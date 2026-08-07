@@ -33,7 +33,7 @@ The repo root is **not** a CMake project — configure `Editor`, `Projects/<name
 | `format.bat` | clang-format in-place | Includes `Templates/`; skips `build*`, `_deps`, `_leon_*`, `.git` |
 | `lint.bat` | format dry-run + Release Editor build | Same dirs as format |
 | `build-linux.sh` | Linux Editor + tests | `Editor/build-linux` |
-| `build-ps2.sh` | EE cross-build (ps2dev env) | `Projects/Ps2Lab/build-ps2/leon-Ps2Lab.elf` |
+| `build-ps2.sh` | EE cross-build (ps2dev env) | `Projects/Ps2Cube/build-ps2/leon-Ps2Cube.elf` |
 | `build-ps2-docker.sh` | Same via `ghcr.io/ps2dev/ps2dev` | Works from Windows Docker Desktop |
 
 ### Editor build trees (do not merge casually)
@@ -104,8 +104,8 @@ Editor\build-ninja\LeonEngine.exe
 Canonical in-repo pack is the PS2 capability lab:
 
 ```powershell
-.\Scripts\build-ps2-docker.ps1 lab
-# → Projects/Ps2Lab/build-ps2/leon-Ps2Lab.elf
+.\Scripts\build-ps2-docker.ps1 cube
+# → Projects/Ps2Cube/build-ps2/leon-Ps2Cube.elf
 ```
 
 Host gameplay packs are created from the Editor (**File → New Project**) using `Templates/Blank` or `Templates/ThirdPerson`, then built with:
@@ -201,7 +201,12 @@ Both skip generated trees under `build`, `build-*`, `_deps`, `_leon_*`, and `.gi
    Scripts/build-ps2.sh hello
    # → Samples/Ps2Hello/build-ps2/leon-Ps2Hello.elf
    ```
-3. Capability lab (clear / pulse / pad / embedded LPS2; Start to quit):
+3. 3D starter (perspective boxes + z-buffer; Start to quit):
+   ```bash
+   Scripts/build-ps2.sh cube
+   # → Projects/Ps2Cube/build-ps2/leon-Ps2Cube.elf
+   ```
+4. Optional 2D capability lab:
    ```bash
    Scripts/build-ps2.sh lab
    # → Projects/Ps2Lab/build-ps2/leon-Ps2Lab.elf
@@ -211,17 +216,19 @@ Both skip generated trees under `build`, `build-*`, `_deps`, `_leon_*`, and `.gi
 
 ```powershell
 .\Scripts\build-ps2-docker.ps1 hello
+.\Scripts\build-ps2-docker.ps1 cube
 .\Scripts\build-ps2-docker.ps1 lab
 ```
 
-Or from Git Bash / WSL: `Scripts/build-ps2-docker.sh hello`. Outputs:
+Or from Git Bash / WSL: `Scripts/build-ps2-docker.sh cube`. Outputs:
 
 - `Samples/Ps2Hello/build-ps2/leon-Ps2Hello.elf`
+- `Projects/Ps2Cube/build-ps2/leon-Ps2Cube.elf`
 - `Projects/Ps2Lab/build-ps2/leon-Ps2Lab.elf`
 
 CMake entry: `-DCMAKE_TOOLCHAIN_FILE=Build/toolchains/ps2-ee.cmake` sets `LEON_PLATFORM=PS2` and `LEON_RHI=PS2`.
 
-**PCSX2:** File → Run ELF → pick `leon-Ps2Lab.elf`. For cooked assets on disk, use a PCSX2 `host:` folder or ISO layout documented under [ASSET_FORMATS — PS2](ASSET_FORMATS.md#ps2-cooked-lps2). The lab also embeds `SM_Triangle.lps2` for header validation without hostfs.
+**PCSX2:** File → Run ELF → pick `leon-Ps2Cube.elf` (3D) or `leon-Ps2Lab.elf` (2D). For cooked assets on disk, use a PCSX2 `host:` folder or ISO layout under [ASSET_FORMATS — PS2](ASSET_FORMATS.md#ps2-cooked-lps2).
 
 Host Editor remains the content/cook path (`Scripts\build.bat`, `Scripts\cook.bat`).
 

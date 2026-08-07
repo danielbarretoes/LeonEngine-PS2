@@ -1,8 +1,8 @@
 # PowerShell wrapper: build PS2 targets via ghcr.io/ps2dev/ps2dev
-# Usage: .\Scripts\build-ps2-docker.ps1 [hello|lab]
+# Usage: .\Scripts\build-ps2-docker.ps1 [hello|lab|cube]
 param(
-    [ValidateSet("hello", "lab", "smoke")]
-    [string]$Target = "lab"
+    [ValidateSet("hello", "lab", "smoke", "cube")]
+    [string]$Target = "cube"
 )
 
 $ErrorActionPreference = "Stop"

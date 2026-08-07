@@ -17,9 +17,11 @@ namespace {
 
 #if defined(LEON_PLATFORM_PS2)
 
+constexpr int kPacketQwords = 512;
+
 bool SetupDrawingEnvironment(ps2::GsContext& gs) {
     if (gs.packet == nullptr) {
-        gs.packet = packet_init(128, PACKET_NORMAL);
+        gs.packet = packet_init(kPacketQwords, PACKET_NORMAL);
         if (gs.packet == nullptr) {
             return false;
         }
@@ -41,9 +43,12 @@ void ClearFramebuffer(ps2::GsContext& gs, int r, int g, int b) {
         return;
     }
 
+    // Disable z-test while clearing so the color fill always lands; z writes 0.
     qword_t* q = gs.packet->data;
+    q = draw_disable_tests(q, 0, &gs.z);
     q = draw_clear(q, 0, gs.OriginX(), gs.OriginY(), static_cast<float>(gs.frame.width),
                    static_cast<float>(gs.frame.height), r, g, b);
+    q = draw_enable_tests(q, 0, &gs.z);
     q = draw_finish(q);
 
     dma_channel_send_normal(DMA_CHANNEL_GIF, gs.packet->data, q - gs.packet->data, 0, 0);
@@ -131,18 +136,23 @@ bool Ps2InitDisplay(int width, int height) {
     gs.frame.height = h;
     gs.frame.mask = 0;
     gs.frame.psm = GS_PSM_32;
-    const int vram = graph_vram_allocate(w, h, GS_PSM_32, GRAPH_ALIGN_PAGE);
-    if (vram < 0) {
-        std::printf("Ps2InitDisplay: graph_vram_allocate failed\n");
+    const int frameVram = graph_vram_allocate(w, h, GS_PSM_32, GRAPH_ALIGN_PAGE);
+    if (frameVram < 0) {
+        std::printf("Ps2InitDisplay: frame VRAM allocate failed\n");
         return false;
     }
-    gs.frame.address = static_cast<unsigned int>(vram);
+    gs.frame.address = static_cast<unsigned int>(frameVram);
 
-    gs.z.enable = DRAW_DISABLE;
+    const int zVram = graph_vram_allocate(w, h, GS_ZBUF_32, GRAPH_ALIGN_PAGE);
+    if (zVram < 0) {
+        std::printf("Ps2InitDisplay: z-buffer VRAM allocate failed\n");
+        return false;
+    }
+    gs.z.enable = DRAW_ENABLE;
     gs.z.mask = 0;
-    gs.z.method = ZTEST_METHOD_ALLPASS;
+    gs.z.method = ZTEST_METHOD_GREATER_EQUAL;
     gs.z.zsm = GS_ZBUF_32;
-    gs.z.address = 0;
+    gs.z.address = static_cast<unsigned int>(zVram);
 
     if (graph_initialize(gs.frame.address, w, h, GS_PSM_32, 0, 0) < 0) {
         std::printf("Ps2InitDisplay: graph_initialize failed\n");
@@ -160,7 +170,7 @@ bool Ps2InitDisplay(int width, int height) {
     graph_wait_vsync();
 
     gs.ready = true;
-    std::printf("Ps2InitDisplay: %dx%d GS ready\n", w, h);
+    std::printf("Ps2InitDisplay: %dx%d GS + z-buffer ready\n", w, h);
     return true;
 #else
     (void)width;

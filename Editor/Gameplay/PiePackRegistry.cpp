@@ -8,7 +8,7 @@ PiePackInfo FindPiePack(std::string_view projectName) {
     const std::string key = AsciiToLower(std::string(projectName));
     PiePackInfo info;
     // Host sample packs were removed; Blank / template seeds use DefaultGameMode only.
-    if (key == "blank" || key == "ps2lab" || key == "thirdperson") {
+    if (key == "blank" || key == "ps2lab" || key == "ps2cube" || key == "thirdperson") {
         info.known = true;
         info.registerModes = {};
         return info;
