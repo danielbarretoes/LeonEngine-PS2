@@ -1,23 +1,32 @@
 # Ps2Lab
 
-Canonical PS2 Emotion Engine capability pack.
+Canonical PS2 Emotion Engine pack (`leon-Ps2Lab.elf`).
 
-## What you should see
+## Layout
+
+| File | Role |
+| --- | --- |
+| `main.cpp` | Window create / destroy |
+| `Ps2LabDemo.*` | Modes + frame loop |
+| `EmbeddedSmTriangleLps2.h` | In-binary `SM_Triangle.lps2` |
+| `Content/Meshes/SM_Triangle.lps2` | On-disk cook sample |
+
+## Modes
 
 | Mode | Button | Content |
 | --- | --- | --- |
-| **Showcase** | Cross (A) | Sky/ground, spinning hero tri, 3 orbiting satellites, HUD |
-| **PadPilot** | Circle (B) | Move with D-Pad, L1/R1 rotate, L2/R2 scale |
-| **StressGrid** | Square (X) | 6×4 spinning triangles |
-| **ClearOnly** | Triangle (Y) | Pulsing clear + HUD |
+| Showcase | Cross (A) | Sky/ground, hero spin, orbiters, HUD |
+| PadPilot | Circle (B) | D-Pad move, L1/R1 rotate, L2/R2 scale |
+| StressGrid | Square (X) | 6×4 spinning tris |
+| ClearOnly | Triangle (Y) | Pulsing clear + HUD |
 | Quit | Start | Exit |
 
-Title bar `[?]` is normal for homebrew (no game serial).
+PCSX2 title `[?]` is normal (no game serial).
 
-## Build / run
+## Build
 
 ```powershell
 .\Scripts\build-ps2-docker.ps1 lab
 ```
 
-PCSX2 → **File → Run ELF** → `Projects/Ps2Lab/build-ps2/leon-Ps2Lab.elf`
+Output: `Projects/Ps2Lab/build-ps2/leon-Ps2Lab.elf`

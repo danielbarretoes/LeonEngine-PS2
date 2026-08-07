@@ -244,4 +244,4 @@ Recipe sketch (host Tools):
 | Cache | `ResourceCache` (OpenGL plugin) |
 | Editor import | `Editor/Importers` |
 | Offline cook | `Tools/AssetPipeline/leon-cook` + `Tools/ResourceTools` ([TOOLS.md](TOOLS.md)) |
-| PS2 `LPS2` draw | `Plugins/RHI/PS2` — `Ps2UnlitMesh` |
+| PS2 `LPS2` draw | `Plugins/RHI/PS2` — `Ps2DrawPrimitives` |

@@ -1,5 +1,5 @@
-# Projects/Ps2Lab — PS2 EE capability demo (lean Engine + clear / pad / LPS2).
-#   Scripts/build-ps2.sh
+# Projects/Ps2Lab — PS2 EE capability demo.
+#   Scripts/build-ps2.sh lab
 #   Scripts/build-ps2-docker.ps1 lab
 
 cmake_minimum_required(VERSION 3.20)
@@ -33,6 +33,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 include("${LEON_REPO_ROOT}/Build/Dependencies.cmake")
 add_subdirectory("${LEON_REPO_ROOT}/Engine" "${CMAKE_BINARY_DIR}/_leon_engine")
 
-add_executable(leon-Ps2Lab main.cpp)
+add_executable(leon-Ps2Lab
+    main.cpp
+    Ps2LabDemo.cpp
+)
 set_target_properties(leon-Ps2Lab PROPERTIES OUTPUT_NAME "leon-Ps2Lab" SUFFIX ".elf")
 target_link_libraries(leon-Ps2Lab PRIVATE leon_engine)

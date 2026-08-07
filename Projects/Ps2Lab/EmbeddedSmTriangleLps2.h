@@ -3,11 +3,10 @@
 #include <cstddef>
 #include <cstdint>
 
-// Embedded SM_Triangle.lps2 (Scripts/make-ps2-triangle-lps2.py) so PCSX2 can
-// exercise the cook header path without hostfs.
+// Embedded Content/Meshes/SM_Triangle.lps2 for PCSX2 without hostfs.
 namespace leon::ps2lab {
 
-inline constexpr std::uint8_t kEmbeddedTriangleLps2[] = {
+inline constexpr std::uint8_t kEmbeddedSmTriangleLps2[] = {
     0x4c, 0x50, 0x53, 0x32, 0x01, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00,
     0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xbf, 0x00, 0x00, 0x00, 0xbf,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3f, 0x00, 0x00, 0x00, 0xbf,
@@ -15,7 +14,7 @@ inline constexpr std::uint8_t kEmbeddedTriangleLps2[] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x02, 0x00,
 };
 
-inline constexpr unsigned kEmbeddedTriangleLps2Size =
-    static_cast<unsigned>(sizeof(kEmbeddedTriangleLps2));
+inline constexpr unsigned kEmbeddedSmTriangleLps2Size =
+    static_cast<unsigned>(sizeof(kEmbeddedSmTriangleLps2));
 
 } // namespace leon::ps2lab

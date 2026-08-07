@@ -111,7 +111,7 @@ Headers under `Tools/ResourceTools/include/leon/tools/`:
 | Command | Behavior |
 | --- | --- |
 | `help` | Usage |
-| `version` | `Leon Tools 0.9.0` |
+| `version` | `Leon Tools 0.10.0` |
 | `cook <recipe.json>` | `GetModuleFileName` (Windows) / `argv[0]` → run sibling `leon-cook.exe recipe …` |
 
 No Engine libraries. Exit codes normalized (`WEXITSTATUS` on Unix).

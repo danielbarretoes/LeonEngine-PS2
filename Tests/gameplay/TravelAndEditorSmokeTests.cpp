@@ -38,7 +38,7 @@ TEST_CASE("Menu to Lobby to Match travel headless", "[gameplay][travel][e2e]") {
         std::string(LEON_SOURCE_DIR) + "/Projects/CoopTp/Content/Levels";
     const std::string hint = levels + "/Courtyard.llev";
     if (!std::filesystem::exists(hint)) {
-        SKIP("Host sample levels not present (Projects/CoopTp removed)");
+        SKIP("Optional host sample levels not present");
     }
 
     leon::Engine engine;

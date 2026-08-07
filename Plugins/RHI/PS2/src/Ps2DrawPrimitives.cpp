@@ -1,4 +1,4 @@
-#include "Ps2GsInternal.h"
+#include "Ps2GsContext.h"
 
 #include <leon/rhi/Ps2RHI.h>
 
@@ -24,7 +24,7 @@ struct Ps2MeshHeader {
 
 #if defined(LEON_PLATFORM_PS2)
 
-// Quarter-wave sin table (0..64 => 0..90°), avoids libm on EE soft-float.
+// Quarter-wave sin (0..64 => 0..90°). Avoids libm on EE soft-float.
 constexpr float kSinQuarter[65] = {
     0.000000f, 0.024541f, 0.049068f, 0.073565f, 0.098017f, 0.122411f, 0.146730f, 0.170962f,
     0.195090f, 0.219101f, 0.242980f, 0.266713f, 0.290285f, 0.313682f, 0.336890f, 0.359895f,
@@ -40,23 +40,17 @@ constexpr float kSinQuarter[65] = {
 [[nodiscard]] float Sin256(unsigned angle256) {
     const unsigned a = angle256 & 255u;
     const unsigned quad = a >> 6;
-    unsigned idx = a & 63u;
-    float s = 0.0f;
+    const unsigned idx = a & 63u;
     switch (quad) {
     case 0:
-        s = kSinQuarter[idx];
-        break;
+        return kSinQuarter[idx];
     case 1:
-        s = kSinQuarter[64u - idx];
-        break;
+        return kSinQuarter[64u - idx];
     case 2:
-        s = -kSinQuarter[idx];
-        break;
+        return -kSinQuarter[idx];
     default:
-        s = -kSinQuarter[64u - idx];
-        break;
+        return -kSinQuarter[64u - idx];
     }
-    return s;
 }
 
 [[nodiscard]] float Cos256(unsigned angle256) {
@@ -70,32 +64,31 @@ void FillVertex(vertex_t& out, float x, float y) {
 }
 
 void FillColor(color_t& out, float r, float g, float b) {
-    const int rr = static_cast<int>(r * 255.0f) & 0xFF;
-    const int gg = static_cast<int>(g * 255.0f) & 0xFF;
-    const int bb = static_cast<int>(b * 255.0f) & 0xFF;
-    out.r = static_cast<unsigned char>(rr);
-    out.g = static_cast<unsigned char>(gg);
-    out.b = static_cast<unsigned char>(bb);
+    out.r = static_cast<unsigned char>(static_cast<int>(r * 255.0f) & 0xFF);
+    out.g = static_cast<unsigned char>(static_cast<int>(g * 255.0f) & 0xFF);
+    out.b = static_cast<unsigned char>(static_cast<int>(b * 255.0f) & 0xFF);
     out.a = 0x80;
     out.q = 1.0f;
 }
 
-[[nodiscard]] bool SubmitPacket(qword_t* end) {
-    using ps2gs::g_packet;
-    if (g_packet == nullptr || end <= g_packet->data) {
+[[nodiscard]] bool SubmitPacket(ps2::GsContext& gs, qword_t* end) {
+    if (gs.packet == nullptr || end <= gs.packet->data) {
         return false;
     }
-    dma_channel_send_normal(DMA_CHANNEL_GIF, g_packet->data, end - g_packet->data, 0, 0);
+    dma_channel_send_normal(DMA_CHANNEL_GIF, gs.packet->data, end - gs.packet->data, 0, 0);
     dma_wait_fast();
     draw_wait_finish();
     return true;
 }
 
-[[nodiscard]] bool DisplayReady() {
-    using ps2gs::g_displayReady;
-    using ps2gs::g_frame;
-    using ps2gs::g_packet;
-    return g_displayReady && g_packet != nullptr && g_frame.width > 0;
+[[nodiscard]] bool IsDisplayReady(const ps2::GsContext& gs) {
+    return gs.ready && gs.packet != nullptr && gs.frame.width > 0;
+}
+
+void RotatePoint(float centerX, float centerY, float lx, float ly, float cosA, float sinA,
+                 float& outX, float& outY) {
+    outX = centerX + lx * cosA - ly * sinA;
+    outY = centerY + lx * sinA + ly * cosA;
 }
 
 #endif
@@ -120,27 +113,18 @@ float Ps2Cos256(unsigned angle256) {
 #endif
 }
 
-bool Ps2DrawUnlitTriangleEx(float centerX, float centerY, float size, unsigned angle256, float r,
+bool Ps2DrawUnlitTriangleAt(float centerX, float centerY, float size, unsigned angle256, float r,
                             float g, float b) {
 #if defined(LEON_PLATFORM_PS2)
-    if (!DisplayReady() || size <= 0.0f) {
+    auto& gs = ps2::GetGsContext();
+    if (!IsDisplayReady(gs) || size <= 0.0f) {
         return false;
     }
 
-    const float c = Cos256(angle256);
-    const float s = Sin256(angle256);
-    // Unit triangle in local space, then rotate + translate.
-    const float lx0 = 0.0f;
-    const float ly0 = -size;
-    const float lx1 = -size * 0.9f;
-    const float ly1 = size * 0.75f;
-    const float lx2 = size * 0.9f;
-    const float ly2 = size * 0.75f;
-
-    auto rot = [&](float lx, float ly, float& ox, float& oy) {
-        ox = centerX + lx * c - ly * s;
-        oy = centerY + lx * s + ly * c;
-    };
+    // draw_triangle_filled adds +2048; with XYOFFSET at (2048-w/2, 2048-h/2),
+    // drawable space is centered on (0,0).
+    const float cosA = Cos256(angle256);
+    const float sinA = Sin256(angle256);
 
     float x0 = 0.0f;
     float y0 = 0.0f;
@@ -148,9 +132,9 @@ bool Ps2DrawUnlitTriangleEx(float centerX, float centerY, float size, unsigned a
     float y1 = 0.0f;
     float x2 = 0.0f;
     float y2 = 0.0f;
-    rot(lx0, ly0, x0, y0);
-    rot(lx1, ly1, x1, y1);
-    rot(lx2, ly2, x2, y2);
+    RotatePoint(centerX, centerY, 0.0f, -size, cosA, sinA, x0, y0);
+    RotatePoint(centerX, centerY, -size * 0.9f, size * 0.75f, cosA, sinA, x1, y1);
+    RotatePoint(centerX, centerY, size * 0.9f, size * 0.75f, cosA, sinA, x2, y2);
 
     triangle_t tri{};
     FillColor(tri.color, r, g, b);
@@ -158,10 +142,10 @@ bool Ps2DrawUnlitTriangleEx(float centerX, float centerY, float size, unsigned a
     FillVertex(tri.v1, x1, y1);
     FillVertex(tri.v2, x2, y2);
 
-    qword_t* q = ps2gs::g_packet->data;
+    qword_t* q = gs.packet->data;
     q = draw_triangle_filled(q, 0, &tri);
     q = draw_finish(q);
-    return SubmitPacket(q);
+    return SubmitPacket(gs, q);
 #else
     (void)centerX;
     (void)centerY;
@@ -176,7 +160,8 @@ bool Ps2DrawUnlitTriangleEx(float centerX, float centerY, float size, unsigned a
 
 bool Ps2DrawUnlitRect(float x0, float y0, float x1, float y1, float r, float g, float b) {
 #if defined(LEON_PLATFORM_PS2)
-    if (!DisplayReady()) {
+    auto& gs = ps2::GetGsContext();
+    if (!IsDisplayReady(gs)) {
         return false;
     }
     if (x1 < x0) {
@@ -195,10 +180,10 @@ bool Ps2DrawUnlitRect(float x0, float y0, float x1, float y1, float r, float g, 
     FillVertex(rect.v0, x0, y0);
     FillVertex(rect.v1, x1, y1);
 
-    qword_t* q = ps2gs::g_packet->data;
+    qword_t* q = gs.packet->data;
     q = draw_rect_filled(q, 0, &rect);
     q = draw_finish(q);
-    return SubmitPacket(q);
+    return SubmitPacket(gs, q);
 #else
     (void)x0;
     (void)y0;
@@ -213,12 +198,12 @@ bool Ps2DrawUnlitRect(float x0, float y0, float x1, float y1, float r, float g, 
 
 bool Ps2DrawUnlitTriangle() {
 #if defined(LEON_PLATFORM_PS2)
-    using ps2gs::g_frame;
-    if (!DisplayReady()) {
+    auto& gs = ps2::GetGsContext();
+    if (!IsDisplayReady(gs)) {
         return false;
     }
-    const float size = static_cast<float>(g_frame.height) * 0.28f;
-    return Ps2DrawUnlitTriangleEx(0.0f, 0.0f, size, 0, 1.0f, 0.784f, 0.125f);
+    const float size = static_cast<float>(gs.frame.height) * 0.28f;
+    return Ps2DrawUnlitTriangleAt(0.0f, 0.0f, size, 0, 1.0f, 0.784f, 0.125f);
 #else
     return false;
 #endif
@@ -237,6 +222,7 @@ bool Ps2DrawCookedMesh(const void* data, unsigned size) {
     if (header.vertexCount == 0) {
         return false;
     }
+    // Full LPS2 vertex upload is not wired yet; keep a visible GS result for cook smoke.
     return Ps2DrawUnlitTriangle();
 #else
     return header.vertexCount > 0;

@@ -183,6 +183,33 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - Editor `LightmapPersist.h` (use `<leon/level/LightmapIO.h>`)
 - CamelCase free-function aliases; `leon::games` / `leon_game_host` / `Leon::GameHost`
 
+## [0.10.0] - 2026-08-08
+
+### Added
+
+- Dual-target **PS2 Emotion Engine** path: `Build/toolchains/ps2-ee.cmake`, `LEON_PLATFORM=PS2`, lean `Engine/CMakeLists.Ps2.txt`
+- `Plugins/RHI/PS2` (`leon_rhi_ps2`): GS clear/VBlank, unlit triangle/rect primitives, `LPS2` header check
+- Platform PS2: `WindowPs2`, `InputPad` (`InitializePad` / `EPadButton`), `Ps2CoreAnchor`
+- Canonical pack **`Projects/Ps2Lab`** (`leon-Ps2Lab.elf`): Showcase / PadPilot / StressGrid / ClearOnly demos
+- Toolchain smoke **`Samples/Ps2Hello`**; Docker builds via `Scripts/build-ps2-docker.ps1` / `.sh` (`ghcr.io/ps2dev/ps2dev`)
+- Host scancode enums `EKey` / `EPadButton` / `EPlatform`; Window no longer exposes `GLFWwindow*`
+- Docs: SETUP PS2 section, ASSET_FORMATS `LPS2`, NAMING notes for `leon_rhi_ps2` / Ps2Lab
+
+### Changed
+
+- README and build scripts are PS2-first; Editor no longer links removed host pack gameplay libs
+- PS2 RHI layout polish: `Ps2GsContext`, `Ps2DrawPrimitives`, `Ps2DrawUnlitTriangleAt`
+
+### Removed
+
+- In-repo host sample packs: CoopTp, Zombies, Furytoon, ThirdPerson, Smoke (use `Templates/` for New Project)
+- Dedicated pack smoke scripts (`smoke-coop-dedicated`, `smoke-packs`)
+
+### Fixed
+
+- PS2 display: real GIF `draw_clear` (bgcolor-only left a black framebuffer in PCSX2)
+- Triangle screen-space coords (draw2d +2048 / XYOFFSET); pad init no longer blocks first painted frames
+
 ## [0.9.0] - 2026-07-31
 
 ### Added
@@ -1180,6 +1207,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - Transparent object queue (back-to-front)
 - CMake + Visual Studio build (`build.bat`)
 
+[0.10.0]: https://github.com/danielbarretoes/geon/compare/v0.9.0...v0.10.0
+[0.9.0]: https://github.com/danielbarretoes/geon/compare/v0.8.0...v0.9.0
 [0.4.5]: https://github.com/danielbarretoes/geon/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/danielbarretoes/geon/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/danielbarretoes/geon/compare/v0.4.2...v0.4.3

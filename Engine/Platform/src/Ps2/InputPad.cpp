@@ -1,4 +1,4 @@
-#include <leon/core/EKey.h>
+#include <leon/core/InputPad.h>
 
 #include <cstdio>
 
@@ -15,9 +15,9 @@ namespace {
 char g_padBuf[256] __attribute__((aligned(64)));
 bool g_padReady = false;
 
-void loadPadModules() {
+void LoadPadModules() {
     SifInitRpc(0);
-    // rom0 modules need a working BIOS in PCSX2. Fail soft if missing.
+    // rom0 modules need a working BIOS in PCSX2.
     if (SifLoadModule("rom0:SIO2MAN", 0, nullptr) < 0) {
         std::printf("InputPad: SIO2MAN load failed\n");
     }
@@ -29,9 +29,9 @@ void loadPadModules() {
 
 } // namespace
 
-bool InitializePs2Pad() {
+bool InitializePad() {
 #if defined(LEON_PLATFORM_PS2)
-    loadPadModules();
+    LoadPadModules();
     padInit(0);
     if (padPortOpen(0, 0, g_padBuf) == 0) {
         g_padReady = false;

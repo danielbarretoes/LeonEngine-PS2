@@ -1,8 +1,9 @@
-# Static PS2 (GS) RHI plugin — clear/flip + unlit mesh path.
+# PS2 GS RHI — clear/flip + unlit 2D primitives.
 
 add_library(leon_rhi_ps2 STATIC
+    src/Ps2GsContext.cpp
     src/Ps2RHIDevice.cpp
-    src/Ps2UnlitMesh.cpp
+    src/Ps2DrawPrimitives.cpp
 )
 
 target_include_directories(leon_rhi_ps2 PUBLIC
@@ -12,7 +13,6 @@ target_include_directories(leon_rhi_ps2 PUBLIC
 target_link_libraries(leon_rhi_ps2 PUBLIC leon_rhi)
 
 if(DEFINED ENV{PS2SDK})
-    # draw_clear + packet GIF path for visible framebuffer fills.
     target_link_libraries(leon_rhi_ps2 PUBLIC draw packet graph dma kernel)
 endif()
 

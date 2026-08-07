@@ -15,7 +15,7 @@ endif()
 get_filename_component(LEON_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 
 if(_LEON_ENGINE_IS_TOPLEVEL)
-    project(LeonEngine VERSION 0.9.0 LANGUAGES C CXX)
+    project(LeonEngine VERSION 0.10.0 LANGUAGES C CXX)
 
     set(CMAKE_CXX_STANDARD 20)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)

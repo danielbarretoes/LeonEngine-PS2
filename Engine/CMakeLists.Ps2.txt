@@ -1,5 +1,4 @@
-# PS2 lean Engine — included from Engine/CMakeLists.txt when LEON_PLATFORM_PS2.
-# Window + pad + PS2 RHI only (no GLM / OpenGL / Jolt / Net / Audio / Gameplay).
+# PS2 lean Engine — Window + pad + PS2 RHI (no GLM / OpenGL / Jolt / Net / Audio / Gameplay).
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,9 +8,8 @@ add_library(leon_rhi INTERFACE)
 target_include_directories(leon_rhi INTERFACE ${_LEON_PUBLIC_INC})
 add_library(Leon::RHI ALIAS leon_rhi)
 
-# Anchor lib — host Camera/Input/Transform pull GLM (IEC559 asserts fail on EE soft-float).
 add_library(leon_core STATIC
-    Platform/src/Ps2/LeonPs2Stub.cpp
+    Platform/src/Ps2/Ps2CoreAnchor.cpp
 )
 target_include_directories(leon_core PUBLIC ${_LEON_PUBLIC_INC})
 add_library(Leon::Core ALIAS leon_core)
@@ -24,8 +22,8 @@ add_library(leon_platform STATIC
 target_include_directories(leon_platform PUBLIC ${_LEON_PUBLIC_INC})
 target_link_libraries(leon_platform PUBLIC leon_core leon_rhi)
 if(DEFINED ENV{PS2SDK})
-    # SifLoadModule / SifInitRpc live in libkernel (see pad_example.elf sample).
-    target_link_libraries(leon_platform PUBLIC draw packet graph dma pad kernel c)
+    # Pad IOP symbols live in libkernel; draw path is linked via leon_rhi_ps2.
+    target_link_libraries(leon_platform PUBLIC graph dma pad kernel c)
 endif()
 add_library(Leon::Platform ALIAS leon_platform)
 

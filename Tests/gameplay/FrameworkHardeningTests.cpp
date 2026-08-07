@@ -97,7 +97,7 @@ TEST_CASE("ServerTravel sibling level load without net", "[gameplay][travel]") {
     const std::string coopLevels = std::string(LEON_SOURCE_DIR) + "/Projects/CoopTp/Content/Levels";
     const std::string hint = coopLevels + "/Courtyard.llev";
     if (!std::filesystem::exists(hint)) {
-        SKIP("Host sample levels not present (Projects/CoopTp removed)");
+        SKIP("Optional host sample levels not present");
     }
     leon::Engine engine;
     REQUIRE(engine.InitializeHeadless());

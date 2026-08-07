@@ -324,8 +324,8 @@ Tools/
 
 | Tree | Naming note |
 | --- | --- |
-| `Plugins/` | `leon_rhi_opengl`, `leon_physics_arcade`, optional `leon_physics_jolt` + `Leon::RHI_OpenGL` / `Leon::Physics_Arcade` / `Leon::Physics_Jolt`; public headers stay under `Engine/include/leon/` |
-| `Projects/` | Same rules as Templates after clone; exe `leon-<name>`; never link Editor |
+| `Plugins/` | `leon_rhi_opengl`, `leon_rhi_ps2` (`Leon::RhiPs2`), `leon_physics_arcade`, optional `leon_physics_jolt`; public headers stay under `Engine/include/leon/` (`Ps2RHI.h`, …). Plugin `.cpp` files PascalCase (`Ps2DrawPrimitives.cpp`) |
+| `Projects/` | Same rules as Templates after clone; exe `leon-<name>`; PS2 lab is `Projects/Ps2Lab` → `leon-Ps2Lab.elf`; never link Editor |
 | `Build/` | Descriptive Pascal / camel CMake files (`LeonCompileOptions.cmake`, `SyncDirectory.cmake`) |
 | `Scripts/` | kebab-case `.bat` / `.sh`; Python utilities may be `snake_case.py` |
 | `Docs/` | `SCREAMING_SNAKE` or Pascal topic files (`ARCHITECTURE.md`, `NAMING.md`) |

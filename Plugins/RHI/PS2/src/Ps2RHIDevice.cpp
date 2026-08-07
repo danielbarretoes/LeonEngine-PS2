@@ -1,4 +1,4 @@
-#include "Ps2GsInternal.h"
+#include "Ps2GsContext.h"
 
 #include <leon/rhi/IRHIDevice.h>
 #include <leon/rhi/Ps2RHI.h>
@@ -16,43 +16,37 @@ namespace leon::rhi {
 namespace {
 
 #if defined(LEON_PLATFORM_PS2)
-using ps2gs::g_displayReady;
-using ps2gs::g_frame;
-using ps2gs::g_packet;
-using ps2gs::g_z;
-using ps2gs::OriginX;
-using ps2gs::OriginY;
 
-bool SetupDrawingEnvironment() {
-    if (g_packet == nullptr) {
-        g_packet = packet_init(128, PACKET_NORMAL);
-        if (g_packet == nullptr) {
+bool SetupDrawingEnvironment(ps2::GsContext& gs) {
+    if (gs.packet == nullptr) {
+        gs.packet = packet_init(128, PACKET_NORMAL);
+        if (gs.packet == nullptr) {
             return false;
         }
     }
 
-    qword_t* q = g_packet->data;
-    q = draw_setup_environment(q, 0, &g_frame, &g_z);
-    q = draw_primitive_xyoffset(q, 0, OriginX(), OriginY());
+    qword_t* q = gs.packet->data;
+    q = draw_setup_environment(q, 0, &gs.frame, &gs.z);
+    q = draw_primitive_xyoffset(q, 0, gs.OriginX(), gs.OriginY());
     q = draw_finish(q);
 
-    dma_channel_send_normal(DMA_CHANNEL_GIF, g_packet->data, q - g_packet->data, 0, 0);
+    dma_channel_send_normal(DMA_CHANNEL_GIF, gs.packet->data, q - gs.packet->data, 0, 0);
     dma_wait_fast();
     draw_wait_finish();
     return true;
 }
 
-void ClearFramebuffer(int r, int g, int b) {
-    if (g_packet == nullptr) {
+void ClearFramebuffer(ps2::GsContext& gs, int r, int g, int b) {
+    if (gs.packet == nullptr) {
         return;
     }
 
-    qword_t* q = g_packet->data;
-    q = draw_clear(q, 0, OriginX(), OriginY(), static_cast<float>(g_frame.width),
-                   static_cast<float>(g_frame.height), r, g, b);
+    qword_t* q = gs.packet->data;
+    q = draw_clear(q, 0, gs.OriginX(), gs.OriginY(), static_cast<float>(gs.frame.width),
+                   static_cast<float>(gs.frame.height), r, g, b);
     q = draw_finish(q);
 
-    dma_channel_send_normal(DMA_CHANNEL_GIF, g_packet->data, q - g_packet->data, 0, 0);
+    dma_channel_send_normal(DMA_CHANNEL_GIF, gs.packet->data, q - gs.packet->data, 0, 0);
     dma_wait_fast();
     draw_wait_finish();
 }
@@ -74,7 +68,7 @@ public:
         width_ = width > 0 ? width : 640;
         height_ = height > 0 ? height : 448;
 #if defined(LEON_PLATFORM_PS2)
-        if (g_displayReady) {
+        if (ps2::GetGsContext().ready) {
             graph_set_screen(0, 0, width_, height_);
         }
 #endif
@@ -95,12 +89,13 @@ public:
 
     void Clear(float r, float g, float b) {
 #if defined(LEON_PLATFORM_PS2)
+        auto& gs = ps2::GetGsContext();
         const int rr = static_cast<int>(r * 255.0f) & 0xFF;
         const int gg = static_cast<int>(g * 255.0f) & 0xFF;
         const int bb = static_cast<int>(b * 255.0f) & 0xFF;
         graph_set_bgcolor(static_cast<unsigned char>(rr), static_cast<unsigned char>(gg),
                           static_cast<unsigned char>(bb));
-        ClearFramebuffer(rr, gg, bb);
+        ClearFramebuffer(gs, rr, gg, bb);
 #else
         (void)r;
         (void)g;
@@ -125,45 +120,46 @@ Ps2RHIDevice* g_ps2Device = nullptr;
 
 bool Ps2InitDisplay(int width, int height) {
 #if defined(LEON_PLATFORM_PS2)
+    auto& gs = ps2::GetGsContext();
     const int w = width > 0 ? width : 640;
     const int h = height > 0 ? height : 448;
 
     dma_channel_initialize(DMA_CHANNEL_GIF, nullptr, 0);
     dma_channel_fast_waits(DMA_CHANNEL_GIF);
 
-    g_frame.width = w;
-    g_frame.height = h;
-    g_frame.mask = 0;
-    g_frame.psm = GS_PSM_32;
+    gs.frame.width = w;
+    gs.frame.height = h;
+    gs.frame.mask = 0;
+    gs.frame.psm = GS_PSM_32;
     const int vram = graph_vram_allocate(w, h, GS_PSM_32, GRAPH_ALIGN_PAGE);
     if (vram < 0) {
         std::printf("Ps2InitDisplay: graph_vram_allocate failed\n");
         return false;
     }
-    g_frame.address = static_cast<unsigned int>(vram);
+    gs.frame.address = static_cast<unsigned int>(vram);
 
-    g_z.enable = DRAW_DISABLE;
-    g_z.mask = 0;
-    g_z.method = ZTEST_METHOD_ALLPASS;
-    g_z.zsm = GS_ZBUF_32;
-    g_z.address = 0;
+    gs.z.enable = DRAW_DISABLE;
+    gs.z.mask = 0;
+    gs.z.method = ZTEST_METHOD_ALLPASS;
+    gs.z.zsm = GS_ZBUF_32;
+    gs.z.address = 0;
 
-    if (graph_initialize(g_frame.address, w, h, GS_PSM_32, 0, 0) < 0) {
+    if (graph_initialize(gs.frame.address, w, h, GS_PSM_32, 0, 0) < 0) {
         std::printf("Ps2InitDisplay: graph_initialize failed\n");
         return false;
     }
 
-    if (!SetupDrawingEnvironment()) {
+    if (!SetupDrawingEnvironment(gs)) {
         std::printf("Ps2InitDisplay: draw environment failed\n");
         return false;
     }
 
     graph_set_bgcolor(0x20, 0x50, 0xC0);
-    ClearFramebuffer(0x20, 0x50, 0xC0);
+    ClearFramebuffer(gs, 0x20, 0x50, 0xC0);
     graph_enable_output();
     graph_wait_vsync();
 
-    g_displayReady = true;
+    gs.ready = true;
     std::printf("Ps2InitDisplay: %dx%d GS ready\n", w, h);
     return true;
 #else
@@ -175,7 +171,7 @@ bool Ps2InitDisplay(int width, int height) {
 
 void Ps2WaitVsync() {
 #if defined(LEON_PLATFORM_PS2)
-    if (g_displayReady) {
+    if (ps2::GetGsContext().ready) {
         graph_wait_vsync();
     }
 #endif
@@ -198,15 +194,17 @@ IRHIDevice* GetActiveDevice() {
 void Ps2ClearColor(float r, float g, float b) {
     if (g_ps2Device != nullptr) {
         g_ps2Device->Clear(r, g, b);
+        return;
     }
 #if defined(LEON_PLATFORM_PS2)
-    else if (g_packet != nullptr) {
+    auto& gs = ps2::GetGsContext();
+    if (gs.packet != nullptr) {
         const int rr = static_cast<int>(r * 255.0f) & 0xFF;
         const int gg = static_cast<int>(g * 255.0f) & 0xFF;
         const int bb = static_cast<int>(b * 255.0f) & 0xFF;
         graph_set_bgcolor(static_cast<unsigned char>(rr), static_cast<unsigned char>(gg),
                           static_cast<unsigned char>(bb));
-        ClearFramebuffer(rr, gg, bb);
+        ClearFramebuffer(gs, rr, gg, bb);
     }
 #else
     (void)r;
