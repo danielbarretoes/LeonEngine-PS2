@@ -1,0 +1,65 @@
+#pragma once
+
+#include <glm/vec3.hpp>
+
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <vector>
+
+namespace leon {
+
+class DebugDraw;
+
+/// Unreal-like ECollisionChannel (micro-engine subset).
+enum class ECollisionChannel : std::uint8_t {
+    WorldStatic,  // Static PhysScene bodies
+    WorldDynamic, // Dynamic PhysScene bodies
+    Pawn,         // Both (character / pawn queries)
+    Visibility,   // Both (generic line/sphere checks)
+};
+
+/// Unreal-like EDrawDebugTrace — draw the query for one frame when a DebugDraw* is passed.
+enum class EDrawDebugTrace : std::uint8_t {
+    None,
+    ForOneFrame,
+};
+
+/// Unreal-like FHitResult for PhysScene traces.
+struct HitResult {
+    bool bBlockingHit = false;
+    /// Normalized distance along [Start, End] in [0, 1].
+    float Time = 1.0f;
+    float Distance = 0.0f;
+    /// World location of the sweep shape center at the blocking time (Unreal `Location`).
+    glm::vec3 Location{0.0f};
+    /// Surface contact point (Unreal `ImpactPoint`); equals Location for line traces.
+    glm::vec3 ImpactPoint{0.0f};
+    /// Unit normal pointing toward the trace start (away from the surface).
+    glm::vec3 ImpactNormal{0.0f, 1.0f, 0.0f};
+    glm::vec3 TraceStart{0.0f};
+    glm::vec3 TraceEnd{0.0f};
+    std::size_t LevelMeshIndex = (std::numeric_limits<std::size_t>::max)();
+    /// True when the hit is the virtual infinite floor plane (CollisionQueryParams).
+    bool bFloorPlane = false;
+};
+
+/// Unreal-like FCollisionQueryParams.
+struct CollisionQueryParams {
+    std::size_t SkipLevelMeshIndex = (std::numeric_limits<std::size_t>::max)();
+    /// Include an infinite horizontal floor at FloorY (CharacterMovement floor).
+    bool bTraceFloorPlane = false;
+    float FloorY = 0.0f;
+    /// When not None, PhysScene traces draw into the provided DebugDraw* (F2 / gameplay debug).
+    EDrawDebugTrace DrawDebugType = EDrawDebugTrace::None;
+};
+
+/// Unreal-like DrawDebugLineTrace / Kismet System Library helpers (one frame into DebugDraw).
+void DrawDebugLineTrace(DebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
+                        const std::vector<HitResult>& hits);
+void DrawDebugSphereTrace(DebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
+                          float radius, const std::vector<HitResult>& hits);
+void DrawDebugCapsuleTrace(DebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
+                           float radius, float halfHeight, const std::vector<HitResult>& hits);
+
+} // namespace leon

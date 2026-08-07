@@ -1,0 +1,64 @@
+Checks: >-
+  -*,
+  bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  cppcoreguidelines-*,
+  misc-*,
+  modernize-*,
+  performance-*,
+  readability-*,
+  -modernize-use-trailing-return-type,
+  -modernize-use-nodiscard,
+  -readability-magic-numbers,
+  -readability-identifier-length,
+  -readability-uppercase-literal-suffix,
+  -readability-implicit-bool-conversion,
+  -readability-convert-member-functions-to-static,
+  -readability-function-cognitive-complexity,
+  -readability-use-anyofallof,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-owning-memory,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -cppcoreguidelines-avoid-c-arrays,
+  -cppcoreguidelines-pro-type-vararg,
+  -cppcoreguidelines-pro-type-union-access,
+  -cppcoreguidelines-special-member-functions,
+  -misc-include-cleaner,
+  -misc-no-recursion,
+  -cert-err58-cpp,
+  -cert-err33-c,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-unused-return-value,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -performance-unnecessary-value-param,
+  -performance-enum-size,
+  -modernize-use-ranges,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
+  -cppcoreguidelines-pro-type-const-cast,
+  -cppcoreguidelines-narrowing-conversions,
+  -cppcoreguidelines-avoid-do-while,
+  -misc-non-private-member-variables-in-classes,
+  -misc-use-anonymous-namespace,
+  -readability-suspicious-call-argument,
+  -readability-math-missing-parentheses,
+  -readability-avoid-nested-conditional-operator,
+  -readability-make-member-function-const
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*(Engine/(include/leon|Core|Platform|Renderer|Content|Animation|Network|Scene|Gameplay|Utilities|Serialization|Physics|RHI)|Editor/(include/leon|Application|Panels|Gizmos|SceneEditing|Importers|Preview)|Runtime|Plugins)/.*'
+FormatStyle: file
+# Notes:
+# - uppercase-literal-suffix: project uses 1.0f (GLM style), not 1.0F
+# - implicit-bool-conversion: noisy with GLFW/GLAD/shared_ptr/ifstream; prefer explicit null checks in new code
+# - pro-type-union-access: GLM vec swizzles
+# - convert-member-functions-to-static: breaks intentional instance APIs (e.g. Window::pollEvents)
+# - avoid-c-arrays / array-to-pointer-decay: OpenGL upload helpers often use stack pixel arrays
+# - pro-bounds-constant-array-index: too noisy for UBO/light loops and small fixed buffers
+# - misc-non-private-member-variables-in-classes: engine uses public POD-style structs (Material, SceneObject, …)
+# - unused-return-value / unnecessary-value-param: noisy with std::function callbacks and GL helpers
+# - use-anyofallof / modernize-use-ranges: style preference, not correctness
+# - cert-err33-c: snprintf into fixed ImGui buffers; return length unused on purpose
+# - Catch2 tests: excluded from HeaderFilterRegex; clangd PathMatch Tests/ strips tidy
+# - narrowing / math-parentheses / nested ?: / enum-size: pedantic noise vs engine style

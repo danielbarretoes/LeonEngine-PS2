@@ -1,0 +1,10 @@
+{
+  "displayName": "Leon Zombies",
+  "engineVersion": "0.9.0",
+  "name": "Zombies",
+  "defaultLevel": "Levels/MainMenu.llev",
+  "defaultGameMode": "zombies-menu",
+  "gameModes": ["zombies-menu", "zombies-lobby", "zombies-match"],
+  "buildDedicatedServer": true,
+  "description": "Main Menu -> Lobby -> Town. COD Town-style loop: points, doors, wall guns, perks, Pack-a-Punch (lava risk), rounds. Host / Join Listen / Join Dedicated. Procedural geometry only. Shipping builds leon-Zombies-server when buildDedicatedServer is set."
+}

@@ -1,0 +1,43 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "compileCommands": "${workspaceFolder}/Editor/build-ninja/compile_commands.json",
+            "includePath": [
+                "${workspaceFolder}/Engine/include",
+                "${workspaceFolder}/Editor/include",
+                "${workspaceFolder}/Runtime/Application",
+                "${workspaceFolder}/Projects",
+                "${workspaceFolder}/ThirdParty/ufbx",
+                "${workspaceFolder}/ThirdParty/enet/include",
+                "${workspaceFolder}/ThirdParty/glad/include",
+                "${workspaceFolder}/ThirdParty/stb",
+                "${workspaceFolder}/Editor/build/_deps/glfw-src/include",
+                "${workspaceFolder}/Editor/build/_deps/glm-src",
+                "${workspaceFolder}/Editor/build/_deps/tinyobjloader-src",
+                "${workspaceFolder}/Editor/build/_deps/json-src/include",
+                "${workspaceFolder}/Editor/build/_deps/imgui-src",
+                "${workspaceFolder}/Editor/build/_deps/imgui-src/backends",
+                "${workspaceFolder}/Editor/build/_deps/imguizmo-src/src",
+                "${workspaceFolder}/Editor/build-ninja/_deps/glfw-src/include",
+                "${workspaceFolder}/Editor/build-ninja/_deps/glm-src",
+                "${workspaceFolder}/Editor/build-ninja/_deps/tinyobjloader-src",
+                "${workspaceFolder}/Editor/build-ninja/_deps/json-src/include",
+                "${workspaceFolder}/Editor/build-ninja/_deps/imgui-src",
+                "${workspaceFolder}/Editor/build-ninja/_deps/imgui-src/backends",
+                "${workspaceFolder}/Editor/build-ninja/_deps/imguizmo-src/src"
+            ],
+            "defines": [
+                "NOMINMAX",
+                "WIN32_LEAN_AND_MEAN",
+                "_WIN32",
+                "WIN32",
+                "IMGUI_IMPL_OPENGL_LOADER_GLAD"
+            ],
+            "cStandard": "c17",
+            "cppStandard": "c++20",
+            "intelliSenseMode": "windows-clang-x64"
+        }
+    ],
+    "version": 4
+}

@@ -1,0 +1,16 @@
+# Leon Character (.lchar) — ThirdPerson Bot pack
+# Cooked: Bot.lskel / Bot.lskm / Materials/M_Bot.lmat / Anims/*.lanim
+# Gameplay: Templates/ThirdPerson src {{NAME}}Character + {{NAME}}AnimInstance
+
+[Info]
+Name=Bot
+FitHeight=1.85
+
+[Mesh]
+SkeletalMesh=Bot.lskm
+
+[Animation]
+BlendSpace=Bot_Locomotion.blendspace1d.json
+JumpStart=Anims/JumpingUp.lanim
+FallLoop=Anims/FallingIdle.lanim
+Land=Anims/FallingToLanding.lanim

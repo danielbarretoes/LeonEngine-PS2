@@ -1,0 +1,56 @@
+# clangd: use Ninja compile DB (see Scripts/configure-ninja.bat + fix-compile-commands.py).
+# QueryDriver lets clangd ask cl.exe for MSVC system include paths.
+
+CompileFlags:
+  CompilationDatabase: Editor/build-ninja
+  Add:
+    - -Wno-unused-command-line-argument
+    - -Wno-unused-const-variable
+
+Diagnostics:
+  UnusedIncludes: None
+  MissingIncludes: None
+  ClangTidy:
+    Remove:
+      - cert-err33-c
+      - readability-suspicious-call-argument
+      - readability-math-missing-parentheses
+      - readability-avoid-nested-conditional-operator
+      - bugprone-implicit-widening-of-multiplication-result
+      - performance-enum-size
+      - readability-make-member-function-const
+      - cppcoreguidelines-pro-type-const-cast
+      - cppcoreguidelines-narrowing-conversions
+      - cppcoreguidelines-avoid-do-while
+      - misc-use-anonymous-namespace
+
+---
+If:
+  PathMatch: Tools/.*
+CompileFlags:
+  CompilationDatabase: Tools/build-ninja
+  Add:
+    - -std=c++20
+    - -xc++
+    - -ITools/ResourceTools/include
+    - -IEngine/include
+    - -IThirdParty/stb
+    - -IThirdParty/ufbx
+    - -IThirdParty/cgltf
+    - -DNOMINMAX
+    - -DWIN32_LEAN_AND_MEAN
+
+---
+If:
+  PathMatch: Projects/.*
+CompileFlags:
+  Add:
+    - -std=c++20
+    - -xc++
+    - -IRuntime
+    - -IRuntime/Application
+    - -IEngine/include
+    - -IThirdParty/glad/include
+    - -IThirdParty/stb
+    - -DNOMINMAX
+    - -DWIN32_LEAN_AND_MEAN

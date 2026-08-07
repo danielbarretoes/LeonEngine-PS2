@@ -1,0 +1,10 @@
+{
+  "displayName": "Leon Furytoon",
+  "engineVersion": "0.9.0",
+  "name": "Furytoon",
+  "defaultLevel": "Levels/MainMenu.llev",
+  "defaultGameMode": "furytoon-menu",
+  "gameModes": ["furytoon-menu", "furytoon-lobby", "furytoon-match"],
+  "buildDedicatedServer": true,
+  "description": "Main Menu -> Lobby -> Kitchen arena. Party fighter (War of the Whiskers lite): 3D move, double jump, light/heavy combos, AI bots, up to 4 fighters. Procedural geometry only."
+}

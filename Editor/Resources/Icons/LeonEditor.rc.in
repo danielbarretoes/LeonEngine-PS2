@@ -1,0 +1,5 @@
+// Application icon (Explorer / taskbar / Alt-Tab).
+// Requires BMP/DIB .ico (not PNG-in-ICO) — regenerate with Scripts/make-editor-icon.py
+// Numeric ID 1 is what the Windows shell treats as the primary exe icon.
+#define IDI_LEON_EDITOR 1
+IDI_LEON_EDITOR ICON "@LEON_EDITOR_ICO@"

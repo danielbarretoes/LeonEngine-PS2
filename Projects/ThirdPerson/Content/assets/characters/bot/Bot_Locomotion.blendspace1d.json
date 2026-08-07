@@ -1,0 +1,16 @@
+{
+  "axisMax": 1.0,
+  "axisMin": 0.0,
+  "name": "Bot_Locomotion",
+  "samples": [
+    {
+      "anim": "Anims/BreathingIdle.lanim",
+      "position": 0.0
+    },
+    {
+      "anim": "Anims/Running.lanim",
+      "position": 1.0
+    }
+  ],
+  "version": 1
+}

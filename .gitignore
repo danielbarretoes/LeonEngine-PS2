@@ -1,0 +1,59 @@
+# Build
+.vs/
+out/
+build/
+build-ninja/
+build-linux/
+cmake-build-*/
+compile_commands.json
+Editor/build/
+Editor/build-ninja/
+Editor/build-fast/
+Editor/build-linux/
+Engine/build/
+Engine/build-ninja/
+Tools/build/
+Tools/build-fast/
+Tools/build-ninja/
+Projects/*/build/
+Projects/*/build-fast/
+Projects/*/build-ninja/
+Projects/*/build-linux/
+Projects/*/Shipping/
+dist/
+Dist/
+
+# FetchContent source trees (any build dir)
+**/_deps/
+
+# Legacy (pre-migration)
+engine/build/
+engine/build-ninja/
+games/*/build/
+
+# Binaries / objects (keep mesh assets)
+*.exe
+*.pdb
+*.ilk
+*.lib
+*.dll
+*.exp
+*.o
+*.a
+*.obj
+!assets/**/*.obj
+!Engine/Assets/**/*.obj
+
+# DCC source (not needed at runtime)
+*.max
+*.mb
+*.blend1
+
+# IDE / OS / tooling
+.idea/
+.cache/
+__pycache__/
+*.user
+*.suo
+.DS_Store
+Thumbs.db
