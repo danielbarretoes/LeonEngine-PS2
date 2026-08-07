@@ -1,6 +1,5 @@
-#include <GLFW/glfw3.h>
-
 #include <algorithm>
+#include <leon/core/EKey.h>
 #include <leon/core/InputActions.h>
 #include <leon/core/InputMapping.h>
 
@@ -20,24 +19,32 @@ void InputMappingContext::BindActionKey(std::string_view action, int key) {
     actions_[std::string(action)].push_back(key);
 }
 
+void InputMappingContext::BindAxisKey(std::string_view action, EKey key, float scale) {
+    BindAxisKey(action, ToKeyCode(key), scale);
+}
+
+void InputMappingContext::BindActionKey(std::string_view action, EKey key) {
+    BindActionKey(action, ToKeyCode(key));
+}
+
 InputMappingContext InputMappingContext::MakeDefault() {
     InputMappingContext ctx;
     using namespace InputActions;
 
-    ctx.BindAxisKey(MoveForward, GLFW_KEY_W, 1.0f);
-    ctx.BindAxisKey(MoveForward, GLFW_KEY_UP, 1.0f);
-    ctx.BindAxisKey(MoveForward, GLFW_KEY_S, -1.0f);
-    ctx.BindAxisKey(MoveForward, GLFW_KEY_DOWN, -1.0f);
+    ctx.BindAxisKey(MoveForward, EKey::W, 1.0f);
+    ctx.BindAxisKey(MoveForward, EKey::Up, 1.0f);
+    ctx.BindAxisKey(MoveForward, EKey::S, -1.0f);
+    ctx.BindAxisKey(MoveForward, EKey::Down, -1.0f);
 
-    ctx.BindAxisKey(MoveRight, GLFW_KEY_D, 1.0f);
-    ctx.BindAxisKey(MoveRight, GLFW_KEY_RIGHT, 1.0f);
-    ctx.BindAxisKey(MoveRight, GLFW_KEY_A, -1.0f);
-    ctx.BindAxisKey(MoveRight, GLFW_KEY_LEFT, -1.0f);
+    ctx.BindAxisKey(MoveRight, EKey::D, 1.0f);
+    ctx.BindAxisKey(MoveRight, EKey::Right, 1.0f);
+    ctx.BindAxisKey(MoveRight, EKey::A, -1.0f);
+    ctx.BindAxisKey(MoveRight, EKey::Left, -1.0f);
 
-    ctx.BindAxisKey(MoveUp, GLFW_KEY_E, 1.0f);
-    ctx.BindAxisKey(MoveUp, GLFW_KEY_Q, -1.0f);
+    ctx.BindAxisKey(MoveUp, EKey::E, 1.0f);
+    ctx.BindAxisKey(MoveUp, EKey::Q, -1.0f);
 
-    ctx.BindActionKey(Jump, GLFW_KEY_SPACE);
+    ctx.BindActionKey(Jump, EKey::Space);
     return ctx;
 }
 
@@ -82,7 +89,7 @@ void PlayerInput::Update(const Window& window) {
     for (const auto& [name, keys] : effectiveAxes_) {
         float value = 0.0f;
         for (const InputAxisKey& binding : keys) {
-            if (window.IsKeyPressed(binding.key)) {
+            if (window.IsKeyPressed(static_cast<EKey>(binding.key))) {
                 value += binding.scale;
             }
         }
@@ -93,7 +100,7 @@ void PlayerInput::Update(const Window& window) {
     for (const auto& [name, keys] : effectiveActions_) {
         bool pressed = false;
         for (int key : keys) {
-            if (window.IsKeyPressed(key)) {
+            if (window.IsKeyPressed(static_cast<EKey>(key))) {
                 pressed = true;
                 break;
             }

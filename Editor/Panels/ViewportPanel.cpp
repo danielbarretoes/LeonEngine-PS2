@@ -18,6 +18,7 @@
 #include <ImGuizmo.h>
 #include <iostream>
 #include <leon/core/Camera.h>
+#include <leon/core/EKey.h>
 #include <leon/core/Paths.h>
 #include <leon/core/Window.h>
 #include <leon/editor/EditorAssetPaths.h>
@@ -429,9 +430,9 @@ void ViewportPanel::HandleCameraInput(EditorContext& ctx, float deltaTime) {
     const bool wantMove =
         (flyActive_ && !ortho) ||
         (ortho && ctx.viewportHovered &&
-         (window.IsKeyPressed(GLFW_KEY_W) || window.IsKeyPressed(GLFW_KEY_S) ||
-          window.IsKeyPressed(GLFW_KEY_A) || window.IsKeyPressed(GLFW_KEY_D) ||
-          window.IsKeyPressed(GLFW_KEY_Q) || window.IsKeyPressed(GLFW_KEY_E)));
+         (window.IsKeyPressed(leon::EKey::W) || window.IsKeyPressed(leon::EKey::S) ||
+          window.IsKeyPressed(leon::EKey::A) || window.IsKeyPressed(leon::EKey::D) ||
+          window.IsKeyPressed(leon::EKey::Q) || window.IsKeyPressed(leon::EKey::E)));
     if (wantMove && !io.WantTextInput) {
         EnsureEditorFreeLook(*ctx.camera);
         const float speed =
@@ -442,35 +443,35 @@ void ViewportPanel::HandleCameraInput(EditorContext& ctx, float deltaTime) {
         const glm::vec3 up{0.0f, 1.0f, 0.0f};
         if (ortho) {
             const glm::vec3 camUp = glm::normalize(glm::cross(right, forward));
-            if (window.IsKeyPressed(GLFW_KEY_W)) {
+            if (window.IsKeyPressed(leon::EKey::W)) {
                 eye += camUp * speed;
             }
-            if (window.IsKeyPressed(GLFW_KEY_S)) {
+            if (window.IsKeyPressed(leon::EKey::S)) {
                 eye -= camUp * speed;
             }
-            if (window.IsKeyPressed(GLFW_KEY_A)) {
+            if (window.IsKeyPressed(leon::EKey::A)) {
                 eye -= right * speed;
             }
-            if (window.IsKeyPressed(GLFW_KEY_D)) {
+            if (window.IsKeyPressed(leon::EKey::D)) {
                 eye += right * speed;
             }
         } else {
-            if (window.IsKeyPressed(GLFW_KEY_W)) {
+            if (window.IsKeyPressed(leon::EKey::W)) {
                 eye += forward * speed;
             }
-            if (window.IsKeyPressed(GLFW_KEY_S)) {
+            if (window.IsKeyPressed(leon::EKey::S)) {
                 eye -= forward * speed;
             }
-            if (window.IsKeyPressed(GLFW_KEY_A)) {
+            if (window.IsKeyPressed(leon::EKey::A)) {
                 eye -= right * speed;
             }
-            if (window.IsKeyPressed(GLFW_KEY_D)) {
+            if (window.IsKeyPressed(leon::EKey::D)) {
                 eye += right * speed;
             }
-            if (window.IsKeyPressed(GLFW_KEY_Q)) {
+            if (window.IsKeyPressed(leon::EKey::Q)) {
                 eye -= up * speed;
             }
-            if (window.IsKeyPressed(GLFW_KEY_E)) {
+            if (window.IsKeyPressed(leon::EKey::E)) {
                 eye += up * speed;
             }
         }

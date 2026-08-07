@@ -1,7 +1,11 @@
 # Build
 .vs/
 out/
+# Avoid bare "build/" — on Windows (case-insensitive) it also ignores
+# the PascalCase Build/ CMake helpers. Un-ignore that tree explicitly.
 build/
+!/Build/
+!/Build/**
 build-ninja/
 build-linux/
 cmake-build-*/
@@ -19,7 +23,10 @@ Projects/*/build/
 Projects/*/build-fast/
 Projects/*/build-ninja/
 Projects/*/build-linux/
+Projects/*/build-ps2/
 Projects/*/Shipping/
+Samples/*/build-ps2/
+*.elf
 dist/
 Dist/
 

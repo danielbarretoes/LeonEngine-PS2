@@ -4,8 +4,8 @@ REM Intermediate:  <project>\build-fast\  (or build\Release)
 REM Portable ship: <project>\Shipping\   (copy this folder to another PC)
 REM Usage:
 REM   Scripts\build-project.bat <projectDir> [cmakeTarget] [--with-server]
-REM   Scripts\build-project.bat Projects\CoopTp
-REM   Scripts\build-project.bat Projects\CoopTp leon-CoopTp --with-server
+REM   Scripts\build-project.bat Projects\MyGame
+REM   Scripts\build-project.bat Projects\MyGame leon-MyGame --with-server
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0.."
 set "ROOT=%CD%"
@@ -13,7 +13,7 @@ set "ROOT=%CD%"
 if "%~1"=="" (
   echo Usage: Scripts\build-project.bat ^<projectDir^> [cmakeTarget] [--with-server]
   echo   Scripts\build-project.bat Projects\Smoke leon-smoke
-  echo   Scripts\build-project.bat Projects\CoopTp leon-CoopTp --with-server
+  echo   Scripts\build-project.bat Projects\MyGame leon-MyGame --with-server
   echo LEON_BUILD_EXIT=1
   exit /b 1
 )

@@ -5,13 +5,17 @@
 | Need | Required for | Notes |
 | --- | --- | --- |
 | CMake 3.20+ | All builds | Prefer install under `C:\Program Files\CMake\bin` (scripts prepend it) |
-| C++20 compiler (MSVC 2022+ / VS 18, or clang/gcc) | All builds | Scripts look for Community / Professional / **Enterprise** |
+| C++20 compiler (MSVC 2022+ / VS 18, or clang/gcc) | **Host** Editor / Tools / PC packs | Scripts look for Community / Professional / **Enterprise** |
 | Git | FetchContent deps | |
-| GPU / driver with **OpenGL 3.3** | Editor / windowed projects | Headless init skips GL |
+| GPU / driver with **OpenGL 3.3** | Editor / windowed host projects | Headless init skips GL |
 | [Ninja](https://ninja-build.org/) | Fast incremental, clangd, `test.bat` | `winget install Ninja-build.Ninja` |
 | clang-format (VS LLVM) | `format.bat` / `lint.bat` | Bundled with Visual Studio “C++ Clang tools” |
+| [ps2dev](https://github.com/ps2dev/ps2dev) + `PS2DEV` / `PS2SDK` | **PS2** EE cross-builds | WSL2 Ubuntu or Docker (`Scripts/build-ps2-docker.sh`) |
+| [PCSX2](https://pcsx2.net/) | Run / debug `.elf` | Load ELF directly or via `host:` path |
 
-The repo root is **not** a CMake project — configure `Editor`, `Projects/<name>`, or `Tools`.
+This repo is **PS2-first / dual-target**: Host (Windows) authors and cooks; Target (EE) runs lean Runtime packs.
+
+The repo root is **not** a CMake project — configure `Editor`, `Projects/<name>`, `Tools`, or PS2 via toolchain.
 
 ## Scripts (`Scripts/`)
 
@@ -29,6 +33,8 @@ The repo root is **not** a CMake project — configure `Editor`, `Projects/<name
 | `format.bat` | clang-format in-place | Includes `Templates/`; skips `build*`, `_deps`, `_leon_*`, `.git` |
 | `lint.bat` | format dry-run + Release Editor build | Same dirs as format |
 | `build-linux.sh` | Linux Editor + tests | `Editor/build-linux` |
+| `build-ps2.sh` | EE cross-build (ps2dev env) | `Projects/Ps2Lab/build-ps2/leon-Ps2Lab.elf` |
+| `build-ps2-docker.sh` | Same via `ghcr.io/ps2dev/ps2dev` | Works from Windows Docker Desktop |
 
 ### Editor build trees (do not merge casually)
 
@@ -95,46 +101,18 @@ Editor\build-ninja\LeonEngine.exe
 
 ## Projects
 
+Canonical in-repo pack is the PS2 capability lab:
+
+```powershell
+.\Scripts\build-ps2-docker.ps1 lab
+# → Projects/Ps2Lab/build-ps2/leon-Ps2Lab.elf
+```
+
+Host gameplay packs are created from the Editor (**File → New Project**) using `Templates/Blank` or `Templates/ThirdPerson`, then built with:
+
 ```bat
-cmake -S Projects/Smoke -B Projects/Smoke/build -G "Visual Studio 18 2026" -A x64
-cmake --build Projects/Smoke/build --config Release
-Projects\Smoke\build\Release\leon-smoke.exe
+Scripts\build-project.bat Projects\<YourPack>
 ```
-
-### Coop LAN (`Projects/CoopTp`)
-
-Flow: **MainMenu** → **Lobby** (pick map) → **Courtyard** or **Rooftops** (2P LAN).
-
-```bat
-REM Client only
-Scripts\build-project.bat Projects\CoopTp leon-CoopTp
-
-REM Client + headless dedicated (leon-CoopTp-server)
-Scripts\build-project.bat Projects\CoopTp leon-CoopTp --with-server
-```
-
-Linux (native build on a Linux host — no Win→Linux cross-compile from these scripts):
-
-```bash
-Scripts/build-project.sh Projects/CoopTp leon-CoopTp --with-server
-```
-
-Or open `Projects/CoopTp` in the Editor to author levels (assign GameMode Override in World Settings; Game Default Map in **Edit → Project Settings**). Enable **Build dedicated headless server** in Project Settings so **Build → Build Game** passes `--with-server` (`leon.game.json` → `buildDedicatedServer`). Full Menu/Lobby/match + net runs in the pack executable — the Editor only embeds `Default` / `third-person` PIE previews.
-
-
-| Screen | Controls |
-| --- | --- |
-| Main Menu | Host / Join Listen Host / Join Dedicated / Quit; **Esc** / **Backspace** Quit |
-| Lobby (Listen / Dedicated) | Pick map, **Start Match**; **Esc** / **Backspace** → Main Menu |
-| Lobby (Client) | Wait for Start Match; **Disconnect** or **Esc** / **Backspace** |
-| Match | WASD / mouse / Space; **Esc** / **Backspace** pause / resume; hold **Tab** player list (`GameState::PlayerArray`) |
-| Dedicated binary | `Shipping\leon-CoopTp-server.exe` (or `run-dedicated.bat`) — headless by default; optional `--port 7777` / `--tick 60` |
-| CLI dedicated (client exe) | `leon-CoopTp.exe --dedicated --port 7777` → Courtyard headless |
-| Smoke dedicated | `Scripts\smoke-coop-dedicated.bat` (expects Shipping or build-fast exe) |
-| Smoke packs (optional) | `Scripts\smoke-packs.ps1` — CoopTp / Zombies / Furytoon dedicated headless |
-| Join Dedicated | Main Menu → Join Dedicated (LAN IP:7777), or `leon-CoopTp.exe --join 192.168.x.x` |
-
-Default port **7777**. Join Dedicated uses the same UDP join path as Join Listen Host; the distinction is UX (you expect a headless `leon-CoopTp-server` already running). Standalone PIE on a gameplay map still supports **H** / **C** / **V** / **F9**. Snapshots replicate pawns + dynamic bodies; **Welcome / Travel** keep clients on the host map.
 
 ## Tools
 
@@ -210,11 +188,50 @@ Scripts\lint.bat
 
 Both skip generated trees under `build`, `build-*`, `_deps`, `_leon_*`, and `.git`.
 
+## PS2 (Emotion Engine)
+
+**Toolchain (WSL2 Ubuntu recommended):**
+
+1. Install [ps2dev](https://github.com/ps2dev/ps2dev) and export:
+   - `PS2DEV` (e.g. `/usr/local/ps2dev`)
+   - `PS2SDK` (`$PS2DEV/ps2sdk`)
+   - prepend `$PS2DEV/ee/bin` to `PATH`
+2. Validate toolchain only:
+   ```bash
+   Scripts/build-ps2.sh hello
+   # → Samples/Ps2Hello/build-ps2/leon-Ps2Hello.elf
+   ```
+3. Capability lab (clear / pulse / pad / embedded LPS2; Start to quit):
+   ```bash
+   Scripts/build-ps2.sh lab
+   # → Projects/Ps2Lab/build-ps2/leon-Ps2Lab.elf
+   ```
+
+**Docker (no local ps2dev — recommended on Windows):**
+
+```powershell
+.\Scripts\build-ps2-docker.ps1 hello
+.\Scripts\build-ps2-docker.ps1 lab
+```
+
+Or from Git Bash / WSL: `Scripts/build-ps2-docker.sh hello`. Outputs:
+
+- `Samples/Ps2Hello/build-ps2/leon-Ps2Hello.elf`
+- `Projects/Ps2Lab/build-ps2/leon-Ps2Lab.elf`
+
+CMake entry: `-DCMAKE_TOOLCHAIN_FILE=Build/toolchains/ps2-ee.cmake` sets `LEON_PLATFORM=PS2` and `LEON_RHI=PS2`.
+
+**PCSX2:** File → Run ELF → pick `leon-Ps2Lab.elf`. For cooked assets on disk, use a PCSX2 `host:` folder or ISO layout documented under [ASSET_FORMATS — PS2](ASSET_FORMATS.md#ps2-cooked-lps2). The lab also embeds `SM_Triangle.lps2` for header validation without hostfs.
+
+Host Editor remains the content/cook path (`Scripts\build.bat`, `Scripts\cook.bat`).
+
 ## Troubleshooting
 
 | Symptom | Fix |
 | --- | --- |
-| `cmake -S .` fails | Expected — configure `Editor`, `Projects/<name>`, or `Tools` |
+| `cmake -S .` fails | Expected — configure `Editor`, `Projects/<name>`, `Tools`, or PS2 toolchain |
+| `PS2DEV is not set` | Install ps2dev / use `build-ps2-docker.sh` |
+| `ee-g++` missing | Ensure `$PS2DEV/ee/bin` is on `PATH` inside WSL/Docker |
 | `VsDevCmd.bat not found` | Install VS 18 or 2022 with C++ workload (any edition) |
 | Levels/materials missing next to exe | Rebuild so POST_BUILD syncs `assets/` + `Projects/<pack>/` |
 | clangd missing includes / false “no member” | `Scripts\configure-ninja.bat` (fixes paths); Restart Language Server |

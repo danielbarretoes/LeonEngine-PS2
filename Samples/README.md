@@ -1,9 +1,8 @@
 # Samples/
 
-Unreal-style **sample packs** live under `Projects/` with fixed names (no `{{NAME}}` rename):
-
-| Pack | Build |
+| Path | Role |
 | --- | --- |
-| [`Projects/ThirdPerson`](../Projects/ThirdPerson) | `Scripts\build-project.bat Projects\ThirdPerson` |
+| [`Ps2Hello/`](Ps2Hello/) | Toolchain-only EE ELF (`Scripts/build-ps2-docker.ps1 hello`) |
+| [`../Projects/Ps2Lab`](../Projects/Ps2Lab/) | Canonical lean-Engine PS2 capability pack |
 
-`Templates/ThirdPerson` is the **New Project** seed (copied as-is; fixed `ThirdPerson*` types). Prefer `Projects/ThirdPerson` when you want the canonical sample pack in-repo.
+Host gameplay packs are created from the Editor via `Templates/Blank` or `Templates/ThirdPerson`.

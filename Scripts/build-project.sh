@@ -4,8 +4,8 @@
 # Portable ship: <project>/Shipping/
 # Usage:
 #   Scripts/build-project.sh <projectDir> [cmakeTarget] [--with-server]
-#   Scripts/build-project.sh Projects/CoopTp
-#   Scripts/build-project.sh Projects/CoopTp leon-CoopTp --with-server
+#   Scripts/build-project.sh Projects/MyGame
+#   Scripts/build-project.sh Projects/MyGame leon-MyGame --with-server
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

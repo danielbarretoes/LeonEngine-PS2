@@ -9,7 +9,7 @@ Physical layout matches [Docs/ARCHITECTURE.md](../Docs/ARCHITECTURE.md).
 Prefer configuring an **app** that pulls this tree:
 
 - Editor: `cmake -S ../Editor`
-- Project: `cmake -S ../Projects/Smoke`
+- PS2 Lab: `Scripts/build-ps2.sh lab`
 - Tools: `cmake -S ../Tools`
 
 ## Folders

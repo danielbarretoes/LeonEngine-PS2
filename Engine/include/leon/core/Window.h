@@ -1,14 +1,16 @@
 #pragma once
 
 #include <functional>
+#include <leon/core/EKey.h>
 #include <leon/rhi/IRHIDevice.h>
 #include <memory>
 
-struct GLFWwindow;
-
 namespace leon {
 
-/// OS window + graphics context (GLFW). GL loading goes through IRHIDevice.
+/// Opaque OS / graphics window handle (GLFW on Host, GS context on PS2).
+using NativeWindowHandle = void*;
+
+/// OS window + graphics context. GPU entry points go through IRHIDevice.
 class Window {
 public:
     using ScrollCallback = std::function<void(double yOffset)>;
@@ -20,13 +22,11 @@ public:
     Window& operator=(const Window&) = delete;
 
     bool Create(int width, int height, const char* title);
-    /// Secondary OS window sharing the OpenGL context of `shareWith` (no second RHI).
-    bool CreateShared(GLFWwindow* shareWith, int width, int height, const char* title);
+    /// Secondary Host window sharing the GL context of `shareWith` (Editor PIE). No-op on PS2.
+    bool CreateShared(const Window& shareWith, int width, int height, const char* title);
     void Destroy();
 
-    /// Make this window's GL context current (needed when rendering to a shared play window).
     void MakeContextCurrent();
-    /// Show + raise + focus (needed so GLFW_CURSOR_DISABLED / keyboard work on PIE New Window).
     void Show();
     void Focus();
     [[nodiscard]] bool IsFocused() const;
@@ -35,7 +35,7 @@ public:
     void PollEvents();
     void SwapBuffers();
 
-    [[nodiscard]] GLFWwindow* Handle() const { return handle_; }
+    [[nodiscard]] NativeWindowHandle NativeHandle() const { return handle_; }
     [[nodiscard]] rhi::IRHIDevice* RHIDevice() const { return rhi_.get(); }
 
     [[nodiscard]] int Width() const { return windowWidth_; }
@@ -48,34 +48,34 @@ public:
 
     [[nodiscard]] float Aspect() const;
 
-    [[nodiscard]] bool IsKeyPressed(int key) const;
-    [[nodiscard]] bool IsMouseButtonDown(int button) const;
+    [[nodiscard]] bool IsKeyPressed(EKey key) const;
+    [[nodiscard]] bool IsMouseButtonDown(EMouseButton button) const;
     void GetCursorPos(double& x, double& y) const;
 
     void SetCursorCaptured(bool captured);
     [[nodiscard]] bool IsCursorCaptured() const { return cursorCaptured_; }
 
-    /// Set the OS window / taskbar icon from a PNG (RGBA). No-op if the file cannot be loaded.
     bool SetIconFromFile(const char* pngPath);
 
     void SetScrollCallback(ScrollCallback callback);
 
+    /// Backend callbacks (Host GLFW / PS2 pad) update sizes through these.
+    void ApplyWindowSize(int width, int height);
+    void ApplyFramebufferSize(int width, int height);
+    void NotifyScroll(double yOffset);
+
 private:
-    void syncSizesFromGlfw();
+    void syncSizesFromBackend();
 
-    static void windowSizeCallback(GLFWwindow* window, int width, int height);
-    static void framebufferSizeCallback(GLFWwindow* window, int width, int height);
-    static void scrollCallback(GLFWwindow* window, double xOffset, double yOffset);
-
-    GLFWwindow* handle_ = nullptr;
+    NativeWindowHandle handle_ = nullptr;
     std::unique_ptr<rhi::IRHIDevice> rhi_;
     int windowWidth_ = 0;
     int windowHeight_ = 0;
     int framebufferWidth_ = 0;
     int framebufferHeight_ = 0;
-    /// True when this window holds a process-wide GLFW init ref (primary and shared windows).
-    bool glfwOwned_ = false;
+    bool backendOwned_ = false;
     bool cursorCaptured_ = false;
+    bool shouldClose_ = false;
     ScrollCallback scrollCallback_;
 };
 

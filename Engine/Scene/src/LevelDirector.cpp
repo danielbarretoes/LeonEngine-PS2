@@ -7,8 +7,11 @@
 #include <cstring>
 #include <iostream>
 #include <leon/Engine.h>
+#include <leon/core/EKey.h>
 #include <leon/level/LevelDirector.h>
+#include <leon/core/EKey.h>
 #include <leon/level/LevelLoader.h>
+#include <leon/core/EKey.h>
 #include <string_view>
 #include <vector>
 
@@ -250,8 +253,8 @@ bool LevelDirector::HandleUiInput(Engine& engine) {
 
     bool switched = false;
 
-    const bool prevKey = engine.GetWindow().IsKeyPressed(GLFW_KEY_LEFT_BRACKET);
-    const bool nextKey = engine.GetWindow().IsKeyPressed(GLFW_KEY_RIGHT_BRACKET);
+    const bool prevKey = engine.GetWindow().IsKeyPressed(EKey::LeftBracket);
+    const bool nextKey = engine.GetWindow().IsKeyPressed(EKey::RightBracket);
     if (prevKey && !keyPrevDown_) {
         switched = Previous(engine) || switched;
     }
@@ -263,8 +266,9 @@ bool LevelDirector::HandleUiInput(Engine& engine) {
 
     // Digit keys 1–9 (and keypad) jump to catalog slot (1-based → index 0–8).
     for (int digit = 0; digit < 9; ++digit) {
-        const bool down = engine.GetWindow().IsKeyPressed(GLFW_KEY_1 + digit) ||
-                          engine.GetWindow().IsKeyPressed(GLFW_KEY_KP_1 + digit);
+        const bool down =
+            engine.GetWindow().IsKeyPressed(static_cast<EKey>(ToKeyCode(EKey::Num1) + digit)) ||
+            engine.GetWindow().IsKeyPressed(static_cast<EKey>(ToKeyCode(EKey::Kp1) + digit));
         if (down && !digitWasDown_[digit]) {
             const auto index = static_cast<std::size_t>(digit);
             if (index < catalog_.NumEntries() && index != currentIndex_) {
@@ -274,7 +278,7 @@ bool LevelDirector::HandleUiInput(Engine& engine) {
         digitWasDown_[digit] = down;
     }
 
-    const bool mouseDown = engine.GetWindow().IsMouseButtonDown(GLFW_MOUSE_BUTTON_LEFT);
+    const bool mouseDown = engine.GetWindow().IsMouseButtonDown(EMouseButton::Left);
     // Captured cursor uses relative motion; chrome hit-testing needs a visible cursor.
     if (mouseDown && !mouseWasDown_ && !engine.IsCursorCaptured()) {
         float x = 0.0f;

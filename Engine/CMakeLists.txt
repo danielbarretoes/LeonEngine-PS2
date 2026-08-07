@@ -1,5 +1,5 @@
 # Leon Engine modules + facade. Apps add_subdirectory(Engine) or configure from Editor/Projects.
-# Prefer: cmake -S Editor | cmake -S Projects/Smoke | cmake -S Tools
+# Prefer: cmake -S Editor | cmake -S Projects/Ps2Lab | cmake -S Tools
 #
 # Physical layout matches Docs/ARCHITECTURE.md:
 #   Core/Platform → Assets/Net/RHI-iface/Serialization → Renderer/Anim/Scene → Gameplay
@@ -38,8 +38,8 @@ if(_LEON_ENGINE_IS_TOPLEVEL)
     set(LEON_ENGINE_ASSETS "${CMAKE_CURRENT_SOURCE_DIR}/Assets" CACHE PATH "Engine runtime assets root")
     set(LEON_PROJECTS_ROOT "${LEON_REPO_ROOT}/Projects" CACHE PATH "Projects root (replaces games/)")
 
-    set(LEON_RHI "OpenGL" CACHE STRING "RHI plugin (OpenGL)")
-    set_property(CACHE LEON_RHI PROPERTY STRINGS OpenGL)
+    set(LEON_RHI "OpenGL" CACHE STRING "RHI plugin (OpenGL|PS2)")
+    set_property(CACHE LEON_RHI PROPERTY STRINGS OpenGL PS2)
 
     include("${LEON_REPO_ROOT}/Build/Dependencies.cmake")
 
@@ -62,6 +62,10 @@ else()
     if(NOT DEFINED LEON_RHI)
         set(LEON_RHI "OpenGL" CACHE STRING "RHI plugin")
     endif()
+    # Consumer apps include Dependencies before add_subdirectory(Engine); ensure platform flags exist.
+    if(NOT DEFINED LEON_PLATFORM_HOST AND NOT DEFINED LEON_PLATFORM_PS2)
+        include("${LEON_REPO_ROOT}/Build/LeonPlatform.cmake")
+    endif()
 endif()
 
 set(_LEON_PUBLIC_INC
@@ -69,6 +73,11 @@ set(_LEON_PUBLIC_INC
     $<BUILD_INTERFACE:${LEON_REPO_ROOT}/ThirdParty/stb>
     $<INSTALL_INTERFACE:include>
 )
+
+if(LEON_PLATFORM_PS2)
+    include("${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.Ps2.txt")
+    return()
+endif()
 
 # --- Interface-only contracts ---
 add_library(leon_rhi INTERFACE)
@@ -95,10 +104,10 @@ if(WIN32)
 endif()
 add_library(Leon::Core ALIAS leon_core)
 
-# --- Platform ---
+# --- Platform (Host GLFW) ---
 add_library(leon_platform STATIC
-    Platform/src/Window.cpp
-    Platform/src/MemoryStats.cpp
+    Platform/src/Host/WindowGlfw.cpp
+    Platform/src/Host/MemoryStatsHost.cpp
 )
 target_include_directories(leon_platform PUBLIC ${_LEON_PUBLIC_INC})
 target_link_libraries(leon_platform PUBLIC
@@ -314,7 +323,13 @@ target_link_libraries(leon_engine_core INTERFACE
 add_library(Leon::EngineCore ALIAS leon_engine_core)
 
 # --- Plugins ---
-add_subdirectory("${LEON_REPO_ROOT}/Plugins/RHI/OpenGL" "${CMAKE_BINARY_DIR}/_leon_rhi_opengl")
+if(LEON_RHI STREQUAL "PS2")
+    add_subdirectory("${LEON_REPO_ROOT}/Plugins/RHI/PS2" "${CMAKE_BINARY_DIR}/_leon_rhi_ps2")
+    set(_LEON_RHI_TARGET leon_rhi_ps2)
+else()
+    add_subdirectory("${LEON_REPO_ROOT}/Plugins/RHI/OpenGL" "${CMAKE_BINARY_DIR}/_leon_rhi_opengl")
+    set(_LEON_RHI_TARGET leon_rhi_opengl)
+endif()
 add_subdirectory("${LEON_REPO_ROOT}/Plugins/Physics/Arcade" "${CMAKE_BINARY_DIR}/_leon_physics_arcade")
 if(LEON_WITH_JOLT)
     add_subdirectory("${LEON_REPO_ROOT}/Plugins/Physics/Jolt" "${CMAKE_BINARY_DIR}/_leon_physics_jolt")
@@ -324,7 +339,7 @@ endif()
 add_library(leon_engine INTERFACE)
 target_link_libraries(leon_engine INTERFACE
     leon_engine_core
-    leon_rhi_opengl
+    ${_LEON_RHI_TARGET}
     leon_physics_arcade
 )
 if(LEON_WITH_JOLT)
@@ -339,7 +354,7 @@ target_link_libraries(leon_engine_cook INTERFACE
     leon_animation
     leon_renderer
     leon_import
-    leon_rhi_opengl
+    ${_LEON_RHI_TARGET}
 )
 add_library(Leon::EngineCook ALIAS leon_engine_cook)
 
@@ -362,7 +377,7 @@ leon_apply_compile_options(
     leon_scene
     leon_gameplay
     leon_engine_shell
-    leon_rhi_opengl
+    ${_LEON_RHI_TARGET}
     leon_physics_arcade
 )
 if(LEON_WITH_JOLT AND TARGET leon_physics_jolt)

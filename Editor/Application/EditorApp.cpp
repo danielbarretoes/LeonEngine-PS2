@@ -28,6 +28,7 @@
 #include <ImGuizmo.h>
 #include <iostream>
 #include <leon/core/Ascii.h>
+#include <leon/core/EKey.h>
 #include <leon/core/Paths.h>
 #include <leon/core/Window.h>
 #include <leon/editor/EditorApp.h>
@@ -195,7 +196,7 @@ bool EditorApp::Initialize(Engine& engine) {
     engine.SetSuppressCameraDrag(true);
     ApplyLeonWindowIcon(engine.GetWindow());
 
-    GLFWwindow* glfwWindow = engine.GetWindow().Handle();
+    GLFWwindow* glfwWindow = static_cast<GLFWwindow*>(engine.GetWindow().NativeHandle());
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
@@ -381,7 +382,7 @@ void EditorApp::UpdateWindowTitle(Engine& engine) {
     std::string title = "Leon Editor";
     if (!projectOpen_) {
         title += " — Welcome";
-        glfwSetWindowTitle(engine.GetWindow().Handle(), title.c_str());
+        glfwSetWindowTitle(static_cast<GLFWwindow*>(engine.GetWindow().NativeHandle()), title.c_str());
         return;
     }
     if (!ctx_.projectDisplayName.empty()) {
@@ -404,7 +405,7 @@ void EditorApp::UpdateWindowTitle(Engine& engine) {
     if (ctx_.dirty) {
         title += " *";
     }
-    glfwSetWindowTitle(engine.GetWindow().Handle(), title.c_str());
+    glfwSetWindowTitle(static_cast<GLFWwindow*>(engine.GetWindow().NativeHandle()), title.c_str());
 }
 
 void EditorApp::SaveEditorCamera(const Camera& camera) {
@@ -468,7 +469,7 @@ void EditorApp::StartPie(Engine& engine) {
     ctx_.pieNewWindow = ctx_.playMode == EEditorPlayMode::NewEditorWindow;
 
     if (ctx_.pieNewWindow) {
-        if (!pieWindow_.CreateShared(engine.GetWindow().Handle(), 1280, 720, "Leon Play")) {
+        if (!pieWindow_.CreateShared(engine.GetWindow(), 1280, 720, "Leon Play")) {
             std::cerr << "Editor: failed to open Play window; falling back to Selected Viewport\n";
             ctx_.pieNewWindow = false;
         } else {
@@ -496,7 +497,7 @@ void EditorApp::StartPie(Engine& engine) {
 
     // Flow: PIE GameMode selection (Unreal-like)
     // 1. Explicit Default → free-look DefaultGameMode (no pack session)
-    // 2. Known pack (CoopTp/…) → GameHostSession + RegisterModes (same as Shipping)
+    // 2. Known pack → GameHostSession + RegisterModes (same as Shipping)
     // 3. third-person / Pie / unknown → PieGameMode preview fallback
     // Prefer folder name; New Project copies keep fixed gameplay via templateId.
     PiePackInfo packInfo = FindPiePack(ctx_.projectName);
@@ -981,7 +982,7 @@ void EditorApp::DestroyPiePresentResources() {
     if (piePresentFbo_ == 0 && piePresentAttachedTex_ == 0) {
         return;
     }
-    if (pieWindow_.Handle() != nullptr) {
+    if (pieWindow_.NativeHandle() != nullptr) {
         pieWindow_.MakeContextCurrent();
         if (piePresentFbo_ != 0) {
             glDeleteFramebuffers(1, &piePresentFbo_);
@@ -1025,7 +1026,7 @@ void EditorApp::PresentPieColorTexture(unsigned int colorTexture, int srcW, int 
 }
 
 void EditorApp::RenderPieWindow(Engine& engine) {
-    if (!ctx_.piePlaying || !ctx_.pieNewWindow || pieWindow_.Handle() == nullptr) {
+    if (!ctx_.piePlaying || !ctx_.pieNewWindow || pieWindow_.NativeHandle() == nullptr) {
         return;
     }
     if (pieWindow_.ShouldClose()) {
@@ -1092,7 +1093,7 @@ void EditorApp::Run(Engine& engine) {
         }
 
         engine.GetWindow().PollEvents();
-        if (ctx_.piePlaying && ctx_.pieNewWindow && pieWindow_.Handle() != nullptr) {
+        if (ctx_.piePlaying && ctx_.pieNewWindow && pieWindow_.NativeHandle() != nullptr) {
             engine.GetInput().Update(pieWindow_);
         } else {
             engine.GetInput().Update(engine.GetWindow());
@@ -1139,9 +1140,9 @@ void EditorApp::Run(Engine& engine) {
             }
             {
                 const bool esc =
-                    ctx_.piePlaying && ctx_.pieNewWindow && pieWindow_.Handle() != nullptr
-                        ? pieWindow_.IsKeyPressed(GLFW_KEY_ESCAPE)
-                        : engine.GetWindow().IsKeyPressed(GLFW_KEY_ESCAPE);
+                    ctx_.piePlaying && ctx_.pieNewWindow && pieWindow_.NativeHandle() != nullptr
+                        ? pieWindow_.IsKeyPressed(leon::EKey::Escape)
+                        : engine.GetWindow().IsKeyPressed(leon::EKey::Escape);
                 if (ctx_.piePlaying && esc && !escapeWasDown_) {
                     StopPie(engine);
                 }
@@ -1155,7 +1156,7 @@ void EditorApp::Run(Engine& engine) {
                         engine.SetCursorCaptured(false);
                     }
                 } else if (ctx_.pieNewWindow) {
-                    const bool focused = pieWindow_.Handle() != nullptr && pieWindow_.IsFocused();
+                    const bool focused = pieWindow_.NativeHandle() != nullptr && pieWindow_.IsFocused();
                     engine.SetPlayMouseLookActive(focused);
                     if (focused && !engine.IsCursorCaptured()) {
                         engine.SetCursorCaptured(true);

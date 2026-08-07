@@ -21,7 +21,7 @@ New code **must** follow these rules. Public free functions and Core path helper
 | Namespace root | `leon` | — |
 | Types (class / struct) | PascalCase, **no** Unreal `U`/`A`/`F` prefixes | `Actor`, `World`, `HitResult` |
 | Interfaces | `I` + PascalCase | `IRHIDevice`, `IPhysicsBackend` |
-| Enums (new API) | `E` + PascalCase, prefer `enum class` + `uint8_t` | `ECameraMode`, `ENetMode` |
+| Enums (new API) | `E` + PascalCase, prefer `enum class` + `uint8_t` | `ECameraMode`, `ENetMode`, `EKey`, `EPadButton`, `EPlatform` |
 | Constants | `k` + PascalCase | `kMaxSkinBones`, `kProtocolMagic` |
 | Public methods (Core / Gameplay / Scene / Level I/O) | **PascalCase** | `SpawnActor`, `GetActorLocation`, `ResolveAssetPath` |
 | Free functions | **PascalCase** | `LoadLevelFile`, `MakeCube`, `ResolveAssetPath` |

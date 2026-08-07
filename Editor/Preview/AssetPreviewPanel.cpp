@@ -11,6 +11,7 @@
 #include <imgui.h>
 #include <iostream>
 #include <leon/content/CookedSkeletal.h>
+#include <leon/core/EKey.h>
 #include <leon/core/Paths.h>
 #include <leon/core/Window.h>
 #include <leon/editor/AssetImport.h>
@@ -255,7 +256,7 @@ void AssetPreviewPanel::HandleOrbit(EditorContext& ctx) {
         return;
     }
     Window& window = *ctx.window;
-    const bool rmb = window.IsMouseButtonDown(GLFW_MOUSE_BUTTON_RIGHT);
+    const bool rmb = window.IsMouseButtonDown(leon::EMouseButton::Right);
     double mx = 0.0;
     double my = 0.0;
     window.GetCursorPos(mx, my);

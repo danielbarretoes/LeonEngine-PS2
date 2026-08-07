@@ -1,0 +1,6 @@
+# Optional local image: FROM official ps2dev, repo mounted at build time via build-ps2-docker.sh.
+FROM ghcr.io/ps2dev/ps2dev:latest
+WORKDIR /src
+ENV PS2DEV=/usr/local/ps2dev
+ENV PS2SDK=/usr/local/ps2dev/ps2sdk
+ENV PATH="${PS2DEV}/bin:${PS2DEV}/ee/bin:${PS2DEV}/iop/bin:${PS2DEV}/dvp/bin:${PATH}"

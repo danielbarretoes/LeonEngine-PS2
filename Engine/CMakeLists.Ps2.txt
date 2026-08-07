@@ -1,0 +1,43 @@
+# PS2 lean Engine — included from Engine/CMakeLists.txt when LEON_PLATFORM_PS2.
+# Window + pad + PS2 RHI only (no GLM / OpenGL / Jolt / Net / Audio / Gameplay).
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+add_library(leon_rhi INTERFACE)
+target_include_directories(leon_rhi INTERFACE ${_LEON_PUBLIC_INC})
+add_library(Leon::RHI ALIAS leon_rhi)
+
+# Anchor lib — host Camera/Input/Transform pull GLM (IEC559 asserts fail on EE soft-float).
+add_library(leon_core STATIC
+    Platform/src/Ps2/LeonPs2Stub.cpp
+)
+target_include_directories(leon_core PUBLIC ${_LEON_PUBLIC_INC})
+add_library(Leon::Core ALIAS leon_core)
+
+add_library(leon_platform STATIC
+    Platform/src/Ps2/WindowPs2.cpp
+    Platform/src/Ps2/MemoryStatsPs2.cpp
+    Platform/src/Ps2/InputPad.cpp
+)
+target_include_directories(leon_platform PUBLIC ${_LEON_PUBLIC_INC})
+target_link_libraries(leon_platform PUBLIC leon_core leon_rhi)
+if(DEFINED ENV{PS2SDK})
+    # SifLoadModule / SifInitRpc live in libkernel (see pad_example.elf sample).
+    target_link_libraries(leon_platform PUBLIC draw packet graph dma pad kernel c)
+endif()
+add_library(Leon::Platform ALIAS leon_platform)
+
+add_subdirectory("${LEON_REPO_ROOT}/Plugins/RHI/PS2" "${CMAKE_BINARY_DIR}/_leon_rhi_ps2")
+
+add_library(leon_engine INTERFACE)
+target_link_libraries(leon_engine INTERFACE
+    leon_core
+    leon_platform
+    leon_rhi_ps2
+)
+add_library(Leon::Engine ALIAS leon_engine)
+
+include("${LEON_REPO_ROOT}/Build/LeonCompileOptions.cmake")
+leon_apply_compile_options(leon_core leon_platform leon_rhi_ps2)

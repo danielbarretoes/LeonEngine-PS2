@@ -1,5 +1,6 @@
 #pragma once
 
+#include <leon/core/EKey.h>
 #include <leon/core/Input.h>
 #include <leon/core/Window.h>
 #include <string>
@@ -12,7 +13,7 @@ namespace leon {
 
 /// One key contribution to a 1D axis (Unreal-like axis mapping entry).
 struct InputAxisKey {
-    int key = 0;        // GLFW key
+    int key = 0;        // EKey underlying code (Host matches GLFW)
     float scale = 1.0f; // typically +1 or -1
 };
 
@@ -21,9 +22,11 @@ class InputMappingContext {
 public:
     /// Bind a key that contributes `scale` to a named axis while held.
     void BindAxisKey(std::string_view action, int key, float scale = 1.0f);
+    void BindAxisKey(std::string_view action, EKey key, float scale = 1.0f);
 
     /// Bind a digital action key (pressed / just-pressed queries).
     void BindActionKey(std::string_view action, int key);
+    void BindActionKey(std::string_view action, EKey key);
 
     [[nodiscard]] const std::unordered_map<std::string, std::vector<InputAxisKey>>& Axes() const {
         return axes_;

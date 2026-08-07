@@ -17,7 +17,7 @@ struct PiePackInfo {
     PieRegisterModesFn registerModes;
 };
 
-/// Lookup by project folder name (`CoopTp`, `Zombies`, …).
+/// Lookup by project folder name (`Blank`, `Ps2Lab`, template id, …).
 [[nodiscard]] PiePackInfo FindPiePack(std::string_view projectName);
 
 } // namespace leon::editor

@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <iostream>
 #include <leon/editor/PieGameMode.h>
+#include <leon/core/EKey.h>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -113,7 +114,7 @@ public:
         inputWindow.GetCursorPos(mouseX, mouseY);
         const bool wantLook = !engine.IsCameraDragSuppressed() &&
                               (engine.IsCursorCaptured() || engine.IsPlayMouseLookActive() ||
-                               inputWindow.IsMouseButtonDown(GLFW_MOUSE_BUTTON_LEFT));
+                               inputWindow.IsMouseButtonDown(leon::EMouseButton::Left));
         if (wantLook) {
             if (mouseLookSampleValid_) {
                 const float dx = static_cast<float>(mouseX - lastMouseX_);

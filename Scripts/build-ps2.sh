@@ -1,0 +1,60 @@
+#!/usr/bin/env sh
+# Cross-build Leon PS2 targets with ps2dev (WSL2 / Linux / Docker Alpine).
+# Usage:
+#   Scripts/build-ps2.sh              # Ps2Lab
+#   Scripts/build-ps2.sh hello        # Samples/Ps2Hello
+#   Scripts/build-ps2.sh lab          # Projects/Ps2Lab
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+TARGET="${1:-lab}"
+
+if [ -z "${PS2DEV:-}" ] || [ -z "${PS2SDK:-}" ]; then
+  echo "ERROR: PS2DEV and PS2SDK must be set (see Docs/SETUP.md § PS2)."
+  exit 1
+fi
+if [ ! -x "${PS2DEV}/ee/bin/mips64r5900el-ps2-elf-g++" ]; then
+  echo "ERROR: ee g++ not found under PS2DEV=${PS2DEV}"
+  exit 1
+fi
+
+TOOLCHAIN="${ROOT}/Build/toolchains/ps2-ee.cmake"
+export PATH="${PS2DEV}/bin:${PS2DEV}/ee/bin:${PS2DEV}/iop/bin:${PS2DEV}/dvp/bin:${PATH}"
+
+case "$TARGET" in
+  hello)
+    SRC="Samples/Ps2Hello"
+    BIN="Samples/Ps2Hello/build-ps2"
+    EXE="leon-Ps2Hello.elf"
+    ;;
+  lab|smoke|*)
+    SRC="Projects/Ps2Lab"
+    BIN="Projects/Ps2Lab/build-ps2"
+    EXE="leon-Ps2Lab.elf"
+    ;;
+esac
+
+# Prefer Ninja when available (Docker script installs it).
+GEN_ARGS=""
+if command -v ninja >/dev/null 2>&1; then
+  GEN_ARGS="-G Ninja"
+fi
+
+rm -rf "$BIN"
+# cmake 3.x: pass toolchain + Release
+# shellcheck disable=SC2086
+cmake -S "$SRC" -B "$BIN" $GEN_ARGS \
+  -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DLEON_PLATFORM=PS2 \
+  -DLEON_RHI=PS2 \
+  -DLEON_BUILD_CLIENT=OFF \
+  -DLEON_BUILD_TESTS=OFF \
+  -DLEON_WITH_JOLT=OFF
+
+cmake --build "$BIN" --parallel
+
+echo ""
+echo "Built: ${BIN}/${EXE}"
+echo "Run in PCSX2 (File → Run ELF) — see Docs/SETUP.md § PS2."

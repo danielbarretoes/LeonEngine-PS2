@@ -1,0 +1,39 @@
+# Leon platform detection — include before Dependencies.cmake.
+# LEON_PLATFORM: HOST (default) | PS2
+
+if(NOT DEFINED LEON_PLATFORM OR LEON_PLATFORM STREQUAL "")
+    if(DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "ps2-ee")
+        set(LEON_PLATFORM "PS2")
+    else()
+        set(LEON_PLATFORM "HOST")
+    endif()
+endif()
+string(TOUPPER "${LEON_PLATFORM}" LEON_PLATFORM)
+
+if(NOT LEON_PLATFORM STREQUAL "HOST" AND NOT LEON_PLATFORM STREQUAL "PS2")
+    message(FATAL_ERROR "LEON_PLATFORM must be HOST or PS2 (got '${LEON_PLATFORM}')")
+endif()
+
+set(LEON_PLATFORM "${LEON_PLATFORM}" CACHE STRING "Leon build platform (HOST or PS2)" FORCE)
+set_property(CACHE LEON_PLATFORM PROPERTY STRINGS HOST PS2)
+
+if(LEON_PLATFORM STREQUAL "PS2")
+    set(LEON_PLATFORM_PS2 TRUE)
+    set(LEON_PLATFORM_HOST FALSE)
+    add_compile_definitions(LEON_PLATFORM_PS2=1)
+    if(NOT DEFINED LEON_RHI OR LEON_RHI STREQUAL "" OR LEON_RHI STREQUAL "OpenGL")
+        set(LEON_RHI "PS2" CACHE STRING "RHI plugin" FORCE)
+    endif()
+    set(LEON_BUILD_CLIENT OFF CACHE BOOL "" FORCE)
+    set(LEON_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(LEON_WITH_JOLT OFF CACHE BOOL "" FORCE)
+else()
+    set(LEON_PLATFORM_PS2 FALSE)
+    set(LEON_PLATFORM_HOST TRUE)
+    add_compile_definitions(LEON_PLATFORM_HOST=1)
+    if(NOT DEFINED LEON_RHI OR LEON_RHI STREQUAL "")
+        set(LEON_RHI "OpenGL" CACHE STRING "RHI plugin")
+    endif()
+endif()
+
+message(STATUS "Leon platform: ${LEON_PLATFORM} (RHI=${LEON_RHI})")

@@ -204,6 +204,35 @@ Recipe step schema, lean CMake deps (`leon_engine_cook` / `leon_resource_tools`)
 
 ---
 
+## PS2 cooked — `LPS2`
+
+Host-cooked mesh blob for the EE RHI (`leon::rhi::Ps2DrawCookedMesh`). Not used on Host OpenGL.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `magic` | `char[4]` | `LPS2` |
+| `version` | `u32` | `1` |
+| `vertexCount` | `u32` | Positions as XYZ float32 follow header |
+| `indexCount` | `u32` | `u16` indices follow vertices |
+
+**Budgets (soft):** keep a single mesh under ~64 KiB cooked; GS local mem ~4 MiB total. Cook rejects (future `leon-cook platform: ps2`) should fail when vertexCount exceeds project limits.
+
+**Layout on target:** stage beside the ELF under `host:Projects/Ps2Lab/Content/Meshes/` (PCSX2 hostfs) or pack into ISO. See [SETUP — PS2](SETUP.md#ps2-emotion-engine).
+
+Recipe sketch (host Tools):
+
+```json
+{
+  "platform": "ps2",
+  "staticmesh": {
+    "source": "Content/Meshes/SM_Triangle.obj",
+    "output": "Content/Meshes/SM_Triangle.lps2"
+  }
+}
+```
+
+---
+
 ## Code map
 
 | Concern | Location |
@@ -215,3 +244,4 @@ Recipe step schema, lean CMake deps (`leon_engine_cook` / `leon_resource_tools`)
 | Cache | `ResourceCache` (OpenGL plugin) |
 | Editor import | `Editor/Importers` |
 | Offline cook | `Tools/AssetPipeline/leon-cook` + `Tools/ResourceTools` ([TOOLS.md](TOOLS.md)) |
+| PS2 `LPS2` draw | `Plugins/RHI/PS2` — `Ps2UnlitMesh` |

@@ -38,10 +38,6 @@ endif()
 
 add_subdirectory("${LEON_REPO_ROOT}/Engine" "${CMAKE_BINARY_DIR}/_leon_engine")
 add_subdirectory("${LEON_REPO_ROOT}/Runtime" "${CMAKE_BINARY_DIR}/_leon_runtime")
-include("${LEON_PROJECTS_ROOT}/CoopTp/GameplayLib.cmake")
-include("${LEON_PROJECTS_ROOT}/Zombies/GameplayLib.cmake")
-include("${LEON_PROJECTS_ROOT}/Furytoon/GameplayLib.cmake")
-include("${LEON_PROJECTS_ROOT}/ThirdPerson/GameplayLib.cmake")
 
 add_library(leon_editor STATIC
     Application/EditorApp.cpp
@@ -90,10 +86,6 @@ target_link_libraries(leon_editor PUBLIC
     leon_engine
     leon_import
     leon_runtime
-    leon_coop_tp_gameplay
-    leon_zombies_gameplay
-    leon_furytoon_gameplay
-    leon_third_person_gameplay
     imgui
     imguizmo
 )

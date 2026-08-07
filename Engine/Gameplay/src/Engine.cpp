@@ -6,9 +6,13 @@
 #include <cstdio>
 #include <iostream>
 #include <leon/core/Input.h>
+#include <leon/core/EKey.h>
 #include <leon/core/MemoryStats.h>
+#include <leon/core/EKey.h>
 #include <leon/core/Paths.h>
+#include <leon/core/EKey.h>
 #include <leon/Engine.h>
+#include <leon/core/EKey.h>
 #include <string>
 #include <thread>
 
@@ -355,7 +359,7 @@ void Engine::handleInput(float deltaTime) {
     // PIE "New Window" routes capture + look here; fall back to the main window otherwise.
     Window& inputWindow = GetPlayInputWindow();
 
-    const bool f1Down = inputWindow.IsKeyPressed(GLFW_KEY_F1);
+    const bool f1Down = inputWindow.IsKeyPressed(EKey::F1);
     if (f1Down && !debugKeyWasDown_) {
         renderer_.ToggleDebugDraw();
         std::cout << "Debug draw (mesh AABB): " << (renderer_.IsDebugDrawEnabled() ? "on" : "off")
@@ -363,28 +367,28 @@ void Engine::handleInput(float deltaTime) {
     }
     debugKeyWasDown_ = f1Down;
 
-    const bool f2Down = inputWindow.IsKeyPressed(GLFW_KEY_F2);
+    const bool f2Down = inputWindow.IsKeyPressed(EKey::F2);
     if (f2Down && !collisionDebugKeyWasDown_) {
         ToggleCollisionDebug();
         std::cout << "Collision debug: " << (IsCollisionDebugEnabled() ? "on" : "off") << '\n';
     }
     collisionDebugKeyWasDown_ = f2Down;
 
-    const bool f3Down = inputWindow.IsKeyPressed(GLFW_KEY_F3);
+    const bool f3Down = inputWindow.IsKeyPressed(EKey::F3);
     if (f3Down && !navMeshDebugKeyWasDown_) {
         ToggleNavMeshDebug();
         std::cout << "NavMesh debug: " << (IsNavMeshDebugEnabled() ? "on" : "off") << '\n';
     }
     navMeshDebugKeyWasDown_ = f3Down;
 
-    const bool f4Down = inputWindow.IsKeyPressed(GLFW_KEY_F4);
+    const bool f4Down = inputWindow.IsKeyPressed(EKey::F4);
     if (f4Down && !hudStatsKeyWasDown_) {
         SetHudStatsVisible(!showHudStats_);
         std::cout << "HUD stats: " << (showHudStats_ ? "on" : "off") << '\n';
     }
     hudStatsKeyWasDown_ = f4Down;
 
-    const bool f5Down = inputWindow.IsKeyPressed(GLFW_KEY_F5);
+    const bool f5Down = inputWindow.IsKeyPressed(EKey::F5);
     if (f5Down && !reloadKeyWasDown_) {
         const EShaderReloadResult result = reloadAllShaders(true);
         if (result == EShaderReloadResult::Failed) {
@@ -422,7 +426,7 @@ void Engine::handleInput(float deltaTime) {
 
     const bool wantLook =
         !suppressCameraDrag_ &&
-        (inputWindow.IsCursorCaptured() || inputWindow.IsMouseButtonDown(GLFW_MOUSE_BUTTON_LEFT));
+        (inputWindow.IsCursorCaptured() || inputWindow.IsMouseButtonDown(EMouseButton::Left));
 
     if (wantLook) {
         if (mouseLookSampleValid_) {

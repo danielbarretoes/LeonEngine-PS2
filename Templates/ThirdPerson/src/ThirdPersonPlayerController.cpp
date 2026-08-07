@@ -4,6 +4,7 @@
 #include <GLFW/glfw3.h>
 
 #include <leon/core/Input.h>
+#include <leon/core/EKey.h>
 #include <leon/core/InputActions.h>
 #include <leon/core/Window.h>
 #include <leon/Engine.h>
@@ -32,7 +33,7 @@ glm::vec3 ThirdPersonPlayerController::TickInput(leon::Engine& engine) {
 
     const bool wantLook = !engine.IsCameraDragSuppressed() &&
                           (engine.IsCursorCaptured() || engine.IsPlayMouseLookActive() ||
-                           inputWindow.IsMouseButtonDown(GLFW_MOUSE_BUTTON_LEFT));
+                           inputWindow.IsMouseButtonDown(leon::EMouseButton::Left));
 
     if (wantLook) {
         if (mouseLookSampleValid_) {

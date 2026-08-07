@@ -1,4 +1,5 @@
 #include <leon/ui/MenuListWidget.h>
+#include <leon/core/EKey.h>
 
 #include <algorithm>
 #include <cmath>
@@ -6,6 +7,7 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <leon/core/Window.h>
+#include <leon/core/EKey.h>
 
 namespace leon {
 namespace {
@@ -124,12 +126,12 @@ std::string MenuListWidget::TickInput(Window& window, bool cursorCaptured, float
         ignoreActivateSeconds_ = std::max(0.0f, ignoreActivateSeconds_ - deltaTime);
     }
 
-    const bool up = window.IsKeyPressed(GLFW_KEY_UP) || window.IsKeyPressed(GLFW_KEY_W);
-    const bool down = window.IsKeyPressed(GLFW_KEY_DOWN) || window.IsKeyPressed(GLFW_KEY_S);
-    const bool enter = window.IsKeyPressed(GLFW_KEY_ENTER) ||
-                       window.IsKeyPressed(GLFW_KEY_KP_ENTER) ||
-                       window.IsKeyPressed(GLFW_KEY_SPACE);
-    const bool mouse = window.IsMouseButtonDown(GLFW_MOUSE_BUTTON_LEFT);
+    const bool up = window.IsKeyPressed(EKey::Up) || window.IsKeyPressed(EKey::W);
+    const bool down = window.IsKeyPressed(EKey::Down) || window.IsKeyPressed(EKey::S);
+    const bool enter = window.IsKeyPressed(EKey::Enter) ||
+                       window.IsKeyPressed(EKey::KpEnter) ||
+                       window.IsKeyPressed(EKey::Space);
+    const bool mouse = window.IsMouseButtonDown(EMouseButton::Left);
 
     auto stepSelectable = [this](int delta) {
         const int n = static_cast<int>(items_.size());
