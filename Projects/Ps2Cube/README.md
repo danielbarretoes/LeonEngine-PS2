@@ -1,10 +1,15 @@
 # Ps2Cube
 
-PS2 **3D** starter pack — perspective camera, z-buffer, per-face albedo + lighting.
+PS2 **3D scene** starter — view target, directional light, materials + textures, FPS/ms HUD.
 
-Lighting: soft ambient fill + **directional sun from above** (top faces bright, bottom in shadow).
+Editor-ready naming ([Docs/NAMING.md](../../Docs/NAMING.md)): POD fields `Location` / `BaseColor` / `Intensity`, content `T_*_D` / `M_*`, no Unreal `U`/`A`/`F` prefixes. Frame contract: clear → set view/lights → bind material → draw → HUD → swap.
 
-Face legend (white tint): **+X red**, **-X dark red**, **+Y green**, **-Y dark green**, **+Z blue**, **-Z dark blue**.
+## Features
+
+- **ViewTarget** + **DirectionalLight** (orbiting sun; pad yaw / intensity)
+- **Materials** (`M_Ground`, `M_Cube`): `BaseColor`, `BaseColorMap`, `EShadingModel::DefaultLit`
+- **Textures** (embedded procedural, Content names): `T_Grid_D`, `T_Checker_D`
+- **HUD**: `FPS` + work `ms` (5×7 DebugOverlay-lite)
 
 ## Build / run
 
@@ -16,16 +21,20 @@ PCSX2 → **File → Run ELF** → `Projects/Ps2Cube/build-ps2/leon-Ps2Cube.elf`
 
 | Input | Action |
 | --- | --- |
-| (idle) | Auto yaw / pitch |
-| D-Pad | Manual rotate (stops auto) |
+| (idle) | Object auto-spin; sun orbits |
+| D-Pad | Object yaw / pitch |
 | L1 / R1 | Orbit speed |
-| Cross (A) | Reset |
+| L2 / R2 | Sun yaw |
+| Square / Triangle | Sun intensity −/+ |
+| Cross | Reset |
 | Start | Quit |
 
 ## Layout
 
-| File | Role |
+| Path | Role |
 | --- | --- |
 | `main.cpp` | Window create / destroy |
-| `Ps2CubeDemo.*` | Camera scene loop |
-| RHI | `Ps2DrawUnlitBox` (`Plugins/RHI/PS2/src/Ps2Draw3D.cpp`) |
+| `Ps2CubeDemo.*` | Scene loop (authoring POD → RHI submit) |
+| `Content/Textures/` | `T_Checker_D` / `T_Grid_D` (embedded at runtime) |
+| `Content/Materials/` | Logical `M_Cube` / `M_Ground` |
+| RHI | `Ps2DrawBox`, `Ps2Texture`, `Ps2Material` (`Plugins/RHI/PS2`) |

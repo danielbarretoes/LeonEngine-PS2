@@ -1,4 +1,4 @@
-# Projects/Ps2Cube — PS2 EE 3D starter (perspective unlit box).
+# Projects/Ps2Cube — PS2 EE 3D scene (lit/textured boxes, lights, FPS HUD).
 #   Scripts/build-ps2.sh cube
 #   Scripts/build-ps2-docker.ps1 cube
 

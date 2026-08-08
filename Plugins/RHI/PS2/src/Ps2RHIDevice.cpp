@@ -17,7 +17,8 @@ namespace {
 
 #if defined(LEON_PLATFORM_PS2)
 
-constexpr int kPacketQwords = 512;
+// Textured box (~60 qwords) + batched HUD rects share this packet.
+constexpr int kPacketQwords = 2048;
 
 bool SetupDrawingEnvironment(ps2::GsContext& gs) {
     if (gs.packet == nullptr) {

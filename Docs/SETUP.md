@@ -201,7 +201,7 @@ Both skip generated trees under `build`, `build-*`, `_deps`, `_leon_*`, and `.gi
    Scripts/build-ps2.sh hello
    # → Samples/Ps2Hello/build-ps2/leon-Ps2Hello.elf
    ```
-3. 3D starter (perspective boxes + z-buffer; Start to quit):
+3. 3D scene (lit/textured boxes, dynamic sun, FPS HUD; Start to quit):
    ```bash
    Scripts/build-ps2.sh cube
    # → Projects/Ps2Cube/build-ps2/leon-Ps2Cube.elf

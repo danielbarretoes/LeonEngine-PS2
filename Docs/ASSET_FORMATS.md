@@ -231,6 +231,20 @@ Recipe sketch (host Tools):
 }
 ```
 
+### PS2 materials / textures (runtime lite)
+
+EE uses a **subset** of `.lmat` field names for editor-ready PODs (`leon::rhi::Ps2Material`):
+
+| Field | Notes |
+| --- | --- |
+| `BaseColor` | RGB tint |
+| `BaseColorMap` | Optional `Ps2Texture` (`T_*_D`) |
+| `ShadingModel` | `DefaultLit` \| `Unlit` (`EShadingModel`) |
+
+Textures: Unreal basenames under `Content/Textures/` (`T_Checker_D`, `T_Grid_D`). Ps2Cube embeds procedural RGBA via `Ps2Texture::Create*` (no hostfs). Full PNG cook → GS upload is future work.
+
+Scene lights / view: `Ps2ViewTarget`, `DirectionalLight` (Intensity / LightColor / aim), `Ps2SetAmbientLightColor` — same naming intent as host level lights for a future Editor bridge.
+
 ---
 
 ## Code map
@@ -245,3 +259,4 @@ Recipe sketch (host Tools):
 | Editor import | `Editor/Importers` |
 | Offline cook | `Tools/AssetPipeline/leon-cook` + `Tools/ResourceTools` ([TOOLS.md](TOOLS.md)) |
 | PS2 `LPS2` draw | `Plugins/RHI/PS2` — `Ps2DrawPrimitives` |
+| PS2 box / texture / HUD | `Plugins/RHI/PS2` — `Ps2Draw3D`, `Ps2Texture`, `Ps2DebugHud` |

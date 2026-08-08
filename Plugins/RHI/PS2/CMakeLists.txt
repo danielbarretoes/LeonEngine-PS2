@@ -1,10 +1,13 @@
-# PS2 GS RHI — clear/flip, 2D unlit primitives, 3D unlit box.
+# PS2 GS RHI — clear/flip, 2D unlit, 3D lit/textured box, debug HUD.
 
 add_library(leon_rhi_ps2 STATIC
     src/Ps2GsContext.cpp
     src/Ps2RHIDevice.cpp
+    src/Ps2SceneState.cpp
     src/Ps2DrawPrimitives.cpp
     src/Ps2Draw3D.cpp
+    src/Ps2Texture.cpp
+    src/Ps2DebugHud.cpp
 )
 
 target_include_directories(leon_rhi_ps2 PUBLIC
