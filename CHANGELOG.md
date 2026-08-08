@@ -9,8 +9,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **Projects/Ps2Cube** — PS2 3D starter (`leon-Ps2Cube.elf`): perspective camera, z-buffer, unlit boxes; pad yaw/pitch; `Scripts/build-ps2-docker.ps1 cube`
-- PS2 RHI 3D: `Ps2DrawUnlitBox` (`math3d` / `draw3d`); GS z-buffer enabled in `Ps2InitDisplay`
+- **Projects/Ps2Cube** — PS2 3D starter (`leon-Ps2Cube.elf`): perspective camera, z-buffer, lit boxes; pad yaw/pitch; `Scripts/build-ps2-docker.ps1 cube`
+- PS2 RHI 3D: `Ps2DrawUnlitBox` with ambient + top directional light (`math3d` / `draw3d`); GS z-buffer in `Ps2InitDisplay`
 - Editor viewport **View Mode**: Lit / Player Collision (Alt+5/6); camera-following Show Grid (View menu); `Renderer::SetSceneGeometryEnabled`
 - Editor Play: Number of Players + Net Mode; multiplayer via Shipping `--listen`/`--join` + `--map <LevelKey>`; AssetTools rename/move/delete; Content Browser click UX
 - Pack `GameplayLib.cmake` + `RegisterModes` / `GameHostSession`; templates copy fixed type names (no `{{NAME}}` rename)

@@ -9,8 +9,6 @@
 #include <graph.h>
 #include <math3d.h>
 #include <packet.h>
-
-#include <cstring>
 #endif
 
 namespace leon::rhi {
@@ -19,24 +17,63 @@ namespace {
 #if defined(LEON_PLATFORM_PS2)
 
 constexpr float kTwoPi = 6.28318530718f;
-constexpr int kCubeVertexCount = 8;
-constexpr int kCubePointCount = 36; // 12 tris * 3
+constexpr int kFaceCount = 6;
+constexpr int kVertsPerFace = 4;
+constexpr int kCubeVertexCount = kFaceCount * kVertsPerFace;
+constexpr int kCubePointCount = kFaceCount * 6;
 
-// Unit cube corners.
-VECTOR kCubeCorners[kCubeVertexCount] __attribute__((aligned(16))) = {
-    {-1.0f, -1.0f, -1.0f, 1.0f}, {1.0f, -1.0f, -1.0f, 1.0f}, {1.0f, 1.0f, -1.0f, 1.0f},
-    {-1.0f, 1.0f, -1.0f, 1.0f},  {-1.0f, -1.0f, 1.0f, 1.0f},  {1.0f, -1.0f, 1.0f, 1.0f},
-    {1.0f, 1.0f, 1.0f, 1.0f},    {-1.0f, 1.0f, 1.0f, 1.0f},
+// Face albedo (RGB cube). Tint multiplies these.
+constexpr float kFaceRgb[kFaceCount][3] = {
+    {0.92f, 0.22f, 0.18f}, // +X
+    {0.55f, 0.12f, 0.10f}, // -X
+    {0.28f, 0.90f, 0.32f}, // +Y (receives top light most)
+    {0.14f, 0.38f, 0.16f}, // -Y (in shadow)
+    {0.28f, 0.48f, 0.95f}, // +Z
+    {0.14f, 0.22f, 0.48f}, // -Z
 };
 
-// Triangle list indices (outward faces).
+// Object-space outward normals. w must be 1 for math3d::vector_innerproduct.
+VECTOR kFaceNormals[kFaceCount] __attribute__((aligned(16))) = {
+    {1.0f, 0.0f, 0.0f, 1.0f},  {-1.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f, 1.0f},
+    {0.0f, -1.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f},  {0.0f, 0.0f, -1.0f, 1.0f},
+};
+
+VECTOR kFaceCorners[kCubeVertexCount] __attribute__((aligned(16))) = {
+    // +X
+    {1.0f, -1.0f, -1.0f, 1.0f},
+    {1.0f, -1.0f, 1.0f, 1.0f},
+    {1.0f, 1.0f, 1.0f, 1.0f},
+    {1.0f, 1.0f, -1.0f, 1.0f},
+    // -X
+    {-1.0f, -1.0f, 1.0f, 1.0f},
+    {-1.0f, -1.0f, -1.0f, 1.0f},
+    {-1.0f, 1.0f, -1.0f, 1.0f},
+    {-1.0f, 1.0f, 1.0f, 1.0f},
+    // +Y
+    {-1.0f, 1.0f, -1.0f, 1.0f},
+    {1.0f, 1.0f, -1.0f, 1.0f},
+    {1.0f, 1.0f, 1.0f, 1.0f},
+    {-1.0f, 1.0f, 1.0f, 1.0f},
+    // -Y
+    {-1.0f, -1.0f, 1.0f, 1.0f},
+    {1.0f, -1.0f, 1.0f, 1.0f},
+    {1.0f, -1.0f, -1.0f, 1.0f},
+    {-1.0f, -1.0f, -1.0f, 1.0f},
+    // +Z
+    {-1.0f, -1.0f, 1.0f, 1.0f},
+    {-1.0f, 1.0f, 1.0f, 1.0f},
+    {1.0f, 1.0f, 1.0f, 1.0f},
+    {1.0f, -1.0f, 1.0f, 1.0f},
+    // -Z
+    {1.0f, -1.0f, -1.0f, 1.0f},
+    {1.0f, 1.0f, -1.0f, 1.0f},
+    {-1.0f, 1.0f, -1.0f, 1.0f},
+    {-1.0f, -1.0f, -1.0f, 1.0f},
+};
+
 const int kCubePoints[kCubePointCount] = {
-    0, 1, 2, 0, 2, 3, // -Z
-    4, 6, 5, 4, 7, 6, // +Z
-    0, 4, 5, 0, 5, 1, // -Y
-    2, 6, 7, 2, 7, 3, // +Y
-    0, 3, 7, 0, 7, 4, // -X
-    1, 5, 6, 1, 6, 2, // +X
+    0,  1,  2,  0,  2,  3,  4,  5,  6,  4,  6,  7,  8,  9,  10, 8,  10, 11,
+    12, 13, 14, 12, 14, 15, 16, 17, 18, 16, 18, 19, 20, 21, 22, 20, 22, 23,
 };
 
 [[nodiscard]] float TurnsToRadians(unsigned angle256) {
@@ -51,6 +88,18 @@ const int kCubePoints[kCubePointCount] = {
     dma_wait_fast();
     draw_wait_finish();
     return true;
+}
+
+// math3d directional light: intensity = max(0, -N·L) where L is ray travel direction.
+void BuildTopDirectionalLight(VECTOR outDirection, VECTOR outColour) {
+    // Rays travel mostly downward (sun overhead), slight bias toward camera (+Z front).
+    VECTOR raw __attribute__((aligned(16))) = {0.18f, -1.0f, -0.35f, 1.0f};
+    vector_normalize(outDirection, raw);
+    outDirection[3] = 1.0f;
+    outColour[0] = 1.00f;
+    outColour[1] = 0.97f;
+    outColour[2] = 0.90f;
+    outColour[3] = 1.00f;
 }
 
 #endif
@@ -70,11 +119,27 @@ bool Ps2DrawUnlitBox(float centerX, float centerY, float centerZ, float halfExte
                                                           TurnsToRadians(yaw256), 0.0f, 1.0f};
     VECTOR objectScale __attribute__((aligned(16))) = {halfExtent, halfExtent, halfExtent, 1.0f};
 
-    // Camera sits on +Z looking toward origin (math3d world_view convention).
-    VECTOR cameraPosition __attribute__((aligned(16))) = {0.0f, 12.0f, 55.0f, 1.0f};
-    VECTOR cameraRotation __attribute__((aligned(16))) = {-0.22f, 0.0f, 0.0f, 1.0f};
+    VECTOR cameraPosition __attribute__((aligned(16))) = {0.0f, 14.0f, 58.0f, 1.0f};
+    VECTOR cameraRotation __attribute__((aligned(16))) = {-0.24f, 0.0f, 0.0f, 1.0f};
+
+    // Lights: soft ambient fill + strong directional from above.
+    VECTOR lightDirections[2] __attribute__((aligned(16)));
+    VECTOR lightColours[2] __attribute__((aligned(16)));
+    const int lightTypes[2] = {LIGHT_AMBIENT, LIGHT_DIRECTIONAL};
+
+    lightDirections[0][0] = 0.0f;
+    lightDirections[0][1] = 0.0f;
+    lightDirections[0][2] = 0.0f;
+    lightDirections[0][3] = 1.0f;
+    lightColours[0][0] = 0.20f;
+    lightColours[0][1] = 0.22f;
+    lightColours[0][2] = 0.28f;
+    lightColours[0][3] = 1.0f;
+
+    BuildTopDirectionalLight(lightDirections[1], lightColours[1]);
 
     MATRIX localWorld;
+    MATRIX localLight;
     MATRIX worldView;
     MATRIX viewScreen;
     MATRIX localScreen;
@@ -82,29 +147,44 @@ bool Ps2DrawUnlitBox(float centerX, float centerY, float centerZ, float halfExte
     matrix_unit(localWorld);
     create_local_world(localWorld, objectPosition, objectRotation);
     matrix_scale(localWorld, localWorld, objectScale);
+    create_local_light(localLight, objectRotation);
 
     create_world_view(worldView, cameraPosition, cameraRotation);
     create_view_screen(viewScreen, graph_aspect_ratio(), -3.0f, 3.0f, -3.0f * (3.0f / 4.0f),
                        3.0f * (3.0f / 4.0f), 1.0f, 2000.0f);
     create_local_screen(localScreen, localWorld, worldView, viewScreen);
 
+    VECTOR objectNormals[kCubeVertexCount] __attribute__((aligned(16)));
+    VECTOR worldNormals[kCubeVertexCount] __attribute__((aligned(16)));
+    VECTOR lights[kCubeVertexCount] __attribute__((aligned(16)));
+    VECTOR albedos[kCubeVertexCount] __attribute__((aligned(16)));
+    VECTOR shaded[kCubeVertexCount] __attribute__((aligned(16)));
+
+    for (int face = 0; face < kFaceCount; ++face) {
+        for (int v = 0; v < kVertsPerFace; ++v) {
+            const int idx = face * kVertsPerFace + v;
+            vector_copy(objectNormals[idx], kFaceNormals[face]);
+            albedos[idx][0] = kFaceRgb[face][0] * r;
+            albedos[idx][1] = kFaceRgb[face][1] * g;
+            albedos[idx][2] = kFaceRgb[face][2] * b;
+            albedos[idx][3] = 1.0f;
+        }
+    }
+
+    calculate_normals(worldNormals, kCubeVertexCount, objectNormals, localLight);
+    calculate_lights(lights, kCubeVertexCount, worldNormals, lightDirections, lightColours,
+                     lightTypes, 2);
+    calculate_colours(shaded, kCubeVertexCount, albedos, lights);
+
     VECTOR tempVertices[kCubeVertexCount] __attribute__((aligned(16)));
-    VECTOR colours[kCubeVertexCount] __attribute__((aligned(16)));
     xyz_t verts[kCubeVertexCount];
     color_t colors[kCubeVertexCount];
 
-    for (int i = 0; i < kCubeVertexCount; ++i) {
-        colours[i][0] = r;
-        colours[i][1] = g;
-        colours[i][2] = b;
-        colours[i][3] = 1.0f;
-    }
-
-    calculate_vertices(tempVertices, kCubeVertexCount, kCubeCorners, localScreen);
+    calculate_vertices(tempVertices, kCubeVertexCount, kFaceCorners, localScreen);
     draw_convert_xyz(verts, 2048, 2048, 32, kCubeVertexCount,
                      reinterpret_cast<vertex_f_t*>(tempVertices));
     draw_convert_rgbq(colors, kCubeVertexCount, reinterpret_cast<vertex_f_t*>(tempVertices),
-                      reinterpret_cast<color_f_t*>(colours), 0x80);
+                      reinterpret_cast<color_f_t*>(shaded), 0x80);
 
     prim_t prim{};
     prim.type = PRIM_TRIANGLE;
@@ -117,9 +197,9 @@ bool Ps2DrawUnlitBox(float centerX, float centerY, float centerZ, float halfExte
     prim.colorfix = PRIM_UNFIXED;
 
     color_t baseColor{};
-    baseColor.r = static_cast<unsigned char>(static_cast<int>(r * 255.0f) & 0xFF);
-    baseColor.g = static_cast<unsigned char>(static_cast<int>(g * 255.0f) & 0xFF);
-    baseColor.b = static_cast<unsigned char>(static_cast<int>(b * 255.0f) & 0xFF);
+    baseColor.r = 0x80;
+    baseColor.g = 0x80;
+    baseColor.b = 0x80;
     baseColor.a = 0x80;
     baseColor.q = 1.0f;
 

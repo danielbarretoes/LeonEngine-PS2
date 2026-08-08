@@ -31,7 +31,8 @@ void Ps2WaitVsync();
 /// Validate + draw a cooked LPS2 blob (see Docs/ASSET_FORMATS.md § PS2).
 [[nodiscard]] bool Ps2DrawCookedMesh(const void* data, unsigned size);
 
-/// Unlit box in world space (perspective camera). Angles are 1/256-turn units.
+/// Lit box in world space: per-face albedo tint × (ambient + top directional).
+/// Angles are 1/256-turn units. `r,g,b` tint the face colours (use 1,1,1 for RGB faces).
 [[nodiscard]] bool Ps2DrawUnlitBox(float centerX, float centerY, float centerZ, float halfExtent,
                                    unsigned yaw256, unsigned pitch256, float r, float g, float b);
 

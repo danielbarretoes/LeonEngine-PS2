@@ -1,6 +1,10 @@
 # Ps2Cube
 
-PS2 **3D** starter pack — perspective camera, z-buffer, unlit boxes.
+PS2 **3D** starter pack — perspective camera, z-buffer, per-face albedo + lighting.
+
+Lighting: soft ambient fill + **directional sun from above** (top faces bright, bottom in shadow).
+
+Face legend (white tint): **+X red**, **-X dark red**, **+Y green**, **-Y dark green**, **+Z blue**, **-Z dark blue**.
 
 ## Build / run
 

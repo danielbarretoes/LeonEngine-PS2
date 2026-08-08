@@ -31,7 +31,8 @@ struct Rgb {
 
 void PrintBanner(bool padOk) {
     std::printf("\n========== Leon Ps2Cube (3D) ==========\n");
-    std::printf("  Perspective unlit box + z-buffer\n");
+    std::printf("  Lit boxes: ambient + directional from above\n");
+    std::printf("  Faces: +X red  +Y green  +Z blue (dark = opposite)\n");
     std::printf("  D-Pad L/R   yaw\n");
     std::printf("  D-Pad U/D   pitch\n");
     std::printf("  L1 / R1     orbit speed -/+\n");
@@ -106,22 +107,20 @@ int RunPs2CubeDemo(Window& window) {
             }
         }
 
-        rhi::Ps2ClearColor(0.05f, 0.07f, 0.12f);
+        // Cool ground fill so the top-lit cubes read clearly.
+        rhi::Ps2ClearColor(0.10f, 0.11f, 0.14f);
 
-        // Ground slab (flat box) under the hero cube.
-        (void)rhi::Ps2DrawUnlitBox(0.0f, -8.0f, 0.0f, 18.0f, 0, 0, 0.12f, 0.22f, 0.16f);
+        (void)rhi::Ps2DrawUnlitBox(0.0f, -8.0f, 0.0f, 18.0f, 0, 0, 0.65f, 0.65f, 0.65f);
+        (void)rhi::Ps2DrawUnlitBox(0.0f, 0.0f, 0.0f, 6.0f, yaw, pitch, 1.0f, 1.0f, 1.0f);
 
-        const Rgb rgb = HueRgb(yaw + frame / 2u);
-        (void)rhi::Ps2DrawUnlitBox(0.0f, 0.0f, 0.0f, 6.0f, yaw, pitch, rgb.r, rgb.g, rgb.b);
-
-        // Accent satellite cubes.
         const unsigned orbit = (frame * 2u) & 255u;
         const float ox = rhi::Ps2Cos256(orbit) * 16.0f;
         const float oz = rhi::Ps2Sin256(orbit) * 16.0f;
-        (void)rhi::Ps2DrawUnlitBox(ox, 2.0f, oz, 2.2f, (yaw + 40u) & 255u, pitch, 0.95f, 0.55f,
-                                   0.20f);
+        const Rgb accent = HueRgb(yaw + frame / 2u);
+        (void)rhi::Ps2DrawUnlitBox(ox, 2.0f, oz, 2.2f, (yaw + 40u) & 255u, pitch, accent.r,
+                                   accent.g, accent.b);
         (void)rhi::Ps2DrawUnlitBox(-ox * 0.7f, 4.0f, -oz * 0.7f, 1.6f, (255u - yaw) & 255u,
-                                   (pitch + 30u) & 255u, 0.35f, 0.65f, 1.0f);
+                                   (pitch + 30u) & 255u, 0.85f, 0.85f, 0.95f);
 
         window.SwapBuffers();
         ++frame;
