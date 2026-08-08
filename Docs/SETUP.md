@@ -206,7 +206,12 @@ Both skip generated trees under `build`, `build-*`, `_deps`, `_leon_*`, and `.gi
    Scripts/build-ps2.sh cube
    # → Projects/Ps2Cube/build-ps2/leon-Ps2Cube.elf
    ```
-4. Optional 2D capability lab:
+4. Third-person gameplay (orbit camera + primitive level; Start to quit):
+   ```bash
+   Scripts/build-ps2.sh tp
+   # → Projects/Ps2ThirdPerson/build-ps2/leon-Ps2ThirdPerson.elf
+   ```
+5. Optional 2D capability lab:
    ```bash
    Scripts/build-ps2.sh lab
    # → Projects/Ps2Lab/build-ps2/leon-Ps2Lab.elf
@@ -217,18 +222,20 @@ Both skip generated trees under `build`, `build-*`, `_deps`, `_leon_*`, and `.gi
 ```powershell
 .\Scripts\build-ps2-docker.ps1 hello
 .\Scripts\build-ps2-docker.ps1 cube
+.\Scripts\build-ps2-docker.ps1 tp
 .\Scripts\build-ps2-docker.ps1 lab
 ```
 
-Or from Git Bash / WSL: `Scripts/build-ps2-docker.sh cube`. Outputs:
+Or from Git Bash / WSL: `Scripts/build-ps2-docker.sh tp`. Outputs:
 
 - `Samples/Ps2Hello/build-ps2/leon-Ps2Hello.elf`
 - `Projects/Ps2Cube/build-ps2/leon-Ps2Cube.elf`
+- `Projects/Ps2ThirdPerson/build-ps2/leon-Ps2ThirdPerson.elf`
 - `Projects/Ps2Lab/build-ps2/leon-Ps2Lab.elf`
 
 CMake entry: `-DCMAKE_TOOLCHAIN_FILE=Build/toolchains/ps2-ee.cmake` sets `LEON_PLATFORM=PS2` and `LEON_RHI=PS2`.
 
-**PCSX2:** File → Run ELF → pick `leon-Ps2Cube.elf` (3D) or `leon-Ps2Lab.elf` (2D). For cooked assets on disk, use a PCSX2 `host:` folder or ISO layout under [ASSET_FORMATS — PS2](ASSET_FORMATS.md#ps2-cooked-lps2).
+**PCSX2:** File → Run ELF → pick `leon-Ps2ThirdPerson.elf` (gameplay), `leon-Ps2Cube.elf` (3D lab), or `leon-Ps2Lab.elf` (2D). For cooked assets on disk, use a PCSX2 `host:` folder or ISO layout under [ASSET_FORMATS — PS2](ASSET_FORMATS.md#ps2-cooked-lps2).
 
 Host Editor remains the content/cook path (`Scripts\build.bat`, `Scripts\cook.bat`).
 

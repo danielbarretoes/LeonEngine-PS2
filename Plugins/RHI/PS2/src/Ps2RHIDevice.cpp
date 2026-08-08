@@ -30,6 +30,8 @@ bool SetupDrawingEnvironment(ps2::GsContext& gs) {
 
     qword_t* q = gs.packet->data;
     q = draw_setup_environment(q, 0, &gs.frame, &gs.z);
+    // draw_setup_environment already programs SCISSOR in window space (0..w/h).
+    // Do not override with a second scissor — wrong coords blank the screen.
     q = draw_primitive_xyoffset(q, 0, gs.OriginX(), gs.OriginY());
     q = draw_finish(q);
 

@@ -125,8 +125,14 @@ void Ps2DrawDebugHudText(float x, float y, const char* text, float r = 0.95f, fl
 /// Validate + draw a cooked LPS2 blob (see Docs/ASSET_FORMATS.md § PS2).
 [[nodiscard]] bool Ps2DrawCookedMesh(const void* data, unsigned size);
 
-/// Lit/textured box: Location / Rotation (1/256-turn) / uniform Scale (half-extent).
+/// Lit/textured box: Location / Rotation (1/256-turn) / Scale as half-extents.
 [[nodiscard]] bool Ps2DrawBox(float locationX, float locationY, float locationZ, unsigned yaw256,
-                              unsigned pitch256, float scale);
+                              unsigned pitch256, float scaleX, float scaleY, float scaleZ);
+
+/// Uniform half-extent convenience.
+[[nodiscard]] inline bool Ps2DrawBox(float locationX, float locationY, float locationZ,
+                                     unsigned yaw256, unsigned pitch256, float scale) {
+    return Ps2DrawBox(locationX, locationY, locationZ, yaw256, pitch256, scale, scale, scale);
+}
 
 } // namespace leon::rhi

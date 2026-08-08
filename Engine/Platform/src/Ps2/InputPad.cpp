@@ -14,16 +14,53 @@ namespace {
 #if defined(LEON_PLATFORM_PS2)
 char g_padBuf[256] __attribute__((aligned(64)));
 bool g_padReady = false;
+bool g_analogRequested = false;
+padButtonStatus g_pad{};
+bool g_padSampleValid = false;
+
+constexpr float kStickDeadzone = 0.18f;
 
 void LoadPadModules() {
     SifInitRpc(0);
-    // rom0 modules need a working BIOS in PCSX2.
     if (SifLoadModule("rom0:SIO2MAN", 0, nullptr) < 0) {
         std::printf("InputPad: SIO2MAN load failed\n");
     }
     if (SifLoadModule("rom0:PADMAN", 0, nullptr) < 0) {
         std::printf("InputPad: PADMAN load failed\n");
     }
+}
+
+[[nodiscard]] float AxisFromByte(unsigned char raw) {
+    // DualShock: 0..255, center ~128.
+    float v = (static_cast<float>(raw) - 128.0f) / 128.0f;
+    if (v < -1.0f) {
+        v = -1.0f;
+    }
+    if (v > 1.0f) {
+        v = 1.0f;
+    }
+    if (v > -kStickDeadzone && v < kStickDeadzone) {
+        return 0.0f;
+    }
+    // Rescale outside deadzone to full range.
+    const float sign = v < 0.0f ? -1.0f : 1.0f;
+    const float mag = (v < 0.0f ? -v : v) - kStickDeadzone;
+    const float span = 1.0f - kStickDeadzone;
+    return sign * (mag / span);
+}
+
+void TryEnableAnalog() {
+    if (g_analogRequested || !g_padReady) {
+        return;
+    }
+    const int state = padGetState(0, 0);
+    if (state != PAD_STATE_STABLE && state != PAD_STATE_FINDCTP1) {
+        return;
+    }
+    // DualShock analog sticks.
+    padSetMainMode(0, 0, PAD_MMODE_DUALSHOCK, PAD_MMODE_LOCK);
+    g_analogRequested = true;
+    std::printf("InputPad: DualShock analog mode requested\n");
 }
 #endif
 
@@ -38,27 +75,41 @@ bool InitializePad() {
         return false;
     }
     g_padReady = true;
+    g_analogRequested = false;
+    g_padSampleValid = false;
     return true;
 #else
     return false;
 #endif
 }
 
-bool IsPadButtonPressed(EPadButton button) {
+void PollPad() {
 #if defined(LEON_PLATFORM_PS2)
+    g_padSampleValid = false;
     if (!g_padReady) {
-        return false;
+        return;
     }
+    TryEnableAnalog();
     const int state = padGetState(0, 0);
     if (state != PAD_STATE_STABLE && state != PAD_STATE_FINDCTP1) {
+        return;
+    }
+    if (padRead(0, 0, &g_pad) == 0) {
+        return;
+    }
+    g_padSampleValid = true;
+#endif
+}
+
+bool IsPadButtonPressed(EPadButton button) {
+#if defined(LEON_PLATFORM_PS2)
+    if (!g_padSampleValid) {
+        PollPad();
+    }
+    if (!g_padSampleValid) {
         return false;
     }
-    padButtonStatus buttons{};
-    if (padRead(0, 0, &buttons) == 0) {
-        return false;
-    }
-    // libpad reports pressed bits inverted (0 = pressed).
-    const unsigned short btns = static_cast<unsigned short>(buttons.btns ^ 0xFFFF);
+    const unsigned short btns = static_cast<unsigned short>(g_pad.btns ^ 0xFFFF);
     switch (button) {
     case EPadButton::Cross:
         return (btns & PAD_CROSS) != 0;
@@ -94,6 +145,35 @@ bool IsPadButtonPressed(EPadButton button) {
 #else
     (void)button;
     return false;
+#endif
+}
+
+PadStick GetPadLeftStick() {
+#if defined(LEON_PLATFORM_PS2)
+    if (!g_padSampleValid) {
+        PollPad();
+    }
+    if (!g_padSampleValid) {
+        return {};
+    }
+    // libpad: ljoy_h / ljoy_v — Y flipped so -1 = stick up.
+    return {AxisFromByte(g_pad.ljoy_h), -AxisFromByte(g_pad.ljoy_v)};
+#else
+    return {};
+#endif
+}
+
+PadStick GetPadRightStick() {
+#if defined(LEON_PLATFORM_PS2)
+    if (!g_padSampleValid) {
+        PollPad();
+    }
+    if (!g_padSampleValid) {
+        return {};
+    }
+    return {AxisFromByte(g_pad.rjoy_h), -AxisFromByte(g_pad.rjoy_v)};
+#else
+    return {};
 #endif
 }
 

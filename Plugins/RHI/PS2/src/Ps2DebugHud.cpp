@@ -7,6 +7,7 @@
 #if defined(LEON_PLATFORM_PS2)
 #include <dma.h>
 #include <draw2d.h>
+#include <draw_tests.h>
 #include <timer.h>
 #endif
 
@@ -121,9 +122,11 @@ qword_t* AppendRect(ps2::GsContext& gs, qword_t* q, float x0, float y0, float x1
     constexpr int kQwordsPerRect = 10;
     constexpr int kPacketBudget = 2000; // matches enlarged GIF packet
     if ((q - gs.packet->data) + kQwordsPerRect >= kPacketBudget) {
+        q = draw_enable_tests(q, 0, &gs.z);
         q = draw_finish(q);
         FlushRects(gs, q);
         q = gs.packet->data;
+        q = draw_disable_tests(q, 0, &gs.z);
     }
 
     rect_t rect{};
@@ -194,6 +197,8 @@ void Ps2DrawDebugHudText(float x, float y, const char* text, float r, float g, f
     FillColor(color, r, g, b);
 
     qword_t* q = gs.packet->data;
+    // Overlay: disable z so 3D near-plane wallpaper cannot cover FPS text.
+    q = draw_disable_tests(q, 0, &gs.z);
     float cx = x;
     for (const char* p = text; *p != '\0'; ++p) {
         char ch = *p;
@@ -203,6 +208,7 @@ void Ps2DrawDebugHudText(float x, float y, const char* text, float r, float g, f
         q = AppendGlyphRuns(gs, q, cx, y, ch, color);
         cx += kGlyphAdvance;
     }
+    q = draw_enable_tests(q, 0, &gs.z);
     q = draw_finish(q);
     FlushRects(gs, q);
 #else

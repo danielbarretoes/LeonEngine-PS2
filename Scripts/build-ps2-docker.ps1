@@ -1,7 +1,7 @@
 # PowerShell wrapper: build PS2 targets via ghcr.io/ps2dev/ps2dev
-# Usage: .\Scripts\build-ps2-docker.ps1 [hello|lab|cube]
+# Usage: .\Scripts\build-ps2-docker.ps1 [hello|lab|cube|tp]
 param(
-    [ValidateSet("hello", "lab", "smoke", "cube")]
+    [ValidateSet("hello", "lab", "smoke", "cube", "tp", "thirdperson")]
     [string]$Target = "cube"
 )
 

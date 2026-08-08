@@ -1,10 +1,11 @@
 #!/usr/bin/env sh
 # Cross-build Leon PS2 targets with ps2dev (WSL2 / Linux / Docker Alpine).
 # Usage:
-#   Scripts/build-ps2.sh              # Ps2Cube (3D)
+#   Scripts/build-ps2.sh              # Ps2Cube (3D scene)
 #   Scripts/build-ps2.sh hello        # Samples/Ps2Hello
 #   Scripts/build-ps2.sh lab          # Projects/Ps2Lab (2D)
-#   Scripts/build-ps2.sh cube         # Projects/Ps2Cube (3D)
+#   Scripts/build-ps2.sh cube         # Projects/Ps2Cube (3D scene)
+#   Scripts/build-ps2.sh tp           # Projects/Ps2ThirdPerson (gameplay)
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -33,6 +34,11 @@ case "$TARGET" in
     SRC="Projects/Ps2Lab"
     BIN="Projects/Ps2Lab/build-ps2"
     EXE="leon-Ps2Lab.elf"
+    ;;
+  tp|thirdperson)
+    SRC="Projects/Ps2ThirdPerson"
+    BIN="Projects/Ps2ThirdPerson/build-ps2"
+    EXE="leon-Ps2ThirdPerson.elf"
     ;;
   cube|*)
     SRC="Projects/Ps2Cube"

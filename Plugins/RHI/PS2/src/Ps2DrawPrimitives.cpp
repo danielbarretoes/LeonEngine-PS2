@@ -8,6 +8,7 @@
 #if defined(LEON_PLATFORM_PS2)
 #include <dma.h>
 #include <draw2d.h>
+#include <draw_tests.h>
 #endif
 
 namespace leon::rhi {
@@ -181,7 +182,10 @@ bool Ps2DrawUnlitRect(float x0, float y0, float x1, float y1, float r, float g, 
     FillVertex(rect.v1, x1, y1);
 
     qword_t* q = gs.packet->data;
+    // Overlay: ignore z so terrain cannot cover HUD / 2D chrome.
+    q = draw_disable_tests(q, 0, &gs.z);
     q = draw_rect_filled(q, 0, &rect);
+    q = draw_enable_tests(q, 0, &gs.z);
     q = draw_finish(q);
     return SubmitPacket(gs, q);
 #else

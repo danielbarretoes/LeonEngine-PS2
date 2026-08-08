@@ -9,6 +9,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Projects/Ps2ThirdPerson** — PS2 third-person gameplay (`leon-Ps2ThirdPerson.elf`): orbit SpringArm camera, Character move/jump, primitive sandbox level; DualShock sticks (left move / right camera) + Cross jump; `Scripts/build-ps2-docker.ps1 tp`
+- PS2 `InputPad`: `PollPad`, `GetPadLeftStick` / `GetPadRightStick` (DualShock analog mode)
 - **Projects/Ps2Cube** — PS2 3D scene (`leon-Ps2Cube.elf`): ViewTarget, DirectionalLight, `M_*` / `T_*_D` materials+textures, FPS/ms HUD; `Scripts/build-ps2-docker.ps1 cube`
 - PS2 RHI 3D: `Ps2DrawBox`, `Ps2Texture`, `Ps2Material` (`BaseColor` / `BaseColorMap` / `EShadingModel`), `Ps2SetViewTarget` / `Ps2SetDirectionalLight`, `Ps2DrawDebugHudText`; GS z-buffer in `Ps2InitDisplay`
 - Editor viewport **View Mode**: Lit / Player Collision (Alt+5/6); camera-following Show Grid (View menu); `Renderer::SetSceneGeometryEnabled`
