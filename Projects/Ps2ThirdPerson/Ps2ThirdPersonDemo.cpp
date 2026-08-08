@@ -34,19 +34,19 @@ struct Character {
 
 /// Orbit follow camera — spherical boom around look-at (typical third-person).
 struct SpringArm {
-    float TargetArmLength = 22.0f;
-    float MinArmLength = 7.0f;
-    float SocketOffsetY = 2.5f;
-    float ProbeRadius = 3.2f;
+    float TargetArmLength = 28.0f;
+    float MinArmLength = 12.0f;
+    float SocketOffsetY = 3.0f;
+    float ProbeRadius = 4.0f;
     float Yaw256 = 0.0f;
-    float Pitch256 = 22.0f; // elevation above look-at (1/256-turn)
+    float Pitch256 = 28.0f; // elevation above look-at (1/256-turn)
 };
 
 constexpr float kMoveSpeed = 0.55f;
 constexpr float kCamYawRate = 2.8f;
 constexpr float kCamPitchRate = 1.6f;
-constexpr float kPitchMin = 2.0f;
-constexpr float kPitchMax = 78.0f;
+constexpr float kPitchMin = 14.0f; // avoid grazing the floor (near smear)
+constexpr float kPitchMax = 72.0f;
 constexpr float kGravity = 0.045f;
 constexpr float kJumpSpeed = 0.95f;
 constexpr float kCharHalfW = 1.6f;
@@ -55,7 +55,7 @@ constexpr float kGroundSkin = 0.08f;
 constexpr float kArenaHalf = 70.0f;
 constexpr float kGroundTopY = 0.0f;
 // Tile the ground so no single quad straddles the camera (avoids stretch / total cull).
-constexpr int kGroundTilesPerSide = 15;
+constexpr int kGroundTilesPerSide = 18;
 constexpr int kGroundTileCount = kGroundTilesPerSide * kGroundTilesPerSide;
 constexpr int kPropCount = 17;
 constexpr int kLevelActorCount = kGroundTileCount + kPropCount;
@@ -72,6 +72,8 @@ void PrintBanner(bool padOk) {
     std::printf("  Right stick   camera orbit\n");
     std::printf("  Cross         jump\n");
     std::printf("Pad=%s\n", padOk ? "ok" : "--");
+    std::printf("Draw3D debug: PCSX2 Console every 30 frames\n");
+    std::printf("  keep3/drop0/clip1/clip2 rejDiv/rejNdc emit wall |ndc| edge2\n");
     std::printf("==================================\n\n");
 }
 
@@ -87,6 +89,21 @@ void FormatHud(char* out, unsigned outSize, int fps, float workMs) {
         tenths = 0;
     }
     std::snprintf(out, outSize, "FPS %d  %d.%d ms", fps, tenths / 10, tenths % 10);
+}
+
+/// K=keep3 D=drop E=emitted W=wallpaper-rejected (cull-only path → C usually 0)
+void FormatClipHud(char* out, unsigned outSize, const rhi::Ps2Draw3DDebugStats& s) {
+    std::snprintf(out, outSize, "K%d D%d E%d W%d", static_cast<int>(s.Keep3),
+                  static_cast<int>(s.Drop0), static_cast<int>(s.Emitted),
+                  static_cast<int>(s.WallpaperSuspect));
+}
+
+void FormatNdcHud(char* out, unsigned outSize, const rhi::Ps2Draw3DDebugStats& s) {
+    // Tenths for |ndc| peaks; edge2 shown as integer (squared NDC edge).
+    const int nx = static_cast<int>(s.MaxAbsNdcX * 10.0f + 0.5f);
+    const int ny = static_cast<int>(s.MaxAbsNdcY * 10.0f + 0.5f);
+    const int e2 = static_cast<int>(s.MaxNdcEdge + 0.5f);
+    std::snprintf(out, outSize, "N%d.%d/%d.%d E%d", nx / 10, nx % 10, ny / 10, ny % 10, e2);
 }
 
 [[nodiscard]] float MaxF(float a, float b) {
@@ -222,7 +239,7 @@ void PlaceGrounded(PrimitiveActor& out, float x, float z, float halfX, float hal
 void UpdateViewTarget(float lookX, float lookY, float lookZ, const SpringArm& arm, float& armLen,
                       const PrimitiveActor* level, int levelCount) {
     constexpr float kTwoPi = 6.28318530718f;
-    constexpr float kCamGroundClearance = 0.8f;
+    constexpr float kCamGroundClearance = 3.5f;
     const unsigned yawU = WrapYaw256(arm.Yaw256);
     const unsigned pitchU = static_cast<unsigned>(arm.Pitch256) & 255u;
     const float horizUnit = rhi::Ps2Cos256(pitchU);
@@ -373,11 +390,14 @@ int RunPs2ThirdPersonDemo(Window& window) {
     unsigned hudFrames = 0;
     float workSumMs = 0.0f;
     char hudLine[32] = "FPS --";
+    char hudClip[40] = "C--";
+    char hudNdc[40] = "N--";
 
     for (;;) {
         const std::uint64_t frameStartUs = rhi::Ps2GetSystemTimeUs();
         window.PollEvents();
         PollPad();
+        rhi::Ps2Draw3DDebugBeginFrame();
 
         const PadStick left = GetPadLeftStick();
         const PadStick right = GetPadRightStick();
@@ -492,8 +512,18 @@ int RunPs2ThirdPersonDemo(Window& window) {
             workSumMs = 0.0f;
         }
 
-        (void)rhi::Ps2DrawUnlitRect(-310.0f, -215.0f, -40.0f, -185.0f, 0.04f, 0.05f, 0.07f);
+        rhi::Ps2Draw3DDebugStats clipStats{};
+        rhi::Ps2Draw3DDebugGetStats(clipStats);
+        FormatClipHud(hudClip, sizeof(hudClip), clipStats);
+        FormatNdcHud(hudNdc, sizeof(hudNdc), clipStats);
+        if ((frame % 30u) == 0u) {
+            rhi::Ps2Draw3DDebugPrint(clipStats);
+        }
+
+        (void)rhi::Ps2DrawUnlitRect(-310.0f, -215.0f, -40.0f, -155.0f, 0.04f, 0.05f, 0.07f);
         rhi::Ps2DrawDebugHudText(-300.0f, -210.0f, hudLine, 0.95f, 0.95f, 0.75f);
+        rhi::Ps2DrawDebugHudText(-300.0f, -192.0f, hudClip, 0.75f, 0.95f, 0.85f);
+        rhi::Ps2DrawDebugHudText(-300.0f, -174.0f, hudNdc, 0.85f, 0.85f, 0.95f);
 
         window.SwapBuffers();
         ++frame;

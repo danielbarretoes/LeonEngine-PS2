@@ -135,4 +135,29 @@ void Ps2DrawDebugHudText(float x, float y, const char* text, float r = 0.95f, fl
     return Ps2DrawBox(locationX, locationY, locationZ, yaw256, pitch256, scale, scale, scale);
 }
 
+/// Per-frame near-clip / emit counters for EE→GIF debugging (PCSX2 console + HUD).
+struct Ps2Draw3DDebugStats {
+    unsigned Boxes = 0;
+    unsigned InTris = 0;
+    unsigned Keep3 = 0;  // fully in front of near
+    unsigned Drop0 = 0;  // fully behind near
+    unsigned Clip1 = 0;  // 1 vert in → 1 out tri
+    unsigned Clip2 = 0;  // 2 verts in → 2 out tris
+    unsigned RejectDiv = 0;
+    unsigned RejectNdc = 0;
+    unsigned Emitted = 0;
+    unsigned WallpaperSuspect = 0; // rejected: huge NDC edge (near-plane wallpaper)
+    unsigned PacketQwordsPeak = 0;
+    float MinW = 0.0f;
+    float MaxW = 0.0f;
+    float MaxAbsNdcX = 0.0f;
+    float MaxAbsNdcY = 0.0f;
+    float MaxNdcEdge = 0.0f; // max squared NDC edge length (no sqrt on EE)
+};
+
+void Ps2Draw3DDebugBeginFrame();
+void Ps2Draw3DDebugGetStats(Ps2Draw3DDebugStats& out);
+/// printf snapshot (PCSX2 EE console / stdout).
+void Ps2Draw3DDebugPrint(const Ps2Draw3DDebugStats& stats);
+
 } // namespace leon::rhi

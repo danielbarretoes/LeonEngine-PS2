@@ -218,7 +218,8 @@ void Ps2Texture::Bind() const {
     texbuf.address = vramAddress_;
     texbuf.info.width = draw_log2(width_);
     texbuf.info.height = draw_log2(height_);
-    texbuf.info.components = TEXTURE_COMPONENTS_RGBA;
+    // RGB: ignore texel alpha (ATEST NOTEQUAL 0 can punch holes with bad A).
+    texbuf.info.components = TEXTURE_COMPONENTS_RGB;
     texbuf.info.function = TEXTURE_FUNCTION_MODULATE;
 
     lod_t lod{};

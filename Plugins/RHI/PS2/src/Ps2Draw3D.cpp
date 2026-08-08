@@ -4,11 +4,13 @@
 #include <leon/rhi/Ps2RHI.h>
 
 #include <cstdint>
+#include <cstdio>
 
 #if defined(LEON_PLATFORM_PS2)
 #include <dma.h>
 #include <draw.h>
 #include <draw3d.h>
+#include <draw_tests.h>
 #include <graph.h>
 #include <math3d.h>
 #include <packet.h>
@@ -16,6 +18,47 @@
 
 namespace leon::rhi {
 namespace {
+
+Ps2Draw3DDebugStats gDraw3DDebug{};
+bool gDraw3DDebugHasW = false;
+
+[[nodiscard]] float AbsF(float v) {
+    return v < 0.0f ? -v : v;
+}
+
+[[nodiscard]] float MaxF(float a, float b) {
+    return a > b ? a : b;
+}
+
+[[nodiscard]] float MinF(float a, float b) {
+    return a < b ? a : b;
+}
+
+void NoteClipW(float w) {
+    if (!gDraw3DDebugHasW) {
+        gDraw3DDebug.MinW = w;
+        gDraw3DDebug.MaxW = w;
+        gDraw3DDebugHasW = true;
+        return;
+    }
+    gDraw3DDebug.MinW = MinF(gDraw3DDebug.MinW, w);
+    gDraw3DDebug.MaxW = MaxF(gDraw3DDebug.MaxW, w);
+}
+
+void NoteNdc(const float x, const float y) {
+    gDraw3DDebug.MaxAbsNdcX = MaxF(gDraw3DDebug.MaxAbsNdcX, AbsF(x));
+    gDraw3DDebug.MaxAbsNdcY = MaxF(gDraw3DDebug.MaxAbsNdcY, AbsF(y));
+}
+
+[[nodiscard]] float MaxNdcEdge2(float ax, float ay, float bx, float by, float cx, float cy) {
+    const float e0x = ax - bx;
+    const float e0y = ay - by;
+    const float e1x = bx - cx;
+    const float e1y = by - cy;
+    const float e2x = cx - ax;
+    const float e2y = cy - ay;
+    return MaxF(MaxF(e0x * e0x + e0y * e0y, e1x * e1x + e1y * e1y), e2x * e2x + e2y * e2y);
+}
 
 #if defined(LEON_PLATFORM_PS2)
 
@@ -128,11 +171,14 @@ void BuildDirectionalRay(VECTOR outDirection, unsigned yaw256, unsigned pitch256
     outDirection[3] = 1.0f;
 }
 
-// Only emit tris fully past the near plane (no near-clip lerp). Clipped
-// "wallpaper" fans were the horizontal smear band when orbiting / moving.
+// GS has no homogeneous triangle clip (math3d W = -Z_eye).
+// Cull-only (no SH lerp). Side cull |X|,|Y|<=W punched holes in meshes
+// (looked like transparency / flicker). Near cull + GS scissor is enough.
 constexpr float kNearW = 3.5f;
 constexpr float kNdcGuard = 1.15f;
-constexpr float kMaxNdcEdge = 1.45f;
+constexpr float kMaxNdcEdge2 = 1.6f * 1.6f;
+// draw_convert_xyz z-bits: max_z = 1<<(bits-1). 24 avoids float overflow at Z_ndc→1.
+constexpr int kDepthBits = 24;
 
 struct ClipVertex {
     float X = 0.0f;
@@ -166,25 +212,30 @@ void TransformToClip(VECTOR* outClip, int count, const VECTOR* in, const MATRIX 
     }
 }
 
-[[nodiscard]] float Max3(float a, float b, float c) {
-    float m = a;
-    if (b > m) {
-        m = b;
+/// Drop tri if any vertex is behind / too close to near (W = -Z_eye).
+[[nodiscard]] bool CullTriangleClipSpace(const ClipVertex& v0, const ClipVertex& v1,
+                                         const ClipVertex& v2) {
+    NoteClipW(v0.W);
+    NoteClipW(v1.W);
+    NoteClipW(v2.W);
+
+    if (v0.W < kNearW || v1.W < kNearW || v2.W < kNearW) {
+        ++gDraw3DDebug.Drop0;
+        return false;
     }
-    if (c > m) {
-        m = c;
-    }
-    return m;
+    ++gDraw3DDebug.Keep3;
+    return true;
 }
 
 [[nodiscard]] bool PerspectiveDivide(ClipVertex& v) {
-    if (v.W < kNearW) {
+    if (v.W < kNearW * 0.99f) {
         return false;
     }
     const float invW = 1.0f / v.W;
     v.X *= invW;
     v.Y *= invW;
     v.Z *= invW;
+    // Keep clip W for draw_convert_* (GS §3.4.10: Q = 1/W).
     return true;
 }
 
@@ -192,28 +243,32 @@ void TransformToClip(VECTOR* outClip, int count, const VECTOR* in, const MATRIX 
     return v.X >= -kNdcGuard && v.X <= kNdcGuard && v.Y >= -kNdcGuard && v.Y <= kNdcGuard;
 }
 
-[[nodiscard]] float NdcEdgeLen2(const ClipVertex& a, const ClipVertex& b) {
-    const float dx = a.X - b.X;
-    const float dy = a.Y - b.Y;
-    return dx * dx + dy * dy;
-}
-
-[[nodiscard]] bool FanTriOk(const ClipVertex& a, const ClipVertex& b, const ClipVertex& c) {
-    if (!InNdcGuard(a) || !InNdcGuard(b) || !InNdcGuard(c)) {
+[[nodiscard]] bool TriReady(ClipVertex& a, ClipVertex& b, ClipVertex& c) {
+    if (!PerspectiveDivide(a) || !PerspectiveDivide(b) || !PerspectiveDivide(c)) {
+        ++gDraw3DDebug.RejectDiv;
         return false;
     }
-    const float e2 = Max3(NdcEdgeLen2(a, b), NdcEdgeLen2(b, c), NdcEdgeLen2(c, a));
-    return e2 < kMaxNdcEdge * kMaxNdcEdge;
-}
-
-[[nodiscard]] bool TrianglePastNear(const ClipVertex& a, const ClipVertex& b, const ClipVertex& c) {
-    return a.W >= kNearW && b.W >= kNearW && c.W >= kNearW;
+    NoteNdc(a.X, a.Y);
+    NoteNdc(b.X, b.Y);
+    NoteNdc(c.X, c.Y);
+    const float edge2 = MaxNdcEdge2(a.X, a.Y, b.X, b.Y, c.X, c.Y);
+    gDraw3DDebug.MaxNdcEdge = MaxF(gDraw3DDebug.MaxNdcEdge, edge2);
+    if (!InNdcGuard(a) || !InNdcGuard(b) || !InNdcGuard(c)) {
+        ++gDraw3DDebug.RejectNdc;
+        return false;
+    }
+    if (edge2 >= kMaxNdcEdge2) {
+        ++gDraw3DDebug.WallpaperSuspect;
+        return false;
+    }
+    return true;
 }
 
 void EmitConverted(const ClipVertex& v, xyz_t& outXyz, color_t& outRgb, texel_t* outSt) {
     VECTOR ndc __attribute__((aligned(16))) = {v.X, v.Y, v.Z, v.W};
     VECTOR col __attribute__((aligned(16))) = {v.R, v.G, v.B, 1.0f};
-    draw_convert_xyz(&outXyz, 2048, 2048, 32, 1, reinterpret_cast<vertex_f_t*>(&ndc));
+    draw_convert_xyz(&outXyz, 2048, 2048, kDepthBits, 1, reinterpret_cast<vertex_f_t*>(&ndc));
+    // Alpha 0x80 = 1.0 for GS modulate; never 0 (ATEST discards A==0).
     draw_convert_rgbq(&outRgb, 1, reinterpret_cast<vertex_f_t*>(&ndc),
                       reinterpret_cast<color_f_t*>(&col), 0x80);
     if (outSt != nullptr) {
@@ -355,7 +410,8 @@ bool Ps2DrawBox(float locationX, float locationY, float locationZ, unsigned yaw2
     prim.mapping = textured ? DRAW_ENABLE : DRAW_DISABLE;
     prim.fogging = DRAW_DISABLE;
     prim.blending = DRAW_DISABLE;
-    prim.antialiasing = DRAW_ENABLE;
+    // AA edges look like screen-door / flicker when many tris overlap.
+    prim.antialiasing = DRAW_DISABLE;
     prim.mapping_type = PRIM_MAP_ST;
     prim.colorfix = PRIM_UNFIXED;
 
@@ -366,33 +422,31 @@ bool Ps2DrawBox(float locationX, float locationY, float locationZ, unsigned yaw2
     baseColor.a = 0x80;
     baseColor.q = 1.0f;
 
+    ++gDraw3DDebug.Boxes;
+
     qword_t* q = gs.packet->data;
+    // HUD / clear may leave TEST in ALLPASS — restore z before 3D.
+    q = draw_enable_tests(q, 0, &gs.z);
     int emitted = 0;
     if (textured) {
         auto* dw = reinterpret_cast<std::uint64_t*>(draw_prim_start(q, 0, &prim, &baseColor));
         for (int t = 0; t < kCubePointCount; t += 3) {
+            ++gDraw3DDebug.InTris;
             const int i0 = kCubePoints[t];
             const int i1 = kCubePoints[t + 1];
             const int i2 = kCubePoints[t + 2];
-            ClipVertex v0 = MakeClipVert(clipVerts[i0], shaded[i0], kFaceUVs[i0]);
-            ClipVertex v1 = MakeClipVert(clipVerts[i1], shaded[i1], kFaceUVs[i1]);
-            ClipVertex v2 = MakeClipVert(clipVerts[i2], shaded[i2], kFaceUVs[i2]);
-            // No near-clip lerp: any tri that crosses near is dropped (avoids wallpaper smear).
-            if (!TrianglePastNear(v0, v1, v2)) {
-                continue;
-            }
-            if (!PerspectiveDivide(v0) || !PerspectiveDivide(v1) || !PerspectiveDivide(v2)) {
-                continue;
-            }
-            if (!FanTriOk(v0, v1, v2)) {
+            ClipVertex a = MakeClipVert(clipVerts[i0], shaded[i0], kFaceUVs[i0]);
+            ClipVertex b = MakeClipVert(clipVerts[i1], shaded[i1], kFaceUVs[i1]);
+            ClipVertex c = MakeClipVert(clipVerts[i2], shaded[i2], kFaceUVs[i2]);
+            if (!CullTriangleClipSpace(a, b, c) || !TriReady(a, b, c)) {
                 continue;
             }
             xyz_t xyz[3];
             color_t rgb[3];
             texel_t st[3];
-            EmitConverted(v0, xyz[0], rgb[0], &st[0]);
-            EmitConverted(v1, xyz[1], rgb[1], &st[1]);
-            EmitConverted(v2, xyz[2], rgb[2], &st[2]);
+            EmitConverted(a, xyz[0], rgb[0], &st[0]);
+            EmitConverted(b, xyz[1], rgb[1], &st[1]);
+            EmitConverted(c, xyz[2], rgb[2], &st[2]);
             for (int k = 0; k < 3; ++k) {
                 *dw++ = rgb[k].rgbaq;
                 *dw++ = st[k].uv;
@@ -408,26 +462,21 @@ bool Ps2DrawBox(float locationX, float locationY, float locationZ, unsigned yaw2
         q = draw_prim_start(q, 0, &prim, &baseColor);
         VECTOR zeroUv __attribute__((aligned(16))) = {0.0f, 0.0f, 0.0f, 1.0f};
         for (int t = 0; t < kCubePointCount; t += 3) {
+            ++gDraw3DDebug.InTris;
             const int i0 = kCubePoints[t];
             const int i1 = kCubePoints[t + 1];
             const int i2 = kCubePoints[t + 2];
-            ClipVertex v0 = MakeClipVert(clipVerts[i0], shaded[i0], zeroUv);
-            ClipVertex v1 = MakeClipVert(clipVerts[i1], shaded[i1], zeroUv);
-            ClipVertex v2 = MakeClipVert(clipVerts[i2], shaded[i2], zeroUv);
-            if (!TrianglePastNear(v0, v1, v2)) {
-                continue;
-            }
-            if (!PerspectiveDivide(v0) || !PerspectiveDivide(v1) || !PerspectiveDivide(v2)) {
-                continue;
-            }
-            if (!FanTriOk(v0, v1, v2)) {
+            ClipVertex a = MakeClipVert(clipVerts[i0], shaded[i0], zeroUv);
+            ClipVertex b = MakeClipVert(clipVerts[i1], shaded[i1], zeroUv);
+            ClipVertex c = MakeClipVert(clipVerts[i2], shaded[i2], zeroUv);
+            if (!CullTriangleClipSpace(a, b, c) || !TriReady(a, b, c)) {
                 continue;
             }
             xyz_t xyz[3];
             color_t rgb[3];
-            EmitConverted(v0, xyz[0], rgb[0], nullptr);
-            EmitConverted(v1, xyz[1], rgb[1], nullptr);
-            EmitConverted(v2, xyz[2], rgb[2], nullptr);
+            EmitConverted(a, xyz[0], rgb[0], nullptr);
+            EmitConverted(b, xyz[1], rgb[1], nullptr);
+            EmitConverted(c, xyz[2], rgb[2], nullptr);
             for (int k = 0; k < 3; ++k) {
                 q->dw[0] = rgb[k].rgbaq;
                 q->dw[1] = xyz[k].xyz;
@@ -437,10 +486,15 @@ bool Ps2DrawBox(float locationX, float locationY, float locationZ, unsigned yaw2
         }
         q = draw_prim_end(q, 2, DRAW_RGBAQ_REGLIST);
     }
+    gDraw3DDebug.Emitted += static_cast<unsigned>(emitted);
     if (emitted == 0) {
         return true;
     }
     q = draw_finish(q);
+    const unsigned used = static_cast<unsigned>(q - gs.packet->data);
+    if (used > gDraw3DDebug.PacketQwordsPeak) {
+        gDraw3DDebug.PacketQwordsPeak = used;
+    }
     return Submit(gs, q);
 #else
     (void)locationX;
@@ -453,6 +507,27 @@ bool Ps2DrawBox(float locationX, float locationY, float locationZ, unsigned yaw2
     (void)scaleZ;
     return false;
 #endif
+}
+
+void Ps2Draw3DDebugBeginFrame() {
+    gDraw3DDebug = Ps2Draw3DDebugStats{};
+    gDraw3DDebugHasW = false;
+}
+
+void Ps2Draw3DDebugGetStats(Ps2Draw3DDebugStats& out) {
+    out = gDraw3DDebug;
+}
+
+void Ps2Draw3DDebugPrint(const Ps2Draw3DDebugStats& s) {
+    // MaxNdcEdge field holds squared edge length (see TriReady).
+    std::printf(
+        "[Draw3D] boxes=%u in=%u keep3=%u drop0=%u clip1=%u clip2=%u "
+        "rejDiv=%u rejNdc=%u emit=%u wall=%u qwPeak=%u "
+        "W=[%.3f..%.3f] |ndc|=%.2f,%.2f edge2=%.2f\n",
+        s.Boxes, s.InTris, s.Keep3, s.Drop0, s.Clip1, s.Clip2, s.RejectDiv, s.RejectNdc,
+        s.Emitted, s.WallpaperSuspect, s.PacketQwordsPeak, static_cast<double>(s.MinW),
+        static_cast<double>(s.MaxW), static_cast<double>(s.MaxAbsNdcX),
+        static_cast<double>(s.MaxAbsNdcY), static_cast<double>(s.MaxNdcEdge));
 }
 
 } // namespace leon::rhi

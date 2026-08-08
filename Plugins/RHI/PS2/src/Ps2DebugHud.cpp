@@ -91,6 +91,51 @@ constexpr float kGlyphAdvance = 12.0f;
         static const unsigned char r[7] = {0x00, 0x00, 0x0F, 0x10, 0x0E, 0x01, 0x1E};
         return r;
     }
+    // Clip-debug HUD letters (Draw3D counters).
+    case 'C': {
+        static const unsigned char r[7] = {0x0E, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0E};
+        return r;
+    }
+    case 'D': {
+        static const unsigned char r[7] = {0x1E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1E};
+        return r;
+    }
+    case 'E': {
+        static const unsigned char r[7] = {0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F};
+        return r;
+    }
+    case 'W': {
+        static const unsigned char r[7] = {0x11, 0x11, 0x11, 0x15, 0x15, 0x1B, 0x11};
+        return r;
+    }
+    case 'N': {
+        static const unsigned char r[7] = {0x11, 0x19, 0x15, 0x13, 0x11, 0x11, 0x11};
+        return r;
+    }
+    case 'X': {
+        static const unsigned char r[7] = {0x11, 0x11, 0x0A, 0x04, 0x0A, 0x11, 0x11};
+        return r;
+    }
+    case 'Y': {
+        static const unsigned char r[7] = {0x11, 0x11, 0x0A, 0x04, 0x04, 0x04, 0x04};
+        return r;
+    }
+    case 'I': {
+        static const unsigned char r[7] = {0x0E, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E};
+        return r;
+    }
+    case 'T': {
+        static const unsigned char r[7] = {0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04};
+        return r;
+    }
+    case '-': {
+        static const unsigned char r[7] = {0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00};
+        return r;
+    }
+    case '/': {
+        static const unsigned char r[7] = {0x01, 0x01, 0x02, 0x04, 0x08, 0x10, 0x10};
+        return r;
+    }
     default:
         return nullptr;
     }
