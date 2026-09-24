@@ -38,7 +38,7 @@ Requires [ps2dev](https://github.com/ps2dev/ps2dev) (`PS2DEV` / `PS2SDK`) in WSL
 .\Scripts\build-ps2-docker.ps1 lab     # Projects/Ps2Lab (2D capability lab)
 ```
 
-Run the `.elf` in [PCSX2](https://pcsx2.net/). Details: [SETUP — PS2](Docs/SETUP.md#ps2-emotion-engine).
+Run the `.elf` in [PCSX2](https://pcsx2.net/) (`.\Scripts\run-ps2-pcsx2.ps1 cube`, add `-Build` to build first). Details: [SETUP — PS2](Docs/SETUP.md#ps2-emotion-engine).
 
 Canonical **3D** pack: [`Projects/Ps2Cube`](Projects/Ps2Cube/).
 
