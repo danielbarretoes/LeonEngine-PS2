@@ -8,7 +8,7 @@
 #include <iostream>
 #include <string>
 
-#if defined(_WIN32)
+#if PLATFORM_WINDOWS
 	#ifndef WIN32_LEAN_AND_MEAN
 		#define WIN32_LEAN_AND_MEAN
 	#endif
@@ -28,7 +28,7 @@ namespace Leon::Net
 
 		bool EnsureSockets()
 		{
-#if defined(_WIN32)
+#if PLATFORM_WINDOWS
 			static bool bReady = false;
 			if (bReady)
 			{
@@ -56,7 +56,7 @@ namespace Leon::Net
 		}
 
 		char Hostname[256]{};
-#if defined(_WIN32)
+#if PLATFORM_WINDOWS
 		if (gethostname(Hostname, static_cast<int>(sizeof(Hostname))) != 0)
 		{
 #else

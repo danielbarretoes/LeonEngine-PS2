@@ -8,7 +8,7 @@
 #include <string>
 #include <string_view>
 
-/// Embeddable play host: pack resolve, FWorldRuntime, FGameplayRouter — no GLFW loop.
+/// Embeddable play host: pack resolve, FWorldRuntime, FGameplayRouter — no window loop of its own.
 /// Used by shipping `FGameApplication::Run` and Editor PIE (Selected Viewport / New Window).
 class ENGINE_API FGameHostSession
 {

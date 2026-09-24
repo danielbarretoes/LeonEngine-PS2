@@ -1,7 +1,6 @@
 # CMake toolchain: PlayStation 2 Emotion Engine (ps2dev / PS2SDK).
-# Usage:
-#   cmake -S Projects/Ps2Lab -B Projects/Ps2Lab/build-ps2 \
-#     -DCMAKE_TOOLCHAIN_FILE=Build/toolchains/ps2-ee.cmake -G Ninja
+# Registered as the PS2 platform's TOOLCHAIN_FILE (LeonBuildPS2.cmake); LeonBuildTool applies it inside the
+# pinned ps2dev Docker image (PS2DEV set), e.g. Engine\Build\BatchFiles\Build.bat BlankProgram PS2 Development.
 
 set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_SYSTEM_PROCESSOR mips)

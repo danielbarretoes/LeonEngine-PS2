@@ -52,11 +52,11 @@ public:
 	}
 
 	void SetAnimInstance(std::unique_ptr<UAnimInstance> Instance);
-	template <typename TAnim, typename... TArgs>
-	TAnim& SetAnimInstance(TArgs&&... Args)
+	template <typename TAnim, typename... ArgsType>
+	TAnim& SetAnimInstance(ArgsType&&... Args)
 	{
 		static_assert(std::is_base_of_v<UAnimInstance, TAnim>, "TAnim must derive from AnimInstance");
-		auto Owned = std::make_unique<TAnim>(std::forward<TArgs>(Args)...);
+		auto Owned = std::make_unique<TAnim>(std::forward<ArgsType>(Args)...);
 		TAnim& Ref = *Owned;
 		SetAnimInstance(std::move(Owned));
 		return Ref;

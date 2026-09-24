@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <vector>
 
-/// Runtime animation hooks produced while loading a Level JSON (spin / bob / light orbit).
+/// Runtime animation hooks produced while loading a level (spin / bob / light orbit).
 struct ENGINE_API FLevelAnimation
 {
 	struct FStaticMeshSpin

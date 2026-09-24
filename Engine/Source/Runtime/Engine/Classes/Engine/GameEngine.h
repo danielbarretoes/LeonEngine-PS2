@@ -20,7 +20,7 @@
 #include <type_traits>
 #include <utility>
 
-/// Top-level runtime: GLFW window, main loop, orbit-camera input, FPS overlay,
+/// Top-level runtime: platform window (FGenericWindow), per-frame Tick, orbit-camera input, FPS overlay,
 /// UGameInstance, and a Level/FResourceCache filled by FLevelDirector (or the app).
 class ENGINE_API UGameEngine
 {
@@ -38,7 +38,7 @@ public:
 	UGameEngine& operator=(const UGameEngine&) = delete;
 
 	bool Initialize(int Width, int Height, const char* Title);
-	/// No GLFW / OpenGL — CPU meshes only. For `leon-server`.
+	/// No window / RHI — CPU meshes only. For dedicated servers.
 	bool InitializeHeadless();
 	void Shutdown();
 
@@ -260,7 +260,7 @@ public:
 		return bNavMeshDebugEnabled;
 	}
 
-	/// Consume accumulated mouse-wheel Y this frame (GLFW units). Cleared after return.
+	/// Consume accumulated mouse-wheel Y this frame (platform wheel units). Cleared after return.
 	/// When orbit mouse is enabled, Engine applies scroll to Orbit distance in handleInput first.
 	[[nodiscard]] float ConsumeScrollY();
 

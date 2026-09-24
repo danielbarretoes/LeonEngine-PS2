@@ -12,15 +12,15 @@ namespace
 
 	void PrintUsage()
 	{
-		std::cout << "leon-cook — cook meshes / skeletal assets for Leon\n\n"
+		std::cout << "LeonCook - cook meshes / skeletal assets for Leon (UCookCommandlet)\n\n"
 				  << "Usage:\n"
-				  << "  leon-cook staticmesh --obj <mesh.obj>|--fbx <m.fbx>|--gltf <m.gltf> --out <m.lmesh>\n"
+				  << "  LeonCook staticmesh --obj <mesh.obj>|--fbx <m.fbx>|--gltf <m.gltf> --out <m.lmesh>\n"
 				  << "    [--materials <dir>]  (glTF: write .lmat + textures)\n\n"
-				  << "  leon-cook character --name <Name> --mesh <idle.fbx> --run <run.fbx> --out <dir>\n"
+				  << "  LeonCook character --name <Name> --mesh <idle.fbx> --run <run.fbx> --out <dir>\n"
 				  << "    [--jump <JumpingUp.fbx>] [--fall <FallingIdle.fbx>] [--land <Land.fbx>]\n\n"
-				  << "  leon-cook anim --fbx <clip.fbx> --skeleton <Bot.lskel>\n"
+				  << "  LeonCook anim --fbx <clip.fbx> --skeleton <Bot.lskel>\n"
 				  << "    --name <ClipName> --out <Anims/Clip.lanim> [--noloop]\n\n"
-				  << "  leon-cook recipe <file.json>\n"
+				  << "  LeonCook recipe <file.json>\n"
 				  << "    Runs steps from a recipe; relative paths resolve next to the JSON file.\n"
 				  << "    Step types: character | anim | staticmesh\n\n"
 				  << "Writes (staticmesh):\n"

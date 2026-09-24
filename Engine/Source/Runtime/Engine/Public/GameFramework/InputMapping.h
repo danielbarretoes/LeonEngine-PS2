@@ -13,7 +13,7 @@
 /// One key contribution to a 1D axis (Unreal-like axis mapping entry).
 struct ENGINE_API FInputAxisKeyMapping
 {
-	int Key = 0; // EKeys underlying code (Host matches GLFW)
+	int Key = 0; // EKeys underlying code (desktop key codes match GLFW)
 	float Scale = 1.0f; // typically +1 or -1
 };
 

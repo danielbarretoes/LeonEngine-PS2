@@ -4,7 +4,7 @@
 
 /// Physics implementation behind `FPhysScene`.
 /// Default remains Arcade (AABB traces + CMC). Pass `EPhysicsBackend::Jolt` for rigid Step
-/// and narrow-phase traces when built with `LEON_WITH_JOLT` (Editor/Engine default ON).
+/// and narrow-phase traces when built with `LEON_WITH_JOLT` (the JoltPhysics plugin, Win64).
 enum class EPhysicsBackend : std::uint8_t
 {
 	Arcade = 0,

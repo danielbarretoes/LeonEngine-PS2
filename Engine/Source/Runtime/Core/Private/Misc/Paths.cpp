@@ -7,7 +7,7 @@
 #include <system_error>
 #include <vector>
 
-#if defined(_WIN32)
+#if PLATFORM_WINDOWS
 	#ifndef NOMINMAX
 		#define NOMINMAX
 	#endif
@@ -116,7 +116,7 @@ std::filesystem::path FPaths::GetActiveContentRoot()
 
 std::filesystem::path FPaths::ExecutableDir()
 {
-#if defined(_WIN32)
+#if PLATFORM_WINDOWS
 	std::vector<wchar_t> Buffer(MAX_PATH);
 	for (;;)
 	{
@@ -267,9 +267,7 @@ std::string FPaths::ResolveAssetPath(const std::string& RelativePath)
 
 std::string FPaths::ResolveProjectsDir()
 {
-	// Prefer a Projects/ whose parent is a real Leon root (Build/Dependencies.cmake +
-	// Engine/). Avoid the thin POST_BUILD staging folder beside the editor exe
-	// (e.g. Editor/build/Release/Projects) — that breaks game CMakeLists ../.. paths.
+	// Prefer a Projects/ whose parent is a Leon root (Engine/Build/Build.version) over a staged copy.
 	const std::filesystem::path ExeDir = FPaths::ExecutableDir();
 	std::error_code Ec;
 	const auto IsSdkProjects = [&](const std::filesystem::path& ProjectsDir)
@@ -279,14 +277,13 @@ std::string FPaths::ResolveProjectsDir()
 			return false;
 		}
 		const std::filesystem::path Root = ProjectsDir.parent_path();
-		return std::filesystem::is_regular_file(Root / "Build" / "Dependencies.cmake", Ec) && !Ec &&
-			std::filesystem::is_directory(Root / "Engine", Ec) && !Ec;
+		return std::filesystem::is_regular_file(Root / "Engine" / "Build" / "Build.version", Ec) && !Ec;
 	};
 
 	const std::filesystem::path Candidates[] = {
-		ExeDir / "Projects", // Dist/LeonEditor/Projects
-		ExeDir / ".." / ".." / "Projects", // Editor/build-fast → repo/Projects
-		ExeDir / ".." / ".." / ".." / "Projects", // Editor/build/Release → repo/Projects
+		ExeDir / "Projects", // staged next to the executable
+		ExeDir / ".." / ".." / "Projects", // Engine/Binaries/Win64 -> Engine/Projects (not a root; skipped)
+		ExeDir / ".." / ".." / ".." / "Projects", // Engine/Binaries/Win64 -> <root>/Projects
 		std::filesystem::path("Projects"),
 		std::filesystem::path("..") / "Projects",
 		std::filesystem::path("..") / ".." / "Projects",

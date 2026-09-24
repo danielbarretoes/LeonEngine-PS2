@@ -6,13 +6,13 @@ REM   call "%~dp0GetVSEnv.bat" vsdev
 REM   call "%~dp0GetVSEnv.bat" vsdev quiet
 REM Optional trailing tokens (any order after mode):
 REM   quiet       — suppress VsDevCmd / vcvars stdout
-REM   optional    — if VS missing, exit 0 without setting env (package-editor)
+REM   optional    — if VS missing, exit 0 without setting env
 REM   need-ninja  — require ninja on PATH
 REM   need-git    — require git on PATH
 REM
 REM Modes:
-REM   vcvars — Ninja / clangd trees (build-fast, configure-ninja)
-REM   vsdev  — VS generator / general (build, test, cook, lint, build-project)
+REM   vcvars — Ninja builds (Build.bat, RunTests.bat, GenerateProjectFiles.bat)
+REM   vsdev  — Visual Studio developer prompt (VS generator / general tools)
 
 set "_LEON_MODE="
 set "_LEON_QUIET=0"
@@ -53,7 +53,7 @@ if /I "%~1"=="need-git" (
   goto ParseArgs
 )
 echo ERROR: GetVSEnv.bat unknown arg: %~1
-echo   Usage: call Scripts\_vsenv.bat vcvars^|vsdev [quiet] [optional] [need-ninja] [need-git]
+echo   Usage: call Engine\Build\BatchFiles\GetVSEnv.bat vcvars^|vsdev [quiet] [optional] [need-ninja] [need-git]
 exit /b 1
 
 :Parsed

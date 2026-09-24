@@ -7,7 +7,7 @@
 #include <vector>
 
 /// Unreal-like cooked skeletal content (micro-engine files, not UObject).
-/// Sample pack: Templates/ThirdPerson/Content/assets/characters/bot/
+/// Layout of a cooked character inside a pack (e.g. <Pack>/Content/assets/characters/bot/):
 ///   Bot.lskel
 ///   Bot.lskm
 ///   Materials/M_Bot.lmat

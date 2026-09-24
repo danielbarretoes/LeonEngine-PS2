@@ -2,5 +2,5 @@
 leon_module(UMG
 	PLATFORMS Desktop
 	PUBLIC_DEPENDENCIES Core SlateCore GLM
-	PRIVATE_DEPENDENCIES ApplicationCore InputCore Renderer GLFW
+	PRIVATE_DEPENDENCIES ApplicationCore InputCore Renderer
 )

@@ -885,7 +885,7 @@ bool CookCharacterFromFbx(const std::string& CharacterName, const std::string& M
 		return false;
 	}
 
-	// Prefer pack albedo when present (ThirdPerson: Textures/T_Bot_D.png).
+	// Prefer the pack albedo when present (e.g. <Pack>/Content/Textures/T_Bot_D.png).
 	std::string CharacterFolder = CharacterName;
 	for (char& C : CharacterFolder)
 	{

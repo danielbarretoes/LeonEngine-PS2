@@ -1,7 +1,7 @@
 # .leonproject reader (Unreal: FProjectDescriptor / .uproject).
 #
 #   { "FileVersion": 1, "EngineAssociation": "", "Description": "...",
-#     "Modules": [ { "Name": "ThirdPerson", "Type": "Runtime", "LoadingPhase": "Default" } ],
+#     "Modules": [ { "Name": "MyGame", "Type": "Runtime", "LoadingPhase": "Default" } ],
 #     "Plugins": [ { "Name": "JoltPhysics", "Enabled": true } ],
 #     "TargetPlatforms": [ "PS2" ] }
 #

@@ -3,6 +3,6 @@ leon_module(Engine
 	PLATFORMS Desktop
 	PUBLIC_DEPENDENCIES Core InputCore ApplicationCore RHI RenderCore UMG PhysicsCore AnimationCore AudioMixer
 		NetCore GLM NlohmannJson
-	PRIVATE_DEPENDENCIES Projects ENet GLFW STB
+	PRIVATE_DEPENDENCIES Projects ENet STB
 	CIRCULAR_DEPENDENCIES Renderer
 )
