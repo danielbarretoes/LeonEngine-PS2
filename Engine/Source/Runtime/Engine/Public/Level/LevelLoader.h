@@ -1,10 +1,10 @@
 #pragma once
 
-#include <cstddef>
 #include "Engine/GameEngine.h"
 #include "Level/LevelAnimation.h"
-#include <string>
 
+#include <cstddef>
+#include <string>
 
 struct UStaticMeshComponent;
 
@@ -17,4 +17,3 @@ void ApplyFitHeight(UStaticMeshComponent& Object, float FitHeight);
 /// leave the previous Level and camera untouched).
 /// Runs ContentValidator on the decoded document (referenced materials / meshes) before applying.
 bool LoadLevelFile(UGameEngine& Engine, const std::string& LevelPath, FLevelAnimation* OutAnim = nullptr);
-

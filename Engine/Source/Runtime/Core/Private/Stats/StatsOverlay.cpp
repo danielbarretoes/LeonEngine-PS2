@@ -9,7 +9,7 @@ namespace
 	bool bStatsVisible = true;
 	bool bGamepadWidgetVisible = true;
 	char Messages[FStatsOverlay::MaxOnScreenMessages][MessageChars] = {};
-}
+} // namespace
 
 void FStatsOverlay::SetStatsVisible(bool bVisible)
 {
@@ -51,8 +51,8 @@ void FStatsOverlay::CycleVisibility()
 		bStatsVisible = true;
 		bGamepadWidgetVisible = true;
 	}
-	std::printf("StatsOverlay: stats %s, gamepad %s\n", bStatsVisible ? "on" : "off",
-		bGamepadWidgetVisible ? "on" : "off");
+	std::printf(
+		"StatsOverlay: stats %s, gamepad %s\n", bStatsVisible ? "on" : "off", bGamepadWidgetVisible ? "on" : "off");
 }
 
 void FStatsOverlay::AddOnScreenDebugMessage(int32 Key, const char* Message)

@@ -27,7 +27,7 @@ namespace
 		glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 		glfwWindowHint(GLFW_SAMPLES, 0);
 	}
-}
+} // namespace
 
 FGLFWWindow::~FGLFWWindow()
 {
@@ -38,24 +38,30 @@ void FGLFWWindow::InstallCallbacks()
 {
 	GLFWwindow* Window = AsGLFW(Handle);
 	glfwSetWindowUserPointer(Window, this);
-	glfwSetWindowSizeCallback(Window, [](GLFWwindow* W, int Width, int Height) {
-		if (FGLFWWindow* Self = FromGLFW(W))
+	glfwSetWindowSizeCallback(Window,
+		[](GLFWwindow* W, int Width, int Height)
 		{
-			Self->ApplyWindowSize(Width, Height);
-		}
-	});
-	glfwSetFramebufferSizeCallback(Window, [](GLFWwindow* W, int Width, int Height) {
-		if (FGLFWWindow* Self = FromGLFW(W))
+			if (FGLFWWindow* Self = FromGLFW(W))
+			{
+				Self->ApplyWindowSize(Width, Height);
+			}
+		});
+	glfwSetFramebufferSizeCallback(Window,
+		[](GLFWwindow* W, int Width, int Height)
 		{
-			Self->ApplyFramebufferSize(Width, Height);
-		}
-	});
-	glfwSetScrollCallback(Window, [](GLFWwindow* W, double, double YOffset) {
-		if (FGLFWWindow* Self = FromGLFW(W))
+			if (FGLFWWindow* Self = FromGLFW(W))
+			{
+				Self->ApplyFramebufferSize(Width, Height);
+			}
+		});
+	glfwSetScrollCallback(Window,
+		[](GLFWwindow* W, double, double YOffset)
 		{
-			Self->NotifyScroll(YOffset);
-		}
-	});
+			if (FGLFWWindow* Self = FromGLFW(W))
+			{
+				Self->NotifyScroll(YOffset);
+			}
+		});
 }
 
 bool FGLFWWindow::Create(int Width, int Height, const char* Title)
@@ -111,8 +117,7 @@ bool FGLFWWindow::CreateShared(const FGenericWindow& ShareWith, int Width, int H
 
 	SetContextHints();
 	glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
-	GLFWwindow* Window =
-		glfwCreateWindow(Width, Height, Title != nullptr ? Title : "Leon Play", nullptr, ShareWindow);
+	GLFWwindow* Window = glfwCreateWindow(Width, Height, Title != nullptr ? Title : "Leon Play", nullptr, ShareWindow);
 	Handle = Window;
 	if (Handle == nullptr)
 	{

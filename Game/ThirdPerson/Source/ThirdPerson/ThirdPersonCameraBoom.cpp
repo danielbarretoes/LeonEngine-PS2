@@ -12,7 +12,7 @@ namespace
 	constexpr float PitchMax = 72.0f;
 	constexpr float CameraGroundClearance = 3.5f;
 	constexpr float TwoPi = 6.28318530718f;
-}
+} // namespace
 
 void FThirdPersonCameraBoom::ResetTo(float TargetX, float TargetY, float TargetZ)
 {

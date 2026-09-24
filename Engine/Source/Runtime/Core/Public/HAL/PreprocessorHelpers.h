@@ -25,8 +25,10 @@
  *   #include COMPILED_PLATFORM_HEADER(PlatformMemory.h)
  * resolves to "Windows/WindowsPlatformMemory.h" in-module, or "PS2PlatformMemory.h" for an extension.
  */
+// clang-format off: the path separator must stay glued to its tokens ("Windows/WindowsPlatform.h").
 #if PLATFORM_IS_EXTENSION
 	#define COMPILED_PLATFORM_HEADER(Suffix) PREPROCESSOR_TO_STRING(PREPROCESSOR_JOIN(PLATFORM_HEADER_NAME, Suffix))
 #else
 	#define COMPILED_PLATFORM_HEADER(Suffix) PREPROCESSOR_TO_STRING(PREPROCESSOR_JOIN(PLATFORM_HEADER_NAME/PLATFORM_HEADER_NAME, Suffix))
 #endif
+// clang-format on

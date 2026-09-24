@@ -2,7 +2,6 @@
 
 #include "MeshData.h"
 
-
 /// Unit cube centered at the origin [-0.5, 0.5]^3.
 [[nodiscard]] FMeshData MakeCube();
 
@@ -11,4 +10,3 @@
 
 /// UV sphere centered at the origin with radius 0.5.
 [[nodiscard]] FMeshData MakeSphere(int Segments = 24, int Rings = 16);
-

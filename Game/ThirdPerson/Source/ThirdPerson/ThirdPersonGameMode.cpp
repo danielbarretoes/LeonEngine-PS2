@@ -26,7 +26,7 @@ namespace
 		std::printf("Draw3D stats: HUD + PCSX2 console every 30 frames\n");
 		std::printf("================================\n\n");
 	}
-}
+} // namespace
 
 FThirdPersonGameMode::FThirdPersonGameMode(FGenericWindow& InWindow, IInputInterface* InInputInterface)
 	: Window(InWindow)

@@ -9,7 +9,7 @@ namespace
 {
 	constexpr UPTRINT EEUserBase = 0x00100000u;
 	constexpr uint64 EERamBytes = 32ull * 1024ull * 1024ull;
-}
+} // namespace
 
 FPlatformMemoryStats FPS2PlatformMemory::GetStats()
 {

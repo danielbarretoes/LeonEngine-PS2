@@ -1,9 +1,10 @@
 #pragma once
 
 #include "Material.h"
-#include <nlohmann/json.hpp>
-#include <string>
 
+#include <nlohmann/json.hpp>
+
+#include <string>
 
 class FResourceCache;
 
@@ -11,14 +12,11 @@ class FResourceCache;
 [[nodiscard]] bool HasMaterialSurfaceFields(const nlohmann::json& Spec);
 
 /// Apply material JSON fields onto an existing FMaterial (maps resolved via cache).
-void PatchMaterialFromJson(FResourceCache& Resources, FMaterial& Material,
-                           const nlohmann::json& Spec);
+void PatchMaterialFromJson(FResourceCache& Resources, FMaterial& Material, const nlohmann::json& Spec);
 
 /// Load a `.lmat` material asset.
 /// Returns false on I/O / parse failure (leaves `out` unchanged).
-[[nodiscard]] bool LoadMaterialFile(FResourceCache& Resources, const std::string& Path,
-                                    FMaterial& Out);
+[[nodiscard]] bool LoadMaterialFile(FResourceCache& Resources, const std::string& Path, FMaterial& Out);
 
 /// Engine default: grayscale checker (Unreal-like WorldGrid placeholder).
 [[nodiscard]] FMaterial MakeDefaultCheckerMaterial(FResourceCache& Resources);
-

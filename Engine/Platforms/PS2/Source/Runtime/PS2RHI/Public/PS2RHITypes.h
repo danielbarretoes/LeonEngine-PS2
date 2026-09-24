@@ -50,13 +50,13 @@ struct PS2RHI_API FPS2Material
  */
 struct PS2RHI_API FPS2Draw3DStats
 {
-	uint32 Boxes = 0;            // DrawBox calls
-	uint32 CulledBoxes = 0;      // whole box outside the view frustum
-	uint32 BackFaces = 0;        // faces facing away from the camera
-	uint32 InTris = 0;           // triangles tested after box / face culling
-	uint32 Keep3 = 0;            // fully inside the clip volume (sent as-is)
-	uint32 Drop0 = 0;            // fully outside the visible frustum
-	uint32 Clipped = 0;          // split against near / guard band
-	uint32 Emitted = 0;          // triangles sent to the GS
+	uint32 Boxes = 0; // DrawBox calls
+	uint32 CulledBoxes = 0; // whole box outside the view frustum
+	uint32 BackFaces = 0; // faces facing away from the camera
+	uint32 InTris = 0; // triangles tested after box / face culling
+	uint32 Keep3 = 0; // fully inside the clip volume (sent as-is)
+	uint32 Drop0 = 0; // fully outside the visible frustum
+	uint32 Clipped = 0; // split against near / guard band
+	uint32 Emitted = 0; // triangles sent to the GS
 	uint32 PacketQwordsPeak = 0;
 };

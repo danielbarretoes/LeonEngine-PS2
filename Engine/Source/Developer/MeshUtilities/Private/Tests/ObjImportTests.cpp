@@ -6,8 +6,8 @@
 
 TEST_CASE("LoadObj imports the Cube fixture", "[MeshUtilities][OBJ]")
 {
-	const std::filesystem::path Fixture = std::filesystem::path(LEON_ROOT_DIR) /
-		"Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/Cube.obj";
+	const std::filesystem::path Fixture =
+		std::filesystem::path(LEON_ROOT_DIR) / "Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/Cube.obj";
 	REQUIRE(std::filesystem::exists(Fixture));
 
 	const FMeshData Data = LoadObj(Fixture.string());

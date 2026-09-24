@@ -116,7 +116,7 @@ enum class EKeys : int32
 	Multiply = 332,
 	Subtract = 333,
 	Add = 334,
-	NumPadEnter = 335,  // Leon: UE folds it into Enter
+	NumPadEnter = 335, // Leon: UE folds it into Enter
 	NumPadEquals = 336, // Leon
 
 	LeftShift = 340,

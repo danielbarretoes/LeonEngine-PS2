@@ -8,8 +8,8 @@ FPlatformMemoryStats FWindowsPlatformMemory::GetStats()
 	FPlatformMemoryStats Stats;
 	PROCESS_MEMORY_COUNTERS_EX Counters{};
 	Counters.cb = sizeof(Counters);
-	if (GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&Counters),
-			sizeof(Counters)))
+	if (GetProcessMemoryInfo(
+			GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&Counters), sizeof(Counters)))
 	{
 		Stats.UsedPhysical = static_cast<uint64>(Counters.WorkingSetSize);
 		Stats.UsedVirtual = static_cast<uint64>(Counters.PrivateUsage);

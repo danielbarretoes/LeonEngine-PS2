@@ -1,31 +1,33 @@
-#include <catch2/catch_test_macros.hpp>
 #include "Engine/GameEngine.h"
 
-TEST_CASE("Engine flags work before initialize", "[engine]") {
-    UGameEngine Engine;
-    REQUIRE_FALSE(Engine.IsInitialized());
+#include <catch2/catch_test_macros.hpp>
 
-    Engine.SetSuppressCameraDrag(true);
-    REQUIRE(Engine.IsCameraDragSuppressed());
-    Engine.SetSuppressCameraDrag(false);
-    REQUIRE_FALSE(Engine.IsCameraDragSuppressed());
+TEST_CASE("Engine flags work before initialize", "[engine]")
+{
+	UGameEngine Engine;
+	REQUIRE_FALSE(Engine.IsInitialized());
 
-    REQUIRE_FALSE(Engine.IsCollisionDebugEnabled());
-    Engine.ToggleCollisionDebug();
-    REQUIRE(Engine.IsCollisionDebugEnabled());
-    Engine.SetCollisionDebugEnabled(false);
-    REQUIRE_FALSE(Engine.IsCollisionDebugEnabled());
+	Engine.SetSuppressCameraDrag(true);
+	REQUIRE(Engine.IsCameraDragSuppressed());
+	Engine.SetSuppressCameraDrag(false);
+	REQUIRE_FALSE(Engine.IsCameraDragSuppressed());
 
-    REQUIRE_FALSE(Engine.IsNavMeshDebugEnabled());
-    Engine.ToggleNavMeshDebug();
-    REQUIRE(Engine.IsNavMeshDebugEnabled());
-    Engine.SetNavMeshDebugEnabled(false);
-    REQUIRE_FALSE(Engine.IsNavMeshDebugEnabled());
+	REQUIRE_FALSE(Engine.IsCollisionDebugEnabled());
+	Engine.ToggleCollisionDebug();
+	REQUIRE(Engine.IsCollisionDebugEnabled());
+	Engine.SetCollisionDebugEnabled(false);
+	REQUIRE_FALSE(Engine.IsCollisionDebugEnabled());
 
-    Engine.SetKeyboardOrbitEnabled(false);
-    Engine.SetOrbitMouseEnabled(false);
+	REQUIRE_FALSE(Engine.IsNavMeshDebugEnabled());
+	Engine.ToggleNavMeshDebug();
+	REQUIRE(Engine.IsNavMeshDebugEnabled());
+	Engine.SetNavMeshDebugEnabled(false);
+	REQUIRE_FALSE(Engine.IsNavMeshDebugEnabled());
 
-    REQUIRE(Engine.GetGameInstance().GetLevelsOpened() == 0);
-    Engine.GetGameInstance().NotifyLevelOpened();
-    REQUIRE(Engine.GetGameInstance().GetLevelsOpened() == 1);
+	Engine.SetKeyboardOrbitEnabled(false);
+	Engine.SetOrbitMouseEnabled(false);
+
+	REQUIRE(Engine.GetGameInstance().GetLevelsOpened() == 0);
+	Engine.GetGameInstance().NotifyLevelOpened();
+	REQUIRE(Engine.GetGameInstance().GetLevelsOpened() == 1);
 }

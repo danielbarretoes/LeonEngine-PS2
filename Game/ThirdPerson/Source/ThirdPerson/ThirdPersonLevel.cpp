@@ -9,8 +9,8 @@ namespace
 	constexpr float MaxFallCatch = 2.5f;
 
 	/** Box with its bottom flush on Y = BottomY (no floating). */
-	void PlaceGrounded(FThirdPersonPrimitive& Out, float X, float Z, float HalfX, float HalfY, float HalfZ, float BottomY,
-		uint32 Yaw256, const FPS2Material* Material)
+	void PlaceGrounded(FThirdPersonPrimitive& Out, float X, float Z, float HalfX, float HalfY, float HalfZ,
+		float BottomY, uint32 Yaw256, const FPS2Material* Material)
 	{
 		Out.LocationX = X;
 		Out.LocationZ = Z;
@@ -56,8 +56,8 @@ namespace
 	}
 
 	/** Ray (origin + t * dir, t in [0, 1], dir = full boom vector) vs AABB. */
-	bool RayAabbHit(const float Origin[3], const float Direction[3], const float BoxMin[3], const float BoxMax[3],
-		float& OutTime)
+	bool RayAabbHit(
+		const float Origin[3], const float Direction[3], const float BoxMin[3], const float BoxMax[3], float& OutTime)
 	{
 		float TimeMin = 0.0f;
 		float TimeMax = 1.0f;
@@ -96,7 +96,7 @@ namespace
 		OutTime = TimeMin;
 		return TimeMin >= 0.0f && TimeMin <= 1.0f;
 	}
-}
+} // namespace
 
 void FThirdPersonLevel::Build(
 	const FPS2Material* GroundMaterial, const FPS2Material* PlatformMaterial, const FPS2Material* CrateMaterial)

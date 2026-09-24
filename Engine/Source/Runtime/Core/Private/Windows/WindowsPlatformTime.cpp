@@ -16,7 +16,7 @@ namespace
 		static const uint64 Frequency = QueryFrequency();
 		return Frequency;
 	}
-}
+} // namespace
 
 uint64 FWindowsPlatformTime::Cycles64()
 {

@@ -2,16 +2,15 @@
 
 #include <cstdint>
 
-
 /// Horizontal justification for HUD / UUserWidget text (Unreal-like ETextJustify lite).
-enum class ETextJustify : std::uint8_t {
-    Left = 0,
-    Center = 1,
-    Right = 2,
+enum class ETextJustify : std::uint8_t
+{
+	Left = 0,
+	Center = 1,
+	Right = 2,
 };
 
 /// Default HUD bitmap font scale (stb_easy_font × this).
 inline constexpr float HudFontScale = 2.0f;
 /// Line step in pixels at `HudFontScale` (stb cell height 14).
 inline constexpr float HudLineHeight = 14.0f * HudFontScale;
-

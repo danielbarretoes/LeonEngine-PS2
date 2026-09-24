@@ -2,29 +2,37 @@
 
 #include "GameFramework/Actor.h"
 
-
 class AController;
 
 /// Possessable Actor (Unreal-style Pawn). Character derives from this.
-class ENGINE_API APawn : public AActor {
+class ENGINE_API APawn : public AActor
+{
 public:
-    [[nodiscard]] AController* GetController() const { return Controller; }
-    [[nodiscard]] bool IsPossessed() const { return Controller != nullptr; }
+	[[nodiscard]] AController* GetController() const
+	{
+		return Controller;
+	}
+	[[nodiscard]] bool IsPossessed() const
+	{
+		return Controller != nullptr;
+	}
 
-    /// UnPossess any Controller, then mark pending kill.
-    void Destroy() override;
-    /// Also UnPossess when removed via World::Clear.
-    void EndPlay() override;
+	/// UnPossess any Controller, then mark pending kill.
+	void Destroy() override;
+	/// Also UnPossess when removed via World::Clear.
+	void EndPlay() override;
 
 protected:
-    APawn() = default;
+	APawn() = default;
 
 private:
-    friend class AController;
+	friend class AController;
 
-    void BindController(AController* InController) { Controller = InController; }
-    void DetachController();
+	void BindController(AController* InController)
+	{
+		Controller = InController;
+	}
+	void DetachController();
 
-    AController* Controller = nullptr;
+	AController* Controller = nullptr;
 };
-

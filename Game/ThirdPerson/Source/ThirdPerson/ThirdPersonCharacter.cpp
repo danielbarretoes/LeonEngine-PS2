@@ -20,7 +20,7 @@ namespace
 	{
 		return A < B ? A : B;
 	}
-}
+} // namespace
 
 void FThirdPersonCharacter::SpawnAt(const FThirdPersonLevel& Level)
 {

@@ -31,7 +31,7 @@ namespace
 	/** The desktop game session (UE: GEngine + the game viewport), driven one frame per Tick. */
 	std::unique_ptr<FGameApplication> GGameApplication;
 #endif
-}
+} // namespace
 
 FEngineLoop::FEngineLoop() = default;
 
@@ -87,7 +87,8 @@ int32 FEngineLoop::Init()
 void FEngineLoop::Tick()
 {
 	const uint64 NowCycles = FPlatformTime::Cycles64();
-	const float DeltaTime = static_cast<float>(FPlatformTime::CyclesToMicroseconds(NowCycles - LastFrameCycles)) / 1000000.0f;
+	const float DeltaTime =
+		static_cast<float>(FPlatformTime::CyclesToMicroseconds(NowCycles - LastFrameCycles)) / 1000000.0f;
 	LastFrameCycles = NowCycles;
 
 #if WITH_ENGINE

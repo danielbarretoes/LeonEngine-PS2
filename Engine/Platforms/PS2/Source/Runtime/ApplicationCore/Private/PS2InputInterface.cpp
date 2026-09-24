@@ -1,7 +1,6 @@
 #include "PS2InputInterface.h"
 
 #include <cstdio>
-
 #include <libpad.h>
 #include <loadfile.h>
 #include <sifrpc.h>
@@ -103,7 +102,7 @@ namespace
 				return 0;
 		}
 	}
-}
+} // namespace
 
 FPS2InputInterface* FPS2InputInterface::Get()
 {

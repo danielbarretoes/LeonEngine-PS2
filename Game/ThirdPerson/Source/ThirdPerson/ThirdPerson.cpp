@@ -23,10 +23,7 @@ void FThirdPersonModule::StartupModule()
 
 	GameMode = std::make_unique<FThirdPersonGameMode>(*Window, Application->GetInputInterface());
 	GameMode->StartPlay();
-	TickHandle = FTicker::GetCoreTicker().AddTicker([this](float DeltaTime)
-	{
-		return GameMode->Tick(DeltaTime);
-	});
+	TickHandle = FTicker::GetCoreTicker().AddTicker([this](float DeltaTime) { return GameMode->Tick(DeltaTime); });
 }
 
 void FThirdPersonModule::ShutdownModule()

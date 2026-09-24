@@ -3,7 +3,6 @@
 #include "PS2RHI.h"
 
 #include <cstdio>
-
 #include <graph.h>
 
 namespace
@@ -14,7 +13,7 @@ namespace
 	};
 
 	FPS2DisplayState GPS2Display;
-}
+} // namespace
 
 FPS2Window::~FPS2Window()
 {

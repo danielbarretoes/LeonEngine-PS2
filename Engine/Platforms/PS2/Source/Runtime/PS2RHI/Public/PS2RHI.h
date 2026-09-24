@@ -30,8 +30,8 @@ public:
 
 	// --- 2D unlit (screen space, origin at the screen centre) ---
 	static bool DrawUnlitTriangle();
-	static bool DrawUnlitTriangleAt(float CenterX, float CenterY, float Size, unsigned Angle256, float R, float G,
-		float B);
+	static bool DrawUnlitTriangleAt(
+		float CenterX, float CenterY, float Size, unsigned Angle256, float R, float G, float B);
 	static bool DrawUnlitRect(float X0, float Y0, float X1, float Y1, float R, float G, float B);
 
 	/** Alpha-blended overlay rect: color = (src - dst) * alpha + dst, alpha in [0, 1]. */
@@ -41,8 +41,8 @@ public:
 	 * 5x7 debug glyphs drawn with rects (ASCII A-Z, 0-9, a few symbols).
 	 * scale 1 = 2 px cells (12 px advance, 14 px tall); 0.5 = 1 px cells (6 px advance, 7 px tall).
 	 */
-	static void DrawDebugText(float X, float Y, const char* Text, float R = 0.95f, float G = 0.95f, float B = 0.85f,
-		float Scale = 1.0f);
+	static void DrawDebugText(
+		float X, float Y, const char* Text, float R = 0.95f, float G = 0.95f, float B = 0.85f, float Scale = 1.0f);
 
 	/** Validates and draws a cooked LPS2 blob (see Docs/ASSET_FORMATS.md, PS2). */
 	static bool DrawCookedMesh(const void* Data, unsigned Size);
@@ -52,8 +52,8 @@ public:
 		float ScaleX, float ScaleY, float ScaleZ);
 
 	/** Uniform half-extent convenience. */
-	static bool DrawBox(float LocationX, float LocationY, float LocationZ, unsigned Yaw256, unsigned Pitch256,
-		float Scale)
+	static bool DrawBox(
+		float LocationX, float LocationY, float LocationZ, unsigned Yaw256, unsigned Pitch256, float Scale)
 	{
 		return DrawBox(LocationX, LocationY, LocationZ, Yaw256, Pitch256, Scale, Scale, Scale);
 	}

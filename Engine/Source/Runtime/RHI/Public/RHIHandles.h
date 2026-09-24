@@ -2,7 +2,6 @@
 
 #include <cstdint>
 
-
 /// Opaque GPU object ids for public Engine headers.
 /// Under the OpenGL plugin these are GLuint-compatible; 0 means invalid / default FB.
 using FRHITextureId = std::uint32_t;
@@ -20,4 +19,3 @@ constexpr FRHIVertexArrayId InvalidVertexArray = 0;
 constexpr FRHIProgramId InvalidProgram = 0;
 constexpr FRHIQueryId InvalidQuery = 0;
 constexpr FRHIRenderbufferId InvalidRenderbuffer = 0;
-

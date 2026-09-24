@@ -67,13 +67,14 @@ public:
  * Registers a module: LeonBuildTool's generated module table calls InitializeModule_<ModuleName>.
  * A module listed in the table without this macro fails to link, which enforces it.
  */
-#define IMPLEMENT_MODULE(ModuleImplClass, ModuleName) \
-	extern "C" IModuleInterface* InitializeModule_##ModuleName() \
-	{ \
-		return new ModuleImplClass(); \
+#define IMPLEMENT_MODULE(ModuleImplClass, ModuleName)                                                                  \
+	extern "C" IModuleInterface* InitializeModule_##ModuleName()                                                       \
+	{                                                                                                                  \
+		return new ModuleImplClass();                                                                                  \
 	}
 
 #define IMPLEMENT_GAME_MODULE(ModuleImplClass, ModuleName) IMPLEMENT_MODULE(ModuleImplClass, ModuleName)
 
 /** The project's main game module; the game name comes from the .leonproject (LEON_PROJECT_NAME). */
-#define IMPLEMENT_PRIMARY_GAME_MODULE(ModuleImplClass, ModuleName, GameName) IMPLEMENT_GAME_MODULE(ModuleImplClass, ModuleName)
+#define IMPLEMENT_PRIMARY_GAME_MODULE(ModuleImplClass, ModuleName, GameName)                                           \
+	IMPLEMENT_GAME_MODULE(ModuleImplClass, ModuleName)

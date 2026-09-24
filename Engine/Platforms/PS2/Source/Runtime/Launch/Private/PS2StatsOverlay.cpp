@@ -137,8 +137,8 @@ namespace
 		float Y = Top + Padding;
 		for (uint32 Index = 0; Index < Count; ++Index)
 		{
-			FPS2RHI::DrawDebugText(Left + Padding, Y, Lines[Index].Text, Lines[Index].R, Lines[Index].G, Lines[Index].B,
-				TextScale);
+			FPS2RHI::DrawDebugText(
+				Left + Padding, Y, Lines[Index].Text, Lines[Index].R, Lines[Index].G, Lines[Index].B, TextScale);
 			Y += GlyphHeight + LineGap;
 		}
 	}
@@ -159,7 +159,8 @@ namespace
 
 		const auto Box = [&](float X0, float Y0, float X1, float Y1, float R, float G, float B, float A)
 		{
-			(void)FPS2RHI::DrawUnlitRectAlpha(X + X0 * Scale, Y + Y0 * Scale, X + X1 * Scale, Y + Y1 * Scale, R, G, B, A);
+			(void)FPS2RHI::DrawUnlitRectAlpha(
+				X + X0 * Scale, Y + Y0 * Scale, X + X1 * Scale, Y + Y1 * Scale, R, G, B, A);
 		};
 		const auto IsDown = [&](EKeys Key) { return bLive && Pad->IsGamepadKeyDown(Key); };
 		// Lit colour while held, dim grey otherwise.
@@ -233,7 +234,7 @@ namespace
 		Stick(LeftX, LeftY, EKeys::Gamepad_LeftThumbstick, 55.0f, 65.0f);
 		Stick(RightX, RightY, EKeys::Gamepad_RightThumbstick, 95.0f, 65.0f);
 	}
-}
+} // namespace
 
 void FPS2StatsOverlay::MarkFrameStart()
 {

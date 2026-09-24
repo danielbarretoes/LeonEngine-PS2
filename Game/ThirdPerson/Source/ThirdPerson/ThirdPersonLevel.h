@@ -36,7 +36,8 @@ public:
 	/** FindSupportY result when nothing is under the footprint. */
 	static constexpr float NoSupport = -10000.0f;
 
-	void Build(const FPS2Material* GroundMaterial, const FPS2Material* PlatformMaterial, const FPS2Material* CrateMaterial);
+	void Build(
+		const FPS2Material* GroundMaterial, const FPS2Material* PlatformMaterial, const FPS2Material* CrateMaterial);
 
 	/** Highest top under a square footprint the feet can step onto or catch while falling. */
 	float FindSupportY(float X, float Z, float HalfWidth, float FeetY) const;
