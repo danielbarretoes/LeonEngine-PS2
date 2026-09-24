@@ -47,13 +47,36 @@ Checks: >-
   -readability-avoid-nested-conditional-operator,
   -readability-make-member-function-const
 WarningsAsErrors: ''
-HeaderFilterRegex: '.*(Engine/(include/leon|Core|Platform|Renderer|Content|Animation|Network|Scene|Gameplay|Utilities|Serialization|Physics|RHI)|Runtime|Plugins)/.*'
+HeaderFilterRegex: '.*(Engine/(Source/(Runtime|Developer|Programs)|Platforms|Plugins/[^/]+/[^/]+/Source/[^T])|Game/[^/]+/Source)/.*'
 FormatStyle: file
+# Epic naming (applied project-wide in Phase 4 with the same options; see Docs/CODING_STANDARD.md).
+CheckOptions:
+  readability-identifier-naming.ClassCase: CamelCase
+  readability-identifier-naming.StructCase: CamelCase
+  readability-identifier-naming.EnumCase: CamelCase
+  readability-identifier-naming.EnumPrefix: E
+  readability-identifier-naming.MemberCase: CamelCase
+  readability-identifier-naming.ClassMemberCase: CamelCase
+  readability-identifier-naming.MethodCase: CamelCase
+  readability-identifier-naming.FunctionCase: CamelCase
+  readability-identifier-naming.FunctionIgnoredRegexp: '^(to_json|from_json|main|begin|end|size|empty|data|swap|hash|sbrk)$'
+  readability-identifier-naming.MethodIgnoredRegexp: '^(begin|end|size|empty|data|swap|operator.*)$'
+  readability-identifier-naming.ParameterCase: CamelCase
+  readability-identifier-naming.LocalVariableCase: CamelCase
+  readability-identifier-naming.LocalConstantCase: CamelCase
+  readability-identifier-naming.VariableCase: CamelCase
+  readability-identifier-naming.GlobalVariableCase: CamelCase
+  readability-identifier-naming.GlobalConstantCase: CamelCase
+  readability-identifier-naming.ConstexprVariableCase: CamelCase
+  readability-identifier-naming.StaticConstantCase: CamelCase
+  readability-identifier-naming.StaticVariableCase: CamelCase
+  readability-identifier-naming.EnumConstantCase: CamelCase
+  readability-identifier-naming.EnumConstantIgnoredRegexp: '^Gamepad_'
 # Notes:
 # - uppercase-literal-suffix: project uses 1.0f (GLM style), not 1.0F
 # - implicit-bool-conversion: noisy with GLFW/GLAD/shared_ptr/ifstream; prefer explicit null checks in new code
 # - pro-type-union-access: GLM vec swizzles
-# - convert-member-functions-to-static: breaks intentional instance APIs (e.g. Window::pollEvents)
+# - convert-member-functions-to-static: breaks intentional instance APIs (e.g. FGenericWindow::PollEvents)
 # - avoid-c-arrays / array-to-pointer-decay: OpenGL upload helpers often use stack pixel arrays
 # - pro-bounds-constant-array-index: too noisy for UBO/light loops and small fixed buffers
 # - misc-non-private-member-variables-in-classes: engine uses public POD-style structs (Material, SceneObject, …)

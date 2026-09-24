@@ -1,29 +1,22 @@
 {
     "clangd.arguments": [
-        "--compile-commands-dir=${workspaceFolder}/Engine/build-ninja",
+        "--compile-commands-dir=${workspaceFolder}",
         "--query-driver=C:/Program Files/Microsoft Visual Studio/**/cl.exe",
         "--header-insertion=never"
     ],
     "C_Cpp.intelliSenseEngine": "disabled",
     "C_Cpp.default.cppStandard": "c++20",
-    "C_Cpp.default.compileCommands": "${workspaceFolder}/Engine/build-ninja/compile_commands.json",
-    "C_Cpp.default.includePath": [
-        "${workspaceFolder}/Engine/include",
-        "${workspaceFolder}/Runtime/Application",
-        "${workspaceFolder}/Tools/ResourceTools/include",
-        "${workspaceFolder}/Projects",
-        "${workspaceFolder}/ThirdParty/glad/include",
-        "${workspaceFolder}/ThirdParty/stb",
-        "${workspaceFolder}/ThirdParty/ufbx",
-        "${workspaceFolder}/ThirdParty/cgltf",
-        "${workspaceFolder}/ThirdParty/enet/include",
-        "${workspaceFolder}/Engine/build-ninja/_deps/glfw-src/include",
-        "${workspaceFolder}/Engine/build-ninja/_deps/glm-src",
-        "${workspaceFolder}/Engine/build-ninja/_deps/tinyobjloader-src",
-        "${workspaceFolder}/Engine/build-ninja/_deps/json-src/include"
-    ],
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/compile_commands.json",
     "C_Cpp.codeAnalysis.clangTidy.enabled": false,
     "C_Cpp.codeAnalysis.runAutomatically": false,
-    "csharp-dev-tools.solutionViewer.selectedWorkspaceSolutions": [
-    ]
+    "editor.detectIndentation": false,
+    "[cpp]": {
+        "editor.insertSpaces": false,
+        "editor.tabSize": 4,
+        "editor.rulers": [120]
+    },
+    "files.associations": {
+        "*.leonproject": "json",
+        "*.leonplugin": "json"
+    }
 }

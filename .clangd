@@ -1,8 +1,7 @@
-# clangd: use Ninja compile DB (see Scripts/configure-ninja.bat + fix-compile-commands.py).
-# QueryDriver lets clangd ask cl.exe for MSVC system include paths.
-
+# clangd: root compile_commands.json written by GenerateProjectFiles.bat / LeonBuildTool
+# (-Mode=GenerateClangDatabase). QueryDriver lets clangd ask cl.exe for the MSVC system include paths.
 CompileFlags:
-  CompilationDatabase: Engine/build-ninja
+  CompilationDatabase: .
   Add:
     - -Wno-unused-command-line-argument
     - -Wno-unused-const-variable
@@ -25,32 +24,10 @@ Diagnostics:
       - misc-use-anonymous-namespace
 
 ---
+# Third-party code: no diagnostics.
 If:
-  PathMatch: Tools/.*
-CompileFlags:
-  CompilationDatabase: Tools/build-ninja
-  Add:
-    - -std=c++20
-    - -xc++
-    - -ITools/ResourceTools/include
-    - -IEngine/include
-    - -IThirdParty/stb
-    - -IThirdParty/ufbx
-    - -IThirdParty/cgltf
-    - -DNOMINMAX
-    - -DWIN32_LEAN_AND_MEAN
-
----
-If:
-  PathMatch: Projects/.*
-CompileFlags:
-  Add:
-    - -std=c++20
-    - -xc++
-    - -IRuntime
-    - -IRuntime/Application
-    - -IEngine/include
-    - -IThirdParty/glad/include
-    - -IThirdParty/stb
-    - -DNOMINMAX
-    - -DWIN32_LEAN_AND_MEAN
+  PathMatch: .*/ThirdParty/.*
+Diagnostics:
+  Suppress: "*"
+  ClangTidy:
+    Remove: "*"

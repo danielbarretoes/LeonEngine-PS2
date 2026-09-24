@@ -6,3 +6,17 @@
 
 # Windows batch files: always CRLF (cmd label/goto parsing breaks on LF-only files)
 *.bat text eol=crlf
+
+# CMake scripts (LeonBuildTool) run inside Docker too: LF everywhere
+*.cmake text eol=lf
+CMakeLists.txt text eol=lf
+
+# PowerShell scripts: CRLF
+*.ps1 text eol=crlf
+
+# Binary content
+*.lasset binary
+*.llev binary
+*.lmesh binary
+*.hdr binary
+*.png binary
