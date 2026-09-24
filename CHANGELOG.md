@@ -12,6 +12,12 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - Project and plugin descriptors use the UE-style extensions `.lproj` (`.uproject`) and `.lplugin`
   (`.uplugin`); LeonBuildTool rejects `.leonproject` with a rename hint.
 
+### Removed
+
+- HDR environment maps (skybox pass, cubemap IBL, `Engine/Content/Hdr/`); `blinn_phong.frag` keeps the
+  procedural sky. `.llev` still reads and writes the environment field for compatibility but ignores it.
+- `.lm` lightmaps (`LightmapIO`, `uLightmap`); they return as `<Map>_BuiltData.lasset` with static lighting.
+
 ## [0.11.0] - 2026-09-24
 
 Restructure to the **Unreal Engine 4.27** layout, architecture and coding standard, built with CMake

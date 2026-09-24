@@ -1,6 +1,5 @@
 #pragma once
 
-#include "EnvironmentMap.h"
 #include "Level/Light.h"
 #include "Material.h"
 #include "Math/Transform.h"
@@ -56,14 +55,6 @@ struct ENGINE_API UStaticMeshComponent
 
 	/// Static = lightmap candidate; Movable = runtime-lit only.
 	EComponentMobility Mobility = EComponentMobility::Static;
-	/// Lightmap texture resolution (power of two; clamped 32–512 on bake).
-	int LightmapResolution = 128;
-	/// Baked lightmap (Build Lights); sampled with mesh UV0.
-	std::shared_ptr<UTexture2D> Lightmap;
-	/// Stable id for bake file names (`LM_<id>.lm`); survives actor reorder.
-	std::string LightmapId;
-	/// Relative path to persisted lightmap image (written on Build Lights + Save).
-	std::string LightmapPath;
 
 	/// Editor / save provenance (filled by LevelLoader; used by LevelSaver).
 	std::string EditorClass; // "Cube", "Sphere", "Plane", "BlockingVolume", "StaticMesh", ...
@@ -89,11 +80,6 @@ struct ENGINE_API UStaticMeshComponent
 	[[nodiscard]] bool HasPhysicsBody() const
 	{
 		return bCollisionEnabled || bSimulatePhysics;
-	}
-
-	[[nodiscard]] bool UsesLightmap() const
-	{
-		return Mobility == EComponentMobility::Static && Lightmap != nullptr && Lightmap->Valid();
 	}
 
 	[[nodiscard]] std::size_t SubMeshCount() const;
@@ -226,33 +212,6 @@ public:
 		return PointLights;
 	}
 
-	void SetEnvironment(std::shared_ptr<FEnvironmentMap> Env)
-	{
-		Environment = std::move(Env);
-	}
-	[[nodiscard]] const std::shared_ptr<FEnvironmentMap>& GetEnvironment() const
-	{
-		return Environment;
-	}
-	void SetEnvironmentExposure(float Exposure)
-	{
-		EnvironmentExposure = Exposure;
-	}
-	[[nodiscard]] float GetEnvironmentExposure() const
-	{
-		return EnvironmentExposure;
-	}
-
-	/// Relative HDR path from JSON (for editor save round-trip).
-	void SetEnvironmentPath(std::string Path)
-	{
-		EnvironmentPath = std::move(Path);
-	}
-	[[nodiscard]] const std::string& GetEnvironmentPath() const
-	{
-		return EnvironmentPath;
-	}
-
 	void SetName(std::string InName)
 	{
 		Name = std::move(InName);
@@ -280,9 +239,6 @@ private:
 	std::vector<FAISpawnPoint> AiSpawnPoints;
 	std::vector<FDirectionalLight> DirectionalLights{FDirectionalLight{}};
 	std::vector<FPointLight> PointLights;
-	std::shared_ptr<FEnvironmentMap> Environment;
-	float EnvironmentExposure = 1.0f;
-	std::string EnvironmentPath;
 	std::string Name;
 	std::string GameMode;
 };

@@ -157,9 +157,6 @@ void ULevel::Clear()
 	ClearPainCausingVolumes();
 	ClearAISpawnPoints();
 	ClearLights();
-	Environment.reset();
-	EnvironmentExposure = 1.0f;
-	EnvironmentPath.clear();
 	Name.clear();
 	GameMode.clear();
 }

@@ -100,28 +100,6 @@ std::shared_ptr<UTexture2D> FResourceCache::LoadTexture(const std::string& Path)
 	return Texture;
 }
 
-std::shared_ptr<FEnvironmentMap> FResourceCache::LoadEnvMap(const std::string& Path, int FaceSize)
-{
-	if (!bGpuUploadEnabled)
-	{
-		return nullptr;
-	}
-	const std::string CacheKey = NormalizeKey(Path) + ":cube:" + std::to_string(std::max(16, FaceSize));
-	if (const auto It = EnvMaps.find(CacheKey); It != EnvMaps.end())
-	{
-		return It->second;
-	}
-
-	auto Env = std::make_shared<FEnvironmentMap>(FEnvironmentMap::LoadFromHdr(Path, FaceSize));
-	if (!Env->Valid())
-	{
-		std::cerr << "ResourceCache: failed to load env map '" << Path << "'\n";
-		return nullptr;
-	}
-	EnvMaps.emplace(CacheKey, Env);
-	return Env;
-}
-
 std::shared_ptr<UTexture2D> FResourceCache::CheckerTexture(int Size)
 {
 	if (!bGpuUploadEnabled)
@@ -235,7 +213,6 @@ void FResourceCache::Clear()
 {
 	Meshes.clear();
 	Textures.clear();
-	EnvMaps.clear();
 	Materials.clear();
 }
 

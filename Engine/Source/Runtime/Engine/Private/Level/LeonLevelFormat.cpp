@@ -6,7 +6,6 @@
 #include "Level/LevelAnimation.h"
 #include "Level/LevelLoader.h"
 #include "Level/Light.h"
-#include "Level/LightmapIO.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 
@@ -412,8 +411,6 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 	FLevelDocument Doc;
 	Doc.Name = Level.GetName();
 	Doc.GameMode = Level.GetGameMode();
-	Doc.EnvironmentPath = Level.GetEnvironmentPath();
-	Doc.EnvironmentExposure = Level.GetEnvironmentExposure();
 
 	Doc.Camera.Mode = InCamera.GetMode();
 	Doc.Camera.Target = InCamera.GetTarget();
@@ -502,9 +499,6 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 		{
 			Record.MeshPath = LocalMesh.MeshPath;
 		}
-		Record.LightmapId = LocalMesh.LightmapId;
-		Record.LightmapPath = LocalMesh.LightmapPath;
-		Record.LightmapResolution = static_cast<std::uint32_t>(std::max(0, LocalMesh.LightmapResolution));
 
 		Record.SphereSegments = LocalMesh.SphereSegments;
 		Record.SphereRings = LocalMesh.SphereRings;
@@ -1025,12 +1019,6 @@ bool ApplyLevelDocument(
 
 	try
 	{
-		if (!Doc.EnvironmentPath.empty())
-		{
-			Staged.SetEnvironmentPath(Doc.EnvironmentPath);
-			Staged.SetEnvironment(Resources.LoadEnvMap(FPaths::ResolveAssetPath(Doc.EnvironmentPath)));
-		}
-		Staged.SetEnvironmentExposure(Doc.EnvironmentExposure);
 		Staged.SetName(Doc.Name);
 		Staged.SetGameMode(Doc.GameMode);
 
@@ -1120,9 +1108,6 @@ bool ApplyLevelDocument(
 			Actor.bEnableGravity = Record.bEnableGravity;
 			Actor.bHidden = Record.bHidden;
 			Actor.Mobility = Record.Mobility;
-			Actor.LightmapResolution = static_cast<int>(Record.LightmapResolution);
-			Actor.LightmapId = Record.LightmapId;
-			Actor.LightmapPath = Record.LightmapPath;
 			Actor.SpinYaw = Record.bHasSpinYaw ? Record.SpinYaw : 0.0f;
 			Actor.MaterialPath = Record.MaterialPath;
 
@@ -1199,7 +1184,7 @@ bool ApplyLevelDocument(
 	// Blank / lights-only levels are valid (editor New Level → Blank).
 	if (Staged.GetStaticMeshes().empty() && Staged.GetPlayerStarts().empty() && Staged.GetTriggerVolumes().empty() &&
 		Staged.GetPainCausingVolumes().empty() && Staged.AISpawnPoints().empty() &&
-		Staged.GetDirectionalLights().empty() && Staged.GetPointLights().empty() && Staged.GetEnvironment() == nullptr)
+		Staged.GetDirectionalLights().empty() && Staged.GetPointLights().empty())
 	{
 		std::cerr << "LeonLevelFormat: completely empty level in " << SourcePath << '\n';
 		return false;
@@ -1215,7 +1200,6 @@ bool ApplyLevelDocument(
 	LocalCamera.SetMode(Doc.Camera.Mode);
 
 	// Runtime + Editor: hydrate GPU textures from persisted `.lm` paths.
-	(void)LoadLevelLightmaps(Engine.GetLevel(), SourcePath, nullptr);
 
 	if (OutAnim != nullptr)
 	{

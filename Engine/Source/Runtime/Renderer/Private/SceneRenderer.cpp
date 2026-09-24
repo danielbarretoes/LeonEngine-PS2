@@ -211,11 +211,6 @@ bool FSceneRenderer::Initialize(const std::string& InShaderDirectory)
 		std::cerr << "Failed to load skinned shadow shaders from " << InShaderDirectory << '\n';
 		return false;
 	}
-	if (!SkyboxShader.LoadFromFiles(ShaderFile("skybox.vert"), ShaderFile("skybox.frag")))
-	{
-		std::cerr << "Failed to load skybox shaders from " << InShaderDirectory << '\n';
-		return false;
-	}
 	if (!SsaoShader.LoadFromFiles(ShaderFile("fullscreen.vert"), ShaderFile("ssao.frag")))
 	{
 		std::cerr << "Failed to load SSAO shaders from " << InShaderDirectory << '\n';
@@ -269,8 +264,7 @@ bool FSceneRenderer::Initialize(const std::string& InShaderDirectory)
 	const std::array<unsigned char, 4> White = {255, 255, 255, 255};
 	WhiteTexture = std::make_shared<UTexture2D>(UTexture2D::Create(1, 1, White.data()));
 	FlatNormalTexture = std::make_shared<UTexture2D>(UTexture2D::CreateFlatNormal(4));
-	SkyboxMesh = std::make_shared<UStaticMesh>(UStaticMesh::Upload(MakeCube()));
-	if (!WhiteTexture->Valid() || !FlatNormalTexture->Valid() || !SkyboxMesh->Valid())
+	if (!WhiteTexture->Valid() || !FlatNormalTexture->Valid())
 	{
 		std::cerr << "Failed to create default textures/meshes\n";
 		return false;
@@ -299,7 +293,6 @@ void FSceneRenderer::Shutdown()
 	CameraUbo.Destroy();
 	OverlayDebugDraw.Shutdown();
 	DebugDraw.Shutdown();
-	SkyboxMesh.reset();
 	FlatNormalTexture.reset();
 	WhiteTexture.reset();
 	PassTimers.Destroy();
@@ -322,7 +315,6 @@ void FSceneRenderer::Shutdown()
 	PostCompositeShader.Destroy();
 	SsaoBlurShader.Destroy();
 	SsaoShader.Destroy();
-	SkyboxShader.Destroy();
 	SkinnedShadowShader.Destroy();
 	ShadowShader.Destroy();
 	UnlitShader.Destroy();
@@ -347,9 +339,8 @@ EShaderReloadResult FSceneRenderer::ReloadShaders(bool bForce)
 	};
 
 	if (!TryReload(LitShader, LitAccept) || !TryReload(SkinnedLitShader, LitAccept) || !TryReload(UnlitShader) ||
-		!TryReload(ShadowShader) || !TryReload(SkinnedShadowShader) || !TryReload(SkyboxShader) ||
-		!TryReload(SsaoShader) || !TryReload(SsaoBlurShader) || !TryReload(PostCompositeShader) ||
-		!TryReload(FxaaShader))
+		!TryReload(ShadowShader) || !TryReload(SkinnedShadowShader) || !TryReload(SsaoShader) ||
+		!TryReload(SsaoBlurShader) || !TryReload(PostCompositeShader) || !TryReload(FxaaShader))
 	{
 		return EShaderReloadResult::Failed;
 	}
@@ -504,26 +495,6 @@ void FSceneRenderer::UpdateLightsUbo(const ULevel& Level) const
 	LightsUbo.Update(&Block, sizeof(Block));
 }
 
-void FSceneRenderer::BindEnvironment(const ULevel& Level) const
-{
-	const bool bHasEnv = Level.GetEnvironment() != nullptr && Level.GetEnvironment()->Valid();
-	const bool bHasIrr = bHasEnv && Level.GetEnvironment()->HasIrradiance();
-	LitShader.SetInt("uHasEnvMap", bHasEnv ? 1 : 0);
-	LitShader.SetInt("uHasIrradiance", bHasIrr ? 1 : 0);
-	LitShader.SetFloat("uEnvExposure", Level.GetEnvironmentExposure());
-	LitShader.SetFloat("uEnvMaxLod", bHasEnv ? Level.GetEnvironment()->MaxLod() : 0.0f);
-	LitShader.SetInt("uEnvMap", 3);
-	LitShader.SetInt("uIrradianceMap", 4);
-	if (bHasEnv)
-	{
-		Level.GetEnvironment()->Bind(3);
-	}
-	if (bHasIrr)
-	{
-		Level.GetEnvironment()->BindIrradiance(4);
-	}
-}
-
 void FSceneRenderer::BindShadowResources(bool bInReceiveShadows, float SourceAngleDegrees) const
 {
 	LitShader.SetInt("uShadowMap", 1);
@@ -675,7 +646,6 @@ void FSceneRenderer::RenderPlanarReflectionPass(const ULevel& Level, const UCame
 		UpdateCameraUbo(LocalView, LocalProjection, ReflectedEye);
 		UpdateLightsUbo(Level);
 		LitShader.Bind();
-		BindEnvironment(Level);
 		BindShadowResources(false);
 		BindPlanarReflection(false, glm::mat4{1.0f});
 	}
@@ -724,7 +694,6 @@ void FSceneRenderer::RenderPlanarReflectionPass(const ULevel& Level, const UCame
 			{
 				if (!bLitGlobalsBound)
 				{
-					BindEnvironment(Level);
 					BindShadowResources(false);
 					BindPlanarReflection(false, glm::mat4{1.0f});
 					bLitGlobalsBound = true;
@@ -739,36 +708,13 @@ void FSceneRenderer::RenderPlanarReflectionPass(const ULevel& Level, const UCame
 		}
 	}
 
-	DrawSkybox(Level, LocalView, LocalProjection);
-
 	// Characters are queued before DrawScene — include them in the mirror (clip + reflected frustum).
-	DrawQueuedSkeletal(Level, LocalView, LocalProjection, LightSpace, false, 0.0f, &ReflectedFrustum, true);
+	DrawQueuedSkeletal(LocalView, LocalProjection, LightSpace, false, 0.0f, &ReflectedFrustum, true);
 
 	SetClipPlane(false, glm::vec4{0.0f, 1.0f, 0.0f, 0.0f});
 	glDisable(GL_CLIP_DISTANCE0);
 	PlanarReflection.End(FbWidth, FbHeight, ColorRestoreFbo());
 	PassTimers.End(FGPUPassTimer::EPass::Planar);
-}
-
-void FSceneRenderer::DrawSkybox(const ULevel& Level, const glm::mat4& InView, const glm::mat4& InProjection) const
-{
-	if (Level.GetEnvironment() == nullptr || !Level.GetEnvironment()->Valid() || !SkyboxShader.Valid() ||
-		SkyboxMesh == nullptr || !SkyboxMesh->Valid())
-	{
-		return;
-	}
-
-	glDepthFunc(GL_LEQUAL);
-	glCullFace(GL_FRONT);
-	SkyboxShader.Bind();
-	SkyboxShader.SetMat4("uView", glm::value_ptr(InView));
-	SkyboxShader.SetMat4("uProjection", glm::value_ptr(InProjection));
-	SkyboxShader.SetInt("uEnvMap", 0);
-	SkyboxShader.SetFloat("uEnvExposure", Level.GetEnvironmentExposure());
-	Level.GetEnvironment()->Bind(0);
-	SkyboxMesh->Draw();
-	glCullFace(GL_BACK);
-	glDepthFunc(GL_LESS);
 }
 
 void FSceneRenderer::DrawSubMesh(const FShader& Shader, const UStaticMeshComponent& Object, std::size_t InSubMeshIndex,
@@ -800,13 +746,10 @@ void FSceneRenderer::DrawSubMesh(const FShader& Shader, const UStaticMeshCompone
 		Shader.SetFloat("uMetallic", InMaterial.Metallic);
 		Shader.SetMat4("uLightSpaceMatrix", glm::value_ptr(LightSpace));
 		Shader.SetInt("uNormalMap", 2);
-		Shader.SetInt("uLightmap", 6);
-		const bool bUseLm = Object.UsesLightmap();
-		Shader.SetInt("uUseLightmap", bUseLm ? 1 : 0);
 		if (Options.bBindSharedLitTextures)
 		{
 			Shader.SetInt("uShadowMap", 1);
-			Shader.SetInt("uReceiveShadows", (Options.bReceiveShadows && ShadowMap.Valid() && !bUseLm) ? 1 : 0);
+			Shader.SetInt("uReceiveShadows", (Options.bReceiveShadows && ShadowMap.Valid()) ? 1 : 0);
 			Shader.SetFloat(
 				"uShadowTexelSize", ShadowMap.Valid() ? 1.0f / static_cast<float>(ShadowMap.GetSize()) : 0.0f);
 			if (Options.bReceiveShadows && ShadowMap.Valid())
@@ -826,14 +769,6 @@ void FSceneRenderer::DrawSubMesh(const FShader& Shader, const UStaticMeshCompone
 			? InMaterial.NormalMap.get()
 			: FlatNormalTexture.get();
 		Normals->Bind(2);
-		if (Object.UsesLightmap())
-		{
-			Object.Lightmap->Bind(6);
-		}
-		else if (WhiteTexture != nullptr)
-		{
-			WhiteTexture->Bind(6);
-		}
 	}
 
 	Object.Mesh->DrawSubMesh(InSubMeshIndex);
@@ -1045,7 +980,6 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 		UpdateCameraUbo(Camera);
 		UpdateLightsUbo(Level);
 		LitShader.Bind();
-		BindEnvironment(Level);
 		BindShadowResources(bCastDirShadows, ShadowSourceAngle);
 		SetClipPlane(false, glm::vec4{0.0f, 1.0f, 0.0f, 0.0f});
 		BindPlanarReflection(false, ReflectionViewProj);
@@ -1098,7 +1032,6 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 			{
 				if (!bLitGlobalsBound)
 				{
-					BindEnvironment(Level);
 					BindShadowResources(bCastDirShadows, ShadowSourceAngle);
 					if (bHasPlanarMirror && PlanarReflection.Valid())
 					{
@@ -1128,16 +1061,11 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 	};
 
 	DrawList(Opaque, false);
-	DrawQueuedSkeletal(
-		Level, LocalView, LocalProjection, LightSpace, bCastDirShadows, ShadowSourceAngle, &CameraFrustum);
+	DrawQueuedSkeletal(LocalView, LocalProjection, LightSpace, bCastDirShadows, ShadowSourceAngle, &CameraFrustum);
 	DrawQueuedStatic(Level, LocalView, LocalProjection, LightSpace, bCastDirShadows, ShadowSourceAngle);
-	// Skybox before transparent so glass can blend over the environment.
-	DrawSkybox(Level, LocalView, LocalProjection);
-	// Skybox rebinds cubemap on unit 0; restore lit env units before transparent lit draws.
 	if (LitShader.Valid())
 	{
 		LitShader.Bind();
-		BindEnvironment(Level);
 		BindShadowResources(bCastDirShadows, ShadowSourceAngle);
 		if (bHasPlanarMirror && PlanarReflection.Valid())
 		{
@@ -1159,7 +1087,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 
 	if (bPostOn)
 	{
-		RenderPostStack(Level, Camera);
+		RenderPostStack(Camera);
 	}
 	else
 	{
@@ -1183,7 +1111,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 	StaticDraws.clear();
 }
 
-void FSceneRenderer::RenderPostStack(const ULevel& Level, const UCameraComponent& Camera)
+void FSceneRenderer::RenderPostStack(const UCameraComponent& Camera)
 {
 	// Flow: SceneColor(+Depth) → SSAO → bilateral blur → composite+tonemap → FXAA → present
 	glDisable(GL_DEPTH_TEST);
@@ -1247,7 +1175,7 @@ void FSceneRenderer::RenderPostStack(const ULevel& Level, const UCameraComponent
 	PassTimers.End(FGPUPassTimer::EPass::Ssao);
 
 	PassTimers.Begin(FGPUPassTimer::EPass::Post);
-	const float Exposure = std::max(0.01f, Level.GetEnvironmentExposure() * Post.Exposure);
+	const float Exposure = std::max(0.01f, Post.Exposure);
 	const bool bWantFxaa = Post.bFxaa && FxaaShader.Valid() && LdrColor.Valid();
 
 	if (bWantFxaa)
@@ -1300,7 +1228,7 @@ void FSceneRenderer::RenderPostStack(const ULevel& Level, const UCameraComponent
 	glViewport(0, 0, FbWidth, FbHeight);
 }
 
-void FSceneRenderer::DrawQueuedSkeletal(const ULevel& Level, const glm::mat4& InView, const glm::mat4& InProjection,
+void FSceneRenderer::DrawQueuedSkeletal(const glm::mat4& InView, const glm::mat4& InProjection,
 	const glm::mat4& LightSpace, bool bInReceiveShadows, float ShadowSourceAngle, const FFrustum* CameraFrustum,
 	bool bUseWorldClipPlane)
 {
@@ -1310,23 +1238,6 @@ void FSceneRenderer::DrawQueuedSkeletal(const ULevel& Level, const glm::mat4& In
 	}
 
 	SkinnedLitShader.Bind();
-
-	const bool bHasEnv = Level.GetEnvironment() != nullptr && Level.GetEnvironment()->Valid();
-	const bool bHasIrr = bHasEnv && Level.GetEnvironment()->HasIrradiance();
-	SkinnedLitShader.SetInt("uHasEnvMap", bHasEnv ? 1 : 0);
-	SkinnedLitShader.SetInt("uHasIrradiance", bHasIrr ? 1 : 0);
-	SkinnedLitShader.SetFloat("uEnvExposure", Level.GetEnvironmentExposure());
-	SkinnedLitShader.SetFloat("uEnvMaxLod", bHasEnv ? Level.GetEnvironment()->MaxLod() : 0.0f);
-	SkinnedLitShader.SetInt("uEnvMap", 3);
-	SkinnedLitShader.SetInt("uIrradianceMap", 4);
-	if (bHasEnv)
-	{
-		Level.GetEnvironment()->Bind(3);
-	}
-	if (bHasIrr)
-	{
-		Level.GetEnvironment()->BindIrradiance(4);
-	}
 
 	float Texel = ShadowMap.Valid() ? 1.0f / static_cast<float>(ShadowMap.GetSize()) : 0.0f;
 	if (bInReceiveShadows && Texel > 0.0f)

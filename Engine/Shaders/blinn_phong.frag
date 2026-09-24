@@ -35,16 +35,8 @@ uniform float uRoughness;
 uniform sampler2D uAlbedoMap;
 uniform sampler2D uNormalMap;
 uniform sampler2D uShadowMap;
-uniform samplerCube uEnvMap;
-uniform samplerCube uIrradianceMap;
 uniform sampler2D uPlanarReflection;
-uniform sampler2D uLightmap;
-uniform int uHasEnvMap;
-uniform int uHasIrradiance;
 uniform int uHasPlanarReflection;
-uniform int uUseLightmap;
-uniform float uEnvExposure;
-uniform float uEnvMaxLod;
 uniform int uReceiveShadows;
 uniform float uShadowTexelSize;
 uniform mat4 uReflectionViewProj;
@@ -71,7 +63,7 @@ float shadowFactor(vec4 lightSpacePos, vec3 N, vec3 L) {
     return shadow / 9.0;
 }
 
-// Fallback gradient sky when no HDR cubemap is bound.
+// Procedural gradient sky (no HDR environment maps; static lighting comes later).
 vec3 fakeEnvironment(vec3 dir) {
     float t = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
     vec3 ground = vec3(0.12, 0.11, 0.10);
@@ -81,22 +73,7 @@ vec3 fakeEnvironment(vec3 dir) {
 }
 
 vec3 sampleEnvironment(vec3 dir, float roughness) {
-    if (uHasEnvMap == 0) {
-        return fakeEnvironment(dir);
-    }
-    // Cheap "prefilter": blur via cubemap mips (not a full GGX convolution).
-    float lod = clamp(roughness, 0.0, 1.0) * uEnvMaxLod;
-    vec3 hdr = textureLod(uEnvMap, dir, lod).rgb;
-    return vec3(1.0) - exp(-hdr * uEnvExposure);
-}
-
-/// Diffuse IBL — same per-sample tonemap as specular env (no second film curve).
-vec3 sampleIrradiance(vec3 N) {
-    if (uHasIrradiance != 0) {
-        vec3 hdr = texture(uIrradianceMap, N).rgb;
-        return vec3(1.0) - exp(-hdr * uEnvExposure);
-    }
-    return fakeEnvironment(N) * 0.35;
+    return fakeEnvironment(dir);
 }
 
 vec3 shadeDirectional(vec3 N, vec3 V, vec3 diffuseColor, vec3 specularColor, vec3 direction,
@@ -146,45 +123,9 @@ void main() {
         shadow = shadowFactor(vLightSpacePos, N, L0);
     }
 
-    // Diffuse ambient: irradiance replaces the old flat 0.10 term (not added on top).
-    // k keeps energy near the previous look while dirs/points stay unchanged.
-    const float kAmbientIbl = 0.20;
     vec3 lit;
-    if (uUseLightmap != 0) {
-        // Baked diffuse (Build Lights); keep dynamic specular from realtime lights.
-        vec3 baked = texture(uLightmap, vTexCoord).rgb;
-        lit = diffuseColor * baked;
-        for (int i = 0; i < MAX_DIR; ++i) {
-            if (i >= uDirCount) {
-                break;
-            }
-            float s = (i == 0) ? shadow : 0.0;
-            vec3 L = normalize(-uDirDirections[i].xyz);
-            float NdL = max(dot(N, L), 0.0);
-            vec3 H = normalize(L + V);
-            float spec = pow(max(dot(N, H), 0.0), max(uShininess, 1.0));
-            float specNorm = (uShininess + 8.0) / 8.0;
-            lit += specularColor * spec * specNorm * uDirColors[i].xyz * (1.0 - s);
-        }
-        for (int i = 0; i < MAX_POINT; ++i) {
-            if (i >= uPointCount) {
-                break;
-            }
-            vec3 toLight = uPointPositions[i].xyz - vWorldPos;
-            float dist = length(toLight);
-            float atten = clamp(1.0 - dist / max(uPointRanges[i].x, 0.001), 0.0, 1.0);
-            atten *= atten;
-            vec3 L = toLight / max(dist, 0.001);
-            float NdL = max(dot(N, L), 0.0);
-            vec3 H = normalize(L + V);
-            float spec = pow(max(dot(N, H), 0.0), max(uShininess, 1.0));
-            float specNorm = (uShininess + 8.0) / 8.0;
-            lit += specularColor * spec * specNorm * uPointColors[i].xyz * atten;
-        }
-    } else {
-        lit = (uHasIrradiance != 0)
-                  ? (diffuseColor * sampleIrradiance(N) * kAmbientIbl)
-                  : (0.10 * diffuseColor);
+    {
+        lit = 0.10 * diffuseColor;
         for (int i = 0; i < MAX_DIR; ++i) {
             if (i >= uDirCount) {
                 break;

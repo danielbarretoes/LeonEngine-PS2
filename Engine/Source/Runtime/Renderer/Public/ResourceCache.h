@@ -1,6 +1,5 @@
 #pragma once
 
-#include "EnvironmentMap.h"
 #include "Material.h"
 #include "MeshData.h"
 #include "StaticMesh.h"
@@ -17,8 +16,6 @@ class RENDERER_API FResourceCache
 public:
 	[[nodiscard]] std::shared_ptr<UStaticMesh> LoadStaticMesh(const std::string& Path);
 	[[nodiscard]] std::shared_ptr<UTexture2D> LoadTexture(const std::string& Path);
-	[[nodiscard]] std::shared_ptr<FEnvironmentMap> LoadEnvMap(
-		const std::string& Path, int FaceSize = FEnvironmentMap::DefaultFaceSize);
 	[[nodiscard]] std::shared_ptr<UTexture2D> CheckerTexture(int Size = 64);
 	[[nodiscard]] std::shared_ptr<UTexture2D> BumpNormalTexture(int Size = 256);
 
@@ -52,6 +49,5 @@ private:
 	bool bGpuUploadEnabled = true;
 	std::unordered_map<std::string, std::shared_ptr<UStaticMesh>> Meshes;
 	std::unordered_map<std::string, std::shared_ptr<UTexture2D>> Textures;
-	std::unordered_map<std::string, std::shared_ptr<FEnvironmentMap>> EnvMaps;
 	std::unordered_map<std::string, FMaterial> Materials;
 };

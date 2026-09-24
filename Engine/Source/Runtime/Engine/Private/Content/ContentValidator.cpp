@@ -215,11 +215,6 @@ namespace
 				}
 			}
 		}
-
-		if (!Actor.LightmapPath.empty() && !LevelAssetExists(LevelPath, Actor.LightmapPath))
-		{
-			Report.Warning(LocalWhere + ".lightmap", "lightmap file not found: " + Actor.LightmapPath);
-		}
 	}
 
 	void ValidateLightRecord(FValidationReport& Report, const FLevelLightRecord& Light, std::size_t Index)
@@ -402,18 +397,6 @@ FValidationReport ValidateLevelDocument(const FLevelDocument& Doc, const std::st
 
 	// Magic / version / class enums are already enforced by the `.llev` reader; an empty
 	// actor list is valid (blank / lights-only levels).
-	if (!Doc.EnvironmentPath.empty())
-	{
-		std::error_code Ec;
-		if (!std::filesystem::exists(FPaths::ResolveAssetPath(Doc.EnvironmentPath), Ec) || Ec)
-		{
-			Report.Warning("environment", "HDR file not found: " + Doc.EnvironmentPath);
-		}
-	}
-	if (Doc.EnvironmentExposure < 0.0f)
-	{
-		Report.Error("environmentExposure", "expected a non-negative value");
-	}
 
 	for (std::size_t I = 0; I < Doc.Actors.size(); ++I)
 	{

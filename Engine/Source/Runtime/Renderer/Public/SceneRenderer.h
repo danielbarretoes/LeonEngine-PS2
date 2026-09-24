@@ -53,7 +53,7 @@ struct RENDERER_API FDrawOptions
 };
 
 /// Forward renderer: directional shadow map (light 0), optional half-res planar mirror,
-/// opaque / skybox / transparent, then optional post (SSAO → tonemap → FXAA).
+/// opaque / transparent, then optional post (SSAO → tonemap → FXAA).
 class RENDERER_API FSceneRenderer
 {
 public:
@@ -199,24 +199,22 @@ private:
 	void UpdateCameraUbo(const UCameraComponent& Camera) const;
 	void UpdateCameraUbo(const glm::mat4& InView, const glm::mat4& InProjection, const glm::vec3& InCameraPos) const;
 	void UpdateLightsUbo(const ULevel& Level) const;
-	void BindEnvironment(const ULevel& Level) const;
 	void BindShadowResources(bool bInReceiveShadows, float SourceAngleDegrees = DefaultLightSourceAngleDegrees) const;
 	void BindPlanarReflection(bool bEnabled, const glm::mat4& ReflectionViewProj) const;
 	void SetClipPlane(bool bEnabled, const glm::vec4& Plane) const;
 	void EnsureShadowMapSize();
 	[[nodiscard]] FRHIFramebufferId ColorRestoreFbo() const;
 	void DrawFullscreenTriangle() const;
-	void RenderPostStack(const ULevel& Level, const UCameraComponent& Camera);
+	void RenderPostStack(const UCameraComponent& Camera);
 	void RenderShadowPass(const ULevel& Level, const glm::mat4& LightSpace);
 	void RenderPlanarReflectionPass(const ULevel& Level, const UCameraComponent& Camera, float PlaneY);
-	void DrawSkybox(const ULevel& Level, const glm::mat4& InView, const glm::mat4& InProjection) const;
 	void DrawDebug(
 		const ULevel& Level, const UCameraComponent& Camera, const glm::mat4& LightSpace, bool bHasLightSpace);
 	void DrawSubMesh(const FShader& Shader, const UStaticMeshComponent& Object, std::size_t InSubMeshIndex,
 		const FMaterial& InMaterial, const glm::mat4& InView, const glm::mat4& InProjection,
 		const glm::mat4& LightSpace, const FDrawOptions& Options) const;
-	void DrawQueuedSkeletal(const ULevel& Level, const glm::mat4& InView, const glm::mat4& InProjection,
-		const glm::mat4& LightSpace, bool bInReceiveShadows, float ShadowSourceAngle, const FFrustum* CameraFrustum,
+	void DrawQueuedSkeletal(const glm::mat4& InView, const glm::mat4& InProjection, const glm::mat4& LightSpace,
+		bool bInReceiveShadows, float ShadowSourceAngle, const FFrustum* CameraFrustum,
 		bool bUseWorldClipPlane = false);
 	void DrawQueuedStatic(const ULevel& Level, const glm::mat4& InView, const glm::mat4& InProjection,
 		const glm::mat4& LightSpace, bool bInReceiveShadows, float ShadowSourceAngle);
@@ -241,7 +239,6 @@ private:
 	FShader UnlitShader;
 	FShader ShadowShader;
 	FShader SkinnedShadowShader;
-	FShader SkyboxShader;
 	FShader SsaoShader;
 	FShader SsaoBlurShader;
 	FShader PostCompositeShader;
@@ -258,7 +255,6 @@ private:
 	FUniformBuffer LightsUbo;
 	std::shared_ptr<UTexture2D> WhiteTexture;
 	std::shared_ptr<UTexture2D> FlatNormalTexture;
-	std::shared_ptr<UStaticMesh> SkyboxMesh;
 	std::vector<FSkeletalDrawItem> SkeletalDraws;
 	std::vector<FStaticDrawItem> StaticDraws;
 	FFrameStats FrameStats{};

@@ -62,7 +62,7 @@ struct RENDERER_API FPostProcessSettings
 	float AoRadius = 0.45f;
 	float AoBias = 0.04f;
 	float AoPower = 1.0f;
-	float Exposure = 1.0f; // multiplied with level EnvironmentExposure in composite
+	float Exposure = 1.0f; // scene exposure applied in the composite pass
 	int ShadowMapSize = 1024;
 	int AoSampleCount = 8;
 };
