@@ -11,7 +11,6 @@
 #include "Components/SceneComponent.h"
 #include "CollisionQuery.h"
 
-namespace leon {
 
 class DebugDraw;
 class PhysScene;
@@ -105,4 +104,3 @@ private:
     bool lagInitialized_ = false;
 };
 
-} // namespace leon

@@ -8,7 +8,6 @@
 #include <string>
 #include <vector>
 
-namespace leon {
 
 class Engine;
 struct LevelAnimation;
@@ -174,4 +173,3 @@ struct LevelDocument {
 [[nodiscard]] std::string ResolveLevelAssetPath(const std::string& levelPath,
                                                 const std::string& relativeOrKey);
 
-} // namespace leon

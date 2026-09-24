@@ -7,7 +7,6 @@
 #include "GameFramework/DefaultCameraActor.h"
 #include "GameFramework/DefaultGameMode.h"
 
-namespace leon {
 namespace {
 
 void beginFreeLookFromOrbit(Camera& camera) {
@@ -131,4 +130,3 @@ void DefaultGameMode::Tick(Engine& engine, float deltaTime) {
     camera.SetEyeLocation(cameraActor->GetActorLocation());
 }
 
-} // namespace leon

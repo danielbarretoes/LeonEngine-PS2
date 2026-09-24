@@ -7,7 +7,6 @@
 #include "Components/ActorComponent.h"
 #include <vector>
 
-namespace leon {
 
 class Actor;
 
@@ -53,4 +52,3 @@ private:
     std::vector<SceneComponent*> children_;
 };
 
-} // namespace leon

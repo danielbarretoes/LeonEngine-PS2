@@ -8,7 +8,6 @@
 #include "Engine/World.h"
 #include "Physics/PhysScene.h"
 
-namespace leon {
 namespace {
 
 [[nodiscard]] PhysScene* ResolvePhysScene(Actor* owner, PhysScene* explicitScene) {
@@ -158,4 +157,3 @@ void SpringArmComponent::ApplyToCamera(Camera& camera, float deltaTime, DebugDra
     ApplyToCamera(camera, actorLocation, deltaTime, nullptr, debugDraw);
 }
 
-} // namespace leon

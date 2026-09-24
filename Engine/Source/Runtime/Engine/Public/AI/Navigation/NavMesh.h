@@ -5,7 +5,6 @@
 #include <cstdint>
 #include <vector>
 
-namespace leon {
 
 /// Baked walkable grid (Unreal NavMesh lite — no Recast). XZ cells + floor height.
 struct NavMesh {
@@ -37,4 +36,3 @@ struct NavMesh {
     [[nodiscard]] bool WorldToCell(float x, float z, int& outIx, int& outIz) const;
 };
 
-} // namespace leon

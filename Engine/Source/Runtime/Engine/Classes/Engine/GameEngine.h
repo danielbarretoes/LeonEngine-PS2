@@ -19,8 +19,6 @@
 #include <type_traits>
 #include <utility>
 
-namespace leon {
-
 /// Top-level runtime: GLFW window, main loop, orbit-camera input, FPS overlay,
 /// GameInstance, and a Level/ResourceCache filled by LevelDirector (or the app).
 class Engine {
@@ -80,7 +78,7 @@ public:
 
     template <typename T, typename... Args>
     T* SetGameInstance(Args&&... args) {
-        static_assert(std::is_base_of_v<GameInstance, T>, "T must derive from leon::GameInstance");
+        static_assert(std::is_base_of_v<GameInstance, T>, "T must derive from GameInstance");
         // Packs call SetGameInstance after Runtime wires travel/browser callbacks — keep them.
         GameInstance::LevelTravelFn travelFn;
         GameInstance::LevelBrowserVisibleFn browserFn;
@@ -220,4 +218,3 @@ private:
     float displayMs_ = 0.0f;
 };
 
-} // namespace leon

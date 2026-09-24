@@ -2,7 +2,6 @@
 
 #include "UniformBuffer.h"
 
-namespace leon {
 
 UniformBuffer::~UniformBuffer() {
     Destroy();
@@ -49,4 +48,3 @@ void UniformBuffer::Bind() const {
     }
 }
 
-} // namespace leon

@@ -4,7 +4,6 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
-namespace leon {
 
 /// TRS transform used to build model / normal matrices (Unreal-like FTransform lite).
 struct Transform {
@@ -16,4 +15,3 @@ struct Transform {
     [[nodiscard]] glm::mat3 normalMatrix() const;
 };
 
-} // namespace leon

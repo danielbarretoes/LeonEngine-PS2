@@ -18,7 +18,6 @@
 #include "MeshData.h"
 #include <system_error>
 
-namespace leon {
 namespace fs = std::filesystem;
 
 namespace {
@@ -214,4 +213,3 @@ bool LoadStaticMeshFromGltf(const std::string& path, MeshData& out,
     return true;
 }
 
-} // namespace leon

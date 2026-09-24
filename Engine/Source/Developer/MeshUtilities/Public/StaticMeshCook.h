@@ -2,7 +2,6 @@
 
 #include <string>
 
-namespace leon {
 
 /// DCC → cooked `.lmesh` (edit-time / `leon-cook`). Shipping loads `.lmesh` via `LeonMeshFormat`.
 
@@ -17,4 +16,3 @@ namespace leon {
                                           const std::string& materialsOutDir,
                                           std::string& outError);
 
-} // namespace leon

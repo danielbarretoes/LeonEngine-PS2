@@ -4,7 +4,6 @@
 #include <cstdint>
 #include "RHIHandles.h"
 
-namespace leon {
 
 /// Double-buffered GL_TIME_ELAPSED queries so HUD reads last frame (no GPU stall).
 class GpuPassTimer {
@@ -39,11 +38,11 @@ private:
     static constexpr int kBufferCount = 2;
     static constexpr auto kPassCount = static_cast<int>(EPass::Count);
 
-    using QueryBuffer = std::array<rhi::RHIQueryId, kPassCount>;
+    using QueryBuffer = std::array<RHIQueryId, kPassCount>;
 
     [[nodiscard]] QueryBuffer& bufferQueries(int buffer);
     [[nodiscard]] bool& bufferPending(int buffer);
-    [[nodiscard]] rhi::RHIQueryId& querySlot(int buffer, EPass pass);
+    [[nodiscard]] RHIQueryId& querySlot(int buffer, EPass pass);
     [[nodiscard]] bool& passOpenSlot(EPass pass);
     [[nodiscard]] float& msSlot(EPass pass);
     [[nodiscard]] const float& msSlot(EPass pass) const;
@@ -58,4 +57,3 @@ private:
     std::array<bool, kPassCount> passOpen_{};
 };
 
-} // namespace leon

@@ -9,9 +9,9 @@ using Catch::Matchers::WithinAbs;
 
 namespace {
 
-void AddFloorBox(leon::PhysScene& scene, const glm::vec3& center, const glm::vec3& halfExtents) {
-    const std::size_t id = scene.AddBody({0, leon::EBodyType::Static, 1.0f, true});
-    leon::BodyInstance& body = scene.Bodies()[id];
+void AddFloorBox(PhysScene& scene, const glm::vec3& center, const glm::vec3& halfExtents) {
+    const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
+    BodyInstance& body = scene.Bodies()[id];
     body.position = center;
     body.halfExtents = halfExtents;
 }
@@ -19,15 +19,15 @@ void AddFloorBox(leon::PhysScene& scene, const glm::vec3& center, const glm::vec
 } // namespace
 
 TEST_CASE("IsWalkable uses WalkableFloorZ", "[gameplay][character][floor]") {
-    leon::Character character;
+    Character character;
     character.GetCharacterMovement().WalkableFloorZ = 0.71f;
 
-    leon::HitResult flat{};
+    HitResult flat{};
     flat.bBlockingHit = true;
     flat.ImpactNormal = {0.0f, 1.0f, 0.0f};
     REQUIRE(character.IsWalkable(flat));
 
-    leon::HitResult steep{};
+    HitResult steep{};
     steep.bBlockingHit = true;
     steep.ImpactNormal = {0.0f, 0.5f, 0.0f}; // ~60° — steeper than default UE walkable
     REQUIRE_FALSE(character.IsWalkable(steep));
@@ -37,12 +37,12 @@ TEST_CASE("IsWalkable uses WalkableFloorZ", "[gameplay][character][floor]") {
 }
 
 TEST_CASE("FindFloor hits infinite floor plane", "[gameplay][character][floor]") {
-    leon::PhysScene scene;
-    leon::Character character;
+    PhysScene scene;
+    Character character;
     character.Reset({0.0f, 1.0f, 0.0f}, 0.0f);
     character.GetCharacterMovement().FloorY = 0.0f;
 
-    leon::FindFloorResult floor{};
+    FindFloorResult floor{};
     character.FindFloor(scene, floor, 2.0f, nullptr);
     REQUIRE(floor.bBlockingHit);
     REQUIRE(floor.bWalkableFloor);
@@ -52,15 +52,15 @@ TEST_CASE("FindFloor hits infinite floor plane", "[gameplay][character][floor]")
 }
 
 TEST_CASE("FindFloor hits static AABB top", "[gameplay][character][floor]") {
-    leon::PhysScene scene;
+    PhysScene scene;
     // Box top at y = 2
     AddFloorBox(scene, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f});
 
-    leon::Character character;
+    Character character;
     character.Reset({0.0f, 2.5f, 0.0f}, 0.0f);
     character.GetCharacterMovement().FloorY = -100.0f; // prefer box over far plane
 
-    leon::FindFloorResult floor{};
+    FindFloorResult floor{};
     character.FindFloor(scene, floor, 1.0f, nullptr);
     REQUIRE(floor.bBlockingHit);
     REQUIRE(floor.bWalkableFloor);
@@ -69,8 +69,8 @@ TEST_CASE("FindFloor hits static AABB top", "[gameplay][character][floor]") {
 }
 
 TEST_CASE("Character lands on floor plane after fall", "[gameplay][character][movement]") {
-    leon::World world;
-    auto* character = world.SpawnActor<leon::Character>();
+    World world;
+    auto* character = world.SpawnActor<Character>();
     REQUIRE(character != nullptr);
     character->Reset({0.0f, 2.0f, 0.0f}, 0.0f);
     character->GetCharacterMovement().FloorY = 0.0f;
@@ -78,7 +78,7 @@ TEST_CASE("Character lands on floor plane after fall", "[gameplay][character][mo
     character->ApplyReplicatedState({0.0f, 2.0f, 0.0f}, 0.0f, 0.0f, false);
     REQUIRE(character->IsFalling());
 
-    leon::PhysScene& scene = world.GetPhysicsScene();
+    PhysScene& scene = world.GetPhysicsScene();
     for (int i = 0; i < 180; ++i) {
         character->PerformMovement(scene, 1.0f / 60.0f, nullptr);
     }
@@ -90,14 +90,14 @@ TEST_CASE("Character lands on floor plane after fall", "[gameplay][character][mo
 }
 
 TEST_CASE("Character jump leaves ground then lands", "[gameplay][character][movement]") {
-    leon::World world;
-    auto* character = world.SpawnActor<leon::Character>();
+    World world;
+    auto* character = world.SpawnActor<Character>();
     character->Reset({0.0f, 0.0f, 0.0f}, 0.0f);
     character->GetCharacterMovement().FloorY = 0.0f;
     character->GetCharacterMovement().JumpZVelocity = 7.0f;
     character->GetCharacterMovement().Gravity = 24.0f;
 
-    leon::PhysScene& scene = world.GetPhysicsScene();
+    PhysScene& scene = world.GetPhysicsScene();
     // Settle on floor.
     for (int i = 0; i < 10; ++i) {
         character->PerformMovement(scene, 1.0f / 60.0f, nullptr);
@@ -122,13 +122,13 @@ TEST_CASE("Character jump leaves ground then lands", "[gameplay][character][move
 }
 
 TEST_CASE("Character does not walk through static wall", "[gameplay][character][movement]") {
-    leon::World world;
-    auto* character = world.SpawnActor<leon::Character>();
+    World world;
+    auto* character = world.SpawnActor<Character>();
     character->Reset({-2.0f, 0.0f, 0.0f}, 0.0f);
     character->GetCharacterMovement().FloorY = 0.0f;
     character->GetCharacterMovement().MaxWalkSpeed = 6.0f;
 
-    leon::PhysScene& scene = world.GetPhysicsScene();
+    PhysScene& scene = world.GetPhysicsScene();
     // Tall wall at x=0
     AddFloorBox(scene, {0.0f, 1.0f, 0.0f}, {0.25f, 1.0f, 2.0f});
 
@@ -142,13 +142,13 @@ TEST_CASE("Character does not walk through static wall", "[gameplay][character][
 }
 
 TEST_CASE("Character slides along wall with diagonal wish", "[gameplay][character][movement][sweep]") {
-    leon::World world;
-    auto* character = world.SpawnActor<leon::Character>();
+    World world;
+    auto* character = world.SpawnActor<Character>();
     character->Reset({-1.5f, 0.0f, 0.0f}, 0.0f);
     character->GetCharacterMovement().FloorY = 0.0f;
     character->GetCharacterMovement().MaxWalkSpeed = 5.0f;
 
-    leon::PhysScene& scene = world.GetPhysicsScene();
+    PhysScene& scene = world.GetPhysicsScene();
     AddFloorBox(scene, {0.0f, 1.0f, 0.0f}, {0.25f, 1.0f, 4.0f}); // wall in YZ plane at x=0
 
     const float z0 = character->GetActorLocation().z;
@@ -163,13 +163,13 @@ TEST_CASE("Character slides along wall with diagonal wish", "[gameplay][characte
 
 TEST_CASE("Character sweep does not tunnel thin wall at high speed",
           "[gameplay][character][movement][sweep]") {
-    leon::World world;
-    auto* character = world.SpawnActor<leon::Character>();
+    World world;
+    auto* character = world.SpawnActor<Character>();
     character->Reset({-1.0f, 0.0f, 0.0f}, 0.0f);
     character->GetCharacterMovement().FloorY = 0.0f;
     character->GetCharacterMovement().MaxWalkSpeed = 40.0f; // >> normal
 
-    leon::PhysScene& scene = world.GetPhysicsScene();
+    PhysScene& scene = world.GetPhysicsScene();
     AddFloorBox(scene, {0.0f, 1.0f, 0.0f}, {0.1f, 1.0f, 2.0f});
 
     for (int i = 0; i < 30; ++i) {
@@ -181,14 +181,14 @@ TEST_CASE("Character sweep does not tunnel thin wall at high speed",
 }
 
 TEST_CASE("Character steps up onto short ledge", "[gameplay][character][movement][stepup]") {
-    leon::World world;
-    auto* character = world.SpawnActor<leon::Character>();
+    World world;
+    auto* character = world.SpawnActor<Character>();
     character->Reset({-1.5f, 0.0f, 0.0f}, 0.0f);
     character->GetCharacterMovement().FloorY = 0.0f;
     character->GetCharacterMovement().MaxWalkSpeed = 5.0f;
     character->GetCharacterMovement().MaxStepHeight = 0.35f;
 
-    leon::PhysScene& scene = world.GetPhysicsScene();
+    PhysScene& scene = world.GetPhysicsScene();
     // Top at y=0.30 (< MaxStepHeight). Long/wide so we stay on the ledge after stepping up.
     AddFloorBox(scene, {8.0f, 0.15f, 0.0f}, {8.0f, 0.15f, 4.0f});
 
@@ -203,14 +203,14 @@ TEST_CASE("Character steps up onto short ledge", "[gameplay][character][movement
 }
 
 TEST_CASE("Character does not step up tall wall", "[gameplay][character][movement][stepup]") {
-    leon::World world;
-    auto* character = world.SpawnActor<leon::Character>();
+    World world;
+    auto* character = world.SpawnActor<Character>();
     character->Reset({-1.5f, 0.0f, 0.0f}, 0.0f);
     character->GetCharacterMovement().FloorY = 0.0f;
     character->GetCharacterMovement().MaxWalkSpeed = 5.0f;
     character->GetCharacterMovement().MaxStepHeight = 0.35f;
 
-    leon::PhysScene& scene = world.GetPhysicsScene();
+    PhysScene& scene = world.GetPhysicsScene();
     // Top at y=1.0 (> MaxStepHeight)
     AddFloorBox(scene, {0.5f, 0.5f, 0.0f}, {0.5f, 0.5f, 4.0f});
 
@@ -225,22 +225,22 @@ TEST_CASE("Character does not step up tall wall", "[gameplay][character][movemen
 
 TEST_CASE("Character MovementMode Walking Jump Falling Land",
           "[gameplay][character][movement][mode]") {
-    leon::World world;
-    auto* character = world.SpawnActor<leon::Character>();
+    World world;
+    auto* character = world.SpawnActor<Character>();
     character->Reset({0.0f, 0.0f, 0.0f}, 0.0f);
     character->GetCharacterMovement().FloorY = 0.0f;
-    REQUIRE(character->GetMovementMode() == leon::EMovementMode::Walking);
+    REQUIRE(character->GetMovementMode() == EMovementMode::Walking);
 
-    leon::PhysScene& scene = world.GetPhysicsScene();
+    PhysScene& scene = world.GetPhysicsScene();
     character->Jump();
     character->PerformMovement(scene, 1.0f / 60.0f, nullptr);
-    REQUIRE(character->GetMovementMode() == leon::EMovementMode::Falling);
+    REQUIRE(character->GetMovementMode() == EMovementMode::Falling);
     REQUIRE(character->IsFalling());
 
     bool landed = false;
     for (int i = 0; i < 180; ++i) {
         character->PerformMovement(scene, 1.0f / 60.0f, nullptr);
-        if (character->GetMovementMode() == leon::EMovementMode::Walking) {
+        if (character->GetMovementMode() == EMovementMode::Walking) {
             landed = true;
             break;
         }
@@ -250,14 +250,14 @@ TEST_CASE("Character MovementMode Walking Jump Falling Land",
 }
 
 TEST_CASE("Character walks off ledge enters Falling", "[gameplay][character][movement][mode]") {
-    leon::World world;
-    auto* character = world.SpawnActor<leon::Character>();
+    World world;
+    auto* character = world.SpawnActor<Character>();
     character->Reset({0.0f, 1.0f, 0.0f}, 0.0f);
     character->GetCharacterMovement().FloorY = -100.0f; // no infinite floor under gap
     character->GetCharacterMovement().MaxWalkSpeed = 6.0f;
     character->GetCharacterMovement().Gravity = 24.0f;
 
-    leon::PhysScene& scene = world.GetPhysicsScene();
+    PhysScene& scene = world.GetPhysicsScene();
     // Platform top at y=1, ends at x=0.5
     AddFloorBox(scene, {0.0f, 0.5f, 0.0f}, {0.5f, 0.5f, 0.5f});
 
@@ -276,22 +276,22 @@ TEST_CASE("Character walks off ledge enters Falling", "[gameplay][character][mov
         }
     }
     REQUIRE(character->IsFalling());
-    REQUIRE(character->GetMovementMode() == leon::EMovementMode::Falling);
+    REQUIRE(character->GetMovementMode() == EMovementMode::Falling);
 }
 
 TEST_CASE("Character walk shove moves Dynamic crate without overlap",
           "[gameplay][character][movement][push]") {
-    leon::World world;
-    auto* character = world.SpawnActor<leon::Character>();
+    World world;
+    auto* character = world.SpawnActor<Character>();
     REQUIRE(character != nullptr);
     character->GetCharacterMovement().FloorY = 0.0f;
     character->GetCharacterMovement().MaxWalkSpeed = 6.0f;
     character->GetCharacterMovement().PushStrength = 0.85f;
     character->Reset({0.0f, 0.0f, 0.0f}, 0.0f);
 
-    leon::PhysScene& scene = world.GetPhysicsScene();
-    const std::size_t id = scene.AddBody({3, leon::EBodyType::Dynamic, 1.0f, true});
-    leon::BodyInstance& crate = scene.Bodies()[id];
+    PhysScene& scene = world.GetPhysicsScene();
+    const std::size_t id = scene.AddBody({3, EBodyType::Dynamic, 1.0f, true});
+    BodyInstance& crate = scene.Bodies()[id];
     // Capsule radius ~0.35; place crate so walking +X contacts the west face.
     crate.position = {1.2f, 0.45f, 0.0f};
     crate.halfExtents = {0.4f, 0.45f, 0.4f};
@@ -301,7 +301,7 @@ TEST_CASE("Character walk shove moves Dynamic crate without overlap",
     for (int i = 0; i < 45; ++i) {
         character->AddMovementInput({1.0f, 0.0f, 0.0f});
         character->PerformMovement(scene, 1.0f / 60.0f, nullptr);
-        leon::PhysSceneStepParams step{};
+        PhysSceneStepParams step{};
         step.deltaTime = 1.0f / 60.0f;
         step.floorY = 0.0f;
         step.gravity = 24.0f;
@@ -312,9 +312,9 @@ TEST_CASE("Character walk shove moves Dynamic crate without overlap",
 }
 
 TEST_CASE("World separates overlapping Character capsules", "[gameplay][character][pawn]") {
-    leon::World world;
-    auto* a = world.SpawnActor<leon::Character>();
-    auto* b = world.SpawnActor<leon::Character>();
+    World world;
+    auto* a = world.SpawnActor<Character>();
+    auto* b = world.SpawnActor<Character>();
     REQUIRE(a != nullptr);
     REQUIRE(b != nullptr);
     a->GetCharacterMovement().FloorY = 0.0f;
@@ -322,7 +322,7 @@ TEST_CASE("World separates overlapping Character capsules", "[gameplay][characte
     a->Reset({0.0f, 0.0f, 0.0f}, 0.0f);
     b->Reset({0.1f, 0.0f, 0.0f}, 0.0f);
 
-    leon::WorldGameplayFrameParams frame{};
+    WorldGameplayFrameParams frame{};
     frame.deltaTime = 1.0f / 60.0f;
     world.TickGameplayFrame(frame);
 
@@ -335,8 +335,8 @@ TEST_CASE("World separates overlapping Character capsules", "[gameplay][characte
 
 TEST_CASE("ResolvePawnOverlap ignores vertically separated capsules",
           "[gameplay][character][pawn]") {
-    leon::Character a;
-    leon::Character b;
+    Character a;
+    Character b;
     a.Reset({0.0f, 0.0f, 0.0f}, 0.0f);
     b.Reset({0.05f, 3.0f, 0.0f}, 0.0f);
     a.ResolvePawnOverlap(b);
@@ -345,13 +345,13 @@ TEST_CASE("ResolvePawnOverlap ignores vertically separated capsules",
 }
 
 TEST_CASE("Character walks up walkable slope ramp", "[gameplay][character][movement][slope]") {
-    leon::World world;
-    auto* character = world.SpawnActor<leon::Character>();
+    World world;
+    auto* character = world.SpawnActor<Character>();
     character->GetCharacterMovement().FloorY = -100.0f;
     character->GetCharacterMovement().MaxWalkSpeed = 5.0f;
     character->GetCharacterMovement().WalkableFloorZ = 0.71f; // ~44°
 
-    leon::PhysScene& scene = world.GetPhysicsScene();
+    PhysScene& scene = world.GetPhysicsScene();
     // 30° ramp (cos30≈0.866 walkable). Plane through origin; y ≈ x * tan30.
     scene.AddSlopeRamp({0.0f, 0.0f, 0.0f}, {8.0f, 8.0f, 2.0f}, 30.0f);
 
@@ -377,13 +377,13 @@ TEST_CASE("Character walks up walkable slope ramp", "[gameplay][character][movem
 }
 
 TEST_CASE("Character cannot stand on steep slope ramp", "[gameplay][character][movement][slope]") {
-    leon::World world;
-    auto* character = world.SpawnActor<leon::Character>();
+    World world;
+    auto* character = world.SpawnActor<Character>();
     character->GetCharacterMovement().FloorY = -100.0f;
     character->GetCharacterMovement().Gravity = 24.0f;
     character->GetCharacterMovement().WalkableFloorZ = 0.71f;
 
-    leon::PhysScene& scene = world.GetPhysicsScene();
+    PhysScene& scene = world.GetPhysicsScene();
     // 60° ramp (cos60=0.5 < WalkableFloorZ)
     scene.AddSlopeRamp({0.0f, 0.0f, 0.0f}, {4.0f, 4.0f, 2.0f}, 60.0f);
 
@@ -401,8 +401,8 @@ TEST_CASE("Character cannot stand on steep slope ramp", "[gameplay][character][m
 TEST_CASE("Character AirControl scales horizontal move while Falling",
           "[gameplay][character][movement][air]") {
     auto runAirMove = [](float AirControl) -> float {
-        leon::World world;
-        auto* character = world.SpawnActor<leon::Character>();
+        World world;
+        auto* character = world.SpawnActor<Character>();
         character->Reset({0.0f, 4.0f, 0.0f}, 0.0f);
         character->GetCharacterMovement().FloorY = 0.0f;
         character->GetCharacterMovement().MaxWalkSpeed = 6.0f;
@@ -411,7 +411,7 @@ TEST_CASE("Character AirControl scales horizontal move while Falling",
         // Start airborne high enough that 30 frames stay Falling.
         character->ApplyReplicatedState({0.0f, 4.0f, 0.0f}, 0.0f, 0.0f, false);
 
-        leon::PhysScene& scene = world.GetPhysicsScene();
+        PhysScene& scene = world.GetPhysicsScene();
         REQUIRE(character->IsFalling());
 
         const float x0 = character->GetActorLocation().x;

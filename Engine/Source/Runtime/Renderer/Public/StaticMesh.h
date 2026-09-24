@@ -7,7 +7,6 @@
 #include "RHIHandles.h"
 #include <vector>
 
-namespace leon {
 
 /// GPU static mesh resource (Unreal-style StaticMesh; VAO/VBO/EBO + optional MTL).
 class StaticMesh {
@@ -28,7 +27,7 @@ public:
     void DrawSubMesh(std::size_t subMeshIndex) const;
 
     [[nodiscard]] bool Valid() const {
-        return indexCount_ > 0 && (cpuOnly_ || vao_ != rhi::kInvalidVertexArray);
+        return indexCount_ > 0 && (cpuOnly_ || vao_ != kInvalidVertexArray);
     }
     [[nodiscard]] bool IsCpuOnly() const { return cpuOnly_; }
     [[nodiscard]] int IndexCount() const { return indexCount_; }
@@ -45,9 +44,9 @@ public:
 private:
     void Destroy();
 
-    rhi::RHIVertexArrayId vao_ = rhi::kInvalidVertexArray;
-    rhi::RHIBufferId vbo_ = rhi::kInvalidBuffer;
-    rhi::RHIBufferId ebo_ = rhi::kInvalidBuffer;
+    RHIVertexArrayId vao_ = kInvalidVertexArray;
+    RHIBufferId vbo_ = kInvalidBuffer;
+    RHIBufferId ebo_ = kInvalidBuffer;
     int indexCount_ = 0;
     bool cpuOnly_ = false;
     glm::vec3 localMin_{0.0f};
@@ -57,4 +56,3 @@ private:
     MeshData cpuData_{};
 };
 
-} // namespace leon

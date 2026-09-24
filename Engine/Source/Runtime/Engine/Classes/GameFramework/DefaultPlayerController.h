@@ -4,7 +4,6 @@
 
 #include "GameFramework/PlayerController.h"
 
-namespace leon {
 
 class DefaultCameraActor;
 
@@ -16,4 +15,3 @@ public:
     glm::vec3 TickInput(Engine& engine) override;
 };
 
-} // namespace leon

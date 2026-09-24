@@ -5,7 +5,6 @@
 #include <memory>
 #include <string>
 
-namespace leon {
 
 class Texture;
 
@@ -32,4 +31,3 @@ inline void ReloadLevelLightmapsForPath(Level& level, const std::string& levelPa
 /// Ensure `lightmapId` is a non-empty stable id (generates one if missing). Returns the id.
 [[nodiscard]] std::string EnsureLightmapId(StaticMeshComponent& mesh);
 
-} // namespace leon

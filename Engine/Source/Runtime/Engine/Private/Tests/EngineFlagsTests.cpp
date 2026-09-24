@@ -2,7 +2,7 @@
 #include "Engine/GameEngine.h"
 
 TEST_CASE("Engine flags work before initialize", "[engine]") {
-    leon::Engine engine;
+    Engine engine;
     REQUIRE_FALSE(engine.IsInitialized());
 
     engine.SetSuppressCameraDrag(true);

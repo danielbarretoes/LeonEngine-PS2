@@ -7,8 +7,6 @@
 
 class FGenericWindow;
 
-namespace leon {
-
 /// Unreal-like UButton (lite): filled rect + label; hover / selected / press.
 /// Usually owned by VerticalBoxWidget; can also be a root HUD widget with SetPosition.
 class ButtonWidget : public UserWidget {
@@ -72,4 +70,3 @@ private:
     void SetHovered(bool hovered) { hovered_ = hovered; }
 };
 
-} // namespace leon

@@ -1,7 +1,6 @@
 #include "GameFramework/Controller.h"
 #include "GameFramework/Pawn.h"
 
-namespace leon {
 
 void Pawn::detachController() {
     if (controller_ == nullptr) {
@@ -23,4 +22,3 @@ void Pawn::EndPlay() {
     detachController();
 }
 
-} // namespace leon

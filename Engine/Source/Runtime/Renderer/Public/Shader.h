@@ -8,7 +8,6 @@
 #include <string>
 #include <unordered_map>
 
-namespace leon {
 
 enum class EShaderReloadResult : std::uint8_t {
     Unchanged = 0,
@@ -61,7 +60,7 @@ public:
     bool BindUniformBlock(const char* blockName, unsigned int bindingPoint) const;
 
     [[nodiscard]] bool Valid() const { return program_ != 0; }
-    [[nodiscard]] rhi::RHIProgramId ProgramId() const { return program_; }
+    [[nodiscard]] RHIProgramId ProgramId() const { return program_; }
     [[nodiscard]] bool HasFilePaths() const {
         return !vertexPath_.empty() && !fragmentPath_.empty();
     }
@@ -71,7 +70,7 @@ private:
     [[nodiscard]] int UniformLocation(const char* name) const;
     EShaderReloadResult LoadFromStoredPaths(bool force, const AcceptFn& accept);
 
-    rhi::RHIProgramId program_ = rhi::kInvalidProgram;
+    RHIProgramId program_ = kInvalidProgram;
     mutable std::unordered_map<std::string, int> uniformCache_;
     std::string vertexPath_;
     std::string fragmentPath_;
@@ -79,4 +78,3 @@ private:
     std::filesystem::file_time_type fragmentTime_;
 };
 
-} // namespace leon

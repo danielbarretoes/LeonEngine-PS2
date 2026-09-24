@@ -4,7 +4,6 @@
 
 #include <string>
 
-namespace leon {
 
 /// 2D GPU texture (RGBA8).
 class Texture {
@@ -31,7 +30,6 @@ public:
 private:
     void Destroy();
 
-    rhi::RHITextureId id_ = rhi::kInvalidTexture;
+    RHITextureId id_ = kInvalidTexture;
 };
 
-} // namespace leon

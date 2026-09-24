@@ -7,7 +7,6 @@
 #include "MeshData.h"
 #include <vector>
 
-namespace leon {
 
 bool CookStaticMeshFromObj(const std::string& objPath, const std::string& outLmeshPath,
                            std::string& outError) {
@@ -55,4 +54,3 @@ bool CookStaticMeshFromGltf(const std::string& gltfPath, const std::string& outL
     return true;
 }
 
-} // namespace leon

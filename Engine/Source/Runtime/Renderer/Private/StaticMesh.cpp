@@ -7,7 +7,6 @@
 #include <limits>
 #include <utility>
 
-namespace leon {
 namespace {
 
 [[nodiscard]] const void* glIndexByteOffset(int indexOffset) noexcept {
@@ -182,4 +181,3 @@ void StaticMesh::Destroy() {
     cpuData_ = {};
 }
 
-} // namespace leon

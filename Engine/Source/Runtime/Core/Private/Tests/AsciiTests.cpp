@@ -2,8 +2,8 @@
 #include "Misc/Ascii.h"
 
 TEST_CASE("AsciiToLower lowercases ASCII letters", "[core][ascii]") {
-    REQUIRE(leon::AsciiToLower("AbC") == "abc");
-    REQUIRE(leon::AsciiToLower("Cube") == "cube");
-    REQUIRE(leon::AsciiToLower("123_OK") == "123_ok");
-    REQUIRE(leon::AsciiToLower("") == "");
+    REQUIRE(AsciiToLower("AbC") == "abc");
+    REQUIRE(AsciiToLower("Cube") == "cube");
+    REQUIRE(AsciiToLower("123_OK") == "123_ok");
+    REQUIRE(AsciiToLower("") == "");
 }

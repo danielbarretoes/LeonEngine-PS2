@@ -11,7 +11,6 @@ struct _ENetPeer;
 typedef struct _ENetHost ENetHost;
 typedef struct _ENetPeer ENetPeer;
 
-namespace leon {
 
 enum class ENetMode : std::uint8_t {
     Standalone = 0,
@@ -35,10 +34,10 @@ public:
     NetDriver& operator=(const NetDriver&) = delete;
 
     /// Listen-server: remotes fill fighter slots after the local host player.
-    [[nodiscard]] bool StartHost(std::uint16_t port = net::kDefaultPort);
+    [[nodiscard]] bool StartHost(std::uint16_t port = Leon::Net::kDefaultPort);
     /// Dedicated: up to kMaxPlayers remote clients, no local player.
-    [[nodiscard]] bool StartDedicated(std::uint16_t port = net::kDefaultPort);
-    [[nodiscard]] bool Connect(const std::string& address, std::uint16_t port = net::kDefaultPort);
+    [[nodiscard]] bool StartDedicated(std::uint16_t port = Leon::Net::kDefaultPort);
+    [[nodiscard]] bool Connect(const std::string& address, std::uint16_t port = Leon::Net::kDefaultPort);
     void Shutdown();
 
     void Poll();
@@ -80,8 +79,8 @@ private:
     void disconnectPeerForAbuse(int peerSlot);
 
     ENetHost* host_ = nullptr;
-    std::array<ENetPeer*, net::kMaxPlayers> peers_{};
-    std::array<net::PeerPacketWindow, net::kMaxPlayers> peerRates_{};
+    std::array<ENetPeer*, Leon::Net::kMaxPlayers> peers_{};
+    std::array<Leon::Net::PeerPacketWindow, Leon::Net::kMaxPlayers> peerRates_{};
     int maxClients_ = 1;
     ENetMode mode_ = ENetMode::Standalone;
     /// True when this instance holds a process-wide ENet init ref.
@@ -93,4 +92,3 @@ private:
     PeerHandler onPeerDisconnected_;
 };
 
-} // namespace leon

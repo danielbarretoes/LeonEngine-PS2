@@ -5,7 +5,6 @@
 #include <string>
 #include <vector>
 
-namespace leon {
 
 /// Unreal-like cooked skeletal content (micro-engine files, not UObject).
 /// Sample pack: Templates/ThirdPerson/Content/assets/characters/bot/
@@ -91,4 +90,3 @@ struct CookJumpAnimPaths {
                                         const std::string& outDirectory,
                                         const CookJumpAnimPaths& jumpAnims = {});
 
-} // namespace leon

@@ -10,7 +10,6 @@
 #include "GameFramework/PlayerController.h"
 #include "Engine/Level.h"
 
-namespace leon {
 
 void GameMode::PostLogin(PlayerController& newPlayer) {
     GetGameState().AddPlayerState(&newPlayer.GetPlayerState());
@@ -113,4 +112,3 @@ void GameMode::SnapCharacterToFloor(Character& character, glm::vec3& inOutFeet,
     inOutFeet.y = std::max(support, floorY) + 0.02f;
 }
 
-} // namespace leon

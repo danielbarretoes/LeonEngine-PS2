@@ -8,7 +8,6 @@
 #include <cstdint>
 #include "Math/Transform.h"
 
-namespace leon {
 
 constexpr int kMaxDirectionalLights = 2;
 constexpr int kMaxPointLights = 4;
@@ -70,4 +69,3 @@ struct PointLight {
     float orbitSpeed = 1.0f;
 };
 
-} // namespace leon

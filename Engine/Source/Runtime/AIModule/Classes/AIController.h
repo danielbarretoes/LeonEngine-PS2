@@ -6,7 +6,6 @@
 #include "GameFramework/Controller.h"
 #include <vector>
 
-namespace leon {
 
 class Actor;
 class NavigationSystem;
@@ -72,4 +71,3 @@ private:
     EAILogicState logicState_ = EAILogicState::Idle;
 };
 
-} // namespace leon

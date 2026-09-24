@@ -19,7 +19,6 @@ int g_enetInitCount = 0;
 
 } // namespace
 
-namespace leon {
 
 NetDriver::~NetDriver() {
     Shutdown();
@@ -78,7 +77,7 @@ void NetDriver::clearPeerSlot(ENetPeer* peer) {
         return;
     }
     const auto slot = static_cast<int>(reinterpret_cast<std::intptr_t>(peer->data));
-    if (slot >= 0 && slot < net::kMaxPlayers && peers_[static_cast<std::size_t>(slot)] == peer) {
+    if (slot >= 0 && slot < Leon::Net::kMaxPlayers && peers_[static_cast<std::size_t>(slot)] == peer) {
         peers_[static_cast<std::size_t>(slot)] = nullptr;
         peerRates_[static_cast<std::size_t>(slot)].Reset();
     }
@@ -86,7 +85,7 @@ void NetDriver::clearPeerSlot(ENetPeer* peer) {
 }
 
 void NetDriver::disconnectPeerForAbuse(int peerSlot) {
-    if (peerSlot < 0 || peerSlot >= net::kMaxPlayers) {
+    if (peerSlot < 0 || peerSlot >= Leon::Net::kMaxPlayers) {
         return;
     }
     ENetPeer* peer = peers_[static_cast<std::size_t>(peerSlot)];
@@ -109,8 +108,8 @@ bool NetDriver::startServer(std::uint16_t port, int maxClients, ENetMode mode) {
     if (maxClients < 1) {
         maxClients = 1;
     }
-    if (maxClients > net::kMaxPlayers) {
-        maxClients = net::kMaxPlayers;
+    if (maxClients > Leon::Net::kMaxPlayers) {
+        maxClients = Leon::Net::kMaxPlayers;
     }
 
     ENetAddress address{};
@@ -137,11 +136,11 @@ bool NetDriver::startServer(std::uint16_t port, int maxClients, ENetMode mode) {
 
 bool NetDriver::StartHost(std::uint16_t port) {
     // Listen host: local player occupies one player slot; remotes fill the rest.
-    return startServer(port, std::max(1, net::kMaxPlayers - 1), ENetMode::ListenServer);
+    return startServer(port, std::max(1, Leon::Net::kMaxPlayers - 1), ENetMode::ListenServer);
 }
 
 bool NetDriver::StartDedicated(std::uint16_t port) {
-    return startServer(port, net::kMaxPlayers, ENetMode::DedicatedServer);
+    return startServer(port, Leon::Net::kMaxPlayers, ENetMode::DedicatedServer);
 }
 
 bool NetDriver::Connect(const std::string& address, std::uint16_t port) {
@@ -188,7 +187,7 @@ bool NetDriver::Connect(const std::string& address, std::uint16_t port) {
 
 void NetDriver::Shutdown() {
     if (host_ != nullptr) {
-        for (int i = 0; i < net::kMaxPlayers; ++i) {
+        for (int i = 0; i < Leon::Net::kMaxPlayers; ++i) {
             ENetPeer*& peer = peers_[static_cast<std::size_t>(i)];
             if (peer != nullptr) {
                 enet_peer_disconnect_now(peer, 0);
@@ -252,17 +251,17 @@ void NetDriver::Poll() {
                     if (event.peer != nullptr) {
                         slot = static_cast<int>(reinterpret_cast<std::intptr_t>(event.peer->data));
                     }
-                    const bool accepted = net::AcceptInboundPacket(data, size);
+                    const bool accepted = Leon::Net::AcceptInboundPacket(data, size);
                     bool deliver = accepted;
-                    if (IsHost() && peerRateLimitEnabled_ && slot >= 0 && slot < net::kMaxPlayers) {
+                    if (IsHost() && peerRateLimitEnabled_ && slot >= 0 && slot < Leon::Net::kMaxPlayers) {
                         const auto action = peerRates_[static_cast<std::size_t>(slot)].Observe(
                             steadyNowMs(), accepted);
-                        if (action == net::PeerPacketWindow::EAction::Disconnect) {
+                        if (action == Leon::Net::PeerPacketWindow::EAction::Disconnect) {
                             deliver = false;
                             enet_packet_destroy(event.packet);
                             destroyPacket = false;
                             disconnectPeerForAbuse(slot);
-                        } else if (action == net::PeerPacketWindow::EAction::Drop) {
+                        } else if (action == Leon::Net::PeerPacketWindow::EAction::Drop) {
                             deliver = false;
                         }
                     }
@@ -297,7 +296,7 @@ void NetDriver::Poll() {
 }
 
 void NetDriver::SendToPeer(int peerSlot, const void* data, std::size_t size, bool reliable) {
-    if (data == nullptr || size == 0 || peerSlot < 0 || peerSlot >= net::kMaxPlayers) {
+    if (data == nullptr || size == 0 || peerSlot < 0 || peerSlot >= Leon::Net::kMaxPlayers) {
         return;
     }
     ENetPeer* peer = peers_[static_cast<std::size_t>(peerSlot)];
@@ -326,4 +325,3 @@ void NetDriver::Broadcast(const void* data, std::size_t size, bool reliable) {
     enet_host_flush(host_);
 }
 
-} // namespace leon

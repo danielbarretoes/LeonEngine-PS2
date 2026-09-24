@@ -13,8 +13,6 @@
 #include <string>
 #include <thread>
 
-namespace leon {
-
 Engine::Engine() : gameInstance_(std::make_unique<GameInstance>()) {
     application_.reset(FPlatformApplicationMisc::CreateApplication());
     window_ = application_->MakeWindow();
@@ -474,4 +472,3 @@ void Engine::render(const PostRenderCallback& onPostRender) {
     }
 }
 
-} // namespace leon

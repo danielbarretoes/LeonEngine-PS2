@@ -2,7 +2,6 @@
 
 #include <string>
 
-namespace leon {
 
 /// Per-player session data (Unreal-style `APlayerState`). Typically owned by PlayerController.
 class PlayerState {
@@ -54,4 +53,3 @@ private:
     std::string playerName_;
 };
 
-} // namespace leon

@@ -4,7 +4,6 @@
 #include <string>
 #include <vector>
 
-namespace leon {
 
 struct GltfImportedMaterial {
     std::string name;
@@ -19,4 +18,3 @@ struct GltfImportedMaterial {
                                           std::vector<GltfImportedMaterial>* outMaterials,
                                           std::string& outError);
 
-} // namespace leon

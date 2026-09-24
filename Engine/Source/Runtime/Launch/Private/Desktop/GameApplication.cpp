@@ -8,7 +8,6 @@
 #include "Net/NetProtocol.h"
 #include <string>
 
-namespace leon::runtime {
 namespace {
 
 [[nodiscard]] bool HasFlag(int argc, char** argv, const char* flag) {
@@ -88,7 +87,7 @@ int GameApplication::Run(int argc, char** argv, const char* packName,
         !dedicated && (HasFlag(argc, argv, "--listen") || HasFlag(argc, argv, "--host"));
     const bool showStats = HasFlag(argc, argv, "--show-stats");
     const std::uint16_t netPort =
-        ParsePort(argc, argv, static_cast<std::uint16_t>(net::kDefaultPort));
+        ParsePort(argc, argv, static_cast<std::uint16_t>(Leon::Net::kDefaultPort));
     const float tickHz = ParseTickHz(argc, argv, 60.0f);
     const std::string joinAddress = ParseJoinAddress(argc, argv);
     const std::string playMap = ParsePlayMap(argc, argv);
@@ -148,4 +147,3 @@ int GameApplication::Run(int argc, char** argv, const char* packName,
     return 0;
 }
 
-} // namespace leon::runtime

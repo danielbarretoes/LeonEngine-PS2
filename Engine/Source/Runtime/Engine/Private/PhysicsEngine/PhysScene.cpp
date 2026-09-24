@@ -13,7 +13,6 @@
 #include "MeshData.h"
 #include "StaticMesh.h"
 
-namespace leon {
 
 PhysScene::PhysScene(EPhysicsBackend backend)
     : backend_(backend)
@@ -611,4 +610,3 @@ void PhysScene::AppendBodiesCollisionDebug(DebugDraw& draw,
     }
 }
 
-} // namespace leon

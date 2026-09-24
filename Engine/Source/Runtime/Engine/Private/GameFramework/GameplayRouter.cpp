@@ -1,7 +1,6 @@
 #include <iostream>
 #include "GameFramework/GameplayRouter.h"
 
-namespace leon {
 
 void GameplayRouter::AddMode(std::unique_ptr<GameMode> mode) {
     if (mode) {
@@ -71,4 +70,3 @@ void GameplayRouter::Update(Engine& engine, const LevelDirector& director, float
     SyncActiveMode(engine, director);
 }
 
-} // namespace leon

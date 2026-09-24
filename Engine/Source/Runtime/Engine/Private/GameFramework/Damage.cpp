@@ -4,7 +4,6 @@
 
 #include "GameFramework/Character.h"
 
-namespace leon {
 
 float ApplyPointDamage(Character* DamagedActor, float BaseDamage, const glm::vec3& HitFromDirection,
                        Character* /*DamageCauser*/) {
@@ -35,4 +34,3 @@ float ApplyRadialDamage(const std::vector<Character*>& Actors, float BaseDamage,
     return totalApplied;
 }
 
-} // namespace leon

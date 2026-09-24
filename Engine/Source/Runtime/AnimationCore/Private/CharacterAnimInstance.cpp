@@ -2,7 +2,6 @@
 #include <cmath>
 #include "SkeletalAnimation.h"
 
-namespace leon {
 
 void CharacterAnimInstance::SetJumpPlayRates(float jumpStart, float fallLoop, float land) {
     jumpStartPlayRate_ = std::max(jumpStart, 0.01f);
@@ -241,4 +240,3 @@ void CharacterAnimInstance::GetSkinMatrices(std::vector<glm::mat4>& outSkin) con
     SkinFromBoneWorld(worldBlended, outSkin);
 }
 
-} // namespace leon

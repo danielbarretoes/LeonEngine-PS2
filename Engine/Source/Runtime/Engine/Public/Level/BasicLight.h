@@ -3,7 +3,6 @@
 #include "Level/Light.h"
 #include <string_view>
 
-namespace leon {
 
 class Level;
 
@@ -41,4 +40,3 @@ struct BasicLight {
 
 [[nodiscard]] bool tryParseBasicLightName(std::string_view name, EBasicLight& out);
 
-} // namespace leon

@@ -6,7 +6,6 @@
 
 #include "GenericPlatform/GenericWindow.h"
 
-namespace leon {
 namespace {
 
 /// Lines before the first menu item in BuildPaintText (title + blank separator).
@@ -198,4 +197,3 @@ std::string MenuListWidget::TickInput(FGenericWindow& window, bool cursorCapture
     return activated;
 }
 
-} // namespace leon

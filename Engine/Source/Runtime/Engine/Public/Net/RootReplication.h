@@ -9,8 +9,8 @@
 #include "GameFramework/Character.h"
 #include "Net/NetProtocol.h"
 
-namespace leon {
-namespace net {
+namespace Leon::Net
+{
 
 /// Capture Actor root location + yaw for replication (no full SceneComponent graph).
 [[nodiscard]] inline PawnSnap CaptureActorRoot(std::uint8_t slot, const Actor& actor,
@@ -87,5 +87,4 @@ template <typename Iterator>
     return false;
 }
 
-} // namespace net
-} // namespace leon
+} // namespace Leon::Net

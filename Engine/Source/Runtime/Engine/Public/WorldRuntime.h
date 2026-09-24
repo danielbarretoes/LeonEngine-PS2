@@ -12,15 +12,12 @@
 
 
 
-namespace leon {
 
 class Engine;
 
-}
 
 
 
-namespace leon::runtime {
 
 
 
@@ -60,6 +57,5 @@ private:
 
 
 
-} // namespace leon::runtime
 
 

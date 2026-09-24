@@ -6,7 +6,6 @@
 #include <string>
 #include <vector>
 
-namespace leon {
 
 /// Contiguous index range drawn with one material slot.
 struct SubMesh {
@@ -30,4 +29,3 @@ struct MeshData {
 /// Orthonormalize tangents from triangle UVs (needed for normal mapping).
 void ComputeTangents(MeshData& data);
 
-} // namespace leon

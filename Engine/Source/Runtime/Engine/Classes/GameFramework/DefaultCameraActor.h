@@ -2,7 +2,6 @@
 
 #include "GameFramework/Pawn.h"
 
-namespace leon {
 
 /// Default possessed pawn for `DefaultGameMode` (Unreal-like DefaultPawn / flying camera).
 /// Free-look: LMB aims, WASD flies along look direction, Q/E world vertical.
@@ -21,4 +20,3 @@ private:
     float lookSensitivity_ = 0.15f;
 };
 
-} // namespace leon

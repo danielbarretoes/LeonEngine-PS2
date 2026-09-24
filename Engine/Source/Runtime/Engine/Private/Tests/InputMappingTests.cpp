@@ -7,20 +7,20 @@
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("InputMappingContext MakeDefault binds move and jump", "[core][inputmapping]") {
-    const leon::InputMappingContext ctx = leon::InputMappingContext::MakeDefault();
+    const InputMappingContext ctx = InputMappingContext::MakeDefault();
 
-    REQUIRE(ctx.Axes().count(std::string(leon::InputActions::MoveForward)) == 1);
-    REQUIRE(ctx.Axes().count(std::string(leon::InputActions::MoveRight)) == 1);
-    REQUIRE(ctx.Axes().count(std::string(leon::InputActions::MoveUp)) == 1);
-    REQUIRE(ctx.Actions().count(std::string(leon::InputActions::Jump)) == 1);
+    REQUIRE(ctx.Axes().count(std::string(Leon::InputActions::MoveForward)) == 1);
+    REQUIRE(ctx.Axes().count(std::string(Leon::InputActions::MoveRight)) == 1);
+    REQUIRE(ctx.Axes().count(std::string(Leon::InputActions::MoveUp)) == 1);
+    REQUIRE(ctx.Actions().count(std::string(Leon::InputActions::Jump)) == 1);
 
-    const auto& jumpKeys = ctx.Actions().at(std::string(leon::InputActions::Jump));
+    const auto& jumpKeys = ctx.Actions().at(std::string(Leon::InputActions::Jump));
     REQUIRE_FALSE(jumpKeys.empty());
     REQUIRE(jumpKeys.front() == ToKeyCode(EKeys::SpaceBar));
 }
 
 TEST_CASE("InputMappingContext BindAxisKey and BindActionKey", "[core][inputmapping]") {
-    leon::InputMappingContext ctx;
+    InputMappingContext ctx;
     ctx.BindAxisKey("Strafe", EKeys::A, -1.0f);
     ctx.BindAxisKey("Strafe", EKeys::D, 1.0f);
     ctx.BindActionKey("Fire", EKeys::LeftControl);
@@ -33,10 +33,10 @@ TEST_CASE("InputMappingContext BindAxisKey and BindActionKey", "[core][inputmapp
 }
 
 TEST_CASE("PlayerInput ClearContexts empties maps after Update path", "[core][inputmapping]") {
-    leon::PlayerInput input;
-    input.AddMappingContext(leon::InputMappingContext::MakeDefault());
+    PlayerInput input;
+    input.AddMappingContext(InputMappingContext::MakeDefault());
     input.ClearContexts();
-    REQUIRE_THAT(input.GetAxisValue(leon::InputActions::MoveForward), WithinAbs(0.0f, 1.0e-6f));
-    REQUIRE_FALSE(input.IsActionPressed(leon::InputActions::Jump));
+    REQUIRE_THAT(input.GetAxisValue(Leon::InputActions::MoveForward), WithinAbs(0.0f, 1.0e-6f));
+    REQUIRE_FALSE(input.IsActionPressed(Leon::InputActions::Jump));
     REQUIRE_FALSE(input.GetMoveAxes2D().any());
 }

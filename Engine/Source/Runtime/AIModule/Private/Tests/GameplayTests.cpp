@@ -30,14 +30,14 @@ using Catch::Matchers::WithinAbs;
 
 namespace {
 
-class TestActor : public leon::Actor {};
-class TestPawn : public leon::Pawn {};
-class TestController : public leon::Controller {};
+class TestActor : public Actor {};
+class TestPawn : public Pawn {};
+class TestController : public Controller {};
 
 } // namespace
 
 TEST_CASE("World spawns ticks and destroys actors", "[gameplay][world]") {
-    leon::World world;
+    World world;
     auto* actor = world.SpawnActor<TestActor>();
     REQUIRE(actor != nullptr);
     REQUIRE(world.ActorCount() == 1);
@@ -57,15 +57,15 @@ TEST_CASE("World spawns ticks and destroys actors", "[gameplay][world]") {
 }
 
 TEST_CASE("World FindFirst finds derived type", "[gameplay][world]") {
-    leon::World world;
+    World world;
     world.SpawnActor<TestActor>();
     auto* pawn = world.SpawnActor<TestPawn>();
     REQUIRE(world.FindFirst<TestPawn>() == pawn);
-    REQUIRE(world.FindFirst<leon::Character>() == nullptr);
+    REQUIRE(world.FindFirst<Character>() == nullptr);
 }
 
 TEST_CASE("Controller Possess and UnPossess", "[gameplay][controller]") {
-    leon::World world;
+    World world;
     auto* pawn = world.SpawnActor<TestPawn>();
     TestController controller;
     controller.Possess(pawn);
@@ -79,7 +79,7 @@ TEST_CASE("Controller Possess and UnPossess", "[gameplay][controller]") {
 }
 
 TEST_CASE("Pawn Destroy UnPossesses controller", "[gameplay][pawn]") {
-    leon::World world;
+    World world;
     auto* pawn = world.SpawnActor<TestPawn>();
     TestController controller;
     controller.Possess(pawn);
@@ -89,7 +89,7 @@ TEST_CASE("Pawn Destroy UnPossesses controller", "[gameplay][pawn]") {
 }
 
 TEST_CASE("GameState match timer and PlayerState score", "[gameplay][state]") {
-    leon::GameState gs;
+    GameState gs;
     gs.HandleMatchHasStarted();
     gs.Tick(0.5f);
     REQUIRE(gs.HasMatchStarted());
@@ -98,7 +98,7 @@ TEST_CASE("GameState match timer and PlayerState score", "[gameplay][state]") {
     REQUIRE_THAT(gs.GetServerWorldTimeSeconds(), WithinAbs(0.0f, 1.0e-5f));
     REQUIRE_FALSE(gs.HasMatchStarted());
 
-    leon::PlayerState ps;
+    PlayerState ps;
     ps.SetPlayerId(2);
     ps.SetPlayerName("P2");
     ps.AddScore(10.0f);
@@ -110,7 +110,7 @@ TEST_CASE("GameState match timer and PlayerState score", "[gameplay][state]") {
 }
 
 TEST_CASE("GameInstance NotifyLevelOpened", "[gameplay][gameinstance]") {
-    leon::GameInstance gi;
+    GameInstance gi;
     REQUIRE(gi.LevelsOpened() == 0);
     gi.NotifyLevelOpened();
     gi.NotifyLevelOpened();
@@ -118,7 +118,7 @@ TEST_CASE("GameInstance NotifyLevelOpened", "[gameplay][gameinstance]") {
 }
 
 TEST_CASE("SpringArmComponent clamps pitch and arm length", "[gameplay][springarm]") {
-    leon::SpringArmComponent arm;
+    SpringArmComponent arm;
     arm.AddPitchInput(200.0f);
     REQUIRE(arm.BoomPitchDegrees <= arm.PitchMax);
     arm.AddPitchInput(-400.0f);
@@ -128,19 +128,19 @@ TEST_CASE("SpringArmComponent clamps pitch and arm length", "[gameplay][springar
     REQUIRE_THAT(arm.TargetArmLength, WithinAbs(arm.ArmLengthMax, 1.0e-5f));
 
     arm.SnapLagState({0.0f, 0.0f, 0.0f});
-    leon::Camera camera;
+    Camera camera;
     arm.ApplyToCamera(camera, {1.0f, 0.0f, 0.0f}, 0.016f);
-    REQUIRE(camera.Mode() == leon::ECameraMode::Orbit);
+    REQUIRE(camera.Mode() == ECameraMode::Orbit);
     REQUIRE_THAT(camera.Target().y, WithinAbs(arm.SocketOffsetZ, 0.5f));
 }
 
 TEST_CASE("SpringArmComponent collision probe shortens arm", "[gameplay][springarm]") {
-    leon::PhysScene scene;
-    const std::size_t id = scene.AddBody({0, leon::EBodyType::Static, 1.0f, true});
+    PhysScene scene;
+    const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
     scene.Bodies()[id].position = {2.0f, 1.0f, 0.0f};
     scene.Bodies()[id].halfExtents = {0.25f, 1.0f, 2.0f};
 
-    leon::SpringArmComponent arm;
+    SpringArmComponent arm;
     arm.bDoCollisionTest = true;
     arm.bEnableCameraLag = false;
     arm.bEnableCameraRotationLag = false;
@@ -155,18 +155,18 @@ TEST_CASE("SpringArmComponent collision probe shortens arm", "[gameplay][springa
     arm.CollisionProbeOffset = 0.05f;
     arm.SnapLagState({0.0f, 0.0f, 0.0f});
 
-    leon::Camera camera;
+    Camera camera;
     arm.ApplyToCamera(camera, {0.0f, 0.0f, 0.0f}, 0.016f, &scene);
     REQUIRE(camera.Distance() < 3.0f);
     REQUIRE(camera.Distance() >= arm.ArmLengthMin);
 }
 
 TEST_CASE("AIController steers toward target and arrives", "[gameplay][ai]") {
-    leon::World world;
-    auto* character = world.SpawnActor<leon::Character>();
+    World world;
+    auto* character = world.SpawnActor<Character>();
     character->Reset({0.0f, 0.0f, 0.0f});
 
-    leon::AIController ai;
+    AIController ai;
     ai.Possess(character);
     ai.SetArriveRadius(0.5f);
     ai.MoveToLocation({10.0f, 0.0f, 0.0f});
@@ -181,13 +181,13 @@ TEST_CASE("AIController steers toward target and arrives", "[gameplay][ai]") {
 }
 
 TEST_CASE("AIController MoveToActor tracks moving target", "[gameplay][ai]") {
-    leon::World world;
-    auto* hunter = world.SpawnActor<leon::Character>();
-    auto* prey = world.SpawnActor<leon::Character>();
+    World world;
+    auto* hunter = world.SpawnActor<Character>();
+    auto* prey = world.SpawnActor<Character>();
     hunter->Reset({0.0f, 0.0f, 0.0f});
     prey->Reset({8.0f, 0.0f, 0.0f});
 
-    leon::AIController ai;
+    AIController ai;
     ai.Possess(hunter);
     ai.SetArriveRadius(0.4f);
     ai.MoveToActor(prey);
@@ -202,24 +202,24 @@ TEST_CASE("AIController MoveToActor tracks moving target", "[gameplay][ai]") {
 }
 
 TEST_CASE("AIController path follow does not shortcut through blocker", "[gameplay][ai][nav]") {
-    leon::PhysScene physics;
-    leon::BodyInstance wall{};
-    wall.type = leon::EBodyType::Static;
+    PhysScene physics;
+    BodyInstance wall{};
+    wall.type = EBodyType::Static;
     wall.position = {0.0f, 1.0f, 0.0f};
     wall.halfExtents = {0.6f, 1.5f, 4.0f};
     physics.Bodies().push_back(wall);
 
-    leon::NavigationSystem nav;
+    NavigationSystem nav;
     nav.SetCellSize(0.5f);
     nav.SetAgentRadius(0.45f);
     nav.BuildFromPhysScene(physics, 0.0f, 12.0f);
     REQUIRE(nav.HasNavMesh());
 
-    leon::World world;
-    auto* character = world.SpawnActor<leon::Character>();
+    World world;
+    auto* character = world.SpawnActor<Character>();
     character->Reset({-5.0f, 0.0f, 0.0f});
 
-    leon::AIController ai;
+    AIController ai;
     ai.Possess(character);
     ai.SetNavigationSystem(&nav);
     // CoopTp-like large goal arrive — must not skip detour waypoints through the wall.
@@ -235,22 +235,22 @@ TEST_CASE("AIController path follow does not shortcut through blocker", "[gamepl
 }
 
 TEST_CASE("NavigationSystem FindPath routes around static blocker", "[gameplay][nav]") {
-    leon::PhysScene physics;
+    PhysScene physics;
 
     // Floor plane-like slab (wide aspect) must NOT wipe the whole grid.
-    leon::BodyInstance floor{};
-    floor.type = leon::EBodyType::Static;
+    BodyInstance floor{};
+    floor.type = EBodyType::Static;
     floor.position = {0.0f, 0.0f, 0.0f};
     floor.halfExtents = {20.0f, 0.5f, 20.0f};
     physics.Bodies().push_back(floor);
 
-    leon::BodyInstance wall{};
-    wall.type = leon::EBodyType::Static;
+    BodyInstance wall{};
+    wall.type = EBodyType::Static;
     wall.position = {0.0f, 1.0f, 0.0f};
     wall.halfExtents = {0.6f, 1.5f, 5.0f};
     physics.Bodies().push_back(wall);
 
-    leon::NavigationSystem nav;
+    NavigationSystem nav;
     nav.SetCellSize(0.5f);
     nav.SetAgentRadius(0.35f);
     nav.BuildFromPhysScene(physics, 0.0f, 12.0f);
@@ -277,47 +277,47 @@ TEST_CASE("NavigationSystem FindPath routes around static blocker", "[gameplay][
 }
 
 TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "[gameplay][nav]") {
-    leon::Level level;
-    leon::PhysScene physics;
+    Level level;
+    PhysScene physics;
 
-    leon::StaticMeshComponent plate{};
-    plate.tag = leon::NavTags::Blocker;
+    StaticMeshComponent plate{};
+    plate.tag = NavTags::Blocker;
     plate.collisionEnabled = true;
     plate.editorClass = "Cube";
     plate.transform.position = {0.0f, 0.12f, 0.0f};
     plate.transform.scale = {1.8f, 0.2f, 1.8f};
     level.StaticMeshes().push_back(std::move(plate));
 
-    leon::BodyInstance plateBody{};
-    plateBody.type = leon::EBodyType::Static;
+    BodyInstance plateBody{};
+    plateBody.type = EBodyType::Static;
     plateBody.levelMeshIndex = 0;
     plateBody.position = {0.0f, 0.12f, 0.0f};
     plateBody.halfExtents = {0.9f, 0.1f, 0.9f};
     physics.Bodies().push_back(plateBody);
     physics.TriangleMeshes().emplace_back();
 
-    leon::StaticMeshComponent ramp{};
-    ramp.tag = leon::NavTags::Walkable;
+    StaticMeshComponent ramp{};
+    ramp.tag = NavTags::Walkable;
     ramp.collisionEnabled = true;
     ramp.editorClass = "Cube";
     level.StaticMeshes().push_back(std::move(ramp));
 
-    leon::BodyInstance rampBody{};
-    rampBody.type = leon::EBodyType::Static;
+    BodyInstance rampBody{};
+    rampBody.type = EBodyType::Static;
     rampBody.levelMeshIndex = 1;
     rampBody.position = {4.0f, 1.0f, 0.0f};
     rampBody.halfExtents = {2.5f, 1.0f, 1.2f};
-    rampBody.collisionShape = leon::ECollisionShape::TriangleMesh;
+    rampBody.collisionShape = ECollisionShape::TriangleMesh;
     physics.Bodies().push_back(rampBody);
 
-    leon::TriangleMeshCollision tri{};
+    TriangleMeshCollision tri{};
     // Two tris covering a 4x2 footprint around (4,0).
     tri.positions = {
         {2.0f, 0.5f, -1.0f}, {6.0f, 1.5f, -1.0f}, {6.0f, 1.5f, 1.0f}, {2.0f, 0.5f, 1.0f}};
     tri.indices = {0, 1, 2, 0, 2, 3};
     physics.TriangleMeshes().push_back(std::move(tri));
 
-    leon::NavigationSystem nav;
+    NavigationSystem nav;
     nav.SetCellSize(0.5f);
     nav.SetAgentRadius(0.35f);
     nav.BuildFromLevel(level, physics, 0.0f, 12.0f);
@@ -351,31 +351,31 @@ TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "
 }
 
 TEST_CASE("NavigationSystem AppendDebugDraw fills overlay", "[gameplay][nav][debug]") {
-    leon::PhysScene physics;
-    leon::BodyInstance wall{};
-    wall.type = leon::EBodyType::Static;
+    PhysScene physics;
+    BodyInstance wall{};
+    wall.type = EBodyType::Static;
     wall.position = {0.0f, 1.0f, 0.0f};
     wall.halfExtents = {0.5f, 1.0f, 0.5f};
     physics.Bodies().push_back(wall);
 
-    leon::NavigationSystem nav;
+    NavigationSystem nav;
     nav.SetCellSize(1.0f);
     nav.BuildFromPhysScene(physics, 0.0f, 4.0f);
     REQUIRE(nav.HasNavMesh());
 
-    leon::DebugDraw draw;
+    DebugDraw draw;
     REQUIRE(draw.IsEmpty());
     nav.AppendDebugDraw(draw);
     REQUIRE_FALSE(draw.IsEmpty());
 }
 
 TEST_CASE("Character Reset Jump and PerformMovement", "[gameplay][character]") {
-    leon::Character character;
+    Character character;
     character.Reset({0.0f, 0.0f, 0.0f}, 45.0f);
     REQUIRE(character.IsMovingOnGround());
     REQUIRE_THAT(character.GetActorYaw(), WithinAbs(45.0f, 1.0e-5f));
 
-    leon::PhysScene scene;
+    PhysScene scene;
     character.Jump();
     character.PerformMovement(scene, 1.0f / 60.0f);
     REQUIRE_FALSE(character.IsMovingOnGround());
@@ -389,8 +389,8 @@ TEST_CASE("Character Reset Jump and PerformMovement", "[gameplay][character]") {
 }
 
 TEST_CASE("DefaultGameMode Matches empty or Default id", "[gameplay][gamemode]") {
-    leon::DefaultGameMode mode;
-    leon::LevelEntry entry{};
+    DefaultGameMode mode;
+    LevelEntry entry{};
     REQUIRE(mode.Matches(entry, ""));
     REQUIRE(mode.Matches(entry, "Default"));
     REQUIRE_FALSE(mode.Matches(entry, "Showcase"));
@@ -398,13 +398,13 @@ TEST_CASE("DefaultGameMode Matches empty or Default id", "[gameplay][gamemode]")
 }
 
 TEST_CASE("Actor SyncTransformToLevel writes linked mesh", "[gameplay][actor][sync]") {
-    leon::Level level;
-    leon::StaticMeshComponent mesh{};
+    Level level;
+    StaticMeshComponent mesh{};
     mesh.transform.position = {0.0f, 0.0f, 0.0f};
     mesh.transform.rotationDegrees = {0.0f, 0.0f, 0.0f};
     level.AddStaticMesh(std::move(mesh));
 
-    leon::World world;
+    World world;
     auto* actor = world.SpawnActor<TestActor>();
     actor->SetLevelMeshIndex(0);
     actor->SetActorLocationAndRotation({3.0f, 1.5f, -2.0f}, 90.0f);
@@ -417,16 +417,16 @@ TEST_CASE("Actor SyncTransformToLevel writes linked mesh", "[gameplay][actor][sy
 }
 
 TEST_CASE("World TickGameplayFrame syncs Character to Level mesh", "[gameplay][world][sync]") {
-    leon::Level level;
-    leon::StaticMeshComponent mesh{};
+    Level level;
+    StaticMeshComponent mesh{};
     level.AddStaticMesh(std::move(mesh));
 
-    leon::World world;
-    auto* character = world.SpawnActor<leon::Character>();
+    World world;
+    auto* character = world.SpawnActor<Character>();
     character->SetLevelMeshIndex(0);
     character->Reset({1.0f, 0.0f, 2.0f}, 45.0f);
 
-    leon::WorldGameplayFrameParams frame{};
+    WorldGameplayFrameParams frame{};
     frame.deltaTime = 1.0f / 60.0f;
     frame.level = &level;
     world.TickGameplayFrame(frame);
@@ -438,14 +438,14 @@ TEST_CASE("World TickGameplayFrame syncs Character to Level mesh", "[gameplay][w
 
 TEST_CASE("ActorComponent RegisterComponent and CreateDefaultSubobject tick",
           "[gameplay][actorcomponent]") {
-    struct CountingComponent : leon::ActorComponent {
+    struct CountingComponent : ActorComponent {
         int ticks = 0;
         int begins = 0;
         void BeginPlay() override { ++begins; }
         void TickComponent(float) override { ++ticks; }
     };
 
-    leon::World world;
+    World world;
     auto* actor = world.SpawnActor<TestActor>();
     REQUIRE(actor->GetComponents().size() >= 1); // root
 
@@ -468,11 +468,11 @@ TEST_CASE("ActorComponent RegisterComponent and CreateDefaultSubobject tick",
 }
 
 TEST_CASE("SceneComponent attach hierarchy world transform", "[gameplay][scenecomponent]") {
-    leon::World world;
+    World world;
     auto* actor = world.SpawnActor<TestActor>();
     actor->SetActorLocationAndRotation({10.0f, 0.0f, 0.0f}, 0.0f);
 
-    leon::SceneComponent child;
+    SceneComponent child;
     child.SetOwner(actor);
     child.RelativeLocation = {2.0f, 0.0f, 0.0f};
     REQUIRE(child.AttachToComponent(&actor->GetRootComponent()));
@@ -482,7 +482,7 @@ TEST_CASE("SceneComponent attach hierarchy world transform", "[gameplay][sceneco
     const glm::vec3 loc = child.GetComponentLocation();
     REQUIRE_THAT(loc.x, WithinAbs(12.0f, 1.0e-4f));
 
-    leon::SceneComponent grandchild;
+    SceneComponent grandchild;
     grandchild.RelativeLocation = {1.0f, 0.0f, 0.0f};
     REQUIRE(grandchild.AttachToComponent(&child));
     REQUIRE_THAT(grandchild.GetComponentLocation().x, WithinAbs(13.0f, 1.0e-4f));
@@ -495,7 +495,7 @@ TEST_CASE("SceneComponent attach hierarchy world transform", "[gameplay][sceneco
 
 TEST_CASE("Character mesh attaches to root SceneComponent",
           "[gameplay][character][scenecomponent]") {
-    leon::Character character;
+    Character character;
     REQUIRE(character.GetMesh().GetAttachParent() == &character.GetRootComponent());
     REQUIRE(character.GetMesh().GetOwner() == &character);
     REQUIRE(character.GetMesh().IsRegistered());
@@ -506,21 +506,21 @@ TEST_CASE("Character mesh attaches to root SceneComponent",
 }
 
 TEST_CASE("PhysScene reports Arcade backend by default", "[physics][backend]") {
-    leon::PhysScene scene;
-    REQUIRE(scene.GetBackend() == leon::EPhysicsBackend::Arcade);
-    REQUIRE(std::string(leon::PhysicsBackendName(scene.GetBackend())) == "Arcade");
+    PhysScene scene;
+    REQUIRE(scene.GetBackend() == EPhysicsBackend::Arcade);
+    REQUIRE(std::string(PhysicsBackendName(scene.GetBackend())) == "Arcade");
 }
 
 TEST_CASE("RootReplication capture and apply Actor root", "[net][replication]") {
-    leon::World world;
+    World world;
     auto* actor = world.SpawnActor<TestActor>();
     actor->SetActorLocationAndRotation({1.0f, 2.0f, 3.0f}, 45.0f);
-    const leon::net::PawnSnap snap = leon::net::CaptureActorRoot(0, *actor, 1.5f, 0.25f);
+    const Leon::Net::PawnSnap snap = Leon::Net::CaptureActorRoot(0, *actor, 1.5f, 0.25f);
     REQUIRE_THAT(snap.x, WithinAbs(1.0f, 1.0e-5f));
     REQUIRE_THAT(snap.yaw, WithinAbs(45.0f, 1.0e-5f));
 
     auto* other = world.SpawnActor<TestActor>();
-    leon::net::ApplyActorRoot(*other, snap);
+    Leon::Net::ApplyActorRoot(*other, snap);
     REQUIRE_THAT(other->GetActorLocation().z, WithinAbs(3.0f, 1.0e-5f));
     REQUIRE_THAT(other->GetActorYaw(), WithinAbs(45.0f, 1.0e-5f));
 }

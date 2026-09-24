@@ -72,7 +72,7 @@ void FEngineLoop::Tick()
 			PackName = Args[Index + 1];
 		}
 	}
-	ExitCode = leon::runtime::RunLeonGame(ArgCount, Args, PackName, [](leon::Engine&, leon::GameplayRouter&) {});
+	ExitCode = RunLeonGame(ArgCount, Args, PackName, [](Engine&, GameplayRouter&) {});
 	RequestEngineExit("GameApplication finished");
 #else
 	const uint64 NowCycles = FPlatformTime::Cycles64();

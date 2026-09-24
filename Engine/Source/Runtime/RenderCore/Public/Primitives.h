@@ -2,7 +2,6 @@
 
 #include "MeshData.h"
 
-namespace leon {
 
 /// Unit cube centered at the origin [-0.5, 0.5]^3.
 [[nodiscard]] MeshData MakeCube();
@@ -13,4 +12,3 @@ namespace leon {
 /// UV sphere centered at the origin with radius 0.5.
 [[nodiscard]] MeshData MakeSphere(int segments = 24, int rings = 16);
 
-} // namespace leon

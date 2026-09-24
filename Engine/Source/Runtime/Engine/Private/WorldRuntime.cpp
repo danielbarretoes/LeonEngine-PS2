@@ -3,7 +3,6 @@
 #include <iostream>
 #include "Engine/GameEngine.h"
 
-namespace leon::runtime {
 
 bool WorldRuntime::Initialize(Engine& engine, const std::string& shaderDirectory) {
     // Headless dedicated servers have no GL context — skip overlay chrome/shaders.
@@ -40,4 +39,3 @@ void WorldRuntime::Shutdown() {
     director_.Shutdown();
 }
 
-} // namespace leon::runtime

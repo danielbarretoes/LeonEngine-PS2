@@ -11,7 +11,6 @@
 
 #include <miniaudio.h>
 
-namespace leon {
 namespace {
 
 [[nodiscard]] float Clamp01(float v) {
@@ -353,4 +352,3 @@ bool AudioDevice::IsMusicPlaying() const {
     return impl_ != nullptr && impl_->musicInUse && ma_sound_is_playing(&impl_->music);
 }
 
-} // namespace leon

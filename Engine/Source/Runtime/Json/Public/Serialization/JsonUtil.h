@@ -4,7 +4,6 @@
 #include <nlohmann/json.hpp>
 #include <string>
 
-namespace leon::serialization {
 
 /// Read a JSON array of 3 numbers, or return `fallback` if missing/invalid.
 [[nodiscard]] glm::vec3 ReadVec3(const nlohmann::json& j, const glm::vec3& fallback);
@@ -12,4 +11,3 @@ namespace leon::serialization {
 /// Parse a JSON file into `out`. Returns false on I/O or parse error (logs to stderr).
 [[nodiscard]] bool LoadJsonFile(const std::string& path, nlohmann::json& out);
 
-} // namespace leon::serialization

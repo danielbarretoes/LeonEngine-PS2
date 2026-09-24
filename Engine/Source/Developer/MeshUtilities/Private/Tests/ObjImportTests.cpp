@@ -10,7 +10,7 @@ TEST_CASE("LoadObj imports the Cube fixture", "[MeshUtilities][OBJ]")
 		"Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/Cube.obj";
 	REQUIRE(std::filesystem::exists(Fixture));
 
-	const leon::MeshData Data = leon::LoadObj(Fixture.string());
+	const MeshData Data = LoadObj(Fixture.string());
 	REQUIRE_FALSE(Data.empty());
 	REQUIRE(Data.indices.size() == 36);
 }

@@ -5,7 +5,6 @@
 #include "Renderer.h"
 #include <vector>
 
-namespace leon {
 
 void World::Tick(float deltaTime) {
     ticking_ = true;
@@ -158,4 +157,3 @@ void World::purgePending() {
     }
 }
 
-} // namespace leon

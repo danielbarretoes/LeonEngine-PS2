@@ -2,7 +2,6 @@
 
 #include "GameFramework/Actor.h"
 
-namespace leon {
 
 class Controller;
 
@@ -29,4 +28,3 @@ private:
     Controller* controller_ = nullptr;
 };
 
-} // namespace leon

@@ -11,7 +11,6 @@
 #include "GlAttrib.h"
 #include <utility>
 
-namespace leon {
 
 bool DebugDraw::Initialize(const std::string& /*shaderDirectory*/) {
     const std::string vert = ResolveAssetPath("assets/Shaders/debug_line.vert");
@@ -185,4 +184,3 @@ void DebugDraw::Flush(const glm::mat4& viewProjection) const {
     glDepthFunc(GL_LESS);
 }
 
-} // namespace leon

@@ -3,7 +3,6 @@
 #include <iostream>
 #include "PostProcess.h"
 
-namespace leon {
 
 SsaoTarget::~SsaoTarget() {
     Destroy();
@@ -72,4 +71,3 @@ void SsaoTarget::BindColorTexture(int index, unsigned int unit) const {
     glBindTexture(GL_TEXTURE_2D, color_[i]);
 }
 
-} // namespace leon

@@ -8,8 +8,8 @@
 #include <string_view>
 #include <vector>
 
-namespace leon {
-namespace net {
+namespace Leon::Net
+{
 
 constexpr std::uint32_t kProtocolMagic = 0x4E4F454Cu; // 'LEON'
 /// Bumped when fixed wire layouts change (Hello / InputCmd / SnapshotHeader / Rpc).
@@ -377,5 +377,4 @@ struct PeerPacketWindow {
     }
 };
 
-} // namespace net
-} // namespace leon
+} // namespace Leon::Net

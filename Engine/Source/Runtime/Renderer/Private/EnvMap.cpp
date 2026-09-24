@@ -11,7 +11,6 @@
 #include <stb_image.h>
 #include <vector>
 
-namespace leon {
 namespace {
 
 glm::vec3 faceDirection(int face, float u, float v) {
@@ -256,4 +255,3 @@ void EnvMap::Destroy() {
     mipCount_ = 0;
 }
 
-} // namespace leon

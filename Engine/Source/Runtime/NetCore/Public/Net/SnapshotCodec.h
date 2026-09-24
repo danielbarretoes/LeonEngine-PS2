@@ -5,8 +5,8 @@
 #include "Net/NetProtocol.h"
 #include <vector>
 
-namespace leon {
-namespace net {
+namespace Leon::Net
+{
 
 /// Decoded authoritative snapshot (client interpolation targets).
 struct DecodedSnapshot {
@@ -38,5 +38,4 @@ struct DecodedSnapshot {
 /// Parse a Snapshot datagram (validates sizes; unknown extBytes are skipped).
 [[nodiscard]] bool DecodeSnapshot(const std::uint8_t* data, std::size_t size, DecodedSnapshot& out);
 
-} // namespace net
-} // namespace leon
+} // namespace Leon::Net

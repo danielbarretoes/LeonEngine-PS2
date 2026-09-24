@@ -8,8 +8,8 @@ using Catch::Matchers::WithinAbs;
 
 TEST_CASE("Aabb fromLocalTransformed expands under rotation", "[render][frustum]") {
     const glm::mat4 model = glm::rotate(glm::mat4(1.0f), glm::radians(45.0f), {0.0f, 1.0f, 0.0f});
-    const leon::Aabb box =
-        leon::Aabb::fromLocalTransformed({-0.5f, -0.5f, -0.5f}, {0.5f, 0.5f, 0.5f}, model);
+    const Aabb box =
+        Aabb::fromLocalTransformed({-0.5f, -0.5f, -0.5f}, {0.5f, 0.5f, 0.5f}, model);
     REQUIRE(box.min.x < -0.5f);
     REQUIRE(box.max.x > 0.5f);
     REQUIRE(box.min.y <= -0.5f + 1.0e-4f);
@@ -17,7 +17,7 @@ TEST_CASE("Aabb fromLocalTransformed expands under rotation", "[render][frustum]
 }
 
 TEST_CASE("Aabb intersectRay hits unit cube from -Z", "[render][frustum]") {
-    const leon::Aabb box{{-0.5f, -0.5f, -0.5f}, {0.5f, 0.5f, 0.5f}};
+    const Aabb box{{-0.5f, -0.5f, -0.5f}, {0.5f, 0.5f, 0.5f}};
     float t = -1.0f;
     REQUIRE(box.intersectRay({0.0f, 0.0f, 5.0f}, {0.0f, 0.0f, -1.0f}, t));
     REQUIRE_THAT(t, WithinAbs(4.5f, 1.0e-4f));
@@ -31,12 +31,12 @@ TEST_CASE("Frustum intersectsAabb contains near origin box", "[render][frustum]"
         glm::lookAt(glm::vec3{0.0f, 0.0f, 5.0f}, glm::vec3{0.0f}, glm::vec3{0.0f, 1.0f, 0.0f});
     const glm::mat4 proj = glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 100.0f);
 
-    leon::Frustum frustum;
+    Frustum frustum;
     frustum.extractFromViewProjection(proj * view);
 
-    leon::Aabb inside{{-0.5f, -0.5f, -0.5f}, {0.5f, 0.5f, 0.5f}};
+    Aabb inside{{-0.5f, -0.5f, -0.5f}, {0.5f, 0.5f, 0.5f}};
     REQUIRE(frustum.intersectsAabb(inside));
 
-    leon::Aabb farAway{{200.0f, 200.0f, 200.0f}, {201.0f, 201.0f, 201.0f}};
+    Aabb farAway{{200.0f, 200.0f, 200.0f}, {201.0f, 201.0f, 201.0f}};
     REQUIRE_FALSE(frustum.intersectsAabb(farAway));
 }

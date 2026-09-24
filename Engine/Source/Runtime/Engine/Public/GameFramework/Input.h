@@ -4,7 +4,6 @@
 
 #include "Camera/Camera.h"
 
-namespace leon {
 
 /// Keyboard move axes on the ground plane: x = strafe, z = forward (from mapped Move* actions).
 struct MoveAxes2D {
@@ -20,4 +19,3 @@ struct MoveAxes2D {
 /// Same as `cameraRelativeMoveXZ` but from an explicit yaw (e.g. desired SpringArm boom).
 [[nodiscard]] glm::vec3 yawRelativeMoveXZ(float yawDegrees, const MoveAxes2D& axes);
 
-} // namespace leon

@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <vector>
 
-namespace leon {
 
 /// Baked world-space triangle mesh for static ComplexAsSimple lite (Arcade traces /
 /// QuerySupportY; Jolt MeshShape on rebuild).
@@ -39,4 +38,3 @@ struct TriangleMeshCollision {
                                        const TriangleMeshCollision& mesh, float inflate,
                                        float& outT, glm::vec3& outNormal);
 
-} // namespace leon

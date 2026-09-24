@@ -7,7 +7,6 @@
 #include <cmath>
 #include <memory>
 
-namespace leon {
 
 class Texture;
 
@@ -44,4 +43,3 @@ struct Material {
     void syncRoughnessFromShininess() { roughness = roughnessFromShininess(shininess); }
 };
 
-} // namespace leon

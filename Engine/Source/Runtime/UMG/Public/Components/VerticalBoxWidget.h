@@ -8,8 +8,6 @@
 
 class FGenericWindow;
 
-namespace leon {
-
 /// Unreal-like UVerticalBox (lite): title + stacked ButtonWidgets + hint.
 /// Add via HUD::AddWidget; call TickInput each frame from GameMode (same as MenuListWidget).
 class VerticalBoxWidget : public UserWidget {
@@ -64,4 +62,3 @@ private:
     float minButtonW_ = 220.0f;
 };
 
-} // namespace leon

@@ -5,7 +5,6 @@
 #include "Level/LevelAnimation.h"
 #include <string>
 
-namespace leon {
 
 struct StaticMeshComponent;
 
@@ -19,4 +18,3 @@ void ApplyFitHeight(StaticMeshComponent& object, float fitHeight);
 /// Runs ContentValidator on the decoded document (referenced materials / meshes) before applying.
 bool LoadLevelFile(Engine& engine, const std::string& levelPath, LevelAnimation* outAnim = nullptr);
 
-} // namespace leon

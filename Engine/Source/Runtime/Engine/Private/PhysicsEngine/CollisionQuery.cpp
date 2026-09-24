@@ -8,7 +8,6 @@
 #include <numbers>
 #include <vector>
 
-namespace leon {
 namespace {
 
 constexpr glm::vec3 kTraceMiss{0.25f, 0.85f, 1.0f};
@@ -519,4 +518,3 @@ bool PhysScene::CapsuleTraceSingleByChannel(HitResult& outHit, const glm::vec3& 
     return takeNearestHit(hits, outHit, start, end);
 }
 
-} // namespace leon

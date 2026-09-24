@@ -6,7 +6,6 @@
 #include "MeshData.h"
 #include <vector>
 
-namespace leon {
 
 void ComputeTangents(MeshData& data) {
     if (data.empty()) {
@@ -61,4 +60,3 @@ void ComputeTangents(MeshData& data) {
     }
 }
 
-} // namespace leon

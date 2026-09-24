@@ -2,7 +2,6 @@
 #include "GameFramework/Actor.h"
 #include "Components/ActorComponent.h"
 
-namespace leon {
 
 Actor::~Actor() {
     // Members (root, Character mesh, …) destroy after this body. Clear registry first so
@@ -65,4 +64,3 @@ void Actor::TickComponents(float deltaTime) {
     }
 }
 
-} // namespace leon

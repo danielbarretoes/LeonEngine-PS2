@@ -3,7 +3,6 @@
 #include <iostream>
 #include "PlanarReflection.h"
 
-namespace leon {
 
 PlanarReflection::~PlanarReflection() {
     Destroy();
@@ -76,7 +75,7 @@ void PlanarReflection::Begin() const {
 }
 
 void PlanarReflection::End(int framebufferWidth, int framebufferHeight,
-                           rhi::RHIFramebufferId restoreFbo) const {
+                           RHIFramebufferId restoreFbo) const {
     glCullFace(GL_BACK);
     glBindFramebuffer(GL_FRAMEBUFFER, restoreFbo);
     glViewport(0, 0, framebufferWidth, framebufferHeight);
@@ -87,4 +86,3 @@ void PlanarReflection::BindColorTexture(unsigned int unit) const {
     glBindTexture(GL_TEXTURE_2D, colorTexture_);
 }
 
-} // namespace leon

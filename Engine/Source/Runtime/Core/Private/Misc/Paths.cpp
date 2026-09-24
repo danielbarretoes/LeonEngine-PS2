@@ -13,7 +13,6 @@
 #include <windows.h>
 #endif
 
-namespace leon {
 namespace {
 
 std::filesystem::path& ActiveContentRootStorage() {
@@ -270,4 +269,3 @@ std::string ResolveProjectsDirectory() {
     return (exeDir / "Projects").lexically_normal().string();
 }
 
-} // namespace leon

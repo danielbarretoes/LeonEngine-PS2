@@ -7,7 +7,6 @@
 #include "Level/LeonLevelFormat.h"
 #include "Level/LevelLoader.h"
 
-namespace leon {
 namespace {
 
 [[nodiscard]] bool TravelViaSiblingLevels(Engine& engine, std::string_view levelKey,
@@ -107,4 +106,3 @@ bool GameInstance::ClientTravel(Engine& engine, std::string_view mapName,
     return TravelInternal(engine, mapName, hintLevelPath);
 }
 
-} // namespace leon

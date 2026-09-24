@@ -8,7 +8,6 @@
 #include "Level/LeonLevelFormat.h"
 #include <string_view>
 
-namespace leon {
 namespace {
 
 bool isLeonLevelFile(const std::filesystem::directory_entry& entry) {
@@ -200,4 +199,3 @@ std::size_t LevelCatalog::FindIndexByLevelKey(std::string_view key) const {
     return entries_.size();
 }
 
-} // namespace leon

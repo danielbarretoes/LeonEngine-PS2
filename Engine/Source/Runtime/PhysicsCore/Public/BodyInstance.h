@@ -6,7 +6,6 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace leon {
 
 enum class EBodyType : std::uint8_t {
     Static,
@@ -41,4 +40,3 @@ struct BodyInstance {
     float velocityY = 0.0f;
 };
 
-} // namespace leon

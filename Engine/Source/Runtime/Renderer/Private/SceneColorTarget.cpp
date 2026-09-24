@@ -3,7 +3,6 @@
 #include <iostream>
 #include "SceneColorTarget.h"
 
-namespace leon {
 
 SceneColorTarget::~SceneColorTarget() {
     Destroy();
@@ -96,4 +95,3 @@ void SceneColorTarget::BindDepthTexture(unsigned int unit) const {
     glBindTexture(GL_TEXTURE_2D, depthTexture_);
 }
 
-} // namespace leon

@@ -3,7 +3,6 @@
 #include <fstream>
 #include <iostream>
 
-namespace leon::serialization {
 
 glm::vec3 ReadVec3(const nlohmann::json& j, const glm::vec3& fallback) {
     if (!j.is_array() || j.size() < 3) {
@@ -27,4 +26,3 @@ bool LoadJsonFile(const std::string& path, nlohmann::json& out) {
     return true;
 }
 
-} // namespace leon::serialization

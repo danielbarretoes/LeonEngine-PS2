@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <vector>
 
-namespace leon {
 
 /// Runtime animation hooks produced while loading a Level JSON (spin / bob / light orbit).
 struct LevelAnimation {
@@ -36,4 +35,3 @@ struct LevelAnimation {
     }
 };
 
-} // namespace leon

@@ -5,7 +5,6 @@
 #include "GameFramework/Actor.h"
 #include "Components/SceneComponent.h"
 
-namespace leon {
 namespace {
 
 [[nodiscard]] Transform decomposeApprox(const glm::mat4& m) {
@@ -145,4 +144,3 @@ void SceneComponent::DestroyComponent() {
     ActorComponent::DestroyComponent();
 }
 
-} // namespace leon

@@ -5,7 +5,6 @@
 #include "Blueprint/UserWidget.h"
 #include <string>
 
-namespace leon {
 
 /// Unreal-like UTextBlock: simple screen text (status lines, titles).
 class TextBlockWidget : public UserWidget {
@@ -38,4 +37,3 @@ private:
     bool centeredOnScreen_ = true;
 };
 
-} // namespace leon

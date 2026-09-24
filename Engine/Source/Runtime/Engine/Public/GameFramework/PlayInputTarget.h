@@ -2,8 +2,6 @@
 
 #include "GenericPlatform/GenericWindow.h"
 
-namespace leon {
-
 /// Routes play-mode input to an optional secondary `Window` (Editor PIE New Window).
 /// Shipping leaves the override unset — `Resolve` returns the main Engine window.
 /// Unreal analogy: focus the play viewport for input without a separate UObject.
@@ -29,4 +27,3 @@ private:
     bool mouseLookActive_ = true;
 };
 
-} // namespace leon

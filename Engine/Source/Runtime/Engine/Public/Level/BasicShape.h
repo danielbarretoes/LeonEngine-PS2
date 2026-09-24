@@ -7,7 +7,6 @@
 #include <memory>
 #include <string_view>
 
-namespace leon {
 
 /// Engine basic shapes (Unreal-like `/Engine/BasicShapes`: Cube, Sphere, Plane).
 /// Unit meshes; size comes from `transform.scale`. Plane lies on XZ (y = 0).
@@ -53,4 +52,3 @@ struct BasicShape {
                                                             int sphereSegments = 24,
                                                             int sphereRings = 16);
 
-} // namespace leon

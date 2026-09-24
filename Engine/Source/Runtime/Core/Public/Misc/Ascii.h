@@ -4,7 +4,6 @@
 #include <string>
 #include <string_view>
 
-namespace leon {
 
 /// ASCII lower-case copy (for case-insensitive JSON class / primitive names).
 [[nodiscard]] inline std::string AsciiToLower(std::string_view text) {
@@ -15,4 +14,3 @@ namespace leon {
     return out;
 }
 
-} // namespace leon

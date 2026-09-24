@@ -4,7 +4,6 @@
 #include <nlohmann/json.hpp>
 #include <string>
 
-namespace leon {
 
 class ResourceCache;
 
@@ -23,4 +22,3 @@ void PatchMaterialFromJson(ResourceCache& resources, Material& material,
 /// Engine default: grayscale checker (Unreal-like WorldGrid placeholder).
 [[nodiscard]] Material MakeDefaultCheckerMaterial(ResourceCache& resources);
 
-} // namespace leon

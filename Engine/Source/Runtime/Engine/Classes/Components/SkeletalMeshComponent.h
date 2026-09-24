@@ -17,7 +17,6 @@
 #include <utility>
 #include <vector>
 
-namespace leon {
 
 class Engine;
 class Renderer;
@@ -48,7 +47,7 @@ public:
     template <typename TAnim, typename... TArgs>
     TAnim& SetAnimInstance(TArgs&&... args) {
         static_assert(std::is_base_of_v<AnimInstance, TAnim>,
-                      "TAnim must derive from leon::AnimInstance");
+                      "TAnim must derive from AnimInstance");
         auto owned = std::make_unique<TAnim>(std::forward<TArgs>(args)...);
         TAnim& ref = *owned;
         SetAnimInstance(std::move(owned));
@@ -120,4 +119,3 @@ private:
     mutable std::vector<glm::mat4> boneWorldMatrices_;
 };
 
-} // namespace leon

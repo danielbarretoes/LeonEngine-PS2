@@ -3,7 +3,6 @@
 #include <filesystem>
 #include <string>
 
-namespace leon {
 
 [[nodiscard]] std::filesystem::path ExecutableDirectory();
 
@@ -32,4 +31,3 @@ void SetActiveContentRoot(const std::filesystem::path& projectOrPackRoot);
 [[nodiscard]] std::string ResolveContentAssetPath(const std::filesystem::path& projectOrPackRoot,
                                                   const std::string& relativeOrKey);
 
-} // namespace leon

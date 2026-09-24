@@ -1,6 +1,5 @@
 #include "Level/BasicShape.h"
 
-namespace leon {
 
 // Class-name parsers live in Content/LevelClassNames.cpp (shared with ContentValidator / cook).
 
@@ -60,4 +59,3 @@ StaticMeshComponent BasicShape::MakeStaticMesh(ResourceCache& resources) const {
     return component;
 }
 
-} // namespace leon

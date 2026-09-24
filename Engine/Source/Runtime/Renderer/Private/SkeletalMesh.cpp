@@ -6,7 +6,6 @@
 #include "SkeletalMesh.h"
 #include <utility>
 
-namespace leon {
 
 SkeletalMesh::~SkeletalMesh() {
     Destroy();
@@ -149,4 +148,3 @@ void SkeletalMesh::Destroy() {
     indexCount_ = 0;
 }
 
-} // namespace leon

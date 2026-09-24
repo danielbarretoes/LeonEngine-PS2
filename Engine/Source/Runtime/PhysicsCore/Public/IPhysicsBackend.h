@@ -10,7 +10,6 @@
 #include "CollisionQuery.h"
 #include "TriangleCollision.h"
 
-namespace leon {
 
 /// Physics backend contract. Implementations live under Plugins/Physics/*.
 /// `PhysScene` remains the gameplay-facing API; backends plug in behind it.
@@ -110,4 +109,3 @@ enum class EPhysicsBackendKind : std::uint8_t {
 using PhysicsBackendFactory = std::unique_ptr<IPhysicsBackend> (*)();
 void RegisterPhysicsBackendFactory(EPhysicsBackendKind kind, PhysicsBackendFactory factory);
 
-} // namespace leon

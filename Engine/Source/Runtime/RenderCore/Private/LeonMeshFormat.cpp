@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-namespace leon {
 namespace {
 
 constexpr char kMagic[4] = {'L', 'M', 'S', 'H'};
@@ -195,4 +194,3 @@ bool SaveLeonMeshFile(const std::string& path, const MeshData& data) {
     return static_cast<bool>(out);
 }
 
-} // namespace leon

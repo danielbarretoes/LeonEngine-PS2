@@ -7,7 +7,7 @@
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("Transform identity modelMatrix", "[core][transform]") {
-    leon::Transform t;
+    Transform t;
     const glm::mat4 m = t.modelMatrix();
     REQUIRE_THAT(m[0][0], WithinAbs(1.0f, 1.0e-5f));
     REQUIRE_THAT(m[1][1], WithinAbs(1.0f, 1.0e-5f));
@@ -18,7 +18,7 @@ TEST_CASE("Transform identity modelMatrix", "[core][transform]") {
 }
 
 TEST_CASE("Transform applies translation and yaw", "[core][transform]") {
-    leon::Transform t;
+    Transform t;
     t.position = {2.0f, 3.0f, 4.0f};
     t.rotationDegrees = {0.0f, 90.0f, 0.0f};
 
@@ -32,7 +32,7 @@ TEST_CASE("Transform applies translation and yaw", "[core][transform]") {
 }
 
 TEST_CASE("Transform sanitizes near-zero scale", "[core][transform]") {
-    leon::Transform t;
+    Transform t;
     t.scale = {0.0f, 1.0f, 0.0f};
     const glm::mat4 m = t.modelMatrix();
     REQUIRE(std::abs(m[0][0]) >= 1.0e-4f);

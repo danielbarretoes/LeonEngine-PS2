@@ -9,7 +9,6 @@
 #include <utility>
 #include <vector>
 
-namespace leon {
 
 class Character;
 class DebugDraw;
@@ -56,7 +55,7 @@ public:
 
     template <typename T, typename... Args>
     T* SpawnActor(Args&&... args) {
-        static_assert(std::is_base_of_v<Actor, T>, "T must derive from leon::Actor");
+        static_assert(std::is_base_of_v<Actor, T>, "T must derive from Actor");
         auto owned = std::make_unique<T>(std::forward<Args>(args)...);
         T* raw = owned.get();
         raw->world_ = this;
@@ -108,7 +107,7 @@ public:
 
     template <typename T>
     [[nodiscard]] T* FindFirst() const {
-        static_assert(std::is_base_of_v<Actor, T>, "T must derive from leon::Actor");
+        static_assert(std::is_base_of_v<Actor, T>, "T must derive from Actor");
         for (const auto& actor : actors_) {
             if (actor && !actor->IsPendingKill()) {
                 if (T* typed = dynamic_cast<T*>(actor.get())) {
@@ -122,7 +121,7 @@ public:
     /// Visit every live Actor of type T.
     template <typename T, typename TFn>
     void ForEach(TFn&& fn) const {
-        static_assert(std::is_base_of_v<Actor, T>, "T must derive from leon::Actor");
+        static_assert(std::is_base_of_v<Actor, T>, "T must derive from Actor");
         for (const auto& actor : actors_) {
             if (actor && !actor->IsPendingKill()) {
                 if (T* typed = dynamic_cast<T*>(actor.get())) {
@@ -156,4 +155,3 @@ private:
     std::uint64_t nextEditorId_ = 0;
 };
 
-} // namespace leon

@@ -1,6 +1,5 @@
 #pragma once
 
-namespace leon {
 
 class Actor;
 
@@ -44,4 +43,3 @@ protected:
     bool primaryTickEnabled_ = false;
 };
 
-} // namespace leon

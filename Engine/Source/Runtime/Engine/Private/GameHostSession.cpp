@@ -9,7 +9,6 @@
 #include <memory>
 #include <nlohmann/json.hpp>
 
-namespace leon::runtime {
 
 GameHostSession::~GameHostSession() {
     Stop();
@@ -162,4 +161,3 @@ void GameHostSession::Stop() {
     active_ = false;
 }
 
-} // namespace leon::runtime

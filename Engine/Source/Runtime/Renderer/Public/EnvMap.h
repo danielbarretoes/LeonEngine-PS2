@@ -3,7 +3,6 @@
 #include "RHIHandles.h"
 #include <string>
 
-namespace leon {
 
 /// HDR environment as OpenGL cubemaps (RGB16F):
 /// - specular/env map with mips (roughness → textureLod)
@@ -29,9 +28,9 @@ public:
     void Bind(unsigned int unit = 0) const;
     void BindIrradiance(unsigned int unit) const;
 
-    [[nodiscard]] bool Valid() const { return id_ != rhi::kInvalidTexture; }
-    [[nodiscard]] bool HasIrradiance() const { return irradianceId_ != rhi::kInvalidTexture; }
-    [[nodiscard]] rhi::RHITextureId Id() const { return id_; }
+    [[nodiscard]] bool Valid() const { return id_ != kInvalidTexture; }
+    [[nodiscard]] bool HasIrradiance() const { return irradianceId_ != kInvalidTexture; }
+    [[nodiscard]] RHITextureId Id() const { return id_; }
     [[nodiscard]] int FaceSize() const { return faceSize_; }
     /// Number of mip levels (base + mips). Max LOD index is MipCount()-1.
     [[nodiscard]] int MipCount() const { return mipCount_; }
@@ -42,10 +41,9 @@ public:
 private:
     void Destroy();
 
-    rhi::RHITextureId id_ = rhi::kInvalidTexture;
-    rhi::RHITextureId irradianceId_ = rhi::kInvalidTexture;
+    RHITextureId id_ = kInvalidTexture;
+    RHITextureId irradianceId_ = kInvalidTexture;
     int faceSize_ = 0;
     int mipCount_ = 0;
 };
 
-} // namespace leon

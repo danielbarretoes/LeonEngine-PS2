@@ -6,7 +6,6 @@
 #include <random>
 #include <system_error>
 
-namespace leon {
 namespace {
 
 [[nodiscard]] std::filesystem::path MakeTempSibling(const std::filesystem::path& path) {
@@ -76,4 +75,3 @@ bool WriteTextFileAtomic(const std::filesystem::path& path, std::string_view tex
     return WriteFileAtomic(path, text.data(), text.size());
 }
 
-} // namespace leon

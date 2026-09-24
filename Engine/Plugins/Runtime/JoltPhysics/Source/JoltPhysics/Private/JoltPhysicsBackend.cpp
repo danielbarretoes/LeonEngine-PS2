@@ -30,7 +30,6 @@
 
 JPH_SUPPRESS_WARNINGS
 
-namespace leon {
 namespace {
 
 void TraceImpl(const char* fmt, ...) {
@@ -573,4 +572,3 @@ std::unique_ptr<IPhysicsBackend> CreateJoltPhysicsBackend() {
     return std::make_unique<JoltPhysicsBackend>();
 }
 
-} // namespace leon

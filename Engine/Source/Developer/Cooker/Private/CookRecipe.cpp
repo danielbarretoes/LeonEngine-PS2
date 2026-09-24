@@ -7,7 +7,6 @@
 #include "CookPaths.h"
 #include <nlohmann/json.hpp>
 
-namespace leon::tools {
 namespace {
 
 namespace fs = std::filesystem;
@@ -37,15 +36,15 @@ namespace fs = std::filesystem;
     if (!obj.empty()) {
         const std::string src = ResolveBeside(baseDir, obj);
         std::cout << "Cook staticmesh OBJ '" << src << "' -> " << outAbs << '\n';
-        ok = leon::CookStaticMeshFromObj(src, outAbs, err);
+        ok = CookStaticMeshFromObj(src, outAbs, err);
     } else if (!fbx.empty()) {
         const std::string src = ResolveBeside(baseDir, fbx);
         std::cout << "Cook staticmesh FBX '" << src << "' -> " << outAbs << '\n';
-        ok = leon::CookStaticMeshFromFbx(src, outAbs, err);
+        ok = CookStaticMeshFromFbx(src, outAbs, err);
     } else {
         const std::string src = ResolveBeside(baseDir, gltf);
         std::cout << "Cook staticmesh glTF '" << src << "' -> " << outAbs << '\n';
-        ok = leon::CookStaticMeshFromGltf(src, outAbs, materialsAbs, err);
+        ok = CookStaticMeshFromGltf(src, outAbs, materialsAbs, err);
     }
     if (!ok) {
         std::cerr << "Cook staticmesh failed (step " << stepIndex << "): "
@@ -84,7 +83,7 @@ int RunCookRecipeFile(const std::string& recipePath) {
             const std::string mesh = ResolveBeside(baseDir, step.value("mesh", ""));
             const std::string run = ResolveBeside(baseDir, step.value("run", ""));
             const std::string out = ResolveBeside(baseDir, step.value("out", "."));
-            leon::CookJumpAnimPaths jump{};
+            CookJumpAnimPaths jump{};
             if (step.contains("jump") && step["jump"].is_string()) {
                 jump.jumpStartFbx = ResolveBeside(baseDir, step["jump"].get<std::string>());
             }
@@ -99,7 +98,7 @@ int RunCookRecipeFile(const std::string& recipePath) {
                 return 1;
             }
             std::cout << "Cook character '" << name << "' -> " << out << '\n';
-            if (!leon::CookCharacterFromFbx(name, mesh, run, out, jump)) {
+            if (!CookCharacterFromFbx(name, mesh, run, out, jump)) {
                 std::cerr << "Cook character failed (step " << stepIndex << ")\n";
                 return 2;
             }
@@ -114,7 +113,7 @@ int RunCookRecipeFile(const std::string& recipePath) {
                 return 1;
             }
             std::cout << "Cook anim '" << name << "' -> " << out << '\n';
-            if (!leon::CookAnimSequenceFromFbx(fbx, skeleton, out, name, looping)) {
+            if (!CookAnimSequenceFromFbx(fbx, skeleton, out, name, looping)) {
                 std::cerr << "Cook anim failed (step " << stepIndex << ")\n";
                 return 2;
             }
@@ -131,4 +130,3 @@ int RunCookRecipeFile(const std::string& recipePath) {
     return 0;
 }
 
-} // namespace leon::tools

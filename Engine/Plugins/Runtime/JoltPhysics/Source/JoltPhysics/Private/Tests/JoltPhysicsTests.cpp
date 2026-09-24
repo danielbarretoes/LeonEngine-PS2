@@ -14,26 +14,26 @@ using Catch::Matchers::WithinAbs;
 #if defined(LEON_WITH_JOLT) && LEON_WITH_JOLT
 
 TEST_CASE("PhysScene Jolt backend reports Jolt", "[physics][jolt]") {
-    leon::PhysScene scene(leon::EPhysicsBackend::Jolt);
-    REQUIRE(scene.GetBackend() == leon::EPhysicsBackend::Jolt);
+    PhysScene scene(EPhysicsBackend::Jolt);
+    REQUIRE(scene.GetBackend() == EPhysicsBackend::Jolt);
     REQUIRE(scene.GetBackendIface() != nullptr);
     REQUIRE(std::string(scene.GetBackendIface()->GetName()) == "Jolt");
     REQUIRE(scene.GetBackendIface()->HasRigidWorld());
 }
 
 TEST_CASE("World SetPhysicsBackend switches to Jolt", "[physics][jolt][world]") {
-    leon::World world;
-    REQUIRE(world.GetPhysicsScene().GetBackend() == leon::EPhysicsBackend::Arcade);
+    World world;
+    REQUIRE(world.GetPhysicsScene().GetBackend() == EPhysicsBackend::Arcade);
 
-    world.SetPhysicsBackend(leon::EPhysicsBackend::Jolt);
-    REQUIRE(world.GetPhysicsScene().GetBackend() == leon::EPhysicsBackend::Jolt);
+    world.SetPhysicsBackend(EPhysicsBackend::Jolt);
+    REQUIRE(world.GetPhysicsScene().GetBackend() == EPhysicsBackend::Jolt);
 
-    const std::size_t id = world.GetPhysicsScene().AddBody({0, leon::EBodyType::Dynamic, 8.0f, true});
+    const std::size_t id = world.GetPhysicsScene().AddBody({0, EBodyType::Dynamic, 8.0f, true});
     auto& body = world.GetPhysicsScene().Bodies()[id];
     body.position = {0.0f, 2.5f, 0.0f};
     body.halfExtents = {0.4f, 0.4f, 0.4f};
 
-    leon::PhysSceneStepParams params;
+    PhysSceneStepParams params;
     params.deltaTime = 1.0f / 60.0f;
     params.gravity = 24.0f;
     params.floorY = 0.0f;
@@ -46,13 +46,13 @@ TEST_CASE("World SetPhysicsBackend switches to Jolt", "[physics][jolt][world]") 
 }
 
 TEST_CASE("PhysScene Jolt Step applies gravity and rests on floor", "[physics][jolt]") {
-    leon::PhysScene scene(leon::EPhysicsBackend::Jolt);
-    const std::size_t id = scene.AddBody({0, leon::EBodyType::Dynamic, 10.0f, true});
+    PhysScene scene(EPhysicsBackend::Jolt);
+    const std::size_t id = scene.AddBody({0, EBodyType::Dynamic, 10.0f, true});
     auto& body = scene.Bodies()[id];
     body.position = {0.0f, 3.0f, 0.0f};
     body.halfExtents = {0.5f, 0.5f, 0.5f};
 
-    leon::PhysSceneStepParams params;
+    PhysSceneStepParams params;
     params.deltaTime = 1.0f / 60.0f;
     params.gravity = 24.0f;
     params.floorY = 0.0f;
@@ -68,19 +68,19 @@ TEST_CASE("PhysScene Jolt Step applies gravity and rests on floor", "[physics][j
 }
 
 TEST_CASE("PhysScene Jolt dynamic rests on static box", "[physics][jolt]") {
-    leon::PhysScene scene(leon::EPhysicsBackend::Jolt);
+    PhysScene scene(EPhysicsBackend::Jolt);
 
-    const std::size_t groundId = scene.AddBody({0, leon::EBodyType::Static, 1.0f, true});
+    const std::size_t groundId = scene.AddBody({0, EBodyType::Static, 1.0f, true});
     auto& ground = scene.Bodies()[groundId];
     ground.position = {0.0f, 0.5f, 0.0f};
     ground.halfExtents = {2.0f, 0.5f, 2.0f};
 
-    const std::size_t boxId = scene.AddBody({1, leon::EBodyType::Dynamic, 5.0f, true});
+    const std::size_t boxId = scene.AddBody({1, EBodyType::Dynamic, 5.0f, true});
     auto& box = scene.Bodies()[boxId];
     box.position = {0.0f, 4.0f, 0.0f};
     box.halfExtents = {0.4f, 0.4f, 0.4f};
 
-    leon::PhysSceneStepParams params;
+    PhysSceneStepParams params;
     params.deltaTime = 1.0f / 60.0f;
     params.gravity = 24.0f;
     params.floorY = -10.0f; // below ground so static box is the support
@@ -96,8 +96,8 @@ TEST_CASE("PhysScene Jolt dynamic rests on static box", "[physics][jolt]") {
 }
 
 TEST_CASE("PhysScene Jolt dynamic rests on TriangleMesh static", "[physics][jolt][mesh]") {
-    leon::Level level;
-    leon::MeshData data;
+    Level level;
+    MeshData data;
     // Flat plane at y=1 covering xz [-3,3]
     data.vertices.push_back({{-3.0f, 1.0f, -3.0f}, {0, 1, 0}, {0, 0}, {1, 0, 0, 1}});
     data.vertices.push_back({{3.0f, 1.0f, -3.0f}, {0, 1, 0}, {1, 0}, {1, 0, 0, 1}});
@@ -106,22 +106,22 @@ TEST_CASE("PhysScene Jolt dynamic rests on TriangleMesh static", "[physics][jolt
     data.indices = {0, 1, 2, 0, 2, 3};
     data.submeshes.push_back({0, 6, 0});
 
-    leon::StaticMeshComponent component{};
-    component.mesh = std::make_shared<leon::StaticMesh>(leon::StaticMesh::CreateCpu(data));
+    StaticMeshComponent component{};
+    component.mesh = std::make_shared<StaticMesh>(StaticMesh::CreateCpu(data));
     component.collisionEnabled = true;
     level.StaticMeshes().push_back(std::move(component));
 
-    leon::PhysScene scene(leon::EPhysicsBackend::Jolt);
-    scene.AddBody({0, leon::EBodyType::Static, 1.0f, true});
-    const std::size_t boxId = scene.AddBody({1, leon::EBodyType::Dynamic, 5.0f, true});
+    PhysScene scene(EPhysicsBackend::Jolt);
+    scene.AddBody({0, EBodyType::Static, 1.0f, true});
+    const std::size_t boxId = scene.AddBody({1, EBodyType::Dynamic, 5.0f, true});
     auto& box = scene.Bodies()[boxId];
     box.position = {0.0f, 5.0f, 0.0f};
     box.halfExtents = {0.35f, 0.35f, 0.35f};
 
     scene.SyncFromLevel(level);
-    REQUIRE(scene.Bodies()[0].collisionShape == leon::ECollisionShape::TriangleMesh);
+    REQUIRE(scene.Bodies()[0].collisionShape == ECollisionShape::TriangleMesh);
 
-    leon::PhysSceneStepParams params;
+    PhysSceneStepParams params;
     params.deltaTime = 1.0f / 60.0f;
     params.gravity = 24.0f;
     params.floorY = -20.0f;
@@ -137,37 +137,37 @@ TEST_CASE("PhysScene Jolt dynamic rests on TriangleMesh static", "[physics][jolt
 }
 
 TEST_CASE("PhysScene Jolt LineTrace hits static box", "[physics][jolt][trace]") {
-    leon::PhysScene scene(leon::EPhysicsBackend::Jolt);
+    PhysScene scene(EPhysicsBackend::Jolt);
     REQUIRE(scene.GetBackendIface()->HasNarrowPhaseTraces());
 
-    const std::size_t id = scene.AddBody({0, leon::EBodyType::Static, 1.0f, true});
+    const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
     auto& body = scene.Bodies()[id];
     body.position = {0.0f, 0.5f, 0.0f};
     body.halfExtents = {0.5f, 0.5f, 0.5f};
 
-    leon::CollisionQueryParams params;
+    CollisionQueryParams params;
     params.bTraceFloorPlane = false;
-    leon::HitResult hit{};
+    HitResult hit{};
     REQUIRE(scene.LineTraceSingleByChannel(hit, {0.0f, 0.5f, -2.0f}, {0.0f, 0.5f, 2.0f},
-                                           leon::ECollisionChannel::WorldStatic, params));
+                                           ECollisionChannel::WorldStatic, params));
     REQUIRE(hit.bBlockingHit);
     REQUIRE_THAT(hit.ImpactPoint.z, WithinAbs(-0.5f, 0.08f));
     REQUIRE(hit.ImpactNormal.z < -0.5f);
 }
 
 TEST_CASE("PhysScene Jolt SphereTrace hits static box", "[physics][jolt][trace]") {
-    leon::PhysScene scene(leon::EPhysicsBackend::Jolt);
+    PhysScene scene(EPhysicsBackend::Jolt);
 
-    const std::size_t id = scene.AddBody({0, leon::EBodyType::Static, 1.0f, true});
+    const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
     auto& body = scene.Bodies()[id];
     body.position = {0.0f, 0.5f, 0.0f};
     body.halfExtents = {0.5f, 0.5f, 0.5f};
 
-    leon::CollisionQueryParams params;
+    CollisionQueryParams params;
     params.bTraceFloorPlane = false;
-    leon::HitResult hit{};
+    HitResult hit{};
     REQUIRE(scene.SphereTraceSingleByChannel(hit, {0.0f, 0.5f, -3.0f}, {0.0f, 0.5f, 3.0f}, 0.25f,
-                                             leon::ECollisionChannel::WorldStatic, params));
+                                             ECollisionChannel::WorldStatic, params));
     REQUIRE(hit.bBlockingHit);
     // Sweep center stops before the face by ~radius.
     REQUIRE_THAT(hit.Location.z, WithinAbs(-0.75f, 0.12f));
@@ -176,8 +176,8 @@ TEST_CASE("PhysScene Jolt SphereTrace hits static box", "[physics][jolt][trace]"
 #else
 
 TEST_CASE("PhysScene Jolt disabled falls back to Arcade", "[physics][jolt]") {
-    leon::PhysScene scene(leon::EPhysicsBackend::Jolt);
-    REQUIRE(scene.GetBackend() == leon::EPhysicsBackend::Arcade);
+    PhysScene scene(EPhysicsBackend::Jolt);
+    REQUIRE(scene.GetBackend() == EPhysicsBackend::Arcade);
 }
 
 #endif

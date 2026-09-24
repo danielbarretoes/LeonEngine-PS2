@@ -2,7 +2,6 @@
 
 #include "GameFramework/Pawn.h"
 
-namespace leon {
 
 class Character;
 
@@ -30,4 +29,3 @@ private:
     Pawn* pawn_ = nullptr;
 };
 
-} // namespace leon

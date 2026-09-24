@@ -2,7 +2,6 @@
 
 #include <cstdint>
 
-namespace leon {
 
 /// Physics implementation behind `PhysScene`.
 /// Default remains Arcade (AABB traces + CMC). Pass `EPhysicsBackend::Jolt` for rigid Step
@@ -27,4 +26,3 @@ enum class EPhysicsBackend : std::uint8_t {
     return "Unknown";
 }
 
-} // namespace leon

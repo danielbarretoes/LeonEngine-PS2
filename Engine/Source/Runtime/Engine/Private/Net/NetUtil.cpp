@@ -19,8 +19,8 @@
 #include <unistd.h>
 #endif
 
-namespace leon {
-namespace net {
+namespace Leon::Net
+{
 namespace {
 
 bool ensureSockets() {
@@ -101,5 +101,4 @@ void SendTravelToPeers(NetDriver& net, std::string_view mapName, bool dedicatedS
     std::cout << "NetTravel: Travel -> peers map='" << mapName << "'\n";
 }
 
-} // namespace net
-} // namespace leon
+} // namespace Leon::Net

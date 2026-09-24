@@ -3,7 +3,6 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
-namespace leon {
 
 struct CapsuleShape {
     float radius = 0.35f;
@@ -36,4 +35,3 @@ void ClampPositionXZ(glm::vec3& pos, float bounds);
                                 const glm::vec3& bHalfExtents, float moveA, float moveB,
                                 glm::vec3* outNormal = nullptr);
 
-} // namespace leon

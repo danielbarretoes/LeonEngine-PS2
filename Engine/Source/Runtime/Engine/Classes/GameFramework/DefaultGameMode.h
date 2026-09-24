@@ -6,7 +6,6 @@
 #include "GameFramework/DefaultPlayerController.h"
 #include "GameFramework/GameMode.h"
 
-namespace leon {
 
 /// Fallback GameMode when a level has no `gameMode` override (Unreal default GameMode).
 /// Spawns and possesses `DefaultCameraActor` as the default pawn (free-look fly).
@@ -36,4 +35,3 @@ private:
     bool mouseLookSampleValid_ = false;
 };
 
-} // namespace leon

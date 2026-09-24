@@ -1,7 +1,6 @@
 #include "Debug/DebugOverlay.h"
 #include "Blueprint/WidgetPaintContext.h"
 
-namespace leon {
 
 void WidgetPaintContext::DrawLine(float x0, float y0, float x1, float y1, const glm::vec3& color,
                                   float thickness) {
@@ -22,4 +21,3 @@ void WidgetPaintContext::MeasureText(const std::string& text, float scale, float
     DebugOverlay::MeasureText(text, scale, outWidth, outHeight);
 }
 
-} // namespace leon

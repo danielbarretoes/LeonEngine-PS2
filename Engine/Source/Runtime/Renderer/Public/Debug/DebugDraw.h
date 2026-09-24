@@ -7,7 +7,6 @@
 #include <string>
 #include <vector>
 
-namespace leon {
 
 /// Immediate-mode colored line batch for 3D debug (AABBs, light frustum, etc.).
 class DebugDraw {
@@ -45,4 +44,3 @@ private:
     std::vector<Vertex> vertices_;
 };
 
-} // namespace leon

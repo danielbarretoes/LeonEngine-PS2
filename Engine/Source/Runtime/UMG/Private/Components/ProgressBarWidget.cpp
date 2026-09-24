@@ -3,7 +3,6 @@
 #include <cstdio>
 #include <string>
 
-namespace leon {
 
 void ProgressBarWidget::NativePaint(WidgetPaintContext& ctx) {
     if (!IsVisible()) {
@@ -43,4 +42,3 @@ void ProgressBarWidget::NativePaint(WidgetPaintContext& ctx) {
     }
 }
 
-} // namespace leon

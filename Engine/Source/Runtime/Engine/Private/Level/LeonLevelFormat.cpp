@@ -17,7 +17,6 @@
 #include <unordered_map>
 #include <utility>
 
-namespace leon {
 namespace {
 namespace fs = std::filesystem;
 
@@ -1065,4 +1064,3 @@ bool ApplyLevelDocument(Engine& engine, const LevelDocument& doc, const std::str
     return true;
 }
 
-} // namespace leon

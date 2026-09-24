@@ -9,7 +9,6 @@
 #include <ufbx.h>
 #include <unordered_map> // IWYU pragma: keep — used below; include-cleaner false positive
 
-namespace leon {
 namespace {
 
 glm::mat4 ToGlm(const ufbx_transform& t) {
@@ -501,4 +500,3 @@ bool LoadAnimSequenceFromFbx(const std::string& path, const Skeleton& skeleton, 
     return ok;
 }
 
-} // namespace leon

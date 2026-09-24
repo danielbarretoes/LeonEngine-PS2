@@ -4,7 +4,6 @@
 #include "RHIHandles.h"
 #include <vector>
 
-namespace leon {
 
 /// Full-res SSAO ping-pong targets (R16F).
 class SsaoTarget {
@@ -22,14 +21,14 @@ public:
     void BindColorTexture(int index, unsigned int unit) const;
 
     [[nodiscard]] bool Valid() const {
-        return fbo_[0] != rhi::kInvalidFramebuffer && fbo_[1] != rhi::kInvalidFramebuffer;
+        return fbo_[0] != kInvalidFramebuffer && fbo_[1] != kInvalidFramebuffer;
     }
     [[nodiscard]] int Width() const { return width_; }
     [[nodiscard]] int Height() const { return height_; }
 
 private:
-    rhi::RHIFramebufferId fbo_[2]{};
-    rhi::RHITextureId color_[2]{};
+    RHIFramebufferId fbo_[2]{};
+    RHITextureId color_[2]{};
     int width_ = 0;
     int height_ = 0;
 };
@@ -106,4 +105,3 @@ inline void ApplyPostProcessQuality(PostProcessSettings& settings, EPostProcessQ
     }
 }
 
-} // namespace leon

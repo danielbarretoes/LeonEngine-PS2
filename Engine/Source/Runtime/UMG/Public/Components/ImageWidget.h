@@ -3,7 +3,6 @@
 #include <glm/vec3.hpp>
 #include "Blueprint/UserWidget.h"
 
-namespace leon {
 
 /// Unreal-like UImage (lite): solid tinted rect (no texture brush yet — HUD DrawRect only).
 /// Useful as panel chrome, health backdrop, letterbox bars.
@@ -45,4 +44,3 @@ private:
     glm::vec3 borderColor_{0.45f, 0.38f, 0.22f};
 };
 
-} // namespace leon

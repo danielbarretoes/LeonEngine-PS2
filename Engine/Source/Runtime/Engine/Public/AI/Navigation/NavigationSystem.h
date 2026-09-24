@@ -6,7 +6,6 @@
 #include "AI/Navigation/NavMesh.h"
 #include <vector>
 
-namespace leon {
 
 class Level;
 class PhysScene;
@@ -64,4 +63,3 @@ private:
     int walkableCellCount_ = 0;
 };
 
-} // namespace leon

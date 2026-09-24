@@ -16,7 +16,6 @@
 #include <string_view>
 #include <vector>
 
-namespace leon {
 
 /// Unreal-like mobility: Static receives baked lightmaps; Movable uses only dynamic lights.
 enum class EComponentMobility : std::uint8_t {
@@ -214,4 +213,3 @@ private:
     std::string gameMode_;
 };
 
-} // namespace leon

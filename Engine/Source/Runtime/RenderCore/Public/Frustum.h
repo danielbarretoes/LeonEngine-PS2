@@ -5,7 +5,6 @@
 
 #include <array>
 
-namespace leon {
 
 /// Axis-aligned bounding box in world space.
 struct Aabb {
@@ -39,4 +38,3 @@ private:
     std::array<Plane, 6> planes_{};
 };
 
-} // namespace leon

@@ -3,7 +3,6 @@
 #include <cstddef>
 #include "RHIHandles.h"
 
-namespace leon {
 
 /// GL_UNIFORM_BUFFER wrapper bound to a fixed binding point (OpenGL 3.3+).
 class UniformBuffer {
@@ -20,13 +19,12 @@ public:
     void Update(const void* data, std::size_t sizeBytes) const;
     void Bind() const;
 
-    [[nodiscard]] bool Valid() const { return id_ != rhi::kInvalidBuffer; }
+    [[nodiscard]] bool Valid() const { return id_ != kInvalidBuffer; }
     [[nodiscard]] unsigned int BindingPoint() const { return bindingPoint_; }
 
 private:
-    rhi::RHIBufferId id_ = rhi::kInvalidBuffer;
+    RHIBufferId id_ = kInvalidBuffer;
     unsigned int bindingPoint_ = 0;
     std::size_t sizeBytes_ = 0;
 };
 
-} // namespace leon

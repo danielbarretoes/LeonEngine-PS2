@@ -2,7 +2,6 @@
 
 #include <string>
 
-namespace leon::runtime {
 
 /// Discover/load a project pack under `Projects/<name>/`.
 struct ProjectPack {
@@ -18,4 +17,3 @@ struct ProjectPack {
     [[nodiscard]] std::string DefaultLevelKey() const;
 };
 
-} // namespace leon::runtime

@@ -2,7 +2,6 @@
 
 #include "GpuPassTimer.h"
 
-namespace leon {
 namespace {
 
 bool isTimedPass(GpuPassTimer::EPass pass) {
@@ -39,7 +38,7 @@ bool& GpuPassTimer::bufferPending(int buffer) {
     return buffer == 0 ? pending_[0] : pending_[1];
 }
 
-rhi::RHIQueryId& GpuPassTimer::querySlot(int buffer, EPass pass) {
+RHIQueryId& GpuPassTimer::querySlot(int buffer, EPass pass) {
     return bufferQueries(buffer)[static_cast<std::size_t>(passIndex(pass))];
 }
 
@@ -143,4 +142,3 @@ float GpuPassTimer::Milliseconds(EPass pass) const {
     return msSlot(pass);
 }
 
-} // namespace leon

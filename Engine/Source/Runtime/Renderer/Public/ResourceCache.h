@@ -9,7 +9,6 @@
 #include <string>
 #include <unordered_map>
 
-namespace leon {
 
 /// Path- and key-keyed cache for GPU meshes/textures: OBJ/file loads plus
 /// procedural checker/bump normals, material assets, and cube/plane/sphere meshes.
@@ -50,4 +49,3 @@ private:
     std::unordered_map<std::string, Material> materials_;
 };
 
-} // namespace leon

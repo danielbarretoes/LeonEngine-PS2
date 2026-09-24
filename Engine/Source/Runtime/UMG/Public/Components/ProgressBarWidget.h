@@ -5,7 +5,6 @@
 #include "Blueprint/UserWidget.h"
 #include <algorithm>
 
-namespace leon {
 
 /// Unreal-like UProgressBar (lite): background + fill rect, optional percent label.
 class ProgressBarWidget : public UserWidget {
@@ -54,4 +53,3 @@ private:
     glm::vec3 textColor_{1.0f, 0.92f, 0.75f};
 };
 
-} // namespace leon

@@ -1,8 +1,8 @@
 #include <cstring>
 #include "Net/SnapshotCodec.h"
 
-namespace leon {
-namespace net {
+namespace Leon::Net
+{
 
 bool EncodeSnapshot(std::vector<std::uint8_t>& outPacket, std::uint32_t tick, const PawnSnap* pawns,
                     std::uint8_t pawnCount, const BodySnap* bodies, std::uint8_t bodyCount,
@@ -91,5 +91,4 @@ bool DecodeSnapshot(const std::uint8_t* data, std::size_t size, DecodedSnapshot&
     return true;
 }
 
-} // namespace net
-} // namespace leon
+} // namespace Leon::Net

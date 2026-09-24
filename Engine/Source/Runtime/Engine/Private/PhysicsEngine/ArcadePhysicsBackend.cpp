@@ -1,7 +1,6 @@
 #include <iostream>
 #include "IPhysicsBackend.h"
 
-namespace leon {
 namespace {
 
 class ArcadePhysicsBackend final : public IPhysicsBackend {
@@ -36,4 +35,3 @@ std::unique_ptr<IPhysicsBackend> CreatePhysicsBackend(EPhysicsBackendKind kind) 
     return std::make_unique<ArcadePhysicsBackend>();
 }
 
-} // namespace leon

@@ -20,7 +20,6 @@
 #include <string>
 #include <vector>
 
-namespace leon {
 namespace {
 
 struct DrawItem {
@@ -1338,4 +1337,3 @@ void Renderer::drawDebug(const Level& level, const Camera& camera, const glm::ma
     debugDraw_.Flush(viewProjection);
 }
 
-} // namespace leon

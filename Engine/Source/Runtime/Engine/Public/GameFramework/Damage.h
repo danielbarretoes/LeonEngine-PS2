@@ -4,7 +4,6 @@
 
 #include <vector>
 
-namespace leon {
 
 class Character;
 
@@ -20,4 +19,3 @@ float ApplyRadialDamage(const std::vector<Character*>& Actors, float BaseDamage,
                         const glm::vec3& Origin, float DamageRadius,
                         Character* DamageCauser = nullptr);
 
-} // namespace leon

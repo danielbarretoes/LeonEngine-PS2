@@ -7,7 +7,6 @@
 #include "GameFramework/Character.h"
 #include "AI/Navigation/NavigationSystem.h"
 
-namespace leon {
 namespace {
 
 constexpr float kPathRebuildIntervalSeconds = 0.35f;
@@ -158,4 +157,3 @@ glm::vec3 AIController::TickAI(float deltaTime) {
     return wish;
 }
 
-} // namespace leon

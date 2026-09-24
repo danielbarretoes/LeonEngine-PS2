@@ -12,7 +12,6 @@
 #include <unordered_map>
 #include <vector>
 
-namespace leon {
 namespace {
 
 class VertexKey {
@@ -309,4 +308,3 @@ MeshData LoadObj(const std::string& path) {
     return data;
 }
 
-} // namespace leon

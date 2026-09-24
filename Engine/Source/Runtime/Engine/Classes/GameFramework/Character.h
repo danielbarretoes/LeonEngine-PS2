@@ -9,7 +9,6 @@
 #include "CollisionShape.h"
 #include "Physics/PhysScene.h"
 
-namespace leon {
 
 class Renderer;
 class DebugDraw;
@@ -188,4 +187,3 @@ private:
     FindFloorResult currentFloor_{};
 };
 
-} // namespace leon

@@ -4,7 +4,6 @@
 
 #include <cmath>
 
-namespace leon {
 namespace {
 
 [[nodiscard]] bool pointInTriangle(const glm::vec3& p, const glm::vec3& a, const glm::vec3& b,
@@ -135,4 +134,3 @@ bool SegmentTriangleMesh(const glm::vec3& start, const glm::vec3& end,
     return true;
 }
 
-} // namespace leon

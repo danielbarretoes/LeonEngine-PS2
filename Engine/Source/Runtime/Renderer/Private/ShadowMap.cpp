@@ -9,7 +9,6 @@
 #include "ShadowMap.h"
 #include <limits>
 
-namespace leon {
 
 ShadowMap::~ShadowMap() {
     Destroy();
@@ -132,4 +131,3 @@ glm::mat4 ShadowMap::FitLightSpaceMatrix(const glm::vec3& lightDirection, const 
     return lightProj * lightView;
 }
 
-} // namespace leon

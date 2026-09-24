@@ -6,7 +6,6 @@
 #include <utility>
 #include <vector>
 
-namespace leon {
 
 class DebugOverlay;
 
@@ -18,7 +17,7 @@ public:
     /// Unreal `CreateWidget` + `AddToViewport` (lite): construct, NativeConstruct, retain.
     template <typename T, typename... Args>
     T* AddWidget(Args&&... args) {
-        static_assert(std::is_base_of_v<UserWidget, T>, "T must derive from leon::UserWidget");
+        static_assert(std::is_base_of_v<UserWidget, T>, "T must derive from UserWidget");
         auto owned = std::make_unique<T>(std::forward<Args>(args)...);
         T* raw = owned.get();
         raw->owningHud_ = this;
@@ -30,7 +29,7 @@ public:
     /// Remove first widget of type T (NativeDestruct). Returns true if removed.
     template <typename T>
     bool RemoveWidget() {
-        static_assert(std::is_base_of_v<UserWidget, T>, "T must derive from leon::UserWidget");
+        static_assert(std::is_base_of_v<UserWidget, T>, "T must derive from UserWidget");
         for (auto it = widgets_.begin(); it != widgets_.end(); ++it) {
             if (dynamic_cast<T*>(it->get()) != nullptr) {
                 (*it)->NativeDestruct();
@@ -46,7 +45,7 @@ public:
 
     template <typename T>
     [[nodiscard]] T* GetWidgetOfClass() const {
-        static_assert(std::is_base_of_v<UserWidget, T>, "T must derive from leon::UserWidget");
+        static_assert(std::is_base_of_v<UserWidget, T>, "T must derive from UserWidget");
         for (const auto& w : widgets_) {
             if (T* typed = dynamic_cast<T*>(w.get())) {
                 return typed;
@@ -68,4 +67,3 @@ private:
     std::vector<std::unique_ptr<UserWidget>> widgets_;
 };
 
-} // namespace leon

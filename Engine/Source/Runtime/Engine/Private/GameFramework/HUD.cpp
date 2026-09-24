@@ -2,7 +2,6 @@
 #include "GameFramework/HUD.h"
 #include "Blueprint/WidgetPaintContext.h"
 
-namespace leon {
 
 void HUD::Clear() {
     for (const std::unique_ptr<UserWidget>& widget : widgets_) {
@@ -51,4 +50,3 @@ void HUD::Paint(DebugOverlay& overlay, int framebufferWidth, int framebufferHeig
     }
 }
 
-} // namespace leon

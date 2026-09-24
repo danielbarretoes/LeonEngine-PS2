@@ -7,7 +7,6 @@
 #include <ufbx.h>
 #include <vector>
 
-namespace leon {
 namespace {
 
 ufbx_load_opts MakeLoadOpts() {
@@ -102,4 +101,3 @@ bool LoadStaticMeshFromFbx(const std::string& path, MeshData& out) {
     return true;
 }
 
-} // namespace leon

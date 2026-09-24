@@ -4,7 +4,6 @@
 #include "Engine/GameEngine.h"
 #include "GameFramework/GameplayRouter.h"
 
-namespace leon::runtime {
 
 /// Thin runtime host: LevelDirector + one project's GameMode registration.
 /// `packName` is the folder under `Projects/` (e.g. "Smoke").
@@ -15,4 +14,3 @@ namespace leon::runtime {
                               const std::function<void(Engine&, GameplayRouter&)>& registerModes,
                               bool dedicatedByDefault = false);
 
-} // namespace leon::runtime

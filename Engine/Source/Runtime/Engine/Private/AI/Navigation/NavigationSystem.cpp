@@ -13,7 +13,6 @@
 #include <queue>
 #include <vector>
 
-namespace leon {
 namespace {
 
 [[nodiscard]] bool IsFloorLikeBody(const BodyInstance& body, float cellSize) {
@@ -425,4 +424,3 @@ void NavigationSystem::AppendDebugDraw(DebugDraw& draw) const {
     }
 }
 
-} // namespace leon

@@ -8,7 +8,6 @@
 #include <memory>
 #include <vector>
 
-namespace leon {
 
 /// Shared chase BehaviorTree for pack AI (HasTarget → MoveToActor, else Stop).
 /// One instance is safe to reuse serially across pawns in a Tick loop.
@@ -59,4 +58,3 @@ private:
     BehaviorTree tree_{};
 };
 
-} // namespace leon

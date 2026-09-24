@@ -8,7 +8,6 @@
 #include <string>
 #include <vector>
 
-namespace leon {
 
 class Character;
 
@@ -33,4 +32,3 @@ void TickPainCausingVolumes(const std::vector<PainCausingVolume>& volumes,
 /// Default `[F] … [cost]` prompt from payload / interactCost (Door, WallBuy:…, Perk:…).
 [[nodiscard]] std::string FormatDefaultInteractPrompt(const TriggerVolume& volume);
 
-} // namespace leon

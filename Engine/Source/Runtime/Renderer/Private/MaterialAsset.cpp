@@ -6,7 +6,6 @@
 #include "ResourceCache.h"
 #include <nlohmann/json.hpp>
 
-namespace leon {
 namespace {
 
 glm::vec3 readVec3(const nlohmann::json& j, const glm::vec3& fallback) {
@@ -115,4 +114,3 @@ Material MakeDefaultCheckerMaterial(ResourceCache& resources) {
     return material;
 }
 
-} // namespace leon

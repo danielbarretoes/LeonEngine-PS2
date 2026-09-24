@@ -1,6 +1,5 @@
 #include "Components/ImageWidget.h"
 
-namespace leon {
 
 void ImageWidget::NativePaint(WidgetPaintContext& ctx) {
     if (!IsVisible()) {
@@ -27,4 +26,3 @@ void ImageWidget::NativePaint(WidgetPaintContext& ctx) {
     }
 }
 
-} // namespace leon

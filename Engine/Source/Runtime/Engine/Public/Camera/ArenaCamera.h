@@ -4,7 +4,6 @@
 
 #include <vector>
 
-namespace leon {
 
 class Camera;
 
@@ -31,4 +30,3 @@ void UpdateArenaCamera(Camera& camera, ArenaCameraState& state, const ArenaCamer
                        const std::vector<glm::vec3>& livingFeet, float deltaTime,
                        float floorYFallback);
 
-} // namespace leon

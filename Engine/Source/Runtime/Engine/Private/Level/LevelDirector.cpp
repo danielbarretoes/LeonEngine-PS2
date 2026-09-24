@@ -20,7 +20,6 @@
 #pragma warning(pop)
 #endif
 
-namespace leon {
 namespace {
 
 constexpr float kPixelScale = 2.0f;
@@ -298,4 +297,3 @@ bool LevelDirector::HandleUiInput(Engine& engine) {
     return switched || ignoreDrag_;
 }
 
-} // namespace leon

@@ -6,7 +6,7 @@
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("MakeCube has expected topology and bounds", "[render][primitives]") {
-    const leon::MeshData cube = leon::MakeCube();
+    const MeshData cube = MakeCube();
     REQUIRE_FALSE(cube.empty());
     REQUIRE(cube.vertices.size() == 24);
     REQUIRE(cube.indices.size() == 36);
@@ -19,7 +19,7 @@ TEST_CASE("MakeCube has expected topology and bounds", "[render][primitives]") {
 }
 
 TEST_CASE("MakePlane lies on XZ", "[render][primitives]") {
-    const leon::MeshData plane = leon::MakePlane(2.0f);
+    const MeshData plane = MakePlane(2.0f);
     REQUIRE_FALSE(plane.empty());
     for (const auto& v : plane.vertices) {
         REQUIRE_THAT(v.position.y, WithinAbs(0.0f, 1.0e-5f));
@@ -27,7 +27,7 @@ TEST_CASE("MakePlane lies on XZ", "[render][primitives]") {
 }
 
 TEST_CASE("MakeSphere clamps low tessellation", "[render][primitives]") {
-    const leon::MeshData sphere = leon::MakeSphere(2, 1);
+    const MeshData sphere = MakeSphere(2, 1);
     REQUIRE_FALSE(sphere.empty());
     REQUIRE(sphere.indices.size() % 3 == 0);
 }

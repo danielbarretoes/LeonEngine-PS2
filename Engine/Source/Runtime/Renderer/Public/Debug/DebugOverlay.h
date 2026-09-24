@@ -7,7 +7,6 @@
 #include <string>
 #include <vector>
 
-namespace leon {
 
 /// Immediate-mode screen text: top-right stats, bottom-left hints, bottom-right chrome,
 /// and top-left timed debug console (Unreal-like AddOnScreenDebugMessage).
@@ -106,4 +105,3 @@ private:
     int builtForHeight_ = 0;
 };
 
-} // namespace leon

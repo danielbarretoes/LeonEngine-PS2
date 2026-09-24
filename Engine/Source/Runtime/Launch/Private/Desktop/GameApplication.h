@@ -4,7 +4,6 @@
 #include "Engine/GameEngine.h"
 #include "GameFramework/GameplayRouter.h"
 
-namespace leon::runtime {
 
 /// Game process shell: init Engine, load project pack, tick WorldRuntime, run loop.
 class GameApplication {
@@ -16,4 +15,3 @@ public:
                           bool dedicatedByDefault = false);
 };
 
-} // namespace leon::runtime

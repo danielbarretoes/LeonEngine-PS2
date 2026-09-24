@@ -1,7 +1,6 @@
 #include <algorithm>
 #include "Components/TextBlockWidget.h"
 
-namespace leon {
 
 void TextBlockWidget::NativePaint(WidgetPaintContext& ctx) {
     if (text_.empty()) {
@@ -21,4 +20,3 @@ void TextBlockWidget::NativePaint(WidgetPaintContext& ctx) {
     ctx.DrawText(text_, x, y, color_, scale_, justify_);
 }
 
-} // namespace leon

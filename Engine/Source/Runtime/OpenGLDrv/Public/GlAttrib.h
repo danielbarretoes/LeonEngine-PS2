@@ -1,6 +1,5 @@
 #pragma once
 
-namespace leon {
 
 /// OpenGL VBO attribute offset (byte offset encoded as a pointer while ARRAY_BUFFER is bound).
 template <typename T, typename Member>
@@ -9,4 +8,3 @@ template <typename T, typename Member>
     return static_cast<const void*>(&(base->*member));
 }
 
-} // namespace leon

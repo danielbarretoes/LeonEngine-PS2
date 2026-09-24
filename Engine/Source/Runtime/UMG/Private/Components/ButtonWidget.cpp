@@ -3,7 +3,6 @@
 #include <algorithm>
 #include "Debug/DebugOverlay.h"
 
-namespace leon {
 
 void ButtonWidget::MeasureDesiredSize(float& outW, float& outH) const {
     float textW = 0.0f;
@@ -49,4 +48,3 @@ void ButtonWidget::NativePaint(WidgetPaintContext& ctx) {
     ctx.DrawText(label_, textX, textY, color, kHudFontScale, ETextJustify::Center);
 }
 
-} // namespace leon

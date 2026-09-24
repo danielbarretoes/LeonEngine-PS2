@@ -16,7 +16,7 @@ namespace {
 } // namespace
 
 TEST_CASE("ResolveAssetPath finds known shader under repo", "[core][paths]") {
-    const std::string resolved = leon::ResolveAssetPath("assets/Shaders/blinn_phong.vert");
+    const std::string resolved = ResolveAssetPath("assets/Shaders/blinn_phong.vert");
     REQUIRE(std::filesystem::exists(resolved));
     REQUIRE(std::filesystem::exists(sourceAsset("Shaders/blinn_phong.vert")));
 }

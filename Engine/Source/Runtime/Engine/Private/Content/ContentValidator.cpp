@@ -8,7 +8,6 @@
 #include <nlohmann/json.hpp>
 #include <system_error>
 
-namespace leon {
 namespace {
 
 constexpr int kSupportedMaterialVersion = 1;
@@ -340,4 +339,3 @@ ValidationReport ValidateLevelDocument(const LevelDocument& doc, const std::stri
     return report;
 }
 
-} // namespace leon

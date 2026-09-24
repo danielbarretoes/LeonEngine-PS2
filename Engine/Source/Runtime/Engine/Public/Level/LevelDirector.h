@@ -6,7 +6,6 @@
 #include <string>
 #include <string_view>
 
-namespace leon {
 
 class Engine;
 
@@ -83,4 +82,3 @@ private:
     bool browserVisible_ = true;
 };
 
-} // namespace leon

@@ -10,7 +10,6 @@
 #include "Renderer.h"
 #include "StaticMesh.h"
 
-namespace leon {
 namespace {
 
 namespace fs = std::filesystem;
@@ -306,4 +305,3 @@ void SkeletalMeshComponent::SubmitDraw(Renderer& renderer) const {
     }
 }
 
-} // namespace leon

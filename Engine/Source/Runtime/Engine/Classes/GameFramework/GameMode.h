@@ -13,7 +13,6 @@
 #include <type_traits>
 #include <utility>
 
-namespace leon {
 
 class Character;
 class Engine;
@@ -73,19 +72,19 @@ public:
     /// Unreal `GetGameState<T>()`.
     template <typename T>
     [[nodiscard]] T* GetGameState() {
-        static_assert(std::is_base_of_v<GameState, T>, "T must derive from leon::GameState");
+        static_assert(std::is_base_of_v<GameState, T>, "T must derive from GameState");
         return dynamic_cast<T*>(gameState_.get());
     }
     template <typename T>
     [[nodiscard]] const T* GetGameState() const {
-        static_assert(std::is_base_of_v<GameState, T>, "T must derive from leon::GameState");
+        static_assert(std::is_base_of_v<GameState, T>, "T must derive from GameState");
         return dynamic_cast<const T*>(gameState_.get());
     }
 
     /// Replace the GameState instance (e.g. pack-specific subclass). Calls InitGameState.
     template <typename T, typename... Args>
     T* SetGameState(Args&&... args) {
-        static_assert(std::is_base_of_v<GameState, T>, "T must derive from leon::GameState");
+        static_assert(std::is_base_of_v<GameState, T>, "T must derive from GameState");
         auto owned = std::make_unique<T>(std::forward<Args>(args)...);
         T* raw = owned.get();
         gameState_ = std::move(owned);
@@ -138,4 +137,3 @@ private:
     std::unique_ptr<GameState> gameState_;
 };
 
-} // namespace leon

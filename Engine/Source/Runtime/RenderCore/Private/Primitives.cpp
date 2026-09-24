@@ -4,7 +4,6 @@
 #include "Primitives.h"
 #include <numbers>
 
-namespace leon {
 
 MeshData MakeCube() {
     // 6 faces × 4 verts (unique normals/UVs per face corner).
@@ -100,4 +99,3 @@ MeshData MakeSphere(int segments, int rings) {
     return data;
 }
 
-} // namespace leon

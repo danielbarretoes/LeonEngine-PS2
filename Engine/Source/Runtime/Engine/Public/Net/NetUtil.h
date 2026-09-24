@@ -3,11 +3,11 @@
 #include <string>
 #include <string_view>
 
-namespace leon {
 
 class NetDriver;
 
-namespace net {
+namespace Leon::Net
+{
 
 /// Best-effort primary LAN IPv4 (skips 127.x). Empty if none found.
 [[nodiscard]] std::string DetectPrimaryLanIPv4();
@@ -17,5 +17,4 @@ namespace net {
 /// playerSlotFromPeer). No-op when not hosting or no peers.
 void SendTravelToPeers(NetDriver& net, std::string_view mapName, bool dedicatedServer);
 
-} // namespace net
-} // namespace leon
+} // namespace Leon::Net

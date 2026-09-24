@@ -9,7 +9,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-namespace leon {
 namespace {
 
 std::size_t pixelIndex(int x, int y, int size) {
@@ -168,4 +167,3 @@ void Texture::Destroy() {
     }
 }
 
-} // namespace leon

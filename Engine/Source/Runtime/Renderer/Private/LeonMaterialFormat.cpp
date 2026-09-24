@@ -9,7 +9,6 @@
 #include "ResourceCache.h"
 #include <sstream>
 
-namespace leon {
 namespace {
 
 [[nodiscard]] std::string ExtLower(const std::string& path) {
@@ -351,4 +350,3 @@ std::string MakeDefaultLeonMaterialText(const std::string& name, const glm::vec3
     return oss.str();
 }
 
-} // namespace leon

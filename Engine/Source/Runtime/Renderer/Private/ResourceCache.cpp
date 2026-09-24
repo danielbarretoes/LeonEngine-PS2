@@ -8,7 +8,6 @@
 #include "Primitives.h"
 #include "ResourceCache.h"
 
-namespace leon {
 
 std::string ResourceCache::normalizeKey(const std::string& path) {
     std::error_code ec;
@@ -202,4 +201,3 @@ void ResourceCache::InvalidateMaterial(const std::string& path) {
     materials_.erase(normalizeKey(path));
 }
 
-} // namespace leon

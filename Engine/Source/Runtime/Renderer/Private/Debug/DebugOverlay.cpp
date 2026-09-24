@@ -22,7 +22,6 @@
 #pragma warning(pop)
 #endif
 
-namespace leon {
 namespace {
 
 constexpr float kHudPixelScale = 2.0f;
@@ -537,4 +536,3 @@ void DebugOverlay::Draw(int framebufferWidth, int framebufferHeight) {
     glEnable(GL_DEPTH_TEST);
 }
 
-} // namespace leon

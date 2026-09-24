@@ -4,7 +4,6 @@
 #include "Fonts/TextLayout.h"
 #include <string>
 
-namespace leon {
 
 class DebugOverlay;
 
@@ -34,4 +33,3 @@ private:
     int height_ = 0;
 };
 
-} // namespace leon

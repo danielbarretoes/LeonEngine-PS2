@@ -3,7 +3,6 @@
 #include "MeshData.h"
 #include <string>
 
-namespace leon {
 
 /// Cooked static mesh binary (`.lmesh`). Source of truth for runtime.
 [[nodiscard]] bool IsLeonMeshPath(const std::string& path);
@@ -11,4 +10,3 @@ namespace leon {
 [[nodiscard]] bool LoadLeonMeshFile(const std::string& path, MeshData& out);
 [[nodiscard]] bool SaveLeonMeshFile(const std::string& path, const MeshData& data);
 
-} // namespace leon

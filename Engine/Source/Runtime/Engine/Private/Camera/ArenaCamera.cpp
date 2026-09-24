@@ -7,7 +7,6 @@
 #include <cmath>
 #include "Camera/Camera.h"
 
-namespace leon {
 namespace {
 
 [[nodiscard]] float DistXZ(const glm::vec3& a, const glm::vec3& b) {
@@ -60,4 +59,3 @@ void UpdateArenaCamera(Camera& camera, ArenaCameraState& state, const ArenaCamer
     camera.SetYawPitch(params.fixedYawDegrees, params.fixedPitchDegrees);
 }
 
-} // namespace leon

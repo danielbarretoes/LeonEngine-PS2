@@ -7,7 +7,6 @@
 #include <utility>
 #include <vector>
 
-namespace leon {
 
 /// Minimal Behavior Tree (Unreal BT lite): composites + leaf tasks over a string blackboard.
 enum class EBTNodeResult : std::uint8_t {
@@ -141,4 +140,3 @@ private:
     Blackboard board_{};
 };
 
-} // namespace leon

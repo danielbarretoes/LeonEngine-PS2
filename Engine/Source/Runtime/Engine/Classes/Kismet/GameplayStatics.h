@@ -5,7 +5,6 @@
 #include "Engine/World.h"
 #include "CollisionQuery.h"
 
-namespace leon {
 
 class DebugDraw;
 
@@ -48,4 +47,3 @@ class DebugDraw;
                                        params, debug);
 }
 
-} // namespace leon

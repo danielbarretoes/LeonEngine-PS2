@@ -7,8 +7,6 @@
 #include "GenericPlatform/GenericWindow.h"
 #include "Debug/DebugOverlay.h"
 
-namespace leon {
-
 void VerticalBoxWidget::ClearChildren() {
     buttons_.clear();
     selected_ = 0;
@@ -256,4 +254,3 @@ std::string VerticalBoxWidget::TickInput(FGenericWindow& window, bool cursorCapt
     return activated;
 }
 
-} // namespace leon

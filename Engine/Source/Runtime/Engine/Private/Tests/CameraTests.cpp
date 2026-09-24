@@ -7,7 +7,7 @@
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("Camera orbit clamps pitch", "[core][camera]") {
-    leon::Camera cam;
+    Camera cam;
     cam.SetYawPitch(0.0f, 0.0f);
     cam.Orbit(0.0f, 200.0f);
     REQUIRE_THAT(cam.PitchDegrees(), WithinAbs(89.0f, 1.0e-4f));
@@ -16,20 +16,20 @@ TEST_CASE("Camera orbit clamps pitch", "[core][camera]") {
 }
 
 TEST_CASE("Camera orbit distance clamps and FreeLook ignores zoom", "[core][camera]") {
-    leon::Camera cam;
+    Camera cam;
     cam.SetDistance(5.0f);
     cam.Zoom(100.0f);
     REQUIRE_THAT(cam.Distance(), WithinAbs(0.5f, 1.0e-4f));
 
     cam.SetDistance(5.0f);
-    cam.SetMode(leon::ECameraMode::FreeLook);
+    cam.SetMode(ECameraMode::FreeLook);
     cam.Zoom(2.0f);
     REQUIRE_THAT(cam.Distance(), WithinAbs(5.0f, 1.0e-4f));
 }
 
 TEST_CASE("Camera orbit position follows target and distance", "[core][camera]") {
-    leon::Camera cam;
-    cam.SetMode(leon::ECameraMode::Orbit);
+    Camera cam;
+    cam.SetMode(ECameraMode::Orbit);
     cam.SetTarget({0.0f, 0.0f, 0.0f});
     cam.SetYawPitch(0.0f, 0.0f);
     cam.SetDistance(4.0f);
@@ -41,8 +41,8 @@ TEST_CASE("Camera orbit position follows target and distance", "[core][camera]")
 }
 
 TEST_CASE("Camera FreeLook uses eye location", "[core][camera]") {
-    leon::Camera cam;
-    cam.SetMode(leon::ECameraMode::FreeLook);
+    Camera cam;
+    cam.SetMode(ECameraMode::FreeLook);
     cam.SetEyeLocation({1.0f, 2.0f, 3.0f});
     const glm::vec3 eye = cam.GetCameraLocation();
     REQUIRE_THAT(eye.x, WithinAbs(1.0f, 1.0e-5f));

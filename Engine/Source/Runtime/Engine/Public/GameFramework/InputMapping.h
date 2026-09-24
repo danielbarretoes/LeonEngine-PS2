@@ -9,8 +9,6 @@
 #include <utility>
 #include <vector>
 
-namespace leon {
-
 /// One key contribution to a 1D axis (Unreal-like axis mapping entry).
 struct InputAxisKey {
     int key = 0;        // EKeys underlying code (Host matches GLFW)
@@ -79,4 +77,3 @@ private:
     bool mapsDirty_ = true;
 };
 
-} // namespace leon

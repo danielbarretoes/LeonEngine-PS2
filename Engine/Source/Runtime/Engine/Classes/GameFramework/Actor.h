@@ -12,7 +12,6 @@
 #include <utility>
 #include <vector>
 
-namespace leon {
 
 class World;
 
@@ -143,4 +142,3 @@ private:
     bool hasBegunPlay_ = false;
 };
 
-} // namespace leon

@@ -5,7 +5,6 @@
 #include <string>
 #include <vector>
 
-namespace leon {
 
 enum class EValidationSeverity {
     Error,
@@ -48,4 +47,3 @@ struct ValidationReport {
 /// Open + parse + validate a `.lmat` material file (does not upload GPU resources).
 [[nodiscard]] ValidationReport ValidateMaterialFile(const std::string& path);
 
-} // namespace leon

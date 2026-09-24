@@ -6,7 +6,6 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/Damage.h"
 
-namespace leon {
 namespace {
 
 [[nodiscard]] bool PointInPainAabb(const glm::vec3& point, const PainCausingVolume& vol) {
@@ -120,4 +119,3 @@ std::string FormatDefaultInteractPrompt(const TriggerVolume& volume) {
     return "[F] " + payload + costSuffix;
 }
 
-} // namespace leon

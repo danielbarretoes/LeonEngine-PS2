@@ -9,7 +9,6 @@
 #include <random>
 #include <vector>
 
-namespace leon {
 namespace {
 
 [[nodiscard]] bool IsLm01Magic(const char magic[4]) {
@@ -116,4 +115,3 @@ std::string EnsureLightmapId(StaticMeshComponent& mesh) {
     return mesh.lightmapId;
 }
 
-} // namespace leon

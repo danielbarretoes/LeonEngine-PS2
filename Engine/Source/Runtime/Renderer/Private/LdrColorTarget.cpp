@@ -3,7 +3,6 @@
 #include <iostream>
 #include "LdrColorTarget.h"
 
-namespace leon {
 
 LdrColorTarget::~LdrColorTarget() {
     Destroy();
@@ -67,4 +66,3 @@ void LdrColorTarget::BindColorTexture(unsigned int unit) const {
     glBindTexture(GL_TEXTURE_2D, colorTexture_);
 }
 
-} // namespace leon

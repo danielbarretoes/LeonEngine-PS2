@@ -4,7 +4,6 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
-namespace leon {
 
 /// Interleaved GPU vertex attributes (matches Mesh VAO layout).
 struct Vertex {
@@ -15,4 +14,3 @@ struct Vertex {
     glm::vec4 tangent{0.0f, 0.0f, 0.0f, 1.0f};
 };
 
-} // namespace leon

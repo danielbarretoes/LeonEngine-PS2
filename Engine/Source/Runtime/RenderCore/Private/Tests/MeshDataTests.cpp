@@ -18,19 +18,19 @@ TEST_CASE("LoadObj loads a minimal OBJ", "[render][meshdata]") {
             << "vn 0 0 1\n"
             << "f 1//1 2//1 3//1\n";
     }
-    const leon::MeshData data = leon::LoadObj(path.string());
+    const MeshData data = LoadObj(path.string());
     REQUIRE_FALSE(data.empty());
     REQUIRE(data.indices.size() % 3 == 0);
     std::filesystem::remove(path);
 }
 
 TEST_CASE("ComputeTangents produces unit tangents", "[render][meshdata]") {
-    leon::MeshData data = leon::MakeCube();
+    MeshData data = MakeCube();
     // MakeCube may already have tangents; recompute from UVs.
     for (auto& v : data.vertices) {
         v.tangent = {0.0f, 0.0f, 0.0f, 1.0f};
     }
-    leon::ComputeTangents(data);
+    ComputeTangents(data);
     for (const auto& v : data.vertices) {
         const float len = glm::length(glm::vec3{v.tangent});
         REQUIRE_THAT(len, WithinAbs(1.0f, 1.0e-3f));

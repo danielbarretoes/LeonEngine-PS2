@@ -4,7 +4,6 @@
 #include <cmath>
 #include "CollisionShape.h"
 
-namespace leon {
 
 void HalfExtentsFromScale(const glm::vec3& scale, float& halfX, float& halfY, float& halfZ) {
     halfX = 0.5f * std::abs(scale.x);
@@ -110,4 +109,3 @@ bool SeparateAabb(glm::vec3& a, const glm::vec3& aHalfExtents, glm::vec3& b,
     return true;
 }
 
-} // namespace leon

@@ -8,7 +8,6 @@
 #include <numbers>
 #include <vector>
 
-namespace leon {
 namespace {
 
 float yawDegreesFromMoveXZ(const glm::vec3& moveXZ) {
@@ -528,4 +527,3 @@ void Character::SubmitMeshDraw(Renderer& renderer) const {
     mesh_.SubmitDraw(renderer);
 }
 
-} // namespace leon

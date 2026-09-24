@@ -4,7 +4,6 @@
 #include <string_view>
 #include <vector>
 
-namespace leon {
 
 struct LevelEntry {
     std::string name;     // from the level document name, else filename stem
@@ -42,4 +41,3 @@ private:
     std::vector<LevelEntry> entries_;
 };
 
-} // namespace leon

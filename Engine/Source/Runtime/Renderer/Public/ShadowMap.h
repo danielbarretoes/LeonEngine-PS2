@@ -5,7 +5,6 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
-namespace leon {
 
 /// Depth-only shadow map for directional light 0 (orthographic + manual PCF in the lit shader).
 /// Depth texture uses GL_NEAREST so PCF samples discrete texels (not hardware-filtered depth).
@@ -24,7 +23,7 @@ public:
 
     void Begin() const;
     /// Restore draw target to `restoreFbo` (0 = default framebuffer).
-    void End(int framebufferWidth, int framebufferHeight, rhi::RHIFramebufferId restoreFbo = rhi::kInvalidFramebuffer) const;
+    void End(int framebufferWidth, int framebufferHeight, RHIFramebufferId restoreFbo = kInvalidFramebuffer) const;
 
     void BindDepthTexture(unsigned int unit) const;
     [[nodiscard]] bool Valid() const { return fbo_ != 0 && depthTexture_ != 0; }
@@ -37,9 +36,8 @@ public:
                                                        float padding = 0.5f);
 
 private:
-    rhi::RHIFramebufferId fbo_ = rhi::kInvalidFramebuffer;
-    rhi::RHITextureId depthTexture_ = rhi::kInvalidTexture;
+    RHIFramebufferId fbo_ = kInvalidFramebuffer;
+    RHITextureId depthTexture_ = kInvalidTexture;
     int size_ = 0;
 };
 
-} // namespace leon

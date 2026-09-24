@@ -2,7 +2,6 @@
 
 #include "RHIHandles.h"
 
-namespace leon {
 
 /// Full-res LDR color target for post (composite → FXAA).
 class LdrColorTarget {
@@ -20,17 +19,16 @@ public:
     void BindColorTexture(unsigned int unit) const;
 
     [[nodiscard]] bool Valid() const {
-        return fbo_ != rhi::kInvalidFramebuffer && colorTexture_ != rhi::kInvalidTexture;
+        return fbo_ != kInvalidFramebuffer && colorTexture_ != kInvalidTexture;
     }
-    [[nodiscard]] rhi::RHIFramebufferId Framebuffer() const { return fbo_; }
+    [[nodiscard]] RHIFramebufferId Framebuffer() const { return fbo_; }
     [[nodiscard]] int Width() const { return width_; }
     [[nodiscard]] int Height() const { return height_; }
 
 private:
-    rhi::RHIFramebufferId fbo_ = rhi::kInvalidFramebuffer;
-    rhi::RHITextureId colorTexture_ = rhi::kInvalidTexture;
+    RHIFramebufferId fbo_ = kInvalidFramebuffer;
+    RHITextureId colorTexture_ = kInvalidTexture;
     int width_ = 0;
     int height_ = 0;
 };
 
-} // namespace leon

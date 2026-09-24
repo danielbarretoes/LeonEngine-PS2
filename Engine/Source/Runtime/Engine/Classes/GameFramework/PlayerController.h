@@ -10,7 +10,6 @@
 #include <type_traits>
 #include <utility>
 
-namespace leon {
 
 class Character;
 class Engine;
@@ -33,7 +32,7 @@ public:
     /// so GameState::PlayerArray does not keep a dangling pointer.
     template <typename T, typename... Args>
     T* SetPlayerState(Args&&... args) {
-        static_assert(std::is_base_of_v<PlayerState, T>, "T must derive from leon::PlayerState");
+        static_assert(std::is_base_of_v<PlayerState, T>, "T must derive from PlayerState");
         auto owned = std::make_unique<T>(std::forward<Args>(args)...);
         T* raw = owned.get();
         playerState_ = std::move(owned);
@@ -54,8 +53,8 @@ public:
     // Flow: Local input → InputCmdMsg → authority ApplyRemoteInput
     /// Latches current button mask; rising edges vs previous frame go into pressedEdges_.
     void LatchButtons(std::uint16_t pressedNow);
-    [[nodiscard]] bool WasButtonPressed(net::EInputButton button) const;
-    [[nodiscard]] bool IsButtonDown(net::EInputButton button) const;
+    [[nodiscard]] bool WasButtonPressed(Leon::Net::EInputButton button) const;
+    [[nodiscard]] bool IsButtonDown(Leon::Net::EInputButton button) const;
     [[nodiscard]] std::uint16_t GetButtonDownMask() const { return downButtons_; }
     /// Returns rising-edge mask from the last LatchButtons and clears it.
     [[nodiscard]] std::uint16_t ConsumeButtonPressedMask();
@@ -69,4 +68,3 @@ private:
     std::uint16_t pressedEdges_ = 0;
 };
 
-} // namespace leon

@@ -7,7 +7,6 @@
 #include <limits>
 #include <vector>
 
-namespace leon {
 
 class DebugDraw;
 
@@ -62,4 +61,3 @@ void DrawDebugSphereTrace(DebugDraw& draw, const glm::vec3& start, const glm::ve
 void DrawDebugCapsuleTrace(DebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
                            float radius, float halfHeight, const std::vector<HitResult>& hits);
 
-} // namespace leon

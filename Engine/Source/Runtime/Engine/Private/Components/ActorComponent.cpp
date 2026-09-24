@@ -1,7 +1,6 @@
 #include "GameFramework/Actor.h"
 #include "Components/ActorComponent.h"
 
-namespace leon {
 
 ActorComponent::~ActorComponent() {
     DestroyComponent();
@@ -15,4 +14,3 @@ void ActorComponent::DestroyComponent() {
     owner_ = nullptr;
 }
 
-} // namespace leon

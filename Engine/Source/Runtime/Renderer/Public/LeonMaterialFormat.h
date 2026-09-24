@@ -4,7 +4,6 @@
 #include "Material.h"
 #include <string>
 
-namespace leon {
 
 class ResourceCache;
 
@@ -40,4 +39,3 @@ struct LeonMaterialDocument {
                                                       float metallic = 0.0f,
                                                       float roughness = 0.6f);
 
-} // namespace leon

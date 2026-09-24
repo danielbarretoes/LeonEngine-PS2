@@ -7,7 +7,6 @@
 #include <limits>
 #include <utility>
 
-namespace leon {
 namespace {
 
 struct RawPlane {
@@ -131,4 +130,3 @@ bool Frustum::intersectsAabb(const Aabb& box) const {
     return true;
 }
 
-} // namespace leon

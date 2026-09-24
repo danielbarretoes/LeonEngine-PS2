@@ -11,7 +11,6 @@
 #include <nlohmann/json.hpp>
 #include <string>
 
-namespace leon {
 namespace {
 
 namespace fs = std::filesystem;
@@ -829,4 +828,3 @@ bool CookCharacterFromFbx(const std::string& characterName, const std::string& m
     return true;
 }
 
-} // namespace leon

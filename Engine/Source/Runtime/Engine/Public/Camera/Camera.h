@@ -5,7 +5,6 @@
 
 #include <cstdint>
 
-namespace leon {
 
 enum class ECameraMode : std::uint8_t {
     Orbit,    // Blender-style tumble around a target
@@ -86,4 +85,3 @@ private:
     mutable glm::vec3 cachedPosition_{0.0f};
 };
 
-} // namespace leon

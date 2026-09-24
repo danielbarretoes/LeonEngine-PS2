@@ -12,7 +12,6 @@
 #include <memory>
 #include <vector>
 
-namespace leon {
 
 class DebugDraw;
 
@@ -162,4 +161,3 @@ private:
     std::vector<SlopePlane> slopePlanes_;
 };
 
-} // namespace leon

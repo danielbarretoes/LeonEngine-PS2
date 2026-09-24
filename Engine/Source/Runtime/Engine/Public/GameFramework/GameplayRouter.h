@@ -6,7 +6,6 @@
 #include <memory>
 #include <vector>
 
-namespace leon {
 
 /// Picks the GameMode for the active level (Unreal-style GameMode Override).
 /// Levels may set `"gameMode": "<id>"`. Empty → default mode.
@@ -32,4 +31,3 @@ private:
     std::size_t boundCatalogIndex_ = static_cast<std::size_t>(-1);
 };
 
-} // namespace leon

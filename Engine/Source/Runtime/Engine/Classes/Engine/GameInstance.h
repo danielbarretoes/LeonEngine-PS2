@@ -7,7 +7,6 @@
 #include <string>
 #include <string_view>
 
-namespace leon {
 
 class Engine;
 
@@ -48,13 +47,13 @@ public:
     [[nodiscard]] bool HasAuthority() const { return GetNetMode() != ENetMode::Client; }
 
     /// Unreal-like Host / Join session (LAN).
-    [[nodiscard]] bool HostListen(std::uint16_t port = net::kDefaultPort);
-    [[nodiscard]] bool HostDedicated(std::uint16_t port = net::kDefaultPort);
-    [[nodiscard]] bool Join(const std::string& address, std::uint16_t port = net::kDefaultPort);
+    [[nodiscard]] bool HostListen(std::uint16_t port = Leon::Net::kDefaultPort);
+    [[nodiscard]] bool HostDedicated(std::uint16_t port = Leon::Net::kDefaultPort);
+    [[nodiscard]] bool Join(const std::string& address, std::uint16_t port = Leon::Net::kDefaultPort);
     void CloseNetSession();
 
     /// Set by the app host (`--dedicated`) before a networked GameMode enters.
-    void RequestDedicatedStart(std::uint16_t port = net::kDefaultPort) {
+    void RequestDedicatedStart(std::uint16_t port = Leon::Net::kDefaultPort) {
         pendingDedicatedStart_ = true;
         pendingDedicatedPort_ = port;
     }
@@ -77,7 +76,7 @@ public:
     }
 
     /// Optional `--listen` / `--host` from the app host; Menu auto HostListen → Lobby/map.
-    void RequestListenStart(std::uint16_t port = net::kDefaultPort) {
+    void RequestListenStart(std::uint16_t port = Leon::Net::kDefaultPort) {
         pendingListenStart_ = true;
         pendingListenPort_ = port;
     }
@@ -129,9 +128,9 @@ private:
 
     int levelsOpened_ = 0;
     bool pendingDedicatedStart_ = false;
-    std::uint16_t pendingDedicatedPort_ = net::kDefaultPort;
+    std::uint16_t pendingDedicatedPort_ = Leon::Net::kDefaultPort;
     bool pendingListenStart_ = false;
-    std::uint16_t pendingListenPort_ = net::kDefaultPort;
+    std::uint16_t pendingListenPort_ = Leon::Net::kDefaultPort;
     std::string pendingJoinAddress_;
     std::string pendingPlayMap_;
     std::unique_ptr<NetDriver> netDriver_;
@@ -139,4 +138,3 @@ private:
     LevelBrowserVisibleFn levelBrowserVisibleFn_;
 };
 
-} // namespace leon

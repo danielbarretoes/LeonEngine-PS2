@@ -4,7 +4,6 @@
 #include <cmath>
 #include "GameFramework/Input.h"
 
-namespace leon {
 namespace {
 
 constexpr float kDegToRad = glm::pi<float>() / 180.0f;
@@ -33,4 +32,3 @@ glm::vec3 cameraRelativeMoveXZ(const Camera& camera, const MoveAxes2D& axes) {
     return yawRelativeMoveXZ(camera.YawDegrees(), axes);
 }
 
-} // namespace leon

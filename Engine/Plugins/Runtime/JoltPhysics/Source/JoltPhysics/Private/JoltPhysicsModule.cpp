@@ -8,12 +8,12 @@ class FJoltPhysicsModule : public IModuleInterface
 public:
 	virtual void StartupModule() override
 	{
-		leon::RegisterPhysicsBackendFactory(leon::EPhysicsBackendKind::Jolt, &leon::CreateJoltPhysicsBackend);
+		RegisterPhysicsBackendFactory(EPhysicsBackendKind::Jolt, &CreateJoltPhysicsBackend);
 	}
 
 	virtual void ShutdownModule() override
 	{
-		leon::RegisterPhysicsBackendFactory(leon::EPhysicsBackendKind::Jolt, nullptr);
+		RegisterPhysicsBackendFactory(EPhysicsBackendKind::Jolt, nullptr);
 	}
 };
 

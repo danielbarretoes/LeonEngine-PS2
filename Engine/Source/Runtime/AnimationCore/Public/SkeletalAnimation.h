@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-namespace leon {
 
 class SkeletalMeshComponent;
 
@@ -234,4 +233,3 @@ struct SkeletalMeshData {
 [[nodiscard]] bool LoadAnimSequenceFromFbx(const std::string& path, const Skeleton& skeleton,
                                            AnimSequence& out);
 
-} // namespace leon

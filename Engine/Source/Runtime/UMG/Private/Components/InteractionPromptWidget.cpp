@@ -2,7 +2,6 @@
 
 #include <glm/vec3.hpp>
 
-namespace leon {
 namespace {
 
 void DrawOutlinedText(WidgetPaintContext& ctx, const std::string& text, float x, float y,
@@ -23,4 +22,3 @@ void InteractionPromptWidget::NativePaint(WidgetPaintContext& ctx) {
     DrawOutlinedText(ctx, Prompt, x, y, Color, Scale, Justify);
 }
 
-} // namespace leon

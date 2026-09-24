@@ -8,8 +8,6 @@
 
 class FGenericWindow;
 
-namespace leon {
-
 /// Unreal-like vertical text menu (UMG ListView lite): arrows / Enter / click.
 /// Add via HUD::AddWidget; call TickInput each frame from GameMode.
 class MenuListWidget : public UserWidget {
@@ -59,4 +57,3 @@ private:
     int viewportH_ = 0;
 };
 
-} // namespace leon

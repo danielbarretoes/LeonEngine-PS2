@@ -1,7 +1,6 @@
 #include "Level/BasicLight.h"
 #include "Engine/Level.h"
 
-namespace leon {
 
 // Class-name parsers live in Content/LevelClassNames.cpp (shared with ContentValidator / cook).
 
@@ -59,4 +58,3 @@ void BasicLight::addTo(Level& level) const {
     }
 }
 
-} // namespace leon

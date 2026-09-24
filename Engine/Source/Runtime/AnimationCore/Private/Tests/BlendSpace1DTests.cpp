@@ -6,8 +6,8 @@ using Catch::Matchers::WithinAbs;
 
 namespace {
 
-leon::AnimSequence makeNamedClip(const char* name) {
-    leon::AnimSequence clip;
+AnimSequence makeNamedClip(const char* name) {
+    AnimSequence clip;
     clip.name = name;
     clip.durationSeconds = 1.0f;
     clip.framesPerSecond = 1.0f;
@@ -19,18 +19,18 @@ leon::AnimSequence makeNamedClip(const char* name) {
 } // namespace
 
 TEST_CASE("BlendSpace1D evaluates idle/run axis", "[animation][blendspace]") {
-    const leon::AnimSequence idle = makeNamedClip("Idle");
-    const leon::AnimSequence run = makeNamedClip("Run");
+    const AnimSequence idle = makeNamedClip("Idle");
+    const AnimSequence run = makeNamedClip("Run");
 
-    leon::BlendSpace1D bs;
+    BlendSpace1D bs;
     bs.name = "Locomotion";
     bs.axisMin = 0.0f;
     bs.axisMax = 1.0f;
     bs.AddSample(&idle, 0.0f);
     bs.AddSample(&run, 1.0f);
 
-    const leon::AnimSequence* a = nullptr;
-    const leon::AnimSequence* b = nullptr;
+    const AnimSequence* a = nullptr;
+    const AnimSequence* b = nullptr;
     float alpha = -1.0f;
 
     SECTION("at idle") {
@@ -68,9 +68,9 @@ TEST_CASE("BlendSpace1D evaluates idle/run axis", "[animation][blendspace]") {
 }
 
 TEST_CASE("BlendSpace1D empty samples are safe", "[animation][blendspace]") {
-    leon::BlendSpace1D bs;
-    const leon::AnimSequence* a = reinterpret_cast<const leon::AnimSequence*>(1);
-    const leon::AnimSequence* b = reinterpret_cast<const leon::AnimSequence*>(1);
+    BlendSpace1D bs;
+    const AnimSequence* a = reinterpret_cast<const AnimSequence*>(1);
+    const AnimSequence* b = reinterpret_cast<const AnimSequence*>(1);
     float alpha = 1.0f;
     bs.Evaluate(0.5f, a, b, alpha);
     REQUIRE(a == nullptr);

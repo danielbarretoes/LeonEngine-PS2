@@ -5,7 +5,6 @@
 #include "Misc/Paths.h"
 #include <nlohmann/json.hpp>
 
-namespace leon::runtime {
 
 ProjectPack ProjectPack::Resolve(const char* packName) {
     ProjectPack pack;
@@ -40,4 +39,3 @@ std::string ProjectPack::DefaultLevelKey() const {
     return std::filesystem::path(defaultLevel).stem().string();
 }
 
-} // namespace leon::runtime

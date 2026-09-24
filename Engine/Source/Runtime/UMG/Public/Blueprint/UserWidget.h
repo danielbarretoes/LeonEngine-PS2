@@ -2,7 +2,6 @@
 
 #include "Blueprint/WidgetPaintContext.h"
 
-namespace leon {
 
 class HUD;
 
@@ -29,4 +28,3 @@ private:
     HUD* owningHud_ = nullptr;
 };
 
-} // namespace leon

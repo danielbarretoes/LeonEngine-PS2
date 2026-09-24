@@ -6,7 +6,6 @@
 #include <memory>
 #include <vector>
 
-namespace leon {
 
 /// GPU skinned mesh (VAO with bone indices/weights).
 class SkeletalMesh {
@@ -26,7 +25,7 @@ public:
     void Draw() const;
 
     [[nodiscard]] bool Valid() const {
-        return indexCount_ > 0 && (cpuOnly_ || vao_ != rhi::kInvalidVertexArray);
+        return indexCount_ > 0 && (cpuOnly_ || vao_ != kInvalidVertexArray);
     }
     [[nodiscard]] bool IsCpuOnly() const { return cpuOnly_; }
     [[nodiscard]] int IndexCount() const { return indexCount_; }
@@ -44,9 +43,9 @@ public:
 private:
     void Destroy();
 
-    rhi::RHIVertexArrayId vao_ = rhi::kInvalidVertexArray;
-    rhi::RHIBufferId vbo_ = rhi::kInvalidBuffer;
-    rhi::RHIBufferId ebo_ = rhi::kInvalidBuffer;
+    RHIVertexArrayId vao_ = kInvalidVertexArray;
+    RHIBufferId vbo_ = kInvalidBuffer;
+    RHIBufferId ebo_ = kInvalidBuffer;
     int indexCount_ = 0;
     bool cpuOnly_ = false;
     Skeleton skeleton_{};
@@ -56,4 +55,3 @@ private:
     Material material_{};
 };
 
-} // namespace leon

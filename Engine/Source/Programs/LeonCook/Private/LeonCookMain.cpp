@@ -96,11 +96,11 @@ void printUsage() {
     std::string err;
     bool ok = false;
     if (!obj.empty()) {
-        ok = leon::CookStaticMeshFromObj(obj, out, err);
+        ok = CookStaticMeshFromObj(obj, out, err);
     } else if (!fbx.empty()) {
-        ok = leon::CookStaticMeshFromFbx(fbx, out, err);
+        ok = CookStaticMeshFromFbx(fbx, out, err);
     } else {
-        ok = leon::CookStaticMeshFromGltf(gltf, out, materials, err);
+        ok = CookStaticMeshFromGltf(gltf, out, materials, err);
     }
     if (!ok) {
         std::cerr << (err.empty() ? "Cook static mesh failed" : err) << '\n';
@@ -115,7 +115,7 @@ void printUsage() {
     std::string meshFbx;
     std::string runFbx;
     std::string outDir;
-    leon::CookJumpAnimPaths jumpAnims{};
+    CookJumpAnimPaths jumpAnims{};
 
     for (int i = 2; i < argc; ++i) {
         const std::string a = argv[i];
@@ -159,7 +159,7 @@ void printUsage() {
         return 1;
     }
 
-    if (!leon::CookCharacterFromFbx(name, meshFbx, runFbx, outDir, jumpAnims)) {
+    if (!CookCharacterFromFbx(name, meshFbx, runFbx, outDir, jumpAnims)) {
         std::cerr << "Cook failed\n";
         return 2;
     }
@@ -205,7 +205,7 @@ void printUsage() {
         return 1;
     }
 
-    if (!leon::CookAnimSequenceFromFbx(fbx, skeleton, outJson, name, looping)) {
+    if (!CookAnimSequenceFromFbx(fbx, skeleton, outJson, name, looping)) {
         std::cerr << "Cook anim failed\n";
         return 2;
     }
@@ -241,7 +241,7 @@ int main(int argc, char** argv) {
             printUsage();
             return 1;
         }
-        return leon::tools::RunCookRecipeFile(argv[2]);
+        return RunCookRecipeFile(argv[2]);
     }
 
     std::cerr << "Unknown mode '" << mode << "'\n";

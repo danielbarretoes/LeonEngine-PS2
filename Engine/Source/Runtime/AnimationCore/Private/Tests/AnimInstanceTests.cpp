@@ -8,8 +8,8 @@ using Catch::Matchers::WithinAbs;
 
 namespace {
 
-leon::Skeleton makeTwoBoneSkeleton() {
-    leon::Skeleton sk;
+Skeleton makeTwoBoneSkeleton() {
+    Skeleton sk;
     sk.boneNames = {"root", "child"};
     sk.parentIndices = {-1, 0};
     sk.inverseBindPose = {glm::mat4(1.0f), glm::inverse(glm::translate(
@@ -17,8 +17,8 @@ leon::Skeleton makeTwoBoneSkeleton() {
     return sk;
 }
 
-leon::AnimSequence makeTranslatedClip(const char* name, const glm::vec3& childLocalTranslation) {
-    leon::AnimSequence clip;
+AnimSequence makeTranslatedClip(const char* name, const glm::vec3& childLocalTranslation) {
+    AnimSequence clip;
     clip.name = name;
     clip.durationSeconds = 1.0f;
     clip.framesPerSecond = 1.0f;
@@ -32,7 +32,7 @@ leon::AnimSequence makeTranslatedClip(const char* name, const glm::vec3& childLo
 } // namespace
 
 TEST_CASE("AnimSequence SampleLocalPose loops duration", "[animation][sequence]") {
-    leon::AnimSequence clip;
+    AnimSequence clip;
     clip.durationSeconds = 2.0f;
     clip.framesPerSecond = 1.0f;
     clip.localPoseFrames.resize(2);
@@ -49,7 +49,7 @@ TEST_CASE("AnimSequence SampleLocalPose loops duration", "[animation][sequence]"
 }
 
 TEST_CASE("AnimSequence one-shot clamps and reports finished", "[animation][sequence]") {
-    leon::AnimSequence clip;
+    AnimSequence clip;
     clip.durationSeconds = 1.0f;
     clip.framesPerSecond = 1.0f;
     clip.bLooping = false;
@@ -66,15 +66,15 @@ TEST_CASE("AnimSequence one-shot clamps and reports finished", "[animation][sequ
 }
 
 TEST_CASE("AnimInstance BlendSpace produces skin matrices", "[animation][animinstance]") {
-    const leon::Skeleton skeleton = makeTwoBoneSkeleton();
-    const leon::AnimSequence idle = makeTranslatedClip("Idle", {0.0f, 1.0f, 0.0f});
-    const leon::AnimSequence run = makeTranslatedClip("Run", {0.0f, 2.0f, 0.0f});
+    const Skeleton skeleton = makeTwoBoneSkeleton();
+    const AnimSequence idle = makeTranslatedClip("Idle", {0.0f, 1.0f, 0.0f});
+    const AnimSequence run = makeTranslatedClip("Run", {0.0f, 2.0f, 0.0f});
 
-    leon::BlendSpace1D bs;
+    BlendSpace1D bs;
     bs.AddSample(&idle, 0.0f);
     bs.AddSample(&run, 1.0f);
 
-    leon::AnimInstance anim;
+    AnimInstance anim;
     anim.SetSkeleton(&skeleton);
     anim.SetBlendSpace(&bs);
     anim.SetLocomotionBlendInterpSpeed(0.0f); // snap for unit tests
@@ -101,14 +101,14 @@ TEST_CASE("AnimInstance BlendSpace produces skin matrices", "[animation][animins
 }
 
 TEST_CASE("AnimInstance eases locomotion blend input", "[animation][animinstance]") {
-    const leon::Skeleton skeleton = makeTwoBoneSkeleton();
-    const leon::AnimSequence idle = makeTranslatedClip("Idle", {0.0f, 1.0f, 0.0f});
-    const leon::AnimSequence run = makeTranslatedClip("Run", {0.0f, 2.0f, 0.0f});
-    leon::BlendSpace1D bs;
+    const Skeleton skeleton = makeTwoBoneSkeleton();
+    const AnimSequence idle = makeTranslatedClip("Idle", {0.0f, 1.0f, 0.0f});
+    const AnimSequence run = makeTranslatedClip("Run", {0.0f, 2.0f, 0.0f});
+    BlendSpace1D bs;
     bs.AddSample(&idle, 0.0f);
     bs.AddSample(&run, 1.0f);
 
-    leon::AnimInstance anim;
+    AnimInstance anim;
     anim.SetSkeleton(&skeleton);
     anim.SetBlendSpace(&bs);
     anim.SetLocomotionBlendInterpSpeed(8.0f);
@@ -121,23 +121,23 @@ TEST_CASE("AnimInstance eases locomotion blend input", "[animation][animinstance
 
 TEST_CASE("CharacterAnimInstance jump state machine with crossfade",
           "[animation][animinstance][jump]") {
-    const leon::Skeleton skeleton = makeTwoBoneSkeleton();
-    leon::AnimSequence idle = makeTranslatedClip("Idle", {0.0f, 1.0f, 0.0f});
-    leon::AnimSequence run = makeTranslatedClip("Run", {0.0f, 2.0f, 0.0f});
-    leon::AnimSequence jump = makeTranslatedClip("Jump", {0.0f, 3.0f, 0.0f});
-    leon::AnimSequence fall = makeTranslatedClip("Fall", {0.0f, 4.0f, 0.0f});
-    leon::AnimSequence land = makeTranslatedClip("Land", {0.0f, 1.5f, 0.0f});
+    const Skeleton skeleton = makeTwoBoneSkeleton();
+    AnimSequence idle = makeTranslatedClip("Idle", {0.0f, 1.0f, 0.0f});
+    AnimSequence run = makeTranslatedClip("Run", {0.0f, 2.0f, 0.0f});
+    AnimSequence jump = makeTranslatedClip("Jump", {0.0f, 3.0f, 0.0f});
+    AnimSequence fall = makeTranslatedClip("Fall", {0.0f, 4.0f, 0.0f});
+    AnimSequence land = makeTranslatedClip("Land", {0.0f, 1.5f, 0.0f});
     jump.bLooping = false;
     jump.durationSeconds = 0.2f;
     fall.bLooping = true;
     land.bLooping = false;
     land.durationSeconds = 0.2f;
 
-    leon::BlendSpace1D bs;
+    BlendSpace1D bs;
     bs.AddSample(&idle, 0.0f);
     bs.AddSample(&run, 1.0f);
 
-    leon::CharacterAnimInstance anim;
+    CharacterAnimInstance anim;
     anim.SetSkeleton(&skeleton);
     anim.SetBlendSpace(&bs);
     anim.SetJumpClips({&jump, &fall, &land});
@@ -146,27 +146,27 @@ TEST_CASE("CharacterAnimInstance jump state machine with crossfade",
     anim.SetLocomotionBlendInterpSpeed(0.0f);
     anim.SetBlendSpaceInput(0.0f);
 
-    REQUIRE(anim.GetJumpState() == leon::EAnimJumpState::Locomotion);
+    REQUIRE(anim.GetJumpState() == EAnimJumpState::Locomotion);
 
     anim.NotifyJumped();
     anim.SetMovementState(true, 5.0f, false);
     anim.NativeUpdateAnimation(0.016f);
-    REQUIRE(anim.GetJumpState() == leon::EAnimJumpState::JumpStart);
+    REQUIRE(anim.GetJumpState() == EAnimJumpState::JumpStart);
     REQUIRE(anim.GetCrossfadeAlpha() < 1.0f);
 
     anim.SetMovementState(true, -1.0f, false);
     anim.NativeUpdateAnimation(0.016f);
-    REQUIRE(anim.GetJumpState() == leon::EAnimJumpState::FallLoop);
+    REQUIRE(anim.GetJumpState() == EAnimJumpState::FallLoop);
 
     anim.SetMovementState(false, 0.0f, true);
     anim.NativeUpdateAnimation(0.016f);
-    REQUIRE(anim.GetJumpState() == leon::EAnimJumpState::Land);
+    REQUIRE(anim.GetJumpState() == EAnimJumpState::Land);
 
     for (int i = 0; i < 20; ++i) {
         anim.SetMovementState(false, 0.0f, false);
         anim.NativeUpdateAnimation(0.05f);
     }
-    REQUIRE(anim.GetJumpState() == leon::EAnimJumpState::Locomotion);
+    REQUIRE(anim.GetJumpState() == EAnimJumpState::Locomotion);
 
     std::vector<glm::mat4> skin;
     anim.GetSkinMatrices(skin);
@@ -175,18 +175,18 @@ TEST_CASE("CharacterAnimInstance jump state machine with crossfade",
 
 TEST_CASE("CharacterAnimInstance jump play rate finishes one-shot sooner",
           "[animation][animinstance][jump]") {
-    const leon::Skeleton skeleton = makeTwoBoneSkeleton();
-    leon::AnimSequence idle = makeTranslatedClip("Idle", {0.0f, 1.0f, 0.0f});
-    leon::AnimSequence jump = makeTranslatedClip("Jump", {0.0f, 3.0f, 0.0f});
-    leon::AnimSequence fall = makeTranslatedClip("Fall", {0.0f, 4.0f, 0.0f});
+    const Skeleton skeleton = makeTwoBoneSkeleton();
+    AnimSequence idle = makeTranslatedClip("Idle", {0.0f, 1.0f, 0.0f});
+    AnimSequence jump = makeTranslatedClip("Jump", {0.0f, 3.0f, 0.0f});
+    AnimSequence fall = makeTranslatedClip("Fall", {0.0f, 4.0f, 0.0f});
     jump.bLooping = false;
     jump.durationSeconds = 1.0f;
     fall.bLooping = true;
 
-    leon::BlendSpace1D bs;
+    BlendSpace1D bs;
     bs.AddSample(&idle, 0.0f);
 
-    leon::CharacterAnimInstance anim;
+    CharacterAnimInstance anim;
     anim.SetSkeleton(&skeleton);
     anim.SetBlendSpace(&bs);
     anim.SetJumpClips({&jump, &fall, nullptr});
@@ -197,9 +197,9 @@ TEST_CASE("CharacterAnimInstance jump play rate finishes one-shot sooner",
     anim.NotifyJumped();
     anim.SetMovementState(true, 5.0f, false);
     anim.NativeUpdateAnimation(0.0f);
-    REQUIRE(anim.GetJumpState() == leon::EAnimJumpState::JumpStart);
+    REQUIRE(anim.GetJumpState() == EAnimJumpState::JumpStart);
 
     anim.SetMovementState(true, 5.0f, false);
     anim.NativeUpdateAnimation(0.3f);
-    REQUIRE(anim.GetJumpState() == leon::EAnimJumpState::FallLoop);
+    REQUIRE(anim.GetJumpState() == EAnimJumpState::FallLoop);
 }

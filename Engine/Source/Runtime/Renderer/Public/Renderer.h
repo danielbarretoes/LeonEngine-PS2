@@ -26,7 +26,6 @@
 #include <string>
 #include <vector>
 
-namespace leon {
 
 /// Per-frame measurable counters (color pass after frustum culling).
 struct FrameStats {
@@ -68,8 +67,8 @@ public:
     [[nodiscard]] EShaderReloadResult ReloadShaders(bool force = false);
 
     /// When non-zero, BeginFrame / shadow / planar restore bind this FBO (editor viewport).
-    void SetDrawFramebuffer(rhi::RHIFramebufferId fbo) { drawTargetFbo_ = fbo; }
-    [[nodiscard]] rhi::RHIFramebufferId GetDrawFramebuffer() const { return drawTargetFbo_; }
+    void SetDrawFramebuffer(RHIFramebufferId fbo) { drawTargetFbo_ = fbo; }
+    [[nodiscard]] RHIFramebufferId GetDrawFramebuffer() const { return drawTargetFbo_; }
 
     void BeginFrame(int framebufferWidth, int framebufferHeight);
     void DrawScene(const Level& level, const Camera& camera);
@@ -137,7 +136,7 @@ private:
     void bindPlanarReflection(bool enabled, const glm::mat4& reflectionViewProj) const;
     void setClipPlane(bool enabled, const glm::vec4& plane) const;
     void ensureShadowMapSize();
-    [[nodiscard]] rhi::RHIFramebufferId colorRestoreFbo() const;
+    [[nodiscard]] RHIFramebufferId colorRestoreFbo() const;
     void drawFullscreenTriangle() const;
     void renderPostStack(const Level& level, const Camera& camera);
     void renderShadowPass(const Level& level, const glm::mat4& lightSpace);
@@ -198,15 +197,14 @@ private:
     FrameStats frameStats_{};
     PostProcessSettings post_{};
 
-    rhi::RHIVertexArrayId fullscreenVao_ = rhi::kInvalidVertexArray;
-    rhi::RHITextureId aoNoiseTexture_ = rhi::kInvalidTexture;
+    RHIVertexArrayId fullscreenVao_ = kInvalidVertexArray;
+    RHITextureId aoNoiseTexture_ = kInvalidTexture;
     std::array<glm::vec3, kMaxAoSamples> aoKernel_{};
 
     int fbWidth_ = 0;
     int fbHeight_ = 0;
-    rhi::RHIFramebufferId drawTargetFbo_ = rhi::kInvalidFramebuffer;
+    RHIFramebufferId drawTargetFbo_ = kInvalidFramebuffer;
     bool debugDrawEnabled_ = false;
     bool sceneGeometryEnabled_ = true;
 };
 
-} // namespace leon

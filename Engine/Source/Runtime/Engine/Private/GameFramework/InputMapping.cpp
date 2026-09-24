@@ -3,8 +3,6 @@
 #include "GameFramework/InputActions.h"
 #include "GameFramework/InputMapping.h"
 
-namespace leon {
-
 void InputMappingContext::BindAxisKey(std::string_view action, int key, float scale) {
     if (action.empty() || key == 0) {
         return;
@@ -29,7 +27,7 @@ void InputMappingContext::BindActionKey(std::string_view action, EKeys key) {
 
 InputMappingContext InputMappingContext::MakeDefault() {
     InputMappingContext ctx;
-    using namespace InputActions;
+    using namespace Leon::InputActions;
 
     ctx.BindAxisKey(MoveForward, EKeys::W, 1.0f);
     ctx.BindAxisKey(MoveForward, EKeys::Up, 1.0f);
@@ -144,9 +142,8 @@ bool PlayerInput::WasActionJustReleased(std::string_view action) const {
 
 MoveAxes2D PlayerInput::GetMoveAxes2D() const {
     MoveAxes2D axes{};
-    axes.x = GetAxisValue(InputActions::MoveRight);
-    axes.z = GetAxisValue(InputActions::MoveForward);
+    axes.x = GetAxisValue(Leon::InputActions::MoveRight);
+    axes.z = GetAxisValue(Leon::InputActions::MoveForward);
     return axes;
 }
 
-} // namespace leon

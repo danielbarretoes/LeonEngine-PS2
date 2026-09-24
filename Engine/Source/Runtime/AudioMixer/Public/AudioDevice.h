@@ -6,7 +6,6 @@
 #include <string>
 #include <string_view>
 
-namespace leon {
 
 /// Built-in UI / feedback cues. Prefers Content WAVs when present; procedural fallback.
 enum class EUiSound : std::uint8_t {
@@ -64,4 +63,3 @@ private:
     float masterVolume_ = 1.0f;
 };
 
-} // namespace leon

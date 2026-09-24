@@ -5,7 +5,6 @@
 #include <string>
 #include <vector>
 
-namespace leon {
 
 class PlayerState;
 
@@ -107,4 +106,3 @@ private:
     std::vector<PlayerState*> playerArray_;
 };
 
-} // namespace leon

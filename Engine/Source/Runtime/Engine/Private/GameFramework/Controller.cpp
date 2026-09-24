@@ -1,7 +1,6 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/Controller.h"
 
-namespace leon {
 
 Controller::~Controller() {
     UnPossess();
@@ -35,4 +34,3 @@ Character* Controller::GetCharacter() const {
     return dynamic_cast<Character*>(pawn_);
 }
 
-} // namespace leon

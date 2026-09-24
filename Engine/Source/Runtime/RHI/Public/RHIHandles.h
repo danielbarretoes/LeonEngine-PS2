@@ -2,7 +2,6 @@
 
 #include <cstdint>
 
-namespace leon::rhi {
 
 /// Opaque GPU object ids for public Engine headers.
 /// Under the OpenGL plugin these are GLuint-compatible; 0 means invalid / default FB.
@@ -22,4 +21,3 @@ constexpr RHIProgramId kInvalidProgram = 0;
 constexpr RHIQueryId kInvalidQuery = 0;
 constexpr RHIRenderbufferId kInvalidRenderbuffer = 0;
 
-} // namespace leon::rhi

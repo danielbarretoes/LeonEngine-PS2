@@ -9,7 +9,6 @@
 #include "Level/LeonLevelFormat.h"
 #include <string>
 
-namespace leon {
 namespace {
 
 [[nodiscard]] bool HasLeonLevelExtension(const std::string& path) {
@@ -66,4 +65,3 @@ bool LoadLevelFile(Engine& engine, const std::string& levelPath, LevelAnimation*
     return ApplyLevelDocument(engine, doc, levelPath, outAnim);
 }
 
-} // namespace leon

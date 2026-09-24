@@ -6,9 +6,9 @@
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("PhysScene AddBody and Clear", "[physics][physscene]") {
-    leon::PhysScene scene;
+    PhysScene scene;
     REQUIRE(scene.Bodies().empty());
-    const std::size_t id = scene.AddBody({0, leon::EBodyType::Static, 1.0f, true});
+    const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
     REQUIRE(id == 0);
     REQUIRE(scene.Bodies().size() == 1);
     scene.Clear();
@@ -16,13 +16,13 @@ TEST_CASE("PhysScene AddBody and Clear", "[physics][physscene]") {
 }
 
 TEST_CASE("PhysScene Step applies gravity and snaps to floor", "[physics][physscene]") {
-    leon::PhysScene scene;
-    const std::size_t id = scene.AddBody({0, leon::EBodyType::Dynamic, 1.0f, true});
+    PhysScene scene;
+    const std::size_t id = scene.AddBody({0, EBodyType::Dynamic, 1.0f, true});
     auto& body = scene.Bodies()[id];
     body.position = {0.0f, 2.0f, 0.0f};
     body.halfExtents = {0.5f, 0.5f, 0.5f};
 
-    leon::PhysSceneStepParams params;
+    PhysSceneStepParams params;
     params.deltaTime = 1.0f / 60.0f;
     params.gravity = 24.0f;
     params.floorY = 0.0f;
@@ -39,13 +39,13 @@ TEST_CASE("PhysScene Step applies gravity and snaps to floor", "[physics][physsc
 }
 
 TEST_CASE("PhysScene static body does not move under gravity", "[physics][physscene]") {
-    leon::PhysScene scene;
-    const std::size_t id = scene.AddBody({0, leon::EBodyType::Static, 1.0f, true});
+    PhysScene scene;
+    const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
     auto& body = scene.Bodies()[id];
     body.position = {1.0f, 3.0f, 2.0f};
     body.halfExtents = {0.5f, 0.5f, 0.5f};
 
-    leon::PhysSceneStepParams params;
+    PhysSceneStepParams params;
     params.deltaTime = 0.1f;
     params.gravity = 50.0f;
     scene.Step(params);
@@ -56,35 +56,35 @@ TEST_CASE("PhysScene static body does not move under gravity", "[physics][physsc
 }
 
 TEST_CASE("PhysScene QuerySupportY uses body tops", "[physics][physscene]") {
-    leon::PhysScene scene;
-    const std::size_t id = scene.AddBody({0, leon::EBodyType::Static, 1.0f, true});
+    PhysScene scene;
+    const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
     auto& body = scene.Bodies()[id];
     body.position = {0.0f, 1.0f, 0.0f};
     body.halfExtents = {1.0f, 1.0f, 1.0f}; // top at y=2
 
-    leon::CapsuleShape capsule;
+    CapsuleShape capsule;
     capsule.radius = 0.35f;
     capsule.height = 1.85f;
 
     const float support =
-        scene.QuerySupportY(capsule, {0.0f, 2.1f, 0.0f}, 0.0f, 0.35f, 0.02f, leon::Level::npos);
+        scene.QuerySupportY(capsule, {0.0f, 2.1f, 0.0f}, 0.0f, 0.35f, 0.02f, Level::npos);
     REQUIRE_THAT(support, WithinAbs(2.0f, 1.0e-3f));
 }
 
 TEST_CASE("PhysScene ResolveCapsuleSides pushes out of AABB", "[physics][physscene]") {
-    leon::PhysScene scene;
-    const std::size_t id = scene.AddBody({0, leon::EBodyType::Static, 1.0f, true});
+    PhysScene scene;
+    const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
     auto& body = scene.Bodies()[id];
     body.position = {0.0f, 0.9f, 0.0f};
     body.halfExtents = {0.5f, 0.9f, 0.5f};
 
-    leon::CapsuleShape capsule;
+    CapsuleShape capsule;
     capsule.radius = 0.35f;
     capsule.height = 1.85f;
 
     glm::vec3 feet{0.1f, 0.0f, 0.0f};
-    leon::CapsuleContactParams contact{};
-    scene.ResolveCapsuleSides(capsule, feet, {0.0f, 0.0f}, contact, leon::Level::npos, false);
+    CapsuleContactParams contact{};
+    scene.ResolveCapsuleSides(capsule, feet, {0.0f, 0.0f}, contact, Level::npos, false);
 
     const float distXZ = std::sqrt((feet.x * feet.x) + (feet.z * feet.z));
     REQUIRE(distXZ > 0.4f);
@@ -92,9 +92,9 @@ TEST_CASE("PhysScene ResolveCapsuleSides pushes out of AABB", "[physics][physsce
 
 TEST_CASE("PhysScene ApplyCapsuleSweepPush moves Dynamic without penetration",
           "[physics][physscene][push]") {
-    leon::PhysScene scene;
-    const std::size_t id = scene.AddBody({7, leon::EBodyType::Dynamic, 1.0f, true});
-    leon::BodyInstance& body = scene.Bodies()[id];
+    PhysScene scene;
+    const std::size_t id = scene.AddBody({7, EBodyType::Dynamic, 1.0f, true});
+    BodyInstance& body = scene.Bodies()[id];
     body.position = {2.0f, 0.5f, 0.0f};
     body.halfExtents = {0.5f, 0.5f, 0.5f};
     body.mass = 1.0f;

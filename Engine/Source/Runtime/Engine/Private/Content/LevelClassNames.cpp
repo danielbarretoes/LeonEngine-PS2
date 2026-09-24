@@ -2,7 +2,6 @@
 #include "Level/BasicLight.h"
 #include "Level/BasicShape.h"
 
-namespace leon {
 
 bool tryParseBasicShapeName(std::string_view name, EBasicShape& out) {
     const std::string key = AsciiToLower(name);
@@ -42,4 +41,3 @@ bool tryParseBasicLightName(std::string_view name, EBasicLight& out) {
     return false;
 }
 
-} // namespace leon

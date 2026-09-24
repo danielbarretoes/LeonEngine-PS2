@@ -2,7 +2,6 @@
 
 #include <cmath>
 
-namespace leon {
 
 bool NavMesh::WorldToCell(float x, float z, int& outIx, int& outIz) const {
     if (!IsValid() || cellSize <= 0.0f) {
@@ -25,4 +24,3 @@ bool NavMesh::WorldToCell(float x, float z, int& outIx, int& outIz) const {
     return true;
 }
 
-} // namespace leon

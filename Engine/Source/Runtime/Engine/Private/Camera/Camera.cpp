@@ -5,7 +5,6 @@
 #include <cmath>
 #include "Camera/Camera.h"
 
-namespace leon {
 namespace {
 
 [[nodiscard]] glm::vec3 freeLookForward(float yawDegrees, float pitchDegrees) {
@@ -191,4 +190,3 @@ glm::mat4 Camera::ViewMatrix() const {
     return glm::lookAt(cachedPosition_, target_, glm::vec3{0.0f, 1.0f, 0.0f});
 }
 
-} // namespace leon

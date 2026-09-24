@@ -5,7 +5,6 @@
 #include "Blueprint/UserWidget.h"
 #include <string>
 
-namespace leon {
 
 /// Centered outlined interact hint ("[F] Open Door [750]"). Empty Prompt skips paint.
 class InteractionPromptWidget : public UserWidget {
@@ -21,4 +20,3 @@ public:
     void NativePaint(WidgetPaintContext& ctx) override;
 };
 
-} // namespace leon

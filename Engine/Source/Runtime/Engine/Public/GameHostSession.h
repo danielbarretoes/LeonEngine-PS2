@@ -7,7 +7,6 @@
 #include <string>
 #include <string_view>
 
-namespace leon::runtime {
 
 /// Embeddable play host: pack resolve, WorldRuntime, GameplayRouter — no GLFW loop.
 /// Used by shipping `GameApplication::Run` and Editor PIE (Selected Viewport / New Window).
@@ -54,4 +53,3 @@ private:
     bool worldInitialized_ = false;
 };
 
-} // namespace leon::runtime

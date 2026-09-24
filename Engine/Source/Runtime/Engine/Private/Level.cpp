@@ -3,7 +3,6 @@
 #include <string_view>
 #include <utility>
 
-namespace leon {
 
 std::size_t StaticMeshComponent::subMeshCount() const {
     if (mesh == nullptr || !mesh->Valid()) {
@@ -136,4 +135,3 @@ void Level::Clear() {
     gameMode_.clear();
 }
 
-} // namespace leon

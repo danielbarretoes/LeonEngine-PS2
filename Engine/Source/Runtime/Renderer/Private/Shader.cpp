@@ -7,7 +7,6 @@
 #include <sstream>
 #include <system_error>
 
-namespace leon {
 namespace {
 
 bool readFile(const std::string& path, std::string& out) {
@@ -259,4 +258,3 @@ int Shader::UniformLocation(const char* name) const {
     return location;
 }
 
-} // namespace leon

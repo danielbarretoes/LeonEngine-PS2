@@ -4,7 +4,6 @@
 #include <cmath>
 #include "Math/Transform.h"
 
-namespace leon {
 namespace {
 
 constexpr glm::vec3 kAxisX{1.0f, 0.0f, 0.0f};
@@ -42,4 +41,3 @@ glm::mat3 Transform::normalMatrix() const {
     return glm::transpose(glm::inverse(m));
 }
 
-} // namespace leon
