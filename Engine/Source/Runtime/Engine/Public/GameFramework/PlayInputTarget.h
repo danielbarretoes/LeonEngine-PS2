@@ -5,7 +5,7 @@
 /// Routes play-mode input to an optional secondary `Window` (Editor PIE New Window).
 /// Shipping leaves the override unset — `Resolve` returns the main Engine window.
 /// Unreal analogy: focus the play viewport for input without a separate UObject.
-class PlayInputTarget {
+class FPlayInputTarget {
 public:
     void SetWindow(FGenericWindow* window) { window_ = window; }
     [[nodiscard]] FGenericWindow* GetWindow() const { return window_; }

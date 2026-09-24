@@ -9,7 +9,7 @@
 
 namespace {
 
-[[nodiscard]] bool TravelViaSiblingLevels(Engine& engine, std::string_view levelKey,
+[[nodiscard]] bool TravelViaSiblingLevels(UGameEngine& engine, std::string_view levelKey,
                                           std::string_view hintLevelPath) {
     if (levelKey.empty() || hintLevelPath.empty()) {
         return false;
@@ -34,7 +34,7 @@ namespace {
         const std::string stem = FCString::ToLower(path.stem().string());
         bool match = (stem == needle) || (FCString::ToLower(path.filename().string()) == needle);
         if (!match) {
-            LevelDocument doc;
+            FLevelDocument doc;
             if (LoadLeonLevelFile(path.string(), doc) && FCString::ToLower(doc.name) == needle) {
                 match = true;
             }
@@ -49,39 +49,39 @@ namespace {
 
 } // namespace
 
-GameInstance::GameInstance() : netDriver_(std::make_unique<NetDriver>()) {}
+UGameInstance::UGameInstance() : netDriver_(std::make_unique<UNetDriver>()) {}
 
-GameInstance::~GameInstance() {
+UGameInstance::~UGameInstance() {
     Shutdown();
 }
 
-void GameInstance::Init() {}
+void UGameInstance::Init() {}
 
-void GameInstance::Shutdown() {
+void UGameInstance::Shutdown() {
     CloseNetSession();
     levelTravelFn_ = {};
     levelBrowserVisibleFn_ = {};
 }
 
-bool GameInstance::HostListen(std::uint16_t port) {
+bool UGameInstance::HostListen(std::uint16_t port) {
     return netDriver_->StartHost(port);
 }
 
-bool GameInstance::HostDedicated(std::uint16_t port) {
+bool UGameInstance::HostDedicated(std::uint16_t port) {
     return netDriver_->StartDedicated(port);
 }
 
-bool GameInstance::Join(const std::string& address, std::uint16_t port) {
+bool UGameInstance::Join(const std::string& address, std::uint16_t port) {
     return netDriver_->Connect(address, port);
 }
 
-void GameInstance::CloseNetSession() {
+void UGameInstance::CloseNetSession() {
     if (netDriver_) {
         netDriver_->Shutdown();
     }
 }
 
-bool GameInstance::TravelInternal(Engine& engine, std::string_view levelKey,
+bool UGameInstance::TravelInternal(UGameEngine& engine, std::string_view levelKey,
                                   std::string_view hintLevelPath) {
     if (levelKey.empty()) {
         return false;
@@ -96,12 +96,12 @@ bool GameInstance::TravelInternal(Engine& engine, std::string_view levelKey,
     return false;
 }
 
-bool GameInstance::ServerTravel(Engine& engine, std::string_view mapName,
+bool UGameInstance::ServerTravel(UGameEngine& engine, std::string_view mapName,
                                 std::string_view hintLevelPath) {
     return TravelInternal(engine, mapName, hintLevelPath);
 }
 
-bool GameInstance::ClientTravel(Engine& engine, std::string_view mapName,
+bool UGameInstance::ClientTravel(UGameEngine& engine, std::string_view mapName,
                                 std::string_view hintLevelPath) {
     return TravelInternal(engine, mapName, hintLevelPath);
 }

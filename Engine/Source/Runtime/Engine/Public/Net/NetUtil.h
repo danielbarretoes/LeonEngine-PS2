@@ -4,7 +4,7 @@
 #include <string_view>
 
 
-class NetDriver;
+class UNetDriver;
 
 namespace Leon::Net
 {
@@ -15,6 +15,6 @@ namespace Leon::Net
 /// Host → remotes: reliable Travel (Unreal ClientTravel notify lite).
 /// Dedicated: Travel.slot = peer index. Listen: Travel.slot = peer + 1 (matches pack
 /// playerSlotFromPeer). No-op when not hosting or no peers.
-void SendTravelToPeers(NetDriver& net, std::string_view mapName, bool dedicatedServer);
+void SendTravelToPeers(UNetDriver& net, std::string_view mapName, bool dedicatedServer);
 
 } // namespace Leon::Net

@@ -25,7 +25,7 @@ void AIController::ClearPath() {
 
 void AIController::RebuildPath() {
     ClearPath();
-    Character* character = GetCharacter();
+    ACharacter* character = GetCharacter();
     if (character == nullptr || navigation_ == nullptr || !navigation_->HasNavMesh() ||
         !hasTarget_) {
         return;
@@ -80,7 +80,7 @@ void AIController::MoveToLocation(const glm::vec3& worldPosition) {
     RebuildPath();
 }
 
-void AIController::MoveToActor(Actor* actor) {
+void AIController::MoveToActor(AActor* actor) {
     if (actor == nullptr) {
         StopMovement();
         return;
@@ -104,7 +104,7 @@ void AIController::StopMovement() {
 }
 
 glm::vec3 AIController::TickAI(float deltaTime) {
-    Character* character = GetCharacter();
+    ACharacter* character = GetCharacter();
     if (character == nullptr) {
         return {};
     }

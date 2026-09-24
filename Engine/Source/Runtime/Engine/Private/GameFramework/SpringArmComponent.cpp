@@ -10,20 +10,20 @@
 
 namespace {
 
-[[nodiscard]] FPhysScene* ResolvePhysScene(Actor* owner, FPhysScene* explicitScene) {
+[[nodiscard]] FPhysScene* ResolvePhysScene(AActor* owner, FPhysScene* explicitScene) {
     if (explicitScene != nullptr) {
         return explicitScene;
     }
     if (owner == nullptr) {
         return nullptr;
     }
-    World* world = owner->GetWorld();
+    UWorld* world = owner->GetWorld();
     return world != nullptr ? &world->GetPhysicsScene() : nullptr;
 }
 
 } // namespace
 
-glm::vec3 SpringArmComponent::GetBoomDirection(float yawDegrees, float pitchDegrees) {
+glm::vec3 USpringArmComponent::GetBoomDirection(float yawDegrees, float pitchDegrees) {
     const float yawRad = yawDegrees * (glm::pi<float>() / 180.0f);
     const float pitchRad = pitchDegrees * (glm::pi<float>() / 180.0f);
     const glm::vec3 dir{
@@ -38,7 +38,7 @@ glm::vec3 SpringArmComponent::GetBoomDirection(float yawDegrees, float pitchDegr
     return dir / len;
 }
 
-glm::vec3 SpringArmComponent::GetTargetLocation(const glm::vec3& actorLocation) const {
+glm::vec3 USpringArmComponent::GetTargetLocation(const glm::vec3& actorLocation) const {
     constexpr float kDegToRad = glm::pi<float>() / 180.0f;
     const float yawRad = BoomYawDegrees * kDegToRad;
     // Same right basis as yawRelativeMoveXZ.
@@ -46,7 +46,7 @@ glm::vec3 SpringArmComponent::GetTargetLocation(const glm::vec3& actorLocation) 
     return actorLocation + glm::vec3{0.0f, SocketOffsetZ, 0.0f} + (right * SocketOffsetX);
 }
 
-void SpringArmComponent::SnapLagState(const glm::vec3& actorLocation) {
+void USpringArmComponent::SnapLagState(const glm::vec3& actorLocation) {
     laggedTarget_ = GetTargetLocation(actorLocation);
     laggedYawDegrees_ = BoomYawDegrees;
     laggedPitchDegrees_ = BoomPitchDegrees;
@@ -54,7 +54,7 @@ void SpringArmComponent::SnapLagState(const glm::vec3& actorLocation) {
     lagInitialized_ = true;
 }
 
-float SpringArmComponent::GetLookFacingYawDegrees() const {
+float USpringArmComponent::GetLookFacingYawDegrees() const {
     constexpr float kDegToRad = glm::pi<float>() / 180.0f;
     constexpr float kRadToDeg = 180.0f / glm::pi<float>();
     const float yawRad = BoomYawDegrees * kDegToRad;
@@ -62,19 +62,19 @@ float SpringArmComponent::GetLookFacingYawDegrees() const {
     return std::atan2(-std::cos(yawRad), -std::sin(yawRad)) * kRadToDeg;
 }
 
-float SpringArmComponent::ExpSmoothAlpha(float speed, float deltaTime) {
+float USpringArmComponent::ExpSmoothAlpha(float speed, float deltaTime) {
     if (speed <= 0.0f || deltaTime <= 0.0f) {
         return 1.0f;
     }
     return 1.0f - std::exp(-speed * deltaTime);
 }
 
-float SpringArmComponent::LerpAngleDegrees(float fromDegrees, float toDegrees, float alpha) {
+float USpringArmComponent::LerpAngleDegrees(float fromDegrees, float toDegrees, float alpha) {
     float delta = std::fmod(toDegrees - fromDegrees + 540.0f, 360.0f) - 180.0f;
     return fromDegrees + (delta * alpha);
 }
 
-void SpringArmComponent::UpdateLag(float deltaTime, const glm::vec3& actorLocation) {
+void USpringArmComponent::UpdateLag(float deltaTime, const glm::vec3& actorLocation) {
     const glm::vec3 desiredTarget = GetTargetLocation(actorLocation);
     if (!lagInitialized_) {
         laggedTarget_ = desiredTarget;
@@ -98,7 +98,7 @@ void SpringArmComponent::UpdateLag(float deltaTime, const glm::vec3& actorLocati
     laggedArmLength_ = std::clamp(laggedArmLength_, ArmLengthMin, ArmLengthMax);
 }
 
-float SpringArmComponent::ProbeArmLength(FPhysScene& physScene, const glm::vec3& target,
+float USpringArmComponent::ProbeArmLength(FPhysScene& physScene, const glm::vec3& target,
                                          float yawDegrees, float pitchDegrees,
                                          float desiredLength, FDebugDraw* debugDraw) const {
     const float length = std::clamp(desiredLength, ArmLengthMin, ArmLengthMax);
@@ -127,7 +127,7 @@ float SpringArmComponent::ProbeArmLength(FPhysScene& physScene, const glm::vec3&
     return std::clamp(cleared, ArmLengthMin, length);
 }
 
-void SpringArmComponent::ApplyToCamera(Camera& camera, const glm::vec3& actorLocation,
+void USpringArmComponent::ApplyToCamera(UCameraComponent& camera, const glm::vec3& actorLocation,
                                        float deltaTime, FPhysScene* physScene,
                                        FDebugDraw* debugDraw) {
     UpdateLag(deltaTime, actorLocation);
@@ -151,7 +151,7 @@ void SpringArmComponent::ApplyToCamera(Camera& camera, const glm::vec3& actorLoc
     camera.SetYawPitch(laggedYawDegrees_, laggedPitchDegrees_);
 }
 
-void SpringArmComponent::ApplyToCamera(Camera& camera, float deltaTime, FDebugDraw* debugDraw) {
+void USpringArmComponent::ApplyToCamera(UCameraComponent& camera, float deltaTime, FDebugDraw* debugDraw) {
     const glm::vec3 actorLocation =
         GetOwner() != nullptr ? GetOwner()->GetActorLocation() : GetComponentLocation();
     ApplyToCamera(camera, actorLocation, deltaTime, nullptr, debugDraw);

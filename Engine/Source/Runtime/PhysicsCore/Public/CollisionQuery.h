@@ -46,7 +46,7 @@ struct FHitResult {
 /// Unreal-like FCollisionQueryParams.
 struct FCollisionQueryParams {
     std::size_t SkipLevelMeshIndex = (std::numeric_limits<std::size_t>::max)();
-    /// Include an infinite horizontal floor at FloorY (CharacterMovement floor).
+    /// Include an infinite horizontal floor at FloorY (UCharacterMovementComponent floor).
     bool bTraceFloorPlane = false;
     float FloorY = 0.0f;
     /// When not None, FPhysScene traces draw into the provided FDebugDraw* (F2 / gameplay debug).

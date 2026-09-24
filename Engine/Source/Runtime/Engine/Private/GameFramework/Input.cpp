@@ -10,7 +10,7 @@ constexpr float kDegToRad = glm::pi<float>() / 180.0f;
 
 } // namespace
 
-glm::vec3 yawRelativeMoveXZ(float yawDegrees, const MoveAxes2D& axes) {
+glm::vec3 yawRelativeMoveXZ(float yawDegrees, const FMoveAxes2D& axes) {
     if (!axes.any()) {
         return glm::vec3{0.0f};
     }
@@ -28,7 +28,7 @@ glm::vec3 yawRelativeMoveXZ(float yawDegrees, const MoveAxes2D& axes) {
     return move;
 }
 
-glm::vec3 cameraRelativeMoveXZ(const Camera& camera, const MoveAxes2D& axes) {
+glm::vec3 cameraRelativeMoveXZ(const UCameraComponent& camera, const FMoveAxes2D& axes) {
     return yawRelativeMoveXZ(camera.YawDegrees(), axes);
 }
 

@@ -11,28 +11,28 @@
 #include <utility>
 
 
-class Character;
-class Engine;
+class ACharacter;
+class UGameEngine;
 
-/// Drives a possessed Character from player input (Unreal-style PlayerController).
-class PlayerController : public Controller {
+/// Drives a possessed Character from player input (Unreal-style APlayerController).
+class APlayerController : public AController {
 public:
-    PlayerController() : playerState_(std::make_unique<PlayerState>()) {}
+    APlayerController() : playerState_(std::make_unique<APlayerState>()) {}
 
-    using Controller::Possess;
-    void Possess(Character* character);
+    using AController::Possess;
+    void Possess(ACharacter* character);
 
-    [[nodiscard]] Character* GetCharacter() const { return Controller::GetCharacter(); }
+    [[nodiscard]] ACharacter* GetCharacter() const { return AController::GetCharacter(); }
     [[nodiscard]] bool HasCharacter() const { return GetCharacter() != nullptr; }
 
-    [[nodiscard]] PlayerState& GetPlayerState() { return *playerState_; }
-    [[nodiscard]] const PlayerState& GetPlayerState() const { return *playerState_; }
+    [[nodiscard]] APlayerState& GetPlayerState() { return *playerState_; }
+    [[nodiscard]] const APlayerState& GetPlayerState() const { return *playerState_; }
 
     /// Replaces owned PlayerState. Caller must GameMode::Logout (or RemovePlayerState) first
     /// so GameState::PlayerArray does not keep a dangling pointer.
     template <typename T, typename... Args>
     T* SetPlayerState(Args&&... args) {
-        static_assert(std::is_base_of_v<PlayerState, T>, "T must derive from PlayerState");
+        static_assert(std::is_base_of_v<APlayerState, T>, "T must derive from PlayerState");
         auto owned = std::make_unique<T>(std::forward<Args>(args)...);
         T* raw = owned.get();
         playerState_ = std::move(owned);
@@ -41,10 +41,10 @@ public:
 
     /// Apply input to the possessed Character. Packs override. Returns wish direction for
     /// debug HUD; default is a no-op.
-    virtual glm::vec3 TickInput(Engine& engine);
+    virtual glm::vec3 TickInput(UGameEngine& engine);
 
     /// Unreal-like: drive view from possessed pawn SpringArm (packs override).
-    virtual void UpdateCamera(Engine& engine, float deltaTime);
+    virtual void UpdateCamera(UGameEngine& engine, float deltaTime);
 
     /// When false, this PC is driven by remote InputCmd (listen-server remote player).
     [[nodiscard]] bool IsLocalController() const { return bLocalController_; }
@@ -60,7 +60,7 @@ public:
     [[nodiscard]] std::uint16_t ConsumeButtonPressedMask();
 
 private:
-    std::unique_ptr<PlayerState> playerState_;
+    std::unique_ptr<APlayerState> playerState_;
     bool bLocalController_ = true;
 
     std::uint16_t prevButtons_ = 0;

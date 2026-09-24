@@ -21,7 +21,7 @@ TEST_CASE("SegmentTriangle hits a unit floor tri", "[physics][triangle]") {
 }
 
 TEST_CASE("LineTrace and QuerySupportY use TriangleMesh surface", "[physics][triangle][trace]") {
-    Level level;
+    ULevel level;
     FMeshData data;
     // Flat plane at y=0.5 covering xz [-2,2]
     data.vertices.push_back({{-2.0f, 0.5f, -2.0f}, {0, 1, 0}, {0, 0}, {1, 0, 0, 1}});
@@ -31,7 +31,7 @@ TEST_CASE("LineTrace and QuerySupportY use TriangleMesh surface", "[physics][tri
     data.indices = {0, 1, 2, 0, 2, 3};
     data.submeshes.push_back({0, 6, 0});
 
-    StaticMeshComponent component{};
+    UStaticMeshComponent component{};
     component.mesh = std::make_shared<UStaticMesh>(UStaticMesh::CreateCpu(data));
     component.collisionEnabled = true;
     level.StaticMeshes().push_back(std::move(component));
@@ -52,6 +52,6 @@ TEST_CASE("LineTrace and QuerySupportY use TriangleMesh surface", "[physics][tri
     capsule.radius = 0.35f;
     capsule.height = 1.0f;
     const float support =
-        scene.QuerySupportY(capsule, {0.0f, 1.0f, 0.0f}, 0.0f, 0.4f, 0.02f, Level::npos);
+        scene.QuerySupportY(capsule, {0.0f, 1.0f, 0.0f}, 0.0f, 0.4f, 0.02f, ULevel::npos);
     REQUIRE_THAT(support, WithinAbs(0.5f, 5.0e-2f));
 }

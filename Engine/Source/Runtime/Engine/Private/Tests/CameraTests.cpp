@@ -2,12 +2,12 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include "Camera/Camera.h"
+#include "Camera/CameraComponent.h"
 
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("Camera orbit clamps pitch", "[core][camera]") {
-    Camera cam;
+    UCameraComponent cam;
     cam.SetYawPitch(0.0f, 0.0f);
     cam.Orbit(0.0f, 200.0f);
     REQUIRE_THAT(cam.PitchDegrees(), WithinAbs(89.0f, 1.0e-4f));
@@ -16,7 +16,7 @@ TEST_CASE("Camera orbit clamps pitch", "[core][camera]") {
 }
 
 TEST_CASE("Camera orbit distance clamps and FreeLook ignores zoom", "[core][camera]") {
-    Camera cam;
+    UCameraComponent cam;
     cam.SetDistance(5.0f);
     cam.Zoom(100.0f);
     REQUIRE_THAT(cam.Distance(), WithinAbs(0.5f, 1.0e-4f));
@@ -28,7 +28,7 @@ TEST_CASE("Camera orbit distance clamps and FreeLook ignores zoom", "[core][came
 }
 
 TEST_CASE("Camera orbit position follows target and distance", "[core][camera]") {
-    Camera cam;
+    UCameraComponent cam;
     cam.SetMode(ECameraMode::Orbit);
     cam.SetTarget({0.0f, 0.0f, 0.0f});
     cam.SetYawPitch(0.0f, 0.0f);
@@ -41,7 +41,7 @@ TEST_CASE("Camera orbit position follows target and distance", "[core][camera]")
 }
 
 TEST_CASE("Camera FreeLook uses eye location", "[core][camera]") {
-    Camera cam;
+    UCameraComponent cam;
     cam.SetMode(ECameraMode::FreeLook);
     cam.SetEyeLocation({1.0f, 2.0f, 3.0f});
     const glm::vec3 eye = cam.GetCameraLocation();

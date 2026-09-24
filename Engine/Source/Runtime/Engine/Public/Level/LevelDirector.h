@@ -7,45 +7,45 @@
 #include <string_view>
 
 
-class Engine;
+class UGameEngine;
 
 /// Scans game levels, loads them into an Engine, and draws a bottom-right browser
 /// (`< name (i/n) >`). Switch with `[` / `]`, digit keys `1`–`9`, or mouse on the arrows.
-class LevelDirector {
+class FLevelDirector {
 public:
     bool Initialize(const std::string& shaderDirectory);
     void Shutdown();
     [[nodiscard]] EShaderReloadResult ReloadShaders(bool force = false);
 
     /// Discover `.llev` levels under `projectsRoot/<pack>/Content/Levels/` and load the first.
-    bool ScanAndLoad(Engine& engine, const std::string& projectsDirectory);
+    bool ScanAndLoad(UGameEngine& engine, const std::string& projectsDirectory);
 
     /// Discover levels for a single project folder (`Projects/<pack>/`) and load
-    /// `preferredLevelKey` when set (LevelEntry.name / stem); otherwise the first entry.
-    bool ScanPackAndLoad(Engine& engine, const std::string& packDirectory,
+    /// `preferredLevelKey` when set (FLevelEntry.name / stem); otherwise the first entry.
+    bool ScanPackAndLoad(UGameEngine& engine, const std::string& packDirectory,
                          std::string_view preferredLevelKey = {});
 
     /// Load by catalog index. On failure the previous Level contents may be cleared;
     /// CurrentIndex is only updated after a successful load.
-    bool LoadIndex(Engine& engine, std::size_t index);
-    /// Load by LevelEntry.name / path stem (net travel key). Returns false if unknown.
-    bool LoadByKey(Engine& engine, std::string_view levelKey);
-    bool Next(Engine& engine);
-    bool Previous(Engine& engine);
+    bool LoadIndex(UGameEngine& engine, std::size_t index);
+    /// Load by FLevelEntry.name / path stem (net travel key). Returns false if unknown.
+    bool LoadByKey(UGameEngine& engine, std::string_view levelKey);
+    bool Next(UGameEngine& engine);
+    bool Previous(UGameEngine& engine);
 
     /// Apply spin / bob / point-light orbit from the loaded Level.
-    void Update(Engine& engine, float deltaTime);
+    void Update(UGameEngine& engine, float deltaTime);
 
     /// Draw the bottom-right chrome after the 3D + stats pass.
     void DrawUi(int framebufferWidth, int framebufferHeight);
 
     /// Handle `[` `]`, digits `1`–`9`, and clicks on `<` `>`.
     /// Returns true while camera drag should be blocked.
-    bool HandleUiInput(Engine& engine);
+    bool HandleUiInput(UGameEngine& engine);
 
     [[nodiscard]] bool IsEmpty() const { return catalog_.IsEmpty(); }
     [[nodiscard]] std::size_t CurrentIndex() const { return currentIndex_; }
-    [[nodiscard]] const LevelCatalog& Catalog() const { return catalog_; }
+    [[nodiscard]] const FLevelCatalog& Catalog() const { return catalog_; }
 
     /// When false, `[`/`]` chrome and input are disabled (menus / shipping UI).
     void SetBrowserVisible(bool visible) { browserVisible_ = visible; }
@@ -56,10 +56,10 @@ private:
     void layoutChrome(int framebufferWidth, int framebufferHeight);
     [[nodiscard]] bool hitPrev(float x, float y) const;
     [[nodiscard]] bool hitNext(float x, float y) const;
-    void cursorFramebuffer(Engine& engine, float& outX, float& outY) const;
+    void cursorFramebuffer(UGameEngine& engine, float& outX, float& outY) const;
 
-    LevelCatalog catalog_;
-    LevelAnimation animation_;
+    FLevelCatalog catalog_;
+    FLevelAnimation animation_;
     FDebugOverlay chrome_;
 
     std::size_t currentIndex_ = 0;

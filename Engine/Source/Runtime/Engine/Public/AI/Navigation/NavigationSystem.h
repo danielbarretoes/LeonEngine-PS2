@@ -7,19 +7,19 @@
 #include <vector>
 
 
-class Level;
+class ULevel;
 class FPhysScene;
 class FDebugDraw;
 
-/// Level mesh tags recognized by NavigationSystem bake (Unreal NavArea-style hints).
+/// Level mesh tags recognized by UNavigationSystem bake (Unreal NavArea-style hints).
 namespace NavTags {
 inline constexpr const char* Blocker = "NavBlocker";
 inline constexpr const char* Walkable = "NavWalkable";
 } // namespace NavTags
 
-/// Unreal-like NavigationSystem lite: bake a grid NavMesh from static FPhysScene bodies,
+/// Unreal-like UNavigationSystem lite: bake a grid NavMesh from static FPhysScene bodies,
 /// then FindPath for AIController. Not Recast/Detour — swap-compatible later.
-class NavigationSystem {
+class UNavigationSystem {
 public:
     /// Cell size / agent radius used when baking (defaults ~ character capsule radius).
     void SetCellSize(float meters) { cellSize_ = meters > 0.05f ? meters : 0.05f; }
@@ -28,17 +28,17 @@ public:
     [[nodiscard]] float AgentRadius() const { return agentRadius_; }
 
     /// Bake walkable grid from static box bodies. Wide/flat floor slabs stay walkable.
-    /// `walkBounds` is half-extent from origin on XZ (matches CharacterMovement::WalkBounds).
+    /// `walkBounds` is half-extent from origin on XZ (matches UCharacterMovementComponent::WalkBounds).
     void BuildFromPhysScene(const FPhysScene& physics, float floorY, float walkBounds);
 
     /// Prefer this: skips FPlane; honors NavTags::Blocker / NavTags::Walkable on meshes.
-    void BuildFromLevel(const Level& level, const FPhysScene& physics, float floorY,
+    void BuildFromLevel(const ULevel& level, const FPhysScene& physics, float floorY,
                         float walkBounds);
 
     void Clear();
 
     [[nodiscard]] bool HasNavMesh() const { return mesh_.IsValid(); }
-    [[nodiscard]] const NavMesh& GetNavMesh() const { return mesh_; }
+    [[nodiscard]] const FNavMesh& GetNavMesh() const { return mesh_; }
     [[nodiscard]] int BlockerCount() const { return blockerCount_; }
     [[nodiscard]] int WalkableCellCount() const { return walkableCellCount_; }
 
@@ -54,9 +54,9 @@ public:
     void AppendDebugDraw(FDebugDraw& draw) const;
 
 private:
-    void BakeGrid(const FPhysScene& physics, float floorY, float walkBounds, const Level* level);
+    void BakeGrid(const FPhysScene& physics, float floorY, float walkBounds, const ULevel* level);
 
-    NavMesh mesh_{};
+    FNavMesh mesh_{};
     float cellSize_ = 0.5f;
     float agentRadius_ = 0.35f;
     int blockerCount_ = 0;

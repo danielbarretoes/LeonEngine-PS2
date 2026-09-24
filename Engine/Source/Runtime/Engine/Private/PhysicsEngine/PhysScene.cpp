@@ -137,7 +137,7 @@ std::size_t FPhysScene::AddSlopeRamp(const glm::vec3& boundsCenter,
     return slopePlanes_.size() - 1;
 }
 
-void FPhysScene::SyncFromLevel(const Level& level) {
+void FPhysScene::SyncFromLevel(const ULevel& level) {
     const auto& meshes = level.StaticMeshes();
     if (triangleMeshes_.size() != bodies_.size()) {
         triangleMeshes_.resize(bodies_.size());
@@ -151,7 +151,7 @@ void FPhysScene::SyncFromLevel(const Level& level) {
         if (body.levelMeshIndex >= meshes.size()) {
             continue;
         }
-        const StaticMeshComponent& obj = meshes[body.levelMeshIndex];
+        const UStaticMeshComponent& obj = meshes[body.levelMeshIndex];
         if (obj.mesh != nullptr) {
             const FBox worldAabb = FBox::fromLocalTransformed(
                 obj.mesh->LocalMin(), obj.mesh->LocalMax(), obj.EffectiveModelMatrix());
@@ -190,7 +190,7 @@ void FPhysScene::SyncFromLevel(const Level& level) {
     }
 }
 
-void FPhysScene::SyncToLevel(Level& level) const {
+void FPhysScene::SyncToLevel(ULevel& level) const {
     auto& meshes = level.StaticMeshes();
     for (const FBodyInstance& body : bodies_) {
         if (body.levelMeshIndex >= meshes.size()) {
@@ -343,7 +343,7 @@ void FPhysScene::ResolveCapsuleSides(const FCapsuleShape& capsule, glm::vec3& fe
 bool FPhysScene::ApplyCapsuleSweepPush(std::size_t levelMeshIndex, const glm::vec2& wishXZ,
                                       const glm::vec3& impactNormal, float pushStrength,
                                       float walkBounds) {
-    if (levelMeshIndex == Level::npos || glm::length(wishXZ) <= 1.0e-4f) {
+    if (levelMeshIndex == ULevel::npos || glm::length(wishXZ) <= 1.0e-4f) {
         return false;
     }
 

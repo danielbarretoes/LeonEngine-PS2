@@ -9,19 +9,19 @@
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("Level stores meshes PlayerStarts and tags", "[level][container]") {
-    Level level;
-    StaticMeshComponent mesh{};
+    ULevel level;
+    UStaticMeshComponent mesh{};
     mesh.tag = "player";
     mesh.transform.Position = {1.0f, 2.0f, 3.0f};
     level.AddStaticMesh(std::move(mesh));
 
-    PlayerStart start{};
+    FPlayerStart start{};
     start.transform.Position = {5.0f, 0.0f, -2.0f};
     level.AddPlayerStart(start);
 
     REQUIRE(level.StaticMeshes().size() == 1);
     REQUIRE(level.FindStaticMeshIndexByTag("player") == 0);
-    REQUIRE(level.FindStaticMeshIndexByTag("missing") == Level::npos);
+    REQUIRE(level.FindStaticMeshIndexByTag("missing") == ULevel::npos);
     REQUIRE(level.FindPlayerStart() != nullptr);
     REQUIRE_THAT(level.FindPlayerStart()->transform.Position.x, WithinAbs(5.0f, 1.0e-5f));
 
@@ -36,12 +36,12 @@ TEST_CASE("LevelCatalog scan flat directory", "[level][catalog]") {
     const auto tempDir = std::filesystem::temp_directory_path() / "leon_level_catalog_test";
     std::filesystem::create_directories(tempDir);
 
-    LevelDocument doc;
+    FLevelDocument doc;
     doc.name = "UnitLevel";
     doc.gameMode = "Default";
     REQUIRE(SaveLeonLevelFile((tempDir / "unit_level.llev").string(), doc));
 
-    LevelCatalog catalog;
+    FLevelCatalog catalog;
     REQUIRE(catalog.Scan(tempDir.string()));
     REQUIRE(catalog.NumEntries() == 1);
     REQUIRE(catalog.Entries().front().name == "UnitLevel");

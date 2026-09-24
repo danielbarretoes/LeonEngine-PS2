@@ -19,19 +19,19 @@ enum class ENetMode : std::uint8_t {
     DedicatedServer = 3,
 };
 
-/// Thin ENet wrapper (Unreal-like NetDriver / UNetDriver micro).
-class NetDriver {
+/// Thin ENet wrapper (Unreal-like UNetDriver / UNetDriver micro).
+class UNetDriver {
 public:
     /// peerSlot: host remote index [0, maxClients), or 0 for the server when Client.
-    using PacketHandler =
+    using FPacketHandler =
         std::function<void(int peerSlot, const std::uint8_t* data, std::size_t size)>;
-    using PeerHandler = std::function<void(int peerSlot)>;
+    using FPeerHandler = std::function<void(int peerSlot)>;
 
-    NetDriver() = default;
-    ~NetDriver();
+    UNetDriver() = default;
+    ~UNetDriver();
 
-    NetDriver(const NetDriver&) = delete;
-    NetDriver& operator=(const NetDriver&) = delete;
+    UNetDriver(const UNetDriver&) = delete;
+    UNetDriver& operator=(const UNetDriver&) = delete;
 
     /// Listen-server: remotes fill fighter slots after the local host player.
     [[nodiscard]] bool StartHost(std::uint16_t port = Leon::Net::kDefaultPort);
@@ -67,9 +67,9 @@ public:
     void SetPeerRateLimitEnabled(bool enabled) { peerRateLimitEnabled_ = enabled; }
     [[nodiscard]] bool IsPeerRateLimitEnabled() const { return peerRateLimitEnabled_; }
 
-    void SetOnPacket(PacketHandler handler) { onPacket_ = std::move(handler); }
-    void SetOnPeerConnected(PeerHandler handler) { onPeerConnected_ = std::move(handler); }
-    void SetOnPeerDisconnected(PeerHandler handler) { onPeerDisconnected_ = std::move(handler); }
+    void SetOnPacket(FPacketHandler handler) { onPacket_ = std::move(handler); }
+    void SetOnPeerConnected(FPeerHandler handler) { onPeerConnected_ = std::move(handler); }
+    void SetOnPeerDisconnected(FPeerHandler handler) { onPeerDisconnected_ = std::move(handler); }
 
 private:
     bool ensureInitialized();
@@ -87,8 +87,8 @@ private:
     bool libraryReady_ = false;
     bool connected_ = false;
     bool peerRateLimitEnabled_ = true;
-    PacketHandler onPacket_;
-    PeerHandler onPeerConnected_;
-    PeerHandler onPeerDisconnected_;
+    FPacketHandler onPacket_;
+    FPeerHandler onPeerConnected_;
+    FPeerHandler onPeerDisconnected_;
 };
 

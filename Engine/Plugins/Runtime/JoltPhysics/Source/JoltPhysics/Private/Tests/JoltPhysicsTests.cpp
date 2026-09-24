@@ -22,7 +22,7 @@ TEST_CASE("PhysScene Jolt backend reports Jolt", "[physics][jolt]") {
 }
 
 TEST_CASE("World SetPhysicsBackend switches to Jolt", "[physics][jolt][world]") {
-    World world;
+    UWorld world;
     REQUIRE(world.GetPhysicsScene().GetBackend() == EPhysicsBackend::Arcade);
 
     world.SetPhysicsBackend(EPhysicsBackend::Jolt);
@@ -96,7 +96,7 @@ TEST_CASE("PhysScene Jolt dynamic rests on static box", "[physics][jolt]") {
 }
 
 TEST_CASE("PhysScene Jolt dynamic rests on TriangleMesh static", "[physics][jolt][mesh]") {
-    Level level;
+    ULevel level;
     FMeshData data;
     // Flat plane at y=1 covering xz [-3,3]
     data.vertices.push_back({{-3.0f, 1.0f, -3.0f}, {0, 1, 0}, {0, 0}, {1, 0, 0, 1}});
@@ -106,7 +106,7 @@ TEST_CASE("PhysScene Jolt dynamic rests on TriangleMesh static", "[physics][jolt
     data.indices = {0, 1, 2, 0, 2, 3};
     data.submeshes.push_back({0, 6, 0});
 
-    StaticMeshComponent component{};
+    UStaticMeshComponent component{};
     component.mesh = std::make_shared<UStaticMesh>(UStaticMesh::CreateCpu(data));
     component.collisionEnabled = true;
     level.StaticMeshes().push_back(std::move(component));

@@ -21,7 +21,7 @@ namespace {
 
 } // namespace
 
-void ApplyFitHeight(StaticMeshComponent& object, float fitHeight) {
+void ApplyFitHeight(UStaticMeshComponent& object, float fitHeight) {
     if (object.mesh == nullptr || fitHeight <= 0.0f) {
         return;
     }
@@ -43,19 +43,19 @@ void ApplyFitHeight(StaticMeshComponent& object, float fitHeight) {
     object.transform.Position = grounded + positionOffset;
 }
 
-bool LoadLevelFile(Engine& engine, const std::string& levelPath, LevelAnimation* outAnim) {
+bool LoadLevelFile(UGameEngine& engine, const std::string& levelPath, FLevelAnimation* outAnim) {
     if (!HasLeonLevelExtension(levelPath)) {
         std::cerr << "LevelLoader: '" << levelPath << "' is not a Leon Level -- expected '"
                   << kLeonLevelExtension << "'\n";
         return false;
     }
 
-    LevelDocument doc;
+    FLevelDocument doc;
     if (!LoadLeonLevelFile(levelPath, doc)) {
         return false;
     }
 
-    ValidationReport report = ValidateLevelDocument(doc, levelPath);
+    FValidationReport report = ValidateLevelDocument(doc, levelPath);
     report.logToStderr();
     if (!report.ok()) {
         std::cerr << "LevelLoader: rejecting '" << levelPath << "' (validation failed)\n";

@@ -7,8 +7,8 @@
 #include <vector>
 
 
-class Actor;
-class NavigationSystem;
+class AActor;
+class UNavigationSystem;
 
 /// High-level AIController mode for packs that do not run a BehaviorTree.
 enum class EAILogicState : std::uint8_t {
@@ -18,8 +18,8 @@ enum class EAILogicState : std::uint8_t {
 };
 
 /// Drives a possessed Pawn with simple steering (Unreal-style AIController).
-/// When a NavigationSystem is set, MoveTo* follows a NavMesh path; otherwise line-of-sight XZ.
-class AIController : public Controller {
+/// When a UNavigationSystem is set, MoveTo* follows a NavMesh path; otherwise line-of-sight XZ.
+class AIController : public AController {
 public:
     void SetWishDirection(const glm::vec3& wishDirXZ) { wishDir_ = wishDirXZ; }
     void ClearWishDirection() { wishDir_ = {}; }
@@ -28,16 +28,16 @@ public:
     [[nodiscard]] EAILogicState GetLogicState() const { return logicState_; }
 
     /// Optional; enables FindPath for MoveToLocation / MoveToActor.
-    void SetNavigationSystem(NavigationSystem* navigation) { navigation_ = navigation; }
-    [[nodiscard]] NavigationSystem* GetNavigationSystem() const { return navigation_; }
+    void SetNavigationSystem(UNavigationSystem* navigation) { navigation_ = navigation; }
+    [[nodiscard]] UNavigationSystem* GetNavigationSystem() const { return navigation_; }
 
     void MoveToLocation(const glm::vec3& worldPosition);
     /// Chase an Actor each TickAI (repaths periodically when nav is available).
-    void MoveToActor(Actor* actor);
+    void MoveToActor(AActor* actor);
     void StopMovement();
 
     [[nodiscard]] bool HasMoveTarget() const { return hasTarget_; }
-    [[nodiscard]] Actor* MoveActor() const { return moveActor_; }
+    [[nodiscard]] AActor* MoveActor() const { return moveActor_; }
     [[nodiscard]] const glm::vec3& MoveTarget() const { return target_; }
     [[nodiscard]] bool HasPath() const { return !path_.empty(); }
     [[nodiscard]] bool IsFollowingPath() const { return usePath_ && !path_.empty(); }
@@ -60,8 +60,8 @@ private:
 
     glm::vec3 wishDir_{0.0f};
     glm::vec3 target_{0.0f};
-    Actor* moveActor_ = nullptr;
-    NavigationSystem* navigation_ = nullptr;
+    AActor* moveActor_ = nullptr;
+    UNavigationSystem* navigation_ = nullptr;
     std::vector<glm::vec3> path_;
     std::size_t pathIndex_ = 0;
     float pathRebuildCooldown_ = 0.0f;

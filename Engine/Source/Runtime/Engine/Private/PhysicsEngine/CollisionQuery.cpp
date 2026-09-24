@@ -171,7 +171,7 @@ void appendSlopePlaneHits(std::vector<FHitResult>& outHits, const glm::vec3& sta
             continue;
         }
         FHitResult hit{};
-        writeHit(hit, start, end, t, normal, Level::npos, false);
+        writeHit(hit, start, end, t, normal, ULevel::npos, false);
         hit.ImpactPoint = hit.Location - (normal * inflate);
         outHits.push_back(hit);
     }
@@ -326,7 +326,7 @@ bool FPhysScene::LineTraceMultiByChannel(std::vector<FHitResult>& outHits, const
         glm::vec3 normal{};
         if (segmentFloorY(start, end, params.FloorY, t, normal)) {
             FHitResult hit{};
-            writeHit(hit, start, end, t, normal, Level::npos, true);
+            writeHit(hit, start, end, t, normal, ULevel::npos, true);
             outHits.push_back(hit);
         }
     }
@@ -408,7 +408,7 @@ bool FPhysScene::SphereTraceMultiByChannel(std::vector<FHitResult>& outHits, con
         glm::vec3 normal{};
         if (segmentFloorY(start, end, planeY, t, normal)) {
             FHitResult hit{};
-            writeHit(hit, start, end, t, normal, Level::npos, true);
+            writeHit(hit, start, end, t, normal, ULevel::npos, true);
             hit.ImpactPoint = hit.Location - (normal * r);
             outHits.push_back(hit);
         }
@@ -493,7 +493,7 @@ bool FPhysScene::CapsuleTraceMultiByChannel(std::vector<FHitResult>& outHits, co
         glm::vec3 normal{};
         if (segmentFloorY(start, end, planeY, t, normal)) {
             FHitResult hit{};
-            writeHit(hit, start, end, t, normal, Level::npos, true);
+            writeHit(hit, start, end, t, normal, ULevel::npos, true);
             hit.ImpactPoint = hit.Location - (normal * (hh + r));
             outHits.push_back(hit);
         }

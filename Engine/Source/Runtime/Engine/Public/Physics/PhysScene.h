@@ -69,10 +69,10 @@ public:
     [[nodiscard]] const std::vector<FSlopePlane>& SlopePlanes() const { return slopePlanes_; }
     [[nodiscard]] std::vector<FSlopePlane>& SlopePlanes() { return slopePlanes_; }
 
-    /// Pull position / half-extents / mass from StaticMeshComponent transforms.
-    void SyncFromLevel(const Level& level);
-    /// Write body positions back to StaticMeshComponent transforms.
-    void SyncToLevel(Level& level) const;
+    /// Pull position / half-extents / mass from UStaticMeshComponent transforms.
+    void SyncFromLevel(const ULevel& level);
+    /// Write body positions back to UStaticMeshComponent transforms.
+    void SyncToLevel(ULevel& level) const;
 
     [[nodiscard]] const std::vector<FBodyInstance>& Bodies() const { return bodies_; }
     [[nodiscard]] std::vector<FBodyInstance>& Bodies() { return bodies_; }

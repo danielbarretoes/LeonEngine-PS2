@@ -2,16 +2,16 @@
 #include "GameFramework/Controller.h"
 
 
-Controller::~Controller() {
+AController::~AController() {
     UnPossess();
 }
 
-void Controller::Possess(Pawn* pawn) {
+void AController::Possess(APawn* pawn) {
     if (pawn_ == pawn) {
         return;
     }
     if (pawn != nullptr) {
-        if (Controller* previous = pawn->GetController(); previous != nullptr && previous != this) {
+        if (AController* previous = pawn->GetController(); previous != nullptr && previous != this) {
             previous->UnPossess();
         }
     }
@@ -22,7 +22,7 @@ void Controller::Possess(Pawn* pawn) {
     }
 }
 
-void Controller::UnPossess() {
+void AController::UnPossess() {
     if (pawn_ == nullptr) {
         return;
     }
@@ -30,7 +30,7 @@ void Controller::UnPossess() {
     pawn_ = nullptr;
 }
 
-Character* Controller::GetCharacter() const {
-    return dynamic_cast<Character*>(pawn_);
+ACharacter* AController::GetCharacter() const {
+    return dynamic_cast<ACharacter*>(pawn_);
 }
 

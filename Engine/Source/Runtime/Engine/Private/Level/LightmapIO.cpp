@@ -77,10 +77,10 @@ std::filesystem::path ResolveLightmapAbsolutePath(const std::string& levelPath,
     return resolved.empty() ? rel : std::filesystem::path(resolved);
 }
 
-int LoadLevelLightmaps(Level& level, const std::string& levelPath, std::string* outMessage) {
+int LoadLevelLightmaps(ULevel& level, const std::string& levelPath, std::string* outMessage) {
     int loaded = 0;
     int failed = 0;
-    for (StaticMeshComponent& mesh : level.StaticMeshes()) {
+    for (UStaticMeshComponent& mesh : level.StaticMeshes()) {
         if (mesh.lightmapPath.empty()) {
             continue;
         }
@@ -103,7 +103,7 @@ int LoadLevelLightmaps(Level& level, const std::string& levelPath, std::string* 
     return loaded;
 }
 
-std::string EnsureLightmapId(StaticMeshComponent& mesh) {
+std::string EnsureLightmapId(UStaticMeshComponent& mesh) {
     if (!mesh.lightmapId.empty()) {
         return mesh.lightmapId;
     }

@@ -3,14 +3,14 @@
 #include <glm/vec3.hpp>
 
 #include <cstdint>
-#include "Camera/Camera.h"
+#include "Camera/CameraComponent.h"
 #include "Engine/Level.h"
 #include <string>
 #include <vector>
 
 
-class Engine;
-struct LevelAnimation;
+class UGameEngine;
+struct FLevelAnimation;
 
 /// Binary Leon Level container (`.llev`): little-endian, string-table based.
 /// Layout: header → string table → meta → camera → actors → lights.
@@ -60,7 +60,7 @@ inline constexpr std::uint32_t kLevelLightFlagCastShadows = 1u << 0;
 inline constexpr std::uint32_t kLevelLightFlagHasOrbit = 1u << 1;
 
 /// One placed actor as stored in a `.llev` (no GPU / resource handles).
-struct LevelActorRecord {
+struct FLevelActorRecord {
     ELevelActorClass actorClass = ELevelActorClass::StaticMesh;
     EComponentMobility mobility = EComponentMobility::Static;
 
@@ -95,7 +95,7 @@ struct LevelActorRecord {
     bool hasFitHeight = false;
     float fitHeight = 0.0f;
 
-    // TriggerVolume / interactables (written when HasInteractCost / HasPayload / ConsumeOnUse).
+    // FTriggerVolume / interactables (written when HasInteractCost / HasPayload / ConsumeOnUse).
     int interactCost = 0;
     float interactRadius = 2.0f;
     float damagePerSecond = 12.0f;
@@ -105,7 +105,7 @@ struct LevelActorRecord {
 };
 
 /// One placed light as stored in a `.llev`.
-struct LevelLightRecord {
+struct FLevelLightRecord {
     ELevelLightClass lightClass = ELevelLightClass::DirectionalLight;
     bool castShadows = true;
     bool hasOrbit = false;
@@ -125,7 +125,7 @@ struct LevelLightRecord {
 };
 
 /// Camera framing stored in a `.llev` (always present).
-struct LevelCameraRecord {
+struct FLevelCameraRecord {
     ECameraMode mode = ECameraMode::Orbit;
     glm::vec3 target{0.0f, 0.0f, 0.0f};
     glm::vec3 eye{0.0f, 0.0f, 0.0f};
@@ -135,37 +135,37 @@ struct LevelCameraRecord {
 };
 
 /// In-memory mirror of a `.llev` file: plain data, no engine resources resolved yet.
-struct LevelDocument {
+struct FLevelDocument {
     std::string name;
     std::string gameMode;
     std::string environmentPath;
     float environmentExposure = 1.0f;
 
-    LevelCameraRecord camera;
-    std::vector<LevelActorRecord> actors;
-    std::vector<LevelLightRecord> lights;
+    FLevelCameraRecord camera;
+    std::vector<FLevelActorRecord> actors;
+    std::vector<FLevelLightRecord> lights;
 };
 
 /// Snapshot a live Level + Camera into a serializable document.
-[[nodiscard]] LevelDocument BuildLevelDocument(const Level& level, const Camera& camera);
+[[nodiscard]] FLevelDocument BuildLevelDocument(const ULevel& level, const UCameraComponent& camera);
 
 /// Encode a document as `.llev` bytes.
-[[nodiscard]] std::vector<std::uint8_t> SerializeLeonLevel(const LevelDocument& doc);
+[[nodiscard]] std::vector<std::uint8_t> SerializeLeonLevel(const FLevelDocument& doc);
 
 /// Decode `.llev` bytes; returns false on bad magic / version / truncation.
-[[nodiscard]] bool DeserializeLeonLevel(const std::vector<std::uint8_t>& bytes, LevelDocument& out);
+[[nodiscard]] bool DeserializeLeonLevel(const std::vector<std::uint8_t>& bytes, FLevelDocument& out);
 
 /// Write a document to `path` as `.llev`.
-[[nodiscard]] bool SaveLeonLevelFile(const std::string& path, const LevelDocument& doc);
+[[nodiscard]] bool SaveLeonLevelFile(const std::string& path, const FLevelDocument& doc);
 
 /// Read a `.llev` file into `out`.
-[[nodiscard]] bool LoadLeonLevelFile(const std::string& path, LevelDocument& out);
+[[nodiscard]] bool LoadLeonLevelFile(const std::string& path, FLevelDocument& out);
 
 /// Resolve a document into the Engine: builds a staging Level, commits on full success only,
 /// then hydrates persisted lightmaps relative to `sourcePath`.
-[[nodiscard]] bool ApplyLevelDocument(Engine& engine, const LevelDocument& doc,
+[[nodiscard]] bool ApplyLevelDocument(UGameEngine& engine, const FLevelDocument& doc,
                                       const std::string& sourcePath,
-                                      LevelAnimation* outAnim = nullptr);
+                                      FLevelAnimation* outAnim = nullptr);
 
 /// Resolve a content-relative key (`Materials/M_Floor.lmat`) for a level under `…/Content/Levels/`
 /// (or legacy `…/Levels/`).

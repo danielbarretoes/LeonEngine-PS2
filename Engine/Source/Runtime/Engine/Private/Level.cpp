@@ -4,14 +4,14 @@
 #include <utility>
 
 
-std::size_t StaticMeshComponent::subMeshCount() const {
+std::size_t UStaticMeshComponent::subMeshCount() const {
     if (mesh == nullptr || !mesh->Valid()) {
         return 0;
     }
     return mesh->Submeshes().empty() ? 1 : mesh->Submeshes().size();
 }
 
-const FMaterial& StaticMeshComponent::materialForSubMesh(std::size_t subMeshIndex) const {
+const FMaterial& UStaticMeshComponent::materialForSubMesh(std::size_t subMeshIndex) const {
     int slot = 0;
     if (mesh != nullptr && subMeshIndex < mesh->Submeshes().size()) {
         slot = mesh->Submeshes()[subMeshIndex].materialIndex;
@@ -30,7 +30,7 @@ const FMaterial& StaticMeshComponent::materialForSubMesh(std::size_t subMeshInde
     return material;
 }
 
-bool StaticMeshComponent::isShadowCaster() const {
+bool UStaticMeshComponent::isShadowCaster() const {
     if (hidden || mesh == nullptr || !mesh->Valid()) {
         return false;
     }
@@ -52,39 +52,39 @@ bool StaticMeshComponent::isShadowCaster() const {
     return countsAsCaster(material);
 }
 
-StaticMeshComponent& Level::AddStaticMesh(StaticMeshComponent component) {
+UStaticMeshComponent& ULevel::AddStaticMesh(UStaticMeshComponent component) {
     staticMeshes_.push_back(std::move(component));
     return staticMeshes_.back();
 }
 
-PlayerStart& Level::AddPlayerStart(PlayerStart start) {
+FPlayerStart& ULevel::AddPlayerStart(FPlayerStart start) {
     playerStarts_.push_back(std::move(start));
     return playerStarts_.back();
 }
 
-TriggerVolume& Level::AddTriggerVolume(TriggerVolume volume) {
+FTriggerVolume& ULevel::AddTriggerVolume(FTriggerVolume volume) {
     triggerVolumes_.push_back(std::move(volume));
     return triggerVolumes_.back();
 }
 
-PainCausingVolume& Level::AddPainCausingVolume(PainCausingVolume volume) {
+FPainCausingVolume& ULevel::AddPainCausingVolume(FPainCausingVolume volume) {
     painCausingVolumes_.push_back(std::move(volume));
     return painCausingVolumes_.back();
 }
 
-AISpawnPoint& Level::AddAISpawnPoint(AISpawnPoint point) {
+FAISpawnPoint& ULevel::AddAISpawnPoint(FAISpawnPoint point) {
     aiSpawnPoints_.push_back(std::move(point));
     return aiSpawnPoints_.back();
 }
 
-const PlayerStart* Level::FindPlayerStart() const {
+const FPlayerStart* ULevel::FindPlayerStart() const {
     if (playerStarts_.empty()) {
         return nullptr;
     }
     return &playerStarts_.front();
 }
 
-std::size_t Level::FindStaticMeshIndexByTag(std::string_view tag) const {
+std::size_t ULevel::FindStaticMeshIndexByTag(std::string_view tag) const {
     if (tag.empty()) {
         return npos;
     }
@@ -96,32 +96,32 @@ std::size_t Level::FindStaticMeshIndexByTag(std::string_view tag) const {
     return npos;
 }
 
-void Level::ClearStaticMeshes() {
+void ULevel::ClearStaticMeshes() {
     staticMeshes_.clear();
 }
 
-void Level::ClearPlayerStarts() {
+void ULevel::ClearPlayerStarts() {
     playerStarts_.clear();
 }
 
-void Level::ClearTriggerVolumes() {
+void ULevel::ClearTriggerVolumes() {
     triggerVolumes_.clear();
 }
 
-void Level::ClearPainCausingVolumes() {
+void ULevel::ClearPainCausingVolumes() {
     painCausingVolumes_.clear();
 }
 
-void Level::ClearAISpawnPoints() {
+void ULevel::ClearAISpawnPoints() {
     aiSpawnPoints_.clear();
 }
 
-void Level::ClearLights() {
+void ULevel::ClearLights() {
     directionalLights_.clear();
     pointLights_.clear();
 }
 
-void Level::Clear() {
+void ULevel::Clear() {
     ClearStaticMeshes();
     ClearPlayerStarts();
     ClearTriggerVolumes();

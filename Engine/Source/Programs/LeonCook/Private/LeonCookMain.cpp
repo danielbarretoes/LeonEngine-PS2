@@ -115,7 +115,7 @@ void printUsage() {
     std::string meshFbx;
     std::string runFbx;
     std::string outDir;
-    CookJumpAnimPaths jumpAnims{};
+    FCookJumpAnimPaths jumpAnims{};
 
     for (int i = 2; i < argc; ++i) {
         const std::string a = argv[i];

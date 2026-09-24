@@ -67,7 +67,7 @@ TEST_CASE("PhysScene QuerySupportY uses body tops", "[physics][physscene]") {
     capsule.height = 1.85f;
 
     const float support =
-        scene.QuerySupportY(capsule, {0.0f, 2.1f, 0.0f}, 0.0f, 0.35f, 0.02f, Level::npos);
+        scene.QuerySupportY(capsule, {0.0f, 2.1f, 0.0f}, 0.0f, 0.35f, 0.02f, ULevel::npos);
     REQUIRE_THAT(support, WithinAbs(2.0f, 1.0e-3f));
 }
 
@@ -84,7 +84,7 @@ TEST_CASE("PhysScene ResolveCapsuleSides pushes out of AABB", "[physics][physsce
 
     glm::vec3 feet{0.1f, 0.0f, 0.0f};
     FCapsuleContactParams contact{};
-    scene.ResolveCapsuleSides(capsule, feet, {0.0f, 0.0f}, contact, Level::npos, false);
+    scene.ResolveCapsuleSides(capsule, feet, {0.0f, 0.0f}, contact, ULevel::npos, false);
 
     const float distXZ = std::sqrt((feet.x * feet.x) + (feet.z * feet.z));
     REQUIRE(distXZ > 0.4f);

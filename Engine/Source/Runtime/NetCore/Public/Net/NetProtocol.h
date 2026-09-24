@@ -20,7 +20,7 @@ constexpr int kMaxPlayers = 4;
 constexpr int kMaxAiPawns = 16;
 constexpr int kMaxSnapshotPawns = kMaxPlayers + kMaxAiPawns;
 constexpr int kMaxDynamicBodies = 48;
-/// Level identity in Welcome / Travel (LevelEntry.name or .llev stem).
+/// Level identity in Welcome / Travel (FLevelEntry.name or .llev stem).
 constexpr std::size_t kMaxLevelKeyBytes = 64;
 /// Stick move axes are expected in [-1, 1] after sanitize.
 constexpr float kInputMoveAxisMax = 1.0f;
@@ -243,7 +243,7 @@ inline void GetPawnUserAmmo(const FPawnSnap& snap, std::uint8_t& clip, std::uint
     return hello.magic == kProtocolMagic && hello.protocolVersion == kProtocolVersion;
 }
 
-/// Flow: inbound datagram gate (NetDriver before onPacket_).
+/// Flow: inbound datagram gate (UNetDriver before onPacket_).
 /// 1. Reject null / empty / unknown type
 /// 2. Reject undersized fixed headers
 /// 3. Hello: require magic + protocol version

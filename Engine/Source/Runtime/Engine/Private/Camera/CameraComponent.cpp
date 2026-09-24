@@ -3,7 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
-#include "Camera/Camera.h"
+#include "Camera/CameraComponent.h"
 
 namespace {
 
@@ -32,7 +32,7 @@ namespace {
 
 } // namespace
 
-void Camera::SetPerspective(float fovDegrees, float aspect, float nearPlane, float farPlane) {
+void UCameraComponent::SetPerspective(float fovDegrees, float aspect, float nearPlane, float farPlane) {
     fovDegrees_ = std::clamp(fovDegrees, 20.0f, 120.0f);
     aspect_ = aspect > 1.0e-4f ? aspect : (16.0f / 9.0f);
     nearPlane_ = nearPlane;
@@ -41,7 +41,7 @@ void Camera::SetPerspective(float fovDegrees, float aspect, float nearPlane, flo
     projection_ = glm::perspective(glm::radians(fovDegrees_), aspect_, nearPlane_, farPlane_);
 }
 
-void Camera::SetOrthographic(float height, float aspect, float nearPlane, float farPlane) {
+void UCameraComponent::SetOrthographic(float height, float aspect, float nearPlane, float farPlane) {
     orthoHeight_ = std::clamp(height, 0.5f, 500.0f);
     aspect_ = aspect > 1.0e-4f ? aspect : (16.0f / 9.0f);
     nearPlane_ = nearPlane;
@@ -52,7 +52,7 @@ void Camera::SetOrthographic(float height, float aspect, float nearPlane, float 
     projection_ = glm::ortho(-halfW, halfW, -halfH, halfH, nearPlane_, farPlane_);
 }
 
-void Camera::SetOrthoHeight(float height) {
+void UCameraComponent::SetOrthoHeight(float height) {
     if (orthographic_) {
         SetOrthographic(height, aspect_, nearPlane_, farPlane_);
     } else {
@@ -60,11 +60,11 @@ void Camera::SetOrthoHeight(float height) {
     }
 }
 
-void Camera::SetFieldOfView(float fovDegrees) {
+void UCameraComponent::SetFieldOfView(float fovDegrees) {
     SetPerspective(fovDegrees, aspect_, nearPlane_, farPlane_);
 }
 
-void Camera::SetMode(ECameraMode mode) {
+void UCameraComponent::SetMode(ECameraMode mode) {
     if (mode_ == mode) {
         return;
     }
@@ -72,13 +72,13 @@ void Camera::SetMode(ECameraMode mode) {
     invalidateCache();
 }
 
-void Camera::Orbit(float deltaYawDegrees, float deltaPitchDegrees) {
+void UCameraComponent::Orbit(float deltaYawDegrees, float deltaPitchDegrees) {
     yawDegrees_ += deltaYawDegrees;
     pitchDegrees_ = std::clamp(pitchDegrees_ + deltaPitchDegrees, -89.0f, 89.0f);
     invalidateCache();
 }
 
-void Camera::Pan(float deltaRight, float deltaUp) {
+void UCameraComponent::Pan(float deltaRight, float deltaUp) {
     const glm::vec3 right = RightVector();
     const glm::vec3 up{0.0f, 1.0f, 0.0f};
     const glm::vec3 delta = right * deltaRight + up * deltaUp;
@@ -90,39 +90,39 @@ void Camera::Pan(float deltaRight, float deltaUp) {
     invalidateCache();
 }
 
-void Camera::Zoom(float deltaDistance) {
+void UCameraComponent::Zoom(float deltaDistance) {
     if (mode_ != ECameraMode::Orbit) {
         return;
     }
     SetDistance(distance_ - deltaDistance);
 }
 
-void Camera::SetDistance(float distance) {
+void UCameraComponent::SetDistance(float distance) {
     distance_ = std::clamp(distance, 0.5f, 80.0f);
     invalidateCache();
 }
 
-void Camera::SetYawPitch(float yawDegrees, float pitchDegrees) {
+void UCameraComponent::SetYawPitch(float yawDegrees, float pitchDegrees) {
     yawDegrees_ = yawDegrees;
     pitchDegrees_ = std::clamp(pitchDegrees, -89.0f, 89.0f);
     invalidateCache();
 }
 
-void Camera::SetTarget(const glm::vec3& target) {
+void UCameraComponent::SetTarget(const glm::vec3& target) {
     target_ = target;
     invalidateCache();
 }
 
-void Camera::SetEyeLocation(const glm::vec3& eye) {
+void UCameraComponent::SetEyeLocation(const glm::vec3& eye) {
     eye_ = eye;
     invalidateCache();
 }
 
-void Camera::invalidateCache() {
+void UCameraComponent::invalidateCache() {
     cacheDirty_ = true;
 }
 
-void Camera::updateCachedPosition() const {
+void UCameraComponent::updateCachedPosition() const {
     if (!cacheDirty_) {
         return;
     }
@@ -144,12 +144,12 @@ void Camera::updateCachedPosition() const {
     cacheDirty_ = false;
 }
 
-glm::vec3 Camera::GetCameraLocation() const {
+glm::vec3 UCameraComponent::GetCameraLocation() const {
     updateCachedPosition();
     return cachedPosition_;
 }
 
-glm::vec3 Camera::ForwardVector() const {
+glm::vec3 UCameraComponent::ForwardVector() const {
     if (mode_ == ECameraMode::FreeLook) {
         return freeLookForward(yawDegrees_, pitchDegrees_);
     }
@@ -162,7 +162,7 @@ glm::vec3 Camera::ForwardVector() const {
     return toTarget / len;
 }
 
-glm::vec3 Camera::RightVector() const {
+glm::vec3 UCameraComponent::RightVector() const {
     const glm::vec3 forward = ForwardVector();
     const glm::vec3 up = (mode_ == ECameraMode::FreeLook)
                              ? freeLookWorldUp(yawDegrees_, pitchDegrees_)
@@ -180,7 +180,7 @@ glm::vec3 Camera::RightVector() const {
     return right / len;
 }
 
-glm::mat4 Camera::ViewMatrix() const {
+glm::mat4 UCameraComponent::ViewMatrix() const {
     updateCachedPosition();
     if (mode_ == ECameraMode::FreeLook) {
         const glm::vec3 forward = freeLookForward(yawDegrees_, pitchDegrees_);

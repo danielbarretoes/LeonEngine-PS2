@@ -3,29 +3,29 @@
 #include "GameFramework/Pawn.h"
 
 
-class Character;
+class ACharacter;
 
 /// Drives a possessed Pawn (Unreal-style Controller).
-class Controller {
+class AController {
 public:
-    virtual ~Controller();
+    virtual ~AController();
 
-    Controller(const Controller&) = delete;
-    Controller& operator=(const Controller&) = delete;
-    Controller(Controller&&) = delete;
-    Controller& operator=(Controller&&) = delete;
+    AController(const AController&) = delete;
+    AController& operator=(const AController&) = delete;
+    AController(AController&&) = delete;
+    AController& operator=(AController&&) = delete;
 
-    void Possess(Pawn* pawn);
+    void Possess(APawn* pawn);
     void UnPossess();
 
-    [[nodiscard]] Pawn* GetPawn() const { return pawn_; }
+    [[nodiscard]] APawn* GetPawn() const { return pawn_; }
     [[nodiscard]] bool HasPawn() const { return pawn_ != nullptr; }
-    [[nodiscard]] Character* GetCharacter() const;
+    [[nodiscard]] ACharacter* GetCharacter() const;
 
 protected:
-    Controller() = default;
+    AController() = default;
 
 private:
-    Pawn* pawn_ = nullptr;
+    APawn* pawn_ = nullptr;
 };
 

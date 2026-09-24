@@ -31,17 +31,17 @@ namespace {
 
 } // namespace
 
-SceneComponent::~SceneComponent() {
-    // ActorComponent dtor also calls DestroyComponent; detach scene links first while owner may
-    // still be valid (Actor::~ clears owner before member SceneComponent dtors).
+USceneComponent::~USceneComponent() {
+    // UActorComponent dtor also calls DestroyComponent; detach scene links first while owner may
+    // still be valid (Actor::~ clears owner before member USceneComponent dtors).
     while (!children_.empty()) {
-        SceneComponent* child = children_.back();
+        USceneComponent* child = children_.back();
         child->DetachFromParent(false);
     }
     DetachFromParent(false);
 }
 
-FTransform SceneComponent::GetRelativeTransform() const {
+FTransform USceneComponent::GetRelativeTransform() const {
     FTransform t{};
     t.Position = RelativeLocation;
     t.RotationDegrees = RelativeRotation;
@@ -49,8 +49,8 @@ FTransform SceneComponent::GetRelativeTransform() const {
     return t;
 }
 
-bool SceneComponent::wouldCreateCycle(const SceneComponent* candidateParent) const {
-    for (const SceneComponent* walk = candidateParent; walk != nullptr; walk = walk->parent_) {
+bool USceneComponent::wouldCreateCycle(const USceneComponent* candidateParent) const {
+    for (const USceneComponent* walk = candidateParent; walk != nullptr; walk = walk->parent_) {
         if (walk == this) {
             return true;
         }
@@ -58,11 +58,11 @@ bool SceneComponent::wouldCreateCycle(const SceneComponent* candidateParent) con
     return false;
 }
 
-void SceneComponent::detachChild(SceneComponent* child) {
+void USceneComponent::detachChild(USceneComponent* child) {
     children_.erase(std::remove(children_.begin(), children_.end(), child), children_.end());
 }
 
-bool SceneComponent::AttachToComponent(SceneComponent* parent, bool keepWorldTransform) {
+bool USceneComponent::AttachToComponent(USceneComponent* parent, bool keepWorldTransform) {
     if (parent == nullptr || parent == this || wouldCreateCycle(parent)) {
         return false;
     }
@@ -90,7 +90,7 @@ bool SceneComponent::AttachToComponent(SceneComponent* parent, bool keepWorldTra
     return true;
 }
 
-void SceneComponent::DetachFromParent(bool keepWorldTransform) {
+void USceneComponent::DetachFromParent(bool keepWorldTransform) {
     if (parent_ == nullptr) {
         return;
     }
@@ -115,7 +115,7 @@ void SceneComponent::DetachFromParent(bool keepWorldTransform) {
     }
 }
 
-glm::mat4 SceneComponent::GetComponentTransform() const {
+glm::mat4 USceneComponent::GetComponentTransform() const {
     const FTransform relative = GetRelativeTransform();
     if (parent_ != nullptr) {
         return parent_->GetComponentTransform() * relative.ModelMatrix();
@@ -131,16 +131,16 @@ glm::mat4 SceneComponent::GetComponentTransform() const {
     return relative.ModelMatrix();
 }
 
-glm::vec3 SceneComponent::GetComponentLocation() const {
+glm::vec3 USceneComponent::GetComponentLocation() const {
     return glm::vec3(GetComponentTransform()[3]);
 }
 
-void SceneComponent::DestroyComponent() {
+void USceneComponent::DestroyComponent() {
     while (!children_.empty()) {
-        SceneComponent* child = children_.back();
+        USceneComponent* child = children_.back();
         child->DetachFromParent(false);
     }
     DetachFromParent(false);
-    ActorComponent::DestroyComponent();
+    UActorComponent::DestroyComponent();
 }
 

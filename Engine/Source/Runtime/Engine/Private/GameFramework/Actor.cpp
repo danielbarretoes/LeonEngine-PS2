@@ -3,10 +3,10 @@
 #include "Components/ActorComponent.h"
 
 
-Actor::~Actor() {
+AActor::~AActor() {
     // Members (root, Character mesh, …) destroy after this body. Clear registry first so
     // component dtors do not touch a destroyed `components_` vector.
-    for (ActorComponent* component : components_) {
+    for (UActorComponent* component : components_) {
         if (component != nullptr) {
             component->registered_ = false;
             component->owner_ = nullptr;
@@ -16,7 +16,7 @@ Actor::~Actor() {
     ownedComponents_.clear();
 }
 
-void Actor::RegisterComponent(ActorComponent* component) {
+void AActor::RegisterComponent(UActorComponent* component) {
     if (component == nullptr || component->registered_) {
         return;
     }
@@ -29,7 +29,7 @@ void Actor::RegisterComponent(ActorComponent* component) {
     }
 }
 
-void Actor::UnregisterComponent(ActorComponent* component) {
+void AActor::UnregisterComponent(UActorComponent* component) {
     if (component == nullptr) {
         return;
     }
@@ -38,17 +38,17 @@ void Actor::UnregisterComponent(ActorComponent* component) {
     component->registered_ = false;
 }
 
-void Actor::BeginPlayComponents() {
+void AActor::BeginPlayComponents() {
     hasBegunPlay_ = true;
-    for (ActorComponent* component : components_) {
+    for (UActorComponent* component : components_) {
         if (component != nullptr) {
             component->BeginPlay();
         }
     }
 }
 
-void Actor::EndPlayComponents() {
-    for (ActorComponent* component : components_) {
+void AActor::EndPlayComponents() {
+    for (UActorComponent* component : components_) {
         if (component != nullptr) {
             component->EndPlay();
         }
@@ -56,8 +56,8 @@ void Actor::EndPlayComponents() {
     hasBegunPlay_ = false;
 }
 
-void Actor::TickComponents(float deltaTime) {
-    for (ActorComponent* component : components_) {
+void AActor::TickComponents(float deltaTime) {
+    for (UActorComponent* component : components_) {
         if (component != nullptr && component->IsComponentTickEnabled()) {
             component->TickComponent(deltaTime);
         }

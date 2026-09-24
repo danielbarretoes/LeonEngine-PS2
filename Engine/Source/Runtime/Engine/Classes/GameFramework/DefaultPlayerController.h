@@ -5,13 +5,13 @@
 #include "GameFramework/PlayerController.h"
 
 
-class DefaultCameraActor;
+class ADefaultCameraActor;
 
-/// PlayerController for `DefaultCameraActor`: fly along look (Move*) + world up (MoveUp).
-class DefaultPlayerController final : public PlayerController {
+/// APlayerController for `ADefaultCameraActor`: fly along look (Move*) + world up (MoveUp).
+class ADefaultPlayerController final : public APlayerController {
 public:
-    [[nodiscard]] DefaultCameraActor* GetDefaultCameraActor() const;
+    [[nodiscard]] ADefaultCameraActor* GetDefaultCameraActor() const;
 
-    glm::vec3 TickInput(Engine& engine) override;
+    glm::vec3 TickInput(UGameEngine& engine) override;
 };
 

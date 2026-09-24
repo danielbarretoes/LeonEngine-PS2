@@ -7,7 +7,7 @@
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("InputMappingContext MakeDefault binds move and jump", "[core][inputmapping]") {
-    const InputMappingContext ctx = InputMappingContext::MakeDefault();
+    const UInputMappingContext ctx = UInputMappingContext::MakeDefault();
 
     REQUIRE(ctx.Axes().count(std::string(Leon::InputActions::MoveForward)) == 1);
     REQUIRE(ctx.Axes().count(std::string(Leon::InputActions::MoveRight)) == 1);
@@ -20,7 +20,7 @@ TEST_CASE("InputMappingContext MakeDefault binds move and jump", "[core][inputma
 }
 
 TEST_CASE("InputMappingContext BindAxisKey and BindActionKey", "[core][inputmapping]") {
-    InputMappingContext ctx;
+    UInputMappingContext ctx;
     ctx.BindAxisKey("Strafe", EKeys::A, -1.0f);
     ctx.BindAxisKey("Strafe", EKeys::D, 1.0f);
     ctx.BindActionKey("Fire", EKeys::LeftControl);
@@ -33,8 +33,8 @@ TEST_CASE("InputMappingContext BindAxisKey and BindActionKey", "[core][inputmapp
 }
 
 TEST_CASE("PlayerInput ClearContexts empties maps after Update path", "[core][inputmapping]") {
-    PlayerInput input;
-    input.AddMappingContext(InputMappingContext::MakeDefault());
+    UPlayerInput input;
+    input.AddMappingContext(UInputMappingContext::MakeDefault());
     input.ClearContexts();
     REQUIRE_THAT(input.GetAxisValue(Leon::InputActions::MoveForward), WithinAbs(0.0f, 1.0e-6f));
     REQUIRE_FALSE(input.IsActionPressed(Leon::InputActions::Jump));

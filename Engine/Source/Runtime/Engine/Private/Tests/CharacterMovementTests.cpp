@@ -19,7 +19,7 @@ void AddFloorBox(FPhysScene& scene, const glm::vec3& center, const glm::vec3& ha
 } // namespace
 
 TEST_CASE("IsWalkable uses WalkableFloorZ", "[gameplay][character][floor]") {
-    Character character;
+    ACharacter character;
     character.GetCharacterMovement().WalkableFloorZ = 0.71f;
 
     FHitResult flat{};
@@ -38,11 +38,11 @@ TEST_CASE("IsWalkable uses WalkableFloorZ", "[gameplay][character][floor]") {
 
 TEST_CASE("FindFloor hits infinite floor plane", "[gameplay][character][floor]") {
     FPhysScene scene;
-    Character character;
+    ACharacter character;
     character.Reset({0.0f, 1.0f, 0.0f}, 0.0f);
     character.GetCharacterMovement().FloorY = 0.0f;
 
-    FindFloorResult floor{};
+    FFindFloorResult floor{};
     character.FindFloor(scene, floor, 2.0f, nullptr);
     REQUIRE(floor.bBlockingHit);
     REQUIRE(floor.bWalkableFloor);
@@ -56,11 +56,11 @@ TEST_CASE("FindFloor hits static AABB top", "[gameplay][character][floor]") {
     // Box top at y = 2
     AddFloorBox(scene, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f});
 
-    Character character;
+    ACharacter character;
     character.Reset({0.0f, 2.5f, 0.0f}, 0.0f);
     character.GetCharacterMovement().FloorY = -100.0f; // prefer box over far plane
 
-    FindFloorResult floor{};
+    FFindFloorResult floor{};
     character.FindFloor(scene, floor, 1.0f, nullptr);
     REQUIRE(floor.bBlockingHit);
     REQUIRE(floor.bWalkableFloor);
@@ -69,8 +69,8 @@ TEST_CASE("FindFloor hits static AABB top", "[gameplay][character][floor]") {
 }
 
 TEST_CASE("Character lands on floor plane after fall", "[gameplay][character][movement]") {
-    World world;
-    auto* character = world.SpawnActor<Character>();
+    UWorld world;
+    auto* character = world.SpawnActor<ACharacter>();
     REQUIRE(character != nullptr);
     character->Reset({0.0f, 2.0f, 0.0f}, 0.0f);
     character->GetCharacterMovement().FloorY = 0.0f;
@@ -90,8 +90,8 @@ TEST_CASE("Character lands on floor plane after fall", "[gameplay][character][mo
 }
 
 TEST_CASE("Character jump leaves ground then lands", "[gameplay][character][movement]") {
-    World world;
-    auto* character = world.SpawnActor<Character>();
+    UWorld world;
+    auto* character = world.SpawnActor<ACharacter>();
     character->Reset({0.0f, 0.0f, 0.0f}, 0.0f);
     character->GetCharacterMovement().FloorY = 0.0f;
     character->GetCharacterMovement().JumpZVelocity = 7.0f;
@@ -122,8 +122,8 @@ TEST_CASE("Character jump leaves ground then lands", "[gameplay][character][move
 }
 
 TEST_CASE("Character does not walk through static wall", "[gameplay][character][movement]") {
-    World world;
-    auto* character = world.SpawnActor<Character>();
+    UWorld world;
+    auto* character = world.SpawnActor<ACharacter>();
     character->Reset({-2.0f, 0.0f, 0.0f}, 0.0f);
     character->GetCharacterMovement().FloorY = 0.0f;
     character->GetCharacterMovement().MaxWalkSpeed = 6.0f;
@@ -142,8 +142,8 @@ TEST_CASE("Character does not walk through static wall", "[gameplay][character][
 }
 
 TEST_CASE("Character slides along wall with diagonal wish", "[gameplay][character][movement][sweep]") {
-    World world;
-    auto* character = world.SpawnActor<Character>();
+    UWorld world;
+    auto* character = world.SpawnActor<ACharacter>();
     character->Reset({-1.5f, 0.0f, 0.0f}, 0.0f);
     character->GetCharacterMovement().FloorY = 0.0f;
     character->GetCharacterMovement().MaxWalkSpeed = 5.0f;
@@ -163,8 +163,8 @@ TEST_CASE("Character slides along wall with diagonal wish", "[gameplay][characte
 
 TEST_CASE("Character sweep does not tunnel thin wall at high speed",
           "[gameplay][character][movement][sweep]") {
-    World world;
-    auto* character = world.SpawnActor<Character>();
+    UWorld world;
+    auto* character = world.SpawnActor<ACharacter>();
     character->Reset({-1.0f, 0.0f, 0.0f}, 0.0f);
     character->GetCharacterMovement().FloorY = 0.0f;
     character->GetCharacterMovement().MaxWalkSpeed = 40.0f; // >> normal
@@ -181,8 +181,8 @@ TEST_CASE("Character sweep does not tunnel thin wall at high speed",
 }
 
 TEST_CASE("Character steps up onto short ledge", "[gameplay][character][movement][stepup]") {
-    World world;
-    auto* character = world.SpawnActor<Character>();
+    UWorld world;
+    auto* character = world.SpawnActor<ACharacter>();
     character->Reset({-1.5f, 0.0f, 0.0f}, 0.0f);
     character->GetCharacterMovement().FloorY = 0.0f;
     character->GetCharacterMovement().MaxWalkSpeed = 5.0f;
@@ -203,8 +203,8 @@ TEST_CASE("Character steps up onto short ledge", "[gameplay][character][movement
 }
 
 TEST_CASE("Character does not step up tall wall", "[gameplay][character][movement][stepup]") {
-    World world;
-    auto* character = world.SpawnActor<Character>();
+    UWorld world;
+    auto* character = world.SpawnActor<ACharacter>();
     character->Reset({-1.5f, 0.0f, 0.0f}, 0.0f);
     character->GetCharacterMovement().FloorY = 0.0f;
     character->GetCharacterMovement().MaxWalkSpeed = 5.0f;
@@ -225,8 +225,8 @@ TEST_CASE("Character does not step up tall wall", "[gameplay][character][movemen
 
 TEST_CASE("Character MovementMode Walking Jump Falling Land",
           "[gameplay][character][movement][mode]") {
-    World world;
-    auto* character = world.SpawnActor<Character>();
+    UWorld world;
+    auto* character = world.SpawnActor<ACharacter>();
     character->Reset({0.0f, 0.0f, 0.0f}, 0.0f);
     character->GetCharacterMovement().FloorY = 0.0f;
     REQUIRE(character->GetMovementMode() == EMovementMode::Walking);
@@ -250,8 +250,8 @@ TEST_CASE("Character MovementMode Walking Jump Falling Land",
 }
 
 TEST_CASE("Character walks off ledge enters Falling", "[gameplay][character][movement][mode]") {
-    World world;
-    auto* character = world.SpawnActor<Character>();
+    UWorld world;
+    auto* character = world.SpawnActor<ACharacter>();
     character->Reset({0.0f, 1.0f, 0.0f}, 0.0f);
     character->GetCharacterMovement().FloorY = -100.0f; // no infinite floor under gap
     character->GetCharacterMovement().MaxWalkSpeed = 6.0f;
@@ -281,8 +281,8 @@ TEST_CASE("Character walks off ledge enters Falling", "[gameplay][character][mov
 
 TEST_CASE("Character walk shove moves Dynamic crate without overlap",
           "[gameplay][character][movement][push]") {
-    World world;
-    auto* character = world.SpawnActor<Character>();
+    UWorld world;
+    auto* character = world.SpawnActor<ACharacter>();
     REQUIRE(character != nullptr);
     character->GetCharacterMovement().FloorY = 0.0f;
     character->GetCharacterMovement().MaxWalkSpeed = 6.0f;
@@ -312,9 +312,9 @@ TEST_CASE("Character walk shove moves Dynamic crate without overlap",
 }
 
 TEST_CASE("World separates overlapping Character capsules", "[gameplay][character][pawn]") {
-    World world;
-    auto* a = world.SpawnActor<Character>();
-    auto* b = world.SpawnActor<Character>();
+    UWorld world;
+    auto* a = world.SpawnActor<ACharacter>();
+    auto* b = world.SpawnActor<ACharacter>();
     REQUIRE(a != nullptr);
     REQUIRE(b != nullptr);
     a->GetCharacterMovement().FloorY = 0.0f;
@@ -322,7 +322,7 @@ TEST_CASE("World separates overlapping Character capsules", "[gameplay][characte
     a->Reset({0.0f, 0.0f, 0.0f}, 0.0f);
     b->Reset({0.1f, 0.0f, 0.0f}, 0.0f);
 
-    WorldGameplayFrameParams frame{};
+    FWorldGameplayFrameParams frame{};
     frame.deltaTime = 1.0f / 60.0f;
     world.TickGameplayFrame(frame);
 
@@ -335,8 +335,8 @@ TEST_CASE("World separates overlapping Character capsules", "[gameplay][characte
 
 TEST_CASE("ResolvePawnOverlap ignores vertically separated capsules",
           "[gameplay][character][pawn]") {
-    Character a;
-    Character b;
+    ACharacter a;
+    ACharacter b;
     a.Reset({0.0f, 0.0f, 0.0f}, 0.0f);
     b.Reset({0.05f, 3.0f, 0.0f}, 0.0f);
     a.ResolvePawnOverlap(b);
@@ -345,8 +345,8 @@ TEST_CASE("ResolvePawnOverlap ignores vertically separated capsules",
 }
 
 TEST_CASE("Character walks up walkable slope ramp", "[gameplay][character][movement][slope]") {
-    World world;
-    auto* character = world.SpawnActor<Character>();
+    UWorld world;
+    auto* character = world.SpawnActor<ACharacter>();
     character->GetCharacterMovement().FloorY = -100.0f;
     character->GetCharacterMovement().MaxWalkSpeed = 5.0f;
     character->GetCharacterMovement().WalkableFloorZ = 0.71f; // ~44°
@@ -377,8 +377,8 @@ TEST_CASE("Character walks up walkable slope ramp", "[gameplay][character][movem
 }
 
 TEST_CASE("Character cannot stand on steep slope ramp", "[gameplay][character][movement][slope]") {
-    World world;
-    auto* character = world.SpawnActor<Character>();
+    UWorld world;
+    auto* character = world.SpawnActor<ACharacter>();
     character->GetCharacterMovement().FloorY = -100.0f;
     character->GetCharacterMovement().Gravity = 24.0f;
     character->GetCharacterMovement().WalkableFloorZ = 0.71f;
@@ -401,8 +401,8 @@ TEST_CASE("Character cannot stand on steep slope ramp", "[gameplay][character][m
 TEST_CASE("Character AirControl scales horizontal move while Falling",
           "[gameplay][character][movement][air]") {
     auto runAirMove = [](float AirControl) -> float {
-        World world;
-        auto* character = world.SpawnActor<Character>();
+        UWorld world;
+        auto* character = world.SpawnActor<ACharacter>();
         character->Reset({0.0f, 4.0f, 0.0f}, 0.0f);
         character->GetCharacterMovement().FloorY = 0.0f;
         character->GetCharacterMovement().MaxWalkSpeed = 6.0f;

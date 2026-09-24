@@ -4,7 +4,7 @@
 #include "Engine/GameEngine.h"
 
 
-bool WorldRuntime::Initialize(Engine& engine, const std::string& shaderDirectory) {
+bool FWorldRuntime::Initialize(UGameEngine& engine, const std::string& shaderDirectory) {
     // Headless dedicated servers have no GL context — skip overlay chrome/shaders.
     if (engine.IsHeadless()) {
         return true;
@@ -16,26 +16,26 @@ bool WorldRuntime::Initialize(Engine& engine, const std::string& shaderDirectory
     return true;
 }
 
-bool WorldRuntime::LoadPack(Engine& engine, const std::string& packDirectory,
+bool FWorldRuntime::LoadPack(UGameEngine& engine, const std::string& packDirectory,
                             std::string_view preferredLevelKey) {
     return director_.ScanPackAndLoad(engine, packDirectory, preferredLevelKey);
 }
 
-void WorldRuntime::Tick(Engine& engine, GameplayRouter& gameplay, float deltaTime) {
+void FWorldRuntime::Tick(UGameEngine& engine, FGameplayRouter& gameplay, float deltaTime) {
     director_.Update(engine, deltaTime);
     gameplay.Update(engine, director_, deltaTime);
 }
 
-void WorldRuntime::HandleUiInput(Engine& engine) {
+void FWorldRuntime::HandleUiInput(UGameEngine& engine) {
     const bool blockDrag = director_.HandleUiInput(engine);
     engine.SetSuppressCameraDrag(blockDrag);
 }
 
-void WorldRuntime::DrawUi(int framebufferWidth, int framebufferHeight) {
+void FWorldRuntime::DrawUi(int framebufferWidth, int framebufferHeight) {
     director_.DrawUi(framebufferWidth, framebufferHeight);
 }
 
-void WorldRuntime::Shutdown() {
+void FWorldRuntime::Shutdown() {
     director_.Shutdown();
 }
 

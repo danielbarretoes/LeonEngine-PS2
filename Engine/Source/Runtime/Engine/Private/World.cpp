@@ -6,7 +6,7 @@
 #include <vector>
 
 
-void World::Tick(float deltaTime) {
+void UWorld::Tick(float deltaTime) {
     ticking_ = true;
     for (auto& actor : actors_) {
         if (actor && !actor->IsPendingKillPending()) {
@@ -19,11 +19,11 @@ void World::Tick(float deltaTime) {
     purgePending();
 }
 
-void World::RegisterBodiesFromLevel(const Level& level) {
+void UWorld::RegisterBodiesFromLevel(const ULevel& level) {
     physics_.Clear();
     const auto& meshes = level.StaticMeshes();
     for (std::size_t i = 0; i < meshes.size(); ++i) {
-        const StaticMeshComponent& component = meshes[i];
+        const UStaticMeshComponent& component = meshes[i];
         if (!component.HasPhysicsBody()) {
             continue;
         }
@@ -35,10 +35,10 @@ void World::RegisterBodiesFromLevel(const Level& level) {
     }
 }
 
-void World::resolveCharacterOverlaps() {
-    std::vector<Character*> characters;
+void UWorld::resolveCharacterOverlaps() {
+    std::vector<ACharacter*> characters;
     characters.reserve(actors_.size());
-    ForEach<Character>([&](Character& character) { characters.push_back(&character); });
+    ForEach<ACharacter>([&](ACharacter& character) { characters.push_back(&character); });
     if (characters.size() < 2) {
         return;
     }
@@ -54,8 +54,8 @@ void World::resolveCharacterOverlaps() {
     }
 }
 
-void World::TickGameplayFrame(const WorldGameplayFrameParams& params) {
-    ForEach<Character>([&](Character& character) {
+void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& params) {
+    ForEach<ACharacter>([&](ACharacter& character) {
         character.TickCharacterMovement(params.deltaTime, params.collisionDebugDraw);
     });
     resolveCharacterOverlaps();
@@ -68,8 +68,8 @@ void World::TickGameplayFrame(const WorldGameplayFrameParams& params) {
         step.gravity = params.physicsGravity;
         step.floorY = params.physicsFloorY;
         step.skin = params.physicsSkin;
-    } else if (Character* primary = FindFirst<Character>()) {
-        const CharacterMovement& moveCfg = primary->GetCharacterMovement();
+    } else if (ACharacter* primary = FindFirst<ACharacter>()) {
+        const UCharacterMovementComponent& moveCfg = primary->GetCharacterMovement();
         step.damping = moveCfg.PushDamping;
         step.walkBounds = moveCfg.WalkBounds;
         step.gravity = moveCfg.Gravity;
@@ -79,14 +79,14 @@ void World::TickGameplayFrame(const WorldGameplayFrameParams& params) {
     }
     physics_.Step(step);
 
-    ForEach<Character>([](Character& character) { character.ResolveOverlaps(); });
+    ForEach<ACharacter>([](ACharacter& character) { character.ResolveOverlaps(); });
     resolveCharacterOverlaps();
 
     Tick(params.deltaTime);
 
     if (params.level != nullptr) {
         physics_.SyncToLevel(*params.level);
-        ForEach<Character>([level = params.level](Character& character) {
+        ForEach<ACharacter>([level = params.level](ACharacter& character) {
             character.SyncTransformToLevel(*level);
         });
     }
@@ -96,7 +96,7 @@ void World::TickGameplayFrame(const WorldGameplayFrameParams& params) {
     }
 
     if (params.collisionDebugDraw != nullptr) {
-        ForEach<Character>([&](Character& character) {
+        ForEach<ACharacter>([&](ACharacter& character) {
             physics_.AppendCollisionDebug(*params.collisionDebugDraw, character.GetCapsule(),
                                           character.GetActorLocation(), character.LevelMeshIndex());
         });
@@ -107,11 +107,11 @@ void World::TickGameplayFrame(const WorldGameplayFrameParams& params) {
     }
 }
 
-void World::SubmitSkeletalDraws(FSceneRenderer& renderer) const {
-    ForEach<Character>([&](Character& character) { character.SubmitMeshDraw(renderer); });
+void UWorld::SubmitSkeletalDraws(FSceneRenderer& renderer) const {
+    ForEach<ACharacter>([&](ACharacter& character) { character.SubmitMeshDraw(renderer); });
 }
 
-void World::Clear() {
+void UWorld::Clear() {
     for (auto& actor : pendingSpawns_) {
         if (actor) {
             actor->world_ = nullptr;
@@ -129,12 +129,12 @@ void World::Clear() {
     physics_.Clear();
 }
 
-void World::flushPendingSpawns() {
+void UWorld::flushPendingSpawns() {
     for (auto& owned : pendingSpawns_) {
         if (!owned) {
             continue;
         }
-        Actor* raw = owned.get();
+        AActor* raw = owned.get();
         actors_.push_back(std::move(owned));
         raw->BeginPlayComponents();
         raw->BeginPlay();
@@ -142,7 +142,7 @@ void World::flushPendingSpawns() {
     pendingSpawns_.clear();
 }
 
-void World::purgePending() {
+void UWorld::purgePending() {
     for (auto it = actors_.begin(); it != actors_.end();) {
         if (!*it || (*it)->IsPendingKillPending()) {
             if (*it) {

@@ -5,7 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
-#include "Camera/Camera.h"
+#include "Camera/CameraComponent.h"
 #include "GameFramework/Input.h"
 #include "GameFramework/Actor.h"
 #include "Components/SceneComponent.h"
@@ -15,9 +15,9 @@
 class FDebugDraw;
 class FPhysScene;
 
-/// Unreal-like Spring Arm / Camera Boom (SceneComponent) with optional camera lag,
+/// Unreal-like Spring Arm / Camera Boom (USceneComponent) with optional camera lag,
 /// rotation lag, smoothed arm length, and collision probe (sphere sweep).
-class SpringArmComponent : public SceneComponent {
+class USpringArmComponent : public USceneComponent {
 public:
     /// Desired boom length (scroll edits this; lag follows toward it).
     float TargetArmLength = 4.0f;
@@ -68,7 +68,7 @@ public:
     void SnapLagState(const glm::vec3& actorLocation);
 
     /// Movement uses *desired* boom yaw so controls stay responsive while the view lags.
-    [[nodiscard]] glm::vec3 GetMoveDirectionXZ(const MoveAxes2D& axes) const {
+    [[nodiscard]] glm::vec3 GetMoveDirectionXZ(const FMoveAxes2D& axes) const {
         return yawRelativeMoveXZ(BoomYawDegrees, axes);
     }
 
@@ -78,11 +78,11 @@ public:
 
     /// Advance lag, optional collision probe, and push the Engine orbit camera.
     /// If `physScene` is null, uses `GetOwner()->GetWorld()->GetPhysicsScene()` when available.
-    void ApplyToCamera(Camera& camera, const glm::vec3& actorLocation, float deltaTime,
+    void ApplyToCamera(UCameraComponent& camera, const glm::vec3& actorLocation, float deltaTime,
                        FPhysScene* physScene = nullptr, FDebugDraw* debugDraw = nullptr);
 
     /// Prefer when attached under an Actor root: uses owner location + world FPhysScene.
-    void ApplyToCamera(Camera& camera, float deltaTime, FDebugDraw* debugDraw = nullptr);
+    void ApplyToCamera(UCameraComponent& camera, float deltaTime, FDebugDraw* debugDraw = nullptr);
 
     /// Unit boom direction matching `Camera` orbit eye offset (target → camera).
     [[nodiscard]] static glm::vec3 GetBoomDirection(float yawDegrees, float pitchDegrees);

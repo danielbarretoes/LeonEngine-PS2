@@ -8,7 +8,7 @@
 #include <vector>
 
 TEST_CASE("ValidationReport counts errors and warnings", "[content][validator]") {
-    ValidationReport report;
+    FValidationReport report;
     REQUIRE(report.ok());
     REQUIRE(report.errorCount() == 0);
     REQUIRE(report.warningCount() == 0);
@@ -24,8 +24,8 @@ TEST_CASE("ValidationReport counts errors and warnings", "[content][validator]")
 
 namespace {
 
-[[nodiscard]] LevelActorRecord MakeCubeRecord() {
-    LevelActorRecord actor;
+[[nodiscard]] FLevelActorRecord MakeCubeRecord() {
+    FLevelActorRecord actor;
     actor.actorClass = ELevelActorClass::Cube;
     return actor;
 }
@@ -33,47 +33,47 @@ namespace {
 } // namespace
 
 TEST_CASE("ValidateLevelDocument accepts minimal valid level", "[content][validator]") {
-    LevelDocument doc;
+    FLevelDocument doc;
     doc.name = "Test";
     doc.actors.push_back(MakeCubeRecord());
 
-    const ValidationReport report = ValidateLevelDocument(doc, "memory:level");
+    const FValidationReport report = ValidateLevelDocument(doc, "memory:level");
     REQUIRE(report.ok());
 }
 
 TEST_CASE("ValidateLevelDocument accepts a blank level", "[content][validator]") {
-    const LevelDocument doc;
-    const ValidationReport report = ValidateLevelDocument(doc, "memory:blank");
+    const FLevelDocument doc;
+    const FValidationReport report = ValidateLevelDocument(doc, "memory:blank");
     REQUIRE(report.ok());
 }
 
 TEST_CASE("ValidateLevelDocument checks actor mesh paths", "[content][validator]") {
     SECTION("StaticMesh without a mesh path is an error") {
-        LevelDocument doc;
-        LevelActorRecord actor;
+        FLevelDocument doc;
+        FLevelActorRecord actor;
         actor.actorClass = ELevelActorClass::StaticMesh;
         doc.actors.push_back(actor);
 
-        const ValidationReport report = ValidateLevelDocument(doc, "memory:nomesh");
+        const FValidationReport report = ValidateLevelDocument(doc, "memory:nomesh");
         REQUIRE_FALSE(report.ok());
     }
     SECTION("basic shape carrying a mesh path is an error") {
-        LevelDocument doc;
-        LevelActorRecord actor = MakeCubeRecord();
+        FLevelDocument doc;
+        FLevelActorRecord actor = MakeCubeRecord();
         actor.meshPath = "meshes/SM_Something.lmesh";
         doc.actors.push_back(actor);
 
-        const ValidationReport report = ValidateLevelDocument(doc, "memory:shapemesh");
+        const FValidationReport report = ValidateLevelDocument(doc, "memory:shapemesh");
         REQUIRE_FALSE(report.ok());
     }
     SECTION("missing mesh file is a warning, not an error") {
-        LevelDocument doc;
-        LevelActorRecord actor;
+        FLevelDocument doc;
+        FLevelActorRecord actor;
         actor.actorClass = ELevelActorClass::StaticMesh;
         actor.meshPath = "meshes/SM_DoesNotExist.lmesh";
         doc.actors.push_back(actor);
 
-        const ValidationReport report = ValidateLevelDocument(doc, "memory:absent");
+        const FValidationReport report = ValidateLevelDocument(doc, "memory:absent");
         REQUIRE(report.ok());
         REQUIRE(report.warningCount() >= 1);
     }
@@ -81,48 +81,48 @@ TEST_CASE("ValidateLevelDocument checks actor mesh paths", "[content][validator]
 
 TEST_CASE("ValidateLevelDocument rejects out-of-range values", "[content][validator]") {
     SECTION("missing material asset") {
-        LevelDocument doc;
-        LevelActorRecord actor = MakeCubeRecord();
+        FLevelDocument doc;
+        FLevelActorRecord actor = MakeCubeRecord();
         actor.materialPath = "Materials/M_DoesNotExist.lmat";
         doc.actors.push_back(actor);
 
-        const ValidationReport report = ValidateLevelDocument(doc, "memory:mat");
+        const FValidationReport report = ValidateLevelDocument(doc, "memory:mat");
         REQUIRE_FALSE(report.ok());
     }
     SECTION("degenerate sphere tessellation") {
-        LevelDocument doc;
-        LevelActorRecord actor;
+        FLevelDocument doc;
+        FLevelActorRecord actor;
         actor.actorClass = ELevelActorClass::Sphere;
         actor.sphereSegments = 1;
         actor.sphereRings = 1;
         doc.actors.push_back(actor);
 
-        const ValidationReport report = ValidateLevelDocument(doc, "memory:sphere");
+        const FValidationReport report = ValidateLevelDocument(doc, "memory:sphere");
         REQUIRE_FALSE(report.ok());
     }
     SECTION("negative light intensity") {
-        LevelDocument doc;
-        LevelLightRecord light;
+        FLevelDocument doc;
+        FLevelLightRecord light;
         light.intensity = -1.0f;
         doc.lights.push_back(light);
 
-        const ValidationReport report = ValidateLevelDocument(doc, "memory:light");
+        const FValidationReport report = ValidateLevelDocument(doc, "memory:light");
         REQUIRE_FALSE(report.ok());
     }
     SECTION("non-positive point light range") {
-        LevelDocument doc;
-        LevelLightRecord light;
+        FLevelDocument doc;
+        FLevelLightRecord light;
         light.lightClass = ELevelLightClass::PointLight;
         light.range = 0.0f;
         doc.lights.push_back(light);
 
-        const ValidationReport report = ValidateLevelDocument(doc, "memory:range");
+        const FValidationReport report = ValidateLevelDocument(doc, "memory:range");
         REQUIRE_FALSE(report.ok());
     }
 }
 
 TEST_CASE("Leon level bytes round-trip through the binary format", "[content][level][format]") {
-    LevelDocument doc;
+    FLevelDocument doc;
     doc.name = "RoundTrip";
     doc.gameMode = "Default";
     doc.environmentExposure = 0.75f;
@@ -130,7 +130,7 @@ TEST_CASE("Leon level bytes round-trip through the binary format", "[content][le
     doc.camera.eye = {1.0f, 2.0f, 3.0f};
     doc.camera.yaw = -90.0f;
 
-    LevelActorRecord sphere;
+    FLevelActorRecord sphere;
     sphere.actorClass = ELevelActorClass::Sphere;
     sphere.position = {1.0f, 2.0f, 3.0f};
     sphere.scale = {0.5f, 0.5f, 0.5f};
@@ -143,7 +143,7 @@ TEST_CASE("Leon level bytes round-trip through the binary format", "[content][le
     sphere.bobBaseY = 2.0f;
     doc.actors.push_back(sphere);
 
-    LevelLightRecord point;
+    FLevelLightRecord point;
     point.lightClass = ELevelLightClass::PointLight;
     point.hasOrbit = true;
     point.orbitRadius = 4.0f;
@@ -153,7 +153,7 @@ TEST_CASE("Leon level bytes round-trip through the binary format", "[content][le
     const std::vector<std::uint8_t> bytes = SerializeLeonLevel(doc);
     REQUIRE(bytes.size() > 16);
 
-    LevelDocument restored;
+    FLevelDocument restored;
     REQUIRE(DeserializeLeonLevel(bytes, restored));
     REQUIRE(restored.name == "RoundTrip");
     REQUIRE(restored.gameMode == "Default");
@@ -169,9 +169,9 @@ TEST_CASE("Leon level bytes round-trip through the binary format", "[content][le
 }
 
 TEST_CASE("DeserializeLeonLevel rejects bad magic and truncation", "[content][level][format]") {
-    const LevelDocument doc;
+    const FLevelDocument doc;
     std::vector<std::uint8_t> bytes = SerializeLeonLevel(doc);
-    LevelDocument restored;
+    FLevelDocument restored;
 
     SECTION("bad magic") {
         bytes[0] = 'X';
@@ -190,12 +190,12 @@ TEST_CASE("ValidateMaterialDocument checks version and types", "[content][valida
             {"albedo", {1.0, 1.0, 1.0}},
             {"shininess", 8.0},
         };
-        const ValidationReport report = ValidateMaterialDocument(doc, "memory:mat");
+        const FValidationReport report = ValidateMaterialDocument(doc, "memory:mat");
         REQUIRE(report.ok());
     }
     SECTION("bad albedo") {
         const nlohmann::json doc = {{"version", 1}, {"albedo", "red"}};
-        const ValidationReport report = ValidateMaterialDocument(doc, "memory:badmat");
+        const FValidationReport report = ValidateMaterialDocument(doc, "memory:badmat");
         REQUIRE_FALSE(report.ok());
     }
 }
@@ -209,6 +209,6 @@ TEST_CASE("ValidateMaterialFile loads M_Default.lmat", "[content][validator]") {
 #else
     const std::string path = "Engine/Content/Materials/M_Default.lmat";
 #endif
-    const ValidationReport report = ValidateMaterialFile(path);
+    const FValidationReport report = ValidateMaterialFile(path);
     REQUIRE(report.ok());
 }

@@ -51,7 +51,7 @@ struct alignas(16) LightsBlock {
 static_assert(sizeof(CameraBlock) == 208, "CameraBlock must match std140 Camera UBO");
 static_assert(sizeof(LightsBlock) == 272, "LightsBlock must match std140 Lights UBO");
 
-float distanceSqToCamera(const StaticMeshComponent& object, const glm::vec3& cameraPos) {
+float distanceSqToCamera(const UStaticMeshComponent& object, const glm::vec3& cameraPos) {
     const FBox box = FBox::fromLocalTransformed(object.mesh->LocalMin(), object.mesh->LocalMax(),
                                                 object.EffectiveModelMatrix());
     const glm::vec3 center = (box.min + box.max) * 0.5f;
@@ -59,12 +59,12 @@ float distanceSqToCamera(const StaticMeshComponent& object, const glm::vec3& cam
     return glm::dot(d, d);
 }
 
-FBox worldAabbFromObject(const StaticMeshComponent& object) {
+FBox worldAabbFromObject(const UStaticMeshComponent& object) {
     return FBox::fromLocalTransformed(object.mesh->LocalMin(), object.mesh->LocalMax(),
                                       object.EffectiveModelMatrix());
 }
 
-void expandWorldAabbFromObject(const StaticMeshComponent& object, glm::vec3& worldMin,
+void expandWorldAabbFromObject(const UStaticMeshComponent& object, glm::vec3& worldMin,
                                glm::vec3& worldMax) {
     const FBox box = worldAabbFromObject(object);
     worldMin = glm::min(worldMin, box.min);
@@ -79,11 +79,11 @@ void snapAabbOutward(glm::vec3& worldMin, glm::vec3& worldMax, float step) {
     worldMax = glm::ceil(worldMax / step) * step;
 }
 
-bool computeCasterAabb(const Level& level, glm::vec3& worldMin, glm::vec3& worldMax) {
+bool computeCasterAabb(const ULevel& level, glm::vec3& worldMin, glm::vec3& worldMax) {
     worldMin = glm::vec3(std::numeric_limits<float>::max());
     worldMax = glm::vec3(std::numeric_limits<float>::lowest());
     bool any = false;
-    for (const StaticMeshComponent& object : level.StaticMeshes()) {
+    for (const UStaticMeshComponent& object : level.StaticMeshes()) {
         if (!object.isShadowCaster()) {
             continue;
         }
@@ -404,7 +404,7 @@ void FSceneRenderer::AddDebugAabb(const glm::vec3& worldMin, const glm::vec3& wo
     overlayDebugDraw_.AddAabb(worldMin, worldMax, color);
 }
 
-void FSceneRenderer::updateCameraUbo(const Camera& camera) const {
+void FSceneRenderer::updateCameraUbo(const UCameraComponent& camera) const {
     updateCameraUbo(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.GetCameraLocation());
 }
 
@@ -418,7 +418,7 @@ void FSceneRenderer::updateCameraUbo(const glm::mat4& view, const glm::mat4& pro
     cameraUbo_.Update(&block, sizeof(block));
 }
 
-void FSceneRenderer::updateLightsUbo(const Level& level) const {
+void FSceneRenderer::updateLightsUbo(const ULevel& level) const {
     LightsBlock block{};
     const auto& dirs = level.DirectionalLights();
     const auto& points = level.PointLights();
@@ -440,7 +440,7 @@ void FSceneRenderer::updateLightsUbo(const Level& level) const {
     lightsUbo_.Update(&block, sizeof(block));
 }
 
-void FSceneRenderer::bindEnvironment(const Level& level) const {
+void FSceneRenderer::bindEnvironment(const ULevel& level) const {
     const bool hasEnv = level.Environment() != nullptr && level.Environment()->Valid();
     const bool hasIrr = hasEnv && level.Environment()->HasIrradiance();
     litShader_.SetInt("uHasEnvMap", hasEnv ? 1 : 0);
@@ -461,7 +461,7 @@ void FSceneRenderer::bindShadowResources(bool receiveShadows, float sourceAngleD
     litShader_.SetInt("uShadowMap", 1);
     litShader_.SetInt("uReceiveShadows", (receiveShadows && shadowMap_.Valid()) ? 1 : 0);
     float texel = shadowMap_.Valid() ? 1.0f / static_cast<float>(shadowMap_.Size()) : 0.0f;
-    // Source Angle softens PCF filter kernel (Unreal DirectionalLight Source Angle).
+    // Source Angle softens PCF filter kernel (Unreal FDirectionalLight Source Angle).
     if (receiveShadows && texel > 0.0f) {
         const float soft =
             std::clamp(sourceAngleDegrees / kDefaultLightSourceAngleDegrees, 0.25f, 16.0f);
@@ -501,7 +501,7 @@ void FSceneRenderer::setClipPlane(bool enabled, const glm::vec4& plane) const {
     }
 }
 
-void FSceneRenderer::renderShadowPass(const Level& level, const glm::mat4& lightSpace) {
+void FSceneRenderer::renderShadowPass(const ULevel& level, const glm::mat4& lightSpace) {
     if (!shadowMap_.Valid()) {
         return;
     }
@@ -511,7 +511,7 @@ void FSceneRenderer::renderShadowPass(const Level& level, const glm::mat4& light
 
     if (shadowShader_.Valid()) {
         shadowShader_.Bind();
-        for (const StaticMeshComponent& object : level.StaticMeshes()) {
+        for (const UStaticMeshComponent& object : level.StaticMeshes()) {
             if (!object.isShadowCaster()) {
                 continue;
             }
@@ -555,7 +555,7 @@ void FSceneRenderer::renderShadowPass(const Level& level, const glm::mat4& light
     passTimers_.End(FGPUPassTimer::EPass::Shadow);
 }
 
-void FSceneRenderer::renderPlanarReflectionPass(const Level& level, const Camera& camera, float planeY) {
+void FSceneRenderer::renderPlanarReflectionPass(const ULevel& level, const UCameraComponent& camera, float planeY) {
     const int reflW = std::max(
         1, static_cast<int>(std::lround(static_cast<float>(fbWidth_) * kPlanarReflectionScale)));
     const int reflH = std::max(
@@ -603,7 +603,7 @@ void FSceneRenderer::renderPlanarReflectionPass(const Level& level, const Camera
     unlitOpts.bindSharedLitTextures = false;
 
     bool litGlobalsBound = litShader_.Valid();
-    for (const StaticMeshComponent& object : level.StaticMeshes()) {
+    for (const UStaticMeshComponent& object : level.StaticMeshes()) {
         if (object.hidden || object.mesh == nullptr || !object.mesh->Valid()) {
             continue;
         }
@@ -652,7 +652,7 @@ void FSceneRenderer::renderPlanarReflectionPass(const Level& level, const Camera
     passTimers_.End(FGPUPassTimer::EPass::Planar);
 }
 
-void FSceneRenderer::drawSkybox(const Level& level, const glm::mat4& view,
+void FSceneRenderer::drawSkybox(const ULevel& level, const glm::mat4& view,
                           const glm::mat4& projection) const {
     if (level.Environment() == nullptr || !level.Environment()->Valid() || !skyboxShader_.Valid() ||
         skyboxMesh_ == nullptr || !skyboxMesh_->Valid()) {
@@ -672,7 +672,7 @@ void FSceneRenderer::drawSkybox(const Level& level, const glm::mat4& view,
     glDepthFunc(GL_LESS);
 }
 
-void FSceneRenderer::DrawSubMesh(const FShader& shader, const StaticMeshComponent& object,
+void FSceneRenderer::DrawSubMesh(const FShader& shader, const UStaticMeshComponent& object,
                            std::size_t subMeshIndex, const FMaterial& material,
                            const glm::mat4& view, const glm::mat4& projection,
                            const glm::mat4& lightSpace, const FDrawOptions& options) const {
@@ -736,7 +736,7 @@ void FSceneRenderer::DrawSubMesh(const FShader& shader, const StaticMeshComponen
     object.mesh->DrawSubMesh(subMeshIndex);
 }
 
-void FSceneRenderer::DrawScene(const Level& level, const Camera& camera) {
+void FSceneRenderer::DrawScene(const ULevel& level, const UCameraComponent& camera) {
     frameStats_ = {};
     passTimers_.BeginFrame();
     frameStats_.shadowMs = passTimers_.Milliseconds(FGPUPassTimer::EPass::Shadow);
@@ -804,7 +804,7 @@ void FSceneRenderer::DrawScene(const Level& level, const Camera& camera) {
     bool hasPlanarMirror = false;
     float mirrorPlaneY = 0.0f;
     glm::mat4 reflectionViewProj(1.0f);
-    for (const StaticMeshComponent& object : level.StaticMeshes()) {
+    for (const UStaticMeshComponent& object : level.StaticMeshes()) {
         const std::size_t subCount = object.subMeshCount();
         for (std::size_t s = 0; s < subCount; ++s) {
             if (object.materialForSubMesh(s).planarMirror) {
@@ -832,7 +832,7 @@ void FSceneRenderer::DrawScene(const Level& level, const Camera& camera) {
     transparent.reserve(level.StaticMeshes().size());
 
     for (std::size_t i = 0; i < level.StaticMeshes().size(); ++i) {
-        const StaticMeshComponent& object = level.StaticMeshes()[i];
+        const UStaticMeshComponent& object = level.StaticMeshes()[i];
         if (object.hidden || object.mesh == nullptr || !object.mesh->Valid()) {
             continue;
         }
@@ -892,7 +892,7 @@ void FSceneRenderer::DrawScene(const Level& level, const Camera& camera) {
         unlitShader_.SetFloat("uAlpha", 1.0f);
         whiteTexture_->Bind(0);
         for (const FDrawItem& item : opaque) {
-            const StaticMeshComponent& object = level.StaticMeshes()[item.objectIndex];
+            const UStaticMeshComponent& object = level.StaticMeshes()[item.objectIndex];
             const FMaterial& mat = object.materialForSubMesh(item.subMeshIndex);
             if (mat.shading == EMaterialShadingModel::Unlit) {
                 continue;
@@ -936,7 +936,7 @@ void FSceneRenderer::DrawScene(const Level& level, const Camera& camera) {
         bool mirrorEnabled = false;
 
         for (const FDrawItem& item : items) {
-            const StaticMeshComponent& object = level.StaticMeshes()[item.objectIndex];
+            const UStaticMeshComponent& object = level.StaticMeshes()[item.objectIndex];
             const FMaterial& mat = object.materialForSubMesh(item.subMeshIndex);
             const bool lit = mat.shading == EMaterialShadingModel::BlinnPhong;
             FShader& shader = lit ? litShader_ : unlitShader_;
@@ -1033,7 +1033,7 @@ void FSceneRenderer::DrawScene(const Level& level, const Camera& camera) {
     staticDraws_.clear();
 }
 
-void FSceneRenderer::renderPostStack(const Level& level, const Camera& camera) {
+void FSceneRenderer::renderPostStack(const ULevel& level, const UCameraComponent& camera) {
     // Flow: SceneColor(+Depth) → SSAO → bilateral blur → composite+tonemap → FXAA → present
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_BLEND);
@@ -1142,7 +1142,7 @@ void FSceneRenderer::renderPostStack(const Level& level, const Camera& camera) {
     glViewport(0, 0, fbWidth_, fbHeight_);
 }
 
-void FSceneRenderer::drawQueuedSkeletal(const Level& level, const glm::mat4& view,
+void FSceneRenderer::drawQueuedSkeletal(const ULevel& level, const glm::mat4& view,
                                   const glm::mat4& projection, const glm::mat4& lightSpace,
                                   bool receiveShadows, float shadowSourceAngle,
                                   const FFrustum* cameraFrustum, bool useWorldClipPlane) {
@@ -1247,7 +1247,7 @@ void FSceneRenderer::drawQueuedSkeletal(const Level& level, const glm::mat4& vie
     }
 }
 
-void FSceneRenderer::drawQueuedStatic(const Level& level, const glm::mat4& view,
+void FSceneRenderer::drawQueuedStatic(const ULevel& level, const glm::mat4& view,
                                 const glm::mat4& projection, const glm::mat4& lightSpace,
                                 bool receiveShadows, float shadowSourceAngle) {
     if (staticDraws_.empty() || whiteTexture_ == nullptr || !unlitShader_.Valid()) {
@@ -1309,7 +1309,7 @@ void FSceneRenderer::drawQueuedStatic(const Level& level, const glm::mat4& view,
     glEnable(GL_CULL_FACE);
 }
 
-void FSceneRenderer::drawDebug(const Level& level, const Camera& camera, const glm::mat4& lightSpace,
+void FSceneRenderer::drawDebug(const ULevel& level, const UCameraComponent& camera, const glm::mat4& lightSpace,
                          bool hasLightSpace) {
     if (!debugDrawEnabled_ || !debugDraw_.IsValid()) {
         return;
@@ -1321,7 +1321,7 @@ void FSceneRenderer::drawDebug(const Level& level, const Camera& camera, const g
     constexpr glm::vec3 kHiddenAabbColor{0.95f, 0.35f, 0.85f}; // BlockingVolume / hidden
     constexpr glm::vec3 kFrustumColor{1.0f, 0.85f, 0.15f};
 
-    for (const StaticMeshComponent& object : level.StaticMeshes()) {
+    for (const UStaticMeshComponent& object : level.StaticMeshes()) {
         if (object.mesh == nullptr || !object.mesh->Valid()) {
             continue;
         }

@@ -4,7 +4,7 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
-#include "Camera/Camera.h"
+#include "Camera/CameraComponent.h"
 #include "Math/Transform.h"
 #include "Debug/DebugDraw.h"
 #include "Engine/Level.h"
@@ -71,7 +71,7 @@ public:
     [[nodiscard]] FRHIFramebufferId GetDrawFramebuffer() const { return drawTargetFbo_; }
 
     void BeginFrame(int framebufferWidth, int framebufferHeight);
-    void DrawScene(const Level& level, const Camera& camera);
+    void DrawScene(const ULevel& level, const UCameraComponent& camera);
 
     /// Queue a skinned mesh draw for the next `DrawScene` (cleared after DrawScene).
     void SubmitSkeletalDraw(const USkeletalMesh& mesh, const glm::mat4& model,
@@ -126,11 +126,11 @@ public:
 
 private:
     bool bindLitUbos() const;
-    void updateCameraUbo(const Camera& camera) const;
+    void updateCameraUbo(const UCameraComponent& camera) const;
     void updateCameraUbo(const glm::mat4& view, const glm::mat4& projection,
                          const glm::vec3& cameraPos) const;
-    void updateLightsUbo(const Level& level) const;
-    void bindEnvironment(const Level& level) const;
+    void updateLightsUbo(const ULevel& level) const;
+    void bindEnvironment(const ULevel& level) const;
     void bindShadowResources(bool receiveShadows,
                              float sourceAngleDegrees = kDefaultLightSourceAngleDegrees) const;
     void bindPlanarReflection(bool enabled, const glm::mat4& reflectionViewProj) const;
@@ -138,21 +138,21 @@ private:
     void ensureShadowMapSize();
     [[nodiscard]] FRHIFramebufferId colorRestoreFbo() const;
     void drawFullscreenTriangle() const;
-    void renderPostStack(const Level& level, const Camera& camera);
-    void renderShadowPass(const Level& level, const glm::mat4& lightSpace);
-    void renderPlanarReflectionPass(const Level& level, const Camera& camera, float planeY);
-    void drawSkybox(const Level& level, const glm::mat4& view, const glm::mat4& projection) const;
-    void drawDebug(const Level& level, const Camera& camera, const glm::mat4& lightSpace,
+    void renderPostStack(const ULevel& level, const UCameraComponent& camera);
+    void renderShadowPass(const ULevel& level, const glm::mat4& lightSpace);
+    void renderPlanarReflectionPass(const ULevel& level, const UCameraComponent& camera, float planeY);
+    void drawSkybox(const ULevel& level, const glm::mat4& view, const glm::mat4& projection) const;
+    void drawDebug(const ULevel& level, const UCameraComponent& camera, const glm::mat4& lightSpace,
                    bool hasLightSpace);
-    void DrawSubMesh(const FShader& shader, const StaticMeshComponent& object,
+    void DrawSubMesh(const FShader& shader, const UStaticMeshComponent& object,
                      std::size_t subMeshIndex, const FMaterial& material, const glm::mat4& view,
                      const glm::mat4& projection, const glm::mat4& lightSpace,
                      const FDrawOptions& options) const;
-    void drawQueuedSkeletal(const Level& level, const glm::mat4& view, const glm::mat4& projection,
+    void drawQueuedSkeletal(const ULevel& level, const glm::mat4& view, const glm::mat4& projection,
                             const glm::mat4& lightSpace, bool receiveShadows,
                             float shadowSourceAngle, const FFrustum* cameraFrustum,
                             bool useWorldClipPlane = false);
-    void drawQueuedStatic(const Level& level, const glm::mat4& view, const glm::mat4& projection,
+    void drawQueuedStatic(const ULevel& level, const glm::mat4& view, const glm::mat4& projection,
                           const glm::mat4& lightSpace, bool receiveShadows,
                           float shadowSourceAngle);
 

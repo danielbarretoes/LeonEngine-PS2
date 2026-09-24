@@ -8,31 +8,31 @@
 #include <vector>
 
 
-class Actor;
+class AActor;
 
-/// Unreal-like USceneComponent: ActorComponent + relative TRS + parent/child attach tree.
+/// Unreal-like USceneComponent: UActorComponent + relative TRS + parent/child attach tree.
 /// World transform: root uses owning Actor location/yaw + relative; children compose parent *
 /// relative.
-class SceneComponent : public ActorComponent {
+class USceneComponent : public UActorComponent {
 public:
-    SceneComponent() = default;
-    ~SceneComponent() override;
+    USceneComponent() = default;
+    ~USceneComponent() override;
 
-    SceneComponent(const SceneComponent&) = delete;
-    SceneComponent& operator=(const SceneComponent&) = delete;
-    SceneComponent(SceneComponent&&) = delete;
-    SceneComponent& operator=(SceneComponent&&) = delete;
+    USceneComponent(const USceneComponent&) = delete;
+    USceneComponent& operator=(const USceneComponent&) = delete;
+    USceneComponent(USceneComponent&&) = delete;
+    USceneComponent& operator=(USceneComponent&&) = delete;
 
     glm::vec3 RelativeLocation{0.0f};
     glm::vec3 RelativeRotation{0.0f}; // XYZ Euler, degrees
     glm::vec3 RelativeScale{1.0f};
 
     /// Attach under `parent`. Returns false if parent is null, this, or would create a cycle.
-    [[nodiscard]] bool AttachToComponent(SceneComponent* parent, bool keepWorldTransform = false);
+    [[nodiscard]] bool AttachToComponent(USceneComponent* parent, bool keepWorldTransform = false);
     void DetachFromParent(bool keepWorldTransform = false);
 
-    [[nodiscard]] SceneComponent* GetAttachParent() const { return parent_; }
-    [[nodiscard]] const std::vector<SceneComponent*>& GetAttachChildren() const {
+    [[nodiscard]] USceneComponent* GetAttachParent() const { return parent_; }
+    [[nodiscard]] const std::vector<USceneComponent*>& GetAttachChildren() const {
         return children_;
     }
 
@@ -45,10 +45,10 @@ public:
     void DestroyComponent() override;
 
 private:
-    void detachChild(SceneComponent* child);
-    [[nodiscard]] bool wouldCreateCycle(const SceneComponent* candidateParent) const;
+    void detachChild(USceneComponent* child);
+    [[nodiscard]] bool wouldCreateCycle(const USceneComponent* candidateParent) const;
 
-    SceneComponent* parent_ = nullptr;
-    std::vector<SceneComponent*> children_;
+    USceneComponent* parent_ = nullptr;
+    std::vector<USceneComponent*> children_;
 };
 

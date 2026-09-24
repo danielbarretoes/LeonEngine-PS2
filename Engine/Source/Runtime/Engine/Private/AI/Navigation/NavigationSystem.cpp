@@ -29,7 +29,7 @@ namespace {
     return false;
 }
 
-[[nodiscard]] bool IsForcedNavBlockerTag(const Level& level, std::size_t meshIndex) {
+[[nodiscard]] bool IsForcedNavBlockerTag(const ULevel& level, std::size_t meshIndex) {
     if (meshIndex >= level.StaticMeshes().size()) {
         return false;
     }
@@ -38,14 +38,14 @@ namespace {
 }
 
 /// Walkable for CMC (slopes) — must not carve a hole in the flat grid NavMesh.
-[[nodiscard]] bool IsWalkableNavSurfaceTag(const Level& level, std::size_t meshIndex) {
+[[nodiscard]] bool IsWalkableNavSurfaceTag(const ULevel& level, std::size_t meshIndex) {
     if (meshIndex >= level.StaticMeshes().size()) {
         return false;
     }
     return level.StaticMeshes()[meshIndex].tag == NavTags::Walkable;
 }
 
-[[nodiscard]] bool ShouldSkipLevelMesh(const Level& level, std::size_t meshIndex) {
+[[nodiscard]] bool ShouldSkipLevelMesh(const ULevel& level, std::size_t meshIndex) {
     if (meshIndex >= level.StaticMeshes().size()) {
         return false;
     }
@@ -54,14 +54,14 @@ namespace {
 }
 
 [[nodiscard]] bool BodyBlocksNavigation(const FBodyInstance& body, float floorY, float cellSize,
-                                        const Level* level) {
+                                        const ULevel* level) {
     if (body.type != EBodyType::Static) {
         return false;
     }
     if (level != nullptr && ShouldSkipLevelMesh(*level, body.levelMeshIndex)) {
         return false;
     }
-    // NavWalkable (ramps): path across footprint; CharacterMovement climbs the mesh.
+    // NavWalkable (ramps): path across footprint; UCharacterMovementComponent climbs the mesh.
     if (level != nullptr && IsWalkableNavSurfaceTag(*level, body.levelMeshIndex)) {
         return false;
     }
@@ -71,7 +71,7 @@ namespace {
     if (!inHeightBand) {
         return false;
     }
-    // NavBlocker: thin slab may look floor-like by aspect but must block paths.
+    // FNavBlocker: thin slab may look floor-like by aspect but must block paths.
     if (level != nullptr && IsForcedNavBlockerTag(*level, body.levelMeshIndex)) {
         return true;
     }
@@ -136,14 +136,14 @@ struct AStarNodeGreater {
 
 } // namespace
 
-void NavigationSystem::Clear() {
+void UNavigationSystem::Clear() {
     mesh_ = {};
     blockerCount_ = 0;
     walkableCellCount_ = 0;
 }
 
-void NavigationSystem::BakeGrid(const FPhysScene& physics, float floorY, float walkBounds,
-                                const Level* level) {
+void UNavigationSystem::BakeGrid(const FPhysScene& physics, float floorY, float walkBounds,
+                                const ULevel* level) {
     Clear();
     const float bounds = walkBounds > 1.0f ? walkBounds : 1.0f;
     const float cell = cellSize_;
@@ -158,11 +158,11 @@ void NavigationSystem::BakeGrid(const FPhysScene& physics, float floorY, float w
     mesh_.walkable.assign(static_cast<std::size_t>(dim * dim), 1);
 
     const float cellHalf = cell * 0.5f;
-    struct NavBlocker {
+    struct FNavBlocker {
         const FBodyInstance* body = nullptr;
         const FTriangleMeshCollision* triMesh = nullptr;
     };
-    std::vector<NavBlocker> blockers;
+    std::vector<FNavBlocker> blockers;
     blockers.reserve(physics.Bodies().size());
     const auto& triMeshes = physics.TriangleMeshes();
     for (std::size_t bi = 0; bi < physics.Bodies().size(); ++bi) {
@@ -170,7 +170,7 @@ void NavigationSystem::BakeGrid(const FPhysScene& physics, float floorY, float w
         if (!BodyBlocksNavigation(body, floorY, cell, level)) {
             continue;
         }
-        NavBlocker blocker{};
+        FNavBlocker blocker{};
         blocker.body = &body;
         if (body.collisionShape == ECollisionShape::TriangleMesh && bi < triMeshes.size() &&
             triMeshes[bi].IsValid()) {
@@ -185,7 +185,7 @@ void NavigationSystem::BakeGrid(const FPhysScene& physics, float floorY, float w
         for (int ix = 0; ix < dim; ++ix) {
             const glm::vec3 center = mesh_.CellCenter(ix, iz);
             bool blocked = false;
-            for (const NavBlocker& blocker : blockers) {
+            for (const FNavBlocker& blocker : blockers) {
                 if (blocker.triMesh != nullptr) {
                     if (CellBlockedByTriangleMesh(center.x, center.z, cellHalf, agentRadius_,
                                                   *blocker.triMesh)) {
@@ -243,17 +243,17 @@ void NavigationSystem::BakeGrid(const FPhysScene& physics, float floorY, float w
     walkableCellCount_ = walkable;
 }
 
-void NavigationSystem::BuildFromPhysScene(const FPhysScene& physics, float floorY,
+void UNavigationSystem::BuildFromPhysScene(const FPhysScene& physics, float floorY,
                                           float walkBounds) {
     BakeGrid(physics, floorY, walkBounds, nullptr);
 }
 
-void NavigationSystem::BuildFromLevel(const Level& level, const FPhysScene& physics, float floorY,
+void UNavigationSystem::BuildFromLevel(const ULevel& level, const FPhysScene& physics, float floorY,
                                       float walkBounds) {
     BakeGrid(physics, floorY, walkBounds, &level);
 }
 
-bool NavigationSystem::ProjectPointToNavigation(const glm::vec3& world,
+bool UNavigationSystem::ProjectPointToNavigation(const glm::vec3& world,
                                                 glm::vec3& outProjected) const {
     if (!mesh_.IsValid()) {
         return false;
@@ -287,7 +287,7 @@ bool NavigationSystem::ProjectPointToNavigation(const glm::vec3& world,
     return false;
 }
 
-bool NavigationSystem::FindPath(const glm::vec3& start, const glm::vec3& end,
+bool UNavigationSystem::FindPath(const glm::vec3& start, const glm::vec3& end,
                                 std::vector<glm::vec3>& outPath) const {
     outPath.clear();
     if (!mesh_.IsValid() || walkableCellCount_ <= 0) {
@@ -394,7 +394,7 @@ bool NavigationSystem::FindPath(const glm::vec3& start, const glm::vec3& end,
     return !outPath.empty();
 }
 
-void NavigationSystem::AppendDebugDraw(FDebugDraw& draw) const {
+void UNavigationSystem::AppendDebugDraw(FDebugDraw& draw) const {
     if (!mesh_.IsValid()) {
         return;
     }

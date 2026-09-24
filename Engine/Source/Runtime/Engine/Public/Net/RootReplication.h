@@ -12,8 +12,8 @@
 namespace Leon::Net
 {
 
-/// Capture Actor root location + yaw for replication (no full SceneComponent graph).
-[[nodiscard]] inline FPawnSnap CaptureActorRoot(std::uint8_t slot, const Actor& actor,
+/// Capture Actor root location + yaw for replication (no full USceneComponent graph).
+[[nodiscard]] inline FPawnSnap CaptureActorRoot(std::uint8_t slot, const AActor& actor,
                                                float velocityY = 0.0f, float animBlend = 0.0f,
                                                float boomYaw = 0.0f, float boomPitch = 0.0f,
                                                bool grounded = true) {
@@ -35,7 +35,7 @@ namespace Leon::Net
 }
 
 /// Capture Character movement-relevant fields for snapshots.
-[[nodiscard]] inline FPawnSnap CaptureCharacterRoot(std::uint8_t slot, const Character& character,
+[[nodiscard]] inline FPawnSnap CaptureCharacterRoot(std::uint8_t slot, const ACharacter& character,
                                                    float boomYaw = 0.0f, float boomPitch = 0.0f) {
     FPawnSnap snap =
         CaptureActorRoot(slot, character, character.GetVelocityZ(), character.GetAnimBlendInput(),
@@ -44,7 +44,7 @@ namespace Leon::Net
 }
 
 /// Apply a replicated root snapshot onto an Actor (location + yaw only).
-inline void ApplyActorRoot(Actor& actor, const FPawnSnap& snap) {
+inline void ApplyActorRoot(AActor& actor, const FPawnSnap& snap) {
     actor.SetActorLocationAndRotation({snap.x, snap.y, snap.z}, snap.yaw);
 }
 

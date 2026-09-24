@@ -3,9 +3,9 @@
 #include "GameFramework/Pawn.h"
 
 
-/// Default possessed pawn for `DefaultGameMode` (Unreal-like DefaultPawn / flying camera).
+/// Default possessed pawn for `ADefaultGameMode` (Unreal-like DefaultPawn / flying camera).
 /// Free-look: LMB aims, WASD flies along look direction, Q/E world vertical.
-class DefaultCameraActor : public Pawn {
+class ADefaultCameraActor : public APawn {
 public:
     [[nodiscard]] float MoveSpeed() const { return moveSpeed_; }
     void SetMoveSpeed(float speed) { moveSpeed_ = speed > 0.0f ? speed : 0.0f; }

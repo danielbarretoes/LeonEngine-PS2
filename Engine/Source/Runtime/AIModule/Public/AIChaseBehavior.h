@@ -36,7 +36,7 @@ public:
     }
 
     /// Runs BT then `AIController::TickAI`. Returns steering wish.
-    glm::vec3 Tick(AIController& ai, Actor* target, float deltaTime) {
+    glm::vec3 Tick(AIController& ai, AActor* target, float deltaTime) {
         ai_ = &ai;
         target_ = target;
         tree_.GetBlackboard().SetBool("HasTarget", target != nullptr);
@@ -49,7 +49,7 @@ public:
 
 private:
     AIController* ai_ = nullptr;
-    Actor* target_ = nullptr;
+    AActor* target_ = nullptr;
     std::unique_ptr<BTConditionBool> hasTarget_;
     std::unique_ptr<BTAction> chase_;
     std::unique_ptr<BTAction> stop_;

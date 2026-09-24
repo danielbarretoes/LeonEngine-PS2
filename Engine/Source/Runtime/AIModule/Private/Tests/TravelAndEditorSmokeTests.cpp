@@ -36,17 +36,17 @@ TEST_CASE("Editor-style level save load apply headless", "[editor][level]") {
 #ifdef LEON_ROOT_DIR
     const std::string templateLevel =
         std::string(LEON_ROOT_DIR) + "/Engine/Content/LevelTemplates/Blank.llev";
-    Engine engine;
+    UGameEngine engine;
     REQUIRE(engine.InitializeHeadless());
     REQUIRE(LoadLevelFile(engine, templateLevel));
 
-    LevelDocument doc = BuildLevelDocument(engine.GetLevel(), engine.GetCamera());
+    FLevelDocument doc = BuildLevelDocument(engine.GetLevel(), engine.GetCamera());
     REQUIRE_FALSE(doc.name.empty());
 
     const std::vector<std::uint8_t> bytes = SerializeLeonLevel(doc);
     REQUIRE_FALSE(bytes.empty());
 
-    LevelDocument roundTrip;
+    FLevelDocument roundTrip;
     REQUIRE(DeserializeLeonLevel(bytes, roundTrip));
     REQUIRE(roundTrip.name == doc.name);
 
@@ -58,9 +58,9 @@ TEST_CASE("Editor-style level save load apply headless", "[editor][level]") {
 }
 
 TEST_CASE("AIChaseBehavior MoveTo when target present", "[gameplay][bt][ai]") {
-    World world;
-    auto* character = world.SpawnActor<Character>();
-    auto* target = world.SpawnActor<Character>();
+    UWorld world;
+    auto* character = world.SpawnActor<ACharacter>();
+    auto* target = world.SpawnActor<ACharacter>();
     target->SetActorLocationAndRotation({5.0f, 0.0f, 0.0f}, 0.0f);
 
     AIController ai;

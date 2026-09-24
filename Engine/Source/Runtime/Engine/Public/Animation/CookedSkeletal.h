@@ -38,21 +38,21 @@ inline constexpr int kCookedFormatVersion = 1;
 [[nodiscard]] bool LoadAnimSequence(const std::string& path, UAnimSequence& out);
 
 /// UBlendSpace1D descriptor; `samples[].anim` are paths relative to the blendspace file.
-struct BlendSpace1DAssetDesc {
+struct FBlendSpace1DAssetDesc {
     std::string name = "BlendSpace1D";
     float axisMin = 0.0f;
     float axisMax = 1.0f;
-    struct Sample {
+    struct FSample {
         std::string animRelPath;
         float position = 0.0f;
     };
-    std::vector<Sample> samples;
+    std::vector<FSample> samples;
 };
 
-[[nodiscard]] bool SaveBlendSpace1DJson(const std::string& path, const BlendSpace1DAssetDesc& desc);
-[[nodiscard]] bool LoadBlendSpace1DJson(const std::string& path, BlendSpace1DAssetDesc& out);
+[[nodiscard]] bool SaveBlendSpace1DJson(const std::string& path, const FBlendSpace1DAssetDesc& desc);
+[[nodiscard]] bool LoadBlendSpace1DJson(const std::string& path, FBlendSpace1DAssetDesc& out);
 
-struct CharacterVisualDesc {
+struct FCharacterVisualDesc {
     std::string name = "Character";
     std::string skeletalMeshRel; // *.lskm
     std::string blendSpaceRel;   // *.blendspace1d.json
@@ -65,13 +65,13 @@ struct CharacterVisualDesc {
 
 /// Leon Character package (`.lchar` — INI-style, like `.lmat`).
 [[nodiscard]] bool SaveCharacterVisualLchar(const std::string& path,
-                                            const CharacterVisualDesc& desc);
-[[nodiscard]] bool LoadCharacterVisualLchar(const std::string& path, CharacterVisualDesc& out);
+                                            const FCharacterVisualDesc& desc);
+[[nodiscard]] bool LoadCharacterVisualLchar(const std::string& path, FCharacterVisualDesc& out);
 /// Load `.lchar` (preferred) or legacy `.character.json`.
-[[nodiscard]] bool LoadCharacterVisual(const std::string& path, CharacterVisualDesc& out);
+[[nodiscard]] bool LoadCharacterVisual(const std::string& path, FCharacterVisualDesc& out);
 
 /// Optional Mixamo jump / fall / land FBX paths for UAnimInstance jump SM.
-struct CookJumpAnimPaths {
+struct FCookJumpAnimPaths {
     std::string jumpStartFbx; // Jumping Up
     std::string fallLoopFbx;  // Falling Idle
     std::string landFbx;      // Falling To Landing
@@ -88,5 +88,5 @@ struct CookJumpAnimPaths {
                                         const std::string& meshFbxPath,
                                         const std::string& runFbxPath,
                                         const std::string& outDirectory,
-                                        const CookJumpAnimPaths& jumpAnims = {});
+                                        const FCookJumpAnimPaths& jumpAnims = {});
 

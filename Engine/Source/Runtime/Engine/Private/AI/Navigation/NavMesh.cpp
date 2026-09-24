@@ -3,7 +3,7 @@
 #include <cmath>
 
 
-bool NavMesh::WorldToCell(float x, float z, int& outIx, int& outIz) const {
+bool FNavMesh::WorldToCell(float x, float z, int& outIx, int& outIz) const {
     if (!IsValid() || cellSize <= 0.0f) {
         return false;
     }

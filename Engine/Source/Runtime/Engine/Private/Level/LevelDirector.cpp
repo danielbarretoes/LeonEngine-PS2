@@ -29,15 +29,15 @@ constexpr float kLineHeight = 14.0f * kPixelScale;
 
 } // namespace
 
-bool LevelDirector::Initialize(const std::string& shaderDirectory) {
+bool FLevelDirector::Initialize(const std::string& shaderDirectory) {
     return chrome_.Initialize(shaderDirectory);
 }
 
-EShaderReloadResult LevelDirector::ReloadShaders(bool force) {
+EShaderReloadResult FLevelDirector::ReloadShaders(bool force) {
     return chrome_.ReloadShader(force);
 }
 
-void LevelDirector::Shutdown() {
+void FLevelDirector::Shutdown() {
     chrome_.Shutdown();
     catalog_ = {};
     animation_.clear();
@@ -56,14 +56,14 @@ void LevelDirector::Shutdown() {
     }
 }
 
-bool LevelDirector::ScanAndLoad(Engine& engine, const std::string& projectsDirectory) {
+bool FLevelDirector::ScanAndLoad(UGameEngine& engine, const std::string& projectsDirectory) {
     if (!catalog_.ScanProjectPacks(projectsDirectory)) {
         return false;
     }
     return LoadIndex(engine, 0);
 }
 
-bool LevelDirector::ScanPackAndLoad(Engine& engine, const std::string& packDirectory,
+bool FLevelDirector::ScanPackAndLoad(UGameEngine& engine, const std::string& packDirectory,
                                     std::string_view preferredLevelKey) {
     if (!catalog_.ScanPack(packDirectory)) {
         return false;
@@ -79,14 +79,14 @@ bool LevelDirector::ScanPackAndLoad(Engine& engine, const std::string& packDirec
     return LoadIndex(engine, 0);
 }
 
-bool LevelDirector::LoadIndex(Engine& engine, std::size_t index) {
+bool FLevelDirector::LoadIndex(UGameEngine& engine, std::size_t index) {
     if (catalog_.IsEmpty()) {
         return false;
     }
 
     const std::size_t target = index % catalog_.NumEntries();
-    LevelAnimation nextAnim;
-    const LevelEntry& entry = catalog_.Entries()[target];
+    FLevelAnimation nextAnim;
+    const FLevelEntry& entry = catalog_.Entries()[target];
     if (!LoadLevelFile(engine, entry.path, &nextAnim)) {
         std::cerr << "LevelDirector: failed to load " << entry.path << '\n';
         return false;
@@ -99,7 +99,7 @@ bool LevelDirector::LoadIndex(Engine& engine, std::size_t index) {
     return true;
 }
 
-bool LevelDirector::LoadByKey(Engine& engine, std::string_view levelKey) {
+bool FLevelDirector::LoadByKey(UGameEngine& engine, std::string_view levelKey) {
     const std::size_t index = catalog_.FindIndexByLevelKey(levelKey);
     if (index >= catalog_.NumEntries()) {
         std::cerr << "LevelDirector: unknown level key '" << levelKey << "'\n";
@@ -108,14 +108,14 @@ bool LevelDirector::LoadByKey(Engine& engine, std::string_view levelKey) {
     return LoadIndex(engine, index);
 }
 
-bool LevelDirector::Next(Engine& engine) {
+bool FLevelDirector::Next(UGameEngine& engine) {
     if (catalog_.NumEntries() < 2) {
         return false;
     }
     return LoadIndex(engine, (currentIndex_ + 1) % catalog_.NumEntries());
 }
 
-bool LevelDirector::Previous(Engine& engine) {
+bool FLevelDirector::Previous(UGameEngine& engine) {
     if (catalog_.NumEntries() < 2) {
         return false;
     }
@@ -123,7 +123,7 @@ bool LevelDirector::Previous(Engine& engine) {
     return LoadIndex(engine, idx);
 }
 
-void LevelDirector::Update(Engine& engine, float deltaTime) {
+void FLevelDirector::Update(UGameEngine& engine, float deltaTime) {
     elapsed_ += deltaTime;
     auto& objects = engine.GetLevel().StaticMeshes();
     for (const auto& spin : animation_.spins) {
@@ -151,12 +151,12 @@ void LevelDirector::Update(Engine& engine, float deltaTime) {
     }
 }
 
-void LevelDirector::layoutChrome(int framebufferWidth, int framebufferHeight) {
+void FLevelDirector::layoutChrome(int framebufferWidth, int framebufferHeight) {
     if (catalog_.IsEmpty()) {
         return;
     }
 
-    const LevelEntry& entry = catalog_.Entries()[currentIndex_];
+    const FLevelEntry& entry = catalog_.Entries()[currentIndex_];
     std::array<char, 128> label{};
     if (std::snprintf(label.data(), label.size(), "<  %s/%s  (%zu/%zu)  >",
                       entry.pack.empty() ? "-" : entry.pack.c_str(), entry.name.c_str(),
@@ -186,7 +186,7 @@ void LevelDirector::layoutChrome(int framebufferWidth, int framebufferHeight) {
     chrome_.SetRightText(label.data());
 }
 
-void LevelDirector::refreshChrome(int framebufferWidth, int framebufferHeight) {
+void FLevelDirector::refreshChrome(int framebufferWidth, int framebufferHeight) {
     int fbW = framebufferWidth;
     int fbH = framebufferHeight;
     if (fbW <= 0) {
@@ -198,7 +198,7 @@ void LevelDirector::refreshChrome(int framebufferWidth, int framebufferHeight) {
     layoutChrome(fbW, fbH);
 }
 
-void LevelDirector::DrawUi(int framebufferWidth, int framebufferHeight) {
+void FLevelDirector::DrawUi(int framebufferWidth, int framebufferHeight) {
     // Single-level packs: no level-switcher chrome (Shipping then matches PIE visuals).
     if (!browserVisible_ || catalog_.NumEntries() <= 1) {
         return;
@@ -209,7 +209,7 @@ void LevelDirector::DrawUi(int framebufferWidth, int framebufferHeight) {
     chrome_.Draw(framebufferWidth, framebufferHeight);
 }
 
-void LevelDirector::cursorFramebuffer(Engine& engine, float& outX, float& outY) const {
+void FLevelDirector::cursorFramebuffer(UGameEngine& engine, float& outX, float& outY) const {
     double mx = 0.0;
     double my = 0.0;
     engine.GetWindow().GetCursorPos(mx, my);
@@ -233,15 +233,15 @@ void LevelDirector::cursorFramebuffer(Engine& engine, float& outX, float& outY) 
     outY = static_cast<float>(my) * static_cast<float>(fbH) / static_cast<float>(winH);
 }
 
-bool LevelDirector::hitPrev(float x, float y) const {
+bool FLevelDirector::hitPrev(float x, float y) const {
     return x >= prevMinX_ && x <= prevMaxX_ && y >= chromeMinY_ && y <= chromeMaxY_;
 }
 
-bool LevelDirector::hitNext(float x, float y) const {
+bool FLevelDirector::hitNext(float x, float y) const {
     return x >= nextMinX_ && x <= nextMaxX_ && y >= chromeMinY_ && y <= chromeMaxY_;
 }
 
-bool LevelDirector::HandleUiInput(Engine& engine) {
+bool FLevelDirector::HandleUiInput(UGameEngine& engine) {
     if (!browserVisible_ || catalog_.IsEmpty()) {
         return false;
     }

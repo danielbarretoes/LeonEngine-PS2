@@ -6,19 +6,19 @@
 #include <vector>
 
 
-class PlayerState;
+class APlayerState;
 
 /// Shared match/session state (Unreal-style `AGameStateBase` / `AGameState`).
 /// Owned by GameMode; replicated fields are advanced by the net GameMode on authority.
-class GameState {
+class AGameStateBase {
 public:
-    GameState() = default;
-    virtual ~GameState() = default;
+    AGameStateBase() = default;
+    virtual ~AGameStateBase() = default;
 
-    GameState(const GameState&) = delete;
-    GameState& operator=(const GameState&) = delete;
-    GameState(GameState&&) = delete;
-    GameState& operator=(GameState&&) = delete;
+    AGameStateBase(const AGameStateBase&) = delete;
+    AGameStateBase& operator=(const AGameStateBase&) = delete;
+    AGameStateBase(AGameStateBase&&) = delete;
+    AGameStateBase& operator=(AGameStateBase&&) = delete;
 
     /// Resets match clock / flags / map — not PlayerArray (Unreal: logout removes players).
     virtual void Reset() {
@@ -43,12 +43,12 @@ public:
     [[nodiscard]] float GetServerWorldTimeSeconds() const { return elapsedSeconds_; }
 
     /// Unreal `PlayerArray` — PlayerStates registered via PostLogin / Logout.
-    [[nodiscard]] const std::vector<PlayerState*>& GetPlayerArray() const { return playerArray_; }
+    [[nodiscard]] const std::vector<APlayerState*>& GetPlayerArray() const { return playerArray_; }
     /// Unreal `PlayerArray.Num()`.
     [[nodiscard]] int GetNumPlayers() const { return static_cast<int>(playerArray_.size()); }
 
     /// Unreal `AGameStateBase::AddPlayerState` (idempotent).
-    void AddPlayerState(PlayerState* playerState) {
+    void AddPlayerState(APlayerState* playerState) {
         if (playerState == nullptr) {
             return;
         }
@@ -59,7 +59,7 @@ public:
     }
 
     /// Unreal `AGameStateBase::RemovePlayerState`.
-    void RemovePlayerState(PlayerState* playerState) {
+    void RemovePlayerState(APlayerState* playerState) {
         if (playerState == nullptr) {
             return;
         }
@@ -67,7 +67,7 @@ public:
                            playerArray_.end());
     }
 
-    [[nodiscard]] bool HasPlayerState(const PlayerState* playerState) const {
+    [[nodiscard]] bool HasPlayerState(const APlayerState* playerState) const {
         if (playerState == nullptr) {
             return false;
         }
@@ -103,6 +103,6 @@ private:
     bool matchHasEnded_ = false;
     std::uint32_t replicatedWorldTimeFrames_ = 0;
     std::string mapName_;
-    std::vector<PlayerState*> playerArray_;
+    std::vector<APlayerState*> playerArray_;
 };
 

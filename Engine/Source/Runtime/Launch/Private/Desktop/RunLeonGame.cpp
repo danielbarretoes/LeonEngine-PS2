@@ -4,8 +4,8 @@
 
 
 int RunLeonGame(int argc, char** argv, const char* packName,
-                const std::function<void(Engine&, GameplayRouter&)>& registerModes,
+                const std::function<void(UGameEngine&, FGameplayRouter&)>& registerModes,
                 bool dedicatedByDefault) {
-    return GameApplication{}.Run(argc, argv, packName, registerModes, dedicatedByDefault);
+    return FGameApplication{}.Run(argc, argv, packName, registerModes, dedicatedByDefault);
 }
 

@@ -3,12 +3,12 @@
 #include "GameFramework/Actor.h"
 
 
-class Controller;
+class AController;
 
 /// Possessable Actor (Unreal-style Pawn). Character derives from this.
-class Pawn : public Actor {
+class APawn : public AActor {
 public:
-    [[nodiscard]] Controller* GetController() const { return controller_; }
+    [[nodiscard]] AController* GetController() const { return controller_; }
     [[nodiscard]] bool IsPossessed() const { return controller_ != nullptr; }
 
     /// UnPossess any Controller, then mark pending kill.
@@ -17,14 +17,14 @@ public:
     void EndPlay() override;
 
 protected:
-    Pawn() = default;
+    APawn() = default;
 
 private:
-    friend class Controller;
+    friend class AController;
 
-    void bindController(Controller* controller) { controller_ = controller; }
+    void bindController(AController* controller) { controller_ = controller; }
     void detachController();
 
-    Controller* controller_ = nullptr;
+    AController* controller_ = nullptr;
 };
 

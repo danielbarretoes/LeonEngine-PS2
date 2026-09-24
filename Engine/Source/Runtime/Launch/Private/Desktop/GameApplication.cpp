@@ -77,8 +77,8 @@ namespace {
 
 } // namespace
 
-int GameApplication::Run(int argc, char** argv, const char* packName,
-                         const std::function<void(Engine&, GameplayRouter&)>& registerModes,
+int FGameApplication::Run(int argc, char** argv, const char* packName,
+                         const std::function<void(UGameEngine&, FGameplayRouter&)>& registerModes,
                          bool dedicatedByDefault) {
     // dedicatedByDefault is set by *-server mains; CLI flags work on the client exe too.
     // Console strings stay ASCII: Windows cmd often is not UTF-8 (em dash / arrows mojibake).
@@ -94,7 +94,7 @@ int GameApplication::Run(int argc, char** argv, const char* packName,
     const std::string title =
         dedicated ? std::string("Leon (Dedicated) - ") + packName : std::string("Leon - ") + packName;
 
-    Engine engine;
+    UGameEngine engine;
     if (dedicated) {
         if (!engine.InitializeHeadless()) {
             std::cerr << "Failed to initialize headless engine\n";
@@ -111,7 +111,7 @@ int GameApplication::Run(int argc, char** argv, const char* packName,
         WireDefaultInput(engine);
     }
 
-    GameHostSession session;
+    FGameHostSession session;
     // Shipping: empty preferred key → pack defaultLevel inside session.Start.
     if (!session.Start(engine, packName, registerModes, {})) {
         engine.Shutdown();

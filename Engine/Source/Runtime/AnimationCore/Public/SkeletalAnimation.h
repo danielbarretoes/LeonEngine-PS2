@@ -10,7 +10,7 @@
 #include <vector>
 
 
-class SkeletalMeshComponent;
+class USkeletalMeshComponent;
 
 constexpr int kMaxSkinBones = 96;
 constexpr int kMaxBoneInfluences = 4;
@@ -105,8 +105,8 @@ public:
     UAnimInstance(UAnimInstance&&) = delete;
     UAnimInstance& operator=(UAnimInstance&&) = delete;
 
-    void SetOwningMeshComponent(SkeletalMeshComponent* owner) { owningMesh_ = owner; }
-    [[nodiscard]] SkeletalMeshComponent* GetOwningMeshComponent() const { return owningMesh_; }
+    void SetOwningMeshComponent(USkeletalMeshComponent* owner) { owningMesh_ = owner; }
+    [[nodiscard]] USkeletalMeshComponent* GetOwningMeshComponent() const { return owningMesh_; }
 
     void SetSkeleton(const USkeleton* skeleton) { skeleton_ = skeleton; }
     void SetBlendSpace(const UBlendSpace1D* blendSpace) { blendSpace_ = blendSpace; }
@@ -140,7 +140,7 @@ protected:
     [[nodiscard]] const UBlendSpace1D* GetBlendSpace() const { return blendSpace_; }
 
 private:
-    SkeletalMeshComponent* owningMesh_ = nullptr;
+    USkeletalMeshComponent* owningMesh_ = nullptr;
     const USkeleton* skeleton_ = nullptr;
     const UBlendSpace1D* blendSpace_ = nullptr;
 

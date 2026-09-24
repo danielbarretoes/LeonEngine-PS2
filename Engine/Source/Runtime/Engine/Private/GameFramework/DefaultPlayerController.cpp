@@ -7,17 +7,17 @@
 #include "GameFramework/DefaultPlayerController.h"
 
 
-DefaultCameraActor* DefaultPlayerController::GetDefaultCameraActor() const {
-    return dynamic_cast<DefaultCameraActor*>(GetPawn());
+ADefaultCameraActor* ADefaultPlayerController::GetDefaultCameraActor() const {
+    return dynamic_cast<ADefaultCameraActor*>(GetPawn());
 }
 
-glm::vec3 DefaultPlayerController::TickInput(Engine& engine) {
-    DefaultCameraActor* cameraActor = GetDefaultCameraActor();
+glm::vec3 ADefaultPlayerController::TickInput(UGameEngine& engine) {
+    ADefaultCameraActor* cameraActor = GetDefaultCameraActor();
     if (cameraActor == nullptr) {
         return {};
     }
 
-    const Camera& camera = engine.GetCamera();
+    const UCameraComponent& camera = engine.GetCamera();
     const float forwardAxis = engine.GetInput().GetAxisValue(Leon::InputActions::MoveForward);
     const float rightAxis = engine.GetInput().GetAxisValue(Leon::InputActions::MoveRight);
     const float upAxis = engine.GetInput().GetAxisValue(Leon::InputActions::MoveUp);

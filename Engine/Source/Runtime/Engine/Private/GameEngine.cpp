@@ -13,17 +13,17 @@
 #include <string>
 #include <thread>
 
-Engine::Engine() : gameInstance_(std::make_unique<GameInstance>()) {
+UGameEngine::UGameEngine() : gameInstance_(std::make_unique<UGameInstance>()) {
     application_.reset(FPlatformApplicationMisc::CreateApplication());
     window_ = application_->MakeWindow();
-    playerInput_.AddMappingContext(InputMappingContext::MakeDefault());
+    playerInput_.AddMappingContext(UInputMappingContext::MakeDefault());
 }
 
-Engine::~Engine() {
+UGameEngine::~UGameEngine() {
     Shutdown();
 }
 
-bool Engine::Initialize(int width, int height, const char* title) {
+bool UGameEngine::Initialize(int width, int height, const char* title) {
     if (initialized_) {
         return true;
     }
@@ -64,7 +64,7 @@ bool Engine::Initialize(int width, int height, const char* title) {
     return true;
 }
 
-bool Engine::InitializeHeadless() {
+bool UGameEngine::InitializeHeadless() {
     if (initialized_) {
         return true;
     }
@@ -83,7 +83,7 @@ bool Engine::InitializeHeadless() {
     return true;
 }
 
-void Engine::Shutdown() {
+void UGameEngine::Shutdown() {
     if (!initialized_) {
         return;
     }
@@ -117,13 +117,13 @@ void Engine::Shutdown() {
     displayMs_ = 0.0f;
 }
 
-float Engine::ConsumeScrollY() {
+float UGameEngine::ConsumeScrollY() {
     const float y = pendingScrollY_;
     pendingScrollY_ = 0.0f;
     return y;
 }
 
-void Engine::SetCursorCaptured(bool captured) {
+void UGameEngine::SetCursorCaptured(bool captured) {
     if (headless_) {
         return;
     }
@@ -131,14 +131,14 @@ void Engine::SetCursorCaptured(bool captured) {
     mouseLookSampleValid_ = false; // skip one frame to avoid a jump after mode change
 }
 
-bool Engine::IsCursorCaptured() const {
+bool UGameEngine::IsCursorCaptured() const {
     if (headless_) {
         return false;
     }
     return GetPlayInputWindow().IsCursorCaptured();
 }
 
-void Engine::SetPlayInputWindow(FGenericWindow* window) {
+void UGameEngine::SetPlayInputWindow(FGenericWindow* window) {
     FGenericWindow* previous = playInputTarget_.GetWindow();
     if (previous != nullptr && previous != window) {
         previous->SetScrollCallback(nullptr);
@@ -151,15 +151,15 @@ void Engine::SetPlayInputWindow(FGenericWindow* window) {
     }
 }
 
-FGenericWindow& Engine::GetPlayInputWindow() {
+FGenericWindow& UGameEngine::GetPlayInputWindow() {
     return playInputTarget_.Resolve(*window_);
 }
 
-const FGenericWindow& Engine::GetPlayInputWindow() const {
+const FGenericWindow& UGameEngine::GetPlayInputWindow() const {
     return playInputTarget_.Resolve(*window_);
 }
 
-void Engine::AddOnScreenDebugMessage(std::string message, float displaySeconds,
+void UGameEngine::AddOnScreenDebugMessage(std::string message, float displaySeconds,
                                      const glm::vec3& color) {
     if (headless_) {
         std::cout << "[server] " << message << '\n';
@@ -170,7 +170,7 @@ void Engine::AddOnScreenDebugMessage(std::string message, float displaySeconds,
     overlay_.AddOnScreenDebugMessage(std::move(message), displaySeconds, color);
 }
 
-EShaderReloadResult Engine::reloadAllShaders(bool force) {
+EShaderReloadResult UGameEngine::reloadAllShaders(bool force) {
     EShaderReloadResult result = renderer_.ReloadShaders(force);
     result = MergeShaderReload(result, overlay_.ReloadShader(force));
     if (shaderReloadHook_) {
@@ -179,8 +179,8 @@ EShaderReloadResult Engine::reloadAllShaders(bool force) {
     return result;
 }
 
-void Engine::Run(const UpdateCallback& onUpdate, const PreInputCallback& onPreInput,
-                 const PostRenderCallback& onPostRender) {
+void UGameEngine::Run(const FUpdateCallback& onUpdate, const FPreInputCallback& onPreInput,
+                 const FPostRenderCallback& onPostRender) {
     if (!initialized_) {
         std::cerr << "Engine is not initialized\n";
         return;
@@ -223,7 +223,7 @@ void Engine::Run(const UpdateCallback& onUpdate, const PreInputCallback& onPreIn
     }
 }
 
-void Engine::TickPlayAudio() {
+void UGameEngine::TickPlayAudio() {
     if (!initialized_ || headless_) {
         return;
     }
@@ -234,7 +234,7 @@ void Engine::TickPlayAudio() {
     audioDevice_.Tick();
 }
 
-void Engine::TickPlayHud(float deltaTime) {
+void UGameEngine::TickPlayHud(float deltaTime) {
     if (!initialized_) {
         return;
     }
@@ -246,7 +246,7 @@ void Engine::TickPlayHud(float deltaTime) {
     overlay_.SetCenterText(centerHudText_);
 }
 
-void Engine::PaintHudAndOverlay(int framebufferWidth, int framebufferHeight) {
+void UGameEngine::PaintHudAndOverlay(int framebufferWidth, int framebufferHeight) {
     if (!initialized_ || headless_) {
         return;
     }
@@ -257,7 +257,7 @@ void Engine::PaintHudAndOverlay(int framebufferWidth, int framebufferHeight) {
     overlay_.Draw(framebufferWidth, framebufferHeight);
 }
 
-void Engine::RunHeadless(const UpdateCallback& onUpdate, float tickHz) {
+void UGameEngine::RunHeadless(const FUpdateCallback& onUpdate, float tickHz) {
     if (!initialized_ || !headless_) {
         std::cerr << "Engine::RunHeadless requires InitializeHeadless()\n";
         return;
@@ -285,7 +285,7 @@ void Engine::RunHeadless(const UpdateCallback& onUpdate, float tickHz) {
     }
 }
 
-void Engine::SetHudStatsVisible(bool visible) {
+void UGameEngine::SetHudStatsVisible(bool visible) {
     showHudStats_ = visible;
     if (!showHudStats_) {
         overlay_.SetRightText({});
@@ -295,7 +295,7 @@ void Engine::SetHudStatsVisible(bool visible) {
     }
 }
 
-void Engine::updateHudStats(float deltaTime) {
+void UGameEngine::updateHudStats(float deltaTime) {
     fpsAccumTime_ += deltaTime;
     ++fpsAccumFrames_;
     if (fpsAccumTime_ < 0.25f) {
@@ -353,7 +353,7 @@ void Engine::updateHudStats(float deltaTime) {
     overlay_.SetBottomLeftText(hints.data());
 }
 
-void Engine::handleInput(float deltaTime) {
+void UGameEngine::handleInput(float deltaTime) {
     // PIE "New Window" routes capture + look here; fall back to the main window otherwise.
     FGenericWindow& inputWindow = GetPlayInputWindow();
 
@@ -402,7 +402,7 @@ void Engine::handleInput(float deltaTime) {
     constexpr float kKeyboardOrbitSpeed = 90.0f;
     if (keyboardOrbitEnabled_) {
         // Reuse Move* axes so remapping WASD also remaps keyboard orbit tumble.
-        const MoveAxes2D axes = playerInput_.GetMoveAxes2D();
+        const FMoveAxes2D axes = playerInput_.GetMoveAxes2D();
         const float yaw = axes.x * kKeyboardOrbitSpeed;
         const float pitch = -axes.z * kKeyboardOrbitSpeed;
         if (yaw != 0.0f || pitch != 0.0f) {
@@ -448,7 +448,7 @@ void Engine::handleInput(float deltaTime) {
     }
 }
 
-void Engine::render(const PostRenderCallback& onPostRender) {
+void UGameEngine::render(const FPostRenderCallback& onPostRender) {
     int fbWidth = 0;
     int fbHeight = 0;
     window_->GetFramebufferSize(fbWidth, fbHeight);

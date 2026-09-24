@@ -83,7 +83,7 @@ int RunCookRecipeFile(const std::string& recipePath) {
             const std::string mesh = ResolveBeside(baseDir, step.value("mesh", ""));
             const std::string run = ResolveBeside(baseDir, step.value("run", ""));
             const std::string out = ResolveBeside(baseDir, step.value("out", "."));
-            CookJumpAnimPaths jump{};
+            FCookJumpAnimPaths jump{};
             if (step.contains("jump") && step["jump"].is_string()) {
                 jump.jumpStartFbx = ResolveBeside(baseDir, step["jump"].get<std::string>());
             }

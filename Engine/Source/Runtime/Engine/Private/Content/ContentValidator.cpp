@@ -24,7 +24,7 @@ bool isNumberArray(const nlohmann::json& j, std::size_t minSize) {
     return true;
 }
 
-void requireVec3(ValidationReport& report, const nlohmann::json& parent, const char* key,
+void requireVec3(FValidationReport& report, const nlohmann::json& parent, const char* key,
                  const std::string& where) {
     if (!parent.contains(key)) {
         return;
@@ -34,7 +34,7 @@ void requireVec3(ValidationReport& report, const nlohmann::json& parent, const c
     }
 }
 
-void requireNumber(ValidationReport& report, const nlohmann::json& parent, const char* key,
+void requireNumber(FValidationReport& report, const nlohmann::json& parent, const char* key,
                    const std::string& where) {
     if (!parent.contains(key)) {
         return;
@@ -44,7 +44,7 @@ void requireNumber(ValidationReport& report, const nlohmann::json& parent, const
     }
 }
 
-void requireBool(ValidationReport& report, const nlohmann::json& parent, const char* key,
+void requireBool(FValidationReport& report, const nlohmann::json& parent, const char* key,
                  const std::string& where) {
     if (!parent.contains(key)) {
         return;
@@ -54,7 +54,7 @@ void requireBool(ValidationReport& report, const nlohmann::json& parent, const c
     }
 }
 
-void requireString(ValidationReport& report, const nlohmann::json& parent, const char* key,
+void requireString(FValidationReport& report, const nlohmann::json& parent, const char* key,
                    const std::string& where) {
     if (!parent.contains(key)) {
         return;
@@ -64,7 +64,7 @@ void requireString(ValidationReport& report, const nlohmann::json& parent, const
     }
 }
 
-void validateSurfaceFields(ValidationReport& report, const nlohmann::json& spec,
+void validateSurfaceFields(FValidationReport& report, const nlohmann::json& spec,
                            const std::string& where) {
     requireVec3(report, spec, "albedo", where);
     requireVec3(report, spec, "specular", where);
@@ -118,7 +118,7 @@ void validateSurfaceFields(ValidationReport& report, const nlohmann::json& spec,
     return !resolved.empty() && std::filesystem::exists(resolved, ec) && !ec;
 }
 
-void validateActorRecord(ValidationReport& report, const LevelActorRecord& actor,
+void validateActorRecord(FValidationReport& report, const FLevelActorRecord& actor,
                          std::size_t index, const std::string& levelPath) {
     const std::string where = "actors[" + std::to_string(index) + "]";
 
@@ -160,8 +160,8 @@ void validateActorRecord(ValidationReport& report, const LevelActorRecord& actor
         if (resolvedMat.empty() || !std::filesystem::exists(resolvedMat, ec) || ec) {
             report.error(where + ".material", "material file not found: " + actor.materialPath);
         } else {
-            ValidationReport matReport = ValidateMaterialFile(resolvedMat);
-            for (ValidationIssue& issue : matReport.issues) {
+            FValidationReport matReport = ValidateMaterialFile(resolvedMat);
+            for (FValidationIssue& issue : matReport.issues) {
                 issue.where = where + ".material->" + issue.where;
                 report.issues.push_back(std::move(issue));
             }
@@ -173,7 +173,7 @@ void validateActorRecord(ValidationReport& report, const LevelActorRecord& actor
     }
 }
 
-void validateLightRecord(ValidationReport& report, const LevelLightRecord& light,
+void validateLightRecord(FValidationReport& report, const FLevelLightRecord& light,
                          std::size_t index) {
     const std::string where = "lights[" + std::to_string(index) + "]";
     if (light.intensity < 0.0f) {
@@ -186,23 +186,23 @@ void validateLightRecord(ValidationReport& report, const LevelLightRecord& light
 
 } // namespace
 
-void ValidationReport::error(std::string where, std::string message) {
+void FValidationReport::error(std::string where, std::string message) {
     issues.push_back(
-        ValidationIssue{EValidationSeverity::Error, std::move(where), std::move(message)});
+        FValidationIssue{EValidationSeverity::Error, std::move(where), std::move(message)});
 }
 
-void ValidationReport::warning(std::string where, std::string message) {
+void FValidationReport::warning(std::string where, std::string message) {
     issues.push_back(
-        ValidationIssue{EValidationSeverity::Warning, std::move(where), std::move(message)});
+        FValidationIssue{EValidationSeverity::Warning, std::move(where), std::move(message)});
 }
 
-bool ValidationReport::ok() const {
+bool FValidationReport::ok() const {
     return errorCount() == 0;
 }
 
-std::size_t ValidationReport::errorCount() const {
+std::size_t FValidationReport::errorCount() const {
     std::size_t n = 0;
-    for (const ValidationIssue& issue : issues) {
+    for (const FValidationIssue& issue : issues) {
         if (issue.severity == EValidationSeverity::Error) {
             ++n;
         }
@@ -210,13 +210,13 @@ std::size_t ValidationReport::errorCount() const {
     return n;
 }
 
-std::size_t ValidationReport::warningCount() const {
+std::size_t FValidationReport::warningCount() const {
     return issues.size() - errorCount();
 }
 
-void ValidationReport::logToStderr() const {
+void FValidationReport::logToStderr() const {
     const char* label = sourcePath.empty() ? "<json>" : sourcePath.c_str();
-    for (const ValidationIssue& issue : issues) {
+    for (const FValidationIssue& issue : issues) {
         const char* kind = issue.severity == EValidationSeverity::Error ? "error" : "warning";
         std::cerr << "ContentValidator: " << kind << " in " << label;
         if (!issue.where.empty()) {
@@ -233,10 +233,10 @@ void ValidationReport::logToStderr() const {
     }
 }
 
-ValidationReport ValidateMaterialDocument(const nlohmann::json& doc,
+FValidationReport ValidateMaterialDocument(const nlohmann::json& doc,
                                           const std::string& sourcePath) {
     // Deprecated JSON material path — keep for callers that still pass JSON.
-    ValidationReport report;
+    FValidationReport report;
     report.sourcePath = sourcePath;
 
     if (!doc.is_object()) {
@@ -271,8 +271,8 @@ ValidationReport ValidateMaterialDocument(const nlohmann::json& doc,
     return report;
 }
 
-ValidationReport ValidateMaterialFile(const std::string& path) {
-    ValidationReport report;
+FValidationReport ValidateMaterialFile(const std::string& path) {
+    FValidationReport report;
     report.sourcePath = path;
 
     const auto extPos = path.find_last_of('.');
@@ -313,8 +313,8 @@ ValidationReport ValidateMaterialFile(const std::string& path) {
     return report;
 }
 
-ValidationReport ValidateLevelDocument(const LevelDocument& doc, const std::string& sourcePath) {
-    ValidationReport report;
+FValidationReport ValidateLevelDocument(const FLevelDocument& doc, const std::string& sourcePath) {
+    FValidationReport report;
     report.sourcePath = sourcePath;
 
     // Magic / version / class enums are already enforced by the `.llev` reader; an empty

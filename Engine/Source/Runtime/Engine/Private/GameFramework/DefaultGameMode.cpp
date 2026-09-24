@@ -9,7 +9,7 @@
 
 namespace {
 
-void beginFreeLookFromOrbit(Camera& camera) {
+void beginFreeLookFromOrbit(UCameraComponent& camera) {
     const glm::vec3 eye = camera.GetCameraLocation();
     const glm::vec3 target = camera.Target();
     glm::vec3 look = target - eye;
@@ -30,17 +30,17 @@ void beginFreeLookFromOrbit(Camera& camera) {
 
 } // namespace
 
-bool DefaultGameMode::Matches(const LevelEntry& /*entry*/, const std::string& gameModeId) const {
+bool ADefaultGameMode::Matches(const FLevelEntry& /*entry*/, const std::string& gameModeId) const {
     return gameModeId.empty() || gameModeId == Id();
 }
 
-void DefaultGameMode::OnEnter(Engine& engine, const std::string& /*levelPath*/) {
+void ADefaultGameMode::OnEnter(UGameEngine& engine, const std::string& /*levelPath*/) {
     player_.UnPossess();
     GetWorld().Clear();
     GetGameState().Reset();
     player_.GetPlayerState().Reset();
 
-    Camera& camera = engine.GetCamera();
+    UCameraComponent& camera = engine.GetCamera();
     savedOrbit_.target = camera.Target();
     savedOrbit_.distance = camera.Distance();
     savedOrbit_.yawDegrees = camera.YawDegrees();
@@ -48,7 +48,7 @@ void DefaultGameMode::OnEnter(Engine& engine, const std::string& /*levelPath*/) 
 
     beginFreeLookFromOrbit(camera);
 
-    auto* cameraActor = GetWorld().SpawnActor<DefaultCameraActor>();
+    auto* cameraActor = GetWorld().SpawnActor<ADefaultCameraActor>();
     cameraActor->SetActorLocation(camera.EyeLocation());
     cameraActor->SetActorYaw(camera.YawDegrees());
     player_.Possess(cameraActor);
@@ -68,14 +68,14 @@ void DefaultGameMode::OnEnter(Engine& engine, const std::string& /*levelPath*/) 
                                    {0.35f, 0.95f, 0.55f});
 }
 
-void DefaultGameMode::OnExit(Engine& engine) {
+void ADefaultGameMode::OnExit(UGameEngine& engine) {
     GetGameState().HandleMatchHasEnded();
     Logout(player_);
     player_.UnPossess();
     GetWorld().Clear();
     mouseLookSampleValid_ = false;
 
-    Camera& camera = engine.GetCamera();
+    UCameraComponent& camera = engine.GetCamera();
     camera.SetMode(ECameraMode::Orbit);
     camera.SetTarget(savedOrbit_.target);
     camera.SetDistance(savedOrbit_.distance);
@@ -86,16 +86,16 @@ void DefaultGameMode::OnExit(Engine& engine) {
     engine.SetOrbitMouseEnabled(true);
 }
 
-void DefaultGameMode::Tick(Engine& engine, float deltaTime) {
+void ADefaultGameMode::Tick(UGameEngine& engine, float deltaTime) {
     GetGameState().Tick(deltaTime);
     player_.GetPlayerState().Tick(deltaTime);
 
-    DefaultCameraActor* cameraActor = player_.GetDefaultCameraActor();
+    ADefaultCameraActor* cameraActor = player_.GetDefaultCameraActor();
     if (cameraActor == nullptr || cameraActor->IsPendingKillPending()) {
         return;
     }
 
-    Camera& camera = engine.GetCamera();
+    UCameraComponent& camera = engine.GetCamera();
     double mouseX = 0.0;
     double mouseY = 0.0;
     engine.GetPlayInputWindow().GetCursorPos(mouseX, mouseY);

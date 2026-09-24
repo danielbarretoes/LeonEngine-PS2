@@ -13,7 +13,7 @@
 
 
 
-class Engine;
+class UGameEngine;
 
 
 
@@ -23,19 +23,19 @@ class Engine;
 
 /// Level load orchestration + world tick glue (no ownership of Actor/GameMode types).
 
-class WorldRuntime {
+class FWorldRuntime {
 
 public:
 
-    [[nodiscard]] bool Initialize(Engine& engine, const std::string& shaderDirectory);
+    [[nodiscard]] bool Initialize(UGameEngine& engine, const std::string& shaderDirectory);
 
-    [[nodiscard]] bool LoadPack(Engine& engine, const std::string& packDirectory,
+    [[nodiscard]] bool LoadPack(UGameEngine& engine, const std::string& packDirectory,
 
                                 std::string_view preferredLevelKey = {});
 
-    void Tick(Engine& engine, GameplayRouter& gameplay, float deltaTime);
+    void Tick(UGameEngine& engine, FGameplayRouter& gameplay, float deltaTime);
 
-    void HandleUiInput(Engine& engine);
+    void HandleUiInput(UGameEngine& engine);
 
     void DrawUi(int framebufferWidth, int framebufferHeight);
 
@@ -43,15 +43,15 @@ public:
 
 
 
-    [[nodiscard]] LevelDirector& Director() { return director_; }
+    [[nodiscard]] FLevelDirector& Director() { return director_; }
 
-    [[nodiscard]] const LevelDirector& Director() const { return director_; }
+    [[nodiscard]] const FLevelDirector& Director() const { return director_; }
 
 
 
 private:
 
-    LevelDirector director_;
+    FLevelDirector director_;
 
 };
 

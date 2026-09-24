@@ -10,21 +10,21 @@
 #include <nlohmann/json.hpp>
 
 
-GameHostSession::~GameHostSession() {
+FGameHostSession::~FGameHostSession() {
     Stop();
 }
 
-void GameHostSession::BindTravelCallbacks() {
+void FGameHostSession::BindTravelCallbacks() {
     if (engine_ == nullptr) {
         return;
     }
     engine_->GetGameInstance().SetLevelTravelFn(
-        [this](Engine& e, std::string_view levelKey) { return world_.Director().LoadByKey(e, levelKey); });
+        [this](UGameEngine& e, std::string_view levelKey) { return world_.Director().LoadByKey(e, levelKey); });
     engine_->GetGameInstance().SetLevelBrowserVisibleFn(
         [this](bool visible) { world_.Director().SetBrowserVisible(visible); });
 }
 
-bool GameHostSession::Start(Engine& engine, const char* packName, RegisterModesFn registerModes,
+bool FGameHostSession::Start(UGameEngine& engine, const char* packName, FRegisterModesFunction registerModes,
                             std::string_view preferredLevelKey,
                             std::string_view packRootOverride) {
     Stop();
@@ -97,8 +97,8 @@ bool GameHostSession::Start(Engine& engine, const char* packName, RegisterModesF
 
     BindTravelCallbacks();
 
-    gameplay_ = GameplayRouter{};
-    gameplay_.SetDefaultMode(std::make_unique<DefaultGameMode>());
+    gameplay_ = FGameplayRouter{};
+    gameplay_.SetDefaultMode(std::make_unique<ADefaultGameMode>());
     if (registerModes) {
         // Packs may SetGameInstance<T>() here before modes run.
         registerModes(engine, gameplay_);
@@ -111,38 +111,38 @@ bool GameHostSession::Start(Engine& engine, const char* packName, RegisterModesF
     return true;
 }
 
-void GameHostSession::Tick(float deltaTime) {
+void FGameHostSession::Tick(float deltaTime) {
     if (!active_ || engine_ == nullptr) {
         return;
     }
     world_.Tick(*engine_, gameplay_, deltaTime);
 }
 
-void GameHostSession::HandleUiInput() {
+void FGameHostSession::HandleUiInput() {
     if (!active_ || engine_ == nullptr) {
         return;
     }
     world_.HandleUiInput(*engine_);
 }
 
-void GameHostSession::DrawUi(int framebufferWidth, int framebufferHeight) {
+void FGameHostSession::DrawUi(int framebufferWidth, int framebufferHeight) {
     if (!active_) {
         return;
     }
     world_.DrawUi(framebufferWidth, framebufferHeight);
 }
 
-void GameHostSession::Stop() {
+void FGameHostSession::Stop() {
     if (!active_ && !worldInitialized_) {
         return;
     }
 
     if (engine_ != nullptr) {
-        if (GameMode* mode = gameplay_.GetActive()) {
+        if (AGameModeBase* mode = gameplay_.GetActive()) {
             mode->OnExit(*engine_);
         }
-        // Restore base GameInstance (pack may have swapped CoopGameInstance, etc.).
-        engine_->SetGameInstance<GameInstance>();
+        // Restore base UGameInstance (pack may have swapped CoopGameInstance, etc.).
+        engine_->SetGameInstance<UGameInstance>();
         engine_->GetGameInstance().SetLevelTravelFn({});
         engine_->GetGameInstance().SetLevelBrowserVisibleFn({});
         engine_->SetShaderReloadHook({});
@@ -150,7 +150,7 @@ void GameHostSession::Stop() {
         engine_->GetHUD().Clear();
     }
 
-    gameplay_ = GameplayRouter{};
+    gameplay_ = FGameplayRouter{};
     if (worldInitialized_) {
         world_.Shutdown();
         worldInitialized_ = false;

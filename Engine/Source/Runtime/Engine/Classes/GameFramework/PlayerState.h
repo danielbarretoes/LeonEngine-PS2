@@ -3,16 +3,16 @@
 #include <string>
 
 
-/// Per-player session data (Unreal-style `APlayerState`). Typically owned by PlayerController.
-class PlayerState {
+/// Per-player session data (Unreal-style `APlayerState`). Typically owned by APlayerController.
+class APlayerState {
 public:
-    PlayerState() = default;
-    virtual ~PlayerState() = default;
+    APlayerState() = default;
+    virtual ~APlayerState() = default;
 
-    PlayerState(const PlayerState&) = delete;
-    PlayerState& operator=(const PlayerState&) = delete;
-    PlayerState(PlayerState&&) = delete;
-    PlayerState& operator=(PlayerState&&) = delete;
+    APlayerState(const APlayerState&) = delete;
+    APlayerState& operator=(const APlayerState&) = delete;
+    APlayerState(APlayerState&&) = delete;
+    APlayerState& operator=(APlayerState&&) = delete;
 
     virtual void Reset() {
         score_ = 0.0f;

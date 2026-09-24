@@ -42,8 +42,8 @@ TEST_CASE("BehaviorTree Sequence and Selector with Blackboard", "[gameplay][bt]"
 }
 
 TEST_CASE("AIController logic state tracks MoveTo Chase Idle", "[gameplay][ai]") {
-    World world;
-    auto* character = world.SpawnActor<Character>();
+    UWorld world;
+    auto* character = world.SpawnActor<ACharacter>();
     AIController ai;
     ai.Possess(character);
     REQUIRE(ai.GetLogicState() == EAILogicState::Idle);
@@ -56,7 +56,7 @@ TEST_CASE("AIController logic state tracks MoveTo Chase Idle", "[gameplay][ai]")
 }
 
 TEST_CASE("RootReplication relevancy and CaptureCharacterRoot", "[net][replication]") {
-    Character character;
+    ACharacter character;
     character.SetActorLocationAndRotation({1.0f, 0.0f, 2.0f}, 45.0f);
     const Leon::Net::FPawnSnap snap = Leon::Net::CaptureCharacterRoot(3, character, 10.0f, -5.0f);
     REQUIRE(snap.slot == 3);
@@ -93,7 +93,7 @@ TEST_CASE("HUD AddWidget TextBlock and remove", "[ui][hud]") {
 }
 
 TEST_CASE("DeserializeLeonLevel and InputCmd adversarial inputs", "[content][fuzz][net]") {
-    LevelDocument doc;
+    FLevelDocument doc;
     std::vector<std::uint8_t> empty;
     REQUIRE_FALSE(DeserializeLeonLevel(empty, doc));
 
@@ -126,12 +126,12 @@ TEST_CASE("NavigationSystem agent radius dilation shrinks walkable ring", "[game
     pillar.halfExtents = {0.4f, 1.5f, 0.4f};
     physics.Bodies().push_back(pillar);
 
-    NavigationSystem narrow;
+    UNavigationSystem narrow;
     narrow.SetCellSize(0.5f);
     narrow.SetAgentRadius(0.35f);
     narrow.BuildFromPhysScene(physics, 0.0f, 10.0f);
 
-    NavigationSystem wide;
+    UNavigationSystem wide;
     wide.SetCellSize(0.5f);
     wide.SetAgentRadius(1.5f);
     wide.BuildFromPhysScene(physics, 0.0f, 10.0f);

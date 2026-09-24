@@ -22,7 +22,7 @@ public:
     void AddArrow(const glm::vec3& from, const glm::vec3& to, const glm::vec3& color,
                   float headLength = 0.28f, float headWidth = 0.14f);
     void AddAabb(const glm::vec3& worldMin, const glm::vec3& worldMax, const glm::vec3& color);
-    /// RGB axes at a SceneComponent world location (editor / PIE debug).
+    /// RGB axes at a USceneComponent world location (editor / PIE debug).
     void AddAxes(const glm::vec3& origin, float size = 0.35f);
     /// Clip-space cube (±1) transformed by inverse(lightSpace) → world-space ortho frustum.
     void AddLightFrustum(const glm::mat4& lightSpace, const glm::vec3& color);

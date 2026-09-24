@@ -10,14 +10,14 @@
 #include <vector>
 
 
-class Character;
+class ACharacter;
 class FDebugDraw;
-class Level;
+class ULevel;
 class FSceneRenderer;
 
-struct WorldGameplayFrameParams {
+struct FWorldGameplayFrameParams {
     float deltaTime = 0.0f;
-    Level* level = nullptr;
+    ULevel* level = nullptr;
     FSceneRenderer* renderer = nullptr;
     FDebugDraw* collisionDebugDraw = nullptr;
     FDebugDraw* navMeshDebugDraw = nullptr;
@@ -32,30 +32,30 @@ struct WorldGameplayFrameParams {
 
 /// Owns spawned Actors + FPhysScene; ticks them and purges pending kills.
 /// Distinct from `Level` (map/visual content ≈ ULevel).
-class World {
+class UWorld {
 public:
-    explicit World(EPhysicsBackend physicsBackend = DefaultPhysicsBackend())
+    explicit UWorld(EPhysicsBackend physicsBackend = DefaultPhysicsBackend())
         : physics_(physicsBackend) {}
-    ~World() { Clear(); }
+    ~UWorld() { Clear(); }
 
-    World(const World&) = delete;
-    World& operator=(const World&) = delete;
-    World(World&&) = delete;
-    World& operator=(World&&) = delete;
+    UWorld(const UWorld&) = delete;
+    UWorld& operator=(const UWorld&) = delete;
+    UWorld(UWorld&&) = delete;
+    UWorld& operator=(UWorld&&) = delete;
 
     [[nodiscard]] FPhysScene& GetPhysicsScene() { return physics_; }
     [[nodiscard]] const FPhysScene& GetPhysicsScene() const { return physics_; }
 
     /// Unreal-like UNavigationSystem lite (grid NavMesh for AI pathfinding).
-    [[nodiscard]] NavigationSystem& GetNavigationSystem() { return navigation_; }
-    [[nodiscard]] const NavigationSystem& GetNavigationSystem() const { return navigation_; }
+    [[nodiscard]] UNavigationSystem& GetNavigationSystem() { return navigation_; }
+    [[nodiscard]] const UNavigationSystem& GetNavigationSystem() const { return navigation_; }
 
     /// Recreate FPhysScene with another backend (clears bodies). Call before RegisterBodiesFromLevel.
     void SetPhysicsBackend(EPhysicsBackend physicsBackend) { physics_ = FPhysScene(physicsBackend); }
 
     template <typename T, typename... Args>
     T* SpawnActor(Args&&... args) {
-        static_assert(std::is_base_of_v<Actor, T>, "T must derive from Actor");
+        static_assert(std::is_base_of_v<AActor, T>, "T must derive from Actor");
         auto owned = std::make_unique<T>(std::forward<Args>(args)...);
         T* raw = owned.get();
         raw->world_ = this;
@@ -72,7 +72,7 @@ public:
     }
 
     /// Find live Actor by session-stable editor id (PIE / Outliner).
-    [[nodiscard]] Actor* FindActorByEditorId(std::uint64_t editorId) const {
+    [[nodiscard]] AActor* FindActorByEditorId(std::uint64_t editorId) const {
         if (editorId == 0) {
             return nullptr;
         }
@@ -84,7 +84,7 @@ public:
         return nullptr;
     }
 
-    void DestroyActor(Actor* actor) {
+    void DestroyActor(AActor* actor) {
         if (actor != nullptr && actor->world_ == this) {
             actor->Destroy();
         }
@@ -94,10 +94,10 @@ public:
     void Tick(float deltaTime);
 
     /// Unreal-like frame: Character move → FPhysScene::Step → overlaps → Actor Tick → sync → draw.
-    void TickGameplayFrame(const WorldGameplayFrameParams& params);
+    void TickGameplayFrame(const FWorldGameplayFrameParams& params);
 
     /// Register StaticMeshComponents that have collision as FPhysScene bodies (clears first).
-    void RegisterBodiesFromLevel(const Level& level);
+    void RegisterBodiesFromLevel(const ULevel& level);
 
     void SubmitSkeletalDraws(FSceneRenderer& renderer) const;
 
@@ -107,7 +107,7 @@ public:
 
     template <typename T>
     [[nodiscard]] T* FindFirst() const {
-        static_assert(std::is_base_of_v<Actor, T>, "T must derive from Actor");
+        static_assert(std::is_base_of_v<AActor, T>, "T must derive from Actor");
         for (const auto& actor : actors_) {
             if (actor && !actor->IsPendingKill()) {
                 if (T* typed = dynamic_cast<T*>(actor.get())) {
@@ -121,7 +121,7 @@ public:
     /// Visit every live Actor of type T.
     template <typename T, typename TFn>
     void ForEach(TFn&& fn) const {
-        static_assert(std::is_base_of_v<Actor, T>, "T must derive from Actor");
+        static_assert(std::is_base_of_v<AActor, T>, "T must derive from Actor");
         for (const auto& actor : actors_) {
             if (actor && !actor->IsPendingKill()) {
                 if (T* typed = dynamic_cast<T*>(actor.get())) {
@@ -148,9 +148,9 @@ private:
     void resolveCharacterOverlaps();
 
     FPhysScene physics_{};
-    NavigationSystem navigation_{};
-    std::vector<std::unique_ptr<Actor>> actors_;
-    std::vector<std::unique_ptr<Actor>> pendingSpawns_;
+    UNavigationSystem navigation_{};
+    std::vector<std::unique_ptr<AActor>> actors_;
+    std::vector<std::unique_ptr<AActor>> pendingSpawns_;
     bool ticking_ = false;
     std::uint64_t nextEditorId_ = 0;
 };

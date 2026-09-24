@@ -1,49 +1,57 @@
 #pragma once
 
-/// Unreal-like UGameplayStatics / UWorld trace helpers over FPhysScene.
-#include <glm/vec3.hpp>
-#include "Engine/World.h"
 #include "CollisionQuery.h"
+#include "Engine/World.h"
 
+#include <glm/vec3.hpp>
 
+#include <vector>
+
+class ACharacter;
 class FDebugDraw;
 
-[[nodiscard]] inline bool LineTraceSingleByChannel(World& world, FHitResult& outHit,
-                                                   const glm::vec3& start, const glm::vec3& end,
-                                                   ECollisionChannel channel,
-                                                   const FCollisionQueryParams& params = {},
-                                                   FDebugDraw* debug = nullptr) {
-    return world.GetPhysicsScene().LineTraceSingleByChannel(outHit, start, end, channel, params,
-                                                            debug);
-}
+/** Static gameplay helpers: world traces over FPhysScene and damage (UE: UGameplayStatics / UKismetSystemLibrary). */
+class ENGINE_API UGameplayStatics
+{
+public:
+	[[nodiscard]] static bool LineTraceSingleByChannel(UWorld& World, FHitResult& OutHit, const glm::vec3& Start,
+		const glm::vec3& End, ECollisionChannel Channel, const FCollisionQueryParams& Params = {},
+		FDebugDraw* Debug = nullptr)
+	{
+		return World.GetPhysicsScene().LineTraceSingleByChannel(OutHit, Start, End, Channel, Params, Debug);
+	}
 
-[[nodiscard]] inline bool SphereTraceSingleByChannel(World& world, FHitResult& outHit,
-                                                     const glm::vec3& start, const glm::vec3& end,
-                                                     float radius, ECollisionChannel channel,
-                                                     const FCollisionQueryParams& params = {},
-                                                     FDebugDraw* debug = nullptr) {
-    return world.GetPhysicsScene().SphereTraceSingleByChannel(outHit, start, end, radius, channel,
-                                                              params, debug);
-}
+	[[nodiscard]] static bool SphereTraceSingleByChannel(UWorld& World, FHitResult& OutHit, const glm::vec3& Start,
+		const glm::vec3& End, float Radius, ECollisionChannel Channel, const FCollisionQueryParams& Params = {},
+		FDebugDraw* Debug = nullptr)
+	{
+		return World.GetPhysicsScene().SphereTraceSingleByChannel(OutHit, Start, End, Radius, Channel, Params, Debug);
+	}
 
-[[nodiscard]] inline bool CapsuleTraceSingleByChannel(World& world, FHitResult& outHit,
-                                                      const glm::vec3& start, const glm::vec3& end,
-                                                      float radius, float halfHeight,
-                                                      ECollisionChannel channel,
-                                                      const FCollisionQueryParams& params = {},
-                                                      FDebugDraw* debug = nullptr) {
-    return world.GetPhysicsScene().CapsuleTraceSingleByChannel(outHit, start, end, radius,
-                                                               halfHeight, channel, params, debug);
-}
+	[[nodiscard]] static bool CapsuleTraceSingleByChannel(UWorld& World, FHitResult& OutHit, const glm::vec3& Start,
+		const glm::vec3& End, float Radius, float HalfHeight, ECollisionChannel Channel,
+		const FCollisionQueryParams& Params = {}, FDebugDraw* Debug = nullptr)
+	{
+		return World.GetPhysicsScene().CapsuleTraceSingleByChannel(
+			OutHit, Start, End, Radius, HalfHeight, Channel, Params, Debug);
+	}
 
-/// Melee / sweep helper: capsule along a segment (forwards to CapsuleTraceSingleByChannel).
-[[nodiscard]] inline bool SweepCapsuleAlongSegment(World& world, FHitResult& outHit,
-                                                   const glm::vec3& start, const glm::vec3& end,
-                                                   float radius, float halfHeight,
-                                                   ECollisionChannel channel,
-                                                   const FCollisionQueryParams& params = {},
-                                                   FDebugDraw* debug = nullptr) {
-    return CapsuleTraceSingleByChannel(world, outHit, start, end, radius, halfHeight, channel,
-                                       params, debug);
-}
+	/** Melee / sweep helper: capsule along a segment (forwards to CapsuleTraceSingleByChannel). */
+	[[nodiscard]] static bool SweepCapsuleAlongSegment(UWorld& World, FHitResult& OutHit, const glm::vec3& Start,
+		const glm::vec3& End, float Radius, float HalfHeight, ECollisionChannel Channel,
+		const FCollisionQueryParams& Params = {}, FDebugDraw* Debug = nullptr)
+	{
+		return CapsuleTraceSingleByChannel(World, OutHit, Start, End, Radius, HalfHeight, Channel, Params, Debug);
+	}
 
+	/**
+	 * Applies point damage to a character through ACharacter::TakeDamage and returns the applied amount.
+	 * HitFromDirection / DamageCauser are reserved for knockback / attribution.
+	 */
+	static float ApplyPointDamage(ACharacter* DamagedActor, float BaseDamage, const glm::vec3& HitFromDirection,
+		ACharacter* DamageCauser = nullptr);
+
+	/** Radial damage with linear falloff by distance; returns the total applied across all actors. */
+	static float ApplyRadialDamage(const std::vector<ACharacter*>& Actors, float BaseDamage, const glm::vec3& Origin,
+		float DamageRadius, ACharacter* DamageCauser = nullptr);
+};

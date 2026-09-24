@@ -19,7 +19,7 @@ TEST_CASE("lightDirectionFromRotation round-trip", "[level][light]") {
 }
 
 TEST_CASE("DirectionalLight GetDirection matches transform", "[level][light]") {
-    DirectionalLight light;
+    FDirectionalLight light;
     light.transform.RotationDegrees = {30.0f, 0.0f, 0.0f};
     const glm::vec3 dir = light.GetDirection();
     REQUIRE(dir.y < 0.0f);
@@ -44,9 +44,9 @@ TEST_CASE("BlockingVolume and PlayerStart name helpers", "[level][basicshape]") 
 }
 
 TEST_CASE("BasicShape factories set type and plane scale", "[level][basicshape]") {
-    const BasicShape cube = BasicShape::cube();
+    const FBasicShape cube = FBasicShape::cube();
     REQUIRE(cube.type == EBasicShape::Cube);
-    const BasicShape plane = BasicShape::plane(4.0f);
+    const FBasicShape plane = FBasicShape::plane(4.0f);
     REQUIRE(plane.type == EBasicShape::Plane);
     REQUIRE_THAT(plane.transform.Scale.x, WithinAbs(4.0f, 1.0e-5f));
     REQUIRE_THAT(plane.transform.Scale.z, WithinAbs(4.0f, 1.0e-5f));
@@ -59,12 +59,12 @@ TEST_CASE("BasicLight parse and addTo Level", "[level][basiclight]") {
     REQUIRE(tryParseBasicLightName("PointLight", type));
     REQUIRE(type == EBasicLight::Point);
 
-    Level level;
+    ULevel level;
     level.ClearLights();
     REQUIRE(level.DirectionalLights().empty());
 
-    BasicLight::directional().addTo(level);
-    BasicLight::point().addTo(level);
+    FBasicLight::directional().addTo(level);
+    FBasicLight::point().addTo(level);
     REQUIRE(level.DirectionalLights().size() == 1);
     REQUIRE(level.PointLights().size() == 1);
 }

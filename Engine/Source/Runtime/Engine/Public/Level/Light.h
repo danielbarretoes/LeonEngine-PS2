@@ -12,7 +12,7 @@
 constexpr int kMaxDirectionalLights = 2;
 constexpr int kMaxPointLights = 4;
 
-/// Unreal DirectionalLight Source Angle default (~sun disc), in degrees.
+/// Unreal FDirectionalLight Source Angle default (~sun disc), in degrees.
 constexpr float kDefaultLightSourceAngleDegrees = 0.5357f;
 
 /// Light travel direction from Unreal-like pitch (X) / yaw (Y) degrees. Roll ignored.
@@ -36,8 +36,8 @@ constexpr float kDefaultLightSourceAngleDegrees = 0.5357f;
     return {pitch * kRadToDeg, yaw * kRadToDeg, 0.0f};
 }
 
-/// Unreal-like DirectionalLight: transform drives aim; no raw direction field.
-struct DirectionalLight {
+/// Unreal-like FDirectionalLight: transform drives aim; no raw direction field.
+struct FDirectionalLight {
     FTransform transform{{0.0f, 0.0f, 0.0f}, {60.3f, 142.1f, 0.0f}, {1.0f, 1.0f, 1.0f}};
     glm::vec3 lightColor{1.0f, 1.0f, 1.0f};
     float intensity = 1.0f;
@@ -51,8 +51,8 @@ struct DirectionalLight {
     }
 };
 
-/// Unreal-like PointLight: location from transform; attenuation `range`.
-struct PointLight {
+/// Unreal-like FPointLight: location from transform; attenuation `range`.
+struct FPointLight {
     FTransform transform{{0.0f, 2.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}};
     glm::vec3 lightColor{1.0f, 1.0f, 1.0f};
     float intensity = 1.0f;

@@ -18,7 +18,7 @@ enum class EBasicShape {
 };
 
 /// Placeable basic shape: transform + material + optional mesh options.
-struct BasicShape {
+struct FBasicShape {
     EBasicShape type = EBasicShape::Cube;
     FTransform transform{};
     FMaterial material{};
@@ -29,23 +29,23 @@ struct BasicShape {
     int sphereSegments = 24;
     int sphereRings = 16;
 
-    [[nodiscard]] static BasicShape cube(FTransform transform = {}, FMaterial material = {},
+    [[nodiscard]] static FBasicShape cube(FTransform transform = {}, FMaterial material = {},
                                          bool hasMaterial = false);
-    [[nodiscard]] static BasicShape sphere(FTransform transform = {}, FMaterial material = {},
+    [[nodiscard]] static FBasicShape sphere(FTransform transform = {}, FMaterial material = {},
                                            bool hasMaterial = false, int segments = 24,
                                            int rings = 16);
     /// `size` sets uniform XZ scale (Unreal-like ground plane extent).
-    [[nodiscard]] static BasicShape plane(float size = 1.0f, FTransform transform = {},
+    [[nodiscard]] static FBasicShape plane(float size = 1.0f, FTransform transform = {},
                                           FMaterial material = {}, bool hasMaterial = false);
 
-    /// Build a Level `StaticMeshComponent` (mesh + transform + material override).
-    [[nodiscard]] StaticMeshComponent MakeStaticMesh(FResourceCache& resources) const;
+    /// Build a Level `UStaticMeshComponent` (mesh + transform + material override).
+    [[nodiscard]] UStaticMeshComponent MakeStaticMesh(FResourceCache& resources) const;
 };
 
 [[nodiscard]] bool tryParseBasicShapeName(std::string_view name, EBasicShape& out);
 /// Unreal-like BlockingVolume — invisible collision box (Cube + collisionEnabled + hidden).
 [[nodiscard]] bool isBlockingVolumeName(std::string_view name);
-/// Unreal-like PlayerStart — spawn point only (no mesh).
+/// Unreal-like FPlayerStart — spawn point only (no mesh).
 [[nodiscard]] bool isPlayerStartName(std::string_view name);
 [[nodiscard]] std::shared_ptr<UStaticMesh> MeshForBasicShape(FResourceCache& resources,
                                                             EBasicShape shape,

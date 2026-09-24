@@ -13,48 +13,48 @@
 #include <vector>
 
 
-class World;
+class UWorld;
 
-/// Unreal-style Actor (no A-prefix): owns a root SceneComponent and optional Level mesh link.
+/// Unreal-style Actor (no A-prefix): owns a root USceneComponent and optional Level mesh link.
 ///
 /// ## Transforms
 /// `location_` / `yawDegrees_` are the gameplay pose written to Level meshes via
-/// `SyncTransformToLevel`. The root `SceneComponent` may add `Relative*` offsets on top
+/// `SyncTransformToLevel`. The root `USceneComponent` may add `Relative*` offsets on top
 /// (`GetComponentTransform`). Prefer setting Actor location/yaw for pawn movement; keep root
 /// Relative near identity unless you intentionally offset the visual.
 ///
 /// ## Components
 /// Root is always registered. Add member comps with `RegisterComponent`; heap extras with
-/// `CreateDefaultSubobject<T>()`. See `ActorComponent` contract.
+/// `CreateDefaultSubobject<T>()`. See `UActorComponent` contract.
 ///
 /// ## Actor location vs Level mesh
-/// `SetLevelMeshIndex` links this Actor to a Level StaticMeshComponent for FPhysScene bodies.
+/// `SetLevelMeshIndex` links this Actor to a Level UStaticMeshComponent for FPhysScene bodies.
 /// `SyncTransformToLevel` writes Actor location/yaw into that mesh each gameplay frame
 /// (`World::TickGameplayFrame`). Skeletal visuals use SceneComponents (`GetMesh`), not Level
 /// meshes.
-class Actor {
+class AActor {
 public:
-    virtual ~Actor();
+    virtual ~AActor();
 
-    Actor(const Actor&) = delete;
-    Actor& operator=(const Actor&) = delete;
-    Actor(Actor&&) = delete;
-    Actor& operator=(Actor&&) = delete;
+    AActor(const AActor&) = delete;
+    AActor& operator=(const AActor&) = delete;
+    AActor(AActor&&) = delete;
+    AActor& operator=(AActor&&) = delete;
 
-    [[nodiscard]] World* GetWorld() const { return world_; }
+    [[nodiscard]] UWorld* GetWorld() const { return world_; }
 
-    [[nodiscard]] SceneComponent& GetRootComponent() { return rootComponent_; }
-    [[nodiscard]] const SceneComponent& GetRootComponent() const { return rootComponent_; }
+    [[nodiscard]] USceneComponent& GetRootComponent() { return rootComponent_; }
+    [[nodiscard]] const USceneComponent& GetRootComponent() const { return rootComponent_; }
 
-    [[nodiscard]] const std::vector<ActorComponent*>& GetComponents() const { return components_; }
+    [[nodiscard]] const std::vector<UActorComponent*>& GetComponents() const { return components_; }
 
     /// Register a component that lives on this Actor (member or already owned). Idempotent.
-    void RegisterComponent(ActorComponent* component);
+    void RegisterComponent(UActorComponent* component);
 
     /// Heap-owned component (Unreal CreateDefaultSubobject lite — no name table).
     template <typename T, typename... Args>
     T* CreateDefaultSubobject(Args&&... args) {
-        static_assert(std::is_base_of_v<ActorComponent, T>, "T must derive from ActorComponent");
+        static_assert(std::is_base_of_v<UActorComponent, T>, "T must derive from ActorComponent");
         auto owned = std::make_unique<T>(std::forward<Args>(args)...);
         T* raw = owned.get();
         ownedComponents_.push_back(std::move(owned));
@@ -107,37 +107,37 @@ public:
     void TickComponents(float deltaTime);
     [[nodiscard]] bool HasActorBegunPlay() const { return hasBegunPlay_; }
 
-    /// Copy location + yaw into the linked Level StaticMeshComponent (no-op if index is invalid).
-    virtual void SyncTransformToLevel(Level& level) const {
+    /// Copy location + yaw into the linked Level UStaticMeshComponent (no-op if index is invalid).
+    virtual void SyncTransformToLevel(ULevel& level) const {
         auto& meshes = level.StaticMeshes();
         if (levelMeshIndex_ >= meshes.size()) {
             return;
         }
-        StaticMeshComponent& obj = meshes[levelMeshIndex_];
+        UStaticMeshComponent& obj = meshes[levelMeshIndex_];
         obj.transform.Position = location_;
         obj.transform.RotationDegrees.y = yawDegrees_;
     }
 
 protected:
-    Actor() { RegisterComponent(&rootComponent_); }
+    AActor() { RegisterComponent(&rootComponent_); }
 
     [[nodiscard]] glm::vec3& mutableLocation() { return location_; }
     [[nodiscard]] float& mutableYawDegrees() { return yawDegrees_; }
 
-    void UnregisterComponent(ActorComponent* component);
+    void UnregisterComponent(UActorComponent* component);
 
 private:
-    friend class World;
-    friend class ActorComponent;
+    friend class UWorld;
+    friend class UActorComponent;
 
-    SceneComponent rootComponent_{};
-    std::vector<ActorComponent*> components_{};
-    std::vector<std::unique_ptr<ActorComponent>> ownedComponents_{};
-    std::size_t levelMeshIndex_ = Level::npos;
+    USceneComponent rootComponent_{};
+    std::vector<UActorComponent*> components_{};
+    std::vector<std::unique_ptr<UActorComponent>> ownedComponents_{};
+    std::size_t levelMeshIndex_ = ULevel::npos;
     std::uint64_t editorId_ = 0;
     glm::vec3 location_{0.0f};
     float yawDegrees_ = 0.0f;
-    World* world_ = nullptr;
+    UWorld* world_ = nullptr;
     bool pendingKill_ = false;
     bool hasBegunPlay_ = false;
 };

@@ -18,11 +18,11 @@
 #include <vector>
 
 
-class Engine;
+class UGameEngine;
 class FSceneRenderer;
 
 /// Static mesh glued to a skeletal bone (Unreal-like socket attachment).
-struct SkelMeshAttachment {
+struct FSkelMeshAttachment {
     std::string boneName;
     std::shared_ptr<UStaticMesh> mesh;
     FMaterial material{};
@@ -34,10 +34,10 @@ struct SkelMeshAttachment {
     glm::mat4 worldMatrixOverride{1.0f};
 };
 
-/// Unreal-like USkeletalMeshComponent — SceneComponent with skeletal mesh + UAnimInstance.
-class SkeletalMeshComponent : public SceneComponent {
+/// Unreal-like USkeletalMeshComponent — USceneComponent with skeletal mesh + UAnimInstance.
+class USkeletalMeshComponent : public USceneComponent {
 public:
-    SkeletalMeshComponent();
+    USkeletalMeshComponent();
 
     void SetSkeletalMesh(std::shared_ptr<USkeletalMesh> mesh);
     [[nodiscard]] USkeletalMesh* GetSkeletalMesh() { return skeletalMesh_.get(); }
@@ -81,12 +81,12 @@ public:
     [[nodiscard]] bool LoadFromFbx(const std::string& meshFbxPath, const std::string& runFbxPath,
                                    float fitHeight);
     /// Load a Leon character package (`.lchar`) or legacy `.character.json`.
-    [[nodiscard]] bool LoadFromCooked(Engine& engine, const std::string& characterAssetPath);
+    [[nodiscard]] bool LoadFromCooked(UGameEngine& engine, const std::string& characterAssetPath);
 
     void ClearAttachments();
-    SkelMeshAttachment& AddAttachment(SkelMeshAttachment attachment);
-    [[nodiscard]] std::vector<SkelMeshAttachment>& Attachments() { return attachments_; }
-    [[nodiscard]] const std::vector<SkelMeshAttachment>& Attachments() const {
+    FSkelMeshAttachment& AddAttachment(FSkelMeshAttachment attachment);
+    [[nodiscard]] std::vector<FSkelMeshAttachment>& Attachments() { return attachments_; }
+    [[nodiscard]] const std::vector<FSkelMeshAttachment>& Attachments() const {
         return attachments_;
     }
 
@@ -98,7 +98,7 @@ public:
                                                 glm::mat4& outWorld) const;
 
     void TickComponent(float deltaTime);
-    /// Submit using this component's SceneComponent world transform.
+    /// Submit using this component's USceneComponent world transform.
     void SubmitDraw(FSceneRenderer& renderer) const;
 
     [[nodiscard]] bool HasValidMesh() const {
@@ -114,7 +114,7 @@ private:
     std::unordered_map<std::string, std::size_t> sequenceIndexByName_;
     UBlendSpace1D blendSpace_{};
     std::unique_ptr<UAnimInstance> animInstance_;
-    std::vector<SkelMeshAttachment> attachments_;
+    std::vector<FSkelMeshAttachment> attachments_;
     mutable std::vector<glm::mat4> skinMatrices_;
     mutable std::vector<glm::mat4> boneWorldMatrices_;
 };

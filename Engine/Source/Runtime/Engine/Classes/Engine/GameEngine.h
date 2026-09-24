@@ -3,7 +3,7 @@
 #include <glm/vec3.hpp>
 
 #include <functional>
-#include "Camera/Camera.h"
+#include "Camera/CameraComponent.h"
 #include "GameFramework/InputMapping.h"
 #include "GameFramework/PlayInputTarget.h"
 #include "GenericPlatform/GenericApplication.h"
@@ -20,20 +20,20 @@
 #include <utility>
 
 /// Top-level runtime: GLFW window, main loop, orbit-camera input, FPS overlay,
-/// GameInstance, and a Level/FResourceCache filled by LevelDirector (or the app).
-class Engine {
+/// UGameInstance, and a Level/FResourceCache filled by FLevelDirector (or the app).
+class UGameEngine {
 public:
-    using UpdateCallback = std::function<void(float deltaTime)>;
+    using FUpdateCallback = std::function<void(float deltaTime)>;
     /// Runs after PollEvents, before camera/input handling (level UI, etc.).
-    using PreInputCallback = std::function<void()>;
+    using FPreInputCallback = std::function<void()>;
     /// Runs after the 3D + stats HUD pass (level browser chrome, etc.).
-    using PostRenderCallback = std::function<void(int fbWidth, int fbHeight)>;
+    using FPostRenderCallback = std::function<void(int fbWidth, int fbHeight)>;
 
-    Engine();
-    ~Engine();
+    UGameEngine();
+    ~UGameEngine();
 
-    Engine(const Engine&) = delete;
-    Engine& operator=(const Engine&) = delete;
+    UGameEngine(const UGameEngine&) = delete;
+    UGameEngine& operator=(const UGameEngine&) = delete;
 
     bool Initialize(int width, int height, const char* title);
     /// No GLFW / OpenGL — CPU meshes only. For `leon-server`.
@@ -41,10 +41,10 @@ public:
     void Shutdown();
 
     /// Main loop. Optional hooks: pre-input (UI), per-frame update, post-render overlays.
-    void Run(const UpdateCallback& onUpdate = {}, const PreInputCallback& onPreInput = {},
-             const PostRenderCallback& onPostRender = {});
+    void Run(const FUpdateCallback& onUpdate = {}, const FPreInputCallback& onPreInput = {},
+             const FPostRenderCallback& onPostRender = {});
     /// Fixed-timestep simulation loop (no render / swap).
-    void RunHeadless(const UpdateCallback& onUpdate, float tickHz = 60.0f);
+    void RunHeadless(const FUpdateCallback& onUpdate, float tickHz = 60.0f);
 
     /// Editor PIE / custom loops: same audio listener + device tick as `Run`.
     void TickPlayAudio();
@@ -57,31 +57,31 @@ public:
     [[nodiscard]] bool IsHeadless() const { return headless_; }
     [[nodiscard]] bool IsRunning() const { return running_; }
 
-    [[nodiscard]] Level& GetLevel() { return level_; }
-    [[nodiscard]] const Level& GetLevel() const { return level_; }
+    [[nodiscard]] ULevel& GetLevel() { return level_; }
+    [[nodiscard]] const ULevel& GetLevel() const { return level_; }
     [[nodiscard]] FResourceCache& GetResources() { return resources_; }
     [[nodiscard]] const FResourceCache& GetResources() const { return resources_; }
-    [[nodiscard]] Camera& GetCamera() { return camera_; }
-    [[nodiscard]] const Camera& GetCamera() const { return camera_; }
+    [[nodiscard]] UCameraComponent& GetCamera() { return camera_; }
+    [[nodiscard]] const UCameraComponent& GetCamera() const { return camera_; }
     [[nodiscard]] FGenericWindow& GetWindow() { return *window_; }
     [[nodiscard]] const FGenericWindow& GetWindow() const { return *window_; }
-    [[nodiscard]] PlayerInput& GetInput() { return playerInput_; }
-    [[nodiscard]] const PlayerInput& GetInput() const { return playerInput_; }
+    [[nodiscard]] UPlayerInput& GetInput() { return playerInput_; }
+    [[nodiscard]] const UPlayerInput& GetInput() const { return playerInput_; }
     [[nodiscard]] FSceneRenderer& GetRenderer() { return renderer_; }
     [[nodiscard]] const FSceneRenderer& GetRenderer() const { return renderer_; }
     [[nodiscard]] FAudioDevice& GetAudioDevice() { return audioDevice_; }
     [[nodiscard]] const FAudioDevice& GetAudioDevice() const { return audioDevice_; }
     [[nodiscard]] bool IsInitialized() const { return initialized_; }
 
-    [[nodiscard]] GameInstance& GetGameInstance() { return *gameInstance_; }
-    [[nodiscard]] const GameInstance& GetGameInstance() const { return *gameInstance_; }
+    [[nodiscard]] UGameInstance& GetGameInstance() { return *gameInstance_; }
+    [[nodiscard]] const UGameInstance& GetGameInstance() const { return *gameInstance_; }
 
     template <typename T, typename... Args>
     T* SetGameInstance(Args&&... args) {
-        static_assert(std::is_base_of_v<GameInstance, T>, "T must derive from GameInstance");
+        static_assert(std::is_base_of_v<UGameInstance, T>, "T must derive from GameInstance");
         // Packs call SetGameInstance after Runtime wires travel/browser callbacks — keep them.
-        GameInstance::LevelTravelFn travelFn;
-        GameInstance::LevelBrowserVisibleFn browserFn;
+        UGameInstance::FLevelTravelFunction travelFn;
+        UGameInstance::FLevelBrowserVisibleFunction browserFn;
         if (gameInstance_) {
             travelFn = gameInstance_->TakeLevelTravelFn();
             browserFn = gameInstance_->TakeLevelBrowserVisibleFn();
@@ -114,14 +114,14 @@ public:
 
     /// Optional secondary window for PIE "New Window" input / cursor capture.
     /// Prefer `GetPlayInputTarget()` when configuring multiple fields; these remain the
-    /// Unreal-like convenience API used by GameMode / PlayerController.
+    /// Unreal-like convenience API used by GameMode / APlayerController.
     void SetPlayInputWindow(FGenericWindow* window);
     [[nodiscard]] FGenericWindow& GetPlayInputWindow();
     [[nodiscard]] const FGenericWindow& GetPlayInputWindow() const;
 
     /// Grouped PIE / multi-window play input state (window override + mouse-look gate).
-    [[nodiscard]] PlayInputTarget& GetPlayInputTarget() { return playInputTarget_; }
-    [[nodiscard]] const PlayInputTarget& GetPlayInputTarget() const { return playInputTarget_; }
+    [[nodiscard]] FPlayInputTarget& GetPlayInputTarget() { return playInputTarget_; }
+    [[nodiscard]] const FPlayInputTarget& GetPlayInputTarget() const { return playInputTarget_; }
 
     /// Editor PIE: when cursor is not OS-captured (Selected Viewport), mouse look only applies
     /// while this is true (typically Viewport hovered / play window focused).
@@ -165,27 +165,27 @@ public:
     [[nodiscard]] const AHUD& GetHUD() const { return hud_; }
 
     /// Optional extra shader reload (level chrome, etc.) merged into F5 / auto-reload.
-    using ShaderReloadHook = std::function<EShaderReloadResult(bool force)>;
-    void SetShaderReloadHook(ShaderReloadHook hook) { shaderReloadHook_ = std::move(hook); }
+    using FShaderReloadHook = std::function<EShaderReloadResult(bool force)>;
+    void SetShaderReloadHook(FShaderReloadHook hook) { shaderReloadHook_ = std::move(hook); }
 
 private:
     [[nodiscard]] EShaderReloadResult reloadAllShaders(bool force);
     void handleInput(float deltaTime);
-    void render(const PostRenderCallback& onPostRender);
+    void render(const FPostRenderCallback& onPostRender);
     void updateHudStats(float deltaTime);
 
     std::unique_ptr<GenericApplication> application_;
     std::unique_ptr<FGenericWindow> window_;
-    PlayInputTarget playInputTarget_;
-    PlayerInput playerInput_;
+    FPlayInputTarget playInputTarget_;
+    UPlayerInput playerInput_;
     FSceneRenderer renderer_;
     FDebugOverlay overlay_;
     AHUD hud_;
     FAudioDevice audioDevice_;
-    Camera camera_;
-    Level level_;
+    UCameraComponent camera_;
+    ULevel level_;
     FResourceCache resources_;
-    std::unique_ptr<GameInstance> gameInstance_;
+    std::unique_ptr<UGameInstance> gameInstance_;
 
     bool running_ = false;
     bool initialized_ = false;
@@ -205,7 +205,7 @@ private:
     bool reloadKeyWasDown_ = false;
     bool showHudStats_ = false;
     bool hudStatsKeyWasDown_ = false;
-    ShaderReloadHook shaderReloadHook_;
+    FShaderReloadHook shaderReloadHook_;
     double lastMouseX_ = 0.0;
     double lastMouseY_ = 0.0;
 

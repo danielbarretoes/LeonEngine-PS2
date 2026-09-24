@@ -5,7 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
-#include "Camera/Camera.h"
+#include "Camera/CameraComponent.h"
 
 namespace {
 
@@ -21,7 +21,7 @@ namespace {
 
 } // namespace
 
-void UpdateArenaCamera(Camera& camera, ArenaCameraState& state, const ArenaCameraParams& params,
+void UpdateArenaCamera(UCameraComponent& camera, FArenaCameraState& state, const FArenaCameraParams& params,
                        const std::vector<glm::vec3>& livingFeet, float deltaTime,
                        float floorYFallback) {
     glm::vec3 desiredTarget = state.target;

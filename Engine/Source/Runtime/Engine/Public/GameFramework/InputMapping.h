@@ -10,13 +10,13 @@
 #include <vector>
 
 /// One key contribution to a 1D axis (Unreal-like axis mapping entry).
-struct InputAxisKey {
+struct FInputAxisKeyMapping {
     int key = 0;        // EKeys underlying code (Host matches GLFW)
     float scale = 1.0f; // typically +1 or -1
 };
 
 /// Maps action names → keys (Unreal-like Input Mapping Context).
-class InputMappingContext {
+class UInputMappingContext {
 public:
     /// Bind a key that contributes `scale` to a named axis while held.
     void BindAxisKey(std::string_view action, int key, float scale = 1.0f);
@@ -26,7 +26,7 @@ public:
     void BindActionKey(std::string_view action, int key);
     void BindActionKey(std::string_view action, EKeys key);
 
-    [[nodiscard]] const std::unordered_map<std::string, std::vector<InputAxisKey>>& Axes() const {
+    [[nodiscard]] const std::unordered_map<std::string, std::vector<FInputAxisKeyMapping>>& Axes() const {
         return axes_;
     }
     [[nodiscard]] const std::unordered_map<std::string, std::vector<int>>& Actions() const {
@@ -34,19 +34,19 @@ public:
     }
 
     /// Default Leon gameplay map: WASD+arrows move, Q/E up, Space jump.
-    [[nodiscard]] static InputMappingContext MakeDefault();
+    [[nodiscard]] static UInputMappingContext MakeDefault();
 
 private:
-    std::unordered_map<std::string, std::vector<InputAxisKey>> axes_;
+    std::unordered_map<std::string, std::vector<FInputAxisKeyMapping>> axes_;
     std::unordered_map<std::string, std::vector<int>> actions_;
 };
 
-/// Samples mapped input once per frame (Unreal-like PlayerInput).
-class PlayerInput {
+/// Samples mapped input once per frame (Unreal-like UPlayerInput).
+class UPlayerInput {
 public:
     void ClearContexts();
     /// Higher priority is merged later (same key can appear in multiple contexts).
-    void AddMappingContext(InputMappingContext context, int priority = 0);
+    void AddMappingContext(UInputMappingContext context, int priority = 0);
 
     /// Rebuild effective binds + sample Window state. Call once per frame after pollEvents.
     void Update(const FGenericWindow& window);
@@ -57,18 +57,18 @@ public:
     [[nodiscard]] bool WasActionJustReleased(std::string_view action) const;
 
     /// Convenience: MoveRight (x) + MoveForward (z) from the active map.
-    [[nodiscard]] MoveAxes2D GetMoveAxes2D() const;
+    [[nodiscard]] FMoveAxes2D GetMoveAxes2D() const;
 
 private:
-    struct ContextEntry {
+    struct FContextEntry {
         int priority = 0;
-        InputMappingContext context;
+        UInputMappingContext context;
     };
 
     void rebuildEffectiveMaps();
 
-    std::vector<ContextEntry> contexts_;
-    std::unordered_map<std::string, std::vector<InputAxisKey>> effectiveAxes_;
+    std::vector<FContextEntry> contexts_;
+    std::unordered_map<std::string, std::vector<FInputAxisKeyMapping>> effectiveAxes_;
     std::unordered_map<std::string, std::vector<int>> effectiveActions_;
 
     std::unordered_map<std::string, float> axisValues_;

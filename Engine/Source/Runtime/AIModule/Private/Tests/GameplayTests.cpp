@@ -9,7 +9,7 @@
 #include "GameFramework/Controller.h"
 #include "GameFramework/DefaultGameMode.h"
 #include "Engine/GameInstance.h"
-#include "GameFramework/GameState.h"
+#include "GameFramework/GameStateBase.h"
 #include "AI/Navigation/NavigationSystem.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
@@ -30,14 +30,14 @@ using Catch::Matchers::WithinAbs;
 
 namespace {
 
-class TestActor : public Actor {};
-class TestPawn : public Pawn {};
-class TestController : public Controller {};
+class TestActor : public AActor {};
+class TestPawn : public APawn {};
+class TestController : public AController {};
 
 } // namespace
 
 TEST_CASE("World spawns ticks and destroys actors", "[gameplay][world]") {
-    World world;
+    UWorld world;
     auto* actor = world.SpawnActor<TestActor>();
     REQUIRE(actor != nullptr);
     REQUIRE(world.ActorCount() == 1);
@@ -57,15 +57,15 @@ TEST_CASE("World spawns ticks and destroys actors", "[gameplay][world]") {
 }
 
 TEST_CASE("World FindFirst finds derived type", "[gameplay][world]") {
-    World world;
+    UWorld world;
     world.SpawnActor<TestActor>();
     auto* pawn = world.SpawnActor<TestPawn>();
     REQUIRE(world.FindFirst<TestPawn>() == pawn);
-    REQUIRE(world.FindFirst<Character>() == nullptr);
+    REQUIRE(world.FindFirst<ACharacter>() == nullptr);
 }
 
 TEST_CASE("Controller Possess and UnPossess", "[gameplay][controller]") {
-    World world;
+    UWorld world;
     auto* pawn = world.SpawnActor<TestPawn>();
     TestController controller;
     controller.Possess(pawn);
@@ -79,7 +79,7 @@ TEST_CASE("Controller Possess and UnPossess", "[gameplay][controller]") {
 }
 
 TEST_CASE("Pawn Destroy UnPossesses controller", "[gameplay][pawn]") {
-    World world;
+    UWorld world;
     auto* pawn = world.SpawnActor<TestPawn>();
     TestController controller;
     controller.Possess(pawn);
@@ -89,7 +89,7 @@ TEST_CASE("Pawn Destroy UnPossesses controller", "[gameplay][pawn]") {
 }
 
 TEST_CASE("GameState match timer and PlayerState score", "[gameplay][state]") {
-    GameState gs;
+    AGameStateBase gs;
     gs.HandleMatchHasStarted();
     gs.Tick(0.5f);
     REQUIRE(gs.HasMatchStarted());
@@ -98,7 +98,7 @@ TEST_CASE("GameState match timer and PlayerState score", "[gameplay][state]") {
     REQUIRE_THAT(gs.GetServerWorldTimeSeconds(), WithinAbs(0.0f, 1.0e-5f));
     REQUIRE_FALSE(gs.HasMatchStarted());
 
-    PlayerState ps;
+    APlayerState ps;
     ps.SetPlayerId(2);
     ps.SetPlayerName("P2");
     ps.AddScore(10.0f);
@@ -110,7 +110,7 @@ TEST_CASE("GameState match timer and PlayerState score", "[gameplay][state]") {
 }
 
 TEST_CASE("GameInstance NotifyLevelOpened", "[gameplay][gameinstance]") {
-    GameInstance gi;
+    UGameInstance gi;
     REQUIRE(gi.LevelsOpened() == 0);
     gi.NotifyLevelOpened();
     gi.NotifyLevelOpened();
@@ -118,7 +118,7 @@ TEST_CASE("GameInstance NotifyLevelOpened", "[gameplay][gameinstance]") {
 }
 
 TEST_CASE("SpringArmComponent clamps pitch and arm length", "[gameplay][springarm]") {
-    SpringArmComponent arm;
+    USpringArmComponent arm;
     arm.AddPitchInput(200.0f);
     REQUIRE(arm.BoomPitchDegrees <= arm.PitchMax);
     arm.AddPitchInput(-400.0f);
@@ -128,7 +128,7 @@ TEST_CASE("SpringArmComponent clamps pitch and arm length", "[gameplay][springar
     REQUIRE_THAT(arm.TargetArmLength, WithinAbs(arm.ArmLengthMax, 1.0e-5f));
 
     arm.SnapLagState({0.0f, 0.0f, 0.0f});
-    Camera camera;
+    UCameraComponent camera;
     arm.ApplyToCamera(camera, {1.0f, 0.0f, 0.0f}, 0.016f);
     REQUIRE(camera.Mode() == ECameraMode::Orbit);
     REQUIRE_THAT(camera.Target().y, WithinAbs(arm.SocketOffsetZ, 0.5f));
@@ -140,7 +140,7 @@ TEST_CASE("SpringArmComponent collision probe shortens arm", "[gameplay][springa
     scene.Bodies()[id].position = {2.0f, 1.0f, 0.0f};
     scene.Bodies()[id].halfExtents = {0.25f, 1.0f, 2.0f};
 
-    SpringArmComponent arm;
+    USpringArmComponent arm;
     arm.bDoCollisionTest = true;
     arm.bEnableCameraLag = false;
     arm.bEnableCameraRotationLag = false;
@@ -155,15 +155,15 @@ TEST_CASE("SpringArmComponent collision probe shortens arm", "[gameplay][springa
     arm.CollisionProbeOffset = 0.05f;
     arm.SnapLagState({0.0f, 0.0f, 0.0f});
 
-    Camera camera;
+    UCameraComponent camera;
     arm.ApplyToCamera(camera, {0.0f, 0.0f, 0.0f}, 0.016f, &scene);
     REQUIRE(camera.Distance() < 3.0f);
     REQUIRE(camera.Distance() >= arm.ArmLengthMin);
 }
 
 TEST_CASE("AIController steers toward target and arrives", "[gameplay][ai]") {
-    World world;
-    auto* character = world.SpawnActor<Character>();
+    UWorld world;
+    auto* character = world.SpawnActor<ACharacter>();
     character->Reset({0.0f, 0.0f, 0.0f});
 
     AIController ai;
@@ -181,9 +181,9 @@ TEST_CASE("AIController steers toward target and arrives", "[gameplay][ai]") {
 }
 
 TEST_CASE("AIController MoveToActor tracks moving target", "[gameplay][ai]") {
-    World world;
-    auto* hunter = world.SpawnActor<Character>();
-    auto* prey = world.SpawnActor<Character>();
+    UWorld world;
+    auto* hunter = world.SpawnActor<ACharacter>();
+    auto* prey = world.SpawnActor<ACharacter>();
     hunter->Reset({0.0f, 0.0f, 0.0f});
     prey->Reset({8.0f, 0.0f, 0.0f});
 
@@ -209,14 +209,14 @@ TEST_CASE("AIController path follow does not shortcut through blocker", "[gamepl
     wall.halfExtents = {0.6f, 1.5f, 4.0f};
     physics.Bodies().push_back(wall);
 
-    NavigationSystem nav;
+    UNavigationSystem nav;
     nav.SetCellSize(0.5f);
     nav.SetAgentRadius(0.45f);
     nav.BuildFromPhysScene(physics, 0.0f, 12.0f);
     REQUIRE(nav.HasNavMesh());
 
-    World world;
-    auto* character = world.SpawnActor<Character>();
+    UWorld world;
+    auto* character = world.SpawnActor<ACharacter>();
     character->Reset({-5.0f, 0.0f, 0.0f});
 
     AIController ai;
@@ -250,7 +250,7 @@ TEST_CASE("NavigationSystem FindPath routes around static blocker", "[gameplay][
     wall.halfExtents = {0.6f, 1.5f, 5.0f};
     physics.Bodies().push_back(wall);
 
-    NavigationSystem nav;
+    UNavigationSystem nav;
     nav.SetCellSize(0.5f);
     nav.SetAgentRadius(0.35f);
     nav.BuildFromPhysScene(physics, 0.0f, 12.0f);
@@ -277,10 +277,10 @@ TEST_CASE("NavigationSystem FindPath routes around static blocker", "[gameplay][
 }
 
 TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "[gameplay][nav]") {
-    Level level;
+    ULevel level;
     FPhysScene physics;
 
-    StaticMeshComponent plate{};
+    UStaticMeshComponent plate{};
     plate.tag = NavTags::Blocker;
     plate.collisionEnabled = true;
     plate.editorClass = "Cube";
@@ -296,7 +296,7 @@ TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "
     physics.Bodies().push_back(plateBody);
     physics.TriangleMeshes().emplace_back();
 
-    StaticMeshComponent ramp{};
+    UStaticMeshComponent ramp{};
     ramp.tag = NavTags::Walkable;
     ramp.collisionEnabled = true;
     ramp.editorClass = "Cube";
@@ -317,7 +317,7 @@ TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "
     tri.indices = {0, 1, 2, 0, 2, 3};
     physics.TriangleMeshes().push_back(std::move(tri));
 
-    NavigationSystem nav;
+    UNavigationSystem nav;
     nav.SetCellSize(0.5f);
     nav.SetAgentRadius(0.35f);
     nav.BuildFromLevel(level, physics, 0.0f, 12.0f);
@@ -358,7 +358,7 @@ TEST_CASE("NavigationSystem AppendDebugDraw fills overlay", "[gameplay][nav][deb
     wall.halfExtents = {0.5f, 1.0f, 0.5f};
     physics.Bodies().push_back(wall);
 
-    NavigationSystem nav;
+    UNavigationSystem nav;
     nav.SetCellSize(1.0f);
     nav.BuildFromPhysScene(physics, 0.0f, 4.0f);
     REQUIRE(nav.HasNavMesh());
@@ -370,7 +370,7 @@ TEST_CASE("NavigationSystem AppendDebugDraw fills overlay", "[gameplay][nav][deb
 }
 
 TEST_CASE("Character Reset Jump and PerformMovement", "[gameplay][character]") {
-    Character character;
+    ACharacter character;
     character.Reset({0.0f, 0.0f, 0.0f}, 45.0f);
     REQUIRE(character.IsMovingOnGround());
     REQUIRE_THAT(character.GetActorYaw(), WithinAbs(45.0f, 1.0e-5f));
@@ -389,8 +389,8 @@ TEST_CASE("Character Reset Jump and PerformMovement", "[gameplay][character]") {
 }
 
 TEST_CASE("DefaultGameMode Matches empty or Default id", "[gameplay][gamemode]") {
-    DefaultGameMode mode;
-    LevelEntry entry{};
+    ADefaultGameMode mode;
+    FLevelEntry entry{};
     REQUIRE(mode.Matches(entry, ""));
     REQUIRE(mode.Matches(entry, "Default"));
     REQUIRE_FALSE(mode.Matches(entry, "Showcase"));
@@ -398,13 +398,13 @@ TEST_CASE("DefaultGameMode Matches empty or Default id", "[gameplay][gamemode]")
 }
 
 TEST_CASE("Actor SyncTransformToLevel writes linked mesh", "[gameplay][actor][sync]") {
-    Level level;
-    StaticMeshComponent mesh{};
+    ULevel level;
+    UStaticMeshComponent mesh{};
     mesh.transform.Position = {0.0f, 0.0f, 0.0f};
     mesh.transform.RotationDegrees = {0.0f, 0.0f, 0.0f};
     level.AddStaticMesh(std::move(mesh));
 
-    World world;
+    UWorld world;
     auto* actor = world.SpawnActor<TestActor>();
     actor->SetLevelMeshIndex(0);
     actor->SetActorLocationAndRotation({3.0f, 1.5f, -2.0f}, 90.0f);
@@ -417,16 +417,16 @@ TEST_CASE("Actor SyncTransformToLevel writes linked mesh", "[gameplay][actor][sy
 }
 
 TEST_CASE("World TickGameplayFrame syncs Character to Level mesh", "[gameplay][world][sync]") {
-    Level level;
-    StaticMeshComponent mesh{};
+    ULevel level;
+    UStaticMeshComponent mesh{};
     level.AddStaticMesh(std::move(mesh));
 
-    World world;
-    auto* character = world.SpawnActor<Character>();
+    UWorld world;
+    auto* character = world.SpawnActor<ACharacter>();
     character->SetLevelMeshIndex(0);
     character->Reset({1.0f, 0.0f, 2.0f}, 45.0f);
 
-    WorldGameplayFrameParams frame{};
+    FWorldGameplayFrameParams frame{};
     frame.deltaTime = 1.0f / 60.0f;
     frame.level = &level;
     world.TickGameplayFrame(frame);
@@ -438,14 +438,14 @@ TEST_CASE("World TickGameplayFrame syncs Character to Level mesh", "[gameplay][w
 
 TEST_CASE("ActorComponent RegisterComponent and CreateDefaultSubobject tick",
           "[gameplay][actorcomponent]") {
-    struct CountingComponent : ActorComponent {
+    struct CountingComponent : UActorComponent {
         int ticks = 0;
         int begins = 0;
         void BeginPlay() override { ++begins; }
         void TickComponent(float) override { ++ticks; }
     };
 
-    World world;
+    UWorld world;
     auto* actor = world.SpawnActor<TestActor>();
     REQUIRE(actor->GetComponents().size() >= 1); // root
 
@@ -468,11 +468,11 @@ TEST_CASE("ActorComponent RegisterComponent and CreateDefaultSubobject tick",
 }
 
 TEST_CASE("SceneComponent attach hierarchy world transform", "[gameplay][scenecomponent]") {
-    World world;
+    UWorld world;
     auto* actor = world.SpawnActor<TestActor>();
     actor->SetActorLocationAndRotation({10.0f, 0.0f, 0.0f}, 0.0f);
 
-    SceneComponent child;
+    USceneComponent child;
     child.SetOwner(actor);
     child.RelativeLocation = {2.0f, 0.0f, 0.0f};
     REQUIRE(child.AttachToComponent(&actor->GetRootComponent()));
@@ -482,7 +482,7 @@ TEST_CASE("SceneComponent attach hierarchy world transform", "[gameplay][sceneco
     const glm::vec3 loc = child.GetComponentLocation();
     REQUIRE_THAT(loc.x, WithinAbs(12.0f, 1.0e-4f));
 
-    SceneComponent grandchild;
+    USceneComponent grandchild;
     grandchild.RelativeLocation = {1.0f, 0.0f, 0.0f};
     REQUIRE(grandchild.AttachToComponent(&child));
     REQUIRE_THAT(grandchild.GetComponentLocation().x, WithinAbs(13.0f, 1.0e-4f));
@@ -495,7 +495,7 @@ TEST_CASE("SceneComponent attach hierarchy world transform", "[gameplay][sceneco
 
 TEST_CASE("Character mesh attaches to root SceneComponent",
           "[gameplay][character][scenecomponent]") {
-    Character character;
+    ACharacter character;
     REQUIRE(character.GetMesh().GetAttachParent() == &character.GetRootComponent());
     REQUIRE(character.GetMesh().GetOwner() == &character);
     REQUIRE(character.GetMesh().IsRegistered());
@@ -512,7 +512,7 @@ TEST_CASE("PhysScene reports Arcade backend by default", "[physics][backend]") {
 }
 
 TEST_CASE("RootReplication capture and apply Actor root", "[net][replication]") {
-    World world;
+    UWorld world;
     auto* actor = world.SpawnActor<TestActor>();
     actor->SetActorLocationAndRotation({1.0f, 2.0f, 3.0f}, 45.0f);
     const Leon::Net::FPawnSnap snap = Leon::Net::CaptureActorRoot(0, *actor, 1.5f, 0.25f);

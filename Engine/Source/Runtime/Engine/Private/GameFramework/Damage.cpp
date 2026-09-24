@@ -1,12 +1,12 @@
-#include "GameFramework/Damage.h"
+#include "Kismet/GameplayStatics.h"
 
 #include <glm/geometric.hpp>
 
 #include "GameFramework/Character.h"
 
 
-float ApplyPointDamage(Character* DamagedActor, float BaseDamage, const glm::vec3& HitFromDirection,
-                       Character* /*DamageCauser*/) {
+float UGameplayStatics::ApplyPointDamage(ACharacter* DamagedActor, float BaseDamage, const glm::vec3& HitFromDirection,
+                       ACharacter* /*DamageCauser*/) {
     if (DamagedActor == nullptr || BaseDamage <= 0.0f) {
         return 0.0f;
     }
@@ -14,13 +14,13 @@ float ApplyPointDamage(Character* DamagedActor, float BaseDamage, const glm::vec
     return DamagedActor->TakeDamage(BaseDamage);
 }
 
-float ApplyRadialDamage(const std::vector<Character*>& Actors, float BaseDamage,
-                        const glm::vec3& Origin, float DamageRadius, Character* /*DamageCauser*/) {
+float UGameplayStatics::ApplyRadialDamage(const std::vector<ACharacter*>& Actors, float BaseDamage,
+                        const glm::vec3& Origin, float DamageRadius, ACharacter* /*DamageCauser*/) {
     if (BaseDamage <= 0.0f || DamageRadius <= 0.0f) {
         return 0.0f;
     }
     float totalApplied = 0.0f;
-    for (Character* actor : Actors) {
+    for (ACharacter* actor : Actors) {
         if (actor == nullptr || !actor->IsAlive()) {
             continue;
         }

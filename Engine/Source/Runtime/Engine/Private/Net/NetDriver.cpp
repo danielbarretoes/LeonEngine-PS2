@@ -7,7 +7,7 @@
 
 namespace {
 
-/// Process-wide ENet init refcount — deinitialize only when the last NetDriver drops.
+/// Process-wide ENet init refcount — deinitialize only when the last UNetDriver drops.
 int g_enetInitCount = 0;
 
 [[nodiscard]] std::uint64_t steadyNowMs() {
@@ -20,7 +20,7 @@ int g_enetInitCount = 0;
 } // namespace
 
 
-NetDriver::~NetDriver() {
+UNetDriver::~UNetDriver() {
     Shutdown();
     if (libraryReady_) {
         libraryReady_ = false;
@@ -33,7 +33,7 @@ NetDriver::~NetDriver() {
     }
 }
 
-bool NetDriver::ensureInitialized() {
+bool UNetDriver::ensureInitialized() {
     if (libraryReady_) {
         return true;
     }
@@ -48,7 +48,7 @@ bool NetDriver::ensureInitialized() {
     return true;
 }
 
-int NetDriver::PeerCount() const {
+int UNetDriver::PeerCount() const {
     int count = 0;
     for (int i = 0; i < maxClients_; ++i) {
         if (peers_[static_cast<std::size_t>(i)] != nullptr) {
@@ -58,7 +58,7 @@ int NetDriver::PeerCount() const {
     return count;
 }
 
-int NetDriver::allocatePeerSlot(ENetPeer* peer) {
+int UNetDriver::allocatePeerSlot(ENetPeer* peer) {
     if (peer == nullptr) {
         return -1;
     }
@@ -72,7 +72,7 @@ int NetDriver::allocatePeerSlot(ENetPeer* peer) {
     return -1;
 }
 
-void NetDriver::clearPeerSlot(ENetPeer* peer) {
+void UNetDriver::clearPeerSlot(ENetPeer* peer) {
     if (peer == nullptr) {
         return;
     }
@@ -84,7 +84,7 @@ void NetDriver::clearPeerSlot(ENetPeer* peer) {
     peer->data = nullptr;
 }
 
-void NetDriver::disconnectPeerForAbuse(int peerSlot) {
+void UNetDriver::disconnectPeerForAbuse(int peerSlot) {
     if (peerSlot < 0 || peerSlot >= Leon::Net::kMaxPlayers) {
         return;
     }
@@ -100,7 +100,7 @@ void NetDriver::disconnectPeerForAbuse(int peerSlot) {
     }
 }
 
-bool NetDriver::startServer(std::uint16_t port, int maxClients, ENetMode mode) {
+bool UNetDriver::startServer(std::uint16_t port, int maxClients, ENetMode mode) {
     Shutdown();
     if (!ensureInitialized()) {
         return false;
@@ -134,16 +134,16 @@ bool NetDriver::startServer(std::uint16_t port, int maxClients, ENetMode mode) {
     return true;
 }
 
-bool NetDriver::StartHost(std::uint16_t port) {
+bool UNetDriver::StartHost(std::uint16_t port) {
     // Listen host: local player occupies one player slot; remotes fill the rest.
     return startServer(port, std::max(1, Leon::Net::kMaxPlayers - 1), ENetMode::ListenServer);
 }
 
-bool NetDriver::StartDedicated(std::uint16_t port) {
+bool UNetDriver::StartDedicated(std::uint16_t port) {
     return startServer(port, Leon::Net::kMaxPlayers, ENetMode::DedicatedServer);
 }
 
-bool NetDriver::Connect(const std::string& address, std::uint16_t port) {
+bool UNetDriver::Connect(const std::string& address, std::uint16_t port) {
     Shutdown();
     if (!ensureInitialized()) {
         return false;
@@ -185,7 +185,7 @@ bool NetDriver::Connect(const std::string& address, std::uint16_t port) {
     return true;
 }
 
-void NetDriver::Shutdown() {
+void UNetDriver::Shutdown() {
     if (host_ != nullptr) {
         for (int i = 0; i < Leon::Net::kMaxPlayers; ++i) {
             ENetPeer*& peer = peers_[static_cast<std::size_t>(i)];
@@ -203,7 +203,7 @@ void NetDriver::Shutdown() {
     connected_ = false;
 }
 
-void NetDriver::Poll() {
+void UNetDriver::Poll() {
     if (host_ == nullptr) {
         return;
     }
@@ -295,7 +295,7 @@ void NetDriver::Poll() {
     }
 }
 
-void NetDriver::SendToPeer(int peerSlot, const void* data, std::size_t size, bool reliable) {
+void UNetDriver::SendToPeer(int peerSlot, const void* data, std::size_t size, bool reliable) {
     if (data == nullptr || size == 0 || peerSlot < 0 || peerSlot >= Leon::Net::kMaxPlayers) {
         return;
     }
@@ -312,7 +312,7 @@ void NetDriver::SendToPeer(int peerSlot, const void* data, std::size_t size, boo
     enet_host_flush(host_);
 }
 
-void NetDriver::Broadcast(const void* data, std::size_t size, bool reliable) {
+void UNetDriver::Broadcast(const void* data, std::size_t size, bool reliable) {
     if (host_ == nullptr || data == nullptr || size == 0) {
         return;
     }

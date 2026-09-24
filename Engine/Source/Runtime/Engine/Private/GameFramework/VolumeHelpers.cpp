@@ -4,11 +4,11 @@
 #include <glm/geometric.hpp>
 #include <limits>
 #include "GameFramework/Character.h"
-#include "GameFramework/Damage.h"
+#include "Kismet/GameplayStatics.h"
 
 namespace {
 
-[[nodiscard]] bool PointInPainAabb(const glm::vec3& point, const PainCausingVolume& vol) {
+[[nodiscard]] bool PointInPainAabb(const glm::vec3& point, const FPainCausingVolume& vol) {
     const glm::vec3 half = glm::abs(vol.transform.Scale) * 0.5f;
     const glm::vec3 min = vol.transform.Position - half;
     const glm::vec3 max = vol.transform.Position + half;
@@ -16,9 +16,9 @@ namespace {
            point.z >= min.z && point.z <= max.z;
 }
 
-[[nodiscard]] float SmallestPositiveInterval(const std::vector<PainCausingVolume>& volumes) {
+[[nodiscard]] float SmallestPositiveInterval(const std::vector<FPainCausingVolume>& volumes) {
     float best = (std::numeric_limits<float>::max)();
-    for (const PainCausingVolume& vol : volumes) {
+    for (const FPainCausingVolume& vol : volumes) {
         if (vol.damageInterval > 0.0f && vol.damageInterval < best) {
             best = vol.damageInterval;
         }
@@ -28,20 +28,20 @@ namespace {
 
 } // namespace
 
-bool CharacterOverlapsPainVolume(const Character& ch, const PainCausingVolume& vol) {
+bool CharacterOverlapsPainVolume(const ACharacter& ch, const FPainCausingVolume& vol) {
     return PointInPainAabb(ch.GetActorLocation(), vol);
 }
 
-void ApplyPainVolumeDamage(Character& ch, const PainCausingVolume& vol) {
+void ApplyPainVolumeDamage(ACharacter& ch, const FPainCausingVolume& vol) {
     const float amount = vol.damagePerSecond * vol.damageInterval;
     if (amount <= 0.0f) {
         return;
     }
-    (void)ApplyPointDamage(&ch, amount, glm::vec3{0.0f, -1.0f, 0.0f});
+    (void)UGameplayStatics::ApplyPointDamage(&ch, amount, glm::vec3{0.0f, -1.0f, 0.0f});
 }
 
-void TickPainCausingVolumes(const std::vector<PainCausingVolume>& volumes,
-                            std::span<Character*> characters, float deltaTime, float& tickAccum) {
+void TickPainCausingVolumes(const std::vector<FPainCausingVolume>& volumes,
+                            std::span<ACharacter*> characters, float deltaTime, float& tickAccum) {
     if (volumes.empty() || characters.empty() || deltaTime <= 0.0f) {
         return;
     }
@@ -56,11 +56,11 @@ void TickPainCausingVolumes(const std::vector<PainCausingVolume>& volumes,
     }
     tickAccum = 0.0f;
 
-    for (Character* ch : characters) {
+    for (ACharacter* ch : characters) {
         if (ch == nullptr || !ch->IsAlive()) {
             continue;
         }
-        for (const PainCausingVolume& vol : volumes) {
+        for (const FPainCausingVolume& vol : volumes) {
             if (!CharacterOverlapsPainVolume(*ch, vol)) {
                 continue;
             }
@@ -70,16 +70,16 @@ void TickPainCausingVolumes(const std::vector<PainCausingVolume>& volumes,
     }
 }
 
-std::size_t FindBestTriggerVolume(const std::vector<TriggerVolume>& volumes, const glm::vec3& feet,
+std::size_t FindBestTriggerVolume(const std::vector<FTriggerVolume>& volumes, const glm::vec3& feet,
                                   float maxDist) {
     if (volumes.empty() || maxDist <= 0.0f) {
-        return Level::npos;
+        return ULevel::npos;
     }
 
-    std::size_t best = Level::npos;
+    std::size_t best = ULevel::npos;
     float bestDist = maxDist;
     for (std::size_t i = 0; i < volumes.size(); ++i) {
-        const TriggerVolume& vol = volumes[i];
+        const FTriggerVolume& vol = volumes[i];
         const float radius = vol.interactRadius > 0.0f ? vol.interactRadius : maxDist;
         const float limit = radius < maxDist ? radius : maxDist;
         const glm::vec3 delta{feet.x - vol.transform.Position.x, 0.0f,
@@ -93,7 +93,7 @@ std::size_t FindBestTriggerVolume(const std::vector<TriggerVolume>& volumes, con
     return best;
 }
 
-std::string FormatDefaultInteractPrompt(const TriggerVolume& volume) {
+std::string FormatDefaultInteractPrompt(const FTriggerVolume& volume) {
     const std::string& payload = volume.payload;
     const std::string costSuffix =
         volume.interactCost > 0 ? (" [" + std::to_string(volume.interactCost) + "]") : std::string{};

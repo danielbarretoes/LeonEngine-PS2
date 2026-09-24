@@ -3,30 +3,30 @@
 #include "GameFramework/InputActions.h"
 #include "GameFramework/InputMapping.h"
 
-void InputMappingContext::BindAxisKey(std::string_view action, int key, float scale) {
+void UInputMappingContext::BindAxisKey(std::string_view action, int key, float scale) {
     if (action.empty() || key == 0) {
         return;
     }
-    axes_[std::string(action)].push_back(InputAxisKey{key, scale});
+    axes_[std::string(action)].push_back(FInputAxisKeyMapping{key, scale});
 }
 
-void InputMappingContext::BindActionKey(std::string_view action, int key) {
+void UInputMappingContext::BindActionKey(std::string_view action, int key) {
     if (action.empty() || key == 0) {
         return;
     }
     actions_[std::string(action)].push_back(key);
 }
 
-void InputMappingContext::BindAxisKey(std::string_view action, EKeys key, float scale) {
+void UInputMappingContext::BindAxisKey(std::string_view action, EKeys key, float scale) {
     BindAxisKey(action, ToKeyCode(key), scale);
 }
 
-void InputMappingContext::BindActionKey(std::string_view action, EKeys key) {
+void UInputMappingContext::BindActionKey(std::string_view action, EKeys key) {
     BindActionKey(action, ToKeyCode(key));
 }
 
-InputMappingContext InputMappingContext::MakeDefault() {
-    InputMappingContext ctx;
+UInputMappingContext UInputMappingContext::MakeDefault() {
+    UInputMappingContext ctx;
     using namespace Leon::InputActions;
 
     ctx.BindAxisKey(MoveForward, EKeys::W, 1.0f);
@@ -46,23 +46,23 @@ InputMappingContext InputMappingContext::MakeDefault() {
     return ctx;
 }
 
-void PlayerInput::ClearContexts() {
+void UPlayerInput::ClearContexts() {
     contexts_.clear();
     mapsDirty_ = true;
 }
 
-void PlayerInput::AddMappingContext(InputMappingContext context, int priority) {
-    contexts_.push_back(ContextEntry{.priority = priority, .context = std::move(context)});
+void UPlayerInput::AddMappingContext(UInputMappingContext context, int priority) {
+    contexts_.push_back(FContextEntry{.priority = priority, .context = std::move(context)});
     std::stable_sort(
         contexts_.begin(), contexts_.end(),
-        [](const ContextEntry& a, const ContextEntry& b) { return a.priority < b.priority; });
+        [](const FContextEntry& a, const FContextEntry& b) { return a.priority < b.priority; });
     mapsDirty_ = true;
 }
 
-void PlayerInput::rebuildEffectiveMaps() {
+void UPlayerInput::rebuildEffectiveMaps() {
     effectiveAxes_.clear();
     effectiveActions_.clear();
-    for (const ContextEntry& entry : contexts_) {
+    for (const FContextEntry& entry : contexts_) {
         for (const auto& [name, keys] : entry.context.Axes()) {
             auto& dst = effectiveAxes_[name];
             dst.insert(dst.end(), keys.begin(), keys.end());
@@ -75,7 +75,7 @@ void PlayerInput::rebuildEffectiveMaps() {
     mapsDirty_ = false;
 }
 
-void PlayerInput::Update(const FGenericWindow& window) {
+void UPlayerInput::Update(const FGenericWindow& window) {
     if (mapsDirty_) {
         rebuildEffectiveMaps();
     }
@@ -86,7 +86,7 @@ void PlayerInput::Update(const FGenericWindow& window) {
 
     for (const auto& [name, keys] : effectiveAxes_) {
         float value = 0.0f;
-        for (const InputAxisKey& binding : keys) {
+        for (const FInputAxisKeyMapping& binding : keys) {
             if (window.IsKeyPressed(static_cast<EKeys>(binding.key))) {
                 value += binding.scale;
             }
@@ -107,17 +107,17 @@ void PlayerInput::Update(const FGenericWindow& window) {
     }
 }
 
-float PlayerInput::GetAxisValue(std::string_view action) const {
+float UPlayerInput::GetAxisValue(std::string_view action) const {
     const auto it = axisValues_.find(std::string(action));
     return it != axisValues_.end() ? it->second : 0.0f;
 }
 
-bool PlayerInput::IsActionPressed(std::string_view action) const {
+bool UPlayerInput::IsActionPressed(std::string_view action) const {
     const auto it = actionPressed_.find(std::string(action));
     return it != actionPressed_.end() && it->second;
 }
 
-bool PlayerInput::WasActionJustPressed(std::string_view action) const {
+bool UPlayerInput::WasActionJustPressed(std::string_view action) const {
     const std::string key(action);
     const auto cur = actionPressed_.find(key);
     const bool now = cur != actionPressed_.end() && cur->second;
@@ -129,7 +129,7 @@ bool PlayerInput::WasActionJustPressed(std::string_view action) const {
     return !was;
 }
 
-bool PlayerInput::WasActionJustReleased(std::string_view action) const {
+bool UPlayerInput::WasActionJustReleased(std::string_view action) const {
     const std::string key(action);
     const auto cur = actionPressed_.find(key);
     const bool now = cur != actionPressed_.end() && cur->second;
@@ -140,8 +140,8 @@ bool PlayerInput::WasActionJustReleased(std::string_view action) const {
     return prev != actionPressedPrev_.end() && prev->second;
 }
 
-MoveAxes2D PlayerInput::GetMoveAxes2D() const {
-    MoveAxes2D axes{};
+FMoveAxes2D UPlayerInput::GetMoveAxes2D() const {
+    FMoveAxes2D axes{};
     axes.x = GetAxisValue(Leon::InputActions::MoveRight);
     axes.z = GetAxisValue(Leon::InputActions::MoveForward);
     return axes;

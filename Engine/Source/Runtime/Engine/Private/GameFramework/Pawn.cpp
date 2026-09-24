@@ -2,7 +2,7 @@
 #include "GameFramework/Pawn.h"
 
 
-void Pawn::detachController() {
+void APawn::detachController() {
     if (controller_ == nullptr) {
         return;
     }
@@ -10,15 +10,15 @@ void Pawn::detachController() {
     controller_->UnPossess();
 }
 
-void Pawn::Destroy() {
+void APawn::Destroy() {
     if (IsPendingKillPending()) {
         return;
     }
     detachController();
-    Actor::Destroy();
+    AActor::Destroy();
 }
 
-void Pawn::EndPlay() {
+void APawn::EndPlay() {
     detachController();
 }
 

@@ -1,4 +1,4 @@
-#include "GameFramework/GameMode.h"
+#include "GameFramework/GameModeBase.h"
 
 #include <algorithm>
 #include <cmath>
@@ -11,15 +11,15 @@
 #include "Engine/Level.h"
 
 
-void GameMode::PostLogin(PlayerController& newPlayer) {
+void AGameModeBase::PostLogin(APlayerController& newPlayer) {
     GetGameState().AddPlayerState(&newPlayer.GetPlayerState());
 }
 
-void GameMode::Logout(PlayerController& exiting) {
+void AGameModeBase::Logout(APlayerController& exiting) {
     GetGameState().RemovePlayerState(&exiting.GetPlayerState());
 }
 
-bool GameMode::ServerTravel(Engine& engine, std::string_view mapName,
+bool AGameModeBase::ServerTravel(UGameEngine& engine, std::string_view mapName,
                             std::string_view hintLevelPath) {
     if (!engine.GetGameInstance().ServerTravel(engine, mapName, hintLevelPath)) {
         return false;
@@ -32,7 +32,7 @@ bool GameMode::ServerTravel(Engine& engine, std::string_view mapName,
     return true;
 }
 
-bool GameMode::ClientTravel(Engine& engine, std::string_view mapName,
+bool AGameModeBase::ClientTravel(UGameEngine& engine, std::string_view mapName,
                             std::string_view hintLevelPath) {
     if (!engine.GetGameInstance().ClientTravel(engine, mapName, hintLevelPath)) {
         return false;
@@ -45,21 +45,21 @@ bool GameMode::ClientTravel(Engine& engine, std::string_view mapName,
     return true;
 }
 
-float GameMode::EstimateFloorY(const Level& level) {
+float AGameModeBase::EstimateFloorY(const ULevel& level) {
     const auto& starts = level.PlayerStarts();
     if (starts.empty()) {
         return 0.0f;
     }
     float y = starts.front().transform.Position.y;
-    for (const PlayerStart& start : starts) {
+    for (const FPlayerStart& start : starts) {
         y = std::min(y, start.transform.Position.y);
     }
     return y;
 }
 
-float GameMode::EstimateWalkBounds(const Level& level) {
+float AGameModeBase::EstimateWalkBounds(const ULevel& level) {
     float maxExtent = 40.0f;
-    for (const StaticMeshComponent& mesh : level.StaticMeshes()) {
+    for (const UStaticMeshComponent& mesh : level.StaticMeshes()) {
         if (!mesh.HasPhysicsBody() || mesh.simulatePhysics) {
             continue;
         }
@@ -74,8 +74,8 @@ float GameMode::EstimateWalkBounds(const Level& level) {
 // 1. Physics backend
 // 2. Estimate floor Y / walk bounds from level
 // 3. RegisterBodiesFromLevel + SyncFromLevel
-// 4. NavigationSystem bake (cell 0.5, agent 0.45)
-void GameMode::PrepareMatchWorld(Engine& engine, float& outFloorY, float& outWalkBounds,
+// 4. UNavigationSystem bake (cell 0.5, agent 0.45)
+void AGameModeBase::PrepareMatchWorld(UGameEngine& engine, float& outFloorY, float& outWalkBounds,
                                  EPhysicsBackend backend) {
     SetPhysicsBackend(backend);
     outFloorY = EstimateFloorY(engine.GetLevel());
@@ -83,7 +83,7 @@ void GameMode::PrepareMatchWorld(Engine& engine, float& outFloorY, float& outWal
     RegisterBodiesFromLevel(engine.GetLevel());
     GetWorld().GetPhysicsScene().SyncFromLevel(engine.GetLevel());
 
-    NavigationSystem& nav = GetWorld().GetNavigationSystem();
+    UNavigationSystem& nav = GetWorld().GetNavigationSystem();
     nav.SetCellSize(0.5f);
     nav.SetAgentRadius(0.45f);
     nav.BuildFromLevel(engine.GetLevel(), GetWorld().GetPhysicsScene(), outFloorY, outWalkBounds);
@@ -93,17 +93,17 @@ void GameMode::PrepareMatchWorld(Engine& engine, float& outFloorY, float& outWal
               << '\n';
 }
 
-void GameMode::RebuildNavigation(Engine& engine, float floorY, float walkBounds) {
+void AGameModeBase::RebuildNavigation(UGameEngine& engine, float floorY, float walkBounds) {
     RegisterBodiesFromLevel(engine.GetLevel());
     GetWorld().GetPhysicsScene().SyncFromLevel(engine.GetLevel());
-    NavigationSystem& nav = GetWorld().GetNavigationSystem();
+    UNavigationSystem& nav = GetWorld().GetNavigationSystem();
     nav.BuildFromLevel(engine.GetLevel(), GetWorld().GetPhysicsScene(), floorY, walkBounds);
 }
 
-void GameMode::SnapCharacterToFloor(Character& character, glm::vec3& inOutFeet,
+void AGameModeBase::SnapCharacterToFloor(ACharacter& character, glm::vec3& inOutFeet,
                                     float floorY) const {
     const FPhysScene& phys = GetWorld().GetPhysicsScene();
-    const CharacterMovement& move = character.GetCharacterMovement();
+    const UCharacterMovementComponent& move = character.GetCharacterMovement();
     glm::vec3 probe = inOutFeet;
     probe.y = std::max(inOutFeet.y, floorY);
     const float support =

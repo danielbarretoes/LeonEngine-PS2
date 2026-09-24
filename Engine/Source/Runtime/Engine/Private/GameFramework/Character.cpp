@@ -25,24 +25,24 @@ float shortestYawDelta(float fromDeg, float toDeg) {
 
 } // namespace
 
-Character::Character() {
+ACharacter::ACharacter() {
     RegisterComponent(&mesh_);
     (void)mesh_.AttachToComponent(&GetRootComponent());
 }
 
-void Character::SetHealth(float health) {
+void ACharacter::SetHealth(float health) {
     health_ = std::clamp(health, 0.0f, maxHealth_);
     bAlive_ = health_ > 0.0f;
 }
 
-void Character::SetMaxHealth(float maxHealth) {
+void ACharacter::SetMaxHealth(float maxHealth) {
     maxHealth_ = std::max(0.0f, maxHealth);
     if (health_ > maxHealth_) {
         health_ = maxHealth_;
     }
 }
 
-float Character::TakeDamage(float DamageAmount) {
+float ACharacter::TakeDamage(float DamageAmount) {
     if (!bAlive_ || DamageAmount <= 0.0f) {
         return 0.0f;
     }
@@ -54,17 +54,17 @@ float Character::TakeDamage(float DamageAmount) {
     return applied;
 }
 
-void Character::Die() {
+void ACharacter::Die() {
     health_ = 0.0f;
     bAlive_ = false;
 }
 
-void Character::Revive(float NewHealth) {
+void ACharacter::Revive(float NewHealth) {
     health_ = std::clamp(NewHealth, 0.0f, maxHealth_);
     bAlive_ = true;
 }
 
-void Character::Reset(const glm::vec3& location, float yawDegrees) {
+void ACharacter::Reset(const glm::vec3& location, float yawDegrees) {
     SetActorLocationAndRotation(location, yawDegrees);
     wishDir_ = {};
     velocityY_ = 0.0f;
@@ -78,7 +78,7 @@ void Character::Reset(const glm::vec3& location, float yawDegrees) {
     bAlive_ = true;
 }
 
-void Character::ApplyReplicatedState(const glm::vec3& location, float yawDegrees, float velocityY,
+void ACharacter::ApplyReplicatedState(const glm::vec3& location, float yawDegrees, float velocityY,
                                      bool grounded) {
     SetActorLocationAndRotation(location, yawDegrees);
     wishDir_ = {};
@@ -88,44 +88,44 @@ void Character::ApplyReplicatedState(const glm::vec3& location, float yawDegrees
     yawInitialized_ = true;
 }
 
-void Character::SetMovementMode(EMovementMode newMode) {
+void ACharacter::SetMovementMode(EMovementMode newMode) {
     if (newMode == EMovementMode::None) {
         newMode = EMovementMode::Walking;
     }
     movementMode_ = newMode;
 }
 
-void Character::AddMovementInput(const glm::vec3& wishDirXZ) {
+void ACharacter::AddMovementInput(const glm::vec3& wishDirXZ) {
     wishDir_ = wishDirXZ;
 }
 
-void Character::SetAnimBlendInput(float speedAlpha) {
+void ACharacter::SetAnimBlendInput(float speedAlpha) {
     animBlendInput_ = std::clamp(speedAlpha, 0.0f, 1.0f);
     mesh_.GetAnimInstance().SetBlendSpaceInput(animBlendInput_);
 }
 
-bool Character::ConsumeJustLanded() {
+bool ACharacter::ConsumeJustLanded() {
     const bool landed = justLanded_;
     justLanded_ = false;
     return landed;
 }
 
-void Character::Jump() {
+void ACharacter::Jump() {
     jumpRequested_ = true;
 }
 
-void Character::FaceRotation(float yawDegrees, float deltaTime) {
+void ACharacter::FaceRotation(float yawDegrees, float deltaTime) {
     applyYaw(yawDegrees, deltaTime);
 }
 
-bool Character::IsWalkable(const FHitResult& hit) const {
+bool ACharacter::IsWalkable(const FHitResult& hit) const {
     if (!hit.bBlockingHit) {
         return false;
     }
     return hit.ImpactNormal.y >= movement_.WalkableFloorZ;
 }
 
-void Character::FindFloor(FPhysScene& physScene, FindFloorResult& outFloor, float traceDistance,
+void ACharacter::FindFloor(FPhysScene& physScene, FFindFloorResult& outFloor, float traceDistance,
                           FDebugDraw* debugDraw) const {
     outFloor = {};
     const float distance = std::max(traceDistance, movement_.Skin);
@@ -156,7 +156,7 @@ void Character::FindFloor(FPhysScene& physScene, FindFloorResult& outFloor, floa
     outFloor.FloorDist = std::max(0.0f, feet.y - hit.ImpactPoint.y);
 }
 
-void Character::applyYaw(float targetYawDegrees, float deltaTime) {
+void ACharacter::applyYaw(float targetYawDegrees, float deltaTime) {
     if (!yawInitialized_) {
         mutableYawDegrees() = targetYawDegrees;
         yawInitialized_ = true;
@@ -167,15 +167,15 @@ void Character::applyYaw(float targetYawDegrees, float deltaTime) {
     mutableYawDegrees() += delta * t;
 }
 
-float Character::capsuleHalfHeight() const {
+float ACharacter::capsuleHalfHeight() const {
     return std::max(0.0f, capsule_.height * 0.5f - capsule_.radius);
 }
 
-glm::vec3 Character::capsuleCenterFromFeet(const glm::vec3& feet) const {
+glm::vec3 ACharacter::capsuleCenterFromFeet(const glm::vec3& feet) const {
     return feet + glm::vec3{0.0f, capsule_.height * 0.5f, 0.0f};
 }
 
-bool Character::blocksHorizontalMove(const FHitResult& hit) const {
+bool ACharacter::blocksHorizontalMove(const FHitResult& hit) const {
     if (!hit.bBlockingHit || hit.bFloorPlane) {
         return false;
     }
@@ -186,7 +186,7 @@ bool Character::blocksHorizontalMove(const FHitResult& hit) const {
     return true;
 }
 
-glm::vec3 Character::computeSlideVector(const glm::vec3& delta, const glm::vec3& impactNormal) {
+glm::vec3 ACharacter::computeSlideVector(const glm::vec3& delta, const glm::vec3& impactNormal) {
     glm::vec3 n{impactNormal.x, 0.0f, impactNormal.z};
     const float nLen = glm::length(n);
     if (nLen < 1.0e-4f) {
@@ -198,7 +198,7 @@ glm::vec3 Character::computeSlideVector(const glm::vec3& delta, const glm::vec3&
     return slide;
 }
 
-bool Character::safeMoveUpdatedComponent(FPhysScene& physScene, const glm::vec3& delta,
+bool ACharacter::safeMoveUpdatedComponent(FPhysScene& physScene, const glm::vec3& delta,
                                          FHitResult* outHit, FDebugDraw* debugDraw) {
     glm::vec3& feet = mutableLocation();
     const float deltaLen = glm::length(delta);
@@ -258,7 +258,7 @@ bool Character::safeMoveUpdatedComponent(FPhysScene& physScene, const glm::vec3&
     return false;
 }
 
-void Character::resolveSides(FPhysScene& physScene, bool applyPush) {
+void ACharacter::resolveSides(FPhysScene& physScene, bool applyPush) {
     FCapsuleContactParams params{};
     params.pushStrength = movement_.PushStrength;
     params.stepUp = movement_.MaxStepHeight;
@@ -268,7 +268,7 @@ void Character::resolveSides(FPhysScene& physScene, bool applyPush) {
                                   LevelMeshIndex(), applyPush);
 }
 
-bool Character::tryStepUp(FPhysScene& physScene, const glm::vec3& forwardDelta,
+bool ACharacter::tryStepUp(FPhysScene& physScene, const glm::vec3& forwardDelta,
                           FDebugDraw* debugDraw) {
     if (!IsMovingOnGround() || movement_.MaxStepHeight <= 1.0e-4f) {
         return false;
@@ -317,7 +317,7 @@ bool Character::tryStepUp(FPhysScene& physScene, const glm::vec3& forwardDelta,
     }
 
     // 3) Land on a raised walkable support within MaxStepHeight (not the floor below).
-    FindFloorResult floor{};
+    FFindFloorResult floor{};
     FindFloor(physScene, floor, movement_.MaxStepHeight + (movement_.Skin * 4.0f), debugDraw);
     if (!floor.bWalkableFloor) {
         feet = startFeet;
@@ -349,7 +349,7 @@ bool Character::tryStepUp(FPhysScene& physScene, const glm::vec3& forwardDelta,
     return true;
 }
 
-void Character::moveHorizontal(FPhysScene& physScene, float deltaTime, FDebugDraw* debugDraw) {
+void ACharacter::moveHorizontal(FPhysScene& physScene, float deltaTime, FDebugDraw* debugDraw) {
     const float len = glm::length(wishDir_);
     if (len <= 1.0e-4f) {
         resolveSides(physScene, true);
@@ -394,7 +394,7 @@ void Character::moveHorizontal(FPhysScene& physScene, float deltaTime, FDebugDra
     resolveSides(physScene, true);
 }
 
-void Character::integrateVertical(FPhysScene& physScene, float deltaTime, FDebugDraw* debugDraw) {
+void ACharacter::integrateVertical(FPhysScene& physScene, float deltaTime, FDebugDraw* debugDraw) {
     const bool wasGrounded = IsMovingOnGround();
     if (jumpRequested_) {
         const bool canGroundJump = wasGrounded;
@@ -448,33 +448,33 @@ void Character::integrateVertical(FPhysScene& physScene, float deltaTime, FDebug
     }
 }
 
-void Character::PerformMovement(FPhysScene& physScene, float deltaTime, FDebugDraw* debugDraw) {
+void ACharacter::PerformMovement(FPhysScene& physScene, float deltaTime, FDebugDraw* debugDraw) {
     moveHorizontal(physScene, deltaTime, debugDraw);
     integrateVertical(physScene, deltaTime, debugDraw);
     resolveSides(physScene, false);
 }
 
-void Character::TickCharacterMovement(float deltaTime, FDebugDraw* debugDraw) {
-    World* world = GetWorld();
+void ACharacter::TickCharacterMovement(float deltaTime, FDebugDraw* debugDraw) {
+    UWorld* world = GetWorld();
     if (world == nullptr) {
         return;
     }
     PerformMovement(world->GetPhysicsScene(), deltaTime, debugDraw);
 }
 
-void Character::ResolveOverlaps(FPhysScene& physScene) {
+void ACharacter::ResolveOverlaps(FPhysScene& physScene) {
     resolveSides(physScene, false);
 }
 
-void Character::ResolveOverlaps() {
-    World* world = GetWorld();
+void ACharacter::ResolveOverlaps() {
+    UWorld* world = GetWorld();
     if (world == nullptr) {
         return;
     }
     ResolveOverlaps(world->GetPhysicsScene());
 }
 
-void Character::ResolvePawnOverlap(Character& other) {
+void ACharacter::ResolvePawnOverlap(ACharacter& other) {
     if (this == &other) {
         return;
     }
@@ -514,7 +514,7 @@ void Character::ResolvePawnOverlap(Character& other) {
     ClampPositionXZ(b, other.movement_.WalkBounds);
 }
 
-void Character::Tick(float deltaTime) {
+void ACharacter::Tick(float deltaTime) {
     if (auto* characterAnim = dynamic_cast<UCharacterAnimInstance*>(&mesh_.GetAnimInstance())) {
         characterAnim->SetMovementState(IsFalling(), velocityY_, ConsumeJustLanded());
     } else {
@@ -523,7 +523,7 @@ void Character::Tick(float deltaTime) {
     mesh_.TickComponent(deltaTime);
 }
 
-void Character::SubmitMeshDraw(FSceneRenderer& renderer) const {
+void ACharacter::SubmitMeshDraw(FSceneRenderer& renderer) const {
     mesh_.SubmitDraw(renderer);
 }
 

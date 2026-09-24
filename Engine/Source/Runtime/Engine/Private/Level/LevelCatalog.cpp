@@ -21,7 +21,7 @@ bool isLeonLevelFile(const std::filesystem::directory_entry& entry) {
     return extension == kLeonLevelExtension;
 }
 
-void appendLevelsFromDirectory(std::vector<LevelEntry>& out, const std::filesystem::path& levelsDir,
+void appendLevelsFromDirectory(std::vector<FLevelEntry>& out, const std::filesystem::path& levelsDir,
                                const std::string& packName) {
     std::error_code ec;
     if (!std::filesystem::is_directory(levelsDir, ec) || ec) {
@@ -36,13 +36,13 @@ void appendLevelsFromDirectory(std::vector<LevelEntry>& out, const std::filesyst
             continue;
         }
 
-        LevelEntry item;
+        FLevelEntry item;
         item.path = entry.path().lexically_normal().string();
         item.name = entry.path().stem().string();
         item.pack = packName;
 
-        // Display name + GameMode Override are read once at catalog scan (GameplayRouter uses it).
-        LevelDocument doc;
+        // Display name + GameMode Override are read once at catalog scan (FGameplayRouter uses it).
+        FLevelDocument doc;
         if (LoadLeonLevelFile(item.path, doc)) {
             if (!doc.name.empty()) {
                 item.name = doc.name;
@@ -72,7 +72,7 @@ bool directoryHasLeonLevels(const std::filesystem::path& levelsDir) {
 
 } // namespace
 
-bool LevelCatalog::Scan(const std::string& directory) {
+bool FLevelCatalog::Scan(const std::string& directory) {
     entries_.clear();
     directory_ = directory;
 
@@ -85,7 +85,7 @@ bool LevelCatalog::Scan(const std::string& directory) {
 
     appendLevelsFromDirectory(entries_, dir, {});
     std::sort(entries_.begin(), entries_.end(),
-              [](const LevelEntry& a, const LevelEntry& b) { return a.path < b.path; });
+              [](const FLevelEntry& a, const FLevelEntry& b) { return a.path < b.path; });
 
     std::cout << "LevelCatalog: " << entries_.size() << " Level(s) in " << directory << '\n';
     for (std::size_t i = 0; i < entries_.size(); ++i) {
@@ -94,7 +94,7 @@ bool LevelCatalog::Scan(const std::string& directory) {
     return !entries_.empty();
 }
 
-bool LevelCatalog::ScanPack(const std::string& packDirectory) {
+bool FLevelCatalog::ScanPack(const std::string& packDirectory) {
     entries_.clear();
     directory_ = packDirectory;
 
@@ -114,17 +114,17 @@ bool LevelCatalog::ScanPack(const std::string& packDirectory) {
     }
 
     std::sort(entries_.begin(), entries_.end(),
-              [](const LevelEntry& a, const LevelEntry& b) { return a.path < b.path; });
+              [](const FLevelEntry& a, const FLevelEntry& b) { return a.path < b.path; });
 
     std::cout << "LevelCatalog: " << entries_.size() << " Level(s) in pack " << packName << '\n';
     for (std::size_t i = 0; i < entries_.size(); ++i) {
-        const LevelEntry& e = entries_[i];
+        const FLevelEntry& e = entries_[i];
         std::cout << "  [" << i << "] " << e.pack << "/" << e.name << " (" << e.path << ")\n";
     }
     return !entries_.empty();
 }
 
-bool LevelCatalog::ScanProjectPacks(const std::string& projectsRoot) {
+bool FLevelCatalog::ScanProjectPacks(const std::string& projectsRoot) {
     entries_.clear();
     directory_ = projectsRoot;
 
@@ -156,17 +156,17 @@ bool LevelCatalog::ScanProjectPacks(const std::string& projectsRoot) {
     }
 
     std::sort(entries_.begin(), entries_.end(),
-              [](const LevelEntry& a, const LevelEntry& b) { return a.path < b.path; });
+              [](const FLevelEntry& a, const FLevelEntry& b) { return a.path < b.path; });
 
     std::cout << "LevelCatalog: " << entries_.size() << " Level(s) under " << projectsRoot << '\n';
     for (std::size_t i = 0; i < entries_.size(); ++i) {
-        const LevelEntry& e = entries_[i];
+        const FLevelEntry& e = entries_[i];
         std::cout << "  [" << i << "] " << e.pack << "/" << e.name << " (" << e.path << ")\n";
     }
     return !entries_.empty();
 }
 
-std::size_t LevelCatalog::FindIndexByGameModeOrPack(const std::string& id) const {
+std::size_t FLevelCatalog::FindIndexByGameModeOrPack(const std::string& id) const {
     if (id.empty()) {
         return entries_.size();
     }
@@ -178,13 +178,13 @@ std::size_t LevelCatalog::FindIndexByGameModeOrPack(const std::string& id) const
     return entries_.size();
 }
 
-std::size_t LevelCatalog::FindIndexByLevelKey(std::string_view key) const {
+std::size_t FLevelCatalog::FindIndexByLevelKey(std::string_view key) const {
     if (key.empty()) {
         return entries_.size();
     }
     const std::string needle = FCString::ToLower(key);
     for (std::size_t i = 0; i < entries_.size(); ++i) {
-        const LevelEntry& e = entries_[i];
+        const FLevelEntry& e = entries_[i];
         if (FCString::ToLower(e.name) == needle) {
             return i;
         }

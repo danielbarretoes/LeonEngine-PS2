@@ -209,8 +209,8 @@ TEST_CASE("AcceptInboundPacket rejects Hello with wrong protocol version", "[net
 TEST_CASE("NetDriver listen + client Hello/Welcome on localhost", "[net][enet]") {
     constexpr std::uint16_t kPort = 17991;
 
-    NetDriver host;
-    NetDriver client;
+    UNetDriver host;
+    UNetDriver client;
 
     std::uint8_t welcomedSlot = 255;
     bool hostSawHello = false;

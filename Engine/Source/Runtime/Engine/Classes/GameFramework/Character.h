@@ -21,7 +21,7 @@ enum class EMovementMode : std::uint8_t {
 };
 
 /// Unreal-like FFindFloorResult (CMC floor query).
-struct FindFloorResult {
+struct FFindFloorResult {
     bool bBlockingHit = false;
     bool bWalkableFloor = false;
     /// Distance from capsule feet down to floor ImpactPoint.y (>= 0 when hit below/at feet).
@@ -30,7 +30,7 @@ struct FindFloorResult {
 };
 
 /// Unreal-like UCharacterMovementComponent tunables (PascalCase Unreal-like field names).
-struct CharacterMovement {
+struct UCharacterMovementComponent {
     /// Unreal MaxWalkSpeed.
     float MaxWalkSpeed = 4.5f;
     /// Unreal JumpZVelocity.
@@ -61,16 +61,16 @@ struct CharacterMovement {
 /// - Capsule extends upward by FCapsuleShape::height; XZ radius FCapsuleShape::radius.
 /// - Not registered as a FPhysScene FBodyInstance; moves via PerformMovement queries.
 /// - Modes: Walking / Falling via SetMovementMode; floor via FindFloor → IsWalkable.
-class Character : public Pawn {
+class ACharacter : public APawn {
 public:
-    Character();
+    ACharacter();
 
     void SetCapsule(const FCapsuleShape& capsule) { capsule_ = capsule; }
-    void SetCharacterMovement(const CharacterMovement& movement) { movement_ = movement; }
+    void SetCharacterMovement(const UCharacterMovementComponent& movement) { movement_ = movement; }
 
     [[nodiscard]] const FCapsuleShape& GetCapsule() const { return capsule_; }
-    [[nodiscard]] CharacterMovement& GetCharacterMovement() { return movement_; }
-    [[nodiscard]] const CharacterMovement& GetCharacterMovement() const { return movement_; }
+    [[nodiscard]] UCharacterMovementComponent& GetCharacterMovement() { return movement_; }
+    [[nodiscard]] const UCharacterMovementComponent& GetCharacterMovement() const { return movement_; }
 
     /// Unreal-like UCharacterMovementComponent::SetMovementMode / MovementMode.
     void SetMovementMode(EMovementMode newMode);
@@ -86,18 +86,18 @@ public:
     [[nodiscard]] bool ConsumeJustLanded();
 
     /// Last successful FindFloor from integrateVertical (may be empty if never queried).
-    [[nodiscard]] const FindFloorResult& GetCurrentFloor() const { return currentFloor_; }
+    [[nodiscard]] const FFindFloorResult& GetCurrentFloor() const { return currentFloor_; }
 
     /// Unreal IsWalkable: ImpactNormal.Z >= WalkableFloorZ.
     [[nodiscard]] bool IsWalkable(const FHitResult& hit) const;
 
     /// Unreal-like FindFloor: downward sphere trace from feet; fills outFloor.
-    void FindFloor(FPhysScene& physScene, FindFloorResult& outFloor, float traceDistance,
+    void FindFloor(FPhysScene& physScene, FFindFloorResult& outFloor, float traceDistance,
                    FDebugDraw* debugDraw = nullptr) const;
 
     /// Unreal-like ACharacter::GetMesh() — skeletal visual + UAnimInstance.
-    [[nodiscard]] SkeletalMeshComponent& GetMesh() { return mesh_; }
-    [[nodiscard]] const SkeletalMeshComponent& GetMesh() const { return mesh_; }
+    [[nodiscard]] USkeletalMeshComponent& GetMesh() { return mesh_; }
+    [[nodiscard]] const USkeletalMeshComponent& GetMesh() const { return mesh_; }
 
     /// Apply replicated movement state (client proxy / snapshot).
     void ApplyReplicatedState(const glm::vec3& location, float yawDegrees, float velocityY,
@@ -139,12 +139,12 @@ public:
     void ResolveOverlaps();
 
     /// Separate this capsule from another Character on XZ (equal share). No-op if Y ranges miss.
-    void ResolvePawnOverlap(Character& other);
+    void ResolvePawnOverlap(ACharacter& other);
 
     /// Ticks Mesh UAnimInstance (Unreal: Character::Tick → Mesh component).
     void Tick(float deltaTime) override;
 
-    /// Draw GetMesh() via SceneComponent world transform.
+    /// Draw GetMesh() via USceneComponent world transform.
     void SubmitMeshDraw(FSceneRenderer& renderer) const;
 
 private:
@@ -170,8 +170,8 @@ private:
                                  FDebugDraw* debugDraw);
 
     FCapsuleShape capsule_{};
-    CharacterMovement movement_{};
-    SkeletalMeshComponent mesh_{};
+    UCharacterMovementComponent movement_{};
+    USkeletalMeshComponent mesh_{};
     float animBlendInput_ = 0.0f;
     float health_ = 100.0f;
     float maxHealth_ = 100.0f;
@@ -184,6 +184,6 @@ private:
     bool justLanded_ = false;
     bool yawInitialized_ = false;
     int jumpsRemaining_ = 0;
-    FindFloorResult currentFloor_{};
+    FFindFloorResult currentFloor_{};
 };
 

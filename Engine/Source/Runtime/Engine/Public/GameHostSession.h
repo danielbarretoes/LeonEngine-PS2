@@ -8,22 +8,22 @@
 #include <string_view>
 
 
-/// Embeddable play host: pack resolve, WorldRuntime, GameplayRouter — no GLFW loop.
-/// Used by shipping `GameApplication::Run` and Editor PIE (Selected Viewport / New Window).
-class GameHostSession {
+/// Embeddable play host: pack resolve, FWorldRuntime, FGameplayRouter — no GLFW loop.
+/// Used by shipping `FGameApplication::Run` and Editor PIE (Selected Viewport / New Window).
+class FGameHostSession {
 public:
-    using RegisterModesFn = std::function<void(Engine&, GameplayRouter&)>;
+    using FRegisterModesFunction = std::function<void(UGameEngine&, FGameplayRouter&)>;
 
-    GameHostSession() = default;
-    ~GameHostSession();
+    FGameHostSession() = default;
+    ~FGameHostSession();
 
-    GameHostSession(const GameHostSession&) = delete;
-    GameHostSession& operator=(const GameHostSession&) = delete;
+    FGameHostSession(const FGameHostSession&) = delete;
+    FGameHostSession& operator=(const FGameHostSession&) = delete;
 
     /// Flow: content root → LoadPack → travel/browser callbacks → registerModes → first Sync via Tick.
     /// `preferredLevelKey` empty → pack `defaultLevel` (shipping). Editor PIE passes the open level key.
     /// `packRootOverride` empty → `FProjectDescriptor::Resolve`; Editor passes the open project path.
-    [[nodiscard]] bool Start(Engine& engine, const char* packName, RegisterModesFn registerModes,
+    [[nodiscard]] bool Start(UGameEngine& engine, const char* packName, FRegisterModesFunction registerModes,
                              std::string_view preferredLevelKey = {},
                              std::string_view packRootOverride = {});
 
@@ -31,23 +31,23 @@ public:
     void HandleUiInput();
     void DrawUi(int framebufferWidth, int framebufferHeight);
 
-    /// Exit active GameMode, shut down WorldRuntime, restore base GameInstance, clear content root.
+    /// Exit active GameMode, shut down FWorldRuntime, restore base UGameInstance, clear content root.
     void Stop();
 
     [[nodiscard]] bool IsActive() const { return active_; }
-    [[nodiscard]] GameplayRouter& Router() { return gameplay_; }
-    [[nodiscard]] const GameplayRouter& Router() const { return gameplay_; }
-    [[nodiscard]] WorldRuntime& World() { return world_; }
-    [[nodiscard]] const WorldRuntime& World() const { return world_; }
-    [[nodiscard]] Engine* GetEngine() const { return engine_; }
+    [[nodiscard]] FGameplayRouter& Router() { return gameplay_; }
+    [[nodiscard]] const FGameplayRouter& Router() const { return gameplay_; }
+    [[nodiscard]] FWorldRuntime& GetWorldRuntime() { return world_; }
+    [[nodiscard]] const FWorldRuntime& GetWorldRuntime() const { return world_; }
+    [[nodiscard]] UGameEngine* GetEngine() const { return engine_; }
     [[nodiscard]] const std::string& PackName() const { return packName_; }
 
 private:
     void BindTravelCallbacks();
 
-    Engine* engine_ = nullptr;
-    WorldRuntime world_;
-    GameplayRouter gameplay_;
+    UGameEngine* engine_ = nullptr;
+    FWorldRuntime world_;
+    FGameplayRouter gameplay_;
     std::string packName_;
     bool active_ = false;
     bool worldInitialized_ = false;

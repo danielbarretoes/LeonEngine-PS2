@@ -1,6 +1,6 @@
 #pragma once
 
-/// Gameplay framework: GameInstance, World, Actors, Controllers, GameState/PlayerState, GameMode.
+/// Gameplay framework: UGameInstance, World, Actors, Controllers, GameState/PlayerState, GameMode.
 #include "GameFramework/Actor.h"
 #include "Components/ActorComponent.h"
 #include "AIController.h"
@@ -9,15 +9,15 @@
 #include "BehaviorTree/BehaviorTree.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/Controller.h"
-#include "GameFramework/Damage.h"
+#include "Kismet/GameplayStatics.h"
 #include "GameFramework/DefaultCameraActor.h"
 #include "GameFramework/DefaultGameMode.h"
 #include "GameFramework/DefaultPlayerController.h"
 #include "Engine/GameInstance.h"
-#include "GameFramework/GameMode.h"
+#include "GameFramework/GameModeBase.h"
 #include "GameFramework/GameplayRouter.h"
 #include "Kismet/GameplayStatics.h"
-#include "GameFramework/GameState.h"
+#include "GameFramework/GameStateBase.h"
 #include "AI/Navigation/NavigationSystem.h"
 #include "AI/Navigation/NavMesh.h"
 #include "GameFramework/Pawn.h"

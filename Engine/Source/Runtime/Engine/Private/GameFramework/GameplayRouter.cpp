@@ -2,17 +2,17 @@
 #include "GameFramework/GameplayRouter.h"
 
 
-void GameplayRouter::AddMode(std::unique_ptr<GameMode> mode) {
+void FGameplayRouter::AddMode(std::unique_ptr<AGameModeBase> mode) {
     if (mode) {
         modes_.push_back(std::move(mode));
     }
 }
 
-void GameplayRouter::SetDefaultMode(std::unique_ptr<GameMode> mode) {
+void FGameplayRouter::SetDefaultMode(std::unique_ptr<AGameModeBase> mode) {
     defaultMode_ = std::move(mode);
 }
 
-void GameplayRouter::SyncActiveMode(Engine& engine, const LevelDirector& director) {
+void FGameplayRouter::SyncActiveMode(UGameEngine& engine, const FLevelDirector& director) {
     if (director.IsEmpty()) {
         if (active_ != nullptr) {
             active_->OnExit(engine);
@@ -28,11 +28,11 @@ void GameplayRouter::SyncActiveMode(Engine& engine, const LevelDirector& directo
     }
     boundCatalogIndex_ = index;
 
-    const LevelEntry& entry = director.Catalog().Entries()[index];
+    const FLevelEntry& entry = director.Catalog().Entries()[index];
     const std::string& gameModeId = entry.gameMode;
 
-    // Explicit override / pack soft-match first; otherwise DefaultGameMode.
-    GameMode* next = nullptr;
+    // Explicit override / pack soft-match first; otherwise ADefaultGameMode.
+    AGameModeBase* next = nullptr;
     for (const auto& mode : modes_) {
         if (mode->Matches(entry, gameModeId)) {
             next = mode.get();
@@ -60,7 +60,7 @@ void GameplayRouter::SyncActiveMode(Engine& engine, const LevelDirector& directo
     }
 }
 
-void GameplayRouter::Update(Engine& engine, const LevelDirector& director, float deltaTime) {
+void FGameplayRouter::Update(UGameEngine& engine, const FLevelDirector& director, float deltaTime) {
     SyncActiveMode(engine, director);
     if (active_ != nullptr) {
         active_->Tick(engine, deltaTime);

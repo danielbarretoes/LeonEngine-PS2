@@ -86,7 +86,7 @@ std::string DetectPrimaryLanIPv4() {
     return chosen;
 }
 
-void SendTravelToPeers(NetDriver& net, std::string_view mapName, bool dedicatedServer) {
+void SendTravelToPeers(UNetDriver& net, std::string_view mapName, bool dedicatedServer) {
     if (!net.IsHost() || !net.HasPeer()) {
         return;
     }

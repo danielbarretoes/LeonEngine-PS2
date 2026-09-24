@@ -432,7 +432,7 @@ bool LoadAnimSequence(const std::string& path, UAnimSequence& out) {
     return out.FrameCount() > 0;
 }
 
-bool SaveBlendSpace1DJson(const std::string& path, const BlendSpace1DAssetDesc& desc) {
+bool SaveBlendSpace1DJson(const std::string& path, const FBlendSpace1DAssetDesc& desc) {
     json root;
     root["version"] = kCookedFormatVersion;
     root["name"] = desc.name;
@@ -450,7 +450,7 @@ bool SaveBlendSpace1DJson(const std::string& path, const BlendSpace1DAssetDesc& 
     return true;
 }
 
-bool LoadBlendSpace1DJson(const std::string& path, BlendSpace1DAssetDesc& out) {
+bool LoadBlendSpace1DJson(const std::string& path, FBlendSpace1DAssetDesc& out) {
     std::ifstream in(path);
     if (!in) {
         return false;
@@ -473,7 +473,7 @@ bool LoadBlendSpace1DJson(const std::string& path, BlendSpace1DAssetDesc& out) {
         return false;
     }
     for (const json& s : root["samples"]) {
-        BlendSpace1DAssetDesc::Sample sample;
+        FBlendSpace1DAssetDesc::FSample sample;
         sample.animRelPath = s.at("anim").get<std::string>();
         sample.position = s.value("position", 0.0f);
         out.samples.push_back(std::move(sample));
@@ -481,7 +481,7 @@ bool LoadBlendSpace1DJson(const std::string& path, BlendSpace1DAssetDesc& out) {
     return !out.samples.empty();
 }
 
-bool SaveCharacterVisualLchar(const std::string& path, const CharacterVisualDesc& desc) {
+bool SaveCharacterVisualLchar(const std::string& path, const FCharacterVisualDesc& desc) {
     std::ofstream out(path);
     if (!out) {
         return false;
@@ -506,7 +506,7 @@ bool SaveCharacterVisualLchar(const std::string& path, const CharacterVisualDesc
     return static_cast<bool>(out);
 }
 
-bool LoadCharacterVisualLchar(const std::string& path, CharacterVisualDesc& outDesc) {
+bool LoadCharacterVisualLchar(const std::string& path, FCharacterVisualDesc& outDesc) {
     std::ifstream in(path);
     if (!in) {
         return false;
@@ -587,7 +587,7 @@ bool LoadCharacterVisualLchar(const std::string& path, CharacterVisualDesc& outD
 
 namespace {
 
-bool LoadCharacterVisualJsonLegacy(const std::string& path, CharacterVisualDesc& out) {
+bool LoadCharacterVisualJsonLegacy(const std::string& path, FCharacterVisualDesc& out) {
     std::ifstream in(path);
     if (!in) {
         return false;
@@ -614,7 +614,7 @@ bool LoadCharacterVisualJsonLegacy(const std::string& path, CharacterVisualDesc&
 
 } // namespace
 
-bool LoadCharacterVisual(const std::string& path, CharacterVisualDesc& out) {
+bool LoadCharacterVisual(const std::string& path, FCharacterVisualDesc& out) {
     const fs::path p(path);
     const std::string ext = p.extension().string();
     std::string extLower = ext;
@@ -670,7 +670,7 @@ bool CookAnimSequenceFromFbx(const std::string& fbxPath, const std::string& skel
 
 bool CookCharacterFromFbx(const std::string& characterName, const std::string& meshFbxPath,
                           const std::string& runFbxPath, const std::string& outDirectory,
-                          const CookJumpAnimPaths& jumpAnims) {
+                          const FCookJumpAnimPaths& jumpAnims) {
     fs::create_directories(outDirectory);
     fs::create_directories(fs::path(outDirectory) / "Anims");
     fs::create_directories(fs::path(outDirectory) / "Materials");
@@ -783,7 +783,7 @@ bool CookCharacterFromFbx(const std::string& characterName, const std::string& m
         }
     }
 
-    BlendSpace1DAssetDesc bs;
+    FBlendSpace1DAssetDesc bs;
     bs.name = characterName + "_Locomotion";
     bs.samples.push_back({idleAnimRel, 0.0f});
     bs.samples.push_back({runAnimRel, 1.0f});
@@ -791,7 +791,7 @@ bool CookCharacterFromFbx(const std::string& characterName, const std::string& m
         return false;
     }
 
-    CharacterVisualDesc character;
+    FCharacterVisualDesc character;
     character.name = characterName;
     character.skeletalMeshRel = skelMeshFile;
     character.blendSpaceRel = blendRel;

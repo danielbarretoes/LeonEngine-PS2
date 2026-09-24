@@ -8,22 +8,22 @@
 #include <string_view>
 
 
-class Engine;
+class UGameEngine;
 
 /// Persistent game session (Unreal-style `UGameInstance`). Survives level changes; owned by Engine.
-/// Owns NetDriver for listen-server / dedicated / client LAN sessions.
-class GameInstance {
+/// Owns UNetDriver for listen-server / dedicated / client LAN sessions.
+class UGameInstance {
 public:
-    /// Load a level by catalog key (name / stem). Wired by Runtime (LevelDirector) or Editor PIE.
-    using LevelTravelFn = std::function<bool(Engine& engine, std::string_view levelKey)>;
+    /// Load a level by catalog key (name / stem). Wired by Runtime (FLevelDirector) or Editor PIE.
+    using FLevelTravelFunction = std::function<bool(UGameEngine& engine, std::string_view levelKey)>;
 
-    GameInstance();
-    virtual ~GameInstance();
+    UGameInstance();
+    virtual ~UGameInstance();
 
-    GameInstance(const GameInstance&) = delete;
-    GameInstance& operator=(const GameInstance&) = delete;
-    GameInstance(GameInstance&&) = delete;
-    GameInstance& operator=(GameInstance&&) = delete;
+    UGameInstance(const UGameInstance&) = delete;
+    UGameInstance& operator=(const UGameInstance&) = delete;
+    UGameInstance(UGameInstance&&) = delete;
+    UGameInstance& operator=(UGameInstance&&) = delete;
 
     virtual void Init();
     virtual void Shutdown();
@@ -33,8 +33,8 @@ public:
 
     [[nodiscard]] int LevelsOpened() const { return levelsOpened_; }
 
-    [[nodiscard]] NetDriver& GetNetDriver() { return *netDriver_; }
-    [[nodiscard]] const NetDriver& GetNetDriver() const { return *netDriver_; }
+    [[nodiscard]] UNetDriver& GetNetDriver() { return *netDriver_; }
+    [[nodiscard]] const UNetDriver& GetNetDriver() const { return *netDriver_; }
 
     [[nodiscard]] ENetMode GetNetMode() const { return netDriver_->Mode(); }
     [[nodiscard]] bool IsListenServer() const { return GetNetMode() == ENetMode::ListenServer; }
@@ -97,16 +97,16 @@ public:
     }
     [[nodiscard]] const std::string& PeekPendingPlayMap() const { return pendingPlayMap_; }
 
-    void SetLevelTravelFn(LevelTravelFn fn) { levelTravelFn_ = std::move(fn); }
+    void SetLevelTravelFn(FLevelTravelFunction fn) { levelTravelFn_ = std::move(fn); }
     /// Used by Engine::SetGameInstance to keep Runtime/Editor travel wiring across subclass swap.
-    [[nodiscard]] LevelTravelFn TakeLevelTravelFn() { return std::move(levelTravelFn_); }
+    [[nodiscard]] FLevelTravelFunction TakeLevelTravelFn() { return std::move(levelTravelFn_); }
 
-    /// Toggle LevelDirector `[`/`]` chrome (menus hide it).
-    using LevelBrowserVisibleFn = std::function<void(bool visible)>;
-    void SetLevelBrowserVisibleFn(LevelBrowserVisibleFn fn) {
+    /// Toggle FLevelDirector `[`/`]` chrome (menus hide it).
+    using FLevelBrowserVisibleFunction = std::function<void(bool visible)>;
+    void SetLevelBrowserVisibleFn(FLevelBrowserVisibleFunction fn) {
         levelBrowserVisibleFn_ = std::move(fn);
     }
-    [[nodiscard]] LevelBrowserVisibleFn TakeLevelBrowserVisibleFn() {
+    [[nodiscard]] FLevelBrowserVisibleFunction TakeLevelBrowserVisibleFn() {
         return std::move(levelBrowserVisibleFn_);
     }
     void SetLevelBrowserVisible(bool visible) {
@@ -116,14 +116,14 @@ public:
     }
 
     /// Unreal `UWorld::ServerTravel` — load map on authority / local process.
-    [[nodiscard]] bool ServerTravel(Engine& engine, std::string_view mapName,
+    [[nodiscard]] bool ServerTravel(UGameEngine& engine, std::string_view mapName,
                                     std::string_view hintLevelPath = {});
     /// Unreal `APlayerController::ClientTravel` — load map on a client process.
-    [[nodiscard]] bool ClientTravel(Engine& engine, std::string_view mapName,
+    [[nodiscard]] bool ClientTravel(UGameEngine& engine, std::string_view mapName,
                                     std::string_view hintLevelPath = {});
 
 private:
-    [[nodiscard]] bool TravelInternal(Engine& engine, std::string_view levelKey,
+    [[nodiscard]] bool TravelInternal(UGameEngine& engine, std::string_view levelKey,
                                       std::string_view hintLevelPath);
 
     int levelsOpened_ = 0;
@@ -133,8 +133,8 @@ private:
     std::uint16_t pendingListenPort_ = Leon::Net::kDefaultPort;
     std::string pendingJoinAddress_;
     std::string pendingPlayMap_;
-    std::unique_ptr<NetDriver> netDriver_;
-    LevelTravelFn levelTravelFn_;
-    LevelBrowserVisibleFn levelBrowserVisibleFn_;
+    std::unique_ptr<UNetDriver> netDriver_;
+    FLevelTravelFunction levelTravelFn_;
+    FLevelBrowserVisibleFunction levelBrowserVisibleFn_;
 };
 

@@ -4,9 +4,9 @@
 
 // Class-name parsers live in Content/LevelClassNames.cpp (shared with ContentValidator / cook).
 
-BasicLight BasicLight::directional(glm::vec3 rotationDegrees, glm::vec3 lightColor,
+FBasicLight FBasicLight::directional(glm::vec3 rotationDegrees, glm::vec3 lightColor,
                                    float intensity) {
-    BasicLight light;
+    FBasicLight light;
     light.type = EBasicLight::Directional;
     light.transform.RotationDegrees = rotationDegrees;
     light.lightColor = lightColor;
@@ -15,9 +15,9 @@ BasicLight BasicLight::directional(glm::vec3 rotationDegrees, glm::vec3 lightCol
     return light;
 }
 
-BasicLight BasicLight::point(glm::vec3 position, glm::vec3 lightColor, float intensity,
+FBasicLight FBasicLight::point(glm::vec3 position, glm::vec3 lightColor, float intensity,
                              float range) {
-    BasicLight light;
+    FBasicLight light;
     light.type = EBasicLight::Point;
     light.transform.Position = position;
     light.lightColor = lightColor;
@@ -27,8 +27,8 @@ BasicLight BasicLight::point(glm::vec3 position, glm::vec3 lightColor, float int
     return light;
 }
 
-DirectionalLight BasicLight::asDirectional() const {
-    DirectionalLight light;
+FDirectionalLight FBasicLight::asDirectional() const {
+    FDirectionalLight light;
     light.transform = transform;
     light.lightColor = lightColor;
     light.intensity = intensity;
@@ -37,8 +37,8 @@ DirectionalLight BasicLight::asDirectional() const {
     return light;
 }
 
-PointLight BasicLight::asPoint() const {
-    PointLight light;
+FPointLight FBasicLight::asPoint() const {
+    FPointLight light;
     light.transform = transform;
     light.lightColor = lightColor;
     light.intensity = intensity;
@@ -47,7 +47,7 @@ PointLight BasicLight::asPoint() const {
     return light;
 }
 
-void BasicLight::addTo(Level& level) const {
+void FBasicLight::addTo(ULevel& level) const {
     switch (type) {
     case EBasicLight::Directional:
         level.DirectionalLights().push_back(asDirectional());

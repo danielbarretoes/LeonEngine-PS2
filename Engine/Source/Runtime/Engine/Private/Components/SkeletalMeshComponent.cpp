@@ -29,11 +29,11 @@ namespace fs = std::filesystem;
 
 } // namespace
 
-SkeletalMeshComponent::SkeletalMeshComponent() : animInstance_(std::make_unique<UAnimInstance>()) {
+USkeletalMeshComponent::USkeletalMeshComponent() : animInstance_(std::make_unique<UAnimInstance>()) {
     animInstance_->SetOwningMeshComponent(this);
 }
 
-void SkeletalMeshComponent::SetAnimInstance(std::unique_ptr<UAnimInstance> instance) {
+void USkeletalMeshComponent::SetAnimInstance(std::unique_ptr<UAnimInstance> instance) {
     animInstance_ = std::move(instance);
     if (animInstance_ == nullptr) {
         animInstance_ = std::make_unique<UAnimInstance>();
@@ -42,7 +42,7 @@ void SkeletalMeshComponent::SetAnimInstance(std::unique_ptr<UAnimInstance> insta
     bindAnimInstanceToAssets();
 }
 
-void SkeletalMeshComponent::bindAnimInstanceToAssets() {
+void USkeletalMeshComponent::bindAnimInstanceToAssets() {
     if (skeletalMesh_ != nullptr && skeletalMesh_->Valid()) {
         animInstance_->SetSkeleton(&skeletalMesh_->GetSkeleton());
     } else {
@@ -53,17 +53,17 @@ void SkeletalMeshComponent::bindAnimInstanceToAssets() {
     }
 }
 
-UAnimSequence* SkeletalMeshComponent::FindSequence(const std::string& name) {
+UAnimSequence* USkeletalMeshComponent::FindSequence(const std::string& name) {
     const auto it = sequenceIndexByName_.find(name);
     return it != sequenceIndexByName_.end() ? &sequences_[it->second] : nullptr;
 }
 
-const UAnimSequence* SkeletalMeshComponent::FindSequence(const std::string& name) const {
+const UAnimSequence* USkeletalMeshComponent::FindSequence(const std::string& name) const {
     const auto it = sequenceIndexByName_.find(name);
     return it != sequenceIndexByName_.end() ? &sequences_[it->second] : nullptr;
 }
 
-UAnimSequence& SkeletalMeshComponent::GetOrCreateSequence(const std::string& name) {
+UAnimSequence& USkeletalMeshComponent::GetOrCreateSequence(const std::string& name) {
     if (const auto it = sequenceIndexByName_.find(name); it != sequenceIndexByName_.end()) {
         return sequences_[it->second];
     }
@@ -73,12 +73,12 @@ UAnimSequence& SkeletalMeshComponent::GetOrCreateSequence(const std::string& nam
     return sequences_.back();
 }
 
-void SkeletalMeshComponent::BindSequencesToAnimInstance() {
+void USkeletalMeshComponent::BindSequencesToAnimInstance() {
     bindAnimInstanceToAssets();
     animInstance_->NativeInitializeAnimation();
 }
 
-void SkeletalMeshComponent::SetSkeletalMesh(std::shared_ptr<USkeletalMesh> mesh) {
+void USkeletalMeshComponent::SetSkeletalMesh(std::shared_ptr<USkeletalMesh> mesh) {
     skeletalMesh_ = std::move(mesh);
     if (skeletalMesh_ != nullptr && skeletalMesh_->Valid()) {
         animInstance_->SetSkeleton(&skeletalMesh_->GetSkeleton());
@@ -87,7 +87,7 @@ void SkeletalMeshComponent::SetSkeletalMesh(std::shared_ptr<USkeletalMesh> mesh)
     }
 }
 
-void SkeletalMeshComponent::ApplyFitHeight(float fitHeight) {
+void USkeletalMeshComponent::ApplyFitHeight(float fitHeight) {
     if (!HasValidMesh() || fitHeight <= 0.0f) {
         return;
     }
@@ -101,16 +101,16 @@ void SkeletalMeshComponent::ApplyFitHeight(float fitHeight) {
                         (-center.z) * scale};
 }
 
-void SkeletalMeshComponent::ClearAttachments() {
+void USkeletalMeshComponent::ClearAttachments() {
     attachments_.clear();
 }
 
-SkelMeshAttachment& SkeletalMeshComponent::AddAttachment(SkelMeshAttachment attachment) {
+FSkelMeshAttachment& USkeletalMeshComponent::AddAttachment(FSkelMeshAttachment attachment) {
     attachments_.push_back(std::move(attachment));
     return attachments_.back();
 }
 
-bool SkeletalMeshComponent::GetBoneModelMatrix(const std::string& boneName,
+bool USkeletalMeshComponent::GetBoneModelMatrix(const std::string& boneName,
                                                glm::mat4& outModel) const {
     if (!HasValidMesh() || boneName.empty()) {
         return false;
@@ -127,12 +127,12 @@ bool SkeletalMeshComponent::GetBoneModelMatrix(const std::string& boneName,
     return true;
 }
 
-bool SkeletalMeshComponent::GetAttachmentWorldMatrix(std::size_t attachmentIndex,
+bool USkeletalMeshComponent::GetAttachmentWorldMatrix(std::size_t attachmentIndex,
                                                      glm::mat4& outWorld) const {
     if (attachmentIndex >= attachments_.size()) {
         return false;
     }
-    const SkelMeshAttachment& att = attachments_[attachmentIndex];
+    const FSkelMeshAttachment& att = attachments_[attachmentIndex];
     if (att.bOverrideWorldMatrix) {
         outWorld = att.worldMatrixOverride;
         return true;
@@ -145,7 +145,7 @@ bool SkeletalMeshComponent::GetAttachmentWorldMatrix(std::size_t attachmentIndex
     return true;
 }
 
-bool SkeletalMeshComponent::LoadFromFbx(const std::string& meshFbxPath,
+bool USkeletalMeshComponent::LoadFromFbx(const std::string& meshFbxPath,
                                         const std::string& runFbxPath, float fitHeight) {
     FSkeletalMeshData data;
     const std::string meshPath = FPaths::ResolveAssetPath(meshFbxPath);
@@ -188,9 +188,9 @@ bool SkeletalMeshComponent::LoadFromFbx(const std::string& meshFbxPath,
     return true;
 }
 
-bool SkeletalMeshComponent::LoadFromCooked(Engine& engine, const std::string& characterAssetPath) {
+bool USkeletalMeshComponent::LoadFromCooked(UGameEngine& engine, const std::string& characterAssetPath) {
     const std::string characterPath = FPaths::ResolveAssetPath(characterAssetPath);
-    CharacterVisualDesc desc;
+    FCharacterVisualDesc desc;
     if (!LoadCharacterVisual(characterPath, desc)) {
         std::cerr << "SkeletalMeshComponent: failed to load character '" << characterPath << "'\n";
         return false;
@@ -224,7 +224,7 @@ bool SkeletalMeshComponent::LoadFromCooked(Engine& engine, const std::string& ch
     }
     SetSkeletalMesh(std::move(mesh));
 
-    BlendSpace1DAssetDesc bsDesc;
+    FBlendSpace1DAssetDesc bsDesc;
     if (!LoadBlendSpace1DJson(blendJson, bsDesc) || bsDesc.samples.empty()) {
         std::cerr << "SkeletalMeshComponent: failed blendspace '" << blendJson << "'\n";
         return false;
@@ -277,14 +277,14 @@ bool SkeletalMeshComponent::LoadFromCooked(Engine& engine, const std::string& ch
     return HasValidMesh();
 }
 
-void SkeletalMeshComponent::TickComponent(float deltaTime) {
+void USkeletalMeshComponent::TickComponent(float deltaTime) {
     if (!HasValidMesh()) {
         return;
     }
     animInstance_->NativeUpdateAnimation(deltaTime);
 }
 
-void SkeletalMeshComponent::SubmitDraw(FSceneRenderer& renderer) const {
+void USkeletalMeshComponent::SubmitDraw(FSceneRenderer& renderer) const {
     if (!HasValidMesh()) {
         return;
     }
@@ -293,7 +293,7 @@ void SkeletalMeshComponent::SubmitDraw(FSceneRenderer& renderer) const {
     renderer.SubmitSkeletalDraw(*skeletalMesh_, GetComponentTransform(), skinMatrices_);
 
     for (std::size_t i = 0; i < attachments_.size(); ++i) {
-        const SkelMeshAttachment& att = attachments_[i];
+        const FSkelMeshAttachment& att = attachments_[i];
         if (att.mesh == nullptr || !att.mesh->Valid()) {
             continue;
         }

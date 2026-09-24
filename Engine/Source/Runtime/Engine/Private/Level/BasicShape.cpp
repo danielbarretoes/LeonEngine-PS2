@@ -17,8 +17,8 @@ std::shared_ptr<UStaticMesh> MeshForBasicShape(FResourceCache& resources, EBasic
     return nullptr;
 }
 
-BasicShape BasicShape::cube(FTransform transform, FMaterial material, bool hasMaterial) {
-    BasicShape shape;
+FBasicShape FBasicShape::cube(FTransform transform, FMaterial material, bool hasMaterial) {
+    FBasicShape shape;
     shape.type = EBasicShape::Cube;
     shape.transform = transform;
     shape.material = std::move(material);
@@ -26,9 +26,9 @@ BasicShape BasicShape::cube(FTransform transform, FMaterial material, bool hasMa
     return shape;
 }
 
-BasicShape BasicShape::sphere(FTransform transform, FMaterial material, bool hasMaterial,
+FBasicShape FBasicShape::sphere(FTransform transform, FMaterial material, bool hasMaterial,
                               int segments, int rings) {
-    BasicShape shape;
+    FBasicShape shape;
     shape.type = EBasicShape::Sphere;
     shape.transform = transform;
     shape.material = std::move(material);
@@ -38,8 +38,8 @@ BasicShape BasicShape::sphere(FTransform transform, FMaterial material, bool has
     return shape;
 }
 
-BasicShape BasicShape::plane(float size, FTransform transform, FMaterial material, bool hasMaterial) {
-    BasicShape shape;
+FBasicShape FBasicShape::plane(float size, FTransform transform, FMaterial material, bool hasMaterial) {
+    FBasicShape shape;
     shape.type = EBasicShape::Plane;
     shape.transform = transform;
     shape.transform.Scale.x = size;
@@ -50,8 +50,8 @@ BasicShape BasicShape::plane(float size, FTransform transform, FMaterial materia
     return shape;
 }
 
-StaticMeshComponent BasicShape::MakeStaticMesh(FResourceCache& resources) const {
-    StaticMeshComponent component;
+UStaticMeshComponent FBasicShape::MakeStaticMesh(FResourceCache& resources) const {
+    UStaticMeshComponent component;
     component.mesh = MeshForBasicShape(resources, type, sphereSegments, sphereRings);
     component.transform = transform;
     component.materialOverride = true;

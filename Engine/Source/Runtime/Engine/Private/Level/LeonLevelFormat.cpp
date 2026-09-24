@@ -62,9 +62,9 @@ void WriteVec3(std::vector<std::uint8_t>& out, const glm::vec3& value) {
 }
 
 /// Deduplicating string table; index 0 is always the empty string.
-class StringTableBuilder {
+class FStringTableBuilder {
 public:
-    StringTableBuilder() { (void)Add(std::string{}); }
+    FStringTableBuilder() { (void)Add(std::string{}); }
 
     std::uint32_t Add(const std::string& value) {
         const auto it = lookup_.find(value);
@@ -91,9 +91,9 @@ private:
 };
 
 /// Bounds-checked little-endian cursor; any overrun latches `failed_`.
-class ByteReader {
+class FByteReader {
 public:
-    explicit ByteReader(const std::vector<std::uint8_t>& bytes)
+    explicit FByteReader(const std::vector<std::uint8_t>& bytes)
         : bytes_(bytes.data()), size_(bytes.size()) {}
 
     [[nodiscard]] bool Failed() const { return failed_; }
@@ -261,8 +261,8 @@ namespace {
     return "StaticMesh";
 }
 
-/// Basic shape backing a stored actor class; false for PlayerStart / AISpawnPoint / UStaticMesh.
-/// TriggerVolume / PainCausingVolume map to Cube (editor debug mesh); runtime apply uses PODs only.
+/// Basic shape backing a stored actor class; false for FPlayerStart / FAISpawnPoint / UStaticMesh.
+/// FTriggerVolume / FPainCausingVolume map to Cube (editor debug mesh); runtime apply uses PODs only.
 [[nodiscard]] bool BasicShapeForActorClass(ELevelActorClass actorClass, EBasicShape& outShape) {
     switch (actorClass) {
     case ELevelActorClass::Cube:
@@ -282,9 +282,9 @@ namespace {
     }
 }
 
-void ApplyDocumentLights(const LevelDocument& doc, Level& staged, LevelAnimation& anim) {
-    for (const LevelLightRecord& record : doc.lights) {
-        BasicLight light;
+void ApplyDocumentLights(const FLevelDocument& doc, ULevel& staged, FLevelAnimation& anim) {
+    for (const FLevelLightRecord& record : doc.lights) {
+        FBasicLight light;
         light.type = record.lightClass == ELevelLightClass::PointLight ? EBasicLight::Point
                                                                        : EBasicLight::Directional;
         light.transform.Position = record.position;
@@ -305,14 +305,14 @@ void ApplyDocumentLights(const LevelDocument& doc, Level& staged, LevelAnimation
         if (!record.hasOrbit || lightIndex >= staged.PointLights().size()) {
             continue;
         }
-        anim.orbits.push_back(LevelAnimation::PointOrbit{
+        anim.orbits.push_back(FLevelAnimation::FPointOrbit{
             .lightIndex = lightIndex,
             .radius = record.orbitRadius,
             .height = record.orbitHeight,
             .heightAmp = record.orbitHeightAmp,
             .speed = record.orbitSpeed,
         });
-        PointLight& live = staged.PointLights()[lightIndex];
+        FPointLight& live = staged.PointLights()[lightIndex];
         live.hasOrbit = true;
         live.orbitRadius = record.orbitRadius;
         live.orbitHeight = record.orbitHeight;
@@ -321,7 +321,7 @@ void ApplyDocumentLights(const LevelDocument& doc, Level& staged, LevelAnimation
     }
 
     if (staged.DirectionalLights().empty()) {
-        BasicLight::directional().addTo(staged);
+        FBasicLight::directional().addTo(staged);
     }
     if (staged.DirectionalLights().size() > static_cast<std::size_t>(kMaxDirectionalLights)) {
         std::cerr << "LeonLevelFormat: truncating directional lights from "
@@ -333,7 +333,7 @@ void ApplyDocumentLights(const LevelDocument& doc, Level& staged, LevelAnimation
                   << " to " << kMaxPointLights << '\n';
         staged.PointLights().resize(static_cast<std::size_t>(kMaxPointLights));
         anim.orbits.erase(std::remove_if(anim.orbits.begin(), anim.orbits.end(),
-                                         [](const LevelAnimation::PointOrbit& orbit) {
+                                         [](const FLevelAnimation::FPointOrbit& orbit) {
                                              return orbit.lightIndex >=
                                                     static_cast<std::size_t>(kMaxPointLights);
                                          }),
@@ -343,10 +343,10 @@ void ApplyDocumentLights(const LevelDocument& doc, Level& staged, LevelAnimation
 
 } // namespace
 
-LevelDocument BuildLevelDocument(const Level& level, const Camera& camera) {
-    LevelDocument doc;
+FLevelDocument BuildLevelDocument(const ULevel& level, const UCameraComponent& camera) {
+    FLevelDocument doc;
     doc.name = level.Name();
-    doc.gameMode = level.GameMode();
+    doc.gameMode = level.GetGameMode();
     doc.environmentPath = level.EnvironmentPath();
     doc.environmentExposure = level.EnvironmentExposure();
 
@@ -357,8 +357,8 @@ LevelDocument BuildLevelDocument(const Level& level, const Camera& camera) {
     doc.camera.yaw = camera.YawDegrees();
     doc.camera.pitch = camera.PitchDegrees();
 
-    for (const PlayerStart& start : level.PlayerStarts()) {
-        LevelActorRecord record;
+    for (const FPlayerStart& start : level.PlayerStarts()) {
+        FLevelActorRecord record;
         record.actorClass = ELevelActorClass::PlayerStart;
         record.position = start.transform.Position;
         record.rotationDegrees = start.transform.RotationDegrees;
@@ -367,8 +367,8 @@ LevelDocument BuildLevelDocument(const Level& level, const Camera& camera) {
         doc.actors.push_back(std::move(record));
     }
 
-    for (const AISpawnPoint& spawn : level.AISpawnPoints()) {
-        LevelActorRecord record;
+    for (const FAISpawnPoint& spawn : level.AISpawnPoints()) {
+        FLevelActorRecord record;
         record.actorClass = ELevelActorClass::AISpawnPoint;
         record.position = spawn.transform.Position;
         record.rotationDegrees = spawn.transform.RotationDegrees;
@@ -378,8 +378,8 @@ LevelDocument BuildLevelDocument(const Level& level, const Camera& camera) {
         doc.actors.push_back(std::move(record));
     }
 
-    for (const TriggerVolume& volume : level.TriggerVolumes()) {
-        LevelActorRecord record;
+    for (const FTriggerVolume& volume : level.TriggerVolumes()) {
+        FLevelActorRecord record;
         record.actorClass = ELevelActorClass::TriggerVolume;
         record.position = volume.transform.Position;
         record.rotationDegrees = volume.transform.RotationDegrees;
@@ -393,8 +393,8 @@ LevelDocument BuildLevelDocument(const Level& level, const Camera& camera) {
         doc.actors.push_back(std::move(record));
     }
 
-    for (const PainCausingVolume& volume : level.PainCausingVolumes()) {
-        LevelActorRecord record;
+    for (const FPainCausingVolume& volume : level.PainCausingVolumes()) {
+        FLevelActorRecord record;
         record.actorClass = ELevelActorClass::PainCausingVolume;
         record.position = volume.transform.Position;
         record.rotationDegrees = volume.transform.RotationDegrees;
@@ -406,8 +406,8 @@ LevelDocument BuildLevelDocument(const Level& level, const Camera& camera) {
         doc.actors.push_back(std::move(record));
     }
 
-    for (const StaticMeshComponent& mesh : level.StaticMeshes()) {
-        LevelActorRecord record;
+    for (const UStaticMeshComponent& mesh : level.StaticMeshes()) {
+        FLevelActorRecord record;
         record.actorClass = ActorClassFromEditorClass(mesh.editorClass);
         // Imported meshes are only reloadable through their path.
         if (record.actorClass == ELevelActorClass::StaticMesh && mesh.meshPath.empty()) {
@@ -448,8 +448,8 @@ LevelDocument BuildLevelDocument(const Level& level, const Camera& camera) {
         doc.actors.push_back(std::move(record));
     }
 
-    for (const DirectionalLight& light : level.DirectionalLights()) {
-        LevelLightRecord record;
+    for (const FDirectionalLight& light : level.DirectionalLights()) {
+        FLevelLightRecord record;
         record.lightClass = ELevelLightClass::DirectionalLight;
         record.castShadows = light.castShadows;
         record.position = light.transform.Position;
@@ -459,8 +459,8 @@ LevelDocument BuildLevelDocument(const Level& level, const Camera& camera) {
         record.sourceAngle = light.sourceAngle;
         doc.lights.push_back(record);
     }
-    for (const PointLight& light : level.PointLights()) {
-        LevelLightRecord record;
+    for (const FPointLight& light : level.PointLights()) {
+        FLevelLightRecord record;
         record.lightClass = ELevelLightClass::PointLight;
         record.castShadows = light.castShadows;
         record.position = light.transform.Position;
@@ -479,13 +479,13 @@ LevelDocument BuildLevelDocument(const Level& level, const Camera& camera) {
     return doc;
 }
 
-std::vector<std::uint8_t> SerializeLeonLevel(const LevelDocument& doc) {
-    StringTableBuilder strings;
+std::vector<std::uint8_t> SerializeLeonLevel(const FLevelDocument& doc) {
+    FStringTableBuilder strings;
     const std::uint32_t nameIdx = strings.Add(doc.name);
     const std::uint32_t gameModeIdx = strings.Add(doc.gameMode);
     const std::uint32_t environmentIdx = strings.Add(doc.environmentPath);
 
-    struct ActorIndices {
+    struct FActorIndices {
         std::uint32_t flags = 0;
         std::uint32_t tag = 0;
         std::uint32_t material = 0;
@@ -494,10 +494,10 @@ std::vector<std::uint8_t> SerializeLeonLevel(const LevelDocument& doc) {
         std::uint32_t lightmapPath = 0;
         std::uint32_t payload = 0;
     };
-    std::vector<ActorIndices> actorIndices;
+    std::vector<FActorIndices> actorIndices;
     actorIndices.reserve(doc.actors.size());
-    for (const LevelActorRecord& actor : doc.actors) {
-        ActorIndices indices;
+    for (const FLevelActorRecord& actor : doc.actors) {
+        FActorIndices indices;
         if (actor.collisionEnabled) {
             indices.flags |= kLevelActorFlagCollisionEnabled;
         }
@@ -581,8 +581,8 @@ std::vector<std::uint8_t> SerializeLeonLevel(const LevelDocument& doc) {
 
     WriteU32(out, static_cast<std::uint32_t>(doc.actors.size()));
     for (std::size_t i = 0; i < doc.actors.size(); ++i) {
-        const LevelActorRecord& actor = doc.actors[i];
-        const ActorIndices& indices = actorIndices[i];
+        const FLevelActorRecord& actor = doc.actors[i];
+        const FActorIndices& indices = actorIndices[i];
 
         WriteU8(out, static_cast<std::uint8_t>(actor.actorClass));
         WriteU8(out, static_cast<std::uint8_t>(actor.mobility));
@@ -638,7 +638,7 @@ std::vector<std::uint8_t> SerializeLeonLevel(const LevelDocument& doc) {
     }
 
     WriteU32(out, static_cast<std::uint32_t>(doc.lights.size()));
-    for (const LevelLightRecord& light : doc.lights) {
+    for (const FLevelLightRecord& light : doc.lights) {
         std::uint32_t flags = 0;
         if (light.castShadows) {
             flags |= kLevelLightFlagCastShadows;
@@ -669,10 +669,10 @@ std::vector<std::uint8_t> SerializeLeonLevel(const LevelDocument& doc) {
     return out;
 }
 
-bool DeserializeLeonLevel(const std::vector<std::uint8_t>& bytes, LevelDocument& out) {
-    out = LevelDocument{};
+bool DeserializeLeonLevel(const std::vector<std::uint8_t>& bytes, FLevelDocument& out) {
+    out = FLevelDocument{};
 
-    ByteReader reader(bytes);
+    FByteReader reader(bytes);
     if (reader.ReadU32() != kLeonLevelMagic) {
         std::cerr << "LeonLevelFormat: bad magic (expected 'LLEV')\n";
         return false;
@@ -730,7 +730,7 @@ bool DeserializeLeonLevel(const std::vector<std::uint8_t>& bytes, LevelDocument&
     }
     out.actors.reserve(actorCount);
     for (std::uint32_t i = 0; i < actorCount; ++i) {
-        LevelActorRecord actor;
+        FLevelActorRecord actor;
         const std::uint8_t actorClass = reader.ReadU8();
         const std::uint8_t mobility = reader.ReadU8();
         (void)reader.ReadU16();
@@ -814,7 +814,7 @@ bool DeserializeLeonLevel(const std::vector<std::uint8_t>& bytes, LevelDocument&
     }
     out.lights.reserve(lightCount);
     for (std::uint32_t i = 0; i < lightCount; ++i) {
-        LevelLightRecord light;
+        FLevelLightRecord light;
         const std::uint8_t lightClass = reader.ReadU8();
         reader.Skip(3);
         const std::uint32_t flags = reader.ReadU32();
@@ -851,7 +851,7 @@ bool DeserializeLeonLevel(const std::vector<std::uint8_t>& bytes, LevelDocument&
     return !reader.Failed();
 }
 
-bool SaveLeonLevelFile(const std::string& path, const LevelDocument& doc) {
+bool SaveLeonLevelFile(const std::string& path, const FLevelDocument& doc) {
     const std::vector<std::uint8_t> bytes = SerializeLeonLevel(doc);
     if (!FFileHelper::WriteFileAtomic(path, bytes)) {
         std::cerr << "LeonLevelFormat: cannot write: " << path << '\n';
@@ -860,7 +860,7 @@ bool SaveLeonLevelFile(const std::string& path, const LevelDocument& doc) {
     return true;
 }
 
-bool LoadLeonLevelFile(const std::string& path, LevelDocument& out) {
+bool LoadLeonLevelFile(const std::string& path, FLevelDocument& out) {
     std::ifstream in(path, std::ios::binary);
     if (!in) {
         std::cerr << "LeonLevelFormat: cannot open " << path << '\n';
@@ -875,11 +875,11 @@ bool LoadLeonLevelFile(const std::string& path, LevelDocument& out) {
     return true;
 }
 
-bool ApplyLevelDocument(Engine& engine, const LevelDocument& doc, const std::string& sourcePath,
-                        LevelAnimation* outAnim) {
-    Level staged;
+bool ApplyLevelDocument(UGameEngine& engine, const FLevelDocument& doc, const std::string& sourcePath,
+                        FLevelAnimation* outAnim) {
+    ULevel staged;
     staged.Clear();
-    LevelAnimation anim;
+    FLevelAnimation anim;
     FResourceCache& resources = engine.GetResources();
 
     try {
@@ -892,27 +892,27 @@ bool ApplyLevelDocument(Engine& engine, const LevelDocument& doc, const std::str
         staged.SetGameMode(doc.gameMode);
 
         int failedMeshes = 0;
-        for (const LevelActorRecord& record : doc.actors) {
+        for (const FLevelActorRecord& record : doc.actors) {
             FTransform transform;
             transform.Position = record.position;
             transform.RotationDegrees = record.rotationDegrees;
             transform.Scale = record.scale;
 
             if (record.actorClass == ELevelActorClass::PlayerStart) {
-                PlayerStart start{};
+                FPlayerStart start{};
                 start.transform = transform;
                 staged.AddPlayerStart(start);
                 continue;
             }
             if (record.actorClass == ELevelActorClass::AISpawnPoint) {
-                AISpawnPoint spawn{};
+                FAISpawnPoint spawn{};
                 spawn.transform = transform;
                 spawn.tag = record.tag;
                 staged.AddAISpawnPoint(std::move(spawn));
                 continue;
             }
             if (record.actorClass == ELevelActorClass::TriggerVolume) {
-                TriggerVolume volume{};
+                FTriggerVolume volume{};
                 volume.transform = transform;
                 volume.interactRadius = record.interactRadius;
                 volume.interactCost = record.interactCost;
@@ -923,7 +923,7 @@ bool ApplyLevelDocument(Engine& engine, const LevelDocument& doc, const std::str
                 continue;
             }
             if (record.actorClass == ELevelActorClass::PainCausingVolume) {
-                PainCausingVolume volume{};
+                FPainCausingVolume volume{};
                 volume.transform = transform;
                 volume.damagePerSecond = record.damagePerSecond;
                 volume.damageInterval = record.damageInterval;
@@ -932,11 +932,11 @@ bool ApplyLevelDocument(Engine& engine, const LevelDocument& doc, const std::str
                 continue;
             }
 
-            StaticMeshComponent actor;
+            UStaticMeshComponent actor;
             EBasicShape shapeType{};
             const bool isBasicShape = BasicShapeForActorClass(record.actorClass, shapeType);
             if (isBasicShape) {
-                BasicShape shape;
+                FBasicShape shape;
                 shape.type = shapeType;
                 shape.transform = transform;
                 shape.sphereSegments = record.sphereSegments;
@@ -1000,18 +1000,18 @@ bool ApplyLevelDocument(Engine& engine, const LevelDocument& doc, const std::str
             staged.AddStaticMesh(std::move(actor));
 
             if (record.hasSpinYaw) {
-                anim.spins.push_back(LevelAnimation::StaticMeshSpin{
+                anim.spins.push_back(FLevelAnimation::FStaticMeshSpin{
                     .meshIndex = actorIndex,
                     .yawDegreesPerSec = record.spinYaw,
                 });
             }
             if (record.hasBob) {
-                StaticMeshComponent& live = staged.StaticMeshes()[actorIndex];
+                UStaticMeshComponent& live = staged.StaticMeshes()[actorIndex];
                 live.hasBob = true;
                 live.bobBaseY = record.bobBaseY;
                 live.bobAmplitude = record.bobAmplitude;
                 live.bobSpeed = record.bobSpeed;
-                anim.bobs.push_back(LevelAnimation::StaticMeshBob{
+                anim.bobs.push_back(FLevelAnimation::FStaticMeshBob{
                     .meshIndex = actorIndex,
                     .baseY = record.bobBaseY,
                     .amplitude = record.bobAmplitude,
@@ -1044,7 +1044,7 @@ bool ApplyLevelDocument(Engine& engine, const LevelDocument& doc, const std::str
 
     engine.GetLevel() = std::move(staged);
 
-    Camera& camera = engine.GetCamera();
+    UCameraComponent& camera = engine.GetCamera();
     camera.SetTarget(doc.camera.target);
     camera.SetDistance(doc.camera.distance);
     camera.SetYawPitch(doc.camera.yaw, doc.camera.pitch);

@@ -11,8 +11,8 @@ enum class ECameraMode : std::uint8_t {
     FreeLook, // Unreal-like flying / first-person: eye + look yaw/pitch
 };
 
-/// View camera: orbit (default) or free-look for DefaultCameraActor.
-class Camera {
+/// View camera: orbit (default) or free-look for ADefaultCameraActor.
+class UCameraComponent {
 public:
     void SetPerspective(float fovDegrees, float aspect, float nearPlane, float farPlane);
     /// Orthographic projection; `height` is the full vertical world extent visible.

@@ -2,11 +2,11 @@
 #include "Components/ActorComponent.h"
 
 
-ActorComponent::~ActorComponent() {
+UActorComponent::~UActorComponent() {
     DestroyComponent();
 }
 
-void ActorComponent::DestroyComponent() {
+void UActorComponent::DestroyComponent() {
     if (registered_ && owner_ != nullptr) {
         owner_->UnregisterComponent(this);
     }

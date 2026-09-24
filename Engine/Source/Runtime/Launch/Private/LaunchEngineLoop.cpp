@@ -62,7 +62,7 @@ int32 FEngineLoop::Init()
 void FEngineLoop::Tick()
 {
 #if WITH_ENGINE
-	// Transitional: the pre-UE GameApplication still owns its frame loop (folded into FEngineLoop in
+	// Transitional: the pre-UE FGameApplication still owns its frame loop (folded into FEngineLoop in
 	// Phase 4.6). LeonGame runs a project pack: LeonGame --pack <Name> [game flags].
 	const char* PackName = LEON_PROJECT_NAME;
 	for (int32 Index = 1; Index + 1 < ArgCount; ++Index)
@@ -72,7 +72,7 @@ void FEngineLoop::Tick()
 			PackName = Args[Index + 1];
 		}
 	}
-	ExitCode = RunLeonGame(ArgCount, Args, PackName, [](Engine&, GameplayRouter&) {});
+	ExitCode = RunLeonGame(ArgCount, Args, PackName, [](UGameEngine&, FGameplayRouter&) {});
 	RequestEngineExit("GameApplication finished");
 #else
 	const uint64 NowCycles = FPlatformTime::Cycles64();
