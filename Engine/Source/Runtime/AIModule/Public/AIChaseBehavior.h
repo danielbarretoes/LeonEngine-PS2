@@ -14,47 +14,47 @@
 class FAIChaseBehavior {
 public:
     FAIChaseBehavior() {
-        hasTarget_ = std::make_unique<UBTDecorator_Bool>("HasTarget", true);
-        chase_ = std::make_unique<UBTTask_Action>([this](UBlackboardComponent&, float) {
-            if (ai_ == nullptr || target_ == nullptr) {
+        HasTarget = std::make_unique<UBTDecorator_Bool>("HasTarget", true);
+        Chase = std::make_unique<UBTTask_Action>([this](UBlackboardComponent&, float) {
+            if (Ai == nullptr || Target == nullptr) {
                 return EBTNodeResult::Failed;
             }
-            ai_->MoveToActor(target_);
+            Ai->MoveToActor(Target);
             return EBTNodeResult::Succeeded;
         });
-        stop_ = std::make_unique<UBTTask_Action>([this](UBlackboardComponent&, float) {
-            if (ai_ != nullptr) {
-                ai_->StopMovement();
+        Stop = std::make_unique<UBTTask_Action>([this](UBlackboardComponent&, float) {
+            if (Ai != nullptr) {
+                Ai->StopMovement();
             }
             return EBTNodeResult::Succeeded;
         });
-        chaseSeq_ = std::make_unique<UBTComposite_Sequence>(
-            std::vector<UBTNode*>{hasTarget_.get(), chase_.get()});
-        root_ = std::make_unique<UBTComposite_Selector>(
-            std::vector<UBTNode*>{chaseSeq_.get(), stop_.get()});
-        tree_.SetRoot(root_.get());
+        ChaseSeq = std::make_unique<UBTComposite_Sequence>(
+            std::vector<UBTNode*>{HasTarget.get(), Chase.get()});
+        Root = std::make_unique<UBTComposite_Selector>(
+            std::vector<UBTNode*>{ChaseSeq.get(), Stop.get()});
+        Tree.SetRoot(Root.get());
     }
 
     /// Runs BT then `AAIController::TickAI`. Returns steering wish.
-    glm::vec3 Tick(AAIController& ai, AActor* target, float deltaTime) {
-        ai_ = &ai;
-        target_ = target;
-        tree_.GetBlackboard().SetBool("HasTarget", target != nullptr);
-        (void)tree_.Tick(deltaTime);
-        return ai.TickAI(deltaTime);
+    glm::vec3 Tick(AAIController& InAi, AActor* InTarget, float DeltaTime) {
+        Ai = &InAi;
+        Target = InTarget;
+        Tree.GetBlackboard().SetBool("HasTarget", InTarget != nullptr);
+        (void)Tree.Tick(DeltaTime);
+        return InAi.TickAI(DeltaTime);
     }
 
-    [[nodiscard]] UBehaviorTree& GetTree() { return tree_; }
-    [[nodiscard]] const UBehaviorTree& GetTree() const { return tree_; }
+    [[nodiscard]] UBehaviorTree& GetTree() { return Tree; }
+    [[nodiscard]] const UBehaviorTree& GetTree() const { return Tree; }
 
 private:
-    AAIController* ai_ = nullptr;
-    AActor* target_ = nullptr;
-    std::unique_ptr<UBTDecorator_Bool> hasTarget_;
-    std::unique_ptr<UBTTask_Action> chase_;
-    std::unique_ptr<UBTTask_Action> stop_;
-    std::unique_ptr<UBTComposite_Sequence> chaseSeq_;
-    std::unique_ptr<UBTComposite_Selector> root_;
-    UBehaviorTree tree_{};
+    AAIController* Ai = nullptr;
+    AActor* Target = nullptr;
+    std::unique_ptr<UBTDecorator_Bool> HasTarget;
+    std::unique_ptr<UBTTask_Action> Chase;
+    std::unique_ptr<UBTTask_Action> Stop;
+    std::unique_ptr<UBTComposite_Sequence> ChaseSeq;
+    std::unique_ptr<UBTComposite_Selector> Root;
+    UBehaviorTree Tree{};
 };
 

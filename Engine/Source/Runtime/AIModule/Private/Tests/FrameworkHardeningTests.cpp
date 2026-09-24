@@ -19,51 +19,51 @@
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("BehaviorTree Sequence and Selector with Blackboard", "[gameplay][bt]") {
-    UBlackboardComponent board;
-    UBTDecorator_Bool hasTarget("HasTarget", true);
-    int ran = 0;
-    UBTTask_Action act([&](UBlackboardComponent& b, float) {
-        ++ran;
-        b.SetBool("DidAct", true);
+    UBlackboardComponent Board;
+    UBTDecorator_Bool HasTarget("HasTarget", true);
+    int Ran = 0;
+    UBTTask_Action Act([&](UBlackboardComponent& B, float) {
+        ++Ran;
+        B.SetBool("DidAct", true);
         return EBTNodeResult::Succeeded;
     });
-    UBTComposite_Sequence seq({&hasTarget, &act});
+    UBTComposite_Sequence Seq({&HasTarget, &Act});
 
-    REQUIRE(seq.Tick(board, 0.016f) == EBTNodeResult::Failed);
-    board.SetBool("HasTarget", true);
-    REQUIRE(seq.Tick(board, 0.016f) == EBTNodeResult::Succeeded);
-    REQUIRE(ran == 1);
-    REQUIRE(board.GetBool("DidAct"));
+    REQUIRE(Seq.Tick(Board, 0.016f) == EBTNodeResult::Failed);
+    Board.SetBool("HasTarget", true);
+    REQUIRE(Seq.Tick(Board, 0.016f) == EBTNodeResult::Succeeded);
+    REQUIRE(Ran == 1);
+    REQUIRE(Board.GetBool("DidAct"));
 
-    UBTDecorator_Bool never("Never", true);
-    UBTComposite_Selector sel({&never, &act});
-    REQUIRE(sel.Tick(board, 0.0f) == EBTNodeResult::Succeeded);
-    REQUIRE(ran == 2);
+    UBTDecorator_Bool Never("Never", true);
+    UBTComposite_Selector Sel({&Never, &Act});
+    REQUIRE(Sel.Tick(Board, 0.0f) == EBTNodeResult::Succeeded);
+    REQUIRE(Ran == 2);
 }
 
 TEST_CASE("AIController logic state tracks MoveTo Chase Idle", "[gameplay][ai]") {
-    UWorld world;
-    auto* character = world.SpawnActor<ACharacter>();
-    AAIController ai;
-    ai.Possess(character);
-    REQUIRE(ai.GetLogicState() == EAILogicState::Idle);
-    ai.MoveToLocation({3.0f, 0.0f, 0.0f});
-    REQUIRE(ai.GetLogicState() == EAILogicState::MoveTo);
-    ai.MoveToActor(character);
-    REQUIRE(ai.GetLogicState() == EAILogicState::Chase);
-    ai.StopMovement();
-    REQUIRE(ai.GetLogicState() == EAILogicState::Idle);
+    UWorld World;
+    auto* Character = World.SpawnActor<ACharacter>();
+    AAIController Ai;
+    Ai.Possess(Character);
+    REQUIRE(Ai.GetLogicState() == EAILogicState::Idle);
+    Ai.MoveToLocation({3.0f, 0.0f, 0.0f});
+    REQUIRE(Ai.GetLogicState() == EAILogicState::MoveTo);
+    Ai.MoveToActor(Character);
+    REQUIRE(Ai.GetLogicState() == EAILogicState::Chase);
+    Ai.StopMovement();
+    REQUIRE(Ai.GetLogicState() == EAILogicState::Idle);
 }
 
 TEST_CASE("RootReplication relevancy and CaptureCharacterRoot", "[net][replication]") {
-    ACharacter character;
-    character.SetActorLocationAndRotation({1.0f, 0.0f, 2.0f}, 45.0f);
-    const Leon::Net::FPawnSnap snap = Leon::Net::CaptureCharacterRoot(3, character, 10.0f, -5.0f);
-    REQUIRE(snap.Slot == 3);
-    REQUIRE_THAT(snap.X, WithinAbs(1.0f, 1.0e-5f));
-    REQUIRE_THAT(snap.Z, WithinAbs(2.0f, 1.0e-5f));
-    REQUIRE_THAT(snap.Yaw, WithinAbs(45.0f, 1.0e-5f));
-    REQUIRE_THAT(snap.BoomYaw, WithinAbs(10.0f, 1.0e-5f));
+    ACharacter Character;
+    Character.SetActorLocationAndRotation({1.0f, 0.0f, 2.0f}, 45.0f);
+    const Leon::Net::FPawnSnap Snap = Leon::Net::CaptureCharacterRoot(3, Character, 10.0f, -5.0f);
+    REQUIRE(Snap.Slot == 3);
+    REQUIRE_THAT(Snap.X, WithinAbs(1.0f, 1.0e-5f));
+    REQUIRE_THAT(Snap.Z, WithinAbs(2.0f, 1.0e-5f));
+    REQUIRE_THAT(Snap.Yaw, WithinAbs(45.0f, 1.0e-5f));
+    REQUIRE_THAT(Snap.BoomYaw, WithinAbs(10.0f, 1.0e-5f));
 
     REQUIRE(Leon::Net::IsPawnRelevant({0, 0, 0}, {3, 0, 0}, 5.0f));
     REQUIRE_FALSE(Leon::Net::IsPawnRelevant({0, 0, 0}, {10, 0, 0}, 5.0f));
@@ -71,70 +71,70 @@ TEST_CASE("RootReplication relevancy and CaptureCharacterRoot", "[net][replicati
 }
 
 TEST_CASE("AudioDevice silent mode is safe for Play APIs", "[audio]") {
-    FAudioDevice audio;
-    REQUIRE(audio.Initialize(/*silent=*/true));
-    audio.PlaySound2D("does-not-exist.wav");
-    audio.PlayUiSound(EUISound::Click);
-    audio.PlayMusic("MenuBed.wav");
-    audio.StopMusic();
-    audio.Tick();
-    audio.Shutdown();
+    FAudioDevice Audio;
+    REQUIRE(Audio.Initialize(/*silent=*/true));
+    Audio.PlaySound2D("does-not-exist.wav");
+    Audio.PlayUiSound(EUISound::Click);
+    Audio.PlayMusic("MenuBed.wav");
+    Audio.StopMusic();
+    Audio.Tick();
+    Audio.Shutdown();
 }
 
 TEST_CASE("HUD AddWidget TextBlock and remove", "[ui][hud]") {
-    AHUD hud;
-    auto* text = hud.AddWidget<UTextBlock>();
-    REQUIRE(text != nullptr);
-    text->SetText("Hello");
-    REQUIRE(hud.GetWidgetOfClass<UTextBlock>() == text);
-    hud.Tick(0.016f);
-    hud.RemoveWidget(text);
-    REQUIRE(hud.GetWidgetOfClass<UTextBlock>() == nullptr);
+    AHUD Hud;
+    auto* Text = Hud.AddWidget<UTextBlock>();
+    REQUIRE(Text != nullptr);
+    Text->SetText("Hello");
+    REQUIRE(Hud.GetWidgetOfClass<UTextBlock>() == Text);
+    Hud.Tick(0.016f);
+    Hud.RemoveWidget(Text);
+    REQUIRE(Hud.GetWidgetOfClass<UTextBlock>() == nullptr);
 }
 
 TEST_CASE("DeserializeLeonLevel and InputCmd adversarial inputs", "[content][fuzz][net]") {
-    FLevelDocument doc;
-    std::vector<std::uint8_t> empty;
-    REQUIRE_FALSE(DeserializeLeonLevel(empty, doc));
+    FLevelDocument Doc;
+    std::vector<std::uint8_t> Empty;
+    REQUIRE_FALSE(DeserializeLeonLevel(Empty, Doc));
 
-    std::vector<std::uint8_t> junk(64, 0xA5);
-    REQUIRE_FALSE(DeserializeLeonLevel(junk, doc));
+    std::vector<std::uint8_t> Junk(64, 0xA5);
+    REQUIRE_FALSE(DeserializeLeonLevel(Junk, Doc));
 
-    std::vector<std::uint8_t> almostMagic = {'L', 'L', 'E', 'V', 1, 0, 0, 0};
-    REQUIRE_FALSE(DeserializeLeonLevel(almostMagic, doc));
+    std::vector<std::uint8_t> AlmostMagic = {'L', 'L', 'E', 'V', 1, 0, 0, 0};
+    REQUIRE_FALSE(DeserializeLeonLevel(AlmostMagic, Doc));
 
-    Leon::Net::FInputCmdMsg cmd{};
-    cmd.MoveX = std::numeric_limits<float>::quiet_NaN();
-    cmd.Buttons = 0xFFFF;
-    Leon::Net::SanitizeInputCmd(cmd);
-    REQUIRE_THAT(cmd.MoveX, WithinAbs(0.0f, 1.0e-5f));
-    REQUIRE(cmd.Buttons == Leon::Net::InputButtonMask);
-    REQUIRE((cmd.Buttons & static_cast<std::uint16_t>(~Leon::Net::InputButtonMask)) == 0);
+    Leon::Net::FInputCmdMsg Cmd{};
+    Cmd.MoveX = std::numeric_limits<float>::quiet_NaN();
+    Cmd.Buttons = 0xFFFF;
+    Leon::Net::SanitizeInputCmd(Cmd);
+    REQUIRE_THAT(Cmd.MoveX, WithinAbs(0.0f, 1.0e-5f));
+    REQUIRE(Cmd.Buttons == Leon::Net::InputButtonMask);
+    REQUIRE((Cmd.Buttons & static_cast<std::uint16_t>(~Leon::Net::InputButtonMask)) == 0);
 }
 
 TEST_CASE("NavigationSystem agent radius dilation shrinks walkable ring", "[gameplay][nav]") {
-    FPhysScene physics;
-    FBodyInstance floor{};
-    floor.Type = EBodyType::Static;
-    floor.Position = {0.0f, 0.0f, 0.0f};
-    floor.HalfExtents = {20.0f, 0.5f, 20.0f};
-    physics.GetBodies().push_back(floor);
+    FPhysScene Physics;
+    FBodyInstance Floor{};
+    Floor.Type = EBodyType::Static;
+    Floor.Position = {0.0f, 0.0f, 0.0f};
+    Floor.HalfExtents = {20.0f, 0.5f, 20.0f};
+    Physics.GetBodies().push_back(Floor);
 
-    FBodyInstance pillar{};
-    pillar.Type = EBodyType::Static;
-    pillar.Position = {0.0f, 1.0f, 0.0f};
-    pillar.HalfExtents = {0.4f, 1.5f, 0.4f};
-    physics.GetBodies().push_back(pillar);
+    FBodyInstance Pillar{};
+    Pillar.Type = EBodyType::Static;
+    Pillar.Position = {0.0f, 1.0f, 0.0f};
+    Pillar.HalfExtents = {0.4f, 1.5f, 0.4f};
+    Physics.GetBodies().push_back(Pillar);
 
-    UNavigationSystem narrow;
-    narrow.SetCellSize(0.5f);
-    narrow.SetAgentRadius(0.35f);
-    narrow.BuildFromPhysScene(physics, 0.0f, 10.0f);
+    UNavigationSystem Narrow;
+    Narrow.SetCellSize(0.5f);
+    Narrow.SetAgentRadius(0.35f);
+    Narrow.BuildFromPhysScene(Physics, 0.0f, 10.0f);
 
-    UNavigationSystem wide;
-    wide.SetCellSize(0.5f);
-    wide.SetAgentRadius(1.5f);
-    wide.BuildFromPhysScene(physics, 0.0f, 10.0f);
+    UNavigationSystem Wide;
+    Wide.SetCellSize(0.5f);
+    Wide.SetAgentRadius(1.5f);
+    Wide.BuildFromPhysScene(Physics, 0.0f, 10.0f);
 
-    REQUIRE(wide.GetWalkableCellCount() < narrow.GetWalkableCellCount());
+    REQUIRE(Wide.GetWalkableCellCount() < Narrow.GetWalkableCellCount());
 }

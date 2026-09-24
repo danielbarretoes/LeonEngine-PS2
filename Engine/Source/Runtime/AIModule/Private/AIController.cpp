@@ -9,151 +9,151 @@
 
 namespace {
 
-constexpr float kPathRebuildIntervalSeconds = 0.35f;
+constexpr float PathRebuildIntervalSeconds = 0.35f;
 /// Tight waypoint arrive — must stay well below typical obstacle half-width so path
 /// corners are not skipped via straight-line distance through a blocker.
-constexpr float kWaypointArriveRadius = 0.45f;
+constexpr float WaypointArriveRadius = 0.45f;
 
 } // namespace
 
 void AAIController::ClearPath() {
-    path_.clear();
-    pathIndex_ = 0;
-    usePath_ = false;
-    pathRebuildCooldown_ = 0.0f;
+    Path.clear();
+    PathIndex = 0;
+    bUsePath = false;
+    PathRebuildCooldown = 0.0f;
 }
 
 void AAIController::RebuildPath() {
     ClearPath();
-    ACharacter* character = GetCharacter();
-    if (character == nullptr || navigation_ == nullptr || !navigation_->HasNavMesh() ||
-        !hasTarget_) {
+    ACharacter* Character = GetCharacter();
+    if (Character == nullptr || Navigation == nullptr || !Navigation->HasNavMesh() ||
+        !bHasTarget) {
         return;
     }
-    std::vector<glm::vec3> found;
-    if (!navigation_->FindPath(character->GetActorLocation(), target_, found) || found.empty()) {
+    std::vector<glm::vec3> Found;
+    if (!Navigation->FindPath(Character->GetActorLocation(), Target, Found) || Found.empty()) {
         return;
     }
-    path_ = std::move(found);
-    pathIndex_ = 0;
-    usePath_ = true;
+    Path = std::move(Found);
+    PathIndex = 0;
+    bUsePath = true;
 }
 
-glm::vec3 AAIController::SteerToward(const glm::vec3& from, const glm::vec3& to,
-                                    float arriveRadius) const {
-    const glm::vec3 delta = to - from;
-    const glm::vec3 flat{delta.x, 0.0f, delta.z};
-    const float distSq = glm::dot(flat, flat);
-    const float arrive = arriveRadius * arriveRadius;
-    if (distSq <= arrive) {
+glm::vec3 AAIController::SteerToward(const glm::vec3& From, const glm::vec3& To,
+                                    float InArriveRadius) const {
+    const glm::vec3 Delta = To - From;
+    const glm::vec3 Flat{Delta.x, 0.0f, Delta.z};
+    const float DistSq = glm::dot(Flat, Flat);
+    const float Arrive = InArriveRadius * InArriveRadius;
+    if (DistSq <= Arrive) {
         return {};
     }
-    const float len = std::sqrt(distSq);
-    return flat / len;
+    const float Len = std::sqrt(DistSq);
+    return Flat / Len;
 }
 
-glm::vec3 AAIController::SteerWithNavFallback(const glm::vec3& from) const {
+glm::vec3 AAIController::SteerWithNavFallback(const glm::vec3& From) const {
     // Nav is authoritative: never charge the goal in a straight line through blockers.
-    if (navigation_ == nullptr || !navigation_->HasNavMesh()) {
-        return SteerToward(from, target_, arriveRadius_);
+    if (Navigation == nullptr || !Navigation->HasNavMesh()) {
+        return SteerToward(From, Target, ArriveRadius);
     }
-    glm::vec3 onMesh{};
-    if (!navigation_->ProjectPointToNavigation(from, onMesh)) {
+    glm::vec3 OnMesh{};
+    if (!Navigation->ProjectPointToNavigation(From, OnMesh)) {
         return {};
     }
-    const glm::vec3 toMesh = SteerToward(from, onMesh, kWaypointArriveRadius);
-    if (glm::dot(toMesh, toMesh) > 1.0e-8f) {
-        return toMesh;
+    const glm::vec3 ToMesh = SteerToward(From, OnMesh, WaypointArriveRadius);
+    if (glm::dot(ToMesh, ToMesh) > 1.0e-8f) {
+        return ToMesh;
     }
-    glm::vec3 goalNav{};
-    if (!navigation_->ProjectPointToNavigation(target_, goalNav)) {
+    glm::vec3 GoalNav{};
+    if (!Navigation->ProjectPointToNavigation(Target, GoalNav)) {
         return {};
     }
-    return SteerToward(from, goalNav, arriveRadius_);
+    return SteerToward(From, GoalNav, ArriveRadius);
 }
 
-void AAIController::MoveToLocation(const glm::vec3& worldPosition) {
-    moveActor_ = nullptr;
-    target_ = worldPosition;
-    hasTarget_ = true;
-    logicState_ = EAILogicState::MoveTo;
+void AAIController::MoveToLocation(const glm::vec3& WorldPosition) {
+    MoveActor = nullptr;
+    Target = WorldPosition;
+    bHasTarget = true;
+    LogicState = EAILogicState::MoveTo;
     RebuildPath();
 }
 
-void AAIController::MoveToActor(AActor* actor) {
-    if (actor == nullptr) {
+void AAIController::MoveToActor(AActor* Actor) {
+    if (Actor == nullptr) {
         StopMovement();
         return;
     }
-    const bool sameActor = (moveActor_ == actor);
-    moveActor_ = actor;
-    hasTarget_ = true;
-    logicState_ = EAILogicState::Chase;
-    target_ = actor->GetActorLocation();
+    const bool bSameActor = (MoveActor == Actor);
+    MoveActor = Actor;
+    bHasTarget = true;
+    LogicState = EAILogicState::Chase;
+    Target = Actor->GetActorLocation();
     // Repath on acquire / when not following; TickAI refreshes on an interval while chasing.
-    if (!sameActor || !usePath_) {
+    if (!bSameActor || !bUsePath) {
         RebuildPath();
     }
 }
 
 void AAIController::StopMovement() {
-    hasTarget_ = false;
-    moveActor_ = nullptr;
-    logicState_ = EAILogicState::Idle;
+    bHasTarget = false;
+    MoveActor = nullptr;
+    LogicState = EAILogicState::Idle;
     ClearPath();
 }
 
-glm::vec3 AAIController::TickAI(float deltaTime) {
-    ACharacter* character = GetCharacter();
-    if (character == nullptr) {
+glm::vec3 AAIController::TickAI(float DeltaTime) {
+    ACharacter* Character = GetCharacter();
+    if (Character == nullptr) {
         return {};
     }
 
-    if (moveActor_ != nullptr) {
-        if (moveActor_->IsPendingKillPending()) {
-            moveActor_ = nullptr;
-            hasTarget_ = false;
+    if (MoveActor != nullptr) {
+        if (MoveActor->IsPendingKillPending()) {
+            MoveActor = nullptr;
+            bHasTarget = false;
             ClearPath();
         } else {
-            target_ = moveActor_->GetActorLocation();
-            hasTarget_ = true;
-            pathRebuildCooldown_ += deltaTime;
-            if (!usePath_ || pathRebuildCooldown_ >= kPathRebuildIntervalSeconds) {
-                pathRebuildCooldown_ = 0.0f;
+            Target = MoveActor->GetActorLocation();
+            bHasTarget = true;
+            PathRebuildCooldown += DeltaTime;
+            if (!bUsePath || PathRebuildCooldown >= PathRebuildIntervalSeconds) {
+                PathRebuildCooldown = 0.0f;
                 RebuildPath();
             }
         }
     }
 
-    glm::vec3 wish = wishDir_;
-    if (hasTarget_) {
-        const glm::vec3 from = character->GetActorLocation();
-        if (usePath_ && !path_.empty()) {
+    glm::vec3 Wish = WishDir;
+    if (bHasTarget) {
+        const glm::vec3 From = Character->GetActorLocation();
+        if (bUsePath && !Path.empty()) {
             // Advance at most along truly-reached waypoints (tight radius — no Euclidean
             // shortcut through a plate/ramp whose width is smaller than arriveRadius_).
-            while (pathIndex_ + 1 < path_.size()) {
-                const glm::vec3& wp = path_[pathIndex_];
-                const glm::vec3 d = wp - from;
-                const float distSq = d.x * d.x + d.z * d.z;
-                if (distSq <= kWaypointArriveRadius * kWaypointArriveRadius) {
-                    ++pathIndex_;
+            while (PathIndex + 1 < Path.size()) {
+                const glm::vec3& Wp = Path[PathIndex];
+                const glm::vec3 D = Wp - From;
+                const float DistSq = D.x * D.x + D.z * D.z;
+                if (DistSq <= WaypointArriveRadius * WaypointArriveRadius) {
+                    ++PathIndex;
                 } else {
                     break;
                 }
             }
-            const bool onFinalSegment = pathIndex_ + 1 >= path_.size();
-            const glm::vec3& wp = path_[std::min(pathIndex_, path_.size() - 1)];
-            if (onFinalSegment) {
-                wish = SteerToward(from, target_, arriveRadius_);
+            const bool bOnFinalSegment = PathIndex + 1 >= Path.size();
+            const glm::vec3& Wp = Path[std::min(PathIndex, Path.size() - 1)];
+            if (bOnFinalSegment) {
+                Wish = SteerToward(From, Target, ArriveRadius);
             } else {
-                wish = SteerToward(from, wp, kWaypointArriveRadius);
+                Wish = SteerToward(From, Wp, WaypointArriveRadius);
             }
         } else {
-            wish = SteerWithNavFallback(from);
+            Wish = SteerWithNavFallback(From);
         }
     }
 
-    character->AddMovementInput(wish);
-    return wish;
+    Character->AddMovementInput(Wish);
+    return Wish;
 }
 
