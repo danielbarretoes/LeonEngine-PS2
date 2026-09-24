@@ -1,0 +1,5 @@
+# Revisions that only reformat code; use with `git blame --ignore-revs-file .git-blame-ignore-revs`
+# (or `git config blame.ignoreRevsFile .git-blame-ignore-revs`).
+
+# style: format C++ sources with the Epic .clang-format (no functional change)
+b2fc5731accee856f13bf958f17fffa8212edc43
