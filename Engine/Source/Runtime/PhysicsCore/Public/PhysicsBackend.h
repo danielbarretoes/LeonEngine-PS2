@@ -16,8 +16,8 @@ enum class EPhysicsBackend : std::uint8_t {
     return EPhysicsBackend::Arcade;
 }
 
-[[nodiscard]] inline const char* PhysicsBackendName(EPhysicsBackend backend) {
-    switch (backend) {
+[[nodiscard]] inline const char* PhysicsBackendName(EPhysicsBackend Backend) {
+    switch (Backend) {
     case EPhysicsBackend::Arcade:
         return "Arcade";
     case EPhysicsBackend::Jolt:

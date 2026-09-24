@@ -31,67 +31,67 @@ public:
     /// Full rebuild after SyncFromLevel / Clear. Optional parallel triangle meshes for
     /// static ComplexAsSimple (Jolt MeshShape); boxes otherwise.
     virtual void RigidRebuild(
-        const std::vector<FBodyInstance>& bodies,
-        const std::vector<FTriangleMeshCollision>* triangleMeshes = nullptr,
-        std::size_t skipLevelMeshIndex = (std::numeric_limits<std::size_t>::max)()) {
-        (void)bodies;
-        (void)triangleMeshes;
-        (void)skipLevelMeshIndex;
+        const std::vector<FBodyInstance>& Bodies,
+        const std::vector<FTriangleMeshCollision>* TriangleMeshes = nullptr,
+        std::size_t SkipLevelMeshIndex = (std::numeric_limits<std::size_t>::max)()) {
+        (void)Bodies;
+        (void)TriangleMeshes;
+        (void)SkipLevelMeshIndex;
     }
 
     /// Before Step: push dynamic FBodyInstance state (e.g. CMC side push) without rebuilding.
     /// Creates/removes bodies only when `skipLevelMeshIndex` membership changes.
     virtual void RigidPrepareStep(
-        const std::vector<FBodyInstance>& bodies,
-        std::size_t skipLevelMeshIndex = (std::numeric_limits<std::size_t>::max)()) {
-        (void)bodies;
-        (void)skipLevelMeshIndex;
+        const std::vector<FBodyInstance>& Bodies,
+        std::size_t SkipLevelMeshIndex = (std::numeric_limits<std::size_t>::max)()) {
+        (void)Bodies;
+        (void)SkipLevelMeshIndex;
     }
 
     /// Integrate with gravity magnitude along -Y; optional infinite floor at `floorY`.
-    virtual void RigidStep(float deltaTime, float gravityMagnitude, float floorY) {
-        (void)deltaTime;
-        (void)gravityMagnitude;
-        (void)floorY;
+    virtual void RigidStep(float DeltaTime, float GravityMagnitude, float FloorY) {
+        (void)DeltaTime;
+        (void)GravityMagnitude;
+        (void)FloorY;
     }
 
     /// Write simulated COM positions / velocities back into dynamic BodyInstances.
-    virtual void RigidReadBack(std::vector<FBodyInstance>& bodies) { (void)bodies; }
+    virtual void RigidReadBack(std::vector<FBodyInstance>& Bodies) { (void)Bodies; }
 
     /// Append body hits (not floor/slopes) sorted is caller's job. Returns true if any hit.
-    virtual bool RigidLineTrace(std::vector<FHitResult>& outHits, const glm::vec3& start,
-                                const glm::vec3& end, ECollisionChannel channel,
-                                std::size_t skipLevelMeshIndex) {
-        (void)outHits;
-        (void)start;
-        (void)end;
-        (void)channel;
-        (void)skipLevelMeshIndex;
+    virtual bool RigidLineTrace(std::vector<FHitResult>& OutHits, const glm::vec3& Start,
+                                const glm::vec3& End, ECollisionChannel Channel,
+                                std::size_t SkipLevelMeshIndex) {
+        (void)OutHits;
+        (void)Start;
+        (void)End;
+        (void)Channel;
+        (void)SkipLevelMeshIndex;
         return false;
     }
 
-    virtual bool RigidSphereTrace(std::vector<FHitResult>& outHits, const glm::vec3& start,
-                                  const glm::vec3& end, float radius, ECollisionChannel channel,
-                                  std::size_t skipLevelMeshIndex) {
-        (void)outHits;
-        (void)start;
-        (void)end;
-        (void)radius;
-        (void)channel;
-        (void)skipLevelMeshIndex;
+    virtual bool RigidSphereTrace(std::vector<FHitResult>& OutHits, const glm::vec3& Start,
+                                  const glm::vec3& End, float Radius, ECollisionChannel Channel,
+                                  std::size_t SkipLevelMeshIndex) {
+        (void)OutHits;
+        (void)Start;
+        (void)End;
+        (void)Radius;
+        (void)Channel;
+        (void)SkipLevelMeshIndex;
         return false;
     }
 
-    virtual bool RigidCapsuleTrace(std::vector<FHitResult>& outHits, const glm::vec3& start,
-                                   const glm::vec3& end, float radius, float halfHeight,
-                                   ECollisionChannel channel, std::size_t skipLevelMeshIndex) {
-        (void)outHits;
-        (void)start;
-        (void)end;
-        (void)radius;
-        (void)halfHeight;
-        (void)channel;
-        (void)skipLevelMeshIndex;
+    virtual bool RigidCapsuleTrace(std::vector<FHitResult>& OutHits, const glm::vec3& Start,
+                                   const glm::vec3& End, float Radius, float HalfHeight,
+                                   ECollisionChannel Channel, std::size_t SkipLevelMeshIndex) {
+        (void)OutHits;
+        (void)Start;
+        (void)End;
+        (void)Radius;
+        (void)HalfHeight;
+        (void)Channel;
+        (void)SkipLevelMeshIndex;
         return false;
     }
 };
@@ -102,10 +102,10 @@ enum class EPhysicsBackendKind : std::uint8_t {
 };
 
 [[nodiscard]] std::unique_ptr<IPhysicsBackend> CreatePhysicsBackend(
-    EPhysicsBackendKind kind = EPhysicsBackendKind::Arcade);
+    EPhysicsBackendKind Kind = EPhysicsBackendKind::Arcade);
 
 /// Plugins register extra backends at module startup (e.g. the JoltPhysics plugin registers Jolt).
 /// CreatePhysicsBackend falls back to Arcade when no factory is registered for a kind.
 using FPhysicsBackendFactory = std::unique_ptr<IPhysicsBackend> (*)();
-void RegisterPhysicsBackendFactory(EPhysicsBackendKind kind, FPhysicsBackendFactory factory);
+void RegisterPhysicsBackendFactory(EPhysicsBackendKind Kind, FPhysicsBackendFactory Factory);
 

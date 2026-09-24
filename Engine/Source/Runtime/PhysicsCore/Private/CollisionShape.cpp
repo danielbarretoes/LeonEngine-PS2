@@ -5,106 +5,106 @@
 #include "CollisionShape.h"
 
 
-void HalfExtentsFromScale(const glm::vec3& scale, float& halfX, float& halfY, float& halfZ) {
-    halfX = 0.5f * std::abs(scale.x);
-    halfY = 0.5f * std::abs(scale.y);
-    halfZ = 0.5f * std::abs(scale.z);
+void HalfExtentsFromScale(const glm::vec3& Scale, float& HalfX, float& HalfY, float& HalfZ) {
+    HalfX = 0.5f * std::abs(Scale.x);
+    HalfY = 0.5f * std::abs(Scale.y);
+    HalfZ = 0.5f * std::abs(Scale.z);
 }
 
-float MassFromHalfExtents(float halfX, float halfY, float halfZ) {
-    return std::max(0.08f, 8.0f * halfX * halfY * halfZ);
+float MassFromHalfExtents(float HalfX, float HalfY, float HalfZ) {
+    return std::max(0.08f, 8.0f * HalfX * HalfY * HalfZ);
 }
 
-void ClampPositionXZ(glm::vec3& pos, float bounds) {
-    pos.x = std::clamp(pos.x, -bounds, bounds);
-    pos.z = std::clamp(pos.z, -bounds, bounds);
+void ClampPositionXZ(glm::vec3& Pos, float Bounds) {
+    Pos.x = std::clamp(Pos.x, -Bounds, Bounds);
+    Pos.z = std::clamp(Pos.z, -Bounds, Bounds);
 }
 
-bool XzDiscOverlapsAabb(float x, float z, float radius, float cx, float cz, float hx, float hz,
-                        float inflate) {
-    hx += inflate;
-    hz += inflate;
-    const float nearestX = std::clamp(x, cx - hx, cx + hx);
-    const float nearestZ = std::clamp(z, cz - hz, cz + hz);
-    const float dx = x - nearestX;
-    const float dz = z - nearestZ;
-    return ((dx * dx) + (dz * dz)) <= (radius * radius);
+bool XzDiscOverlapsAabb(float X, float Z, float InRadius, float Cx, float Cz, float Hx, float Hz,
+                        float Inflate) {
+    Hx += Inflate;
+    Hz += Inflate;
+    const float NearestX = std::clamp(X, Cx - Hx, Cx + Hx);
+    const float NearestZ = std::clamp(Z, Cz - Hz, Cz + Hz);
+    const float Dx = X - NearestX;
+    const float Dz = Z - NearestZ;
+    return ((Dx * Dx) + (Dz * Dz)) <= (InRadius * InRadius);
 }
 
-bool CapsuleAabbMtv(float px, float pz, float radius, float cx, float cz, float hx, float hz,
-                    glm::vec2& outNormal, float& outPenetration) {
-    const float dx = px - cx;
-    const float dz = pz - cz;
-    const float closestX = std::clamp(px, cx - hx, cx + hx);
-    const float closestZ = std::clamp(pz, cz - hz, cz + hz);
-    const float ox = px - closestX;
-    const float oz = pz - closestZ;
-    const float distSq = (ox * ox) + (oz * oz);
+bool CapsuleAabbMtv(float Px, float Pz, float InRadius, float Cx, float Cz, float Hx, float Hz,
+                    glm::vec2& OutNormal, float& OutPenetration) {
+    const float Dx = Px - Cx;
+    const float Dz = Pz - Cz;
+    const float ClosestX = std::clamp(Px, Cx - Hx, Cx + Hx);
+    const float ClosestZ = std::clamp(Pz, Cz - Hz, Cz + Hz);
+    const float Ox = Px - ClosestX;
+    const float Oz = Pz - ClosestZ;
+    const float DistSq = (Ox * Ox) + (Oz * Oz);
 
-    if (distSq > 1.0e-8f) {
-        const float dist = std::sqrt(distSq);
-        if (dist >= radius) {
+    if (DistSq > 1.0e-8f) {
+        const float Dist = std::sqrt(DistSq);
+        if (Dist >= InRadius) {
             return false;
         }
-        outNormal = {ox / dist, oz / dist};
-        outPenetration = radius - dist;
-        return outPenetration > 0.0f;
+        OutNormal = {Ox / Dist, Oz / Dist};
+        OutPenetration = InRadius - Dist;
+        return OutPenetration > 0.0f;
     }
 
-    const float overlapX = hx + radius - std::abs(dx);
-    const float overlapZ = hz + radius - std::abs(dz);
-    if (overlapX <= 0.0f || overlapZ <= 0.0f) {
+    const float OverlapX = Hx + InRadius - std::abs(Dx);
+    const float OverlapZ = Hz + InRadius - std::abs(Dz);
+    if (OverlapX <= 0.0f || OverlapZ <= 0.0f) {
         return false;
     }
-    if (overlapX < overlapZ) {
-        outNormal = {dx >= 0.0f ? 1.0f : -1.0f, 0.0f};
-        outPenetration = overlapX;
+    if (OverlapX < OverlapZ) {
+        OutNormal = {Dx >= 0.0f ? 1.0f : -1.0f, 0.0f};
+        OutPenetration = OverlapX;
     } else {
-        outNormal = {0.0f, dz >= 0.0f ? 1.0f : -1.0f};
-        outPenetration = overlapZ;
+        OutNormal = {0.0f, Dz >= 0.0f ? 1.0f : -1.0f};
+        OutPenetration = OverlapZ;
     }
     return true;
 }
 
-bool AabbOverlapY(float ay, float ahy, float by, float bhy) {
-    return std::abs(ay - by) < (ahy + bhy);
+bool AabbOverlapY(float Ay, float Ahy, float By, float Bhy) {
+    return std::abs(Ay - By) < (Ahy + Bhy);
 }
 
-bool SeparateAabbXZ(glm::vec3& a, float ahx, float ahz, glm::vec3& b, float bhx, float bhz,
-                    float moveA, float moveB) {
-    return SeparateAabb(a, {ahx, 1.0e6f, ahz}, b, {bhx, 1.0e6f, bhz}, moveA, moveB, nullptr);
+bool SeparateAabbXZ(glm::vec3& A, float Ahx, float Ahz, glm::vec3& B, float Bhx, float Bhz,
+                    float MoveA, float MoveB) {
+    return SeparateAabb(A, {Ahx, 1.0e6f, Ahz}, B, {Bhx, 1.0e6f, Bhz}, MoveA, MoveB, nullptr);
 }
 
-bool SeparateAabb(glm::vec3& a, const glm::vec3& aHalfExtents, glm::vec3& b,
-                  const glm::vec3& bHalfExtents, float moveA, float moveB, glm::vec3* outNormal) {
-    const float overlapX = (aHalfExtents.x + bHalfExtents.x) - std::abs(a.x - b.x);
-    const float overlapY = (aHalfExtents.y + bHalfExtents.y) - std::abs(a.y - b.y);
-    const float overlapZ = (aHalfExtents.z + bHalfExtents.z) - std::abs(a.z - b.z);
-    if (overlapX <= 0.0f || overlapY <= 0.0f || overlapZ <= 0.0f) {
+bool SeparateAabb(glm::vec3& A, const glm::vec3& AHalfExtents, glm::vec3& B,
+                  const glm::vec3& bHalfExtents, float MoveA, float MoveB, glm::vec3* OutNormal) {
+    const float OverlapX = (AHalfExtents.x + bHalfExtents.x) - std::abs(A.x - B.x);
+    const float OverlapY = (AHalfExtents.y + bHalfExtents.y) - std::abs(A.y - B.y);
+    const float OverlapZ = (AHalfExtents.z + bHalfExtents.z) - std::abs(A.z - B.z);
+    if (OverlapX <= 0.0f || OverlapY <= 0.0f || OverlapZ <= 0.0f) {
         return false;
     }
 
-    const float share = moveA + moveB;
-    if (share <= 1.0e-6f) {
+    const float Share = MoveA + MoveB;
+    if (Share <= 1.0e-6f) {
         return false;
     }
 
-    glm::vec3 mtv{0.0f};
-    if (overlapX <= overlapY && overlapX <= overlapZ) {
-        mtv.x = (a.x >= b.x ? 1.0f : -1.0f) * overlapX;
-    } else if (overlapY <= overlapX && overlapY <= overlapZ) {
-        mtv.y = (a.y >= b.y ? 1.0f : -1.0f) * overlapY;
+    glm::vec3 Mtv{0.0f};
+    if (OverlapX <= OverlapY && OverlapX <= OverlapZ) {
+        Mtv.x = (A.x >= B.x ? 1.0f : -1.0f) * OverlapX;
+    } else if (OverlapY <= OverlapX && OverlapY <= OverlapZ) {
+        Mtv.y = (A.y >= B.y ? 1.0f : -1.0f) * OverlapY;
     } else {
-        mtv.z = (a.z >= b.z ? 1.0f : -1.0f) * overlapZ;
+        Mtv.z = (A.z >= B.z ? 1.0f : -1.0f) * OverlapZ;
     }
 
-    const float inv = 1.0f / share;
-    a += mtv * (moveA * inv);
-    b -= mtv * (moveB * inv);
+    const float Inv = 1.0f / Share;
+    A += Mtv * (MoveA * Inv);
+    B -= Mtv * (MoveB * Inv);
 
-    if (outNormal != nullptr) {
-        const float len = glm::length(mtv);
-        *outNormal = len > 1.0e-8f ? (mtv / len) : glm::vec3{0.0f, 1.0f, 0.0f};
+    if (OutNormal != nullptr) {
+        const float Len = glm::length(Mtv);
+        *OutNormal = Len > 1.0e-8f ? (Mtv / Len) : glm::vec3{0.0f, 1.0f, 0.0f};
     }
     return true;
 }

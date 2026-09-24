@@ -32,33 +32,33 @@ JPH_SUPPRESS_WARNINGS
 
 namespace {
 
-void TraceImpl(const char* fmt, ...) {
-    char buffer[1024];
-    va_list args;
-    va_start(args, fmt);
-    std::vsnprintf(buffer, sizeof(buffer), fmt, args);
-    va_end(args);
-    std::cerr << buffer << '\n';
+void TraceImpl(const char* Fmt, ...) {
+    char Buffer[1024];
+    va_list Args;
+    va_start(Args, Fmt);
+    std::vsnprintf(Buffer, sizeof(Buffer), Fmt, Args);
+    va_end(Args);
+    std::cerr << Buffer << '\n';
 }
 
 namespace Layers {
-constexpr JPH::ObjectLayer NON_MOVING = 0;
+constexpr JPH::ObjectLayer NonMoving = 0;
 constexpr JPH::ObjectLayer MOVING = 1;
-constexpr JPH::ObjectLayer NUM_LAYERS = 2;
+constexpr JPH::ObjectLayer NumLayers = 2;
 } // namespace Layers
 
 namespace BroadPhaseLayers {
-constexpr JPH::BroadPhaseLayer NON_MOVING(0);
+constexpr JPH::BroadPhaseLayer NonMoving(0);
 constexpr JPH::BroadPhaseLayer MOVING(1);
-constexpr JPH::uint NUM_LAYERS = 2;
+constexpr JPH::uint NumLayers = 2;
 } // namespace BroadPhaseLayers
 
 class FObjectLayerPairFilterImpl final : public JPH::ObjectLayerPairFilter {
 public:
-    [[nodiscard]] bool ShouldCollide(JPH::ObjectLayer a, JPH::ObjectLayer b) const override {
-        switch (a) {
-        case Layers::NON_MOVING:
-            return b == Layers::MOVING;
+    [[nodiscard]] bool ShouldCollide(JPH::ObjectLayer A, JPH::ObjectLayer B) const override {
+        switch (A) {
+        case Layers::NonMoving:
+            return B == Layers::MOVING;
         case Layers::MOVING:
             return true;
         default:
@@ -70,16 +70,16 @@ public:
 class FBPLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface {
 public:
     FBPLayerInterfaceImpl() {
-        objectToBroadPhase_[Layers::NON_MOVING] = BroadPhaseLayers::NON_MOVING;
-        objectToBroadPhase_[Layers::MOVING] = BroadPhaseLayers::MOVING;
+        ObjectToBroadPhase[Layers::NonMoving] = BroadPhaseLayers::NonMoving;
+        ObjectToBroadPhase[Layers::MOVING] = BroadPhaseLayers::MOVING;
     }
 
     [[nodiscard]] JPH::uint GetNumBroadPhaseLayers() const override {
-        return BroadPhaseLayers::NUM_LAYERS;
+        return BroadPhaseLayers::NumLayers;
     }
 
-    [[nodiscard]] JPH::BroadPhaseLayer GetBroadPhaseLayer(JPH::ObjectLayer layer) const override {
-        return objectToBroadPhase_[layer];
+    [[nodiscard]] JPH::BroadPhaseLayer GetBroadPhaseLayer(JPH::ObjectLayer Layer) const override {
+        return ObjectToBroadPhase[Layer];
     }
 
 #if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
@@ -96,16 +96,16 @@ public:
 #endif
 
 private:
-    JPH::BroadPhaseLayer objectToBroadPhase_[Layers::NUM_LAYERS];
+    JPH::BroadPhaseLayer ObjectToBroadPhase[Layers::NumLayers];
 };
 
 class FObjectVsBroadPhaseLayerFilterImpl final : public JPH::ObjectVsBroadPhaseLayerFilter {
 public:
-    [[nodiscard]] bool ShouldCollide(JPH::ObjectLayer layer,
-                                     JPH::BroadPhaseLayer bp) const override {
-        switch (layer) {
-        case Layers::NON_MOVING:
-            return bp == BroadPhaseLayers::MOVING;
+    [[nodiscard]] bool ShouldCollide(JPH::ObjectLayer Layer,
+                                     JPH::BroadPhaseLayer Bp) const override {
+        switch (Layer) {
+        case Layers::NonMoving:
+            return Bp == BroadPhaseLayers::MOVING;
         case Layers::MOVING:
             return true;
         default:
@@ -114,72 +114,72 @@ public:
     }
 };
 
-[[nodiscard]] JPH::ShapeRefC CreateBoxShape(const glm::vec3& halfExtents) {
+[[nodiscard]] JPH::ShapeRefC CreateBoxShape(const glm::vec3& HalfExtents) {
     // Half-extents must exceed convex radius or BoxShapeSettings::Create fails.
-    constexpr float kConvexRadius = 0.001f;
-    constexpr float kMinHalf = 0.002f;
-    const float hx = std::max(halfExtents.x, kMinHalf);
-    const float hy = std::max(halfExtents.y, kMinHalf);
-    const float hz = std::max(halfExtents.z, kMinHalf);
-    JPH::BoxShapeSettings shapeSettings(JPH::Vec3(hx, hy, hz), kConvexRadius);
-    shapeSettings.SetEmbedded();
-    JPH::ShapeSettings::ShapeResult shapeResult = shapeSettings.Create();
-    if (shapeResult.HasError()) {
+    constexpr float ConvexRadius = 0.001f;
+    constexpr float MinHalf = 0.002f;
+    const float Hx = std::max(HalfExtents.x, MinHalf);
+    const float Hy = std::max(HalfExtents.y, MinHalf);
+    const float Hz = std::max(HalfExtents.z, MinHalf);
+    JPH::BoxShapeSettings ShapeSettings(JPH::Vec3(Hx, Hy, Hz), ConvexRadius);
+    ShapeSettings.SetEmbedded();
+    JPH::ShapeSettings::ShapeResult ShapeResult = ShapeSettings.Create();
+    if (ShapeResult.HasError()) {
         return nullptr;
     }
-    return shapeResult.Get();
+    return ShapeResult.Get();
 }
 
 /// Bake FTriangleMeshCollision into a MeshShape in body-local space (origin = body.position).
-[[nodiscard]] JPH::ShapeRefC CreateMeshShape(const FTriangleMeshCollision& mesh,
-                                             const glm::vec3& bodyPosition) {
-    if (!mesh.IsValid()) {
+[[nodiscard]] JPH::ShapeRefC CreateMeshShape(const FTriangleMeshCollision& Mesh,
+                                             const glm::vec3& BodyPosition) {
+    if (!Mesh.IsValid()) {
         return nullptr;
     }
-    JPH::TriangleList tris;
-    tris.reserve(mesh.indices.size() / 3);
-    for (std::size_t i = 0; i + 2 < mesh.indices.size(); i += 3) {
-        const std::uint32_t i0 = mesh.indices[i];
-        const std::uint32_t i1 = mesh.indices[i + 1];
-        const std::uint32_t i2 = mesh.indices[i + 2];
-        if (i0 >= mesh.positions.size() || i1 >= mesh.positions.size() ||
-            i2 >= mesh.positions.size()) {
+    JPH::TriangleList Tris;
+    Tris.reserve(Mesh.Indices.size() / 3);
+    for (std::size_t I = 0; I + 2 < Mesh.Indices.size(); I += 3) {
+        const std::uint32_t I0 = Mesh.Indices[I];
+        const std::uint32_t I1 = Mesh.Indices[I + 1];
+        const std::uint32_t I2 = Mesh.Indices[I + 2];
+        if (I0 >= Mesh.Positions.size() || I1 >= Mesh.Positions.size() ||
+            I2 >= Mesh.Positions.size()) {
             continue;
         }
-        const glm::vec3 p0 = mesh.positions[i0] - bodyPosition;
-        const glm::vec3 p1 = mesh.positions[i1] - bodyPosition;
-        const glm::vec3 p2 = mesh.positions[i2] - bodyPosition;
+        const glm::vec3 P0 = Mesh.Positions[I0] - BodyPosition;
+        const glm::vec3 P1 = Mesh.Positions[I1] - BodyPosition;
+        const glm::vec3 P2 = Mesh.Positions[I2] - BodyPosition;
         // Emit both windings so single-sided MeshShape collides from either side (floors/ceilings).
-        tris.push_back(JPH::Triangle(JPH::Vec3(p0.x, p0.y, p0.z), JPH::Vec3(p1.x, p1.y, p1.z),
-                                     JPH::Vec3(p2.x, p2.y, p2.z)));
-        tris.push_back(JPH::Triangle(JPH::Vec3(p0.x, p0.y, p0.z), JPH::Vec3(p2.x, p2.y, p2.z),
-                                     JPH::Vec3(p1.x, p1.y, p1.z)));
+        Tris.push_back(JPH::Triangle(JPH::Vec3(P0.x, P0.y, P0.z), JPH::Vec3(P1.x, P1.y, P1.z),
+                                     JPH::Vec3(P2.x, P2.y, P2.z)));
+        Tris.push_back(JPH::Triangle(JPH::Vec3(P0.x, P0.y, P0.z), JPH::Vec3(P2.x, P2.y, P2.z),
+                                     JPH::Vec3(P1.x, P1.y, P1.z)));
     }
-    if (tris.empty()) {
+    if (Tris.empty()) {
         return nullptr;
     }
     // Heap settings: MeshShape retains cooked data; stack+SetEmbedded is fragile for meshes.
-    JPH::Ref<JPH::MeshShapeSettings> meshSettings = new JPH::MeshShapeSettings(tris);
-    JPH::ShapeSettings::ShapeResult shapeResult = meshSettings->Create();
-    if (shapeResult.HasError()) {
+    JPH::Ref<JPH::MeshShapeSettings> MeshSettings = new JPH::MeshShapeSettings(Tris);
+    JPH::ShapeSettings::ShapeResult ShapeResult = MeshSettings->Create();
+    if (ShapeResult.HasError()) {
         return nullptr;
     }
-    return shapeResult.Get();
+    return ShapeResult.Get();
 }
 
 class FJoltPhysicsBackend final : public IPhysicsBackend {
 public:
     FJoltPhysicsBackend() {
         EnsureJoltTypes();
-        tempAllocator_ = std::make_unique<JPH::TempAllocatorImpl>(4 * 1024 * 1024);
-        jobSystem_ = std::make_unique<JPH::JobSystemSingleThreaded>(JPH::cMaxPhysicsJobs);
+        TempAllocator = std::make_unique<JPH::TempAllocatorImpl>(4 * 1024 * 1024);
+        JobSystem = std::make_unique<JPH::JobSystemSingleThreaded>(JPH::cMaxPhysicsJobs);
 
-        constexpr JPH::uint kMaxBodies = 4096;
-        constexpr JPH::uint kMaxBodyPairs = 4096;
-        constexpr JPH::uint kMaxContactConstraints = 4096;
-        physicsSystem_.Init(kMaxBodies, 0, kMaxBodyPairs, kMaxContactConstraints,
-                            broadPhaseLayerInterface_, objectVsBroadphaseLayerFilter_,
-                            objectVsObjectLayerFilter_);
+        constexpr JPH::uint MaxBodies = 4096;
+        constexpr JPH::uint MaxBodyPairs = 4096;
+        constexpr JPH::uint MaxContactConstraints = 4096;
+        PhysicsSystem.Init(MaxBodies, 0, MaxBodyPairs, MaxContactConstraints,
+                            BroadPhaseLayerInterface, ObjectVsBroadphaseLayerFilter,
+                            ObjectVsObjectLayerFilter);
     }
 
     ~FJoltPhysicsBackend() override { RigidClear(); }
@@ -189,184 +189,184 @@ public:
     [[nodiscard]] bool HasNarrowPhaseTraces() const override { return true; }
 
     void RigidClear() override {
-        JPH::BodyInterface& bodies = physicsSystem_.GetBodyInterface();
-        for (const JPH::BodyID& id : bodyIds_) {
-            DestroyBody(bodies, id);
+        JPH::BodyInterface& Bodies = PhysicsSystem.GetBodyInterface();
+        for (const JPH::BodyID& Id : BodyIds) {
+            DestroyBody(Bodies, Id);
         }
-        bodyIds_.clear();
-        DestroyFloor(bodies);
-        lastSkip_ = (std::numeric_limits<std::size_t>::max)();
-        floorY_ = std::numeric_limits<float>::quiet_NaN();
+        BodyIds.clear();
+        DestroyFloor(Bodies);
+        LastSkip = (std::numeric_limits<std::size_t>::max)();
+        FloorY = std::numeric_limits<float>::quiet_NaN();
     }
 
-    void RigidRebuild(const std::vector<FBodyInstance>& bodies,
-                      const std::vector<FTriangleMeshCollision>* triangleMeshes,
-                      std::size_t skipLevelMeshIndex) override {
+    void RigidRebuild(const std::vector<FBodyInstance>& Bodies,
+                      const std::vector<FTriangleMeshCollision>* TriangleMeshes,
+                      std::size_t SkipLevelMeshIndex) override {
         RigidClear();
-        bodyIds_.assign(bodies.size(), JPH::BodyID());
-        lastSkip_ = skipLevelMeshIndex;
+        BodyIds.assign(Bodies.size(), JPH::BodyID());
+        LastSkip = SkipLevelMeshIndex;
 
-        JPH::BodyInterface& iface = physicsSystem_.GetBodyInterface();
-        for (std::size_t i = 0; i < bodies.size(); ++i) {
-            if (bodies[i].levelMeshIndex == skipLevelMeshIndex) {
+        JPH::BodyInterface& Iface = PhysicsSystem.GetBodyInterface();
+        for (std::size_t I = 0; I < Bodies.size(); ++I) {
+            if (Bodies[I].LevelMeshIndex == SkipLevelMeshIndex) {
                 continue;
             }
-            const FTriangleMeshCollision* tri =
-                (triangleMeshes != nullptr && i < triangleMeshes->size()) ? &(*triangleMeshes)[i]
+            const FTriangleMeshCollision* Tri =
+                (TriangleMeshes != nullptr && I < TriangleMeshes->size()) ? &(*TriangleMeshes)[I]
                                                                           : nullptr;
-            bodyIds_[i] = CreateBody(iface, bodies[i], i, tri);
+            BodyIds[I] = CreateBody(Iface, Bodies[I], I, Tri);
         }
-        physicsSystem_.OptimizeBroadPhase();
+        PhysicsSystem.OptimizeBroadPhase();
     }
 
-    void RigidPrepareStep(const std::vector<FBodyInstance>& bodies,
-                          std::size_t skipLevelMeshIndex) override {
+    void RigidPrepareStep(const std::vector<FBodyInstance>& Bodies,
+                          std::size_t SkipLevelMeshIndex) override {
         // Structure changed outside SyncFromLevel — rebuild as boxes (meshes need SyncFromLevel).
-        if (bodyIds_.size() != bodies.size()) {
-            RigidRebuild(bodies, nullptr, skipLevelMeshIndex);
+        if (BodyIds.size() != Bodies.size()) {
+            RigidRebuild(Bodies, nullptr, SkipLevelMeshIndex);
             return;
         }
 
-        JPH::BodyInterface& iface = physicsSystem_.GetBodyInterface();
-        lastSkip_ = skipLevelMeshIndex;
+        JPH::BodyInterface& Iface = PhysicsSystem.GetBodyInterface();
+        LastSkip = SkipLevelMeshIndex;
 
-        for (std::size_t i = 0; i < bodies.size(); ++i) {
-            const FBodyInstance& src = bodies[i];
-            const bool skip = src.levelMeshIndex == skipLevelMeshIndex;
+        for (std::size_t I = 0; I < Bodies.size(); ++I) {
+            const FBodyInstance& Src = Bodies[I];
+            const bool bSkip = Src.LevelMeshIndex == SkipLevelMeshIndex;
 
-            if (skip) {
-                if (!bodyIds_[i].IsInvalid()) {
-                    DestroyBody(iface, bodyIds_[i]);
-                    bodyIds_[i] = JPH::BodyID();
+            if (bSkip) {
+                if (!BodyIds[I].IsInvalid()) {
+                    DestroyBody(Iface, BodyIds[I]);
+                    BodyIds[I] = JPH::BodyID();
                 }
                 continue;
             }
 
-            if (bodyIds_[i].IsInvalid()) {
-                bodyIds_[i] = CreateBody(iface, src, i, nullptr);
+            if (BodyIds[I].IsInvalid()) {
+                BodyIds[I] = CreateBody(Iface, Src, I, nullptr);
                 continue;
             }
 
-            if (src.type != EBodyType::Dynamic) {
+            if (Src.Type != EBodyType::Dynamic) {
                 continue;
             }
 
             // CMC / ResolveCapsuleSides may have nudged FBodyInstance state — push into Jolt.
-            iface.SetPosition(bodyIds_[i],
-                              JPH::RVec3(src.position.x, src.position.y, src.position.z),
+            Iface.SetPosition(BodyIds[I],
+                              JPH::RVec3(Src.Position.x, Src.Position.y, Src.Position.z),
                               JPH::EActivation::Activate);
-            iface.SetLinearVelocity(bodyIds_[i],
-                                    JPH::Vec3(src.velXZ.x, src.velocityY, src.velXZ.y));
+            Iface.SetLinearVelocity(BodyIds[I],
+                                    JPH::Vec3(Src.VelXz.x, Src.VelocityY, Src.VelXz.y));
         }
     }
 
-    void RigidStep(float deltaTime, float gravityMagnitude, float floorY) override {
-        if (deltaTime <= 0.0f) {
+    void RigidStep(float DeltaTime, float GravityMagnitude, float InFloorY) override {
+        if (DeltaTime <= 0.0f) {
             return;
         }
-        EnsureFloor(floorY);
-        physicsSystem_.SetGravity(JPH::Vec3(0.0f, -std::abs(gravityMagnitude), 0.0f));
+        EnsureFloor(InFloorY);
+        PhysicsSystem.SetGravity(JPH::Vec3(0.0f, -std::abs(GravityMagnitude), 0.0f));
 
-        const int collisionSteps = std::max(1, static_cast<int>(std::ceil(deltaTime * 60.0f)));
-        physicsSystem_.Update(deltaTime, collisionSteps, tempAllocator_.get(), jobSystem_.get());
+        const int CollisionSteps = std::max(1, static_cast<int>(std::ceil(DeltaTime * 60.0f)));
+        PhysicsSystem.Update(DeltaTime, CollisionSteps, TempAllocator.get(), JobSystem.get());
     }
 
-    void RigidReadBack(std::vector<FBodyInstance>& bodies) override {
-        JPH::BodyInterface& iface = physicsSystem_.GetBodyInterface();
-        const std::size_t n = (std::min)(bodies.size(), bodyIds_.size());
-        for (std::size_t i = 0; i < n; ++i) {
-            const JPH::BodyID id = bodyIds_[i];
-            if (id.IsInvalid() || bodies[i].type != EBodyType::Dynamic) {
+    void RigidReadBack(std::vector<FBodyInstance>& Bodies) override {
+        JPH::BodyInterface& Iface = PhysicsSystem.GetBodyInterface();
+        const std::size_t N = (std::min)(Bodies.size(), BodyIds.size());
+        for (std::size_t I = 0; I < N; ++I) {
+            const JPH::BodyID Id = BodyIds[I];
+            if (Id.IsInvalid() || Bodies[I].Type != EBodyType::Dynamic) {
                 continue;
             }
-            const JPH::RVec3 pos = iface.GetCenterOfMassPosition(id);
-            const JPH::Vec3 vel = iface.GetLinearVelocity(id);
-            bodies[i].position = {pos.GetX(), pos.GetY(), pos.GetZ()};
-            bodies[i].velXZ = {vel.GetX(), vel.GetZ()};
-            bodies[i].velocityY = vel.GetY();
+            const JPH::RVec3 Pos = Iface.GetCenterOfMassPosition(Id);
+            const JPH::Vec3 Vel = Iface.GetLinearVelocity(Id);
+            Bodies[I].Position = {Pos.GetX(), Pos.GetY(), Pos.GetZ()};
+            Bodies[I].VelXz = {Vel.GetX(), Vel.GetZ()};
+            Bodies[I].VelocityY = Vel.GetY();
         }
     }
 
-    bool RigidLineTrace(std::vector<FHitResult>& outHits, const glm::vec3& start,
-                        const glm::vec3& end, ECollisionChannel channel,
-                        std::size_t skipLevelMeshIndex) override {
-        outHits.clear();
-        const JPH::Vec3 origin(start.x, start.y, start.z);
-        const JPH::Vec3 direction(end.x - start.x, end.y - start.y, end.z - start.z);
-        const JPH::RRayCast ray(origin, direction);
+    bool RigidLineTrace(std::vector<FHitResult>& OutHits, const glm::vec3& Start,
+                        const glm::vec3& End, ECollisionChannel InChannel,
+                        std::size_t SkipLevelMeshIndex) override {
+        OutHits.clear();
+        const JPH::Vec3 Origin(Start.x, Start.y, Start.z);
+        const JPH::Vec3 Direction(End.x - Start.x, End.y - Start.y, End.z - Start.z);
+        const JPH::RRayCast Ray(Origin, Direction);
 
-        JPH::AllHitCollisionCollector<JPH::CastRayCollector> collector;
-        JPH::RayCastSettings settings;
-        FChannelObjectLayerFilter layerFilter(channel);
-        FTraceBodyFilter bodyFilter(floorId_, skipLevelMeshIndex);
-        physicsSystem_.GetNarrowPhaseQuery().CastRay(ray, settings, collector, {}, layerFilter,
-                                                     bodyFilter);
-        collector.Sort();
+        JPH::AllHitCollisionCollector<JPH::CastRayCollector> Collector;
+        JPH::RayCastSettings Settings;
+        FChannelObjectLayerFilter LayerFilter(InChannel);
+        FTraceBodyFilter BodyFilter(FloorId, SkipLevelMeshIndex);
+        PhysicsSystem.GetNarrowPhaseQuery().CastRay(Ray, Settings, Collector, {}, LayerFilter,
+                                                     BodyFilter);
+        Collector.Sort();
 
-        const JPH::BodyLockInterface& locks = physicsSystem_.GetBodyLockInterface();
-        for (const JPH::RayCastResult& hit : collector.mHits) {
-            JPH::BodyLockRead lock(locks, hit.mBodyID);
-            if (!lock.Succeeded()) {
+        const JPH::BodyLockInterface& Locks = PhysicsSystem.GetBodyLockInterface();
+        for (const JPH::RayCastResult& Hit : Collector.mHits) {
+            JPH::BodyLockRead Lock(Locks, Hit.mBodyID);
+            if (!Lock.Succeeded()) {
                 continue;
             }
-            const JPH::Body& body = lock.GetBody();
-            const JPH::RVec3 point = ray.GetPointOnRay(hit.mFraction);
-            JPH::Vec3 normal =
-                body.GetWorldSpaceSurfaceNormal(hit.mSubShapeID2, point);
-            if (normal.LengthSq() < 1.0e-8f) {
-                normal = JPH::Vec3(0, 1, 0);
+            const JPH::Body& Body = Lock.GetBody();
+            const JPH::RVec3 Point = Ray.GetPointOnRay(Hit.mFraction);
+            JPH::Vec3 Normal =
+                Body.GetWorldSpaceSurfaceNormal(Hit.mSubShapeID2, Point);
+            if (Normal.LengthSq() < 1.0e-8f) {
+                Normal = JPH::Vec3(0, 1, 0);
             } else {
-                normal = normal.Normalized();
+                Normal = Normal.Normalized();
             }
             // Point normal toward the trace start (Unreal ImpactNormal convention).
-            const JPH::Vec3 toStart = origin - point;
-            if (normal.Dot(toStart) < 0.0f) {
-                normal = -normal;
+            const JPH::Vec3 ToStart = Origin - Point;
+            if (Normal.Dot(ToStart) < 0.0f) {
+                Normal = -Normal;
             }
-            FHitResult out{};
-            out.bBlockingHit = true;
-            out.Time = hit.mFraction;
-            out.Distance = direction.Length() * hit.mFraction;
-            out.Location = {point.GetX(), point.GetY(), point.GetZ()};
-            out.ImpactPoint = out.Location;
-            out.ImpactNormal = {normal.GetX(), normal.GetY(), normal.GetZ()};
-            out.TraceStart = start;
-            out.TraceEnd = end;
-            out.LevelMeshIndex = static_cast<std::size_t>(body.GetUserData());
-            out.bFloorPlane = false;
-            outHits.push_back(out);
+            FHitResult Out{};
+            Out.bBlockingHit = true;
+            Out.Time = Hit.mFraction;
+            Out.Distance = Direction.Length() * Hit.mFraction;
+            Out.Location = {Point.GetX(), Point.GetY(), Point.GetZ()};
+            Out.ImpactPoint = Out.Location;
+            Out.ImpactNormal = {Normal.GetX(), Normal.GetY(), Normal.GetZ()};
+            Out.TraceStart = Start;
+            Out.TraceEnd = End;
+            Out.LevelMeshIndex = static_cast<std::size_t>(Body.GetUserData());
+            Out.bFloorPlane = false;
+            OutHits.push_back(Out);
         }
-        return !outHits.empty();
+        return !OutHits.empty();
     }
 
-    bool RigidSphereTrace(std::vector<FHitResult>& outHits, const glm::vec3& start,
-                          const glm::vec3& end, float radius, ECollisionChannel channel,
-                          std::size_t skipLevelMeshIndex) override {
-        const float r = std::max(radius, 1.0e-3f);
-        JPH::RefConst<JPH::SphereShape> sphere = new JPH::SphereShape(r);
-        return CastShapeTrace(outHits, start, end, sphere, channel, skipLevelMeshIndex, r);
+    bool RigidSphereTrace(std::vector<FHitResult>& OutHits, const glm::vec3& Start,
+                          const glm::vec3& End, float Radius, ECollisionChannel InChannel,
+                          std::size_t SkipLevelMeshIndex) override {
+        const float R = std::max(Radius, 1.0e-3f);
+        JPH::RefConst<JPH::SphereShape> Sphere = new JPH::SphereShape(R);
+        return CastShapeTrace(OutHits, Start, End, Sphere, InChannel, SkipLevelMeshIndex, R);
     }
 
-    bool RigidCapsuleTrace(std::vector<FHitResult>& outHits, const glm::vec3& start,
-                           const glm::vec3& end, float radius, float halfHeight,
-                           ECollisionChannel channel, std::size_t skipLevelMeshIndex) override {
-        const float r = std::max(radius, 1.0e-3f);
-        const float hh = std::max(halfHeight, 0.0f);
-        JPH::RefConst<JPH::CapsuleShape> capsule = new JPH::CapsuleShape(hh, r);
-        return CastShapeTrace(outHits, start, end, capsule, channel, skipLevelMeshIndex,
-                              r + hh);
+    bool RigidCapsuleTrace(std::vector<FHitResult>& OutHits, const glm::vec3& Start,
+                           const glm::vec3& End, float Radius, float HalfHeight,
+                           ECollisionChannel InChannel, std::size_t SkipLevelMeshIndex) override {
+        const float R = std::max(Radius, 1.0e-3f);
+        const float Hh = std::max(HalfHeight, 0.0f);
+        JPH::RefConst<JPH::CapsuleShape> Capsule = new JPH::CapsuleShape(Hh, R);
+        return CastShapeTrace(OutHits, Start, End, Capsule, InChannel, SkipLevelMeshIndex,
+                              R + Hh);
     }
 
 private:
     class FChannelObjectLayerFilter final : public JPH::ObjectLayerFilter {
     public:
-        explicit FChannelObjectLayerFilter(ECollisionChannel channel) : channel_(channel) {}
-        [[nodiscard]] bool ShouldCollide(JPH::ObjectLayer layer) const override {
-            switch (channel_) {
+        explicit FChannelObjectLayerFilter(ECollisionChannel InChannel) : Channel(InChannel) {}
+        [[nodiscard]] bool ShouldCollide(JPH::ObjectLayer Layer) const override {
+            switch (Channel) {
             case ECollisionChannel::WorldStatic:
-                return layer == Layers::NON_MOVING;
+                return Layer == Layers::NonMoving;
             case ECollisionChannel::WorldDynamic:
-                return layer == Layers::MOVING;
+                return Layer == Layers::MOVING;
             case ECollisionChannel::Pawn:
             case ECollisionChannel::Visibility:
                 return true;
@@ -375,195 +375,195 @@ private:
         }
 
     private:
-        ECollisionChannel channel_;
+        ECollisionChannel Channel;
     };
 
     class FTraceBodyFilter final : public JPH::BodyFilter {
     public:
-        FTraceBodyFilter(JPH::BodyID floorId, std::size_t skipMesh)
-            : floorId_(floorId), skipMesh_(skipMesh) {}
+        FTraceBodyFilter(JPH::BodyID InFloorId, std::size_t InSkipMesh)
+            : FloorId(InFloorId), SkipMesh(InSkipMesh) {}
 
-        [[nodiscard]] bool ShouldCollide(const JPH::BodyID& id) const override {
-            return id != floorId_;
+        [[nodiscard]] bool ShouldCollide(const JPH::BodyID& Id) const override {
+            return Id != FloorId;
         }
 
-        [[nodiscard]] bool ShouldCollideLocked(const JPH::Body& body) const override {
-            if (body.GetID() == floorId_) {
+        [[nodiscard]] bool ShouldCollideLocked(const JPH::Body& Body) const override {
+            if (Body.GetID() == FloorId) {
                 return false;
             }
-            if (skipMesh_ == (std::numeric_limits<std::size_t>::max)()) {
+            if (SkipMesh == (std::numeric_limits<std::size_t>::max)()) {
                 return true;
             }
-            return static_cast<std::size_t>(body.GetUserData()) != skipMesh_;
+            return static_cast<std::size_t>(Body.GetUserData()) != SkipMesh;
         }
 
     private:
-        JPH::BodyID floorId_;
-        std::size_t skipMesh_;
+        JPH::BodyID FloorId;
+        std::size_t SkipMesh;
     };
 
-    bool CastShapeTrace(std::vector<FHitResult>& outHits, const glm::vec3& start,
-                        const glm::vec3& end, const JPH::Shape* shape, ECollisionChannel channel,
-                        std::size_t skipLevelMeshIndex, float inflateHint) {
-        outHits.clear();
-        if (shape == nullptr) {
+    bool CastShapeTrace(std::vector<FHitResult>& OutHits, const glm::vec3& Start,
+                        const glm::vec3& End, const JPH::Shape* Shape, ECollisionChannel InChannel,
+                        std::size_t SkipLevelMeshIndex, float InflateHint) {
+        OutHits.clear();
+        if (Shape == nullptr) {
             return false;
         }
-        const JPH::Vec3 direction(end.x - start.x, end.y - start.y, end.z - start.z);
-        const JPH::RShapeCast shapeCast = JPH::RShapeCast::sFromWorldTransform(
-            shape, JPH::Vec3::sOne(),
-            JPH::RMat44::sTranslation(JPH::RVec3(start.x, start.y, start.z)), direction);
+        const JPH::Vec3 Direction(End.x - Start.x, End.y - Start.y, End.z - Start.z);
+        const JPH::RShapeCast ShapeCast = JPH::RShapeCast::sFromWorldTransform(
+            Shape, JPH::Vec3::sOne(),
+            JPH::RMat44::sTranslation(JPH::RVec3(Start.x, Start.y, Start.z)), Direction);
 
-        JPH::AllHitCollisionCollector<JPH::CastShapeCollector> collector;
-        JPH::ShapeCastSettings settings;
-        FChannelObjectLayerFilter layerFilter(channel);
-        FTraceBodyFilter bodyFilter(floorId_, skipLevelMeshIndex);
-        physicsSystem_.GetNarrowPhaseQuery().CastShape(shapeCast, settings, JPH::RVec3::sZero(),
-                                                       collector, {}, layerFilter, bodyFilter);
-        collector.Sort();
+        JPH::AllHitCollisionCollector<JPH::CastShapeCollector> Collector;
+        JPH::ShapeCastSettings Settings;
+        FChannelObjectLayerFilter LayerFilter(InChannel);
+        FTraceBodyFilter BodyFilter(FloorId, SkipLevelMeshIndex);
+        PhysicsSystem.GetNarrowPhaseQuery().CastShape(ShapeCast, Settings, JPH::RVec3::sZero(),
+                                                       Collector, {}, LayerFilter, BodyFilter);
+        Collector.Sort();
 
-        const JPH::BodyLockInterface& locks = physicsSystem_.GetBodyLockInterface();
-        for (const JPH::ShapeCastResult& hit : collector.mHits) {
-            JPH::BodyLockRead lock(locks, hit.mBodyID2);
-            if (!lock.Succeeded()) {
+        const JPH::BodyLockInterface& Locks = PhysicsSystem.GetBodyLockInterface();
+        for (const JPH::ShapeCastResult& Hit : Collector.mHits) {
+            JPH::BodyLockRead Lock(Locks, Hit.mBodyID2);
+            if (!Lock.Succeeded()) {
                 continue;
             }
-            const JPH::Body& body = lock.GetBody();
-            const JPH::RVec3 point = shapeCast.mCenterOfMassStart.GetTranslation() +
-                                    (direction * hit.mFraction);
+            const JPH::Body& Body = Lock.GetBody();
+            const JPH::RVec3 Point = ShapeCast.mCenterOfMassStart.GetTranslation() +
+                                    (Direction * Hit.mFraction);
             // Contact on world body (base offset Zero → world space); Location = sweep COM.
-            const JPH::Vec3 contact = hit.mContactPointOn2;
-            JPH::Vec3 normal = -hit.mPenetrationAxis;
-            if (normal.LengthSq() > 1.0e-8f) {
-                normal = normal.Normalized();
+            const JPH::Vec3 Contact = Hit.mContactPointOn2;
+            JPH::Vec3 Normal = -Hit.mPenetrationAxis;
+            if (Normal.LengthSq() > 1.0e-8f) {
+                Normal = Normal.Normalized();
             } else {
-                normal = JPH::Vec3(0, 1, 0);
+                Normal = JPH::Vec3(0, 1, 0);
             }
-            const JPH::Vec3 toStart =
-                JPH::Vec3(start.x, start.y, start.z) - JPH::Vec3(point.GetX(), point.GetY(), point.GetZ());
-            if (normal.Dot(toStart) < 0.0f) {
-                normal = -normal;
+            const JPH::Vec3 ToStart =
+                JPH::Vec3(Start.x, Start.y, Start.z) - JPH::Vec3(Point.GetX(), Point.GetY(), Point.GetZ());
+            if (Normal.Dot(ToStart) < 0.0f) {
+                Normal = -Normal;
             }
-            FHitResult out{};
-            out.bBlockingHit = true;
-            out.Time = hit.mFraction;
-            out.Distance = direction.Length() * hit.mFraction;
-            out.Location = {point.GetX(), point.GetY(), point.GetZ()};
-            out.ImpactPoint = {contact.GetX(), contact.GetY(), contact.GetZ()};
-            out.ImpactNormal = {normal.GetX(), normal.GetY(), normal.GetZ()};
-            out.TraceStart = start;
-            out.TraceEnd = end;
-            out.LevelMeshIndex = static_cast<std::size_t>(body.GetUserData());
-            out.bFloorPlane = false;
-            (void)inflateHint;
-            outHits.push_back(out);
+            FHitResult Out{};
+            Out.bBlockingHit = true;
+            Out.Time = Hit.mFraction;
+            Out.Distance = Direction.Length() * Hit.mFraction;
+            Out.Location = {Point.GetX(), Point.GetY(), Point.GetZ()};
+            Out.ImpactPoint = {Contact.GetX(), Contact.GetY(), Contact.GetZ()};
+            Out.ImpactNormal = {Normal.GetX(), Normal.GetY(), Normal.GetZ()};
+            Out.TraceStart = Start;
+            Out.TraceEnd = End;
+            Out.LevelMeshIndex = static_cast<std::size_t>(Body.GetUserData());
+            Out.bFloorPlane = false;
+            (void)InflateHint;
+            OutHits.push_back(Out);
         }
-        return !outHits.empty();
+        return !OutHits.empty();
     }
 
     static void EnsureJoltTypes() {
-        static bool s_ready = false;
-        if (s_ready) {
+        static bool bSReady = false;
+        if (bSReady) {
             return;
         }
-        s_ready = true;
+        bSReady = true;
         JPH::RegisterDefaultAllocator();
         JPH::Trace = TraceImpl;
         JPH::Factory::sInstance = new JPH::Factory();
         JPH::RegisterTypes();
     }
 
-    static void DestroyBody(JPH::BodyInterface& iface, JPH::BodyID id) {
-        if (id.IsInvalid()) {
+    static void DestroyBody(JPH::BodyInterface& Iface, JPH::BodyID Id) {
+        if (Id.IsInvalid()) {
             return;
         }
-        iface.RemoveBody(id);
-        iface.DestroyBody(id);
+        Iface.RemoveBody(Id);
+        Iface.DestroyBody(Id);
     }
 
-    [[nodiscard]] JPH::BodyID CreateBody(JPH::BodyInterface& iface, const FBodyInstance& src,
+    [[nodiscard]] JPH::BodyID CreateBody(JPH::BodyInterface& Iface, const FBodyInstance& Src,
                                          std::size_t /*index*/,
-                                         const FTriangleMeshCollision* triMesh) const {
-        JPH::ShapeRefC shape;
-        JPH::RVec3 bodyPos(src.position.x, src.position.y, src.position.z);
+                                         const FTriangleMeshCollision* TriMesh) const {
+        JPH::ShapeRefC Shape;
+        JPH::RVec3 BodyPos(Src.Position.x, Src.Position.y, Src.Position.z);
 
-        if (src.type == EBodyType::Static && src.collisionShape == ECollisionShape::TriangleMesh &&
-            triMesh != nullptr && triMesh->IsValid()) {
+        if (Src.Type == EBodyType::Static && Src.CollisionShape == ECollisionShape::TriangleMesh &&
+            TriMesh != nullptr && TriMesh->IsValid()) {
             // Local-space cook (origin = Leon body/AABB center) keeps COM at the body position.
-            shape = CreateMeshShape(*triMesh, src.position);
+            Shape = CreateMeshShape(*TriMesh, Src.Position);
         }
-        if (shape == nullptr) {
+        if (Shape == nullptr) {
             // Near-flat AABBs (zero Y from a plane mesh) need thickness > convex radius.
-            glm::vec3 he = src.halfExtents;
-            he.x = std::max(he.x, 0.05f);
-            he.y = std::max(he.y, 0.05f);
-            he.z = std::max(he.z, 0.05f);
-            shape = CreateBoxShape(he);
-            bodyPos = JPH::RVec3(src.position.x, src.position.y, src.position.z);
+            glm::vec3 He = Src.HalfExtents;
+            He.x = std::max(He.x, 0.05f);
+            He.y = std::max(He.y, 0.05f);
+            He.z = std::max(He.z, 0.05f);
+            Shape = CreateBoxShape(He);
+            BodyPos = JPH::RVec3(Src.Position.x, Src.Position.y, Src.Position.z);
         }
-        if (shape == nullptr) {
+        if (Shape == nullptr) {
             return JPH::BodyID();
         }
 
-        const bool dynamic = src.type == EBodyType::Dynamic;
-        JPH::BodyCreationSettings settings(
-            shape, bodyPos, JPH::Quat::sIdentity(),
-            dynamic ? JPH::EMotionType::Dynamic : JPH::EMotionType::Static,
-            dynamic ? Layers::MOVING : Layers::NON_MOVING);
-        settings.mUserData = static_cast<JPH::uint64>(src.levelMeshIndex);
-        if (dynamic) {
-            settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
-            settings.mMassPropertiesOverride.mMass = std::max(src.mass, 0.5f);
-            if (!src.enableGravity) {
-                settings.mGravityFactor = 0.0f;
+        const bool bDynamic = Src.Type == EBodyType::Dynamic;
+        JPH::BodyCreationSettings Settings(
+            Shape, BodyPos, JPH::Quat::sIdentity(),
+            bDynamic ? JPH::EMotionType::Dynamic : JPH::EMotionType::Static,
+            bDynamic ? Layers::MOVING : Layers::NonMoving);
+        Settings.mUserData = static_cast<JPH::uint64>(Src.LevelMeshIndex);
+        if (bDynamic) {
+            Settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+            Settings.mMassPropertiesOverride.mMass = std::max(Src.Mass, 0.5f);
+            if (!Src.bEnableGravity) {
+                Settings.mGravityFactor = 0.0f;
             }
         }
 
-        const JPH::BodyID id = iface.CreateAndAddBody(
-            settings, dynamic ? JPH::EActivation::Activate : JPH::EActivation::DontActivate);
-        if (dynamic && !id.IsInvalid()) {
-            iface.SetLinearVelocity(id, JPH::Vec3(src.velXZ.x, src.velocityY, src.velXZ.y));
+        const JPH::BodyID Id = Iface.CreateAndAddBody(
+            Settings, bDynamic ? JPH::EActivation::Activate : JPH::EActivation::DontActivate);
+        if (bDynamic && !Id.IsInvalid()) {
+            Iface.SetLinearVelocity(Id, JPH::Vec3(Src.VelXz.x, Src.VelocityY, Src.VelXz.y));
         }
-        return id;
+        return Id;
     }
 
-    void DestroyFloor(JPH::BodyInterface& iface) {
-        if (!floorId_.IsInvalid()) {
-            DestroyBody(iface, floorId_);
-            floorId_ = JPH::BodyID();
+    void DestroyFloor(JPH::BodyInterface& Iface) {
+        if (!FloorId.IsInvalid()) {
+            DestroyBody(Iface, FloorId);
+            FloorId = JPH::BodyID();
         }
     }
 
-    void EnsureFloor(float floorY) {
-        if (!floorId_.IsInvalid() && std::isfinite(floorY_) &&
-            std::abs(floorY - floorY_) < 1.0e-4f) {
+    void EnsureFloor(float InFloorY) {
+        if (!FloorId.IsInvalid() && std::isfinite(FloorY) &&
+            std::abs(InFloorY - FloorY) < 1.0e-4f) {
             return;
         }
-        JPH::BodyInterface& iface = physicsSystem_.GetBodyInterface();
-        DestroyFloor(iface);
+        JPH::BodyInterface& Iface = PhysicsSystem.GetBodyInterface();
+        DestroyFloor(Iface);
         // Thin static slab under the world floor (Leon floorY is the support plane).
-        constexpr float kHalfThickness = 0.5f;
-        JPH::ShapeRefC shape = CreateBoxShape({500.0f, kHalfThickness, 500.0f});
-        if (shape == nullptr) {
+        constexpr float HalfThickness = 0.5f;
+        JPH::ShapeRefC Shape = CreateBoxShape({500.0f, HalfThickness, 500.0f});
+        if (Shape == nullptr) {
             return;
         }
-        JPH::BodyCreationSettings settings(
-            shape, JPH::RVec3(0.0f, floorY - kHalfThickness, 0.0f), JPH::Quat::sIdentity(),
-            JPH::EMotionType::Static, Layers::NON_MOVING);
-        floorId_ = iface.CreateAndAddBody(settings, JPH::EActivation::DontActivate);
-        floorY_ = floorY;
+        JPH::BodyCreationSettings Settings(
+            Shape, JPH::RVec3(0.0f, InFloorY - HalfThickness, 0.0f), JPH::Quat::sIdentity(),
+            JPH::EMotionType::Static, Layers::NonMoving);
+        FloorId = Iface.CreateAndAddBody(Settings, JPH::EActivation::DontActivate);
+        FloorY = InFloorY;
     }
 
-    FBPLayerInterfaceImpl broadPhaseLayerInterface_;
-    FObjectVsBroadPhaseLayerFilterImpl objectVsBroadphaseLayerFilter_;
-    FObjectLayerPairFilterImpl objectVsObjectLayerFilter_;
-    JPH::PhysicsSystem physicsSystem_;
-    std::unique_ptr<JPH::TempAllocatorImpl> tempAllocator_;
-    std::unique_ptr<JPH::JobSystemSingleThreaded> jobSystem_;
-    std::vector<JPH::BodyID> bodyIds_;
-    JPH::BodyID floorId_{};
-    std::size_t lastSkip_ = (std::numeric_limits<std::size_t>::max)();
-    float floorY_ = std::numeric_limits<float>::quiet_NaN();
+    FBPLayerInterfaceImpl BroadPhaseLayerInterface;
+    FObjectVsBroadPhaseLayerFilterImpl ObjectVsBroadphaseLayerFilter;
+    FObjectLayerPairFilterImpl ObjectVsObjectLayerFilter;
+    JPH::PhysicsSystem PhysicsSystem;
+    std::unique_ptr<JPH::TempAllocatorImpl> TempAllocator;
+    std::unique_ptr<JPH::JobSystemSingleThreaded> JobSystem;
+    std::vector<JPH::BodyID> BodyIds;
+    JPH::BodyID FloorId{};
+    std::size_t LastSkip = (std::numeric_limits<std::size_t>::max)();
+    float FloorY = std::numeric_limits<float>::quiet_NaN();
 };
 
 } // namespace

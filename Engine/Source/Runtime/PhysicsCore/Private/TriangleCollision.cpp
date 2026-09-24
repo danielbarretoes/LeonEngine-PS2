@@ -6,19 +6,19 @@
 
 namespace {
 
-[[nodiscard]] bool pointInTriangle(const glm::vec3& p, const glm::vec3& a, const glm::vec3& b,
-                                   const glm::vec3& c, const glm::vec3& normal) {
-    const glm::vec3 n = normal;
-    const glm::vec3 edge0 = b - a;
-    const glm::vec3 edge1 = c - b;
-    const glm::vec3 edge2 = a - c;
-    if (glm::dot(n, glm::cross(edge0, p - a)) < -1.0e-5f) {
+[[nodiscard]] bool PointInTriangle(const glm::vec3& P, const glm::vec3& A, const glm::vec3& B,
+                                   const glm::vec3& C, const glm::vec3& Normal) {
+    const glm::vec3 N = Normal;
+    const glm::vec3 Edge0 = B - A;
+    const glm::vec3 Edge1 = C - B;
+    const glm::vec3 Edge2 = A - C;
+    if (glm::dot(N, glm::cross(Edge0, P - A)) < -1.0e-5f) {
         return false;
     }
-    if (glm::dot(n, glm::cross(edge1, p - b)) < -1.0e-5f) {
+    if (glm::dot(N, glm::cross(Edge1, P - B)) < -1.0e-5f) {
         return false;
     }
-    if (glm::dot(n, glm::cross(edge2, p - c)) < -1.0e-5f) {
+    if (glm::dot(N, glm::cross(Edge2, P - C)) < -1.0e-5f) {
         return false;
     }
     return true;
@@ -26,111 +26,111 @@ namespace {
 
 } // namespace
 
-bool SegmentTriangle(const glm::vec3& start, const glm::vec3& end, const glm::vec3& v0,
-                     const glm::vec3& v1, const glm::vec3& v2, float& outT, glm::vec3& outNormal) {
-    const glm::vec3 edge1 = v1 - v0;
-    const glm::vec3 edge2 = v2 - v0;
-    glm::vec3 normal = glm::cross(edge1, edge2);
-    const float nLen = glm::length(normal);
-    if (nLen < 1.0e-8f) {
+bool SegmentTriangle(const glm::vec3& Start, const glm::vec3& End, const glm::vec3& V0,
+                     const glm::vec3& V1, const glm::vec3& V2, float& OutT, glm::vec3& OutNormal) {
+    const glm::vec3 Edge1 = V1 - V0;
+    const glm::vec3 Edge2 = V2 - V0;
+    glm::vec3 Normal = glm::cross(Edge1, Edge2);
+    const float NLen = glm::length(Normal);
+    if (NLen < 1.0e-8f) {
         return false;
     }
-    normal /= nLen;
+    Normal /= NLen;
 
-    const glm::vec3 dir = end - start;
-    const float denom = glm::dot(normal, dir);
-    if (std::abs(denom) < 1.0e-8f) {
+    const glm::vec3 Dir = End - Start;
+    const float Denom = glm::dot(Normal, Dir);
+    if (std::abs(Denom) < 1.0e-8f) {
         return false;
     }
-    const float t = glm::dot(normal, v0 - start) / denom;
-    if (t < 0.0f || t > 1.0f) {
+    const float T = glm::dot(Normal, V0 - Start) / Denom;
+    if (T < 0.0f || T > 1.0f) {
         return false;
     }
-    const glm::vec3 hit = start + (dir * t);
-    if (!pointInTriangle(hit, v0, v1, v2, normal)) {
+    const glm::vec3 Hit = Start + (Dir * T);
+    if (!PointInTriangle(Hit, V0, V1, V2, Normal)) {
         return false;
     }
-    outT = t;
+    OutT = T;
     // Face the incoming ray (Unreal blocking normal points toward the tracer).
-    outNormal = (denom < 0.0f) ? normal : -normal;
+    OutNormal = (Denom < 0.0f) ? Normal : -Normal;
     return true;
 }
 
-bool SegmentTriangleInflated(const glm::vec3& start, const glm::vec3& end, const glm::vec3& v0,
-                             const glm::vec3& v1, const glm::vec3& v2, float inflate, float& outT,
-                             glm::vec3& outNormal) {
-    const glm::vec3 edge1 = v1 - v0;
-    const glm::vec3 edge2 = v2 - v0;
-    glm::vec3 normal = glm::cross(edge1, edge2);
-    const float nLen = glm::length(normal);
-    if (nLen < 1.0e-8f) {
+bool SegmentTriangleInflated(const glm::vec3& Start, const glm::vec3& End, const glm::vec3& V0,
+                             const glm::vec3& V1, const glm::vec3& V2, float Inflate, float& OutT,
+                             glm::vec3& OutNormal) {
+    const glm::vec3 Edge1 = V1 - V0;
+    const glm::vec3 Edge2 = V2 - V0;
+    glm::vec3 Normal = glm::cross(Edge1, Edge2);
+    const float NLen = glm::length(Normal);
+    if (NLen < 1.0e-8f) {
         return false;
     }
-    normal /= nLen;
+    Normal /= NLen;
 
-    const float pad = std::max(inflate, 0.0f);
+    const float Pad = std::max(Inflate, 0.0f);
     // Offset plane toward the start of the segment (sphere center approach).
-    const float dStart = glm::dot(start - v0, normal);
-    const glm::vec3 planeN = (dStart >= 0.0f) ? normal : -normal;
-    const glm::vec3 planePoint = v0 + (planeN * pad);
+    const float DStart = glm::dot(Start - V0, Normal);
+    const glm::vec3 PlaneN = (DStart >= 0.0f) ? Normal : -Normal;
+    const glm::vec3 PlanePoint = V0 + (PlaneN * Pad);
 
-    const glm::vec3 dir = end - start;
-    const float denom = glm::dot(planeN, dir);
-    if (std::abs(denom) < 1.0e-8f) {
+    const glm::vec3 Dir = End - Start;
+    const float Denom = glm::dot(PlaneN, Dir);
+    if (std::abs(Denom) < 1.0e-8f) {
         return false;
     }
-    const float t = glm::dot(planeN, planePoint - start) / denom;
-    if (t < 0.0f || t > 1.0f) {
+    const float T = glm::dot(PlaneN, PlanePoint - Start) / Denom;
+    if (T < 0.0f || T > 1.0f) {
         return false;
     }
-    const glm::vec3 hit = start + (dir * t);
-    const glm::vec3 onTri = hit - (planeN * pad);
-    if (!pointInTriangle(onTri, v0, v1, v2, normal)) {
+    const glm::vec3 Hit = Start + (Dir * T);
+    const glm::vec3 OnTri = Hit - (PlaneN * Pad);
+    if (!PointInTriangle(OnTri, V0, V1, V2, Normal)) {
         return false;
     }
-    outT = t;
-    outNormal = planeN;
+    OutT = T;
+    OutNormal = PlaneN;
     return true;
 }
 
-bool SegmentTriangleMesh(const glm::vec3& start, const glm::vec3& end,
-                         const FTriangleMeshCollision& mesh, float inflate, float& outT,
-                         glm::vec3& outNormal) {
-    if (!mesh.IsValid()) {
+bool SegmentTriangleMesh(const glm::vec3& Start, const glm::vec3& End,
+                         const FTriangleMeshCollision& Mesh, float Inflate, float& OutT,
+                         glm::vec3& OutNormal) {
+    if (!Mesh.IsValid()) {
         return false;
     }
-    bool any = false;
-    float bestT = 1.0f;
-    glm::vec3 bestN{0.0f, 1.0f, 0.0f};
-    const std::size_t triCount = mesh.indices.size() / 3;
-    for (std::size_t t = 0; t < triCount; ++t) {
-        const std::uint32_t i0 = mesh.indices[t * 3 + 0];
-        const std::uint32_t i1 = mesh.indices[t * 3 + 1];
-        const std::uint32_t i2 = mesh.indices[t * 3 + 2];
-        if (i0 >= mesh.positions.size() || i1 >= mesh.positions.size() ||
-            i2 >= mesh.positions.size()) {
+    bool bAny = false;
+    float BestT = 1.0f;
+    glm::vec3 BestN{0.0f, 1.0f, 0.0f};
+    const std::size_t TriCount = Mesh.Indices.size() / 3;
+    for (std::size_t T = 0; T < TriCount; ++T) {
+        const std::uint32_t I0 = Mesh.Indices[T * 3 + 0];
+        const std::uint32_t I1 = Mesh.Indices[T * 3 + 1];
+        const std::uint32_t I2 = Mesh.Indices[T * 3 + 2];
+        if (I0 >= Mesh.Positions.size() || I1 >= Mesh.Positions.size() ||
+            I2 >= Mesh.Positions.size()) {
             continue;
         }
-        float hitT = 1.0f;
-        glm::vec3 hitN{};
-        const bool ok = (inflate > 1.0e-6f)
-                            ? SegmentTriangleInflated(start, end, mesh.positions[i0],
-                                                      mesh.positions[i1], mesh.positions[i2],
-                                                      inflate, hitT, hitN)
-                            : SegmentTriangle(start, end, mesh.positions[i0], mesh.positions[i1],
-                                              mesh.positions[i2], hitT, hitN);
-        if (!ok || hitT > bestT) {
+        float HitT = 1.0f;
+        glm::vec3 HitN{};
+        const bool bOk = (Inflate > 1.0e-6f)
+                            ? SegmentTriangleInflated(Start, End, Mesh.Positions[I0],
+                                                      Mesh.Positions[I1], Mesh.Positions[I2],
+                                                      Inflate, HitT, HitN)
+                            : SegmentTriangle(Start, End, Mesh.Positions[I0], Mesh.Positions[I1],
+                                              Mesh.Positions[I2], HitT, HitN);
+        if (!bOk || HitT > BestT) {
             continue;
         }
-        bestT = hitT;
-        bestN = hitN;
-        any = true;
+        BestT = HitT;
+        BestN = HitN;
+        bAny = true;
     }
-    if (!any) {
+    if (!bAny) {
         return false;
     }
-    outT = bestT;
-    outNormal = bestN;
+    OutT = BestT;
+    OutNormal = BestN;
     return true;
 }
 

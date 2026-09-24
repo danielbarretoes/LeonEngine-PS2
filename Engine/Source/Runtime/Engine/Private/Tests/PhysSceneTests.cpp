@@ -7,64 +7,64 @@ using Catch::Matchers::WithinAbs;
 
 TEST_CASE("PhysScene AddBody and Clear", "[physics][physscene]") {
     FPhysScene scene;
-    REQUIRE(scene.Bodies().empty());
+    REQUIRE(scene.GetBodies().empty());
     const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
     REQUIRE(id == 0);
-    REQUIRE(scene.Bodies().size() == 1);
+    REQUIRE(scene.GetBodies().size() == 1);
     scene.Clear();
-    REQUIRE(scene.Bodies().empty());
+    REQUIRE(scene.GetBodies().empty());
 }
 
 TEST_CASE("PhysScene Step applies gravity and snaps to floor", "[physics][physscene]") {
     FPhysScene scene;
     const std::size_t id = scene.AddBody({0, EBodyType::Dynamic, 1.0f, true});
-    auto& body = scene.Bodies()[id];
-    body.position = {0.0f, 2.0f, 0.0f};
-    body.halfExtents = {0.5f, 0.5f, 0.5f};
+    auto& body = scene.GetBodies()[id];
+    body.Position = {0.0f, 2.0f, 0.0f};
+    body.HalfExtents = {0.5f, 0.5f, 0.5f};
 
     FPhysSceneStepParams params;
-    params.deltaTime = 1.0f / 60.0f;
-    params.gravity = 24.0f;
-    params.floorY = 0.0f;
-    params.skin = 0.02f;
+    params.DeltaTime = 1.0f / 60.0f;
+    params.Gravity = 24.0f;
+    params.FloorY = 0.0f;
+    params.Skin = 0.02f;
 
     for (int i = 0; i < 180; ++i) {
         scene.Step(params);
     }
 
     // Bottom of AABB ≈ floorY (center y ≈ halfExtents.y)
-    REQUIRE(body.position.y < 1.0f);
-    REQUIRE(body.position.y > 0.0f);
-    REQUIRE_THAT(body.velocityY, WithinAbs(0.0f, 0.5f));
+    REQUIRE(body.Position.y < 1.0f);
+    REQUIRE(body.Position.y > 0.0f);
+    REQUIRE_THAT(body.VelocityY, WithinAbs(0.0f, 0.5f));
 }
 
 TEST_CASE("PhysScene static body does not move under gravity", "[physics][physscene]") {
     FPhysScene scene;
     const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
-    auto& body = scene.Bodies()[id];
-    body.position = {1.0f, 3.0f, 2.0f};
-    body.halfExtents = {0.5f, 0.5f, 0.5f};
+    auto& body = scene.GetBodies()[id];
+    body.Position = {1.0f, 3.0f, 2.0f};
+    body.HalfExtents = {0.5f, 0.5f, 0.5f};
 
     FPhysSceneStepParams params;
-    params.deltaTime = 0.1f;
-    params.gravity = 50.0f;
+    params.DeltaTime = 0.1f;
+    params.Gravity = 50.0f;
     scene.Step(params);
 
-    REQUIRE_THAT(body.position.x, WithinAbs(1.0f, 1.0e-5f));
-    REQUIRE_THAT(body.position.y, WithinAbs(3.0f, 1.0e-5f));
-    REQUIRE_THAT(body.position.z, WithinAbs(2.0f, 1.0e-5f));
+    REQUIRE_THAT(body.Position.x, WithinAbs(1.0f, 1.0e-5f));
+    REQUIRE_THAT(body.Position.y, WithinAbs(3.0f, 1.0e-5f));
+    REQUIRE_THAT(body.Position.z, WithinAbs(2.0f, 1.0e-5f));
 }
 
 TEST_CASE("PhysScene QuerySupportY uses body tops", "[physics][physscene]") {
     FPhysScene scene;
     const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
-    auto& body = scene.Bodies()[id];
-    body.position = {0.0f, 1.0f, 0.0f};
-    body.halfExtents = {1.0f, 1.0f, 1.0f}; // top at y=2
+    auto& body = scene.GetBodies()[id];
+    body.Position = {0.0f, 1.0f, 0.0f};
+    body.HalfExtents = {1.0f, 1.0f, 1.0f}; // top at y=2
 
     FCapsuleShape capsule;
-    capsule.radius = 0.35f;
-    capsule.height = 1.85f;
+    capsule.Radius = 0.35f;
+    capsule.Height = 1.85f;
 
     const float support =
         scene.QuerySupportY(capsule, {0.0f, 2.1f, 0.0f}, 0.0f, 0.35f, 0.02f, ULevel::npos);
@@ -74,13 +74,13 @@ TEST_CASE("PhysScene QuerySupportY uses body tops", "[physics][physscene]") {
 TEST_CASE("PhysScene ResolveCapsuleSides pushes out of AABB", "[physics][physscene]") {
     FPhysScene scene;
     const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
-    auto& body = scene.Bodies()[id];
-    body.position = {0.0f, 0.9f, 0.0f};
-    body.halfExtents = {0.5f, 0.9f, 0.5f};
+    auto& body = scene.GetBodies()[id];
+    body.Position = {0.0f, 0.9f, 0.0f};
+    body.HalfExtents = {0.5f, 0.9f, 0.5f};
 
     FCapsuleShape capsule;
-    capsule.radius = 0.35f;
-    capsule.height = 1.85f;
+    capsule.Radius = 0.35f;
+    capsule.Height = 1.85f;
 
     glm::vec3 feet{0.1f, 0.0f, 0.0f};
     FCapsuleContactParams contact{};
@@ -94,14 +94,14 @@ TEST_CASE("PhysScene ApplyCapsuleSweepPush moves Dynamic without penetration",
           "[physics][physscene][push]") {
     FPhysScene scene;
     const std::size_t id = scene.AddBody({7, EBodyType::Dynamic, 1.0f, true});
-    FBodyInstance& body = scene.Bodies()[id];
-    body.position = {2.0f, 0.5f, 0.0f};
-    body.halfExtents = {0.5f, 0.5f, 0.5f};
-    body.mass = 1.0f;
+    FBodyInstance& body = scene.GetBodies()[id];
+    body.Position = {2.0f, 0.5f, 0.0f};
+    body.HalfExtents = {0.5f, 0.5f, 0.5f};
+    body.Mass = 1.0f;
 
     REQUIRE(scene.ApplyCapsuleSweepPush(7, {1.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, 0.85f, 18.0f));
-    REQUIRE(body.velXZ.x > 0.1f);
-    REQUIRE(body.position.x > 2.0f);
+    REQUIRE(body.VelXz.x > 0.1f);
+    REQUIRE(body.Position.x > 2.0f);
 
     REQUIRE_FALSE(scene.ApplyCapsuleSweepPush(7, {1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 0.85f, 18.0f));
 }

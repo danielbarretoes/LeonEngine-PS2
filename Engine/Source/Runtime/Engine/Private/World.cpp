@@ -28,9 +28,9 @@ void UWorld::RegisterBodiesFromLevel(const ULevel& level) {
             continue;
         }
         FBodyInstanceDesc desc{};
-        desc.levelMeshIndex = i;
-        desc.type = component.simulatePhysics ? EBodyType::Dynamic : EBodyType::Static;
-        desc.enableGravity = component.enableGravity;
+        desc.LevelMeshIndex = i;
+        desc.Type = component.simulatePhysics ? EBodyType::Dynamic : EBodyType::Static;
+        desc.bEnableGravity = component.enableGravity;
         physics_.AddBody(desc);
     }
 }
@@ -61,21 +61,21 @@ void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& params) {
     resolveCharacterOverlaps();
 
     FPhysSceneStepParams step{};
-    step.deltaTime = params.deltaTime;
+    step.DeltaTime = params.deltaTime;
     if (params.overridePhysicsStep) {
-        step.damping = params.physicsDamping;
-        step.walkBounds = params.physicsWalkBounds;
-        step.gravity = params.physicsGravity;
-        step.floorY = params.physicsFloorY;
-        step.skin = params.physicsSkin;
+        step.Damping = params.physicsDamping;
+        step.WalkBounds = params.physicsWalkBounds;
+        step.Gravity = params.physicsGravity;
+        step.FloorY = params.physicsFloorY;
+        step.Skin = params.physicsSkin;
     } else if (ACharacter* primary = FindFirst<ACharacter>()) {
         const UCharacterMovementComponent& moveCfg = primary->GetCharacterMovement();
-        step.damping = moveCfg.PushDamping;
-        step.walkBounds = moveCfg.WalkBounds;
-        step.gravity = moveCfg.Gravity;
-        step.floorY = moveCfg.FloorY;
-        step.skin = moveCfg.Skin;
-        step.skipLevelMeshIndex = primary->LevelMeshIndex();
+        step.Damping = moveCfg.PushDamping;
+        step.WalkBounds = moveCfg.WalkBounds;
+        step.Gravity = moveCfg.Gravity;
+        step.FloorY = moveCfg.FloorY;
+        step.Skin = moveCfg.Skin;
+        step.SkipLevelMeshIndex = primary->LevelMeshIndex();
     }
     physics_.Step(step);
 

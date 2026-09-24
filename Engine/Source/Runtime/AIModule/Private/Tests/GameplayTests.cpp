@@ -137,8 +137,8 @@ TEST_CASE("SpringArmComponent clamps pitch and arm length", "[gameplay][springar
 TEST_CASE("SpringArmComponent collision probe shortens arm", "[gameplay][springarm]") {
     FPhysScene scene;
     const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
-    scene.Bodies()[id].position = {2.0f, 1.0f, 0.0f};
-    scene.Bodies()[id].halfExtents = {0.25f, 1.0f, 2.0f};
+    scene.GetBodies()[id].Position = {2.0f, 1.0f, 0.0f};
+    scene.GetBodies()[id].HalfExtents = {0.25f, 1.0f, 2.0f};
 
     USpringArmComponent arm;
     arm.bDoCollisionTest = true;
@@ -204,10 +204,10 @@ TEST_CASE("AIController MoveToActor tracks moving target", "[gameplay][ai]") {
 TEST_CASE("AIController path follow does not shortcut through blocker", "[gameplay][ai][nav]") {
     FPhysScene physics;
     FBodyInstance wall{};
-    wall.type = EBodyType::Static;
-    wall.position = {0.0f, 1.0f, 0.0f};
-    wall.halfExtents = {0.6f, 1.5f, 4.0f};
-    physics.Bodies().push_back(wall);
+    wall.Type = EBodyType::Static;
+    wall.Position = {0.0f, 1.0f, 0.0f};
+    wall.HalfExtents = {0.6f, 1.5f, 4.0f};
+    physics.GetBodies().push_back(wall);
 
     UNavigationSystem nav;
     nav.SetCellSize(0.5f);
@@ -239,16 +239,16 @@ TEST_CASE("NavigationSystem FindPath routes around static blocker", "[gameplay][
 
     // Floor plane-like slab (wide aspect) must NOT wipe the whole grid.
     FBodyInstance floor{};
-    floor.type = EBodyType::Static;
-    floor.position = {0.0f, 0.0f, 0.0f};
-    floor.halfExtents = {20.0f, 0.5f, 20.0f};
-    physics.Bodies().push_back(floor);
+    floor.Type = EBodyType::Static;
+    floor.Position = {0.0f, 0.0f, 0.0f};
+    floor.HalfExtents = {20.0f, 0.5f, 20.0f};
+    physics.GetBodies().push_back(floor);
 
     FBodyInstance wall{};
-    wall.type = EBodyType::Static;
-    wall.position = {0.0f, 1.0f, 0.0f};
-    wall.halfExtents = {0.6f, 1.5f, 5.0f};
-    physics.Bodies().push_back(wall);
+    wall.Type = EBodyType::Static;
+    wall.Position = {0.0f, 1.0f, 0.0f};
+    wall.HalfExtents = {0.6f, 1.5f, 5.0f};
+    physics.GetBodies().push_back(wall);
 
     UNavigationSystem nav;
     nav.SetCellSize(0.5f);
@@ -289,12 +289,12 @@ TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "
     level.StaticMeshes().push_back(std::move(plate));
 
     FBodyInstance plateBody{};
-    plateBody.type = EBodyType::Static;
-    plateBody.levelMeshIndex = 0;
-    plateBody.position = {0.0f, 0.12f, 0.0f};
-    plateBody.halfExtents = {0.9f, 0.1f, 0.9f};
-    physics.Bodies().push_back(plateBody);
-    physics.TriangleMeshes().emplace_back();
+    plateBody.Type = EBodyType::Static;
+    plateBody.LevelMeshIndex = 0;
+    plateBody.Position = {0.0f, 0.12f, 0.0f};
+    plateBody.HalfExtents = {0.9f, 0.1f, 0.9f};
+    physics.GetBodies().push_back(plateBody);
+    physics.GetTriangleMeshes().emplace_back();
 
     UStaticMeshComponent ramp{};
     ramp.tag = NavTags::Walkable;
@@ -303,19 +303,19 @@ TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "
     level.StaticMeshes().push_back(std::move(ramp));
 
     FBodyInstance rampBody{};
-    rampBody.type = EBodyType::Static;
-    rampBody.levelMeshIndex = 1;
-    rampBody.position = {4.0f, 1.0f, 0.0f};
-    rampBody.halfExtents = {2.5f, 1.0f, 1.2f};
-    rampBody.collisionShape = ECollisionShape::TriangleMesh;
-    physics.Bodies().push_back(rampBody);
+    rampBody.Type = EBodyType::Static;
+    rampBody.LevelMeshIndex = 1;
+    rampBody.Position = {4.0f, 1.0f, 0.0f};
+    rampBody.HalfExtents = {2.5f, 1.0f, 1.2f};
+    rampBody.CollisionShape = ECollisionShape::TriangleMesh;
+    physics.GetBodies().push_back(rampBody);
 
     FTriangleMeshCollision tri{};
     // Two tris covering a 4x2 footprint around (4,0).
-    tri.positions = {
+    tri.Positions = {
         {2.0f, 0.5f, -1.0f}, {6.0f, 1.5f, -1.0f}, {6.0f, 1.5f, 1.0f}, {2.0f, 0.5f, 1.0f}};
-    tri.indices = {0, 1, 2, 0, 2, 3};
-    physics.TriangleMeshes().push_back(std::move(tri));
+    tri.Indices = {0, 1, 2, 0, 2, 3};
+    physics.GetTriangleMeshes().push_back(std::move(tri));
 
     UNavigationSystem nav;
     nav.SetCellSize(0.5f);
@@ -353,10 +353,10 @@ TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "
 TEST_CASE("NavigationSystem AppendDebugDraw fills overlay", "[gameplay][nav][debug]") {
     FPhysScene physics;
     FBodyInstance wall{};
-    wall.type = EBodyType::Static;
-    wall.position = {0.0f, 1.0f, 0.0f};
-    wall.halfExtents = {0.5f, 1.0f, 0.5f};
-    physics.Bodies().push_back(wall);
+    wall.Type = EBodyType::Static;
+    wall.Position = {0.0f, 1.0f, 0.0f};
+    wall.HalfExtents = {0.5f, 1.0f, 0.5f};
+    physics.GetBodies().push_back(wall);
 
     UNavigationSystem nav;
     nav.SetCellSize(1.0f);

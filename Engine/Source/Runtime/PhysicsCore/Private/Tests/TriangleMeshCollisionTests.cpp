@@ -10,48 +10,48 @@
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("SegmentTriangle hits a unit floor tri", "[physics][triangle]") {
-    const glm::vec3 v0{-1.0f, 0.0f, -1.0f};
-    const glm::vec3 v1{1.0f, 0.0f, -1.0f};
-    const glm::vec3 v2{0.0f, 0.0f, 1.0f};
-    float t = 1.0f;
-    glm::vec3 n{};
-    REQUIRE(SegmentTriangle({0.0f, 2.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, v0, v1, v2, t, n));
-    REQUIRE_THAT(t, WithinAbs(2.0f / 3.0f, 1.0e-3f));
-    REQUIRE(n.y > 0.5f);
+    const glm::vec3 V0{-1.0f, 0.0f, -1.0f};
+    const glm::vec3 V1{1.0f, 0.0f, -1.0f};
+    const glm::vec3 V2{0.0f, 0.0f, 1.0f};
+    float T = 1.0f;
+    glm::vec3 N{};
+    REQUIRE(SegmentTriangle({0.0f, 2.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, V0, V1, V2, T, N));
+    REQUIRE_THAT(T, WithinAbs(2.0f / 3.0f, 1.0e-3f));
+    REQUIRE(N.y > 0.5f);
 }
 
 TEST_CASE("LineTrace and QuerySupportY use TriangleMesh surface", "[physics][triangle][trace]") {
-    ULevel level;
-    FMeshData data;
+    ULevel Level;
+    FMeshData Data;
     // Flat plane at y=0.5 covering xz [-2,2]
-    data.Vertices.push_back({{-2.0f, 0.5f, -2.0f}, {0, 1, 0}, {0, 0}, {1, 0, 0, 1}});
-    data.Vertices.push_back({{2.0f, 0.5f, -2.0f}, {0, 1, 0}, {1, 0}, {1, 0, 0, 1}});
-    data.Vertices.push_back({{2.0f, 0.5f, 2.0f}, {0, 1, 0}, {1, 1}, {1, 0, 0, 1}});
-    data.Vertices.push_back({{-2.0f, 0.5f, 2.0f}, {0, 1, 0}, {0, 1}, {1, 0, 0, 1}});
-    data.Indices = {0, 1, 2, 0, 2, 3};
-    data.Submeshes.push_back({0, 6, 0});
+    Data.Vertices.push_back({{-2.0f, 0.5f, -2.0f}, {0, 1, 0}, {0, 0}, {1, 0, 0, 1}});
+    Data.Vertices.push_back({{2.0f, 0.5f, -2.0f}, {0, 1, 0}, {1, 0}, {1, 0, 0, 1}});
+    Data.Vertices.push_back({{2.0f, 0.5f, 2.0f}, {0, 1, 0}, {1, 1}, {1, 0, 0, 1}});
+    Data.Vertices.push_back({{-2.0f, 0.5f, 2.0f}, {0, 1, 0}, {0, 1}, {1, 0, 0, 1}});
+    Data.Indices = {0, 1, 2, 0, 2, 3};
+    Data.Submeshes.push_back({0, 6, 0});
 
-    UStaticMeshComponent component{};
-    component.mesh = std::make_shared<UStaticMesh>(UStaticMesh::CreateCpu(data));
-    component.collisionEnabled = true;
-    level.StaticMeshes().push_back(std::move(component));
+    UStaticMeshComponent Component{};
+    Component.mesh = std::make_shared<UStaticMesh>(UStaticMesh::CreateCpu(Data));
+    Component.collisionEnabled = true;
+    Level.StaticMeshes().push_back(std::move(Component));
 
-    FPhysScene scene;
-    scene.AddBody({0, EBodyType::Static, 1.0f, true});
-    scene.SyncFromLevel(level);
-    REQUIRE(scene.Bodies()[0].collisionShape == ECollisionShape::TriangleMesh);
+    FPhysScene Scene;
+    Scene.AddBody({0, EBodyType::Static, 1.0f, true});
+    Scene.SyncFromLevel(Level);
+    REQUIRE(Scene.GetBodies()[0].CollisionShape == ECollisionShape::TriangleMesh);
 
-    FHitResult hit{};
-    REQUIRE(scene.LineTraceSingleByChannel(hit, {0.0f, 3.0f, 0.0f}, {0.0f, -1.0f, 0.0f},
+    FHitResult Hit{};
+    REQUIRE(Scene.LineTraceSingleByChannel(Hit, {0.0f, 3.0f, 0.0f}, {0.0f, -1.0f, 0.0f},
                                            ECollisionChannel::WorldStatic));
-    REQUIRE(hit.bBlockingHit);
-    REQUIRE_THAT(hit.ImpactPoint.y, WithinAbs(0.5f, 2.0e-2f));
-    REQUIRE(hit.ImpactNormal.y > 0.5f);
+    REQUIRE(Hit.bBlockingHit);
+    REQUIRE_THAT(Hit.ImpactPoint.y, WithinAbs(0.5f, 2.0e-2f));
+    REQUIRE(Hit.ImpactNormal.y > 0.5f);
 
-    FCapsuleShape capsule{};
-    capsule.radius = 0.35f;
-    capsule.height = 1.0f;
-    const float support =
-        scene.QuerySupportY(capsule, {0.0f, 1.0f, 0.0f}, 0.0f, 0.4f, 0.02f, ULevel::npos);
-    REQUIRE_THAT(support, WithinAbs(0.5f, 5.0e-2f));
+    FCapsuleShape Capsule{};
+    Capsule.Radius = 0.35f;
+    Capsule.Height = 1.0f;
+    const float Support =
+        Scene.QuerySupportY(Capsule, {0.0f, 1.0f, 0.0f}, 0.0f, 0.4f, 0.02f, ULevel::npos);
+    REQUIRE_THAT(Support, WithinAbs(0.5f, 5.0e-2f));
 }

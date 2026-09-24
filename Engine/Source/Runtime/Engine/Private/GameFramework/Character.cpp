@@ -131,7 +131,7 @@ void ACharacter::FindFloor(FPhysScene& physScene, FFindFloorResult& outFloor, fl
     const float distance = std::max(traceDistance, movement_.Skin);
     const glm::vec3 feet = GetActorLocation();
     // Sphere rests on the feet (center = feet + radius up).
-    const glm::vec3 sphereCenter = feet + glm::vec3{0.0f, capsule_.radius, 0.0f};
+    const glm::vec3 sphereCenter = feet + glm::vec3{0.0f, capsule_.Radius, 0.0f};
     const glm::vec3 traceStart = sphereCenter + glm::vec3{0.0f, movement_.Skin, 0.0f};
     const glm::vec3 traceEnd = sphereCenter - glm::vec3{0.0f, distance, 0.0f};
 
@@ -144,7 +144,7 @@ void ACharacter::FindFloor(FPhysScene& physScene, FFindFloorResult& outFloor, fl
 
     FHitResult hit{};
     const bool hitFloor =
-        physScene.SphereTraceSingleByChannel(hit, traceStart, traceEnd, capsule_.radius,
+        physScene.SphereTraceSingleByChannel(hit, traceStart, traceEnd, capsule_.Radius,
                                              ECollisionChannel::Visibility, query, debugDraw);
     if (!hitFloor) {
         return;
@@ -168,11 +168,11 @@ void ACharacter::applyYaw(float targetYawDegrees, float deltaTime) {
 }
 
 float ACharacter::capsuleHalfHeight() const {
-    return std::max(0.0f, capsule_.height * 0.5f - capsule_.radius);
+    return std::max(0.0f, capsule_.Height * 0.5f - capsule_.Radius);
 }
 
 glm::vec3 ACharacter::capsuleCenterFromFeet(const glm::vec3& feet) const {
-    return feet + glm::vec3{0.0f, capsule_.height * 0.5f, 0.0f};
+    return feet + glm::vec3{0.0f, capsule_.Height * 0.5f, 0.0f};
 }
 
 bool ACharacter::blocksHorizontalMove(const FHitResult& hit) const {
@@ -217,7 +217,7 @@ bool ACharacter::safeMoveUpdatedComponent(FPhysScene& physScene, const glm::vec3
         debugDraw != nullptr ? EDrawDebugTrace::ForOneFrame : EDrawDebugTrace::None;
 
     std::vector<FHitResult> hits;
-    (void)physScene.CapsuleTraceMultiByChannel(hits, startCenter, endCenter, capsule_.radius, halfH,
+    (void)physScene.CapsuleTraceMultiByChannel(hits, startCenter, endCenter, capsule_.Radius, halfH,
                                                ECollisionChannel::Visibility, query, debugDraw);
 
     const FHitResult* block = nullptr;
@@ -260,10 +260,10 @@ bool ACharacter::safeMoveUpdatedComponent(FPhysScene& physScene, const glm::vec3
 
 void ACharacter::resolveSides(FPhysScene& physScene, bool applyPush) {
     FCapsuleContactParams params{};
-    params.pushStrength = movement_.PushStrength;
-    params.stepUp = movement_.MaxStepHeight;
-    params.skin = movement_.Skin;
-    params.walkBounds = movement_.WalkBounds;
+    params.PushStrength = movement_.PushStrength;
+    params.StepUp = movement_.MaxStepHeight;
+    params.Skin = movement_.Skin;
+    params.WalkBounds = movement_.WalkBounds;
     physScene.ResolveCapsuleSides(capsule_, mutableLocation(), {wishDir_.x, wishDir_.z}, params,
                                   LevelMeshIndex(), applyPush);
 }
@@ -293,7 +293,7 @@ bool ACharacter::tryStepUp(FPhysScene& physScene, const glm::vec3& forwardDelta,
     const glm::vec3 upStart = capsuleCenterFromFeet(feet);
     const glm::vec3 upEnd = upStart + glm::vec3{0.0f, movement_.MaxStepHeight, 0.0f};
     std::vector<FHitResult> upHits;
-    (void)physScene.CapsuleTraceMultiByChannel(upHits, upStart, upEnd, capsule_.radius, halfH,
+    (void)physScene.CapsuleTraceMultiByChannel(upHits, upStart, upEnd, capsule_.Radius, halfH,
                                                ECollisionChannel::Visibility, query, debugDraw);
     for (const FHitResult& upHit : upHits) {
         if (upHit.ImpactNormal.y < -0.5f) {
@@ -305,7 +305,7 @@ bool ACharacter::tryStepUp(FPhysScene& physScene, const glm::vec3& forwardDelta,
     // 2) Forward onto the ledge while elevated. One frame of leftover is often << radius;
     // probe at least ~half-radius so QuerySupportY can see the top.
     const float fwdLen = glm::length(fwd);
-    const float minFwd = std::max(capsule_.radius * 0.5f, movement_.Skin * 4.0f);
+    const float minFwd = std::max(capsule_.Radius * 0.5f, movement_.Skin * 4.0f);
     if (fwdLen > 1.0e-5f && fwdLen < minFwd) {
         fwd *= (minFwd / fwdLen);
     }
@@ -481,15 +481,15 @@ void ACharacter::ResolvePawnOverlap(ACharacter& other) {
 
     glm::vec3& a = mutableLocation();
     glm::vec3& b = other.mutableLocation();
-    const float aTop = a.y + capsule_.height;
-    const float bTop = b.y + other.capsule_.height;
+    const float aTop = a.y + capsule_.Height;
+    const float bTop = b.y + other.capsule_.Height;
     if (aTop < b.y || bTop < a.y) {
         return;
     }
 
     glm::vec2 delta{a.x - b.x, a.z - b.z};
     float dist = glm::length(delta);
-    const float minDist = capsule_.radius + other.capsule_.radius;
+    const float minDist = capsule_.Radius + other.capsule_.Radius;
     if (dist >= minDist - 1.0e-5f) {
         return;
     }

@@ -11,9 +11,9 @@ namespace {
 
 void AddFloorBox(FPhysScene& scene, const glm::vec3& center, const glm::vec3& halfExtents) {
     const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
-    FBodyInstance& body = scene.Bodies()[id];
-    body.position = center;
-    body.halfExtents = halfExtents;
+    FBodyInstance& body = scene.GetBodies()[id];
+    body.Position = center;
+    body.HalfExtents = halfExtents;
 }
 
 } // namespace
@@ -291,24 +291,24 @@ TEST_CASE("Character walk shove moves Dynamic crate without overlap",
 
     FPhysScene& scene = world.GetPhysicsScene();
     const std::size_t id = scene.AddBody({3, EBodyType::Dynamic, 1.0f, true});
-    FBodyInstance& crate = scene.Bodies()[id];
+    FBodyInstance& crate = scene.GetBodies()[id];
     // Capsule radius ~0.35; place crate so walking +X contacts the west face.
-    crate.position = {1.2f, 0.45f, 0.0f};
-    crate.halfExtents = {0.4f, 0.45f, 0.4f};
-    crate.mass = 1.0f;
-    const float x0 = crate.position.x;
+    crate.Position = {1.2f, 0.45f, 0.0f};
+    crate.HalfExtents = {0.4f, 0.45f, 0.4f};
+    crate.Mass = 1.0f;
+    const float x0 = crate.Position.x;
 
     for (int i = 0; i < 45; ++i) {
         character->AddMovementInput({1.0f, 0.0f, 0.0f});
         character->PerformMovement(scene, 1.0f / 60.0f, nullptr);
         FPhysSceneStepParams step{};
-        step.deltaTime = 1.0f / 60.0f;
-        step.floorY = 0.0f;
-        step.gravity = 24.0f;
+        step.DeltaTime = 1.0f / 60.0f;
+        step.FloorY = 0.0f;
+        step.Gravity = 24.0f;
         scene.Step(step);
     }
 
-    REQUIRE(crate.position.x > x0 + 0.15f);
+    REQUIRE(crate.Position.x > x0 + 0.15f);
 }
 
 TEST_CASE("World separates overlapping Character capsules", "[gameplay][character][pawn]") {
@@ -329,7 +329,7 @@ TEST_CASE("World separates overlapping Character capsules", "[gameplay][characte
     const float dx = a->GetActorLocation().x - b->GetActorLocation().x;
     const float dz = a->GetActorLocation().z - b->GetActorLocation().z;
     const float dist = std::sqrt((dx * dx) + (dz * dz));
-    const float minDist = a->GetCapsule().radius + b->GetCapsule().radius;
+    const float minDist = a->GetCapsule().Radius + b->GetCapsule().Radius;
     REQUIRE(dist + 1.0e-3f >= minDist);
 }
 

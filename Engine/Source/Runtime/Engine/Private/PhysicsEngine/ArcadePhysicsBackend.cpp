@@ -9,26 +9,26 @@ public:
 };
 
 FPhysicsBackendFactory& JoltFactory() {
-    static FPhysicsBackendFactory factory = nullptr;
-    return factory;
+    static FPhysicsBackendFactory Factory = nullptr;
+    return Factory;
 }
 
 } // namespace
 
-void RegisterPhysicsBackendFactory(EPhysicsBackendKind kind, FPhysicsBackendFactory factory) {
-    if (kind == EPhysicsBackendKind::Jolt) {
-        JoltFactory() = factory;
+void RegisterPhysicsBackendFactory(EPhysicsBackendKind Kind, FPhysicsBackendFactory Factory) {
+    if (Kind == EPhysicsBackendKind::Jolt) {
+        JoltFactory() = Factory;
     }
 }
 
-std::unique_ptr<IPhysicsBackend> CreatePhysicsBackend(EPhysicsBackendKind kind) {
-    if (kind == EPhysicsBackendKind::Jolt) {
+std::unique_ptr<IPhysicsBackend> CreatePhysicsBackend(EPhysicsBackendKind Kind) {
+    if (Kind == EPhysicsBackendKind::Jolt) {
         if (JoltFactory() != nullptr) {
             return JoltFactory()();
         }
-        static bool s_loggedJoltFallback = false;
-        if (!s_loggedJoltFallback) {
-            s_loggedJoltFallback = true;
+        static bool bSLoggedJoltFallback = false;
+        if (!bSLoggedJoltFallback) {
+            bSLoggedJoltFallback = true;
             std::cerr << "CreatePhysicsBackend: JoltPhysics plugin not enabled; falling back to Arcade\n";
         }
     }

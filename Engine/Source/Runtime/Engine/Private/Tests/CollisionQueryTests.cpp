@@ -8,8 +8,8 @@ using Catch::Matchers::WithinAbs;
 TEST_CASE("LineTraceSingleByChannel hits static AABB", "[physics][trace]") {
     FPhysScene scene;
     const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
-    scene.Bodies()[id].position = {0.0f, 0.5f, 0.0f};
-    scene.Bodies()[id].halfExtents = {0.5f, 0.5f, 0.5f};
+    scene.GetBodies()[id].Position = {0.0f, 0.5f, 0.0f};
+    scene.GetBodies()[id].HalfExtents = {0.5f, 0.5f, 0.5f};
 
     FHitResult hit{};
     REQUIRE(scene.LineTraceSingleByChannel(hit, {0.0f, 0.5f, -2.0f}, {0.0f, 0.5f, 2.0f},
@@ -22,8 +22,8 @@ TEST_CASE("LineTraceSingleByChannel hits static AABB", "[physics][trace]") {
 TEST_CASE("LineTraceSingleByChannel filters by channel", "[physics][trace]") {
     FPhysScene scene;
     const std::size_t id = scene.AddBody({0, EBodyType::Dynamic, 1.0f, true});
-    scene.Bodies()[id].position = {0.0f, 0.5f, 0.0f};
-    scene.Bodies()[id].halfExtents = {0.5f, 0.5f, 0.5f};
+    scene.GetBodies()[id].Position = {0.0f, 0.5f, 0.0f};
+    scene.GetBodies()[id].HalfExtents = {0.5f, 0.5f, 0.5f};
 
     FHitResult hit{};
     REQUIRE_FALSE(scene.LineTraceSingleByChannel(hit, {0.0f, 0.5f, -2.0f}, {0.0f, 0.5f, 2.0f},
@@ -49,8 +49,8 @@ TEST_CASE("SphereTraceSingleByChannel hits floor plane", "[physics][trace]") {
 TEST_CASE("CapsuleTraceSingleByChannel finds platform top", "[physics][trace]") {
     FPhysScene scene;
     const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
-    scene.Bodies()[id].position = {0.0f, 1.0f, 0.0f};
-    scene.Bodies()[id].halfExtents = {1.0f, 1.0f, 1.0f}; // top at y=2
+    scene.GetBodies()[id].Position = {0.0f, 1.0f, 0.0f};
+    scene.GetBodies()[id].HalfExtents = {1.0f, 1.0f, 1.0f}; // top at y=2
 
     FHitResult hit{};
     const float radius = 0.35f;
@@ -65,12 +65,12 @@ TEST_CASE("CapsuleTraceSingleByChannel finds platform top", "[physics][trace]") 
 TEST_CASE("LineTraceMultiByChannel returns all hits sorted", "[physics][trace][multi]") {
     FPhysScene scene;
     const std::size_t nearId = scene.AddBody({0, EBodyType::Static, 1.0f, true});
-    scene.Bodies()[nearId].position = {0.0f, 0.5f, 0.0f};
-    scene.Bodies()[nearId].halfExtents = {0.5f, 0.5f, 0.5f};
+    scene.GetBodies()[nearId].Position = {0.0f, 0.5f, 0.0f};
+    scene.GetBodies()[nearId].HalfExtents = {0.5f, 0.5f, 0.5f};
 
     const std::size_t farId = scene.AddBody({1, EBodyType::Static, 1.0f, true});
-    scene.Bodies()[farId].position = {0.0f, 0.5f, 3.0f};
-    scene.Bodies()[farId].halfExtents = {0.5f, 0.5f, 0.5f};
+    scene.GetBodies()[farId].Position = {0.0f, 0.5f, 3.0f};
+    scene.GetBodies()[farId].HalfExtents = {0.5f, 0.5f, 0.5f};
 
     FCollisionQueryParams params{};
     params.bTraceFloorPlane = false;
@@ -92,8 +92,8 @@ TEST_CASE("LineTraceMultiByChannel returns all hits sorted", "[physics][trace][m
 TEST_CASE("SphereTraceMultiByChannel includes floor and bodies", "[physics][trace][multi]") {
     FPhysScene scene;
     const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
-    scene.Bodies()[id].position = {0.0f, 2.0f, 0.0f};
-    scene.Bodies()[id].halfExtents = {1.0f, 0.5f, 1.0f}; // top at 2.5, bottom at 1.5
+    scene.GetBodies()[id].Position = {0.0f, 2.0f, 0.0f};
+    scene.GetBodies()[id].HalfExtents = {1.0f, 0.5f, 1.0f}; // top at 2.5, bottom at 1.5
 
     FCollisionQueryParams params{};
     params.bTraceFloorPlane = true;
@@ -117,11 +117,11 @@ TEST_CASE("SphereTraceMultiByChannel includes floor and bodies", "[physics][trac
 TEST_CASE("CapsuleTraceMultiByChannel returns multiple blocking hits", "[physics][trace][multi]") {
     FPhysScene scene;
     const std::size_t a = scene.AddBody({0, EBodyType::Static, 1.0f, true});
-    scene.Bodies()[a].position = {0.0f, 1.0f, 0.0f};
-    scene.Bodies()[a].halfExtents = {0.5f, 0.5f, 0.5f};
+    scene.GetBodies()[a].Position = {0.0f, 1.0f, 0.0f};
+    scene.GetBodies()[a].HalfExtents = {0.5f, 0.5f, 0.5f};
     const std::size_t b = scene.AddBody({1, EBodyType::Dynamic, 1.0f, true});
-    scene.Bodies()[b].position = {0.0f, 3.0f, 0.0f};
-    scene.Bodies()[b].halfExtents = {0.5f, 0.5f, 0.5f};
+    scene.GetBodies()[b].Position = {0.0f, 3.0f, 0.0f};
+    scene.GetBodies()[b].HalfExtents = {0.5f, 0.5f, 0.5f};
 
     std::vector<FHitResult> hits;
     REQUIRE(scene.CapsuleTraceMultiByChannel(hits, {0.0f, 5.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, 0.2f,

@@ -115,16 +115,16 @@ TEST_CASE("DeserializeLeonLevel and InputCmd adversarial inputs", "[content][fuz
 TEST_CASE("NavigationSystem agent radius dilation shrinks walkable ring", "[gameplay][nav]") {
     FPhysScene physics;
     FBodyInstance floor{};
-    floor.type = EBodyType::Static;
-    floor.position = {0.0f, 0.0f, 0.0f};
-    floor.halfExtents = {20.0f, 0.5f, 20.0f};
-    physics.Bodies().push_back(floor);
+    floor.Type = EBodyType::Static;
+    floor.Position = {0.0f, 0.0f, 0.0f};
+    floor.HalfExtents = {20.0f, 0.5f, 20.0f};
+    physics.GetBodies().push_back(floor);
 
     FBodyInstance pillar{};
-    pillar.type = EBodyType::Static;
-    pillar.position = {0.0f, 1.0f, 0.0f};
-    pillar.halfExtents = {0.4f, 1.5f, 0.4f};
-    physics.Bodies().push_back(pillar);
+    pillar.Type = EBodyType::Static;
+    pillar.Position = {0.0f, 1.0f, 0.0f};
+    pillar.HalfExtents = {0.4f, 1.5f, 0.4f};
+    physics.GetBodies().push_back(pillar);
 
     UNavigationSystem narrow;
     narrow.SetCellSize(0.5f);

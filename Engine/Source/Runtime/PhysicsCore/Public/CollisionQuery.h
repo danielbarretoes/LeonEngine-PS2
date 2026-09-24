@@ -54,10 +54,10 @@ struct FCollisionQueryParams {
 };
 
 /// Unreal-like DrawDebugLineTrace / Kismet System Library helpers (one frame into FDebugDraw).
-void DrawDebugLineTrace(FDebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
-                        const std::vector<FHitResult>& hits);
-void DrawDebugSphereTrace(FDebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
-                          float radius, const std::vector<FHitResult>& hits);
-void DrawDebugCapsuleTrace(FDebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
-                           float radius, float halfHeight, const std::vector<FHitResult>& hits);
+void DrawDebugLineTrace(FDebugDraw& Draw, const glm::vec3& Start, const glm::vec3& End,
+                        const std::vector<FHitResult>& Hits);
+void DrawDebugSphereTrace(FDebugDraw& Draw, const glm::vec3& Start, const glm::vec3& End,
+                          float Radius, const std::vector<FHitResult>& Hits);
+void DrawDebugCapsuleTrace(FDebugDraw& Draw, const glm::vec3& Start, const glm::vec3& End,
+                           float Radius, float HalfHeight, const std::vector<FHitResult>& Hits);
 

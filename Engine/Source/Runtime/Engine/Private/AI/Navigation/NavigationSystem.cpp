@@ -16,14 +16,14 @@
 namespace {
 
 [[nodiscard]] bool IsFloorLikeBody(const FBodyInstance& body, float cellSize) {
-    const float hy = std::max(body.halfExtents.y, 0.001f);
-    const float horiz = std::max(body.halfExtents.x, body.halfExtents.z);
+    const float hy = std::max(body.HalfExtents.y, 0.001f);
+    const float horiz = std::max(body.HalfExtents.x, body.HalfExtents.z);
     // Unit FPlane scaled ~40x1x40 → hy=0.5 still floor-like by aspect (was wrongly a full-arena
     // blocker).
     if (horiz / hy >= 6.0f) {
         return true;
     }
-    if (body.halfExtents.y <= std::max(0.35f, cellSize * 0.75f)) {
+    if (body.HalfExtents.y <= std::max(0.35f, cellSize * 0.75f)) {
         return true;
     }
     return false;
@@ -55,24 +55,24 @@ namespace {
 
 [[nodiscard]] bool BodyBlocksNavigation(const FBodyInstance& body, float floorY, float cellSize,
                                         const ULevel* level) {
-    if (body.type != EBodyType::Static) {
+    if (body.Type != EBodyType::Static) {
         return false;
     }
-    if (level != nullptr && ShouldSkipLevelMesh(*level, body.levelMeshIndex)) {
+    if (level != nullptr && ShouldSkipLevelMesh(*level, body.LevelMeshIndex)) {
         return false;
     }
     // NavWalkable (ramps): path across footprint; UCharacterMovementComponent climbs the mesh.
-    if (level != nullptr && IsWalkableNavSurfaceTag(*level, body.levelMeshIndex)) {
+    if (level != nullptr && IsWalkableNavSurfaceTag(*level, body.LevelMeshIndex)) {
         return false;
     }
-    const float bottom = body.position.y - body.halfExtents.y;
-    const float top = body.position.y + body.halfExtents.y;
+    const float bottom = body.Position.y - body.HalfExtents.y;
+    const float top = body.Position.y + body.HalfExtents.y;
     const bool inHeightBand = top > floorY + 0.05f && bottom < floorY + 2.2f;
     if (!inHeightBand) {
         return false;
     }
     // FNavBlocker: thin slab may look floor-like by aspect but must block paths.
-    if (level != nullptr && IsForcedNavBlockerTag(*level, body.levelMeshIndex)) {
+    if (level != nullptr && IsForcedNavBlockerTag(*level, body.LevelMeshIndex)) {
         return true;
     }
     if (IsFloorLikeBody(body, cellSize)) {
@@ -91,18 +91,18 @@ namespace {
                                      const FBodyInstance& body) {
     const float inflate = agentRadius + cellHalf;
     return AabbXZOverlapsPoint(
-        cx, cz, inflate, body.position.x - body.halfExtents.x, body.position.x + body.halfExtents.x,
-        body.position.z - body.halfExtents.z, body.position.z + body.halfExtents.z);
+        cx, cz, inflate, body.Position.x - body.HalfExtents.x, body.Position.x + body.HalfExtents.x,
+        body.Position.z - body.HalfExtents.z, body.Position.z + body.HalfExtents.z);
 }
 
 /// Tighter XZ footprint from baked tris (rotated ramp) vs fat world AABB.
 [[nodiscard]] bool CellBlockedByTriangleMesh(float cx, float cz, float cellHalf, float agentRadius,
                                              const FTriangleMeshCollision& mesh) {
     const float inflate = agentRadius + cellHalf;
-    for (std::size_t i = 0; i + 2 < mesh.indices.size(); i += 3) {
-        const glm::vec3& v0 = mesh.positions[mesh.indices[i]];
-        const glm::vec3& v1 = mesh.positions[mesh.indices[i + 1]];
-        const glm::vec3& v2 = mesh.positions[mesh.indices[i + 2]];
+    for (std::size_t i = 0; i + 2 < mesh.Indices.size(); i += 3) {
+        const glm::vec3& v0 = mesh.Positions[mesh.Indices[i]];
+        const glm::vec3& v1 = mesh.Positions[mesh.Indices[i + 1]];
+        const glm::vec3& v2 = mesh.Positions[mesh.Indices[i + 2]];
         const float minX = std::min({v0.x, v1.x, v2.x});
         const float maxX = std::max({v0.x, v1.x, v2.x});
         const float minZ = std::min({v0.z, v1.z, v2.z});
@@ -163,16 +163,16 @@ void UNavigationSystem::BakeGrid(const FPhysScene& physics, float floorY, float 
         const FTriangleMeshCollision* triMesh = nullptr;
     };
     std::vector<FNavBlocker> blockers;
-    blockers.reserve(physics.Bodies().size());
-    const auto& triMeshes = physics.TriangleMeshes();
-    for (std::size_t bi = 0; bi < physics.Bodies().size(); ++bi) {
-        const FBodyInstance& body = physics.Bodies()[bi];
+    blockers.reserve(physics.GetBodies().size());
+    const auto& triMeshes = physics.GetTriangleMeshes();
+    for (std::size_t bi = 0; bi < physics.GetBodies().size(); ++bi) {
+        const FBodyInstance& body = physics.GetBodies()[bi];
         if (!BodyBlocksNavigation(body, floorY, cell, level)) {
             continue;
         }
         FNavBlocker blocker{};
         blocker.body = &body;
-        if (body.collisionShape == ECollisionShape::TriangleMesh && bi < triMeshes.size() &&
+        if (body.CollisionShape == ECollisionShape::TriangleMesh && bi < triMeshes.size() &&
             triMeshes[bi].IsValid()) {
             blocker.triMesh = &triMeshes[bi];
         }

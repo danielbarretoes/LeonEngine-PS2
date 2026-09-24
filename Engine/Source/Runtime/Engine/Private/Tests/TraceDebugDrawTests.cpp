@@ -23,8 +23,8 @@ TEST_CASE("DrawDebugLineTrace miss and hit fill DebugDraw", "[physics][trace][de
 TEST_CASE("LineTrace ForOneFrame draws via PhysScene", "[physics][trace][debug]") {
     FPhysScene scene;
     const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
-    scene.Bodies()[id].position = {0.0f, 0.5f, 0.0f};
-    scene.Bodies()[id].halfExtents = {0.5f, 0.5f, 0.5f};
+    scene.GetBodies()[id].Position = {0.0f, 0.5f, 0.0f};
+    scene.GetBodies()[id].HalfExtents = {0.5f, 0.5f, 0.5f};
 
     FDebugDraw draw;
     FCollisionQueryParams params{};

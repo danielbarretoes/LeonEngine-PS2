@@ -14,599 +14,599 @@
 #include "StaticMesh.h"
 
 
-FPhysScene::FPhysScene(EPhysicsBackend backend)
-    : backend_(backend)
-    , backendIface_(CreatePhysicsBackend(backend == EPhysicsBackend::Jolt ? EPhysicsBackendKind::Jolt
+FPhysScene::FPhysScene(EPhysicsBackend InBackend)
+    : Backend(InBackend)
+    , BackendIface(CreatePhysicsBackend(InBackend == EPhysicsBackend::Jolt ? EPhysicsBackendKind::Jolt
                                                                           : EPhysicsBackendKind::Arcade)) {
-    if (backendIface_ != nullptr && std::strcmp(backendIface_->GetName(), "Jolt") == 0) {
-        backend_ = EPhysicsBackend::Jolt;
+    if (BackendIface != nullptr && std::strcmp(BackendIface->GetName(), "Jolt") == 0) {
+        Backend = EPhysicsBackend::Jolt;
     } else {
-        backend_ = EPhysicsBackend::Arcade;
+        Backend = EPhysicsBackend::Arcade;
     }
 }
 
 namespace {
 
-void cancelVelocityInto(glm::vec2& vel, const glm::vec2& outwardNormal) {
-    const float into = glm::dot(vel, -outwardNormal);
-    if (into > 0.0f) {
-        vel += outwardNormal * into;
+void CancelVelocityInto(glm::vec2& Vel, const glm::vec2& OutwardNormal) {
+    const float Into = glm::dot(Vel, -OutwardNormal);
+    if (Into > 0.0f) {
+        Vel += OutwardNormal * Into;
     }
 }
 
-void cancelVelocityYInto(float& velocityY, float outwardNormalY) {
-    if (outwardNormalY > 0.5f && velocityY < 0.0f) {
-        velocityY = 0.0f;
-    } else if (outwardNormalY < -0.5f && velocityY > 0.0f) {
-        velocityY = 0.0f;
+void CancelVelocityYInto(float& VelocityY, float OutwardNormalY) {
+    if (OutwardNormalY > 0.5f && VelocityY < 0.0f) {
+        VelocityY = 0.0f;
+    } else if (OutwardNormalY < -0.5f && VelocityY > 0.0f) {
+        VelocityY = 0.0f;
     }
 }
 
-void appendCapsuleRing(FDebugDraw& draw, const glm::vec3& center, float radius,
-                       const glm::vec3& color, int segments) {
-    const float segCount = static_cast<float>(segments);
-    for (int i = 0; i < segments; ++i) {
-        const float a0 = (static_cast<float>(i) / segCount) * 6.2831853f;
-        const float a1 = (static_cast<float>(i + 1) / segCount) * 6.2831853f;
-        const glm::vec3 p0{std::cos(a0) * radius, 0.0f, std::sin(a0) * radius};
-        const glm::vec3 p1{std::cos(a1) * radius, 0.0f, std::sin(a1) * radius};
-        draw.AddLine(center + p0, center + p1, color);
+void AppendCapsuleRing(FDebugDraw& Draw, const glm::vec3& Center, float Radius,
+                       const glm::vec3& Color, int Segments) {
+    const float SegCount = static_cast<float>(Segments);
+    for (int I = 0; I < Segments; ++I) {
+        const float A0 = (static_cast<float>(I) / SegCount) * 6.2831853f;
+        const float A1 = (static_cast<float>(I + 1) / SegCount) * 6.2831853f;
+        const glm::vec3 P0{std::cos(A0) * Radius, 0.0f, std::sin(A0) * Radius};
+        const glm::vec3 P1{std::cos(A1) * Radius, 0.0f, std::sin(A1) * Radius};
+        Draw.AddLine(Center + P0, Center + P1, Color);
     }
 }
 
-[[nodiscard]] float landWindow(float velocityY, float deltaTime, float skin) {
-    return std::max(0.12f, (std::abs(velocityY) * deltaTime) + (skin * 4.0f));
+[[nodiscard]] float LandWindow(float VelocityY, float InDeltaTime, float InSkin) {
+    return std::max(0.12f, (std::abs(VelocityY) * InDeltaTime) + (InSkin * 4.0f));
 }
 
 /// Flow: wish into contact normal → lateral vel + optional contact shove (light props).
-void applyDynamicWishPush(FBodyInstance& body, const glm::vec2& wishN, const glm::vec2& normal,
-                          float pushStrength, float walkBounds, bool applyContactShove) {
-    const float into = std::max(0.0f, -glm::dot(wishN, normal));
-    if (into <= 1.0e-4f) {
+void ApplyDynamicWishPush(FBodyInstance& Body, const glm::vec2& WishN, const glm::vec2& InNormal,
+                          float InPushStrength, float InWalkBounds, bool bApplyContactShove) {
+    const float Into = std::max(0.0f, -glm::dot(WishN, InNormal));
+    if (Into <= 1.0e-4f) {
         return;
     }
 
-    constexpr float kPlayerMass = 80.0f;
-    const float bodyMass = std::max(body.mass, 0.5f);
-    const float invMass = 1.0f / bodyMass;
-    constexpr float kPushScale = 2.8f;
-    body.velXZ += wishN * (into * pushStrength * invMass * kPushScale);
+    constexpr float PlayerMass = 80.0f;
+    const float BodyMass = std::max(Body.Mass, 0.5f);
+    const float InvMass = 1.0f / BodyMass;
+    constexpr float PushScale = 2.8f;
+    Body.VelXz += WishN * (Into * InPushStrength * InvMass * PushScale);
 
-    constexpr float kMaxPushSpeed = 4.0f;
-    const float speed = glm::length(body.velXZ);
-    if (speed > kMaxPushSpeed) {
-        body.velXZ *= kMaxPushSpeed / speed;
+    constexpr float MaxPushSpeed = 4.0f;
+    const float Speed = glm::length(Body.VelXz);
+    if (Speed > MaxPushSpeed) {
+        Body.VelXz *= MaxPushSpeed / Speed;
     }
 
-    if (!applyContactShove) {
+    if (!bApplyContactShove) {
         return;
     }
 
     // Sweep-based contact never overlaps; nudge the body so walking shove is visible same frame.
-    const float bodyShare = kPlayerMass / (kPlayerMass + bodyMass);
-    constexpr float kContactShove = 0.06f;
-    const float shove = into * pushStrength * bodyShare * kContactShove;
-    body.position.x += wishN.x * shove;
-    body.position.z += wishN.y * shove;
-    ClampPositionXZ(body.position, walkBounds);
+    const float BodyShare = PlayerMass / (PlayerMass + BodyMass);
+    constexpr float ContactShove = 0.06f;
+    const float Shove = Into * InPushStrength * BodyShare * ContactShove;
+    Body.Position.x += WishN.x * Shove;
+    Body.Position.z += WishN.y * Shove;
+    ClampPositionXZ(Body.Position, InWalkBounds);
 }
 
 } // namespace
 
 void FPhysScene::Clear() {
-    bodies_.clear();
-    triangleMeshes_.clear();
-    slopePlanes_.clear();
-    if (backendIface_ != nullptr) {
-        backendIface_->RigidClear();
+    Bodies.clear();
+    TriangleMeshes.clear();
+    SlopePlanes.clear();
+    if (BackendIface != nullptr) {
+        BackendIface->RigidClear();
     }
 }
 
-std::size_t FPhysScene::AddBody(const FBodyInstanceDesc& desc) {
-    FBodyInstance body{};
-    body.levelMeshIndex = desc.levelMeshIndex;
-    body.type = desc.type;
-    body.mass = desc.mass > 0.0f ? desc.mass : 0.0f;
-    body.enableGravity = desc.enableGravity;
-    bodies_.push_back(body);
-    triangleMeshes_.emplace_back();
-    return bodies_.size() - 1;
+std::size_t FPhysScene::AddBody(const FBodyInstanceDesc& Desc) {
+    FBodyInstance Body{};
+    Body.LevelMeshIndex = Desc.LevelMeshIndex;
+    Body.Type = Desc.Type;
+    Body.Mass = Desc.Mass > 0.0f ? Desc.Mass : 0.0f;
+    Body.bEnableGravity = Desc.bEnableGravity;
+    Bodies.push_back(Body);
+    TriangleMeshes.emplace_back();
+    return Bodies.size() - 1;
 }
 
-std::size_t FPhysScene::AddSlopeRamp(const glm::vec3& boundsCenter,
-                                    const glm::vec3& boundsHalfExtents, float pitchDegrees,
-                                    float yawDegrees) {
-    constexpr float kDegToRad = 0.01745329251f;
-    const float pitch = pitchDegrees * kDegToRad;
-    const float s = std::sin(pitch);
-    const float c = std::cos(pitch);
-    FSlopePlane plane{};
-    plane.point = boundsCenter;
+std::size_t FPhysScene::AddSlopeRamp(const glm::vec3& InBoundsCenter,
+                                    const glm::vec3& InBoundsHalfExtents, float PitchDegrees,
+                                    float YawDegrees) {
+    constexpr float DegToRad = 0.01745329251f;
+    const float Pitch = PitchDegrees * DegToRad;
+    const float S = std::sin(Pitch);
+    const float C = std::cos(Pitch);
+    FSlopePlane Plane{};
+    Plane.Point = InBoundsCenter;
     // Surface rises with +X; unit normal points to the walkable side (normal.y = cos(pitch)).
-    glm::vec3 normal{-s, c, 0.0f};
-    if (std::abs(yawDegrees) > 1.0e-3f) {
-        const float yaw = yawDegrees * kDegToRad;
-        const float cy = std::cos(yaw);
-        const float sy = std::sin(yaw);
-        normal = {normal.x * cy - normal.z * sy, normal.y, normal.x * sy + normal.z * cy};
+    glm::vec3 LocalNormal{-S, C, 0.0f};
+    if (std::abs(YawDegrees) > 1.0e-3f) {
+        const float Yaw = YawDegrees * DegToRad;
+        const float Cy = std::cos(Yaw);
+        const float Sy = std::sin(Yaw);
+        LocalNormal = {LocalNormal.x * Cy - LocalNormal.z * Sy, LocalNormal.y, LocalNormal.x * Sy + LocalNormal.z * Cy};
     }
-    plane.normal = glm::normalize(normal);
-    plane.boundsCenter = boundsCenter;
-    plane.boundsHalfExtents = boundsHalfExtents;
-    slopePlanes_.push_back(plane);
-    return slopePlanes_.size() - 1;
+    Plane.Normal = glm::normalize(LocalNormal);
+    Plane.BoundsCenter = InBoundsCenter;
+    Plane.BoundsHalfExtents = InBoundsHalfExtents;
+    SlopePlanes.push_back(Plane);
+    return SlopePlanes.size() - 1;
 }
 
-void FPhysScene::SyncFromLevel(const ULevel& level) {
-    const auto& meshes = level.StaticMeshes();
-    if (triangleMeshes_.size() != bodies_.size()) {
-        triangleMeshes_.resize(bodies_.size());
+void FPhysScene::SyncFromLevel(const ULevel& Level) {
+    const auto& Meshes = Level.StaticMeshes();
+    if (TriangleMeshes.size() != Bodies.size()) {
+        TriangleMeshes.resize(Bodies.size());
     }
-    for (std::size_t bi = 0; bi < bodies_.size(); ++bi) {
-        FBodyInstance& body = bodies_[bi];
-        FTriangleMeshCollision& triMesh = triangleMeshes_[bi];
-        triMesh.Clear();
-        body.collisionShape = ECollisionShape::Box;
+    for (std::size_t Bi = 0; Bi < Bodies.size(); ++Bi) {
+        FBodyInstance& Body = Bodies[Bi];
+        FTriangleMeshCollision& TriMesh = TriangleMeshes[Bi];
+        TriMesh.Clear();
+        Body.CollisionShape = ECollisionShape::Box;
 
-        if (body.levelMeshIndex >= meshes.size()) {
+        if (Body.LevelMeshIndex >= Meshes.size()) {
             continue;
         }
-        const UStaticMeshComponent& obj = meshes[body.levelMeshIndex];
-        if (obj.mesh != nullptr) {
-            const FBox worldAabb = FBox::FromLocalTransformed(
-                obj.mesh->GetLocalMin(), obj.mesh->GetLocalMax(), obj.EffectiveModelMatrix());
-            body.position = (worldAabb.Min + worldAabb.Max) * 0.5f;
-            body.halfExtents = (worldAabb.Max - worldAabb.Min) * 0.5f;
+        const UStaticMeshComponent& Obj = Meshes[Body.LevelMeshIndex];
+        if (Obj.mesh != nullptr) {
+            const FBox WorldAabb = FBox::FromLocalTransformed(
+                Obj.mesh->GetLocalMin(), Obj.mesh->GetLocalMax(), Obj.EffectiveModelMatrix());
+            Body.Position = (WorldAabb.Min + WorldAabb.Max) * 0.5f;
+            Body.HalfExtents = (WorldAabb.Max - WorldAabb.Min) * 0.5f;
 
             // Unreal ComplexAsSimple lite: static meshes with CPU tris use triangle queries.
-            if (body.type == EBodyType::Static && obj.mesh->HasCpuData()) {
-                const FMeshData& cpu = obj.mesh->GetCpuData();
-                const glm::mat4 model = obj.EffectiveModelMatrix();
-                triMesh.positions.resize(cpu.Vertices.size());
-                for (std::size_t vi = 0; vi < cpu.Vertices.size(); ++vi) {
-                    const glm::vec4 world =
-                        model * glm::vec4(cpu.Vertices[vi].Position, 1.0f);
-                    triMesh.positions[vi] = glm::vec3(world);
+            if (Body.Type == EBodyType::Static && Obj.mesh->HasCpuData()) {
+                const FMeshData& Cpu = Obj.mesh->GetCpuData();
+                const glm::mat4 Model = Obj.EffectiveModelMatrix();
+                TriMesh.Positions.resize(Cpu.Vertices.size());
+                for (std::size_t Vi = 0; Vi < Cpu.Vertices.size(); ++Vi) {
+                    const glm::vec4 World =
+                        Model * glm::vec4(Cpu.Vertices[Vi].Position, 1.0f);
+                    TriMesh.Positions[Vi] = glm::vec3(World);
                 }
-                triMesh.indices = cpu.Indices;
-                if (triMesh.IsValid()) {
-                    body.collisionShape = ECollisionShape::TriangleMesh;
+                TriMesh.Indices = Cpu.Indices;
+                if (TriMesh.IsValid()) {
+                    Body.CollisionShape = ECollisionShape::TriangleMesh;
                 } else {
-                    triMesh.Clear();
+                    TriMesh.Clear();
                 }
             }
         } else {
-            body.position = obj.transform.Position;
-            HalfExtentsFromScale(obj.transform.Scale, body.halfExtents.x, body.halfExtents.y,
-                                 body.halfExtents.z);
+            Body.Position = Obj.transform.Position;
+            HalfExtentsFromScale(Obj.transform.Scale, Body.HalfExtents.x, Body.HalfExtents.y,
+                                 Body.HalfExtents.z);
         }
-        if (body.mass <= 0.0f) {
-            body.mass =
-                MassFromHalfExtents(body.halfExtents.x, body.halfExtents.y, body.halfExtents.z);
+        if (Body.Mass <= 0.0f) {
+            Body.Mass =
+                MassFromHalfExtents(Body.HalfExtents.x, Body.HalfExtents.y, Body.HalfExtents.z);
         }
     }
-    if (backendIface_ != nullptr && backendIface_->HasRigidWorld()) {
-        backendIface_->RigidRebuild(bodies_, &triangleMeshes_);
-    }
-}
-
-void FPhysScene::SyncToLevel(ULevel& level) const {
-    auto& meshes = level.StaticMeshes();
-    for (const FBodyInstance& body : bodies_) {
-        if (body.levelMeshIndex >= meshes.size()) {
-            continue;
-        }
-        meshes[body.levelMeshIndex].transform.Position = body.position;
+    if (BackendIface != nullptr && BackendIface->HasRigidWorld()) {
+        BackendIface->RigidRebuild(Bodies, &TriangleMeshes);
     }
 }
 
-float FPhysScene::QuerySupportY(const FCapsuleShape& capsule, const glm::vec3& feet, float floorY,
-                               float stepUp, float skin, std::size_t skipLevelMeshIndex) const {
-    float support = floorY;
-    const float r = capsule.radius;
-
-    for (std::size_t bi = 0; bi < bodies_.size(); ++bi) {
-        const FBodyInstance& body = bodies_[bi];
-        if (body.levelMeshIndex == skipLevelMeshIndex) {
+void FPhysScene::SyncToLevel(ULevel& Level) const {
+    auto& Meshes = Level.StaticMeshes();
+    for (const FBodyInstance& Body : Bodies) {
+        if (Body.LevelMeshIndex >= Meshes.size()) {
             continue;
         }
-        if (!XzDiscOverlapsAabb(feet.x, feet.z, r, body.position.x, body.position.z,
-                                body.halfExtents.x, body.halfExtents.z, -0.02f)) {
+        Meshes[Body.LevelMeshIndex].transform.Position = Body.Position;
+    }
+}
+
+float FPhysScene::QuerySupportY(const FCapsuleShape& Capsule, const glm::vec3& Feet, float InFloorY,
+                               float InStepUp, float InSkin, std::size_t InSkipLevelMeshIndex) const {
+    float Support = InFloorY;
+    const float R = Capsule.Radius;
+
+    for (std::size_t Bi = 0; Bi < Bodies.size(); ++Bi) {
+        const FBodyInstance& Body = Bodies[Bi];
+        if (Body.LevelMeshIndex == InSkipLevelMeshIndex) {
+            continue;
+        }
+        if (!XzDiscOverlapsAabb(Feet.x, Feet.z, R, Body.Position.x, Body.Position.z,
+                                Body.HalfExtents.x, Body.HalfExtents.z, -0.02f)) {
             continue;
         }
 
-        if (body.collisionShape == ECollisionShape::TriangleMesh && bi < triangleMeshes_.size() &&
-            triangleMeshes_[bi].IsValid()) {
+        if (Body.CollisionShape == ECollisionShape::TriangleMesh && Bi < TriangleMeshes.size() &&
+            TriangleMeshes[Bi].IsValid()) {
             // Vertical probe: walkable triangle tops under the capsule disc (ComplexAsSimple).
-            const float rayTop =
-                std::max(feet.y + stepUp + skin + 0.5f, body.position.y + body.halfExtents.y + 0.5f);
-            const glm::vec3 start{feet.x, rayTop, feet.z};
-            const glm::vec3 end{feet.x, floorY - 1.0f, feet.z};
-            float t = 1.0f;
-            glm::vec3 normal{};
-            if (SegmentTriangleMesh(start, end, triangleMeshes_[bi], 0.0f, t, normal) &&
-                normal.y > 0.15f) {
-                const float yHit = start.y + ((end.y - start.y) * t);
-                if (yHit <= feet.y + stepUp + skin) {
-                    support = std::max(support, yHit);
+            const float RayTop =
+                std::max(Feet.y + InStepUp + InSkin + 0.5f, Body.Position.y + Body.HalfExtents.y + 0.5f);
+            const glm::vec3 Start{Feet.x, RayTop, Feet.z};
+            const glm::vec3 End{Feet.x, InFloorY - 1.0f, Feet.z};
+            float T = 1.0f;
+            glm::vec3 LocalNormal{};
+            if (SegmentTriangleMesh(Start, End, TriangleMeshes[Bi], 0.0f, T, LocalNormal) &&
+                LocalNormal.y > 0.15f) {
+                const float YHit = Start.y + ((End.y - Start.y) * T);
+                if (YHit <= Feet.y + InStepUp + InSkin) {
+                    Support = std::max(Support, YHit);
                 }
             }
             continue;
         }
 
-        const float top = body.position.y + body.halfExtents.y;
+        const float Top = Body.Position.y + Body.HalfExtents.y;
         // Skip tops too high to step onto (side collision handles walls).
-        if (feet.y + stepUp + skin < top) {
+        if (Feet.y + InStepUp + InSkin < Top) {
             continue;
         }
-        support = std::max(support, top);
+        Support = std::max(Support, Top);
     }
 
-    for (const FSlopePlane& plane : slopePlanes_) {
-        if (std::abs(plane.normal.y) < 1.0e-4f) {
+    for (const FSlopePlane& Plane : SlopePlanes) {
+        if (std::abs(Plane.Normal.y) < 1.0e-4f) {
             continue;
         }
         // FPlane height at feet XZ: dot((x,y,z)-point, n) = 0.
-        const float yOnPlane =
-            plane.point.y -
-            ((plane.normal.x * (feet.x - plane.point.x)) + (plane.normal.z * (feet.z - plane.point.z))) /
-                plane.normal.y;
-        if (feet.y + stepUp + skin < yOnPlane) {
+        const float YOnPlane =
+            Plane.Point.y -
+            ((Plane.Normal.x * (Feet.x - Plane.Point.x)) + (Plane.Normal.z * (Feet.z - Plane.Point.z))) /
+                Plane.Normal.y;
+        if (Feet.y + InStepUp + InSkin < YOnPlane) {
             continue;
         }
-        if (!XzDiscOverlapsAabb(feet.x, feet.z, r, plane.boundsCenter.x, plane.boundsCenter.z,
-                                plane.boundsHalfExtents.x, plane.boundsHalfExtents.z, -0.02f)) {
+        if (!XzDiscOverlapsAabb(Feet.x, Feet.z, R, Plane.BoundsCenter.x, Plane.BoundsCenter.z,
+                                Plane.BoundsHalfExtents.x, Plane.BoundsHalfExtents.z, -0.02f)) {
             continue;
         }
-        support = std::max(support, yOnPlane);
+        Support = std::max(Support, YOnPlane);
     }
-    return support;
+    return Support;
 }
 
-void FPhysScene::ResolveCapsuleSides(const FCapsuleShape& capsule, glm::vec3& feet,
-                                    const glm::vec2& wishXZ, const FCapsuleContactParams& params,
-                                    std::size_t skipLevelMeshIndex, bool applyPush) {
-    const float r = capsule.radius;
-    const float feetY = feet.y;
-    const float head = feetY + capsule.height;
-    const bool hasWish = glm::length(wishXZ) > 1.0e-4f;
-    const glm::vec2 wishN = hasWish ? glm::normalize(wishXZ) : glm::vec2{0.0f};
+void FPhysScene::ResolveCapsuleSides(const FCapsuleShape& Capsule, glm::vec3& Feet,
+                                    const glm::vec2& WishXz, const FCapsuleContactParams& Params,
+                                    std::size_t InSkipLevelMeshIndex, bool bApplyPush) {
+    const float R = Capsule.Radius;
+    const float FeetY = Feet.y;
+    const float Head = FeetY + Capsule.Height;
+    const bool bHasWish = glm::length(WishXz) > 1.0e-4f;
+    const glm::vec2 WishN = bHasWish ? glm::normalize(WishXz) : glm::vec2{0.0f};
 
-    for (FBodyInstance& body : bodies_) {
-        if (body.levelMeshIndex == skipLevelMeshIndex) {
+    for (FBodyInstance& Body : Bodies) {
+        if (Body.LevelMeshIndex == InSkipLevelMeshIndex) {
             continue;
         }
         // ComplexAsSimple: sides come from TriangleMesh traces; world AABB is too fat for ramps.
-        if (body.collisionShape == ECollisionShape::TriangleMesh) {
+        if (Body.CollisionShape == ECollisionShape::TriangleMesh) {
             continue;
         }
-        const float hx = body.halfExtents.x;
-        const float hy = body.halfExtents.y;
-        const float hz = body.halfExtents.z;
-        const float top = body.position.y + hy;
-        const float bottom = body.position.y - hy;
+        const float Hx = Body.HalfExtents.x;
+        const float Hy = Body.HalfExtents.y;
+        const float Hz = Body.HalfExtents.z;
+        const float Top = Body.Position.y + Hy;
+        const float Bottom = Body.Position.y - Hy;
 
-        if (head < bottom) {
+        if (Head < Bottom) {
             continue;
         }
 
-        const bool xzOnTop =
-            XzDiscOverlapsAabb(feet.x, feet.z, r, body.position.x, body.position.z, hx, hz, -0.02f);
+        const bool bXzOnTop =
+            XzDiscOverlapsAabb(Feet.x, Feet.z, R, Body.Position.x, Body.Position.z, Hx, Hz, -0.02f);
         // Standing on this top — no side push.
-        if (feetY >= top - params.skin && xzOnTop) {
+        if (FeetY >= Top - Params.Skin && bXzOnTop) {
             continue;
         }
         // Airborne over the volume (jump/clearance) — no side push.
         // Still resolve when elevated *beside* a short ledge (step-up clearance).
-        if (feetY > top && xzOnTop) {
+        if (FeetY > Top && bXzOnTop) {
             continue;
         }
 
-        glm::vec2 normal{};
-        float penetration = 0.0f;
-        if (!CapsuleAabbMtv(feet.x, feet.z, r, body.position.x, body.position.z, hx, hz, normal,
-                            penetration)) {
+        glm::vec2 LocalNormal{};
+        float Penetration = 0.0f;
+        if (!CapsuleAabbMtv(Feet.x, Feet.z, R, Body.Position.x, Body.Position.z, Hx, Hz, LocalNormal,
+                            Penetration)) {
             continue;
         }
 
-        if (body.type == EBodyType::Static) {
-            feet.x += normal.x * penetration;
-            feet.z += normal.y * penetration;
-            ClampPositionXZ(feet, params.walkBounds);
+        if (Body.Type == EBodyType::Static) {
+            Feet.x += LocalNormal.x * Penetration;
+            Feet.z += LocalNormal.y * Penetration;
+            ClampPositionXZ(Feet, Params.WalkBounds);
             continue;
         }
 
         // Dynamic: mass-weighted depenetration (player ≈ fixed mass 80 for share).
-        constexpr float kPlayerMass = 80.0f;
-        const float bodyMass = std::max(body.mass, 0.5f);
-        const float invSum = 1.0f / (kPlayerMass + bodyMass);
-        const float playerShare = bodyMass * invSum;
-        const float bodyShare = kPlayerMass * invSum;
+        constexpr float PlayerMass = 80.0f;
+        const float BodyMass = std::max(Body.Mass, 0.5f);
+        const float InvSum = 1.0f / (PlayerMass + BodyMass);
+        const float PlayerShare = BodyMass * InvSum;
+        const float BodyShare = PlayerMass * InvSum;
 
-        feet.x += normal.x * (penetration * playerShare);
-        feet.z += normal.y * (penetration * playerShare);
-        body.position.x -= normal.x * (penetration * bodyShare);
-        body.position.z -= normal.y * (penetration * bodyShare);
-        ClampPositionXZ(feet, params.walkBounds);
-        ClampPositionXZ(body.position, params.walkBounds);
+        Feet.x += LocalNormal.x * (Penetration * PlayerShare);
+        Feet.z += LocalNormal.y * (Penetration * PlayerShare);
+        Body.Position.x -= LocalNormal.x * (Penetration * BodyShare);
+        Body.Position.z -= LocalNormal.y * (Penetration * BodyShare);
+        ClampPositionXZ(Feet, Params.WalkBounds);
+        ClampPositionXZ(Body.Position, Params.WalkBounds);
 
-        cancelVelocityInto(body.velXZ, -normal);
+        CancelVelocityInto(Body.VelXz, -LocalNormal);
 
-        if (!applyPush || !hasWish) {
+        if (!bApplyPush || !bHasWish) {
             continue;
         }
 
-        applyDynamicWishPush(body, wishN, normal, params.pushStrength, params.walkBounds, false);
+        ApplyDynamicWishPush(Body, WishN, LocalNormal, Params.PushStrength, Params.WalkBounds, false);
     }
 }
 
-bool FPhysScene::ApplyCapsuleSweepPush(std::size_t levelMeshIndex, const glm::vec2& wishXZ,
-                                      const glm::vec3& impactNormal, float pushStrength,
-                                      float walkBounds) {
-    if (levelMeshIndex == ULevel::npos || glm::length(wishXZ) <= 1.0e-4f) {
+bool FPhysScene::ApplyCapsuleSweepPush(std::size_t LevelMeshIndex, const glm::vec2& WishXz,
+                                      const glm::vec3& ImpactNormal, float InPushStrength,
+                                      float InWalkBounds) {
+    if (LevelMeshIndex == ULevel::npos || glm::length(WishXz) <= 1.0e-4f) {
         return false;
     }
 
-    glm::vec2 normal{impactNormal.x, impactNormal.z};
-    const float nLen = glm::length(normal);
-    if (nLen <= 1.0e-4f) {
+    glm::vec2 LocalNormal{ImpactNormal.x, ImpactNormal.z};
+    const float NLen = glm::length(LocalNormal);
+    if (NLen <= 1.0e-4f) {
         return false;
     }
-    normal /= nLen;
-    const glm::vec2 wishN = glm::normalize(wishXZ);
+    LocalNormal /= NLen;
+    const glm::vec2 WishN = glm::normalize(WishXz);
 
-    for (FBodyInstance& body : bodies_) {
-        if (body.levelMeshIndex != levelMeshIndex || body.type != EBodyType::Dynamic) {
+    for (FBodyInstance& Body : Bodies) {
+        if (Body.LevelMeshIndex != LevelMeshIndex || Body.Type != EBodyType::Dynamic) {
             continue;
         }
-        const float into = std::max(0.0f, -glm::dot(wishN, normal));
-        if (into <= 1.0e-4f) {
+        const float Into = std::max(0.0f, -glm::dot(WishN, LocalNormal));
+        if (Into <= 1.0e-4f) {
             return false;
         }
-        applyDynamicWishPush(body, wishN, normal, pushStrength, walkBounds, true);
+        ApplyDynamicWishPush(Body, WishN, LocalNormal, InPushStrength, InWalkBounds, true);
         return true;
     }
     return false;
 }
 
-void FPhysScene::Step(const FPhysSceneStepParams& params) {
-    if (backendIface_ != nullptr && backendIface_->HasRigidWorld()) {
-        backendIface_->RigidPrepareStep(bodies_, params.skipLevelMeshIndex);
-        backendIface_->RigidStep(params.deltaTime, params.gravity, params.floorY);
-        backendIface_->RigidReadBack(bodies_);
-        for (FBodyInstance& body : bodies_) {
-            if (body.type != EBodyType::Dynamic) {
+void FPhysScene::Step(const FPhysSceneStepParams& Params) {
+    if (BackendIface != nullptr && BackendIface->HasRigidWorld()) {
+        BackendIface->RigidPrepareStep(Bodies, Params.SkipLevelMeshIndex);
+        BackendIface->RigidStep(Params.DeltaTime, Params.Gravity, Params.FloorY);
+        BackendIface->RigidReadBack(Bodies);
+        for (FBodyInstance& Body : Bodies) {
+            if (Body.Type != EBodyType::Dynamic) {
                 continue;
             }
-            ClampPositionXZ(body.position, params.walkBounds);
+            ClampPositionXZ(Body.Position, Params.WalkBounds);
         }
         return;
     }
 
-    const float damp = std::exp(-params.damping * params.deltaTime);
+    const float Damp = std::exp(-Params.Damping * Params.DeltaTime);
 
-    auto supportUnderAabb = [&](const FBodyInstance& body) -> float {
-        float support = params.floorY;
-        const float bx0 = body.position.x - body.halfExtents.x;
-        const float bx1 = body.position.x + body.halfExtents.x;
-        const float bz0 = body.position.z - body.halfExtents.z;
-        const float bz1 = body.position.z + body.halfExtents.z;
-        const float bottom = body.position.y - body.halfExtents.y;
+    auto SupportUnderAabb = [&](const FBodyInstance& Body) -> float {
+        float Support = Params.FloorY;
+        const float Bx0 = Body.Position.x - Body.HalfExtents.x;
+        const float Bx1 = Body.Position.x + Body.HalfExtents.x;
+        const float Bz0 = Body.Position.z - Body.HalfExtents.z;
+        const float Bz1 = Body.Position.z + Body.HalfExtents.z;
+        const float Bottom = Body.Position.y - Body.HalfExtents.y;
 
-        for (const FBodyInstance& other : bodies_) {
-            if (other.levelMeshIndex == body.levelMeshIndex ||
-                other.levelMeshIndex == params.skipLevelMeshIndex) {
+        for (const FBodyInstance& Other : Bodies) {
+            if (Other.LevelMeshIndex == Body.LevelMeshIndex ||
+                Other.LevelMeshIndex == Params.SkipLevelMeshIndex) {
                 continue;
             }
-            const float ox0 = other.position.x - other.halfExtents.x;
-            const float ox1 = other.position.x + other.halfExtents.x;
-            const float oz0 = other.position.z - other.halfExtents.z;
-            const float oz1 = other.position.z + other.halfExtents.z;
-            if (bx1 < ox0 || bx0 > ox1 || bz1 < oz0 || bz0 > oz1) {
+            const float Ox0 = Other.Position.x - Other.HalfExtents.x;
+            const float Ox1 = Other.Position.x + Other.HalfExtents.x;
+            const float Oz0 = Other.Position.z - Other.HalfExtents.z;
+            const float Oz1 = Other.Position.z + Other.HalfExtents.z;
+            if (Bx1 < Ox0 || Bx0 > Ox1 || Bz1 < Oz0 || Bz0 > Oz1) {
                 continue;
             }
 
-            const float top = other.position.y + other.halfExtents.y;
+            const float Top = Other.Position.y + Other.HalfExtents.y;
             // Dynamic support only when this body is clearly above the other (stacking).
-            if (other.type == EBodyType::Dynamic && bottom + params.skin < top - 0.02f &&
-                body.position.y <= other.position.y) {
+            if (Other.Type == EBodyType::Dynamic && Bottom + Params.Skin < Top - 0.02f &&
+                Body.Position.y <= Other.Position.y) {
                 continue;
             }
-            support = std::max(support, top);
+            Support = std::max(Support, Top);
         }
-        return support;
+        return Support;
     };
 
     // 1) Integrate velocities (no floor snap yet).
-    for (FBodyInstance& body : bodies_) {
-        if (body.type != EBodyType::Dynamic) {
-            body.velXZ = {};
-            body.velocityY = 0.0f;
+    for (FBodyInstance& Body : Bodies) {
+        if (Body.Type != EBodyType::Dynamic) {
+            Body.VelXz = {};
+            Body.VelocityY = 0.0f;
             continue;
         }
 
-        if (body.enableGravity) {
-            body.velocityY -= params.gravity * params.deltaTime;
-            body.position.y += body.velocityY * params.deltaTime;
+        if (Body.bEnableGravity) {
+            Body.VelocityY -= Params.Gravity * Params.DeltaTime;
+            Body.Position.y += Body.VelocityY * Params.DeltaTime;
         } else {
-            body.velocityY = 0.0f;
+            Body.VelocityY = 0.0f;
         }
 
-        if (glm::length(body.velXZ) >= 1.0e-3f) {
-            body.position.x += body.velXZ.x * params.deltaTime;
-            body.position.z += body.velXZ.y * params.deltaTime;
-            ClampPositionXZ(body.position, params.walkBounds);
-            body.velXZ *= damp;
+        if (glm::length(Body.VelXz) >= 1.0e-3f) {
+            Body.Position.x += Body.VelXz.x * Params.DeltaTime;
+            Body.Position.z += Body.VelXz.y * Params.DeltaTime;
+            ClampPositionXZ(Body.Position, Params.WalkBounds);
+            Body.VelXz *= Damp;
         } else {
-            body.velXZ = {};
+            Body.VelXz = {};
         }
     }
 
     // 2) Resolve overlaps on min-penetration axis (XZ sides vs Y stacking).
-    constexpr int kIterations = 6;
-    for (int iter = 0; iter < kIterations; ++iter) {
-        for (std::size_t i = 0; i < bodies_.size(); ++i) {
-            if (bodies_[i].levelMeshIndex == params.skipLevelMeshIndex) {
+    constexpr int Iterations = 6;
+    for (int Iter = 0; Iter < Iterations; ++Iter) {
+        for (std::size_t I = 0; I < Bodies.size(); ++I) {
+            if (Bodies[I].LevelMeshIndex == Params.SkipLevelMeshIndex) {
                 continue;
             }
-            for (std::size_t j = i + 1; j < bodies_.size(); ++j) {
-                if (bodies_[j].levelMeshIndex == params.skipLevelMeshIndex) {
+            for (std::size_t J = I + 1; J < Bodies.size(); ++J) {
+                if (Bodies[J].LevelMeshIndex == Params.SkipLevelMeshIndex) {
                     continue;
                 }
 
-                FBodyInstance& a = bodies_[i];
-                FBodyInstance& b = bodies_[j];
+                FBodyInstance& A = Bodies[I];
+                FBodyInstance& B = Bodies[J];
 
-                const bool aDyn = a.type == EBodyType::Dynamic;
-                const bool bDyn = b.type == EBodyType::Dynamic;
-                if (!aDyn && !bDyn) {
+                const bool bADyn = A.Type == EBodyType::Dynamic;
+                const bool bDyn = B.Type == EBodyType::Dynamic;
+                if (!bADyn && !bDyn) {
                     continue;
                 }
 
-                float moveA = 0.0f;
-                float moveB = 0.0f;
-                if (aDyn && bDyn) {
-                    const float sum = std::max(a.mass + b.mass, 1.0e-3f);
-                    moveA = b.mass / sum;
-                    moveB = a.mass / sum;
-                } else if (aDyn) {
-                    moveA = 1.0f;
+                float MoveA = 0.0f;
+                float MoveB = 0.0f;
+                if (bADyn && bDyn) {
+                    const float Sum = std::max(A.Mass + B.Mass, 1.0e-3f);
+                    MoveA = B.Mass / Sum;
+                    MoveB = A.Mass / Sum;
+                } else if (bADyn) {
+                    MoveA = 1.0f;
                 } else {
-                    moveB = 1.0f;
+                    MoveB = 1.0f;
                 }
 
-                glm::vec3 normal{};
-                if (!SeparateAabb(a.position, a.halfExtents, b.position, b.halfExtents, moveA,
-                                  moveB, &normal)) {
+                glm::vec3 LocalNormal{};
+                if (!SeparateAabb(A.Position, A.HalfExtents, B.Position, B.HalfExtents, MoveA,
+                                  MoveB, &LocalNormal)) {
                     continue;
                 }
 
-                ClampPositionXZ(a.position, params.walkBounds);
-                ClampPositionXZ(b.position, params.walkBounds);
+                ClampPositionXZ(A.Position, Params.WalkBounds);
+                ClampPositionXZ(B.Position, Params.WalkBounds);
 
-                if (aDyn) {
-                    cancelVelocityInto(a.velXZ, {normal.x, normal.z});
-                    cancelVelocityYInto(a.velocityY, normal.y);
+                if (bADyn) {
+                    CancelVelocityInto(A.VelXz, {LocalNormal.x, LocalNormal.z});
+                    CancelVelocityYInto(A.VelocityY, LocalNormal.y);
                 }
                 if (bDyn) {
-                    cancelVelocityInto(b.velXZ, {-normal.x, -normal.z});
-                    cancelVelocityYInto(b.velocityY, -normal.y);
+                    CancelVelocityInto(B.VelXz, {-LocalNormal.x, -LocalNormal.z});
+                    CancelVelocityYInto(B.VelocityY, -LocalNormal.y);
                 }
             }
         }
     }
 
     // 3) Floor / platform snap only when landing from above.
-    for (FBodyInstance& body : bodies_) {
-        if (body.type != EBodyType::Dynamic || !body.enableGravity) {
+    for (FBodyInstance& Body : Bodies) {
+        if (Body.Type != EBodyType::Dynamic || !Body.bEnableGravity) {
             continue;
         }
 
-        const float support = supportUnderAabb(body);
-        const float bottom = body.position.y - body.halfExtents.y;
-        const float window = landWindow(body.velocityY, params.deltaTime, params.skin);
-        if (body.velocityY <= 0.0f && bottom <= support + params.skin &&
-            bottom >= support - window) {
-            body.position.y = support + body.halfExtents.y;
-            body.velocityY = 0.0f;
+        const float Support = SupportUnderAabb(Body);
+        const float Bottom = Body.Position.y - Body.HalfExtents.y;
+        const float Window = LandWindow(Body.VelocityY, Params.DeltaTime, Params.Skin);
+        if (Body.VelocityY <= 0.0f && Bottom <= Support + Params.Skin &&
+            Bottom >= Support - Window) {
+            Body.Position.y = Support + Body.HalfExtents.y;
+            Body.VelocityY = 0.0f;
             // Resting friction: kill tiny residual slide when fully supported.
-            if (glm::length(body.velXZ) < 0.08f) {
-                body.velXZ = {};
+            if (glm::length(Body.VelXz) < 0.08f) {
+                Body.VelXz = {};
             }
         }
     }
 }
 
-void FPhysScene::AppendCollisionDebug(FDebugDraw& draw, const FCapsuleShape& capsule,
-                                     const glm::vec3& feet, std::size_t skipLevelMeshIndex) const {
-    const float r = capsule.radius;
-    const float h = capsule.height;
-    const float cylBottom = std::min(r, h * 0.5f);
-    const float cylTop = std::max(h - r, cylBottom);
-    constexpr glm::vec3 kCapsuleColor{0.2f, 1.0f, 0.45f};
-    constexpr int kSeg = 12;
+void FPhysScene::AppendCollisionDebug(FDebugDraw& Draw, const FCapsuleShape& Capsule,
+                                     const glm::vec3& Feet, std::size_t InSkipLevelMeshIndex) const {
+    const float R = Capsule.Radius;
+    const float H = Capsule.Height;
+    const float CylBottom = std::min(R, H * 0.5f);
+    const float CylTop = std::max(H - R, CylBottom);
+    constexpr glm::vec3 CapsuleColor{0.2f, 1.0f, 0.45f};
+    constexpr int Seg = 12;
 
-    const glm::vec3 b0 = feet + glm::vec3{0.0f, cylBottom, 0.0f};
-    const glm::vec3 t0 = feet + glm::vec3{0.0f, cylTop, 0.0f};
-    draw.AddLine(b0 + glm::vec3{r, 0, 0}, t0 + glm::vec3{r, 0, 0}, kCapsuleColor);
-    draw.AddLine(b0 + glm::vec3{-r, 0, 0}, t0 + glm::vec3{-r, 0, 0}, kCapsuleColor);
-    draw.AddLine(b0 + glm::vec3{0, 0, r}, t0 + glm::vec3{0, 0, r}, kCapsuleColor);
-    draw.AddLine(b0 + glm::vec3{0, 0, -r}, t0 + glm::vec3{0, 0, -r}, kCapsuleColor);
+    const glm::vec3 B0 = Feet + glm::vec3{0.0f, CylBottom, 0.0f};
+    const glm::vec3 T0 = Feet + glm::vec3{0.0f, CylTop, 0.0f};
+    Draw.AddLine(B0 + glm::vec3{R, 0, 0}, T0 + glm::vec3{R, 0, 0}, CapsuleColor);
+    Draw.AddLine(B0 + glm::vec3{-R, 0, 0}, T0 + glm::vec3{-R, 0, 0}, CapsuleColor);
+    Draw.AddLine(B0 + glm::vec3{0, 0, R}, T0 + glm::vec3{0, 0, R}, CapsuleColor);
+    Draw.AddLine(B0 + glm::vec3{0, 0, -R}, T0 + glm::vec3{0, 0, -R}, CapsuleColor);
 
-    appendCapsuleRing(draw, feet + glm::vec3{0.0f, cylBottom, 0.0f}, r, kCapsuleColor, kSeg);
-    appendCapsuleRing(draw, feet + glm::vec3{0.0f, cylTop, 0.0f}, r, kCapsuleColor, kSeg);
+    AppendCapsuleRing(Draw, Feet + glm::vec3{0.0f, CylBottom, 0.0f}, R, CapsuleColor, Seg);
+    AppendCapsuleRing(Draw, Feet + glm::vec3{0.0f, CylTop, 0.0f}, R, CapsuleColor, Seg);
 
-    if (cylBottom > 1.0e-3f) {
-        appendCapsuleRing(draw, feet + glm::vec3{0.0f, cylBottom * 0.5f, 0.0f}, r * 0.85f,
-                          kCapsuleColor, kSeg / 2);
+    if (CylBottom > 1.0e-3f) {
+        AppendCapsuleRing(Draw, Feet + glm::vec3{0.0f, CylBottom * 0.5f, 0.0f}, R * 0.85f,
+                          CapsuleColor, Seg / 2);
     }
-    if (h - cylTop > 1.0e-3f) {
-        const float capMidY = cylTop + ((h - cylTop) * 0.5f);
-        appendCapsuleRing(draw, feet + glm::vec3{0.0f, capMidY, 0.0f}, r * 0.85f, kCapsuleColor,
-                          kSeg / 2);
+    if (H - CylTop > 1.0e-3f) {
+        const float CapMidY = CylTop + ((H - CylTop) * 0.5f);
+        AppendCapsuleRing(Draw, Feet + glm::vec3{0.0f, CapMidY, 0.0f}, R * 0.85f, CapsuleColor,
+                          Seg / 2);
     }
-    appendCapsuleRing(draw, feet, r * 0.35f, kCapsuleColor, 6);
-    appendCapsuleRing(draw, feet + glm::vec3{0.0f, h, 0.0f}, r * 0.35f, kCapsuleColor, 6);
+    AppendCapsuleRing(Draw, Feet, R * 0.35f, CapsuleColor, 6);
+    AppendCapsuleRing(Draw, Feet + glm::vec3{0.0f, H, 0.0f}, R * 0.35f, CapsuleColor, 6);
 
-    AppendBodiesCollisionDebug(draw, skipLevelMeshIndex);
+    AppendBodiesCollisionDebug(Draw, InSkipLevelMeshIndex);
 }
 
-void FPhysScene::AppendBodiesCollisionDebug(FDebugDraw& draw,
-                                           std::size_t skipLevelMeshIndex) const {
-    constexpr glm::vec3 kDynamicColor{1.0f, 0.55f, 0.15f};
-    constexpr glm::vec3 kStaticColor{0.35f, 0.65f, 1.0f};
-    constexpr glm::vec3 kTriMeshColor{0.25f, 0.9f, 1.0f};
-    for (std::size_t bi = 0; bi < bodies_.size(); ++bi) {
-        const FBodyInstance& body = bodies_[bi];
-        if (body.levelMeshIndex == skipLevelMeshIndex) {
+void FPhysScene::AppendBodiesCollisionDebug(FDebugDraw& Draw,
+                                           std::size_t InSkipLevelMeshIndex) const {
+    constexpr glm::vec3 DynamicColor{1.0f, 0.55f, 0.15f};
+    constexpr glm::vec3 StaticColor{0.35f, 0.65f, 1.0f};
+    constexpr glm::vec3 TriMeshColor{0.25f, 0.9f, 1.0f};
+    for (std::size_t Bi = 0; Bi < Bodies.size(); ++Bi) {
+        const FBodyInstance& Body = Bodies[Bi];
+        if (Body.LevelMeshIndex == InSkipLevelMeshIndex) {
             continue;
         }
 
         // TriangleMesh: draw actual tris (oriented). AABB alone looks like a fat unrotated box.
-        if (body.collisionShape == ECollisionShape::TriangleMesh && bi < triangleMeshes_.size() &&
-            triangleMeshes_[bi].IsValid()) {
-            const FTriangleMeshCollision& mesh = triangleMeshes_[bi];
-            for (std::size_t i = 0; i + 2 < mesh.indices.size(); i += 3) {
-                const glm::vec3& v0 = mesh.positions[mesh.indices[i]];
-                const glm::vec3& v1 = mesh.positions[mesh.indices[i + 1]];
-                const glm::vec3& v2 = mesh.positions[mesh.indices[i + 2]];
-                draw.AddLine(v0, v1, kTriMeshColor);
-                draw.AddLine(v1, v2, kTriMeshColor);
-                draw.AddLine(v2, v0, kTriMeshColor);
+        if (Body.CollisionShape == ECollisionShape::TriangleMesh && Bi < TriangleMeshes.size() &&
+            TriangleMeshes[Bi].IsValid()) {
+            const FTriangleMeshCollision& Mesh = TriangleMeshes[Bi];
+            for (std::size_t I = 0; I + 2 < Mesh.Indices.size(); I += 3) {
+                const glm::vec3& V0 = Mesh.Positions[Mesh.Indices[I]];
+                const glm::vec3& V1 = Mesh.Positions[Mesh.Indices[I + 1]];
+                const glm::vec3& V2 = Mesh.Positions[Mesh.Indices[I + 2]];
+                Draw.AddLine(V0, V1, TriMeshColor);
+                Draw.AddLine(V1, V2, TriMeshColor);
+                Draw.AddLine(V2, V0, TriMeshColor);
             }
             continue;
         }
 
-        const glm::vec3 mn = body.position - body.halfExtents;
-        const glm::vec3 mx = body.position + body.halfExtents;
-        draw.AddAabb(mn, mx, body.type == EBodyType::Dynamic ? kDynamicColor : kStaticColor);
+        const glm::vec3 Mn = Body.Position - Body.HalfExtents;
+        const glm::vec3 Mx = Body.Position + Body.HalfExtents;
+        Draw.AddAabb(Mn, Mx, Body.Type == EBodyType::Dynamic ? DynamicColor : StaticColor);
     }
 
     // Walkable slope planes (AddSlopeRamp) — magenta wire quads for F2.
-    constexpr glm::vec3 kSlopeColor{0.95f, 0.2f, 0.85f};
-    for (const FSlopePlane& plane : slopePlanes_) {
-        const float hx = plane.boundsHalfExtents.x;
-        const float hz = plane.boundsHalfExtents.z;
-        const glm::vec3& c = plane.boundsCenter;
-        const float nLen = glm::length(plane.normal);
-        if (nLen < 1.0e-6f || std::abs(plane.normal.y) < 1.0e-4f) {
+    constexpr glm::vec3 SlopeColor{0.95f, 0.2f, 0.85f};
+    for (const FSlopePlane& Plane : SlopePlanes) {
+        const float Hx = Plane.BoundsHalfExtents.x;
+        const float Hz = Plane.BoundsHalfExtents.z;
+        const glm::vec3& C = Plane.BoundsCenter;
+        const float NLen = glm::length(Plane.Normal);
+        if (NLen < 1.0e-6f || std::abs(Plane.Normal.y) < 1.0e-4f) {
             continue;
         }
-        const glm::vec3 n = plane.normal / nLen;
-        auto yAt = [&](float x, float z) {
-            return plane.point.y -
-                   ((n.x * (x - plane.point.x)) + (n.z * (z - plane.point.z))) / n.y;
+        const glm::vec3 N = Plane.Normal / NLen;
+        auto YAt = [&](float X, float Z) {
+            return Plane.Point.y -
+                   ((N.x * (X - Plane.Point.x)) + (N.z * (Z - Plane.Point.z))) / N.y;
         };
-        const glm::vec3 p00{c.x - hx, yAt(c.x - hx, c.z - hz), c.z - hz};
-        const glm::vec3 p10{c.x + hx, yAt(c.x + hx, c.z - hz), c.z - hz};
-        const glm::vec3 p11{c.x + hx, yAt(c.x + hx, c.z + hz), c.z + hz};
-        const glm::vec3 p01{c.x - hx, yAt(c.x - hx, c.z + hz), c.z + hz};
-        draw.AddLine(p00, p10, kSlopeColor);
-        draw.AddLine(p10, p11, kSlopeColor);
-        draw.AddLine(p11, p01, kSlopeColor);
-        draw.AddLine(p01, p00, kSlopeColor);
-        draw.AddLine(p00, p11, kSlopeColor);
-        draw.AddLine(p10, p01, kSlopeColor);
+        const glm::vec3 P00{C.x - Hx, YAt(C.x - Hx, C.z - Hz), C.z - Hz};
+        const glm::vec3 P10{C.x + Hx, YAt(C.x + Hx, C.z - Hz), C.z - Hz};
+        const glm::vec3 P11{C.x + Hx, YAt(C.x + Hx, C.z + Hz), C.z + Hz};
+        const glm::vec3 P01{C.x - Hx, YAt(C.x - Hx, C.z + Hz), C.z + Hz};
+        Draw.AddLine(P00, P10, SlopeColor);
+        Draw.AddLine(P10, P11, SlopeColor);
+        Draw.AddLine(P11, P01, SlopeColor);
+        Draw.AddLine(P01, P00, SlopeColor);
+        Draw.AddLine(P00, P11, SlopeColor);
+        Draw.AddLine(P10, P01, SlopeColor);
     }
 }
 
