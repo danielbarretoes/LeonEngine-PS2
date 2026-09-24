@@ -1,32 +1,61 @@
+# Epic Games coding standard (UE 4.27) for LeonEngine C++: tabs for indentation, braces on their
+# own line (Allman), 120 columns, `public:` aligned with its class, BeforeComma initializer lists.
+# ThirdParty folders carry their own .clang-format with DisableFormat. GLSL is never formatted.
 BasedOnStyle: LLVM
 Language: Cpp
 Standard: c++20
+UseTab: ForContinuationAndIndentation
 IndentWidth: 4
 TabWidth: 4
-UseTab: Never
-ColumnLimit: 100
+ContinuationIndentWidth: 4
+ColumnLimit: 120
+BreakBeforeBraces: Allman
 AccessModifierOffset: -4
-AllowShortFunctionsOnASingleLine: Inline
+NamespaceIndentation: All
+IndentCaseLabels: true
+IndentPPDirectives: BeforeHash
+AllowShortFunctionsOnASingleLine: None
+AllowShortLambdasOnASingleLine: All
+AllowShortBlocksOnASingleLine: Never
 AllowShortIfStatementsOnASingleLine: Never
 AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortEnumsOnASingleLine: false
 AlwaysBreakTemplateDeclarations: Yes
-BreakBeforeBraces: Attach
-BreakConstructorInitializers: BeforeColon
+BreakConstructorInitializers: BeforeComma
 ConstructorInitializerIndentWidth: 4
-ContinuationIndentWidth: 4
-NamespaceIndentation: None
+PackConstructorInitializers: Never
+BreakInheritanceList: BeforeComma
+AlignAfterOpenBracket: DontAlign
+AlignOperands: DontAlign
+AlignTrailingComments: false
+AlignConsecutiveAssignments: None
+AlignConsecutiveDeclarations: None
+BinPackArguments: true
+BinPackParameters: true
 PointerAlignment: Left
 ReferenceAlignment: Left
 SpaceAfterCStyleCast: false
+SpaceAfterTemplateKeyword: true
 SpaceBeforeCpp11BracedList: false
-SortIncludes: CaseInsensitive
+Cpp11BracedListStyle: true
+FixNamespaceComments: true
+LambdaBodyIndentation: Signature
+MaxEmptyLinesToKeep: 1
+# Includes: the module's own header stays first (main include), then engine headers, then third
+# party, then system / SDK headers.
+SortIncludes: CaseSensitive
 IncludeBlocks: Regroup
+IncludeIsMainRegex: '$'
+# Within the third-party block, prerequisite headers sort first (Jolt/Jolt.h, glad before GLFW).
 IncludeCategories:
-  - Regex: '^<geon/'
+  - Regex: '^"'
     Priority: 1
-  - Regex: '^<(glad|GLFW|glm|tiny_obj)'
+  - Regex: '^<(Jolt/Jolt\.h|glad/)'
     Priority: 2
+    SortPriority: 2
+  - Regex: '^<(GLFW|glm|nlohmann|stb_|miniaudio|enet|ufbx|cgltf|tiny_obj|catch2|Jolt)'
+    Priority: 2
+    SortPriority: 3
   - Regex: '^<'
-    Priority: 3
-  - Regex: '.*'
     Priority: 4

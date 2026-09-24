@@ -23,20 +23,16 @@ if not defined CLANG_FORMAT (
   exit /b 1
 )
 
-set "FAILED=0"
+REM File list (FOR /R cannot take a loop variable as its root, so use DIR /S /B).
+set "LIST=%TEMP%\leon-format-files.txt"
+if exist "%LIST%" del "%LIST%"
 for %%D in (Engine\Source Engine\Platforms Engine\Plugins Game) do (
-  if exist "%%D" for /r "%%D" %%f in (*.cpp *.h *.inl) do (
-    set "P=%%f"
-    echo !P!| findstr /I /C:"\ThirdParty\" /C:"\Intermediate\" /C:"\Binaries\" >nul
-    if errorlevel 1 (
-      "%CLANG_FORMAT%" %MODE% "%%f" >nul 2>&1
-      if errorlevel 1 (
-        echo needs format: %%f
-        set "FAILED=1"
-      )
-    )
-  )
+  if exist "%%D" dir /s /b /a-d "%%D\*.cpp" "%%D\*.h" "%%D\*.inl" 2>nul | findstr /V /I /C:"ThirdParty" /C:"Intermediate" /C:"Binaries" >> "%LIST%"
 )
-if "%FAILED%"=="1" exit /b 1
+"%CLANG_FORMAT%" %MODE% --files="%LIST%"
+if not "%ERRORLEVEL%"=="0" (
+  echo FormatCode: files need formatting ^(run Engine\Build\BatchFiles\FormatCode.bat^)
+  exit /b 1
+)
 echo FormatCode OK
 endlocal
