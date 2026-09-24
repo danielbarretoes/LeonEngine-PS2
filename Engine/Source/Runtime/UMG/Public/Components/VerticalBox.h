@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Components/ButtonWidget.h"
+#include "Components/Button.h"
 #include "Blueprint/UserWidget.h"
 #include <memory>
 #include <string>
@@ -9,8 +9,8 @@
 class FGenericWindow;
 
 /// Unreal-like UVerticalBox (lite): title + stacked ButtonWidgets + hint.
-/// Add via HUD::AddWidget; call TickInput each frame from GameMode (same as MenuListWidget).
-class VerticalBoxWidget : public UserWidget {
+/// Add via HUD::AddWidget; call TickInput each frame from GameMode (same as UMenuListWidget).
+class UVerticalBox : public UUserWidget {
 public:
     void SetTitle(std::string title) { title_ = std::move(title); }
     void SetHint(std::string hint) { hint_ = std::move(hint); }
@@ -18,11 +18,11 @@ public:
     void ClearChildren();
 
     /// Append a UButton-like child. Empty `id` = non-activatable status row.
-    ButtonWidget* AddButton(std::string id, std::string label);
+    UButton* AddButton(std::string id, std::string label);
 
     [[nodiscard]] int NumButtons() const { return static_cast<int>(buttons_.size()); }
-    [[nodiscard]] ButtonWidget* GetButton(int index);
-    [[nodiscard]] const ButtonWidget* GetButton(int index) const;
+    [[nodiscard]] UButton* GetButton(int index);
+    [[nodiscard]] const UButton* GetButton(int index) const;
 
     [[nodiscard]] int SelectedIndex() const { return selected_; }
     void SetSelectedIndex(int index);
@@ -33,7 +33,7 @@ public:
     /// Returns activated button id this frame (empty if none).
     [[nodiscard]] std::string TickInput(FGenericWindow& window, bool cursorCaptured, float deltaTime);
 
-    void NativePaint(WidgetPaintContext& ctx) override;
+    void NativePaint(FPaintContext& ctx) override;
 
 private:
     void CacheLayout(int viewportW, int viewportH);
@@ -43,7 +43,7 @@ private:
 
     std::string title_ = "Menu";
     std::string hint_;
-    std::vector<std::unique_ptr<ButtonWidget>> buttons_;
+    std::vector<std::unique_ptr<UButton>> buttons_;
     int selected_ = 0;
 
     bool upWasDown_ = false;

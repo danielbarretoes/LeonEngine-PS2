@@ -161,8 +161,8 @@ public:
     [[nodiscard]] bool IsHudStatsVisible() const { return showHudStats_; }
 
     /// Unreal-like AHUD (UserWidgets / crosshair, etc.).
-    [[nodiscard]] HUD& GetHUD() { return hud_; }
-    [[nodiscard]] const HUD& GetHUD() const { return hud_; }
+    [[nodiscard]] AHUD& GetHUD() { return hud_; }
+    [[nodiscard]] const AHUD& GetHUD() const { return hud_; }
 
     /// Optional extra shader reload (level chrome, etc.) merged into F5 / auto-reload.
     using ShaderReloadHook = std::function<EShaderReloadResult(bool force)>;
@@ -180,7 +180,7 @@ private:
     PlayerInput playerInput_;
     FSceneRenderer renderer_;
     FDebugOverlay overlay_;
-    HUD hud_;
+    AHUD hud_;
     FAudioDevice audioDevice_;
     Camera camera_;
     Level level_;

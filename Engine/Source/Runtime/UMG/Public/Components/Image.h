@@ -6,7 +6,7 @@
 
 /// Unreal-like UImage (lite): solid tinted rect (no texture brush yet — HUD DrawRect only).
 /// Useful as panel chrome, health backdrop, letterbox bars.
-class ImageWidget : public UserWidget {
+class UImage : public UUserWidget {
 public:
     void SetPosition(float x, float y) {
         x_ = x;
@@ -31,7 +31,7 @@ public:
     /// Stretch to full framebuffer each paint (dim overlay / letterbox).
     void SetFillScreen(bool enabled) { fillScreen_ = enabled; }
 
-    void NativePaint(WidgetPaintContext& ctx) override;
+    void NativePaint(FPaintContext& ctx) override;
 
 private:
     float x_ = 0.0f;

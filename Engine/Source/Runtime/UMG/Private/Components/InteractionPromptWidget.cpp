@@ -4,7 +4,7 @@
 
 namespace {
 
-void DrawOutlinedText(WidgetPaintContext& ctx, const std::string& text, float x, float y,
+void DrawOutlinedText(FPaintContext& ctx, const std::string& text, float x, float y,
                       const glm::vec3& color, float scale, ETextJustify justify) {
     constexpr glm::vec3 kShadow{0.02f, 0.02f, 0.02f};
     ctx.DrawText(text, x + 2.0f, y + 2.0f, kShadow, scale, justify);
@@ -13,7 +13,7 @@ void DrawOutlinedText(WidgetPaintContext& ctx, const std::string& text, float x,
 
 } // namespace
 
-void InteractionPromptWidget::NativePaint(WidgetPaintContext& ctx) {
+void UInteractionPromptWidget::NativePaint(FPaintContext& ctx) {
     if (Prompt.empty()) {
         return;
     }

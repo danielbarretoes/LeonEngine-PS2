@@ -10,16 +10,16 @@ class FGenericWindow;
 
 /// Unreal-like vertical text menu (UMG ListView lite): arrows / Enter / click.
 /// Add via HUD::AddWidget; call TickInput each frame from GameMode.
-class MenuListWidget : public UserWidget {
+class UMenuListWidget : public UUserWidget {
 public:
-    struct Item {
+    struct FItem {
         std::string id;
         std::string label;
     };
 
     void SetTitle(std::string title) { title_ = std::move(title); }
     void SetHint(std::string hint) { hint_ = std::move(hint); }
-    void SetItems(std::vector<Item> items);
+    void SetItems(std::vector<FItem> items);
     void SetColor(const glm::vec3& color) { color_ = color; }
 
     [[nodiscard]] int SelectedIndex() const { return selected_; }
@@ -31,7 +31,7 @@ public:
     /// Returns activated item id this frame (empty if none).
     [[nodiscard]] std::string TickInput(FGenericWindow& window, bool cursorCaptured, float deltaTime);
 
-    void NativePaint(WidgetPaintContext& ctx) override;
+    void NativePaint(FPaintContext& ctx) override;
 
 private:
     [[nodiscard]] std::string BuildPaintText() const;
@@ -40,7 +40,7 @@ private:
 
     std::string title_ = "Menu";
     std::string hint_;
-    std::vector<Item> items_;
+    std::vector<FItem> items_;
     int selected_ = 0;
     glm::vec3 color_{1.0f, 0.82f, 0.35f};
 

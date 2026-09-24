@@ -1,4 +1,4 @@
-#include "Components/VerticalBoxWidget.h"
+#include "Components/VerticalBox.h"
 #include "InputCoreTypes.h"
 
 #include <algorithm>
@@ -7,37 +7,37 @@
 #include "GenericPlatform/GenericWindow.h"
 #include "Debug/DebugOverlay.h"
 
-void VerticalBoxWidget::ClearChildren() {
+void UVerticalBox::ClearChildren() {
     buttons_.clear();
     selected_ = 0;
 }
 
-ButtonWidget* VerticalBoxWidget::AddButton(std::string id, std::string label) {
-    auto button = std::make_unique<ButtonWidget>();
+UButton* UVerticalBox::AddButton(std::string id, std::string label) {
+    auto button = std::make_unique<UButton>();
     button->SetId(std::move(id));
     button->SetLabel(std::move(label));
-    ButtonWidget* raw = button.get();
+    UButton* raw = button.get();
     buttons_.push_back(std::move(button));
     SnapSelectionToSelectable();
     ApplySelectionVisuals();
     return raw;
 }
 
-ButtonWidget* VerticalBoxWidget::GetButton(int index) {
+UButton* UVerticalBox::GetButton(int index) {
     if (index < 0 || index >= static_cast<int>(buttons_.size())) {
         return nullptr;
     }
     return buttons_[static_cast<std::size_t>(index)].get();
 }
 
-const ButtonWidget* VerticalBoxWidget::GetButton(int index) const {
+const UButton* UVerticalBox::GetButton(int index) const {
     if (index < 0 || index >= static_cast<int>(buttons_.size())) {
         return nullptr;
     }
     return buttons_[static_cast<std::size_t>(index)].get();
 }
 
-void VerticalBoxWidget::SetSelectedIndex(int index) {
+void UVerticalBox::SetSelectedIndex(int index) {
     if (buttons_.empty()) {
         selected_ = 0;
         ApplySelectionVisuals();
@@ -47,13 +47,13 @@ void VerticalBoxWidget::SetSelectedIndex(int index) {
     ApplySelectionVisuals();
 }
 
-void VerticalBoxWidget::ResetEdges() {
+void UVerticalBox::ResetEdges() {
     upWasDown_ = downWasDown_ = enterWasDown_ = mouseWasDown_ = true;
     // Keyboard only — mouse must stay usable on the first click after travel.
     ignoreActivateSeconds_ = 0.35f;
 }
 
-void VerticalBoxWidget::SnapSelectionToSelectable() {
+void UVerticalBox::SnapSelectionToSelectable() {
     if (buttons_.empty()) {
         selected_ = 0;
         return;
@@ -72,7 +72,7 @@ void VerticalBoxWidget::SnapSelectionToSelectable() {
     }
 }
 
-void VerticalBoxWidget::StepSelectable(int delta) {
+void UVerticalBox::StepSelectable(int delta) {
     const int n = static_cast<int>(buttons_.size());
     if (n <= 0) {
         return;
@@ -80,7 +80,7 @@ void VerticalBoxWidget::StepSelectable(int delta) {
     int idx = selected_;
     for (int guard = 0; guard < n; ++guard) {
         idx = (idx + delta + n) % n;
-        ButtonWidget* button = buttons_[static_cast<std::size_t>(idx)].get();
+        UButton* button = buttons_[static_cast<std::size_t>(idx)].get();
         if (!button->GetId().empty() && button->IsEnabled()) {
             selected_ = idx;
             ApplySelectionVisuals();
@@ -89,13 +89,13 @@ void VerticalBoxWidget::StepSelectable(int delta) {
     }
 }
 
-void VerticalBoxWidget::ApplySelectionVisuals() {
+void UVerticalBox::ApplySelectionVisuals() {
     for (int i = 0; i < static_cast<int>(buttons_.size()); ++i) {
         buttons_[static_cast<std::size_t>(i)]->SetSelected(i == selected_);
     }
 }
 
-void VerticalBoxWidget::CacheLayout(int viewportW, int viewportH) {
+void UVerticalBox::CacheLayout(int viewportW, int viewportH) {
     if (viewportW <= 0 || viewportH <= 0) {
         return;
     }
@@ -134,7 +134,7 @@ void VerticalBoxWidget::CacheLayout(int viewportW, int viewportH) {
                        std::max(10.0f, static_cast<float>(viewportH) - totalH - 10.0f));
 
     float y = boxY_ + titleH_;
-    for (std::unique_ptr<ButtonWidget>& button : buttons_) {
+    for (std::unique_ptr<UButton>& button : buttons_) {
         float dw = 0.0f;
         float dh = 0.0f;
         button->MeasureDesiredSize(dw, dh);
@@ -144,7 +144,7 @@ void VerticalBoxWidget::CacheLayout(int viewportW, int viewportH) {
     }
 }
 
-void VerticalBoxWidget::NativePaint(WidgetPaintContext& ctx) {
+void UVerticalBox::NativePaint(FPaintContext& ctx) {
     if (!IsVisible()) {
         return;
     }
@@ -155,13 +155,13 @@ void VerticalBoxWidget::NativePaint(WidgetPaintContext& ctx) {
                      glm::vec3{1.0f, 0.82f, 0.35f}, kHudFontScale, ETextJustify::Center);
     }
 
-    for (std::unique_ptr<ButtonWidget>& button : buttons_) {
+    for (std::unique_ptr<UButton>& button : buttons_) {
         button->NativePaint(ctx);
     }
 
     if (!hint_.empty()) {
         float buttonsBottom = boxY_ + titleH_;
-        for (const std::unique_ptr<ButtonWidget>& button : buttons_) {
+        for (const std::unique_ptr<UButton>& button : buttons_) {
             buttonsBottom = button->GetY() + button->GetHeight();
         }
         const float hintY = buttonsBottom + 12.0f;
@@ -170,7 +170,7 @@ void VerticalBoxWidget::NativePaint(WidgetPaintContext& ctx) {
     }
 }
 
-std::string VerticalBoxWidget::TickInput(FGenericWindow& window, bool cursorCaptured, float deltaTime) {
+std::string UVerticalBox::TickInput(FGenericWindow& window, bool cursorCaptured, float deltaTime) {
     if (buttons_.empty()) {
         return {};
     }
@@ -202,7 +202,7 @@ std::string VerticalBoxWidget::TickInput(FGenericWindow& window, bool cursorCapt
     const bool allowKeyboardActivate = ignoreActivateSeconds_ <= 0.0f;
     std::string activated;
     if (allowKeyboardActivate && enter && !enterWasDown_) {
-        ButtonWidget* button = GetButton(selected_);
+        UButton* button = GetButton(selected_);
         if (button != nullptr && button->IsEnabled() && !button->GetId().empty()) {
             activated = button->GetId();
         }
@@ -223,13 +223,13 @@ std::string VerticalBoxWidget::TickInput(FGenericWindow& window, bool cursorCapt
         const float fbY =
             static_cast<float>(my) * static_cast<float>(fbH) / static_cast<float>(winH);
 
-        for (std::unique_ptr<ButtonWidget>& button : buttons_) {
+        for (std::unique_ptr<UButton>& button : buttons_) {
             button->SetHovered(button->Contains(fbX, fbY));
         }
 
         if (mouse && !mouseWasDown_) {
             for (int i = 0; i < static_cast<int>(buttons_.size()); ++i) {
-                ButtonWidget* button = buttons_[static_cast<std::size_t>(i)].get();
+                UButton* button = buttons_[static_cast<std::size_t>(i)].get();
                 if (!button->Contains(fbX, fbY)) {
                     continue;
                 }
@@ -242,7 +242,7 @@ std::string VerticalBoxWidget::TickInput(FGenericWindow& window, bool cursorCapt
             }
         }
     } else {
-        for (std::unique_ptr<ButtonWidget>& button : buttons_) {
+        for (std::unique_ptr<UButton>& button : buttons_) {
             button->SetHovered(false);
         }
     }

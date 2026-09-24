@@ -1,10 +1,10 @@
-#include "Components/ProgressBarWidget.h"
+#include "Components/ProgressBar.h"
 
 #include <cstdio>
 #include <string>
 
 
-void ProgressBarWidget::NativePaint(WidgetPaintContext& ctx) {
+void UProgressBar::NativePaint(FPaintContext& ctx) {
     if (!IsVisible()) {
         return;
     }

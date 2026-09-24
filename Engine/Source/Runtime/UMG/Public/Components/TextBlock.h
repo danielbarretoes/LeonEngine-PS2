@@ -7,7 +7,7 @@
 
 
 /// Unreal-like UTextBlock: simple screen text (status lines, titles).
-class TextBlockWidget : public UserWidget {
+class UTextBlock : public UUserWidget {
 public:
     void SetText(std::string text) { text_ = std::move(text); }
     [[nodiscard]] const std::string& GetText() const { return text_; }
@@ -25,7 +25,7 @@ public:
     /// Place block in the middle of the viewport (updates each paint from ctx size).
     void SetCenteredOnScreen(bool enabled) { centeredOnScreen_ = enabled; }
 
-    void NativePaint(WidgetPaintContext& ctx) override;
+    void NativePaint(FPaintContext& ctx) override;
 
 private:
     std::string text_;

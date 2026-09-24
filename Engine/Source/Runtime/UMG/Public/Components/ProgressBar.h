@@ -7,7 +7,7 @@
 
 
 /// Unreal-like UProgressBar (lite): background + fill rect, optional percent label.
-class ProgressBarWidget : public UserWidget {
+class UProgressBar : public UUserWidget {
 public:
     void SetPosition(float x, float y) {
         x_ = x;
@@ -36,7 +36,7 @@ public:
     /// Place horizontally centered near the bottom of the viewport each paint.
     void SetAnchoredBottomCenter(bool enabled) { anchoredBottomCenter_ = enabled; }
 
-    void NativePaint(WidgetPaintContext& ctx) override;
+    void NativePaint(FPaintContext& ctx) override;
 
 private:
     float x_ = 0.0f;

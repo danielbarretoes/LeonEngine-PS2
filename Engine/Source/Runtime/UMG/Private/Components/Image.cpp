@@ -1,7 +1,7 @@
-#include "Components/ImageWidget.h"
+#include "Components/Image.h"
 
 
-void ImageWidget::NativePaint(WidgetPaintContext& ctx) {
+void UImage::NativePaint(FPaintContext& ctx) {
     if (!IsVisible()) {
         return;
     }

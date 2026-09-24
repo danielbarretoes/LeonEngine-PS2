@@ -3,7 +3,7 @@
 #include <cstdint>
 
 
-/// Horizontal justification for HUD / UserWidget text (Unreal-like ETextJustify lite).
+/// Horizontal justification for HUD / UUserWidget text (Unreal-like ETextJustify lite).
 enum class ETextJustify : std::uint8_t {
     Left = 0,
     Center = 1,

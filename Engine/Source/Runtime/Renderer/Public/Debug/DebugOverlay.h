@@ -32,7 +32,7 @@ public:
                                  const glm::vec3& color = {1.0f, 0.0f, 0.0f});
     void TickOnScreenMessages(float deltaTime);
 
-    /// Screen-space geometry for UserWidget / HUD (cleared each Paint). Pixel coords, top-left.
+    /// Screen-space geometry for UUserWidget / HUD (cleared each Paint). Pixel coords, top-left.
     void ClearScreenGeometry();
     void AddScreenLine(float x0, float y0, float x1, float y1, const glm::vec3& color,
                        float thickness = 2.0f);

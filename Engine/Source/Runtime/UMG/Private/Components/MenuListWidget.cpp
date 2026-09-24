@@ -24,7 +24,7 @@ namespace {
 
 } // namespace
 
-void MenuListWidget::SetItems(std::vector<Item> items) {
+void UMenuListWidget::SetItems(std::vector<FItem> items) {
     items_ = std::move(items);
     if (items_.empty()) {
         selected_ = 0;
@@ -42,7 +42,7 @@ void MenuListWidget::SetItems(std::vector<Item> items) {
     }
 }
 
-void MenuListWidget::SetSelectedIndex(int index) {
+void UMenuListWidget::SetSelectedIndex(int index) {
     if (items_.empty()) {
         selected_ = 0;
         return;
@@ -50,13 +50,13 @@ void MenuListWidget::SetSelectedIndex(int index) {
     selected_ = std::clamp(index, 0, static_cast<int>(items_.size()) - 1);
 }
 
-void MenuListWidget::ResetEdges() {
+void UMenuListWidget::ResetEdges() {
     upWasDown_ = downWasDown_ = enterWasDown_ = mouseWasDown_ = true;
     // Keyboard only — mouse must stay usable on the first click after travel.
     ignoreActivateSeconds_ = 0.35f;
 }
 
-int MenuListWidget::CountLines(const std::string& text) const {
+int UMenuListWidget::CountLines(const std::string& text) const {
     if (text.empty()) {
         return 0;
     }
@@ -69,7 +69,7 @@ int MenuListWidget::CountLines(const std::string& text) const {
     return n;
 }
 
-std::string MenuListWidget::BuildPaintText() const {
+std::string UMenuListWidget::BuildPaintText() const {
     std::string text = title_;
     text += "\n\n";
     for (int i = 0; i < static_cast<int>(items_.size()); ++i) {
@@ -84,7 +84,7 @@ std::string MenuListWidget::BuildPaintText() const {
     return text;
 }
 
-void MenuListWidget::CacheLayout(int /*viewportW*/, int viewportH) {
+void UMenuListWidget::CacheLayout(int /*viewportW*/, int viewportH) {
     viewportH_ = viewportH;
     lineH_ = kHudLineHeight;
     if (items_.empty() || viewportH <= 0) {
@@ -99,7 +99,7 @@ void MenuListWidget::CacheLayout(int /*viewportW*/, int viewportH) {
     itemsTopPx_ = top + lineH_ * static_cast<float>(ItemStartLine(title_));
 }
 
-void MenuListWidget::NativePaint(WidgetPaintContext& ctx) {
+void UMenuListWidget::NativePaint(FPaintContext& ctx) {
     if (items_.empty()) {
         return;
     }
@@ -114,7 +114,7 @@ void MenuListWidget::NativePaint(WidgetPaintContext& ctx) {
                  ETextJustify::Center);
 }
 
-std::string MenuListWidget::TickInput(FGenericWindow& window, bool cursorCaptured, float deltaTime) {
+std::string UMenuListWidget::TickInput(FGenericWindow& window, bool cursorCaptured, float deltaTime) {
     if (items_.empty()) {
         return {};
     }

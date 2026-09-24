@@ -12,7 +12,7 @@
 #include "Net/RootReplication.h"
 #include "Physics/PhysScene.h"
 #include "GameFramework/HUD.h"
-#include "Components/TextBlockWidget.h"
+#include "Components/TextBlock.h"
 #include <string>
 #include <vector>
 
@@ -82,14 +82,14 @@ TEST_CASE("AudioDevice silent mode is safe for Play APIs", "[audio]") {
 }
 
 TEST_CASE("HUD AddWidget TextBlock and remove", "[ui][hud]") {
-    HUD hud;
-    auto* text = hud.AddWidget<TextBlockWidget>();
+    AHUD hud;
+    auto* text = hud.AddWidget<UTextBlock>();
     REQUIRE(text != nullptr);
     text->SetText("Hello");
-    REQUIRE(hud.GetWidgetOfClass<TextBlockWidget>() == text);
+    REQUIRE(hud.GetWidgetOfClass<UTextBlock>() == text);
     hud.Tick(0.016f);
     hud.RemoveWidget(text);
-    REQUIRE(hud.GetWidgetOfClass<TextBlockWidget>() == nullptr);
+    REQUIRE(hud.GetWidgetOfClass<UTextBlock>() == nullptr);
 }
 
 TEST_CASE("DeserializeLeonLevel and InputCmd adversarial inputs", "[content][fuzz][net]") {

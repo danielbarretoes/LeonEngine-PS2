@@ -1,10 +1,10 @@
 #include "Debug/DebugOverlay.h"
 #include "GameFramework/HUD.h"
-#include "Blueprint/WidgetPaintContext.h"
+#include "Blueprint/PaintContext.h"
 
 
-void HUD::Clear() {
-    for (const std::unique_ptr<UserWidget>& widget : widgets_) {
+void AHUD::Clear() {
+    for (const std::unique_ptr<UUserWidget>& widget : widgets_) {
         if (widget != nullptr) {
             widget->NativeDestruct();
             widget->owningHud_ = nullptr;
@@ -13,7 +13,7 @@ void HUD::Clear() {
     widgets_.clear();
 }
 
-bool HUD::RemoveWidget(UserWidget* widget) {
+bool AHUD::RemoveWidget(UUserWidget* widget) {
     if (widget == nullptr) {
         return false;
     }
@@ -28,22 +28,22 @@ bool HUD::RemoveWidget(UserWidget* widget) {
     return false;
 }
 
-void HUD::Tick(float deltaTime) {
-    for (const std::unique_ptr<UserWidget>& widget : widgets_) {
+void AHUD::Tick(float deltaTime) {
+    for (const std::unique_ptr<UUserWidget>& widget : widgets_) {
         if (widget != nullptr && widget->bIsVisible) {
             widget->NativeTick(deltaTime);
         }
     }
 }
 
-void HUD::Paint(FDebugOverlay& overlay, int framebufferWidth, int framebufferHeight) {
+void AHUD::Paint(FDebugOverlay& overlay, int framebufferWidth, int framebufferHeight) {
     overlay.ClearScreenGeometry();
     if (framebufferWidth <= 0 || framebufferHeight <= 0 || widgets_.empty()) {
         return;
     }
 
-    WidgetPaintContext ctx(overlay, framebufferWidth, framebufferHeight);
-    for (const std::unique_ptr<UserWidget>& widget : widgets_) {
+    FPaintContext ctx(overlay, framebufferWidth, framebufferHeight);
+    for (const std::unique_ptr<UUserWidget>& widget : widgets_) {
         if (widget != nullptr && widget->bIsVisible) {
             widget->NativePaint(ctx);
         }

@@ -484,7 +484,7 @@ void FDebugOverlay::RebuildMesh(int framebufferWidth, int framebufferHeight) {
     }
 
     // Screen widgets: panels/buttons first, then lines, then labels on top.
-    // (Texts before rects hid VerticalBox labels under Button fills and under ImageWidget.)
+    // (Texts before rects hid VerticalBox labels under Button fills and under UImage.)
     for (const FScreenRect& rect : screenRects_) {
         appendScreenQuad(tris, rect.x, rect.y, rect.x + rect.w, rect.y, rect.x + rect.w,
                          rect.y + rect.h, rect.x, rect.y + rect.h, rect.color);

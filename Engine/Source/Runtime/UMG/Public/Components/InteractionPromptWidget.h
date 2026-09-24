@@ -7,7 +7,7 @@
 
 
 /// Centered outlined interact hint ("[F] Open Door [750]"). Empty Prompt skips paint.
-class InteractionPromptWidget : public UserWidget {
+class UInteractionPromptWidget : public UUserWidget {
 public:
     std::string Prompt;
 
@@ -17,6 +17,6 @@ public:
     float NormalizedY = 0.62f;
     ETextJustify Justify = ETextJustify::Center;
 
-    void NativePaint(WidgetPaintContext& ctx) override;
+    void NativePaint(FPaintContext& ctx) override;
 };
 

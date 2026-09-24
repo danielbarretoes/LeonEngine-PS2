@@ -8,8 +8,8 @@
 class FGenericWindow;
 
 /// Unreal-like UButton (lite): filled rect + label; hover / selected / press.
-/// Usually owned by VerticalBoxWidget; can also be a root HUD widget with SetPosition.
-class ButtonWidget : public UserWidget {
+/// Usually owned by UVerticalBox; can also be a root HUD widget with SetPosition.
+class UButton : public UUserWidget {
 public:
     void SetId(std::string id) { id_ = std::move(id); }
     [[nodiscard]] const std::string& GetId() const { return id_; }
@@ -47,7 +47,7 @@ public:
     /// Hit-test in framebuffer pixels (top-left origin).
     [[nodiscard]] bool Contains(float fbX, float fbY) const;
 
-    void NativePaint(WidgetPaintContext& ctx) override;
+    void NativePaint(FPaintContext& ctx) override;
 
 private:
     std::string id_;
@@ -66,7 +66,7 @@ private:
     glm::vec3 hoverBackgroundColor_{0.18f, 0.16f, 0.12f};
     glm::vec3 disabledTextColor_{0.45f, 0.45f, 0.45f};
 
-    friend class VerticalBoxWidget;
+    friend class UVerticalBox;
     void SetHovered(bool hovered) { hovered_ = hovered; }
 };
 

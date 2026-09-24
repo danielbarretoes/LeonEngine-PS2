@@ -1,10 +1,10 @@
-#include "Components/ButtonWidget.h"
+#include "Components/Button.h"
 
 #include <algorithm>
 #include "Debug/DebugOverlay.h"
 
 
-void ButtonWidget::MeasureDesiredSize(float& outW, float& outH) const {
+void UButton::MeasureDesiredSize(float& outW, float& outH) const {
     float textW = 0.0f;
     float textH = 0.0f;
     FDebugOverlay::MeasureText(label_.empty() ? " " : label_, kHudFontScale, textW, textH);
@@ -14,11 +14,11 @@ void ButtonWidget::MeasureDesiredSize(float& outW, float& outH) const {
     outH = std::max(textH, kHudLineHeight) + kPadY * 2.0f;
 }
 
-bool ButtonWidget::Contains(float fbX, float fbY) const {
+bool UButton::Contains(float fbX, float fbY) const {
     return fbX >= x_ && fbX <= x_ + w_ && fbY >= y_ && fbY <= y_ + h_;
 }
 
-void ButtonWidget::NativePaint(WidgetPaintContext& ctx) {
+void UButton::NativePaint(FPaintContext& ctx) {
     if (!IsVisible()) {
         return;
     }

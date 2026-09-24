@@ -1,8 +1,8 @@
 #include <algorithm>
-#include "Components/TextBlockWidget.h"
+#include "Components/TextBlock.h"
 
 
-void TextBlockWidget::NativePaint(WidgetPaintContext& ctx) {
+void UTextBlock::NativePaint(FPaintContext& ctx) {
     if (text_.empty()) {
         return;
     }
