@@ -1,7 +1,7 @@
 # LeonBuildTool build-tree generator (the part of UnrealBuildTool that turns rules into a build).
 #
 # Do not configure this directly — use Engine/Build/BatchFiles/Build.bat (or LeonBuildTool.cmake):
-#   Build.bat <Target> <Platform> <Configuration> [-Project=<path>.leonproject]
+#   Build.bat <Target> <Platform> <Configuration> [-Project=<path>.lproj]
 #
 # Cache inputs: LEON_PLATFORM, LEON_CONFIGURATION (Debug|Development|Shipping), LEON_PROJECT_FILE.
 # Without a project the tree contains every engine target (programs, LeonGame) for the platform.

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Engine/Build/BatchFiles/Linux/GenerateProjectFiles.sh [-Project=<file.leonproject>]
+# Engine/Build/BatchFiles/Linux/GenerateProjectFiles.sh [-Project=<file.lproj>]
 # Host project files (default CMake generator) in <Engine|Project>/Intermediate/ProjectFiles.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/../../../.." && pwd)"

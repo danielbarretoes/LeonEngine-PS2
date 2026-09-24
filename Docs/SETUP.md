@@ -88,7 +88,7 @@ The PS2 game is `Game/ThirdPerson`, an isolated project built against the engine
 Desktop running:
 
 ```bat
-Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.leonproject
+Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.lproj
 ```
 
 → `Game\ThirdPerson\Binaries\PS2\ThirdPerson.elf`. The first build pulls the ps2dev image. PS2 builds do not need
@@ -108,7 +108,7 @@ Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson    
 Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson -Build   # build first
 ```
 
-`-Project` accepts a project folder or a `.leonproject` file (default `Game\ThirdPerson`); `-Configuration` is
+`-Project` accepts a project folder or a `.lproj` file (default `Game\ThirdPerson`); `-Configuration` is
 `Debug`, `Development` (default) or `Shipping`. The script finds PCSX2 through `$env:LEON_PCSX2`, then
 `pcsx2-qt.exe` on `PATH`, then the default install folders, and starts it with `-fastboot -elf <file>`. You can also
 use PCSX2's **File → Run ELF** directly.

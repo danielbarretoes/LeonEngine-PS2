@@ -1,7 +1,7 @@
 @echo off
-REM Engine\Build\BatchFiles\Build.bat <Target> <Platform> <Configuration> [-Project=<file.leonproject>] [-Mode=...]
+REM Engine\Build\BatchFiles\Build.bat <Target> <Platform> <Configuration> [-Project=<file.lproj>] [-Mode=...]
 REM   Build.bat BlankProgram Win64 Development
-REM   Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.leonproject
+REM   Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.lproj
 REM Runs LeonBuildTool (CMake script mode). Win64 needs the MSVC environment; PS2 builds run in Docker.
 setlocal EnableExtensions
 set "LEON_ROOT=%~dp0..\..\.."

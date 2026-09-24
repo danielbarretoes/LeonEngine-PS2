@@ -28,7 +28,7 @@ LeonEngine-PS2/
 │   │   └── LeonGame.Target.cmake
 │   ├── Platforms/PS2/         # PS2 platform extension (Source, Build, Config, Documentation)
 │   └── Plugins/Runtime/JoltPhysics/
-├── Game/ThirdPerson/          # the only game project (isolated; .leonproject)
+├── Game/ThirdPerson/          # the only game project (isolated; .lproj)
 ├── Docs/
 ├── Setup.bat / Setup.sh       # pinned third-party downloads
 └── GenerateProjectFiles.bat / .sh
@@ -56,7 +56,7 @@ module style) — `Game/ThirdPerson/Source/ThirdPerson` is flat.
 Rules:
 
 - **No engine module references the game.** `Game/ThirdPerson` is only discovered when a build passes
-  `-Project=…/ThirdPerson.leonproject`; engine sources never include its headers (the name appears only
+  `-Project=…/ThirdPerson.lproj`; engine sources never include its headers (the name appears only
   as a default in `Build.bat` / `RunPCSX2.ps1` usage lines).
 - **Platform code lives in platform folders only**: `Private/Windows`, `Private/Linux`, `Private/Desktop`
   inside a module, or the extension under `Engine/Platforms/PS2`. LeonBuildTool drops source folders named
@@ -499,7 +499,7 @@ roadmap is [NextSteps.md](UnrealEngine427/NextSteps.md).
 | Game → Launch | The PS2 game module reads `GEngineLoop.GetMainWindow()` / `GetApplication()` through an include-only dependency on the launch module (UE game modules never see `FEngineLoop`); there is no `GEngine` / viewport on PS2 to hand them out. |
 | Gamepad input | Game code polls `IInputInterface` state directly; no Slate application routing events. |
 | Config | `Engine/Config/Base*.ini`, `Engine/Platforms/PS2/Config/PS2Engine.ini` and `Game/ThirdPerson/Config/Default*.ini` are placeholders; nothing loads them (no `FConfigCacheIni`). |
-| Desktop packs | `FProjectDescriptor` still reads the pre-refactor pack layout (`Projects/<Name>/leon.game.json`); the repository contains no such pack, and `.leonproject` files are read only by LeonBuildTool. |
+| Desktop packs | `FProjectDescriptor` still reads the pre-refactor pack layout (`Projects/<Name>/leon.game.json`); the repository contains no such pack, and `.lproj` files are read only by LeonBuildTool. |
 | Window / RHI ownership | The window creates the RHI (`FGenericWindow::InitRHI`), so ApplicationCore depends on the platform RHI module; on desktop `UGameEngine` creates its own application and window instead of `FEngineLoop`. |
 | Unused dependencies | Engine and UMG list `GLFW` as a private dependency but no source in either module includes a GLFW header. |
 | Platform checks | `Core/Private/Misc/Paths.cpp` and `Engine/Private/Net/NetUtil.cpp` still use `#if defined(_WIN32)` outside a platform folder. |

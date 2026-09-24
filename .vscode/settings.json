@@ -16,7 +16,7 @@
         "editor.rulers": [120]
     },
     "files.associations": {
-        "*.leonproject": "json",
-        "*.leonplugin": "json"
+        "*.lproj": "json",
+        "*.lplugin": "json"
     }
 }

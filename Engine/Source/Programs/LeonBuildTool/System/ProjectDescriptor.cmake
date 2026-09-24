@@ -1,4 +1,4 @@
-# .leonproject reader (Unreal: FProjectDescriptor / .uproject).
+# .lproj reader (Unreal: FProjectDescriptor / .uproject).
 #
 #   { "FileVersion": 1, "EngineAssociation": "", "Description": "...",
 #     "Modules": [ { "Name": "MyGame", "Type": "Runtime", "LoadingPhase": "Default" } ],

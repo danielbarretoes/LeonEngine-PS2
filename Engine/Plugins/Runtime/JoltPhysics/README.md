@@ -16,7 +16,7 @@ The module also exports the transitional define `LEON_WITH_JOLT=1` to whatever l
 
 ## Descriptor
 
-`JoltPhysics.leonplugin`: version `5.3.0`, category `Physics`, `"EnabledByDefault": false`, one `Runtime` module `JoltPhysics` with `"PlatformAllowList": [ "Win64" ]`. `JoltPhysics.Build.cmake` also restricts the module to `PLATFORMS Win64` and depends on `Core`, `PhysicsCore` (public), `Engine` and `JoltLib` (private).
+`JoltPhysics.lplugin`: version `5.3.0`, category `Physics`, `"EnabledByDefault": false`, one `Runtime` module `JoltPhysics` with `"PlatformAllowList": [ "Win64" ]`. `JoltPhysics.Build.cmake` also restricts the module to `PLATFORMS Win64` and depends on `Core`, `PhysicsCore` (public), `Engine` and `JoltLib` (private).
 
 ## Enabling it
 
@@ -31,7 +31,7 @@ The plugin is off by default, so a target only gets it when asked. Either:
   )
   ```
 
-- or for every target of a project, in its `.leonproject`:
+- or for every target of a project, in its `.lproj`:
 
   ```json
   "Plugins": [ { "Name": "JoltPhysics", "Enabled": true } ]

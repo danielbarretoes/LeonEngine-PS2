@@ -37,7 +37,7 @@ Requires CMake 3.24 or later and Ninja. Host setup is in [SETUP.md](SETUP.md).
 | `EnablePlugins` / `DisablePlugins` | `ENABLE_PLUGINS` / `DISABLE_PLUGINS` |
 | `bCompileAgainstEngine` → `WITH_ENGINE` | `COMPILE_AGAINST_ENGINE` → `WITH_ENGINE` |
 | `UE4Game.Target.cs` | `Engine/Source/LeonGame.Target.cmake` |
-| `.uproject` / `.uplugin` | `.leonproject` / `.leonplugin` (JSON, same field names) |
+| `.uproject` / `.uplugin` | `.lproj` / `.lplugin` (JSON, same field names) |
 | `UBT_COMPILED_PLATFORM` | `LBT_COMPILED_PLATFORM` |
 | `UEBuildPlatform` / `UnrealTargetPlatform` | `leon_register_platform()` (platform registry) |
 | Statically linked module list (monolithic) | generated `<Target>.ModuleInit.gen.cpp` |
@@ -59,7 +59,7 @@ The `--` is required: without it CMake would parse `-Project=...` as its own `-P
 | `<Target>` | a target from a `*.Target.cmake` (`LeonGame`, `LeonCook`, `LeonAutomationTests`, `BlankProgram`, or a project's target such as `ThirdPerson`) |
 | `<Platform>` | a registered platform: `Win64`, `Linux`, `PS2` |
 | `<Configuration>` | `Debug`, `Development`, `Shipping` |
-| `-Project=<file.leonproject>` | build a project's target instead of an engine target. Relative paths are resolved from the current directory |
+| `-Project=<file.lproj>` | build a project's target instead of an engine target. Relative paths are resolved from the current directory |
 | `-Mode=Build` | default: configure if needed, then build the target |
 | `-Mode=Clean` (or `-Clean`) | delete the target's build tree |
 | `-Mode=Rebuild` | Clean, then Build |
@@ -94,7 +94,7 @@ Anything else starting with `-` is rejected (`unknown option`).
 | Build tree | `Engine/Intermediate/Build/<Platform>/<Configuration>/` | `<Project>/Intermediate/Build/<Platform>/<Configuration>/` |
 | Executable | `Engine/Binaries/<Platform>/` | `<Project>/Binaries/<Platform>/` |
 | Targets in the tree | every engine target allowed on the platform | only the project's targets |
-| CMake project / solution name | `LeonEngine` | the `.leonproject` file name |
+| CMake project / solution name | `LeonEngine` | the `.lproj` file name |
 
 The executable is named `<OutputName><Suffix>` in `Development` and `<OutputName>-<Platform>-<Configuration><Suffix>` in
 other configurations. Suffix: `.exe` on Win64, `.elf` on PS2, none on Linux. Examples:
@@ -138,7 +138,7 @@ Examples:
 Setup.bat
 Engine\Build\BatchFiles\Build.bat LeonGame Win64 Development
 Engine\Build\BatchFiles\Build.bat BlankProgram PS2 Development
-Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.leonproject
+Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.lproj
 Engine\Build\BatchFiles\Rebuild.bat LeonAutomationTests Win64 Debug -KeepGoing
 Engine\Build\BatchFiles\RunTests.bat "[physics]"
 ```
@@ -287,7 +287,7 @@ leon_target(<Name> TYPE Game|Program
 | `TYPE` | `Game` or `Program` (required) |
 | `PLATFORMS` | Allow-list; the target is not generated on other platforms. Empty means every platform |
 | `LAUNCH_MODULE` | Module compiled straight into the executable (owns `main`). Default: `Launch` for games, `<Name>` for programs |
-| `EXTRA_MODULE_NAMES` | Extra root modules. Game default: the modules listed in the `.leonproject` |
+| `EXTRA_MODULE_NAMES` | Extra root modules. Game default: the modules listed in the `.lproj` |
 | `ENABLE_PLUGINS` / `DISABLE_PLUGINS` | Override plugin enablement for this target |
 | `COMPILE_AGAINST_ENGINE` | Sets `WITH_ENGINE` for the launch module. Default `ON` for games, `OFF` for programs |
 | `COLLECT_AUTOMATION_TESTS` | Compile every closure module's `Private/Tests/**` into the executable (`WITH_DEV_AUTOMATION_TESTS=1`) |
@@ -346,7 +346,7 @@ fails to link, which enforces the rule. `IMPLEMENT_GAME_MODULE` and `IMPLEMENT_P
 
 ## Projects and plugins
 
-### `.leonproject` (UE `.uproject`)
+### `.lproj` (UE `.uproject`)
 
 ```json
 {
@@ -361,11 +361,11 @@ fails to link, which enforces the rule. `IMPLEMENT_GAME_MODULE` and `IMPLEMENT_P
 
 LeonBuildTool reads `Modules[].Name` (the project's modules, default `EXTRA_MODULE_NAMES` of its game targets),
 `Plugins[]` (`Name` plus `Enabled`; a missing `Enabled` counts as enabled) and `TargetPlatforms[]`. The project name is
-the file name. A project folder contains `<Name>.leonproject`, `Source/<Target>.Target.cmake`,
+the file name. A project folder contains `<Name>.lproj`, `Source/<Target>.Target.cmake`,
 `Source/<Module>/<Module>.Build.cmake`, `Config/`, `Content/` and optionally `Plugins/`. The engine never references a
 project; projects are only built with `-Project=`.
 
-### `.leonplugin` (UE `.uplugin`)
+### `.lplugin` (UE `.uplugin`)
 
 ```json
 {
@@ -528,9 +528,9 @@ dependency of the module that uses it (or to a target's `EXTRA_MODULE_NAMES`).
 **Tests**: put Catch2 test files in `<Module>/Private/Tests/`; they are built into `LeonAutomationTests` if the module is
 in its closure (add it to `EXTRA_MODULE_NAMES` in `LeonAutomationTests.Target.cmake` otherwise).
 
-**A new game project**: create `<Dir>/<Name>.leonproject`, `<Dir>/Source/<Name>.Target.cmake` with
+**A new game project**: create `<Dir>/<Name>.lproj`, `<Dir>/Source/<Name>.Target.cmake` with
 `leon_target(<Name> TYPE Game ...)`, and a module in `<Dir>/Source/<Name>/` using `IMPLEMENT_PRIMARY_GAME_MODULE`. Build
-with `Build.bat <Name> <Platform> <Config> -Project=<Dir>\<Name>.leonproject`. `Game/ThirdPerson` is the reference.
+with `Build.bat <Name> <Platform> <Config> -Project=<Dir>\<Name>.lproj`. `Game/ThirdPerson` is the reference.
 
 **A new platform**: add `Engine/Platforms/<P>/Source/Programs/LeonBuildTool/LeonBuild<P>.cmake` calling
 `leon_register_platform(<P> IS_EXTENSION GROUPS ... HEADER_NAME <P> CXX_STANDARD ... EXECUTABLE_SUFFIX ... RHI_MODULE ...)`

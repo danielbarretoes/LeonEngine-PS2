@@ -54,7 +54,7 @@ UE 4.27 location to mirror.
 - **Game → Launch:** the PS2 game module reads `GEngineLoop.GetMainWindow()` through an include-only
   dependency on Launch; give games an engine-side accessor instead (UE: `GEngine->GameViewport`).
 - **Desktop packs:** `FProjectDescriptor` still resolves the pre-refactor layout
-  (`Projects/<Name>/leon.game.json`); read `.leonproject` + `<Project>/Content` like UE's `FProjectDescriptor`
+  (`Projects/<Name>/leon.game.json`); read `.lproj` + `<Project>/Content` like UE's `FProjectDescriptor`
   reads `.uproject`.
 - **Platform checks in shared code:** `_WIN32` tests in `Core/Private/Misc/Paths.cpp` and
   `Engine/Private/Net/NetUtil.cpp` should become HAL functions or move under `Private/Windows`.

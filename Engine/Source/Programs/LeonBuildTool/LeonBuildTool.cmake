@@ -5,7 +5,7 @@
 # (the -- keeps CMake from parsing our options: -Project= would otherwise read as -P roject=)
 #
 # Options:
-#   -Project=<file.leonproject>   build a game target of that project
+#   -Project=<file.lproj>   build a game target of that project
 #   -Mode=Build|Clean|Rebuild|GenerateClangDatabase|GenerateProjectFiles|Setup   (default Build)
 #   -NoDocker                     never re-launch inside the platform's Docker image
 #   -KeepGoing                    keep compiling after errors (ninja -k 0), to see every error at once
@@ -53,6 +53,9 @@ foreach(_Arg IN LISTS _Args)
 		continue()
 	elseif(_Arg MATCHES "^-Project=(.+)$")
 		set(_ProjectFile "${CMAKE_MATCH_1}")
+		if(_ProjectFile MATCHES "\\.leonproject$")
+			message(FATAL_ERROR "LeonBuildTool: .leonproject was renamed to .lproj (UE: .uproject); pass the .lproj file")
+		endif()
 	elseif(_Arg MATCHES "^-Mode=(.+)$")
 		set(_Mode "${CMAKE_MATCH_1}")
 	elseif(_Arg STREQUAL "-Clean")

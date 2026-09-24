@@ -162,7 +162,7 @@ leon_module(ThirdPerson
 )
 ```
 
-- `PLATFORMS PS2` and `"TargetPlatforms": [ "PS2" ]` in the `.leonproject`.
+- `PLATFORMS PS2` and `"TargetPlatforms": [ "PS2" ]` in the `.lproj`.
 - `COMPILE_AGAINST_ENGINE OFF`: `WITH_ENGINE=0`, the loop described above. Only modules that are allowed on PS2
   (`Core`, `InputCore`, `ApplicationCore`, `RHI`, `Launch`, `PS2RHI`) can be in the closure.
 - The primary game module uses `IMPLEMENT_PRIMARY_GAME_MODULE`, gets the window and input from `GEngineLoop` (a
@@ -172,11 +172,11 @@ leon_module(ThirdPerson
 Build and run:
 
 ```bat
-Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.leonproject
+Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.lproj
 Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson
 ```
 
-`RunPCSX2.ps1 [-Project <dir|file.leonproject>] [-Configuration Debug|Development|Shipping] [-Build]` resolves
+`RunPCSX2.ps1 [-Project <dir|file.lproj>] [-Configuration Debug|Development|Shipping] [-Build]` resolves
 `<Project>\Binaries\PS2\<Name>.elf` (`<Name>-PS2-<Configuration>.elf` outside Development), finds PCSX2 through
 `$env:LEON_PCSX2`, `PATH` or the default install folders, and starts it with `-fastboot -elf`. PCSX2 setup notes:
 [Docs/SETUP.md](../../../Docs/SETUP.md#pcsx2-notes).

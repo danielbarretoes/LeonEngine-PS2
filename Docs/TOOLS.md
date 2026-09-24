@@ -147,15 +147,15 @@ All scripts forward to LeonBuildTool (`cmake -P Engine/Source/Programs/LeonBuild
 | Script | Usage | Does |
 | --- | --- | --- |
 | `Setup.bat` / `Setup.sh` (root) | `Setup.bat` | Downloads every pinned third-party dependency (`-Mode=Setup`) |
-| `Engine\Build\BatchFiles\Build.bat` | `<Target> <Platform> <Configuration> [-Project=<file.leonproject>] [-Mode=...]` | Builds a target (`Build.bat BlankProgram Win64 Development`) |
+| `Engine\Build\BatchFiles\Build.bat` | `<Target> <Platform> <Configuration> [-Project=<file.lproj>] [-Mode=...]` | Builds a target (`Build.bat BlankProgram Win64 Development`) |
 | `Engine\Build\BatchFiles\Clean.bat` | same arguments as Build | `-Mode=Clean` |
 | `Engine\Build\BatchFiles\Rebuild.bat` | same arguments as Build | `-Mode=Rebuild` |
 | `Engine\Build\BatchFiles\Cook.bat` | `<LeonCook arguments>` | Builds LeonCook (Win64 Development) and runs it |
 | `Engine\Build\BatchFiles\RunTests.bat` | `[Catch2 args]` | Builds LeonAutomationTests (Win64 Development) and runs it from the repo root |
 | `Engine\Build\BatchFiles\FormatCode.bat` | `[--check]` | clang-format on every `.cpp` / `.h` / `.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game` (skips `ThirdParty`, `Intermediate`, `Binaries`); `--check` is a dry run that fails on unformatted files |
 | `Engine\Build\BatchFiles\Lint.bat` | | `FormatCode.bat --check`, then builds LeonAutomationTests, LeonCook, LeonGame and BlankProgram for Win64 Development |
-| `GenerateProjectFiles.bat` (root) → `Engine\Build\BatchFiles\GenerateProjectFiles.bat` | `[-Project=<file.leonproject>]` | Visual Studio solution in `<Engine or Project>\Intermediate\ProjectFiles` plus the root `compile_commands.json` for clangd; builds keep using Build.bat |
-| `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1` | `[-Project <dir or .leonproject>] [-Configuration Debug\|Development\|Shipping] [-Build]` | Optionally builds the project for PS2, then starts PCSX2 on `<Project>\Binaries\PS2\<Name>.elf` |
+| `GenerateProjectFiles.bat` (root) → `Engine\Build\BatchFiles\GenerateProjectFiles.bat` | `[-Project=<file.lproj>]` | Visual Studio solution in `<Engine or Project>\Intermediate\ProjectFiles` plus the root `compile_commands.json` for clangd; builds keep using Build.bat |
+| `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1` | `[-Project <dir or .lproj>] [-Configuration Debug\|Development\|Shipping] [-Build]` | Optionally builds the project for PS2, then starts PCSX2 on `<Project>\Binaries\PS2\<Name>.elf` |
 
 Linux equivalents: `Engine/Build/BatchFiles/Linux/Build.sh`, `Engine/Build/BatchFiles/Linux/GenerateProjectFiles.sh`, root `GenerateProjectFiles.sh` and `Setup.sh`.
 
@@ -169,7 +169,7 @@ Outputs go to `<Project or Engine>/Binaries/<Platform>/<Target><suffix>` for Dev
 Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson -Build
 ```
 
-`-Project` defaults to `Game\ThirdPerson` and takes a folder (first `*.leonproject` in it) or a `.leonproject` file. PCSX2 is looked up in `$env:LEON_PCSX2`, then `pcsx2-qt.exe` on `PATH`, then the default install folders; it starts with `-fastboot -elf <ELF>`.
+`-Project` defaults to `Game\ThirdPerson` and takes a folder (first `*.lproj` in it) or a `.lproj` file. PCSX2 is looked up in `$env:LEON_PCSX2`, then `pcsx2-qt.exe` on `PATH`, then the default install folders; it starts with `-fastboot -elf <ELF>`.
 
 ## Related docs
 

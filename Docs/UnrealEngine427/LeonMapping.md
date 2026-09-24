@@ -10,8 +10,8 @@ Update this page whenever a module or type is added, moved or renamed.
 | UnrealBuildTool (C#) | **LeonBuildTool** — pure CMake, `Engine/Source/Programs/LeonBuildTool/` |
 | `<Module>.Build.cs` (`ModuleRules`) | `<Module>.Build.cmake` → `leon_module(...)` |
 | `<Target>.Target.cs` (`TargetRules`) | `<Target>.Target.cmake` → `leon_target(...)` |
-| `.uproject` | `.leonproject` (JSON) |
-| `.uplugin` | `.leonplugin` (JSON) |
+| `.uproject` | `.lproj` (JSON) |
+| `.uplugin` | `.lplugin` (JSON) |
 | `Engine/Build/BatchFiles/Build.bat <Target> <Platform> <Config> -Project=` | same command line |
 | `UE4Game.Target.cs` | `Engine/Source/LeonGame.Target.cmake` |
 | Setup.bat / GitDependencies | `Setup.bat/.sh` → pinned third-party downloads |
@@ -43,7 +43,7 @@ Update this page whenever a module or type is added, moved or renamed.
 | `Plugins/Physics/Arcade` | `Engine` (`FPhysScene`, `Private/PhysicsEngine`) | |
 | `Plugins/Physics/Jolt` | plugin `Engine/Plugins/Runtime/JoltPhysics` | Win64 only |
 | `Runtime/` (GameApplication, RunLeonGame) | `Launch` (`GuardedMain`, `FEngineLoop`) | |
-| `Runtime/ProjectPack` (`leon.game.json`) | `Projects` (`FProjectDescriptor`, `.leonproject`) | |
+| `Runtime/ProjectPack` (`leon.game.json`) | `Projects` (`FProjectDescriptor`, `.lproj`) | |
 | `Runtime/GameHostSession`, `WorldRuntime` | `Engine` | |
 | `Tools/ResourceTools` | `Developer/Cooker` (`FCookRecipe`, `FCookPaths`, `UCookCommandlet`) | UE: cook commandlet in UnrealEd |
 | `Tools/AssetPipeline/leon-cook` | `Programs/LeonCook` | `UE4Editor-Cmd -run=cook` equivalent |

@@ -1,5 +1,5 @@
 @echo off
-REM Engine\Build\BatchFiles\GenerateProjectFiles.bat [-Project=<file.leonproject>]
+REM Engine\Build\BatchFiles\GenerateProjectFiles.bat [-Project=<file.lproj>]
 REM Visual Studio solution for browsing / debugging in <Engine|Project>\Intermediate\ProjectFiles, plus the
 REM root compile_commands.json for clangd (UE: GenerateProjectFiles.bat). Builds keep using Build.bat (Ninja).
 setlocal EnableExtensions

@@ -21,7 +21,7 @@ The overlay belongs to the engine (`FStatsOverlay`, drawn on PS2 by Launch's `PS
 From the repository root (Windows):
 
 ```bat
-Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.leonproject
+Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.lproj
 ```
 
 The PS2 build runs inside the pinned ps2dev Docker image (Docker must be running) unless `PS2DEV` is set on the host. Output: `Game/ThirdPerson/Binaries/PS2/ThirdPerson.elf` (Debug and Shipping add `-PS2-<Configuration>` to the name). On Linux use `Engine/Build/BatchFiles/Linux/Build.sh` with the same arguments.
@@ -38,7 +38,7 @@ The script finds PCSX2 through `$env:LEON_PCSX2`, `pcsx2-qt.exe` on `PATH`, or t
 
 ```text
 Game/ThirdPerson/
-├── ThirdPerson.leonproject          project descriptor (module ThirdPerson, TargetPlatforms PS2, no plugins)
+├── ThirdPerson.lproj          project descriptor (module ThirdPerson, TargetPlatforms PS2, no plugins)
 ├── Config/                          DefaultEngine.ini, DefaultGame.ini, DefaultInput.ini (placeholders)
 ├── Content/                         Levels/, Materials/, Textures/ (README only; content is built in code)
 └── Source/
@@ -91,4 +91,4 @@ LeonBuildTool generates the target's module table and marks ThirdPerson as the p
 
 ## Isolation
 
-The engine never references the game: no engine module, plugin or build rule depends on or includes anything under `Game/ThirdPerson`. The game depends on engine modules through its `.Build.cmake`, and is only pulled into a build through its `.leonproject` (`-Project=`). Keep game code, content and config inside `Game/ThirdPerson`.
+The engine never references the game: no engine module, plugin or build rule depends on or includes anything under `Game/ThirdPerson`. The game depends on engine modules through its `.Build.cmake`, and is only pulled into a build through its `.lproj` (`-Project=`). Keep game code, content and config inside `Game/ThirdPerson`.

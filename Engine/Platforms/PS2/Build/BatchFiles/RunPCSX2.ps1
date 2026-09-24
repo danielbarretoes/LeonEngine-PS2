@@ -1,5 +1,5 @@
 # Launch a project's PS2 build in PCSX2, optionally building it first with LeonBuildTool.
-# Usage: Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 [-Project <dir|file.leonproject>] [-Configuration Development] [-Build]
+# Usage: Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 [-Project <dir|file.lproj>] [-Configuration Development] [-Build]
 # PCSX2 path: $env:LEON_PCSX2, else PATH, else default install locations.
 param(
     [string]$Project = "Game\ThirdPerson",
@@ -13,8 +13,8 @@ $Root = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..\..\..")).Path
 
 $ProjectPath = if ([System.IO.Path]::IsPathRooted($Project)) { $Project } else { Join-Path $Root $Project }
 if ((Get-Item $ProjectPath).PSIsContainer) {
-    $ProjectFile = Get-ChildItem -Path $ProjectPath -Filter *.leonproject | Select-Object -First 1
-    if (-not $ProjectFile) { Write-Error "No .leonproject in $ProjectPath" }
+    $ProjectFile = Get-ChildItem -Path $ProjectPath -Filter *.lproj | Select-Object -First 1
+    if (-not $ProjectFile) { Write-Error "No .lproj in $ProjectPath" }
     $ProjectFile = $ProjectFile.FullName
 } else {
     $ProjectFile = (Resolve-Path $ProjectPath).Path

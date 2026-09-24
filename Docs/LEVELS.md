@@ -191,7 +191,7 @@ Only `Content/Levels/*.llev` and the `leon.game.json` location are fixed; other 
 4. loads `PreferredLevelKey`, else the `defaultLevel` stem (`FProjectDescriptor::DefaultLevelKey`), else the first catalog entry (`FWorldRuntime::LoadPack` → `FLevelDirector::ScanPackAndLoad`);
 5. binds `UGameInstance` level travel to `FLevelDirector::LoadByKey`, registers game modes on the `FGameplayRouter` (`ADefaultGameMode` by default) and ticks once.
 
-The Win64 `LeonGame` target runs a pack with `Engine\Binaries\Win64\LeonGame.exe --pack <Name>`. The repository does not ship a runtime pack at the moment, and `Game/ThirdPerson` is a build project (`.leonproject`), not a pack.
+The Win64 `LeonGame` target runs a pack with `Engine\Binaries\Win64\LeonGame.exe --pack <Name>`. The repository does not ship a runtime pack at the moment, and `Game/ThirdPerson` is a build project (`.lproj`), not a pack.
 
 ## Level templates
 

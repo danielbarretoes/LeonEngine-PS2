@@ -16,7 +16,7 @@ jobs:
       - name: Build ThirdPerson (PS2) with LeonBuildTool
         run: |
           sh Engine/Build/BatchFiles/Linux/Build.sh ThirdPerson PS2 Development \
-            "-Project=$PWD/Game/ThirdPerson/ThirdPerson.leonproject"
+            "-Project=$PWD/Game/ThirdPerson/ThirdPerson.lproj"
       - name: Build BlankProgram (PS2)
         run: sh Engine/Build/BatchFiles/Linux/Build.sh BlankProgram PS2 Development
       - name: Upload ELF

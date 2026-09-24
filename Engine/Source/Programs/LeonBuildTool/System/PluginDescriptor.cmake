@@ -1,4 +1,4 @@
-# .leonplugin reader (Unreal: FPluginDescriptor / .uplugin).
+# .lplugin reader (Unreal: FPluginDescriptor / .uplugin).
 #
 #   { "FileVersion": 1, "Version": 1, "VersionName": "1.0", "FriendlyName": "...", "Category": "...",
 #     "EnabledByDefault": false,
@@ -52,12 +52,12 @@ function(leon_read_plugin_descriptor File)
 	set_property(GLOBAL PROPERTY LEON_PLUGIN_${Name}_MODULES "${Modules}")
 endfunction()
 
-# leon_discover_plugins(<Root>...) — every *.leonplugin under the roots.
+# leon_discover_plugins(<Root>...) — every *.lplugin under the roots.
 function(leon_discover_plugins)
 	set(Files)
 	foreach(Root IN LISTS ARGN)
 		if(EXISTS "${Root}")
-			file(GLOB_RECURSE Found CONFIGURE_DEPENDS "${Root}/*.leonplugin")
+			file(GLOB_RECURSE Found CONFIGURE_DEPENDS "${Root}/*.lplugin")
 			list(APPEND Files ${Found})
 		endif()
 	endforeach()

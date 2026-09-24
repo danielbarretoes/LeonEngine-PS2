@@ -7,6 +7,11 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Project and plugin descriptors use the UE-style extensions `.lproj` (`.uproject`) and `.lplugin`
+  (`.uplugin`); LeonBuildTool rejects `.leonproject` with a rename hint.
+
 ## [0.11.0] - 2026-09-24
 
 Restructure to the **Unreal Engine 4.27** layout, architecture and coding standard, built with CMake

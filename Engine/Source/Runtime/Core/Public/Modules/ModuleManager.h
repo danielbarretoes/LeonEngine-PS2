@@ -75,6 +75,6 @@ public:
 
 #define IMPLEMENT_GAME_MODULE(ModuleImplClass, ModuleName) IMPLEMENT_MODULE(ModuleImplClass, ModuleName)
 
-/** The project's main game module; the game name comes from the .leonproject (LEON_PROJECT_NAME). */
+/** The project's main game module; the game name comes from the .lproj (LEON_PROJECT_NAME). */
 #define IMPLEMENT_PRIMARY_GAME_MODULE(ModuleImplClass, ModuleName, GameName)                                           \
 	IMPLEMENT_GAME_MODULE(ModuleImplClass, ModuleName)

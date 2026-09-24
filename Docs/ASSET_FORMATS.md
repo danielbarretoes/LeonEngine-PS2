@@ -23,7 +23,7 @@ Runtime formats are Leon binaries plus a few small INI-style text files. DCC sou
 | `*.blendspace1d.json` | JSON | 1D blend space | `CookedSkeletal` (Engine) |
 | `.lm` | Binary `LM01` | Lightmap | `LightmapIO` (Engine), load only |
 | `leon.game.json` | JSON | Runtime project pack marker | `FProjectDescriptor` (Projects) |
-| `.leonproject` / `.leonplugin` | JSON | Build descriptors | LeonBuildTool (CMake) |
+| `.lproj` / `.lplugin` | JSON | Build descriptors | LeonBuildTool (CMake) |
 | `.png` (and other stb_image formats) | Image | Textures | `FResourceCache::LoadTexture` (Renderer) |
 | `.hdr` | Radiance HDR | Environment map | `FResourceCache::LoadEnvMap` (Renderer) |
 | `.obj` / `.fbx` / `.gltf` / `.glb` | Source | Cook input only | MeshUtilities, AnimationCore |
@@ -245,11 +245,11 @@ A runtime project pack is a folder `Projects/<Name>/` with a `leon.game.json` ma
 
 ---
 
-## Build descriptors — `.leonproject` / `.leonplugin`
+## Build descriptors — `.lproj` / `.lplugin`
 
 JSON read by LeonBuildTool in CMake (`Engine/Source/Programs/LeonBuildTool/System/ProjectDescriptor.cmake`, `PluginDescriptor.cmake`), equivalent to Unreal's `.uproject` / `.uplugin`. The runtime does not read them.
 
-`.leonproject` (the file name is the project name):
+`.lproj` (the file name is the project name):
 
 | Field | Used for |
 | --- | --- |
@@ -258,7 +258,7 @@ JSON read by LeonBuildTool in CMake (`Engine/Source/Programs/LeonBuildTool/Syste
 | `TargetPlatforms[]` | Recorded (`LEON_PROJECT_TARGET_PLATFORMS`) |
 | `FileVersion`, `EngineAssociation`, `Category`, `Description`, `Modules[].Type` / `LoadingPhase` | Informational |
 
-`.leonplugin` (the file name is the plugin name; discovered under `Engine/Plugins` and `<Project>/Plugins`):
+`.lplugin` (the file name is the plugin name; discovered under `Engine/Plugins` and `<Project>/Plugins`):
 
 | Field | Used for |
 | --- | --- |
@@ -267,7 +267,7 @@ JSON read by LeonBuildTool in CMake (`Engine/Source/Programs/LeonBuildTool/Syste
 | `Modules[].PlatformAllowList[]` | Platforms (or platform groups) the module builds for |
 | `FileVersion`, `Version`, `VersionName`, `FriendlyName`, `Description`, `Category`, `Modules[].Type` / `LoadingPhase` | Informational |
 
-Examples: `Game/ThirdPerson/ThirdPerson.leonproject`, `Engine/Plugins/Runtime/JoltPhysics/JoltPhysics.leonplugin`.
+Examples: `Game/ThirdPerson/ThirdPerson.lproj`, `Engine/Plugins/Runtime/JoltPhysics/JoltPhysics.lplugin`.
 
 ---
 

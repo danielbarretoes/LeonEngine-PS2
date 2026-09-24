@@ -27,7 +27,7 @@ Engine\Build\BatchFiles\Build.bat LeonGame Win64 Development
 Engine\Build\BatchFiles\Build.bat LeonCook Win64 Development
 
 :: 4. Build the PS2 game (in Docker) -> Game\ThirdPerson\Binaries\PS2\ThirdPerson.elf
-Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.leonproject
+Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.lproj
 ```
 
 Run it in PCSX2 (add `-Build` to build first):
@@ -58,7 +58,7 @@ Engine/
   Plugins/Runtime/JoltPhysics/   Jolt rigid-body backend (Win64, disabled by default)
   Platforms/PS2/         PS2 platform extension
   Binaries/, Intermediate/       generated
-Game/ThirdPerson/        ThirdPerson.leonproject, Source/, Config/, Content/ (PS2 game)
+Game/ThirdPerson/        ThirdPerson.lproj, Source/, Config/, Content/ (PS2 game)
 Docs/
 ```
 
