@@ -90,7 +90,7 @@ public:
         }
     }
 
-    /// Actor Tick only (AnimInstance, etc.). Prefer `TickGameplayFrame` for Character worlds.
+    /// Actor Tick only (UAnimInstance, etc.). Prefer `TickGameplayFrame` for Character worlds.
     void Tick(float deltaTime);
 
     /// Unreal-like frame: Character move → FPhysScene::Step → overlaps → Actor Tick → sync → draw.

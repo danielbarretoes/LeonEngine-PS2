@@ -58,9 +58,9 @@ glm::mat4 EvaluateNodeToWorld(ufbx_anim* anim, ufbx_node* node, double time) {
     return world;
 }
 
-bool BakeAnimFromScene(ufbx_scene* scene, const Skeleton& skeleton,
+bool BakeAnimFromScene(ufbx_scene* scene, const USkeleton& skeleton,
                        const std::unordered_map<std::string, ufbx_node*>& nodesByName,
-                       AnimSequence& out) {
+                       UAnimSequence& out) {
     if (scene == nullptr || skeleton.BoneCount() <= 0) {
         return false;
     }
@@ -128,7 +128,7 @@ void CollectNodesByName(ufbx_scene* scene, std::unordered_map<std::string, ufbx_
 
 } // namespace
 
-int Skeleton::FindBoneIndex(const std::string& name) const {
+int USkeleton::FindBoneIndex(const std::string& name) const {
     for (int i = 0; i < BoneCount(); ++i) {
         if (boneNames[static_cast<std::size_t>(i)] == name) {
             return i;
@@ -137,14 +137,14 @@ int Skeleton::FindBoneIndex(const std::string& name) const {
     return -1;
 }
 
-bool AnimSequence::IsFinished(float timeSeconds) const {
+bool UAnimSequence::IsFinished(float timeSeconds) const {
     if (bLooping || durationSeconds <= 1.0e-4f) {
         return false;
     }
     return timeSeconds >= (durationSeconds - 1.0e-4f);
 }
 
-void AnimSequence::SampleLocalPose(float timeSeconds, std::vector<glm::mat4>& outBoneWorld) const {
+void UAnimSequence::SampleLocalPose(float timeSeconds, std::vector<glm::mat4>& outBoneWorld) const {
     const int boneCount = FrameCount() > 0 ? static_cast<int>(localPoseFrames[0].size()) : 0;
     outBoneWorld.assign(static_cast<std::size_t>(boneCount), glm::mat4(1.0f));
     if (boneCount <= 0 || FrameCount() <= 0) {
@@ -188,7 +188,7 @@ void AnimSequence::SampleLocalPose(float timeSeconds, std::vector<glm::mat4>& ou
     }
 }
 
-void BlendSpace1D::Evaluate(float axisValue, const AnimSequence*& outA, const AnimSequence*& outB,
+void UBlendSpace1D::Evaluate(float axisValue, const UAnimSequence*& outA, const UAnimSequence*& outB,
                             float& outAlpha) const {
     outA = nullptr;
     outB = nullptr;
@@ -207,8 +207,8 @@ void BlendSpace1D::Evaluate(float axisValue, const AnimSequence*& outA, const An
     });
 
     const float x = std::clamp(axisValue, axisMin, axisMax);
-    const BlendSpace1DSample& first = samples[order.front()];
-    const BlendSpace1DSample& last = samples[order.back()];
+    const FBlendSample& first = samples[order.front()];
+    const FBlendSample& last = samples[order.back()];
     if (x <= first.position || order.size() == 1) {
         outA = first.sequence;
         outB = first.sequence;
@@ -223,8 +223,8 @@ void BlendSpace1D::Evaluate(float axisValue, const AnimSequence*& outA, const An
     }
 
     for (std::size_t i = 0; i + 1 < order.size(); ++i) {
-        const BlendSpace1DSample& a = samples[order[i]];
-        const BlendSpace1DSample& b = samples[order[i + 1]];
+        const FBlendSample& a = samples[order[i]];
+        const FBlendSample& b = samples[order[i + 1]];
         if (x >= a.position && x <= b.position) {
             outA = a.sequence;
             outB = b.sequence;
@@ -235,11 +235,11 @@ void BlendSpace1D::Evaluate(float axisValue, const AnimSequence*& outA, const An
     }
 }
 
-void AnimInstance::SetBlendSpaceInput(float axisValue) {
+void UAnimInstance::SetBlendSpaceInput(float axisValue) {
     blendInputTarget_ = axisValue;
 }
 
-void AnimInstance::UpdateLocomotion(float deltaTime) {
+void UAnimInstance::UpdateLocomotion(float deltaTime) {
     if (locomotionBlendInterpSpeed_ <= 1.0e-6f) {
         blendInput_ = blendInputTarget_;
     } else {
@@ -263,7 +263,7 @@ void AnimInstance::UpdateLocomotion(float deltaTime) {
     }
 }
 
-void AnimInstance::SampleLocomotionBoneWorld(std::vector<glm::mat4>& outBoneWorld) const {
+void UAnimInstance::SampleLocomotionBoneWorld(std::vector<glm::mat4>& outBoneWorld) const {
     outBoneWorld.clear();
     if (skeleton_ == nullptr) {
         return;
@@ -299,7 +299,7 @@ void AnimInstance::SampleLocomotionBoneWorld(std::vector<glm::mat4>& outBoneWorl
     }
 }
 
-void AnimInstance::SkinFromBoneWorld(const std::vector<glm::mat4>& boneWorld,
+void UAnimInstance::SkinFromBoneWorld(const std::vector<glm::mat4>& boneWorld,
                                      std::vector<glm::mat4>& outSkin) const {
     outSkin.clear();
     if (skeleton_ == nullptr || skeleton_->BoneCount() <= 0) {
@@ -318,21 +318,21 @@ void AnimInstance::SkinFromBoneWorld(const std::vector<glm::mat4>& boneWorld,
     }
 }
 
-void AnimInstance::NativeUpdateAnimation(float deltaTime) {
+void UAnimInstance::NativeUpdateAnimation(float deltaTime) {
     UpdateLocomotion(deltaTime);
 }
 
-void AnimInstance::GetBoneWorldMatrices(std::vector<glm::mat4>& outBoneWorld) const {
+void UAnimInstance::GetBoneWorldMatrices(std::vector<glm::mat4>& outBoneWorld) const {
     SampleLocomotionBoneWorld(outBoneWorld);
 }
 
-void AnimInstance::GetSkinMatrices(std::vector<glm::mat4>& outSkin) const {
+void UAnimInstance::GetSkinMatrices(std::vector<glm::mat4>& outSkin) const {
     std::vector<glm::mat4> world;
     GetBoneWorldMatrices(world);
     SkinFromBoneWorld(world, outSkin);
 }
 
-bool LoadSkeletalMeshFromFbx(const std::string& path, SkeletalMeshData& out) {
+bool LoadSkeletalMeshFromFbx(const std::string& path, FSkeletalMeshData& out) {
     out = {};
     ufbx_error error{};
     const ufbx_load_opts opts = MakeLoadOpts();
@@ -418,7 +418,7 @@ bool LoadSkeletalMeshFromFbx(const std::string& path, SkeletalMeshData& out) {
                 const uint32_t index = tri[static_cast<size_t>(t) * 3u + static_cast<size_t>(k)];
                 const uint32_t vi = mesh->vertex_indices.data[index];
 
-                SkeletalVertex v{};
+                FSkeletalVertex v{};
                 const ufbx_vec3 pos = ufbx_get_vertex_vec3(&mesh->vertex_position, index);
                 v.position = {static_cast<float>(pos.x), static_cast<float>(pos.y),
                               static_cast<float>(pos.z)};
@@ -474,7 +474,7 @@ bool LoadSkeletalMeshFromFbx(const std::string& path, SkeletalMeshData& out) {
     return out.skeleton.BoneCount() > 0;
 }
 
-bool LoadAnimSequenceFromFbx(const std::string& path, const Skeleton& skeleton, AnimSequence& out) {
+bool LoadAnimSequenceFromFbx(const std::string& path, const USkeleton& skeleton, UAnimSequence& out) {
     out = {};
     ufbx_error error{};
     const ufbx_load_opts opts = MakeLoadOpts();

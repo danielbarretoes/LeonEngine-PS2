@@ -34,7 +34,7 @@ struct SkelMeshAttachment {
     glm::mat4 worldMatrixOverride{1.0f};
 };
 
-/// Unreal-like USkeletalMeshComponent — SceneComponent with skeletal mesh + AnimInstance.
+/// Unreal-like USkeletalMeshComponent — SceneComponent with skeletal mesh + UAnimInstance.
 class SkeletalMeshComponent : public SceneComponent {
 public:
     SkeletalMeshComponent();
@@ -43,10 +43,10 @@ public:
     [[nodiscard]] USkeletalMesh* GetSkeletalMesh() { return skeletalMesh_.get(); }
     [[nodiscard]] const USkeletalMesh* GetSkeletalMesh() const { return skeletalMesh_.get(); }
 
-    void SetAnimInstance(std::unique_ptr<AnimInstance> instance);
+    void SetAnimInstance(std::unique_ptr<UAnimInstance> instance);
     template <typename TAnim, typename... TArgs>
     TAnim& SetAnimInstance(TArgs&&... args) {
-        static_assert(std::is_base_of_v<AnimInstance, TAnim>,
+        static_assert(std::is_base_of_v<UAnimInstance, TAnim>,
                       "TAnim must derive from AnimInstance");
         auto owned = std::make_unique<TAnim>(std::forward<TArgs>(args)...);
         TAnim& ref = *owned;
@@ -54,8 +54,8 @@ public:
         return ref;
     }
 
-    [[nodiscard]] AnimInstance& GetAnimInstance() { return *animInstance_; }
-    [[nodiscard]] const AnimInstance& GetAnimInstance() const { return *animInstance_; }
+    [[nodiscard]] UAnimInstance& GetAnimInstance() { return *animInstance_; }
+    [[nodiscard]] const UAnimInstance& GetAnimInstance() const { return *animInstance_; }
 
     template <typename TAnim>
     [[nodiscard]] TAnim* GetAnimInstance() {
@@ -66,14 +66,14 @@ public:
         return dynamic_cast<const TAnim*>(animInstance_.get());
     }
 
-    [[nodiscard]] BlendSpace1D& GetBlendSpace() { return blendSpace_; }
-    [[nodiscard]] const BlendSpace1D& GetBlendSpace() const { return blendSpace_; }
+    [[nodiscard]] UBlendSpace1D& GetBlendSpace() { return blendSpace_; }
+    [[nodiscard]] const UBlendSpace1D& GetBlendSpace() const { return blendSpace_; }
 
-    [[nodiscard]] AnimSequence* FindSequence(const std::string& name);
-    [[nodiscard]] const AnimSequence* FindSequence(const std::string& name) const;
-    [[nodiscard]] AnimSequence& GetOrCreateSequence(const std::string& name);
+    [[nodiscard]] UAnimSequence* FindSequence(const std::string& name);
+    [[nodiscard]] const UAnimSequence* FindSequence(const std::string& name) const;
+    [[nodiscard]] UAnimSequence& GetOrCreateSequence(const std::string& name);
 
-    /// Bind skeleton/blendspace pointers and call AnimInstance::NativeInitializeAnimation.
+    /// Bind skeleton/blendspace pointers and call UAnimInstance::NativeInitializeAnimation.
     void BindSequencesToAnimInstance();
 
     void ApplyFitHeight(float fitHeight);
@@ -90,7 +90,7 @@ public:
         return attachments_;
     }
 
-    /// Bone model-space matrix from the current AnimInstance pose.
+    /// Bone model-space matrix from the current UAnimInstance pose.
     [[nodiscard]] bool GetBoneModelMatrix(const std::string& boneName, glm::mat4& outModel) const;
 
     /// Component world * bone * attachment.relative (or worldMatrixOverride).
@@ -109,11 +109,11 @@ private:
     void bindAnimInstanceToAssets();
 
     std::shared_ptr<USkeletalMesh> skeletalMesh_;
-    /// Stable storage — BlendSpace / AnimInstance keep raw pointers into these elements.
-    std::deque<AnimSequence> sequences_;
+    /// Stable storage — BlendSpace / UAnimInstance keep raw pointers into these elements.
+    std::deque<UAnimSequence> sequences_;
     std::unordered_map<std::string, std::size_t> sequenceIndexByName_;
-    BlendSpace1D blendSpace_{};
-    std::unique_ptr<AnimInstance> animInstance_;
+    UBlendSpace1D blendSpace_{};
+    std::unique_ptr<UAnimInstance> animInstance_;
     std::vector<SkelMeshAttachment> attachments_;
     mutable std::vector<glm::mat4> skinMatrices_;
     mutable std::vector<glm::mat4> boneWorldMatrices_;

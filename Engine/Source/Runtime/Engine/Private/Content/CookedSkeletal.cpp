@@ -109,7 +109,7 @@ constexpr std::uint32_t kMaxCookedAnimFrames = 100'000u;
     return static_cast<bool>(out);
 }
 
-void writeVertex(std::ostream& out, const SkeletalVertex& v) {
+void writeVertex(std::ostream& out, const FSkeletalVertex& v) {
     out.write(reinterpret_cast<const char*>(&v.position), sizeof(float) * 3);
     out.write(reinterpret_cast<const char*>(&v.normal), sizeof(float) * 3);
     out.write(reinterpret_cast<const char*>(&v.texCoord), sizeof(float) * 2);
@@ -120,7 +120,7 @@ void writeVertex(std::ostream& out, const SkeletalVertex& v) {
 }
 
 [[nodiscard]] bool readVertex(const std::uint8_t*& ptr, const std::uint8_t* end,
-                              SkeletalVertex& v) {
+                              FSkeletalVertex& v) {
     auto take = [&](void* dst, std::size_t n) -> bool {
         if (ptr + n > end) {
             return false;
@@ -141,7 +141,7 @@ void writeVertex(std::ostream& out, const SkeletalVertex& v) {
 
 } // namespace
 
-bool SaveSkeletonLeon(const std::string& path, const Skeleton& skeleton, const std::string& name) {
+bool SaveSkeletonLeon(const std::string& path, const USkeleton& skeleton, const std::string& name) {
     if (skeleton.BoneCount() <= 0) {
         return false;
     }
@@ -172,7 +172,7 @@ bool SaveSkeletonLeon(const std::string& path, const Skeleton& skeleton, const s
     return static_cast<bool>(out);
 }
 
-bool LoadSkeleton(const std::string& path, Skeleton& out, std::string* outName) {
+bool LoadSkeleton(const std::string& path, USkeleton& out, std::string* outName) {
     std::vector<std::uint8_t> bytes;
     if (!readAllBytes(path, bytes) || bytes.size() < 12) {
         return false;
@@ -224,7 +224,7 @@ bool LoadSkeleton(const std::string& path, Skeleton& out, std::string* outName) 
     return out.BoneCount() > 0;
 }
 
-bool SaveSkeletalMeshLeon(const std::string& path, const SkeletalMeshData& data,
+bool SaveSkeletalMeshLeon(const std::string& path, const FSkeletalMeshData& data,
                           const std::string& skeletonRelPath, const std::string& materialRelPath,
                           const std::string& assetName) {
     if (data.empty()) {
@@ -252,7 +252,7 @@ bool SaveSkeletalMeshLeon(const std::string& path, const SkeletalMeshData& data,
     out.write(reinterpret_cast<const char*>(localMax), sizeof(localMax));
     out.write(reinterpret_cast<const char*>(&vcount), sizeof(vcount));
     out.write(reinterpret_cast<const char*>(&icount), sizeof(icount));
-    for (const SkeletalVertex& v : data.vertices) {
+    for (const FSkeletalVertex& v : data.vertices) {
         writeVertex(out, v);
     }
     out.write(reinterpret_cast<const char*>(data.indices.data()),
@@ -260,8 +260,8 @@ bool SaveSkeletalMeshLeon(const std::string& path, const SkeletalMeshData& data,
     return static_cast<bool>(out);
 }
 
-bool LoadSkeletalMesh(const std::string& path, SkeletalMeshData& out,
-                          Skeleton* skeletonOverride, std::string* outMaterialRelPath) {
+bool LoadSkeletalMesh(const std::string& path, FSkeletalMeshData& out,
+                          USkeleton* skeletonOverride, std::string* outMaterialRelPath) {
     std::vector<std::uint8_t> bytes;
     if (!readAllBytes(path, bytes) || bytes.size() < 40) {
         std::cerr << "CookedSkeletal: cannot read skelmesh '" << path << "'\n";
@@ -333,7 +333,7 @@ bool LoadSkeletalMesh(const std::string& path, SkeletalMeshData& out,
     return !out.empty();
 }
 
-bool SaveAnimSequenceLeon(const std::string& path, const AnimSequence& anim, int boneCount,
+bool SaveAnimSequenceLeon(const std::string& path, const UAnimSequence& anim, int boneCount,
                           const std::string& skeletonRelPath) {
     if (anim.FrameCount() <= 0 || boneCount <= 0) {
         return false;
@@ -369,7 +369,7 @@ bool SaveAnimSequenceLeon(const std::string& path, const AnimSequence& anim, int
     return static_cast<bool>(out);
 }
 
-bool LoadAnimSequence(const std::string& path, AnimSequence& out) {
+bool LoadAnimSequence(const std::string& path, UAnimSequence& out) {
     std::vector<std::uint8_t> bytes;
     if (!readAllBytes(path, bytes) || bytes.size() < 28) {
         std::cerr << "CookedSkeletal: cannot read anim '" << path << "'\n";
@@ -637,13 +637,13 @@ bool LoadCharacterVisual(const std::string& path, CharacterVisualDesc& out) {
 bool CookAnimSequenceFromFbx(const std::string& fbxPath, const std::string& skeletonPath,
                              const std::string& outAnimPath, const std::string& animName,
                              bool looping) {
-    Skeleton skeleton;
+    USkeleton skeleton;
     if (!LoadSkeleton(skeletonPath, skeleton)) {
         std::cerr << "CookAnimSequenceFromFbx: failed skeleton '" << skeletonPath << "'\n";
         return false;
     }
 
-    AnimSequence anim;
+    UAnimSequence anim;
     if (!LoadAnimSequenceFromFbx(fbxPath, skeleton, anim)) {
         std::cerr << "CookAnimSequenceFromFbx: failed FBX '" << fbxPath << "'\n";
         return false;
@@ -675,16 +675,16 @@ bool CookCharacterFromFbx(const std::string& characterName, const std::string& m
     fs::create_directories(fs::path(outDirectory) / "Anims");
     fs::create_directories(fs::path(outDirectory) / "Materials");
 
-    SkeletalMeshData meshData;
+    FSkeletalMeshData meshData;
     if (!LoadSkeletalMeshFromFbx(meshFbxPath, meshData)) {
         return false;
     }
 
-    AnimSequence idle = std::move(meshData.embeddedAnim);
+    UAnimSequence idle = std::move(meshData.embeddedAnim);
     idle.name = "BreathingIdle";
     meshData.embeddedAnim = {};
 
-    AnimSequence run;
+    UAnimSequence run;
     if (!LoadAnimSequenceFromFbx(runFbxPath, meshData.skeleton, run)) {
         std::cerr << "CookCharacterFromFbx: run anim failed\n";
         return false;
@@ -693,9 +693,9 @@ bool CookCharacterFromFbx(const std::string& characterName, const std::string& m
         run.name = "Running";
     }
 
-    AnimSequence jumpStart;
-    AnimSequence fallLoop;
-    AnimSequence land;
+    UAnimSequence jumpStart;
+    UAnimSequence fallLoop;
+    UAnimSequence land;
     if (!jumpAnims.jumpStartFbx.empty()) {
         if (!LoadAnimSequenceFromFbx(jumpAnims.jumpStartFbx, meshData.skeleton, jumpStart)) {
             std::cerr << "CookCharacterFromFbx: jumpStart anim failed\n";

@@ -3,23 +3,23 @@
 #include "SkeletalAnimation.h"
 
 
-void CharacterAnimInstance::SetJumpPlayRates(float jumpStart, float fallLoop, float land) {
+void UCharacterAnimInstance::SetJumpPlayRates(float jumpStart, float fallLoop, float land) {
     jumpStartPlayRate_ = std::max(jumpStart, 0.01f);
     fallLoopPlayRate_ = std::max(fallLoop, 0.01f);
     landPlayRate_ = std::max(land, 0.01f);
 }
 
-void CharacterAnimInstance::NotifyJumped() {
+void UCharacterAnimInstance::NotifyJumped() {
     jumpRequested_ = true;
 }
 
-void CharacterAnimInstance::SetMovementState(bool falling, float velocityY, bool justLanded) {
+void UCharacterAnimInstance::SetMovementState(bool falling, float velocityY, bool justLanded) {
     falling_ = falling;
     velocityY_ = velocityY;
     justLanded_ = justLanded;
 }
 
-float CharacterAnimInstance::playRateForState(EAnimJumpState state) const {
+float UCharacterAnimInstance::playRateForState(EAnimJumpState state) const {
     switch (state) {
     case EAnimJumpState::JumpStart:
         return jumpStartPlayRate_;
@@ -33,7 +33,7 @@ float CharacterAnimInstance::playRateForState(EAnimJumpState state) const {
     }
 }
 
-void CharacterAnimInstance::advancePlayer(PosePlayer& player, float deltaTime,
+void UCharacterAnimInstance::advancePlayer(FPosePlayer& player, float deltaTime,
                                           float playRate) const {
     if (player.sequence == nullptr) {
         return;
@@ -44,7 +44,7 @@ void CharacterAnimInstance::advancePlayer(PosePlayer& player, float deltaTime,
     }
 }
 
-void CharacterAnimInstance::enterState(EAnimJumpState next) {
+void UCharacterAnimInstance::enterState(EAnimJumpState next) {
     if (next == jumpState_) {
         return;
     }
@@ -81,7 +81,7 @@ void CharacterAnimInstance::enterState(EAnimJumpState next) {
     activeCrossfadeDuration_ = fade;
 }
 
-void CharacterAnimInstance::updateJumpStateMachine() {
+void UCharacterAnimInstance::updateJumpStateMachine() {
     const bool hasJumpStart =
         jumpClips_.jumpStart != nullptr && jumpClips_.jumpStart->FrameCount() > 0;
     const bool hasFallLoop =
@@ -159,10 +159,10 @@ void CharacterAnimInstance::updateJumpStateMachine() {
     justLanded_ = false;
 }
 
-void CharacterAnimInstance::samplePlayerBoneWorld(const PosePlayer& player,
+void UCharacterAnimInstance::samplePlayerBoneWorld(const FPosePlayer& player,
                                                   std::vector<glm::mat4>& outBoneWorld) const {
     outBoneWorld.clear();
-    const Skeleton* skeleton = GetSkeleton();
+    const USkeleton* skeleton = GetSkeleton();
     if (skeleton == nullptr) {
         return;
     }
@@ -173,7 +173,7 @@ void CharacterAnimInstance::samplePlayerBoneWorld(const PosePlayer& player,
     player.sequence->SampleLocalPose(player.time, outBoneWorld);
 }
 
-void CharacterAnimInstance::NativeUpdateAnimation(float deltaTime) {
+void UCharacterAnimInstance::NativeUpdateAnimation(float deltaTime) {
     UpdateLocomotion(deltaTime);
 
     if (jumpState_ != EAnimJumpState::Locomotion) {
@@ -199,8 +199,8 @@ void CharacterAnimInstance::NativeUpdateAnimation(float deltaTime) {
     }
 }
 
-void CharacterAnimInstance::GetBoneWorldMatrices(std::vector<glm::mat4>& outBoneWorld) const {
-    const Skeleton* skeleton = GetSkeleton();
+void UCharacterAnimInstance::GetBoneWorldMatrices(std::vector<glm::mat4>& outBoneWorld) const {
+    const USkeleton* skeleton = GetSkeleton();
     if (skeleton == nullptr || skeleton->BoneCount() <= 0) {
         outBoneWorld.clear();
         return;
@@ -234,7 +234,7 @@ void CharacterAnimInstance::GetBoneWorldMatrices(std::vector<glm::mat4>& outBone
     }
 }
 
-void CharacterAnimInstance::GetSkinMatrices(std::vector<glm::mat4>& outSkin) const {
+void UCharacterAnimInstance::GetSkinMatrices(std::vector<glm::mat4>& outSkin) const {
     std::vector<glm::mat4> worldBlended;
     GetBoneWorldMatrices(worldBlended);
     SkinFromBoneWorld(worldBlended, outSkin);

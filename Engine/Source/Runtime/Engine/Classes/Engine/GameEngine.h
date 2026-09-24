@@ -69,8 +69,8 @@ public:
     [[nodiscard]] const PlayerInput& GetInput() const { return playerInput_; }
     [[nodiscard]] FSceneRenderer& GetRenderer() { return renderer_; }
     [[nodiscard]] const FSceneRenderer& GetRenderer() const { return renderer_; }
-    [[nodiscard]] AudioDevice& GetAudioDevice() { return audioDevice_; }
-    [[nodiscard]] const AudioDevice& GetAudioDevice() const { return audioDevice_; }
+    [[nodiscard]] FAudioDevice& GetAudioDevice() { return audioDevice_; }
+    [[nodiscard]] const FAudioDevice& GetAudioDevice() const { return audioDevice_; }
     [[nodiscard]] bool IsInitialized() const { return initialized_; }
 
     [[nodiscard]] GameInstance& GetGameInstance() { return *gameInstance_; }
@@ -181,7 +181,7 @@ private:
     FSceneRenderer renderer_;
     FDebugOverlay overlay_;
     HUD hud_;
-    AudioDevice audioDevice_;
+    FAudioDevice audioDevice_;
     Camera camera_;
     Level level_;
     FResourceCache resources_;

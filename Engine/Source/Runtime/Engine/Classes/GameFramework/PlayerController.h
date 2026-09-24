@@ -50,7 +50,7 @@ public:
     [[nodiscard]] bool IsLocalController() const { return bLocalController_; }
     void SetIsLocalController(bool local) { bLocalController_ = local; }
 
-    // Flow: Local input → InputCmdMsg → authority ApplyRemoteInput
+    // Flow: Local input → FInputCmdMsg → authority ApplyRemoteInput
     /// Latches current button mask; rising edges vs previous frame go into pressedEdges_.
     void LatchButtons(std::uint16_t pressedNow);
     [[nodiscard]] bool WasButtonPressed(Leon::Net::EInputButton button) const;

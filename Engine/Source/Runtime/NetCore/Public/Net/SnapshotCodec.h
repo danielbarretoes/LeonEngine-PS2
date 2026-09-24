@@ -9,12 +9,12 @@ namespace Leon::Net
 {
 
 /// Decoded authoritative snapshot (client interpolation targets).
-struct DecodedSnapshot {
+struct FDecodedSnapshot {
     std::uint32_t tick = 0;
     bool hasMatchMeta = false;
-    SnapshotMatchMeta matchMeta{};
-    std::vector<PawnSnap> pawns;
-    std::vector<BodySnap> bodies;
+    FSnapshotMatchMeta matchMeta{};
+    std::vector<FPawnSnap> pawns;
+    std::vector<FBodySnap> bodies;
 
     /// Convenience mirrors when hasMatchMeta (else 0).
     [[nodiscard]] std::uint8_t RoundIndex() const {
@@ -28,14 +28,14 @@ struct DecodedSnapshot {
     }
 };
 
-/// Pack SnapshotHeader [| MatchMeta] | pawns | bodies.
-/// When matchMeta is non-null, writes sizeof(SnapshotMatchMeta) extension after the header.
+/// Pack FSnapshotHeader [| MatchMeta] | pawns | bodies.
+/// When matchMeta is non-null, writes sizeof(FSnapshotMatchMeta) extension after the header.
 [[nodiscard]] bool EncodeSnapshot(std::vector<std::uint8_t>& outPacket, std::uint32_t tick,
-                                  const PawnSnap* pawns, std::uint8_t pawnCount,
-                                  const BodySnap* bodies, std::uint8_t bodyCount,
-                                  const SnapshotMatchMeta* matchMeta = nullptr);
+                                  const FPawnSnap* pawns, std::uint8_t pawnCount,
+                                  const FBodySnap* bodies, std::uint8_t bodyCount,
+                                  const FSnapshotMatchMeta* matchMeta = nullptr);
 
 /// Parse a Snapshot datagram (validates sizes; unknown extBytes are skipped).
-[[nodiscard]] bool DecodeSnapshot(const std::uint8_t* data, std::size_t size, DecodedSnapshot& out);
+[[nodiscard]] bool DecodeSnapshot(const std::uint8_t* data, std::size_t size, FDecodedSnapshot& out);
 
 } // namespace Leon::Net

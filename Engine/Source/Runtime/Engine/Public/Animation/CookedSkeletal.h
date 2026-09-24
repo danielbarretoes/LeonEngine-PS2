@@ -20,24 +20,24 @@ inline constexpr std::uint32_t kLeonSkelMeshMagic = 0x314D4B4Cu;  // 'LKM1'
 inline constexpr std::uint32_t kLeonAnimMagic = 0x314E414Cu;      // 'LAN1'
 inline constexpr int kCookedFormatVersion = 1;
 
-[[nodiscard]] bool SaveSkeletonLeon(const std::string& path, const Skeleton& skeleton,
+[[nodiscard]] bool SaveSkeletonLeon(const std::string& path, const USkeleton& skeleton,
                                   const std::string& name);
-[[nodiscard]] bool LoadSkeleton(const std::string& path, Skeleton& out,
+[[nodiscard]] bool LoadSkeleton(const std::string& path, USkeleton& out,
                                 std::string* outName = nullptr);
 
-[[nodiscard]] bool SaveSkeletalMeshLeon(const std::string& path, const SkeletalMeshData& data,
+[[nodiscard]] bool SaveSkeletalMeshLeon(const std::string& path, const FSkeletalMeshData& data,
                                         const std::string& skeletonRelPath,
                                         const std::string& materialRelPath,
                                         const std::string& assetName);
-[[nodiscard]] bool LoadSkeletalMesh(const std::string& path, SkeletalMeshData& out,
-                                    Skeleton* skeletonOverride = nullptr,
+[[nodiscard]] bool LoadSkeletalMesh(const std::string& path, FSkeletalMeshData& out,
+                                    USkeleton* skeletonOverride = nullptr,
                                     std::string* outMaterialRelPath = nullptr);
 
-[[nodiscard]] bool SaveAnimSequenceLeon(const std::string& path, const AnimSequence& anim,
+[[nodiscard]] bool SaveAnimSequenceLeon(const std::string& path, const UAnimSequence& anim,
                                         int boneCount, const std::string& skeletonRelPath);
-[[nodiscard]] bool LoadAnimSequence(const std::string& path, AnimSequence& out);
+[[nodiscard]] bool LoadAnimSequence(const std::string& path, UAnimSequence& out);
 
-/// BlendSpace1D descriptor; `samples[].anim` are paths relative to the blendspace file.
+/// UBlendSpace1D descriptor; `samples[].anim` are paths relative to the blendspace file.
 struct BlendSpace1DAssetDesc {
     std::string name = "BlendSpace1D";
     float axisMin = 0.0f;
@@ -70,14 +70,14 @@ struct CharacterVisualDesc {
 /// Load `.lchar` (preferred) or legacy `.character.json`.
 [[nodiscard]] bool LoadCharacterVisual(const std::string& path, CharacterVisualDesc& out);
 
-/// Optional Mixamo jump / fall / land FBX paths for AnimInstance jump SM.
+/// Optional Mixamo jump / fall / land FBX paths for UAnimInstance jump SM.
 struct CookJumpAnimPaths {
     std::string jumpStartFbx; // Jumping Up
     std::string fallLoopFbx;  // Falling Idle
     std::string landFbx;      // Falling To Landing
 };
 
-/// Cook a single AnimSequence FBX into Anims/<name>.lanim (reuses existing skeleton).
+/// Cook a single UAnimSequence FBX into Anims/<name>.lanim (reuses existing skeleton).
 [[nodiscard]] bool CookAnimSequenceFromFbx(const std::string& fbxPath,
                                            const std::string& skeletonPath,
                                            const std::string& outAnimPath,

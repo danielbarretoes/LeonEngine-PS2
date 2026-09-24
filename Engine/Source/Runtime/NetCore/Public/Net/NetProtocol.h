@@ -12,7 +12,7 @@ namespace Leon::Net
 {
 
 constexpr std::uint32_t kProtocolMagic = 0x4E4F454Cu; // 'LEON'
-/// Bumped when fixed wire layouts change (Hello / InputCmd / SnapshotHeader / Rpc).
+/// Bumped when fixed wire layouts change (Hello / InputCmd / FSnapshotHeader / Rpc).
 constexpr std::uint16_t kProtocolVersion = 4;
 constexpr int kDefaultPort = 7777;
 constexpr int kMaxPlayers = 4;
@@ -47,10 +47,10 @@ enum class ERpcId : std::uint8_t {
 };
 
 constexpr std::uint8_t kRpcIdPackBase = 16;
-/// Max payload after RpcHeader (keeps datagrams under typical MTU).
+/// Max payload after FRpcHeader (keeps datagrams under typical MTU).
 constexpr std::uint16_t kMaxRpcPayloadBytes = 512;
 
-/// Game-agnostic action bits on InputCmdMsg::buttons (packs assign meaning).
+/// Game-agnostic action bits on FInputCmdMsg::buttons (packs assign meaning).
 enum EInputButton : std::uint16_t {
     kInputButton0 = 1u << 0,
     kInputButton1 = 1u << 1,
@@ -70,7 +70,7 @@ enum EInputButton : std::uint16_t {
     kInputButton15 = 1u << 15,
 };
 
-/// All valid InputCmdMsg::buttons bits (sanitize mask).
+/// All valid FInputCmdMsg::buttons bits (sanitize mask).
 constexpr std::uint16_t kInputButtonMask = 0xFFFFu;
 
 /// Suggested semantic aliases (packs may remap).
@@ -86,26 +86,26 @@ constexpr EInputButton Sprint = kInputButton4;     // hold to sprint
 
 #pragma pack(push, 1)
 
-struct HelloMsg {
+struct FHelloMsg {
     std::uint8_t type = static_cast<std::uint8_t>(ENetMsg::Hello);
     std::uint32_t magic = kProtocolMagic;
     std::uint16_t protocolVersion = kProtocolVersion;
 };
 
-struct WelcomeMsg {
+struct FWelcomeMsg {
     std::uint8_t type = static_cast<std::uint8_t>(ENetMsg::Welcome);
     std::uint8_t slot = 0; // 0 = host local, 1 = joining client
     char levelKey[kMaxLevelKeyBytes]{};
 };
 
-struct TravelMsg {
+struct FTravelMsg {
     std::uint8_t type = static_cast<std::uint8_t>(ENetMsg::Travel);
     std::uint8_t slot = 0; // client local slot after travel (host may send 0)
     char levelKey[kMaxLevelKeyBytes]{};
 };
 
-/// Fixed RPC framing. Wire: RpcHeader | payload[payloadBytes].
-struct RpcHeader {
+/// Fixed RPC framing. Wire: FRpcHeader | payload[payloadBytes].
+struct FRpcHeader {
     std::uint8_t type = static_cast<std::uint8_t>(ENetMsg::Rpc);
     std::uint8_t rpcId = 0;
     std::uint8_t targetSlot = 0; // pawn / player slot the RPC addresses (pack-defined)
@@ -114,7 +114,7 @@ struct RpcHeader {
 };
 
 /// Core locomotion + generic buttons. Pack-specific meaning lives in InputButtons aliases.
-struct InputCmdMsg {
+struct FInputCmdMsg {
     std::uint8_t type = static_cast<std::uint8_t>(ENetMsg::InputCmd);
     std::uint32_t seq = 0;
     float moveX = 0.0f;
@@ -125,7 +125,7 @@ struct InputCmdMsg {
     std::uint16_t buttons = 0; // v4: 16 action bits (was uint8 in v3)
 };
 
-struct PawnSnap {
+struct FPawnSnap {
     std::uint8_t slot = 0;
     float x = 0.0f;
     float y = 0.0f;
@@ -148,7 +148,7 @@ enum EPawnSnapFlags : std::uint8_t {
     kPawnSnapAlive = 1 << 0,
 };
 
-struct BodySnap {
+struct FBodySnap {
     std::uint32_t levelMeshIndex = 0;
     float x = 0.0f;
     float y = 0.0f;
@@ -159,7 +159,7 @@ struct BodySnap {
 };
 
 /// Fixed snapshot framing. Match / GameState fields are an optional extension blob.
-struct SnapshotHeader {
+struct FSnapshotHeader {
     std::uint8_t type = static_cast<std::uint8_t>(ENetMsg::Snapshot);
     std::uint32_t tick = 0;
     std::uint8_t pawnCount = 0;
@@ -169,7 +169,7 @@ struct SnapshotHeader {
 };
 
 /// Typed snapshot extension (extBytes == sizeof). Wire: Header | MatchMeta? | Pawns | Bodies.
-struct SnapshotMatchMeta {
+struct FSnapshotMatchMeta {
     std::uint8_t roundIndex = 0;
     std::uint8_t unitsAlive = 0;
     std::uint8_t remainingSeconds = 0;
@@ -194,11 +194,11 @@ inline void WriteLevelKey(char (&dest)[kMaxLevelKeyBytes], std::string_view key)
     return std::string(src, strnlen(src, kMaxLevelKeyBytes));
 }
 
-[[nodiscard]] inline bool HasInputButton(const InputCmdMsg& cmd, EInputButton button) {
+[[nodiscard]] inline bool HasInputButton(const FInputCmdMsg& cmd, EInputButton button) {
     return (cmd.buttons & static_cast<std::uint16_t>(button)) != 0;
 }
 
-inline void SetInputButton(InputCmdMsg& cmd, EInputButton button, bool down) {
+inline void SetInputButton(FInputCmdMsg& cmd, EInputButton button, bool down) {
     if (down) {
         cmd.buttons =
             static_cast<std::uint16_t>(cmd.buttons | static_cast<std::uint16_t>(button));
@@ -208,13 +208,13 @@ inline void SetInputButton(InputCmdMsg& cmd, EInputButton button, bool down) {
     }
 }
 
-/// PawnSnap user payload helpers (ammo-style packs).
-inline void SetPawnUserAmmo(PawnSnap& snap, std::uint8_t clip, std::uint16_t reserve) {
+/// FPawnSnap user payload helpers (ammo-style packs).
+inline void SetPawnUserAmmo(FPawnSnap& snap, std::uint8_t clip, std::uint16_t reserve) {
     snap.userByte0 = clip;
     snap.userWord0 = reserve;
 }
 
-inline void GetPawnUserAmmo(const PawnSnap& snap, std::uint8_t& clip, std::uint16_t& reserve) {
+inline void GetPawnUserAmmo(const FPawnSnap& snap, std::uint8_t& clip, std::uint16_t& reserve) {
     clip = snap.userByte0;
     reserve = snap.userWord0;
 }
@@ -223,23 +223,23 @@ inline void GetPawnUserAmmo(const PawnSnap& snap, std::uint8_t& clip, std::uint1
 [[nodiscard]] inline std::size_t MinPacketSize(ENetMsg type) {
     switch (type) {
     case ENetMsg::Hello:
-        return sizeof(HelloMsg);
+        return sizeof(FHelloMsg);
     case ENetMsg::Welcome:
-        return sizeof(WelcomeMsg);
+        return sizeof(FWelcomeMsg);
     case ENetMsg::InputCmd:
-        return sizeof(InputCmdMsg);
+        return sizeof(FInputCmdMsg);
     case ENetMsg::Snapshot:
-        return sizeof(SnapshotHeader);
+        return sizeof(FSnapshotHeader);
     case ENetMsg::Travel:
-        return sizeof(TravelMsg);
+        return sizeof(FTravelMsg);
     case ENetMsg::Rpc:
-        return sizeof(RpcHeader);
+        return sizeof(FRpcHeader);
     default:
         return 0;
     }
 }
 
-[[nodiscard]] inline bool IsValidHello(const HelloMsg& hello) {
+[[nodiscard]] inline bool IsValidHello(const FHelloMsg& hello) {
     return hello.magic == kProtocolMagic && hello.protocolVersion == kProtocolVersion;
 }
 
@@ -257,7 +257,7 @@ inline void GetPawnUserAmmo(const PawnSnap& snap, std::uint8_t& clip, std::uint1
         return false;
     }
     if (type == ENetMsg::Hello) {
-        HelloMsg hello{};
+        FHelloMsg hello{};
         std::memcpy(&hello, data, sizeof(hello));
         return IsValidHello(hello);
     }
@@ -265,7 +265,7 @@ inline void GetPawnUserAmmo(const PawnSnap& snap, std::uint8_t& clip, std::uint1
 }
 
 /// Clamp / finite-check remote InputCmd before applying to simulation.
-inline void SanitizeInputCmd(InputCmdMsg& cmd) {
+inline void SanitizeInputCmd(FInputCmdMsg& cmd) {
     cmd.type = static_cast<std::uint8_t>(ENetMsg::InputCmd);
     auto sanitizeAxis = [](float v) -> float {
         if (!std::isfinite(v)) {
@@ -287,7 +287,7 @@ inline void SanitizeInputCmd(InputCmdMsg& cmd) {
     cmd.buttons = static_cast<std::uint16_t>(cmd.buttons & kInputButtonMask);
 }
 
-/// Encode RpcHeader + optional payload into `out` (cleared first).
+/// Encode FRpcHeader + optional payload into `out` (cleared first).
 [[nodiscard]] inline bool EncodeRpc(std::vector<std::uint8_t>& out, ERpcId rpcId,
                                     std::uint8_t targetSlot, const void* payload,
                                     std::uint16_t payloadBytes) {
@@ -298,24 +298,24 @@ inline void SanitizeInputCmd(InputCmdMsg& cmd) {
         return false;
     }
     out.clear();
-    out.resize(sizeof(RpcHeader) + payloadBytes);
-    RpcHeader header{};
+    out.resize(sizeof(FRpcHeader) + payloadBytes);
+    FRpcHeader header{};
     header.rpcId = static_cast<std::uint8_t>(rpcId);
     header.targetSlot = targetSlot;
     header.payloadBytes = payloadBytes;
     std::memcpy(out.data(), &header, sizeof(header));
     if (payloadBytes > 0) {
-        std::memcpy(out.data() + sizeof(RpcHeader), payload, payloadBytes);
+        std::memcpy(out.data() + sizeof(FRpcHeader), payload, payloadBytes);
     }
     return true;
 }
 
-/// Decode RpcHeader; `outPayload` points into `data` (not owned).
-[[nodiscard]] inline bool DecodeRpc(const std::uint8_t* data, std::size_t size, RpcHeader& outHeader,
+/// Decode FRpcHeader; `outPayload` points into `data` (not owned).
+[[nodiscard]] inline bool DecodeRpc(const std::uint8_t* data, std::size_t size, FRpcHeader& outHeader,
                                     const std::uint8_t*& outPayload, std::uint16_t& outPayloadBytes) {
     outPayload = nullptr;
     outPayloadBytes = 0;
-    if (data == nullptr || size < sizeof(RpcHeader)) {
+    if (data == nullptr || size < sizeof(FRpcHeader)) {
         return false;
     }
     std::memcpy(&outHeader, data, sizeof(outHeader));
@@ -325,16 +325,16 @@ inline void SanitizeInputCmd(InputCmdMsg& cmd) {
     if (outHeader.payloadBytes > kMaxRpcPayloadBytes) {
         return false;
     }
-    if (size < sizeof(RpcHeader) + outHeader.payloadBytes) {
+    if (size < sizeof(FRpcHeader) + outHeader.payloadBytes) {
         return false;
     }
     outPayloadBytes = outHeader.payloadBytes;
-    outPayload = outPayloadBytes > 0 ? (data + sizeof(RpcHeader)) : nullptr;
+    outPayload = outPayloadBytes > 0 ? (data + sizeof(FRpcHeader)) : nullptr;
     return true;
 }
 
 /// Sliding 1-second packet window for host flood control.
-struct PeerPacketWindow {
+struct FPeerPacketWindow {
     std::uint64_t windowStartMs = 0;
     int accepted = 0;
     int rejected = 0;

@@ -45,7 +45,7 @@ USkeletalMesh& USkeletalMesh::operator=(USkeletalMesh&& other) noexcept {
     return *this;
 }
 
-USkeletalMesh USkeletalMesh::CreateCpu(SkeletalMeshData data) {
+USkeletalMesh USkeletalMesh::CreateCpu(FSkeletalMeshData data) {
     USkeletalMesh mesh;
     if (data.empty()) {
         return mesh;
@@ -59,7 +59,7 @@ USkeletalMesh USkeletalMesh::CreateCpu(SkeletalMeshData data) {
     return mesh;
 }
 
-USkeletalMesh USkeletalMesh::Upload(SkeletalMeshData data) {
+USkeletalMesh USkeletalMesh::Upload(FSkeletalMeshData data) {
     USkeletalMesh mesh;
     if (data.empty()) {
         return mesh;
@@ -78,7 +78,7 @@ USkeletalMesh USkeletalMesh::Upload(SkeletalMeshData data) {
 
     glBindBuffer(GL_ARRAY_BUFFER, mesh.vbo_);
     glBufferData(GL_ARRAY_BUFFER,
-                 static_cast<GLsizeiptr>(data.vertices.size() * sizeof(SkeletalVertex)),
+                 static_cast<GLsizeiptr>(data.vertices.size() * sizeof(FSkeletalVertex)),
                  data.vertices.data(), GL_STATIC_DRAW);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo_);
@@ -87,28 +87,28 @@ USkeletalMesh USkeletalMesh::Upload(SkeletalMeshData data) {
                  data.indices.data(), GL_STATIC_DRAW);
 
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(SkeletalVertex),
-                          GlAttribOffset(&SkeletalVertex::position));
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(FSkeletalVertex),
+                          GlAttribOffset(&FSkeletalVertex::position));
 
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(SkeletalVertex),
-                          GlAttribOffset(&SkeletalVertex::normal));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(FSkeletalVertex),
+                          GlAttribOffset(&FSkeletalVertex::normal));
 
     glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(SkeletalVertex),
-                          GlAttribOffset(&SkeletalVertex::texCoord));
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(FSkeletalVertex),
+                          GlAttribOffset(&FSkeletalVertex::texCoord));
 
     glEnableVertexAttribArray(3);
-    glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(SkeletalVertex),
-                          GlAttribOffset(&SkeletalVertex::tangent));
+    glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(FSkeletalVertex),
+                          GlAttribOffset(&FSkeletalVertex::tangent));
 
     glEnableVertexAttribArray(4);
-    glVertexAttribIPointer(4, 4, GL_INT, sizeof(SkeletalVertex),
-                           GlAttribOffset(&SkeletalVertex::boneIndices));
+    glVertexAttribIPointer(4, 4, GL_INT, sizeof(FSkeletalVertex),
+                           GlAttribOffset(&FSkeletalVertex::boneIndices));
 
     glEnableVertexAttribArray(5);
-    glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(SkeletalVertex),
-                          GlAttribOffset(&SkeletalVertex::boneWeights));
+    glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(FSkeletalVertex),
+                          GlAttribOffset(&FSkeletalVertex::boneWeights));
 
     glBindVertexArray(0);
     mesh.indexCount_ = static_cast<int>(data.indices.size());

@@ -6,8 +6,8 @@ using Catch::Matchers::WithinAbs;
 
 namespace {
 
-AnimSequence makeNamedClip(const char* name) {
-    AnimSequence clip;
+UAnimSequence makeNamedClip(const char* name) {
+    UAnimSequence clip;
     clip.name = name;
     clip.durationSeconds = 1.0f;
     clip.framesPerSecond = 1.0f;
@@ -19,18 +19,18 @@ AnimSequence makeNamedClip(const char* name) {
 } // namespace
 
 TEST_CASE("BlendSpace1D evaluates idle/run axis", "[animation][blendspace]") {
-    const AnimSequence idle = makeNamedClip("Idle");
-    const AnimSequence run = makeNamedClip("Run");
+    const UAnimSequence idle = makeNamedClip("Idle");
+    const UAnimSequence run = makeNamedClip("Run");
 
-    BlendSpace1D bs;
+    UBlendSpace1D bs;
     bs.name = "Locomotion";
     bs.axisMin = 0.0f;
     bs.axisMax = 1.0f;
     bs.AddSample(&idle, 0.0f);
     bs.AddSample(&run, 1.0f);
 
-    const AnimSequence* a = nullptr;
-    const AnimSequence* b = nullptr;
+    const UAnimSequence* a = nullptr;
+    const UAnimSequence* b = nullptr;
     float alpha = -1.0f;
 
     SECTION("at idle") {
@@ -68,9 +68,9 @@ TEST_CASE("BlendSpace1D evaluates idle/run axis", "[animation][blendspace]") {
 }
 
 TEST_CASE("BlendSpace1D empty samples are safe", "[animation][blendspace]") {
-    BlendSpace1D bs;
-    const AnimSequence* a = reinterpret_cast<const AnimSequence*>(1);
-    const AnimSequence* b = reinterpret_cast<const AnimSequence*>(1);
+    UBlendSpace1D bs;
+    const UAnimSequence* a = reinterpret_cast<const UAnimSequence*>(1);
+    const UAnimSequence* b = reinterpret_cast<const UAnimSequence*>(1);
     float alpha = 1.0f;
     bs.Evaluate(0.5f, a, b, alpha);
     REQUIRE(a == nullptr);

@@ -256,12 +256,12 @@ void NetDriver::Poll() {
                     if (IsHost() && peerRateLimitEnabled_ && slot >= 0 && slot < Leon::Net::kMaxPlayers) {
                         const auto action = peerRates_[static_cast<std::size_t>(slot)].Observe(
                             steadyNowMs(), accepted);
-                        if (action == Leon::Net::PeerPacketWindow::EAction::Disconnect) {
+                        if (action == Leon::Net::FPeerPacketWindow::EAction::Disconnect) {
                             deliver = false;
                             enet_packet_destroy(event.packet);
                             destroyPacket = false;
                             disconnectPeerForAbuse(slot);
-                        } else if (action == Leon::Net::PeerPacketWindow::EAction::Drop) {
+                        } else if (action == Leon::Net::FPeerPacketWindow::EAction::Drop) {
                             deliver = false;
                         }
                     }

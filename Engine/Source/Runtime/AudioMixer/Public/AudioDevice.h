@@ -8,7 +8,7 @@
 
 
 /// Built-in UI / feedback cues. Prefers Content WAVs when present; procedural fallback.
-enum class EUiSound : std::uint8_t {
+enum class EUISound : std::uint8_t {
     Click = 0,
     Confirm = 1,
     Back = 2,
@@ -17,13 +17,13 @@ enum class EUiSound : std::uint8_t {
 
 /// Unreal-like audio subsystem (UAudioDevice / UGameplayStatics PlaySound lite).
 /// Backed by miniaudio. Safe no-op when Initialize fails or headless silent mode.
-class AudioDevice {
+class FAudioDevice {
 public:
-    AudioDevice();
-    ~AudioDevice();
+    FAudioDevice();
+    ~FAudioDevice();
 
-    AudioDevice(const AudioDevice&) = delete;
-    AudioDevice& operator=(const AudioDevice&) = delete;
+    FAudioDevice(const FAudioDevice&) = delete;
+    FAudioDevice& operator=(const FAudioDevice&) = delete;
 
     /// `silent` skips device open (dedicated / CI). Returns false only on hard failure when
     /// not silent (engine still runs; subsequent Play* become no-ops).
@@ -48,7 +48,7 @@ public:
                              float volumeMultiplier = 1.0f);
 
     /// UI cue: tries Content `assets/Audio/UI/UI_*.wav`, else procedural tone.
-    void PlayUiSound(EUiSound sound, float volumeMultiplier = 1.0f);
+    void PlayUiSound(EUISound sound, float volumeMultiplier = 1.0f);
 
     /// Looping 2D music bed (dedicated slot, not the one-shot voice pool). Replaces any prior bed.
     void PlayMusic(std::string_view assetRelativePath, float volumeMultiplier = 0.35f);
@@ -56,8 +56,8 @@ public:
     [[nodiscard]] bool IsMusicPlaying() const;
 
 private:
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
+    struct FImpl;
+    std::unique_ptr<FImpl> impl_;
     bool initialized_ = false;
     bool silent_ = true;
     float masterVolume_ = 1.0f;

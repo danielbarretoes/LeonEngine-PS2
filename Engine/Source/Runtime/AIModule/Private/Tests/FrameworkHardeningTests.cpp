@@ -58,7 +58,7 @@ TEST_CASE("AIController logic state tracks MoveTo Chase Idle", "[gameplay][ai]")
 TEST_CASE("RootReplication relevancy and CaptureCharacterRoot", "[net][replication]") {
     Character character;
     character.SetActorLocationAndRotation({1.0f, 0.0f, 2.0f}, 45.0f);
-    const Leon::Net::PawnSnap snap = Leon::Net::CaptureCharacterRoot(3, character, 10.0f, -5.0f);
+    const Leon::Net::FPawnSnap snap = Leon::Net::CaptureCharacterRoot(3, character, 10.0f, -5.0f);
     REQUIRE(snap.slot == 3);
     REQUIRE_THAT(snap.x, WithinAbs(1.0f, 1.0e-5f));
     REQUIRE_THAT(snap.z, WithinAbs(2.0f, 1.0e-5f));
@@ -71,10 +71,10 @@ TEST_CASE("RootReplication relevancy and CaptureCharacterRoot", "[net][replicati
 }
 
 TEST_CASE("AudioDevice silent mode is safe for Play APIs", "[audio]") {
-    AudioDevice audio;
+    FAudioDevice audio;
     REQUIRE(audio.Initialize(/*silent=*/true));
     audio.PlaySound2D("does-not-exist.wav");
-    audio.PlayUiSound(EUiSound::Click);
+    audio.PlayUiSound(EUISound::Click);
     audio.PlayMusic("MenuBed.wav");
     audio.StopMusic();
     audio.Tick();
@@ -103,7 +103,7 @@ TEST_CASE("DeserializeLeonLevel and InputCmd adversarial inputs", "[content][fuz
     std::vector<std::uint8_t> almostMagic = {'L', 'L', 'E', 'V', 1, 0, 0, 0};
     REQUIRE_FALSE(DeserializeLeonLevel(almostMagic, doc));
 
-    Leon::Net::InputCmdMsg cmd{};
+    Leon::Net::FInputCmdMsg cmd{};
     cmd.moveX = std::numeric_limits<float>::quiet_NaN();
     cmd.buttons = 0xFFFF;
     Leon::Net::SanitizeInputCmd(cmd);

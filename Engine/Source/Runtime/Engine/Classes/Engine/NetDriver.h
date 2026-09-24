@@ -80,7 +80,7 @@ private:
 
     ENetHost* host_ = nullptr;
     std::array<ENetPeer*, Leon::Net::kMaxPlayers> peers_{};
-    std::array<Leon::Net::PeerPacketWindow, Leon::Net::kMaxPlayers> peerRates_{};
+    std::array<Leon::Net::FPeerPacketWindow, Leon::Net::kMaxPlayers> peerRates_{};
     int maxClients_ = 1;
     ENetMode mode_ = ENetMode::Standalone;
     /// True when this instance holds a process-wide ENet init ref.

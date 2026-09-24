@@ -19,10 +19,10 @@ TEST_CASE("EncodeRpc / DecodeRpc roundtrip Notify payload", "[net][rpc]") {
     std::vector<std::uint8_t> packet;
     REQUIRE(Leon::Net::EncodeRpc(packet, Leon::Net::ERpcId::Notify, 1,
                                   payload, static_cast<std::uint16_t>(sizeof(payload) - 1)));
-    REQUIRE(packet.size() == sizeof(Leon::Net::RpcHeader) + 4);
+    REQUIRE(packet.size() == sizeof(Leon::Net::FRpcHeader) + 4);
     REQUIRE(Leon::Net::AcceptInboundPacket(packet.data(), packet.size()));
 
-    Leon::Net::RpcHeader header{};
+    Leon::Net::FRpcHeader header{};
     const std::uint8_t* outPayload = nullptr;
     std::uint16_t outBytes = 0;
     REQUIRE(Leon::Net::DecodeRpc(packet.data(), packet.size(), header, outPayload, outBytes));

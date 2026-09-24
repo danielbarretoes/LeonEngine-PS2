@@ -18,9 +18,9 @@ public:
     USkeletalMesh(USkeletalMesh&& other) noexcept;
     USkeletalMesh& operator=(USkeletalMesh&& other) noexcept;
 
-    [[nodiscard]] static USkeletalMesh Upload(SkeletalMeshData data);
+    [[nodiscard]] static USkeletalMesh Upload(FSkeletalMeshData data);
     /// Skeleton / bounds / index count only (no VAO). Dedicated server path.
-    [[nodiscard]] static USkeletalMesh CreateCpu(SkeletalMeshData data);
+    [[nodiscard]] static USkeletalMesh CreateCpu(FSkeletalMeshData data);
 
     void Draw() const;
 
@@ -30,8 +30,8 @@ public:
     [[nodiscard]] bool IsCpuOnly() const { return cpuOnly_; }
     [[nodiscard]] int IndexCount() const { return indexCount_; }
     [[nodiscard]] int TriangleCount() const { return indexCount_ / 3; }
-    [[nodiscard]] const Skeleton& GetSkeleton() const { return skeleton_; }
-    [[nodiscard]] const AnimSequence& EmbeddedAnim() const { return embeddedAnim_; }
+    [[nodiscard]] const USkeleton& GetSkeleton() const { return skeleton_; }
+    [[nodiscard]] const UAnimSequence& EmbeddedAnim() const { return embeddedAnim_; }
     [[nodiscard]] const glm::vec3& LocalMin() const { return localMin_; }
     [[nodiscard]] const glm::vec3& LocalMax() const { return localMax_; }
     [[nodiscard]] float FitUniformScale(float fitHeight) const;
@@ -48,8 +48,8 @@ private:
     FRHIBufferId ebo_ = kInvalidBuffer;
     int indexCount_ = 0;
     bool cpuOnly_ = false;
-    Skeleton skeleton_{};
-    AnimSequence embeddedAnim_{};
+    USkeleton skeleton_{};
+    UAnimSequence embeddedAnim_{};
     glm::vec3 localMin_{0.0f};
     glm::vec3 localMax_{0.0f};
     FMaterial material_{};

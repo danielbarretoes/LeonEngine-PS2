@@ -14,8 +14,8 @@ using Catch::Matchers::WithinAbs;
 TEST_CASE("AcceptInboundPacket rejects unknown, short, and bad Hello magic", "[net][protocol]") {
     using Leon::Net::AcceptInboundPacket;
     using Leon::Net::ENetMsg;
-    using Leon::Net::HelloMsg;
-    using Leon::Net::InputCmdMsg;
+    using Leon::Net::FHelloMsg;
+    using Leon::Net::FInputCmdMsg;
     using Leon::Net::kProtocolMagic;
 
     REQUIRE_FALSE(AcceptInboundPacket(nullptr, 0));
@@ -26,15 +26,15 @@ TEST_CASE("AcceptInboundPacket rejects unknown, short, and bad Hello magic", "[n
     const std::uint8_t shortHello[] = {static_cast<std::uint8_t>(ENetMsg::Hello)};
     REQUIRE_FALSE(AcceptInboundPacket(shortHello, sizeof(shortHello)));
 
-    HelloMsg badMagic{};
+    FHelloMsg badMagic{};
     badMagic.magic = 0;
     REQUIRE_FALSE(
         AcceptInboundPacket(reinterpret_cast<const std::uint8_t*>(&badMagic), sizeof(badMagic)));
 
-    HelloMsg good{};
+    FHelloMsg good{};
     REQUIRE(AcceptInboundPacket(reinterpret_cast<const std::uint8_t*>(&good), sizeof(good)));
 
-    InputCmdMsg cmd{};
+    FInputCmdMsg cmd{};
     REQUIRE(AcceptInboundPacket(reinterpret_cast<const std::uint8_t*>(&cmd), sizeof(cmd)));
     REQUIRE_FALSE(AcceptInboundPacket(reinterpret_cast<const std::uint8_t*>(&cmd), 1));
 
@@ -42,7 +42,7 @@ TEST_CASE("AcceptInboundPacket rejects unknown, short, and bad Hello magic", "[n
 }
 
 TEST_CASE("SanitizeInputCmd clamps axes and clears non-finite floats", "[net][protocol]") {
-    Leon::Net::InputCmdMsg cmd{};
+    Leon::Net::FInputCmdMsg cmd{};
     cmd.moveX = 4.0f;
     cmd.moveZ = -2.5f;
     cmd.lookYaw = std::numeric_limits<float>::quiet_NaN();
@@ -62,7 +62,7 @@ TEST_CASE("SanitizeInputCmd clamps axes and clears non-finite floats", "[net][pr
 }
 
 TEST_CASE("InputButtons helpers set and test game aliases", "[net][protocol]") {
-    Leon::Net::InputCmdMsg cmd{};
+    Leon::Net::FInputCmdMsg cmd{};
     Leon::Net::SetInputButton(cmd, Leon::Net::InputButtons::Fire, true);
     REQUIRE(Leon::Net::HasInputButton(cmd, Leon::Net::InputButtons::Fire));
     REQUIRE(Leon::Net::HasInputButton(cmd, Leon::Net::InputButtons::Primary)); // same bit
@@ -74,8 +74,8 @@ TEST_CASE("InputButtons helpers set and test game aliases", "[net][protocol]") {
 }
 
 TEST_CASE("PeerPacketWindow disconnects after accepted flood", "[net][protocol][ratelimit]") {
-    using Action = Leon::Net::PeerPacketWindow::EAction;
-    Leon::Net::PeerPacketWindow window{};
+    using Action = Leon::Net::FPeerPacketWindow::EAction;
+    Leon::Net::FPeerPacketWindow window{};
     constexpr int kMax = 5;
     for (int i = 0; i < kMax; ++i) {
         REQUIRE(window.Observe(1000, true, kMax, 10) == Action::Allow);
@@ -84,8 +84,8 @@ TEST_CASE("PeerPacketWindow disconnects after accepted flood", "[net][protocol][
 }
 
 TEST_CASE("PeerPacketWindow drops then disconnects on reject flood", "[net][protocol][ratelimit]") {
-    using Action = Leon::Net::PeerPacketWindow::EAction;
-    Leon::Net::PeerPacketWindow window{};
+    using Action = Leon::Net::FPeerPacketWindow::EAction;
+    Leon::Net::FPeerPacketWindow window{};
     constexpr int kMaxReject = 3;
     for (int i = 0; i < kMaxReject; ++i) {
         REQUIRE(window.Observe(50, false, 100, kMaxReject) == Action::Drop);
@@ -94,15 +94,15 @@ TEST_CASE("PeerPacketWindow drops then disconnects on reject flood", "[net][prot
 }
 
 TEST_CASE("PeerPacketWindow resets after one second", "[net][protocol][ratelimit]") {
-    using Action = Leon::Net::PeerPacketWindow::EAction;
-    Leon::Net::PeerPacketWindow window{};
+    using Action = Leon::Net::FPeerPacketWindow::EAction;
+    Leon::Net::FPeerPacketWindow window{};
     REQUIRE(window.Observe(0, true, 1, 10) == Action::Allow);
     REQUIRE(window.Observe(0, true, 1, 10) == Action::Disconnect);
     REQUIRE(window.Observe(1000, true, 1, 10) == Action::Allow);
 }
 
 TEST_CASE("EncodeSnapshot / DecodeSnapshot roundtrip", "[net][snapshot]") {
-    Leon::Net::PawnSnap pawns[2]{};
+    Leon::Net::FPawnSnap pawns[2]{};
     pawns[0].slot = 0;
     pawns[0].x = 1.0f;
     pawns[0].y = 2.0f;
@@ -113,16 +113,16 @@ TEST_CASE("EncodeSnapshot / DecodeSnapshot roundtrip", "[net][snapshot]") {
     pawns[1].x = -1.0f;
     pawns[1].animBlend = 0.5f;
 
-    Leon::Net::BodySnap bodies[1]{};
+    Leon::Net::FBodySnap bodies[1]{};
     bodies[0].levelMeshIndex = 7;
     bodies[0].x = 9.0f;
     bodies[0].velY = -1.5f;
 
     std::vector<std::uint8_t> packet;
     REQUIRE(Leon::Net::EncodeSnapshot(packet, 42, pawns, 2, bodies, 1));
-    REQUIRE(packet.size() > sizeof(Leon::Net::SnapshotHeader));
+    REQUIRE(packet.size() > sizeof(Leon::Net::FSnapshotHeader));
 
-    Leon::Net::DecodedSnapshot decoded;
+    Leon::Net::FDecodedSnapshot decoded;
     REQUIRE(Leon::Net::DecodeSnapshot(packet.data(), packet.size(), decoded));
     REQUIRE(decoded.tick == 42);
     REQUIRE(decoded.pawns.size() == 2);
@@ -134,7 +134,7 @@ TEST_CASE("EncodeSnapshot / DecodeSnapshot roundtrip", "[net][snapshot]") {
 }
 
 TEST_CASE("EncodeSnapshot accepts AI pawn slots beyond kMaxPlayers", "[net][snapshot][ai]") {
-    Leon::Net::PawnSnap pawns[Leon::Net::kMaxSnapshotPawns]{};
+    Leon::Net::FPawnSnap pawns[Leon::Net::kMaxSnapshotPawns]{};
     pawns[0].slot = 0;
     pawns[1].slot = 1;
     pawns[2].slot = static_cast<std::uint8_t>(Leon::Net::kMaxPlayers);
@@ -145,7 +145,7 @@ TEST_CASE("EncodeSnapshot accepts AI pawn slots beyond kMaxPlayers", "[net][snap
     std::vector<std::uint8_t> packet;
     REQUIRE(Leon::Net::EncodeSnapshot(packet, 7, pawns, Leon::Net::kMaxSnapshotPawns, nullptr, 0));
 
-    Leon::Net::DecodedSnapshot decoded;
+    Leon::Net::FDecodedSnapshot decoded;
     REQUIRE(Leon::Net::DecodeSnapshot(packet.data(), packet.size(), decoded));
     REQUIRE(decoded.pawns.size() == Leon::Net::kMaxSnapshotPawns);
     REQUIRE(decoded.pawns[2].slot == Leon::Net::kMaxPlayers);
@@ -154,12 +154,12 @@ TEST_CASE("EncodeSnapshot accepts AI pawn slots beyond kMaxPlayers", "[net][snap
 }
 
 TEST_CASE("EncodeSnapshot roundtrips match meta and pawn health", "[net][snapshot]") {
-    Leon::Net::PawnSnap pawns[1]{};
+    Leon::Net::FPawnSnap pawns[1]{};
     pawns[0].slot = 0;
     pawns[0].health = 73.5f;
     pawns[0].flags = Leon::Net::kPawnSnapAlive;
 
-    Leon::Net::SnapshotMatchMeta meta{};
+    Leon::Net::FSnapshotMatchMeta meta{};
     meta.roundIndex = 4;
     meta.unitsAlive = 9;
     meta.remainingSeconds = 3;
@@ -170,7 +170,7 @@ TEST_CASE("EncodeSnapshot roundtrips match meta and pawn health", "[net][snapsho
     std::vector<std::uint8_t> packet;
     REQUIRE(Leon::Net::EncodeSnapshot(packet, 11, pawns, 1, nullptr, 0, &meta));
 
-    Leon::Net::DecodedSnapshot decoded;
+    Leon::Net::FDecodedSnapshot decoded;
     REQUIRE(Leon::Net::DecodeSnapshot(packet.data(), packet.size(), decoded));
     REQUIRE(decoded.hasMatchMeta);
     REQUIRE(decoded.RoundIndex() == 4);
@@ -184,20 +184,20 @@ TEST_CASE("EncodeSnapshot roundtrips match meta and pawn health", "[net][snapsho
 }
 
 TEST_CASE("EncodeSnapshot without match meta leaves extension empty", "[net][snapshot]") {
-    Leon::Net::PawnSnap pawns[1]{};
+    Leon::Net::FPawnSnap pawns[1]{};
     pawns[0].slot = 0;
     std::vector<std::uint8_t> packet;
     REQUIRE(Leon::Net::EncodeSnapshot(packet, 3, pawns, 1, nullptr, 0, nullptr));
-    REQUIRE(packet.size() == sizeof(Leon::Net::SnapshotHeader) + sizeof(Leon::Net::PawnSnap));
+    REQUIRE(packet.size() == sizeof(Leon::Net::FSnapshotHeader) + sizeof(Leon::Net::FPawnSnap));
 
-    Leon::Net::DecodedSnapshot decoded;
+    Leon::Net::FDecodedSnapshot decoded;
     REQUIRE(Leon::Net::DecodeSnapshot(packet.data(), packet.size(), decoded));
     REQUIRE_FALSE(decoded.hasMatchMeta);
     REQUIRE(decoded.RoundIndex() == 0);
 }
 
 TEST_CASE("AcceptInboundPacket rejects Hello with wrong protocol version", "[net][protocol]") {
-    Leon::Net::HelloMsg hello{};
+    Leon::Net::FHelloMsg hello{};
     hello.protocolVersion = static_cast<std::uint16_t>(Leon::Net::kProtocolVersion + 1);
     REQUIRE_FALSE(Leon::Net::AcceptInboundPacket(reinterpret_cast<const std::uint8_t*>(&hello),
                                                  sizeof(hello)));
@@ -216,36 +216,36 @@ TEST_CASE("NetDriver listen + client Hello/Welcome on localhost", "[net][enet]")
     bool hostSawHello = false;
 
     host.SetOnPacket([&](int peerSlot, const std::uint8_t* data, std::size_t size) {
-        if (data == nullptr || size < sizeof(Leon::Net::HelloMsg)) {
+        if (data == nullptr || size < sizeof(Leon::Net::FHelloMsg)) {
             return;
         }
         if (static_cast<Leon::Net::ENetMsg>(data[0]) != Leon::Net::ENetMsg::Hello) {
             return;
         }
-        Leon::Net::HelloMsg hello{};
+        Leon::Net::FHelloMsg hello{};
         std::memcpy(&hello, data, sizeof(hello));
         if (!Leon::Net::IsValidHello(hello)) {
             return;
         }
         hostSawHello = true;
-        Leon::Net::WelcomeMsg welcome{};
+        Leon::Net::FWelcomeMsg welcome{};
         welcome.slot = 1;
         Leon::Net::WriteLevelKey(welcome.levelKey, "Main");
         host.SendToPeer(peerSlot, &welcome, sizeof(welcome), true);
     });
 
     client.SetOnPeerConnected([&](int /*peerSlot*/) {
-        Leon::Net::HelloMsg hello{};
+        Leon::Net::FHelloMsg hello{};
         client.SendToPeer(&hello, sizeof(hello), true);
     });
     client.SetOnPacket([&](int /*peerSlot*/, const std::uint8_t* data, std::size_t size) {
-        if (data == nullptr || size < sizeof(Leon::Net::WelcomeMsg)) {
+        if (data == nullptr || size < sizeof(Leon::Net::FWelcomeMsg)) {
             return;
         }
         if (static_cast<Leon::Net::ENetMsg>(data[0]) != Leon::Net::ENetMsg::Welcome) {
             return;
         }
-        Leon::Net::WelcomeMsg welcome{};
+        Leon::Net::FWelcomeMsg welcome{};
         std::memcpy(&welcome, data, sizeof(welcome));
         welcomedSlot = welcome.slot;
         REQUIRE(Leon::Net::ReadLevelKey(welcome.levelKey) == "Main");

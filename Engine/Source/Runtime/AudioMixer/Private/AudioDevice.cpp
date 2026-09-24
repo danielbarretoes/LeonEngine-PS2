@@ -17,28 +17,28 @@ namespace {
     return std::clamp(v, 0.0f, 1.0f);
 }
 
-void BuildUiTone(EUiSound sound, std::vector<float>& outSamples, int& outSampleRate) {
+void BuildUiTone(EUISound sound, std::vector<float>& outSamples, int& outSampleRate) {
     outSampleRate = 44100;
     float freq = 660.0f;
     float duration = 0.045f;
     float amp = 0.22f;
     switch (sound) {
-    case EUiSound::Click:
+    case EUISound::Click:
         freq = 880.0f;
         duration = 0.035f;
         amp = 0.18f;
         break;
-    case EUiSound::Confirm:
+    case EUISound::Confirm:
         freq = 520.0f;
         duration = 0.08f;
         amp = 0.22f;
         break;
-    case EUiSound::Back:
+    case EUISound::Back:
         freq = 320.0f;
         duration = 0.05f;
         amp = 0.16f;
         break;
-    case EUiSound::Error:
+    case EUISound::Error:
         freq = 180.0f;
         duration = 0.12f;
         amp = 0.2f;
@@ -51,10 +51,10 @@ void BuildUiTone(EUiSound sound, std::vector<float>& outSamples, int& outSampleR
         const float t = static_cast<float>(i) / static_cast<float>(outSampleRate);
         const float env = 1.0f - (static_cast<float>(i) / static_cast<float>(n));
         float sample = std::sin(2.0f * kPi * freq * t) * amp * env;
-        if (sound == EUiSound::Confirm && t > 0.04f) {
+        if (sound == EUISound::Confirm && t > 0.04f) {
             sample += std::sin(2.0f * kPi * 780.0f * t) * amp * 0.55f * env;
         }
-        if (sound == EUiSound::Error) {
+        if (sound == EUISound::Error) {
             sample = (std::sin(2.0f * kPi * freq * t) +
                       0.5f * std::sin(2.0f * kPi * (freq * 1.5f) * t)) *
                      amp * env;
@@ -65,10 +65,10 @@ void BuildUiTone(EUiSound sound, std::vector<float>& outSamples, int& outSampleR
 
 } // namespace
 
-struct AudioDevice::Impl {
+struct FAudioDevice::FImpl {
     static constexpr int kMaxVoices = 24;
 
-    struct Voice {
+    struct FVoice {
         ma_sound sound{};
         ma_audio_buffer buffer{};
         std::vector<float> pcm; // keeps buffer memory alive for UI tones
@@ -78,18 +78,18 @@ struct AudioDevice::Impl {
 
     ma_engine engine{};
     bool engineOk = false;
-    std::array<Voice, kMaxVoices> voices{};
+    std::array<FVoice, kMaxVoices> voices{};
     ma_sound music{};
     bool musicInUse = false;
 
-    [[nodiscard]] Voice* AcquireVoice() {
-        for (Voice& voice : voices) {
+    [[nodiscard]] FVoice* AcquireVoice() {
+        for (FVoice& voice : voices) {
             if (!voice.inUse) {
                 return &voice;
             }
         }
         // Steal oldest finished or first slot.
-        for (Voice& voice : voices) {
+        for (FVoice& voice : voices) {
             if (voice.inUse && !ma_sound_is_playing(&voice.sound)) {
                 ReleaseVoice(voice);
                 return &voice;
@@ -99,7 +99,7 @@ struct AudioDevice::Impl {
         return &voices[0];
     }
 
-    void ReleaseVoice(Voice& voice) {
+    void ReleaseVoice(FVoice& voice) {
         if (!voice.inUse) {
             return;
         }
@@ -124,7 +124,7 @@ struct AudioDevice::Impl {
     }
 
     void ReapFinished() {
-        for (Voice& voice : voices) {
+        for (FVoice& voice : voices) {
             if (voice.inUse && !ma_sound_is_playing(&voice.sound)) {
                 ReleaseVoice(voice);
             }
@@ -133,7 +133,7 @@ struct AudioDevice::Impl {
 
     void ReleaseAll() {
         ReleaseMusic();
-        for (Voice& voice : voices) {
+        for (FVoice& voice : voices) {
             ReleaseVoice(voice);
         }
     }
@@ -147,7 +147,7 @@ struct AudioDevice::Impl {
         if (path.empty()) {
             return false;
         }
-        Voice* voice = AcquireVoice();
+        FVoice* voice = AcquireVoice();
         const ma_result result =
             ma_sound_init_from_file(&engine, path.c_str(),
                                     MA_SOUND_FLAG_ASYNC | MA_SOUND_FLAG_STREAM |
@@ -164,13 +164,13 @@ struct AudioDevice::Impl {
     }
 };
 
-AudioDevice::AudioDevice() : impl_(std::make_unique<Impl>()) {}
+FAudioDevice::FAudioDevice() : impl_(std::make_unique<FImpl>()) {}
 
-AudioDevice::~AudioDevice() {
+FAudioDevice::~FAudioDevice() {
     Shutdown();
 }
 
-bool AudioDevice::Initialize(bool silent) {
+bool FAudioDevice::Initialize(bool silent) {
     Shutdown();
     silent_ = silent;
     masterVolume_ = 1.0f;
@@ -195,7 +195,7 @@ bool AudioDevice::Initialize(bool silent) {
     return true;
 }
 
-void AudioDevice::Shutdown() {
+void FAudioDevice::Shutdown() {
     if (impl_) {
         impl_->ReleaseAll();
         if (impl_->engineOk) {
@@ -208,20 +208,20 @@ void AudioDevice::Shutdown() {
     silent_ = true;
 }
 
-void AudioDevice::Tick() {
+void FAudioDevice::Tick() {
     if (impl_ && impl_->engineOk) {
         impl_->ReapFinished();
     }
 }
 
-void AudioDevice::SetMasterVolume(float volume01) {
+void FAudioDevice::SetMasterVolume(float volume01) {
     masterVolume_ = Clamp01(volume01);
     if (impl_ && impl_->engineOk) {
         ma_engine_set_volume(&impl_->engine, masterVolume_);
     }
 }
 
-void AudioDevice::SetListener(const glm::vec3& location, const glm::vec3& forward,
+void FAudioDevice::SetListener(const glm::vec3& location, const glm::vec3& forward,
                               const glm::vec3& up) {
     if (!impl_ || !impl_->engineOk) {
         return;
@@ -231,14 +231,14 @@ void AudioDevice::SetListener(const glm::vec3& location, const glm::vec3& forwar
     ma_engine_listener_set_world_up(&impl_->engine, 0, up.x, up.y, up.z);
 }
 
-void AudioDevice::PlaySound2D(std::string_view assetRelativePath, float volumeMultiplier) {
+void FAudioDevice::PlaySound2D(std::string_view assetRelativePath, float volumeMultiplier) {
     if (!impl_) {
         return;
     }
     (void)impl_->PlayFile2D(assetRelativePath, volumeMultiplier);
 }
 
-void AudioDevice::PlaySoundAtLocation(std::string_view assetRelativePath, const glm::vec3& location,
+void FAudioDevice::PlaySoundAtLocation(std::string_view assetRelativePath, const glm::vec3& location,
                                       float volumeMultiplier) {
     if (!impl_ || !impl_->engineOk || assetRelativePath.empty()) {
         return;
@@ -248,7 +248,7 @@ void AudioDevice::PlaySoundAtLocation(std::string_view assetRelativePath, const 
     if (path.empty()) {
         return;
     }
-    Impl::Voice* voice = impl_->AcquireVoice();
+    FImpl::FVoice* voice = impl_->AcquireVoice();
     const ma_result result =
         ma_sound_init_from_file(&impl_->engine, path.c_str(),
                                 MA_SOUND_FLAG_ASYNC | MA_SOUND_FLAG_DECODE, nullptr, nullptr,
@@ -264,23 +264,23 @@ void AudioDevice::PlaySoundAtLocation(std::string_view assetRelativePath, const 
     ma_sound_start(&voice->sound);
 }
 
-void AudioDevice::PlayUiSound(EUiSound sound, float volumeMultiplier) {
+void FAudioDevice::PlayUiSound(EUISound sound, float volumeMultiplier) {
     if (!impl_ || !impl_->engineOk) {
         return;
     }
 
     const char* assetPath = nullptr;
     switch (sound) {
-    case EUiSound::Click:
+    case EUISound::Click:
         assetPath = "assets/Audio/UI/UI_Click.wav";
         break;
-    case EUiSound::Confirm:
+    case EUISound::Confirm:
         assetPath = "assets/Audio/UI/UI_Confirm.wav";
         break;
-    case EUiSound::Back:
+    case EUISound::Back:
         assetPath = "assets/Audio/UI/UI_Back.wav";
         break;
-    case EUiSound::Error:
+    case EUISound::Error:
         assetPath = "assets/Audio/UI/UI_Error.wav";
         break;
     }
@@ -296,7 +296,7 @@ void AudioDevice::PlayUiSound(EUiSound sound, float volumeMultiplier) {
         return;
     }
 
-    Impl::Voice* voice = impl_->AcquireVoice();
+    FImpl::FVoice* voice = impl_->AcquireVoice();
     voice->pcm = std::move(samples);
 
     ma_audio_buffer_config bufferConfig = ma_audio_buffer_config_init(
@@ -320,7 +320,7 @@ void AudioDevice::PlayUiSound(EUiSound sound, float volumeMultiplier) {
     ma_sound_start(&voice->sound);
 }
 
-void AudioDevice::PlayMusic(std::string_view assetRelativePath, float volumeMultiplier) {
+void FAudioDevice::PlayMusic(std::string_view assetRelativePath, float volumeMultiplier) {
     if (!impl_ || !impl_->engineOk || assetRelativePath.empty()) {
         return;
     }
@@ -342,13 +342,13 @@ void AudioDevice::PlayMusic(std::string_view assetRelativePath, float volumeMult
     ma_sound_start(&impl_->music);
 }
 
-void AudioDevice::StopMusic() {
+void FAudioDevice::StopMusic() {
     if (impl_) {
         impl_->ReleaseMusic();
     }
 }
 
-bool AudioDevice::IsMusicPlaying() const {
+bool FAudioDevice::IsMusicPlaying() const {
     return impl_ != nullptr && impl_->musicInUse && ma_sound_is_playing(&impl_->music);
 }
 

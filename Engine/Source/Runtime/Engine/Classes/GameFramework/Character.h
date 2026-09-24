@@ -82,7 +82,7 @@ public:
     [[nodiscard]] bool IsFalling() const { return movementMode_ == EMovementMode::Falling; }
     /// Vertical velocity (Unreal Velocity.Z) for jump SM apex detection.
     [[nodiscard]] float GetVelocityZ() const { return velocityY_; }
-    /// True for one frame after leaving air → ground (consumed by AnimInstance).
+    /// True for one frame after leaving air → ground (consumed by UAnimInstance).
     [[nodiscard]] bool ConsumeJustLanded();
 
     /// Last successful FindFloor from integrateVertical (may be empty if never queried).
@@ -95,7 +95,7 @@ public:
     void FindFloor(FPhysScene& physScene, FindFloorResult& outFloor, float traceDistance,
                    FDebugDraw* debugDraw = nullptr) const;
 
-    /// Unreal-like ACharacter::GetMesh() — skeletal visual + AnimInstance.
+    /// Unreal-like ACharacter::GetMesh() — skeletal visual + UAnimInstance.
     [[nodiscard]] SkeletalMeshComponent& GetMesh() { return mesh_; }
     [[nodiscard]] const SkeletalMeshComponent& GetMesh() const { return mesh_; }
 
@@ -103,7 +103,7 @@ public:
     void ApplyReplicatedState(const glm::vec3& location, float yawDegrees, float velocityY,
                               bool grounded);
 
-    /// Normalized locomotion blend input [0,1] for Mesh AnimInstance BlendSpace1D.
+    /// Normalized locomotion blend input [0,1] for Mesh UAnimInstance UBlendSpace1D.
     void SetAnimBlendInput(float speedAlpha);
     [[nodiscard]] float GetAnimBlendInput() const { return animBlendInput_; }
 
@@ -141,7 +141,7 @@ public:
     /// Separate this capsule from another Character on XZ (equal share). No-op if Y ranges miss.
     void ResolvePawnOverlap(Character& other);
 
-    /// Ticks Mesh AnimInstance (Unreal: Character::Tick → Mesh component).
+    /// Ticks Mesh UAnimInstance (Unreal: Character::Tick → Mesh component).
     void Tick(float deltaTime) override;
 
     /// Draw GetMesh() via SceneComponent world transform.

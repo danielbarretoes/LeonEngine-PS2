@@ -29,14 +29,14 @@ namespace fs = std::filesystem;
 
 } // namespace
 
-SkeletalMeshComponent::SkeletalMeshComponent() : animInstance_(std::make_unique<AnimInstance>()) {
+SkeletalMeshComponent::SkeletalMeshComponent() : animInstance_(std::make_unique<UAnimInstance>()) {
     animInstance_->SetOwningMeshComponent(this);
 }
 
-void SkeletalMeshComponent::SetAnimInstance(std::unique_ptr<AnimInstance> instance) {
+void SkeletalMeshComponent::SetAnimInstance(std::unique_ptr<UAnimInstance> instance) {
     animInstance_ = std::move(instance);
     if (animInstance_ == nullptr) {
-        animInstance_ = std::make_unique<AnimInstance>();
+        animInstance_ = std::make_unique<UAnimInstance>();
     }
     animInstance_->SetOwningMeshComponent(this);
     bindAnimInstanceToAssets();
@@ -53,21 +53,21 @@ void SkeletalMeshComponent::bindAnimInstanceToAssets() {
     }
 }
 
-AnimSequence* SkeletalMeshComponent::FindSequence(const std::string& name) {
+UAnimSequence* SkeletalMeshComponent::FindSequence(const std::string& name) {
     const auto it = sequenceIndexByName_.find(name);
     return it != sequenceIndexByName_.end() ? &sequences_[it->second] : nullptr;
 }
 
-const AnimSequence* SkeletalMeshComponent::FindSequence(const std::string& name) const {
+const UAnimSequence* SkeletalMeshComponent::FindSequence(const std::string& name) const {
     const auto it = sequenceIndexByName_.find(name);
     return it != sequenceIndexByName_.end() ? &sequences_[it->second] : nullptr;
 }
 
-AnimSequence& SkeletalMeshComponent::GetOrCreateSequence(const std::string& name) {
+UAnimSequence& SkeletalMeshComponent::GetOrCreateSequence(const std::string& name) {
     if (const auto it = sequenceIndexByName_.find(name); it != sequenceIndexByName_.end()) {
         return sequences_[it->second];
     }
-    sequences_.push_back(AnimSequence{});
+    sequences_.push_back(UAnimSequence{});
     sequences_.back().name = name;
     sequenceIndexByName_[name] = sequences_.size() - 1;
     return sequences_.back();
@@ -147,7 +147,7 @@ bool SkeletalMeshComponent::GetAttachmentWorldMatrix(std::size_t attachmentIndex
 
 bool SkeletalMeshComponent::LoadFromFbx(const std::string& meshFbxPath,
                                         const std::string& runFbxPath, float fitHeight) {
-    SkeletalMeshData data;
+    FSkeletalMeshData data;
     const std::string meshPath = FPaths::ResolveAssetPath(meshFbxPath);
     if (!LoadSkeletalMeshFromFbx(meshPath, data)) {
         std::cerr << "SkeletalMeshComponent: failed to load '" << meshPath << "'\n";
@@ -156,7 +156,7 @@ bool SkeletalMeshComponent::LoadFromFbx(const std::string& meshFbxPath,
 
     sequences_.clear();
     sequenceIndexByName_.clear();
-    AnimSequence& idle = GetOrCreateSequence("BreathingIdle");
+    UAnimSequence& idle = GetOrCreateSequence("BreathingIdle");
     idle = std::move(data.embeddedAnim);
     idle.name = "BreathingIdle";
     if (idle.FrameCount() <= 0) {
@@ -172,7 +172,7 @@ bool SkeletalMeshComponent::LoadFromFbx(const std::string& meshFbxPath,
     mesh->GetMaterial().shininess = 24.0f;
     mesh->GetMaterial().syncRoughnessFromShininess();
 
-    AnimSequence& run = GetOrCreateSequence("Running");
+    UAnimSequence& run = GetOrCreateSequence("Running");
     const std::string runPath = FPaths::ResolveAssetPath(runFbxPath);
     if (!LoadAnimSequenceFromFbx(runPath, mesh->GetSkeleton(), run)) {
         std::cerr << "SkeletalMeshComponent: failed to load run AnimSequence '" << runPath << "'\n";
@@ -200,7 +200,7 @@ bool SkeletalMeshComponent::LoadFromCooked(Engine& engine, const std::string& ch
     const std::string meshJson = joinRel(baseDir, desc.skeletalMeshRel);
     const std::string blendJson = joinRel(baseDir, desc.blendSpaceRel);
 
-    SkeletalMeshData meshData;
+    FSkeletalMeshData meshData;
     std::string materialRel;
     if (!LoadSkeletalMesh(meshJson, meshData, nullptr, &materialRel)) {
         std::cerr << "SkeletalMeshComponent: failed cooked skelmesh '" << meshJson << "'\n";
@@ -245,10 +245,10 @@ bool SkeletalMeshComponent::LoadFromCooked(Engine& engine, const std::string& ch
         }
         const std::string key = sequenceKeyFromAnimRel(rel);
         const std::string name = key.empty() ? fallbackKey : key;
-        AnimSequence& seq = GetOrCreateSequence(name);
+        UAnimSequence& seq = GetOrCreateSequence(name);
         if (!LoadAnimSequence(joinRel(baseDir, rel), seq)) {
             std::cerr << "SkeletalMeshComponent: failed optional anim '" << rel << "'\n";
-            seq = AnimSequence{};
+            seq = UAnimSequence{};
             seq.name = name;
         }
     };
@@ -258,7 +258,7 @@ bool SkeletalMeshComponent::LoadFromCooked(Engine& engine, const std::string& ch
 
     for (const auto& sample : bsDesc.samples) {
         const std::string key = sequenceKeyFromAnimRel(sample.animRelPath);
-        AnimSequence& seq = GetOrCreateSequence(key);
+        UAnimSequence& seq = GetOrCreateSequence(key);
         if (!LoadAnimSequence(joinRel(blendDir, sample.animRelPath), seq)) {
             std::cerr << "SkeletalMeshComponent: failed anim '" << sample.animRelPath << "'\n";
             return false;

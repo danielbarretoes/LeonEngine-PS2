@@ -7,7 +7,7 @@
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("Skeleton FindBoneIndex and BoneCount", "[animation][skeleton]") {
-    Skeleton sk;
+    USkeleton sk;
     sk.boneNames = {"root", "hips", "spine"};
     sk.parentIndices = {-1, 0, 1};
     sk.inverseBindPose.assign(3, glm::mat4(1.0f));
@@ -18,7 +18,7 @@ TEST_CASE("Skeleton FindBoneIndex and BoneCount", "[animation][skeleton]") {
 }
 
 TEST_CASE("AnimSequence SampleLocalPose lerps mid-frame", "[animation][sequence]") {
-    AnimSequence clip;
+    UAnimSequence clip;
     clip.durationSeconds = 1.0f;
     clip.framesPerSecond = 1.0f;
     clip.localPoseFrames.resize(2);
@@ -32,7 +32,7 @@ TEST_CASE("AnimSequence SampleLocalPose lerps mid-frame", "[animation][sequence]
 }
 
 TEST_CASE("AnimInstance without skeleton yields empty skin", "[animation][animinstance]") {
-    AnimInstance anim;
+    UAnimInstance anim;
     anim.NativeUpdateAnimation(0.016f);
     std::vector<glm::mat4> skin;
     anim.GetSkinMatrices(skin);

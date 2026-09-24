@@ -515,7 +515,7 @@ TEST_CASE("RootReplication capture and apply Actor root", "[net][replication]") 
     World world;
     auto* actor = world.SpawnActor<TestActor>();
     actor->SetActorLocationAndRotation({1.0f, 2.0f, 3.0f}, 45.0f);
-    const Leon::Net::PawnSnap snap = Leon::Net::CaptureActorRoot(0, *actor, 1.5f, 0.25f);
+    const Leon::Net::FPawnSnap snap = Leon::Net::CaptureActorRoot(0, *actor, 1.5f, 0.25f);
     REQUIRE_THAT(snap.x, WithinAbs(1.0f, 1.0e-5f));
     REQUIRE_THAT(snap.yaw, WithinAbs(45.0f, 1.0e-5f));
 
