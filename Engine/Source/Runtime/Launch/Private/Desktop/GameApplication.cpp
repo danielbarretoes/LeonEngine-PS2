@@ -1,11 +1,14 @@
 #include "GameApplication.h"
 
-#include "Engine/GameEngine.h"
-#include "GameHostSession.h"
-#include "Net/NetProtocol.h"
+#include "GameFramework/DefaultGameMode.h"
+#include "Level/LevelLoader.h"
+#include "Misc/Paths.h"
 #include "RuntimeInput.h"
 
 #include <algorithm>
+#include <cstdlib>
+#include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -13,11 +16,13 @@
 namespace
 {
 
+	constexpr const char* DefaultMap = "LevelTemplates/Starter.llev";
+
 	[[nodiscard]] bool HasFlag(int Argc, char** Argv, const char* Flag)
 	{
 		for (int I = 1; I < Argc; ++I)
 		{
-			if (Argv[I] != nullptr && std::string(Argv[I]) == Flag)
+			if (Argv[I] != nullptr && std::strcmp(Argv[I], Flag) == 0)
 			{
 				return true;
 			}
@@ -25,102 +30,66 @@ namespace
 		return false;
 	}
 
-	[[nodiscard]] bool WantsDedicatedCli(int Argc, char** Argv)
+	/// Value of `-Key=Value` (UE command-line style), or empty.
+	[[nodiscard]] std::string ParseValue(int Argc, char** Argv, const char* Key)
 	{
-		return HasFlag(Argc, Argv, "--dedicated") || HasFlag(Argc, Argv, "--server");
-	}
-
-	[[nodiscard]] std::uint16_t ParsePort(int Argc, char** Argv, std::uint16_t Fallback)
-	{
+		const std::size_t KeyLength = std::strlen(Key);
 		for (int I = 1; I < Argc; ++I)
 		{
-			const std::string Arg = Argv[I] != nullptr ? Argv[I] : "";
-			if ((Arg == "--port" || Arg == "-p") && I + 1 < Argc && Argv[I + 1] != nullptr)
+			if (Argv[I] != nullptr && std::strncmp(Argv[I], Key, KeyLength) == 0)
 			{
-				try
-				{
-					const int Parsed = std::stoi(Argv[++I]);
-					if (Parsed > 0 && Parsed < 65536)
-					{
-						return static_cast<std::uint16_t>(Parsed);
-					}
-				}
-				catch (...)
-				{
-				}
+				return Argv[I] + KeyLength;
 			}
 		}
-		return Fallback;
+		return {};
 	}
 
 	[[nodiscard]] float ParseTickHz(int Argc, char** Argv, float Fallback)
 	{
-		for (int I = 1; I < Argc; ++I)
+		for (int I = 1; I + 1 < Argc; ++I)
 		{
-			const std::string Arg = Argv[I] != nullptr ? Argv[I] : "";
-			if ((Arg == "--tick" || Arg == "-t") && I + 1 < Argc && Argv[I + 1] != nullptr)
+			if (Argv[I] != nullptr && std::strcmp(Argv[I], "--tick") == 0 && Argv[I + 1] != nullptr)
 			{
-				try
+				const float Hz = std::strtof(Argv[I + 1], nullptr);
+				if (Hz >= 1.0f && Hz <= 240.0f)
 				{
-					const float Hz = std::stof(Argv[++I]);
-					if (Hz >= 1.0f && Hz <= 240.0f)
-					{
-						return Hz;
-					}
-				}
-				catch (...)
-				{
+					return Hz;
 				}
 			}
 		}
 		return Fallback;
 	}
 
-	[[nodiscard]] std::string ParseJoinAddress(int Argc, char** Argv)
+	/// A path as given (absolute or relative to the working directory), else relative to Engine/Content.
+	[[nodiscard]] std::string ResolveMapPath(const std::string& Map)
 	{
-		for (int I = 1; I < Argc; ++I)
+		std::error_code Ec;
+		if (std::filesystem::is_regular_file(Map, Ec) && !Ec)
 		{
-			const std::string Arg = Argv[I] != nullptr ? Argv[I] : "";
-			if ((Arg == "--join" || Arg == "-j") && I + 1 < Argc && Argv[I + 1] != nullptr)
-			{
-				return Argv[++I];
-			}
+			return std::filesystem::path(Map).lexically_normal().string();
 		}
-		return {};
-	}
-
-	[[nodiscard]] std::string ParsePlayMap(int Argc, char** Argv)
-	{
-		for (int I = 1; I < Argc; ++I)
-		{
-			const std::string Arg = Argv[I] != nullptr ? Argv[I] : "";
-			if ((Arg == "--map" || Arg == "-m") && I + 1 < Argc && Argv[I + 1] != nullptr)
-			{
-				return Argv[++I];
-			}
-		}
-		return {};
+		return FPaths::ResolveAssetPath(Map);
 	}
 
 } // namespace
 
-bool FGameApplication::Init(
-	int Argc, char** Argv, const char* PackName, const FRegisterModesFunction& RegisterModes, bool bDedicatedByDefault)
+bool FGameApplication::Init(int Argc, char** Argv, const char* ProjectName)
 {
-	// bDedicatedByDefault is set by server executables; CLI flags work on the client exe too.
 	// Console strings stay ASCII: Windows cmd often is not UTF-8 (em dash / arrows mojibake).
-	bDedicated = bDedicatedByDefault || WantsDedicatedCli(Argc, Argv);
-	const bool bListenHost = !bDedicated && (HasFlag(Argc, Argv, "--listen") || HasFlag(Argc, Argv, "--host"));
+	bHeadless = HasFlag(Argc, Argv, "-nullrhi");
 	const bool bShowStats = HasFlag(Argc, Argv, "--show-stats");
-	const std::uint16_t NetPort = ParsePort(Argc, Argv, static_cast<std::uint16_t>(Leon::Net::DefaultPort));
 	TickHz = ParseTickHz(Argc, Argv, 60.0f);
-	const std::string JoinAddress = ParseJoinAddress(Argc, Argv);
-	const std::string PlayMap = ParsePlayMap(Argc, Argv);
-	const std::string Title =
-		bDedicated ? std::string("Leon (Dedicated) - ") + PackName : std::string("Leon - ") + PackName;
+	std::string Map = ParseValue(Argc, Argv, "-map=");
+	if (Map.empty())
+	{
+		Map = DefaultMap;
+	}
+	const std::string MapPath = ResolveMapPath(Map);
+	const bool bHasProjectName = ProjectName != nullptr && std::strlen(ProjectName) > 0;
+	const std::string Title = bHasProjectName ? std::string("Leon - ") + ProjectName : std::string("Leon");
 
 	Engine = std::make_unique<UGameEngine>();
-	if (bDedicated)
+	if (bHeadless)
 	{
 		if (!Engine->InitializeHeadless())
 		{
@@ -135,51 +104,32 @@ bool FGameApplication::Init(
 		Engine.reset();
 		return false;
 	}
-	if (bShowStats && !bDedicated)
+	if (bShowStats && !bHeadless)
 	{
 		Engine->SetHudStatsVisible(true);
 	}
-	if (!bDedicated)
+	if (!bHeadless)
 	{
 		WireDefaultInput(*Engine);
 	}
 
-	// Shipping: empty preferred key -> pack defaultLevel inside Session.Start.
-	if (!Session.Start(*Engine, PackName, RegisterModes, {}))
+	if (!LoadLevelFile(*Engine, MapPath))
 	{
+		std::cerr << "Failed to load map '" << Map << "'\n";
 		Engine->Shutdown();
 		Engine.reset();
 		return false;
 	}
-	bStarted = true;
+	GameMode = std::make_unique<ADefaultGameMode>();
+	GameMode->OnEnter(*Engine, MapPath);
 
-	if (bDedicated)
+	if (bHeadless)
 	{
-		Engine->GetGameInstance().RequestDedicatedStart(NetPort);
-		std::cout << "Starting dedicated server for pack '" << PackName << "' on port " << NetPort << " @ " << TickHz
-				  << " Hz (headless - Ctrl+C or RequestQuit to stop)\n";
+		std::cout << "Running '" << MapPath << "' headless @ " << TickHz << " Hz (Ctrl+C to stop)\n";
 		NextHeadlessTick = std::chrono::steady_clock::now();
 	}
 	else
 	{
-		// Flow: CLI Play session (Unreal-like)
-		// --listen/--host [--map Key] -> HostListen -> Lobby or match map
-		// --join <ip> [--map Key] -> Join -> Lobby or match map
-		if (!PlayMap.empty())
-		{
-			Engine->GetGameInstance().SetPendingPlayMap(PlayMap);
-			std::cout << "Pending play map: " << PlayMap << '\n';
-		}
-		if (bListenHost)
-		{
-			Engine->GetGameInstance().RequestListenStart(NetPort);
-			std::cout << "Pending listen host on port " << NetPort << '\n';
-		}
-		else if (!JoinAddress.empty())
-		{
-			Engine->GetGameInstance().SetPendingJoinAddress(JoinAddress);
-			std::cout << "Pending join address: " << JoinAddress << '\n';
-		}
 		Engine->Start();
 	}
 	LastFrameTime = std::chrono::steady_clock::now();
@@ -192,7 +142,7 @@ bool FGameApplication::Tick()
 	{
 		return false;
 	}
-	if (bDedicated)
+	if (bHeadless)
 	{
 		// Fixed-timestep simulation (no render / present), paced to TickHz.
 		const float StepSeconds = 1.0f / (TickHz < 1.0f ? 1.0f : TickHz);
@@ -200,7 +150,7 @@ bool FGameApplication::Tick()
 		{
 			return false;
 		}
-		Session.Tick(StepSeconds);
+		GameMode->Tick(*Engine, StepSeconds);
 		using FClock = std::chrono::steady_clock;
 		NextHeadlessTick += std::chrono::duration_cast<FClock::duration>(std::chrono::duration<double>(StepSeconds));
 		const auto Now = FClock::now();
@@ -218,35 +168,19 @@ bool FGameApplication::Tick()
 	const auto Now = std::chrono::steady_clock::now();
 	const float DeltaTime = std::min(std::chrono::duration<float>(Now - LastFrameTime).count(), 0.1f);
 	LastFrameTime = Now;
-	return Engine->Tick(
-		DeltaTime, [this](float Dt) { Session.Tick(Dt); }, [this]() { Session.HandleUiInput(); },
-		[this](int Width, int Height) { Session.DrawUi(Width, Height); });
+	return Engine->Tick(DeltaTime, [this](float Dt) { GameMode->Tick(*Engine, Dt); });
 }
 
 void FGameApplication::Exit()
 {
-	if (bStarted)
+	if (GameMode && Engine)
 	{
-		Session.Stop();
-		bStarted = false;
+		GameMode->OnExit(*Engine);
 	}
+	GameMode.reset();
 	if (Engine)
 	{
 		Engine->Shutdown();
 		Engine.reset();
 	}
-}
-
-int FGameApplication::Run(
-	int Argc, char** Argv, const char* PackName, const FRegisterModesFunction& RegisterModes, bool bDedicatedByDefault)
-{
-	if (!Init(Argc, Argv, PackName, RegisterModes, bDedicatedByDefault))
-	{
-		return 1;
-	}
-	while (Tick())
-	{
-	}
-	Exit();
-	return 0;
 }

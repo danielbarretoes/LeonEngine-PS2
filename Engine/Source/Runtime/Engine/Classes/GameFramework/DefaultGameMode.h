@@ -6,18 +6,11 @@
 
 #include <glm/vec3.hpp>
 
-/// Fallback GameMode when a level has no `gameMode` override (Unreal default GameMode).
+/// Default GameMode (Unreal default GameMode).
 /// Spawns and possesses `ADefaultCameraActor` as the default pawn (free-look fly).
 class ENGINE_API ADefaultGameMode final : public AGameModeBase
 {
 public:
-	[[nodiscard]] const char* Id() const override
-	{
-		return "Default";
-	}
-
-	[[nodiscard]] bool Matches(const FLevelEntry& Entry, const std::string& GameModeId) const override;
-
 	void OnEnter(UGameEngine& Engine, const std::string& LevelPath) override;
 	void OnExit(UGameEngine& Engine) override;
 	void Tick(UGameEngine& Engine, float DeltaTime) override;

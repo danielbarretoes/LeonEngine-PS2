@@ -186,7 +186,7 @@ void UGameEngine::AddOnScreenDebugMessage(std::string Message, float DisplaySeco
 {
 	if (bHeadless)
 	{
-		std::cout << "[server] " << Message << '\n';
+		std::cout << "[headless] " << Message << '\n';
 		(void)DisplaySeconds;
 		(void)Color;
 		return;
@@ -230,7 +230,6 @@ void UGameEngine::Start()
 	std::cout << "Level static meshes: " << Level.GetStaticMeshes().size() << '\n';
 	std::cout << "Controls: mouse look (cursor captured), scroll zoom (orbit); close window to quit\n";
 	std::cout << "Default mode: mouse look, WASD fly along view, Q/E up/down\n";
-	std::cout << "Levels: keys 1-9 jump to slot; [ ] previous/next\n";
 	std::cout << "Debug: F1 mesh AABBs + light frustum; F2 collision volumes + floor traces\n";
 	std::cout << "Debug: F3 NavMesh grid (walkable / blocked)\n";
 	std::cout << "Stats: F4 FPS / RAM / TRI overlay (off by default)\n";

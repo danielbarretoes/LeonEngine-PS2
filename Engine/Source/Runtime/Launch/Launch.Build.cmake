@@ -4,5 +4,5 @@
 leon_module(Launch
 	PUBLIC_DEPENDENCIES Core InputCore ApplicationCore RHI
 	# Desktop games tick the gameplay framework session (UGameEngine) from FEngineLoop.
-	PRIVATE_DEPENDENCIES_Desktop Engine NetCore Projects
+	PRIVATE_DEPENDENCIES_Desktop Engine
 )

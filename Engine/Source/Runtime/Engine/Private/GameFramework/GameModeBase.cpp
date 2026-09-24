@@ -21,40 +21,6 @@ void AGameModeBase::Logout(APlayerController& Exiting)
 	GetGameState().RemovePlayerState(&Exiting.GetPlayerState());
 }
 
-bool AGameModeBase::ServerTravel(UGameEngine& Engine, std::string_view MapName, std::string_view HintLevelPath)
-{
-	if (!Engine.GetGameInstance().ServerTravel(Engine, MapName, HintLevelPath))
-	{
-		return false;
-	}
-	if (!Engine.GetLevel().GetName().empty())
-	{
-		GetGameState().SetMapName(Engine.GetLevel().GetName());
-	}
-	else
-	{
-		GetGameState().SetMapName(std::string(MapName));
-	}
-	return true;
-}
-
-bool AGameModeBase::ClientTravel(UGameEngine& Engine, std::string_view MapName, std::string_view HintLevelPath)
-{
-	if (!Engine.GetGameInstance().ClientTravel(Engine, MapName, HintLevelPath))
-	{
-		return false;
-	}
-	if (!Engine.GetLevel().GetName().empty())
-	{
-		GetGameState().SetMapName(Engine.GetLevel().GetName());
-	}
-	else
-	{
-		GetGameState().SetMapName(std::string(MapName));
-	}
-	return true;
-}
-
 float AGameModeBase::EstimateFloorY(const ULevel& Level)
 {
 	const auto& Starts = Level.GetPlayerStarts();

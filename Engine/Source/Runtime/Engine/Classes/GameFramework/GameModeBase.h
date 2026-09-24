@@ -3,7 +3,6 @@
 #include "Engine/Level.h"
 #include "Engine/World.h"
 #include "GameFramework/GameStateBase.h"
-#include "Level/LevelCatalog.h"
 
 #include <glm/vec3.hpp>
 
@@ -18,8 +17,8 @@ class ACharacter;
 class UGameEngine;
 class APlayerController;
 
-/// Pluggable level gameplay rules (Unreal-style `AGameModeBase` / `AGameMode`).
-/// Packs subclass this; the engine never includes pack headers.
+/// Level gameplay rules (Unreal-style `AGameModeBase` / `AGameMode`).
+/// Games subclass this; the engine never includes game headers.
 class ENGINE_API AGameModeBase
 {
 public:
@@ -29,12 +28,6 @@ public:
 	AGameModeBase& operator=(const AGameModeBase&) = delete;
 	AGameModeBase(AGameModeBase&&) = delete;
 	AGameModeBase& operator=(AGameModeBase&&) = delete;
-
-	/// Stable id matched against level JSON `"gameMode": "<id>"`.
-	[[nodiscard]] virtual const char* Id() const = 0;
-
-	/// Prefer `gameModeId == Id()`. Entry name/path may be used as a soft fallback.
-	[[nodiscard]] virtual bool Matches(const FLevelEntry& Entry, const std::string& GameModeId) const = 0;
 
 	virtual void OnEnter(UGameEngine& Engine, const std::string& LevelPath) = 0;
 	virtual void OnExit(UGameEngine& Engine) = 0;
@@ -125,11 +118,6 @@ public:
 		InitGameState();
 		return Raw;
 	}
-
-	/// Unreal `UWorld::ServerTravel` / GameMode travel — load map on authority (or local).
-	[[nodiscard]] bool ServerTravel(UGameEngine& Engine, std::string_view MapName, std::string_view HintLevelPath = {});
-	/// Unreal `APlayerController::ClientTravel` — load map on a joining/remote client.
-	[[nodiscard]] bool ClientTravel(UGameEngine& Engine, std::string_view MapName, std::string_view HintLevelPath = {});
 
 	/// Min FPlayerStart Y, or 0 if none.
 	[[nodiscard]] static float EstimateFloorY(const ULevel& Level);

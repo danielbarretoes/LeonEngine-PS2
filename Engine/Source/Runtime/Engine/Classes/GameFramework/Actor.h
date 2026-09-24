@@ -85,14 +85,14 @@ public:
 		return LevelMeshIndex;
 	}
 
-	/// Session-stable id for editor selection (assigned on SpawnActor).
-	void SetEditorId(std::uint64_t Id)
+	/// Spawn-order serial assigned by UWorld::SpawnActor (UE: UObjectBase::GetUniqueID).
+	void SetUniqueID(std::uint64_t Id)
 	{
-		EditorId = Id;
+		UniqueID = Id;
 	}
-	[[nodiscard]] std::uint64_t GetEditorId() const
+	[[nodiscard]] std::uint64_t GetUniqueID() const
 	{
-		return EditorId;
+		return UniqueID;
 	}
 
 	[[nodiscard]] const glm::vec3& GetActorLocation() const
@@ -197,7 +197,7 @@ private:
 	std::vector<UActorComponent*> Components{};
 	std::vector<std::unique_ptr<UActorComponent>> OwnedComponents{};
 	std::size_t LevelMeshIndex = ULevel::Npos;
-	std::uint64_t EditorId = 0;
+	std::uint64_t UniqueID = 0;
 	glm::vec3 Location{0.0f};
 	float YawDegrees = 0.0f;
 	UWorld* World = nullptr;

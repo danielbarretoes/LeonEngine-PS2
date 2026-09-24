@@ -10,7 +10,6 @@
 #include <vector>
 
 class UGameEngine;
-struct FLevelAnimation;
 
 /// Binary Leon Level container (`.llev`): little-endian, string-table based.
 /// Layout: header → string table → meta → camera → actors → lights.
@@ -169,8 +168,7 @@ struct ENGINE_API FLevelDocument
 
 /// Resolve a document into the Engine: builds a staging Level, commits on full success only,
 /// then hydrates persisted lightmaps relative to `sourcePath`.
-[[nodiscard]] bool ApplyLevelDocument(
-	UGameEngine& Engine, const FLevelDocument& Doc, const std::string& SourcePath, FLevelAnimation* OutAnim = nullptr);
+[[nodiscard]] bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const std::string& SourcePath);
 
 /// Resolve a content-relative key (`Materials/M_Floor.lmat`) for a level under `…/Content/Levels/`
 /// (or legacy `…/Levels/`).

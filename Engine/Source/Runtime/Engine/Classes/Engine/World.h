@@ -82,7 +82,7 @@ public:
 		auto Owned = std::make_unique<T>(std::forward<ArgsType>(Args)...);
 		T* Raw = Owned.get();
 		Raw->World = this;
-		Raw->SetEditorId(++NextEditorId);
+		Raw->SetUniqueID(++NextUniqueID);
 		if (bTicking)
 		{
 			// Defer push_back so Tick iterators stay valid.
@@ -95,23 +95,6 @@ public:
 			Raw->BeginPlay();
 		}
 		return Raw;
-	}
-
-	/// Find live Actor by session-stable editor id (PIE / Outliner).
-	[[nodiscard]] AActor* FindActorByEditorId(std::uint64_t EditorId) const
-	{
-		if (EditorId == 0)
-		{
-			return nullptr;
-		}
-		for (const auto& Actor : Actors)
-		{
-			if (Actor && !Actor->IsPendingKill() && Actor->GetEditorId() == EditorId)
-			{
-				return Actor.get();
-			}
-		}
-		return nullptr;
 	}
 
 	void DestroyActor(AActor* Actor)
@@ -198,5 +181,5 @@ private:
 	std::vector<std::unique_ptr<AActor>> Actors;
 	std::vector<std::unique_ptr<AActor>> PendingSpawns;
 	bool bTicking = false;
-	std::uint64_t NextEditorId = 0;
+	std::uint64_t NextUniqueID = 0;
 };

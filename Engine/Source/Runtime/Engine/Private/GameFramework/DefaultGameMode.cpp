@@ -37,11 +37,6 @@ namespace
 
 } // namespace
 
-bool ADefaultGameMode::Matches(const FLevelEntry& /*entry*/, const std::string& GameModeId) const
-{
-	return GameModeId.empty() || GameModeId == Id();
-}
-
 void ADefaultGameMode::OnEnter(UGameEngine& Engine, const std::string& /*levelPath*/)
 {
 	Player.UnPossess();

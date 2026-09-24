@@ -3,7 +3,6 @@
 #include "Engine/GameEngine.h"
 #include "Level/BasicLight.h"
 #include "Level/BasicShape.h"
-#include "Level/LevelAnimation.h"
 #include "Level/LevelLoader.h"
 #include "Level/Light.h"
 #include "Misc/FileHelper.h"
@@ -340,7 +339,7 @@ namespace
 		}
 	}
 
-	void ApplyDocumentLights(const FLevelDocument& Doc, ULevel& Staged, FLevelAnimation& Anim)
+	void ApplyDocumentLights(const FLevelDocument& Doc, ULevel& Staged)
 	{
 		for (const FLevelLightRecord& Record : Doc.Lights)
 		{
@@ -367,13 +366,6 @@ namespace
 			{
 				continue;
 			}
-			Anim.Orbits.push_back(FLevelAnimation::FPointOrbit{
-				.LightIndex = LightIndex,
-				.Radius = Record.OrbitRadius,
-				.Height = Record.OrbitHeight,
-				.HeightAmp = Record.OrbitHeightAmp,
-				.Speed = Record.OrbitSpeed,
-			});
 			FPointLight& Live = Staged.GetPointLights()[LightIndex];
 			Live.bHasOrbit = true;
 			Live.OrbitRadius = Record.OrbitRadius;
@@ -397,10 +389,6 @@ namespace
 			std::cerr << "LeonLevelFormat: truncating point lights from " << Staged.GetPointLights().size() << " to "
 					  << MaxPointLights << '\n';
 			Staged.GetPointLights().resize(static_cast<std::size_t>(MaxPointLights));
-			Anim.Orbits.erase(
-				std::remove_if(Anim.Orbits.begin(), Anim.Orbits.end(), [](const FLevelAnimation::FPointOrbit& Orbit)
-					{ return Orbit.LightIndex >= static_cast<std::size_t>(MaxPointLights); }),
-				Anim.Orbits.end());
 		}
 	}
 
@@ -1009,12 +997,10 @@ bool LoadLeonLevelFile(const std::string& Path, FLevelDocument& Out)
 	return true;
 }
 
-bool ApplyLevelDocument(
-	UGameEngine& Engine, const FLevelDocument& Doc, const std::string& SourcePath, FLevelAnimation* OutAnim)
+bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const std::string& SourcePath)
 {
 	ULevel Staged;
 	Staged.Clear();
-	FLevelAnimation Anim;
 	FResourceCache& Resources = Engine.GetResources();
 
 	try
@@ -1143,13 +1129,6 @@ bool ApplyLevelDocument(
 			const std::size_t ActorIndex = Staged.GetStaticMeshes().size();
 			Staged.AddStaticMesh(std::move(Actor));
 
-			if (Record.bHasSpinYaw)
-			{
-				Anim.Spins.push_back(FLevelAnimation::FStaticMeshSpin{
-					.MeshIndex = ActorIndex,
-					.YawDegreesPerSec = Record.SpinYaw,
-				});
-			}
 			if (Record.bHasBob)
 			{
 				UStaticMeshComponent& Live = Staged.GetStaticMeshes()[ActorIndex];
@@ -1157,12 +1136,6 @@ bool ApplyLevelDocument(
 				Live.BobBaseY = Record.BobBaseY;
 				Live.BobAmplitude = Record.BobAmplitude;
 				Live.BobSpeed = Record.BobSpeed;
-				Anim.Bobs.push_back(FLevelAnimation::FStaticMeshBob{
-					.MeshIndex = ActorIndex,
-					.BaseY = Record.BobBaseY,
-					.Amplitude = Record.BobAmplitude,
-					.Speed = Record.BobSpeed,
-				});
 			}
 		}
 
@@ -1173,7 +1146,7 @@ bool ApplyLevelDocument(
 			return false;
 		}
 
-		ApplyDocumentLights(Doc, Staged, Anim);
+		ApplyDocumentLights(Doc, Staged);
 	}
 	catch (const std::exception& Ex)
 	{
@@ -1198,13 +1171,6 @@ bool ApplyLevelDocument(
 	LocalCamera.SetYawPitch(Doc.Camera.Yaw, Doc.Camera.Pitch);
 	LocalCamera.SetEyeLocation(Doc.Camera.Eye);
 	LocalCamera.SetMode(Doc.Camera.Mode);
-
-	// Runtime + Editor: hydrate GPU textures from persisted `.lm` paths.
-
-	if (OutAnim != nullptr)
-	{
-		*OutAnim = std::move(Anim);
-	}
 
 	const std::string Label = Doc.Name.empty() ? SourcePath : Doc.Name;
 	std::cout << "LevelLoader: loaded '" << Label << "' (" << Engine.GetLevel().GetStaticMeshes().size()

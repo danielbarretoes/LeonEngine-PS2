@@ -62,17 +62,9 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 int32 FEngineLoop::Init()
 {
 #if WITH_ENGINE
-	// LeonGame runs a project pack: LeonGame --pack <Name> [game flags].
-	const char* PackName = LEON_PROJECT_NAME;
-	for (int32 Index = 1; Index + 1 < ArgCount; ++Index)
-	{
-		if (std::strcmp(Args[Index], "--pack") == 0)
-		{
-			PackName = Args[Index + 1];
-		}
-	}
+	// LeonGame: LeonGame [-map=<.llev>] [-nullrhi] [--tick <Hz>] [--show-stats].
 	GGameApplication = std::make_unique<FGameApplication>();
-	if (!GGameApplication->Init(ArgCount, Args, PackName, [](UGameEngine&, FGameplayRouter&) {}))
+	if (!GGameApplication->Init(ArgCount, Args, LEON_PROJECT_NAME))
 	{
 		GGameApplication.reset();
 		ExitCode = 1;

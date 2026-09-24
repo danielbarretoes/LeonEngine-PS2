@@ -1,6 +1,6 @@
 #include "Level/BasicShape.h"
 
-// Class-name parsers live in Content/LevelClassNames.cpp (shared with ContentValidator / cook).
+// Class-name parsers live in Content/LevelClassNames.cpp (shared with the level format / cook).
 
 std::shared_ptr<UStaticMesh> MeshForBasicShape(
 	FResourceCache& Resources, EBasicShape Shape, int InSphereSegments, int InSphereRings)

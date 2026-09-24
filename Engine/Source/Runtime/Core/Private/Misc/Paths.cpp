@@ -17,12 +17,6 @@
 namespace
 {
 
-	std::filesystem::path& ActiveContentRootStorage()
-	{
-		static std::filesystem::path Root;
-		return Root;
-	}
-
 	/// Prefer the newest existing candidate so repo edits win over a stale POST_BUILD copy.
 	std::string NewestExisting(const std::vector<std::filesystem::path>& Candidates)
 	{
@@ -74,45 +68,7 @@ namespace
 		return Rel;
 	}
 
-	void AppendActivePackCandidates(std::vector<std::filesystem::path>& Out, const std::filesystem::path& Rel,
-		const std::filesystem::path& UnderAssets)
-	{
-		const std::filesystem::path Active = ActiveContentRootStorage();
-		if (Active.empty())
-		{
-			return;
-		}
-		const std::filesystem::path Content = FPaths::ProjectContentDir(Active);
-		if (!Content.empty())
-		{
-			Out.push_back(Content / Rel);
-			if (!UnderAssets.empty())
-			{
-				Out.push_back(Content / "assets" / UnderAssets);
-				Out.push_back(Content / UnderAssets);
-			}
-		}
-		Out.push_back(Active / Rel);
-		if (!UnderAssets.empty())
-		{
-			Out.push_back(Active / "assets" / UnderAssets);
-		}
-	}
-
 } // namespace
-
-void FPaths::SetActiveContentRoot(const std::filesystem::path& ProjectOrPackRoot)
-{
-	std::error_code Ec;
-	ActiveContentRootStorage() =
-		ProjectOrPackRoot.empty() ? std::filesystem::path{} : ProjectOrPackRoot.lexically_normal();
-	(void)Ec;
-}
-
-std::filesystem::path FPaths::GetActiveContentRoot()
-{
-	return ActiveContentRootStorage();
-}
 
 std::filesystem::path FPaths::ExecutableDir()
 {
@@ -147,82 +103,11 @@ std::filesystem::path FPaths::ExecutableDir()
 #endif
 }
 
-std::filesystem::path FPaths::ProjectContentDir(const std::filesystem::path& ProjectOrPackRoot)
-{
-	std::error_code Ec;
-	const std::filesystem::path Root = ProjectOrPackRoot.lexically_normal();
-	if (Root.empty())
-	{
-		return {};
-	}
-	const std::filesystem::path Content = Root / "Content";
-	const bool bContentLevels = std::filesystem::is_directory(Content / "Levels", Ec) && !Ec;
-	const bool bLegacyLevels = std::filesystem::is_directory(Root / "Levels", Ec) && !Ec;
-	if (bContentLevels)
-	{
-		return Content;
-	}
-	if (bLegacyLevels)
-	{
-		return Root;
-	}
-	// Default Unreal-like layout (folder may be created by the editor).
-	return Content;
-}
-
-std::string FPaths::ResolveContentAssetPath(
-	const std::filesystem::path& ProjectOrPackRoot, const std::string& RelativeOrKey)
-{
-	std::error_code Ec;
-	if (RelativeOrKey.empty())
-	{
-		return {};
-	}
-	const std::filesystem::path Key(RelativeOrKey);
-	if (Key.is_absolute() && std::filesystem::exists(Key, Ec) && !Ec)
-	{
-		return Key.lexically_normal().string();
-	}
-
-	const std::filesystem::path Content = FPaths::ProjectContentDir(ProjectOrPackRoot);
-	if (!Content.empty())
-	{
-		const std::filesystem::path InContent = (Content / Key).lexically_normal();
-		if (std::filesystem::exists(InContent, Ec) && !Ec)
-		{
-			return InContent.string();
-		}
-	}
-
-	if (!ProjectOrPackRoot.empty())
-	{
-		const std::filesystem::path InRoot = (ProjectOrPackRoot / Key).lexically_normal();
-		if (std::filesystem::exists(InRoot, Ec) && !Ec)
-		{
-			return InRoot.string();
-		}
-	}
-
-	// Engine / exe staging only — never another project's Content/.
-	return FPaths::ResolveAssetPath(RelativeOrKey);
-}
-
 std::string FPaths::ResolveAssetPath(const std::string& RelativePath)
 {
 	const std::filesystem::path ExeDir = FPaths::ExecutableDir();
 	const std::filesystem::path Rel(RelativePath);
 	const std::filesystem::path UnderAssets = StripAssetsPrefix(Rel);
-
-	// Active pack Content wins outright (never lose to a newer Engine/staging copy).
-	{
-		std::vector<std::filesystem::path> PackCandidates;
-		AppendActivePackCandidates(PackCandidates, Rel, UnderAssets);
-		const std::string PackHit = NewestExisting(PackCandidates);
-		if (!PackHit.empty())
-		{
-			return PackHit;
-		}
-	}
 
 	std::vector<std::filesystem::path> Candidates = {
 		ExeDir / Rel,
@@ -263,49 +148,4 @@ std::string FPaths::ResolveAssetPath(const std::string& RelativePath)
 		return Found;
 	}
 	return (ExeDir / Rel).lexically_normal().string();
-}
-
-std::string FPaths::ResolveProjectsDir()
-{
-	// Prefer a Projects/ whose parent is a Leon root (Engine/Build/Build.version) over a staged copy.
-	const std::filesystem::path ExeDir = FPaths::ExecutableDir();
-	std::error_code Ec;
-	const auto IsSdkProjects = [&](const std::filesystem::path& ProjectsDir)
-	{
-		if (!std::filesystem::is_directory(ProjectsDir, Ec) || Ec)
-		{
-			return false;
-		}
-		const std::filesystem::path Root = ProjectsDir.parent_path();
-		return std::filesystem::is_regular_file(Root / "Engine" / "Build" / "Build.version", Ec) && !Ec;
-	};
-
-	const std::filesystem::path Candidates[] = {
-		ExeDir / "Projects", // staged next to the executable
-		ExeDir / ".." / ".." / "Projects", // Engine/Binaries/Win64 -> Engine/Projects (not a root; skipped)
-		ExeDir / ".." / ".." / ".." / "Projects", // Engine/Binaries/Win64 -> <root>/Projects
-		std::filesystem::path("Projects"),
-		std::filesystem::path("..") / "Projects",
-		std::filesystem::path("..") / ".." / "Projects",
-		std::filesystem::path("..") / ".." / ".." / "Projects",
-	};
-	for (const auto& C : Candidates)
-	{
-		const std::filesystem::path P = C.lexically_normal();
-		if (IsSdkProjects(P))
-		{
-			return P.string();
-		}
-	}
-
-	// Fallback without calling FPaths::ResolveAssetPath("Projects") — that would recurse via Projects scan.
-	if (std::filesystem::is_directory(ExeDir / "Projects", Ec) && !Ec)
-	{
-		return (ExeDir / "Projects").lexically_normal().string();
-	}
-	if (std::filesystem::is_directory("Projects", Ec) && !Ec)
-	{
-		return std::filesystem::path("Projects").lexically_normal().string();
-	}
-	return (ExeDir / "Projects").lexically_normal().string();
 }

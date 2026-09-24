@@ -5,8 +5,6 @@
 #include "GameFramework/HUD.h"
 #include "GameplayMinimal.h"
 #include "Level/LeonLevelFormat.h"
-#include "Net/NetProtocol.h"
-#include "Net/RootReplication.h"
 #include "Physics/PhysScene.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -61,22 +59,6 @@ TEST_CASE("AIController logic state tracks MoveTo Chase Idle", "[gameplay][ai]")
 	REQUIRE(Ai.GetLogicState() == EAILogicState::Idle);
 }
 
-TEST_CASE("RootReplication relevancy and CaptureCharacterRoot", "[net][replication]")
-{
-	ACharacter Character;
-	Character.SetActorLocationAndRotation({1.0f, 0.0f, 2.0f}, 45.0f);
-	const Leon::Net::FPawnSnap Snap = Leon::Net::CaptureCharacterRoot(3, Character, 10.0f, -5.0f);
-	REQUIRE(Snap.Slot == 3);
-	REQUIRE_THAT(Snap.X, WithinAbs(1.0f, 1.0e-5f));
-	REQUIRE_THAT(Snap.Z, WithinAbs(2.0f, 1.0e-5f));
-	REQUIRE_THAT(Snap.Yaw, WithinAbs(45.0f, 1.0e-5f));
-	REQUIRE_THAT(Snap.BoomYaw, WithinAbs(10.0f, 1.0e-5f));
-
-	REQUIRE(Leon::Net::IsPawnRelevant({0, 0, 0}, {3, 0, 0}, 5.0f));
-	REQUIRE_FALSE(Leon::Net::IsPawnRelevant({0, 0, 0}, {10, 0, 0}, 5.0f));
-	REQUIRE(Leon::Net::IsPawnRelevantXZ({0, 0, 0}, {0, 99, 4}, 5.0f));
-}
-
 TEST_CASE("AudioDevice silent mode is safe for Play APIs", "[audio]")
 {
 	FAudioDevice Audio;
@@ -101,7 +83,7 @@ TEST_CASE("HUD AddWidget TextBlock and remove", "[ui][hud]")
 	REQUIRE(Hud.GetWidgetOfClass<UTextBlock>() == nullptr);
 }
 
-TEST_CASE("DeserializeLeonLevel and InputCmd adversarial inputs", "[content][fuzz][net]")
+TEST_CASE("DeserializeLeonLevel adversarial inputs", "[content][fuzz]")
 {
 	FLevelDocument Doc;
 	std::vector<std::uint8_t> Empty;
@@ -112,14 +94,6 @@ TEST_CASE("DeserializeLeonLevel and InputCmd adversarial inputs", "[content][fuz
 
 	std::vector<std::uint8_t> AlmostMagic = {'L', 'L', 'E', 'V', 1, 0, 0, 0};
 	REQUIRE_FALSE(DeserializeLeonLevel(AlmostMagic, Doc));
-
-	Leon::Net::FInputCmdMsg Cmd{};
-	Cmd.MoveX = std::numeric_limits<float>::quiet_NaN();
-	Cmd.Buttons = 0xFFFF;
-	Leon::Net::SanitizeInputCmd(Cmd);
-	REQUIRE_THAT(Cmd.MoveX, WithinAbs(0.0f, 1.0e-5f));
-	REQUIRE(Cmd.Buttons == Leon::Net::InputButtonMask);
-	REQUIRE((Cmd.Buttons & static_cast<std::uint16_t>(~Leon::Net::InputButtonMask)) == 0);
 }
 
 TEST_CASE("NavigationSystem agent radius dilation shrinks walkable ring", "[gameplay][nav]")

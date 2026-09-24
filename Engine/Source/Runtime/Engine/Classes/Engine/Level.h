@@ -60,8 +60,6 @@ struct ENGINE_API UStaticMeshComponent
 	std::string EditorClass; // "Cube", "Sphere", "Plane", "BlockingVolume", "StaticMesh", ...
 	std::string MeshPath; // relative mesh path when imported
 	std::string MaterialPath; // relative material JSON path when set
-	/// Session-stable editor selection id (0 = unassigned). Not serialized.
-	std::uint64_t EditorId = 0;
 	float SpinYaw = 0.0f;
 	int SphereSegments = 24;
 	int SphereRings = 16;
@@ -91,8 +89,6 @@ struct ENGINE_API UStaticMeshComponent
 struct ENGINE_API FPlayerStart
 {
 	FTransform Transform{};
-	/// Session-stable editor selection id (0 = unassigned). Not serialized.
-	std::uint64_t EditorId = 0;
 };
 
 /// Interact / trigger volume (POD). Overlap tested in gameplay from position + interactRadius.
@@ -104,7 +100,6 @@ struct ENGINE_API FTriggerVolume
 	std::string Payload; // pack-defined e.g. Door, WallBuy:M14, Perk:Jugg
 	std::string Tag;
 	bool bConsumeOnUse = false;
-	std::uint64_t EditorId = 0;
 };
 
 /// Damage volume (POD). AABB from transform.position and abs(scale) * 0.5.
@@ -114,7 +109,6 @@ struct ENGINE_API FPainCausingVolume
 	float DamagePerSecond = 12.f;
 	float DamageInterval = 0.35f;
 	std::string Tag;
-	std::uint64_t EditorId = 0;
 };
 
 /// AI spawn marker (POD — not a drawable mesh).
@@ -122,7 +116,6 @@ struct ENGINE_API FAISpawnPoint
 {
 	FTransform Transform{};
 	std::string Tag;
-	std::uint64_t EditorId = 0;
 };
 
 /// Map content container (Unreal-style Level / ULevel): StaticMeshComponents + lights + env.

@@ -13,8 +13,6 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/SpringArmComponent.h"
-#include "Level/LevelCatalog.h"
-#include "Net/RootReplication.h"
 #include "Physics/PhysScene.h"
 #include "PhysicsBackend.h"
 #include "TriangleCollision.h"
@@ -414,16 +412,6 @@ TEST_CASE("Character Reset Jump and PerformMovement", "[gameplay][character]")
 	REQUIRE(Character.GetActorLocation().x > X0);
 }
 
-TEST_CASE("DefaultGameMode Matches empty or Default id", "[gameplay][gamemode]")
-{
-	ADefaultGameMode Mode;
-	FLevelEntry Entry{};
-	REQUIRE(Mode.Matches(Entry, ""));
-	REQUIRE(Mode.Matches(Entry, "Default"));
-	REQUIRE_FALSE(Mode.Matches(Entry, "Showcase"));
-	REQUIRE(std::string(Mode.Id()) == "Default");
-}
-
 TEST_CASE("Actor SyncTransformToLevel writes linked mesh", "[gameplay][actor][sync]")
 {
 	ULevel Level;
@@ -547,19 +535,4 @@ TEST_CASE("PhysScene reports Arcade backend by default", "[physics][backend]")
 	FPhysScene Scene;
 	REQUIRE(Scene.GetBackend() == EPhysicsBackend::Arcade);
 	REQUIRE(std::string(PhysicsBackendName(Scene.GetBackend())) == "Arcade");
-}
-
-TEST_CASE("RootReplication capture and apply Actor root", "[net][replication]")
-{
-	UWorld World;
-	auto* Actor = World.SpawnActor<ATestActor>();
-	Actor->SetActorLocationAndRotation({1.0f, 2.0f, 3.0f}, 45.0f);
-	const Leon::Net::FPawnSnap Snap = Leon::Net::CaptureActorRoot(0, *Actor, 1.5f, 0.25f);
-	REQUIRE_THAT(Snap.X, WithinAbs(1.0f, 1.0e-5f));
-	REQUIRE_THAT(Snap.Yaw, WithinAbs(45.0f, 1.0e-5f));
-
-	auto* Other = World.SpawnActor<ATestActor>();
-	Leon::Net::ApplyActorRoot(*Other, Snap);
-	REQUIRE_THAT(Other->GetActorLocation().z, WithinAbs(3.0f, 1.0e-5f));
-	REQUIRE_THAT(Other->GetActorYaw(), WithinAbs(45.0f, 1.0e-5f));
 }

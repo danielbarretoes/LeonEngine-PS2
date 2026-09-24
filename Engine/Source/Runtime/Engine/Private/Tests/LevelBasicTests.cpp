@@ -74,3 +74,28 @@ TEST_CASE("BasicLight parse and addTo Level", "[level][basiclight]")
 	REQUIRE(Level.GetDirectionalLights().size() == 1);
 	REQUIRE(Level.GetPointLights().size() == 1);
 }
+
+TEST_CASE("Level stores meshes PlayerStarts and tags", "[level][container]")
+{
+	ULevel Level;
+	UStaticMeshComponent Mesh{};
+	Mesh.Tag = "player";
+	Mesh.Transform.Position = {1.0f, 2.0f, 3.0f};
+	Level.AddStaticMesh(std::move(Mesh));
+
+	FPlayerStart Start{};
+	Start.Transform.Position = {5.0f, 0.0f, -2.0f};
+	Level.AddPlayerStart(Start);
+
+	REQUIRE(Level.GetStaticMeshes().size() == 1);
+	REQUIRE(Level.FindStaticMeshIndexByTag("player") == 0);
+	REQUIRE(Level.FindStaticMeshIndexByTag("missing") == ULevel::Npos);
+	REQUIRE(Level.FindPlayerStart() != nullptr);
+	REQUIRE_THAT(Level.FindPlayerStart()->Transform.Position.x, WithinAbs(5.0f, 1.0e-5f));
+
+	Level.Clear();
+	REQUIRE(Level.GetStaticMeshes().empty());
+	REQUIRE(Level.GetPlayerStarts().empty());
+	REQUIRE(Level.GetDirectionalLights().empty());
+	REQUIRE(Level.FindPlayerStart() == nullptr);
+}

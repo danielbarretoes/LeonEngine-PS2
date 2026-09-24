@@ -2,7 +2,7 @@
 
 #include "Engine/Level.h"
 
-// Class-name parsers live in Content/LevelClassNames.cpp (shared with ContentValidator / cook).
+// Class-name parsers live in Content/LevelClassNames.cpp (shared with the level format / cook).
 
 FBasicLight FBasicLight::Directional(glm::vec3 RotationDegrees, glm::vec3 InLightColor, float InIntensity)
 {

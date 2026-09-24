@@ -582,7 +582,7 @@ void ACharacter::ResolvePawnOverlap(ACharacter& Other)
 	if (Dist < 1.0e-4f)
 	{
 		// Deterministic axis when centers coincide (avoid NaN / jitter).
-		Normal = (GetEditorId() <= Other.GetEditorId()) ? glm::vec2{1.0f, 0.0f} : glm::vec2{-1.0f, 0.0f};
+		Normal = (GetUniqueID() <= Other.GetUniqueID()) ? glm::vec2{1.0f, 0.0f} : glm::vec2{-1.0f, 0.0f};
 		Dist = 0.0f;
 	}
 	else

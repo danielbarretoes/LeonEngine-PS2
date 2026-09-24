@@ -2,7 +2,6 @@
 
 #include "Engine/Level.h"
 #include "Level/LeonLevelFormat.h"
-#include "Validation/ContentValidator.h"
 
 #include <algorithm>
 #include <cctype>
@@ -49,7 +48,7 @@ void ApplyFitHeight(UStaticMeshComponent& Object, float FitHeight)
 	Object.Transform.Position = Grounded + PositionOffset;
 }
 
-bool LoadLevelFile(UGameEngine& Engine, const std::string& LevelPath, FLevelAnimation* OutAnim)
+bool LoadLevelFile(UGameEngine& Engine, const std::string& LevelPath)
 {
 	if (!HasLeonLevelExtension(LevelPath))
 	{
@@ -64,13 +63,5 @@ bool LoadLevelFile(UGameEngine& Engine, const std::string& LevelPath, FLevelAnim
 		return false;
 	}
 
-	FValidationReport Report = ValidateLevelDocument(Doc, LevelPath);
-	Report.LogToStderr();
-	if (!Report.Ok())
-	{
-		std::cerr << "LevelLoader: rejecting '" << LevelPath << "' (validation failed)\n";
-		return false;
-	}
-
-	return ApplyLevelDocument(Engine, Doc, LevelPath, OutAnim);
+	return ApplyLevelDocument(Engine, Doc, LevelPath);
 }

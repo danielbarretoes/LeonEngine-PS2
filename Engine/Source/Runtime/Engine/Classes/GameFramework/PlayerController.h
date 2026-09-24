@@ -2,7 +2,6 @@
 
 #include "GameFramework/Controller.h"
 #include "GameFramework/PlayerState.h"
-#include "Net/NetProtocol.h"
 
 #include <glm/vec3.hpp>
 
@@ -63,33 +62,6 @@ public:
 	/// Unreal-like: drive view from possessed pawn SpringArm (packs override).
 	virtual void UpdateCamera(UGameEngine& Engine, float DeltaTime);
 
-	/// When false, this PC is driven by remote InputCmd (listen-server remote player).
-	[[nodiscard]] bool IsLocalController() const
-	{
-		return bLocalController;
-	}
-	void SetIsLocalController(bool bLocal)
-	{
-		bLocalController = bLocal;
-	}
-
-	// Flow: Local input → FInputCmdMsg → authority ApplyRemoteInput
-	/// Latches current button mask; rising edges vs previous frame go into PressedEdges.
-	void LatchButtons(std::uint16_t PressedNow);
-	[[nodiscard]] bool WasButtonPressed(Leon::Net::EInputButton Button) const;
-	[[nodiscard]] bool IsButtonDown(Leon::Net::EInputButton Button) const;
-	[[nodiscard]] std::uint16_t GetButtonDownMask() const
-	{
-		return DownButtons;
-	}
-	/// Returns rising-edge mask from the last LatchButtons and clears it.
-	[[nodiscard]] std::uint16_t ConsumeButtonPressedMask();
-
 private:
 	std::unique_ptr<APlayerState> PlayerState;
-	bool bLocalController = true;
-
-	std::uint16_t PrevButtons = 0;
-	std::uint16_t DownButtons = 0;
-	std::uint16_t PressedEdges = 0;
 };

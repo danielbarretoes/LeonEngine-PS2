@@ -21,7 +21,7 @@
 #include <utility>
 
 /// Top-level runtime: platform window (FGenericWindow), per-frame Tick, orbit-camera input, FPS overlay,
-/// UGameInstance, and a Level/FResourceCache filled by FLevelDirector (or the app).
+/// UGameInstance, and a Level/FResourceCache filled by the level loader.
 class ENGINE_API UGameEngine
 {
 public:
@@ -148,29 +148,13 @@ public:
 	T* SetGameInstance(ArgsType&&... Args)
 	{
 		static_assert(std::is_base_of_v<UGameInstance, T>, "T must derive from GameInstance");
-		// Packs call SetGameInstance after Runtime wires travel/browser callbacks — keep them.
-		UGameInstance::FLevelTravelFunction TravelFn;
-		UGameInstance::FLevelBrowserVisibleFunction BrowserFn;
-		if (GameInstance)
+		if (GameInstance && bInitialized)
 		{
-			TravelFn = GameInstance->TakeLevelTravelFn();
-			BrowserFn = GameInstance->TakeLevelBrowserVisibleFn();
-			if (bInitialized)
-			{
-				GameInstance->Shutdown();
-			}
+			GameInstance->Shutdown();
 		}
 		auto Owned = std::make_unique<T>(std::forward<ArgsType>(Args)...);
 		T* Raw = Owned.get();
 		GameInstance = std::move(Owned);
-		if (TravelFn)
-		{
-			GameInstance->SetLevelTravelFn(std::move(TravelFn));
-		}
-		if (BrowserFn)
-		{
-			GameInstance->SetLevelBrowserVisibleFn(std::move(BrowserFn));
-		}
 		if (bInitialized)
 		{
 			GameInstance->Init();

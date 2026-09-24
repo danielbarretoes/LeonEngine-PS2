@@ -17,6 +17,19 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - HDR environment maps (skybox pass, cubemap IBL, `Engine/Content/Hdr/`); `blinn_phong.frag` keeps the
   procedural sky. `.llev` still reads and writes the environment field for compatibility but ignores it.
 - `.lm` lightmaps (`LightmapIO`, `uLightmap`); they return as `<Map>_BuiltData.lasset` with static lighting.
+- Networking: `NetCore`, vendored ENet, `UNetDriver`, root replication and the listen / dedicated / join flow
+  (`--listen`, `--host`, `--join`, `--port`, `--dedicated`). The last networked state is tagged
+  `archive/net-enet-0.11`.
+- The pack / session layer: `FGameHostSession`, `FWorldRuntime`, `FLevelDirector` (level browser), `FLevelCatalog`,
+  `FGameplayRouter`, `FLevelAnimation`, `FProjectDescriptor` packs (`Projects/<Name>/leon.game.json`, `--pack`),
+  `FPaths` pack content roots, travel on `UGameInstance` / `AGameModeBase`, `ContentValidator`, `FArenaCamera`
+  and the editor ids.
+
+### Changed (runtime)
+
+- `LeonGame [-map=<.llev>] [-nullrhi] [--tick <Hz>] [--show-stats]` loads one level (default
+  `Engine/Content/LevelTemplates/Starter.llev`) and runs `ADefaultGameMode`; `-nullrhi` runs headless.
+- `AActor` keeps a spawn serial as `GetUniqueID()` (was the editor id).
 
 ## [0.11.0] - 2026-09-24
 

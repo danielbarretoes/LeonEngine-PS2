@@ -46,8 +46,6 @@ struct ENGINE_API FDirectionalLight
 	float Intensity = 1.0f;
 	bool bCastShadows = true;
 	float SourceAngle = DefaultLightSourceAngleDegrees;
-	/// Session-stable editor selection id (0 = unassigned). Not serialized.
-	std::uint64_t EditorId = 0;
 
 	[[nodiscard]] glm::vec3 GetDirection() const
 	{
@@ -63,8 +61,6 @@ struct ENGINE_API FPointLight
 	float Intensity = 1.0f;
 	float Range = 8.0f;
 	bool bCastShadows = false;
-	/// Session-stable editor selection id (0 = unassigned). Not serialized.
-	std::uint64_t EditorId = 0;
 
 	/// Optional orbit animation (Level JSON `orbit`); preserved for save round-trip.
 	bool bHasOrbit = false;
