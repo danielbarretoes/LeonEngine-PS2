@@ -158,7 +158,7 @@ Material ResourceCache::DefaultMaterial() {
     }
 
     Material material;
-    const std::string lmatPath = ResolveAssetPath("assets/Materials/M_Default.lmat");
+    const std::string lmatPath = FPaths::ResolveAssetPath("assets/Materials/M_Default.lmat");
     if (std::filesystem::exists(lmatPath) && LoadMaterialFile(*this, lmatPath, material)) {
         materials_.emplace(kKey, material);
         return material;

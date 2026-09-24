@@ -11,7 +11,7 @@ struct Aabb {
     glm::vec3 min{0.0f};
     glm::vec3 max{0.0f};
 
-    /// Transform local AABB corners by `model` and re-wrap as a world AABB.
+    /// FTransform local AABB corners by `model` and re-wrap as a world AABB.
     [[nodiscard]] static Aabb fromLocalTransformed(const glm::vec3& localMin,
                                                    const glm::vec3& localMax,
                                                    const glm::mat4& model);

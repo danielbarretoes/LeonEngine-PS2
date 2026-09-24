@@ -5,9 +5,9 @@
 
 namespace {
 
-[[nodiscard]] std::string sourceAsset(const char* relative) {
+[[nodiscard]] std::string SourceAsset(const char* Relative) {
 #ifdef LEON_ROOT_DIR
-    return (std::filesystem::path(LEON_ROOT_DIR) / "Engine" / relative).lexically_normal().string();
+    return (std::filesystem::path(LEON_ROOT_DIR) / "Engine" / Relative).lexically_normal().string();
 #else
     return relative;
 #endif
@@ -16,7 +16,7 @@ namespace {
 } // namespace
 
 TEST_CASE("ResolveAssetPath finds known shader under repo", "[core][paths]") {
-    const std::string resolved = ResolveAssetPath("assets/Shaders/blinn_phong.vert");
-    REQUIRE(std::filesystem::exists(resolved));
-    REQUIRE(std::filesystem::exists(sourceAsset("Shaders/blinn_phong.vert")));
+    const std::string Resolved = FPaths::ResolveAssetPath("assets/Shaders/blinn_phong.vert");
+    REQUIRE(std::filesystem::exists(Resolved));
+    REQUIRE(std::filesystem::exists(SourceAsset("Shaders/blinn_phong.vert")));
 }

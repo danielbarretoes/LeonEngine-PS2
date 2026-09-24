@@ -17,7 +17,7 @@ std::shared_ptr<StaticMesh> MeshForBasicShape(ResourceCache& resources, EBasicSh
     return nullptr;
 }
 
-BasicShape BasicShape::cube(Transform transform, Material material, bool hasMaterial) {
+BasicShape BasicShape::cube(FTransform transform, Material material, bool hasMaterial) {
     BasicShape shape;
     shape.type = EBasicShape::Cube;
     shape.transform = transform;
@@ -26,7 +26,7 @@ BasicShape BasicShape::cube(Transform transform, Material material, bool hasMate
     return shape;
 }
 
-BasicShape BasicShape::sphere(Transform transform, Material material, bool hasMaterial,
+BasicShape BasicShape::sphere(FTransform transform, Material material, bool hasMaterial,
                               int segments, int rings) {
     BasicShape shape;
     shape.type = EBasicShape::Sphere;
@@ -38,13 +38,13 @@ BasicShape BasicShape::sphere(Transform transform, Material material, bool hasMa
     return shape;
 }
 
-BasicShape BasicShape::plane(float size, Transform transform, Material material, bool hasMaterial) {
+BasicShape BasicShape::plane(float size, FTransform transform, Material material, bool hasMaterial) {
     BasicShape shape;
     shape.type = EBasicShape::Plane;
     shape.transform = transform;
-    shape.transform.scale.x = size;
-    shape.transform.scale.y = 1.0f;
-    shape.transform.scale.z = size;
+    shape.transform.Scale.x = size;
+    shape.transform.Scale.y = 1.0f;
+    shape.transform.Scale.z = size;
     shape.material = std::move(material);
     shape.hasCustomMaterial = hasMaterial;
     return shape;

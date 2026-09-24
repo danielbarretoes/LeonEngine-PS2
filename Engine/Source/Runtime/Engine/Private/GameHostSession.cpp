@@ -5,7 +5,7 @@
 #include <iostream>
 #include "Misc/Paths.h"
 #include "GameFramework/DefaultGameMode.h"
-#include "ProjectPack.h"
+#include "ProjectDescriptor.h"
 #include <memory>
 #include <nlohmann/json.hpp>
 
@@ -40,7 +40,7 @@ bool GameHostSession::Start(Engine& engine, const char* packName, RegisterModesF
     engine_ = &engine;
     packName_ = packName;
 
-    const std::string shaderDir = ResolveAssetPath("assets/Shaders");
+    const std::string shaderDir = FPaths::ResolveAssetPath("assets/Shaders");
     if (!world_.Initialize(engine, shaderDir)) {
         std::cerr << "GameHostSession: failed to initialize WorldRuntime\n";
         engine_ = nullptr;
@@ -49,24 +49,24 @@ bool GameHostSession::Start(Engine& engine, const char* packName, RegisterModesF
     }
     worldInitialized_ = true;
 
-    ProjectPack pack;
+    FProjectDescriptor pack;
     if (!packRootOverride.empty()) {
-        pack.name = packName;
-        pack.rootDirectory = std::string(packRootOverride);
-        const auto marker = std::filesystem::path(pack.rootDirectory) / "leon.game.json";
+        pack.Name = packName;
+        pack.RootDirectory = std::string(packRootOverride);
+        const auto marker = std::filesystem::path(pack.RootDirectory) / "leon.game.json";
         std::ifstream in(marker);
         if (in.is_open()) {
             try {
                 nlohmann::json doc;
                 in >> doc;
-                pack.defaultLevel = doc.value("defaultLevel", "");
+                pack.DefaultLevel = doc.value("defaultLevel", "");
             } catch (...) {
             }
         }
     } else {
-        pack = ProjectPack::Resolve(packName);
+        pack = FProjectDescriptor::Resolve(packName);
     }
-    if (pack.rootDirectory.empty()) {
+    if (pack.RootDirectory.empty()) {
         std::cerr << "GameHostSession: could not resolve pack root for '" << packName << "'\n";
         world_.Shutdown();
         worldInitialized_ = false;
@@ -74,17 +74,17 @@ bool GameHostSession::Start(Engine& engine, const char* packName, RegisterModesF
         packName_.clear();
         return false;
     }
-    SetActiveContentRoot(pack.rootDirectory);
+    FPaths::SetActiveContentRoot(pack.RootDirectory);
 
     std::string levelKey(preferredLevelKey);
     if (levelKey.empty()) {
         levelKey = pack.DefaultLevelKey();
     }
 
-    if (!world_.LoadPack(engine, pack.rootDirectory, levelKey)) {
-        std::cerr << "GameHostSession: no levels under '" << pack.rootDirectory << "'\n";
+    if (!world_.LoadPack(engine, pack.RootDirectory, levelKey)) {
+        std::cerr << "GameHostSession: no levels under '" << pack.RootDirectory << "'\n";
         std::cerr << "Expected Content/Levels/*.llev under the pack root\n";
-        SetActiveContentRoot({});
+        FPaths::SetActiveContentRoot({});
         world_.Shutdown();
         worldInitialized_ = false;
         engine_ = nullptr;
@@ -155,7 +155,7 @@ void GameHostSession::Stop() {
         world_.Shutdown();
         worldInitialized_ = false;
     }
-    SetActiveContentRoot({});
+    FPaths::SetActiveContentRoot({});
     engine_ = nullptr;
     packName_.clear();
     active_ = false;

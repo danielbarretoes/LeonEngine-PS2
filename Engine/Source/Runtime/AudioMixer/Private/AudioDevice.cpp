@@ -143,7 +143,7 @@ struct AudioDevice::Impl {
             return false;
         }
         ReapFinished();
-        const std::string path = ResolveAssetPath(std::string(assetRelativePath));
+        const std::string path = FPaths::ResolveAssetPath(std::string(assetRelativePath));
         if (path.empty()) {
             return false;
         }
@@ -244,7 +244,7 @@ void AudioDevice::PlaySoundAtLocation(std::string_view assetRelativePath, const 
         return;
     }
     impl_->ReapFinished();
-    const std::string path = ResolveAssetPath(std::string(assetRelativePath));
+    const std::string path = FPaths::ResolveAssetPath(std::string(assetRelativePath));
     if (path.empty()) {
         return;
     }
@@ -324,7 +324,7 @@ void AudioDevice::PlayMusic(std::string_view assetRelativePath, float volumeMult
     if (!impl_ || !impl_->engineOk || assetRelativePath.empty()) {
         return;
     }
-    const std::string path = ResolveAssetPath(std::string(assetRelativePath));
+    const std::string path = FPaths::ResolveAssetPath(std::string(assetRelativePath));
     if (path.empty()) {
         return;
     }

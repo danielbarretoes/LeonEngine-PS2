@@ -1,33 +1,44 @@
 #pragma once
 
+#include "CoreTypes.h"
+
 #include <filesystem>
 #include <string>
 
+/** Engine / project path resolution (UE: FPaths). */
+struct CORE_API FPaths
+{
+	/** Folder of the running executable. */
+	[[nodiscard]] static std::filesystem::path ExecutableDir();
 
-[[nodiscard]] std::filesystem::path ExecutableDirectory();
+	/**
+	 * Pins asset resolution to a project root: ResolveAssetPath then prefers that project's Content/
+	 * before Engine content. Cleared with an empty path.
+	 */
+	static void SetActiveContentRoot(const std::filesystem::path& ProjectRoot);
 
-/// Pin asset resolution to a project/pack root (`Projects/<name>/`).
-/// When set, `ResolveAssetPath` prefers that pack's Content/ before Engine assets.
-/// Cleared with an empty path.
-void SetActiveContentRoot(const std::filesystem::path& projectOrPackRoot);
+	[[nodiscard]] static std::filesystem::path GetActiveContentRoot();
 
-[[nodiscard]] std::filesystem::path ActiveContentRoot();
+	/**
+	 * Resolves a path relative to the executable / Engine/Content / Engine/Shaders / the active
+	 * project Content. When several Engine or staging candidates exist the newest wins (repo edits beat
+	 * a stale post-build copy). Does not scan unrelated projects.
+	 */
+	[[nodiscard]] static std::string ResolveAssetPath(const std::string& RelativePath);
 
-/// Resolve a path relative to the executable / Engine Assets / active pack Content.
-/// When several Engine/staging candidates exist, picks the newest (repo edits beat a
-/// stale POST_BUILD copy). Does **not** scan unrelated projects.
-[[nodiscard]] std::string ResolveAssetPath(const std::string& relativePath);
+	/** The folder holding runtime project packs (`Projects/`). */
+	[[nodiscard]] static std::string ResolveProjectsDir();
 
-/// Resolve the projects root (`Projects/`).
-[[nodiscard]] std::string ResolveProjectsDirectory();
+	/**
+	 * Project Content folder (UE: ProjectContentDir): `<project>/Content`. An old pack layout with
+	 * `<project>/Levels` and no `Content/Levels` returns `<project>`.
+	 */
+	[[nodiscard]] static std::filesystem::path ProjectContentDir(const std::filesystem::path& ProjectRoot);
 
-/// Unreal-like project Content folder: `<project>/Content`.
-/// If `<project>/Levels` exists without `Content/Levels` (old pack layout), returns `<project>`.
-[[nodiscard]] std::filesystem::path ProjectContentDirectory(
-    const std::filesystem::path& projectOrPackRoot);
-
-/// Resolve a content-relative key (`Materials/M_Floor.lmat`) under a project's Content/.
-/// Falls back to Engine assets via `ResolveAssetPath` (not other packs).
-[[nodiscard]] std::string ResolveContentAssetPath(const std::filesystem::path& projectOrPackRoot,
-                                                  const std::string& relativeOrKey);
-
+	/**
+	 * Resolves a content-relative key (`Materials/M_Floor.lmat`) under a project's Content/, falling back
+	 * to Engine content through ResolveAssetPath (never other projects).
+	 */
+	[[nodiscard]] static std::string ResolveContentAssetPath(
+		const std::filesystem::path& ProjectRoot, const std::string& RelativeOrKey);
+};

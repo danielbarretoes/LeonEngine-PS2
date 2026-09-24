@@ -159,7 +159,7 @@ bool Renderer::Initialize(const std::string& shaderDirectory) {
             return underDir.string();
         }
         // Fallback: executable-relative assets (POST_BUILD copy / packaged layout).
-        return ResolveAssetPath((fs::path("assets/Shaders") / name).string());
+        return FPaths::ResolveAssetPath((fs::path("assets/Shaders") / name).string());
     };
     if (!litShader_.LoadFromFiles(shaderFile("blinn_phong.vert"), shaderFile("blinn_phong.frag"))) {
         std::cerr << "Failed to load lit shaders from " << shaderDirectory << '\n';
@@ -370,9 +370,9 @@ void Renderer::SubmitSkeletalDraw(const SkeletalMesh& mesh, const glm::mat4& mod
     skeletalDraws_.push_back(std::move(item));
 }
 
-void Renderer::SubmitSkeletalDraw(const SkeletalMesh& mesh, const Transform& transform,
+void Renderer::SubmitSkeletalDraw(const SkeletalMesh& mesh, const FTransform& transform,
                                   const std::vector<glm::mat4>& boneMatrices) {
-    SubmitSkeletalDraw(mesh, transform.modelMatrix(), boneMatrices);
+    SubmitSkeletalDraw(mesh, transform.ModelMatrix(), boneMatrices);
 }
 
 void Renderer::SubmitStaticDraw(const StaticMesh& mesh, const glm::mat4& model,
@@ -433,7 +433,7 @@ void Renderer::updateLightsUbo(const Level& level) const {
     }
     for (int i = 0; i < block.pointCount; ++i) {
         const auto& light = points[static_cast<std::size_t>(i)];
-        block.pointPositions[i] = glm::vec4(light.transform.position, 1.0f);
+        block.pointPositions[i] = glm::vec4(light.transform.Position, 1.0f);
         block.pointColors[i] = glm::vec4(light.lightColor * light.intensity, 0.0f);
         block.pointRanges[i] = glm::vec4(light.range, 0.0f, 0.0f, 0.0f);
     }

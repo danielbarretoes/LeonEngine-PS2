@@ -32,7 +32,7 @@ bool Engine::Initialize(int width, int height, const char* title) {
         return false;
     }
 
-    const std::string shaderDir = ResolveAssetPath("assets/Shaders");
+    const std::string shaderDir = FPaths::ResolveAssetPath("assets/Shaders");
     if (!renderer_.Initialize(shaderDir)) {
         window_->Destroy();
         return false;

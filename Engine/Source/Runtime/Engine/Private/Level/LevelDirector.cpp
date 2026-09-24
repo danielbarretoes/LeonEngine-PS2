@@ -128,24 +128,24 @@ void LevelDirector::Update(Engine& engine, float deltaTime) {
     auto& objects = engine.GetLevel().StaticMeshes();
     for (const auto& spin : animation_.spins) {
         if (spin.meshIndex < objects.size()) {
-            objects[spin.meshIndex].transform.rotationDegrees.y +=
+            objects[spin.meshIndex].transform.RotationDegrees.y +=
                 spin.yawDegreesPerSec * deltaTime;
         }
     }
     for (const auto& bob : animation_.bobs) {
         if (bob.meshIndex < objects.size()) {
-            objects[bob.meshIndex].transform.position.y =
+            objects[bob.meshIndex].transform.Position.y =
                 bob.baseY + (bob.amplitude * (0.5f + (0.5f * std::sin(elapsed_ * bob.speed))));
         }
     }
     auto& points = engine.GetLevel().PointLights();
     for (const auto& orbit : animation_.orbits) {
         if (orbit.lightIndex < points.size()) {
-            points[orbit.lightIndex].transform.position.x =
+            points[orbit.lightIndex].transform.Position.x =
                 std::cos(elapsed_ * orbit.speed) * orbit.radius;
-            points[orbit.lightIndex].transform.position.z =
+            points[orbit.lightIndex].transform.Position.z =
                 std::sin(elapsed_ * orbit.speed) * orbit.radius;
-            points[orbit.lightIndex].transform.position.y =
+            points[orbit.lightIndex].transform.Position.y =
                 orbit.height + (orbit.heightAmp * std::sin((elapsed_ * orbit.speed) * 2.0f));
         }
     }

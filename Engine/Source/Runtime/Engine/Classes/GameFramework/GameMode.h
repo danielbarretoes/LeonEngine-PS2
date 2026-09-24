@@ -121,8 +121,8 @@ protected:
         }
         const int index = std::clamp(slot, 0, static_cast<int>(starts.size()) - 1);
         const PlayerStart& start = starts[static_cast<std::size_t>(index)];
-        outLocation = start.transform.position;
-        outYawDegrees = start.transform.rotationDegrees.y;
+        outLocation = start.transform.Position;
+        outYawDegrees = start.transform.RotationDegrees.y;
         return true;
     }
 

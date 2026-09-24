@@ -2,7 +2,7 @@
 #include <cctype>
 #include <filesystem>
 #include <iostream>
-#include "Misc/Ascii.h"
+#include "Misc/CString.h"
 #include "Misc/Paths.h"
 #include "Level/LevelCatalog.h"
 #include "Level/LeonLevelFormat.h"
@@ -106,8 +106,8 @@ bool LevelCatalog::ScanPack(const std::string& packDirectory) {
     }
 
     const std::string packName = packDir.filename().string();
-    // Unreal-like: `<pack>/Content/Levels` (via ProjectContentDirectory).
-    const std::filesystem::path levelsDir = ProjectContentDirectory(packDir) / "Levels";
+    // Unreal-like: `<pack>/Content/Levels` (via FPaths::ProjectContentDir).
+    const std::filesystem::path levelsDir = FPaths::ProjectContentDir(packDir) / "Levels";
 
     if (directoryHasLeonLevels(levelsDir)) {
         appendLevelsFromDirectory(entries_, levelsDir, packName);
@@ -148,7 +148,7 @@ bool LevelCatalog::ScanProjectPacks(const std::string& projectsRoot) {
             continue;
         }
         const std::filesystem::path levelsDir =
-            ProjectContentDirectory(packEntry.path()) / "Levels";
+            FPaths::ProjectContentDir(packEntry.path()) / "Levels";
 
         if (directoryHasLeonLevels(levelsDir)) {
             appendLevelsFromDirectory(entries_, levelsDir, packName);
@@ -182,17 +182,17 @@ std::size_t LevelCatalog::FindIndexByLevelKey(std::string_view key) const {
     if (key.empty()) {
         return entries_.size();
     }
-    const std::string needle = AsciiToLower(key);
+    const std::string needle = FCString::ToLower(key);
     for (std::size_t i = 0; i < entries_.size(); ++i) {
         const LevelEntry& e = entries_[i];
-        if (AsciiToLower(e.name) == needle) {
+        if (FCString::ToLower(e.name) == needle) {
             return i;
         }
-        const std::string stem = AsciiToLower(std::filesystem::path(e.path).stem().string());
+        const std::string stem = FCString::ToLower(std::filesystem::path(e.path).stem().string());
         if (stem == needle) {
             return i;
         }
-        if (AsciiToLower(e.path) == needle) {
+        if (FCString::ToLower(e.path) == needle) {
             return i;
         }
     }

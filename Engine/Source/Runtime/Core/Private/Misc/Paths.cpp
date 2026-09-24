@@ -16,101 +16,101 @@
 namespace {
 
 std::filesystem::path& ActiveContentRootStorage() {
-    static std::filesystem::path root;
-    return root;
+    static std::filesystem::path Root;
+    return Root;
 }
 
 /// Prefer the newest existing candidate so repo edits win over a stale POST_BUILD copy.
-std::string newestExisting(const std::vector<std::filesystem::path>& candidates) {
-    std::filesystem::path best;
-    std::filesystem::file_time_type bestTime{};
-    bool found = false;
-    for (const auto& path : candidates) {
-        std::error_code ec;
-        if (!std::filesystem::exists(path, ec) || ec) {
+std::string NewestExisting(const std::vector<std::filesystem::path>& Candidates) {
+    std::filesystem::path Best;
+    std::filesystem::file_time_type BestTime{};
+    bool bFound = false;
+    for (const auto& Path : Candidates) {
+        std::error_code Ec;
+        if (!std::filesystem::exists(Path, Ec) || Ec) {
             continue;
         }
-        const auto time = std::filesystem::last_write_time(path, ec);
-        if (ec) {
+        const auto Time = std::filesystem::last_write_time(Path, Ec);
+        if (Ec) {
             continue;
         }
-        if (!found || time > bestTime) {
-            best = path;
-            bestTime = time;
-            found = true;
+        if (!bFound || Time > BestTime) {
+            Best = Path;
+            BestTime = Time;
+            bFound = true;
         }
     }
-    if (!found) {
+    if (!bFound) {
         return {};
     }
-    return best.lexically_normal().string();
+    return Best.lexically_normal().string();
 }
 
-std::string newestExisting(std::initializer_list<std::filesystem::path> candidates) {
-    return newestExisting(std::vector<std::filesystem::path>(candidates));
+std::string NewestExisting(std::initializer_list<std::filesystem::path> Candidates) {
+    return NewestExisting(std::vector<std::filesystem::path>(Candidates));
 }
 
-std::filesystem::path stripAssetsPrefix(const std::filesystem::path& rel) {
-    const std::string s = rel.generic_string();
-    if (s.rfind("assets/", 0) == 0) {
-        return s.substr(7);
+std::filesystem::path StripAssetsPrefix(const std::filesystem::path& Rel) {
+    const std::string S = Rel.generic_string();
+    if (S.rfind("assets/", 0) == 0) {
+        return S.substr(7);
     }
-    if (s == "assets") {
+    if (S == "assets") {
         return {};
     }
-    return rel;
+    return Rel;
 }
 
-void appendActivePackCandidates(std::vector<std::filesystem::path>& out,
-                                const std::filesystem::path& rel,
-                                const std::filesystem::path& underAssets) {
-    const std::filesystem::path active = ActiveContentRootStorage();
-    if (active.empty()) {
+void AppendActivePackCandidates(std::vector<std::filesystem::path>& Out,
+                                const std::filesystem::path& Rel,
+                                const std::filesystem::path& UnderAssets) {
+    const std::filesystem::path Active = ActiveContentRootStorage();
+    if (Active.empty()) {
         return;
     }
-    const std::filesystem::path content = ProjectContentDirectory(active);
-    if (!content.empty()) {
-        out.push_back(content / rel);
-        if (!underAssets.empty()) {
-            out.push_back(content / "assets" / underAssets);
-            out.push_back(content / underAssets);
+    const std::filesystem::path Content = FPaths::ProjectContentDir(Active);
+    if (!Content.empty()) {
+        Out.push_back(Content / Rel);
+        if (!UnderAssets.empty()) {
+            Out.push_back(Content / "assets" / UnderAssets);
+            Out.push_back(Content / UnderAssets);
         }
     }
-    out.push_back(active / rel);
-    if (!underAssets.empty()) {
-        out.push_back(active / "assets" / underAssets);
+    Out.push_back(Active / Rel);
+    if (!UnderAssets.empty()) {
+        Out.push_back(Active / "assets" / UnderAssets);
     }
 }
 
 } // namespace
 
-void SetActiveContentRoot(const std::filesystem::path& projectOrPackRoot) {
-    std::error_code ec;
+void FPaths::SetActiveContentRoot(const std::filesystem::path& ProjectOrPackRoot) {
+    std::error_code Ec;
     ActiveContentRootStorage() =
-        projectOrPackRoot.empty() ? std::filesystem::path{}
-                                  : projectOrPackRoot.lexically_normal();
-    (void)ec;
+        ProjectOrPackRoot.empty() ? std::filesystem::path{}
+                                  : ProjectOrPackRoot.lexically_normal();
+    (void)Ec;
 }
 
-std::filesystem::path ActiveContentRoot() {
+std::filesystem::path FPaths::GetActiveContentRoot() {
     return ActiveContentRootStorage();
 }
 
-std::filesystem::path ExecutableDirectory() {
+std::filesystem::path FPaths::ExecutableDir() {
 #if defined(_WIN32)
-    std::vector<wchar_t> buffer(MAX_PATH);
+    std::vector<wchar_t> Buffer(MAX_PATH);
     for (;;) {
-        const DWORD length =
-            GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
-        if (length == 0) {
+        const DWORD Length =
+            GetModuleFileNameW(nullptr, Buffer.data(), static_cast<DWORD>(Buffer.size()));
+        if (Length == 0) {
             return std::filesystem::current_path();
         }
-        if (length < buffer.size()) {
-            return std::filesystem::path(buffer.data()).parent_path();
+        if (Length < Buffer.size()) {
+            return std::filesystem::path(Buffer.data()).parent_path();
         }
         // Truncated — grow and retry (long paths / Unicode).
-        buffer.resize(buffer.size() * 2);
-        if (buffer.size() > 32768) {
+        Buffer.resize(Buffer.size() * 2);
+        if (Buffer.size() > 32768) {
             return std::filesystem::current_path();
         }
     }
@@ -124,148 +124,148 @@ std::filesystem::path ExecutableDirectory() {
 #endif
 }
 
-std::filesystem::path ProjectContentDirectory(const std::filesystem::path& projectOrPackRoot) {
-    std::error_code ec;
-    const std::filesystem::path root = projectOrPackRoot.lexically_normal();
-    if (root.empty()) {
+std::filesystem::path FPaths::ProjectContentDir(const std::filesystem::path& ProjectOrPackRoot) {
+    std::error_code Ec;
+    const std::filesystem::path Root = ProjectOrPackRoot.lexically_normal();
+    if (Root.empty()) {
         return {};
     }
-    const std::filesystem::path content = root / "Content";
-    const bool contentLevels = std::filesystem::is_directory(content / "Levels", ec) && !ec;
-    const bool legacyLevels = std::filesystem::is_directory(root / "Levels", ec) && !ec;
-    if (contentLevels) {
-        return content;
+    const std::filesystem::path Content = Root / "Content";
+    const bool bContentLevels = std::filesystem::is_directory(Content / "Levels", Ec) && !Ec;
+    const bool bLegacyLevels = std::filesystem::is_directory(Root / "Levels", Ec) && !Ec;
+    if (bContentLevels) {
+        return Content;
     }
-    if (legacyLevels) {
-        return root;
+    if (bLegacyLevels) {
+        return Root;
     }
     // Default Unreal-like layout (folder may be created by the editor).
-    return content;
+    return Content;
 }
 
-std::string ResolveContentAssetPath(const std::filesystem::path& projectOrPackRoot,
-                                    const std::string& relativeOrKey) {
-    std::error_code ec;
-    if (relativeOrKey.empty()) {
+std::string FPaths::ResolveContentAssetPath(const std::filesystem::path& ProjectOrPackRoot,
+                                    const std::string& RelativeOrKey) {
+    std::error_code Ec;
+    if (RelativeOrKey.empty()) {
         return {};
     }
-    const std::filesystem::path key(relativeOrKey);
-    if (key.is_absolute() && std::filesystem::exists(key, ec) && !ec) {
-        return key.lexically_normal().string();
+    const std::filesystem::path Key(RelativeOrKey);
+    if (Key.is_absolute() && std::filesystem::exists(Key, Ec) && !Ec) {
+        return Key.lexically_normal().string();
     }
 
-    const std::filesystem::path content = ProjectContentDirectory(projectOrPackRoot);
-    if (!content.empty()) {
-        const std::filesystem::path inContent = (content / key).lexically_normal();
-        if (std::filesystem::exists(inContent, ec) && !ec) {
-            return inContent.string();
+    const std::filesystem::path Content = FPaths::ProjectContentDir(ProjectOrPackRoot);
+    if (!Content.empty()) {
+        const std::filesystem::path InContent = (Content / Key).lexically_normal();
+        if (std::filesystem::exists(InContent, Ec) && !Ec) {
+            return InContent.string();
         }
     }
 
-    if (!projectOrPackRoot.empty()) {
-        const std::filesystem::path inRoot = (projectOrPackRoot / key).lexically_normal();
-        if (std::filesystem::exists(inRoot, ec) && !ec) {
-            return inRoot.string();
+    if (!ProjectOrPackRoot.empty()) {
+        const std::filesystem::path InRoot = (ProjectOrPackRoot / Key).lexically_normal();
+        if (std::filesystem::exists(InRoot, Ec) && !Ec) {
+            return InRoot.string();
         }
     }
 
     // Engine / exe staging only — never another project's Content/.
-    return ResolveAssetPath(relativeOrKey);
+    return FPaths::ResolveAssetPath(RelativeOrKey);
 }
 
-std::string ResolveAssetPath(const std::string& relativePath) {
-    const std::filesystem::path exeDir = ExecutableDirectory();
-    const std::filesystem::path rel(relativePath);
-    const std::filesystem::path underAssets = stripAssetsPrefix(rel);
+std::string FPaths::ResolveAssetPath(const std::string& RelativePath) {
+    const std::filesystem::path ExeDir = FPaths::ExecutableDir();
+    const std::filesystem::path Rel(RelativePath);
+    const std::filesystem::path UnderAssets = StripAssetsPrefix(Rel);
 
     // Active pack Content wins outright (never lose to a newer Engine/staging copy).
     {
-        std::vector<std::filesystem::path> packCandidates;
-        appendActivePackCandidates(packCandidates, rel, underAssets);
-        const std::string packHit = newestExisting(packCandidates);
-        if (!packHit.empty()) {
-            return packHit;
+        std::vector<std::filesystem::path> PackCandidates;
+        AppendActivePackCandidates(PackCandidates, Rel, UnderAssets);
+        const std::string PackHit = NewestExisting(PackCandidates);
+        if (!PackHit.empty()) {
+            return PackHit;
         }
     }
 
-    std::vector<std::filesystem::path> candidates = {
-        exeDir / rel,
-        exeDir / "assets" / underAssets,
-        std::filesystem::path("assets") / underAssets,
-        rel,
-        std::filesystem::path("../") / rel,
-        std::filesystem::path("../../") / rel,
-        std::filesystem::path("../../../") / rel,
-        exeDir / ".." / rel,
-        exeDir / "../.." / rel,
-        exeDir / "../../.." / rel,
+    std::vector<std::filesystem::path> Candidates = {
+        ExeDir / Rel,
+        ExeDir / "assets" / UnderAssets,
+        std::filesystem::path("assets") / UnderAssets,
+        Rel,
+        std::filesystem::path("../") / Rel,
+        std::filesystem::path("../../") / Rel,
+        std::filesystem::path("../../../") / Rel,
+        ExeDir / ".." / Rel,
+        ExeDir / "../.." / Rel,
+        ExeDir / "../../.." / Rel,
     };
     // Engine content (Unreal layout): Engine/Content/<X>, shaders in Engine/Shaders/<X>.
     // Executables live in Engine/Binaries/<Platform>, so ../.. from the exe is Engine/.
-    const std::string underStr = underAssets.generic_string();
-    const bool isShader = underStr == "Shaders" || underStr.rfind("Shaders/", 0) == 0;
-    const std::filesystem::path engineRel =
-        isShader ? std::filesystem::path(underStr.size() > 8 ? underStr.substr(8) : std::string())
-                 : underAssets;
-    const std::vector<std::filesystem::path> engineDirs = {
+    const std::string UnderStr = UnderAssets.generic_string();
+    const bool bIsShader = UnderStr == "Shaders" || UnderStr.rfind("Shaders/", 0) == 0;
+    const std::filesystem::path EngineRel =
+        bIsShader ? std::filesystem::path(UnderStr.size() > 8 ? UnderStr.substr(8) : std::string())
+                 : UnderAssets;
+    const std::vector<std::filesystem::path> EngineDirs = {
         std::filesystem::path("Engine"),
         std::filesystem::path("../Engine"),
         std::filesystem::path("../../Engine"),
-        exeDir / "../..",
-        exeDir / "../../../Engine",
+        ExeDir / "../..",
+        ExeDir / "../../../Engine",
 #ifdef LEON_ENGINE_DIR
         std::filesystem::path(LEON_ENGINE_DIR),
 #endif
     };
-    for (const std::filesystem::path& engineDir : engineDirs) {
-        candidates.push_back(engineDir / (isShader ? "Shaders" : "Content") / engineRel);
+    for (const std::filesystem::path& EngineDir : EngineDirs) {
+        Candidates.push_back(EngineDir / (bIsShader ? "Shaders" : "Content") / EngineRel);
     }
 
-    std::string found = newestExisting(candidates);
-    if (!found.empty()) {
-        return found;
+    std::string Found = NewestExisting(Candidates);
+    if (!Found.empty()) {
+        return Found;
     }
-    return (exeDir / rel).lexically_normal().string();
+    return (ExeDir / Rel).lexically_normal().string();
 }
 
-std::string ResolveProjectsDirectory() {
+std::string FPaths::ResolveProjectsDir() {
     // Prefer a Projects/ whose parent is a real Leon root (Build/Dependencies.cmake +
     // Engine/). Avoid the thin POST_BUILD staging folder beside the editor exe
     // (e.g. Editor/build/Release/Projects) — that breaks game CMakeLists ../.. paths.
-    const std::filesystem::path exeDir = ExecutableDirectory();
-    std::error_code ec;
-    const auto isSdkProjects = [&](const std::filesystem::path& projectsDir) {
-        if (!std::filesystem::is_directory(projectsDir, ec) || ec) {
+    const std::filesystem::path ExeDir = FPaths::ExecutableDir();
+    std::error_code Ec;
+    const auto IsSdkProjects = [&](const std::filesystem::path& ProjectsDir) {
+        if (!std::filesystem::is_directory(ProjectsDir, Ec) || Ec) {
             return false;
         }
-        const std::filesystem::path root = projectsDir.parent_path();
-        return std::filesystem::is_regular_file(root / "Build" / "Dependencies.cmake", ec) &&
-               !ec && std::filesystem::is_directory(root / "Engine", ec) && !ec;
+        const std::filesystem::path Root = ProjectsDir.parent_path();
+        return std::filesystem::is_regular_file(Root / "Build" / "Dependencies.cmake", Ec) &&
+               !Ec && std::filesystem::is_directory(Root / "Engine", Ec) && !Ec;
     };
 
-    const std::filesystem::path candidates[] = {
-        exeDir / "Projects",                      // Dist/LeonEditor/Projects
-        exeDir / ".." / ".." / "Projects",        // Editor/build-fast → repo/Projects
-        exeDir / ".." / ".." / ".." / "Projects", // Editor/build/Release → repo/Projects
+    const std::filesystem::path Candidates[] = {
+        ExeDir / "Projects",                      // Dist/LeonEditor/Projects
+        ExeDir / ".." / ".." / "Projects",        // Editor/build-fast → repo/Projects
+        ExeDir / ".." / ".." / ".." / "Projects", // Editor/build/Release → repo/Projects
         std::filesystem::path("Projects"),
         std::filesystem::path("..") / "Projects",
         std::filesystem::path("..") / ".." / "Projects",
         std::filesystem::path("..") / ".." / ".." / "Projects",
     };
-    for (const auto& c : candidates) {
-        const std::filesystem::path p = c.lexically_normal();
-        if (isSdkProjects(p)) {
-            return p.string();
+    for (const auto& C : Candidates) {
+        const std::filesystem::path P = C.lexically_normal();
+        if (IsSdkProjects(P)) {
+            return P.string();
         }
     }
 
-    // Fallback without calling ResolveAssetPath("Projects") — that would recurse via Projects scan.
-    if (std::filesystem::is_directory(exeDir / "Projects", ec) && !ec) {
-        return (exeDir / "Projects").lexically_normal().string();
+    // Fallback without calling FPaths::ResolveAssetPath("Projects") — that would recurse via Projects scan.
+    if (std::filesystem::is_directory(ExeDir / "Projects", Ec) && !Ec) {
+        return (ExeDir / "Projects").lexically_normal().string();
     }
-    if (std::filesystem::is_directory("Projects", ec) && !ec) {
+    if (std::filesystem::is_directory("Projects", Ec) && !Ec) {
         return std::filesystem::path("Projects").lexically_normal().string();
     }
-    return (exeDir / "Projects").lexically_normal().string();
+    return (ExeDir / "Projects").lexically_normal().string();
 }
 

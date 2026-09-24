@@ -176,8 +176,8 @@ void PhysScene::SyncFromLevel(const Level& level) {
                 }
             }
         } else {
-            body.position = obj.transform.position;
-            HalfExtentsFromScale(obj.transform.scale, body.halfExtents.x, body.halfExtents.y,
+            body.position = obj.transform.Position;
+            HalfExtentsFromScale(obj.transform.Scale, body.halfExtents.x, body.halfExtents.y,
                                  body.halfExtents.z);
         }
         if (body.mass <= 0.0f) {
@@ -196,7 +196,7 @@ void PhysScene::SyncToLevel(Level& level) const {
         if (body.levelMeshIndex >= meshes.size()) {
             continue;
         }
-        meshes[body.levelMeshIndex].transform.position = body.position;
+        meshes[body.levelMeshIndex].transform.Position = body.position;
     }
 }
 

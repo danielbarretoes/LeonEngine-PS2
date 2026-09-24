@@ -8,7 +8,7 @@ BasicLight BasicLight::directional(glm::vec3 rotationDegrees, glm::vec3 lightCol
                                    float intensity) {
     BasicLight light;
     light.type = EBasicLight::Directional;
-    light.transform.rotationDegrees = rotationDegrees;
+    light.transform.RotationDegrees = rotationDegrees;
     light.lightColor = lightColor;
     light.intensity = intensity;
     light.castShadows = true;
@@ -19,7 +19,7 @@ BasicLight BasicLight::point(glm::vec3 position, glm::vec3 lightColor, float int
                              float range) {
     BasicLight light;
     light.type = EBasicLight::Point;
-    light.transform.position = position;
+    light.transform.Position = position;
     light.lightColor = lightColor;
     light.intensity = intensity;
     light.range = range;

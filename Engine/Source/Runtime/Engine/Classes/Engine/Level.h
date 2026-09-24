@@ -31,7 +31,7 @@ enum class EComponentMobility : std::uint8_t {
 ///   3) mesh MTL materials
 ///   4) material (engine default checker when procedural mesh has no MTL)
 struct StaticMeshComponent {
-    Transform transform;
+    FTransform transform;
     std::shared_ptr<StaticMesh> mesh;
     Material material;
     std::vector<Material> materials; // optional per-slot overrides
@@ -80,7 +80,7 @@ struct StaticMeshComponent {
     float bobSpeed = 1.0f;
 
     [[nodiscard]] glm::mat4 EffectiveModelMatrix() const {
-        return bUseModelMatrixOverride ? modelMatrixOverride : transform.modelMatrix();
+        return bUseModelMatrixOverride ? modelMatrixOverride : transform.ModelMatrix();
     }
 
     [[nodiscard]] bool HasPhysicsBody() const { return collisionEnabled || simulatePhysics; }
@@ -96,14 +96,14 @@ struct StaticMeshComponent {
 
 /// Unreal-like PlayerStart — spawn transform for GameMode-possessed pawns (not a drawable mesh).
 struct PlayerStart {
-    Transform transform{};
+    FTransform transform{};
     /// Session-stable editor selection id (0 = unassigned). Not serialized.
     std::uint64_t editorId = 0;
 };
 
 /// Interact / trigger volume (POD). Overlap tested in gameplay from position + interactRadius.
 struct TriggerVolume {
-    Transform transform{};
+    FTransform transform{};
     float interactRadius = 2.f;
     int interactCost = 0;
     std::string payload; // pack-defined e.g. Door, WallBuy:M14, Perk:Jugg
@@ -114,7 +114,7 @@ struct TriggerVolume {
 
 /// Damage volume (POD). AABB from transform.position and abs(scale) * 0.5.
 struct PainCausingVolume {
-    Transform transform{}; // position + scale as half-extents box (full size = abs(scale))
+    FTransform transform{}; // position + scale as half-extents box (full size = abs(scale))
     float damagePerSecond = 12.f;
     float damageInterval = 0.35f;
     std::string tag;
@@ -123,7 +123,7 @@ struct PainCausingVolume {
 
 /// AI spawn marker (POD — not a drawable mesh).
 struct AISpawnPoint {
-    Transform transform{};
+    FTransform transform{};
     std::string tag;
     std::uint64_t editorId = 0;
 };

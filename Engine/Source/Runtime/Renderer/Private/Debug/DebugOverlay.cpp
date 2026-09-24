@@ -254,8 +254,8 @@ void appendThickScreenLine(std::vector<DrawVert>& tris, float x0, float y0, floa
 } // namespace
 
 bool DebugOverlay::Initialize(const std::string& /*shaderDirectory*/) {
-    const std::string vert = ResolveAssetPath("assets/Shaders/debug_overlay.vert");
-    const std::string frag = ResolveAssetPath("assets/Shaders/debug_overlay.frag");
+    const std::string vert = FPaths::ResolveAssetPath("assets/Shaders/debug_overlay.vert");
+    const std::string frag = FPaths::ResolveAssetPath("assets/Shaders/debug_overlay.frag");
     if (!shader_.LoadFromFiles(vert, frag)) {
         std::cerr << "Failed to load debug overlay shaders\n";
         return false;

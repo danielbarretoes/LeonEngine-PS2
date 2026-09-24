@@ -141,14 +141,14 @@ bool SkeletalMeshComponent::GetAttachmentWorldMatrix(std::size_t attachmentIndex
     if (!GetBoneModelMatrix(att.boneName, boneModel)) {
         return false;
     }
-    outWorld = GetComponentTransform() * boneModel * att.relative.modelMatrix();
+    outWorld = GetComponentTransform() * boneModel * att.relative.ModelMatrix();
     return true;
 }
 
 bool SkeletalMeshComponent::LoadFromFbx(const std::string& meshFbxPath,
                                         const std::string& runFbxPath, float fitHeight) {
     SkeletalMeshData data;
-    const std::string meshPath = ResolveAssetPath(meshFbxPath);
+    const std::string meshPath = FPaths::ResolveAssetPath(meshFbxPath);
     if (!LoadSkeletalMeshFromFbx(meshPath, data)) {
         std::cerr << "SkeletalMeshComponent: failed to load '" << meshPath << "'\n";
         return false;
@@ -173,7 +173,7 @@ bool SkeletalMeshComponent::LoadFromFbx(const std::string& meshFbxPath,
     mesh->GetMaterial().syncRoughnessFromShininess();
 
     AnimSequence& run = GetOrCreateSequence("Running");
-    const std::string runPath = ResolveAssetPath(runFbxPath);
+    const std::string runPath = FPaths::ResolveAssetPath(runFbxPath);
     if (!LoadAnimSequenceFromFbx(runPath, mesh->GetSkeleton(), run)) {
         std::cerr << "SkeletalMeshComponent: failed to load run AnimSequence '" << runPath << "'\n";
     }
@@ -189,7 +189,7 @@ bool SkeletalMeshComponent::LoadFromFbx(const std::string& meshFbxPath,
 }
 
 bool SkeletalMeshComponent::LoadFromCooked(Engine& engine, const std::string& characterAssetPath) {
-    const std::string characterPath = ResolveAssetPath(characterAssetPath);
+    const std::string characterPath = FPaths::ResolveAssetPath(characterAssetPath);
     CharacterVisualDesc desc;
     if (!LoadCharacterVisual(characterPath, desc)) {
         std::cerr << "SkeletalMeshComponent: failed to load character '" << characterPath << "'\n";

@@ -12,18 +12,18 @@ TEST_CASE("Level stores meshes PlayerStarts and tags", "[level][container]") {
     Level level;
     StaticMeshComponent mesh{};
     mesh.tag = "player";
-    mesh.transform.position = {1.0f, 2.0f, 3.0f};
+    mesh.transform.Position = {1.0f, 2.0f, 3.0f};
     level.AddStaticMesh(std::move(mesh));
 
     PlayerStart start{};
-    start.transform.position = {5.0f, 0.0f, -2.0f};
+    start.transform.Position = {5.0f, 0.0f, -2.0f};
     level.AddPlayerStart(start);
 
     REQUIRE(level.StaticMeshes().size() == 1);
     REQUIRE(level.FindStaticMeshIndexByTag("player") == 0);
     REQUIRE(level.FindStaticMeshIndexByTag("missing") == Level::npos);
     REQUIRE(level.FindPlayerStart() != nullptr);
-    REQUIRE_THAT(level.FindPlayerStart()->transform.position.x, WithinAbs(5.0f, 1.0e-5f));
+    REQUIRE_THAT(level.FindPlayerStart()->transform.Position.x, WithinAbs(5.0f, 1.0e-5f));
 
     level.Clear();
     REQUIRE(level.StaticMeshes().empty());

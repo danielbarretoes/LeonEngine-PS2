@@ -9,9 +9,9 @@
 namespace {
 
 [[nodiscard]] bool PointInPainAabb(const glm::vec3& point, const PainCausingVolume& vol) {
-    const glm::vec3 half = glm::abs(vol.transform.scale) * 0.5f;
-    const glm::vec3 min = vol.transform.position - half;
-    const glm::vec3 max = vol.transform.position + half;
+    const glm::vec3 half = glm::abs(vol.transform.Scale) * 0.5f;
+    const glm::vec3 min = vol.transform.Position - half;
+    const glm::vec3 max = vol.transform.Position + half;
     return point.x >= min.x && point.x <= max.x && point.y >= min.y && point.y <= max.y &&
            point.z >= min.z && point.z <= max.z;
 }
@@ -82,8 +82,8 @@ std::size_t FindBestTriggerVolume(const std::vector<TriggerVolume>& volumes, con
         const TriggerVolume& vol = volumes[i];
         const float radius = vol.interactRadius > 0.0f ? vol.interactRadius : maxDist;
         const float limit = radius < maxDist ? radius : maxDist;
-        const glm::vec3 delta{feet.x - vol.transform.position.x, 0.0f,
-                              feet.z - vol.transform.position.z};
+        const glm::vec3 delta{feet.x - vol.transform.Position.x, 0.0f,
+                              feet.z - vol.transform.Position.z};
         const float dist = glm::length(delta);
         if (dist < bestDist && dist <= limit) {
             bestDist = dist;

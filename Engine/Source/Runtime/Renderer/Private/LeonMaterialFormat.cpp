@@ -4,7 +4,7 @@
 #include <cctype>
 #include <fstream>
 #include <iostream>
-#include "Misc/FileIO.h"
+#include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "ResourceCache.h"
 #include <sstream>
@@ -128,13 +128,13 @@ void ApplyTextureKey(ResourceCache& resources, Material& material, const std::st
         if (value == "checker") {
             material.albedoMap = resources.CheckerTexture(64);
         } else {
-            material.albedoMap = resources.LoadTexture(ResolveAssetPath(value));
+            material.albedoMap = resources.LoadTexture(FPaths::ResolveAssetPath(value));
         }
     } else if (k == "normalmap") {
         if (value == "bump") {
             material.normalMap = resources.BumpNormalTexture(256);
         } else {
-            material.normalMap = resources.LoadTexture(ResolveAssetPath(value));
+            material.normalMap = resources.LoadTexture(FPaths::ResolveAssetPath(value));
         }
     }
 }
@@ -316,7 +316,7 @@ bool SaveLeonMaterialFile(const std::string& path, const std::string& name,
     out << "[Textures]\n";
     out << "BaseColorMap=" << baseColorMapPath << '\n';
     out << "NormalMap=" << normalMapPath << '\n';
-    if (!WriteTextFileAtomic(path, out.str())) {
+    if (!FFileHelper::WriteTextFileAtomic(path, out.str())) {
         std::cerr << "LeonMaterial: cannot write " << path << '\n';
         return false;
     }

@@ -38,7 +38,7 @@ constexpr float kDefaultLightSourceAngleDegrees = 0.5357f;
 
 /// Unreal-like DirectionalLight: transform drives aim; no raw direction field.
 struct DirectionalLight {
-    Transform transform{{0.0f, 0.0f, 0.0f}, {60.3f, 142.1f, 0.0f}, {1.0f, 1.0f, 1.0f}};
+    FTransform transform{{0.0f, 0.0f, 0.0f}, {60.3f, 142.1f, 0.0f}, {1.0f, 1.0f, 1.0f}};
     glm::vec3 lightColor{1.0f, 1.0f, 1.0f};
     float intensity = 1.0f;
     bool castShadows = true;
@@ -47,13 +47,13 @@ struct DirectionalLight {
     std::uint64_t editorId = 0;
 
     [[nodiscard]] glm::vec3 GetDirection() const {
-        return lightDirectionFromRotation(transform.rotationDegrees);
+        return lightDirectionFromRotation(transform.RotationDegrees);
     }
 };
 
 /// Unreal-like PointLight: location from transform; attenuation `range`.
 struct PointLight {
-    Transform transform{{0.0f, 2.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}};
+    FTransform transform{{0.0f, 2.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}};
     glm::vec3 lightColor{1.0f, 1.0f, 1.0f};
     float intensity = 1.0f;
     float range = 8.0f;

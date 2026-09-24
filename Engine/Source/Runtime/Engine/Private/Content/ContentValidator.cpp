@@ -94,7 +94,7 @@ void validateSurfaceFields(ValidationReport& report, const nlohmann::json& spec,
     if (spec.contains("albedoMap") && spec["albedoMap"].is_string()) {
         const std::string key = spec["albedoMap"].get<std::string>();
         if (key != "checker") {
-            const std::string resolved = ResolveAssetPath(key);
+            const std::string resolved = FPaths::ResolveAssetPath(key);
             if (!std::filesystem::exists(resolved)) {
                 report.warning(where + ".albedoMap", "texture not found: " + key);
             }
@@ -103,7 +103,7 @@ void validateSurfaceFields(ValidationReport& report, const nlohmann::json& spec,
     if (spec.contains("normalMap") && spec["normalMap"].is_string()) {
         const std::string key = spec["normalMap"].get<std::string>();
         if (key != "bump") {
-            const std::string resolved = ResolveAssetPath(key);
+            const std::string resolved = FPaths::ResolveAssetPath(key);
             if (!std::filesystem::exists(resolved)) {
                 report.warning(where + ".normalMap", "texture not found: " + key);
             }
@@ -302,7 +302,7 @@ ValidationReport ValidateMaterialFile(const std::string& path) {
         if (mapPath.empty() || mapPath == "checker" || mapPath == "bump") {
             return;
         }
-        const std::string resolved = ResolveAssetPath(mapPath);
+        const std::string resolved = FPaths::ResolveAssetPath(mapPath);
         std::error_code ec;
         if (resolved.empty() || !std::filesystem::exists(resolved, ec) || ec) {
             report.warning(where, "texture not found: " + mapPath);
@@ -321,7 +321,7 @@ ValidationReport ValidateLevelDocument(const LevelDocument& doc, const std::stri
     // actor list is valid (blank / lights-only levels).
     if (!doc.environmentPath.empty()) {
         std::error_code ec;
-        if (!std::filesystem::exists(ResolveAssetPath(doc.environmentPath), ec) || ec) {
+        if (!std::filesystem::exists(FPaths::ResolveAssetPath(doc.environmentPath), ec) || ec) {
             report.warning("environment", "HDR file not found: " + doc.environmentPath);
         }
     }

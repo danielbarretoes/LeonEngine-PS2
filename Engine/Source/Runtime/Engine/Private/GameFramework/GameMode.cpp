@@ -50,9 +50,9 @@ float GameMode::EstimateFloorY(const Level& level) {
     if (starts.empty()) {
         return 0.0f;
     }
-    float y = starts.front().transform.position.y;
+    float y = starts.front().transform.Position.y;
     for (const PlayerStart& start : starts) {
-        y = std::min(y, start.transform.position.y);
+        y = std::min(y, start.transform.Position.y);
     }
     return y;
 }
@@ -63,8 +63,8 @@ float GameMode::EstimateWalkBounds(const Level& level) {
         if (!mesh.HasPhysicsBody() || mesh.simulatePhysics) {
             continue;
         }
-        const float hx = std::abs(mesh.transform.scale.x) * 0.5f;
-        const float hz = std::abs(mesh.transform.scale.z) * 0.5f;
+        const float hx = std::abs(mesh.transform.Scale.x) * 0.5f;
+        const float hz = std::abs(mesh.transform.Scale.z) * 0.5f;
         maxExtent = std::max(maxExtent, std::max(hx, hz));
     }
     return std::clamp(maxExtent - 1.0f, 20.0f, 120.0f);

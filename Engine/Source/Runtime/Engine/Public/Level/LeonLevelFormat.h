@@ -169,7 +169,7 @@ struct LevelDocument {
 
 /// Resolve a content-relative key (`Materials/M_Floor.lmat`) for a level under `…/Content/Levels/`
 /// (or legacy `…/Levels/`).
-/// Prefers `<pack>/key`, then global `ResolveAssetPath`.
+/// Prefers `<pack>/key`, then global `FPaths::ResolveAssetPath`.
 [[nodiscard]] std::string ResolveLevelAssetPath(const std::string& levelPath,
                                                 const std::string& relativeOrKey);
 

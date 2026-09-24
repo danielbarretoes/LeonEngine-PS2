@@ -76,7 +76,7 @@ public:
     /// Queue a skinned mesh draw for the next `DrawScene` (cleared after DrawScene).
     void SubmitSkeletalDraw(const SkeletalMesh& mesh, const glm::mat4& model,
                             const std::vector<glm::mat4>& boneMatrices);
-    void SubmitSkeletalDraw(const SkeletalMesh& mesh, const Transform& transform,
+    void SubmitSkeletalDraw(const SkeletalMesh& mesh, const FTransform& transform,
                             const std::vector<glm::mat4>& boneMatrices);
 
     /// Queue a rigid static mesh with an explicit model matrix (attachments, etc.).

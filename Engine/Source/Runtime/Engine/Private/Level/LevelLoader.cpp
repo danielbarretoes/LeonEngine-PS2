@@ -27,7 +27,7 @@ void ApplyFitHeight(StaticMeshComponent& object, float fitHeight) {
     }
 
     // Existing position is kept as an offset after auto scale / ground align.
-    const glm::vec3 positionOffset = object.transform.position;
+    const glm::vec3 positionOffset = object.transform.Position;
 
     const glm::vec3 mn = object.mesh->LocalMin();
     const glm::vec3 mx = object.mesh->LocalMax();
@@ -36,11 +36,11 @@ void ApplyFitHeight(StaticMeshComponent& object, float fitHeight) {
     const float scale = fitHeight / height;
     const glm::vec3 center = (mn + mx) * 0.5f;
 
-    object.transform.scale = {scale, scale, scale};
+    object.transform.Scale = {scale, scale, scale};
     constexpr float kGroundEpsilon = 0.008f;
     const glm::vec3 grounded{(-center.x) * scale, ((-mn.y) * scale) + kGroundEpsilon,
                              (-center.z) * scale};
-    object.transform.position = grounded + positionOffset;
+    object.transform.Position = grounded + positionOffset;
 }
 
 bool LoadLevelFile(Engine& engine, const std::string& levelPath, LevelAnimation* outAnim) {

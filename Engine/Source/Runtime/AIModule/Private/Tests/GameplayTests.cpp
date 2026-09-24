@@ -284,8 +284,8 @@ TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "
     plate.tag = NavTags::Blocker;
     plate.collisionEnabled = true;
     plate.editorClass = "Cube";
-    plate.transform.position = {0.0f, 0.12f, 0.0f};
-    plate.transform.scale = {1.8f, 0.2f, 1.8f};
+    plate.transform.Position = {0.0f, 0.12f, 0.0f};
+    plate.transform.Scale = {1.8f, 0.2f, 1.8f};
     level.StaticMeshes().push_back(std::move(plate));
 
     BodyInstance plateBody{};
@@ -400,8 +400,8 @@ TEST_CASE("DefaultGameMode Matches empty or Default id", "[gameplay][gamemode]")
 TEST_CASE("Actor SyncTransformToLevel writes linked mesh", "[gameplay][actor][sync]") {
     Level level;
     StaticMeshComponent mesh{};
-    mesh.transform.position = {0.0f, 0.0f, 0.0f};
-    mesh.transform.rotationDegrees = {0.0f, 0.0f, 0.0f};
+    mesh.transform.Position = {0.0f, 0.0f, 0.0f};
+    mesh.transform.RotationDegrees = {0.0f, 0.0f, 0.0f};
     level.AddStaticMesh(std::move(mesh));
 
     World world;
@@ -410,10 +410,10 @@ TEST_CASE("Actor SyncTransformToLevel writes linked mesh", "[gameplay][actor][sy
     actor->SetActorLocationAndRotation({3.0f, 1.5f, -2.0f}, 90.0f);
     actor->SyncTransformToLevel(level);
 
-    REQUIRE_THAT(level.StaticMeshes()[0].transform.position.x, WithinAbs(3.0f, 1.0e-5f));
-    REQUIRE_THAT(level.StaticMeshes()[0].transform.position.y, WithinAbs(1.5f, 1.0e-5f));
-    REQUIRE_THAT(level.StaticMeshes()[0].transform.position.z, WithinAbs(-2.0f, 1.0e-5f));
-    REQUIRE_THAT(level.StaticMeshes()[0].transform.rotationDegrees.y, WithinAbs(90.0f, 1.0e-5f));
+    REQUIRE_THAT(level.StaticMeshes()[0].transform.Position.x, WithinAbs(3.0f, 1.0e-5f));
+    REQUIRE_THAT(level.StaticMeshes()[0].transform.Position.y, WithinAbs(1.5f, 1.0e-5f));
+    REQUIRE_THAT(level.StaticMeshes()[0].transform.Position.z, WithinAbs(-2.0f, 1.0e-5f));
+    REQUIRE_THAT(level.StaticMeshes()[0].transform.RotationDegrees.y, WithinAbs(90.0f, 1.0e-5f));
 }
 
 TEST_CASE("World TickGameplayFrame syncs Character to Level mesh", "[gameplay][world][sync]") {
@@ -431,9 +431,9 @@ TEST_CASE("World TickGameplayFrame syncs Character to Level mesh", "[gameplay][w
     frame.level = &level;
     world.TickGameplayFrame(frame);
 
-    REQUIRE_THAT(level.StaticMeshes()[0].transform.position.x, WithinAbs(1.0f, 1.0e-4f));
-    REQUIRE_THAT(level.StaticMeshes()[0].transform.position.z, WithinAbs(2.0f, 1.0e-4f));
-    REQUIRE_THAT(level.StaticMeshes()[0].transform.rotationDegrees.y, WithinAbs(45.0f, 1.0e-4f));
+    REQUIRE_THAT(level.StaticMeshes()[0].transform.Position.x, WithinAbs(1.0f, 1.0e-4f));
+    REQUIRE_THAT(level.StaticMeshes()[0].transform.Position.z, WithinAbs(2.0f, 1.0e-4f));
+    REQUIRE_THAT(level.StaticMeshes()[0].transform.RotationDegrees.y, WithinAbs(45.0f, 1.0e-4f));
 }
 
 TEST_CASE("ActorComponent RegisterComponent and CreateDefaultSubobject tick",

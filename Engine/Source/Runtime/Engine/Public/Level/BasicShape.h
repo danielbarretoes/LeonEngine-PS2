@@ -20,7 +20,7 @@ enum class EBasicShape {
 /// Placeable basic shape: transform + material + optional mesh options.
 struct BasicShape {
     EBasicShape type = EBasicShape::Cube;
-    Transform transform{};
+    FTransform transform{};
     Material material{};
     /// When false, `MakeStaticMesh` uses `ResourceCache::DefaultMaterial()` (checker).
     bool hasCustomMaterial = false;
@@ -29,13 +29,13 @@ struct BasicShape {
     int sphereSegments = 24;
     int sphereRings = 16;
 
-    [[nodiscard]] static BasicShape cube(Transform transform = {}, Material material = {},
+    [[nodiscard]] static BasicShape cube(FTransform transform = {}, Material material = {},
                                          bool hasMaterial = false);
-    [[nodiscard]] static BasicShape sphere(Transform transform = {}, Material material = {},
+    [[nodiscard]] static BasicShape sphere(FTransform transform = {}, Material material = {},
                                            bool hasMaterial = false, int segments = 24,
                                            int rings = 16);
     /// `size` sets uniform XZ scale (Unreal-like ground plane extent).
-    [[nodiscard]] static BasicShape plane(float size = 1.0f, Transform transform = {},
+    [[nodiscard]] static BasicShape plane(float size = 1.0f, FTransform transform = {},
                                           Material material = {}, bool hasMaterial = false);
 
     /// Build a Level `StaticMeshComponent` (mesh + transform + material override).

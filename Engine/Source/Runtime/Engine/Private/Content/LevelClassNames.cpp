@@ -1,10 +1,10 @@
-#include "Misc/Ascii.h"
+#include "Misc/CString.h"
 #include "Level/BasicLight.h"
 #include "Level/BasicShape.h"
 
 
 bool tryParseBasicShapeName(std::string_view name, EBasicShape& out) {
-    const std::string key = AsciiToLower(name);
+    const std::string key = FCString::ToLower(name);
     if (key == "cube") {
         out = EBasicShape::Cube;
         return true;
@@ -21,15 +21,15 @@ bool tryParseBasicShapeName(std::string_view name, EBasicShape& out) {
 }
 
 bool isBlockingVolumeName(std::string_view name) {
-    return AsciiToLower(name) == "blockingvolume";
+    return FCString::ToLower(name) == "blockingvolume";
 }
 
 bool isPlayerStartName(std::string_view name) {
-    return AsciiToLower(name) == "playerstart";
+    return FCString::ToLower(name) == "playerstart";
 }
 
 bool tryParseBasicLightName(std::string_view name, EBasicLight& out) {
-    const std::string key = AsciiToLower(name);
+    const std::string key = FCString::ToLower(name);
     if (key == "directionallight" || key == "directional" || key == "dirlight") {
         out = EBasicLight::Directional;
         return true;

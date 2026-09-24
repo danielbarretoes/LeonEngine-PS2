@@ -4,7 +4,7 @@
 #include <filesystem>
 #include "Engine/GameEngine.h"
 #include "GameplayMinimal.h"
-#include "Misc/Ascii.h"
+#include "Misc/CString.h"
 #include "Level/LeonLevelFormat.h"
 #include "Level/LevelLoader.h"
 #include "Engine/NetDriver.h"

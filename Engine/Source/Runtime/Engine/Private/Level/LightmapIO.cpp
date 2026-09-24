@@ -73,7 +73,7 @@ std::filesystem::path ResolveLightmapAbsolutePath(const std::string& levelPath,
         }
         return besideLevel;
     }
-    const std::string resolved = ResolveAssetPath(lightmapRel);
+    const std::string resolved = FPaths::ResolveAssetPath(lightmapRel);
     return resolved.empty() ? rel : std::filesystem::path(resolved);
 }
 

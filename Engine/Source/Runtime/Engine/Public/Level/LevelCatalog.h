@@ -22,7 +22,7 @@ public:
     bool ScanProjectPacks(const std::string& projectsRoot);
 
     /// Scan one pack (`Projects/<pack>/`) for `Content/Levels/*.llev`
-    /// (also `<pack>/Levels` via ProjectContentDirectory pre-Content layout).
+    /// (also `<pack>/Levels` via FPaths::ProjectContentDir pre-Content layout).
     bool ScanPack(const std::string& packDirectory);
 
     /// First catalog index whose `gameMode` or `pack` equals `id`, or `NumEntries()` if none.

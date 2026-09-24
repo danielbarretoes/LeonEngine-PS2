@@ -28,7 +28,7 @@ struct SkelMeshAttachment {
     Material material{};
     bool materialOverride = true;
     /// Bone-local TRS applied after the bone model matrix.
-    Transform relative{};
+    FTransform relative{};
     /// When true, `worldMatrixOverride` replaces `component * bone * relative`.
     bool bOverrideWorldMatrix = false;
     glm::mat4 worldMatrixOverride{1.0f};

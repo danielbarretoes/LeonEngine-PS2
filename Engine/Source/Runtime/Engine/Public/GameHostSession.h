@@ -22,7 +22,7 @@ public:
 
     /// Flow: content root → LoadPack → travel/browser callbacks → registerModes → first Sync via Tick.
     /// `preferredLevelKey` empty → pack `defaultLevel` (shipping). Editor PIE passes the open level key.
-    /// `packRootOverride` empty → `ProjectPack::Resolve`; Editor passes the open project path.
+    /// `packRootOverride` empty → `FProjectDescriptor::Resolve`; Editor passes the open project path.
     [[nodiscard]] bool Start(Engine& engine, const char* packName, RegisterModesFn registerModes,
                              std::string_view preferredLevelKey = {},
                              std::string_view packRootOverride = {});

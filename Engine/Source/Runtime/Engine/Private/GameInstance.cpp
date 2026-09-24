@@ -2,7 +2,7 @@
 
 #include <filesystem>
 #include <iostream>
-#include "Misc/Ascii.h"
+#include "Misc/CString.h"
 #include "Engine/GameEngine.h"
 #include "Level/LeonLevelFormat.h"
 #include "Level/LevelLoader.h"
@@ -21,21 +21,21 @@ namespace {
         return false;
     }
 
-    const std::string needle = AsciiToLower(levelKey);
+    const std::string needle = FCString::ToLower(levelKey);
     std::error_code ec;
     for (const auto& entry : fs::directory_iterator(levelsDir, ec)) {
         if (ec || !entry.is_regular_file()) {
             continue;
         }
         const fs::path path = entry.path();
-        if (AsciiToLower(path.extension().string()) != ".llev") {
+        if (FCString::ToLower(path.extension().string()) != ".llev") {
             continue;
         }
-        const std::string stem = AsciiToLower(path.stem().string());
-        bool match = (stem == needle) || (AsciiToLower(path.filename().string()) == needle);
+        const std::string stem = FCString::ToLower(path.stem().string());
+        bool match = (stem == needle) || (FCString::ToLower(path.filename().string()) == needle);
         if (!match) {
             LevelDocument doc;
-            if (LoadLeonLevelFile(path.string(), doc) && AsciiToLower(doc.name) == needle) {
+            if (LoadLeonLevelFile(path.string(), doc) && FCString::ToLower(doc.name) == needle) {
                 match = true;
             }
         }

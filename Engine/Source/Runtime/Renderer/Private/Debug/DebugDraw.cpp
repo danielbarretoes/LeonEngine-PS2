@@ -13,8 +13,8 @@
 
 
 bool DebugDraw::Initialize(const std::string& /*shaderDirectory*/) {
-    const std::string vert = ResolveAssetPath("assets/Shaders/debug_line.vert");
-    const std::string frag = ResolveAssetPath("assets/Shaders/debug_line.frag");
+    const std::string vert = FPaths::ResolveAssetPath("assets/Shaders/debug_line.vert");
+    const std::string frag = FPaths::ResolveAssetPath("assets/Shaders/debug_line.frag");
     if (!shader_.LoadFromFiles(vert, frag)) {
         std::cerr << "Failed to load debug line shaders\n";
         return false;

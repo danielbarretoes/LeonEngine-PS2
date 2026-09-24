@@ -12,10 +12,10 @@ enum class EBasicLight {
     Point,
 };
 
-/// Placeable light: Transform + Unreal Details fields (intensity, lightColor, castShadows, …).
+/// Placeable light: FTransform + Unreal Details fields (intensity, lightColor, castShadows, …).
 struct BasicLight {
     EBasicLight type = EBasicLight::Directional;
-    Transform transform{};
+    FTransform transform{};
     glm::vec3 lightColor{1.0f, 1.0f, 1.0f};
     float intensity = 1.0f;
     bool castShadows = true;

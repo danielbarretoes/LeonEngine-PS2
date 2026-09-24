@@ -7,24 +7,24 @@
 
 namespace {
 
-[[nodiscard]] Transform decomposeApprox(const glm::mat4& m) {
-    Transform t{};
-    t.position = glm::vec3(m[3]);
-    t.scale.x = glm::length(glm::vec3(m[0]));
-    t.scale.y = glm::length(glm::vec3(m[1]));
-    t.scale.z = glm::length(glm::vec3(m[2]));
+[[nodiscard]] FTransform decomposeApprox(const glm::mat4& m) {
+    FTransform t{};
+    t.Position = glm::vec3(m[3]);
+    t.Scale.x = glm::length(glm::vec3(m[0]));
+    t.Scale.y = glm::length(glm::vec3(m[1]));
+    t.Scale.z = glm::length(glm::vec3(m[2]));
     constexpr float kEps = 1.0e-6f;
     const glm::vec3 col0 =
-        t.scale.x > kEps ? glm::vec3(m[0]) / t.scale.x : glm::vec3(1.0f, 0.0f, 0.0f);
+        t.Scale.x > kEps ? glm::vec3(m[0]) / t.Scale.x : glm::vec3(1.0f, 0.0f, 0.0f);
     const glm::vec3 col1 =
-        t.scale.y > kEps ? glm::vec3(m[1]) / t.scale.y : glm::vec3(0.0f, 1.0f, 0.0f);
+        t.Scale.y > kEps ? glm::vec3(m[1]) / t.Scale.y : glm::vec3(0.0f, 1.0f, 0.0f);
     const glm::vec3 col2 =
-        t.scale.z > kEps ? glm::vec3(m[2]) / t.scale.z : glm::vec3(0.0f, 0.0f, 1.0f);
-    // XYZ Euler extraction (degrees) matching Transform::modelMatrix order Rx*Ry*Rz.
-    t.rotationDegrees.y = std::atan2(-col0.z, col2.z) * (180.0f / 3.14159265358979323846f);
-    t.rotationDegrees.x =
+        t.Scale.z > kEps ? glm::vec3(m[2]) / t.Scale.z : glm::vec3(0.0f, 0.0f, 1.0f);
+    // XYZ Euler extraction (degrees) matching FTransform::modelMatrix order Rx*Ry*Rz.
+    t.RotationDegrees.y = std::atan2(-col0.z, col2.z) * (180.0f / 3.14159265358979323846f);
+    t.RotationDegrees.x =
         std::asin(std::clamp(col1.z, -1.0f, 1.0f)) * (180.0f / 3.14159265358979323846f);
-    t.rotationDegrees.z = std::atan2(-col1.x, col1.y) * (180.0f / 3.14159265358979323846f);
+    t.RotationDegrees.z = std::atan2(-col1.x, col1.y) * (180.0f / 3.14159265358979323846f);
     (void)col2;
     return t;
 }
@@ -41,11 +41,11 @@ SceneComponent::~SceneComponent() {
     DetachFromParent(false);
 }
 
-Transform SceneComponent::GetRelativeTransform() const {
-    Transform t{};
-    t.position = RelativeLocation;
-    t.rotationDegrees = RelativeRotation;
-    t.scale = RelativeScale;
+FTransform SceneComponent::GetRelativeTransform() const {
+    FTransform t{};
+    t.Position = RelativeLocation;
+    t.RotationDegrees = RelativeRotation;
+    t.Scale = RelativeScale;
     return t;
 }
 
@@ -82,10 +82,10 @@ bool SceneComponent::AttachToComponent(SceneComponent* parent, bool keepWorldTra
     if (keepWorldTransform) {
         const glm::mat4 parentWorld = parent_->GetComponentTransform();
         const glm::mat4 parentInv = glm::inverse(parentWorld);
-        const Transform relative = decomposeApprox(parentInv * worldBefore);
-        RelativeLocation = relative.position;
-        RelativeRotation = relative.rotationDegrees;
-        RelativeScale = relative.scale;
+        const FTransform relative = decomposeApprox(parentInv * worldBefore);
+        RelativeLocation = relative.Position;
+        RelativeRotation = relative.RotationDegrees;
+        RelativeScale = relative.Scale;
     }
     return true;
 }
@@ -104,10 +104,10 @@ void SceneComponent::DetachFromParent(bool keepWorldTransform) {
     parent_ = nullptr;
 
     if (keepWorldTransform) {
-        const Transform world = decomposeApprox(worldBefore);
-        RelativeLocation = world.position;
-        RelativeRotation = world.rotationDegrees;
-        RelativeScale = world.scale;
+        const FTransform world = decomposeApprox(worldBefore);
+        RelativeLocation = world.Position;
+        RelativeRotation = world.RotationDegrees;
+        RelativeScale = world.Scale;
         if (owner_ != nullptr) {
             RelativeLocation -= owner_->GetActorLocation();
             RelativeRotation.y -= owner_->GetActorYaw();
@@ -116,19 +116,19 @@ void SceneComponent::DetachFromParent(bool keepWorldTransform) {
 }
 
 glm::mat4 SceneComponent::GetComponentTransform() const {
-    const Transform relative = GetRelativeTransform();
+    const FTransform relative = GetRelativeTransform();
     if (parent_ != nullptr) {
-        return parent_->GetComponentTransform() * relative.modelMatrix();
+        return parent_->GetComponentTransform() * relative.ModelMatrix();
     }
     if (owner_ != nullptr) {
-        Transform world{};
-        world.position = owner_->GetActorLocation() + RelativeLocation;
-        world.rotationDegrees = RelativeRotation;
-        world.rotationDegrees.y += owner_->GetActorYaw();
-        world.scale = RelativeScale;
-        return world.modelMatrix();
+        FTransform world{};
+        world.Position = owner_->GetActorLocation() + RelativeLocation;
+        world.RotationDegrees = RelativeRotation;
+        world.RotationDegrees.y += owner_->GetActorYaw();
+        world.Scale = RelativeScale;
+        return world.ModelMatrix();
     }
-    return relative.modelMatrix();
+    return relative.ModelMatrix();
 }
 
 glm::vec3 SceneComponent::GetComponentLocation() const {

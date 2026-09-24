@@ -21,7 +21,7 @@ void applyMaterialMaps(ResourceCache& resources, Material& material, const nlohm
         if (key == "checker") {
             material.albedoMap = resources.CheckerTexture(64);
         } else {
-            material.albedoMap = resources.LoadTexture(ResolveAssetPath(key));
+            material.albedoMap = resources.LoadTexture(FPaths::ResolveAssetPath(key));
         }
     }
     if (object.contains("normalMap") && object["normalMap"].is_string()) {
@@ -29,7 +29,7 @@ void applyMaterialMaps(ResourceCache& resources, Material& material, const nlohm
         if (key == "bump") {
             material.normalMap = resources.BumpNormalTexture(256);
         } else {
-            material.normalMap = resources.LoadTexture(ResolveAssetPath(key));
+            material.normalMap = resources.LoadTexture(FPaths::ResolveAssetPath(key));
         }
     }
 }

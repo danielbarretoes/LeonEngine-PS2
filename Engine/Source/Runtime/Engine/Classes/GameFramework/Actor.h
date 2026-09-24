@@ -114,8 +114,8 @@ public:
             return;
         }
         StaticMeshComponent& obj = meshes[levelMeshIndex_];
-        obj.transform.position = location_;
-        obj.transform.rotationDegrees.y = yawDegrees_;
+        obj.transform.Position = location_;
+        obj.transform.RotationDegrees.y = yawDegrees_;
     }
 
 protected:

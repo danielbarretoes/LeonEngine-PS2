@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include "Misc/FileIO.h"
+#include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Engine/GameEngine.h"
 #include "Level/BasicLight.h"
@@ -204,7 +204,7 @@ std::string ResolveLevelAssetPath(const std::string& levelPath, const std::strin
         }
     }
 
-    return ResolveAssetPath(relativeOrKey);
+    return FPaths::ResolveAssetPath(relativeOrKey);
 }
 
 namespace {
@@ -287,8 +287,8 @@ void ApplyDocumentLights(const LevelDocument& doc, Level& staged, LevelAnimation
         BasicLight light;
         light.type = record.lightClass == ELevelLightClass::PointLight ? EBasicLight::Point
                                                                        : EBasicLight::Directional;
-        light.transform.position = record.position;
-        light.transform.rotationDegrees = record.rotationDegrees;
+        light.transform.Position = record.position;
+        light.transform.RotationDegrees = record.rotationDegrees;
         light.lightColor = record.lightColor;
         light.intensity = record.intensity;
         light.castShadows = record.castShadows;
@@ -360,9 +360,9 @@ LevelDocument BuildLevelDocument(const Level& level, const Camera& camera) {
     for (const PlayerStart& start : level.PlayerStarts()) {
         LevelActorRecord record;
         record.actorClass = ELevelActorClass::PlayerStart;
-        record.position = start.transform.position;
-        record.rotationDegrees = start.transform.rotationDegrees;
-        record.scale = start.transform.scale;
+        record.position = start.transform.Position;
+        record.rotationDegrees = start.transform.RotationDegrees;
+        record.scale = start.transform.Scale;
         record.enableGravity = false;
         doc.actors.push_back(std::move(record));
     }
@@ -370,9 +370,9 @@ LevelDocument BuildLevelDocument(const Level& level, const Camera& camera) {
     for (const AISpawnPoint& spawn : level.AISpawnPoints()) {
         LevelActorRecord record;
         record.actorClass = ELevelActorClass::AISpawnPoint;
-        record.position = spawn.transform.position;
-        record.rotationDegrees = spawn.transform.rotationDegrees;
-        record.scale = spawn.transform.scale;
+        record.position = spawn.transform.Position;
+        record.rotationDegrees = spawn.transform.RotationDegrees;
+        record.scale = spawn.transform.Scale;
         record.tag = spawn.tag;
         record.enableGravity = false;
         doc.actors.push_back(std::move(record));
@@ -381,9 +381,9 @@ LevelDocument BuildLevelDocument(const Level& level, const Camera& camera) {
     for (const TriggerVolume& volume : level.TriggerVolumes()) {
         LevelActorRecord record;
         record.actorClass = ELevelActorClass::TriggerVolume;
-        record.position = volume.transform.position;
-        record.rotationDegrees = volume.transform.rotationDegrees;
-        record.scale = volume.transform.scale;
+        record.position = volume.transform.Position;
+        record.rotationDegrees = volume.transform.RotationDegrees;
+        record.scale = volume.transform.Scale;
         record.tag = volume.tag;
         record.interactCost = volume.interactCost;
         record.interactRadius = volume.interactRadius;
@@ -396,9 +396,9 @@ LevelDocument BuildLevelDocument(const Level& level, const Camera& camera) {
     for (const PainCausingVolume& volume : level.PainCausingVolumes()) {
         LevelActorRecord record;
         record.actorClass = ELevelActorClass::PainCausingVolume;
-        record.position = volume.transform.position;
-        record.rotationDegrees = volume.transform.rotationDegrees;
-        record.scale = volume.transform.scale;
+        record.position = volume.transform.Position;
+        record.rotationDegrees = volume.transform.RotationDegrees;
+        record.scale = volume.transform.Scale;
         record.tag = volume.tag;
         record.damagePerSecond = volume.damagePerSecond;
         record.damageInterval = volume.damageInterval;
@@ -421,9 +421,9 @@ LevelDocument BuildLevelDocument(const Level& level, const Camera& camera) {
         record.enableGravity = mesh.enableGravity;
         record.hidden = mesh.hidden;
 
-        record.position = mesh.transform.position;
-        record.rotationDegrees = mesh.transform.rotationDegrees;
-        record.scale = mesh.transform.scale;
+        record.position = mesh.transform.Position;
+        record.rotationDegrees = mesh.transform.RotationDegrees;
+        record.scale = mesh.transform.Scale;
 
         record.tag = mesh.tag;
         record.materialPath = mesh.materialPath;
@@ -452,8 +452,8 @@ LevelDocument BuildLevelDocument(const Level& level, const Camera& camera) {
         LevelLightRecord record;
         record.lightClass = ELevelLightClass::DirectionalLight;
         record.castShadows = light.castShadows;
-        record.position = light.transform.position;
-        record.rotationDegrees = light.transform.rotationDegrees;
+        record.position = light.transform.Position;
+        record.rotationDegrees = light.transform.RotationDegrees;
         record.lightColor = light.lightColor;
         record.intensity = light.intensity;
         record.sourceAngle = light.sourceAngle;
@@ -463,8 +463,8 @@ LevelDocument BuildLevelDocument(const Level& level, const Camera& camera) {
         LevelLightRecord record;
         record.lightClass = ELevelLightClass::PointLight;
         record.castShadows = light.castShadows;
-        record.position = light.transform.position;
-        record.rotationDegrees = light.transform.rotationDegrees;
+        record.position = light.transform.Position;
+        record.rotationDegrees = light.transform.RotationDegrees;
         record.lightColor = light.lightColor;
         record.intensity = light.intensity;
         record.range = light.range;
@@ -853,7 +853,7 @@ bool DeserializeLeonLevel(const std::vector<std::uint8_t>& bytes, LevelDocument&
 
 bool SaveLeonLevelFile(const std::string& path, const LevelDocument& doc) {
     const std::vector<std::uint8_t> bytes = SerializeLeonLevel(doc);
-    if (!WriteFileAtomic(path, bytes)) {
+    if (!FFileHelper::WriteFileAtomic(path, bytes)) {
         std::cerr << "LeonLevelFormat: cannot write: " << path << '\n';
         return false;
     }
@@ -885,7 +885,7 @@ bool ApplyLevelDocument(Engine& engine, const LevelDocument& doc, const std::str
     try {
         if (!doc.environmentPath.empty()) {
             staged.SetEnvironmentPath(doc.environmentPath);
-            staged.SetEnvironment(resources.LoadEnvMap(ResolveAssetPath(doc.environmentPath)));
+            staged.SetEnvironment(resources.LoadEnvMap(FPaths::ResolveAssetPath(doc.environmentPath)));
         }
         staged.SetEnvironmentExposure(doc.environmentExposure);
         staged.SetName(doc.name);
@@ -893,10 +893,10 @@ bool ApplyLevelDocument(Engine& engine, const LevelDocument& doc, const std::str
 
         int failedMeshes = 0;
         for (const LevelActorRecord& record : doc.actors) {
-            Transform transform;
-            transform.position = record.position;
-            transform.rotationDegrees = record.rotationDegrees;
-            transform.scale = record.scale;
+            FTransform transform;
+            transform.Position = record.position;
+            transform.RotationDegrees = record.rotationDegrees;
+            transform.Scale = record.scale;
 
             if (record.actorClass == ELevelActorClass::PlayerStart) {
                 PlayerStart start{};

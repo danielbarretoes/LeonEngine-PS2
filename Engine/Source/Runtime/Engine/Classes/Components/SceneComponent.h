@@ -36,7 +36,7 @@ public:
         return children_;
     }
 
-    [[nodiscard]] Transform GetRelativeTransform() const;
+    [[nodiscard]] FTransform GetRelativeTransform() const;
     /// Component-to-world matrix (Unreal GetComponentTransform).
     [[nodiscard]] glm::mat4 GetComponentTransform() const;
     [[nodiscard]] glm::vec3 GetComponentLocation() const;

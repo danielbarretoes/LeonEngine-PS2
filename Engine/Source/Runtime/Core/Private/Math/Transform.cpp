@@ -6,38 +6,38 @@
 
 namespace {
 
-constexpr glm::vec3 kAxisX{1.0f, 0.0f, 0.0f};
-constexpr glm::vec3 kAxisY{0.0f, 1.0f, 0.0f};
-constexpr glm::vec3 kAxisZ{0.0f, 0.0f, 1.0f};
+constexpr glm::vec3 AxisX{1.0f, 0.0f, 0.0f};
+constexpr glm::vec3 AxisY{0.0f, 1.0f, 0.0f};
+constexpr glm::vec3 AxisZ{0.0f, 0.0f, 1.0f};
 
-float sanitizeScaleComponent(float v) {
-    constexpr float kMin = 1e-4f;
-    if (std::abs(v) < kMin) {
-        return (v < 0.0f) ? -kMin : kMin;
+float SanitizeScaleComponent(float V) {
+    constexpr float Min = 1e-4f;
+    if (std::abs(V) < Min) {
+        return (V < 0.0f) ? -Min : Min;
     }
-    return v;
+    return V;
 }
 
 } // namespace
 
-glm::mat4 Transform::modelMatrix() const {
-    const glm::vec3 safeScale{sanitizeScaleComponent(scale.x), sanitizeScaleComponent(scale.y),
-                              sanitizeScaleComponent(scale.z)};
-    glm::mat4 model(1.0f);
-    model = glm::translate(model, position);
-    model = glm::rotate(model, glm::radians(rotationDegrees[0]), kAxisX);
-    model = glm::rotate(model, glm::radians(rotationDegrees[1]), kAxisY);
-    model = glm::rotate(model, glm::radians(rotationDegrees[2]), kAxisZ);
-    model = glm::scale(model, safeScale);
-    return model;
+glm::mat4 FTransform::ModelMatrix() const {
+    const glm::vec3 SafeScale{SanitizeScaleComponent(Scale.x), SanitizeScaleComponent(Scale.y),
+                              SanitizeScaleComponent(Scale.z)};
+    glm::mat4 Model(1.0f);
+    Model = glm::translate(Model, Position);
+    Model = glm::rotate(Model, glm::radians(RotationDegrees[0]), AxisX);
+    Model = glm::rotate(Model, glm::radians(RotationDegrees[1]), AxisY);
+    Model = glm::rotate(Model, glm::radians(RotationDegrees[2]), AxisZ);
+    Model = glm::scale(Model, SafeScale);
+    return Model;
 }
 
-glm::mat3 Transform::normalMatrix() const {
-    const glm::mat3 m(modelMatrix());
-    const float det = glm::determinant(m);
-    if (std::abs(det) < 1e-12f) {
+glm::mat3 FTransform::NormalMatrix() const {
+    const glm::mat3 M(ModelMatrix());
+    const float Det = glm::determinant(M);
+    if (std::abs(Det) < 1e-12f) {
         return glm::mat3(1.0f);
     }
-    return glm::transpose(glm::inverse(m));
+    return glm::transpose(glm::inverse(M));
 }
 
