@@ -1,5 +1,3 @@
-#include <GLFW/glfw3.h>
-
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -7,11 +5,9 @@
 #include <cstring>
 #include <iostream>
 #include "Engine/GameEngine.h"
-#include "EKey.h"
+#include "InputCoreTypes.h"
 #include "Level/LevelDirector.h"
-#include "EKey.h"
 #include "Level/LevelLoader.h"
-#include "EKey.h"
 #include <string_view>
 #include <vector>
 
@@ -253,8 +249,8 @@ bool LevelDirector::HandleUiInput(Engine& engine) {
 
     bool switched = false;
 
-    const bool prevKey = engine.GetWindow().IsKeyPressed(EKey::LeftBracket);
-    const bool nextKey = engine.GetWindow().IsKeyPressed(EKey::RightBracket);
+    const bool prevKey = engine.GetWindow().IsKeyPressed(EKeys::LeftBracket);
+    const bool nextKey = engine.GetWindow().IsKeyPressed(EKeys::RightBracket);
     if (prevKey && !keyPrevDown_) {
         switched = Previous(engine) || switched;
     }
@@ -267,8 +263,8 @@ bool LevelDirector::HandleUiInput(Engine& engine) {
     // Digit keys 1–9 (and keypad) jump to catalog slot (1-based → index 0–8).
     for (int digit = 0; digit < 9; ++digit) {
         const bool down =
-            engine.GetWindow().IsKeyPressed(static_cast<EKey>(ToKeyCode(EKey::Num1) + digit)) ||
-            engine.GetWindow().IsKeyPressed(static_cast<EKey>(ToKeyCode(EKey::Kp1) + digit));
+            engine.GetWindow().IsKeyPressed(static_cast<EKeys>(ToKeyCode(EKeys::One) + digit)) ||
+            engine.GetWindow().IsKeyPressed(static_cast<EKeys>(ToKeyCode(EKeys::NumPadOne) + digit));
         if (down && !digitWasDown_[digit]) {
             const auto index = static_cast<std::size_t>(digit);
             if (index < catalog_.NumEntries() && index != currentIndex_) {
@@ -278,7 +274,7 @@ bool LevelDirector::HandleUiInput(Engine& engine) {
         digitWasDown_[digit] = down;
     }
 
-    const bool mouseDown = engine.GetWindow().IsMouseButtonDown(EMouseButton::Left);
+    const bool mouseDown = engine.GetWindow().IsMouseButtonDown(EMouseButtons::Left);
     // Captured cursor uses relative motion; chrome hit-testing needs a visible cursor.
     if (mouseDown && !mouseWasDown_ && !engine.IsCursorCaptured()) {
         float x = 0.0f;

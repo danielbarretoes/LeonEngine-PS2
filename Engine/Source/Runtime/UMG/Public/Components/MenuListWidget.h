@@ -6,9 +6,9 @@
 #include <string>
 #include <vector>
 
-namespace leon {
+class FGenericWindow;
 
-class Window;
+namespace leon {
 
 /// Unreal-like vertical text menu (UMG ListView lite): arrows / Enter / click.
 /// Add via HUD::AddWidget; call TickInput each frame from GameMode.
@@ -31,7 +31,7 @@ public:
     void ResetEdges();
 
     /// Returns activated item id this frame (empty if none).
-    [[nodiscard]] std::string TickInput(Window& window, bool cursorCaptured, float deltaTime);
+    [[nodiscard]] std::string TickInput(FGenericWindow& window, bool cursorCaptured, float deltaTime);
 
     void NativePaint(WidgetPaintContext& ctx) override;
 

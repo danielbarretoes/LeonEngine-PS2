@@ -1,0 +1,11 @@
+#pragma once
+
+#include "GenericPlatform/GenericPlatformApplicationMisc.h"
+
+/** PS2: GS window + DualShock on port 0 (see Private/PS2Application.h). */
+struct APPLICATIONCORE_API FPS2PlatformApplicationMisc : public FGenericPlatformApplicationMisc
+{
+	static GenericApplication* CreateApplication();
+};
+
+typedef FPS2PlatformApplicationMisc FPlatformApplicationMisc;

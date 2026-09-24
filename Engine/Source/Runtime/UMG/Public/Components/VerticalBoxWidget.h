@@ -6,9 +6,9 @@
 #include <string>
 #include <vector>
 
-namespace leon {
+class FGenericWindow;
 
-class Window;
+namespace leon {
 
 /// Unreal-like UVerticalBox (lite): title + stacked ButtonWidgets + hint.
 /// Add via HUD::AddWidget; call TickInput each frame from GameMode (same as MenuListWidget).
@@ -33,7 +33,7 @@ public:
     void ResetEdges();
 
     /// Returns activated button id this frame (empty if none).
-    [[nodiscard]] std::string TickInput(Window& window, bool cursorCaptured, float deltaTime);
+    [[nodiscard]] std::string TickInput(FGenericWindow& window, bool cursorCaptured, float deltaTime);
 
     void NativePaint(WidgetPaintContext& ctx) override;
 

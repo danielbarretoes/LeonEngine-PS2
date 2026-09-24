@@ -1,13 +1,10 @@
 #include "Components/MenuListWidget.h"
-#include "EKey.h"
+#include "InputCoreTypes.h"
 
 #include <algorithm>
 #include <cmath>
 
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
-#include "Window.h"
-#include "EKey.h"
+#include "GenericPlatform/GenericWindow.h"
 
 namespace leon {
 namespace {
@@ -118,7 +115,7 @@ void MenuListWidget::NativePaint(WidgetPaintContext& ctx) {
                  ETextJustify::Center);
 }
 
-std::string MenuListWidget::TickInput(Window& window, bool cursorCaptured, float deltaTime) {
+std::string MenuListWidget::TickInput(FGenericWindow& window, bool cursorCaptured, float deltaTime) {
     if (items_.empty()) {
         return {};
     }
@@ -126,12 +123,12 @@ std::string MenuListWidget::TickInput(Window& window, bool cursorCaptured, float
         ignoreActivateSeconds_ = std::max(0.0f, ignoreActivateSeconds_ - deltaTime);
     }
 
-    const bool up = window.IsKeyPressed(EKey::Up) || window.IsKeyPressed(EKey::W);
-    const bool down = window.IsKeyPressed(EKey::Down) || window.IsKeyPressed(EKey::S);
-    const bool enter = window.IsKeyPressed(EKey::Enter) ||
-                       window.IsKeyPressed(EKey::KpEnter) ||
-                       window.IsKeyPressed(EKey::Space);
-    const bool mouse = window.IsMouseButtonDown(EMouseButton::Left);
+    const bool up = window.IsKeyPressed(EKeys::Up) || window.IsKeyPressed(EKeys::W);
+    const bool down = window.IsKeyPressed(EKeys::Down) || window.IsKeyPressed(EKeys::S);
+    const bool enter = window.IsKeyPressed(EKeys::Enter) ||
+                       window.IsKeyPressed(EKeys::NumPadEnter) ||
+                       window.IsKeyPressed(EKeys::SpaceBar);
+    const bool mouse = window.IsMouseButtonDown(EMouseButtons::Left);
 
     auto stepSelectable = [this](int delta) {
         const int n = static_cast<int>(items_.size());

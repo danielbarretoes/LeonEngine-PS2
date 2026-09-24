@@ -5,9 +5,9 @@
 #include "Blueprint/UserWidget.h"
 #include <string>
 
-namespace leon {
+class FGenericWindow;
 
-class Window;
+namespace leon {
 
 /// Unreal-like UButton (lite): filled rect + label; hover / selected / press.
 /// Usually owned by VerticalBoxWidget; can also be a root HUD widget with SetPosition.

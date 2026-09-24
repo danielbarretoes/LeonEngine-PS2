@@ -1,8 +1,8 @@
 #pragma once
 
-#include "EKey.h"
+#include "InputCoreTypes.h"
 #include "GameFramework/Input.h"
-#include "Window.h"
+#include "GenericPlatform/GenericWindow.h"
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -13,7 +13,7 @@ namespace leon {
 
 /// One key contribution to a 1D axis (Unreal-like axis mapping entry).
 struct InputAxisKey {
-    int key = 0;        // EKey underlying code (Host matches GLFW)
+    int key = 0;        // EKeys underlying code (Host matches GLFW)
     float scale = 1.0f; // typically +1 or -1
 };
 
@@ -22,11 +22,11 @@ class InputMappingContext {
 public:
     /// Bind a key that contributes `scale` to a named axis while held.
     void BindAxisKey(std::string_view action, int key, float scale = 1.0f);
-    void BindAxisKey(std::string_view action, EKey key, float scale = 1.0f);
+    void BindAxisKey(std::string_view action, EKeys key, float scale = 1.0f);
 
     /// Bind a digital action key (pressed / just-pressed queries).
     void BindActionKey(std::string_view action, int key);
-    void BindActionKey(std::string_view action, EKey key);
+    void BindActionKey(std::string_view action, EKeys key);
 
     [[nodiscard]] const std::unordered_map<std::string, std::vector<InputAxisKey>>& Axes() const {
         return axes_;
@@ -51,7 +51,7 @@ public:
     void AddMappingContext(InputMappingContext context, int priority = 0);
 
     /// Rebuild effective binds + sample Window state. Call once per frame after pollEvents.
-    void Update(const Window& window);
+    void Update(const FGenericWindow& window);
 
     [[nodiscard]] float GetAxisValue(std::string_view action) const;
     [[nodiscard]] bool IsActionPressed(std::string_view action) const;

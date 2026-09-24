@@ -222,6 +222,18 @@ function(leon_topological_order OutVar)
 	set(${OutVar} "${Result}" PARENT_SCOPE)
 endfunction()
 
+# The launch module is compiled into the executable, so a module depending on it (e.g. a game
+# module reaching GEngineLoop) only gets its public include paths; the symbols resolve at exe link.
+function(_leon_link_module_dependency Target Scope Dep)
+	if(DEFINED LEON_CURRENT_LAUNCH_MODULE AND Dep STREQUAL LEON_CURRENT_LAUNCH_MODULE)
+		leon_module_include_dirs(${Dep} DepPublicIncludes Unused)
+		target_include_directories(${Target} ${Scope} ${DepPublicIncludes})
+		return()
+	endif()
+	leon_module_target_name(${Dep} DepTarget)
+	target_link_libraries(${Target} ${Scope} ${DepTarget})
+endfunction()
+
 # Usage requirements shared by module libraries and the launch module compiled into an executable.
 # Scope: PUBLIC/PRIVATE for a STATIC library, INTERFACE for a header-only one, PRIVATE for an exe.
 function(_leon_apply_module_usage Target Name PublicScope PrivateScope)
@@ -248,12 +260,10 @@ function(_leon_apply_module_usage Target Name PublicScope PrivateScope)
 	# Circular dependencies (UE: CircularlyReferencedDependentModules) propagate like public ones:
 	# their headers include each other.
 	foreach(Dep IN LISTS PublicDeps CircularDeps)
-		leon_module_target_name(${Dep} DepTarget)
-		target_link_libraries(${Target} ${PublicScope} ${DepTarget})
+		_leon_link_module_dependency(${Target} ${PublicScope} ${Dep})
 	endforeach()
 	foreach(Dep IN LISTS PrivateDeps)
-		leon_module_target_name(${Dep} DepTarget)
-		target_link_libraries(${Target} ${PrivateScope} ${DepTarget})
+		_leon_link_module_dependency(${Target} ${PrivateScope} ${Dep})
 	endforeach()
 	if(CircularDeps AND NOT PrivateScope STREQUAL "INTERFACE")
 		set_target_properties(${Target} PROPERTIES LINK_INTERFACE_MULTIPLICITY 3)
@@ -428,6 +438,7 @@ function(leon_build_target TargetName)
 	leon_resolve_closure("target ${TargetName}" Closure ${Roots})
 
 	# Every module except the launch module becomes a library.
+	set(LEON_CURRENT_LAUNCH_MODULE ${LaunchModule})
 	set(LibraryModules ${Closure})
 	list(REMOVE_ITEM LibraryModules ${LaunchModule})
 	foreach(Module IN LISTS LibraryModules)

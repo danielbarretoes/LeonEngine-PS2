@@ -1,27 +1,40 @@
-#include "ThirdPersonGameMode.h"
+#include "ThirdPerson.h"
 
+#include "CoreGlobals.h"
+#include "GenericPlatform/GenericApplication.h"
+#include "LaunchEngineLoop.h"
 #include "Modules/ModuleManager.h"
-#include "Window.h"
+#include "ThirdPersonGameMode.h"
 
 #include <cstdio>
 
-IMPLEMENT_PRIMARY_GAME_MODULE(FDefaultGameModuleImpl, ThirdPerson, "ThirdPerson")
+IMPLEMENT_PRIMARY_GAME_MODULE(FThirdPersonModule, ThirdPerson, "ThirdPerson")
 
-// Transitional entry point: moves to Launch (LaunchPS2.cpp + FEngineLoop) in Phase 3.
-int main(int argc, char** argv) {
-    (void)argc;
-    (void)argv;
+void FThirdPersonModule::StartupModule()
+{
+	FGenericWindow* Window = GEngineLoop.GetMainWindow();
+	GenericApplication* Application = GEngineLoop.GetApplication();
+	if (Window == nullptr || Application == nullptr)
+	{
+		std::printf("ThirdPerson: no main window\n");
+		RequestEngineExit("ThirdPerson: no main window");
+		return;
+	}
 
-    FModuleManager::Get().StartupStaticallyLinkedModules();
+	GameMode = std::make_unique<FThirdPersonGameMode>(*Window, Application->GetInputInterface());
+	GameMode->StartPlay();
+	TickHandle = FTicker::GetCoreTicker().AddTicker([this](float DeltaTime)
+	{
+		return GameMode->Tick(DeltaTime);
+	});
+}
 
-    leon::Window window;
-    if (!window.Create(640, 448, "Leon Ps2ThirdPerson")) {
-        std::printf("Ps2ThirdPerson: Window::Create failed\n");
-        return 1;
-    }
-
-    const int code = leon::ps2thirdperson::RunPs2ThirdPersonDemo(window);
-    window.Destroy();
-    FModuleManager::Get().ShutdownModules();
-    return code;
+void FThirdPersonModule::ShutdownModule()
+{
+	if (TickHandle.IsValid())
+	{
+		FTicker::GetCoreTicker().RemoveTicker(TickHandle);
+		TickHandle = {};
+	}
+	GameMode.reset();
 }

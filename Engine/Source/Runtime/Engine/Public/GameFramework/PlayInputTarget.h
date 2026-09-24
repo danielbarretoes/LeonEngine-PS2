@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Window.h"
+#include "GenericPlatform/GenericWindow.h"
 
 namespace leon {
 
@@ -9,14 +9,14 @@ namespace leon {
 /// Unreal analogy: focus the play viewport for input without a separate UObject.
 class PlayInputTarget {
 public:
-    void SetWindow(Window* window) { window_ = window; }
-    [[nodiscard]] Window* GetWindow() const { return window_; }
+    void SetWindow(FGenericWindow* window) { window_ = window; }
+    [[nodiscard]] FGenericWindow* GetWindow() const { return window_; }
     [[nodiscard]] bool HasOverride() const { return window_ != nullptr; }
 
-    [[nodiscard]] Window& Resolve(Window& mainWindow) {
+    [[nodiscard]] FGenericWindow& Resolve(FGenericWindow& mainWindow) {
         return window_ != nullptr ? *window_ : mainWindow;
     }
-    [[nodiscard]] const Window& Resolve(const Window& mainWindow) const {
+    [[nodiscard]] const FGenericWindow& Resolve(const FGenericWindow& mainWindow) const {
         return window_ != nullptr ? *window_ : mainWindow;
     }
 
@@ -25,7 +25,7 @@ public:
     [[nodiscard]] bool IsMouseLookActive() const { return mouseLookActive_; }
 
 private:
-    Window* window_ = nullptr;
+    FGenericWindow* window_ = nullptr;
     bool mouseLookActive_ = true;
 };
 

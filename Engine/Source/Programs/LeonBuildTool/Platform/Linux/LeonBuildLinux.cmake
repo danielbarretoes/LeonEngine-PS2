@@ -10,5 +10,4 @@ leon_register_platform(Linux
 	BUILD_TYPE_Development RelWithDebInfo
 	BUILD_TYPE_Shipping Release
 	DEFINITIONS PLATFORM_LINUX=1
-		LEON_PLATFORM_HOST=1 # transitional (removed in Phase 3)
 )

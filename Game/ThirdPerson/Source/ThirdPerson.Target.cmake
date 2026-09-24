@@ -1,6 +1,6 @@
-# ThirdPerson game target (Unreal: <Game>.Target.cs).
-# Transitional: the game module owns main() until Launch runs on PS2 (Phase 3).
+# ThirdPerson game target (Unreal: <Game>.Target.cs). Launch (GuardedMain / FEngineLoop) owns main();
+# the gameplay framework does not run on PS2, so the target compiles without the engine (WITH_ENGINE=0).
 leon_target(ThirdPerson TYPE Game
 	PLATFORMS PS2
-	LAUNCH_MODULE ThirdPerson
+	COMPILE_AGAINST_ENGINE OFF
 )

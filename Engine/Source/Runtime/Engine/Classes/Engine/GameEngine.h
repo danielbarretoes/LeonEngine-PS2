@@ -6,7 +6,7 @@
 #include "Camera/Camera.h"
 #include "GameFramework/InputMapping.h"
 #include "GameFramework/PlayInputTarget.h"
-#include "Window.h"
+#include "GenericPlatform/GenericApplication.h"
 #include "AudioDevice.h"
 #include "Debug/DebugOverlay.h"
 #include "Engine/GameInstance.h"
@@ -65,8 +65,8 @@ public:
     [[nodiscard]] const ResourceCache& GetResources() const { return resources_; }
     [[nodiscard]] Camera& GetCamera() { return camera_; }
     [[nodiscard]] const Camera& GetCamera() const { return camera_; }
-    [[nodiscard]] Window& GetWindow() { return window_; }
-    [[nodiscard]] const Window& GetWindow() const { return window_; }
+    [[nodiscard]] FGenericWindow& GetWindow() { return *window_; }
+    [[nodiscard]] const FGenericWindow& GetWindow() const { return *window_; }
     [[nodiscard]] PlayerInput& GetInput() { return playerInput_; }
     [[nodiscard]] const PlayerInput& GetInput() const { return playerInput_; }
     [[nodiscard]] Renderer& GetRenderer() { return renderer_; }
@@ -117,9 +117,9 @@ public:
     /// Optional secondary window for PIE "New Window" input / cursor capture.
     /// Prefer `GetPlayInputTarget()` when configuring multiple fields; these remain the
     /// Unreal-like convenience API used by GameMode / PlayerController.
-    void SetPlayInputWindow(Window* window);
-    [[nodiscard]] Window& GetPlayInputWindow();
-    [[nodiscard]] const Window& GetPlayInputWindow() const;
+    void SetPlayInputWindow(FGenericWindow* window);
+    [[nodiscard]] FGenericWindow& GetPlayInputWindow();
+    [[nodiscard]] const FGenericWindow& GetPlayInputWindow() const;
 
     /// Grouped PIE / multi-window play input state (window override + mouse-look gate).
     [[nodiscard]] PlayInputTarget& GetPlayInputTarget() { return playInputTarget_; }
@@ -176,7 +176,8 @@ private:
     void render(const PostRenderCallback& onPostRender);
     void updateHudStats(float deltaTime);
 
-    Window window_;
+    std::unique_ptr<GenericApplication> application_;
+    std::unique_ptr<FGenericWindow> window_;
     PlayInputTarget playInputTarget_;
     PlayerInput playerInput_;
     Renderer renderer_;

@@ -1,5 +1,5 @@
 #include <algorithm>
-#include "EKey.h"
+#include "InputCoreTypes.h"
 #include "GameFramework/InputActions.h"
 #include "GameFramework/InputMapping.h"
 
@@ -19,11 +19,11 @@ void InputMappingContext::BindActionKey(std::string_view action, int key) {
     actions_[std::string(action)].push_back(key);
 }
 
-void InputMappingContext::BindAxisKey(std::string_view action, EKey key, float scale) {
+void InputMappingContext::BindAxisKey(std::string_view action, EKeys key, float scale) {
     BindAxisKey(action, ToKeyCode(key), scale);
 }
 
-void InputMappingContext::BindActionKey(std::string_view action, EKey key) {
+void InputMappingContext::BindActionKey(std::string_view action, EKeys key) {
     BindActionKey(action, ToKeyCode(key));
 }
 
@@ -31,20 +31,20 @@ InputMappingContext InputMappingContext::MakeDefault() {
     InputMappingContext ctx;
     using namespace InputActions;
 
-    ctx.BindAxisKey(MoveForward, EKey::W, 1.0f);
-    ctx.BindAxisKey(MoveForward, EKey::Up, 1.0f);
-    ctx.BindAxisKey(MoveForward, EKey::S, -1.0f);
-    ctx.BindAxisKey(MoveForward, EKey::Down, -1.0f);
+    ctx.BindAxisKey(MoveForward, EKeys::W, 1.0f);
+    ctx.BindAxisKey(MoveForward, EKeys::Up, 1.0f);
+    ctx.BindAxisKey(MoveForward, EKeys::S, -1.0f);
+    ctx.BindAxisKey(MoveForward, EKeys::Down, -1.0f);
 
-    ctx.BindAxisKey(MoveRight, EKey::D, 1.0f);
-    ctx.BindAxisKey(MoveRight, EKey::Right, 1.0f);
-    ctx.BindAxisKey(MoveRight, EKey::A, -1.0f);
-    ctx.BindAxisKey(MoveRight, EKey::Left, -1.0f);
+    ctx.BindAxisKey(MoveRight, EKeys::D, 1.0f);
+    ctx.BindAxisKey(MoveRight, EKeys::Right, 1.0f);
+    ctx.BindAxisKey(MoveRight, EKeys::A, -1.0f);
+    ctx.BindAxisKey(MoveRight, EKeys::Left, -1.0f);
 
-    ctx.BindAxisKey(MoveUp, EKey::E, 1.0f);
-    ctx.BindAxisKey(MoveUp, EKey::Q, -1.0f);
+    ctx.BindAxisKey(MoveUp, EKeys::E, 1.0f);
+    ctx.BindAxisKey(MoveUp, EKeys::Q, -1.0f);
 
-    ctx.BindActionKey(Jump, EKey::Space);
+    ctx.BindActionKey(Jump, EKeys::SpaceBar);
     return ctx;
 }
 
@@ -77,7 +77,7 @@ void PlayerInput::rebuildEffectiveMaps() {
     mapsDirty_ = false;
 }
 
-void PlayerInput::Update(const Window& window) {
+void PlayerInput::Update(const FGenericWindow& window) {
     if (mapsDirty_) {
         rebuildEffectiveMaps();
     }
@@ -89,7 +89,7 @@ void PlayerInput::Update(const Window& window) {
     for (const auto& [name, keys] : effectiveAxes_) {
         float value = 0.0f;
         for (const InputAxisKey& binding : keys) {
-            if (window.IsKeyPressed(static_cast<EKey>(binding.key))) {
+            if (window.IsKeyPressed(static_cast<EKeys>(binding.key))) {
                 value += binding.scale;
             }
         }
@@ -100,7 +100,7 @@ void PlayerInput::Update(const Window& window) {
     for (const auto& [name, keys] : effectiveActions_) {
         bool pressed = false;
         for (int key : keys) {
-            if (window.IsKeyPressed(static_cast<EKey>(key))) {
+            if (window.IsKeyPressed(static_cast<EKeys>(key))) {
                 pressed = true;
                 break;
             }

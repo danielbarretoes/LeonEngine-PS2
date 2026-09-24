@@ -1,24 +1,23 @@
-#include <GLFW/glfw3.h>
-
 #include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstdio>
 #include <iostream>
 #include "GameFramework/Input.h"
-#include "EKey.h"
-#include "HAL/MemoryStats.h"
-#include "EKey.h"
+#include "HAL/PlatformApplicationMisc.h"
+#include "InputCoreTypes.h"
+#include "DynamicRHI.h"
+#include "HAL/PlatformMemory.h"
 #include "Misc/Paths.h"
-#include "EKey.h"
 #include "Engine/GameEngine.h"
-#include "EKey.h"
 #include <string>
 #include <thread>
 
 namespace leon {
 
 Engine::Engine() : gameInstance_(std::make_unique<GameInstance>()) {
+    application_.reset(FPlatformApplicationMisc::CreateApplication());
+    window_ = application_->MakeWindow();
     playerInput_.AddMappingContext(InputMappingContext::MakeDefault());
 }
 
@@ -31,25 +30,25 @@ bool Engine::Initialize(int width, int height, const char* title) {
         return true;
     }
 
-    if (!window_.Create(width, height, title != nullptr ? title : "Leon Engine")) {
+    if (!window_->Create(width, height, title != nullptr ? title : "Leon Engine")) {
         return false;
     }
 
     const std::string shaderDir = ResolveAssetPath("assets/Shaders");
     if (!renderer_.Initialize(shaderDir)) {
-        window_.Destroy();
+        window_->Destroy();
         return false;
     }
     if (!overlay_.Initialize(shaderDir)) {
         renderer_.Shutdown();
-        window_.Destroy();
+        window_->Destroy();
         return false;
     }
 
-    window_.SetScrollCallback(
+    window_->SetScrollCallback(
         [this](double yOffset) { pendingScrollY_ += static_cast<float>(yOffset); });
 
-    camera_.SetPerspective(60.0f, window_.Aspect(), 0.1f, 100.0f);
+    camera_.SetPerspective(60.0f, window_->Aspect(), 0.1f, 100.0f);
     camera_.SetTarget({0.0f, 0.0f, 0.0f});
 
     SetCursorCaptured(true);
@@ -98,8 +97,8 @@ void Engine::Shutdown() {
     if (!headless_) {
         overlay_.Shutdown();
         renderer_.Shutdown();
-        window_.Destroy();
-        window_.SetCursorCaptured(false);
+        window_->Destroy();
+        window_->SetCursorCaptured(false);
     }
     running_ = false;
     initialized_ = false;
@@ -141,8 +140,8 @@ bool Engine::IsCursorCaptured() const {
     return GetPlayInputWindow().IsCursorCaptured();
 }
 
-void Engine::SetPlayInputWindow(Window* window) {
-    Window* previous = playInputTarget_.GetWindow();
+void Engine::SetPlayInputWindow(FGenericWindow* window) {
+    FGenericWindow* previous = playInputTarget_.GetWindow();
     if (previous != nullptr && previous != window) {
         previous->SetScrollCallback(nullptr);
     }
@@ -154,12 +153,12 @@ void Engine::SetPlayInputWindow(Window* window) {
     }
 }
 
-Window& Engine::GetPlayInputWindow() {
-    return playInputTarget_.Resolve(window_);
+FGenericWindow& Engine::GetPlayInputWindow() {
+    return playInputTarget_.Resolve(*window_);
 }
 
-const Window& Engine::GetPlayInputWindow() const {
-    return playInputTarget_.Resolve(window_);
+const FGenericWindow& Engine::GetPlayInputWindow() const {
+    return playInputTarget_.Resolve(*window_);
 }
 
 void Engine::AddOnScreenDebugMessage(std::string message, float displaySeconds,
@@ -199,13 +198,13 @@ void Engine::Run(const UpdateCallback& onUpdate, const PreInputCallback& onPreIn
     std::cout << "Shaders: F5 force-reload (also auto-reloads when files change)\n";
 
     auto previous = std::chrono::steady_clock::now();
-    while (running_ && !window_.ShouldClose()) {
+    while (running_ && !window_->ShouldClose()) {
         const auto now = std::chrono::steady_clock::now();
         float deltaTime = std::chrono::duration<float>(now - previous).count();
         previous = now;
         deltaTime = std::min(deltaTime, 0.1f);
 
-        window_.PollEvents();
+        window_->PollEvents();
         if (playInputTarget_.HasOverride()) {
             playInputTarget_.GetWindow()->PollEvents();
         }
@@ -222,7 +221,7 @@ void Engine::Run(const UpdateCallback& onUpdate, const PreInputCallback& onPreIn
         TickPlayHud(deltaTime);
         pendingScrollY_ = 0.0f; // discard unused wheel (modes that do not ConsumeScrollY)
         render(onPostRender);
-        window_.SwapBuffers();
+        window_->SwapBuffers();
     }
 }
 
@@ -314,17 +313,18 @@ void Engine::updateHudStats(float deltaTime) {
 
     int fbWidth = 0;
     int fbHeight = 0;
-    window_.GetFramebufferSize(fbWidth, fbHeight);
+    window_->GetFramebufferSize(fbWidth, fbHeight);
 
-    const MemorySnapshot mem = queryMemorySnapshot();
-    const auto ramMb = static_cast<double>(mem.processWorkingSetBytes) / (1024.0 * 1024.0);
+    const FPlatformMemoryStats memory = FPlatformMemory::GetStats();
+    const auto ramMb = static_cast<double>(memory.UsedPhysical) / (1024.0 * 1024.0);
+    const FRHIGPUMemoryStats gpu = GDynamicRHI != nullptr ? GDynamicRHI->GetGPUMemoryStats() : FRHIGPUMemoryStats{};
 
     std::array<char, 32> vram{};
     (void)std::snprintf(vram.data(), vram.size(), "VRAM n/a");
-    if (mem.gpuValid) {
-        const auto budgetMb = static_cast<double>(mem.gpuBudgetBytes) / (1024.0 * 1024.0);
-        if (mem.gpuReportsUsage) {
-            const auto usedMb = static_cast<double>(mem.gpuUsedBytes) / (1024.0 * 1024.0);
+    if (gpu.bValid) {
+        const auto budgetMb = static_cast<double>(gpu.BudgetBytes) / (1024.0 * 1024.0);
+        if (gpu.bReportsUsage) {
+            const auto usedMb = static_cast<double>(gpu.UsedBytes) / (1024.0 * 1024.0);
             (void)std::snprintf(vram.data(), vram.size(), "VRAM %.0f/%.0fM", usedMb, budgetMb);
         } else {
             (void)std::snprintf(vram.data(), vram.size(), "VRAM %.0fM", budgetMb);
@@ -357,9 +357,9 @@ void Engine::updateHudStats(float deltaTime) {
 
 void Engine::handleInput(float deltaTime) {
     // PIE "New Window" routes capture + look here; fall back to the main window otherwise.
-    Window& inputWindow = GetPlayInputWindow();
+    FGenericWindow& inputWindow = GetPlayInputWindow();
 
-    const bool f1Down = inputWindow.IsKeyPressed(EKey::F1);
+    const bool f1Down = inputWindow.IsKeyPressed(EKeys::F1);
     if (f1Down && !debugKeyWasDown_) {
         renderer_.ToggleDebugDraw();
         std::cout << "Debug draw (mesh AABB): " << (renderer_.IsDebugDrawEnabled() ? "on" : "off")
@@ -367,28 +367,28 @@ void Engine::handleInput(float deltaTime) {
     }
     debugKeyWasDown_ = f1Down;
 
-    const bool f2Down = inputWindow.IsKeyPressed(EKey::F2);
+    const bool f2Down = inputWindow.IsKeyPressed(EKeys::F2);
     if (f2Down && !collisionDebugKeyWasDown_) {
         ToggleCollisionDebug();
         std::cout << "Collision debug: " << (IsCollisionDebugEnabled() ? "on" : "off") << '\n';
     }
     collisionDebugKeyWasDown_ = f2Down;
 
-    const bool f3Down = inputWindow.IsKeyPressed(EKey::F3);
+    const bool f3Down = inputWindow.IsKeyPressed(EKeys::F3);
     if (f3Down && !navMeshDebugKeyWasDown_) {
         ToggleNavMeshDebug();
         std::cout << "NavMesh debug: " << (IsNavMeshDebugEnabled() ? "on" : "off") << '\n';
     }
     navMeshDebugKeyWasDown_ = f3Down;
 
-    const bool f4Down = inputWindow.IsKeyPressed(EKey::F4);
+    const bool f4Down = inputWindow.IsKeyPressed(EKeys::F4);
     if (f4Down && !hudStatsKeyWasDown_) {
         SetHudStatsVisible(!showHudStats_);
         std::cout << "HUD stats: " << (showHudStats_ ? "on" : "off") << '\n';
     }
     hudStatsKeyWasDown_ = f4Down;
 
-    const bool f5Down = inputWindow.IsKeyPressed(EKey::F5);
+    const bool f5Down = inputWindow.IsKeyPressed(EKeys::F5);
     if (f5Down && !reloadKeyWasDown_) {
         const EShaderReloadResult result = reloadAllShaders(true);
         if (result == EShaderReloadResult::Failed) {
@@ -426,7 +426,7 @@ void Engine::handleInput(float deltaTime) {
 
     const bool wantLook =
         !suppressCameraDrag_ &&
-        (inputWindow.IsCursorCaptured() || inputWindow.IsMouseButtonDown(EMouseButton::Left));
+        (inputWindow.IsCursorCaptured() || inputWindow.IsMouseButtonDown(EMouseButtons::Left));
 
     if (wantLook) {
         if (mouseLookSampleValid_) {
@@ -453,7 +453,7 @@ void Engine::handleInput(float deltaTime) {
 void Engine::render(const PostRenderCallback& onPostRender) {
     int fbWidth = 0;
     int fbHeight = 0;
-    window_.GetFramebufferSize(fbWidth, fbHeight);
+    window_->GetFramebufferSize(fbWidth, fbHeight);
     if (fbWidth <= 0 || fbHeight <= 0) {
         return;
     }

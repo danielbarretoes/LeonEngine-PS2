@@ -1,15 +1,11 @@
 #include "Components/VerticalBoxWidget.h"
-#include "EKey.h"
+#include "InputCoreTypes.h"
 
 #include <algorithm>
 #include <cmath>
 
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
-#include "Window.h"
-#include "EKey.h"
+#include "GenericPlatform/GenericWindow.h"
 #include "Debug/DebugOverlay.h"
-#include "EKey.h"
 
 namespace leon {
 
@@ -176,7 +172,7 @@ void VerticalBoxWidget::NativePaint(WidgetPaintContext& ctx) {
     }
 }
 
-std::string VerticalBoxWidget::TickInput(Window& window, bool cursorCaptured, float deltaTime) {
+std::string VerticalBoxWidget::TickInput(FGenericWindow& window, bool cursorCaptured, float deltaTime) {
     if (buttons_.empty()) {
         return {};
     }
@@ -191,12 +187,12 @@ std::string VerticalBoxWidget::TickInput(Window& window, bool cursorCaptured, fl
         CacheLayout(fbW, fbH);
     }
 
-    const bool up = window.IsKeyPressed(EKey::Up) || window.IsKeyPressed(EKey::W);
-    const bool down = window.IsKeyPressed(EKey::Down) || window.IsKeyPressed(EKey::S);
-    const bool enter = window.IsKeyPressed(EKey::Enter) ||
-                       window.IsKeyPressed(EKey::KpEnter) ||
-                       window.IsKeyPressed(EKey::Space);
-    const bool mouse = window.IsMouseButtonDown(EMouseButton::Left);
+    const bool up = window.IsKeyPressed(EKeys::Up) || window.IsKeyPressed(EKeys::W);
+    const bool down = window.IsKeyPressed(EKeys::Down) || window.IsKeyPressed(EKeys::S);
+    const bool enter = window.IsKeyPressed(EKeys::Enter) ||
+                       window.IsKeyPressed(EKeys::NumPadEnter) ||
+                       window.IsKeyPressed(EKeys::SpaceBar);
+    const bool mouse = window.IsMouseButtonDown(EMouseButtons::Left);
 
     if (up && !upWasDown_) {
         StepSelectable(-1);
