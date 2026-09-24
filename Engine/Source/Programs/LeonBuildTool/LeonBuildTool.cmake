@@ -8,6 +8,7 @@
 #   -Project=<file.leonproject>   build a game target of that project
 #   -Mode=Build|Clean|Rebuild|GenerateClangDatabase|Setup   (default Build)
 #   -NoDocker                     never re-launch inside the platform's Docker image
+#   -KeepGoing                    keep compiling after errors (ninja -k 0), to see every error at once
 #
 # Build trees: <Project>/Intermediate/Build/<Platform>/<Configuration> for games,
 #              Engine/Intermediate/Build/<Platform>/<Configuration> for engine targets.
@@ -45,6 +46,7 @@ set(_Positional)
 set(_ProjectFile "")
 set(_Mode Build)
 set(_NoDocker FALSE)
+set(_KeepGoing FALSE)
 foreach(_Arg IN LISTS _Args)
 	if(_Arg STREQUAL "--")
 		# Separator that stops CMake from parsing our options (e.g. -Project= would read as -P).
@@ -57,6 +59,8 @@ foreach(_Arg IN LISTS _Args)
 		set(_Mode Clean)
 	elseif(_Arg STREQUAL "-NoDocker")
 		set(_NoDocker TRUE)
+	elseif(_Arg STREQUAL "-KeepGoing")
+		set(_KeepGoing TRUE)
 	elseif(_Arg MATCHES "^-")
 		message(FATAL_ERROR "LeonBuildTool: unknown option ${_Arg}")
 	else()
@@ -143,6 +147,9 @@ if(_NeedDocker)
 		list(APPEND _DockerArgs --user "${_Uid}:${_Gid}")
 	endif()
 	set(_Inner ${_Target} ${_Platform} ${_Configuration} -Mode=${_Mode} -NoDocker)
+	if(_KeepGoing)
+		list(APPEND _Inner -KeepGoing)
+	endif()
 	if(_ContainerProject)
 		list(APPEND _Inner "${_ContainerProject}")
 	endif()
@@ -208,7 +215,11 @@ if(_Mode STREQUAL "GenerateClangDatabase")
 	return()
 endif()
 
-execute_process(COMMAND "${CMAKE_COMMAND}" --build "${_BinaryDir}" --target "${_Target}" RESULT_VARIABLE _Result)
+set(_BuildToolArgs)
+if(_KeepGoing)
+	set(_BuildToolArgs -- -k 0)
+endif()
+execute_process(COMMAND "${CMAKE_COMMAND}" --build "${_BinaryDir}" --target "${_Target}" ${_BuildToolArgs} RESULT_VARIABLE _Result)
 if(NOT _Result EQUAL 0)
 	message(FATAL_ERROR "LeonBuildTool: build of ${_Target} failed")
 endif()
