@@ -1,271 +1,204 @@
 # Leon Engine — setup
 
+How to get a working Windows machine that builds the engine (Win64), runs the automation tests, and builds and runs
+the PS2 game in PCSX2. The build system itself is documented in [BUILD.md](BUILD.md).
+
 ## Requirements
 
 | Need | Required for | Notes |
 | --- | --- | --- |
-| CMake 3.20+ | All builds | Prefer install under `C:\Program Files\CMake\bin` (scripts prepend it) |
-| C++20 compiler (MSVC 2022+ / VS 18, or clang/gcc) | **Host** Editor / Tools / PC packs | Scripts look for Community / Professional / **Enterprise** |
-| Git | FetchContent deps | |
-| GPU / driver with **OpenGL 3.3** | Editor / windowed host projects | Headless init skips GL |
-| [Ninja](https://ninja-build.org/) | Fast incremental, clangd, `test.bat` | `winget install Ninja-build.Ninja` |
-| clang-format (VS LLVM) | `format.bat` / `lint.bat` | Bundled with Visual Studio “C++ Clang tools” |
-| [ps2dev](https://github.com/ps2dev/ps2dev) + `PS2DEV` / `PS2SDK` | **PS2** EE cross-builds | WSL2 Ubuntu or Docker (`Scripts/build-ps2-docker.sh`) |
-| [PCSX2](https://pcsx2.net/) | Run / debug `.elf` | Load ELF directly or via `host:` path |
+| Visual Studio 2026 (folder `18`) or 2022, any edition | Win64 builds | Workloads/components: **Desktop development with C++**, **C++ CMake tools for Windows**, **C++ Clang tools for Windows** (LLVM: `clang-format`, `clangd`). The scripts look in `%ProgramFiles%\Microsoft Visual Studio\18\` then `...\2022\`, editions Community, Professional, Enterprise |
+| CMake 3.24 or later on `PATH` | everything | `Setup.bat` calls `cmake` directly. The build scripts also prepend `C:\Program Files\CMake\bin` |
+| [Ninja](https://ninja-build.org/) on `PATH` | Win64 builds | `Build.bat` fails with `Ninja not on PATH` otherwise: `winget install Ninja-build.Ninja`, then open a new terminal |
+| GPU / driver with OpenGL 3.3 | running `LeonGame` | |
+| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | PS2 builds | Builds run in the pinned `ghcr.io/ps2dev/ps2dev` image; nothing else to install. Alternative: a local [ps2dev](https://github.com/ps2dev/ps2dev) with `PS2DEV` / `PS2SDK` exported |
+| [PCSX2](https://pcsx2.net/) (Qt build) + a PS2 BIOS dump | running the PS2 build | `winget install PCSX2Team.PCSX2` |
+| Git | cloning | |
 
-This repo is **PS2-first / dual-target**: Host (Windows) authors and cooks; Target (EE) runs lean Runtime packs.
+## First-time setup
 
-The repo root is **not** a CMake project — configure `Editor`, `Projects/<name>`, `Tools`, or PS2 via toolchain.
-
-## Scripts (`Scripts/`)
-
-| Script | Purpose | Output / notes |
-| --- | --- | --- |
-| `_vsenv.bat` | Shared VS env helper (not run alone) | `vcvars` \| `vsdev` + `quiet` / `need-ninja` / `need-git` |
-| `build.bat` | Full Editor (VS generator) + tests | `Editor\build\Release\LeonEngine.exe`, `leon_tests.exe` |
-| `build-fast.bat` | Day-to-day Editor (Ninja, tests OFF) | `Editor\build-fast\LeonEngine.exe` |
-| `configure-ninja.bat` | Ninja Release + compile DBs + Editor build | `Editor\build-ninja\`, `Tools\build-ninja\` (clangd) |
-| `test.bat` | Build `leon_tests` + `ctest` | **Same tree as** `configure-ninja`: `Editor\build-ninja` |
-| `cook.bat` | Build + run `leon-cook recipe <json>` | Prefers `Tools\build-ninja`, else VS `Tools\build` |
-| `build-project.bat` / `.sh` | CMake-build pack; optional `--with-server` | Editor **Build → Build Game** → `<project>\Shipping\` (+ `*-server` when Project Settings enables it) |
-| `package-editor.bat` | Portable Editor + SDK folder (dev/release) | `Dist\LeonEditor\` — run from Scripts, not from the editor UI |
-| `make-editor-icon.py` | Rebuild `LeonEditor.ico` from brand logo (BMP for rc.exe) | `python Scripts\make-editor-icon.py` then rebuild editor |
-| `format.bat` | clang-format in-place | Includes `Templates/`; skips `build*`, `_deps`, `_leon_*`, `.git` |
-| `lint.bat` | format dry-run + Release Editor build | Same dirs as format |
-| `build-linux.sh` | Linux Editor + tests | `Editor/build-linux` |
-| `build-ps2.sh` | EE cross-build (ps2dev env) | `Projects/Ps2Cube/build-ps2/leon-Ps2Cube.elf` |
-| `build-ps2-docker.sh` | Same via `ghcr.io/ps2dev/ps2dev` | Works from Windows Docker Desktop |
-| `run-ps2-pcsx2.ps1` | Launch a built ELF in PCSX2 (`-Build` to build first) | Finds `pcsx2-qt.exe` via `LEON_PCSX2`, PATH or default install |
-
-### Editor build trees (do not merge casually)
-
-| Tree | Role | Tests | clangd |
-| --- | --- | --- | --- |
-| `Editor/build-fast` | Day-to-day (`build-fast.bat`) | OFF | optional local DB |
-| `Editor/build-ninja` | Tests + clangd (`test.bat` / `configure-ninja.bat`) | ON when configured for tests | **canonical** (`.clangd`) |
-| `Editor/build` | Full VS solution (`build.bat` / `lint.bat`) | ON | no |
-
-VS discovery order: **18** then **2022**, editions Community → Professional → Enterprise (via `_vsenv.bat`). Paths like `Visual Studio\2026\` are **not** used (folder names are `18` / `2022`).
-
-## First build (Editor)
-
-Full Visual Studio solution + tests:
+From the repo root:
 
 ```bat
-Scripts\build.bat
-Editor\build\Release\LeonEngine.exe
+Setup.bat
 ```
 
-## Day-to-day (recommended)
+`Setup.bat` downloads the pinned third-party archives (GLFW, GLM, miniaudio, nlohmann/json, tinyobjloader, Catch2,
+Jolt) into `Engine/Intermediate/ThirdPartyDownloads/`, checks their SHA-256 and extracts them next to their module
+rules. Run it again after pulling a change that bumps a library. List of libraries: [LIBRARIES.md](LIBRARIES.md).
 
-Ninja + Release + `LEON_BUILD_TESTS=OFF` + target `leon-editor` only (output `LeonEngine.exe`):
+## Build the engine (Win64)
+
+`Engine\Build\BatchFiles\Build.bat` loads the Visual Studio environment itself, so any terminal works:
 
 ```bat
-Scripts\build-fast.bat
-Editor\build-fast\LeonEngine.exe
+Engine\Build\BatchFiles\Build.bat LeonGame Win64 Development
+Engine\Build\BatchFiles\Build.bat LeonCook Win64 Development
+Engine\Build\BatchFiles\Build.bat BlankProgram Win64 Development
 ```
 
-Portable release (editor + SDK for another PC):
+Outputs go to `Engine\Binaries\Win64\` (`LeonGame.exe`, `LeonCook.exe`, `BlankProgram.exe`); build trees to
+`Engine\Intermediate\Build\Win64\<Configuration>\`. Other configurations are `Debug` and `Shipping`; their executables
+are named `<Target>-Win64-<Configuration>.exe`. `Clean.bat` and `Rebuild.bat` take the same arguments; add
+`-KeepGoing` to see every compile error in one run.
+
+## Run the tests
 
 ```bat
-Scripts\package-editor.bat
-Dist\LeonEditor\LeonEngine.exe
+Engine\Build\BatchFiles\RunTests.bat
 ```
 
-What makes this fast:
-
-- MSVC `/MP` (and `/FS` when using debug info)
-- Precompiled header on `leon_editor` (`Editor/pch.h`)
-- Asset POST_BUILD via `Build/SyncDirectory.cmake` (`copy_if_different`)
-- No Catch2 graph unless you reconfigure with tests ON
-
-Re-run after touching a single `.cpp` — typically seconds, not minutes.
-
-Ninja + tests + `compile_commands.json` (clangd):
+This builds `LeonAutomationTests` (Win64 Development) and runs it from the repo root. The executable contains the
+automation tests of every module in its closure (`<Module>/Private/Tests/`, 156 test cases today, Catch2). Arguments
+are passed to Catch2:
 
 ```bat
-Scripts\configure-ninja.bat
-Editor\build-ninja\LeonEngine.exe
+Engine\Build\BatchFiles\RunTests.bat "[physics]"
+Engine\Build\BatchFiles\RunTests.bat --list-tests
 ```
 
-### IDE / clangd (Cursor)
+## LeonGame
 
-| Piece | Role |
-| --- | --- |
-| `.clangd` | `CompilationDatabase: Editor/build-ninja`; `Tools/` → `Tools/build-ninja` |
-| `.vscode/settings.json` | clangd `QueryDriver` for `cl.exe`; MS C++ IntelliSense off |
-| `Scripts/fix-compile-commands.ps1` | Rewrites `-IC:\Users\...` → forward slashes |
+`LeonGame` is the engine's game executable (UE: `UE4Game`). It runs a **project pack**: a `Projects/<Name>/` folder
+with a `leon.game.json` (its `defaultLevel` is the first level to open), looked up relative to the executable and the
+working directory.
 
-**Why the script exists:** CMake/Ninja emits MSVC commands with backslash include paths. clangd’s command lexer treats `\U` in `\Users` as an escape, so includes (`ufbx.h`, `Editor/include`, …) vanish and you get false “no member / file not found” errors even when `cl.exe` builds fine.
+```bat
+Engine\Binaries\Win64\LeonGame.exe --pack <Name>
+```
 
-`configure-ninja.bat` configures **Editor** and **Tools** Ninja DBs, builds the Editor, then runs the fixer (copies Editor DB to repo-root `compile_commands.json` for editors that look there). After regenerating: **Developer: Restart Language Server**.
+There are no packs in the repository at the moment, so `LeonGame` has nothing to run until you add one. Other flags
+(`Engine/Source/Runtime/Launch/Private/Desktop/GameApplication.cpp`): `--listen` / `--host`, `--join <ip>`,
+`--map <Key>`, `--port <n>`, `--dedicated` / `--server`, `--tick <Hz>`, `--show-stats`.
 
-## Projects
+## Cook
 
-Canonical in-repo pack is the PS2 capability lab:
+```bat
+Engine\Build\BatchFiles\Cook.bat staticmesh --obj Mesh.obj --out Mesh.lmesh
+Engine\Build\BatchFiles\Cook.bat recipe CookRecipe.json
+```
+
+`Cook.bat` builds `LeonCook` and passes the arguments through. Modes: `staticmesh`, `character`, `anim`, `recipe`
+(run `Cook.bat --help` for the options). Formats: [ASSET_FORMATS.md](ASSET_FORMATS.md). Tool reference:
+[TOOLS.md](TOOLS.md).
+
+## PS2
+
+The PS2 game is `Game/ThirdPerson`, an isolated project built against the engine with `-Project=`. With Docker
+Desktop running:
+
+```bat
+Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.leonproject
+```
+
+→ `Game\ThirdPerson\Binaries\PS2\ThirdPerson.elf`. The first build pulls the ps2dev image. PS2 builds do not need
+Visual Studio. When `PS2DEV` is not set, LeonBuildTool runs itself inside the container; with a local ps2dev install
+(`PS2DEV`, `PS2SDK`, and `$PS2DEV/ee/bin` on `PATH`) it builds on the host. From Git Bash, WSL or Linux use
+`Engine/Build/BatchFiles/Linux/Build.sh` with the same arguments. Details:
+[BUILD.md — PS2 builds in Docker](BUILD.md#ps2-builds-in-docker) and the platform extension
+[Engine/Platforms/PS2/README.md](../Engine/Platforms/PS2/README.md).
+
+The engine-only `BlankProgram` also builds for PS2 (`Build.bat BlankProgram PS2 Development` →
+`Engine\Binaries\PS2\BlankProgram.elf`).
+
+### Run in PCSX2
 
 ```powershell
-.\Scripts\build-ps2-docker.ps1 cube
-# → Projects/Ps2Cube/build-ps2/leon-Ps2Cube.elf
+Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson          # run the built ELF
+Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson -Build   # build first
 ```
 
-Host gameplay packs are created from the Editor (**File → New Project**) using `Templates/Blank` or `Templates/ThirdPerson`, then built with:
+`-Project` accepts a project folder or a `.leonproject` file (default `Game\ThirdPerson`); `-Configuration` is
+`Debug`, `Development` (default) or `Shipping`. The script finds PCSX2 through `$env:LEON_PCSX2`, then
+`pcsx2-qt.exe` on `PATH`, then the default install folders, and starts it with `-fastboot -elf <file>`. You can also
+use PCSX2's **File → Run ELF** directly.
 
-```bat
-Scripts\build-project.bat Projects\<YourPack>
-```
+ThirdPerson controls:
 
-## Tools
-
-Offline cook / CLI (`cmake -S Tools`). For clangd on Tools sources, prefer the Ninja DB from `configure-ninja.bat` (`Tools/build-ninja`).
-
-```bat
-Scripts\cook.bat Templates\ThirdPerson\assets\characters\bot\cook-bot.json
-```
-
-`cook.bat` will configure Tools if needed (Ninja when available, otherwise Visual Studio). Equivalents:
-
-```bat
-cmake -S Tools -B Tools/build
-cmake --build Tools/build --config Release
-Tools\build\Release\leon-cook.exe recipe Templates\ThirdPerson\assets\characters\bot\cook-bot.json
-Tools\build\Release\leon-cli.exe cook Templates\ThirdPerson\assets\characters\bot\cook-bot.json
-```
-
-`leon-cli cook` runs the **sibling** `leon-cook` binary (same output directory; resolved via the CLI module path on Windows).
-
-Full Tools reference (modes, recipe schema, lean link graph, ResourceTools API): **[TOOLS.md](TOOLS.md)**.
-
-Level / lightmap authoring: [LEVELS.md](LEVELS.md). Material / mesh cook formats: [ASSET_FORMATS.md](ASSET_FORMATS.md). Editor panels: [EDITOR.md](EDITOR.md).
-
-## Layout
-
-| Path | Role |
+| Input | Action |
 | --- | --- |
-| `Engine/` | Libraries + `Assets/` |
-| `Editor/` | Level editor (+ PIE via Engine GameModes) |
-| `Runtime/` | Thin game host |
-| `Plugins/` | OpenGL RHI, Arcade physics, optional Jolt |
-| `Projects/` | Game packs |
-| `Build/` | Shared CMake helpers |
-| `Scripts/` | Build / cook / format / test helpers |
-| `Tools/` | `leon-cook`, `leon-cli`, `leon_resource_tools` ([TOOLS.md](TOOLS.md)) |
-| `Dist/` | Portable outputs (`LeonEditor/`, `Games/<Name>/`) — not committed |
-| `Docs/` | Architecture + authoring |
-| `Tests/` | Catch2 |
+| Left stick | move (camera-relative) |
+| Right stick | orbit the camera |
+| Cross | jump |
+| Start | quit |
+| Select | cycle the engine debug overlay: both panels → stats → gamepad → none |
 
-### Portable game / editor (another PC)
+The overlay (FPS, RAM, VRAM, resolution, plus the DualShock widget) is described in the
+[PS2 platform README](../Engine/Platforms/PS2/README.md#debug-overlay).
 
-```bat
-REM GAME — from editor: Build → Build Game
-REM → Projects\<Name>\Shipping\   ← copy this folder to play on another PC
+### PCSX2 notes
 
-REM EDITOR toolkit — developer script only (not in the editor menu)
-Scripts\package-editor.bat
-REM → Dist\LeonEditor\
-```
+- **Controller**: bind your pad in the global **Controller Port 1** settings. Bindings made only inside an input
+  profile do not reach games unless that profile is the one in use. An Xbox controller shows up as an SDL device
+  (`SDL-0`).
+- **EE console log**: the ELF prints diagnostics with `printf` (for example `FPS2RHI::InitDisplay: 640x448 GS +
+  z-buffer ready`, `PS2InputInterface: ...`, `FStatsOverlay` visibility changes). Enable the EE console in PCSX2's
+  logging settings (`EnableEEConsole = true` under `[Logging]` in `PCSX2.ini`) and read the PCSX2 log window or
+  `logs/emulog.txt` in the PCSX2 user folder. Edit `PCSX2.ini` only while PCSX2 is closed; it rewrites the file on exit.
+- PCSX2 ignores synthetic keyboard input, so button handling has to be tested with a real pad (or keyboard bindings
+  on Pad 1).
 
-**Not in git:** `*/build/`, `*/build-ninja/`, `Editor/build-fast/`, `Tools/build-ninja/`, `compile_commands.json` (see `.gitignore`).
-
-## Tests
+## IDE and clangd
 
 ```bat
-Scripts\test.bat
+GenerateProjectFiles.bat
 ```
 
-Requires Ninja. Or after an Editor configure with `LEON_BUILD_TESTS=ON`:
+This writes a Visual Studio solution to `Engine\Intermediate\ProjectFiles\` (for browsing and debugging; keep building
+with `Build.bat`) and the root `compile_commands.json` from the `LeonAutomationTests Win64 Development` Ninja tree,
+which covers the Win64 engine modules and their tests.
+
+VS Code / Cursor with clangd work out of the box with the committed settings:
+
+| File | Role |
+| --- | --- |
+| `.clangd` | `CompilationDatabase: .` (root `compile_commands.json`); no diagnostics under `ThirdParty/` |
+| `.vscode/settings.json` | clangd `--compile-commands-dir=${workspaceFolder}`, `--query-driver` for MSVC `cl.exe` (system headers), MS C++ IntelliSense off, tabs of width 4, ruler at 120 |
+| `.vscode/c_cpp_properties.json` | `Win64` configuration on the root `compile_commands.json` |
+| `.clang-tidy` | clang-tidy checks used by clangd |
+
+Re-run `GenerateProjectFiles.bat` after adding modules or files, then **Developer: Restart Language Server**.
+The database is Win64 only; PS2-only files (`Engine/Platforms/PS2/`, `Game/ThirdPerson/`) are not in it.
+
+## Formatting and lint
 
 ```bat
-ctest --test-dir Editor/build -C Release -R "^leon\." --output-on-failure
-ctest --test-dir Editor/build-ninja -R "^leon\." --output-on-failure
+Engine\Build\BatchFiles\FormatCode.bat            :: clang-format in place
+Engine\Build\BatchFiles\FormatCode.bat --check    :: dry run, fails if a file needs formatting
+Engine\Build\BatchFiles\Lint.bat                  :: format check + Win64 build of every engine target
 ```
 
-## Format / lint
+`FormatCode.bat` uses Visual Studio's LLVM `clang-format` (or one on `PATH`) with the repo's `.clang-format` (Epic
+style: tabs, Allman braces) on `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game`, skipping `ThirdParty`,
+`Intermediate` and `Binaries`. Coding rules: [CODING_STANDARD.md](CODING_STANDARD.md).
 
-```bat
-Scripts\format.bat
-Scripts\lint.bat
-```
+## Continuous integration
 
-Both skip generated trees under `build`, `build-*`, `_deps`, `_leon_*`, and `.git`.
+`.github/workflows/ci.yml` runs two jobs on every push to `main` / `master` and on pull requests:
 
-## PS2 (Emotion Engine)
+- **ps2**: inside the pinned ps2dev image, builds `ThirdPerson` and `BlankProgram` for PS2 with
+  `Engine/Build/BatchFiles/Linux/Build.sh` and uploads `ThirdPerson.elf`.
+- **win64**: `Setup.bat`, `RunTests.bat`, then builds `LeonGame` and `LeonCook`.
 
-**Toolchain (WSL2 Ubuntu recommended):**
-
-1. Install [ps2dev](https://github.com/ps2dev/ps2dev) and export:
-   - `PS2DEV` (e.g. `/usr/local/ps2dev`)
-   - `PS2SDK` (`$PS2DEV/ps2sdk`)
-   - prepend `$PS2DEV/ee/bin` to `PATH`
-2. Validate toolchain only:
-   ```bash
-   Scripts/build-ps2.sh hello
-   # → Samples/Ps2Hello/build-ps2/leon-Ps2Hello.elf
-   ```
-3. 3D scene (lit/textured boxes, dynamic sun; Start to quit):
-   ```bash
-   Scripts/build-ps2.sh cube
-   # → Projects/Ps2Cube/build-ps2/leon-Ps2Cube.elf
-   ```
-4. Third-person gameplay (orbit camera + primitive level; Start to quit):
-   ```bash
-   Scripts/build-ps2.sh tp
-   # → Projects/Ps2ThirdPerson/build-ps2/leon-Ps2ThirdPerson.elf
-   ```
-5. Optional 2D capability lab:
-   ```bash
-   Scripts/build-ps2.sh lab
-   # → Projects/Ps2Lab/build-ps2/leon-Ps2Lab.elf
-   ```
-
-**Docker (no local ps2dev — recommended on Windows):**
-
-```powershell
-.\Scripts\build-ps2-docker.ps1 hello
-.\Scripts\build-ps2-docker.ps1 cube
-.\Scripts\build-ps2-docker.ps1 tp
-.\Scripts\build-ps2-docker.ps1 lab
-```
-
-Or from Git Bash / WSL: `Scripts/build-ps2-docker.sh tp`. Outputs:
-
-- `Samples/Ps2Hello/build-ps2/leon-Ps2Hello.elf`
-- `Projects/Ps2Cube/build-ps2/leon-Ps2Cube.elf`
-- `Projects/Ps2ThirdPerson/build-ps2/leon-Ps2ThirdPerson.elf`
-- `Projects/Ps2Lab/build-ps2/leon-Ps2Lab.elf`
-
-CMake entry: `-DCMAKE_TOOLCHAIN_FILE=Build/toolchains/ps2-ee.cmake` sets `LEON_PLATFORM=PS2` and `LEON_RHI=PS2`.
-
-**Engine debug overlay (every PS2 project, on by default):** `Window::SwapBuffers` draws two 50% translucent panels with the same margin / padding and a half-size 5×7 font:
-
-- **Stats** (top-left): `FPS` + work `ms`, `RAM` (EE image + heap / 32 MB), `VRAM` (GS allocations / 4 MB), `RES`, then any project lines from `SetStatsHudExtraLine(slot, text)`.
-- **Pad** (top-right): LED green = reading / orange = port open, no data / red = port closed; buttons light while held; stick dots follow the raw axes.
-
-**Select** cycles both → stats only → pad only → none. Code: `leon/core/DebugOverlay.h`. `Window::PollEvents` refreshes the pad and `SwapBuffers` resets the Draw3D counters every frame, so projects do not call `PollPad()` / `Ps2Draw3DDebugBeginFrame()` themselves.
-
-**Draw3D (`Ps2DrawBox`):** box frustum cull → per-face backface cull → per-face lighting → per-triangle homogeneous clip (near plane + NDC guard band, Sutherland–Hodgman) → GS scissor. Counters: `Ps2Draw3DDebugGetStats` (`BOXES drawn/total`, `TRIS`, `CLIP` in Ps2ThirdPerson's HUD lines).
-
-**PCSX2:** File → Run ELF → pick `leon-Ps2ThirdPerson.elf` (gameplay), `leon-Ps2Cube.elf` (3D lab), or `leon-Ps2Lab.elf` (2D). For cooked assets on disk, use a PCSX2 `host:` folder or ISO layout under [ASSET_FORMATS — PS2](ASSET_FORMATS.md#ps2-cooked-lps2).
-
-Host Editor remains the content/cook path (`Scripts\build.bat`, `Scripts\cook.bat`).
+Formatting is checked locally with `Lint.bat` (the runner's clang-format version may differ from Visual Studio's).
 
 ## Troubleshooting
 
 | Symptom | Fix |
 | --- | --- |
-| `cmake -S .` fails | Expected — configure `Editor`, `Projects/<name>`, `Tools`, or PS2 toolchain |
-| `PS2DEV is not set` | Install ps2dev / use `build-ps2-docker.sh` |
-| `ee-g++` missing | Ensure `$PS2DEV/ee/bin` is on `PATH` inside WSL/Docker |
-| `VsDevCmd.bat not found` | Install VS 18 or 2022 with C++ workload (any edition) |
-| Levels/materials missing next to exe | Rebuild so POST_BUILD syncs `assets/` + `Projects/<pack>/` |
-| clangd missing includes / false “no member” | `Scripts\configure-ninja.bat` (fixes paths); Restart Language Server |
-| clangd OK on Editor, red on `Tools/` | Same script configures `Tools/build-ninja`; check `.clangd` PathMatch |
-| clangd STL1003 / “expected C++ compiler” | DB missing or not C++; re-run configure-ninja; ensure `--query-driver` for `cl.exe` |
-| Editor rebuild takes many minutes | Use `Scripts\build-fast.bat`; avoid Debug for daily work; build target `leon-editor` only |
+| `vcvars64.bat not found` | Install Visual Studio 18 (2026) or 2022 with the C++ workload |
 | `Ninja not on PATH` | `winget install Ninja-build.Ninja` and open a new terminal |
-| `cook.bat` fails without Ninja | Script falls back to VS `Tools\build`; ensure CMake + VS are installed |
-| `leon-cli cook` cannot find leon-cook | Build Tools so both exes sit in the same folder, or use `Scripts\cook.bat` |
-| Format touches generated code | Should not — if it does, check path is under a skipped `build*` folder |
-| Lightmaps missing in shipping | Bake + save level; runtime loads `.lm` via `LightmapIO` — see [LEVELS.md](LEVELS.md) |
+| `cmake` is not recognized (`Setup.bat`) | Install CMake 3.24+ and add it to `PATH` |
+| `LeonBuildTool: unknown platform` / `configuration must be ...` | Platforms: `Win64`, `Linux`, `PS2`; configurations: `Debug`, `Development`, `Shipping` |
+| `LeonBuildTool: unknown module 'X' (required by ...)` | A dependency name is misspelled or its `.Build.cmake` is missing |
+| `module 'X' is not available on PS2` | A module used on PS2 depends on a Desktop-only module; move the dependency under a `_Desktop` suffix |
+| `LeonBuildTool: Docker build failed` | Start Docker Desktop; check that `docker run hello-world` works |
+| `PS2DEV is not set` | Only with `-NoDocker` or inside a custom container: export `PS2DEV` / `PS2SDK` |
+| `ELF not found` in `RunPCSX2.ps1` | Build first (`-Build`) or check `-Configuration` |
+| `PCSX2 not found` | Install it or set `$env:LEON_PCSX2` to `pcsx2-qt.exe` |
+| Pad does nothing in PCSX2 | Bind it in the global Controller Port 1 settings (see [PCSX2 notes](#pcsx2-notes)) |
+| clangd reports missing includes | Run `GenerateProjectFiles.bat`, then restart the language server |
+| A third-party download fails the hash check | Delete the archive in `Engine\Intermediate\ThirdPartyDownloads\` and run `Setup.bat` again |
 
-More: [ARCHITECTURE](ARCHITECTURE.md) · [NAMING](NAMING.md) · [TOOLS](TOOLS.md) · [LEVELS](LEVELS.md) · [ASSET_FORMATS](ASSET_FORMATS.md) · [EDITOR](EDITOR.md) · [LIBRARIES](LIBRARIES.md)
+More: [BUILD.md](BUILD.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [CODING_STANDARD.md](CODING_STANDARD.md) ·
+[LIBRARIES.md](LIBRARIES.md) · [UnrealEngine427/](UnrealEngine427/README.md)

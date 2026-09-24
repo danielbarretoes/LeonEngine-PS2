@@ -1,5 +1,5 @@
 # Levels
 
-Editor-facing placeholder. Runtime today builds a **primitive sandbox** in code (`Ps2ThirdPersonDemo`).
+Empty on purpose. The PS2 runtime does not load `.llev` levels yet, so the demo level is built in code by `FThirdPersonLevel::Build` (`Source/ThirdPerson/ThirdPersonLevel.cpp`): an 18 × 18 grid of ground tiles and 17 box props (crates, platforms, stairs, walls).
 
-Future: cook / load `.llev` (same POD fields: actor Location / Rotation / Scale, materials) for Editor open → EE play.
+The `.llev` format and how the desktop runtime loads levels are described in [Docs/LEVELS.md](../../../../Docs/LEVELS.md).

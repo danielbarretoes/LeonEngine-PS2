@@ -1,10 +1,12 @@
 # Materials
 
-Logical names used by the demo (`Ps2Material` PODs):
+Empty on purpose. The demo's materials are `FPS2Material` values set up in `FThirdPersonGameMode::StartPlay` (`Source/ThirdPerson/ThirdPersonGameMode.cpp`), not `.lmat` files:
 
-| Asset | Role |
-| --- | --- |
-| `M_Ground` | Floor (`T_Grid_D`) |
-| `M_Platform` | Raised blocks |
-| `M_Crate` | Props |
-| `M_Character` | Player capsule proxy |
+| Member | Used for | Base color map |
+| --- | --- | --- |
+| `GroundMaterial` | Ground tiles | `GridTexture` |
+| `PlatformMaterial` | Platforms, stairs, walls | `CheckerTexture` |
+| `CrateMaterial` | Crates | `CheckerTexture` |
+| `CharacterMaterial` | Character | none (solid color) |
+
+`FPS2Material` mirrors a subset of `.lmat` (`BaseColor`, `BaseColorMap`, `ShadingModel`); see [Docs/ASSET_FORMATS.md](../../../../Docs/ASSET_FORMATS.md#ps2).

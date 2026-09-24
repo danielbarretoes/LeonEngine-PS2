@@ -103,8 +103,8 @@ The full rename table lives in this file as phases land (see sections added per 
 Engine loop without the gameplay framework (`WITH_ENGINE=0`, PS2): `PreInit` creates the application and
 the 640×448 main window, then starts the statically linked modules (the game module registers its tick);
 each `Tick` runs `PollGameDeviceState` → `PollEvents` → `FTicker` → `FPlatformEngineLoopHooks::EndFrame`
-(stats overlay) → `SwapBuffers` (vsync) → `PostPresent`. Desktop `WITH_ENGINE=1` still delegates to the
-pre-UE `GameApplication` loop until Phase 4.6.
+(stats overlay) → `SwapBuffers` (vsync) → `PostPresent`. Desktop `WITH_ENGINE=1` delegated to the
+pre-UE `GameApplication` loop until Phase 4.9 (see the Phase 4 table below).
 
 ### Phase 4 — Epic naming across every module
 

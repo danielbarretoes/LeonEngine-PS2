@@ -7,7 +7,59 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-24
+
+Restructure to the **Unreal Engine 4.27** layout, architecture and coding standard, built with CMake
+through **LeonBuildTool**. Rename tables: `Docs/UnrealEngine427/LeonMapping.md`.
+
+### Changed (breaking)
+
+- **Layout**: modules under `Engine/Source/{Runtime,Developer,Programs,ThirdParty}` with
+  `Public/Private/Classes`; the PS2 code is a platform extension (`Engine/Platforms/PS2`, including the
+  `PS2RHI` module); Jolt is a plugin (`Engine/Plugins/Runtime/JoltPhysics`, Win64); content in
+  `Engine/Content`, GLSL in `Engine/Shaders`; tests in `<Module>/Private/Tests`.
+- **Build**: LeonBuildTool (UnrealBuildTool homologue, pure CMake) replaces the root CMake build and
+  `Scripts/`: `<Module>.Build.cmake` / `<Target>.Target.cmake` / `.leonproject` / `.leonplugin`,
+  `Engine/Build/BatchFiles/{Build,Clean,Rebuild,RunTests,Cook,FormatCode,Lint,GenerateProjectFiles}.bat`,
+  `Setup.bat` (pinned third-party downloads), PS2 builds in the pinned ps2dev Docker image, generated
+  statically linked module table (`IMPLEMENT_MODULE` / `FModuleManager`).
+- **Game**: the only game is `Game/ThirdPerson` (from `Projects/Ps2ThirdPerson`), isolated from the engine
+  and built separately (`Build.bat ThirdPerson PS2 Development -Project=...`); primary game module
+  `FThirdPersonModule` ticking `FThirdPersonGameMode` through `FTicker`.
+- **HAL / ApplicationCore / RHI / Launch**: `FPlatformMemory/Time/Math`, `FStatsOverlay`, `FTicker`,
+  `EKeys` (UE names), `GenericApplication` / `FGenericWindow` / `IInputInterface` (GLFW desktop, PS2
+  application + window + DualShock input), `FDynamicRHI` / `GDynamicRHI` (`FOpenGLDynamicRHI`,
+  `FPS2RHI` static API), `GuardedMain` + `FEngineLoop` driving both the PS2 game and the desktop
+  `UGameEngine` session one frame at a time.
+- **Naming**: no `namespace leon`; UE type prefixes (`UGameEngine`, `UWorld`, `AActor`, `ACharacter`,
+  `FSceneRenderer`, `UTexture2D`, `FPaths`, `UGameplayStatics`, `UCookCommandlet`, …); members,
+  functions, parameters and locals in PascalCase with `b` bools (clang-tidy over every translation
+  unit); `<MODULE>_API` on public classes; shadowing is a compile error (MSVC and GCC).
+- **Formatting**: Epic `.clang-format` (tabs, Allman braces, 120 columns) applied to all engine and game
+  C++; `.editorconfig`; formatting commit listed in `.git-blame-ignore-revs`.
+- **Tooling / CI**: clangd and VS Code read the root `compile_commands.json`; CI builds ThirdPerson for
+  PS2 (ELF artifact) and runs the Win64 build + automation tests.
+
 ### Added
+
+- `Docs/UnrealEngine427/` knowledge base (UE 4.27 source layout, key headers, Leon mapping, next steps),
+  `Docs/BUILD.md`, `Docs/CODING_STANDARD.md` (replaces `NAMING.md`).
+- Config placeholders with UE names (`Engine/Config/Base*.ini`, `Engine/Platforms/PS2/Config/PS2Engine.ini`,
+  `Game/ThirdPerson/Config/Default*.ini`), not loaded yet.
+
+### Removed
+
+- Editor, Templates (including the bot content and its tests), `Projects/Ps2Cube`, `Projects/Ps2Lab`,
+  `Samples/`, `leon-cli`, the legacy root CMake build and `Scripts/`.
+
+### Fixed
+
+- LeonGame was built without the engine framework (target default `COMPILE_AGAINST_ENGINE` ignored).
+- `FHelloMsg` protocol version initialised from itself after the rename (now `CurrentProtocolVersion`).
+
+### Earlier in this cycle (before the restructure; paths and names as they were then)
+
+#### Added
 
 - **Projects/Ps2ThirdPerson** — PS2 third-person gameplay (`leon-Ps2ThirdPerson.elf`): orbit SpringArm camera, Character move/jump, primitive sandbox level; DualShock sticks (left move / right camera) + Cross jump; `Scripts/build-ps2-docker.ps1 tp`
 - PS2 `InputPad`: `PollPad`, `GetPadLeftStick` / `GetPadRightStick` (DualShock analog mode)
@@ -45,7 +97,7 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - Unreal-like `AudioDevice` (miniaudio): `PlaySound2D` / `PlaySoundAtLocation` / `PlayUiSound`; CoopTp menus play click/confirm/back/error cues
 - Unreal-like HUD widgets: `ButtonWidget` (UButton lite) and `VerticalBoxWidget` (UVerticalBox lite); CoopTp Main Menu / Lobby / Pause use VerticalBox + Buttons
 
-### Fixed
+#### Fixed
 
 - Character capsules collide with each other (players / AI) via pairwise XZ depenetration in `World::TickGameplayFrame`
 - NavMesh bake: ignore wide floor slabs / `Plane` (not plates); force-block `AISpawnPlate`; `SlopeRamp` stays walkable so AI can path/climb (CMC); TriangleMesh blockers use XZ tri footprint instead of fat world AABB
@@ -58,7 +110,7 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - CoopTp Join: suppress ghost menu activate after travel (Connecting… until Welcome; 350ms lockout); GameplayRouter re-syncs GameMode same frame after ClientTravel
 - `Scripts\smoke-coop-dedicated.bat` — dedicated headless smoke (Courtyard); headless `std::cout` uses unitbuf so redirected logs survive process kill
 
-### Changed
+#### Changed
 
 - Renderer / DebugOverlay / DebugDraw public frame API → PascalCase (`Initialize`, `BeginFrame`, `DrawScene`, `GetDebugOverlay`, …); PIE uses project `defaultGameMode` when the level has no GameMode override
 - Dropped obsolete path fallbacks: `games/` projects root, lowercase `engine/` asset roots, and pre-Content `Templates/ThirdPerson/assets/`
@@ -69,7 +121,7 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - CoopTp: removed `CoopSession` singleton (session lives on `CoopGameInstance`); soft map re-enter renamed `OnTravelFinished`
 - Coop polish (UE-like): single session source on `CoopGameInstance`; match gate via `GameState::HasMatchStarted`; `FinishClientJoin` unifies Welcome/Travel; shared `CoopNet::SendTravelToPeers`; `GameState::Reset` no longer clears `PlayerArray`; guarded `LoginPlayer` Logout
 
-### Added
+#### Added
 
 - Character CMC lite (phase 0–5): `FindFloor` / `WalkableFloorZ`; capsule sweep + slide; `tryStepUp`; `EMovementMode` + `AirControl`; `AddSlopeRamp` / steep reject; UE-like tunables (`MaxWalkSpeed`, `JumpZVelocity`, `MaxStepHeight`); tests in `CharacterMovementTests`
 - Unreal-like coop framework: `GameState::PlayerArray` (`Add`/`Remove`/`GetNumPlayers`), `GameMode::HandleStartingNewPlayer`, `CoopGameInstance` (session survives travel), `CoopTpPlayerState`, `LoginPlayer` → PostLogin → RestartPlayer; Lobby `ServerTravelToMatchMap`; Tab scoreboard reads PlayerArray
@@ -109,7 +161,7 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - [`Docs/NAMING.md`](Docs/NAMING.md): folder / file / type / include / CMake conventions (Engine → Runtime → Editor → Templates → Tools)
 - [`Docs/TOOLS.md`](Docs/TOOLS.md): offline cook / CLI / ResourceTools (lean `leon_engine_cook`, recipe schema)
 
-### Fixed
+#### Fixed
 
 - `ResolveAssetPath` no longer picks the newest file across all `Projects/*` (cross-pack leaks); uses `SetActiveContentRoot` (Editor open project / runtime pack) then Engine/staging
 - `--dedicated` uses `initializeHeadless` + `runHeadless` (no OpenGL window); WorldRuntime skips overlay chrome when headless
@@ -132,7 +184,7 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - Editor product exe renamed to `LeonEngine.exe` (CMake target still `leon-editor`); portable package: `Dist/LeonEditor/LeonEngine.exe`
 - Dist/editor: resolve `Materials/…` under `Projects/<name>/Content/` (Details preview no longer looks beside the exe)
 
-### Changed
+#### Changed
 
 - `PlayInputTarget` (`leon/core/PlayInputTarget.h`): groups PIE / multi-window play input (window override + mouse-look gate); `Engine` convenience API unchanged
 - Scripts: shared `Scripts/_vsenv.bat` (vcvars/vsdev); Editor trees documented (`build-fast` vs `build-ninja` vs `build`); `format`/`lint` include `Templates/`; PIE/`editorId` contract in ARCHITECTURE
@@ -173,13 +225,13 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - GLFW init refcount; PIE scroll window; dirty gate Close/Exit; FreeLook camera JSON
 - `GpuPassTimer` non-blocking resolve; Renderer honors `shaderDirectory`
 
-### Fixed
+#### Fixed
 
 - BlendSpace pointer invalidation; Prop/Pawn empty-mesh load; skeletal shadow uniforms
 - clangd false errors on Windows (MSVC `\Users` path escapes in `compile_commands.json`)
 - Dead `writeBytes` helper; duplicated material shininess sync; empty validator branches
 
-### Removed
+#### Removed
 
 - JSON level format entirely (sources, loader, saver, validator, catalog) — levels are `.llev` only
 - Inline material fields on level actors and the `Prop` / `Pawn` placeholder actor classes

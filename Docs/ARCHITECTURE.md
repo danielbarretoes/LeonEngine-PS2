@@ -1,288 +1,507 @@
-# Leon Engine — architecture
+# LeonEngine — architecture
 
-**Canonical path:** [`Docs/ARCHITECTURE.md`](ARCHITECTURE.md)  
-**Also:** [README.md](../README.md), [SETUP.md](SETUP.md), [NAMING.md](NAMING.md), [TOOLS.md](TOOLS.md), [LEVELS.md](LEVELS.md), [ASSET_FORMATS.md](ASSET_FORMATS.md), [EDITOR.md](EDITOR.md), [CHANGELOG.md](../CHANGELOG.md), [LIBRARIES.md](LIBRARIES.md)
+As-built module layout, dependencies and runtime flow. LeonEngine mirrors the **Unreal Engine 4.27**
+source layout, module architecture and Epic naming, and is built with CMake through **LeonBuildTool**
+(our UnrealBuildTool).
 
-As-built layout and module boundaries. Root [`SPEC.md`](../SPEC.md) points here.
-
-**Deferred (not blocking):** optional second RHI/physics backends; dynamic (DLL) plugins. GL handle types use `leon::rhi` opaque ids (`RHIHandles.h`) in public Renderer headers (OpenGL backend still maps 1:1).
+**Also:** [BUILD.md](BUILD.md) (LeonBuildTool reference) · [CODING_STANDARD.md](CODING_STANDARD.md) ·
+[UnrealEngine427/](UnrealEngine427/README.md) (UE 4.27 knowledge base, [LeonMapping](UnrealEngine427/LeonMapping.md),
+[NextSteps](UnrealEngine427/NextSteps.md)) · [SETUP.md](SETUP.md) · [TOOLS.md](TOOLS.md) · [LEVELS.md](LEVELS.md) ·
+[ASSET_FORMATS.md](ASSET_FORMATS.md) · [LIBRARIES.md](LIBRARIES.md) · [README](../README.md)
 
 ---
 
-## Goals
-
-1. Small, generic engine core any Leon project can link.
-2. Separate **edit-time** (Editor), **play-time** (Runtime), and **offline** (Tools).
-3. Grow via optional **Plugins/** (static CMake), not by stuffing backends into core.
-4. Unreal-like gameplay model (Actor, ActorComponent, SceneComponent, GameMode, World, Level).
-5. Independent builds — root is not a mega-project.
-6. Unreal-first **PascalCase** public API on Core / Gameplay / Scene (camelCase aliases kept where needed). Full rules: [NAMING.md](NAMING.md).
-
-## Separate builds
-
-| Project | Command | Produces |
-| --- | --- | --- |
-| Editor (full) | `Scripts\build.bat` | `Editor/build/Release/LeonEngine.exe`, tests |
-| Editor (fast) | `Scripts\build-fast.bat` | `Editor/build-fast/LeonEngine.exe` (Ninja, tests OFF) |
-| Editor (portable) | `Scripts\package-editor.bat` | `Dist/LeonEditor/LeonEngine.exe` + SDK |
-| Project | `cmake -S Projects/<name>` | shipping exe via `leon_runtime` |
-| Tools | `cmake -S Tools` / `Scripts\cook.bat` | `leon-cook`, `leon-cli`, `leon_resource_tools` — [TOOLS.md](TOOLS.md) |
-| Tests | `Scripts\test.bat` | `ctest` on `Editor/build-ninja` |
-
-Day-to-day editor work should use **`build-fast.bat`** (MSVC `/MP`, PCH on `leon_editor`, incremental asset sync). Full script list: [SETUP.md](SETUP.md#scripts-scripts).
-
-## Repository layout
+## 1. Repository layout
 
 ```text
-Leon/
-├── Engine/          # reusable modules + Assets/
-├── Runtime/         # thin play-time host
-├── Editor/          # edit-time app + panels (+ PIE Gameplay)
-├── Tools/           # offline cook / CLI
-├── Plugins/         # RHI OpenGL, Physics Arcade
-├── Projects/        # game packs (own CMake)
-├── Templates/       # project templates (Blank, ThirdPerson)
-├── Samples/         # see Samples/README.md → Projects/ThirdPerson sample pack
-├── ThirdParty/
-├── Build/           # Dependencies, LeonCompileOptions, SyncDirectory
-├── Scripts/
+LeonEngine-PS2/
+├── Engine/
+│   ├── Build/                 # BatchFiles (Build, Clean, Rebuild, RunTests, Cook, FormatCode, Lint, …), Build.version
+│   ├── Config/                # Base*.ini (placeholders, not loaded yet)
+│   ├── Content/               # engine content: Materials, Textures, Hdr, LevelTemplates
+│   ├── Shaders/               # GLSL (desktop renderer)
+│   ├── Source/
+│   │   ├── Runtime/           # modules that ship in games
+│   │   ├── Developer/         # tool-only modules (import, cook)
+│   │   ├── Programs/          # standalone programs + LeonBuildTool
+│   │   ├── ThirdParty/        # external modules (<Lib>/<Lib>.Build.cmake)
+│   │   └── LeonGame.Target.cmake
+│   ├── Platforms/PS2/         # PS2 platform extension (Source, Build, Config, Documentation)
+│   └── Plugins/Runtime/JoltPhysics/
+├── Game/ThirdPerson/          # the only game project (isolated; .leonproject)
 ├── Docs/
-├── Tests/
-├── SPEC.md
-└── README.md
+├── Setup.bat / Setup.sh       # pinned third-party downloads
+└── GenerateProjectFiles.bat / .sh
 ```
 
-| Path | Role |
-| --- | --- |
-| `Engine/Core` … `Utilities` | Physical module folders + `include/leon/` |
-| `Engine/Assets/` | Runtime content (materials, HDR, level templates, …) |
-| `Engine/Content/` | Asset loaders / validators (code) |
-| `Engine/Serialization/` | JSON helpers (`leon_serialization`) |
-| `Runtime/include/leon/runtime` + `Application\|Project\|WorldRuntime` | Thin play-time host (`<leon/runtime/…>`) |
-| `Editor/Application\|Panels\|Gameplay\|…` | Edit-time UI (`leon::editor`) + PIE host (`GameHostSession` / `PiePackRegistry`) |
-| `Tools/AssetPipeline\|Cli\|ResourceTools` | Offline cook / CLI / recipe lib — [TOOLS.md](TOOLS.md) |
-| `Plugins/RHI/OpenGL` | OpenGL RHI + Renderer GPU + debug draw |
-| `Plugins/Physics/Arcade` | Arcade PhysScene |
-| `Projects/` | Game packs (`ResolveProjectsDirectory`) |
-| `Templates/` | **Project** templates copied by the editor hub |
-| `Scripts/` | `build` / `build-fast` / `cook` / `test` / `format` / `lint` |
-| `Build/` | Shared CMake (`/MP`, SyncDirectory, FetchContent) |
-| `Docs/` | Architecture, [NAMING](NAMING.md), [TOOLS](TOOLS.md), setup, [LEVELS](LEVELS.md), [ASSET_FORMATS](ASSET_FORMATS.md), [EDITOR](EDITOR.md) |
+Every C++ module follows the UE anatomy: `<Module>/<Module>.Build.cmake`, `Public/` (headers other
+modules may include), `Classes/` (public gameplay-class headers, UE convention), `Private/` (sources,
+private headers, platform subfolders and `Tests/`). A module without those folders is *flat* (UE game
+module style) — `Game/ThirdPerson/Source/ThirdPerson` is flat.
 
-### Engine modules (CMake)
+---
 
-| Target | Folder |
-| --- | --- |
-| `leon_core` / `leon_platform` | `Engine/Core`, `Engine/Platform` |
-| `leon_serialization` | `Engine/Serialization` |
-| `leon_renderer` | `Engine/Renderer` (CPU); GPU in OpenGL plugin |
-| `leon_import` | `Engine/Import` — DCC import / staticmesh cook (Editor + `leon_engine_cook` only) |
-| `leon_scene` / `leon_gameplay` | `Engine/Scene`, `Engine/Gameplay` |
-| `leon_animation` / `leon_assets` / `leon_network` / `leon_utilities` | matching folders |
-| `leon_assets` | Also `Content/LevelClassNames.cpp` (shape/light class parsers for validator + cook) |
-| `leon_engine_shell` | `Engine` bootstrap (`Gameplay/src/Engine.cpp`) |
-| `leon_engine` | INTERFACE facade + default plugins (Editor / projects) |
-| `leon_engine_cook` | INTERFACE lean cook: assets + animation + renderer + OpenGL cache |
-| `leon_runtime` | thin host — **Projects/Templates/Editor** `add_subdirectory(Runtime)` after Engine (not pulled by Engine itself) |
-| `leon_editor` | Editor static lib; PIE embeds `GameHostSession` + first-party `leon_*_gameplay` packs |
+## 2. Layers
 
-### RHI / Physics
+| Layer | Folder | Contents | May depend on |
+| --- | --- | --- | --- |
+| **Runtime** | `Engine/Source/Runtime` | Core, HAL, application, RHI, rendering, gameplay framework, … | Runtime, ThirdParty |
+| **Developer** | `Engine/Source/Developer` | `MeshUtilities` (DCC import), `Cooker` (cook recipes, `UCookCommandlet`) | Runtime, Developer, ThirdParty |
+| **Programs** | `Engine/Source/Programs` | `LeonCook`, `LeonAutomationTests`, `BlankProgram`, `LeonBuildTool` (CMake scripts, not a module) | anything |
+| **ThirdParty** | `Engine/Source/ThirdParty` | External modules (`TYPE External`): GLM, GLFW, Glad, STB, NlohmannJson, ENet, MiniAudio, UFBX, CGLTF, TinyObjLoader, Catch2 | — |
+| **Platform extension** | `Engine/Platforms/PS2` | PS2 halves of `Core`, `ApplicationCore`, `Launch` + the `PS2RHI` module; toolchain, Docker image, `PS2Engine.ini` | same as the module it extends |
+| **Plugins** | `Engine/Plugins/Runtime/JoltPhysics` | `JoltPhysics` module + its third-party `JoltLib` (Win64 only) | Runtime |
+| **Game** | `Game/ThirdPerson` | `ThirdPerson` primary game module + `ThirdPerson.Target.cmake` | Runtime (never the other way) |
 
-- Engine modules do **not** include glad. Platform uses `IRHIDevice`.
-- OpenGL under `Plugins/RHI/OpenGL`. Arcade PhysScene under `Plugins/Physics/Arcade` (`IPhysicsBackend`). Optional Jolt under `Plugins/Physics/Jolt` (`LEON_WITH_JOLT`, default ON): `World`/`GameMode::SetPhysicsBackend(Jolt)` (CoopTp match) drives rigid-body `Step` with incremental prepare; static TriangleMesh rebuilds as Jolt `MeshShape`; default World remains Arcade. When Jolt is active, Line/Sphere/Capsule traces use narrow-phase (`CastRay`/`CastShape`); floor plane + slope planes stay Arcade overlays; CMC side resolve stays Arcade.
-- `EPhysicsBackend::Jolt` creates a real backend when Jolt is linked; without `LEON_WITH_JOLT` it falls back to Arcade with a log.
-- PhysScene AABB sync uses mesh local bounds × model matrix (not scale alone).
-- `GpuPassTimer` resolves with `GL_QUERY_RESULT_AVAILABLE` (no GPU stall). Passes: Shadow / Planar / Color / Ssao / Post.
-- Forward color path can target an HDR `SceneColorTarget` (RGB16F + depth) for post: SSAO (half-res) → bilateral blur → ACES tonemap + exposure → FXAA. Quality presets Off/Low/Medium/High via `Renderer::SetPostProcessQuality` (default **Low**). Optional Early-Z for opaque. Shadow map size 1024/2048.
+Rules:
 
-### Paths / content root
+- **No engine module references the game.** `Game/ThirdPerson` is only discovered when a build passes
+  `-Project=…/ThirdPerson.leonproject`; engine sources never include its headers (the name appears only
+  as a default in `Build.bat` / `RunPCSX2.ps1` usage lines).
+- **Platform code lives in platform folders only**: `Private/Windows`, `Private/Linux`, `Private/Desktop`
+  inside a module, or the extension under `Engine/Platforms/PS2`. LeonBuildTool drops source folders named
+  after a platform or group that does not apply (a `Windows/` folder never compiles on PS2), and only
+  discovers `Engine/Platforms/<P>/Source` when building for `<P>`.
+- **Extension merge**: `Engine/Platforms/PS2/Source/Runtime/Core` is merged into `Engine/Source/Runtime/Core`
+  (same relative path); its `Core_PS2.Build.cmake` uses `leon_module_extend(Core …)` to add PS2-only
+  dependencies / system libraries. Extension `Public/` headers sit at the root of `Public/` (e.g.
+  `PS2PlatformMemory.h`), which is what `COMPILED_PLATFORM_HEADER` expects for extensions.
 
-`SetActiveContentRoot(projectOrPack)` pins `ResolveAssetPath` to that pack's `Content/` (Editor on open project; Runtime on `LoadPack`). Unrelated `Projects/*` are not scanned. Engine Assets + exe staging remain fallbacks; newest-wins applies only among those.
+---
 
-### HUD / UI (Unreal-lite)
+## 3. Build model (summary)
 
-| Leon | Unreal analogy |
-| --- | --- |
-| `leon::HUD` (`GetHUD()`) | `AHUD` |
-| `leon::UserWidget` | `UUserWidget` |
-| `HUD::AddWidget<T>()` | `CreateWidget` + `AddToViewport` |
-| `WidgetPaintContext::DrawText/Line/Rect` | Slate/UMG paint |
-| `MenuListWidget` / `TextBlockWidget` / `ButtonWidget` / `VerticalBoxWidget` / `ProgressBarWidget` / `ImageWidget` | common UMG controls (lite) |
-| `SetCenterHudText` / `AddOnScreenDebugMessage` | quick debug / legacy center slot |
+Full reference: [BUILD.md](BUILD.md).
 
-Packs should prefer `GetHUD().AddWidget<>()` for menus and status. GPU text/mesh backend: `DebugOverlay` (OpenGL plugin).
+- `leon_module(<Name> …)` in `<Module>.Build.cmake` declares `PUBLIC_DEPENDENCIES`, `PRIVATE_DEPENDENCIES`,
+  `CIRCULAR_DEPENDENCIES` (UE `CircularlyReferencedDependentModules`, propagated like public ones),
+  `PLATFORMS` allow-list and `_<Platform|Group>` suffixed variants (`PRIVATE_DEPENDENCIES_Desktop`).
+- Platforms: **Win64** (groups `Windows Microsoft Desktop`, C++20), **Linux** (`Unix Linux Desktop`, C++20,
+  registered but not a verification gate), **PS2** (`PS2 Console`, C++17, extension, built in the pinned
+  ps2dev Docker image).
+- A module library's C++ standard is the **lowest** standard among the platforms it is allowed on: modules
+  without a `PLATFORMS` list (Core, InputCore, RHI, ApplicationCore, …) compile as C++17 everywhere;
+  desktop-only modules compile as C++20. The launch module compiled into an executable uses the platform's
+  standard (C++20 on Win64, C++17 on PS2), so Launch code must still be valid C++17.
+- Linking is always **static** (`IS_MONOLITHIC=1`). For each target, LeonBuildTool resolves the module
+  closure from `Core` + the launch module + `EXTRA_MODULE_NAMES` (+ enabled plugin modules), builds every
+  module except the launch module as a static library `Module.<Name>`, compiles the **launch module straight
+  into the executable** with the target macros (`WITH_ENGINE`, `IS_PROGRAM`, `WITH_DEV_AUTOMATION_TESTS`,
+  `LEON_TARGET_NAME`, `LEON_PROJECT_NAME`), and generates `<Target>.ModuleInit.gen.cpp` (see §8).
+- Shared module libraries never see target macros; only the launch module does.
 
-### Audio (Unreal-lite)
+### Targets
 
-| Leon | Unreal analogy |
-| --- | --- |
-| `leon::AudioDevice` (`GetAudioDevice()`) | `UAudioDevice` / `UGameplayStatics` |
-| `PlaySound2D` / `PlaySoundAtLocation` | same names |
-| `PlayUiSound(EUiSound)` | UI cues (`Content/assets/Audio/UI/*.wav` or procedural fallback) |
-| `PlayMusic` / `StopMusic` | looping 2D music bed (dedicated slot) |
-| `SetListener` | listener from camera each frame |
+| Target | File | Type | Platforms | Launch module | Roots / notes |
+| --- | --- | --- | --- | --- | --- |
+| `LeonGame` | `Engine/Source/LeonGame.Target.cmake` | Game | Win64 | `Launch` | `Engine AIModule`; `WITH_ENGINE=1`; runs a desktop pack (`LeonGame --pack <Name>`) |
+| `ThirdPerson` | `Game/ThirdPerson/Source/ThirdPerson.Target.cmake` | Game | PS2 | `Launch` | project module `ThirdPerson`; `COMPILE_AGAINST_ENGINE OFF` → `WITH_ENGINE=0` |
+| `LeonCook` | `Engine/Source/Programs/LeonCook/` | Program | Desktop | `LeonCook` | `Cooker` → `UCookCommandlet::Main` |
+| `LeonAutomationTests` | `Engine/Source/Programs/LeonAutomationTests/` | Program | Desktop | `LeonAutomationTests` | every desktop Runtime / Developer module except `Launch`, + `JoltPhysics` plugin; `COLLECT_AUTOMATION_TESTS` |
+| `BlankProgram` | `Engine/Source/Programs/BlankProgram/` | Program | all | `BlankProgram` | starts the module table and prints the platform (CI builds it for PS2) |
 
-Backend: **miniaudio** (FetchContent). Dedicated / headless initializes silent.
-### Runtime (thin)
+Module closures in practice:
 
-`GameApplication` → `ProjectPack` + `WorldRuntime` + `Engine::run` (or headless `--dedicated`). Gameplay types stay in Engine.
+- **PS2 `ThirdPerson`**: `Core`, `Launch`, `ThirdPerson`, `InputCore`, `ApplicationCore`, `RHI`, `PS2RHI`.
+- **Win64 `LeonGame`**: everything reachable from `Launch` (desktop private deps `Engine NetCore Projects`) +
+  `AIModule` — every desktop Runtime module except `Json`, no Developer modules; plugins are disabled by
+  default, so `JoltPhysics` is not linked.
 
-Shipping CMake: `add_subdirectory(Engine)` then `add_subdirectory(Runtime)`, link `leon_runtime`. Editor also adds Runtime for in-process PIE (`GameHostSession`). Tools / cook use `leon_engine_cook` and do **not** add Runtime.
+---
 
-Level load (`LoadLevelFile`) decodes the binary `.llev` into a `LevelDocument`, validates it, commits a staging `Level` + camera, then runs **`LoadLevelLightmaps`** (Engine `LightmapIO`) so shipping packs see baked `.lm` textures. JSON levels are not supported. Authoring: [LEVELS.md](LEVELS.md).
+## 4. Module dependency graph
 
-### Editor / PIE
+Built from the `*.Build.cmake` files. Every module depends on **Core** (edges to Core omitted);
+third-party modules are listed in the next table.
 
-- Editor owns its ImGui loop (`EditorApp`), not `Engine::run`. Links `leon_engine` + `leon_runtime` + first-party `leon_*_gameplay` libs.
-- **Play In Editor** (Selected Viewport / New Window, N=1): `leon::runtime::GameHostSession` + pack `RegisterModes` (same GameModes as Shipping) on the open level. Explicit `Default` → `DefaultGameMode`. Unknown projects → `PieGameMode` preview fallback.
-- **Multiplayer N>1** (Listen/Client): spawns Shipping pack processes; editor stays editable.
-- Selection uses session-stable `editorId` on Level objects / Actors (`EditorContext::ResolveSelectionIndices`).
-- Close Project / Exit respect unsaved dirty state.
-- GLFW init is process-refcount’d so PIE New Window can outlive temporary destroys safely; scroll routes through the play input window.
-- Docking UI: Console (`` ` ``), Material Editor tabs for `.lmat`, Window menu for panel visibility — [EDITOR.md](EDITOR.md). Assets: [ASSET_FORMATS.md](ASSET_FORMATS.md).
+```mermaid
+flowchart BT
+  subgraph Runtime [Engine/Source/Runtime]
+    InputCore
+    RHI
+    ApplicationCore
+    OpenGLDrv
+    Launch
+    Projects
+    Json
+    NetCore
+    PhysicsCore
+    AnimationCore
+    AudioMixer
+    RenderCore
+    Renderer
+    SlateCore
+    UMG
+    Engine
+    AIModule
+  end
+  subgraph Developer [Engine/Source/Developer]
+    MeshUtilities
+    Cooker
+  end
+  subgraph Programs [Engine/Source/Programs]
+    LeonCook
+    LeonAutomationTests
+    BlankProgram
+  end
+  subgraph PS2Ext [Engine/Platforms/PS2]
+    PS2RHI
+  end
+  subgraph Plugin [Engine/Plugins/Runtime/JoltPhysics]
+    JoltPhysics
+  end
+  subgraph GameProject [Game/ThirdPerson]
+    ThirdPerson
+  end
 
-#### PIE / `editorId` contract (Unreal-like)
+  ApplicationCore --> InputCore
+  ApplicationCore --> RHI
+  ApplicationCore -. "Desktop" .-> OpenGLDrv
+  ApplicationCore -. "PS2 ext" .-> PS2RHI
+  OpenGLDrv --> RHI
+  PS2RHI --> RHI
+  Launch --> InputCore
+  Launch --> ApplicationCore
+  Launch --> RHI
+  Launch -. "Desktop" .-> Engine
+  Launch -. "Desktop" .-> NetCore
+  Launch -. "Desktop" .-> Projects
+  Launch -. "PS2 ext" .-> PS2RHI
+  Renderer --> RHI
+  Renderer --> RenderCore
+  Renderer --> SlateCore
+  Renderer --> AnimationCore
+  Renderer -.-> OpenGLDrv
+  Renderer == "circular" ==> Engine
+  Engine == "circular" ==> Renderer
+  UMG --> SlateCore
+  UMG -.-> ApplicationCore
+  UMG -.-> InputCore
+  UMG -.-> Renderer
+  Engine --> InputCore
+  Engine --> ApplicationCore
+  Engine --> RHI
+  Engine --> RenderCore
+  Engine --> UMG
+  Engine --> PhysicsCore
+  Engine --> AnimationCore
+  Engine --> AudioMixer
+  Engine --> NetCore
+  Engine -.-> Projects
+  AIModule --> Engine
+  AIModule --> UMG
+  AIModule --> SlateCore
+  MeshUtilities --> RenderCore
+  MeshUtilities -.-> Renderer
+  Cooker -.-> Engine
+  Cooker -.-> MeshUtilities
+  LeonCook -.-> Cooker
+  JoltPhysics --> PhysicsCore
+  JoltPhysics -.-> Engine
+  ThirdPerson --> InputCore
+  ThirdPerson --> ApplicationCore
+  ThirdPerson -. "include-only" .-> Launch
+  ThirdPerson -.-> PS2RHI
+```
 
-| Item | Shipping-safe? | Notes |
+Solid = `PUBLIC_DEPENDENCIES`, dashed = `PRIVATE_DEPENDENCIES` (label = platform suffix or extension file),
+thick = `CIRCULAR_DEPENDENCIES`. `Json` has no dependents; it is linked only by `LeonAutomationTests`
+(`EXTRA_MODULE_NAMES`). `LeonAutomationTests` and `BlankProgram` depend only on Core (+ Catch2).
+
+**Include-only dependency on Launch:** the launch module is compiled into the executable, not into a
+library, so a module that depends on it (`ThirdPerson` → `Launch`) only receives Launch's public include
+paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable links.
+
+### Third-party and system libraries
+
+| Library | Used by (public / private) | Platforms |
 | --- | --- | --- |
-| `Actor::editorId` / `SetEditorId` / `GetEditorId` | Yes (harmless) | Session-stable id; Outliner / PIE selection. Zero = unset. |
-| `World::FindActorByEditorId` | Yes | Used by Editor; cheap lookup for tools. |
-| Level POD `editorId` on meshes / lights / PlayerStarts | Persisted in `.llev` | Selection + undo; not gameplay logic. |
-| `Engine::SetPlayInputWindow` / `GetPlayInputTarget` | Editor PIE | `PlayInputTarget` routes input to PIE New Window; shipping leaves unset. |
-| `SetPlayMouseLookActive` | Editor PIE | Gates look when cursor is not OS-captured (Selected Viewport). |
-| `GameHostSession` | Yes (Runtime) | Shared by Shipping `GameApplication` and Editor PIE. |
-| `PieGameMode` | **No** — Editor only | Fallback preview when pack gameplay is not linked. |
+| GLM | public: Core (`_Desktop`), AIModule, AnimationCore, AudioMixer, Engine, Json, MeshUtilities, PhysicsCore, RenderCore, Renderer, UMG | Desktop |
+| NlohmannJson | public: Engine, Json, Renderer; private: Projects, Cooker | Desktop |
+| GLFW | private: ApplicationCore (`_Desktop`), Engine, UMG | Desktop |
+| STB | private: ApplicationCore (`_Desktop`), Engine, Renderer | Desktop |
+| Glad | private: OpenGLDrv, Renderer | Desktop |
+| ENet | private: Engine | Desktop |
+| MiniAudio | private: AudioMixer | Desktop |
+| UFBX | private: AnimationCore, MeshUtilities | Desktop |
+| TinyObjLoader, CGLTF | private: MeshUtilities | Desktop |
+| Catch2 | private: LeonAutomationTests | Desktop |
+| JoltLib (Jolt 5.3.0) | private: JoltPhysics | Win64 |
+| System libs | Core: `psapi` (Windows), `kernel` (PS2); OpenGLDrv: `dxgi` (Windows); ENet: `ws2_32 winmm` (Windows); ApplicationCore: `pad` (PS2); PS2RHI: `draw math3d packet graph dma kernel` | — |
 
-Do not put ImGui or `leon::editor` types in Engine. Engine exposes thin play pumps (`TickPlayAudio` / `TickPlayHud` / `PaintHudAndOverlay`) so the Editor loop can match `Engine::Run` parity.
+---
 
-### Naming
+## 5. Modules
 
-Canonical conventions (folders, files, types, includes, CMake) live in **[NAMING.md](NAMING.md)** — Engine → Runtime → Editor → Templates → Tools.
+| Module | Role | Key types | Platforms |
+| --- | --- | --- | --- |
+| **Core** | HAL, module manager, ticker, engine exit flag, paths, file helpers, transform, stats-overlay state | `FPlatformMemory`, `FPlatformTime`, `FPlatformMath`, `FPlatformProperties`, `FModuleManager`, `IModuleInterface`, `FTicker`, `FPaths`, `FFileHelper`, `FCString`, `FTransform`, `FStatsOverlay` | all (`FileHelper.cpp`, `Paths.cpp`, `Transform.cpp` excluded on PS2) |
+| **InputCore** | Key / gamepad identifiers | `EKeys` | all |
+| **ApplicationCore** | Platform application, windows, gamepad input | `GenericApplication`, `FGenericWindow`, `IInputInterface`, `FPlatformApplicationMisc`; desktop `FGLFWApplication`, `FGLFWWindow`; PS2 ext `FPS2Application`, `FPS2Window`, `FPS2InputInterface` | all |
+| **RHI** | Graphics backend interface + opaque GPU handle ids | `FDynamicRHI`, `GDynamicRHI`, `FRHIGPUMemoryStats`, `FRHITextureId` … | all |
+| **OpenGLDrv** | OpenGL 3.3 RHI device | `FOpenGLDynamicRHI` | Desktop |
+| **PS2RHI** | Graphics Synthesizer immediate-mode API (platform extension module) | `FPS2RHI`, `FPS2Texture`, `FPS2Material`, `FPS2ViewTarget`, `FPS2DirectionalLight` | PS2 |
+| **Launch** | Entry points and engine loop | `GuardedMain`, `FEngineLoop`, `GEngineLoop`, `FPlatformEngineLoopHooks`; desktop-private `FGameApplication` | all |
+| **Projects** | Runtime pack descriptor | `FProjectDescriptor` | Desktop |
+| **Json** | JSON helpers | `FJsonUtils` | Desktop |
+| **NetCore** | Network protocol and snapshot codec | `Leon::Net` (`ENetMsg`, `FHelloMsg`, `ProtocolMagic`, `CurrentProtocolVersion`, snapshot codec) | Desktop |
+| **PhysicsCore** | Physics types and backend seam | `IPhysicsBackend`, `EPhysicsBackend`, `FHitResult`, `FBodyInstance`, `FCollisionQueryParams`, `FCapsuleShape`, `FTriangleMeshCollision` | Desktop |
+| **AnimationCore** | Skeletons, sequences, blend spaces, anim instances | `USkeleton`, `UAnimSequence`, `UBlendSpace1D`, `UAnimInstance`, `UCharacterAnimInstance` | Desktop |
+| **AudioMixer** | Audio device (miniaudio) | `FAudioDevice` | Desktop |
+| **RenderCore** | CPU-side render data | `FMeshData`, `FMeshSection`, `FVertex`, `FBox`, `FFrustum`, `FMaterial` | Desktop |
+| **Renderer** | Forward scene renderer and GPU resources | `FSceneRenderer`, `UTexture2D`, `UStaticMesh`, `USkeletalMesh`, `FShader`, `FShadowMap`, `FResourceCache`, `FDebugDraw`, `FDebugOverlay`, `FGPUPassTimer` | Desktop |
+| **SlateCore** | Text layout primitives | `ETextJustify`, HUD font metrics | Desktop |
+| **UMG** | Widgets | `UUserWidget`, `UButton`, `UTextBlock`, `UImage`, `UProgressBar`, `UVerticalBox`, `UMenuListWidget`, `UInteractionPromptWidget`, `FPaintContext` | Desktop |
+| **Engine** | Gameplay framework, world, levels, physics scene, net driver, game session | `UGameEngine`, `UGameInstance`, `UWorld`, `ULevel`, `AActor`, `APawn`, `ACharacter`, `UCharacterMovementComponent`, `AController`, `APlayerController`, `AGameModeBase`, `AGameStateBase`, `APlayerState`, `AHUD`, `UGameplayStatics`, `UNetDriver`, `FPhysScene`, `UNavigationSystem`, `FGameHostSession` | Desktop |
+| **AIModule** | AI controller and behavior trees | `AAIController`, `UBehaviorTree`, `UBTComposite_Sequence`, `UBTComposite_Selector`, `UBTDecorator_Bool`, `UBTTask_Action`, `UBlackboardComponent`, `FAIChaseBehavior` | Desktop |
+| **MeshUtilities** | Static mesh import / build (Developer) | `FStaticMeshBuilder`, `LoadObj`, `LoadStaticMeshFromFbx`, glTF import | Desktop |
+| **Cooker** | Cook recipes and paths (Developer) | `UCookCommandlet`, `FCookRecipe`, `FCookPaths` | Desktop |
+| **JoltPhysics** (plugin) | Jolt rigid-body backend | `CreateJoltPhysicsBackend` | Win64 |
+| **ThirdPerson** (game) | PS2 third-person game | `FThirdPersonModule`, `FThirdPersonGameMode`, `FThirdPersonCharacter`, `FThirdPersonCameraBoom`, `FThirdPersonLevel` | PS2 (target) |
 
-Summary: Unreal-first **PascalCase** on Core / Gameplay / Scene; Editor in `leon::editor`; libs `leon_*`, exes `leon-*`; PIE only under Editor. `Level::StaticMeshComponent` is a level POD, not a gameplay `ActorComponent`. Gameplay comps: `ActorComponent` base → `SceneComponent` (attach tree); register members with `RegisterComponent` or heap via `CreateDefaultSubobject<T>()` (no name registry / reflection).
+---
 
-### Anim / World safety
+## 6. HAL (Core)
 
-- Anim sequences stored in `std::deque` so BlendSpace pointers stay valid.
-- `World::SpawnActor` during `Tick` is deferred until after the tick loop.
-- Actors get a session `editorId` on spawn.
+UE pattern: a generic implementation, a per-platform subclass, and a `HAL/` header that picks the current
+platform through `COMPILED_PLATFORM_HEADER`.
+
+```text
+Core/Public/GenericPlatform/GenericPlatformMemory.h   struct FGenericPlatformMemory
+Core/Public/Windows/WindowsPlatformMemory.h           struct FWindowsPlatformMemory : FGenericPlatformMemory
+                                                      typedef FWindowsPlatformMemory FPlatformMemory;
+Core/Public/Linux/LinuxPlatformMemory.h               (same for Linux)
+Platforms/PS2/Source/Runtime/Core/Public/PS2PlatformMemory.h   (PS2 extension)
+Core/Public/HAL/PlatformMemory.h                      #include COMPILED_PLATFORM_HEADER(PlatformMemory.h)
+```
+
+- LeonBuildTool defines `PLATFORM_<NAME>=1`, `LBT_COMPILED_PLATFORM=<HeaderName>` (UE `UBT_COMPILED_PLATFORM`)
+  and `PLATFORM_IS_EXTENSION`. `HAL/PreprocessorHelpers.h` turns `COMPILED_PLATFORM_HEADER(PlatformMemory.h)`
+  into `"Windows/WindowsPlatformMemory.h"` in-module, or `"PS2PlatformMemory.h"` for an extension.
+- `HAL/Platform.h` defaults every `PLATFORM_*` macro to 0, includes the platform's `Platform.h`
+  (`FPlatformTypes`, `PLATFORM_DESKTOP`, `PLATFORM_64BITS`, `FORCEINLINE`) and defines the global fixed-width
+  types (`int32`, `uint64`, `SIZE_T`, `PTRINT`, …). The EE is ILP32 (`PS2Platform.h`).
+- HAL structs: `FPlatformMemory::GetStats()` → `FPlatformMemoryStats`; `FPlatformTime::Cycles64()`,
+  `GetSecondsPerCycle64()`, `CyclesToMicroseconds()` (integer, for the EE), `Seconds()`;
+  `FPlatformMath::Sin256` / `Cos256` (1/256-turn angles, PS2 uses a table); `FPlatformProperties::PlatformName()`.
+- `CoreTypes.h` → `HAL/Platform.h`; `CoreMinimal.h` currently just includes `CoreTypes.h`.
+- Other Core services: `FTicker::GetCoreTicker()` (per-frame delegates, return `false` to unregister),
+  `IsEngineExitRequested()` / `RequestEngineExit()` (`CoreGlobals.h`), `FStatsOverlay` (engine debug overlay
+  state; the platform draws it).
+
+---
+
+## 7. ApplicationCore and RHI
+
+### ApplicationCore
+
+| Abstraction | Desktop (`Private/Desktop`, GLFW) | PS2 (extension) |
+| --- | --- | --- |
+| `FPlatformApplicationMisc::CreateApplication()` | `FWindowsPlatformApplicationMisc` / `FLinuxPlatformApplicationMisc` | `FPS2PlatformApplicationMisc` |
+| `GenericApplication` (`MakeWindow`, `PollGameDeviceState`, `GetInputInterface`) | `FGLFWApplication` | `FPS2Application` |
+| `FGenericWindow` (`Create`, `PollEvents`, `SwapBuffers`, sizes, cursor, keys) | `FGLFWWindow` | `FPS2Window` (GS display; `SwapBuffers` waits for vsync) |
+| `IInputInterface` (`IsGamepadConnected`, `IsGamepadKeyDown(EKeys)`, `GetGamepadAnalog(EKeys)`) | — | `FPS2InputInterface` (DualShock, libpad port 0; UE homologue `XInputInterface`) |
+
+The window owns the graphics device: `FGenericWindow::InitRHI` calls `PlatformCreateDynamicRHI()`, loads it
+and publishes it in `GDynamicRHI`. That is why ApplicationCore depends on the platform RHI module
+(`OpenGLDrv` on desktop, `PS2RHI` through `ApplicationCore_PS2.Build.cmake`).
+
+### RHI
+
+- `FDynamicRHI` (`RHI/Public/DynamicRHI.h`): `Init(ProcAddressLoader)`, `SetViewport`, `GetGPUMemoryStats`,
+  `GetName`, `GetAPIVersionString`. `GDynamicRHI` is the active instance; `PlatformCreateDynamicRHI()` is
+  implemented by the platform RHI module.
+- `RHIHandles.h`: opaque GPU ids (`FRHITextureId`, `FRHIFramebufferId`, `FRHIBufferId`, …, `InvalidTexture`)
+  used in public Renderer headers so they do not expose GL types.
+- **OpenGLDrv**: `FOpenGLDynamicRHI` (Glad loader, GPU memory stats per platform under `Private/Windows` and
+  `Private/Linux`).
+- **PS2RHI**: implements `PlatformCreateDynamicRHI()` and exposes the **static** `FPS2RHI` API used directly
+  by PS2 code. Frame contract: `InitDisplay` (done by `FPS2Window`) → `SetViewTarget` /
+  `SetDirectionalLight` / `SetAmbientLightColor` → `ClearColor` → `BindMaterial` → `DrawBox` /
+  `DrawCookedMesh` / `DrawUnlit*` → `DrawDebugText` → `WaitVSync` (`FPS2Window::SwapBuffers`). Internals
+  (`PS2GSContext`, `PS2SceneState`, `PS2Draw3D`, `PS2DrawPrimitives`, `PS2Texture`, `PS2DebugText`) live in
+  `Private/`; the private helper namespace is `Leon::PS2`.
+
+---
+
+## 8. Module startup
+
+- Each module registers itself with `IMPLEMENT_MODULE(<Impl>, <Module>)` (usually in
+  `Private/<Module>Module.cpp`), which defines `extern "C" IModuleInterface* InitializeModule_<Module>()`.
+  `FDefaultModuleImpl` covers modules without startup logic; game modules use
+  `IMPLEMENT_PRIMARY_GAME_MODULE` / `IMPLEMENT_GAME_MODULE`.
+- LeonBuildTool writes `<Target>.ModuleInit.gen.cpp` with the table `GetStaticallyLinkedModules()` (every
+  Runtime / Developer module of the closure, **dependency order**) and `GPrimaryGameModuleName`. A module in
+  the table without `IMPLEMENT_MODULE` fails to link.
+- `FModuleManager::Get().StartupStaticallyLinkedModules()` creates and starts them in order;
+  `ShutdownModules()` shuts them down in reverse. Programs call these directly (`BlankProgram`,
+  `LeonAutomationTests`); games get them from `FEngineLoop`.
+- Example: `JoltPhysics` registers its backend factory in `StartupModule`; `ThirdPerson` creates its game mode
+  and registers an `FTicker` delegate in `StartupModule`.
+
+---
+
+## 9. Launch and the engine loop
+
+`Launch<Platform>.cpp` (`Private/Windows`, `Private/Linux`, PS2 extension `LaunchPS2.cpp`) defines `main`,
+which calls `GuardedMain`:
+
+```text
+GuardedMain: GEngineLoop.PreInit → (exit if requested) → Init → while !IsEngineExitRequested(): Tick → Exit
+```
+
+`WITH_ENGINE` is set per target (`COMPILE_AGAINST_ENGINE`) and reaches only the launch module.
+
+### `WITH_ENGINE=1` — desktop (`LeonGame`)
+
+- `PreInit`: starts the statically linked modules (the loop does not own a window here).
+- `Init`: creates `FGameApplication` (`Launch/Private/Desktop`) and calls `Init(ArgC, ArgV, PackName, …)`;
+  the pack name is `LEON_PROJECT_NAME` or `--pack <Name>`. `FGameApplication::Init` parses the command line
+  (`--dedicated`/`--server`, `--listen`/`--host`, `--join`, `--map`, `--port`, `--tick`, `--show-stats`),
+  creates `UGameEngine` (`Initialize(1280, 720, …)`, or `InitializeHeadless()` for dedicated), wires the
+  default input, starts `FGameHostSession` and calls `UGameEngine::Start`.
+- `Tick`: ticks `FTicker`, then `FGameApplication::Tick` → `UGameEngine::Tick(DeltaTime, …)` (windowed) or a
+  fixed-rate `FGameHostSession::Tick` (dedicated); returning `false` requests engine exit.
+- `Exit`: `FGameApplication::Exit` (session stop, `UGameEngine::Shutdown`), then module shutdown.
+- `LaunchEngineLoop.cpp` refuses `WITH_ENGINE` on non-desktop platforms (`#error`).
+
+### `WITH_ENGINE=0` — PS2 (`ThirdPerson`)
+
+- `PreInit`: `FPlatformApplicationMisc::CreateApplication()`, `MakeWindow()`, `Create(640, 448, LEON_TARGET_NAME)`,
+  then module startup — so the primary game module can already reach the window through
+  `GEngineLoop.GetMainWindow()` / `GetApplication()`.
+- `Tick`: `PollGameDeviceState` → `PollEvents` → `FTicker::GetCoreTicker().Tick(DeltaTime)` (game work) →
+  `FPlatformEngineLoopHooks::EndFrame` (PS2: `FPS2StatsOverlay::Draw` — stats panel + gamepad widget) →
+  `SwapBuffers` (vsync) → `FPlatformEngineLoopHooks::PostPresent` (`MarkFrameStart`). Closing the window
+  requests exit.
+- `Exit`: module shutdown, window destroy, application release.
+- `FPlatformEngineLoopHooks` is implemented per platform: `Private/Desktop/DesktopEngineLoopHooks.cpp` (empty)
+  and PS2 `PS2EngineLoopHooks.cpp`.
+
+### The PS2 game
+
+`FThirdPersonModule` (`IMPLEMENT_PRIMARY_GAME_MODULE`) builds `FThirdPersonGameMode` from the main window and
+input interface, calls `StartPlay` and ticks it from `FTicker`. The game mode owns textures / materials
+(`FPS2Texture`, `FPS2Material`), `FThirdPersonLevel` (primitive sandbox built in code), `FThirdPersonCharacter`
+(camera-relative move, jump, gravity, step-up, wall push-out) and `FThirdPersonCameraBoom`, draws through
+`FPS2RHI` and publishes debug lines with `FStatsOverlay::AddOnScreenDebugMessage`. It uses plain floats and
+`FPlatformMath` — the desktop gameplay framework is not available on PS2 (see §15).
+
+---
+
+## 10. Gameplay framework (Engine, desktop)
+
+Unreal shapes without reflection: `A`/`U` prefixes are naming only (no `UObject`, no GC).
+
+| Area | Types / flow |
+| --- | --- |
+| Engine | `UGameEngine` creates its own application + window through `FPlatformApplicationMisc`, owns `ULevel`, `FSceneRenderer`, `FResourceCache`, `FAudioDevice`, `AHUD`, `FDebugOverlay`, `UPlayerInput`, camera, `UGameInstance` (`SetGameInstance<T>()`). Frame (`UGameEngine::Tick`): poll events → `UPlayerInput::Update` → shader hot reload → UI input → `HandleInput` → `TickPlayAudio` → update callback (session tick) → `TickPlayHud` → `Render` (+ UI paint) → `SwapBuffers` |
+| Session | `FGameHostSession::Start`: `FProjectDescriptor::Resolve(Pack)` → `FPaths::SetActiveContentRoot` → `FWorldRuntime::LoadPack` (`FLevelDirector`, `FLevelCatalog`, `LoadLevelFile`) → `FGameplayRouter` (default mode `ADefaultGameMode`, packs add modes through the `RegisterModes` callback; a level's `"gameMode"` id selects the override) |
+| World | `UWorld` (owned by `AGameModeBase`) owns spawned actors + `FPhysScene`; `SpawnActor<T>()` during tick is deferred; `TickGameplayFrame`: character move → `FPhysScene::Step` → overlaps → actor tick → sync to level → draw. `ULevel` is map content (`UStaticMeshComponent` PODs, lights, `FPlayerStart`, `FTriggerVolume`, `FPainCausingVolume`, `FAISpawnPoint`) |
+| Actors | `AActor` (root `USceneComponent`, `RegisterComponent`, `CreateDefaultSubobject<T>()`) → `APawn` → `ACharacter` (+ `UCharacterMovementComponent`, `USkeletalMeshComponent`, `TakeDamage`); `USpringArmComponent`, `UCameraComponent` |
+| Controllers / rules | `AController` → `APlayerController`, `AAIController` (AIModule); `AGameModeBase` (`OnEnter`/`Tick`/`OnExit`, `InitGameState`, `StartMatch`, `PostLogin`, `RestartPlayer`, `HandleStartingNewPlayer`, travel), `AGameStateBase` (`PlayerArray`), `APlayerState`, `UGameInstance` (`HostListen`, `Join`, `ServerTravel`, `ClientTravel`) |
+| Helpers | `UGameplayStatics` (traces over `FPhysScene`, `ApplyPointDamage`, …), `VolumeHelpers`, `ArenaCamera`, `UNavigationSystem` (grid `FNavMesh`), `UInputMappingContext` / `Leon::InputActions` |
+| UI / audio | `AHUD::AddWidget<T>()` + `Paint(FDebugOverlay&, …)` over UMG widgets; `FAudioDevice` (`PlaySound2D`, `PlaySoundAtLocation`, `PlayUiSound`, `PlayMusic`/`StopMusic`, `SetListener` from the camera each frame); dedicated servers initialise silent |
+| Network | `UNetDriver` (ENet, process-wide init refcount, per-peer rate limits `SetPeerRateLimitEnabled`); protocol in NetCore `Leon::Net` (v4: Hello / Welcome / InputCmd / Snapshot / Travel / Rpc, `ProtocolMagic`); helpers `Leon::Net::SendTravelToPeers` (`Net/NetUtil.h`), root relevancy (`Net/RootReplication.h`) |
 
 ### Character movement (CMC lite)
 
-- Capsule kinematic pawn: **Actor location = feet**; `CapsuleShape` radius/height; not a `BodyInstance`.
-- Modes: `EMovementMode` Walking / Falling (`SetMovementMode`); `IsMovingOnGround` / `IsFalling` map to mode.
-- Floor: `FindFloor` / `FindFloorResult` / `IsWalkable` (`CharacterMovement::WalkableFloorZ`, UE ~0.71).
-- Slopes: `PhysScene::AddSlopeRamp` / `SlopePlane` for tests; CoopTp ramps are rotated Cube + TriangleMesh (ComplexAsSimple) so walkable normals match the mesh in any yaw.
-- Tunables (UE names): `MaxWalkSpeed`, `JumpZVelocity`, `MaxStepHeight`, `WalkableFloorZ`, `AirControl`.
-- Per frame: horizontal **capsule sweep** (Falling × `AirControl`) → **step-up** (Walking only, ≤ `MaxStepHeight`) → **slide** → `ResolveCapsuleSides` → gravity → FindFloor → mode snap. Dynamic shove: `ApplyCapsuleSweepPush` on blocking sweep hits (SafeMove never penetrates, so side-resolve push alone is insufficient).
-- Pawn–pawn: `World::TickGameplayFrame` pairwise `ResolvePawnOverlap` (XZ equal depenetration; Y ranges must overlap) so players/AI do not stack.
-- Step-up: raise → forward (≥ ~½ radius) → `FindFloor` + `QuerySupportY` (reject phantom shelves). Side resolve skips only when feet are **on** a top (XZ overlap), not merely within MaxStepHeight of it.
-- Planar mirror: reflection pass draws level statics + queued skeletal Characters; plane Y = mirror mesh AABB top.
-- World static props with CPU `MeshData` bake to `ECollisionShape::TriangleMesh` on `SyncFromLevel` (ComplexAsSimple lite): Arcade Line/Sphere/Capsule traces and `QuerySupportY` refine against world-space tris after AABB broadphase. With Jolt backend, body hits come from narrow-phase and dynamics use Jolt `Step` (floor slab + statics, MeshShape when TriangleMesh); floor/slopes and CMC side depenetration stay Arcade; optional `SlopePlane` ramps remain. Default World/PhysScene stays Arcade.
-
-### Network
-
-- `NetDriver` uses a process-wide ENet init refcount. Pack `Projects/CoopTp` flow (Unreal-like): `CoopGameInstance` → MainMenu (`coop-menu`) → Lobby (`coop-lobby`) → Match (`coop-tp` + `CoopTpGameState` / `CoopTpPlayerState`). Pack `Projects/Zombies`: FPS Menu→Lobby→**Town** (COD loop: points/doors/wall buys/perks/PaP). Pack `Projects/Furytoon`: party fighter Menu→Lobby→Kitchen (`furytoon-menu/lobby/match`); double jump; light/heavy combos; bots fill to `kMaxPlayers=4`. Sample pack `Projects/ThirdPerson` (fixed names, Bot.lchar). Net msgs: Hello/Welcome/InputCmd/Snapshot/**Travel**/**Rpc**. Protocol **v4**: locomotion `InputCmd` + `buttons` **uint16** (16 action bits; `InputButtons::*`); Snapshot = `SnapshotHeader` + optional `SnapshotMatchMeta` + pawns/bodies; `RpcHeader` + payload (`ERpcId::Notify`, pack ids ≥ `kRpcIdPackBase`); PawnSnap user payload. Travel: `ServerTravel` / `ClientTravel`; Lobby host uses `ServerTravelToMatchMap` (not `StartMatch`). Login: `LoginPlayer` → `PostLogin` (`GameState::PlayerArray`) → `HandleStartingNewPlayer` → `RestartPlayer`. Helpers: `leon/net/SnapshotCodec.h`, `leon/net/NetUtil.h` (`SendTravelToPeers`, LAN IP); `CaptureCharacterRoot` / AI relevancy cull; pack AI via `AIChaseBehavior`.
-- **Match bootstrap (Unreal flow):** `GameMode::OnEnter` → `PrepareMatchWorld` (physics + `RegisterBodiesFromLevel` + nav bake) → `PostLogin` / `RestartPlayer` / `FindPlayerStart` → `StartMatch`. After doors toggle collision: `RebuildNavigation`. Health: `Character::TakeDamage` via `ApplyPointDamage`. Interact: Use bit → nearest `TriggerVolume` → pack purchase. Pain: `TickPainCausingVolumes`. Traces: `GameplayStatics` / `PhysScene::*Trace*ByChannel`. Party camera: `UpdateArenaCamera`.
-- Runtime dedicated: `RequestDedicatedStart(port)` + GameMode `ConsumePendingDedicatedStart()`; CLI `--port` / `--tick`. CoopTp / Zombies / Furytoon each ship `leon-*-server` (`LEON_DEDICATED_DEFAULT=1`) via `build-project --with-server`. Listen host remotes = `kMaxPlayers-1`. CoopTp match: orange `AISpawnPlate` → `SpawnAIWave`; snapshot slots `>= kMaxPlayers` replicate AI (`kMaxAiPawns` / `kMaxSnapshotPawns`).
-- `CharacterMovement.MaxJumpCount` (default 1; Furytoon uses 2 for double jump). `AIController`: wish / `MoveToLocation` / `MoveToActor` / `TickAI` → `AddMovementInput`; `EAILogicState` Idle/MoveTo/Chase. Optional `NavigationSystem` (grid NavMesh; bake inflates blockers by `agentRadius` + ring dilation). F3 draws walkable/blocked cells via `AppendDebugDraw`. Header-only `BehaviorTree` lite (`BTSequence` / `BTSelector` / blackboard). Root relevancy helpers: `net::IsPawnRelevant` / `CaptureCharacterRoot`.
-- Hello packets validate `net::kProtocolMagic`. Hosts apply `PeerPacketWindow` rate limits (`kMaxAcceptedPacketsPerPeerPerSecond` / `kMaxRejectedPacketsPerPeerPerSecond`); abuse → disconnect. Toggle: `NetDriver::SetPeerRateLimitEnabled`.
-- `GameState::GetPlayerArray` / `AddPlayerState` / `RemovePlayerState` / `HasPlayerState` (Unreal `PlayerArray`); `GetNumPlayers()` = array size; `Reset()` does not clear the array (logout does). Packs install a GameInstance subclass via `RunLeonGame` → `engine.SetGameInstance<T>()`. Host travel notify: `leon::net::SendTravelToPeers` (`NetUtil.h`); inbound datagrams gated by `AcceptInboundPacket` + `SanitizeInputCmd` on InputCmd.
+- Kinematic capsule pawn: actor location = feet; `FCapsuleShape`; not an `FBodyInstance`.
+- Modes `EMovementMode` Walking / Falling (`IsMovingOnGround`, `IsFalling`); floor via `FindFloor` /
+  `FFindFloorResult`; walkable test against `WalkableFloorZ` (UE ~0.71).
+- Tunables with UE names on `UCharacterMovementComponent`: `MaxWalkSpeed`, `JumpZVelocity`, `MaxStepHeight`,
+  `WalkableFloorZ`, `AirControl`, `MaxJumpCount`.
+- Per frame: horizontal capsule sweep (× `AirControl` when falling) → step-up (walking, ≤ `MaxStepHeight`) →
+  slide → `ResolveCapsuleSides` → gravity → `FindFloor` → mode snap. Blocking sweeps push dynamic bodies
+  (`ApplyCapsuleSweepPush`); `UWorld::TickGameplayFrame` separates overlapping pawns (`ResolvePawnOverlap`).
 
 ---
 
-## Templates: project vs level
+## 11. Physics
 
-Two different concepts (Unreal-like):
-
-| Kind | Where | Used by | Examples |
-| --- | --- | --- | --- |
-| **Project template** | `Templates/<Id>/` | Welcome → New From Template | `Blank`, `ThirdPerson` |
-| **Level template** | `Engine/Assets/LevelTemplates/*.llev` | Editor → File → New Level | `Blank.llev`, `Starter.llev` |
-
-Editor factory: `EditorLevelFactory` → `ResolveAssetPath("LevelTemplates/…")` → `LoadLevelFile`.
+- **PhysicsCore** holds the types (`FHitResult`, `FBodyInstance`, `FCollisionQueryParams`, `FCapsuleShape`,
+  triangle-mesh collision) and the seam `IPhysicsBackend` + `CreatePhysicsBackend(EPhysicsBackendKind)` /
+  `RegisterPhysicsBackendFactory(Kind, Factory)`.
+- **Engine** owns the gameplay-facing `FPhysScene` (`Public/Physics/PhysScene.h`) and the default **Arcade**
+  backend (`Private/PhysicsEngine`: AABB + triangle-mesh traces, CMC queries such as `QuerySupportY`,
+  optional arcade step). `UWorld::SetPhysicsBackend` recreates the scene with another backend.
+- **JoltPhysics plugin** (Win64): `FJoltPhysicsModule::StartupModule` registers `CreateJoltPhysicsBackend` for
+  `EPhysicsBackendKind::Jolt`. With Jolt, rigid bodies step in Jolt (static triangle meshes become `MeshShape`)
+  and line / sphere / capsule traces use its narrow phase; the floor plane, slope planes and CMC side
+  resolve stay Arcade. Asking for Jolt without the plugin logs and falls back to Arcade. The plugin is
+  `EnabledByDefault: false` and currently enabled only by `LeonAutomationTests`.
+- Level statics with CPU mesh data bake to triangle-mesh collision on `SyncFromLevel` (complex-as-simple
+  lite).
 
 ---
 
-## Engine content (system only)
+## 12. Rendering (desktop)
 
-Engine ships **primitives + default materials/textures** only:
+- `FSceneRenderer` (Renderer) is a forward renderer: directional shadow map (light 0), optional half-res
+  planar reflection (`PlanarReflectionScale = 0.5`), opaque / skybox / transparent. With post enabled the
+  color pass renders into an HDR `FSceneColorTarget` (RGB16F + depth), then SSAO (`FSSAOTarget`) → blur →
+  tonemap + exposure (`post_composite.frag`) → optional FXAA.
+- Scalability: `SetPostProcessQuality(EPostProcessQuality::Off|Low|Medium|High)` (default **Low**: light SSAO,
+  no FXAA, 1024 shadow map); optional early-Z (`SetEarlyZEnabled`).
+- `FGPUPassTimer` measures `Shadow / Planar / Color / Ssao / Post` with `GL_QUERY_RESULT_AVAILABLE` (no stall).
+- Resources: `FResourceCache`, `UTexture2D`, `UStaticMesh`, `USkeletalMesh`, `FShader` (GLSL from
+  `Engine/Shaders`, hot reload), `FEnvironmentMap`, `FUniformBuffer`; materials `.lmat` (`LeonMaterialFormat`).
+- Debug: `FDebugDraw` (lines, collision / nav-mesh debug) and `FDebugOverlay` (text / HUD backend).
+- Levels load from binary `.llev` (`LoadLevelFile`), then `LoadLevelLightmaps` loads baked `.lm` files — see
+  [LEVELS.md](LEVELS.md) and [ASSET_FORMATS.md](ASSET_FORMATS.md).
+- **PS2** does not use Renderer: games draw immediately through `FPS2RHI` (§7).
 
-| Item | Material (persisted on place) |
+---
+
+## 13. Content and paths
+
+- `FPaths::ResolveAssetPath` resolves relative to the executable, `Engine/Content`, `Engine/Shaders` and the
+  active project content; `FPaths::SetActiveContentRoot(ProjectRoot)` pins it to one project's `Content/`
+  (other projects are never scanned). Among engine / staging candidates the newest file wins.
+- Engine content is system-only: `Materials/M_Default.lmat`, `M_WorldGrid.lmat`, `M_SolidMetal.lmat`,
+  `Textures/T_Default_D.png`, `Hdr/AutumnFieldPuresky1k.hdr`, `LevelTemplates/Blank.llev`, `Starter.llev`.
+- Desktop packs are resolved by `FProjectDescriptor::Resolve` as `Projects/<Name>/leon.game.json`
+  (`defaultLevel`) — see Known debt.
+
+---
+
+## 14. Tools and tests
+
+- **Developer/MeshUtilities**: OBJ (tinyobjloader), FBX (ufbx) and glTF (cgltf) import to `FMeshData`;
+  `FStaticMeshBuilder` cooks static meshes.
+- **Developer/Cooker**: `UCookCommandlet::Main` (modes `staticmesh`, `character`, `anim`, `recipe`),
+  `FCookRecipe::RunFile`, `FCookPaths::ResolveBeside`.
+- **Programs/LeonCook**: `main` → `UCookCommandlet::Main` (UE: `UE4Editor-Cmd -run=cook`); wrapper
+  `Engine\Build\BatchFiles\Cook.bat`. Details: [TOOLS.md](TOOLS.md).
+- **Tests**: each module keeps its automation tests in `<Module>/Private/Tests/` (Catch2): Core, RenderCore,
+  Renderer, PhysicsCore, AnimationCore, Engine, AIModule, MeshUtilities and the JoltPhysics plugin. They are
+  excluded from the module library and compiled only into `LeonAutomationTests` (`COLLECT_AUTOMATION_TESTS`),
+  whose `main` starts the module table and runs Catch2. Run with `Engine\Build\BatchFiles\RunTests.bat`.
+- **CI** (`.github/workflows/ci.yml`): PS2 `ThirdPerson` + `BlankProgram` in the ps2dev image (ELF artifact);
+  Win64 `Setup.bat`, `RunTests.bat`, `LeonGame` and `LeonCook`.
+
+---
+
+## 15. Known debt / deviations
+
+Intentional deviations from UE 4.27 are tracked in
+[LeonMapping.md — Deviations](UnrealEngine427/LeonMapping.md#deviations-from-ue-427-intentional); the
+roadmap is [NextSteps.md](UnrealEngine427/NextSteps.md).
+
+| Topic | Current state |
 | --- | --- |
-| Cube, Sphere | `Materials/M_Default.lmat` |
-| Plane | `Materials/M_WorldGrid.lmat` |
-
-Shared helper: `PlaceBasicShapeActor` (`Editor/SceneEditing/EngineContent.cpp`).
-
-ThirdPerson character content (Bot mesh, skeleton, anims, `M_Bot`, cook recipes) lives under **`Templates/ThirdPerson/Content/assets/`**, not `Engine/Assets`.
-
----
-
-## Build helpers (`Build/` + `Scripts/`)
-
-| File | Role |
-| --- | --- |
-| `Dependencies.cmake` | FetchContent + vendored glad/ufbx/enet/imgui |
-| `LeonCompileOptions.cmake` | `/W4`, `/MP`, `/FS` (Debug/RelWithDebInfo) |
-| `SyncDirectory.cmake` | POST_BUILD copy-if-different for assets / packs |
-| `Scripts/*.bat` / `build-linux.sh` | App entry wrappers — see [SETUP § Scripts](SETUP.md#scripts-scripts) |
-
-`leon_editor` uses a PCH (`Editor/pch.h`: STL + GLM + ImGui).
-
-**Tools:** see **[TOOLS.md](TOOLS.md)**. `leon-cook` → `leon_resource_tools` → `leon_engine_cook` (+ `leon_import`). `leon-cli` has no Engine link. Lightmap **load** (`LightmapIO`) stays in Engine; **bake** (`BakeLevelLightmaps`) is Editor-only.
-
----
-
-## Dependency diagram
-
-```mermaid
-flowchart TB
-  subgraph apps [Apps]
-    EditorApp[Editor]
-    ProjectExe[Project executable]
-    ToolExe[Tools CLIs]
-  end
-
-  subgraph optional [Plugins - static]
-    RHI_GL[RHI OpenGL]
-    PhysArcade[Physics Arcade]
-  end
-
-  subgraph engine [Engine modules]
-    Core[Core / Platform]
-    Mid[RHI iface / Assets / Net / Serialize]
-    Systems[Renderer / Physics iface / Anim / Scene]
-    GP[Gameplay]
-  end
-
-  Runtime[Runtime - thin host]
-
-  EditorApp --> GP
-  EditorApp --> Systems
-  ProjectExe --> Runtime
-  Runtime --> GP
-  GP --> Systems
-  Systems --> Mid
-  Mid --> Core
-  ToolExe --> Mid
-  ToolExe --> Systems
-  RHI_GL -.-> Systems
-  PhysArcade -.-> Systems
-```
-
-Editor links Runtime for in-process PIE (`GameHostSession`). Shipping projects also add Runtime. Tools do not.
-
----
-
-## Success criteria
-
-1. Shipping links Runtime + Engine + Plugins — zero Editor UI — **yes** (`Projects/Smoke`; Runtime is project-owned `add_subdirectory`).
-2. OpenGL under Plugins; Engine talks RHI iface — **yes**.
-3. `games/` gone; `Projects/Smoke` builds — **yes**.
-4. Edit-time PIE GameMode not in Engine public surface — **yes** (`Editor/Gameplay`).
-5. Tools do not build `leon_runtime`; Editor may for PIE host — **yes**.
-6. DCC import (`leon_import`) not linked by shipping `leon_engine` — **yes**.
-7. Docs stay current each release — **yes**.
-
-Docs: [SETUP](SETUP.md) · [NAMING](NAMING.md) · [TOOLS](TOOLS.md) · [LEVELS](LEVELS.md) · [ASSET_FORMATS](ASSET_FORMATS.md) · [LIBRARIES](LIBRARIES.md) · [../README.md](../README.md)
+| Reflection | No `UObject` / `UCLASS` / UHT / GC. `A` and `U` prefixes are naming only; objects are plain C++ owned with `std::unique_ptr` (e.g. `UWorld` is a member of `AGameModeBase`). |
+| Containers / strings | `std::` containers, `std::string`, `char` instead of `TArray`, `TMap`, `FString`, `TCHAR`. |
+| Math | glm on desktop (Y-up, lowercase API); plain floats + `FPlatformMath` on PS2. No `FVector` / `FRotator` / `FMatrix`. |
+| Renderer | Calls OpenGL directly (Glad) instead of going through RHI command lists; `FDynamicRHI` only covers device init, viewport and memory stats. |
+| Engine ↔ Renderer | `CIRCULAR_DEPENDENCIES` both ways (`Renderer.h` includes `Level.h`, `Level.h` includes GPU resources). UMG also depends privately on Renderer. |
+| PS2 gameplay | The gameplay framework (Engine, AIModule, …) is desktop-only (glm / JSON, C++20). The PS2 game uses its own `F*` types (`FThirdPersonCharacter`, …) and `FPS2RHI`, with no `AActor` / `ACharacter`. |
+| Game → Launch | The PS2 game module reads `GEngineLoop.GetMainWindow()` / `GetApplication()` through an include-only dependency on the launch module (UE game modules never see `FEngineLoop`); there is no `GEngine` / viewport on PS2 to hand them out. |
+| Gamepad input | Game code polls `IInputInterface` state directly; no Slate application routing events. |
+| Config | `Engine/Config/Base*.ini`, `Engine/Platforms/PS2/Config/PS2Engine.ini` and `Game/ThirdPerson/Config/Default*.ini` are placeholders; nothing loads them (no `FConfigCacheIni`). |
+| Desktop packs | `FProjectDescriptor` still reads the pre-refactor pack layout (`Projects/<Name>/leon.game.json`); the repository contains no such pack, and `.leonproject` files are read only by LeonBuildTool. |
+| Window / RHI ownership | The window creates the RHI (`FGenericWindow::InitRHI`), so ApplicationCore depends on the platform RHI module; on desktop `UGameEngine` creates its own application and window instead of `FEngineLoop`. |
+| Unused dependencies | Engine and UMG list `GLFW` as a private dependency but no source in either module includes a GLFW header. |
+| Platform checks | `Core/Private/Misc/Paths.cpp` and `Engine/Private/Net/NetUtil.cpp` still use `#if defined(_WIN32)` outside a platform folder. |
+| Linking | Always static (`IS_MONOLITHIC=1`), generated module table; no DLL modules or hot reload. |
+| Build tool | CMake scripts instead of C# UBT; Linux is registered but not verified. |

@@ -1,60 +1,97 @@
-# Offline Tools (`leon-cook`, `leon-cli`, ResourceTools)
+# Offline tools (LeonCook, build scripts)
 
-Build entry: `cmake -S Tools` (see [SETUP.md](SETUP.md#tools)). Wrapper: `Scripts\cook.bat <recipe.json>`.
+Offline cooking and the helper scripts around LeonBuildTool. Build setup itself (Setup, toolchains, Docker for PS2) is in [SETUP.md](SETUP.md); file formats are in [ASSET_FORMATS.md](ASSET_FORMATS.md).
 
-## Layout
+## Where tools live
 
-```text
-Tools/
-├── AssetPipeline/leon-cook/   # CLI executable (modes below)
-├── Cli/                       # leon-cli — thin forwarder (no Engine link)
-├── ResourceTools/             # shared library leon_resource_tools
-│   ├── include/leon/tools/
-│   └── src/
-└── CMakeLists.txt
-```
+The layout mirrors Unreal Engine 4.27: edit-time code is in **Developer** modules, and executables are **Program** targets that link them.
 
-| Target | Role |
-| --- | --- |
-| `leon-cook` | Offline cook executable |
-| `leon-cli` | `help` / `version` / `cook <recipe>` → sibling `leon-cook` |
-| `leon_resource_tools` | Recipe runner + path helpers |
-| `leon_engine_cook` | Engine INTERFACE: lean deps for cook (see below) |
+| Path | Kind | Role |
+| --- | --- | --- |
+| `Engine/Source/Developer/Cooker/` | Developer module | Cook commandlet (`UCookCommandlet`), recipes (`FCookRecipe`), path helpers (`FCookPaths`) |
+| `Engine/Source/Developer/MeshUtilities/` | Developer module | OBJ / FBX / glTF import and `FStaticMeshBuilder` (source → `.lmesh`) |
+| `Engine/Source/Programs/LeonCook/` | Program target | `LeonCook` executable: `main` forwards to `UCookCommandlet::Main` |
+| `Engine/Source/Programs/LeonBuildTool/` | Build tool (CMake script) | Builds every target (UnrealBuildTool equivalent) |
+| `Engine/Source/Programs/LeonAutomationTests/` | Program target | Runs every module's `Private/Tests/**` (Catch2) |
+| `Engine/Source/Programs/BlankProgram/` | Program target | Minimal program: starts the statically linked modules |
+| `Engine/Build/BatchFiles/` | Scripts | Build / Clean / Rebuild / Cook / RunTests / FormatCode / Lint / GenerateProjectFiles |
+| `Engine/Platforms/PS2/Build/BatchFiles/` | Scripts | `RunPCSX2.ps1` (launch a PS2 build), `DockerEntry.sh` (used by LeonBuildTool) |
 
-## Link graph (lean cook)
+Both Developer modules and the LeonCook target are `PLATFORMS Desktop`: they never build for PS2.
+
+### LeonCook link graph
 
 ```text
-leon-cook
-  └─ leon_resource_tools
-       └─ leon_engine_cook
-            ├─ leon_assets      (+ LevelClassNames, CookedSkeletal, ContentValidator)
-            ├─ leon_animation
-            ├─ leon_renderer    (CPU `.lmesh` / `.lmat`)
-            ├─ leon_import      (OBJ / FBX / glTF → `.lmesh`)
-            └─ leon_rhi_opengl  (ResourceCache / Texture for material maps)
+LeonCook (Program)
+  └─ Cooker (Developer)
+       ├─ Engine         (CookedSkeletal: character / anim cook, .lskel / .lskm / .lanim / .lchar writers)
+       │    └─ AnimationCore (FBX skeleton / animation import through ufbx)
+       ├─ MeshUtilities  (FStaticMeshBuilder, ObjImport, FbxStaticMesh, GltfImport)
+       │    └─ Renderer  (LeonMaterialFormat: .lmat written by glTF import)
+       └─ NlohmannJson   (recipe parsing)
 ```
 
-**Not linked by cook:** `leon_gameplay`, `leon_scene` (LevelDirector/Loader), `leon_network`, `leon_physics_*`, `leon_engine_shell`, full `leon_engine`.
+Rules from `Engine/Source/Programs/LeonCook/LeonCook.Build.cmake`, `Engine/Source/Developer/Cooker/Cooker.Build.cmake` and `Engine/Source/Developer/MeshUtilities/MeshUtilities.Build.cmake`. Programs do not get plugins unless their target enables them (see [JoltPhysics](../Engine/Plugins/Runtime/JoltPhysics/README.md)), so LeonCook has no physics backend plugin.
 
-**Not linked by shipping `leon_engine`:** `leon_import` (Editor + cook only).
-Class-name parsers (`tryParseBasicShapeName`, `tryParseBasicLightName`, PlayerStart / BlockingVolume) live in `Engine/Content/src/LevelClassNames.cpp` so ContentValidator does not force a Scene link.
+## LeonCook
 
-POST_BUILD syncs `Engine/Assets` beside `leon-cook` via `Build/SyncDirectory.cmake` (copy-if-different).
+Output: `Engine/Binaries/Win64/LeonCook.exe` (Win64 Development). Entry point: `UCookCommandlet::Main` in `Engine/Source/Developer/Cooker/Private/Commandlets/CookCommandlet.cpp` (UE: `UE4Editor-Cmd -run=cook`).
 
-## `leon-cook` modes
+```bat
+Engine\Build\BatchFiles\Build.bat LeonCook Win64 Development
+Engine\Binaries\Win64\LeonCook.exe <mode> [options]
+```
 
-| Mode | Purpose |
-| --- | --- |
-| `staticmesh` | `--obj` \| `--fbx` \| `--gltf` → `.lmesh` (glTF: optional `--materials <dir>` for `.lmat` + textures) |
-| `character` | Skinned FBX pack → `.lskel` / `.lskm` / anims / blendspace / `.lchar` |
-| `anim` | Single clip → `.lanim` (needs skeleton) |
-| `recipe` | JSON `steps[]` (types below) |
+Or use the wrapper, which builds LeonCook first and forwards every argument:
 
-Formats detail: [ASSET_FORMATS.md](ASSET_FORMATS.md).
+```bat
+Engine\Build\BatchFiles\Cook.bat staticmesh --obj Mesh.obj --out Content\Meshes\Mesh.lmesh
+Engine\Build\BatchFiles\Cook.bat recipe Content\CookRecipe.json
+```
 
-### Recipe JSON
+### Modes
 
-Relative paths resolve next to the recipe file (`leon::tools::ResolveBeside`).
+| Mode | Required | Optional | Writes |
+| --- | --- | --- | --- |
+| `staticmesh` | `--out <m.lmesh>` and exactly one of `--obj <m.obj>`, `--fbx <m.fbx>`, `--gltf <m.gltf>` | `--materials <dir>` (glTF only: writes `M_*.lmat` and copies textures) | `.lmesh` |
+| `character` | `--name <Name>`, `--mesh <idle.fbx>`, `--run <run.fbx>`, `--out <dir>` | `--jump <JumpingUp.fbx>`, `--fall <FallingIdle.fbx>`, `--land <Land.fbx>` | Character folder (below) |
+| `anim` | `--fbx <clip.fbx>`, `--skeleton <X.lskel>`, `--out <Anims/Clip.lanim>` | `--name <ClipName>`, `--noloop` (clips loop by default) | `.lanim` |
+| `recipe` | `<file.json>` | | Whatever the steps write |
+| `help`, `-h`, `--help` | | | Prints usage |
+
+Exit codes: `0` success, `1` bad arguments or recipe, `2` cook failure. Running without a mode prints usage and returns `1`. Unknown flags are rejected.
+
+`character` writes, under `--out`:
+
+```text
+<Name>.lskel
+<Name>.lskm
+Materials/M_<Name>.lmat
+Anims/BreathingIdle.lanim
+Anims/Running.lanim
+Anims/JumpingUp.lanim          (--jump)
+Anims/FallingIdle.lanim        (--fall)
+Anims/FallingToLanding.lanim   (--land)
+<Name>_Locomotion.blendspace1d.json
+<Name>.lchar
+```
+
+Implementation: `FStaticMeshBuilder::CookFromObj` / `CookFromFbx` / `CookFromGltf` (`Engine/Source/Developer/MeshUtilities/Public/StaticMeshBuilder.h`), `CookCharacterFromFbx` / `CookAnimSequenceFromFbx` (`Engine/Source/Runtime/Engine/Public/Animation/CookedSkeletal.h`).
+
+### Examples
+
+```bat
+Engine\Binaries\Win64\LeonCook.exe staticmesh --obj mesh.obj --out mesh.lmesh
+Engine\Binaries\Win64\LeonCook.exe staticmesh --fbx mesh.fbx --out mesh.lmesh
+Engine\Binaries\Win64\LeonCook.exe staticmesh --gltf mesh.gltf --out mesh.lmesh --materials Materials
+Engine\Binaries\Win64\LeonCook.exe character --name Bot --mesh BreathingIdle.fbx --run Running.fbx --out Characters\Bot
+Engine\Binaries\Win64\LeonCook.exe anim --fbx Wave.fbx --skeleton Bot.lskel --name Wave --out Anims\Wave.lanim
+Engine\Binaries\Win64\LeonCook.exe recipe CookRecipe.json
+```
+
+## Recipes
+
+`FCookRecipe::RunFile` (`Engine/Source/Developer/Cooker/Private/CookRecipe.cpp`) runs a JSON file with a `steps` array, in order, and stops at the first failing step. Relative paths resolve next to the recipe file with `FCookPaths::ResolveBeside` (absolute paths are kept as is).
 
 ```json
 {
@@ -71,9 +108,9 @@ Relative paths resolve next to the recipe file (`leon::tools::ResolveBeside`).
     },
     {
       "type": "staticmesh",
-      "gltf": "prop.gltf",
+      "gltf": "Prop.gltf",
       "out": "Prop.lmesh",
-      "materials": "materials"
+      "materials": "Materials"
     },
     {
       "type": "anim",
@@ -90,32 +127,50 @@ Relative paths resolve next to the recipe file (`leon::tools::ResolveBeside`).
 | Step `type` | Required fields | Optional |
 | --- | --- | --- |
 | `character` | `name`, `mesh`, `run` | `out` (default `.`), `jump`, `fall`, `land` |
-| `anim` | `fbx`, `skeleton`, `out` | `name`, `loop` (default true) |
+| `anim` | `fbx`, `skeleton`, `out` | `name`, `loop` (default `true`) |
 | `staticmesh` | `out` + exactly one of `obj` / `fbx` / `gltf` | `materials` (glTF) |
 
-Example pack recipe: `Templates/ThirdPerson/Content/assets/characters/bot/cook-bot.json`.
+The repository has no sample recipe or source FBX / glTF files; the only mesh source is the OBJ test fixture `Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/Cube.obj`.
 
-## ResourceTools API
+### C++ API
 
-Headers under `Tools/ResourceTools/include/leon/tools/`:
+| API | Header | Role |
+| --- | --- | --- |
+| `UCookCommandlet::Main(ArgC, ArgV)` | `Cooker/Public/Commandlets/CookCommandlet.h` | Command-line entry; returns a process exit code |
+| `FCookRecipe::RunFile(RecipePath)` | `Cooker/Public/CookRecipe.h` | Runs a recipe; `0` on success |
+| `FCookPaths::ResolveBeside(BaseDir, Relative)` | `Cooker/Public/CookPaths.h` | Absolute paths unchanged, otherwise `BaseDir / Relative` (normalized) |
 
-| API | Role |
-| --- | --- |
-| `ResolveBeside(baseDir, rel)` | Absolute unchanged; else `baseDir / rel` |
-| `RunCookRecipeFile(path)` | Execute recipe; process-style exit code (`0` ok) |
+## Build scripts
 
-`leon-cook recipe` calls `RunCookRecipeFile`. Lightmap **load** is Engine `LightmapIO`; **bake** is Editor `LightmapBaker` (Build Lights) — [LEVELS.md](LEVELS.md).
+All scripts forward to LeonBuildTool (`cmake -P Engine/Source/Programs/LeonBuildTool/LeonBuildTool.cmake -- ...`). Win64 builds set up the MSVC environment through `GetVSEnv.bat`; PS2 builds run inside the pinned ps2dev Docker image unless `PS2DEV` is set on the host.
 
-## `leon-cli`
+| Script | Usage | Does |
+| --- | --- | --- |
+| `Setup.bat` / `Setup.sh` (root) | `Setup.bat` | Downloads every pinned third-party dependency (`-Mode=Setup`) |
+| `Engine\Build\BatchFiles\Build.bat` | `<Target> <Platform> <Configuration> [-Project=<file.leonproject>] [-Mode=...]` | Builds a target (`Build.bat BlankProgram Win64 Development`) |
+| `Engine\Build\BatchFiles\Clean.bat` | same arguments as Build | `-Mode=Clean` |
+| `Engine\Build\BatchFiles\Rebuild.bat` | same arguments as Build | `-Mode=Rebuild` |
+| `Engine\Build\BatchFiles\Cook.bat` | `<LeonCook arguments>` | Builds LeonCook (Win64 Development) and runs it |
+| `Engine\Build\BatchFiles\RunTests.bat` | `[Catch2 args]` | Builds LeonAutomationTests (Win64 Development) and runs it from the repo root |
+| `Engine\Build\BatchFiles\FormatCode.bat` | `[--check]` | clang-format on every `.cpp` / `.h` / `.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game` (skips `ThirdParty`, `Intermediate`, `Binaries`); `--check` is a dry run that fails on unformatted files |
+| `Engine\Build\BatchFiles\Lint.bat` | | `FormatCode.bat --check`, then builds LeonAutomationTests, LeonCook, LeonGame and BlankProgram for Win64 Development |
+| `GenerateProjectFiles.bat` (root) → `Engine\Build\BatchFiles\GenerateProjectFiles.bat` | `[-Project=<file.leonproject>]` | Visual Studio solution in `<Engine or Project>\Intermediate\ProjectFiles` plus the root `compile_commands.json` for clangd; builds keep using Build.bat |
+| `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1` | `[-Project <dir or .leonproject>] [-Configuration Debug\|Development\|Shipping] [-Build]` | Optionally builds the project for PS2, then starts PCSX2 on `<Project>\Binaries\PS2\<Name>.elf` |
 
-| Command | Behavior |
-| --- | --- |
-| `help` | Usage |
-| `version` | `Leon Tools 0.10.0` |
-| `cook <recipe.json>` | `GetModuleFileName` (Windows) / `argv[0]` → run sibling `leon-cook.exe recipe …` |
+Linux equivalents: `Engine/Build/BatchFiles/Linux/Build.sh`, `Engine/Build/BatchFiles/Linux/GenerateProjectFiles.sh`, root `GenerateProjectFiles.sh` and `Setup.sh`.
 
-No Engine libraries. Exit codes normalized (`WEXITSTATUS` on Unix).
+LeonBuildTool options accepted after the positional arguments: `-Project=<file>`, `-Mode=Build|Clean|Rebuild|GenerateClangDatabase|GenerateProjectFiles|Setup`, `-NoDocker`, `-KeepGoing`.
+
+Outputs go to `<Project or Engine>/Binaries/<Platform>/<Target><suffix>` for Development and `<Target>-<Platform>-<Configuration><suffix>` for other configurations; build trees go to `<Project or Engine>/Intermediate/Build/<Platform>/<Configuration>`.
+
+### RunPCSX2.ps1
+
+```powershell
+Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson -Build
+```
+
+`-Project` defaults to `Game\ThirdPerson` and takes a folder (first `*.leonproject` in it) or a `.leonproject` file. PCSX2 is looked up in `$env:LEON_PCSX2`, then `pcsx2-qt.exe` on `PATH`, then the default install folders; it starts with `-fastboot -elf <ELF>`.
 
 ## Related docs
 
-[SETUP.md](SETUP.md) · [ASSET_FORMATS.md](ASSET_FORMATS.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [NAMING.md](NAMING.md) · [LEVELS.md](LEVELS.md)
+[SETUP.md](SETUP.md) · [ASSET_FORMATS.md](ASSET_FORMATS.md) · [LEVELS.md](LEVELS.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [CODING_STANDARD.md](CODING_STANDARD.md)
