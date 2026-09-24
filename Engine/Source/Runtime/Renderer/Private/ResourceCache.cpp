@@ -1,12 +1,12 @@
 #include <algorithm>
 #include <filesystem>
 #include <iostream>
-#include <leon/core/Paths.h>
-#include <leon/render/LeonMeshFormat.h>
-#include <leon/render/MaterialAsset.h>
-#include <leon/render/MeshData.h>
-#include <leon/render/Primitives.h>
-#include <leon/render/ResourceCache.h>
+#include "Misc/Paths.h"
+#include "LeonMeshFormat.h"
+#include "MaterialAsset.h"
+#include "MeshData.h"
+#include "Primitives.h"
+#include "ResourceCache.h"
 
 namespace leon {
 

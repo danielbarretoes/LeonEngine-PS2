@@ -1,11 +1,11 @@
-#include <leon/runtime/GameHostSession.h>
+#include "GameHostSession.h"
 
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <leon/core/Paths.h>
-#include <leon/gameplay/DefaultGameMode.h>
-#include <leon/runtime/ProjectPack.h>
+#include "Misc/Paths.h"
+#include "GameFramework/DefaultGameMode.h"
+#include "ProjectPack.h"
 #include <memory>
 #include <nlohmann/json.hpp>
 

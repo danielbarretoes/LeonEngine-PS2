@@ -1,6 +1,6 @@
-#include <leon/runtime/RunLeonGame.h>
+#include "RunLeonGame.h"
 
-#include <leon/runtime/GameApplication.h>
+#include "GameApplication.h"
 
 namespace leon::runtime {
 

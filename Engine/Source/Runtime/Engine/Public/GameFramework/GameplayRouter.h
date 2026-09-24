@@ -1,8 +1,8 @@
 #pragma once
 
 #include <cstddef>
-#include <leon/gameplay/GameMode.h>
-#include <leon/level/LevelDirector.h>
+#include "GameFramework/GameMode.h"
+#include "Level/LevelDirector.h"
 #include <memory>
 #include <vector>
 

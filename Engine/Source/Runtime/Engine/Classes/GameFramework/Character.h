@@ -3,11 +3,11 @@
 #include <glm/vec3.hpp>
 
 #include <cstdint>
-#include <leon/gameplay/Pawn.h>
-#include <leon/gameplay/SkeletalMeshComponent.h>
-#include <leon/physics/CollisionQuery.h>
-#include <leon/physics/CollisionShape.h>
-#include <leon/physics/PhysScene.h>
+#include "GameFramework/Pawn.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "CollisionQuery.h"
+#include "CollisionShape.h"
+#include "Physics/PhysScene.h"
 
 namespace leon {
 

@@ -1,11 +1,11 @@
-#include <leon/gameplay/GameInstance.h>
+#include "Engine/GameInstance.h"
 
 #include <filesystem>
 #include <iostream>
-#include <leon/core/Ascii.h>
-#include <leon/Engine.h>
-#include <leon/level/LeonLevelFormat.h>
-#include <leon/level/LevelLoader.h>
+#include "Misc/Ascii.h"
+#include "Engine/GameEngine.h"
+#include "Level/LeonLevelFormat.h"
+#include "Level/LevelLoader.h"
 
 namespace leon {
 namespace {

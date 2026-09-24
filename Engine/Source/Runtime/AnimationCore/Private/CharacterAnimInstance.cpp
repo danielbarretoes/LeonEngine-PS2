@@ -1,6 +1,6 @@
 #include <algorithm>
 #include <cmath>
-#include <leon/animation/SkeletalAnimation.h>
+#include "SkeletalAnimation.h"
 
 namespace leon {
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <leon/render/Material.h>
+#include "Material.h"
 #include <nlohmann/json.hpp>
 #include <string>
 

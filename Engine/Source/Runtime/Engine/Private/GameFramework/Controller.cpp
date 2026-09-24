@@ -1,5 +1,5 @@
-#include <leon/gameplay/Character.h>
-#include <leon/gameplay/Controller.h>
+#include "GameFramework/Character.h"
+#include "GameFramework/Controller.h"
 
 namespace leon {
 

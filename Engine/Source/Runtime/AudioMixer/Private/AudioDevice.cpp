@@ -1,11 +1,11 @@
-#include <leon/audio/AudioDevice.h>
+#include "AudioDevice.h"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstring>
 #include <iostream>
-#include <leon/core/Paths.h>
+#include "Misc/Paths.h"
 #include <string>
 #include <vector>
 

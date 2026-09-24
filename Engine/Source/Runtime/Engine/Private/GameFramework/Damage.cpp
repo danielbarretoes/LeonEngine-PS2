@@ -1,8 +1,8 @@
-#include <leon/gameplay/Damage.h>
+#include "GameFramework/Damage.h"
 
 #include <glm/geometric.hpp>
 
-#include <leon/gameplay/Character.h>
+#include "GameFramework/Character.h"
 
 namespace leon {
 

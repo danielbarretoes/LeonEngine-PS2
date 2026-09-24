@@ -1,14 +1,14 @@
-#include <leon/gameplay/GameMode.h>
+#include "GameFramework/GameMode.h"
 
 #include <algorithm>
 #include <cmath>
 #include <iostream>
-#include <leon/Engine.h>
-#include <leon/gameplay/Character.h>
-#include <leon/gameplay/GameInstance.h>
-#include <leon/gameplay/NavigationSystem.h>
-#include <leon/gameplay/PlayerController.h>
-#include <leon/level/Level.h>
+#include "Engine/GameEngine.h"
+#include "GameFramework/Character.h"
+#include "Engine/GameInstance.h"
+#include "AI/Navigation/NavigationSystem.h"
+#include "GameFramework/PlayerController.h"
+#include "Engine/Level.h"
 
 namespace leon {
 

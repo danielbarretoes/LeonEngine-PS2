@@ -2,9 +2,9 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <chrono>
 #include <cstring>
-#include <leon/net/NetDriver.h>
-#include <leon/net/NetProtocol.h>
-#include <leon/net/SnapshotCodec.h>
+#include "Engine/NetDriver.h"
+#include "Net/NetProtocol.h"
+#include "Net/SnapshotCodec.h"
 #include <limits>
 #include <thread>
 #include <vector>

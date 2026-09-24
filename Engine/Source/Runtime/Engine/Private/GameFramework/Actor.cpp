@@ -1,6 +1,6 @@
 #include <algorithm>
-#include <leon/gameplay/Actor.h>
-#include <leon/gameplay/ActorComponent.h>
+#include "GameFramework/Actor.h"
+#include "Components/ActorComponent.h"
 
 namespace leon {
 

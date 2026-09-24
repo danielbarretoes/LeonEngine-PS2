@@ -1,12 +1,12 @@
-#include <leon/render/LeonMaterialFormat.h>
+#include "LeonMaterialFormat.h"
 
 #include <algorithm>
 #include <cctype>
 #include <fstream>
 #include <iostream>
-#include <leon/core/FileIO.h>
-#include <leon/core/Paths.h>
-#include <leon/render/ResourceCache.h>
+#include "Misc/FileIO.h"
+#include "Misc/Paths.h"
+#include "ResourceCache.h"
 #include <sstream>
 
 namespace leon {

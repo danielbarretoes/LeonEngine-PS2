@@ -1,8 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <filesystem>
-#include <leon/content/ContentValidator.h>
-#include <leon/level/LeonLevelFormat.h>
+#include "Validation/ContentValidator.h"
+#include "Level/LeonLevelFormat.h"
 #include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
@@ -201,13 +201,13 @@ TEST_CASE("ValidateMaterialDocument checks version and types", "[content][valida
 }
 
 TEST_CASE("ValidateMaterialFile loads M_Default.lmat", "[content][validator]") {
-#ifdef LEON_SOURCE_DIR
+#ifdef LEON_ROOT_DIR
     const std::string path =
-        (std::filesystem::path(LEON_SOURCE_DIR) / "Engine/Assets/Materials/M_Default.lmat")
+        (std::filesystem::path(LEON_ROOT_DIR) / "Engine/Content/Materials/M_Default.lmat")
             .lexically_normal()
             .string();
 #else
-    const std::string path = "Engine/Assets/Materials/M_Default.lmat";
+    const std::string path = "Engine/Content/Materials/M_Default.lmat";
 #endif
     const leon::ValidationReport report = leon::ValidateMaterialFile(path);
     REQUIRE(report.ok());

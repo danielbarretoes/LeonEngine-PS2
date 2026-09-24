@@ -2,8 +2,8 @@
 #include <glm/common.hpp>
 
 #include <algorithm>
-#include <leon/render/GlAttrib.h>
-#include <leon/render/SkeletalMesh.h>
+#include "GlAttrib.h"
+#include "SkeletalMesh.h"
 #include <utility>
 
 namespace leon {

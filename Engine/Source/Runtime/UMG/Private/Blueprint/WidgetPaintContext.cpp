@@ -1,5 +1,5 @@
-#include <leon/debug/DebugOverlay.h>
-#include <leon/ui/WidgetPaintContext.h>
+#include "Debug/DebugOverlay.h"
+#include "Blueprint/WidgetPaintContext.h"
 
 namespace leon {
 

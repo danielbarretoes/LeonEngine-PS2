@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstddef>
-#include <leon/rhi/RHIHandles.h>
+#include "RHIHandles.h"
 
 namespace leon {
 

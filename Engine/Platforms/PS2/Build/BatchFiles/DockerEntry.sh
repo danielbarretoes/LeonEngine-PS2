@@ -8,4 +8,4 @@ export PATH="$PS2DEV/bin:$PS2DEV/ee/bin:$PS2DEV/iop/bin:$PS2DEV/dvp/bin:$PATH"
 if ! command -v cmake >/dev/null 2>&1 || ! command -v ninja >/dev/null 2>&1; then
 	apk add --no-cache cmake ninja make >/dev/null
 fi
-exec cmake -P /leon/Engine/Source/Programs/LeonBuildTool/LeonBuildTool.cmake "$@"
+exec cmake -P /leon/Engine/Source/Programs/LeonBuildTool/LeonBuildTool.cmake -- "$@"

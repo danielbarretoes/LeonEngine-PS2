@@ -1,7 +1,7 @@
 #include "Ps2GsContext.h"
 #include "Ps2SceneState.h"
 
-#include <leon/rhi/Ps2RHI.h>
+#include "Ps2RHI.h"
 
 #include <cstring>
 

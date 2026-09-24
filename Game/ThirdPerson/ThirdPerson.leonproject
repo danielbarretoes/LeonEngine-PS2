@@ -1,0 +1,17 @@
+{
+	"FileVersion": 1,
+	"EngineAssociation": "",
+	"Category": "",
+	"Description": "PS2 third-person starter: orbit camera, character move/jump, primitive level.",
+	"Modules": [
+		{
+			"Name": "ThirdPerson",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [],
+	"TargetPlatforms": [
+		"PS2"
+	]
+}

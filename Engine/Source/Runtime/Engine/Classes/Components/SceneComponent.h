@@ -3,8 +3,8 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
-#include <leon/core/Transform.h>
-#include <leon/gameplay/ActorComponent.h>
+#include "Math/Transform.h"
+#include "Components/ActorComponent.h"
 #include <vector>
 
 namespace leon {

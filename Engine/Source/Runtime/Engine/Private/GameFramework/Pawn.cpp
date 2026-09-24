@@ -1,5 +1,5 @@
-#include <leon/gameplay/Controller.h>
-#include <leon/gameplay/Pawn.h>
+#include "GameFramework/Controller.h"
+#include "GameFramework/Pawn.h"
 
 namespace leon {
 

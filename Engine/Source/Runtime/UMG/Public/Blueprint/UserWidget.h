@@ -1,6 +1,6 @@
 #pragma once
 
-#include <leon/ui/WidgetPaintContext.h>
+#include "Blueprint/WidgetPaintContext.h"
 
 namespace leon {
 

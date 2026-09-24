@@ -2,8 +2,8 @@
 
 /// Unreal-like UGameplayStatics / UWorld trace helpers over PhysScene.
 #include <glm/vec3.hpp>
-#include <leon/gameplay/World.h>
-#include <leon/physics/CollisionQuery.h>
+#include "Engine/World.h"
+#include "CollisionQuery.h"
 
 namespace leon {
 

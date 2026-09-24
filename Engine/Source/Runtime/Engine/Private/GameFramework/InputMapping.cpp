@@ -1,7 +1,7 @@
 #include <algorithm>
-#include <leon/core/EKey.h>
-#include <leon/core/InputActions.h>
-#include <leon/core/InputMapping.h>
+#include "EKey.h"
+#include "GameFramework/InputActions.h"
+#include "GameFramework/InputMapping.h"
 
 namespace leon {
 

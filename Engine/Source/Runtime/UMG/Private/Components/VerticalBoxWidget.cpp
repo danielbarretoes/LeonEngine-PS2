@@ -1,15 +1,15 @@
-#include <leon/ui/VerticalBoxWidget.h>
-#include <leon/core/EKey.h>
+#include "Components/VerticalBoxWidget.h"
+#include "EKey.h"
 
 #include <algorithm>
 #include <cmath>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
-#include <leon/core/Window.h>
-#include <leon/core/EKey.h>
-#include <leon/debug/DebugOverlay.h>
-#include <leon/core/EKey.h>
+#include "Window.h"
+#include "EKey.h"
+#include "Debug/DebugOverlay.h"
+#include "EKey.h"
 
 namespace leon {
 

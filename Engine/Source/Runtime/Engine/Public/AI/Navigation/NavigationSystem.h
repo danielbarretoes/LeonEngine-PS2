@@ -3,7 +3,7 @@
 #include <glm/vec3.hpp>
 
 #include <cstddef>
-#include <leon/gameplay/NavMesh.h>
+#include "AI/Navigation/NavMesh.h"
 #include <vector>
 
 namespace leon {

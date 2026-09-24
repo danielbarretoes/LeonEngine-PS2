@@ -1,4 +1,4 @@
-#include <leon/ui/ProgressBarWidget.h>
+#include "Components/ProgressBarWidget.h"
 
 #include <cstdio>
 #include <string>

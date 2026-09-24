@@ -1,10 +1,10 @@
 #pragma once
 
-#include <leon/render/EnvMap.h>
-#include <leon/render/Material.h>
-#include <leon/render/MeshData.h>
-#include <leon/render/StaticMesh.h>
-#include <leon/render/Texture.h>
+#include "EnvMap.h"
+#include "Material.h"
+#include "MeshData.h"
+#include "StaticMesh.h"
+#include "Texture.h"
 #include <memory>
 #include <string>
 #include <unordered_map>

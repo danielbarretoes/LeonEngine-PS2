@@ -50,7 +50,7 @@ Dist/
 *.a
 *.obj
 !assets/**/*.obj
-!Engine/Assets/**/*.obj
+!Engine/Content/**/*.obj
 
 # DCC source (not needed at runtime)
 *.max
@@ -69,3 +69,4 @@ Thumbs.db
 # Keep Engine/Build (case-insensitive filesystems also match build/ rules above).
 !/Engine/Build/
 !/Engine/Build/**
+!Engine/Source/**/Tests/Fixtures/*.obj

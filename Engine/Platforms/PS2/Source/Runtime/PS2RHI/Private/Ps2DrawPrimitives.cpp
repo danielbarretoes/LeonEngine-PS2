@@ -1,6 +1,6 @@
 #include "Ps2GsContext.h"
 
-#include <leon/rhi/Ps2RHI.h>
+#include "Ps2RHI.h"
 
 #include <cstdint>
 #include <cstring>

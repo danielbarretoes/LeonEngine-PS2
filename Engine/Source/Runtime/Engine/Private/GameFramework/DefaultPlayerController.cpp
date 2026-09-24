@@ -1,10 +1,10 @@
 #include <glm/geometric.hpp>
 
-#include <leon/core/Input.h>
-#include <leon/core/InputActions.h>
-#include <leon/Engine.h>
-#include <leon/gameplay/DefaultCameraActor.h>
-#include <leon/gameplay/DefaultPlayerController.h>
+#include "GameFramework/Input.h"
+#include "GameFramework/InputActions.h"
+#include "Engine/GameEngine.h"
+#include "GameFramework/DefaultCameraActor.h"
+#include "GameFramework/DefaultPlayerController.h"
 
 namespace leon {
 

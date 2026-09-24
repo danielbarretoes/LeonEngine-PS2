@@ -1,5 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
-#include <leon/debug/DebugDraw.h>
+#include "Debug/DebugDraw.h"
 
 TEST_CASE("DebugDraw batch accumulates and clears", "[debug][draw]") {
     leon::DebugDraw draw;

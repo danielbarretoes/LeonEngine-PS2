@@ -6,7 +6,7 @@
 #include <array>
 #include <cmath>
 #include <iostream>
-#include <leon/render/ShadowMap.h>
+#include "ShadowMap.h"
 #include <limits>
 
 namespace leon {

@@ -1,7 +1,7 @@
-#include <leon/core/DebugOverlay.h>
-#include <leon/core/InputPad.h>
-#include <leon/core/MemoryStats.h>
-#include <leon/rhi/Ps2RHI.h>
+#include "Stats/DebugOverlay.h"
+#include "InputPad.h"
+#include "HAL/MemoryStats.h"
+#include "Ps2RHI.h"
 
 #include <cstdint>
 #include <cstdio>

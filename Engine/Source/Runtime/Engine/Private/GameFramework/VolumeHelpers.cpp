@@ -1,10 +1,10 @@
-#include <leon/gameplay/VolumeHelpers.h>
+#include "GameFramework/VolumeHelpers.h"
 
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
 #include <limits>
-#include <leon/gameplay/Character.h>
-#include <leon/gameplay/Damage.h>
+#include "GameFramework/Character.h"
+#include "GameFramework/Damage.h"
 
 namespace leon {
 namespace {

@@ -4,8 +4,8 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <filesystem>
 #include <fstream>
-#include <leon/import/ObjImport.h>
-#include <leon/render/Primitives.h>
+#include "ObjImport.h"
+#include "Primitives.h"
 
 using Catch::Matchers::WithinAbs;
 

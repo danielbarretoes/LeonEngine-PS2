@@ -1,9 +1,5 @@
 #include <iostream>
-#include <leon/physics/IPhysicsBackend.h>
-
-#if defined(LEON_WITH_JOLT) && LEON_WITH_JOLT
-#include <leon/physics/JoltPhysicsBackend.h>
-#endif
+#include "IPhysicsBackend.h"
 
 namespace leon {
 namespace {
@@ -13,19 +9,29 @@ public:
     [[nodiscard]] const char* GetName() const override { return "Arcade"; }
 };
 
+PhysicsBackendFactory& JoltFactory() {
+    static PhysicsBackendFactory factory = nullptr;
+    return factory;
+}
+
 } // namespace
+
+void RegisterPhysicsBackendFactory(EPhysicsBackendKind kind, PhysicsBackendFactory factory) {
+    if (kind == EPhysicsBackendKind::Jolt) {
+        JoltFactory() = factory;
+    }
+}
 
 std::unique_ptr<IPhysicsBackend> CreatePhysicsBackend(EPhysicsBackendKind kind) {
     if (kind == EPhysicsBackendKind::Jolt) {
-#if defined(LEON_WITH_JOLT) && LEON_WITH_JOLT
-        return CreateJoltPhysicsBackend();
-#else
+        if (JoltFactory() != nullptr) {
+            return JoltFactory()();
+        }
         static bool s_loggedJoltFallback = false;
         if (!s_loggedJoltFallback) {
             s_loggedJoltFallback = true;
-            std::cerr << "CreatePhysicsBackend: LEON_WITH_JOLT is off; falling back to Arcade\n";
+            std::cerr << "CreatePhysicsBackend: JoltPhysics plugin not enabled; falling back to Arcade\n";
         }
-#endif
     }
     return std::make_unique<ArcadePhysicsBackend>();
 }

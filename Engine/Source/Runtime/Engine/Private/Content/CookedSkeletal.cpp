@@ -7,7 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <leon/content/CookedSkeletal.h>
+#include "Animation/CookedSkeletal.h"
 #include <nlohmann/json.hpp>
 #include <string>
 

@@ -1,7 +1,7 @@
 #pragma once
 
-#include <leon/ui/ButtonWidget.h>
-#include <leon/ui/UserWidget.h>
+#include "Components/ButtonWidget.h"
+#include "Blueprint/UserWidget.h"
 #include <memory>
 #include <string>
 #include <vector>

@@ -3,12 +3,12 @@
 
 #include <filesystem>
 #include <iostream>
-#include <leon/content/CookedSkeletal.h>
-#include <leon/core/Paths.h>
-#include <leon/Engine.h>
-#include <leon/gameplay/SkeletalMeshComponent.h>
-#include <leon/render/Renderer.h>
-#include <leon/render/StaticMesh.h>
+#include "Animation/CookedSkeletal.h"
+#include "Misc/Paths.h"
+#include "Engine/GameEngine.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Renderer.h"
+#include "StaticMesh.h"
 
 namespace leon {
 namespace {

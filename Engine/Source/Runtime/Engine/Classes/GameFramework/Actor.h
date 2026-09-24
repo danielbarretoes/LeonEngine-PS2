@@ -4,9 +4,9 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <leon/gameplay/ActorComponent.h>
-#include <leon/gameplay/SceneComponent.h>
-#include <leon/level/Level.h>
+#include "Components/ActorComponent.h"
+#include "Components/SceneComponent.h"
+#include "Engine/Level.h"
 #include <memory>
 #include <type_traits>
 #include <utility>

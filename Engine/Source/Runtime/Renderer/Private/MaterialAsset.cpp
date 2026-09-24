@@ -1,9 +1,9 @@
 #include <algorithm>
 #include <iostream>
-#include <leon/core/Paths.h>
-#include <leon/render/LeonMaterialFormat.h>
-#include <leon/render/MaterialAsset.h>
-#include <leon/render/ResourceCache.h>
+#include "Misc/Paths.h"
+#include "LeonMaterialFormat.h"
+#include "MaterialAsset.h"
+#include "ResourceCache.h"
 #include <nlohmann/json.hpp>
 
 namespace leon {

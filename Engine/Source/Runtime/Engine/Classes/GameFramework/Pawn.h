@@ -1,6 +1,6 @@
 #pragma once
 
-#include <leon/gameplay/Actor.h>
+#include "GameFramework/Actor.h"
 
 namespace leon {
 

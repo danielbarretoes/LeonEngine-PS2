@@ -3,9 +3,9 @@
 #include <glm/vec3.hpp>
 
 #include <cstdint>
-#include <leon/gameplay/Controller.h>
-#include <leon/gameplay/PlayerState.h>
-#include <leon/net/NetProtocol.h>
+#include "GameFramework/Controller.h"
+#include "GameFramework/PlayerState.h"
+#include "Net/NetProtocol.h"
 #include <memory>
 #include <type_traits>
 #include <utility>

@@ -1,9 +1,9 @@
-#include <leon/core/InputPad.h>
+#include "InputPad.h"
 
 #include <cstdio>
 
 #if defined(LEON_PLATFORM_PS2)
-#include <leon/rhi/Ps2RHI.h>
+#include "Ps2RHI.h"
 
 #include <libpad.h>
 #include <loadfile.h>

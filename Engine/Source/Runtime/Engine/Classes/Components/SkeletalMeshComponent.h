@@ -3,12 +3,12 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
-#include <leon/animation/SkeletalAnimation.h>
-#include <leon/core/Transform.h>
-#include <leon/gameplay/SceneComponent.h>
-#include <leon/render/Material.h>
-#include <leon/render/SkeletalMesh.h>
-#include <leon/render/StaticMesh.h>
+#include "SkeletalAnimation.h"
+#include "Math/Transform.h"
+#include "Components/SceneComponent.h"
+#include "Material.h"
+#include "SkeletalMesh.h"
+#include "StaticMesh.h"
 #include <deque>
 #include <memory>
 #include <string>

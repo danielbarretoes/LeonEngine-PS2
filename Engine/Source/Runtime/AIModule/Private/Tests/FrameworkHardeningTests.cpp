@@ -3,16 +3,16 @@
 #include <limits>
 #include <cstring>
 #include <filesystem>
-#include <leon/Engine.h>
-#include <leon/Gameplay.h>
-#include <leon/audio/AudioDevice.h>
-#include <leon/gameplay/NavigationSystem.h>
-#include <leon/level/LeonLevelFormat.h>
-#include <leon/net/NetProtocol.h>
-#include <leon/net/RootReplication.h>
-#include <leon/physics/PhysScene.h>
-#include <leon/ui/HUD.h>
-#include <leon/ui/TextBlockWidget.h>
+#include "Engine/GameEngine.h"
+#include "GameplayMinimal.h"
+#include "AudioDevice.h"
+#include "AI/Navigation/NavigationSystem.h"
+#include "Level/LeonLevelFormat.h"
+#include "Net/NetProtocol.h"
+#include "Net/RootReplication.h"
+#include "Physics/PhysScene.h"
+#include "GameFramework/HUD.h"
+#include "Components/TextBlockWidget.h"
 #include <string>
 #include <vector>
 

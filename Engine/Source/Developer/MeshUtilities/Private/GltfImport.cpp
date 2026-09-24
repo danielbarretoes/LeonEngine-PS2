@@ -8,14 +8,14 @@
 #pragma warning(pop)
 #endif
 
-#include <leon/import/GltfImport.h>
+#include "GltfImport.h"
 
 #include <algorithm>
 #include <cctype>
 #include <cstring>
 #include <filesystem>
-#include <leon/render/LeonMaterialFormat.h>
-#include <leon/render/MeshData.h>
+#include "LeonMaterialFormat.h"
+#include "MeshData.h"
 #include <system_error>
 
 namespace leon {

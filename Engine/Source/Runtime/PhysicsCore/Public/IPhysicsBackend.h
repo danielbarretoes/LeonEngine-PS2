@@ -6,9 +6,9 @@
 #include <memory>
 #include <vector>
 
-#include <leon/physics/BodyInstance.h>
-#include <leon/physics/CollisionQuery.h>
-#include <leon/physics/TriangleCollision.h>
+#include "BodyInstance.h"
+#include "CollisionQuery.h"
+#include "TriangleCollision.h"
 
 namespace leon {
 
@@ -104,5 +104,10 @@ enum class EPhysicsBackendKind : std::uint8_t {
 
 [[nodiscard]] std::unique_ptr<IPhysicsBackend> CreatePhysicsBackend(
     EPhysicsBackendKind kind = EPhysicsBackendKind::Arcade);
+
+/// Plugins register extra backends at module startup (e.g. the JoltPhysics plugin registers Jolt).
+/// CreatePhysicsBackend falls back to Arcade when no factory is registered for a kind.
+using PhysicsBackendFactory = std::unique_ptr<IPhysicsBackend> (*)();
+void RegisterPhysicsBackendFactory(EPhysicsBackendKind kind, PhysicsBackendFactory factory);
 
 } // namespace leon

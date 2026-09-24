@@ -1,5 +1,5 @@
-#include <leon/core/MemoryStats.h>
-#include <leon/rhi/IRHIDevice.h>
+#include "HAL/MemoryStats.h"
+#include "IRHIDevice.h"
 
 #ifdef _WIN32
 #ifndef NOMINMAX

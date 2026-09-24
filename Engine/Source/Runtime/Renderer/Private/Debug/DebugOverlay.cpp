@@ -7,9 +7,9 @@
 #include <cmath>
 #include <cstddef>
 #include <iostream>
-#include <leon/core/Paths.h>
-#include <leon/debug/DebugOverlay.h>
-#include <leon/render/GlAttrib.h>
+#include "Misc/Paths.h"
+#include "Debug/DebugOverlay.h"
+#include "GlAttrib.h"
 #include <utility>
 #include <vector>
 

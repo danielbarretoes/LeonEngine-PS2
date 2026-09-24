@@ -1,5 +1,5 @@
 #include <cstring>
-#include <leon/net/SnapshotCodec.h>
+#include "Net/SnapshotCodec.h"
 
 namespace leon {
 namespace net {

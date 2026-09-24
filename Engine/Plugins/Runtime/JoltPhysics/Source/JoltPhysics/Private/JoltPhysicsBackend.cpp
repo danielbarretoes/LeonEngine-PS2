@@ -6,7 +6,7 @@
 #include <limits>
 #include <vector>
 
-#include <leon/physics/JoltPhysicsBackend.h>
+#include "JoltPhysicsBackend.h"
 
 #include <Jolt/Jolt.h>
 

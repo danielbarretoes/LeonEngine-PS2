@@ -3,7 +3,7 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
-#include <leon/render/Shader.h>
+#include "Shader.h"
 #include <string>
 #include <vector>
 

@@ -2,10 +2,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include <leon/level/BasicLight.h>
-#include <leon/level/BasicShape.h>
-#include <leon/level/Level.h>
-#include <leon/level/Light.h>
+#include "Level/BasicLight.h"
+#include "Level/BasicShape.h"
+#include "Engine/Level.h"
+#include "Level/Light.h"
 
 using Catch::Matchers::WithinAbs;
 

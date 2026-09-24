@@ -6,9 +6,9 @@
 #include <array>
 #include <cmath>
 #include <iostream>
-#include <leon/core/Paths.h>
-#include <leon/debug/DebugDraw.h>
-#include <leon/render/GlAttrib.h>
+#include "Misc/Paths.h"
+#include "Debug/DebugDraw.h"
+#include "GlAttrib.h"
 #include <utility>
 
 namespace leon {

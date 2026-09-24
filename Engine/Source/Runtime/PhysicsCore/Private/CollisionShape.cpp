@@ -2,7 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
-#include <leon/physics/CollisionShape.h>
+#include "CollisionShape.h"
 
 namespace leon {
 

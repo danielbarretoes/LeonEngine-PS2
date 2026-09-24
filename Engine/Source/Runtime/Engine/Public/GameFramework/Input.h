@@ -2,7 +2,7 @@
 
 #include <glm/vec3.hpp>
 
-#include <leon/core/Camera.h>
+#include "Camera/Camera.h"
 
 namespace leon {
 

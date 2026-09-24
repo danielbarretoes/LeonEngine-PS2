@@ -1,11 +1,11 @@
-#include <leon/runtime/GameApplication.h>
+#include "GameApplication.h"
 
-#include <leon/runtime/GameHostSession.h>
-#include <leon/runtime/RuntimeInput.h>
+#include "GameHostSession.h"
+#include "RuntimeInput.h"
 
 #include <iostream>
-#include <leon/Engine.h>
-#include <leon/net/NetProtocol.h>
+#include "Engine/GameEngine.h"
+#include "Net/NetProtocol.h"
 #include <string>
 
 namespace leon::runtime {

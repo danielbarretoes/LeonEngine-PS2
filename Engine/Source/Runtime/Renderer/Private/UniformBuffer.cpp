@@ -1,6 +1,6 @@
 #include <glad/glad.h>
 
-#include <leon/render/UniformBuffer.h>
+#include "UniformBuffer.h"
 
 namespace leon {
 

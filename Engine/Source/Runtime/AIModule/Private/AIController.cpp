@@ -2,10 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
-#include <leon/gameplay/Actor.h>
-#include <leon/gameplay/AIController.h>
-#include <leon/gameplay/Character.h>
-#include <leon/gameplay/NavigationSystem.h>
+#include "GameFramework/Actor.h"
+#include "AIController.h"
+#include "GameFramework/Character.h"
+#include "AI/Navigation/NavigationSystem.h"
 
 namespace leon {
 namespace {

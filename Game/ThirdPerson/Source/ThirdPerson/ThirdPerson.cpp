@@ -1,12 +1,18 @@
-#include "Ps2ThirdPersonDemo.h"
+#include "ThirdPersonGameMode.h"
 
-#include <leon/core/Window.h>
+#include "Modules/ModuleManager.h"
+#include "Window.h"
 
 #include <cstdio>
 
+IMPLEMENT_PRIMARY_GAME_MODULE(FDefaultGameModuleImpl, ThirdPerson, "ThirdPerson")
+
+// Transitional entry point: moves to Launch (LaunchPS2.cpp + FEngineLoop) in Phase 3.
 int main(int argc, char** argv) {
     (void)argc;
     (void)argv;
+
+    FModuleManager::Get().StartupStaticallyLinkedModules();
 
     leon::Window window;
     if (!window.Create(640, 448, "Leon Ps2ThirdPerson")) {
@@ -16,5 +22,6 @@ int main(int argc, char** argv) {
 
     const int code = leon::ps2thirdperson::RunPs2ThirdPersonDemo(window);
     window.Destroy();
+    FModuleManager::Get().ShutdownModules();
     return code;
 }

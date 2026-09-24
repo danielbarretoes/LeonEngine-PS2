@@ -1,7 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include <leon/render/Material.h>
-#include <leon/render/MaterialAsset.h>
+#include "Material.h"
+#include "MaterialAsset.h"
 #include <nlohmann/json.hpp>
 
 using Catch::Matchers::WithinAbs;

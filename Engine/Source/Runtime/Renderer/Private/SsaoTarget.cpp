@@ -1,7 +1,7 @@
 #include <glad/glad.h>
 
 #include <iostream>
-#include <leon/render/PostProcess.h>
+#include "PostProcess.h"
 
 namespace leon {
 

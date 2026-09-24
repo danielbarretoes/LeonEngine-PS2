@@ -1,9 +1,9 @@
 #pragma once
 
-#include <leon/core/Transform.h>
-#include <leon/level/Level.h>
-#include <leon/render/Material.h>
-#include <leon/render/ResourceCache.h>
+#include "Math/Transform.h"
+#include "Engine/Level.h"
+#include "Material.h"
+#include "ResourceCache.h"
 #include <memory>
 #include <string_view>
 

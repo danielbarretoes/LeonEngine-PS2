@@ -1,7 +1,8 @@
 # LeonBuildTool command line (UnrealBuildTool.exe equivalent). Run in CMake script mode:
 #
-#   cmake -P LeonBuildTool.cmake <Target> <Platform> <Configuration> [options]
-#   cmake -P LeonBuildTool.cmake -Mode=Setup
+#   cmake -P LeonBuildTool.cmake -- <Target> <Platform> <Configuration> [options]
+#   cmake -P LeonBuildTool.cmake -- -Mode=Setup
+# (the -- keeps CMake from parsing our options: -Project= would otherwise read as -P roject=)
 #
 # Options:
 #   -Project=<file.leonproject>   build a game target of that project
@@ -45,7 +46,10 @@ set(_ProjectFile "")
 set(_Mode Build)
 set(_NoDocker FALSE)
 foreach(_Arg IN LISTS _Args)
-	if(_Arg MATCHES "^-Project=(.+)$")
+	if(_Arg STREQUAL "--")
+		# Separator that stops CMake from parsing our options (e.g. -Project= would read as -P).
+		continue()
+	elseif(_Arg MATCHES "^-Project=(.+)$")
 		set(_ProjectFile "${CMAKE_MATCH_1}")
 	elseif(_Arg MATCHES "^-Mode=(.+)$")
 		set(_Mode "${CMAKE_MATCH_1}")

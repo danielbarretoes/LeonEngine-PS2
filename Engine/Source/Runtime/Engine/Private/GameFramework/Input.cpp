@@ -2,7 +2,7 @@
 #include <glm/gtc/constants.hpp>
 
 #include <cmath>
-#include <leon/core/Input.h>
+#include "GameFramework/Input.h"
 
 namespace leon {
 namespace {

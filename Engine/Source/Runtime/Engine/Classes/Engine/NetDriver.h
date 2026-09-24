@@ -3,7 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <functional>
-#include <leon/net/NetProtocol.h>
+#include "Net/NetProtocol.h"
 #include <string>
 
 struct _ENetHost;

@@ -5,7 +5,7 @@ leon_module(Glad
 )
 
 function(LeonExternal_Glad)
-	set(Dir "${LEON_ROOT_DIR}/ThirdParty/glad")
+	set(Dir "${LEON_MODULE_DIR}/glad")
 	add_library(LeonThirdParty_Glad STATIC "${Dir}/src/glad.c")
 	target_include_directories(LeonThirdParty_Glad SYSTEM PUBLIC "${Dir}/include")
 endfunction()

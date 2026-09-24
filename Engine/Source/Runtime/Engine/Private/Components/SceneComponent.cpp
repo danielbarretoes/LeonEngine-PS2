@@ -2,8 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <leon/gameplay/Actor.h>
-#include <leon/gameplay/SceneComponent.h>
+#include "GameFramework/Actor.h"
+#include "Components/SceneComponent.h"
 
 namespace leon {
 namespace {

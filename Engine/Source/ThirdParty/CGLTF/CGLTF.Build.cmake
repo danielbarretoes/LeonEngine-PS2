@@ -6,5 +6,5 @@ leon_module(CGLTF
 
 function(LeonExternal_CGLTF)
 	add_library(LeonThirdParty_CGLTF INTERFACE)
-	target_include_directories(LeonThirdParty_CGLTF SYSTEM INTERFACE "${LEON_ROOT_DIR}/ThirdParty/cgltf")
+	target_include_directories(LeonThirdParty_CGLTF SYSTEM INTERFACE "${LEON_MODULE_DIR}/cgltf")
 endfunction()

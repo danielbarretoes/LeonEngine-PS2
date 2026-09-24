@@ -2,7 +2,7 @@
 
 #include <array>
 #include <cstdint>
-#include <leon/rhi/RHIHandles.h>
+#include "RHIHandles.h"
 
 namespace leon {
 

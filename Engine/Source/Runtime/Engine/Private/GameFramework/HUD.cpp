@@ -1,6 +1,6 @@
-#include <leon/debug/DebugOverlay.h>
-#include <leon/ui/HUD.h>
-#include <leon/ui/WidgetPaintContext.h>
+#include "Debug/DebugOverlay.h"
+#include "GameFramework/HUD.h"
+#include "Blueprint/WidgetPaintContext.h"
 
 namespace leon {
 

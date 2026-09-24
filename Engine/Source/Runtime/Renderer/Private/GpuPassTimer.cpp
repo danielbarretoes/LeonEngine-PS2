@@ -1,6 +1,6 @@
 #include <glad/glad.h>
 
-#include <leon/render/GpuPassTimer.h>
+#include "GpuPassTimer.h"
 
 namespace leon {
 namespace {

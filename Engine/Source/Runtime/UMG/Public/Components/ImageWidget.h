@@ -1,7 +1,7 @@
 #pragma once
 
 #include <glm/vec3.hpp>
-#include <leon/ui/UserWidget.h>
+#include "Blueprint/UserWidget.h"
 
 namespace leon {
 

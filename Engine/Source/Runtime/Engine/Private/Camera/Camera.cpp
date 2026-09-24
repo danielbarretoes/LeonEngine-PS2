@@ -3,7 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
-#include <leon/core/Camera.h>
+#include "Camera/Camera.h"
 
 namespace leon {
 namespace {

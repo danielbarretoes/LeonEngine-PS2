@@ -5,14 +5,14 @@
 #include <chrono>
 #include <cstdio>
 #include <iostream>
-#include <leon/core/Input.h>
-#include <leon/core/EKey.h>
-#include <leon/core/MemoryStats.h>
-#include <leon/core/EKey.h>
-#include <leon/core/Paths.h>
-#include <leon/core/EKey.h>
-#include <leon/Engine.h>
-#include <leon/core/EKey.h>
+#include "GameFramework/Input.h"
+#include "EKey.h"
+#include "HAL/MemoryStats.h"
+#include "EKey.h"
+#include "Misc/Paths.h"
+#include "EKey.h"
+#include "Engine/GameEngine.h"
+#include "EKey.h"
 #include <string>
 #include <thread>
 

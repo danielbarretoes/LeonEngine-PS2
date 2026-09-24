@@ -1,8 +1,8 @@
-#include <leon/gameplay/Character.h>
-#include <leon/gameplay/World.h>
-#include <leon/level/Level.h>
-#include <leon/physics/BodyInstance.h>
-#include <leon/render/Renderer.h>
+#include "GameFramework/Character.h"
+#include "Engine/World.h"
+#include "Engine/Level.h"
+#include "BodyInstance.h"
+#include "Renderer.h"
 #include <vector>
 
 namespace leon {

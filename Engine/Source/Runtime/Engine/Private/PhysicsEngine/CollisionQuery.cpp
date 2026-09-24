@@ -2,9 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
-#include <leon/debug/DebugDraw.h>
-#include <leon/physics/PhysScene.h>
-#include <leon/physics/TriangleCollision.h>
+#include "Debug/DebugDraw.h"
+#include "Physics/PhysScene.h"
+#include "TriangleCollision.h"
 #include <numbers>
 #include <vector>
 

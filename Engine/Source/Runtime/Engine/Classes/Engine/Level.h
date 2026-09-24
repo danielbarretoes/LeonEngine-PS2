@@ -4,12 +4,12 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <leon/core/Transform.h>
-#include <leon/level/Light.h>
-#include <leon/render/EnvMap.h>
-#include <leon/render/Material.h>
-#include <leon/render/StaticMesh.h>
-#include <leon/render/Texture.h>
+#include "Math/Transform.h"
+#include "Level/Light.h"
+#include "EnvMap.h"
+#include "Material.h"
+#include "StaticMesh.h"
+#include "Texture.h"
 #include <limits>
 #include <memory>
 #include <string>

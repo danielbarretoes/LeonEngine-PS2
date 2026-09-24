@@ -3,10 +3,10 @@
 #include <cmath>
 #include <filesystem>
 #include <iostream>
-#include <leon/content/ContentValidator.h>
-#include <leon/level/Level.h>
-#include <leon/level/LevelLoader.h>
-#include <leon/level/LeonLevelFormat.h>
+#include "Validation/ContentValidator.h"
+#include "Engine/Level.h"
+#include "Level/LevelLoader.h"
+#include "Level/LeonLevelFormat.h"
 #include <string>
 
 namespace leon {

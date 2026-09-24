@@ -1,9 +1,9 @@
-#include <leon/import/FbxStaticMesh.h>
+#include "FbxStaticMesh.h"
 
 #include <algorithm>
 #include <glm/geometric.hpp>
 #include <iostream>
-#include <leon/render/MeshData.h>
+#include "MeshData.h"
 #include <ufbx.h>
 #include <vector>
 

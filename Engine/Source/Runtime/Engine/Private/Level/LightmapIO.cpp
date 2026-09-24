@@ -1,11 +1,11 @@
-#include <leon/level/LightmapIO.h>
+#include "Level/LightmapIO.h"
 
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
 #include <iostream>
-#include <leon/core/Paths.h>
-#include <leon/render/Texture.h>
+#include "Misc/Paths.h"
+#include "Texture.h"
 #include <random>
 #include <vector>
 

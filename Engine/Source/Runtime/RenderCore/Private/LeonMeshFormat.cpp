@@ -1,11 +1,11 @@
-#include <leon/render/LeonMeshFormat.h>
+#include "LeonMeshFormat.h"
 
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <fstream>
 #include <iostream>
-#include <leon/render/MeshData.h>
+#include "MeshData.h"
 #include <string>
 #include <vector>
 

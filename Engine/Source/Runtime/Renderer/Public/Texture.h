@@ -1,6 +1,6 @@
 #pragma once
 
-#include <leon/rhi/RHIHandles.h>
+#include "RHIHandles.h"
 
 #include <string>
 

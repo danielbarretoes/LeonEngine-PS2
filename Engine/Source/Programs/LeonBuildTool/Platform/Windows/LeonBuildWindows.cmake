@@ -10,4 +10,5 @@ leon_register_platform(Win64
 	BUILD_TYPE_Development RelWithDebInfo
 	BUILD_TYPE_Shipping Release
 	DEFINITIONS PLATFORM_WINDOWS=1 NOMINMAX WIN32_LEAN_AND_MEAN
+		LEON_PLATFORM_HOST=1 # transitional (removed in Phase 3)
 )

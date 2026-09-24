@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
-#include <leon/render/Texture.h>
+#include "Texture.h"
 #include <vector>
 
 #define STB_IMAGE_IMPLEMENTATION

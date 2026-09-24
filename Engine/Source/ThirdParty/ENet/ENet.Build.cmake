@@ -6,7 +6,7 @@ leon_module(ENet
 )
 
 function(LeonExternal_ENet)
-	set(Dir "${LEON_ROOT_DIR}/ThirdParty/enet")
+	set(Dir "${LEON_MODULE_DIR}/enet")
 	add_library(LeonThirdParty_ENet STATIC
 		"${Dir}/callbacks.c" "${Dir}/compress.c" "${Dir}/host.c" "${Dir}/list.c" "${Dir}/packet.c"
 		"${Dir}/peer.c" "${Dir}/protocol.c" "${Dir}/unix.c" "${Dir}/win32.c")

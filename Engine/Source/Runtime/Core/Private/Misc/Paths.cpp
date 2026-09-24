@@ -1,7 +1,7 @@
 #include <array>
 #include <filesystem>
 #include <initializer_list>
-#include <leon/core/Paths.h>
+#include "Misc/Paths.h"
 #include <string>
 #include <system_error>
 #include <vector>
@@ -53,7 +53,7 @@ std::string newestExisting(std::initializer_list<std::filesystem::path> candidat
 
 std::filesystem::path stripAssetsPrefix(const std::filesystem::path& rel) {
     const std::string s = rel.generic_string();
-    if (s.starts_with("assets/")) {
+    if (s.rfind("assets/", 0) == 0) {
         return s.substr(7);
     }
     if (s == "assets") {
@@ -200,15 +200,27 @@ std::string ResolveAssetPath(const std::string& relativePath) {
         exeDir / ".." / rel,
         exeDir / "../.." / rel,
         exeDir / "../../.." / rel,
-        std::filesystem::path("Engine") / "Assets" / underAssets,
-        std::filesystem::path("../Engine") / "Assets" / underAssets,
-        std::filesystem::path("../../Engine") / "Assets" / underAssets,
-        std::filesystem::path("../../../Engine") / "Assets" / underAssets,
-        exeDir / "Engine" / "Assets" / underAssets,
-        exeDir / ".." / "Engine" / "Assets" / underAssets,
-        exeDir / "../.." / "Engine" / "Assets" / underAssets,
-        exeDir / "../../.." / "Engine" / "Assets" / underAssets,
     };
+    // Engine content (Unreal layout): Engine/Content/<X>, shaders in Engine/Shaders/<X>.
+    // Executables live in Engine/Binaries/<Platform>, so ../.. from the exe is Engine/.
+    const std::string underStr = underAssets.generic_string();
+    const bool isShader = underStr == "Shaders" || underStr.rfind("Shaders/", 0) == 0;
+    const std::filesystem::path engineRel =
+        isShader ? std::filesystem::path(underStr.size() > 8 ? underStr.substr(8) : std::string())
+                 : underAssets;
+    const std::vector<std::filesystem::path> engineDirs = {
+        std::filesystem::path("Engine"),
+        std::filesystem::path("../Engine"),
+        std::filesystem::path("../../Engine"),
+        exeDir / "../..",
+        exeDir / "../../../Engine",
+#ifdef LEON_ENGINE_DIR
+        std::filesystem::path(LEON_ENGINE_DIR),
+#endif
+    };
+    for (const std::filesystem::path& engineDir : engineDirs) {
+        candidates.push_back(engineDir / (isShader ? "Shaders" : "Content") / engineRel);
+    }
 
     std::string found = newestExisting(candidates);
     if (!found.empty()) {

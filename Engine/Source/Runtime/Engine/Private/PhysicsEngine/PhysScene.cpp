@@ -5,13 +5,13 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <leon/debug/DebugDraw.h>
-#include <leon/physics/IPhysicsBackend.h>
-#include <leon/physics/PhysScene.h>
-#include <leon/physics/TriangleCollision.h>
-#include <leon/render/Frustum.h>
-#include <leon/render/MeshData.h>
-#include <leon/render/StaticMesh.h>
+#include "Debug/DebugDraw.h"
+#include "IPhysicsBackend.h"
+#include "Physics/PhysScene.h"
+#include "TriangleCollision.h"
+#include "Frustum.h"
+#include "MeshData.h"
+#include "StaticMesh.h"
 
 namespace leon {
 

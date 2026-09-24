@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
-#include <leon/animation/SkeletalAnimation.h>
+#include "SkeletalAnimation.h"
 #include <limits>
 #include <ufbx.h>
 #include <unordered_map> // IWYU pragma: keep — used below; include-cleaner false positive

@@ -11,5 +11,5 @@ if /I not "%~2"=="PS2" (
   if errorlevel 1 exit /b 1
 )
 
-cmake -P "%LEON_ROOT%\Engine\Source\Programs\LeonBuildTool\LeonBuildTool.cmake" %*
+cmake -P "%LEON_ROOT%\Engine\Source\Programs\LeonBuildTool\LeonBuildTool.cmake" -- %*
 exit /b %ERRORLEVEL%

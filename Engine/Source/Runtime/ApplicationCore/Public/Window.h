@@ -1,8 +1,8 @@
 #pragma once
 
 #include <functional>
-#include <leon/core/EKey.h>
-#include <leon/rhi/IRHIDevice.h>
+#include "EKey.h"
+#include "IRHIDevice.h"
 #include <memory>
 
 namespace leon {

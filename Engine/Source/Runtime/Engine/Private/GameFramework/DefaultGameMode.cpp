@@ -4,8 +4,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <leon/gameplay/DefaultCameraActor.h>
-#include <leon/gameplay/DefaultGameMode.h>
+#include "GameFramework/DefaultCameraActor.h"
+#include "GameFramework/DefaultGameMode.h"
 
 namespace leon {
 namespace {

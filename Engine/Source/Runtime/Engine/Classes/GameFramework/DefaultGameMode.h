@@ -2,9 +2,9 @@
 
 #include <glm/vec3.hpp>
 
-#include <leon/Engine.h>
-#include <leon/gameplay/DefaultPlayerController.h>
-#include <leon/gameplay/GameMode.h>
+#include "Engine/GameEngine.h"
+#include "GameFramework/DefaultPlayerController.h"
+#include "GameFramework/GameMode.h"
 
 namespace leon {
 

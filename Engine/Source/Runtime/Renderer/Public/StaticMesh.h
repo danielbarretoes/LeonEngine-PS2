@@ -2,9 +2,9 @@
 
 #include <glm/vec3.hpp>
 
-#include <leon/render/Material.h>
-#include <leon/render/MeshData.h>
-#include <leon/rhi/RHIHandles.h>
+#include "Material.h"
+#include "MeshData.h"
+#include "RHIHandles.h"
 #include <vector>
 
 namespace leon {

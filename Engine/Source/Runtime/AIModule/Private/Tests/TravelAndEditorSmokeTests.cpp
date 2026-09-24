@@ -2,14 +2,14 @@
 #include <chrono>
 #include <cstring>
 #include <filesystem>
-#include <leon/Engine.h>
-#include <leon/Gameplay.h>
-#include <leon/core/Ascii.h>
-#include <leon/level/LeonLevelFormat.h>
-#include <leon/level/LevelLoader.h>
-#include <leon/net/NetDriver.h>
-#include <leon/net/NetProtocol.h>
-#include <leon/net/NetUtil.h>
+#include "Engine/GameEngine.h"
+#include "GameplayMinimal.h"
+#include "Misc/Ascii.h"
+#include "Level/LeonLevelFormat.h"
+#include "Level/LevelLoader.h"
+#include "Engine/NetDriver.h"
+#include "Net/NetProtocol.h"
+#include "Net/NetUtil.h"
 #include <string>
 #include <thread>
 #include <vector>
@@ -33,9 +33,9 @@ TEST_CASE("EncodeRpc / DecodeRpc roundtrip Notify payload", "[net][rpc]") {
 }
 
 TEST_CASE("Editor-style level save load apply headless", "[editor][level]") {
-#ifdef LEON_SOURCE_DIR
+#ifdef LEON_ROOT_DIR
     const std::string templateLevel =
-        std::string(LEON_SOURCE_DIR) + "/Engine/Assets/LevelTemplates/Blank.llev";
+        std::string(LEON_ROOT_DIR) + "/Engine/Content/LevelTemplates/Blank.llev";
     leon::Engine engine;
     REQUIRE(engine.InitializeHeadless());
     REQUIRE(leon::LoadLevelFile(engine, templateLevel));
@@ -53,7 +53,7 @@ TEST_CASE("Editor-style level save load apply headless", "[editor][level]") {
     REQUIRE(leon::ApplyLevelDocument(engine, roundTrip, "memory-editor-smoke"));
     engine.Shutdown();
 #else
-    SUCCEED("LEON_SOURCE_DIR unset");
+    SUCCEED("LEON_ROOT_DIR unset");
 #endif
 }
 

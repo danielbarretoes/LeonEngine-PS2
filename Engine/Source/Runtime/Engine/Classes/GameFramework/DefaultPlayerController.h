@@ -2,7 +2,7 @@
 
 #include <glm/vec3.hpp>
 
-#include <leon/gameplay/PlayerController.h>
+#include "GameFramework/PlayerController.h"
 
 namespace leon {
 

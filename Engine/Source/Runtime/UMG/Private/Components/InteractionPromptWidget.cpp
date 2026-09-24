@@ -1,4 +1,4 @@
-#include <leon/ui/InteractionPromptWidget.h>
+#include "Components/InteractionPromptWidget.h"
 
 #include <glm/vec3.hpp>
 

@@ -3,10 +3,10 @@
 #include <glm/vec3.hpp>
 
 #include <algorithm>
-#include <leon/gameplay/GameState.h>
-#include <leon/gameplay/World.h>
-#include <leon/level/Level.h>
-#include <leon/level/LevelCatalog.h>
+#include "GameFramework/GameState.h"
+#include "Engine/World.h"
+#include "Engine/Level.h"
+#include "Level/LevelCatalog.h"
 #include <memory>
 #include <string>
 #include <string_view>

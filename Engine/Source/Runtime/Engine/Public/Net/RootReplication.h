@@ -5,9 +5,9 @@
 
 #include <cmath>
 #include <cstdint>
-#include <leon/gameplay/Actor.h>
-#include <leon/gameplay/Character.h>
-#include <leon/net/NetProtocol.h>
+#include "GameFramework/Actor.h"
+#include "GameFramework/Character.h"
+#include "Net/NetProtocol.h"
 
 namespace leon {
 namespace net {

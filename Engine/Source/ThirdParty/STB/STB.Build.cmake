@@ -6,5 +6,5 @@ leon_module(STB
 
 function(LeonExternal_STB)
 	add_library(LeonThirdParty_STB INTERFACE)
-	target_include_directories(LeonThirdParty_STB SYSTEM INTERFACE "${LEON_ROOT_DIR}/ThirdParty/stb")
+	target_include_directories(LeonThirdParty_STB SYSTEM INTERFACE "${LEON_MODULE_DIR}/stb")
 endfunction()

@@ -1,8 +1,8 @@
 #pragma once
 
 #include <cstdint>
-#include <leon/render/Material.h>
-#include <leon/render/Vertex.h>
+#include "Material.h"
+#include "Vertex.h"
 #include <string>
 #include <vector>
 

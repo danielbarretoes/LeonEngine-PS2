@@ -1,6 +1,6 @@
 #pragma once
 
-#include <leon/core/Window.h>
+#include "Window.h"
 
 namespace leon {
 

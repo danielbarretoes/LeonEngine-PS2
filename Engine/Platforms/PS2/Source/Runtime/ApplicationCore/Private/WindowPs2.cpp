@@ -1,8 +1,8 @@
-#include <leon/core/DebugOverlay.h>
-#include <leon/core/InputPad.h>
-#include <leon/core/Window.h>
-#include <leon/rhi/IRHIDevice.h>
-#include <leon/rhi/Ps2RHI.h>
+#include "Stats/DebugOverlay.h"
+#include "InputPad.h"
+#include "Window.h"
+#include "IRHIDevice.h"
+#include "Ps2RHI.h"
 
 #include <cstdio>
 

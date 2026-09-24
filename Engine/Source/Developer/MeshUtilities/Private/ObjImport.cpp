@@ -7,7 +7,7 @@
 #include <cmath>
 #include <filesystem>
 #include <iostream>
-#include <leon/import/ObjImport.h>
+#include "ObjImport.h"
 #include <map>
 #include <unordered_map>
 #include <vector>

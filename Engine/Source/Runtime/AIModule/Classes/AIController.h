@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <glm/vec3.hpp>
 
-#include <leon/gameplay/Controller.h>
+#include "GameFramework/Controller.h"
 #include <vector>
 
 namespace leon {

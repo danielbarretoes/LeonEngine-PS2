@@ -1,10 +1,10 @@
-#include <leon/tools/CookRecipe.h>
+#include "CookRecipe.h"
 
 #include <fstream>
 #include <iostream>
-#include <leon/content/CookedSkeletal.h>
-#include <leon/import/StaticMeshCook.h>
-#include <leon/tools/CookPaths.h>
+#include "Animation/CookedSkeletal.h"
+#include "StaticMeshCook.h"
+#include "CookPaths.h"
 #include <nlohmann/json.hpp>
 
 namespace leon::tools {

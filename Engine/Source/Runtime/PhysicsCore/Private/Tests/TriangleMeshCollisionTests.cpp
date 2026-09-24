@@ -1,10 +1,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include <leon/level/Level.h>
-#include <leon/physics/PhysScene.h>
-#include <leon/physics/TriangleCollision.h>
-#include <leon/render/MeshData.h>
-#include <leon/render/StaticMesh.h>
+#include "Engine/Level.h"
+#include "Physics/PhysScene.h"
+#include "TriangleCollision.h"
+#include "MeshData.h"
+#include "StaticMesh.h"
 #include <memory>
 
 using Catch::Matchers::WithinAbs;

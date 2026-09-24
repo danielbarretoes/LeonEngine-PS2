@@ -1,7 +1,7 @@
 #include <iostream>
-#include <leon/content/CookedSkeletal.h>
-#include <leon/import/StaticMeshCook.h>
-#include <leon/tools/CookRecipe.h>
+#include "Animation/CookedSkeletal.h"
+#include "StaticMeshCook.h"
+#include "CookRecipe.h"
 #include <string>
 
 namespace {

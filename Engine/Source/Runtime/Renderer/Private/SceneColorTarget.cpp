@@ -1,7 +1,7 @@
 #include <glad/glad.h>
 
 #include <iostream>
-#include <leon/render/SceneColorTarget.h>
+#include "SceneColorTarget.h"
 
 namespace leon {
 

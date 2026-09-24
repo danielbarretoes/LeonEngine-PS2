@@ -3,7 +3,7 @@
 #include <glm/vec4.hpp>
 
 #include <cmath>
-#include <leon/render/MeshData.h>
+#include "MeshData.h"
 #include <vector>
 
 namespace leon {

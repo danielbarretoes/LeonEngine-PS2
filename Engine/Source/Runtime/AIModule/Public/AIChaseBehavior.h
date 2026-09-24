@@ -2,9 +2,9 @@
 
 #include <glm/vec3.hpp>
 
-#include <leon/gameplay/AIController.h>
-#include <leon/gameplay/Actor.h>
-#include <leon/gameplay/BehaviorTree.h>
+#include "AIController.h"
+#include "GameFramework/Actor.h"
+#include "BehaviorTree/BehaviorTree.h"
 #include <memory>
 #include <vector>
 

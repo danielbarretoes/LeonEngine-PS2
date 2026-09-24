@@ -1,6 +1,6 @@
 #pragma once
 
-#include <leon/render/MeshData.h>
+#include "MeshData.h"
 #include <string>
 #include <vector>
 

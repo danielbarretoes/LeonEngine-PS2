@@ -2,8 +2,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include <leon/core/Camera.h>
-#include <leon/core/Input.h>
+#include "Camera/Camera.h"
+#include "GameFramework/Input.h"
 
 using Catch::Matchers::WithinAbs;
 

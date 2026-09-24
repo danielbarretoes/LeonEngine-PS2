@@ -1,7 +1,7 @@
-#include <leon/ui/ButtonWidget.h>
+#include "Components/ButtonWidget.h"
 
 #include <algorithm>
-#include <leon/debug/DebugOverlay.h>
+#include "Debug/DebugOverlay.h"
 
 namespace leon {
 

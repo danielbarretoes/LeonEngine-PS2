@@ -1,8 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include <leon/core/EKey.h>
-#include <leon/core/InputActions.h>
-#include <leon/core/InputMapping.h>
+#include "EKey.h"
+#include "GameFramework/InputActions.h"
+#include "GameFramework/InputMapping.h"
 
 using Catch::Matchers::WithinAbs;
 

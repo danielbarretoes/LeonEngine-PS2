@@ -1,8 +1,8 @@
 #pragma once
 
-#include <leon/animation/SkeletalAnimation.h>
-#include <leon/render/Material.h>
-#include <leon/rhi/RHIHandles.h>
+#include "SkeletalAnimation.h"
+#include "Material.h"
+#include "RHIHandles.h"
 #include <memory>
 #include <vector>
 

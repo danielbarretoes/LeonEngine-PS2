@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
-#include <leon/render/EnvMap.h>
+#include "EnvMap.h"
 #include <numbers>
 #include <stb_image.h>
 #include <vector>

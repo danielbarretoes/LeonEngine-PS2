@@ -17,4 +17,5 @@ leon_register_platform(PS2
 	BUILD_TYPE_Development Release
 	BUILD_TYPE_Shipping Release
 	DEFINITIONS PLATFORM_PS2=1
+		LEON_PLATFORM_PS2=1 # transitional (removed in Phase 3)
 )

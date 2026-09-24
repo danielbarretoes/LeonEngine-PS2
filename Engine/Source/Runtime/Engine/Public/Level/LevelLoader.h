@@ -1,8 +1,8 @@
 #pragma once
 
 #include <cstddef>
-#include <leon/Engine.h>
-#include <leon/level/LevelAnimation.h>
+#include "Engine/GameEngine.h"
+#include "Level/LevelAnimation.h"
 #include <string>
 
 namespace leon {

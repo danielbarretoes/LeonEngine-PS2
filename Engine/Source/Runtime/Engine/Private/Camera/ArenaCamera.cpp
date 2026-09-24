@@ -1,11 +1,11 @@
-#include <leon/gameplay/ArenaCamera.h>
+#include "Camera/ArenaCamera.h"
 
 #include <glm/common.hpp>
 #include <glm/vec3.hpp>
 
 #include <algorithm>
 #include <cmath>
-#include <leon/core/Camera.h>
+#include "Camera/Camera.h"
 
 namespace leon {
 namespace {

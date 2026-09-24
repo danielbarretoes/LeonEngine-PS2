@@ -1,7 +1,7 @@
 #include "Ps2GsContext.h"
 
-#include <leon/rhi/IRHIDevice.h>
-#include <leon/rhi/Ps2RHI.h>
+#include "IRHIDevice.h"
+#include "Ps2RHI.h"
 
 #include <cstdio>
 #include <memory>

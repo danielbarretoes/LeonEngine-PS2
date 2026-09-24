@@ -1,12 +1,12 @@
-#include <leon/gameplay/SpringArmComponent.h>
+#include "GameFramework/SpringArmComponent.h"
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
 
 #include <cmath>
-#include <leon/debug/DebugDraw.h>
-#include <leon/gameplay/World.h>
-#include <leon/physics/PhysScene.h>
+#include "Debug/DebugDraw.h"
+#include "Engine/World.h"
+#include "Physics/PhysScene.h"
 
 namespace leon {
 namespace {

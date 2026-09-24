@@ -1,8 +1,8 @@
 #pragma once
 
 #include <glm/vec3.hpp>
-#include <leon/ui/TextLayout.h>
-#include <leon/ui/UserWidget.h>
+#include "Fonts/TextLayout.h"
+#include "Blueprint/UserWidget.h"
 #include <algorithm>
 
 namespace leon {

@@ -1,13 +1,13 @@
-#include <leon/ui/MenuListWidget.h>
-#include <leon/core/EKey.h>
+#include "Components/MenuListWidget.h"
+#include "EKey.h"
 
 #include <algorithm>
 #include <cmath>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
-#include <leon/core/Window.h>
-#include <leon/core/EKey.h>
+#include "Window.h"
+#include "EKey.h"
 
 namespace leon {
 namespace {

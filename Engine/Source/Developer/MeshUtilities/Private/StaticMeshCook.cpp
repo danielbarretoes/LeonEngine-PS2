@@ -1,10 +1,10 @@
-#include <leon/import/StaticMeshCook.h>
+#include "StaticMeshCook.h"
 
-#include <leon/import/FbxStaticMesh.h>
-#include <leon/import/GltfImport.h>
-#include <leon/import/ObjImport.h>
-#include <leon/render/LeonMeshFormat.h>
-#include <leon/render/MeshData.h>
+#include "FbxStaticMesh.h"
+#include "GltfImport.h"
+#include "ObjImport.h"
+#include "LeonMeshFormat.h"
+#include "MeshData.h"
 #include <vector>
 
 namespace leon {

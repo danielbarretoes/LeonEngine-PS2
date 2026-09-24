@@ -2,7 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <leon/net/NetProtocol.h>
+#include "Net/NetProtocol.h"
 #include <vector>
 
 namespace leon {

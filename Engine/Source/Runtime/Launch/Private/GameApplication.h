@@ -1,8 +1,8 @@
 #pragma once
 
 #include <functional>
-#include <leon/Engine.h>
-#include <leon/gameplay/GameplayRouter.h>
+#include "Engine/GameEngine.h"
+#include "GameFramework/GameplayRouter.h"
 
 namespace leon::runtime {
 

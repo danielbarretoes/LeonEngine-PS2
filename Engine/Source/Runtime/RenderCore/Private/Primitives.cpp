@@ -1,7 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <leon/render/Primitives.h>
+#include "Primitives.h"
 #include <numbers>
 
 namespace leon {

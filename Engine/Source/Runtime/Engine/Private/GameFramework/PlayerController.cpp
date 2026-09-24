@@ -1,6 +1,6 @@
-#include <leon/Engine.h>
-#include <leon/gameplay/Character.h>
-#include <leon/gameplay/PlayerController.h>
+#include "Engine/GameEngine.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/PlayerController.h"
 
 namespace leon {
 

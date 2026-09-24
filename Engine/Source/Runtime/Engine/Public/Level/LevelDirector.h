@@ -1,8 +1,8 @@
 #pragma once
 
-#include <leon/debug/DebugOverlay.h>
-#include <leon/level/LevelAnimation.h>
-#include <leon/level/LevelCatalog.h>
+#include "Debug/DebugOverlay.h"
+#include "Level/LevelAnimation.h"
+#include "Level/LevelCatalog.h"
 #include <string>
 #include <string_view>
 

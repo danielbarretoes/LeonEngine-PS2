@@ -2,9 +2,9 @@
 
 
 
-#include <leon/gameplay/GameplayRouter.h>
+#include "GameFramework/GameplayRouter.h"
 
-#include <leon/level/LevelDirector.h>
+#include "Level/LevelDirector.h"
 
 #include <string>
 

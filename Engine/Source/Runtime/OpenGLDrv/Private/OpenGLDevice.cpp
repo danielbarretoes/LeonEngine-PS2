@@ -1,5 +1,5 @@
 #include <glad/glad.h>
-#include <leon/rhi/IRHIDevice.h>
+#include "IRHIDevice.h"
 
 #include <array>
 #include <iostream>

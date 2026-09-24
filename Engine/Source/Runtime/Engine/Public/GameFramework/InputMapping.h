@@ -1,8 +1,8 @@
 #pragma once
 
-#include <leon/core/EKey.h>
-#include <leon/core/Input.h>
-#include <leon/core/Window.h>
+#include "EKey.h"
+#include "GameFramework/Input.h"
+#include "Window.h"
 #include <string>
 #include <string_view>
 #include <unordered_map>

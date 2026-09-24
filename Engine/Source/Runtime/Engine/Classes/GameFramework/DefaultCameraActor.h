@@ -1,6 +1,6 @@
 #pragma once
 
-#include <leon/gameplay/Pawn.h>
+#include "GameFramework/Pawn.h"
 
 namespace leon {
 

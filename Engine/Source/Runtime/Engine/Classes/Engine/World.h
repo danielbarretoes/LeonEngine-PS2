@@ -1,9 +1,9 @@
 #pragma once
 
 #include <cstdint>
-#include <leon/gameplay/Actor.h>
-#include <leon/gameplay/NavigationSystem.h>
-#include <leon/physics/PhysScene.h>
+#include "GameFramework/Actor.h"
+#include "AI/Navigation/NavigationSystem.h"
+#include "Physics/PhysScene.h"
 #include <memory>
 #include <type_traits>
 #include <utility>

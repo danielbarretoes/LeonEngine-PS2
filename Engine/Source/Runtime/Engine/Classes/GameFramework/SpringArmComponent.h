@@ -5,11 +5,11 @@
 
 #include <algorithm>
 #include <cmath>
-#include <leon/core/Camera.h>
-#include <leon/core/Input.h>
-#include <leon/gameplay/Actor.h>
-#include <leon/gameplay/SceneComponent.h>
-#include <leon/physics/CollisionQuery.h>
+#include "Camera/Camera.h"
+#include "GameFramework/Input.h"
+#include "GameFramework/Actor.h"
+#include "Components/SceneComponent.h"
+#include "CollisionQuery.h"
 
 namespace leon {
 

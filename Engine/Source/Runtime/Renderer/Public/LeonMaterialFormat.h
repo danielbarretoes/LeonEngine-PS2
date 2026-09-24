@@ -1,7 +1,7 @@
 #pragma once
 
 #include <glm/vec3.hpp>
-#include <leon/render/Material.h>
+#include "Material.h"
 #include <string>
 
 namespace leon {

@@ -1,5 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
-#include <leon/Engine.h>
+#include "Engine/GameEngine.h"
 
 TEST_CASE("Engine flags work before initialize", "[engine]") {
     leon::Engine engine;

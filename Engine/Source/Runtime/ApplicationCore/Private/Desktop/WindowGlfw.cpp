@@ -1,8 +1,8 @@
 #include <GLFW/glfw3.h>
 
 #include <iostream>
-#include <leon/core/Window.h>
-#include <leon/rhi/IRHIDevice.h>
+#include "Window.h"
+#include "IRHIDevice.h"
 #include <stb_image.h>
 #include <vector>
 

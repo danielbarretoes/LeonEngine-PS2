@@ -2,9 +2,9 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <leon/content/ContentValidator.h>
-#include <leon/core/Paths.h>
-#include <leon/render/LeonMaterialFormat.h>
+#include "Validation/ContentValidator.h"
+#include "Misc/Paths.h"
+#include "LeonMaterialFormat.h"
 #include <nlohmann/json.hpp>
 #include <system_error>
 

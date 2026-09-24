@@ -3,7 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
-#include <leon/render/Frustum.h>
+#include "Frustum.h"
 #include <limits>
 #include <utility>
 

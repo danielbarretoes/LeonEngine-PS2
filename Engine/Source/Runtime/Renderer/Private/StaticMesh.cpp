@@ -2,8 +2,8 @@
 #include <glm/common.hpp>
 
 #include <cstdint>
-#include <leon/render/GlAttrib.h>
-#include <leon/render/StaticMesh.h>
+#include "GlAttrib.h"
+#include "StaticMesh.h"
 #include <limits>
 #include <utility>
 

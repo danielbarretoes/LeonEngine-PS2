@@ -1,9 +1,9 @@
-#include "Ps2ThirdPersonDemo.h"
+#include "ThirdPersonGameMode.h"
 
-#include <leon/core/DebugOverlay.h>
-#include <leon/core/InputPad.h>
-#include <leon/core/Window.h>
-#include <leon/rhi/Ps2RHI.h>
+#include "Stats/DebugOverlay.h"
+#include "InputPad.h"
+#include "Window.h"
+#include "Ps2RHI.h"
 
 #include <cstdio>
 

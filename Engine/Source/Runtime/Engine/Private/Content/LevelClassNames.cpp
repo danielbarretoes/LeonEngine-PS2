@@ -1,6 +1,6 @@
-#include <leon/core/Ascii.h>
-#include <leon/level/BasicLight.h>
-#include <leon/level/BasicShape.h>
+#include "Misc/Ascii.h"
+#include "Level/BasicLight.h"
+#include "Level/BasicShape.h"
 
 namespace leon {
 

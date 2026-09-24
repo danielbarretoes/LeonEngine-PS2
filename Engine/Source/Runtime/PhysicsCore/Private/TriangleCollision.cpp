@@ -1,4 +1,4 @@
-#include <leon/physics/TriangleCollision.h>
+#include "TriangleCollision.h"
 
 #include <glm/geometric.hpp>
 

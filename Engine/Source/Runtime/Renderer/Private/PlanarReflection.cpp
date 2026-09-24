@@ -1,7 +1,7 @@
 #include <glad/glad.h>
 
 #include <iostream>
-#include <leon/render/PlanarReflection.h>
+#include "PlanarReflection.h"
 
 namespace leon {
 

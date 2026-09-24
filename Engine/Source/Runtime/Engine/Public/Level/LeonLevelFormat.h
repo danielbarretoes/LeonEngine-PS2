@@ -3,8 +3,8 @@
 #include <glm/vec3.hpp>
 
 #include <cstdint>
-#include <leon/core/Camera.h>
-#include <leon/level/Level.h>
+#include "Camera/Camera.h"
+#include "Engine/Level.h"
 #include <string>
 #include <vector>
 

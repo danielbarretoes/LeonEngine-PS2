@@ -1,7 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
-#include <leon/debug/DebugDraw.h>
-#include <leon/physics/CollisionQuery.h>
-#include <leon/physics/PhysScene.h>
+#include "Debug/DebugDraw.h"
+#include "CollisionQuery.h"
+#include "Physics/PhysScene.h"
 #include <vector>
 
 TEST_CASE("DrawDebugLineTrace miss and hit fill DebugDraw", "[physics][trace][debug]") {

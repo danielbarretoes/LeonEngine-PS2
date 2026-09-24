@@ -2,10 +2,10 @@
 #include <cctype>
 #include <filesystem>
 #include <iostream>
-#include <leon/core/Ascii.h>
-#include <leon/core/Paths.h>
-#include <leon/level/LevelCatalog.h>
-#include <leon/level/LeonLevelFormat.h>
+#include "Misc/Ascii.h"
+#include "Misc/Paths.h"
+#include "Level/LevelCatalog.h"
+#include "Level/LeonLevelFormat.h"
 #include <string_view>
 
 namespace leon {

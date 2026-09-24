@@ -5,7 +5,7 @@ leon_module(UFBX
 )
 
 function(LeonExternal_UFBX)
-	set(Dir "${LEON_ROOT_DIR}/ThirdParty/ufbx")
+	set(Dir "${LEON_MODULE_DIR}/ufbx")
 	add_library(LeonThirdParty_UFBX STATIC "${Dir}/ufbx.c")
 	target_include_directories(LeonThirdParty_UFBX SYSTEM PUBLIC "${Dir}")
 	if(MSVC)

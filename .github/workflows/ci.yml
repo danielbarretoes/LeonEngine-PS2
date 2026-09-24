@@ -6,19 +6,24 @@ on:
   pull_request:
 
 jobs:
-  ps2-docker:
+  ps2:
     runs-on: ubuntu-latest
+    container: ghcr.io/ps2dev/ps2dev@sha256:79c24d3762f5cfeee0beabeacc94480fe580d379d3e48a0bfbac681a8895daf6
     steps:
       - uses: actions/checkout@v4
-      - name: Build Ps2ThirdPerson ELF (ps2dev container)
+      - name: Install CMake + Ninja
+        run: apk add --no-cache cmake ninja make
+      - name: Build ThirdPerson (PS2) with LeonBuildTool
         run: |
-          chmod +x Scripts/build-ps2.sh Scripts/build-ps2-docker.sh
-          Scripts/build-ps2-docker.sh tp
+          sh Engine/Build/BatchFiles/Linux/Build.sh ThirdPerson PS2 Development \
+            "-Project=$PWD/Game/ThirdPerson/ThirdPerson.leonproject"
+      - name: Build BlankProgram (PS2)
+        run: sh Engine/Build/BatchFiles/Linux/Build.sh BlankProgram PS2 Development
       - name: Upload ELF
         uses: actions/upload-artifact@v4
         with:
-          name: leon-Ps2ThirdPerson-elf
-          path: Projects/Ps2ThirdPerson/build-ps2/leon-Ps2ThirdPerson.elf
+          name: ThirdPerson-PS2-elf
+          path: Game/ThirdPerson/Binaries/PS2/ThirdPerson.elf
 
-  # Host engine build is validated locally (Scripts/build.bat). Full MSVC + FetchContent
-  # on GHA is optional; enable when a self-hosted or windows-latest matrix is wired.
+  # Win64 (engine + LeonAutomationTests) is validated locally with
+  # Engine\Build\BatchFiles\RunTests.bat; a windows-latest job can run Setup.bat + RunTests.bat.

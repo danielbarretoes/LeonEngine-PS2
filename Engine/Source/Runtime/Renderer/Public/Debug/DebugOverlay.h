@@ -2,8 +2,8 @@
 
 #include <glm/vec3.hpp>
 
-#include <leon/render/Shader.h>
-#include <leon/ui/TextLayout.h>
+#include "Shader.h"
+#include "Fonts/TextLayout.h"
 #include <string>
 #include <vector>
 

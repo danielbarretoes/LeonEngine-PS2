@@ -10,11 +10,11 @@
 #include <cmath>
 #include <filesystem>
 #include <iostream>
-#include <leon/core/Paths.h>
-#include <leon/level/Light.h>
-#include <leon/render/Frustum.h>
-#include <leon/render/Primitives.h>
-#include <leon/render/Renderer.h>
+#include "Misc/Paths.h"
+#include "Level/Light.h"
+#include "Frustum.h"
+#include "Primitives.h"
+#include "Renderer.h"
 #include <limits>
 #include <random>
 #include <string>

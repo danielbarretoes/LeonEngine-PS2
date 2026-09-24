@@ -1,6 +1,6 @@
 #pragma once
 
-#include <leon/rhi/Ps2RHI.h>
+#include "Ps2RHI.h"
 
 namespace leon::rhi::ps2 {
 
