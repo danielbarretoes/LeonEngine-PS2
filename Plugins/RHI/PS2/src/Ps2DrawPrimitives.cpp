@@ -8,6 +8,7 @@
 #if defined(LEON_PLATFORM_PS2)
 #include <dma.h>
 #include <draw2d.h>
+#include <draw_blending.h>
 #include <draw_tests.h>
 #endif
 
@@ -196,6 +197,64 @@ bool Ps2DrawUnlitRect(float x0, float y0, float x1, float y1, float r, float g, 
     (void)r;
     (void)g;
     (void)b;
+    return false;
+#endif
+}
+
+bool Ps2DrawUnlitRectAlpha(float x0, float y0, float x1, float y1, float r, float g, float b,
+                           float alpha) {
+#if defined(LEON_PLATFORM_PS2)
+    auto& gs = ps2::GetGsContext();
+    if (!IsDisplayReady(gs)) {
+        return false;
+    }
+    if (x1 < x0) {
+        const float t = x0;
+        x0 = x1;
+        x1 = t;
+    }
+    if (y1 < y0) {
+        const float t = y0;
+        y0 = y1;
+        y1 = t;
+    }
+    alpha = alpha < 0.0f ? 0.0f : (alpha > 1.0f ? 1.0f : alpha);
+
+    rect_t rect{};
+    FillColor(rect.color, r, g, b);
+    // GS alpha: 0x80 = 1.0. Keep >= 1 so ATEST (A != 0) never discards the sprite.
+    const int a = static_cast<int>(alpha * 128.0f + 0.5f);
+    rect.color.a = static_cast<unsigned char>(a < 1 ? 1 : a);
+    FillVertex(rect.v0, x0, y0);
+    FillVertex(rect.v1, x1, y1);
+
+    // (Cs - Cd) * As + Cd. libdraw bakes PRIM.ABE from a global flag inside draw_rect_filled,
+    // so enable it only around this sprite (everything else stays opaque).
+    blend_t blend{};
+    blend.color1 = BLEND_COLOR_SOURCE;
+    blend.color2 = BLEND_COLOR_DEST;
+    blend.alpha = BLEND_ALPHA_SOURCE;
+    blend.color3 = BLEND_COLOR_DEST;
+    blend.fixed_alpha = 0x80;
+
+    qword_t* q = gs.packet->data;
+    q = draw_disable_tests(q, 0, &gs.z);
+    q = draw_alpha_blending(q, 0, &blend);
+    draw_enable_blending();
+    q = draw_rect_filled(q, 0, &rect);
+    draw_disable_blending();
+    q = draw_enable_tests(q, 0, &gs.z);
+    q = draw_finish(q);
+    return SubmitPacket(gs, q);
+#else
+    (void)x0;
+    (void)y0;
+    (void)x1;
+    (void)y1;
+    (void)r;
+    (void)g;
+    (void)b;
+    (void)alpha;
     return false;
 #endif
 }

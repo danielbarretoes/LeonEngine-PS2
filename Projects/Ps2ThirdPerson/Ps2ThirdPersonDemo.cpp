@@ -1,5 +1,6 @@
 #include "Ps2ThirdPersonDemo.h"
 
+#include <leon/core/DebugOverlay.h>
 #include <leon/core/InputPad.h>
 #include <leon/core/Window.h>
 #include <leon/rhi/Ps2RHI.h>
@@ -71,9 +72,9 @@ void PrintBanner(bool padOk) {
     std::printf("  Left stick    move (cam-relative)\n");
     std::printf("  Right stick   camera orbit\n");
     std::printf("  Cross         jump\n");
+    std::printf("  Start         quit | Select  debug HUD\n");
     std::printf("Pad=%s\n", padOk ? "ok" : "--");
-    std::printf("Draw3D debug: PCSX2 Console every 30 frames\n");
-    std::printf("  keep3/drop0/clip1/clip2 rejDiv/rejNdc emit wall |ndc| edge2\n");
+    std::printf("Draw3D stats: HUD + PCSX2 console every 30 frames\n");
     std::printf("==================================\n\n");
 }
 
@@ -83,27 +84,10 @@ void PrintBanner(bool padOk) {
     return pressed;
 }
 
-void FormatHud(char* out, unsigned outSize, int fps, float workMs) {
-    int tenths = static_cast<int>(workMs * 10.0f + 0.5f);
-    if (tenths < 0) {
-        tenths = 0;
-    }
-    std::snprintf(out, outSize, "FPS %d  %d.%d ms", fps, tenths / 10, tenths % 10);
-}
-
-/// K=keep3 D=drop E=emitted W=wallpaper-rejected (cull-only path → C usually 0)
-void FormatClipHud(char* out, unsigned outSize, const rhi::Ps2Draw3DDebugStats& s) {
-    std::snprintf(out, outSize, "K%d D%d E%d W%d", static_cast<int>(s.Keep3),
-                  static_cast<int>(s.Drop0), static_cast<int>(s.Emitted),
-                  static_cast<int>(s.WallpaperSuspect));
-}
-
-void FormatNdcHud(char* out, unsigned outSize, const rhi::Ps2Draw3DDebugStats& s) {
-    // Tenths for |ndc| peaks; edge2 shown as integer (squared NDC edge).
-    const int nx = static_cast<int>(s.MaxAbsNdcX * 10.0f + 0.5f);
-    const int ny = static_cast<int>(s.MaxAbsNdcY * 10.0f + 0.5f);
-    const int e2 = static_cast<int>(s.MaxNdcEdge + 0.5f);
-    std::snprintf(out, outSize, "N%d.%d/%d.%d E%d", nx / 10, nx % 10, ny / 10, ny % 10, e2);
+/// Draw3D counters for the engine stats panel: boxes drawn / submitted, GS tris, clipped.
+void FormatDrawHud(char* boxes, char* tris, unsigned outSize, const rhi::Ps2Draw3DDebugStats& s) {
+    std::snprintf(boxes, outSize, "BOXES %u/%u", s.Boxes - s.CulledBoxes, s.Boxes);
+    std::snprintf(tris, outSize, "TRIS %u CLIP %u", s.Emitted, s.Clipped);
 }
 
 [[nodiscard]] float MaxF(float a, float b) {
@@ -128,16 +112,41 @@ void PlaceGrounded(PrimitiveActor& out, float x, float z, float halfX, float hal
     out.Material = material;
 }
 
+/// World → box-local XZ (math3d matrix_rotate Y: world = (x·c + z·s, −x·s + z·c)).
+void ToLocalXZ(const PrimitiveActor& a, float x, float z, float& lx, float& lz) {
+    const float c = rhi::Ps2Cos256(a.Yaw256);
+    const float sn = rhi::Ps2Sin256(a.Yaw256);
+    const float dx = x - a.LocationX;
+    const float dz = z - a.LocationZ;
+    lx = dx * c - dz * sn;
+    lz = dx * sn + dz * c;
+}
+
+/// World-axis half extents of a yawed box footprint (conservative AABB).
+void FootprintExtents(const PrimitiveActor& a, float& ex, float& ez) {
+    float c = rhi::Ps2Cos256(a.Yaw256);
+    float sn = rhi::Ps2Sin256(a.Yaw256);
+    c = c < 0.0f ? -c : c;
+    sn = sn < 0.0f ? -sn : sn;
+    ex = a.ScaleX * c + a.ScaleZ * sn;
+    ez = a.ScaleX * sn + a.ScaleZ * c;
+}
+
+[[nodiscard]] bool FootprintOverlaps(const PrimitiveActor& a, float x, float z, float halfW) {
+    float lx = 0.0f;
+    float lz = 0.0f;
+    ToLocalXZ(a, x, z, lx, lz);
+    lx = lx < 0.0f ? -lx : lx;
+    lz = lz < 0.0f ? -lz : lz;
+    return lx < a.ScaleX + halfW && lz < a.ScaleZ + halfW;
+}
+
 [[nodiscard]] float FindSupportY(const PrimitiveActor* level, int count, float x, float z,
                                  float halfW, float feetY) {
     float best = kNoSupport;
     for (int i = 0; i < count; ++i) {
         const PrimitiveActor& a = level[i];
-        const float minX = a.LocationX - a.ScaleX;
-        const float maxX = a.LocationX + a.ScaleX;
-        const float minZ = a.LocationZ - a.ScaleZ;
-        const float maxZ = a.LocationZ + a.ScaleZ;
-        if (x + halfW < minX || x - halfW > maxX || z + halfW < minZ || z - halfW > maxZ) {
+        if (!FootprintOverlaps(a, x, z, halfW)) {
             continue;
         }
         const float top = a.LocationY + a.ScaleY;
@@ -152,6 +161,39 @@ void PlaceGrounded(PrimitiveActor& out, float x, float z, float halfX, float hal
         }
     }
     return best;
+}
+
+/// Push the character (square footprint, box-local) out of props it cannot step onto.
+void ResolveWallCollisions(const PrimitiveActor* props, int count, float& x, float& z,
+                           float halfW, float feetY, float headY) {
+    for (int i = 0; i < count; ++i) {
+        const PrimitiveActor& a = props[i];
+        const float top = a.LocationY + a.ScaleY;
+        const float bottom = a.LocationY - a.ScaleY;
+        if (top <= feetY + kMaxStepUp || bottom >= headY) {
+            continue;
+        }
+        float lx = 0.0f;
+        float lz = 0.0f;
+        ToLocalXZ(a, x, z, lx, lz);
+        const float penX = a.ScaleX + halfW - (lx < 0.0f ? -lx : lx);
+        const float penZ = a.ScaleZ + halfW - (lz < 0.0f ? -lz : lz);
+        if (penX <= 0.0f || penZ <= 0.0f) {
+            continue;
+        }
+        // Minimum-penetration axis in box space, then rotate the push back to world.
+        float px = 0.0f;
+        float pz = 0.0f;
+        if (penX < penZ) {
+            px = lx < 0.0f ? -penX : penX;
+        } else {
+            pz = lz < 0.0f ? -penZ : penZ;
+        }
+        const float c = rhi::Ps2Cos256(a.Yaw256);
+        const float sn = rhi::Ps2Sin256(a.Yaw256);
+        x += px * c + pz * sn;
+        z += -px * sn + pz * c;
+    }
 }
 
 [[nodiscard]] unsigned WrapYaw256(float yaw) {
@@ -212,12 +254,15 @@ void PlaceGrounded(PrimitiveActor& out, float x, float z, float halfX, float hal
     float bestT = 1.0f;
     for (int i = 0; i < count; ++i) {
         const PrimitiveActor& a = level[i];
-        const float minX = a.LocationX - a.ScaleX - radius;
-        const float maxX = a.LocationX + a.ScaleX + radius;
+        float ex = 0.0f;
+        float ez = 0.0f;
+        FootprintExtents(a, ex, ez);
+        const float minX = a.LocationX - ex - radius;
+        const float maxX = a.LocationX + ex + radius;
         const float minY = a.LocationY - a.ScaleY - radius;
         const float maxY = a.LocationY + a.ScaleY + radius;
-        const float minZ = a.LocationZ - a.ScaleZ - radius;
-        const float maxZ = a.LocationZ + a.ScaleZ + radius;
+        const float minZ = a.LocationZ - ez - radius;
+        const float maxZ = a.LocationZ + ez + radius;
         float t = 0.0f;
         if (RayAabbHit(lookX, lookY, lookZ, dx, dy, dz, minX, minY, minZ, maxX, maxY, maxZ, t)) {
             if (t < bestT) {
@@ -254,7 +299,7 @@ void UpdateViewTarget(float lookX, float lookY, float lookZ, const SpringArm& ar
     const float fullZ = lookZ + dirZ * desired;
     const float probed =
         ProbeBoomLength(lookX, lookY, lookZ, fullX, fullY, fullZ, desired, arm.MinArmLength,
-                        arm.ProbeRadius, level, levelCount);
+                        arm.ProbeRadius, level + kGroundTileCount, levelCount - kGroundTileCount);
 
     // Snap in fast on collision; ease out when clear.
     if (probed < armLen) {
@@ -385,19 +430,14 @@ int RunPs2ThirdPersonDemo(Window& window) {
     unsigned frame = 0;
     bool prevCross = false;
 
-    std::uint64_t prevFrameUs = rhi::Ps2GetSystemTimeUs();
-    std::uint64_t hudAccumUs = 0;
-    unsigned hudFrames = 0;
-    float workSumMs = 0.0f;
-    char hudLine[32] = "FPS --";
-    char hudClip[40] = "C--";
-    char hudNdc[40] = "N--";
+    char hudBoxes[32] = "BOXES --";
+    char hudTris[32] = "TRIS --";
 
     for (;;) {
-        const std::uint64_t frameStartUs = rhi::Ps2GetSystemTimeUs();
         window.PollEvents();
-        PollPad();
-        rhi::Ps2Draw3DDebugBeginFrame();
+        if (IsPadButtonPressed(EPadButton::Start)) {
+            break;
+        }
 
         const PadStick left = GetPadLeftStick();
         const PadStick right = GetPadRightStick();
@@ -429,6 +469,14 @@ int RunPs2ThirdPersonDemo(Window& window) {
         // Camera basis is orthonormal, so |wish| matches stick magnitude.
         wishX = fx * left.Y + rx * left.X;
         wishZ = fz * left.Y + rz * left.X;
+        // Each stick axis reaches ±1 independently: cap diagonals to unit length.
+        const float wishLen2 = wishX * wishX + wishZ * wishZ;
+        if (wishLen2 > 1.0f) {
+            // One Newton step from 1 is enough for |wish| in (1, √2].
+            const float invLen = 1.0f / (0.5f * (wishLen2 + 1.0f));
+            wishX *= invLen;
+            wishZ *= invLen;
+        }
 
         if (wishX != 0.0f || wishZ != 0.0f) {
             character.VelocityX = wishX * kMoveSpeed;
@@ -458,6 +506,9 @@ int RunPs2ThirdPersonDemo(Window& window) {
         const float bound = kArenaHalf - 2.0f;
         character.LocationX = MinF(MaxF(character.LocationX, -bound), bound);
         character.LocationZ = MinF(MaxF(character.LocationZ, -bound), bound);
+        ResolveWallCollisions(level + kGroundTileCount, kPropCount, character.LocationX,
+                              character.LocationZ, kCharHalfW, character.LocationY - kCharHalfH,
+                              character.LocationY + kCharHalfH);
 
         const float feet = character.LocationY - kCharHalfH;
         const float support = FindSupportY(level, kLevelActorCount, character.LocationX,
@@ -497,38 +548,21 @@ int RunPs2ThirdPersonDemo(Window& window) {
                               character.LocationZ, character.Yaw256, 0, kCharHalfW * 0.55f,
                               kCharHalfW * 0.55f, kCharHalfW * 0.55f);
 
-        const std::uint64_t workEndUs = rhi::Ps2GetSystemTimeUs();
-        const float workMs = static_cast<float>(workEndUs - frameStartUs) / 1000.0f;
-        hudAccumUs += workEndUs - prevFrameUs;
-        prevFrameUs = workEndUs;
-        workSumMs += workMs;
-        ++hudFrames;
-        if (hudAccumUs >= 250000ull && hudFrames > 0) {
-            const float secs = static_cast<float>(hudAccumUs) / 1000000.0f;
-            const int fps = static_cast<int>(static_cast<float>(hudFrames) / secs + 0.5f);
-            FormatHud(hudLine, sizeof(hudLine), fps, workSumMs / static_cast<float>(hudFrames));
-            hudAccumUs = 0;
-            hudFrames = 0;
-            workSumMs = 0.0f;
-        }
-
-        rhi::Ps2Draw3DDebugStats clipStats{};
-        rhi::Ps2Draw3DDebugGetStats(clipStats);
-        FormatClipHud(hudClip, sizeof(hudClip), clipStats);
-        FormatNdcHud(hudNdc, sizeof(hudNdc), clipStats);
+        rhi::Ps2Draw3DDebugStats drawStats{};
+        rhi::Ps2Draw3DDebugGetStats(drawStats);
+        FormatDrawHud(hudBoxes, hudTris, sizeof(hudBoxes), drawStats);
+        SetStatsHudExtraLine(0, hudBoxes);
+        SetStatsHudExtraLine(1, hudTris);
         if ((frame % 30u) == 0u) {
-            rhi::Ps2Draw3DDebugPrint(clipStats);
+            rhi::Ps2Draw3DDebugPrint(drawStats);
         }
-
-        (void)rhi::Ps2DrawUnlitRect(-310.0f, -215.0f, -40.0f, -155.0f, 0.04f, 0.05f, 0.07f);
-        rhi::Ps2DrawDebugHudText(-300.0f, -210.0f, hudLine, 0.95f, 0.95f, 0.75f);
-        rhi::Ps2DrawDebugHudText(-300.0f, -192.0f, hudClip, 0.75f, 0.95f, 0.85f);
-        rhi::Ps2DrawDebugHudText(-300.0f, -174.0f, hudNdc, 0.85f, 0.85f, 0.95f);
 
         window.SwapBuffers();
         ++frame;
     }
 
+    SetStatsHudExtraLine(0, nullptr);
+    SetStatsHudExtraLine(1, nullptr);
     std::printf("Ps2ThirdPerson: quit after %u frames\n", frame);
     return 0;
 }

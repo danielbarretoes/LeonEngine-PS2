@@ -118,9 +118,14 @@ void Ps2BindMaterial(const Ps2Material& material);
 [[nodiscard]] bool Ps2DrawUnlitRect(float x0, float y0, float x1, float y1, float r, float g,
                                     float b);
 
+/// Alpha-blended overlay rect: color = (src - dst) * alpha + dst, alpha in [0, 1].
+[[nodiscard]] bool Ps2DrawUnlitRectAlpha(float x0, float y0, float x1, float y1, float r, float g,
+                                         float b, float alpha);
+
 /// DebugOverlay-lite: 5×7 glyphs via rects (ASCII subset for FPS HUD).
+/// scale 1 = 2 px cells (12 px advance, 14 px tall); 0.5 = 1 px cells (6 px advance, 7 px tall).
 void Ps2DrawDebugHudText(float x, float y, const char* text, float r = 0.95f, float g = 0.95f,
-                         float b = 0.85f);
+                         float b = 0.85f, float scale = 1.0f);
 
 /// Validate + draw a cooked LPS2 blob (see Docs/ASSET_FORMATS.md § PS2).
 [[nodiscard]] bool Ps2DrawCookedMesh(const void* data, unsigned size);
@@ -135,26 +140,21 @@ void Ps2DrawDebugHudText(float x, float y, const char* text, float r = 0.95f, fl
     return Ps2DrawBox(locationX, locationY, locationZ, yaw256, pitch256, scale, scale, scale);
 }
 
-/// Per-frame near-clip / emit counters for EE→GIF debugging (PCSX2 console + HUD).
+/// Per-frame Draw3D counters (PCSX2 console + HUD). Box → frustum cull → backface cull →
+/// per-triangle trivial reject / homogeneous clip (near + guard band) → GS.
 struct Ps2Draw3DDebugStats {
-    unsigned Boxes = 0;
-    unsigned InTris = 0;
-    unsigned Keep3 = 0;  // fully in front of near
-    unsigned Drop0 = 0;  // fully behind near
-    unsigned Clip1 = 0;  // 1 vert in → 1 out tri
-    unsigned Clip2 = 0;  // 2 verts in → 2 out tris
-    unsigned RejectDiv = 0;
-    unsigned RejectNdc = 0;
-    unsigned Emitted = 0;
-    unsigned WallpaperSuspect = 0; // rejected: huge NDC edge (near-plane wallpaper)
+    unsigned Boxes = 0;       // Ps2DrawBox calls
+    unsigned CulledBoxes = 0; // whole box outside the view frustum
+    unsigned BackFaces = 0;   // faces facing away from the camera
+    unsigned InTris = 0;      // triangles tested after box / face culling
+    unsigned Keep3 = 0;       // fully inside the clip volume (sent as-is)
+    unsigned Drop0 = 0;       // fully outside the visible frustum
+    unsigned Clipped = 0;     // split against near / guard band
+    unsigned Emitted = 0;     // triangles sent to the GS
     unsigned PacketQwordsPeak = 0;
-    float MinW = 0.0f;
-    float MaxW = 0.0f;
-    float MaxAbsNdcX = 0.0f;
-    float MaxAbsNdcY = 0.0f;
-    float MaxNdcEdge = 0.0f; // max squared NDC edge length (no sqrt on EE)
 };
 
+/// Reset counters (Window::SwapBuffers does this every frame on PS2).
 void Ps2Draw3DDebugBeginFrame();
 void Ps2Draw3DDebugGetStats(Ps2Draw3DDebugStats& out);
 /// printf snapshot (PCSX2 EE console / stdout).

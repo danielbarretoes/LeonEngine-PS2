@@ -106,8 +106,8 @@ void DrawHud(EDemoMode mode, unsigned frame) {
     constexpr float kModeW = 18.0f;
     constexpr float kGap = 6.0f;
     constexpr float kBaseX = -300.0f;
-    constexpr float kY0 = -210.0f;
-    constexpr float kY1 = -190.0f;
+    constexpr float kY0 = 174.0f;
+    constexpr float kY1 = 194.0f;
 
     for (int i = 0; i < static_cast<int>(EDemoMode::Count); ++i) {
         const float x0 = kBaseX + static_cast<float>(i) * (kModeW + kGap);

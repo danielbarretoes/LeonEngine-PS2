@@ -10,7 +10,7 @@ Lean Emotion Engine GS backend (`leon_rhi_ps2`).
 | `Ps2DrawPrimitives` | 2D unlit triangle / rect, sin LUT |
 | `Ps2Draw3D` | Lit/textured box (`math3d` + `draw3d`) |
 | `Ps2Texture` | VRAM upload + TEX0 bind (`T_*_D`) |
-| `Ps2DebugHud` | Timer + 5×7 HUD text |
+| `Ps2DebugHud` | Timer + 5×7 HUD text (drawn by the engine debug overlay, `leon/core/DebugOverlay.h`) |
 
 Public API: `<leon/rhi/Ps2RHI.h>`.
 

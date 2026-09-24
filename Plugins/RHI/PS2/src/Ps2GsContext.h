@@ -13,12 +13,17 @@ struct GsContext {
     zbuffer_t z{};
     packet_t* packet = nullptr;
     bool ready = false;
+    /// End of the libgraph bump allocator (32-bit words) — VRAM in use for QueryGpuMemory.
+    int vramEndWords = 0;
 
     [[nodiscard]] float OriginX() const;
     [[nodiscard]] float OriginY() const;
 };
 
 [[nodiscard]] GsContext& GetGsContext();
+
+/// graph_vram_allocate + VRAM usage bookkeeping. Returns word address, or < 0 when full.
+[[nodiscard]] int AllocateVram(int width, int height, int psm, int alignment);
 
 } // namespace leon::rhi::ps2
 #endif

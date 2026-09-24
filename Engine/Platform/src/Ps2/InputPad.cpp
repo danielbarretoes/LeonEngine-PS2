@@ -3,6 +3,8 @@
 #include <cstdio>
 
 #if defined(LEON_PLATFORM_PS2)
+#include <leon/rhi/Ps2RHI.h>
+
 #include <libpad.h>
 #include <loadfile.h>
 #include <sifrpc.h>
@@ -17,6 +19,8 @@ bool g_padReady = false;
 bool g_analogRequested = false;
 padButtonStatus g_pad{};
 bool g_padSampleValid = false;
+int g_lastPadState = -1;
+unsigned short g_lastLoggedBtns = 0;
 
 constexpr float kStickDeadzone = 0.18f;
 
@@ -91,6 +95,10 @@ void PollPad() {
     }
     TryEnableAnalog();
     const int state = padGetState(0, 0);
+    if (state != g_lastPadState) {
+        std::printf("InputPad: port0 state %d\n", state);
+        g_lastPadState = state;
+    }
     if (state != PAD_STATE_STABLE && state != PAD_STATE_FINDCTP1) {
         return;
     }
@@ -98,6 +106,11 @@ void PollPad() {
         return;
     }
     g_padSampleValid = true;
+    const unsigned short btns = static_cast<unsigned short>(g_pad.btns ^ 0xFFFF);
+    if (btns != g_lastLoggedBtns) {
+        std::printf("InputPad: btns 0x%04X\n", btns);
+        g_lastLoggedBtns = btns;
+    }
 #endif
 }
 
@@ -174,6 +187,94 @@ PadStick GetPadRightStick() {
     return {AxisFromByte(g_pad.rjoy_h), -AxisFromByte(g_pad.rjoy_v)};
 #else
     return {};
+#endif
+}
+
+void DrawPadDebugOverlay(float x, float y, float scale) {
+#if defined(LEON_PLATFORM_PS2)
+    if (!g_padSampleValid) {
+        PollPad();
+    }
+    const bool live = g_padSampleValid;
+    const unsigned short btns = live ? static_cast<unsigned short>(g_pad.btns ^ 0xFFFF) : 0;
+
+    // 50% panel so the scene stays readable underneath.
+    constexpr float kPanelAlpha = 0.5f;
+    constexpr float kIdleAlpha = 0.5f;
+    constexpr float kLitAlpha = 0.9f;
+
+    const auto box = [&](float x0, float y0, float x1, float y1, float r, float g, float b,
+                         float a) {
+        (void)rhi::Ps2DrawUnlitRectAlpha(x + x0 * scale, y + y0 * scale, x + x1 * scale,
+                                         y + y1 * scale, r, g, b, a);
+    };
+    // Lit colour while held, dim grey otherwise.
+    const auto button = [&](unsigned short mask, float x0, float y0, float x1, float y1, float r,
+                            float g, float b) {
+        if ((btns & mask) != 0) {
+            box(x0, y0, x1, y1, r, g, b, kLitAlpha);
+        } else {
+            box(x0, y0, x1, y1, 0.55f, 0.58f, 0.64f, kIdleAlpha);
+        }
+    };
+    // Raw bytes (no deadzone) so any stick movement is visible; screen y grows down like raw v.
+    const auto stick = [&](unsigned char rawH, unsigned char rawV, unsigned short clickMask,
+                           float cx, float cy) {
+        if ((btns & clickMask) != 0) {
+            box(cx - 9.0f, cy - 9.0f, cx + 9.0f, cy + 9.0f, 0.95f, 0.75f, 0.2f, kIdleAlpha);
+        } else {
+            box(cx - 9.0f, cy - 9.0f, cx + 9.0f, cy + 9.0f, 0.3f, 0.32f, 0.38f, kIdleAlpha);
+        }
+        float dx = 0.0f;
+        float dy = 0.0f;
+        if (live) {
+            dx = (static_cast<float>(rawH) - 128.0f) / 128.0f * 7.0f;
+            dy = (static_cast<float>(rawV) - 128.0f) / 128.0f * 7.0f;
+        }
+        const bool moved = dx * dx + dy * dy > 1.0f;
+        box(cx + dx - 2.0f, cy + dy - 2.0f, cx + dx + 2.0f, cy + dy + 2.0f, moved ? 1.0f : 0.8f,
+            moved ? 0.85f : 0.8f, moved ? 0.2f : 0.85f, kLitAlpha);
+    };
+
+    // Layout in widget units (150×78), kPadDebugPadding on every side, mirrored around x = 75.
+    box(0.0f, 0.0f, 150.0f, 78.0f, 0.02f, 0.03f, 0.05f, kPanelAlpha);
+
+    // Status LED (top centre).
+    if (live) {
+        box(71.0f, 4.0f, 79.0f, 12.0f, 0.2f, 0.95f, 0.3f, kLitAlpha);
+    } else if (g_padReady) {
+        box(71.0f, 4.0f, 79.0f, 12.0f, 1.0f, 0.6f, 0.1f, kLitAlpha);
+    } else {
+        box(71.0f, 4.0f, 79.0f, 12.0f, 0.95f, 0.15f, 0.15f, kLitAlpha);
+    }
+
+    constexpr float kWhiteR = 0.95f;
+    constexpr float kWhiteG = 0.9f;
+    constexpr float kWhiteB = 0.4f;
+    button(PAD_L2, 4.0f, 4.0f, 30.0f, 8.0f, kWhiteR, kWhiteG, kWhiteB);
+    button(PAD_L1, 4.0f, 10.0f, 30.0f, 14.0f, kWhiteR, kWhiteG, kWhiteB);
+    button(PAD_R2, 120.0f, 4.0f, 146.0f, 8.0f, kWhiteR, kWhiteG, kWhiteB);
+    button(PAD_R1, 120.0f, 10.0f, 146.0f, 14.0f, kWhiteR, kWhiteG, kWhiteB);
+
+    button(PAD_UP, 13.0f, 20.0f, 21.0f, 28.0f, kWhiteR, kWhiteG, kWhiteB);
+    button(PAD_DOWN, 13.0f, 38.0f, 21.0f, 46.0f, kWhiteR, kWhiteG, kWhiteB);
+    button(PAD_LEFT, 4.0f, 29.0f, 12.0f, 37.0f, kWhiteR, kWhiteG, kWhiteB);
+    button(PAD_RIGHT, 22.0f, 29.0f, 30.0f, 37.0f, kWhiteR, kWhiteG, kWhiteB);
+
+    button(PAD_SELECT, 57.0f, 31.0f, 69.0f, 35.0f, kWhiteR, kWhiteG, kWhiteB);
+    button(PAD_START, 81.0f, 31.0f, 93.0f, 35.0f, kWhiteR, kWhiteG, kWhiteB);
+
+    button(PAD_TRIANGLE, 129.0f, 20.0f, 137.0f, 28.0f, 0.2f, 0.9f, 0.5f);
+    button(PAD_CROSS, 129.0f, 38.0f, 137.0f, 46.0f, 0.35f, 0.55f, 1.0f);
+    button(PAD_SQUARE, 120.0f, 29.0f, 128.0f, 37.0f, 0.95f, 0.45f, 0.85f);
+    button(PAD_CIRCLE, 138.0f, 29.0f, 146.0f, 37.0f, 0.95f, 0.3f, 0.3f);
+
+    stick(g_pad.ljoy_h, g_pad.ljoy_v, PAD_L3, 55.0f, 65.0f);
+    stick(g_pad.rjoy_h, g_pad.rjoy_v, PAD_R3, 95.0f, 65.0f);
+#else
+    (void)x;
+    (void)y;
+    (void)scale;
 #endif
 }
 

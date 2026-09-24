@@ -1,3 +1,5 @@
+#include <leon/core/DebugOverlay.h>
+#include <leon/core/InputPad.h>
 #include <leon/core/Window.h>
 #include <leon/rhi/IRHIDevice.h>
 #include <leon/rhi/Ps2RHI.h>
@@ -93,12 +95,19 @@ void Window::Destroy() {
 
 bool Window::ShouldClose() const { return shouldClose_ || handle_ == nullptr; }
 
-void Window::PollEvents() {}
+void Window::PollEvents() {
+#if defined(LEON_PLATFORM_PS2)
+    // Fresh pad sample every frame (queries otherwise reuse the last cached read).
+    PollPad();
+#endif
+}
 
 void Window::SwapBuffers() {
 #if defined(LEON_PLATFORM_PS2)
     if (handle_ != nullptr) {
+        DrawEngineDebugOverlay(framebufferWidth_, framebufferHeight_);
         rhi::Ps2WaitVsync();
+        MarkEngineFrameStart();
     }
 #endif
 }

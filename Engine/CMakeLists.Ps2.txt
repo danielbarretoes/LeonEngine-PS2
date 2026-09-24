@@ -18,6 +18,7 @@ add_library(leon_platform STATIC
     Platform/src/Ps2/WindowPs2.cpp
     Platform/src/Ps2/MemoryStatsPs2.cpp
     Platform/src/Ps2/InputPad.cpp
+    Platform/src/Ps2/DebugOverlayPs2.cpp
 )
 target_include_directories(leon_platform PUBLIC ${_LEON_PUBLIC_INC})
 target_link_libraries(leon_platform PUBLIC leon_core leon_rhi)

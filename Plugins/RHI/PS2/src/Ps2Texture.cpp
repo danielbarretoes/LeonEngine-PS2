@@ -84,7 +84,7 @@ Ps2Texture Ps2Texture::CreateFromAlignedRgba(int width, int height, unsigned cha
         return {};
     }
     const int bufW = NextPow2(width);
-    const int addr = graph_vram_allocate(bufW, height, GS_PSM_32, GRAPH_ALIGN_BLOCK);
+    const int addr = ps2::AllocateVram(bufW, height, GS_PSM_32, GRAPH_ALIGN_BLOCK);
     if (addr < 0) {
         return {};
     }

@@ -17,6 +17,10 @@ PCSX2 → **File → Run ELF** → `Projects/Ps2ThirdPerson/build-ps2/leon-Ps2Th
 | Left stick | Move (camera-relative) |
 | Right stick | Camera orbit (yaw / pitch) |
 | Cross | Jump |
+| Start | Quit |
+| Select | Cycle debug HUD: both → stats → pad → none (engine) |
+
+Collision: floor support + wall push-out against props, both in each prop's yawed (box-local) frame. HUD extra lines: `BOXES drawn/total`, `TRIS emitted CLIP clipped`.
 
 ## Layout
 

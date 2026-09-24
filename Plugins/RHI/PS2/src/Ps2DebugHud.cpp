@@ -15,7 +15,7 @@ namespace leon::rhi {
 namespace {
 
 constexpr float kCell = 2.0f;
-constexpr float kGlyphAdvance = 12.0f;
+constexpr float kGlyphAdvanceCells = 6.0f; // 5 columns + 1 spacing
 
 [[nodiscard]] const unsigned char* GlyphRows(char ch) {
     switch (ch) {
@@ -128,6 +128,64 @@ constexpr float kGlyphAdvance = 12.0f;
         static const unsigned char r[7] = {0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04};
         return r;
     }
+    // Engine stats HUD letters (RAM / VRAM / RES / MB).
+    case 'R': {
+        static const unsigned char r[7] = {0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11};
+        return r;
+    }
+    case 'A': {
+        static const unsigned char r[7] = {0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11};
+        return r;
+    }
+    case 'B': {
+        static const unsigned char r[7] = {0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E};
+        return r;
+    }
+    case 'K': {
+        static const unsigned char r[7] = {0x11, 0x12, 0x14, 0x18, 0x14, 0x12, 0x11};
+        return r;
+    }
+    case 'V': {
+        static const unsigned char r[7] = {0x11, 0x11, 0x11, 0x11, 0x11, 0x0A, 0x04};
+        return r;
+    }
+    // Remaining uppercase + ':' so any HUD label renders.
+    case 'G': {
+        static const unsigned char r[7] = {0x0E, 0x11, 0x10, 0x17, 0x11, 0x11, 0x0F};
+        return r;
+    }
+    case 'H': {
+        static const unsigned char r[7] = {0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11};
+        return r;
+    }
+    case 'J': {
+        static const unsigned char r[7] = {0x07, 0x02, 0x02, 0x02, 0x02, 0x12, 0x0C};
+        return r;
+    }
+    case 'L': {
+        static const unsigned char r[7] = {0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F};
+        return r;
+    }
+    case 'O': {
+        static const unsigned char r[7] = {0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E};
+        return r;
+    }
+    case 'Q': {
+        static const unsigned char r[7] = {0x0E, 0x11, 0x11, 0x11, 0x15, 0x12, 0x0D};
+        return r;
+    }
+    case 'U': {
+        static const unsigned char r[7] = {0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E};
+        return r;
+    }
+    case 'Z': {
+        static const unsigned char r[7] = {0x1F, 0x01, 0x02, 0x04, 0x08, 0x10, 0x1F};
+        return r;
+    }
+    case ':': {
+        static const unsigned char r[7] = {0x00, 0x0C, 0x0C, 0x00, 0x0C, 0x0C, 0x00};
+        return r;
+    }
     case '-': {
         static const unsigned char r[7] = {0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00};
         return r;
@@ -185,7 +243,7 @@ qword_t* AppendRect(ps2::GsContext& gs, qword_t* q, float x0, float y0, float x1
     return draw_rect_filled(q, 0, &rect);
 }
 
-qword_t* AppendGlyphRuns(ps2::GsContext& gs, qword_t* q, float x, float y, char ch,
+qword_t* AppendGlyphRuns(ps2::GsContext& gs, qword_t* q, float x, float y, char ch, float cell,
                          const color_t& color) {
     const unsigned char* rows = GlyphRows(ch);
     if (rows == nullptr) {
@@ -205,10 +263,10 @@ qword_t* AppendGlyphRuns(ps2::GsContext& gs, qword_t* q, float x, float y, char 
             while (col < 5 && (bits & static_cast<unsigned char>(0x10 >> col)) != 0) {
                 ++col;
             }
-            const float x0 = x + static_cast<float>(runStart) * kCell;
-            const float x1 = x + static_cast<float>(col) * kCell;
-            const float y0 = y + static_cast<float>(row) * kCell;
-            q = AppendRect(gs, q, x0, y0, x1, y0 + kCell, color);
+            const float x0 = x + static_cast<float>(runStart) * cell;
+            const float x1 = x + static_cast<float>(col) * cell;
+            const float y0 = y + static_cast<float>(row) * cell;
+            q = AppendRect(gs, q, x0, y0, x1, y0 + cell, color);
         }
     }
     return q;
@@ -228,7 +286,8 @@ std::uint64_t Ps2GetSystemTimeUs() {
 #endif
 }
 
-void Ps2DrawDebugHudText(float x, float y, const char* text, float r, float g, float b) {
+void Ps2DrawDebugHudText(float x, float y, const char* text, float r, float g, float b,
+                         float scale) {
 #if defined(LEON_PLATFORM_PS2)
     if (text == nullptr) {
         return;
@@ -240,6 +299,7 @@ void Ps2DrawDebugHudText(float x, float y, const char* text, float r, float g, f
 
     color_t color{};
     FillColor(color, r, g, b);
+    const float cell = kCell * (scale > 0.0f ? scale : 1.0f);
 
     qword_t* q = gs.packet->data;
     // Overlay: disable z so 3D near-plane wallpaper cannot cover FPS text.
@@ -250,8 +310,8 @@ void Ps2DrawDebugHudText(float x, float y, const char* text, float r, float g, f
         if (ch >= 'a' && ch <= 'z' && ch != 'm' && ch != 's') {
             ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
         }
-        q = AppendGlyphRuns(gs, q, cx, y, ch, color);
-        cx += kGlyphAdvance;
+        q = AppendGlyphRuns(gs, q, cx, y, ch, cell, color);
+        cx += kGlyphAdvanceCells * cell;
     }
     q = draw_enable_tests(q, 0, &gs.z);
     q = draw_finish(q);
@@ -263,6 +323,7 @@ void Ps2DrawDebugHudText(float x, float y, const char* text, float r, float g, f
     (void)r;
     (void)g;
     (void)b;
+    (void)scale;
 #endif
 }
 

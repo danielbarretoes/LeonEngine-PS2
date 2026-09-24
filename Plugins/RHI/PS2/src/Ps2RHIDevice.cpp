@@ -85,9 +85,14 @@ public:
     [[nodiscard]] GpuMemoryInfo QueryGpuMemory() const override {
         GpuMemoryInfo out{};
         out.valid = true;
-        out.reportsUsage = false;
         out.budgetBytes = 4u * 1024u * 1024u;
+#if defined(LEON_PLATFORM_PS2)
+        out.reportsUsage = true;
+        out.usedBytes = static_cast<std::size_t>(ps2::GetGsContext().vramEndWords) * 4u;
+#else
+        out.reportsUsage = false;
         out.usedBytes = 0;
+#endif
         return out;
     }
 
@@ -139,14 +144,14 @@ bool Ps2InitDisplay(int width, int height) {
     gs.frame.height = h;
     gs.frame.mask = 0;
     gs.frame.psm = GS_PSM_32;
-    const int frameVram = graph_vram_allocate(w, h, GS_PSM_32, GRAPH_ALIGN_PAGE);
+    const int frameVram = ps2::AllocateVram(w, h, GS_PSM_32, GRAPH_ALIGN_PAGE);
     if (frameVram < 0) {
         std::printf("Ps2InitDisplay: frame VRAM allocate failed\n");
         return false;
     }
     gs.frame.address = static_cast<unsigned int>(frameVram);
 
-    const int zVram = graph_vram_allocate(w, h, GS_ZBUF_32, GRAPH_ALIGN_PAGE);
+    const int zVram = ps2::AllocateVram(w, h, GS_ZBUF_32, GRAPH_ALIGN_PAGE);
     if (zVram < 0) {
         std::printf("Ps2InitDisplay: z-buffer VRAM allocate failed\n");
         return false;

@@ -35,6 +35,7 @@ The repo root is **not** a CMake project — configure `Editor`, `Projects/<name
 | `build-linux.sh` | Linux Editor + tests | `Editor/build-linux` |
 | `build-ps2.sh` | EE cross-build (ps2dev env) | `Projects/Ps2Cube/build-ps2/leon-Ps2Cube.elf` |
 | `build-ps2-docker.sh` | Same via `ghcr.io/ps2dev/ps2dev` | Works from Windows Docker Desktop |
+| `run-ps2-pcsx2.ps1` | Launch a built ELF in PCSX2 (`-Build` to build first) | Finds `pcsx2-qt.exe` via `LEON_PCSX2`, PATH or default install |
 
 ### Editor build trees (do not merge casually)
 
@@ -201,7 +202,7 @@ Both skip generated trees under `build`, `build-*`, `_deps`, `_leon_*`, and `.gi
    Scripts/build-ps2.sh hello
    # → Samples/Ps2Hello/build-ps2/leon-Ps2Hello.elf
    ```
-3. 3D scene (lit/textured boxes, dynamic sun, FPS HUD; Start to quit):
+3. 3D scene (lit/textured boxes, dynamic sun; Start to quit):
    ```bash
    Scripts/build-ps2.sh cube
    # → Projects/Ps2Cube/build-ps2/leon-Ps2Cube.elf
@@ -234,6 +235,15 @@ Or from Git Bash / WSL: `Scripts/build-ps2-docker.sh tp`. Outputs:
 - `Projects/Ps2Lab/build-ps2/leon-Ps2Lab.elf`
 
 CMake entry: `-DCMAKE_TOOLCHAIN_FILE=Build/toolchains/ps2-ee.cmake` sets `LEON_PLATFORM=PS2` and `LEON_RHI=PS2`.
+
+**Engine debug overlay (every PS2 project, on by default):** `Window::SwapBuffers` draws two 50% translucent panels with the same margin / padding and a half-size 5×7 font:
+
+- **Stats** (top-left): `FPS` + work `ms`, `RAM` (EE image + heap / 32 MB), `VRAM` (GS allocations / 4 MB), `RES`, then any project lines from `SetStatsHudExtraLine(slot, text)`.
+- **Pad** (top-right): LED green = reading / orange = port open, no data / red = port closed; buttons light while held; stick dots follow the raw axes.
+
+**Select** cycles both → stats only → pad only → none. Code: `leon/core/DebugOverlay.h`. `Window::PollEvents` refreshes the pad and `SwapBuffers` resets the Draw3D counters every frame, so projects do not call `PollPad()` / `Ps2Draw3DDebugBeginFrame()` themselves.
+
+**Draw3D (`Ps2DrawBox`):** box frustum cull → per-face backface cull → per-face lighting → per-triangle homogeneous clip (near plane + NDC guard band, Sutherland–Hodgman) → GS scissor. Counters: `Ps2Draw3DDebugGetStats` (`BOXES drawn/total`, `TRIS`, `CLIP` in Ps2ThirdPerson's HUD lines).
 
 **PCSX2:** File → Run ELF → pick `leon-Ps2ThirdPerson.elf` (gameplay), `leon-Ps2Cube.elf` (3D lab), or `leon-Ps2Lab.elf` (2D). For cooked assets on disk, use a PCSX2 `host:` folder or ISO layout under [ASSET_FORMATS — PS2](ASSET_FORMATS.md#ps2-cooked-lps2).
 

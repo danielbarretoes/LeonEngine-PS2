@@ -1,6 +1,6 @@
 # Ps2Cube
 
-PS2 **3D scene** starter — view target, directional light, materials + textures, FPS/ms HUD.
+PS2 **3D scene** starter — view target, directional light, materials + textures (engine stats / pad HUD).
 
 Editor-ready naming ([Docs/NAMING.md](../../Docs/NAMING.md)): POD fields `Location` / `BaseColor` / `Intensity`, content `T_*_D` / `M_*`, no Unreal `U`/`A`/`F` prefixes. Frame contract: clear → set view/lights → bind material → draw → HUD → swap.
 
@@ -9,7 +9,7 @@ Editor-ready naming ([Docs/NAMING.md](../../Docs/NAMING.md)): POD fields `Locati
 - **ViewTarget** + **DirectionalLight** (orbiting sun; pad yaw / intensity)
 - **Materials** (`M_Ground`, `M_Cube`): `BaseColor`, `BaseColorMap`, `EShadingModel::DefaultLit`
 - **Textures** (embedded procedural, Content names): `T_Grid_D`, `T_Checker_D`
-- **HUD**: `FPS` + work `ms` (5×7 DebugOverlay-lite)
+- **HUD**: engine debug overlay — `FPS`/`ms`, `RAM`, `VRAM`, `RES` + pad widget (Select cycles stats / pad; [SETUP — PS2](../../Docs/SETUP.md#ps2-emotion-engine))
 
 ## Build / run
 
@@ -28,6 +28,7 @@ PCSX2 → **File → Run ELF** → `Projects/Ps2Cube/build-ps2/leon-Ps2Cube.elf`
 | Square / Triangle | Sun intensity −/+ |
 | Cross | Reset |
 | Start | Quit |
+| Select | Cycle debug HUD: both → stats → pad → none (engine) |
 
 ## Layout
 

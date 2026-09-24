@@ -32,7 +32,7 @@ struct Rgb {
 void PrintBanner(bool padOk) {
     std::printf("\n========== Leon Ps2Cube (3D scene) ==========\n");
     std::printf("  M_Ground / M_Cube + T_*_D | DirectionalLight\n");
-    std::printf("  HUD: FPS + work ms\n");
+    std::printf("  HUD: engine stats + pad (Select cycles)\n");
     std::printf("  D-Pad        object yaw/pitch\n");
     std::printf("  L1/R1        orbit speed\n");
     std::printf("  L2/R2        sun yaw\n");
@@ -46,14 +46,6 @@ void PrintBanner(bool padOk) {
     const bool pressed = down && !prev;
     prev = down;
     return pressed;
-}
-
-void FormatHud(char* out, unsigned outSize, int fps, float workMs) {
-    int tenths = static_cast<int>(workMs * 10.0f + 0.5f);
-    if (tenths < 0) {
-        tenths = 0;
-    }
-    std::snprintf(out, outSize, "FPS %d  %d.%d ms", fps, tenths / 10, tenths % 10);
 }
 
 [[nodiscard]] float Clamp(float v, float lo, float hi) {
@@ -115,15 +107,7 @@ int RunPs2CubeDemo(Window& window) {
     bool prevCross = false;
     bool sunManual = false;
 
-    std::uint64_t prevFrameUs = rhi::Ps2GetSystemTimeUs();
-    std::uint64_t hudAccumUs = 0;
-    unsigned hudFrames = 0;
-    float workSumMs = 0.0f;
-    char hudLine[32] = "FPS --";
-
     for (;;) {
-        const std::uint64_t frameStartUs = rhi::Ps2GetSystemTimeUs();
-
         window.PollEvents();
         if (IsPadButtonPressed(EPadButton::Start)) {
             break;
@@ -188,11 +172,13 @@ int RunPs2CubeDemo(Window& window) {
         }
         rhi::Ps2SetDirectionalLight(sun);
 
-        // clear → draw → HUD → swap
+        // clear → draw → swap (engine stats / pad HUD drawn by SwapBuffers)
         rhi::Ps2ClearColor(0.10f, 0.11f, 0.14f);
 
         rhi::Ps2BindMaterial(mGround);
-        (void)rhi::Ps2DrawBox(0.0f, -8.0f, 0.0f, 0, 0, 18.0f);
+        // Flat slab (half-extents): top at y=-11.5 stays below the spinning cube's corners
+        // (6·√3 ≈ 10.4), so the pad-driven objects are never buried inside the ground.
+        (void)rhi::Ps2DrawBox(0.0f, -12.0f, 0.0f, 0, 0, 22.0f, 0.5f, 22.0f);
 
         rhi::Ps2BindMaterial(mCube);
         (void)rhi::Ps2DrawBox(0.0f, 0.0f, 0.0f, yaw, pitch, 6.0f);
@@ -215,25 +201,6 @@ int RunPs2CubeDemo(Window& window) {
         rhi::Ps2BindMaterial(mAccent);
         (void)rhi::Ps2DrawBox(-ox * 0.7f, 4.0f, -oz * 0.7f, (255u - yaw) & 255u,
                               (pitch + 30u) & 255u, 1.6f);
-
-        const std::uint64_t workEndUs = rhi::Ps2GetSystemTimeUs();
-        const float workMs = static_cast<float>(workEndUs - frameStartUs) / 1000.0f;
-
-        hudAccumUs += workEndUs - prevFrameUs;
-        prevFrameUs = workEndUs;
-        workSumMs += workMs;
-        ++hudFrames;
-        if (hudAccumUs >= 250000ull && hudFrames > 0) {
-            const float secs = static_cast<float>(hudAccumUs) / 1000000.0f;
-            const int fps = static_cast<int>(static_cast<float>(hudFrames) / secs + 0.5f);
-            FormatHud(hudLine, sizeof(hudLine), fps, workSumMs / static_cast<float>(hudFrames));
-            hudAccumUs = 0;
-            hudFrames = 0;
-            workSumMs = 0.0f;
-        }
-
-        (void)rhi::Ps2DrawUnlitRect(-310.0f, -215.0f, -70.0f, -185.0f, 0.05f, 0.06f, 0.08f);
-        rhi::Ps2DrawDebugHudText(-300.0f, -210.0f, hudLine, 0.95f, 0.95f, 0.75f);
 
         window.SwapBuffers();
         ++frame;
