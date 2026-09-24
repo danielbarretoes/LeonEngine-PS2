@@ -1,0 +1,56 @@
+# Pinned third-party downloads (Unreal: Setup.bat / GitDependencies). Script-mode safe.
+#
+# leon_thirdparty_ensure(<Name> <Url> <Sha256> <Dir>)
+#   Downloads <Url> once (checked against <Sha256>) into Engine/Intermediate/ThirdPartyDownloads and
+#   extracts it next to <Dir>; <Dir> must be the archive's top-level folder (e.g. glm-1.0.1).
+#   An empty <Sha256> downloads without verification and prints the hash to pin.
+
+function(leon_thirdparty_ensure Name Url Sha256 Dir)
+	if(EXISTS "${Dir}")
+		return()
+	endif()
+
+	get_filename_component(ArchiveName "${Url}" NAME)
+	set(Archive "${LEON_ENGINE_DIR}/Intermediate/ThirdPartyDownloads/${Name}-${ArchiveName}")
+	if(NOT EXISTS "${Archive}")
+		message(STATUS "LeonBuildTool: downloading ${Name} (${Url})")
+		if(Sha256)
+			file(DOWNLOAD "${Url}" "${Archive}" EXPECTED_HASH SHA256=${Sha256} TLS_VERIFY ON STATUS Status)
+		else()
+			file(DOWNLOAD "${Url}" "${Archive}" TLS_VERIFY ON STATUS Status)
+		endif()
+		list(GET Status 0 Code)
+		if(NOT Code EQUAL 0)
+			file(REMOVE "${Archive}")
+			message(FATAL_ERROR "LeonBuildTool: download of ${Name} failed: ${Status}")
+		endif()
+	endif()
+	if(NOT Sha256)
+		file(SHA256 "${Archive}" Actual)
+		message(WARNING "LeonBuildTool: ${Name} has no pinned hash. Pin DOWNLOAD_SHA256 ${Actual}")
+	endif()
+
+	get_filename_component(Parent "${Dir}" DIRECTORY)
+	file(ARCHIVE_EXTRACT INPUT "${Archive}" DESTINATION "${Parent}")
+	if(NOT EXISTS "${Dir}")
+		message(FATAL_ERROR "LeonBuildTool: ${Name} archive did not produce ${Dir}")
+	endif()
+endfunction()
+
+# Resolve an External module's third-party directory and make sure it is downloaded.
+function(leon_thirdparty_prepare Name OutDir)
+	leon_module_get(${Name} DIR ModuleDir)
+	leon_module_get(${Name} DOWNLOAD_URL Url)
+	leon_module_get(${Name} DOWNLOAD_SHA256 Sha256)
+	leon_module_get(${Name} DOWNLOAD_DIR DownloadDir)
+	if(Url)
+		if(NOT DownloadDir)
+			message(FATAL_ERROR "External module ${Name}: DOWNLOAD_URL needs DOWNLOAD_DIR")
+		endif()
+		set(Dir "${ModuleDir}/${DownloadDir}")
+		leon_thirdparty_ensure(${Name} "${Url}" "${Sha256}" "${Dir}")
+	else()
+		set(Dir "${ModuleDir}")
+	endif()
+	set(${OutDir} "${Dir}" PARENT_SCOPE)
+endfunction()

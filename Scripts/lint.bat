@@ -44,11 +44,11 @@ echo format OK
 echo.
 echo === MSVC /W4 Release build (Editor) ===
 if not exist Editor\build (
-  cmake -S Engine -B Engine/build -DLEON_BUILD_TESTS=ON -G "Visual Studio 18 2026" -A x64 2>nul
-  if errorlevel 1 cmake -S Engine -B Engine/build -DLEON_BUILD_TESTS=ON -G "Visual Studio 17 2022" -A x64
+  cmake -S Engine -B Engine/build-vs -DLEON_BUILD_TESTS=ON -G "Visual Studio 18 2026" -A x64 2>nul
+  if errorlevel 1 cmake -S Engine -B Engine/build-vs -DLEON_BUILD_TESTS=ON -G "Visual Studio 17 2022" -A x64
   if errorlevel 1 exit /b 1
 )
-cmake --build Engine/build --config Release
+cmake --build Engine/build-vs --config Release
 if errorlevel 1 exit /b 1
 
 echo lint OK

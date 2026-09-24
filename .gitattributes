@@ -3,3 +3,6 @@
 
 # Shell scripts run inside Linux/Docker: always LF, even with core.autocrlf=true
 *.sh text eol=lf
+
+# Windows batch files: always CRLF (cmd label/goto parsing breaks on LF-only files)
+*.bat text eol=crlf

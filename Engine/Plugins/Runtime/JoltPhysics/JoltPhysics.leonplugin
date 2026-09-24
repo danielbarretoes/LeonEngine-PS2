@@ -1,0 +1,17 @@
+{
+	"FileVersion": 1,
+	"Version": 1,
+	"VersionName": "5.3.0",
+	"FriendlyName": "Jolt Physics",
+	"Description": "Jolt Physics backend for FPhysScene (desktop).",
+	"Category": "Physics",
+	"EnabledByDefault": false,
+	"Modules": [
+		{
+			"Name": "JoltPhysics",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64" ]
+		}
+	]
+}

@@ -1,0 +1,19 @@
+# GLFW 3.4 — desktop window, input and OpenGL context.
+leon_module(GLFW
+	PLATFORMS Desktop
+	DOWNLOAD_URL https://github.com/glfw/glfw/archive/refs/tags/3.4.tar.gz
+	DOWNLOAD_SHA256 c038d34200234d071fae9345bc455e4a8f2f544ab60150765d7704e08f3dac01
+	DOWNLOAD_DIR glfw-3.4
+	EXTERNAL_TARGETS glfw
+)
+
+function(LeonExternal_GLFW)
+	set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+	set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+	set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+	set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+	if(UNIX AND NOT APPLE)
+		set(GLFW_BUILD_WAYLAND OFF CACHE BOOL "" FORCE)
+	endif()
+	add_subdirectory("${LEON_THIRDPARTY_DIR}" "${CMAKE_BINARY_DIR}/ThirdParty/GLFW" EXCLUDE_FROM_ALL SYSTEM)
+endfunction()

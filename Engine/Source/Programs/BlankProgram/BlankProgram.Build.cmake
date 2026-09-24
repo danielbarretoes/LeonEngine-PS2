@@ -1,0 +1,1 @@
+leon_module(BlankProgram PRIVATE_DEPENDENCIES Core)
