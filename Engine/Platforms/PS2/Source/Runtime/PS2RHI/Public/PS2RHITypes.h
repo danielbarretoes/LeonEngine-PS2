@@ -41,7 +41,7 @@ struct FPS2Material
 	EMaterialShadingModel ShadingModel = EMaterialShadingModel::DefaultLit;
 
 	/** When true and no BaseColorMap: multiply per-face RGB (debug cube). */
-	bool UseFaceAlbedo = false;
+	bool bUseFaceAlbedo = false;
 };
 
 /**

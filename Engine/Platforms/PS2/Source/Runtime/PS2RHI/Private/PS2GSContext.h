@@ -8,12 +8,12 @@
 namespace Leon::PS2 {
 
 struct FPS2GSContext {
-    framebuffer_t frame{};
-    zbuffer_t z{};
-    packet_t* packet = nullptr;
-    bool ready = false;
+    framebuffer_t Frame{};
+    zbuffer_t Z{};
+    packet_t* Packet = nullptr;
+    bool bReady = false;
     /// End of the libgraph bump allocator (32-bit words) — VRAM in use for QueryGpuMemory.
-    int vramEndWords = 0;
+    int VramEndWords = 0;
 
     [[nodiscard]] float OriginX() const;
     [[nodiscard]] float OriginY() const;
@@ -22,6 +22,6 @@ struct FPS2GSContext {
 [[nodiscard]] FPS2GSContext& GetGSContext();
 
 /// graph_vram_allocate + VRAM usage bookkeeping. Returns word address, or < 0 when full.
-[[nodiscard]] int AllocateVram(int width, int height, int psm, int alignment);
+[[nodiscard]] int AllocateVram(int Width, int Height, int Psm, int Alignment);
 
 } // namespace Leon::PS2

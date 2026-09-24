@@ -14,13 +14,13 @@ public:
 	FPS2Texture(FPS2Texture&& Other) noexcept;
 	FPS2Texture& operator=(FPS2Texture&& Other) noexcept;
 
-	static FPS2Texture Create(int width, int height, const unsigned char* rgba);
+	static FPS2Texture Create(int InWidth, int InHeight, const unsigned char* Rgba);
 
 	/** Content name: T_Checker_D */
-	static FPS2Texture CreateChecker(int size = 64);
+	static FPS2Texture CreateChecker(int Size = 64);
 
 	/** Content name: T_Grid_D */
-	static FPS2Texture CreateGrid(int size = 64);
+	static FPS2Texture CreateGrid(int Size = 64);
 
 	void Destroy();
 	bool Valid() const;
@@ -28,35 +28,35 @@ public:
 	/** Binds TEX0 / sampling for subsequent textured draws. */
 	void Bind() const;
 
-	int Width() const
+	int GetWidth() const
 	{
-		return width_;
+		return Width;
 	}
 
-	int Height() const
+	int GetHeight() const
 	{
-		return height_;
+		return Height;
 	}
 
-	int VramAddress() const
+	int GetVramAddress() const
 	{
-		return vramAddress_;
+		return VramAddress;
 	}
 
 private:
-	explicit FPS2Texture(int width, int height, int vramAddress, int bufferWidth)
-		: width_(width)
-		, height_(height)
-		, vramAddress_(vramAddress)
-		, bufferWidth_(bufferWidth)
+	explicit FPS2Texture(int InWidth, int InHeight, int InVramAddress, int InBufferWidth)
+		: Width(InWidth)
+		, Height(InHeight)
+		, VramAddress(InVramAddress)
+		, BufferWidth(InBufferWidth)
 	{
 	}
 
 	/** `rgba` must be 16-byte aligned. Uploads to VRAM; does not free `rgba`. */
-	static FPS2Texture CreateFromAlignedRgba(int width, int height, unsigned char* rgba);
+	static FPS2Texture CreateFromAlignedRgba(int InWidth, int InHeight, unsigned char* Rgba);
 
-	int width_ = 0;
-	int height_ = 0;
-	int vramAddress_ = 0;
-	int bufferWidth_ = 0;
+	int Width = 0;
+	int Height = 0;
+	int VramAddress = 0;
+	int BufferWidth = 0;
 };

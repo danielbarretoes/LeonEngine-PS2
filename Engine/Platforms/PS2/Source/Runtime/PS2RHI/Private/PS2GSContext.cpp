@@ -5,28 +5,28 @@
 namespace Leon::PS2 {
 
 float FPS2GSContext::OriginX() const {
-    return 2048.0f - (static_cast<float>(frame.width) * 0.5f);
+    return 2048.0f - (static_cast<float>(Frame.width) * 0.5f);
 }
 
 float FPS2GSContext::OriginY() const {
-    return 2048.0f - (static_cast<float>(frame.height) * 0.5f);
+    return 2048.0f - (static_cast<float>(Frame.height) * 0.5f);
 }
 
 FPS2GSContext& GetGSContext() {
-    static FPS2GSContext context{};
-    return context;
+    static FPS2GSContext Context{};
+    return Context;
 }
 
-int AllocateVram(int width, int height, int psm, int alignment) {
-    const int address = graph_vram_allocate(width, height, psm, alignment);
-    if (address >= 0) {
-        const int end = address + graph_vram_size(width, height, psm, alignment);
-        FPS2GSContext& gs = GetGSContext();
-        if (end > gs.vramEndWords) {
-            gs.vramEndWords = end;
+int AllocateVram(int Width, int Height, int Psm, int Alignment) {
+    const int Address = graph_vram_allocate(Width, Height, Psm, Alignment);
+    if (Address >= 0) {
+        const int End = Address + graph_vram_size(Width, Height, Psm, Alignment);
+        FPS2GSContext& Gs = GetGSContext();
+        if (End > Gs.VramEndWords) {
+            Gs.VramEndWords = End;
         }
     }
-    return address;
+    return Address;
 }
 
 } // namespace Leon::PS2

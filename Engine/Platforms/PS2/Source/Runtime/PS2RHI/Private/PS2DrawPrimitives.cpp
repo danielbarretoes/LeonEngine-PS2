@@ -15,181 +15,181 @@ namespace {
 
 #pragma pack(push, 1)
 struct Ps2MeshHeader {
-    char magic[4]; // LPS2
-    std::uint32_t version;
-    std::uint32_t vertexCount;
-    std::uint32_t indexCount;
+    char Magic[4]; // LPS2
+    std::uint32_t Version;
+    std::uint32_t VertexCount;
+    std::uint32_t IndexCount;
 };
 #pragma pack(pop)
 
 
-void FillVertex(vertex_t& out, float x, float y) {
-    out.x = x;
-    out.y = y;
-    out.z = 0;
+void FillVertex(vertex_t& Out, float X, float Y) {
+    Out.x = X;
+    Out.y = Y;
+    Out.z = 0;
 }
 
-void FillColor(color_t& out, float r, float g, float b) {
-    out.r = static_cast<unsigned char>(static_cast<int>(r * 255.0f) & 0xFF);
-    out.g = static_cast<unsigned char>(static_cast<int>(g * 255.0f) & 0xFF);
-    out.b = static_cast<unsigned char>(static_cast<int>(b * 255.0f) & 0xFF);
-    out.a = 0x80;
-    out.q = 1.0f;
+void FillColor(color_t& Out, float R, float G, float B) {
+    Out.r = static_cast<unsigned char>(static_cast<int>(R * 255.0f) & 0xFF);
+    Out.g = static_cast<unsigned char>(static_cast<int>(G * 255.0f) & 0xFF);
+    Out.b = static_cast<unsigned char>(static_cast<int>(B * 255.0f) & 0xFF);
+    Out.a = 0x80;
+    Out.q = 1.0f;
 }
 
-[[nodiscard]] bool SubmitPacket(Leon::PS2::FPS2GSContext& gs, qword_t* end) {
-    if (gs.packet == nullptr || end <= gs.packet->data) {
+[[nodiscard]] bool SubmitPacket(Leon::PS2::FPS2GSContext& Gs, qword_t* End) {
+    if (Gs.Packet == nullptr || End <= Gs.Packet->data) {
         return false;
     }
-    dma_channel_send_normal(DMA_CHANNEL_GIF, gs.packet->data, end - gs.packet->data, 0, 0);
+    dma_channel_send_normal(DMA_CHANNEL_GIF, Gs.Packet->data, End - Gs.Packet->data, 0, 0);
     dma_wait_fast();
     draw_wait_finish();
     return true;
 }
 
-[[nodiscard]] bool IsDisplayReady(const Leon::PS2::FPS2GSContext& gs) {
-    return gs.ready && gs.packet != nullptr && gs.frame.width > 0;
+[[nodiscard]] bool IsDisplayReady(const Leon::PS2::FPS2GSContext& Gs) {
+    return Gs.bReady && Gs.Packet != nullptr && Gs.Frame.width > 0;
 }
 
-void RotatePoint(float centerX, float centerY, float lx, float ly, float cosA, float sinA,
-                 float& outX, float& outY) {
-    outX = centerX + lx * cosA - ly * sinA;
-    outY = centerY + lx * sinA + ly * cosA;
+void RotatePoint(float CenterX, float CenterY, float Lx, float Ly, float CosA, float SinA,
+                 float& OutX, float& OutY) {
+    OutX = CenterX + Lx * CosA - Ly * SinA;
+    OutY = CenterY + Lx * SinA + Ly * CosA;
 }
 
 
 } // namespace
 
 
-bool FPS2RHI::DrawUnlitTriangleAt(float centerX, float centerY, float size, unsigned angle256, float r,
-                            float g, float b) {
-    auto& gs = Leon::PS2::GetGSContext();
-    if (!IsDisplayReady(gs) || size <= 0.0f) {
+bool FPS2RHI::DrawUnlitTriangleAt(float CenterX, float CenterY, float Size, unsigned Angle256, float R,
+                            float G, float B) {
+    auto& Gs = Leon::PS2::GetGSContext();
+    if (!IsDisplayReady(Gs) || Size <= 0.0f) {
         return false;
     }
 
     // draw_triangle_filled adds +2048; with XYOFFSET at (2048-w/2, 2048-h/2),
     // drawable space is centered on (0,0).
-    const float cosA = FPlatformMath::Cos256(angle256);
-    const float sinA = FPlatformMath::Sin256(angle256);
+    const float CosA = FPlatformMath::Cos256(Angle256);
+    const float SinA = FPlatformMath::Sin256(Angle256);
 
-    float x0 = 0.0f;
-    float y0 = 0.0f;
-    float x1 = 0.0f;
-    float y1 = 0.0f;
-    float x2 = 0.0f;
-    float y2 = 0.0f;
-    RotatePoint(centerX, centerY, 0.0f, -size, cosA, sinA, x0, y0);
-    RotatePoint(centerX, centerY, -size * 0.9f, size * 0.75f, cosA, sinA, x1, y1);
-    RotatePoint(centerX, centerY, size * 0.9f, size * 0.75f, cosA, sinA, x2, y2);
+    float X0 = 0.0f;
+    float Y0 = 0.0f;
+    float X1 = 0.0f;
+    float Y1 = 0.0f;
+    float X2 = 0.0f;
+    float Y2 = 0.0f;
+    RotatePoint(CenterX, CenterY, 0.0f, -Size, CosA, SinA, X0, Y0);
+    RotatePoint(CenterX, CenterY, -Size * 0.9f, Size * 0.75f, CosA, SinA, X1, Y1);
+    RotatePoint(CenterX, CenterY, Size * 0.9f, Size * 0.75f, CosA, SinA, X2, Y2);
 
-    triangle_t tri{};
-    FillColor(tri.color, r, g, b);
-    FillVertex(tri.v0, x0, y0);
-    FillVertex(tri.v1, x1, y1);
-    FillVertex(tri.v2, x2, y2);
+    triangle_t Tri{};
+    FillColor(Tri.color, R, G, B);
+    FillVertex(Tri.v0, X0, Y0);
+    FillVertex(Tri.v1, X1, Y1);
+    FillVertex(Tri.v2, X2, Y2);
 
-    qword_t* q = gs.packet->data;
-    q = draw_triangle_filled(q, 0, &tri);
-    q = draw_finish(q);
-    return SubmitPacket(gs, q);
+    qword_t* Q = Gs.Packet->data;
+    Q = draw_triangle_filled(Q, 0, &Tri);
+    Q = draw_finish(Q);
+    return SubmitPacket(Gs, Q);
 }
 
-bool FPS2RHI::DrawUnlitRect(float x0, float y0, float x1, float y1, float r, float g, float b) {
-    auto& gs = Leon::PS2::GetGSContext();
-    if (!IsDisplayReady(gs)) {
+bool FPS2RHI::DrawUnlitRect(float X0, float Y0, float X1, float Y1, float R, float G, float B) {
+    auto& Gs = Leon::PS2::GetGSContext();
+    if (!IsDisplayReady(Gs)) {
         return false;
     }
-    if (x1 < x0) {
-        const float t = x0;
-        x0 = x1;
-        x1 = t;
+    if (X1 < X0) {
+        const float T = X0;
+        X0 = X1;
+        X1 = T;
     }
-    if (y1 < y0) {
-        const float t = y0;
-        y0 = y1;
-        y1 = t;
+    if (Y1 < Y0) {
+        const float T = Y0;
+        Y0 = Y1;
+        Y1 = T;
     }
 
-    rect_t rect{};
-    FillColor(rect.color, r, g, b);
-    FillVertex(rect.v0, x0, y0);
-    FillVertex(rect.v1, x1, y1);
+    rect_t Rect{};
+    FillColor(Rect.color, R, G, B);
+    FillVertex(Rect.v0, X0, Y0);
+    FillVertex(Rect.v1, X1, Y1);
 
-    qword_t* q = gs.packet->data;
+    qword_t* Q = Gs.Packet->data;
     // Overlay: ignore z so terrain cannot cover HUD / 2D chrome.
-    q = draw_disable_tests(q, 0, &gs.z);
-    q = draw_rect_filled(q, 0, &rect);
-    q = draw_enable_tests(q, 0, &gs.z);
-    q = draw_finish(q);
-    return SubmitPacket(gs, q);
+    Q = draw_disable_tests(Q, 0, &Gs.Z);
+    Q = draw_rect_filled(Q, 0, &Rect);
+    Q = draw_enable_tests(Q, 0, &Gs.Z);
+    Q = draw_finish(Q);
+    return SubmitPacket(Gs, Q);
 }
 
-bool FPS2RHI::DrawUnlitRectAlpha(float x0, float y0, float x1, float y1, float r, float g, float b,
-                           float alpha) {
-    auto& gs = Leon::PS2::GetGSContext();
-    if (!IsDisplayReady(gs)) {
+bool FPS2RHI::DrawUnlitRectAlpha(float X0, float Y0, float X1, float Y1, float R, float G, float B,
+                           float Alpha) {
+    auto& Gs = Leon::PS2::GetGSContext();
+    if (!IsDisplayReady(Gs)) {
         return false;
     }
-    if (x1 < x0) {
-        const float t = x0;
-        x0 = x1;
-        x1 = t;
+    if (X1 < X0) {
+        const float T = X0;
+        X0 = X1;
+        X1 = T;
     }
-    if (y1 < y0) {
-        const float t = y0;
-        y0 = y1;
-        y1 = t;
+    if (Y1 < Y0) {
+        const float T = Y0;
+        Y0 = Y1;
+        Y1 = T;
     }
-    alpha = alpha < 0.0f ? 0.0f : (alpha > 1.0f ? 1.0f : alpha);
+    Alpha = Alpha < 0.0f ? 0.0f : (Alpha > 1.0f ? 1.0f : Alpha);
 
-    rect_t rect{};
-    FillColor(rect.color, r, g, b);
+    rect_t Rect{};
+    FillColor(Rect.color, R, G, B);
     // GS alpha: 0x80 = 1.0. Keep >= 1 so ATEST (A != 0) never discards the sprite.
-    const int a = static_cast<int>(alpha * 128.0f + 0.5f);
-    rect.color.a = static_cast<unsigned char>(a < 1 ? 1 : a);
-    FillVertex(rect.v0, x0, y0);
-    FillVertex(rect.v1, x1, y1);
+    const int A = static_cast<int>(Alpha * 128.0f + 0.5f);
+    Rect.color.a = static_cast<unsigned char>(A < 1 ? 1 : A);
+    FillVertex(Rect.v0, X0, Y0);
+    FillVertex(Rect.v1, X1, Y1);
 
     // (Cs - Cd) * As + Cd. libdraw bakes PRIM.ABE from a global flag inside draw_rect_filled,
     // so enable it only around this sprite (everything else stays opaque).
-    blend_t blend{};
-    blend.color1 = BLEND_COLOR_SOURCE;
-    blend.color2 = BLEND_COLOR_DEST;
-    blend.alpha = BLEND_ALPHA_SOURCE;
-    blend.color3 = BLEND_COLOR_DEST;
-    blend.fixed_alpha = 0x80;
+    blend_t Blend{};
+    Blend.color1 = BLEND_COLOR_SOURCE;
+    Blend.color2 = BLEND_COLOR_DEST;
+    Blend.alpha = BLEND_ALPHA_SOURCE;
+    Blend.color3 = BLEND_COLOR_DEST;
+    Blend.fixed_alpha = 0x80;
 
-    qword_t* q = gs.packet->data;
-    q = draw_disable_tests(q, 0, &gs.z);
-    q = draw_alpha_blending(q, 0, &blend);
+    qword_t* Q = Gs.Packet->data;
+    Q = draw_disable_tests(Q, 0, &Gs.Z);
+    Q = draw_alpha_blending(Q, 0, &Blend);
     draw_enable_blending();
-    q = draw_rect_filled(q, 0, &rect);
+    Q = draw_rect_filled(Q, 0, &Rect);
     draw_disable_blending();
-    q = draw_enable_tests(q, 0, &gs.z);
-    q = draw_finish(q);
-    return SubmitPacket(gs, q);
+    Q = draw_enable_tests(Q, 0, &Gs.Z);
+    Q = draw_finish(Q);
+    return SubmitPacket(Gs, Q);
 }
 
 bool FPS2RHI::DrawUnlitTriangle() {
-    auto& gs = Leon::PS2::GetGSContext();
-    if (!IsDisplayReady(gs)) {
+    auto& Gs = Leon::PS2::GetGSContext();
+    if (!IsDisplayReady(Gs)) {
         return false;
     }
-    const float size = static_cast<float>(gs.frame.height) * 0.28f;
-    return FPS2RHI::DrawUnlitTriangleAt(0.0f, 0.0f, size, 0, 1.0f, 0.784f, 0.125f);
+    const float Size = static_cast<float>(Gs.Frame.height) * 0.28f;
+    return FPS2RHI::DrawUnlitTriangleAt(0.0f, 0.0f, Size, 0, 1.0f, 0.784f, 0.125f);
 }
 
-bool FPS2RHI::DrawCookedMesh(const void* data, unsigned size) {
-    if (data == nullptr || size < sizeof(Ps2MeshHeader)) {
+bool FPS2RHI::DrawCookedMesh(const void* Data, unsigned Size) {
+    if (Data == nullptr || Size < sizeof(Ps2MeshHeader)) {
         return false;
     }
-    Ps2MeshHeader header{};
-    std::memcpy(&header, data, sizeof(header));
-    if (std::memcmp(header.magic, "LPS2", 4) != 0 || header.version != 1) {
+    Ps2MeshHeader Header{};
+    std::memcpy(&Header, Data, sizeof(Header));
+    if (std::memcmp(Header.Magic, "LPS2", 4) != 0 || Header.Version != 1) {
         return false;
     }
-    if (header.vertexCount == 0) {
+    if (Header.VertexCount == 0) {
         return false;
     }
     // Full LPS2 vertex upload is not wired yet; keep a visible GS result for cook smoke.

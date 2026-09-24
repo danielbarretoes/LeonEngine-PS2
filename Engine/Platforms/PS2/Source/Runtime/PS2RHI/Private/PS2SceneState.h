@@ -13,7 +13,7 @@ struct FPS2SceneState {
     FPS2Material BoundMaterial{};
     /// Last TEX0 VRAM address bound this frame (-1 = none). Avoids redundant Bind().
     int BoundTextureVram = -1;
-    bool ViewDirty = true;
+    bool bViewDirty = true;
 };
 
 [[nodiscard]] FPS2SceneState& GetSceneState();

@@ -15,210 +15,210 @@
 namespace {
 
 
-[[nodiscard]] int NextPow2(int v) {
-    int p = 1;
-    while (p < v) {
-        p <<= 1;
+[[nodiscard]] int NextPow2(int V) {
+    int P = 1;
+    while (P < V) {
+        P <<= 1;
     }
-    return p;
+    return P;
 }
 
-void FillChecker(unsigned char* rgba, int size) {
-    for (int y = 0; y < size; ++y) {
-        for (int x = 0; x < size; ++x) {
-            const int cell = ((x >> 3) ^ (y >> 3)) & 1;
-            const unsigned char c = cell ? static_cast<unsigned char>(220) : static_cast<unsigned char>(40);
-            const int i = (y * size + x) * 4;
-            rgba[i + 0] = c;
-            rgba[i + 1] = c;
-            rgba[i + 2] = cell ? static_cast<unsigned char>(200) : static_cast<unsigned char>(50);
-            rgba[i + 3] = 255;
+void FillChecker(unsigned char* Rgba, int Size) {
+    for (int Y = 0; Y < Size; ++Y) {
+        for (int X = 0; X < Size; ++X) {
+            const int Cell = ((X >> 3) ^ (Y >> 3)) & 1;
+            const unsigned char C = Cell ? static_cast<unsigned char>(220) : static_cast<unsigned char>(40);
+            const int I = (Y * Size + X) * 4;
+            Rgba[I + 0] = C;
+            Rgba[I + 1] = C;
+            Rgba[I + 2] = Cell ? static_cast<unsigned char>(200) : static_cast<unsigned char>(50);
+            Rgba[I + 3] = 255;
         }
     }
 }
 
-void FillGrid(unsigned char* rgba, int size) {
-    for (int y = 0; y < size; ++y) {
-        for (int x = 0; x < size; ++x) {
-            const bool line = (x & 7) == 0 || (y & 7) == 0;
-            const int i = (y * size + x) * 4;
-            rgba[i + 0] = line ? static_cast<unsigned char>(70) : static_cast<unsigned char>(160);
-            rgba[i + 1] = line ? static_cast<unsigned char>(90) : static_cast<unsigned char>(170);
-            rgba[i + 2] = line ? static_cast<unsigned char>(80) : static_cast<unsigned char>(150);
-            rgba[i + 3] = 255;
+void FillGrid(unsigned char* Rgba, int Size) {
+    for (int Y = 0; Y < Size; ++Y) {
+        for (int X = 0; X < Size; ++X) {
+            const bool bLine = (X & 7) == 0 || (Y & 7) == 0;
+            const int I = (Y * Size + X) * 4;
+            Rgba[I + 0] = bLine ? static_cast<unsigned char>(70) : static_cast<unsigned char>(160);
+            Rgba[I + 1] = bLine ? static_cast<unsigned char>(90) : static_cast<unsigned char>(170);
+            Rgba[I + 2] = bLine ? static_cast<unsigned char>(80) : static_cast<unsigned char>(150);
+            Rgba[I + 3] = 255;
         }
     }
 }
 
-[[nodiscard]] bool UploadRgba(int vramAddress, int bufferWidth, int width, int height,
-                              void* rgbaAligned) {
-    packet_t* packet = packet_init(80, PACKET_NORMAL);
-    if (packet == nullptr) {
+[[nodiscard]] bool UploadRgba(int InVramAddress, int InBufferWidth, int InWidth, int InHeight,
+                              void* RgbaAligned) {
+    packet_t* LocalPacket = packet_init(80, PACKET_NORMAL);
+    if (LocalPacket == nullptr) {
         return false;
     }
-    qword_t* q = packet->data;
-    q = draw_texture_transfer(q, rgbaAligned, width, height, GS_PSM_32, vramAddress, bufferWidth);
-    q = draw_texture_flush(q);
-    dma_channel_send_chain(DMA_CHANNEL_GIF, packet->data, q - packet->data, 0, 0);
+    qword_t* Q = LocalPacket->data;
+    Q = draw_texture_transfer(Q, RgbaAligned, InWidth, InHeight, GS_PSM_32, InVramAddress, InBufferWidth);
+    Q = draw_texture_flush(Q);
+    dma_channel_send_chain(DMA_CHANNEL_GIF, LocalPacket->data, Q - LocalPacket->data, 0, 0);
     dma_wait_fast();
-    packet_free(packet);
+    packet_free(LocalPacket);
     return true;
 }
 
 packet_t*& BindPacketSlot() {
-    static packet_t* packet = nullptr;
-    return packet;
+    static packet_t* Packet = nullptr;
+    return Packet;
 }
 
 
 } // namespace
 
-FPS2Texture FPS2Texture::CreateFromAlignedRgba(int width, int height, unsigned char* rgba) {
-    if (!Leon::PS2::GetGSContext().ready || width <= 0 || height <= 0 || rgba == nullptr) {
+FPS2Texture FPS2Texture::CreateFromAlignedRgba(int InWidth, int InHeight, unsigned char* Rgba) {
+    if (!Leon::PS2::GetGSContext().bReady || InWidth <= 0 || InHeight <= 0 || Rgba == nullptr) {
         return {};
     }
-    const int bufW = NextPow2(width);
-    const int addr = Leon::PS2::AllocateVram(bufW, height, GS_PSM_32, GRAPH_ALIGN_BLOCK);
-    if (addr < 0) {
+    const int BufW = NextPow2(InWidth);
+    const int Addr = Leon::PS2::AllocateVram(BufW, InHeight, GS_PSM_32, GRAPH_ALIGN_BLOCK);
+    if (Addr < 0) {
         return {};
     }
-    if (!UploadRgba(addr, bufW, width, height, rgba)) {
+    if (!UploadRgba(Addr, BufW, InWidth, InHeight, Rgba)) {
         return {};
     }
-    return FPS2Texture(width, height, addr, bufW);
+    return FPS2Texture(InWidth, InHeight, Addr, BufW);
 }
 
 FPS2Texture::~FPS2Texture() {
     Destroy();
 }
 
-FPS2Texture::FPS2Texture(FPS2Texture&& other) noexcept
-    : width_(other.width_), height_(other.height_), vramAddress_(other.vramAddress_),
-      bufferWidth_(other.bufferWidth_) {
-    other.width_ = 0;
-    other.height_ = 0;
-    other.vramAddress_ = 0;
-    other.bufferWidth_ = 0;
+FPS2Texture::FPS2Texture(FPS2Texture&& Other) noexcept
+    : Width(Other.Width), Height(Other.Height), VramAddress(Other.VramAddress),
+      BufferWidth(Other.BufferWidth) {
+    Other.Width = 0;
+    Other.Height = 0;
+    Other.VramAddress = 0;
+    Other.BufferWidth = 0;
 }
 
-FPS2Texture& FPS2Texture::operator=(FPS2Texture&& other) noexcept {
-    if (this != &other) {
+FPS2Texture& FPS2Texture::operator=(FPS2Texture&& Other) noexcept {
+    if (this != &Other) {
         Destroy();
-        width_ = other.width_;
-        height_ = other.height_;
-        vramAddress_ = other.vramAddress_;
-        bufferWidth_ = other.bufferWidth_;
-        other.width_ = 0;
-        other.height_ = 0;
-        other.vramAddress_ = 0;
-        other.bufferWidth_ = 0;
+        Width = Other.Width;
+        Height = Other.Height;
+        VramAddress = Other.VramAddress;
+        BufferWidth = Other.BufferWidth;
+        Other.Width = 0;
+        Other.Height = 0;
+        Other.VramAddress = 0;
+        Other.BufferWidth = 0;
     }
     return *this;
 }
 
 void FPS2Texture::Destroy() {
-    if (vramAddress_ != 0) {
+    if (VramAddress != 0) {
         Leon::PS2::InvalidateBoundTexture();
     }
-    width_ = 0;
-    height_ = 0;
-    vramAddress_ = 0;
-    bufferWidth_ = 0;
+    Width = 0;
+    Height = 0;
+    VramAddress = 0;
+    BufferWidth = 0;
 }
 
 bool FPS2Texture::Valid() const {
-    return width_ > 0 && height_ > 0 && vramAddress_ > 0;
+    return Width > 0 && Height > 0 && VramAddress > 0;
 }
 
-FPS2Texture FPS2Texture::Create(int width, int height, const unsigned char* rgba) {
-    if (rgba == nullptr || width <= 0 || height <= 0) {
+FPS2Texture FPS2Texture::Create(int InWidth, int InHeight, const unsigned char* Rgba) {
+    if (Rgba == nullptr || InWidth <= 0 || InHeight <= 0) {
         return {};
     }
-    auto* aligned = static_cast<unsigned char*>(memalign(16, static_cast<size_t>(width * height * 4)));
-    if (aligned == nullptr) {
+    auto* Aligned = static_cast<unsigned char*>(memalign(16, static_cast<size_t>(InWidth * InHeight * 4)));
+    if (Aligned == nullptr) {
         return {};
     }
-    std::memcpy(aligned, rgba, static_cast<size_t>(width * height * 4));
-    FPS2Texture tex = CreateFromAlignedRgba(width, height, aligned);
-    free(aligned);
-    return tex;
+    std::memcpy(Aligned, Rgba, static_cast<size_t>(InWidth * InHeight * 4));
+    FPS2Texture Tex = CreateFromAlignedRgba(InWidth, InHeight, Aligned);
+    free(Aligned);
+    return Tex;
 }
 
-FPS2Texture FPS2Texture::CreateChecker(int size) {
-    if (size < 8) {
-        size = 8;
+FPS2Texture FPS2Texture::CreateChecker(int Size) {
+    if (Size < 8) {
+        Size = 8;
     }
-    auto* rgba = static_cast<unsigned char*>(memalign(16, static_cast<size_t>(size * size * 4)));
-    if (rgba == nullptr) {
+    auto* Rgba = static_cast<unsigned char*>(memalign(16, static_cast<size_t>(Size * Size * 4)));
+    if (Rgba == nullptr) {
         return {};
     }
-    FillChecker(rgba, size);
-    FPS2Texture tex = CreateFromAlignedRgba(size, size, rgba);
-    free(rgba);
-    return tex;
+    FillChecker(Rgba, Size);
+    FPS2Texture Tex = CreateFromAlignedRgba(Size, Size, Rgba);
+    free(Rgba);
+    return Tex;
 }
 
-FPS2Texture FPS2Texture::CreateGrid(int size) {
-    if (size < 8) {
-        size = 8;
+FPS2Texture FPS2Texture::CreateGrid(int Size) {
+    if (Size < 8) {
+        Size = 8;
     }
-    auto* rgba = static_cast<unsigned char*>(memalign(16, static_cast<size_t>(size * size * 4)));
-    if (rgba == nullptr) {
+    auto* Rgba = static_cast<unsigned char*>(memalign(16, static_cast<size_t>(Size * Size * 4)));
+    if (Rgba == nullptr) {
         return {};
     }
-    FillGrid(rgba, size);
-    FPS2Texture tex = CreateFromAlignedRgba(size, size, rgba);
-    free(rgba);
-    return tex;
+    FillGrid(Rgba, Size);
+    FPS2Texture Tex = CreateFromAlignedRgba(Size, Size, Rgba);
+    free(Rgba);
+    return Tex;
 }
 
 void FPS2Texture::Bind() const {
-    if (!Valid() || !Leon::PS2::GetGSContext().ready) {
+    if (!Valid() || !Leon::PS2::GetGSContext().bReady) {
         return;
     }
 
-    auto& scene = Leon::PS2::GetSceneState();
-    if (scene.BoundTextureVram == vramAddress_) {
+    auto& Scene = Leon::PS2::GetSceneState();
+    if (Scene.BoundTextureVram == VramAddress) {
         return;
     }
 
-    texbuffer_t texbuf{};
-    texbuf.width = bufferWidth_;
-    texbuf.psm = GS_PSM_32;
-    texbuf.address = vramAddress_;
-    texbuf.info.width = draw_log2(width_);
-    texbuf.info.height = draw_log2(height_);
+    texbuffer_t Texbuf{};
+    Texbuf.width = BufferWidth;
+    Texbuf.psm = GS_PSM_32;
+    Texbuf.address = VramAddress;
+    Texbuf.info.width = draw_log2(Width);
+    Texbuf.info.height = draw_log2(Height);
     // RGB: ignore texel alpha (ATEST NOTEQUAL 0 can punch holes with bad A).
-    texbuf.info.components = TEXTURE_COMPONENTS_RGB;
-    texbuf.info.function = TEXTURE_FUNCTION_MODULATE;
+    Texbuf.info.components = TEXTURE_COMPONENTS_RGB;
+    Texbuf.info.function = TEXTURE_FUNCTION_MODULATE;
 
-    lod_t lod{};
-    lod.calculation = LOD_USE_K;
-    lod.max_level = 0;
-    lod.mag_filter = LOD_MAG_LINEAR;
-    lod.min_filter = LOD_MIN_LINEAR;
-    lod.l = 0;
-    lod.k = 0;
+    lod_t Lod{};
+    Lod.calculation = LOD_USE_K;
+    Lod.max_level = 0;
+    Lod.mag_filter = LOD_MAG_LINEAR;
+    Lod.min_filter = LOD_MIN_LINEAR;
+    Lod.l = 0;
+    Lod.k = 0;
 
-    clutbuffer_t clut{};
-    clut.storage_mode = CLUT_STORAGE_MODE1;
-    clut.start = 0;
-    clut.psm = 0;
-    clut.load_method = CLUT_NO_LOAD;
-    clut.address = 0;
+    clutbuffer_t Clut{};
+    Clut.storage_mode = CLUT_STORAGE_MODE1;
+    Clut.start = 0;
+    Clut.psm = 0;
+    Clut.load_method = CLUT_NO_LOAD;
+    Clut.address = 0;
 
-    packet_t*& packet = BindPacketSlot();
-    if (packet == nullptr) {
-        packet = packet_init(16, PACKET_NORMAL);
-        if (packet == nullptr) {
+    packet_t*& LocalPacket = BindPacketSlot();
+    if (LocalPacket == nullptr) {
+        LocalPacket = packet_init(16, PACKET_NORMAL);
+        if (LocalPacket == nullptr) {
             return;
         }
     }
-    qword_t* q = packet->data;
-    q = draw_texture_sampling(q, 0, &lod);
-    q = draw_texturebuffer(q, 0, &texbuf, &clut);
-    dma_channel_send_normal(DMA_CHANNEL_GIF, packet->data, q - packet->data, 0, 0);
+    qword_t* Q = LocalPacket->data;
+    Q = draw_texture_sampling(Q, 0, &Lod);
+    Q = draw_texturebuffer(Q, 0, &Texbuf, &Clut);
+    dma_channel_send_normal(DMA_CHANNEL_GIF, LocalPacket->data, Q - LocalPacket->data, 0, 0);
     dma_wait_fast();
-    scene.BoundTextureVram = vramAddress_;
+    Scene.BoundTextureVram = VramAddress;
 }
 

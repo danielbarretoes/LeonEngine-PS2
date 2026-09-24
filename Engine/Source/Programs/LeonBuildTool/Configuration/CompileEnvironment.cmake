@@ -69,7 +69,8 @@ function(leon_apply_compile_environment Target CxxStandard)
 			/we4456 /we4457 /we4458 /we4459
 			$<$<CONFIG:Debug,RelWithDebInfo>:/FS>)
 	elseif(LEON_PLATFORM STREQUAL "PS2")
-		target_compile_options(${Target} PRIVATE -Wall -Wextra)
+		# Shadowing is an error like on MSVC (UE: ShadowVariableWarningLevel = Error).
+		target_compile_options(${Target} PRIVATE -Wall -Wextra -Werror=shadow)
 	else()
 		target_compile_options(${Target} PRIVATE -Wall -Wextra -Wpedantic)
 	endif()
