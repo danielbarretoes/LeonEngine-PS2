@@ -33,7 +33,13 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Third-party CMake files that still declare cmake_minimum_required(< 3.5) (CMake 4 removed them).
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
-project(LeonBuild LANGUAGES C CXX)
+# Solution / build tree name: the project's name for game builds, LeonEngine otherwise (UE: UE4.sln / <Game>.sln).
+if(LEON_PROJECT_FILE)
+	get_filename_component(_LeonSolutionName "${LEON_PROJECT_FILE}" NAME_WE)
+else()
+	set(_LeonSolutionName LeonEngine)
+endif()
+project(${_LeonSolutionName} LANGUAGES C CXX)
 
 include("${LEON_LBT_DIR}/Configuration/ModuleRules.cmake")
 include("${LEON_LBT_DIR}/Configuration/TargetRules.cmake")

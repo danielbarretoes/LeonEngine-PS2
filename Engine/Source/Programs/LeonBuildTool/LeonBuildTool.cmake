@@ -6,7 +6,7 @@
 #
 # Options:
 #   -Project=<file.leonproject>   build a game target of that project
-#   -Mode=Build|Clean|Rebuild|GenerateClangDatabase|Setup   (default Build)
+#   -Mode=Build|Clean|Rebuild|GenerateClangDatabase|GenerateProjectFiles|Setup   (default Build)
 #   -NoDocker                     never re-launch inside the platform's Docker image
 #   -KeepGoing                    keep compiling after errors (ninja -k 0), to see every error at once
 #
@@ -92,6 +92,38 @@ if(_Mode STREQUAL "Setup")
 			message(STATUS "LeonBuildTool: ${_Module} ready (${_Dir})")
 		endif()
 	endforeach()
+	return()
+endif()
+
+# --- GenerateProjectFiles: IDE solution for browsing / debugging (UE: GenerateProjectFiles.bat) ---
+# Configures every Win64 engine target (plus the project's, with -Project=) with the host's default
+# CMake generator (newest Visual Studio on Windows) into <Engine|Project>/Intermediate/ProjectFiles,
+# and refreshes the root compile_commands.json for clangd from the Ninja tree.
+if(_Mode STREQUAL "GenerateProjectFiles")
+	if(_ProjectFile)
+		get_filename_component(_ProjectFile "${_ProjectFile}" ABSOLUTE)
+		get_filename_component(_ProjectDir "${_ProjectFile}" DIRECTORY)
+		set(_ProjectFilesDir "${_ProjectDir}/Intermediate/ProjectFiles")
+	else()
+		set(_ProjectFilesDir "${LEON_ENGINE_DIR}/Intermediate/ProjectFiles")
+	endif()
+	if(CMAKE_HOST_WIN32)
+		set(_HostPlatform Win64)
+		set(_GeneratorArgs -A x64)
+	else()
+		set(_HostPlatform Linux)
+		set(_GeneratorArgs)
+	endif()
+	set(_ConfigureArgs -S "${LEON_LBT_DIR}" -B "${_ProjectFilesDir}" ${_GeneratorArgs}
+		"-DLEON_PLATFORM=${_HostPlatform}" "-DLEON_CONFIGURATION=Development")
+	if(_ProjectFile)
+		list(APPEND _ConfigureArgs "-DLEON_PROJECT_FILE=${_ProjectFile}")
+	endif()
+	execute_process(COMMAND "${CMAKE_COMMAND}" ${_ConfigureArgs} RESULT_VARIABLE _Result)
+	if(NOT _Result EQUAL 0)
+		message(FATAL_ERROR "LeonBuildTool: project file generation failed")
+	endif()
+	message(STATUS "LeonBuildTool: project files in ${_ProjectFilesDir}")
 	return()
 endif()
 
