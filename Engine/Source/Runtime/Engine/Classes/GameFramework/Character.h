@@ -21,7 +21,7 @@ enum class EMovementMode : std::uint8_t {
 };
 
 /// Unreal-like FFindFloorResult (CMC floor query).
-struct FFindFloorResult {
+struct ENGINE_API FFindFloorResult {
     bool bBlockingHit = false;
     bool bWalkableFloor = false;
     /// Distance from capsule feet down to floor ImpactPoint.y (>= 0 when hit below/at feet).
@@ -30,7 +30,7 @@ struct FFindFloorResult {
 };
 
 /// Unreal-like UCharacterMovementComponent tunables (PascalCase Unreal-like field names).
-struct UCharacterMovementComponent {
+struct ENGINE_API UCharacterMovementComponent {
     /// Unreal MaxWalkSpeed.
     float MaxWalkSpeed = 4.5f;
     /// Unreal JumpZVelocity.
@@ -61,7 +61,7 @@ struct UCharacterMovementComponent {
 /// - Capsule extends upward by FCapsuleShape::height; XZ radius FCapsuleShape::radius.
 /// - Not registered as a FPhysScene FBodyInstance; moves via PerformMovement queries.
 /// - Modes: Walking / Falling via SetMovementMode; floor via FindFloor → IsWalkable.
-class ACharacter : public APawn {
+class ENGINE_API ACharacter : public APawn {
 public:
     ACharacter();
 
@@ -119,7 +119,7 @@ public:
     virtual float TakeDamage(float DamageAmount);
     virtual void Die();
     void Revive(float NewHealth);
-    [[nodiscard]] bool IsAlive() const { return bAlive_; }
+    [[nodiscard]] bool IsAlive() const { return bAlive; }
 
     void Reset(const glm::vec3& Location, float YawDegrees = 0.0f);
     void AddMovementInput(const glm::vec3& WishDirXz);
@@ -175,7 +175,7 @@ private:
     float AnimBlendInput = 0.0f;
     float Health = 100.0f;
     float MaxHealth = 100.0f;
-    bool bAlive_ = true;
+    bool bAlive = true;
 
     glm::vec3 WishDir{0.0f};
     float VelocityY = 0.0f;

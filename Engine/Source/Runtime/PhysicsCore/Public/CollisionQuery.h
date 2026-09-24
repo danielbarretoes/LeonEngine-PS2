@@ -25,7 +25,7 @@ enum class EDrawDebugTrace : std::uint8_t {
 };
 
 /// Unreal-like FHitResult for FPhysScene traces.
-struct FHitResult {
+struct PHYSICSCORE_API FHitResult {
     bool bBlockingHit = false;
     /// Normalized distance along [Start, End] in [0, 1].
     float Time = 1.0f;
@@ -44,7 +44,7 @@ struct FHitResult {
 };
 
 /// Unreal-like FCollisionQueryParams.
-struct FCollisionQueryParams {
+struct PHYSICSCORE_API FCollisionQueryParams {
     std::size_t SkipLevelMeshIndex = (std::numeric_limits<std::size_t>::max)();
     /// Include an infinite horizontal floor at FloorY (UCharacterMovementComponent floor).
     bool bTraceFloorPlane = false;

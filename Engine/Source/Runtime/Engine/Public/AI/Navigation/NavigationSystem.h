@@ -19,7 +19,7 @@ inline constexpr const char* Walkable = "NavWalkable";
 
 /// Unreal-like UNavigationSystem lite: bake a grid NavMesh from static FPhysScene bodies,
 /// then FindPath for AAIController. Not Recast/Detour — swap-compatible later.
-class UNavigationSystem {
+class ENGINE_API UNavigationSystem {
 public:
     /// Cell size / agent radius used when baking (defaults ~ character capsule radius).
     void SetCellSize(float Meters) { CellSize = Meters > 0.05f ? Meters : 0.05f; }

@@ -17,7 +17,7 @@ enum class EUISound : std::uint8_t {
 
 /// Unreal-like audio subsystem (UAudioDevice / UGameplayStatics PlaySound lite).
 /// Backed by miniaudio. Safe no-op when Initialize fails or headless silent mode.
-class FAudioDevice {
+class AUDIOMIXER_API FAudioDevice {
 public:
     FAudioDevice();
     ~FAudioDevice();

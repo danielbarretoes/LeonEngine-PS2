@@ -7,7 +7,7 @@
 
 
 /// Unreal-like UTextBlock: simple screen text (status lines, titles).
-class UTextBlock : public UUserWidget {
+class UMG_API UTextBlock : public UUserWidget {
 public:
     void SetText(std::string InText) { Text = std::move(InText); }
     [[nodiscard]] const std::string& GetText() const { return Text; }

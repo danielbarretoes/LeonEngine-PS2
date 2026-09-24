@@ -17,7 +17,7 @@ class FPhysScene;
 
 /// Unreal-like Spring Arm / Camera Boom (USceneComponent) with optional camera lag,
 /// rotation lag, smoothed arm length, and collision probe (sphere sweep).
-class USpringArmComponent : public USceneComponent {
+class ENGINE_API USpringArmComponent : public USceneComponent {
 public:
     /// Desired boom length (scroll edits this; lag follows toward it).
     float TargetArmLength = 4.0f;

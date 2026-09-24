@@ -18,7 +18,7 @@ class UWorld;
 /// Unreal-style Actor (no A-prefix): owns a root USceneComponent and optional Level mesh link.
 ///
 /// ## Transforms
-/// `location_` / `yawDegrees_` are the gameplay pose written to Level meshes via
+/// `Location` / `YawDegrees` are the gameplay pose written to Level meshes via
 /// `SyncTransformToLevel`. The root `USceneComponent` may add `Relative*` offsets on top
 /// (`GetComponentTransform`). Prefer setting Actor location/yaw for pawn movement; keep root
 /// Relative near identity unless you intentionally offset the visual.
@@ -32,7 +32,7 @@ class UWorld;
 /// `SyncTransformToLevel` writes Actor location/yaw into that mesh each gameplay frame
 /// (`World::TickGameplayFrame`). Skeletal visuals use SceneComponents (`GetMesh`), not Level
 /// meshes.
-class AActor {
+class ENGINE_API AActor {
 public:
     virtual ~AActor();
 

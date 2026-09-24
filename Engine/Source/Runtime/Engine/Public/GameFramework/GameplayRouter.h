@@ -9,7 +9,7 @@
 
 /// Picks the GameMode for the active level (Unreal-style GameMode Override).
 /// Levels may set `"gameMode": "<id>"`. Empty → default mode.
-class FGameplayRouter {
+class ENGINE_API FGameplayRouter {
 public:
     void AddMode(std::unique_ptr<AGameModeBase> Mode);
 

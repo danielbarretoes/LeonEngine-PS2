@@ -8,7 +8,7 @@
 class FResourceCache;
 
 /// Parsed `.lmat` for authoring (paths kept as strings; maps not required).
-struct FLeonMaterialDocument {
+struct RENDERER_API FLeonMaterialDocument {
     std::string Name = "Material";
     FMaterial Material{};
     std::string BaseColorMapPath;

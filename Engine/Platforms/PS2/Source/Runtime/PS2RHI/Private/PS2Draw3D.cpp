@@ -117,7 +117,7 @@ void BuildDirectionalRay(VECTOR OutDirection, unsigned Yaw256, unsigned Pitch256
 // --- Homogeneous clipping -------------------------------------------------------------------
 // The GS has no clipper and math3d gives W = -Z_eye. draw_convert_xyz maps NDC ±1 onto the
 // whole 0..4096 GS coordinate range, while the 640×448 screen only spans ~±0.16 × ±0.11 NDC.
-// So: clip against the near plane and a ±kGuard band (keeps XYZ2 in range), trivially reject
+// So: clip against the near plane and a ±Guard band (keeps XYZ2 in range), trivially reject
 // against the visible frustum, and let the GS scissor trim the rest. No triangle is dropped
 // just because one vertex is off-screen or behind the camera.
 constexpr float NearW = 1.0f; // = create_view_screen near
@@ -194,7 +194,7 @@ struct VisibleExtents {
     return Code;
 }
 
-/// Signed distance to clip plane p (inside when >= 0). Order matches kOutClipMask bits.
+/// Signed distance to clip plane p (inside when >= 0). Order matches OutClipMask bits.
 [[nodiscard]] float PlaneDistance(const ClipVertex& V, int Plane) {
     switch (Plane) {
     case 0:
@@ -227,7 +227,7 @@ constexpr unsigned PlaneBit[5] = {OutNear, OutGuardXPos, OutGuardXNeg, OutGuardY
     return O;
 }
 
-/// Sutherland–Hodgman against the planes in `planes` (kOutClipMask bits). Returns vertex count.
+/// Sutherland–Hodgman against the planes in `planes` (OutClipMask bits). Returns vertex count.
 [[nodiscard]] int ClipPolygon(ClipVertex* Poly, int Count, unsigned Planes) {
     ClipVertex Scratch[MaxPolyVerts];
     ClipVertex* In = Poly;

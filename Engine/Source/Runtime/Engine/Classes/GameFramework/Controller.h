@@ -6,7 +6,7 @@
 class ACharacter;
 
 /// Drives a possessed Pawn (Unreal-style Controller).
-class AController {
+class ENGINE_API AController {
 public:
     virtual ~AController();
 

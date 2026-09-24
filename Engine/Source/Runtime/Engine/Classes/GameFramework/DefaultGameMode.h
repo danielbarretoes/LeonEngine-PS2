@@ -9,7 +9,7 @@
 
 /// Fallback GameMode when a level has no `gameMode` override (Unreal default GameMode).
 /// Spawns and possesses `ADefaultCameraActor` as the default pawn (free-look fly).
-class ADefaultGameMode final : public AGameModeBase {
+class ENGINE_API ADefaultGameMode final : public AGameModeBase {
 public:
     [[nodiscard]] const char* Id() const override { return "Default"; }
 

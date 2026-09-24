@@ -8,7 +8,7 @@
 class UCameraComponent;
 
 /// Shared party-fighter / arena framing: fixed yaw/pitch orbit that pulls back with separation.
-struct FArenaCameraParams {
+struct ENGINE_API FArenaCameraParams {
     float FixedYawDegrees = 25.f;
     float FixedPitchDegrees = 45.f;
     float MinDistance = 10.f;
@@ -20,7 +20,7 @@ struct FArenaCameraParams {
     float LagSpeed = 8.f;
 };
 
-struct FArenaCameraState {
+struct ENGINE_API FArenaCameraState {
     glm::vec3 Target{0};
     float Distance = 16.f;
 };

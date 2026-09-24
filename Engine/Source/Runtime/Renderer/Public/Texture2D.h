@@ -6,7 +6,7 @@
 
 
 /// 2D GPU texture (RGBA8).
-class UTexture2D {
+class RENDERER_API UTexture2D {
 public:
     UTexture2D() = default;
     ~UTexture2D();

@@ -8,7 +8,7 @@
 class ADefaultCameraActor;
 
 /// APlayerController for `ADefaultCameraActor`: fly along look (Move*) + world up (MoveUp).
-class ADefaultPlayerController final : public APlayerController {
+class ENGINE_API ADefaultPlayerController final : public APlayerController {
 public:
     [[nodiscard]] ADefaultCameraActor* GetDefaultCameraActor() const;
 

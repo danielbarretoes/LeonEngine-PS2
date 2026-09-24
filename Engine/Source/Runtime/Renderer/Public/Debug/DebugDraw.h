@@ -9,7 +9,7 @@
 
 
 /// Immediate-mode colored line batch for 3D debug (AABBs, light frustum, etc.).
-class FDebugDraw {
+class RENDERER_API FDebugDraw {
 public:
     bool Initialize(const std::string& ShaderDirectory);
     void Shutdown();

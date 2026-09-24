@@ -15,7 +15,7 @@ enum class EBTNodeResult : std::uint8_t {
     Running = 2,
 };
 
-class UBlackboardComponent {
+class AIMODULE_API UBlackboardComponent {
 public:
     void SetBool(const std::string& InKey, bool bValue) { Bools[InKey] = bValue; }
     void SetFloat(const std::string& InKey, float Value) { Floats[InKey] = Value; }
@@ -46,13 +46,13 @@ private:
     std::unordered_map<std::string, int> Ints;
 };
 
-struct UBTNode {
+struct AIMODULE_API UBTNode {
     virtual ~UBTNode() = default;
     virtual EBTNodeResult Tick(UBlackboardComponent& InBoard, float DeltaTime) = 0;
 };
 
 /// Run children in order until one fails (Unreal Sequence).
-class UBTComposite_Sequence final : public UBTNode {
+class AIMODULE_API UBTComposite_Sequence final : public UBTNode {
 public:
     explicit UBTComposite_Sequence(std::vector<UBTNode*> InChildren) : Children(std::move(InChildren)) {}
     EBTNodeResult Tick(UBlackboardComponent& InBoard, float DeltaTime) override {
@@ -73,7 +73,7 @@ private:
 };
 
 /// Run children until one succeeds (Unreal Selector).
-class UBTComposite_Selector final : public UBTNode {
+class AIMODULE_API UBTComposite_Selector final : public UBTNode {
 public:
     explicit UBTComposite_Selector(std::vector<UBTNode*> InChildren) : Children(std::move(InChildren)) {}
     EBTNodeResult Tick(UBlackboardComponent& InBoard, float DeltaTime) override {
@@ -94,7 +94,7 @@ private:
 };
 
 /// Leaf: succeed when blackboard bool is true.
-class UBTDecorator_Bool final : public UBTNode {
+class AIMODULE_API UBTDecorator_Bool final : public UBTNode {
 public:
     UBTDecorator_Bool(std::string InKey, bool bInExpected = true)
         : Key(std::move(InKey)), bExpected(bInExpected) {}
@@ -108,7 +108,7 @@ private:
 };
 
 /// Leaf: invoke a callback (Succeeded/Failed/Running).
-class UBTTask_Action final : public UBTNode {
+class AIMODULE_API UBTTask_Action final : public UBTNode {
 public:
     using FTaskFunction = std::function<EBTNodeResult(UBlackboardComponent&, float)>;
     explicit UBTTask_Action(FTaskFunction InFn) : Fn(std::move(InFn)) {}
@@ -121,7 +121,7 @@ private:
 };
 
 /// Owns a root node pointer (non-owning children — caller owns node storage).
-class UBehaviorTree {
+class AIMODULE_API UBehaviorTree {
 public:
     void SetRoot(UBTNode* InRoot) { Root = InRoot; }
     [[nodiscard]] UBTNode* GetRoot() const { return Root; }

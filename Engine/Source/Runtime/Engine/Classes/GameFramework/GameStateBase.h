@@ -10,7 +10,7 @@ class APlayerState;
 
 /// Shared match/session state (Unreal-style `AGameStateBase` / `AGameState`).
 /// Owned by GameMode; replicated fields are advanced by the net GameMode on authority.
-class AGameStateBase {
+class ENGINE_API AGameStateBase {
 public:
     AGameStateBase() = default;
     virtual ~AGameStateBase() = default;

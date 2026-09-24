@@ -6,7 +6,7 @@
 
 
 /// Full-res SSAO ping-pong targets (R16F).
-class FSSAOTarget {
+class RENDERER_API FSSAOTarget {
 public:
     FSSAOTarget() = default;
     ~FSSAOTarget();
@@ -41,7 +41,7 @@ enum class EPostProcessQuality : std::uint8_t {
     High = 3,
 };
 
-struct FPostProcessSettings {
+struct RENDERER_API FPostProcessSettings {
     bool bEnabled = true;
     /// Default: Low — light SSAO, no FXAA, 1024 shadows (good for editor / mid PCs).
     EPostProcessQuality Quality = EPostProcessQuality::Low;

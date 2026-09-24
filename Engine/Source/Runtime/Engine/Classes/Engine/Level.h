@@ -30,7 +30,7 @@ enum class EComponentMobility : std::uint8_t {
 ///   2) material if materialOverride (asset / JSON override replaced MTL)
 ///   3) mesh MTL materials
 ///   4) material (engine default checker when procedural mesh has no MTL)
-struct UStaticMeshComponent {
+struct ENGINE_API UStaticMeshComponent {
     FTransform Transform;
     std::shared_ptr<UStaticMesh> Mesh;
     FMaterial Material;
@@ -95,14 +95,14 @@ struct UStaticMeshComponent {
 };
 
 /// Unreal-like FPlayerStart — spawn transform for GameMode-possessed pawns (not a drawable mesh).
-struct FPlayerStart {
+struct ENGINE_API FPlayerStart {
     FTransform Transform{};
     /// Session-stable editor selection id (0 = unassigned). Not serialized.
     std::uint64_t EditorId = 0;
 };
 
 /// Interact / trigger volume (POD). Overlap tested in gameplay from position + interactRadius.
-struct FTriggerVolume {
+struct ENGINE_API FTriggerVolume {
     FTransform Transform{};
     float InteractRadius = 2.f;
     int InteractCost = 0;
@@ -113,7 +113,7 @@ struct FTriggerVolume {
 };
 
 /// Damage volume (POD). AABB from transform.position and abs(scale) * 0.5.
-struct FPainCausingVolume {
+struct ENGINE_API FPainCausingVolume {
     FTransform Transform{}; // position + scale as half-extents box (full size = abs(scale))
     float DamagePerSecond = 12.f;
     float DamageInterval = 0.35f;
@@ -122,7 +122,7 @@ struct FPainCausingVolume {
 };
 
 /// AI spawn marker (POD — not a drawable mesh).
-struct FAISpawnPoint {
+struct ENGINE_API FAISpawnPoint {
     FTransform Transform{};
     std::string Tag;
     std::uint64_t EditorId = 0;
@@ -130,7 +130,7 @@ struct FAISpawnPoint {
 
 /// Map content container (Unreal-style Level / ULevel): StaticMeshComponents + lights + env.
 /// Distinct from gameplay `World` (spawned Actors). The app owns contents; FSceneRenderer reads them.
-class ULevel {
+class ENGINE_API ULevel {
 public:
     UStaticMeshComponent& AddStaticMesh(UStaticMeshComponent Component);
     FPlayerStart& AddPlayerStart(FPlayerStart Start);

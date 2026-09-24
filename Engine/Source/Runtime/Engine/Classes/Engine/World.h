@@ -15,7 +15,7 @@ class FDebugDraw;
 class ULevel;
 class FSceneRenderer;
 
-struct FWorldGameplayFrameParams {
+struct ENGINE_API FWorldGameplayFrameParams {
     float DeltaTime = 0.0f;
     ULevel* Level = nullptr;
     FSceneRenderer* Renderer = nullptr;
@@ -32,7 +32,7 @@ struct FWorldGameplayFrameParams {
 
 /// Owns spawned Actors + FPhysScene; ticks them and purges pending kills.
 /// Distinct from `Level` (map/visual content ≈ ULevel).
-class UWorld {
+class ENGINE_API UWorld {
 public:
     explicit UWorld(EPhysicsBackend PhysicsBackend = DefaultPhysicsBackend())
         : Physics(PhysicsBackend) {}

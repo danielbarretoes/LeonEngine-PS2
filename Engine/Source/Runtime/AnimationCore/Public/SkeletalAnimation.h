@@ -15,7 +15,7 @@ class USkeletalMeshComponent;
 constexpr int MaxSkinBones = 96;
 constexpr int MaxBoneInfluences = 4;
 
-struct FSkeletalVertex {
+struct ANIMATIONCORE_API FSkeletalVertex {
     glm::vec3 Position{};
     glm::vec3 Normal{0.0f, 1.0f, 0.0f};
     glm::vec2 TexCoord{};
@@ -24,7 +24,7 @@ struct FSkeletalVertex {
     glm::vec4 BoneWeights{0.0f};
 };
 
-struct USkeleton {
+struct ANIMATIONCORE_API USkeleton {
     std::vector<std::string> BoneNames;
     std::vector<int> ParentIndices;         // -1 = root
     std::vector<glm::mat4> InverseBindPose; // cluster geometry_to_bone
@@ -35,7 +35,7 @@ struct USkeleton {
 
 /// Unreal-like UAnimSequence: per-frame bone matrices as model-space `node_to_world`
 /// at sample time. Skin matrix = boneWorld * geometry_to_bone (inverse bind).
-struct UAnimSequence {
+struct ANIMATIONCORE_API UAnimSequence {
     std::string Name;
     float DurationSeconds = 1.0f;
     float FramesPerSecond = 30.0f;
@@ -52,13 +52,13 @@ struct UAnimSequence {
 };
 
 /// Unreal-like UBlendSpace1D sample (UAnimSequence + axis position).
-struct FBlendSample {
+struct ANIMATIONCORE_API FBlendSample {
     const UAnimSequence* Sequence = nullptr;
     float Position = 0.0f;
 };
 
 /// Unreal-like UBlendSpace1D: blends adjacent samples along one axis (e.g. Speed).
-struct UBlendSpace1D {
+struct ANIMATIONCORE_API UBlendSpace1D {
     std::string Name = "BlendSpace1D";
     float AxisMin = 0.0f;
     float AxisMax = 1.0f;
@@ -79,7 +79,7 @@ struct UBlendSpace1D {
 };
 
 /// Jump / fall / land clips layered over locomotion (Unreal AnimBP overlay).
-struct FAnimJumpClips {
+struct ANIMATIONCORE_API FAnimJumpClips {
     const UAnimSequence* JumpStart = nullptr;
     const UAnimSequence* FallLoop = nullptr;
     const UAnimSequence* Land = nullptr;
@@ -95,7 +95,7 @@ enum class EAnimJumpState : std::uint8_t {
 
 /// Unreal-like UAnimInstance base: UBlendSpace1D locomotion only (no jump SM).
 /// Pack / Character subclasses add game-specific graphs via `NativeInitializeAnimation`.
-class UAnimInstance {
+class ANIMATIONCORE_API UAnimInstance {
 public:
     UAnimInstance() = default;
     virtual ~UAnimInstance() = default;
@@ -155,7 +155,7 @@ private:
 };
 
 /// Framework Character AnimBP: locomotion UBlendSpace1D + Jump/Fall/Land SM (rates pack-tuned).
-class UCharacterAnimInstance : public UAnimInstance {
+class ANIMATIONCORE_API UCharacterAnimInstance : public UAnimInstance {
 public:
     void SetJumpClips(const FAnimJumpClips& Clips) { JumpClips = Clips; }
 
@@ -218,7 +218,7 @@ private:
     bool bJumpRequested = false;
 };
 
-struct FSkeletalMeshData {
+struct ANIMATIONCORE_API FSkeletalMeshData {
     USkeleton Skeleton;
     std::vector<FSkeletalVertex> Vertices;
     std::vector<std::uint32_t> Indices;

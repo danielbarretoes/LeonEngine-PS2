@@ -10,7 +10,7 @@ class FGenericWindow;
 
 /// Unreal-like vertical text menu (UMG ListView lite): arrows / Enter / click.
 /// Add via HUD::AddWidget; call TickInput each frame from GameMode.
-class UMenuListWidget : public UUserWidget {
+class UMG_API UMenuListWidget : public UUserWidget {
 public:
     struct FItem {
         std::string Id;

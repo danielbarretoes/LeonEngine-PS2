@@ -10,7 +10,7 @@ class AActor;
 /// - Use `CreateDefaultSubobject<T>()` for heap-owned extras on the Actor.
 /// - `Level::StaticMeshComponent` remains a level POD — not an UActorComponent.
 /// - No reflection / Blueprint; no CreateDefaultSubobject name registry.
-class UActorComponent {
+class ENGINE_API UActorComponent {
 public:
     UActorComponent() = default;
     virtual ~UActorComponent();

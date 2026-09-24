@@ -6,7 +6,7 @@
 
 
 /// Double-buffered GL_TIME_ELAPSED queries so HUD reads last frame (no GPU stall).
-class FGPUPassTimer {
+class RENDERER_API FGPUPassTimer {
 public:
     enum class EPass : std::uint8_t {
         Shadow = 0,

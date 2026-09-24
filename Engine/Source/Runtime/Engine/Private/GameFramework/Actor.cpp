@@ -5,7 +5,7 @@
 
 AActor::~AActor() {
     // Members (root, Character mesh, …) destroy after this body. Clear registry first so
-    // component dtors do not touch a destroyed `components_` vector.
+    // component dtors do not touch a destroyed `Components` vector.
     for (UActorComponent* Component : Components) {
         if (Component != nullptr) {
             Component->bRegistered = false;

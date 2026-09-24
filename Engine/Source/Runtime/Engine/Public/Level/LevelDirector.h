@@ -11,7 +11,7 @@ class UGameEngine;
 
 /// Scans game levels, loads them into an Engine, and draws a bottom-right browser
 /// (`< name (i/n) >`). Switch with `[` / `]`, digit keys `1`–`9`, or mouse on the arrows.
-class FLevelDirector {
+class ENGINE_API FLevelDirector {
 public:
     bool Initialize(const std::string& ShaderDirectory);
     void Shutdown();

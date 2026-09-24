@@ -4,7 +4,7 @@
 
 
 /// Color+depth FBO for a horizontal planar mirror pass (typically half-res).
-class FPlanarReflection {
+class RENDERER_API FPlanarReflection {
 public:
     FPlanarReflection() = default;
     ~FPlanarReflection();

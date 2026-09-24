@@ -7,7 +7,7 @@
 
 
 /// Axis-aligned bounding box in world space.
-struct FBox {
+struct RENDERCORE_API FBox {
     glm::vec3 Min{0.0f};
     glm::vec3 Max{0.0f};
 
@@ -22,7 +22,7 @@ struct FBox {
 };
 
 /// View-projection frustum as 6 planes (inside = n·x + d >= 0).
-class FFrustum {
+class RENDERCORE_API FFrustum {
 public:
     void ExtractFromViewProjection(const glm::mat4& ViewProjection);
 

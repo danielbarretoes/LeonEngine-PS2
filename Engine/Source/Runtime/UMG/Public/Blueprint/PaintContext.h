@@ -9,7 +9,7 @@ class FDebugOverlay;
 
 /// Immediate screen-space draw for UUserWidget::NativePaint (pixel coords, top-left origin).
 /// Unreal analogy: FPaintContext / Slate draw elements (lite).
-class FPaintContext {
+class UMG_API FPaintContext {
 public:
     FPaintContext(FDebugOverlay& InOverlay, int FramebufferWidth, int FramebufferHeight)
         : Overlay(InOverlay), Width(FramebufferWidth), Height(FramebufferHeight) {}

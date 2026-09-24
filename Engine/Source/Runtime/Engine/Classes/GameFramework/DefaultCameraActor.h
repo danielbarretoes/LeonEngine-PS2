@@ -5,7 +5,7 @@
 
 /// Default possessed pawn for `ADefaultGameMode` (Unreal-like DefaultPawn / flying camera).
 /// Free-look: LMB aims, WASD flies along look direction, Q/E world vertical.
-class ADefaultCameraActor : public APawn {
+class ENGINE_API ADefaultCameraActor : public APawn {
 public:
     [[nodiscard]] float GetMoveSpeed() const { return MoveSpeed; }
     void SetMoveSpeed(float Speed) { MoveSpeed = Speed > 0.0f ? Speed : 0.0f; }

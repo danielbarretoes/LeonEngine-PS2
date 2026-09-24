@@ -15,7 +15,7 @@
 
 class FDebugDraw;
 
-struct FCapsuleContactParams {
+struct ENGINE_API FCapsuleContactParams {
     float PushStrength = 1.0f;
     float StepUp = 0.35f;
     float Skin = 0.02f;
@@ -24,14 +24,14 @@ struct FCapsuleContactParams {
 
 /// Inclined walkable/blocking surface for Arcade traces (CMC slope lite).
 /// FPlane through `point` with unit `normal`, clipped by world AABB bounds.
-struct FSlopePlane {
+struct ENGINE_API FSlopePlane {
     glm::vec3 Point{0.0f};
     glm::vec3 Normal{0.0f, 1.0f, 0.0f};
     glm::vec3 BoundsCenter{0.0f};
     glm::vec3 BoundsHalfExtents{1.0f, 1.0f, 1.0f};
 };
 
-struct FPhysSceneStepParams {
+struct ENGINE_API FPhysSceneStepParams {
     float DeltaTime = 0.0f;
     float Damping = 6.0f;
     float WalkBounds = 18.0f;
@@ -50,7 +50,7 @@ struct FPhysSceneStepParams {
 /// slope planes, and CMC side resolve stay Arcade.
 /// Body owns position + AABB; Level is synced explicitly.
 /// Implementation lives in Plugins/Physics/*; `IPhysicsBackend` is the swap seam.
-class FPhysScene {
+class ENGINE_API FPhysScene {
 public:
     explicit FPhysScene(EPhysicsBackend InBackend = DefaultPhysicsBackend());
 

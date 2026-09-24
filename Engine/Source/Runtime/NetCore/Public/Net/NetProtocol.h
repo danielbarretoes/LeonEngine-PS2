@@ -16,7 +16,7 @@ constexpr std::uint32_t ProtocolMagic = 0x4E4F454Cu; // 'LEON'
 constexpr std::uint16_t CurrentProtocolVersion = 4;
 constexpr int DefaultPort = 7777;
 constexpr int MaxPlayers = 4;
-/// Extra pawn slots in snapshots (AI / bots). Not connection slots — keep kMaxPlayers for peers.
+/// Extra pawn slots in snapshots (AI / bots). Not connection slots — keep MaxPlayers for peers.
 constexpr int MaxAiPawns = 16;
 constexpr int MaxSnapshotPawns = MaxPlayers + MaxAiPawns;
 constexpr int MaxDynamicBodies = 48;
@@ -39,7 +39,7 @@ enum class ENetMsg : std::uint8_t {
     Rpc = 6,
 };
 
-/// Built-in RPC ids; packs may use custom ids from `kRpcIdPackBase` upward.
+/// Built-in RPC ids; packs may use custom ids from `RpcIdPackBase` upward.
 enum class ERpcId : std::uint8_t {
     None = 0,
     /// Generic reliable notify (payload optional UTF-8 / pack bytes).
@@ -86,26 +86,26 @@ constexpr EInputButton Sprint = InputButton4;     // hold to sprint
 
 #pragma pack(push, 1)
 
-struct FHelloMsg {
+struct NETCORE_API FHelloMsg {
     std::uint8_t Type = static_cast<std::uint8_t>(ENetMsg::Hello);
     std::uint32_t Magic = ProtocolMagic;
     std::uint16_t ProtocolVersion = CurrentProtocolVersion;
 };
 
-struct FWelcomeMsg {
+struct NETCORE_API FWelcomeMsg {
     std::uint8_t Type = static_cast<std::uint8_t>(ENetMsg::Welcome);
     std::uint8_t Slot = 0; // 0 = host local, 1 = joining client
     char LevelKey[MaxLevelKeyBytes]{};
 };
 
-struct FTravelMsg {
+struct NETCORE_API FTravelMsg {
     std::uint8_t Type = static_cast<std::uint8_t>(ENetMsg::Travel);
     std::uint8_t Slot = 0; // client local slot after travel (host may send 0)
     char LevelKey[MaxLevelKeyBytes]{};
 };
 
 /// Fixed RPC framing. Wire: FRpcHeader | payload[payloadBytes].
-struct FRpcHeader {
+struct NETCORE_API FRpcHeader {
     std::uint8_t Type = static_cast<std::uint8_t>(ENetMsg::Rpc);
     std::uint8_t RpcId = 0;
     std::uint8_t TargetSlot = 0; // pawn / player slot the RPC addresses (pack-defined)
@@ -114,7 +114,7 @@ struct FRpcHeader {
 };
 
 /// Core locomotion + generic buttons. Pack-specific meaning lives in InputButtons aliases.
-struct FInputCmdMsg {
+struct NETCORE_API FInputCmdMsg {
     std::uint8_t Type = static_cast<std::uint8_t>(ENetMsg::InputCmd);
     std::uint32_t Seq = 0;
     float MoveX = 0.0f;
@@ -125,7 +125,7 @@ struct FInputCmdMsg {
     std::uint16_t Buttons = 0; // v4: 16 action bits (was uint8 in v3)
 };
 
-struct FPawnSnap {
+struct NETCORE_API FPawnSnap {
     std::uint8_t Slot = 0;
     float X = 0.0f;
     float Y = 0.0f;
@@ -148,7 +148,7 @@ enum EPawnSnapFlags : std::uint8_t {
     PawnSnapAlive = 1 << 0,
 };
 
-struct FBodySnap {
+struct NETCORE_API FBodySnap {
     std::uint32_t LevelMeshIndex = 0;
     float X = 0.0f;
     float Y = 0.0f;
@@ -159,7 +159,7 @@ struct FBodySnap {
 };
 
 /// Fixed snapshot framing. Match / GameState fields are an optional extension blob.
-struct FSnapshotHeader {
+struct NETCORE_API FSnapshotHeader {
     std::uint8_t Type = static_cast<std::uint8_t>(ENetMsg::Snapshot);
     std::uint32_t Tick = 0;
     std::uint8_t PawnCount = 0;
@@ -169,7 +169,7 @@ struct FSnapshotHeader {
 };
 
 /// Typed snapshot extension (extBytes == sizeof). Wire: Header | MatchMeta? | Pawns | Bodies.
-struct FSnapshotMatchMeta {
+struct NETCORE_API FSnapshotMatchMeta {
     std::uint8_t RoundIndex = 0;
     std::uint8_t UnitsAlive = 0;
     std::uint8_t RemainingSeconds = 0;
@@ -243,7 +243,7 @@ inline void GetPawnUserAmmo(const FPawnSnap& Snap, std::uint8_t& Clip, std::uint
     return Hello.Magic == ProtocolMagic && Hello.ProtocolVersion == CurrentProtocolVersion;
 }
 
-/// Flow: inbound datagram gate (UNetDriver before onPacket_).
+/// Flow: inbound datagram gate (UNetDriver before OnPacket).
 /// 1. Reject null / empty / unknown type
 /// 2. Reject undersized fixed headers
 /// 3. Hello: require magic + protocol version
@@ -334,7 +334,7 @@ inline void SanitizeInputCmd(FInputCmdMsg& Cmd) {
 }
 
 /// Sliding 1-second packet window for host flood control.
-struct FPeerPacketWindow {
+struct NETCORE_API FPeerPacketWindow {
     std::uint64_t WindowStartMs = 0;
     int Accepted = 0;
     int Rejected = 0;

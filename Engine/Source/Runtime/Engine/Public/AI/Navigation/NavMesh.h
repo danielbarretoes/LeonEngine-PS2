@@ -7,7 +7,7 @@
 
 
 /// Baked walkable grid (Unreal NavMesh lite — no Recast). XZ cells + floor height.
-struct FNavMesh {
+struct ENGINE_API FNavMesh {
     float OriginX = 0.0f;
     float OriginZ = 0.0f;
     float CellSize = 0.5f;

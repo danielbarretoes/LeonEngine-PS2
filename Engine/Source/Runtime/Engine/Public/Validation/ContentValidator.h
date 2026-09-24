@@ -11,14 +11,14 @@ enum class EValidationSeverity {
     Warning,
 };
 
-struct FValidationIssue {
+struct ENGINE_API FValidationIssue {
     EValidationSeverity Severity = EValidationSeverity::Error;
     std::string Where; // e.g. "actors[2].material" or "albedo"
     std::string Message;
 };
 
 /// Collects validation issues for level documents / material assets.
-struct FValidationReport {
+struct ENGINE_API FValidationReport {
     std::string SourcePath;
     std::vector<FValidationIssue> Issues;
 

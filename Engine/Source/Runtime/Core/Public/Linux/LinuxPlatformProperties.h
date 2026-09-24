@@ -2,7 +2,7 @@
 
 #include "GenericPlatform/GenericPlatformProperties.h"
 
-struct FLinuxPlatformProperties : public FGenericPlatformProperties
+struct CORE_API FLinuxPlatformProperties : public FGenericPlatformProperties
 {
 	static FORCEINLINE const char* PlatformName()
 	{

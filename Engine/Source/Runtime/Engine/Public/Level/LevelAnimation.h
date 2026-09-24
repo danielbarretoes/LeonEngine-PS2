@@ -5,7 +5,7 @@
 
 
 /// Runtime animation hooks produced while loading a Level JSON (spin / bob / light orbit).
-struct FLevelAnimation {
+struct ENGINE_API FLevelAnimation {
     struct FStaticMeshSpin {
         std::size_t MeshIndex = 0;
         float YawDegreesPerSec = 0.0f; // added to transform.rotation.y each frame

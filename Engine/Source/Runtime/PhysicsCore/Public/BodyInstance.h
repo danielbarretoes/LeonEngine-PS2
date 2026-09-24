@@ -18,7 +18,7 @@ enum class ECollisionShape : std::uint8_t {
     TriangleMesh = 1, // Static mesh ComplexAsSimple lite (CPU MeshData)
 };
 
-struct FBodyInstanceDesc {
+struct PHYSICSCORE_API FBodyInstanceDesc {
     std::size_t LevelMeshIndex = 0;
     EBodyType Type = EBodyType::Static;
     /// 0 = derive from AABB volume on SyncFromLevel.
@@ -28,7 +28,7 @@ struct FBodyInstanceDesc {
 };
 
 /// Physics-owned state. Level transforms are visuals; SyncFromLevel / SyncToLevel bridge them.
-struct FBodyInstance {
+struct PHYSICSCORE_API FBodyInstance {
     std::size_t LevelMeshIndex = 0;
     EBodyType Type = EBodyType::Static;
     ECollisionShape CollisionShape = ECollisionShape::Box;

@@ -8,7 +8,7 @@
 
 /// Depth-only shadow map for directional light 0 (orthographic + manual PCF in the lit shader).
 /// Depth texture uses GL_NEAREST so PCF samples discrete texels (not hardware-filtered depth).
-class FShadowMap {
+class RENDERER_API FShadowMap {
 public:
     static constexpr int DefaultSize = 2048;
 

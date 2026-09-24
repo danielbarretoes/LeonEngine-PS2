@@ -21,7 +21,7 @@
 
 /// Top-level runtime: GLFW window, main loop, orbit-camera input, FPS overlay,
 /// UGameInstance, and a Level/FResourceCache filled by FLevelDirector (or the app).
-class UGameEngine {
+class ENGINE_API UGameEngine {
 public:
     using FUpdateCallback = std::function<void(float DeltaTime)>;
     /// Runs after PollEvents, before camera/input handling (level UI, etc.).
@@ -40,7 +40,13 @@ public:
     bool InitializeHeadless();
     void Shutdown();
 
-    /// Main loop. Optional hooks: pre-input (UI), per-frame update, post-render overlays.
+    /// Announces the play controls (UE: UGameEngine::Start). Call once before the first Tick.
+    void Start();
+    /// One windowed frame (UE: UGameEngine::Tick): input, update hook, HUD, render, present.
+    /// Returns false once the engine should stop (window closed or RequestQuit).
+    bool Tick(float DeltaTime, const FUpdateCallback& OnUpdate = {}, const FPreInputCallback& OnPreInput = {},
+              const FPostRenderCallback& OnPostRender = {});
+    /// Start + Tick until stopped (standalone loops; FEngineLoop drives Tick itself).
     void Run(const FUpdateCallback& OnUpdate = {}, const FPreInputCallback& OnPreInput = {},
              const FPostRenderCallback& OnPostRender = {});
     /// Fixed-timestep simulation loop (no render / swap).

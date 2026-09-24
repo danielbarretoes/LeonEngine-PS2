@@ -10,7 +10,7 @@
 class FDebugOverlay;
 
 /// Unreal-like AHUD: owns UserWidgets painted each frame into screen geometry.
-class AHUD {
+class ENGINE_API AHUD {
 public:
     void Clear();
 

@@ -9,7 +9,7 @@
 
 
 /// GPU static mesh resource (Unreal-style UStaticMesh; VAO/VBO/EBO + optional MTL).
-class UStaticMesh {
+class RENDERER_API UStaticMesh {
 public:
     UStaticMesh() = default;
     ~UStaticMesh();

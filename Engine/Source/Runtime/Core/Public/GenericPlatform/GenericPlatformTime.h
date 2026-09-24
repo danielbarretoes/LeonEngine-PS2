@@ -3,7 +3,7 @@
 #include "HAL/Platform.h"
 
 /** High-resolution time (UE: FGenericPlatformTime). Platforms implement the cycle counter. */
-struct FGenericPlatformTime
+struct CORE_API FGenericPlatformTime
 {
 	/** Monotonic cycle counter of the platform's high-resolution timer. */
 	static uint64 Cycles64();

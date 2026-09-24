@@ -3,7 +3,9 @@
 #include "GameHostSession.h"
 #include "RuntimeInput.h"
 
+#include <algorithm>
 #include <iostream>
+#include <thread>
 #include "Engine/GameEngine.h"
 #include "Net/NetProtocol.h"
 #include <string>
@@ -77,73 +79,120 @@ namespace {
 
 } // namespace
 
-int FGameApplication::Run(int Argc, char** Argv, const char* PackName,
-                         const std::function<void(UGameEngine&, FGameplayRouter&)>& RegisterModes,
-                         bool bDedicatedByDefault) {
-    // dedicatedByDefault is set by *-server mains; CLI flags work on the client exe too.
+bool FGameApplication::Init(int Argc, char** Argv, const char* PackName, const FRegisterModesFunction& RegisterModes,
+                            bool bDedicatedByDefault) {
+    // bDedicatedByDefault is set by server executables; CLI flags work on the client exe too.
     // Console strings stay ASCII: Windows cmd often is not UTF-8 (em dash / arrows mojibake).
-    const bool bDedicated = bDedicatedByDefault || WantsDedicatedCli(Argc, Argv);
-    const bool bListenHost =
-        !bDedicated && (HasFlag(Argc, Argv, "--listen") || HasFlag(Argc, Argv, "--host"));
+    bDedicated = bDedicatedByDefault || WantsDedicatedCli(Argc, Argv);
+    const bool bListenHost = !bDedicated && (HasFlag(Argc, Argv, "--listen") || HasFlag(Argc, Argv, "--host"));
     const bool bShowStats = HasFlag(Argc, Argv, "--show-stats");
-    const std::uint16_t NetPort =
-        ParsePort(Argc, Argv, static_cast<std::uint16_t>(Leon::Net::DefaultPort));
-    const float TickHz = ParseTickHz(Argc, Argv, 60.0f);
+    const std::uint16_t NetPort = ParsePort(Argc, Argv, static_cast<std::uint16_t>(Leon::Net::DefaultPort));
+    TickHz = ParseTickHz(Argc, Argv, 60.0f);
     const std::string JoinAddress = ParseJoinAddress(Argc, Argv);
     const std::string PlayMap = ParsePlayMap(Argc, Argv);
     const std::string Title =
         bDedicated ? std::string("Leon (Dedicated) - ") + PackName : std::string("Leon - ") + PackName;
 
-    UGameEngine Engine;
+    Engine = std::make_unique<UGameEngine>();
     if (bDedicated) {
-        if (!Engine.InitializeHeadless()) {
+        if (!Engine->InitializeHeadless()) {
             std::cerr << "Failed to initialize headless engine\n";
-            return 1;
+            Engine.reset();
+            return false;
         }
-    } else if (!Engine.Initialize(1280, 720, Title.c_str())) {
+    } else if (!Engine->Initialize(1280, 720, Title.c_str())) {
         std::cerr << "Failed to initialize engine\n";
-        return 1;
+        Engine.reset();
+        return false;
     }
     if (bShowStats && !bDedicated) {
-        Engine.SetHudStatsVisible(true);
+        Engine->SetHudStatsVisible(true);
     }
     if (!bDedicated) {
-        WireDefaultInput(Engine);
+        WireDefaultInput(*Engine);
     }
 
-    FGameHostSession Session;
-    // Shipping: empty preferred key → pack defaultLevel inside session.Start.
-    if (!Session.Start(Engine, PackName, RegisterModes, {})) {
-        Engine.Shutdown();
-        return 1;
+    // Shipping: empty preferred key -> pack defaultLevel inside Session.Start.
+    if (!Session.Start(*Engine, PackName, RegisterModes, {})) {
+        Engine->Shutdown();
+        Engine.reset();
+        return false;
     }
+    bStarted = true;
 
     if (bDedicated) {
-        Engine.GetGameInstance().RequestDedicatedStart(NetPort);
-        std::cout << "Starting dedicated server for pack '" << PackName << "' on port " << NetPort
-                  << " @ " << TickHz << " Hz (headless - Ctrl+C or RequestQuit to stop)\n";
-        Engine.RunHeadless([&](float Dt) { Session.Tick(Dt); }, TickHz);
+        Engine->GetGameInstance().RequestDedicatedStart(NetPort);
+        std::cout << "Starting dedicated server for pack '" << PackName << "' on port " << NetPort << " @ " << TickHz
+                  << " Hz (headless - Ctrl+C or RequestQuit to stop)\n";
+        NextHeadlessTick = std::chrono::steady_clock::now();
     } else {
         // Flow: CLI Play session (Unreal-like)
-        // --listen/--host [--map Key] → HostListen → Lobby or match map
-        // --join <ip> [--map Key] → Join → Lobby or match map
+        // --listen/--host [--map Key] -> HostListen -> Lobby or match map
+        // --join <ip> [--map Key] -> Join -> Lobby or match map
         if (!PlayMap.empty()) {
-            Engine.GetGameInstance().SetPendingPlayMap(PlayMap);
+            Engine->GetGameInstance().SetPendingPlayMap(PlayMap);
             std::cout << "Pending play map: " << PlayMap << '\n';
         }
         if (bListenHost) {
-            Engine.GetGameInstance().RequestListenStart(NetPort);
+            Engine->GetGameInstance().RequestListenStart(NetPort);
             std::cout << "Pending listen host on port " << NetPort << '\n';
         } else if (!JoinAddress.empty()) {
-            Engine.GetGameInstance().SetPendingJoinAddress(JoinAddress);
+            Engine->GetGameInstance().SetPendingJoinAddress(JoinAddress);
             std::cout << "Pending join address: " << JoinAddress << '\n';
         }
-        Engine.Run([&](float Dt) { Session.Tick(Dt); }, [&]() { Session.HandleUiInput(); },
-                   [&](int W, int H) { Session.DrawUi(W, H); });
+        Engine->Start();
     }
-
-    Session.Stop();
-    Engine.Shutdown();
-    return 0;
+    LastFrameTime = std::chrono::steady_clock::now();
+    return true;
 }
 
+bool FGameApplication::Tick() {
+    if (!Engine) {
+        return false;
+    }
+    if (bDedicated) {
+        // Fixed-timestep simulation (no render / present), paced to TickHz.
+        const float StepSeconds = 1.0f / (TickHz < 1.0f ? 1.0f : TickHz);
+        if (!Engine->IsRunning()) {
+            return false;
+        }
+        Session.Tick(StepSeconds);
+        using FClock = std::chrono::steady_clock;
+        NextHeadlessTick += std::chrono::duration_cast<FClock::duration>(std::chrono::duration<double>(StepSeconds));
+        const auto Now = FClock::now();
+        if (NextHeadlessTick < Now) {
+            NextHeadlessTick = Now; // fell behind: resync instead of spiralling
+        } else {
+            std::this_thread::sleep_until(NextHeadlessTick);
+        }
+        return Engine->IsRunning();
+    }
+
+    const auto Now = std::chrono::steady_clock::now();
+    const float DeltaTime = std::min(std::chrono::duration<float>(Now - LastFrameTime).count(), 0.1f);
+    LastFrameTime = Now;
+    return Engine->Tick(DeltaTime, [this](float Dt) { Session.Tick(Dt); }, [this]() { Session.HandleUiInput(); },
+                        [this](int Width, int Height) { Session.DrawUi(Width, Height); });
+}
+
+void FGameApplication::Exit() {
+    if (bStarted) {
+        Session.Stop();
+        bStarted = false;
+    }
+    if (Engine) {
+        Engine->Shutdown();
+        Engine.reset();
+    }
+}
+
+int FGameApplication::Run(int Argc, char** Argv, const char* PackName, const FRegisterModesFunction& RegisterModes,
+                          bool bDedicatedByDefault) {
+    if (!Init(Argc, Argv, PackName, RegisterModes, bDedicatedByDefault)) {
+        return 1;
+    }
+    while (Tick()) {
+    }
+    Exit();
+    return 0;
+}

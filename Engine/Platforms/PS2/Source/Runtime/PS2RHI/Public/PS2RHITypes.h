@@ -5,7 +5,7 @@
 class FPS2Texture;
 
 /** Active view target (camera). Rotation in radians (Pitch / Yaw for math3d). */
-struct FPS2ViewTarget
+struct PS2RHI_API FPS2ViewTarget
 {
 	float LocationX = 0.0f;
 	float LocationY = 14.0f;
@@ -15,7 +15,7 @@ struct FPS2ViewTarget
 };
 
 /** Directional sun: aim via Yaw256 / Pitch256 (1/256 turn); Intensity scales LightColor. */
-struct FPS2DirectionalLight
+struct PS2RHI_API FPS2DirectionalLight
 {
 	float Intensity = 1.0f;
 	float LightColorR = 1.00f;
@@ -32,7 +32,7 @@ enum class EMaterialShadingModel : uint8
 };
 
 /** PS2-lite material aligned to .lmat: BaseColor, BaseColorMap, ShadingModel. */
-struct FPS2Material
+struct PS2RHI_API FPS2Material
 {
 	float BaseColorR = 1.0f;
 	float BaseColorG = 1.0f;
@@ -48,7 +48,7 @@ struct FPS2Material
  * Per-frame Draw3D counters (PCSX2 console + HUD). Box -> frustum cull -> backface cull ->
  * per-triangle trivial reject / homogeneous clip (near + guard band) -> GS.
  */
-struct FPS2Draw3DStats
+struct PS2RHI_API FPS2Draw3DStats
 {
 	uint32 Boxes = 0;            // DrawBox calls
 	uint32 CulledBoxes = 0;      // whole box outside the view frustum

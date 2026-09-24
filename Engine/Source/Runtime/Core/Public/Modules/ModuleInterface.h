@@ -3,7 +3,7 @@
 #include "CoreTypes.h"
 
 /** Interface every module implements (UE: IModuleInterface). Registered with IMPLEMENT_MODULE. */
-class IModuleInterface
+class CORE_API IModuleInterface
 {
 public:
 	virtual ~IModuleInterface() = default;

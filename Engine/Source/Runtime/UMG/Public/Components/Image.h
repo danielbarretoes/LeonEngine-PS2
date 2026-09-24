@@ -6,7 +6,7 @@
 
 /// Unreal-like UImage (lite): solid tinted rect (no texture brush yet — HUD DrawRect only).
 /// Useful as panel chrome, health backdrop, letterbox bars.
-class UImage : public UUserWidget {
+class UMG_API UImage : public UUserWidget {
 public:
     void SetPosition(float InX, float InY) {
         X = InX;

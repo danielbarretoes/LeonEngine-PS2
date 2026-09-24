@@ -9,7 +9,7 @@ struct FPS2Material;
  * Player character: camera-relative movement, jump, gravity, step-up and wall push-out against the
  * level props (TP_ThirdPerson: ThirdPersonCharacter + CharacterMovementComponent, reduced).
  */
-class FThirdPersonCharacter
+class THIRDPERSON_API FThirdPersonCharacter
 {
 public:
 	static constexpr float HalfWidth = 1.6f;

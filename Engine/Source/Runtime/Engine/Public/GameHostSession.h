@@ -10,7 +10,7 @@
 
 /// Embeddable play host: pack resolve, FWorldRuntime, FGameplayRouter — no GLFW loop.
 /// Used by shipping `FGameApplication::Run` and Editor PIE (Selected Viewport / New Window).
-class FGameHostSession {
+class ENGINE_API FGameHostSession {
 public:
     using FRegisterModesFunction = std::function<void(UGameEngine&, FGameplayRouter&)>;
 

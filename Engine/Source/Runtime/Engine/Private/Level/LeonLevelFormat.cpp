@@ -90,13 +90,13 @@ private:
     std::unordered_map<std::string, std::uint32_t> Lookup;
 };
 
-/// Bounds-checked little-endian cursor; any overrun latches `failed_`.
+/// Bounds-checked little-endian cursor; any overrun latches `bFailed`.
 class FByteReader {
 public:
     explicit FByteReader(const std::vector<std::uint8_t>& InBytes)
         : Bytes(InBytes.data()), Size(InBytes.size()) {}
 
-    [[nodiscard]] bool GetFailed() const { return bFailed; }
+    [[nodiscard]] bool HasFailed() const { return bFailed; }
 
     std::uint8_t ReadU8() {
         if (!Require(1)) {
@@ -687,18 +687,18 @@ bool DeserializeLeonLevel(const std::vector<std::uint8_t>& InBytes, FLevelDocume
     (void)Reader.ReadU32(); // flags (reserved)
 
     const std::uint32_t StringCount = Reader.ReadU32();
-    if (Reader.GetFailed() || StringCount > MaxLeonLevelStrings) {
+    if (Reader.HasFailed() || StringCount > MaxLeonLevelStrings) {
         return false;
     }
     std::vector<std::string> LocalStrings;
     LocalStrings.reserve(StringCount);
     for (std::uint32_t I = 0; I < StringCount; ++I) {
         const std::uint32_t Length = Reader.ReadU32();
-        if (Reader.GetFailed() || Length > MaxLeonStringBytes) {
+        if (Reader.HasFailed() || Length > MaxLeonStringBytes) {
             return false;
         }
         LocalStrings.push_back(Reader.ReadBytes(Length));
-        if (Reader.GetFailed()) {
+        if (Reader.HasFailed()) {
             return false;
         }
     }
@@ -720,12 +720,12 @@ bool DeserializeLeonLevel(const std::vector<std::uint8_t>& InBytes, FLevelDocume
     Out.Camera.Distance = Reader.ReadF32();
     Out.Camera.Yaw = Reader.ReadF32();
     Out.Camera.Pitch = Reader.ReadF32();
-    if (Reader.GetFailed()) {
+    if (Reader.HasFailed()) {
         return false;
     }
 
     const std::uint32_t ActorCount = Reader.ReadU32();
-    if (Reader.GetFailed() || ActorCount > MaxLeonLevelActors) {
+    if (Reader.HasFailed() || ActorCount > MaxLeonLevelActors) {
         return false;
     }
     Out.Actors.reserve(ActorCount);
@@ -735,7 +735,7 @@ bool DeserializeLeonLevel(const std::vector<std::uint8_t>& InBytes, FLevelDocume
         const std::uint8_t LocalMobility = Reader.ReadU8();
         (void)Reader.ReadU16();
         const std::uint32_t LocalFlags = Reader.ReadU32();
-        if (Reader.GetFailed()) {
+        if (Reader.HasFailed()) {
             return false;
         }
         if (LocalActorClass > static_cast<std::uint8_t>(ELevelActorClass::AISpawnPoint)) {
@@ -802,14 +802,14 @@ bool DeserializeLeonLevel(const std::vector<std::uint8_t>& InBytes, FLevelDocume
         if ((LocalFlags & LevelActorFlagHasPayload) != 0u) {
             Actor.Payload = StringAt(Reader.ReadU32());
         }
-        if (Reader.GetFailed()) {
+        if (Reader.HasFailed()) {
             return false;
         }
         Out.Actors.push_back(std::move(Actor));
     }
 
     const std::uint32_t LightCount = Reader.ReadU32();
-    if (Reader.GetFailed() || LightCount > MaxLeonLevelLights) {
+    if (Reader.HasFailed() || LightCount > MaxLeonLevelLights) {
         return false;
     }
     Out.Lights.reserve(LightCount);
@@ -818,7 +818,7 @@ bool DeserializeLeonLevel(const std::vector<std::uint8_t>& InBytes, FLevelDocume
         const std::uint8_t LocalLightClass = Reader.ReadU8();
         Reader.Skip(3);
         const std::uint32_t LocalFlags = Reader.ReadU32();
-        if (Reader.GetFailed()) {
+        if (Reader.HasFailed()) {
             return false;
         }
         if (LocalLightClass > static_cast<std::uint8_t>(ELevelLightClass::PointLight)) {
@@ -842,13 +842,13 @@ bool DeserializeLeonLevel(const std::vector<std::uint8_t>& InBytes, FLevelDocume
             Light.OrbitHeightAmp = Reader.ReadF32();
             Light.OrbitSpeed = Reader.ReadF32();
         }
-        if (Reader.GetFailed()) {
+        if (Reader.HasFailed()) {
             return false;
         }
         Out.Lights.push_back(Light);
     }
 
-    return !Reader.GetFailed();
+    return !Reader.HasFailed();
 }
 
 bool SaveLeonLevelFile(const std::string& Path, const FLevelDocument& Doc) {

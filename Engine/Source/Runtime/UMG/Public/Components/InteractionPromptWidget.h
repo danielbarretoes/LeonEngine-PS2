@@ -7,7 +7,7 @@
 
 
 /// Centered outlined interact hint ("[F] Open Door [750]"). Empty Prompt skips paint.
-class UInteractionPromptWidget : public UUserWidget {
+class UMG_API UInteractionPromptWidget : public UUserWidget {
 public:
     std::string Prompt;
 

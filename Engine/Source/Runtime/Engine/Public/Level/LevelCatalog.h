@@ -5,7 +5,7 @@
 #include <vector>
 
 
-struct FLevelEntry {
+struct ENGINE_API FLevelEntry {
     std::string Name;     // from the level document name, else filename stem
     std::string Path;     // resolved .llev path
     std::string Pack;     // project folder name under `Projects/`
@@ -13,7 +13,7 @@ struct FLevelEntry {
 };
 
 /// Discovers binary Leon Level files (`.llev`) under project packs or a flat directory.
-class FLevelCatalog {
+class ENGINE_API FLevelCatalog {
 public:
     /// Scan a flat directory of `*.llev` (unit tests / tools).
     bool Scan(const std::string& InDirectory);

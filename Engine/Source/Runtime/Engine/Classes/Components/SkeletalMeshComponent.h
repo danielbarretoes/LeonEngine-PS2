@@ -22,7 +22,7 @@ class UGameEngine;
 class FSceneRenderer;
 
 /// Static mesh glued to a skeletal bone (Unreal-like socket attachment).
-struct FSkelMeshAttachment {
+struct ENGINE_API FSkelMeshAttachment {
     std::string BoneName;
     std::shared_ptr<UStaticMesh> Mesh;
     FMaterial Material{};
@@ -35,7 +35,7 @@ struct FSkelMeshAttachment {
 };
 
 /// Unreal-like USkeletalMeshComponent — USceneComponent with skeletal mesh + UAnimInstance.
-class USkeletalMeshComponent : public USceneComponent {
+class ENGINE_API USkeletalMeshComponent : public USceneComponent {
 public:
     USkeletalMeshComponent();
 

@@ -13,7 +13,7 @@ class AActor;
 /// Unreal-like USceneComponent: UActorComponent + relative TRS + parent/child attach tree.
 /// World transform: root uses owning Actor location/yaw + relative; children compose parent *
 /// relative.
-class USceneComponent : public UActorComponent {
+class ENGINE_API USceneComponent : public UActorComponent {
 public:
     USceneComponent() = default;
     ~USceneComponent() override;

@@ -12,6 +12,6 @@ enum class ETextJustify : std::uint8_t {
 
 /// Default HUD bitmap font scale (stb_easy_font × this).
 inline constexpr float HudFontScale = 2.0f;
-/// Line step in pixels at `kHudFontScale` (stb cell height 14).
+/// Line step in pixels at `HudFontScale` (stb cell height 14).
 inline constexpr float HudLineHeight = 14.0f * HudFontScale;
 

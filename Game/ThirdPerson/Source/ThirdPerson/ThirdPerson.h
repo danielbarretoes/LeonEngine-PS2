@@ -8,7 +8,7 @@
 class FThirdPersonGameMode;
 
 /** Primary game module: starts the game mode and ticks it from the core ticker. */
-class FThirdPersonModule : public IModuleInterface
+class THIRDPERSON_API FThirdPersonModule : public IModuleInterface
 {
 public:
 	virtual void StartupModule() override;

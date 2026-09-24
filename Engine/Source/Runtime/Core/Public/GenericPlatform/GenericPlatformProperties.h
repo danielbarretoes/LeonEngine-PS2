@@ -3,7 +3,7 @@
 #include "HAL/Platform.h"
 
 /** Compile-time platform properties; each platform overrides what differs (UE: FGenericPlatformProperties). */
-struct FGenericPlatformProperties
+struct CORE_API FGenericPlatformProperties
 {
 	/** Platform name as used by LeonBuildTool (Win64, Linux, PS2). */
 	static FORCEINLINE const char* PlatformName()

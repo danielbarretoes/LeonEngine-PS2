@@ -15,7 +15,7 @@ class IInputInterface;
  * Runs the ThirdPerson demo: builds the level, spawns the character and drives one frame per tick
  * (TP_ThirdPerson: ThirdPersonGameMode). Start requests engine exit.
  */
-class FThirdPersonGameMode
+class THIRDPERSON_API FThirdPersonGameMode
 {
 public:
 	FThirdPersonGameMode(FGenericWindow& InWindow, IInputInterface* InInputInterface);

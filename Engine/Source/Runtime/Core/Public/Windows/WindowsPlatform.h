@@ -1,7 +1,7 @@
 #pragma once
 
 /** Windows (Win64) platform types and capabilities. Included through HAL/Platform.h. */
-struct FWindowsPlatformTypes : public FGenericPlatformTypes
+struct CORE_API FWindowsPlatformTypes : public FGenericPlatformTypes
 {
 	typedef unsigned long long SIZE_T;
 	typedef long long PTRINT;

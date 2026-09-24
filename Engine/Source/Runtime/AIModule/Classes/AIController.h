@@ -19,7 +19,7 @@ enum class EAILogicState : std::uint8_t {
 
 /// Drives a possessed Pawn with simple steering (Unreal-style AAIController).
 /// When a UNavigationSystem is set, MoveTo* follows a NavMesh path; otherwise line-of-sight XZ.
-class AAIController : public AController {
+class AIMODULE_API AAIController : public AController {
 public:
     void SetWishDirection(const glm::vec3& WishDirXz) { WishDir = WishDirXz; }
     void ClearWishDirection() { WishDir = {}; }

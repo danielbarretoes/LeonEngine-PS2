@@ -7,7 +7,7 @@
 /// HDR environment as OpenGL cubemaps (RGB16F):
 /// - specular/env map with mips (roughness → textureLod)
 /// - low-res irradiance map (diffuse IBL / Lambertian convolution)
-class FEnvironmentMap {
+class RENDERER_API FEnvironmentMap {
 public:
     static constexpr int DefaultFaceSize = 512;
     static constexpr int DefaultIrradianceSize = 32;

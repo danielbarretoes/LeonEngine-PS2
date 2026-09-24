@@ -10,7 +10,7 @@
 
 /// Immediate-mode screen text: top-right stats, bottom-left hints, bottom-right chrome,
 /// and top-left timed debug console (Unreal-like AddOnScreenDebugMessage).
-class FDebugOverlay {
+class RENDERER_API FDebugOverlay {
 public:
     bool Initialize(const std::string& ShaderDirectory);
     void Shutdown();

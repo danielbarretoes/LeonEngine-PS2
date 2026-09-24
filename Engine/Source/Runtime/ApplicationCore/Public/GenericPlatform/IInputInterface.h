@@ -7,7 +7,7 @@
  * Game controller access owned by the platform application (UE: IInputInterface + the
  * platform's gamepad polling, e.g. XInputInterface). Leon exposes polled state directly.
  */
-class IInputInterface
+class APPLICATIONCORE_API IInputInterface
 {
 public:
 	virtual ~IInputInterface() = default;

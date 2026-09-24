@@ -2,7 +2,7 @@
 
 #include "GenericPlatform/GenericPlatformProperties.h"
 
-struct FPS2PlatformProperties : public FGenericPlatformProperties
+struct CORE_API FPS2PlatformProperties : public FGenericPlatformProperties
 {
 	static FORCEINLINE const char* PlatformName()
 	{

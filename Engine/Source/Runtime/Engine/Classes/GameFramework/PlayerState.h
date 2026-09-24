@@ -4,7 +4,7 @@
 
 
 /// Per-player session data (Unreal-style `APlayerState`). Typically owned by APlayerController.
-class APlayerState {
+class ENGINE_API APlayerState {
 public:
     APlayerState() = default;
     virtual ~APlayerState() = default;

@@ -242,7 +242,7 @@ void UNetDriver::Poll() {
         }
         case ENET_EVENT_TYPE_RECEIVE:
             if (Event.packet != nullptr) {
-                // Flow: host rate window → AcceptInboundPacket → onPacket_ (or drop / kick).
+                // Flow: host rate window → AcceptInboundPacket → OnPacket (or drop / kick).
                 bool bDestroyPacket = true;
                 if (Event.packet->data != nullptr) {
                     const std::size_t Size = Event.packet->dataLength;

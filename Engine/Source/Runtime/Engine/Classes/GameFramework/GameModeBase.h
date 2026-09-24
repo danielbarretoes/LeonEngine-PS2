@@ -20,7 +20,7 @@ class APlayerController;
 
 /// Pluggable level gameplay rules (Unreal-style `AGameModeBase` / `AGameMode`).
 /// Packs subclass this; the engine never includes pack headers.
-class AGameModeBase {
+class ENGINE_API AGameModeBase {
 public:
     virtual ~AGameModeBase() = default;
 

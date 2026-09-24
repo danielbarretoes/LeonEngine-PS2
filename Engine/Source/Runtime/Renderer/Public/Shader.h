@@ -27,7 +27,7 @@ enum class EShaderReloadResult : std::uint8_t {
 }
 
 /// GLSL program with cached uniform locations and optional disk hot-reload.
-class FShader {
+class RENDERER_API FShader {
 public:
     /// Called after a new program is linked and installed; return false to revert.
     using FAcceptFunction = std::function<bool()>;

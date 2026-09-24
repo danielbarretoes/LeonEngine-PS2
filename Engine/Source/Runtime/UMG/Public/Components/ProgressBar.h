@@ -7,7 +7,7 @@
 
 
 /// Unreal-like UProgressBar (lite): background + fill rect, optional percent label.
-class UProgressBar : public UUserWidget {
+class UMG_API UProgressBar : public UUserWidget {
 public:
     void SetPosition(float InX, float InY) {
         X = InX;

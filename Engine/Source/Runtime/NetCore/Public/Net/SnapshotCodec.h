@@ -9,7 +9,7 @@ namespace Leon::Net
 {
 
 /// Decoded authoritative snapshot (client interpolation targets).
-struct FDecodedSnapshot {
+struct NETCORE_API FDecodedSnapshot {
     std::uint32_t Tick = 0;
     bool bHasMatchMeta = false;
     FSnapshotMatchMeta MatchMeta{};

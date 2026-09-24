@@ -133,7 +133,7 @@ TEST_CASE("EncodeSnapshot / DecodeSnapshot roundtrip", "[net][snapshot]") {
     REQUIRE_THAT(Decoded.Bodies[0].VelY, WithinAbs(-1.5f, 1.0e-5f));
 }
 
-TEST_CASE("EncodeSnapshot accepts AI pawn slots beyond kMaxPlayers", "[net][snapshot][ai]") {
+TEST_CASE("EncodeSnapshot accepts AI pawn slots beyond MaxPlayers", "[net][snapshot][ai]") {
     Leon::Net::FPawnSnap Pawns[Leon::Net::MaxSnapshotPawns]{};
     Pawns[0].Slot = 0;
     Pawns[1].Slot = 1;

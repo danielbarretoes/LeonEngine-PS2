@@ -3,7 +3,7 @@
 #include "HAL/Platform.h"
 
 /** Process memory numbers (UE: FGenericPlatformMemoryStats, reduced). */
-struct FGenericPlatformMemoryStats
+struct CORE_API FGenericPlatformMemoryStats
 {
 	/** Resident physical memory used by the process (working set / program image + heap). */
 	uint64 UsedPhysical = 0;
@@ -18,7 +18,7 @@ struct FGenericPlatformMemoryStats
 typedef FGenericPlatformMemoryStats FPlatformMemoryStats;
 
 /** Memory queries; platforms implement GetStats (UE: FGenericPlatformMemory). */
-struct FGenericPlatformMemory
+struct CORE_API FGenericPlatformMemory
 {
 	static FPlatformMemoryStats GetStats();
 };

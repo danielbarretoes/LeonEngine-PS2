@@ -5,7 +5,7 @@
 #include <vector>
 
 
-struct FGltfImportedMaterial {
+struct MESHUTILITIES_API FGltfImportedMaterial {
     std::string Name;
     std::string LmatRelativePath; // path written relative to out directory
 };

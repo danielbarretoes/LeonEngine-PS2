@@ -12,7 +12,7 @@ class GenericApplication;
  * (WITH_ENGINE=0, e.g. the PS2 game) it owns the platform application and main window and ticks
  * FTicker::GetCoreTicker(); game modules register their per-frame work there.
  */
-class FEngineLoop
+class LAUNCH_API FEngineLoop
 {
 public:
 	FEngineLoop();

@@ -130,7 +130,7 @@ glm::vec3 AAIController::TickAI(float DeltaTime) {
         const glm::vec3 From = Character->GetActorLocation();
         if (bUsePath && !Path.empty()) {
             // Advance at most along truly-reached waypoints (tight radius — no Euclidean
-            // shortcut through a plate/ramp whose width is smaller than arriveRadius_).
+            // shortcut through a plate/ramp whose width is smaller than ArriveRadius).
             while (PathIndex + 1 < Path.size()) {
                 const glm::vec3& Wp = Path[PathIndex];
                 const glm::vec3 D = Wp - From;

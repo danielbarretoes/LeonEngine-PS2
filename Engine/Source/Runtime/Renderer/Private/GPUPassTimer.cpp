@@ -55,7 +55,7 @@ const float& FGPUPassTimer::MsSlot(EPass Pass) const {
 }
 
 bool FGPUPassTimer::ResolveBuffer(const FQueryBuffer& InQueries) {
-    // Non-blocking: skip until all queries are ready (keeps last frame's ms_).
+    // Non-blocking: skip until all queries are ready (keeps last frame's Ms).
     for (int I = 0; I < PassCount; ++I) {
         GLint Available = 0;
         glGetQueryObjectiv(InQueries[static_cast<std::size_t>(I)], GL_QUERY_RESULT_AVAILABLE,
@@ -103,7 +103,7 @@ void FGPUPassTimer::BeginFrame() {
         return;
     }
 
-    // Resolve the buffer completed on the previous frame (still selected as writeBuffer_).
+    // Resolve the buffer completed on the previous frame (still selected as WriteBuffer).
     if (BufferPending(WriteBuffer)) {
         if (!ResolveBuffer(BufferQueries(WriteBuffer))) {
             // GPU still working — skip issuing new queries this frame (no stall).

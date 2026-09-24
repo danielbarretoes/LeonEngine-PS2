@@ -1,7 +1,7 @@
 #pragma once
 
 /** Linux (x86_64) platform types and capabilities. Included through HAL/Platform.h. */
-struct FLinuxPlatformTypes : public FGenericPlatformTypes
+struct CORE_API FLinuxPlatformTypes : public FGenericPlatformTypes
 {
 	typedef unsigned long SIZE_T;
 	typedef long PTRINT;

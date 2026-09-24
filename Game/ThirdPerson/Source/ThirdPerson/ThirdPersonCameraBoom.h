@@ -8,7 +8,7 @@ class FThirdPersonLevel;
  * Orbit follow camera: spherical boom around a smoothed look-at point, pulled in when props block
  * it (TP_ThirdPerson: CameraBoom spring arm + FollowCamera). Angles in 1/256 turn.
  */
-class FThirdPersonCameraBoom
+class THIRDPERSON_API FThirdPersonCameraBoom
 {
 public:
 	float TargetArmLength = 28.0f;

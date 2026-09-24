@@ -10,7 +10,7 @@ class FGenericWindow;
 
 /// Unreal-like UVerticalBox (lite): title + stacked ButtonWidgets + hint.
 /// Add via HUD::AddWidget; call TickInput each frame from GameMode (same as UMenuListWidget).
-class UVerticalBox : public UUserWidget {
+class UMG_API UVerticalBox : public UUserWidget {
 public:
     void SetTitle(std::string InTitle) { Title = std::move(InTitle); }
     void SetHint(std::string InHint) { Hint = std::move(InHint); }

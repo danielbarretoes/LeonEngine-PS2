@@ -6,7 +6,7 @@
 
 
 /// Keyboard move axes on the ground plane: x = strafe, z = forward (from mapped Move* actions).
-struct FMoveAxes2D {
+struct ENGINE_API FMoveAxes2D {
     float X = 0.0f;
     float Z = 0.0f;
 

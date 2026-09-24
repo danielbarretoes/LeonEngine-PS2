@@ -28,7 +28,7 @@
 
 
 /// Per-frame measurable counters (color pass after frustum culling).
-struct FFrameStats {
+struct RENDERER_API FFrameStats {
     int ObjectsTotal = 0;
     int ObjectsVisible = 0;
     int ObjectsCulled = 0;
@@ -43,7 +43,7 @@ struct FFrameStats {
 };
 
 /// Options for a single submesh draw (shared lit textures may already be bound).
-struct FDrawOptions {
+struct RENDERER_API FDrawOptions {
     bool bLitPass = true;
     bool bReceiveShadows = true;
     bool bUseNormalMaps = true;
@@ -52,7 +52,7 @@ struct FDrawOptions {
 
 /// Forward renderer: directional shadow map (light 0), optional half-res planar mirror,
 /// opaque / skybox / transparent, then optional post (SSAO → tonemap → FXAA).
-class FSceneRenderer {
+class RENDERER_API FSceneRenderer {
 public:
     static constexpr unsigned int CameraUboBinding = 0;
     static constexpr unsigned int LightsUboBinding = 1;

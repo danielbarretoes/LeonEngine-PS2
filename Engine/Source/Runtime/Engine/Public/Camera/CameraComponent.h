@@ -12,7 +12,7 @@ enum class ECameraMode : std::uint8_t {
 };
 
 /// View camera: orbit (default) or free-look for ADefaultCameraActor.
-class UCameraComponent {
+class ENGINE_API UCameraComponent {
 public:
     void SetPerspective(float InFovDegrees, float InAspect, float InNearPlane, float InFarPlane);
     /// Orthographic projection; `height` is the full vertical world extent visible.

@@ -18,7 +18,7 @@ enum class EBasicShape {
 };
 
 /// Placeable basic shape: transform + material + optional mesh options.
-struct FBasicShape {
+struct ENGINE_API FBasicShape {
     EBasicShape Type = EBasicShape::Cube;
     FTransform Transform{};
     FMaterial Material{};

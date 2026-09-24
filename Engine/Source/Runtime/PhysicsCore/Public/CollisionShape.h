@@ -4,7 +4,7 @@
 #include <glm/vec3.hpp>
 
 
-struct FCapsuleShape {
+struct PHYSICSCORE_API FCapsuleShape {
     float Radius = 0.35f;
     /// Full vertical extent from feet to top (cylinder + end caps approximated in XZ).
     float Height = 1.85f;

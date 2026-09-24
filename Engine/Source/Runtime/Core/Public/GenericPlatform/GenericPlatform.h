@@ -4,7 +4,7 @@
  * Generic type table. Each platform derives F<Platform>PlatformTypes from it and typedefs it as
  * FPlatformTypes; HAL/Platform.h then exposes the global int32/uint8/… typedefs.
  */
-struct FGenericPlatformTypes
+struct CORE_API FGenericPlatformTypes
 {
 	// Unsigned base types.
 	typedef unsigned char uint8;

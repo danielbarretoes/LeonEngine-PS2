@@ -15,7 +15,7 @@ class ACharacter;
 class UGameEngine;
 
 /// Drives a possessed Character from player input (Unreal-style APlayerController).
-class APlayerController : public AController {
+class ENGINE_API APlayerController : public AController {
 public:
     APlayerController() : PlayerState(std::make_unique<APlayerState>()) {}
 
@@ -47,11 +47,11 @@ public:
     virtual void UpdateCamera(UGameEngine& Engine, float DeltaTime);
 
     /// When false, this PC is driven by remote InputCmd (listen-server remote player).
-    [[nodiscard]] bool IsLocalController() const { return bLocalController_; }
-    void SetIsLocalController(bool bLocal) { bLocalController_ = bLocal; }
+    [[nodiscard]] bool IsLocalController() const { return bLocalController; }
+    void SetIsLocalController(bool bLocal) { bLocalController = bLocal; }
 
     // Flow: Local input → FInputCmdMsg → authority ApplyRemoteInput
-    /// Latches current button mask; rising edges vs previous frame go into pressedEdges_.
+    /// Latches current button mask; rising edges vs previous frame go into PressedEdges.
     void LatchButtons(std::uint16_t PressedNow);
     [[nodiscard]] bool WasButtonPressed(Leon::Net::EInputButton Button) const;
     [[nodiscard]] bool IsButtonDown(Leon::Net::EInputButton Button) const;
@@ -61,7 +61,7 @@ public:
 
 private:
     std::unique_ptr<APlayerState> PlayerState;
-    bool bLocalController_ = true;
+    bool bLocalController = true;
 
     std::uint16_t PrevButtons = 0;
     std::uint16_t DownButtons = 0;

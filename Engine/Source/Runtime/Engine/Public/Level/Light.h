@@ -37,7 +37,7 @@ constexpr float DefaultLightSourceAngleDegrees = 0.5357f;
 }
 
 /// Unreal-like FDirectionalLight: transform drives aim; no raw direction field.
-struct FDirectionalLight {
+struct ENGINE_API FDirectionalLight {
     FTransform Transform{{0.0f, 0.0f, 0.0f}, {60.3f, 142.1f, 0.0f}, {1.0f, 1.0f, 1.0f}};
     glm::vec3 LightColor{1.0f, 1.0f, 1.0f};
     float Intensity = 1.0f;
@@ -52,7 +52,7 @@ struct FDirectionalLight {
 };
 
 /// Unreal-like FPointLight: location from transform; attenuation `range`.
-struct FPointLight {
+struct ENGINE_API FPointLight {
     FTransform Transform{{0.0f, 2.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}};
     glm::vec3 LightColor{1.0f, 1.0f, 1.0f};
     float Intensity = 1.0f;

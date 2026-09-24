@@ -11,7 +11,7 @@
 
 /// Shared chase UBehaviorTree for pack AI (HasTarget → MoveToActor, else Stop).
 /// One instance is safe to reuse serially across pawns in a Tick loop.
-class FAIChaseBehavior {
+class AIMODULE_API FAIChaseBehavior {
 public:
     FAIChaseBehavior() {
         HasTarget = std::make_unique<UBTDecorator_Bool>("HasTarget", true);

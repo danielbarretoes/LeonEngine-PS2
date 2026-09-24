@@ -13,7 +13,7 @@ enum class EBasicLight {
 };
 
 /// Placeable light: FTransform + Unreal Details fields (intensity, lightColor, castShadows, …).
-struct FBasicLight {
+struct ENGINE_API FBasicLight {
     EBasicLight Type = EBasicLight::Directional;
     FTransform Transform{};
     glm::vec3 LightColor{1.0f, 1.0f, 1.0f};

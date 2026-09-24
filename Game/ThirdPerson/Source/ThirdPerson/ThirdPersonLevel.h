@@ -5,7 +5,7 @@
 struct FPS2Material;
 
 /** Box primitive placed in the level (TP_ThirdPerson: the map's static mesh actors). */
-struct FThirdPersonPrimitive
+struct THIRDPERSON_API FThirdPersonPrimitive
 {
 	float LocationX = 0.0f;
 	float LocationY = 0.0f;
@@ -22,7 +22,7 @@ struct FThirdPersonPrimitive
  * Large grounded primitive level: a tiled ground plane plus crates, platforms, stairs and walls.
  * Also answers the queries the character and the camera boom need (UE: world traces/sweeps).
  */
-class FThirdPersonLevel
+class THIRDPERSON_API FThirdPersonLevel
 {
 public:
 	static constexpr float ArenaHalfExtent = 70.0f;

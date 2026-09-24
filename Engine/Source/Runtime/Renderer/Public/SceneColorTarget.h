@@ -4,7 +4,7 @@
 
 
 /// HDR scene color + sampleable depth for post-process (SSAO / tonemap).
-class FSceneColorTarget {
+class RENDERER_API FSceneColorTarget {
 public:
     FSceneColorTarget() = default;
     ~FSceneColorTarget();

@@ -12,7 +12,7 @@
 
 /// Path- and key-keyed cache for GPU meshes/textures: OBJ/file loads plus
 /// procedural checker/bump normals, material assets, and cube/plane/sphere meshes.
-class FResourceCache {
+class RENDERER_API FResourceCache {
 public:
     [[nodiscard]] std::shared_ptr<UStaticMesh> LoadStaticMesh(const std::string& Path);
     [[nodiscard]] std::shared_ptr<UTexture2D> LoadTexture(const std::string& Path);

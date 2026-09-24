@@ -7,7 +7,7 @@
 
 /// Baked world-space triangle mesh for static ComplexAsSimple lite (Arcade traces /
 /// QuerySupportY; Jolt MeshShape on rebuild).
-struct FTriangleMeshCollision {
+struct PHYSICSCORE_API FTriangleMeshCollision {
     std::vector<glm::vec3> Positions;
     std::vector<std::uint32_t> Indices;
 

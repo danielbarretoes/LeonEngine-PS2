@@ -6,7 +6,7 @@
 
 
 /// Interleaved GPU vertex attributes (matches Mesh VAO layout).
-struct FVertex {
+struct RENDERCORE_API FVertex {
     glm::vec3 Position{};
     glm::vec3 Normal{};
     glm::vec2 TexCoord{};

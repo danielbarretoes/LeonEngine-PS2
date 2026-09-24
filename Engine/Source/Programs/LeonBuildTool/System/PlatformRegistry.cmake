@@ -6,7 +6,7 @@
 
 set_property(GLOBAL PROPERTY LEON_PLATFORMS "")
 
-set(_LEON_PLATFORM_ONE_VALUE_KEYS
+set(_LBT_PLATFORM_ONE_VALUE_KEYS
 	HEADER_NAME
 	TOOLCHAIN_FILE
 	CXX_STANDARD
@@ -20,20 +20,20 @@ set(_LEON_PLATFORM_ONE_VALUE_KEYS
 	BUILD_TYPE_Development
 	BUILD_TYPE_Shipping
 )
-set(_LEON_PLATFORM_MULTI_VALUE_KEYS GROUPS DEFINITIONS)
+set(_LBT_PLATFORM_MULTI_VALUE_KEYS GROUPS DEFINITIONS)
 
 # leon_register_platform(<Name> GROUPS <group>... HEADER_NAME <dir> [IS_EXTENSION] ...)
 function(leon_register_platform Name)
-	cmake_parse_arguments(P "IS_EXTENSION" "${_LEON_PLATFORM_ONE_VALUE_KEYS}" "${_LEON_PLATFORM_MULTI_VALUE_KEYS}" ${ARGN})
+	cmake_parse_arguments(P "IS_EXTENSION" "${_LBT_PLATFORM_ONE_VALUE_KEYS}" "${_LBT_PLATFORM_MULTI_VALUE_KEYS}" ${ARGN})
 	set_property(GLOBAL APPEND PROPERTY LEON_PLATFORMS ${Name})
-	foreach(Key IN LISTS _LEON_PLATFORM_ONE_VALUE_KEYS _LEON_PLATFORM_MULTI_VALUE_KEYS)
-		set_property(GLOBAL PROPERTY LEON_PLATFORM_${Name}_${Key} "${P_${Key}}")
+	foreach(Key IN LISTS _LBT_PLATFORM_ONE_VALUE_KEYS _LBT_PLATFORM_MULTI_VALUE_KEYS)
+		set_property(GLOBAL PROPERTY LBT_PLATFORM_${Name}_${Key} "${P_${Key}}")
 	endforeach()
-	set_property(GLOBAL PROPERTY LEON_PLATFORM_${Name}_IS_EXTENSION ${P_IS_EXTENSION})
+	set_property(GLOBAL PROPERTY LBT_PLATFORM_${Name}_IS_EXTENSION ${P_IS_EXTENSION})
 endfunction()
 
 function(leon_platform_get Name Key OutVar)
-	get_property(Value GLOBAL PROPERTY LEON_PLATFORM_${Name}_${Key})
+	get_property(Value GLOBAL PROPERTY LBT_PLATFORM_${Name}_${Key})
 	set(${OutVar} "${Value}" PARENT_SCOPE)
 endfunction()
 

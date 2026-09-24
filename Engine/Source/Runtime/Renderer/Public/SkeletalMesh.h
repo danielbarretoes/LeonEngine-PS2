@@ -8,7 +8,7 @@
 
 
 /// GPU skinned mesh (VAO with bone indices/weights).
-class USkeletalMesh {
+class RENDERER_API USkeletalMesh {
 public:
     USkeletalMesh() = default;
     ~USkeletalMesh();

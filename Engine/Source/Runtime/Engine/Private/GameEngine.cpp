@@ -145,7 +145,7 @@ void UGameEngine::SetPlayInputWindow(FGenericWindow* InWindow) {
     }
     PlayInputTarget.SetWindow(InWindow);
     if (InWindow != nullptr) {
-        // Accumulate into the same pendingScrollY_ as the main window (PIE New Window scroll).
+        // Accumulate into the same PendingScrollY as the main window (PIE New Window scroll).
         InWindow->SetScrollCallback(
             [this](double YOffset) { PendingScrollY += static_cast<float>(YOffset); });
     }
@@ -186,6 +186,17 @@ void UGameEngine::Run(const FUpdateCallback& OnUpdate, const FPreInputCallback& 
         return;
     }
 
+    Start();
+    auto Previous = std::chrono::steady_clock::now();
+    float DeltaTime = 0.0f;
+    do {
+        const auto Now = std::chrono::steady_clock::now();
+        DeltaTime = std::min(std::chrono::duration<float>(Now - Previous).count(), 0.1f);
+        Previous = Now;
+    } while (Tick(DeltaTime, OnUpdate, OnPreInput, OnPostRender));
+}
+
+void UGameEngine::Start() {
     std::cout << "Level static meshes: " << Level.GetStaticMeshes().size() << '\n';
     std::cout << "Controls: mouse look (cursor captured), scroll zoom (orbit); close window to quit\n";
     std::cout << "Default mode: mouse look, WASD fly along view, Q/E up/down\n";
@@ -194,33 +205,33 @@ void UGameEngine::Run(const FUpdateCallback& OnUpdate, const FPreInputCallback& 
     std::cout << "Debug: F3 NavMesh grid (walkable / blocked)\n";
     std::cout << "Stats: F4 FPS / RAM / TRI overlay (off by default)\n";
     std::cout << "Shaders: F5 force-reload (also auto-reloads when files change)\n";
+}
 
-    auto Previous = std::chrono::steady_clock::now();
-    while (bRunning && !Window->ShouldClose()) {
-        const auto Now = std::chrono::steady_clock::now();
-        float DeltaTime = std::chrono::duration<float>(Now - Previous).count();
-        Previous = Now;
-        DeltaTime = std::min(DeltaTime, 0.1f);
-
-        Window->PollEvents();
-        if (PlayInputTarget.HasOverride()) {
-            PlayInputTarget.GetWindow()->PollEvents();
-        }
-        PlayerInput.Update(GetPlayInputWindow());
-        (void)ReloadAllShaders(false);
-        if (OnPreInput) {
-            OnPreInput();
-        }
-        HandleInput(DeltaTime);
-        TickPlayAudio();
-        if (OnUpdate) {
-            OnUpdate(DeltaTime);
-        }
-        TickPlayHud(DeltaTime);
-        PendingScrollY = 0.0f; // discard unused wheel (modes that do not ConsumeScrollY)
-        Render(OnPostRender);
-        Window->SwapBuffers();
+bool UGameEngine::Tick(float DeltaTime, const FUpdateCallback& OnUpdate, const FPreInputCallback& OnPreInput,
+                       const FPostRenderCallback& OnPostRender) {
+    if (!bInitialized || !bRunning || Window->ShouldClose()) {
+        return false;
     }
+
+    Window->PollEvents();
+    if (PlayInputTarget.HasOverride()) {
+        PlayInputTarget.GetWindow()->PollEvents();
+    }
+    PlayerInput.Update(GetPlayInputWindow());
+    (void)ReloadAllShaders(false);
+    if (OnPreInput) {
+        OnPreInput();
+    }
+    HandleInput(DeltaTime);
+    TickPlayAudio();
+    if (OnUpdate) {
+        OnUpdate(DeltaTime);
+    }
+    TickPlayHud(DeltaTime);
+    PendingScrollY = 0.0f; // discard unused wheel (modes that do not ConsumeScrollY)
+    Render(OnPostRender);
+    Window->SwapBuffers();
+    return bRunning && !Window->ShouldClose();
 }
 
 void UGameEngine::TickPlayAudio() {

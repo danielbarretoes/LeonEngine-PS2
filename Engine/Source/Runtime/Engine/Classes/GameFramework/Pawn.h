@@ -6,7 +6,7 @@
 class AController;
 
 /// Possessable Actor (Unreal-style Pawn). Character derives from this.
-class APawn : public AActor {
+class ENGINE_API APawn : public AActor {
 public:
     [[nodiscard]] AController* GetController() const { return Controller; }
     [[nodiscard]] bool IsPossessed() const { return Controller != nullptr; }

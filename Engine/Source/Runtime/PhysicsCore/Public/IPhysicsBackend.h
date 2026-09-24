@@ -14,7 +14,7 @@
 /// Physics backend contract. Implementations live under Plugins/Physics/*.
 /// `FPhysScene` remains the gameplay-facing API; backends plug in behind it.
 /// Arcade owns CMC side resolve / QuerySupportY; Jolt may own rigid Step + narrow-phase traces.
-class IPhysicsBackend {
+class PHYSICSCORE_API IPhysicsBackend {
 public:
     virtual ~IPhysicsBackend() = default;
 

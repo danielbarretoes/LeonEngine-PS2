@@ -12,7 +12,7 @@ class UGameEngine;
 
 /// Persistent game session (Unreal-style `UGameInstance`). Survives level changes; owned by Engine.
 /// Owns UNetDriver for listen-server / dedicated / client LAN sessions.
-class UGameInstance {
+class ENGINE_API UGameInstance {
 public:
     /// Load a level by catalog key (name / stem). Wired by Runtime (FLevelDirector) or Editor PIE.
     using FLevelTravelFunction = std::function<bool(UGameEngine& Engine, std::string_view LevelKey)>;

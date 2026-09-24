@@ -6,7 +6,7 @@ void APawn::DetachController() {
     if (Controller == nullptr) {
         return;
     }
-    // Controller::UnPossess clears pawn_ and calls bindController(nullptr).
+    // Controller::UnPossess clears Pawn and calls bindController(nullptr).
     Controller->UnPossess();
 }
 

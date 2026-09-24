@@ -24,7 +24,7 @@ enum class EMaterialShadingModel {
 /// Per-object surface for the forward lit pass.
 /// specular/metallic + roughness drive Blinn highlights and HDR cubemap LOD.
 /// uvScale tiles albedo/normal maps (Unreal-like FMaterial Instance tiling).
-struct FMaterial {
+struct RENDERCORE_API FMaterial {
     EMaterialShadingModel Shading = EMaterialShadingModel::BlinnPhong;
     glm::vec3 Albedo{0.55f, 0.72f, 0.85f};
     glm::vec3 Specular{0.04f, 0.04f, 0.04f}; // F0 / MTL Ks (dielectric default ~4%)

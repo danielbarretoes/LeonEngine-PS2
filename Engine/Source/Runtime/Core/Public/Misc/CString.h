@@ -5,7 +5,7 @@
 #include <string_view>
 
 /** Character string helpers (UE: FCString, reduced to what the engine uses). */
-struct FCString
+struct CORE_API FCString
 {
 	/** ASCII lower-case copy (case-insensitive JSON class / primitive names). */
 	static std::string ToLower(std::string_view Text)

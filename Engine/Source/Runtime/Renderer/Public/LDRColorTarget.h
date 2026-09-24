@@ -4,7 +4,7 @@
 
 
 /// Full-res LDR color target for post (composite → FXAA).
-class FLDRColorTarget {
+class RENDERER_API FLDRColorTarget {
 public:
     FLDRColorTarget() = default;
     ~FLDRColorTarget();

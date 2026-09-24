@@ -60,7 +60,7 @@ inline constexpr std::uint32_t LevelLightFlagCastShadows = 1u << 0;
 inline constexpr std::uint32_t LevelLightFlagHasOrbit = 1u << 1;
 
 /// One placed actor as stored in a `.llev` (no GPU / resource handles).
-struct FLevelActorRecord {
+struct ENGINE_API FLevelActorRecord {
     ELevelActorClass ActorClass = ELevelActorClass::StaticMesh;
     EComponentMobility Mobility = EComponentMobility::Static;
 
@@ -105,7 +105,7 @@ struct FLevelActorRecord {
 };
 
 /// One placed light as stored in a `.llev`.
-struct FLevelLightRecord {
+struct ENGINE_API FLevelLightRecord {
     ELevelLightClass LightClass = ELevelLightClass::DirectionalLight;
     bool bCastShadows = true;
     bool bHasOrbit = false;
@@ -125,7 +125,7 @@ struct FLevelLightRecord {
 };
 
 /// Camera framing stored in a `.llev` (always present).
-struct FLevelCameraRecord {
+struct ENGINE_API FLevelCameraRecord {
     ECameraMode Mode = ECameraMode::Orbit;
     glm::vec3 Target{0.0f, 0.0f, 0.0f};
     glm::vec3 Eye{0.0f, 0.0f, 0.0f};
@@ -135,7 +135,7 @@ struct FLevelCameraRecord {
 };
 
 /// In-memory mirror of a `.llev` file: plain data, no engine resources resolved yet.
-struct FLevelDocument {
+struct ENGINE_API FLevelDocument {
     std::string Name;
     std::string GameMode;
     std::string EnvironmentPath;

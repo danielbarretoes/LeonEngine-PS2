@@ -23,7 +23,7 @@ class UGameEngine;
 
 /// Level load orchestration + world tick glue (no ownership of Actor/GameMode types).
 
-class FWorldRuntime {
+class ENGINE_API FWorldRuntime {
 
 public:
 

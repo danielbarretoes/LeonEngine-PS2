@@ -32,7 +32,7 @@ ACharacter::ACharacter() {
 
 void ACharacter::SetHealth(float InHealth) {
     Health = std::clamp(InHealth, 0.0f, MaxHealth);
-    bAlive_ = Health > 0.0f;
+    bAlive = Health > 0.0f;
 }
 
 void ACharacter::SetMaxHealth(float InMaxHealth) {
@@ -43,7 +43,7 @@ void ACharacter::SetMaxHealth(float InMaxHealth) {
 }
 
 float ACharacter::TakeDamage(float DamageAmount) {
-    if (!bAlive_ || DamageAmount <= 0.0f) {
+    if (!bAlive || DamageAmount <= 0.0f) {
         return 0.0f;
     }
     const float Applied = std::min(Health, DamageAmount);
@@ -56,12 +56,12 @@ float ACharacter::TakeDamage(float DamageAmount) {
 
 void ACharacter::Die() {
     Health = 0.0f;
-    bAlive_ = false;
+    bAlive = false;
 }
 
 void ACharacter::Revive(float NewHealth) {
     Health = std::clamp(NewHealth, 0.0f, MaxHealth);
-    bAlive_ = true;
+    bAlive = true;
 }
 
 void ACharacter::Reset(const glm::vec3& InLocation, float InYawDegrees) {
@@ -75,7 +75,7 @@ void ACharacter::Reset(const glm::vec3& InLocation, float InYawDegrees) {
     JumpsRemaining = std::max(0, Movement.MaxJumpCount - 1);
     CurrentFloor = {};
     Health = MaxHealth;
-    bAlive_ = true;
+    bAlive = true;
 }
 
 void ACharacter::ApplyReplicatedState(const glm::vec3& InLocation, float InYawDegrees, float InVelocityY,

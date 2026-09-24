@@ -5,7 +5,7 @@
 #include <memory>
 
 /** GPU memory reported by the active RHI (0 / invalid when the API cannot tell). */
-struct FRHIGPUMemoryStats
+struct RHI_API FRHIGPUMemoryStats
 {
 	bool bValid = false;
 

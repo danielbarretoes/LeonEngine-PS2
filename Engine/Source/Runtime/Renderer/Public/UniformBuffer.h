@@ -5,7 +5,7 @@
 
 
 /// GL_UNIFORM_BUFFER wrapper bound to a fixed binding point (OpenGL 3.3+).
-class FUniformBuffer {
+class RENDERER_API FUniformBuffer {
 public:
     FUniformBuffer() = default;
     ~FUniformBuffer();

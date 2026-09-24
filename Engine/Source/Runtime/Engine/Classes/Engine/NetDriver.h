@@ -20,7 +20,7 @@ enum class ENetMode : std::uint8_t {
 };
 
 /// Thin ENet wrapper (Unreal-like UNetDriver / UNetDriver micro).
-class UNetDriver {
+class ENGINE_API UNetDriver {
 public:
     /// peerSlot: host remote index [0, maxClients), or 0 for the server when Client.
     using FPacketHandler =
@@ -35,7 +35,7 @@ public:
 
     /// Listen-server: remotes fill fighter slots after the local host player.
     [[nodiscard]] bool StartHost(std::uint16_t Port = Leon::Net::DefaultPort);
-    /// Dedicated: up to kMaxPlayers remote clients, no local player.
+    /// Dedicated: up to MaxPlayers remote clients, no local player.
     [[nodiscard]] bool StartDedicated(std::uint16_t Port = Leon::Net::DefaultPort);
     [[nodiscard]] bool Connect(const std::string& Address, std::uint16_t Port = Leon::Net::DefaultPort);
     void Shutdown();

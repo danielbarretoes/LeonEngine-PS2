@@ -38,7 +38,7 @@ inline constexpr int CookedFormatVersion = 1;
 [[nodiscard]] bool LoadAnimSequence(const std::string& Path, UAnimSequence& Out);
 
 /// UBlendSpace1D descriptor; `samples[].anim` are paths relative to the blendspace file.
-struct FBlendSpace1DAssetDesc {
+struct ENGINE_API FBlendSpace1DAssetDesc {
     std::string Name = "BlendSpace1D";
     float AxisMin = 0.0f;
     float AxisMax = 1.0f;
@@ -52,7 +52,7 @@ struct FBlendSpace1DAssetDesc {
 [[nodiscard]] bool SaveBlendSpace1DJson(const std::string& Path, const FBlendSpace1DAssetDesc& Desc);
 [[nodiscard]] bool LoadBlendSpace1DJson(const std::string& Path, FBlendSpace1DAssetDesc& Out);
 
-struct FCharacterVisualDesc {
+struct ENGINE_API FCharacterVisualDesc {
     std::string Name = "Character";
     std::string SkeletalMeshRel; // *.lskm
     std::string BlendSpaceRel;   // *.blendspace1d.json
@@ -71,7 +71,7 @@ struct FCharacterVisualDesc {
 [[nodiscard]] bool LoadCharacterVisual(const std::string& Path, FCharacterVisualDesc& Out);
 
 /// Optional Mixamo jump / fall / land FBX paths for UAnimInstance jump SM.
-struct FCookJumpAnimPaths {
+struct ENGINE_API FCookJumpAnimPaths {
     std::string JumpStartFbx; // Jumping Up
     std::string FallLoopFbx;  // Falling Idle
     std::string LandFbx;      // Falling To Landing

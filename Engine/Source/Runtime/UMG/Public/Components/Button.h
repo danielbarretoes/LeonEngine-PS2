@@ -9,7 +9,7 @@ class FGenericWindow;
 
 /// Unreal-like UButton (lite): filled rect + label; hover / selected / press.
 /// Usually owned by UVerticalBox; can also be a root HUD widget with SetPosition.
-class UButton : public UUserWidget {
+class UMG_API UButton : public UUserWidget {
 public:
     void SetId(std::string InId) { Id = std::move(InId); }
     [[nodiscard]] const std::string& GetId() const { return Id; }
