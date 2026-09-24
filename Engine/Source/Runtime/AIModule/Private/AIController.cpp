@@ -16,14 +16,14 @@ constexpr float kWaypointArriveRadius = 0.45f;
 
 } // namespace
 
-void AIController::ClearPath() {
+void AAIController::ClearPath() {
     path_.clear();
     pathIndex_ = 0;
     usePath_ = false;
     pathRebuildCooldown_ = 0.0f;
 }
 
-void AIController::RebuildPath() {
+void AAIController::RebuildPath() {
     ClearPath();
     ACharacter* character = GetCharacter();
     if (character == nullptr || navigation_ == nullptr || !navigation_->HasNavMesh() ||
@@ -39,7 +39,7 @@ void AIController::RebuildPath() {
     usePath_ = true;
 }
 
-glm::vec3 AIController::SteerToward(const glm::vec3& from, const glm::vec3& to,
+glm::vec3 AAIController::SteerToward(const glm::vec3& from, const glm::vec3& to,
                                     float arriveRadius) const {
     const glm::vec3 delta = to - from;
     const glm::vec3 flat{delta.x, 0.0f, delta.z};
@@ -52,7 +52,7 @@ glm::vec3 AIController::SteerToward(const glm::vec3& from, const glm::vec3& to,
     return flat / len;
 }
 
-glm::vec3 AIController::SteerWithNavFallback(const glm::vec3& from) const {
+glm::vec3 AAIController::SteerWithNavFallback(const glm::vec3& from) const {
     // Nav is authoritative: never charge the goal in a straight line through blockers.
     if (navigation_ == nullptr || !navigation_->HasNavMesh()) {
         return SteerToward(from, target_, arriveRadius_);
@@ -72,7 +72,7 @@ glm::vec3 AIController::SteerWithNavFallback(const glm::vec3& from) const {
     return SteerToward(from, goalNav, arriveRadius_);
 }
 
-void AIController::MoveToLocation(const glm::vec3& worldPosition) {
+void AAIController::MoveToLocation(const glm::vec3& worldPosition) {
     moveActor_ = nullptr;
     target_ = worldPosition;
     hasTarget_ = true;
@@ -80,7 +80,7 @@ void AIController::MoveToLocation(const glm::vec3& worldPosition) {
     RebuildPath();
 }
 
-void AIController::MoveToActor(AActor* actor) {
+void AAIController::MoveToActor(AActor* actor) {
     if (actor == nullptr) {
         StopMovement();
         return;
@@ -96,14 +96,14 @@ void AIController::MoveToActor(AActor* actor) {
     }
 }
 
-void AIController::StopMovement() {
+void AAIController::StopMovement() {
     hasTarget_ = false;
     moveActor_ = nullptr;
     logicState_ = EAILogicState::Idle;
     ClearPath();
 }
 
-glm::vec3 AIController::TickAI(float deltaTime) {
+glm::vec3 AAIController::TickAI(float deltaTime) {
     ACharacter* character = GetCharacter();
     if (character == nullptr) {
         return {};

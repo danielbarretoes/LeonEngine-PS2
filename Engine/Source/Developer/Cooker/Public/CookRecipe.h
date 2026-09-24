@@ -1,9 +1,12 @@
 #pragma once
 
+#include "CoreTypes.h"
+
 #include <string>
 
-
-/// Run a leon-cook recipe JSON (`steps` array: character | anim | staticmesh).
-/// Relative paths resolve next to the recipe file. Returns process-style exit code (0 ok).
-[[nodiscard]] int RunCookRecipeFile(const std::string& recipePath);
-
+/** Cook recipe runner: a JSON `steps` array of `character` / `anim` / `staticmesh` steps. */
+struct COOKER_API FCookRecipe
+{
+	/** Runs a recipe file; relative paths resolve next to it. Returns a process exit code (0 ok). */
+	[[nodiscard]] static int32 RunFile(const std::string& RecipePath);
+};

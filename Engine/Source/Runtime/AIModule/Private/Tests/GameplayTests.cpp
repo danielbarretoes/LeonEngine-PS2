@@ -30,15 +30,15 @@ using Catch::Matchers::WithinAbs;
 
 namespace {
 
-class TestActor : public AActor {};
-class TestPawn : public APawn {};
-class TestController : public AController {};
+class ATestActor : public AActor {};
+class ATestPawn : public APawn {};
+class ATestController : public AController {};
 
 } // namespace
 
 TEST_CASE("World spawns ticks and destroys actors", "[gameplay][world]") {
     UWorld world;
-    auto* actor = world.SpawnActor<TestActor>();
+    auto* actor = world.SpawnActor<ATestActor>();
     REQUIRE(actor != nullptr);
     REQUIRE(world.ActorCount() == 1);
     REQUIRE(actor->GetWorld() == &world);
@@ -51,23 +51,23 @@ TEST_CASE("World spawns ticks and destroys actors", "[gameplay][world]") {
     world.Tick(0.016f);
     REQUIRE(world.ActorCount() == 0);
 
-    world.SpawnActor<TestActor>();
+    world.SpawnActor<ATestActor>();
     world.Clear();
     REQUIRE(world.ActorCount() == 0);
 }
 
 TEST_CASE("World FindFirst finds derived type", "[gameplay][world]") {
     UWorld world;
-    world.SpawnActor<TestActor>();
-    auto* pawn = world.SpawnActor<TestPawn>();
-    REQUIRE(world.FindFirst<TestPawn>() == pawn);
+    world.SpawnActor<ATestActor>();
+    auto* pawn = world.SpawnActor<ATestPawn>();
+    REQUIRE(world.FindFirst<ATestPawn>() == pawn);
     REQUIRE(world.FindFirst<ACharacter>() == nullptr);
 }
 
 TEST_CASE("Controller Possess and UnPossess", "[gameplay][controller]") {
     UWorld world;
-    auto* pawn = world.SpawnActor<TestPawn>();
-    TestController controller;
+    auto* pawn = world.SpawnActor<ATestPawn>();
+    ATestController controller;
     controller.Possess(pawn);
     REQUIRE(controller.HasPawn());
     REQUIRE(pawn->IsPossessed());
@@ -80,8 +80,8 @@ TEST_CASE("Controller Possess and UnPossess", "[gameplay][controller]") {
 
 TEST_CASE("Pawn Destroy UnPossesses controller", "[gameplay][pawn]") {
     UWorld world;
-    auto* pawn = world.SpawnActor<TestPawn>();
-    TestController controller;
+    auto* pawn = world.SpawnActor<ATestPawn>();
+    ATestController controller;
     controller.Possess(pawn);
     pawn->Destroy();
     world.Tick(0.0f);
@@ -166,7 +166,7 @@ TEST_CASE("AIController steers toward target and arrives", "[gameplay][ai]") {
     auto* character = world.SpawnActor<ACharacter>();
     character->Reset({0.0f, 0.0f, 0.0f});
 
-    AIController ai;
+    AAIController ai;
     ai.Possess(character);
     ai.SetArriveRadius(0.5f);
     ai.MoveToLocation({10.0f, 0.0f, 0.0f});
@@ -187,7 +187,7 @@ TEST_CASE("AIController MoveToActor tracks moving target", "[gameplay][ai]") {
     hunter->Reset({0.0f, 0.0f, 0.0f});
     prey->Reset({8.0f, 0.0f, 0.0f});
 
-    AIController ai;
+    AAIController ai;
     ai.Possess(hunter);
     ai.SetArriveRadius(0.4f);
     ai.MoveToActor(prey);
@@ -219,7 +219,7 @@ TEST_CASE("AIController path follow does not shortcut through blocker", "[gamepl
     auto* character = world.SpawnActor<ACharacter>();
     character->Reset({-5.0f, 0.0f, 0.0f});
 
-    AIController ai;
+    AAIController ai;
     ai.Possess(character);
     ai.SetNavigationSystem(&nav);
     // CoopTp-like large goal arrive — must not skip detour waypoints through the wall.
@@ -405,7 +405,7 @@ TEST_CASE("Actor SyncTransformToLevel writes linked mesh", "[gameplay][actor][sy
     level.AddStaticMesh(std::move(mesh));
 
     UWorld world;
-    auto* actor = world.SpawnActor<TestActor>();
+    auto* actor = world.SpawnActor<ATestActor>();
     actor->SetLevelMeshIndex(0);
     actor->SetActorLocationAndRotation({3.0f, 1.5f, -2.0f}, 90.0f);
     actor->SyncTransformToLevel(level);
@@ -438,7 +438,7 @@ TEST_CASE("World TickGameplayFrame syncs Character to Level mesh", "[gameplay][w
 
 TEST_CASE("ActorComponent RegisterComponent and CreateDefaultSubobject tick",
           "[gameplay][actorcomponent]") {
-    struct CountingComponent : UActorComponent {
+    struct UCountingComponent : UActorComponent {
         int ticks = 0;
         int begins = 0;
         void BeginPlay() override { ++begins; }
@@ -446,10 +446,10 @@ TEST_CASE("ActorComponent RegisterComponent and CreateDefaultSubobject tick",
     };
 
     UWorld world;
-    auto* actor = world.SpawnActor<TestActor>();
+    auto* actor = world.SpawnActor<ATestActor>();
     REQUIRE(actor->GetComponents().size() >= 1); // root
 
-    CountingComponent* heap = actor->CreateDefaultSubobject<CountingComponent>();
+    UCountingComponent* heap = actor->CreateDefaultSubobject<UCountingComponent>();
     REQUIRE(heap != nullptr);
     REQUIRE(heap->GetOwner() == actor);
     REQUIRE(heap->IsRegistered());
@@ -469,7 +469,7 @@ TEST_CASE("ActorComponent RegisterComponent and CreateDefaultSubobject tick",
 
 TEST_CASE("SceneComponent attach hierarchy world transform", "[gameplay][scenecomponent]") {
     UWorld world;
-    auto* actor = world.SpawnActor<TestActor>();
+    auto* actor = world.SpawnActor<ATestActor>();
     actor->SetActorLocationAndRotation({10.0f, 0.0f, 0.0f}, 0.0f);
 
     USceneComponent child;
@@ -513,13 +513,13 @@ TEST_CASE("PhysScene reports Arcade backend by default", "[physics][backend]") {
 
 TEST_CASE("RootReplication capture and apply Actor root", "[net][replication]") {
     UWorld world;
-    auto* actor = world.SpawnActor<TestActor>();
+    auto* actor = world.SpawnActor<ATestActor>();
     actor->SetActorLocationAndRotation({1.0f, 2.0f, 3.0f}, 45.0f);
     const Leon::Net::FPawnSnap snap = Leon::Net::CaptureActorRoot(0, *actor, 1.5f, 0.25f);
     REQUIRE_THAT(snap.x, WithinAbs(1.0f, 1.0e-5f));
     REQUIRE_THAT(snap.yaw, WithinAbs(45.0f, 1.0e-5f));
 
-    auto* other = world.SpawnActor<TestActor>();
+    auto* other = world.SpawnActor<ATestActor>();
     Leon::Net::ApplyActorRoot(*other, snap);
     REQUIRE_THAT(other->GetActorLocation().z, WithinAbs(3.0f, 1.0e-5f));
     REQUIRE_THAT(other->GetActorYaw(), WithinAbs(45.0f, 1.0e-5f));

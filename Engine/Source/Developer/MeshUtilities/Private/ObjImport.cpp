@@ -14,12 +14,12 @@
 
 namespace {
 
-class VertexKey {
+class FVertexKey {
 public:
-    VertexKey(int positionIndex, int normalIndex, int texcoordIndex)
+    FVertexKey(int positionIndex, int normalIndex, int texcoordIndex)
         : positionIndex_(positionIndex), normalIndex_(normalIndex), texcoordIndex_(texcoordIndex) {}
 
-    [[nodiscard]] bool operator==(const VertexKey& other) const {
+    [[nodiscard]] bool operator==(const FVertexKey& other) const {
         return positionIndex_ == other.positionIndex_ && normalIndex_ == other.normalIndex_ &&
                texcoordIndex_ == other.texcoordIndex_;
     }
@@ -34,8 +34,8 @@ private:
     int texcoordIndex_ = 0;
 };
 
-struct VertexKeyHash {
-    std::size_t operator()(const VertexKey& key) const noexcept {
+struct FVertexKeyHash {
+    std::size_t operator()(const FVertexKey& key) const noexcept {
         auto h = static_cast<std::size_t>(key.positionIndex());
         h ^= static_cast<std::size_t>(key.normalIndex()) + 0x9e3779b97f4a7c15ULL + (h << 6) +
              (h >> 2);
@@ -102,10 +102,10 @@ bool faceIndicesValid(const tinyobj::attrib_t& attrib, const tinyobj::index_t& i
 }
 
 std::uint32_t getOrCreateVertex(FMeshData& data,
-                                std::unordered_map<VertexKey, std::uint32_t, VertexKeyHash>& unique,
+                                std::unordered_map<FVertexKey, std::uint32_t, FVertexKeyHash>& unique,
                                 const tinyobj::attrib_t& attrib, const tinyobj::index_t& index,
                                 bool hasFileNormals, bool hasTexcoords) {
-    const VertexKey key{index.vertex_index, index.normal_index, index.texcoord_index};
+    const FVertexKey key{index.vertex_index, index.normal_index, index.texcoord_index};
     if (const auto found = unique.find(key); found != unique.end()) {
         return found->second;
     }
@@ -205,7 +205,7 @@ FMeshData LoadObj(const std::string& path) {
     FMeshData data;
     data.vertices.reserve(indexEstimate);
 
-    std::unordered_map<VertexKey, std::uint32_t, VertexKeyHash> unique;
+    std::unordered_map<FVertexKey, std::uint32_t, FVertexKeyHash> unique;
     unique.reserve(indexEstimate);
 
     // materialId → triangle indices (grouped so each FMeshSection is contiguous).

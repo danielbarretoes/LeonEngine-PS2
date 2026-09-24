@@ -1,10 +1,13 @@
 #pragma once
 
+#include "CoreTypes.h"
+
 #include <filesystem>
 #include <string>
 
-
-/// Resolve `rel` against `baseDir` (absolute paths unchanged).
-[[nodiscard]] std::string ResolveBeside(const std::filesystem::path& baseDir,
-                                        const std::string& rel);
-
+/** Path helpers for cook recipes. */
+struct COOKER_API FCookPaths
+{
+	/** Resolves Relative against BaseDir (absolute paths are returned unchanged). */
+	[[nodiscard]] static std::string ResolveBeside(const std::filesystem::path& BaseDir, const std::string& Relative);
+};

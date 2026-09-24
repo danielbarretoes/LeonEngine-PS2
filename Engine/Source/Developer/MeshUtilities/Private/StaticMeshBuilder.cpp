@@ -1,4 +1,4 @@
-#include "StaticMeshCook.h"
+#include "StaticMeshBuilder.h"
 
 #include "FbxStaticMesh.h"
 #include "GltfImport.h"
@@ -8,7 +8,7 @@
 #include <vector>
 
 
-bool CookStaticMeshFromObj(const std::string& objPath, const std::string& outLmeshPath,
+bool FStaticMeshBuilder::CookFromObj(const std::string& objPath, const std::string& outLmeshPath,
                            std::string& outError) {
     FMeshData data = LoadObj(objPath);
     if (data.empty()) {
@@ -24,7 +24,7 @@ bool CookStaticMeshFromObj(const std::string& objPath, const std::string& outLme
     return true;
 }
 
-bool CookStaticMeshFromFbx(const std::string& fbxPath, const std::string& outLmeshPath,
+bool FStaticMeshBuilder::CookFromFbx(const std::string& fbxPath, const std::string& outLmeshPath,
                            std::string& outError) {
     FMeshData data;
     if (!LoadStaticMeshFromFbx(fbxPath, data)) {
@@ -39,10 +39,10 @@ bool CookStaticMeshFromFbx(const std::string& fbxPath, const std::string& outLme
     return true;
 }
 
-bool CookStaticMeshFromGltf(const std::string& gltfPath, const std::string& outLmeshPath,
+bool FStaticMeshBuilder::CookFromGltf(const std::string& gltfPath, const std::string& outLmeshPath,
                             const std::string& materialsOutDir, std::string& outError) {
     FMeshData data;
-    std::vector<GltfImportedMaterial> mats;
+    std::vector<FGltfImportedMaterial> mats;
     if (!LoadStaticMeshFromGltf(gltfPath, data, materialsOutDir, &mats, outError)) {
         return false;
     }

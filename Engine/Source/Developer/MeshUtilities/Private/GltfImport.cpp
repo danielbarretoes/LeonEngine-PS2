@@ -63,7 +63,7 @@ bool CopyTextureUri(const cgltf_image* image, const fs::path& gltfDir, const fs:
 
 void WriteMaterialFromGltf(const cgltf_material* mat, const std::string& name,
                            const fs::path& materialsDir, const fs::path& gltfDir,
-                           GltfImportedMaterial& outDesc) {
+                           FGltfImportedMaterial& outDesc) {
     FMaterial m{};
     m.albedo = {0.8f, 0.8f, 0.8f};
     m.metallic = 0.0f;
@@ -101,7 +101,7 @@ void WriteMaterialFromGltf(const cgltf_material* mat, const std::string& name,
 
 bool LoadStaticMeshFromGltf(const std::string& path, FMeshData& out,
                             const std::string& materialsOutDir,
-                            std::vector<GltfImportedMaterial>* outMaterials, std::string& outError) {
+                            std::vector<FGltfImportedMaterial>* outMaterials, std::string& outError) {
     out = {};
     outError.clear();
 
@@ -191,7 +191,7 @@ bool LoadStaticMeshFromGltf(const std::string& path, FMeshData& out,
             mesh.albedoMapPaths.emplace_back();
 
             if (!materialsDir.empty() && outMaterials != nullptr && prim.material != nullptr) {
-                GltfImportedMaterial desc;
+                FGltfImportedMaterial desc;
                 const char* matName =
                     prim.material->name != nullptr ? prim.material->name : "Material";
                 WriteMaterialFromGltf(prim.material, matName, materialsDir, gltfDir, desc);

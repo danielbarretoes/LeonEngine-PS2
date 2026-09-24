@@ -15,7 +15,7 @@ enum class EBTNodeResult : std::uint8_t {
     Running = 2,
 };
 
-class Blackboard {
+class UBlackboardComponent {
 public:
     void SetBool(const std::string& key, bool value) { bools_[key] = value; }
     void SetFloat(const std::string& key, float value) { floats_[key] = value; }
@@ -46,17 +46,17 @@ private:
     std::unordered_map<std::string, int> ints_;
 };
 
-struct BTNode {
-    virtual ~BTNode() = default;
-    virtual EBTNodeResult Tick(Blackboard& board, float deltaTime) = 0;
+struct UBTNode {
+    virtual ~UBTNode() = default;
+    virtual EBTNodeResult Tick(UBlackboardComponent& board, float deltaTime) = 0;
 };
 
 /// Run children in order until one fails (Unreal Sequence).
-class BTSequence final : public BTNode {
+class UBTComposite_Sequence final : public UBTNode {
 public:
-    explicit BTSequence(std::vector<BTNode*> children) : children_(std::move(children)) {}
-    EBTNodeResult Tick(Blackboard& board, float deltaTime) override {
-        for (BTNode* child : children_) {
+    explicit UBTComposite_Sequence(std::vector<UBTNode*> children) : children_(std::move(children)) {}
+    EBTNodeResult Tick(UBlackboardComponent& board, float deltaTime) override {
+        for (UBTNode* child : children_) {
             if (child == nullptr) {
                 return EBTNodeResult::Failed;
             }
@@ -69,15 +69,15 @@ public:
     }
 
 private:
-    std::vector<BTNode*> children_;
+    std::vector<UBTNode*> children_;
 };
 
 /// Run children until one succeeds (Unreal Selector).
-class BTSelector final : public BTNode {
+class UBTComposite_Selector final : public UBTNode {
 public:
-    explicit BTSelector(std::vector<BTNode*> children) : children_(std::move(children)) {}
-    EBTNodeResult Tick(Blackboard& board, float deltaTime) override {
-        for (BTNode* child : children_) {
+    explicit UBTComposite_Selector(std::vector<UBTNode*> children) : children_(std::move(children)) {}
+    EBTNodeResult Tick(UBlackboardComponent& board, float deltaTime) override {
+        for (UBTNode* child : children_) {
             if (child == nullptr) {
                 continue;
             }
@@ -90,15 +90,15 @@ public:
     }
 
 private:
-    std::vector<BTNode*> children_;
+    std::vector<UBTNode*> children_;
 };
 
 /// Leaf: succeed when blackboard bool is true.
-class BTConditionBool final : public BTNode {
+class UBTDecorator_Bool final : public UBTNode {
 public:
-    BTConditionBool(std::string key, bool expected = true)
+    UBTDecorator_Bool(std::string key, bool expected = true)
         : key_(std::move(key)), expected_(expected) {}
-    EBTNodeResult Tick(Blackboard& board, float /*deltaTime*/) override {
+    EBTNodeResult Tick(UBlackboardComponent& board, float /*deltaTime*/) override {
         return board.GetBool(key_) == expected_ ? EBTNodeResult::Succeeded : EBTNodeResult::Failed;
     }
 
@@ -108,25 +108,25 @@ private:
 };
 
 /// Leaf: invoke a callback (Succeeded/Failed/Running).
-class BTAction final : public BTNode {
+class UBTTask_Action final : public UBTNode {
 public:
-    using Fn = std::function<EBTNodeResult(Blackboard&, float)>;
-    explicit BTAction(Fn fn) : fn_(std::move(fn)) {}
-    EBTNodeResult Tick(Blackboard& board, float deltaTime) override {
+    using FTaskFunction = std::function<EBTNodeResult(UBlackboardComponent&, float)>;
+    explicit UBTTask_Action(FTaskFunction fn) : fn_(std::move(fn)) {}
+    EBTNodeResult Tick(UBlackboardComponent& board, float deltaTime) override {
         return fn_ ? fn_(board, deltaTime) : EBTNodeResult::Failed;
     }
 
 private:
-    Fn fn_;
+    FTaskFunction fn_;
 };
 
 /// Owns a root node pointer (non-owning children — caller owns node storage).
-class BehaviorTree {
+class UBehaviorTree {
 public:
-    void SetRoot(BTNode* root) { root_ = root; }
-    [[nodiscard]] BTNode* GetRoot() const { return root_; }
-    [[nodiscard]] Blackboard& GetBlackboard() { return board_; }
-    [[nodiscard]] const Blackboard& GetBlackboard() const { return board_; }
+    void SetRoot(UBTNode* root) { root_ = root; }
+    [[nodiscard]] UBTNode* GetRoot() const { return root_; }
+    [[nodiscard]] UBlackboardComponent& GetBlackboard() { return board_; }
+    [[nodiscard]] const UBlackboardComponent& GetBlackboard() const { return board_; }
 
     EBTNodeResult Tick(float deltaTime) {
         if (root_ == nullptr) {
@@ -136,7 +136,7 @@ public:
     }
 
 private:
-    BTNode* root_ = nullptr;
-    Blackboard board_{};
+    UBTNode* root_ = nullptr;
+    UBlackboardComponent board_{};
 };
 

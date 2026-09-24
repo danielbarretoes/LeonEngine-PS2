@@ -63,9 +63,9 @@ TEST_CASE("AIChaseBehavior MoveTo when target present", "[gameplay][bt][ai]") {
     auto* target = world.SpawnActor<ACharacter>();
     target->SetActorLocationAndRotation({5.0f, 0.0f, 0.0f}, 0.0f);
 
-    AIController ai;
+    AAIController ai;
     ai.Possess(character);
-    AIChaseBehavior chase;
+    FAIChaseBehavior chase;
     (void)chase.Tick(ai, target, 0.016f);
     REQUIRE(ai.GetLogicState() == EAILogicState::Chase);
     (void)chase.Tick(ai, nullptr, 0.016f);

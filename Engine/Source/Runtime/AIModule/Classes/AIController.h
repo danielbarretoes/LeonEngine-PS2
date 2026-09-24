@@ -10,16 +10,16 @@
 class AActor;
 class UNavigationSystem;
 
-/// High-level AIController mode for packs that do not run a BehaviorTree.
+/// High-level AAIController mode for packs that do not run a UBehaviorTree.
 enum class EAILogicState : std::uint8_t {
     Idle = 0,
     MoveTo = 1,
     Chase = 2,
 };
 
-/// Drives a possessed Pawn with simple steering (Unreal-style AIController).
+/// Drives a possessed Pawn with simple steering (Unreal-style AAIController).
 /// When a UNavigationSystem is set, MoveTo* follows a NavMesh path; otherwise line-of-sight XZ.
-class AIController : public AController {
+class AAIController : public AController {
 public:
     void SetWishDirection(const glm::vec3& wishDirXZ) { wishDir_ = wishDirXZ; }
     void ClearWishDirection() { wishDir_ = {}; }

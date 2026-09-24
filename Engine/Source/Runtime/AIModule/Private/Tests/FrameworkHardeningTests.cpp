@@ -19,15 +19,15 @@
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("BehaviorTree Sequence and Selector with Blackboard", "[gameplay][bt]") {
-    Blackboard board;
-    BTConditionBool hasTarget("HasTarget", true);
+    UBlackboardComponent board;
+    UBTDecorator_Bool hasTarget("HasTarget", true);
     int ran = 0;
-    BTAction act([&](Blackboard& b, float) {
+    UBTTask_Action act([&](UBlackboardComponent& b, float) {
         ++ran;
         b.SetBool("DidAct", true);
         return EBTNodeResult::Succeeded;
     });
-    BTSequence seq({&hasTarget, &act});
+    UBTComposite_Sequence seq({&hasTarget, &act});
 
     REQUIRE(seq.Tick(board, 0.016f) == EBTNodeResult::Failed);
     board.SetBool("HasTarget", true);
@@ -35,8 +35,8 @@ TEST_CASE("BehaviorTree Sequence and Selector with Blackboard", "[gameplay][bt]"
     REQUIRE(ran == 1);
     REQUIRE(board.GetBool("DidAct"));
 
-    BTConditionBool never("Never", true);
-    BTSelector sel({&never, &act});
+    UBTDecorator_Bool never("Never", true);
+    UBTComposite_Selector sel({&never, &act});
     REQUIRE(sel.Tick(board, 0.0f) == EBTNodeResult::Succeeded);
     REQUIRE(ran == 2);
 }
@@ -44,7 +44,7 @@ TEST_CASE("BehaviorTree Sequence and Selector with Blackboard", "[gameplay][bt]"
 TEST_CASE("AIController logic state tracks MoveTo Chase Idle", "[gameplay][ai]") {
     UWorld world;
     auto* character = world.SpawnActor<ACharacter>();
-    AIController ai;
+    AAIController ai;
     ai.Possess(character);
     REQUIRE(ai.GetLogicState() == EAILogicState::Idle);
     ai.MoveToLocation({3.0f, 0.0f, 0.0f});

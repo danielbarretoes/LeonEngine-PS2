@@ -3,7 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include "Animation/CookedSkeletal.h"
-#include "StaticMeshCook.h"
+#include "StaticMeshBuilder.h"
 #include "CookPaths.h"
 #include <nlohmann/json.hpp>
 
@@ -28,23 +28,23 @@ namespace fs = std::filesystem;
                   << ": staticmesh needs exactly one of obj/fbx/gltf\n";
         return 1;
     }
-    const std::string outAbs = ResolveBeside(baseDir, out);
+    const std::string outAbs = FCookPaths::ResolveBeside(baseDir, out);
     const std::string materialsAbs =
-        materialsRel.empty() ? std::string{} : ResolveBeside(baseDir, materialsRel);
+        materialsRel.empty() ? std::string{} : FCookPaths::ResolveBeside(baseDir, materialsRel);
     std::string err;
     bool ok = false;
     if (!obj.empty()) {
-        const std::string src = ResolveBeside(baseDir, obj);
+        const std::string src = FCookPaths::ResolveBeside(baseDir, obj);
         std::cout << "Cook staticmesh OBJ '" << src << "' -> " << outAbs << '\n';
-        ok = CookStaticMeshFromObj(src, outAbs, err);
+        ok = FStaticMeshBuilder::CookFromObj(src, outAbs, err);
     } else if (!fbx.empty()) {
-        const std::string src = ResolveBeside(baseDir, fbx);
+        const std::string src = FCookPaths::ResolveBeside(baseDir, fbx);
         std::cout << "Cook staticmesh FBX '" << src << "' -> " << outAbs << '\n';
-        ok = CookStaticMeshFromFbx(src, outAbs, err);
+        ok = FStaticMeshBuilder::CookFromFbx(src, outAbs, err);
     } else {
-        const std::string src = ResolveBeside(baseDir, gltf);
+        const std::string src = FCookPaths::ResolveBeside(baseDir, gltf);
         std::cout << "Cook staticmesh glTF '" << src << "' -> " << outAbs << '\n';
-        ok = CookStaticMeshFromGltf(src, outAbs, materialsAbs, err);
+        ok = FStaticMeshBuilder::CookFromGltf(src, outAbs, materialsAbs, err);
     }
     if (!ok) {
         std::cerr << "Cook staticmesh failed (step " << stepIndex << "): "
@@ -56,7 +56,7 @@ namespace fs = std::filesystem;
 
 } // namespace
 
-int RunCookRecipeFile(const std::string& recipePath) {
+int FCookRecipe::RunFile(const std::string& recipePath) {
     std::ifstream in(recipePath);
     if (!in) {
         std::cerr << "Cannot open recipe '" << recipePath << "'\n";
@@ -80,18 +80,18 @@ int RunCookRecipeFile(const std::string& recipePath) {
         const std::string type = step["type"].get<std::string>();
         if (type == "character") {
             const std::string name = step.value("name", "");
-            const std::string mesh = ResolveBeside(baseDir, step.value("mesh", ""));
-            const std::string run = ResolveBeside(baseDir, step.value("run", ""));
-            const std::string out = ResolveBeside(baseDir, step.value("out", "."));
+            const std::string mesh = FCookPaths::ResolveBeside(baseDir, step.value("mesh", ""));
+            const std::string run = FCookPaths::ResolveBeside(baseDir, step.value("run", ""));
+            const std::string out = FCookPaths::ResolveBeside(baseDir, step.value("out", "."));
             FCookJumpAnimPaths jump{};
             if (step.contains("jump") && step["jump"].is_string()) {
-                jump.jumpStartFbx = ResolveBeside(baseDir, step["jump"].get<std::string>());
+                jump.jumpStartFbx = FCookPaths::ResolveBeside(baseDir, step["jump"].get<std::string>());
             }
             if (step.contains("fall") && step["fall"].is_string()) {
-                jump.fallLoopFbx = ResolveBeside(baseDir, step["fall"].get<std::string>());
+                jump.fallLoopFbx = FCookPaths::ResolveBeside(baseDir, step["fall"].get<std::string>());
             }
             if (step.contains("land") && step["land"].is_string()) {
-                jump.landFbx = ResolveBeside(baseDir, step["land"].get<std::string>());
+                jump.landFbx = FCookPaths::ResolveBeside(baseDir, step["land"].get<std::string>());
             }
             if (name.empty() || mesh.empty() || run.empty()) {
                 std::cerr << "Recipe step " << stepIndex << ": character needs name/mesh/run\n";
@@ -103,9 +103,9 @@ int RunCookRecipeFile(const std::string& recipePath) {
                 return 2;
             }
         } else if (type == "anim") {
-            const std::string fbx = ResolveBeside(baseDir, step.value("fbx", ""));
-            const std::string skeleton = ResolveBeside(baseDir, step.value("skeleton", ""));
-            const std::string out = ResolveBeside(baseDir, step.value("out", ""));
+            const std::string fbx = FCookPaths::ResolveBeside(baseDir, step.value("fbx", ""));
+            const std::string skeleton = FCookPaths::ResolveBeside(baseDir, step.value("skeleton", ""));
+            const std::string out = FCookPaths::ResolveBeside(baseDir, step.value("out", ""));
             const std::string name = step.value("name", "");
             const bool looping = step.value("loop", true);
             if (fbx.empty() || skeleton.empty() || out.empty()) {
