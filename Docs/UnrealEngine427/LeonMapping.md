@@ -68,7 +68,7 @@ Update this page whenever a module or type is added, moved or renamed.
 | `GameplayStatics` | `UGameplayStatics` |
 | `BehaviorTree`, `Blackboard` | `UBehaviorTree`, `UBlackboardComponent` |
 | `AnimInstance`, `Skeleton`, `AnimSequence`, `BlendSpace1D` | `UAnimInstance`, `USkeleton`, `UAnimSequence`, `UBlendSpace1D` |
-| `Texture`, `StaticMesh`, `SkeletalMesh`, `MaterialAsset` | `UTexture2D`, `UStaticMesh`, `USkeletalMesh`, `UMaterial` |
+| `Texture`, `StaticMesh`, `SkeletalMesh`, `Material` | `UTexture2D`, `UStaticMesh`, `USkeletalMesh`, `FMaterial` (render parameters; no `UMaterial` asset class yet) |
 | `UserWidget`, `TextBlockWidget`, `ButtonWidget`, … | `UUserWidget`, `UTextBlock`, `UButton`, … |
 | `Transform` | `FTransform` |
 | `Window` | `FGenericWindow` (+ `FGLFWWindow`, `FPS2Window`) |
@@ -105,6 +105,49 @@ the 640×448 main window, then starts the statically linked modules (the game mo
 each `Tick` runs `PollGameDeviceState` → `PollEvents` → `FTicker` → `FPlatformEngineLoopHooks::EndFrame`
 (stats overlay) → `SwapBuffers` (vsync) → `PostPresent`. Desktop `WITH_ENGINE=1` still delegates to the
 pre-UE `GameApplication` loop until Phase 4.6.
+
+### Phase 4 — Epic naming across every module
+
+`namespace leon` is gone (types are global like UE; protocol / codec helpers live in `Leon::Net`,
+`Leon::InputActions`). Types got UE prefixes group by group, then clang-tidy
+`readability-identifier-naming` renamed members, methods, parameters and locals over every
+translation unit (Win64 compile database; PS2-only sources through a host-clang database built from
+the pinned ps2dev image headers).
+
+| Group | Leon (before) | UE name (now) |
+| --- | --- | --- |
+| 4.1 Core / Json / Projects | `Transform`, `Paths` free functions, `FileIO`, `AsciiToLower` | `FTransform`, `FPaths::*` (`ExecutableDir`, `ProjectContentDir`, …), `FFileHelper` (`Misc/FileHelper.h`), `FCString::ToLower` (`Misc/CString.h`) |
+| | `serialization::ReadVec3 / LoadJsonFile`, `ProjectPack` | `FJsonUtils` (`Serialization/JsonUtils.h`), `FProjectDescriptor` (`ProjectDescriptor.h`) |
+| 4.2 Render | `Renderer`, `Texture`, `StaticMesh`, `SkeletalMesh`, `Material`, `EShadingModel` | `FSceneRenderer` (`SceneRenderer.h`), `UTexture2D` (`Texture2D.h`), `UStaticMesh`, `USkeletalMesh`, `FMaterial`, `EMaterialShadingModel` |
+| | `MeshData`, `SubMesh`, `Vertex`, `Aabb`, `Plane`, `Frustum` | `FMeshData`, `FMeshSection`, `FVertex`, `FBox`, `FPlane`, `FFrustum` |
+| | `Shader`, `ShadowMap`, `EnvMap`, `GpuPassTimer`, `LdrColorTarget`, `SsaoTarget`, … | `FShader`, `FShadowMap`, `FEnvironmentMap`, `FGPUPassTimer`, `FLDRColorTarget`, `FSSAOTarget`, … |
+| | `RHITextureId`, … , `kInvalidTexture` | `FRHITextureId`, … , `InvalidTexture` |
+| 4.3 Physics | `HitResult`, `CollisionQueryParams`, `BodyInstance`, `PhysScene`, `CapsuleShape` | `FHitResult`, `FCollisionQueryParams`, `FBodyInstance`, `FPhysScene`, `FCapsuleShape` |
+| 4.4 Anim / Audio / Net | `Skeleton`, `AnimSequence`, `BlendSpace1D`, `AnimInstance`, `AudioDevice`, `HelloMsg`, … | `USkeleton`, `UAnimSequence`, `UBlendSpace1D` (`FBlendSample`), `UAnimInstance`, `FAudioDevice`, `Leon::Net::FHelloMsg`, … (`kProtocolVersion` -> `CurrentProtocolVersion`) |
+| 4.5 UMG | `ButtonWidget`, `ImageWidget`, `ProgressBarWidget`, `TextBlockWidget`, `VerticalBoxWidget`, `WidgetPaintContext` | `UButton`, `UImage`, `UProgressBar`, `UTextBlock`, `UVerticalBox` (files renamed to match), `FPaintContext` |
+| 4.6 Engine | `Engine`, `World`, `Level`, `Actor`, `Character`, `Camera`, `GameMode`, `GameState` | `UGameEngine`, `UWorld`, `ULevel`, `AActor`, `ACharacter`, `UCameraComponent` (`Camera/CameraComponent.h`), `AGameModeBase`, `AGameStateBase` |
+| | `LineTraceSingleByChannel(...)`, `ApplyPointDamage(...)` (Damage.h) | `UGameplayStatics::*` (`Kismet/GameplayStatics.h`) |
+| | `NavigationSystem`, `NavMesh`, `InputMappingContext`, `PlayerInput`, `NetDriver` | `UNavigationSystem`, `FNavMesh`, `UInputMappingContext`, `UPlayerInput`, `UNetDriver` |
+| 4.7 AI | `AIController`, `BTSequence`, `BTSelector`, `BTConditionBool`, `BTAction`, `Blackboard` | `AAIController`, `UBTComposite_Sequence`, `UBTComposite_Selector`, `UBTDecorator_Bool`, `UBTTask_Action`, `UBlackboardComponent` |
+| 4.8 Tools | LeonCook `main`, `RunCookRecipeFile`, `ResolveBeside`, `CookStaticMeshFrom*` | `UCookCommandlet::Main` (`Commandlets/CookCommandlet.h`), `FCookRecipe::RunFile`, `FCookPaths::ResolveBeside`, `FStaticMeshBuilder::CookFrom*` |
+| 4.9 Launch | `RunLeonGame` + `GameApplication::Run` loop | `FEngineLoop::Init/Tick/Exit` driving `FGameApplication::Init/Tick/Exit` -> `UGameEngine::Start/Tick` |
+
+Identifier conventions applied (Epic coding standard):
+
+- Members, methods, free functions, parameters and locals in PascalCase; `b` prefix on bools; no `k`
+  or trailing-underscore forms; globals keep a `G` prefix (`GDynamicRHI`, `GEngineLoop`).
+- Accessor that would collide with its member -> `GetX()` (`Id()` + `id_` -> `GetId()` + `Id`); bool
+  accessors use `Is` / `Has` (`HasFailed()`).
+- Parameter that would shadow a member -> `InX`; local that would shadow a member or a
+  namespace-scope constant -> `LocalX` (`kFaceNormals` + `faceNormals` -> `FaceNormals` + `LocalFaceNormals`).
+- Variadic templates: `template <typename... ArgsType> ... (ArgsType&&... Args)`.
+- UE enumerator names with underscores are kept (`EKeys::Gamepad_FaceButton_Bottom`).
+- Public top-level classes / structs carry `<MODULE>_API` (empty: static linking).
+- Shadowing is a compile error on every platform (MSVC `/we4456 /we4457 /we4458 /we4459`, GCC
+  `-Werror=shadow`), mirroring UE's `ShadowVariableWarningLevel = Error`.
+- Sets of free functions become static classes only where UE has that homologue (`FPaths`,
+  `FFileHelper`, `FCString`, `FJsonUtils`, `UGameplayStatics`, `FCookRecipe`, …); other free functions stay
+  free and PascalCase like UE's `DrawDebugLine`.
 
 ## Deviations from UE 4.27 (intentional)
 
