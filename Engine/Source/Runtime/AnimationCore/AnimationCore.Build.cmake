@@ -2,5 +2,4 @@
 leon_module(AnimationCore
 	PLATFORMS Desktop
 	PUBLIC_DEPENDENCIES Core GLM
-	PRIVATE_DEPENDENCIES UFBX
 )

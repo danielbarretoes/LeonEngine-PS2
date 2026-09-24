@@ -1,6 +1,5 @@
 #include "CookRecipe.h"
 
-#include "Animation/CookedSkeletal.h"
 #include "CookPaths.h"
 #include "StaticMeshBuilder.h"
 
@@ -93,57 +92,7 @@ int FCookRecipe::RunFile(const std::string& RecipePath)
 			return 1;
 		}
 		const std::string Type = Step["type"].get<std::string>();
-		if (Type == "character")
-		{
-			const std::string Name = Step.value("name", "");
-			const std::string Mesh = FCookPaths::ResolveBeside(BaseDir, Step.value("mesh", ""));
-			const std::string Run = FCookPaths::ResolveBeside(BaseDir, Step.value("run", ""));
-			const std::string Out = FCookPaths::ResolveBeside(BaseDir, Step.value("out", "."));
-			FCookJumpAnimPaths Jump{};
-			if (Step.contains("jump") && Step["jump"].is_string())
-			{
-				Jump.JumpStartFbx = FCookPaths::ResolveBeside(BaseDir, Step["jump"].get<std::string>());
-			}
-			if (Step.contains("fall") && Step["fall"].is_string())
-			{
-				Jump.FallLoopFbx = FCookPaths::ResolveBeside(BaseDir, Step["fall"].get<std::string>());
-			}
-			if (Step.contains("land") && Step["land"].is_string())
-			{
-				Jump.LandFbx = FCookPaths::ResolveBeside(BaseDir, Step["land"].get<std::string>());
-			}
-			if (Name.empty() || Mesh.empty() || Run.empty())
-			{
-				std::cerr << "Recipe step " << StepIndex << ": character needs name/mesh/run\n";
-				return 1;
-			}
-			std::cout << "Cook character '" << Name << "' -> " << Out << '\n';
-			if (!CookCharacterFromFbx(Name, Mesh, Run, Out, Jump))
-			{
-				std::cerr << "Cook character failed (step " << StepIndex << ")\n";
-				return 2;
-			}
-		}
-		else if (Type == "anim")
-		{
-			const std::string Fbx = FCookPaths::ResolveBeside(BaseDir, Step.value("fbx", ""));
-			const std::string Skeleton = FCookPaths::ResolveBeside(BaseDir, Step.value("skeleton", ""));
-			const std::string Out = FCookPaths::ResolveBeside(BaseDir, Step.value("out", ""));
-			const std::string Name = Step.value("name", "");
-			const bool bLooping = Step.value("loop", true);
-			if (Fbx.empty() || Skeleton.empty() || Out.empty())
-			{
-				std::cerr << "Recipe step " << StepIndex << ": anim needs fbx/skeleton/out\n";
-				return 1;
-			}
-			std::cout << "Cook anim '" << Name << "' -> " << Out << '\n';
-			if (!CookAnimSequenceFromFbx(Fbx, Skeleton, Out, Name, bLooping))
-			{
-				std::cerr << "Cook anim failed (step " << StepIndex << ")\n";
-				return 2;
-			}
-		}
-		else if (Type == "staticmesh")
+		if (Type == "staticmesh")
 		{
 			const int Rc = CookRecipeStaticMesh(Step, BaseDir, StepIndex);
 			if (Rc != 0)

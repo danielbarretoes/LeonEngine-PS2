@@ -24,6 +24,9 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   `FGameplayRouter`, `FLevelAnimation`, `FProjectDescriptor` packs (`Projects/<Name>/leon.game.json`, `--pack`),
   `FPaths` pack content roots, travel on `UGameInstance` / `AGameModeBase`, `ContentValidator`, `FArenaCamera`
   and the editor ids.
+- Cooked skeletal formats (`.lskel`, `.lskm`, `.lanim`, `.lchar`, blend space JSON), their loaders on
+  `USkeletalMeshComponent` and the `character` / `anim` modes and recipe steps of LeonCook. The FBX skeletal
+  import moved to `Developer/MeshUtilities` (`FbxSkeletalImport.h`); AnimationCore no longer links ufbx.
 
 ### Changed (runtime)
 

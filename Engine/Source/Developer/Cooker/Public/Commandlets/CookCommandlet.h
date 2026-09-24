@@ -4,7 +4,7 @@
 
 /**
  * Offline cook entry point (UE: UCookCommandlet, run as `UE4Editor-Cmd -run=cook`):
- * `staticmesh`, `character`, `anim` and `recipe` modes. Returns a process exit code.
+ * `staticmesh` and `recipe` modes. Returns a process exit code.
  */
 class COOKER_API UCookCommandlet
 {

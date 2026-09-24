@@ -4,7 +4,7 @@
 
 #include <string>
 
-/** Cook recipe runner: a JSON `steps` array of `character` / `anim` / `staticmesh` steps. */
+/** Cook recipe runner: a JSON `steps` array of `staticmesh` steps. */
 struct COOKER_API FCookRecipe
 {
 	/** Runs a recipe file; relative paths resolve next to it. Returns a process exit code (0 ok). */

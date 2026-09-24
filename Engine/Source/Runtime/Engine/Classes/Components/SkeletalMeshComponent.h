@@ -100,10 +100,6 @@ public:
 
 	void ApplyFitHeight(float FitHeight);
 
-	[[nodiscard]] bool LoadFromFbx(const std::string& MeshFbxPath, const std::string& RunFbxPath, float FitHeight);
-	/// Load a Leon character package (`.lchar`) or legacy `.character.json`.
-	[[nodiscard]] bool LoadFromCooked(UGameEngine& Engine, const std::string& CharacterAssetPath);
-
 	void ClearAttachments();
 	FSkelMeshAttachment& AddAttachment(FSkelMeshAttachment Attachment);
 	[[nodiscard]] std::vector<FSkelMeshAttachment>& GetAttachments()

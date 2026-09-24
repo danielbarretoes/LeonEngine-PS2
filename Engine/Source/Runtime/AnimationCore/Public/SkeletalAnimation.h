@@ -306,6 +306,3 @@ struct ANIMATIONCORE_API FSkeletalMeshData
 		return Vertices.empty() || Indices.empty();
 	}
 };
-
-[[nodiscard]] bool LoadSkeletalMeshFromFbx(const std::string& Path, FSkeletalMeshData& Out);
-[[nodiscard]] bool LoadAnimSequenceFromFbx(const std::string& Path, const USkeleton& InSkeleton, UAnimSequence& Out);
