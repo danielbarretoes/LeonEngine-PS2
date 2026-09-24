@@ -26,8 +26,8 @@ TEST_CASE("EncodeRpc / DecodeRpc roundtrip Notify payload", "[net][rpc]") {
     const std::uint8_t* outPayload = nullptr;
     std::uint16_t outBytes = 0;
     REQUIRE(Leon::Net::DecodeRpc(packet.data(), packet.size(), header, outPayload, outBytes));
-    REQUIRE(header.rpcId == static_cast<std::uint8_t>(Leon::Net::ERpcId::Notify));
-    REQUIRE(header.targetSlot == 1);
+    REQUIRE(header.RpcId == static_cast<std::uint8_t>(Leon::Net::ERpcId::Notify));
+    REQUIRE(header.TargetSlot == 1);
     REQUIRE(outBytes == 4);
     REQUIRE(std::memcmp(outPayload, "ping", 4) == 0);
 }

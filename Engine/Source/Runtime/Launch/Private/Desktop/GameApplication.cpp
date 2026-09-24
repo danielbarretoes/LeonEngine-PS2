@@ -87,7 +87,7 @@ int FGameApplication::Run(int argc, char** argv, const char* packName,
         !dedicated && (HasFlag(argc, argv, "--listen") || HasFlag(argc, argv, "--host"));
     const bool showStats = HasFlag(argc, argv, "--show-stats");
     const std::uint16_t netPort =
-        ParsePort(argc, argv, static_cast<std::uint16_t>(Leon::Net::kDefaultPort));
+        ParsePort(argc, argv, static_cast<std::uint16_t>(Leon::Net::DefaultPort));
     const float tickHz = ParseTickHz(argc, argv, 60.0f);
     const std::string joinAddress = ParseJoinAddress(argc, argv);
     const std::string playMap = ParsePlayMap(argc, argv);

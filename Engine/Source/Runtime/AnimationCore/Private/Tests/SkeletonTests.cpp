@@ -7,34 +7,34 @@
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("Skeleton FindBoneIndex and BoneCount", "[animation][skeleton]") {
-    USkeleton sk;
-    sk.boneNames = {"root", "hips", "spine"};
-    sk.parentIndices = {-1, 0, 1};
-    sk.inverseBindPose.assign(3, glm::mat4(1.0f));
+    USkeleton Sk;
+    Sk.BoneNames = {"root", "hips", "spine"};
+    Sk.ParentIndices = {-1, 0, 1};
+    Sk.InverseBindPose.assign(3, glm::mat4(1.0f));
 
-    REQUIRE(sk.BoneCount() == 3);
-    REQUIRE(sk.FindBoneIndex("hips") == 1);
-    REQUIRE(sk.FindBoneIndex("missing") == -1);
+    REQUIRE(Sk.BoneCount() == 3);
+    REQUIRE(Sk.FindBoneIndex("hips") == 1);
+    REQUIRE(Sk.FindBoneIndex("missing") == -1);
 }
 
 TEST_CASE("AnimSequence SampleLocalPose lerps mid-frame", "[animation][sequence]") {
-    UAnimSequence clip;
-    clip.durationSeconds = 1.0f;
-    clip.framesPerSecond = 1.0f;
-    clip.localPoseFrames.resize(2);
-    clip.localPoseFrames[0] = {glm::mat4(1.0f)};
-    clip.localPoseFrames[1] = {glm::translate(glm::mat4(1.0f), glm::vec3{2.0f, 0.0f, 0.0f})};
+    UAnimSequence Clip;
+    Clip.DurationSeconds = 1.0f;
+    Clip.FramesPerSecond = 1.0f;
+    Clip.LocalPoseFrames.resize(2);
+    Clip.LocalPoseFrames[0] = {glm::mat4(1.0f)};
+    Clip.LocalPoseFrames[1] = {glm::translate(glm::mat4(1.0f), glm::vec3{2.0f, 0.0f, 0.0f})};
 
-    std::vector<glm::mat4> pose;
-    clip.SampleLocalPose(0.5f, pose);
-    REQUIRE(pose.size() == 1);
-    REQUIRE_THAT(pose[0][3].x, WithinAbs(1.0f, 1.0e-3f));
+    std::vector<glm::mat4> Pose;
+    Clip.SampleLocalPose(0.5f, Pose);
+    REQUIRE(Pose.size() == 1);
+    REQUIRE_THAT(Pose[0][3].x, WithinAbs(1.0f, 1.0e-3f));
 }
 
 TEST_CASE("AnimInstance without skeleton yields empty skin", "[animation][animinstance]") {
-    UAnimInstance anim;
-    anim.NativeUpdateAnimation(0.016f);
-    std::vector<glm::mat4> skin;
-    anim.GetSkinMatrices(skin);
-    REQUIRE(skin.empty());
+    UAnimInstance Anim;
+    Anim.NativeUpdateAnimation(0.016f);
+    std::vector<glm::mat4> Skin;
+    Anim.GetSkinMatrices(Skin);
+    REQUIRE(Skin.empty());
 }

@@ -4,89 +4,89 @@
 namespace Leon::Net
 {
 
-bool EncodeSnapshot(std::vector<std::uint8_t>& outPacket, std::uint32_t tick, const FPawnSnap* pawns,
-                    std::uint8_t pawnCount, const FBodySnap* bodies, std::uint8_t bodyCount,
-                    const FSnapshotMatchMeta* matchMeta) {
-    if (pawnCount > kMaxSnapshotPawns) {
+bool EncodeSnapshot(std::vector<std::uint8_t>& OutPacket, std::uint32_t InTick, const FPawnSnap* InPawns,
+                    std::uint8_t PawnCount, const FBodySnap* InBodies, std::uint8_t BodyCount,
+                    const FSnapshotMatchMeta* InMatchMeta) {
+    if (PawnCount > MaxSnapshotPawns) {
         return false;
     }
-    if (bodyCount > kMaxDynamicBodies) {
+    if (BodyCount > MaxDynamicBodies) {
         return false;
     }
-    if ((pawnCount > 0 && pawns == nullptr) || (bodyCount > 0 && bodies == nullptr)) {
+    if ((PawnCount > 0 && InPawns == nullptr) || (BodyCount > 0 && InBodies == nullptr)) {
         return false;
     }
 
     // Flow: Header → optional MatchMeta ext → pawns → bodies.
-    FSnapshotHeader header{};
-    header.tick = tick;
-    header.pawnCount = pawnCount;
-    header.bodyCount = bodyCount;
-    header.extBytes =
-        matchMeta != nullptr ? static_cast<std::uint16_t>(sizeof(FSnapshotMatchMeta)) : 0;
+    FSnapshotHeader Header{};
+    Header.Tick = InTick;
+    Header.PawnCount = PawnCount;
+    Header.BodyCount = BodyCount;
+    Header.ExtBytes =
+        InMatchMeta != nullptr ? static_cast<std::uint16_t>(sizeof(FSnapshotMatchMeta)) : 0;
 
-    const std::size_t bytes = sizeof(header) + header.extBytes + (sizeof(FPawnSnap) * pawnCount) +
-                              (sizeof(FBodySnap) * bodyCount);
-    outPacket.resize(bytes);
+    const std::size_t Bytes = sizeof(Header) + Header.ExtBytes + (sizeof(FPawnSnap) * PawnCount) +
+                              (sizeof(FBodySnap) * BodyCount);
+    OutPacket.resize(Bytes);
 
-    std::size_t offset = 0;
-    std::memcpy(outPacket.data() + offset, &header, sizeof(header));
-    offset += sizeof(header);
-    if (matchMeta != nullptr) {
-        std::memcpy(outPacket.data() + offset, matchMeta, sizeof(FSnapshotMatchMeta));
-        offset += sizeof(FSnapshotMatchMeta);
+    std::size_t Offset = 0;
+    std::memcpy(OutPacket.data() + Offset, &Header, sizeof(Header));
+    Offset += sizeof(Header);
+    if (InMatchMeta != nullptr) {
+        std::memcpy(OutPacket.data() + Offset, InMatchMeta, sizeof(FSnapshotMatchMeta));
+        Offset += sizeof(FSnapshotMatchMeta);
     }
-    if (pawnCount > 0) {
-        std::memcpy(outPacket.data() + offset, pawns, sizeof(FPawnSnap) * pawnCount);
-        offset += sizeof(FPawnSnap) * pawnCount;
+    if (PawnCount > 0) {
+        std::memcpy(OutPacket.data() + Offset, InPawns, sizeof(FPawnSnap) * PawnCount);
+        Offset += sizeof(FPawnSnap) * PawnCount;
     }
-    if (bodyCount > 0) {
-        std::memcpy(outPacket.data() + offset, bodies, sizeof(FBodySnap) * bodyCount);
+    if (BodyCount > 0) {
+        std::memcpy(OutPacket.data() + Offset, InBodies, sizeof(FBodySnap) * BodyCount);
     }
     return true;
 }
 
-bool DecodeSnapshot(const std::uint8_t* data, std::size_t size, FDecodedSnapshot& out) {
-    out = {};
-    if (data == nullptr || size < sizeof(FSnapshotHeader)) {
+bool DecodeSnapshot(const std::uint8_t* Data, std::size_t Size, FDecodedSnapshot& Out) {
+    Out = {};
+    if (Data == nullptr || Size < sizeof(FSnapshotHeader)) {
         return false;
     }
 
-    FSnapshotHeader header{};
-    std::memcpy(&header, data, sizeof(header));
-    if (header.type != static_cast<std::uint8_t>(ENetMsg::Snapshot)) {
+    FSnapshotHeader Header{};
+    std::memcpy(&Header, Data, sizeof(Header));
+    if (Header.Type != static_cast<std::uint8_t>(ENetMsg::Snapshot)) {
         return false;
     }
-    if (header.pawnCount > kMaxSnapshotPawns || header.bodyCount > kMaxDynamicBodies) {
-        return false;
-    }
-
-    const std::size_t needed = sizeof(header) + header.extBytes +
-                               (sizeof(FPawnSnap) * header.pawnCount) +
-                               (sizeof(FBodySnap) * header.bodyCount);
-    if (size < needed) {
+    if (Header.PawnCount > MaxSnapshotPawns || Header.BodyCount > MaxDynamicBodies) {
         return false;
     }
 
-    out.tick = header.tick;
-    std::size_t offset = sizeof(header);
-    if (header.extBytes == sizeof(FSnapshotMatchMeta)) {
-        std::memcpy(&out.matchMeta, data + offset, sizeof(FSnapshotMatchMeta));
-        out.hasMatchMeta = true;
-        offset += sizeof(FSnapshotMatchMeta);
-    } else if (header.extBytes > 0) {
+    const std::size_t Needed = sizeof(Header) + Header.ExtBytes +
+                               (sizeof(FPawnSnap) * Header.PawnCount) +
+                               (sizeof(FBodySnap) * Header.BodyCount);
+    if (Size < Needed) {
+        return false;
+    }
+
+    Out.Tick = Header.Tick;
+    std::size_t Offset = sizeof(Header);
+    if (Header.ExtBytes == sizeof(FSnapshotMatchMeta)) {
+        std::memcpy(&Out.MatchMeta, Data + Offset, sizeof(FSnapshotMatchMeta));
+        Out.bHasMatchMeta = true;
+        Offset += sizeof(FSnapshotMatchMeta);
+    } else if (Header.ExtBytes > 0) {
         // Unknown extension: skip so newer packs can add blobs without breaking older readers.
-        offset += header.extBytes;
+        Offset += Header.ExtBytes;
     }
 
-    out.pawns.resize(header.pawnCount);
-    out.bodies.resize(header.bodyCount);
-    if (header.pawnCount > 0) {
-        std::memcpy(out.pawns.data(), data + offset, sizeof(FPawnSnap) * header.pawnCount);
-        offset += sizeof(FPawnSnap) * header.pawnCount;
+    Out.Pawns.resize(Header.PawnCount);
+    Out.Bodies.resize(Header.BodyCount);
+    if (Header.PawnCount > 0) {
+        std::memcpy(Out.Pawns.data(), Data + Offset, sizeof(FPawnSnap) * Header.PawnCount);
+        Offset += sizeof(FPawnSnap) * Header.PawnCount;
     }
-    if (header.bodyCount > 0) {
-        std::memcpy(out.bodies.data(), data + offset, sizeof(FBodySnap) * header.bodyCount);
+    if (Header.BodyCount > 0) {
+        std::memcpy(Out.Bodies.data(), Data + Offset, sizeof(FBodySnap) * Header.BodyCount);
     }
     return true;
 }

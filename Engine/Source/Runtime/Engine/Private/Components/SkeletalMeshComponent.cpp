@@ -48,7 +48,7 @@ void USkeletalMeshComponent::bindAnimInstanceToAssets() {
     } else {
         animInstance_->SetSkeleton(nullptr);
     }
-    if (!blendSpace_.samples.empty()) {
+    if (!blendSpace_.Samples.empty()) {
         animInstance_->SetBlendSpace(&blendSpace_);
     }
 }
@@ -68,7 +68,7 @@ UAnimSequence& USkeletalMeshComponent::GetOrCreateSequence(const std::string& na
         return sequences_[it->second];
     }
     sequences_.push_back(UAnimSequence{});
-    sequences_.back().name = name;
+    sequences_.back().Name = name;
     sequenceIndexByName_[name] = sequences_.size() - 1;
     return sequences_.back();
 }
@@ -157,8 +157,8 @@ bool USkeletalMeshComponent::LoadFromFbx(const std::string& meshFbxPath,
     sequences_.clear();
     sequenceIndexByName_.clear();
     UAnimSequence& idle = GetOrCreateSequence("BreathingIdle");
-    idle = std::move(data.embeddedAnim);
-    idle.name = "BreathingIdle";
+    idle = std::move(data.EmbeddedAnim);
+    idle.Name = "BreathingIdle";
     if (idle.FrameCount() <= 0) {
         std::cerr << "SkeletalMeshComponent: mesh FBX has no embedded AnimSequence\n";
     }
@@ -177,7 +177,7 @@ bool USkeletalMeshComponent::LoadFromFbx(const std::string& meshFbxPath,
     if (!LoadAnimSequenceFromFbx(runPath, mesh->GetSkeleton(), run)) {
         std::cerr << "SkeletalMeshComponent: failed to load run AnimSequence '" << runPath << "'\n";
     }
-    run.name = "Running";
+    run.Name = "Running";
 
     SetSkeletalMesh(std::move(mesh));
     ApplyFitHeight(fitHeight);
@@ -233,9 +233,9 @@ bool USkeletalMeshComponent::LoadFromCooked(UGameEngine& engine, const std::stri
     sequences_.clear();
     sequenceIndexByName_.clear();
     const std::string blendDir = fs::path(blendJson).parent_path().string();
-    blendSpace_.name = bsDesc.name;
-    blendSpace_.axisMin = bsDesc.axisMin;
-    blendSpace_.axisMax = bsDesc.axisMax;
+    blendSpace_.Name = bsDesc.name;
+    blendSpace_.AxisMin = bsDesc.axisMin;
+    blendSpace_.AxisMax = bsDesc.axisMax;
     blendSpace_.ClearSamples();
 
     // Optional jump clips first; deque keeps pointers stable across later inserts.
@@ -249,7 +249,7 @@ bool USkeletalMeshComponent::LoadFromCooked(UGameEngine& engine, const std::stri
         if (!LoadAnimSequence(joinRel(baseDir, rel), seq)) {
             std::cerr << "SkeletalMeshComponent: failed optional anim '" << rel << "'\n";
             seq = UAnimSequence{};
-            seq.name = name;
+            seq.Name = name;
         }
     };
     loadNamed(desc.jumpStartAnimRel, "JumpingUp");

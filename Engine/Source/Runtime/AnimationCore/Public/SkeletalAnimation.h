@@ -12,77 +12,77 @@
 
 class USkeletalMeshComponent;
 
-constexpr int kMaxSkinBones = 96;
-constexpr int kMaxBoneInfluences = 4;
+constexpr int MaxSkinBones = 96;
+constexpr int MaxBoneInfluences = 4;
 
 struct FSkeletalVertex {
-    glm::vec3 position{};
-    glm::vec3 normal{0.0f, 1.0f, 0.0f};
-    glm::vec2 texCoord{};
-    glm::vec4 tangent{1.0f, 0.0f, 0.0f, 1.0f};
-    glm::ivec4 boneIndices{0};
-    glm::vec4 boneWeights{0.0f};
+    glm::vec3 Position{};
+    glm::vec3 Normal{0.0f, 1.0f, 0.0f};
+    glm::vec2 TexCoord{};
+    glm::vec4 Tangent{1.0f, 0.0f, 0.0f, 1.0f};
+    glm::ivec4 BoneIndices{0};
+    glm::vec4 BoneWeights{0.0f};
 };
 
 struct USkeleton {
-    std::vector<std::string> boneNames;
-    std::vector<int> parentIndices;         // -1 = root
-    std::vector<glm::mat4> inverseBindPose; // cluster geometry_to_bone
+    std::vector<std::string> BoneNames;
+    std::vector<int> ParentIndices;         // -1 = root
+    std::vector<glm::mat4> InverseBindPose; // cluster geometry_to_bone
 
-    [[nodiscard]] int BoneCount() const { return static_cast<int>(boneNames.size()); }
-    [[nodiscard]] int FindBoneIndex(const std::string& name) const;
+    [[nodiscard]] int BoneCount() const { return static_cast<int>(BoneNames.size()); }
+    [[nodiscard]] int FindBoneIndex(const std::string& InName) const;
 };
 
 /// Unreal-like UAnimSequence: per-frame bone matrices as model-space `node_to_world`
 /// at sample time. Skin matrix = boneWorld * geometry_to_bone (inverse bind).
 struct UAnimSequence {
-    std::string name;
-    float durationSeconds = 1.0f;
-    float framesPerSecond = 30.0f;
+    std::string Name;
+    float DurationSeconds = 1.0f;
+    float FramesPerSecond = 30.0f;
     /// When false, SampleLocalPose clamps to the last frame (one-shot Jump / Land).
     bool bLooping = true;
     /// [frame][bone] — model-space bone matrix (`node_to_world`), not parent-local.
     /// Named `localPoseFrames` for historical cooked JSON compatibility.
-    std::vector<std::vector<glm::mat4>> localPoseFrames;
+    std::vector<std::vector<glm::mat4>> LocalPoseFrames;
 
-    [[nodiscard]] int FrameCount() const { return static_cast<int>(localPoseFrames.size()); }
-    [[nodiscard]] bool IsFinished(float timeSeconds) const;
+    [[nodiscard]] int FrameCount() const { return static_cast<int>(LocalPoseFrames.size()); }
+    [[nodiscard]] bool IsFinished(float TimeSeconds) const;
     /// Samples blended bone model-space matrices for `timeSeconds` (loops or clamps by `bLooping`).
-    void SampleLocalPose(float timeSeconds, std::vector<glm::mat4>& outBoneWorld) const;
+    void SampleLocalPose(float TimeSeconds, std::vector<glm::mat4>& OutBoneWorld) const;
 };
 
 /// Unreal-like UBlendSpace1D sample (UAnimSequence + axis position).
 struct FBlendSample {
-    const UAnimSequence* sequence = nullptr;
-    float position = 0.0f;
+    const UAnimSequence* Sequence = nullptr;
+    float Position = 0.0f;
 };
 
 /// Unreal-like UBlendSpace1D: blends adjacent samples along one axis (e.g. Speed).
 struct UBlendSpace1D {
-    std::string name = "BlendSpace1D";
-    float axisMin = 0.0f;
-    float axisMax = 1.0f;
-    std::vector<FBlendSample> samples;
+    std::string Name = "BlendSpace1D";
+    float AxisMin = 0.0f;
+    float AxisMax = 1.0f;
+    std::vector<FBlendSample> Samples;
 
-    void AddSample(const UAnimSequence* sequence, float position) {
-        if (sequence == nullptr) {
+    void AddSample(const UAnimSequence* InSequence, float InPosition) {
+        if (InSequence == nullptr) {
             return;
         }
-        samples.push_back(FBlendSample{sequence, position});
+        Samples.push_back(FBlendSample{InSequence, InPosition});
     }
 
-    void ClearSamples() { samples.clear(); }
+    void ClearSamples() { Samples.clear(); }
 
     /// Resolve axis value into two clips + blend weight toward the higher sample.
-    void Evaluate(float axisValue, const UAnimSequence*& outA, const UAnimSequence*& outB,
-                  float& outAlpha) const;
+    void Evaluate(float AxisValue, const UAnimSequence*& OutA, const UAnimSequence*& OutB,
+                  float& OutAlpha) const;
 };
 
 /// Jump / fall / land clips layered over locomotion (Unreal AnimBP overlay).
 struct FAnimJumpClips {
-    const UAnimSequence* jumpStart = nullptr;
-    const UAnimSequence* fallLoop = nullptr;
-    const UAnimSequence* land = nullptr;
+    const UAnimSequence* JumpStart = nullptr;
+    const UAnimSequence* FallLoop = nullptr;
+    const UAnimSequence* Land = nullptr;
 };
 
 /// Unreal-like locomotion + jump state machine states.
@@ -105,131 +105,131 @@ public:
     UAnimInstance(UAnimInstance&&) = delete;
     UAnimInstance& operator=(UAnimInstance&&) = delete;
 
-    void SetOwningMeshComponent(USkeletalMeshComponent* owner) { owningMesh_ = owner; }
-    [[nodiscard]] USkeletalMeshComponent* GetOwningMeshComponent() const { return owningMesh_; }
+    void SetOwningMeshComponent(USkeletalMeshComponent* Owner) { OwningMesh = Owner; }
+    [[nodiscard]] USkeletalMeshComponent* GetOwningMeshComponent() const { return OwningMesh; }
 
-    void SetSkeleton(const USkeleton* skeleton) { skeleton_ = skeleton; }
-    void SetBlendSpace(const UBlendSpace1D* blendSpace) { blendSpace_ = blendSpace; }
+    void SetSkeleton(const USkeleton* InSkeleton) { Skeleton = InSkeleton; }
+    void SetBlendSpace(const UBlendSpace1D* InBlendSpace) { BlendSpace = InBlendSpace; }
 
-    void SetBlendSpaceInput(float axisValue);
-    [[nodiscard]] float GetBlendSpaceInput() const { return blendInput_; }
-    [[nodiscard]] float GetBlendSpaceInputTarget() const { return blendInputTarget_; }
+    void SetBlendSpaceInput(float AxisValue);
+    [[nodiscard]] float GetBlendSpaceInput() const { return BlendInput; }
+    [[nodiscard]] float GetBlendSpaceInputTarget() const { return BlendInputTarget; }
 
-    void SetLocomotionBlendInterpSpeed(float speed) {
-        locomotionBlendInterpSpeed_ = speed >= 0.0f ? speed : 0.0f;
+    void SetLocomotionBlendInterpSpeed(float Speed) {
+        LocomotionBlendInterpSpeed = Speed >= 0.0f ? Speed : 0.0f;
     }
     [[nodiscard]] float GetLocomotionBlendInterpSpeed() const {
-        return locomotionBlendInterpSpeed_;
+        return LocomotionBlendInterpSpeed;
     }
 
     virtual void NativeInitializeAnimation() {}
-    virtual void NativeUpdateAnimation(float deltaTime);
+    virtual void NativeUpdateAnimation(float DeltaTime);
     /// Current pose bone model-space matrices (`node_to_world`).
-    virtual void GetBoneWorldMatrices(std::vector<glm::mat4>& outBoneWorld) const;
-    virtual void GetSkinMatrices(std::vector<glm::mat4>& outSkin) const;
+    virtual void GetBoneWorldMatrices(std::vector<glm::mat4>& OutBoneWorld) const;
+    virtual void GetSkinMatrices(std::vector<glm::mat4>& OutSkin) const;
 
-    [[nodiscard]] float GetBlendAlpha() const { return blendAlpha_; }
+    [[nodiscard]] float GetBlendAlpha() const { return BlendAlpha; }
 
 protected:
-    void UpdateLocomotion(float deltaTime);
-    void SampleLocomotionBoneWorld(std::vector<glm::mat4>& outBoneWorld) const;
-    void SkinFromBoneWorld(const std::vector<glm::mat4>& boneWorld,
-                           std::vector<glm::mat4>& outSkin) const;
+    void UpdateLocomotion(float DeltaTime);
+    void SampleLocomotionBoneWorld(std::vector<glm::mat4>& OutBoneWorld) const;
+    void SkinFromBoneWorld(const std::vector<glm::mat4>& BoneWorld,
+                           std::vector<glm::mat4>& OutSkin) const;
 
-    [[nodiscard]] const USkeleton* GetSkeleton() const { return skeleton_; }
-    [[nodiscard]] const UBlendSpace1D* GetBlendSpace() const { return blendSpace_; }
+    [[nodiscard]] const USkeleton* GetSkeleton() const { return Skeleton; }
+    [[nodiscard]] const UBlendSpace1D* GetBlendSpace() const { return BlendSpace; }
 
 private:
-    USkeletalMeshComponent* owningMesh_ = nullptr;
-    const USkeleton* skeleton_ = nullptr;
-    const UBlendSpace1D* blendSpace_ = nullptr;
+    USkeletalMeshComponent* OwningMesh = nullptr;
+    const USkeleton* Skeleton = nullptr;
+    const UBlendSpace1D* BlendSpace = nullptr;
 
-    float blendInput_ = 0.0f;
-    float blendInputTarget_ = 0.0f;
-    float locomotionBlendInterpSpeed_ = 0.0f;
-    float blendAlpha_ = 0.0f;
-    const UAnimSequence* sampleA_ = nullptr;
-    const UAnimSequence* sampleB_ = nullptr;
-    float timeA_ = 0.0f;
-    float timeB_ = 0.0f;
+    float BlendInput = 0.0f;
+    float BlendInputTarget = 0.0f;
+    float LocomotionBlendInterpSpeed = 0.0f;
+    float BlendAlpha = 0.0f;
+    const UAnimSequence* SampleA = nullptr;
+    const UAnimSequence* SampleB = nullptr;
+    float TimeA = 0.0f;
+    float TimeB = 0.0f;
 };
 
 /// Framework Character AnimBP: locomotion UBlendSpace1D + Jump/Fall/Land SM (rates pack-tuned).
 class UCharacterAnimInstance : public UAnimInstance {
 public:
-    void SetJumpClips(const FAnimJumpClips& clips) { jumpClips_ = clips; }
+    void SetJumpClips(const FAnimJumpClips& Clips) { JumpClips = Clips; }
 
-    void SetCrossfadeDuration(float seconds) {
-        crossfadeDuration_ = seconds > 0.0f ? seconds : 0.0f;
+    void SetCrossfadeDuration(float Seconds) {
+        CrossfadeDuration = Seconds > 0.0f ? Seconds : 0.0f;
     }
-    [[nodiscard]] float GetCrossfadeDuration() const { return crossfadeDuration_; }
+    [[nodiscard]] float GetCrossfadeDuration() const { return CrossfadeDuration; }
 
-    void SetLandToLocomotionCrossfade(float seconds) {
-        landToLocomotionCrossfade_ = seconds > 0.0f ? seconds : 0.0f;
+    void SetLandToLocomotionCrossfade(float Seconds) {
+        LandToLocomotionCrossfade = Seconds > 0.0f ? Seconds : 0.0f;
     }
-    [[nodiscard]] float GetLandToLocomotionCrossfade() const { return landToLocomotionCrossfade_; }
+    [[nodiscard]] float GetLandToLocomotionCrossfade() const { return LandToLocomotionCrossfade; }
 
-    void SetJumpPlayRates(float jumpStart, float fallLoop, float land);
-    [[nodiscard]] float GetJumpStartPlayRate() const { return jumpStartPlayRate_; }
-    [[nodiscard]] float GetFallLoopPlayRate() const { return fallLoopPlayRate_; }
-    [[nodiscard]] float GetLandPlayRate() const { return landPlayRate_; }
+    void SetJumpPlayRates(float InJumpStart, float InFallLoop, float InLand);
+    [[nodiscard]] float GetJumpStartPlayRate() const { return JumpStartPlayRate; }
+    [[nodiscard]] float GetFallLoopPlayRate() const { return FallLoopPlayRate; }
+    [[nodiscard]] float GetLandPlayRate() const { return LandPlayRate; }
 
     void NotifyJumped();
-    void SetMovementState(bool falling, float velocityY, bool justLanded);
+    void SetMovementState(bool bInFalling, float InVelocityY, bool bInJustLanded);
 
-    void NativeUpdateAnimation(float deltaTime) override;
-    void GetBoneWorldMatrices(std::vector<glm::mat4>& outBoneWorld) const override;
-    void GetSkinMatrices(std::vector<glm::mat4>& outSkin) const override;
+    void NativeUpdateAnimation(float DeltaTime) override;
+    void GetBoneWorldMatrices(std::vector<glm::mat4>& OutBoneWorld) const override;
+    void GetSkinMatrices(std::vector<glm::mat4>& OutSkin) const override;
 
-    [[nodiscard]] EAnimJumpState GetJumpState() const { return jumpState_; }
-    [[nodiscard]] float GetCrossfadeAlpha() const { return crossfadeAlpha_; }
+    [[nodiscard]] EAnimJumpState GetJumpState() const { return JumpState; }
+    [[nodiscard]] float GetCrossfadeAlpha() const { return CrossfadeAlpha; }
 
 private:
     struct FPosePlayer {
-        const UAnimSequence* sequence = nullptr;
-        float time = 0.0f;
+        const UAnimSequence* Sequence = nullptr;
+        float Time = 0.0f;
     };
 
-    void enterState(EAnimJumpState next);
-    void updateJumpStateMachine();
-    void samplePlayerBoneWorld(const FPosePlayer& player,
-                               std::vector<glm::mat4>& outBoneWorld) const;
-    void advancePlayer(FPosePlayer& player, float deltaTime, float playRate) const;
-    [[nodiscard]] float playRateForState(EAnimJumpState state) const;
+    void EnterState(EAnimJumpState Next);
+    void UpdateJumpStateMachine();
+    void SamplePlayerBoneWorld(const FPosePlayer& Player,
+                               std::vector<glm::mat4>& OutBoneWorld) const;
+    void AdvancePlayer(FPosePlayer& Player, float DeltaTime, float PlayRate) const;
+    [[nodiscard]] float PlayRateForState(EAnimJumpState State) const;
 
-    FAnimJumpClips jumpClips_{};
-    EAnimJumpState jumpState_ = EAnimJumpState::Locomotion;
-    EAnimJumpState previousState_ = EAnimJumpState::Locomotion;
-    FPosePlayer active_{};
-    FPosePlayer previous_{};
-    float crossfadeDuration_ = 0.15f;
-    float crossfadeElapsed_ = 0.0f;
-    float crossfadeAlpha_ = 1.0f;
-    float activeCrossfadeDuration_ = 0.15f;
-    float landToLocomotionCrossfade_ = 0.15f;
+    FAnimJumpClips JumpClips{};
+    EAnimJumpState JumpState = EAnimJumpState::Locomotion;
+    EAnimJumpState PreviousState = EAnimJumpState::Locomotion;
+    FPosePlayer Active{};
+    FPosePlayer Previous{};
+    float CrossfadeDuration = 0.15f;
+    float CrossfadeElapsed = 0.0f;
+    float CrossfadeAlpha = 1.0f;
+    float ActiveCrossfadeDuration = 0.15f;
+    float LandToLocomotionCrossfade = 0.15f;
 
-    float jumpStartPlayRate_ = 1.0f;
-    float fallLoopPlayRate_ = 1.0f;
-    float landPlayRate_ = 1.0f;
+    float JumpStartPlayRate = 1.0f;
+    float FallLoopPlayRate = 1.0f;
+    float LandPlayRate = 1.0f;
 
-    bool falling_ = false;
-    float velocityY_ = 0.0f;
-    bool justLanded_ = false;
-    bool jumpRequested_ = false;
+    bool bFalling = false;
+    float VelocityY = 0.0f;
+    bool bJustLanded = false;
+    bool bJumpRequested = false;
 };
 
 struct FSkeletalMeshData {
-    USkeleton skeleton;
-    std::vector<FSkeletalVertex> vertices;
-    std::vector<std::uint32_t> indices;
-    glm::vec3 localMin{0.0f};
-    glm::vec3 localMax{0.0f};
-    UAnimSequence embeddedAnim;
+    USkeleton Skeleton;
+    std::vector<FSkeletalVertex> Vertices;
+    std::vector<std::uint32_t> Indices;
+    glm::vec3 LocalMin{0.0f};
+    glm::vec3 LocalMax{0.0f};
+    UAnimSequence EmbeddedAnim;
 
-    [[nodiscard]] bool empty() const { return vertices.empty() || indices.empty(); }
+    [[nodiscard]] bool empty() const { return Vertices.empty() || Indices.empty(); }
 };
 
-[[nodiscard]] bool LoadSkeletalMeshFromFbx(const std::string& path, FSkeletalMeshData& out);
-[[nodiscard]] bool LoadAnimSequenceFromFbx(const std::string& path, const USkeleton& skeleton,
-                                           UAnimSequence& out);
+[[nodiscard]] bool LoadSkeletalMeshFromFbx(const std::string& Path, FSkeletalMeshData& Out);
+[[nodiscard]] bool LoadAnimSequenceFromFbx(const std::string& Path, const USkeleton& InSkeleton,
+                                           UAnimSequence& Out);
 

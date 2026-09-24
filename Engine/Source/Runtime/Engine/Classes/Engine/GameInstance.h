@@ -47,13 +47,13 @@ public:
     [[nodiscard]] bool HasAuthority() const { return GetNetMode() != ENetMode::Client; }
 
     /// Unreal-like Host / Join session (LAN).
-    [[nodiscard]] bool HostListen(std::uint16_t port = Leon::Net::kDefaultPort);
-    [[nodiscard]] bool HostDedicated(std::uint16_t port = Leon::Net::kDefaultPort);
-    [[nodiscard]] bool Join(const std::string& address, std::uint16_t port = Leon::Net::kDefaultPort);
+    [[nodiscard]] bool HostListen(std::uint16_t port = Leon::Net::DefaultPort);
+    [[nodiscard]] bool HostDedicated(std::uint16_t port = Leon::Net::DefaultPort);
+    [[nodiscard]] bool Join(const std::string& address, std::uint16_t port = Leon::Net::DefaultPort);
     void CloseNetSession();
 
     /// Set by the app host (`--dedicated`) before a networked GameMode enters.
-    void RequestDedicatedStart(std::uint16_t port = Leon::Net::kDefaultPort) {
+    void RequestDedicatedStart(std::uint16_t port = Leon::Net::DefaultPort) {
         pendingDedicatedStart_ = true;
         pendingDedicatedPort_ = port;
     }
@@ -76,7 +76,7 @@ public:
     }
 
     /// Optional `--listen` / `--host` from the app host; Menu auto HostListen → Lobby/map.
-    void RequestListenStart(std::uint16_t port = Leon::Net::kDefaultPort) {
+    void RequestListenStart(std::uint16_t port = Leon::Net::DefaultPort) {
         pendingListenStart_ = true;
         pendingListenPort_ = port;
     }
@@ -128,9 +128,9 @@ private:
 
     int levelsOpened_ = 0;
     bool pendingDedicatedStart_ = false;
-    std::uint16_t pendingDedicatedPort_ = Leon::Net::kDefaultPort;
+    std::uint16_t pendingDedicatedPort_ = Leon::Net::DefaultPort;
     bool pendingListenStart_ = false;
-    std::uint16_t pendingListenPort_ = Leon::Net::kDefaultPort;
+    std::uint16_t pendingListenPort_ = Leon::Net::DefaultPort;
     std::string pendingJoinAddress_;
     std::string pendingPlayMap_;
     std::unique_ptr<UNetDriver> netDriver_;

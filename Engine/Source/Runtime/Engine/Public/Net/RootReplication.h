@@ -18,19 +18,19 @@ namespace Leon::Net
                                                float boomYaw = 0.0f, float boomPitch = 0.0f,
                                                bool grounded = true) {
     FPawnSnap snap{};
-    snap.slot = slot;
+    snap.Slot = slot;
     const glm::vec3& loc = actor.GetActorLocation();
-    snap.x = loc.x;
-    snap.y = loc.y;
-    snap.z = loc.z;
-    snap.yaw = actor.GetActorYaw();
-    snap.velY = velocityY;
-    snap.animBlend = animBlend;
-    snap.boomYaw = boomYaw;
-    snap.boomPitch = boomPitch;
-    snap.grounded = grounded ? 1 : 0;
-    snap.health = 100.0f;
-    snap.flags = kPawnSnapAlive;
+    snap.X = loc.x;
+    snap.Y = loc.y;
+    snap.Z = loc.z;
+    snap.Yaw = actor.GetActorYaw();
+    snap.VelY = velocityY;
+    snap.AnimBlend = animBlend;
+    snap.BoomYaw = boomYaw;
+    snap.BoomPitch = boomPitch;
+    snap.Grounded = grounded ? 1 : 0;
+    snap.Health = 100.0f;
+    snap.Flags = PawnSnapAlive;
     return snap;
 }
 
@@ -45,7 +45,7 @@ namespace Leon::Net
 
 /// Apply a replicated root snapshot onto an Actor (location + yaw only).
 inline void ApplyActorRoot(AActor& actor, const FPawnSnap& snap) {
-    actor.SetActorLocationAndRotation({snap.x, snap.y, snap.z}, snap.yaw);
+    actor.SetActorLocationAndRotation({snap.X, snap.Y, snap.Z}, snap.Yaw);
 }
 
 /// Distance relevancy check (Unreal Net relevancy lite). `maxDist <= 0` always relevant.

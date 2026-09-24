@@ -93,9 +93,9 @@ void SendTravelToPeers(UNetDriver& net, std::string_view mapName, bool dedicated
     const int peers = net.PeerCount();
     for (int peer = 0; peer < peers; ++peer) {
         FTravelMsg travel{};
-        travel.slot =
+        travel.Slot =
             dedicatedServer ? static_cast<std::uint8_t>(peer) : static_cast<std::uint8_t>(peer + 1);
-        WriteLevelKey(travel.levelKey, mapName);
+        WriteLevelKey(travel.LevelKey, mapName);
         net.SendToPeer(peer, &travel, sizeof(travel), true);
     }
     std::cout << "NetTravel: Travel -> peers map='" << mapName << "'\n";

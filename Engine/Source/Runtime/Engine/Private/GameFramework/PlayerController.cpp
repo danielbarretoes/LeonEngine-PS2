@@ -14,7 +14,7 @@ glm::vec3 APlayerController::TickInput(UGameEngine& /*engine*/) {
 void APlayerController::UpdateCamera(UGameEngine& /*engine*/, float /*deltaTime*/) {}
 
 void APlayerController::LatchButtons(std::uint16_t pressedNow) {
-    const std::uint16_t masked = static_cast<std::uint16_t>(pressedNow & Leon::Net::kInputButtonMask);
+    const std::uint16_t masked = static_cast<std::uint16_t>(pressedNow & Leon::Net::InputButtonMask);
     pressedEdges_ = static_cast<std::uint16_t>(masked & static_cast<std::uint16_t>(~prevButtons_));
     downButtons_ = masked;
     prevButtons_ = masked;

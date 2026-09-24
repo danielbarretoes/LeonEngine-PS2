@@ -13,342 +13,342 @@
 
 namespace {
 
-[[nodiscard]] float Clamp01(float v) {
-    return std::clamp(v, 0.0f, 1.0f);
+[[nodiscard]] float Clamp01(float V) {
+    return std::clamp(V, 0.0f, 1.0f);
 }
 
-void BuildUiTone(EUISound sound, std::vector<float>& outSamples, int& outSampleRate) {
-    outSampleRate = 44100;
-    float freq = 660.0f;
-    float duration = 0.045f;
-    float amp = 0.22f;
-    switch (sound) {
+void BuildUiTone(EUISound InSound, std::vector<float>& OutSamples, int& OutSampleRate) {
+    OutSampleRate = 44100;
+    float Freq = 660.0f;
+    float Duration = 0.045f;
+    float Amp = 0.22f;
+    switch (InSound) {
     case EUISound::Click:
-        freq = 880.0f;
-        duration = 0.035f;
-        amp = 0.18f;
+        Freq = 880.0f;
+        Duration = 0.035f;
+        Amp = 0.18f;
         break;
     case EUISound::Confirm:
-        freq = 520.0f;
-        duration = 0.08f;
-        amp = 0.22f;
+        Freq = 520.0f;
+        Duration = 0.08f;
+        Amp = 0.22f;
         break;
     case EUISound::Back:
-        freq = 320.0f;
-        duration = 0.05f;
-        amp = 0.16f;
+        Freq = 320.0f;
+        Duration = 0.05f;
+        Amp = 0.16f;
         break;
     case EUISound::Error:
-        freq = 180.0f;
-        duration = 0.12f;
-        amp = 0.2f;
+        Freq = 180.0f;
+        Duration = 0.12f;
+        Amp = 0.2f;
         break;
     }
-    const int n = std::max(1, static_cast<int>(duration * static_cast<float>(outSampleRate)));
-    outSamples.resize(static_cast<std::size_t>(n));
-    constexpr float kPi = 3.14159265f;
-    for (int i = 0; i < n; ++i) {
-        const float t = static_cast<float>(i) / static_cast<float>(outSampleRate);
-        const float env = 1.0f - (static_cast<float>(i) / static_cast<float>(n));
-        float sample = std::sin(2.0f * kPi * freq * t) * amp * env;
-        if (sound == EUISound::Confirm && t > 0.04f) {
-            sample += std::sin(2.0f * kPi * 780.0f * t) * amp * 0.55f * env;
+    const int N = std::max(1, static_cast<int>(Duration * static_cast<float>(OutSampleRate)));
+    OutSamples.resize(static_cast<std::size_t>(N));
+    constexpr float Pi = 3.14159265f;
+    for (int I = 0; I < N; ++I) {
+        const float T = static_cast<float>(I) / static_cast<float>(OutSampleRate);
+        const float Env = 1.0f - (static_cast<float>(I) / static_cast<float>(N));
+        float Sample = std::sin(2.0f * Pi * Freq * T) * Amp * Env;
+        if (InSound == EUISound::Confirm && T > 0.04f) {
+            Sample += std::sin(2.0f * Pi * 780.0f * T) * Amp * 0.55f * Env;
         }
-        if (sound == EUISound::Error) {
-            sample = (std::sin(2.0f * kPi * freq * t) +
-                      0.5f * std::sin(2.0f * kPi * (freq * 1.5f) * t)) *
-                     amp * env;
+        if (InSound == EUISound::Error) {
+            Sample = (std::sin(2.0f * Pi * Freq * T) +
+                      0.5f * std::sin(2.0f * Pi * (Freq * 1.5f) * T)) *
+                     Amp * Env;
         }
-        outSamples[static_cast<std::size_t>(i)] = sample;
+        OutSamples[static_cast<std::size_t>(I)] = Sample;
     }
 }
 
 } // namespace
 
 struct FAudioDevice::FImpl {
-    static constexpr int kMaxVoices = 24;
+    static constexpr int MaxVoices = 24;
 
     struct FVoice {
-        ma_sound sound{};
-        ma_audio_buffer buffer{};
-        std::vector<float> pcm; // keeps buffer memory alive for UI tones
-        bool inUse = false;
-        bool ownsBuffer = false;
+        ma_sound Sound{};
+        ma_audio_buffer Buffer{};
+        std::vector<float> Pcm; // keeps buffer memory alive for UI tones
+        bool bInUse = false;
+        bool bOwnsBuffer = false;
     };
 
-    ma_engine engine{};
-    bool engineOk = false;
-    std::array<FVoice, kMaxVoices> voices{};
-    ma_sound music{};
-    bool musicInUse = false;
+    ma_engine Engine{};
+    bool bEngineOk = false;
+    std::array<FVoice, MaxVoices> Voices{};
+    ma_sound Music{};
+    bool bMusicInUse = false;
 
     [[nodiscard]] FVoice* AcquireVoice() {
-        for (FVoice& voice : voices) {
-            if (!voice.inUse) {
-                return &voice;
+        for (FVoice& Voice : Voices) {
+            if (!Voice.bInUse) {
+                return &Voice;
             }
         }
         // Steal oldest finished or first slot.
-        for (FVoice& voice : voices) {
-            if (voice.inUse && !ma_sound_is_playing(&voice.sound)) {
-                ReleaseVoice(voice);
-                return &voice;
+        for (FVoice& Voice : Voices) {
+            if (Voice.bInUse && !ma_sound_is_playing(&Voice.Sound)) {
+                ReleaseVoice(Voice);
+                return &Voice;
             }
         }
-        ReleaseVoice(voices[0]);
-        return &voices[0];
+        ReleaseVoice(Voices[0]);
+        return &Voices[0];
     }
 
-    void ReleaseVoice(FVoice& voice) {
-        if (!voice.inUse) {
+    void ReleaseVoice(FVoice& Voice) {
+        if (!Voice.bInUse) {
             return;
         }
-        ma_sound_uninit(&voice.sound);
-        if (voice.ownsBuffer) {
-            ma_audio_buffer_uninit(&voice.buffer);
-            voice.ownsBuffer = false;
+        ma_sound_uninit(&Voice.Sound);
+        if (Voice.bOwnsBuffer) {
+            ma_audio_buffer_uninit(&Voice.Buffer);
+            Voice.bOwnsBuffer = false;
         }
-        voice.pcm.clear();
-        voice.inUse = false;
-        std::memset(&voice.sound, 0, sizeof(voice.sound));
-        std::memset(&voice.buffer, 0, sizeof(voice.buffer));
+        Voice.Pcm.clear();
+        Voice.bInUse = false;
+        std::memset(&Voice.Sound, 0, sizeof(Voice.Sound));
+        std::memset(&Voice.Buffer, 0, sizeof(Voice.Buffer));
     }
 
     void ReleaseMusic() {
-        if (!musicInUse) {
+        if (!bMusicInUse) {
             return;
         }
-        ma_sound_uninit(&music);
-        std::memset(&music, 0, sizeof(music));
-        musicInUse = false;
+        ma_sound_uninit(&Music);
+        std::memset(&Music, 0, sizeof(Music));
+        bMusicInUse = false;
     }
 
     void ReapFinished() {
-        for (FVoice& voice : voices) {
-            if (voice.inUse && !ma_sound_is_playing(&voice.sound)) {
-                ReleaseVoice(voice);
+        for (FVoice& Voice : Voices) {
+            if (Voice.bInUse && !ma_sound_is_playing(&Voice.Sound)) {
+                ReleaseVoice(Voice);
             }
         }
     }
 
     void ReleaseAll() {
         ReleaseMusic();
-        for (FVoice& voice : voices) {
-            ReleaseVoice(voice);
+        for (FVoice& Voice : Voices) {
+            ReleaseVoice(Voice);
         }
     }
 
-    [[nodiscard]] bool PlayFile2D(std::string_view assetRelativePath, float volumeMultiplier) {
-        if (!engineOk || assetRelativePath.empty()) {
+    [[nodiscard]] bool PlayFile2D(std::string_view AssetRelativePath, float VolumeMultiplier) {
+        if (!bEngineOk || AssetRelativePath.empty()) {
             return false;
         }
         ReapFinished();
-        const std::string path = FPaths::ResolveAssetPath(std::string(assetRelativePath));
-        if (path.empty()) {
+        const std::string Path = FPaths::ResolveAssetPath(std::string(AssetRelativePath));
+        if (Path.empty()) {
             return false;
         }
-        FVoice* voice = AcquireVoice();
-        const ma_result result =
-            ma_sound_init_from_file(&engine, path.c_str(),
+        FVoice* Voice = AcquireVoice();
+        const ma_result Result =
+            ma_sound_init_from_file(&Engine, Path.c_str(),
                                     MA_SOUND_FLAG_ASYNC | MA_SOUND_FLAG_STREAM |
                                         MA_SOUND_FLAG_NO_SPATIALIZATION,
-                                    nullptr, nullptr, &voice->sound);
-        if (result != MA_SUCCESS) {
+                                    nullptr, nullptr, &Voice->Sound);
+        if (Result != MA_SUCCESS) {
             return false;
         }
-        voice->inUse = true;
-        voice->ownsBuffer = false;
-        ma_sound_set_volume(&voice->sound, Clamp01(volumeMultiplier));
-        ma_sound_start(&voice->sound);
+        Voice->bInUse = true;
+        Voice->bOwnsBuffer = false;
+        ma_sound_set_volume(&Voice->Sound, Clamp01(VolumeMultiplier));
+        ma_sound_start(&Voice->Sound);
         return true;
     }
 };
 
-FAudioDevice::FAudioDevice() : impl_(std::make_unique<FImpl>()) {}
+FAudioDevice::FAudioDevice() : Impl(std::make_unique<FImpl>()) {}
 
 FAudioDevice::~FAudioDevice() {
     Shutdown();
 }
 
-bool FAudioDevice::Initialize(bool silent) {
+bool FAudioDevice::Initialize(bool bInSilent) {
     Shutdown();
-    silent_ = silent;
-    masterVolume_ = 1.0f;
-    if (silent) {
-        initialized_ = true;
+    bSilent = bInSilent;
+    MasterVolume = 1.0f;
+    if (bInSilent) {
+        bInitialized = true;
         return true;
     }
 
-    ma_engine_config config = ma_engine_config_init();
-    const ma_result result = ma_engine_init(&config, &impl_->engine);
-    if (result != MA_SUCCESS) {
-        std::cerr << "AudioDevice: ma_engine_init failed (" << static_cast<int>(result)
+    ma_engine_config Config = ma_engine_config_init();
+    const ma_result Result = ma_engine_init(&Config, &Impl->Engine);
+    if (Result != MA_SUCCESS) {
+        std::cerr << "AudioDevice: ma_engine_init failed (" << static_cast<int>(Result)
                   << ") -- audio disabled\n";
-        silent_ = true;
-        initialized_ = true;
+        bSilent = true;
+        bInitialized = true;
         return false;
     }
-    impl_->engineOk = true;
-    ma_engine_set_volume(&impl_->engine, masterVolume_);
-    initialized_ = true;
+    Impl->bEngineOk = true;
+    ma_engine_set_volume(&Impl->Engine, MasterVolume);
+    bInitialized = true;
     std::cout << "AudioDevice: miniaudio engine ready\n";
     return true;
 }
 
 void FAudioDevice::Shutdown() {
-    if (impl_) {
-        impl_->ReleaseAll();
-        if (impl_->engineOk) {
-            ma_engine_uninit(&impl_->engine);
-            impl_->engineOk = false;
-            std::memset(&impl_->engine, 0, sizeof(impl_->engine));
+    if (Impl) {
+        Impl->ReleaseAll();
+        if (Impl->bEngineOk) {
+            ma_engine_uninit(&Impl->Engine);
+            Impl->bEngineOk = false;
+            std::memset(&Impl->Engine, 0, sizeof(Impl->Engine));
         }
     }
-    initialized_ = false;
-    silent_ = true;
+    bInitialized = false;
+    bSilent = true;
 }
 
 void FAudioDevice::Tick() {
-    if (impl_ && impl_->engineOk) {
-        impl_->ReapFinished();
+    if (Impl && Impl->bEngineOk) {
+        Impl->ReapFinished();
     }
 }
 
-void FAudioDevice::SetMasterVolume(float volume01) {
-    masterVolume_ = Clamp01(volume01);
-    if (impl_ && impl_->engineOk) {
-        ma_engine_set_volume(&impl_->engine, masterVolume_);
+void FAudioDevice::SetMasterVolume(float Volume01) {
+    MasterVolume = Clamp01(Volume01);
+    if (Impl && Impl->bEngineOk) {
+        ma_engine_set_volume(&Impl->Engine, MasterVolume);
     }
 }
 
-void FAudioDevice::SetListener(const glm::vec3& location, const glm::vec3& forward,
-                              const glm::vec3& up) {
-    if (!impl_ || !impl_->engineOk) {
+void FAudioDevice::SetListener(const glm::vec3& Location, const glm::vec3& Forward,
+                              const glm::vec3& Up) {
+    if (!Impl || !Impl->bEngineOk) {
         return;
     }
-    ma_engine_listener_set_position(&impl_->engine, 0, location.x, location.y, location.z);
-    ma_engine_listener_set_direction(&impl_->engine, 0, forward.x, forward.y, forward.z);
-    ma_engine_listener_set_world_up(&impl_->engine, 0, up.x, up.y, up.z);
+    ma_engine_listener_set_position(&Impl->Engine, 0, Location.x, Location.y, Location.z);
+    ma_engine_listener_set_direction(&Impl->Engine, 0, Forward.x, Forward.y, Forward.z);
+    ma_engine_listener_set_world_up(&Impl->Engine, 0, Up.x, Up.y, Up.z);
 }
 
-void FAudioDevice::PlaySound2D(std::string_view assetRelativePath, float volumeMultiplier) {
-    if (!impl_) {
+void FAudioDevice::PlaySound2D(std::string_view AssetRelativePath, float VolumeMultiplier) {
+    if (!Impl) {
         return;
     }
-    (void)impl_->PlayFile2D(assetRelativePath, volumeMultiplier);
+    (void)Impl->PlayFile2D(AssetRelativePath, VolumeMultiplier);
 }
 
-void FAudioDevice::PlaySoundAtLocation(std::string_view assetRelativePath, const glm::vec3& location,
-                                      float volumeMultiplier) {
-    if (!impl_ || !impl_->engineOk || assetRelativePath.empty()) {
+void FAudioDevice::PlaySoundAtLocation(std::string_view AssetRelativePath, const glm::vec3& Location,
+                                      float VolumeMultiplier) {
+    if (!Impl || !Impl->bEngineOk || AssetRelativePath.empty()) {
         return;
     }
-    impl_->ReapFinished();
-    const std::string path = FPaths::ResolveAssetPath(std::string(assetRelativePath));
-    if (path.empty()) {
+    Impl->ReapFinished();
+    const std::string Path = FPaths::ResolveAssetPath(std::string(AssetRelativePath));
+    if (Path.empty()) {
         return;
     }
-    FImpl::FVoice* voice = impl_->AcquireVoice();
-    const ma_result result =
-        ma_sound_init_from_file(&impl_->engine, path.c_str(),
+    FImpl::FVoice* Voice = Impl->AcquireVoice();
+    const ma_result Result =
+        ma_sound_init_from_file(&Impl->Engine, Path.c_str(),
                                 MA_SOUND_FLAG_ASYNC | MA_SOUND_FLAG_DECODE, nullptr, nullptr,
-                                &voice->sound);
-    if (result != MA_SUCCESS) {
+                                &Voice->Sound);
+    if (Result != MA_SUCCESS) {
         return;
     }
-    voice->inUse = true;
-    voice->ownsBuffer = false;
-    ma_sound_set_spatialization_enabled(&voice->sound, MA_TRUE);
-    ma_sound_set_position(&voice->sound, location.x, location.y, location.z);
-    ma_sound_set_volume(&voice->sound, Clamp01(volumeMultiplier));
-    ma_sound_start(&voice->sound);
+    Voice->bInUse = true;
+    Voice->bOwnsBuffer = false;
+    ma_sound_set_spatialization_enabled(&Voice->Sound, MA_TRUE);
+    ma_sound_set_position(&Voice->Sound, Location.x, Location.y, Location.z);
+    ma_sound_set_volume(&Voice->Sound, Clamp01(VolumeMultiplier));
+    ma_sound_start(&Voice->Sound);
 }
 
-void FAudioDevice::PlayUiSound(EUISound sound, float volumeMultiplier) {
-    if (!impl_ || !impl_->engineOk) {
+void FAudioDevice::PlayUiSound(EUISound InSound, float VolumeMultiplier) {
+    if (!Impl || !Impl->bEngineOk) {
         return;
     }
 
-    const char* assetPath = nullptr;
-    switch (sound) {
+    const char* AssetPath = nullptr;
+    switch (InSound) {
     case EUISound::Click:
-        assetPath = "assets/Audio/UI/UI_Click.wav";
+        AssetPath = "assets/Audio/UI/UI_Click.wav";
         break;
     case EUISound::Confirm:
-        assetPath = "assets/Audio/UI/UI_Confirm.wav";
+        AssetPath = "assets/Audio/UI/UI_Confirm.wav";
         break;
     case EUISound::Back:
-        assetPath = "assets/Audio/UI/UI_Back.wav";
+        AssetPath = "assets/Audio/UI/UI_Back.wav";
         break;
     case EUISound::Error:
-        assetPath = "assets/Audio/UI/UI_Error.wav";
+        AssetPath = "assets/Audio/UI/UI_Error.wav";
         break;
     }
-    if (assetPath != nullptr && impl_->PlayFile2D(assetPath, volumeMultiplier)) {
+    if (AssetPath != nullptr && Impl->PlayFile2D(AssetPath, VolumeMultiplier)) {
         return;
     }
 
-    impl_->ReapFinished();
-    std::vector<float> samples;
-    int sampleRate = 44100;
-    BuildUiTone(sound, samples, sampleRate);
-    if (samples.empty()) {
+    Impl->ReapFinished();
+    std::vector<float> Samples;
+    int SampleRate = 44100;
+    BuildUiTone(InSound, Samples, SampleRate);
+    if (Samples.empty()) {
         return;
     }
 
-    FImpl::FVoice* voice = impl_->AcquireVoice();
-    voice->pcm = std::move(samples);
+    FImpl::FVoice* Voice = Impl->AcquireVoice();
+    Voice->Pcm = std::move(Samples);
 
-    ma_audio_buffer_config bufferConfig = ma_audio_buffer_config_init(
-        ma_format_f32, 1, static_cast<ma_uint64>(voice->pcm.size()), voice->pcm.data(), nullptr);
-    bufferConfig.sampleRate = static_cast<ma_uint32>(sampleRate);
+    ma_audio_buffer_config BufferConfig = ma_audio_buffer_config_init(
+        ma_format_f32, 1, static_cast<ma_uint64>(Voice->Pcm.size()), Voice->Pcm.data(), nullptr);
+    BufferConfig.sampleRate = static_cast<ma_uint32>(SampleRate);
 
-    if (ma_audio_buffer_init(&bufferConfig, &voice->buffer) != MA_SUCCESS) {
-        voice->pcm.clear();
+    if (ma_audio_buffer_init(&BufferConfig, &Voice->Buffer) != MA_SUCCESS) {
+        Voice->Pcm.clear();
         return;
     }
-    if (ma_sound_init_from_data_source(&impl_->engine, &voice->buffer,
+    if (ma_sound_init_from_data_source(&Impl->Engine, &Voice->Buffer,
                                        MA_SOUND_FLAG_ASYNC | MA_SOUND_FLAG_NO_SPATIALIZATION, nullptr,
-                                       &voice->sound) != MA_SUCCESS) {
-        ma_audio_buffer_uninit(&voice->buffer);
-        voice->pcm.clear();
+                                       &Voice->Sound) != MA_SUCCESS) {
+        ma_audio_buffer_uninit(&Voice->Buffer);
+        Voice->Pcm.clear();
         return;
     }
-    voice->inUse = true;
-    voice->ownsBuffer = true;
-    ma_sound_set_volume(&voice->sound, Clamp01(volumeMultiplier));
-    ma_sound_start(&voice->sound);
+    Voice->bInUse = true;
+    Voice->bOwnsBuffer = true;
+    ma_sound_set_volume(&Voice->Sound, Clamp01(VolumeMultiplier));
+    ma_sound_start(&Voice->Sound);
 }
 
-void FAudioDevice::PlayMusic(std::string_view assetRelativePath, float volumeMultiplier) {
-    if (!impl_ || !impl_->engineOk || assetRelativePath.empty()) {
+void FAudioDevice::PlayMusic(std::string_view AssetRelativePath, float VolumeMultiplier) {
+    if (!Impl || !Impl->bEngineOk || AssetRelativePath.empty()) {
         return;
     }
-    const std::string path = FPaths::ResolveAssetPath(std::string(assetRelativePath));
-    if (path.empty()) {
+    const std::string Path = FPaths::ResolveAssetPath(std::string(AssetRelativePath));
+    if (Path.empty()) {
         return;
     }
-    impl_->ReleaseMusic();
-    const ma_result result =
-        ma_sound_init_from_file(&impl_->engine, path.c_str(),
+    Impl->ReleaseMusic();
+    const ma_result Result =
+        ma_sound_init_from_file(&Impl->Engine, Path.c_str(),
                                 MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_SPATIALIZATION, nullptr,
-                                nullptr, &impl_->music);
-    if (result != MA_SUCCESS) {
+                                nullptr, &Impl->Music);
+    if (Result != MA_SUCCESS) {
         return;
     }
-    impl_->musicInUse = true;
-    ma_sound_set_looping(&impl_->music, MA_TRUE);
-    ma_sound_set_volume(&impl_->music, Clamp01(volumeMultiplier));
-    ma_sound_start(&impl_->music);
+    Impl->bMusicInUse = true;
+    ma_sound_set_looping(&Impl->Music, MA_TRUE);
+    ma_sound_set_volume(&Impl->Music, Clamp01(VolumeMultiplier));
+    ma_sound_start(&Impl->Music);
 }
 
 void FAudioDevice::StopMusic() {
-    if (impl_) {
-        impl_->ReleaseMusic();
+    if (Impl) {
+        Impl->ReleaseMusic();
     }
 }
 
 bool FAudioDevice::IsMusicPlaying() const {
-    return impl_ != nullptr && impl_->musicInUse && ma_sound_is_playing(&impl_->music);
+    return Impl != nullptr && Impl->bMusicInUse && ma_sound_is_playing(&Impl->Music);
 }
 

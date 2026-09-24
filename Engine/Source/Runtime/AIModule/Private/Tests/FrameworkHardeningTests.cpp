@@ -59,11 +59,11 @@ TEST_CASE("RootReplication relevancy and CaptureCharacterRoot", "[net][replicati
     ACharacter character;
     character.SetActorLocationAndRotation({1.0f, 0.0f, 2.0f}, 45.0f);
     const Leon::Net::FPawnSnap snap = Leon::Net::CaptureCharacterRoot(3, character, 10.0f, -5.0f);
-    REQUIRE(snap.slot == 3);
-    REQUIRE_THAT(snap.x, WithinAbs(1.0f, 1.0e-5f));
-    REQUIRE_THAT(snap.z, WithinAbs(2.0f, 1.0e-5f));
-    REQUIRE_THAT(snap.yaw, WithinAbs(45.0f, 1.0e-5f));
-    REQUIRE_THAT(snap.boomYaw, WithinAbs(10.0f, 1.0e-5f));
+    REQUIRE(snap.Slot == 3);
+    REQUIRE_THAT(snap.X, WithinAbs(1.0f, 1.0e-5f));
+    REQUIRE_THAT(snap.Z, WithinAbs(2.0f, 1.0e-5f));
+    REQUIRE_THAT(snap.Yaw, WithinAbs(45.0f, 1.0e-5f));
+    REQUIRE_THAT(snap.BoomYaw, WithinAbs(10.0f, 1.0e-5f));
 
     REQUIRE(Leon::Net::IsPawnRelevant({0, 0, 0}, {3, 0, 0}, 5.0f));
     REQUIRE_FALSE(Leon::Net::IsPawnRelevant({0, 0, 0}, {10, 0, 0}, 5.0f));
@@ -104,12 +104,12 @@ TEST_CASE("DeserializeLeonLevel and InputCmd adversarial inputs", "[content][fuz
     REQUIRE_FALSE(DeserializeLeonLevel(almostMagic, doc));
 
     Leon::Net::FInputCmdMsg cmd{};
-    cmd.moveX = std::numeric_limits<float>::quiet_NaN();
-    cmd.buttons = 0xFFFF;
+    cmd.MoveX = std::numeric_limits<float>::quiet_NaN();
+    cmd.Buttons = 0xFFFF;
     Leon::Net::SanitizeInputCmd(cmd);
-    REQUIRE_THAT(cmd.moveX, WithinAbs(0.0f, 1.0e-5f));
-    REQUIRE(cmd.buttons == Leon::Net::kInputButtonMask);
-    REQUIRE((cmd.buttons & static_cast<std::uint16_t>(~Leon::Net::kInputButtonMask)) == 0);
+    REQUIRE_THAT(cmd.MoveX, WithinAbs(0.0f, 1.0e-5f));
+    REQUIRE(cmd.Buttons == Leon::Net::InputButtonMask);
+    REQUIRE((cmd.Buttons & static_cast<std::uint16_t>(~Leon::Net::InputButtonMask)) == 0);
 }
 
 TEST_CASE("NavigationSystem agent radius dilation shrinks walkable ring", "[gameplay][nav]") {

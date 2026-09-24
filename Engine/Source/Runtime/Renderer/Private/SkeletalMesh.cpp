@@ -50,11 +50,11 @@ USkeletalMesh USkeletalMesh::CreateCpu(FSkeletalMeshData Data) {
     if (Data.empty()) {
         return Mesh;
     }
-    Mesh.Skeleton = std::move(Data.skeleton);
-    Mesh.EmbeddedAnim = std::move(Data.embeddedAnim);
-    Mesh.LocalMin = Data.localMin;
-    Mesh.LocalMax = Data.localMax;
-    Mesh.IndexCount = static_cast<int>(Data.indices.size());
+    Mesh.Skeleton = std::move(Data.Skeleton);
+    Mesh.EmbeddedAnim = std::move(Data.EmbeddedAnim);
+    Mesh.LocalMin = Data.LocalMin;
+    Mesh.LocalMax = Data.LocalMax;
+    Mesh.IndexCount = static_cast<int>(Data.Indices.size());
     Mesh.bCpuOnly = true;
     return Mesh;
 }
@@ -65,10 +65,10 @@ USkeletalMesh USkeletalMesh::Upload(FSkeletalMeshData Data) {
         return Mesh;
     }
 
-    Mesh.Skeleton = std::move(Data.skeleton);
-    Mesh.EmbeddedAnim = std::move(Data.embeddedAnim);
-    Mesh.LocalMin = Data.localMin;
-    Mesh.LocalMax = Data.localMax;
+    Mesh.Skeleton = std::move(Data.Skeleton);
+    Mesh.EmbeddedAnim = std::move(Data.EmbeddedAnim);
+    Mesh.LocalMin = Data.LocalMin;
+    Mesh.LocalMax = Data.LocalMax;
 
     glGenVertexArrays(1, &Mesh.Vao);
     glGenBuffers(1, &Mesh.Vbo);
@@ -78,40 +78,40 @@ USkeletalMesh USkeletalMesh::Upload(FSkeletalMeshData Data) {
 
     glBindBuffer(GL_ARRAY_BUFFER, Mesh.Vbo);
     glBufferData(GL_ARRAY_BUFFER,
-                 static_cast<GLsizeiptr>(Data.vertices.size() * sizeof(FSkeletalVertex)),
-                 Data.vertices.data(), GL_STATIC_DRAW);
+                 static_cast<GLsizeiptr>(Data.Vertices.size() * sizeof(FSkeletalVertex)),
+                 Data.Vertices.data(), GL_STATIC_DRAW);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Mesh.Ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-                 static_cast<GLsizeiptr>(Data.indices.size() * sizeof(std::uint32_t)),
-                 Data.indices.data(), GL_STATIC_DRAW);
+                 static_cast<GLsizeiptr>(Data.Indices.size() * sizeof(std::uint32_t)),
+                 Data.Indices.data(), GL_STATIC_DRAW);
 
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(FSkeletalVertex),
-                          GlAttribOffset(&FSkeletalVertex::position));
+                          GlAttribOffset(&FSkeletalVertex::Position));
 
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(FSkeletalVertex),
-                          GlAttribOffset(&FSkeletalVertex::normal));
+                          GlAttribOffset(&FSkeletalVertex::Normal));
 
     glEnableVertexAttribArray(2);
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(FSkeletalVertex),
-                          GlAttribOffset(&FSkeletalVertex::texCoord));
+                          GlAttribOffset(&FSkeletalVertex::TexCoord));
 
     glEnableVertexAttribArray(3);
     glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(FSkeletalVertex),
-                          GlAttribOffset(&FSkeletalVertex::tangent));
+                          GlAttribOffset(&FSkeletalVertex::Tangent));
 
     glEnableVertexAttribArray(4);
     glVertexAttribIPointer(4, 4, GL_INT, sizeof(FSkeletalVertex),
-                           GlAttribOffset(&FSkeletalVertex::boneIndices));
+                           GlAttribOffset(&FSkeletalVertex::BoneIndices));
 
     glEnableVertexAttribArray(5);
     glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(FSkeletalVertex),
-                          GlAttribOffset(&FSkeletalVertex::boneWeights));
+                          GlAttribOffset(&FSkeletalVertex::BoneWeights));
 
     glBindVertexArray(0);
-    Mesh.IndexCount = static_cast<int>(Data.indices.size());
+    Mesh.IndexCount = static_cast<int>(Data.Indices.size());
     return Mesh;
 }
 

@@ -364,8 +364,8 @@ void FSceneRenderer::SubmitSkeletalDraw(const USkeletalMesh& InMesh, const glm::
     Item.Mesh = &InMesh;
     Item.Model = InModel;
     Item.BoneMatrices = InBoneMatrices;
-    if (Item.BoneMatrices.size() > static_cast<std::size_t>(kMaxSkinBones)) {
-        Item.BoneMatrices.resize(static_cast<std::size_t>(kMaxSkinBones));
+    if (Item.BoneMatrices.size() > static_cast<std::size_t>(MaxSkinBones)) {
+        Item.BoneMatrices.resize(static_cast<std::size_t>(MaxSkinBones));
     }
     SkeletalDraws.push_back(std::move(Item));
 }

@@ -11,492 +11,492 @@
 
 namespace {
 
-glm::mat4 ToGlm(const ufbx_transform& t) {
-    const glm::quat q(static_cast<float>(t.rotation.w), static_cast<float>(t.rotation.x),
-                      static_cast<float>(t.rotation.y), static_cast<float>(t.rotation.z));
-    glm::mat4 m = glm::mat4_cast(q);
-    m[0] *= static_cast<float>(t.scale.x);
-    m[1] *= static_cast<float>(t.scale.y);
-    m[2] *= static_cast<float>(t.scale.z);
-    m[3] = glm::vec4(static_cast<float>(t.translation.x), static_cast<float>(t.translation.y),
-                     static_cast<float>(t.translation.z), 1.0f);
-    return m;
+glm::mat4 ToGlm(const ufbx_transform& T) {
+    const glm::quat Q(static_cast<float>(T.rotation.w), static_cast<float>(T.rotation.x),
+                      static_cast<float>(T.rotation.y), static_cast<float>(T.rotation.z));
+    glm::mat4 M = glm::mat4_cast(Q);
+    M[0] *= static_cast<float>(T.scale.x);
+    M[1] *= static_cast<float>(T.scale.y);
+    M[2] *= static_cast<float>(T.scale.z);
+    M[3] = glm::vec4(static_cast<float>(T.translation.x), static_cast<float>(T.translation.y),
+                     static_cast<float>(T.translation.z), 1.0f);
+    return M;
 }
 
-glm::mat4 ToGlm(const ufbx_matrix& m) {
-    glm::mat4 out(1.0f);
-    out[0] = glm::vec4(static_cast<float>(m.m00), static_cast<float>(m.m10),
-                       static_cast<float>(m.m20), 0.0f);
-    out[1] = glm::vec4(static_cast<float>(m.m01), static_cast<float>(m.m11),
-                       static_cast<float>(m.m21), 0.0f);
-    out[2] = glm::vec4(static_cast<float>(m.m02), static_cast<float>(m.m12),
-                       static_cast<float>(m.m22), 0.0f);
-    out[3] = glm::vec4(static_cast<float>(m.m03), static_cast<float>(m.m13),
-                       static_cast<float>(m.m23), 1.0f);
-    return out;
+glm::mat4 ToGlm(const ufbx_matrix& M) {
+    glm::mat4 Out(1.0f);
+    Out[0] = glm::vec4(static_cast<float>(M.m00), static_cast<float>(M.m10),
+                       static_cast<float>(M.m20), 0.0f);
+    Out[1] = glm::vec4(static_cast<float>(M.m01), static_cast<float>(M.m11),
+                       static_cast<float>(M.m21), 0.0f);
+    Out[2] = glm::vec4(static_cast<float>(M.m02), static_cast<float>(M.m12),
+                       static_cast<float>(M.m22), 0.0f);
+    Out[3] = glm::vec4(static_cast<float>(M.m03), static_cast<float>(M.m13),
+                       static_cast<float>(M.m23), 1.0f);
+    return Out;
 }
 
 ufbx_load_opts MakeLoadOpts() {
-    ufbx_load_opts opts{};
-    opts.target_axes = ufbx_axes_right_handed_y_up;
-    opts.target_unit_meters = 1.0f;
-    opts.space_conversion = UFBX_SPACE_CONVERSION_MODIFY_GEOMETRY;
-    opts.generate_missing_normals = true;
-    return opts;
+    ufbx_load_opts Opts{};
+    Opts.target_axes = ufbx_axes_right_handed_y_up;
+    Opts.target_unit_meters = 1.0f;
+    Opts.space_conversion = UFBX_SPACE_CONVERSION_MODIFY_GEOMETRY;
+    Opts.generate_missing_normals = true;
+    return Opts;
 }
 
-glm::mat4 EvaluateNodeToWorld(ufbx_anim* anim, ufbx_node* node, double time) {
-    std::vector<ufbx_node*> chain;
-    for (ufbx_node* n = node; n != nullptr; n = n->parent) {
-        chain.push_back(n);
+glm::mat4 EvaluateNodeToWorld(ufbx_anim* Anim, ufbx_node* Node, double InTime) {
+    std::vector<ufbx_node*> Chain;
+    for (ufbx_node* N = Node; N != nullptr; N = N->parent) {
+        Chain.push_back(N);
     }
-    glm::mat4 world(1.0f);
-    for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
+    glm::mat4 World(1.0f);
+    for (auto It = Chain.rbegin(); It != Chain.rend(); ++It) {
         // child.node_to_world = parent.node_to_world * child.node_to_parent
-        world *= ToGlm(ufbx_evaluate_transform(anim, *it, time));
+        World *= ToGlm(ufbx_evaluate_transform(Anim, *It, InTime));
     }
-    return world;
+    return World;
 }
 
-bool BakeAnimFromScene(ufbx_scene* scene, const USkeleton& skeleton,
-                       const std::unordered_map<std::string, ufbx_node*>& nodesByName,
-                       UAnimSequence& out) {
-    if (scene == nullptr || skeleton.BoneCount() <= 0) {
+bool BakeAnimFromScene(ufbx_scene* Scene, const USkeleton& InSkeleton,
+                       const std::unordered_map<std::string, ufbx_node*>& NodesByName,
+                       UAnimSequence& Out) {
+    if (Scene == nullptr || InSkeleton.BoneCount() <= 0) {
         return false;
     }
 
     // Mixamo often ships a short static "Take 001" as scene->anim plus the real clip
     // on another stack (e.g. "mixamo.com"). Prefer the longest stack.
-    ufbx_anim* anim = scene->anim;
-    double begin = (anim != nullptr) ? anim->time_begin : 0.0;
-    double end = (anim != nullptr) ? anim->time_end : 0.0;
-    for (size_t i = 0; i < scene->anim_stacks.count; ++i) {
-        ufbx_anim_stack* stack = scene->anim_stacks.data[i];
-        if (stack == nullptr || stack->anim == nullptr) {
+    ufbx_anim* Anim = Scene->anim;
+    double Begin = (Anim != nullptr) ? Anim->time_begin : 0.0;
+    double End = (Anim != nullptr) ? Anim->time_end : 0.0;
+    for (size_t I = 0; I < Scene->anim_stacks.count; ++I) {
+        ufbx_anim_stack* Stack = Scene->anim_stacks.data[I];
+        if (Stack == nullptr || Stack->anim == nullptr) {
             continue;
         }
-        const double stackDur = stack->time_end - stack->time_begin;
-        if (stackDur > (end - begin) + 1.0e-4) {
-            anim = stack->anim;
-            begin = stack->time_begin;
-            end = stack->time_end;
+        const double StackDur = Stack->time_end - Stack->time_begin;
+        if (StackDur > (End - Begin) + 1.0e-4) {
+            Anim = Stack->anim;
+            Begin = Stack->time_begin;
+            End = Stack->time_end;
         }
     }
-    if (anim == nullptr) {
+    if (Anim == nullptr) {
         return false;
     }
-    if (end <= begin + 1.0e-4) {
-        end = begin + 1.0;
+    if (End <= Begin + 1.0e-4) {
+        End = Begin + 1.0;
     }
 
-    constexpr float kFps = 30.0f;
-    const float duration = static_cast<float>(end - begin);
-    const int frameCount = std::max(2, static_cast<int>(std::ceil(duration * kFps)) + 1);
+    constexpr float Fps = 30.0f;
+    const float Duration = static_cast<float>(End - Begin);
+    const int LocalFrameCount = std::max(2, static_cast<int>(std::ceil(Duration * Fps)) + 1);
 
-    out.name = "clip";
-    out.durationSeconds = duration;
-    out.framesPerSecond = kFps;
-    out.localPoseFrames.resize(static_cast<std::size_t>(frameCount));
+    Out.Name = "clip";
+    Out.DurationSeconds = Duration;
+    Out.FramesPerSecond = Fps;
+    Out.LocalPoseFrames.resize(static_cast<std::size_t>(LocalFrameCount));
 
-    for (int f = 0; f < frameCount; ++f) {
-        const double t =
-            begin + (static_cast<double>(f) / static_cast<double>(frameCount - 1)) * (end - begin);
-        auto& frame = out.localPoseFrames[static_cast<std::size_t>(f)];
-        frame.resize(static_cast<std::size_t>(skeleton.BoneCount()), glm::mat4(1.0f));
-        for (int b = 0; b < skeleton.BoneCount(); ++b) {
-            const auto it = nodesByName.find(skeleton.boneNames[static_cast<std::size_t>(b)]);
-            if (it == nodesByName.end() || it->second == nullptr) {
+    for (int F = 0; F < LocalFrameCount; ++F) {
+        const double T =
+            Begin + (static_cast<double>(F) / static_cast<double>(LocalFrameCount - 1)) * (End - Begin);
+        auto& Frame = Out.LocalPoseFrames[static_cast<std::size_t>(F)];
+        Frame.resize(static_cast<std::size_t>(InSkeleton.BoneCount()), glm::mat4(1.0f));
+        for (int B = 0; B < InSkeleton.BoneCount(); ++B) {
+            const auto It = NodesByName.find(InSkeleton.BoneNames[static_cast<std::size_t>(B)]);
+            if (It == NodesByName.end() || It->second == nullptr) {
                 continue;
             }
             // Bake full node_to_world so skinning does not depend on cluster-only parents.
-            frame[static_cast<std::size_t>(b)] = EvaluateNodeToWorld(anim, it->second, t);
+            Frame[static_cast<std::size_t>(B)] = EvaluateNodeToWorld(Anim, It->second, T);
         }
     }
-    return frameCount > 0;
+    return LocalFrameCount > 0;
 }
 
-void CollectNodesByName(ufbx_scene* scene, std::unordered_map<std::string, ufbx_node*>& out) {
-    out.clear();
-    for (size_t i = 0; i < scene->nodes.count; ++i) {
-        ufbx_node* node = scene->nodes.data[i];
-        if (node == nullptr || node->name.data == nullptr || node->name.length == 0) {
+void CollectNodesByName(ufbx_scene* Scene, std::unordered_map<std::string, ufbx_node*>& Out) {
+    Out.clear();
+    for (size_t I = 0; I < Scene->nodes.count; ++I) {
+        ufbx_node* Node = Scene->nodes.data[I];
+        if (Node == nullptr || Node->name.data == nullptr || Node->name.length == 0) {
             continue;
         }
-        out[std::string(node->name.data, node->name.length)] = node;
+        Out[std::string(Node->name.data, Node->name.length)] = Node;
     }
 }
 
 } // namespace
 
-int USkeleton::FindBoneIndex(const std::string& name) const {
-    for (int i = 0; i < BoneCount(); ++i) {
-        if (boneNames[static_cast<std::size_t>(i)] == name) {
-            return i;
+int USkeleton::FindBoneIndex(const std::string& InName) const {
+    for (int I = 0; I < BoneCount(); ++I) {
+        if (BoneNames[static_cast<std::size_t>(I)] == InName) {
+            return I;
         }
     }
     return -1;
 }
 
-bool UAnimSequence::IsFinished(float timeSeconds) const {
-    if (bLooping || durationSeconds <= 1.0e-4f) {
+bool UAnimSequence::IsFinished(float TimeSeconds) const {
+    if (bLooping || DurationSeconds <= 1.0e-4f) {
         return false;
     }
-    return timeSeconds >= (durationSeconds - 1.0e-4f);
+    return TimeSeconds >= (DurationSeconds - 1.0e-4f);
 }
 
-void UAnimSequence::SampleLocalPose(float timeSeconds, std::vector<glm::mat4>& outBoneWorld) const {
-    const int boneCount = FrameCount() > 0 ? static_cast<int>(localPoseFrames[0].size()) : 0;
-    outBoneWorld.assign(static_cast<std::size_t>(boneCount), glm::mat4(1.0f));
-    if (boneCount <= 0 || FrameCount() <= 0) {
+void UAnimSequence::SampleLocalPose(float TimeSeconds, std::vector<glm::mat4>& OutBoneWorld) const {
+    const int LocalBoneCount = FrameCount() > 0 ? static_cast<int>(LocalPoseFrames[0].size()) : 0;
+    OutBoneWorld.assign(static_cast<std::size_t>(LocalBoneCount), glm::mat4(1.0f));
+    if (LocalBoneCount <= 0 || FrameCount() <= 0) {
         return;
     }
 
-    float t = timeSeconds;
-    if (durationSeconds > 1.0e-4f) {
+    float T = TimeSeconds;
+    if (DurationSeconds > 1.0e-4f) {
         if (bLooping) {
-            t = std::fmod(t, durationSeconds);
-            if (t < 0.0f) {
-                t += durationSeconds;
+            T = std::fmod(T, DurationSeconds);
+            if (T < 0.0f) {
+                T += DurationSeconds;
             }
         } else {
-            t = std::clamp(t, 0.0f, durationSeconds);
+            T = std::clamp(T, 0.0f, DurationSeconds);
         }
     }
-    const float frameF = t * framesPerSecond;
-    int f0 = 0;
-    int f1 = 0;
-    float alpha = 0.0f;
+    const float FrameF = T * FramesPerSecond;
+    int F0 = 0;
+    int F1 = 0;
+    float Alpha = 0.0f;
     if (bLooping) {
-        f0 = static_cast<int>(frameF) % FrameCount();
-        f1 = (f0 + 1) % FrameCount();
-        alpha = frameF - std::floor(frameF);
+        F0 = static_cast<int>(FrameF) % FrameCount();
+        F1 = (F0 + 1) % FrameCount();
+        Alpha = FrameF - std::floor(FrameF);
     } else {
-        const float maxFrame = static_cast<float>(FrameCount() - 1);
-        const float clamped = std::min(frameF, maxFrame);
-        f0 = static_cast<int>(clamped);
-        f1 = std::min(f0 + 1, FrameCount() - 1);
-        alpha = clamped - std::floor(clamped);
+        const float MaxFrame = static_cast<float>(FrameCount() - 1);
+        const float Clamped = std::min(FrameF, MaxFrame);
+        F0 = static_cast<int>(Clamped);
+        F1 = std::min(F0 + 1, FrameCount() - 1);
+        Alpha = Clamped - std::floor(Clamped);
     }
 
-    const auto& a = localPoseFrames[static_cast<std::size_t>(f0)];
-    const auto& b = localPoseFrames[static_cast<std::size_t>(f1)];
-    for (int i = 0; i < boneCount; ++i) {
+    const auto& A = LocalPoseFrames[static_cast<std::size_t>(F0)];
+    const auto& B = LocalPoseFrames[static_cast<std::size_t>(F1)];
+    for (int I = 0; I < LocalBoneCount; ++I) {
         // Matrix lerp is approximate but fine for a micro blend-space / crossfade.
-        outBoneWorld[static_cast<std::size_t>(i)] =
-            a[static_cast<std::size_t>(i)] * (1.0f - alpha) +
-            b[static_cast<std::size_t>(i)] * alpha;
+        OutBoneWorld[static_cast<std::size_t>(I)] =
+            A[static_cast<std::size_t>(I)] * (1.0f - Alpha) +
+            B[static_cast<std::size_t>(I)] * Alpha;
     }
 }
 
-void UBlendSpace1D::Evaluate(float axisValue, const UAnimSequence*& outA, const UAnimSequence*& outB,
-                            float& outAlpha) const {
-    outA = nullptr;
-    outB = nullptr;
-    outAlpha = 0.0f;
-    if (samples.empty()) {
+void UBlendSpace1D::Evaluate(float AxisValue, const UAnimSequence*& OutA, const UAnimSequence*& OutB,
+                            float& OutAlpha) const {
+    OutA = nullptr;
+    OutB = nullptr;
+    OutAlpha = 0.0f;
+    if (Samples.empty()) {
         return;
     }
 
     // Sort indices by sample position (stable for typical Idle@0 / Run@1 authoring).
-    std::vector<std::size_t> order(samples.size());
-    for (std::size_t i = 0; i < samples.size(); ++i) {
-        order[i] = i;
+    std::vector<std::size_t> Order(Samples.size());
+    for (std::size_t I = 0; I < Samples.size(); ++I) {
+        Order[I] = I;
     }
-    std::sort(order.begin(), order.end(), [this](std::size_t a, std::size_t b) {
-        return samples[a].position < samples[b].position;
+    std::sort(Order.begin(), Order.end(), [this](std::size_t A, std::size_t B) {
+        return Samples[A].Position < Samples[B].Position;
     });
 
-    const float x = std::clamp(axisValue, axisMin, axisMax);
-    const FBlendSample& first = samples[order.front()];
-    const FBlendSample& last = samples[order.back()];
-    if (x <= first.position || order.size() == 1) {
-        outA = first.sequence;
-        outB = first.sequence;
-        outAlpha = 0.0f;
+    const float X = std::clamp(AxisValue, AxisMin, AxisMax);
+    const FBlendSample& First = Samples[Order.front()];
+    const FBlendSample& Last = Samples[Order.back()];
+    if (X <= First.Position || Order.size() == 1) {
+        OutA = First.Sequence;
+        OutB = First.Sequence;
+        OutAlpha = 0.0f;
         return;
     }
-    if (x >= last.position) {
-        outA = last.sequence;
-        outB = last.sequence;
-        outAlpha = 0.0f;
+    if (X >= Last.Position) {
+        OutA = Last.Sequence;
+        OutB = Last.Sequence;
+        OutAlpha = 0.0f;
         return;
     }
 
-    for (std::size_t i = 0; i + 1 < order.size(); ++i) {
-        const FBlendSample& a = samples[order[i]];
-        const FBlendSample& b = samples[order[i + 1]];
-        if (x >= a.position && x <= b.position) {
-            outA = a.sequence;
-            outB = b.sequence;
-            const float span = b.position - a.position;
-            outAlpha = (span > 1.0e-6f) ? ((x - a.position) / span) : 0.0f;
+    for (std::size_t I = 0; I + 1 < Order.size(); ++I) {
+        const FBlendSample& A = Samples[Order[I]];
+        const FBlendSample& B = Samples[Order[I + 1]];
+        if (X >= A.Position && X <= B.Position) {
+            OutA = A.Sequence;
+            OutB = B.Sequence;
+            const float Span = B.Position - A.Position;
+            OutAlpha = (Span > 1.0e-6f) ? ((X - A.Position) / Span) : 0.0f;
             return;
         }
     }
 }
 
-void UAnimInstance::SetBlendSpaceInput(float axisValue) {
-    blendInputTarget_ = axisValue;
+void UAnimInstance::SetBlendSpaceInput(float AxisValue) {
+    BlendInputTarget = AxisValue;
 }
 
-void UAnimInstance::UpdateLocomotion(float deltaTime) {
-    if (locomotionBlendInterpSpeed_ <= 1.0e-6f) {
-        blendInput_ = blendInputTarget_;
+void UAnimInstance::UpdateLocomotion(float DeltaTime) {
+    if (LocomotionBlendInterpSpeed <= 1.0e-6f) {
+        BlendInput = BlendInputTarget;
     } else {
-        const float t = 1.0f - std::exp(-locomotionBlendInterpSpeed_ * deltaTime);
-        blendInput_ += (blendInputTarget_ - blendInput_) * t;
+        const float T = 1.0f - std::exp(-LocomotionBlendInterpSpeed * DeltaTime);
+        BlendInput += (BlendInputTarget - BlendInput) * T;
     }
 
-    sampleA_ = nullptr;
-    sampleB_ = nullptr;
-    blendAlpha_ = 0.0f;
-    if (blendSpace_ != nullptr) {
-        blendSpace_->Evaluate(blendInput_, sampleA_, sampleB_, blendAlpha_);
+    SampleA = nullptr;
+    SampleB = nullptr;
+    BlendAlpha = 0.0f;
+    if (BlendSpace != nullptr) {
+        BlendSpace->Evaluate(BlendInput, SampleA, SampleB, BlendAlpha);
     }
-    if (sampleA_ != nullptr) {
-        timeA_ += deltaTime;
+    if (SampleA != nullptr) {
+        TimeA += DeltaTime;
     }
-    if (sampleB_ != nullptr && sampleB_ != sampleA_) {
-        timeB_ += deltaTime;
-    } else if (sampleB_ == sampleA_) {
-        timeB_ = timeA_;
+    if (SampleB != nullptr && SampleB != SampleA) {
+        TimeB += DeltaTime;
+    } else if (SampleB == SampleA) {
+        TimeB = TimeA;
     }
 }
 
-void UAnimInstance::SampleLocomotionBoneWorld(std::vector<glm::mat4>& outBoneWorld) const {
-    outBoneWorld.clear();
-    if (skeleton_ == nullptr) {
+void UAnimInstance::SampleLocomotionBoneWorld(std::vector<glm::mat4>& OutBoneWorld) const {
+    OutBoneWorld.clear();
+    if (Skeleton == nullptr) {
         return;
     }
-    const int boneCount = skeleton_->BoneCount();
-    const bool hasA = sampleA_ != nullptr && sampleA_->FrameCount() > 0;
-    const bool hasB = sampleB_ != nullptr && sampleB_->FrameCount() > 0;
-    if (!hasA && !hasB) {
-        outBoneWorld.assign(static_cast<std::size_t>(boneCount), glm::mat4(1.0f));
+    const int LocalBoneCount = Skeleton->BoneCount();
+    const bool bHasA = SampleA != nullptr && SampleA->FrameCount() > 0;
+    const bool bHasB = SampleB != nullptr && SampleB->FrameCount() > 0;
+    if (!bHasA && !bHasB) {
+        OutBoneWorld.assign(static_cast<std::size_t>(LocalBoneCount), glm::mat4(1.0f));
         return;
     }
 
-    std::vector<glm::mat4> worldA;
-    std::vector<glm::mat4> worldB;
-    if (hasA) {
-        sampleA_->SampleLocalPose(timeA_, worldA);
+    std::vector<glm::mat4> WorldA;
+    std::vector<glm::mat4> WorldB;
+    if (bHasA) {
+        SampleA->SampleLocalPose(TimeA, WorldA);
     }
-    if (hasB) {
-        sampleB_->SampleLocalPose(timeB_, worldB);
+    if (bHasB) {
+        SampleB->SampleLocalPose(TimeB, WorldB);
     }
 
-    outBoneWorld.resize(static_cast<std::size_t>(boneCount), glm::mat4(1.0f));
-    for (int i = 0; i < boneCount; ++i) {
-        const glm::mat4 a = (worldA.size() == static_cast<std::size_t>(boneCount))
-                                ? worldA[static_cast<std::size_t>(i)]
-                                : (worldB.size() == static_cast<std::size_t>(boneCount)
-                                       ? worldB[static_cast<std::size_t>(i)]
+    OutBoneWorld.resize(static_cast<std::size_t>(LocalBoneCount), glm::mat4(1.0f));
+    for (int I = 0; I < LocalBoneCount; ++I) {
+        const glm::mat4 A = (WorldA.size() == static_cast<std::size_t>(LocalBoneCount))
+                                ? WorldA[static_cast<std::size_t>(I)]
+                                : (WorldB.size() == static_cast<std::size_t>(LocalBoneCount)
+                                       ? WorldB[static_cast<std::size_t>(I)]
                                        : glm::mat4(1.0f));
-        const glm::mat4 b = (worldB.size() == static_cast<std::size_t>(boneCount))
-                                ? worldB[static_cast<std::size_t>(i)]
-                                : a;
-        outBoneWorld[static_cast<std::size_t>(i)] = a * (1.0f - blendAlpha_) + b * blendAlpha_;
+        const glm::mat4 B = (WorldB.size() == static_cast<std::size_t>(LocalBoneCount))
+                                ? WorldB[static_cast<std::size_t>(I)]
+                                : A;
+        OutBoneWorld[static_cast<std::size_t>(I)] = A * (1.0f - BlendAlpha) + B * BlendAlpha;
     }
 }
 
-void UAnimInstance::SkinFromBoneWorld(const std::vector<glm::mat4>& boneWorld,
-                                     std::vector<glm::mat4>& outSkin) const {
-    outSkin.clear();
-    if (skeleton_ == nullptr || skeleton_->BoneCount() <= 0) {
+void UAnimInstance::SkinFromBoneWorld(const std::vector<glm::mat4>& BoneWorld,
+                                     std::vector<glm::mat4>& OutSkin) const {
+    OutSkin.clear();
+    if (Skeleton == nullptr || Skeleton->BoneCount() <= 0) {
         return;
     }
-    const int boneCount = skeleton_->BoneCount();
-    if (boneWorld.size() != static_cast<std::size_t>(boneCount)) {
-        outSkin.assign(static_cast<std::size_t>(boneCount), glm::mat4(1.0f));
+    const int LocalBoneCount = Skeleton->BoneCount();
+    if (BoneWorld.size() != static_cast<std::size_t>(LocalBoneCount)) {
+        OutSkin.assign(static_cast<std::size_t>(LocalBoneCount), glm::mat4(1.0f));
         return;
     }
-    outSkin.resize(static_cast<std::size_t>(boneCount), glm::mat4(1.0f));
-    for (int i = 0; i < boneCount; ++i) {
-        outSkin[static_cast<std::size_t>(i)] =
-            boneWorld[static_cast<std::size_t>(i)] *
-            skeleton_->inverseBindPose[static_cast<std::size_t>(i)];
+    OutSkin.resize(static_cast<std::size_t>(LocalBoneCount), glm::mat4(1.0f));
+    for (int I = 0; I < LocalBoneCount; ++I) {
+        OutSkin[static_cast<std::size_t>(I)] =
+            BoneWorld[static_cast<std::size_t>(I)] *
+            Skeleton->InverseBindPose[static_cast<std::size_t>(I)];
     }
 }
 
-void UAnimInstance::NativeUpdateAnimation(float deltaTime) {
-    UpdateLocomotion(deltaTime);
+void UAnimInstance::NativeUpdateAnimation(float DeltaTime) {
+    UpdateLocomotion(DeltaTime);
 }
 
-void UAnimInstance::GetBoneWorldMatrices(std::vector<glm::mat4>& outBoneWorld) const {
-    SampleLocomotionBoneWorld(outBoneWorld);
+void UAnimInstance::GetBoneWorldMatrices(std::vector<glm::mat4>& OutBoneWorld) const {
+    SampleLocomotionBoneWorld(OutBoneWorld);
 }
 
-void UAnimInstance::GetSkinMatrices(std::vector<glm::mat4>& outSkin) const {
-    std::vector<glm::mat4> world;
-    GetBoneWorldMatrices(world);
-    SkinFromBoneWorld(world, outSkin);
+void UAnimInstance::GetSkinMatrices(std::vector<glm::mat4>& OutSkin) const {
+    std::vector<glm::mat4> World;
+    GetBoneWorldMatrices(World);
+    SkinFromBoneWorld(World, OutSkin);
 }
 
-bool LoadSkeletalMeshFromFbx(const std::string& path, FSkeletalMeshData& out) {
-    out = {};
-    ufbx_error error{};
-    const ufbx_load_opts opts = MakeLoadOpts();
-    ufbx_scene* scene = ufbx_load_file(path.c_str(), &opts, &error);
-    if (scene == nullptr) {
-        std::cerr << "ufbx: failed to load mesh FBX '" << path << "': " << error.description.data
+bool LoadSkeletalMeshFromFbx(const std::string& Path, FSkeletalMeshData& Out) {
+    Out = {};
+    ufbx_error Error{};
+    const ufbx_load_opts Opts = MakeLoadOpts();
+    ufbx_scene* Scene = ufbx_load_file(Path.c_str(), &Opts, &Error);
+    if (Scene == nullptr) {
+        std::cerr << "ufbx: failed to load mesh FBX '" << Path << "': " << Error.description.data
                   << '\n';
         return false;
     }
 
-    ufbx_mesh* mesh = nullptr;
-    ufbx_skin_deformer* skin = nullptr;
-    for (size_t i = 0; i < scene->meshes.count; ++i) {
-        ufbx_mesh* candidate = scene->meshes.data[i];
-        if (candidate != nullptr && candidate->skin_deformers.count > 0) {
-            mesh = candidate;
-            skin = candidate->skin_deformers.data[0];
+    ufbx_mesh* Mesh = nullptr;
+    ufbx_skin_deformer* Skin = nullptr;
+    for (size_t I = 0; I < Scene->meshes.count; ++I) {
+        ufbx_mesh* Candidate = Scene->meshes.data[I];
+        if (Candidate != nullptr && Candidate->skin_deformers.count > 0) {
+            Mesh = Candidate;
+            Skin = Candidate->skin_deformers.data[0];
             break;
         }
     }
-    if (mesh == nullptr || skin == nullptr) {
-        std::cerr << "ufbx: no skinned mesh in '" << path << "'\n";
-        ufbx_free_scene(scene);
+    if (Mesh == nullptr || Skin == nullptr) {
+        std::cerr << "ufbx: no skinned mesh in '" << Path << "'\n";
+        ufbx_free_scene(Scene);
         return false;
     }
 
-    const int clusterCount = static_cast<int>(skin->clusters.count);
-    if (clusterCount <= 0 || clusterCount > kMaxSkinBones) {
-        std::cerr << "ufbx: invalid bone count " << clusterCount << " in '" << path << "'\n";
-        ufbx_free_scene(scene);
+    const int ClusterCount = static_cast<int>(Skin->clusters.count);
+    if (ClusterCount <= 0 || ClusterCount > MaxSkinBones) {
+        std::cerr << "ufbx: invalid bone count " << ClusterCount << " in '" << Path << "'\n";
+        ufbx_free_scene(Scene);
         return false;
     }
 
-    out.skeleton.boneNames.resize(static_cast<std::size_t>(clusterCount));
-    out.skeleton.parentIndices.assign(static_cast<std::size_t>(clusterCount), -1);
-    out.skeleton.inverseBindPose.resize(static_cast<std::size_t>(clusterCount), glm::mat4(1.0f));
+    Out.Skeleton.BoneNames.resize(static_cast<std::size_t>(ClusterCount));
+    Out.Skeleton.ParentIndices.assign(static_cast<std::size_t>(ClusterCount), -1);
+    Out.Skeleton.InverseBindPose.resize(static_cast<std::size_t>(ClusterCount), glm::mat4(1.0f));
 
-    std::unordered_map<ufbx_node*, int> nodeToBone;
-    for (int c = 0; c < clusterCount; ++c) {
-        ufbx_skin_cluster* cluster = skin->clusters.data[c];
-        if (cluster == nullptr || cluster->bone_node == nullptr) {
+    std::unordered_map<ufbx_node*, int> NodeToBone;
+    for (int C = 0; C < ClusterCount; ++C) {
+        ufbx_skin_cluster* Cluster = Skin->clusters.data[C];
+        if (Cluster == nullptr || Cluster->bone_node == nullptr) {
             continue;
         }
-        ufbx_node* bone = cluster->bone_node;
-        const std::string name(bone->name.data, bone->name.length);
-        out.skeleton.boneNames[static_cast<std::size_t>(c)] = name;
-        out.skeleton.inverseBindPose[static_cast<std::size_t>(c)] =
-            ToGlm(cluster->geometry_to_bone);
-        nodeToBone[bone] = c;
+        ufbx_node* Bone = Cluster->bone_node;
+        const std::string LocalName(Bone->name.data, Bone->name.length);
+        Out.Skeleton.BoneNames[static_cast<std::size_t>(C)] = LocalName;
+        Out.Skeleton.InverseBindPose[static_cast<std::size_t>(C)] =
+            ToGlm(Cluster->geometry_to_bone);
+        NodeToBone[Bone] = C;
     }
-    for (int c = 0; c < clusterCount; ++c) {
-        ufbx_skin_cluster* cluster = skin->clusters.data[c];
-        if (cluster == nullptr || cluster->bone_node == nullptr) {
+    for (int C = 0; C < ClusterCount; ++C) {
+        ufbx_skin_cluster* Cluster = Skin->clusters.data[C];
+        if (Cluster == nullptr || Cluster->bone_node == nullptr) {
             continue;
         }
-        ufbx_node* parent = cluster->bone_node->parent;
-        while (parent != nullptr) {
-            const auto it = nodeToBone.find(parent);
-            if (it != nodeToBone.end()) {
-                out.skeleton.parentIndices[static_cast<std::size_t>(c)] = it->second;
+        ufbx_node* Parent = Cluster->bone_node->parent;
+        while (Parent != nullptr) {
+            const auto It = NodeToBone.find(Parent);
+            if (It != NodeToBone.end()) {
+                Out.Skeleton.ParentIndices[static_cast<std::size_t>(C)] = It->second;
                 break;
             }
-            parent = parent->parent;
+            Parent = Parent->parent;
         }
     }
 
     // Triangulate into unique vertices (per corner attributes).
     // `ufbx_triangulate_face` returns the number of *triangles* (not indices).
-    out.localMin = glm::vec3(std::numeric_limits<float>::max());
-    out.localMax = glm::vec3(std::numeric_limits<float>::lowest());
+    Out.LocalMin = glm::vec3(std::numeric_limits<float>::max());
+    Out.LocalMax = glm::vec3(std::numeric_limits<float>::lowest());
 
-    const size_t triIndexCapacity = std::max<size_t>(mesh->max_face_triangles * 3u, 16u * 3u);
-    std::vector<uint32_t> tri(triIndexCapacity);
+    const size_t TriIndexCapacity = std::max<size_t>(Mesh->max_face_triangles * 3u, 16u * 3u);
+    std::vector<uint32_t> Tri(TriIndexCapacity);
 
-    for (size_t fi = 0; fi < mesh->faces.count; ++fi) {
-        const ufbx_face face = mesh->faces.data[fi];
-        if (face.num_indices < 3) {
+    for (size_t Fi = 0; Fi < Mesh->faces.count; ++Fi) {
+        const ufbx_face Face = Mesh->faces.data[Fi];
+        if (Face.num_indices < 3) {
             continue;
         }
-        const uint32_t numTris = ufbx_triangulate_face(tri.data(), tri.size(), mesh, face);
-        for (uint32_t t = 0; t < numTris; ++t) {
-            for (int k = 0; k < 3; ++k) {
-                const uint32_t index = tri[static_cast<size_t>(t) * 3u + static_cast<size_t>(k)];
-                const uint32_t vi = mesh->vertex_indices.data[index];
+        const uint32_t NumTris = ufbx_triangulate_face(Tri.data(), Tri.size(), Mesh, Face);
+        for (uint32_t T = 0; T < NumTris; ++T) {
+            for (int K = 0; K < 3; ++K) {
+                const uint32_t Index = Tri[static_cast<size_t>(T) * 3u + static_cast<size_t>(K)];
+                const uint32_t Vi = Mesh->vertex_indices.data[Index];
 
-                FSkeletalVertex v{};
-                const ufbx_vec3 pos = ufbx_get_vertex_vec3(&mesh->vertex_position, index);
-                v.position = {static_cast<float>(pos.x), static_cast<float>(pos.y),
-                              static_cast<float>(pos.z)};
-                if (mesh->vertex_normal.exists) {
-                    const ufbx_vec3 n = ufbx_get_vertex_vec3(&mesh->vertex_normal, index);
-                    v.normal = glm::normalize(glm::vec3{
-                        static_cast<float>(n.x), static_cast<float>(n.y), static_cast<float>(n.z)});
+                FSkeletalVertex V{};
+                const ufbx_vec3 Pos = ufbx_get_vertex_vec3(&Mesh->vertex_position, Index);
+                V.Position = {static_cast<float>(Pos.x), static_cast<float>(Pos.y),
+                              static_cast<float>(Pos.z)};
+                if (Mesh->vertex_normal.exists) {
+                    const ufbx_vec3 N = ufbx_get_vertex_vec3(&Mesh->vertex_normal, Index);
+                    V.Normal = glm::normalize(glm::vec3{
+                        static_cast<float>(N.x), static_cast<float>(N.y), static_cast<float>(N.z)});
                 }
-                if (mesh->vertex_uv.exists) {
-                    const ufbx_vec2 uv = ufbx_get_vertex_vec2(&mesh->vertex_uv, index);
-                    v.texCoord = {static_cast<float>(uv.x), static_cast<float>(uv.y)};
+                if (Mesh->vertex_uv.exists) {
+                    const ufbx_vec2 Uv = ufbx_get_vertex_vec2(&Mesh->vertex_uv, Index);
+                    V.TexCoord = {static_cast<float>(Uv.x), static_cast<float>(Uv.y)};
                 }
 
                 // Skin weights (up to 4).
-                if (vi < skin->vertices.count) {
-                    const ufbx_skin_vertex sv = skin->vertices.data[vi];
-                    float wsum = 0.0f;
-                    const uint32_t nw = std::min<uint32_t>(sv.num_weights, kMaxBoneInfluences);
-                    for (uint32_t wi = 0; wi < nw; ++wi) {
-                        const ufbx_skin_weight sw = skin->weights.data[sv.weight_begin + wi];
-                        v.boneIndices[wi] = static_cast<int>(sw.cluster_index);
-                        v.boneWeights[wi] = static_cast<float>(sw.weight);
-                        wsum += static_cast<float>(sw.weight);
+                if (Vi < Skin->vertices.count) {
+                    const ufbx_skin_vertex Sv = Skin->vertices.data[Vi];
+                    float Wsum = 0.0f;
+                    const uint32_t Nw = std::min<uint32_t>(Sv.num_weights, MaxBoneInfluences);
+                    for (uint32_t Wi = 0; Wi < Nw; ++Wi) {
+                        const ufbx_skin_weight Sw = Skin->weights.data[Sv.weight_begin + Wi];
+                        V.BoneIndices[Wi] = static_cast<int>(Sw.cluster_index);
+                        V.BoneWeights[Wi] = static_cast<float>(Sw.weight);
+                        Wsum += static_cast<float>(Sw.weight);
                     }
-                    if (wsum > 1.0e-6f) {
-                        v.boneWeights /= wsum;
+                    if (Wsum > 1.0e-6f) {
+                        V.BoneWeights /= Wsum;
                     } else {
-                        v.boneWeights[0] = 1.0f;
+                        V.BoneWeights[0] = 1.0f;
                     }
                 } else {
-                    v.boneWeights[0] = 1.0f;
+                    V.BoneWeights[0] = 1.0f;
                 }
 
-                out.localMin = glm::min(out.localMin, v.position);
-                out.localMax = glm::max(out.localMax, v.position);
-                out.indices.push_back(static_cast<std::uint32_t>(out.vertices.size()));
-                out.vertices.push_back(v);
+                Out.LocalMin = glm::min(Out.LocalMin, V.Position);
+                Out.LocalMax = glm::max(Out.LocalMax, V.Position);
+                Out.Indices.push_back(static_cast<std::uint32_t>(Out.Vertices.size()));
+                Out.Vertices.push_back(V);
             }
         }
     }
 
-    if (out.empty()) {
-        std::cerr << "ufbx: skinned mesh produced no triangles in '" << path << "'\n";
-        ufbx_free_scene(scene);
+    if (Out.empty()) {
+        std::cerr << "ufbx: skinned mesh produced no triangles in '" << Path << "'\n";
+        ufbx_free_scene(Scene);
         return false;
     }
 
-    std::unordered_map<std::string, ufbx_node*> nodesByName;
-    CollectNodesByName(scene, nodesByName);
-    BakeAnimFromScene(scene, out.skeleton, nodesByName, out.embeddedAnim);
+    std::unordered_map<std::string, ufbx_node*> NodesByName;
+    CollectNodesByName(Scene, NodesByName);
+    BakeAnimFromScene(Scene, Out.Skeleton, NodesByName, Out.EmbeddedAnim);
 
-    ufbx_free_scene(scene);
-    return out.skeleton.BoneCount() > 0;
+    ufbx_free_scene(Scene);
+    return Out.Skeleton.BoneCount() > 0;
 }
 
-bool LoadAnimSequenceFromFbx(const std::string& path, const USkeleton& skeleton, UAnimSequence& out) {
-    out = {};
-    ufbx_error error{};
-    const ufbx_load_opts opts = MakeLoadOpts();
-    ufbx_scene* scene = ufbx_load_file(path.c_str(), &opts, &error);
-    if (scene == nullptr) {
-        std::cerr << "ufbx: failed to load anim FBX '" << path << "': " << error.description.data
+bool LoadAnimSequenceFromFbx(const std::string& Path, const USkeleton& InSkeleton, UAnimSequence& Out) {
+    Out = {};
+    ufbx_error Error{};
+    const ufbx_load_opts Opts = MakeLoadOpts();
+    ufbx_scene* Scene = ufbx_load_file(Path.c_str(), &Opts, &Error);
+    if (Scene == nullptr) {
+        std::cerr << "ufbx: failed to load anim FBX '" << Path << "': " << Error.description.data
                   << '\n';
         return false;
     }
 
-    std::unordered_map<std::string, ufbx_node*> nodesByName;
-    CollectNodesByName(scene, nodesByName);
-    const bool ok = BakeAnimFromScene(scene, skeleton, nodesByName, out);
-    if (ok) {
+    std::unordered_map<std::string, ufbx_node*> NodesByName;
+    CollectNodesByName(Scene, NodesByName);
+    const bool bOk = BakeAnimFromScene(Scene, InSkeleton, NodesByName, Out);
+    if (bOk) {
         // Prefer filename stem as clip name.
-        const auto slash = path.find_last_of("/\\");
-        const auto dot = path.find_last_of('.');
-        const std::size_t start = slash == std::string::npos ? 0 : slash + 1;
-        const std::size_t end = (dot == std::string::npos || dot < start) ? path.size() : dot;
-        out.name = path.substr(start, end - start);
+        const auto Slash = Path.find_last_of("/\\");
+        const auto Dot = Path.find_last_of('.');
+        const std::size_t Start = Slash == std::string::npos ? 0 : Slash + 1;
+        const std::size_t End = (Dot == std::string::npos || Dot < Start) ? Path.size() : Dot;
+        Out.Name = Path.substr(Start, End - Start);
     }
-    ufbx_free_scene(scene);
-    return ok;
+    ufbx_free_scene(Scene);
+    return bOk;
 }
 

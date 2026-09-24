@@ -27,39 +27,39 @@ public:
 
     /// `silent` skips device open (dedicated / CI). Returns false only on hard failure when
     /// not silent (engine still runs; subsequent Play* become no-ops).
-    bool Initialize(bool silent = false);
+    bool Initialize(bool bInSilent = false);
     void Shutdown();
     /// Reap finished one-shots (call once per frame from Engine).
     void Tick();
-    [[nodiscard]] bool IsInitialized() const { return initialized_; }
-    [[nodiscard]] bool IsSilent() const { return silent_; }
+    [[nodiscard]] bool IsInitialized() const { return bInitialized; }
+    [[nodiscard]] bool IsSilent() const { return bSilent; }
 
-    void SetMasterVolume(float volume01);
-    [[nodiscard]] float GetMasterVolume() const { return masterVolume_; }
+    void SetMasterVolume(float Volume01);
+    [[nodiscard]] float GetMasterVolume() const { return MasterVolume; }
 
     /// Listener for 3D (Unreal SetListener). Call from Engine after camera update.
-    void SetListener(const glm::vec3& location, const glm::vec3& forward, const glm::vec3& up);
+    void SetListener(const glm::vec3& Location, const glm::vec3& Forward, const glm::vec3& Up);
 
     /// Unreal PlaySound2D — fire-and-forget WAV/FLAC/MP3/OGG under FPaths::ResolveAssetPath.
-    void PlaySound2D(std::string_view assetRelativePath, float volumeMultiplier = 1.0f);
+    void PlaySound2D(std::string_view AssetRelativePath, float VolumeMultiplier = 1.0f);
 
     /// Unreal PlaySoundAtLocation — spatialized one-shot.
-    void PlaySoundAtLocation(std::string_view assetRelativePath, const glm::vec3& location,
-                             float volumeMultiplier = 1.0f);
+    void PlaySoundAtLocation(std::string_view AssetRelativePath, const glm::vec3& Location,
+                             float VolumeMultiplier = 1.0f);
 
     /// UI cue: tries Content `assets/Audio/UI/UI_*.wav`, else procedural tone.
-    void PlayUiSound(EUISound sound, float volumeMultiplier = 1.0f);
+    void PlayUiSound(EUISound InSound, float VolumeMultiplier = 1.0f);
 
     /// Looping 2D music bed (dedicated slot, not the one-shot voice pool). Replaces any prior bed.
-    void PlayMusic(std::string_view assetRelativePath, float volumeMultiplier = 0.35f);
+    void PlayMusic(std::string_view AssetRelativePath, float VolumeMultiplier = 0.35f);
     void StopMusic();
     [[nodiscard]] bool IsMusicPlaying() const;
 
 private:
     struct FImpl;
-    std::unique_ptr<FImpl> impl_;
-    bool initialized_ = false;
-    bool silent_ = true;
-    float masterVolume_ = 1.0f;
+    std::unique_ptr<FImpl> Impl;
+    bool bInitialized = false;
+    bool bSilent = true;
+    float MasterVolume = 1.0f;
 };
 
