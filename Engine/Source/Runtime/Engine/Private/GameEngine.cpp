@@ -120,7 +120,6 @@ void UGameEngine::Shutdown()
 	bKeyboardOrbitEnabled = true;
 	bOrbitMouseEnabled = true;
 	PendingScrollY = 0.0f;
-	ShaderReloadHook = {};
 	Hud.Clear();
 	CenterHudText.clear();
 	LastFbWidth = 0;
@@ -198,10 +197,6 @@ EShaderReloadResult UGameEngine::ReloadAllShaders(bool bForce)
 {
 	EShaderReloadResult Result = Renderer.ReloadShaders(bForce);
 	Result = MergeShaderReload(Result, Overlay.ReloadShader(bForce));
-	if (ShaderReloadHook)
-	{
-		Result = MergeShaderReload(Result, ShaderReloadHook(bForce));
-	}
 	return Result;
 }
 

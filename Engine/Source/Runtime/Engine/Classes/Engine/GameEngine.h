@@ -279,13 +279,6 @@ public:
 		return Hud;
 	}
 
-	/// Optional extra shader reload (level chrome, etc.) merged into F5 / auto-reload.
-	using FShaderReloadHook = std::function<EShaderReloadResult(bool bForce)>;
-	void SetShaderReloadHook(FShaderReloadHook Hook)
-	{
-		ShaderReloadHook = std::move(Hook);
-	}
-
 private:
 	[[nodiscard]] EShaderReloadResult ReloadAllShaders(bool bForce);
 	void HandleInput(float DeltaTime);
@@ -323,7 +316,6 @@ private:
 	bool bReloadKeyWasDown = false;
 	bool bShowHudStats = false;
 	bool bHudStatsKeyWasDown = false;
-	FShaderReloadHook ShaderReloadHook;
 	double LastMouseX = 0.0;
 	double LastMouseY = 0.0;
 
