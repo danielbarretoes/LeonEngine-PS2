@@ -25,5 +25,20 @@ jobs:
           name: ThirdPerson-PS2-elf
           path: Game/ThirdPerson/Binaries/PS2/ThirdPerson.elf
 
-  # Win64 (engine + LeonAutomationTests) is validated locally with
-  # Engine\Build\BatchFiles\RunTests.bat; a windows-latest job can run Setup.bat + RunTests.bat.
+  # Formatting is checked locally with Engine\Build\BatchFiles\Lint.bat (clang-format output is
+  # version-specific; the runner's LLVM may differ from Visual Studio's).
+  win64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup (pinned third-party downloads)
+        shell: cmd
+        run: call Setup.bat
+      - name: Build + run LeonAutomationTests
+        shell: cmd
+        run: call Engine\Build\BatchFiles\RunTests.bat
+      - name: Build LeonGame and LeonCook
+        shell: cmd
+        run: |
+          call Engine\Build\BatchFiles\Build.bat LeonGame Win64 Development || exit /b 1
+          call Engine\Build\BatchFiles\Build.bat LeonCook Win64 Development
