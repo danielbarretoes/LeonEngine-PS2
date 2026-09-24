@@ -8,8 +8,8 @@ class FGLFWWindow final : public FGenericWindow
 public:
 	virtual ~FGLFWWindow() override;
 
-	virtual bool Create(int width, int height, const char* title) override;
-	virtual bool CreateShared(const FGenericWindow& shareWith, int width, int height, const char* title) override;
+	virtual bool Create(int Width, int Height, const char* Title) override;
+	virtual bool CreateShared(const FGenericWindow& ShareWith, int Width, int Height, const char* Title) override;
 	virtual void Destroy() override;
 
 	virtual void MakeContextCurrent() override;
@@ -20,11 +20,11 @@ public:
 	virtual void PollEvents() override;
 	virtual void SwapBuffers() override;
 
-	virtual bool IsKeyPressed(EKeys key) const override;
-	virtual bool IsMouseButtonDown(EMouseButtons button) const override;
-	virtual void GetCursorPos(double& x, double& y) const override;
-	virtual void SetCursorCaptured(bool captured) override;
-	virtual bool SetIconFromFile(const char* pngPath) override;
+	virtual bool IsKeyPressed(EKeys Key) const override;
+	virtual bool IsMouseButtonDown(EMouseButtons Button) const override;
+	virtual void GetCursorPos(double& X, double& Y) const override;
+	virtual void SetCursorCaptured(bool bCaptured) override;
+	virtual bool SetIconFromFile(const char* PngPath) override;
 
 private:
 	void InstallCallbacks();

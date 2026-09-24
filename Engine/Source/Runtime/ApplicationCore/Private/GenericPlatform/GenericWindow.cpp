@@ -28,15 +28,15 @@ bool FGenericWindow::IsMouseButtonDown(EMouseButtons) const
 	return false;
 }
 
-void FGenericWindow::GetCursorPos(double& x, double& y) const
+void FGenericWindow::GetCursorPos(double& X, double& Y) const
 {
-	x = 0.0;
-	y = 0.0;
+	X = 0.0;
+	Y = 0.0;
 }
 
-void FGenericWindow::SetCursorCaptured(bool captured)
+void FGenericWindow::SetCursorCaptured(bool bCaptured)
 {
-	cursorCaptured_ = captured;
+	bCursorCaptured = bCaptured;
 }
 
 bool FGenericWindow::SetIconFromFile(const char*)
@@ -44,89 +44,89 @@ bool FGenericWindow::SetIconFromFile(const char*)
 	return false;
 }
 
-void FGenericWindow::GetWindowSize(int& width, int& height) const
+void FGenericWindow::GetWindowSize(int& InWidth, int& InHeight) const
 {
-	width = windowWidth_;
-	height = windowHeight_;
+	InWidth = WindowWidth;
+	InHeight = WindowHeight;
 }
 
-void FGenericWindow::GetFramebufferSize(int& width, int& height) const
+void FGenericWindow::GetFramebufferSize(int& InWidth, int& InHeight) const
 {
-	width = framebufferWidth_;
-	height = framebufferHeight_;
+	InWidth = FramebufferWidth;
+	InHeight = FramebufferHeight;
 }
 
 float FGenericWindow::Aspect() const
 {
-	if (framebufferWidth_ > 0 && framebufferHeight_ > 0)
+	if (FramebufferWidth > 0 && FramebufferHeight > 0)
 	{
-		return static_cast<float>(framebufferWidth_) / static_cast<float>(framebufferHeight_);
+		return static_cast<float>(FramebufferWidth) / static_cast<float>(FramebufferHeight);
 	}
-	return windowHeight_ > 0 ? static_cast<float>(windowWidth_) / static_cast<float>(windowHeight_) : 1.0f;
+	return WindowHeight > 0 ? static_cast<float>(WindowWidth) / static_cast<float>(WindowHeight) : 1.0f;
 }
 
-void FGenericWindow::SetScrollCallback(FScrollCallback callback)
+void FGenericWindow::SetScrollCallback(FScrollCallback Callback)
 {
-	scrollCallback_ = std::move(callback);
+	ScrollCallback = std::move(Callback);
 }
 
-void FGenericWindow::ApplyWindowSize(int width, int height)
+void FGenericWindow::ApplyWindowSize(int InWidth, int InHeight)
 {
-	windowWidth_ = width;
-	windowHeight_ = height;
+	WindowWidth = InWidth;
+	WindowHeight = InHeight;
 }
 
-void FGenericWindow::ApplyFramebufferSize(int width, int height)
+void FGenericWindow::ApplyFramebufferSize(int InWidth, int InHeight)
 {
-	framebufferWidth_ = width;
-	framebufferHeight_ = height;
-	if (rhi_)
+	FramebufferWidth = InWidth;
+	FramebufferHeight = InHeight;
+	if (OwnedRHI)
 	{
-		rhi_->SetViewport(0, 0, width, height);
-	}
-}
-
-void FGenericWindow::NotifyScroll(double yOffset)
-{
-	if (scrollCallback_)
-	{
-		scrollCallback_(yOffset);
+		OwnedRHI->SetViewport(0, 0, InWidth, InHeight);
 	}
 }
 
-bool FGenericWindow::InitRHI(void* (*procAddressLoader)(const char*))
+void FGenericWindow::NotifyScroll(double YOffset)
 {
-	rhi_ = PlatformCreateDynamicRHI();
-	if (!rhi_ || !rhi_->Init(procAddressLoader))
+	if (ScrollCallback)
+	{
+		ScrollCallback(YOffset);
+	}
+}
+
+bool FGenericWindow::InitRHI(void* (*ProcAddressLoader)(const char*))
+{
+	OwnedRHI = PlatformCreateDynamicRHI();
+	if (!OwnedRHI || !OwnedRHI->Init(ProcAddressLoader))
 	{
 		std::printf("FGenericWindow: failed to initialize the RHI\n");
-		rhi_.reset();
+		OwnedRHI.reset();
 		return false;
 	}
-	GDynamicRHI = rhi_.get();
-	if (framebufferWidth_ > 0 && framebufferHeight_ > 0)
+	GDynamicRHI = OwnedRHI.get();
+	if (FramebufferWidth > 0 && FramebufferHeight > 0)
 	{
-		rhi_->SetViewport(0, 0, framebufferWidth_, framebufferHeight_);
+		OwnedRHI->SetViewport(0, 0, FramebufferWidth, FramebufferHeight);
 	}
 	return true;
 }
 
 void FGenericWindow::ReleaseRHI()
 {
-	if (GDynamicRHI != nullptr && GDynamicRHI == rhi_.get())
+	if (GDynamicRHI != nullptr && GDynamicRHI == OwnedRHI.get())
 	{
 		GDynamicRHI = nullptr;
 	}
-	rhi_.reset();
+	OwnedRHI.reset();
 }
 
 void FGenericWindow::ResetWindowState()
 {
-	windowWidth_ = 0;
-	windowHeight_ = 0;
-	framebufferWidth_ = 0;
-	framebufferHeight_ = 0;
-	cursorCaptured_ = false;
-	shouldClose_ = false;
-	scrollCallback_ = nullptr;
+	WindowWidth = 0;
+	WindowHeight = 0;
+	FramebufferWidth = 0;
+	FramebufferHeight = 0;
+	bCursorCaptured = false;
+	bShouldClose = false;
+	ScrollCallback = nullptr;
 }

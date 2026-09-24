@@ -5,7 +5,7 @@
 
 void FPlatformEngineLoopHooks::EndFrame(FGenericWindow& Window, GenericApplication& Application)
 {
-	FPS2StatsOverlay::Draw(Window.FramebufferWidth(), Window.FramebufferHeight(), Application.GetInputInterface());
+	FPS2StatsOverlay::Draw(Window.GetFramebufferWidth(), Window.GetFramebufferHeight(), Application.GetInputInterface());
 }
 
 void FPlatformEngineLoopHooks::PostPresent()

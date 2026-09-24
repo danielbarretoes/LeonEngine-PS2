@@ -27,10 +27,10 @@ public:
 	FGenericWindow(const FGenericWindow&) = delete;
 	FGenericWindow& operator=(const FGenericWindow&) = delete;
 
-	virtual bool Create(int width, int height, const char* title) = 0;
+	virtual bool Create(int InWidth, int InHeight, const char* Title) = 0;
 
 	/** Secondary window sharing the graphics context of `shareWith` (desktop only). */
-	virtual bool CreateShared(const FGenericWindow& shareWith, int width, int height, const char* title);
+	virtual bool CreateShared(const FGenericWindow& ShareWith, int InWidth, int InHeight, const char* Title);
 
 	virtual void Destroy() = 0;
 
@@ -55,63 +55,63 @@ public:
 	/** Presents the frame (desktop: swap chain; PS2: vsync). */
 	virtual void SwapBuffers() = 0;
 
-	virtual bool IsKeyPressed(EKeys key) const;
-	virtual bool IsMouseButtonDown(EMouseButtons button) const;
-	virtual void GetCursorPos(double& x, double& y) const;
-	virtual void SetCursorCaptured(bool captured);
-	virtual bool SetIconFromFile(const char* pngPath);
+	virtual bool IsKeyPressed(EKeys Key) const;
+	virtual bool IsMouseButtonDown(EMouseButtons Button) const;
+	virtual void GetCursorPos(double& X, double& Y) const;
+	virtual void SetCursorCaptured(bool bCaptured);
+	virtual bool SetIconFromFile(const char* PngPath);
 
 	FNativeWindowHandle NativeHandle() const
 	{
-		return handle_;
+		return Handle;
 	}
 
 	FDynamicRHI* RHIDevice() const
 	{
-		return rhi_.get();
+		return OwnedRHI.get();
 	}
 
 	int Width() const
 	{
-		return windowWidth_;
+		return WindowWidth;
 	}
 
 	int Height() const
 	{
-		return windowHeight_;
+		return WindowHeight;
 	}
 
-	void GetWindowSize(int& width, int& height) const;
+	void GetWindowSize(int& InWidth, int& InHeight) const;
 
-	int FramebufferWidth() const
+	int GetFramebufferWidth() const
 	{
-		return framebufferWidth_;
+		return FramebufferWidth;
 	}
 
-	int FramebufferHeight() const
+	int GetFramebufferHeight() const
 	{
-		return framebufferHeight_;
+		return FramebufferHeight;
 	}
 
-	void GetFramebufferSize(int& width, int& height) const;
+	void GetFramebufferSize(int& InWidth, int& InHeight) const;
 
 	float Aspect() const;
 
 	bool IsCursorCaptured() const
 	{
-		return cursorCaptured_;
+		return bCursorCaptured;
 	}
 
-	void SetScrollCallback(FScrollCallback callback);
+	void SetScrollCallback(FScrollCallback Callback);
 
 	/** Backend callbacks update sizes / scroll through these. */
-	void ApplyWindowSize(int width, int height);
-	void ApplyFramebufferSize(int width, int height);
-	void NotifyScroll(double yOffset);
+	void ApplyWindowSize(int InWidth, int InHeight);
+	void ApplyFramebufferSize(int InWidth, int InHeight);
+	void NotifyScroll(double YOffset);
 
 protected:
 	/** Creates the platform RHI, loads it and publishes it in GDynamicRHI. */
-	bool InitRHI(void* (*procAddressLoader)(const char*));
+	bool InitRHI(void* (*ProcAddressLoader)(const char*));
 
 	/** Releases the RHI created by InitRHI (clears GDynamicRHI if it is ours). */
 	void ReleaseRHI();
@@ -119,14 +119,14 @@ protected:
 	/** Resets the size / cursor / callback state after the backend window is gone. */
 	void ResetWindowState();
 
-	FNativeWindowHandle handle_ = nullptr;
-	std::unique_ptr<FDynamicRHI> rhi_;
-	int windowWidth_ = 0;
-	int windowHeight_ = 0;
-	int framebufferWidth_ = 0;
-	int framebufferHeight_ = 0;
-	bool backendOwned_ = false;
-	bool cursorCaptured_ = false;
-	bool shouldClose_ = false;
-	FScrollCallback scrollCallback_;
+	FNativeWindowHandle Handle = nullptr;
+	std::unique_ptr<FDynamicRHI> OwnedRHI;
+	int WindowWidth = 0;
+	int WindowHeight = 0;
+	int FramebufferWidth = 0;
+	int FramebufferHeight = 0;
+	bool bBackendOwned = false;
+	bool bCursorCaptured = false;
+	bool bShouldClose = false;
+	FScrollCallback ScrollCallback;
 };

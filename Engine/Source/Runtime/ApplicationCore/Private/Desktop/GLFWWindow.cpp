@@ -36,7 +36,7 @@ FGLFWWindow::~FGLFWWindow()
 
 void FGLFWWindow::InstallCallbacks()
 {
-	GLFWwindow* Window = AsGLFW(handle_);
+	GLFWwindow* Window = AsGLFW(Handle);
 	glfwSetWindowUserPointer(Window, this);
 	glfwSetWindowSizeCallback(Window, [](GLFWwindow* W, int Width, int Height) {
 		if (FGLFWWindow* Self = FromGLFW(W))
@@ -58,9 +58,9 @@ void FGLFWWindow::InstallCallbacks()
 	});
 }
 
-bool FGLFWWindow::Create(int width, int height, const char* title)
+bool FGLFWWindow::Create(int Width, int Height, const char* Title)
 {
-	if (handle_ != nullptr)
+	if (Handle != nullptr)
 	{
 		return true;
 	}
@@ -71,12 +71,12 @@ bool FGLFWWindow::Create(int width, int height, const char* title)
 		return false;
 	}
 	++GGLFWInitCount;
-	backendOwned_ = true;
+	bBackendOwned = true;
 
 	SetContextHints();
-	GLFWwindow* Window = glfwCreateWindow(width, height, title, nullptr, nullptr);
-	handle_ = Window;
-	if (handle_ == nullptr)
+	GLFWwindow* Window = glfwCreateWindow(Width, Height, Title, nullptr, nullptr);
+	Handle = Window;
+	if (Handle == nullptr)
 	{
 		std::cerr << "Failed to create GLFW window\n";
 		Destroy();
@@ -96,13 +96,13 @@ bool FGLFWWindow::Create(int width, int height, const char* title)
 	return true;
 }
 
-bool FGLFWWindow::CreateShared(const FGenericWindow& shareWith, int width, int height, const char* title)
+bool FGLFWWindow::CreateShared(const FGenericWindow& ShareWith, int Width, int Height, const char* Title)
 {
-	if (handle_ != nullptr)
+	if (Handle != nullptr)
 	{
 		return true;
 	}
-	GLFWwindow* ShareWindow = AsGLFW(shareWith.NativeHandle());
+	GLFWwindow* ShareWindow = AsGLFW(ShareWith.NativeHandle());
 	if (ShareWindow == nullptr || GGLFWInitCount == 0)
 	{
 		std::cerr << "FGLFWWindow::CreateShared requires an initialised share context\n";
@@ -112,16 +112,16 @@ bool FGLFWWindow::CreateShared(const FGenericWindow& shareWith, int width, int h
 	SetContextHints();
 	glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
 	GLFWwindow* Window =
-		glfwCreateWindow(width, height, title != nullptr ? title : "Leon Play", nullptr, ShareWindow);
-	handle_ = Window;
-	if (handle_ == nullptr)
+		glfwCreateWindow(Width, Height, Title != nullptr ? Title : "Leon Play", nullptr, ShareWindow);
+	Handle = Window;
+	if (Handle == nullptr)
 	{
 		std::cerr << "Failed to create shared GLFW window\n";
 		return false;
 	}
 
 	++GGLFWInitCount;
-	backendOwned_ = true;
+	bBackendOwned = true;
 	InstallCallbacks();
 	SyncSizesFromBackend();
 	MakeContextCurrent();
@@ -135,14 +135,14 @@ bool FGLFWWindow::CreateShared(const FGenericWindow& shareWith, int width, int h
 void FGLFWWindow::Destroy()
 {
 	ReleaseRHI();
-	if (GLFWwindow* Window = AsGLFW(handle_))
+	if (GLFWwindow* Window = AsGLFW(Handle))
 	{
 		glfwDestroyWindow(Window);
-		handle_ = nullptr;
+		Handle = nullptr;
 	}
-	if (backendOwned_)
+	if (bBackendOwned)
 	{
-		backendOwned_ = false;
+		bBackendOwned = false;
 		if (GGLFWInitCount > 0)
 		{
 			--GGLFWInitCount;
@@ -157,7 +157,7 @@ void FGLFWWindow::Destroy()
 
 void FGLFWWindow::MakeContextCurrent()
 {
-	if (GLFWwindow* Window = AsGLFW(handle_))
+	if (GLFWwindow* Window = AsGLFW(Handle))
 	{
 		glfwMakeContextCurrent(Window);
 	}
@@ -165,7 +165,7 @@ void FGLFWWindow::MakeContextCurrent()
 
 void FGLFWWindow::Show()
 {
-	if (GLFWwindow* Window = AsGLFW(handle_))
+	if (GLFWwindow* Window = AsGLFW(Handle))
 	{
 		glfwShowWindow(Window);
 	}
@@ -173,7 +173,7 @@ void FGLFWWindow::Show()
 
 void FGLFWWindow::Focus()
 {
-	if (GLFWwindow* Window = AsGLFW(handle_))
+	if (GLFWwindow* Window = AsGLFW(Handle))
 	{
 		glfwFocusWindow(Window);
 	}
@@ -181,13 +181,13 @@ void FGLFWWindow::Focus()
 
 bool FGLFWWindow::IsFocused() const
 {
-	GLFWwindow* Window = AsGLFW(handle_);
+	GLFWwindow* Window = AsGLFW(Handle);
 	return Window != nullptr && glfwGetWindowAttrib(Window, GLFW_FOCUSED) == GLFW_TRUE;
 }
 
 bool FGLFWWindow::ShouldClose() const
 {
-	GLFWwindow* Window = AsGLFW(handle_);
+	GLFWwindow* Window = AsGLFW(Handle);
 	return Window == nullptr || glfwWindowShouldClose(Window) == GLFW_TRUE;
 }
 
@@ -198,7 +198,7 @@ void FGLFWWindow::PollEvents()
 
 void FGLFWWindow::SwapBuffers()
 {
-	if (GLFWwindow* Window = AsGLFW(handle_))
+	if (GLFWwindow* Window = AsGLFW(Handle))
 	{
 		glfwSwapBuffers(Window);
 	}
@@ -206,60 +206,60 @@ void FGLFWWindow::SwapBuffers()
 
 void FGLFWWindow::SyncSizesFromBackend()
 {
-	GLFWwindow* Window = AsGLFW(handle_);
+	GLFWwindow* Window = AsGLFW(Handle);
 	if (Window == nullptr)
 	{
 		return;
 	}
-	glfwGetWindowSize(Window, &windowWidth_, &windowHeight_);
-	glfwGetFramebufferSize(Window, &framebufferWidth_, &framebufferHeight_);
+	glfwGetWindowSize(Window, &WindowWidth, &WindowHeight);
+	glfwGetFramebufferSize(Window, &FramebufferWidth, &FramebufferHeight);
 }
 
-bool FGLFWWindow::IsKeyPressed(EKeys key) const
+bool FGLFWWindow::IsKeyPressed(EKeys Key) const
 {
-	GLFWwindow* Window = AsGLFW(handle_);
-	return Window != nullptr && !IsGamepadKey(key) && glfwGetKey(Window, ToKeyCode(key)) == GLFW_PRESS;
+	GLFWwindow* Window = AsGLFW(Handle);
+	return Window != nullptr && !IsGamepadKey(Key) && glfwGetKey(Window, ToKeyCode(Key)) == GLFW_PRESS;
 }
 
-bool FGLFWWindow::IsMouseButtonDown(EMouseButtons button) const
+bool FGLFWWindow::IsMouseButtonDown(EMouseButtons Button) const
 {
-	GLFWwindow* Window = AsGLFW(handle_);
-	return Window != nullptr && button != EMouseButtons::Invalid &&
-		glfwGetMouseButton(Window, static_cast<int>(button)) == GLFW_PRESS;
+	GLFWwindow* Window = AsGLFW(Handle);
+	return Window != nullptr && Button != EMouseButtons::Invalid &&
+		glfwGetMouseButton(Window, static_cast<int>(Button)) == GLFW_PRESS;
 }
 
-void FGLFWWindow::GetCursorPos(double& x, double& y) const
+void FGLFWWindow::GetCursorPos(double& X, double& Y) const
 {
-	if (GLFWwindow* Window = AsGLFW(handle_))
+	if (GLFWwindow* Window = AsGLFW(Handle))
 	{
-		glfwGetCursorPos(Window, &x, &y);
+		glfwGetCursorPos(Window, &X, &Y);
 	}
 	else
 	{
-		x = 0.0;
-		y = 0.0;
+		X = 0.0;
+		Y = 0.0;
 	}
 }
 
-void FGLFWWindow::SetCursorCaptured(bool captured)
+void FGLFWWindow::SetCursorCaptured(bool bCaptured)
 {
-	cursorCaptured_ = captured;
-	GLFWwindow* Window = AsGLFW(handle_);
+	bCursorCaptured = bCaptured;
+	GLFWwindow* Window = AsGLFW(Handle);
 	if (Window == nullptr)
 	{
 		return;
 	}
-	glfwSetInputMode(Window, GLFW_CURSOR, captured ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+	glfwSetInputMode(Window, GLFW_CURSOR, bCaptured ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
 	if (glfwRawMouseMotionSupported() == GLFW_TRUE)
 	{
-		glfwSetInputMode(Window, GLFW_RAW_MOUSE_MOTION, captured ? GLFW_TRUE : GLFW_FALSE);
+		glfwSetInputMode(Window, GLFW_RAW_MOUSE_MOTION, bCaptured ? GLFW_TRUE : GLFW_FALSE);
 	}
 }
 
-bool FGLFWWindow::SetIconFromFile(const char* pngPath)
+bool FGLFWWindow::SetIconFromFile(const char* PngPath)
 {
-	GLFWwindow* Window = AsGLFW(handle_);
-	if (Window == nullptr || pngPath == nullptr || pngPath[0] == '\0')
+	GLFWwindow* Window = AsGLFW(Handle);
+	if (Window == nullptr || PngPath == nullptr || PngPath[0] == '\0')
 	{
 		return false;
 	}
@@ -267,7 +267,7 @@ bool FGLFWWindow::SetIconFromFile(const char* pngPath)
 	int Width = 0;
 	int Height = 0;
 	int Channels = 0;
-	unsigned char* Pixels = stbi_load(pngPath, &Width, &Height, &Channels, 4);
+	unsigned char* Pixels = stbi_load(PngPath, &Width, &Height, &Channels, 4);
 	if (Pixels == nullptr || Width <= 0 || Height <= 0)
 	{
 		if (Pixels != nullptr)

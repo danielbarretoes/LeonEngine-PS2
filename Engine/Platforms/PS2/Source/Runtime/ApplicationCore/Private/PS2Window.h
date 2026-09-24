@@ -8,17 +8,17 @@ class FPS2Window final : public FGenericWindow
 public:
 	virtual ~FPS2Window() override;
 
-	virtual bool Create(int width, int height, const char* title) override;
+	virtual bool Create(int InWidth, int InHeight, const char* Title) override;
 	virtual void Destroy() override;
 
 	virtual bool IsFocused() const override
 	{
-		return handle_ != nullptr;
+		return Handle != nullptr;
 	}
 
 	virtual bool ShouldClose() const override
 	{
-		return shouldClose_ || handle_ == nullptr;
+		return bShouldClose || Handle == nullptr;
 	}
 
 	/** No OS message queue on the EE; controllers are polled by the application. */
