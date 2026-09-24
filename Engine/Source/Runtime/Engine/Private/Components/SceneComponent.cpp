@@ -7,26 +7,26 @@
 
 namespace {
 
-[[nodiscard]] FTransform decomposeApprox(const glm::mat4& m) {
-    FTransform t{};
-    t.Position = glm::vec3(m[3]);
-    t.Scale.x = glm::length(glm::vec3(m[0]));
-    t.Scale.y = glm::length(glm::vec3(m[1]));
-    t.Scale.z = glm::length(glm::vec3(m[2]));
-    constexpr float kEps = 1.0e-6f;
-    const glm::vec3 col0 =
-        t.Scale.x > kEps ? glm::vec3(m[0]) / t.Scale.x : glm::vec3(1.0f, 0.0f, 0.0f);
-    const glm::vec3 col1 =
-        t.Scale.y > kEps ? glm::vec3(m[1]) / t.Scale.y : glm::vec3(0.0f, 1.0f, 0.0f);
-    const glm::vec3 col2 =
-        t.Scale.z > kEps ? glm::vec3(m[2]) / t.Scale.z : glm::vec3(0.0f, 0.0f, 1.0f);
+[[nodiscard]] FTransform DecomposeApprox(const glm::mat4& M) {
+    FTransform T{};
+    T.Position = glm::vec3(M[3]);
+    T.Scale.x = glm::length(glm::vec3(M[0]));
+    T.Scale.y = glm::length(glm::vec3(M[1]));
+    T.Scale.z = glm::length(glm::vec3(M[2]));
+    constexpr float Eps = 1.0e-6f;
+    const glm::vec3 Col0 =
+        T.Scale.x > Eps ? glm::vec3(M[0]) / T.Scale.x : glm::vec3(1.0f, 0.0f, 0.0f);
+    const glm::vec3 Col1 =
+        T.Scale.y > Eps ? glm::vec3(M[1]) / T.Scale.y : glm::vec3(0.0f, 1.0f, 0.0f);
+    const glm::vec3 Col2 =
+        T.Scale.z > Eps ? glm::vec3(M[2]) / T.Scale.z : glm::vec3(0.0f, 0.0f, 1.0f);
     // XYZ Euler extraction (degrees) matching FTransform::modelMatrix order Rx*Ry*Rz.
-    t.RotationDegrees.y = std::atan2(-col0.z, col2.z) * (180.0f / 3.14159265358979323846f);
-    t.RotationDegrees.x =
-        std::asin(std::clamp(col1.z, -1.0f, 1.0f)) * (180.0f / 3.14159265358979323846f);
-    t.RotationDegrees.z = std::atan2(-col1.x, col1.y) * (180.0f / 3.14159265358979323846f);
-    (void)col2;
-    return t;
+    T.RotationDegrees.y = std::atan2(-Col0.z, Col2.z) * (180.0f / 3.14159265358979323846f);
+    T.RotationDegrees.x =
+        std::asin(std::clamp(Col1.z, -1.0f, 1.0f)) * (180.0f / 3.14159265358979323846f);
+    T.RotationDegrees.z = std::atan2(-Col1.x, Col1.y) * (180.0f / 3.14159265358979323846f);
+    (void)Col2;
+    return T;
 }
 
 } // namespace
@@ -34,101 +34,101 @@ namespace {
 USceneComponent::~USceneComponent() {
     // UActorComponent dtor also calls DestroyComponent; detach scene links first while owner may
     // still be valid (Actor::~ clears owner before member USceneComponent dtors).
-    while (!children_.empty()) {
-        USceneComponent* child = children_.back();
-        child->DetachFromParent(false);
+    while (!Children.empty()) {
+        USceneComponent* Child = Children.back();
+        Child->DetachFromParent(false);
     }
     DetachFromParent(false);
 }
 
 FTransform USceneComponent::GetRelativeTransform() const {
-    FTransform t{};
-    t.Position = RelativeLocation;
-    t.RotationDegrees = RelativeRotation;
-    t.Scale = RelativeScale;
-    return t;
+    FTransform T{};
+    T.Position = RelativeLocation;
+    T.RotationDegrees = RelativeRotation;
+    T.Scale = RelativeScale;
+    return T;
 }
 
-bool USceneComponent::wouldCreateCycle(const USceneComponent* candidateParent) const {
-    for (const USceneComponent* walk = candidateParent; walk != nullptr; walk = walk->parent_) {
-        if (walk == this) {
+bool USceneComponent::WouldCreateCycle(const USceneComponent* CandidateParent) const {
+    for (const USceneComponent* Walk = CandidateParent; Walk != nullptr; Walk = Walk->Parent) {
+        if (Walk == this) {
             return true;
         }
     }
     return false;
 }
 
-void USceneComponent::detachChild(USceneComponent* child) {
-    children_.erase(std::remove(children_.begin(), children_.end(), child), children_.end());
+void USceneComponent::DetachChild(USceneComponent* Child) {
+    Children.erase(std::remove(Children.begin(), Children.end(), Child), Children.end());
 }
 
-bool USceneComponent::AttachToComponent(USceneComponent* parent, bool keepWorldTransform) {
-    if (parent == nullptr || parent == this || wouldCreateCycle(parent)) {
+bool USceneComponent::AttachToComponent(USceneComponent* InParent, bool bKeepWorldTransform) {
+    if (InParent == nullptr || InParent == this || WouldCreateCycle(InParent)) {
         return false;
     }
 
-    glm::mat4 worldBefore{};
-    if (keepWorldTransform) {
-        worldBefore = GetComponentTransform();
+    glm::mat4 WorldBefore{};
+    if (bKeepWorldTransform) {
+        WorldBefore = GetComponentTransform();
     }
 
     DetachFromParent(false);
-    parent_ = parent;
-    parent_->children_.push_back(this);
-    if (owner_ == nullptr) {
-        owner_ = parent->owner_;
+    Parent = InParent;
+    Parent->Children.push_back(this);
+    if (Owner == nullptr) {
+        Owner = InParent->Owner;
     }
 
-    if (keepWorldTransform) {
-        const glm::mat4 parentWorld = parent_->GetComponentTransform();
-        const glm::mat4 parentInv = glm::inverse(parentWorld);
-        const FTransform relative = decomposeApprox(parentInv * worldBefore);
-        RelativeLocation = relative.Position;
-        RelativeRotation = relative.RotationDegrees;
-        RelativeScale = relative.Scale;
+    if (bKeepWorldTransform) {
+        const glm::mat4 ParentWorld = Parent->GetComponentTransform();
+        const glm::mat4 ParentInv = glm::inverse(ParentWorld);
+        const FTransform Relative = DecomposeApprox(ParentInv * WorldBefore);
+        RelativeLocation = Relative.Position;
+        RelativeRotation = Relative.RotationDegrees;
+        RelativeScale = Relative.Scale;
     }
     return true;
 }
 
-void USceneComponent::DetachFromParent(bool keepWorldTransform) {
-    if (parent_ == nullptr) {
+void USceneComponent::DetachFromParent(bool bKeepWorldTransform) {
+    if (Parent == nullptr) {
         return;
     }
 
-    glm::mat4 worldBefore{};
-    if (keepWorldTransform) {
-        worldBefore = GetComponentTransform();
+    glm::mat4 WorldBefore{};
+    if (bKeepWorldTransform) {
+        WorldBefore = GetComponentTransform();
     }
 
-    parent_->detachChild(this);
-    parent_ = nullptr;
+    Parent->DetachChild(this);
+    Parent = nullptr;
 
-    if (keepWorldTransform) {
-        const FTransform world = decomposeApprox(worldBefore);
-        RelativeLocation = world.Position;
-        RelativeRotation = world.RotationDegrees;
-        RelativeScale = world.Scale;
-        if (owner_ != nullptr) {
-            RelativeLocation -= owner_->GetActorLocation();
-            RelativeRotation.y -= owner_->GetActorYaw();
+    if (bKeepWorldTransform) {
+        const FTransform World = DecomposeApprox(WorldBefore);
+        RelativeLocation = World.Position;
+        RelativeRotation = World.RotationDegrees;
+        RelativeScale = World.Scale;
+        if (Owner != nullptr) {
+            RelativeLocation -= Owner->GetActorLocation();
+            RelativeRotation.y -= Owner->GetActorYaw();
         }
     }
 }
 
 glm::mat4 USceneComponent::GetComponentTransform() const {
-    const FTransform relative = GetRelativeTransform();
-    if (parent_ != nullptr) {
-        return parent_->GetComponentTransform() * relative.ModelMatrix();
+    const FTransform Relative = GetRelativeTransform();
+    if (Parent != nullptr) {
+        return Parent->GetComponentTransform() * Relative.ModelMatrix();
     }
-    if (owner_ != nullptr) {
-        FTransform world{};
-        world.Position = owner_->GetActorLocation() + RelativeLocation;
-        world.RotationDegrees = RelativeRotation;
-        world.RotationDegrees.y += owner_->GetActorYaw();
-        world.Scale = RelativeScale;
-        return world.ModelMatrix();
+    if (Owner != nullptr) {
+        FTransform World{};
+        World.Position = Owner->GetActorLocation() + RelativeLocation;
+        World.RotationDegrees = RelativeRotation;
+        World.RotationDegrees.y += Owner->GetActorYaw();
+        World.Scale = RelativeScale;
+        return World.ModelMatrix();
     }
-    return relative.ModelMatrix();
+    return Relative.ModelMatrix();
 }
 
 glm::vec3 USceneComponent::GetComponentLocation() const {
@@ -136,9 +136,9 @@ glm::vec3 USceneComponent::GetComponentLocation() const {
 }
 
 void USceneComponent::DestroyComponent() {
-    while (!children_.empty()) {
-        USceneComponent* child = children_.back();
-        child->DetachFromParent(false);
+    while (!Children.empty()) {
+        USceneComponent* Child = Children.back();
+        Child->DetachFromParent(false);
     }
     DetachFromParent(false);
     UActorComponent::DestroyComponent();

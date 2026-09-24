@@ -15,17 +15,17 @@ public:
     AController(AController&&) = delete;
     AController& operator=(AController&&) = delete;
 
-    void Possess(APawn* pawn);
+    void Possess(APawn* InPawn);
     void UnPossess();
 
-    [[nodiscard]] APawn* GetPawn() const { return pawn_; }
-    [[nodiscard]] bool HasPawn() const { return pawn_ != nullptr; }
+    [[nodiscard]] APawn* GetPawn() const { return Pawn; }
+    [[nodiscard]] bool HasPawn() const { return Pawn != nullptr; }
     [[nodiscard]] ACharacter* GetCharacter() const;
 
 protected:
     AController() = default;
 
 private:
-    APawn* pawn_ = nullptr;
+    APawn* Pawn = nullptr;
 };
 

@@ -6,126 +6,126 @@
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("LineTraceSingleByChannel hits static AABB", "[physics][trace]") {
-    FPhysScene scene;
-    const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
-    scene.GetBodies()[id].Position = {0.0f, 0.5f, 0.0f};
-    scene.GetBodies()[id].HalfExtents = {0.5f, 0.5f, 0.5f};
+    FPhysScene Scene;
+    const std::size_t Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
+    Scene.GetBodies()[Id].Position = {0.0f, 0.5f, 0.0f};
+    Scene.GetBodies()[Id].HalfExtents = {0.5f, 0.5f, 0.5f};
 
-    FHitResult hit{};
-    REQUIRE(scene.LineTraceSingleByChannel(hit, {0.0f, 0.5f, -2.0f}, {0.0f, 0.5f, 2.0f},
+    FHitResult Hit{};
+    REQUIRE(Scene.LineTraceSingleByChannel(Hit, {0.0f, 0.5f, -2.0f}, {0.0f, 0.5f, 2.0f},
                                            ECollisionChannel::WorldStatic));
-    REQUIRE(hit.bBlockingHit);
-    REQUIRE(hit.Time < 1.0f);
-    REQUIRE_THAT(hit.ImpactNormal.z, WithinAbs(-1.0f, 1.0e-3f));
+    REQUIRE(Hit.bBlockingHit);
+    REQUIRE(Hit.Time < 1.0f);
+    REQUIRE_THAT(Hit.ImpactNormal.z, WithinAbs(-1.0f, 1.0e-3f));
 }
 
 TEST_CASE("LineTraceSingleByChannel filters by channel", "[physics][trace]") {
-    FPhysScene scene;
-    const std::size_t id = scene.AddBody({0, EBodyType::Dynamic, 1.0f, true});
-    scene.GetBodies()[id].Position = {0.0f, 0.5f, 0.0f};
-    scene.GetBodies()[id].HalfExtents = {0.5f, 0.5f, 0.5f};
+    FPhysScene Scene;
+    const std::size_t Id = Scene.AddBody({0, EBodyType::Dynamic, 1.0f, true});
+    Scene.GetBodies()[Id].Position = {0.0f, 0.5f, 0.0f};
+    Scene.GetBodies()[Id].HalfExtents = {0.5f, 0.5f, 0.5f};
 
-    FHitResult hit{};
-    REQUIRE_FALSE(scene.LineTraceSingleByChannel(hit, {0.0f, 0.5f, -2.0f}, {0.0f, 0.5f, 2.0f},
+    FHitResult Hit{};
+    REQUIRE_FALSE(Scene.LineTraceSingleByChannel(Hit, {0.0f, 0.5f, -2.0f}, {0.0f, 0.5f, 2.0f},
                                                  ECollisionChannel::WorldStatic));
-    REQUIRE(scene.LineTraceSingleByChannel(hit, {0.0f, 0.5f, -2.0f}, {0.0f, 0.5f, 2.0f},
+    REQUIRE(Scene.LineTraceSingleByChannel(Hit, {0.0f, 0.5f, -2.0f}, {0.0f, 0.5f, 2.0f},
                                            ECollisionChannel::WorldDynamic));
 }
 
 TEST_CASE("SphereTraceSingleByChannel hits floor plane", "[physics][trace]") {
-    FPhysScene scene;
-    FCollisionQueryParams params{};
-    params.bTraceFloorPlane = true;
-    params.FloorY = 0.0f;
+    FPhysScene Scene;
+    FCollisionQueryParams Params{};
+    Params.bTraceFloorPlane = true;
+    Params.FloorY = 0.0f;
 
-    FHitResult hit{};
-    REQUIRE(scene.SphereTraceSingleByChannel(hit, {0.0f, 1.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, 0.35f,
-                                             ECollisionChannel::Visibility, params));
-    REQUIRE(hit.bFloorPlane);
-    REQUIRE_THAT(hit.ImpactPoint.y, WithinAbs(0.0f, 1.0e-3f));
-    REQUIRE(hit.ImpactNormal.y > 0.5f);
+    FHitResult Hit{};
+    REQUIRE(Scene.SphereTraceSingleByChannel(Hit, {0.0f, 1.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, 0.35f,
+                                             ECollisionChannel::Visibility, Params));
+    REQUIRE(Hit.bFloorPlane);
+    REQUIRE_THAT(Hit.ImpactPoint.y, WithinAbs(0.0f, 1.0e-3f));
+    REQUIRE(Hit.ImpactNormal.y > 0.5f);
 }
 
 TEST_CASE("CapsuleTraceSingleByChannel finds platform top", "[physics][trace]") {
-    FPhysScene scene;
-    const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
-    scene.GetBodies()[id].Position = {0.0f, 1.0f, 0.0f};
-    scene.GetBodies()[id].HalfExtents = {1.0f, 1.0f, 1.0f}; // top at y=2
+    FPhysScene Scene;
+    const std::size_t Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
+    Scene.GetBodies()[Id].Position = {0.0f, 1.0f, 0.0f};
+    Scene.GetBodies()[Id].HalfExtents = {1.0f, 1.0f, 1.0f}; // top at y=2
 
-    FHitResult hit{};
-    const float radius = 0.35f;
-    const float halfHeight = 0.5f;
-    REQUIRE(scene.CapsuleTraceSingleByChannel(hit, {0.0f, 3.0f, 0.0f}, {0.0f, 1.5f, 0.0f}, radius,
-                                              halfHeight, ECollisionChannel::Visibility));
-    REQUIRE(hit.bBlockingHit);
-    REQUIRE(hit.ImpactPoint.y <= 2.0f + 1.0e-2f);
-    REQUIRE(hit.ImpactNormal.y > 0.5f);
+    FHitResult Hit{};
+    const float Radius = 0.35f;
+    const float HalfHeight = 0.5f;
+    REQUIRE(Scene.CapsuleTraceSingleByChannel(Hit, {0.0f, 3.0f, 0.0f}, {0.0f, 1.5f, 0.0f}, Radius,
+                                              HalfHeight, ECollisionChannel::Visibility));
+    REQUIRE(Hit.bBlockingHit);
+    REQUIRE(Hit.ImpactPoint.y <= 2.0f + 1.0e-2f);
+    REQUIRE(Hit.ImpactNormal.y > 0.5f);
 }
 
 TEST_CASE("LineTraceMultiByChannel returns all hits sorted", "[physics][trace][multi]") {
-    FPhysScene scene;
-    const std::size_t nearId = scene.AddBody({0, EBodyType::Static, 1.0f, true});
-    scene.GetBodies()[nearId].Position = {0.0f, 0.5f, 0.0f};
-    scene.GetBodies()[nearId].HalfExtents = {0.5f, 0.5f, 0.5f};
+    FPhysScene Scene;
+    const std::size_t NearId = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
+    Scene.GetBodies()[NearId].Position = {0.0f, 0.5f, 0.0f};
+    Scene.GetBodies()[NearId].HalfExtents = {0.5f, 0.5f, 0.5f};
 
-    const std::size_t farId = scene.AddBody({1, EBodyType::Static, 1.0f, true});
-    scene.GetBodies()[farId].Position = {0.0f, 0.5f, 3.0f};
-    scene.GetBodies()[farId].HalfExtents = {0.5f, 0.5f, 0.5f};
+    const std::size_t FarId = Scene.AddBody({1, EBodyType::Static, 1.0f, true});
+    Scene.GetBodies()[FarId].Position = {0.0f, 0.5f, 3.0f};
+    Scene.GetBodies()[FarId].HalfExtents = {0.5f, 0.5f, 0.5f};
 
-    FCollisionQueryParams params{};
-    params.bTraceFloorPlane = false;
+    FCollisionQueryParams Params{};
+    Params.bTraceFloorPlane = false;
 
-    std::vector<FHitResult> hits;
-    REQUIRE(scene.LineTraceMultiByChannel(hits, {0.0f, 0.5f, -2.0f}, {0.0f, 0.5f, 5.0f},
-                                          ECollisionChannel::WorldStatic, params));
-    REQUIRE(hits.size() == 2);
-    REQUIRE(hits[0].Time < hits[1].Time);
-    REQUIRE(hits[0].LevelMeshIndex == 0);
-    REQUIRE(hits[1].LevelMeshIndex == 1);
+    std::vector<FHitResult> Hits;
+    REQUIRE(Scene.LineTraceMultiByChannel(Hits, {0.0f, 0.5f, -2.0f}, {0.0f, 0.5f, 5.0f},
+                                          ECollisionChannel::WorldStatic, Params));
+    REQUIRE(Hits.size() == 2);
+    REQUIRE(Hits[0].Time < Hits[1].Time);
+    REQUIRE(Hits[0].LevelMeshIndex == 0);
+    REQUIRE(Hits[1].LevelMeshIndex == 1);
 
-    FHitResult single{};
-    REQUIRE(scene.LineTraceSingleByChannel(single, {0.0f, 0.5f, -2.0f}, {0.0f, 0.5f, 5.0f},
-                                           ECollisionChannel::WorldStatic, params));
-    REQUIRE_THAT(single.Time, WithinAbs(hits[0].Time, 1.0e-5f));
+    FHitResult Single{};
+    REQUIRE(Scene.LineTraceSingleByChannel(Single, {0.0f, 0.5f, -2.0f}, {0.0f, 0.5f, 5.0f},
+                                           ECollisionChannel::WorldStatic, Params));
+    REQUIRE_THAT(Single.Time, WithinAbs(Hits[0].Time, 1.0e-5f));
 }
 
 TEST_CASE("SphereTraceMultiByChannel includes floor and bodies", "[physics][trace][multi]") {
-    FPhysScene scene;
-    const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
-    scene.GetBodies()[id].Position = {0.0f, 2.0f, 0.0f};
-    scene.GetBodies()[id].HalfExtents = {1.0f, 0.5f, 1.0f}; // top at 2.5, bottom at 1.5
+    FPhysScene Scene;
+    const std::size_t Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
+    Scene.GetBodies()[Id].Position = {0.0f, 2.0f, 0.0f};
+    Scene.GetBodies()[Id].HalfExtents = {1.0f, 0.5f, 1.0f}; // top at 2.5, bottom at 1.5
 
-    FCollisionQueryParams params{};
-    params.bTraceFloorPlane = true;
-    params.FloorY = 0.0f;
+    FCollisionQueryParams Params{};
+    Params.bTraceFloorPlane = true;
+    Params.FloorY = 0.0f;
 
-    std::vector<FHitResult> hits;
-    REQUIRE(scene.SphereTraceMultiByChannel(hits, {0.0f, 4.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, 0.25f,
-                                            ECollisionChannel::Visibility, params));
-    REQUIRE(hits.size() >= 2);
-    REQUIRE(hits.front().Time <= hits.back().Time);
-    bool anyFloor = false;
-    bool anyBody = false;
-    for (const FHitResult& h : hits) {
-        anyFloor = anyFloor || h.bFloorPlane;
-        anyBody = anyBody || !h.bFloorPlane;
+    std::vector<FHitResult> Hits;
+    REQUIRE(Scene.SphereTraceMultiByChannel(Hits, {0.0f, 4.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, 0.25f,
+                                            ECollisionChannel::Visibility, Params));
+    REQUIRE(Hits.size() >= 2);
+    REQUIRE(Hits.front().Time <= Hits.back().Time);
+    bool bAnyFloor = false;
+    bool bAnyBody = false;
+    for (const FHitResult& H : Hits) {
+        bAnyFloor = bAnyFloor || H.bFloorPlane;
+        bAnyBody = bAnyBody || !H.bFloorPlane;
     }
-    REQUIRE(anyFloor);
-    REQUIRE(anyBody);
+    REQUIRE(bAnyFloor);
+    REQUIRE(bAnyBody);
 }
 
 TEST_CASE("CapsuleTraceMultiByChannel returns multiple blocking hits", "[physics][trace][multi]") {
-    FPhysScene scene;
-    const std::size_t a = scene.AddBody({0, EBodyType::Static, 1.0f, true});
-    scene.GetBodies()[a].Position = {0.0f, 1.0f, 0.0f};
-    scene.GetBodies()[a].HalfExtents = {0.5f, 0.5f, 0.5f};
-    const std::size_t b = scene.AddBody({1, EBodyType::Dynamic, 1.0f, true});
-    scene.GetBodies()[b].Position = {0.0f, 3.0f, 0.0f};
-    scene.GetBodies()[b].HalfExtents = {0.5f, 0.5f, 0.5f};
+    FPhysScene Scene;
+    const std::size_t A = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
+    Scene.GetBodies()[A].Position = {0.0f, 1.0f, 0.0f};
+    Scene.GetBodies()[A].HalfExtents = {0.5f, 0.5f, 0.5f};
+    const std::size_t B = Scene.AddBody({1, EBodyType::Dynamic, 1.0f, true});
+    Scene.GetBodies()[B].Position = {0.0f, 3.0f, 0.0f};
+    Scene.GetBodies()[B].HalfExtents = {0.5f, 0.5f, 0.5f};
 
-    std::vector<FHitResult> hits;
-    REQUIRE(scene.CapsuleTraceMultiByChannel(hits, {0.0f, 5.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, 0.2f,
+    std::vector<FHitResult> Hits;
+    REQUIRE(Scene.CapsuleTraceMultiByChannel(Hits, {0.0f, 5.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, 0.2f,
                                              0.3f, ECollisionChannel::Visibility));
-    REQUIRE(hits.size() == 2);
-    REQUIRE(hits[0].Time < hits[1].Time);
+    REQUIRE(Hits.size() == 2);
+    REQUIRE(Hits[0].Time < Hits[1].Time);
 }

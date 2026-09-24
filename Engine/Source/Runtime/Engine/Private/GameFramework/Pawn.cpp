@@ -2,23 +2,23 @@
 #include "GameFramework/Pawn.h"
 
 
-void APawn::detachController() {
-    if (controller_ == nullptr) {
+void APawn::DetachController() {
+    if (Controller == nullptr) {
         return;
     }
     // Controller::UnPossess clears pawn_ and calls bindController(nullptr).
-    controller_->UnPossess();
+    Controller->UnPossess();
 }
 
 void APawn::Destroy() {
     if (IsPendingKillPending()) {
         return;
     }
-    detachController();
+    DetachController();
     AActor::Destroy();
 }
 
 void APawn::EndPlay() {
-    detachController();
+    DetachController();
 }
 

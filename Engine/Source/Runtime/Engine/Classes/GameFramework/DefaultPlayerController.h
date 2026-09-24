@@ -12,6 +12,6 @@ class ADefaultPlayerController final : public APlayerController {
 public:
     [[nodiscard]] ADefaultCameraActor* GetDefaultCameraActor() const;
 
-    glm::vec3 TickInput(UGameEngine& engine) override;
+    glm::vec3 TickInput(UGameEngine& Engine) override;
 };
 

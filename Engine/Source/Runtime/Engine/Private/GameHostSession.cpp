@@ -15,149 +15,149 @@ FGameHostSession::~FGameHostSession() {
 }
 
 void FGameHostSession::BindTravelCallbacks() {
-    if (engine_ == nullptr) {
+    if (Engine == nullptr) {
         return;
     }
-    engine_->GetGameInstance().SetLevelTravelFn(
-        [this](UGameEngine& e, std::string_view levelKey) { return world_.Director().LoadByKey(e, levelKey); });
-    engine_->GetGameInstance().SetLevelBrowserVisibleFn(
-        [this](bool visible) { world_.Director().SetBrowserVisible(visible); });
+    Engine->GetGameInstance().SetLevelTravelFn(
+        [this](UGameEngine& E, std::string_view LevelKey) { return World.GetDirector().LoadByKey(E, LevelKey); });
+    Engine->GetGameInstance().SetLevelBrowserVisibleFn(
+        [this](bool bVisible) { World.GetDirector().SetBrowserVisible(bVisible); });
 }
 
-bool FGameHostSession::Start(UGameEngine& engine, const char* packName, FRegisterModesFunction registerModes,
-                            std::string_view preferredLevelKey,
-                            std::string_view packRootOverride) {
+bool FGameHostSession::Start(UGameEngine& InEngine, const char* InPackName, FRegisterModesFunction RegisterModes,
+                            std::string_view PreferredLevelKey,
+                            std::string_view PackRootOverride) {
     Stop();
-    if (packName == nullptr || packName[0] == '\0') {
+    if (InPackName == nullptr || InPackName[0] == '\0') {
         std::cerr << "GameHostSession: pack name is empty\n";
         return false;
     }
-    if (!engine.IsInitialized()) {
+    if (!InEngine.IsInitialized()) {
         std::cerr << "GameHostSession: Engine is not initialized\n";
         return false;
     }
 
-    engine_ = &engine;
-    packName_ = packName;
+    Engine = &InEngine;
+    PackName = InPackName;
 
-    const std::string shaderDir = FPaths::ResolveAssetPath("assets/Shaders");
-    if (!world_.Initialize(engine, shaderDir)) {
+    const std::string ShaderDir = FPaths::ResolveAssetPath("assets/Shaders");
+    if (!World.Initialize(InEngine, ShaderDir)) {
         std::cerr << "GameHostSession: failed to initialize WorldRuntime\n";
-        engine_ = nullptr;
-        packName_.clear();
+        Engine = nullptr;
+        PackName.clear();
         return false;
     }
-    worldInitialized_ = true;
+    bWorldInitialized = true;
 
-    FProjectDescriptor pack;
-    if (!packRootOverride.empty()) {
-        pack.Name = packName;
-        pack.RootDirectory = std::string(packRootOverride);
-        const auto marker = std::filesystem::path(pack.RootDirectory) / "leon.game.json";
-        std::ifstream in(marker);
-        if (in.is_open()) {
+    FProjectDescriptor Pack;
+    if (!PackRootOverride.empty()) {
+        Pack.Name = InPackName;
+        Pack.RootDirectory = std::string(PackRootOverride);
+        const auto Marker = std::filesystem::path(Pack.RootDirectory) / "leon.game.json";
+        std::ifstream In(Marker);
+        if (In.is_open()) {
             try {
-                nlohmann::json doc;
-                in >> doc;
-                pack.DefaultLevel = doc.value("defaultLevel", "");
+                nlohmann::json Doc;
+                In >> Doc;
+                Pack.DefaultLevel = Doc.value("defaultLevel", "");
             } catch (...) {
             }
         }
     } else {
-        pack = FProjectDescriptor::Resolve(packName);
+        Pack = FProjectDescriptor::Resolve(InPackName);
     }
-    if (pack.RootDirectory.empty()) {
-        std::cerr << "GameHostSession: could not resolve pack root for '" << packName << "'\n";
-        world_.Shutdown();
-        worldInitialized_ = false;
-        engine_ = nullptr;
-        packName_.clear();
+    if (Pack.RootDirectory.empty()) {
+        std::cerr << "GameHostSession: could not resolve pack root for '" << InPackName << "'\n";
+        World.Shutdown();
+        bWorldInitialized = false;
+        Engine = nullptr;
+        PackName.clear();
         return false;
     }
-    FPaths::SetActiveContentRoot(pack.RootDirectory);
+    FPaths::SetActiveContentRoot(Pack.RootDirectory);
 
-    std::string levelKey(preferredLevelKey);
-    if (levelKey.empty()) {
-        levelKey = pack.DefaultLevelKey();
+    std::string LevelKey(PreferredLevelKey);
+    if (LevelKey.empty()) {
+        LevelKey = Pack.DefaultLevelKey();
     }
 
-    if (!world_.LoadPack(engine, pack.RootDirectory, levelKey)) {
-        std::cerr << "GameHostSession: no levels under '" << pack.RootDirectory << "'\n";
+    if (!World.LoadPack(InEngine, Pack.RootDirectory, LevelKey)) {
+        std::cerr << "GameHostSession: no levels under '" << Pack.RootDirectory << "'\n";
         std::cerr << "Expected Content/Levels/*.llev under the pack root\n";
         FPaths::SetActiveContentRoot({});
-        world_.Shutdown();
-        worldInitialized_ = false;
-        engine_ = nullptr;
-        packName_.clear();
+        World.Shutdown();
+        bWorldInitialized = false;
+        Engine = nullptr;
+        PackName.clear();
         return false;
     }
-    if (!levelKey.empty()) {
-        std::cout << "GameHostSession pack '" << packName << "' start level: " << levelKey << '\n';
+    if (!LevelKey.empty()) {
+        std::cout << "GameHostSession pack '" << InPackName << "' start level: " << LevelKey << '\n';
     }
 
     BindTravelCallbacks();
 
-    gameplay_ = FGameplayRouter{};
-    gameplay_.SetDefaultMode(std::make_unique<ADefaultGameMode>());
-    if (registerModes) {
+    Gameplay = FGameplayRouter{};
+    Gameplay.SetDefaultMode(std::make_unique<ADefaultGameMode>());
+    if (RegisterModes) {
         // Packs may SetGameInstance<T>() here before modes run.
-        registerModes(engine, gameplay_);
+        RegisterModes(InEngine, Gameplay);
     }
     BindTravelCallbacks();
 
-    active_ = true;
+    bActive = true;
     // Bind the GameMode for the loaded level immediately (Unreal BeginPlay).
-    world_.Tick(engine, gameplay_, 0.0f);
+    World.Tick(InEngine, Gameplay, 0.0f);
     return true;
 }
 
-void FGameHostSession::Tick(float deltaTime) {
-    if (!active_ || engine_ == nullptr) {
+void FGameHostSession::Tick(float DeltaTime) {
+    if (!bActive || Engine == nullptr) {
         return;
     }
-    world_.Tick(*engine_, gameplay_, deltaTime);
+    World.Tick(*Engine, Gameplay, DeltaTime);
 }
 
 void FGameHostSession::HandleUiInput() {
-    if (!active_ || engine_ == nullptr) {
+    if (!bActive || Engine == nullptr) {
         return;
     }
-    world_.HandleUiInput(*engine_);
+    World.HandleUiInput(*Engine);
 }
 
-void FGameHostSession::DrawUi(int framebufferWidth, int framebufferHeight) {
-    if (!active_) {
+void FGameHostSession::DrawUi(int FramebufferWidth, int FramebufferHeight) {
+    if (!bActive) {
         return;
     }
-    world_.DrawUi(framebufferWidth, framebufferHeight);
+    World.DrawUi(FramebufferWidth, FramebufferHeight);
 }
 
 void FGameHostSession::Stop() {
-    if (!active_ && !worldInitialized_) {
+    if (!bActive && !bWorldInitialized) {
         return;
     }
 
-    if (engine_ != nullptr) {
-        if (AGameModeBase* mode = gameplay_.GetActive()) {
-            mode->OnExit(*engine_);
+    if (Engine != nullptr) {
+        if (AGameModeBase* Mode = Gameplay.GetActive()) {
+            Mode->OnExit(*Engine);
         }
         // Restore base UGameInstance (pack may have swapped CoopGameInstance, etc.).
-        engine_->SetGameInstance<UGameInstance>();
-        engine_->GetGameInstance().SetLevelTravelFn({});
-        engine_->GetGameInstance().SetLevelBrowserVisibleFn({});
-        engine_->SetShaderReloadHook({});
-        engine_->ClearCenterHudText();
-        engine_->GetHUD().Clear();
+        Engine->SetGameInstance<UGameInstance>();
+        Engine->GetGameInstance().SetLevelTravelFn({});
+        Engine->GetGameInstance().SetLevelBrowserVisibleFn({});
+        Engine->SetShaderReloadHook({});
+        Engine->ClearCenterHudText();
+        Engine->GetHUD().Clear();
     }
 
-    gameplay_ = FGameplayRouter{};
-    if (worldInitialized_) {
-        world_.Shutdown();
-        worldInitialized_ = false;
+    Gameplay = FGameplayRouter{};
+    if (bWorldInitialized) {
+        World.Shutdown();
+        bWorldInitialized = false;
     }
     FPaths::SetActiveContentRoot({});
-    engine_ = nullptr;
-    packName_.clear();
-    active_ = false;
+    Engine = nullptr;
+    PackName.clear();
+    bActive = false;
 }
 

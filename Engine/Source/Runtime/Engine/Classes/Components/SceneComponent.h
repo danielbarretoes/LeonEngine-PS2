@@ -28,12 +28,12 @@ public:
     glm::vec3 RelativeScale{1.0f};
 
     /// Attach under `parent`. Returns false if parent is null, this, or would create a cycle.
-    [[nodiscard]] bool AttachToComponent(USceneComponent* parent, bool keepWorldTransform = false);
-    void DetachFromParent(bool keepWorldTransform = false);
+    [[nodiscard]] bool AttachToComponent(USceneComponent* InParent, bool bKeepWorldTransform = false);
+    void DetachFromParent(bool bKeepWorldTransform = false);
 
-    [[nodiscard]] USceneComponent* GetAttachParent() const { return parent_; }
+    [[nodiscard]] USceneComponent* GetAttachParent() const { return Parent; }
     [[nodiscard]] const std::vector<USceneComponent*>& GetAttachChildren() const {
-        return children_;
+        return Children;
     }
 
     [[nodiscard]] FTransform GetRelativeTransform() const;
@@ -45,10 +45,10 @@ public:
     void DestroyComponent() override;
 
 private:
-    void detachChild(USceneComponent* child);
-    [[nodiscard]] bool wouldCreateCycle(const USceneComponent* candidateParent) const;
+    void DetachChild(USceneComponent* Child);
+    [[nodiscard]] bool WouldCreateCycle(const USceneComponent* CandidateParent) const;
 
-    USceneComponent* parent_ = nullptr;
-    std::vector<USceneComponent*> children_;
+    USceneComponent* Parent = nullptr;
+    std::vector<USceneComponent*> Children;
 };
 

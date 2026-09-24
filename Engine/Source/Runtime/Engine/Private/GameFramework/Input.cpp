@@ -6,29 +6,29 @@
 
 namespace {
 
-constexpr float kDegToRad = glm::pi<float>() / 180.0f;
+constexpr float DegToRad = glm::pi<float>() / 180.0f;
 
 } // namespace
 
-glm::vec3 yawRelativeMoveXZ(float yawDegrees, const FMoveAxes2D& axes) {
-    if (!axes.any()) {
+glm::vec3 YawRelativeMoveXz(float YawDegrees, const FMoveAxes2D& Axes) {
+    if (!Axes.Any()) {
         return glm::vec3{0.0f};
     }
 
-    const float yawRad = yawDegrees * kDegToRad;
+    const float YawRad = YawDegrees * DegToRad;
     // Match Camera orbit: world offset ≈ (cos(p)*cos(y), …, cos(p)*sin(y)); look ≈ -offset.xz
-    const glm::vec3 forward{-std::cos(yawRad), 0.0f, -std::sin(yawRad)};
-    const glm::vec3 right{std::sin(yawRad), 0.0f, -std::cos(yawRad)};
+    const glm::vec3 Forward{-std::cos(YawRad), 0.0f, -std::sin(YawRad)};
+    const glm::vec3 Right{std::sin(YawRad), 0.0f, -std::cos(YawRad)};
 
-    glm::vec3 move = (forward * axes.z) + (right * axes.x);
-    const float len = glm::length(move);
-    if (len > 1.0e-4f) {
-        move /= len;
+    glm::vec3 Move = (Forward * Axes.Z) + (Right * Axes.X);
+    const float Len = glm::length(Move);
+    if (Len > 1.0e-4f) {
+        Move /= Len;
     }
-    return move;
+    return Move;
 }
 
-glm::vec3 cameraRelativeMoveXZ(const UCameraComponent& camera, const FMoveAxes2D& axes) {
-    return yawRelativeMoveXZ(camera.YawDegrees(), axes);
+glm::vec3 CameraRelativeMoveXz(const UCameraComponent& Camera, const FMoveAxes2D& Axes) {
+    return YawRelativeMoveXz(Camera.GetYawDegrees(), Axes);
 }
 

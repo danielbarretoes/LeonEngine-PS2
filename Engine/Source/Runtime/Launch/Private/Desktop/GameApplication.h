@@ -10,8 +10,8 @@ class FGameApplication {
 public:
     /// When `dedicatedByDefault` is true (server shipping exes), start headless without CLI flags.
     /// CLI `--dedicated` / `--server` still force dedicated on client builds.
-    [[nodiscard]] int Run(int argc, char** argv, const char* packName,
-                          const std::function<void(UGameEngine&, FGameplayRouter&)>& registerModes,
-                          bool dedicatedByDefault = false);
+    [[nodiscard]] int Run(int Argc, char** Argv, const char* PackName,
+                          const std::function<void(UGameEngine&, FGameplayRouter&)>& RegisterModes,
+                          bool bDedicatedByDefault = false);
 };
 

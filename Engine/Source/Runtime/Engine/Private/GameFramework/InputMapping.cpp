@@ -3,147 +3,147 @@
 #include "GameFramework/InputActions.h"
 #include "GameFramework/InputMapping.h"
 
-void UInputMappingContext::BindAxisKey(std::string_view action, int key, float scale) {
-    if (action.empty() || key == 0) {
+void UInputMappingContext::BindAxisKey(std::string_view Action, int InKey, float InScale) {
+    if (Action.empty() || InKey == 0) {
         return;
     }
-    axes_[std::string(action)].push_back(FInputAxisKeyMapping{key, scale});
+    Axes[std::string(Action)].push_back(FInputAxisKeyMapping{InKey, InScale});
 }
 
-void UInputMappingContext::BindActionKey(std::string_view action, int key) {
-    if (action.empty() || key == 0) {
+void UInputMappingContext::BindActionKey(std::string_view Action, int InKey) {
+    if (Action.empty() || InKey == 0) {
         return;
     }
-    actions_[std::string(action)].push_back(key);
+    Actions[std::string(Action)].push_back(InKey);
 }
 
-void UInputMappingContext::BindAxisKey(std::string_view action, EKeys key, float scale) {
-    BindAxisKey(action, ToKeyCode(key), scale);
+void UInputMappingContext::BindAxisKey(std::string_view Action, EKeys InKey, float InScale) {
+    BindAxisKey(Action, ToKeyCode(InKey), InScale);
 }
 
-void UInputMappingContext::BindActionKey(std::string_view action, EKeys key) {
-    BindActionKey(action, ToKeyCode(key));
+void UInputMappingContext::BindActionKey(std::string_view Action, EKeys InKey) {
+    BindActionKey(Action, ToKeyCode(InKey));
 }
 
 UInputMappingContext UInputMappingContext::MakeDefault() {
-    UInputMappingContext ctx;
+    UInputMappingContext Ctx;
     using namespace Leon::InputActions;
 
-    ctx.BindAxisKey(MoveForward, EKeys::W, 1.0f);
-    ctx.BindAxisKey(MoveForward, EKeys::Up, 1.0f);
-    ctx.BindAxisKey(MoveForward, EKeys::S, -1.0f);
-    ctx.BindAxisKey(MoveForward, EKeys::Down, -1.0f);
+    Ctx.BindAxisKey(MoveForward, EKeys::W, 1.0f);
+    Ctx.BindAxisKey(MoveForward, EKeys::Up, 1.0f);
+    Ctx.BindAxisKey(MoveForward, EKeys::S, -1.0f);
+    Ctx.BindAxisKey(MoveForward, EKeys::Down, -1.0f);
 
-    ctx.BindAxisKey(MoveRight, EKeys::D, 1.0f);
-    ctx.BindAxisKey(MoveRight, EKeys::Right, 1.0f);
-    ctx.BindAxisKey(MoveRight, EKeys::A, -1.0f);
-    ctx.BindAxisKey(MoveRight, EKeys::Left, -1.0f);
+    Ctx.BindAxisKey(MoveRight, EKeys::D, 1.0f);
+    Ctx.BindAxisKey(MoveRight, EKeys::Right, 1.0f);
+    Ctx.BindAxisKey(MoveRight, EKeys::A, -1.0f);
+    Ctx.BindAxisKey(MoveRight, EKeys::Left, -1.0f);
 
-    ctx.BindAxisKey(MoveUp, EKeys::E, 1.0f);
-    ctx.BindAxisKey(MoveUp, EKeys::Q, -1.0f);
+    Ctx.BindAxisKey(MoveUp, EKeys::E, 1.0f);
+    Ctx.BindAxisKey(MoveUp, EKeys::Q, -1.0f);
 
-    ctx.BindActionKey(Jump, EKeys::SpaceBar);
-    return ctx;
+    Ctx.BindActionKey(Jump, EKeys::SpaceBar);
+    return Ctx;
 }
 
 void UPlayerInput::ClearContexts() {
-    contexts_.clear();
-    mapsDirty_ = true;
+    Contexts.clear();
+    bMapsDirty = true;
 }
 
-void UPlayerInput::AddMappingContext(UInputMappingContext context, int priority) {
-    contexts_.push_back(FContextEntry{.priority = priority, .context = std::move(context)});
+void UPlayerInput::AddMappingContext(UInputMappingContext InContext, int InPriority) {
+    Contexts.push_back(FContextEntry{.Priority = InPriority, .Context = std::move(InContext)});
     std::stable_sort(
-        contexts_.begin(), contexts_.end(),
-        [](const FContextEntry& a, const FContextEntry& b) { return a.priority < b.priority; });
-    mapsDirty_ = true;
+        Contexts.begin(), Contexts.end(),
+        [](const FContextEntry& A, const FContextEntry& B) { return A.Priority < B.Priority; });
+    bMapsDirty = true;
 }
 
-void UPlayerInput::rebuildEffectiveMaps() {
-    effectiveAxes_.clear();
-    effectiveActions_.clear();
-    for (const FContextEntry& entry : contexts_) {
-        for (const auto& [name, keys] : entry.context.Axes()) {
-            auto& dst = effectiveAxes_[name];
-            dst.insert(dst.end(), keys.begin(), keys.end());
+void UPlayerInput::RebuildEffectiveMaps() {
+    EffectiveAxes.clear();
+    EffectiveActions.clear();
+    for (const FContextEntry& Entry : Contexts) {
+        for (const auto& [name, keys] : Entry.Context.GetAxes()) {
+            auto& Dst = EffectiveAxes[name];
+            Dst.insert(Dst.end(), keys.begin(), keys.end());
         }
-        for (const auto& [name, keys] : entry.context.Actions()) {
-            auto& dst = effectiveActions_[name];
-            dst.insert(dst.end(), keys.begin(), keys.end());
+        for (const auto& [name, keys] : Entry.Context.GetActions()) {
+            auto& Dst = EffectiveActions[name];
+            Dst.insert(Dst.end(), keys.begin(), keys.end());
         }
     }
-    mapsDirty_ = false;
+    bMapsDirty = false;
 }
 
-void UPlayerInput::Update(const FGenericWindow& window) {
-    if (mapsDirty_) {
-        rebuildEffectiveMaps();
+void UPlayerInput::Update(const FGenericWindow& Window) {
+    if (bMapsDirty) {
+        RebuildEffectiveMaps();
     }
 
-    actionPressedPrev_ = actionPressed_;
-    axisValues_.clear();
-    actionPressed_.clear();
+    ActionPressedPrev = ActionPressed;
+    AxisValues.clear();
+    ActionPressed.clear();
 
-    for (const auto& [name, keys] : effectiveAxes_) {
-        float value = 0.0f;
-        for (const FInputAxisKeyMapping& binding : keys) {
-            if (window.IsKeyPressed(static_cast<EKeys>(binding.key))) {
-                value += binding.scale;
+    for (const auto& [name, keys] : EffectiveAxes) {
+        float Value = 0.0f;
+        for (const FInputAxisKeyMapping& Binding : keys) {
+            if (Window.IsKeyPressed(static_cast<EKeys>(Binding.Key))) {
+                Value += Binding.Scale;
             }
         }
-        value = std::clamp(value, -1.0f, 1.0f);
-        axisValues_[name] = value;
+        Value = std::clamp(Value, -1.0f, 1.0f);
+        AxisValues[name] = Value;
     }
 
-    for (const auto& [name, keys] : effectiveActions_) {
-        bool pressed = false;
-        for (int key : keys) {
-            if (window.IsKeyPressed(static_cast<EKeys>(key))) {
-                pressed = true;
+    for (const auto& [name, keys] : EffectiveActions) {
+        bool bPressed = false;
+        for (int LocalKey : keys) {
+            if (Window.IsKeyPressed(static_cast<EKeys>(LocalKey))) {
+                bPressed = true;
                 break;
             }
         }
-        actionPressed_[name] = pressed;
+        ActionPressed[name] = bPressed;
     }
 }
 
-float UPlayerInput::GetAxisValue(std::string_view action) const {
-    const auto it = axisValues_.find(std::string(action));
-    return it != axisValues_.end() ? it->second : 0.0f;
+float UPlayerInput::GetAxisValue(std::string_view Action) const {
+    const auto It = AxisValues.find(std::string(Action));
+    return It != AxisValues.end() ? It->second : 0.0f;
 }
 
-bool UPlayerInput::IsActionPressed(std::string_view action) const {
-    const auto it = actionPressed_.find(std::string(action));
-    return it != actionPressed_.end() && it->second;
+bool UPlayerInput::IsActionPressed(std::string_view Action) const {
+    const auto It = ActionPressed.find(std::string(Action));
+    return It != ActionPressed.end() && It->second;
 }
 
-bool UPlayerInput::WasActionJustPressed(std::string_view action) const {
-    const std::string key(action);
-    const auto cur = actionPressed_.find(key);
-    const bool now = cur != actionPressed_.end() && cur->second;
-    if (!now) {
+bool UPlayerInput::WasActionJustPressed(std::string_view Action) const {
+    const std::string LocalKey(Action);
+    const auto Cur = ActionPressed.find(LocalKey);
+    const bool bNow = Cur != ActionPressed.end() && Cur->second;
+    if (!bNow) {
         return false;
     }
-    const auto prev = actionPressedPrev_.find(key);
-    const bool was = prev != actionPressedPrev_.end() && prev->second;
-    return !was;
+    const auto Prev = ActionPressedPrev.find(LocalKey);
+    const bool bWas = Prev != ActionPressedPrev.end() && Prev->second;
+    return !bWas;
 }
 
-bool UPlayerInput::WasActionJustReleased(std::string_view action) const {
-    const std::string key(action);
-    const auto cur = actionPressed_.find(key);
-    const bool now = cur != actionPressed_.end() && cur->second;
-    if (now) {
+bool UPlayerInput::WasActionJustReleased(std::string_view Action) const {
+    const std::string LocalKey(Action);
+    const auto Cur = ActionPressed.find(LocalKey);
+    const bool bNow = Cur != ActionPressed.end() && Cur->second;
+    if (bNow) {
         return false;
     }
-    const auto prev = actionPressedPrev_.find(key);
-    return prev != actionPressedPrev_.end() && prev->second;
+    const auto Prev = ActionPressedPrev.find(LocalKey);
+    return Prev != ActionPressedPrev.end() && Prev->second;
 }
 
 FMoveAxes2D UPlayerInput::GetMoveAxes2D() const {
-    FMoveAxes2D axes{};
-    axes.x = GetAxisValue(Leon::InputActions::MoveRight);
-    axes.z = GetAxisValue(Leon::InputActions::MoveForward);
-    return axes;
+    FMoveAxes2D LocalAxes{};
+    LocalAxes.X = GetAxisValue(Leon::InputActions::MoveRight);
+    LocalAxes.Z = GetAxisValue(Leon::InputActions::MoveForward);
+    return LocalAxes;
 }
 

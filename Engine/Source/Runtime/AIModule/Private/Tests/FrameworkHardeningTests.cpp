@@ -136,5 +136,5 @@ TEST_CASE("NavigationSystem agent radius dilation shrinks walkable ring", "[game
     wide.SetAgentRadius(1.5f);
     wide.BuildFromPhysScene(physics, 0.0f, 10.0f);
 
-    REQUIRE(wide.WalkableCellCount() < narrow.WalkableCellCount());
+    REQUIRE(wide.GetWalkableCellCount() < narrow.GetWalkableCellCount());
 }

@@ -11,63 +11,63 @@
 #include "Engine/Level.h"
 
 
-void AGameModeBase::PostLogin(APlayerController& newPlayer) {
-    GetGameState().AddPlayerState(&newPlayer.GetPlayerState());
+void AGameModeBase::PostLogin(APlayerController& NewPlayer) {
+    GetGameState().AddPlayerState(&NewPlayer.GetPlayerState());
 }
 
-void AGameModeBase::Logout(APlayerController& exiting) {
-    GetGameState().RemovePlayerState(&exiting.GetPlayerState());
+void AGameModeBase::Logout(APlayerController& Exiting) {
+    GetGameState().RemovePlayerState(&Exiting.GetPlayerState());
 }
 
-bool AGameModeBase::ServerTravel(UGameEngine& engine, std::string_view mapName,
-                            std::string_view hintLevelPath) {
-    if (!engine.GetGameInstance().ServerTravel(engine, mapName, hintLevelPath)) {
+bool AGameModeBase::ServerTravel(UGameEngine& Engine, std::string_view MapName,
+                            std::string_view HintLevelPath) {
+    if (!Engine.GetGameInstance().ServerTravel(Engine, MapName, HintLevelPath)) {
         return false;
     }
-    if (!engine.GetLevel().Name().empty()) {
-        GetGameState().SetMapName(engine.GetLevel().Name());
+    if (!Engine.GetLevel().GetName().empty()) {
+        GetGameState().SetMapName(Engine.GetLevel().GetName());
     } else {
-        GetGameState().SetMapName(std::string(mapName));
+        GetGameState().SetMapName(std::string(MapName));
     }
     return true;
 }
 
-bool AGameModeBase::ClientTravel(UGameEngine& engine, std::string_view mapName,
-                            std::string_view hintLevelPath) {
-    if (!engine.GetGameInstance().ClientTravel(engine, mapName, hintLevelPath)) {
+bool AGameModeBase::ClientTravel(UGameEngine& Engine, std::string_view MapName,
+                            std::string_view HintLevelPath) {
+    if (!Engine.GetGameInstance().ClientTravel(Engine, MapName, HintLevelPath)) {
         return false;
     }
-    if (!engine.GetLevel().Name().empty()) {
-        GetGameState().SetMapName(engine.GetLevel().Name());
+    if (!Engine.GetLevel().GetName().empty()) {
+        GetGameState().SetMapName(Engine.GetLevel().GetName());
     } else {
-        GetGameState().SetMapName(std::string(mapName));
+        GetGameState().SetMapName(std::string(MapName));
     }
     return true;
 }
 
-float AGameModeBase::EstimateFloorY(const ULevel& level) {
-    const auto& starts = level.PlayerStarts();
-    if (starts.empty()) {
+float AGameModeBase::EstimateFloorY(const ULevel& Level) {
+    const auto& Starts = Level.GetPlayerStarts();
+    if (Starts.empty()) {
         return 0.0f;
     }
-    float y = starts.front().transform.Position.y;
-    for (const FPlayerStart& start : starts) {
-        y = std::min(y, start.transform.Position.y);
+    float Y = Starts.front().Transform.Position.y;
+    for (const FPlayerStart& Start : Starts) {
+        Y = std::min(Y, Start.Transform.Position.y);
     }
-    return y;
+    return Y;
 }
 
-float AGameModeBase::EstimateWalkBounds(const ULevel& level) {
-    float maxExtent = 40.0f;
-    for (const UStaticMeshComponent& mesh : level.StaticMeshes()) {
-        if (!mesh.HasPhysicsBody() || mesh.simulatePhysics) {
+float AGameModeBase::EstimateWalkBounds(const ULevel& Level) {
+    float MaxExtent = 40.0f;
+    for (const UStaticMeshComponent& Mesh : Level.GetStaticMeshes()) {
+        if (!Mesh.HasPhysicsBody() || Mesh.bSimulatePhysics) {
             continue;
         }
-        const float hx = std::abs(mesh.transform.Scale.x) * 0.5f;
-        const float hz = std::abs(mesh.transform.Scale.z) * 0.5f;
-        maxExtent = std::max(maxExtent, std::max(hx, hz));
+        const float Hx = std::abs(Mesh.Transform.Scale.x) * 0.5f;
+        const float Hz = std::abs(Mesh.Transform.Scale.z) * 0.5f;
+        MaxExtent = std::max(MaxExtent, std::max(Hx, Hz));
     }
-    return std::clamp(maxExtent - 1.0f, 20.0f, 120.0f);
+    return std::clamp(MaxExtent - 1.0f, 20.0f, 120.0f);
 }
 
 // Flow: Match enter — bodies + nav bake
@@ -75,40 +75,40 @@ float AGameModeBase::EstimateWalkBounds(const ULevel& level) {
 // 2. Estimate floor Y / walk bounds from level
 // 3. RegisterBodiesFromLevel + SyncFromLevel
 // 4. UNavigationSystem bake (cell 0.5, agent 0.45)
-void AGameModeBase::PrepareMatchWorld(UGameEngine& engine, float& outFloorY, float& outWalkBounds,
-                                 EPhysicsBackend backend) {
-    SetPhysicsBackend(backend);
-    outFloorY = EstimateFloorY(engine.GetLevel());
-    outWalkBounds = EstimateWalkBounds(engine.GetLevel());
-    RegisterBodiesFromLevel(engine.GetLevel());
-    GetWorld().GetPhysicsScene().SyncFromLevel(engine.GetLevel());
+void AGameModeBase::PrepareMatchWorld(UGameEngine& Engine, float& OutFloorY, float& OutWalkBounds,
+                                 EPhysicsBackend Backend) {
+    SetPhysicsBackend(Backend);
+    OutFloorY = EstimateFloorY(Engine.GetLevel());
+    OutWalkBounds = EstimateWalkBounds(Engine.GetLevel());
+    RegisterBodiesFromLevel(Engine.GetLevel());
+    GetWorld().GetPhysicsScene().SyncFromLevel(Engine.GetLevel());
 
-    UNavigationSystem& nav = GetWorld().GetNavigationSystem();
-    nav.SetCellSize(0.5f);
-    nav.SetAgentRadius(0.45f);
-    nav.BuildFromLevel(engine.GetLevel(), GetWorld().GetPhysicsScene(), outFloorY, outWalkBounds);
-    std::cout << "GameMode: NavMesh bake blockers=" << nav.BlockerCount()
-              << " walkable=" << nav.WalkableCellCount() << "/"
-              << (nav.GetNavMesh().width * nav.GetNavMesh().depth) << " cell=" << nav.CellSize()
+    UNavigationSystem& Nav = GetWorld().GetNavigationSystem();
+    Nav.SetCellSize(0.5f);
+    Nav.SetAgentRadius(0.45f);
+    Nav.BuildFromLevel(Engine.GetLevel(), GetWorld().GetPhysicsScene(), OutFloorY, OutWalkBounds);
+    std::cout << "GameMode: NavMesh bake blockers=" << Nav.GetBlockerCount()
+              << " walkable=" << Nav.GetWalkableCellCount() << "/"
+              << (Nav.GetNavMesh().Width * Nav.GetNavMesh().Depth) << " cell=" << Nav.GetCellSize()
               << '\n';
 }
 
-void AGameModeBase::RebuildNavigation(UGameEngine& engine, float floorY, float walkBounds) {
-    RegisterBodiesFromLevel(engine.GetLevel());
-    GetWorld().GetPhysicsScene().SyncFromLevel(engine.GetLevel());
-    UNavigationSystem& nav = GetWorld().GetNavigationSystem();
-    nav.BuildFromLevel(engine.GetLevel(), GetWorld().GetPhysicsScene(), floorY, walkBounds);
+void AGameModeBase::RebuildNavigation(UGameEngine& Engine, float FloorY, float WalkBounds) {
+    RegisterBodiesFromLevel(Engine.GetLevel());
+    GetWorld().GetPhysicsScene().SyncFromLevel(Engine.GetLevel());
+    UNavigationSystem& Nav = GetWorld().GetNavigationSystem();
+    Nav.BuildFromLevel(Engine.GetLevel(), GetWorld().GetPhysicsScene(), FloorY, WalkBounds);
 }
 
-void AGameModeBase::SnapCharacterToFloor(ACharacter& character, glm::vec3& inOutFeet,
-                                    float floorY) const {
-    const FPhysScene& phys = GetWorld().GetPhysicsScene();
-    const UCharacterMovementComponent& move = character.GetCharacterMovement();
-    glm::vec3 probe = inOutFeet;
-    probe.y = std::max(inOutFeet.y, floorY);
-    const float support =
-        phys.QuerySupportY(character.GetCapsule(), probe, move.FloorY, move.MaxStepHeight,
-                           move.Skin, character.LevelMeshIndex());
-    inOutFeet.y = std::max(support, floorY) + 0.02f;
+void AGameModeBase::SnapCharacterToFloor(ACharacter& Character, glm::vec3& InOutFeet,
+                                    float FloorY) const {
+    const FPhysScene& Phys = GetWorld().GetPhysicsScene();
+    const UCharacterMovementComponent& Move = Character.GetCharacterMovement();
+    glm::vec3 Probe = InOutFeet;
+    Probe.y = std::max(InOutFeet.y, FloorY);
+    const float Support =
+        Phys.QuerySupportY(Character.GetCapsule(), Probe, Move.FloorY, Move.MaxStepHeight,
+                           Move.Skin, Character.GetLevelMeshIndex());
+    InOutFeet.y = std::max(Support, FloorY) + 0.02f;
 }
 

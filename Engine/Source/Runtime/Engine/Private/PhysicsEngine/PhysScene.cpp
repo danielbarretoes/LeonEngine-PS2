@@ -138,7 +138,7 @@ std::size_t FPhysScene::AddSlopeRamp(const glm::vec3& InBoundsCenter,
 }
 
 void FPhysScene::SyncFromLevel(const ULevel& Level) {
-    const auto& Meshes = Level.StaticMeshes();
+    const auto& Meshes = Level.GetStaticMeshes();
     if (TriangleMeshes.size() != Bodies.size()) {
         TriangleMeshes.resize(Bodies.size());
     }
@@ -152,15 +152,15 @@ void FPhysScene::SyncFromLevel(const ULevel& Level) {
             continue;
         }
         const UStaticMeshComponent& Obj = Meshes[Body.LevelMeshIndex];
-        if (Obj.mesh != nullptr) {
+        if (Obj.Mesh != nullptr) {
             const FBox WorldAabb = FBox::FromLocalTransformed(
-                Obj.mesh->GetLocalMin(), Obj.mesh->GetLocalMax(), Obj.EffectiveModelMatrix());
+                Obj.Mesh->GetLocalMin(), Obj.Mesh->GetLocalMax(), Obj.EffectiveModelMatrix());
             Body.Position = (WorldAabb.Min + WorldAabb.Max) * 0.5f;
             Body.HalfExtents = (WorldAabb.Max - WorldAabb.Min) * 0.5f;
 
             // Unreal ComplexAsSimple lite: static meshes with CPU tris use triangle queries.
-            if (Body.Type == EBodyType::Static && Obj.mesh->HasCpuData()) {
-                const FMeshData& Cpu = Obj.mesh->GetCpuData();
+            if (Body.Type == EBodyType::Static && Obj.Mesh->HasCpuData()) {
+                const FMeshData& Cpu = Obj.Mesh->GetCpuData();
                 const glm::mat4 Model = Obj.EffectiveModelMatrix();
                 TriMesh.Positions.resize(Cpu.Vertices.size());
                 for (std::size_t Vi = 0; Vi < Cpu.Vertices.size(); ++Vi) {
@@ -176,8 +176,8 @@ void FPhysScene::SyncFromLevel(const ULevel& Level) {
                 }
             }
         } else {
-            Body.Position = Obj.transform.Position;
-            HalfExtentsFromScale(Obj.transform.Scale, Body.HalfExtents.x, Body.HalfExtents.y,
+            Body.Position = Obj.Transform.Position;
+            HalfExtentsFromScale(Obj.Transform.Scale, Body.HalfExtents.x, Body.HalfExtents.y,
                                  Body.HalfExtents.z);
         }
         if (Body.Mass <= 0.0f) {
@@ -191,12 +191,12 @@ void FPhysScene::SyncFromLevel(const ULevel& Level) {
 }
 
 void FPhysScene::SyncToLevel(ULevel& Level) const {
-    auto& Meshes = Level.StaticMeshes();
+    auto& Meshes = Level.GetStaticMeshes();
     for (const FBodyInstance& Body : Bodies) {
         if (Body.LevelMeshIndex >= Meshes.size()) {
             continue;
         }
-        Meshes[Body.LevelMeshIndex].transform.Position = Body.Position;
+        Meshes[Body.LevelMeshIndex].Transform.Position = Body.Position;
     }
 }
 
@@ -343,7 +343,7 @@ void FPhysScene::ResolveCapsuleSides(const FCapsuleShape& Capsule, glm::vec3& Fe
 bool FPhysScene::ApplyCapsuleSweepPush(std::size_t LevelMeshIndex, const glm::vec2& WishXz,
                                       const glm::vec3& ImpactNormal, float InPushStrength,
                                       float InWalkBounds) {
-    if (LevelMeshIndex == ULevel::npos || glm::length(WishXz) <= 1.0e-4f) {
+    if (LevelMeshIndex == ULevel::Npos || glm::length(WishXz) <= 1.0e-4f) {
         return false;
     }
 

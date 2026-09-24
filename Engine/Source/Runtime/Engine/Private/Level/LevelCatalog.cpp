@@ -10,60 +10,60 @@
 
 namespace {
 
-bool isLeonLevelFile(const std::filesystem::directory_entry& entry) {
-    if (!entry.is_regular_file()) {
+bool IsLeonLevelFile(const std::filesystem::directory_entry& Entry) {
+    if (!Entry.is_regular_file()) {
         return false;
     }
-    std::string extension = entry.path().extension().string();
-    for (char& c : extension) {
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    std::string Extension = Entry.path().extension().string();
+    for (char& C : Extension) {
+        C = static_cast<char>(std::tolower(static_cast<unsigned char>(C)));
     }
-    return extension == kLeonLevelExtension;
+    return Extension == LeonLevelExtension;
 }
 
-void appendLevelsFromDirectory(std::vector<FLevelEntry>& out, const std::filesystem::path& levelsDir,
-                               const std::string& packName) {
-    std::error_code ec;
-    if (!std::filesystem::is_directory(levelsDir, ec) || ec) {
+void AppendLevelsFromDirectory(std::vector<FLevelEntry>& Out, const std::filesystem::path& LevelsDir,
+                               const std::string& PackName) {
+    std::error_code Ec;
+    if (!std::filesystem::is_directory(LevelsDir, Ec) || Ec) {
         return;
     }
 
-    for (const auto& entry : std::filesystem::directory_iterator(levelsDir, ec)) {
-        if (ec) {
+    for (const auto& Entry : std::filesystem::directory_iterator(LevelsDir, Ec)) {
+        if (Ec) {
             break;
         }
-        if (!isLeonLevelFile(entry)) {
+        if (!IsLeonLevelFile(Entry)) {
             continue;
         }
 
-        FLevelEntry item;
-        item.path = entry.path().lexically_normal().string();
-        item.name = entry.path().stem().string();
-        item.pack = packName;
+        FLevelEntry Item;
+        Item.Path = Entry.path().lexically_normal().string();
+        Item.Name = Entry.path().stem().string();
+        Item.Pack = PackName;
 
         // Display name + GameMode Override are read once at catalog scan (FGameplayRouter uses it).
-        FLevelDocument doc;
-        if (LoadLeonLevelFile(item.path, doc)) {
-            if (!doc.name.empty()) {
-                item.name = doc.name;
+        FLevelDocument Doc;
+        if (LoadLeonLevelFile(Item.Path, Doc)) {
+            if (!Doc.Name.empty()) {
+                Item.Name = Doc.Name;
             }
-            item.gameMode = doc.gameMode;
+            Item.GameMode = Doc.GameMode;
         }
 
-        out.push_back(std::move(item));
+        Out.push_back(std::move(Item));
     }
 }
 
-bool directoryHasLeonLevels(const std::filesystem::path& levelsDir) {
-    std::error_code ec;
-    if (!std::filesystem::is_directory(levelsDir, ec) || ec) {
+bool DirectoryHasLeonLevels(const std::filesystem::path& LevelsDir) {
+    std::error_code Ec;
+    if (!std::filesystem::is_directory(LevelsDir, Ec) || Ec) {
         return false;
     }
-    for (const auto& entry : std::filesystem::directory_iterator(levelsDir, ec)) {
-        if (ec) {
+    for (const auto& Entry : std::filesystem::directory_iterator(LevelsDir, Ec)) {
+        if (Ec) {
             break;
         }
-        if (isLeonLevelFile(entry)) {
+        if (IsLeonLevelFile(Entry)) {
             return true;
         }
     }
@@ -72,130 +72,130 @@ bool directoryHasLeonLevels(const std::filesystem::path& levelsDir) {
 
 } // namespace
 
-bool FLevelCatalog::Scan(const std::string& directory) {
-    entries_.clear();
-    directory_ = directory;
+bool FLevelCatalog::Scan(const std::string& InDirectory) {
+    Entries.clear();
+    Directory = InDirectory;
 
-    std::error_code ec;
-    const std::filesystem::path dir(directory);
-    if (!std::filesystem::is_directory(dir, ec) || ec) {
-        std::cerr << "LevelCatalog: not a directory: " << directory << '\n';
+    std::error_code Ec;
+    const std::filesystem::path Dir(InDirectory);
+    if (!std::filesystem::is_directory(Dir, Ec) || Ec) {
+        std::cerr << "LevelCatalog: not a directory: " << InDirectory << '\n';
         return false;
     }
 
-    appendLevelsFromDirectory(entries_, dir, {});
-    std::sort(entries_.begin(), entries_.end(),
-              [](const FLevelEntry& a, const FLevelEntry& b) { return a.path < b.path; });
+    AppendLevelsFromDirectory(Entries, Dir, {});
+    std::sort(Entries.begin(), Entries.end(),
+              [](const FLevelEntry& A, const FLevelEntry& B) { return A.Path < B.Path; });
 
-    std::cout << "LevelCatalog: " << entries_.size() << " Level(s) in " << directory << '\n';
-    for (std::size_t i = 0; i < entries_.size(); ++i) {
-        std::cout << "  [" << i << "] " << entries_[i].name << " (" << entries_[i].path << ")\n";
+    std::cout << "LevelCatalog: " << Entries.size() << " Level(s) in " << InDirectory << '\n';
+    for (std::size_t I = 0; I < Entries.size(); ++I) {
+        std::cout << "  [" << I << "] " << Entries[I].Name << " (" << Entries[I].Path << ")\n";
     }
-    return !entries_.empty();
+    return !Entries.empty();
 }
 
-bool FLevelCatalog::ScanPack(const std::string& packDirectory) {
-    entries_.clear();
-    directory_ = packDirectory;
+bool FLevelCatalog::ScanPack(const std::string& PackDirectory) {
+    Entries.clear();
+    Directory = PackDirectory;
 
-    std::error_code ec;
-    const std::filesystem::path packDir(packDirectory);
-    if (!std::filesystem::is_directory(packDir, ec) || ec) {
-        std::cerr << "LevelCatalog: pack is not a directory: " << packDirectory << '\n';
+    std::error_code Ec;
+    const std::filesystem::path PackDir(PackDirectory);
+    if (!std::filesystem::is_directory(PackDir, Ec) || Ec) {
+        std::cerr << "LevelCatalog: pack is not a directory: " << PackDirectory << '\n';
         return false;
     }
 
-    const std::string packName = packDir.filename().string();
+    const std::string PackName = PackDir.filename().string();
     // Unreal-like: `<pack>/Content/Levels` (via FPaths::ProjectContentDir).
-    const std::filesystem::path levelsDir = FPaths::ProjectContentDir(packDir) / "Levels";
+    const std::filesystem::path LevelsDir = FPaths::ProjectContentDir(PackDir) / "Levels";
 
-    if (directoryHasLeonLevels(levelsDir)) {
-        appendLevelsFromDirectory(entries_, levelsDir, packName);
+    if (DirectoryHasLeonLevels(LevelsDir)) {
+        AppendLevelsFromDirectory(Entries, LevelsDir, PackName);
     }
 
-    std::sort(entries_.begin(), entries_.end(),
-              [](const FLevelEntry& a, const FLevelEntry& b) { return a.path < b.path; });
+    std::sort(Entries.begin(), Entries.end(),
+              [](const FLevelEntry& A, const FLevelEntry& B) { return A.Path < B.Path; });
 
-    std::cout << "LevelCatalog: " << entries_.size() << " Level(s) in pack " << packName << '\n';
-    for (std::size_t i = 0; i < entries_.size(); ++i) {
-        const FLevelEntry& e = entries_[i];
-        std::cout << "  [" << i << "] " << e.pack << "/" << e.name << " (" << e.path << ")\n";
+    std::cout << "LevelCatalog: " << Entries.size() << " Level(s) in pack " << PackName << '\n';
+    for (std::size_t I = 0; I < Entries.size(); ++I) {
+        const FLevelEntry& E = Entries[I];
+        std::cout << "  [" << I << "] " << E.Pack << "/" << E.Name << " (" << E.Path << ")\n";
     }
-    return !entries_.empty();
+    return !Entries.empty();
 }
 
-bool FLevelCatalog::ScanProjectPacks(const std::string& projectsRoot) {
-    entries_.clear();
-    directory_ = projectsRoot;
+bool FLevelCatalog::ScanProjectPacks(const std::string& ProjectsRoot) {
+    Entries.clear();
+    Directory = ProjectsRoot;
 
-    std::error_code ec;
-    const std::filesystem::path root(projectsRoot);
-    if (!std::filesystem::is_directory(root, ec) || ec) {
-        std::cerr << "LevelCatalog: projects root is not a directory: " << projectsRoot << '\n';
+    std::error_code Ec;
+    const std::filesystem::path Root(ProjectsRoot);
+    if (!std::filesystem::is_directory(Root, Ec) || Ec) {
+        std::cerr << "LevelCatalog: projects root is not a directory: " << ProjectsRoot << '\n';
         return false;
     }
 
-    for (const auto& packEntry : std::filesystem::directory_iterator(root, ec)) {
-        if (ec) {
+    for (const auto& PackEntry : std::filesystem::directory_iterator(Root, Ec)) {
+        if (Ec) {
             break;
         }
-        if (!packEntry.is_directory()) {
+        if (!PackEntry.is_directory()) {
             continue;
         }
-        const std::string packName = packEntry.path().filename().string();
+        const std::string PackName = PackEntry.path().filename().string();
         // Skip shared host / cmake helpers that are not game projects.
-        if (packName == "_host" || packName.starts_with('.')) {
+        if (PackName == "_host" || PackName.starts_with('.')) {
             continue;
         }
-        const std::filesystem::path levelsDir =
-            FPaths::ProjectContentDir(packEntry.path()) / "Levels";
+        const std::filesystem::path LevelsDir =
+            FPaths::ProjectContentDir(PackEntry.path()) / "Levels";
 
-        if (directoryHasLeonLevels(levelsDir)) {
-            appendLevelsFromDirectory(entries_, levelsDir, packName);
+        if (DirectoryHasLeonLevels(LevelsDir)) {
+            AppendLevelsFromDirectory(Entries, LevelsDir, PackName);
         }
     }
 
-    std::sort(entries_.begin(), entries_.end(),
-              [](const FLevelEntry& a, const FLevelEntry& b) { return a.path < b.path; });
+    std::sort(Entries.begin(), Entries.end(),
+              [](const FLevelEntry& A, const FLevelEntry& B) { return A.Path < B.Path; });
 
-    std::cout << "LevelCatalog: " << entries_.size() << " Level(s) under " << projectsRoot << '\n';
-    for (std::size_t i = 0; i < entries_.size(); ++i) {
-        const FLevelEntry& e = entries_[i];
-        std::cout << "  [" << i << "] " << e.pack << "/" << e.name << " (" << e.path << ")\n";
+    std::cout << "LevelCatalog: " << Entries.size() << " Level(s) under " << ProjectsRoot << '\n';
+    for (std::size_t I = 0; I < Entries.size(); ++I) {
+        const FLevelEntry& E = Entries[I];
+        std::cout << "  [" << I << "] " << E.Pack << "/" << E.Name << " (" << E.Path << ")\n";
     }
-    return !entries_.empty();
+    return !Entries.empty();
 }
 
-std::size_t FLevelCatalog::FindIndexByGameModeOrPack(const std::string& id) const {
-    if (id.empty()) {
-        return entries_.size();
+std::size_t FLevelCatalog::FindIndexByGameModeOrPack(const std::string& Id) const {
+    if (Id.empty()) {
+        return Entries.size();
     }
-    for (std::size_t i = 0; i < entries_.size(); ++i) {
-        if (entries_[i].gameMode == id || entries_[i].pack == id) {
-            return i;
+    for (std::size_t I = 0; I < Entries.size(); ++I) {
+        if (Entries[I].GameMode == Id || Entries[I].Pack == Id) {
+            return I;
         }
     }
-    return entries_.size();
+    return Entries.size();
 }
 
-std::size_t FLevelCatalog::FindIndexByLevelKey(std::string_view key) const {
-    if (key.empty()) {
-        return entries_.size();
+std::size_t FLevelCatalog::FindIndexByLevelKey(std::string_view Key) const {
+    if (Key.empty()) {
+        return Entries.size();
     }
-    const std::string needle = FCString::ToLower(key);
-    for (std::size_t i = 0; i < entries_.size(); ++i) {
-        const FLevelEntry& e = entries_[i];
-        if (FCString::ToLower(e.name) == needle) {
-            return i;
+    const std::string Needle = FCString::ToLower(Key);
+    for (std::size_t I = 0; I < Entries.size(); ++I) {
+        const FLevelEntry& E = Entries[I];
+        if (FCString::ToLower(E.Name) == Needle) {
+            return I;
         }
-        const std::string stem = FCString::ToLower(std::filesystem::path(e.path).stem().string());
-        if (stem == needle) {
-            return i;
+        const std::string Stem = FCString::ToLower(std::filesystem::path(E.Path).stem().string());
+        if (Stem == Needle) {
+            return I;
         }
-        if (FCString::ToLower(e.path) == needle) {
-            return i;
+        if (FCString::ToLower(E.Path) == Needle) {
+            return I;
         }
     }
-    return entries_.size();
+    return Entries.size();
 }
 

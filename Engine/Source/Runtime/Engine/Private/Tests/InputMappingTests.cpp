@@ -7,36 +7,36 @@
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("InputMappingContext MakeDefault binds move and jump", "[core][inputmapping]") {
-    const UInputMappingContext ctx = UInputMappingContext::MakeDefault();
+    const UInputMappingContext Ctx = UInputMappingContext::MakeDefault();
 
-    REQUIRE(ctx.Axes().count(std::string(Leon::InputActions::MoveForward)) == 1);
-    REQUIRE(ctx.Axes().count(std::string(Leon::InputActions::MoveRight)) == 1);
-    REQUIRE(ctx.Axes().count(std::string(Leon::InputActions::MoveUp)) == 1);
-    REQUIRE(ctx.Actions().count(std::string(Leon::InputActions::Jump)) == 1);
+    REQUIRE(Ctx.GetAxes().count(std::string(Leon::InputActions::MoveForward)) == 1);
+    REQUIRE(Ctx.GetAxes().count(std::string(Leon::InputActions::MoveRight)) == 1);
+    REQUIRE(Ctx.GetAxes().count(std::string(Leon::InputActions::MoveUp)) == 1);
+    REQUIRE(Ctx.GetActions().count(std::string(Leon::InputActions::Jump)) == 1);
 
-    const auto& jumpKeys = ctx.Actions().at(std::string(Leon::InputActions::Jump));
-    REQUIRE_FALSE(jumpKeys.empty());
-    REQUIRE(jumpKeys.front() == ToKeyCode(EKeys::SpaceBar));
+    const auto& JumpKeys = Ctx.GetActions().at(std::string(Leon::InputActions::Jump));
+    REQUIRE_FALSE(JumpKeys.empty());
+    REQUIRE(JumpKeys.front() == ToKeyCode(EKeys::SpaceBar));
 }
 
 TEST_CASE("InputMappingContext BindAxisKey and BindActionKey", "[core][inputmapping]") {
-    UInputMappingContext ctx;
-    ctx.BindAxisKey("Strafe", EKeys::A, -1.0f);
-    ctx.BindAxisKey("Strafe", EKeys::D, 1.0f);
-    ctx.BindActionKey("Fire", EKeys::LeftControl);
-    ctx.BindAxisKey("", EKeys::W, 1.0f); // ignored
-    ctx.BindActionKey("Fire", 0);             // ignored
+    UInputMappingContext Ctx;
+    Ctx.BindAxisKey("Strafe", EKeys::A, -1.0f);
+    Ctx.BindAxisKey("Strafe", EKeys::D, 1.0f);
+    Ctx.BindActionKey("Fire", EKeys::LeftControl);
+    Ctx.BindAxisKey("", EKeys::W, 1.0f); // ignored
+    Ctx.BindActionKey("Fire", 0);             // ignored
 
-    REQUIRE(ctx.Axes().at("Strafe").size() == 2);
-    REQUIRE(ctx.Actions().at("Fire").size() == 1);
-    REQUIRE(ctx.Actions().at("Fire").front() == ToKeyCode(EKeys::LeftControl));
+    REQUIRE(Ctx.GetAxes().at("Strafe").size() == 2);
+    REQUIRE(Ctx.GetActions().at("Fire").size() == 1);
+    REQUIRE(Ctx.GetActions().at("Fire").front() == ToKeyCode(EKeys::LeftControl));
 }
 
 TEST_CASE("PlayerInput ClearContexts empties maps after Update path", "[core][inputmapping]") {
-    UPlayerInput input;
-    input.AddMappingContext(UInputMappingContext::MakeDefault());
-    input.ClearContexts();
-    REQUIRE_THAT(input.GetAxisValue(Leon::InputActions::MoveForward), WithinAbs(0.0f, 1.0e-6f));
-    REQUIRE_FALSE(input.IsActionPressed(Leon::InputActions::Jump));
-    REQUIRE_FALSE(input.GetMoveAxes2D().any());
+    UPlayerInput Input;
+    Input.AddMappingContext(UInputMappingContext::MakeDefault());
+    Input.ClearContexts();
+    REQUIRE_THAT(Input.GetAxisValue(Leon::InputActions::MoveForward), WithinAbs(0.0f, 1.0e-6f));
+    REQUIRE_FALSE(Input.IsActionPressed(Leon::InputActions::Jump));
+    REQUIRE_FALSE(Input.GetMoveAxes2D().Any());
 }

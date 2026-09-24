@@ -10,332 +10,332 @@
 
 namespace {
 
-constexpr int kSupportedMaterialVersion = 1;
+constexpr int SupportedMaterialVersion = 1;
 
-bool isNumberArray(const nlohmann::json& j, std::size_t minSize) {
-    if (!j.is_array() || j.size() < minSize) {
+bool IsNumberArray(const nlohmann::json& J, std::size_t MinSize) {
+    if (!J.is_array() || J.size() < MinSize) {
         return false;
     }
-    for (std::size_t i = 0; i < minSize; ++i) {
-        if (!j[i].is_number()) {
+    for (std::size_t I = 0; I < MinSize; ++I) {
+        if (!J[I].is_number()) {
             return false;
         }
     }
     return true;
 }
 
-void requireVec3(FValidationReport& report, const nlohmann::json& parent, const char* key,
-                 const std::string& where) {
-    if (!parent.contains(key)) {
+void RequireVec3(FValidationReport& Report, const nlohmann::json& Parent, const char* Key,
+                 const std::string& InWhere) {
+    if (!Parent.contains(Key)) {
         return;
     }
-    if (!isNumberArray(parent[key], 3)) {
-        report.error(where + "." + key, "expected array of 3 numbers [x, y, z]");
+    if (!IsNumberArray(Parent[Key], 3)) {
+        Report.Error(InWhere + "." + Key, "expected array of 3 numbers [x, y, z]");
     }
 }
 
-void requireNumber(FValidationReport& report, const nlohmann::json& parent, const char* key,
-                   const std::string& where) {
-    if (!parent.contains(key)) {
+void RequireNumber(FValidationReport& Report, const nlohmann::json& Parent, const char* Key,
+                   const std::string& InWhere) {
+    if (!Parent.contains(Key)) {
         return;
     }
-    if (!parent[key].is_number()) {
-        report.error(where + "." + key, "expected number");
+    if (!Parent[Key].is_number()) {
+        Report.Error(InWhere + "." + Key, "expected number");
     }
 }
 
-void requireBool(FValidationReport& report, const nlohmann::json& parent, const char* key,
-                 const std::string& where) {
-    if (!parent.contains(key)) {
+void RequireBool(FValidationReport& Report, const nlohmann::json& Parent, const char* Key,
+                 const std::string& InWhere) {
+    if (!Parent.contains(Key)) {
         return;
     }
-    if (!parent[key].is_boolean()) {
-        report.error(where + "." + key, "expected boolean");
+    if (!Parent[Key].is_boolean()) {
+        Report.Error(InWhere + "." + Key, "expected boolean");
     }
 }
 
-void requireString(FValidationReport& report, const nlohmann::json& parent, const char* key,
-                   const std::string& where) {
-    if (!parent.contains(key)) {
+void RequireString(FValidationReport& Report, const nlohmann::json& Parent, const char* Key,
+                   const std::string& InWhere) {
+    if (!Parent.contains(Key)) {
         return;
     }
-    if (!parent[key].is_string()) {
-        report.error(where + "." + key, "expected string");
+    if (!Parent[Key].is_string()) {
+        Report.Error(InWhere + "." + Key, "expected string");
     }
 }
 
-void validateSurfaceFields(FValidationReport& report, const nlohmann::json& spec,
-                           const std::string& where) {
-    requireVec3(report, spec, "albedo", where);
-    requireVec3(report, spec, "specular", where);
-    requireNumber(report, spec, "metallic", where);
-    requireNumber(report, spec, "alpha", where);
-    requireNumber(report, spec, "shininess", where);
-    requireNumber(report, spec, "roughness", where);
-    requireBool(report, spec, "unlit", where);
-    requireBool(report, spec, "castsShadows", where);
-    requireBool(report, spec, "planarMirror", where);
-    requireString(report, spec, "albedoMap", where);
-    requireString(report, spec, "normalMap", where);
+void ValidateSurfaceFields(FValidationReport& Report, const nlohmann::json& Spec,
+                           const std::string& InWhere) {
+    RequireVec3(Report, Spec, "albedo", InWhere);
+    RequireVec3(Report, Spec, "specular", InWhere);
+    RequireNumber(Report, Spec, "metallic", InWhere);
+    RequireNumber(Report, Spec, "alpha", InWhere);
+    RequireNumber(Report, Spec, "shininess", InWhere);
+    RequireNumber(Report, Spec, "roughness", InWhere);
+    RequireBool(Report, Spec, "unlit", InWhere);
+    RequireBool(Report, Spec, "castsShadows", InWhere);
+    RequireBool(Report, Spec, "planarMirror", InWhere);
+    RequireString(Report, Spec, "albedoMap", InWhere);
+    RequireString(Report, Spec, "normalMap", InWhere);
 
-    if (spec.contains("uvScale")) {
-        const auto& uv = spec["uvScale"];
-        if (!(uv.is_number() || isNumberArray(uv, 2))) {
-            report.error(where + ".uvScale", "expected number or [u, v]");
+    if (Spec.contains("uvScale")) {
+        const auto& Uv = Spec["uvScale"];
+        if (!(Uv.is_number() || IsNumberArray(Uv, 2))) {
+            Report.Error(InWhere + ".uvScale", "expected number or [u, v]");
         }
     }
-    if (spec.contains("tiling")) {
-        const auto& uv = spec["tiling"];
-        if (!(uv.is_number() || isNumberArray(uv, 2))) {
-            report.error(where + ".tiling", "expected number or [u, v]");
+    if (Spec.contains("tiling")) {
+        const auto& Uv = Spec["tiling"];
+        if (!(Uv.is_number() || IsNumberArray(Uv, 2))) {
+            Report.Error(InWhere + ".tiling", "expected number or [u, v]");
         }
     }
 
-    if (spec.contains("albedoMap") && spec["albedoMap"].is_string()) {
-        const std::string key = spec["albedoMap"].get<std::string>();
-        if (key != "checker") {
-            const std::string resolved = FPaths::ResolveAssetPath(key);
-            if (!std::filesystem::exists(resolved)) {
-                report.warning(where + ".albedoMap", "texture not found: " + key);
+    if (Spec.contains("albedoMap") && Spec["albedoMap"].is_string()) {
+        const std::string Key = Spec["albedoMap"].get<std::string>();
+        if (Key != "checker") {
+            const std::string Resolved = FPaths::ResolveAssetPath(Key);
+            if (!std::filesystem::exists(Resolved)) {
+                Report.Warning(InWhere + ".albedoMap", "texture not found: " + Key);
             }
         }
     }
-    if (spec.contains("normalMap") && spec["normalMap"].is_string()) {
-        const std::string key = spec["normalMap"].get<std::string>();
-        if (key != "bump") {
-            const std::string resolved = FPaths::ResolveAssetPath(key);
-            if (!std::filesystem::exists(resolved)) {
-                report.warning(where + ".normalMap", "texture not found: " + key);
+    if (Spec.contains("normalMap") && Spec["normalMap"].is_string()) {
+        const std::string Key = Spec["normalMap"].get<std::string>();
+        if (Key != "bump") {
+            const std::string Resolved = FPaths::ResolveAssetPath(Key);
+            if (!std::filesystem::exists(Resolved)) {
+                Report.Warning(InWhere + ".normalMap", "texture not found: " + Key);
             }
         }
     }
 }
 
 /// True when the key resolves via pack-relative or global asset lookup.
-[[nodiscard]] bool LevelAssetExists(const std::string& levelPath, const std::string& key) {
-    std::error_code ec;
-    const std::string resolved = ResolveLevelAssetPath(levelPath, key);
-    return !resolved.empty() && std::filesystem::exists(resolved, ec) && !ec;
+[[nodiscard]] bool LevelAssetExists(const std::string& LevelPath, const std::string& Key) {
+    std::error_code Ec;
+    const std::string Resolved = ResolveLevelAssetPath(LevelPath, Key);
+    return !Resolved.empty() && std::filesystem::exists(Resolved, Ec) && !Ec;
 }
 
-void validateActorRecord(FValidationReport& report, const FLevelActorRecord& actor,
-                         std::size_t index, const std::string& levelPath) {
-    const std::string where = "actors[" + std::to_string(index) + "]";
+void ValidateActorRecord(FValidationReport& Report, const FLevelActorRecord& Actor,
+                         std::size_t Index, const std::string& LevelPath) {
+    const std::string LocalWhere = "actors[" + std::to_string(Index) + "]";
 
-    if (actor.actorClass == ELevelActorClass::StaticMesh) {
-        if (actor.meshPath.empty()) {
-            report.error(where + ".mesh", "StaticMesh actor needs a mesh path");
-        } else if (!LevelAssetExists(levelPath, actor.meshPath)) {
-            report.warning(where + ".mesh", "mesh file not found: " + actor.meshPath);
+    if (Actor.ActorClass == ELevelActorClass::StaticMesh) {
+        if (Actor.MeshPath.empty()) {
+            Report.Error(LocalWhere + ".mesh", "StaticMesh actor needs a mesh path");
+        } else if (!LevelAssetExists(LevelPath, Actor.MeshPath)) {
+            Report.Warning(LocalWhere + ".mesh", "mesh file not found: " + Actor.MeshPath);
         }
-    } else if (!actor.meshPath.empty()) {
-        report.error(where + ".mesh", "only StaticMesh actors carry a mesh path");
+    } else if (!Actor.MeshPath.empty()) {
+        Report.Error(LocalWhere + ".mesh", "only StaticMesh actors carry a mesh path");
     }
 
-    if (actor.actorClass == ELevelActorClass::Sphere &&
-        (actor.sphereSegments < 3 || actor.sphereRings < 2)) {
-        report.error(where, "sphere needs at least 3 segments and 2 rings");
+    if (Actor.ActorClass == ELevelActorClass::Sphere &&
+        (Actor.SphereSegments < 3 || Actor.SphereRings < 2)) {
+        Report.Error(LocalWhere, "sphere needs at least 3 segments and 2 rings");
     }
 
-    if (actor.actorClass == ELevelActorClass::TriggerVolume && actor.interactRadius <= 0.0f) {
-        report.error(where + ".interactRadius", "expected a positive radius");
+    if (Actor.ActorClass == ELevelActorClass::TriggerVolume && Actor.InteractRadius <= 0.0f) {
+        Report.Error(LocalWhere + ".interactRadius", "expected a positive radius");
     }
 
-    if (actor.actorClass == ELevelActorClass::PainCausingVolume) {
-        if (actor.damagePerSecond < 0.0f) {
-            report.error(where + ".damagePerSecond", "expected a non-negative value");
+    if (Actor.ActorClass == ELevelActorClass::PainCausingVolume) {
+        if (Actor.DamagePerSecond < 0.0f) {
+            Report.Error(LocalWhere + ".damagePerSecond", "expected a non-negative value");
         }
-        if (actor.damageInterval <= 0.0f) {
-            report.error(where + ".damageInterval", "expected a positive interval");
+        if (Actor.DamageInterval <= 0.0f) {
+            Report.Error(LocalWhere + ".damageInterval", "expected a positive interval");
         }
     }
 
-    if (actor.hasFitHeight && actor.fitHeight <= 0.0f) {
-        report.error(where + ".fitHeight", "expected a positive height");
+    if (Actor.bHasFitHeight && Actor.FitHeight <= 0.0f) {
+        Report.Error(LocalWhere + ".fitHeight", "expected a positive height");
     }
 
-    if (!actor.materialPath.empty()) {
-        const std::string resolvedMat = ResolveLevelAssetPath(levelPath, actor.materialPath);
-        std::error_code ec;
-        if (resolvedMat.empty() || !std::filesystem::exists(resolvedMat, ec) || ec) {
-            report.error(where + ".material", "material file not found: " + actor.materialPath);
+    if (!Actor.MaterialPath.empty()) {
+        const std::string ResolvedMat = ResolveLevelAssetPath(LevelPath, Actor.MaterialPath);
+        std::error_code Ec;
+        if (ResolvedMat.empty() || !std::filesystem::exists(ResolvedMat, Ec) || Ec) {
+            Report.Error(LocalWhere + ".material", "material file not found: " + Actor.MaterialPath);
         } else {
-            FValidationReport matReport = ValidateMaterialFile(resolvedMat);
-            for (FValidationIssue& issue : matReport.issues) {
-                issue.where = where + ".material->" + issue.where;
-                report.issues.push_back(std::move(issue));
+            FValidationReport MatReport = ValidateMaterialFile(ResolvedMat);
+            for (FValidationIssue& Issue : MatReport.Issues) {
+                Issue.Where = LocalWhere + ".material->" + Issue.Where;
+                Report.Issues.push_back(std::move(Issue));
             }
         }
     }
 
-    if (!actor.lightmapPath.empty() && !LevelAssetExists(levelPath, actor.lightmapPath)) {
-        report.warning(where + ".lightmap", "lightmap file not found: " + actor.lightmapPath);
+    if (!Actor.LightmapPath.empty() && !LevelAssetExists(LevelPath, Actor.LightmapPath)) {
+        Report.Warning(LocalWhere + ".lightmap", "lightmap file not found: " + Actor.LightmapPath);
     }
 }
 
-void validateLightRecord(FValidationReport& report, const FLevelLightRecord& light,
-                         std::size_t index) {
-    const std::string where = "lights[" + std::to_string(index) + "]";
-    if (light.intensity < 0.0f) {
-        report.error(where + ".intensity", "expected a non-negative value");
+void ValidateLightRecord(FValidationReport& Report, const FLevelLightRecord& Light,
+                         std::size_t Index) {
+    const std::string LocalWhere = "lights[" + std::to_string(Index) + "]";
+    if (Light.Intensity < 0.0f) {
+        Report.Error(LocalWhere + ".intensity", "expected a non-negative value");
     }
-    if (light.lightClass == ELevelLightClass::PointLight && light.range <= 0.0f) {
-        report.error(where + ".range", "point light range must be positive");
+    if (Light.LightClass == ELevelLightClass::PointLight && Light.Range <= 0.0f) {
+        Report.Error(LocalWhere + ".range", "point light range must be positive");
     }
 }
 
 } // namespace
 
-void FValidationReport::error(std::string where, std::string message) {
-    issues.push_back(
-        FValidationIssue{EValidationSeverity::Error, std::move(where), std::move(message)});
+void FValidationReport::Error(std::string InWhere, std::string InMessage) {
+    Issues.push_back(
+        FValidationIssue{EValidationSeverity::Error, std::move(InWhere), std::move(InMessage)});
 }
 
-void FValidationReport::warning(std::string where, std::string message) {
-    issues.push_back(
-        FValidationIssue{EValidationSeverity::Warning, std::move(where), std::move(message)});
+void FValidationReport::Warning(std::string InWhere, std::string InMessage) {
+    Issues.push_back(
+        FValidationIssue{EValidationSeverity::Warning, std::move(InWhere), std::move(InMessage)});
 }
 
-bool FValidationReport::ok() const {
-    return errorCount() == 0;
+bool FValidationReport::Ok() const {
+    return ErrorCount() == 0;
 }
 
-std::size_t FValidationReport::errorCount() const {
-    std::size_t n = 0;
-    for (const FValidationIssue& issue : issues) {
-        if (issue.severity == EValidationSeverity::Error) {
-            ++n;
+std::size_t FValidationReport::ErrorCount() const {
+    std::size_t N = 0;
+    for (const FValidationIssue& Issue : Issues) {
+        if (Issue.Severity == EValidationSeverity::Error) {
+            ++N;
         }
     }
-    return n;
+    return N;
 }
 
-std::size_t FValidationReport::warningCount() const {
-    return issues.size() - errorCount();
+std::size_t FValidationReport::WarningCount() const {
+    return Issues.size() - ErrorCount();
 }
 
-void FValidationReport::logToStderr() const {
-    const char* label = sourcePath.empty() ? "<json>" : sourcePath.c_str();
-    for (const FValidationIssue& issue : issues) {
-        const char* kind = issue.severity == EValidationSeverity::Error ? "error" : "warning";
-        std::cerr << "ContentValidator: " << kind << " in " << label;
-        if (!issue.where.empty()) {
-            std::cerr << " @ " << issue.where;
+void FValidationReport::LogToStderr() const {
+    const char* Label = SourcePath.empty() ? "<json>" : SourcePath.c_str();
+    for (const FValidationIssue& Issue : Issues) {
+        const char* Kind = Issue.Severity == EValidationSeverity::Error ? "error" : "warning";
+        std::cerr << "ContentValidator: " << Kind << " in " << Label;
+        if (!Issue.Where.empty()) {
+            std::cerr << " @ " << Issue.Where;
         }
-        std::cerr << ": " << issue.message << '\n';
+        std::cerr << ": " << Issue.Message << '\n';
     }
-    if (!ok()) {
-        std::cerr << "ContentValidator: " << errorCount() << " error(s), " << warningCount()
-                  << " warning(s) in " << label << '\n';
-    } else if (warningCount() > 0) {
-        std::cerr << "ContentValidator: OK with " << warningCount() << " warning(s) in " << label
+    if (!Ok()) {
+        std::cerr << "ContentValidator: " << ErrorCount() << " error(s), " << WarningCount()
+                  << " warning(s) in " << Label << '\n';
+    } else if (WarningCount() > 0) {
+        std::cerr << "ContentValidator: OK with " << WarningCount() << " warning(s) in " << Label
                   << '\n';
     }
 }
 
-FValidationReport ValidateMaterialDocument(const nlohmann::json& doc,
-                                          const std::string& sourcePath) {
+FValidationReport ValidateMaterialDocument(const nlohmann::json& Doc,
+                                          const std::string& InSourcePath) {
     // Deprecated JSON material path — keep for callers that still pass JSON.
-    FValidationReport report;
-    report.sourcePath = sourcePath;
+    FValidationReport Report;
+    Report.SourcePath = InSourcePath;
 
-    if (!doc.is_object()) {
-        report.error("", "material root must be a JSON object");
-        return report;
+    if (!Doc.is_object()) {
+        Report.Error("", "material root must be a JSON object");
+        return Report;
     }
 
-    if (doc.contains("version")) {
-        if (!doc["version"].is_number()) {
-            report.error("version", "expected number");
+    if (Doc.contains("version")) {
+        if (!Doc["version"].is_number()) {
+            Report.Error("version", "expected number");
         } else {
-            int version = 0;
-            if (doc["version"].is_number_integer()) {
-                version = doc["version"].get<int>();
+            int Version = 0;
+            if (Doc["version"].is_number_integer()) {
+                Version = Doc["version"].get<int>();
             } else {
-                const double raw = doc["version"].get<double>();
-                if (std::floor(raw) != raw) {
-                    report.error("version", "must be a whole number");
+                const double Raw = Doc["version"].get<double>();
+                if (std::floor(Raw) != Raw) {
+                    Report.Error("version", "must be a whole number");
                 } else {
-                    version = static_cast<int>(raw);
+                    Version = static_cast<int>(Raw);
                 }
             }
-            if (version != kSupportedMaterialVersion) {
-                report.error("version", "unsupported material version (expected " +
-                                            std::to_string(kSupportedMaterialVersion) + ")");
+            if (Version != SupportedMaterialVersion) {
+                Report.Error("version", "unsupported material version (expected " +
+                                            std::to_string(SupportedMaterialVersion) + ")");
             }
         }
     }
 
-    requireString(report, doc, "name", "");
-    validateSurfaceFields(report, doc, "");
-    return report;
+    RequireString(Report, Doc, "name", "");
+    ValidateSurfaceFields(Report, Doc, "");
+    return Report;
 }
 
-FValidationReport ValidateMaterialFile(const std::string& path) {
-    FValidationReport report;
-    report.sourcePath = path;
+FValidationReport ValidateMaterialFile(const std::string& Path) {
+    FValidationReport Report;
+    Report.SourcePath = Path;
 
-    const auto extPos = path.find_last_of('.');
-    std::string ext = extPos == std::string::npos ? std::string{} : path.substr(extPos);
-    for (char& c : ext) {
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    const auto ExtPos = Path.find_last_of('.');
+    std::string Ext = ExtPos == std::string::npos ? std::string{} : Path.substr(ExtPos);
+    for (char& C : Ext) {
+        C = static_cast<char>(std::tolower(static_cast<unsigned char>(C)));
     }
-    if (ext != ".lmat") {
-        report.error("", "material asset must be .lmat");
-        return report;
-    }
-
-    FLeonMaterialDocument doc;
-    if (!LoadLeonMaterialDocument(path, doc)) {
-        report.error("", "failed to load .lmat");
-        return report;
+    if (Ext != ".lmat") {
+        Report.Error("", "material asset must be .lmat");
+        return Report;
     }
 
-    if (doc.Material.Metallic < 0.0f || doc.Material.Metallic > 1.0f) {
-        report.warning("Metallic", "expected value in [0, 1]");
-    }
-    if (doc.Material.Roughness < 0.0f || doc.Material.Roughness > 1.0f) {
-        report.warning("Roughness", "expected value in [0, 1]");
+    FLeonMaterialDocument Doc;
+    if (!LoadLeonMaterialDocument(Path, Doc)) {
+        Report.Error("", "failed to load .lmat");
+        return Report;
     }
 
-    auto warnMissingMap = [&](const std::string& mapPath, const char* where) {
-        if (mapPath.empty() || mapPath == "checker" || mapPath == "bump") {
+    if (Doc.Material.Metallic < 0.0f || Doc.Material.Metallic > 1.0f) {
+        Report.Warning("Metallic", "expected value in [0, 1]");
+    }
+    if (Doc.Material.Roughness < 0.0f || Doc.Material.Roughness > 1.0f) {
+        Report.Warning("Roughness", "expected value in [0, 1]");
+    }
+
+    auto WarnMissingMap = [&](const std::string& MapPath, const char* InWhere) {
+        if (MapPath.empty() || MapPath == "checker" || MapPath == "bump") {
             return;
         }
-        const std::string resolved = FPaths::ResolveAssetPath(mapPath);
-        std::error_code ec;
-        if (resolved.empty() || !std::filesystem::exists(resolved, ec) || ec) {
-            report.warning(where, "texture not found: " + mapPath);
+        const std::string Resolved = FPaths::ResolveAssetPath(MapPath);
+        std::error_code Ec;
+        if (Resolved.empty() || !std::filesystem::exists(Resolved, Ec) || Ec) {
+            Report.Warning(InWhere, "texture not found: " + MapPath);
         }
     };
-    warnMissingMap(doc.BaseColorMapPath, "BaseColorMap");
-    warnMissingMap(doc.NormalMapPath, "NormalMap");
-    return report;
+    WarnMissingMap(Doc.BaseColorMapPath, "BaseColorMap");
+    WarnMissingMap(Doc.NormalMapPath, "NormalMap");
+    return Report;
 }
 
-FValidationReport ValidateLevelDocument(const FLevelDocument& doc, const std::string& sourcePath) {
-    FValidationReport report;
-    report.sourcePath = sourcePath;
+FValidationReport ValidateLevelDocument(const FLevelDocument& Doc, const std::string& InSourcePath) {
+    FValidationReport Report;
+    Report.SourcePath = InSourcePath;
 
     // Magic / version / class enums are already enforced by the `.llev` reader; an empty
     // actor list is valid (blank / lights-only levels).
-    if (!doc.environmentPath.empty()) {
-        std::error_code ec;
-        if (!std::filesystem::exists(FPaths::ResolveAssetPath(doc.environmentPath), ec) || ec) {
-            report.warning("environment", "HDR file not found: " + doc.environmentPath);
+    if (!Doc.EnvironmentPath.empty()) {
+        std::error_code Ec;
+        if (!std::filesystem::exists(FPaths::ResolveAssetPath(Doc.EnvironmentPath), Ec) || Ec) {
+            Report.Warning("environment", "HDR file not found: " + Doc.EnvironmentPath);
         }
     }
-    if (doc.environmentExposure < 0.0f) {
-        report.error("environmentExposure", "expected a non-negative value");
+    if (Doc.EnvironmentExposure < 0.0f) {
+        Report.Error("environmentExposure", "expected a non-negative value");
     }
 
-    for (std::size_t i = 0; i < doc.actors.size(); ++i) {
-        validateActorRecord(report, doc.actors[i], i, sourcePath);
+    for (std::size_t I = 0; I < Doc.Actors.size(); ++I) {
+        ValidateActorRecord(Report, Doc.Actors[I], I, InSourcePath);
     }
-    for (std::size_t i = 0; i < doc.lights.size(); ++i) {
-        validateLightRecord(report, doc.lights[i], i);
+    for (std::size_t I = 0; I < Doc.Lights.size(); ++I) {
+        ValidateLightRecord(Report, Doc.Lights[I], I);
     }
 
-    return report;
+    return Report;
 }
 

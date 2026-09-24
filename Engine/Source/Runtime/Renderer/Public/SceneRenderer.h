@@ -132,7 +132,7 @@ private:
     void UpdateLightsUbo(const ULevel& Level) const;
     void BindEnvironment(const ULevel& Level) const;
     void BindShadowResources(bool bInReceiveShadows,
-                             float SourceAngleDegrees = kDefaultLightSourceAngleDegrees) const;
+                             float SourceAngleDegrees = DefaultLightSourceAngleDegrees) const;
     void BindPlanarReflection(bool bEnabled, const glm::mat4& ReflectionViewProj) const;
     void SetClipPlane(bool bEnabled, const glm::vec4& Plane) const;
     void EnsureShadowMapSize();

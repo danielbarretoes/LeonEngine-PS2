@@ -19,18 +19,18 @@ float UGameplayStatics::ApplyRadialDamage(const std::vector<ACharacter*>& Actors
     if (BaseDamage <= 0.0f || DamageRadius <= 0.0f) {
         return 0.0f;
     }
-    float totalApplied = 0.0f;
-    for (ACharacter* actor : Actors) {
-        if (actor == nullptr || !actor->IsAlive()) {
+    float TotalApplied = 0.0f;
+    for (ACharacter* Actor : Actors) {
+        if (Actor == nullptr || !Actor->IsAlive()) {
             continue;
         }
-        const float dist = glm::length(actor->GetActorLocation() - Origin);
-        if (dist >= DamageRadius) {
+        const float Dist = glm::length(Actor->GetActorLocation() - Origin);
+        if (Dist >= DamageRadius) {
             continue;
         }
-        const float falloff = 1.0f - (dist / DamageRadius);
-        totalApplied += actor->TakeDamage(BaseDamage * falloff);
+        const float Falloff = 1.0f - (Dist / DamageRadius);
+        TotalApplied += Actor->TakeDamage(BaseDamage * Falloff);
     }
-    return totalApplied;
+    return TotalApplied;
 }
 

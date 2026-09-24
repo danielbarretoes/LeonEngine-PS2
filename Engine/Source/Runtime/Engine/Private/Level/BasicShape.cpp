@@ -3,59 +3,59 @@
 
 // Class-name parsers live in Content/LevelClassNames.cpp (shared with ContentValidator / cook).
 
-std::shared_ptr<UStaticMesh> MeshForBasicShape(FResourceCache& resources, EBasicShape shape,
-                                              int sphereSegments, int sphereRings) {
-    switch (shape) {
+std::shared_ptr<UStaticMesh> MeshForBasicShape(FResourceCache& Resources, EBasicShape Shape,
+                                              int InSphereSegments, int InSphereRings) {
+    switch (Shape) {
     case EBasicShape::Cube:
-        return resources.GetCubeMesh();
+        return Resources.GetCubeMesh();
     case EBasicShape::Sphere:
-        return resources.GetSphereMesh(sphereSegments, sphereRings);
+        return Resources.GetSphereMesh(InSphereSegments, InSphereRings);
     case EBasicShape::Plane:
         // Unit plane with 0–1 UVs; tiling is FMaterial::uvScale.
-        return resources.GetPlaneMesh(1.0f, 1.0f);
+        return Resources.GetPlaneMesh(1.0f, 1.0f);
     }
     return nullptr;
 }
 
-FBasicShape FBasicShape::cube(FTransform transform, FMaterial material, bool hasMaterial) {
-    FBasicShape shape;
-    shape.type = EBasicShape::Cube;
-    shape.transform = transform;
-    shape.material = std::move(material);
-    shape.hasCustomMaterial = hasMaterial;
-    return shape;
+FBasicShape FBasicShape::Cube(FTransform InTransform, FMaterial InMaterial, bool bHasMaterial) {
+    FBasicShape Shape;
+    Shape.Type = EBasicShape::Cube;
+    Shape.Transform = InTransform;
+    Shape.Material = std::move(InMaterial);
+    Shape.bHasCustomMaterial = bHasMaterial;
+    return Shape;
 }
 
-FBasicShape FBasicShape::sphere(FTransform transform, FMaterial material, bool hasMaterial,
-                              int segments, int rings) {
-    FBasicShape shape;
-    shape.type = EBasicShape::Sphere;
-    shape.transform = transform;
-    shape.material = std::move(material);
-    shape.hasCustomMaterial = hasMaterial;
-    shape.sphereSegments = segments;
-    shape.sphereRings = rings;
-    return shape;
+FBasicShape FBasicShape::Sphere(FTransform InTransform, FMaterial InMaterial, bool bHasMaterial,
+                              int Segments, int Rings) {
+    FBasicShape Shape;
+    Shape.Type = EBasicShape::Sphere;
+    Shape.Transform = InTransform;
+    Shape.Material = std::move(InMaterial);
+    Shape.bHasCustomMaterial = bHasMaterial;
+    Shape.SphereSegments = Segments;
+    Shape.SphereRings = Rings;
+    return Shape;
 }
 
-FBasicShape FBasicShape::plane(float size, FTransform transform, FMaterial material, bool hasMaterial) {
-    FBasicShape shape;
-    shape.type = EBasicShape::Plane;
-    shape.transform = transform;
-    shape.transform.Scale.x = size;
-    shape.transform.Scale.y = 1.0f;
-    shape.transform.Scale.z = size;
-    shape.material = std::move(material);
-    shape.hasCustomMaterial = hasMaterial;
-    return shape;
+FBasicShape FBasicShape::Plane(float Size, FTransform InTransform, FMaterial InMaterial, bool bHasMaterial) {
+    FBasicShape Shape;
+    Shape.Type = EBasicShape::Plane;
+    Shape.Transform = InTransform;
+    Shape.Transform.Scale.x = Size;
+    Shape.Transform.Scale.y = 1.0f;
+    Shape.Transform.Scale.z = Size;
+    Shape.Material = std::move(InMaterial);
+    Shape.bHasCustomMaterial = bHasMaterial;
+    return Shape;
 }
 
-UStaticMeshComponent FBasicShape::MakeStaticMesh(FResourceCache& resources) const {
-    UStaticMeshComponent component;
-    component.mesh = MeshForBasicShape(resources, type, sphereSegments, sphereRings);
-    component.transform = transform;
-    component.materialOverride = true;
-    component.material = hasCustomMaterial ? material : resources.DefaultMaterial();
-    return component;
+UStaticMeshComponent FBasicShape::MakeStaticMesh(FResourceCache& Resources) const {
+    UStaticMeshComponent Component;
+    Component.Mesh = MeshForBasicShape(Resources, Type, SphereSegments, SphereRings);
+    Component.Transform = Transform;
+    Component.bMaterialOverride = true;
+    Component.Material = bHasCustomMaterial ? Material : Resources.DefaultMaterial();
+    return Component;
 }
 

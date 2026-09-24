@@ -10,66 +10,66 @@
 
 namespace {
 
-[[nodiscard]] bool HasFlag(int argc, char** argv, const char* flag) {
-    for (int i = 1; i < argc; ++i) {
-        if (argv[i] != nullptr && std::string(argv[i]) == flag) {
+[[nodiscard]] bool HasFlag(int Argc, char** Argv, const char* Flag) {
+    for (int I = 1; I < Argc; ++I) {
+        if (Argv[I] != nullptr && std::string(Argv[I]) == Flag) {
             return true;
         }
     }
     return false;
 }
 
-[[nodiscard]] bool WantsDedicatedCli(int argc, char** argv) {
-    return HasFlag(argc, argv, "--dedicated") || HasFlag(argc, argv, "--server");
+[[nodiscard]] bool WantsDedicatedCli(int Argc, char** Argv) {
+    return HasFlag(Argc, Argv, "--dedicated") || HasFlag(Argc, Argv, "--server");
 }
 
-[[nodiscard]] std::uint16_t ParsePort(int argc, char** argv, std::uint16_t fallback) {
-    for (int i = 1; i < argc; ++i) {
-        const std::string arg = argv[i] != nullptr ? argv[i] : "";
-        if ((arg == "--port" || arg == "-p") && i + 1 < argc && argv[i + 1] != nullptr) {
+[[nodiscard]] std::uint16_t ParsePort(int Argc, char** Argv, std::uint16_t Fallback) {
+    for (int I = 1; I < Argc; ++I) {
+        const std::string Arg = Argv[I] != nullptr ? Argv[I] : "";
+        if ((Arg == "--port" || Arg == "-p") && I + 1 < Argc && Argv[I + 1] != nullptr) {
             try {
-                const int parsed = std::stoi(argv[++i]);
-                if (parsed > 0 && parsed < 65536) {
-                    return static_cast<std::uint16_t>(parsed);
+                const int Parsed = std::stoi(Argv[++I]);
+                if (Parsed > 0 && Parsed < 65536) {
+                    return static_cast<std::uint16_t>(Parsed);
                 }
             } catch (...) {
             }
         }
     }
-    return fallback;
+    return Fallback;
 }
 
-[[nodiscard]] float ParseTickHz(int argc, char** argv, float fallback) {
-    for (int i = 1; i < argc; ++i) {
-        const std::string arg = argv[i] != nullptr ? argv[i] : "";
-        if ((arg == "--tick" || arg == "-t") && i + 1 < argc && argv[i + 1] != nullptr) {
+[[nodiscard]] float ParseTickHz(int Argc, char** Argv, float Fallback) {
+    for (int I = 1; I < Argc; ++I) {
+        const std::string Arg = Argv[I] != nullptr ? Argv[I] : "";
+        if ((Arg == "--tick" || Arg == "-t") && I + 1 < Argc && Argv[I + 1] != nullptr) {
             try {
-                const float hz = std::stof(argv[++i]);
-                if (hz >= 1.0f && hz <= 240.0f) {
-                    return hz;
+                const float Hz = std::stof(Argv[++I]);
+                if (Hz >= 1.0f && Hz <= 240.0f) {
+                    return Hz;
                 }
             } catch (...) {
             }
         }
     }
-    return fallback;
+    return Fallback;
 }
 
-[[nodiscard]] std::string ParseJoinAddress(int argc, char** argv) {
-    for (int i = 1; i < argc; ++i) {
-        const std::string arg = argv[i] != nullptr ? argv[i] : "";
-        if ((arg == "--join" || arg == "-j") && i + 1 < argc && argv[i + 1] != nullptr) {
-            return argv[++i];
+[[nodiscard]] std::string ParseJoinAddress(int Argc, char** Argv) {
+    for (int I = 1; I < Argc; ++I) {
+        const std::string Arg = Argv[I] != nullptr ? Argv[I] : "";
+        if ((Arg == "--join" || Arg == "-j") && I + 1 < Argc && Argv[I + 1] != nullptr) {
+            return Argv[++I];
         }
     }
     return {};
 }
 
-[[nodiscard]] std::string ParsePlayMap(int argc, char** argv) {
-    for (int i = 1; i < argc; ++i) {
-        const std::string arg = argv[i] != nullptr ? argv[i] : "";
-        if ((arg == "--map" || arg == "-m") && i + 1 < argc && argv[i + 1] != nullptr) {
-            return argv[++i];
+[[nodiscard]] std::string ParsePlayMap(int Argc, char** Argv) {
+    for (int I = 1; I < Argc; ++I) {
+        const std::string Arg = Argv[I] != nullptr ? Argv[I] : "";
+        if ((Arg == "--map" || Arg == "-m") && I + 1 < Argc && Argv[I + 1] != nullptr) {
+            return Argv[++I];
         }
     }
     return {};
@@ -77,73 +77,73 @@ namespace {
 
 } // namespace
 
-int FGameApplication::Run(int argc, char** argv, const char* packName,
-                         const std::function<void(UGameEngine&, FGameplayRouter&)>& registerModes,
-                         bool dedicatedByDefault) {
+int FGameApplication::Run(int Argc, char** Argv, const char* PackName,
+                         const std::function<void(UGameEngine&, FGameplayRouter&)>& RegisterModes,
+                         bool bDedicatedByDefault) {
     // dedicatedByDefault is set by *-server mains; CLI flags work on the client exe too.
     // Console strings stay ASCII: Windows cmd often is not UTF-8 (em dash / arrows mojibake).
-    const bool dedicated = dedicatedByDefault || WantsDedicatedCli(argc, argv);
-    const bool listenHost =
-        !dedicated && (HasFlag(argc, argv, "--listen") || HasFlag(argc, argv, "--host"));
-    const bool showStats = HasFlag(argc, argv, "--show-stats");
-    const std::uint16_t netPort =
-        ParsePort(argc, argv, static_cast<std::uint16_t>(Leon::Net::DefaultPort));
-    const float tickHz = ParseTickHz(argc, argv, 60.0f);
-    const std::string joinAddress = ParseJoinAddress(argc, argv);
-    const std::string playMap = ParsePlayMap(argc, argv);
-    const std::string title =
-        dedicated ? std::string("Leon (Dedicated) - ") + packName : std::string("Leon - ") + packName;
+    const bool bDedicated = bDedicatedByDefault || WantsDedicatedCli(Argc, Argv);
+    const bool bListenHost =
+        !bDedicated && (HasFlag(Argc, Argv, "--listen") || HasFlag(Argc, Argv, "--host"));
+    const bool bShowStats = HasFlag(Argc, Argv, "--show-stats");
+    const std::uint16_t NetPort =
+        ParsePort(Argc, Argv, static_cast<std::uint16_t>(Leon::Net::DefaultPort));
+    const float TickHz = ParseTickHz(Argc, Argv, 60.0f);
+    const std::string JoinAddress = ParseJoinAddress(Argc, Argv);
+    const std::string PlayMap = ParsePlayMap(Argc, Argv);
+    const std::string Title =
+        bDedicated ? std::string("Leon (Dedicated) - ") + PackName : std::string("Leon - ") + PackName;
 
-    UGameEngine engine;
-    if (dedicated) {
-        if (!engine.InitializeHeadless()) {
+    UGameEngine Engine;
+    if (bDedicated) {
+        if (!Engine.InitializeHeadless()) {
             std::cerr << "Failed to initialize headless engine\n";
             return 1;
         }
-    } else if (!engine.Initialize(1280, 720, title.c_str())) {
+    } else if (!Engine.Initialize(1280, 720, Title.c_str())) {
         std::cerr << "Failed to initialize engine\n";
         return 1;
     }
-    if (showStats && !dedicated) {
-        engine.SetHudStatsVisible(true);
+    if (bShowStats && !bDedicated) {
+        Engine.SetHudStatsVisible(true);
     }
-    if (!dedicated) {
-        WireDefaultInput(engine);
+    if (!bDedicated) {
+        WireDefaultInput(Engine);
     }
 
-    FGameHostSession session;
+    FGameHostSession Session;
     // Shipping: empty preferred key → pack defaultLevel inside session.Start.
-    if (!session.Start(engine, packName, registerModes, {})) {
-        engine.Shutdown();
+    if (!Session.Start(Engine, PackName, RegisterModes, {})) {
+        Engine.Shutdown();
         return 1;
     }
 
-    if (dedicated) {
-        engine.GetGameInstance().RequestDedicatedStart(netPort);
-        std::cout << "Starting dedicated server for pack '" << packName << "' on port " << netPort
-                  << " @ " << tickHz << " Hz (headless - Ctrl+C or RequestQuit to stop)\n";
-        engine.RunHeadless([&](float dt) { session.Tick(dt); }, tickHz);
+    if (bDedicated) {
+        Engine.GetGameInstance().RequestDedicatedStart(NetPort);
+        std::cout << "Starting dedicated server for pack '" << PackName << "' on port " << NetPort
+                  << " @ " << TickHz << " Hz (headless - Ctrl+C or RequestQuit to stop)\n";
+        Engine.RunHeadless([&](float Dt) { Session.Tick(Dt); }, TickHz);
     } else {
         // Flow: CLI Play session (Unreal-like)
         // --listen/--host [--map Key] → HostListen → Lobby or match map
         // --join <ip> [--map Key] → Join → Lobby or match map
-        if (!playMap.empty()) {
-            engine.GetGameInstance().SetPendingPlayMap(playMap);
-            std::cout << "Pending play map: " << playMap << '\n';
+        if (!PlayMap.empty()) {
+            Engine.GetGameInstance().SetPendingPlayMap(PlayMap);
+            std::cout << "Pending play map: " << PlayMap << '\n';
         }
-        if (listenHost) {
-            engine.GetGameInstance().RequestListenStart(netPort);
-            std::cout << "Pending listen host on port " << netPort << '\n';
-        } else if (!joinAddress.empty()) {
-            engine.GetGameInstance().SetPendingJoinAddress(joinAddress);
-            std::cout << "Pending join address: " << joinAddress << '\n';
+        if (bListenHost) {
+            Engine.GetGameInstance().RequestListenStart(NetPort);
+            std::cout << "Pending listen host on port " << NetPort << '\n';
+        } else if (!JoinAddress.empty()) {
+            Engine.GetGameInstance().SetPendingJoinAddress(JoinAddress);
+            std::cout << "Pending join address: " << JoinAddress << '\n';
         }
-        engine.Run([&](float dt) { session.Tick(dt); }, [&]() { session.HandleUiInput(); },
-                   [&](int w, int h) { session.DrawUi(w, h); });
+        Engine.Run([&](float Dt) { Session.Tick(Dt); }, [&]() { Session.HandleUiInput(); },
+                   [&](int W, int H) { Session.DrawUi(W, H); });
     }
 
-    session.Stop();
-    engine.Shutdown();
+    Session.Stop();
+    Engine.Shutdown();
     return 0;
 }
 

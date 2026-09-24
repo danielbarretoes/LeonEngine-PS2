@@ -49,27 +49,27 @@ public:
     float CollisionProbeOffset = 0.05f;
     ECollisionChannel ProbeChannel = ECollisionChannel::WorldStatic;
 
-    void AddYawInput(float deltaDegrees) { BoomYawDegrees += deltaDegrees; }
+    void AddYawInput(float DeltaDegrees) { BoomYawDegrees += DeltaDegrees; }
 
-    void AddPitchInput(float deltaDegrees) {
-        BoomPitchDegrees = std::clamp(BoomPitchDegrees + deltaDegrees, PitchMin, PitchMax);
+    void AddPitchInput(float DeltaDegrees) {
+        BoomPitchDegrees = std::clamp(BoomPitchDegrees + DeltaDegrees, PitchMin, PitchMax);
     }
 
     /// Positive delta lengthens the boom (zoom out). Clamped to ArmLengthMin/Max.
-    void AddArmLengthInput(float deltaLength) {
-        TargetArmLength = std::clamp(TargetArmLength + deltaLength, ArmLengthMin, ArmLengthMax);
+    void AddArmLengthInput(float DeltaLength) {
+        TargetArmLength = std::clamp(TargetArmLength + DeltaLength, ArmLengthMin, ArmLengthMax);
     }
 
     void ClampPitch() { BoomPitchDegrees = std::clamp(BoomPitchDegrees, PitchMin, PitchMax); }
 
-    [[nodiscard]] glm::vec3 GetTargetLocation(const glm::vec3& actorLocation) const;
+    [[nodiscard]] glm::vec3 GetTargetLocation(const glm::vec3& ActorLocation) const;
 
     /// Snap lagged state to desired (call on possess / level enter).
-    void SnapLagState(const glm::vec3& actorLocation);
+    void SnapLagState(const glm::vec3& ActorLocation);
 
     /// Movement uses *desired* boom yaw so controls stay responsive while the view lags.
-    [[nodiscard]] glm::vec3 GetMoveDirectionXZ(const FMoveAxes2D& axes) const {
-        return yawRelativeMoveXZ(BoomYawDegrees, axes);
+    [[nodiscard]] glm::vec3 GetMoveDirectionXZ(const FMoveAxes2D& Axes) const {
+        return YawRelativeMoveXz(BoomYawDegrees, Axes);
     }
 
     /// World yaw for a pawn facing the same XZ direction the orbit camera looks
@@ -78,29 +78,29 @@ public:
 
     /// Advance lag, optional collision probe, and push the Engine orbit camera.
     /// If `physScene` is null, uses `GetOwner()->GetWorld()->GetPhysicsScene()` when available.
-    void ApplyToCamera(UCameraComponent& camera, const glm::vec3& actorLocation, float deltaTime,
-                       FPhysScene* physScene = nullptr, FDebugDraw* debugDraw = nullptr);
+    void ApplyToCamera(UCameraComponent& Camera, const glm::vec3& ActorLocation, float DeltaTime,
+                       FPhysScene* PhysScene = nullptr, FDebugDraw* DebugDraw = nullptr);
 
     /// Prefer when attached under an Actor root: uses owner location + world FPhysScene.
-    void ApplyToCamera(UCameraComponent& camera, float deltaTime, FDebugDraw* debugDraw = nullptr);
+    void ApplyToCamera(UCameraComponent& Camera, float DeltaTime, FDebugDraw* DebugDraw = nullptr);
 
     /// Unit boom direction matching `Camera` orbit eye offset (target → camera).
-    [[nodiscard]] static glm::vec3 GetBoomDirection(float yawDegrees, float pitchDegrees);
+    [[nodiscard]] static glm::vec3 GetBoomDirection(float YawDegrees, float PitchDegrees);
 
     /// Sphere-sweep arm length; returns clamped length (ArmLengthMin..desiredLength).
-    [[nodiscard]] float ProbeArmLength(FPhysScene& physScene, const glm::vec3& target,
-                                       float yawDegrees, float pitchDegrees, float desiredLength,
-                                       FDebugDraw* debugDraw = nullptr) const;
+    [[nodiscard]] float ProbeArmLength(FPhysScene& PhysScene, const glm::vec3& Target,
+                                       float YawDegrees, float PitchDegrees, float DesiredLength,
+                                       FDebugDraw* DebugDraw = nullptr) const;
 
 private:
-    [[nodiscard]] static float ExpSmoothAlpha(float speed, float deltaTime);
-    [[nodiscard]] static float LerpAngleDegrees(float fromDegrees, float toDegrees, float alpha);
-    void UpdateLag(float deltaTime, const glm::vec3& actorLocation);
+    [[nodiscard]] static float ExpSmoothAlpha(float Speed, float DeltaTime);
+    [[nodiscard]] static float LerpAngleDegrees(float FromDegrees, float ToDegrees, float Alpha);
+    void UpdateLag(float DeltaTime, const glm::vec3& ActorLocation);
 
-    glm::vec3 laggedTarget_{0.0f};
-    float laggedYawDegrees_ = 0.0f;
-    float laggedPitchDegrees_ = 15.0f;
-    float laggedArmLength_ = 4.0f;
-    bool lagInitialized_ = false;
+    glm::vec3 LaggedTarget{0.0f};
+    float LaggedYawDegrees = 0.0f;
+    float LaggedPitchDegrees = 15.0f;
+    float LaggedArmLength = 4.0f;
+    bool bLagInitialized = false;
 };
 

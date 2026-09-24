@@ -24,8 +24,8 @@ class UNetDriver {
 public:
     /// peerSlot: host remote index [0, maxClients), or 0 for the server when Client.
     using FPacketHandler =
-        std::function<void(int peerSlot, const std::uint8_t* data, std::size_t size)>;
-    using FPeerHandler = std::function<void(int peerSlot)>;
+        std::function<void(int PeerSlot, const std::uint8_t* Data, std::size_t Size)>;
+    using FPeerHandler = std::function<void(int PeerSlot)>;
 
     UNetDriver() = default;
     ~UNetDriver();
@@ -34,61 +34,61 @@ public:
     UNetDriver& operator=(const UNetDriver&) = delete;
 
     /// Listen-server: remotes fill fighter slots after the local host player.
-    [[nodiscard]] bool StartHost(std::uint16_t port = Leon::Net::DefaultPort);
+    [[nodiscard]] bool StartHost(std::uint16_t Port = Leon::Net::DefaultPort);
     /// Dedicated: up to kMaxPlayers remote clients, no local player.
-    [[nodiscard]] bool StartDedicated(std::uint16_t port = Leon::Net::DefaultPort);
-    [[nodiscard]] bool Connect(const std::string& address, std::uint16_t port = Leon::Net::DefaultPort);
+    [[nodiscard]] bool StartDedicated(std::uint16_t Port = Leon::Net::DefaultPort);
+    [[nodiscard]] bool Connect(const std::string& Address, std::uint16_t Port = Leon::Net::DefaultPort);
     void Shutdown();
 
     void Poll();
 
     /// Client → server, or host → specific remote peerSlot.
-    void SendToPeer(int peerSlot, const void* data, std::size_t size, bool reliable = false);
+    void SendToPeer(int PeerSlot, const void* Data, std::size_t Size, bool bReliable = false);
     /// Convenience: client uses peerSlot 0 (the server).
-    void SendToPeer(const void* data, std::size_t size, bool reliable = false) {
-        SendToPeer(0, data, size, reliable);
+    void SendToPeer(const void* Data, std::size_t Size, bool bReliable = false) {
+        SendToPeer(0, Data, Size, bReliable);
     }
     /// Broadcast to all connected remotes (host / dedicated).
-    void Broadcast(const void* data, std::size_t size, bool reliable = false);
+    void Broadcast(const void* Data, std::size_t Size, bool bReliable = false);
 
-    [[nodiscard]] ENetMode Mode() const { return mode_; }
+    [[nodiscard]] ENetMode GetMode() const { return Mode; }
     [[nodiscard]] bool IsHost() const {
-        return mode_ == ENetMode::ListenServer || mode_ == ENetMode::DedicatedServer;
+        return Mode == ENetMode::ListenServer || Mode == ENetMode::DedicatedServer;
     }
-    [[nodiscard]] bool IsListenServer() const { return mode_ == ENetMode::ListenServer; }
-    [[nodiscard]] bool IsDedicatedServer() const { return mode_ == ENetMode::DedicatedServer; }
-    [[nodiscard]] bool IsClient() const { return mode_ == ENetMode::Client; }
+    [[nodiscard]] bool IsListenServer() const { return Mode == ENetMode::ListenServer; }
+    [[nodiscard]] bool IsDedicatedServer() const { return Mode == ENetMode::DedicatedServer; }
+    [[nodiscard]] bool IsClient() const { return Mode == ENetMode::Client; }
     [[nodiscard]] int PeerCount() const;
     [[nodiscard]] bool HasPeer() const { return PeerCount() > 0; }
-    [[nodiscard]] bool IsConnected() const { return connected_; }
-    [[nodiscard]] int MaxClients() const { return maxClients_; }
+    [[nodiscard]] bool IsConnected() const { return bConnected; }
+    [[nodiscard]] int GetMaxClients() const { return MaxClients; }
 
     /// When true (default), host drops/disconnects peers that exceed packet windows.
-    void SetPeerRateLimitEnabled(bool enabled) { peerRateLimitEnabled_ = enabled; }
-    [[nodiscard]] bool IsPeerRateLimitEnabled() const { return peerRateLimitEnabled_; }
+    void SetPeerRateLimitEnabled(bool bEnabled) { bPeerRateLimitEnabled = bEnabled; }
+    [[nodiscard]] bool IsPeerRateLimitEnabled() const { return bPeerRateLimitEnabled; }
 
-    void SetOnPacket(FPacketHandler handler) { onPacket_ = std::move(handler); }
-    void SetOnPeerConnected(FPeerHandler handler) { onPeerConnected_ = std::move(handler); }
-    void SetOnPeerDisconnected(FPeerHandler handler) { onPeerDisconnected_ = std::move(handler); }
+    void SetOnPacket(FPacketHandler Handler) { OnPacket = std::move(Handler); }
+    void SetOnPeerConnected(FPeerHandler Handler) { OnPeerConnected = std::move(Handler); }
+    void SetOnPeerDisconnected(FPeerHandler Handler) { OnPeerDisconnected = std::move(Handler); }
 
 private:
-    bool ensureInitialized();
-    [[nodiscard]] bool startServer(std::uint16_t port, int maxClients, ENetMode mode);
-    [[nodiscard]] int allocatePeerSlot(ENetPeer* peer);
-    void clearPeerSlot(ENetPeer* peer);
-    void disconnectPeerForAbuse(int peerSlot);
+    bool EnsureInitialized();
+    [[nodiscard]] bool StartServer(std::uint16_t Port, int InMaxClients, ENetMode InMode);
+    [[nodiscard]] int AllocatePeerSlot(ENetPeer* Peer);
+    void ClearPeerSlot(ENetPeer* Peer);
+    void DisconnectPeerForAbuse(int PeerSlot);
 
-    ENetHost* host_ = nullptr;
-    std::array<ENetPeer*, Leon::Net::MaxPlayers> peers_{};
-    std::array<Leon::Net::FPeerPacketWindow, Leon::Net::MaxPlayers> peerRates_{};
-    int maxClients_ = 1;
-    ENetMode mode_ = ENetMode::Standalone;
+    ENetHost* Host = nullptr;
+    std::array<ENetPeer*, Leon::Net::MaxPlayers> Peers{};
+    std::array<Leon::Net::FPeerPacketWindow, Leon::Net::MaxPlayers> PeerRates{};
+    int MaxClients = 1;
+    ENetMode Mode = ENetMode::Standalone;
     /// True when this instance holds a process-wide ENet init ref.
-    bool libraryReady_ = false;
-    bool connected_ = false;
-    bool peerRateLimitEnabled_ = true;
-    FPacketHandler onPacket_;
-    FPeerHandler onPeerConnected_;
-    FPeerHandler onPeerDisconnected_;
+    bool bLibraryReady = false;
+    bool bConnected = false;
+    bool bPeerRateLimitEnabled = true;
+    FPacketHandler OnPacket;
+    FPeerHandler OnPeerConnected;
+    FPeerHandler OnPeerDisconnected;
 };
 

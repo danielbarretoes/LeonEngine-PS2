@@ -11,26 +11,26 @@ ADefaultCameraActor* ADefaultPlayerController::GetDefaultCameraActor() const {
     return dynamic_cast<ADefaultCameraActor*>(GetPawn());
 }
 
-glm::vec3 ADefaultPlayerController::TickInput(UGameEngine& engine) {
-    ADefaultCameraActor* cameraActor = GetDefaultCameraActor();
-    if (cameraActor == nullptr) {
+glm::vec3 ADefaultPlayerController::TickInput(UGameEngine& Engine) {
+    ADefaultCameraActor* CameraActor = GetDefaultCameraActor();
+    if (CameraActor == nullptr) {
         return {};
     }
 
-    const UCameraComponent& camera = engine.GetCamera();
-    const float forwardAxis = engine.GetInput().GetAxisValue(Leon::InputActions::MoveForward);
-    const float rightAxis = engine.GetInput().GetAxisValue(Leon::InputActions::MoveRight);
-    const float upAxis = engine.GetInput().GetAxisValue(Leon::InputActions::MoveUp);
+    const UCameraComponent& Camera = Engine.GetCamera();
+    const float ForwardAxis = Engine.GetInput().GetAxisValue(Leon::InputActions::MoveForward);
+    const float RightAxis = Engine.GetInput().GetAxisValue(Leon::InputActions::MoveRight);
+    const float UpAxis = Engine.GetInput().GetAxisValue(Leon::InputActions::MoveUp);
 
-    glm::vec3 wish = (camera.ForwardVector() * forwardAxis) + (camera.RightVector() * rightAxis) +
-                     (glm::vec3{0.0f, 1.0f, 0.0f} * upAxis);
+    glm::vec3 Wish = (Camera.ForwardVector() * ForwardAxis) + (Camera.RightVector() * RightAxis) +
+                     (glm::vec3{0.0f, 1.0f, 0.0f} * UpAxis);
 
-    const float len = glm::length(wish);
-    if (len > 1.0e-4f) {
-        wish /= len;
+    const float Len = glm::length(Wish);
+    if (Len > 1.0e-4f) {
+        Wish /= Len;
     } else {
-        wish = {};
+        Wish = {};
     }
-    return wish;
+    return Wish;
 }
 

@@ -15,99 +15,99 @@
 
 namespace {
 
-[[nodiscard]] bool IsFloorLikeBody(const FBodyInstance& body, float cellSize) {
-    const float hy = std::max(body.HalfExtents.y, 0.001f);
-    const float horiz = std::max(body.HalfExtents.x, body.HalfExtents.z);
+[[nodiscard]] bool IsFloorLikeBody(const FBodyInstance& InBody, float InCellSize) {
+    const float Hy = std::max(InBody.HalfExtents.y, 0.001f);
+    const float Horiz = std::max(InBody.HalfExtents.x, InBody.HalfExtents.z);
     // Unit FPlane scaled ~40x1x40 → hy=0.5 still floor-like by aspect (was wrongly a full-arena
     // blocker).
-    if (horiz / hy >= 6.0f) {
+    if (Horiz / Hy >= 6.0f) {
         return true;
     }
-    if (body.HalfExtents.y <= std::max(0.35f, cellSize * 0.75f)) {
+    if (InBody.HalfExtents.y <= std::max(0.35f, InCellSize * 0.75f)) {
         return true;
     }
     return false;
 }
 
-[[nodiscard]] bool IsForcedNavBlockerTag(const ULevel& level, std::size_t meshIndex) {
-    if (meshIndex >= level.StaticMeshes().size()) {
+[[nodiscard]] bool IsForcedNavBlockerTag(const ULevel& Level, std::size_t MeshIndex) {
+    if (MeshIndex >= Level.GetStaticMeshes().size()) {
         return false;
     }
     // Thin pads / volumes: keep as obstacle so paths go around (not climbable floor).
-    return level.StaticMeshes()[meshIndex].tag == NavTags::Blocker;
+    return Level.GetStaticMeshes()[MeshIndex].Tag == NavTags::Blocker;
 }
 
 /// Walkable for CMC (slopes) — must not carve a hole in the flat grid NavMesh.
-[[nodiscard]] bool IsWalkableNavSurfaceTag(const ULevel& level, std::size_t meshIndex) {
-    if (meshIndex >= level.StaticMeshes().size()) {
+[[nodiscard]] bool IsWalkableNavSurfaceTag(const ULevel& Level, std::size_t MeshIndex) {
+    if (MeshIndex >= Level.GetStaticMeshes().size()) {
         return false;
     }
-    return level.StaticMeshes()[meshIndex].tag == NavTags::Walkable;
+    return Level.GetStaticMeshes()[MeshIndex].Tag == NavTags::Walkable;
 }
 
-[[nodiscard]] bool ShouldSkipLevelMesh(const ULevel& level, std::size_t meshIndex) {
-    if (meshIndex >= level.StaticMeshes().size()) {
+[[nodiscard]] bool ShouldSkipLevelMesh(const ULevel& Level, std::size_t MeshIndex) {
+    if (MeshIndex >= Level.GetStaticMeshes().size()) {
         return false;
     }
     // Arena floor FPlane only.
-    return level.StaticMeshes()[meshIndex].editorClass == "Plane";
+    return Level.GetStaticMeshes()[MeshIndex].EditorClass == "Plane";
 }
 
-[[nodiscard]] bool BodyBlocksNavigation(const FBodyInstance& body, float floorY, float cellSize,
-                                        const ULevel* level) {
-    if (body.Type != EBodyType::Static) {
+[[nodiscard]] bool BodyBlocksNavigation(const FBodyInstance& InBody, float FloorY, float InCellSize,
+                                        const ULevel* Level) {
+    if (InBody.Type != EBodyType::Static) {
         return false;
     }
-    if (level != nullptr && ShouldSkipLevelMesh(*level, body.LevelMeshIndex)) {
+    if (Level != nullptr && ShouldSkipLevelMesh(*Level, InBody.LevelMeshIndex)) {
         return false;
     }
     // NavWalkable (ramps): path across footprint; UCharacterMovementComponent climbs the mesh.
-    if (level != nullptr && IsWalkableNavSurfaceTag(*level, body.LevelMeshIndex)) {
+    if (Level != nullptr && IsWalkableNavSurfaceTag(*Level, InBody.LevelMeshIndex)) {
         return false;
     }
-    const float bottom = body.Position.y - body.HalfExtents.y;
-    const float top = body.Position.y + body.HalfExtents.y;
-    const bool inHeightBand = top > floorY + 0.05f && bottom < floorY + 2.2f;
-    if (!inHeightBand) {
+    const float Bottom = InBody.Position.y - InBody.HalfExtents.y;
+    const float Top = InBody.Position.y + InBody.HalfExtents.y;
+    const bool bInHeightBand = Top > FloorY + 0.05f && Bottom < FloorY + 2.2f;
+    if (!bInHeightBand) {
         return false;
     }
     // FNavBlocker: thin slab may look floor-like by aspect but must block paths.
-    if (level != nullptr && IsForcedNavBlockerTag(*level, body.LevelMeshIndex)) {
+    if (Level != nullptr && IsForcedNavBlockerTag(*Level, InBody.LevelMeshIndex)) {
         return true;
     }
-    if (IsFloorLikeBody(body, cellSize)) {
+    if (IsFloorLikeBody(InBody, InCellSize)) {
         return false;
     }
     return true;
 }
 
-[[nodiscard]] bool AabbXZOverlapsPoint(float cx, float cz, float inflate, float minX, float maxX,
-                                       float minZ, float maxZ) {
-    return cx >= (minX - inflate) && cx <= (maxX + inflate) && cz >= (minZ - inflate) &&
-           cz <= (maxZ + inflate);
+[[nodiscard]] bool AabbXZOverlapsPoint(float Cx, float Cz, float Inflate, float MinX, float MaxX,
+                                       float MinZ, float MaxZ) {
+    return Cx >= (MinX - Inflate) && Cx <= (MaxX + Inflate) && Cz >= (MinZ - Inflate) &&
+           Cz <= (MaxZ + Inflate);
 }
 
-[[nodiscard]] bool CellBlockedByBody(float cx, float cz, float cellHalf, float agentRadius,
-                                     const FBodyInstance& body) {
-    const float inflate = agentRadius + cellHalf;
+[[nodiscard]] bool CellBlockedByBody(float Cx, float Cz, float CellHalf, float InAgentRadius,
+                                     const FBodyInstance& InBody) {
+    const float Inflate = InAgentRadius + CellHalf;
     return AabbXZOverlapsPoint(
-        cx, cz, inflate, body.Position.x - body.HalfExtents.x, body.Position.x + body.HalfExtents.x,
-        body.Position.z - body.HalfExtents.z, body.Position.z + body.HalfExtents.z);
+        Cx, Cz, Inflate, InBody.Position.x - InBody.HalfExtents.x, InBody.Position.x + InBody.HalfExtents.x,
+        InBody.Position.z - InBody.HalfExtents.z, InBody.Position.z + InBody.HalfExtents.z);
 }
 
 /// Tighter XZ footprint from baked tris (rotated ramp) vs fat world AABB.
-[[nodiscard]] bool CellBlockedByTriangleMesh(float cx, float cz, float cellHalf, float agentRadius,
-                                             const FTriangleMeshCollision& mesh) {
-    const float inflate = agentRadius + cellHalf;
-    for (std::size_t i = 0; i + 2 < mesh.Indices.size(); i += 3) {
-        const glm::vec3& v0 = mesh.Positions[mesh.Indices[i]];
-        const glm::vec3& v1 = mesh.Positions[mesh.Indices[i + 1]];
-        const glm::vec3& v2 = mesh.Positions[mesh.Indices[i + 2]];
-        const float minX = std::min({v0.x, v1.x, v2.x});
-        const float maxX = std::max({v0.x, v1.x, v2.x});
-        const float minZ = std::min({v0.z, v1.z, v2.z});
-        const float maxZ = std::max({v0.z, v1.z, v2.z});
-        if (AabbXZOverlapsPoint(cx, cz, inflate, minX, maxX, minZ, maxZ)) {
+[[nodiscard]] bool CellBlockedByTriangleMesh(float Cx, float Cz, float CellHalf, float InAgentRadius,
+                                             const FTriangleMeshCollision& InMesh) {
+    const float Inflate = InAgentRadius + CellHalf;
+    for (std::size_t I = 0; I + 2 < InMesh.Indices.size(); I += 3) {
+        const glm::vec3& V0 = InMesh.Positions[InMesh.Indices[I]];
+        const glm::vec3& V1 = InMesh.Positions[InMesh.Indices[I + 1]];
+        const glm::vec3& V2 = InMesh.Positions[InMesh.Indices[I + 2]];
+        const float MinX = std::min({V0.x, V1.x, V2.x});
+        const float MaxX = std::max({V0.x, V1.x, V2.x});
+        const float MinZ = std::min({V0.z, V1.z, V2.z});
+        const float MaxZ = std::max({V0.z, V1.z, V2.z});
+        if (AabbXZOverlapsPoint(Cx, Cz, Inflate, MinX, MaxX, MinZ, MaxZ)) {
             return true;
         }
     }
@@ -115,170 +115,170 @@ namespace {
 }
 
 struct AStarNode {
-    int ix = 0;
-    int iz = 0;
-    float f = 0.0f;
+    int Ix = 0;
+    int Iz = 0;
+    float F = 0.0f;
 };
 
 struct AStarNodeGreater {
-    bool operator()(const AStarNode& a, const AStarNode& b) const { return a.f > b.f; }
+    bool operator()(const AStarNode& A, const AStarNode& B) const { return A.F > B.F; }
 };
 
-[[nodiscard]] float Heuristic(int ax, int az, int bx, int bz) {
-    const float dx = static_cast<float>(ax - bx);
-    const float dz = static_cast<float>(az - bz);
-    return std::sqrt(dx * dx + dz * dz);
+[[nodiscard]] float Heuristic(int Ax, int Az, int Bx, int Bz) {
+    const float Dx = static_cast<float>(Ax - Bx);
+    const float Dz = static_cast<float>(Az - Bz);
+    return std::sqrt(Dx * Dx + Dz * Dz);
 }
 
-[[nodiscard]] int CellIndex(int ix, int iz, int width) {
-    return iz * width + ix;
+[[nodiscard]] int CellIndex(int InIx, int InIz, int Width) {
+    return InIz * Width + InIx;
 }
 
 } // namespace
 
 void UNavigationSystem::Clear() {
-    mesh_ = {};
-    blockerCount_ = 0;
-    walkableCellCount_ = 0;
+    Mesh = {};
+    BlockerCount = 0;
+    WalkableCellCount = 0;
 }
 
-void UNavigationSystem::BakeGrid(const FPhysScene& physics, float floorY, float walkBounds,
-                                const ULevel* level) {
+void UNavigationSystem::BakeGrid(const FPhysScene& Physics, float FloorY, float WalkBounds,
+                                const ULevel* Level) {
     Clear();
-    const float bounds = walkBounds > 1.0f ? walkBounds : 1.0f;
-    const float cell = cellSize_;
-    const int dim = std::max(4, static_cast<int>(std::ceil((bounds * 2.0f) / cell)));
+    const float Bounds = WalkBounds > 1.0f ? WalkBounds : 1.0f;
+    const float Cell = CellSize;
+    const int Dim = std::max(4, static_cast<int>(std::ceil((Bounds * 2.0f) / Cell)));
 
-    mesh_.originX = -bounds;
-    mesh_.originZ = -bounds;
-    mesh_.cellSize = cell;
-    mesh_.floorY = floorY;
-    mesh_.width = dim;
-    mesh_.depth = dim;
-    mesh_.walkable.assign(static_cast<std::size_t>(dim * dim), 1);
+    Mesh.OriginX = -Bounds;
+    Mesh.OriginZ = -Bounds;
+    Mesh.CellSize = Cell;
+    Mesh.FloorY = FloorY;
+    Mesh.Width = Dim;
+    Mesh.Depth = Dim;
+    Mesh.Walkable.assign(static_cast<std::size_t>(Dim * Dim), 1);
 
-    const float cellHalf = cell * 0.5f;
+    const float CellHalf = Cell * 0.5f;
     struct FNavBlocker {
-        const FBodyInstance* body = nullptr;
-        const FTriangleMeshCollision* triMesh = nullptr;
+        const FBodyInstance* Body = nullptr;
+        const FTriangleMeshCollision* TriMesh = nullptr;
     };
-    std::vector<FNavBlocker> blockers;
-    blockers.reserve(physics.GetBodies().size());
-    const auto& triMeshes = physics.GetTriangleMeshes();
-    for (std::size_t bi = 0; bi < physics.GetBodies().size(); ++bi) {
-        const FBodyInstance& body = physics.GetBodies()[bi];
-        if (!BodyBlocksNavigation(body, floorY, cell, level)) {
+    std::vector<FNavBlocker> Blockers;
+    Blockers.reserve(Physics.GetBodies().size());
+    const auto& TriMeshes = Physics.GetTriangleMeshes();
+    for (std::size_t Bi = 0; Bi < Physics.GetBodies().size(); ++Bi) {
+        const FBodyInstance& LocalBody = Physics.GetBodies()[Bi];
+        if (!BodyBlocksNavigation(LocalBody, FloorY, Cell, Level)) {
             continue;
         }
-        FNavBlocker blocker{};
-        blocker.body = &body;
-        if (body.CollisionShape == ECollisionShape::TriangleMesh && bi < triMeshes.size() &&
-            triMeshes[bi].IsValid()) {
-            blocker.triMesh = &triMeshes[bi];
+        FNavBlocker Blocker{};
+        Blocker.Body = &LocalBody;
+        if (LocalBody.CollisionShape == ECollisionShape::TriangleMesh && Bi < TriMeshes.size() &&
+            TriMeshes[Bi].IsValid()) {
+            Blocker.TriMesh = &TriMeshes[Bi];
         }
-        blockers.push_back(blocker);
+        Blockers.push_back(Blocker);
     }
-    blockerCount_ = static_cast<int>(blockers.size());
+    BlockerCount = static_cast<int>(Blockers.size());
 
-    int walkable = 0;
-    for (int iz = 0; iz < dim; ++iz) {
-        for (int ix = 0; ix < dim; ++ix) {
-            const glm::vec3 center = mesh_.CellCenter(ix, iz);
-            bool blocked = false;
-            for (const FNavBlocker& blocker : blockers) {
-                if (blocker.triMesh != nullptr) {
-                    if (CellBlockedByTriangleMesh(center.x, center.z, cellHalf, agentRadius_,
-                                                  *blocker.triMesh)) {
-                        blocked = true;
+    int Walkable = 0;
+    for (int LocalIz = 0; LocalIz < Dim; ++LocalIz) {
+        for (int LocalIx = 0; LocalIx < Dim; ++LocalIx) {
+            const glm::vec3 Center = Mesh.CellCenter(LocalIx, LocalIz);
+            bool bBlocked = false;
+            for (const FNavBlocker& Blocker : Blockers) {
+                if (Blocker.TriMesh != nullptr) {
+                    if (CellBlockedByTriangleMesh(Center.x, Center.z, CellHalf, AgentRadius,
+                                                  *Blocker.TriMesh)) {
+                        bBlocked = true;
                         break;
                     }
-                } else if (CellBlockedByBody(center.x, center.z, cellHalf, agentRadius_,
-                                             *blocker.body)) {
-                    blocked = true;
+                } else if (CellBlockedByBody(Center.x, Center.z, CellHalf, AgentRadius,
+                                             *Blocker.Body)) {
+                    bBlocked = true;
                     break;
                 }
             }
-            if (blocked) {
-                mesh_.walkable[static_cast<std::size_t>(CellIndex(ix, iz, dim))] = 0;
+            if (bBlocked) {
+                Mesh.Walkable[static_cast<std::size_t>(CellIndex(LocalIx, LocalIz, Dim))] = 0;
             } else {
-                ++walkable;
+                ++Walkable;
             }
         }
     }
 
     // Extra clearance dilation beyond per-sample inflate (agents larger than one cell).
-    const int dilateRings = std::max(0, static_cast<int>(std::ceil(agentRadius_ / cell)) - 1);
-    if (dilateRings > 0) {
-        std::vector<std::uint8_t> dilated = mesh_.walkable;
-        for (int iz = 0; iz < dim; ++iz) {
-            for (int ix = 0; ix < dim; ++ix) {
-                if (mesh_.walkable[static_cast<std::size_t>(CellIndex(ix, iz, dim))] == 0) {
+    const int DilateRings = std::max(0, static_cast<int>(std::ceil(AgentRadius / Cell)) - 1);
+    if (DilateRings > 0) {
+        std::vector<std::uint8_t> Dilated = Mesh.Walkable;
+        for (int LocalIz = 0; LocalIz < Dim; ++LocalIz) {
+            for (int LocalIx = 0; LocalIx < Dim; ++LocalIx) {
+                if (Mesh.Walkable[static_cast<std::size_t>(CellIndex(LocalIx, LocalIz, Dim))] == 0) {
                     continue;
                 }
-                bool nearBlocked = false;
-                for (int dz = -dilateRings; dz <= dilateRings && !nearBlocked; ++dz) {
-                    for (int dx = -dilateRings; dx <= dilateRings; ++dx) {
-                        const int nx = ix + dx;
-                        const int nz = iz + dz;
-                        if (nx < 0 || nz < 0 || nx >= dim || nz >= dim) {
+                bool bNearBlocked = false;
+                for (int Dz = -DilateRings; Dz <= DilateRings && !bNearBlocked; ++Dz) {
+                    for (int Dx = -DilateRings; Dx <= DilateRings; ++Dx) {
+                        const int Nx = LocalIx + Dx;
+                        const int Nz = LocalIz + Dz;
+                        if (Nx < 0 || Nz < 0 || Nx >= Dim || Nz >= Dim) {
                             continue;
                         }
-                        if (mesh_.walkable[static_cast<std::size_t>(CellIndex(nx, nz, dim))] == 0) {
-                            nearBlocked = true;
+                        if (Mesh.Walkable[static_cast<std::size_t>(CellIndex(Nx, Nz, Dim))] == 0) {
+                            bNearBlocked = true;
                             break;
                         }
                     }
                 }
-                if (nearBlocked) {
-                    dilated[static_cast<std::size_t>(CellIndex(ix, iz, dim))] = 0;
+                if (bNearBlocked) {
+                    Dilated[static_cast<std::size_t>(CellIndex(LocalIx, LocalIz, Dim))] = 0;
                 }
             }
         }
-        mesh_.walkable.swap(dilated);
-        walkable = 0;
-        for (std::uint8_t w : mesh_.walkable) {
-            walkable += w != 0 ? 1 : 0;
+        Mesh.Walkable.swap(Dilated);
+        Walkable = 0;
+        for (std::uint8_t W : Mesh.Walkable) {
+            Walkable += W != 0 ? 1 : 0;
         }
     }
-    walkableCellCount_ = walkable;
+    WalkableCellCount = Walkable;
 }
 
-void UNavigationSystem::BuildFromPhysScene(const FPhysScene& physics, float floorY,
-                                          float walkBounds) {
-    BakeGrid(physics, floorY, walkBounds, nullptr);
+void UNavigationSystem::BuildFromPhysScene(const FPhysScene& Physics, float FloorY,
+                                          float WalkBounds) {
+    BakeGrid(Physics, FloorY, WalkBounds, nullptr);
 }
 
-void UNavigationSystem::BuildFromLevel(const ULevel& level, const FPhysScene& physics, float floorY,
-                                      float walkBounds) {
-    BakeGrid(physics, floorY, walkBounds, &level);
+void UNavigationSystem::BuildFromLevel(const ULevel& Level, const FPhysScene& Physics, float FloorY,
+                                      float WalkBounds) {
+    BakeGrid(Physics, FloorY, WalkBounds, &Level);
 }
 
-bool UNavigationSystem::ProjectPointToNavigation(const glm::vec3& world,
-                                                glm::vec3& outProjected) const {
-    if (!mesh_.IsValid()) {
+bool UNavigationSystem::ProjectPointToNavigation(const glm::vec3& World,
+                                                glm::vec3& OutProjected) const {
+    if (!Mesh.IsValid()) {
         return false;
     }
-    int ix = 0;
-    int iz = 0;
-    if (!mesh_.WorldToCell(world.x, world.z, ix, iz)) {
+    int LocalIx = 0;
+    int LocalIz = 0;
+    if (!Mesh.WorldToCell(World.x, World.z, LocalIx, LocalIz)) {
         return false;
     }
-    if (mesh_.IsWalkable(ix, iz)) {
-        outProjected = mesh_.CellCenter(ix, iz);
+    if (Mesh.IsWalkable(LocalIx, LocalIz)) {
+        OutProjected = Mesh.CellCenter(LocalIx, LocalIz);
         return true;
     }
     // Spiral search for nearest walkable cell.
-    const int maxR = std::max(mesh_.width, mesh_.depth);
-    for (int r = 1; r <= maxR; ++r) {
-        for (int dz = -r; dz <= r; ++dz) {
-            for (int dx = -r; dx <= r; ++dx) {
-                if (std::abs(dx) != r && std::abs(dz) != r) {
+    const int MaxR = std::max(Mesh.Width, Mesh.Depth);
+    for (int R = 1; R <= MaxR; ++R) {
+        for (int Dz = -R; Dz <= R; ++Dz) {
+            for (int Dx = -R; Dx <= R; ++Dx) {
+                if (std::abs(Dx) != R && std::abs(Dz) != R) {
                     continue;
                 }
-                const int nx = ix + dx;
-                const int nz = iz + dz;
-                if (mesh_.IsWalkable(nx, nz)) {
-                    outProjected = mesh_.CellCenter(nx, nz);
+                const int Nx = LocalIx + Dx;
+                const int Nz = LocalIz + Dz;
+                if (Mesh.IsWalkable(Nx, Nz)) {
+                    OutProjected = Mesh.CellCenter(Nx, Nz);
                     return true;
                 }
             }
@@ -287,138 +287,138 @@ bool UNavigationSystem::ProjectPointToNavigation(const glm::vec3& world,
     return false;
 }
 
-bool UNavigationSystem::FindPath(const glm::vec3& start, const glm::vec3& end,
-                                std::vector<glm::vec3>& outPath) const {
-    outPath.clear();
-    if (!mesh_.IsValid() || walkableCellCount_ <= 0) {
+bool UNavigationSystem::FindPath(const glm::vec3& Start, const glm::vec3& End,
+                                std::vector<glm::vec3>& OutPath) const {
+    OutPath.clear();
+    if (!Mesh.IsValid() || WalkableCellCount <= 0) {
         return false;
     }
 
-    glm::vec3 startNav{};
-    glm::vec3 endNav{};
-    if (!ProjectPointToNavigation(start, startNav) || !ProjectPointToNavigation(end, endNav)) {
+    glm::vec3 StartNav{};
+    glm::vec3 EndNav{};
+    if (!ProjectPointToNavigation(Start, StartNav) || !ProjectPointToNavigation(End, EndNav)) {
         return false;
     }
 
-    int sx = 0;
-    int sz = 0;
-    int ex = 0;
-    int ez = 0;
-    if (!mesh_.WorldToCell(startNav.x, startNav.z, sx, sz) ||
-        !mesh_.WorldToCell(endNav.x, endNav.z, ex, ez)) {
+    int Sx = 0;
+    int Sz = 0;
+    int Ex = 0;
+    int Ez = 0;
+    if (!Mesh.WorldToCell(StartNav.x, StartNav.z, Sx, Sz) ||
+        !Mesh.WorldToCell(EndNav.x, EndNav.z, Ex, Ez)) {
         return false;
     }
-    if (!mesh_.IsWalkable(sx, sz) || !mesh_.IsWalkable(ex, ez)) {
+    if (!Mesh.IsWalkable(Sx, Sz) || !Mesh.IsWalkable(Ex, Ez)) {
         return false;
     }
-    if (sx == ex && sz == ez) {
-        outPath.push_back(endNav);
+    if (Sx == Ex && Sz == Ez) {
+        OutPath.push_back(EndNav);
         return true;
     }
 
-    const int width = mesh_.width;
-    const int depth = mesh_.depth;
-    const int cellCount = width * depth;
-    std::vector<float> gScore(static_cast<std::size_t>(cellCount),
+    const int Width = Mesh.Width;
+    const int Depth = Mesh.Depth;
+    const int CellCount = Width * Depth;
+    std::vector<float> GScore(static_cast<std::size_t>(CellCount),
                               std::numeric_limits<float>::infinity());
-    std::vector<int> cameFrom(static_cast<std::size_t>(cellCount), -1);
-    std::vector<std::uint8_t> closed(static_cast<std::size_t>(cellCount), 0);
+    std::vector<int> CameFrom(static_cast<std::size_t>(CellCount), -1);
+    std::vector<std::uint8_t> Closed(static_cast<std::size_t>(CellCount), 0);
 
-    std::priority_queue<AStarNode, std::vector<AStarNode>, AStarNodeGreater> open;
-    const int startIdx = CellIndex(sx, sz, width);
-    gScore[static_cast<std::size_t>(startIdx)] = 0.0f;
-    open.push(AStarNode{sx, sz, Heuristic(sx, sz, ex, ez)});
+    std::priority_queue<AStarNode, std::vector<AStarNode>, AStarNodeGreater> Open;
+    const int StartIdx = CellIndex(Sx, Sz, Width);
+    GScore[static_cast<std::size_t>(StartIdx)] = 0.0f;
+    Open.push(AStarNode{Sx, Sz, Heuristic(Sx, Sz, Ex, Ez)});
 
-    static constexpr int kDx[8] = {-1, 0, 1, -1, 1, -1, 0, 1};
-    static constexpr int kDz[8] = {-1, -1, -1, 0, 0, 1, 1, 1};
-    static constexpr float kCost[8] = {1.4142f, 1.0f, 1.4142f, 1.0f, 1.0f, 1.4142f, 1.0f, 1.4142f};
+    static constexpr int Dx[8] = {-1, 0, 1, -1, 1, -1, 0, 1};
+    static constexpr int Dz[8] = {-1, -1, -1, 0, 0, 1, 1, 1};
+    static constexpr float Cost[8] = {1.4142f, 1.0f, 1.4142f, 1.0f, 1.0f, 1.4142f, 1.0f, 1.4142f};
 
-    bool found = false;
-    while (!open.empty()) {
-        const AStarNode cur = open.top();
-        open.pop();
-        const int curIdx = CellIndex(cur.ix, cur.iz, width);
-        if (closed[static_cast<std::size_t>(curIdx)] != 0) {
+    bool bFound = false;
+    while (!Open.empty()) {
+        const AStarNode Cur = Open.top();
+        Open.pop();
+        const int CurIdx = CellIndex(Cur.Ix, Cur.Iz, Width);
+        if (Closed[static_cast<std::size_t>(CurIdx)] != 0) {
             continue;
         }
-        closed[static_cast<std::size_t>(curIdx)] = 1;
-        if (cur.ix == ex && cur.iz == ez) {
-            found = true;
+        Closed[static_cast<std::size_t>(CurIdx)] = 1;
+        if (Cur.Ix == Ex && Cur.Iz == Ez) {
+            bFound = true;
             break;
         }
 
-        for (int i = 0; i < 8; ++i) {
-            const int nx = cur.ix + kDx[i];
-            const int nz = cur.iz + kDz[i];
-            if (!mesh_.IsWalkable(nx, nz)) {
+        for (int I = 0; I < 8; ++I) {
+            const int Nx = Cur.Ix + Dx[I];
+            const int Nz = Cur.Iz + Dz[I];
+            if (!Mesh.IsWalkable(Nx, Nz)) {
                 continue;
             }
             // No corner-cutting through blocked diagonals.
-            if (kDx[i] != 0 && kDz[i] != 0) {
-                if (!mesh_.IsWalkable(cur.ix + kDx[i], cur.iz) ||
-                    !mesh_.IsWalkable(cur.ix, cur.iz + kDz[i])) {
+            if (Dx[I] != 0 && Dz[I] != 0) {
+                if (!Mesh.IsWalkable(Cur.Ix + Dx[I], Cur.Iz) ||
+                    !Mesh.IsWalkable(Cur.Ix, Cur.Iz + Dz[I])) {
                     continue;
                 }
             }
-            const int nIdx = CellIndex(nx, nz, width);
-            if (closed[static_cast<std::size_t>(nIdx)] != 0) {
+            const int NIdx = CellIndex(Nx, Nz, Width);
+            if (Closed[static_cast<std::size_t>(NIdx)] != 0) {
                 continue;
             }
-            const float tentative = gScore[static_cast<std::size_t>(curIdx)] + kCost[i];
-            if (tentative >= gScore[static_cast<std::size_t>(nIdx)]) {
+            const float Tentative = GScore[static_cast<std::size_t>(CurIdx)] + Cost[I];
+            if (Tentative >= GScore[static_cast<std::size_t>(NIdx)]) {
                 continue;
             }
-            cameFrom[static_cast<std::size_t>(nIdx)] = curIdx;
-            gScore[static_cast<std::size_t>(nIdx)] = tentative;
-            open.push(AStarNode{nx, nz, tentative + Heuristic(nx, nz, ex, ez)});
+            CameFrom[static_cast<std::size_t>(NIdx)] = CurIdx;
+            GScore[static_cast<std::size_t>(NIdx)] = Tentative;
+            Open.push(AStarNode{Nx, Nz, Tentative + Heuristic(Nx, Nz, Ex, Ez)});
         }
     }
 
-    if (!found) {
+    if (!bFound) {
         return false;
     }
 
-    std::vector<glm::vec3> reverse;
-    int idx = CellIndex(ex, ez, width);
-    while (idx >= 0) {
-        const int ix = idx % width;
-        const int iz = idx / width;
-        reverse.push_back(mesh_.CellCenter(ix, iz));
-        idx = cameFrom[static_cast<std::size_t>(idx)];
+    std::vector<glm::vec3> Reverse;
+    int Idx = CellIndex(Ex, Ez, Width);
+    while (Idx >= 0) {
+        const int LocalIx = Idx % Width;
+        const int LocalIz = Idx / Width;
+        Reverse.push_back(Mesh.CellCenter(LocalIx, LocalIz));
+        Idx = CameFrom[static_cast<std::size_t>(Idx)];
     }
-    std::reverse(reverse.begin(), reverse.end());
-    if (!reverse.empty()) {
-        reverse.back() = endNav;
+    std::reverse(Reverse.begin(), Reverse.end());
+    if (!Reverse.empty()) {
+        Reverse.back() = EndNav;
     }
-    outPath = std::move(reverse);
-    return !outPath.empty();
+    OutPath = std::move(Reverse);
+    return !OutPath.empty();
 }
 
-void UNavigationSystem::AppendDebugDraw(FDebugDraw& draw) const {
-    if (!mesh_.IsValid()) {
+void UNavigationSystem::AppendDebugDraw(FDebugDraw& Draw) const {
+    if (!Mesh.IsValid()) {
         return;
     }
 
-    const float y = mesh_.floorY + 0.04f;
-    const float half = mesh_.cellSize * 0.5f;
-    constexpr glm::vec3 kWalkable{0.15f, 0.85f, 0.35f};
-    constexpr glm::vec3 kBlocked{0.95f, 0.2f, 0.15f};
+    const float Y = Mesh.FloorY + 0.04f;
+    const float Half = Mesh.CellSize * 0.5f;
+    constexpr glm::vec3 Walkable{0.15f, 0.85f, 0.35f};
+    constexpr glm::vec3 Blocked{0.95f, 0.2f, 0.15f};
 
-    for (int iz = 0; iz < mesh_.depth; ++iz) {
-        for (int ix = 0; ix < mesh_.width; ++ix) {
-            const glm::vec3 center = mesh_.CellCenter(ix, iz);
-            const float x0 = center.x - half;
-            const float x1 = center.x + half;
-            const float z0 = center.z - half;
-            const float z1 = center.z + half;
-            const glm::vec3& color = mesh_.IsWalkable(ix, iz) ? kWalkable : kBlocked;
-            draw.AddLine({x0, y, z0}, {x1, y, z0}, color);
-            draw.AddLine({x1, y, z0}, {x1, y, z1}, color);
-            draw.AddLine({x1, y, z1}, {x0, y, z1}, color);
-            draw.AddLine({x0, y, z1}, {x0, y, z0}, color);
-            if (!mesh_.IsWalkable(ix, iz)) {
-                draw.AddLine({x0, y, z0}, {x1, y, z1}, color);
-                draw.AddLine({x1, y, z0}, {x0, y, z1}, color);
+    for (int LocalIz = 0; LocalIz < Mesh.Depth; ++LocalIz) {
+        for (int LocalIx = 0; LocalIx < Mesh.Width; ++LocalIx) {
+            const glm::vec3 Center = Mesh.CellCenter(LocalIx, LocalIz);
+            const float X0 = Center.x - Half;
+            const float X1 = Center.x + Half;
+            const float Z0 = Center.z - Half;
+            const float Z1 = Center.z + Half;
+            const glm::vec3& Color = Mesh.IsWalkable(LocalIx, LocalIz) ? Walkable : Blocked;
+            Draw.AddLine({X0, Y, Z0}, {X1, Y, Z0}, Color);
+            Draw.AddLine({X1, Y, Z0}, {X1, Y, Z1}, Color);
+            Draw.AddLine({X1, Y, Z1}, {X0, Y, Z1}, Color);
+            Draw.AddLine({X0, Y, Z1}, {X0, Y, Z0}, Color);
+            if (!Mesh.IsWalkable(LocalIx, LocalIz)) {
+                Draw.AddLine({X0, Y, Z0}, {X1, Y, Z1}, Color);
+                Draw.AddLine({X1, Y, Z0}, {X0, Y, Z1}, Color);
             }
         }
     }

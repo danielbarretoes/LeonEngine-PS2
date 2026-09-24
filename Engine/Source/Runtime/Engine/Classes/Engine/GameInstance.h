@@ -15,7 +15,7 @@ class UGameEngine;
 class UGameInstance {
 public:
     /// Load a level by catalog key (name / stem). Wired by Runtime (FLevelDirector) or Editor PIE.
-    using FLevelTravelFunction = std::function<bool(UGameEngine& engine, std::string_view levelKey)>;
+    using FLevelTravelFunction = std::function<bool(UGameEngine& Engine, std::string_view LevelKey)>;
 
     UGameInstance();
     virtual ~UGameInstance();
@@ -29,112 +29,112 @@ public:
     virtual void Shutdown();
 
     /// Called when a level is successfully activated for gameplay.
-    virtual void NotifyLevelOpened() { ++levelsOpened_; }
+    virtual void NotifyLevelOpened() { ++LevelsOpened; }
 
-    [[nodiscard]] int LevelsOpened() const { return levelsOpened_; }
+    [[nodiscard]] int GetLevelsOpened() const { return LevelsOpened; }
 
-    [[nodiscard]] UNetDriver& GetNetDriver() { return *netDriver_; }
-    [[nodiscard]] const UNetDriver& GetNetDriver() const { return *netDriver_; }
+    [[nodiscard]] UNetDriver& GetNetDriver() { return *NetDriver; }
+    [[nodiscard]] const UNetDriver& GetNetDriver() const { return *NetDriver; }
 
-    [[nodiscard]] ENetMode GetNetMode() const { return netDriver_->Mode(); }
+    [[nodiscard]] ENetMode GetNetMode() const { return NetDriver->GetMode(); }
     [[nodiscard]] bool IsListenServer() const { return GetNetMode() == ENetMode::ListenServer; }
     [[nodiscard]] bool IsDedicatedServer() const {
         return GetNetMode() == ENetMode::DedicatedServer;
     }
     [[nodiscard]] bool IsClient() const { return GetNetMode() == ENetMode::Client; }
-    [[nodiscard]] bool IsNetHost() const { return netDriver_->IsHost(); }
+    [[nodiscard]] bool IsNetHost() const { return NetDriver->IsHost(); }
     /// Unreal `HasAuthority` on the session (host / standalone).
     [[nodiscard]] bool HasAuthority() const { return GetNetMode() != ENetMode::Client; }
 
     /// Unreal-like Host / Join session (LAN).
-    [[nodiscard]] bool HostListen(std::uint16_t port = Leon::Net::DefaultPort);
-    [[nodiscard]] bool HostDedicated(std::uint16_t port = Leon::Net::DefaultPort);
-    [[nodiscard]] bool Join(const std::string& address, std::uint16_t port = Leon::Net::DefaultPort);
+    [[nodiscard]] bool HostListen(std::uint16_t Port = Leon::Net::DefaultPort);
+    [[nodiscard]] bool HostDedicated(std::uint16_t Port = Leon::Net::DefaultPort);
+    [[nodiscard]] bool Join(const std::string& Address, std::uint16_t Port = Leon::Net::DefaultPort);
     void CloseNetSession();
 
     /// Set by the app host (`--dedicated`) before a networked GameMode enters.
-    void RequestDedicatedStart(std::uint16_t port = Leon::Net::DefaultPort) {
-        pendingDedicatedStart_ = true;
-        pendingDedicatedPort_ = port;
+    void RequestDedicatedStart(std::uint16_t Port = Leon::Net::DefaultPort) {
+        bPendingDedicatedStart = true;
+        PendingDedicatedPort = Port;
     }
-    [[nodiscard]] bool HasPendingDedicatedStart() const { return pendingDedicatedStart_; }
-    void ClearPendingDedicatedStart() { pendingDedicatedStart_ = false; }
+    [[nodiscard]] bool HasPendingDedicatedStart() const { return bPendingDedicatedStart; }
+    void ClearPendingDedicatedStart() { bPendingDedicatedStart = false; }
     /// Clears and returns whether a dedicated start was pending (prefer Has + Clear after bind OK).
     [[nodiscard]] bool ConsumePendingDedicatedStart() {
-        const bool pending = pendingDedicatedStart_;
-        pendingDedicatedStart_ = false;
-        return pending;
+        const bool bPending = bPendingDedicatedStart;
+        bPendingDedicatedStart = false;
+        return bPending;
     }
-    [[nodiscard]] std::uint16_t PendingDedicatedPort() const { return pendingDedicatedPort_; }
+    [[nodiscard]] std::uint16_t GetPendingDedicatedPort() const { return PendingDedicatedPort; }
 
     /// Optional `--join <ip>` from the app host; Menu consumes into session address.
-    void SetPendingJoinAddress(std::string address) { pendingJoinAddress_ = std::move(address); }
+    void SetPendingJoinAddress(std::string Address) { PendingJoinAddress = std::move(Address); }
     [[nodiscard]] std::string ConsumePendingJoinAddress() {
-        std::string address = std::move(pendingJoinAddress_);
-        pendingJoinAddress_.clear();
-        return address;
+        std::string Address = std::move(PendingJoinAddress);
+        PendingJoinAddress.clear();
+        return Address;
     }
 
     /// Optional `--listen` / `--host` from the app host; Menu auto HostListen → Lobby/map.
-    void RequestListenStart(std::uint16_t port = Leon::Net::DefaultPort) {
-        pendingListenStart_ = true;
-        pendingListenPort_ = port;
+    void RequestListenStart(std::uint16_t Port = Leon::Net::DefaultPort) {
+        bPendingListenStart = true;
+        PendingListenPort = Port;
     }
-    [[nodiscard]] bool HasPendingListenStart() const { return pendingListenStart_; }
+    [[nodiscard]] bool HasPendingListenStart() const { return bPendingListenStart; }
     [[nodiscard]] bool ConsumePendingListenStart() {
-        const bool pending = pendingListenStart_;
-        pendingListenStart_ = false;
-        return pending;
+        const bool bPending = bPendingListenStart;
+        bPendingListenStart = false;
+        return bPending;
     }
-    [[nodiscard]] std::uint16_t PendingListenPort() const { return pendingListenPort_; }
+    [[nodiscard]] std::uint16_t GetPendingListenPort() const { return PendingListenPort; }
 
     /// Optional `--map <LevelKey>` (Unreal Play current map): skip Lobby, travel to match.
-    void SetPendingPlayMap(std::string mapKey) { pendingPlayMap_ = std::move(mapKey); }
+    void SetPendingPlayMap(std::string MapKey) { PendingPlayMap = std::move(MapKey); }
     [[nodiscard]] std::string ConsumePendingPlayMap() {
-        std::string map = std::move(pendingPlayMap_);
-        pendingPlayMap_.clear();
-        return map;
+        std::string Map = std::move(PendingPlayMap);
+        PendingPlayMap.clear();
+        return Map;
     }
-    [[nodiscard]] const std::string& PeekPendingPlayMap() const { return pendingPlayMap_; }
+    [[nodiscard]] const std::string& PeekPendingPlayMap() const { return PendingPlayMap; }
 
-    void SetLevelTravelFn(FLevelTravelFunction fn) { levelTravelFn_ = std::move(fn); }
+    void SetLevelTravelFn(FLevelTravelFunction Fn) { LevelTravelFn = std::move(Fn); }
     /// Used by Engine::SetGameInstance to keep Runtime/Editor travel wiring across subclass swap.
-    [[nodiscard]] FLevelTravelFunction TakeLevelTravelFn() { return std::move(levelTravelFn_); }
+    [[nodiscard]] FLevelTravelFunction TakeLevelTravelFn() { return std::move(LevelTravelFn); }
 
     /// Toggle FLevelDirector `[`/`]` chrome (menus hide it).
-    using FLevelBrowserVisibleFunction = std::function<void(bool visible)>;
-    void SetLevelBrowserVisibleFn(FLevelBrowserVisibleFunction fn) {
-        levelBrowserVisibleFn_ = std::move(fn);
+    using FLevelBrowserVisibleFunction = std::function<void(bool bVisible)>;
+    void SetLevelBrowserVisibleFn(FLevelBrowserVisibleFunction Fn) {
+        LevelBrowserVisibleFn = std::move(Fn);
     }
     [[nodiscard]] FLevelBrowserVisibleFunction TakeLevelBrowserVisibleFn() {
-        return std::move(levelBrowserVisibleFn_);
+        return std::move(LevelBrowserVisibleFn);
     }
-    void SetLevelBrowserVisible(bool visible) {
-        if (levelBrowserVisibleFn_) {
-            levelBrowserVisibleFn_(visible);
+    void SetLevelBrowserVisible(bool bVisible) {
+        if (LevelBrowserVisibleFn) {
+            LevelBrowserVisibleFn(bVisible);
         }
     }
 
     /// Unreal `UWorld::ServerTravel` — load map on authority / local process.
-    [[nodiscard]] bool ServerTravel(UGameEngine& engine, std::string_view mapName,
-                                    std::string_view hintLevelPath = {});
+    [[nodiscard]] bool ServerTravel(UGameEngine& Engine, std::string_view MapName,
+                                    std::string_view HintLevelPath = {});
     /// Unreal `APlayerController::ClientTravel` — load map on a client process.
-    [[nodiscard]] bool ClientTravel(UGameEngine& engine, std::string_view mapName,
-                                    std::string_view hintLevelPath = {});
+    [[nodiscard]] bool ClientTravel(UGameEngine& Engine, std::string_view MapName,
+                                    std::string_view HintLevelPath = {});
 
 private:
-    [[nodiscard]] bool TravelInternal(UGameEngine& engine, std::string_view levelKey,
-                                      std::string_view hintLevelPath);
+    [[nodiscard]] bool TravelInternal(UGameEngine& Engine, std::string_view LevelKey,
+                                      std::string_view HintLevelPath);
 
-    int levelsOpened_ = 0;
-    bool pendingDedicatedStart_ = false;
-    std::uint16_t pendingDedicatedPort_ = Leon::Net::DefaultPort;
-    bool pendingListenStart_ = false;
-    std::uint16_t pendingListenPort_ = Leon::Net::DefaultPort;
-    std::string pendingJoinAddress_;
-    std::string pendingPlayMap_;
-    std::unique_ptr<UNetDriver> netDriver_;
-    FLevelTravelFunction levelTravelFn_;
-    FLevelBrowserVisibleFunction levelBrowserVisibleFn_;
+    int LevelsOpened = 0;
+    bool bPendingDedicatedStart = false;
+    std::uint16_t PendingDedicatedPort = Leon::Net::DefaultPort;
+    bool bPendingListenStart = false;
+    std::uint16_t PendingListenPort = Leon::Net::DefaultPort;
+    std::string PendingJoinAddress;
+    std::string PendingPlayMap;
+    std::unique_ptr<UNetDriver> NetDriver;
+    FLevelTravelFunction LevelTravelFn;
+    FLevelBrowserVisibleFunction LevelBrowserVisibleFn;
 };
 

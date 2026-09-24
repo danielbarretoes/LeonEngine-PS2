@@ -9,53 +9,53 @@
 
 namespace {
 
-[[nodiscard]] float DistXZ(const glm::vec3& a, const glm::vec3& b) {
-    const float dx = a.x - b.x;
-    const float dz = a.z - b.z;
-    return std::sqrt(dx * dx + dz * dz);
+[[nodiscard]] float DistXZ(const glm::vec3& A, const glm::vec3& B) {
+    const float Dx = A.x - B.x;
+    const float Dz = A.z - B.z;
+    return std::sqrt(Dx * Dx + Dz * Dz);
 }
 
-[[nodiscard]] float ExpAlpha(float speed, float dt) {
-    return (speed <= 0.0f || dt <= 0.0f) ? 1.0f : (1.0f - std::exp(-speed * dt));
+[[nodiscard]] float ExpAlpha(float Speed, float Dt) {
+    return (Speed <= 0.0f || Dt <= 0.0f) ? 1.0f : (1.0f - std::exp(-Speed * Dt));
 }
 
 } // namespace
 
-void UpdateArenaCamera(UCameraComponent& camera, FArenaCameraState& state, const FArenaCameraParams& params,
-                       const std::vector<glm::vec3>& livingFeet, float deltaTime,
-                       float floorYFallback) {
-    glm::vec3 desiredTarget = state.target;
-    float desiredDistance = state.distance;
+void UpdateArenaCamera(UCameraComponent& Camera, FArenaCameraState& State, const FArenaCameraParams& Params,
+                       const std::vector<glm::vec3>& LivingFeet, float DeltaTime,
+                       float FloorYFallback) {
+    glm::vec3 DesiredTarget = State.Target;
+    float DesiredDistance = State.Distance;
 
-    if (!livingFeet.empty()) {
-        glm::vec3 sum{0.0f};
-        for (const glm::vec3& feet : livingFeet) {
-            sum += feet + glm::vec3{0.0f, params.targetHeightOffset, 0.0f};
+    if (!LivingFeet.empty()) {
+        glm::vec3 Sum{0.0f};
+        for (const glm::vec3& Feet : LivingFeet) {
+            Sum += Feet + glm::vec3{0.0f, Params.TargetHeightOffset, 0.0f};
         }
-        desiredTarget = sum / static_cast<float>(livingFeet.size());
+        DesiredTarget = Sum / static_cast<float>(LivingFeet.size());
 
-        float maxSep = 0.0f;
-        for (const glm::vec3& feet : livingFeet) {
-            const glm::vec3 focus = feet + glm::vec3{0.0f, params.targetHeightOffset, 0.0f};
-            maxSep = (std::max)(maxSep, DistXZ(focus, desiredTarget));
+        float MaxSep = 0.0f;
+        for (const glm::vec3& Feet : LivingFeet) {
+            const glm::vec3 Focus = Feet + glm::vec3{0.0f, Params.TargetHeightOffset, 0.0f};
+            MaxSep = (std::max)(MaxSep, DistXZ(Focus, DesiredTarget));
         }
-        desiredDistance =
-            std::clamp(params.distanceBase + maxSep * params.distancePerSeparation,
-                       params.minDistance, params.maxDistance);
+        DesiredDistance =
+            std::clamp(Params.DistanceBase + MaxSep * Params.DistancePerSeparation,
+                       Params.MinDistance, Params.MaxDistance);
     } else {
         // No living pawns: frame arena center at standing height; distance ≈ prior Furytoon empty
         // framing (distanceBase * 2 → 18 with defaults).
-        desiredTarget = {0.0f, floorYFallback + params.targetHeightOffset, 0.0f};
-        desiredDistance = std::clamp(params.distanceBase * 2.0f, params.minDistance, params.maxDistance);
+        DesiredTarget = {0.0f, FloorYFallback + Params.TargetHeightOffset, 0.0f};
+        DesiredDistance = std::clamp(Params.DistanceBase * 2.0f, Params.MinDistance, Params.MaxDistance);
     }
 
-    const float a = ExpAlpha(params.lagSpeed, deltaTime);
-    state.target = glm::mix(state.target, desiredTarget, a);
-    state.distance = glm::mix(state.distance, desiredDistance, a);
+    const float A = ExpAlpha(Params.LagSpeed, DeltaTime);
+    State.Target = glm::mix(State.Target, DesiredTarget, A);
+    State.Distance = glm::mix(State.Distance, DesiredDistance, A);
 
-    camera.SetMode(ECameraMode::Orbit);
-    camera.SetTarget(state.target);
-    camera.SetDistance(state.distance);
-    camera.SetYawPitch(params.fixedYawDegrees, params.fixedPitchDegrees);
+    Camera.SetMode(ECameraMode::Orbit);
+    Camera.SetTarget(State.Target);
+    Camera.SetDistance(State.Distance);
+    Camera.SetYawPitch(Params.FixedYawDegrees, Params.FixedPitchDegrees);
 }
 

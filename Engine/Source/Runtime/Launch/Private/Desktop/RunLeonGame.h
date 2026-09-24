@@ -10,7 +10,7 @@
 /// `registerModes(engine, router)` may install a pack UGameInstance via `engine.SetGameInstance<T>()`.
 /// `dedicatedByDefault` must come from the pack exe (not leon_runtime): compile defines on the
 /// static lib do not reach FGameApplication.cpp.
-[[nodiscard]] int RunLeonGame(int argc, char** argv, const char* packName,
-                              const std::function<void(UGameEngine&, FGameplayRouter&)>& registerModes,
-                              bool dedicatedByDefault = false);
+[[nodiscard]] int RunLeonGame(int Argc, char** Argv, const char* PackName,
+                              const std::function<void(UGameEngine&, FGameplayRouter&)>& RegisterModes,
+                              bool bDedicatedByDefault = false);
 

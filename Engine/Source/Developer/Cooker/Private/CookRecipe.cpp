@@ -85,13 +85,13 @@ int FCookRecipe::RunFile(const std::string& recipePath) {
             const std::string out = FCookPaths::ResolveBeside(baseDir, step.value("out", "."));
             FCookJumpAnimPaths jump{};
             if (step.contains("jump") && step["jump"].is_string()) {
-                jump.jumpStartFbx = FCookPaths::ResolveBeside(baseDir, step["jump"].get<std::string>());
+                jump.JumpStartFbx = FCookPaths::ResolveBeside(baseDir, step["jump"].get<std::string>());
             }
             if (step.contains("fall") && step["fall"].is_string()) {
-                jump.fallLoopFbx = FCookPaths::ResolveBeside(baseDir, step["fall"].get<std::string>());
+                jump.FallLoopFbx = FCookPaths::ResolveBeside(baseDir, step["fall"].get<std::string>());
             }
             if (step.contains("land") && step["land"].is_string()) {
-                jump.landFbx = FCookPaths::ResolveBeside(baseDir, step["land"].get<std::string>());
+                jump.LandFbx = FCookPaths::ResolveBeside(baseDir, step["land"].get<std::string>());
             }
             if (name.empty() || mesh.empty() || run.empty()) {
                 std::cerr << "Recipe step " << stepIndex << ": character needs name/mesh/run\n";

@@ -23,17 +23,17 @@ namespace Leon::Net
 {
 namespace {
 
-bool ensureSockets() {
+bool EnsureSockets() {
 #if defined(_WIN32)
-    static bool ready = false;
-    if (ready) {
+    static bool bReady = false;
+    if (bReady) {
         return true;
     }
-    WSADATA data{};
-    if (WSAStartup(MAKEWORD(2, 2), &data) != 0) {
+    WSADATA Data{};
+    if (WSAStartup(MAKEWORD(2, 2), &Data) != 0) {
         return false;
     }
-    ready = true;
+    bReady = true;
     return true;
 #else
     return true;
@@ -43,62 +43,62 @@ bool ensureSockets() {
 } // namespace
 
 std::string DetectPrimaryLanIPv4() {
-    if (!ensureSockets()) {
+    if (!EnsureSockets()) {
         return {};
     }
 
-    char hostname[256]{};
+    char Hostname[256]{};
 #if defined(_WIN32)
-    if (gethostname(hostname, static_cast<int>(sizeof(hostname))) != 0) {
+    if (gethostname(Hostname, static_cast<int>(sizeof(Hostname))) != 0) {
 #else
     if (gethostname(hostname, sizeof(hostname)) != 0) {
 #endif
         return {};
     }
 
-    addrinfo hints{};
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
+    addrinfo Hints{};
+    Hints.ai_family = AF_INET;
+    Hints.ai_socktype = SOCK_STREAM;
 
-    addrinfo* result = nullptr;
-    if (getaddrinfo(hostname, nullptr, &hints, &result) != 0 || result == nullptr) {
+    addrinfo* Result = nullptr;
+    if (getaddrinfo(Hostname, nullptr, &Hints, &Result) != 0 || Result == nullptr) {
         return {};
     }
 
-    std::string chosen;
-    for (addrinfo* p = result; p != nullptr; p = p->ai_next) {
-        if (p->ai_addr == nullptr) {
+    std::string Chosen;
+    for (addrinfo* P = Result; P != nullptr; P = P->ai_next) {
+        if (P->ai_addr == nullptr) {
             continue;
         }
-        auto* sa = reinterpret_cast<sockaddr_in*>(p->ai_addr);
-        char buf[INET_ADDRSTRLEN]{};
-        if (inet_ntop(AF_INET, &sa->sin_addr, buf, sizeof(buf)) == nullptr) {
+        auto* Sa = reinterpret_cast<sockaddr_in*>(P->ai_addr);
+        char Buf[INET_ADDRSTRLEN]{};
+        if (inet_ntop(AF_INET, &Sa->sin_addr, Buf, sizeof(Buf)) == nullptr) {
             continue;
         }
-        const std::string candidate = buf;
-        if (candidate.rfind("127.", 0) == 0) {
+        const std::string Candidate = Buf;
+        if (Candidate.rfind("127.", 0) == 0) {
             continue;
         }
-        chosen = candidate;
+        Chosen = Candidate;
         break;
     }
-    freeaddrinfo(result);
-    return chosen;
+    freeaddrinfo(Result);
+    return Chosen;
 }
 
-void SendTravelToPeers(UNetDriver& net, std::string_view mapName, bool dedicatedServer) {
-    if (!net.IsHost() || !net.HasPeer()) {
+void SendTravelToPeers(UNetDriver& Net, std::string_view MapName, bool bDedicatedServer) {
+    if (!Net.IsHost() || !Net.HasPeer()) {
         return;
     }
-    const int peers = net.PeerCount();
-    for (int peer = 0; peer < peers; ++peer) {
-        FTravelMsg travel{};
-        travel.Slot =
-            dedicatedServer ? static_cast<std::uint8_t>(peer) : static_cast<std::uint8_t>(peer + 1);
-        WriteLevelKey(travel.LevelKey, mapName);
-        net.SendToPeer(peer, &travel, sizeof(travel), true);
+    const int Peers = Net.PeerCount();
+    for (int Peer = 0; Peer < Peers; ++Peer) {
+        FTravelMsg Travel{};
+        Travel.Slot =
+            bDedicatedServer ? static_cast<std::uint8_t>(Peer) : static_cast<std::uint8_t>(Peer + 1);
+        WriteLevelKey(Travel.LevelKey, MapName);
+        Net.SendToPeer(Peer, &Travel, sizeof(Travel), true);
     }
-    std::cout << "NetTravel: Travel -> peers map='" << mapName << "'\n";
+    std::cout << "NetTravel: Travel -> peers map='" << MapName << "'\n";
 }
 
 } // namespace Leon::Net

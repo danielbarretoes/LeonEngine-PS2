@@ -4,38 +4,38 @@
 #include "Engine/GameEngine.h"
 
 
-bool FWorldRuntime::Initialize(UGameEngine& engine, const std::string& shaderDirectory) {
+bool FWorldRuntime::Initialize(UGameEngine& Engine, const std::string& ShaderDirectory) {
     // Headless dedicated servers have no GL context — skip overlay chrome/shaders.
-    if (engine.IsHeadless()) {
+    if (Engine.IsHeadless()) {
         return true;
     }
-    if (!director_.Initialize(shaderDirectory)) {
+    if (!Director.Initialize(ShaderDirectory)) {
         return false;
     }
-    engine.SetShaderReloadHook([this](bool force) { return director_.ReloadShaders(force); });
+    Engine.SetShaderReloadHook([this](bool bForce) { return Director.ReloadShaders(bForce); });
     return true;
 }
 
-bool FWorldRuntime::LoadPack(UGameEngine& engine, const std::string& packDirectory,
-                            std::string_view preferredLevelKey) {
-    return director_.ScanPackAndLoad(engine, packDirectory, preferredLevelKey);
+bool FWorldRuntime::LoadPack(UGameEngine& Engine, const std::string& PackDirectory,
+                            std::string_view PreferredLevelKey) {
+    return Director.ScanPackAndLoad(Engine, PackDirectory, PreferredLevelKey);
 }
 
-void FWorldRuntime::Tick(UGameEngine& engine, FGameplayRouter& gameplay, float deltaTime) {
-    director_.Update(engine, deltaTime);
-    gameplay.Update(engine, director_, deltaTime);
+void FWorldRuntime::Tick(UGameEngine& Engine, FGameplayRouter& Gameplay, float DeltaTime) {
+    Director.Update(Engine, DeltaTime);
+    Gameplay.Update(Engine, Director, DeltaTime);
 }
 
-void FWorldRuntime::HandleUiInput(UGameEngine& engine) {
-    const bool blockDrag = director_.HandleUiInput(engine);
-    engine.SetSuppressCameraDrag(blockDrag);
+void FWorldRuntime::HandleUiInput(UGameEngine& Engine) {
+    const bool bBlockDrag = Director.HandleUiInput(Engine);
+    Engine.SetSuppressCameraDrag(bBlockDrag);
 }
 
-void FWorldRuntime::DrawUi(int framebufferWidth, int framebufferHeight) {
-    director_.DrawUi(framebufferWidth, framebufferHeight);
+void FWorldRuntime::DrawUi(int FramebufferWidth, int FramebufferHeight) {
+    Director.DrawUi(FramebufferWidth, FramebufferHeight);
 }
 
 void FWorldRuntime::Shutdown() {
-    director_.Shutdown();
+    Director.Shutdown();
 }
 

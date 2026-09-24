@@ -3,39 +3,39 @@
 #include "Level/BasicShape.h"
 
 
-bool tryParseBasicShapeName(std::string_view name, EBasicShape& out) {
-    const std::string key = FCString::ToLower(name);
-    if (key == "cube") {
-        out = EBasicShape::Cube;
+bool TryParseBasicShapeName(std::string_view Name, EBasicShape& Out) {
+    const std::string Key = FCString::ToLower(Name);
+    if (Key == "cube") {
+        Out = EBasicShape::Cube;
         return true;
     }
-    if (key == "sphere") {
-        out = EBasicShape::Sphere;
+    if (Key == "sphere") {
+        Out = EBasicShape::Sphere;
         return true;
     }
-    if (key == "plane") {
-        out = EBasicShape::Plane;
+    if (Key == "plane") {
+        Out = EBasicShape::Plane;
         return true;
     }
     return false;
 }
 
-bool isBlockingVolumeName(std::string_view name) {
-    return FCString::ToLower(name) == "blockingvolume";
+bool IsBlockingVolumeName(std::string_view Name) {
+    return FCString::ToLower(Name) == "blockingvolume";
 }
 
-bool isPlayerStartName(std::string_view name) {
-    return FCString::ToLower(name) == "playerstart";
+bool IsPlayerStartName(std::string_view Name) {
+    return FCString::ToLower(Name) == "playerstart";
 }
 
-bool tryParseBasicLightName(std::string_view name, EBasicLight& out) {
-    const std::string key = FCString::ToLower(name);
-    if (key == "directionallight" || key == "directional" || key == "dirlight") {
-        out = EBasicLight::Directional;
+bool TryParseBasicLightName(std::string_view Name, EBasicLight& Out) {
+    const std::string Key = FCString::ToLower(Name);
+    if (Key == "directionallight" || Key == "directional" || Key == "dirlight") {
+        Out = EBasicLight::Directional;
         return true;
     }
-    if (key == "pointlight" || key == "point") {
-        out = EBasicLight::Point;
+    if (Key == "pointlight" || Key == "point") {
+        Out = EBasicLight::Point;
         return true;
     }
     return false;

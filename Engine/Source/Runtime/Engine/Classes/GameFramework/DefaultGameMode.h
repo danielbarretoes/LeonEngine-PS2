@@ -13,25 +13,25 @@ class ADefaultGameMode final : public AGameModeBase {
 public:
     [[nodiscard]] const char* Id() const override { return "Default"; }
 
-    [[nodiscard]] bool Matches(const FLevelEntry& entry,
-                               const std::string& gameModeId) const override;
+    [[nodiscard]] bool Matches(const FLevelEntry& Entry,
+                               const std::string& GameModeId) const override;
 
-    void OnEnter(UGameEngine& engine, const std::string& levelPath) override;
-    void OnExit(UGameEngine& engine) override;
-    void Tick(UGameEngine& engine, float deltaTime) override;
+    void OnEnter(UGameEngine& Engine, const std::string& LevelPath) override;
+    void OnExit(UGameEngine& Engine) override;
+    void Tick(UGameEngine& Engine, float DeltaTime) override;
 
 private:
     struct FOrbitSnapshot {
-        glm::vec3 target{0.0f};
-        float distance = 8.0f;
-        float yawDegrees = 45.0f;
-        float pitchDegrees = 25.0f;
+        glm::vec3 Target{0.0f};
+        float Distance = 8.0f;
+        float YawDegrees = 45.0f;
+        float PitchDegrees = 25.0f;
     };
 
-    ADefaultPlayerController player_{};
-    FOrbitSnapshot savedOrbit_{};
-    double lastMouseX_ = 0.0;
-    double lastMouseY_ = 0.0;
-    bool mouseLookSampleValid_ = false;
+    ADefaultPlayerController Player{};
+    FOrbitSnapshot SavedOrbit{};
+    double LastMouseX = 0.0;
+    double LastMouseY = 0.0;
+    bool bMouseLookSampleValid = false;
 };
 

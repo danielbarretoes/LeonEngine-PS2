@@ -3,9 +3,9 @@
 #include "GameApplication.h"
 
 
-int RunLeonGame(int argc, char** argv, const char* packName,
-                const std::function<void(UGameEngine&, FGameplayRouter&)>& registerModes,
-                bool dedicatedByDefault) {
-    return FGameApplication{}.Run(argc, argv, packName, registerModes, dedicatedByDefault);
+int RunLeonGame(int Argc, char** Argv, const char* PackName,
+                const std::function<void(UGameEngine&, FGameplayRouter&)>& RegisterModes,
+                bool bDedicatedByDefault) {
+    return FGameApplication{}.Run(Argc, Argv, PackName, RegisterModes, bDedicatedByDefault);
 }
 

@@ -8,9 +8,9 @@
 namespace {
 
 /// Process-wide ENet init refcount — deinitialize only when the last UNetDriver drops.
-int g_enetInitCount = 0;
+int GEnetInitCount = 0;
 
-[[nodiscard]] std::uint64_t steadyNowMs() {
+[[nodiscard]] std::uint64_t SteadyNowMs() {
     using clock = std::chrono::steady_clock;
     return static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::milliseconds>(clock::now().time_since_epoch())
@@ -22,270 +22,270 @@ int g_enetInitCount = 0;
 
 UNetDriver::~UNetDriver() {
     Shutdown();
-    if (libraryReady_) {
-        libraryReady_ = false;
-        if (g_enetInitCount > 0) {
-            --g_enetInitCount;
+    if (bLibraryReady) {
+        bLibraryReady = false;
+        if (GEnetInitCount > 0) {
+            --GEnetInitCount;
         }
-        if (g_enetInitCount == 0) {
+        if (GEnetInitCount == 0) {
             enet_deinitialize();
         }
     }
 }
 
-bool UNetDriver::ensureInitialized() {
-    if (libraryReady_) {
+bool UNetDriver::EnsureInitialized() {
+    if (bLibraryReady) {
         return true;
     }
-    if (g_enetInitCount == 0) {
+    if (GEnetInitCount == 0) {
         if (enet_initialize() != 0) {
             std::cerr << "NetDriver: enet_initialize failed\n";
             return false;
         }
     }
-    ++g_enetInitCount;
-    libraryReady_ = true;
+    ++GEnetInitCount;
+    bLibraryReady = true;
     return true;
 }
 
 int UNetDriver::PeerCount() const {
-    int count = 0;
-    for (int i = 0; i < maxClients_; ++i) {
-        if (peers_[static_cast<std::size_t>(i)] != nullptr) {
-            ++count;
+    int Count = 0;
+    for (int I = 0; I < MaxClients; ++I) {
+        if (Peers[static_cast<std::size_t>(I)] != nullptr) {
+            ++Count;
         }
     }
-    return count;
+    return Count;
 }
 
-int UNetDriver::allocatePeerSlot(ENetPeer* peer) {
-    if (peer == nullptr) {
+int UNetDriver::AllocatePeerSlot(ENetPeer* Peer) {
+    if (Peer == nullptr) {
         return -1;
     }
-    for (int i = 0; i < maxClients_; ++i) {
-        if (peers_[static_cast<std::size_t>(i)] == nullptr) {
-            peers_[static_cast<std::size_t>(i)] = peer;
-            peer->data = reinterpret_cast<void*>(static_cast<std::intptr_t>(i));
-            return i;
+    for (int I = 0; I < MaxClients; ++I) {
+        if (Peers[static_cast<std::size_t>(I)] == nullptr) {
+            Peers[static_cast<std::size_t>(I)] = Peer;
+            Peer->data = reinterpret_cast<void*>(static_cast<std::intptr_t>(I));
+            return I;
         }
     }
     return -1;
 }
 
-void UNetDriver::clearPeerSlot(ENetPeer* peer) {
-    if (peer == nullptr) {
+void UNetDriver::ClearPeerSlot(ENetPeer* Peer) {
+    if (Peer == nullptr) {
         return;
     }
-    const auto slot = static_cast<int>(reinterpret_cast<std::intptr_t>(peer->data));
-    if (slot >= 0 && slot < Leon::Net::MaxPlayers && peers_[static_cast<std::size_t>(slot)] == peer) {
-        peers_[static_cast<std::size_t>(slot)] = nullptr;
-        peerRates_[static_cast<std::size_t>(slot)].Reset();
+    const auto Slot = static_cast<int>(reinterpret_cast<std::intptr_t>(Peer->data));
+    if (Slot >= 0 && Slot < Leon::Net::MaxPlayers && Peers[static_cast<std::size_t>(Slot)] == Peer) {
+        Peers[static_cast<std::size_t>(Slot)] = nullptr;
+        PeerRates[static_cast<std::size_t>(Slot)].Reset();
     }
-    peer->data = nullptr;
+    Peer->data = nullptr;
 }
 
-void UNetDriver::disconnectPeerForAbuse(int peerSlot) {
-    if (peerSlot < 0 || peerSlot >= Leon::Net::MaxPlayers) {
+void UNetDriver::DisconnectPeerForAbuse(int PeerSlot) {
+    if (PeerSlot < 0 || PeerSlot >= Leon::Net::MaxPlayers) {
         return;
     }
-    ENetPeer* peer = peers_[static_cast<std::size_t>(peerSlot)];
-    if (peer == nullptr) {
+    ENetPeer* Peer = Peers[static_cast<std::size_t>(PeerSlot)];
+    if (Peer == nullptr) {
         return;
     }
-    std::cerr << "NetDriver: disconnecting peer slot " << peerSlot << " (rate limit)\n";
-    enet_peer_disconnect_now(peer, 0);
-    clearPeerSlot(peer);
-    if (onPeerDisconnected_) {
-        onPeerDisconnected_(peerSlot);
+    std::cerr << "NetDriver: disconnecting peer slot " << PeerSlot << " (rate limit)\n";
+    enet_peer_disconnect_now(Peer, 0);
+    ClearPeerSlot(Peer);
+    if (OnPeerDisconnected) {
+        OnPeerDisconnected(PeerSlot);
     }
 }
 
-bool UNetDriver::startServer(std::uint16_t port, int maxClients, ENetMode mode) {
+bool UNetDriver::StartServer(std::uint16_t Port, int InMaxClients, ENetMode InMode) {
     Shutdown();
-    if (!ensureInitialized()) {
+    if (!EnsureInitialized()) {
         return false;
     }
-    if (maxClients < 1) {
-        maxClients = 1;
+    if (InMaxClients < 1) {
+        InMaxClients = 1;
     }
-    if (maxClients > Leon::Net::MaxPlayers) {
-        maxClients = Leon::Net::MaxPlayers;
+    if (InMaxClients > Leon::Net::MaxPlayers) {
+        InMaxClients = Leon::Net::MaxPlayers;
     }
 
-    ENetAddress address{};
-    address.host = ENET_HOST_ANY;
-    address.port = port;
+    ENetAddress Address{};
+    Address.host = ENET_HOST_ANY;
+    Address.port = Port;
 
-    host_ = enet_host_create(&address, static_cast<std::size_t>(maxClients), 2, 0, 0);
-    if (host_ == nullptr) {
-        std::cerr << "NetDriver: failed to create host on port " << port << '\n';
+    Host = enet_host_create(&Address, static_cast<std::size_t>(InMaxClients), 2, 0, 0);
+    if (Host == nullptr) {
+        std::cerr << "NetDriver: failed to create host on port " << Port << '\n';
         return false;
     }
-    maxClients_ = maxClients;
-    peers_.fill(nullptr);
-    for (auto& rate : peerRates_) {
-        rate.Reset();
+    MaxClients = InMaxClients;
+    Peers.fill(nullptr);
+    for (auto& Rate : PeerRates) {
+        Rate.Reset();
     }
-    mode_ = mode;
-    connected_ = true;
-    const char* label = (mode == ENetMode::DedicatedServer) ? "DedicatedServer" : "ListenServer";
-    std::cout << "NetDriver: " << label << " on 0.0.0.0:" << port << " (maxClients=" << maxClients_
+    Mode = InMode;
+    bConnected = true;
+    const char* Label = (InMode == ENetMode::DedicatedServer) ? "DedicatedServer" : "ListenServer";
+    std::cout << "NetDriver: " << Label << " on 0.0.0.0:" << Port << " (maxClients=" << MaxClients
               << ")\n";
     return true;
 }
 
-bool UNetDriver::StartHost(std::uint16_t port) {
+bool UNetDriver::StartHost(std::uint16_t Port) {
     // Listen host: local player occupies one player slot; remotes fill the rest.
-    return startServer(port, std::max(1, Leon::Net::MaxPlayers - 1), ENetMode::ListenServer);
+    return StartServer(Port, std::max(1, Leon::Net::MaxPlayers - 1), ENetMode::ListenServer);
 }
 
-bool UNetDriver::StartDedicated(std::uint16_t port) {
-    return startServer(port, Leon::Net::MaxPlayers, ENetMode::DedicatedServer);
+bool UNetDriver::StartDedicated(std::uint16_t Port) {
+    return StartServer(Port, Leon::Net::MaxPlayers, ENetMode::DedicatedServer);
 }
 
-bool UNetDriver::Connect(const std::string& address, std::uint16_t port) {
+bool UNetDriver::Connect(const std::string& Address, std::uint16_t Port) {
     Shutdown();
-    if (!ensureInitialized()) {
+    if (!EnsureInitialized()) {
         return false;
     }
 
-    host_ = enet_host_create(nullptr, 1, 2, 0, 0);
-    if (host_ == nullptr) {
+    Host = enet_host_create(nullptr, 1, 2, 0, 0);
+    if (Host == nullptr) {
         std::cerr << "NetDriver: failed to create client host\n";
         return false;
     }
 
-    ENetAddress addr{};
-    if (enet_address_set_host(&addr, address.c_str()) != 0) {
-        std::cerr << "NetDriver: failed to resolve host '" << address << "'\n";
-        enet_host_destroy(host_);
-        host_ = nullptr;
+    ENetAddress Addr{};
+    if (enet_address_set_host(&Addr, Address.c_str()) != 0) {
+        std::cerr << "NetDriver: failed to resolve host '" << Address << "'\n";
+        enet_host_destroy(Host);
+        Host = nullptr;
         return false;
     }
-    addr.port = port;
+    Addr.port = Port;
 
-    ENetPeer* peer = enet_host_connect(host_, &addr, 2, 0);
-    if (peer == nullptr) {
+    ENetPeer* Peer = enet_host_connect(Host, &Addr, 2, 0);
+    if (Peer == nullptr) {
         std::cerr << "NetDriver: connect failed\n";
-        enet_host_destroy(host_);
-        host_ = nullptr;
+        enet_host_destroy(Host);
+        Host = nullptr;
         return false;
     }
 
-    maxClients_ = 1;
-    peers_.fill(nullptr);
-    peers_[0] = peer;
-    peer->data = reinterpret_cast<void*>(static_cast<std::intptr_t>(0));
-    for (auto& rate : peerRates_) {
-        rate.Reset();
+    MaxClients = 1;
+    Peers.fill(nullptr);
+    Peers[0] = Peer;
+    Peer->data = reinterpret_cast<void*>(static_cast<std::intptr_t>(0));
+    for (auto& Rate : PeerRates) {
+        Rate.Reset();
     }
-    mode_ = ENetMode::Client;
-    connected_ = false;
-    std::cout << "NetDriver: connecting to " << address << ':' << port << '\n';
+    Mode = ENetMode::Client;
+    bConnected = false;
+    std::cout << "NetDriver: connecting to " << Address << ':' << Port << '\n';
     return true;
 }
 
 void UNetDriver::Shutdown() {
-    if (host_ != nullptr) {
-        for (int i = 0; i < Leon::Net::MaxPlayers; ++i) {
-            ENetPeer*& peer = peers_[static_cast<std::size_t>(i)];
-            if (peer != nullptr) {
-                enet_peer_disconnect_now(peer, 0);
-                peer = nullptr;
+    if (Host != nullptr) {
+        for (int I = 0; I < Leon::Net::MaxPlayers; ++I) {
+            ENetPeer*& Peer = Peers[static_cast<std::size_t>(I)];
+            if (Peer != nullptr) {
+                enet_peer_disconnect_now(Peer, 0);
+                Peer = nullptr;
             }
-            peerRates_[static_cast<std::size_t>(i)].Reset();
+            PeerRates[static_cast<std::size_t>(I)].Reset();
         }
-        enet_host_destroy(host_);
-        host_ = nullptr;
+        enet_host_destroy(Host);
+        Host = nullptr;
     }
-    maxClients_ = 1;
-    mode_ = ENetMode::Standalone;
-    connected_ = false;
+    MaxClients = 1;
+    Mode = ENetMode::Standalone;
+    bConnected = false;
 }
 
 void UNetDriver::Poll() {
-    if (host_ == nullptr) {
+    if (Host == nullptr) {
         return;
     }
 
-    ENetEvent event{};
-    while (enet_host_service(host_, &event, 0) > 0) {
-        switch (event.type) {
+    ENetEvent Event{};
+    while (enet_host_service(Host, &Event, 0) > 0) {
+        switch (Event.type) {
         case ENET_EVENT_TYPE_CONNECT: {
-            if (mode_ == ENetMode::Client) {
-                peers_[0] = event.peer;
-                if (event.peer != nullptr) {
-                    event.peer->data = reinterpret_cast<void*>(static_cast<std::intptr_t>(0));
+            if (Mode == ENetMode::Client) {
+                Peers[0] = Event.peer;
+                if (Event.peer != nullptr) {
+                    Event.peer->data = reinterpret_cast<void*>(static_cast<std::intptr_t>(0));
                 }
-                connected_ = true;
+                bConnected = true;
                 std::cout << "NetDriver: connected to server\n";
-                if (onPeerConnected_) {
-                    onPeerConnected_(0);
+                if (OnPeerConnected) {
+                    OnPeerConnected(0);
                 }
                 break;
             }
 
-            const int slot = allocatePeerSlot(event.peer);
-            if (slot < 0) {
+            const int Slot = AllocatePeerSlot(Event.peer);
+            if (Slot < 0) {
                 std::cerr << "NetDriver: rejecting peer (server full)\n";
-                if (event.peer != nullptr) {
-                    enet_peer_disconnect_now(event.peer, 0);
+                if (Event.peer != nullptr) {
+                    enet_peer_disconnect_now(Event.peer, 0);
                 }
                 break;
             }
-            peerRates_[static_cast<std::size_t>(slot)].Reset();
-            std::cout << "NetDriver: peer connected (slot " << slot << ")\n";
-            if (onPeerConnected_) {
-                onPeerConnected_(slot);
+            PeerRates[static_cast<std::size_t>(Slot)].Reset();
+            std::cout << "NetDriver: peer connected (slot " << Slot << ")\n";
+            if (OnPeerConnected) {
+                OnPeerConnected(Slot);
             }
             break;
         }
         case ENET_EVENT_TYPE_RECEIVE:
-            if (event.packet != nullptr) {
+            if (Event.packet != nullptr) {
                 // Flow: host rate window → AcceptInboundPacket → onPacket_ (or drop / kick).
-                bool destroyPacket = true;
-                if (event.packet->data != nullptr) {
-                    const std::size_t size = event.packet->dataLength;
-                    const std::uint8_t* data = event.packet->data;
-                    int slot = 0;
-                    if (event.peer != nullptr) {
-                        slot = static_cast<int>(reinterpret_cast<std::intptr_t>(event.peer->data));
+                bool bDestroyPacket = true;
+                if (Event.packet->data != nullptr) {
+                    const std::size_t Size = Event.packet->dataLength;
+                    const std::uint8_t* Data = Event.packet->data;
+                    int Slot = 0;
+                    if (Event.peer != nullptr) {
+                        Slot = static_cast<int>(reinterpret_cast<std::intptr_t>(Event.peer->data));
                     }
-                    const bool accepted = Leon::Net::AcceptInboundPacket(data, size);
-                    bool deliver = accepted;
-                    if (IsHost() && peerRateLimitEnabled_ && slot >= 0 && slot < Leon::Net::MaxPlayers) {
-                        const auto action = peerRates_[static_cast<std::size_t>(slot)].Observe(
-                            steadyNowMs(), accepted);
-                        if (action == Leon::Net::FPeerPacketWindow::EAction::Disconnect) {
-                            deliver = false;
-                            enet_packet_destroy(event.packet);
-                            destroyPacket = false;
-                            disconnectPeerForAbuse(slot);
-                        } else if (action == Leon::Net::FPeerPacketWindow::EAction::Drop) {
-                            deliver = false;
+                    const bool bAccepted = Leon::Net::AcceptInboundPacket(Data, Size);
+                    bool bDeliver = bAccepted;
+                    if (IsHost() && bPeerRateLimitEnabled && Slot >= 0 && Slot < Leon::Net::MaxPlayers) {
+                        const auto Action = PeerRates[static_cast<std::size_t>(Slot)].Observe(
+                            SteadyNowMs(), bAccepted);
+                        if (Action == Leon::Net::FPeerPacketWindow::EAction::Disconnect) {
+                            bDeliver = false;
+                            enet_packet_destroy(Event.packet);
+                            bDestroyPacket = false;
+                            DisconnectPeerForAbuse(Slot);
+                        } else if (Action == Leon::Net::FPeerPacketWindow::EAction::Drop) {
+                            bDeliver = false;
                         }
                     }
-                    if (deliver && onPacket_) {
-                        onPacket_(slot, data, size);
+                    if (bDeliver && OnPacket) {
+                        OnPacket(Slot, Data, Size);
                     }
                 }
-                if (destroyPacket) {
-                    enet_packet_destroy(event.packet);
+                if (bDestroyPacket) {
+                    enet_packet_destroy(Event.packet);
                 }
             }
             break;
         case ENET_EVENT_TYPE_DISCONNECT: {
-            int slot = 0;
-            if (event.peer != nullptr) {
-                slot = static_cast<int>(reinterpret_cast<std::intptr_t>(event.peer->data));
+            int Slot = 0;
+            if (Event.peer != nullptr) {
+                Slot = static_cast<int>(reinterpret_cast<std::intptr_t>(Event.peer->data));
             }
-            std::cout << "NetDriver: peer disconnected (slot " << slot << ")\n";
-            clearPeerSlot(event.peer);
-            if (mode_ == ENetMode::Client) {
-                connected_ = false;
+            std::cout << "NetDriver: peer disconnected (slot " << Slot << ")\n";
+            ClearPeerSlot(Event.peer);
+            if (Mode == ENetMode::Client) {
+                bConnected = false;
             }
-            if (onPeerDisconnected_) {
-                onPeerDisconnected_(slot);
+            if (OnPeerDisconnected) {
+                OnPeerDisconnected(Slot);
             }
             break;
         }
@@ -295,33 +295,33 @@ void UNetDriver::Poll() {
     }
 }
 
-void UNetDriver::SendToPeer(int peerSlot, const void* data, std::size_t size, bool reliable) {
-    if (data == nullptr || size == 0 || peerSlot < 0 || peerSlot >= Leon::Net::MaxPlayers) {
+void UNetDriver::SendToPeer(int PeerSlot, const void* Data, std::size_t Size, bool bReliable) {
+    if (Data == nullptr || Size == 0 || PeerSlot < 0 || PeerSlot >= Leon::Net::MaxPlayers) {
         return;
     }
-    ENetPeer* peer = peers_[static_cast<std::size_t>(peerSlot)];
-    if (peer == nullptr) {
+    ENetPeer* Peer = Peers[static_cast<std::size_t>(PeerSlot)];
+    if (Peer == nullptr) {
         return;
     }
-    const enet_uint32 flags = reliable ? ENET_PACKET_FLAG_RELIABLE : 0;
-    ENetPacket* packet = enet_packet_create(data, size, flags);
-    if (packet == nullptr) {
+    const enet_uint32 Flags = bReliable ? ENET_PACKET_FLAG_RELIABLE : 0;
+    ENetPacket* Packet = enet_packet_create(Data, Size, Flags);
+    if (Packet == nullptr) {
         return;
     }
-    enet_peer_send(peer, 0, packet);
-    enet_host_flush(host_);
+    enet_peer_send(Peer, 0, Packet);
+    enet_host_flush(Host);
 }
 
-void UNetDriver::Broadcast(const void* data, std::size_t size, bool reliable) {
-    if (host_ == nullptr || data == nullptr || size == 0) {
+void UNetDriver::Broadcast(const void* Data, std::size_t Size, bool bReliable) {
+    if (Host == nullptr || Data == nullptr || Size == 0) {
         return;
     }
-    const enet_uint32 flags = reliable ? ENET_PACKET_FLAG_RELIABLE : 0;
-    ENetPacket* packet = enet_packet_create(data, size, flags);
-    if (packet == nullptr) {
+    const enet_uint32 Flags = bReliable ? ENET_PACKET_FLAG_RELIABLE : 0;
+    ENetPacket* Packet = enet_packet_create(Data, Size, Flags);
+    if (Packet == nullptr) {
         return;
     }
-    enet_host_broadcast(host_, 0, packet);
-    enet_host_flush(host_);
+    enet_host_broadcast(Host, 0, Packet);
+    enet_host_flush(Host);
 }
 

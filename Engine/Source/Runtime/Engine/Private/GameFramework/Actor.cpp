@@ -6,60 +6,60 @@
 AActor::~AActor() {
     // Members (root, Character mesh, …) destroy after this body. Clear registry first so
     // component dtors do not touch a destroyed `components_` vector.
-    for (UActorComponent* component : components_) {
-        if (component != nullptr) {
-            component->registered_ = false;
-            component->owner_ = nullptr;
+    for (UActorComponent* Component : Components) {
+        if (Component != nullptr) {
+            Component->bRegistered = false;
+            Component->Owner = nullptr;
         }
     }
-    components_.clear();
-    ownedComponents_.clear();
+    Components.clear();
+    OwnedComponents.clear();
 }
 
-void AActor::RegisterComponent(UActorComponent* component) {
-    if (component == nullptr || component->registered_) {
+void AActor::RegisterComponent(UActorComponent* Component) {
+    if (Component == nullptr || Component->bRegistered) {
         return;
     }
-    component->SetOwner(this);
-    component->registered_ = true;
-    components_.push_back(component);
+    Component->SetOwner(this);
+    Component->bRegistered = true;
+    Components.push_back(Component);
     // CreateDefaultSubobject after SpawnActor: match Unreal late-register BeginPlay.
-    if (hasBegunPlay_) {
-        component->BeginPlay();
+    if (bHasBegunPlay) {
+        Component->BeginPlay();
     }
 }
 
-void AActor::UnregisterComponent(UActorComponent* component) {
-    if (component == nullptr) {
+void AActor::UnregisterComponent(UActorComponent* Component) {
+    if (Component == nullptr) {
         return;
     }
-    components_.erase(std::remove(components_.begin(), components_.end(), component),
-                      components_.end());
-    component->registered_ = false;
+    Components.erase(std::remove(Components.begin(), Components.end(), Component),
+                      Components.end());
+    Component->bRegistered = false;
 }
 
 void AActor::BeginPlayComponents() {
-    hasBegunPlay_ = true;
-    for (UActorComponent* component : components_) {
-        if (component != nullptr) {
-            component->BeginPlay();
+    bHasBegunPlay = true;
+    for (UActorComponent* Component : Components) {
+        if (Component != nullptr) {
+            Component->BeginPlay();
         }
     }
 }
 
 void AActor::EndPlayComponents() {
-    for (UActorComponent* component : components_) {
-        if (component != nullptr) {
-            component->EndPlay();
+    for (UActorComponent* Component : Components) {
+        if (Component != nullptr) {
+            Component->EndPlay();
         }
     }
-    hasBegunPlay_ = false;
+    bHasBegunPlay = false;
 }
 
-void AActor::TickComponents(float deltaTime) {
-    for (UActorComponent* component : components_) {
-        if (component != nullptr && component->IsComponentTickEnabled()) {
-            component->TickComponent(deltaTime);
+void AActor::TickComponents(float DeltaTime) {
+    for (UActorComponent* Component : Components) {
+        if (Component != nullptr && Component->IsComponentTickEnabled()) {
+            Component->TickComponent(DeltaTime);
         }
     }
 }

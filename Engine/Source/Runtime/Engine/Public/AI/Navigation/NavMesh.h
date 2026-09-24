@@ -8,31 +8,31 @@
 
 /// Baked walkable grid (Unreal NavMesh lite — no Recast). XZ cells + floor height.
 struct FNavMesh {
-    float originX = 0.0f;
-    float originZ = 0.0f;
-    float cellSize = 0.5f;
-    float floorY = 0.0f;
-    int width = 0;
-    int depth = 0;
+    float OriginX = 0.0f;
+    float OriginZ = 0.0f;
+    float CellSize = 0.5f;
+    float FloorY = 0.0f;
+    int Width = 0;
+    int Depth = 0;
     /// Row-major: index = iz * width + ix. true = walkable.
-    std::vector<std::uint8_t> walkable;
+    std::vector<std::uint8_t> Walkable;
 
-    [[nodiscard]] bool IsValid() const { return width > 0 && depth > 0 && !walkable.empty(); }
+    [[nodiscard]] bool IsValid() const { return Width > 0 && Depth > 0 && !Walkable.empty(); }
 
-    [[nodiscard]] bool InBounds(int ix, int iz) const {
-        return ix >= 0 && iz >= 0 && ix < width && iz < depth;
+    [[nodiscard]] bool InBounds(int Ix, int Iz) const {
+        return Ix >= 0 && Iz >= 0 && Ix < Width && Iz < Depth;
     }
 
-    [[nodiscard]] bool IsWalkable(int ix, int iz) const {
-        return InBounds(ix, iz) && walkable[static_cast<std::size_t>(iz * width + ix)] != 0;
+    [[nodiscard]] bool IsWalkable(int Ix, int Iz) const {
+        return InBounds(Ix, Iz) && Walkable[static_cast<std::size_t>(Iz * Width + Ix)] != 0;
     }
 
-    [[nodiscard]] glm::vec3 CellCenter(int ix, int iz) const {
-        return {originX + (static_cast<float>(ix) + 0.5f) * cellSize, floorY,
-                originZ + (static_cast<float>(iz) + 0.5f) * cellSize};
+    [[nodiscard]] glm::vec3 CellCenter(int Ix, int Iz) const {
+        return {OriginX + (static_cast<float>(Ix) + 0.5f) * CellSize, FloorY,
+                OriginZ + (static_cast<float>(Iz) + 0.5f) * CellSize};
     }
 
     /// Nearest cell indices for a world XZ point (clamped). Returns false if mesh empty.
-    [[nodiscard]] bool WorldToCell(float x, float z, int& outIx, int& outIz) const;
+    [[nodiscard]] bool WorldToCell(float X, float Z, int& OutIx, int& OutIz) const;
 };
 

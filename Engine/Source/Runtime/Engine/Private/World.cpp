@@ -6,153 +6,153 @@
 #include <vector>
 
 
-void UWorld::Tick(float deltaTime) {
-    ticking_ = true;
-    for (auto& actor : actors_) {
-        if (actor && !actor->IsPendingKillPending()) {
-            actor->TickComponents(deltaTime);
-            actor->Tick(deltaTime);
+void UWorld::Tick(float InDeltaTime) {
+    bTicking = true;
+    for (auto& Actor : Actors) {
+        if (Actor && !Actor->IsPendingKillPending()) {
+            Actor->TickComponents(InDeltaTime);
+            Actor->Tick(InDeltaTime);
         }
     }
-    ticking_ = false;
-    flushPendingSpawns();
-    purgePending();
+    bTicking = false;
+    FlushPendingSpawns();
+    PurgePending();
 }
 
-void UWorld::RegisterBodiesFromLevel(const ULevel& level) {
-    physics_.Clear();
-    const auto& meshes = level.StaticMeshes();
-    for (std::size_t i = 0; i < meshes.size(); ++i) {
-        const UStaticMeshComponent& component = meshes[i];
-        if (!component.HasPhysicsBody()) {
+void UWorld::RegisterBodiesFromLevel(const ULevel& InLevel) {
+    Physics.Clear();
+    const auto& Meshes = InLevel.GetStaticMeshes();
+    for (std::size_t I = 0; I < Meshes.size(); ++I) {
+        const UStaticMeshComponent& Component = Meshes[I];
+        if (!Component.HasPhysicsBody()) {
             continue;
         }
-        FBodyInstanceDesc desc{};
-        desc.LevelMeshIndex = i;
-        desc.Type = component.simulatePhysics ? EBodyType::Dynamic : EBodyType::Static;
-        desc.bEnableGravity = component.enableGravity;
-        physics_.AddBody(desc);
+        FBodyInstanceDesc Desc{};
+        Desc.LevelMeshIndex = I;
+        Desc.Type = Component.bSimulatePhysics ? EBodyType::Dynamic : EBodyType::Static;
+        Desc.bEnableGravity = Component.bEnableGravity;
+        Physics.AddBody(Desc);
     }
 }
 
-void UWorld::resolveCharacterOverlaps() {
-    std::vector<ACharacter*> characters;
-    characters.reserve(actors_.size());
-    ForEach<ACharacter>([&](ACharacter& character) { characters.push_back(&character); });
-    if (characters.size() < 2) {
+void UWorld::ResolveCharacterOverlaps() {
+    std::vector<ACharacter*> Characters;
+    Characters.reserve(Actors.size());
+    ForEach<ACharacter>([&](ACharacter& Character) { Characters.push_back(&Character); });
+    if (Characters.size() < 2) {
         return;
     }
 
     // Flow: collect live Characters → iterate pairs → equal XZ depenetration (2–3 passes).
-    constexpr int kIterations = 3;
-    for (int iter = 0; iter < kIterations; ++iter) {
-        for (std::size_t i = 0; i < characters.size(); ++i) {
-            for (std::size_t j = i + 1; j < characters.size(); ++j) {
-                characters[i]->ResolvePawnOverlap(*characters[j]);
+    constexpr int Iterations = 3;
+    for (int Iter = 0; Iter < Iterations; ++Iter) {
+        for (std::size_t I = 0; I < Characters.size(); ++I) {
+            for (std::size_t J = I + 1; J < Characters.size(); ++J) {
+                Characters[I]->ResolvePawnOverlap(*Characters[J]);
             }
         }
     }
 }
 
-void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& params) {
-    ForEach<ACharacter>([&](ACharacter& character) {
-        character.TickCharacterMovement(params.deltaTime, params.collisionDebugDraw);
+void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& Params) {
+    ForEach<ACharacter>([&](ACharacter& Character) {
+        Character.TickCharacterMovement(Params.DeltaTime, Params.CollisionDebugDraw);
     });
-    resolveCharacterOverlaps();
+    ResolveCharacterOverlaps();
 
-    FPhysSceneStepParams step{};
-    step.DeltaTime = params.deltaTime;
-    if (params.overridePhysicsStep) {
-        step.Damping = params.physicsDamping;
-        step.WalkBounds = params.physicsWalkBounds;
-        step.Gravity = params.physicsGravity;
-        step.FloorY = params.physicsFloorY;
-        step.Skin = params.physicsSkin;
-    } else if (ACharacter* primary = FindFirst<ACharacter>()) {
-        const UCharacterMovementComponent& moveCfg = primary->GetCharacterMovement();
-        step.Damping = moveCfg.PushDamping;
-        step.WalkBounds = moveCfg.WalkBounds;
-        step.Gravity = moveCfg.Gravity;
-        step.FloorY = moveCfg.FloorY;
-        step.Skin = moveCfg.Skin;
-        step.SkipLevelMeshIndex = primary->LevelMeshIndex();
+    FPhysSceneStepParams Step{};
+    Step.DeltaTime = Params.DeltaTime;
+    if (Params.bOverridePhysicsStep) {
+        Step.Damping = Params.PhysicsDamping;
+        Step.WalkBounds = Params.PhysicsWalkBounds;
+        Step.Gravity = Params.PhysicsGravity;
+        Step.FloorY = Params.PhysicsFloorY;
+        Step.Skin = Params.PhysicsSkin;
+    } else if (ACharacter* Primary = FindFirst<ACharacter>()) {
+        const UCharacterMovementComponent& MoveCfg = Primary->GetCharacterMovement();
+        Step.Damping = MoveCfg.PushDamping;
+        Step.WalkBounds = MoveCfg.WalkBounds;
+        Step.Gravity = MoveCfg.Gravity;
+        Step.FloorY = MoveCfg.FloorY;
+        Step.Skin = MoveCfg.Skin;
+        Step.SkipLevelMeshIndex = Primary->GetLevelMeshIndex();
     }
-    physics_.Step(step);
+    Physics.Step(Step);
 
-    ForEach<ACharacter>([](ACharacter& character) { character.ResolveOverlaps(); });
-    resolveCharacterOverlaps();
+    ForEach<ACharacter>([](ACharacter& Character) { Character.ResolveOverlaps(); });
+    ResolveCharacterOverlaps();
 
-    Tick(params.deltaTime);
+    Tick(Params.DeltaTime);
 
-    if (params.level != nullptr) {
-        physics_.SyncToLevel(*params.level);
-        ForEach<ACharacter>([level = params.level](ACharacter& character) {
-            character.SyncTransformToLevel(*level);
+    if (Params.Level != nullptr) {
+        Physics.SyncToLevel(*Params.Level);
+        ForEach<ACharacter>([LocalLevel = Params.Level](ACharacter& Character) {
+            Character.SyncTransformToLevel(*LocalLevel);
         });
     }
 
-    if (params.renderer != nullptr) {
-        SubmitSkeletalDraws(*params.renderer);
+    if (Params.Renderer != nullptr) {
+        SubmitSkeletalDraws(*Params.Renderer);
     }
 
-    if (params.collisionDebugDraw != nullptr) {
-        ForEach<ACharacter>([&](ACharacter& character) {
-            physics_.AppendCollisionDebug(*params.collisionDebugDraw, character.GetCapsule(),
-                                          character.GetActorLocation(), character.LevelMeshIndex());
+    if (Params.CollisionDebugDraw != nullptr) {
+        ForEach<ACharacter>([&](ACharacter& Character) {
+            Physics.AppendCollisionDebug(*Params.CollisionDebugDraw, Character.GetCapsule(),
+                                          Character.GetActorLocation(), Character.GetLevelMeshIndex());
         });
     }
 
-    if (params.navMeshDebugDraw != nullptr) {
-        navigation_.AppendDebugDraw(*params.navMeshDebugDraw);
+    if (Params.NavMeshDebugDraw != nullptr) {
+        Navigation.AppendDebugDraw(*Params.NavMeshDebugDraw);
     }
 }
 
-void UWorld::SubmitSkeletalDraws(FSceneRenderer& renderer) const {
-    ForEach<ACharacter>([&](ACharacter& character) { character.SubmitMeshDraw(renderer); });
+void UWorld::SubmitSkeletalDraws(FSceneRenderer& InRenderer) const {
+    ForEach<ACharacter>([&](ACharacter& Character) { Character.SubmitMeshDraw(InRenderer); });
 }
 
 void UWorld::Clear() {
-    for (auto& actor : pendingSpawns_) {
-        if (actor) {
-            actor->world_ = nullptr;
+    for (auto& Actor : PendingSpawns) {
+        if (Actor) {
+            Actor->World = nullptr;
         }
     }
-    pendingSpawns_.clear();
-    for (auto& actor : actors_) {
-        if (actor) {
-            actor->EndPlay();
-            actor->EndPlayComponents();
-            actor->world_ = nullptr;
+    PendingSpawns.clear();
+    for (auto& Actor : Actors) {
+        if (Actor) {
+            Actor->EndPlay();
+            Actor->EndPlayComponents();
+            Actor->World = nullptr;
         }
     }
-    actors_.clear();
-    physics_.Clear();
+    Actors.clear();
+    Physics.Clear();
 }
 
-void UWorld::flushPendingSpawns() {
-    for (auto& owned : pendingSpawns_) {
-        if (!owned) {
+void UWorld::FlushPendingSpawns() {
+    for (auto& Owned : PendingSpawns) {
+        if (!Owned) {
             continue;
         }
-        AActor* raw = owned.get();
-        actors_.push_back(std::move(owned));
-        raw->BeginPlayComponents();
-        raw->BeginPlay();
+        AActor* Raw = Owned.get();
+        Actors.push_back(std::move(Owned));
+        Raw->BeginPlayComponents();
+        Raw->BeginPlay();
     }
-    pendingSpawns_.clear();
+    PendingSpawns.clear();
 }
 
-void UWorld::purgePending() {
-    for (auto it = actors_.begin(); it != actors_.end();) {
-        if (!*it || (*it)->IsPendingKillPending()) {
-            if (*it) {
-                (*it)->EndPlay();
-                (*it)->EndPlayComponents();
-                (*it)->world_ = nullptr;
+void UWorld::PurgePending() {
+    for (auto It = Actors.begin(); It != Actors.end();) {
+        if (!*It || (*It)->IsPendingKillPending()) {
+            if (*It) {
+                (*It)->EndPlay();
+                (*It)->EndPlayComponents();
+                (*It)->World = nullptr;
             }
-            it = actors_.erase(it);
+            It = Actors.erase(It);
         } else {
-            ++it;
+            ++It;
         }
     }
 }

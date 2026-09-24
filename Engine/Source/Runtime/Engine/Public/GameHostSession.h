@@ -23,33 +23,33 @@ public:
     /// Flow: content root → LoadPack → travel/browser callbacks → registerModes → first Sync via Tick.
     /// `preferredLevelKey` empty → pack `defaultLevel` (shipping). Editor PIE passes the open level key.
     /// `packRootOverride` empty → `FProjectDescriptor::Resolve`; Editor passes the open project path.
-    [[nodiscard]] bool Start(UGameEngine& engine, const char* packName, FRegisterModesFunction registerModes,
-                             std::string_view preferredLevelKey = {},
-                             std::string_view packRootOverride = {});
+    [[nodiscard]] bool Start(UGameEngine& InEngine, const char* InPackName, FRegisterModesFunction RegisterModes,
+                             std::string_view PreferredLevelKey = {},
+                             std::string_view PackRootOverride = {});
 
-    void Tick(float deltaTime);
+    void Tick(float DeltaTime);
     void HandleUiInput();
-    void DrawUi(int framebufferWidth, int framebufferHeight);
+    void DrawUi(int FramebufferWidth, int FramebufferHeight);
 
     /// Exit active GameMode, shut down FWorldRuntime, restore base UGameInstance, clear content root.
     void Stop();
 
-    [[nodiscard]] bool IsActive() const { return active_; }
-    [[nodiscard]] FGameplayRouter& Router() { return gameplay_; }
-    [[nodiscard]] const FGameplayRouter& Router() const { return gameplay_; }
-    [[nodiscard]] FWorldRuntime& GetWorldRuntime() { return world_; }
-    [[nodiscard]] const FWorldRuntime& GetWorldRuntime() const { return world_; }
-    [[nodiscard]] UGameEngine* GetEngine() const { return engine_; }
-    [[nodiscard]] const std::string& PackName() const { return packName_; }
+    [[nodiscard]] bool IsActive() const { return bActive; }
+    [[nodiscard]] FGameplayRouter& Router() { return Gameplay; }
+    [[nodiscard]] const FGameplayRouter& Router() const { return Gameplay; }
+    [[nodiscard]] FWorldRuntime& GetWorldRuntime() { return World; }
+    [[nodiscard]] const FWorldRuntime& GetWorldRuntime() const { return World; }
+    [[nodiscard]] UGameEngine* GetEngine() const { return Engine; }
+    [[nodiscard]] const std::string& GetPackName() const { return PackName; }
 
 private:
     void BindTravelCallbacks();
 
-    UGameEngine* engine_ = nullptr;
-    FWorldRuntime world_;
-    FGameplayRouter gameplay_;
-    std::string packName_;
-    bool active_ = false;
-    bool worldInitialized_ = false;
+    UGameEngine* Engine = nullptr;
+    FWorldRuntime World;
+    FGameplayRouter Gameplay;
+    std::string PackName;
+    bool bActive = false;
+    bool bWorldInitialized = false;
 };
 

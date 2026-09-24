@@ -27,31 +27,31 @@ class FWorldRuntime {
 
 public:
 
-    [[nodiscard]] bool Initialize(UGameEngine& engine, const std::string& shaderDirectory);
+    [[nodiscard]] bool Initialize(UGameEngine& Engine, const std::string& ShaderDirectory);
 
-    [[nodiscard]] bool LoadPack(UGameEngine& engine, const std::string& packDirectory,
+    [[nodiscard]] bool LoadPack(UGameEngine& Engine, const std::string& PackDirectory,
 
-                                std::string_view preferredLevelKey = {});
+                                std::string_view PreferredLevelKey = {});
 
-    void Tick(UGameEngine& engine, FGameplayRouter& gameplay, float deltaTime);
+    void Tick(UGameEngine& Engine, FGameplayRouter& Gameplay, float DeltaTime);
 
-    void HandleUiInput(UGameEngine& engine);
+    void HandleUiInput(UGameEngine& Engine);
 
-    void DrawUi(int framebufferWidth, int framebufferHeight);
+    void DrawUi(int FramebufferWidth, int FramebufferHeight);
 
     void Shutdown();
 
 
 
-    [[nodiscard]] FLevelDirector& Director() { return director_; }
+    [[nodiscard]] FLevelDirector& GetDirector() { return Director; }
 
-    [[nodiscard]] const FLevelDirector& Director() const { return director_; }
+    [[nodiscard]] const FLevelDirector& GetDirector() const { return Director; }
 
 
 
 private:
 
-    FLevelDirector director_;
+    FLevelDirector Director;
 
 };
 

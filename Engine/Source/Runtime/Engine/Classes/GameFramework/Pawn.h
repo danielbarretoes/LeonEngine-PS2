@@ -8,8 +8,8 @@ class AController;
 /// Possessable Actor (Unreal-style Pawn). Character derives from this.
 class APawn : public AActor {
 public:
-    [[nodiscard]] AController* GetController() const { return controller_; }
-    [[nodiscard]] bool IsPossessed() const { return controller_ != nullptr; }
+    [[nodiscard]] AController* GetController() const { return Controller; }
+    [[nodiscard]] bool IsPossessed() const { return Controller != nullptr; }
 
     /// UnPossess any Controller, then mark pending kill.
     void Destroy() override;
@@ -22,9 +22,9 @@ protected:
 private:
     friend class AController;
 
-    void bindController(AController* controller) { controller_ = controller; }
-    void detachController();
+    void BindController(AController* InController) { Controller = InController; }
+    void DetachController();
 
-    AController* controller_ = nullptr;
+    AController* Controller = nullptr;
 };
 

@@ -9,124 +9,124 @@
 
 namespace {
 
-void beginFreeLookFromOrbit(UCameraComponent& camera) {
-    const glm::vec3 eye = camera.GetCameraLocation();
-    const glm::vec3 target = camera.Target();
-    glm::vec3 look = target - eye;
-    const float lookLen = glm::length(look);
-    if (lookLen > 1.0e-5f) {
-        look /= lookLen;
+void BeginFreeLookFromOrbit(UCameraComponent& Camera) {
+    const glm::vec3 Eye = Camera.GetCameraLocation();
+    const glm::vec3 LocalTarget = Camera.GetTarget();
+    glm::vec3 Look = LocalTarget - Eye;
+    const float LookLen = glm::length(Look);
+    if (LookLen > 1.0e-5f) {
+        Look /= LookLen;
     } else {
-        look = glm::vec3{0.0f, 0.0f, -1.0f};
+        Look = glm::vec3{0.0f, 0.0f, -1.0f};
     }
 
-    const float pitch = std::asin(std::clamp(look.y, -1.0f, 1.0f)) * (180.0f / glm::pi<float>());
-    const float yaw = std::atan2(look.z, look.x) * (180.0f / glm::pi<float>());
+    const float Pitch = std::asin(std::clamp(Look.y, -1.0f, 1.0f)) * (180.0f / glm::pi<float>());
+    const float Yaw = std::atan2(Look.z, Look.x) * (180.0f / glm::pi<float>());
 
-    camera.SetMode(ECameraMode::FreeLook);
-    camera.SetEyeLocation(eye);
-    camera.SetYawPitch(yaw, pitch);
+    Camera.SetMode(ECameraMode::FreeLook);
+    Camera.SetEyeLocation(Eye);
+    Camera.SetYawPitch(Yaw, Pitch);
 }
 
 } // namespace
 
-bool ADefaultGameMode::Matches(const FLevelEntry& /*entry*/, const std::string& gameModeId) const {
-    return gameModeId.empty() || gameModeId == Id();
+bool ADefaultGameMode::Matches(const FLevelEntry& /*entry*/, const std::string& GameModeId) const {
+    return GameModeId.empty() || GameModeId == Id();
 }
 
-void ADefaultGameMode::OnEnter(UGameEngine& engine, const std::string& /*levelPath*/) {
-    player_.UnPossess();
+void ADefaultGameMode::OnEnter(UGameEngine& Engine, const std::string& /*levelPath*/) {
+    Player.UnPossess();
     GetWorld().Clear();
     GetGameState().Reset();
-    player_.GetPlayerState().Reset();
+    Player.GetPlayerState().Reset();
 
-    UCameraComponent& camera = engine.GetCamera();
-    savedOrbit_.target = camera.Target();
-    savedOrbit_.distance = camera.Distance();
-    savedOrbit_.yawDegrees = camera.YawDegrees();
-    savedOrbit_.pitchDegrees = camera.PitchDegrees();
+    UCameraComponent& Camera = Engine.GetCamera();
+    SavedOrbit.Target = Camera.GetTarget();
+    SavedOrbit.Distance = Camera.GetDistance();
+    SavedOrbit.YawDegrees = Camera.GetYawDegrees();
+    SavedOrbit.PitchDegrees = Camera.GetPitchDegrees();
 
-    beginFreeLookFromOrbit(camera);
+    BeginFreeLookFromOrbit(Camera);
 
-    auto* cameraActor = GetWorld().SpawnActor<ADefaultCameraActor>();
-    cameraActor->SetActorLocation(camera.EyeLocation());
-    cameraActor->SetActorYaw(camera.YawDegrees());
-    player_.Possess(cameraActor);
-    PostLogin(player_);
+    auto* CameraActor = GetWorld().SpawnActor<ADefaultCameraActor>();
+    CameraActor->SetActorLocation(Camera.EyeLocation());
+    CameraActor->SetActorYaw(Camera.GetYawDegrees());
+    Player.Possess(CameraActor);
+    PostLogin(Player);
 
     GetGameState().HandleMatchHasStarted();
-    engine.GetGameInstance().NotifyLevelOpened();
-    engine.SetKeyboardOrbitEnabled(false);
-    engine.SetOrbitMouseEnabled(false);
-    engine.SetSuppressCameraDrag(false);
-    engine.SetPlayMouseLookActive(true);
+    Engine.GetGameInstance().NotifyLevelOpened();
+    Engine.SetKeyboardOrbitEnabled(false);
+    Engine.SetOrbitMouseEnabled(false);
+    Engine.SetSuppressCameraDrag(false);
+    Engine.SetPlayMouseLookActive(true);
     // Runtime / New Window: capture. Editor Selected Viewport clears this and gates look by hover.
-    engine.SetCursorCaptured(true);
-    mouseLookSampleValid_ = false;
+    Engine.SetCursorCaptured(true);
+    bMouseLookSampleValid = false;
 
-    engine.AddOnScreenDebugMessage("DefaultCameraActor — mouse look, WASD fly, Q/E up/down", 5.0f,
+    Engine.AddOnScreenDebugMessage("DefaultCameraActor — mouse look, WASD fly, Q/E up/down", 5.0f,
                                    {0.35f, 0.95f, 0.55f});
 }
 
-void ADefaultGameMode::OnExit(UGameEngine& engine) {
+void ADefaultGameMode::OnExit(UGameEngine& Engine) {
     GetGameState().HandleMatchHasEnded();
-    Logout(player_);
-    player_.UnPossess();
+    Logout(Player);
+    Player.UnPossess();
     GetWorld().Clear();
-    mouseLookSampleValid_ = false;
+    bMouseLookSampleValid = false;
 
-    UCameraComponent& camera = engine.GetCamera();
-    camera.SetMode(ECameraMode::Orbit);
-    camera.SetTarget(savedOrbit_.target);
-    camera.SetDistance(savedOrbit_.distance);
-    camera.SetYawPitch(savedOrbit_.yawDegrees, savedOrbit_.pitchDegrees);
+    UCameraComponent& Camera = Engine.GetCamera();
+    Camera.SetMode(ECameraMode::Orbit);
+    Camera.SetTarget(SavedOrbit.Target);
+    Camera.SetDistance(SavedOrbit.Distance);
+    Camera.SetYawPitch(SavedOrbit.YawDegrees, SavedOrbit.PitchDegrees);
 
-    engine.SetCursorCaptured(false);
-    engine.SetKeyboardOrbitEnabled(true);
-    engine.SetOrbitMouseEnabled(true);
+    Engine.SetCursorCaptured(false);
+    Engine.SetKeyboardOrbitEnabled(true);
+    Engine.SetOrbitMouseEnabled(true);
 }
 
-void ADefaultGameMode::Tick(UGameEngine& engine, float deltaTime) {
-    GetGameState().Tick(deltaTime);
-    player_.GetPlayerState().Tick(deltaTime);
+void ADefaultGameMode::Tick(UGameEngine& Engine, float DeltaTime) {
+    GetGameState().Tick(DeltaTime);
+    Player.GetPlayerState().Tick(DeltaTime);
 
-    ADefaultCameraActor* cameraActor = player_.GetDefaultCameraActor();
-    if (cameraActor == nullptr || cameraActor->IsPendingKillPending()) {
+    ADefaultCameraActor* CameraActor = Player.GetDefaultCameraActor();
+    if (CameraActor == nullptr || CameraActor->IsPendingKillPending()) {
         return;
     }
 
-    UCameraComponent& camera = engine.GetCamera();
-    double mouseX = 0.0;
-    double mouseY = 0.0;
-    engine.GetPlayInputWindow().GetCursorPos(mouseX, mouseY);
+    UCameraComponent& Camera = Engine.GetCamera();
+    double MouseX = 0.0;
+    double MouseY = 0.0;
+    Engine.GetPlayInputWindow().GetCursorPos(MouseX, MouseY);
     // EditorApp does not call Engine::handleInput — apply look here for PIE + runtime.
-    if (engine.IsCursorCaptured() || engine.IsPlayMouseLookActive()) {
-        if (mouseLookSampleValid_) {
-            const float dx = static_cast<float>(mouseX - lastMouseX_);
-            const float dy = static_cast<float>(mouseY - lastMouseY_);
-            constexpr float kLookDegreesPerPixel = 0.15f;
-            camera.AddLook(dx * kLookDegreesPerPixel, -dy * kLookDegreesPerPixel);
+    if (Engine.IsCursorCaptured() || Engine.IsPlayMouseLookActive()) {
+        if (bMouseLookSampleValid) {
+            const float Dx = static_cast<float>(MouseX - LastMouseX);
+            const float Dy = static_cast<float>(MouseY - LastMouseY);
+            constexpr float LookDegreesPerPixel = 0.15f;
+            Camera.AddLook(Dx * LookDegreesPerPixel, -Dy * LookDegreesPerPixel);
         }
-        mouseLookSampleValid_ = true;
-        lastMouseX_ = mouseX;
-        lastMouseY_ = mouseY;
+        bMouseLookSampleValid = true;
+        LastMouseX = MouseX;
+        LastMouseY = MouseY;
     } else {
-        mouseLookSampleValid_ = false;
+        bMouseLookSampleValid = false;
     }
 
-    const glm::vec3 wish = player_.TickInput(engine);
-    glm::vec3 location = cameraActor->GetActorLocation();
-    location += wish * cameraActor->MoveSpeed() * deltaTime;
-    cameraActor->SetActorLocation(location);
-    cameraActor->SetActorYaw(camera.YawDegrees());
+    const glm::vec3 Wish = Player.TickInput(Engine);
+    glm::vec3 Location = CameraActor->GetActorLocation();
+    Location += Wish * CameraActor->GetMoveSpeed() * DeltaTime;
+    CameraActor->SetActorLocation(Location);
+    CameraActor->SetActorYaw(Camera.GetYawDegrees());
 
-    GetWorld().Tick(deltaTime);
+    GetWorld().Tick(DeltaTime);
 
-    cameraActor = player_.GetDefaultCameraActor();
-    if (cameraActor == nullptr) {
+    CameraActor = Player.GetDefaultCameraActor();
+    if (CameraActor == nullptr) {
         return;
     }
 
-    camera.SetEyeLocation(cameraActor->GetActorLocation());
+    Camera.SetEyeLocation(CameraActor->GetActorLocation());
 }
 

@@ -20,12 +20,12 @@ public:
     UActorComponent(UActorComponent&&) = delete;
     UActorComponent& operator=(UActorComponent&&) = delete;
 
-    void SetOwner(AActor* owner) { owner_ = owner; }
-    [[nodiscard]] AActor* GetOwner() const { return owner_; }
+    void SetOwner(AActor* InOwner) { Owner = InOwner; }
+    [[nodiscard]] AActor* GetOwner() const { return Owner; }
 
-    [[nodiscard]] bool IsRegistered() const { return registered_; }
-    [[nodiscard]] bool IsComponentTickEnabled() const { return primaryTickEnabled_; }
-    void SetComponentTickEnabled(bool enabled) { primaryTickEnabled_ = enabled; }
+    [[nodiscard]] bool IsRegistered() const { return bRegistered; }
+    [[nodiscard]] bool IsComponentTickEnabled() const { return bPrimaryTickEnabled; }
+    void SetComponentTickEnabled(bool bEnabled) { bPrimaryTickEnabled = bEnabled; }
 
     virtual void BeginPlay() {}
     virtual void EndPlay() {}
@@ -38,8 +38,8 @@ public:
 protected:
     friend class AActor;
 
-    AActor* owner_ = nullptr;
-    bool registered_ = false;
-    bool primaryTickEnabled_ = false;
+    AActor* Owner = nullptr;
+    bool bRegistered = false;
+    bool bPrimaryTickEnabled = false;
 };
 

@@ -4,121 +4,121 @@
 #include <utility>
 
 
-std::size_t UStaticMeshComponent::subMeshCount() const {
-    if (mesh == nullptr || !mesh->Valid()) {
+std::size_t UStaticMeshComponent::SubMeshCount() const {
+    if (Mesh == nullptr || !Mesh->Valid()) {
         return 0;
     }
-    return mesh->GetSubmeshes().empty() ? 1 : mesh->GetSubmeshes().size();
+    return Mesh->GetSubmeshes().empty() ? 1 : Mesh->GetSubmeshes().size();
 }
 
-const FMaterial& UStaticMeshComponent::materialForSubMesh(std::size_t subMeshIndex) const {
-    int slot = 0;
-    if (mesh != nullptr && subMeshIndex < mesh->GetSubmeshes().size()) {
-        slot = mesh->GetSubmeshes()[subMeshIndex].MaterialIndex;
+const FMaterial& UStaticMeshComponent::MaterialForSubMesh(std::size_t SubMeshIndex) const {
+    int Slot = 0;
+    if (Mesh != nullptr && SubMeshIndex < Mesh->GetSubmeshes().size()) {
+        Slot = Mesh->GetSubmeshes()[SubMeshIndex].MaterialIndex;
     }
 
-    if (slot >= 0 && static_cast<std::size_t>(slot) < materials.size()) {
-        return materials[static_cast<std::size_t>(slot)];
+    if (Slot >= 0 && static_cast<std::size_t>(Slot) < Materials.size()) {
+        return Materials[static_cast<std::size_t>(Slot)];
     }
-    if (materialOverride) {
-        return material;
+    if (bMaterialOverride) {
+        return Material;
     }
-    if (mesh != nullptr && mesh->HasMaterials() && slot >= 0 &&
-        static_cast<std::size_t>(slot) < mesh->GetMaterials().size()) {
-        return mesh->GetMaterials()[static_cast<std::size_t>(slot)];
+    if (Mesh != nullptr && Mesh->HasMaterials() && Slot >= 0 &&
+        static_cast<std::size_t>(Slot) < Mesh->GetMaterials().size()) {
+        return Mesh->GetMaterials()[static_cast<std::size_t>(Slot)];
     }
-    return material;
+    return Material;
 }
 
-bool UStaticMeshComponent::isShadowCaster() const {
-    if (hidden || mesh == nullptr || !mesh->Valid()) {
+bool UStaticMeshComponent::IsShadowCaster() const {
+    if (bHidden || Mesh == nullptr || !Mesh->Valid()) {
         return false;
     }
 
-    const auto countsAsCaster = [](const FMaterial& mat) {
-        return mat.bCastsShadows && !mat.IsTransparent() && mat.Shading != EMaterialShadingModel::Unlit;
+    const auto CountsAsCaster = [](const FMaterial& Mat) {
+        return Mat.bCastsShadows && !Mat.IsTransparent() && Mat.Shading != EMaterialShadingModel::Unlit;
     };
 
-    if (!materials.empty()) {
-        return std::any_of(materials.begin(), materials.end(), countsAsCaster);
+    if (!Materials.empty()) {
+        return std::any_of(Materials.begin(), Materials.end(), CountsAsCaster);
     }
-    if (materialOverride) {
-        return countsAsCaster(material);
+    if (bMaterialOverride) {
+        return CountsAsCaster(Material);
     }
-    if (mesh->HasMaterials()) {
-        const auto& mats = mesh->GetMaterials();
-        return std::any_of(mats.begin(), mats.end(), countsAsCaster);
+    if (Mesh->HasMaterials()) {
+        const auto& Mats = Mesh->GetMaterials();
+        return std::any_of(Mats.begin(), Mats.end(), CountsAsCaster);
     }
-    return countsAsCaster(material);
+    return CountsAsCaster(Material);
 }
 
-UStaticMeshComponent& ULevel::AddStaticMesh(UStaticMeshComponent component) {
-    staticMeshes_.push_back(std::move(component));
-    return staticMeshes_.back();
+UStaticMeshComponent& ULevel::AddStaticMesh(UStaticMeshComponent Component) {
+    StaticMeshes.push_back(std::move(Component));
+    return StaticMeshes.back();
 }
 
-FPlayerStart& ULevel::AddPlayerStart(FPlayerStart start) {
-    playerStarts_.push_back(std::move(start));
-    return playerStarts_.back();
+FPlayerStart& ULevel::AddPlayerStart(FPlayerStart Start) {
+    PlayerStarts.push_back(std::move(Start));
+    return PlayerStarts.back();
 }
 
-FTriggerVolume& ULevel::AddTriggerVolume(FTriggerVolume volume) {
-    triggerVolumes_.push_back(std::move(volume));
-    return triggerVolumes_.back();
+FTriggerVolume& ULevel::AddTriggerVolume(FTriggerVolume Volume) {
+    TriggerVolumes.push_back(std::move(Volume));
+    return TriggerVolumes.back();
 }
 
-FPainCausingVolume& ULevel::AddPainCausingVolume(FPainCausingVolume volume) {
-    painCausingVolumes_.push_back(std::move(volume));
-    return painCausingVolumes_.back();
+FPainCausingVolume& ULevel::AddPainCausingVolume(FPainCausingVolume Volume) {
+    PainCausingVolumes.push_back(std::move(Volume));
+    return PainCausingVolumes.back();
 }
 
-FAISpawnPoint& ULevel::AddAISpawnPoint(FAISpawnPoint point) {
-    aiSpawnPoints_.push_back(std::move(point));
-    return aiSpawnPoints_.back();
+FAISpawnPoint& ULevel::AddAISpawnPoint(FAISpawnPoint Point) {
+    AiSpawnPoints.push_back(std::move(Point));
+    return AiSpawnPoints.back();
 }
 
 const FPlayerStart* ULevel::FindPlayerStart() const {
-    if (playerStarts_.empty()) {
+    if (PlayerStarts.empty()) {
         return nullptr;
     }
-    return &playerStarts_.front();
+    return &PlayerStarts.front();
 }
 
-std::size_t ULevel::FindStaticMeshIndexByTag(std::string_view tag) const {
-    if (tag.empty()) {
-        return npos;
+std::size_t ULevel::FindStaticMeshIndexByTag(std::string_view InTag) const {
+    if (InTag.empty()) {
+        return Npos;
     }
-    for (std::size_t i = 0; i < staticMeshes_.size(); ++i) {
-        if (staticMeshes_[i].tag == tag) {
-            return i;
+    for (std::size_t I = 0; I < StaticMeshes.size(); ++I) {
+        if (StaticMeshes[I].Tag == InTag) {
+            return I;
         }
     }
-    return npos;
+    return Npos;
 }
 
 void ULevel::ClearStaticMeshes() {
-    staticMeshes_.clear();
+    StaticMeshes.clear();
 }
 
 void ULevel::ClearPlayerStarts() {
-    playerStarts_.clear();
+    PlayerStarts.clear();
 }
 
 void ULevel::ClearTriggerVolumes() {
-    triggerVolumes_.clear();
+    TriggerVolumes.clear();
 }
 
 void ULevel::ClearPainCausingVolumes() {
-    painCausingVolumes_.clear();
+    PainCausingVolumes.clear();
 }
 
 void ULevel::ClearAISpawnPoints() {
-    aiSpawnPoints_.clear();
+    AiSpawnPoints.clear();
 }
 
 void ULevel::ClearLights() {
-    directionalLights_.clear();
-    pointLights_.clear();
+    DirectionalLights.clear();
+    PointLights.clear();
 }
 
 void ULevel::Clear() {
@@ -128,10 +128,10 @@ void ULevel::Clear() {
     ClearPainCausingVolumes();
     ClearAISpawnPoints();
     ClearLights();
-    environment_.reset();
-    environmentExposure_ = 1.0f;
-    environmentPath_.clear();
-    name_.clear();
-    gameMode_.clear();
+    Environment.reset();
+    EnvironmentExposure = 1.0f;
+    EnvironmentPath.clear();
+    Name.clear();
+    GameMode.clear();
 }
 

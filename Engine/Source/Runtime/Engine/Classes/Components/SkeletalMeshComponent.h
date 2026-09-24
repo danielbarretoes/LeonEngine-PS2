@@ -23,15 +23,15 @@ class FSceneRenderer;
 
 /// Static mesh glued to a skeletal bone (Unreal-like socket attachment).
 struct FSkelMeshAttachment {
-    std::string boneName;
-    std::shared_ptr<UStaticMesh> mesh;
-    FMaterial material{};
-    bool materialOverride = true;
+    std::string BoneName;
+    std::shared_ptr<UStaticMesh> Mesh;
+    FMaterial Material{};
+    bool bMaterialOverride = true;
     /// Bone-local TRS applied after the bone model matrix.
-    FTransform relative{};
+    FTransform Relative{};
     /// When true, `worldMatrixOverride` replaces `component * bone * relative`.
     bool bOverrideWorldMatrix = false;
-    glm::mat4 worldMatrixOverride{1.0f};
+    glm::mat4 WorldMatrixOverride{1.0f};
 };
 
 /// Unreal-like USkeletalMeshComponent — USceneComponent with skeletal mesh + UAnimInstance.
@@ -39,83 +39,83 @@ class USkeletalMeshComponent : public USceneComponent {
 public:
     USkeletalMeshComponent();
 
-    void SetSkeletalMesh(std::shared_ptr<USkeletalMesh> mesh);
-    [[nodiscard]] USkeletalMesh* GetSkeletalMesh() { return skeletalMesh_.get(); }
-    [[nodiscard]] const USkeletalMesh* GetSkeletalMesh() const { return skeletalMesh_.get(); }
+    void SetSkeletalMesh(std::shared_ptr<USkeletalMesh> InMesh);
+    [[nodiscard]] USkeletalMesh* GetSkeletalMesh() { return SkeletalMesh.get(); }
+    [[nodiscard]] const USkeletalMesh* GetSkeletalMesh() const { return SkeletalMesh.get(); }
 
-    void SetAnimInstance(std::unique_ptr<UAnimInstance> instance);
+    void SetAnimInstance(std::unique_ptr<UAnimInstance> Instance);
     template <typename TAnim, typename... TArgs>
-    TAnim& SetAnimInstance(TArgs&&... args) {
+    TAnim& SetAnimInstance(TArgs&&... Args) {
         static_assert(std::is_base_of_v<UAnimInstance, TAnim>,
                       "TAnim must derive from AnimInstance");
-        auto owned = std::make_unique<TAnim>(std::forward<TArgs>(args)...);
-        TAnim& ref = *owned;
-        SetAnimInstance(std::move(owned));
-        return ref;
+        auto Owned = std::make_unique<TAnim>(std::forward<TArgs>(Args)...);
+        TAnim& Ref = *Owned;
+        SetAnimInstance(std::move(Owned));
+        return Ref;
     }
 
-    [[nodiscard]] UAnimInstance& GetAnimInstance() { return *animInstance_; }
-    [[nodiscard]] const UAnimInstance& GetAnimInstance() const { return *animInstance_; }
+    [[nodiscard]] UAnimInstance& GetAnimInstance() { return *AnimInstance; }
+    [[nodiscard]] const UAnimInstance& GetAnimInstance() const { return *AnimInstance; }
 
     template <typename TAnim>
     [[nodiscard]] TAnim* GetAnimInstance() {
-        return dynamic_cast<TAnim*>(animInstance_.get());
+        return dynamic_cast<TAnim*>(AnimInstance.get());
     }
     template <typename TAnim>
     [[nodiscard]] const TAnim* GetAnimInstance() const {
-        return dynamic_cast<const TAnim*>(animInstance_.get());
+        return dynamic_cast<const TAnim*>(AnimInstance.get());
     }
 
-    [[nodiscard]] UBlendSpace1D& GetBlendSpace() { return blendSpace_; }
-    [[nodiscard]] const UBlendSpace1D& GetBlendSpace() const { return blendSpace_; }
+    [[nodiscard]] UBlendSpace1D& GetBlendSpace() { return BlendSpace; }
+    [[nodiscard]] const UBlendSpace1D& GetBlendSpace() const { return BlendSpace; }
 
-    [[nodiscard]] UAnimSequence* FindSequence(const std::string& name);
-    [[nodiscard]] const UAnimSequence* FindSequence(const std::string& name) const;
-    [[nodiscard]] UAnimSequence& GetOrCreateSequence(const std::string& name);
+    [[nodiscard]] UAnimSequence* FindSequence(const std::string& Name);
+    [[nodiscard]] const UAnimSequence* FindSequence(const std::string& Name) const;
+    [[nodiscard]] UAnimSequence& GetOrCreateSequence(const std::string& Name);
 
     /// Bind skeleton/blendspace pointers and call UAnimInstance::NativeInitializeAnimation.
     void BindSequencesToAnimInstance();
 
-    void ApplyFitHeight(float fitHeight);
+    void ApplyFitHeight(float FitHeight);
 
-    [[nodiscard]] bool LoadFromFbx(const std::string& meshFbxPath, const std::string& runFbxPath,
-                                   float fitHeight);
+    [[nodiscard]] bool LoadFromFbx(const std::string& MeshFbxPath, const std::string& RunFbxPath,
+                                   float FitHeight);
     /// Load a Leon character package (`.lchar`) or legacy `.character.json`.
-    [[nodiscard]] bool LoadFromCooked(UGameEngine& engine, const std::string& characterAssetPath);
+    [[nodiscard]] bool LoadFromCooked(UGameEngine& Engine, const std::string& CharacterAssetPath);
 
     void ClearAttachments();
-    FSkelMeshAttachment& AddAttachment(FSkelMeshAttachment attachment);
-    [[nodiscard]] std::vector<FSkelMeshAttachment>& Attachments() { return attachments_; }
-    [[nodiscard]] const std::vector<FSkelMeshAttachment>& Attachments() const {
-        return attachments_;
+    FSkelMeshAttachment& AddAttachment(FSkelMeshAttachment Attachment);
+    [[nodiscard]] std::vector<FSkelMeshAttachment>& GetAttachments() { return Attachments; }
+    [[nodiscard]] const std::vector<FSkelMeshAttachment>& GetAttachments() const {
+        return Attachments;
     }
 
     /// Bone model-space matrix from the current UAnimInstance pose.
-    [[nodiscard]] bool GetBoneModelMatrix(const std::string& boneName, glm::mat4& outModel) const;
+    [[nodiscard]] bool GetBoneModelMatrix(const std::string& InBoneName, glm::mat4& OutModel) const;
 
     /// Component world * bone * attachment.relative (or worldMatrixOverride).
-    [[nodiscard]] bool GetAttachmentWorldMatrix(std::size_t attachmentIndex,
-                                                glm::mat4& outWorld) const;
+    [[nodiscard]] bool GetAttachmentWorldMatrix(std::size_t AttachmentIndex,
+                                                glm::mat4& OutWorld) const;
 
-    void TickComponent(float deltaTime);
+    void TickComponent(float DeltaTime);
     /// Submit using this component's USceneComponent world transform.
-    void SubmitDraw(FSceneRenderer& renderer) const;
+    void SubmitDraw(FSceneRenderer& Renderer) const;
 
     [[nodiscard]] bool HasValidMesh() const {
-        return skeletalMesh_ != nullptr && skeletalMesh_->Valid();
+        return SkeletalMesh != nullptr && SkeletalMesh->Valid();
     }
 
 private:
-    void bindAnimInstanceToAssets();
+    void BindAnimInstanceToAssets();
 
-    std::shared_ptr<USkeletalMesh> skeletalMesh_;
+    std::shared_ptr<USkeletalMesh> SkeletalMesh;
     /// Stable storage — BlendSpace / UAnimInstance keep raw pointers into these elements.
-    std::deque<UAnimSequence> sequences_;
-    std::unordered_map<std::string, std::size_t> sequenceIndexByName_;
-    UBlendSpace1D blendSpace_{};
-    std::unique_ptr<UAnimInstance> animInstance_;
-    std::vector<FSkelMeshAttachment> attachments_;
-    mutable std::vector<glm::mat4> skinMatrices_;
-    mutable std::vector<glm::mat4> boneWorldMatrices_;
+    std::deque<UAnimSequence> Sequences;
+    std::unordered_map<std::string, std::size_t> SequenceIndexByName;
+    UBlendSpace1D BlendSpace{};
+    std::unique_ptr<UAnimInstance> AnimInstance;
+    std::vector<FSkelMeshAttachment> Attachments;
+    mutable std::vector<glm::mat4> SkinMatrices;
+    mutable std::vector<glm::mat4> BoneWorldMatrices;
 };
 

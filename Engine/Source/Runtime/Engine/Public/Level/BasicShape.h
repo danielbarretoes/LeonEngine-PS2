@@ -19,36 +19,36 @@ enum class EBasicShape {
 
 /// Placeable basic shape: transform + material + optional mesh options.
 struct FBasicShape {
-    EBasicShape type = EBasicShape::Cube;
-    FTransform transform{};
-    FMaterial material{};
+    EBasicShape Type = EBasicShape::Cube;
+    FTransform Transform{};
+    FMaterial Material{};
     /// When false, `MakeStaticMesh` uses `FResourceCache::DefaultMaterial()` (checker).
-    bool hasCustomMaterial = false;
+    bool bHasCustomMaterial = false;
 
     /// Sphere tessellation (ignored for Cube / FPlane).
-    int sphereSegments = 24;
-    int sphereRings = 16;
+    int SphereSegments = 24;
+    int SphereRings = 16;
 
-    [[nodiscard]] static FBasicShape cube(FTransform transform = {}, FMaterial material = {},
-                                         bool hasMaterial = false);
-    [[nodiscard]] static FBasicShape sphere(FTransform transform = {}, FMaterial material = {},
-                                           bool hasMaterial = false, int segments = 24,
-                                           int rings = 16);
+    [[nodiscard]] static FBasicShape Cube(FTransform InTransform = {}, FMaterial InMaterial = {},
+                                         bool bHasMaterial = false);
+    [[nodiscard]] static FBasicShape Sphere(FTransform InTransform = {}, FMaterial InMaterial = {},
+                                           bool bHasMaterial = false, int Segments = 24,
+                                           int Rings = 16);
     /// `size` sets uniform XZ scale (Unreal-like ground plane extent).
-    [[nodiscard]] static FBasicShape plane(float size = 1.0f, FTransform transform = {},
-                                          FMaterial material = {}, bool hasMaterial = false);
+    [[nodiscard]] static FBasicShape Plane(float Size = 1.0f, FTransform InTransform = {},
+                                          FMaterial InMaterial = {}, bool bHasMaterial = false);
 
     /// Build a Level `UStaticMeshComponent` (mesh + transform + material override).
-    [[nodiscard]] UStaticMeshComponent MakeStaticMesh(FResourceCache& resources) const;
+    [[nodiscard]] UStaticMeshComponent MakeStaticMesh(FResourceCache& Resources) const;
 };
 
-[[nodiscard]] bool tryParseBasicShapeName(std::string_view name, EBasicShape& out);
+[[nodiscard]] bool TryParseBasicShapeName(std::string_view Name, EBasicShape& Out);
 /// Unreal-like BlockingVolume — invisible collision box (Cube + collisionEnabled + hidden).
-[[nodiscard]] bool isBlockingVolumeName(std::string_view name);
+[[nodiscard]] bool IsBlockingVolumeName(std::string_view Name);
 /// Unreal-like FPlayerStart — spawn point only (no mesh).
-[[nodiscard]] bool isPlayerStartName(std::string_view name);
-[[nodiscard]] std::shared_ptr<UStaticMesh> MeshForBasicShape(FResourceCache& resources,
-                                                            EBasicShape shape,
-                                                            int sphereSegments = 24,
-                                                            int sphereRings = 16);
+[[nodiscard]] bool IsPlayerStartName(std::string_view Name);
+[[nodiscard]] std::shared_ptr<UStaticMesh> MeshForBasicShape(FResourceCache& Resources,
+                                                            EBasicShape Shape,
+                                                            int InSphereSegments = 24,
+                                                            int InSphereRings = 16);
 

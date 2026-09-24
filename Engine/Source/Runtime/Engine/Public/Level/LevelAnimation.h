@@ -7,31 +7,31 @@
 /// Runtime animation hooks produced while loading a Level JSON (spin / bob / light orbit).
 struct FLevelAnimation {
     struct FStaticMeshSpin {
-        std::size_t meshIndex = 0;
-        float yawDegreesPerSec = 0.0f; // added to transform.rotation.y each frame
+        std::size_t MeshIndex = 0;
+        float YawDegreesPerSec = 0.0f; // added to transform.rotation.y each frame
     };
     struct FStaticMeshBob {
-        std::size_t meshIndex = 0;
-        float baseY = 0.0f;
-        float amplitude = 0.0f;
-        float speed = 1.0f;
+        std::size_t MeshIndex = 0;
+        float BaseY = 0.0f;
+        float Amplitude = 0.0f;
+        float Speed = 1.0f;
     };
     struct FPointOrbit {
-        std::size_t lightIndex = 0;
-        float radius = 1.0f;
-        float height = 1.0f;
-        float heightAmp = 0.0f;
-        float speed = 1.0f;
+        std::size_t LightIndex = 0;
+        float Radius = 1.0f;
+        float Height = 1.0f;
+        float HeightAmp = 0.0f;
+        float Speed = 1.0f;
     };
 
-    std::vector<FStaticMeshSpin> spins;
-    std::vector<FStaticMeshBob> bobs;
-    std::vector<FPointOrbit> orbits;
+    std::vector<FStaticMeshSpin> Spins;
+    std::vector<FStaticMeshBob> Bobs;
+    std::vector<FPointOrbit> Orbits;
 
-    void clear() {
-        spins.clear();
-        bobs.clear();
-        orbits.clear();
+    void Clear() {
+        Spins.clear();
+        Bobs.clear();
+        Orbits.clear();
     }
 };
 

@@ -22,87 +22,87 @@ public:
 
     /// Resets match clock / flags / map — not PlayerArray (Unreal: logout removes players).
     virtual void Reset() {
-        elapsedSeconds_ = 0.0f;
-        matchInProgress_ = false;
-        matchHasEnded_ = false;
-        replicatedWorldTimeFrames_ = 0;
-        mapName_.clear();
+        ElapsedSeconds = 0.0f;
+        bMatchInProgress = false;
+        bMatchHasEnded = false;
+        ReplicatedWorldTimeFrames = 0;
+        MapName.clear();
     }
 
-    virtual void Tick(float deltaTime) {
-        if (matchInProgress_ && !matchHasEnded_) {
-            elapsedSeconds_ += deltaTime;
+    virtual void Tick(float DeltaTime) {
+        if (bMatchInProgress && !bMatchHasEnded) {
+            ElapsedSeconds += DeltaTime;
         }
     }
 
     /// Unreal `HasMatchStarted`.
-    [[nodiscard]] bool HasMatchStarted() const { return matchInProgress_; }
+    [[nodiscard]] bool HasMatchStarted() const { return bMatchInProgress; }
     /// Unreal `HasMatchEnded`.
-    [[nodiscard]] bool HasMatchEnded() const { return matchHasEnded_; }
+    [[nodiscard]] bool HasMatchEnded() const { return bMatchHasEnded; }
     /// Unreal `GetServerWorldTimeSeconds` (local elapsed while match is in progress).
-    [[nodiscard]] float GetServerWorldTimeSeconds() const { return elapsedSeconds_; }
+    [[nodiscard]] float GetServerWorldTimeSeconds() const { return ElapsedSeconds; }
 
     /// Unreal `PlayerArray` — PlayerStates registered via PostLogin / Logout.
-    [[nodiscard]] const std::vector<APlayerState*>& GetPlayerArray() const { return playerArray_; }
+    [[nodiscard]] const std::vector<APlayerState*>& GetPlayerArray() const { return PlayerArray; }
     /// Unreal `PlayerArray.Num()`.
-    [[nodiscard]] int GetNumPlayers() const { return static_cast<int>(playerArray_.size()); }
+    [[nodiscard]] int GetNumPlayers() const { return static_cast<int>(PlayerArray.size()); }
 
     /// Unreal `AGameStateBase::AddPlayerState` (idempotent).
-    void AddPlayerState(APlayerState* playerState) {
-        if (playerState == nullptr) {
+    void AddPlayerState(APlayerState* PlayerState) {
+        if (PlayerState == nullptr) {
             return;
         }
-        if (std::find(playerArray_.begin(), playerArray_.end(), playerState) != playerArray_.end()) {
+        if (std::find(PlayerArray.begin(), PlayerArray.end(), PlayerState) != PlayerArray.end()) {
             return;
         }
-        playerArray_.push_back(playerState);
+        PlayerArray.push_back(PlayerState);
     }
 
     /// Unreal `AGameStateBase::RemovePlayerState`.
-    void RemovePlayerState(APlayerState* playerState) {
-        if (playerState == nullptr) {
+    void RemovePlayerState(APlayerState* PlayerState) {
+        if (PlayerState == nullptr) {
             return;
         }
-        playerArray_.erase(std::remove(playerArray_.begin(), playerArray_.end(), playerState),
-                           playerArray_.end());
+        PlayerArray.erase(std::remove(PlayerArray.begin(), PlayerArray.end(), PlayerState),
+                           PlayerArray.end());
     }
 
-    [[nodiscard]] bool HasPlayerState(const APlayerState* playerState) const {
-        if (playerState == nullptr) {
+    [[nodiscard]] bool HasPlayerState(const APlayerState* PlayerState) const {
+        if (PlayerState == nullptr) {
             return false;
         }
-        return std::find(playerArray_.begin(), playerArray_.end(), playerState) !=
-               playerArray_.end();
+        return std::find(PlayerArray.begin(), PlayerArray.end(), PlayerState) !=
+               PlayerArray.end();
     }
 
     /// Authority: mark match in progress (pairs with GameMode::StartMatch).
     virtual void HandleMatchHasStarted() {
-        matchInProgress_ = true;
-        matchHasEnded_ = false;
+        bMatchInProgress = true;
+        bMatchHasEnded = false;
     }
     /// Authority: mark match finished (pairs with GameMode::EndMatch).
     virtual void HandleMatchHasEnded() {
-        matchInProgress_ = false;
-        matchHasEnded_ = true;
+        bMatchInProgress = false;
+        bMatchHasEnded = true;
     }
 
     /// Current map identity (Level document name / travel key). Unreal: map package name.
-    [[nodiscard]] const std::string& GetMapName() const { return mapName_; }
-    void SetMapName(std::string name) { mapName_ = std::move(name); }
+    [[nodiscard]] const std::string& GetMapName() const { return MapName; }
+    void SetMapName(std::string Name) { MapName = std::move(Name); }
 
     /// Replicated simulation frame (host advances; clients apply from Snapshot).
     [[nodiscard]] std::uint32_t GetReplicatedWorldTimeFrames() const {
-        return replicatedWorldTimeFrames_;
+        return ReplicatedWorldTimeFrames;
     }
-    void SetReplicatedWorldTimeFrames(std::uint32_t tick) { replicatedWorldTimeFrames_ = tick; }
-    void IncrementReplicatedWorldTimeFrames() { ++replicatedWorldTimeFrames_; }
+    void SetReplicatedWorldTimeFrames(std::uint32_t InTick) { ReplicatedWorldTimeFrames = InTick; }
+    void IncrementReplicatedWorldTimeFrames() { ++ReplicatedWorldTimeFrames; }
 
 private:
-    float elapsedSeconds_ = 0.0f;
-    bool matchInProgress_ = false;
-    bool matchHasEnded_ = false;
-    std::uint32_t replicatedWorldTimeFrames_ = 0;
-    std::string mapName_;
-    std::vector<APlayerState*> playerArray_;
+    float ElapsedSeconds = 0.0f;
+    bool bMatchInProgress = false;
+    bool bMatchHasEnded = false;
+    std::uint32_t ReplicatedWorldTimeFrames = 0;
+    std::string MapName;
+    std::vector<APlayerState*> PlayerArray;
 };
 

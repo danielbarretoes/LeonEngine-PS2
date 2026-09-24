@@ -8,114 +8,114 @@
 
 namespace {
 
-[[nodiscard]] bool PointInPainAabb(const glm::vec3& point, const FPainCausingVolume& vol) {
-    const glm::vec3 half = glm::abs(vol.transform.Scale) * 0.5f;
-    const glm::vec3 min = vol.transform.Position - half;
-    const glm::vec3 max = vol.transform.Position + half;
-    return point.x >= min.x && point.x <= max.x && point.y >= min.y && point.y <= max.y &&
-           point.z >= min.z && point.z <= max.z;
+[[nodiscard]] bool PointInPainAabb(const glm::vec3& Point, const FPainCausingVolume& Vol) {
+    const glm::vec3 Half = glm::abs(Vol.Transform.Scale) * 0.5f;
+    const glm::vec3 Min = Vol.Transform.Position - Half;
+    const glm::vec3 Max = Vol.Transform.Position + Half;
+    return Point.x >= Min.x && Point.x <= Max.x && Point.y >= Min.y && Point.y <= Max.y &&
+           Point.z >= Min.z && Point.z <= Max.z;
 }
 
-[[nodiscard]] float SmallestPositiveInterval(const std::vector<FPainCausingVolume>& volumes) {
-    float best = (std::numeric_limits<float>::max)();
-    for (const FPainCausingVolume& vol : volumes) {
-        if (vol.damageInterval > 0.0f && vol.damageInterval < best) {
-            best = vol.damageInterval;
+[[nodiscard]] float SmallestPositiveInterval(const std::vector<FPainCausingVolume>& Volumes) {
+    float Best = (std::numeric_limits<float>::max)();
+    for (const FPainCausingVolume& Vol : Volumes) {
+        if (Vol.DamageInterval > 0.0f && Vol.DamageInterval < Best) {
+            Best = Vol.DamageInterval;
         }
     }
-    return best;
+    return Best;
 }
 
 } // namespace
 
-bool CharacterOverlapsPainVolume(const ACharacter& ch, const FPainCausingVolume& vol) {
-    return PointInPainAabb(ch.GetActorLocation(), vol);
+bool CharacterOverlapsPainVolume(const ACharacter& Ch, const FPainCausingVolume& Vol) {
+    return PointInPainAabb(Ch.GetActorLocation(), Vol);
 }
 
-void ApplyPainVolumeDamage(ACharacter& ch, const FPainCausingVolume& vol) {
-    const float amount = vol.damagePerSecond * vol.damageInterval;
-    if (amount <= 0.0f) {
+void ApplyPainVolumeDamage(ACharacter& Ch, const FPainCausingVolume& Vol) {
+    const float Amount = Vol.DamagePerSecond * Vol.DamageInterval;
+    if (Amount <= 0.0f) {
         return;
     }
-    (void)UGameplayStatics::ApplyPointDamage(&ch, amount, glm::vec3{0.0f, -1.0f, 0.0f});
+    (void)UGameplayStatics::ApplyPointDamage(&Ch, Amount, glm::vec3{0.0f, -1.0f, 0.0f});
 }
 
-void TickPainCausingVolumes(const std::vector<FPainCausingVolume>& volumes,
-                            std::span<ACharacter*> characters, float deltaTime, float& tickAccum) {
-    if (volumes.empty() || characters.empty() || deltaTime <= 0.0f) {
+void TickPainCausingVolumes(const std::vector<FPainCausingVolume>& Volumes,
+                            std::span<ACharacter*> Characters, float DeltaTime, float& TickAccum) {
+    if (Volumes.empty() || Characters.empty() || DeltaTime <= 0.0f) {
         return;
     }
-    const float interval = SmallestPositiveInterval(volumes);
-    if (!(interval < (std::numeric_limits<float>::max)())) {
+    const float Interval = SmallestPositiveInterval(Volumes);
+    if (!(Interval < (std::numeric_limits<float>::max)())) {
         return;
     }
 
-    tickAccum += deltaTime;
-    if (tickAccum < interval) {
+    TickAccum += DeltaTime;
+    if (TickAccum < Interval) {
         return;
     }
-    tickAccum = 0.0f;
+    TickAccum = 0.0f;
 
-    for (ACharacter* ch : characters) {
-        if (ch == nullptr || !ch->IsAlive()) {
+    for (ACharacter* Ch : Characters) {
+        if (Ch == nullptr || !Ch->IsAlive()) {
             continue;
         }
-        for (const FPainCausingVolume& vol : volumes) {
-            if (!CharacterOverlapsPainVolume(*ch, vol)) {
+        for (const FPainCausingVolume& Vol : Volumes) {
+            if (!CharacterOverlapsPainVolume(*Ch, Vol)) {
                 continue;
             }
-            ApplyPainVolumeDamage(*ch, vol);
+            ApplyPainVolumeDamage(*Ch, Vol);
             break;
         }
     }
 }
 
-std::size_t FindBestTriggerVolume(const std::vector<FTriggerVolume>& volumes, const glm::vec3& feet,
-                                  float maxDist) {
-    if (volumes.empty() || maxDist <= 0.0f) {
-        return ULevel::npos;
+std::size_t FindBestTriggerVolume(const std::vector<FTriggerVolume>& Volumes, const glm::vec3& Feet,
+                                  float MaxDist) {
+    if (Volumes.empty() || MaxDist <= 0.0f) {
+        return ULevel::Npos;
     }
 
-    std::size_t best = ULevel::npos;
-    float bestDist = maxDist;
-    for (std::size_t i = 0; i < volumes.size(); ++i) {
-        const FTriggerVolume& vol = volumes[i];
-        const float radius = vol.interactRadius > 0.0f ? vol.interactRadius : maxDist;
-        const float limit = radius < maxDist ? radius : maxDist;
-        const glm::vec3 delta{feet.x - vol.transform.Position.x, 0.0f,
-                              feet.z - vol.transform.Position.z};
-        const float dist = glm::length(delta);
-        if (dist < bestDist && dist <= limit) {
-            bestDist = dist;
-            best = i;
+    std::size_t Best = ULevel::Npos;
+    float BestDist = MaxDist;
+    for (std::size_t I = 0; I < Volumes.size(); ++I) {
+        const FTriggerVolume& Vol = Volumes[I];
+        const float Radius = Vol.InteractRadius > 0.0f ? Vol.InteractRadius : MaxDist;
+        const float Limit = Radius < MaxDist ? Radius : MaxDist;
+        const glm::vec3 Delta{Feet.x - Vol.Transform.Position.x, 0.0f,
+                              Feet.z - Vol.Transform.Position.z};
+        const float Dist = glm::length(Delta);
+        if (Dist < BestDist && Dist <= Limit) {
+            BestDist = Dist;
+            Best = I;
         }
     }
-    return best;
+    return Best;
 }
 
-std::string FormatDefaultInteractPrompt(const FTriggerVolume& volume) {
-    const std::string& payload = volume.payload;
-    const std::string costSuffix =
-        volume.interactCost > 0 ? (" [" + std::to_string(volume.interactCost) + "]") : std::string{};
+std::string FormatDefaultInteractPrompt(const FTriggerVolume& Volume) {
+    const std::string& Payload = Volume.Payload;
+    const std::string CostSuffix =
+        Volume.InteractCost > 0 ? (" [" + std::to_string(Volume.InteractCost) + "]") : std::string{};
 
-    if (payload.empty()) {
-        return "[F] Interact" + costSuffix;
+    if (Payload.empty()) {
+        return "[F] Interact" + CostSuffix;
     }
-    if (payload == "Door") {
-        return "[F] Open Door" + costSuffix;
+    if (Payload == "Door") {
+        return "[F] Open Door" + CostSuffix;
     }
-    if (payload.rfind("WallBuy:", 0) == 0) {
-        return "[F] Buy " + payload.substr(8) + costSuffix;
+    if (Payload.rfind("WallBuy:", 0) == 0) {
+        return "[F] Buy " + Payload.substr(8) + CostSuffix;
     }
-    if (payload.rfind("Perk:", 0) == 0) {
-        return "[F] " + payload.substr(5) + costSuffix;
+    if (Payload.rfind("Perk:", 0) == 0) {
+        return "[F] " + Payload.substr(5) + CostSuffix;
     }
-    if (payload == "Ammo") {
-        return "[F] Buy Ammo" + costSuffix;
+    if (Payload == "Ammo") {
+        return "[F] Buy Ammo" + CostSuffix;
     }
-    if (payload == "PackAPunch") {
-        return "[F] Pack-a-Punch" + costSuffix;
+    if (Payload == "PackAPunch") {
+        return "[F] Pack-a-Punch" + CostSuffix;
     }
-    return "[F] " + payload + costSuffix;
+    return "[F] " + Payload + CostSuffix;
 }
 

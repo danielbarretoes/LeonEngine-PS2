@@ -135,15 +135,15 @@ void printUsage() {
             }
         } else if (a == "--jump") {
             if (const char* v = argValue(argc, argv, i)) {
-                jumpAnims.jumpStartFbx = v;
+                jumpAnims.JumpStartFbx = v;
             }
         } else if (a == "--fall") {
             if (const char* v = argValue(argc, argv, i)) {
-                jumpAnims.fallLoopFbx = v;
+                jumpAnims.FallLoopFbx = v;
             }
         } else if (a == "--land") {
             if (const char* v = argValue(argc, argv, i)) {
-                jumpAnims.landFbx = v;
+                jumpAnims.LandFbx = v;
             }
         } else if (a == "--out") {
             if (const char* v = argValue(argc, argv, i)) {

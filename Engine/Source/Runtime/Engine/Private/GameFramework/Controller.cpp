@@ -6,31 +6,31 @@ AController::~AController() {
     UnPossess();
 }
 
-void AController::Possess(APawn* pawn) {
-    if (pawn_ == pawn) {
+void AController::Possess(APawn* InPawn) {
+    if (Pawn == InPawn) {
         return;
     }
-    if (pawn != nullptr) {
-        if (AController* previous = pawn->GetController(); previous != nullptr && previous != this) {
-            previous->UnPossess();
+    if (InPawn != nullptr) {
+        if (AController* Previous = InPawn->GetController(); Previous != nullptr && Previous != this) {
+            Previous->UnPossess();
         }
     }
     UnPossess();
-    pawn_ = pawn;
-    if (pawn_ != nullptr) {
-        pawn_->bindController(this);
+    Pawn = InPawn;
+    if (Pawn != nullptr) {
+        Pawn->BindController(this);
     }
 }
 
 void AController::UnPossess() {
-    if (pawn_ == nullptr) {
+    if (Pawn == nullptr) {
         return;
     }
-    pawn_->bindController(nullptr);
-    pawn_ = nullptr;
+    Pawn->BindController(nullptr);
+    Pawn = nullptr;
 }
 
 ACharacter* AController::GetCharacter() const {
-    return dynamic_cast<ACharacter*>(pawn_);
+    return dynamic_cast<ACharacter*>(Pawn);
 }
 

@@ -107,9 +107,9 @@ TEST_CASE("PhysScene Jolt dynamic rests on TriangleMesh static", "[physics][jolt
     Data.Submeshes.push_back({0, 6, 0});
 
     UStaticMeshComponent Component{};
-    Component.mesh = std::make_shared<UStaticMesh>(UStaticMesh::CreateCpu(Data));
-    Component.collisionEnabled = true;
-    Level.StaticMeshes().push_back(std::move(Component));
+    Component.Mesh = std::make_shared<UStaticMesh>(UStaticMesh::CreateCpu(Data));
+    Component.bCollisionEnabled = true;
+    Level.GetStaticMeshes().push_back(std::move(Component));
 
     FPhysScene Scene(EPhysicsBackend::Jolt);
     Scene.AddBody({0, EBodyType::Static, 1.0f, true});

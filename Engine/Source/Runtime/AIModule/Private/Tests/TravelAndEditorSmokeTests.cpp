@@ -41,14 +41,14 @@ TEST_CASE("Editor-style level save load apply headless", "[editor][level]") {
     REQUIRE(LoadLevelFile(engine, templateLevel));
 
     FLevelDocument doc = BuildLevelDocument(engine.GetLevel(), engine.GetCamera());
-    REQUIRE_FALSE(doc.name.empty());
+    REQUIRE_FALSE(doc.Name.empty());
 
     const std::vector<std::uint8_t> bytes = SerializeLeonLevel(doc);
     REQUIRE_FALSE(bytes.empty());
 
     FLevelDocument roundTrip;
     REQUIRE(DeserializeLeonLevel(bytes, roundTrip));
-    REQUIRE(roundTrip.name == doc.name);
+    REQUIRE(roundTrip.Name == doc.Name);
 
     REQUIRE(ApplyLevelDocument(engine, roundTrip, "memory-editor-smoke"));
     engine.Shutdown();

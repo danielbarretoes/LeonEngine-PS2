@@ -32,9 +32,9 @@ TEST_CASE("LineTrace and QuerySupportY use TriangleMesh surface", "[physics][tri
     Data.Submeshes.push_back({0, 6, 0});
 
     UStaticMeshComponent Component{};
-    Component.mesh = std::make_shared<UStaticMesh>(UStaticMesh::CreateCpu(Data));
-    Component.collisionEnabled = true;
-    Level.StaticMeshes().push_back(std::move(Component));
+    Component.Mesh = std::make_shared<UStaticMesh>(UStaticMesh::CreateCpu(Data));
+    Component.bCollisionEnabled = true;
+    Level.GetStaticMeshes().push_back(std::move(Component));
 
     FPhysScene Scene;
     Scene.AddBody({0, EBodyType::Static, 1.0f, true});
@@ -52,6 +52,6 @@ TEST_CASE("LineTrace and QuerySupportY use TriangleMesh surface", "[physics][tri
     Capsule.Radius = 0.35f;
     Capsule.Height = 1.0f;
     const float Support =
-        Scene.QuerySupportY(Capsule, {0.0f, 1.0f, 0.0f}, 0.0f, 0.4f, 0.02f, ULevel::npos);
+        Scene.QuerySupportY(Capsule, {0.0f, 1.0f, 0.0f}, 0.0f, 0.4f, 0.02f, ULevel::Npos);
     REQUIRE_THAT(Support, WithinAbs(0.5f, 5.0e-2f));
 }

@@ -7,10 +7,10 @@ UActorComponent::~UActorComponent() {
 }
 
 void UActorComponent::DestroyComponent() {
-    if (registered_ && owner_ != nullptr) {
-        owner_->UnregisterComponent(this);
+    if (bRegistered && Owner != nullptr) {
+        Owner->UnregisterComponent(this);
     }
-    registered_ = false;
-    owner_ = nullptr;
+    bRegistered = false;
+    Owner = nullptr;
 }
 

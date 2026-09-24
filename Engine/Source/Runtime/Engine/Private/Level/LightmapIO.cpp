@@ -11,107 +11,107 @@
 
 namespace {
 
-[[nodiscard]] bool IsLm01Magic(const char magic[4]) {
-    return magic[0] == 'L' && magic[1] == 'M' && magic[2] == '0' && magic[3] == '1';
+[[nodiscard]] bool IsLm01Magic(const char Magic[4]) {
+    return Magic[0] == 'L' && Magic[1] == 'M' && Magic[2] == '0' && Magic[3] == '1';
 }
 
 } // namespace
 
-std::shared_ptr<UTexture2D> LoadLightmapFile(const std::filesystem::path& path) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) {
+std::shared_ptr<UTexture2D> LoadLightmapFile(const std::filesystem::path& Path) {
+    std::ifstream In(Path, std::ios::binary);
+    if (!In) {
         return nullptr;
     }
-    char magic[4]{};
-    std::uint32_t width = 0;
-    std::uint32_t height = 0;
-    in.read(magic, 4);
-    in.read(reinterpret_cast<char*>(&width), 4);
-    in.read(reinterpret_cast<char*>(&height), 4);
-    if (!IsLm01Magic(magic) || width == 0 || height == 0 || width > 4096 || height > 4096) {
+    char Magic[4]{};
+    std::uint32_t Width = 0;
+    std::uint32_t Height = 0;
+    In.read(Magic, 4);
+    In.read(reinterpret_cast<char*>(&Width), 4);
+    In.read(reinterpret_cast<char*>(&Height), 4);
+    if (!IsLm01Magic(Magic) || Width == 0 || Height == 0 || Width > 4096 || Height > 4096) {
         return nullptr;
     }
-    const std::size_t pixelBytes =
-        static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u;
-    std::vector<unsigned char> rgba(pixelBytes);
-    in.read(reinterpret_cast<char*>(rgba.data()), static_cast<std::streamsize>(rgba.size()));
-    if (!in) {
+    const std::size_t PixelBytes =
+        static_cast<std::size_t>(Width) * static_cast<std::size_t>(Height) * 4u;
+    std::vector<unsigned char> Rgba(PixelBytes);
+    In.read(reinterpret_cast<char*>(Rgba.data()), static_cast<std::streamsize>(Rgba.size()));
+    if (!In) {
         return nullptr;
     }
-    UTexture2D tex = UTexture2D::Create(static_cast<int>(width), static_cast<int>(height), rgba.data());
-    if (!tex.Valid()) {
+    UTexture2D Tex = UTexture2D::Create(static_cast<int>(Width), static_cast<int>(Height), Rgba.data());
+    if (!Tex.Valid()) {
         return nullptr;
     }
-    return std::make_shared<UTexture2D>(std::move(tex));
+    return std::make_shared<UTexture2D>(std::move(Tex));
 }
 
-std::filesystem::path ResolveLightmapAbsolutePath(const std::string& levelPath,
-                                                  const std::string& lightmapRel) {
-    if (lightmapRel.empty()) {
+std::filesystem::path ResolveLightmapAbsolutePath(const std::string& LevelPath,
+                                                  const std::string& LightmapRel) {
+    if (LightmapRel.empty()) {
         return {};
     }
-    std::filesystem::path rel(lightmapRel);
-    if (rel.is_absolute()) {
-        return rel;
+    std::filesystem::path Rel(LightmapRel);
+    if (Rel.is_absolute()) {
+        return Rel;
     }
-    if (!levelPath.empty()) {
-        const std::filesystem::path besideLevel =
-            (std::filesystem::path(levelPath).parent_path() / rel).lexically_normal();
-        std::error_code ec;
-        if (std::filesystem::is_regular_file(besideLevel, ec) && !ec) {
-            return besideLevel;
+    if (!LevelPath.empty()) {
+        const std::filesystem::path BesideLevel =
+            (std::filesystem::path(LevelPath).parent_path() / Rel).lexically_normal();
+        std::error_code Ec;
+        if (std::filesystem::is_regular_file(BesideLevel, Ec) && !Ec) {
+            return BesideLevel;
         }
         // Legacy paths used lowercase "lightmaps/"; directory is "Lightmaps/".
-        std::string alt = lightmapRel;
-        if (alt.rfind("lightmaps/", 0) == 0) {
-            alt.replace(0, 10, "Lightmaps/");
-            const std::filesystem::path fixed =
-                (std::filesystem::path(levelPath).parent_path() / alt).lexically_normal();
-            if (std::filesystem::is_regular_file(fixed, ec) && !ec) {
-                return fixed;
+        std::string Alt = LightmapRel;
+        if (Alt.rfind("lightmaps/", 0) == 0) {
+            Alt.replace(0, 10, "Lightmaps/");
+            const std::filesystem::path Fixed =
+                (std::filesystem::path(LevelPath).parent_path() / Alt).lexically_normal();
+            if (std::filesystem::is_regular_file(Fixed, Ec) && !Ec) {
+                return Fixed;
             }
         }
-        return besideLevel;
+        return BesideLevel;
     }
-    const std::string resolved = FPaths::ResolveAssetPath(lightmapRel);
-    return resolved.empty() ? rel : std::filesystem::path(resolved);
+    const std::string Resolved = FPaths::ResolveAssetPath(LightmapRel);
+    return Resolved.empty() ? Rel : std::filesystem::path(Resolved);
 }
 
-int LoadLevelLightmaps(ULevel& level, const std::string& levelPath, std::string* outMessage) {
-    int loaded = 0;
-    int failed = 0;
-    for (UStaticMeshComponent& mesh : level.StaticMeshes()) {
-        if (mesh.lightmapPath.empty()) {
+int LoadLevelLightmaps(ULevel& Level, const std::string& LevelPath, std::string* OutMessage) {
+    int Loaded = 0;
+    int Failed = 0;
+    for (UStaticMeshComponent& Mesh : Level.GetStaticMeshes()) {
+        if (Mesh.LightmapPath.empty()) {
             continue;
         }
-        const auto path = ResolveLightmapAbsolutePath(levelPath, mesh.lightmapPath);
-        auto tex = LoadLightmapFile(path);
-        if (tex) {
-            mesh.lightmap = std::move(tex);
-            ++loaded;
+        const auto Path = ResolveLightmapAbsolutePath(LevelPath, Mesh.LightmapPath);
+        auto Tex = LoadLightmapFile(Path);
+        if (Tex) {
+            Mesh.Lightmap = std::move(Tex);
+            ++Loaded;
         } else {
-            ++failed;
-            std::cerr << "LightmapIO: failed to load '" << path.generic_string() << "'\n";
+            ++Failed;
+            std::cerr << "LightmapIO: failed to load '" << Path.generic_string() << "'\n";
         }
     }
-    if (outMessage != nullptr) {
-        *outMessage = "Lightmaps: loaded " + std::to_string(loaded);
-        if (failed > 0) {
-            *outMessage += ", failed " + std::to_string(failed);
+    if (OutMessage != nullptr) {
+        *OutMessage = "Lightmaps: loaded " + std::to_string(Loaded);
+        if (Failed > 0) {
+            *OutMessage += ", failed " + std::to_string(Failed);
         }
     }
-    return loaded;
+    return Loaded;
 }
 
-std::string EnsureLightmapId(UStaticMeshComponent& mesh) {
-    if (!mesh.lightmapId.empty()) {
-        return mesh.lightmapId;
+std::string EnsureLightmapId(UStaticMeshComponent& Mesh) {
+    if (!Mesh.LightmapId.empty()) {
+        return Mesh.LightmapId;
     }
-    static thread_local std::mt19937 rng{std::random_device{}()};
-    std::uniform_int_distribution<std::uint32_t> dist;
-    char buf[17]{};
-    std::snprintf(buf, sizeof(buf), "%08x%08x", dist(rng), dist(rng));
-    mesh.lightmapId = buf;
-    return mesh.lightmapId;
+    static thread_local std::mt19937 Rng{std::random_device{}()};
+    std::uniform_int_distribution<std::uint32_t> Dist;
+    char Buf[17]{};
+    std::snprintf(Buf, sizeof(Buf), "%08x%08x", Dist(Rng), Dist(Rng));
+    Mesh.LightmapId = Buf;
+    return Mesh.LightmapId;
 }
 

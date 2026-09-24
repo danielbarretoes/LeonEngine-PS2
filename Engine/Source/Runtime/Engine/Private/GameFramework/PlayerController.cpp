@@ -3,8 +3,8 @@
 #include "GameFramework/PlayerController.h"
 
 
-void APlayerController::Possess(ACharacter* character) {
-    AController::Possess(character);
+void APlayerController::Possess(ACharacter* Character) {
+    AController::Possess(Character);
 }
 
 glm::vec3 APlayerController::TickInput(UGameEngine& /*engine*/) {
@@ -13,24 +13,24 @@ glm::vec3 APlayerController::TickInput(UGameEngine& /*engine*/) {
 
 void APlayerController::UpdateCamera(UGameEngine& /*engine*/, float /*deltaTime*/) {}
 
-void APlayerController::LatchButtons(std::uint16_t pressedNow) {
-    const std::uint16_t masked = static_cast<std::uint16_t>(pressedNow & Leon::Net::InputButtonMask);
-    pressedEdges_ = static_cast<std::uint16_t>(masked & static_cast<std::uint16_t>(~prevButtons_));
-    downButtons_ = masked;
-    prevButtons_ = masked;
+void APlayerController::LatchButtons(std::uint16_t PressedNow) {
+    const std::uint16_t Masked = static_cast<std::uint16_t>(PressedNow & Leon::Net::InputButtonMask);
+    PressedEdges = static_cast<std::uint16_t>(Masked & static_cast<std::uint16_t>(~PrevButtons));
+    DownButtons = Masked;
+    PrevButtons = Masked;
 }
 
-bool APlayerController::WasButtonPressed(Leon::Net::EInputButton button) const {
-    return (pressedEdges_ & static_cast<std::uint16_t>(button)) != 0;
+bool APlayerController::WasButtonPressed(Leon::Net::EInputButton Button) const {
+    return (PressedEdges & static_cast<std::uint16_t>(Button)) != 0;
 }
 
-bool APlayerController::IsButtonDown(Leon::Net::EInputButton button) const {
-    return (downButtons_ & static_cast<std::uint16_t>(button)) != 0;
+bool APlayerController::IsButtonDown(Leon::Net::EInputButton Button) const {
+    return (DownButtons & static_cast<std::uint16_t>(Button)) != 0;
 }
 
 std::uint16_t APlayerController::ConsumeButtonPressedMask() {
-    const std::uint16_t edges = pressedEdges_;
-    pressedEdges_ = 0;
-    return edges;
+    const std::uint16_t Edges = PressedEdges;
+    PressedEdges = 0;
+    return Edges;
 }
 

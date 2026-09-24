@@ -7,16 +7,16 @@
 /// Free-look: LMB aims, WASD flies along look direction, Q/E world vertical.
 class ADefaultCameraActor : public APawn {
 public:
-    [[nodiscard]] float MoveSpeed() const { return moveSpeed_; }
-    void SetMoveSpeed(float speed) { moveSpeed_ = speed > 0.0f ? speed : 0.0f; }
+    [[nodiscard]] float GetMoveSpeed() const { return MoveSpeed; }
+    void SetMoveSpeed(float Speed) { MoveSpeed = Speed > 0.0f ? Speed : 0.0f; }
 
-    [[nodiscard]] float LookSensitivity() const { return lookSensitivity_; }
-    void SetLookSensitivity(float degreesPerPixel) {
-        lookSensitivity_ = degreesPerPixel > 0.0f ? degreesPerPixel : 0.0f;
+    [[nodiscard]] float GetLookSensitivity() const { return LookSensitivity; }
+    void SetLookSensitivity(float DegreesPerPixel) {
+        LookSensitivity = DegreesPerPixel > 0.0f ? DegreesPerPixel : 0.0f;
     }
 
 private:
-    float moveSpeed_ = 8.0f;
-    float lookSensitivity_ = 0.15f;
+    float MoveSpeed = 8.0f;
+    float LookSensitivity = 0.15f;
 };
 

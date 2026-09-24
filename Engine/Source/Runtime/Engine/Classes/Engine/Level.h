@@ -31,112 +31,112 @@ enum class EComponentMobility : std::uint8_t {
 ///   3) mesh MTL materials
 ///   4) material (engine default checker when procedural mesh has no MTL)
 struct UStaticMeshComponent {
-    FTransform transform;
-    std::shared_ptr<UStaticMesh> mesh;
-    FMaterial material;
-    std::vector<FMaterial> materials; // optional per-slot overrides
+    FTransform Transform;
+    std::shared_ptr<UStaticMesh> Mesh;
+    FMaterial Material;
+    std::vector<FMaterial> Materials; // optional per-slot overrides
     /// When true, `material` is used for every submesh (asset/inline overrode MTL).
-    bool materialOverride = false;
+    bool bMaterialOverride = false;
 
     /// Optional tag from JSON (`"tag"`). Spawn points use FPlayerStart, not tagged meshes.
-    std::string tag;
+    std::string Tag;
     /// Unreal-like collision enabled — registers a FPhysScene body (Static unless simulating).
-    bool collisionEnabled = false;
+    bool bCollisionEnabled = false;
     /// Unreal-like `bSimulatePhysics` — Dynamic body (implies collision).
-    bool simulatePhysics = false;
+    bool bSimulatePhysics = false;
     /// Unreal-like `bEnableGravity` — applies to simulatePhysics bodies (default true).
-    bool enableGravity = true;
+    bool bEnableGravity = true;
     /// When true, skipped by the renderer (Unreal-like BlockingVolume / HiddenInGame).
-    bool hidden = false;
+    bool bHidden = false;
     /// When true, renderer uses `modelMatrixOverride` instead of `transform.modelMatrix()`.
     bool bUseModelMatrixOverride = false;
-    glm::mat4 modelMatrixOverride{1.0f};
+    glm::mat4 ModelMatrixOverride{1.0f};
 
     /// Static = lightmap candidate; Movable = runtime-lit only.
-    EComponentMobility mobility = EComponentMobility::Static;
+    EComponentMobility Mobility = EComponentMobility::Static;
     /// Lightmap texture resolution (power of two; clamped 32–512 on bake).
-    int lightmapResolution = 128;
+    int LightmapResolution = 128;
     /// Baked lightmap (Build Lights); sampled with mesh UV0.
-    std::shared_ptr<UTexture2D> lightmap;
+    std::shared_ptr<UTexture2D> Lightmap;
     /// Stable id for bake file names (`LM_<id>.lm`); survives actor reorder.
-    std::string lightmapId;
+    std::string LightmapId;
     /// Relative path to persisted lightmap image (written on Build Lights + Save).
-    std::string lightmapPath;
+    std::string LightmapPath;
 
     /// Editor / save provenance (filled by LevelLoader; used by LevelSaver).
-    std::string editorClass;  // "Cube", "Sphere", "Plane", "BlockingVolume", "StaticMesh", ...
-    std::string meshPath;     // relative mesh path when imported
-    std::string materialPath; // relative material JSON path when set
+    std::string EditorClass;  // "Cube", "Sphere", "Plane", "BlockingVolume", "StaticMesh", ...
+    std::string MeshPath;     // relative mesh path when imported
+    std::string MaterialPath; // relative material JSON path when set
     /// Session-stable editor selection id (0 = unassigned). Not serialized.
-    std::uint64_t editorId = 0;
-    float spinYaw = 0.0f;
-    int sphereSegments = 24;
-    int sphereRings = 16;
+    std::uint64_t EditorId = 0;
+    float SpinYaw = 0.0f;
+    int SphereSegments = 24;
+    int SphereRings = 16;
 
     /// Optional bob animation (Level JSON `bob`); preserved for save round-trip.
-    bool hasBob = false;
-    float bobBaseY = 0.0f;
-    float bobAmplitude = 0.1f;
-    float bobSpeed = 1.0f;
+    bool bHasBob = false;
+    float BobBaseY = 0.0f;
+    float BobAmplitude = 0.1f;
+    float BobSpeed = 1.0f;
 
     [[nodiscard]] glm::mat4 EffectiveModelMatrix() const {
-        return bUseModelMatrixOverride ? modelMatrixOverride : transform.ModelMatrix();
+        return bUseModelMatrixOverride ? ModelMatrixOverride : Transform.ModelMatrix();
     }
 
-    [[nodiscard]] bool HasPhysicsBody() const { return collisionEnabled || simulatePhysics; }
+    [[nodiscard]] bool HasPhysicsBody() const { return bCollisionEnabled || bSimulatePhysics; }
 
     [[nodiscard]] bool UsesLightmap() const {
-        return mobility == EComponentMobility::Static && lightmap != nullptr && lightmap->Valid();
+        return Mobility == EComponentMobility::Static && Lightmap != nullptr && Lightmap->Valid();
     }
 
-    [[nodiscard]] std::size_t subMeshCount() const;
-    [[nodiscard]] const FMaterial& materialForSubMesh(std::size_t subMeshIndex) const;
-    [[nodiscard]] bool isShadowCaster() const;
+    [[nodiscard]] std::size_t SubMeshCount() const;
+    [[nodiscard]] const FMaterial& MaterialForSubMesh(std::size_t SubMeshIndex) const;
+    [[nodiscard]] bool IsShadowCaster() const;
 };
 
 /// Unreal-like FPlayerStart — spawn transform for GameMode-possessed pawns (not a drawable mesh).
 struct FPlayerStart {
-    FTransform transform{};
+    FTransform Transform{};
     /// Session-stable editor selection id (0 = unassigned). Not serialized.
-    std::uint64_t editorId = 0;
+    std::uint64_t EditorId = 0;
 };
 
 /// Interact / trigger volume (POD). Overlap tested in gameplay from position + interactRadius.
 struct FTriggerVolume {
-    FTransform transform{};
-    float interactRadius = 2.f;
-    int interactCost = 0;
-    std::string payload; // pack-defined e.g. Door, WallBuy:M14, Perk:Jugg
-    std::string tag;
+    FTransform Transform{};
+    float InteractRadius = 2.f;
+    int InteractCost = 0;
+    std::string Payload; // pack-defined e.g. Door, WallBuy:M14, Perk:Jugg
+    std::string Tag;
     bool bConsumeOnUse = false;
-    std::uint64_t editorId = 0;
+    std::uint64_t EditorId = 0;
 };
 
 /// Damage volume (POD). AABB from transform.position and abs(scale) * 0.5.
 struct FPainCausingVolume {
-    FTransform transform{}; // position + scale as half-extents box (full size = abs(scale))
-    float damagePerSecond = 12.f;
-    float damageInterval = 0.35f;
-    std::string tag;
-    std::uint64_t editorId = 0;
+    FTransform Transform{}; // position + scale as half-extents box (full size = abs(scale))
+    float DamagePerSecond = 12.f;
+    float DamageInterval = 0.35f;
+    std::string Tag;
+    std::uint64_t EditorId = 0;
 };
 
 /// AI spawn marker (POD — not a drawable mesh).
 struct FAISpawnPoint {
-    FTransform transform{};
-    std::string tag;
-    std::uint64_t editorId = 0;
+    FTransform Transform{};
+    std::string Tag;
+    std::uint64_t EditorId = 0;
 };
 
 /// Map content container (Unreal-style Level / ULevel): StaticMeshComponents + lights + env.
 /// Distinct from gameplay `World` (spawned Actors). The app owns contents; FSceneRenderer reads them.
 class ULevel {
 public:
-    UStaticMeshComponent& AddStaticMesh(UStaticMeshComponent component);
-    FPlayerStart& AddPlayerStart(FPlayerStart start);
-    FTriggerVolume& AddTriggerVolume(FTriggerVolume volume);
-    FPainCausingVolume& AddPainCausingVolume(FPainCausingVolume volume);
-    FAISpawnPoint& AddAISpawnPoint(FAISpawnPoint point);
+    UStaticMeshComponent& AddStaticMesh(UStaticMeshComponent Component);
+    FPlayerStart& AddPlayerStart(FPlayerStart Start);
+    FTriggerVolume& AddTriggerVolume(FTriggerVolume Volume);
+    FPainCausingVolume& AddPainCausingVolume(FPainCausingVolume Volume);
+    FAISpawnPoint& AddAISpawnPoint(FAISpawnPoint Point);
     void ClearStaticMeshes();
     void ClearPlayerStarts();
     void ClearTriggerVolumes();
@@ -145,71 +145,71 @@ public:
     void ClearLights();
     void Clear();
 
-    [[nodiscard]] const std::vector<UStaticMeshComponent>& StaticMeshes() const {
-        return staticMeshes_;
+    [[nodiscard]] const std::vector<UStaticMeshComponent>& GetStaticMeshes() const {
+        return StaticMeshes;
     }
-    [[nodiscard]] std::vector<UStaticMeshComponent>& StaticMeshes() { return staticMeshes_; }
+    [[nodiscard]] std::vector<UStaticMeshComponent>& GetStaticMeshes() { return StaticMeshes; }
 
-    [[nodiscard]] const std::vector<FPlayerStart>& PlayerStarts() const { return playerStarts_; }
-    [[nodiscard]] std::vector<FPlayerStart>& PlayerStarts() { return playerStarts_; }
+    [[nodiscard]] const std::vector<FPlayerStart>& GetPlayerStarts() const { return PlayerStarts; }
+    [[nodiscard]] std::vector<FPlayerStart>& GetPlayerStarts() { return PlayerStarts; }
 
-    [[nodiscard]] const std::vector<FTriggerVolume>& TriggerVolumes() const {
-        return triggerVolumes_;
+    [[nodiscard]] const std::vector<FTriggerVolume>& GetTriggerVolumes() const {
+        return TriggerVolumes;
     }
-    [[nodiscard]] std::vector<FTriggerVolume>& TriggerVolumes() { return triggerVolumes_; }
+    [[nodiscard]] std::vector<FTriggerVolume>& GetTriggerVolumes() { return TriggerVolumes; }
 
-    [[nodiscard]] const std::vector<FPainCausingVolume>& PainCausingVolumes() const {
-        return painCausingVolumes_;
+    [[nodiscard]] const std::vector<FPainCausingVolume>& GetPainCausingVolumes() const {
+        return PainCausingVolumes;
     }
-    [[nodiscard]] std::vector<FPainCausingVolume>& PainCausingVolumes() {
-        return painCausingVolumes_;
+    [[nodiscard]] std::vector<FPainCausingVolume>& GetPainCausingVolumes() {
+        return PainCausingVolumes;
     }
 
-    [[nodiscard]] const std::vector<FAISpawnPoint>& AISpawnPoints() const { return aiSpawnPoints_; }
-    [[nodiscard]] std::vector<FAISpawnPoint>& AISpawnPoints() { return aiSpawnPoints_; }
+    [[nodiscard]] const std::vector<FAISpawnPoint>& AISpawnPoints() const { return AiSpawnPoints; }
+    [[nodiscard]] std::vector<FAISpawnPoint>& AISpawnPoints() { return AiSpawnPoints; }
 
     /// First FPlayerStart, or nullptr if the level has none.
     [[nodiscard]] const FPlayerStart* FindPlayerStart() const;
 
     /// First static mesh whose tag matches, or npos if none.
-    [[nodiscard]] std::size_t FindStaticMeshIndexByTag(std::string_view tag) const;
+    [[nodiscard]] std::size_t FindStaticMeshIndexByTag(std::string_view InTag) const;
 
-    [[nodiscard]] const std::vector<FDirectionalLight>& DirectionalLights() const {
-        return directionalLights_;
+    [[nodiscard]] const std::vector<FDirectionalLight>& GetDirectionalLights() const {
+        return DirectionalLights;
     }
-    [[nodiscard]] std::vector<FDirectionalLight>& DirectionalLights() { return directionalLights_; }
+    [[nodiscard]] std::vector<FDirectionalLight>& GetDirectionalLights() { return DirectionalLights; }
 
-    [[nodiscard]] const std::vector<FPointLight>& PointLights() const { return pointLights_; }
-    [[nodiscard]] std::vector<FPointLight>& PointLights() { return pointLights_; }
+    [[nodiscard]] const std::vector<FPointLight>& GetPointLights() const { return PointLights; }
+    [[nodiscard]] std::vector<FPointLight>& GetPointLights() { return PointLights; }
 
-    void SetEnvironment(std::shared_ptr<FEnvironmentMap> env) { environment_ = std::move(env); }
-    [[nodiscard]] const std::shared_ptr<FEnvironmentMap>& Environment() const { return environment_; }
-    void SetEnvironmentExposure(float exposure) { environmentExposure_ = exposure; }
-    [[nodiscard]] float EnvironmentExposure() const { return environmentExposure_; }
+    void SetEnvironment(std::shared_ptr<FEnvironmentMap> Env) { Environment = std::move(Env); }
+    [[nodiscard]] const std::shared_ptr<FEnvironmentMap>& GetEnvironment() const { return Environment; }
+    void SetEnvironmentExposure(float Exposure) { EnvironmentExposure = Exposure; }
+    [[nodiscard]] float GetEnvironmentExposure() const { return EnvironmentExposure; }
 
     /// Relative HDR path from JSON (for editor save round-trip).
-    void SetEnvironmentPath(std::string path) { environmentPath_ = std::move(path); }
-    [[nodiscard]] const std::string& EnvironmentPath() const { return environmentPath_; }
+    void SetEnvironmentPath(std::string Path) { EnvironmentPath = std::move(Path); }
+    [[nodiscard]] const std::string& GetEnvironmentPath() const { return EnvironmentPath; }
 
-    void SetName(std::string name) { name_ = std::move(name); }
-    [[nodiscard]] const std::string& Name() const { return name_; }
-    void SetGameMode(std::string gameMode) { gameMode_ = std::move(gameMode); }
-    [[nodiscard]] const std::string& GetGameMode() const { return gameMode_; }
+    void SetName(std::string InName) { Name = std::move(InName); }
+    [[nodiscard]] const std::string& GetName() const { return Name; }
+    void SetGameMode(std::string InGameMode) { GameMode = std::move(InGameMode); }
+    [[nodiscard]] const std::string& GetGameMode() const { return GameMode; }
 
-    static constexpr std::size_t npos = (std::numeric_limits<std::size_t>::max)();
+    static constexpr std::size_t Npos = (std::numeric_limits<std::size_t>::max)();
 
 private:
-    std::vector<UStaticMeshComponent> staticMeshes_;
-    std::vector<FPlayerStart> playerStarts_;
-    std::vector<FTriggerVolume> triggerVolumes_;
-    std::vector<FPainCausingVolume> painCausingVolumes_;
-    std::vector<FAISpawnPoint> aiSpawnPoints_;
-    std::vector<FDirectionalLight> directionalLights_{FDirectionalLight{}};
-    std::vector<FPointLight> pointLights_;
-    std::shared_ptr<FEnvironmentMap> environment_;
-    float environmentExposure_ = 1.0f;
-    std::string environmentPath_;
-    std::string name_;
-    std::string gameMode_;
+    std::vector<UStaticMeshComponent> StaticMeshes;
+    std::vector<FPlayerStart> PlayerStarts;
+    std::vector<FTriggerVolume> TriggerVolumes;
+    std::vector<FPainCausingVolume> PainCausingVolumes;
+    std::vector<FAISpawnPoint> AiSpawnPoints;
+    std::vector<FDirectionalLight> DirectionalLights{FDirectionalLight{}};
+    std::vector<FPointLight> PointLights;
+    std::shared_ptr<FEnvironmentMap> Environment;
+    float EnvironmentExposure = 1.0f;
+    std::string EnvironmentPath;
+    std::string Name;
+    std::string GameMode;
 };
 

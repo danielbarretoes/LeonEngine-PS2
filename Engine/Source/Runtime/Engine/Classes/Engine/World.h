@@ -16,26 +16,26 @@ class ULevel;
 class FSceneRenderer;
 
 struct FWorldGameplayFrameParams {
-    float deltaTime = 0.0f;
-    ULevel* level = nullptr;
-    FSceneRenderer* renderer = nullptr;
-    FDebugDraw* collisionDebugDraw = nullptr;
-    FDebugDraw* navMeshDebugDraw = nullptr;
+    float DeltaTime = 0.0f;
+    ULevel* Level = nullptr;
+    FSceneRenderer* Renderer = nullptr;
+    FDebugDraw* CollisionDebugDraw = nullptr;
+    FDebugDraw* NavMeshDebugDraw = nullptr;
     /// When true, FPhysScene::Step uses these values instead of the first Character's movement.
-    bool overridePhysicsStep = false;
-    float physicsDamping = 6.0f;
-    float physicsWalkBounds = 18.0f;
-    float physicsGravity = 24.0f;
-    float physicsFloorY = 0.0f;
-    float physicsSkin = 0.02f;
+    bool bOverridePhysicsStep = false;
+    float PhysicsDamping = 6.0f;
+    float PhysicsWalkBounds = 18.0f;
+    float PhysicsGravity = 24.0f;
+    float PhysicsFloorY = 0.0f;
+    float PhysicsSkin = 0.02f;
 };
 
 /// Owns spawned Actors + FPhysScene; ticks them and purges pending kills.
 /// Distinct from `Level` (map/visual content ≈ ULevel).
 class UWorld {
 public:
-    explicit UWorld(EPhysicsBackend physicsBackend = DefaultPhysicsBackend())
-        : physics_(physicsBackend) {}
+    explicit UWorld(EPhysicsBackend PhysicsBackend = DefaultPhysicsBackend())
+        : Physics(PhysicsBackend) {}
     ~UWorld() { Clear(); }
 
     UWorld(const UWorld&) = delete;
@@ -43,75 +43,75 @@ public:
     UWorld(UWorld&&) = delete;
     UWorld& operator=(UWorld&&) = delete;
 
-    [[nodiscard]] FPhysScene& GetPhysicsScene() { return physics_; }
-    [[nodiscard]] const FPhysScene& GetPhysicsScene() const { return physics_; }
+    [[nodiscard]] FPhysScene& GetPhysicsScene() { return Physics; }
+    [[nodiscard]] const FPhysScene& GetPhysicsScene() const { return Physics; }
 
     /// Unreal-like UNavigationSystem lite (grid NavMesh for AI pathfinding).
-    [[nodiscard]] UNavigationSystem& GetNavigationSystem() { return navigation_; }
-    [[nodiscard]] const UNavigationSystem& GetNavigationSystem() const { return navigation_; }
+    [[nodiscard]] UNavigationSystem& GetNavigationSystem() { return Navigation; }
+    [[nodiscard]] const UNavigationSystem& GetNavigationSystem() const { return Navigation; }
 
     /// Recreate FPhysScene with another backend (clears bodies). Call before RegisterBodiesFromLevel.
-    void SetPhysicsBackend(EPhysicsBackend physicsBackend) { physics_ = FPhysScene(physicsBackend); }
+    void SetPhysicsBackend(EPhysicsBackend PhysicsBackend) { Physics = FPhysScene(PhysicsBackend); }
 
     template <typename T, typename... ArgsType>
-    T* SpawnActor(ArgsType&&... args) {
+    T* SpawnActor(ArgsType&&... Args) {
         static_assert(std::is_base_of_v<AActor, T>, "T must derive from Actor");
-        auto owned = std::make_unique<T>(std::forward<ArgsType>(args)...);
-        T* raw = owned.get();
-        raw->world_ = this;
-        raw->SetEditorId(++nextEditorId_);
-        if (ticking_) {
+        auto Owned = std::make_unique<T>(std::forward<ArgsType>(Args)...);
+        T* Raw = Owned.get();
+        Raw->World = this;
+        Raw->SetEditorId(++NextEditorId);
+        if (bTicking) {
             // Defer push_back so Tick iterators stay valid.
-            pendingSpawns_.push_back(std::move(owned));
+            PendingSpawns.push_back(std::move(Owned));
         } else {
-            actors_.push_back(std::move(owned));
-            raw->BeginPlayComponents();
-            raw->BeginPlay();
+            Actors.push_back(std::move(Owned));
+            Raw->BeginPlayComponents();
+            Raw->BeginPlay();
         }
-        return raw;
+        return Raw;
     }
 
     /// Find live Actor by session-stable editor id (PIE / Outliner).
-    [[nodiscard]] AActor* FindActorByEditorId(std::uint64_t editorId) const {
-        if (editorId == 0) {
+    [[nodiscard]] AActor* FindActorByEditorId(std::uint64_t EditorId) const {
+        if (EditorId == 0) {
             return nullptr;
         }
-        for (const auto& actor : actors_) {
-            if (actor && !actor->IsPendingKill() && actor->GetEditorId() == editorId) {
-                return actor.get();
+        for (const auto& Actor : Actors) {
+            if (Actor && !Actor->IsPendingKill() && Actor->GetEditorId() == EditorId) {
+                return Actor.get();
             }
         }
         return nullptr;
     }
 
-    void DestroyActor(AActor* actor) {
-        if (actor != nullptr && actor->world_ == this) {
-            actor->Destroy();
+    void DestroyActor(AActor* Actor) {
+        if (Actor != nullptr && Actor->World == this) {
+            Actor->Destroy();
         }
     }
 
     /// Actor Tick only (UAnimInstance, etc.). Prefer `TickGameplayFrame` for Character worlds.
-    void Tick(float deltaTime);
+    void Tick(float InDeltaTime);
 
     /// Unreal-like frame: Character move → FPhysScene::Step → overlaps → Actor Tick → sync → draw.
-    void TickGameplayFrame(const FWorldGameplayFrameParams& params);
+    void TickGameplayFrame(const FWorldGameplayFrameParams& Params);
 
     /// Register StaticMeshComponents that have collision as FPhysScene bodies (clears first).
-    void RegisterBodiesFromLevel(const ULevel& level);
+    void RegisterBodiesFromLevel(const ULevel& InLevel);
 
-    void SubmitSkeletalDraws(FSceneRenderer& renderer) const;
+    void SubmitSkeletalDraws(FSceneRenderer& InRenderer) const;
 
     void Clear();
 
-    [[nodiscard]] std::size_t ActorCount() const { return actors_.size(); }
+    [[nodiscard]] std::size_t ActorCount() const { return Actors.size(); }
 
     template <typename T>
     [[nodiscard]] T* FindFirst() const {
         static_assert(std::is_base_of_v<AActor, T>, "T must derive from Actor");
-        for (const auto& actor : actors_) {
-            if (actor && !actor->IsPendingKill()) {
-                if (T* typed = dynamic_cast<T*>(actor.get())) {
-                    return typed;
+        for (const auto& Actor : Actors) {
+            if (Actor && !Actor->IsPendingKill()) {
+                if (T* Typed = dynamic_cast<T*>(Actor.get())) {
+                    return Typed;
                 }
             }
         }
@@ -120,12 +120,12 @@ public:
 
     /// Visit every live Actor of type T.
     template <typename T, typename TFn>
-    void ForEach(TFn&& fn) const {
+    void ForEach(TFn&& Fn) const {
         static_assert(std::is_base_of_v<AActor, T>, "T must derive from Actor");
-        for (const auto& actor : actors_) {
-            if (actor && !actor->IsPendingKill()) {
-                if (T* typed = dynamic_cast<T*>(actor.get())) {
-                    fn(*typed);
+        for (const auto& Actor : Actors) {
+            if (Actor && !Actor->IsPendingKill()) {
+                if (T* Typed = dynamic_cast<T*>(Actor.get())) {
+                    Fn(*Typed);
                 }
             }
         }
@@ -133,25 +133,25 @@ public:
 
     /// Visit every live Actor (any type).
     template <typename TFn>
-    void ForEachActor(TFn&& fn) const {
-        for (const auto& actor : actors_) {
-            if (actor && !actor->IsPendingKill()) {
-                fn(*actor);
+    void ForEachActor(TFn&& Fn) const {
+        for (const auto& Actor : Actors) {
+            if (Actor && !Actor->IsPendingKill()) {
+                Fn(*Actor);
             }
         }
     }
 
 private:
-    void flushPendingSpawns();
-    void purgePending();
+    void FlushPendingSpawns();
+    void PurgePending();
     /// Pairwise Character capsule depenetration (players / AI are not FPhysScene bodies).
-    void resolveCharacterOverlaps();
+    void ResolveCharacterOverlaps();
 
-    FPhysScene physics_{};
-    UNavigationSystem navigation_{};
-    std::vector<std::unique_ptr<AActor>> actors_;
-    std::vector<std::unique_ptr<AActor>> pendingSpawns_;
-    bool ticking_ = false;
-    std::uint64_t nextEditorId_ = 0;
+    FPhysScene Physics{};
+    UNavigationSystem Navigation{};
+    std::vector<std::unique_ptr<AActor>> Actors;
+    std::vector<std::unique_ptr<AActor>> PendingSpawns;
+    bool bTicking = false;
+    std::uint64_t NextEditorId = 0;
 };
 

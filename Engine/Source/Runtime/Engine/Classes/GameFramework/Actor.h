@@ -41,60 +41,60 @@ public:
     AActor(AActor&&) = delete;
     AActor& operator=(AActor&&) = delete;
 
-    [[nodiscard]] UWorld* GetWorld() const { return world_; }
+    [[nodiscard]] UWorld* GetWorld() const { return World; }
 
-    [[nodiscard]] USceneComponent& GetRootComponent() { return rootComponent_; }
-    [[nodiscard]] const USceneComponent& GetRootComponent() const { return rootComponent_; }
+    [[nodiscard]] USceneComponent& GetRootComponent() { return RootComponent; }
+    [[nodiscard]] const USceneComponent& GetRootComponent() const { return RootComponent; }
 
-    [[nodiscard]] const std::vector<UActorComponent*>& GetComponents() const { return components_; }
+    [[nodiscard]] const std::vector<UActorComponent*>& GetComponents() const { return Components; }
 
     /// Register a component that lives on this Actor (member or already owned). Idempotent.
-    void RegisterComponent(UActorComponent* component);
+    void RegisterComponent(UActorComponent* Component);
 
     /// Heap-owned component (Unreal CreateDefaultSubobject lite — no name table).
     template <typename T, typename... ArgsType>
-    T* CreateDefaultSubobject(ArgsType&&... args) {
+    T* CreateDefaultSubobject(ArgsType&&... Args) {
         static_assert(std::is_base_of_v<UActorComponent, T>, "T must derive from ActorComponent");
-        auto owned = std::make_unique<T>(std::forward<ArgsType>(args)...);
-        T* raw = owned.get();
-        ownedComponents_.push_back(std::move(owned));
-        RegisterComponent(raw);
-        return raw;
+        auto Owned = std::make_unique<T>(std::forward<ArgsType>(Args)...);
+        T* Raw = Owned.get();
+        OwnedComponents.push_back(std::move(Owned));
+        RegisterComponent(Raw);
+        return Raw;
     }
 
-    void SetLevelMeshIndex(std::size_t index) { levelMeshIndex_ = index; }
-    [[nodiscard]] std::size_t LevelMeshIndex() const { return levelMeshIndex_; }
+    void SetLevelMeshIndex(std::size_t Index) { LevelMeshIndex = Index; }
+    [[nodiscard]] std::size_t GetLevelMeshIndex() const { return LevelMeshIndex; }
 
     /// Session-stable id for editor selection (assigned on SpawnActor).
-    void SetEditorId(std::uint64_t id) { editorId_ = id; }
-    [[nodiscard]] std::uint64_t GetEditorId() const { return editorId_; }
+    void SetEditorId(std::uint64_t Id) { EditorId = Id; }
+    [[nodiscard]] std::uint64_t GetEditorId() const { return EditorId; }
 
-    [[nodiscard]] const glm::vec3& GetActorLocation() const { return location_; }
-    [[nodiscard]] float GetActorYaw() const { return yawDegrees_; }
+    [[nodiscard]] const glm::vec3& GetActorLocation() const { return Location; }
+    [[nodiscard]] float GetActorYaw() const { return YawDegrees; }
 
-    void SetActorLocation(const glm::vec3& location) {
-        location_ = location;
+    void SetActorLocation(const glm::vec3& InLocation) {
+        Location = InLocation;
         // Keep root Relative* as identity offset so GetComponentTransform matches Actor pose.
-        rootComponent_.RelativeLocation = {0.0f, 0.0f, 0.0f};
+        RootComponent.RelativeLocation = {0.0f, 0.0f, 0.0f};
     }
-    void SetActorYaw(float yawDegrees) {
-        yawDegrees_ = yawDegrees;
-        rootComponent_.RelativeRotation = {0.0f, 0.0f, 0.0f};
+    void SetActorYaw(float InYawDegrees) {
+        YawDegrees = InYawDegrees;
+        RootComponent.RelativeRotation = {0.0f, 0.0f, 0.0f};
     }
 
-    void SetActorLocationAndRotation(const glm::vec3& location, float yawDegrees = 0.0f) {
-        SetActorLocation(location);
-        SetActorYaw(yawDegrees);
+    void SetActorLocationAndRotation(const glm::vec3& InLocation, float InYawDegrees = 0.0f) {
+        SetActorLocation(InLocation);
+        SetActorYaw(InYawDegrees);
     }
 
     /// Unreal-like AActor::IsPendingKill.
-    [[nodiscard]] bool IsPendingKill() const { return pendingKill_; }
+    [[nodiscard]] bool IsPendingKill() const { return bPendingKill; }
     [[nodiscard]] bool IsPendingKillPending() const { return IsPendingKill(); }
 
     /// Mark for removal at end of World::Tick (or immediately via World::Clear).
     virtual void Destroy() {
-        if (!pendingKill_) {
-            pendingKill_ = true;
+        if (!bPendingKill) {
+            bPendingKill = true;
         }
     }
 
@@ -104,41 +104,41 @@ public:
 
     void BeginPlayComponents();
     void EndPlayComponents();
-    void TickComponents(float deltaTime);
-    [[nodiscard]] bool HasActorBegunPlay() const { return hasBegunPlay_; }
+    void TickComponents(float DeltaTime);
+    [[nodiscard]] bool HasActorBegunPlay() const { return bHasBegunPlay; }
 
     /// Copy location + yaw into the linked Level UStaticMeshComponent (no-op if index is invalid).
-    virtual void SyncTransformToLevel(ULevel& level) const {
-        auto& meshes = level.StaticMeshes();
-        if (levelMeshIndex_ >= meshes.size()) {
+    virtual void SyncTransformToLevel(ULevel& Level) const {
+        auto& Meshes = Level.GetStaticMeshes();
+        if (LevelMeshIndex >= Meshes.size()) {
             return;
         }
-        UStaticMeshComponent& obj = meshes[levelMeshIndex_];
-        obj.transform.Position = location_;
-        obj.transform.RotationDegrees.y = yawDegrees_;
+        UStaticMeshComponent& Obj = Meshes[LevelMeshIndex];
+        Obj.Transform.Position = Location;
+        Obj.Transform.RotationDegrees.y = YawDegrees;
     }
 
 protected:
-    AActor() { RegisterComponent(&rootComponent_); }
+    AActor() { RegisterComponent(&RootComponent); }
 
-    [[nodiscard]] glm::vec3& mutableLocation() { return location_; }
-    [[nodiscard]] float& mutableYawDegrees() { return yawDegrees_; }
+    [[nodiscard]] glm::vec3& MutableLocation() { return Location; }
+    [[nodiscard]] float& MutableYawDegrees() { return YawDegrees; }
 
-    void UnregisterComponent(UActorComponent* component);
+    void UnregisterComponent(UActorComponent* Component);
 
 private:
     friend class UWorld;
     friend class UActorComponent;
 
-    USceneComponent rootComponent_{};
-    std::vector<UActorComponent*> components_{};
-    std::vector<std::unique_ptr<UActorComponent>> ownedComponents_{};
-    std::size_t levelMeshIndex_ = ULevel::npos;
-    std::uint64_t editorId_ = 0;
-    glm::vec3 location_{0.0f};
-    float yawDegrees_ = 0.0f;
-    UWorld* world_ = nullptr;
-    bool pendingKill_ = false;
-    bool hasBegunPlay_ = false;
+    USceneComponent RootComponent{};
+    std::vector<UActorComponent*> Components{};
+    std::vector<std::unique_ptr<UActorComponent>> OwnedComponents{};
+    std::size_t LevelMeshIndex = ULevel::Npos;
+    std::uint64_t EditorId = 0;
+    glm::vec3 Location{0.0f};
+    float YawDegrees = 0.0f;
+    UWorld* World = nullptr;
+    bool bPendingKill = false;
+    bool bHasBegunPlay = false;
 };
 

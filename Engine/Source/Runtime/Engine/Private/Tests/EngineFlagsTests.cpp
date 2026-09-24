@@ -2,30 +2,30 @@
 #include "Engine/GameEngine.h"
 
 TEST_CASE("Engine flags work before initialize", "[engine]") {
-    UGameEngine engine;
-    REQUIRE_FALSE(engine.IsInitialized());
+    UGameEngine Engine;
+    REQUIRE_FALSE(Engine.IsInitialized());
 
-    engine.SetSuppressCameraDrag(true);
-    REQUIRE(engine.IsCameraDragSuppressed());
-    engine.SetSuppressCameraDrag(false);
-    REQUIRE_FALSE(engine.IsCameraDragSuppressed());
+    Engine.SetSuppressCameraDrag(true);
+    REQUIRE(Engine.IsCameraDragSuppressed());
+    Engine.SetSuppressCameraDrag(false);
+    REQUIRE_FALSE(Engine.IsCameraDragSuppressed());
 
-    REQUIRE_FALSE(engine.IsCollisionDebugEnabled());
-    engine.ToggleCollisionDebug();
-    REQUIRE(engine.IsCollisionDebugEnabled());
-    engine.SetCollisionDebugEnabled(false);
-    REQUIRE_FALSE(engine.IsCollisionDebugEnabled());
+    REQUIRE_FALSE(Engine.IsCollisionDebugEnabled());
+    Engine.ToggleCollisionDebug();
+    REQUIRE(Engine.IsCollisionDebugEnabled());
+    Engine.SetCollisionDebugEnabled(false);
+    REQUIRE_FALSE(Engine.IsCollisionDebugEnabled());
 
-    REQUIRE_FALSE(engine.IsNavMeshDebugEnabled());
-    engine.ToggleNavMeshDebug();
-    REQUIRE(engine.IsNavMeshDebugEnabled());
-    engine.SetNavMeshDebugEnabled(false);
-    REQUIRE_FALSE(engine.IsNavMeshDebugEnabled());
+    REQUIRE_FALSE(Engine.IsNavMeshDebugEnabled());
+    Engine.ToggleNavMeshDebug();
+    REQUIRE(Engine.IsNavMeshDebugEnabled());
+    Engine.SetNavMeshDebugEnabled(false);
+    REQUIRE_FALSE(Engine.IsNavMeshDebugEnabled());
 
-    engine.SetKeyboardOrbitEnabled(false);
-    engine.SetOrbitMouseEnabled(false);
+    Engine.SetKeyboardOrbitEnabled(false);
+    Engine.SetOrbitMouseEnabled(false);
 
-    REQUIRE(engine.GetGameInstance().LevelsOpened() == 0);
-    engine.GetGameInstance().NotifyLevelOpened();
-    REQUIRE(engine.GetGameInstance().LevelsOpened() == 1);
+    REQUIRE(Engine.GetGameInstance().GetLevelsOpened() == 0);
+    Engine.GetGameInstance().NotifyLevelOpened();
+    REQUIRE(Engine.GetGameInstance().GetLevelsOpened() == 1);
 }

@@ -11,57 +11,57 @@
 
 namespace {
 
-[[nodiscard]] bool HasLeonLevelExtension(const std::string& path) {
-    std::string extension = std::filesystem::path(path).extension().string();
-    for (char& c : extension) {
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+[[nodiscard]] bool HasLeonLevelExtension(const std::string& Path) {
+    std::string Extension = std::filesystem::path(Path).extension().string();
+    for (char& C : Extension) {
+        C = static_cast<char>(std::tolower(static_cast<unsigned char>(C)));
     }
-    return extension == kLeonLevelExtension;
+    return Extension == LeonLevelExtension;
 }
 
 } // namespace
 
-void ApplyFitHeight(UStaticMeshComponent& object, float fitHeight) {
-    if (object.mesh == nullptr || fitHeight <= 0.0f) {
+void ApplyFitHeight(UStaticMeshComponent& Object, float FitHeight) {
+    if (Object.Mesh == nullptr || FitHeight <= 0.0f) {
         return;
     }
 
     // Existing position is kept as an offset after auto scale / ground align.
-    const glm::vec3 positionOffset = object.transform.Position;
+    const glm::vec3 PositionOffset = Object.Transform.Position;
 
-    const glm::vec3 mn = object.mesh->GetLocalMin();
-    const glm::vec3 mx = object.mesh->GetLocalMax();
-    const glm::vec3 extents = mx - mn;
-    const float height = std::max(extents.y, 0.001f);
-    const float scale = fitHeight / height;
-    const glm::vec3 center = (mn + mx) * 0.5f;
+    const glm::vec3 Mn = Object.Mesh->GetLocalMin();
+    const glm::vec3 Mx = Object.Mesh->GetLocalMax();
+    const glm::vec3 Extents = Mx - Mn;
+    const float Height = std::max(Extents.y, 0.001f);
+    const float Scale = FitHeight / Height;
+    const glm::vec3 Center = (Mn + Mx) * 0.5f;
 
-    object.transform.Scale = {scale, scale, scale};
-    constexpr float kGroundEpsilon = 0.008f;
-    const glm::vec3 grounded{(-center.x) * scale, ((-mn.y) * scale) + kGroundEpsilon,
-                             (-center.z) * scale};
-    object.transform.Position = grounded + positionOffset;
+    Object.Transform.Scale = {Scale, Scale, Scale};
+    constexpr float GroundEpsilon = 0.008f;
+    const glm::vec3 Grounded{(-Center.x) * Scale, ((-Mn.y) * Scale) + GroundEpsilon,
+                             (-Center.z) * Scale};
+    Object.Transform.Position = Grounded + PositionOffset;
 }
 
-bool LoadLevelFile(UGameEngine& engine, const std::string& levelPath, FLevelAnimation* outAnim) {
-    if (!HasLeonLevelExtension(levelPath)) {
-        std::cerr << "LevelLoader: '" << levelPath << "' is not a Leon Level -- expected '"
-                  << kLeonLevelExtension << "'\n";
+bool LoadLevelFile(UGameEngine& Engine, const std::string& LevelPath, FLevelAnimation* OutAnim) {
+    if (!HasLeonLevelExtension(LevelPath)) {
+        std::cerr << "LevelLoader: '" << LevelPath << "' is not a Leon Level -- expected '"
+                  << LeonLevelExtension << "'\n";
         return false;
     }
 
-    FLevelDocument doc;
-    if (!LoadLeonLevelFile(levelPath, doc)) {
+    FLevelDocument Doc;
+    if (!LoadLeonLevelFile(LevelPath, Doc)) {
         return false;
     }
 
-    FValidationReport report = ValidateLevelDocument(doc, levelPath);
-    report.logToStderr();
-    if (!report.ok()) {
-        std::cerr << "LevelLoader: rejecting '" << levelPath << "' (validation failed)\n";
+    FValidationReport Report = ValidateLevelDocument(Doc, LevelPath);
+    Report.LogToStderr();
+    if (!Report.Ok()) {
+        std::cerr << "LevelLoader: rejecting '" << LevelPath << "' (validation failed)\n";
         return false;
     }
 
-    return ApplyLevelDocument(engine, doc, levelPath, outAnim);
+    return ApplyLevelDocument(Engine, Doc, LevelPath, OutAnim);
 }
 

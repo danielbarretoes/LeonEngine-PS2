@@ -10,61 +10,61 @@
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("lightDirectionFromRotation round-trip", "[level][light]") {
-    const glm::vec3 rot{45.0f, 90.0f, 0.0f};
-    const glm::vec3 dir = lightDirectionFromRotation(rot);
-    REQUIRE_THAT(glm::length(dir), WithinAbs(1.0f, 1.0e-4f));
-    const glm::vec3 back = rotationFromLightDirection(dir);
-    REQUIRE_THAT(back.x, WithinAbs(rot.x, 1.0e-2f));
-    REQUIRE_THAT(back.y, WithinAbs(rot.y, 1.0e-2f));
+    const glm::vec3 Rot{45.0f, 90.0f, 0.0f};
+    const glm::vec3 Dir = LightDirectionFromRotation(Rot);
+    REQUIRE_THAT(glm::length(Dir), WithinAbs(1.0f, 1.0e-4f));
+    const glm::vec3 Back = RotationFromLightDirection(Dir);
+    REQUIRE_THAT(Back.x, WithinAbs(Rot.x, 1.0e-2f));
+    REQUIRE_THAT(Back.y, WithinAbs(Rot.y, 1.0e-2f));
 }
 
 TEST_CASE("DirectionalLight GetDirection matches transform", "[level][light]") {
-    FDirectionalLight light;
-    light.transform.RotationDegrees = {30.0f, 0.0f, 0.0f};
-    const glm::vec3 dir = light.GetDirection();
-    REQUIRE(dir.y < 0.0f);
+    FDirectionalLight Light;
+    Light.Transform.RotationDegrees = {30.0f, 0.0f, 0.0f};
+    const glm::vec3 Dir = Light.GetDirection();
+    REQUIRE(Dir.y < 0.0f);
 }
 
 TEST_CASE("tryParseBasicShapeName is case-insensitive", "[level][basicshape]") {
-    EBasicShape shape{};
-    REQUIRE(tryParseBasicShapeName("Cube", shape));
-    REQUIRE(shape == EBasicShape::Cube);
-    REQUIRE(tryParseBasicShapeName("sphere", shape));
-    REQUIRE(shape == EBasicShape::Sphere);
-    REQUIRE(tryParseBasicShapeName("PLANE", shape));
-    REQUIRE(shape == EBasicShape::Plane);
-    REQUIRE_FALSE(tryParseBasicShapeName("Octahedron", shape));
+    EBasicShape Shape{};
+    REQUIRE(TryParseBasicShapeName("Cube", Shape));
+    REQUIRE(Shape == EBasicShape::Cube);
+    REQUIRE(TryParseBasicShapeName("sphere", Shape));
+    REQUIRE(Shape == EBasicShape::Sphere);
+    REQUIRE(TryParseBasicShapeName("PLANE", Shape));
+    REQUIRE(Shape == EBasicShape::Plane);
+    REQUIRE_FALSE(TryParseBasicShapeName("Octahedron", Shape));
 }
 
 TEST_CASE("BlockingVolume and PlayerStart name helpers", "[level][basicshape]") {
-    REQUIRE(isBlockingVolumeName("BlockingVolume"));
-    REQUIRE(isBlockingVolumeName("blockingvolume"));
-    REQUIRE(isPlayerStartName("PlayerStart"));
-    REQUIRE_FALSE(isPlayerStartName("Cube"));
+    REQUIRE(IsBlockingVolumeName("BlockingVolume"));
+    REQUIRE(IsBlockingVolumeName("blockingvolume"));
+    REQUIRE(IsPlayerStartName("PlayerStart"));
+    REQUIRE_FALSE(IsPlayerStartName("Cube"));
 }
 
 TEST_CASE("BasicShape factories set type and plane scale", "[level][basicshape]") {
-    const FBasicShape cube = FBasicShape::cube();
-    REQUIRE(cube.type == EBasicShape::Cube);
-    const FBasicShape plane = FBasicShape::plane(4.0f);
-    REQUIRE(plane.type == EBasicShape::Plane);
-    REQUIRE_THAT(plane.transform.Scale.x, WithinAbs(4.0f, 1.0e-5f));
-    REQUIRE_THAT(plane.transform.Scale.z, WithinAbs(4.0f, 1.0e-5f));
+    const FBasicShape Cube = FBasicShape::Cube();
+    REQUIRE(Cube.Type == EBasicShape::Cube);
+    const FBasicShape Plane = FBasicShape::Plane(4.0f);
+    REQUIRE(Plane.Type == EBasicShape::Plane);
+    REQUIRE_THAT(Plane.Transform.Scale.x, WithinAbs(4.0f, 1.0e-5f));
+    REQUIRE_THAT(Plane.Transform.Scale.z, WithinAbs(4.0f, 1.0e-5f));
 }
 
 TEST_CASE("BasicLight parse and addTo Level", "[level][basiclight]") {
-    EBasicLight type{};
-    REQUIRE(tryParseBasicLightName("DirectionalLight", type));
-    REQUIRE(type == EBasicLight::Directional);
-    REQUIRE(tryParseBasicLightName("PointLight", type));
-    REQUIRE(type == EBasicLight::Point);
+    EBasicLight Type{};
+    REQUIRE(TryParseBasicLightName("DirectionalLight", Type));
+    REQUIRE(Type == EBasicLight::Directional);
+    REQUIRE(TryParseBasicLightName("PointLight", Type));
+    REQUIRE(Type == EBasicLight::Point);
 
-    ULevel level;
-    level.ClearLights();
-    REQUIRE(level.DirectionalLights().empty());
+    ULevel Level;
+    Level.ClearLights();
+    REQUIRE(Level.GetDirectionalLights().empty());
 
-    FBasicLight::directional().addTo(level);
-    FBasicLight::point().addTo(level);
-    REQUIRE(level.DirectionalLights().size() == 1);
-    REQUIRE(level.PointLights().size() == 1);
+    FBasicLight::Directional().AddTo(Level);
+    FBasicLight::Point().AddTo(Level);
+    REQUIRE(Level.GetDirectionalLights().size() == 1);
+    REQUIRE(Level.GetPointLights().size() == 1);
 }

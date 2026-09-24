@@ -9,47 +9,47 @@
 
 namespace {
 
-[[nodiscard]] bool TravelViaSiblingLevels(UGameEngine& engine, std::string_view levelKey,
-                                          std::string_view hintLevelPath) {
-    if (levelKey.empty() || hintLevelPath.empty()) {
+[[nodiscard]] bool TravelViaSiblingLevels(UGameEngine& Engine, std::string_view LevelKey,
+                                          std::string_view HintLevelPath) {
+    if (LevelKey.empty() || HintLevelPath.empty()) {
         return false;
     }
     namespace fs = std::filesystem;
-    const fs::path hint(hintLevelPath);
-    const fs::path levelsDir = hint.parent_path();
-    if (levelsDir.empty()) {
+    const fs::path Hint(HintLevelPath);
+    const fs::path LevelsDir = Hint.parent_path();
+    if (LevelsDir.empty()) {
         return false;
     }
 
-    const std::string needle = FCString::ToLower(levelKey);
-    std::error_code ec;
-    for (const auto& entry : fs::directory_iterator(levelsDir, ec)) {
-        if (ec || !entry.is_regular_file()) {
+    const std::string Needle = FCString::ToLower(LevelKey);
+    std::error_code Ec;
+    for (const auto& Entry : fs::directory_iterator(LevelsDir, Ec)) {
+        if (Ec || !Entry.is_regular_file()) {
             continue;
         }
-        const fs::path path = entry.path();
-        if (FCString::ToLower(path.extension().string()) != ".llev") {
+        const fs::path Path = Entry.path();
+        if (FCString::ToLower(Path.extension().string()) != ".llev") {
             continue;
         }
-        const std::string stem = FCString::ToLower(path.stem().string());
-        bool match = (stem == needle) || (FCString::ToLower(path.filename().string()) == needle);
-        if (!match) {
-            FLevelDocument doc;
-            if (LoadLeonLevelFile(path.string(), doc) && FCString::ToLower(doc.name) == needle) {
-                match = true;
+        const std::string Stem = FCString::ToLower(Path.stem().string());
+        bool bMatch = (Stem == Needle) || (FCString::ToLower(Path.filename().string()) == Needle);
+        if (!bMatch) {
+            FLevelDocument Doc;
+            if (LoadLeonLevelFile(Path.string(), Doc) && FCString::ToLower(Doc.Name) == Needle) {
+                bMatch = true;
             }
         }
-        if (!match) {
+        if (!bMatch) {
             continue;
         }
-        return LoadLevelFile(engine, path.lexically_normal().string());
+        return LoadLevelFile(Engine, Path.lexically_normal().string());
     }
     return false;
 }
 
 } // namespace
 
-UGameInstance::UGameInstance() : netDriver_(std::make_unique<UNetDriver>()) {}
+UGameInstance::UGameInstance() : NetDriver(std::make_unique<UNetDriver>()) {}
 
 UGameInstance::~UGameInstance() {
     Shutdown();
@@ -59,50 +59,50 @@ void UGameInstance::Init() {}
 
 void UGameInstance::Shutdown() {
     CloseNetSession();
-    levelTravelFn_ = {};
-    levelBrowserVisibleFn_ = {};
+    LevelTravelFn = {};
+    LevelBrowserVisibleFn = {};
 }
 
-bool UGameInstance::HostListen(std::uint16_t port) {
-    return netDriver_->StartHost(port);
+bool UGameInstance::HostListen(std::uint16_t Port) {
+    return NetDriver->StartHost(Port);
 }
 
-bool UGameInstance::HostDedicated(std::uint16_t port) {
-    return netDriver_->StartDedicated(port);
+bool UGameInstance::HostDedicated(std::uint16_t Port) {
+    return NetDriver->StartDedicated(Port);
 }
 
-bool UGameInstance::Join(const std::string& address, std::uint16_t port) {
-    return netDriver_->Connect(address, port);
+bool UGameInstance::Join(const std::string& Address, std::uint16_t Port) {
+    return NetDriver->Connect(Address, Port);
 }
 
 void UGameInstance::CloseNetSession() {
-    if (netDriver_) {
-        netDriver_->Shutdown();
+    if (NetDriver) {
+        NetDriver->Shutdown();
     }
 }
 
-bool UGameInstance::TravelInternal(UGameEngine& engine, std::string_view levelKey,
-                                  std::string_view hintLevelPath) {
-    if (levelKey.empty()) {
+bool UGameInstance::TravelInternal(UGameEngine& Engine, std::string_view LevelKey,
+                                  std::string_view HintLevelPath) {
+    if (LevelKey.empty()) {
         return false;
     }
-    if (levelTravelFn_ && levelTravelFn_(engine, levelKey)) {
+    if (LevelTravelFn && LevelTravelFn(Engine, LevelKey)) {
         return true;
     }
-    if (TravelViaSiblingLevels(engine, levelKey, hintLevelPath)) {
+    if (TravelViaSiblingLevels(Engine, LevelKey, HintLevelPath)) {
         return true;
     }
-    std::cerr << "GameInstance: travel failed for map '" << levelKey << "'\n";
+    std::cerr << "GameInstance: travel failed for map '" << LevelKey << "'\n";
     return false;
 }
 
-bool UGameInstance::ServerTravel(UGameEngine& engine, std::string_view mapName,
-                                std::string_view hintLevelPath) {
-    return TravelInternal(engine, mapName, hintLevelPath);
+bool UGameInstance::ServerTravel(UGameEngine& Engine, std::string_view MapName,
+                                std::string_view HintLevelPath) {
+    return TravelInternal(Engine, MapName, HintLevelPath);
 }
 
-bool UGameInstance::ClientTravel(UGameEngine& engine, std::string_view mapName,
-                                std::string_view hintLevelPath) {
-    return TravelInternal(engine, mapName, hintLevelPath);
+bool UGameInstance::ClientTravel(UGameEngine& Engine, std::string_view MapName,
+                                std::string_view HintLevelPath) {
+    return TravelInternal(Engine, MapName, HintLevelPath);
 }
 

@@ -2,71 +2,71 @@
 #include "GameFramework/GameplayRouter.h"
 
 
-void FGameplayRouter::AddMode(std::unique_ptr<AGameModeBase> mode) {
-    if (mode) {
-        modes_.push_back(std::move(mode));
+void FGameplayRouter::AddMode(std::unique_ptr<AGameModeBase> Mode) {
+    if (Mode) {
+        Modes.push_back(std::move(Mode));
     }
 }
 
-void FGameplayRouter::SetDefaultMode(std::unique_ptr<AGameModeBase> mode) {
-    defaultMode_ = std::move(mode);
+void FGameplayRouter::SetDefaultMode(std::unique_ptr<AGameModeBase> Mode) {
+    DefaultMode = std::move(Mode);
 }
 
-void FGameplayRouter::SyncActiveMode(UGameEngine& engine, const FLevelDirector& director) {
-    if (director.IsEmpty()) {
-        if (active_ != nullptr) {
-            active_->OnExit(engine);
-            active_ = nullptr;
+void FGameplayRouter::SyncActiveMode(UGameEngine& Engine, const FLevelDirector& Director) {
+    if (Director.IsEmpty()) {
+        if (Active != nullptr) {
+            Active->OnExit(Engine);
+            Active = nullptr;
         }
-        boundCatalogIndex_ = static_cast<std::size_t>(-1);
+        BoundCatalogIndex = static_cast<std::size_t>(-1);
         return;
     }
 
-    const std::size_t index = director.CurrentIndex();
-    if (index == boundCatalogIndex_) {
+    const std::size_t Index = Director.GetCurrentIndex();
+    if (Index == BoundCatalogIndex) {
         return;
     }
-    boundCatalogIndex_ = index;
+    BoundCatalogIndex = Index;
 
-    const FLevelEntry& entry = director.Catalog().Entries()[index];
-    const std::string& gameModeId = entry.gameMode;
+    const FLevelEntry& Entry = Director.GetCatalog().GetEntries()[Index];
+    const std::string& GameModeId = Entry.GameMode;
 
     // Explicit override / pack soft-match first; otherwise ADefaultGameMode.
-    AGameModeBase* next = nullptr;
-    for (const auto& mode : modes_) {
-        if (mode->Matches(entry, gameModeId)) {
-            next = mode.get();
+    AGameModeBase* Next = nullptr;
+    for (const auto& Mode : Modes) {
+        if (Mode->Matches(Entry, GameModeId)) {
+            Next = Mode.get();
             break;
         }
     }
-    if (next == nullptr) {
-        next = defaultMode_.get();
+    if (Next == nullptr) {
+        Next = DefaultMode.get();
     }
 
-    if (active_ == next) {
+    if (Active == Next) {
         // Same mode instance, different level file — reload mode config only.
-        if (active_ != nullptr) {
-            active_->OnEnter(engine, entry.path);
+        if (Active != nullptr) {
+            Active->OnEnter(Engine, Entry.Path);
         }
         return;
     }
 
-    if (active_ != nullptr) {
-        active_->OnExit(engine);
+    if (Active != nullptr) {
+        Active->OnExit(Engine);
     }
-    active_ = next;
-    if (active_ != nullptr) {
-        active_->OnEnter(engine, entry.path);
+    Active = Next;
+    if (Active != nullptr) {
+        Active->OnEnter(Engine, Entry.Path);
     }
 }
 
-void FGameplayRouter::Update(UGameEngine& engine, const FLevelDirector& director, float deltaTime) {
-    SyncActiveMode(engine, director);
-    if (active_ != nullptr) {
-        active_->Tick(engine, deltaTime);
+void FGameplayRouter::Update(UGameEngine& Engine, const FLevelDirector& Director, float DeltaTime) {
+    SyncActiveMode(Engine, Director);
+    if (Active != nullptr) {
+        Active->Tick(Engine, DeltaTime);
     }
     // ClientTravel / ServerTravel during Tick may change the catalog index — bind the new
     // GameMode this frame so Lobby/Menu OnEnter (and net callbacks) are not delayed.
-    SyncActiveMode(engine, director);
+    SyncActiveMode(Engine, Director);
 }
 

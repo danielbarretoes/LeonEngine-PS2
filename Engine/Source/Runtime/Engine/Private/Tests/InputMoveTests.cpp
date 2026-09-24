@@ -8,32 +8,32 @@
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("MoveAxes2D any detects nonzero", "[core][input]") {
-    FMoveAxes2D zero{};
-    REQUIRE_FALSE(zero.any());
-    REQUIRE(FMoveAxes2D{1.0f, 0.0f}.any());
-    REQUIRE(FMoveAxes2D{0.0f, -1.0f}.any());
+    FMoveAxes2D Zero{};
+    REQUIRE_FALSE(Zero.Any());
+    REQUIRE(FMoveAxes2D{1.0f, 0.0f}.Any());
+    REQUIRE(FMoveAxes2D{0.0f, -1.0f}.Any());
 }
 
 TEST_CASE("yawRelativeMoveXZ returns zero without axes", "[core][input]") {
-    const glm::vec3 move = yawRelativeMoveXZ(45.0f, {});
-    REQUIRE_THAT(move.x, WithinAbs(0.0f, 1.0e-6f));
-    REQUIRE_THAT(move.y, WithinAbs(0.0f, 1.0e-6f));
-    REQUIRE_THAT(move.z, WithinAbs(0.0f, 1.0e-6f));
+    const glm::vec3 Move = YawRelativeMoveXz(45.0f, {});
+    REQUIRE_THAT(Move.x, WithinAbs(0.0f, 1.0e-6f));
+    REQUIRE_THAT(Move.y, WithinAbs(0.0f, 1.0e-6f));
+    REQUIRE_THAT(Move.z, WithinAbs(0.0f, 1.0e-6f));
 }
 
 TEST_CASE("yawRelativeMoveXZ forward at yaw 0", "[core][input]") {
-    const glm::vec3 move = yawRelativeMoveXZ(0.0f, {0.0f, 1.0f});
-    REQUIRE_THAT(glm::length(move), WithinAbs(1.0f, 1.0e-4f));
-    REQUIRE_THAT(move.x, WithinAbs(-1.0f, 1.0e-4f));
-    REQUIRE_THAT(move.y, WithinAbs(0.0f, 1.0e-4f));
-    REQUIRE_THAT(move.z, WithinAbs(0.0f, 1.0e-4f));
+    const glm::vec3 Move = YawRelativeMoveXz(0.0f, {0.0f, 1.0f});
+    REQUIRE_THAT(glm::length(Move), WithinAbs(1.0f, 1.0e-4f));
+    REQUIRE_THAT(Move.x, WithinAbs(-1.0f, 1.0e-4f));
+    REQUIRE_THAT(Move.y, WithinAbs(0.0f, 1.0e-4f));
+    REQUIRE_THAT(Move.z, WithinAbs(0.0f, 1.0e-4f));
 }
 
 TEST_CASE("cameraRelativeMoveXZ matches camera yaw", "[core][input]") {
-    UCameraComponent cam;
-    cam.SetYawPitch(90.0f, 0.0f);
-    const glm::vec3 a = cameraRelativeMoveXZ(cam, {0.0f, 1.0f});
-    const glm::vec3 b = yawRelativeMoveXZ(90.0f, {0.0f, 1.0f});
-    REQUIRE_THAT(a.x, WithinAbs(b.x, 1.0e-5f));
-    REQUIRE_THAT(a.z, WithinAbs(b.z, 1.0e-5f));
+    UCameraComponent Cam;
+    Cam.SetYawPitch(90.0f, 0.0f);
+    const glm::vec3 A = CameraRelativeMoveXz(Cam, {0.0f, 1.0f});
+    const glm::vec3 B = YawRelativeMoveXz(90.0f, {0.0f, 1.0f});
+    REQUIRE_THAT(A.x, WithinAbs(B.x, 1.0e-5f));
+    REQUIRE_THAT(A.z, WithinAbs(B.z, 1.0e-5f));
 }

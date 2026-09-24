@@ -22,278 +22,278 @@
 
 namespace {
 
-constexpr float kPixelScale = 2.0f;
-constexpr float kMargin = 10.0f;
-constexpr float kHitPad = 8.0f;
-constexpr float kLineHeight = 14.0f * kPixelScale;
+constexpr float PixelScale = 2.0f;
+constexpr float Margin = 10.0f;
+constexpr float HitPad = 8.0f;
+constexpr float LineHeight = 14.0f * PixelScale;
 
 } // namespace
 
-bool FLevelDirector::Initialize(const std::string& shaderDirectory) {
-    return chrome_.Initialize(shaderDirectory);
+bool FLevelDirector::Initialize(const std::string& ShaderDirectory) {
+    return Chrome.Initialize(ShaderDirectory);
 }
 
-EShaderReloadResult FLevelDirector::ReloadShaders(bool force) {
-    return chrome_.ReloadShader(force);
+EShaderReloadResult FLevelDirector::ReloadShaders(bool bForce) {
+    return Chrome.ReloadShader(bForce);
 }
 
 void FLevelDirector::Shutdown() {
-    chrome_.Shutdown();
-    catalog_ = {};
-    animation_.clear();
-    currentIndex_ = 0;
-    elapsed_ = 0.0f;
-    prevMinX_ = prevMaxX_ = nextMinX_ = nextMaxX_ = 0.0f;
-    chromeMinY_ = chromeMaxY_ = 0.0f;
-    layoutFbWidth_ = 0;
-    layoutFbHeight_ = 0;
-    mouseWasDown_ = false;
-    ignoreDrag_ = false;
-    keyPrevDown_ = false;
-    keyNextDown_ = false;
-    for (bool& down : digitWasDown_) {
-        down = false;
+    Chrome.Shutdown();
+    Catalog = {};
+    Animation.Clear();
+    CurrentIndex = 0;
+    Elapsed = 0.0f;
+    PrevMinX = PrevMaxX = NextMinX = NextMaxX = 0.0f;
+    ChromeMinY = ChromeMaxY = 0.0f;
+    LayoutFbWidth = 0;
+    LayoutFbHeight = 0;
+    bMouseWasDown = false;
+    bIgnoreDrag = false;
+    bKeyPrevDown = false;
+    bKeyNextDown = false;
+    for (bool& bDown : DigitWasDown) {
+        bDown = false;
     }
 }
 
-bool FLevelDirector::ScanAndLoad(UGameEngine& engine, const std::string& projectsDirectory) {
-    if (!catalog_.ScanProjectPacks(projectsDirectory)) {
+bool FLevelDirector::ScanAndLoad(UGameEngine& Engine, const std::string& ProjectsDirectory) {
+    if (!Catalog.ScanProjectPacks(ProjectsDirectory)) {
         return false;
     }
-    return LoadIndex(engine, 0);
+    return LoadIndex(Engine, 0);
 }
 
-bool FLevelDirector::ScanPackAndLoad(UGameEngine& engine, const std::string& packDirectory,
-                                    std::string_view preferredLevelKey) {
-    if (!catalog_.ScanPack(packDirectory)) {
+bool FLevelDirector::ScanPackAndLoad(UGameEngine& Engine, const std::string& PackDirectory,
+                                    std::string_view PreferredLevelKey) {
+    if (!Catalog.ScanPack(PackDirectory)) {
         return false;
     }
     // Flow: leon.game.json defaultLevel → preferred key; else catalog[0] (path-sorted).
-    if (!preferredLevelKey.empty()) {
-        if (LoadByKey(engine, preferredLevelKey)) {
+    if (!PreferredLevelKey.empty()) {
+        if (LoadByKey(Engine, PreferredLevelKey)) {
             return true;
         }
-        std::cerr << "LevelDirector: defaultLevel '" << preferredLevelKey
+        std::cerr << "LevelDirector: defaultLevel '" << PreferredLevelKey
                   << "' not in catalog; loading first entry\n";
     }
-    return LoadIndex(engine, 0);
+    return LoadIndex(Engine, 0);
 }
 
-bool FLevelDirector::LoadIndex(UGameEngine& engine, std::size_t index) {
-    if (catalog_.IsEmpty()) {
+bool FLevelDirector::LoadIndex(UGameEngine& Engine, std::size_t Index) {
+    if (Catalog.IsEmpty()) {
         return false;
     }
 
-    const std::size_t target = index % catalog_.NumEntries();
-    FLevelAnimation nextAnim;
-    const FLevelEntry& entry = catalog_.Entries()[target];
-    if (!LoadLevelFile(engine, entry.path, &nextAnim)) {
-        std::cerr << "LevelDirector: failed to load " << entry.path << '\n';
+    const std::size_t Target = Index % Catalog.NumEntries();
+    FLevelAnimation NextAnim;
+    const FLevelEntry& Entry = Catalog.GetEntries()[Target];
+    if (!LoadLevelFile(Engine, Entry.Path, &NextAnim)) {
+        std::cerr << "LevelDirector: failed to load " << Entry.Path << '\n';
         return false;
     }
 
-    currentIndex_ = target;
-    elapsed_ = 0.0f;
-    animation_ = std::move(nextAnim);
-    refreshChrome(layoutFbWidth_, layoutFbHeight_);
+    CurrentIndex = Target;
+    Elapsed = 0.0f;
+    Animation = std::move(NextAnim);
+    RefreshChrome(LayoutFbWidth, LayoutFbHeight);
     return true;
 }
 
-bool FLevelDirector::LoadByKey(UGameEngine& engine, std::string_view levelKey) {
-    const std::size_t index = catalog_.FindIndexByLevelKey(levelKey);
-    if (index >= catalog_.NumEntries()) {
-        std::cerr << "LevelDirector: unknown level key '" << levelKey << "'\n";
+bool FLevelDirector::LoadByKey(UGameEngine& Engine, std::string_view LevelKey) {
+    const std::size_t Index = Catalog.FindIndexByLevelKey(LevelKey);
+    if (Index >= Catalog.NumEntries()) {
+        std::cerr << "LevelDirector: unknown level key '" << LevelKey << "'\n";
         return false;
     }
-    return LoadIndex(engine, index);
+    return LoadIndex(Engine, Index);
 }
 
-bool FLevelDirector::Next(UGameEngine& engine) {
-    if (catalog_.NumEntries() < 2) {
+bool FLevelDirector::Next(UGameEngine& Engine) {
+    if (Catalog.NumEntries() < 2) {
         return false;
     }
-    return LoadIndex(engine, (currentIndex_ + 1) % catalog_.NumEntries());
+    return LoadIndex(Engine, (CurrentIndex + 1) % Catalog.NumEntries());
 }
 
-bool FLevelDirector::Previous(UGameEngine& engine) {
-    if (catalog_.NumEntries() < 2) {
+bool FLevelDirector::Previous(UGameEngine& Engine) {
+    if (Catalog.NumEntries() < 2) {
         return false;
     }
-    const std::size_t idx = (currentIndex_ + catalog_.NumEntries() - 1) % catalog_.NumEntries();
-    return LoadIndex(engine, idx);
+    const std::size_t Idx = (CurrentIndex + Catalog.NumEntries() - 1) % Catalog.NumEntries();
+    return LoadIndex(Engine, Idx);
 }
 
-void FLevelDirector::Update(UGameEngine& engine, float deltaTime) {
-    elapsed_ += deltaTime;
-    auto& objects = engine.GetLevel().StaticMeshes();
-    for (const auto& spin : animation_.spins) {
-        if (spin.meshIndex < objects.size()) {
-            objects[spin.meshIndex].transform.RotationDegrees.y +=
-                spin.yawDegreesPerSec * deltaTime;
+void FLevelDirector::Update(UGameEngine& Engine, float DeltaTime) {
+    Elapsed += DeltaTime;
+    auto& Objects = Engine.GetLevel().GetStaticMeshes();
+    for (const auto& Spin : Animation.Spins) {
+        if (Spin.MeshIndex < Objects.size()) {
+            Objects[Spin.MeshIndex].Transform.RotationDegrees.y +=
+                Spin.YawDegreesPerSec * DeltaTime;
         }
     }
-    for (const auto& bob : animation_.bobs) {
-        if (bob.meshIndex < objects.size()) {
-            objects[bob.meshIndex].transform.Position.y =
-                bob.baseY + (bob.amplitude * (0.5f + (0.5f * std::sin(elapsed_ * bob.speed))));
+    for (const auto& Bob : Animation.Bobs) {
+        if (Bob.MeshIndex < Objects.size()) {
+            Objects[Bob.MeshIndex].Transform.Position.y =
+                Bob.BaseY + (Bob.Amplitude * (0.5f + (0.5f * std::sin(Elapsed * Bob.Speed))));
         }
     }
-    auto& points = engine.GetLevel().PointLights();
-    for (const auto& orbit : animation_.orbits) {
-        if (orbit.lightIndex < points.size()) {
-            points[orbit.lightIndex].transform.Position.x =
-                std::cos(elapsed_ * orbit.speed) * orbit.radius;
-            points[orbit.lightIndex].transform.Position.z =
-                std::sin(elapsed_ * orbit.speed) * orbit.radius;
-            points[orbit.lightIndex].transform.Position.y =
-                orbit.height + (orbit.heightAmp * std::sin((elapsed_ * orbit.speed) * 2.0f));
+    auto& Points = Engine.GetLevel().GetPointLights();
+    for (const auto& Orbit : Animation.Orbits) {
+        if (Orbit.LightIndex < Points.size()) {
+            Points[Orbit.LightIndex].Transform.Position.x =
+                std::cos(Elapsed * Orbit.Speed) * Orbit.Radius;
+            Points[Orbit.LightIndex].Transform.Position.z =
+                std::sin(Elapsed * Orbit.Speed) * Orbit.Radius;
+            Points[Orbit.LightIndex].Transform.Position.y =
+                Orbit.Height + (Orbit.HeightAmp * std::sin((Elapsed * Orbit.Speed) * 2.0f));
         }
     }
 }
 
-void FLevelDirector::layoutChrome(int framebufferWidth, int framebufferHeight) {
-    if (catalog_.IsEmpty()) {
+void FLevelDirector::LayoutChrome(int FramebufferWidth, int FramebufferHeight) {
+    if (Catalog.IsEmpty()) {
         return;
     }
 
-    const FLevelEntry& entry = catalog_.Entries()[currentIndex_];
-    std::array<char, 128> label{};
-    if (std::snprintf(label.data(), label.size(), "<  %s/%s  (%zu/%zu)  >",
-                      entry.pack.empty() ? "-" : entry.pack.c_str(), entry.name.c_str(),
-                      currentIndex_ + 1, catalog_.NumEntries()) < 0) {
-        label[0] = '\0';
+    const FLevelEntry& Entry = Catalog.GetEntries()[CurrentIndex];
+    std::array<char, 128> Label{};
+    if (std::snprintf(Label.data(), Label.size(), "<  %s/%s  (%zu/%zu)  >",
+                      Entry.Pack.empty() ? "-" : Entry.Pack.c_str(), Entry.Name.c_str(),
+                      CurrentIndex + 1, Catalog.NumEntries()) < 0) {
+        Label[0] = '\0';
     }
 
-    std::vector<char> mutableLabel(label.data(), label.data() + std::strlen(label.data()) + 1);
-    const auto rawWidth = static_cast<float>(stb_easy_font_width(mutableLabel.data()));
-    const float totalW = rawWidth * kPixelScale;
-    const float originX = static_cast<float>(framebufferWidth) - totalW - kMargin;
-    const float originY =
-        static_cast<float>(std::max(framebufferHeight, 1)) - kMargin - kLineHeight;
+    std::vector<char> MutableLabel(Label.data(), Label.data() + std::strlen(Label.data()) + 1);
+    const auto RawWidth = static_cast<float>(stb_easy_font_width(MutableLabel.data()));
+    const float TotalW = RawWidth * PixelScale;
+    const float OriginX = static_cast<float>(FramebufferWidth) - TotalW - Margin;
+    const float OriginY =
+        static_cast<float>(std::max(FramebufferHeight, 1)) - Margin - LineHeight;
 
     // Approximate hit boxes: first glyph cluster "<" and last ">".
-    const float arrowW = 14.0f * kPixelScale;
-    prevMinX_ = originX - kHitPad;
-    prevMaxX_ = originX + arrowW + kHitPad;
-    nextMaxX_ = originX + totalW + kHitPad;
-    nextMinX_ = nextMaxX_ - arrowW - kHitPad;
-    chromeMinY_ = originY - kHitPad;
-    chromeMaxY_ = originY + kLineHeight + kHitPad;
-    layoutFbWidth_ = framebufferWidth;
-    layoutFbHeight_ = framebufferHeight;
+    const float ArrowW = 14.0f * PixelScale;
+    PrevMinX = OriginX - HitPad;
+    PrevMaxX = OriginX + ArrowW + HitPad;
+    NextMaxX = OriginX + TotalW + HitPad;
+    NextMinX = NextMaxX - ArrowW - HitPad;
+    ChromeMinY = OriginY - HitPad;
+    ChromeMaxY = OriginY + LineHeight + HitPad;
+    LayoutFbWidth = FramebufferWidth;
+    LayoutFbHeight = FramebufferHeight;
 
-    chrome_.SetRightTextOriginY(originY);
-    chrome_.SetRightText(label.data());
+    Chrome.SetRightTextOriginY(OriginY);
+    Chrome.SetRightText(Label.data());
 }
 
-void FLevelDirector::refreshChrome(int framebufferWidth, int framebufferHeight) {
-    int fbW = framebufferWidth;
-    int fbH = framebufferHeight;
-    if (fbW <= 0) {
-        fbW = layoutFbWidth_ > 0 ? layoutFbWidth_ : 1280;
+void FLevelDirector::RefreshChrome(int FramebufferWidth, int FramebufferHeight) {
+    int FbW = FramebufferWidth;
+    int FbH = FramebufferHeight;
+    if (FbW <= 0) {
+        FbW = LayoutFbWidth > 0 ? LayoutFbWidth : 1280;
     }
-    if (fbH <= 0) {
-        fbH = layoutFbHeight_ > 0 ? layoutFbHeight_ : 720;
+    if (FbH <= 0) {
+        FbH = LayoutFbHeight > 0 ? LayoutFbHeight : 720;
     }
-    layoutChrome(fbW, fbH);
+    LayoutChrome(FbW, FbH);
 }
 
-void FLevelDirector::DrawUi(int framebufferWidth, int framebufferHeight) {
+void FLevelDirector::DrawUi(int FramebufferWidth, int FramebufferHeight) {
     // Single-level packs: no level-switcher chrome (Shipping then matches PIE visuals).
-    if (!browserVisible_ || catalog_.NumEntries() <= 1) {
+    if (!bBrowserVisible || Catalog.NumEntries() <= 1) {
         return;
     }
-    if (framebufferWidth != layoutFbWidth_ || framebufferHeight != layoutFbHeight_) {
-        layoutChrome(framebufferWidth, framebufferHeight);
+    if (FramebufferWidth != LayoutFbWidth || FramebufferHeight != LayoutFbHeight) {
+        LayoutChrome(FramebufferWidth, FramebufferHeight);
     }
-    chrome_.Draw(framebufferWidth, framebufferHeight);
+    Chrome.Draw(FramebufferWidth, FramebufferHeight);
 }
 
-void FLevelDirector::cursorFramebuffer(UGameEngine& engine, float& outX, float& outY) const {
-    double mx = 0.0;
-    double my = 0.0;
-    engine.GetWindow().GetCursorPos(mx, my);
+void FLevelDirector::CursorFramebuffer(UGameEngine& Engine, float& OutX, float& OutY) const {
+    double Mx = 0.0;
+    double My = 0.0;
+    Engine.GetWindow().GetCursorPos(Mx, My);
 
     // Cursor is in window (screen) coordinates; chrome hit boxes are in framebuffer pixels.
-    int winW = 0;
-    int winH = 0;
-    engine.GetWindow().GetWindowSize(winW, winH);
-    winW = std::max(winW, 1);
-    winH = std::max(winH, 1);
+    int WinW = 0;
+    int WinH = 0;
+    Engine.GetWindow().GetWindowSize(WinW, WinH);
+    WinW = std::max(WinW, 1);
+    WinH = std::max(WinH, 1);
 
-    int fbW = 0;
-    int fbH = 0;
-    engine.GetWindow().GetFramebufferSize(fbW, fbH);
-    if (fbW <= 0 || fbH <= 0) {
-        outX = static_cast<float>(mx);
-        outY = static_cast<float>(my);
+    int FbW = 0;
+    int FbH = 0;
+    Engine.GetWindow().GetFramebufferSize(FbW, FbH);
+    if (FbW <= 0 || FbH <= 0) {
+        OutX = static_cast<float>(Mx);
+        OutY = static_cast<float>(My);
         return;
     }
-    outX = static_cast<float>(mx) * static_cast<float>(fbW) / static_cast<float>(winW);
-    outY = static_cast<float>(my) * static_cast<float>(fbH) / static_cast<float>(winH);
+    OutX = static_cast<float>(Mx) * static_cast<float>(FbW) / static_cast<float>(WinW);
+    OutY = static_cast<float>(My) * static_cast<float>(FbH) / static_cast<float>(WinH);
 }
 
-bool FLevelDirector::hitPrev(float x, float y) const {
-    return x >= prevMinX_ && x <= prevMaxX_ && y >= chromeMinY_ && y <= chromeMaxY_;
+bool FLevelDirector::HitPrev(float X, float Y) const {
+    return X >= PrevMinX && X <= PrevMaxX && Y >= ChromeMinY && Y <= ChromeMaxY;
 }
 
-bool FLevelDirector::hitNext(float x, float y) const {
-    return x >= nextMinX_ && x <= nextMaxX_ && y >= chromeMinY_ && y <= chromeMaxY_;
+bool FLevelDirector::HitNext(float X, float Y) const {
+    return X >= NextMinX && X <= NextMaxX && Y >= ChromeMinY && Y <= ChromeMaxY;
 }
 
-bool FLevelDirector::HandleUiInput(UGameEngine& engine) {
-    if (!browserVisible_ || catalog_.IsEmpty()) {
+bool FLevelDirector::HandleUiInput(UGameEngine& Engine) {
+    if (!bBrowserVisible || Catalog.IsEmpty()) {
         return false;
     }
 
-    bool switched = false;
+    bool bSwitched = false;
 
-    const bool prevKey = engine.GetWindow().IsKeyPressed(EKeys::LeftBracket);
-    const bool nextKey = engine.GetWindow().IsKeyPressed(EKeys::RightBracket);
-    if (prevKey && !keyPrevDown_) {
-        switched = Previous(engine) || switched;
+    const bool bPrevKey = Engine.GetWindow().IsKeyPressed(EKeys::LeftBracket);
+    const bool bNextKey = Engine.GetWindow().IsKeyPressed(EKeys::RightBracket);
+    if (bPrevKey && !bKeyPrevDown) {
+        bSwitched = Previous(Engine) || bSwitched;
     }
-    if (nextKey && !keyNextDown_) {
-        switched = Next(engine) || switched;
+    if (bNextKey && !bKeyNextDown) {
+        bSwitched = Next(Engine) || bSwitched;
     }
-    keyPrevDown_ = prevKey;
-    keyNextDown_ = nextKey;
+    bKeyPrevDown = bPrevKey;
+    bKeyNextDown = bNextKey;
 
     // Digit keys 1–9 (and keypad) jump to catalog slot (1-based → index 0–8).
-    for (int digit = 0; digit < 9; ++digit) {
-        const bool down =
-            engine.GetWindow().IsKeyPressed(static_cast<EKeys>(ToKeyCode(EKeys::One) + digit)) ||
-            engine.GetWindow().IsKeyPressed(static_cast<EKeys>(ToKeyCode(EKeys::NumPadOne) + digit));
-        if (down && !digitWasDown_[digit]) {
-            const auto index = static_cast<std::size_t>(digit);
-            if (index < catalog_.NumEntries() && index != currentIndex_) {
-                switched = LoadIndex(engine, index) || switched;
+    for (int Digit = 0; Digit < 9; ++Digit) {
+        const bool bDown =
+            Engine.GetWindow().IsKeyPressed(static_cast<EKeys>(ToKeyCode(EKeys::One) + Digit)) ||
+            Engine.GetWindow().IsKeyPressed(static_cast<EKeys>(ToKeyCode(EKeys::NumPadOne) + Digit));
+        if (bDown && !DigitWasDown[Digit]) {
+            const auto Index = static_cast<std::size_t>(Digit);
+            if (Index < Catalog.NumEntries() && Index != CurrentIndex) {
+                bSwitched = LoadIndex(Engine, Index) || bSwitched;
             }
         }
-        digitWasDown_[digit] = down;
+        DigitWasDown[Digit] = bDown;
     }
 
-    const bool mouseDown = engine.GetWindow().IsMouseButtonDown(EMouseButtons::Left);
+    const bool bMouseDown = Engine.GetWindow().IsMouseButtonDown(EMouseButtons::Left);
     // Captured cursor uses relative motion; chrome hit-testing needs a visible cursor.
-    if (mouseDown && !mouseWasDown_ && !engine.IsCursorCaptured()) {
-        float x = 0.0f;
-        float y = 0.0f;
-        cursorFramebuffer(engine, x, y);
-        if (hitPrev(x, y)) {
-            switched = Previous(engine) || switched;
-            ignoreDrag_ = true;
-        } else if (hitNext(x, y)) {
-            switched = Next(engine) || switched;
-            ignoreDrag_ = true;
+    if (bMouseDown && !bMouseWasDown && !Engine.IsCursorCaptured()) {
+        float X = 0.0f;
+        float Y = 0.0f;
+        CursorFramebuffer(Engine, X, Y);
+        if (HitPrev(X, Y)) {
+            bSwitched = Previous(Engine) || bSwitched;
+            bIgnoreDrag = true;
+        } else if (HitNext(X, Y)) {
+            bSwitched = Next(Engine) || bSwitched;
+            bIgnoreDrag = true;
         } else {
-            ignoreDrag_ = false;
+            bIgnoreDrag = false;
         }
     }
-    if (!mouseDown) {
-        ignoreDrag_ = false;
+    if (!bMouseDown) {
+        bIgnoreDrag = false;
     }
-    mouseWasDown_ = mouseDown;
+    bMouseWasDown = bMouseDown;
 
-    return switched || ignoreDrag_;
+    return bSwitched || bIgnoreDrag;
 }
 

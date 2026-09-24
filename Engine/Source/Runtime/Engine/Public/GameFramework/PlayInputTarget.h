@@ -7,23 +7,23 @@
 /// Unreal analogy: focus the play viewport for input without a separate UObject.
 class FPlayInputTarget {
 public:
-    void SetWindow(FGenericWindow* window) { window_ = window; }
-    [[nodiscard]] FGenericWindow* GetWindow() const { return window_; }
-    [[nodiscard]] bool HasOverride() const { return window_ != nullptr; }
+    void SetWindow(FGenericWindow* InWindow) { Window = InWindow; }
+    [[nodiscard]] FGenericWindow* GetWindow() const { return Window; }
+    [[nodiscard]] bool HasOverride() const { return Window != nullptr; }
 
-    [[nodiscard]] FGenericWindow& Resolve(FGenericWindow& mainWindow) {
-        return window_ != nullptr ? *window_ : mainWindow;
+    [[nodiscard]] FGenericWindow& Resolve(FGenericWindow& MainWindow) {
+        return Window != nullptr ? *Window : MainWindow;
     }
-    [[nodiscard]] const FGenericWindow& Resolve(const FGenericWindow& mainWindow) const {
-        return window_ != nullptr ? *window_ : mainWindow;
+    [[nodiscard]] const FGenericWindow& Resolve(const FGenericWindow& MainWindow) const {
+        return Window != nullptr ? *Window : MainWindow;
     }
 
     /// When cursor is not OS-captured (Selected Viewport PIE), mouse look only while active.
-    void SetMouseLookActive(bool active) { mouseLookActive_ = active; }
-    [[nodiscard]] bool IsMouseLookActive() const { return mouseLookActive_; }
+    void SetMouseLookActive(bool bActive) { bMouseLookActive = bActive; }
+    [[nodiscard]] bool IsMouseLookActive() const { return bMouseLookActive; }
 
 private:
-    FGenericWindow* window_ = nullptr;
-    bool mouseLookActive_ = true;
+    FGenericWindow* Window = nullptr;
+    bool bMouseLookActive = true;
 };
 

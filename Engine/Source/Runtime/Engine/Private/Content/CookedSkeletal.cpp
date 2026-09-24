@@ -16,82 +16,82 @@ namespace {
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
-constexpr std::uint32_t kMaxCookedStringBytes = 1u << 20;   // 1 MiB
-constexpr std::uint32_t kMaxCookedVertices = 2'000'000u;
-constexpr std::uint32_t kMaxCookedIndices = 6'000'000u;
-constexpr std::uint32_t kMaxCookedBones = 512u;
-constexpr std::uint32_t kMaxCookedAnimFrames = 100'000u;
+constexpr std::uint32_t MaxCookedStringBytes = 1u << 20;   // 1 MiB
+constexpr std::uint32_t MaxCookedVertices = 2'000'000u;
+constexpr std::uint32_t MaxCookedIndices = 6'000'000u;
+constexpr std::uint32_t MaxCookedBones = 512u;
+constexpr std::uint32_t MaxCookedAnimFrames = 100'000u;
 
-[[nodiscard]] bool readAllBytes(const std::string& path, std::vector<std::uint8_t>& out) {
-    std::ifstream in(path, std::ios::binary | std::ios::ate);
-    if (!in) {
-        std::cerr << "CookedSkeletal: cannot read '" << path << "'\n";
+[[nodiscard]] bool ReadAllBytes(const std::string& Path, std::vector<std::uint8_t>& Out) {
+    std::ifstream In(Path, std::ios::binary | std::ios::ate);
+    if (!In) {
+        std::cerr << "CookedSkeletal: cannot read '" << Path << "'\n";
         return false;
     }
-    const auto end = in.tellg();
-    if (end < 0) {
+    const auto End = In.tellg();
+    if (End < 0) {
         return false;
     }
-    out.resize(static_cast<std::size_t>(end));
-    in.seekg(0);
-    in.read(reinterpret_cast<char*>(out.data()), end);
-    return static_cast<bool>(in);
+    Out.resize(static_cast<std::size_t>(End));
+    In.seekg(0);
+    In.read(reinterpret_cast<char*>(Out.data()), End);
+    return static_cast<bool>(In);
 }
 
-[[nodiscard]] std::string dirOf(const std::string& path) {
-    return fs::path(path).parent_path().string();
+[[nodiscard]] std::string DirOf(const std::string& Path) {
+    return fs::path(Path).parent_path().string();
 }
 
-[[nodiscard]] std::string joinRel(const std::string& baseDir, const std::string& rel) {
-    return (fs::path(baseDir) / rel).lexically_normal().string();
+[[nodiscard]] std::string JoinRel(const std::string& BaseDir, const std::string& Rel) {
+    return (fs::path(BaseDir) / Rel).lexically_normal().string();
 }
 
-[[nodiscard]] bool writeString(std::ostream& out, const std::string& s) {
-    const auto len = static_cast<std::uint32_t>(s.size());
-    out.write(reinterpret_cast<const char*>(&len), sizeof(len));
-    if (!s.empty()) {
-        out.write(s.data(), static_cast<std::streamsize>(s.size()));
+[[nodiscard]] bool WriteString(std::ostream& Out, const std::string& S) {
+    const auto Len = static_cast<std::uint32_t>(S.size());
+    Out.write(reinterpret_cast<const char*>(&Len), sizeof(Len));
+    if (!S.empty()) {
+        Out.write(S.data(), static_cast<std::streamsize>(S.size()));
     }
-    return static_cast<bool>(out);
+    return static_cast<bool>(Out);
 }
 
-[[nodiscard]] bool readString(const std::uint8_t*& ptr, const std::uint8_t* end, std::string& out) {
-    if (ptr + sizeof(std::uint32_t) > end) {
+[[nodiscard]] bool ReadString(const std::uint8_t*& Ptr, const std::uint8_t* End, std::string& Out) {
+    if (Ptr + sizeof(std::uint32_t) > End) {
         return false;
     }
-    std::uint32_t len = 0;
-    std::memcpy(&len, ptr, sizeof(len));
-    ptr += sizeof(len);
-    if (len > kMaxCookedStringBytes || ptr + len > end) {
+    std::uint32_t Len = 0;
+    std::memcpy(&Len, Ptr, sizeof(Len));
+    Ptr += sizeof(Len);
+    if (Len > MaxCookedStringBytes || Ptr + Len > End) {
         return false;
     }
-    out.assign(reinterpret_cast<const char*>(ptr), len);
-    ptr += len;
+    Out.assign(reinterpret_cast<const char*>(Ptr), Len);
+    Ptr += Len;
     return true;
 }
 
-[[nodiscard]] bool readF32(const std::uint8_t*& ptr, const std::uint8_t* end, float& out) {
-    if (ptr + sizeof(float) > end) {
+[[nodiscard]] bool ReadF32(const std::uint8_t*& Ptr, const std::uint8_t* End, float& Out) {
+    if (Ptr + sizeof(float) > End) {
         return false;
     }
-    std::memcpy(&out, ptr, sizeof(float));
-    ptr += sizeof(float);
+    std::memcpy(&Out, Ptr, sizeof(float));
+    Ptr += sizeof(float);
     return true;
 }
 
-[[nodiscard]] bool readVec3(const std::uint8_t*& ptr, const std::uint8_t* end, glm::vec3& out) {
-    return readF32(ptr, end, out.x) && readF32(ptr, end, out.y) && readF32(ptr, end, out.z);
+[[nodiscard]] bool ReadVec3(const std::uint8_t*& Ptr, const std::uint8_t* End, glm::vec3& Out) {
+    return ReadF32(Ptr, End, Out.x) && ReadF32(Ptr, End, Out.y) && ReadF32(Ptr, End, Out.z);
 }
 
-[[nodiscard]] bool writeSimpleCharacterLmat(const std::string& path, const std::string& matName,
-                                            const std::string& baseColorMapPath = {}) {
-    std::ofstream out(path);
-    if (!out) {
+[[nodiscard]] bool WriteSimpleCharacterLmat(const std::string& Path, const std::string& MatName,
+                                            const std::string& BaseColorMapPath = {}) {
+    std::ofstream Out(Path);
+    if (!Out) {
         return false;
     }
-    out << "# Leon Material (.lmat)\n\n"
+    Out << "# Leon Material (.lmat)\n\n"
         << "[Info]\n"
-        << "Name=" << matName << "\n"
+        << "Name=" << MatName << "\n"
         << "ShadingModel=DefaultLit\n\n"
         << "[Parameters]\n"
         << "BaseColor=0.72,0.74,0.78\n"
@@ -104,727 +104,727 @@ constexpr std::uint32_t kMaxCookedAnimFrames = 100'000u;
         << "CastsShadows=true\n"
         << "PlanarMirror=false\n\n"
         << "[Textures]\n"
-        << "BaseColorMap=" << baseColorMapPath << "\n"
+        << "BaseColorMap=" << BaseColorMapPath << "\n"
         << "NormalMap=\n";
-    return static_cast<bool>(out);
+    return static_cast<bool>(Out);
 }
 
-void writeVertex(std::ostream& out, const FSkeletalVertex& v) {
-    out.write(reinterpret_cast<const char*>(&v.Position), sizeof(float) * 3);
-    out.write(reinterpret_cast<const char*>(&v.Normal), sizeof(float) * 3);
-    out.write(reinterpret_cast<const char*>(&v.TexCoord), sizeof(float) * 2);
-    out.write(reinterpret_cast<const char*>(&v.Tangent), sizeof(float) * 4);
-    const int bones[4] = {v.BoneIndices.x, v.BoneIndices.y, v.BoneIndices.z, v.BoneIndices.w};
-    out.write(reinterpret_cast<const char*>(bones), sizeof(bones));
-    out.write(reinterpret_cast<const char*>(&v.BoneWeights), sizeof(float) * 4);
+void WriteVertex(std::ostream& Out, const FSkeletalVertex& V) {
+    Out.write(reinterpret_cast<const char*>(&V.Position), sizeof(float) * 3);
+    Out.write(reinterpret_cast<const char*>(&V.Normal), sizeof(float) * 3);
+    Out.write(reinterpret_cast<const char*>(&V.TexCoord), sizeof(float) * 2);
+    Out.write(reinterpret_cast<const char*>(&V.Tangent), sizeof(float) * 4);
+    const int Bones[4] = {V.BoneIndices.x, V.BoneIndices.y, V.BoneIndices.z, V.BoneIndices.w};
+    Out.write(reinterpret_cast<const char*>(Bones), sizeof(Bones));
+    Out.write(reinterpret_cast<const char*>(&V.BoneWeights), sizeof(float) * 4);
 }
 
-[[nodiscard]] bool readVertex(const std::uint8_t*& ptr, const std::uint8_t* end,
-                              FSkeletalVertex& v) {
-    auto take = [&](void* dst, std::size_t n) -> bool {
-        if (ptr + n > end) {
+[[nodiscard]] bool ReadVertex(const std::uint8_t*& Ptr, const std::uint8_t* End,
+                              FSkeletalVertex& V) {
+    auto Take = [&](void* Dst, std::size_t N) -> bool {
+        if (Ptr + N > End) {
             return false;
         }
-        std::memcpy(dst, ptr, n);
-        ptr += n;
+        std::memcpy(Dst, Ptr, N);
+        Ptr += N;
         return true;
     };
-    int bones[4]{};
-    if (!take(&v.Position, sizeof(float) * 3) || !take(&v.Normal, sizeof(float) * 3) ||
-        !take(&v.TexCoord, sizeof(float) * 2) || !take(&v.Tangent, sizeof(float) * 4) ||
-        !take(bones, sizeof(bones)) || !take(&v.BoneWeights, sizeof(float) * 4)) {
+    int Bones[4]{};
+    if (!Take(&V.Position, sizeof(float) * 3) || !Take(&V.Normal, sizeof(float) * 3) ||
+        !Take(&V.TexCoord, sizeof(float) * 2) || !Take(&V.Tangent, sizeof(float) * 4) ||
+        !Take(Bones, sizeof(Bones)) || !Take(&V.BoneWeights, sizeof(float) * 4)) {
         return false;
     }
-    v.BoneIndices = {bones[0], bones[1], bones[2], bones[3]};
+    V.BoneIndices = {Bones[0], Bones[1], Bones[2], Bones[3]};
     return true;
 }
 
 } // namespace
 
-bool SaveSkeletonLeon(const std::string& path, const USkeleton& skeleton, const std::string& name) {
-    if (skeleton.BoneCount() <= 0) {
+bool SaveSkeletonLeon(const std::string& Path, const USkeleton& Skeleton, const std::string& InName) {
+    if (Skeleton.BoneCount() <= 0) {
         return false;
     }
-    fs::create_directories(fs::path(path).parent_path());
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    if (!out) {
-        std::cerr << "CookedSkeletal: cannot write skeleton '" << path << "'\n";
+    fs::create_directories(fs::path(Path).parent_path());
+    std::ofstream Out(Path, std::ios::binary | std::ios::trunc);
+    if (!Out) {
+        std::cerr << "CookedSkeletal: cannot write skeleton '" << Path << "'\n";
         return false;
     }
-    const std::uint32_t magic = kLeonSkeletonMagic;
-    const std::uint32_t version = static_cast<std::uint32_t>(kCookedFormatVersion);
-    const std::uint32_t boneCount = static_cast<std::uint32_t>(skeleton.BoneCount());
-    out.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
-    out.write(reinterpret_cast<const char*>(&version), sizeof(version));
-    if (!writeString(out, name)) {
+    const std::uint32_t Magic = LeonSkeletonMagic;
+    const std::uint32_t Version = static_cast<std::uint32_t>(CookedFormatVersion);
+    const std::uint32_t BoneCount = static_cast<std::uint32_t>(Skeleton.BoneCount());
+    Out.write(reinterpret_cast<const char*>(&Magic), sizeof(Magic));
+    Out.write(reinterpret_cast<const char*>(&Version), sizeof(Version));
+    if (!WriteString(Out, InName)) {
         return false;
     }
-    out.write(reinterpret_cast<const char*>(&boneCount), sizeof(boneCount));
-    for (int i = 0; i < skeleton.BoneCount(); ++i) {
-        if (!writeString(out, skeleton.BoneNames[static_cast<std::size_t>(i)])) {
+    Out.write(reinterpret_cast<const char*>(&BoneCount), sizeof(BoneCount));
+    for (int I = 0; I < Skeleton.BoneCount(); ++I) {
+        if (!WriteString(Out, Skeleton.BoneNames[static_cast<std::size_t>(I)])) {
             return false;
         }
-        const std::int32_t parent = skeleton.ParentIndices[static_cast<std::size_t>(i)];
-        out.write(reinterpret_cast<const char*>(&parent), sizeof(parent));
-        const float* ib = glm::value_ptr(skeleton.InverseBindPose[static_cast<std::size_t>(i)]);
-        out.write(reinterpret_cast<const char*>(ib), sizeof(float) * 16);
+        const std::int32_t Parent = Skeleton.ParentIndices[static_cast<std::size_t>(I)];
+        Out.write(reinterpret_cast<const char*>(&Parent), sizeof(Parent));
+        const float* Ib = glm::value_ptr(Skeleton.InverseBindPose[static_cast<std::size_t>(I)]);
+        Out.write(reinterpret_cast<const char*>(Ib), sizeof(float) * 16);
     }
-    return static_cast<bool>(out);
+    return static_cast<bool>(Out);
 }
 
-bool LoadSkeleton(const std::string& path, USkeleton& out, std::string* outName) {
-    std::vector<std::uint8_t> bytes;
-    if (!readAllBytes(path, bytes) || bytes.size() < 12) {
+bool LoadSkeleton(const std::string& Path, USkeleton& Out, std::string* OutName) {
+    std::vector<std::uint8_t> Bytes;
+    if (!ReadAllBytes(Path, Bytes) || Bytes.size() < 12) {
         return false;
     }
-    const std::uint8_t* ptr = bytes.data();
-    const std::uint8_t* end = bytes.data() + bytes.size();
-    std::uint32_t magic = 0;
-    std::uint32_t version = 0;
-    std::memcpy(&magic, ptr, 4);
-    ptr += 4;
-    std::memcpy(&version, ptr, 4);
-    ptr += 4;
-    if (magic != kLeonSkeletonMagic || version != static_cast<std::uint32_t>(kCookedFormatVersion)) {
-        std::cerr << "CookedSkeletal: bad .lskel header in '" << path << "'\n";
+    const std::uint8_t* Ptr = Bytes.data();
+    const std::uint8_t* End = Bytes.data() + Bytes.size();
+    std::uint32_t Magic = 0;
+    std::uint32_t Version = 0;
+    std::memcpy(&Magic, Ptr, 4);
+    Ptr += 4;
+    std::memcpy(&Version, Ptr, 4);
+    Ptr += 4;
+    if (Magic != LeonSkeletonMagic || Version != static_cast<std::uint32_t>(CookedFormatVersion)) {
+        std::cerr << "CookedSkeletal: bad .lskel header in '" << Path << "'\n";
         return false;
     }
-    std::string name;
-    if (!readString(ptr, end, name)) {
+    std::string LocalName;
+    if (!ReadString(Ptr, End, LocalName)) {
         return false;
     }
-    if (outName != nullptr) {
-        *outName = name;
+    if (OutName != nullptr) {
+        *OutName = LocalName;
     }
-    std::uint32_t boneCount = 0;
-    if (ptr + sizeof(boneCount) > end) {
+    std::uint32_t BoneCount = 0;
+    if (Ptr + sizeof(BoneCount) > End) {
         return false;
     }
-    std::memcpy(&boneCount, ptr, sizeof(boneCount));
-    ptr += sizeof(boneCount);
-    out = {};
-    for (std::uint32_t i = 0; i < boneCount; ++i) {
-        std::string boneName;
-        if (!readString(ptr, end, boneName)) {
+    std::memcpy(&BoneCount, Ptr, sizeof(BoneCount));
+    Ptr += sizeof(BoneCount);
+    Out = {};
+    for (std::uint32_t I = 0; I < BoneCount; ++I) {
+        std::string BoneName;
+        if (!ReadString(Ptr, End, BoneName)) {
             return false;
         }
-        out.BoneNames.push_back(std::move(boneName));
-        if ((ptr + sizeof(std::int32_t) + (sizeof(float) * 16)) > end) {
+        Out.BoneNames.push_back(std::move(BoneName));
+        if ((Ptr + sizeof(std::int32_t) + (sizeof(float) * 16)) > End) {
             return false;
         }
-        std::int32_t parent = -1;
-        std::memcpy(&parent, ptr, sizeof(parent));
-        ptr += sizeof(parent);
-        out.ParentIndices.push_back(parent);
-        glm::mat4 ib(1.0f);
-        std::memcpy(glm::value_ptr(ib), ptr, sizeof(float) * 16);
-        ptr += sizeof(float) * 16;
-        out.InverseBindPose.push_back(ib);
+        std::int32_t Parent = -1;
+        std::memcpy(&Parent, Ptr, sizeof(Parent));
+        Ptr += sizeof(Parent);
+        Out.ParentIndices.push_back(Parent);
+        glm::mat4 Ib(1.0f);
+        std::memcpy(glm::value_ptr(Ib), Ptr, sizeof(float) * 16);
+        Ptr += sizeof(float) * 16;
+        Out.InverseBindPose.push_back(Ib);
     }
-    return out.BoneCount() > 0;
+    return Out.BoneCount() > 0;
 }
 
-bool SaveSkeletalMeshLeon(const std::string& path, const FSkeletalMeshData& data,
-                          const std::string& skeletonRelPath, const std::string& materialRelPath,
-                          const std::string& assetName) {
-    if (data.empty()) {
+bool SaveSkeletalMeshLeon(const std::string& Path, const FSkeletalMeshData& Data,
+                          const std::string& SkeletonRelPath, const std::string& MaterialRelPath,
+                          const std::string& AssetName) {
+    if (Data.empty()) {
         return false;
     }
-    fs::create_directories(fs::path(path).parent_path());
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    if (!out) {
-        std::cerr << "CookedSkeletal: cannot write skelmesh '" << path << "'\n";
+    fs::create_directories(fs::path(Path).parent_path());
+    std::ofstream Out(Path, std::ios::binary | std::ios::trunc);
+    if (!Out) {
+        std::cerr << "CookedSkeletal: cannot write skelmesh '" << Path << "'\n";
         return false;
     }
-    const std::uint32_t magic = kLeonSkelMeshMagic;
-    const std::uint32_t version = static_cast<std::uint32_t>(kCookedFormatVersion);
-    const std::uint32_t vcount = static_cast<std::uint32_t>(data.Vertices.size());
-    const std::uint32_t icount = static_cast<std::uint32_t>(data.Indices.size());
-    out.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
-    out.write(reinterpret_cast<const char*>(&version), sizeof(version));
-    if (!writeString(out, assetName) || !writeString(out, skeletonRelPath) ||
-        !writeString(out, materialRelPath)) {
+    const std::uint32_t Magic = LeonSkelMeshMagic;
+    const std::uint32_t Version = static_cast<std::uint32_t>(CookedFormatVersion);
+    const std::uint32_t Vcount = static_cast<std::uint32_t>(Data.Vertices.size());
+    const std::uint32_t Icount = static_cast<std::uint32_t>(Data.Indices.size());
+    Out.write(reinterpret_cast<const char*>(&Magic), sizeof(Magic));
+    Out.write(reinterpret_cast<const char*>(&Version), sizeof(Version));
+    if (!WriteString(Out, AssetName) || !WriteString(Out, SkeletonRelPath) ||
+        !WriteString(Out, MaterialRelPath)) {
         return false;
     }
-    const float localMin[3] = {data.LocalMin.x, data.LocalMin.y, data.LocalMin.z};
-    const float localMax[3] = {data.LocalMax.x, data.LocalMax.y, data.LocalMax.z};
-    out.write(reinterpret_cast<const char*>(localMin), sizeof(localMin));
-    out.write(reinterpret_cast<const char*>(localMax), sizeof(localMax));
-    out.write(reinterpret_cast<const char*>(&vcount), sizeof(vcount));
-    out.write(reinterpret_cast<const char*>(&icount), sizeof(icount));
-    for (const FSkeletalVertex& v : data.Vertices) {
-        writeVertex(out, v);
+    const float LocalMin[3] = {Data.LocalMin.x, Data.LocalMin.y, Data.LocalMin.z};
+    const float LocalMax[3] = {Data.LocalMax.x, Data.LocalMax.y, Data.LocalMax.z};
+    Out.write(reinterpret_cast<const char*>(LocalMin), sizeof(LocalMin));
+    Out.write(reinterpret_cast<const char*>(LocalMax), sizeof(LocalMax));
+    Out.write(reinterpret_cast<const char*>(&Vcount), sizeof(Vcount));
+    Out.write(reinterpret_cast<const char*>(&Icount), sizeof(Icount));
+    for (const FSkeletalVertex& V : Data.Vertices) {
+        WriteVertex(Out, V);
     }
-    out.write(reinterpret_cast<const char*>(data.Indices.data()),
-              static_cast<std::streamsize>(data.Indices.size() * sizeof(std::uint32_t)));
-    return static_cast<bool>(out);
+    Out.write(reinterpret_cast<const char*>(Data.Indices.data()),
+              static_cast<std::streamsize>(Data.Indices.size() * sizeof(std::uint32_t)));
+    return static_cast<bool>(Out);
 }
 
-bool LoadSkeletalMesh(const std::string& path, FSkeletalMeshData& out,
-                          USkeleton* skeletonOverride, std::string* outMaterialRelPath) {
-    std::vector<std::uint8_t> bytes;
-    if (!readAllBytes(path, bytes) || bytes.size() < 40) {
-        std::cerr << "CookedSkeletal: cannot read skelmesh '" << path << "'\n";
+bool LoadSkeletalMesh(const std::string& Path, FSkeletalMeshData& Out,
+                          USkeleton* SkeletonOverride, std::string* OutMaterialRelPath) {
+    std::vector<std::uint8_t> Bytes;
+    if (!ReadAllBytes(Path, Bytes) || Bytes.size() < 40) {
+        std::cerr << "CookedSkeletal: cannot read skelmesh '" << Path << "'\n";
         return false;
     }
-    const std::uint8_t* ptr = bytes.data();
-    const std::uint8_t* end = bytes.data() + bytes.size();
-    std::uint32_t magic = 0;
-    std::uint32_t version = 0;
-    std::memcpy(&magic, ptr, 4);
-    ptr += 4;
-    std::memcpy(&version, ptr, 4);
-    ptr += 4;
-    if (magic != kLeonSkelMeshMagic || version != static_cast<std::uint32_t>(kCookedFormatVersion)) {
+    const std::uint8_t* Ptr = Bytes.data();
+    const std::uint8_t* End = Bytes.data() + Bytes.size();
+    std::uint32_t Magic = 0;
+    std::uint32_t Version = 0;
+    std::memcpy(&Magic, Ptr, 4);
+    Ptr += 4;
+    std::memcpy(&Version, Ptr, 4);
+    Ptr += 4;
+    if (Magic != LeonSkelMeshMagic || Version != static_cast<std::uint32_t>(CookedFormatVersion)) {
         std::cerr << "CookedSkeletal: bad .lskm header\n";
         return false;
     }
 
-    out = {};
-    std::string assetName;
-    std::string skeletonRel;
-    std::string materialRel;
-    if (!readString(ptr, end, assetName) || !readString(ptr, end, skeletonRel) ||
-        !readString(ptr, end, materialRel)) {
+    Out = {};
+    std::string AssetName;
+    std::string SkeletonRel;
+    std::string MaterialRel;
+    if (!ReadString(Ptr, End, AssetName) || !ReadString(Ptr, End, SkeletonRel) ||
+        !ReadString(Ptr, End, MaterialRel)) {
         return false;
     }
-    (void)assetName;
-    if (outMaterialRelPath != nullptr) {
-        *outMaterialRelPath = materialRel;
+    (void)AssetName;
+    if (OutMaterialRelPath != nullptr) {
+        *OutMaterialRelPath = MaterialRel;
     }
-    if (!readVec3(ptr, end, out.LocalMin) || !readVec3(ptr, end, out.LocalMax)) {
+    if (!ReadVec3(Ptr, End, Out.LocalMin) || !ReadVec3(Ptr, End, Out.LocalMax)) {
         return false;
     }
-    if (ptr + (sizeof(std::uint32_t) * 2) > end) {
+    if (Ptr + (sizeof(std::uint32_t) * 2) > End) {
         return false;
     }
-    std::uint32_t vcount = 0;
-    std::uint32_t icount = 0;
-    std::memcpy(&vcount, ptr, 4);
-    ptr += 4;
-    std::memcpy(&icount, ptr, 4);
-    ptr += 4;
-    if (vcount == 0 || vcount > kMaxCookedVertices || icount > kMaxCookedIndices) {
+    std::uint32_t Vcount = 0;
+    std::uint32_t Icount = 0;
+    std::memcpy(&Vcount, Ptr, 4);
+    Ptr += 4;
+    std::memcpy(&Icount, Ptr, 4);
+    Ptr += 4;
+    if (Vcount == 0 || Vcount > MaxCookedVertices || Icount > MaxCookedIndices) {
         std::cerr << "CookedSkeletal: .lskm vertex/index count out of range\n";
         return false;
     }
 
-    if (skeletonOverride != nullptr) {
-        out.Skeleton = *skeletonOverride;
+    if (SkeletonOverride != nullptr) {
+        Out.Skeleton = *SkeletonOverride;
     } else {
-        const std::string skelPath = joinRel(dirOf(path), skeletonRel);
-        if (!LoadSkeleton(skelPath, out.Skeleton)) {
+        const std::string SkelPath = JoinRel(DirOf(Path), SkeletonRel);
+        if (!LoadSkeleton(SkelPath, Out.Skeleton)) {
             return false;
         }
     }
 
-    out.Vertices.resize(vcount);
-    for (std::uint32_t i = 0; i < vcount; ++i) {
-        if (!readVertex(ptr, end, out.Vertices[i])) {
+    Out.Vertices.resize(Vcount);
+    for (std::uint32_t I = 0; I < Vcount; ++I) {
+        if (!ReadVertex(Ptr, End, Out.Vertices[I])) {
             return false;
         }
     }
-    const std::size_t indexBytes = static_cast<std::size_t>(icount) * sizeof(std::uint32_t);
-    if (ptr + indexBytes > end) {
+    const std::size_t IndexBytes = static_cast<std::size_t>(Icount) * sizeof(std::uint32_t);
+    if (Ptr + IndexBytes > End) {
         return false;
     }
-    out.Indices.resize(icount);
-    std::memcpy(out.Indices.data(), ptr, indexBytes);
-    return !out.empty();
+    Out.Indices.resize(Icount);
+    std::memcpy(Out.Indices.data(), Ptr, IndexBytes);
+    return !Out.empty();
 }
 
-bool SaveAnimSequenceLeon(const std::string& path, const UAnimSequence& anim, int boneCount,
-                          const std::string& skeletonRelPath) {
-    if (anim.FrameCount() <= 0 || boneCount <= 0) {
+bool SaveAnimSequenceLeon(const std::string& Path, const UAnimSequence& Anim, int BoneCount,
+                          const std::string& SkeletonRelPath) {
+    if (Anim.FrameCount() <= 0 || BoneCount <= 0) {
         return false;
     }
-    fs::create_directories(fs::path(path).parent_path());
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    if (!out) {
+    fs::create_directories(fs::path(Path).parent_path());
+    std::ofstream Out(Path, std::ios::binary | std::ios::trunc);
+    if (!Out) {
         return false;
     }
-    const std::uint32_t magic = kLeonAnimMagic;
-    const std::uint32_t version = static_cast<std::uint32_t>(kCookedFormatVersion);
-    const std::uint32_t frames = static_cast<std::uint32_t>(anim.FrameCount());
-    const std::uint32_t bones = static_cast<std::uint32_t>(boneCount);
-    out.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
-    out.write(reinterpret_cast<const char*>(&version), sizeof(version));
-    if (!writeString(out, anim.Name) || !writeString(out, skeletonRelPath)) {
+    const std::uint32_t Magic = LeonAnimMagic;
+    const std::uint32_t Version = static_cast<std::uint32_t>(CookedFormatVersion);
+    const std::uint32_t Frames = static_cast<std::uint32_t>(Anim.FrameCount());
+    const std::uint32_t Bones = static_cast<std::uint32_t>(BoneCount);
+    Out.write(reinterpret_cast<const char*>(&Magic), sizeof(Magic));
+    Out.write(reinterpret_cast<const char*>(&Version), sizeof(Version));
+    if (!WriteString(Out, Anim.Name) || !WriteString(Out, SkeletonRelPath)) {
         return false;
     }
-    out.write(reinterpret_cast<const char*>(&anim.DurationSeconds), sizeof(anim.DurationSeconds));
-    out.write(reinterpret_cast<const char*>(&anim.FramesPerSecond), sizeof(anim.FramesPerSecond));
-    out.write(reinterpret_cast<const char*>(&frames), sizeof(frames));
-    out.write(reinterpret_cast<const char*>(&bones), sizeof(bones));
-    for (int f = 0; f < anim.FrameCount(); ++f) {
-        const auto& frame = anim.LocalPoseFrames[static_cast<std::size_t>(f)];
-        if (static_cast<int>(frame.size()) != boneCount) {
+    Out.write(reinterpret_cast<const char*>(&Anim.DurationSeconds), sizeof(Anim.DurationSeconds));
+    Out.write(reinterpret_cast<const char*>(&Anim.FramesPerSecond), sizeof(Anim.FramesPerSecond));
+    Out.write(reinterpret_cast<const char*>(&Frames), sizeof(Frames));
+    Out.write(reinterpret_cast<const char*>(&Bones), sizeof(Bones));
+    for (int F = 0; F < Anim.FrameCount(); ++F) {
+        const auto& Frame = Anim.LocalPoseFrames[static_cast<std::size_t>(F)];
+        if (static_cast<int>(Frame.size()) != BoneCount) {
             return false;
         }
-        for (int b = 0; b < boneCount; ++b) {
-            const float* p = glm::value_ptr(frame[static_cast<std::size_t>(b)]);
-            out.write(reinterpret_cast<const char*>(p), sizeof(float) * 16);
+        for (int B = 0; B < BoneCount; ++B) {
+            const float* P = glm::value_ptr(Frame[static_cast<std::size_t>(B)]);
+            Out.write(reinterpret_cast<const char*>(P), sizeof(float) * 16);
         }
     }
-    return static_cast<bool>(out);
+    return static_cast<bool>(Out);
 }
 
-bool LoadAnimSequence(const std::string& path, UAnimSequence& out) {
-    std::vector<std::uint8_t> bytes;
-    if (!readAllBytes(path, bytes) || bytes.size() < 28) {
-        std::cerr << "CookedSkeletal: cannot read anim '" << path << "'\n";
+bool LoadAnimSequence(const std::string& Path, UAnimSequence& Out) {
+    std::vector<std::uint8_t> Bytes;
+    if (!ReadAllBytes(Path, Bytes) || Bytes.size() < 28) {
+        std::cerr << "CookedSkeletal: cannot read anim '" << Path << "'\n";
         return false;
     }
-    const std::uint8_t* ptr = bytes.data();
-    const std::uint8_t* end = bytes.data() + bytes.size();
-    std::uint32_t magic = 0;
-    std::uint32_t version = 0;
-    std::memcpy(&magic, ptr, 4);
-    ptr += 4;
-    std::memcpy(&version, ptr, 4);
-    ptr += 4;
-    if (magic != kLeonAnimMagic || version != static_cast<std::uint32_t>(kCookedFormatVersion)) {
+    const std::uint8_t* Ptr = Bytes.data();
+    const std::uint8_t* End = Bytes.data() + Bytes.size();
+    std::uint32_t Magic = 0;
+    std::uint32_t Version = 0;
+    std::memcpy(&Magic, Ptr, 4);
+    Ptr += 4;
+    std::memcpy(&Version, Ptr, 4);
+    Ptr += 4;
+    if (Magic != LeonAnimMagic || Version != static_cast<std::uint32_t>(CookedFormatVersion)) {
         std::cerr << "CookedSkeletal: bad .lanim header\n";
         return false;
     }
 
-    out = {};
-    std::string name;
-    std::string skeletonRel;
-    if (!readString(ptr, end, name) || !readString(ptr, end, skeletonRel)) {
+    Out = {};
+    std::string LocalName;
+    std::string SkeletonRel;
+    if (!ReadString(Ptr, End, LocalName) || !ReadString(Ptr, End, SkeletonRel)) {
         return false;
     }
-    (void)skeletonRel;
-    out.Name = std::move(name);
-    if ((ptr + (sizeof(float) * 2) + (sizeof(std::uint32_t) * 2)) > end) {
+    (void)SkeletonRel;
+    Out.Name = std::move(LocalName);
+    if ((Ptr + (sizeof(float) * 2) + (sizeof(std::uint32_t) * 2)) > End) {
         return false;
     }
-    std::memcpy(&out.DurationSeconds, ptr, sizeof(float));
-    ptr += sizeof(float);
-    std::memcpy(&out.FramesPerSecond, ptr, sizeof(float));
-    ptr += sizeof(float);
-    std::uint32_t frameCount = 0;
-    std::uint32_t boneCount = 0;
-    std::memcpy(&frameCount, ptr, 4);
-    ptr += 4;
-    std::memcpy(&boneCount, ptr, 4);
-    ptr += 4;
-    if (frameCount == 0 || boneCount == 0 || frameCount > kMaxCookedAnimFrames ||
-        boneCount > kMaxCookedBones) {
+    std::memcpy(&Out.DurationSeconds, Ptr, sizeof(float));
+    Ptr += sizeof(float);
+    std::memcpy(&Out.FramesPerSecond, Ptr, sizeof(float));
+    Ptr += sizeof(float);
+    std::uint32_t FrameCount = 0;
+    std::uint32_t BoneCount = 0;
+    std::memcpy(&FrameCount, Ptr, 4);
+    Ptr += 4;
+    std::memcpy(&BoneCount, Ptr, 4);
+    Ptr += 4;
+    if (FrameCount == 0 || BoneCount == 0 || FrameCount > MaxCookedAnimFrames ||
+        BoneCount > MaxCookedBones) {
         std::cerr << "CookedSkeletal: .lanim frame/bone count out of range\n";
         return false;
     }
-    const std::size_t need = static_cast<std::size_t>(frameCount) *
-                             static_cast<std::size_t>(boneCount) * 16u * sizeof(float);
-    if (ptr + need > end) {
+    const std::size_t Need = static_cast<std::size_t>(FrameCount) *
+                             static_cast<std::size_t>(BoneCount) * 16u * sizeof(float);
+    if (Ptr + Need > End) {
         return false;
     }
 
-    out.LocalPoseFrames.resize(frameCount);
-    for (std::uint32_t f = 0; f < frameCount; ++f) {
-        out.LocalPoseFrames[f].resize(boneCount);
-        for (std::uint32_t b = 0; b < boneCount; ++b) {
-            float* dst = glm::value_ptr(out.LocalPoseFrames[f][b]);
-            std::memcpy(dst, ptr, sizeof(float) * 16);
-            ptr += sizeof(float) * 16;
+    Out.LocalPoseFrames.resize(FrameCount);
+    for (std::uint32_t F = 0; F < FrameCount; ++F) {
+        Out.LocalPoseFrames[F].resize(BoneCount);
+        for (std::uint32_t B = 0; B < BoneCount; ++B) {
+            float* Dst = glm::value_ptr(Out.LocalPoseFrames[F][B]);
+            std::memcpy(Dst, Ptr, sizeof(float) * 16);
+            Ptr += sizeof(float) * 16;
         }
     }
-    return out.FrameCount() > 0;
+    return Out.FrameCount() > 0;
 }
 
-bool SaveBlendSpace1DJson(const std::string& path, const FBlendSpace1DAssetDesc& desc) {
-    json root;
-    root["version"] = kCookedFormatVersion;
-    root["name"] = desc.name;
-    root["axisMin"] = desc.axisMin;
-    root["axisMax"] = desc.axisMax;
-    root["samples"] = json::array();
-    for (const auto& s : desc.samples) {
-        root["samples"].push_back({{"anim", s.animRelPath}, {"position", s.position}});
+bool SaveBlendSpace1DJson(const std::string& Path, const FBlendSpace1DAssetDesc& Desc) {
+    json Root;
+    Root["version"] = CookedFormatVersion;
+    Root["name"] = Desc.Name;
+    Root["axisMin"] = Desc.AxisMin;
+    Root["axisMax"] = Desc.AxisMax;
+    Root["samples"] = json::array();
+    for (const auto& S : Desc.Samples) {
+        Root["samples"].push_back({{"anim", S.AnimRelPath}, {"position", S.Position}});
     }
-    std::ofstream out(path);
-    if (!out) {
+    std::ofstream Out(Path);
+    if (!Out) {
         return false;
     }
-    out << root.dump(2) << '\n';
+    Out << Root.dump(2) << '\n';
     return true;
 }
 
-bool LoadBlendSpace1DJson(const std::string& path, FBlendSpace1DAssetDesc& out) {
-    std::ifstream in(path);
-    if (!in) {
+bool LoadBlendSpace1DJson(const std::string& Path, FBlendSpace1DAssetDesc& Out) {
+    std::ifstream In(Path);
+    if (!In) {
         return false;
     }
-    json root;
+    json Root;
     try {
-        in >> root;
-    } catch (const std::exception& ex) {
-        std::cerr << "CookedSkeletal: bad blendspace JSON '" << path << "': " << ex.what() << '\n';
+        In >> Root;
+    } catch (const std::exception& Ex) {
+        std::cerr << "CookedSkeletal: bad blendspace JSON '" << Path << "': " << Ex.what() << '\n';
         return false;
     } catch (...) {
-        std::cerr << "CookedSkeletal: bad blendspace JSON '" << path << "'\n";
+        std::cerr << "CookedSkeletal: bad blendspace JSON '" << Path << "'\n";
         return false;
     }
-    out = {};
-    out.name = root.value("name", std::string{"BlendSpace1D"});
-    out.axisMin = root.value("axisMin", 0.0f);
-    out.axisMax = root.value("axisMax", 1.0f);
-    if (!root.contains("samples") || !root["samples"].is_array()) {
+    Out = {};
+    Out.Name = Root.value("name", std::string{"BlendSpace1D"});
+    Out.AxisMin = Root.value("axisMin", 0.0f);
+    Out.AxisMax = Root.value("axisMax", 1.0f);
+    if (!Root.contains("samples") || !Root["samples"].is_array()) {
         return false;
     }
-    for (const json& s : root["samples"]) {
-        FBlendSpace1DAssetDesc::FSample sample;
-        sample.animRelPath = s.at("anim").get<std::string>();
-        sample.position = s.value("position", 0.0f);
-        out.samples.push_back(std::move(sample));
+    for (const json& S : Root["samples"]) {
+        FBlendSpace1DAssetDesc::FSample Sample;
+        Sample.AnimRelPath = S.at("anim").get<std::string>();
+        Sample.Position = S.value("position", 0.0f);
+        Out.Samples.push_back(std::move(Sample));
     }
-    return !out.samples.empty();
+    return !Out.Samples.empty();
 }
 
-bool SaveCharacterVisualLchar(const std::string& path, const FCharacterVisualDesc& desc) {
-    std::ofstream out(path);
-    if (!out) {
+bool SaveCharacterVisualLchar(const std::string& Path, const FCharacterVisualDesc& Desc) {
+    std::ofstream Out(Path);
+    if (!Out) {
         return false;
     }
-    out << "# Leon Character (.lchar) — version " << kCookedFormatVersion << "\n\n";
-    out << "[Info]\n";
-    out << "Name=" << (desc.name.empty() ? "Character" : desc.name) << "\n";
-    out << "FitHeight=" << desc.fitHeight << "\n\n";
-    out << "[Mesh]\n";
-    out << "SkeletalMesh=" << desc.skeletalMeshRel << "\n\n";
-    out << "[Animation]\n";
-    out << "BlendSpace=" << desc.blendSpaceRel << "\n";
-    if (!desc.jumpStartAnimRel.empty()) {
-        out << "JumpStart=" << desc.jumpStartAnimRel << "\n";
+    Out << "# Leon Character (.lchar) — version " << CookedFormatVersion << "\n\n";
+    Out << "[Info]\n";
+    Out << "Name=" << (Desc.Name.empty() ? "Character" : Desc.Name) << "\n";
+    Out << "FitHeight=" << Desc.FitHeight << "\n\n";
+    Out << "[Mesh]\n";
+    Out << "SkeletalMesh=" << Desc.SkeletalMeshRel << "\n\n";
+    Out << "[Animation]\n";
+    Out << "BlendSpace=" << Desc.BlendSpaceRel << "\n";
+    if (!Desc.JumpStartAnimRel.empty()) {
+        Out << "JumpStart=" << Desc.JumpStartAnimRel << "\n";
     }
-    if (!desc.fallLoopAnimRel.empty()) {
-        out << "FallLoop=" << desc.fallLoopAnimRel << "\n";
+    if (!Desc.FallLoopAnimRel.empty()) {
+        Out << "FallLoop=" << Desc.FallLoopAnimRel << "\n";
     }
-    if (!desc.landAnimRel.empty()) {
-        out << "Land=" << desc.landAnimRel << "\n";
+    if (!Desc.LandAnimRel.empty()) {
+        Out << "Land=" << Desc.LandAnimRel << "\n";
     }
-    return static_cast<bool>(out);
+    return static_cast<bool>(Out);
 }
 
-bool LoadCharacterVisualLchar(const std::string& path, FCharacterVisualDesc& outDesc) {
-    std::ifstream in(path);
-    if (!in) {
+bool LoadCharacterVisualLchar(const std::string& Path, FCharacterVisualDesc& OutDesc) {
+    std::ifstream In(Path);
+    if (!In) {
         return false;
     }
-    outDesc = {};
-    std::string section;
-    std::string line;
-    while (std::getline(in, line)) {
+    OutDesc = {};
+    std::string Section;
+    std::string Line;
+    while (std::getline(In, Line)) {
         // strip comments
-        if (const auto hash = line.find('#'); hash != std::string::npos) {
-            line = line.substr(0, hash);
+        if (const auto Hash = Line.find('#'); Hash != std::string::npos) {
+            Line = Line.substr(0, Hash);
         }
-        if (const auto semi = line.find(';'); semi != std::string::npos) {
-            line = line.substr(0, semi);
+        if (const auto Semi = Line.find(';'); Semi != std::string::npos) {
+            Line = Line.substr(0, Semi);
         }
         // trim
-        while (!line.empty() && std::isspace(static_cast<unsigned char>(line.front()))) {
-            line.erase(line.begin());
+        while (!Line.empty() && std::isspace(static_cast<unsigned char>(Line.front()))) {
+            Line.erase(Line.begin());
         }
-        while (!line.empty() && std::isspace(static_cast<unsigned char>(line.back()))) {
-            line.pop_back();
+        while (!Line.empty() && std::isspace(static_cast<unsigned char>(Line.back()))) {
+            Line.pop_back();
         }
-        if (line.empty()) {
+        if (Line.empty()) {
             continue;
         }
-        if (line.front() == '[' && line.back() == ']') {
-            section = line.substr(1, line.size() - 2);
-            for (char& c : section) {
-                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        if (Line.front() == '[' && Line.back() == ']') {
+            Section = Line.substr(1, Line.size() - 2);
+            for (char& C : Section) {
+                C = static_cast<char>(std::tolower(static_cast<unsigned char>(C)));
             }
             continue;
         }
-        const auto eq = line.find('=');
-        if (eq == std::string::npos) {
+        const auto Eq = Line.find('=');
+        if (Eq == std::string::npos) {
             continue;
         }
-        std::string key = line.substr(0, eq);
-        std::string value = line.substr(eq + 1);
-        while (!key.empty() && std::isspace(static_cast<unsigned char>(key.back()))) {
-            key.pop_back();
+        std::string Key = Line.substr(0, Eq);
+        std::string Value = Line.substr(Eq + 1);
+        while (!Key.empty() && std::isspace(static_cast<unsigned char>(Key.back()))) {
+            Key.pop_back();
         }
-        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) {
-            value.erase(value.begin());
+        while (!Value.empty() && std::isspace(static_cast<unsigned char>(Value.front()))) {
+            Value.erase(Value.begin());
         }
-        for (char& c : key) {
-            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        for (char& C : Key) {
+            C = static_cast<char>(std::tolower(static_cast<unsigned char>(C)));
         }
 
-        if (section == "info") {
-            if (key == "name") {
-                outDesc.name = value;
-            } else if (key == "fitheight") {
+        if (Section == "info") {
+            if (Key == "name") {
+                OutDesc.Name = Value;
+            } else if (Key == "fitheight") {
                 try {
-                    outDesc.fitHeight = std::stof(value);
-                } catch (const std::exception& ex) {
-                    std::cerr << "CookedSkeletal: bad FitHeight '" << value << "': " << ex.what()
+                    OutDesc.FitHeight = std::stof(Value);
+                } catch (const std::exception& Ex) {
+                    std::cerr << "CookedSkeletal: bad FitHeight '" << Value << "': " << Ex.what()
                               << '\n';
                 }
             }
-        } else if (section == "mesh") {
-            if (key == "skeletalmesh") {
-                outDesc.skeletalMeshRel = value;
+        } else if (Section == "mesh") {
+            if (Key == "skeletalmesh") {
+                OutDesc.SkeletalMeshRel = Value;
             }
-        } else if (section == "animation") {
-            if (key == "blendspace") {
-                outDesc.blendSpaceRel = value;
-            } else if (key == "jumpstart") {
-                outDesc.jumpStartAnimRel = value;
-            } else if (key == "fallloop") {
-                outDesc.fallLoopAnimRel = value;
-            } else if (key == "land") {
-                outDesc.landAnimRel = value;
+        } else if (Section == "animation") {
+            if (Key == "blendspace") {
+                OutDesc.BlendSpaceRel = Value;
+            } else if (Key == "jumpstart") {
+                OutDesc.JumpStartAnimRel = Value;
+            } else if (Key == "fallloop") {
+                OutDesc.FallLoopAnimRel = Value;
+            } else if (Key == "land") {
+                OutDesc.LandAnimRel = Value;
             }
         }
     }
-    return !outDesc.skeletalMeshRel.empty() && !outDesc.blendSpaceRel.empty();
+    return !OutDesc.SkeletalMeshRel.empty() && !OutDesc.BlendSpaceRel.empty();
 }
 
 namespace {
 
-bool LoadCharacterVisualJsonLegacy(const std::string& path, FCharacterVisualDesc& out) {
-    std::ifstream in(path);
-    if (!in) {
+bool LoadCharacterVisualJsonLegacy(const std::string& Path, FCharacterVisualDesc& Out) {
+    std::ifstream In(Path);
+    if (!In) {
         return false;
     }
-    json root;
+    json Root;
     try {
-        in >> root;
-    } catch (const std::exception& ex) {
-        std::cerr << "CookedSkeletal: bad character JSON '" << path << "': " << ex.what() << '\n';
+        In >> Root;
+    } catch (const std::exception& Ex) {
+        std::cerr << "CookedSkeletal: bad character JSON '" << Path << "': " << Ex.what() << '\n';
         return false;
     } catch (...) {
-        std::cerr << "CookedSkeletal: bad character JSON '" << path << "'\n";
+        std::cerr << "CookedSkeletal: bad character JSON '" << Path << "'\n";
         return false;
     }
-    out = {};
-    out.skeletalMeshRel = root.at("skeletalMesh").get<std::string>();
-    out.blendSpaceRel = root.at("blendSpace").get<std::string>();
-    out.fitHeight = root.value("fitHeight", 1.85f);
-    out.jumpStartAnimRel = root.value("jumpStart", std::string{});
-    out.fallLoopAnimRel = root.value("fallLoop", std::string{});
-    out.landAnimRel = root.value("land", std::string{});
+    Out = {};
+    Out.SkeletalMeshRel = Root.at("skeletalMesh").get<std::string>();
+    Out.BlendSpaceRel = Root.at("blendSpace").get<std::string>();
+    Out.FitHeight = Root.value("fitHeight", 1.85f);
+    Out.JumpStartAnimRel = Root.value("jumpStart", std::string{});
+    Out.FallLoopAnimRel = Root.value("fallLoop", std::string{});
+    Out.LandAnimRel = Root.value("land", std::string{});
     return true;
 }
 
 } // namespace
 
-bool LoadCharacterVisual(const std::string& path, FCharacterVisualDesc& out) {
-    const fs::path p(path);
-    const std::string ext = p.extension().string();
-    std::string extLower = ext;
-    for (char& c : extLower) {
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+bool LoadCharacterVisual(const std::string& Path, FCharacterVisualDesc& Out) {
+    const fs::path P(Path);
+    const std::string Ext = P.extension().string();
+    std::string ExtLower = Ext;
+    for (char& C : ExtLower) {
+        C = static_cast<char>(std::tolower(static_cast<unsigned char>(C)));
     }
-    if (extLower == ".lchar") {
-        return LoadCharacterVisualLchar(path, out);
+    if (ExtLower == ".lchar") {
+        return LoadCharacterVisualLchar(Path, Out);
     }
-    if (extLower == ".json") {
-        return LoadCharacterVisualJsonLegacy(path, out);
+    if (ExtLower == ".json") {
+        return LoadCharacterVisualJsonLegacy(Path, Out);
     }
     // Path without / unknown ext: try .lchar semantics by content.
-    if (LoadCharacterVisualLchar(path, out)) {
+    if (LoadCharacterVisualLchar(Path, Out)) {
         return true;
     }
-    return LoadCharacterVisualJsonLegacy(path, out);
+    return LoadCharacterVisualJsonLegacy(Path, Out);
 }
 
-bool CookAnimSequenceFromFbx(const std::string& fbxPath, const std::string& skeletonPath,
-                             const std::string& outAnimPath, const std::string& animName,
-                             bool looping) {
-    USkeleton skeleton;
-    if (!LoadSkeleton(skeletonPath, skeleton)) {
-        std::cerr << "CookAnimSequenceFromFbx: failed skeleton '" << skeletonPath << "'\n";
+bool CookAnimSequenceFromFbx(const std::string& FbxPath, const std::string& SkeletonPath,
+                             const std::string& OutAnimPath, const std::string& AnimName,
+                             bool bLooping) {
+    USkeleton Skeleton;
+    if (!LoadSkeleton(SkeletonPath, Skeleton)) {
+        std::cerr << "CookAnimSequenceFromFbx: failed skeleton '" << SkeletonPath << "'\n";
         return false;
     }
 
-    UAnimSequence anim;
-    if (!LoadAnimSequenceFromFbx(fbxPath, skeleton, anim)) {
-        std::cerr << "CookAnimSequenceFromFbx: failed FBX '" << fbxPath << "'\n";
+    UAnimSequence Anim;
+    if (!LoadAnimSequenceFromFbx(FbxPath, Skeleton, Anim)) {
+        std::cerr << "CookAnimSequenceFromFbx: failed FBX '" << FbxPath << "'\n";
         return false;
     }
-    anim.Name = animName.empty() ? fs::path(fbxPath).stem().string() : animName;
-    anim.bLooping = looping;
+    Anim.Name = AnimName.empty() ? fs::path(FbxPath).stem().string() : AnimName;
+    Anim.bLooping = bLooping;
 
-    const fs::path animPath(outAnimPath);
-    fs::create_directories(animPath.parent_path());
+    const fs::path AnimPath(OutAnimPath);
+    fs::create_directories(AnimPath.parent_path());
 
-    const fs::path skelAbs = fs::absolute(skeletonPath).lexically_normal();
-    const fs::path animDir = fs::absolute(animPath.parent_path()).lexically_normal();
-    std::string skelRel = fs::relative(skelAbs, animDir).generic_string();
-    if (skelRel.empty()) {
-        skelRel = "../" + skelAbs.filename().string();
+    const fs::path SkelAbs = fs::absolute(SkeletonPath).lexically_normal();
+    const fs::path AnimDir = fs::absolute(AnimPath.parent_path()).lexically_normal();
+    std::string SkelRel = fs::relative(SkelAbs, AnimDir).generic_string();
+    if (SkelRel.empty()) {
+        SkelRel = "../" + SkelAbs.filename().string();
     }
 
-    if (!SaveAnimSequenceLeon(animPath.string(), anim, skeleton.BoneCount(), skelRel)) {
+    if (!SaveAnimSequenceLeon(AnimPath.string(), Anim, Skeleton.BoneCount(), SkelRel)) {
         return false;
     }
-    std::cout << "Cooked anim '" << anim.Name << "' → " << outAnimPath << "\n";
+    std::cout << "Cooked anim '" << Anim.Name << "' → " << OutAnimPath << "\n";
     return true;
 }
 
-bool CookCharacterFromFbx(const std::string& characterName, const std::string& meshFbxPath,
-                          const std::string& runFbxPath, const std::string& outDirectory,
-                          const FCookJumpAnimPaths& jumpAnims) {
-    fs::create_directories(outDirectory);
-    fs::create_directories(fs::path(outDirectory) / "Anims");
-    fs::create_directories(fs::path(outDirectory) / "Materials");
+bool CookCharacterFromFbx(const std::string& CharacterName, const std::string& MeshFbxPath,
+                          const std::string& RunFbxPath, const std::string& OutDirectory,
+                          const FCookJumpAnimPaths& JumpAnims) {
+    fs::create_directories(OutDirectory);
+    fs::create_directories(fs::path(OutDirectory) / "Anims");
+    fs::create_directories(fs::path(OutDirectory) / "Materials");
 
-    FSkeletalMeshData meshData;
-    if (!LoadSkeletalMeshFromFbx(meshFbxPath, meshData)) {
+    FSkeletalMeshData MeshData;
+    if (!LoadSkeletalMeshFromFbx(MeshFbxPath, MeshData)) {
         return false;
     }
 
-    UAnimSequence idle = std::move(meshData.EmbeddedAnim);
-    idle.Name = "BreathingIdle";
-    meshData.EmbeddedAnim = {};
+    UAnimSequence Idle = std::move(MeshData.EmbeddedAnim);
+    Idle.Name = "BreathingIdle";
+    MeshData.EmbeddedAnim = {};
 
-    UAnimSequence run;
-    if (!LoadAnimSequenceFromFbx(runFbxPath, meshData.Skeleton, run)) {
+    UAnimSequence Run;
+    if (!LoadAnimSequenceFromFbx(RunFbxPath, MeshData.Skeleton, Run)) {
         std::cerr << "CookCharacterFromFbx: run anim failed\n";
         return false;
     }
-    if (run.Name.empty()) {
-        run.Name = "Running";
+    if (Run.Name.empty()) {
+        Run.Name = "Running";
     }
 
-    UAnimSequence jumpStart;
-    UAnimSequence fallLoop;
-    UAnimSequence land;
-    if (!jumpAnims.jumpStartFbx.empty()) {
-        if (!LoadAnimSequenceFromFbx(jumpAnims.jumpStartFbx, meshData.Skeleton, jumpStart)) {
+    UAnimSequence JumpStart;
+    UAnimSequence FallLoop;
+    UAnimSequence Land;
+    if (!JumpAnims.JumpStartFbx.empty()) {
+        if (!LoadAnimSequenceFromFbx(JumpAnims.JumpStartFbx, MeshData.Skeleton, JumpStart)) {
             std::cerr << "CookCharacterFromFbx: jumpStart anim failed\n";
             return false;
         }
-        jumpStart.Name = "JumpingUp";
-        jumpStart.bLooping = false;
+        JumpStart.Name = "JumpingUp";
+        JumpStart.bLooping = false;
     }
-    if (!jumpAnims.fallLoopFbx.empty()) {
-        if (!LoadAnimSequenceFromFbx(jumpAnims.fallLoopFbx, meshData.Skeleton, fallLoop)) {
+    if (!JumpAnims.FallLoopFbx.empty()) {
+        if (!LoadAnimSequenceFromFbx(JumpAnims.FallLoopFbx, MeshData.Skeleton, FallLoop)) {
             std::cerr << "CookCharacterFromFbx: fallLoop anim failed\n";
             return false;
         }
-        fallLoop.Name = "FallingIdle";
-        fallLoop.bLooping = true;
+        FallLoop.Name = "FallingIdle";
+        FallLoop.bLooping = true;
     }
-    if (!jumpAnims.landFbx.empty()) {
-        if (!LoadAnimSequenceFromFbx(jumpAnims.landFbx, meshData.Skeleton, land)) {
+    if (!JumpAnims.LandFbx.empty()) {
+        if (!LoadAnimSequenceFromFbx(JumpAnims.LandFbx, MeshData.Skeleton, Land)) {
             std::cerr << "CookCharacterFromFbx: land anim failed\n";
             return false;
         }
-        land.Name = "FallingToLanding";
-        land.bLooping = false;
+        Land.Name = "FallingToLanding";
+        Land.bLooping = false;
     }
 
-    const std::string skeletonFile = characterName + ".lskel";
-    const std::string skelMeshFile = characterName + ".lskm";
-    const std::string materialRel = "Materials/M_" + characterName + ".lmat";
-    const std::string idleAnimRel = "Anims/BreathingIdle.lanim";
-    const std::string runAnimRel = "Anims/Running.lanim";
-    const std::string jumpAnimRel = "Anims/JumpingUp.lanim";
-    const std::string fallAnimRel = "Anims/FallingIdle.lanim";
-    const std::string landAnimRel = "Anims/FallingToLanding.lanim";
-    const std::string blendRel = characterName + "_Locomotion.blendspace1d.json";
-    const std::string characterRel = characterName + ".lchar";
+    const std::string SkeletonFile = CharacterName + ".lskel";
+    const std::string SkelMeshFile = CharacterName + ".lskm";
+    const std::string MaterialRel = "Materials/M_" + CharacterName + ".lmat";
+    const std::string IdleAnimRel = "Anims/BreathingIdle.lanim";
+    const std::string RunAnimRel = "Anims/Running.lanim";
+    const std::string JumpAnimRel = "Anims/JumpingUp.lanim";
+    const std::string FallAnimRel = "Anims/FallingIdle.lanim";
+    const std::string LocalLandAnimRel = "Anims/FallingToLanding.lanim";
+    const std::string BlendRel = CharacterName + "_Locomotion.blendspace1d.json";
+    const std::string CharacterRel = CharacterName + ".lchar";
 
-    const fs::path outDir(outDirectory);
-    if (!SaveSkeletonLeon((outDir / skeletonFile).string(), meshData.Skeleton, characterName)) {
+    const fs::path OutDir(OutDirectory);
+    if (!SaveSkeletonLeon((OutDir / SkeletonFile).string(), MeshData.Skeleton, CharacterName)) {
         return false;
     }
-    if (!SaveSkeletalMeshLeon((outDir / skelMeshFile).string(), meshData, skeletonFile,
-                              materialRel, characterName)) {
+    if (!SaveSkeletalMeshLeon((OutDir / SkelMeshFile).string(), MeshData, SkeletonFile,
+                              MaterialRel, CharacterName)) {
         return false;
     }
 
     // Prefer pack albedo when present (ThirdPerson: Textures/T_Bot_D.png).
-    std::string characterFolder = characterName;
-    for (char& c : characterFolder) {
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    std::string CharacterFolder = CharacterName;
+    for (char& C : CharacterFolder) {
+        C = static_cast<char>(std::tolower(static_cast<unsigned char>(C)));
     }
-    const std::string albedoFile = "T_" + characterName + "_D.png";
-    const std::string albedoRel =
-        "assets/characters/" + characterFolder + "/Textures/" + albedoFile;
-    const bool hasAlbedo = fs::exists(outDir / "Textures" / albedoFile);
-    if (!writeSimpleCharacterLmat((outDir / materialRel).string(), "M_" + characterName,
-                                  hasAlbedo ? albedoRel : std::string{})) {
+    const std::string AlbedoFile = "T_" + CharacterName + "_D.png";
+    const std::string AlbedoRel =
+        "assets/characters/" + CharacterFolder + "/Textures/" + AlbedoFile;
+    const bool bHasAlbedo = fs::exists(OutDir / "Textures" / AlbedoFile);
+    if (!WriteSimpleCharacterLmat((OutDir / MaterialRel).string(), "M_" + CharacterName,
+                                  bHasAlbedo ? AlbedoRel : std::string{})) {
         return false;
     }
 
-    const std::string skelFromAnims = std::string("../") + skeletonFile;
-    if (!SaveAnimSequenceLeon((outDir / idleAnimRel).string(), idle, meshData.Skeleton.BoneCount(),
-                              skelFromAnims)) {
+    const std::string SkelFromAnims = std::string("../") + SkeletonFile;
+    if (!SaveAnimSequenceLeon((OutDir / IdleAnimRel).string(), Idle, MeshData.Skeleton.BoneCount(),
+                              SkelFromAnims)) {
         return false;
     }
-    if (!SaveAnimSequenceLeon((outDir / runAnimRel).string(), run, meshData.Skeleton.BoneCount(),
-                              skelFromAnims)) {
+    if (!SaveAnimSequenceLeon((OutDir / RunAnimRel).string(), Run, MeshData.Skeleton.BoneCount(),
+                              SkelFromAnims)) {
         return false;
     }
-    if (jumpStart.FrameCount() > 0) {
-        if (!SaveAnimSequenceLeon((outDir / jumpAnimRel).string(), jumpStart,
-                                  meshData.Skeleton.BoneCount(), skelFromAnims)) {
+    if (JumpStart.FrameCount() > 0) {
+        if (!SaveAnimSequenceLeon((OutDir / JumpAnimRel).string(), JumpStart,
+                                  MeshData.Skeleton.BoneCount(), SkelFromAnims)) {
             return false;
         }
     }
-    if (fallLoop.FrameCount() > 0) {
-        if (!SaveAnimSequenceLeon((outDir / fallAnimRel).string(), fallLoop,
-                                  meshData.Skeleton.BoneCount(), skelFromAnims)) {
+    if (FallLoop.FrameCount() > 0) {
+        if (!SaveAnimSequenceLeon((OutDir / FallAnimRel).string(), FallLoop,
+                                  MeshData.Skeleton.BoneCount(), SkelFromAnims)) {
             return false;
         }
     }
-    if (land.FrameCount() > 0) {
-        if (!SaveAnimSequenceLeon((outDir / landAnimRel).string(), land,
-                                  meshData.Skeleton.BoneCount(), skelFromAnims)) {
+    if (Land.FrameCount() > 0) {
+        if (!SaveAnimSequenceLeon((OutDir / LocalLandAnimRel).string(), Land,
+                                  MeshData.Skeleton.BoneCount(), SkelFromAnims)) {
             return false;
         }
     }
 
-    FBlendSpace1DAssetDesc bs;
-    bs.name = characterName + "_Locomotion";
-    bs.samples.push_back({idleAnimRel, 0.0f});
-    bs.samples.push_back({runAnimRel, 1.0f});
-    if (!SaveBlendSpace1DJson((outDir / blendRel).string(), bs)) {
+    FBlendSpace1DAssetDesc Bs;
+    Bs.Name = CharacterName + "_Locomotion";
+    Bs.Samples.push_back({IdleAnimRel, 0.0f});
+    Bs.Samples.push_back({RunAnimRel, 1.0f});
+    if (!SaveBlendSpace1DJson((OutDir / BlendRel).string(), Bs)) {
         return false;
     }
 
-    FCharacterVisualDesc character;
-    character.name = characterName;
-    character.skeletalMeshRel = skelMeshFile;
-    character.blendSpaceRel = blendRel;
-    character.fitHeight = 1.85f;
-    if (jumpStart.FrameCount() > 0) {
-        character.jumpStartAnimRel = jumpAnimRel;
+    FCharacterVisualDesc Character;
+    Character.Name = CharacterName;
+    Character.SkeletalMeshRel = SkelMeshFile;
+    Character.BlendSpaceRel = BlendRel;
+    Character.FitHeight = 1.85f;
+    if (JumpStart.FrameCount() > 0) {
+        Character.JumpStartAnimRel = JumpAnimRel;
     }
-    if (fallLoop.FrameCount() > 0) {
-        character.fallLoopAnimRel = fallAnimRel;
+    if (FallLoop.FrameCount() > 0) {
+        Character.FallLoopAnimRel = FallAnimRel;
     }
-    if (land.FrameCount() > 0) {
-        character.landAnimRel = landAnimRel;
+    if (Land.FrameCount() > 0) {
+        Character.LandAnimRel = LocalLandAnimRel;
     }
-    if (!SaveCharacterVisualLchar((outDir / characterRel).string(), character)) {
+    if (!SaveCharacterVisualLchar((OutDir / CharacterRel).string(), Character)) {
         return false;
     }
 
-    std::cout << "Cooked character '" << characterName << "' → " << outDirectory << "\n"
-              << "  " << skeletonFile << "\n"
-              << "  " << skelMeshFile << "\n"
-              << "  " << materialRel << "\n"
-              << "  " << idleAnimRel << " / " << runAnimRel << "\n";
-    if (jumpStart.FrameCount() > 0) {
-        std::cout << "  " << jumpAnimRel << "\n";
+    std::cout << "Cooked character '" << CharacterName << "' → " << OutDirectory << "\n"
+              << "  " << SkeletonFile << "\n"
+              << "  " << SkelMeshFile << "\n"
+              << "  " << MaterialRel << "\n"
+              << "  " << IdleAnimRel << " / " << RunAnimRel << "\n";
+    if (JumpStart.FrameCount() > 0) {
+        std::cout << "  " << JumpAnimRel << "\n";
     }
-    if (fallLoop.FrameCount() > 0) {
-        std::cout << "  " << fallAnimRel << "\n";
+    if (FallLoop.FrameCount() > 0) {
+        std::cout << "  " << FallAnimRel << "\n";
     }
-    if (land.FrameCount() > 0) {
-        std::cout << "  " << landAnimRel << "\n";
+    if (Land.FrameCount() > 0) {
+        std::cout << "  " << LocalLandAnimRel << "\n";
     }
-    std::cout << "  " << blendRel << "\n"
-              << "  " << characterRel << "\n";
+    std::cout << "  " << BlendRel << "\n"
+              << "  " << CharacterRel << "\n";
     return true;
 }
 

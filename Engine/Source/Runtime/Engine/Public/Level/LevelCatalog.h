@@ -6,38 +6,38 @@
 
 
 struct FLevelEntry {
-    std::string name;     // from the level document name, else filename stem
-    std::string path;     // resolved .llev path
-    std::string pack;     // project folder name under `Projects/`
-    std::string gameMode; // Unreal-like GameMode Override
+    std::string Name;     // from the level document name, else filename stem
+    std::string Path;     // resolved .llev path
+    std::string Pack;     // project folder name under `Projects/`
+    std::string GameMode; // Unreal-like GameMode Override
 };
 
 /// Discovers binary Leon Level files (`.llev`) under project packs or a flat directory.
 class FLevelCatalog {
 public:
     /// Scan a flat directory of `*.llev` (unit tests / tools).
-    bool Scan(const std::string& directory);
+    bool Scan(const std::string& InDirectory);
 
     /// Scan every pack under `projectsRoot/` for `Content/Levels/*.llev`.
-    bool ScanProjectPacks(const std::string& projectsRoot);
+    bool ScanProjectPacks(const std::string& ProjectsRoot);
 
     /// Scan one pack (`Projects/<pack>/`) for `Content/Levels/*.llev`
     /// (also `<pack>/Levels` via FPaths::ProjectContentDir pre-Content layout).
-    bool ScanPack(const std::string& packDirectory);
+    bool ScanPack(const std::string& PackDirectory);
 
     /// First catalog index whose `gameMode` or `pack` equals `id`, or `NumEntries()` if none.
-    [[nodiscard]] std::size_t FindIndexByGameModeOrPack(const std::string& id) const;
+    [[nodiscard]] std::size_t FindIndexByGameModeOrPack(const std::string& Id) const;
 
     /// Match `FLevelEntry.name`, path stem, or full path (case-insensitive). Returns `NumEntries()` if none.
-    [[nodiscard]] std::size_t FindIndexByLevelKey(std::string_view key) const;
+    [[nodiscard]] std::size_t FindIndexByLevelKey(std::string_view Key) const;
 
-    [[nodiscard]] const std::vector<FLevelEntry>& Entries() const { return entries_; }
-    [[nodiscard]] bool IsEmpty() const { return entries_.empty(); }
-    [[nodiscard]] std::size_t NumEntries() const { return entries_.size(); }
-    [[nodiscard]] const std::string& Directory() const { return directory_; }
+    [[nodiscard]] const std::vector<FLevelEntry>& GetEntries() const { return Entries; }
+    [[nodiscard]] bool IsEmpty() const { return Entries.empty(); }
+    [[nodiscard]] std::size_t NumEntries() const { return Entries.size(); }
+    [[nodiscard]] const std::string& GetDirectory() const { return Directory; }
 
 private:
-    std::string directory_;
-    std::vector<FLevelEntry> entries_;
+    std::string Directory;
+    std::vector<FLevelEntry> Entries;
 };
 

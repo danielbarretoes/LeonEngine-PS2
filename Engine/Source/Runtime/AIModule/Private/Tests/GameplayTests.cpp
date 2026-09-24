@@ -111,10 +111,10 @@ TEST_CASE("GameState match timer and PlayerState score", "[gameplay][state]") {
 
 TEST_CASE("GameInstance NotifyLevelOpened", "[gameplay][gameinstance]") {
     UGameInstance gi;
-    REQUIRE(gi.LevelsOpened() == 0);
+    REQUIRE(gi.GetLevelsOpened() == 0);
     gi.NotifyLevelOpened();
     gi.NotifyLevelOpened();
-    REQUIRE(gi.LevelsOpened() == 2);
+    REQUIRE(gi.GetLevelsOpened() == 2);
 }
 
 TEST_CASE("SpringArmComponent clamps pitch and arm length", "[gameplay][springarm]") {
@@ -130,8 +130,8 @@ TEST_CASE("SpringArmComponent clamps pitch and arm length", "[gameplay][springar
     arm.SnapLagState({0.0f, 0.0f, 0.0f});
     UCameraComponent camera;
     arm.ApplyToCamera(camera, {1.0f, 0.0f, 0.0f}, 0.016f);
-    REQUIRE(camera.Mode() == ECameraMode::Orbit);
-    REQUIRE_THAT(camera.Target().y, WithinAbs(arm.SocketOffsetZ, 0.5f));
+    REQUIRE(camera.GetMode() == ECameraMode::Orbit);
+    REQUIRE_THAT(camera.GetTarget().y, WithinAbs(arm.SocketOffsetZ, 0.5f));
 }
 
 TEST_CASE("SpringArmComponent collision probe shortens arm", "[gameplay][springarm]") {
@@ -157,8 +157,8 @@ TEST_CASE("SpringArmComponent collision probe shortens arm", "[gameplay][springa
 
     UCameraComponent camera;
     arm.ApplyToCamera(camera, {0.0f, 0.0f, 0.0f}, 0.016f, &scene);
-    REQUIRE(camera.Distance() < 3.0f);
-    REQUIRE(camera.Distance() >= arm.ArmLengthMin);
+    REQUIRE(camera.GetDistance() < 3.0f);
+    REQUIRE(camera.GetDistance() >= arm.ArmLengthMin);
 }
 
 TEST_CASE("AIController steers toward target and arrives", "[gameplay][ai]") {
@@ -255,8 +255,8 @@ TEST_CASE("NavigationSystem FindPath routes around static blocker", "[gameplay][
     nav.SetAgentRadius(0.35f);
     nav.BuildFromPhysScene(physics, 0.0f, 12.0f);
     REQUIRE(nav.HasNavMesh());
-    REQUIRE(nav.WalkableCellCount() > 100);
-    REQUIRE(nav.BlockerCount() == 1);
+    REQUIRE(nav.GetWalkableCellCount() > 100);
+    REQUIRE(nav.GetBlockerCount() == 1);
 
     std::vector<glm::vec3> path;
     REQUIRE(nav.FindPath({-6.0f, 0.0f, 0.0f}, {6.0f, 0.0f, 0.0f}, path));
@@ -281,12 +281,12 @@ TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "
     FPhysScene physics;
 
     UStaticMeshComponent plate{};
-    plate.tag = NavTags::Blocker;
-    plate.collisionEnabled = true;
-    plate.editorClass = "Cube";
-    plate.transform.Position = {0.0f, 0.12f, 0.0f};
-    plate.transform.Scale = {1.8f, 0.2f, 1.8f};
-    level.StaticMeshes().push_back(std::move(plate));
+    plate.Tag = NavTags::Blocker;
+    plate.bCollisionEnabled = true;
+    plate.EditorClass = "Cube";
+    plate.Transform.Position = {0.0f, 0.12f, 0.0f};
+    plate.Transform.Scale = {1.8f, 0.2f, 1.8f};
+    level.GetStaticMeshes().push_back(std::move(plate));
 
     FBodyInstance plateBody{};
     plateBody.Type = EBodyType::Static;
@@ -297,10 +297,10 @@ TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "
     physics.GetTriangleMeshes().emplace_back();
 
     UStaticMeshComponent ramp{};
-    ramp.tag = NavTags::Walkable;
-    ramp.collisionEnabled = true;
-    ramp.editorClass = "Cube";
-    level.StaticMeshes().push_back(std::move(ramp));
+    ramp.Tag = NavTags::Walkable;
+    ramp.bCollisionEnabled = true;
+    ramp.EditorClass = "Cube";
+    level.GetStaticMeshes().push_back(std::move(ramp));
 
     FBodyInstance rampBody{};
     rampBody.Type = EBodyType::Static;
@@ -322,7 +322,7 @@ TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "
     nav.SetAgentRadius(0.35f);
     nav.BuildFromLevel(level, physics, 0.0f, 12.0f);
     REQUIRE(nav.HasNavMesh());
-    REQUIRE(nav.BlockerCount() == 1);
+    REQUIRE(nav.GetBlockerCount() == 1);
 
     // Cell under plate center must be blocked.
     int pix = 0;
@@ -400,8 +400,8 @@ TEST_CASE("DefaultGameMode Matches empty or Default id", "[gameplay][gamemode]")
 TEST_CASE("Actor SyncTransformToLevel writes linked mesh", "[gameplay][actor][sync]") {
     ULevel level;
     UStaticMeshComponent mesh{};
-    mesh.transform.Position = {0.0f, 0.0f, 0.0f};
-    mesh.transform.RotationDegrees = {0.0f, 0.0f, 0.0f};
+    mesh.Transform.Position = {0.0f, 0.0f, 0.0f};
+    mesh.Transform.RotationDegrees = {0.0f, 0.0f, 0.0f};
     level.AddStaticMesh(std::move(mesh));
 
     UWorld world;
@@ -410,10 +410,10 @@ TEST_CASE("Actor SyncTransformToLevel writes linked mesh", "[gameplay][actor][sy
     actor->SetActorLocationAndRotation({3.0f, 1.5f, -2.0f}, 90.0f);
     actor->SyncTransformToLevel(level);
 
-    REQUIRE_THAT(level.StaticMeshes()[0].transform.Position.x, WithinAbs(3.0f, 1.0e-5f));
-    REQUIRE_THAT(level.StaticMeshes()[0].transform.Position.y, WithinAbs(1.5f, 1.0e-5f));
-    REQUIRE_THAT(level.StaticMeshes()[0].transform.Position.z, WithinAbs(-2.0f, 1.0e-5f));
-    REQUIRE_THAT(level.StaticMeshes()[0].transform.RotationDegrees.y, WithinAbs(90.0f, 1.0e-5f));
+    REQUIRE_THAT(level.GetStaticMeshes()[0].Transform.Position.x, WithinAbs(3.0f, 1.0e-5f));
+    REQUIRE_THAT(level.GetStaticMeshes()[0].Transform.Position.y, WithinAbs(1.5f, 1.0e-5f));
+    REQUIRE_THAT(level.GetStaticMeshes()[0].Transform.Position.z, WithinAbs(-2.0f, 1.0e-5f));
+    REQUIRE_THAT(level.GetStaticMeshes()[0].Transform.RotationDegrees.y, WithinAbs(90.0f, 1.0e-5f));
 }
 
 TEST_CASE("World TickGameplayFrame syncs Character to Level mesh", "[gameplay][world][sync]") {
@@ -427,13 +427,13 @@ TEST_CASE("World TickGameplayFrame syncs Character to Level mesh", "[gameplay][w
     character->Reset({1.0f, 0.0f, 2.0f}, 45.0f);
 
     FWorldGameplayFrameParams frame{};
-    frame.deltaTime = 1.0f / 60.0f;
-    frame.level = &level;
+    frame.DeltaTime = 1.0f / 60.0f;
+    frame.Level = &level;
     world.TickGameplayFrame(frame);
 
-    REQUIRE_THAT(level.StaticMeshes()[0].transform.Position.x, WithinAbs(1.0f, 1.0e-4f));
-    REQUIRE_THAT(level.StaticMeshes()[0].transform.Position.z, WithinAbs(2.0f, 1.0e-4f));
-    REQUIRE_THAT(level.StaticMeshes()[0].transform.RotationDegrees.y, WithinAbs(45.0f, 1.0e-4f));
+    REQUIRE_THAT(level.GetStaticMeshes()[0].Transform.Position.x, WithinAbs(1.0f, 1.0e-4f));
+    REQUIRE_THAT(level.GetStaticMeshes()[0].Transform.Position.z, WithinAbs(2.0f, 1.0e-4f));
+    REQUIRE_THAT(level.GetStaticMeshes()[0].Transform.RotationDegrees.y, WithinAbs(45.0f, 1.0e-4f));
 }
 
 TEST_CASE("ActorComponent RegisterComponent and CreateDefaultSubobject tick",

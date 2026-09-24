@@ -13,59 +13,59 @@
 #include <string>
 #include <thread>
 
-UGameEngine::UGameEngine() : gameInstance_(std::make_unique<UGameInstance>()) {
-    application_.reset(FPlatformApplicationMisc::CreateApplication());
-    window_ = application_->MakeWindow();
-    playerInput_.AddMappingContext(UInputMappingContext::MakeDefault());
+UGameEngine::UGameEngine() : GameInstance(std::make_unique<UGameInstance>()) {
+    Application.reset(FPlatformApplicationMisc::CreateApplication());
+    Window = Application->MakeWindow();
+    PlayerInput.AddMappingContext(UInputMappingContext::MakeDefault());
 }
 
 UGameEngine::~UGameEngine() {
     Shutdown();
 }
 
-bool UGameEngine::Initialize(int width, int height, const char* title) {
-    if (initialized_) {
+bool UGameEngine::Initialize(int Width, int Height, const char* Title) {
+    if (bInitialized) {
         return true;
     }
 
-    if (!window_->Create(width, height, title != nullptr ? title : "Leon Engine")) {
+    if (!Window->Create(Width, Height, Title != nullptr ? Title : "Leon Engine")) {
         return false;
     }
 
-    const std::string shaderDir = FPaths::ResolveAssetPath("assets/Shaders");
-    if (!renderer_.Initialize(shaderDir)) {
-        window_->Destroy();
+    const std::string ShaderDir = FPaths::ResolveAssetPath("assets/Shaders");
+    if (!Renderer.Initialize(ShaderDir)) {
+        Window->Destroy();
         return false;
     }
-    if (!overlay_.Initialize(shaderDir)) {
-        renderer_.Shutdown();
-        window_->Destroy();
+    if (!Overlay.Initialize(ShaderDir)) {
+        Renderer.Shutdown();
+        Window->Destroy();
         return false;
     }
 
-    window_->SetScrollCallback(
-        [this](double yOffset) { pendingScrollY_ += static_cast<float>(yOffset); });
+    Window->SetScrollCallback(
+        [this](double YOffset) { PendingScrollY += static_cast<float>(YOffset); });
 
-    camera_.SetPerspective(60.0f, window_->Aspect(), 0.1f, 100.0f);
-    camera_.SetTarget({0.0f, 0.0f, 0.0f});
+    Camera.SetPerspective(60.0f, Window->Aspect(), 0.1f, 100.0f);
+    Camera.SetTarget({0.0f, 0.0f, 0.0f});
 
     SetCursorCaptured(true);
 
-    (void)audioDevice_.Initialize(/*silent=*/false);
+    (void)AudioDevice.Initialize(/*silent=*/false);
 
-    gameInstance_->Init();
+    GameInstance->Init();
 
-    initialized_ = true;
-    running_ = true;
-    headless_ = false;
+    bInitialized = true;
+    bRunning = true;
+    bHeadless = false;
     // Stats off until F4 -- matches editor Viewport / PIE (no Engine overlay by default).
-    overlay_.SetRightText({});
-    overlay_.SetBottomLeftText({});
+    Overlay.SetRightText({});
+    Overlay.SetBottomLeftText({});
     return true;
 }
 
 bool UGameEngine::InitializeHeadless() {
-    if (initialized_) {
+    if (bInitialized) {
         return true;
     }
 
@@ -73,120 +73,120 @@ bool UGameEngine::InitializeHeadless() {
     std::cout.setf(std::ios::unitbuf);
     std::cerr.setf(std::ios::unitbuf);
 
-    resources_.SetGpuUploadEnabled(false);
-    headless_ = true;
-    (void)audioDevice_.Initialize(/*silent=*/true);
-    gameInstance_->Init();
-    initialized_ = true;
-    running_ = true;
+    Resources.SetGpuUploadEnabled(false);
+    bHeadless = true;
+    (void)AudioDevice.Initialize(/*silent=*/true);
+    GameInstance->Init();
+    bInitialized = true;
+    bRunning = true;
     std::cout << "Leon Engine headless (no OpenGL / window)\n";
     return true;
 }
 
 void UGameEngine::Shutdown() {
-    if (!initialized_) {
+    if (!bInitialized) {
         return;
     }
 
-    gameInstance_->Shutdown();
-    audioDevice_.Shutdown();
-    level_.Clear();
-    resources_.Clear();
-    if (!headless_) {
-        overlay_.Shutdown();
-        renderer_.Shutdown();
-        window_->Destroy();
-        window_->SetCursorCaptured(false);
+    GameInstance->Shutdown();
+    AudioDevice.Shutdown();
+    Level.Clear();
+    Resources.Clear();
+    if (!bHeadless) {
+        Overlay.Shutdown();
+        Renderer.Shutdown();
+        Window->Destroy();
+        Window->SetCursorCaptured(false);
     }
-    running_ = false;
-    initialized_ = false;
-    headless_ = false;
-    mouseLookSampleValid_ = false;
-    suppressCameraDrag_ = false;
-    keyboardOrbitEnabled_ = true;
-    orbitMouseEnabled_ = true;
-    pendingScrollY_ = 0.0f;
-    shaderReloadHook_ = {};
-    hud_.Clear();
-    centerHudText_.clear();
-    lastFbWidth_ = 0;
-    lastFbHeight_ = 0;
-    fpsAccumTime_ = 0.0f;
-    fpsAccumFrames_ = 0;
-    displayFps_ = 0.0f;
-    displayMs_ = 0.0f;
+    bRunning = false;
+    bInitialized = false;
+    bHeadless = false;
+    bMouseLookSampleValid = false;
+    bSuppressCameraDrag = false;
+    bKeyboardOrbitEnabled = true;
+    bOrbitMouseEnabled = true;
+    PendingScrollY = 0.0f;
+    ShaderReloadHook = {};
+    Hud.Clear();
+    CenterHudText.clear();
+    LastFbWidth = 0;
+    LastFbHeight = 0;
+    FpsAccumTime = 0.0f;
+    FpsAccumFrames = 0;
+    DisplayFps = 0.0f;
+    DisplayMs = 0.0f;
 }
 
 float UGameEngine::ConsumeScrollY() {
-    const float y = pendingScrollY_;
-    pendingScrollY_ = 0.0f;
-    return y;
+    const float Y = PendingScrollY;
+    PendingScrollY = 0.0f;
+    return Y;
 }
 
-void UGameEngine::SetCursorCaptured(bool captured) {
-    if (headless_) {
+void UGameEngine::SetCursorCaptured(bool bCaptured) {
+    if (bHeadless) {
         return;
     }
-    GetPlayInputWindow().SetCursorCaptured(captured);
-    mouseLookSampleValid_ = false; // skip one frame to avoid a jump after mode change
+    GetPlayInputWindow().SetCursorCaptured(bCaptured);
+    bMouseLookSampleValid = false; // skip one frame to avoid a jump after mode change
 }
 
 bool UGameEngine::IsCursorCaptured() const {
-    if (headless_) {
+    if (bHeadless) {
         return false;
     }
     return GetPlayInputWindow().IsCursorCaptured();
 }
 
-void UGameEngine::SetPlayInputWindow(FGenericWindow* window) {
-    FGenericWindow* previous = playInputTarget_.GetWindow();
-    if (previous != nullptr && previous != window) {
-        previous->SetScrollCallback(nullptr);
+void UGameEngine::SetPlayInputWindow(FGenericWindow* InWindow) {
+    FGenericWindow* Previous = PlayInputTarget.GetWindow();
+    if (Previous != nullptr && Previous != InWindow) {
+        Previous->SetScrollCallback(nullptr);
     }
-    playInputTarget_.SetWindow(window);
-    if (window != nullptr) {
+    PlayInputTarget.SetWindow(InWindow);
+    if (InWindow != nullptr) {
         // Accumulate into the same pendingScrollY_ as the main window (PIE New Window scroll).
-        window->SetScrollCallback(
-            [this](double yOffset) { pendingScrollY_ += static_cast<float>(yOffset); });
+        InWindow->SetScrollCallback(
+            [this](double YOffset) { PendingScrollY += static_cast<float>(YOffset); });
     }
 }
 
 FGenericWindow& UGameEngine::GetPlayInputWindow() {
-    return playInputTarget_.Resolve(*window_);
+    return PlayInputTarget.Resolve(*Window);
 }
 
 const FGenericWindow& UGameEngine::GetPlayInputWindow() const {
-    return playInputTarget_.Resolve(*window_);
+    return PlayInputTarget.Resolve(*Window);
 }
 
-void UGameEngine::AddOnScreenDebugMessage(std::string message, float displaySeconds,
-                                     const glm::vec3& color) {
-    if (headless_) {
-        std::cout << "[server] " << message << '\n';
-        (void)displaySeconds;
-        (void)color;
+void UGameEngine::AddOnScreenDebugMessage(std::string Message, float DisplaySeconds,
+                                     const glm::vec3& Color) {
+    if (bHeadless) {
+        std::cout << "[server] " << Message << '\n';
+        (void)DisplaySeconds;
+        (void)Color;
         return;
     }
-    overlay_.AddOnScreenDebugMessage(std::move(message), displaySeconds, color);
+    Overlay.AddOnScreenDebugMessage(std::move(Message), DisplaySeconds, Color);
 }
 
-EShaderReloadResult UGameEngine::reloadAllShaders(bool force) {
-    EShaderReloadResult result = renderer_.ReloadShaders(force);
-    result = MergeShaderReload(result, overlay_.ReloadShader(force));
-    if (shaderReloadHook_) {
-        result = MergeShaderReload(result, shaderReloadHook_(force));
+EShaderReloadResult UGameEngine::ReloadAllShaders(bool bForce) {
+    EShaderReloadResult Result = Renderer.ReloadShaders(bForce);
+    Result = MergeShaderReload(Result, Overlay.ReloadShader(bForce));
+    if (ShaderReloadHook) {
+        Result = MergeShaderReload(Result, ShaderReloadHook(bForce));
     }
-    return result;
+    return Result;
 }
 
-void UGameEngine::Run(const FUpdateCallback& onUpdate, const FPreInputCallback& onPreInput,
-                 const FPostRenderCallback& onPostRender) {
-    if (!initialized_) {
+void UGameEngine::Run(const FUpdateCallback& OnUpdate, const FPreInputCallback& OnPreInput,
+                 const FPostRenderCallback& OnPostRender) {
+    if (!bInitialized) {
         std::cerr << "Engine is not initialized\n";
         return;
     }
 
-    std::cout << "Level static meshes: " << level_.StaticMeshes().size() << '\n';
+    std::cout << "Level static meshes: " << Level.GetStaticMeshes().size() << '\n';
     std::cout << "Controls: mouse look (cursor captured), scroll zoom (orbit); close window to quit\n";
     std::cout << "Default mode: mouse look, WASD fly along view, Q/E up/down\n";
     std::cout << "Levels: keys 1-9 jump to slot; [ ] previous/next\n";
@@ -195,280 +195,280 @@ void UGameEngine::Run(const FUpdateCallback& onUpdate, const FPreInputCallback& 
     std::cout << "Stats: F4 FPS / RAM / TRI overlay (off by default)\n";
     std::cout << "Shaders: F5 force-reload (also auto-reloads when files change)\n";
 
-    auto previous = std::chrono::steady_clock::now();
-    while (running_ && !window_->ShouldClose()) {
-        const auto now = std::chrono::steady_clock::now();
-        float deltaTime = std::chrono::duration<float>(now - previous).count();
-        previous = now;
-        deltaTime = std::min(deltaTime, 0.1f);
+    auto Previous = std::chrono::steady_clock::now();
+    while (bRunning && !Window->ShouldClose()) {
+        const auto Now = std::chrono::steady_clock::now();
+        float DeltaTime = std::chrono::duration<float>(Now - Previous).count();
+        Previous = Now;
+        DeltaTime = std::min(DeltaTime, 0.1f);
 
-        window_->PollEvents();
-        if (playInputTarget_.HasOverride()) {
-            playInputTarget_.GetWindow()->PollEvents();
+        Window->PollEvents();
+        if (PlayInputTarget.HasOverride()) {
+            PlayInputTarget.GetWindow()->PollEvents();
         }
-        playerInput_.Update(GetPlayInputWindow());
-        (void)reloadAllShaders(false);
-        if (onPreInput) {
-            onPreInput();
+        PlayerInput.Update(GetPlayInputWindow());
+        (void)ReloadAllShaders(false);
+        if (OnPreInput) {
+            OnPreInput();
         }
-        handleInput(deltaTime);
+        HandleInput(DeltaTime);
         TickPlayAudio();
-        if (onUpdate) {
-            onUpdate(deltaTime);
+        if (OnUpdate) {
+            OnUpdate(DeltaTime);
         }
-        TickPlayHud(deltaTime);
-        pendingScrollY_ = 0.0f; // discard unused wheel (modes that do not ConsumeScrollY)
-        render(onPostRender);
-        window_->SwapBuffers();
+        TickPlayHud(DeltaTime);
+        PendingScrollY = 0.0f; // discard unused wheel (modes that do not ConsumeScrollY)
+        Render(OnPostRender);
+        Window->SwapBuffers();
     }
 }
 
 void UGameEngine::TickPlayAudio() {
-    if (!initialized_ || headless_) {
+    if (!bInitialized || bHeadless) {
         return;
     }
-    const glm::vec3 eye = camera_.GetCameraLocation();
-    const glm::vec3 forward = camera_.ForwardVector();
-    const glm::vec3 up{0.0f, 1.0f, 0.0f};
-    audioDevice_.SetListener(eye, forward, up);
-    audioDevice_.Tick();
+    const glm::vec3 Eye = Camera.GetCameraLocation();
+    const glm::vec3 Forward = Camera.ForwardVector();
+    const glm::vec3 Up{0.0f, 1.0f, 0.0f};
+    AudioDevice.SetListener(Eye, Forward, Up);
+    AudioDevice.Tick();
 }
 
-void UGameEngine::TickPlayHud(float deltaTime) {
-    if (!initialized_) {
+void UGameEngine::TickPlayHud(float DeltaTime) {
+    if (!bInitialized) {
         return;
     }
-    hud_.Tick(deltaTime);
-    overlay_.TickOnScreenMessages(deltaTime);
-    if (showHudStats_) {
-        updateHudStats(deltaTime);
+    Hud.Tick(DeltaTime);
+    Overlay.TickOnScreenMessages(DeltaTime);
+    if (bShowHudStats) {
+        UpdateHudStats(DeltaTime);
     }
-    overlay_.SetCenterText(centerHudText_);
+    Overlay.SetCenterText(CenterHudText);
 }
 
-void UGameEngine::PaintHudAndOverlay(int framebufferWidth, int framebufferHeight) {
-    if (!initialized_ || headless_) {
+void UGameEngine::PaintHudAndOverlay(int FramebufferWidth, int FramebufferHeight) {
+    if (!bInitialized || bHeadless) {
         return;
     }
-    if (framebufferWidth <= 0 || framebufferHeight <= 0) {
+    if (FramebufferWidth <= 0 || FramebufferHeight <= 0) {
         return;
     }
-    hud_.Paint(overlay_, framebufferWidth, framebufferHeight);
-    overlay_.Draw(framebufferWidth, framebufferHeight);
+    Hud.Paint(Overlay, FramebufferWidth, FramebufferHeight);
+    Overlay.Draw(FramebufferWidth, FramebufferHeight);
 }
 
-void UGameEngine::RunHeadless(const FUpdateCallback& onUpdate, float tickHz) {
-    if (!initialized_ || !headless_) {
+void UGameEngine::RunHeadless(const FUpdateCallback& OnUpdate, float TickHz) {
+    if (!bInitialized || !bHeadless) {
         std::cerr << "Engine::RunHeadless requires InitializeHeadless()\n";
         return;
     }
-    if (tickHz < 1.0f) {
-        tickHz = 1.0f;
+    if (TickHz < 1.0f) {
+        TickHz = 1.0f;
     }
-    const float dt = 1.0f / tickHz;
-    std::cout << "Headless tick " << tickHz << " Hz -- Ctrl+C to stop\n";
+    const float Dt = 1.0f / TickHz;
+    std::cout << "Headless tick " << TickHz << " Hz -- Ctrl+C to stop\n";
 
     using clock = std::chrono::steady_clock;
-    auto next = clock::now();
-    while (running_) {
-        if (onUpdate) {
-            onUpdate(dt);
+    auto Next = clock::now();
+    while (bRunning) {
+        if (OnUpdate) {
+            OnUpdate(Dt);
         }
-        next += std::chrono::duration_cast<clock::duration>(std::chrono::duration<double>(dt));
-        const auto now = clock::now();
-        if (next < now) {
+        Next += std::chrono::duration_cast<clock::duration>(std::chrono::duration<double>(Dt));
+        const auto Now = clock::now();
+        if (Next < Now) {
             // Fell behind -- resync to avoid spiral.
-            next = now;
+            Next = Now;
         } else {
-            std::this_thread::sleep_until(next);
+            std::this_thread::sleep_until(Next);
         }
     }
 }
 
-void UGameEngine::SetHudStatsVisible(bool visible) {
-    showHudStats_ = visible;
-    if (!showHudStats_) {
-        overlay_.SetRightText({});
-        overlay_.SetBottomLeftText({});
-        fpsAccumTime_ = 0.0f;
-        fpsAccumFrames_ = 0;
+void UGameEngine::SetHudStatsVisible(bool bVisible) {
+    bShowHudStats = bVisible;
+    if (!bShowHudStats) {
+        Overlay.SetRightText({});
+        Overlay.SetBottomLeftText({});
+        FpsAccumTime = 0.0f;
+        FpsAccumFrames = 0;
     }
 }
 
-void UGameEngine::updateHudStats(float deltaTime) {
-    fpsAccumTime_ += deltaTime;
-    ++fpsAccumFrames_;
-    if (fpsAccumTime_ < 0.25f) {
+void UGameEngine::UpdateHudStats(float DeltaTime) {
+    FpsAccumTime += DeltaTime;
+    ++FpsAccumFrames;
+    if (FpsAccumTime < 0.25f) {
         return;
     }
 
-    displayMs_ = (fpsAccumTime_ / static_cast<float>(fpsAccumFrames_)) * 1000.0f;
-    displayFps_ = static_cast<float>(fpsAccumFrames_) / fpsAccumTime_;
-    fpsAccumTime_ = 0.0f;
-    fpsAccumFrames_ = 0;
+    DisplayMs = (FpsAccumTime / static_cast<float>(FpsAccumFrames)) * 1000.0f;
+    DisplayFps = static_cast<float>(FpsAccumFrames) / FpsAccumTime;
+    FpsAccumTime = 0.0f;
+    FpsAccumFrames = 0;
 
-    const FFrameStats& stats = renderer_.GetFrameStats();
+    const FFrameStats& Stats = Renderer.GetFrameStats();
 
-    int fbWidth = 0;
-    int fbHeight = 0;
-    window_->GetFramebufferSize(fbWidth, fbHeight);
+    int FbWidth = 0;
+    int FbHeight = 0;
+    Window->GetFramebufferSize(FbWidth, FbHeight);
 
-    const FPlatformMemoryStats memory = FPlatformMemory::GetStats();
-    const auto ramMb = static_cast<double>(memory.UsedPhysical) / (1024.0 * 1024.0);
-    const FRHIGPUMemoryStats gpu = GDynamicRHI != nullptr ? GDynamicRHI->GetGPUMemoryStats() : FRHIGPUMemoryStats{};
+    const FPlatformMemoryStats Memory = FPlatformMemory::GetStats();
+    const auto RamMb = static_cast<double>(Memory.UsedPhysical) / (1024.0 * 1024.0);
+    const FRHIGPUMemoryStats Gpu = GDynamicRHI != nullptr ? GDynamicRHI->GetGPUMemoryStats() : FRHIGPUMemoryStats{};
 
-    std::array<char, 32> vram{};
-    (void)std::snprintf(vram.data(), vram.size(), "VRAM n/a");
-    if (gpu.bValid) {
-        const auto budgetMb = static_cast<double>(gpu.BudgetBytes) / (1024.0 * 1024.0);
-        if (gpu.bReportsUsage) {
-            const auto usedMb = static_cast<double>(gpu.UsedBytes) / (1024.0 * 1024.0);
-            (void)std::snprintf(vram.data(), vram.size(), "VRAM %.0f/%.0fM", usedMb, budgetMb);
+    std::array<char, 32> Vram{};
+    (void)std::snprintf(Vram.data(), Vram.size(), "VRAM n/a");
+    if (Gpu.bValid) {
+        const auto BudgetMb = static_cast<double>(Gpu.BudgetBytes) / (1024.0 * 1024.0);
+        if (Gpu.bReportsUsage) {
+            const auto UsedMb = static_cast<double>(Gpu.UsedBytes) / (1024.0 * 1024.0);
+            (void)std::snprintf(Vram.data(), Vram.size(), "VRAM %.0f/%.0fM", UsedMb, BudgetMb);
         } else {
-            (void)std::snprintf(vram.data(), vram.size(), "VRAM %.0fM", budgetMb);
+            (void)std::snprintf(Vram.data(), Vram.size(), "VRAM %.0fM", BudgetMb);
         }
     }
 
     // Compact two-column stats (top-right).
-    std::array<char, 256> text{};
-    (void)std::snprintf(text.data(), text.size(),
+    std::array<char, 256> Text{};
+    (void)std::snprintf(Text.data(), Text.size(),
                         "FPS %5.0f   MS %5.2f\n"
                         "RAM %4.0fM  %s\n"
                         "TRIS %5d  OBJ %d/%d\n"
                         "RES %dx%d\n"
                         "GPU Sh %.2f Pl %.2f Col %.2f\n"
                         "    AO %.2f Pst %.2f",
-                        displayFps_, displayMs_, ramMb, vram.data(), stats.TrianglesSubmitted,
-                        stats.ObjectsVisible, stats.ObjectsTotal, fbWidth, fbHeight,
-                        stats.ShadowMs, stats.PlanarMs, stats.ColorMs, stats.SsaoMs, stats.PostMs);
-    overlay_.SetRightText(text.data());
-    overlay_.SetText({});
-    overlay_.SetCenterText({});
+                        DisplayFps, DisplayMs, RamMb, Vram.data(), Stats.TrianglesSubmitted,
+                        Stats.ObjectsVisible, Stats.ObjectsTotal, FbWidth, FbHeight,
+                        Stats.ShadowMs, Stats.PlanarMs, Stats.ColorMs, Stats.SsaoMs, Stats.PostMs);
+    Overlay.SetRightText(Text.data());
+    Overlay.SetText({});
+    Overlay.SetCenterText({});
 
-    std::array<char, 96> hints{};
-    (void)std::snprintf(hints.data(), hints.size(), "F1 AABB %s\nF2 Coll+Trace %s\nF3 NavMesh %s",
-                        renderer_.IsDebugDrawEnabled() ? "ON" : "OFF",
-                        collisionDebugEnabled_ ? "ON" : "OFF",
-                        navMeshDebugEnabled_ ? "ON" : "OFF");
-    overlay_.SetBottomLeftText(hints.data());
+    std::array<char, 96> Hints{};
+    (void)std::snprintf(Hints.data(), Hints.size(), "F1 AABB %s\nF2 Coll+Trace %s\nF3 NavMesh %s",
+                        Renderer.IsDebugDrawEnabled() ? "ON" : "OFF",
+                        bCollisionDebugEnabled ? "ON" : "OFF",
+                        bNavMeshDebugEnabled ? "ON" : "OFF");
+    Overlay.SetBottomLeftText(Hints.data());
 }
 
-void UGameEngine::handleInput(float deltaTime) {
+void UGameEngine::HandleInput(float DeltaTime) {
     // PIE "New Window" routes capture + look here; fall back to the main window otherwise.
-    FGenericWindow& inputWindow = GetPlayInputWindow();
+    FGenericWindow& InputWindow = GetPlayInputWindow();
 
-    const bool f1Down = inputWindow.IsKeyPressed(EKeys::F1);
-    if (f1Down && !debugKeyWasDown_) {
-        renderer_.ToggleDebugDraw();
-        std::cout << "Debug draw (mesh AABB): " << (renderer_.IsDebugDrawEnabled() ? "on" : "off")
+    const bool bF1Down = InputWindow.IsKeyPressed(EKeys::F1);
+    if (bF1Down && !bDebugKeyWasDown) {
+        Renderer.ToggleDebugDraw();
+        std::cout << "Debug draw (mesh AABB): " << (Renderer.IsDebugDrawEnabled() ? "on" : "off")
                   << '\n';
     }
-    debugKeyWasDown_ = f1Down;
+    bDebugKeyWasDown = bF1Down;
 
-    const bool f2Down = inputWindow.IsKeyPressed(EKeys::F2);
-    if (f2Down && !collisionDebugKeyWasDown_) {
+    const bool bF2Down = InputWindow.IsKeyPressed(EKeys::F2);
+    if (bF2Down && !bCollisionDebugKeyWasDown) {
         ToggleCollisionDebug();
         std::cout << "Collision debug: " << (IsCollisionDebugEnabled() ? "on" : "off") << '\n';
     }
-    collisionDebugKeyWasDown_ = f2Down;
+    bCollisionDebugKeyWasDown = bF2Down;
 
-    const bool f3Down = inputWindow.IsKeyPressed(EKeys::F3);
-    if (f3Down && !navMeshDebugKeyWasDown_) {
+    const bool bF3Down = InputWindow.IsKeyPressed(EKeys::F3);
+    if (bF3Down && !bNavMeshDebugKeyWasDown) {
         ToggleNavMeshDebug();
         std::cout << "NavMesh debug: " << (IsNavMeshDebugEnabled() ? "on" : "off") << '\n';
     }
-    navMeshDebugKeyWasDown_ = f3Down;
+    bNavMeshDebugKeyWasDown = bF3Down;
 
-    const bool f4Down = inputWindow.IsKeyPressed(EKeys::F4);
-    if (f4Down && !hudStatsKeyWasDown_) {
-        SetHudStatsVisible(!showHudStats_);
-        std::cout << "HUD stats: " << (showHudStats_ ? "on" : "off") << '\n';
+    const bool bF4Down = InputWindow.IsKeyPressed(EKeys::F4);
+    if (bF4Down && !bHudStatsKeyWasDown) {
+        SetHudStatsVisible(!bShowHudStats);
+        std::cout << "HUD stats: " << (bShowHudStats ? "on" : "off") << '\n';
     }
-    hudStatsKeyWasDown_ = f4Down;
+    bHudStatsKeyWasDown = bF4Down;
 
-    const bool f5Down = inputWindow.IsKeyPressed(EKeys::F5);
-    if (f5Down && !reloadKeyWasDown_) {
-        const EShaderReloadResult result = reloadAllShaders(true);
-        if (result == EShaderReloadResult::Failed) {
+    const bool bF5Down = InputWindow.IsKeyPressed(EKeys::F5);
+    if (bF5Down && !bReloadKeyWasDown) {
+        const EShaderReloadResult Result = ReloadAllShaders(true);
+        if (Result == EShaderReloadResult::Failed) {
             std::cerr << "Shader reload failed; previous programs kept where possible\n";
-        } else if (result == EShaderReloadResult::Reloaded) {
+        } else if (Result == EShaderReloadResult::Reloaded) {
             std::cout << "Shaders reloaded (F5)\n";
         } else {
             std::cout << "Shaders unchanged (F5)\n";
         }
     }
-    reloadKeyWasDown_ = f5Down;
+    bReloadKeyWasDown = bF5Down;
 
-    constexpr float kKeyboardOrbitSpeed = 90.0f;
-    if (keyboardOrbitEnabled_) {
+    constexpr float KeyboardOrbitSpeed = 90.0f;
+    if (bKeyboardOrbitEnabled) {
         // Reuse Move* axes so remapping WASD also remaps keyboard orbit tumble.
-        const FMoveAxes2D axes = playerInput_.GetMoveAxes2D();
-        const float yaw = axes.x * kKeyboardOrbitSpeed;
-        const float pitch = -axes.z * kKeyboardOrbitSpeed;
-        if (yaw != 0.0f || pitch != 0.0f) {
-            camera_.Orbit(yaw * deltaTime, pitch * deltaTime);
+        const FMoveAxes2D Axes = PlayerInput.GetMoveAxes2D();
+        const float Yaw = Axes.X * KeyboardOrbitSpeed;
+        const float Pitch = -Axes.Z * KeyboardOrbitSpeed;
+        if (Yaw != 0.0f || Pitch != 0.0f) {
+            Camera.Orbit(Yaw * DeltaTime, Pitch * DeltaTime);
         }
     }
 
     // Orbit mouse: Engine owns scroll zoom on camera distance (look is continuous below).
-    if (orbitMouseEnabled_ && camera_.Mode() == ECameraMode::Orbit) {
-        const float scrollY = ConsumeScrollY();
-        if (scrollY != 0.0f) {
-            camera_.Zoom(scrollY * 0.4f);
+    if (bOrbitMouseEnabled && Camera.GetMode() == ECameraMode::Orbit) {
+        const float ScrollY = ConsumeScrollY();
+        if (ScrollY != 0.0f) {
+            Camera.Zoom(ScrollY * 0.4f);
         }
     }
 
-    double mouseX = 0.0;
-    double mouseY = 0.0;
-    inputWindow.GetCursorPos(mouseX, mouseY);
+    double MouseX = 0.0;
+    double MouseY = 0.0;
+    InputWindow.GetCursorPos(MouseX, MouseY);
 
-    const bool wantLook =
-        !suppressCameraDrag_ &&
-        (inputWindow.IsCursorCaptured() || inputWindow.IsMouseButtonDown(EMouseButtons::Left));
+    const bool bWantLook =
+        !bSuppressCameraDrag &&
+        (InputWindow.IsCursorCaptured() || InputWindow.IsMouseButtonDown(EMouseButtons::Left));
 
-    if (wantLook) {
-        if (mouseLookSampleValid_) {
-            const float dx = static_cast<float>(mouseX - lastMouseX_);
-            const float dy = static_cast<float>(mouseY - lastMouseY_);
-            if (camera_.Mode() == ECameraMode::FreeLook) {
-                constexpr float kLookDegreesPerPixel = 0.15f;
-                camera_.AddLook(dx * kLookDegreesPerPixel, -dy * kLookDegreesPerPixel);
-            } else if (orbitMouseEnabled_) {
-                constexpr float kOrbitDegreesPerPixel = 0.3f;
-                camera_.Orbit(dx * kOrbitDegreesPerPixel, dy * kOrbitDegreesPerPixel);
+    if (bWantLook) {
+        if (bMouseLookSampleValid) {
+            const float Dx = static_cast<float>(MouseX - LastMouseX);
+            const float Dy = static_cast<float>(MouseY - LastMouseY);
+            if (Camera.GetMode() == ECameraMode::FreeLook) {
+                constexpr float LookDegreesPerPixel = 0.15f;
+                Camera.AddLook(Dx * LookDegreesPerPixel, -Dy * LookDegreesPerPixel);
+            } else if (bOrbitMouseEnabled) {
+                constexpr float OrbitDegreesPerPixel = 0.3f;
+                Camera.Orbit(Dx * OrbitDegreesPerPixel, Dy * OrbitDegreesPerPixel);
             }
         }
-        mouseLookSampleValid_ = true;
-        lastMouseX_ = mouseX;
-        lastMouseY_ = mouseY;
+        bMouseLookSampleValid = true;
+        LastMouseX = MouseX;
+        LastMouseY = MouseY;
     } else {
-        mouseLookSampleValid_ = false;
-        lastMouseX_ = mouseX;
-        lastMouseY_ = mouseY;
+        bMouseLookSampleValid = false;
+        LastMouseX = MouseX;
+        LastMouseY = MouseY;
     }
 }
 
-void UGameEngine::render(const FPostRenderCallback& onPostRender) {
-    int fbWidth = 0;
-    int fbHeight = 0;
-    window_->GetFramebufferSize(fbWidth, fbHeight);
-    if (fbWidth <= 0 || fbHeight <= 0) {
+void UGameEngine::Render(const FPostRenderCallback& OnPostRender) {
+    int FbWidth = 0;
+    int FbHeight = 0;
+    Window->GetFramebufferSize(FbWidth, FbHeight);
+    if (FbWidth <= 0 || FbHeight <= 0) {
         return;
     }
 
-    if (fbWidth != lastFbWidth_ || fbHeight != lastFbHeight_) {
-        lastFbWidth_ = fbWidth;
-        lastFbHeight_ = fbHeight;
-        camera_.SetPerspective(camera_.FieldOfView(),
-                               static_cast<float>(fbWidth) / static_cast<float>(fbHeight), 0.1f,
+    if (FbWidth != LastFbWidth || FbHeight != LastFbHeight) {
+        LastFbWidth = FbWidth;
+        LastFbHeight = FbHeight;
+        Camera.SetPerspective(Camera.FieldOfView(),
+                               static_cast<float>(FbWidth) / static_cast<float>(FbHeight), 0.1f,
                                100.0f);
     }
 
-    renderer_.BeginFrame(fbWidth, fbHeight);
-    renderer_.DrawScene(level_, camera_);
-    PaintHudAndOverlay(fbWidth, fbHeight);
-    if (onPostRender) {
-        onPostRender(fbWidth, fbHeight);
+    Renderer.BeginFrame(FbWidth, FbHeight);
+    Renderer.DrawScene(Level, Camera);
+    PaintHudAndOverlay(FbWidth, FbHeight);
+    if (OnPostRender) {
+        OnPostRender(FbWidth, FbHeight);
     }
 }
 

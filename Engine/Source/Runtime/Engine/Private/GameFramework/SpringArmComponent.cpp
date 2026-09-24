@@ -10,150 +10,150 @@
 
 namespace {
 
-[[nodiscard]] FPhysScene* ResolvePhysScene(AActor* owner, FPhysScene* explicitScene) {
-    if (explicitScene != nullptr) {
-        return explicitScene;
+[[nodiscard]] FPhysScene* ResolvePhysScene(AActor* Owner, FPhysScene* ExplicitScene) {
+    if (ExplicitScene != nullptr) {
+        return ExplicitScene;
     }
-    if (owner == nullptr) {
+    if (Owner == nullptr) {
         return nullptr;
     }
-    UWorld* world = owner->GetWorld();
-    return world != nullptr ? &world->GetPhysicsScene() : nullptr;
+    UWorld* World = Owner->GetWorld();
+    return World != nullptr ? &World->GetPhysicsScene() : nullptr;
 }
 
 } // namespace
 
-glm::vec3 USpringArmComponent::GetBoomDirection(float yawDegrees, float pitchDegrees) {
-    const float yawRad = yawDegrees * (glm::pi<float>() / 180.0f);
-    const float pitchRad = pitchDegrees * (glm::pi<float>() / 180.0f);
-    const glm::vec3 dir{
-        std::cos(pitchRad) * std::cos(yawRad),
-        std::sin(pitchRad),
-        std::cos(pitchRad) * std::sin(yawRad),
+glm::vec3 USpringArmComponent::GetBoomDirection(float YawDegrees, float PitchDegrees) {
+    const float YawRad = YawDegrees * (glm::pi<float>() / 180.0f);
+    const float PitchRad = PitchDegrees * (glm::pi<float>() / 180.0f);
+    const glm::vec3 Dir{
+        std::cos(PitchRad) * std::cos(YawRad),
+        std::sin(PitchRad),
+        std::cos(PitchRad) * std::sin(YawRad),
     };
-    const float len = glm::length(dir);
-    if (len < 1.0e-6f) {
+    const float Len = glm::length(Dir);
+    if (Len < 1.0e-6f) {
         return glm::vec3{0.0f, 0.0f, 1.0f};
     }
-    return dir / len;
+    return Dir / Len;
 }
 
-glm::vec3 USpringArmComponent::GetTargetLocation(const glm::vec3& actorLocation) const {
-    constexpr float kDegToRad = glm::pi<float>() / 180.0f;
-    const float yawRad = BoomYawDegrees * kDegToRad;
+glm::vec3 USpringArmComponent::GetTargetLocation(const glm::vec3& ActorLocation) const {
+    constexpr float DegToRad = glm::pi<float>() / 180.0f;
+    const float YawRad = BoomYawDegrees * DegToRad;
     // Same right basis as yawRelativeMoveXZ.
-    const glm::vec3 right{std::sin(yawRad), 0.0f, -std::cos(yawRad)};
-    return actorLocation + glm::vec3{0.0f, SocketOffsetZ, 0.0f} + (right * SocketOffsetX);
+    const glm::vec3 Right{std::sin(YawRad), 0.0f, -std::cos(YawRad)};
+    return ActorLocation + glm::vec3{0.0f, SocketOffsetZ, 0.0f} + (Right * SocketOffsetX);
 }
 
-void USpringArmComponent::SnapLagState(const glm::vec3& actorLocation) {
-    laggedTarget_ = GetTargetLocation(actorLocation);
-    laggedYawDegrees_ = BoomYawDegrees;
-    laggedPitchDegrees_ = BoomPitchDegrees;
-    laggedArmLength_ = TargetArmLength;
-    lagInitialized_ = true;
+void USpringArmComponent::SnapLagState(const glm::vec3& ActorLocation) {
+    LaggedTarget = GetTargetLocation(ActorLocation);
+    LaggedYawDegrees = BoomYawDegrees;
+    LaggedPitchDegrees = BoomPitchDegrees;
+    LaggedArmLength = TargetArmLength;
+    bLagInitialized = true;
 }
 
 float USpringArmComponent::GetLookFacingYawDegrees() const {
-    constexpr float kDegToRad = glm::pi<float>() / 180.0f;
-    constexpr float kRadToDeg = 180.0f / glm::pi<float>();
-    const float yawRad = BoomYawDegrees * kDegToRad;
+    constexpr float DegToRad = glm::pi<float>() / 180.0f;
+    constexpr float RadToDeg = 180.0f / glm::pi<float>();
+    const float YawRad = BoomYawDegrees * DegToRad;
     // Same forward as yawRelativeMoveXZ / Camera orbit look on XZ.
-    return std::atan2(-std::cos(yawRad), -std::sin(yawRad)) * kRadToDeg;
+    return std::atan2(-std::cos(YawRad), -std::sin(YawRad)) * RadToDeg;
 }
 
-float USpringArmComponent::ExpSmoothAlpha(float speed, float deltaTime) {
-    if (speed <= 0.0f || deltaTime <= 0.0f) {
+float USpringArmComponent::ExpSmoothAlpha(float Speed, float DeltaTime) {
+    if (Speed <= 0.0f || DeltaTime <= 0.0f) {
         return 1.0f;
     }
-    return 1.0f - std::exp(-speed * deltaTime);
+    return 1.0f - std::exp(-Speed * DeltaTime);
 }
 
-float USpringArmComponent::LerpAngleDegrees(float fromDegrees, float toDegrees, float alpha) {
-    float delta = std::fmod(toDegrees - fromDegrees + 540.0f, 360.0f) - 180.0f;
-    return fromDegrees + (delta * alpha);
+float USpringArmComponent::LerpAngleDegrees(float FromDegrees, float ToDegrees, float Alpha) {
+    float Delta = std::fmod(ToDegrees - FromDegrees + 540.0f, 360.0f) - 180.0f;
+    return FromDegrees + (Delta * Alpha);
 }
 
-void USpringArmComponent::UpdateLag(float deltaTime, const glm::vec3& actorLocation) {
-    const glm::vec3 desiredTarget = GetTargetLocation(actorLocation);
-    if (!lagInitialized_) {
-        laggedTarget_ = desiredTarget;
-        laggedYawDegrees_ = BoomYawDegrees;
-        laggedPitchDegrees_ = BoomPitchDegrees;
-        laggedArmLength_ = TargetArmLength;
-        lagInitialized_ = true;
+void USpringArmComponent::UpdateLag(float DeltaTime, const glm::vec3& ActorLocation) {
+    const glm::vec3 DesiredTarget = GetTargetLocation(ActorLocation);
+    if (!bLagInitialized) {
+        LaggedTarget = DesiredTarget;
+        LaggedYawDegrees = BoomYawDegrees;
+        LaggedPitchDegrees = BoomPitchDegrees;
+        LaggedArmLength = TargetArmLength;
+        bLagInitialized = true;
         return;
     }
 
-    const float posAlpha = bEnableCameraLag ? ExpSmoothAlpha(CameraLagSpeed, deltaTime) : 1.0f;
-    laggedTarget_ = glm::mix(laggedTarget_, desiredTarget, posAlpha);
+    const float PosAlpha = bEnableCameraLag ? ExpSmoothAlpha(CameraLagSpeed, DeltaTime) : 1.0f;
+    LaggedTarget = glm::mix(LaggedTarget, DesiredTarget, PosAlpha);
 
-    const float rotAlpha =
-        bEnableCameraRotationLag ? ExpSmoothAlpha(CameraRotationLagSpeed, deltaTime) : 1.0f;
-    laggedYawDegrees_ = LerpAngleDegrees(laggedYawDegrees_, BoomYawDegrees, rotAlpha);
-    laggedPitchDegrees_ = glm::mix(laggedPitchDegrees_, BoomPitchDegrees, rotAlpha);
+    const float RotAlpha =
+        bEnableCameraRotationLag ? ExpSmoothAlpha(CameraRotationLagSpeed, DeltaTime) : 1.0f;
+    LaggedYawDegrees = LerpAngleDegrees(LaggedYawDegrees, BoomYawDegrees, RotAlpha);
+    LaggedPitchDegrees = glm::mix(LaggedPitchDegrees, BoomPitchDegrees, RotAlpha);
 
-    const float armAlpha = ExpSmoothAlpha(ArmLengthLagSpeed, deltaTime);
-    laggedArmLength_ = glm::mix(laggedArmLength_, TargetArmLength, armAlpha);
-    laggedArmLength_ = std::clamp(laggedArmLength_, ArmLengthMin, ArmLengthMax);
+    const float ArmAlpha = ExpSmoothAlpha(ArmLengthLagSpeed, DeltaTime);
+    LaggedArmLength = glm::mix(LaggedArmLength, TargetArmLength, ArmAlpha);
+    LaggedArmLength = std::clamp(LaggedArmLength, ArmLengthMin, ArmLengthMax);
 }
 
-float USpringArmComponent::ProbeArmLength(FPhysScene& physScene, const glm::vec3& target,
-                                         float yawDegrees, float pitchDegrees,
-                                         float desiredLength, FDebugDraw* debugDraw) const {
-    const float length = std::clamp(desiredLength, ArmLengthMin, ArmLengthMax);
-    if (ProbeSize <= 0.0f || length <= ArmLengthMin + 1.0e-4f) {
-        return length;
+float USpringArmComponent::ProbeArmLength(FPhysScene& PhysScene, const glm::vec3& Target,
+                                         float YawDegrees, float PitchDegrees,
+                                         float DesiredLength, FDebugDraw* DebugDraw) const {
+    const float Length = std::clamp(DesiredLength, ArmLengthMin, ArmLengthMax);
+    if (ProbeSize <= 0.0f || Length <= ArmLengthMin + 1.0e-4f) {
+        return Length;
     }
 
-    const glm::vec3 boomDir = GetBoomDirection(yawDegrees, pitchDegrees);
-    const glm::vec3 end = target + boomDir * length;
+    const glm::vec3 BoomDir = GetBoomDirection(YawDegrees, PitchDegrees);
+    const glm::vec3 End = Target + BoomDir * Length;
 
-    FCollisionQueryParams params{};
-    params.bTraceFloorPlane = false;
-    if (debugDraw != nullptr) {
-        params.DrawDebugType = EDrawDebugTrace::ForOneFrame;
+    FCollisionQueryParams Params{};
+    Params.bTraceFloorPlane = false;
+    if (DebugDraw != nullptr) {
+        Params.DrawDebugType = EDrawDebugTrace::ForOneFrame;
     }
 
-    FHitResult hit{};
-    if (!physScene.SphereTraceSingleByChannel(hit, target, end, ProbeSize, ProbeChannel, params,
-                                              debugDraw) ||
-        !hit.bBlockingHit) {
-        return length;
+    FHitResult Hit{};
+    if (!PhysScene.SphereTraceSingleByChannel(Hit, Target, End, ProbeSize, ProbeChannel, Params,
+                                              DebugDraw) ||
+        !Hit.bBlockingHit) {
+        return Length;
     }
 
     // Pull in slightly past the sweep center so the near clip stays clear of the surface.
-    const float cleared = hit.Distance - CollisionProbeOffset;
-    return std::clamp(cleared, ArmLengthMin, length);
+    const float Cleared = Hit.Distance - CollisionProbeOffset;
+    return std::clamp(Cleared, ArmLengthMin, Length);
 }
 
-void USpringArmComponent::ApplyToCamera(UCameraComponent& camera, const glm::vec3& actorLocation,
-                                       float deltaTime, FPhysScene* physScene,
-                                       FDebugDraw* debugDraw) {
-    UpdateLag(deltaTime, actorLocation);
+void USpringArmComponent::ApplyToCamera(UCameraComponent& Camera, const glm::vec3& ActorLocation,
+                                       float DeltaTime, FPhysScene* PhysScene,
+                                       FDebugDraw* DebugDraw) {
+    UpdateLag(DeltaTime, ActorLocation);
 
-    float armLength = laggedArmLength_;
-    FPhysScene* phys = ResolvePhysScene(GetOwner(), physScene);
-    if (bDoCollisionTest && phys != nullptr) {
+    float ArmLength = LaggedArmLength;
+    FPhysScene* Phys = ResolvePhysScene(GetOwner(), PhysScene);
+    if (bDoCollisionTest && Phys != nullptr) {
         // Flow: lag desired length → sphere probe target→eye → snap in on hit (no lerp through walls)
-        const float probed =
-            ProbeArmLength(*phys, laggedTarget_, laggedYawDegrees_, laggedPitchDegrees_, armLength,
-                           debugDraw);
-        if (probed < armLength) {
-            armLength = probed;
-            laggedArmLength_ = probed;
+        const float Probed =
+            ProbeArmLength(*Phys, LaggedTarget, LaggedYawDegrees, LaggedPitchDegrees, ArmLength,
+                           DebugDraw);
+        if (Probed < ArmLength) {
+            ArmLength = Probed;
+            LaggedArmLength = Probed;
         }
     }
 
-    camera.SetMode(ECameraMode::Orbit);
-    camera.SetTarget(laggedTarget_);
-    camera.SetDistance(armLength);
-    camera.SetYawPitch(laggedYawDegrees_, laggedPitchDegrees_);
+    Camera.SetMode(ECameraMode::Orbit);
+    Camera.SetTarget(LaggedTarget);
+    Camera.SetDistance(ArmLength);
+    Camera.SetYawPitch(LaggedYawDegrees, LaggedPitchDegrees);
 }
 
-void USpringArmComponent::ApplyToCamera(UCameraComponent& camera, float deltaTime, FDebugDraw* debugDraw) {
-    const glm::vec3 actorLocation =
+void USpringArmComponent::ApplyToCamera(UCameraComponent& Camera, float DeltaTime, FDebugDraw* DebugDraw) {
+    const glm::vec3 ActorLocation =
         GetOwner() != nullptr ? GetOwner()->GetActorLocation() : GetComponentLocation();
-    ApplyToCamera(camera, actorLocation, deltaTime, nullptr, debugDraw);
+    ApplyToCamera(Camera, ActorLocation, DeltaTime, nullptr, DebugDraw);
 }
 
