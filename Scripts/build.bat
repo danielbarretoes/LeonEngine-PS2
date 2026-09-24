@@ -6,14 +6,14 @@ cd /d "%~dp0.."
 call "%~dp0_vsenv.bat" vsdev need-git
 if errorlevel 1 exit /b 1
 
-cmake -S Editor -B Editor/build -G "Visual Studio 18 2026" -A x64 2>nul
+cmake -S Engine -B Engine/build -DLEON_BUILD_TESTS=ON -G "Visual Studio 18 2026" -A x64 2>nul
 if errorlevel 1 (
   echo Trying Visual Studio 17 2022 generator...
-  cmake -S Editor -B Editor/build -G "Visual Studio 17 2022" -A x64
+  cmake -S Engine -B Engine/build -DLEON_BUILD_TESTS=ON -G "Visual Studio 17 2022" -A x64
   if errorlevel 1 exit /b 1
 )
 
-cmake --build Editor/build --config Release --parallel
+cmake --build Engine/build --config Release --parallel
 if errorlevel 1 exit /b 1
 
 echo.

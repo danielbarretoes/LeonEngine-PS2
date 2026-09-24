@@ -1,9 +1,9 @@
 # Launch a built PS2 ELF in PCSX2 (optionally building it first via Docker).
-# Usage: .\Scripts\run-ps2-pcsx2.ps1 [hello|lab|cube|tp] [-Build]
+# Usage: .\Scripts\run-ps2-pcsx2.ps1 [tp] [-Build]
 # PCSX2 path: $env:LEON_PCSX2, else PATH, else default install locations.
 param(
-    [ValidateSet("hello", "lab", "smoke", "cube", "tp", "thirdperson")]
-    [string]$Target = "cube",
+    [ValidateSet("tp", "thirdperson")]
+    [string]$Target = "tp",
     [switch]$Build
 )
 
@@ -11,12 +11,8 @@ $ErrorActionPreference = "Stop"
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 
 $Elf = switch ($Target) {
-    "hello"       { "Samples\Ps2Hello\build-ps2\leon-Ps2Hello.elf" }
-    "lab"         { "Projects\Ps2Lab\build-ps2\leon-Ps2Lab.elf" }
-    "smoke"       { "Projects\Ps2Lab\build-ps2\leon-Ps2Lab.elf" }
     "tp"          { "Projects\Ps2ThirdPerson\build-ps2\leon-Ps2ThirdPerson.elf" }
     "thirdperson" { "Projects\Ps2ThirdPerson\build-ps2\leon-Ps2ThirdPerson.elf" }
-    default       { "Projects\Ps2Cube\build-ps2\leon-Ps2Cube.elf" }
 }
 $Elf = Join-Path $Root $Elf
 

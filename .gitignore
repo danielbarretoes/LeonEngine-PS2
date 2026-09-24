@@ -10,10 +10,6 @@ build-ninja/
 build-linux/
 cmake-build-*/
 compile_commands.json
-Editor/build/
-Editor/build-ninja/
-Editor/build-fast/
-Editor/build-linux/
 Engine/build/
 Engine/build-ninja/
 Tools/build/

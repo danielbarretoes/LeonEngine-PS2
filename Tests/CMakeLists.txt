@@ -3,10 +3,8 @@
 add_executable(leon_tests
     animation/AnimInstanceTests.cpp
     animation/BlendSpace1DTests.cpp
-    animation/FbxLoadTests.cpp
     animation/SkeletonTests.cpp
     content/ContentValidatorTests.cpp
-    content/CookedSkeletalTests.cpp
     core/AsciiTests.cpp
     core/CameraTests.cpp
     core/InputMappingTests.cpp
@@ -40,7 +38,7 @@ target_link_libraries(leon_tests PRIVATE
     Catch2::Catch2WithMain
 )
 
-# Repo root so tests can resolve Engine/Assets, Templates/, and Projects/.
+# Repo root so tests can resolve Engine/Assets.
 get_filename_component(_leon_repo_root "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 string(REPLACE "\\" "/" LEON_SRC_DIR_FOR_TESTS "${_leon_repo_root}")
 target_compile_definitions(leon_tests PRIVATE "LEON_SOURCE_DIR=\"${LEON_SRC_DIR_FOR_TESTS}\"")

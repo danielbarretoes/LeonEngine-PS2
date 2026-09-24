@@ -20,9 +20,3 @@ TEST_CASE("ResolveAssetPath finds known shader under repo", "[core][paths]") {
     REQUIRE(std::filesystem::exists(resolved));
     REQUIRE(std::filesystem::exists(sourceAsset("Assets/Shaders/blinn_phong.vert")));
 }
-
-TEST_CASE("ResolveProjectsDirectory points at Projects", "[core][paths]") {
-    const std::string projects = leon::ResolveProjectsDirectory();
-    REQUIRE(std::filesystem::is_directory(projects));
-    REQUIRE(std::filesystem::is_directory(std::filesystem::path(projects) / "Smoke"));
-}

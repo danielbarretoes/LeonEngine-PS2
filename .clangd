@@ -2,7 +2,7 @@
 # QueryDriver lets clangd ask cl.exe for MSVC system include paths.
 
 CompileFlags:
-  CompilationDatabase: Editor/build-ninja
+  CompilationDatabase: Engine/build-ninja
   Add:
     - -Wno-unused-command-line-argument
     - -Wno-unused-const-variable

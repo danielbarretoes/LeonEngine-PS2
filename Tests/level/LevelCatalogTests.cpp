@@ -32,28 +32,6 @@ TEST_CASE("Level stores meshes PlayerStarts and tags", "[level][container]") {
     REQUIRE(level.FindPlayerStart() == nullptr);
 }
 
-TEST_CASE("LevelCatalog ScanProjectPacks finds Smoke levels", "[level][catalog]") {
-#ifdef LEON_SOURCE_DIR
-    const std::string gamesRoot =
-        (std::filesystem::path(LEON_SOURCE_DIR) / "Projects").lexically_normal().string();
-#else
-    const std::string gamesRoot = "Projects";
-#endif
-    leon::LevelCatalog catalog;
-    REQUIRE(catalog.ScanProjectPacks(gamesRoot));
-    REQUIRE_FALSE(catalog.IsEmpty());
-
-    bool foundSmoke = false;
-    for (const leon::LevelEntry& entry : catalog.Entries()) {
-        if (entry.pack == "Smoke") {
-            foundSmoke = true;
-            REQUIRE_FALSE(entry.path.empty());
-            break;
-        }
-    }
-    REQUIRE(foundSmoke);
-}
-
 TEST_CASE("LevelCatalog scan flat directory", "[level][catalog]") {
     const auto tempDir = std::filesystem::temp_directory_path() / "leon_level_catalog_test";
     std::filesystem::create_directories(tempDir);

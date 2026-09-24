@@ -26,8 +26,8 @@ if not defined CLANG_FORMAT (
 )
 
 echo Using: %CLANG_FORMAT%
-echo Formatting Engine Editor Runtime Plugins Tools Projects Tests Templates ...
-for %%D in (Engine Editor Runtime Plugins Tools Projects Tests Templates) do (
+echo Formatting Engine Runtime Plugins Tools Projects Tests Templates ...
+for %%D in (Engine Runtime Plugins Tools Projects Tests) do (
   if exist "%%D" for /r "%%D" %%f in (*.cpp *.h) do (
     set "P=%%f"
     echo !P!| findstr /I /C:"\build\" /C:"\build-" /C:"\_deps\" /C:"\_leon_" /C:"\.git\" >nul

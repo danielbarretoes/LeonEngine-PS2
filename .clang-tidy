@@ -47,7 +47,7 @@ Checks: >-
   -readability-avoid-nested-conditional-operator,
   -readability-make-member-function-const
 WarningsAsErrors: ''
-HeaderFilterRegex: '.*(Engine/(include/leon|Core|Platform|Renderer|Content|Animation|Network|Scene|Gameplay|Utilities|Serialization|Physics|RHI)|Editor/(include/leon|Application|Panels|Gizmos|SceneEditing|Importers|Preview)|Runtime|Plugins)/.*'
+HeaderFilterRegex: '.*(Engine/(include/leon|Core|Platform|Renderer|Content|Animation|Network|Scene|Gameplay|Utilities|Serialization|Physics|RHI)|Runtime|Plugins)/.*'
 FormatStyle: file
 # Notes:
 # - uppercase-literal-suffix: project uses 1.0f (GLM style), not 1.0F

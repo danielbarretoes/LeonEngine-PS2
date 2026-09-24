@@ -1,9 +1,9 @@
 #!/usr/bin/env sh
 # Build PS2 targets inside the official ps2dev Docker image (Alpine; no bash).
-# Usage: Scripts/build-ps2-docker.sh [hello|lab|cube|tp]
+# Usage: Scripts/build-ps2-docker.sh [tp]
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
-TARGET="${1:-cube}"
+TARGET="${1:-tp}"
 IMAGE="${LEON_PS2DEV_IMAGE:-ghcr.io/ps2dev/ps2dev:latest}"
 
 docker run --rm \

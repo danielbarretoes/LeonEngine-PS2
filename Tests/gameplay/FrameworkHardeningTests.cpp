@@ -92,26 +92,6 @@ TEST_CASE("HUD AddWidget TextBlock and remove", "[ui][hud]") {
     REQUIRE(hud.GetWidgetOfClass<leon::TextBlockWidget>() == nullptr);
 }
 
-TEST_CASE("ServerTravel sibling level load without net", "[gameplay][travel]") {
-#ifdef LEON_SOURCE_DIR
-    const std::string coopLevels = std::string(LEON_SOURCE_DIR) + "/Projects/CoopTp/Content/Levels";
-    const std::string hint = coopLevels + "/Courtyard.llev";
-    if (!std::filesystem::exists(hint)) {
-        SKIP("Optional host sample levels not present");
-    }
-    leon::Engine engine;
-    REQUIRE(engine.InitializeHeadless());
-    leon::DefaultGameMode mode;
-    // Hint path anchors sibling .llev lookup under the same Levels folder.
-    REQUIRE(mode.ServerTravel(engine, "Lobby", hint));
-    REQUIRE_FALSE(engine.GetLevel().Name().empty());
-    REQUIRE(mode.ClientTravel(engine, "Courtyard", coopLevels + "/Lobby.llev"));
-    engine.Shutdown();
-#else
-    SUCCEED("LEON_SOURCE_DIR unset");
-#endif
-}
-
 TEST_CASE("DeserializeLeonLevel and InputCmd adversarial inputs", "[content][fuzz][net]") {
     leon::LevelDocument doc;
     std::vector<std::uint8_t> empty;

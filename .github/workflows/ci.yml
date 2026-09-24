@@ -10,15 +10,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build Ps2Hello ELF (ps2dev container)
+      - name: Build Ps2ThirdPerson ELF (ps2dev container)
         run: |
           chmod +x Scripts/build-ps2.sh Scripts/build-ps2-docker.sh
-          Scripts/build-ps2-docker.sh hello
+          Scripts/build-ps2-docker.sh tp
       - name: Upload ELF
         uses: actions/upload-artifact@v4
         with:
-          name: leon-Ps2Hello-elf
-          path: Samples/Ps2Hello/build-ps2/leon-Ps2Hello.elf
+          name: leon-Ps2ThirdPerson-elf
+          path: Projects/Ps2ThirdPerson/build-ps2/leon-Ps2ThirdPerson.elf
 
-  # Host Editor build is validated locally (Scripts/build.bat). Full MSVC + FetchContent
+  # Host engine build is validated locally (Scripts/build.bat). Full MSVC + FetchContent
   # on GHA is optional; enable when a self-hosted or windows-latest matrix is wired.

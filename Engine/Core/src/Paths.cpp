@@ -208,17 +208,6 @@ std::string ResolveAssetPath(const std::string& relativePath) {
         exeDir / ".." / "Engine" / "Assets" / underAssets,
         exeDir / "../.." / "Engine" / "Assets" / underAssets,
         exeDir / "../../.." / "Engine" / "Assets" / underAssets,
-        // Shared ThirdPerson character content (not a game pack).
-        std::filesystem::path("Templates") / "ThirdPerson" / "Content" / "assets" / underAssets,
-        std::filesystem::path("../Templates") / "ThirdPerson" / "Content" / "assets" / underAssets,
-        std::filesystem::path("../../Templates") / "ThirdPerson" / "Content" / "assets" /
-            underAssets,
-        std::filesystem::path("../../../Templates") / "ThirdPerson" / "Content" / "assets" /
-            underAssets,
-        exeDir / "Templates" / "ThirdPerson" / "Content" / "assets" / underAssets,
-        exeDir / ".." / "Templates" / "ThirdPerson" / "Content" / "assets" / underAssets,
-        exeDir / "../.." / "Templates" / "ThirdPerson" / "Content" / "assets" / underAssets,
-        exeDir / "../../.." / "Templates" / "ThirdPerson" / "Content" / "assets" / underAssets,
     };
 
     std::string found = newestExisting(candidates);

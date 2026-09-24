@@ -79,25 +79,6 @@ TEST_CASE("ValidateLevelDocument checks actor mesh paths", "[content][validator]
     }
 }
 
-TEST_CASE("ValidateLevelDocument resolves pack-relative materials", "[content][validator]") {
-#ifdef LEON_SOURCE_DIR
-    const std::filesystem::path levelPath =
-        std::filesystem::path(LEON_SOURCE_DIR) / "Templates" / "ThirdPerson" / "Content" /
-            "levels" /
-        "Main.llev";
-    if (!std::filesystem::exists(levelPath)) {
-        SKIP("ThirdPerson Main.llev missing");
-    }
-    leon::LevelDocument doc;
-    REQUIRE(leon::LoadLeonLevelFile(levelPath.string(), doc));
-    const leon::ValidationReport report =
-        leon::ValidateLevelDocument(doc, levelPath.string());
-    REQUIRE(report.ok());
-#else
-    SKIP("LEON_SOURCE_DIR not defined");
-#endif
-}
-
 TEST_CASE("ValidateLevelDocument rejects out-of-range values", "[content][validator]") {
     SECTION("missing material asset") {
         leon::LevelDocument doc;

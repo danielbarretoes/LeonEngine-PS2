@@ -22,7 +22,7 @@ if not defined CLANG_FORMAT (
 
 echo === clang-format --dry-run ===
 set "FMT_FAIL=0"
-for %%D in (Engine Editor Runtime Plugins Tools Projects Tests Templates) do (
+for %%D in (Engine Runtime Plugins Tools Projects Tests) do (
   if exist "%%D" for /r "%%D" %%f in (*.cpp *.h) do (
     set "P=%%f"
     echo !P!| findstr /I /C:"\build\" /C:"\build-" /C:"\_deps\" /C:"\_leon_" /C:"\.git\" >nul
@@ -44,11 +44,11 @@ echo format OK
 echo.
 echo === MSVC /W4 Release build (Editor) ===
 if not exist Editor\build (
-  cmake -S Editor -B Editor/build -G "Visual Studio 18 2026" -A x64 2>nul
-  if errorlevel 1 cmake -S Editor -B Editor/build -G "Visual Studio 17 2022" -A x64
+  cmake -S Engine -B Engine/build -DLEON_BUILD_TESTS=ON -G "Visual Studio 18 2026" -A x64 2>nul
+  if errorlevel 1 cmake -S Engine -B Engine/build -DLEON_BUILD_TESTS=ON -G "Visual Studio 17 2022" -A x64
   if errorlevel 1 exit /b 1
 )
-cmake --build Editor/build --config Release
+cmake --build Engine/build --config Release
 if errorlevel 1 exit /b 1
 
 echo lint OK

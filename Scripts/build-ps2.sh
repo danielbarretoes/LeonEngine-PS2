@@ -1,16 +1,13 @@
 #!/usr/bin/env sh
 # Cross-build Leon PS2 targets with ps2dev (WSL2 / Linux / Docker Alpine).
 # Usage:
-#   Scripts/build-ps2.sh              # Ps2Cube (3D scene)
-#   Scripts/build-ps2.sh hello        # Samples/Ps2Hello
-#   Scripts/build-ps2.sh lab          # Projects/Ps2Lab (2D)
-#   Scripts/build-ps2.sh cube         # Projects/Ps2Cube (3D scene)
+#   Scripts/build-ps2.sh              # Projects/Ps2ThirdPerson (gameplay)
 #   Scripts/build-ps2.sh tp           # Projects/Ps2ThirdPerson (gameplay)
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-TARGET="${1:-cube}"
+TARGET="${1:-tp}"
 
 if [ -z "${PS2DEV:-}" ] || [ -z "${PS2SDK:-}" ]; then
   echo "ERROR: PS2DEV and PS2SDK must be set (see Docs/SETUP.md § PS2)."
@@ -25,25 +22,14 @@ TOOLCHAIN="${ROOT}/Build/toolchains/ps2-ee.cmake"
 export PATH="${PS2DEV}/bin:${PS2DEV}/ee/bin:${PS2DEV}/iop/bin:${PS2DEV}/dvp/bin:${PATH}"
 
 case "$TARGET" in
-  hello)
-    SRC="Samples/Ps2Hello"
-    BIN="Samples/Ps2Hello/build-ps2"
-    EXE="leon-Ps2Hello.elf"
-    ;;
-  lab|smoke)
-    SRC="Projects/Ps2Lab"
-    BIN="Projects/Ps2Lab/build-ps2"
-    EXE="leon-Ps2Lab.elf"
-    ;;
   tp|thirdperson)
     SRC="Projects/Ps2ThirdPerson"
     BIN="Projects/Ps2ThirdPerson/build-ps2"
     EXE="leon-Ps2ThirdPerson.elf"
     ;;
-  cube|*)
-    SRC="Projects/Ps2Cube"
-    BIN="Projects/Ps2Cube/build-ps2"
-    EXE="leon-Ps2Cube.elf"
+  *)
+    echo "ERROR: unknown target '$TARGET' (only: tp)"
+    exit 1
     ;;
 esac
 

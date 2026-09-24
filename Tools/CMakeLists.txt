@@ -19,7 +19,6 @@ endif()
 
 get_filename_component(LEON_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 
-set(LEON_BUILD_CLIENT OFF CACHE BOOL "" FORCE)
 set(LEON_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(LEON_ENGINE_ASSETS "${LEON_REPO_ROOT}/Engine/Assets" CACHE PATH "Engine runtime assets root")
 
