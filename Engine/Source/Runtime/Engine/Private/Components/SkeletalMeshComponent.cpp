@@ -7,7 +7,7 @@
 #include "Misc/Paths.h"
 #include "Engine/GameEngine.h"
 #include "Components/SkeletalMeshComponent.h"
-#include "Renderer.h"
+#include "SceneRenderer.h"
 #include "StaticMesh.h"
 
 namespace {
@@ -78,7 +78,7 @@ void SkeletalMeshComponent::BindSequencesToAnimInstance() {
     animInstance_->NativeInitializeAnimation();
 }
 
-void SkeletalMeshComponent::SetSkeletalMesh(std::shared_ptr<SkeletalMesh> mesh) {
+void SkeletalMeshComponent::SetSkeletalMesh(std::shared_ptr<USkeletalMesh> mesh) {
     skeletalMesh_ = std::move(mesh);
     if (skeletalMesh_ != nullptr && skeletalMesh_->Valid()) {
         animInstance_->SetSkeleton(&skeletalMesh_->GetSkeleton());
@@ -163,7 +163,7 @@ bool SkeletalMeshComponent::LoadFromFbx(const std::string& meshFbxPath,
         std::cerr << "SkeletalMeshComponent: mesh FBX has no embedded AnimSequence\n";
     }
 
-    auto mesh = std::make_shared<SkeletalMesh>(SkeletalMesh::Upload(std::move(data)));
+    auto mesh = std::make_shared<USkeletalMesh>(USkeletalMesh::Upload(std::move(data)));
     if (mesh == nullptr || !mesh->Valid()) {
         std::cerr << "SkeletalMeshComponent: GPU upload failed\n";
         return false;
@@ -207,9 +207,9 @@ bool SkeletalMeshComponent::LoadFromCooked(Engine& engine, const std::string& ch
         return false;
     }
 
-    auto mesh = std::make_shared<SkeletalMesh>(engine.GetResources().IsGpuUploadEnabled()
-                                                   ? SkeletalMesh::Upload(std::move(meshData))
-                                                   : SkeletalMesh::CreateCpu(std::move(meshData)));
+    auto mesh = std::make_shared<USkeletalMesh>(engine.GetResources().IsGpuUploadEnabled()
+                                                   ? USkeletalMesh::Upload(std::move(meshData))
+                                                   : USkeletalMesh::CreateCpu(std::move(meshData)));
     if (mesh == nullptr || !mesh->Valid()) {
         std::cerr << "SkeletalMeshComponent: cooked mesh create failed\n";
         return false;
@@ -284,7 +284,7 @@ void SkeletalMeshComponent::TickComponent(float deltaTime) {
     animInstance_->NativeUpdateAnimation(deltaTime);
 }
 
-void SkeletalMeshComponent::SubmitDraw(Renderer& renderer) const {
+void SkeletalMeshComponent::SubmitDraw(FSceneRenderer& renderer) const {
     if (!HasValidMesh()) {
         return;
     }

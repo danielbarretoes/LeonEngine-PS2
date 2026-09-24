@@ -4,7 +4,7 @@
 #include <cmath>
 #include "GameFramework/Character.h"
 #include "Engine/World.h"
-#include "Renderer.h"
+#include "SceneRenderer.h"
 #include <numbers>
 #include <vector>
 
@@ -126,7 +126,7 @@ bool Character::IsWalkable(const HitResult& hit) const {
 }
 
 void Character::FindFloor(PhysScene& physScene, FindFloorResult& outFloor, float traceDistance,
-                          DebugDraw* debugDraw) const {
+                          FDebugDraw* debugDraw) const {
     outFloor = {};
     const float distance = std::max(traceDistance, movement_.Skin);
     const glm::vec3 feet = GetActorLocation();
@@ -199,7 +199,7 @@ glm::vec3 Character::computeSlideVector(const glm::vec3& delta, const glm::vec3&
 }
 
 bool Character::safeMoveUpdatedComponent(PhysScene& physScene, const glm::vec3& delta,
-                                         HitResult* outHit, DebugDraw* debugDraw) {
+                                         HitResult* outHit, FDebugDraw* debugDraw) {
     glm::vec3& feet = mutableLocation();
     const float deltaLen = glm::length(delta);
     if (deltaLen < 1.0e-6f) {
@@ -269,7 +269,7 @@ void Character::resolveSides(PhysScene& physScene, bool applyPush) {
 }
 
 bool Character::tryStepUp(PhysScene& physScene, const glm::vec3& forwardDelta,
-                          DebugDraw* debugDraw) {
+                          FDebugDraw* debugDraw) {
     if (!IsMovingOnGround() || movement_.MaxStepHeight <= 1.0e-4f) {
         return false;
     }
@@ -349,7 +349,7 @@ bool Character::tryStepUp(PhysScene& physScene, const glm::vec3& forwardDelta,
     return true;
 }
 
-void Character::moveHorizontal(PhysScene& physScene, float deltaTime, DebugDraw* debugDraw) {
+void Character::moveHorizontal(PhysScene& physScene, float deltaTime, FDebugDraw* debugDraw) {
     const float len = glm::length(wishDir_);
     if (len <= 1.0e-4f) {
         resolveSides(physScene, true);
@@ -394,7 +394,7 @@ void Character::moveHorizontal(PhysScene& physScene, float deltaTime, DebugDraw*
     resolveSides(physScene, true);
 }
 
-void Character::integrateVertical(PhysScene& physScene, float deltaTime, DebugDraw* debugDraw) {
+void Character::integrateVertical(PhysScene& physScene, float deltaTime, FDebugDraw* debugDraw) {
     const bool wasGrounded = IsMovingOnGround();
     if (jumpRequested_) {
         const bool canGroundJump = wasGrounded;
@@ -448,13 +448,13 @@ void Character::integrateVertical(PhysScene& physScene, float deltaTime, DebugDr
     }
 }
 
-void Character::PerformMovement(PhysScene& physScene, float deltaTime, DebugDraw* debugDraw) {
+void Character::PerformMovement(PhysScene& physScene, float deltaTime, FDebugDraw* debugDraw) {
     moveHorizontal(physScene, deltaTime, debugDraw);
     integrateVertical(physScene, deltaTime, debugDraw);
     resolveSides(physScene, false);
 }
 
-void Character::TickCharacterMovement(float deltaTime, DebugDraw* debugDraw) {
+void Character::TickCharacterMovement(float deltaTime, FDebugDraw* debugDraw) {
     World* world = GetWorld();
     if (world == nullptr) {
         return;
@@ -523,7 +523,7 @@ void Character::Tick(float deltaTime) {
     mesh_.TickComponent(deltaTime);
 }
 
-void Character::SubmitMeshDraw(Renderer& renderer) const {
+void Character::SubmitMeshDraw(FSceneRenderer& renderer) const {
     mesh_.SubmitDraw(renderer);
 }
 

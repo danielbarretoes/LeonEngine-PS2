@@ -6,10 +6,10 @@
 #include <cstdint>
 #include "Math/Transform.h"
 #include "Level/Light.h"
-#include "EnvMap.h"
+#include "EnvironmentMap.h"
 #include "Material.h"
 #include "StaticMesh.h"
-#include "Texture.h"
+#include "Texture2D.h"
 #include <limits>
 #include <memory>
 #include <string>
@@ -32,9 +32,9 @@ enum class EComponentMobility : std::uint8_t {
 ///   4) material (engine default checker when procedural mesh has no MTL)
 struct StaticMeshComponent {
     FTransform transform;
-    std::shared_ptr<StaticMesh> mesh;
-    Material material;
-    std::vector<Material> materials; // optional per-slot overrides
+    std::shared_ptr<UStaticMesh> mesh;
+    FMaterial material;
+    std::vector<FMaterial> materials; // optional per-slot overrides
     /// When true, `material` is used for every submesh (asset/inline overrode MTL).
     bool materialOverride = false;
 
@@ -57,7 +57,7 @@ struct StaticMeshComponent {
     /// Lightmap texture resolution (power of two; clamped 32–512 on bake).
     int lightmapResolution = 128;
     /// Baked lightmap (Build Lights); sampled with mesh UV0.
-    std::shared_ptr<Texture> lightmap;
+    std::shared_ptr<UTexture2D> lightmap;
     /// Stable id for bake file names (`LM_<id>.lm`); survives actor reorder.
     std::string lightmapId;
     /// Relative path to persisted lightmap image (written on Build Lights + Save).
@@ -90,7 +90,7 @@ struct StaticMeshComponent {
     }
 
     [[nodiscard]] std::size_t subMeshCount() const;
-    [[nodiscard]] const Material& materialForSubMesh(std::size_t subMeshIndex) const;
+    [[nodiscard]] const FMaterial& materialForSubMesh(std::size_t subMeshIndex) const;
     [[nodiscard]] bool isShadowCaster() const;
 };
 
@@ -129,7 +129,7 @@ struct AISpawnPoint {
 };
 
 /// Map content container (Unreal-style Level / ULevel): StaticMeshComponents + lights + env.
-/// Distinct from gameplay `World` (spawned Actors). The app owns contents; Renderer reads them.
+/// Distinct from gameplay `World` (spawned Actors). The app owns contents; FSceneRenderer reads them.
 class Level {
 public:
     StaticMeshComponent& AddStaticMesh(StaticMeshComponent component);
@@ -182,8 +182,8 @@ public:
     [[nodiscard]] const std::vector<PointLight>& PointLights() const { return pointLights_; }
     [[nodiscard]] std::vector<PointLight>& PointLights() { return pointLights_; }
 
-    void SetEnvironment(std::shared_ptr<EnvMap> env) { environment_ = std::move(env); }
-    [[nodiscard]] const std::shared_ptr<EnvMap>& Environment() const { return environment_; }
+    void SetEnvironment(std::shared_ptr<FEnvironmentMap> env) { environment_ = std::move(env); }
+    [[nodiscard]] const std::shared_ptr<FEnvironmentMap>& Environment() const { return environment_; }
     void SetEnvironmentExposure(float exposure) { environmentExposure_ = exposure; }
     [[nodiscard]] float EnvironmentExposure() const { return environmentExposure_; }
 
@@ -206,7 +206,7 @@ private:
     std::vector<AISpawnPoint> aiSpawnPoints_;
     std::vector<DirectionalLight> directionalLights_{DirectionalLight{}};
     std::vector<PointLight> pointLights_;
-    std::shared_ptr<EnvMap> environment_;
+    std::shared_ptr<FEnvironmentMap> environment_;
     float environmentExposure_ = 1.0f;
     std::string environmentPath_;
     std::string name_;

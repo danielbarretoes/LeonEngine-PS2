@@ -6,7 +6,7 @@
 
 
 /// Double-buffered GL_TIME_ELAPSED queries so HUD reads last frame (no GPU stall).
-class GpuPassTimer {
+class FGPUPassTimer {
 public:
     enum class EPass : std::uint8_t {
         Shadow = 0,
@@ -17,11 +17,11 @@ public:
         Count = 5,
     };
 
-    GpuPassTimer() = default;
-    ~GpuPassTimer();
+    FGPUPassTimer() = default;
+    ~FGPUPassTimer();
 
-    GpuPassTimer(const GpuPassTimer&) = delete;
-    GpuPassTimer& operator=(const GpuPassTimer&) = delete;
+    FGPUPassTimer(const FGPUPassTimer&) = delete;
+    FGPUPassTimer& operator=(const FGPUPassTimer&) = delete;
 
     [[nodiscard]] bool Create();
     void Destroy();
@@ -38,18 +38,18 @@ private:
     static constexpr int kBufferCount = 2;
     static constexpr auto kPassCount = static_cast<int>(EPass::Count);
 
-    using QueryBuffer = std::array<RHIQueryId, kPassCount>;
+    using FQueryBuffer = std::array<FRHIQueryId, kPassCount>;
 
-    [[nodiscard]] QueryBuffer& bufferQueries(int buffer);
+    [[nodiscard]] FQueryBuffer& bufferQueries(int buffer);
     [[nodiscard]] bool& bufferPending(int buffer);
-    [[nodiscard]] RHIQueryId& querySlot(int buffer, EPass pass);
+    [[nodiscard]] FRHIQueryId& querySlot(int buffer, EPass pass);
     [[nodiscard]] bool& passOpenSlot(EPass pass);
     [[nodiscard]] float& msSlot(EPass pass);
     [[nodiscard]] const float& msSlot(EPass pass) const;
     /// Returns false if any query is still outstanding (no GPU stall).
-    [[nodiscard]] bool resolveBuffer(const QueryBuffer& queries);
+    [[nodiscard]] bool resolveBuffer(const FQueryBuffer& queries);
 
-    std::array<QueryBuffer, kBufferCount> queries_{};
+    std::array<FQueryBuffer, kBufferCount> queries_{};
     std::array<float, kPassCount> ms_{};
     int writeBuffer_ = 0;
     std::array<bool, kBufferCount> pending_{};

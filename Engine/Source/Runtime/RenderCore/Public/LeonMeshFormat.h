@@ -7,6 +7,6 @@
 /// Cooked static mesh binary (`.lmesh`). Source of truth for runtime.
 [[nodiscard]] bool IsLeonMeshPath(const std::string& path);
 
-[[nodiscard]] bool LoadLeonMeshFile(const std::string& path, MeshData& out);
-[[nodiscard]] bool SaveLeonMeshFile(const std::string& path, const MeshData& data);
+[[nodiscard]] bool LoadLeonMeshFile(const std::string& path, FMeshData& out);
+[[nodiscard]] bool SaveLeonMeshFile(const std::string& path, const FMeshData& data);
 

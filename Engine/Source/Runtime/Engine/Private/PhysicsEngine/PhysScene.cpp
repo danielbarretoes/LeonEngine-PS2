@@ -42,7 +42,7 @@ void cancelVelocityYInto(float& velocityY, float outwardNormalY) {
     }
 }
 
-void appendCapsuleRing(DebugDraw& draw, const glm::vec3& center, float radius,
+void appendCapsuleRing(FDebugDraw& draw, const glm::vec3& center, float radius,
                        const glm::vec3& color, int segments) {
     const float segCount = static_cast<float>(segments);
     for (int i = 0; i < segments; ++i) {
@@ -153,14 +153,14 @@ void PhysScene::SyncFromLevel(const Level& level) {
         }
         const StaticMeshComponent& obj = meshes[body.levelMeshIndex];
         if (obj.mesh != nullptr) {
-            const Aabb worldAabb = Aabb::fromLocalTransformed(
+            const FBox worldAabb = FBox::fromLocalTransformed(
                 obj.mesh->LocalMin(), obj.mesh->LocalMax(), obj.EffectiveModelMatrix());
             body.position = (worldAabb.min + worldAabb.max) * 0.5f;
             body.halfExtents = (worldAabb.max - worldAabb.min) * 0.5f;
 
             // Unreal ComplexAsSimple lite: static meshes with CPU tris use triangle queries.
             if (body.type == EBodyType::Static && obj.mesh->HasCpuData()) {
-                const MeshData& cpu = obj.mesh->CpuData();
+                const FMeshData& cpu = obj.mesh->CpuData();
                 const glm::mat4 model = obj.EffectiveModelMatrix();
                 triMesh.positions.resize(cpu.vertices.size());
                 for (std::size_t vi = 0; vi < cpu.vertices.size(); ++vi) {
@@ -246,7 +246,7 @@ float PhysScene::QuerySupportY(const CapsuleShape& capsule, const glm::vec3& fee
         if (std::abs(plane.normal.y) < 1.0e-4f) {
             continue;
         }
-        // Plane height at feet XZ: dot((x,y,z)-point, n) = 0.
+        // FPlane height at feet XZ: dot((x,y,z)-point, n) = 0.
         const float yOnPlane =
             plane.point.y -
             ((plane.normal.x * (feet.x - plane.point.x)) + (plane.normal.z * (feet.z - plane.point.z))) /
@@ -517,7 +517,7 @@ void PhysScene::Step(const PhysSceneStepParams& params) {
     }
 }
 
-void PhysScene::AppendCollisionDebug(DebugDraw& draw, const CapsuleShape& capsule,
+void PhysScene::AppendCollisionDebug(FDebugDraw& draw, const CapsuleShape& capsule,
                                      const glm::vec3& feet, std::size_t skipLevelMeshIndex) const {
     const float r = capsule.radius;
     const float h = capsule.height;
@@ -551,7 +551,7 @@ void PhysScene::AppendCollisionDebug(DebugDraw& draw, const CapsuleShape& capsul
     AppendBodiesCollisionDebug(draw, skipLevelMeshIndex);
 }
 
-void PhysScene::AppendBodiesCollisionDebug(DebugDraw& draw,
+void PhysScene::AppendBodiesCollisionDebug(FDebugDraw& draw,
                                            std::size_t skipLevelMeshIndex) const {
     constexpr glm::vec3 kDynamicColor{1.0f, 0.55f, 0.15f};
     constexpr glm::vec3 kStaticColor{0.35f, 0.65f, 1.0f};

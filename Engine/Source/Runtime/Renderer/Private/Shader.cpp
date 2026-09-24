@@ -80,11 +80,11 @@ bool linkProgram(const char* vertexSource, const char* fragmentSource, unsigned 
 
 } // namespace
 
-Shader::~Shader() {
+FShader::~FShader() {
     Destroy();
 }
 
-bool Shader::Create(const char* vertexSource, const char* fragmentSource) {
+bool FShader::Create(const char* vertexSource, const char* fragmentSource) {
     unsigned int newProgram = 0;
     if (!linkProgram(vertexSource, fragmentSource, newProgram)) {
         return false;
@@ -97,7 +97,7 @@ bool Shader::Create(const char* vertexSource, const char* fragmentSource) {
     return true;
 }
 
-bool Shader::LoadFromFiles(const std::string& vertexPath, const std::string& fragmentPath) {
+bool FShader::LoadFromFiles(const std::string& vertexPath, const std::string& fragmentPath) {
     std::string vertexSource;
     std::string fragmentSource;
     if (!readFile(vertexPath, vertexSource) || !readFile(fragmentPath, fragmentSource)) {
@@ -114,7 +114,7 @@ bool Shader::LoadFromFiles(const std::string& vertexPath, const std::string& fra
     return true;
 }
 
-EShaderReloadResult Shader::LoadFromStoredPaths(bool force, const AcceptFn& accept) {
+EShaderReloadResult FShader::LoadFromStoredPaths(bool force, const FAcceptFunction& accept) {
     if (!HasFilePaths()) {
         return EShaderReloadResult::Failed;
     }
@@ -172,15 +172,15 @@ EShaderReloadResult Shader::LoadFromStoredPaths(bool force, const AcceptFn& acce
     return EShaderReloadResult::Reloaded;
 }
 
-EShaderReloadResult Shader::ReloadFromDiskIfChanged(const AcceptFn& accept) {
+EShaderReloadResult FShader::ReloadFromDiskIfChanged(const FAcceptFunction& accept) {
     return LoadFromStoredPaths(false, accept);
 }
 
-EShaderReloadResult Shader::ForceReloadFromDisk(const AcceptFn& accept) {
+EShaderReloadResult FShader::ForceReloadFromDisk(const FAcceptFunction& accept) {
     return LoadFromStoredPaths(true, accept);
 }
 
-void Shader::Destroy() {
+void FShader::Destroy() {
     if (program_ != 0) {
         glDeleteProgram(program_);
         program_ = 0;
@@ -192,46 +192,46 @@ void Shader::Destroy() {
     fragmentTime_ = {};
 }
 
-void Shader::Bind() const {
+void FShader::Bind() const {
     glUseProgram(program_);
 }
 
-void Shader::SetMat4(const char* name, const float* value16) const {
+void FShader::SetMat4(const char* name, const float* value16) const {
     glUniformMatrix4fv(UniformLocation(name), 1, GL_FALSE, value16);
 }
 
-void Shader::SetMat4Array(const char* name, const float* values, int count) const {
+void FShader::SetMat4Array(const char* name, const float* values, int count) const {
     if (count <= 0 || values == nullptr) {
         return;
     }
     glUniformMatrix4fv(UniformLocation(name), count, GL_FALSE, values);
 }
 
-void Shader::SetMat3(const char* name, const float* value9) const {
+void FShader::SetMat3(const char* name, const float* value9) const {
     glUniformMatrix3fv(UniformLocation(name), 1, GL_FALSE, value9);
 }
 
-void Shader::SetVec3(const char* name, float x, float y, float z) const {
+void FShader::SetVec3(const char* name, float x, float y, float z) const {
     glUniform3f(UniformLocation(name), x, y, z);
 }
 
-void Shader::SetVec2(const char* name, float x, float y) const {
+void FShader::SetVec2(const char* name, float x, float y) const {
     glUniform2f(UniformLocation(name), x, y);
 }
 
-void Shader::SetVec4(const char* name, float x, float y, float z, float w) const {
+void FShader::SetVec4(const char* name, float x, float y, float z, float w) const {
     glUniform4f(UniformLocation(name), x, y, z, w);
 }
 
-void Shader::SetFloat(const char* name, float value) const {
+void FShader::SetFloat(const char* name, float value) const {
     glUniform1f(UniformLocation(name), value);
 }
 
-void Shader::SetInt(const char* name, int value) const {
+void FShader::SetInt(const char* name, int value) const {
     glUniform1i(UniformLocation(name), value);
 }
 
-bool Shader::BindUniformBlock(const char* blockName, unsigned int bindingPoint) const {
+bool FShader::BindUniformBlock(const char* blockName, unsigned int bindingPoint) const {
     if (!Valid() || blockName == nullptr) {
         return false;
     }
@@ -244,11 +244,11 @@ bool Shader::BindUniformBlock(const char* blockName, unsigned int bindingPoint) 
     return true;
 }
 
-unsigned int Shader::Compile(unsigned int type, const char* source) {
+unsigned int FShader::Compile(unsigned int type, const char* source) {
     return compileShader(type, source);
 }
 
-int Shader::UniformLocation(const char* name) const {
+int FShader::UniformLocation(const char* name) const {
     if (const auto it = uniformCache_.find(name); it != uniformCache_.end()) {
         return it->second;
     }

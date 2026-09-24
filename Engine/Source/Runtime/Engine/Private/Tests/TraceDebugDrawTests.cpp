@@ -5,7 +5,7 @@
 #include <vector>
 
 TEST_CASE("DrawDebugLineTrace miss and hit fill DebugDraw", "[physics][trace][debug]") {
-    DebugDraw draw;
+    FDebugDraw draw;
 
     DrawDebugLineTrace(draw, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {});
     REQUIRE_FALSE(draw.IsEmpty());
@@ -26,7 +26,7 @@ TEST_CASE("LineTrace ForOneFrame draws via PhysScene", "[physics][trace][debug]"
     scene.Bodies()[id].position = {0.0f, 0.5f, 0.0f};
     scene.Bodies()[id].halfExtents = {0.5f, 0.5f, 0.5f};
 
-    DebugDraw draw;
+    FDebugDraw draw;
     CollisionQueryParams params{};
     params.DrawDebugType = EDrawDebugTrace::ForOneFrame;
 
@@ -44,7 +44,7 @@ TEST_CASE("LineTrace ForOneFrame draws via PhysScene", "[physics][trace][debug]"
 }
 
 TEST_CASE("DrawDebugSphereTrace and CapsuleTrace fill batch", "[physics][trace][debug]") {
-    DebugDraw draw;
+    FDebugDraw draw;
     DrawDebugSphereTrace(draw, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, 0.35f, {});
     REQUIRE_FALSE(draw.IsEmpty());
 

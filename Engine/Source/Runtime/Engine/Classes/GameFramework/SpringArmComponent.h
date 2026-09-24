@@ -12,7 +12,7 @@
 #include "CollisionQuery.h"
 
 
-class DebugDraw;
+class FDebugDraw;
 class PhysScene;
 
 /// Unreal-like Spring Arm / Camera Boom (SceneComponent) with optional camera lag,
@@ -79,10 +79,10 @@ public:
     /// Advance lag, optional collision probe, and push the Engine orbit camera.
     /// If `physScene` is null, uses `GetOwner()->GetWorld()->GetPhysicsScene()` when available.
     void ApplyToCamera(Camera& camera, const glm::vec3& actorLocation, float deltaTime,
-                       PhysScene* physScene = nullptr, DebugDraw* debugDraw = nullptr);
+                       PhysScene* physScene = nullptr, FDebugDraw* debugDraw = nullptr);
 
     /// Prefer when attached under an Actor root: uses owner location + world PhysScene.
-    void ApplyToCamera(Camera& camera, float deltaTime, DebugDraw* debugDraw = nullptr);
+    void ApplyToCamera(Camera& camera, float deltaTime, FDebugDraw* debugDraw = nullptr);
 
     /// Unit boom direction matching `Camera` orbit eye offset (target → camera).
     [[nodiscard]] static glm::vec3 GetBoomDirection(float yawDegrees, float pitchDegrees);
@@ -90,7 +90,7 @@ public:
     /// Sphere-sweep arm length; returns clamped length (ArmLengthMin..desiredLength).
     [[nodiscard]] float ProbeArmLength(PhysScene& physScene, const glm::vec3& target,
                                        float yawDegrees, float pitchDegrees, float desiredLength,
-                                       DebugDraw* debugDraw = nullptr) const;
+                                       FDebugDraw* debugDraw = nullptr) const;
 
 private:
     [[nodiscard]] static float ExpSmoothAlpha(float speed, float deltaTime);

@@ -4,11 +4,11 @@
 #include "LdrColorTarget.h"
 
 
-LdrColorTarget::~LdrColorTarget() {
+FLDRColorTarget::~FLDRColorTarget() {
     Destroy();
 }
 
-bool LdrColorTarget::EnsureSize(int width, int height) {
+bool FLDRColorTarget::EnsureSize(int width, int height) {
     if (width < 1 || height < 1) {
         return false;
     }
@@ -43,7 +43,7 @@ bool LdrColorTarget::EnsureSize(int width, int height) {
     return true;
 }
 
-void LdrColorTarget::Destroy() {
+void FLDRColorTarget::Destroy() {
     if (colorTexture_ != 0) {
         glDeleteTextures(1, &colorTexture_);
         colorTexture_ = 0;
@@ -56,12 +56,12 @@ void LdrColorTarget::Destroy() {
     height_ = 0;
 }
 
-void LdrColorTarget::BindWrite() const {
+void FLDRColorTarget::BindWrite() const {
     glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
     glViewport(0, 0, width_, height_);
 }
 
-void LdrColorTarget::BindColorTexture(unsigned int unit) const {
+void FLDRColorTarget::BindColorTexture(unsigned int unit) const {
     glActiveTexture(GL_TEXTURE0 + unit);
     glBindTexture(GL_TEXTURE_2D, colorTexture_);
 }

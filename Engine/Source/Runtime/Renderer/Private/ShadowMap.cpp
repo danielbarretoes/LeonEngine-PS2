@@ -10,11 +10,11 @@
 #include <limits>
 
 
-ShadowMap::~ShadowMap() {
+FShadowMap::~FShadowMap() {
     Destroy();
 }
 
-bool ShadowMap::Create(int size) {
+bool FShadowMap::Create(int size) {
     Destroy();
     size = std::max(size, 64);
     size_ = size;
@@ -47,7 +47,7 @@ bool ShadowMap::Create(int size) {
     return true;
 }
 
-void ShadowMap::Destroy() {
+void FShadowMap::Destroy() {
     if (depthTexture_ != 0) {
         glDeleteTextures(1, &depthTexture_);
         depthTexture_ = 0;
@@ -59,7 +59,7 @@ void ShadowMap::Destroy() {
     size_ = 0;
 }
 
-void ShadowMap::Begin() const {
+void FShadowMap::Begin() const {
     glViewport(0, 0, size_, size_);
     glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
     glClear(GL_DEPTH_BUFFER_BIT);
@@ -69,7 +69,7 @@ void ShadowMap::Begin() const {
     glPolygonOffset(1.0f, 2.0f);
 }
 
-void ShadowMap::End(int framebufferWidth, int framebufferHeight, unsigned int restoreFbo) const {
+void FShadowMap::End(int framebufferWidth, int framebufferHeight, unsigned int restoreFbo) const {
     glDisable(GL_POLYGON_OFFSET_FILL);
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
@@ -77,12 +77,12 @@ void ShadowMap::End(int framebufferWidth, int framebufferHeight, unsigned int re
     glViewport(0, 0, framebufferWidth, framebufferHeight);
 }
 
-void ShadowMap::BindDepthTexture(unsigned int unit) const {
+void FShadowMap::BindDepthTexture(unsigned int unit) const {
     glActiveTexture(GL_TEXTURE0 + unit);
     glBindTexture(GL_TEXTURE_2D, depthTexture_);
 }
 
-glm::mat4 ShadowMap::FitLightSpaceMatrix(const glm::vec3& lightDirection, const glm::vec3& worldMin,
+glm::mat4 FShadowMap::FitLightSpaceMatrix(const glm::vec3& lightDirection, const glm::vec3& worldMin,
                                          const glm::vec3& worldMax, float padding) {
     glm::vec3 dir = lightDirection;
     if (glm::dot(dir, dir) < 1e-8f) {

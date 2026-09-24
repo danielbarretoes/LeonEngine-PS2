@@ -5,13 +5,13 @@
 #include <string>
 
 
-class DebugOverlay;
+class FDebugOverlay;
 
 /// Immediate screen-space draw for UserWidget::NativePaint (pixel coords, top-left origin).
 /// Unreal analogy: FPaintContext / Slate draw elements (lite).
 class WidgetPaintContext {
 public:
-    WidgetPaintContext(DebugOverlay& overlay, int framebufferWidth, int framebufferHeight)
+    WidgetPaintContext(FDebugOverlay& overlay, int framebufferWidth, int framebufferHeight)
         : overlay_(overlay), width_(framebufferWidth), height_(framebufferHeight) {}
 
     [[nodiscard]] int Width() const { return width_; }
@@ -28,7 +28,7 @@ public:
     void MeasureText(const std::string& text, float scale, float& outWidth, float& outHeight) const;
 
 private:
-    DebugOverlay& overlay_;
+    FDebugOverlay& overlay_;
     int width_ = 0;
     int height_ = 0;
 };

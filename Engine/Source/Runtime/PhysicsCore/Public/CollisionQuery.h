@@ -8,7 +8,7 @@
 #include <vector>
 
 
-class DebugDraw;
+class FDebugDraw;
 
 /// Unreal-like ECollisionChannel (micro-engine subset).
 enum class ECollisionChannel : std::uint8_t {
@@ -18,7 +18,7 @@ enum class ECollisionChannel : std::uint8_t {
     Visibility,   // Both (generic line/sphere checks)
 };
 
-/// Unreal-like EDrawDebugTrace — draw the query for one frame when a DebugDraw* is passed.
+/// Unreal-like EDrawDebugTrace — draw the query for one frame when a FDebugDraw* is passed.
 enum class EDrawDebugTrace : std::uint8_t {
     None,
     ForOneFrame,
@@ -49,15 +49,15 @@ struct CollisionQueryParams {
     /// Include an infinite horizontal floor at FloorY (CharacterMovement floor).
     bool bTraceFloorPlane = false;
     float FloorY = 0.0f;
-    /// When not None, PhysScene traces draw into the provided DebugDraw* (F2 / gameplay debug).
+    /// When not None, PhysScene traces draw into the provided FDebugDraw* (F2 / gameplay debug).
     EDrawDebugTrace DrawDebugType = EDrawDebugTrace::None;
 };
 
-/// Unreal-like DrawDebugLineTrace / Kismet System Library helpers (one frame into DebugDraw).
-void DrawDebugLineTrace(DebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
+/// Unreal-like DrawDebugLineTrace / Kismet System Library helpers (one frame into FDebugDraw).
+void DrawDebugLineTrace(FDebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
                         const std::vector<HitResult>& hits);
-void DrawDebugSphereTrace(DebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
+void DrawDebugSphereTrace(FDebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
                           float radius, const std::vector<HitResult>& hits);
-void DrawDebugCapsuleTrace(DebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
+void DrawDebugCapsuleTrace(FDebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
                            float radius, float halfHeight, const std::vector<HitResult>& hits);
 

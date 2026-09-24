@@ -65,6 +65,8 @@ function(leon_apply_compile_environment Target CxxStandard)
 			/Zc:__cplusplus
 			/utf-8
 			/MP
+			# Shadowed locals / parameters / members are errors (UE: ShadowVariableWarningLevel = Error).
+			/we4456 /we4457 /we4458 /we4459
 			$<$<CONFIG:Debug,RelWithDebInfo>:/FS>)
 	elseif(LEON_PLATFORM STREQUAL "PS2")
 		target_compile_options(${Target} PRIVATE -Wall -Wextra)

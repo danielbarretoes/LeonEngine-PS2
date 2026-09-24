@@ -9,7 +9,7 @@
 #include <iostream>
 #include "Misc/Paths.h"
 #include "Debug/DebugOverlay.h"
-#include "GlAttrib.h"
+#include "OpenGLVertexAttrib.h"
 #include <utility>
 #include <vector>
 
@@ -253,7 +253,7 @@ void appendThickScreenLine(std::vector<DrawVert>& tris, float x0, float y0, floa
 
 } // namespace
 
-bool DebugOverlay::Initialize(const std::string& /*shaderDirectory*/) {
+bool FDebugOverlay::Initialize(const std::string& /*shaderDirectory*/) {
     const std::string vert = FPaths::ResolveAssetPath("assets/Shaders/debug_overlay.vert");
     const std::string frag = FPaths::ResolveAssetPath("assets/Shaders/debug_overlay.frag");
     if (!shader_.LoadFromFiles(vert, frag)) {
@@ -273,7 +273,7 @@ bool DebugOverlay::Initialize(const std::string& /*shaderDirectory*/) {
     return true;
 }
 
-void DebugOverlay::Shutdown() {
+void FDebugOverlay::Shutdown() {
     if (vbo_ != 0) {
         glDeleteBuffers(1, &vbo_);
         vbo_ = 0;
@@ -297,7 +297,7 @@ void DebugOverlay::Shutdown() {
     builtForHeight_ = 0;
 }
 
-void DebugOverlay::SetText(const std::string& text) {
+void FDebugOverlay::SetText(const std::string& text) {
     if (text_ == text) {
         return;
     }
@@ -305,7 +305,7 @@ void DebugOverlay::SetText(const std::string& text) {
     dirty_ = true;
 }
 
-void DebugOverlay::SetBottomLeftText(const std::string& text) {
+void FDebugOverlay::SetBottomLeftText(const std::string& text) {
     if (bottomLeftText_ == text) {
         return;
     }
@@ -313,7 +313,7 @@ void DebugOverlay::SetBottomLeftText(const std::string& text) {
     dirty_ = true;
 }
 
-void DebugOverlay::SetCenterText(const std::string& text) {
+void FDebugOverlay::SetCenterText(const std::string& text) {
     if (centerText_ == text) {
         return;
     }
@@ -321,7 +321,7 @@ void DebugOverlay::SetCenterText(const std::string& text) {
     dirty_ = true;
 }
 
-void DebugOverlay::SetRightText(const std::string& text) {
+void FDebugOverlay::SetRightText(const std::string& text) {
     if (rightText_ == text) {
         return;
     }
@@ -329,7 +329,7 @@ void DebugOverlay::SetRightText(const std::string& text) {
     dirty_ = true;
 }
 
-void DebugOverlay::SetRightTextOriginY(float originY) {
+void FDebugOverlay::SetRightTextOriginY(float originY) {
     if (rightTextOriginY_ == originY) {
         return;
     }
@@ -337,31 +337,31 @@ void DebugOverlay::SetRightTextOriginY(float originY) {
     dirty_ = true;
 }
 
-void DebugOverlay::AddOnScreenDebugMessage(std::string message, float displaySeconds,
+void FDebugOverlay::AddOnScreenDebugMessage(std::string message, float displaySeconds,
                                            const glm::vec3& color) {
     if (message.empty()) {
         return;
     }
     const float duration = displaySeconds > 0.0f ? displaySeconds : 0.01f;
-    onScreenMessages_.push_back(OnScreenMessage{std::move(message), duration, duration, color});
+    onScreenMessages_.push_back(FOnScreenMessage{std::move(message), duration, duration, color});
     while (onScreenMessages_.size() > kMaxOnScreenMessages) {
         onScreenMessages_.erase(onScreenMessages_.begin());
     }
     dirty_ = true;
 }
 
-void DebugOverlay::TickOnScreenMessages(float deltaTime) {
+void FDebugOverlay::TickOnScreenMessages(float deltaTime) {
     if (onScreenMessages_.empty()) {
         return;
     }
     bool changed = false;
-    for (OnScreenMessage& msg : onScreenMessages_) {
+    for (FOnScreenMessage& msg : onScreenMessages_) {
         msg.timeRemaining -= deltaTime;
         changed = true;
     }
     const auto eraseIt =
         std::remove_if(onScreenMessages_.begin(), onScreenMessages_.end(),
-                       [](const OnScreenMessage& msg) { return msg.timeRemaining <= 0.0f; });
+                       [](const FOnScreenMessage& msg) { return msg.timeRemaining <= 0.0f; });
     if (eraseIt != onScreenMessages_.end()) {
         onScreenMessages_.erase(eraseIt, onScreenMessages_.end());
         changed = true;
@@ -371,7 +371,7 @@ void DebugOverlay::TickOnScreenMessages(float deltaTime) {
     }
 }
 
-void DebugOverlay::ClearScreenGeometry() {
+void FDebugOverlay::ClearScreenGeometry() {
     if (screenLines_.empty() && screenRects_.empty() && screenTexts_.empty()) {
         return;
     }
@@ -381,28 +381,28 @@ void DebugOverlay::ClearScreenGeometry() {
     dirty_ = true;
 }
 
-void DebugOverlay::AddScreenLine(float x0, float y0, float x1, float y1, const glm::vec3& color,
+void FDebugOverlay::AddScreenLine(float x0, float y0, float x1, float y1, const glm::vec3& color,
                                  float thickness) {
-    screenLines_.push_back(ScreenLine{x0, y0, x1, y1, thickness, color});
+    screenLines_.push_back(FScreenLine{x0, y0, x1, y1, thickness, color});
     dirty_ = true;
 }
 
-void DebugOverlay::AddScreenRect(float x, float y, float w, float h, const glm::vec3& color) {
-    screenRects_.push_back(ScreenRect{x, y, w, h, color});
+void FDebugOverlay::AddScreenRect(float x, float y, float w, float h, const glm::vec3& color) {
+    screenRects_.push_back(FScreenRect{x, y, w, h, color});
     dirty_ = true;
 }
 
-void DebugOverlay::AddScreenText(std::string text, float x, float y, const glm::vec3& color,
+void FDebugOverlay::AddScreenText(std::string text, float x, float y, const glm::vec3& color,
                                  float pixelScale, ETextJustify justify) {
     if (text.empty()) {
         return;
     }
     screenTexts_.push_back(
-        ScreenText{std::move(text), x, y, pixelScale, justify, color});
+        FScreenText{std::move(text), x, y, pixelScale, justify, color});
     dirty_ = true;
 }
 
-void DebugOverlay::MeasureText(const std::string& text, float pixelScale, float& outWidth,
+void FDebugOverlay::MeasureText(const std::string& text, float pixelScale, float& outWidth,
                                float& outHeight) {
     float maxRaw = 0.0f;
     int lines = 1;
@@ -411,11 +411,11 @@ void DebugOverlay::MeasureText(const std::string& text, float pixelScale, float&
     outHeight = 14.0f * pixelScale * static_cast<float>(lines);
 }
 
-EShaderReloadResult DebugOverlay::ReloadShader(bool force) {
+EShaderReloadResult FDebugOverlay::ReloadShader(bool force) {
     return force ? shader_.ForceReloadFromDisk() : shader_.ReloadFromDiskIfChanged();
 }
 
-void DebugOverlay::RebuildMesh(int framebufferWidth, int framebufferHeight) {
+void FDebugOverlay::RebuildMesh(int framebufferWidth, int framebufferHeight) {
     dirty_ = false;
     builtForWidth_ = framebufferWidth;
     builtForHeight_ = framebufferHeight;
@@ -485,14 +485,14 @@ void DebugOverlay::RebuildMesh(int framebufferWidth, int framebufferHeight) {
 
     // Screen widgets: panels/buttons first, then lines, then labels on top.
     // (Texts before rects hid VerticalBox labels under Button fills and under ImageWidget.)
-    for (const ScreenRect& rect : screenRects_) {
+    for (const FScreenRect& rect : screenRects_) {
         appendScreenQuad(tris, rect.x, rect.y, rect.x + rect.w, rect.y, rect.x + rect.w,
                          rect.y + rect.h, rect.x, rect.y + rect.h, rect.color);
     }
-    for (const ScreenLine& line : screenLines_) {
+    for (const FScreenLine& line : screenLines_) {
         appendThickScreenLine(tris, line.x0, line.y0, line.x1, line.y1, line.thickness, line.color);
     }
-    for (const ScreenText& entry : screenTexts_) {
+    for (const FScreenText& entry : screenTexts_) {
         appendJustifiedLines(tris, entry.text, entry.x, entry.y, entry.pixelScale, entry.justify,
                              colorWithAlpha(entry.color, 1.0f));
     }
@@ -504,7 +504,7 @@ void DebugOverlay::RebuildMesh(int framebufferWidth, int framebufferHeight) {
     vertexCount_ = static_cast<int>(tris.size());
 }
 
-void DebugOverlay::Draw(int framebufferWidth, int framebufferHeight) {
+void FDebugOverlay::Draw(int framebufferWidth, int framebufferHeight) {
     if (!IsValid() || framebufferWidth <= 0 || framebufferHeight <= 0) {
         return;
     }

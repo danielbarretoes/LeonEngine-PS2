@@ -8,19 +8,19 @@
 
 
 /// GPU skinned mesh (VAO with bone indices/weights).
-class SkeletalMesh {
+class USkeletalMesh {
 public:
-    SkeletalMesh() = default;
-    ~SkeletalMesh();
+    USkeletalMesh() = default;
+    ~USkeletalMesh();
 
-    SkeletalMesh(const SkeletalMesh&) = delete;
-    SkeletalMesh& operator=(const SkeletalMesh&) = delete;
-    SkeletalMesh(SkeletalMesh&& other) noexcept;
-    SkeletalMesh& operator=(SkeletalMesh&& other) noexcept;
+    USkeletalMesh(const USkeletalMesh&) = delete;
+    USkeletalMesh& operator=(const USkeletalMesh&) = delete;
+    USkeletalMesh(USkeletalMesh&& other) noexcept;
+    USkeletalMesh& operator=(USkeletalMesh&& other) noexcept;
 
-    [[nodiscard]] static SkeletalMesh Upload(SkeletalMeshData data);
+    [[nodiscard]] static USkeletalMesh Upload(SkeletalMeshData data);
     /// Skeleton / bounds / index count only (no VAO). Dedicated server path.
-    [[nodiscard]] static SkeletalMesh CreateCpu(SkeletalMeshData data);
+    [[nodiscard]] static USkeletalMesh CreateCpu(SkeletalMeshData data);
 
     void Draw() const;
 
@@ -36,22 +36,22 @@ public:
     [[nodiscard]] const glm::vec3& LocalMax() const { return localMax_; }
     [[nodiscard]] float FitUniformScale(float fitHeight) const;
 
-    [[nodiscard]] Material& GetMaterial() { return material_; }
-    [[nodiscard]] const Material& GetMaterial() const { return material_; }
-    void SetMaterial(Material material) { material_ = std::move(material); }
+    [[nodiscard]] FMaterial& GetMaterial() { return material_; }
+    [[nodiscard]] const FMaterial& GetMaterial() const { return material_; }
+    void SetMaterial(FMaterial material) { material_ = std::move(material); }
 
 private:
     void Destroy();
 
-    RHIVertexArrayId vao_ = kInvalidVertexArray;
-    RHIBufferId vbo_ = kInvalidBuffer;
-    RHIBufferId ebo_ = kInvalidBuffer;
+    FRHIVertexArrayId vao_ = kInvalidVertexArray;
+    FRHIBufferId vbo_ = kInvalidBuffer;
+    FRHIBufferId ebo_ = kInvalidBuffer;
     int indexCount_ = 0;
     bool cpuOnly_ = false;
     Skeleton skeleton_{};
     AnimSequence embeddedAnim_{};
     glm::vec3 localMin_{0.0f};
     glm::vec3 localMax_{0.0f};
-    Material material_{};
+    FMaterial material_{};
 };
 

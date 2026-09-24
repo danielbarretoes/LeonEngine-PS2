@@ -20,7 +20,7 @@ ufbx_load_opts MakeLoadOpts() {
 
 } // namespace
 
-bool LoadStaticMeshFromFbx(const std::string& path, MeshData& out) {
+bool LoadStaticMeshFromFbx(const std::string& path, FMeshData& out) {
     out = {};
     ufbx_error error{};
     const ufbx_load_opts opts = MakeLoadOpts();
@@ -58,7 +58,7 @@ bool LoadStaticMeshFromFbx(const std::string& path, MeshData& out) {
                     const uint32_t corner =
                         tri[(static_cast<size_t>(t) * 3u) + static_cast<size_t>(k)];
 
-                    Vertex v{};
+                    FVertex v{};
                     const ufbx_vec3 pos = ufbx_get_vertex_vec3(&mesh->vertex_position, corner);
                     v.position = {static_cast<float>(pos.x), static_cast<float>(pos.y),
                                   static_cast<float>(pos.z)};
@@ -86,7 +86,7 @@ bool LoadStaticMeshFromFbx(const std::string& path, MeshData& out) {
 
         if (indexCount > 0) {
             out.submeshes.push_back(
-                SubMesh{indexOffset, indexCount, static_cast<int>(out.submeshes.size())});
+                FMeshSection{indexOffset, indexCount, static_cast<int>(out.submeshes.size())});
         }
     }
 

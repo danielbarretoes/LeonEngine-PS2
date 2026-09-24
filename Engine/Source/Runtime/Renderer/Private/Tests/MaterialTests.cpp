@@ -15,7 +15,7 @@ TEST_CASE("roughnessFromShininess decreases with shininess", "[render][material]
 }
 
 TEST_CASE("Material isTransparent uses alpha threshold", "[render][material]") {
-    Material mat;
+    FMaterial mat;
     mat.alpha = 1.0f;
     REQUIRE_FALSE(mat.isTransparent());
     mat.alpha = 0.5f;
@@ -23,7 +23,7 @@ TEST_CASE("Material isTransparent uses alpha threshold", "[render][material]") {
 }
 
 TEST_CASE("Material syncRoughnessFromShininess", "[render][material]") {
-    Material mat;
+    FMaterial mat;
     mat.shininess = 128.0f;
     mat.syncRoughnessFromShininess();
     REQUIRE_THAT(mat.roughness, WithinAbs(roughnessFromShininess(128.0f), 1.0e-6f));

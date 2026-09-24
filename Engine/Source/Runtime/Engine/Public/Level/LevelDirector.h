@@ -60,7 +60,7 @@ private:
 
     LevelCatalog catalog_;
     LevelAnimation animation_;
-    DebugOverlay chrome_;
+    FDebugOverlay chrome_;
 
     std::size_t currentIndex_ = 0;
     float elapsed_ = 0.0f;

@@ -8,22 +8,22 @@
 
 /// Depth-only shadow map for directional light 0 (orthographic + manual PCF in the lit shader).
 /// Depth texture uses GL_NEAREST so PCF samples discrete texels (not hardware-filtered depth).
-class ShadowMap {
+class FShadowMap {
 public:
     static constexpr int kDefaultSize = 2048;
 
-    ShadowMap() = default;
-    ~ShadowMap();
+    FShadowMap() = default;
+    ~FShadowMap();
 
-    ShadowMap(const ShadowMap&) = delete;
-    ShadowMap& operator=(const ShadowMap&) = delete;
+    FShadowMap(const FShadowMap&) = delete;
+    FShadowMap& operator=(const FShadowMap&) = delete;
 
     bool Create(int size = kDefaultSize);
     void Destroy();
 
     void Begin() const;
     /// Restore draw target to `restoreFbo` (0 = default framebuffer).
-    void End(int framebufferWidth, int framebufferHeight, RHIFramebufferId restoreFbo = kInvalidFramebuffer) const;
+    void End(int framebufferWidth, int framebufferHeight, FRHIFramebufferId restoreFbo = kInvalidFramebuffer) const;
 
     void BindDepthTexture(unsigned int unit) const;
     [[nodiscard]] bool Valid() const { return fbo_ != 0 && depthTexture_ != 0; }
@@ -36,8 +36,8 @@ public:
                                                        float padding = 0.5f);
 
 private:
-    RHIFramebufferId fbo_ = kInvalidFramebuffer;
-    RHITextureId depthTexture_ = kInvalidTexture;
+    FRHIFramebufferId fbo_ = kInvalidFramebuffer;
+    FRHITextureId depthTexture_ = kInvalidTexture;
     int size_ = 0;
 };
 

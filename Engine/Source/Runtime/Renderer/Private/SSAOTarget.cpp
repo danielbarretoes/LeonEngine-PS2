@@ -4,11 +4,11 @@
 #include "PostProcess.h"
 
 
-SsaoTarget::~SsaoTarget() {
+FSSAOTarget::~FSSAOTarget() {
     Destroy();
 }
 
-bool SsaoTarget::EnsureSize(int width, int height) {
+bool FSSAOTarget::EnsureSize(int width, int height) {
     if (width < 1 || height < 1) {
         return false;
     }
@@ -44,7 +44,7 @@ bool SsaoTarget::EnsureSize(int width, int height) {
     return true;
 }
 
-void SsaoTarget::Destroy() {
+void FSSAOTarget::Destroy() {
     for (int i = 0; i < 2; ++i) {
         if (color_[i] != 0) {
             glDeleteTextures(1, &color_[i]);
@@ -59,13 +59,13 @@ void SsaoTarget::Destroy() {
     height_ = 0;
 }
 
-void SsaoTarget::BindWrite(int index) const {
+void FSSAOTarget::BindWrite(int index) const {
     const int i = (index == 0) ? 0 : 1;
     glBindFramebuffer(GL_FRAMEBUFFER, fbo_[i]);
     glViewport(0, 0, width_, height_);
 }
 
-void SsaoTarget::BindColorTexture(int index, unsigned int unit) const {
+void FSSAOTarget::BindColorTexture(int index, unsigned int unit) const {
     const int i = (index == 0) ? 0 : 1;
     glActiveTexture(GL_TEXTURE0 + unit);
     glBindTexture(GL_TEXTURE_2D, color_[i]);

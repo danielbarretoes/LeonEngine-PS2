@@ -6,13 +6,13 @@
 
 
 /// Full-res SSAO ping-pong targets (R16F).
-class SsaoTarget {
+class FSSAOTarget {
 public:
-    SsaoTarget() = default;
-    ~SsaoTarget();
+    FSSAOTarget() = default;
+    ~FSSAOTarget();
 
-    SsaoTarget(const SsaoTarget&) = delete;
-    SsaoTarget& operator=(const SsaoTarget&) = delete;
+    FSSAOTarget(const FSSAOTarget&) = delete;
+    FSSAOTarget& operator=(const FSSAOTarget&) = delete;
 
     [[nodiscard]] bool EnsureSize(int width, int height);
     void Destroy();
@@ -27,8 +27,8 @@ public:
     [[nodiscard]] int Height() const { return height_; }
 
 private:
-    RHIFramebufferId fbo_[2]{};
-    RHITextureId color_[2]{};
+    FRHIFramebufferId fbo_[2]{};
+    FRHITextureId color_[2]{};
     int width_ = 0;
     int height_ = 0;
 };
@@ -41,7 +41,7 @@ enum class EPostProcessQuality : std::uint8_t {
     High = 3,
 };
 
-struct PostProcessSettings {
+struct FPostProcessSettings {
     bool enabled = true;
     /// Default: Low — light SSAO, no FXAA, 1024 shadows (good for editor / mid PCs).
     EPostProcessQuality quality = EPostProcessQuality::Low;
@@ -58,7 +58,7 @@ struct PostProcessSettings {
 };
 
 /// Apply Low / Medium / High scalability (Off disables the whole post stack).
-inline void ApplyPostProcessQuality(PostProcessSettings& settings, EPostProcessQuality quality) {
+inline void ApplyPostProcessQuality(FPostProcessSettings& settings, EPostProcessQuality quality) {
     settings.quality = quality;
     switch (quality) {
     case EPostProcessQuality::Off:

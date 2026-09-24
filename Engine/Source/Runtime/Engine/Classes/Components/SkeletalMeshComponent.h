@@ -19,13 +19,13 @@
 
 
 class Engine;
-class Renderer;
+class FSceneRenderer;
 
 /// Static mesh glued to a skeletal bone (Unreal-like socket attachment).
 struct SkelMeshAttachment {
     std::string boneName;
-    std::shared_ptr<StaticMesh> mesh;
-    Material material{};
+    std::shared_ptr<UStaticMesh> mesh;
+    FMaterial material{};
     bool materialOverride = true;
     /// Bone-local TRS applied after the bone model matrix.
     FTransform relative{};
@@ -39,9 +39,9 @@ class SkeletalMeshComponent : public SceneComponent {
 public:
     SkeletalMeshComponent();
 
-    void SetSkeletalMesh(std::shared_ptr<SkeletalMesh> mesh);
-    [[nodiscard]] SkeletalMesh* GetSkeletalMesh() { return skeletalMesh_.get(); }
-    [[nodiscard]] const SkeletalMesh* GetSkeletalMesh() const { return skeletalMesh_.get(); }
+    void SetSkeletalMesh(std::shared_ptr<USkeletalMesh> mesh);
+    [[nodiscard]] USkeletalMesh* GetSkeletalMesh() { return skeletalMesh_.get(); }
+    [[nodiscard]] const USkeletalMesh* GetSkeletalMesh() const { return skeletalMesh_.get(); }
 
     void SetAnimInstance(std::unique_ptr<AnimInstance> instance);
     template <typename TAnim, typename... TArgs>
@@ -99,7 +99,7 @@ public:
 
     void TickComponent(float deltaTime);
     /// Submit using this component's SceneComponent world transform.
-    void SubmitDraw(Renderer& renderer) const;
+    void SubmitDraw(FSceneRenderer& renderer) const;
 
     [[nodiscard]] bool HasValidMesh() const {
         return skeletalMesh_ != nullptr && skeletalMesh_->Valid();
@@ -108,7 +108,7 @@ public:
 private:
     void bindAnimInstanceToAssets();
 
-    std::shared_ptr<SkeletalMesh> skeletalMesh_;
+    std::shared_ptr<USkeletalMesh> skeletalMesh_;
     /// Stable storage — BlendSpace / AnimInstance keep raw pointers into these elements.
     std::deque<AnimSequence> sequences_;
     std::unordered_map<std::string, std::size_t> sequenceIndexByName_;

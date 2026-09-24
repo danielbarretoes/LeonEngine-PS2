@@ -18,7 +18,7 @@ namespace {
 [[nodiscard]] bool IsFloorLikeBody(const BodyInstance& body, float cellSize) {
     const float hy = std::max(body.halfExtents.y, 0.001f);
     const float horiz = std::max(body.halfExtents.x, body.halfExtents.z);
-    // Unit Plane scaled ~40x1x40 → hy=0.5 still floor-like by aspect (was wrongly a full-arena
+    // Unit FPlane scaled ~40x1x40 → hy=0.5 still floor-like by aspect (was wrongly a full-arena
     // blocker).
     if (horiz / hy >= 6.0f) {
         return true;
@@ -49,7 +49,7 @@ namespace {
     if (meshIndex >= level.StaticMeshes().size()) {
         return false;
     }
-    // Arena floor Plane only.
+    // Arena floor FPlane only.
     return level.StaticMeshes()[meshIndex].editorClass == "Plane";
 }
 
@@ -394,7 +394,7 @@ bool NavigationSystem::FindPath(const glm::vec3& start, const glm::vec3& end,
     return !outPath.empty();
 }
 
-void NavigationSystem::AppendDebugDraw(DebugDraw& draw) const {
+void NavigationSystem::AppendDebugDraw(FDebugDraw& draw) const {
     if (!mesh_.IsValid()) {
         return;
     }

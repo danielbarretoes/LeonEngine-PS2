@@ -115,7 +115,7 @@ namespace {
     return true;
 }
 
-void ApplyTextureKey(ResourceCache& resources, Material& material, const std::string& key,
+void ApplyTextureKey(FResourceCache& resources, FMaterial& material, const std::string& key,
                      const std::string& value) {
     if (value.empty()) {
         return;
@@ -145,15 +145,15 @@ bool IsLeonMaterialPath(const std::string& path) {
     return ExtLower(path) == ".lmat";
 }
 
-bool LoadLeonMaterialDocument(const std::string& path, LeonMaterialDocument& out) {
+bool LoadLeonMaterialDocument(const std::string& path, FLeonMaterialDocument& out) {
     std::ifstream in(path);
     if (!in.is_open()) {
         std::cerr << "LeonMaterial: cannot open " << path << '\n';
         return false;
     }
 
-    LeonMaterialDocument doc{};
-    doc.material.shading = EShadingModel::BlinnPhong;
+    FLeonMaterialDocument doc{};
+    doc.material.shading = EMaterialShadingModel::BlinnPhong;
     bool hasRoughness = false;
     bool hasShininess = false;
     std::string section;
@@ -192,7 +192,7 @@ bool LoadLeonMaterialDocument(const std::string& path, LeonMaterialDocument& out
                     c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
                 }
                 doc.material.shading =
-                    (v == "unlit") ? EShadingModel::Unlit : EShadingModel::BlinnPhong;
+                    (v == "unlit") ? EMaterialShadingModel::Unlit : EMaterialShadingModel::BlinnPhong;
             } else {
                 std::cerr << "LeonMaterial: unknown [Info] key '" << key << "' in " << path << '\n';
             }
@@ -259,7 +259,7 @@ bool LoadLeonMaterialDocument(const std::string& path, LeonMaterialDocument& out
             doc.material.planarMirror = ParseBool(value, doc.material.planarMirror);
         } else if (keyLower == "unlit") {
             if (ParseBool(value, false)) {
-                doc.material.shading = EShadingModel::Unlit;
+                doc.material.shading = EMaterialShadingModel::Unlit;
             }
         } else {
             std::cerr << "LeonMaterial: unknown key '" << key << "' in " << path << '\n';
@@ -276,8 +276,8 @@ bool LoadLeonMaterialDocument(const std::string& path, LeonMaterialDocument& out
     return true;
 }
 
-bool LoadLeonMaterialFile(ResourceCache& resources, const std::string& path, Material& out) {
-    LeonMaterialDocument doc;
+bool LoadLeonMaterialFile(FResourceCache& resources, const std::string& path, FMaterial& out) {
+    FLeonMaterialDocument doc;
     if (!LoadLeonMaterialDocument(path, doc)) {
         return false;
     }
@@ -292,7 +292,7 @@ bool LoadLeonMaterialFile(ResourceCache& resources, const std::string& path, Mat
 }
 
 bool SaveLeonMaterialFile(const std::string& path, const std::string& name,
-                          const Material& material, const std::string& baseColorMapPath,
+                          const FMaterial& material, const std::string& baseColorMapPath,
                           const std::string& normalMapPath) {
     std::ostringstream out;
     out << "# Leon Material (.lmat) — Unreal Material Instance–like parameters\n";
@@ -300,7 +300,7 @@ bool SaveLeonMaterialFile(const std::string& path, const std::string& name,
     out << "[Info]\n";
     out << "Name=" << (name.empty() ? "Material" : name) << '\n';
     out << "ShadingModel="
-        << (material.shading == EShadingModel::Unlit ? "Unlit" : "DefaultLit") << "\n\n";
+        << (material.shading == EMaterialShadingModel::Unlit ? "Unlit" : "DefaultLit") << "\n\n";
     out << "[Parameters]\n";
     out << "BaseColor=" << material.albedo.x << ',' << material.albedo.y << ',' << material.albedo.z
         << '\n';
@@ -325,7 +325,7 @@ bool SaveLeonMaterialFile(const std::string& path, const std::string& name,
 
 std::string MakeDefaultLeonMaterialText(const std::string& name, const glm::vec3& baseColor,
                                         float metallic, float roughness) {
-    Material m{};
+    FMaterial m{};
     m.albedo = baseColor;
     m.metallic = metallic;
     m.roughness = std::clamp(roughness, 0.04f, 1.0f);

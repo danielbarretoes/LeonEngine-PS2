@@ -5,7 +5,7 @@
 #include <fstream>
 #include <iostream>
 #include "Misc/Paths.h"
-#include "Texture.h"
+#include "Texture2D.h"
 #include <random>
 #include <vector>
 
@@ -17,7 +17,7 @@ namespace {
 
 } // namespace
 
-std::shared_ptr<Texture> LoadLightmapFile(const std::filesystem::path& path) {
+std::shared_ptr<UTexture2D> LoadLightmapFile(const std::filesystem::path& path) {
     std::ifstream in(path, std::ios::binary);
     if (!in) {
         return nullptr;
@@ -38,11 +38,11 @@ std::shared_ptr<Texture> LoadLightmapFile(const std::filesystem::path& path) {
     if (!in) {
         return nullptr;
     }
-    Texture tex = Texture::Create(static_cast<int>(width), static_cast<int>(height), rgba.data());
+    UTexture2D tex = UTexture2D::Create(static_cast<int>(width), static_cast<int>(height), rgba.data());
     if (!tex.Valid()) {
         return nullptr;
     }
-    return std::make_shared<Texture>(std::move(tex));
+    return std::make_shared<UTexture2D>(std::move(tex));
 }
 
 std::filesystem::path ResolveLightmapAbsolutePath(const std::string& levelPath,

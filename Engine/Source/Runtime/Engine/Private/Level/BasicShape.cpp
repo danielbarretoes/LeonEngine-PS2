@@ -3,7 +3,7 @@
 
 // Class-name parsers live in Content/LevelClassNames.cpp (shared with ContentValidator / cook).
 
-std::shared_ptr<StaticMesh> MeshForBasicShape(ResourceCache& resources, EBasicShape shape,
+std::shared_ptr<UStaticMesh> MeshForBasicShape(FResourceCache& resources, EBasicShape shape,
                                               int sphereSegments, int sphereRings) {
     switch (shape) {
     case EBasicShape::Cube:
@@ -11,13 +11,13 @@ std::shared_ptr<StaticMesh> MeshForBasicShape(ResourceCache& resources, EBasicSh
     case EBasicShape::Sphere:
         return resources.GetSphereMesh(sphereSegments, sphereRings);
     case EBasicShape::Plane:
-        // Unit plane with 0–1 UVs; tiling is Material::uvScale.
+        // Unit plane with 0–1 UVs; tiling is FMaterial::uvScale.
         return resources.GetPlaneMesh(1.0f, 1.0f);
     }
     return nullptr;
 }
 
-BasicShape BasicShape::cube(FTransform transform, Material material, bool hasMaterial) {
+BasicShape BasicShape::cube(FTransform transform, FMaterial material, bool hasMaterial) {
     BasicShape shape;
     shape.type = EBasicShape::Cube;
     shape.transform = transform;
@@ -26,7 +26,7 @@ BasicShape BasicShape::cube(FTransform transform, Material material, bool hasMat
     return shape;
 }
 
-BasicShape BasicShape::sphere(FTransform transform, Material material, bool hasMaterial,
+BasicShape BasicShape::sphere(FTransform transform, FMaterial material, bool hasMaterial,
                               int segments, int rings) {
     BasicShape shape;
     shape.type = EBasicShape::Sphere;
@@ -38,7 +38,7 @@ BasicShape BasicShape::sphere(FTransform transform, Material material, bool hasM
     return shape;
 }
 
-BasicShape BasicShape::plane(float size, FTransform transform, Material material, bool hasMaterial) {
+BasicShape BasicShape::plane(float size, FTransform transform, FMaterial material, bool hasMaterial) {
     BasicShape shape;
     shape.type = EBasicShape::Plane;
     shape.transform = transform;
@@ -50,7 +50,7 @@ BasicShape BasicShape::plane(float size, FTransform transform, Material material
     return shape;
 }
 
-StaticMeshComponent BasicShape::MakeStaticMesh(ResourceCache& resources) const {
+StaticMeshComponent BasicShape::MakeStaticMesh(FResourceCache& resources) const {
     StaticMeshComponent component;
     component.mesh = MeshForBasicShape(resources, type, sphereSegments, sphereRings);
     component.transform = transform;

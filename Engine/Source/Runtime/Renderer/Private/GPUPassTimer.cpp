@@ -4,25 +4,25 @@
 
 namespace {
 
-bool isTimedPass(GpuPassTimer::EPass pass) {
-    return pass == GpuPassTimer::EPass::Shadow || pass == GpuPassTimer::EPass::Planar ||
-           pass == GpuPassTimer::EPass::Color || pass == GpuPassTimer::EPass::Ssao ||
-           pass == GpuPassTimer::EPass::Post;
+bool isTimedPass(FGPUPassTimer::EPass pass) {
+    return pass == FGPUPassTimer::EPass::Shadow || pass == FGPUPassTimer::EPass::Planar ||
+           pass == FGPUPassTimer::EPass::Color || pass == FGPUPassTimer::EPass::Ssao ||
+           pass == FGPUPassTimer::EPass::Post;
 }
 
-int passIndex(GpuPassTimer::EPass pass) {
+int passIndex(FGPUPassTimer::EPass pass) {
     switch (pass) {
-    case GpuPassTimer::EPass::Shadow:
+    case FGPUPassTimer::EPass::Shadow:
         return 0;
-    case GpuPassTimer::EPass::Planar:
+    case FGPUPassTimer::EPass::Planar:
         return 1;
-    case GpuPassTimer::EPass::Color:
+    case FGPUPassTimer::EPass::Color:
         return 2;
-    case GpuPassTimer::EPass::Ssao:
+    case FGPUPassTimer::EPass::Ssao:
         return 3;
-    case GpuPassTimer::EPass::Post:
+    case FGPUPassTimer::EPass::Post:
         return 4;
-    case GpuPassTimer::EPass::Count:
+    case FGPUPassTimer::EPass::Count:
         break;
     }
     return 0;
@@ -30,31 +30,31 @@ int passIndex(GpuPassTimer::EPass pass) {
 
 } // namespace
 
-GpuPassTimer::QueryBuffer& GpuPassTimer::bufferQueries(int buffer) {
+FGPUPassTimer::FQueryBuffer& FGPUPassTimer::bufferQueries(int buffer) {
     return buffer == 0 ? queries_[0] : queries_[1];
 }
 
-bool& GpuPassTimer::bufferPending(int buffer) {
+bool& FGPUPassTimer::bufferPending(int buffer) {
     return buffer == 0 ? pending_[0] : pending_[1];
 }
 
-RHIQueryId& GpuPassTimer::querySlot(int buffer, EPass pass) {
+FRHIQueryId& FGPUPassTimer::querySlot(int buffer, EPass pass) {
     return bufferQueries(buffer)[static_cast<std::size_t>(passIndex(pass))];
 }
 
-bool& GpuPassTimer::passOpenSlot(EPass pass) {
+bool& FGPUPassTimer::passOpenSlot(EPass pass) {
     return passOpen_[static_cast<std::size_t>(passIndex(pass))];
 }
 
-float& GpuPassTimer::msSlot(EPass pass) {
+float& FGPUPassTimer::msSlot(EPass pass) {
     return ms_[static_cast<std::size_t>(passIndex(pass))];
 }
 
-const float& GpuPassTimer::msSlot(EPass pass) const {
+const float& FGPUPassTimer::msSlot(EPass pass) const {
     return ms_[static_cast<std::size_t>(passIndex(pass))];
 }
 
-bool GpuPassTimer::resolveBuffer(const QueryBuffer& queries) {
+bool FGPUPassTimer::resolveBuffer(const FQueryBuffer& queries) {
     // Non-blocking: skip until all queries are ready (keeps last frame's ms_).
     for (int i = 0; i < kPassCount; ++i) {
         GLint available = 0;
@@ -72,11 +72,11 @@ bool GpuPassTimer::resolveBuffer(const QueryBuffer& queries) {
     return true;
 }
 
-GpuPassTimer::~GpuPassTimer() {
+FGPUPassTimer::~FGPUPassTimer() {
     Destroy();
 }
 
-bool GpuPassTimer::Create() {
+bool FGPUPassTimer::Create() {
     Destroy();
     glGenQueries(kBufferCount * kPassCount, queries_[0].data());
     ms_.fill(0.0f);
@@ -87,18 +87,18 @@ bool GpuPassTimer::Create() {
     return true;
 }
 
-void GpuPassTimer::Destroy() {
+void FGPUPassTimer::Destroy() {
     if (!created_) {
         return;
     }
     glDeleteQueries(kBufferCount * kPassCount, queries_[0].data());
-    for (QueryBuffer& buffer : queries_) {
+    for (FQueryBuffer& buffer : queries_) {
         buffer.fill(0);
     }
     created_ = false;
 }
 
-void GpuPassTimer::BeginFrame() {
+void FGPUPassTimer::BeginFrame() {
     if (!created_) {
         return;
     }
@@ -118,7 +118,7 @@ void GpuPassTimer::BeginFrame() {
     passOpen_.fill(false);
 }
 
-void GpuPassTimer::Begin(EPass pass) {
+void FGPUPassTimer::Begin(EPass pass) {
     if (!created_ || !isTimedPass(pass) || passOpenSlot(pass)) {
         return;
     }
@@ -126,7 +126,7 @@ void GpuPassTimer::Begin(EPass pass) {
     passOpenSlot(pass) = true;
 }
 
-void GpuPassTimer::End(EPass pass) {
+void FGPUPassTimer::End(EPass pass) {
     if (!created_ || !isTimedPass(pass) || !passOpenSlot(pass)) {
         return;
     }
@@ -135,7 +135,7 @@ void GpuPassTimer::End(EPass pass) {
     bufferPending(writeBuffer_) = true;
 }
 
-float GpuPassTimer::Milliseconds(EPass pass) const {
+float FGPUPassTimer::Milliseconds(EPass pass) const {
     if (!isTimedPass(pass)) {
         return 0.0f;
     }

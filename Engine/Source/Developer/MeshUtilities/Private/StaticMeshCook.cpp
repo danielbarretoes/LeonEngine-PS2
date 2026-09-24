@@ -10,7 +10,7 @@
 
 bool CookStaticMeshFromObj(const std::string& objPath, const std::string& outLmeshPath,
                            std::string& outError) {
-    MeshData data = LoadObj(objPath);
+    FMeshData data = LoadObj(objPath);
     if (data.empty()) {
         outError = "Failed to load OBJ: " + objPath;
         return false;
@@ -26,7 +26,7 @@ bool CookStaticMeshFromObj(const std::string& objPath, const std::string& outLme
 
 bool CookStaticMeshFromFbx(const std::string& fbxPath, const std::string& outLmeshPath,
                            std::string& outError) {
-    MeshData data;
+    FMeshData data;
     if (!LoadStaticMeshFromFbx(fbxPath, data)) {
         outError = "Failed to load FBX: " + fbxPath;
         return false;
@@ -41,7 +41,7 @@ bool CookStaticMeshFromFbx(const std::string& fbxPath, const std::string& outLme
 
 bool CookStaticMeshFromGltf(const std::string& gltfPath, const std::string& outLmeshPath,
                             const std::string& materialsOutDir, std::string& outError) {
-    MeshData data;
+    FMeshData data;
     std::vector<GltfImportedMaterial> mats;
     if (!LoadStaticMeshFromGltf(gltfPath, data, materialsOutDir, &mats, outError)) {
         return false;

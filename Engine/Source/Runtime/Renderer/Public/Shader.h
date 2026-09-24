@@ -27,24 +27,24 @@ enum class EShaderReloadResult : std::uint8_t {
 }
 
 /// GLSL program with cached uniform locations and optional disk hot-reload.
-class Shader {
+class FShader {
 public:
     /// Called after a new program is linked and installed; return false to revert.
-    using AcceptFn = std::function<bool()>;
+    using FAcceptFunction = std::function<bool()>;
 
-    Shader() = default;
-    ~Shader();
+    FShader() = default;
+    ~FShader();
 
-    Shader(const Shader&) = delete;
-    Shader& operator=(const Shader&) = delete;
+    FShader(const FShader&) = delete;
+    FShader& operator=(const FShader&) = delete;
 
     bool Create(const char* vertexSource, const char* fragmentSource);
     bool LoadFromFiles(const std::string& vertexPath, const std::string& fragmentPath);
     void Destroy();
 
     /// Recompile when file timestamps change (or force). Failed compiles keep the previous program.
-    [[nodiscard]] EShaderReloadResult ReloadFromDiskIfChanged(const AcceptFn& accept = {});
-    [[nodiscard]] EShaderReloadResult ForceReloadFromDisk(const AcceptFn& accept = {});
+    [[nodiscard]] EShaderReloadResult ReloadFromDiskIfChanged(const FAcceptFunction& accept = {});
+    [[nodiscard]] EShaderReloadResult ForceReloadFromDisk(const FAcceptFunction& accept = {});
 
     void Bind() const;
     void SetMat4(const char* name, const float* value16) const;
@@ -56,11 +56,11 @@ public:
     void SetFloat(const char* name, float value) const;
     void SetInt(const char* name, int value) const;
 
-    /// Bind a named uniform block to a binding point (matches UniformBuffer::Create).
+    /// Bind a named uniform block to a binding point (matches FUniformBuffer::Create).
     bool BindUniformBlock(const char* blockName, unsigned int bindingPoint) const;
 
     [[nodiscard]] bool Valid() const { return program_ != 0; }
-    [[nodiscard]] RHIProgramId ProgramId() const { return program_; }
+    [[nodiscard]] FRHIProgramId ProgramId() const { return program_; }
     [[nodiscard]] bool HasFilePaths() const {
         return !vertexPath_.empty() && !fragmentPath_.empty();
     }
@@ -68,9 +68,9 @@ public:
 private:
     static unsigned int Compile(unsigned int type, const char* source);
     [[nodiscard]] int UniformLocation(const char* name) const;
-    EShaderReloadResult LoadFromStoredPaths(bool force, const AcceptFn& accept);
+    EShaderReloadResult LoadFromStoredPaths(bool force, const FAcceptFunction& accept);
 
-    RHIProgramId program_ = kInvalidProgram;
+    FRHIProgramId program_ = kInvalidProgram;
     mutable std::unordered_map<std::string, int> uniformCache_;
     std::string vertexPath_;
     std::string fragmentPath_;

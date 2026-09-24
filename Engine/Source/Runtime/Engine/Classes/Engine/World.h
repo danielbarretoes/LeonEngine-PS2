@@ -11,16 +11,16 @@
 
 
 class Character;
-class DebugDraw;
+class FDebugDraw;
 class Level;
-class Renderer;
+class FSceneRenderer;
 
 struct WorldGameplayFrameParams {
     float deltaTime = 0.0f;
     Level* level = nullptr;
-    Renderer* renderer = nullptr;
-    DebugDraw* collisionDebugDraw = nullptr;
-    DebugDraw* navMeshDebugDraw = nullptr;
+    FSceneRenderer* renderer = nullptr;
+    FDebugDraw* collisionDebugDraw = nullptr;
+    FDebugDraw* navMeshDebugDraw = nullptr;
     /// When true, PhysScene::Step uses these values instead of the first Character's movement.
     bool overridePhysicsStep = false;
     float physicsDamping = 6.0f;
@@ -99,7 +99,7 @@ public:
     /// Register StaticMeshComponents that have collision as PhysScene bodies (clears first).
     void RegisterBodiesFromLevel(const Level& level);
 
-    void SubmitSkeletalDraws(Renderer& renderer) const;
+    void SubmitSkeletalDraws(FSceneRenderer& renderer) const;
 
     void Clear();
 

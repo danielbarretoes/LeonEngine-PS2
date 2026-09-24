@@ -307,7 +307,7 @@ void Engine::updateHudStats(float deltaTime) {
     fpsAccumTime_ = 0.0f;
     fpsAccumFrames_ = 0;
 
-    const FrameStats& stats = renderer_.GetFrameStats();
+    const FFrameStats& stats = renderer_.GetFrameStats();
 
     int fbWidth = 0;
     int fbHeight = 0;

@@ -4,13 +4,13 @@
 
 
 /// Full-res LDR color target for post (composite → FXAA).
-class LdrColorTarget {
+class FLDRColorTarget {
 public:
-    LdrColorTarget() = default;
-    ~LdrColorTarget();
+    FLDRColorTarget() = default;
+    ~FLDRColorTarget();
 
-    LdrColorTarget(const LdrColorTarget&) = delete;
-    LdrColorTarget& operator=(const LdrColorTarget&) = delete;
+    FLDRColorTarget(const FLDRColorTarget&) = delete;
+    FLDRColorTarget& operator=(const FLDRColorTarget&) = delete;
 
     [[nodiscard]] bool EnsureSize(int width, int height);
     void Destroy();
@@ -21,13 +21,13 @@ public:
     [[nodiscard]] bool Valid() const {
         return fbo_ != kInvalidFramebuffer && colorTexture_ != kInvalidTexture;
     }
-    [[nodiscard]] RHIFramebufferId Framebuffer() const { return fbo_; }
+    [[nodiscard]] FRHIFramebufferId Framebuffer() const { return fbo_; }
     [[nodiscard]] int Width() const { return width_; }
     [[nodiscard]] int Height() const { return height_; }
 
 private:
-    RHIFramebufferId fbo_ = kInvalidFramebuffer;
-    RHITextureId colorTexture_ = kInvalidTexture;
+    FRHIFramebufferId fbo_ = kInvalidFramebuffer;
+    FRHITextureId colorTexture_ = kInvalidTexture;
     int width_ = 0;
     int height_ = 0;
 };

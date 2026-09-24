@@ -91,7 +91,7 @@ void MenuListWidget::CacheLayout(int /*viewportW*/, int viewportH) {
         itemsTopPx_ = 0.0f;
         return;
     }
-    // Same vertical center as NativePaint / DebugOverlay::MeasureText (14 * scale per line).
+    // Same vertical center as NativePaint / FDebugOverlay::MeasureText (14 * scale per line).
     const int lines = CountLines(BuildPaintText());
     const float h = lineH_ * static_cast<float>(std::max(lines, 1));
     float top = (static_cast<float>(viewportH) - h) * 0.5f;

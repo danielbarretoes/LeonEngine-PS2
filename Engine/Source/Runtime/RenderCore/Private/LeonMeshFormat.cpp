@@ -46,7 +46,7 @@ struct LmeshSubMesh {
     return e;
 }
 
-void ComputeAabb(const MeshData& data, float outMin[3], float outMax[3]) {
+void ComputeAabb(const FMeshData& data, float outMin[3], float outMax[3]) {
     outMin[0] = outMin[1] = outMin[2] = 0.0f;
     outMax[0] = outMax[1] = outMax[2] = 0.0f;
     if (data.vertices.empty()) {
@@ -55,7 +55,7 @@ void ComputeAabb(const MeshData& data, float outMin[3], float outMax[3]) {
     outMin[0] = outMax[0] = data.vertices[0].position.x;
     outMin[1] = outMax[1] = data.vertices[0].position.y;
     outMin[2] = outMax[2] = data.vertices[0].position.z;
-    for (const Vertex& v : data.vertices) {
+    for (const FVertex& v : data.vertices) {
         outMin[0] = std::min(outMin[0], v.position.x);
         outMin[1] = std::min(outMin[1], v.position.y);
         outMin[2] = std::min(outMin[2], v.position.z);
@@ -71,7 +71,7 @@ bool IsLeonMeshPath(const std::string& path) {
     return ExtLower(path) == ".lmesh";
 }
 
-bool LoadLeonMeshFile(const std::string& path, MeshData& out) {
+bool LoadLeonMeshFile(const std::string& path, FMeshData& out) {
     std::ifstream in(path, std::ios::binary);
     if (!in.is_open()) {
         std::cerr << "LeonMesh: cannot open " << path << '\n';
@@ -88,11 +88,11 @@ bool LoadLeonMeshFile(const std::string& path, MeshData& out) {
         return false;
     }
 
-    MeshData data;
+    FMeshData data;
     data.vertices.resize(header.vertexCount);
     data.indices.resize(header.indexCount);
     in.read(reinterpret_cast<char*>(data.vertices.data()),
-            static_cast<std::streamsize>(sizeof(Vertex) * header.vertexCount));
+            static_cast<std::streamsize>(sizeof(FVertex) * header.vertexCount));
     in.read(reinterpret_cast<char*>(data.indices.data()),
             static_cast<std::streamsize>(sizeof(std::uint32_t) * header.indexCount));
     if (!in) {
@@ -101,7 +101,7 @@ bool LoadLeonMeshFile(const std::string& path, MeshData& out) {
     }
 
     if (header.submeshCount == 0) {
-        data.submeshes.push_back(SubMesh{0, static_cast<int>(header.indexCount), 0});
+        data.submeshes.push_back(FMeshSection{0, static_cast<int>(header.indexCount), 0});
     } else {
         std::vector<LmeshSubMesh> subs(header.submeshCount);
         in.read(reinterpret_cast<char*>(subs.data()),
@@ -112,7 +112,7 @@ bool LoadLeonMeshFile(const std::string& path, MeshData& out) {
         }
         data.submeshes.reserve(subs.size());
         for (const LmeshSubMesh& s : subs) {
-            data.submeshes.push_back(SubMesh{static_cast<int>(s.indexOffset),
+            data.submeshes.push_back(FMeshSection{static_cast<int>(s.indexOffset),
                                              static_cast<int>(s.indexCount),
                                              static_cast<int>(s.materialIndex)});
         }
@@ -143,7 +143,7 @@ bool LoadLeonMeshFile(const std::string& path, MeshData& out) {
     return !out.empty();
 }
 
-bool SaveLeonMeshFile(const std::string& path, const MeshData& data) {
+bool SaveLeonMeshFile(const std::string& path, const FMeshData& data) {
     if (data.empty()) {
         std::cerr << "LeonMesh: refusing to save empty mesh\n";
         return false;
@@ -168,7 +168,7 @@ bool SaveLeonMeshFile(const std::string& path, const MeshData& data) {
 
     out.write(reinterpret_cast<const char*>(&header), sizeof(header));
     out.write(reinterpret_cast<const char*>(data.vertices.data()),
-              static_cast<std::streamsize>(sizeof(Vertex) * data.vertices.size()));
+              static_cast<std::streamsize>(sizeof(FVertex) * data.vertices.size()));
     out.write(reinterpret_cast<const char*>(data.indices.data()),
               static_cast<std::streamsize>(sizeof(std::uint32_t) * data.indices.size()));
 
@@ -176,7 +176,7 @@ bool SaveLeonMeshFile(const std::string& path, const MeshData& data) {
         LmeshSubMesh s{0, header.indexCount, 0};
         out.write(reinterpret_cast<const char*>(&s), sizeof(s));
     } else {
-        for (const SubMesh& sm : data.submeshes) {
+        for (const FMeshSection& sm : data.submeshes) {
             LmeshSubMesh s{static_cast<std::uint32_t>(sm.indexOffset),
                            static_cast<std::uint32_t>(sm.indexCount),
                            static_cast<std::uint32_t>(sm.materialIndex)};

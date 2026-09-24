@@ -8,11 +8,11 @@
 #include <iostream>
 #include "Misc/Paths.h"
 #include "Debug/DebugDraw.h"
-#include "GlAttrib.h"
+#include "OpenGLVertexAttrib.h"
 #include <utility>
 
 
-bool DebugDraw::Initialize(const std::string& /*shaderDirectory*/) {
+bool FDebugDraw::Initialize(const std::string& /*shaderDirectory*/) {
     const std::string vert = FPaths::ResolveAssetPath("assets/Shaders/debug_line.vert");
     const std::string frag = FPaths::ResolveAssetPath("assets/Shaders/debug_line.frag");
     if (!shader_.LoadFromFiles(vert, frag)) {
@@ -26,19 +26,19 @@ bool DebugDraw::Initialize(const std::string& /*shaderDirectory*/) {
     glBindBuffer(GL_ARRAY_BUFFER, vbo_);
     glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-                          GlAttribOffset(&Vertex::position));
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(FVertex),
+                          GlAttribOffset(&FVertex::position));
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), GlAttribOffset(&Vertex::color));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(FVertex), GlAttribOffset(&FVertex::color));
     glBindVertexArray(0);
     return true;
 }
 
-EShaderReloadResult DebugDraw::ReloadShader(bool force) {
+EShaderReloadResult FDebugDraw::ReloadShader(bool force) {
     return force ? shader_.ForceReloadFromDisk() : shader_.ReloadFromDiskIfChanged();
 }
 
-void DebugDraw::Shutdown() {
+void FDebugDraw::Shutdown() {
     if (vbo_ != 0) {
         glDeleteBuffers(1, &vbo_);
         vbo_ = 0;
@@ -51,16 +51,16 @@ void DebugDraw::Shutdown() {
     vertices_.clear();
 }
 
-void DebugDraw::Clear() {
+void FDebugDraw::Clear() {
     vertices_.clear();
 }
 
-void DebugDraw::AddLine(const glm::vec3& a, const glm::vec3& b, const glm::vec3& color) {
-    vertices_.push_back(Vertex{.position = a, .color = color});
-    vertices_.push_back(Vertex{.position = b, .color = color});
+void FDebugDraw::AddLine(const glm::vec3& a, const glm::vec3& b, const glm::vec3& color) {
+    vertices_.push_back(FVertex{.position = a, .color = color});
+    vertices_.push_back(FVertex{.position = b, .color = color});
 }
 
-void DebugDraw::AddArrow(const glm::vec3& from, const glm::vec3& to, const glm::vec3& color,
+void FDebugDraw::AddArrow(const glm::vec3& from, const glm::vec3& to, const glm::vec3& color,
                          float headLength, float headWidth) {
     AddLine(from, to, color);
 
@@ -80,7 +80,7 @@ void DebugDraw::AddArrow(const glm::vec3& from, const glm::vec3& to, const glm::
     AddLine(to, back - side, color);
 }
 
-void DebugDraw::AddAabb(const glm::vec3& worldMin, const glm::vec3& worldMax,
+void FDebugDraw::AddAabb(const glm::vec3& worldMin, const glm::vec3& worldMax,
                         const glm::vec3& color) {
     const glm::vec3& mn = worldMin;
     const glm::vec3& mx = worldMax;
@@ -114,13 +114,13 @@ void DebugDraw::AddAabb(const glm::vec3& worldMin, const glm::vec3& worldMax,
     }
 }
 
-void DebugDraw::AddAxes(const glm::vec3& origin, float size) {
+void FDebugDraw::AddAxes(const glm::vec3& origin, float size) {
     AddLine(origin, origin + glm::vec3{size, 0.0f, 0.0f}, {1.0f, 0.2f, 0.2f});
     AddLine(origin, origin + glm::vec3{0.0f, size, 0.0f}, {0.2f, 1.0f, 0.2f});
     AddLine(origin, origin + glm::vec3{0.0f, 0.0f, size}, {0.2f, 0.4f, 1.0f});
 }
 
-void DebugDraw::AddLightFrustum(const glm::mat4& lightSpace, const glm::vec3& color) {
+void FDebugDraw::AddLightFrustum(const glm::mat4& lightSpace, const glm::vec3& color) {
     const glm::mat4 inv = glm::inverse(lightSpace);
     const std::array<glm::vec3, 8> ndc = {{
         {-1.0f, -1.0f, -1.0f},
@@ -161,13 +161,13 @@ void DebugDraw::AddLightFrustum(const glm::mat4& lightSpace, const glm::vec3& co
     }
 }
 
-void DebugDraw::Flush(const glm::mat4& viewProjection) const {
+void FDebugDraw::Flush(const glm::mat4& viewProjection) const {
     if (!IsValid() || vertices_.empty()) {
         return;
     }
 
     glBindBuffer(GL_ARRAY_BUFFER, vbo_);
-    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(vertices_.size() * sizeof(Vertex)),
+    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(vertices_.size() * sizeof(FVertex)),
                  vertices_.data(), GL_DYNAMIC_DRAW);
 
     glDisable(GL_BLEND);

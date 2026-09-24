@@ -8,9 +8,9 @@
 #include <memory>
 
 
-class Texture;
+class UTexture2D;
 
-enum class EShadingModel {
+enum class EMaterialShadingModel {
     BlinnPhong,
     Unlit,
 };
@@ -23,9 +23,9 @@ enum class EShadingModel {
 
 /// Per-object surface for the forward lit pass.
 /// specular/metallic + roughness drive Blinn highlights and HDR cubemap LOD.
-/// uvScale tiles albedo/normal maps (Unreal-like Material Instance tiling).
-struct Material {
-    EShadingModel shading = EShadingModel::BlinnPhong;
+/// uvScale tiles albedo/normal maps (Unreal-like FMaterial Instance tiling).
+struct FMaterial {
+    EMaterialShadingModel shading = EMaterialShadingModel::BlinnPhong;
     glm::vec3 albedo{0.55f, 0.72f, 0.85f};
     glm::vec3 specular{0.04f, 0.04f, 0.04f}; // F0 / MTL Ks (dielectric default ~4%)
     float metallic = 0.0f; // 0 = dielectric, 1 = metal (tints specular, kills diffuse)
@@ -35,8 +35,8 @@ struct Material {
     glm::vec2 uvScale{1.0f, 1.0f};                   // multiplies mesh UVs when sampling maps
     bool castsShadows = true;
     bool planarMirror = false;          // horizontal ground mirror (scene planar reflection pass)
-    std::shared_ptr<Texture> albedoMap; // optional; white if null
-    std::shared_ptr<Texture> normalMap; // optional; flat (+Z) if null
+    std::shared_ptr<UTexture2D> albedoMap; // optional; white if null
+    std::shared_ptr<UTexture2D> normalMap; // optional; flat (+Z) if null
 
     [[nodiscard]] bool isTransparent() const { return alpha < 0.999f; }
 

@@ -5,9 +5,9 @@
 #include <numbers>
 
 
-MeshData MakeCube() {
+FMeshData MakeCube() {
     // 6 faces × 4 verts (unique normals/UVs per face corner).
-    MeshData data;
+    FMeshData data;
     data.vertices = {
         // +Z
         {.position = {-0.5f, -0.5f, 0.5f}, .normal = {0, 0, 1}, .texCoord = {0, 0}},
@@ -49,9 +49,9 @@ MeshData MakeCube() {
     return data;
 }
 
-MeshData MakePlane(float size, float uvScale) {
+FMeshData MakePlane(float size, float uvScale) {
     const float h = size * 0.5f;
-    MeshData data;
+    FMeshData data;
     data.vertices = {
         {.position = {-h, 0.0f, -h}, .normal = {0.0f, 1.0f, 0.0f}, .texCoord = {0.0f, 0.0f}},
         {.position = {h, 0.0f, -h}, .normal = {0.0f, 1.0f, 0.0f}, .texCoord = {uvScale, 0.0f}},
@@ -62,11 +62,11 @@ MeshData MakePlane(float size, float uvScale) {
     return data;
 }
 
-MeshData MakeSphere(int segments, int rings) {
+FMeshData MakeSphere(int segments, int rings) {
     segments = std::max(segments, 3);
     rings = std::max(rings, 2);
 
-    MeshData data;
+    FMeshData data;
     data.vertices.reserve(static_cast<std::size_t>(rings + 1) *
                           static_cast<std::size_t>(segments + 1));
     data.indices.reserve(static_cast<std::size_t>(rings) * static_cast<std::size_t>(segments) * 6u);
@@ -82,7 +82,7 @@ MeshData MakeSphere(int segments, int rings) {
             const float theta = u * 2.0f * std::numbers::pi_v<float>;
             const glm::vec3 normal{std::cos(theta) * sinPhi, cosPhi, std::sin(theta) * sinPhi};
             data.vertices.push_back(
-                Vertex{.position = normal * radius, .normal = normal, .texCoord = {u, 1.0f - v}});
+                FVertex{.position = normal * radius, .normal = normal, .texCoord = {u, 1.0f - v}});
         }
     }
 

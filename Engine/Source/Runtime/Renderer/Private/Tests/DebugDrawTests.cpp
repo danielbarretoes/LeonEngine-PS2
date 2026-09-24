@@ -2,7 +2,7 @@
 #include "Debug/DebugDraw.h"
 
 TEST_CASE("DebugDraw batch accumulates and clears", "[debug][draw]") {
-    DebugDraw draw;
+    FDebugDraw draw;
     REQUIRE(draw.IsEmpty());
 
     draw.AddLine({0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f});

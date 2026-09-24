@@ -64,7 +64,7 @@ bool CopyTextureUri(const cgltf_image* image, const fs::path& gltfDir, const fs:
 void WriteMaterialFromGltf(const cgltf_material* mat, const std::string& name,
                            const fs::path& materialsDir, const fs::path& gltfDir,
                            GltfImportedMaterial& outDesc) {
-    Material m{};
+    FMaterial m{};
     m.albedo = {0.8f, 0.8f, 0.8f};
     m.metallic = 0.0f;
     m.roughness = 0.5f;
@@ -99,7 +99,7 @@ void WriteMaterialFromGltf(const cgltf_material* mat, const std::string& name,
 
 } // namespace
 
-bool LoadStaticMeshFromGltf(const std::string& path, MeshData& out,
+bool LoadStaticMeshFromGltf(const std::string& path, FMeshData& out,
                             const std::string& materialsOutDir,
                             std::vector<GltfImportedMaterial>* outMaterials, std::string& outError) {
     out = {};
@@ -123,7 +123,7 @@ bool LoadStaticMeshFromGltf(const std::string& path, MeshData& out,
     const fs::path materialsDir =
         materialsOutDir.empty() ? fs::path{} : fs::path(materialsOutDir);
 
-    MeshData mesh;
+    FMeshData mesh;
     std::uint32_t baseVertex = 0;
 
     for (cgltf_size mi = 0; mi < data->meshes_count; ++mi) {
@@ -154,7 +154,7 @@ bool LoadStaticMeshFromGltf(const std::string& path, MeshData& out,
             const cgltf_size vcount = pos->count;
             const std::size_t startIndex = mesh.indices.size();
             for (cgltf_size vi = 0; vi < vcount; ++vi) {
-                Vertex v{};
+                FVertex v{};
                 float tmp[4]{};
                 if (cgltf_accessor_read_float(pos, vi, tmp, 3)) {
                     v.position = {tmp[0], tmp[1], tmp[2]};
@@ -180,13 +180,13 @@ bool LoadStaticMeshFromGltf(const std::string& path, MeshData& out,
                 }
             }
 
-            SubMesh sm;
+            FMeshSection sm;
             sm.indexOffset = static_cast<int>(startIndex);
             sm.indexCount = static_cast<int>(mesh.indices.size() - startIndex);
             sm.materialIndex = static_cast<int>(mesh.materials.size());
             mesh.submeshes.push_back(sm);
 
-            Material slot{};
+            FMaterial slot{};
             mesh.materials.push_back(slot);
             mesh.albedoMapPaths.emplace_back();
 

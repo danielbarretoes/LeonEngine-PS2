@@ -4,11 +4,11 @@
 #include "SceneColorTarget.h"
 
 
-SceneColorTarget::~SceneColorTarget() {
+FSceneColorTarget::~FSceneColorTarget() {
     Destroy();
 }
 
-bool SceneColorTarget::EnsureSize(int width, int height) {
+bool FSceneColorTarget::EnsureSize(int width, int height) {
     if (width < 1 || height < 1) {
         return false;
     }
@@ -55,7 +55,7 @@ bool SceneColorTarget::EnsureSize(int width, int height) {
     return true;
 }
 
-void SceneColorTarget::Destroy() {
+void FSceneColorTarget::Destroy() {
     if (depthTexture_ != 0) {
         glDeleteTextures(1, &depthTexture_);
         depthTexture_ = 0;
@@ -72,25 +72,25 @@ void SceneColorTarget::Destroy() {
     height_ = 0;
 }
 
-void SceneColorTarget::Begin() const {
+void FSceneColorTarget::Begin() const {
     glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
     glViewport(0, 0, width_, height_);
     glClearColor(0.08f, 0.09f, 0.11f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
-void SceneColorTarget::End(int framebufferWidth, int framebufferHeight,
+void FSceneColorTarget::End(int framebufferWidth, int framebufferHeight,
                            unsigned int restoreFbo) const {
     glBindFramebuffer(GL_FRAMEBUFFER, restoreFbo);
     glViewport(0, 0, framebufferWidth, framebufferHeight);
 }
 
-void SceneColorTarget::BindColorTexture(unsigned int unit) const {
+void FSceneColorTarget::BindColorTexture(unsigned int unit) const {
     glActiveTexture(GL_TEXTURE0 + unit);
     glBindTexture(GL_TEXTURE_2D, colorTexture_);
 }
 
-void SceneColorTarget::BindDepthTexture(unsigned int unit) const {
+void FSceneColorTarget::BindDepthTexture(unsigned int unit) const {
     glActiveTexture(GL_TEXTURE0 + unit);
     glBindTexture(GL_TEXTURE_2D, depthTexture_);
 }

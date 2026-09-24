@@ -75,7 +75,7 @@ struct LevelActorRecord {
 
     std::string tag;
     std::string materialPath; // `.lmat` path (empty = mesh / default material)
-    std::string meshPath;     // imported mesh path (StaticMesh only)
+    std::string meshPath;     // imported mesh path (UStaticMesh only)
     std::string lightmapId;
     std::string lightmapPath;
     std::uint32_t lightmapResolution = 128;

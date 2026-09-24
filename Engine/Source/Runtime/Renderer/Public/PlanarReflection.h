@@ -4,13 +4,13 @@
 
 
 /// Color+depth FBO for a horizontal planar mirror pass (typically half-res).
-class PlanarReflection {
+class FPlanarReflection {
 public:
-    PlanarReflection() = default;
-    ~PlanarReflection();
+    FPlanarReflection() = default;
+    ~FPlanarReflection();
 
-    PlanarReflection(const PlanarReflection&) = delete;
-    PlanarReflection& operator=(const PlanarReflection&) = delete;
+    FPlanarReflection(const FPlanarReflection&) = delete;
+    FPlanarReflection& operator=(const FPlanarReflection&) = delete;
 
     /// Allocate or resize color/depth to match the viewport.
     [[nodiscard]] bool EnsureSize(int width, int height);
@@ -19,7 +19,7 @@ public:
     void Begin() const;
     /// Restore draw target to `restoreFbo` (0 = default framebuffer).
     void End(int framebufferWidth, int framebufferHeight,
-             RHIFramebufferId restoreFbo = kInvalidFramebuffer) const;
+             FRHIFramebufferId restoreFbo = kInvalidFramebuffer) const;
 
     void BindColorTexture(unsigned int unit) const;
     [[nodiscard]] bool Valid() const {
@@ -29,9 +29,9 @@ public:
     [[nodiscard]] int height() const { return height_; }
 
 private:
-    RHIFramebufferId fbo_ = kInvalidFramebuffer;
-    RHITextureId colorTexture_ = kInvalidTexture;
-    RHIRenderbufferId depthRbo_ = kInvalidRenderbuffer;
+    FRHIFramebufferId fbo_ = kInvalidFramebuffer;
+    FRHITextureId colorTexture_ = kInvalidTexture;
+    FRHIRenderbufferId depthRbo_ = kInvalidRenderbuffer;
     int width_ = 0;
     int height_ = 0;
 };

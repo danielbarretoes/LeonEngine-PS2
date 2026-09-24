@@ -11,7 +11,7 @@ std::size_t StaticMeshComponent::subMeshCount() const {
     return mesh->Submeshes().empty() ? 1 : mesh->Submeshes().size();
 }
 
-const Material& StaticMeshComponent::materialForSubMesh(std::size_t subMeshIndex) const {
+const FMaterial& StaticMeshComponent::materialForSubMesh(std::size_t subMeshIndex) const {
     int slot = 0;
     if (mesh != nullptr && subMeshIndex < mesh->Submeshes().size()) {
         slot = mesh->Submeshes()[subMeshIndex].materialIndex;
@@ -35,8 +35,8 @@ bool StaticMeshComponent::isShadowCaster() const {
         return false;
     }
 
-    const auto countsAsCaster = [](const Material& mat) {
-        return mat.castsShadows && !mat.isTransparent() && mat.shading != EShadingModel::Unlit;
+    const auto countsAsCaster = [](const FMaterial& mat) {
+        return mat.castsShadows && !mat.isTransparent() && mat.shading != EMaterialShadingModel::Unlit;
     };
 
     if (!materials.empty()) {

@@ -18,14 +18,14 @@ TEST_CASE("LoadObj loads a minimal OBJ", "[render][meshdata]") {
             << "vn 0 0 1\n"
             << "f 1//1 2//1 3//1\n";
     }
-    const MeshData data = LoadObj(path.string());
+    const FMeshData data = LoadObj(path.string());
     REQUIRE_FALSE(data.empty());
     REQUIRE(data.indices.size() % 3 == 0);
     std::filesystem::remove(path);
 }
 
 TEST_CASE("ComputeTangents produces unit tangents", "[render][meshdata]") {
-    MeshData data = MakeCube();
+    FMeshData data = MakeCube();
     // MakeCube may already have tangents; recompute from UVs.
     for (auto& v : data.vertices) {
         v.tangent = {0.0f, 0.0f, 0.0f, 1.0f};

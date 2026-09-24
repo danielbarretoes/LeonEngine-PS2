@@ -13,7 +13,7 @@
 #include <vector>
 
 
-class DebugDraw;
+class FDebugDraw;
 
 struct CapsuleContactParams {
     float pushStrength = 1.0f;
@@ -23,7 +23,7 @@ struct CapsuleContactParams {
 };
 
 /// Inclined walkable/blocking surface for Arcade traces (CMC slope lite).
-/// Plane through `point` with unit `normal`, clipped by world AABB bounds.
+/// FPlane through `point` with unit `normal`, clipped by world AABB bounds.
 struct SlopePlane {
     glm::vec3 point{0.0f};
     glm::vec3 normal{0.0f, 1.0f, 0.0f};
@@ -92,35 +92,35 @@ public:
     [[nodiscard]] bool LineTraceSingleByChannel(HitResult& outHit, const glm::vec3& start,
                                                 const glm::vec3& end, ECollisionChannel channel,
                                                 const CollisionQueryParams& params = {},
-                                                DebugDraw* debugDraw = nullptr) const;
+                                                FDebugDraw* debugDraw = nullptr) const;
 
     /// Unreal-like UWorld::LineTraceMultiByChannel — all hits sorted nearest→farthest.
     [[nodiscard]] bool LineTraceMultiByChannel(std::vector<HitResult>& outHits,
                                                const glm::vec3& start, const glm::vec3& end,
                                                ECollisionChannel channel,
                                                const CollisionQueryParams& params = {},
-                                               DebugDraw* debugDraw = nullptr) const;
+                                               FDebugDraw* debugDraw = nullptr) const;
 
     /// Unreal-like UWorld::SphereTraceSingleByChannel (swept sphere ≈ expanded AABB).
     [[nodiscard]] bool SphereTraceSingleByChannel(HitResult& outHit, const glm::vec3& start,
                                                   const glm::vec3& end, float radius,
                                                   ECollisionChannel channel,
                                                   const CollisionQueryParams& params = {},
-                                                  DebugDraw* debugDraw = nullptr) const;
+                                                  FDebugDraw* debugDraw = nullptr) const;
 
     /// Unreal-like UWorld::SphereTraceMultiByChannel.
     [[nodiscard]] bool SphereTraceMultiByChannel(std::vector<HitResult>& outHits,
                                                  const glm::vec3& start, const glm::vec3& end,
                                                  float radius, ECollisionChannel channel,
                                                  const CollisionQueryParams& params = {},
-                                                 DebugDraw* debugDraw = nullptr) const;
+                                                 FDebugDraw* debugDraw = nullptr) const;
 
     /// Unreal-like UWorld::CapsuleTraceSingleByChannel (`halfHeight` = cylinder half, excl. caps).
     [[nodiscard]] bool CapsuleTraceSingleByChannel(HitResult& outHit, const glm::vec3& start,
                                                    const glm::vec3& end, float radius,
                                                    float halfHeight, ECollisionChannel channel,
                                                    const CollisionQueryParams& params = {},
-                                                   DebugDraw* debugDraw = nullptr) const;
+                                                   FDebugDraw* debugDraw = nullptr) const;
 
     /// Unreal-like UWorld::CapsuleTraceMultiByChannel.
     [[nodiscard]] bool CapsuleTraceMultiByChannel(std::vector<HitResult>& outHits,
@@ -128,7 +128,7 @@ public:
                                                   float radius, float halfHeight,
                                                   ECollisionChannel channel,
                                                   const CollisionQueryParams& params = {},
-                                                  DebugDraw* debugDraw = nullptr) const;
+                                                  FDebugDraw* debugDraw = nullptr) const;
 
     void ResolveCapsuleSides(const CapsuleShape& capsule, glm::vec3& feet, const glm::vec2& wishXZ,
                              const CapsuleContactParams& params, std::size_t skipLevelMeshIndex,
@@ -143,11 +143,11 @@ public:
     /// Integrate dynamic velocities + resolve body–body overlaps.
     void Step(const PhysSceneStepParams& params);
 
-    void AppendCollisionDebug(DebugDraw& draw, const CapsuleShape& capsule, const glm::vec3& feet,
+    void AppendCollisionDebug(FDebugDraw& draw, const CapsuleShape& capsule, const glm::vec3& feet,
                               std::size_t skipLevelMeshIndex) const;
 
     /// Body / triangle-mesh / slope wireframes only (editor Player Collision view mode).
-    void AppendBodiesCollisionDebug(DebugDraw& draw,
+    void AppendBodiesCollisionDebug(FDebugDraw& draw,
                                     std::size_t skipLevelMeshIndex =
                                         (std::numeric_limits<std::size_t>::max)()) const;
 

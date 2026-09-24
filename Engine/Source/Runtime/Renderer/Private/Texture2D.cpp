@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
-#include "Texture.h"
+#include "Texture2D.h"
 #include <vector>
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -18,15 +18,15 @@ std::size_t pixelIndex(int x, int y, int size) {
 
 } // namespace
 
-Texture::~Texture() {
+UTexture2D::~UTexture2D() {
     Destroy();
 }
 
-Texture::Texture(Texture&& other) noexcept : id_(other.id_) {
+UTexture2D::UTexture2D(UTexture2D&& other) noexcept : id_(other.id_) {
     other.id_ = 0;
 }
 
-Texture& Texture::operator=(Texture&& other) noexcept {
+UTexture2D& UTexture2D::operator=(UTexture2D&& other) noexcept {
     if (this != &other) {
         Destroy();
         id_ = other.id_;
@@ -35,8 +35,8 @@ Texture& Texture::operator=(Texture&& other) noexcept {
     return *this;
 }
 
-Texture Texture::Create(int width, int height, const unsigned char* rgba) {
-    Texture texture;
+UTexture2D UTexture2D::Create(int width, int height, const unsigned char* rgba) {
+    UTexture2D texture;
     if (width <= 0 || height <= 0 || rgba == nullptr) {
         return texture;
     }
@@ -53,7 +53,7 @@ Texture Texture::Create(int width, int height, const unsigned char* rgba) {
     return texture;
 }
 
-Texture Texture::CreateChecker(int size) {
+UTexture2D UTexture2D::CreateChecker(int size) {
     size = std::max(2, size);
 
     const auto count = pixelIndex(0, size, size);
@@ -74,7 +74,7 @@ Texture Texture::CreateChecker(int size) {
     return Create(size, size, pixels.data());
 }
 
-Texture Texture::CreateFlatNormal(int size) {
+UTexture2D UTexture2D::CreateFlatNormal(int size) {
     size = std::max(1, size);
     const auto count = pixelIndex(0, size, size);
     std::vector<unsigned char> pixels(count * 4u, 255);
@@ -87,7 +87,7 @@ Texture Texture::CreateFlatNormal(int size) {
     return Create(size, size, pixels.data());
 }
 
-Texture Texture::CreateBumpNormal(int size) {
+UTexture2D UTexture2D::CreateBumpNormal(int size) {
     size = std::max(8, size);
 
     // Height field ÔåÆ finite-difference normal map (tileable, intentionally strong).
@@ -139,7 +139,7 @@ Texture Texture::CreateBumpNormal(int size) {
     return Create(size, size, pixels.data());
 }
 
-Texture Texture::LoadFromFile(const std::string& path) {
+UTexture2D UTexture2D::LoadFromFile(const std::string& path) {
     stbi_set_flip_vertically_on_load(1);
     int width = 0;
     int height = 0;
@@ -150,17 +150,17 @@ Texture Texture::LoadFromFile(const std::string& path) {
         return {};
     }
 
-    Texture texture = Create(width, height, data);
+    UTexture2D texture = Create(width, height, data);
     stbi_image_free(data);
     return texture;
 }
 
-void Texture::Bind(unsigned int unit) const {
+void UTexture2D::Bind(unsigned int unit) const {
     glActiveTexture(GL_TEXTURE0 + unit);
     glBindTexture(GL_TEXTURE_2D, id_);
 }
 
-void Texture::Destroy() {
+void UTexture2D::Destroy() {
     if (id_ != 0) {
         glDeleteTextures(1, &id_);
         id_ = 0;

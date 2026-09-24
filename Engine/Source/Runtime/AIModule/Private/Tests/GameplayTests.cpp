@@ -363,7 +363,7 @@ TEST_CASE("NavigationSystem AppendDebugDraw fills overlay", "[gameplay][nav][deb
     nav.BuildFromPhysScene(physics, 0.0f, 4.0f);
     REQUIRE(nav.HasNavMesh());
 
-    DebugDraw draw;
+    FDebugDraw draw;
     REQUIRE(draw.IsEmpty());
     nav.AppendDebugDraw(draw);
     REQUIRE_FALSE(draw.IsEmpty());

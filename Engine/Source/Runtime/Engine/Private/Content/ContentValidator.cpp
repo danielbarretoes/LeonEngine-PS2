@@ -285,7 +285,7 @@ ValidationReport ValidateMaterialFile(const std::string& path) {
         return report;
     }
 
-    LeonMaterialDocument doc;
+    FLeonMaterialDocument doc;
     if (!LoadLeonMaterialDocument(path, doc)) {
         report.error("", "failed to load .lmat");
         return report;

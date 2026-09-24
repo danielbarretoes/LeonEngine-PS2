@@ -7,7 +7,7 @@
 #include <vector>
 
 
-void ComputeTangents(MeshData& data) {
+void ComputeTangents(FMeshData& data) {
     if (data.empty()) {
         return;
     }
@@ -20,9 +20,9 @@ void ComputeTangents(MeshData& data) {
         const auto i1 = data.indices[i + 1];
         const auto i2 = data.indices[i + 2];
 
-        const Vertex& v0 = data.vertices[i0];
-        const Vertex& v1 = data.vertices[i1];
-        const Vertex& v2 = data.vertices[i2];
+        const FVertex& v0 = data.vertices[i0];
+        const FVertex& v1 = data.vertices[i1];
+        const FVertex& v2 = data.vertices[i2];
 
         const glm::vec3 e1 = v1.position - v0.position;
         const glm::vec3 e2 = v2.position - v0.position;
@@ -45,7 +45,7 @@ void ComputeTangents(MeshData& data) {
     }
 
     for (std::size_t i = 0; i < data.vertices.size(); ++i) {
-        Vertex& vertex = data.vertices[i];
+        FVertex& vertex = data.vertices[i];
         const glm::vec3 n = vertex.normal;
         glm::vec3 t = tanAcc[i];
         if (glm::dot(t, t) < 1e-8f) {

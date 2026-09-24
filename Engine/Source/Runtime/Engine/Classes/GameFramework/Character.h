@@ -10,8 +10,8 @@
 #include "Physics/PhysScene.h"
 
 
-class Renderer;
-class DebugDraw;
+class FSceneRenderer;
+class FDebugDraw;
 
 /// Unreal-like EMovementMode (CMC lite: Walking / Falling only).
 enum class EMovementMode : std::uint8_t {
@@ -93,7 +93,7 @@ public:
 
     /// Unreal-like FindFloor: downward sphere trace from feet; fills outFloor.
     void FindFloor(PhysScene& physScene, FindFloorResult& outFloor, float traceDistance,
-                   DebugDraw* debugDraw = nullptr) const;
+                   FDebugDraw* debugDraw = nullptr) const;
 
     /// Unreal-like ACharacter::GetMesh() — skeletal visual + AnimInstance.
     [[nodiscard]] SkeletalMeshComponent& GetMesh() { return mesh_; }
@@ -131,9 +131,9 @@ public:
 
     /// Move capsule against an explicit PhysScene (unit tests / tools). Packs may override.
     virtual void PerformMovement(PhysScene& physScene, float deltaTime,
-                                 DebugDraw* debugDraw = nullptr);
+                                 FDebugDraw* debugDraw = nullptr);
     /// Move against `GetWorld()->GetPhysicsScene()` (no-op if not in a World).
-    void TickCharacterMovement(float deltaTime, DebugDraw* debugDraw = nullptr);
+    void TickCharacterMovement(float deltaTime, FDebugDraw* debugDraw = nullptr);
     /// After PhysScene::Step, push the capsule out of overlapping bodies.
     void ResolveOverlaps(PhysScene& physScene);
     void ResolveOverlaps();
@@ -145,12 +145,12 @@ public:
     void Tick(float deltaTime) override;
 
     /// Draw GetMesh() via SceneComponent world transform.
-    void SubmitMeshDraw(Renderer& renderer) const;
+    void SubmitMeshDraw(FSceneRenderer& renderer) const;
 
 private:
     void applyYaw(float targetYawDegrees, float deltaTime);
-    void moveHorizontal(PhysScene& physScene, float deltaTime, DebugDraw* debugDraw);
-    void integrateVertical(PhysScene& physScene, float deltaTime, DebugDraw* debugDraw);
+    void moveHorizontal(PhysScene& physScene, float deltaTime, FDebugDraw* debugDraw);
+    void integrateVertical(PhysScene& physScene, float deltaTime, FDebugDraw* debugDraw);
     void resolveSides(PhysScene& physScene, bool applyPush);
 
     /// Capsule cylinder half-height (excl. hemispherical caps) for CapsuleTrace.
@@ -161,13 +161,13 @@ private:
     /// Unreal-like SafeMoveUpdatedComponent (XZ): sweep capsule, advance to hit, optional outHit.
     /// Returns true if the full delta was applied (no blocking side hit).
     bool safeMoveUpdatedComponent(PhysScene& physScene, const glm::vec3& delta, HitResult* outHit,
-                                  DebugDraw* debugDraw);
+                                  FDebugDraw* debugDraw);
     /// Project velocity onto the wall plane (Unreal ComputeSlideVector lite, Y forced 0).
     [[nodiscard]] static glm::vec3 computeSlideVector(const glm::vec3& delta,
                                                       const glm::vec3& impactNormal);
     /// Unreal CMC step-up: raise ≤ MaxStepHeight, move forward, land on walkable floor.
     [[nodiscard]] bool tryStepUp(PhysScene& physScene, const glm::vec3& forwardDelta,
-                                 DebugDraw* debugDraw);
+                                 FDebugDraw* debugDraw);
 
     CapsuleShape capsule_{};
     CharacterMovement movement_{};

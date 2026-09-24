@@ -2,7 +2,7 @@
 #include "Engine/World.h"
 #include "Engine/Level.h"
 #include "BodyInstance.h"
-#include "Renderer.h"
+#include "SceneRenderer.h"
 #include <vector>
 
 
@@ -107,7 +107,7 @@ void World::TickGameplayFrame(const WorldGameplayFrameParams& params) {
     }
 }
 
-void World::SubmitSkeletalDraws(Renderer& renderer) const {
+void World::SubmitSkeletalDraws(FSceneRenderer& renderer) const {
     ForEach<Character>([&](Character& character) { character.SubmitMeshDraw(renderer); });
 }
 

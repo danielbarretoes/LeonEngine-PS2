@@ -5,20 +5,20 @@
 #include <string>
 
 
-class ResourceCache;
+class FResourceCache;
 
 /// True if JSON has surface fields (albedo, maps, …) — not gameplay-only keys.
 [[nodiscard]] bool HasMaterialSurfaceFields(const nlohmann::json& spec);
 
-/// Apply material JSON fields onto an existing Material (maps resolved via cache).
-void PatchMaterialFromJson(ResourceCache& resources, Material& material,
+/// Apply material JSON fields onto an existing FMaterial (maps resolved via cache).
+void PatchMaterialFromJson(FResourceCache& resources, FMaterial& material,
                            const nlohmann::json& spec);
 
 /// Load a `.lmat` material asset.
 /// Returns false on I/O / parse failure (leaves `out` unchanged).
-[[nodiscard]] bool LoadMaterialFile(ResourceCache& resources, const std::string& path,
-                                    Material& out);
+[[nodiscard]] bool LoadMaterialFile(FResourceCache& resources, const std::string& path,
+                                    FMaterial& out);
 
 /// Engine default: grayscale checker (Unreal-like WorldGrid placeholder).
-[[nodiscard]] Material MakeDefaultCheckerMaterial(ResourceCache& resources);
+[[nodiscard]] FMaterial MakeDefaultCheckerMaterial(FResourceCache& resources);
 

@@ -116,14 +116,14 @@ void VerticalBoxWidget::CacheLayout(int viewportW, int viewportH) {
     titleH_ = 0.0f;
     if (!title_.empty()) {
         float tw = 0.0f;
-        DebugOverlay::MeasureText(title_, kHudFontScale, tw, titleH_);
+        FDebugOverlay::MeasureText(title_, kHudFontScale, tw, titleH_);
         titleH_ += kHudLineHeight; // blank separator under title
     }
 
     hintH_ = 0.0f;
     if (!hint_.empty()) {
         float hw = 0.0f;
-        DebugOverlay::MeasureText(hint_, kHudFontScale, hw, hintH_);
+        FDebugOverlay::MeasureText(hint_, kHudFontScale, hw, hintH_);
         hintH_ += 12.0f; // gap above hint
     }
 

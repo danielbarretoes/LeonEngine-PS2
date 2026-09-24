@@ -10,7 +10,7 @@
 
 /// Immediate-mode screen text: top-right stats, bottom-left hints, bottom-right chrome,
 /// and top-left timed debug console (Unreal-like AddOnScreenDebugMessage).
-class DebugOverlay {
+class FDebugOverlay {
 public:
     bool Initialize(const std::string& shaderDirectory);
     void Shutdown();
@@ -52,14 +52,14 @@ public:
     [[nodiscard]] bool IsValid() const { return shader_.Valid() && vao_ != 0; }
 
 private:
-    struct OnScreenMessage {
+    struct FOnScreenMessage {
         std::string text;
         float timeRemaining = 0.0f;
         float duration = 0.0f;
         glm::vec3 color{1.0f, 0.0f, 0.0f};
     };
 
-    struct ScreenLine {
+    struct FScreenLine {
         float x0 = 0.0f;
         float y0 = 0.0f;
         float x1 = 0.0f;
@@ -68,7 +68,7 @@ private:
         glm::vec3 color{1.0f};
     };
 
-    struct ScreenRect {
+    struct FScreenRect {
         float x = 0.0f;
         float y = 0.0f;
         float w = 0.0f;
@@ -76,7 +76,7 @@ private:
         glm::vec3 color{1.0f};
     };
 
-    struct ScreenText {
+    struct FScreenText {
         std::string text;
         float x = 0.0f;
         float y = 0.0f;
@@ -87,16 +87,16 @@ private:
 
     void RebuildMesh(int framebufferWidth, int framebufferHeight);
 
-    Shader shader_;
+    FShader shader_;
     std::string text_;
     std::string bottomLeftText_;
     std::string centerText_;
     std::string rightText_;
     float rightTextOriginY_ = 10.0f;
-    std::vector<OnScreenMessage> onScreenMessages_;
-    std::vector<ScreenLine> screenLines_;
-    std::vector<ScreenRect> screenRects_;
-    std::vector<ScreenText> screenTexts_;
+    std::vector<FOnScreenMessage> onScreenMessages_;
+    std::vector<FScreenLine> screenLines_;
+    std::vector<FScreenRect> screenRects_;
+    std::vector<FScreenText> screenTexts_;
     unsigned int vao_ = 0;
     unsigned int vbo_ = 0;
     int vertexCount_ = 0;

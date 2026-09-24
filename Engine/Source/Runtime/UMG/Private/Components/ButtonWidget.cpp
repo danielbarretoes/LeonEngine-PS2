@@ -7,7 +7,7 @@
 void ButtonWidget::MeasureDesiredSize(float& outW, float& outH) const {
     float textW = 0.0f;
     float textH = 0.0f;
-    DebugOverlay::MeasureText(label_.empty() ? " " : label_, kHudFontScale, textW, textH);
+    FDebugOverlay::MeasureText(label_.empty() ? " " : label_, kHudFontScale, textW, textH);
     constexpr float kPadX = 24.0f;
     constexpr float kPadY = 10.0f;
     outW = textW + kPadX * 2.0f;

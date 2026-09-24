@@ -100,7 +100,7 @@ void SpringArmComponent::UpdateLag(float deltaTime, const glm::vec3& actorLocati
 
 float SpringArmComponent::ProbeArmLength(PhysScene& physScene, const glm::vec3& target,
                                          float yawDegrees, float pitchDegrees,
-                                         float desiredLength, DebugDraw* debugDraw) const {
+                                         float desiredLength, FDebugDraw* debugDraw) const {
     const float length = std::clamp(desiredLength, ArmLengthMin, ArmLengthMax);
     if (ProbeSize <= 0.0f || length <= ArmLengthMin + 1.0e-4f) {
         return length;
@@ -129,7 +129,7 @@ float SpringArmComponent::ProbeArmLength(PhysScene& physScene, const glm::vec3& 
 
 void SpringArmComponent::ApplyToCamera(Camera& camera, const glm::vec3& actorLocation,
                                        float deltaTime, PhysScene* physScene,
-                                       DebugDraw* debugDraw) {
+                                       FDebugDraw* debugDraw) {
     UpdateLag(deltaTime, actorLocation);
 
     float armLength = laggedArmLength_;
@@ -151,7 +151,7 @@ void SpringArmComponent::ApplyToCamera(Camera& camera, const glm::vec3& actorLoc
     camera.SetYawPitch(laggedYawDegrees_, laggedPitchDegrees_);
 }
 
-void SpringArmComponent::ApplyToCamera(Camera& camera, float deltaTime, DebugDraw* debugDraw) {
+void SpringArmComponent::ApplyToCamera(Camera& camera, float deltaTime, FDebugDraw* debugDraw) {
     const glm::vec3 actorLocation =
         GetOwner() != nullptr ? GetOwner()->GetActorLocation() : GetComponentLocation();
     ApplyToCamera(camera, actorLocation, deltaTime, nullptr, debugDraw);

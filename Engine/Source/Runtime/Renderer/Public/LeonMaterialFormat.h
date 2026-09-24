@@ -5,30 +5,30 @@
 #include <string>
 
 
-class ResourceCache;
+class FResourceCache;
 
 /// Parsed `.lmat` for authoring (paths kept as strings; maps not required).
-struct LeonMaterialDocument {
+struct FLeonMaterialDocument {
     std::string name = "Material";
-    Material material{};
+    FMaterial material{};
     std::string baseColorMapPath;
     std::string normalMapPath;
 };
 
-/// Unreal Material Instance–like text asset (`.lmat`), not JSON / not `.uasset`.
+/// Unreal FMaterial Instance–like text asset (`.lmat`), not JSON / not `.uasset`.
 /// Sections: [Info], [Parameters], [Textures]. See Docs/ASSET_FORMATS.md.
 [[nodiscard]] bool IsLeonMaterialPath(const std::string& path);
 
-/// Parse `.lmat` without resolving textures (Material Editor).
-[[nodiscard]] bool LoadLeonMaterialDocument(const std::string& path, LeonMaterialDocument& out);
+/// Parse `.lmat` without resolving textures (FMaterial Editor).
+[[nodiscard]] bool LoadLeonMaterialDocument(const std::string& path, FLeonMaterialDocument& out);
 
-/// Parse `.lmat` text into a Material (maps resolved via cache).
-[[nodiscard]] bool LoadLeonMaterialFile(ResourceCache& resources, const std::string& path,
-                                        Material& out);
+/// Parse `.lmat` text into a FMaterial (maps resolved via cache).
+[[nodiscard]] bool LoadLeonMaterialFile(FResourceCache& resources, const std::string& path,
+                                        FMaterial& out);
 
 /// Write a `.lmat` from CPU material parameters (texture paths optional).
 [[nodiscard]] bool SaveLeonMaterialFile(const std::string& path, const std::string& name,
-                                        const Material& material,
+                                        const FMaterial& material,
                                         const std::string& baseColorMapPath = {},
                                         const std::string& normalMapPath = {});
 

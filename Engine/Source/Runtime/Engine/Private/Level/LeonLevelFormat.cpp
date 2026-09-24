@@ -261,7 +261,7 @@ namespace {
     return "StaticMesh";
 }
 
-/// Basic shape backing a stored actor class; false for PlayerStart / AISpawnPoint / StaticMesh.
+/// Basic shape backing a stored actor class; false for PlayerStart / AISpawnPoint / UStaticMesh.
 /// TriggerVolume / PainCausingVolume map to Cube (editor debug mesh); runtime apply uses PODs only.
 [[nodiscard]] bool BasicShapeForActorClass(ELevelActorClass actorClass, EBasicShape& outShape) {
     switch (actorClass) {
@@ -880,7 +880,7 @@ bool ApplyLevelDocument(Engine& engine, const LevelDocument& doc, const std::str
     Level staged;
     staged.Clear();
     LevelAnimation anim;
-    ResourceCache& resources = engine.GetResources();
+    FResourceCache& resources = engine.GetResources();
 
     try {
         if (!doc.environmentPath.empty()) {
@@ -975,7 +975,7 @@ bool ApplyLevelDocument(Engine& engine, const LevelDocument& doc, const std::str
             actor.materialPath = record.materialPath;
 
             if (!record.materialPath.empty()) {
-                Material base =
+                FMaterial base =
                     resources.LoadMaterial(ResolveLevelAssetPath(sourcePath, record.materialPath));
                 if (actor.mesh->HasMaterials()) {
                     actor.materials.assign(actor.mesh->Materials().size(), base);
@@ -991,7 +991,7 @@ bool ApplyLevelDocument(Engine& engine, const LevelDocument& doc, const std::str
             // BlockingVolume: invisible collision box, never a shadow caster.
             if (record.actorClass == ELevelActorClass::BlockingVolume) {
                 actor.material.castsShadows = false;
-                for (Material& material : actor.materials) {
+                for (FMaterial& material : actor.materials) {
                     material.castsShadows = false;
                 }
             }

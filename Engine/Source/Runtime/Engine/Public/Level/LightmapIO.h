@@ -6,10 +6,10 @@
 #include <string>
 
 
-class Texture;
+class UTexture2D;
 
 /// Load a raw `.lm` (LM01 + RGBA8) lightmap texture from disk.
-[[nodiscard]] std::shared_ptr<Texture> LoadLightmapFile(const std::filesystem::path& path);
+[[nodiscard]] std::shared_ptr<UTexture2D> LoadLightmapFile(const std::filesystem::path& path);
 
 /// Resolve a relative `lightmapPath` against the `.llev` directory (or asset root).
 [[nodiscard]] std::filesystem::path ResolveLightmapAbsolutePath(const std::string& levelPath,

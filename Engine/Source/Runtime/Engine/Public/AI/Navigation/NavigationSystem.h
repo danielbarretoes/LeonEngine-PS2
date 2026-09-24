@@ -9,7 +9,7 @@
 
 class Level;
 class PhysScene;
-class DebugDraw;
+class FDebugDraw;
 
 /// Level mesh tags recognized by NavigationSystem bake (Unreal NavArea-style hints).
 namespace NavTags {
@@ -31,7 +31,7 @@ public:
     /// `walkBounds` is half-extent from origin on XZ (matches CharacterMovement::WalkBounds).
     void BuildFromPhysScene(const PhysScene& physics, float floorY, float walkBounds);
 
-    /// Prefer this: skips Plane; honors NavTags::Blocker / NavTags::Walkable on meshes.
+    /// Prefer this: skips FPlane; honors NavTags::Blocker / NavTags::Walkable on meshes.
     void BuildFromLevel(const Level& level, const PhysScene& physics, float floorY,
                         float walkBounds);
 
@@ -51,7 +51,7 @@ public:
                                 std::vector<glm::vec3>& outPath) const;
 
     /// Draw walkable (green) / blocked (red) cell outlines at floorY (F3 / debug overlay).
-    void AppendDebugDraw(DebugDraw& draw) const;
+    void AppendDebugDraw(FDebugDraw& draw) const;
 
 private:
     void BakeGrid(const PhysScene& physics, float floorY, float walkBounds, const Level* level);

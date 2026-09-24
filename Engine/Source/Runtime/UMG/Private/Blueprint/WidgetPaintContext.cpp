@@ -18,6 +18,6 @@ void WidgetPaintContext::DrawText(const std::string& text, float x, float y,
 
 void WidgetPaintContext::MeasureText(const std::string& text, float scale, float& outWidth,
                                      float& outHeight) const {
-    DebugOverlay::MeasureText(text, scale, outWidth, outHeight);
+    FDebugOverlay::MeasureText(text, scale, outWidth, outHeight);
 }
 

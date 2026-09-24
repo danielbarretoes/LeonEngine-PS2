@@ -15,7 +15,7 @@ glm::vec3 readVec3(const nlohmann::json& j, const glm::vec3& fallback) {
     return {j[0].get<float>(), j[1].get<float>(), j[2].get<float>()};
 }
 
-void applyMaterialMaps(ResourceCache& resources, Material& material, const nlohmann::json& object) {
+void applyMaterialMaps(FResourceCache& resources, FMaterial& material, const nlohmann::json& object) {
     if (object.contains("albedoMap") && object["albedoMap"].is_string()) {
         const std::string key = object["albedoMap"].get<std::string>();
         if (key == "checker") {
@@ -43,10 +43,10 @@ bool HasMaterialSurfaceFields(const nlohmann::json& spec) {
            spec.contains("uvScale") || spec.contains("tiling");
 }
 
-void PatchMaterialFromJson(ResourceCache& resources, Material& material,
+void PatchMaterialFromJson(FResourceCache& resources, FMaterial& material,
                            const nlohmann::json& spec) {
     if (spec.contains("unlit") && spec["unlit"].is_boolean() && spec["unlit"].get<bool>()) {
-        material.shading = EShadingModel::Unlit;
+        material.shading = EMaterialShadingModel::Unlit;
     }
     if (spec.contains("albedo")) {
         material.albedo = readVec3(spec["albedo"], material.albedo);
@@ -92,7 +92,7 @@ void PatchMaterialFromJson(ResourceCache& resources, Material& material,
     applyMaterialMaps(resources, material, spec);
 }
 
-bool LoadMaterialFile(ResourceCache& resources, const std::string& path, Material& out) {
+bool LoadMaterialFile(FResourceCache& resources, const std::string& path, FMaterial& out) {
     if (!IsLeonMaterialPath(path)) {
         std::cerr << "MaterialAsset: expected .lmat, got '" << path << "'\n";
         return false;
@@ -100,9 +100,9 @@ bool LoadMaterialFile(ResourceCache& resources, const std::string& path, Materia
     return LoadLeonMaterialFile(resources, path, out);
 }
 
-Material MakeDefaultCheckerMaterial(ResourceCache& resources) {
-    Material material;
-    material.shading = EShadingModel::BlinnPhong;
+FMaterial MakeDefaultCheckerMaterial(FResourceCache& resources) {
+    FMaterial material;
+    material.shading = EMaterialShadingModel::BlinnPhong;
     material.albedo = {1.0f, 1.0f, 1.0f};
     material.specular = {0.04f, 0.04f, 0.04f};
     material.metallic = 0.0f;

@@ -36,7 +36,7 @@ void HUD::Tick(float deltaTime) {
     }
 }
 
-void HUD::Paint(DebugOverlay& overlay, int framebufferWidth, int framebufferHeight) {
+void HUD::Paint(FDebugOverlay& overlay, int framebufferWidth, int framebufferHeight) {
     overlay.ClearScreenGeometry();
     if (framebufferWidth <= 0 || framebufferHeight <= 0 || widgets_.empty()) {
         return;

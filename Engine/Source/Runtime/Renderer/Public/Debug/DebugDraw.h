@@ -9,7 +9,7 @@
 
 
 /// Immediate-mode colored line batch for 3D debug (AABBs, light frustum, etc.).
-class DebugDraw {
+class FDebugDraw {
 public:
     bool Initialize(const std::string& shaderDirectory);
     void Shutdown();
@@ -33,14 +33,14 @@ public:
     [[nodiscard]] bool IsEmpty() const { return vertices_.empty(); }
 
 private:
-    struct Vertex {
+    struct FVertex {
         glm::vec3 position{};
         glm::vec3 color{};
     };
 
-    Shader shader_;
+    FShader shader_;
     unsigned int vao_ = 0;
     unsigned int vbo_ = 0;
-    std::vector<Vertex> vertices_;
+    std::vector<FVertex> vertices_;
 };
 

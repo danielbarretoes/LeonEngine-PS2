@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
-#include "EnvMap.h"
+#include "EnvironmentMap.h"
 #include <numbers>
 #include <stb_image.h>
 #include <vector>
@@ -119,11 +119,11 @@ unsigned int uploadCubeRgb16f(const std::vector<std::vector<float>>& faces, int 
 
 } // namespace
 
-EnvMap::~EnvMap() {
+FEnvironmentMap::~FEnvironmentMap() {
     Destroy();
 }
 
-EnvMap::EnvMap(EnvMap&& other) noexcept
+FEnvironmentMap::FEnvironmentMap(FEnvironmentMap&& other) noexcept
     : id_(other.id_), irradianceId_(other.irradianceId_), faceSize_(other.faceSize_),
       mipCount_(other.mipCount_) {
     other.id_ = 0;
@@ -132,7 +132,7 @@ EnvMap::EnvMap(EnvMap&& other) noexcept
     other.mipCount_ = 0;
 }
 
-EnvMap& EnvMap::operator=(EnvMap&& other) noexcept {
+FEnvironmentMap& FEnvironmentMap::operator=(FEnvironmentMap&& other) noexcept {
     if (this != &other) {
         Destroy();
         id_ = other.id_;
@@ -147,8 +147,8 @@ EnvMap& EnvMap::operator=(EnvMap&& other) noexcept {
     return *this;
 }
 
-EnvMap EnvMap::LoadFromHdr(const std::string& path, int faceSize, int irradianceSize) {
-    EnvMap map;
+FEnvironmentMap FEnvironmentMap::LoadFromHdr(const std::string& path, int faceSize, int irradianceSize) {
+    FEnvironmentMap map;
     faceSize = std::max(16, faceSize);
     irradianceSize = std::max(8, irradianceSize);
 
@@ -232,17 +232,17 @@ EnvMap EnvMap::LoadFromHdr(const std::string& path, int faceSize, int irradiance
     return map;
 }
 
-void EnvMap::Bind(unsigned int unit) const {
+void FEnvironmentMap::Bind(unsigned int unit) const {
     glActiveTexture(GL_TEXTURE0 + unit);
     glBindTexture(GL_TEXTURE_CUBE_MAP, id_);
 }
 
-void EnvMap::BindIrradiance(unsigned int unit) const {
+void FEnvironmentMap::BindIrradiance(unsigned int unit) const {
     glActiveTexture(GL_TEXTURE0 + unit);
     glBindTexture(GL_TEXTURE_CUBE_MAP, irradianceId_);
 }
 
-void EnvMap::Destroy() {
+void FEnvironmentMap::Destroy() {
     if (irradianceId_ != 0) {
         glDeleteTextures(1, &irradianceId_);
         irradianceId_ = 0;

@@ -27,7 +27,7 @@ RawPlane normalizePlane(float a, float b, float c, float d) {
 
 } // namespace
 
-Aabb Aabb::fromLocalTransformed(const glm::vec3& localMin, const glm::vec3& localMax,
+FBox FBox::fromLocalTransformed(const glm::vec3& localMin, const glm::vec3& localMax,
                                 const glm::mat4& model) {
     const std::array<glm::vec3, 8> corners = {{
         {localMin.x, localMin.y, localMin.z},
@@ -40,7 +40,7 @@ Aabb Aabb::fromLocalTransformed(const glm::vec3& localMin, const glm::vec3& loca
         {localMax.x, localMax.y, localMax.z},
     }};
 
-    Aabb box;
+    FBox box;
     box.min = glm::vec3(std::numeric_limits<float>::max());
     box.max = glm::vec3(std::numeric_limits<float>::lowest());
     for (const glm::vec3& local : corners) {
@@ -51,7 +51,7 @@ Aabb Aabb::fromLocalTransformed(const glm::vec3& localMin, const glm::vec3& loca
     return box;
 }
 
-bool Aabb::intersectRay(const glm::vec3& origin, const glm::vec3& dir, float& outT) const {
+bool FBox::intersectRay(const glm::vec3& origin, const glm::vec3& dir, float& outT) const {
     constexpr float kEps = 1.0e-8f;
     float tMin = 0.0f;
     float tMax = std::numeric_limits<float>::max();
@@ -86,7 +86,7 @@ bool Aabb::intersectRay(const glm::vec3& origin, const glm::vec3& dir, float& ou
     return outT >= 0.0f;
 }
 
-void Frustum::extractFromViewProjection(const glm::mat4& viewProjection) {
+void FFrustum::extractFromViewProjection(const glm::mat4& viewProjection) {
     // Gribb/Hartmann: combine clip-matrix columns into frustum planes.
     const glm::mat4& m = viewProjection;
     const std::array<RawPlane, 6> raw = {{
@@ -104,7 +104,7 @@ void Frustum::extractFromViewProjection(const glm::mat4& viewProjection) {
                        m[3][3] - m[3][2]), // far
     }};
 
-    auto assign = [](Plane& dst, const RawPlane& src) {
+    auto assign = [](FPlane& dst, const RawPlane& src) {
         dst.normal = {src.a, src.b, src.c};
         dst.distance = src.d;
     };
@@ -116,8 +116,8 @@ void Frustum::extractFromViewProjection(const glm::mat4& viewProjection) {
     assign(planes_[5], raw[5]);
 }
 
-bool Frustum::intersectsAabb(const Aabb& box) const {
-    for (const Plane& plane : planes_) {
+bool FFrustum::intersectsAabb(const FBox& box) const {
+    for (const FPlane& plane : planes_) {
         const glm::vec3 positive{
             plane.normal.x >= 0.0f ? box.max.x : box.min.x,
             plane.normal.y >= 0.0f ? box.max.y : box.min.y,

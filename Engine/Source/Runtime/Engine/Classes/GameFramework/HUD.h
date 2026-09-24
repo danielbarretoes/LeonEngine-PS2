@@ -7,7 +7,7 @@
 #include <vector>
 
 
-class DebugOverlay;
+class FDebugOverlay;
 
 /// Unreal-like AHUD: owns UserWidgets painted each frame into screen geometry.
 class HUD {
@@ -57,7 +57,7 @@ public:
     void Tick(float deltaTime);
 
     /// Clears prior frame screen geometry, then paints visible widgets.
-    void Paint(DebugOverlay& overlay, int framebufferWidth, int framebufferHeight);
+    void Paint(FDebugOverlay& overlay, int framebufferWidth, int framebufferHeight);
 
     [[nodiscard]] const std::vector<std::unique_ptr<UserWidget>>& Widgets() const {
         return widgets_;

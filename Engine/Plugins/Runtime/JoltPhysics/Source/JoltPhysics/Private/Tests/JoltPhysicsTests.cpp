@@ -97,7 +97,7 @@ TEST_CASE("PhysScene Jolt dynamic rests on static box", "[physics][jolt]") {
 
 TEST_CASE("PhysScene Jolt dynamic rests on TriangleMesh static", "[physics][jolt][mesh]") {
     Level level;
-    MeshData data;
+    FMeshData data;
     // Flat plane at y=1 covering xz [-3,3]
     data.vertices.push_back({{-3.0f, 1.0f, -3.0f}, {0, 1, 0}, {0, 0}, {1, 0, 0, 1}});
     data.vertices.push_back({{3.0f, 1.0f, -3.0f}, {0, 1, 0}, {1, 0}, {1, 0, 0, 1}});
@@ -107,7 +107,7 @@ TEST_CASE("PhysScene Jolt dynamic rests on TriangleMesh static", "[physics][jolt
     data.submeshes.push_back({0, 6, 0});
 
     StaticMeshComponent component{};
-    component.mesh = std::make_shared<StaticMesh>(StaticMesh::CreateCpu(data));
+    component.mesh = std::make_shared<UStaticMesh>(UStaticMesh::CreateCpu(data));
     component.collisionEnabled = true;
     level.StaticMeshes().push_back(std::move(component));
 
@@ -131,7 +131,7 @@ TEST_CASE("PhysScene Jolt dynamic rests on TriangleMesh static", "[physics][jolt
         scene.Step(params);
     }
 
-    // Plane at y=1 + halfExtents 0.35 ≈ 1.35
+    // FPlane at y=1 + halfExtents 0.35 ≈ 1.35
     REQUIRE_THAT(box.position.y, WithinAbs(1.35f, 0.45f));
     REQUIRE(std::abs(box.velocityY) < 2.0f);
 }

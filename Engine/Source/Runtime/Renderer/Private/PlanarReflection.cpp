@@ -4,11 +4,11 @@
 #include "PlanarReflection.h"
 
 
-PlanarReflection::~PlanarReflection() {
+FPlanarReflection::~FPlanarReflection() {
     Destroy();
 }
 
-bool PlanarReflection::EnsureSize(int width, int height) {
+bool FPlanarReflection::EnsureSize(int width, int height) {
     if (width < 1 || height < 1) {
         return false;
     }
@@ -48,7 +48,7 @@ bool PlanarReflection::EnsureSize(int width, int height) {
     return true;
 }
 
-void PlanarReflection::Destroy() {
+void FPlanarReflection::Destroy() {
     if (depthRbo_ != 0) {
         glDeleteRenderbuffers(1, &depthRbo_);
         depthRbo_ = 0;
@@ -65,7 +65,7 @@ void PlanarReflection::Destroy() {
     height_ = 0;
 }
 
-void PlanarReflection::Begin() const {
+void FPlanarReflection::Begin() const {
     glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
     glViewport(0, 0, width_, height_);
     glClearColor(0.08f, 0.09f, 0.11f, 1.0f);
@@ -74,14 +74,14 @@ void PlanarReflection::Begin() const {
     glCullFace(GL_FRONT);
 }
 
-void PlanarReflection::End(int framebufferWidth, int framebufferHeight,
-                           RHIFramebufferId restoreFbo) const {
+void FPlanarReflection::End(int framebufferWidth, int framebufferHeight,
+                           FRHIFramebufferId restoreFbo) const {
     glCullFace(GL_BACK);
     glBindFramebuffer(GL_FRAMEBUFFER, restoreFbo);
     glViewport(0, 0, framebufferWidth, framebufferHeight);
 }
 
-void PlanarReflection::BindColorTexture(unsigned int unit) const {
+void FPlanarReflection::BindColorTexture(unsigned int unit) const {
     glActiveTexture(GL_TEXTURE0 + unit);
     glBindTexture(GL_TEXTURE_2D, colorTexture_);
 }

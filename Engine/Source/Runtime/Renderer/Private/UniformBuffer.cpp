@@ -3,11 +3,11 @@
 #include "UniformBuffer.h"
 
 
-UniformBuffer::~UniformBuffer() {
+FUniformBuffer::~FUniformBuffer() {
     Destroy();
 }
 
-bool UniformBuffer::Create(std::size_t sizeBytes, unsigned int bindingPoint) {
+bool FUniformBuffer::Create(std::size_t sizeBytes, unsigned int bindingPoint) {
     Destroy();
     if (sizeBytes == 0) {
         return false;
@@ -24,7 +24,7 @@ bool UniformBuffer::Create(std::size_t sizeBytes, unsigned int bindingPoint) {
     return true;
 }
 
-void UniformBuffer::Destroy() {
+void FUniformBuffer::Destroy() {
     if (id_ != 0) {
         glDeleteBuffers(1, &id_);
         id_ = 0;
@@ -33,7 +33,7 @@ void UniformBuffer::Destroy() {
     sizeBytes_ = 0;
 }
 
-void UniformBuffer::Update(const void* data, std::size_t sizeBytes) const {
+void FUniformBuffer::Update(const void* data, std::size_t sizeBytes) const {
     if (!Valid() || data == nullptr || sizeBytes == 0 || sizeBytes > sizeBytes_) {
         return;
     }
@@ -42,7 +42,7 @@ void UniformBuffer::Update(const void* data, std::size_t sizeBytes) const {
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
 }
 
-void UniformBuffer::Bind() const {
+void FUniformBuffer::Bind() const {
     if (Valid()) {
         glBindBufferBase(GL_UNIFORM_BUFFER, bindingPoint_, id_);
     }

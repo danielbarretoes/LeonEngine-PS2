@@ -2,16 +2,16 @@
 #include <glm/common.hpp>
 
 #include <algorithm>
-#include "GlAttrib.h"
+#include "OpenGLVertexAttrib.h"
 #include "SkeletalMesh.h"
 #include <utility>
 
 
-SkeletalMesh::~SkeletalMesh() {
+USkeletalMesh::~USkeletalMesh() {
     Destroy();
 }
 
-SkeletalMesh::SkeletalMesh(SkeletalMesh&& other) noexcept
+USkeletalMesh::USkeletalMesh(USkeletalMesh&& other) noexcept
     : vao_(other.vao_), vbo_(other.vbo_), ebo_(other.ebo_), indexCount_(other.indexCount_),
       cpuOnly_(other.cpuOnly_), skeleton_(std::move(other.skeleton_)),
       embeddedAnim_(std::move(other.embeddedAnim_)), localMin_(other.localMin_),
@@ -23,7 +23,7 @@ SkeletalMesh::SkeletalMesh(SkeletalMesh&& other) noexcept
     other.cpuOnly_ = false;
 }
 
-SkeletalMesh& SkeletalMesh::operator=(SkeletalMesh&& other) noexcept {
+USkeletalMesh& USkeletalMesh::operator=(USkeletalMesh&& other) noexcept {
     if (this != &other) {
         Destroy();
         vao_ = other.vao_;
@@ -45,8 +45,8 @@ SkeletalMesh& SkeletalMesh::operator=(SkeletalMesh&& other) noexcept {
     return *this;
 }
 
-SkeletalMesh SkeletalMesh::CreateCpu(SkeletalMeshData data) {
-    SkeletalMesh mesh;
+USkeletalMesh USkeletalMesh::CreateCpu(SkeletalMeshData data) {
+    USkeletalMesh mesh;
     if (data.empty()) {
         return mesh;
     }
@@ -59,8 +59,8 @@ SkeletalMesh SkeletalMesh::CreateCpu(SkeletalMeshData data) {
     return mesh;
 }
 
-SkeletalMesh SkeletalMesh::Upload(SkeletalMeshData data) {
-    SkeletalMesh mesh;
+USkeletalMesh USkeletalMesh::Upload(SkeletalMeshData data) {
+    USkeletalMesh mesh;
     if (data.empty()) {
         return mesh;
     }
@@ -115,7 +115,7 @@ SkeletalMesh SkeletalMesh::Upload(SkeletalMeshData data) {
     return mesh;
 }
 
-void SkeletalMesh::Draw() const {
+void USkeletalMesh::Draw() const {
     if (!Valid() || cpuOnly_ || vao_ == 0) {
         return;
     }
@@ -124,7 +124,7 @@ void SkeletalMesh::Draw() const {
     glBindVertexArray(0);
 }
 
-float SkeletalMesh::FitUniformScale(float fitHeight) const {
+float USkeletalMesh::FitUniformScale(float fitHeight) const {
     if (fitHeight <= 0.0f) {
         return 1.0f;
     }
@@ -132,7 +132,7 @@ float SkeletalMesh::FitUniformScale(float fitHeight) const {
     return fitHeight / height;
 }
 
-void SkeletalMesh::Destroy() {
+void USkeletalMesh::Destroy() {
     if (ebo_ != 0) {
         glDeleteBuffers(1, &ebo_);
         ebo_ = 0;

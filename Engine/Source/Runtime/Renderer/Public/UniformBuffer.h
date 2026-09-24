@@ -5,13 +5,13 @@
 
 
 /// GL_UNIFORM_BUFFER wrapper bound to a fixed binding point (OpenGL 3.3+).
-class UniformBuffer {
+class FUniformBuffer {
 public:
-    UniformBuffer() = default;
-    ~UniformBuffer();
+    FUniformBuffer() = default;
+    ~FUniformBuffer();
 
-    UniformBuffer(const UniformBuffer&) = delete;
-    UniformBuffer& operator=(const UniformBuffer&) = delete;
+    FUniformBuffer(const FUniformBuffer&) = delete;
+    FUniformBuffer& operator=(const FUniformBuffer&) = delete;
 
     bool Create(std::size_t sizeBytes, unsigned int bindingPoint);
     void Destroy();
@@ -23,7 +23,7 @@ public:
     [[nodiscard]] unsigned int BindingPoint() const { return bindingPoint_; }
 
 private:
-    RHIBufferId id_ = kInvalidBuffer;
+    FRHIBufferId id_ = kInvalidBuffer;
     unsigned int bindingPoint_ = 0;
     std::size_t sizeBytes_ = 0;
 };

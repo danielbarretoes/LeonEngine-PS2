@@ -45,7 +45,7 @@ struct VertexKeyHash {
     }
 };
 
-void computeSmoothNormals(MeshData& data) {
+void computeSmoothNormals(FMeshData& data) {
     for (auto& vertex : data.vertices) {
         vertex.normal = {0.0f, 0.0f, 0.0f};
     }
@@ -101,7 +101,7 @@ bool faceIndicesValid(const tinyobj::attrib_t& attrib, const tinyobj::index_t& i
     return true;
 }
 
-std::uint32_t getOrCreateVertex(MeshData& data,
+std::uint32_t getOrCreateVertex(FMeshData& data,
                                 std::unordered_map<VertexKey, std::uint32_t, VertexKeyHash>& unique,
                                 const tinyobj::attrib_t& attrib, const tinyobj::index_t& index,
                                 bool hasFileNormals, bool hasTexcoords) {
@@ -110,7 +110,7 @@ std::uint32_t getOrCreateVertex(MeshData& data,
         return found->second;
     }
 
-    Vertex vertex{};
+    FVertex vertex{};
     const auto vi = static_cast<std::size_t>(index.vertex_index) * 3u;
     vertex.position = {
         attrib.vertices[vi + 0],
@@ -144,9 +144,9 @@ std::uint32_t getOrCreateVertex(MeshData& data,
     return newIndex;
 }
 
-Material materialFromTiny(const tinyobj::material_t& src) {
-    Material material;
-    material.shading = EShadingModel::BlinnPhong;
+FMaterial materialFromTiny(const tinyobj::material_t& src) {
+    FMaterial material;
+    material.shading = EMaterialShadingModel::BlinnPhong;
     material.albedo = {src.diffuse[0], src.diffuse[1], src.diffuse[2]};
     material.specular = {src.specular[0], src.specular[1], src.specular[2]};
     material.alpha = src.dissolve;
@@ -176,7 +176,7 @@ Material materialFromTiny(const tinyobj::material_t& src) {
 
 } // namespace
 
-MeshData LoadObj(const std::string& path) {
+FMeshData LoadObj(const std::string& path) {
     tinyobj::ObjReaderConfig config;
     config.triangulate = true;
     config.mtl_search_path = std::filesystem::path(path).parent_path().string();
@@ -202,13 +202,13 @@ MeshData LoadObj(const std::string& path) {
         indexEstimate += shape.mesh.indices.size();
     }
 
-    MeshData data;
+    FMeshData data;
     data.vertices.reserve(indexEstimate);
 
     std::unordered_map<VertexKey, std::uint32_t, VertexKeyHash> unique;
     unique.reserve(indexEstimate);
 
-    // materialId → triangle indices (grouped so each SubMesh is contiguous).
+    // materialId → triangle indices (grouped so each FMeshSection is contiguous).
     std::map<int, std::vector<std::uint32_t>> indicesByMaterial;
 
     const bool hasFileNormals = !attrib.normals.empty();
@@ -282,7 +282,7 @@ MeshData LoadObj(const std::string& path) {
             slot = 0;
         }
 
-        SubMesh sub;
+        FMeshSection sub;
         sub.indexOffset = static_cast<int>(data.indices.size());
         sub.indexCount = static_cast<int>(bucket.size());
         sub.materialIndex = slot;
@@ -291,9 +291,9 @@ MeshData LoadObj(const std::string& path) {
     }
 
     if (data.materials.empty()) {
-        data.materials.push_back(Material{});
+        data.materials.push_back(FMaterial{});
         data.albedoMapPaths.emplace_back();
-        for (SubMesh& sub : data.submeshes) {
+        for (FMeshSection& sub : data.submeshes) {
             sub.materialIndex = 0;
         }
     }

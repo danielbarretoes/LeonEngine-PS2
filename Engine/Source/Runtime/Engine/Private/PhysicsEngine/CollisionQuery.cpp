@@ -196,7 +196,7 @@ void sortHitsByTime(std::vector<HitResult>& hits) {
     return true;
 }
 
-void addRingXZ(DebugDraw& draw, const glm::vec3& center, float radius, const glm::vec3& color,
+void addRingXZ(FDebugDraw& draw, const glm::vec3& center, float radius, const glm::vec3& color,
                int segments = 16) {
     const float segCount = static_cast<float>(segments);
     for (int i = 0; i < segments; ++i) {
@@ -208,7 +208,7 @@ void addRingXZ(DebugDraw& draw, const glm::vec3& center, float radius, const glm
     }
 }
 
-void addImpactMarker(DebugDraw& draw, const HitResult& hit) {
+void addImpactMarker(FDebugDraw& draw, const HitResult& hit) {
     const float s = 0.08f;
     draw.AddLine(hit.ImpactPoint + glm::vec3{-s, 0, 0}, hit.ImpactPoint + glm::vec3{s, 0, 0},
                  kTraceNormal);
@@ -220,7 +220,7 @@ void addImpactMarker(DebugDraw& draw, const HitResult& hit) {
                   0.12f, 0.07f);
 }
 
-void drawTracePath(DebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
+void drawTracePath(FDebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
                    const std::vector<HitResult>& hits) {
     if (hits.empty()) {
         draw.AddLine(start, end, kTraceMiss);
@@ -234,18 +234,18 @@ void drawTracePath(DebugDraw& draw, const glm::vec3& start, const glm::vec3& end
     }
 }
 
-[[nodiscard]] bool shouldDraw(const CollisionQueryParams& params, DebugDraw* debugDraw) {
+[[nodiscard]] bool shouldDraw(const CollisionQueryParams& params, FDebugDraw* debugDraw) {
     return debugDraw != nullptr && params.DrawDebugType == EDrawDebugTrace::ForOneFrame;
 }
 
 } // namespace
 
-void DrawDebugLineTrace(DebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
+void DrawDebugLineTrace(FDebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
                         const std::vector<HitResult>& hits) {
     drawTracePath(draw, start, end, hits);
 }
 
-void DrawDebugSphereTrace(DebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
+void DrawDebugSphereTrace(FDebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
                           float radius, const std::vector<HitResult>& hits) {
     const float r = std::max(radius, 0.0f);
     drawTracePath(draw, start, end, hits);
@@ -256,7 +256,7 @@ void DrawDebugSphereTrace(DebugDraw& draw, const glm::vec3& start, const glm::ve
     }
 }
 
-void DrawDebugCapsuleTrace(DebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
+void DrawDebugCapsuleTrace(FDebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
                            float radius, float halfHeight, const std::vector<HitResult>& hits) {
     const float r = std::max(radius, 0.0f);
     const float hh = std::max(halfHeight, 0.0f);
@@ -275,7 +275,7 @@ void DrawDebugCapsuleTrace(DebugDraw& draw, const glm::vec3& start, const glm::v
 bool PhysScene::LineTraceMultiByChannel(std::vector<HitResult>& outHits, const glm::vec3& start,
                                         const glm::vec3& end, ECollisionChannel channel,
                                         const CollisionQueryParams& params,
-                                        DebugDraw* debugDraw) const {
+                                        FDebugDraw* debugDraw) const {
     outHits.clear();
 
     if (backendIface_ != nullptr && backendIface_->HasNarrowPhaseTraces()) {
@@ -342,7 +342,7 @@ bool PhysScene::LineTraceMultiByChannel(std::vector<HitResult>& outHits, const g
 bool PhysScene::LineTraceSingleByChannel(HitResult& outHit, const glm::vec3& start,
                                          const glm::vec3& end, ECollisionChannel channel,
                                          const CollisionQueryParams& params,
-                                         DebugDraw* debugDraw) const {
+                                         FDebugDraw* debugDraw) const {
     std::vector<HitResult> hits;
     (void)LineTraceMultiByChannel(hits, start, end, channel, params, debugDraw);
     return takeNearestHit(hits, outHit, start, end);
@@ -352,7 +352,7 @@ bool PhysScene::SphereTraceMultiByChannel(std::vector<HitResult>& outHits, const
                                           const glm::vec3& end, float radius,
                                           ECollisionChannel channel,
                                           const CollisionQueryParams& params,
-                                          DebugDraw* debugDraw) const {
+                                          FDebugDraw* debugDraw) const {
     const float r = std::max(radius, 0.0f);
     outHits.clear();
 
@@ -426,7 +426,7 @@ bool PhysScene::SphereTraceSingleByChannel(HitResult& outHit, const glm::vec3& s
                                            const glm::vec3& end, float radius,
                                            ECollisionChannel channel,
                                            const CollisionQueryParams& params,
-                                           DebugDraw* debugDraw) const {
+                                           FDebugDraw* debugDraw) const {
     std::vector<HitResult> hits;
     (void)SphereTraceMultiByChannel(hits, start, end, radius, channel, params, debugDraw);
     return takeNearestHit(hits, outHit, start, end);
@@ -436,7 +436,7 @@ bool PhysScene::CapsuleTraceMultiByChannel(std::vector<HitResult>& outHits, cons
                                            const glm::vec3& end, float radius, float halfHeight,
                                            ECollisionChannel channel,
                                            const CollisionQueryParams& params,
-                                           DebugDraw* debugDraw) const {
+                                           FDebugDraw* debugDraw) const {
     const float r = std::max(radius, 0.0f);
     const float hh = std::max(halfHeight, 0.0f);
     outHits.clear();
@@ -511,7 +511,7 @@ bool PhysScene::CapsuleTraceSingleByChannel(HitResult& outHit, const glm::vec3& 
                                             const glm::vec3& end, float radius, float halfHeight,
                                             ECollisionChannel channel,
                                             const CollisionQueryParams& params,
-                                            DebugDraw* debugDraw) const {
+                                            FDebugDraw* debugDraw) const {
     std::vector<HitResult> hits;
     (void)CapsuleTraceMultiByChannel(hits, start, end, radius, halfHeight, channel, params,
                                      debugDraw);

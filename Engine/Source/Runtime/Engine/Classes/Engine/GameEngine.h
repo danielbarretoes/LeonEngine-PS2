@@ -11,7 +11,7 @@
 #include "Debug/DebugOverlay.h"
 #include "Engine/GameInstance.h"
 #include "Engine/Level.h"
-#include "Renderer.h"
+#include "SceneRenderer.h"
 #include "ResourceCache.h"
 #include "GameFramework/HUD.h"
 #include <memory>
@@ -20,7 +20,7 @@
 #include <utility>
 
 /// Top-level runtime: GLFW window, main loop, orbit-camera input, FPS overlay,
-/// GameInstance, and a Level/ResourceCache filled by LevelDirector (or the app).
+/// GameInstance, and a Level/FResourceCache filled by LevelDirector (or the app).
 class Engine {
 public:
     using UpdateCallback = std::function<void(float deltaTime)>;
@@ -50,7 +50,7 @@ public:
     void TickPlayAudio();
     /// Editor PIE / custom loops: HUD widget tick + on-screen messages + optional F4 stats.
     void TickPlayHud(float deltaTime);
-    /// Editor PIE / custom loops: paint HUD widgets + DebugOverlay (call after DrawScene).
+    /// Editor PIE / custom loops: paint HUD widgets + FDebugOverlay (call after DrawScene).
     void PaintHudAndOverlay(int framebufferWidth, int framebufferHeight);
 
     void RequestQuit() { running_ = false; }
@@ -59,16 +59,16 @@ public:
 
     [[nodiscard]] Level& GetLevel() { return level_; }
     [[nodiscard]] const Level& GetLevel() const { return level_; }
-    [[nodiscard]] ResourceCache& GetResources() { return resources_; }
-    [[nodiscard]] const ResourceCache& GetResources() const { return resources_; }
+    [[nodiscard]] FResourceCache& GetResources() { return resources_; }
+    [[nodiscard]] const FResourceCache& GetResources() const { return resources_; }
     [[nodiscard]] Camera& GetCamera() { return camera_; }
     [[nodiscard]] const Camera& GetCamera() const { return camera_; }
     [[nodiscard]] FGenericWindow& GetWindow() { return *window_; }
     [[nodiscard]] const FGenericWindow& GetWindow() const { return *window_; }
     [[nodiscard]] PlayerInput& GetInput() { return playerInput_; }
     [[nodiscard]] const PlayerInput& GetInput() const { return playerInput_; }
-    [[nodiscard]] Renderer& GetRenderer() { return renderer_; }
-    [[nodiscard]] const Renderer& GetRenderer() const { return renderer_; }
+    [[nodiscard]] FSceneRenderer& GetRenderer() { return renderer_; }
+    [[nodiscard]] const FSceneRenderer& GetRenderer() const { return renderer_; }
     [[nodiscard]] AudioDevice& GetAudioDevice() { return audioDevice_; }
     [[nodiscard]] const AudioDevice& GetAudioDevice() const { return audioDevice_; }
     [[nodiscard]] bool IsInitialized() const { return initialized_; }
@@ -134,7 +134,7 @@ public:
     /// When false, Engine mouse orbit + scroll→camera zoom are off (packs may drive SpringArm).
     void SetOrbitMouseEnabled(bool enabled) { orbitMouseEnabled_ = enabled; }
 
-    /// F2 collision volumes debug (Engine tool flag — not owned by the forward Renderer).
+    /// F2 collision volumes debug (Engine tool flag — not owned by the forward FSceneRenderer).
     void SetCollisionDebugEnabled(bool enabled) { collisionDebugEnabled_ = enabled; }
     void ToggleCollisionDebug() { collisionDebugEnabled_ = !collisionDebugEnabled_; }
     [[nodiscard]] bool IsCollisionDebugEnabled() const { return collisionDebugEnabled_; }
@@ -178,13 +178,13 @@ private:
     std::unique_ptr<FGenericWindow> window_;
     PlayInputTarget playInputTarget_;
     PlayerInput playerInput_;
-    Renderer renderer_;
-    DebugOverlay overlay_;
+    FSceneRenderer renderer_;
+    FDebugOverlay overlay_;
     HUD hud_;
     AudioDevice audioDevice_;
     Camera camera_;
     Level level_;
-    ResourceCache resources_;
+    FResourceCache resources_;
     std::unique_ptr<GameInstance> gameInstance_;
 
     bool running_ = false;
