@@ -55,7 +55,7 @@ private:
     float x_ = 0.0f;
     float y_ = 0.0f;
     float w_ = 160.0f;
-    float h_ = kHudLineHeight + 16.0f;
+    float h_ = HudLineHeight + 16.0f;
     bool selected_ = false;
     bool enabled_ = true;
     bool hovered_ = false;

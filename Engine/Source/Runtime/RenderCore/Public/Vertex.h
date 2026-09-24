@@ -7,10 +7,10 @@
 
 /// Interleaved GPU vertex attributes (matches Mesh VAO layout).
 struct FVertex {
-    glm::vec3 position{};
-    glm::vec3 normal{};
-    glm::vec2 texCoord{};
+    glm::vec3 Position{};
+    glm::vec3 Normal{};
+    glm::vec2 TexCoord{};
     /// xyz = tangent; w = bitangent handedness (±1) for mirrored UVs.
-    glm::vec4 tangent{0.0f, 0.0f, 0.0f, 1.0f};
+    glm::vec4 Tangent{0.0f, 0.0f, 0.0f, 1.0f};
 };
 

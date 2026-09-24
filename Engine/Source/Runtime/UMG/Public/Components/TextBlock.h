@@ -30,7 +30,7 @@ public:
 private:
     std::string text_;
     glm::vec3 color_{1.0f, 0.82f, 0.35f};
-    float scale_ = kHudFontScale;
+    float scale_ = HudFontScale;
     ETextJustify justify_ = ETextJustify::Center;
     float x_ = 0.0f;
     float y_ = 0.0f;

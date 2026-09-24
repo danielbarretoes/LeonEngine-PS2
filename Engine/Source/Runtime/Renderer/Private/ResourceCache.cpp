@@ -9,195 +9,195 @@
 #include "ResourceCache.h"
 
 
-std::string FResourceCache::normalizeKey(const std::string& path) {
-    std::error_code ec;
-    const std::string key = std::filesystem::weakly_canonical(std::filesystem::path(path), ec)
+std::string FResourceCache::NormalizeKey(const std::string& Path) {
+    std::error_code Ec;
+    const std::string Key = std::filesystem::weakly_canonical(std::filesystem::path(Path), Ec)
                                 .lexically_normal()
                                 .string();
-    return ec ? path : key;
+    return Ec ? Path : Key;
 }
 
-std::shared_ptr<UStaticMesh> FResourceCache::cacheMesh(const std::string& key, FMeshData data) {
-    if (const auto it = meshes_.find(key); it != meshes_.end()) {
-        return it->second;
+std::shared_ptr<UStaticMesh> FResourceCache::CacheMesh(const std::string& Key, FMeshData Data) {
+    if (const auto It = Meshes.find(Key); It != Meshes.end()) {
+        return It->second;
     }
-    if (data.empty()) {
+    if (Data.empty()) {
         return nullptr;
     }
-    auto mesh = std::make_shared<UStaticMesh>(gpuUploadEnabled_ ? UStaticMesh::Upload(data)
-                                                               : UStaticMesh::CreateCpu(data));
-    if (!mesh->Valid()) {
+    auto Mesh = std::make_shared<UStaticMesh>(bGpuUploadEnabled ? UStaticMesh::Upload(Data)
+                                                               : UStaticMesh::CreateCpu(Data));
+    if (!Mesh->Valid()) {
         return nullptr;
     }
-    meshes_.emplace(key, mesh);
-    return mesh;
+    Meshes.emplace(Key, Mesh);
+    return Mesh;
 }
 
-std::shared_ptr<UStaticMesh> FResourceCache::LoadStaticMesh(const std::string& path) {
-    const std::string cacheKey = normalizeKey(path);
-    if (const auto it = meshes_.find(cacheKey); it != meshes_.end()) {
-        return it->second;
+std::shared_ptr<UStaticMesh> FResourceCache::LoadStaticMesh(const std::string& Path) {
+    const std::string CacheKey = NormalizeKey(Path);
+    if (const auto It = Meshes.find(CacheKey); It != Meshes.end()) {
+        return It->second;
     }
 
-    FMeshData data;
-    if (IsLeonMeshPath(path)) {
-        if (!LoadLeonMeshFile(path, data)) {
-            std::cerr << "ResourceCache: failed to load .lmesh '" << path << "'\n";
+    FMeshData Data;
+    if (IsLeonMeshPath(Path)) {
+        if (!LoadLeonMeshFile(Path, Data)) {
+            std::cerr << "ResourceCache: failed to load .lmesh '" << Path << "'\n";
             return nullptr;
         }
     } else {
         // Shipping / runtime: cooked `.lmesh` only (OBJ/FBX/glTF via Editor Import / leon-cook).
-        std::cerr << "ResourceCache: expected .lmesh path, got '" << path << "'\n";
+        std::cerr << "ResourceCache: expected .lmesh path, got '" << Path << "'\n";
         return nullptr;
     }
 
     // Bind diffuse textures referenced by the MTL before GPU upload.
-    for (std::size_t i = 0; i < data.materials.size() && i < data.albedoMapPaths.size(); ++i) {
-        if (data.albedoMapPaths[i].empty()) {
+    for (std::size_t I = 0; I < Data.Materials.size() && I < Data.AlbedoMapPaths.size(); ++I) {
+        if (Data.AlbedoMapPaths[I].empty()) {
             continue;
         }
-        data.materials[i].albedoMap = LoadTexture(data.albedoMapPaths[i]);
-        if (data.materials[i].albedoMap == nullptr) {
-            std::cerr << "ResourceCache: missing albedo map '" << data.albedoMapPaths[i] << "'\n";
+        Data.Materials[I].AlbedoMap = LoadTexture(Data.AlbedoMapPaths[I]);
+        if (Data.Materials[I].AlbedoMap == nullptr) {
+            std::cerr << "ResourceCache: missing albedo map '" << Data.AlbedoMapPaths[I] << "'\n";
         }
     }
 
-    return cacheMesh(cacheKey, std::move(data));
+    return CacheMesh(CacheKey, std::move(Data));
 }
 
-std::shared_ptr<UTexture2D> FResourceCache::LoadTexture(const std::string& path) {
-    if (!gpuUploadEnabled_) {
+std::shared_ptr<UTexture2D> FResourceCache::LoadTexture(const std::string& Path) {
+    if (!bGpuUploadEnabled) {
         return nullptr;
     }
-    const std::string cacheKey = normalizeKey(path);
-    if (const auto it = textures_.find(cacheKey); it != textures_.end()) {
-        return it->second;
+    const std::string CacheKey = NormalizeKey(Path);
+    if (const auto It = Textures.find(CacheKey); It != Textures.end()) {
+        return It->second;
     }
 
-    auto texture = std::make_shared<UTexture2D>(UTexture2D::LoadFromFile(path));
-    if (!texture->Valid()) {
+    auto Texture = std::make_shared<UTexture2D>(UTexture2D::LoadFromFile(Path));
+    if (!Texture->Valid()) {
         return nullptr;
     }
-    textures_.emplace(cacheKey, texture);
-    return texture;
+    Textures.emplace(CacheKey, Texture);
+    return Texture;
 }
 
-std::shared_ptr<FEnvironmentMap> FResourceCache::LoadEnvMap(const std::string& path, int faceSize) {
-    if (!gpuUploadEnabled_) {
+std::shared_ptr<FEnvironmentMap> FResourceCache::LoadEnvMap(const std::string& Path, int FaceSize) {
+    if (!bGpuUploadEnabled) {
         return nullptr;
     }
-    const std::string cacheKey =
-        normalizeKey(path) + ":cube:" + std::to_string(std::max(16, faceSize));
-    if (const auto it = envMaps_.find(cacheKey); it != envMaps_.end()) {
-        return it->second;
+    const std::string CacheKey =
+        NormalizeKey(Path) + ":cube:" + std::to_string(std::max(16, FaceSize));
+    if (const auto It = EnvMaps.find(CacheKey); It != EnvMaps.end()) {
+        return It->second;
     }
 
-    auto env = std::make_shared<FEnvironmentMap>(FEnvironmentMap::LoadFromHdr(path, faceSize));
-    if (!env->Valid()) {
-        std::cerr << "ResourceCache: failed to load env map '" << path << "'\n";
+    auto Env = std::make_shared<FEnvironmentMap>(FEnvironmentMap::LoadFromHdr(Path, FaceSize));
+    if (!Env->Valid()) {
+        std::cerr << "ResourceCache: failed to load env map '" << Path << "'\n";
         return nullptr;
     }
-    envMaps_.emplace(cacheKey, env);
-    return env;
+    EnvMaps.emplace(CacheKey, Env);
+    return Env;
 }
 
-std::shared_ptr<UTexture2D> FResourceCache::CheckerTexture(int size) {
-    if (!gpuUploadEnabled_) {
+std::shared_ptr<UTexture2D> FResourceCache::CheckerTexture(int Size) {
+    if (!bGpuUploadEnabled) {
         return nullptr;
     }
-    size = std::max(size, 2);
-    const std::string cacheKey = "proc:checker:" + std::to_string(size);
-    if (const auto it = textures_.find(cacheKey); it != textures_.end()) {
-        return it->second;
+    Size = std::max(Size, 2);
+    const std::string CacheKey = "proc:checker:" + std::to_string(Size);
+    if (const auto It = Textures.find(CacheKey); It != Textures.end()) {
+        return It->second;
     }
 
-    auto texture = std::make_shared<UTexture2D>(UTexture2D::CreateChecker(size));
-    if (!texture->Valid()) {
+    auto Texture = std::make_shared<UTexture2D>(UTexture2D::CreateChecker(Size));
+    if (!Texture->Valid()) {
         return nullptr;
     }
-    textures_.emplace(cacheKey, texture);
-    return texture;
+    Textures.emplace(CacheKey, Texture);
+    return Texture;
 }
 
-std::shared_ptr<UTexture2D> FResourceCache::BumpNormalTexture(int size) {
-    if (!gpuUploadEnabled_) {
+std::shared_ptr<UTexture2D> FResourceCache::BumpNormalTexture(int Size) {
+    if (!bGpuUploadEnabled) {
         return nullptr;
     }
-    size = std::max(size, 8);
-    const std::string cacheKey = "proc:normal:bump:" + std::to_string(size);
-    if (const auto it = textures_.find(cacheKey); it != textures_.end()) {
-        return it->second;
+    Size = std::max(Size, 8);
+    const std::string CacheKey = "proc:normal:bump:" + std::to_string(Size);
+    if (const auto It = Textures.find(CacheKey); It != Textures.end()) {
+        return It->second;
     }
-    auto texture = std::make_shared<UTexture2D>(UTexture2D::CreateBumpNormal(size));
-    if (!texture->Valid()) {
+    auto Texture = std::make_shared<UTexture2D>(UTexture2D::CreateBumpNormal(Size));
+    if (!Texture->Valid()) {
         return nullptr;
     }
-    textures_.emplace(cacheKey, texture);
-    return texture;
+    Textures.emplace(CacheKey, Texture);
+    return Texture;
 }
 
-FMaterial FResourceCache::LoadMaterial(const std::string& path) {
-    const std::string cacheKey = normalizeKey(path);
-    if (const auto it = materials_.find(cacheKey); it != materials_.end()) {
-        return it->second;
+FMaterial FResourceCache::LoadMaterial(const std::string& Path) {
+    const std::string CacheKey = NormalizeKey(Path);
+    if (const auto It = Materials.find(CacheKey); It != Materials.end()) {
+        return It->second;
     }
 
-    FMaterial material;
-    if (!LoadMaterialFile(*this, path, material)) {
-        std::cerr << "ResourceCache: using default material (failed '" << path << "')\n";
+    FMaterial Material;
+    if (!LoadMaterialFile(*this, Path, Material)) {
+        std::cerr << "ResourceCache: using default material (failed '" << Path << "')\n";
         return DefaultMaterial();
     }
-    materials_.emplace(cacheKey, material);
-    return material;
+    Materials.emplace(CacheKey, Material);
+    return Material;
 }
 
 FMaterial FResourceCache::DefaultMaterial() {
-    constexpr const char* kKey = "engine:default";
-    if (const auto it = materials_.find(kKey); it != materials_.end()) {
-        return it->second;
+    constexpr const char* Key = "engine:default";
+    if (const auto It = Materials.find(Key); It != Materials.end()) {
+        return It->second;
     }
 
-    FMaterial material;
-    const std::string lmatPath = FPaths::ResolveAssetPath("assets/Materials/M_Default.lmat");
-    if (std::filesystem::exists(lmatPath) && LoadMaterialFile(*this, lmatPath, material)) {
-        materials_.emplace(kKey, material);
-        return material;
+    FMaterial Material;
+    const std::string LmatPath = FPaths::ResolveAssetPath("assets/Materials/M_Default.lmat");
+    if (std::filesystem::exists(LmatPath) && LoadMaterialFile(*this, LmatPath, Material)) {
+        Materials.emplace(Key, Material);
+        return Material;
     }
 
-    if (gpuUploadEnabled_) {
-        material = MakeDefaultCheckerMaterial(*this);
+    if (bGpuUploadEnabled) {
+        Material = MakeDefaultCheckerMaterial(*this);
     } else {
-        material.shading = EMaterialShadingModel::BlinnPhong;
-        material.albedo = {0.55f, 0.55f, 0.58f};
-        material.shininess = 16.0f;
-        material.syncRoughnessFromShininess();
+        Material.Shading = EMaterialShadingModel::BlinnPhong;
+        Material.Albedo = {0.55f, 0.55f, 0.58f};
+        Material.Shininess = 16.0f;
+        Material.SyncRoughnessFromShininess();
     }
-    materials_.emplace(kKey, material);
-    return material;
+    Materials.emplace(Key, Material);
+    return Material;
 }
 
 std::shared_ptr<UStaticMesh> FResourceCache::GetCubeMesh() {
-    return cacheMesh("proc:cube", MakeCube());
+    return CacheMesh("proc:cube", MakeCube());
 }
 
-std::shared_ptr<UStaticMesh> FResourceCache::GetPlaneMesh(float size, float uvScale) {
-    const std::string key = "proc:plane:" + std::to_string(size) + ":" + std::to_string(uvScale);
-    return cacheMesh(key, MakePlane(size, uvScale));
+std::shared_ptr<UStaticMesh> FResourceCache::GetPlaneMesh(float Size, float UvScale) {
+    const std::string Key = "proc:plane:" + std::to_string(Size) + ":" + std::to_string(UvScale);
+    return CacheMesh(Key, MakePlane(Size, UvScale));
 }
 
-std::shared_ptr<UStaticMesh> FResourceCache::GetSphereMesh(int segments, int rings) {
-    const std::string key = "proc:sphere:" + std::to_string(segments) + ":" + std::to_string(rings);
-    return cacheMesh(key, MakeSphere(segments, rings));
+std::shared_ptr<UStaticMesh> FResourceCache::GetSphereMesh(int Segments, int Rings) {
+    const std::string Key = "proc:sphere:" + std::to_string(Segments) + ":" + std::to_string(Rings);
+    return CacheMesh(Key, MakeSphere(Segments, Rings));
 }
 
-void FResourceCache::clear() {
-    meshes_.clear();
-    textures_.clear();
-    envMaps_.clear();
-    materials_.clear();
+void FResourceCache::Clear() {
+    Meshes.clear();
+    Textures.clear();
+    EnvMaps.clear();
+    Materials.clear();
 }
 
-void FResourceCache::InvalidateMaterial(const std::string& path) {
-    materials_.erase(normalizeKey(path));
+void FResourceCache::InvalidateMaterial(const std::string& Path) {
+    Materials.erase(NormalizeKey(Path));
 }
 

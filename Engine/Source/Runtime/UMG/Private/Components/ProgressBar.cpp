@@ -36,8 +36,8 @@ void UProgressBar::NativePaint(FPaintContext& ctx) {
         std::snprintf(buf, sizeof(buf), "%d%%", static_cast<int>(percent_ * 100.0f + 0.5f));
         float tw = 0.0f;
         float th = 0.0f;
-        ctx.MeasureText(buf, kHudFontScale, tw, th);
-        ctx.DrawText(buf, x + w * 0.5f, y + (h - th) * 0.5f, textColor_, kHudFontScale,
+        ctx.MeasureText(buf, HudFontScale, tw, th);
+        ctx.DrawText(buf, x + w * 0.5f, y + (h - th) * 0.5f, textColor_, HudFontScale,
                      ETextJustify::Center);
     }
 }

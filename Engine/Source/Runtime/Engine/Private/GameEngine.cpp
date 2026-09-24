@@ -91,7 +91,7 @@ void UGameEngine::Shutdown() {
     gameInstance_->Shutdown();
     audioDevice_.Shutdown();
     level_.Clear();
-    resources_.clear();
+    resources_.Clear();
     if (!headless_) {
         overlay_.Shutdown();
         renderer_.Shutdown();
@@ -338,9 +338,9 @@ void UGameEngine::updateHudStats(float deltaTime) {
                         "RES %dx%d\n"
                         "GPU Sh %.2f Pl %.2f Col %.2f\n"
                         "    AO %.2f Pst %.2f",
-                        displayFps_, displayMs_, ramMb, vram.data(), stats.trianglesSubmitted,
-                        stats.objectsVisible, stats.objectsTotal, fbWidth, fbHeight,
-                        stats.shadowMs, stats.planarMs, stats.colorMs, stats.ssaoMs, stats.postMs);
+                        displayFps_, displayMs_, ramMb, vram.data(), stats.TrianglesSubmitted,
+                        stats.ObjectsVisible, stats.ObjectsTotal, fbWidth, fbHeight,
+                        stats.ShadowMs, stats.PlanarMs, stats.ColorMs, stats.SsaoMs, stats.PostMs);
     overlay_.SetRightText(text.data());
     overlay_.SetText({});
     overlay_.SetCenterText({});

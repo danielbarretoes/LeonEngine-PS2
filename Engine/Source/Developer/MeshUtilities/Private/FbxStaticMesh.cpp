@@ -40,7 +40,7 @@ bool LoadStaticMeshFromFbx(const std::string& path, FMeshData& out) {
             continue;
         }
 
-        const int indexOffset = static_cast<int>(out.indices.size());
+        const int indexOffset = static_cast<int>(out.Indices.size());
         int indexCount = 0;
 
         if (mesh->max_face_triangles * 3u > tri.size()) {
@@ -60,33 +60,33 @@ bool LoadStaticMeshFromFbx(const std::string& path, FMeshData& out) {
 
                     FVertex v{};
                     const ufbx_vec3 pos = ufbx_get_vertex_vec3(&mesh->vertex_position, corner);
-                    v.position = {static_cast<float>(pos.x), static_cast<float>(pos.y),
+                    v.Position = {static_cast<float>(pos.x), static_cast<float>(pos.y),
                                   static_cast<float>(pos.z)};
 
                     if (mesh->vertex_normal.exists) {
                         const ufbx_vec3 n = ufbx_get_vertex_vec3(&mesh->vertex_normal, corner);
-                        v.normal = glm::normalize(glm::vec3{
+                        v.Normal = glm::normalize(glm::vec3{
                             static_cast<float>(n.x), static_cast<float>(n.y),
                             static_cast<float>(n.z)});
                     } else {
-                        v.normal = {0.0f, 1.0f, 0.0f};
+                        v.Normal = {0.0f, 1.0f, 0.0f};
                     }
 
                     if (mesh->vertex_uv.exists) {
                         const ufbx_vec2 uv = ufbx_get_vertex_vec2(&mesh->vertex_uv, corner);
-                        v.texCoord = {static_cast<float>(uv.x), static_cast<float>(uv.y)};
+                        v.TexCoord = {static_cast<float>(uv.x), static_cast<float>(uv.y)};
                     }
 
-                    out.indices.push_back(static_cast<std::uint32_t>(out.vertices.size()));
-                    out.vertices.push_back(v);
+                    out.Indices.push_back(static_cast<std::uint32_t>(out.Vertices.size()));
+                    out.Vertices.push_back(v);
                     ++indexCount;
                 }
             }
         }
 
         if (indexCount > 0) {
-            out.submeshes.push_back(
-                FMeshSection{indexOffset, indexCount, static_cast<int>(out.submeshes.size())});
+            out.Submeshes.push_back(
+                FMeshSection{indexOffset, indexCount, static_cast<int>(out.Submeshes.size())});
         }
     }
 

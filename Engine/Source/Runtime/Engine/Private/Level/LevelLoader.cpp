@@ -29,8 +29,8 @@ void ApplyFitHeight(UStaticMeshComponent& object, float fitHeight) {
     // Existing position is kept as an offset after auto scale / ground align.
     const glm::vec3 positionOffset = object.transform.Position;
 
-    const glm::vec3 mn = object.mesh->LocalMin();
-    const glm::vec3 mx = object.mesh->LocalMax();
+    const glm::vec3 mn = object.mesh->GetLocalMin();
+    const glm::vec3 mx = object.mesh->GetLocalMax();
     const glm::vec3 extents = mx - mn;
     const float height = std::max(extents.y, 0.001f);
     const float scale = fitHeight / height;

@@ -13,99 +13,99 @@
 
 namespace {
 
-glm::vec3 faceDirection(int face, float u, float v) {
+glm::vec3 FaceDirection(int Face, float U, float V) {
     // u,v in [-1, 1]; OpenGL cube face order.
-    switch (face) {
+    switch (Face) {
     case 0:
-        return glm::normalize(glm::vec3(1.0f, -v, -u)); // +X
+        return glm::normalize(glm::vec3(1.0f, -V, -U)); // +X
     case 1:
-        return glm::normalize(glm::vec3(-1.0f, -v, u)); // -X
+        return glm::normalize(glm::vec3(-1.0f, -V, U)); // -X
     case 2:
-        return glm::normalize(glm::vec3(u, 1.0f, v)); // +Y
+        return glm::normalize(glm::vec3(U, 1.0f, V)); // +Y
     case 3:
-        return glm::normalize(glm::vec3(u, -1.0f, -v)); // -Y
+        return glm::normalize(glm::vec3(U, -1.0f, -V)); // -Y
     case 4:
-        return glm::normalize(glm::vec3(u, -v, 1.0f)); // +Z
+        return glm::normalize(glm::vec3(U, -V, 1.0f)); // +Z
     default:
-        return glm::normalize(glm::vec3(-u, -v, -1.0f)); // -Z
+        return glm::normalize(glm::vec3(-U, -V, -1.0f)); // -Z
     }
 }
 
-glm::vec3 sampleEquirect(const float* data, int width, int height, const glm::vec3& dir) {
-    const float phi = std::atan2(dir.z, dir.x);
-    const float theta = std::asin(std::clamp(dir.y, -1.0f, 1.0f));
-    float uf = (phi / (2.0f * std::numbers::pi_v<float>)) + 0.5f;
-    float vf = 0.5f - (theta / std::numbers::pi_v<float>);
-    uf = uf - std::floor(uf);
-    vf = std::clamp(vf, 0.0f, 1.0f);
+glm::vec3 SampleEquirect(const float* Data, int Width, int Height, const glm::vec3& Dir) {
+    const float Phi = std::atan2(Dir.z, Dir.x);
+    const float Theta = std::asin(std::clamp(Dir.y, -1.0f, 1.0f));
+    float Uf = (Phi / (2.0f * std::numbers::pi_v<float>)) + 0.5f;
+    float Vf = 0.5f - (Theta / std::numbers::pi_v<float>);
+    Uf = Uf - std::floor(Uf);
+    Vf = std::clamp(Vf, 0.0f, 1.0f);
 
-    const float x = uf * static_cast<float>(width);
-    const float y = vf * static_cast<float>(height - 1);
-    const auto x0 = static_cast<int>(x) % width;
-    const auto y0 = std::clamp(static_cast<int>(y), 0, height - 1);
-    const int x1 = (x0 + 1) % width;
-    const int y1 = std::min(y0 + 1, height - 1);
-    const float tx = x - std::floor(x);
-    const float ty = y - static_cast<float>(y0);
+    const float X = Uf * static_cast<float>(Width);
+    const float Y = Vf * static_cast<float>(Height - 1);
+    const auto X0 = static_cast<int>(X) % Width;
+    const auto Y0 = std::clamp(static_cast<int>(Y), 0, Height - 1);
+    const int X1 = (X0 + 1) % Width;
+    const int Y1 = std::min(Y0 + 1, Height - 1);
+    const float Tx = X - std::floor(X);
+    const float Ty = Y - static_cast<float>(Y0);
 
-    const auto fetch = [&](int px, int py) {
-        const std::size_t i = ((static_cast<std::size_t>(py) * static_cast<std::size_t>(width)) +
-                               static_cast<std::size_t>(px)) *
+    const auto Fetch = [&](int Px, int Py) {
+        const std::size_t I = ((static_cast<std::size_t>(Py) * static_cast<std::size_t>(Width)) +
+                               static_cast<std::size_t>(Px)) *
                               3u;
-        return glm::vec3(data[i + 0], data[i + 1], data[i + 2]);
+        return glm::vec3(Data[I + 0], Data[I + 1], Data[I + 2]);
     };
 
-    const glm::vec3 c00 = fetch(x0, y0);
-    const glm::vec3 c10 = fetch(x1, y0);
-    const glm::vec3 c01 = fetch(x0, y1);
-    const glm::vec3 c11 = fetch(x1, y1);
-    const glm::vec3 c0 = glm::mix(c00, c10, tx);
-    const glm::vec3 c1 = glm::mix(c01, c11, tx);
-    return glm::mix(c0, c1, ty);
+    const glm::vec3 C00 = Fetch(X0, Y0);
+    const glm::vec3 C10 = Fetch(X1, Y0);
+    const glm::vec3 C01 = Fetch(X0, Y1);
+    const glm::vec3 C11 = Fetch(X1, Y1);
+    const glm::vec3 C0 = glm::mix(C00, C10, Tx);
+    const glm::vec3 C1 = glm::mix(C01, C11, Tx);
+    return glm::mix(C0, C1, Ty);
 }
 
 /// Lambertian irradiance for normal N (hemisphere integral over the equirect HDR).
-glm::vec3 convolveIrradiance(const float* data, int width, int height, const glm::vec3& N) {
-    glm::vec3 up =
+glm::vec3 ConvolveIrradiance(const float* Data, int Width, int Height, const glm::vec3& N) {
+    glm::vec3 Up =
         (std::abs(N.z) < 0.999f) ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(1.0f, 0.0f, 0.0f);
-    const glm::vec3 right = glm::normalize(glm::cross(up, N));
-    up = glm::cross(N, right);
+    const glm::vec3 Right = glm::normalize(glm::cross(Up, N));
+    Up = glm::cross(N, Right);
 
-    constexpr float kSampleDelta = 0.05f;
-    const int phiSteps = static_cast<int>((2.0f * std::numbers::pi_v<float>) / kSampleDelta);
-    const int thetaSteps = static_cast<int>((0.5f * std::numbers::pi_v<float>) / kSampleDelta);
-    glm::vec3 irradiance(0.0f);
-    int sampleCount = 0;
-    for (int iPhi = 0; iPhi < phiSteps; ++iPhi) {
-        const float phi = static_cast<float>(iPhi) * kSampleDelta;
-        for (int iTheta = 0; iTheta < thetaSteps; ++iTheta) {
-            const float theta = static_cast<float>(iTheta) * kSampleDelta;
-            const float sinTheta = std::sin(theta);
-            const float cosTheta = std::cos(theta);
-            const glm::vec3 tangentSample{sinTheta * std::cos(phi), sinTheta * std::sin(phi),
-                                          cosTheta};
-            const glm::vec3 sampleVec = glm::normalize(tangentSample.x * right +
-                                                       tangentSample.y * up + tangentSample.z * N);
-            irradiance += sampleEquirect(data, width, height, sampleVec) * cosTheta * sinTheta;
-            ++sampleCount;
+    constexpr float SampleDelta = 0.05f;
+    const int PhiSteps = static_cast<int>((2.0f * std::numbers::pi_v<float>) / SampleDelta);
+    const int ThetaSteps = static_cast<int>((0.5f * std::numbers::pi_v<float>) / SampleDelta);
+    glm::vec3 Irradiance(0.0f);
+    int SampleCount = 0;
+    for (int IPhi = 0; IPhi < PhiSteps; ++IPhi) {
+        const float Phi = static_cast<float>(IPhi) * SampleDelta;
+        for (int ITheta = 0; ITheta < ThetaSteps; ++ITheta) {
+            const float Theta = static_cast<float>(ITheta) * SampleDelta;
+            const float SinTheta = std::sin(Theta);
+            const float CosTheta = std::cos(Theta);
+            const glm::vec3 TangentSample{SinTheta * std::cos(Phi), SinTheta * std::sin(Phi),
+                                          CosTheta};
+            const glm::vec3 SampleVec = glm::normalize(TangentSample.x * Right +
+                                                       TangentSample.y * Up + TangentSample.z * N);
+            Irradiance += SampleEquirect(Data, Width, Height, SampleVec) * CosTheta * SinTheta;
+            ++SampleCount;
         }
     }
-    return irradiance * (std::numbers::pi_v<float> / static_cast<float>(std::max(sampleCount, 1)));
+    return Irradiance * (std::numbers::pi_v<float> / static_cast<float>(std::max(SampleCount, 1)));
 }
 
-unsigned int uploadCubeRgb16f(const std::vector<std::vector<float>>& faces, int faceSize,
-                              bool generateMips) {
-    unsigned int id = 0;
-    glGenTextures(1, &id);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, id);
-    for (int faceIndex = 0; faceIndex < 6; ++faceIndex) {
-        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + faceIndex, 0, GL_RGB16F, faceSize, faceSize,
-                     0, GL_RGB, GL_FLOAT, faces[static_cast<std::size_t>(faceIndex)].data());
+unsigned int UploadCubeRgb16f(const std::vector<std::vector<float>>& Faces, int InFaceSize,
+                              bool bGenerateMips) {
+    unsigned int LocalId = 0;
+    glGenTextures(1, &LocalId);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, LocalId);
+    for (int FaceIndex = 0; FaceIndex < 6; ++FaceIndex) {
+        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + FaceIndex, 0, GL_RGB16F, InFaceSize, InFaceSize,
+                     0, GL_RGB, GL_FLOAT, Faces[static_cast<std::size_t>(FaceIndex)].data());
     }
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-    if (generateMips) {
+    if (bGenerateMips) {
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
@@ -114,7 +114,7 @@ unsigned int uploadCubeRgb16f(const std::vector<std::vector<float>>& faces, int 
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     }
     glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
-    return id;
+    return LocalId;
 }
 
 } // namespace
@@ -123,135 +123,135 @@ FEnvironmentMap::~FEnvironmentMap() {
     Destroy();
 }
 
-FEnvironmentMap::FEnvironmentMap(FEnvironmentMap&& other) noexcept
-    : id_(other.id_), irradianceId_(other.irradianceId_), faceSize_(other.faceSize_),
-      mipCount_(other.mipCount_) {
-    other.id_ = 0;
-    other.irradianceId_ = 0;
-    other.faceSize_ = 0;
-    other.mipCount_ = 0;
+FEnvironmentMap::FEnvironmentMap(FEnvironmentMap&& Other) noexcept
+    : Id(Other.Id), IrradianceId(Other.IrradianceId), FaceSize(Other.FaceSize),
+      MipCount(Other.MipCount) {
+    Other.Id = 0;
+    Other.IrradianceId = 0;
+    Other.FaceSize = 0;
+    Other.MipCount = 0;
 }
 
-FEnvironmentMap& FEnvironmentMap::operator=(FEnvironmentMap&& other) noexcept {
-    if (this != &other) {
+FEnvironmentMap& FEnvironmentMap::operator=(FEnvironmentMap&& Other) noexcept {
+    if (this != &Other) {
         Destroy();
-        id_ = other.id_;
-        irradianceId_ = other.irradianceId_;
-        faceSize_ = other.faceSize_;
-        mipCount_ = other.mipCount_;
-        other.id_ = 0;
-        other.irradianceId_ = 0;
-        other.faceSize_ = 0;
-        other.mipCount_ = 0;
+        Id = Other.Id;
+        IrradianceId = Other.IrradianceId;
+        FaceSize = Other.FaceSize;
+        MipCount = Other.MipCount;
+        Other.Id = 0;
+        Other.IrradianceId = 0;
+        Other.FaceSize = 0;
+        Other.MipCount = 0;
     }
     return *this;
 }
 
-FEnvironmentMap FEnvironmentMap::LoadFromHdr(const std::string& path, int faceSize, int irradianceSize) {
-    FEnvironmentMap map;
-    faceSize = std::max(16, faceSize);
-    irradianceSize = std::max(8, irradianceSize);
+FEnvironmentMap FEnvironmentMap::LoadFromHdr(const std::string& Path, int InFaceSize, int IrradianceSize) {
+    FEnvironmentMap Map;
+    InFaceSize = std::max(16, InFaceSize);
+    IrradianceSize = std::max(8, IrradianceSize);
 
     stbi_set_flip_vertically_on_load(0);
-    int width = 0;
-    int height = 0;
-    int channels = 0;
-    float* data = stbi_loadf(path.c_str(), &width, &height, &channels, 3);
-    if (data == nullptr || width <= 0 || height <= 0) {
-        std::cerr << "Failed to load HDR: " << path << " (" << stbi_failure_reason() << ")\n";
-        return map;
+    int Width = 0;
+    int Height = 0;
+    int Channels = 0;
+    float* Data = stbi_loadf(Path.c_str(), &Width, &Height, &Channels, 3);
+    if (Data == nullptr || Width <= 0 || Height <= 0) {
+        std::cerr << "Failed to load HDR: " << Path << " (" << stbi_failure_reason() << ")\n";
+        return Map;
     }
 
-    std::vector<std::vector<float>> envFaces(6);
-    for (int faceIndex = 0; faceIndex < 6; ++faceIndex) {
-        envFaces[static_cast<std::size_t>(faceIndex)].assign(
-            static_cast<std::size_t>(faceSize) * static_cast<std::size_t>(faceSize) * 3u, 0.0f);
-        auto& face = envFaces[static_cast<std::size_t>(faceIndex)];
-        for (int y = 0; y < faceSize; ++y) {
-            for (int x = 0; x < faceSize; ++x) {
-                const float u =
-                    ((((static_cast<float>(x) + 0.5f) / static_cast<float>(faceSize)) * 2.0f) -
+    std::vector<std::vector<float>> EnvFaces(6);
+    for (int FaceIndex = 0; FaceIndex < 6; ++FaceIndex) {
+        EnvFaces[static_cast<std::size_t>(FaceIndex)].assign(
+            static_cast<std::size_t>(InFaceSize) * static_cast<std::size_t>(InFaceSize) * 3u, 0.0f);
+        auto& Face = EnvFaces[static_cast<std::size_t>(FaceIndex)];
+        for (int Y = 0; Y < InFaceSize; ++Y) {
+            for (int X = 0; X < InFaceSize; ++X) {
+                const float U =
+                    ((((static_cast<float>(X) + 0.5f) / static_cast<float>(InFaceSize)) * 2.0f) -
                      1.0f);
-                const float v =
-                    ((((static_cast<float>(y) + 0.5f) / static_cast<float>(faceSize)) * 2.0f) -
+                const float V =
+                    ((((static_cast<float>(Y) + 0.5f) / static_cast<float>(InFaceSize)) * 2.0f) -
                      1.0f);
-                const glm::vec3 color =
-                    sampleEquirect(data, width, height, faceDirection(faceIndex, u, v));
-                const std::size_t i =
-                    ((static_cast<std::size_t>(y) * static_cast<std::size_t>(faceSize)) +
-                     static_cast<std::size_t>(x)) *
+                const glm::vec3 Color =
+                    SampleEquirect(Data, Width, Height, FaceDirection(FaceIndex, U, V));
+                const std::size_t I =
+                    ((static_cast<std::size_t>(Y) * static_cast<std::size_t>(InFaceSize)) +
+                     static_cast<std::size_t>(X)) *
                     3u;
-                face[i + 0] = color.r;
-                face[i + 1] = color.g;
-                face[i + 2] = color.b;
+                Face[I + 0] = Color.r;
+                Face[I + 1] = Color.g;
+                Face[I + 2] = Color.b;
             }
         }
     }
 
-    map.id_ = uploadCubeRgb16f(envFaces, faceSize, true);
-    map.faceSize_ = faceSize;
-    map.mipCount_ = 1 + static_cast<int>(std::floor(std::log2(static_cast<float>(faceSize))));
+    Map.Id = UploadCubeRgb16f(EnvFaces, InFaceSize, true);
+    Map.FaceSize = InFaceSize;
+    Map.MipCount = 1 + static_cast<int>(std::floor(std::log2(static_cast<float>(InFaceSize))));
 
-    std::cout << "EnvMap: convolving irradiance " << irradianceSize
+    std::cout << "EnvMap: convolving irradiance " << IrradianceSize
               << "^2 (may take a moment)...\n";
-    std::vector<std::vector<float>> irrFaces(6);
-    for (int faceIndex = 0; faceIndex < 6; ++faceIndex) {
-        irrFaces[static_cast<std::size_t>(faceIndex)].assign(
-            static_cast<std::size_t>(irradianceSize) * static_cast<std::size_t>(irradianceSize) *
+    std::vector<std::vector<float>> IrrFaces(6);
+    for (int FaceIndex = 0; FaceIndex < 6; ++FaceIndex) {
+        IrrFaces[static_cast<std::size_t>(FaceIndex)].assign(
+            static_cast<std::size_t>(IrradianceSize) * static_cast<std::size_t>(IrradianceSize) *
                 3u,
             0.0f);
-        auto& face = irrFaces[static_cast<std::size_t>(faceIndex)];
-        for (int y = 0; y < irradianceSize; ++y) {
-            for (int x = 0; x < irradianceSize; ++x) {
-                const float u =
-                    ((((static_cast<float>(x) + 0.5f) / static_cast<float>(irradianceSize)) *
+        auto& Face = IrrFaces[static_cast<std::size_t>(FaceIndex)];
+        for (int Y = 0; Y < IrradianceSize; ++Y) {
+            for (int X = 0; X < IrradianceSize; ++X) {
+                const float U =
+                    ((((static_cast<float>(X) + 0.5f) / static_cast<float>(IrradianceSize)) *
                       2.0f) -
                      1.0f);
-                const float v =
-                    ((((static_cast<float>(y) + 0.5f) / static_cast<float>(irradianceSize)) *
+                const float V =
+                    ((((static_cast<float>(Y) + 0.5f) / static_cast<float>(IrradianceSize)) *
                       2.0f) -
                      1.0f);
-                const glm::vec3 N = faceDirection(faceIndex, u, v);
-                const glm::vec3 color = convolveIrradiance(data, width, height, N);
-                const std::size_t i =
-                    ((static_cast<std::size_t>(y) * static_cast<std::size_t>(irradianceSize)) +
-                     static_cast<std::size_t>(x)) *
+                const glm::vec3 N = FaceDirection(FaceIndex, U, V);
+                const glm::vec3 Color = ConvolveIrradiance(Data, Width, Height, N);
+                const std::size_t I =
+                    ((static_cast<std::size_t>(Y) * static_cast<std::size_t>(IrradianceSize)) +
+                     static_cast<std::size_t>(X)) *
                     3u;
-                face[i + 0] = color.r;
-                face[i + 1] = color.g;
-                face[i + 2] = color.b;
+                Face[I + 0] = Color.r;
+                Face[I + 1] = Color.g;
+                Face[I + 2] = Color.b;
             }
         }
     }
-    map.irradianceId_ = uploadCubeRgb16f(irrFaces, irradianceSize, false);
+    Map.IrradianceId = UploadCubeRgb16f(IrrFaces, IrradianceSize, false);
 
-    stbi_image_free(data);
+    stbi_image_free(Data);
 
-    std::cout << "EnvMap: loaded '" << path << "' -> cubemap " << faceSize << "^2 ("
-              << map.mipCount_ << " mips) + irradiance " << irradianceSize << "^2\n";
-    return map;
+    std::cout << "EnvMap: loaded '" << Path << "' -> cubemap " << InFaceSize << "^2 ("
+              << Map.MipCount << " mips) + irradiance " << IrradianceSize << "^2\n";
+    return Map;
 }
 
-void FEnvironmentMap::Bind(unsigned int unit) const {
-    glActiveTexture(GL_TEXTURE0 + unit);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, id_);
+void FEnvironmentMap::Bind(unsigned int Unit) const {
+    glActiveTexture(GL_TEXTURE0 + Unit);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, Id);
 }
 
-void FEnvironmentMap::BindIrradiance(unsigned int unit) const {
-    glActiveTexture(GL_TEXTURE0 + unit);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, irradianceId_);
+void FEnvironmentMap::BindIrradiance(unsigned int Unit) const {
+    glActiveTexture(GL_TEXTURE0 + Unit);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, IrradianceId);
 }
 
 void FEnvironmentMap::Destroy() {
-    if (irradianceId_ != 0) {
-        glDeleteTextures(1, &irradianceId_);
-        irradianceId_ = 0;
+    if (IrradianceId != 0) {
+        glDeleteTextures(1, &IrradianceId);
+        IrradianceId = 0;
     }
-    if (id_ != 0) {
-        glDeleteTextures(1, &id_);
-        id_ = 0;
+    if (Id != 0) {
+        glDeleteTextures(1, &Id);
+        Id = 0;
     }
-    faceSize_ = 0;
-    mipCount_ = 0;
+    FaceSize = 0;
+    MipCount = 0;
 }
 

@@ -7,11 +7,11 @@
 void UButton::MeasureDesiredSize(float& outW, float& outH) const {
     float textW = 0.0f;
     float textH = 0.0f;
-    FDebugOverlay::MeasureText(label_.empty() ? " " : label_, kHudFontScale, textW, textH);
+    FDebugOverlay::MeasureText(label_.empty() ? " " : label_, HudFontScale, textW, textH);
     constexpr float kPadX = 24.0f;
     constexpr float kPadY = 10.0f;
     outW = textW + kPadX * 2.0f;
-    outH = std::max(textH, kHudLineHeight) + kPadY * 2.0f;
+    outH = std::max(textH, HudLineHeight) + kPadY * 2.0f;
 }
 
 bool UButton::Contains(float fbX, float fbY) const {
@@ -41,10 +41,10 @@ void UButton::NativePaint(FPaintContext& ctx) {
 
     float textW = 0.0f;
     float textH = 0.0f;
-    ctx.MeasureText(label_, kHudFontScale, textW, textH);
+    ctx.MeasureText(label_, HudFontScale, textW, textH);
     const float textX = x_ + w_ * 0.5f;
     const float textY = y_ + (h_ - textH) * 0.5f;
     const glm::vec3 color = enabled_ ? textColor_ : disabledTextColor_;
-    ctx.DrawText(label_, textX, textY, color, kHudFontScale, ETextJustify::Center);
+    ctx.DrawText(label_, textX, textY, color, HudFontScale, ETextJustify::Center);
 }
 

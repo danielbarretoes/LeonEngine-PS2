@@ -9,9 +9,9 @@
 
 namespace {
 
-[[nodiscard]] const void* glIndexByteOffset(int indexOffset) noexcept {
-    const std::uint32_t* base = nullptr;
-    return static_cast<const void*>(base + indexOffset);
+[[nodiscard]] const void* GlIndexByteOffset(int IndexOffset) noexcept {
+    const std::uint32_t* Base = nullptr;
+    return static_cast<const void*>(Base + IndexOffset);
 }
 
 } // namespace
@@ -20,164 +20,164 @@ UStaticMesh::~UStaticMesh() {
     Destroy();
 }
 
-UStaticMesh::UStaticMesh(UStaticMesh&& other) noexcept
-    : vao_(other.vao_), vbo_(other.vbo_), ebo_(other.ebo_), indexCount_(other.indexCount_),
-      cpuOnly_(other.cpuOnly_), localMin_(other.localMin_), localMax_(other.localMax_),
-      submeshes_(std::move(other.submeshes_)), materials_(std::move(other.materials_)),
-      cpuData_(std::move(other.cpuData_)) {
-    other.vao_ = 0;
-    other.vbo_ = 0;
-    other.ebo_ = 0;
-    other.indexCount_ = 0;
-    other.cpuOnly_ = false;
+UStaticMesh::UStaticMesh(UStaticMesh&& Other) noexcept
+    : Vao(Other.Vao), Vbo(Other.Vbo), Ebo(Other.Ebo), IndexCount(Other.IndexCount),
+      bCpuOnly(Other.bCpuOnly), LocalMin(Other.LocalMin), LocalMax(Other.LocalMax),
+      Submeshes(std::move(Other.Submeshes)), Materials(std::move(Other.Materials)),
+      CpuData(std::move(Other.CpuData)) {
+    Other.Vao = 0;
+    Other.Vbo = 0;
+    Other.Ebo = 0;
+    Other.IndexCount = 0;
+    Other.bCpuOnly = false;
 }
 
-UStaticMesh& UStaticMesh::operator=(UStaticMesh&& other) noexcept {
-    if (this != &other) {
+UStaticMesh& UStaticMesh::operator=(UStaticMesh&& Other) noexcept {
+    if (this != &Other) {
         Destroy();
-        vao_ = other.vao_;
-        vbo_ = other.vbo_;
-        ebo_ = other.ebo_;
-        indexCount_ = other.indexCount_;
-        cpuOnly_ = other.cpuOnly_;
-        localMin_ = other.localMin_;
-        localMax_ = other.localMax_;
-        submeshes_ = std::move(other.submeshes_);
-        materials_ = std::move(other.materials_);
-        cpuData_ = std::move(other.cpuData_);
-        other.vao_ = 0;
-        other.vbo_ = 0;
-        other.ebo_ = 0;
-        other.indexCount_ = 0;
-        other.cpuOnly_ = false;
+        Vao = Other.Vao;
+        Vbo = Other.Vbo;
+        Ebo = Other.Ebo;
+        IndexCount = Other.IndexCount;
+        bCpuOnly = Other.bCpuOnly;
+        LocalMin = Other.LocalMin;
+        LocalMax = Other.LocalMax;
+        Submeshes = std::move(Other.Submeshes);
+        Materials = std::move(Other.Materials);
+        CpuData = std::move(Other.CpuData);
+        Other.Vao = 0;
+        Other.Vbo = 0;
+        Other.Ebo = 0;
+        Other.IndexCount = 0;
+        Other.bCpuOnly = false;
     }
     return *this;
 }
 
-UStaticMesh UStaticMesh::CreateCpu(const FMeshData& data) {
-    UStaticMesh mesh;
-    if (data.empty()) {
-        return mesh;
+UStaticMesh UStaticMesh::CreateCpu(const FMeshData& Data) {
+    UStaticMesh Mesh;
+    if (Data.empty()) {
+        return Mesh;
     }
 
-    mesh.localMin_ = glm::vec3(std::numeric_limits<float>::max());
-    mesh.localMax_ = glm::vec3(std::numeric_limits<float>::lowest());
-    for (const FVertex& vertex : data.vertices) {
-        mesh.localMin_ = glm::min(mesh.localMin_, vertex.position);
-        mesh.localMax_ = glm::max(mesh.localMax_, vertex.position);
+    Mesh.LocalMin = glm::vec3(std::numeric_limits<float>::max());
+    Mesh.LocalMax = glm::vec3(std::numeric_limits<float>::lowest());
+    for (const FVertex& Vertex : Data.Vertices) {
+        Mesh.LocalMin = glm::min(Mesh.LocalMin, Vertex.Position);
+        Mesh.LocalMax = glm::max(Mesh.LocalMax, Vertex.Position);
     }
-    mesh.indexCount_ = static_cast<int>(data.indices.size());
-    mesh.materials_ = data.materials;
-    if (data.submeshes.empty()) {
-        mesh.submeshes_.push_back(FMeshSection{0, mesh.indexCount_, 0});
+    Mesh.IndexCount = static_cast<int>(Data.Indices.size());
+    Mesh.Materials = Data.Materials;
+    if (Data.Submeshes.empty()) {
+        Mesh.Submeshes.push_back(FMeshSection{0, Mesh.IndexCount, 0});
     } else {
-        mesh.submeshes_ = data.submeshes;
+        Mesh.Submeshes = Data.Submeshes;
     }
-    mesh.cpuOnly_ = true;
-    mesh.cpuData_ = data;
-    return mesh;
+    Mesh.bCpuOnly = true;
+    Mesh.CpuData = Data;
+    return Mesh;
 }
 
-UStaticMesh UStaticMesh::Upload(const FMeshData& data) {
+UStaticMesh UStaticMesh::Upload(const FMeshData& Data) {
     UStaticMesh Result;
-    if (data.empty()) {
+    if (Data.empty()) {
         return Result;
     }
 
-    FMeshData uploadData = data;
-    ComputeTangents(uploadData);
+    FMeshData UploadData = Data;
+    ComputeTangents(UploadData);
 
-    Result.localMin_ = glm::vec3(std::numeric_limits<float>::max());
-    Result.localMax_ = glm::vec3(std::numeric_limits<float>::lowest());
-    for (const FVertex& vertex : uploadData.vertices) {
-        Result.localMin_ = glm::min(Result.localMin_, vertex.position);
-        Result.localMax_ = glm::max(Result.localMax_, vertex.position);
+    Result.LocalMin = glm::vec3(std::numeric_limits<float>::max());
+    Result.LocalMax = glm::vec3(std::numeric_limits<float>::lowest());
+    for (const FVertex& Vertex : UploadData.Vertices) {
+        Result.LocalMin = glm::min(Result.LocalMin, Vertex.Position);
+        Result.LocalMax = glm::max(Result.LocalMax, Vertex.Position);
     }
 
-    glGenVertexArrays(1, &Result.vao_);
-    glGenBuffers(1, &Result.vbo_);
-    glGenBuffers(1, &Result.ebo_);
+    glGenVertexArrays(1, &Result.Vao);
+    glGenBuffers(1, &Result.Vbo);
+    glGenBuffers(1, &Result.Ebo);
 
-    glBindVertexArray(Result.vao_);
+    glBindVertexArray(Result.Vao);
 
-    glBindBuffer(GL_ARRAY_BUFFER, Result.vbo_);
+    glBindBuffer(GL_ARRAY_BUFFER, Result.Vbo);
     glBufferData(GL_ARRAY_BUFFER,
-                 static_cast<GLsizeiptr>(uploadData.vertices.size() * sizeof(FVertex)),
-                 uploadData.vertices.data(), GL_STATIC_DRAW);
+                 static_cast<GLsizeiptr>(UploadData.Vertices.size() * sizeof(FVertex)),
+                 UploadData.Vertices.data(), GL_STATIC_DRAW);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Result.ebo_);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Result.Ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-                 static_cast<GLsizeiptr>(uploadData.indices.size() * sizeof(std::uint32_t)),
-                 uploadData.indices.data(), GL_STATIC_DRAW);
+                 static_cast<GLsizeiptr>(UploadData.Indices.size() * sizeof(std::uint32_t)),
+                 UploadData.Indices.data(), GL_STATIC_DRAW);
 
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(FVertex),
-                          GlAttribOffset(&FVertex::position));
+                          GlAttribOffset(&FVertex::Position));
 
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(FVertex),
-                          GlAttribOffset(&FVertex::normal));
+                          GlAttribOffset(&FVertex::Normal));
 
     glEnableVertexAttribArray(2);
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(FVertex),
-                          GlAttribOffset(&FVertex::texCoord));
+                          GlAttribOffset(&FVertex::TexCoord));
 
     glEnableVertexAttribArray(3);
     glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(FVertex),
-                          GlAttribOffset(&FVertex::tangent));
+                          GlAttribOffset(&FVertex::Tangent));
 
     glBindVertexArray(0);
-    Result.indexCount_ = static_cast<int>(uploadData.indices.size());
-    Result.materials_ = uploadData.materials;
+    Result.IndexCount = static_cast<int>(UploadData.Indices.size());
+    Result.Materials = UploadData.Materials;
 
-    if (uploadData.submeshes.empty()) {
-        Result.submeshes_.push_back(FMeshSection{0, Result.indexCount_, 0});
+    if (UploadData.Submeshes.empty()) {
+        Result.Submeshes.push_back(FMeshSection{0, Result.IndexCount, 0});
     } else {
-        Result.submeshes_ = uploadData.submeshes;
+        Result.Submeshes = UploadData.Submeshes;
     }
-    Result.cpuData_ = std::move(uploadData);
+    Result.CpuData = std::move(UploadData);
     return Result;
 }
 
 void UStaticMesh::Draw() const {
-    if (!Valid() || cpuOnly_ || vao_ == 0) {
+    if (!Valid() || bCpuOnly || Vao == 0) {
         return;
     }
-    glBindVertexArray(vao_);
-    glDrawElements(GL_TRIANGLES, indexCount_, GL_UNSIGNED_INT, nullptr);
+    glBindVertexArray(Vao);
+    glDrawElements(GL_TRIANGLES, IndexCount, GL_UNSIGNED_INT, nullptr);
     glBindVertexArray(0);
 }
 
-void UStaticMesh::DrawSubMesh(std::size_t subMeshIndex) const {
-    if (!Valid() || cpuOnly_ || vao_ == 0 || subMeshIndex >= submeshes_.size()) {
+void UStaticMesh::DrawSubMesh(std::size_t SubMeshIndex) const {
+    if (!Valid() || bCpuOnly || Vao == 0 || SubMeshIndex >= Submeshes.size()) {
         return;
     }
-    const FMeshSection& sub = submeshes_[subMeshIndex];
-    if (sub.indexCount <= 0) {
+    const FMeshSection& Sub = Submeshes[SubMeshIndex];
+    if (Sub.IndexCount <= 0) {
         return;
     }
-    glBindVertexArray(vao_);
-    glDrawElements(GL_TRIANGLES, sub.indexCount, GL_UNSIGNED_INT,
-                   glIndexByteOffset(sub.indexOffset));
+    glBindVertexArray(Vao);
+    glDrawElements(GL_TRIANGLES, Sub.IndexCount, GL_UNSIGNED_INT,
+                   GlIndexByteOffset(Sub.IndexOffset));
     glBindVertexArray(0);
 }
 
 void UStaticMesh::Destroy() {
-    if (ebo_ != 0) {
-        glDeleteBuffers(1, &ebo_);
-        ebo_ = 0;
+    if (Ebo != 0) {
+        glDeleteBuffers(1, &Ebo);
+        Ebo = 0;
     }
-    if (vbo_ != 0) {
-        glDeleteBuffers(1, &vbo_);
-        vbo_ = 0;
+    if (Vbo != 0) {
+        glDeleteBuffers(1, &Vbo);
+        Vbo = 0;
     }
-    if (vao_ != 0) {
-        glDeleteVertexArrays(1, &vao_);
-        vao_ = 0;
+    if (Vao != 0) {
+        glDeleteVertexArrays(1, &Vao);
+        Vao = 0;
     }
-    indexCount_ = 0;
-    submeshes_.clear();
-    materials_.clear();
-    cpuData_ = {};
+    IndexCount = 0;
+    Submeshes.clear();
+    Materials.clear();
+    CpuData = {};
 }
 

@@ -46,33 +46,33 @@ struct FVertexKeyHash {
 };
 
 void computeSmoothNormals(FMeshData& data) {
-    for (auto& vertex : data.vertices) {
-        vertex.normal = {0.0f, 0.0f, 0.0f};
+    for (auto& vertex : data.Vertices) {
+        vertex.Normal = {0.0f, 0.0f, 0.0f};
     }
 
-    for (std::size_t i = 0; i + 2 < data.indices.size(); i += 3) {
-        const auto i0 = data.indices[i + 0];
-        const auto i1 = data.indices[i + 1];
-        const auto i2 = data.indices[i + 2];
+    for (std::size_t i = 0; i + 2 < data.Indices.size(); i += 3) {
+        const auto i0 = data.Indices[i + 0];
+        const auto i1 = data.Indices[i + 1];
+        const auto i2 = data.Indices[i + 2];
 
-        const glm::vec3 edge1 = data.vertices[i1].position - data.vertices[i0].position;
-        const glm::vec3 edge2 = data.vertices[i2].position - data.vertices[i0].position;
+        const glm::vec3 edge1 = data.Vertices[i1].Position - data.Vertices[i0].Position;
+        const glm::vec3 edge2 = data.Vertices[i2].Position - data.Vertices[i0].Position;
         const glm::vec3 faceNormal = glm::cross(edge1, edge2);
         if (glm::dot(faceNormal, faceNormal) < 1e-20f) {
             continue;
         }
 
         const glm::vec3 n = glm::normalize(faceNormal);
-        data.vertices[i0].normal += n;
-        data.vertices[i1].normal += n;
-        data.vertices[i2].normal += n;
+        data.Vertices[i0].Normal += n;
+        data.Vertices[i1].Normal += n;
+        data.Vertices[i2].Normal += n;
     }
 
-    for (auto& vertex : data.vertices) {
-        if (glm::dot(vertex.normal, vertex.normal) > 0.0f) {
-            vertex.normal = glm::normalize(vertex.normal);
+    for (auto& vertex : data.Vertices) {
+        if (glm::dot(vertex.Normal, vertex.Normal) > 0.0f) {
+            vertex.Normal = glm::normalize(vertex.Normal);
         } else {
-            vertex.normal = {0.0f, 1.0f, 0.0f};
+            vertex.Normal = {0.0f, 1.0f, 0.0f};
         }
     }
 }
@@ -112,7 +112,7 @@ std::uint32_t getOrCreateVertex(FMeshData& data,
 
     FVertex vertex{};
     const auto vi = static_cast<std::size_t>(index.vertex_index) * 3u;
-    vertex.position = {
+    vertex.Position = {
         attrib.vertices[vi + 0],
         attrib.vertices[vi + 1],
         attrib.vertices[vi + 2],
@@ -125,52 +125,52 @@ std::uint32_t getOrCreateVertex(FMeshData& data,
             attrib.normals[ni + 1],
             attrib.normals[ni + 2],
         };
-        vertex.normal = (glm::dot(n, n) > 0.0f) ? glm::normalize(n) : glm::vec3{0, 1, 0};
+        vertex.Normal = (glm::dot(n, n) > 0.0f) ? glm::normalize(n) : glm::vec3{0, 1, 0};
     } else {
-        vertex.normal = {0.0f, 1.0f, 0.0f};
+        vertex.Normal = {0.0f, 1.0f, 0.0f};
     }
 
     if (hasTexcoords && index.texcoord_index >= 0) {
         const auto ti = static_cast<std::size_t>(index.texcoord_index) * 2u;
-        vertex.texCoord = {
+        vertex.TexCoord = {
             attrib.texcoords[ti + 0],
             attrib.texcoords[ti + 1],
         };
     }
 
-    const auto newIndex = static_cast<std::uint32_t>(data.vertices.size());
+    const auto newIndex = static_cast<std::uint32_t>(data.Vertices.size());
     unique.emplace(key, newIndex);
-    data.vertices.push_back(vertex);
+    data.Vertices.push_back(vertex);
     return newIndex;
 }
 
 FMaterial materialFromTiny(const tinyobj::material_t& src) {
     FMaterial material;
-    material.shading = EMaterialShadingModel::BlinnPhong;
-    material.albedo = {src.diffuse[0], src.diffuse[1], src.diffuse[2]};
-    material.specular = {src.specular[0], src.specular[1], src.specular[2]};
-    material.alpha = src.dissolve;
+    material.Shading = EMaterialShadingModel::BlinnPhong;
+    material.Albedo = {src.diffuse[0], src.diffuse[1], src.diffuse[2]};
+    material.Specular = {src.specular[0], src.specular[1], src.specular[2]};
+    material.Alpha = src.dissolve;
     // Max/OBJ often exports low Ns; remap so highlights read clearly in Blinn-Phong.
     const float ns = std::max(src.shininess, 1.0f);
-    material.shininess = std::clamp((ns * ns * 0.25f) + (ns * 2.0f), 8.0f, 256.0f);
+    material.Shininess = std::clamp((ns * ns * 0.25f) + (ns * 2.0f), 8.0f, 256.0f);
 
     // Heuristic metalness from MTL (no explicit metal map): strong Ks relative to Kd.
-    const float kd = (material.albedo.x + material.albedo.y + material.albedo.z) / 3.0f;
-    const float ks = (material.specular.x + material.specular.y + material.specular.z) / 3.0f;
+    const float kd = (material.Albedo.x + material.Albedo.y + material.Albedo.z) / 3.0f;
+    const float ks = (material.Specular.x + material.Specular.y + material.Specular.z) / 3.0f;
     if (ks > 0.2f) {
-        material.metallic = std::clamp((ks - 0.15f) / 0.6f, 0.0f, 1.0f);
+        material.Metallic = std::clamp((ks - 0.15f) / 0.6f, 0.0f, 1.0f);
         // Painted metals in this asset use gray Ks; keep some metal even when Kd is dark.
         if (kd < 0.35f && ks >= 0.35f) {
-            material.metallic = std::max(material.metallic, 0.65f);
+            material.Metallic = std::max(material.Metallic, 0.65f);
         }
     }
     // Ensure specular floor so dielectrics still catch highlights.
     if (ks < 0.04f) {
-        material.specular = {0.04f, 0.04f, 0.04f};
+        material.Specular = {0.04f, 0.04f, 0.04f};
     }
 
-    material.syncRoughnessFromShininess();
-    material.castsShadows = material.alpha >= 0.999f;
+    material.SyncRoughnessFromShininess();
+    material.bCastsShadows = material.Alpha >= 0.999f;
     return material;
 }
 
@@ -203,7 +203,7 @@ FMeshData LoadObj(const std::string& path) {
     }
 
     FMeshData data;
-    data.vertices.reserve(indexEstimate);
+    data.Vertices.reserve(indexEstimate);
 
     std::unordered_map<FVertexKey, std::uint32_t, FVertexKeyHash> unique;
     unique.reserve(indexEstimate);
@@ -250,51 +250,51 @@ FMeshData LoadObj(const std::string& path) {
         }
     }
 
-    if (data.vertices.empty() || indicesByMaterial.empty()) {
+    if (data.Vertices.empty() || indicesByMaterial.empty()) {
         std::cerr << "Mesh has no geometry: " << path << '\n';
         return {};
     }
 
     if (!tinyMaterials.empty()) {
-        data.materials.reserve(tinyMaterials.size());
-        data.albedoMapPaths.reserve(tinyMaterials.size());
+        data.Materials.reserve(tinyMaterials.size());
+        data.AlbedoMapPaths.reserve(tinyMaterials.size());
         const std::filesystem::path objDir = std::filesystem::path(path).parent_path();
         for (const tinyobj::material_t& src : tinyMaterials) {
-            data.materials.push_back(materialFromTiny(src));
+            data.Materials.push_back(materialFromTiny(src));
             if (!src.diffuse_texname.empty()) {
-                data.albedoMapPaths.push_back((objDir / src.diffuse_texname).string());
+                data.AlbedoMapPaths.push_back((objDir / src.diffuse_texname).string());
             } else {
-                data.albedoMapPaths.emplace_back();
+                data.AlbedoMapPaths.emplace_back();
             }
         }
     }
 
-    data.indices.reserve(indexEstimate);
+    data.Indices.reserve(indexEstimate);
     for (auto& [materialId, bucket] : indicesByMaterial) {
         if (bucket.empty()) {
             continue;
         }
 
         int slot = 0;
-        if (materialId >= 0 && materialId < static_cast<int>(data.materials.size())) {
+        if (materialId >= 0 && materialId < static_cast<int>(data.Materials.size())) {
             slot = materialId;
-        } else if (!data.materials.empty()) {
+        } else if (!data.Materials.empty()) {
             slot = 0;
         }
 
         FMeshSection sub;
-        sub.indexOffset = static_cast<int>(data.indices.size());
-        sub.indexCount = static_cast<int>(bucket.size());
-        sub.materialIndex = slot;
-        data.indices.insert(data.indices.end(), bucket.begin(), bucket.end());
-        data.submeshes.push_back(sub);
+        sub.IndexOffset = static_cast<int>(data.Indices.size());
+        sub.IndexCount = static_cast<int>(bucket.size());
+        sub.MaterialIndex = slot;
+        data.Indices.insert(data.Indices.end(), bucket.begin(), bucket.end());
+        data.Submeshes.push_back(sub);
     }
 
-    if (data.materials.empty()) {
-        data.materials.push_back(FMaterial{});
-        data.albedoMapPaths.emplace_back();
-        for (FMeshSection& sub : data.submeshes) {
-            sub.materialIndex = 0;
+    if (data.Materials.empty()) {
+        data.Materials.push_back(FMaterial{});
+        data.AlbedoMapPaths.emplace_back();
+        for (FMeshSection& sub : data.Submeshes) {
+            sub.MaterialIndex = 0;
         }
     }
 
@@ -302,9 +302,9 @@ FMeshData LoadObj(const std::string& path) {
         computeSmoothNormals(data);
     }
 
-    std::cout << "OBJ '" << path << "': " << data.vertices.size() << " verts, "
-              << (data.indices.size() / 3) << " tris, " << data.submeshes.size() << " submeshes, "
-              << data.materials.size() << " materials\n";
+    std::cout << "OBJ '" << path << "': " << data.Vertices.size() << " verts, "
+              << (data.Indices.size() / 3) << " tris, " << data.Submeshes.size() << " submeshes, "
+              << data.Materials.size() << " materials\n";
     return data;
 }
 

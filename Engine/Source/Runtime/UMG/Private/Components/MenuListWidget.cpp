@@ -86,7 +86,7 @@ std::string UMenuListWidget::BuildPaintText() const {
 
 void UMenuListWidget::CacheLayout(int /*viewportW*/, int viewportH) {
     viewportH_ = viewportH;
-    lineH_ = kHudLineHeight;
+    lineH_ = HudLineHeight;
     if (items_.empty() || viewportH <= 0) {
         itemsTopPx_ = 0.0f;
         return;
@@ -107,10 +107,10 @@ void UMenuListWidget::NativePaint(FPaintContext& ctx) {
     const std::string text = BuildPaintText();
     float w = 0.0f;
     float h = 0.0f;
-    ctx.MeasureText(text, kHudFontScale, w, h);
+    ctx.MeasureText(text, HudFontScale, w, h);
     float top = (static_cast<float>(ctx.Height()) - h) * 0.5f;
     top = std::clamp(top, 10.0f, std::max(10.0f, static_cast<float>(ctx.Height()) - h - 10.0f));
-    ctx.DrawText(text, static_cast<float>(ctx.Width()) * 0.5f, top, color_, kHudFontScale,
+    ctx.DrawText(text, static_cast<float>(ctx.Width()) * 0.5f, top, color_, HudFontScale,
                  ETextJustify::Center);
 }
 

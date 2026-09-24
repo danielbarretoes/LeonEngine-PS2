@@ -978,7 +978,7 @@ bool ApplyLevelDocument(UGameEngine& engine, const FLevelDocument& doc, const st
                 FMaterial base =
                     resources.LoadMaterial(ResolveLevelAssetPath(sourcePath, record.materialPath));
                 if (actor.mesh->HasMaterials()) {
-                    actor.materials.assign(actor.mesh->Materials().size(), base);
+                    actor.materials.assign(actor.mesh->GetMaterials().size(), base);
                 } else {
                     actor.materialOverride = true;
                     actor.material = std::move(base);
@@ -990,9 +990,9 @@ bool ApplyLevelDocument(UGameEngine& engine, const FLevelDocument& doc, const st
 
             // BlockingVolume: invisible collision box, never a shadow caster.
             if (record.actorClass == ELevelActorClass::BlockingVolume) {
-                actor.material.castsShadows = false;
+                actor.material.bCastsShadows = false;
                 for (FMaterial& material : actor.materials) {
-                    material.castsShadows = false;
+                    material.bCastsShadows = false;
                 }
             }
 

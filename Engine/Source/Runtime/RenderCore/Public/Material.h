@@ -16,30 +16,30 @@ enum class EMaterialShadingModel {
 };
 
 /// Roughness from Blinn shininess (high Ns → sharp env reflections).
-[[nodiscard]] inline float roughnessFromShininess(float shininess) {
-    const float s = std::max(shininess, 1.0f);
-    return std::clamp(std::sqrt(2.0f / (s + 2.0f)), 0.04f, 1.0f);
+[[nodiscard]] inline float RoughnessFromShininess(float InShininess) {
+    const float S = std::max(InShininess, 1.0f);
+    return std::clamp(std::sqrt(2.0f / (S + 2.0f)), 0.04f, 1.0f);
 }
 
 /// Per-object surface for the forward lit pass.
 /// specular/metallic + roughness drive Blinn highlights and HDR cubemap LOD.
 /// uvScale tiles albedo/normal maps (Unreal-like FMaterial Instance tiling).
 struct FMaterial {
-    EMaterialShadingModel shading = EMaterialShadingModel::BlinnPhong;
-    glm::vec3 albedo{0.55f, 0.72f, 0.85f};
-    glm::vec3 specular{0.04f, 0.04f, 0.04f}; // F0 / MTL Ks (dielectric default ~4%)
-    float metallic = 0.0f; // 0 = dielectric, 1 = metal (tints specular, kills diffuse)
-    float alpha = 1.0f;    // < 1 → transparent queue (back-to-front)
-    float shininess = 32.0f;
-    float roughness = roughnessFromShininess(32.0f); // 0 = mirror, 1 = fully blurred env
-    glm::vec2 uvScale{1.0f, 1.0f};                   // multiplies mesh UVs when sampling maps
-    bool castsShadows = true;
-    bool planarMirror = false;          // horizontal ground mirror (scene planar reflection pass)
-    std::shared_ptr<UTexture2D> albedoMap; // optional; white if null
-    std::shared_ptr<UTexture2D> normalMap; // optional; flat (+Z) if null
+    EMaterialShadingModel Shading = EMaterialShadingModel::BlinnPhong;
+    glm::vec3 Albedo{0.55f, 0.72f, 0.85f};
+    glm::vec3 Specular{0.04f, 0.04f, 0.04f}; // F0 / MTL Ks (dielectric default ~4%)
+    float Metallic = 0.0f; // 0 = dielectric, 1 = metal (tints specular, kills diffuse)
+    float Alpha = 1.0f;    // < 1 → transparent queue (back-to-front)
+    float Shininess = 32.0f;
+    float Roughness = RoughnessFromShininess(32.0f); // 0 = mirror, 1 = fully blurred env
+    glm::vec2 UvScale{1.0f, 1.0f};                   // multiplies mesh UVs when sampling maps
+    bool bCastsShadows = true;
+    bool bPlanarMirror = false;          // horizontal ground mirror (scene planar reflection pass)
+    std::shared_ptr<UTexture2D> AlbedoMap; // optional; white if null
+    std::shared_ptr<UTexture2D> NormalMap; // optional; flat (+Z) if null
 
-    [[nodiscard]] bool isTransparent() const { return alpha < 0.999f; }
+    [[nodiscard]] bool IsTransparent() const { return Alpha < 0.999f; }
 
-    void syncRoughnessFromShininess() { roughness = roughnessFromShininess(shininess); }
+    void SyncRoughnessFromShininess() { Roughness = RoughnessFromShininess(Shininess); }
 };
 

@@ -12,96 +12,96 @@
 /// and top-left timed debug console (Unreal-like AddOnScreenDebugMessage).
 class FDebugOverlay {
 public:
-    bool Initialize(const std::string& shaderDirectory);
+    bool Initialize(const std::string& ShaderDirectory);
     void Shutdown();
 
     /// Optional top-left block (unused by default Engine HUD — messages live there).
-    void SetText(const std::string& text);
+    void SetText(const std::string& InText);
     /// Bottom-left block (e.g. F1/F2 debug toggles), left-aligned.
-    void SetBottomLeftText(const std::string& text);
+    void SetBottomLeftText(const std::string& InText);
     /// Horizontally + vertically centered block (menus / status).
-    void SetCenterText(const std::string& text);
+    void SetCenterText(const std::string& InText);
     /// Right-aligned block (Engine stats top-right / level chrome bottom-right).
-    void SetRightText(const std::string& text);
+    void SetRightText(const std::string& InText);
     /// Vertical origin for `SetRightText` (default top margin).
-    void SetRightTextOriginY(float originY);
+    void SetRightTextOriginY(float OriginY);
 
     /// Queue a temporary message (top-left console). Newest stays at the top; older
     /// lines shift down. Default color is red; duration and color are configurable.
-    void AddOnScreenDebugMessage(std::string message, float displaySeconds = 2.0f,
-                                 const glm::vec3& color = {1.0f, 0.0f, 0.0f});
-    void TickOnScreenMessages(float deltaTime);
+    void AddOnScreenDebugMessage(std::string Message, float DisplaySeconds = 2.0f,
+                                 const glm::vec3& InColor = {1.0f, 0.0f, 0.0f});
+    void TickOnScreenMessages(float DeltaTime);
 
     /// Screen-space geometry for UUserWidget / HUD (cleared each Paint). Pixel coords, top-left.
     void ClearScreenGeometry();
-    void AddScreenLine(float x0, float y0, float x1, float y1, const glm::vec3& color,
-                       float thickness = 2.0f);
-    void AddScreenRect(float x, float y, float w, float h, const glm::vec3& color);
+    void AddScreenLine(float InX0, float InY0, float InX1, float InY1, const glm::vec3& InColor,
+                       float InThickness = 2.0f);
+    void AddScreenRect(float InX, float InY, float InW, float InH, const glm::vec3& InColor);
     /// Widget text. `x`/`y` = left / center / right of the first line per `justify`.
-    void AddScreenText(std::string text, float x, float y, const glm::vec3& color,
-                       float pixelScale = kHudFontScale,
-                       ETextJustify justify = ETextJustify::Left);
+    void AddScreenText(std::string InText, float InX, float InY, const glm::vec3& InColor,
+                       float InPixelScale = HudFontScale,
+                       ETextJustify InJustify = ETextJustify::Left);
 
     /// Measure multiline bitmap text at `pixelScale` (width = longest line).
-    static void MeasureText(const std::string& text, float pixelScale, float& outWidth,
-                            float& outHeight);
+    static void MeasureText(const std::string& InText, float InPixelScale, float& OutWidth,
+                            float& OutHeight);
 
-    void Draw(int framebufferWidth, int framebufferHeight);
-    [[nodiscard]] EShaderReloadResult ReloadShader(bool force = false);
+    void Draw(int FramebufferWidth, int FramebufferHeight);
+    [[nodiscard]] EShaderReloadResult ReloadShader(bool bForce = false);
 
-    [[nodiscard]] bool IsValid() const { return shader_.Valid() && vao_ != 0; }
+    [[nodiscard]] bool IsValid() const { return Shader.Valid() && Vao != 0; }
 
 private:
     struct FOnScreenMessage {
-        std::string text;
-        float timeRemaining = 0.0f;
-        float duration = 0.0f;
-        glm::vec3 color{1.0f, 0.0f, 0.0f};
+        std::string Text;
+        float TimeRemaining = 0.0f;
+        float Duration = 0.0f;
+        glm::vec3 Color{1.0f, 0.0f, 0.0f};
     };
 
     struct FScreenLine {
-        float x0 = 0.0f;
-        float y0 = 0.0f;
-        float x1 = 0.0f;
-        float y1 = 0.0f;
-        float thickness = 2.0f;
-        glm::vec3 color{1.0f};
+        float X0 = 0.0f;
+        float Y0 = 0.0f;
+        float X1 = 0.0f;
+        float Y1 = 0.0f;
+        float Thickness = 2.0f;
+        glm::vec3 Color{1.0f};
     };
 
     struct FScreenRect {
-        float x = 0.0f;
-        float y = 0.0f;
-        float w = 0.0f;
-        float h = 0.0f;
-        glm::vec3 color{1.0f};
+        float X = 0.0f;
+        float Y = 0.0f;
+        float W = 0.0f;
+        float H = 0.0f;
+        glm::vec3 Color{1.0f};
     };
 
     struct FScreenText {
-        std::string text;
-        float x = 0.0f;
-        float y = 0.0f;
-        float pixelScale = kHudFontScale;
-        ETextJustify justify = ETextJustify::Left;
-        glm::vec3 color{1.0f};
+        std::string Text;
+        float X = 0.0f;
+        float Y = 0.0f;
+        float PixelScale = HudFontScale;
+        ETextJustify Justify = ETextJustify::Left;
+        glm::vec3 Color{1.0f};
     };
 
-    void RebuildMesh(int framebufferWidth, int framebufferHeight);
+    void RebuildMesh(int FramebufferWidth, int FramebufferHeight);
 
-    FShader shader_;
-    std::string text_;
-    std::string bottomLeftText_;
-    std::string centerText_;
-    std::string rightText_;
-    float rightTextOriginY_ = 10.0f;
-    std::vector<FOnScreenMessage> onScreenMessages_;
-    std::vector<FScreenLine> screenLines_;
-    std::vector<FScreenRect> screenRects_;
-    std::vector<FScreenText> screenTexts_;
-    unsigned int vao_ = 0;
-    unsigned int vbo_ = 0;
-    int vertexCount_ = 0;
-    bool dirty_ = true;
-    int builtForWidth_ = 0;
-    int builtForHeight_ = 0;
+    FShader Shader;
+    std::string Text;
+    std::string BottomLeftText;
+    std::string CenterText;
+    std::string RightText;
+    float RightTextOriginY = 10.0f;
+    std::vector<FOnScreenMessage> OnScreenMessages;
+    std::vector<FScreenLine> ScreenLines;
+    std::vector<FScreenRect> ScreenRects;
+    std::vector<FScreenText> ScreenTexts;
+    unsigned int Vao = 0;
+    unsigned int Vbo = 0;
+    int VertexCount = 0;
+    bool bDirty = true;
+    int BuiltForWidth = 0;
+    int BuiltForHeight = 0;
 };
 

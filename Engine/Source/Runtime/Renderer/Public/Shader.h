@@ -15,12 +15,12 @@ enum class EShaderReloadResult : std::uint8_t {
     Failed = 2,
 };
 
-[[nodiscard]] inline EShaderReloadResult MergeShaderReload(EShaderReloadResult a,
-                                                           EShaderReloadResult b) {
-    if (a == EShaderReloadResult::Failed || b == EShaderReloadResult::Failed) {
+[[nodiscard]] inline EShaderReloadResult MergeShaderReload(EShaderReloadResult A,
+                                                           EShaderReloadResult B) {
+    if (A == EShaderReloadResult::Failed || B == EShaderReloadResult::Failed) {
         return EShaderReloadResult::Failed;
     }
-    if (a == EShaderReloadResult::Reloaded || b == EShaderReloadResult::Reloaded) {
+    if (A == EShaderReloadResult::Reloaded || B == EShaderReloadResult::Reloaded) {
         return EShaderReloadResult::Reloaded;
     }
     return EShaderReloadResult::Unchanged;
@@ -38,43 +38,43 @@ public:
     FShader(const FShader&) = delete;
     FShader& operator=(const FShader&) = delete;
 
-    bool Create(const char* vertexSource, const char* fragmentSource);
-    bool LoadFromFiles(const std::string& vertexPath, const std::string& fragmentPath);
+    bool Create(const char* VertexSource, const char* FragmentSource);
+    bool LoadFromFiles(const std::string& InVertexPath, const std::string& InFragmentPath);
     void Destroy();
 
     /// Recompile when file timestamps change (or force). Failed compiles keep the previous program.
-    [[nodiscard]] EShaderReloadResult ReloadFromDiskIfChanged(const FAcceptFunction& accept = {});
-    [[nodiscard]] EShaderReloadResult ForceReloadFromDisk(const FAcceptFunction& accept = {});
+    [[nodiscard]] EShaderReloadResult ReloadFromDiskIfChanged(const FAcceptFunction& Accept = {});
+    [[nodiscard]] EShaderReloadResult ForceReloadFromDisk(const FAcceptFunction& Accept = {});
 
     void Bind() const;
-    void SetMat4(const char* name, const float* value16) const;
-    void SetMat4Array(const char* name, const float* values, int count) const;
-    void SetMat3(const char* name, const float* value9) const;
-    void SetVec3(const char* name, float x, float y, float z) const;
-    void SetVec2(const char* name, float x, float y) const;
-    void SetVec4(const char* name, float x, float y, float z, float w) const;
-    void SetFloat(const char* name, float value) const;
-    void SetInt(const char* name, int value) const;
+    void SetMat4(const char* Name, const float* Value16) const;
+    void SetMat4Array(const char* Name, const float* Values, int Count) const;
+    void SetMat3(const char* Name, const float* Value9) const;
+    void SetVec3(const char* Name, float X, float Y, float Z) const;
+    void SetVec2(const char* Name, float X, float Y) const;
+    void SetVec4(const char* Name, float X, float Y, float Z, float W) const;
+    void SetFloat(const char* Name, float Value) const;
+    void SetInt(const char* Name, int Value) const;
 
     /// Bind a named uniform block to a binding point (matches FUniformBuffer::Create).
-    bool BindUniformBlock(const char* blockName, unsigned int bindingPoint) const;
+    bool BindUniformBlock(const char* BlockName, unsigned int BindingPoint) const;
 
-    [[nodiscard]] bool Valid() const { return program_ != 0; }
-    [[nodiscard]] FRHIProgramId ProgramId() const { return program_; }
+    [[nodiscard]] bool Valid() const { return Program != 0; }
+    [[nodiscard]] FRHIProgramId ProgramId() const { return Program; }
     [[nodiscard]] bool HasFilePaths() const {
-        return !vertexPath_.empty() && !fragmentPath_.empty();
+        return !VertexPath.empty() && !FragmentPath.empty();
     }
 
 private:
-    static unsigned int Compile(unsigned int type, const char* source);
-    [[nodiscard]] int UniformLocation(const char* name) const;
-    EShaderReloadResult LoadFromStoredPaths(bool force, const FAcceptFunction& accept);
+    static unsigned int Compile(unsigned int Type, const char* Source);
+    [[nodiscard]] int UniformLocation(const char* Name) const;
+    EShaderReloadResult LoadFromStoredPaths(bool bForce, const FAcceptFunction& Accept);
 
-    FRHIProgramId program_ = kInvalidProgram;
-    mutable std::unordered_map<std::string, int> uniformCache_;
-    std::string vertexPath_;
-    std::string fragmentPath_;
-    std::filesystem::file_time_type vertexTime_;
-    std::filesystem::file_time_type fragmentTime_;
+    FRHIProgramId Program = InvalidProgram;
+    mutable std::unordered_map<std::string, int> UniformCache;
+    std::string VertexPath;
+    std::string FragmentPath;
+    std::filesystem::file_time_type VertexTime;
+    std::filesystem::file_time_type FragmentTime;
 };
 

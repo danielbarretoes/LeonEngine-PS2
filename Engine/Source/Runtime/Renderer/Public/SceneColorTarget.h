@@ -13,26 +13,26 @@ public:
     FSceneColorTarget& operator=(const FSceneColorTarget&) = delete;
 
     /// Allocate or resize color (RGB16F) + depth texture.
-    [[nodiscard]] bool EnsureSize(int width, int height);
+    [[nodiscard]] bool EnsureSize(int InWidth, int InHeight);
     void Destroy();
 
     void Begin() const;
     /// Restore draw target to `restoreFbo` (0 = default framebuffer).
-    void End(int framebufferWidth, int framebufferHeight, FRHIFramebufferId restoreFbo = kInvalidFramebuffer) const;
+    void End(int FramebufferWidth, int FramebufferHeight, FRHIFramebufferId RestoreFbo = InvalidFramebuffer) const;
 
-    void BindColorTexture(unsigned int unit) const;
-    void BindDepthTexture(unsigned int unit) const;
+    void BindColorTexture(unsigned int Unit) const;
+    void BindDepthTexture(unsigned int Unit) const;
 
-    [[nodiscard]] bool Valid() const { return fbo_ != 0 && colorTexture_ != 0 && depthTexture_ != 0; }
-    [[nodiscard]] FRHIFramebufferId Framebuffer() const { return fbo_; }
-    [[nodiscard]] int Width() const { return width_; }
-    [[nodiscard]] int Height() const { return height_; }
+    [[nodiscard]] bool Valid() const { return Fbo != 0 && ColorTexture != 0 && DepthTexture != 0; }
+    [[nodiscard]] FRHIFramebufferId Framebuffer() const { return Fbo; }
+    [[nodiscard]] int GetWidth() const { return Width; }
+    [[nodiscard]] int GetHeight() const { return Height; }
 
 private:
-    FRHIFramebufferId fbo_ = kInvalidFramebuffer;
-    FRHITextureId colorTexture_ = kInvalidTexture;
-    FRHITextureId depthTexture_ = kInvalidTexture;
-    int width_ = 0;
-    int height_ = 0;
+    FRHIFramebufferId Fbo = InvalidFramebuffer;
+    FRHITextureId ColorTexture = InvalidTexture;
+    FRHITextureId DepthTexture = InvalidTexture;
+    int Width = 0;
+    int Height = 0;
 };
 

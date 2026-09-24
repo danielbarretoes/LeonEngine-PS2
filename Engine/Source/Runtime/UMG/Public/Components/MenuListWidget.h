@@ -53,7 +53,7 @@ private:
 
     // Layout cached for hit-testing (Paint + TickInput).
     float itemsTopPx_ = 0.0f;
-    float lineH_ = kHudLineHeight;
+    float lineH_ = HudLineHeight;
     int viewportH_ = 0;
 };
 

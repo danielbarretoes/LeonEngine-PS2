@@ -291,10 +291,10 @@ FValidationReport ValidateMaterialFile(const std::string& path) {
         return report;
     }
 
-    if (doc.material.metallic < 0.0f || doc.material.metallic > 1.0f) {
+    if (doc.Material.Metallic < 0.0f || doc.Material.Metallic > 1.0f) {
         report.warning("Metallic", "expected value in [0, 1]");
     }
-    if (doc.material.roughness < 0.0f || doc.material.roughness > 1.0f) {
+    if (doc.Material.Roughness < 0.0f || doc.Material.Roughness > 1.0f) {
         report.warning("Roughness", "expected value in [0, 1]");
     }
 
@@ -308,8 +308,8 @@ FValidationReport ValidateMaterialFile(const std::string& path) {
             report.warning(where, "texture not found: " + mapPath);
         }
     };
-    warnMissingMap(doc.baseColorMapPath, "BaseColorMap");
-    warnMissingMap(doc.normalMapPath, "NormalMap");
+    warnMissingMap(doc.BaseColorMapPath, "BaseColorMap");
+    warnMissingMap(doc.NormalMapPath, "NormalMap");
     return report;
 }
 

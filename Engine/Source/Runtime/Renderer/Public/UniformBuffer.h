@@ -13,18 +13,18 @@ public:
     FUniformBuffer(const FUniformBuffer&) = delete;
     FUniformBuffer& operator=(const FUniformBuffer&) = delete;
 
-    bool Create(std::size_t sizeBytes, unsigned int bindingPoint);
+    bool Create(std::size_t InSizeBytes, unsigned int InBindingPoint);
     void Destroy();
 
-    void Update(const void* data, std::size_t sizeBytes) const;
+    void Update(const void* Data, std::size_t InSizeBytes) const;
     void Bind() const;
 
-    [[nodiscard]] bool Valid() const { return id_ != kInvalidBuffer; }
-    [[nodiscard]] unsigned int BindingPoint() const { return bindingPoint_; }
+    [[nodiscard]] bool Valid() const { return Id != InvalidBuffer; }
+    [[nodiscard]] unsigned int GetBindingPoint() const { return BindingPoint; }
 
 private:
-    FRHIBufferId id_ = kInvalidBuffer;
-    unsigned int bindingPoint_ = 0;
-    std::size_t sizeBytes_ = 0;
+    FRHIBufferId Id = InvalidBuffer;
+    unsigned int BindingPoint = 0;
+    std::size_t SizeBytes = 0;
 };
 

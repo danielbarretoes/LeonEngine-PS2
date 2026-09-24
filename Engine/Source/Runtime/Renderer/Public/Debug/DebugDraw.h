@@ -11,36 +11,36 @@
 /// Immediate-mode colored line batch for 3D debug (AABBs, light frustum, etc.).
 class FDebugDraw {
 public:
-    bool Initialize(const std::string& shaderDirectory);
+    bool Initialize(const std::string& ShaderDirectory);
     void Shutdown();
     /// Reload line shader from disk if timestamps changed (or force).
-    [[nodiscard]] EShaderReloadResult ReloadShader(bool force = false);
+    [[nodiscard]] EShaderReloadResult ReloadShader(bool bForce = false);
 
     void Clear();
-    void AddLine(const glm::vec3& a, const glm::vec3& b, const glm::vec3& color);
+    void AddLine(const glm::vec3& A, const glm::vec3& B, const glm::vec3& InColor);
     /// Shaft + V-shaped head for a world-space direction vector.
-    void AddArrow(const glm::vec3& from, const glm::vec3& to, const glm::vec3& color,
-                  float headLength = 0.28f, float headWidth = 0.14f);
-    void AddAabb(const glm::vec3& worldMin, const glm::vec3& worldMax, const glm::vec3& color);
+    void AddArrow(const glm::vec3& From, const glm::vec3& To, const glm::vec3& InColor,
+                  float HeadLength = 0.28f, float HeadWidth = 0.14f);
+    void AddAabb(const glm::vec3& WorldMin, const glm::vec3& WorldMax, const glm::vec3& InColor);
     /// RGB axes at a USceneComponent world location (editor / PIE debug).
-    void AddAxes(const glm::vec3& origin, float size = 0.35f);
+    void AddAxes(const glm::vec3& Origin, float Size = 0.35f);
     /// Clip-space cube (±1) transformed by inverse(lightSpace) → world-space ortho frustum.
-    void AddLightFrustum(const glm::mat4& lightSpace, const glm::vec3& color);
+    void AddLightFrustum(const glm::mat4& LightSpace, const glm::vec3& InColor);
 
-    void Flush(const glm::mat4& viewProjection) const;
+    void Flush(const glm::mat4& ViewProjection) const;
 
-    [[nodiscard]] bool IsValid() const { return shader_.Valid() && vao_ != 0; }
-    [[nodiscard]] bool IsEmpty() const { return vertices_.empty(); }
+    [[nodiscard]] bool IsValid() const { return Shader.Valid() && Vao != 0; }
+    [[nodiscard]] bool IsEmpty() const { return Vertices.empty(); }
 
 private:
     struct FVertex {
-        glm::vec3 position{};
-        glm::vec3 color{};
+        glm::vec3 Position{};
+        glm::vec3 Color{};
     };
 
-    FShader shader_;
-    unsigned int vao_ = 0;
-    unsigned int vbo_ = 0;
-    std::vector<FVertex> vertices_;
+    FShader Shader;
+    unsigned int Vao = 0;
+    unsigned int Vbo = 0;
+    std::vector<FVertex> Vertices;
 };
 

@@ -29,182 +29,182 @@
 
 /// Per-frame measurable counters (color pass after frustum culling).
 struct FFrameStats {
-    int objectsTotal = 0;
-    int objectsVisible = 0;
-    int objectsCulled = 0;
-    int drawsSubmitted = 0;
-    int trianglesSubmitted = 0;
-    int planarCulled = 0;
-    float shadowMs = 0.0f;
-    float planarMs = 0.0f;
-    float colorMs = 0.0f;
-    float ssaoMs = 0.0f;
-    float postMs = 0.0f;
+    int ObjectsTotal = 0;
+    int ObjectsVisible = 0;
+    int ObjectsCulled = 0;
+    int DrawsSubmitted = 0;
+    int TrianglesSubmitted = 0;
+    int PlanarCulled = 0;
+    float ShadowMs = 0.0f;
+    float PlanarMs = 0.0f;
+    float ColorMs = 0.0f;
+    float SsaoMs = 0.0f;
+    float PostMs = 0.0f;
 };
 
 /// Options for a single submesh draw (shared lit textures may already be bound).
 struct FDrawOptions {
-    bool litPass = true;
-    bool receiveShadows = true;
-    bool useNormalMaps = true;
-    bool bindSharedLitTextures = true; // shadow map unit; env is bound once per pass
+    bool bLitPass = true;
+    bool bReceiveShadows = true;
+    bool bUseNormalMaps = true;
+    bool bBindSharedLitTextures = true; // shadow map unit; env is bound once per pass
 };
 
 /// Forward renderer: directional shadow map (light 0), optional half-res planar mirror,
 /// opaque / skybox / transparent, then optional post (SSAO → tonemap → FXAA).
 class FSceneRenderer {
 public:
-    static constexpr unsigned int kCameraUboBinding = 0;
-    static constexpr unsigned int kLightsUboBinding = 1;
+    static constexpr unsigned int CameraUboBinding = 0;
+    static constexpr unsigned int LightsUboBinding = 1;
     /// Planar mirror FBO scale vs framebuffer (0.5 = half-res).
-    static constexpr float kPlanarReflectionScale = 0.5f;
-    static constexpr int kMaxAoSamples = 64;
+    static constexpr float PlanarReflectionScale = 0.5f;
+    static constexpr int MaxAoSamples = 64;
 
-    bool Initialize(const std::string& shaderDirectory);
+    bool Initialize(const std::string& InShaderDirectory);
     void Shutdown();
 
     /// Reload shaders from disk if file timestamps changed (or force). Rebinds lit UBOs.
-    [[nodiscard]] EShaderReloadResult ReloadShaders(bool force = false);
+    [[nodiscard]] EShaderReloadResult ReloadShaders(bool bForce = false);
 
     /// When non-zero, BeginFrame / shadow / planar restore bind this FBO (editor viewport).
-    void SetDrawFramebuffer(FRHIFramebufferId fbo) { drawTargetFbo_ = fbo; }
-    [[nodiscard]] FRHIFramebufferId GetDrawFramebuffer() const { return drawTargetFbo_; }
+    void SetDrawFramebuffer(FRHIFramebufferId Fbo) { DrawTargetFbo = Fbo; }
+    [[nodiscard]] FRHIFramebufferId GetDrawFramebuffer() const { return DrawTargetFbo; }
 
-    void BeginFrame(int framebufferWidth, int framebufferHeight);
-    void DrawScene(const ULevel& level, const UCameraComponent& camera);
+    void BeginFrame(int FramebufferWidth, int FramebufferHeight);
+    void DrawScene(const ULevel& Level, const UCameraComponent& Camera);
 
     /// Queue a skinned mesh draw for the next `DrawScene` (cleared after DrawScene).
-    void SubmitSkeletalDraw(const USkeletalMesh& mesh, const glm::mat4& model,
-                            const std::vector<glm::mat4>& boneMatrices);
-    void SubmitSkeletalDraw(const USkeletalMesh& mesh, const FTransform& transform,
-                            const std::vector<glm::mat4>& boneMatrices);
+    void SubmitSkeletalDraw(const USkeletalMesh& InMesh, const glm::mat4& InModel,
+                            const std::vector<glm::mat4>& InBoneMatrices);
+    void SubmitSkeletalDraw(const USkeletalMesh& InMesh, const FTransform& Transform,
+                            const std::vector<glm::mat4>& InBoneMatrices);
 
     /// Queue a rigid static mesh with an explicit model matrix (attachments, etc.).
-    void SubmitStaticDraw(const UStaticMesh& mesh, const glm::mat4& model, const FMaterial& material);
+    void SubmitStaticDraw(const UStaticMesh& InMesh, const glm::mat4& InModel, const FMaterial& InMaterial);
 
     /// World-space lines flushed at end of DrawScene (independent of F1 AABB overlay).
     void ClearDebugOverlay();
-    void AddDebugLine(const glm::vec3& a, const glm::vec3& b, const glm::vec3& color);
-    void AddDebugArrow(const glm::vec3& from, const glm::vec3& to, const glm::vec3& color);
-    void AddDebugAabb(const glm::vec3& worldMin, const glm::vec3& worldMax, const glm::vec3& color);
+    void AddDebugLine(const glm::vec3& A, const glm::vec3& B, const glm::vec3& Color);
+    void AddDebugArrow(const glm::vec3& From, const glm::vec3& To, const glm::vec3& Color);
+    void AddDebugAabb(const glm::vec3& WorldMin, const glm::vec3& WorldMax, const glm::vec3& Color);
 
     /// Gameplay / physics debug lines (flushed with the scene overlay pass).
-    [[nodiscard]] FDebugDraw& GetDebugOverlay() { return overlayDebugDraw_; }
+    [[nodiscard]] FDebugDraw& GetDebugOverlay() { return OverlayDebugDraw; }
 
-    void SetDebugDrawEnabled(bool enabled) { debugDrawEnabled_ = enabled; }
-    void ToggleDebugDraw() { debugDrawEnabled_ = !debugDrawEnabled_; }
-    [[nodiscard]] bool IsDebugDrawEnabled() const { return debugDrawEnabled_; }
+    void SetDebugDrawEnabled(bool bEnabled) { bDebugDrawEnabled = bEnabled; }
+    void ToggleDebugDraw() { bDebugDrawEnabled = !bDebugDrawEnabled; }
+    [[nodiscard]] bool IsDebugDrawEnabled() const { return bDebugDrawEnabled; }
 
     /// When false, DrawScene skips lit geometry / shadows / post (debug overlay still flushes).
-    void SetSceneGeometryEnabled(bool enabled) { sceneGeometryEnabled_ = enabled; }
-    [[nodiscard]] bool IsSceneGeometryEnabled() const { return sceneGeometryEnabled_; }
+    void SetSceneGeometryEnabled(bool bEnabled) { bSceneGeometryEnabled = bEnabled; }
+    [[nodiscard]] bool IsSceneGeometryEnabled() const { return bSceneGeometryEnabled; }
 
     // --- Post-process API (Unreal-like PascalCase) ---
-    void SetPostProcessEnabled(bool enabled) { post_.enabled = enabled; }
-    [[nodiscard]] bool IsPostProcessEnabled() const { return post_.enabled; }
+    void SetPostProcessEnabled(bool bEnabled) { Post.bEnabled = bEnabled; }
+    [[nodiscard]] bool IsPostProcessEnabled() const { return Post.bEnabled; }
 
-    void SetAmbientOcclusionEnabled(bool enabled) { post_.ambientOcclusion = enabled; }
-    [[nodiscard]] bool IsAmbientOcclusionEnabled() const { return post_.ambientOcclusion; }
+    void SetAmbientOcclusionEnabled(bool bEnabled) { Post.bAmbientOcclusion = bEnabled; }
+    [[nodiscard]] bool IsAmbientOcclusionEnabled() const { return Post.bAmbientOcclusion; }
 
-    void SetFxaaEnabled(bool enabled) { post_.fxaa = enabled; }
-    [[nodiscard]] bool IsFxaaEnabled() const { return post_.fxaa; }
+    void SetFxaaEnabled(bool bEnabled) { Post.bFxaa = bEnabled; }
+    [[nodiscard]] bool IsFxaaEnabled() const { return Post.bFxaa; }
 
-    void SetEarlyZEnabled(bool enabled) { post_.earlyZ = enabled; }
-    [[nodiscard]] bool IsEarlyZEnabled() const { return post_.earlyZ; }
+    void SetEarlyZEnabled(bool bEnabled) { Post.bEarlyZ = bEnabled; }
+    [[nodiscard]] bool IsEarlyZEnabled() const { return Post.bEarlyZ; }
 
-    void SetPostProcessQuality(EPostProcessQuality quality) {
-        ApplyPostProcessQuality(post_, quality);
+    void SetPostProcessQuality(EPostProcessQuality Quality) {
+        ApplyPostProcessQuality(Post, Quality);
     }
-    [[nodiscard]] EPostProcessQuality GetPostProcessQuality() const { return post_.quality; }
+    [[nodiscard]] EPostProcessQuality GetPostProcessQuality() const { return Post.Quality; }
 
-    void SetPostProcessSettings(const FPostProcessSettings& settings) { post_ = settings; }
-    [[nodiscard]] const FPostProcessSettings& GetPostProcessSettings() const { return post_; }
-    [[nodiscard]] FPostProcessSettings& GetPostProcessSettings() { return post_; }
+    void SetPostProcessSettings(const FPostProcessSettings& Settings) { Post = Settings; }
+    [[nodiscard]] const FPostProcessSettings& GetPostProcessSettings() const { return Post; }
+    [[nodiscard]] FPostProcessSettings& GetPostProcessSettings() { return Post; }
 
-    [[nodiscard]] const FFrameStats& GetFrameStats() const { return frameStats_; }
-    [[nodiscard]] const std::string& GetShaderDirectory() const { return shaderDirectory_; }
+    [[nodiscard]] const FFrameStats& GetFrameStats() const { return FrameStats; }
+    [[nodiscard]] const std::string& GetShaderDirectory() const { return ShaderDirectory; }
 
 private:
-    bool bindLitUbos() const;
-    void updateCameraUbo(const UCameraComponent& camera) const;
-    void updateCameraUbo(const glm::mat4& view, const glm::mat4& projection,
-                         const glm::vec3& cameraPos) const;
-    void updateLightsUbo(const ULevel& level) const;
-    void bindEnvironment(const ULevel& level) const;
-    void bindShadowResources(bool receiveShadows,
-                             float sourceAngleDegrees = kDefaultLightSourceAngleDegrees) const;
-    void bindPlanarReflection(bool enabled, const glm::mat4& reflectionViewProj) const;
-    void setClipPlane(bool enabled, const glm::vec4& plane) const;
-    void ensureShadowMapSize();
-    [[nodiscard]] FRHIFramebufferId colorRestoreFbo() const;
-    void drawFullscreenTriangle() const;
-    void renderPostStack(const ULevel& level, const UCameraComponent& camera);
-    void renderShadowPass(const ULevel& level, const glm::mat4& lightSpace);
-    void renderPlanarReflectionPass(const ULevel& level, const UCameraComponent& camera, float planeY);
-    void drawSkybox(const ULevel& level, const glm::mat4& view, const glm::mat4& projection) const;
-    void drawDebug(const ULevel& level, const UCameraComponent& camera, const glm::mat4& lightSpace,
-                   bool hasLightSpace);
-    void DrawSubMesh(const FShader& shader, const UStaticMeshComponent& object,
-                     std::size_t subMeshIndex, const FMaterial& material, const glm::mat4& view,
-                     const glm::mat4& projection, const glm::mat4& lightSpace,
-                     const FDrawOptions& options) const;
-    void drawQueuedSkeletal(const ULevel& level, const glm::mat4& view, const glm::mat4& projection,
-                            const glm::mat4& lightSpace, bool receiveShadows,
-                            float shadowSourceAngle, const FFrustum* cameraFrustum,
-                            bool useWorldClipPlane = false);
-    void drawQueuedStatic(const ULevel& level, const glm::mat4& view, const glm::mat4& projection,
-                          const glm::mat4& lightSpace, bool receiveShadows,
-                          float shadowSourceAngle);
+    bool BindLitUbos() const;
+    void UpdateCameraUbo(const UCameraComponent& Camera) const;
+    void UpdateCameraUbo(const glm::mat4& InView, const glm::mat4& InProjection,
+                         const glm::vec3& InCameraPos) const;
+    void UpdateLightsUbo(const ULevel& Level) const;
+    void BindEnvironment(const ULevel& Level) const;
+    void BindShadowResources(bool bInReceiveShadows,
+                             float SourceAngleDegrees = kDefaultLightSourceAngleDegrees) const;
+    void BindPlanarReflection(bool bEnabled, const glm::mat4& ReflectionViewProj) const;
+    void SetClipPlane(bool bEnabled, const glm::vec4& Plane) const;
+    void EnsureShadowMapSize();
+    [[nodiscard]] FRHIFramebufferId ColorRestoreFbo() const;
+    void DrawFullscreenTriangle() const;
+    void RenderPostStack(const ULevel& Level, const UCameraComponent& Camera);
+    void RenderShadowPass(const ULevel& Level, const glm::mat4& LightSpace);
+    void RenderPlanarReflectionPass(const ULevel& Level, const UCameraComponent& Camera, float PlaneY);
+    void DrawSkybox(const ULevel& Level, const glm::mat4& InView, const glm::mat4& InProjection) const;
+    void DrawDebug(const ULevel& Level, const UCameraComponent& Camera, const glm::mat4& LightSpace,
+                   bool bHasLightSpace);
+    void DrawSubMesh(const FShader& Shader, const UStaticMeshComponent& Object,
+                     std::size_t InSubMeshIndex, const FMaterial& InMaterial, const glm::mat4& InView,
+                     const glm::mat4& InProjection, const glm::mat4& LightSpace,
+                     const FDrawOptions& Options) const;
+    void DrawQueuedSkeletal(const ULevel& Level, const glm::mat4& InView, const glm::mat4& InProjection,
+                            const glm::mat4& LightSpace, bool bInReceiveShadows,
+                            float ShadowSourceAngle, const FFrustum* CameraFrustum,
+                            bool bUseWorldClipPlane = false);
+    void DrawQueuedStatic(const ULevel& Level, const glm::mat4& InView, const glm::mat4& InProjection,
+                          const glm::mat4& LightSpace, bool bInReceiveShadows,
+                          float ShadowSourceAngle);
 
     struct FSkeletalDrawItem {
-        const USkeletalMesh* mesh = nullptr;
-        glm::mat4 model{1.0f};
-        std::vector<glm::mat4> boneMatrices;
+        const USkeletalMesh* Mesh = nullptr;
+        glm::mat4 Model{1.0f};
+        std::vector<glm::mat4> BoneMatrices;
     };
 
     struct FStaticDrawItem {
-        const UStaticMesh* mesh = nullptr;
-        glm::mat4 model{1.0f};
-        FMaterial material{};
+        const UStaticMesh* Mesh = nullptr;
+        glm::mat4 Model{1.0f};
+        FMaterial Material{};
     };
 
-    std::string shaderDirectory_;
-    FShader litShader_;
-    FShader skinnedLitShader_;
-    FShader unlitShader_;
-    FShader shadowShader_;
-    FShader skinnedShadowShader_;
-    FShader skyboxShader_;
-    FShader ssaoShader_;
-    FShader ssaoBlurShader_;
-    FShader postCompositeShader_;
-    FShader fxaaShader_;
-    FShadowMap shadowMap_;
-    FPlanarReflection planarReflection_;
-    FSceneColorTarget sceneColor_;
-    FSSAOTarget ssaoTarget_;
-    FLDRColorTarget ldrColor_;
-    FGPUPassTimer passTimers_;
-    FDebugDraw debugDraw_;
-    FDebugDraw overlayDebugDraw_; // gameplay vectors, etc. (always drawn)
-    FUniformBuffer cameraUbo_;
-    FUniformBuffer lightsUbo_;
-    std::shared_ptr<UTexture2D> whiteTexture_;
-    std::shared_ptr<UTexture2D> flatNormalTexture_;
-    std::shared_ptr<UStaticMesh> skyboxMesh_;
-    std::vector<FSkeletalDrawItem> skeletalDraws_;
-    std::vector<FStaticDrawItem> staticDraws_;
-    FFrameStats frameStats_{};
-    FPostProcessSettings post_{};
+    std::string ShaderDirectory;
+    FShader LitShader;
+    FShader SkinnedLitShader;
+    FShader UnlitShader;
+    FShader ShadowShader;
+    FShader SkinnedShadowShader;
+    FShader SkyboxShader;
+    FShader SsaoShader;
+    FShader SsaoBlurShader;
+    FShader PostCompositeShader;
+    FShader FxaaShader;
+    FShadowMap ShadowMap;
+    FPlanarReflection PlanarReflection;
+    FSceneColorTarget SceneColor;
+    FSSAOTarget SsaoTarget;
+    FLDRColorTarget LdrColor;
+    FGPUPassTimer PassTimers;
+    FDebugDraw DebugDraw;
+    FDebugDraw OverlayDebugDraw; // gameplay vectors, etc. (always drawn)
+    FUniformBuffer CameraUbo;
+    FUniformBuffer LightsUbo;
+    std::shared_ptr<UTexture2D> WhiteTexture;
+    std::shared_ptr<UTexture2D> FlatNormalTexture;
+    std::shared_ptr<UStaticMesh> SkyboxMesh;
+    std::vector<FSkeletalDrawItem> SkeletalDraws;
+    std::vector<FStaticDrawItem> StaticDraws;
+    FFrameStats FrameStats{};
+    FPostProcessSettings Post{};
 
-    FRHIVertexArrayId fullscreenVao_ = kInvalidVertexArray;
-    FRHITextureId aoNoiseTexture_ = kInvalidTexture;
-    std::array<glm::vec3, kMaxAoSamples> aoKernel_{};
+    FRHIVertexArrayId FullscreenVao = InvalidVertexArray;
+    FRHITextureId AoNoiseTexture = InvalidTexture;
+    std::array<glm::vec3, MaxAoSamples> AoKernel{};
 
-    int fbWidth_ = 0;
-    int fbHeight_ = 0;
-    FRHIFramebufferId drawTargetFbo_ = kInvalidFramebuffer;
-    bool debugDrawEnabled_ = false;
-    bool sceneGeometryEnabled_ = true;
+    int FbWidth = 0;
+    int FbHeight = 0;
+    FRHIFramebufferId DrawTargetFbo = InvalidFramebuffer;
+    bool bDebugDrawEnabled = false;
+    bool bSceneGeometryEnabled = true;
 };
 

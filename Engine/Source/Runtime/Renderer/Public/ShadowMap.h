@@ -10,7 +10,7 @@
 /// Depth texture uses GL_NEAREST so PCF samples discrete texels (not hardware-filtered depth).
 class FShadowMap {
 public:
-    static constexpr int kDefaultSize = 2048;
+    static constexpr int DefaultSize = 2048;
 
     FShadowMap() = default;
     ~FShadowMap();
@@ -18,26 +18,26 @@ public:
     FShadowMap(const FShadowMap&) = delete;
     FShadowMap& operator=(const FShadowMap&) = delete;
 
-    bool Create(int size = kDefaultSize);
+    bool Create(int InSize = DefaultSize);
     void Destroy();
 
     void Begin() const;
     /// Restore draw target to `restoreFbo` (0 = default framebuffer).
-    void End(int framebufferWidth, int framebufferHeight, FRHIFramebufferId restoreFbo = kInvalidFramebuffer) const;
+    void End(int FramebufferWidth, int FramebufferHeight, FRHIFramebufferId RestoreFbo = InvalidFramebuffer) const;
 
-    void BindDepthTexture(unsigned int unit) const;
-    [[nodiscard]] bool Valid() const { return fbo_ != 0 && depthTexture_ != 0; }
-    [[nodiscard]] int Size() const { return size_; }
+    void BindDepthTexture(unsigned int Unit) const;
+    [[nodiscard]] bool Valid() const { return Fbo != 0 && DepthTexture != 0; }
+    [[nodiscard]] int GetSize() const { return Size; }
 
     /// Ortho light matrix tightly fitted to a world-space AABB of shadow casters.
-    [[nodiscard]] static glm::mat4 FitLightSpaceMatrix(const glm::vec3& lightDirection,
-                                                       const glm::vec3& worldMin,
-                                                       const glm::vec3& worldMax,
-                                                       float padding = 0.5f);
+    [[nodiscard]] static glm::mat4 FitLightSpaceMatrix(const glm::vec3& LightDirection,
+                                                       const glm::vec3& WorldMin,
+                                                       const glm::vec3& WorldMax,
+                                                       float Padding = 0.5f);
 
 private:
-    FRHIFramebufferId fbo_ = kInvalidFramebuffer;
-    FRHITextureId depthTexture_ = kInvalidTexture;
-    int size_ = 0;
+    FRHIFramebufferId Fbo = InvalidFramebuffer;
+    FRHITextureId DepthTexture = InvalidTexture;
+    int Size = 0;
 };
 

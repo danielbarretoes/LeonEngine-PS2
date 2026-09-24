@@ -23,226 +23,226 @@
 namespace {
 
 struct FDrawItem {
-    std::size_t objectIndex = 0;
-    std::size_t subMeshIndex = 0;
-    float sortKey = 0.0f;
+    std::size_t ObjectIndex = 0;
+    std::size_t SubMeshIndex = 0;
+    float SortKey = 0.0f;
 };
 
 // std140 layouts — must match blinn_phong.frag uniform blocks.
 struct alignas(16) CameraBlock {
-    glm::mat4 view{1.0f};
-    glm::mat4 projection{1.0f};
-    glm::mat4 viewProjection{1.0f};
-    glm::vec4 cameraPos{0.0f}; // xyz
+    glm::mat4 View{1.0f};
+    glm::mat4 Projection{1.0f};
+    glm::mat4 ViewProjection{1.0f};
+    glm::vec4 CameraPos{0.0f}; // xyz
 };
 
 struct alignas(16) LightsBlock {
-    int dirCount = 0;
-    int pointCount = 0;
-    int pad0 = 0;
-    int pad1 = 0;
-    glm::vec4 dirDirections[kMaxDirectionalLights]{};
-    glm::vec4 dirColors[kMaxDirectionalLights]{};
-    glm::vec4 pointPositions[kMaxPointLights]{};
-    glm::vec4 pointColors[kMaxPointLights]{};
-    glm::vec4 pointRanges[kMaxPointLights]{}; // .x = range
+    int DirCount = 0;
+    int PointCount = 0;
+    int Pad0 = 0;
+    int Pad1 = 0;
+    glm::vec4 DirDirections[kMaxDirectionalLights]{};
+    glm::vec4 DirColors[kMaxDirectionalLights]{};
+    glm::vec4 PointPositions[kMaxPointLights]{};
+    glm::vec4 PointColors[kMaxPointLights]{};
+    glm::vec4 PointRanges[kMaxPointLights]{}; // .x = range
 };
 
 static_assert(sizeof(CameraBlock) == 208, "CameraBlock must match std140 Camera UBO");
 static_assert(sizeof(LightsBlock) == 272, "LightsBlock must match std140 Lights UBO");
 
-float distanceSqToCamera(const UStaticMeshComponent& object, const glm::vec3& cameraPos) {
-    const FBox box = FBox::fromLocalTransformed(object.mesh->LocalMin(), object.mesh->LocalMax(),
-                                                object.EffectiveModelMatrix());
-    const glm::vec3 center = (box.min + box.max) * 0.5f;
-    const glm::vec3 d = center - cameraPos;
-    return glm::dot(d, d);
+float DistanceSqToCamera(const UStaticMeshComponent& Object, const glm::vec3& InCameraPos) {
+    const FBox Box = FBox::FromLocalTransformed(Object.mesh->GetLocalMin(), Object.mesh->GetLocalMax(),
+                                                Object.EffectiveModelMatrix());
+    const glm::vec3 Center = (Box.Min + Box.Max) * 0.5f;
+    const glm::vec3 D = Center - InCameraPos;
+    return glm::dot(D, D);
 }
 
-FBox worldAabbFromObject(const UStaticMeshComponent& object) {
-    return FBox::fromLocalTransformed(object.mesh->LocalMin(), object.mesh->LocalMax(),
-                                      object.EffectiveModelMatrix());
+FBox WorldAabbFromObject(const UStaticMeshComponent& Object) {
+    return FBox::FromLocalTransformed(Object.mesh->GetLocalMin(), Object.mesh->GetLocalMax(),
+                                      Object.EffectiveModelMatrix());
 }
 
-void expandWorldAabbFromObject(const UStaticMeshComponent& object, glm::vec3& worldMin,
-                               glm::vec3& worldMax) {
-    const FBox box = worldAabbFromObject(object);
-    worldMin = glm::min(worldMin, box.min);
-    worldMax = glm::max(worldMax, box.max);
+void ExpandWorldAabbFromObject(const UStaticMeshComponent& Object, glm::vec3& WorldMin,
+                               glm::vec3& WorldMax) {
+    const FBox Box = WorldAabbFromObject(Object);
+    WorldMin = glm::min(WorldMin, Box.Min);
+    WorldMax = glm::max(WorldMax, Box.Max);
 }
 
-void snapAabbOutward(glm::vec3& worldMin, glm::vec3& worldMax, float step) {
-    if (step <= 0.0f) {
+void SnapAabbOutward(glm::vec3& WorldMin, glm::vec3& WorldMax, float Step) {
+    if (Step <= 0.0f) {
         return;
     }
-    worldMin = glm::floor(worldMin / step) * step;
-    worldMax = glm::ceil(worldMax / step) * step;
+    WorldMin = glm::floor(WorldMin / Step) * Step;
+    WorldMax = glm::ceil(WorldMax / Step) * Step;
 }
 
-bool computeCasterAabb(const ULevel& level, glm::vec3& worldMin, glm::vec3& worldMax) {
-    worldMin = glm::vec3(std::numeric_limits<float>::max());
-    worldMax = glm::vec3(std::numeric_limits<float>::lowest());
-    bool any = false;
-    for (const UStaticMeshComponent& object : level.StaticMeshes()) {
-        if (!object.isShadowCaster()) {
+bool ComputeCasterAabb(const ULevel& Level, glm::vec3& WorldMin, glm::vec3& WorldMax) {
+    WorldMin = glm::vec3(std::numeric_limits<float>::max());
+    WorldMax = glm::vec3(std::numeric_limits<float>::lowest());
+    bool bAny = false;
+    for (const UStaticMeshComponent& Object : Level.StaticMeshes()) {
+        if (!Object.isShadowCaster()) {
             continue;
         }
-        expandWorldAabbFromObject(object, worldMin, worldMax);
-        any = true;
+        ExpandWorldAabbFromObject(Object, WorldMin, WorldMax);
+        bAny = true;
     }
-    if (any) {
+    if (bAny) {
         // Quantize so spinning casters don't retune the ortho light every frame (shadow flicker).
-        snapAabbOutward(worldMin, worldMax, 0.5f);
+        SnapAabbOutward(WorldMin, WorldMax, 0.5f);
     }
-    return any;
+    return bAny;
 }
 
-glm::mat4 makeReflectMatrix(float planeY) {
-    glm::mat4 reflectMat(1.0f);
-    reflectMat[1][1] = -1.0f;
-    reflectMat[3][1] = 2.0f * planeY;
-    return reflectMat;
+glm::mat4 MakeReflectMatrix(float PlaneY) {
+    glm::mat4 ReflectMat(1.0f);
+    ReflectMat[1][1] = -1.0f;
+    ReflectMat[3][1] = 2.0f * PlaneY;
+    return ReflectMat;
 }
 
-void buildAoKernel(std::array<glm::vec3, FSceneRenderer::kMaxAoSamples>& kernel) {
-    std::mt19937 rng(1337u);
-    std::uniform_real_distribution<float> unit(0.0f, 1.0f);
-    for (int i = 0; i < FSceneRenderer::kMaxAoSamples; ++i) {
-        glm::vec3 sample{unit(rng) * 2.0f - 1.0f, unit(rng) * 2.0f - 1.0f, unit(rng)};
-        sample = glm::normalize(sample);
-        sample *= unit(rng);
-        float scale = static_cast<float>(i) / static_cast<float>(FSceneRenderer::kMaxAoSamples);
-        scale = 0.1f + 0.9f * (scale * scale);
-        kernel[static_cast<std::size_t>(i)] = sample * scale;
+void BuildAoKernel(std::array<glm::vec3, FSceneRenderer::MaxAoSamples>& Kernel) {
+    std::mt19937 Rng(1337u);
+    std::uniform_real_distribution<float> Unit(0.0f, 1.0f);
+    for (int I = 0; I < FSceneRenderer::MaxAoSamples; ++I) {
+        glm::vec3 Sample{Unit(Rng) * 2.0f - 1.0f, Unit(Rng) * 2.0f - 1.0f, Unit(Rng)};
+        Sample = glm::normalize(Sample);
+        Sample *= Unit(Rng);
+        float Scale = static_cast<float>(I) / static_cast<float>(FSceneRenderer::MaxAoSamples);
+        Scale = 0.1f + 0.9f * (Scale * Scale);
+        Kernel[static_cast<std::size_t>(I)] = Sample * Scale;
     }
 }
 
-unsigned int createAoNoiseTexture() {
-    std::mt19937 rng(42u);
-    std::uniform_real_distribution<float> unit(0.0f, 1.0f);
-    std::array<glm::vec3, 16> noise{};
-    for (glm::vec3& n : noise) {
-        n = glm::vec3{unit(rng) * 2.0f - 1.0f, unit(rng) * 2.0f - 1.0f, 0.0f};
+unsigned int CreateAoNoiseTexture() {
+    std::mt19937 Rng(42u);
+    std::uniform_real_distribution<float> Unit(0.0f, 1.0f);
+    std::array<glm::vec3, 16> Noise{};
+    for (glm::vec3& N : Noise) {
+        N = glm::vec3{Unit(Rng) * 2.0f - 1.0f, Unit(Rng) * 2.0f - 1.0f, 0.0f};
     }
-    unsigned int tex = 0;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, 4, 4, 0, GL_RGB, GL_FLOAT, noise.data());
+    unsigned int Tex = 0;
+    glGenTextures(1, &Tex);
+    glBindTexture(GL_TEXTURE_2D, Tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, 4, 4, 0, GL_RGB, GL_FLOAT, Noise.data());
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    return tex;
+    return Tex;
 }
 
 } // namespace
 
-bool FSceneRenderer::bindLitUbos() const {
-    const bool litOk = litShader_.BindUniformBlock("Camera", kCameraUboBinding) &&
-                       litShader_.BindUniformBlock("Lights", kLightsUboBinding);
-    if (!litOk) {
+bool FSceneRenderer::BindLitUbos() const {
+    const bool bLitOk = LitShader.BindUniformBlock("Camera", CameraUboBinding) &&
+                       LitShader.BindUniformBlock("Lights", LightsUboBinding);
+    if (!bLitOk) {
         return false;
     }
-    if (skinnedLitShader_.Valid()) {
-        return skinnedLitShader_.BindUniformBlock("Camera", kCameraUboBinding) &&
-               skinnedLitShader_.BindUniformBlock("Lights", kLightsUboBinding);
+    if (SkinnedLitShader.Valid()) {
+        return SkinnedLitShader.BindUniformBlock("Camera", CameraUboBinding) &&
+               SkinnedLitShader.BindUniformBlock("Lights", LightsUboBinding);
     }
     return true;
 }
 
-bool FSceneRenderer::Initialize(const std::string& shaderDirectory) {
-    shaderDirectory_ = shaderDirectory;
+bool FSceneRenderer::Initialize(const std::string& InShaderDirectory) {
+    ShaderDirectory = InShaderDirectory;
     namespace fs = std::filesystem;
-    auto shaderFile = [&](const char* name) {
-        const fs::path underDir = fs::path(shaderDirectory) / name;
-        if (fs::exists(underDir)) {
-            return underDir.string();
+    auto ShaderFile = [&](const char* Name) {
+        const fs::path UnderDir = fs::path(InShaderDirectory) / Name;
+        if (fs::exists(UnderDir)) {
+            return UnderDir.string();
         }
         // Fallback: executable-relative assets (POST_BUILD copy / packaged layout).
-        return FPaths::ResolveAssetPath((fs::path("assets/Shaders") / name).string());
+        return FPaths::ResolveAssetPath((fs::path("assets/Shaders") / Name).string());
     };
-    if (!litShader_.LoadFromFiles(shaderFile("blinn_phong.vert"), shaderFile("blinn_phong.frag"))) {
-        std::cerr << "Failed to load lit shaders from " << shaderDirectory << '\n';
+    if (!LitShader.LoadFromFiles(ShaderFile("blinn_phong.vert"), ShaderFile("blinn_phong.frag"))) {
+        std::cerr << "Failed to load lit shaders from " << InShaderDirectory << '\n';
         return false;
     }
-    if (!skinnedLitShader_.LoadFromFiles(shaderFile("skinned_lit.vert"),
-                                         shaderFile("blinn_phong.frag"))) {
-        std::cerr << "Failed to load skinned lit shaders from " << shaderDirectory << '\n';
+    if (!SkinnedLitShader.LoadFromFiles(ShaderFile("skinned_lit.vert"),
+                                         ShaderFile("blinn_phong.frag"))) {
+        std::cerr << "Failed to load skinned lit shaders from " << InShaderDirectory << '\n';
         return false;
     }
-    if (!unlitShader_.LoadFromFiles(shaderFile("unlit.vert"), shaderFile("unlit.frag"))) {
-        std::cerr << "Failed to load unlit shaders from " << shaderDirectory << '\n';
+    if (!UnlitShader.LoadFromFiles(ShaderFile("unlit.vert"), ShaderFile("unlit.frag"))) {
+        std::cerr << "Failed to load unlit shaders from " << InShaderDirectory << '\n';
         return false;
     }
-    if (!shadowShader_.LoadFromFiles(shaderFile("shadow_depth.vert"),
-                                     shaderFile("shadow_depth.frag"))) {
-        std::cerr << "Failed to load shadow shaders from " << shaderDirectory << '\n';
+    if (!ShadowShader.LoadFromFiles(ShaderFile("shadow_depth.vert"),
+                                     ShaderFile("shadow_depth.frag"))) {
+        std::cerr << "Failed to load shadow shaders from " << InShaderDirectory << '\n';
         return false;
     }
-    if (!skinnedShadowShader_.LoadFromFiles(shaderFile("skinned_shadow_depth.vert"),
-                                            shaderFile("shadow_depth.frag"))) {
-        std::cerr << "Failed to load skinned shadow shaders from " << shaderDirectory << '\n';
+    if (!SkinnedShadowShader.LoadFromFiles(ShaderFile("skinned_shadow_depth.vert"),
+                                            ShaderFile("shadow_depth.frag"))) {
+        std::cerr << "Failed to load skinned shadow shaders from " << InShaderDirectory << '\n';
         return false;
     }
-    if (!skyboxShader_.LoadFromFiles(shaderFile("skybox.vert"), shaderFile("skybox.frag"))) {
-        std::cerr << "Failed to load skybox shaders from " << shaderDirectory << '\n';
+    if (!SkyboxShader.LoadFromFiles(ShaderFile("skybox.vert"), ShaderFile("skybox.frag"))) {
+        std::cerr << "Failed to load skybox shaders from " << InShaderDirectory << '\n';
         return false;
     }
-    if (!ssaoShader_.LoadFromFiles(shaderFile("fullscreen.vert"), shaderFile("ssao.frag"))) {
-        std::cerr << "Failed to load SSAO shaders from " << shaderDirectory << '\n';
+    if (!SsaoShader.LoadFromFiles(ShaderFile("fullscreen.vert"), ShaderFile("ssao.frag"))) {
+        std::cerr << "Failed to load SSAO shaders from " << InShaderDirectory << '\n';
         return false;
     }
-    if (!ssaoBlurShader_.LoadFromFiles(shaderFile("fullscreen.vert"),
-                                       shaderFile("ssao_blur.frag"))) {
-        std::cerr << "Failed to load SSAO blur shaders from " << shaderDirectory << '\n';
+    if (!SsaoBlurShader.LoadFromFiles(ShaderFile("fullscreen.vert"),
+                                       ShaderFile("ssao_blur.frag"))) {
+        std::cerr << "Failed to load SSAO blur shaders from " << InShaderDirectory << '\n';
         return false;
     }
-    if (!postCompositeShader_.LoadFromFiles(shaderFile("fullscreen.vert"),
-                                            shaderFile("post_composite.frag"))) {
-        std::cerr << "Failed to load post composite shaders from " << shaderDirectory << '\n';
+    if (!PostCompositeShader.LoadFromFiles(ShaderFile("fullscreen.vert"),
+                                            ShaderFile("post_composite.frag"))) {
+        std::cerr << "Failed to load post composite shaders from " << InShaderDirectory << '\n';
         return false;
     }
-    if (!fxaaShader_.LoadFromFiles(shaderFile("fullscreen.vert"), shaderFile("fxaa.frag"))) {
-        std::cerr << "Failed to load FXAA shaders from " << shaderDirectory << '\n';
+    if (!FxaaShader.LoadFromFiles(ShaderFile("fullscreen.vert"), ShaderFile("fxaa.frag"))) {
+        std::cerr << "Failed to load FXAA shaders from " << InShaderDirectory << '\n';
         return false;
     }
-    if (!debugDraw_.Initialize(shaderDirectory)) {
+    if (!DebugDraw.Initialize(InShaderDirectory)) {
         return false;
     }
-    if (!overlayDebugDraw_.Initialize(shaderDirectory)) {
+    if (!OverlayDebugDraw.Initialize(InShaderDirectory)) {
         return false;
     }
-    ApplyPostProcessQuality(post_, EPostProcessQuality::Low);
-    if (!shadowMap_.Create(post_.shadowMapSize)) {
+    ApplyPostProcessQuality(Post, EPostProcessQuality::Low);
+    if (!ShadowMap.Create(Post.ShadowMapSize)) {
         return false;
     }
-    if (!passTimers_.Create()) {
+    if (!PassTimers.Create()) {
         std::cerr << "Failed to create GPU pass timers\n";
         return false;
     }
-    if (!cameraUbo_.Create(sizeof(CameraBlock), kCameraUboBinding) ||
-        !lightsUbo_.Create(sizeof(LightsBlock), kLightsUboBinding)) {
+    if (!CameraUbo.Create(sizeof(CameraBlock), CameraUboBinding) ||
+        !LightsUbo.Create(sizeof(LightsBlock), LightsUboBinding)) {
         std::cerr << "Failed to create camera/lights uniform buffers\n";
         return false;
     }
-    if (!bindLitUbos()) {
+    if (!BindLitUbos()) {
         std::cerr << "Failed to bind lit shader UBO blocks\n";
         return false;
     }
 
-    const std::array<unsigned char, 4> white = {255, 255, 255, 255};
-    whiteTexture_ = std::make_shared<UTexture2D>(UTexture2D::Create(1, 1, white.data()));
-    flatNormalTexture_ = std::make_shared<UTexture2D>(UTexture2D::CreateFlatNormal(4));
-    skyboxMesh_ = std::make_shared<UStaticMesh>(UStaticMesh::Upload(MakeCube()));
-    if (!whiteTexture_->Valid() || !flatNormalTexture_->Valid() || !skyboxMesh_->Valid()) {
+    const std::array<unsigned char, 4> White = {255, 255, 255, 255};
+    WhiteTexture = std::make_shared<UTexture2D>(UTexture2D::Create(1, 1, White.data()));
+    FlatNormalTexture = std::make_shared<UTexture2D>(UTexture2D::CreateFlatNormal(4));
+    SkyboxMesh = std::make_shared<UStaticMesh>(UStaticMesh::Upload(MakeCube()));
+    if (!WhiteTexture->Valid() || !FlatNormalTexture->Valid() || !SkyboxMesh->Valid()) {
         std::cerr << "Failed to create default textures/meshes\n";
         return false;
     }
 
-    glGenVertexArrays(1, &fullscreenVao_);
-    buildAoKernel(aoKernel_);
-    aoNoiseTexture_ = createAoNoiseTexture();
-    if (fullscreenVao_ == 0 || aoNoiseTexture_ == 0) {
+    glGenVertexArrays(1, &FullscreenVao);
+    BuildAoKernel(AoKernel);
+    AoNoiseTexture = CreateAoNoiseTexture();
+    if (FullscreenVao == 0 || AoNoiseTexture == 0) {
         std::cerr << "Failed to create post-process GPU resources\n";
         return false;
     }
@@ -256,695 +256,695 @@ bool FSceneRenderer::Initialize(const std::string& shaderDirectory) {
 }
 
 void FSceneRenderer::Shutdown() {
-    lightsUbo_.Destroy();
-    cameraUbo_.Destroy();
-    overlayDebugDraw_.Shutdown();
-    debugDraw_.Shutdown();
-    skyboxMesh_.reset();
-    flatNormalTexture_.reset();
-    whiteTexture_.reset();
-    passTimers_.Destroy();
-    ldrColor_.Destroy();
-    ssaoTarget_.Destroy();
-    sceneColor_.Destroy();
-    planarReflection_.Destroy();
-    shadowMap_.Destroy();
-    if (aoNoiseTexture_ != 0) {
-        glDeleteTextures(1, &aoNoiseTexture_);
-        aoNoiseTexture_ = 0;
+    LightsUbo.Destroy();
+    CameraUbo.Destroy();
+    OverlayDebugDraw.Shutdown();
+    DebugDraw.Shutdown();
+    SkyboxMesh.reset();
+    FlatNormalTexture.reset();
+    WhiteTexture.reset();
+    PassTimers.Destroy();
+    LdrColor.Destroy();
+    SsaoTarget.Destroy();
+    SceneColor.Destroy();
+    PlanarReflection.Destroy();
+    ShadowMap.Destroy();
+    if (AoNoiseTexture != 0) {
+        glDeleteTextures(1, &AoNoiseTexture);
+        AoNoiseTexture = 0;
     }
-    if (fullscreenVao_ != 0) {
-        glDeleteVertexArrays(1, &fullscreenVao_);
-        fullscreenVao_ = 0;
+    if (FullscreenVao != 0) {
+        glDeleteVertexArrays(1, &FullscreenVao);
+        FullscreenVao = 0;
     }
-    fxaaShader_.Destroy();
-    postCompositeShader_.Destroy();
-    ssaoBlurShader_.Destroy();
-    ssaoShader_.Destroy();
-    skyboxShader_.Destroy();
-    skinnedShadowShader_.Destroy();
-    shadowShader_.Destroy();
-    unlitShader_.Destroy();
-    skinnedLitShader_.Destroy();
-    litShader_.Destroy();
-    skeletalDraws_.clear();
-    staticDraws_.clear();
-    shaderDirectory_.clear();
+    FxaaShader.Destroy();
+    PostCompositeShader.Destroy();
+    SsaoBlurShader.Destroy();
+    SsaoShader.Destroy();
+    SkyboxShader.Destroy();
+    SkinnedShadowShader.Destroy();
+    ShadowShader.Destroy();
+    UnlitShader.Destroy();
+    SkinnedLitShader.Destroy();
+    LitShader.Destroy();
+    SkeletalDraws.clear();
+    StaticDraws.clear();
+    ShaderDirectory.clear();
 }
 
-EShaderReloadResult FSceneRenderer::ReloadShaders(bool force) {
-    EShaderReloadResult result = EShaderReloadResult::Unchanged;
-    const FShader::FAcceptFunction litAccept = [this]() { return bindLitUbos(); };
+EShaderReloadResult FSceneRenderer::ReloadShaders(bool bForce) {
+    EShaderReloadResult Result = EShaderReloadResult::Unchanged;
+    const FShader::FAcceptFunction LitAccept = [this]() { return BindLitUbos(); };
 
-    auto tryReload = [&](FShader& shader, const FShader::FAcceptFunction& accept = {}) {
-        const EShaderReloadResult r =
-            force ? shader.ForceReloadFromDisk(accept) : shader.ReloadFromDiskIfChanged(accept);
-        result = MergeShaderReload(result, r);
-        return r != EShaderReloadResult::Failed || shader.Valid();
+    auto TryReload = [&](FShader& Shader, const FShader::FAcceptFunction& Accept = {}) {
+        const EShaderReloadResult R =
+            bForce ? Shader.ForceReloadFromDisk(Accept) : Shader.ReloadFromDiskIfChanged(Accept);
+        Result = MergeShaderReload(Result, R);
+        return R != EShaderReloadResult::Failed || Shader.Valid();
     };
 
-    if (!tryReload(litShader_, litAccept) || !tryReload(skinnedLitShader_, litAccept) ||
-        !tryReload(unlitShader_) || !tryReload(shadowShader_) || !tryReload(skinnedShadowShader_) ||
-        !tryReload(skyboxShader_) || !tryReload(ssaoShader_) || !tryReload(ssaoBlurShader_) ||
-        !tryReload(postCompositeShader_) || !tryReload(fxaaShader_)) {
+    if (!TryReload(LitShader, LitAccept) || !TryReload(SkinnedLitShader, LitAccept) ||
+        !TryReload(UnlitShader) || !TryReload(ShadowShader) || !TryReload(SkinnedShadowShader) ||
+        !TryReload(SkyboxShader) || !TryReload(SsaoShader) || !TryReload(SsaoBlurShader) ||
+        !TryReload(PostCompositeShader) || !TryReload(FxaaShader)) {
         return EShaderReloadResult::Failed;
     }
-    result = MergeShaderReload(result, debugDraw_.ReloadShader(force));
-    result = MergeShaderReload(result, overlayDebugDraw_.ReloadShader(force));
-    return result;
+    Result = MergeShaderReload(Result, DebugDraw.ReloadShader(bForce));
+    Result = MergeShaderReload(Result, OverlayDebugDraw.ReloadShader(bForce));
+    return Result;
 }
 
-void FSceneRenderer::BeginFrame(int framebufferWidth, int framebufferHeight) {
-    fbWidth_ = framebufferWidth;
-    fbHeight_ = framebufferHeight;
-    ensureShadowMapSize();
+void FSceneRenderer::BeginFrame(int FramebufferWidth, int FramebufferHeight) {
+    FbWidth = FramebufferWidth;
+    FbHeight = FramebufferHeight;
+    EnsureShadowMapSize();
 
-    const bool postOn = post_.enabled && fbWidth_ > 0 && fbHeight_ > 0;
-    if (postOn) {
-        (void)sceneColor_.EnsureSize(fbWidth_, fbHeight_);
-        (void)ldrColor_.EnsureSize(fbWidth_, fbHeight_);
+    const bool bPostOn = Post.bEnabled && FbWidth > 0 && FbHeight > 0;
+    if (bPostOn) {
+        (void)SceneColor.EnsureSize(FbWidth, FbHeight);
+        (void)LdrColor.EnsureSize(FbWidth, FbHeight);
         // Full-res SSAO: half-res undersamples 24-bit depth into visible parallel bands.
-        (void)ssaoTarget_.EnsureSize(fbWidth_, fbHeight_);
+        (void)SsaoTarget.EnsureSize(FbWidth, FbHeight);
     }
 
-    glBindFramebuffer(GL_FRAMEBUFFER, drawTargetFbo_);
-    glViewport(0, 0, framebufferWidth, framebufferHeight);
+    glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
+    glViewport(0, 0, FramebufferWidth, FramebufferHeight);
     glClearColor(0.08f, 0.09f, 0.11f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
-void FSceneRenderer::ensureShadowMapSize() {
-    const int size = std::clamp(post_.shadowMapSize, 512, 4096);
-    if (shadowMap_.Valid() && shadowMap_.Size() == size) {
+void FSceneRenderer::EnsureShadowMapSize() {
+    const int Size = std::clamp(Post.ShadowMapSize, 512, 4096);
+    if (ShadowMap.Valid() && ShadowMap.GetSize() == Size) {
         return;
     }
-    shadowMap_.Destroy();
-    (void)shadowMap_.Create(size);
+    ShadowMap.Destroy();
+    (void)ShadowMap.Create(Size);
 }
 
-unsigned int FSceneRenderer::colorRestoreFbo() const {
-    if (post_.enabled && sceneColor_.Valid()) {
-        return sceneColor_.Framebuffer();
+unsigned int FSceneRenderer::ColorRestoreFbo() const {
+    if (Post.bEnabled && SceneColor.Valid()) {
+        return SceneColor.Framebuffer();
     }
-    return drawTargetFbo_;
+    return DrawTargetFbo;
 }
 
-void FSceneRenderer::drawFullscreenTriangle() const {
-    glBindVertexArray(fullscreenVao_);
+void FSceneRenderer::DrawFullscreenTriangle() const {
+    glBindVertexArray(FullscreenVao);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     glBindVertexArray(0);
 }
 
-void FSceneRenderer::SubmitSkeletalDraw(const USkeletalMesh& mesh, const glm::mat4& model,
-                                  const std::vector<glm::mat4>& boneMatrices) {
-    if (!mesh.Valid()) {
+void FSceneRenderer::SubmitSkeletalDraw(const USkeletalMesh& InMesh, const glm::mat4& InModel,
+                                  const std::vector<glm::mat4>& InBoneMatrices) {
+    if (!InMesh.Valid()) {
         return;
     }
-    FSkeletalDrawItem item;
-    item.mesh = &mesh;
-    item.model = model;
-    item.boneMatrices = boneMatrices;
-    if (item.boneMatrices.size() > static_cast<std::size_t>(kMaxSkinBones)) {
-        item.boneMatrices.resize(static_cast<std::size_t>(kMaxSkinBones));
+    FSkeletalDrawItem Item;
+    Item.Mesh = &InMesh;
+    Item.Model = InModel;
+    Item.BoneMatrices = InBoneMatrices;
+    if (Item.BoneMatrices.size() > static_cast<std::size_t>(kMaxSkinBones)) {
+        Item.BoneMatrices.resize(static_cast<std::size_t>(kMaxSkinBones));
     }
-    skeletalDraws_.push_back(std::move(item));
+    SkeletalDraws.push_back(std::move(Item));
 }
 
-void FSceneRenderer::SubmitSkeletalDraw(const USkeletalMesh& mesh, const FTransform& transform,
-                                  const std::vector<glm::mat4>& boneMatrices) {
-    SubmitSkeletalDraw(mesh, transform.ModelMatrix(), boneMatrices);
+void FSceneRenderer::SubmitSkeletalDraw(const USkeletalMesh& InMesh, const FTransform& Transform,
+                                  const std::vector<glm::mat4>& InBoneMatrices) {
+    SubmitSkeletalDraw(InMesh, Transform.ModelMatrix(), InBoneMatrices);
 }
 
-void FSceneRenderer::SubmitStaticDraw(const UStaticMesh& mesh, const glm::mat4& model,
-                                const FMaterial& material) {
-    if (!mesh.Valid()) {
+void FSceneRenderer::SubmitStaticDraw(const UStaticMesh& InMesh, const glm::mat4& InModel,
+                                const FMaterial& InMaterial) {
+    if (!InMesh.Valid()) {
         return;
     }
-    FStaticDrawItem item;
-    item.mesh = &mesh;
-    item.model = model;
-    item.material = material;
-    staticDraws_.push_back(std::move(item));
+    FStaticDrawItem Item;
+    Item.Mesh = &InMesh;
+    Item.Model = InModel;
+    Item.Material = InMaterial;
+    StaticDraws.push_back(std::move(Item));
 }
 
 void FSceneRenderer::ClearDebugOverlay() {
-    overlayDebugDraw_.Clear();
+    OverlayDebugDraw.Clear();
 }
 
-void FSceneRenderer::AddDebugLine(const glm::vec3& a, const glm::vec3& b, const glm::vec3& color) {
-    overlayDebugDraw_.AddLine(a, b, color);
+void FSceneRenderer::AddDebugLine(const glm::vec3& A, const glm::vec3& B, const glm::vec3& Color) {
+    OverlayDebugDraw.AddLine(A, B, Color);
 }
 
-void FSceneRenderer::AddDebugArrow(const glm::vec3& from, const glm::vec3& to, const glm::vec3& color) {
-    overlayDebugDraw_.AddArrow(from, to, color);
+void FSceneRenderer::AddDebugArrow(const glm::vec3& From, const glm::vec3& To, const glm::vec3& Color) {
+    OverlayDebugDraw.AddArrow(From, To, Color);
 }
 
-void FSceneRenderer::AddDebugAabb(const glm::vec3& worldMin, const glm::vec3& worldMax,
-                            const glm::vec3& color) {
-    overlayDebugDraw_.AddAabb(worldMin, worldMax, color);
+void FSceneRenderer::AddDebugAabb(const glm::vec3& WorldMin, const glm::vec3& WorldMax,
+                            const glm::vec3& Color) {
+    OverlayDebugDraw.AddAabb(WorldMin, WorldMax, Color);
 }
 
-void FSceneRenderer::updateCameraUbo(const UCameraComponent& camera) const {
-    updateCameraUbo(camera.ViewMatrix(), camera.ProjectionMatrix(), camera.GetCameraLocation());
+void FSceneRenderer::UpdateCameraUbo(const UCameraComponent& Camera) const {
+    UpdateCameraUbo(Camera.ViewMatrix(), Camera.ProjectionMatrix(), Camera.GetCameraLocation());
 }
 
-void FSceneRenderer::updateCameraUbo(const glm::mat4& view, const glm::mat4& projection,
-                               const glm::vec3& cameraPos) const {
-    CameraBlock block{};
-    block.view = view;
-    block.projection = projection;
-    block.viewProjection = projection * view;
-    block.cameraPos = glm::vec4(cameraPos, 1.0f);
-    cameraUbo_.Update(&block, sizeof(block));
+void FSceneRenderer::UpdateCameraUbo(const glm::mat4& InView, const glm::mat4& InProjection,
+                               const glm::vec3& InCameraPos) const {
+    CameraBlock Block{};
+    Block.View = InView;
+    Block.Projection = InProjection;
+    Block.ViewProjection = InProjection * InView;
+    Block.CameraPos = glm::vec4(InCameraPos, 1.0f);
+    CameraUbo.Update(&Block, sizeof(Block));
 }
 
-void FSceneRenderer::updateLightsUbo(const ULevel& level) const {
-    LightsBlock block{};
-    const auto& dirs = level.DirectionalLights();
-    const auto& points = level.PointLights();
+void FSceneRenderer::UpdateLightsUbo(const ULevel& Level) const {
+    LightsBlock Block{};
+    const auto& Dirs = Level.DirectionalLights();
+    const auto& Points = Level.PointLights();
 
-    block.dirCount = std::min(static_cast<int>(dirs.size()), kMaxDirectionalLights);
-    block.pointCount = std::min(static_cast<int>(points.size()), kMaxPointLights);
+    Block.DirCount = std::min(static_cast<int>(Dirs.size()), kMaxDirectionalLights);
+    Block.PointCount = std::min(static_cast<int>(Points.size()), kMaxPointLights);
 
-    for (int i = 0; i < block.dirCount; ++i) {
-        const auto& light = dirs[static_cast<std::size_t>(i)];
-        block.dirDirections[i] = glm::vec4(light.GetDirection(), 0.0f);
-        block.dirColors[i] = glm::vec4(light.lightColor * light.intensity, 0.0f);
+    for (int I = 0; I < Block.DirCount; ++I) {
+        const auto& Light = Dirs[static_cast<std::size_t>(I)];
+        Block.DirDirections[I] = glm::vec4(Light.GetDirection(), 0.0f);
+        Block.DirColors[I] = glm::vec4(Light.lightColor * Light.intensity, 0.0f);
     }
-    for (int i = 0; i < block.pointCount; ++i) {
-        const auto& light = points[static_cast<std::size_t>(i)];
-        block.pointPositions[i] = glm::vec4(light.transform.Position, 1.0f);
-        block.pointColors[i] = glm::vec4(light.lightColor * light.intensity, 0.0f);
-        block.pointRanges[i] = glm::vec4(light.range, 0.0f, 0.0f, 0.0f);
+    for (int I = 0; I < Block.PointCount; ++I) {
+        const auto& Light = Points[static_cast<std::size_t>(I)];
+        Block.PointPositions[I] = glm::vec4(Light.transform.Position, 1.0f);
+        Block.PointColors[I] = glm::vec4(Light.lightColor * Light.intensity, 0.0f);
+        Block.PointRanges[I] = glm::vec4(Light.range, 0.0f, 0.0f, 0.0f);
     }
-    lightsUbo_.Update(&block, sizeof(block));
+    LightsUbo.Update(&Block, sizeof(Block));
 }
 
-void FSceneRenderer::bindEnvironment(const ULevel& level) const {
-    const bool hasEnv = level.Environment() != nullptr && level.Environment()->Valid();
-    const bool hasIrr = hasEnv && level.Environment()->HasIrradiance();
-    litShader_.SetInt("uHasEnvMap", hasEnv ? 1 : 0);
-    litShader_.SetInt("uHasIrradiance", hasIrr ? 1 : 0);
-    litShader_.SetFloat("uEnvExposure", level.EnvironmentExposure());
-    litShader_.SetFloat("uEnvMaxLod", hasEnv ? level.Environment()->MaxLod() : 0.0f);
-    litShader_.SetInt("uEnvMap", 3);
-    litShader_.SetInt("uIrradianceMap", 4);
-    if (hasEnv) {
-        level.Environment()->Bind(3);
+void FSceneRenderer::BindEnvironment(const ULevel& Level) const {
+    const bool bHasEnv = Level.Environment() != nullptr && Level.Environment()->Valid();
+    const bool bHasIrr = bHasEnv && Level.Environment()->HasIrradiance();
+    LitShader.SetInt("uHasEnvMap", bHasEnv ? 1 : 0);
+    LitShader.SetInt("uHasIrradiance", bHasIrr ? 1 : 0);
+    LitShader.SetFloat("uEnvExposure", Level.EnvironmentExposure());
+    LitShader.SetFloat("uEnvMaxLod", bHasEnv ? Level.Environment()->MaxLod() : 0.0f);
+    LitShader.SetInt("uEnvMap", 3);
+    LitShader.SetInt("uIrradianceMap", 4);
+    if (bHasEnv) {
+        Level.Environment()->Bind(3);
     }
-    if (hasIrr) {
-        level.Environment()->BindIrradiance(4);
+    if (bHasIrr) {
+        Level.Environment()->BindIrradiance(4);
     }
 }
 
-void FSceneRenderer::bindShadowResources(bool receiveShadows, float sourceAngleDegrees) const {
-    litShader_.SetInt("uShadowMap", 1);
-    litShader_.SetInt("uReceiveShadows", (receiveShadows && shadowMap_.Valid()) ? 1 : 0);
-    float texel = shadowMap_.Valid() ? 1.0f / static_cast<float>(shadowMap_.Size()) : 0.0f;
+void FSceneRenderer::BindShadowResources(bool bInReceiveShadows, float SourceAngleDegrees) const {
+    LitShader.SetInt("uShadowMap", 1);
+    LitShader.SetInt("uReceiveShadows", (bInReceiveShadows && ShadowMap.Valid()) ? 1 : 0);
+    float Texel = ShadowMap.Valid() ? 1.0f / static_cast<float>(ShadowMap.GetSize()) : 0.0f;
     // Source Angle softens PCF filter kernel (Unreal FDirectionalLight Source Angle).
-    if (receiveShadows && texel > 0.0f) {
-        const float soft =
-            std::clamp(sourceAngleDegrees / kDefaultLightSourceAngleDegrees, 0.25f, 16.0f);
-        texel *= soft;
+    if (bInReceiveShadows && Texel > 0.0f) {
+        const float Soft =
+            std::clamp(SourceAngleDegrees / kDefaultLightSourceAngleDegrees, 0.25f, 16.0f);
+        Texel *= Soft;
     }
-    litShader_.SetFloat("uShadowTexelSize", texel);
-    if (receiveShadows && shadowMap_.Valid()) {
-        shadowMap_.BindDepthTexture(1);
-    }
-}
-
-void FSceneRenderer::bindPlanarReflection(bool enabled, const glm::mat4& reflectionViewProj) const {
-    litShader_.SetInt("uHasPlanarReflection", enabled ? 1 : 0);
-    litShader_.SetInt("uPlanarReflection", 5);
-    litShader_.SetMat4("uReflectionViewProj", glm::value_ptr(reflectionViewProj));
-    if (enabled && planarReflection_.Valid()) {
-        planarReflection_.BindColorTexture(5);
+    LitShader.SetFloat("uShadowTexelSize", Texel);
+    if (bInReceiveShadows && ShadowMap.Valid()) {
+        ShadowMap.BindDepthTexture(1);
     }
 }
 
-void FSceneRenderer::setClipPlane(bool enabled, const glm::vec4& plane) const {
-    const int use = enabled ? 1 : 0;
-    if (litShader_.Valid()) {
-        litShader_.Bind();
-        litShader_.SetInt("uUseClipPlane", use);
-        litShader_.SetVec4("uClipPlane", plane.x, plane.y, plane.z, plane.w);
-    }
-    if (unlitShader_.Valid()) {
-        unlitShader_.Bind();
-        unlitShader_.SetInt("uUseClipPlane", use);
-        unlitShader_.SetVec4("uClipPlane", plane.x, plane.y, plane.z, plane.w);
-    }
-    if (skinnedLitShader_.Valid()) {
-        skinnedLitShader_.Bind();
-        skinnedLitShader_.SetInt("uUseClipPlane", use);
-        skinnedLitShader_.SetVec4("uClipPlane", plane.x, plane.y, plane.z, plane.w);
+void FSceneRenderer::BindPlanarReflection(bool bEnabled, const glm::mat4& ReflectionViewProj) const {
+    LitShader.SetInt("uHasPlanarReflection", bEnabled ? 1 : 0);
+    LitShader.SetInt("uPlanarReflection", 5);
+    LitShader.SetMat4("uReflectionViewProj", glm::value_ptr(ReflectionViewProj));
+    if (bEnabled && PlanarReflection.Valid()) {
+        PlanarReflection.BindColorTexture(5);
     }
 }
 
-void FSceneRenderer::renderShadowPass(const ULevel& level, const glm::mat4& lightSpace) {
-    if (!shadowMap_.Valid()) {
+void FSceneRenderer::SetClipPlane(bool bEnabled, const glm::vec4& Plane) const {
+    const int Use = bEnabled ? 1 : 0;
+    if (LitShader.Valid()) {
+        LitShader.Bind();
+        LitShader.SetInt("uUseClipPlane", Use);
+        LitShader.SetVec4("uClipPlane", Plane.x, Plane.y, Plane.z, Plane.w);
+    }
+    if (UnlitShader.Valid()) {
+        UnlitShader.Bind();
+        UnlitShader.SetInt("uUseClipPlane", Use);
+        UnlitShader.SetVec4("uClipPlane", Plane.x, Plane.y, Plane.z, Plane.w);
+    }
+    if (SkinnedLitShader.Valid()) {
+        SkinnedLitShader.Bind();
+        SkinnedLitShader.SetInt("uUseClipPlane", Use);
+        SkinnedLitShader.SetVec4("uClipPlane", Plane.x, Plane.y, Plane.z, Plane.w);
+    }
+}
+
+void FSceneRenderer::RenderShadowPass(const ULevel& Level, const glm::mat4& LightSpace) {
+    if (!ShadowMap.Valid()) {
         return;
     }
 
-    passTimers_.Begin(FGPUPassTimer::EPass::Shadow);
-    shadowMap_.Begin();
+    PassTimers.Begin(FGPUPassTimer::EPass::Shadow);
+    ShadowMap.Begin();
 
-    if (shadowShader_.Valid()) {
-        shadowShader_.Bind();
-        for (const UStaticMeshComponent& object : level.StaticMeshes()) {
-            if (!object.isShadowCaster()) {
+    if (ShadowShader.Valid()) {
+        ShadowShader.Bind();
+        for (const UStaticMeshComponent& Object : Level.StaticMeshes()) {
+            if (!Object.isShadowCaster()) {
                 continue;
             }
-            const glm::mat4 lightMvp = lightSpace * object.EffectiveModelMatrix();
-            shadowShader_.SetMat4("uLightMVP", glm::value_ptr(lightMvp));
+            const glm::mat4 LightMvp = LightSpace * Object.EffectiveModelMatrix();
+            ShadowShader.SetMat4("uLightMVP", glm::value_ptr(LightMvp));
 
-            const std::size_t subCount = object.subMeshCount();
-            for (std::size_t s = 0; s < subCount; ++s) {
-                const FMaterial& mat = object.materialForSubMesh(s);
-                if (!mat.castsShadows || mat.isTransparent() || mat.shading == EMaterialShadingModel::Unlit) {
+            const std::size_t SubCount = Object.subMeshCount();
+            for (std::size_t S = 0; S < SubCount; ++S) {
+                const FMaterial& Mat = Object.materialForSubMesh(S);
+                if (!Mat.bCastsShadows || Mat.IsTransparent() || Mat.Shading == EMaterialShadingModel::Unlit) {
                     continue;
                 }
-                object.mesh->DrawSubMesh(s);
+                Object.mesh->DrawSubMesh(S);
             }
         }
     }
 
     // Queued skeletal draws (Character meshes submitted before DrawScene).
-    if (skinnedShadowShader_.Valid()) {
-        skinnedShadowShader_.Bind();
-        for (const FSkeletalDrawItem& item : skeletalDraws_) {
-            if (item.mesh == nullptr || !item.mesh->Valid()) {
+    if (SkinnedShadowShader.Valid()) {
+        SkinnedShadowShader.Bind();
+        for (const FSkeletalDrawItem& Item : SkeletalDraws) {
+            if (Item.Mesh == nullptr || !Item.Mesh->Valid()) {
                 continue;
             }
-            const FMaterial& material = item.mesh->GetMaterial();
-            if (!material.castsShadows || material.isTransparent() ||
-                material.shading == EMaterialShadingModel::Unlit) {
+            const FMaterial& LocalMaterial = Item.Mesh->GetMaterial();
+            if (!LocalMaterial.bCastsShadows || LocalMaterial.IsTransparent() ||
+                LocalMaterial.Shading == EMaterialShadingModel::Unlit) {
                 continue;
             }
-            const glm::mat4 lightMvp = lightSpace * item.model;
-            skinnedShadowShader_.SetMat4("uLightMVP", glm::value_ptr(lightMvp));
-            if (!item.boneMatrices.empty()) {
-                skinnedShadowShader_.SetMat4Array("uBones", glm::value_ptr(item.boneMatrices[0]),
-                                                  static_cast<int>(item.boneMatrices.size()));
+            const glm::mat4 LightMvp = LightSpace * Item.Model;
+            SkinnedShadowShader.SetMat4("uLightMVP", glm::value_ptr(LightMvp));
+            if (!Item.BoneMatrices.empty()) {
+                SkinnedShadowShader.SetMat4Array("uBones", glm::value_ptr(Item.BoneMatrices[0]),
+                                                  static_cast<int>(Item.BoneMatrices.size()));
             }
-            item.mesh->Draw();
+            Item.Mesh->Draw();
         }
     }
 
-    shadowMap_.End(fbWidth_, fbHeight_, colorRestoreFbo());
-    passTimers_.End(FGPUPassTimer::EPass::Shadow);
+    ShadowMap.End(FbWidth, FbHeight, ColorRestoreFbo());
+    PassTimers.End(FGPUPassTimer::EPass::Shadow);
 }
 
-void FSceneRenderer::renderPlanarReflectionPass(const ULevel& level, const UCameraComponent& camera, float planeY) {
-    const int reflW = std::max(
-        1, static_cast<int>(std::lround(static_cast<float>(fbWidth_) * kPlanarReflectionScale)));
-    const int reflH = std::max(
-        1, static_cast<int>(std::lround(static_cast<float>(fbHeight_) * kPlanarReflectionScale)));
-    if (!planarReflection_.EnsureSize(reflW, reflH)) {
+void FSceneRenderer::RenderPlanarReflectionPass(const ULevel& Level, const UCameraComponent& Camera, float PlaneY) {
+    const int ReflW = std::max(
+        1, static_cast<int>(std::lround(static_cast<float>(FbWidth) * PlanarReflectionScale)));
+    const int ReflH = std::max(
+        1, static_cast<int>(std::lround(static_cast<float>(FbHeight) * PlanarReflectionScale)));
+    if (!PlanarReflection.EnsureSize(ReflW, ReflH)) {
         return;
     }
 
-    passTimers_.Begin(FGPUPassTimer::EPass::Planar);
+    PassTimers.Begin(FGPUPassTimer::EPass::Planar);
 
-    const glm::mat4 reflectMat = makeReflectMatrix(planeY);
-    const glm::mat4 view = camera.ViewMatrix() * reflectMat;
-    const glm::mat4 projection = camera.ProjectionMatrix();
-    const glm::mat4 viewProjection = projection * view;
-    const glm::vec3 eye = camera.GetCameraLocation();
-    const glm::vec3 reflectedEye{eye.x, (2.0f * planeY) - eye.y, eye.z};
+    const glm::mat4 ReflectMat = MakeReflectMatrix(PlaneY);
+    const glm::mat4 LocalView = Camera.ViewMatrix() * ReflectMat;
+    const glm::mat4 LocalProjection = Camera.ProjectionMatrix();
+    const glm::mat4 LocalViewProjection = LocalProjection * LocalView;
+    const glm::vec3 Eye = Camera.GetCameraLocation();
+    const glm::vec3 ReflectedEye{Eye.x, (2.0f * PlaneY) - Eye.y, Eye.z};
 
-    FFrustum reflectedFrustum;
-    reflectedFrustum.extractFromViewProjection(viewProjection);
+    FFrustum ReflectedFrustum;
+    ReflectedFrustum.ExtractFromViewProjection(LocalViewProjection);
 
     // Identity light space — reflection pass skips shadows (cheaper mirror).
-    const glm::mat4 lightSpace(1.0f);
+    const glm::mat4 LightSpace(1.0f);
 
-    planarReflection_.Begin();
+    PlanarReflection.Begin();
     glEnable(GL_CLIP_DISTANCE0);
-    setClipPlane(true, glm::vec4{0.0f, 1.0f, 0.0f, -planeY});
+    SetClipPlane(true, glm::vec4{0.0f, 1.0f, 0.0f, -PlaneY});
 
-    if (litShader_.Valid()) {
-        updateCameraUbo(view, projection, reflectedEye);
-        updateLightsUbo(level);
-        litShader_.Bind();
-        bindEnvironment(level);
-        bindShadowResources(false);
-        bindPlanarReflection(false, glm::mat4{1.0f});
+    if (LitShader.Valid()) {
+        UpdateCameraUbo(LocalView, LocalProjection, ReflectedEye);
+        UpdateLightsUbo(Level);
+        LitShader.Bind();
+        BindEnvironment(Level);
+        BindShadowResources(false);
+        BindPlanarReflection(false, glm::mat4{1.0f});
     }
 
-    FDrawOptions cheapLit{};
-    cheapLit.litPass = true;
-    cheapLit.receiveShadows = false;
-    cheapLit.useNormalMaps = false;
-    cheapLit.bindSharedLitTextures = false;
+    FDrawOptions CheapLit{};
+    CheapLit.bLitPass = true;
+    CheapLit.bReceiveShadows = false;
+    CheapLit.bUseNormalMaps = false;
+    CheapLit.bBindSharedLitTextures = false;
 
-    FDrawOptions unlitOpts{};
-    unlitOpts.litPass = false;
-    unlitOpts.bindSharedLitTextures = false;
+    FDrawOptions UnlitOpts{};
+    UnlitOpts.bLitPass = false;
+    UnlitOpts.bBindSharedLitTextures = false;
 
-    bool litGlobalsBound = litShader_.Valid();
-    for (const UStaticMeshComponent& object : level.StaticMeshes()) {
-        if (object.hidden || object.mesh == nullptr || !object.mesh->Valid()) {
+    bool bLitGlobalsBound = LitShader.Valid();
+    for (const UStaticMeshComponent& Object : Level.StaticMeshes()) {
+        if (Object.hidden || Object.mesh == nullptr || !Object.mesh->Valid()) {
             continue;
         }
 
-        const FBox worldBox = worldAabbFromObject(object);
-        if (!reflectedFrustum.intersectsAabb(worldBox)) {
-            ++frameStats_.planarCulled;
+        const FBox WorldBox = WorldAabbFromObject(Object);
+        if (!ReflectedFrustum.IntersectsAabb(WorldBox)) {
+            ++FrameStats.PlanarCulled;
             continue;
         }
 
-        const std::size_t subCount = object.subMeshCount();
-        for (std::size_t s = 0; s < subCount; ++s) {
-            const FMaterial& mat = object.materialForSubMesh(s);
-            if (mat.planarMirror || mat.isTransparent()) {
+        const std::size_t SubCount = Object.subMeshCount();
+        for (std::size_t S = 0; S < SubCount; ++S) {
+            const FMaterial& Mat = Object.materialForSubMesh(S);
+            if (Mat.bPlanarMirror || Mat.IsTransparent()) {
                 continue;
             }
-            const bool lit = mat.shading == EMaterialShadingModel::BlinnPhong;
-            FShader& shader = lit ? litShader_ : unlitShader_;
-            if (!shader.Valid()) {
+            const bool bLit = Mat.Shading == EMaterialShadingModel::BlinnPhong;
+            FShader& Shader = bLit ? LitShader : UnlitShader;
+            if (!Shader.Valid()) {
                 continue;
             }
-            shader.Bind();
-            if (lit) {
-                if (!litGlobalsBound) {
-                    bindEnvironment(level);
-                    bindShadowResources(false);
-                    bindPlanarReflection(false, glm::mat4{1.0f});
-                    litGlobalsBound = true;
+            Shader.Bind();
+            if (bLit) {
+                if (!bLitGlobalsBound) {
+                    BindEnvironment(Level);
+                    BindShadowResources(false);
+                    BindPlanarReflection(false, glm::mat4{1.0f});
+                    bLitGlobalsBound = true;
                 }
-                DrawSubMesh(shader, object, s, mat, view, projection, lightSpace, cheapLit);
+                DrawSubMesh(Shader, Object, S, Mat, LocalView, LocalProjection, LightSpace, CheapLit);
             } else {
-                litGlobalsBound = false;
-                DrawSubMesh(shader, object, s, mat, view, projection, lightSpace, unlitOpts);
+                bLitGlobalsBound = false;
+                DrawSubMesh(Shader, Object, S, Mat, LocalView, LocalProjection, LightSpace, UnlitOpts);
             }
         }
     }
 
-    drawSkybox(level, view, projection);
+    DrawSkybox(Level, LocalView, LocalProjection);
 
     // Characters are queued before DrawScene — include them in the mirror (clip + reflected frustum).
-    drawQueuedSkeletal(level, view, projection, lightSpace, false, 0.0f, &reflectedFrustum, true);
+    DrawQueuedSkeletal(Level, LocalView, LocalProjection, LightSpace, false, 0.0f, &ReflectedFrustum, true);
 
-    setClipPlane(false, glm::vec4{0.0f, 1.0f, 0.0f, 0.0f});
+    SetClipPlane(false, glm::vec4{0.0f, 1.0f, 0.0f, 0.0f});
     glDisable(GL_CLIP_DISTANCE0);
-    planarReflection_.End(fbWidth_, fbHeight_, colorRestoreFbo());
-    passTimers_.End(FGPUPassTimer::EPass::Planar);
+    PlanarReflection.End(FbWidth, FbHeight, ColorRestoreFbo());
+    PassTimers.End(FGPUPassTimer::EPass::Planar);
 }
 
-void FSceneRenderer::drawSkybox(const ULevel& level, const glm::mat4& view,
-                          const glm::mat4& projection) const {
-    if (level.Environment() == nullptr || !level.Environment()->Valid() || !skyboxShader_.Valid() ||
-        skyboxMesh_ == nullptr || !skyboxMesh_->Valid()) {
+void FSceneRenderer::DrawSkybox(const ULevel& Level, const glm::mat4& InView,
+                          const glm::mat4& InProjection) const {
+    if (Level.Environment() == nullptr || !Level.Environment()->Valid() || !SkyboxShader.Valid() ||
+        SkyboxMesh == nullptr || !SkyboxMesh->Valid()) {
         return;
     }
 
     glDepthFunc(GL_LEQUAL);
     glCullFace(GL_FRONT);
-    skyboxShader_.Bind();
-    skyboxShader_.SetMat4("uView", glm::value_ptr(view));
-    skyboxShader_.SetMat4("uProjection", glm::value_ptr(projection));
-    skyboxShader_.SetInt("uEnvMap", 0);
-    skyboxShader_.SetFloat("uEnvExposure", level.EnvironmentExposure());
-    level.Environment()->Bind(0);
-    skyboxMesh_->Draw();
+    SkyboxShader.Bind();
+    SkyboxShader.SetMat4("uView", glm::value_ptr(InView));
+    SkyboxShader.SetMat4("uProjection", glm::value_ptr(InProjection));
+    SkyboxShader.SetInt("uEnvMap", 0);
+    SkyboxShader.SetFloat("uEnvExposure", Level.EnvironmentExposure());
+    Level.Environment()->Bind(0);
+    SkyboxMesh->Draw();
     glCullFace(GL_BACK);
     glDepthFunc(GL_LESS);
 }
 
-void FSceneRenderer::DrawSubMesh(const FShader& shader, const UStaticMeshComponent& object,
-                           std::size_t subMeshIndex, const FMaterial& material,
-                           const glm::mat4& view, const glm::mat4& projection,
-                           const glm::mat4& lightSpace, const FDrawOptions& options) const {
-    if (object.mesh == nullptr || !object.mesh->Valid()) {
+void FSceneRenderer::DrawSubMesh(const FShader& Shader, const UStaticMeshComponent& Object,
+                           std::size_t InSubMeshIndex, const FMaterial& InMaterial,
+                           const glm::mat4& InView, const glm::mat4& InProjection,
+                           const glm::mat4& LightSpace, const FDrawOptions& Options) const {
+    if (Object.mesh == nullptr || !Object.mesh->Valid()) {
         return;
     }
 
-    const glm::mat4 model = object.EffectiveModelMatrix();
-    const glm::mat4 mvp = projection * view * model;
+    const glm::mat4 LocalModel = Object.EffectiveModelMatrix();
+    const glm::mat4 Mvp = InProjection * InView * LocalModel;
 
-    shader.SetMat4("uMVP", glm::value_ptr(mvp));
-    shader.SetMat4("uModel", glm::value_ptr(model));
-    shader.SetVec3("uAlbedo", material.albedo.x, material.albedo.y, material.albedo.z);
-    shader.SetFloat("uAlpha", material.alpha);
-    shader.SetVec2("uUvScale", material.uvScale.x, material.uvScale.y);
-    shader.SetInt("uAlbedoMap", 0);
+    Shader.SetMat4("uMVP", glm::value_ptr(Mvp));
+    Shader.SetMat4("uModel", glm::value_ptr(LocalModel));
+    Shader.SetVec3("uAlbedo", InMaterial.Albedo.x, InMaterial.Albedo.y, InMaterial.Albedo.z);
+    Shader.SetFloat("uAlpha", InMaterial.Alpha);
+    Shader.SetVec2("uUvScale", InMaterial.UvScale.x, InMaterial.UvScale.y);
+    Shader.SetInt("uAlbedoMap", 0);
 
-    if (options.litPass) {
-        const glm::mat3 normal = glm::transpose(glm::inverse(glm::mat3(model)));
-        shader.SetMat3("uNormalMatrix", glm::value_ptr(normal));
-        shader.SetFloat("uShininess", material.shininess);
-        shader.SetFloat("uRoughness", material.roughness);
-        shader.SetVec3("uSpecular", material.specular.x, material.specular.y, material.specular.z);
-        shader.SetFloat("uMetallic", material.metallic);
-        shader.SetMat4("uLightSpaceMatrix", glm::value_ptr(lightSpace));
-        shader.SetInt("uNormalMap", 2);
-        shader.SetInt("uLightmap", 6);
-        const bool useLm = object.UsesLightmap();
-        shader.SetInt("uUseLightmap", useLm ? 1 : 0);
-        if (options.bindSharedLitTextures) {
-            shader.SetInt("uShadowMap", 1);
-            shader.SetInt("uReceiveShadows",
-                          (options.receiveShadows && shadowMap_.Valid() && !useLm) ? 1 : 0);
-            shader.SetFloat("uShadowTexelSize", shadowMap_.Valid()
-                                                    ? 1.0f / static_cast<float>(shadowMap_.Size())
+    if (Options.bLitPass) {
+        const glm::mat3 Normal = glm::transpose(glm::inverse(glm::mat3(LocalModel)));
+        Shader.SetMat3("uNormalMatrix", glm::value_ptr(Normal));
+        Shader.SetFloat("uShininess", InMaterial.Shininess);
+        Shader.SetFloat("uRoughness", InMaterial.Roughness);
+        Shader.SetVec3("uSpecular", InMaterial.Specular.x, InMaterial.Specular.y, InMaterial.Specular.z);
+        Shader.SetFloat("uMetallic", InMaterial.Metallic);
+        Shader.SetMat4("uLightSpaceMatrix", glm::value_ptr(LightSpace));
+        Shader.SetInt("uNormalMap", 2);
+        Shader.SetInt("uLightmap", 6);
+        const bool bUseLm = Object.UsesLightmap();
+        Shader.SetInt("uUseLightmap", bUseLm ? 1 : 0);
+        if (Options.bBindSharedLitTextures) {
+            Shader.SetInt("uShadowMap", 1);
+            Shader.SetInt("uReceiveShadows",
+                          (Options.bReceiveShadows && ShadowMap.Valid() && !bUseLm) ? 1 : 0);
+            Shader.SetFloat("uShadowTexelSize", ShadowMap.Valid()
+                                                    ? 1.0f / static_cast<float>(ShadowMap.GetSize())
                                                     : 0.0f);
-            if (options.receiveShadows && shadowMap_.Valid()) {
-                shadowMap_.BindDepthTexture(1);
+            if (Options.bReceiveShadows && ShadowMap.Valid()) {
+                ShadowMap.BindDepthTexture(1);
             }
         }
     }
 
-    const UTexture2D* albedo = (material.albedoMap && material.albedoMap->Valid())
-                                ? material.albedoMap.get()
-                                : whiteTexture_.get();
-    albedo->Bind(0);
+    const UTexture2D* Albedo = (InMaterial.AlbedoMap && InMaterial.AlbedoMap->Valid())
+                                ? InMaterial.AlbedoMap.get()
+                                : WhiteTexture.get();
+    Albedo->Bind(0);
 
-    if (options.litPass) {
-        const UTexture2D* normals =
-            (options.useNormalMaps && material.normalMap && material.normalMap->Valid())
-                ? material.normalMap.get()
-                : flatNormalTexture_.get();
-        normals->Bind(2);
-        if (object.UsesLightmap()) {
-            object.lightmap->Bind(6);
-        } else if (whiteTexture_ != nullptr) {
-            whiteTexture_->Bind(6);
+    if (Options.bLitPass) {
+        const UTexture2D* Normals =
+            (Options.bUseNormalMaps && InMaterial.NormalMap && InMaterial.NormalMap->Valid())
+                ? InMaterial.NormalMap.get()
+                : FlatNormalTexture.get();
+        Normals->Bind(2);
+        if (Object.UsesLightmap()) {
+            Object.lightmap->Bind(6);
+        } else if (WhiteTexture != nullptr) {
+            WhiteTexture->Bind(6);
         }
     }
 
-    object.mesh->DrawSubMesh(subMeshIndex);
+    Object.mesh->DrawSubMesh(InSubMeshIndex);
 }
 
-void FSceneRenderer::DrawScene(const ULevel& level, const UCameraComponent& camera) {
-    frameStats_ = {};
-    passTimers_.BeginFrame();
-    frameStats_.shadowMs = passTimers_.Milliseconds(FGPUPassTimer::EPass::Shadow);
-    frameStats_.planarMs = passTimers_.Milliseconds(FGPUPassTimer::EPass::Planar);
-    frameStats_.colorMs = passTimers_.Milliseconds(FGPUPassTimer::EPass::Color);
-    frameStats_.ssaoMs = passTimers_.Milliseconds(FGPUPassTimer::EPass::Ssao);
-    frameStats_.postMs = passTimers_.Milliseconds(FGPUPassTimer::EPass::Post);
+void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Camera) {
+    FrameStats = {};
+    PassTimers.BeginFrame();
+    FrameStats.ShadowMs = PassTimers.Milliseconds(FGPUPassTimer::EPass::Shadow);
+    FrameStats.PlanarMs = PassTimers.Milliseconds(FGPUPassTimer::EPass::Planar);
+    FrameStats.ColorMs = PassTimers.Milliseconds(FGPUPassTimer::EPass::Color);
+    FrameStats.SsaoMs = PassTimers.Milliseconds(FGPUPassTimer::EPass::Ssao);
+    FrameStats.PostMs = PassTimers.Milliseconds(FGPUPassTimer::EPass::Post);
 
     // Editor Player Collision / similar: clear + overlay only (keep timer pairs intact).
-    if (!sceneGeometryEnabled_) {
-        passTimers_.Begin(FGPUPassTimer::EPass::Shadow);
-        passTimers_.End(FGPUPassTimer::EPass::Shadow);
-        passTimers_.Begin(FGPUPassTimer::EPass::Planar);
-        passTimers_.End(FGPUPassTimer::EPass::Planar);
-        passTimers_.Begin(FGPUPassTimer::EPass::Color);
-        passTimers_.End(FGPUPassTimer::EPass::Color);
-        passTimers_.Begin(FGPUPassTimer::EPass::Ssao);
-        passTimers_.End(FGPUPassTimer::EPass::Ssao);
-        passTimers_.Begin(FGPUPassTimer::EPass::Post);
-        passTimers_.End(FGPUPassTimer::EPass::Post);
+    if (!bSceneGeometryEnabled) {
+        PassTimers.Begin(FGPUPassTimer::EPass::Shadow);
+        PassTimers.End(FGPUPassTimer::EPass::Shadow);
+        PassTimers.Begin(FGPUPassTimer::EPass::Planar);
+        PassTimers.End(FGPUPassTimer::EPass::Planar);
+        PassTimers.Begin(FGPUPassTimer::EPass::Color);
+        PassTimers.End(FGPUPassTimer::EPass::Color);
+        PassTimers.Begin(FGPUPassTimer::EPass::Ssao);
+        PassTimers.End(FGPUPassTimer::EPass::Ssao);
+        PassTimers.Begin(FGPUPassTimer::EPass::Post);
+        PassTimers.End(FGPUPassTimer::EPass::Post);
 
-        if (overlayDebugDraw_.IsValid() && !overlayDebugDraw_.IsEmpty()) {
-            glBindFramebuffer(GL_FRAMEBUFFER, drawTargetFbo_);
-            glViewport(0, 0, fbWidth_, fbHeight_);
-            const glm::mat4 vp = camera.ProjectionMatrix() * camera.ViewMatrix();
-            overlayDebugDraw_.Flush(vp);
+        if (OverlayDebugDraw.IsValid() && !OverlayDebugDraw.IsEmpty()) {
+            glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
+            glViewport(0, 0, FbWidth, FbHeight);
+            const glm::mat4 Vp = Camera.ProjectionMatrix() * Camera.ViewMatrix();
+            OverlayDebugDraw.Flush(Vp);
         }
-        overlayDebugDraw_.Clear();
-        skeletalDraws_.clear();
-        staticDraws_.clear();
+        OverlayDebugDraw.Clear();
+        SkeletalDraws.clear();
+        StaticDraws.clear();
         return;
     }
 
-    const bool postOn = post_.enabled && sceneColor_.Valid();
+    const bool bPostOn = Post.bEnabled && SceneColor.Valid();
 
-    const glm::mat4 view = camera.ViewMatrix();
-    const glm::mat4 projection = camera.ProjectionMatrix();
-    const glm::mat4 viewProjection = projection * view;
-    const glm::vec3 cameraPos = camera.GetCameraLocation();
+    const glm::mat4 LocalView = Camera.ViewMatrix();
+    const glm::mat4 LocalProjection = Camera.ProjectionMatrix();
+    const glm::mat4 LocalViewProjection = LocalProjection * LocalView;
+    const glm::vec3 LocalCameraPos = Camera.GetCameraLocation();
 
-    FFrustum cameraFrustum;
-    cameraFrustum.extractFromViewProjection(viewProjection);
+    FFrustum CameraFrustum;
+    CameraFrustum.ExtractFromViewProjection(LocalViewProjection);
 
-    glm::mat4 lightSpace(1.0f);
+    glm::mat4 LightSpace(1.0f);
     // Shadow map follows directional light 0 when castShadows; extras are lighting-only.
-    const bool castDirShadows =
-        !level.DirectionalLights().empty() && level.DirectionalLights().front().castShadows;
-    if (castDirShadows) {
-        const glm::vec3 lightDir = level.DirectionalLights().front().GetDirection();
-        glm::vec3 worldMin;
-        glm::vec3 worldMax;
-        if (computeCasterAabb(level, worldMin, worldMax)) {
-            lightSpace = FShadowMap::FitLightSpaceMatrix(lightDir, worldMin, worldMax, 0.75f);
+    const bool bCastDirShadows =
+        !Level.DirectionalLights().empty() && Level.DirectionalLights().front().castShadows;
+    if (bCastDirShadows) {
+        const glm::vec3 LightDir = Level.DirectionalLights().front().GetDirection();
+        glm::vec3 WorldMin;
+        glm::vec3 WorldMax;
+        if (ComputeCasterAabb(Level, WorldMin, WorldMax)) {
+            LightSpace = FShadowMap::FitLightSpaceMatrix(LightDir, WorldMin, WorldMax, 0.75f);
         } else {
-            lightSpace = FShadowMap::FitLightSpaceMatrix(lightDir, {-3, 0, -3}, {3, 2, 3}, 0.75f);
+            LightSpace = FShadowMap::FitLightSpaceMatrix(LightDir, {-3, 0, -3}, {3, 2, 3}, 0.75f);
         }
-        renderShadowPass(level, lightSpace);
+        RenderShadowPass(Level, LightSpace);
     } else {
         // Keep timer queries paired every frame (double-buffered HUD).
-        passTimers_.Begin(FGPUPassTimer::EPass::Shadow);
-        passTimers_.End(FGPUPassTimer::EPass::Shadow);
+        PassTimers.Begin(FGPUPassTimer::EPass::Shadow);
+        PassTimers.End(FGPUPassTimer::EPass::Shadow);
     }
 
     // Optional horizontal planar mirror (first material with planarMirror=true).
-    bool hasPlanarMirror = false;
-    float mirrorPlaneY = 0.0f;
-    glm::mat4 reflectionViewProj(1.0f);
-    for (const UStaticMeshComponent& object : level.StaticMeshes()) {
-        const std::size_t subCount = object.subMeshCount();
-        for (std::size_t s = 0; s < subCount; ++s) {
-            if (object.materialForSubMesh(s).planarMirror) {
-                hasPlanarMirror = true;
+    bool bHasPlanarMirror = false;
+    float MirrorPlaneY = 0.0f;
+    glm::mat4 ReflectionViewProj(1.0f);
+    for (const UStaticMeshComponent& Object : Level.StaticMeshes()) {
+        const std::size_t SubCount = Object.subMeshCount();
+        for (std::size_t S = 0; S < SubCount; ++S) {
+            if (Object.materialForSubMesh(S).bPlanarMirror) {
+                bHasPlanarMirror = true;
                 // Reflect about the visible top of the mirror mesh (not actor origin).
-                mirrorPlaneY = worldAabbFromObject(object).max.y;
+                MirrorPlaneY = WorldAabbFromObject(Object).Max.y;
                 break;
             }
         }
-        if (hasPlanarMirror) {
+        if (bHasPlanarMirror) {
             break;
         }
     }
-    if (hasPlanarMirror) {
-        renderPlanarReflectionPass(level, camera, mirrorPlaneY);
-        reflectionViewProj = projection * camera.ViewMatrix() * makeReflectMatrix(mirrorPlaneY);
+    if (bHasPlanarMirror) {
+        RenderPlanarReflectionPass(Level, Camera, MirrorPlaneY);
+        ReflectionViewProj = LocalProjection * Camera.ViewMatrix() * MakeReflectMatrix(MirrorPlaneY);
     } else {
-        passTimers_.Begin(FGPUPassTimer::EPass::Planar);
-        passTimers_.End(FGPUPassTimer::EPass::Planar);
+        PassTimers.Begin(FGPUPassTimer::EPass::Planar);
+        PassTimers.End(FGPUPassTimer::EPass::Planar);
     }
 
-    std::vector<FDrawItem> opaque;
-    std::vector<FDrawItem> transparent;
-    opaque.reserve(level.StaticMeshes().size());
-    transparent.reserve(level.StaticMeshes().size());
+    std::vector<FDrawItem> Opaque;
+    std::vector<FDrawItem> Transparent;
+    Opaque.reserve(Level.StaticMeshes().size());
+    Transparent.reserve(Level.StaticMeshes().size());
 
-    for (std::size_t i = 0; i < level.StaticMeshes().size(); ++i) {
-        const UStaticMeshComponent& object = level.StaticMeshes()[i];
-        if (object.hidden || object.mesh == nullptr || !object.mesh->Valid()) {
+    for (std::size_t I = 0; I < Level.StaticMeshes().size(); ++I) {
+        const UStaticMeshComponent& Object = Level.StaticMeshes()[I];
+        if (Object.hidden || Object.mesh == nullptr || !Object.mesh->Valid()) {
             continue;
         }
-        ++frameStats_.objectsTotal;
+        ++FrameStats.ObjectsTotal;
 
-        const FBox worldBox = worldAabbFromObject(object);
-        if (!cameraFrustum.intersectsAabb(worldBox)) {
-            ++frameStats_.objectsCulled;
+        const FBox WorldBox = WorldAabbFromObject(Object);
+        if (!CameraFrustum.IntersectsAabb(WorldBox)) {
+            ++FrameStats.ObjectsCulled;
             continue;
         }
-        ++frameStats_.objectsVisible;
+        ++FrameStats.ObjectsVisible;
 
-        const float sortKey = distanceSqToCamera(object, cameraPos);
-        const std::size_t subCount = object.subMeshCount();
-        frameStats_.drawsSubmitted += static_cast<int>(subCount);
-        frameStats_.trianglesSubmitted += object.mesh->TriangleCount();
+        const float LocalSortKey = DistanceSqToCamera(Object, LocalCameraPos);
+        const std::size_t SubCount = Object.subMeshCount();
+        FrameStats.DrawsSubmitted += static_cast<int>(SubCount);
+        FrameStats.TrianglesSubmitted += Object.mesh->TriangleCount();
 
-        for (std::size_t s = 0; s < subCount; ++s) {
-            const FMaterial& mat = object.materialForSubMesh(s);
-            const FDrawItem item{i, s, sortKey};
-            if (mat.isTransparent()) {
-                transparent.push_back(item);
+        for (std::size_t S = 0; S < SubCount; ++S) {
+            const FMaterial& Mat = Object.materialForSubMesh(S);
+            const FDrawItem Item{I, S, LocalSortKey};
+            if (Mat.IsTransparent()) {
+                Transparent.push_back(Item);
             } else {
-                opaque.push_back(item);
+                Opaque.push_back(Item);
             }
         }
     }
 
-    std::sort(opaque.begin(), opaque.end(),
-              [](const FDrawItem& a, const FDrawItem& b) { return a.sortKey < b.sortKey; });
-    std::sort(transparent.begin(), transparent.end(),
-              [](const FDrawItem& a, const FDrawItem& b) { return a.sortKey > b.sortKey; });
+    std::sort(Opaque.begin(), Opaque.end(),
+              [](const FDrawItem& A, const FDrawItem& B) { return A.SortKey < B.SortKey; });
+    std::sort(Transparent.begin(), Transparent.end(),
+              [](const FDrawItem& A, const FDrawItem& B) { return A.SortKey > B.SortKey; });
 
-    passTimers_.Begin(FGPUPassTimer::EPass::Color);
+    PassTimers.Begin(FGPUPassTimer::EPass::Color);
 
-    if (postOn) {
-        sceneColor_.Begin();
+    if (bPostOn) {
+        SceneColor.Begin();
     } else {
-        glBindFramebuffer(GL_FRAMEBUFFER, drawTargetFbo_);
-        glViewport(0, 0, fbWidth_, fbHeight_);
+        glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
+        glViewport(0, 0, FbWidth, FbHeight);
     }
 
-    const float shadowSourceAngle = castDirShadows ? level.DirectionalLights().front().sourceAngle
+    const float ShadowSourceAngle = bCastDirShadows ? Level.DirectionalLights().front().sourceAngle
                                                    : kDefaultLightSourceAngleDegrees;
 
     // Optional early-Z: write opaque depth before expensive lit shading.
-    if (post_.earlyZ && unlitShader_.Valid() && !opaque.empty()) {
+    if (Post.bEarlyZ && UnlitShader.Valid() && !Opaque.empty()) {
         glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
         glDepthMask(GL_TRUE);
         glDepthFunc(GL_LESS);
         glDisable(GL_BLEND);
-        unlitShader_.Bind();
-        unlitShader_.SetInt("uUseClipPlane", 0);
-        unlitShader_.SetVec4("uClipPlane", 0.0f, 1.0f, 0.0f, 0.0f);
-        unlitShader_.SetInt("uAlbedoMap", 0);
-        unlitShader_.SetVec2("uUvScale", 1.0f, 1.0f);
-        unlitShader_.SetFloat("uAlpha", 1.0f);
-        whiteTexture_->Bind(0);
-        for (const FDrawItem& item : opaque) {
-            const UStaticMeshComponent& object = level.StaticMeshes()[item.objectIndex];
-            const FMaterial& mat = object.materialForSubMesh(item.subMeshIndex);
-            if (mat.shading == EMaterialShadingModel::Unlit) {
+        UnlitShader.Bind();
+        UnlitShader.SetInt("uUseClipPlane", 0);
+        UnlitShader.SetVec4("uClipPlane", 0.0f, 1.0f, 0.0f, 0.0f);
+        UnlitShader.SetInt("uAlbedoMap", 0);
+        UnlitShader.SetVec2("uUvScale", 1.0f, 1.0f);
+        UnlitShader.SetFloat("uAlpha", 1.0f);
+        WhiteTexture->Bind(0);
+        for (const FDrawItem& Item : Opaque) {
+            const UStaticMeshComponent& Object = Level.StaticMeshes()[Item.ObjectIndex];
+            const FMaterial& Mat = Object.materialForSubMesh(Item.SubMeshIndex);
+            if (Mat.Shading == EMaterialShadingModel::Unlit) {
                 continue;
             }
-            const glm::mat4 model = object.EffectiveModelMatrix();
-            const glm::mat4 mvp = projection * view * model;
-            unlitShader_.SetMat4("uMVP", glm::value_ptr(mvp));
-            unlitShader_.SetMat4("uModel", glm::value_ptr(model));
-            unlitShader_.SetVec3("uAlbedo", 1.0f, 1.0f, 1.0f);
-            object.mesh->DrawSubMesh(item.subMeshIndex);
+            const glm::mat4 LocalModel = Object.EffectiveModelMatrix();
+            const glm::mat4 Mvp = LocalProjection * LocalView * LocalModel;
+            UnlitShader.SetMat4("uMVP", glm::value_ptr(Mvp));
+            UnlitShader.SetMat4("uModel", glm::value_ptr(LocalModel));
+            UnlitShader.SetVec3("uAlbedo", 1.0f, 1.0f, 1.0f);
+            Object.mesh->DrawSubMesh(Item.SubMeshIndex);
         }
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
         glDepthFunc(GL_LEQUAL);
     }
 
-    if (litShader_.Valid()) {
-        updateCameraUbo(camera);
-        updateLightsUbo(level);
-        litShader_.Bind();
-        bindEnvironment(level);
-        bindShadowResources(castDirShadows, shadowSourceAngle);
-        setClipPlane(false, glm::vec4{0.0f, 1.0f, 0.0f, 0.0f});
-        bindPlanarReflection(false, reflectionViewProj);
-        if (hasPlanarMirror && planarReflection_.Valid()) {
-            planarReflection_.BindColorTexture(5);
+    if (LitShader.Valid()) {
+        UpdateCameraUbo(Camera);
+        UpdateLightsUbo(Level);
+        LitShader.Bind();
+        BindEnvironment(Level);
+        BindShadowResources(bCastDirShadows, ShadowSourceAngle);
+        SetClipPlane(false, glm::vec4{0.0f, 1.0f, 0.0f, 0.0f});
+        BindPlanarReflection(false, ReflectionViewProj);
+        if (bHasPlanarMirror && PlanarReflection.Valid()) {
+            PlanarReflection.BindColorTexture(5);
         }
     }
 
-    FDrawOptions litOpts{};
-    litOpts.litPass = true;
-    litOpts.receiveShadows = castDirShadows;
-    litOpts.useNormalMaps = true;
-    litOpts.bindSharedLitTextures = false;
+    FDrawOptions LitOpts{};
+    LitOpts.bLitPass = true;
+    LitOpts.bReceiveShadows = bCastDirShadows;
+    LitOpts.bUseNormalMaps = true;
+    LitOpts.bBindSharedLitTextures = false;
 
-    FDrawOptions unlitOpts{};
-    unlitOpts.litPass = false;
-    unlitOpts.bindSharedLitTextures = false;
+    FDrawOptions UnlitOpts{};
+    UnlitOpts.bLitPass = false;
+    UnlitOpts.bBindSharedLitTextures = false;
 
-    auto drawList = [&](const std::vector<FDrawItem>& items, bool transparentPass) {
-        bool litGlobalsBound = litShader_.Valid();
-        bool mirrorEnabled = false;
+    auto DrawList = [&](const std::vector<FDrawItem>& Items, bool bTransparentPass) {
+        bool bLitGlobalsBound = LitShader.Valid();
+        bool bMirrorEnabled = false;
 
-        for (const FDrawItem& item : items) {
-            const UStaticMeshComponent& object = level.StaticMeshes()[item.objectIndex];
-            const FMaterial& mat = object.materialForSubMesh(item.subMeshIndex);
-            const bool lit = mat.shading == EMaterialShadingModel::BlinnPhong;
-            FShader& shader = lit ? litShader_ : unlitShader_;
-            if (!shader.Valid()) {
+        for (const FDrawItem& Item : Items) {
+            const UStaticMeshComponent& Object = Level.StaticMeshes()[Item.ObjectIndex];
+            const FMaterial& Mat = Object.materialForSubMesh(Item.SubMeshIndex);
+            const bool bLit = Mat.Shading == EMaterialShadingModel::BlinnPhong;
+            FShader& Shader = bLit ? LitShader : UnlitShader;
+            if (!Shader.Valid()) {
                 continue;
             }
 
-            if (transparentPass) {
+            if (bTransparentPass) {
                 glEnable(GL_BLEND);
                 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                 glDepthMask(GL_FALSE);
@@ -953,30 +953,30 @@ void FSceneRenderer::DrawScene(const ULevel& level, const UCameraComponent& came
                 glDepthMask(GL_TRUE);
             }
 
-            shader.Bind();
-            if (lit) {
-                if (!litGlobalsBound) {
-                    bindEnvironment(level);
-                    bindShadowResources(castDirShadows, shadowSourceAngle);
-                    if (hasPlanarMirror && planarReflection_.Valid()) {
-                        planarReflection_.BindColorTexture(5);
+            Shader.Bind();
+            if (bLit) {
+                if (!bLitGlobalsBound) {
+                    BindEnvironment(Level);
+                    BindShadowResources(bCastDirShadows, ShadowSourceAngle);
+                    if (bHasPlanarMirror && PlanarReflection.Valid()) {
+                        PlanarReflection.BindColorTexture(5);
                     }
-                    litGlobalsBound = true;
-                    mirrorEnabled = false;
+                    bLitGlobalsBound = true;
+                    bMirrorEnabled = false;
                 }
-                const bool useMirror =
-                    hasPlanarMirror && mat.planarMirror && planarReflection_.Valid();
-                if (useMirror != mirrorEnabled) {
-                    bindPlanarReflection(useMirror, reflectionViewProj);
-                    mirrorEnabled = useMirror;
+                const bool bUseMirror =
+                    bHasPlanarMirror && Mat.bPlanarMirror && PlanarReflection.Valid();
+                if (bUseMirror != bMirrorEnabled) {
+                    BindPlanarReflection(bUseMirror, ReflectionViewProj);
+                    bMirrorEnabled = bUseMirror;
                 }
-                DrawSubMesh(shader, object, item.subMeshIndex, mat, view, projection, lightSpace,
-                            litOpts);
+                DrawSubMesh(Shader, Object, Item.SubMeshIndex, Mat, LocalView, LocalProjection, LightSpace,
+                            LitOpts);
             } else {
-                litGlobalsBound = false;
-                mirrorEnabled = false;
-                DrawSubMesh(shader, object, item.subMeshIndex, mat, view, projection, lightSpace,
-                            unlitOpts);
+                bLitGlobalsBound = false;
+                bMirrorEnabled = false;
+                DrawSubMesh(Shader, Object, Item.SubMeshIndex, Mat, LocalView, LocalProjection, LightSpace,
+                            UnlitOpts);
             }
         }
 
@@ -984,273 +984,273 @@ void FSceneRenderer::DrawScene(const ULevel& level, const UCameraComponent& came
         glDepthMask(GL_TRUE);
     };
 
-    drawList(opaque, false);
-    drawQueuedSkeletal(level, view, projection, lightSpace, castDirShadows, shadowSourceAngle,
-                       &cameraFrustum);
-    drawQueuedStatic(level, view, projection, lightSpace, castDirShadows, shadowSourceAngle);
+    DrawList(Opaque, false);
+    DrawQueuedSkeletal(Level, LocalView, LocalProjection, LightSpace, bCastDirShadows, ShadowSourceAngle,
+                       &CameraFrustum);
+    DrawQueuedStatic(Level, LocalView, LocalProjection, LightSpace, bCastDirShadows, ShadowSourceAngle);
     // Skybox before transparent so glass can blend over the environment.
-    drawSkybox(level, view, projection);
+    DrawSkybox(Level, LocalView, LocalProjection);
     // Skybox rebinds cubemap on unit 0; restore lit env units before transparent lit draws.
-    if (litShader_.Valid()) {
-        litShader_.Bind();
-        bindEnvironment(level);
-        bindShadowResources(castDirShadows, shadowSourceAngle);
-        if (hasPlanarMirror && planarReflection_.Valid()) {
-            planarReflection_.BindColorTexture(5);
+    if (LitShader.Valid()) {
+        LitShader.Bind();
+        BindEnvironment(Level);
+        BindShadowResources(bCastDirShadows, ShadowSourceAngle);
+        if (bHasPlanarMirror && PlanarReflection.Valid()) {
+            PlanarReflection.BindColorTexture(5);
         }
-        bindPlanarReflection(false, reflectionViewProj);
+        BindPlanarReflection(false, ReflectionViewProj);
     }
-    drawList(transparent, true);
+    DrawList(Transparent, true);
 
-    if (post_.earlyZ) {
+    if (Post.bEarlyZ) {
         glDepthFunc(GL_LESS);
     }
 
-    passTimers_.End(FGPUPassTimer::EPass::Color);
+    PassTimers.End(FGPUPassTimer::EPass::Color);
 
     // Debug into the color target (scene HDR or backbuffer) so depth occlusion stays correct.
-    drawDebug(level, camera, lightSpace, castDirShadows);
+    DrawDebug(Level, Camera, LightSpace, bCastDirShadows);
 
-    if (postOn) {
-        renderPostStack(level, camera);
+    if (bPostOn) {
+        RenderPostStack(Level, Camera);
     } else {
-        passTimers_.Begin(FGPUPassTimer::EPass::Ssao);
-        passTimers_.End(FGPUPassTimer::EPass::Ssao);
-        passTimers_.Begin(FGPUPassTimer::EPass::Post);
-        passTimers_.End(FGPUPassTimer::EPass::Post);
-        glBindFramebuffer(GL_FRAMEBUFFER, drawTargetFbo_);
-        glViewport(0, 0, fbWidth_, fbHeight_);
+        PassTimers.Begin(FGPUPassTimer::EPass::Ssao);
+        PassTimers.End(FGPUPassTimer::EPass::Ssao);
+        PassTimers.Begin(FGPUPassTimer::EPass::Post);
+        PassTimers.End(FGPUPassTimer::EPass::Post);
+        glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
+        glViewport(0, 0, FbWidth, FbHeight);
     }
 
-    if (overlayDebugDraw_.IsValid() && !overlayDebugDraw_.IsEmpty()) {
-        glBindFramebuffer(GL_FRAMEBUFFER, drawTargetFbo_);
-        glViewport(0, 0, fbWidth_, fbHeight_);
-        const glm::mat4 vp = camera.ProjectionMatrix() * camera.ViewMatrix();
-        overlayDebugDraw_.Flush(vp);
+    if (OverlayDebugDraw.IsValid() && !OverlayDebugDraw.IsEmpty()) {
+        glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
+        glViewport(0, 0, FbWidth, FbHeight);
+        const glm::mat4 Vp = Camera.ProjectionMatrix() * Camera.ViewMatrix();
+        OverlayDebugDraw.Flush(Vp);
     }
-    overlayDebugDraw_.Clear();
-    skeletalDraws_.clear();
-    staticDraws_.clear();
+    OverlayDebugDraw.Clear();
+    SkeletalDraws.clear();
+    StaticDraws.clear();
 }
 
-void FSceneRenderer::renderPostStack(const ULevel& level, const UCameraComponent& camera) {
+void FSceneRenderer::RenderPostStack(const ULevel& Level, const UCameraComponent& Camera) {
     // Flow: SceneColor(+Depth) → SSAO → bilateral blur → composite+tonemap → FXAA → present
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_BLEND);
     glDisable(GL_CULL_FACE);
     glDepthMask(GL_FALSE);
 
-    const bool wantAo = post_.ambientOcclusion && ssaoShader_.Valid() && ssaoBlurShader_.Valid() &&
-                        ssaoTarget_.Valid() && post_.aoSampleCount > 0;
-    int aoReadIndex = 1;
+    const bool bWantAo = Post.bAmbientOcclusion && SsaoShader.Valid() && SsaoBlurShader.Valid() &&
+                        SsaoTarget.Valid() && Post.AoSampleCount > 0;
+    int AoReadIndex = 1;
 
-    passTimers_.Begin(FGPUPassTimer::EPass::Ssao);
-    if (wantAo) {
-        const glm::mat4 projection = camera.ProjectionMatrix();
-        const glm::mat4 invProjection = glm::inverse(projection);
-        const int sampleCount = std::clamp(post_.aoSampleCount, 1, kMaxAoSamples);
+    PassTimers.Begin(FGPUPassTimer::EPass::Ssao);
+    if (bWantAo) {
+        const glm::mat4 LocalProjection = Camera.ProjectionMatrix();
+        const glm::mat4 InvProjection = glm::inverse(LocalProjection);
+        const int SampleCount = std::clamp(Post.AoSampleCount, 1, MaxAoSamples);
 
-        ssaoTarget_.BindWrite(0);
+        SsaoTarget.BindWrite(0);
         glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
-        ssaoShader_.Bind();
-        ssaoShader_.SetInt("uDepth", 0);
-        ssaoShader_.SetInt("uNoise", 1);
-        ssaoShader_.SetInt("uSampleCount", sampleCount);
-        ssaoShader_.SetMat4("uProjection", glm::value_ptr(projection));
-        ssaoShader_.SetMat4("uInvProjection", glm::value_ptr(invProjection));
-        ssaoShader_.SetFloat("uRadius", post_.aoRadius);
-        ssaoShader_.SetFloat("uBias", post_.aoBias);
-        const float noiseScaleX =
-            static_cast<float>(ssaoTarget_.Width()) / 4.0f;
-        const float noiseScaleY =
-            static_cast<float>(ssaoTarget_.Height()) / 4.0f;
-        ssaoShader_.SetVec2("uNoiseScale", noiseScaleX, noiseScaleY);
-        for (int i = 0; i < sampleCount; ++i) {
-            const glm::vec3& s = aoKernel_[static_cast<std::size_t>(i)];
-            const std::string name = "uSamples[" + std::to_string(i) + "]";
-            ssaoShader_.SetVec3(name.c_str(), s.x, s.y, s.z);
+        SsaoShader.Bind();
+        SsaoShader.SetInt("uDepth", 0);
+        SsaoShader.SetInt("uNoise", 1);
+        SsaoShader.SetInt("uSampleCount", SampleCount);
+        SsaoShader.SetMat4("uProjection", glm::value_ptr(LocalProjection));
+        SsaoShader.SetMat4("uInvProjection", glm::value_ptr(InvProjection));
+        SsaoShader.SetFloat("uRadius", Post.AoRadius);
+        SsaoShader.SetFloat("uBias", Post.AoBias);
+        const float NoiseScaleX =
+            static_cast<float>(SsaoTarget.GetWidth()) / 4.0f;
+        const float NoiseScaleY =
+            static_cast<float>(SsaoTarget.GetHeight()) / 4.0f;
+        SsaoShader.SetVec2("uNoiseScale", NoiseScaleX, NoiseScaleY);
+        for (int I = 0; I < SampleCount; ++I) {
+            const glm::vec3& S = AoKernel[static_cast<std::size_t>(I)];
+            const std::string Name = "uSamples[" + std::to_string(I) + "]";
+            SsaoShader.SetVec3(Name.c_str(), S.x, S.y, S.z);
         }
-        sceneColor_.BindDepthTexture(0);
+        SceneColor.BindDepthTexture(0);
         glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, aoNoiseTexture_);
-        drawFullscreenTriangle();
+        glBindTexture(GL_TEXTURE_2D, AoNoiseTexture);
+        DrawFullscreenTriangle();
 
         // Horizontal then vertical spatial blur (dissolves noise without keeping depth bands).
-        const float texelX = 1.0f / static_cast<float>(ssaoTarget_.Width());
-        const float texelY = 1.0f / static_cast<float>(ssaoTarget_.Height());
-        ssaoBlurShader_.Bind();
-        ssaoBlurShader_.SetInt("uAo", 0);
-        ssaoBlurShader_.SetVec2("uDirection", texelX, 0.0f);
+        const float TexelX = 1.0f / static_cast<float>(SsaoTarget.GetWidth());
+        const float TexelY = 1.0f / static_cast<float>(SsaoTarget.GetHeight());
+        SsaoBlurShader.Bind();
+        SsaoBlurShader.SetInt("uAo", 0);
+        SsaoBlurShader.SetVec2("uDirection", TexelX, 0.0f);
 
-        ssaoTarget_.BindWrite(1);
-        ssaoTarget_.BindColorTexture(0, 0);
-        drawFullscreenTriangle();
+        SsaoTarget.BindWrite(1);
+        SsaoTarget.BindColorTexture(0, 0);
+        DrawFullscreenTriangle();
 
-        ssaoTarget_.BindWrite(0);
-        ssaoBlurShader_.SetVec2("uDirection", 0.0f, texelY);
-        ssaoTarget_.BindColorTexture(1, 0);
-        drawFullscreenTriangle();
-        aoReadIndex = 0;
+        SsaoTarget.BindWrite(0);
+        SsaoBlurShader.SetVec2("uDirection", 0.0f, TexelY);
+        SsaoTarget.BindColorTexture(1, 0);
+        DrawFullscreenTriangle();
+        AoReadIndex = 0;
     }
-    passTimers_.End(FGPUPassTimer::EPass::Ssao);
+    PassTimers.End(FGPUPassTimer::EPass::Ssao);
 
-    passTimers_.Begin(FGPUPassTimer::EPass::Post);
-    const float exposure = std::max(0.01f, level.EnvironmentExposure() * post_.exposure);
-    const bool wantFxaa = post_.fxaa && fxaaShader_.Valid() && ldrColor_.Valid();
+    PassTimers.Begin(FGPUPassTimer::EPass::Post);
+    const float Exposure = std::max(0.01f, Level.EnvironmentExposure() * Post.Exposure);
+    const bool bWantFxaa = Post.bFxaa && FxaaShader.Valid() && LdrColor.Valid();
 
-    if (wantFxaa) {
-        ldrColor_.BindWrite();
+    if (bWantFxaa) {
+        LdrColor.BindWrite();
     } else {
-        glBindFramebuffer(GL_FRAMEBUFFER, drawTargetFbo_);
-        glViewport(0, 0, fbWidth_, fbHeight_);
+        glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
+        glViewport(0, 0, FbWidth, FbHeight);
     }
 
-    if (postCompositeShader_.Valid()) {
-        postCompositeShader_.Bind();
-        postCompositeShader_.SetInt("uSceneColor", 0);
-        postCompositeShader_.SetInt("uAo", 1);
-        postCompositeShader_.SetInt("uUseAo", wantAo ? 1 : 0);
-        postCompositeShader_.SetFloat("uAoIntensity", post_.aoIntensity);
-        postCompositeShader_.SetFloat("uAoPower", post_.aoPower);
-        postCompositeShader_.SetFloat("uExposure", exposure);
-        sceneColor_.BindColorTexture(0);
-        if (wantAo) {
-            ssaoTarget_.BindColorTexture(aoReadIndex, 1);
-        } else if (whiteTexture_ != nullptr) {
-            whiteTexture_->Bind(1);
+    if (PostCompositeShader.Valid()) {
+        PostCompositeShader.Bind();
+        PostCompositeShader.SetInt("uSceneColor", 0);
+        PostCompositeShader.SetInt("uAo", 1);
+        PostCompositeShader.SetInt("uUseAo", bWantAo ? 1 : 0);
+        PostCompositeShader.SetFloat("uAoIntensity", Post.AoIntensity);
+        PostCompositeShader.SetFloat("uAoPower", Post.AoPower);
+        PostCompositeShader.SetFloat("uExposure", Exposure);
+        SceneColor.BindColorTexture(0);
+        if (bWantAo) {
+            SsaoTarget.BindColorTexture(AoReadIndex, 1);
+        } else if (WhiteTexture != nullptr) {
+            WhiteTexture->Bind(1);
         }
-        drawFullscreenTriangle();
+        DrawFullscreenTriangle();
     }
 
-    if (wantFxaa) {
-        glBindFramebuffer(GL_FRAMEBUFFER, drawTargetFbo_);
-        glViewport(0, 0, fbWidth_, fbHeight_);
-        fxaaShader_.Bind();
-        fxaaShader_.SetInt("uColor", 0);
-        fxaaShader_.SetVec2("uInvResolution", 1.0f / static_cast<float>(fbWidth_),
-                            1.0f / static_cast<float>(fbHeight_));
-        ldrColor_.BindColorTexture(0);
-        drawFullscreenTriangle();
+    if (bWantFxaa) {
+        glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
+        glViewport(0, 0, FbWidth, FbHeight);
+        FxaaShader.Bind();
+        FxaaShader.SetInt("uColor", 0);
+        FxaaShader.SetVec2("uInvResolution", 1.0f / static_cast<float>(FbWidth),
+                            1.0f / static_cast<float>(FbHeight));
+        LdrColor.BindColorTexture(0);
+        DrawFullscreenTriangle();
     }
-    passTimers_.End(FGPUPassTimer::EPass::Post);
+    PassTimers.End(FGPUPassTimer::EPass::Post);
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
     glDepthMask(GL_TRUE);
-    glBindFramebuffer(GL_FRAMEBUFFER, drawTargetFbo_);
-    glViewport(0, 0, fbWidth_, fbHeight_);
+    glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
+    glViewport(0, 0, FbWidth, FbHeight);
 }
 
-void FSceneRenderer::drawQueuedSkeletal(const ULevel& level, const glm::mat4& view,
-                                  const glm::mat4& projection, const glm::mat4& lightSpace,
-                                  bool receiveShadows, float shadowSourceAngle,
-                                  const FFrustum* cameraFrustum, bool useWorldClipPlane) {
-    if (!skinnedLitShader_.Valid() || skeletalDraws_.empty() || whiteTexture_ == nullptr) {
+void FSceneRenderer::DrawQueuedSkeletal(const ULevel& Level, const glm::mat4& InView,
+                                  const glm::mat4& InProjection, const glm::mat4& LightSpace,
+                                  bool bInReceiveShadows, float ShadowSourceAngle,
+                                  const FFrustum* CameraFrustum, bool bUseWorldClipPlane) {
+    if (!SkinnedLitShader.Valid() || SkeletalDraws.empty() || WhiteTexture == nullptr) {
         return;
     }
 
-    skinnedLitShader_.Bind();
+    SkinnedLitShader.Bind();
 
-    const bool hasEnv = level.Environment() != nullptr && level.Environment()->Valid();
-    const bool hasIrr = hasEnv && level.Environment()->HasIrradiance();
-    skinnedLitShader_.SetInt("uHasEnvMap", hasEnv ? 1 : 0);
-    skinnedLitShader_.SetInt("uHasIrradiance", hasIrr ? 1 : 0);
-    skinnedLitShader_.SetFloat("uEnvExposure", level.EnvironmentExposure());
-    skinnedLitShader_.SetFloat("uEnvMaxLod", hasEnv ? level.Environment()->MaxLod() : 0.0f);
-    skinnedLitShader_.SetInt("uEnvMap", 3);
-    skinnedLitShader_.SetInt("uIrradianceMap", 4);
-    if (hasEnv) {
-        level.Environment()->Bind(3);
+    const bool bHasEnv = Level.Environment() != nullptr && Level.Environment()->Valid();
+    const bool bHasIrr = bHasEnv && Level.Environment()->HasIrradiance();
+    SkinnedLitShader.SetInt("uHasEnvMap", bHasEnv ? 1 : 0);
+    SkinnedLitShader.SetInt("uHasIrradiance", bHasIrr ? 1 : 0);
+    SkinnedLitShader.SetFloat("uEnvExposure", Level.EnvironmentExposure());
+    SkinnedLitShader.SetFloat("uEnvMaxLod", bHasEnv ? Level.Environment()->MaxLod() : 0.0f);
+    SkinnedLitShader.SetInt("uEnvMap", 3);
+    SkinnedLitShader.SetInt("uIrradianceMap", 4);
+    if (bHasEnv) {
+        Level.Environment()->Bind(3);
     }
-    if (hasIrr) {
-        level.Environment()->BindIrradiance(4);
-    }
-
-    float texel = shadowMap_.Valid() ? 1.0f / static_cast<float>(shadowMap_.Size()) : 0.0f;
-    if (receiveShadows && texel > 0.0f) {
-        const float soft =
-            std::clamp(shadowSourceAngle / kDefaultLightSourceAngleDegrees, 0.25f, 16.0f);
-        texel *= soft;
-    }
-    skinnedLitShader_.SetInt("uShadowMap", 1);
-    skinnedLitShader_.SetInt("uReceiveShadows", (receiveShadows && shadowMap_.Valid()) ? 1 : 0);
-    skinnedLitShader_.SetFloat("uShadowTexelSize", texel);
-    if (receiveShadows && shadowMap_.Valid()) {
-        shadowMap_.BindDepthTexture(1);
+    if (bHasIrr) {
+        Level.Environment()->BindIrradiance(4);
     }
 
-    skinnedLitShader_.SetInt("uHasPlanarReflection", 0);
-    if (!useWorldClipPlane) {
-        skinnedLitShader_.SetInt("uUseClipPlane", 0);
-        skinnedLitShader_.SetVec4("uClipPlane", 0.0f, 1.0f, 0.0f, 0.0f);
+    float Texel = ShadowMap.Valid() ? 1.0f / static_cast<float>(ShadowMap.GetSize()) : 0.0f;
+    if (bInReceiveShadows && Texel > 0.0f) {
+        const float Soft =
+            std::clamp(ShadowSourceAngle / kDefaultLightSourceAngleDegrees, 0.25f, 16.0f);
+        Texel *= Soft;
+    }
+    SkinnedLitShader.SetInt("uShadowMap", 1);
+    SkinnedLitShader.SetInt("uReceiveShadows", (bInReceiveShadows && ShadowMap.Valid()) ? 1 : 0);
+    SkinnedLitShader.SetFloat("uShadowTexelSize", Texel);
+    if (bInReceiveShadows && ShadowMap.Valid()) {
+        ShadowMap.BindDepthTexture(1);
     }
 
-    for (const FSkeletalDrawItem& item : skeletalDraws_) {
-        if (item.mesh == nullptr || !item.mesh->Valid()) {
+    SkinnedLitShader.SetInt("uHasPlanarReflection", 0);
+    if (!bUseWorldClipPlane) {
+        SkinnedLitShader.SetInt("uUseClipPlane", 0);
+        SkinnedLitShader.SetVec4("uClipPlane", 0.0f, 1.0f, 0.0f, 0.0f);
+    }
+
+    for (const FSkeletalDrawItem& Item : SkeletalDraws) {
+        if (Item.Mesh == nullptr || !Item.Mesh->Valid()) {
             continue;
         }
 
-        ++frameStats_.objectsTotal;
-        if (cameraFrustum != nullptr) {
-            const FBox worldBox =
-                FBox::fromLocalTransformed(item.mesh->LocalMin(), item.mesh->LocalMax(), item.model);
-            if (!cameraFrustum->intersectsAabb(worldBox)) {
-                ++frameStats_.objectsCulled;
+        ++FrameStats.ObjectsTotal;
+        if (CameraFrustum != nullptr) {
+            const FBox WorldBox =
+                FBox::FromLocalTransformed(Item.Mesh->GetLocalMin(), Item.Mesh->GetLocalMax(), Item.Model);
+            if (!CameraFrustum->IntersectsAabb(WorldBox)) {
+                ++FrameStats.ObjectsCulled;
                 continue;
             }
         }
-        ++frameStats_.objectsVisible;
+        ++FrameStats.ObjectsVisible;
 
-        const FMaterial& material = item.mesh->GetMaterial();
-        const glm::mat4& model = item.model;
-        const glm::mat4 mvp = projection * view * model;
-        const glm::mat3 model3(model);
-        const float det = glm::determinant(model3);
-        const glm::mat3 normal =
-            (std::abs(det) < 1.0e-12f) ? glm::mat3(1.0f) : glm::transpose(glm::inverse(model3));
+        const FMaterial& LocalMaterial = Item.Mesh->GetMaterial();
+        const glm::mat4& LocalModel = Item.Model;
+        const glm::mat4 Mvp = InProjection * InView * LocalModel;
+        const glm::mat3 Model3(LocalModel);
+        const float Det = glm::determinant(Model3);
+        const glm::mat3 Normal =
+            (std::abs(Det) < 1.0e-12f) ? glm::mat3(1.0f) : glm::transpose(glm::inverse(Model3));
 
-        skinnedLitShader_.SetMat4("uMVP", glm::value_ptr(mvp));
-        skinnedLitShader_.SetMat4("uModel", glm::value_ptr(model));
-        skinnedLitShader_.SetMat3("uNormalMatrix", glm::value_ptr(normal));
-        skinnedLitShader_.SetMat4("uLightSpaceMatrix", glm::value_ptr(lightSpace));
-        skinnedLitShader_.SetVec3("uAlbedo", material.albedo.x, material.albedo.y,
-                                  material.albedo.z);
-        skinnedLitShader_.SetFloat("uAlpha", material.alpha);
-        skinnedLitShader_.SetVec2("uUvScale", material.uvScale.x, material.uvScale.y);
-        skinnedLitShader_.SetFloat("uShininess", material.shininess);
-        skinnedLitShader_.SetFloat("uRoughness", material.roughness);
-        skinnedLitShader_.SetVec3("uSpecular", material.specular.x, material.specular.y,
-                                  material.specular.z);
-        skinnedLitShader_.SetFloat("uMetallic", material.metallic);
-        skinnedLitShader_.SetInt("uAlbedoMap", 0);
-        skinnedLitShader_.SetInt("uNormalMap", 2);
+        SkinnedLitShader.SetMat4("uMVP", glm::value_ptr(Mvp));
+        SkinnedLitShader.SetMat4("uModel", glm::value_ptr(LocalModel));
+        SkinnedLitShader.SetMat3("uNormalMatrix", glm::value_ptr(Normal));
+        SkinnedLitShader.SetMat4("uLightSpaceMatrix", glm::value_ptr(LightSpace));
+        SkinnedLitShader.SetVec3("uAlbedo", LocalMaterial.Albedo.x, LocalMaterial.Albedo.y,
+                                  LocalMaterial.Albedo.z);
+        SkinnedLitShader.SetFloat("uAlpha", LocalMaterial.Alpha);
+        SkinnedLitShader.SetVec2("uUvScale", LocalMaterial.UvScale.x, LocalMaterial.UvScale.y);
+        SkinnedLitShader.SetFloat("uShininess", LocalMaterial.Shininess);
+        SkinnedLitShader.SetFloat("uRoughness", LocalMaterial.Roughness);
+        SkinnedLitShader.SetVec3("uSpecular", LocalMaterial.Specular.x, LocalMaterial.Specular.y,
+                                  LocalMaterial.Specular.z);
+        SkinnedLitShader.SetFloat("uMetallic", LocalMaterial.Metallic);
+        SkinnedLitShader.SetInt("uAlbedoMap", 0);
+        SkinnedLitShader.SetInt("uNormalMap", 2);
         // Keep pass-level shadow uniforms (valid map + soft texel); do not overwrite per draw.
 
-        if (!item.boneMatrices.empty()) {
-            skinnedLitShader_.SetMat4Array("uBones", glm::value_ptr(item.boneMatrices[0]),
-                                           static_cast<int>(item.boneMatrices.size()));
+        if (!Item.BoneMatrices.empty()) {
+            SkinnedLitShader.SetMat4Array("uBones", glm::value_ptr(Item.BoneMatrices[0]),
+                                           static_cast<int>(Item.BoneMatrices.size()));
         }
 
-        const UTexture2D* albedo = material.albedoMap && material.albedoMap->Valid()
-                                    ? material.albedoMap.get()
-                                    : whiteTexture_.get();
-        albedo->Bind(0);
-        const UTexture2D* normals = material.normalMap && material.normalMap->Valid()
-                                     ? material.normalMap.get()
-                                     : flatNormalTexture_.get();
-        normals->Bind(2);
+        const UTexture2D* Albedo = LocalMaterial.AlbedoMap && LocalMaterial.AlbedoMap->Valid()
+                                    ? LocalMaterial.AlbedoMap.get()
+                                    : WhiteTexture.get();
+        Albedo->Bind(0);
+        const UTexture2D* Normals = LocalMaterial.NormalMap && LocalMaterial.NormalMap->Valid()
+                                     ? LocalMaterial.NormalMap.get()
+                                     : FlatNormalTexture.get();
+        Normals->Bind(2);
 
-        item.mesh->Draw();
-        ++frameStats_.drawsSubmitted;
-        frameStats_.trianglesSubmitted += item.mesh->TriangleCount();
+        Item.Mesh->Draw();
+        ++FrameStats.DrawsSubmitted;
+        FrameStats.TrianglesSubmitted += Item.Mesh->TriangleCount();
     }
 }
 
-void FSceneRenderer::drawQueuedStatic(const ULevel& level, const glm::mat4& view,
-                                const glm::mat4& projection, const glm::mat4& lightSpace,
-                                bool receiveShadows, float shadowSourceAngle) {
-    if (staticDraws_.empty() || whiteTexture_ == nullptr || !unlitShader_.Valid()) {
+void FSceneRenderer::DrawQueuedStatic(const ULevel& Level, const glm::mat4& InView,
+                                const glm::mat4& InProjection, const glm::mat4& LightSpace,
+                                bool bInReceiveShadows, float ShadowSourceAngle) {
+    if (StaticDraws.empty() || WhiteTexture == nullptr || !UnlitShader.Valid()) {
         return;
     }
 
@@ -1262,78 +1262,78 @@ void FSceneRenderer::drawQueuedStatic(const ULevel& level, const glm::mat4& view
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_TRUE);
 
-    unlitShader_.Bind();
-    unlitShader_.SetInt("uUseClipPlane", 0);
-    unlitShader_.SetVec4("uClipPlane", 0.0f, 1.0f, 0.0f, 0.0f);
-    unlitShader_.SetInt("uAlbedoMap", 0);
-    unlitShader_.SetVec2("uUvScale", 1.0f, 1.0f);
-    unlitShader_.SetFloat("uAlpha", 1.0f);
+    UnlitShader.Bind();
+    UnlitShader.SetInt("uUseClipPlane", 0);
+    UnlitShader.SetVec4("uClipPlane", 0.0f, 1.0f, 0.0f, 0.0f);
+    UnlitShader.SetInt("uAlbedoMap", 0);
+    UnlitShader.SetVec2("uUvScale", 1.0f, 1.0f);
+    UnlitShader.SetFloat("uAlpha", 1.0f);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
-    whiteTexture_->Bind(0);
+    WhiteTexture->Bind(0);
 
-    for (const FStaticDrawItem& item : staticDraws_) {
-        if (item.mesh == nullptr || !item.mesh->Valid()) {
+    for (const FStaticDrawItem& Item : StaticDraws) {
+        if (Item.Mesh == nullptr || !Item.Mesh->Valid()) {
             continue;
         }
 
-        const FMaterial& material = item.material;
-        const glm::mat4& model = item.model;
-        const glm::mat4 mvp = projection * view * model;
+        const FMaterial& LocalMaterial = Item.Material;
+        const glm::mat4& LocalModel = Item.Model;
+        const glm::mat4 Mvp = InProjection * InView * LocalModel;
 
-        unlitShader_.SetMat4("uMVP", glm::value_ptr(mvp));
-        unlitShader_.SetMat4("uModel", glm::value_ptr(model));
-        unlitShader_.SetVec3("uAlbedo", material.albedo.x, material.albedo.y, material.albedo.z);
+        UnlitShader.SetMat4("uMVP", glm::value_ptr(Mvp));
+        UnlitShader.SetMat4("uModel", glm::value_ptr(LocalModel));
+        UnlitShader.SetVec3("uAlbedo", LocalMaterial.Albedo.x, LocalMaterial.Albedo.y, LocalMaterial.Albedo.z);
 
         // Pass 1: establish closest depth (both windings compete).
         glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
         glDepthFunc(GL_LESS);
-        item.mesh->Draw();
+        Item.Mesh->Draw();
         // Pass 2: solid color only on the winning depth samples.
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
         glDepthFunc(GL_EQUAL);
-        item.mesh->Draw();
+        Item.Mesh->Draw();
         glDepthFunc(GL_LESS);
 
-        ++frameStats_.objectsTotal;
-        ++frameStats_.objectsVisible;
-        ++frameStats_.drawsSubmitted;
-        frameStats_.trianglesSubmitted += item.mesh->TriangleCount();
-        (void)level;
-        (void)lightSpace;
-        (void)receiveShadows;
-        (void)shadowSourceAngle;
+        ++FrameStats.ObjectsTotal;
+        ++FrameStats.ObjectsVisible;
+        ++FrameStats.DrawsSubmitted;
+        FrameStats.TrianglesSubmitted += Item.Mesh->TriangleCount();
+        (void)Level;
+        (void)LightSpace;
+        (void)bInReceiveShadows;
+        (void)ShadowSourceAngle;
     }
 
     glEnable(GL_CULL_FACE);
 }
 
-void FSceneRenderer::drawDebug(const ULevel& level, const UCameraComponent& camera, const glm::mat4& lightSpace,
-                         bool hasLightSpace) {
-    if (!debugDrawEnabled_ || !debugDraw_.IsValid()) {
+void FSceneRenderer::DrawDebug(const ULevel& Level, const UCameraComponent& Camera, const glm::mat4& LightSpace,
+                         bool bHasLightSpace) {
+    if (!bDebugDrawEnabled || !DebugDraw.IsValid()) {
         return;
     }
 
-    debugDraw_.Clear();
+    DebugDraw.Clear();
 
-    constexpr glm::vec3 kAabbColor{0.2f, 0.95f, 0.35f};
-    constexpr glm::vec3 kHiddenAabbColor{0.95f, 0.35f, 0.85f}; // BlockingVolume / hidden
-    constexpr glm::vec3 kFrustumColor{1.0f, 0.85f, 0.15f};
+    constexpr glm::vec3 AabbColor{0.2f, 0.95f, 0.35f};
+    constexpr glm::vec3 HiddenAabbColor{0.95f, 0.35f, 0.85f}; // BlockingVolume / hidden
+    constexpr glm::vec3 FrustumColor{1.0f, 0.85f, 0.15f};
 
-    for (const UStaticMeshComponent& object : level.StaticMeshes()) {
-        if (object.mesh == nullptr || !object.mesh->Valid()) {
+    for (const UStaticMeshComponent& Object : Level.StaticMeshes()) {
+        if (Object.mesh == nullptr || !Object.mesh->Valid()) {
             continue;
         }
-        const FBox box = worldAabbFromObject(object);
-        debugDraw_.AddAabb(box.min, box.max, object.hidden ? kHiddenAabbColor : kAabbColor);
+        const FBox Box = WorldAabbFromObject(Object);
+        DebugDraw.AddAabb(Box.Min, Box.Max, Object.hidden ? HiddenAabbColor : AabbColor);
     }
 
-    if (hasLightSpace) {
-        debugDraw_.AddLightFrustum(lightSpace, kFrustumColor);
+    if (bHasLightSpace) {
+        DebugDraw.AddLightFrustum(LightSpace, FrustumColor);
     }
 
-    const glm::mat4 viewProjection = camera.ProjectionMatrix() * camera.ViewMatrix();
-    debugDraw_.Flush(viewProjection);
+    const glm::mat4 LocalViewProjection = Camera.ProjectionMatrix() * Camera.ViewMatrix();
+    DebugDraw.Flush(LocalViewProjection);
 }
 

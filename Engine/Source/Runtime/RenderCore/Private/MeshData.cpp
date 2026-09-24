@@ -7,56 +7,56 @@
 #include <vector>
 
 
-void ComputeTangents(FMeshData& data) {
-    if (data.empty()) {
+void ComputeTangents(FMeshData& Data) {
+    if (Data.empty()) {
         return;
     }
 
-    std::vector<glm::vec3> tanAcc(data.vertices.size(), glm::vec3(0.0f));
-    std::vector<glm::vec3> bitAcc(data.vertices.size(), glm::vec3(0.0f));
+    std::vector<glm::vec3> TanAcc(Data.Vertices.size(), glm::vec3(0.0f));
+    std::vector<glm::vec3> BitAcc(Data.Vertices.size(), glm::vec3(0.0f));
 
-    for (std::size_t i = 0; i + 2 < data.indices.size(); i += 3) {
-        const auto i0 = data.indices[i + 0];
-        const auto i1 = data.indices[i + 1];
-        const auto i2 = data.indices[i + 2];
+    for (std::size_t I = 0; I + 2 < Data.Indices.size(); I += 3) {
+        const auto I0 = Data.Indices[I + 0];
+        const auto I1 = Data.Indices[I + 1];
+        const auto I2 = Data.Indices[I + 2];
 
-        const FVertex& v0 = data.vertices[i0];
-        const FVertex& v1 = data.vertices[i1];
-        const FVertex& v2 = data.vertices[i2];
+        const FVertex& V0 = Data.Vertices[I0];
+        const FVertex& V1 = Data.Vertices[I1];
+        const FVertex& V2 = Data.Vertices[I2];
 
-        const glm::vec3 e1 = v1.position - v0.position;
-        const glm::vec3 e2 = v2.position - v0.position;
-        const glm::vec2 d1 = v1.texCoord - v0.texCoord;
-        const glm::vec2 d2 = v2.texCoord - v0.texCoord;
+        const glm::vec3 E1 = V1.Position - V0.Position;
+        const glm::vec3 E2 = V2.Position - V0.Position;
+        const glm::vec2 D1 = V1.TexCoord - V0.TexCoord;
+        const glm::vec2 D2 = V2.TexCoord - V0.TexCoord;
 
-        const float det = (d1.x * d2.y) - (d2.x * d1.y);
-        if (std::abs(det) < 1e-8f) {
+        const float Det = (D1.x * D2.y) - (D2.x * D1.y);
+        if (std::abs(Det) < 1e-8f) {
             continue;
         }
-        const float inv = 1.0f / det;
-        const glm::vec3 tangent = ((e1 * d2.y) - (e2 * d1.y)) * inv;
-        const glm::vec3 bitangent = ((e2 * d1.x) - (e1 * d2.x)) * inv;
-        tanAcc[i0] += tangent;
-        tanAcc[i1] += tangent;
-        tanAcc[i2] += tangent;
-        bitAcc[i0] += bitangent;
-        bitAcc[i1] += bitangent;
-        bitAcc[i2] += bitangent;
+        const float Inv = 1.0f / Det;
+        const glm::vec3 Tangent = ((E1 * D2.y) - (E2 * D1.y)) * Inv;
+        const glm::vec3 Bitangent = ((E2 * D1.x) - (E1 * D2.x)) * Inv;
+        TanAcc[I0] += Tangent;
+        TanAcc[I1] += Tangent;
+        TanAcc[I2] += Tangent;
+        BitAcc[I0] += Bitangent;
+        BitAcc[I1] += Bitangent;
+        BitAcc[I2] += Bitangent;
     }
 
-    for (std::size_t i = 0; i < data.vertices.size(); ++i) {
-        FVertex& vertex = data.vertices[i];
-        const glm::vec3 n = vertex.normal;
-        glm::vec3 t = tanAcc[i];
-        if (glm::dot(t, t) < 1e-8f) {
-            t = std::abs(n.y) < 0.9f ? glm::normalize(glm::cross(n, {0, 1, 0}))
-                                     : glm::normalize(glm::cross(n, {1, 0, 0}));
-            vertex.tangent = glm::vec4(t, 1.0f);
+    for (std::size_t I = 0; I < Data.Vertices.size(); ++I) {
+        FVertex& Vertex = Data.Vertices[I];
+        const glm::vec3 N = Vertex.Normal;
+        glm::vec3 T = TanAcc[I];
+        if (glm::dot(T, T) < 1e-8f) {
+            T = std::abs(N.y) < 0.9f ? glm::normalize(glm::cross(N, {0, 1, 0}))
+                                     : glm::normalize(glm::cross(N, {1, 0, 0}));
+            Vertex.Tangent = glm::vec4(T, 1.0f);
             continue;
         }
-        t = glm::normalize(t - (n * glm::dot(n, t)));
-        const float handedness = (glm::dot(glm::cross(n, t), bitAcc[i]) < 0.0f) ? -1.0f : 1.0f;
-        vertex.tangent = glm::vec4(t, handedness);
+        T = glm::normalize(T - (N * glm::dot(N, T)));
+        const float Handedness = (glm::dot(glm::cross(N, T), BitAcc[I]) < 0.0f) ? -1.0f : 1.0f;
+        Vertex.Tangent = glm::vec4(T, Handedness);
     }
 }
 

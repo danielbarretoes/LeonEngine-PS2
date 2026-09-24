@@ -11,342 +11,342 @@
 
 namespace {
 
-[[nodiscard]] std::string ExtLower(const std::string& path) {
-    const auto pos = path.find_last_of('.');
-    if (pos == std::string::npos) {
+[[nodiscard]] std::string ExtLower(const std::string& Path) {
+    const auto Pos = Path.find_last_of('.');
+    if (Pos == std::string::npos) {
         return {};
     }
-    std::string e = path.substr(pos);
-    for (char& c : e) {
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    std::string E = Path.substr(Pos);
+    for (char& C : E) {
+        C = static_cast<char>(std::tolower(static_cast<unsigned char>(C)));
     }
-    return e;
+    return E;
 }
 
-[[nodiscard]] std::string Trim(std::string s) {
-    while (!s.empty() && std::isspace(static_cast<unsigned char>(s.front()))) {
-        s.erase(s.begin());
+[[nodiscard]] std::string Trim(std::string S) {
+    while (!S.empty() && std::isspace(static_cast<unsigned char>(S.front()))) {
+        S.erase(S.begin());
     }
-    while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back()))) {
-        s.pop_back();
+    while (!S.empty() && std::isspace(static_cast<unsigned char>(S.back()))) {
+        S.pop_back();
     }
-    return s;
+    return S;
 }
 
-[[nodiscard]] std::string StripComment(std::string line) {
-    const auto hash = line.find('#');
-    if (hash != std::string::npos) {
-        line = line.substr(0, hash);
+[[nodiscard]] std::string StripComment(std::string Line) {
+    const auto Hash = Line.find('#');
+    if (Hash != std::string::npos) {
+        Line = Line.substr(0, Hash);
     }
-    const auto semi = line.find(';');
-    if (semi != std::string::npos) {
-        line = line.substr(0, semi);
+    const auto Semi = Line.find(';');
+    if (Semi != std::string::npos) {
+        Line = Line.substr(0, Semi);
     }
-    return Trim(std::move(line));
+    return Trim(std::move(Line));
 }
 
-[[nodiscard]] bool ParseBool(const std::string& v, bool fallback) {
-    std::string s = v;
-    for (char& c : s) {
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+[[nodiscard]] bool ParseBool(const std::string& V, bool bFallback) {
+    std::string S = V;
+    for (char& C : S) {
+        C = static_cast<char>(std::tolower(static_cast<unsigned char>(C)));
     }
-    if (s == "1" || s == "true" || s == "yes" || s == "on") {
+    if (S == "1" || S == "true" || S == "yes" || S == "on") {
         return true;
     }
-    if (s == "0" || s == "false" || s == "no" || s == "off") {
+    if (S == "0" || S == "false" || S == "no" || S == "off") {
         return false;
     }
-    return fallback;
+    return bFallback;
 }
 
-[[nodiscard]] bool ParseFloat(const std::string& v, float& out) {
+[[nodiscard]] bool ParseFloat(const std::string& V, float& Out) {
     try {
-        size_t idx = 0;
-        out = std::stof(v, &idx);
-        return idx > 0;
+        size_t Idx = 0;
+        Out = std::stof(V, &Idx);
+        return Idx > 0;
     } catch (...) {
         return false;
     }
 }
 
-[[nodiscard]] bool ParseVec3(const std::string& v, glm::vec3& out) {
-    std::stringstream ss(v);
-    char comma = 0;
-    float a = 0.0f;
-    float b = 0.0f;
-    float c = 0.0f;
-    if (!(ss >> a)) {
+[[nodiscard]] bool ParseVec3(const std::string& V, glm::vec3& Out) {
+    std::stringstream Ss(V);
+    char Comma = 0;
+    float A = 0.0f;
+    float B = 0.0f;
+    float C = 0.0f;
+    if (!(Ss >> A)) {
         return false;
     }
-    if (ss >> comma && comma == ',') {
-        if (!(ss >> b)) {
+    if (Ss >> Comma && Comma == ',') {
+        if (!(Ss >> B)) {
             return false;
         }
-        if (!(ss >> comma) || comma != ',') {
+        if (!(Ss >> Comma) || Comma != ',') {
             return false;
         }
-        if (!(ss >> c)) {
+        if (!(Ss >> C)) {
             return false;
         }
-        out = {a, b, c};
+        Out = {A, B, C};
         return true;
     }
     // Single scalar → gray
-    out = {a, a, a};
+    Out = {A, A, A};
     return true;
 }
 
-[[nodiscard]] bool ParseVec2(const std::string& v, glm::vec2& out) {
-    std::stringstream ss(v);
-    char comma = 0;
-    float a = 0.0f;
-    float b = 0.0f;
-    if (!(ss >> a)) {
+[[nodiscard]] bool ParseVec2(const std::string& V, glm::vec2& Out) {
+    std::stringstream Ss(V);
+    char Comma = 0;
+    float A = 0.0f;
+    float B = 0.0f;
+    if (!(Ss >> A)) {
         return false;
     }
-    if (ss >> comma && comma == ',') {
-        if (!(ss >> b)) {
+    if (Ss >> Comma && Comma == ',') {
+        if (!(Ss >> B)) {
             return false;
         }
-        out = {a, b};
+        Out = {A, B};
         return true;
     }
-    out = {a, a};
+    Out = {A, A};
     return true;
 }
 
-void ApplyTextureKey(FResourceCache& resources, FMaterial& material, const std::string& key,
-                     const std::string& value) {
-    if (value.empty()) {
+void ApplyTextureKey(FResourceCache& Resources, FMaterial& InMaterial, const std::string& Key,
+                     const std::string& Value) {
+    if (Value.empty()) {
         return;
     }
-    std::string k = key;
-    for (char& c : k) {
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    std::string K = Key;
+    for (char& C : K) {
+        C = static_cast<char>(std::tolower(static_cast<unsigned char>(C)));
     }
-    if (k == "basecolormap" || k == "albedomap" || k == "diffusemap") {
-        if (value == "checker") {
-            material.albedoMap = resources.CheckerTexture(64);
+    if (K == "basecolormap" || K == "albedomap" || K == "diffusemap") {
+        if (Value == "checker") {
+            InMaterial.AlbedoMap = Resources.CheckerTexture(64);
         } else {
-            material.albedoMap = resources.LoadTexture(FPaths::ResolveAssetPath(value));
+            InMaterial.AlbedoMap = Resources.LoadTexture(FPaths::ResolveAssetPath(Value));
         }
-    } else if (k == "normalmap") {
-        if (value == "bump") {
-            material.normalMap = resources.BumpNormalTexture(256);
+    } else if (K == "normalmap") {
+        if (Value == "bump") {
+            InMaterial.NormalMap = Resources.BumpNormalTexture(256);
         } else {
-            material.normalMap = resources.LoadTexture(FPaths::ResolveAssetPath(value));
+            InMaterial.NormalMap = Resources.LoadTexture(FPaths::ResolveAssetPath(Value));
         }
     }
 }
 
 } // namespace
 
-bool IsLeonMaterialPath(const std::string& path) {
-    return ExtLower(path) == ".lmat";
+bool IsLeonMaterialPath(const std::string& Path) {
+    return ExtLower(Path) == ".lmat";
 }
 
-bool LoadLeonMaterialDocument(const std::string& path, FLeonMaterialDocument& out) {
-    std::ifstream in(path);
-    if (!in.is_open()) {
-        std::cerr << "LeonMaterial: cannot open " << path << '\n';
+bool LoadLeonMaterialDocument(const std::string& Path, FLeonMaterialDocument& Out) {
+    std::ifstream In(Path);
+    if (!In.is_open()) {
+        std::cerr << "LeonMaterial: cannot open " << Path << '\n';
         return false;
     }
 
-    FLeonMaterialDocument doc{};
-    doc.material.shading = EMaterialShadingModel::BlinnPhong;
-    bool hasRoughness = false;
-    bool hasShininess = false;
-    std::string section;
+    FLeonMaterialDocument Doc{};
+    Doc.Material.Shading = EMaterialShadingModel::BlinnPhong;
+    bool bHasRoughness = false;
+    bool bHasShininess = false;
+    std::string Section;
 
-    std::string line;
-    while (std::getline(in, line)) {
-        line = StripComment(std::move(line));
-        if (line.empty()) {
+    std::string Line;
+    while (std::getline(In, Line)) {
+        Line = StripComment(std::move(Line));
+        if (Line.empty()) {
             continue;
         }
-        if (line.front() == '[' && line.back() == ']') {
-            section = line.substr(1, line.size() - 2);
-            for (char& c : section) {
-                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        if (Line.front() == '[' && Line.back() == ']') {
+            Section = Line.substr(1, Line.size() - 2);
+            for (char& C : Section) {
+                C = static_cast<char>(std::tolower(static_cast<unsigned char>(C)));
             }
             continue;
         }
-        const auto eq = line.find('=');
-        if (eq == std::string::npos) {
-            std::cerr << "LeonMaterial: ignoring line without '=': " << path << '\n';
+        const auto Eq = Line.find('=');
+        if (Eq == std::string::npos) {
+            std::cerr << "LeonMaterial: ignoring line without '=': " << Path << '\n';
             continue;
         }
-        std::string key = Trim(line.substr(0, eq));
-        std::string value = Trim(line.substr(eq + 1));
-        std::string keyLower = key;
-        for (char& c : keyLower) {
-            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        std::string Key = Trim(Line.substr(0, Eq));
+        std::string Value = Trim(Line.substr(Eq + 1));
+        std::string KeyLower = Key;
+        for (char& C : KeyLower) {
+            C = static_cast<char>(std::tolower(static_cast<unsigned char>(C)));
         }
 
-        if (section == "info") {
-            if (keyLower == "name") {
-                doc.name = value;
-            } else if (keyLower == "shadingmodel" || keyLower == "shading") {
-                std::string v = value;
-                for (char& c : v) {
-                    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        if (Section == "info") {
+            if (KeyLower == "name") {
+                Doc.Name = Value;
+            } else if (KeyLower == "shadingmodel" || KeyLower == "shading") {
+                std::string V = Value;
+                for (char& C : V) {
+                    C = static_cast<char>(std::tolower(static_cast<unsigned char>(C)));
                 }
-                doc.material.shading =
-                    (v == "unlit") ? EMaterialShadingModel::Unlit : EMaterialShadingModel::BlinnPhong;
+                Doc.Material.Shading =
+                    (V == "unlit") ? EMaterialShadingModel::Unlit : EMaterialShadingModel::BlinnPhong;
             } else {
-                std::cerr << "LeonMaterial: unknown [Info] key '" << key << "' in " << path << '\n';
+                std::cerr << "LeonMaterial: unknown [Info] key '" << Key << "' in " << Path << '\n';
             }
             continue;
         }
 
-        if (section == "textures" || keyLower.find("map") != std::string::npos) {
-            if (keyLower == "basecolormap" || keyLower == "albedomap" || keyLower == "diffusemap") {
-                doc.baseColorMapPath = value;
-            } else if (keyLower == "normalmap") {
-                doc.normalMapPath = value;
-            } else if (section == "textures") {
-                std::cerr << "LeonMaterial: unknown [Textures] key '" << key << "' in " << path
+        if (Section == "textures" || KeyLower.find("map") != std::string::npos) {
+            if (KeyLower == "basecolormap" || KeyLower == "albedomap" || KeyLower == "diffusemap") {
+                Doc.BaseColorMapPath = Value;
+            } else if (KeyLower == "normalmap") {
+                Doc.NormalMapPath = Value;
+            } else if (Section == "textures") {
+                std::cerr << "LeonMaterial: unknown [Textures] key '" << Key << "' in " << Path
                           << '\n';
             }
             continue;
         }
 
-        if (keyLower == "basecolor" || keyLower == "albedo") {
-            if (!ParseVec3(value, doc.material.albedo)) {
-                std::cerr << "LeonMaterial: bad BaseColor '" << value << "' in " << path << '\n';
+        if (KeyLower == "basecolor" || KeyLower == "albedo") {
+            if (!ParseVec3(Value, Doc.Material.Albedo)) {
+                std::cerr << "LeonMaterial: bad BaseColor '" << Value << "' in " << Path << '\n';
             }
-        } else if (keyLower == "specular") {
-            if (!ParseVec3(value, doc.material.specular)) {
-                std::cerr << "LeonMaterial: bad Specular '" << value << "' in " << path << '\n';
+        } else if (KeyLower == "specular") {
+            if (!ParseVec3(Value, Doc.Material.Specular)) {
+                std::cerr << "LeonMaterial: bad Specular '" << Value << "' in " << Path << '\n';
             }
-        } else if (keyLower == "metallic") {
-            float f = doc.material.metallic;
-            if (ParseFloat(value, f)) {
-                doc.material.metallic = std::clamp(f, 0.0f, 1.0f);
+        } else if (KeyLower == "metallic") {
+            float F = Doc.Material.Metallic;
+            if (ParseFloat(Value, F)) {
+                Doc.Material.Metallic = std::clamp(F, 0.0f, 1.0f);
             } else {
-                std::cerr << "LeonMaterial: bad Metallic '" << value << "' in " << path << '\n';
+                std::cerr << "LeonMaterial: bad Metallic '" << Value << "' in " << Path << '\n';
             }
-        } else if (keyLower == "roughness") {
-            float f = doc.material.roughness;
-            if (ParseFloat(value, f)) {
-                doc.material.roughness = std::clamp(f, 0.04f, 1.0f);
-                hasRoughness = true;
+        } else if (KeyLower == "roughness") {
+            float F = Doc.Material.Roughness;
+            if (ParseFloat(Value, F)) {
+                Doc.Material.Roughness = std::clamp(F, 0.04f, 1.0f);
+                bHasRoughness = true;
             } else {
-                std::cerr << "LeonMaterial: bad Roughness '" << value << "' in " << path << '\n';
+                std::cerr << "LeonMaterial: bad Roughness '" << Value << "' in " << Path << '\n';
             }
-        } else if (keyLower == "opacity" || keyLower == "alpha") {
-            float f = doc.material.alpha;
-            if (ParseFloat(value, f)) {
-                doc.material.alpha = std::clamp(f, 0.0f, 1.0f);
+        } else if (KeyLower == "opacity" || KeyLower == "alpha") {
+            float F = Doc.Material.Alpha;
+            if (ParseFloat(Value, F)) {
+                Doc.Material.Alpha = std::clamp(F, 0.0f, 1.0f);
             } else {
-                std::cerr << "LeonMaterial: bad Opacity '" << value << "' in " << path << '\n';
+                std::cerr << "LeonMaterial: bad Opacity '" << Value << "' in " << Path << '\n';
             }
-        } else if (keyLower == "shininess") {
-            float f = doc.material.shininess;
-            if (ParseFloat(value, f)) {
-                doc.material.shininess = f;
-                hasShininess = true;
+        } else if (KeyLower == "shininess") {
+            float F = Doc.Material.Shininess;
+            if (ParseFloat(Value, F)) {
+                Doc.Material.Shininess = F;
+                bHasShininess = true;
             } else {
-                std::cerr << "LeonMaterial: bad Shininess '" << value << "' in " << path << '\n';
+                std::cerr << "LeonMaterial: bad Shininess '" << Value << "' in " << Path << '\n';
             }
-        } else if (keyLower == "uvscale" || keyLower == "tiling") {
-            if (!ParseVec2(value, doc.material.uvScale)) {
-                std::cerr << "LeonMaterial: bad UVScale '" << value << "' in " << path << '\n';
+        } else if (KeyLower == "uvscale" || KeyLower == "tiling") {
+            if (!ParseVec2(Value, Doc.Material.UvScale)) {
+                std::cerr << "LeonMaterial: bad UVScale '" << Value << "' in " << Path << '\n';
             }
-        } else if (keyLower == "castsshadows") {
-            doc.material.castsShadows = ParseBool(value, doc.material.castsShadows);
-        } else if (keyLower == "planarmirror") {
-            doc.material.planarMirror = ParseBool(value, doc.material.planarMirror);
-        } else if (keyLower == "unlit") {
-            if (ParseBool(value, false)) {
-                doc.material.shading = EMaterialShadingModel::Unlit;
+        } else if (KeyLower == "castsshadows") {
+            Doc.Material.bCastsShadows = ParseBool(Value, Doc.Material.bCastsShadows);
+        } else if (KeyLower == "planarmirror") {
+            Doc.Material.bPlanarMirror = ParseBool(Value, Doc.Material.bPlanarMirror);
+        } else if (KeyLower == "unlit") {
+            if (ParseBool(Value, false)) {
+                Doc.Material.Shading = EMaterialShadingModel::Unlit;
             }
         } else {
-            std::cerr << "LeonMaterial: unknown key '" << key << "' in " << path << '\n';
+            std::cerr << "LeonMaterial: unknown key '" << Key << "' in " << Path << '\n';
         }
     }
 
-    if (!hasRoughness) {
-        doc.material.syncRoughnessFromShininess();
+    if (!bHasRoughness) {
+        Doc.Material.SyncRoughnessFromShininess();
     }
-    if (doc.name.empty()) {
-        doc.name = "Material";
+    if (Doc.Name.empty()) {
+        Doc.Name = "Material";
     }
-    out = std::move(doc);
+    Out = std::move(Doc);
     return true;
 }
 
-bool LoadLeonMaterialFile(FResourceCache& resources, const std::string& path, FMaterial& out) {
-    FLeonMaterialDocument doc;
-    if (!LoadLeonMaterialDocument(path, doc)) {
+bool LoadLeonMaterialFile(FResourceCache& Resources, const std::string& Path, FMaterial& Out) {
+    FLeonMaterialDocument Doc;
+    if (!LoadLeonMaterialDocument(Path, Doc)) {
         return false;
     }
-    if (!doc.baseColorMapPath.empty()) {
-        ApplyTextureKey(resources, doc.material, "basecolormap", doc.baseColorMapPath);
+    if (!Doc.BaseColorMapPath.empty()) {
+        ApplyTextureKey(Resources, Doc.Material, "basecolormap", Doc.BaseColorMapPath);
     }
-    if (!doc.normalMapPath.empty()) {
-        ApplyTextureKey(resources, doc.material, "normalmap", doc.normalMapPath);
+    if (!Doc.NormalMapPath.empty()) {
+        ApplyTextureKey(Resources, Doc.Material, "normalmap", Doc.NormalMapPath);
     }
-    out = std::move(doc.material);
+    Out = std::move(Doc.Material);
     return true;
 }
 
-bool SaveLeonMaterialFile(const std::string& path, const std::string& name,
-                          const FMaterial& material, const std::string& baseColorMapPath,
-                          const std::string& normalMapPath) {
-    std::ostringstream out;
-    out << "# Leon Material (.lmat) — Unreal Material Instance–like parameters\n";
-    out << "# version 1\n\n";
-    out << "[Info]\n";
-    out << "Name=" << (name.empty() ? "Material" : name) << '\n';
-    out << "ShadingModel="
-        << (material.shading == EMaterialShadingModel::Unlit ? "Unlit" : "DefaultLit") << "\n\n";
-    out << "[Parameters]\n";
-    out << "BaseColor=" << material.albedo.x << ',' << material.albedo.y << ',' << material.albedo.z
+bool SaveLeonMaterialFile(const std::string& Path, const std::string& InName,
+                          const FMaterial& InMaterial, const std::string& InBaseColorMapPath,
+                          const std::string& InNormalMapPath) {
+    std::ostringstream Out;
+    Out << "# Leon Material (.lmat) — Unreal Material Instance–like parameters\n";
+    Out << "# version 1\n\n";
+    Out << "[Info]\n";
+    Out << "Name=" << (InName.empty() ? "Material" : InName) << '\n';
+    Out << "ShadingModel="
+        << (InMaterial.Shading == EMaterialShadingModel::Unlit ? "Unlit" : "DefaultLit") << "\n\n";
+    Out << "[Parameters]\n";
+    Out << "BaseColor=" << InMaterial.Albedo.x << ',' << InMaterial.Albedo.y << ',' << InMaterial.Albedo.z
         << '\n';
-    out << "Specular=" << material.specular.x << ',' << material.specular.y << ','
-        << material.specular.z << '\n';
-    out << "Metallic=" << material.metallic << '\n';
-    out << "Roughness=" << material.roughness << '\n';
-    out << "Opacity=" << material.alpha << '\n';
-    out << "Shininess=" << material.shininess << '\n';
-    out << "UVScale=" << material.uvScale.x << ',' << material.uvScale.y << '\n';
-    out << "CastsShadows=" << (material.castsShadows ? "true" : "false") << '\n';
-    out << "PlanarMirror=" << (material.planarMirror ? "true" : "false") << "\n\n";
-    out << "[Textures]\n";
-    out << "BaseColorMap=" << baseColorMapPath << '\n';
-    out << "NormalMap=" << normalMapPath << '\n';
-    if (!FFileHelper::WriteTextFileAtomic(path, out.str())) {
-        std::cerr << "LeonMaterial: cannot write " << path << '\n';
+    Out << "Specular=" << InMaterial.Specular.x << ',' << InMaterial.Specular.y << ','
+        << InMaterial.Specular.z << '\n';
+    Out << "Metallic=" << InMaterial.Metallic << '\n';
+    Out << "Roughness=" << InMaterial.Roughness << '\n';
+    Out << "Opacity=" << InMaterial.Alpha << '\n';
+    Out << "Shininess=" << InMaterial.Shininess << '\n';
+    Out << "UVScale=" << InMaterial.UvScale.x << ',' << InMaterial.UvScale.y << '\n';
+    Out << "CastsShadows=" << (InMaterial.bCastsShadows ? "true" : "false") << '\n';
+    Out << "PlanarMirror=" << (InMaterial.bPlanarMirror ? "true" : "false") << "\n\n";
+    Out << "[Textures]\n";
+    Out << "BaseColorMap=" << InBaseColorMapPath << '\n';
+    Out << "NormalMap=" << InNormalMapPath << '\n';
+    if (!FFileHelper::WriteTextFileAtomic(Path, Out.str())) {
+        std::cerr << "LeonMaterial: cannot write " << Path << '\n';
         return false;
     }
     return true;
 }
 
-std::string MakeDefaultLeonMaterialText(const std::string& name, const glm::vec3& baseColor,
-                                        float metallic, float roughness) {
-    FMaterial m{};
-    m.albedo = baseColor;
-    m.metallic = metallic;
-    m.roughness = std::clamp(roughness, 0.04f, 1.0f);
-    m.shininess = 32.0f;
-    std::ostringstream oss;
+std::string MakeDefaultLeonMaterialText(const std::string& InName, const glm::vec3& BaseColor,
+                                        float Metallic, float Roughness) {
+    FMaterial M{};
+    M.Albedo = BaseColor;
+    M.Metallic = Metallic;
+    M.Roughness = std::clamp(Roughness, 0.04f, 1.0f);
+    M.Shininess = 32.0f;
+    std::ostringstream Oss;
     // Reuse writer via temp logic inline
-    oss << "# Leon Material (.lmat) — Unreal Material Instance–like parameters\n";
-    oss << "# version 1\n\n";
-    oss << "[Info]\nName=" << (name.empty() ? "M_New" : name) << "\n";
-    oss << "ShadingModel=DefaultLit\n\n";
-    oss << "[Parameters]\n";
-    oss << "BaseColor=" << baseColor.x << ',' << baseColor.y << ',' << baseColor.z << '\n';
-    oss << "Specular=0.04,0.04,0.04\n";
-    oss << "Metallic=" << metallic << '\n';
-    oss << "Roughness=" << m.roughness << '\n';
-    oss << "Opacity=1\n";
-    oss << "UVScale=1,1\n";
-    oss << "CastsShadows=true\n\n";
-    oss << "[Textures]\n";
-    oss << "BaseColorMap=\n";
-    oss << "NormalMap=\n";
-    return oss.str();
+    Oss << "# Leon Material (.lmat) — Unreal Material Instance–like parameters\n";
+    Oss << "# version 1\n\n";
+    Oss << "[Info]\nName=" << (InName.empty() ? "M_New" : InName) << "\n";
+    Oss << "ShadingModel=DefaultLit\n\n";
+    Oss << "[Parameters]\n";
+    Oss << "BaseColor=" << BaseColor.x << ',' << BaseColor.y << ',' << BaseColor.z << '\n';
+    Oss << "Specular=0.04,0.04,0.04\n";
+    Oss << "Metallic=" << Metallic << '\n';
+    Oss << "Roughness=" << M.Roughness << '\n';
+    Oss << "Opacity=1\n";
+    Oss << "UVScale=1,1\n";
+    Oss << "CastsShadows=true\n\n";
+    Oss << "[Textures]\n";
+    Oss << "BaseColorMap=\n";
+    Oss << "NormalMap=\n";
+    return Oss.str();
 }
 

@@ -10,120 +10,120 @@
 namespace {
 
 struct FRawPlane {
-    float a = 0.0f;
-    float b = 0.0f;
-    float c = 0.0f;
-    float d = 0.0f;
+    float A = 0.0f;
+    float B = 0.0f;
+    float C = 0.0f;
+    float D = 0.0f;
 };
 
-FRawPlane normalizePlane(float a, float b, float c, float d) {
-    const float len = std::sqrt((a * a) + (b * b) + (c * c));
-    if (len > 1e-8f) {
-        const float inv = 1.0f / len;
-        return {.a = a * inv, .b = b * inv, .c = c * inv, .d = d * inv};
+FRawPlane NormalizePlane(float InA, float InB, float InC, float InD) {
+    const float Len = std::sqrt((InA * InA) + (InB * InB) + (InC * InC));
+    if (Len > 1e-8f) {
+        const float Inv = 1.0f / Len;
+        return {.A = InA * Inv, .B = InB * Inv, .C = InC * Inv, .D = InD * Inv};
     }
-    return {.a = 0.0f, .b = 1.0f, .c = 0.0f, .d = 0.0f};
+    return {.A = 0.0f, .B = 1.0f, .C = 0.0f, .D = 0.0f};
 }
 
 } // namespace
 
-FBox FBox::fromLocalTransformed(const glm::vec3& localMin, const glm::vec3& localMax,
-                                const glm::mat4& model) {
-    const std::array<glm::vec3, 8> corners = {{
-        {localMin.x, localMin.y, localMin.z},
-        {localMax.x, localMin.y, localMin.z},
-        {localMin.x, localMax.y, localMin.z},
-        {localMax.x, localMax.y, localMin.z},
-        {localMin.x, localMin.y, localMax.z},
-        {localMax.x, localMin.y, localMax.z},
-        {localMin.x, localMax.y, localMax.z},
-        {localMax.x, localMax.y, localMax.z},
+FBox FBox::FromLocalTransformed(const glm::vec3& LocalMin, const glm::vec3& LocalMax,
+                                const glm::mat4& Model) {
+    const std::array<glm::vec3, 8> Corners = {{
+        {LocalMin.x, LocalMin.y, LocalMin.z},
+        {LocalMax.x, LocalMin.y, LocalMin.z},
+        {LocalMin.x, LocalMax.y, LocalMin.z},
+        {LocalMax.x, LocalMax.y, LocalMin.z},
+        {LocalMin.x, LocalMin.y, LocalMax.z},
+        {LocalMax.x, LocalMin.y, LocalMax.z},
+        {LocalMin.x, LocalMax.y, LocalMax.z},
+        {LocalMax.x, LocalMax.y, LocalMax.z},
     }};
 
-    FBox box;
-    box.min = glm::vec3(std::numeric_limits<float>::max());
-    box.max = glm::vec3(std::numeric_limits<float>::lowest());
-    for (const glm::vec3& local : corners) {
-        const glm::vec3 world = glm::vec3(model * glm::vec4(local, 1.0f));
-        box.min = glm::min(box.min, world);
-        box.max = glm::max(box.max, world);
+    FBox Box;
+    Box.Min = glm::vec3(std::numeric_limits<float>::max());
+    Box.Max = glm::vec3(std::numeric_limits<float>::lowest());
+    for (const glm::vec3& Local : Corners) {
+        const glm::vec3 World = glm::vec3(Model * glm::vec4(Local, 1.0f));
+        Box.Min = glm::min(Box.Min, World);
+        Box.Max = glm::max(Box.Max, World);
     }
-    return box;
+    return Box;
 }
 
-bool FBox::intersectRay(const glm::vec3& origin, const glm::vec3& dir, float& outT) const {
-    constexpr float kEps = 1.0e-8f;
-    float tMin = 0.0f;
-    float tMax = std::numeric_limits<float>::max();
+bool FBox::IntersectRay(const glm::vec3& Origin, const glm::vec3& Dir, float& OutT) const {
+    constexpr float Eps = 1.0e-8f;
+    float TMin = 0.0f;
+    float TMax = std::numeric_limits<float>::max();
 
-    for (int axis = 0; axis < 3; ++axis) {
-        const float o = origin[axis];
-        const float d = dir[axis];
-        const float bMin = min[axis];
-        const float bMax = max[axis];
-        if (std::abs(d) < kEps) {
-            if (o < bMin || o > bMax) {
+    for (int Axis = 0; Axis < 3; ++Axis) {
+        const float O = Origin[Axis];
+        const float LocalD = Dir[Axis];
+        const float bMin = Min[Axis];
+        const float bMax = Max[Axis];
+        if (std::abs(LocalD) < Eps) {
+            if (O < bMin || O > bMax) {
                 return false;
             }
             continue;
         }
-        float t0 = (bMin - o) / d;
-        float t1 = (bMax - o) / d;
-        if (t0 > t1) {
-            std::swap(t0, t1);
+        float T0 = (bMin - O) / LocalD;
+        float T1 = (bMax - O) / LocalD;
+        if (T0 > T1) {
+            std::swap(T0, T1);
         }
-        tMin = std::max(tMin, t0);
-        tMax = std::min(tMax, t1);
-        if (tMin > tMax) {
+        TMin = std::max(TMin, T0);
+        TMax = std::min(TMax, T1);
+        if (TMin > TMax) {
             return false;
         }
     }
 
-    if (tMax < 0.0f) {
+    if (TMax < 0.0f) {
         return false;
     }
-    outT = tMin >= 0.0f ? tMin : tMax;
-    return outT >= 0.0f;
+    OutT = TMin >= 0.0f ? TMin : TMax;
+    return OutT >= 0.0f;
 }
 
-void FFrustum::extractFromViewProjection(const glm::mat4& viewProjection) {
+void FFrustum::ExtractFromViewProjection(const glm::mat4& ViewProjection) {
     // Gribb/Hartmann: combine clip-matrix columns into frustum planes.
-    const glm::mat4& m = viewProjection;
-    const std::array<FRawPlane, 6> raw = {{
-        normalizePlane(m[0][3] + m[0][0], m[1][3] + m[1][0], m[2][3] + m[2][0],
-                       m[3][3] + m[3][0]), // left
-        normalizePlane(m[0][3] - m[0][0], m[1][3] - m[1][0], m[2][3] - m[2][0],
-                       m[3][3] - m[3][0]), // right
-        normalizePlane(m[0][3] + m[0][1], m[1][3] + m[1][1], m[2][3] + m[2][1],
-                       m[3][3] + m[3][1]), // bottom
-        normalizePlane(m[0][3] - m[0][1], m[1][3] - m[1][1], m[2][3] - m[2][1],
-                       m[3][3] - m[3][1]), // top
-        normalizePlane(m[0][3] + m[0][2], m[1][3] + m[1][2], m[2][3] + m[2][2],
-                       m[3][3] + m[3][2]), // near
-        normalizePlane(m[0][3] - m[0][2], m[1][3] - m[1][2], m[2][3] - m[2][2],
-                       m[3][3] - m[3][2]), // far
+    const glm::mat4& M = ViewProjection;
+    const std::array<FRawPlane, 6> Raw = {{
+        NormalizePlane(M[0][3] + M[0][0], M[1][3] + M[1][0], M[2][3] + M[2][0],
+                       M[3][3] + M[3][0]), // left
+        NormalizePlane(M[0][3] - M[0][0], M[1][3] - M[1][0], M[2][3] - M[2][0],
+                       M[3][3] - M[3][0]), // right
+        NormalizePlane(M[0][3] + M[0][1], M[1][3] + M[1][1], M[2][3] + M[2][1],
+                       M[3][3] + M[3][1]), // bottom
+        NormalizePlane(M[0][3] - M[0][1], M[1][3] - M[1][1], M[2][3] - M[2][1],
+                       M[3][3] - M[3][1]), // top
+        NormalizePlane(M[0][3] + M[0][2], M[1][3] + M[1][2], M[2][3] + M[2][2],
+                       M[3][3] + M[3][2]), // near
+        NormalizePlane(M[0][3] - M[0][2], M[1][3] - M[1][2], M[2][3] - M[2][2],
+                       M[3][3] - M[3][2]), // far
     }};
 
-    auto assign = [](FPlane& dst, const FRawPlane& src) {
-        dst.normal = {src.a, src.b, src.c};
-        dst.distance = src.d;
+    auto Assign = [](FPlane& Dst, const FRawPlane& Src) {
+        Dst.Normal = {Src.A, Src.B, Src.C};
+        Dst.Distance = Src.D;
     };
-    assign(planes_[0], raw[0]);
-    assign(planes_[1], raw[1]);
-    assign(planes_[2], raw[2]);
-    assign(planes_[3], raw[3]);
-    assign(planes_[4], raw[4]);
-    assign(planes_[5], raw[5]);
+    Assign(Planes[0], Raw[0]);
+    Assign(Planes[1], Raw[1]);
+    Assign(Planes[2], Raw[2]);
+    Assign(Planes[3], Raw[3]);
+    Assign(Planes[4], Raw[4]);
+    Assign(Planes[5], Raw[5]);
 }
 
-bool FFrustum::intersectsAabb(const FBox& box) const {
-    for (const FPlane& plane : planes_) {
-        const glm::vec3 positive{
-            plane.normal.x >= 0.0f ? box.max.x : box.min.x,
-            plane.normal.y >= 0.0f ? box.max.y : box.min.y,
-            plane.normal.z >= 0.0f ? box.max.z : box.min.z,
+bool FFrustum::IntersectsAabb(const FBox& Box) const {
+    for (const FPlane& Plane : Planes) {
+        const glm::vec3 Positive{
+            Plane.Normal.x >= 0.0f ? Box.Max.x : Box.Min.x,
+            Plane.Normal.y >= 0.0f ? Box.Max.y : Box.Min.y,
+            Plane.Normal.z >= 0.0f ? Box.Max.z : Box.Min.z,
         };
-        if ((glm::dot(plane.normal, positive) + plane.distance) < 0.0f) {
+        if ((glm::dot(Plane.Normal, Positive) + Plane.Distance) < 0.0f) {
             return false;
         }
     }

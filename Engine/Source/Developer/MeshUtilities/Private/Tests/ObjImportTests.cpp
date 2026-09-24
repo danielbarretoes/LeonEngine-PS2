@@ -12,5 +12,5 @@ TEST_CASE("LoadObj imports the Cube fixture", "[MeshUtilities][OBJ]")
 
 	const FMeshData Data = LoadObj(Fixture.string());
 	REQUIRE_FALSE(Data.empty());
-	REQUIRE(Data.indices.size() == 36);
+	REQUIRE(Data.Indices.size() == 36);
 }

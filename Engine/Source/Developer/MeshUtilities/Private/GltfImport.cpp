@@ -65,18 +65,18 @@ void WriteMaterialFromGltf(const cgltf_material* mat, const std::string& name,
                            const fs::path& materialsDir, const fs::path& gltfDir,
                            FGltfImportedMaterial& outDesc) {
     FMaterial m{};
-    m.albedo = {0.8f, 0.8f, 0.8f};
-    m.metallic = 0.0f;
-    m.roughness = 0.5f;
+    m.Albedo = {0.8f, 0.8f, 0.8f};
+    m.Metallic = 0.0f;
+    m.Roughness = 0.5f;
     std::string baseMap;
     std::string normalMap;
 
     if (mat != nullptr && mat->has_pbr_metallic_roughness) {
         const auto& pbr = mat->pbr_metallic_roughness;
-        m.albedo = {pbr.base_color_factor[0], pbr.base_color_factor[1], pbr.base_color_factor[2]};
-        m.alpha = pbr.base_color_factor[3];
-        m.metallic = pbr.metallic_factor;
-        m.roughness = std::clamp(pbr.roughness_factor, 0.04f, 1.0f);
+        m.Albedo = {pbr.base_color_factor[0], pbr.base_color_factor[1], pbr.base_color_factor[2]};
+        m.Alpha = pbr.base_color_factor[3];
+        m.Metallic = pbr.metallic_factor;
+        m.Roughness = std::clamp(pbr.roughness_factor, 0.04f, 1.0f);
         if (pbr.base_color_texture.texture != nullptr) {
             (void)CopyTextureUri(pbr.base_color_texture.texture->image, gltfDir,
                                  materialsDir / "Textures", baseMap);
@@ -152,43 +152,43 @@ bool LoadStaticMeshFromGltf(const std::string& path, FMeshData& out,
             }
 
             const cgltf_size vcount = pos->count;
-            const std::size_t startIndex = mesh.indices.size();
+            const std::size_t startIndex = mesh.Indices.size();
             for (cgltf_size vi = 0; vi < vcount; ++vi) {
                 FVertex v{};
                 float tmp[4]{};
                 if (cgltf_accessor_read_float(pos, vi, tmp, 3)) {
-                    v.position = {tmp[0], tmp[1], tmp[2]};
+                    v.Position = {tmp[0], tmp[1], tmp[2]};
                 }
                 if (nrm != nullptr && cgltf_accessor_read_float(nrm, vi, tmp, 3)) {
-                    v.normal = {tmp[0], tmp[1], tmp[2]};
+                    v.Normal = {tmp[0], tmp[1], tmp[2]};
                 } else {
-                    v.normal = {0.0f, 1.0f, 0.0f};
+                    v.Normal = {0.0f, 1.0f, 0.0f};
                 }
                 if (uv != nullptr && cgltf_accessor_read_float(uv, vi, tmp, 2)) {
-                    v.texCoord = {tmp[0], tmp[1]};
+                    v.TexCoord = {tmp[0], tmp[1]};
                 }
-                mesh.vertices.push_back(v);
+                mesh.Vertices.push_back(v);
             }
 
             if (prim.indices != nullptr) {
                 for (cgltf_size ii = 0; ii < prim.indices->count; ++ii) {
-                    mesh.indices.push_back(baseVertex + ReadIndex(prim.indices, ii));
+                    mesh.Indices.push_back(baseVertex + ReadIndex(prim.indices, ii));
                 }
             } else {
                 for (cgltf_size ii = 0; ii < vcount; ++ii) {
-                    mesh.indices.push_back(baseVertex + static_cast<std::uint32_t>(ii));
+                    mesh.Indices.push_back(baseVertex + static_cast<std::uint32_t>(ii));
                 }
             }
 
             FMeshSection sm;
-            sm.indexOffset = static_cast<int>(startIndex);
-            sm.indexCount = static_cast<int>(mesh.indices.size() - startIndex);
-            sm.materialIndex = static_cast<int>(mesh.materials.size());
-            mesh.submeshes.push_back(sm);
+            sm.IndexOffset = static_cast<int>(startIndex);
+            sm.IndexCount = static_cast<int>(mesh.Indices.size() - startIndex);
+            sm.MaterialIndex = static_cast<int>(mesh.Materials.size());
+            mesh.Submeshes.push_back(sm);
 
             FMaterial slot{};
-            mesh.materials.push_back(slot);
-            mesh.albedoMapPaths.emplace_back();
+            mesh.Materials.push_back(slot);
+            mesh.AlbedoMapPaths.emplace_back();
 
             if (!materialsDir.empty() && outMaterials != nullptr && prim.material != nullptr) {
                 FGltfImportedMaterial desc;

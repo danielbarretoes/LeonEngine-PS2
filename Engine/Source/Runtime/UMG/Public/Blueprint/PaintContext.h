@@ -23,7 +23,7 @@ public:
 
     /// Draw multiline text. `x` is left/center/right of each line per `justify`.
     void DrawText(const std::string& text, float x, float y, const glm::vec3& color,
-                  float scale = kHudFontScale, ETextJustify justify = ETextJustify::Left);
+                  float scale = HudFontScale, ETextJustify justify = ETextJustify::Left);
 
     void MeasureText(const std::string& text, float scale, float& outWidth, float& outHeight) const;
 

@@ -24,12 +24,12 @@ TEST_CASE("LineTrace and QuerySupportY use TriangleMesh surface", "[physics][tri
     ULevel level;
     FMeshData data;
     // Flat plane at y=0.5 covering xz [-2,2]
-    data.vertices.push_back({{-2.0f, 0.5f, -2.0f}, {0, 1, 0}, {0, 0}, {1, 0, 0, 1}});
-    data.vertices.push_back({{2.0f, 0.5f, -2.0f}, {0, 1, 0}, {1, 0}, {1, 0, 0, 1}});
-    data.vertices.push_back({{2.0f, 0.5f, 2.0f}, {0, 1, 0}, {1, 1}, {1, 0, 0, 1}});
-    data.vertices.push_back({{-2.0f, 0.5f, 2.0f}, {0, 1, 0}, {0, 1}, {1, 0, 0, 1}});
-    data.indices = {0, 1, 2, 0, 2, 3};
-    data.submeshes.push_back({0, 6, 0});
+    data.Vertices.push_back({{-2.0f, 0.5f, -2.0f}, {0, 1, 0}, {0, 0}, {1, 0, 0, 1}});
+    data.Vertices.push_back({{2.0f, 0.5f, -2.0f}, {0, 1, 0}, {1, 0}, {1, 0, 0, 1}});
+    data.Vertices.push_back({{2.0f, 0.5f, 2.0f}, {0, 1, 0}, {1, 1}, {1, 0, 0, 1}});
+    data.Vertices.push_back({{-2.0f, 0.5f, 2.0f}, {0, 1, 0}, {0, 1}, {1, 0, 0, 1}});
+    data.Indices = {0, 1, 2, 0, 2, 3};
+    data.Submeshes.push_back({0, 6, 0});
 
     UStaticMeshComponent component{};
     component.mesh = std::make_shared<UStaticMesh>(UStaticMesh::CreateCpu(data));

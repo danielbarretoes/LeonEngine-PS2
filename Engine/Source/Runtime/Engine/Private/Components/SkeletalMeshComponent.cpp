@@ -93,8 +93,8 @@ void USkeletalMeshComponent::ApplyFitHeight(float fitHeight) {
     }
     const float scale = skeletalMesh_->FitUniformScale(fitHeight);
     constexpr float kGroundEpsilon = 0.008f;
-    const glm::vec3 mn = skeletalMesh_->LocalMin();
-    const glm::vec3 mx = skeletalMesh_->LocalMax();
+    const glm::vec3 mn = skeletalMesh_->GetLocalMin();
+    const glm::vec3 mx = skeletalMesh_->GetLocalMax();
     const glm::vec3 center = (mn + mx) * 0.5f;
     RelativeScale = {scale, scale, scale};
     RelativeLocation = {(-center.x) * scale, ((-mn.y) * scale) + kGroundEpsilon,
@@ -168,9 +168,9 @@ bool USkeletalMeshComponent::LoadFromFbx(const std::string& meshFbxPath,
         std::cerr << "SkeletalMeshComponent: GPU upload failed\n";
         return false;
     }
-    mesh->GetMaterial().albedo = {0.72f, 0.74f, 0.78f};
-    mesh->GetMaterial().shininess = 24.0f;
-    mesh->GetMaterial().syncRoughnessFromShininess();
+    mesh->GetMaterial().Albedo = {0.72f, 0.74f, 0.78f};
+    mesh->GetMaterial().Shininess = 24.0f;
+    mesh->GetMaterial().SyncRoughnessFromShininess();
 
     UAnimSequence& run = GetOrCreateSequence("Running");
     const std::string runPath = FPaths::ResolveAssetPath(runFbxPath);
@@ -218,9 +218,9 @@ bool USkeletalMeshComponent::LoadFromCooked(UGameEngine& engine, const std::stri
         const std::string matPath = joinRel(fs::path(meshJson).parent_path().string(), materialRel);
         mesh->SetMaterial(engine.GetResources().LoadMaterial(matPath));
     } else {
-        mesh->GetMaterial().albedo = {0.72f, 0.74f, 0.78f};
-        mesh->GetMaterial().shininess = 24.0f;
-        mesh->GetMaterial().syncRoughnessFromShininess();
+        mesh->GetMaterial().Albedo = {0.72f, 0.74f, 0.78f};
+        mesh->GetMaterial().Shininess = 24.0f;
+        mesh->GetMaterial().SyncRoughnessFromShininess();
     }
     SetSkeletalMesh(std::move(mesh));
 

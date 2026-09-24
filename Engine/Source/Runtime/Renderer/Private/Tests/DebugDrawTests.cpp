@@ -2,22 +2,22 @@
 #include "Debug/DebugDraw.h"
 
 TEST_CASE("DebugDraw batch accumulates and clears", "[debug][draw]") {
-    FDebugDraw draw;
-    REQUIRE(draw.IsEmpty());
+    FDebugDraw Draw;
+    REQUIRE(Draw.IsEmpty());
 
-    draw.AddLine({0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f});
-    REQUIRE_FALSE(draw.IsEmpty());
+    Draw.AddLine({0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f});
+    REQUIRE_FALSE(Draw.IsEmpty());
 
-    draw.Clear();
-    REQUIRE(draw.IsEmpty());
+    Draw.Clear();
+    REQUIRE(Draw.IsEmpty());
 
-    draw.AddAabb({-1.0f, -1.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 0.0f});
+    Draw.AddAabb({-1.0f, -1.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 0.0f});
     // AABB = 12 edges × 2 verts
-    REQUIRE_FALSE(draw.IsEmpty());
+    REQUIRE_FALSE(Draw.IsEmpty());
 
-    draw.AddArrow({0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f});
-    REQUIRE_FALSE(draw.IsEmpty());
+    Draw.AddArrow({0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f});
+    REQUIRE_FALSE(Draw.IsEmpty());
 
-    draw.Clear();
-    REQUIRE(draw.IsEmpty());
+    Draw.Clear();
+    REQUIRE(Draw.IsEmpty());
 }

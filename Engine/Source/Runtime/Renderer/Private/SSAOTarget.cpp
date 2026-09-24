@@ -8,33 +8,33 @@ FSSAOTarget::~FSSAOTarget() {
     Destroy();
 }
 
-bool FSSAOTarget::EnsureSize(int width, int height) {
-    if (width < 1 || height < 1) {
+bool FSSAOTarget::EnsureSize(int InWidth, int InHeight) {
+    if (InWidth < 1 || InHeight < 1) {
         return false;
     }
-    if (Valid() && width_ == width && height_ == height) {
+    if (Valid() && Width == InWidth && Height == InHeight) {
         return true;
     }
 
     Destroy();
-    width_ = width;
-    height_ = height;
+    Width = InWidth;
+    Height = InHeight;
 
-    for (int i = 0; i < 2; ++i) {
-        glGenFramebuffers(1, &fbo_[i]);
-        glGenTextures(1, &color_[i]);
-        glBindTexture(GL_TEXTURE_2D, color_[i]);
+    for (int I = 0; I < 2; ++I) {
+        glGenFramebuffers(1, &Fbo[I]);
+        glGenTextures(1, &Color[I]);
+        glBindTexture(GL_TEXTURE_2D, Color[I]);
         // R16F avoids contour banding that R8 + aoPower/tonemap makes visible on flat materials.
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_R16F, width_, height_, 0, GL_RED, GL_FLOAT, nullptr);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R16F, Width, Height, 0, GL_RED, GL_FLOAT, nullptr);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo_[i]);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color_[i], 0);
-        const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-        if (status != GL_FRAMEBUFFER_COMPLETE) {
+        glBindFramebuffer(GL_FRAMEBUFFER, Fbo[I]);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, Color[I], 0);
+        const GLenum Status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+        if (Status != GL_FRAMEBUFFER_COMPLETE) {
             std::cerr << "SsaoTarget framebuffer incomplete\n";
             Destroy();
             return false;
@@ -45,29 +45,29 @@ bool FSSAOTarget::EnsureSize(int width, int height) {
 }
 
 void FSSAOTarget::Destroy() {
-    for (int i = 0; i < 2; ++i) {
-        if (color_[i] != 0) {
-            glDeleteTextures(1, &color_[i]);
-            color_[i] = 0;
+    for (int I = 0; I < 2; ++I) {
+        if (Color[I] != 0) {
+            glDeleteTextures(1, &Color[I]);
+            Color[I] = 0;
         }
-        if (fbo_[i] != 0) {
-            glDeleteFramebuffers(1, &fbo_[i]);
-            fbo_[i] = 0;
+        if (Fbo[I] != 0) {
+            glDeleteFramebuffers(1, &Fbo[I]);
+            Fbo[I] = 0;
         }
     }
-    width_ = 0;
-    height_ = 0;
+    Width = 0;
+    Height = 0;
 }
 
-void FSSAOTarget::BindWrite(int index) const {
-    const int i = (index == 0) ? 0 : 1;
-    glBindFramebuffer(GL_FRAMEBUFFER, fbo_[i]);
-    glViewport(0, 0, width_, height_);
+void FSSAOTarget::BindWrite(int Index) const {
+    const int I = (Index == 0) ? 0 : 1;
+    glBindFramebuffer(GL_FRAMEBUFFER, Fbo[I]);
+    glViewport(0, 0, Width, Height);
 }
 
-void FSSAOTarget::BindColorTexture(int index, unsigned int unit) const {
-    const int i = (index == 0) ? 0 : 1;
-    glActiveTexture(GL_TEXTURE0 + unit);
-    glBindTexture(GL_TEXTURE_2D, color_[i]);
+void FSSAOTarget::BindColorTexture(int Index, unsigned int Unit) const {
+    const int I = (Index == 0) ? 0 : 1;
+    glActiveTexture(GL_TEXTURE0 + Unit);
+    glBindTexture(GL_TEXTURE_2D, Color[I]);
 }
 

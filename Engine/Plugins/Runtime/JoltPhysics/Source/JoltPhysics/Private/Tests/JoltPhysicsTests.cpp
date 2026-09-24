@@ -99,12 +99,12 @@ TEST_CASE("PhysScene Jolt dynamic rests on TriangleMesh static", "[physics][jolt
     ULevel level;
     FMeshData data;
     // Flat plane at y=1 covering xz [-3,3]
-    data.vertices.push_back({{-3.0f, 1.0f, -3.0f}, {0, 1, 0}, {0, 0}, {1, 0, 0, 1}});
-    data.vertices.push_back({{3.0f, 1.0f, -3.0f}, {0, 1, 0}, {1, 0}, {1, 0, 0, 1}});
-    data.vertices.push_back({{3.0f, 1.0f, 3.0f}, {0, 1, 0}, {1, 1}, {1, 0, 0, 1}});
-    data.vertices.push_back({{-3.0f, 1.0f, 3.0f}, {0, 1, 0}, {0, 1}, {1, 0, 0, 1}});
-    data.indices = {0, 1, 2, 0, 2, 3};
-    data.submeshes.push_back({0, 6, 0});
+    data.Vertices.push_back({{-3.0f, 1.0f, -3.0f}, {0, 1, 0}, {0, 0}, {1, 0, 0, 1}});
+    data.Vertices.push_back({{3.0f, 1.0f, -3.0f}, {0, 1, 0}, {1, 0}, {1, 0, 0, 1}});
+    data.Vertices.push_back({{3.0f, 1.0f, 3.0f}, {0, 1, 0}, {1, 1}, {1, 0, 0, 1}});
+    data.Vertices.push_back({{-3.0f, 1.0f, 3.0f}, {0, 1, 0}, {0, 1}, {1, 0, 0, 1}});
+    data.Indices = {0, 1, 2, 0, 2, 3};
+    data.Submeshes.push_back({0, 6, 0});
 
     UStaticMeshComponent component{};
     component.mesh = std::make_shared<UStaticMesh>(UStaticMesh::CreateCpu(data));

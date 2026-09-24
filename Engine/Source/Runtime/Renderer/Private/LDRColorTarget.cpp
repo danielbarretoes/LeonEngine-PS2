@@ -8,34 +8,34 @@ FLDRColorTarget::~FLDRColorTarget() {
     Destroy();
 }
 
-bool FLDRColorTarget::EnsureSize(int width, int height) {
-    if (width < 1 || height < 1) {
+bool FLDRColorTarget::EnsureSize(int InWidth, int InHeight) {
+    if (InWidth < 1 || InHeight < 1) {
         return false;
     }
-    if (Valid() && width_ == width && height_ == height) {
+    if (Valid() && Width == InWidth && Height == InHeight) {
         return true;
     }
 
     Destroy();
-    width_ = width;
-    height_ = height;
+    Width = InWidth;
+    Height = InHeight;
 
-    glGenFramebuffers(1, &fbo_);
-    glGenTextures(1, &colorTexture_);
+    glGenFramebuffers(1, &Fbo);
+    glGenTextures(1, &ColorTexture);
 
-    glBindTexture(GL_TEXTURE_2D, colorTexture_);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, width_, height_, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+    glBindTexture(GL_TEXTURE_2D, ColorTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, Width, Height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-    glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture_, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, Fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, ColorTexture, 0);
 
-    const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    const GLenum Status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    if (status != GL_FRAMEBUFFER_COMPLETE) {
+    if (Status != GL_FRAMEBUFFER_COMPLETE) {
         std::cerr << "LdrColorTarget framebuffer incomplete\n";
         Destroy();
         return false;
@@ -44,25 +44,25 @@ bool FLDRColorTarget::EnsureSize(int width, int height) {
 }
 
 void FLDRColorTarget::Destroy() {
-    if (colorTexture_ != 0) {
-        glDeleteTextures(1, &colorTexture_);
-        colorTexture_ = 0;
+    if (ColorTexture != 0) {
+        glDeleteTextures(1, &ColorTexture);
+        ColorTexture = 0;
     }
-    if (fbo_ != 0) {
-        glDeleteFramebuffers(1, &fbo_);
-        fbo_ = 0;
+    if (Fbo != 0) {
+        glDeleteFramebuffers(1, &Fbo);
+        Fbo = 0;
     }
-    width_ = 0;
-    height_ = 0;
+    Width = 0;
+    Height = 0;
 }
 
 void FLDRColorTarget::BindWrite() const {
-    glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
-    glViewport(0, 0, width_, height_);
+    glBindFramebuffer(GL_FRAMEBUFFER, Fbo);
+    glViewport(0, 0, Width, Height);
 }
 
-void FLDRColorTarget::BindColorTexture(unsigned int unit) const {
-    glActiveTexture(GL_TEXTURE0 + unit);
-    glBindTexture(GL_TEXTURE_2D, colorTexture_);
+void FLDRColorTarget::BindColorTexture(unsigned int Unit) const {
+    glActiveTexture(GL_TEXTURE0 + Unit);
+    glBindTexture(GL_TEXTURE_2D, ColorTexture);
 }
 

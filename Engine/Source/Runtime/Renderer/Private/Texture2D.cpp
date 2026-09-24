@@ -11,9 +11,9 @@
 
 namespace {
 
-std::size_t pixelIndex(int x, int y, int size) {
-    const auto sx = static_cast<std::size_t>(size);
-    return (static_cast<std::size_t>(y) * sx) + static_cast<std::size_t>(x);
+std::size_t PixelIndex(int X, int Y, int Size) {
+    const auto Sx = static_cast<std::size_t>(Size);
+    return (static_cast<std::size_t>(Y) * Sx) + static_cast<std::size_t>(X);
 }
 
 } // namespace
@@ -22,148 +22,148 @@ UTexture2D::~UTexture2D() {
     Destroy();
 }
 
-UTexture2D::UTexture2D(UTexture2D&& other) noexcept : id_(other.id_) {
-    other.id_ = 0;
+UTexture2D::UTexture2D(UTexture2D&& Other) noexcept : Id(Other.Id) {
+    Other.Id = 0;
 }
 
-UTexture2D& UTexture2D::operator=(UTexture2D&& other) noexcept {
-    if (this != &other) {
+UTexture2D& UTexture2D::operator=(UTexture2D&& Other) noexcept {
+    if (this != &Other) {
         Destroy();
-        id_ = other.id_;
-        other.id_ = 0;
+        Id = Other.Id;
+        Other.Id = 0;
     }
     return *this;
 }
 
-UTexture2D UTexture2D::Create(int width, int height, const unsigned char* rgba) {
-    UTexture2D texture;
-    if (width <= 0 || height <= 0 || rgba == nullptr) {
-        return texture;
+UTexture2D UTexture2D::Create(int Width, int Height, const unsigned char* Rgba) {
+    UTexture2D Texture;
+    if (Width <= 0 || Height <= 0 || Rgba == nullptr) {
+        return Texture;
     }
 
-    glGenTextures(1, &texture.id_);
-    glBindTexture(GL_TEXTURE_2D, texture.id_);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+    glGenTextures(1, &Texture.Id);
+    glBindTexture(GL_TEXTURE_2D, Texture.Id);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, Width, Height, 0, GL_RGBA, GL_UNSIGNED_BYTE, Rgba);
     glGenerateMipmap(GL_TEXTURE_2D);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glBindTexture(GL_TEXTURE_2D, 0);
-    return texture;
+    return Texture;
 }
 
-UTexture2D UTexture2D::CreateChecker(int size) {
-    size = std::max(2, size);
+UTexture2D UTexture2D::CreateChecker(int Size) {
+    Size = std::max(2, Size);
 
-    const auto count = pixelIndex(0, size, size);
-    std::vector<unsigned char> pixels(count * 4u);
-    const int cell = std::max(1, size / 8);
-    for (int y = 0; y < size; ++y) {
-        for (int x = 0; x < size; ++x) {
-            const bool dark = ((x / cell) + (y / cell)) % 2 == 0;
-            const unsigned char c =
-                dark ? static_cast<unsigned char>(60) : static_cast<unsigned char>(220);
-            const std::size_t i = pixelIndex(x, y, size) * 4u;
-            pixels[i + 0] = c;
-            pixels[i + 1] = c;
-            pixels[i + 2] = c;
-            pixels[i + 3] = 255;
+    const auto Count = PixelIndex(0, Size, Size);
+    std::vector<unsigned char> Pixels(Count * 4u);
+    const int Cell = std::max(1, Size / 8);
+    for (int Y = 0; Y < Size; ++Y) {
+        for (int X = 0; X < Size; ++X) {
+            const bool bDark = ((X / Cell) + (Y / Cell)) % 2 == 0;
+            const unsigned char C =
+                bDark ? static_cast<unsigned char>(60) : static_cast<unsigned char>(220);
+            const std::size_t I = PixelIndex(X, Y, Size) * 4u;
+            Pixels[I + 0] = C;
+            Pixels[I + 1] = C;
+            Pixels[I + 2] = C;
+            Pixels[I + 3] = 255;
         }
     }
-    return Create(size, size, pixels.data());
+    return Create(Size, Size, Pixels.data());
 }
 
-UTexture2D UTexture2D::CreateFlatNormal(int size) {
-    size = std::max(1, size);
-    const auto count = pixelIndex(0, size, size);
-    std::vector<unsigned char> pixels(count * 4u, 255);
-    for (std::size_t i = 0; i < pixels.size(); i += 4) {
-        pixels[i + 0] = 128; // X
-        pixels[i + 1] = 128; // Y
-        pixels[i + 2] = 255; // Z
-        pixels[i + 3] = 255;
+UTexture2D UTexture2D::CreateFlatNormal(int Size) {
+    Size = std::max(1, Size);
+    const auto Count = PixelIndex(0, Size, Size);
+    std::vector<unsigned char> Pixels(Count * 4u, 255);
+    for (std::size_t I = 0; I < Pixels.size(); I += 4) {
+        Pixels[I + 0] = 128; // X
+        Pixels[I + 1] = 128; // Y
+        Pixels[I + 2] = 255; // Z
+        Pixels[I + 3] = 255;
     }
-    return Create(size, size, pixels.data());
+    return Create(Size, Size, Pixels.data());
 }
 
-UTexture2D UTexture2D::CreateBumpNormal(int size) {
-    size = std::max(8, size);
+UTexture2D UTexture2D::CreateBumpNormal(int Size) {
+    Size = std::max(8, Size);
 
     // Height field ÔåÆ finite-difference normal map (tileable, intentionally strong).
-    const auto count = pixelIndex(0, size, size);
-    std::vector<float> height(count);
-    constexpr float kTwoPi = 6.28318530718f;
-    for (int y = 0; y < size; ++y) {
-        for (int x = 0; x < size; ++x) {
-            const auto u = static_cast<float>(x) / static_cast<float>(size);
-            const auto v = static_cast<float>(y) / static_cast<float>(size);
+    const auto Count = PixelIndex(0, Size, Size);
+    std::vector<float> Height(Count);
+    constexpr float TwoPi = 6.28318530718f;
+    for (int Y = 0; Y < Size; ++Y) {
+        for (int X = 0; X < Size; ++X) {
+            const auto U = static_cast<float>(X) / static_cast<float>(Size);
+            const auto V = static_cast<float>(Y) / static_cast<float>(Size);
             // Dense ripples + circular dimples so lighting/reflections clearly warp.
-            const float ripples =
-                (0.55f * std::sin(u * kTwoPi * 8.0f) * std::cos(v * kTwoPi * 6.0f)) +
-                (0.30f * std::sin((u + v) * kTwoPi * 10.0f));
-            const float cx = std::fmod(u * 4.0f, 1.0f) - 0.5f;
-            const float cy = std::fmod(v * 4.0f, 1.0f) - 0.5f;
-            const float dimple = 0.45f * std::exp(-18.0f * ((cx * cx) + (cy * cy)));
-            height[pixelIndex(x, y, size)] = ripples + dimple;
+            const float Ripples =
+                (0.55f * std::sin(U * TwoPi * 8.0f) * std::cos(V * TwoPi * 6.0f)) +
+                (0.30f * std::sin((U + V) * TwoPi * 10.0f));
+            const float Cx = std::fmod(U * 4.0f, 1.0f) - 0.5f;
+            const float Cy = std::fmod(V * 4.0f, 1.0f) - 0.5f;
+            const float Dimple = 0.45f * std::exp(-18.0f * ((Cx * Cx) + (Cy * Cy)));
+            Height[PixelIndex(X, Y, Size)] = Ripples + Dimple;
         }
     }
 
-    std::vector<unsigned char> pixels(count * 4u);
-    const float strength = 6.0f;
-    for (int y = 0; y < size; ++y) {
-        for (int x = 0; x < size; ++x) {
-            const int x0 = (x + size - 1) % size;
-            const int x1 = (x + 1) % size;
-            const int y0 = (y + size - 1) % size;
-            const int y1 = (y + 1) % size;
-            const float hL = height[pixelIndex(x0, y, size)];
-            const float hR = height[pixelIndex(x1, y, size)];
-            const float hD = height[pixelIndex(x, y0, size)];
-            const float hU = height[pixelIndex(x, y1, size)];
-            float nx = (hL - hR) * strength;
-            float ny = (hD - hU) * strength;
-            float nz = 1.0f;
-            const float invLen = 1.0f / std::sqrt(((nx * nx) + (ny * ny)) + (nz * nz));
-            nx *= invLen;
-            ny *= invLen;
-            nz *= invLen;
+    std::vector<unsigned char> Pixels(Count * 4u);
+    const float Strength = 6.0f;
+    for (int Y = 0; Y < Size; ++Y) {
+        for (int X = 0; X < Size; ++X) {
+            const int X0 = (X + Size - 1) % Size;
+            const int X1 = (X + 1) % Size;
+            const int Y0 = (Y + Size - 1) % Size;
+            const int Y1 = (Y + 1) % Size;
+            const float HL = Height[PixelIndex(X0, Y, Size)];
+            const float HR = Height[PixelIndex(X1, Y, Size)];
+            const float HD = Height[PixelIndex(X, Y0, Size)];
+            const float HU = Height[PixelIndex(X, Y1, Size)];
+            float Nx = (HL - HR) * Strength;
+            float Ny = (HD - HU) * Strength;
+            float Nz = 1.0f;
+            const float InvLen = 1.0f / std::sqrt(((Nx * Nx) + (Ny * Ny)) + (Nz * Nz));
+            Nx *= InvLen;
+            Ny *= InvLen;
+            Nz *= InvLen;
 
-            const std::size_t i = pixelIndex(x, y, size) * 4u;
-            pixels[i + 0] = static_cast<unsigned char>(((nx * 0.5f) + 0.5f) * 255.0f);
-            pixels[i + 1] = static_cast<unsigned char>(((ny * 0.5f) + 0.5f) * 255.0f);
-            pixels[i + 2] = static_cast<unsigned char>(((nz * 0.5f) + 0.5f) * 255.0f);
-            pixels[i + 3] = 255;
+            const std::size_t I = PixelIndex(X, Y, Size) * 4u;
+            Pixels[I + 0] = static_cast<unsigned char>(((Nx * 0.5f) + 0.5f) * 255.0f);
+            Pixels[I + 1] = static_cast<unsigned char>(((Ny * 0.5f) + 0.5f) * 255.0f);
+            Pixels[I + 2] = static_cast<unsigned char>(((Nz * 0.5f) + 0.5f) * 255.0f);
+            Pixels[I + 3] = 255;
         }
     }
-    return Create(size, size, pixels.data());
+    return Create(Size, Size, Pixels.data());
 }
 
-UTexture2D UTexture2D::LoadFromFile(const std::string& path) {
+UTexture2D UTexture2D::LoadFromFile(const std::string& Path) {
     stbi_set_flip_vertically_on_load(1);
-    int width = 0;
-    int height = 0;
-    int channels = 0;
-    unsigned char* data = stbi_load(path.c_str(), &width, &height, &channels, 4);
-    if (data == nullptr) {
-        std::cerr << "Failed to load texture: " << path << " (" << stbi_failure_reason() << ")\n";
+    int Width = 0;
+    int Height = 0;
+    int Channels = 0;
+    unsigned char* Data = stbi_load(Path.c_str(), &Width, &Height, &Channels, 4);
+    if (Data == nullptr) {
+        std::cerr << "Failed to load texture: " << Path << " (" << stbi_failure_reason() << ")\n";
         return {};
     }
 
-    UTexture2D texture = Create(width, height, data);
-    stbi_image_free(data);
-    return texture;
+    UTexture2D Texture = Create(Width, Height, Data);
+    stbi_image_free(Data);
+    return Texture;
 }
 
-void UTexture2D::Bind(unsigned int unit) const {
-    glActiveTexture(GL_TEXTURE0 + unit);
-    glBindTexture(GL_TEXTURE_2D, id_);
+void UTexture2D::Bind(unsigned int Unit) const {
+    glActiveTexture(GL_TEXTURE0 + Unit);
+    glBindTexture(GL_TEXTURE_2D, Id);
 }
 
 void UTexture2D::Destroy() {
-    if (id_ != 0) {
-        glDeleteTextures(1, &id_);
-        id_ = 0;
+    if (Id != 0) {
+        glDeleteTextures(1, &Id);
+        Id = 0;
     }
 }
 

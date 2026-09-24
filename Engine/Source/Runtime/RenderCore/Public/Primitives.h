@@ -7,8 +7,8 @@
 [[nodiscard]] FMeshData MakeCube();
 
 /// Axis-aligned ground plane on XZ (y = 0), centered at origin.
-[[nodiscard]] FMeshData MakePlane(float size, float uvScale = 1.0f);
+[[nodiscard]] FMeshData MakePlane(float Size, float UvScale = 1.0f);
 
 /// UV sphere centered at the origin with radius 0.5.
-[[nodiscard]] FMeshData MakeSphere(int segments = 24, int rings = 16);
+[[nodiscard]] FMeshData MakeSphere(int Segments = 24, int Rings = 16);
 

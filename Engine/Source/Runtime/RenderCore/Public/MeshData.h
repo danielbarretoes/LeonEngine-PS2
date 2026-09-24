@@ -9,23 +9,23 @@
 
 /// Contiguous index range drawn with one material slot.
 struct FMeshSection {
-    int indexOffset = 0; // in indices (not bytes)
-    int indexCount = 0;
-    int materialIndex = 0;
+    int IndexOffset = 0; // in indices (not bytes)
+    int IndexCount = 0;
+    int MaterialIndex = 0;
 };
 
 /// CPU-side mesh asset (no OpenGL handles).
 struct FMeshData {
-    std::vector<FVertex> vertices;
-    std::vector<std::uint32_t> indices;
-    std::vector<FMeshSection> submeshes;
-    std::vector<FMaterial> materials;
+    std::vector<FVertex> Vertices;
+    std::vector<std::uint32_t> Indices;
+    std::vector<FMeshSection> Submeshes;
+    std::vector<FMaterial> Materials;
     /// Parallel to materials; resolved to FMaterial::albedoMap by FResourceCache.
-    std::vector<std::string> albedoMapPaths;
+    std::vector<std::string> AlbedoMapPaths;
 
-    [[nodiscard]] bool empty() const { return vertices.empty() || indices.empty(); }
+    [[nodiscard]] bool empty() const { return Vertices.empty() || Indices.empty(); }
 };
 
 /// Orthonormalize tangents from triangle UVs (needed for normal mapping).
-void ComputeTangents(FMeshData& data);
+void ComputeTangents(FMeshData& Data);
 

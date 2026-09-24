@@ -9,41 +9,41 @@
 /// - low-res irradiance map (diffuse IBL / Lambertian convolution)
 class FEnvironmentMap {
 public:
-    static constexpr int kDefaultFaceSize = 512;
-    static constexpr int kDefaultIrradianceSize = 32;
+    static constexpr int DefaultFaceSize = 512;
+    static constexpr int DefaultIrradianceSize = 32;
 
     FEnvironmentMap() = default;
     ~FEnvironmentMap();
 
     FEnvironmentMap(const FEnvironmentMap&) = delete;
     FEnvironmentMap& operator=(const FEnvironmentMap&) = delete;
-    FEnvironmentMap(FEnvironmentMap&& other) noexcept;
-    FEnvironmentMap& operator=(FEnvironmentMap&& other) noexcept;
+    FEnvironmentMap(FEnvironmentMap&& Other) noexcept;
+    FEnvironmentMap& operator=(FEnvironmentMap&& Other) noexcept;
 
     /// Load Radiance HDR (.hdr) equirectangular → env cubemap + irradiance cubemap.
-    [[nodiscard]] static FEnvironmentMap LoadFromHdr(const std::string& path,
-                                            int faceSize = kDefaultFaceSize,
-                                            int irradianceSize = kDefaultIrradianceSize);
+    [[nodiscard]] static FEnvironmentMap LoadFromHdr(const std::string& Path,
+                                            int InFaceSize = DefaultFaceSize,
+                                            int IrradianceSize = DefaultIrradianceSize);
 
-    void Bind(unsigned int unit = 0) const;
-    void BindIrradiance(unsigned int unit) const;
+    void Bind(unsigned int Unit = 0) const;
+    void BindIrradiance(unsigned int Unit) const;
 
-    [[nodiscard]] bool Valid() const { return id_ != kInvalidTexture; }
-    [[nodiscard]] bool HasIrradiance() const { return irradianceId_ != kInvalidTexture; }
-    [[nodiscard]] FRHITextureId Id() const { return id_; }
-    [[nodiscard]] int FaceSize() const { return faceSize_; }
+    [[nodiscard]] bool Valid() const { return Id != InvalidTexture; }
+    [[nodiscard]] bool HasIrradiance() const { return IrradianceId != InvalidTexture; }
+    [[nodiscard]] FRHITextureId GetId() const { return Id; }
+    [[nodiscard]] int GetFaceSize() const { return FaceSize; }
     /// Number of mip levels (base + mips). Max LOD index is MipCount()-1.
-    [[nodiscard]] int MipCount() const { return mipCount_; }
+    [[nodiscard]] int GetMipCount() const { return MipCount; }
     [[nodiscard]] float MaxLod() const {
-        return mipCount_ > 0 ? static_cast<float>(mipCount_ - 1) : 0.0f;
+        return MipCount > 0 ? static_cast<float>(MipCount - 1) : 0.0f;
     }
 
 private:
     void Destroy();
 
-    FRHITextureId id_ = kInvalidTexture;
-    FRHITextureId irradianceId_ = kInvalidTexture;
-    int faceSize_ = 0;
-    int mipCount_ = 0;
+    FRHITextureId Id = InvalidTexture;
+    FRHITextureId IrradianceId = InvalidTexture;
+    int FaceSize = 0;
+    int MipCount = 0;
 };
 

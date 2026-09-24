@@ -11,186 +11,186 @@
 
 namespace {
 
-constexpr char kMagic[4] = {'L', 'M', 'S', 'H'};
-constexpr std::uint32_t kVersion = 1;
+constexpr char Magic[4] = {'L', 'M', 'S', 'H'};
+constexpr std::uint32_t Version = 1;
 
 #pragma pack(push, 1)
 struct FLeonMeshHeader {
-    char magic[4];
-    std::uint32_t version;
-    std::uint32_t flags;
-    std::uint32_t vertexCount;
-    std::uint32_t indexCount;
-    std::uint32_t submeshCount;
-    std::uint32_t materialSlotCount;
-    float aabbMin[3];
-    float aabbMax[3];
+    char Magic[4];
+    std::uint32_t Version;
+    std::uint32_t Flags;
+    std::uint32_t VertexCount;
+    std::uint32_t IndexCount;
+    std::uint32_t SubmeshCount;
+    std::uint32_t MaterialSlotCount;
+    float AabbMin[3];
+    float AabbMax[3];
 };
 #pragma pack(pop)
 
 struct FLeonMeshSection {
-    std::uint32_t indexOffset = 0;
-    std::uint32_t indexCount = 0;
-    std::uint32_t materialIndex = 0;
+    std::uint32_t IndexOffset = 0;
+    std::uint32_t IndexCount = 0;
+    std::uint32_t MaterialIndex = 0;
 };
 
-[[nodiscard]] std::string ExtLower(const std::string& path) {
-    const auto pos = path.find_last_of('.');
-    if (pos == std::string::npos) {
+[[nodiscard]] std::string ExtLower(const std::string& Path) {
+    const auto Pos = Path.find_last_of('.');
+    if (Pos == std::string::npos) {
         return {};
     }
-    std::string e = path.substr(pos);
-    for (char& c : e) {
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    std::string E = Path.substr(Pos);
+    for (char& C : E) {
+        C = static_cast<char>(std::tolower(static_cast<unsigned char>(C)));
     }
-    return e;
+    return E;
 }
 
-void ComputeAabb(const FMeshData& data, float outMin[3], float outMax[3]) {
-    outMin[0] = outMin[1] = outMin[2] = 0.0f;
-    outMax[0] = outMax[1] = outMax[2] = 0.0f;
-    if (data.vertices.empty()) {
+void ComputeAabb(const FMeshData& Data, float OutMin[3], float OutMax[3]) {
+    OutMin[0] = OutMin[1] = OutMin[2] = 0.0f;
+    OutMax[0] = OutMax[1] = OutMax[2] = 0.0f;
+    if (Data.Vertices.empty()) {
         return;
     }
-    outMin[0] = outMax[0] = data.vertices[0].position.x;
-    outMin[1] = outMax[1] = data.vertices[0].position.y;
-    outMin[2] = outMax[2] = data.vertices[0].position.z;
-    for (const FVertex& v : data.vertices) {
-        outMin[0] = std::min(outMin[0], v.position.x);
-        outMin[1] = std::min(outMin[1], v.position.y);
-        outMin[2] = std::min(outMin[2], v.position.z);
-        outMax[0] = std::max(outMax[0], v.position.x);
-        outMax[1] = std::max(outMax[1], v.position.y);
-        outMax[2] = std::max(outMax[2], v.position.z);
+    OutMin[0] = OutMax[0] = Data.Vertices[0].Position.x;
+    OutMin[1] = OutMax[1] = Data.Vertices[0].Position.y;
+    OutMin[2] = OutMax[2] = Data.Vertices[0].Position.z;
+    for (const FVertex& V : Data.Vertices) {
+        OutMin[0] = std::min(OutMin[0], V.Position.x);
+        OutMin[1] = std::min(OutMin[1], V.Position.y);
+        OutMin[2] = std::min(OutMin[2], V.Position.z);
+        OutMax[0] = std::max(OutMax[0], V.Position.x);
+        OutMax[1] = std::max(OutMax[1], V.Position.y);
+        OutMax[2] = std::max(OutMax[2], V.Position.z);
     }
 }
 
 } // namespace
 
-bool IsLeonMeshPath(const std::string& path) {
-    return ExtLower(path) == ".lmesh";
+bool IsLeonMeshPath(const std::string& Path) {
+    return ExtLower(Path) == ".lmesh";
 }
 
-bool LoadLeonMeshFile(const std::string& path, FMeshData& out) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in.is_open()) {
-        std::cerr << "LeonMesh: cannot open " << path << '\n';
+bool LoadLeonMeshFile(const std::string& Path, FMeshData& Out) {
+    std::ifstream In(Path, std::ios::binary);
+    if (!In.is_open()) {
+        std::cerr << "LeonMesh: cannot open " << Path << '\n';
         return false;
     }
-    FLeonMeshHeader header{};
-    in.read(reinterpret_cast<char*>(&header), sizeof(header));
-    if (!in || std::memcmp(header.magic, kMagic, 4) != 0 || header.version != kVersion) {
-        std::cerr << "LeonMesh: bad header in " << path << '\n';
+    FLeonMeshHeader Header{};
+    In.read(reinterpret_cast<char*>(&Header), sizeof(Header));
+    if (!In || std::memcmp(Header.Magic, Magic, 4) != 0 || Header.Version != Version) {
+        std::cerr << "LeonMesh: bad header in " << Path << '\n';
         return false;
     }
-    if (header.vertexCount == 0 || header.indexCount == 0) {
-        std::cerr << "LeonMesh: empty mesh in " << path << '\n';
-        return false;
-    }
-
-    FMeshData data;
-    data.vertices.resize(header.vertexCount);
-    data.indices.resize(header.indexCount);
-    in.read(reinterpret_cast<char*>(data.vertices.data()),
-            static_cast<std::streamsize>(sizeof(FVertex) * header.vertexCount));
-    in.read(reinterpret_cast<char*>(data.indices.data()),
-            static_cast<std::streamsize>(sizeof(std::uint32_t) * header.indexCount));
-    if (!in) {
-        std::cerr << "LeonMesh: truncated vertex/index data in " << path << '\n';
+    if (Header.VertexCount == 0 || Header.IndexCount == 0) {
+        std::cerr << "LeonMesh: empty mesh in " << Path << '\n';
         return false;
     }
 
-    if (header.submeshCount == 0) {
-        data.submeshes.push_back(FMeshSection{0, static_cast<int>(header.indexCount), 0});
+    FMeshData Data;
+    Data.Vertices.resize(Header.VertexCount);
+    Data.Indices.resize(Header.IndexCount);
+    In.read(reinterpret_cast<char*>(Data.Vertices.data()),
+            static_cast<std::streamsize>(sizeof(FVertex) * Header.VertexCount));
+    In.read(reinterpret_cast<char*>(Data.Indices.data()),
+            static_cast<std::streamsize>(sizeof(std::uint32_t) * Header.IndexCount));
+    if (!In) {
+        std::cerr << "LeonMesh: truncated vertex/index data in " << Path << '\n';
+        return false;
+    }
+
+    if (Header.SubmeshCount == 0) {
+        Data.Submeshes.push_back(FMeshSection{0, static_cast<int>(Header.IndexCount), 0});
     } else {
-        std::vector<FLeonMeshSection> subs(header.submeshCount);
-        in.read(reinterpret_cast<char*>(subs.data()),
-                static_cast<std::streamsize>(sizeof(FLeonMeshSection) * header.submeshCount));
-        if (!in) {
-            std::cerr << "LeonMesh: truncated submeshes in " << path << '\n';
+        std::vector<FLeonMeshSection> Subs(Header.SubmeshCount);
+        In.read(reinterpret_cast<char*>(Subs.data()),
+                static_cast<std::streamsize>(sizeof(FLeonMeshSection) * Header.SubmeshCount));
+        if (!In) {
+            std::cerr << "LeonMesh: truncated submeshes in " << Path << '\n';
             return false;
         }
-        data.submeshes.reserve(subs.size());
-        for (const FLeonMeshSection& s : subs) {
-            data.submeshes.push_back(FMeshSection{static_cast<int>(s.indexOffset),
-                                             static_cast<int>(s.indexCount),
-                                             static_cast<int>(s.materialIndex)});
+        Data.Submeshes.reserve(Subs.size());
+        for (const FLeonMeshSection& S : Subs) {
+            Data.Submeshes.push_back(FMeshSection{static_cast<int>(S.IndexOffset),
+                                             static_cast<int>(S.IndexCount),
+                                             static_cast<int>(S.MaterialIndex)});
         }
     }
 
     // Optional string table: material slot paths (null-terminated), one per slot.
-    data.materials.resize(std::max<std::uint32_t>(1, header.materialSlotCount));
-    data.albedoMapPaths.resize(data.materials.size());
-    for (std::uint32_t i = 0; i < header.materialSlotCount; ++i) {
-        std::string slot;
-        char ch = 0;
-        while (in.get(ch)) {
-            if (ch == '\0') {
+    Data.Materials.resize(std::max<std::uint32_t>(1, Header.MaterialSlotCount));
+    Data.AlbedoMapPaths.resize(Data.Materials.size());
+    for (std::uint32_t I = 0; I < Header.MaterialSlotCount; ++I) {
+        std::string Slot;
+        char Ch = 0;
+        while (In.get(Ch)) {
+            if (Ch == '\0') {
                 break;
             }
-            slot.push_back(ch);
+            Slot.push_back(Ch);
         }
         // Slot string may be a future .lmat path; keep in albedoMapPaths unused for now
         // or encode as material name. Store as tag in albedoMapPaths if looks like texture.
-        if (!slot.empty() && (slot.find(".png") != std::string::npos ||
-                              slot.find(".jpg") != std::string::npos)) {
-            data.albedoMapPaths[i] = slot;
+        if (!Slot.empty() && (Slot.find(".png") != std::string::npos ||
+                              Slot.find(".jpg") != std::string::npos)) {
+            Data.AlbedoMapPaths[I] = Slot;
         }
-        (void)slot;
+        (void)Slot;
     }
 
-    out = std::move(data);
-    return !out.empty();
+    Out = std::move(Data);
+    return !Out.empty();
 }
 
-bool SaveLeonMeshFile(const std::string& path, const FMeshData& data) {
-    if (data.empty()) {
+bool SaveLeonMeshFile(const std::string& Path, const FMeshData& Data) {
+    if (Data.empty()) {
         std::cerr << "LeonMesh: refusing to save empty mesh\n";
         return false;
     }
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    if (!out.is_open()) {
-        std::cerr << "LeonMesh: cannot write " << path << '\n';
+    std::ofstream Out(Path, std::ios::binary | std::ios::trunc);
+    if (!Out.is_open()) {
+        std::cerr << "LeonMesh: cannot write " << Path << '\n';
         return false;
     }
 
-    FLeonMeshHeader header{};
-    std::memcpy(header.magic, kMagic, 4);
-    header.version = kVersion;
-    header.flags = 0;
-    header.vertexCount = static_cast<std::uint32_t>(data.vertices.size());
-    header.indexCount = static_cast<std::uint32_t>(data.indices.size());
-    header.submeshCount = static_cast<std::uint32_t>(
-        data.submeshes.empty() ? 1 : data.submeshes.size());
-    header.materialSlotCount = static_cast<std::uint32_t>(
-        std::max<std::size_t>(1, data.materials.size()));
-    ComputeAabb(data, header.aabbMin, header.aabbMax);
+    FLeonMeshHeader Header{};
+    std::memcpy(Header.Magic, Magic, 4);
+    Header.Version = Version;
+    Header.Flags = 0;
+    Header.VertexCount = static_cast<std::uint32_t>(Data.Vertices.size());
+    Header.IndexCount = static_cast<std::uint32_t>(Data.Indices.size());
+    Header.SubmeshCount = static_cast<std::uint32_t>(
+        Data.Submeshes.empty() ? 1 : Data.Submeshes.size());
+    Header.MaterialSlotCount = static_cast<std::uint32_t>(
+        std::max<std::size_t>(1, Data.Materials.size()));
+    ComputeAabb(Data, Header.AabbMin, Header.AabbMax);
 
-    out.write(reinterpret_cast<const char*>(&header), sizeof(header));
-    out.write(reinterpret_cast<const char*>(data.vertices.data()),
-              static_cast<std::streamsize>(sizeof(FVertex) * data.vertices.size()));
-    out.write(reinterpret_cast<const char*>(data.indices.data()),
-              static_cast<std::streamsize>(sizeof(std::uint32_t) * data.indices.size()));
+    Out.write(reinterpret_cast<const char*>(&Header), sizeof(Header));
+    Out.write(reinterpret_cast<const char*>(Data.Vertices.data()),
+              static_cast<std::streamsize>(sizeof(FVertex) * Data.Vertices.size()));
+    Out.write(reinterpret_cast<const char*>(Data.Indices.data()),
+              static_cast<std::streamsize>(sizeof(std::uint32_t) * Data.Indices.size()));
 
-    if (data.submeshes.empty()) {
-        FLeonMeshSection s{0, header.indexCount, 0};
-        out.write(reinterpret_cast<const char*>(&s), sizeof(s));
+    if (Data.Submeshes.empty()) {
+        FLeonMeshSection S{0, Header.IndexCount, 0};
+        Out.write(reinterpret_cast<const char*>(&S), sizeof(S));
     } else {
-        for (const FMeshSection& sm : data.submeshes) {
-            FLeonMeshSection s{static_cast<std::uint32_t>(sm.indexOffset),
-                           static_cast<std::uint32_t>(sm.indexCount),
-                           static_cast<std::uint32_t>(sm.materialIndex)};
-            out.write(reinterpret_cast<const char*>(&s), sizeof(s));
+        for (const FMeshSection& Sm : Data.Submeshes) {
+            FLeonMeshSection S{static_cast<std::uint32_t>(Sm.IndexOffset),
+                           static_cast<std::uint32_t>(Sm.IndexCount),
+                           static_cast<std::uint32_t>(Sm.MaterialIndex)};
+            Out.write(reinterpret_cast<const char*>(&S), sizeof(S));
         }
     }
 
-    for (std::uint32_t i = 0; i < header.materialSlotCount; ++i) {
-        std::string slot;
-        if (i < data.albedoMapPaths.size()) {
-            slot = data.albedoMapPaths[i];
+    for (std::uint32_t I = 0; I < Header.MaterialSlotCount; ++I) {
+        std::string Slot;
+        if (I < Data.AlbedoMapPaths.size()) {
+            Slot = Data.AlbedoMapPaths[I];
         }
-        out.write(slot.c_str(), static_cast<std::streamsize>(slot.size() + 1));
+        Out.write(Slot.c_str(), static_cast<std::streamsize>(Slot.size() + 1));
     }
-    return static_cast<bool>(out);
+    return static_cast<bool>(Out);
 }
 

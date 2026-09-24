@@ -8,109 +8,109 @@
 
 namespace {
 
-glm::vec3 readVec3(const nlohmann::json& j, const glm::vec3& fallback) {
-    if (!j.is_array() || j.size() < 3) {
-        return fallback;
+glm::vec3 ReadVec3(const nlohmann::json& J, const glm::vec3& Fallback) {
+    if (!J.is_array() || J.size() < 3) {
+        return Fallback;
     }
-    return {j[0].get<float>(), j[1].get<float>(), j[2].get<float>()};
+    return {J[0].get<float>(), J[1].get<float>(), J[2].get<float>()};
 }
 
-void applyMaterialMaps(FResourceCache& resources, FMaterial& material, const nlohmann::json& object) {
-    if (object.contains("albedoMap") && object["albedoMap"].is_string()) {
-        const std::string key = object["albedoMap"].get<std::string>();
-        if (key == "checker") {
-            material.albedoMap = resources.CheckerTexture(64);
+void ApplyMaterialMaps(FResourceCache& Resources, FMaterial& Material, const nlohmann::json& Object) {
+    if (Object.contains("albedoMap") && Object["albedoMap"].is_string()) {
+        const std::string Key = Object["albedoMap"].get<std::string>();
+        if (Key == "checker") {
+            Material.AlbedoMap = Resources.CheckerTexture(64);
         } else {
-            material.albedoMap = resources.LoadTexture(FPaths::ResolveAssetPath(key));
+            Material.AlbedoMap = Resources.LoadTexture(FPaths::ResolveAssetPath(Key));
         }
     }
-    if (object.contains("normalMap") && object["normalMap"].is_string()) {
-        const std::string key = object["normalMap"].get<std::string>();
-        if (key == "bump") {
-            material.normalMap = resources.BumpNormalTexture(256);
+    if (Object.contains("normalMap") && Object["normalMap"].is_string()) {
+        const std::string Key = Object["normalMap"].get<std::string>();
+        if (Key == "bump") {
+            Material.NormalMap = Resources.BumpNormalTexture(256);
         } else {
-            material.normalMap = resources.LoadTexture(FPaths::ResolveAssetPath(key));
+            Material.NormalMap = Resources.LoadTexture(FPaths::ResolveAssetPath(Key));
         }
     }
 }
 
 } // namespace
 
-bool HasMaterialSurfaceFields(const nlohmann::json& spec) {
-    return spec.contains("albedo") || spec.contains("alpha") || spec.contains("specular") ||
-           spec.contains("metallic") || spec.contains("shininess") || spec.contains("roughness") ||
-           spec.contains("unlit") || spec.contains("albedoMap") || spec.contains("normalMap") ||
-           spec.contains("uvScale") || spec.contains("tiling");
+bool HasMaterialSurfaceFields(const nlohmann::json& Spec) {
+    return Spec.contains("albedo") || Spec.contains("alpha") || Spec.contains("specular") ||
+           Spec.contains("metallic") || Spec.contains("shininess") || Spec.contains("roughness") ||
+           Spec.contains("unlit") || Spec.contains("albedoMap") || Spec.contains("normalMap") ||
+           Spec.contains("uvScale") || Spec.contains("tiling");
 }
 
-void PatchMaterialFromJson(FResourceCache& resources, FMaterial& material,
-                           const nlohmann::json& spec) {
-    if (spec.contains("unlit") && spec["unlit"].is_boolean() && spec["unlit"].get<bool>()) {
-        material.shading = EMaterialShadingModel::Unlit;
+void PatchMaterialFromJson(FResourceCache& Resources, FMaterial& Material,
+                           const nlohmann::json& Spec) {
+    if (Spec.contains("unlit") && Spec["unlit"].is_boolean() && Spec["unlit"].get<bool>()) {
+        Material.Shading = EMaterialShadingModel::Unlit;
     }
-    if (spec.contains("albedo")) {
-        material.albedo = readVec3(spec["albedo"], material.albedo);
+    if (Spec.contains("albedo")) {
+        Material.Albedo = ReadVec3(Spec["albedo"], Material.Albedo);
     }
-    if (spec.contains("specular")) {
-        material.specular = readVec3(spec["specular"], material.specular);
+    if (Spec.contains("specular")) {
+        Material.Specular = ReadVec3(Spec["specular"], Material.Specular);
     }
-    if (spec.contains("metallic")) {
-        material.metallic = spec.value("metallic", material.metallic);
+    if (Spec.contains("metallic")) {
+        Material.Metallic = Spec.value("metallic", Material.Metallic);
     }
-    if (spec.contains("alpha")) {
-        material.alpha = spec.value("alpha", material.alpha);
+    if (Spec.contains("alpha")) {
+        Material.Alpha = Spec.value("alpha", Material.Alpha);
     }
-    if (spec.contains("shininess")) {
-        material.shininess = spec.value("shininess", material.shininess);
-        if (!spec.contains("roughness")) {
-            material.syncRoughnessFromShininess();
+    if (Spec.contains("shininess")) {
+        Material.Shininess = Spec.value("shininess", Material.Shininess);
+        if (!Spec.contains("roughness")) {
+            Material.SyncRoughnessFromShininess();
         }
     }
-    if (spec.contains("roughness")) {
-        material.roughness = std::clamp(spec.value("roughness", material.roughness), 0.04f, 1.0f);
+    if (Spec.contains("roughness")) {
+        Material.Roughness = std::clamp(Spec.value("roughness", Material.Roughness), 0.04f, 1.0f);
     }
-    const nlohmann::json* uvNode = nullptr;
-    if (spec.contains("uvScale")) {
-        uvNode = &spec["uvScale"];
-    } else if (spec.contains("tiling")) {
-        uvNode = &spec["tiling"];
+    const nlohmann::json* UvNode = nullptr;
+    if (Spec.contains("uvScale")) {
+        UvNode = &Spec["uvScale"];
+    } else if (Spec.contains("tiling")) {
+        UvNode = &Spec["tiling"];
     }
-    if (uvNode != nullptr) {
-        if (uvNode->is_number()) {
-            const float s = uvNode->get<float>();
-            material.uvScale = {s, s};
-        } else if (uvNode->is_array() && uvNode->size() >= 2) {
-            material.uvScale = {(*uvNode)[0].get<float>(), (*uvNode)[1].get<float>()};
+    if (UvNode != nullptr) {
+        if (UvNode->is_number()) {
+            const float S = UvNode->get<float>();
+            Material.UvScale = {S, S};
+        } else if (UvNode->is_array() && UvNode->size() >= 2) {
+            Material.UvScale = {(*UvNode)[0].get<float>(), (*UvNode)[1].get<float>()};
         }
     }
-    if (spec.contains("castsShadows")) {
-        material.castsShadows = spec.value("castsShadows", material.castsShadows);
+    if (Spec.contains("castsShadows")) {
+        Material.bCastsShadows = Spec.value("castsShadows", Material.bCastsShadows);
     }
-    if (spec.contains("planarMirror")) {
-        material.planarMirror = spec.value("planarMirror", material.planarMirror);
+    if (Spec.contains("planarMirror")) {
+        Material.bPlanarMirror = Spec.value("planarMirror", Material.bPlanarMirror);
     }
-    applyMaterialMaps(resources, material, spec);
+    ApplyMaterialMaps(Resources, Material, Spec);
 }
 
-bool LoadMaterialFile(FResourceCache& resources, const std::string& path, FMaterial& out) {
-    if (!IsLeonMaterialPath(path)) {
-        std::cerr << "MaterialAsset: expected .lmat, got '" << path << "'\n";
+bool LoadMaterialFile(FResourceCache& Resources, const std::string& Path, FMaterial& Out) {
+    if (!IsLeonMaterialPath(Path)) {
+        std::cerr << "MaterialAsset: expected .lmat, got '" << Path << "'\n";
         return false;
     }
-    return LoadLeonMaterialFile(resources, path, out);
+    return LoadLeonMaterialFile(Resources, Path, Out);
 }
 
-FMaterial MakeDefaultCheckerMaterial(FResourceCache& resources) {
-    FMaterial material;
-    material.shading = EMaterialShadingModel::BlinnPhong;
-    material.albedo = {1.0f, 1.0f, 1.0f};
-    material.specular = {0.04f, 0.04f, 0.04f};
-    material.metallic = 0.0f;
-    material.shininess = 8.0f;
-    material.syncRoughnessFromShininess();
-    material.castsShadows = true;
-    material.planarMirror = false;
-    material.albedoMap = resources.CheckerTexture(64);
-    return material;
+FMaterial MakeDefaultCheckerMaterial(FResourceCache& Resources) {
+    FMaterial Material;
+    Material.Shading = EMaterialShadingModel::BlinnPhong;
+    Material.Albedo = {1.0f, 1.0f, 1.0f};
+    Material.Specular = {0.04f, 0.04f, 0.04f};
+    Material.Metallic = 0.0f;
+    Material.Shininess = 8.0f;
+    Material.SyncRoughnessFromShininess();
+    Material.bCastsShadows = true;
+    Material.bPlanarMirror = false;
+    Material.AlbedoMap = Resources.CheckerTexture(64);
+    return Material;
 }
 

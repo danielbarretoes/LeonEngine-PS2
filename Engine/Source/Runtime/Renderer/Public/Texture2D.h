@@ -13,23 +13,23 @@ public:
 
     UTexture2D(const UTexture2D&) = delete;
     UTexture2D& operator=(const UTexture2D&) = delete;
-    UTexture2D(UTexture2D&& other) noexcept;
-    UTexture2D& operator=(UTexture2D&& other) noexcept;
+    UTexture2D(UTexture2D&& Other) noexcept;
+    UTexture2D& operator=(UTexture2D&& Other) noexcept;
 
-    [[nodiscard]] static UTexture2D Create(int width, int height, const unsigned char* rgba);
-    [[nodiscard]] static UTexture2D CreateChecker(int size = 64);
+    [[nodiscard]] static UTexture2D Create(int Width, int Height, const unsigned char* Rgba);
+    [[nodiscard]] static UTexture2D CreateChecker(int Size = 64);
     /// Flat normal map in tangent space (points along +Z).
-    [[nodiscard]] static UTexture2D CreateFlatNormal(int size = 4);
+    [[nodiscard]] static UTexture2D CreateFlatNormal(int Size = 4);
     /// Strong procedural bumps for demo normal mapping (tileable).
-    [[nodiscard]] static UTexture2D CreateBumpNormal(int size = 256);
-    [[nodiscard]] static UTexture2D LoadFromFile(const std::string& path);
+    [[nodiscard]] static UTexture2D CreateBumpNormal(int Size = 256);
+    [[nodiscard]] static UTexture2D LoadFromFile(const std::string& Path);
 
-    void Bind(unsigned int unit = 0) const;
-    [[nodiscard]] bool Valid() const { return id_ != 0; }
+    void Bind(unsigned int Unit = 0) const;
+    [[nodiscard]] bool Valid() const { return Id != 0; }
 
 private:
     void Destroy();
 
-    FRHITextureId id_ = kInvalidTexture;
+    FRHITextureId Id = InvalidTexture;
 };
 

@@ -11,80 +11,80 @@ USkeletalMesh::~USkeletalMesh() {
     Destroy();
 }
 
-USkeletalMesh::USkeletalMesh(USkeletalMesh&& other) noexcept
-    : vao_(other.vao_), vbo_(other.vbo_), ebo_(other.ebo_), indexCount_(other.indexCount_),
-      cpuOnly_(other.cpuOnly_), skeleton_(std::move(other.skeleton_)),
-      embeddedAnim_(std::move(other.embeddedAnim_)), localMin_(other.localMin_),
-      localMax_(other.localMax_), material_(std::move(other.material_)) {
-    other.vao_ = 0;
-    other.vbo_ = 0;
-    other.ebo_ = 0;
-    other.indexCount_ = 0;
-    other.cpuOnly_ = false;
+USkeletalMesh::USkeletalMesh(USkeletalMesh&& Other) noexcept
+    : Vao(Other.Vao), Vbo(Other.Vbo), Ebo(Other.Ebo), IndexCount(Other.IndexCount),
+      bCpuOnly(Other.bCpuOnly), Skeleton(std::move(Other.Skeleton)),
+      EmbeddedAnim(std::move(Other.EmbeddedAnim)), LocalMin(Other.LocalMin),
+      LocalMax(Other.LocalMax), Material(std::move(Other.Material)) {
+    Other.Vao = 0;
+    Other.Vbo = 0;
+    Other.Ebo = 0;
+    Other.IndexCount = 0;
+    Other.bCpuOnly = false;
 }
 
-USkeletalMesh& USkeletalMesh::operator=(USkeletalMesh&& other) noexcept {
-    if (this != &other) {
+USkeletalMesh& USkeletalMesh::operator=(USkeletalMesh&& Other) noexcept {
+    if (this != &Other) {
         Destroy();
-        vao_ = other.vao_;
-        vbo_ = other.vbo_;
-        ebo_ = other.ebo_;
-        indexCount_ = other.indexCount_;
-        cpuOnly_ = other.cpuOnly_;
-        skeleton_ = std::move(other.skeleton_);
-        embeddedAnim_ = std::move(other.embeddedAnim_);
-        localMin_ = other.localMin_;
-        localMax_ = other.localMax_;
-        material_ = std::move(other.material_);
-        other.vao_ = 0;
-        other.vbo_ = 0;
-        other.ebo_ = 0;
-        other.indexCount_ = 0;
-        other.cpuOnly_ = false;
+        Vao = Other.Vao;
+        Vbo = Other.Vbo;
+        Ebo = Other.Ebo;
+        IndexCount = Other.IndexCount;
+        bCpuOnly = Other.bCpuOnly;
+        Skeleton = std::move(Other.Skeleton);
+        EmbeddedAnim = std::move(Other.EmbeddedAnim);
+        LocalMin = Other.LocalMin;
+        LocalMax = Other.LocalMax;
+        Material = std::move(Other.Material);
+        Other.Vao = 0;
+        Other.Vbo = 0;
+        Other.Ebo = 0;
+        Other.IndexCount = 0;
+        Other.bCpuOnly = false;
     }
     return *this;
 }
 
-USkeletalMesh USkeletalMesh::CreateCpu(FSkeletalMeshData data) {
-    USkeletalMesh mesh;
-    if (data.empty()) {
-        return mesh;
+USkeletalMesh USkeletalMesh::CreateCpu(FSkeletalMeshData Data) {
+    USkeletalMesh Mesh;
+    if (Data.empty()) {
+        return Mesh;
     }
-    mesh.skeleton_ = std::move(data.skeleton);
-    mesh.embeddedAnim_ = std::move(data.embeddedAnim);
-    mesh.localMin_ = data.localMin;
-    mesh.localMax_ = data.localMax;
-    mesh.indexCount_ = static_cast<int>(data.indices.size());
-    mesh.cpuOnly_ = true;
-    return mesh;
+    Mesh.Skeleton = std::move(Data.skeleton);
+    Mesh.EmbeddedAnim = std::move(Data.embeddedAnim);
+    Mesh.LocalMin = Data.localMin;
+    Mesh.LocalMax = Data.localMax;
+    Mesh.IndexCount = static_cast<int>(Data.indices.size());
+    Mesh.bCpuOnly = true;
+    return Mesh;
 }
 
-USkeletalMesh USkeletalMesh::Upload(FSkeletalMeshData data) {
-    USkeletalMesh mesh;
-    if (data.empty()) {
-        return mesh;
+USkeletalMesh USkeletalMesh::Upload(FSkeletalMeshData Data) {
+    USkeletalMesh Mesh;
+    if (Data.empty()) {
+        return Mesh;
     }
 
-    mesh.skeleton_ = std::move(data.skeleton);
-    mesh.embeddedAnim_ = std::move(data.embeddedAnim);
-    mesh.localMin_ = data.localMin;
-    mesh.localMax_ = data.localMax;
+    Mesh.Skeleton = std::move(Data.skeleton);
+    Mesh.EmbeddedAnim = std::move(Data.embeddedAnim);
+    Mesh.LocalMin = Data.localMin;
+    Mesh.LocalMax = Data.localMax;
 
-    glGenVertexArrays(1, &mesh.vao_);
-    glGenBuffers(1, &mesh.vbo_);
-    glGenBuffers(1, &mesh.ebo_);
+    glGenVertexArrays(1, &Mesh.Vao);
+    glGenBuffers(1, &Mesh.Vbo);
+    glGenBuffers(1, &Mesh.Ebo);
 
-    glBindVertexArray(mesh.vao_);
+    glBindVertexArray(Mesh.Vao);
 
-    glBindBuffer(GL_ARRAY_BUFFER, mesh.vbo_);
+    glBindBuffer(GL_ARRAY_BUFFER, Mesh.Vbo);
     glBufferData(GL_ARRAY_BUFFER,
-                 static_cast<GLsizeiptr>(data.vertices.size() * sizeof(FSkeletalVertex)),
-                 data.vertices.data(), GL_STATIC_DRAW);
+                 static_cast<GLsizeiptr>(Data.vertices.size() * sizeof(FSkeletalVertex)),
+                 Data.vertices.data(), GL_STATIC_DRAW);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo_);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Mesh.Ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-                 static_cast<GLsizeiptr>(data.indices.size() * sizeof(std::uint32_t)),
-                 data.indices.data(), GL_STATIC_DRAW);
+                 static_cast<GLsizeiptr>(Data.indices.size() * sizeof(std::uint32_t)),
+                 Data.indices.data(), GL_STATIC_DRAW);
 
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(FSkeletalVertex),
@@ -111,40 +111,40 @@ USkeletalMesh USkeletalMesh::Upload(FSkeletalMeshData data) {
                           GlAttribOffset(&FSkeletalVertex::boneWeights));
 
     glBindVertexArray(0);
-    mesh.indexCount_ = static_cast<int>(data.indices.size());
-    return mesh;
+    Mesh.IndexCount = static_cast<int>(Data.indices.size());
+    return Mesh;
 }
 
 void USkeletalMesh::Draw() const {
-    if (!Valid() || cpuOnly_ || vao_ == 0) {
+    if (!Valid() || bCpuOnly || Vao == 0) {
         return;
     }
-    glBindVertexArray(vao_);
-    glDrawElements(GL_TRIANGLES, indexCount_, GL_UNSIGNED_INT, nullptr);
+    glBindVertexArray(Vao);
+    glDrawElements(GL_TRIANGLES, IndexCount, GL_UNSIGNED_INT, nullptr);
     glBindVertexArray(0);
 }
 
-float USkeletalMesh::FitUniformScale(float fitHeight) const {
-    if (fitHeight <= 0.0f) {
+float USkeletalMesh::FitUniformScale(float FitHeight) const {
+    if (FitHeight <= 0.0f) {
         return 1.0f;
     }
-    const float height = std::max((localMax_ - localMin_).y, 0.001f);
-    return fitHeight / height;
+    const float Height = std::max((LocalMax - LocalMin).y, 0.001f);
+    return FitHeight / Height;
 }
 
 void USkeletalMesh::Destroy() {
-    if (ebo_ != 0) {
-        glDeleteBuffers(1, &ebo_);
-        ebo_ = 0;
+    if (Ebo != 0) {
+        glDeleteBuffers(1, &Ebo);
+        Ebo = 0;
     }
-    if (vbo_ != 0) {
-        glDeleteBuffers(1, &vbo_);
-        vbo_ = 0;
+    if (Vbo != 0) {
+        glDeleteBuffers(1, &Vbo);
+        Vbo = 0;
     }
-    if (vao_ != 0) {
-        glDeleteVertexArrays(1, &vao_);
-        vao_ = 0;
+    if (Vao != 0) {
+        glDeleteVertexArrays(1, &Vao);
+        Vao = 0;
     }
-    indexCount_ = 0;
+    IndexCount = 0;
 }
 

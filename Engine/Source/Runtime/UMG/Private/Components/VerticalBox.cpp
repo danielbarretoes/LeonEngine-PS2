@@ -116,14 +116,14 @@ void UVerticalBox::CacheLayout(int viewportW, int viewportH) {
     titleH_ = 0.0f;
     if (!title_.empty()) {
         float tw = 0.0f;
-        FDebugOverlay::MeasureText(title_, kHudFontScale, tw, titleH_);
-        titleH_ += kHudLineHeight; // blank separator under title
+        FDebugOverlay::MeasureText(title_, HudFontScale, tw, titleH_);
+        titleH_ += HudLineHeight; // blank separator under title
     }
 
     hintH_ = 0.0f;
     if (!hint_.empty()) {
         float hw = 0.0f;
-        FDebugOverlay::MeasureText(hint_, kHudFontScale, hw, hintH_);
+        FDebugOverlay::MeasureText(hint_, HudFontScale, hw, hintH_);
         hintH_ += 12.0f; // gap above hint
     }
 
@@ -152,7 +152,7 @@ void UVerticalBox::NativePaint(FPaintContext& ctx) {
 
     if (!title_.empty()) {
         ctx.DrawText(title_, static_cast<float>(ctx.Width()) * 0.5f, boxY_,
-                     glm::vec3{1.0f, 0.82f, 0.35f}, kHudFontScale, ETextJustify::Center);
+                     glm::vec3{1.0f, 0.82f, 0.35f}, HudFontScale, ETextJustify::Center);
     }
 
     for (std::unique_ptr<UButton>& button : buttons_) {
@@ -166,7 +166,7 @@ void UVerticalBox::NativePaint(FPaintContext& ctx) {
         }
         const float hintY = buttonsBottom + 12.0f;
         ctx.DrawText(hint_, static_cast<float>(ctx.Width()) * 0.5f, hintY,
-                     glm::vec3{0.65f, 0.65f, 0.60f}, kHudFontScale, ETextJustify::Center);
+                     glm::vec3{0.65f, 0.65f, 0.60f}, HudFontScale, ETextJustify::Center);
     }
 }
 

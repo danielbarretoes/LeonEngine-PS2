@@ -12,23 +12,23 @@ public:
     FLDRColorTarget(const FLDRColorTarget&) = delete;
     FLDRColorTarget& operator=(const FLDRColorTarget&) = delete;
 
-    [[nodiscard]] bool EnsureSize(int width, int height);
+    [[nodiscard]] bool EnsureSize(int InWidth, int InHeight);
     void Destroy();
 
     void BindWrite() const;
-    void BindColorTexture(unsigned int unit) const;
+    void BindColorTexture(unsigned int Unit) const;
 
     [[nodiscard]] bool Valid() const {
-        return fbo_ != kInvalidFramebuffer && colorTexture_ != kInvalidTexture;
+        return Fbo != InvalidFramebuffer && ColorTexture != InvalidTexture;
     }
-    [[nodiscard]] FRHIFramebufferId Framebuffer() const { return fbo_; }
-    [[nodiscard]] int Width() const { return width_; }
-    [[nodiscard]] int Height() const { return height_; }
+    [[nodiscard]] FRHIFramebufferId Framebuffer() const { return Fbo; }
+    [[nodiscard]] int GetWidth() const { return Width; }
+    [[nodiscard]] int GetHeight() const { return Height; }
 
 private:
-    FRHIFramebufferId fbo_ = kInvalidFramebuffer;
-    FRHITextureId colorTexture_ = kInvalidTexture;
-    int width_ = 0;
-    int height_ = 0;
+    FRHIFramebufferId Fbo = InvalidFramebuffer;
+    FRHITextureId ColorTexture = InvalidTexture;
+    int Width = 0;
+    int Height = 0;
 };
 

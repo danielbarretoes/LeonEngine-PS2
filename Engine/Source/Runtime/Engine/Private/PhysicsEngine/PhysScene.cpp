@@ -153,22 +153,22 @@ void FPhysScene::SyncFromLevel(const ULevel& level) {
         }
         const UStaticMeshComponent& obj = meshes[body.levelMeshIndex];
         if (obj.mesh != nullptr) {
-            const FBox worldAabb = FBox::fromLocalTransformed(
-                obj.mesh->LocalMin(), obj.mesh->LocalMax(), obj.EffectiveModelMatrix());
-            body.position = (worldAabb.min + worldAabb.max) * 0.5f;
-            body.halfExtents = (worldAabb.max - worldAabb.min) * 0.5f;
+            const FBox worldAabb = FBox::FromLocalTransformed(
+                obj.mesh->GetLocalMin(), obj.mesh->GetLocalMax(), obj.EffectiveModelMatrix());
+            body.position = (worldAabb.Min + worldAabb.Max) * 0.5f;
+            body.halfExtents = (worldAabb.Max - worldAabb.Min) * 0.5f;
 
             // Unreal ComplexAsSimple lite: static meshes with CPU tris use triangle queries.
             if (body.type == EBodyType::Static && obj.mesh->HasCpuData()) {
-                const FMeshData& cpu = obj.mesh->CpuData();
+                const FMeshData& cpu = obj.mesh->GetCpuData();
                 const glm::mat4 model = obj.EffectiveModelMatrix();
-                triMesh.positions.resize(cpu.vertices.size());
-                for (std::size_t vi = 0; vi < cpu.vertices.size(); ++vi) {
+                triMesh.positions.resize(cpu.Vertices.size());
+                for (std::size_t vi = 0; vi < cpu.Vertices.size(); ++vi) {
                     const glm::vec4 world =
-                        model * glm::vec4(cpu.vertices[vi].position, 1.0f);
+                        model * glm::vec4(cpu.Vertices[vi].Position, 1.0f);
                     triMesh.positions[vi] = glm::vec3(world);
                 }
-                triMesh.indices = cpu.indices;
+                triMesh.indices = cpu.Indices;
                 if (triMesh.IsValid()) {
                     body.collisionShape = ECollisionShape::TriangleMesh;
                 } else {

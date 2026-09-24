@@ -28,32 +28,32 @@ public:
 
     /// Swap buffers and resolve the previous frame into Milliseconds().
     void BeginFrame();
-    void Begin(EPass pass);
-    void End(EPass pass);
+    void Begin(EPass Pass);
+    void End(EPass Pass);
 
-    [[nodiscard]] bool Valid() const { return created_; }
-    [[nodiscard]] float Milliseconds(EPass pass) const;
+    [[nodiscard]] bool Valid() const { return bCreated; }
+    [[nodiscard]] float Milliseconds(EPass Pass) const;
 
 private:
-    static constexpr int kBufferCount = 2;
-    static constexpr auto kPassCount = static_cast<int>(EPass::Count);
+    static constexpr int BufferCount = 2;
+    static constexpr auto PassCount = static_cast<int>(EPass::Count);
 
-    using FQueryBuffer = std::array<FRHIQueryId, kPassCount>;
+    using FQueryBuffer = std::array<FRHIQueryId, PassCount>;
 
-    [[nodiscard]] FQueryBuffer& bufferQueries(int buffer);
-    [[nodiscard]] bool& bufferPending(int buffer);
-    [[nodiscard]] FRHIQueryId& querySlot(int buffer, EPass pass);
-    [[nodiscard]] bool& passOpenSlot(EPass pass);
-    [[nodiscard]] float& msSlot(EPass pass);
-    [[nodiscard]] const float& msSlot(EPass pass) const;
+    [[nodiscard]] FQueryBuffer& BufferQueries(int Buffer);
+    [[nodiscard]] bool& BufferPending(int Buffer);
+    [[nodiscard]] FRHIQueryId& QuerySlot(int Buffer, EPass Pass);
+    [[nodiscard]] bool& PassOpenSlot(EPass Pass);
+    [[nodiscard]] float& MsSlot(EPass Pass);
+    [[nodiscard]] const float& MsSlot(EPass Pass) const;
     /// Returns false if any query is still outstanding (no GPU stall).
-    [[nodiscard]] bool resolveBuffer(const FQueryBuffer& queries);
+    [[nodiscard]] bool ResolveBuffer(const FQueryBuffer& InQueries);
 
-    std::array<FQueryBuffer, kBufferCount> queries_{};
-    std::array<float, kPassCount> ms_{};
-    int writeBuffer_ = 0;
-    std::array<bool, kBufferCount> pending_{};
-    bool created_ = false;
-    std::array<bool, kPassCount> passOpen_{};
+    std::array<FQueryBuffer, BufferCount> Queries{};
+    std::array<float, PassCount> Ms{};
+    int WriteBuffer = 0;
+    std::array<bool, BufferCount> Pending{};
+    bool bCreated = false;
+    std::array<bool, PassCount> PassOpen{};
 };
 

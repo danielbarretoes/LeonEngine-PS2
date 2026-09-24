@@ -13,11 +13,11 @@ using FRHIProgramId = std::uint32_t;
 using FRHIQueryId = std::uint32_t;
 using FRHIRenderbufferId = std::uint32_t;
 
-constexpr FRHITextureId kInvalidTexture = 0;
-constexpr FRHIFramebufferId kInvalidFramebuffer = 0;
-constexpr FRHIBufferId kInvalidBuffer = 0;
-constexpr FRHIVertexArrayId kInvalidVertexArray = 0;
-constexpr FRHIProgramId kInvalidProgram = 0;
-constexpr FRHIQueryId kInvalidQuery = 0;
-constexpr FRHIRenderbufferId kInvalidRenderbuffer = 0;
+constexpr FRHITextureId InvalidTexture = 0;
+constexpr FRHIFramebufferId InvalidFramebuffer = 0;
+constexpr FRHIBufferId InvalidBuffer = 0;
+constexpr FRHIVertexArrayId InvalidVertexArray = 0;
+constexpr FRHIProgramId InvalidProgram = 0;
+constexpr FRHIQueryId InvalidQuery = 0;
+constexpr FRHIRenderbufferId InvalidRenderbuffer = 0;
 

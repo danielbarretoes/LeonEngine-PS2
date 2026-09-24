@@ -7,44 +7,44 @@ FUniformBuffer::~FUniformBuffer() {
     Destroy();
 }
 
-bool FUniformBuffer::Create(std::size_t sizeBytes, unsigned int bindingPoint) {
+bool FUniformBuffer::Create(std::size_t InSizeBytes, unsigned int InBindingPoint) {
     Destroy();
-    if (sizeBytes == 0) {
+    if (InSizeBytes == 0) {
         return false;
     }
 
-    glGenBuffers(1, &id_);
-    glBindBuffer(GL_UNIFORM_BUFFER, id_);
-    glBufferData(GL_UNIFORM_BUFFER, static_cast<GLsizeiptr>(sizeBytes), nullptr, GL_DYNAMIC_DRAW);
+    glGenBuffers(1, &Id);
+    glBindBuffer(GL_UNIFORM_BUFFER, Id);
+    glBufferData(GL_UNIFORM_BUFFER, static_cast<GLsizeiptr>(InSizeBytes), nullptr, GL_DYNAMIC_DRAW);
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
-    bindingPoint_ = bindingPoint;
-    sizeBytes_ = sizeBytes;
-    glBindBufferBase(GL_UNIFORM_BUFFER, bindingPoint_, id_);
+    BindingPoint = InBindingPoint;
+    SizeBytes = InSizeBytes;
+    glBindBufferBase(GL_UNIFORM_BUFFER, BindingPoint, Id);
     return true;
 }
 
 void FUniformBuffer::Destroy() {
-    if (id_ != 0) {
-        glDeleteBuffers(1, &id_);
-        id_ = 0;
+    if (Id != 0) {
+        glDeleteBuffers(1, &Id);
+        Id = 0;
     }
-    bindingPoint_ = 0;
-    sizeBytes_ = 0;
+    BindingPoint = 0;
+    SizeBytes = 0;
 }
 
-void FUniformBuffer::Update(const void* data, std::size_t sizeBytes) const {
-    if (!Valid() || data == nullptr || sizeBytes == 0 || sizeBytes > sizeBytes_) {
+void FUniformBuffer::Update(const void* Data, std::size_t InSizeBytes) const {
+    if (!Valid() || Data == nullptr || InSizeBytes == 0 || InSizeBytes > SizeBytes) {
         return;
     }
-    glBindBuffer(GL_UNIFORM_BUFFER, id_);
-    glBufferSubData(GL_UNIFORM_BUFFER, 0, static_cast<GLsizeiptr>(sizeBytes), data);
+    glBindBuffer(GL_UNIFORM_BUFFER, Id);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, static_cast<GLsizeiptr>(InSizeBytes), Data);
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
 }
 
 void FUniformBuffer::Bind() const {
     if (Valid()) {
-        glBindBufferBase(GL_UNIFORM_BUFFER, bindingPoint_, id_);
+        glBindBufferBase(GL_UNIFORM_BUFFER, BindingPoint, Id);
     }
 }
 

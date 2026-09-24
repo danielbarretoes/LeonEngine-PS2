@@ -7,95 +7,95 @@
 
 FMeshData MakeCube() {
     // 6 faces × 4 verts (unique normals/UVs per face corner).
-    FMeshData data;
-    data.vertices = {
+    FMeshData Data;
+    Data.Vertices = {
         // +Z
-        {.position = {-0.5f, -0.5f, 0.5f}, .normal = {0, 0, 1}, .texCoord = {0, 0}},
-        {.position = {0.5f, -0.5f, 0.5f}, .normal = {0, 0, 1}, .texCoord = {1, 0}},
-        {.position = {0.5f, 0.5f, 0.5f}, .normal = {0, 0, 1}, .texCoord = {1, 1}},
-        {.position = {-0.5f, 0.5f, 0.5f}, .normal = {0, 0, 1}, .texCoord = {0, 1}},
+        {.Position = {-0.5f, -0.5f, 0.5f}, .Normal = {0, 0, 1}, .TexCoord = {0, 0}},
+        {.Position = {0.5f, -0.5f, 0.5f}, .Normal = {0, 0, 1}, .TexCoord = {1, 0}},
+        {.Position = {0.5f, 0.5f, 0.5f}, .Normal = {0, 0, 1}, .TexCoord = {1, 1}},
+        {.Position = {-0.5f, 0.5f, 0.5f}, .Normal = {0, 0, 1}, .TexCoord = {0, 1}},
         // -Z
-        {.position = {0.5f, -0.5f, -0.5f}, .normal = {0, 0, -1}, .texCoord = {0, 0}},
-        {.position = {-0.5f, -0.5f, -0.5f}, .normal = {0, 0, -1}, .texCoord = {1, 0}},
-        {.position = {-0.5f, 0.5f, -0.5f}, .normal = {0, 0, -1}, .texCoord = {1, 1}},
-        {.position = {0.5f, 0.5f, -0.5f}, .normal = {0, 0, -1}, .texCoord = {0, 1}},
+        {.Position = {0.5f, -0.5f, -0.5f}, .Normal = {0, 0, -1}, .TexCoord = {0, 0}},
+        {.Position = {-0.5f, -0.5f, -0.5f}, .Normal = {0, 0, -1}, .TexCoord = {1, 0}},
+        {.Position = {-0.5f, 0.5f, -0.5f}, .Normal = {0, 0, -1}, .TexCoord = {1, 1}},
+        {.Position = {0.5f, 0.5f, -0.5f}, .Normal = {0, 0, -1}, .TexCoord = {0, 1}},
         // +Y
-        {.position = {-0.5f, 0.5f, 0.5f}, .normal = {0, 1, 0}, .texCoord = {0, 0}},
-        {.position = {0.5f, 0.5f, 0.5f}, .normal = {0, 1, 0}, .texCoord = {1, 0}},
-        {.position = {0.5f, 0.5f, -0.5f}, .normal = {0, 1, 0}, .texCoord = {1, 1}},
-        {.position = {-0.5f, 0.5f, -0.5f}, .normal = {0, 1, 0}, .texCoord = {0, 1}},
+        {.Position = {-0.5f, 0.5f, 0.5f}, .Normal = {0, 1, 0}, .TexCoord = {0, 0}},
+        {.Position = {0.5f, 0.5f, 0.5f}, .Normal = {0, 1, 0}, .TexCoord = {1, 0}},
+        {.Position = {0.5f, 0.5f, -0.5f}, .Normal = {0, 1, 0}, .TexCoord = {1, 1}},
+        {.Position = {-0.5f, 0.5f, -0.5f}, .Normal = {0, 1, 0}, .TexCoord = {0, 1}},
         // -Y
-        {.position = {-0.5f, -0.5f, -0.5f}, .normal = {0, -1, 0}, .texCoord = {0, 0}},
-        {.position = {0.5f, -0.5f, -0.5f}, .normal = {0, -1, 0}, .texCoord = {1, 0}},
-        {.position = {0.5f, -0.5f, 0.5f}, .normal = {0, -1, 0}, .texCoord = {1, 1}},
-        {.position = {-0.5f, -0.5f, 0.5f}, .normal = {0, -1, 0}, .texCoord = {0, 1}},
+        {.Position = {-0.5f, -0.5f, -0.5f}, .Normal = {0, -1, 0}, .TexCoord = {0, 0}},
+        {.Position = {0.5f, -0.5f, -0.5f}, .Normal = {0, -1, 0}, .TexCoord = {1, 0}},
+        {.Position = {0.5f, -0.5f, 0.5f}, .Normal = {0, -1, 0}, .TexCoord = {1, 1}},
+        {.Position = {-0.5f, -0.5f, 0.5f}, .Normal = {0, -1, 0}, .TexCoord = {0, 1}},
         // +X
-        {.position = {0.5f, -0.5f, 0.5f}, .normal = {1, 0, 0}, .texCoord = {0, 0}},
-        {.position = {0.5f, -0.5f, -0.5f}, .normal = {1, 0, 0}, .texCoord = {1, 0}},
-        {.position = {0.5f, 0.5f, -0.5f}, .normal = {1, 0, 0}, .texCoord = {1, 1}},
-        {.position = {0.5f, 0.5f, 0.5f}, .normal = {1, 0, 0}, .texCoord = {0, 1}},
+        {.Position = {0.5f, -0.5f, 0.5f}, .Normal = {1, 0, 0}, .TexCoord = {0, 0}},
+        {.Position = {0.5f, -0.5f, -0.5f}, .Normal = {1, 0, 0}, .TexCoord = {1, 0}},
+        {.Position = {0.5f, 0.5f, -0.5f}, .Normal = {1, 0, 0}, .TexCoord = {1, 1}},
+        {.Position = {0.5f, 0.5f, 0.5f}, .Normal = {1, 0, 0}, .TexCoord = {0, 1}},
         // -X
-        {.position = {-0.5f, -0.5f, -0.5f}, .normal = {-1, 0, 0}, .texCoord = {0, 0}},
-        {.position = {-0.5f, -0.5f, 0.5f}, .normal = {-1, 0, 0}, .texCoord = {1, 0}},
-        {.position = {-0.5f, 0.5f, 0.5f}, .normal = {-1, 0, 0}, .texCoord = {1, 1}},
-        {.position = {-0.5f, 0.5f, -0.5f}, .normal = {-1, 0, 0}, .texCoord = {0, 1}},
+        {.Position = {-0.5f, -0.5f, -0.5f}, .Normal = {-1, 0, 0}, .TexCoord = {0, 0}},
+        {.Position = {-0.5f, -0.5f, 0.5f}, .Normal = {-1, 0, 0}, .TexCoord = {1, 0}},
+        {.Position = {-0.5f, 0.5f, 0.5f}, .Normal = {-1, 0, 0}, .TexCoord = {1, 1}},
+        {.Position = {-0.5f, 0.5f, -0.5f}, .Normal = {-1, 0, 0}, .TexCoord = {0, 1}},
     };
 
-    data.indices.reserve(36);
-    for (std::uint32_t face = 0; face < 6; ++face) {
-        const std::uint32_t b = face * 4;
-        data.indices.insert(data.indices.end(), {b + 0, b + 1, b + 2, b + 0, b + 2, b + 3});
+    Data.Indices.reserve(36);
+    for (std::uint32_t Face = 0; Face < 6; ++Face) {
+        const std::uint32_t B = Face * 4;
+        Data.Indices.insert(Data.Indices.end(), {B + 0, B + 1, B + 2, B + 0, B + 2, B + 3});
     }
-    return data;
+    return Data;
 }
 
-FMeshData MakePlane(float size, float uvScale) {
-    const float h = size * 0.5f;
-    FMeshData data;
-    data.vertices = {
-        {.position = {-h, 0.0f, -h}, .normal = {0.0f, 1.0f, 0.0f}, .texCoord = {0.0f, 0.0f}},
-        {.position = {h, 0.0f, -h}, .normal = {0.0f, 1.0f, 0.0f}, .texCoord = {uvScale, 0.0f}},
-        {.position = {h, 0.0f, h}, .normal = {0.0f, 1.0f, 0.0f}, .texCoord = {uvScale, uvScale}},
-        {.position = {-h, 0.0f, h}, .normal = {0.0f, 1.0f, 0.0f}, .texCoord = {0.0f, uvScale}},
+FMeshData MakePlane(float Size, float UvScale) {
+    const float H = Size * 0.5f;
+    FMeshData Data;
+    Data.Vertices = {
+        {.Position = {-H, 0.0f, -H}, .Normal = {0.0f, 1.0f, 0.0f}, .TexCoord = {0.0f, 0.0f}},
+        {.Position = {H, 0.0f, -H}, .Normal = {0.0f, 1.0f, 0.0f}, .TexCoord = {UvScale, 0.0f}},
+        {.Position = {H, 0.0f, H}, .Normal = {0.0f, 1.0f, 0.0f}, .TexCoord = {UvScale, UvScale}},
+        {.Position = {-H, 0.0f, H}, .Normal = {0.0f, 1.0f, 0.0f}, .TexCoord = {0.0f, UvScale}},
     };
-    data.indices = {0, 2, 1, 0, 3, 2};
-    return data;
+    Data.Indices = {0, 2, 1, 0, 3, 2};
+    return Data;
 }
 
-FMeshData MakeSphere(int segments, int rings) {
-    segments = std::max(segments, 3);
-    rings = std::max(rings, 2);
+FMeshData MakeSphere(int Segments, int Rings) {
+    Segments = std::max(Segments, 3);
+    Rings = std::max(Rings, 2);
 
-    FMeshData data;
-    data.vertices.reserve(static_cast<std::size_t>(rings + 1) *
-                          static_cast<std::size_t>(segments + 1));
-    data.indices.reserve(static_cast<std::size_t>(rings) * static_cast<std::size_t>(segments) * 6u);
+    FMeshData Data;
+    Data.Vertices.reserve(static_cast<std::size_t>(Rings + 1) *
+                          static_cast<std::size_t>(Segments + 1));
+    Data.Indices.reserve(static_cast<std::size_t>(Rings) * static_cast<std::size_t>(Segments) * 6u);
 
-    constexpr float radius = 0.5f;
-    for (int y = 0; y <= rings; ++y) {
-        const auto v = static_cast<float>(y) / static_cast<float>(rings);
-        const float phi = v * std::numbers::pi_v<float>;
-        const float sinPhi = std::sin(phi);
-        const float cosPhi = std::cos(phi);
-        for (int x = 0; x <= segments; ++x) {
-            const auto u = static_cast<float>(x) / static_cast<float>(segments);
-            const float theta = u * 2.0f * std::numbers::pi_v<float>;
-            const glm::vec3 normal{std::cos(theta) * sinPhi, cosPhi, std::sin(theta) * sinPhi};
-            data.vertices.push_back(
-                FVertex{.position = normal * radius, .normal = normal, .texCoord = {u, 1.0f - v}});
+    constexpr float Radius = 0.5f;
+    for (int Y = 0; Y <= Rings; ++Y) {
+        const auto V = static_cast<float>(Y) / static_cast<float>(Rings);
+        const float Phi = V * std::numbers::pi_v<float>;
+        const float SinPhi = std::sin(Phi);
+        const float CosPhi = std::cos(Phi);
+        for (int X = 0; X <= Segments; ++X) {
+            const auto U = static_cast<float>(X) / static_cast<float>(Segments);
+            const float Theta = U * 2.0f * std::numbers::pi_v<float>;
+            const glm::vec3 Normal{std::cos(Theta) * SinPhi, CosPhi, std::sin(Theta) * SinPhi};
+            Data.Vertices.push_back(
+                FVertex{.Position = Normal * Radius, .Normal = Normal, .TexCoord = {U, 1.0f - V}});
         }
     }
 
-    for (int y = 0; y < rings; ++y) {
-        for (int x = 0; x < segments; ++x) {
-            const auto i0 = static_cast<std::uint32_t>(
-                (static_cast<std::size_t>(y) * static_cast<std::size_t>(segments + 1)) +
-                static_cast<std::size_t>(x));
-            const auto i1 = i0 + static_cast<std::uint32_t>(segments + 1);
+    for (int Y = 0; Y < Rings; ++Y) {
+        for (int X = 0; X < Segments; ++X) {
+            const auto I0 = static_cast<std::uint32_t>(
+                (static_cast<std::size_t>(Y) * static_cast<std::size_t>(Segments + 1)) +
+                static_cast<std::size_t>(X));
+            const auto I1 = I0 + static_cast<std::uint32_t>(Segments + 1);
             // CCW when viewed from outside (matches outward normals + back-face cull).
-            data.indices.insert(data.indices.end(), {i0, i0 + 1, i1, i0 + 1, i1 + 1, i1});
+            Data.Indices.insert(Data.Indices.end(), {I0, I0 + 1, I1, I0 + 1, I1 + 1, I1});
         }
     }
-    return data;
+    return Data;
 }
 

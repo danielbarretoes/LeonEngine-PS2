@@ -7,26 +7,26 @@
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("roughnessFromShininess decreases with shininess", "[render][material]") {
-    const float roughSoft = roughnessFromShininess(8.0f);
-    const float roughHard = roughnessFromShininess(256.0f);
-    REQUIRE(roughSoft > roughHard);
-    REQUIRE(roughHard >= 0.04f);
-    REQUIRE(roughSoft <= 1.0f);
+    const float RoughSoft = RoughnessFromShininess(8.0f);
+    const float RoughHard = RoughnessFromShininess(256.0f);
+    REQUIRE(RoughSoft > RoughHard);
+    REQUIRE(RoughHard >= 0.04f);
+    REQUIRE(RoughSoft <= 1.0f);
 }
 
 TEST_CASE("Material isTransparent uses alpha threshold", "[render][material]") {
-    FMaterial mat;
-    mat.alpha = 1.0f;
-    REQUIRE_FALSE(mat.isTransparent());
-    mat.alpha = 0.5f;
-    REQUIRE(mat.isTransparent());
+    FMaterial Mat;
+    Mat.Alpha = 1.0f;
+    REQUIRE_FALSE(Mat.IsTransparent());
+    Mat.Alpha = 0.5f;
+    REQUIRE(Mat.IsTransparent());
 }
 
 TEST_CASE("Material syncRoughnessFromShininess", "[render][material]") {
-    FMaterial mat;
-    mat.shininess = 128.0f;
-    mat.syncRoughnessFromShininess();
-    REQUIRE_THAT(mat.roughness, WithinAbs(roughnessFromShininess(128.0f), 1.0e-6f));
+    FMaterial Mat;
+    Mat.Shininess = 128.0f;
+    Mat.SyncRoughnessFromShininess();
+    REQUIRE_THAT(Mat.Roughness, WithinAbs(RoughnessFromShininess(128.0f), 1.0e-6f));
 }
 
 TEST_CASE("HasMaterialSurfaceFields detects surface keys", "[render][material]") {
