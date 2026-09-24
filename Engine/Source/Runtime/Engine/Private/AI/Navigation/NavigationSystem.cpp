@@ -15,7 +15,7 @@
 
 namespace {
 
-[[nodiscard]] bool IsFloorLikeBody(const BodyInstance& body, float cellSize) {
+[[nodiscard]] bool IsFloorLikeBody(const FBodyInstance& body, float cellSize) {
     const float hy = std::max(body.halfExtents.y, 0.001f);
     const float horiz = std::max(body.halfExtents.x, body.halfExtents.z);
     // Unit FPlane scaled ~40x1x40 → hy=0.5 still floor-like by aspect (was wrongly a full-arena
@@ -53,7 +53,7 @@ namespace {
     return level.StaticMeshes()[meshIndex].editorClass == "Plane";
 }
 
-[[nodiscard]] bool BodyBlocksNavigation(const BodyInstance& body, float floorY, float cellSize,
+[[nodiscard]] bool BodyBlocksNavigation(const FBodyInstance& body, float floorY, float cellSize,
                                         const Level* level) {
     if (body.type != EBodyType::Static) {
         return false;
@@ -88,7 +88,7 @@ namespace {
 }
 
 [[nodiscard]] bool CellBlockedByBody(float cx, float cz, float cellHalf, float agentRadius,
-                                     const BodyInstance& body) {
+                                     const FBodyInstance& body) {
     const float inflate = agentRadius + cellHalf;
     return AabbXZOverlapsPoint(
         cx, cz, inflate, body.position.x - body.halfExtents.x, body.position.x + body.halfExtents.x,
@@ -97,7 +97,7 @@ namespace {
 
 /// Tighter XZ footprint from baked tris (rotated ramp) vs fat world AABB.
 [[nodiscard]] bool CellBlockedByTriangleMesh(float cx, float cz, float cellHalf, float agentRadius,
-                                             const TriangleMeshCollision& mesh) {
+                                             const FTriangleMeshCollision& mesh) {
     const float inflate = agentRadius + cellHalf;
     for (std::size_t i = 0; i + 2 < mesh.indices.size(); i += 3) {
         const glm::vec3& v0 = mesh.positions[mesh.indices[i]];
@@ -142,7 +142,7 @@ void NavigationSystem::Clear() {
     walkableCellCount_ = 0;
 }
 
-void NavigationSystem::BakeGrid(const PhysScene& physics, float floorY, float walkBounds,
+void NavigationSystem::BakeGrid(const FPhysScene& physics, float floorY, float walkBounds,
                                 const Level* level) {
     Clear();
     const float bounds = walkBounds > 1.0f ? walkBounds : 1.0f;
@@ -159,14 +159,14 @@ void NavigationSystem::BakeGrid(const PhysScene& physics, float floorY, float wa
 
     const float cellHalf = cell * 0.5f;
     struct NavBlocker {
-        const BodyInstance* body = nullptr;
-        const TriangleMeshCollision* triMesh = nullptr;
+        const FBodyInstance* body = nullptr;
+        const FTriangleMeshCollision* triMesh = nullptr;
     };
     std::vector<NavBlocker> blockers;
     blockers.reserve(physics.Bodies().size());
     const auto& triMeshes = physics.TriangleMeshes();
     for (std::size_t bi = 0; bi < physics.Bodies().size(); ++bi) {
-        const BodyInstance& body = physics.Bodies()[bi];
+        const FBodyInstance& body = physics.Bodies()[bi];
         if (!BodyBlocksNavigation(body, floorY, cell, level)) {
             continue;
         }
@@ -243,12 +243,12 @@ void NavigationSystem::BakeGrid(const PhysScene& physics, float floorY, float wa
     walkableCellCount_ = walkable;
 }
 
-void NavigationSystem::BuildFromPhysScene(const PhysScene& physics, float floorY,
+void NavigationSystem::BuildFromPhysScene(const FPhysScene& physics, float floorY,
                                           float walkBounds) {
     BakeGrid(physics, floorY, walkBounds, nullptr);
 }
 
-void NavigationSystem::BuildFromLevel(const Level& level, const PhysScene& physics, float floorY,
+void NavigationSystem::BuildFromLevel(const Level& level, const FPhysScene& physics, float floorY,
                                       float walkBounds) {
     BakeGrid(physics, floorY, walkBounds, &level);
 }

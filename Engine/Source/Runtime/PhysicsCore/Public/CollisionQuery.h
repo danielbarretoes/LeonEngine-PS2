@@ -24,8 +24,8 @@ enum class EDrawDebugTrace : std::uint8_t {
     ForOneFrame,
 };
 
-/// Unreal-like FHitResult for PhysScene traces.
-struct HitResult {
+/// Unreal-like FHitResult for FPhysScene traces.
+struct FHitResult {
     bool bBlockingHit = false;
     /// Normalized distance along [Start, End] in [0, 1].
     float Time = 1.0f;
@@ -39,25 +39,25 @@ struct HitResult {
     glm::vec3 TraceStart{0.0f};
     glm::vec3 TraceEnd{0.0f};
     std::size_t LevelMeshIndex = (std::numeric_limits<std::size_t>::max)();
-    /// True when the hit is the virtual infinite floor plane (CollisionQueryParams).
+    /// True when the hit is the virtual infinite floor plane (FCollisionQueryParams).
     bool bFloorPlane = false;
 };
 
 /// Unreal-like FCollisionQueryParams.
-struct CollisionQueryParams {
+struct FCollisionQueryParams {
     std::size_t SkipLevelMeshIndex = (std::numeric_limits<std::size_t>::max)();
     /// Include an infinite horizontal floor at FloorY (CharacterMovement floor).
     bool bTraceFloorPlane = false;
     float FloorY = 0.0f;
-    /// When not None, PhysScene traces draw into the provided FDebugDraw* (F2 / gameplay debug).
+    /// When not None, FPhysScene traces draw into the provided FDebugDraw* (F2 / gameplay debug).
     EDrawDebugTrace DrawDebugType = EDrawDebugTrace::None;
 };
 
 /// Unreal-like DrawDebugLineTrace / Kismet System Library helpers (one frame into FDebugDraw).
 void DrawDebugLineTrace(FDebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
-                        const std::vector<HitResult>& hits);
+                        const std::vector<FHitResult>& hits);
 void DrawDebugSphereTrace(FDebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
-                          float radius, const std::vector<HitResult>& hits);
+                          float radius, const std::vector<FHitResult>& hits);
 void DrawDebugCapsuleTrace(FDebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
-                           float radius, float halfHeight, const std::vector<HitResult>& hits);
+                           float radius, float halfHeight, const std::vector<FHitResult>& hits);
 

@@ -28,7 +28,7 @@ class World;
 /// `CreateDefaultSubobject<T>()`. See `ActorComponent` contract.
 ///
 /// ## Actor location vs Level mesh
-/// `SetLevelMeshIndex` links this Actor to a Level StaticMeshComponent for PhysScene bodies.
+/// `SetLevelMeshIndex` links this Actor to a Level StaticMeshComponent for FPhysScene bodies.
 /// `SyncTransformToLevel` writes Actor location/yaw into that mesh each gameplay frame
 /// (`World::TickGameplayFrame`). Skeletal visuals use SceneComponents (`GetMesh`), not Level
 /// meshes.

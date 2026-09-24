@@ -15,7 +15,7 @@ constexpr char kMagic[4] = {'L', 'M', 'S', 'H'};
 constexpr std::uint32_t kVersion = 1;
 
 #pragma pack(push, 1)
-struct LmeshHeader {
+struct FLeonMeshHeader {
     char magic[4];
     std::uint32_t version;
     std::uint32_t flags;
@@ -28,7 +28,7 @@ struct LmeshHeader {
 };
 #pragma pack(pop)
 
-struct LmeshSubMesh {
+struct FLeonMeshSection {
     std::uint32_t indexOffset = 0;
     std::uint32_t indexCount = 0;
     std::uint32_t materialIndex = 0;
@@ -77,7 +77,7 @@ bool LoadLeonMeshFile(const std::string& path, FMeshData& out) {
         std::cerr << "LeonMesh: cannot open " << path << '\n';
         return false;
     }
-    LmeshHeader header{};
+    FLeonMeshHeader header{};
     in.read(reinterpret_cast<char*>(&header), sizeof(header));
     if (!in || std::memcmp(header.magic, kMagic, 4) != 0 || header.version != kVersion) {
         std::cerr << "LeonMesh: bad header in " << path << '\n';
@@ -103,15 +103,15 @@ bool LoadLeonMeshFile(const std::string& path, FMeshData& out) {
     if (header.submeshCount == 0) {
         data.submeshes.push_back(FMeshSection{0, static_cast<int>(header.indexCount), 0});
     } else {
-        std::vector<LmeshSubMesh> subs(header.submeshCount);
+        std::vector<FLeonMeshSection> subs(header.submeshCount);
         in.read(reinterpret_cast<char*>(subs.data()),
-                static_cast<std::streamsize>(sizeof(LmeshSubMesh) * header.submeshCount));
+                static_cast<std::streamsize>(sizeof(FLeonMeshSection) * header.submeshCount));
         if (!in) {
             std::cerr << "LeonMesh: truncated submeshes in " << path << '\n';
             return false;
         }
         data.submeshes.reserve(subs.size());
-        for (const LmeshSubMesh& s : subs) {
+        for (const FLeonMeshSection& s : subs) {
             data.submeshes.push_back(FMeshSection{static_cast<int>(s.indexOffset),
                                              static_cast<int>(s.indexCount),
                                              static_cast<int>(s.materialIndex)});
@@ -154,7 +154,7 @@ bool SaveLeonMeshFile(const std::string& path, const FMeshData& data) {
         return false;
     }
 
-    LmeshHeader header{};
+    FLeonMeshHeader header{};
     std::memcpy(header.magic, kMagic, 4);
     header.version = kVersion;
     header.flags = 0;
@@ -173,11 +173,11 @@ bool SaveLeonMeshFile(const std::string& path, const FMeshData& data) {
               static_cast<std::streamsize>(sizeof(std::uint32_t) * data.indices.size()));
 
     if (data.submeshes.empty()) {
-        LmeshSubMesh s{0, header.indexCount, 0};
+        FLeonMeshSection s{0, header.indexCount, 0};
         out.write(reinterpret_cast<const char*>(&s), sizeof(s));
     } else {
         for (const FMeshSection& sm : data.submeshes) {
-            LmeshSubMesh s{static_cast<std::uint32_t>(sm.indexOffset),
+            FLeonMeshSection s{static_cast<std::uint32_t>(sm.indexOffset),
                            static_cast<std::uint32_t>(sm.indexCount),
                            static_cast<std::uint32_t>(sm.materialIndex)};
             out.write(reinterpret_cast<const char*>(&s), sizeof(s));

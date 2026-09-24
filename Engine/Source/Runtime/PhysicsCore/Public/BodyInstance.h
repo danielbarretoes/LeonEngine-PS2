@@ -12,13 +12,13 @@ enum class EBodyType : std::uint8_t {
     Dynamic,
 };
 
-/// Unreal-like collision representation for a PhysScene body.
+/// Unreal-like collision representation for a FPhysScene body.
 enum class ECollisionShape : std::uint8_t {
     Box = 0,          // AABB (BlockingVolume / dynamics / fallback)
     TriangleMesh = 1, // Static mesh ComplexAsSimple lite (CPU MeshData)
 };
 
-struct BodyInstanceDesc {
+struct FBodyInstanceDesc {
     std::size_t levelMeshIndex = 0;
     EBodyType type = EBodyType::Static;
     /// 0 = derive from AABB volume on SyncFromLevel.
@@ -28,7 +28,7 @@ struct BodyInstanceDesc {
 };
 
 /// Physics-owned state. Level transforms are visuals; SyncFromLevel / SyncToLevel bridge them.
-struct BodyInstance {
+struct FBodyInstance {
     std::size_t levelMeshIndex = 0;
     EBodyType type = EBodyType::Static;
     ECollisionShape collisionShape = ECollisionShape::Box;

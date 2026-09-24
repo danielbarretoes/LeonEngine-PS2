@@ -8,7 +8,7 @@
 
 
 class Level;
-class PhysScene;
+class FPhysScene;
 class FDebugDraw;
 
 /// Level mesh tags recognized by NavigationSystem bake (Unreal NavArea-style hints).
@@ -17,7 +17,7 @@ inline constexpr const char* Blocker = "NavBlocker";
 inline constexpr const char* Walkable = "NavWalkable";
 } // namespace NavTags
 
-/// Unreal-like NavigationSystem lite: bake a grid NavMesh from static PhysScene bodies,
+/// Unreal-like NavigationSystem lite: bake a grid NavMesh from static FPhysScene bodies,
 /// then FindPath for AIController. Not Recast/Detour — swap-compatible later.
 class NavigationSystem {
 public:
@@ -29,10 +29,10 @@ public:
 
     /// Bake walkable grid from static box bodies. Wide/flat floor slabs stay walkable.
     /// `walkBounds` is half-extent from origin on XZ (matches CharacterMovement::WalkBounds).
-    void BuildFromPhysScene(const PhysScene& physics, float floorY, float walkBounds);
+    void BuildFromPhysScene(const FPhysScene& physics, float floorY, float walkBounds);
 
     /// Prefer this: skips FPlane; honors NavTags::Blocker / NavTags::Walkable on meshes.
-    void BuildFromLevel(const Level& level, const PhysScene& physics, float floorY,
+    void BuildFromLevel(const Level& level, const FPhysScene& physics, float floorY,
                         float walkBounds);
 
     void Clear();
@@ -54,7 +54,7 @@ public:
     void AppendDebugDraw(FDebugDraw& draw) const;
 
 private:
-    void BakeGrid(const PhysScene& physics, float floorY, float walkBounds, const Level* level);
+    void BakeGrid(const FPhysScene& physics, float floorY, float walkBounds, const Level* level);
 
     NavMesh mesh_{};
     float cellSize_ = 0.5f;

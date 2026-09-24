@@ -113,14 +113,14 @@ TEST_CASE("DeserializeLeonLevel and InputCmd adversarial inputs", "[content][fuz
 }
 
 TEST_CASE("NavigationSystem agent radius dilation shrinks walkable ring", "[gameplay][nav]") {
-    PhysScene physics;
-    BodyInstance floor{};
+    FPhysScene physics;
+    FBodyInstance floor{};
     floor.type = EBodyType::Static;
     floor.position = {0.0f, 0.0f, 0.0f};
     floor.halfExtents = {20.0f, 0.5f, 20.0f};
     physics.Bodies().push_back(floor);
 
-    BodyInstance pillar{};
+    FBodyInstance pillar{};
     pillar.type = EBodyType::Static;
     pillar.position = {0.0f, 1.0f, 0.0f};
     pillar.halfExtents = {0.4f, 1.5f, 0.4f};

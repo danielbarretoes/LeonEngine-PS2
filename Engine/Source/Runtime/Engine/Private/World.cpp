@@ -27,7 +27,7 @@ void World::RegisterBodiesFromLevel(const Level& level) {
         if (!component.HasPhysicsBody()) {
             continue;
         }
-        BodyInstanceDesc desc{};
+        FBodyInstanceDesc desc{};
         desc.levelMeshIndex = i;
         desc.type = component.simulatePhysics ? EBodyType::Dynamic : EBodyType::Static;
         desc.enableGravity = component.enableGravity;
@@ -60,7 +60,7 @@ void World::TickGameplayFrame(const WorldGameplayFrameParams& params) {
     });
     resolveCharacterOverlaps();
 
-    PhysSceneStepParams step{};
+    FPhysSceneStepParams step{};
     step.deltaTime = params.deltaTime;
     if (params.overridePhysicsStep) {
         step.damping = params.physicsDamping;

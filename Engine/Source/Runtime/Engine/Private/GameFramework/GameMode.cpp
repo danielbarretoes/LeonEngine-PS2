@@ -102,7 +102,7 @@ void GameMode::RebuildNavigation(Engine& engine, float floorY, float walkBounds)
 
 void GameMode::SnapCharacterToFloor(Character& character, glm::vec3& inOutFeet,
                                     float floorY) const {
-    const PhysScene& phys = GetWorld().GetPhysicsScene();
+    const FPhysScene& phys = GetWorld().GetPhysicsScene();
     const CharacterMovement& move = character.GetCharacterMovement();
     glm::vec3 probe = inOutFeet;
     probe.y = std::max(inOutFeet.y, floorY);

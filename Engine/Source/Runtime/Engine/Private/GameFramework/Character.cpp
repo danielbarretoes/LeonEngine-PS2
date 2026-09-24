@@ -118,14 +118,14 @@ void Character::FaceRotation(float yawDegrees, float deltaTime) {
     applyYaw(yawDegrees, deltaTime);
 }
 
-bool Character::IsWalkable(const HitResult& hit) const {
+bool Character::IsWalkable(const FHitResult& hit) const {
     if (!hit.bBlockingHit) {
         return false;
     }
     return hit.ImpactNormal.y >= movement_.WalkableFloorZ;
 }
 
-void Character::FindFloor(PhysScene& physScene, FindFloorResult& outFloor, float traceDistance,
+void Character::FindFloor(FPhysScene& physScene, FindFloorResult& outFloor, float traceDistance,
                           FDebugDraw* debugDraw) const {
     outFloor = {};
     const float distance = std::max(traceDistance, movement_.Skin);
@@ -135,14 +135,14 @@ void Character::FindFloor(PhysScene& physScene, FindFloorResult& outFloor, float
     const glm::vec3 traceStart = sphereCenter + glm::vec3{0.0f, movement_.Skin, 0.0f};
     const glm::vec3 traceEnd = sphereCenter - glm::vec3{0.0f, distance, 0.0f};
 
-    CollisionQueryParams query{};
+    FCollisionQueryParams query{};
     query.SkipLevelMeshIndex = LevelMeshIndex();
     query.bTraceFloorPlane = true;
     query.FloorY = movement_.FloorY;
     query.DrawDebugType =
         debugDraw != nullptr ? EDrawDebugTrace::ForOneFrame : EDrawDebugTrace::None;
 
-    HitResult hit{};
+    FHitResult hit{};
     const bool hitFloor =
         physScene.SphereTraceSingleByChannel(hit, traceStart, traceEnd, capsule_.radius,
                                              ECollisionChannel::Visibility, query, debugDraw);
@@ -175,7 +175,7 @@ glm::vec3 Character::capsuleCenterFromFeet(const glm::vec3& feet) const {
     return feet + glm::vec3{0.0f, capsule_.height * 0.5f, 0.0f};
 }
 
-bool Character::blocksHorizontalMove(const HitResult& hit) const {
+bool Character::blocksHorizontalMove(const FHitResult& hit) const {
     if (!hit.bBlockingHit || hit.bFloorPlane) {
         return false;
     }
@@ -198,8 +198,8 @@ glm::vec3 Character::computeSlideVector(const glm::vec3& delta, const glm::vec3&
     return slide;
 }
 
-bool Character::safeMoveUpdatedComponent(PhysScene& physScene, const glm::vec3& delta,
-                                         HitResult* outHit, FDebugDraw* debugDraw) {
+bool Character::safeMoveUpdatedComponent(FPhysScene& physScene, const glm::vec3& delta,
+                                         FHitResult* outHit, FDebugDraw* debugDraw) {
     glm::vec3& feet = mutableLocation();
     const float deltaLen = glm::length(delta);
     if (deltaLen < 1.0e-6f) {
@@ -210,18 +210,18 @@ bool Character::safeMoveUpdatedComponent(PhysScene& physScene, const glm::vec3& 
     const glm::vec3 endCenter = startCenter + delta;
     const float halfH = capsuleHalfHeight();
 
-    CollisionQueryParams query{};
+    FCollisionQueryParams query{};
     query.SkipLevelMeshIndex = LevelMeshIndex();
     query.bTraceFloorPlane = false;
     query.DrawDebugType =
         debugDraw != nullptr ? EDrawDebugTrace::ForOneFrame : EDrawDebugTrace::None;
 
-    std::vector<HitResult> hits;
+    std::vector<FHitResult> hits;
     (void)physScene.CapsuleTraceMultiByChannel(hits, startCenter, endCenter, capsule_.radius, halfH,
                                                ECollisionChannel::Visibility, query, debugDraw);
 
-    const HitResult* block = nullptr;
-    for (const HitResult& hit : hits) {
+    const FHitResult* block = nullptr;
+    for (const FHitResult& hit : hits) {
         if (blocksHorizontalMove(hit)) {
             block = &hit;
             break;
@@ -258,8 +258,8 @@ bool Character::safeMoveUpdatedComponent(PhysScene& physScene, const glm::vec3& 
     return false;
 }
 
-void Character::resolveSides(PhysScene& physScene, bool applyPush) {
-    CapsuleContactParams params{};
+void Character::resolveSides(FPhysScene& physScene, bool applyPush) {
+    FCapsuleContactParams params{};
     params.pushStrength = movement_.PushStrength;
     params.stepUp = movement_.MaxStepHeight;
     params.skin = movement_.Skin;
@@ -268,7 +268,7 @@ void Character::resolveSides(PhysScene& physScene, bool applyPush) {
                                   LevelMeshIndex(), applyPush);
 }
 
-bool Character::tryStepUp(PhysScene& physScene, const glm::vec3& forwardDelta,
+bool Character::tryStepUp(FPhysScene& physScene, const glm::vec3& forwardDelta,
                           FDebugDraw* debugDraw) {
     if (!IsMovingOnGround() || movement_.MaxStepHeight <= 1.0e-4f) {
         return false;
@@ -283,7 +283,7 @@ bool Character::tryStepUp(PhysScene& physScene, const glm::vec3& forwardDelta,
     const glm::vec3 startFeet = feet;
     const float halfH = capsuleHalfHeight();
 
-    CollisionQueryParams query{};
+    FCollisionQueryParams query{};
     query.SkipLevelMeshIndex = LevelMeshIndex();
     query.bTraceFloorPlane = false;
     query.DrawDebugType =
@@ -292,10 +292,10 @@ bool Character::tryStepUp(PhysScene& physScene, const glm::vec3& forwardDelta,
     // 1) Raise by MaxStepHeight; only a true ceiling (downward normal) aborts.
     const glm::vec3 upStart = capsuleCenterFromFeet(feet);
     const glm::vec3 upEnd = upStart + glm::vec3{0.0f, movement_.MaxStepHeight, 0.0f};
-    std::vector<HitResult> upHits;
+    std::vector<FHitResult> upHits;
     (void)physScene.CapsuleTraceMultiByChannel(upHits, upStart, upEnd, capsule_.radius, halfH,
                                                ECollisionChannel::Visibility, query, debugDraw);
-    for (const HitResult& upHit : upHits) {
+    for (const FHitResult& upHit : upHits) {
         if (upHit.ImpactNormal.y < -0.5f) {
             return false;
         }
@@ -309,7 +309,7 @@ bool Character::tryStepUp(PhysScene& physScene, const glm::vec3& forwardDelta,
     if (fwdLen > 1.0e-5f && fwdLen < minFwd) {
         fwd *= (minFwd / fwdLen);
     }
-    HitResult fwdHit{};
+    FHitResult fwdHit{};
     const bool cleared = safeMoveUpdatedComponent(physScene, fwd, &fwdHit, debugDraw);
     if (!cleared && fwdHit.Time < 0.15f) {
         feet = startFeet;
@@ -349,7 +349,7 @@ bool Character::tryStepUp(PhysScene& physScene, const glm::vec3& forwardDelta,
     return true;
 }
 
-void Character::moveHorizontal(PhysScene& physScene, float deltaTime, FDebugDraw* debugDraw) {
+void Character::moveHorizontal(FPhysScene& physScene, float deltaTime, FDebugDraw* debugDraw) {
     const float len = glm::length(wishDir_);
     if (len <= 1.0e-4f) {
         resolveSides(physScene, true);
@@ -374,7 +374,7 @@ void Character::moveHorizontal(PhysScene& physScene, float deltaTime, FDebugDraw
         if (glm::length(remaining) < 1.0e-5f) {
             break;
         }
-        HitResult hit{};
+        FHitResult hit{};
         if (safeMoveUpdatedComponent(physScene, remaining, &hit, debugDraw)) {
             break;
         }
@@ -394,7 +394,7 @@ void Character::moveHorizontal(PhysScene& physScene, float deltaTime, FDebugDraw
     resolveSides(physScene, true);
 }
 
-void Character::integrateVertical(PhysScene& physScene, float deltaTime, FDebugDraw* debugDraw) {
+void Character::integrateVertical(FPhysScene& physScene, float deltaTime, FDebugDraw* debugDraw) {
     const bool wasGrounded = IsMovingOnGround();
     if (jumpRequested_) {
         const bool canGroundJump = wasGrounded;
@@ -448,7 +448,7 @@ void Character::integrateVertical(PhysScene& physScene, float deltaTime, FDebugD
     }
 }
 
-void Character::PerformMovement(PhysScene& physScene, float deltaTime, FDebugDraw* debugDraw) {
+void Character::PerformMovement(FPhysScene& physScene, float deltaTime, FDebugDraw* debugDraw) {
     moveHorizontal(physScene, deltaTime, debugDraw);
     integrateVertical(physScene, deltaTime, debugDraw);
     resolveSides(physScene, false);
@@ -462,7 +462,7 @@ void Character::TickCharacterMovement(float deltaTime, FDebugDraw* debugDraw) {
     PerformMovement(world->GetPhysicsScene(), deltaTime, debugDraw);
 }
 
-void Character::ResolveOverlaps(PhysScene& physScene) {
+void Character::ResolveOverlaps(FPhysScene& physScene) {
     resolveSides(physScene, false);
 }
 

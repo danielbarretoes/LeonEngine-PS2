@@ -53,7 +53,7 @@ constexpr JPH::BroadPhaseLayer MOVING(1);
 constexpr JPH::uint NUM_LAYERS = 2;
 } // namespace BroadPhaseLayers
 
-class ObjectLayerPairFilterImpl final : public JPH::ObjectLayerPairFilter {
+class FObjectLayerPairFilterImpl final : public JPH::ObjectLayerPairFilter {
 public:
     [[nodiscard]] bool ShouldCollide(JPH::ObjectLayer a, JPH::ObjectLayer b) const override {
         switch (a) {
@@ -67,9 +67,9 @@ public:
     }
 };
 
-class BPLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface {
+class FBPLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface {
 public:
-    BPLayerInterfaceImpl() {
+    FBPLayerInterfaceImpl() {
         objectToBroadPhase_[Layers::NON_MOVING] = BroadPhaseLayers::NON_MOVING;
         objectToBroadPhase_[Layers::MOVING] = BroadPhaseLayers::MOVING;
     }
@@ -99,7 +99,7 @@ private:
     JPH::BroadPhaseLayer objectToBroadPhase_[Layers::NUM_LAYERS];
 };
 
-class ObjectVsBroadPhaseLayerFilterImpl final : public JPH::ObjectVsBroadPhaseLayerFilter {
+class FObjectVsBroadPhaseLayerFilterImpl final : public JPH::ObjectVsBroadPhaseLayerFilter {
 public:
     [[nodiscard]] bool ShouldCollide(JPH::ObjectLayer layer,
                                      JPH::BroadPhaseLayer bp) const override {
@@ -130,8 +130,8 @@ public:
     return shapeResult.Get();
 }
 
-/// Bake TriangleMeshCollision into a MeshShape in body-local space (origin = body.position).
-[[nodiscard]] JPH::ShapeRefC CreateMeshShape(const TriangleMeshCollision& mesh,
+/// Bake FTriangleMeshCollision into a MeshShape in body-local space (origin = body.position).
+[[nodiscard]] JPH::ShapeRefC CreateMeshShape(const FTriangleMeshCollision& mesh,
                                              const glm::vec3& bodyPosition) {
     if (!mesh.IsValid()) {
         return nullptr;
@@ -167,9 +167,9 @@ public:
     return shapeResult.Get();
 }
 
-class JoltPhysicsBackend final : public IPhysicsBackend {
+class FJoltPhysicsBackend final : public IPhysicsBackend {
 public:
-    JoltPhysicsBackend() {
+    FJoltPhysicsBackend() {
         EnsureJoltTypes();
         tempAllocator_ = std::make_unique<JPH::TempAllocatorImpl>(4 * 1024 * 1024);
         jobSystem_ = std::make_unique<JPH::JobSystemSingleThreaded>(JPH::cMaxPhysicsJobs);
@@ -182,7 +182,7 @@ public:
                             objectVsObjectLayerFilter_);
     }
 
-    ~JoltPhysicsBackend() override { RigidClear(); }
+    ~FJoltPhysicsBackend() override { RigidClear(); }
 
     [[nodiscard]] const char* GetName() const override { return "Jolt"; }
     [[nodiscard]] bool HasRigidWorld() const override { return true; }
@@ -199,8 +199,8 @@ public:
         floorY_ = std::numeric_limits<float>::quiet_NaN();
     }
 
-    void RigidRebuild(const std::vector<BodyInstance>& bodies,
-                      const std::vector<TriangleMeshCollision>* triangleMeshes,
+    void RigidRebuild(const std::vector<FBodyInstance>& bodies,
+                      const std::vector<FTriangleMeshCollision>* triangleMeshes,
                       std::size_t skipLevelMeshIndex) override {
         RigidClear();
         bodyIds_.assign(bodies.size(), JPH::BodyID());
@@ -211,7 +211,7 @@ public:
             if (bodies[i].levelMeshIndex == skipLevelMeshIndex) {
                 continue;
             }
-            const TriangleMeshCollision* tri =
+            const FTriangleMeshCollision* tri =
                 (triangleMeshes != nullptr && i < triangleMeshes->size()) ? &(*triangleMeshes)[i]
                                                                           : nullptr;
             bodyIds_[i] = CreateBody(iface, bodies[i], i, tri);
@@ -219,7 +219,7 @@ public:
         physicsSystem_.OptimizeBroadPhase();
     }
 
-    void RigidPrepareStep(const std::vector<BodyInstance>& bodies,
+    void RigidPrepareStep(const std::vector<FBodyInstance>& bodies,
                           std::size_t skipLevelMeshIndex) override {
         // Structure changed outside SyncFromLevel — rebuild as boxes (meshes need SyncFromLevel).
         if (bodyIds_.size() != bodies.size()) {
@@ -231,7 +231,7 @@ public:
         lastSkip_ = skipLevelMeshIndex;
 
         for (std::size_t i = 0; i < bodies.size(); ++i) {
-            const BodyInstance& src = bodies[i];
+            const FBodyInstance& src = bodies[i];
             const bool skip = src.levelMeshIndex == skipLevelMeshIndex;
 
             if (skip) {
@@ -251,7 +251,7 @@ public:
                 continue;
             }
 
-            // CMC / ResolveCapsuleSides may have nudged BodyInstance state — push into Jolt.
+            // CMC / ResolveCapsuleSides may have nudged FBodyInstance state — push into Jolt.
             iface.SetPosition(bodyIds_[i],
                               JPH::RVec3(src.position.x, src.position.y, src.position.z),
                               JPH::EActivation::Activate);
@@ -271,7 +271,7 @@ public:
         physicsSystem_.Update(deltaTime, collisionSteps, tempAllocator_.get(), jobSystem_.get());
     }
 
-    void RigidReadBack(std::vector<BodyInstance>& bodies) override {
+    void RigidReadBack(std::vector<FBodyInstance>& bodies) override {
         JPH::BodyInterface& iface = physicsSystem_.GetBodyInterface();
         const std::size_t n = (std::min)(bodies.size(), bodyIds_.size());
         for (std::size_t i = 0; i < n; ++i) {
@@ -287,7 +287,7 @@ public:
         }
     }
 
-    bool RigidLineTrace(std::vector<HitResult>& outHits, const glm::vec3& start,
+    bool RigidLineTrace(std::vector<FHitResult>& outHits, const glm::vec3& start,
                         const glm::vec3& end, ECollisionChannel channel,
                         std::size_t skipLevelMeshIndex) override {
         outHits.clear();
@@ -297,8 +297,8 @@ public:
 
         JPH::AllHitCollisionCollector<JPH::CastRayCollector> collector;
         JPH::RayCastSettings settings;
-        ChannelObjectLayerFilter layerFilter(channel);
-        TraceBodyFilter bodyFilter(floorId_, skipLevelMeshIndex);
+        FChannelObjectLayerFilter layerFilter(channel);
+        FTraceBodyFilter bodyFilter(floorId_, skipLevelMeshIndex);
         physicsSystem_.GetNarrowPhaseQuery().CastRay(ray, settings, collector, {}, layerFilter,
                                                      bodyFilter);
         collector.Sort();
@@ -323,7 +323,7 @@ public:
             if (normal.Dot(toStart) < 0.0f) {
                 normal = -normal;
             }
-            HitResult out{};
+            FHitResult out{};
             out.bBlockingHit = true;
             out.Time = hit.mFraction;
             out.Distance = direction.Length() * hit.mFraction;
@@ -339,7 +339,7 @@ public:
         return !outHits.empty();
     }
 
-    bool RigidSphereTrace(std::vector<HitResult>& outHits, const glm::vec3& start,
+    bool RigidSphereTrace(std::vector<FHitResult>& outHits, const glm::vec3& start,
                           const glm::vec3& end, float radius, ECollisionChannel channel,
                           std::size_t skipLevelMeshIndex) override {
         const float r = std::max(radius, 1.0e-3f);
@@ -347,7 +347,7 @@ public:
         return CastShapeTrace(outHits, start, end, sphere, channel, skipLevelMeshIndex, r);
     }
 
-    bool RigidCapsuleTrace(std::vector<HitResult>& outHits, const glm::vec3& start,
+    bool RigidCapsuleTrace(std::vector<FHitResult>& outHits, const glm::vec3& start,
                            const glm::vec3& end, float radius, float halfHeight,
                            ECollisionChannel channel, std::size_t skipLevelMeshIndex) override {
         const float r = std::max(radius, 1.0e-3f);
@@ -358,9 +358,9 @@ public:
     }
 
 private:
-    class ChannelObjectLayerFilter final : public JPH::ObjectLayerFilter {
+    class FChannelObjectLayerFilter final : public JPH::ObjectLayerFilter {
     public:
-        explicit ChannelObjectLayerFilter(ECollisionChannel channel) : channel_(channel) {}
+        explicit FChannelObjectLayerFilter(ECollisionChannel channel) : channel_(channel) {}
         [[nodiscard]] bool ShouldCollide(JPH::ObjectLayer layer) const override {
             switch (channel_) {
             case ECollisionChannel::WorldStatic:
@@ -378,9 +378,9 @@ private:
         ECollisionChannel channel_;
     };
 
-    class TraceBodyFilter final : public JPH::BodyFilter {
+    class FTraceBodyFilter final : public JPH::BodyFilter {
     public:
-        TraceBodyFilter(JPH::BodyID floorId, std::size_t skipMesh)
+        FTraceBodyFilter(JPH::BodyID floorId, std::size_t skipMesh)
             : floorId_(floorId), skipMesh_(skipMesh) {}
 
         [[nodiscard]] bool ShouldCollide(const JPH::BodyID& id) const override {
@@ -402,7 +402,7 @@ private:
         std::size_t skipMesh_;
     };
 
-    bool CastShapeTrace(std::vector<HitResult>& outHits, const glm::vec3& start,
+    bool CastShapeTrace(std::vector<FHitResult>& outHits, const glm::vec3& start,
                         const glm::vec3& end, const JPH::Shape* shape, ECollisionChannel channel,
                         std::size_t skipLevelMeshIndex, float inflateHint) {
         outHits.clear();
@@ -416,8 +416,8 @@ private:
 
         JPH::AllHitCollisionCollector<JPH::CastShapeCollector> collector;
         JPH::ShapeCastSettings settings;
-        ChannelObjectLayerFilter layerFilter(channel);
-        TraceBodyFilter bodyFilter(floorId_, skipLevelMeshIndex);
+        FChannelObjectLayerFilter layerFilter(channel);
+        FTraceBodyFilter bodyFilter(floorId_, skipLevelMeshIndex);
         physicsSystem_.GetNarrowPhaseQuery().CastShape(shapeCast, settings, JPH::RVec3::sZero(),
                                                        collector, {}, layerFilter, bodyFilter);
         collector.Sort();
@@ -444,7 +444,7 @@ private:
             if (normal.Dot(toStart) < 0.0f) {
                 normal = -normal;
             }
-            HitResult out{};
+            FHitResult out{};
             out.bBlockingHit = true;
             out.Time = hit.mFraction;
             out.Distance = direction.Length() * hit.mFraction;
@@ -481,9 +481,9 @@ private:
         iface.DestroyBody(id);
     }
 
-    [[nodiscard]] JPH::BodyID CreateBody(JPH::BodyInterface& iface, const BodyInstance& src,
+    [[nodiscard]] JPH::BodyID CreateBody(JPH::BodyInterface& iface, const FBodyInstance& src,
                                          std::size_t /*index*/,
-                                         const TriangleMeshCollision* triMesh) const {
+                                         const FTriangleMeshCollision* triMesh) const {
         JPH::ShapeRefC shape;
         JPH::RVec3 bodyPos(src.position.x, src.position.y, src.position.z);
 
@@ -554,9 +554,9 @@ private:
         floorY_ = floorY;
     }
 
-    BPLayerInterfaceImpl broadPhaseLayerInterface_;
-    ObjectVsBroadPhaseLayerFilterImpl objectVsBroadphaseLayerFilter_;
-    ObjectLayerPairFilterImpl objectVsObjectLayerFilter_;
+    FBPLayerInterfaceImpl broadPhaseLayerInterface_;
+    FObjectVsBroadPhaseLayerFilterImpl objectVsBroadphaseLayerFilter_;
+    FObjectLayerPairFilterImpl objectVsObjectLayerFilter_;
     JPH::PhysicsSystem physicsSystem_;
     std::unique_ptr<JPH::TempAllocatorImpl> tempAllocator_;
     std::unique_ptr<JPH::JobSystemSingleThreaded> jobSystem_;
@@ -569,6 +569,6 @@ private:
 } // namespace
 
 std::unique_ptr<IPhysicsBackend> CreateJoltPhysicsBackend() {
-    return std::make_unique<JoltPhysicsBackend>();
+    return std::make_unique<FJoltPhysicsBackend>();
 }
 

@@ -26,7 +26,7 @@ struct FindFloorResult {
     bool bWalkableFloor = false;
     /// Distance from capsule feet down to floor ImpactPoint.y (>= 0 when hit below/at feet).
     float FloorDist = 0.0f;
-    HitResult Hit{};
+    FHitResult Hit{};
 };
 
 /// Unreal-like UCharacterMovementComponent tunables (PascalCase Unreal-like field names).
@@ -58,17 +58,17 @@ struct CharacterMovement {
 ///
 /// Contract:
 /// - Actor location = capsule **feet** (bottom), not capsule center.
-/// - Capsule extends upward by CapsuleShape::height; XZ radius CapsuleShape::radius.
-/// - Not registered as a PhysScene BodyInstance; moves via PerformMovement queries.
+/// - Capsule extends upward by FCapsuleShape::height; XZ radius FCapsuleShape::radius.
+/// - Not registered as a FPhysScene FBodyInstance; moves via PerformMovement queries.
 /// - Modes: Walking / Falling via SetMovementMode; floor via FindFloor → IsWalkable.
 class Character : public Pawn {
 public:
     Character();
 
-    void SetCapsule(const CapsuleShape& capsule) { capsule_ = capsule; }
+    void SetCapsule(const FCapsuleShape& capsule) { capsule_ = capsule; }
     void SetCharacterMovement(const CharacterMovement& movement) { movement_ = movement; }
 
-    [[nodiscard]] const CapsuleShape& GetCapsule() const { return capsule_; }
+    [[nodiscard]] const FCapsuleShape& GetCapsule() const { return capsule_; }
     [[nodiscard]] CharacterMovement& GetCharacterMovement() { return movement_; }
     [[nodiscard]] const CharacterMovement& GetCharacterMovement() const { return movement_; }
 
@@ -89,10 +89,10 @@ public:
     [[nodiscard]] const FindFloorResult& GetCurrentFloor() const { return currentFloor_; }
 
     /// Unreal IsWalkable: ImpactNormal.Z >= WalkableFloorZ.
-    [[nodiscard]] bool IsWalkable(const HitResult& hit) const;
+    [[nodiscard]] bool IsWalkable(const FHitResult& hit) const;
 
     /// Unreal-like FindFloor: downward sphere trace from feet; fills outFloor.
-    void FindFloor(PhysScene& physScene, FindFloorResult& outFloor, float traceDistance,
+    void FindFloor(FPhysScene& physScene, FindFloorResult& outFloor, float traceDistance,
                    FDebugDraw* debugDraw = nullptr) const;
 
     /// Unreal-like ACharacter::GetMesh() — skeletal visual + AnimInstance.
@@ -129,13 +129,13 @@ public:
     /// SetActorYaw).
     void FaceRotation(float yawDegrees, float deltaTime);
 
-    /// Move capsule against an explicit PhysScene (unit tests / tools). Packs may override.
-    virtual void PerformMovement(PhysScene& physScene, float deltaTime,
+    /// Move capsule against an explicit FPhysScene (unit tests / tools). Packs may override.
+    virtual void PerformMovement(FPhysScene& physScene, float deltaTime,
                                  FDebugDraw* debugDraw = nullptr);
     /// Move against `GetWorld()->GetPhysicsScene()` (no-op if not in a World).
     void TickCharacterMovement(float deltaTime, FDebugDraw* debugDraw = nullptr);
-    /// After PhysScene::Step, push the capsule out of overlapping bodies.
-    void ResolveOverlaps(PhysScene& physScene);
+    /// After FPhysScene::Step, push the capsule out of overlapping bodies.
+    void ResolveOverlaps(FPhysScene& physScene);
     void ResolveOverlaps();
 
     /// Separate this capsule from another Character on XZ (equal share). No-op if Y ranges miss.
@@ -149,27 +149,27 @@ public:
 
 private:
     void applyYaw(float targetYawDegrees, float deltaTime);
-    void moveHorizontal(PhysScene& physScene, float deltaTime, FDebugDraw* debugDraw);
-    void integrateVertical(PhysScene& physScene, float deltaTime, FDebugDraw* debugDraw);
-    void resolveSides(PhysScene& physScene, bool applyPush);
+    void moveHorizontal(FPhysScene& physScene, float deltaTime, FDebugDraw* debugDraw);
+    void integrateVertical(FPhysScene& physScene, float deltaTime, FDebugDraw* debugDraw);
+    void resolveSides(FPhysScene& physScene, bool applyPush);
 
     /// Capsule cylinder half-height (excl. hemispherical caps) for CapsuleTrace.
     [[nodiscard]] float capsuleHalfHeight() const;
     [[nodiscard]] glm::vec3 capsuleCenterFromFeet(const glm::vec3& feet) const;
     /// True if a horizontal sweep should stop on this hit (not walkable floor/top).
-    [[nodiscard]] bool blocksHorizontalMove(const HitResult& hit) const;
+    [[nodiscard]] bool blocksHorizontalMove(const FHitResult& hit) const;
     /// Unreal-like SafeMoveUpdatedComponent (XZ): sweep capsule, advance to hit, optional outHit.
     /// Returns true if the full delta was applied (no blocking side hit).
-    bool safeMoveUpdatedComponent(PhysScene& physScene, const glm::vec3& delta, HitResult* outHit,
+    bool safeMoveUpdatedComponent(FPhysScene& physScene, const glm::vec3& delta, FHitResult* outHit,
                                   FDebugDraw* debugDraw);
     /// Project velocity onto the wall plane (Unreal ComputeSlideVector lite, Y forced 0).
     [[nodiscard]] static glm::vec3 computeSlideVector(const glm::vec3& delta,
                                                       const glm::vec3& impactNormal);
     /// Unreal CMC step-up: raise ≤ MaxStepHeight, move forward, land on walkable floor.
-    [[nodiscard]] bool tryStepUp(PhysScene& physScene, const glm::vec3& forwardDelta,
+    [[nodiscard]] bool tryStepUp(FPhysScene& physScene, const glm::vec3& forwardDelta,
                                  FDebugDraw* debugDraw);
 
-    CapsuleShape capsule_{};
+    FCapsuleShape capsule_{};
     CharacterMovement movement_{};
     SkeletalMeshComponent mesh_{};
     float animBlendInput_ = 0.0f;

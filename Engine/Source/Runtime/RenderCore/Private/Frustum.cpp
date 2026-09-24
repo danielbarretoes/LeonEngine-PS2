@@ -9,14 +9,14 @@
 
 namespace {
 
-struct RawPlane {
+struct FRawPlane {
     float a = 0.0f;
     float b = 0.0f;
     float c = 0.0f;
     float d = 0.0f;
 };
 
-RawPlane normalizePlane(float a, float b, float c, float d) {
+FRawPlane normalizePlane(float a, float b, float c, float d) {
     const float len = std::sqrt((a * a) + (b * b) + (c * c));
     if (len > 1e-8f) {
         const float inv = 1.0f / len;
@@ -89,7 +89,7 @@ bool FBox::intersectRay(const glm::vec3& origin, const glm::vec3& dir, float& ou
 void FFrustum::extractFromViewProjection(const glm::mat4& viewProjection) {
     // Gribb/Hartmann: combine clip-matrix columns into frustum planes.
     const glm::mat4& m = viewProjection;
-    const std::array<RawPlane, 6> raw = {{
+    const std::array<FRawPlane, 6> raw = {{
         normalizePlane(m[0][3] + m[0][0], m[1][3] + m[1][0], m[2][3] + m[2][0],
                        m[3][3] + m[3][0]), // left
         normalizePlane(m[0][3] - m[0][0], m[1][3] - m[1][0], m[2][3] - m[2][0],
@@ -104,7 +104,7 @@ void FFrustum::extractFromViewProjection(const glm::mat4& viewProjection) {
                        m[3][3] - m[3][2]), // far
     }};
 
-    auto assign = [](FPlane& dst, const RawPlane& src) {
+    auto assign = [](FPlane& dst, const FRawPlane& src) {
         dst.normal = {src.a, src.b, src.c};
         dst.distance = src.d;
     };

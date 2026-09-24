@@ -32,17 +32,17 @@ constexpr float kMessageLineStepY = 14.0f * kMessagePixelScale;
 constexpr float kFadeTailSeconds = 0.5f;
 constexpr std::size_t kMaxOnScreenMessages = 12;
 
-struct PackedVert {
+struct FPackedVert {
     float x, y, z;
     std::array<unsigned char, 4> rgba{};
 };
 
-struct DrawVert {
+struct FDrawVert {
     float x, y, z;
     float r, g, b, a;
 };
 
-void appendTextMesh(std::vector<DrawVert>& tris, const std::string& text, float originX,
+void appendTextMesh(std::vector<FDrawVert>& tris, const std::string& text, float originX,
                     float originY, float pixelScale, const std::array<unsigned char, 4>& color) {
     if (text.empty()) {
         return;
@@ -59,9 +59,9 @@ void appendTextMesh(std::vector<DrawVert>& tris, const std::string& text, float 
         return;
     }
 
-    const auto* packed = reinterpret_cast<const PackedVert*>(fontBuf.data());
-    auto push = [&](const PackedVert& v) {
-        DrawVert out{};
+    const auto* packed = reinterpret_cast<const FPackedVert*>(fontBuf.data());
+    auto push = [&](const FPackedVert& v) {
+        FDrawVert out{};
         out.x = (v.x * pixelScale) + originX;
         out.y = (v.y * pixelScale) + originY;
         out.z = 0.0f;
@@ -82,7 +82,7 @@ void appendTextMesh(std::vector<DrawVert>& tris, const std::string& text, float 
     }
 }
 
-void appendRightAlignedLines(std::vector<DrawVert>& tris, const std::string& text,
+void appendRightAlignedLines(std::vector<FDrawVert>& tris, const std::string& text,
                              int framebufferWidth, float originY, float pixelScale,
                              const std::array<unsigned char, 4>& color) {
     if (text.empty()) {
@@ -114,7 +114,7 @@ void appendRightAlignedLines(std::vector<DrawVert>& tris, const std::string& tex
     }
 }
 
-void appendCenterAlignedLines(std::vector<DrawVert>& tris, const std::string& text,
+void appendCenterAlignedLines(std::vector<FDrawVert>& tris, const std::string& text,
                               int framebufferWidth, float originY, float pixelScale,
                               const std::array<unsigned char, 4>& color) {
     if (text.empty()) {
@@ -147,7 +147,7 @@ void appendCenterAlignedLines(std::vector<DrawVert>& tris, const std::string& te
 }
 
 /// Draw multiline text. `anchorX` is left / center / right of each line per `justify`.
-void appendJustifiedLines(std::vector<DrawVert>& tris, const std::string& text, float anchorX,
+void appendJustifiedLines(std::vector<FDrawVert>& tris, const std::string& text, float anchorX,
                           float originY, float pixelScale, ETextJustify justify,
                           const std::array<unsigned char, 4>& color) {
     if (text.empty()) {
@@ -216,10 +216,10 @@ void MeasureMultilineText(const std::string& text, float& outMaxRawWidth, int& o
             static_cast<unsigned char>(a * 255.0f)};
 }
 
-void appendScreenQuad(std::vector<DrawVert>& tris, float x0, float y0, float x1, float y1, float x2,
+void appendScreenQuad(std::vector<FDrawVert>& tris, float x0, float y0, float x1, float y1, float x2,
                       float y2, float x3, float y3, const glm::vec3& color) {
     auto push = [&](float x, float y) {
-        DrawVert out{};
+        FDrawVert out{};
         out.x = x;
         out.y = y;
         out.z = 0.0f;
@@ -237,7 +237,7 @@ void appendScreenQuad(std::vector<DrawVert>& tris, float x0, float y0, float x1,
     push(x3, y3);
 }
 
-void appendThickScreenLine(std::vector<DrawVert>& tris, float x0, float y0, float x1, float y1,
+void appendThickScreenLine(std::vector<FDrawVert>& tris, float x0, float y0, float x1, float y1,
                            float thickness, const glm::vec3& color) {
     const float dx = x1 - x0;
     const float dy = y1 - y0;
@@ -266,9 +266,9 @@ bool FDebugOverlay::Initialize(const std::string& /*shaderDirectory*/) {
     glBindVertexArray(vao_);
     glBindBuffer(GL_ARRAY_BUFFER, vbo_);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(DrawVert), GlAttribOffset(&DrawVert::x));
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(FDrawVert), GlAttribOffset(&FDrawVert::x));
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(DrawVert), GlAttribOffset(&DrawVert::r));
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(FDrawVert), GlAttribOffset(&FDrawVert::r));
     glBindVertexArray(0);
     return true;
 }
@@ -427,7 +427,7 @@ void FDebugOverlay::RebuildMesh(int framebufferWidth, int framebufferHeight) {
         return;
     }
 
-    std::vector<DrawVert> tris;
+    std::vector<FDrawVert> tris;
     constexpr std::array<unsigned char, 4> kLeftColor = {230, 235, 240, 255};
     constexpr std::array<unsigned char, 4> kBottomLeftColor = {200, 210, 220, 255};
     constexpr std::array<unsigned char, 4> kCenterColor = {255, 210, 90, 255};
@@ -498,7 +498,7 @@ void FDebugOverlay::RebuildMesh(int framebufferWidth, int framebufferHeight) {
     }
 
     glBindBuffer(GL_ARRAY_BUFFER, vbo_);
-    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(tris.size() * sizeof(DrawVert)),
+    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(tris.size() * sizeof(FDrawVert)),
                  tris.data(), GL_DYNAMIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     vertexCount_ = static_cast<int>(tris.size());

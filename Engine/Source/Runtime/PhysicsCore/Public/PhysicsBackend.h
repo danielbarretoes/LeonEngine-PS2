@@ -3,7 +3,7 @@
 #include <cstdint>
 
 
-/// Physics implementation behind `PhysScene`.
+/// Physics implementation behind `FPhysScene`.
 /// Default remains Arcade (AABB traces + CMC). Pass `EPhysicsBackend::Jolt` for rigid Step
 /// and narrow-phase traces when built with `LEON_WITH_JOLT` (Editor/Engine default ON).
 enum class EPhysicsBackend : std::uint8_t {
@@ -11,7 +11,7 @@ enum class EPhysicsBackend : std::uint8_t {
     Jolt = 1,
 };
 
-/// Default backend for new PhysScene / World instances (Arcade — CMC + AABB queries).
+/// Default backend for new FPhysScene / World instances (Arcade — CMC + AABB queries).
 [[nodiscard]] inline EPhysicsBackend DefaultPhysicsBackend() {
     return EPhysicsBackend::Arcade;
 }

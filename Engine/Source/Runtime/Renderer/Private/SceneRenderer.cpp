@@ -22,7 +22,7 @@
 
 namespace {
 
-struct DrawItem {
+struct FDrawItem {
     std::size_t objectIndex = 0;
     std::size_t subMeshIndex = 0;
     float sortKey = 0.0f;
@@ -826,8 +826,8 @@ void FSceneRenderer::DrawScene(const Level& level, const Camera& camera) {
         passTimers_.End(FGPUPassTimer::EPass::Planar);
     }
 
-    std::vector<DrawItem> opaque;
-    std::vector<DrawItem> transparent;
+    std::vector<FDrawItem> opaque;
+    std::vector<FDrawItem> transparent;
     opaque.reserve(level.StaticMeshes().size());
     transparent.reserve(level.StaticMeshes().size());
 
@@ -852,7 +852,7 @@ void FSceneRenderer::DrawScene(const Level& level, const Camera& camera) {
 
         for (std::size_t s = 0; s < subCount; ++s) {
             const FMaterial& mat = object.materialForSubMesh(s);
-            const DrawItem item{i, s, sortKey};
+            const FDrawItem item{i, s, sortKey};
             if (mat.isTransparent()) {
                 transparent.push_back(item);
             } else {
@@ -862,9 +862,9 @@ void FSceneRenderer::DrawScene(const Level& level, const Camera& camera) {
     }
 
     std::sort(opaque.begin(), opaque.end(),
-              [](const DrawItem& a, const DrawItem& b) { return a.sortKey < b.sortKey; });
+              [](const FDrawItem& a, const FDrawItem& b) { return a.sortKey < b.sortKey; });
     std::sort(transparent.begin(), transparent.end(),
-              [](const DrawItem& a, const DrawItem& b) { return a.sortKey > b.sortKey; });
+              [](const FDrawItem& a, const FDrawItem& b) { return a.sortKey > b.sortKey; });
 
     passTimers_.Begin(FGPUPassTimer::EPass::Color);
 
@@ -891,7 +891,7 @@ void FSceneRenderer::DrawScene(const Level& level, const Camera& camera) {
         unlitShader_.SetVec2("uUvScale", 1.0f, 1.0f);
         unlitShader_.SetFloat("uAlpha", 1.0f);
         whiteTexture_->Bind(0);
-        for (const DrawItem& item : opaque) {
+        for (const FDrawItem& item : opaque) {
             const StaticMeshComponent& object = level.StaticMeshes()[item.objectIndex];
             const FMaterial& mat = object.materialForSubMesh(item.subMeshIndex);
             if (mat.shading == EMaterialShadingModel::Unlit) {
@@ -931,11 +931,11 @@ void FSceneRenderer::DrawScene(const Level& level, const Camera& camera) {
     unlitOpts.litPass = false;
     unlitOpts.bindSharedLitTextures = false;
 
-    auto drawList = [&](const std::vector<DrawItem>& items, bool transparentPass) {
+    auto drawList = [&](const std::vector<FDrawItem>& items, bool transparentPass) {
         bool litGlobalsBound = litShader_.Valid();
         bool mirrorEnabled = false;
 
-        for (const DrawItem& item : items) {
+        for (const FDrawItem& item : items) {
             const StaticMeshComponent& object = level.StaticMeshes()[item.objectIndex];
             const FMaterial& mat = object.materialForSubMesh(item.subMeshIndex);
             const bool lit = mat.shading == EMaterialShadingModel::BlinnPhong;

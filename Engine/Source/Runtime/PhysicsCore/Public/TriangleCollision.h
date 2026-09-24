@@ -7,7 +7,7 @@
 
 /// Baked world-space triangle mesh for static ComplexAsSimple lite (Arcade traces /
 /// QuerySupportY; Jolt MeshShape on rebuild).
-struct TriangleMeshCollision {
+struct FTriangleMeshCollision {
     std::vector<glm::vec3> positions;
     std::vector<std::uint32_t> indices;
 
@@ -35,6 +35,6 @@ struct TriangleMeshCollision {
 
 /// Nearest segment hit against a triangle mesh (optional inflate for sphere/capsule).
 [[nodiscard]] bool SegmentTriangleMesh(const glm::vec3& start, const glm::vec3& end,
-                                       const TriangleMeshCollision& mesh, float inflate,
+                                       const FTriangleMeshCollision& mesh, float inflate,
                                        float& outT, glm::vec3& outNormal);
 

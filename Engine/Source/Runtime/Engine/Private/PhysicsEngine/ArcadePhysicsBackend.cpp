@@ -3,19 +3,19 @@
 
 namespace {
 
-class ArcadePhysicsBackend final : public IPhysicsBackend {
+class FArcadePhysicsBackend final : public IPhysicsBackend {
 public:
     [[nodiscard]] const char* GetName() const override { return "Arcade"; }
 };
 
-PhysicsBackendFactory& JoltFactory() {
-    static PhysicsBackendFactory factory = nullptr;
+FPhysicsBackendFactory& JoltFactory() {
+    static FPhysicsBackendFactory factory = nullptr;
     return factory;
 }
 
 } // namespace
 
-void RegisterPhysicsBackendFactory(EPhysicsBackendKind kind, PhysicsBackendFactory factory) {
+void RegisterPhysicsBackendFactory(EPhysicsBackendKind kind, FPhysicsBackendFactory factory) {
     if (kind == EPhysicsBackendKind::Jolt) {
         JoltFactory() = factory;
     }
@@ -32,6 +32,6 @@ std::unique_ptr<IPhysicsBackend> CreatePhysicsBackend(EPhysicsBackendKind kind) 
             std::cerr << "CreatePhysicsBackend: JoltPhysics plugin not enabled; falling back to Arcade\n";
         }
     }
-    return std::make_unique<ArcadePhysicsBackend>();
+    return std::make_unique<FArcadePhysicsBackend>();
 }
 

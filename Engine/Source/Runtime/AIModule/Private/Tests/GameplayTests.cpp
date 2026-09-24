@@ -135,7 +135,7 @@ TEST_CASE("SpringArmComponent clamps pitch and arm length", "[gameplay][springar
 }
 
 TEST_CASE("SpringArmComponent collision probe shortens arm", "[gameplay][springarm]") {
-    PhysScene scene;
+    FPhysScene scene;
     const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
     scene.Bodies()[id].position = {2.0f, 1.0f, 0.0f};
     scene.Bodies()[id].halfExtents = {0.25f, 1.0f, 2.0f};
@@ -202,8 +202,8 @@ TEST_CASE("AIController MoveToActor tracks moving target", "[gameplay][ai]") {
 }
 
 TEST_CASE("AIController path follow does not shortcut through blocker", "[gameplay][ai][nav]") {
-    PhysScene physics;
-    BodyInstance wall{};
+    FPhysScene physics;
+    FBodyInstance wall{};
     wall.type = EBodyType::Static;
     wall.position = {0.0f, 1.0f, 0.0f};
     wall.halfExtents = {0.6f, 1.5f, 4.0f};
@@ -235,16 +235,16 @@ TEST_CASE("AIController path follow does not shortcut through blocker", "[gamepl
 }
 
 TEST_CASE("NavigationSystem FindPath routes around static blocker", "[gameplay][nav]") {
-    PhysScene physics;
+    FPhysScene physics;
 
     // Floor plane-like slab (wide aspect) must NOT wipe the whole grid.
-    BodyInstance floor{};
+    FBodyInstance floor{};
     floor.type = EBodyType::Static;
     floor.position = {0.0f, 0.0f, 0.0f};
     floor.halfExtents = {20.0f, 0.5f, 20.0f};
     physics.Bodies().push_back(floor);
 
-    BodyInstance wall{};
+    FBodyInstance wall{};
     wall.type = EBodyType::Static;
     wall.position = {0.0f, 1.0f, 0.0f};
     wall.halfExtents = {0.6f, 1.5f, 5.0f};
@@ -278,7 +278,7 @@ TEST_CASE("NavigationSystem FindPath routes around static blocker", "[gameplay][
 
 TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "[gameplay][nav]") {
     Level level;
-    PhysScene physics;
+    FPhysScene physics;
 
     StaticMeshComponent plate{};
     plate.tag = NavTags::Blocker;
@@ -288,7 +288,7 @@ TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "
     plate.transform.Scale = {1.8f, 0.2f, 1.8f};
     level.StaticMeshes().push_back(std::move(plate));
 
-    BodyInstance plateBody{};
+    FBodyInstance plateBody{};
     plateBody.type = EBodyType::Static;
     plateBody.levelMeshIndex = 0;
     plateBody.position = {0.0f, 0.12f, 0.0f};
@@ -302,7 +302,7 @@ TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "
     ramp.editorClass = "Cube";
     level.StaticMeshes().push_back(std::move(ramp));
 
-    BodyInstance rampBody{};
+    FBodyInstance rampBody{};
     rampBody.type = EBodyType::Static;
     rampBody.levelMeshIndex = 1;
     rampBody.position = {4.0f, 1.0f, 0.0f};
@@ -310,7 +310,7 @@ TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "
     rampBody.collisionShape = ECollisionShape::TriangleMesh;
     physics.Bodies().push_back(rampBody);
 
-    TriangleMeshCollision tri{};
+    FTriangleMeshCollision tri{};
     // Two tris covering a 4x2 footprint around (4,0).
     tri.positions = {
         {2.0f, 0.5f, -1.0f}, {6.0f, 1.5f, -1.0f}, {6.0f, 1.5f, 1.0f}, {2.0f, 0.5f, 1.0f}};
@@ -351,8 +351,8 @@ TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "
 }
 
 TEST_CASE("NavigationSystem AppendDebugDraw fills overlay", "[gameplay][nav][debug]") {
-    PhysScene physics;
-    BodyInstance wall{};
+    FPhysScene physics;
+    FBodyInstance wall{};
     wall.type = EBodyType::Static;
     wall.position = {0.0f, 1.0f, 0.0f};
     wall.halfExtents = {0.5f, 1.0f, 0.5f};
@@ -375,7 +375,7 @@ TEST_CASE("Character Reset Jump and PerformMovement", "[gameplay][character]") {
     REQUIRE(character.IsMovingOnGround());
     REQUIRE_THAT(character.GetActorYaw(), WithinAbs(45.0f, 1.0e-5f));
 
-    PhysScene scene;
+    FPhysScene scene;
     character.Jump();
     character.PerformMovement(scene, 1.0f / 60.0f);
     REQUIRE_FALSE(character.IsMovingOnGround());
@@ -506,7 +506,7 @@ TEST_CASE("Character mesh attaches to root SceneComponent",
 }
 
 TEST_CASE("PhysScene reports Arcade backend by default", "[physics][backend]") {
-    PhysScene scene;
+    FPhysScene scene;
     REQUIRE(scene.GetBackend() == EPhysicsBackend::Arcade);
     REQUIRE(std::string(PhysicsBackendName(scene.GetBackend())) == "Arcade");
 }

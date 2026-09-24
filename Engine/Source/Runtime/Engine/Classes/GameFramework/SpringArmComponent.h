@@ -13,7 +13,7 @@
 
 
 class FDebugDraw;
-class PhysScene;
+class FPhysScene;
 
 /// Unreal-like Spring Arm / Camera Boom (SceneComponent) with optional camera lag,
 /// rotation lag, smoothed arm length, and collision probe (sphere sweep).
@@ -41,7 +41,7 @@ public:
     /// Smooth zoom toward TargetArmLength.
     float ArmLengthLagSpeed = 10.0f;
 
-    /// Unreal `bDoCollisionTest` — sphere-sweep target → camera against PhysScene.
+    /// Unreal `bDoCollisionTest` — sphere-sweep target → camera against FPhysScene.
     bool bDoCollisionTest = true;
     /// Sphere probe radius (meters). Unreal ProbeSize ≈ 12uu → ~0.12m.
     float ProbeSize = 0.15f;
@@ -79,16 +79,16 @@ public:
     /// Advance lag, optional collision probe, and push the Engine orbit camera.
     /// If `physScene` is null, uses `GetOwner()->GetWorld()->GetPhysicsScene()` when available.
     void ApplyToCamera(Camera& camera, const glm::vec3& actorLocation, float deltaTime,
-                       PhysScene* physScene = nullptr, FDebugDraw* debugDraw = nullptr);
+                       FPhysScene* physScene = nullptr, FDebugDraw* debugDraw = nullptr);
 
-    /// Prefer when attached under an Actor root: uses owner location + world PhysScene.
+    /// Prefer when attached under an Actor root: uses owner location + world FPhysScene.
     void ApplyToCamera(Camera& camera, float deltaTime, FDebugDraw* debugDraw = nullptr);
 
     /// Unit boom direction matching `Camera` orbit eye offset (target → camera).
     [[nodiscard]] static glm::vec3 GetBoomDirection(float yawDegrees, float pitchDegrees);
 
     /// Sphere-sweep arm length; returns clamped length (ArmLengthMin..desiredLength).
-    [[nodiscard]] float ProbeArmLength(PhysScene& physScene, const glm::vec3& target,
+    [[nodiscard]] float ProbeArmLength(FPhysScene& physScene, const glm::vec3& target,
                                        float yawDegrees, float pitchDegrees, float desiredLength,
                                        FDebugDraw* debugDraw = nullptr) const;
 

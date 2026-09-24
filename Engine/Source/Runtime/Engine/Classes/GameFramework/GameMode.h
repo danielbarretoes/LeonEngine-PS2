@@ -63,7 +63,7 @@ public:
     [[nodiscard]] World& GetWorld() { return world_; }
     [[nodiscard]] const World& GetWorld() const { return world_; }
 
-    /// Recreate World PhysScene backend (clears bodies). Prefer before RegisterBodiesFromLevel.
+    /// Recreate World FPhysScene backend (clears bodies). Prefer before RegisterBodiesFromLevel.
     void SetPhysicsBackend(EPhysicsBackend backend) { world_.SetPhysicsBackend(backend); }
 
     [[nodiscard]] GameState& GetGameState() { return *gameState_; }
@@ -107,7 +107,7 @@ public:
 protected:
     GameMode() : gameState_(std::make_unique<GameState>()) {}
 
-    /// Framework helper: Level collision meshes → World PhysScene (not pack business logic).
+    /// Framework helper: Level collision meshes → World FPhysScene (not pack business logic).
     void RegisterBodiesFromLevel(const Level& level) { GetWorld().RegisterBodiesFromLevel(level); }
 
     /// Unreal `FindPlayerStart` — resolve spawn transform (`slot` picks among starts).

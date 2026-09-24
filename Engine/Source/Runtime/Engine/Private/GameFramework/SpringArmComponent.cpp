@@ -10,7 +10,7 @@
 
 namespace {
 
-[[nodiscard]] PhysScene* ResolvePhysScene(Actor* owner, PhysScene* explicitScene) {
+[[nodiscard]] FPhysScene* ResolvePhysScene(Actor* owner, FPhysScene* explicitScene) {
     if (explicitScene != nullptr) {
         return explicitScene;
     }
@@ -98,7 +98,7 @@ void SpringArmComponent::UpdateLag(float deltaTime, const glm::vec3& actorLocati
     laggedArmLength_ = std::clamp(laggedArmLength_, ArmLengthMin, ArmLengthMax);
 }
 
-float SpringArmComponent::ProbeArmLength(PhysScene& physScene, const glm::vec3& target,
+float SpringArmComponent::ProbeArmLength(FPhysScene& physScene, const glm::vec3& target,
                                          float yawDegrees, float pitchDegrees,
                                          float desiredLength, FDebugDraw* debugDraw) const {
     const float length = std::clamp(desiredLength, ArmLengthMin, ArmLengthMax);
@@ -109,13 +109,13 @@ float SpringArmComponent::ProbeArmLength(PhysScene& physScene, const glm::vec3& 
     const glm::vec3 boomDir = GetBoomDirection(yawDegrees, pitchDegrees);
     const glm::vec3 end = target + boomDir * length;
 
-    CollisionQueryParams params{};
+    FCollisionQueryParams params{};
     params.bTraceFloorPlane = false;
     if (debugDraw != nullptr) {
         params.DrawDebugType = EDrawDebugTrace::ForOneFrame;
     }
 
-    HitResult hit{};
+    FHitResult hit{};
     if (!physScene.SphereTraceSingleByChannel(hit, target, end, ProbeSize, ProbeChannel, params,
                                               debugDraw) ||
         !hit.bBlockingHit) {
@@ -128,12 +128,12 @@ float SpringArmComponent::ProbeArmLength(PhysScene& physScene, const glm::vec3& 
 }
 
 void SpringArmComponent::ApplyToCamera(Camera& camera, const glm::vec3& actorLocation,
-                                       float deltaTime, PhysScene* physScene,
+                                       float deltaTime, FPhysScene* physScene,
                                        FDebugDraw* debugDraw) {
     UpdateLag(deltaTime, actorLocation);
 
     float armLength = laggedArmLength_;
-    PhysScene* phys = ResolvePhysScene(GetOwner(), physScene);
+    FPhysScene* phys = ResolvePhysScene(GetOwner(), physScene);
     if (bDoCollisionTest && phys != nullptr) {
         // Flow: lag desired length → sphere probe target→eye → snap in on hit (no lerp through walls)
         const float probed =

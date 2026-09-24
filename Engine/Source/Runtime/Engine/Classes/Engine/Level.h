@@ -40,7 +40,7 @@ struct StaticMeshComponent {
 
     /// Optional tag from JSON (`"tag"`). Spawn points use PlayerStart, not tagged meshes.
     std::string tag;
-    /// Unreal-like collision enabled — registers a PhysScene body (Static unless simulating).
+    /// Unreal-like collision enabled — registers a FPhysScene body (Static unless simulating).
     bool collisionEnabled = false;
     /// Unreal-like `bSimulatePhysics` — Dynamic body (implies collision).
     bool simulatePhysics = false;

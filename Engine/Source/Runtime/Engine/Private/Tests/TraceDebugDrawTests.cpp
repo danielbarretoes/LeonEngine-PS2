@@ -11,7 +11,7 @@ TEST_CASE("DrawDebugLineTrace miss and hit fill DebugDraw", "[physics][trace][de
     REQUIRE_FALSE(draw.IsEmpty());
 
     draw.Clear();
-    HitResult hit{};
+    FHitResult hit{};
     hit.bBlockingHit = true;
     hit.Time = 0.5f;
     hit.ImpactPoint = {0.0f, 0.5f, 0.0f};
@@ -21,22 +21,22 @@ TEST_CASE("DrawDebugLineTrace miss and hit fill DebugDraw", "[physics][trace][de
 }
 
 TEST_CASE("LineTrace ForOneFrame draws via PhysScene", "[physics][trace][debug]") {
-    PhysScene scene;
+    FPhysScene scene;
     const std::size_t id = scene.AddBody({0, EBodyType::Static, 1.0f, true});
     scene.Bodies()[id].position = {0.0f, 0.5f, 0.0f};
     scene.Bodies()[id].halfExtents = {0.5f, 0.5f, 0.5f};
 
     FDebugDraw draw;
-    CollisionQueryParams params{};
+    FCollisionQueryParams params{};
     params.DrawDebugType = EDrawDebugTrace::ForOneFrame;
 
-    HitResult hit{};
+    FHitResult hit{};
     REQUIRE(scene.LineTraceSingleByChannel(hit, {0.0f, 0.5f, -2.0f}, {0.0f, 0.5f, 2.0f},
                                            ECollisionChannel::WorldStatic, params, &draw));
     REQUIRE_FALSE(draw.IsEmpty());
 
     draw.Clear();
-    std::vector<HitResult> misses;
+    std::vector<FHitResult> misses;
     REQUIRE_FALSE(scene.LineTraceMultiByChannel(misses, {10.0f, 0.5f, -2.0f}, {10.0f, 0.5f, 2.0f},
                                                 ECollisionChannel::WorldStatic, params,
                                                 &draw));

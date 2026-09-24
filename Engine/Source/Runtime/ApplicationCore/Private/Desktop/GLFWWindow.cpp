@@ -301,9 +301,9 @@ bool FGLFWWindow::SetIconFromFile(const char* pngPath)
 			continue;
 		}
 
-		FIconLevel Level;
-		Level.Size = Size;
-		Level.Pixels.resize(static_cast<size_t>(Size) * static_cast<size_t>(Size) * 4u);
+		FIconLevel IconLevel;
+		IconLevel.Size = Size;
+		IconLevel.Pixels.resize(static_cast<size_t>(Size) * static_cast<size_t>(Size) * 4u);
 		for (int Y = 0; Y < Size; ++Y)
 		{
 			for (int X = 0; X < Size; ++X)
@@ -314,11 +314,11 @@ bool FGLFWWindow::SetIconFromFile(const char* pngPath)
 					4u;
 				for (size_t Channel = 0; Channel < 4u; ++Channel)
 				{
-					Level.Pixels[Dst + Channel] = Pixels[Src + Channel];
+					IconLevel.Pixels[Dst + Channel] = Pixels[Src + Channel];
 				}
 			}
 		}
-		Levels.push_back(std::move(Level));
+		Levels.push_back(std::move(IconLevel));
 	}
 	stbi_image_free(Pixels);
 

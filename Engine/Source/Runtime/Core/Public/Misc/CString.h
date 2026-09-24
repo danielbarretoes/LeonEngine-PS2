@@ -11,9 +11,9 @@ struct FCString
 	static std::string ToLower(std::string_view Text)
 	{
 		std::string Result(Text);
-		for (char& Character : Result)
+		for (char& Char : Result)
 		{
-			Character = static_cast<char>(std::tolower(static_cast<unsigned char>(Character)));
+			Char = static_cast<char>(std::tolower(static_cast<unsigned char>(Char)));
 		}
 		return Result;
 	}

@@ -16,7 +16,7 @@ constexpr glm::vec3 kTraceBeyond{1.0f, 0.25f, 0.2f};
 constexpr glm::vec3 kTraceNormal{1.0f, 0.9f, 0.2f};
 constexpr glm::vec3 kTraceShape{0.95f, 0.45f, 1.0f};
 
-[[nodiscard]] bool bodyMatchesChannel(const BodyInstance& body, ECollisionChannel channel) {
+[[nodiscard]] bool bodyMatchesChannel(const FBodyInstance& body, ECollisionChannel channel) {
     switch (channel) {
     case ECollisionChannel::WorldStatic:
         return body.type == EBodyType::Static;
@@ -107,10 +107,10 @@ constexpr glm::vec3 kTraceShape{0.95f, 0.45f, 1.0f};
            std::abs(p.z - center.z) <= he.z;
 }
 
-/// Segment vs SlopePlane. `inflate` expands the plane along its normal (sphere/capsule radius).
+/// Segment vs FSlopePlane. `inflate` expands the plane along its normal (sphere/capsule radius).
 /// Hits when the offset-plane distance changes sign (approach from either side).
 [[nodiscard]] bool segmentSlopePlane(const glm::vec3& start, const glm::vec3& end,
-                                     const SlopePlane& plane, float inflate, float& outT,
+                                     const FSlopePlane& plane, float inflate, float& outT,
                                      glm::vec3& outNormal) {
     const float nLen = glm::length(plane.normal);
     if (nLen < 1.0e-6f) {
@@ -142,7 +142,7 @@ constexpr glm::vec3 kTraceShape{0.95f, 0.45f, 1.0f};
     return true;
 }
 
-void writeHit(HitResult& out, const glm::vec3& start, const glm::vec3& end, float t,
+void writeHit(FHitResult& out, const glm::vec3& start, const glm::vec3& end, float t,
               const glm::vec3& normal, std::size_t levelMeshIndex, bool floorPlane) {
     const glm::vec3 delta = end - start;
     const float segLen = glm::length(delta);
@@ -158,10 +158,10 @@ void writeHit(HitResult& out, const glm::vec3& start, const glm::vec3& end, floa
     out.bFloorPlane = floorPlane;
 }
 
-void appendSlopePlaneHits(std::vector<HitResult>& outHits, const glm::vec3& start,
+void appendSlopePlaneHits(std::vector<FHitResult>& outHits, const glm::vec3& start,
                           const glm::vec3& end, float radius, float halfHeight,
-                          const std::vector<SlopePlane>& planes) {
-    for (const SlopePlane& plane : planes) {
+                          const std::vector<FSlopePlane>& planes) {
+    for (const FSlopePlane& plane : planes) {
         const float nLen = glm::length(plane.normal);
         const float ny = (nLen > 1.0e-6f) ? (std::abs(plane.normal.y) / nLen) : 1.0f;
         const float inflate = radius + (halfHeight * ny);
@@ -170,20 +170,20 @@ void appendSlopePlaneHits(std::vector<HitResult>& outHits, const glm::vec3& star
         if (!segmentSlopePlane(start, end, plane, inflate, t, normal)) {
             continue;
         }
-        HitResult hit{};
+        FHitResult hit{};
         writeHit(hit, start, end, t, normal, Level::npos, false);
         hit.ImpactPoint = hit.Location - (normal * inflate);
         outHits.push_back(hit);
     }
 }
 
-void sortHitsByTime(std::vector<HitResult>& hits) {
+void sortHitsByTime(std::vector<FHitResult>& hits) {
     std::sort(hits.begin(), hits.end(),
-              [](const HitResult& a, const HitResult& b) { return a.Time < b.Time; });
+              [](const FHitResult& a, const FHitResult& b) { return a.Time < b.Time; });
 }
 
 /// Copy nearest Multi hit into `outHit` (Unreal Single returns the first blocking hit).
-[[nodiscard]] bool takeNearestHit(const std::vector<HitResult>& hits, HitResult& outHit,
+[[nodiscard]] bool takeNearestHit(const std::vector<FHitResult>& hits, FHitResult& outHit,
                                   const glm::vec3& start, const glm::vec3& end) {
     outHit = {};
     outHit.TraceStart = start;
@@ -208,7 +208,7 @@ void addRingXZ(FDebugDraw& draw, const glm::vec3& center, float radius, const gl
     }
 }
 
-void addImpactMarker(FDebugDraw& draw, const HitResult& hit) {
+void addImpactMarker(FDebugDraw& draw, const FHitResult& hit) {
     const float s = 0.08f;
     draw.AddLine(hit.ImpactPoint + glm::vec3{-s, 0, 0}, hit.ImpactPoint + glm::vec3{s, 0, 0},
                  kTraceNormal);
@@ -221,32 +221,32 @@ void addImpactMarker(FDebugDraw& draw, const HitResult& hit) {
 }
 
 void drawTracePath(FDebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
-                   const std::vector<HitResult>& hits) {
+                   const std::vector<FHitResult>& hits) {
     if (hits.empty()) {
         draw.AddLine(start, end, kTraceMiss);
         return;
     }
-    const HitResult& first = hits.front();
+    const FHitResult& first = hits.front();
     draw.AddLine(start, first.ImpactPoint, kTraceHitPath);
     draw.AddLine(first.ImpactPoint, end, kTraceBeyond);
-    for (const HitResult& hit : hits) {
+    for (const FHitResult& hit : hits) {
         addImpactMarker(draw, hit);
     }
 }
 
-[[nodiscard]] bool shouldDraw(const CollisionQueryParams& params, FDebugDraw* debugDraw) {
+[[nodiscard]] bool shouldDraw(const FCollisionQueryParams& params, FDebugDraw* debugDraw) {
     return debugDraw != nullptr && params.DrawDebugType == EDrawDebugTrace::ForOneFrame;
 }
 
 } // namespace
 
 void DrawDebugLineTrace(FDebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
-                        const std::vector<HitResult>& hits) {
+                        const std::vector<FHitResult>& hits) {
     drawTracePath(draw, start, end, hits);
 }
 
 void DrawDebugSphereTrace(FDebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
-                          float radius, const std::vector<HitResult>& hits) {
+                          float radius, const std::vector<FHitResult>& hits) {
     const float r = std::max(radius, 0.0f);
     drawTracePath(draw, start, end, hits);
     addRingXZ(draw, start, r, kTraceShape);
@@ -257,7 +257,7 @@ void DrawDebugSphereTrace(FDebugDraw& draw, const glm::vec3& start, const glm::v
 }
 
 void DrawDebugCapsuleTrace(FDebugDraw& draw, const glm::vec3& start, const glm::vec3& end,
-                           float radius, float halfHeight, const std::vector<HitResult>& hits) {
+                           float radius, float halfHeight, const std::vector<FHitResult>& hits) {
     const float r = std::max(radius, 0.0f);
     const float hh = std::max(halfHeight, 0.0f);
     drawTracePath(draw, start, end, hits);
@@ -272,9 +272,9 @@ void DrawDebugCapsuleTrace(FDebugDraw& draw, const glm::vec3& start, const glm::
     }
 }
 
-bool PhysScene::LineTraceMultiByChannel(std::vector<HitResult>& outHits, const glm::vec3& start,
+bool FPhysScene::LineTraceMultiByChannel(std::vector<FHitResult>& outHits, const glm::vec3& start,
                                         const glm::vec3& end, ECollisionChannel channel,
-                                        const CollisionQueryParams& params,
+                                        const FCollisionQueryParams& params,
                                         FDebugDraw* debugDraw) const {
     outHits.clear();
 
@@ -287,7 +287,7 @@ bool PhysScene::LineTraceMultiByChannel(std::vector<HitResult>& outHits, const g
                                             params.SkipLevelMeshIndex);
     } else {
         for (std::size_t bi = 0; bi < bodies_.size(); ++bi) {
-            const BodyInstance& body = bodies_[bi];
+            const FBodyInstance& body = bodies_[bi];
             if (body.levelMeshIndex == params.SkipLevelMeshIndex) {
                 continue;
             }
@@ -315,7 +315,7 @@ bool PhysScene::LineTraceMultiByChannel(std::vector<HitResult>& outHits, const g
                 normal = nMesh;
             }
 
-            HitResult hit{};
+            FHitResult hit{};
             writeHit(hit, start, end, t, normal, body.levelMeshIndex, false);
             outHits.push_back(hit);
         }
@@ -325,7 +325,7 @@ bool PhysScene::LineTraceMultiByChannel(std::vector<HitResult>& outHits, const g
         float t = 1.0f;
         glm::vec3 normal{};
         if (segmentFloorY(start, end, params.FloorY, t, normal)) {
-            HitResult hit{};
+            FHitResult hit{};
             writeHit(hit, start, end, t, normal, Level::npos, true);
             outHits.push_back(hit);
         }
@@ -339,25 +339,25 @@ bool PhysScene::LineTraceMultiByChannel(std::vector<HitResult>& outHits, const g
     return !outHits.empty();
 }
 
-bool PhysScene::LineTraceSingleByChannel(HitResult& outHit, const glm::vec3& start,
+bool FPhysScene::LineTraceSingleByChannel(FHitResult& outHit, const glm::vec3& start,
                                          const glm::vec3& end, ECollisionChannel channel,
-                                         const CollisionQueryParams& params,
+                                         const FCollisionQueryParams& params,
                                          FDebugDraw* debugDraw) const {
-    std::vector<HitResult> hits;
+    std::vector<FHitResult> hits;
     (void)LineTraceMultiByChannel(hits, start, end, channel, params, debugDraw);
     return takeNearestHit(hits, outHit, start, end);
 }
 
-bool PhysScene::SphereTraceMultiByChannel(std::vector<HitResult>& outHits, const glm::vec3& start,
+bool FPhysScene::SphereTraceMultiByChannel(std::vector<FHitResult>& outHits, const glm::vec3& start,
                                           const glm::vec3& end, float radius,
                                           ECollisionChannel channel,
-                                          const CollisionQueryParams& params,
+                                          const FCollisionQueryParams& params,
                                           FDebugDraw* debugDraw) const {
     const float r = std::max(radius, 0.0f);
     outHits.clear();
 
     if (backendIface_ != nullptr && backendIface_->HasNarrowPhaseTraces()) {
-        // Push BodyInstance → Jolt before CastShape (same as Step prepare).
+        // Push FBodyInstance → Jolt before CastShape (same as Step prepare).
         if (backendIface_->HasRigidWorld()) {
             backendIface_->RigidPrepareStep(bodies_, params.SkipLevelMeshIndex);
         }
@@ -365,7 +365,7 @@ bool PhysScene::SphereTraceMultiByChannel(std::vector<HitResult>& outHits, const
                                               params.SkipLevelMeshIndex);
     } else {
         for (std::size_t bi = 0; bi < bodies_.size(); ++bi) {
-            const BodyInstance& body = bodies_[bi];
+            const FBodyInstance& body = bodies_[bi];
             if (body.levelMeshIndex == params.SkipLevelMeshIndex) {
                 continue;
             }
@@ -394,7 +394,7 @@ bool PhysScene::SphereTraceMultiByChannel(std::vector<HitResult>& outHits, const
                 normal = nMesh;
             }
 
-            HitResult hit{};
+            FHitResult hit{};
             writeHit(hit, start, end, t, normal, body.levelMeshIndex, false);
             // Unreal FHitResult: Location = sweep shape center; ImpactPoint = surface contact.
             hit.ImpactPoint = hit.Location - (normal * r);
@@ -407,7 +407,7 @@ bool PhysScene::SphereTraceMultiByChannel(std::vector<HitResult>& outHits, const
         float t = 1.0f;
         glm::vec3 normal{};
         if (segmentFloorY(start, end, planeY, t, normal)) {
-            HitResult hit{};
+            FHitResult hit{};
             writeHit(hit, start, end, t, normal, Level::npos, true);
             hit.ImpactPoint = hit.Location - (normal * r);
             outHits.push_back(hit);
@@ -422,20 +422,20 @@ bool PhysScene::SphereTraceMultiByChannel(std::vector<HitResult>& outHits, const
     return !outHits.empty();
 }
 
-bool PhysScene::SphereTraceSingleByChannel(HitResult& outHit, const glm::vec3& start,
+bool FPhysScene::SphereTraceSingleByChannel(FHitResult& outHit, const glm::vec3& start,
                                            const glm::vec3& end, float radius,
                                            ECollisionChannel channel,
-                                           const CollisionQueryParams& params,
+                                           const FCollisionQueryParams& params,
                                            FDebugDraw* debugDraw) const {
-    std::vector<HitResult> hits;
+    std::vector<FHitResult> hits;
     (void)SphereTraceMultiByChannel(hits, start, end, radius, channel, params, debugDraw);
     return takeNearestHit(hits, outHit, start, end);
 }
 
-bool PhysScene::CapsuleTraceMultiByChannel(std::vector<HitResult>& outHits, const glm::vec3& start,
+bool FPhysScene::CapsuleTraceMultiByChannel(std::vector<FHitResult>& outHits, const glm::vec3& start,
                                            const glm::vec3& end, float radius, float halfHeight,
                                            ECollisionChannel channel,
-                                           const CollisionQueryParams& params,
+                                           const FCollisionQueryParams& params,
                                            FDebugDraw* debugDraw) const {
     const float r = std::max(radius, 0.0f);
     const float hh = std::max(halfHeight, 0.0f);
@@ -450,7 +450,7 @@ bool PhysScene::CapsuleTraceMultiByChannel(std::vector<HitResult>& outHits, cons
                                                params.SkipLevelMeshIndex);
     } else {
         for (std::size_t bi = 0; bi < bodies_.size(); ++bi) {
-            const BodyInstance& body = bodies_[bi];
+            const FBodyInstance& body = bodies_[bi];
             if (body.levelMeshIndex == params.SkipLevelMeshIndex) {
                 continue;
             }
@@ -479,7 +479,7 @@ bool PhysScene::CapsuleTraceMultiByChannel(std::vector<HitResult>& outHits, cons
                 normal = nMesh;
             }
 
-            HitResult hit{};
+            FHitResult hit{};
             writeHit(hit, start, end, t, normal, body.levelMeshIndex, false);
             const float pull = (std::abs(normal.y) > 0.5f) ? (hh + r) : r;
             hit.ImpactPoint = hit.Location - (normal * pull);
@@ -492,7 +492,7 @@ bool PhysScene::CapsuleTraceMultiByChannel(std::vector<HitResult>& outHits, cons
         float t = 1.0f;
         glm::vec3 normal{};
         if (segmentFloorY(start, end, planeY, t, normal)) {
-            HitResult hit{};
+            FHitResult hit{};
             writeHit(hit, start, end, t, normal, Level::npos, true);
             hit.ImpactPoint = hit.Location - (normal * (hh + r));
             outHits.push_back(hit);
@@ -507,12 +507,12 @@ bool PhysScene::CapsuleTraceMultiByChannel(std::vector<HitResult>& outHits, cons
     return !outHits.empty();
 }
 
-bool PhysScene::CapsuleTraceSingleByChannel(HitResult& outHit, const glm::vec3& start,
+bool FPhysScene::CapsuleTraceSingleByChannel(FHitResult& outHit, const glm::vec3& start,
                                             const glm::vec3& end, float radius, float halfHeight,
                                             ECollisionChannel channel,
-                                            const CollisionQueryParams& params,
+                                            const FCollisionQueryParams& params,
                                             FDebugDraw* debugDraw) const {
-    std::vector<HitResult> hits;
+    std::vector<FHitResult> hits;
     (void)CapsuleTraceMultiByChannel(hits, start, end, radius, halfHeight, channel, params,
                                      debugDraw);
     return takeNearestHit(hits, outHit, start, end);

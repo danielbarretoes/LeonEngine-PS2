@@ -94,7 +94,7 @@ bool SegmentTriangleInflated(const glm::vec3& start, const glm::vec3& end, const
 }
 
 bool SegmentTriangleMesh(const glm::vec3& start, const glm::vec3& end,
-                         const TriangleMeshCollision& mesh, float inflate, float& outT,
+                         const FTriangleMeshCollision& mesh, float inflate, float& outT,
                          glm::vec3& outNormal) {
     if (!mesh.IsValid()) {
         return false;

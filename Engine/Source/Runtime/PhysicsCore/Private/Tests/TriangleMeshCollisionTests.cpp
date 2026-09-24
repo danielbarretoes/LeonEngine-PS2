@@ -36,19 +36,19 @@ TEST_CASE("LineTrace and QuerySupportY use TriangleMesh surface", "[physics][tri
     component.collisionEnabled = true;
     level.StaticMeshes().push_back(std::move(component));
 
-    PhysScene scene;
+    FPhysScene scene;
     scene.AddBody({0, EBodyType::Static, 1.0f, true});
     scene.SyncFromLevel(level);
     REQUIRE(scene.Bodies()[0].collisionShape == ECollisionShape::TriangleMesh);
 
-    HitResult hit{};
+    FHitResult hit{};
     REQUIRE(scene.LineTraceSingleByChannel(hit, {0.0f, 3.0f, 0.0f}, {0.0f, -1.0f, 0.0f},
                                            ECollisionChannel::WorldStatic));
     REQUIRE(hit.bBlockingHit);
     REQUIRE_THAT(hit.ImpactPoint.y, WithinAbs(0.5f, 2.0e-2f));
     REQUIRE(hit.ImpactNormal.y > 0.5f);
 
-    CapsuleShape capsule{};
+    FCapsuleShape capsule{};
     capsule.radius = 0.35f;
     capsule.height = 1.0f;
     const float support =

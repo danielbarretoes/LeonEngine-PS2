@@ -21,7 +21,7 @@ struct WorldGameplayFrameParams {
     FSceneRenderer* renderer = nullptr;
     FDebugDraw* collisionDebugDraw = nullptr;
     FDebugDraw* navMeshDebugDraw = nullptr;
-    /// When true, PhysScene::Step uses these values instead of the first Character's movement.
+    /// When true, FPhysScene::Step uses these values instead of the first Character's movement.
     bool overridePhysicsStep = false;
     float physicsDamping = 6.0f;
     float physicsWalkBounds = 18.0f;
@@ -30,7 +30,7 @@ struct WorldGameplayFrameParams {
     float physicsSkin = 0.02f;
 };
 
-/// Owns spawned Actors + PhysScene; ticks them and purges pending kills.
+/// Owns spawned Actors + FPhysScene; ticks them and purges pending kills.
 /// Distinct from `Level` (map/visual content ≈ ULevel).
 class World {
 public:
@@ -43,15 +43,15 @@ public:
     World(World&&) = delete;
     World& operator=(World&&) = delete;
 
-    [[nodiscard]] PhysScene& GetPhysicsScene() { return physics_; }
-    [[nodiscard]] const PhysScene& GetPhysicsScene() const { return physics_; }
+    [[nodiscard]] FPhysScene& GetPhysicsScene() { return physics_; }
+    [[nodiscard]] const FPhysScene& GetPhysicsScene() const { return physics_; }
 
     /// Unreal-like UNavigationSystem lite (grid NavMesh for AI pathfinding).
     [[nodiscard]] NavigationSystem& GetNavigationSystem() { return navigation_; }
     [[nodiscard]] const NavigationSystem& GetNavigationSystem() const { return navigation_; }
 
-    /// Recreate PhysScene with another backend (clears bodies). Call before RegisterBodiesFromLevel.
-    void SetPhysicsBackend(EPhysicsBackend physicsBackend) { physics_ = PhysScene(physicsBackend); }
+    /// Recreate FPhysScene with another backend (clears bodies). Call before RegisterBodiesFromLevel.
+    void SetPhysicsBackend(EPhysicsBackend physicsBackend) { physics_ = FPhysScene(physicsBackend); }
 
     template <typename T, typename... Args>
     T* SpawnActor(Args&&... args) {
@@ -93,10 +93,10 @@ public:
     /// Actor Tick only (AnimInstance, etc.). Prefer `TickGameplayFrame` for Character worlds.
     void Tick(float deltaTime);
 
-    /// Unreal-like frame: Character move → PhysScene::Step → overlaps → Actor Tick → sync → draw.
+    /// Unreal-like frame: Character move → FPhysScene::Step → overlaps → Actor Tick → sync → draw.
     void TickGameplayFrame(const WorldGameplayFrameParams& params);
 
-    /// Register StaticMeshComponents that have collision as PhysScene bodies (clears first).
+    /// Register StaticMeshComponents that have collision as FPhysScene bodies (clears first).
     void RegisterBodiesFromLevel(const Level& level);
 
     void SubmitSkeletalDraws(FSceneRenderer& renderer) const;
@@ -144,10 +144,10 @@ public:
 private:
     void flushPendingSpawns();
     void purgePending();
-    /// Pairwise Character capsule depenetration (players / AI are not PhysScene bodies).
+    /// Pairwise Character capsule depenetration (players / AI are not FPhysScene bodies).
     void resolveCharacterOverlaps();
 
-    PhysScene physics_{};
+    FPhysScene physics_{};
     NavigationSystem navigation_{};
     std::vector<std::unique_ptr<Actor>> actors_;
     std::vector<std::unique_ptr<Actor>> pendingSpawns_;
