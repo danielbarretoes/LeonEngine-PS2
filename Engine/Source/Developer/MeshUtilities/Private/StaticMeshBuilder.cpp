@@ -8,49 +8,49 @@
 #include <vector>
 
 
-bool FStaticMeshBuilder::CookFromObj(const std::string& objPath, const std::string& outLmeshPath,
-                           std::string& outError) {
-    FMeshData data = LoadObj(objPath);
-    if (data.empty()) {
-        outError = "Failed to load OBJ: " + objPath;
+bool FStaticMeshBuilder::CookFromObj(const std::string& ObjPath, const std::string& OutLmeshPath,
+                           std::string& OutError) {
+    FMeshData Data = LoadObj(ObjPath);
+    if (Data.empty()) {
+        OutError = "Failed to load OBJ: " + ObjPath;
         return false;
     }
-    ComputeTangents(data);
-    if (!SaveLeonMeshFile(outLmeshPath, data)) {
-        outError = "Failed to write .lmesh: " + outLmeshPath;
+    ComputeTangents(Data);
+    if (!SaveLeonMeshFile(OutLmeshPath, Data)) {
+        OutError = "Failed to write .lmesh: " + OutLmeshPath;
         return false;
     }
-    outError.clear();
+    OutError.clear();
     return true;
 }
 
-bool FStaticMeshBuilder::CookFromFbx(const std::string& fbxPath, const std::string& outLmeshPath,
-                           std::string& outError) {
-    FMeshData data;
-    if (!LoadStaticMeshFromFbx(fbxPath, data)) {
-        outError = "Failed to load FBX: " + fbxPath;
+bool FStaticMeshBuilder::CookFromFbx(const std::string& FbxPath, const std::string& OutLmeshPath,
+                           std::string& OutError) {
+    FMeshData Data;
+    if (!LoadStaticMeshFromFbx(FbxPath, Data)) {
+        OutError = "Failed to load FBX: " + FbxPath;
         return false;
     }
-    if (!SaveLeonMeshFile(outLmeshPath, data)) {
-        outError = "Failed to write .lmesh: " + outLmeshPath;
+    if (!SaveLeonMeshFile(OutLmeshPath, Data)) {
+        OutError = "Failed to write .lmesh: " + OutLmeshPath;
         return false;
     }
-    outError.clear();
+    OutError.clear();
     return true;
 }
 
-bool FStaticMeshBuilder::CookFromGltf(const std::string& gltfPath, const std::string& outLmeshPath,
-                            const std::string& materialsOutDir, std::string& outError) {
-    FMeshData data;
-    std::vector<FGltfImportedMaterial> mats;
-    if (!LoadStaticMeshFromGltf(gltfPath, data, materialsOutDir, &mats, outError)) {
+bool FStaticMeshBuilder::CookFromGltf(const std::string& GltfPath, const std::string& OutLmeshPath,
+                            const std::string& MaterialsOutDir, std::string& OutError) {
+    FMeshData Data;
+    std::vector<FGltfImportedMaterial> Mats;
+    if (!LoadStaticMeshFromGltf(GltfPath, Data, MaterialsOutDir, &Mats, OutError)) {
         return false;
     }
-    if (!SaveLeonMeshFile(outLmeshPath, data)) {
-        outError = "Failed to write .lmesh: " + outLmeshPath;
+    if (!SaveLeonMeshFile(OutLmeshPath, Data)) {
+        OutError = "Failed to write .lmesh: " + OutLmeshPath;
         return false;
     }
-    outError.clear();
+    OutError.clear();
     return true;
 }
 

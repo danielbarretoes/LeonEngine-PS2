@@ -16,295 +16,295 @@ namespace {
 
 class FVertexKey {
 public:
-    FVertexKey(int positionIndex, int normalIndex, int texcoordIndex)
-        : positionIndex_(positionIndex), normalIndex_(normalIndex), texcoordIndex_(texcoordIndex) {}
+    FVertexKey(int InPositionIndex, int InNormalIndex, int InTexcoordIndex)
+        : PositionIndex(InPositionIndex), NormalIndex(InNormalIndex), TexcoordIndex(InTexcoordIndex) {}
 
-    [[nodiscard]] bool operator==(const FVertexKey& other) const {
-        return positionIndex_ == other.positionIndex_ && normalIndex_ == other.normalIndex_ &&
-               texcoordIndex_ == other.texcoordIndex_;
+    [[nodiscard]] bool operator==(const FVertexKey& Other) const {
+        return PositionIndex == Other.PositionIndex && NormalIndex == Other.NormalIndex &&
+               TexcoordIndex == Other.TexcoordIndex;
     }
 
-    [[nodiscard]] int positionIndex() const { return positionIndex_; }
-    [[nodiscard]] int normalIndex() const { return normalIndex_; }
-    [[nodiscard]] int texcoordIndex() const { return texcoordIndex_; }
+    [[nodiscard]] int GetPositionIndex() const { return PositionIndex; }
+    [[nodiscard]] int GetNormalIndex() const { return NormalIndex; }
+    [[nodiscard]] int GetTexcoordIndex() const { return TexcoordIndex; }
 
 private:
-    int positionIndex_ = 0;
-    int normalIndex_ = 0;
-    int texcoordIndex_ = 0;
+    int PositionIndex = 0;
+    int NormalIndex = 0;
+    int TexcoordIndex = 0;
 };
 
 struct FVertexKeyHash {
-    std::size_t operator()(const FVertexKey& key) const noexcept {
-        auto h = static_cast<std::size_t>(key.positionIndex());
-        h ^= static_cast<std::size_t>(key.normalIndex()) + 0x9e3779b97f4a7c15ULL + (h << 6) +
-             (h >> 2);
-        h ^= static_cast<std::size_t>(key.texcoordIndex()) + 0x9e3779b97f4a7c15ULL + (h << 6) +
-             (h >> 2);
-        return h;
+    std::size_t operator()(const FVertexKey& Key) const noexcept {
+        auto H = static_cast<std::size_t>(Key.GetPositionIndex());
+        H ^= static_cast<std::size_t>(Key.GetNormalIndex()) + 0x9e3779b97f4a7c15ULL + (H << 6) +
+             (H >> 2);
+        H ^= static_cast<std::size_t>(Key.GetTexcoordIndex()) + 0x9e3779b97f4a7c15ULL + (H << 6) +
+             (H >> 2);
+        return H;
     }
 };
 
-void computeSmoothNormals(FMeshData& data) {
-    for (auto& vertex : data.Vertices) {
-        vertex.Normal = {0.0f, 0.0f, 0.0f};
+void ComputeSmoothNormals(FMeshData& Data) {
+    for (auto& Vertex : Data.Vertices) {
+        Vertex.Normal = {0.0f, 0.0f, 0.0f};
     }
 
-    for (std::size_t i = 0; i + 2 < data.Indices.size(); i += 3) {
-        const auto i0 = data.Indices[i + 0];
-        const auto i1 = data.Indices[i + 1];
-        const auto i2 = data.Indices[i + 2];
+    for (std::size_t I = 0; I + 2 < Data.Indices.size(); I += 3) {
+        const auto I0 = Data.Indices[I + 0];
+        const auto I1 = Data.Indices[I + 1];
+        const auto I2 = Data.Indices[I + 2];
 
-        const glm::vec3 edge1 = data.Vertices[i1].Position - data.Vertices[i0].Position;
-        const glm::vec3 edge2 = data.Vertices[i2].Position - data.Vertices[i0].Position;
-        const glm::vec3 faceNormal = glm::cross(edge1, edge2);
-        if (glm::dot(faceNormal, faceNormal) < 1e-20f) {
+        const glm::vec3 Edge1 = Data.Vertices[I1].Position - Data.Vertices[I0].Position;
+        const glm::vec3 Edge2 = Data.Vertices[I2].Position - Data.Vertices[I0].Position;
+        const glm::vec3 FaceNormal = glm::cross(Edge1, Edge2);
+        if (glm::dot(FaceNormal, FaceNormal) < 1e-20f) {
             continue;
         }
 
-        const glm::vec3 n = glm::normalize(faceNormal);
-        data.Vertices[i0].Normal += n;
-        data.Vertices[i1].Normal += n;
-        data.Vertices[i2].Normal += n;
+        const glm::vec3 N = glm::normalize(FaceNormal);
+        Data.Vertices[I0].Normal += N;
+        Data.Vertices[I1].Normal += N;
+        Data.Vertices[I2].Normal += N;
     }
 
-    for (auto& vertex : data.Vertices) {
-        if (glm::dot(vertex.Normal, vertex.Normal) > 0.0f) {
-            vertex.Normal = glm::normalize(vertex.Normal);
+    for (auto& Vertex : Data.Vertices) {
+        if (glm::dot(Vertex.Normal, Vertex.Normal) > 0.0f) {
+            Vertex.Normal = glm::normalize(Vertex.Normal);
         } else {
-            vertex.Normal = {0.0f, 1.0f, 0.0f};
+            Vertex.Normal = {0.0f, 1.0f, 0.0f};
         }
     }
 }
 
-bool indexInRange(int index, std::size_t count, int components) {
-    if (index < 0) {
+bool IndexInRange(int Index, std::size_t Count, int Components) {
+    if (Index < 0) {
         return false;
     }
-    const auto needed = static_cast<std::size_t>(index + 1) * static_cast<std::size_t>(components);
-    return needed <= count;
+    const auto Needed = static_cast<std::size_t>(Index + 1) * static_cast<std::size_t>(Components);
+    return Needed <= Count;
 }
 
-bool faceIndicesValid(const tinyobj::attrib_t& attrib, const tinyobj::index_t& index,
-                      bool hasFileNormals, bool hasTexcoords) {
-    if (!indexInRange(index.vertex_index, attrib.vertices.size(), 3)) {
+bool FaceIndicesValid(const tinyobj::attrib_t& Attrib, const tinyobj::index_t& Index,
+                      bool bHasFileNormals, bool bHasTexcoords) {
+    if (!IndexInRange(Index.vertex_index, Attrib.vertices.size(), 3)) {
         return false;
     }
-    if (hasFileNormals && index.normal_index >= 0 &&
-        !indexInRange(index.normal_index, attrib.normals.size(), 3)) {
+    if (bHasFileNormals && Index.normal_index >= 0 &&
+        !IndexInRange(Index.normal_index, Attrib.normals.size(), 3)) {
         return false;
     }
-    if (hasTexcoords && index.texcoord_index >= 0 &&
-        !indexInRange(index.texcoord_index, attrib.texcoords.size(), 2)) {
+    if (bHasTexcoords && Index.texcoord_index >= 0 &&
+        !IndexInRange(Index.texcoord_index, Attrib.texcoords.size(), 2)) {
         return false;
     }
     return true;
 }
 
-std::uint32_t getOrCreateVertex(FMeshData& data,
-                                std::unordered_map<FVertexKey, std::uint32_t, FVertexKeyHash>& unique,
-                                const tinyobj::attrib_t& attrib, const tinyobj::index_t& index,
-                                bool hasFileNormals, bool hasTexcoords) {
-    const FVertexKey key{index.vertex_index, index.normal_index, index.texcoord_index};
-    if (const auto found = unique.find(key); found != unique.end()) {
-        return found->second;
+std::uint32_t GetOrCreateVertex(FMeshData& Data,
+                                std::unordered_map<FVertexKey, std::uint32_t, FVertexKeyHash>& Unique,
+                                const tinyobj::attrib_t& Attrib, const tinyobj::index_t& Index,
+                                bool bHasFileNormals, bool bHasTexcoords) {
+    const FVertexKey Key{Index.vertex_index, Index.normal_index, Index.texcoord_index};
+    if (const auto Found = Unique.find(Key); Found != Unique.end()) {
+        return Found->second;
     }
 
-    FVertex vertex{};
-    const auto vi = static_cast<std::size_t>(index.vertex_index) * 3u;
-    vertex.Position = {
-        attrib.vertices[vi + 0],
-        attrib.vertices[vi + 1],
-        attrib.vertices[vi + 2],
+    FVertex Vertex{};
+    const auto Vi = static_cast<std::size_t>(Index.vertex_index) * 3u;
+    Vertex.Position = {
+        Attrib.vertices[Vi + 0],
+        Attrib.vertices[Vi + 1],
+        Attrib.vertices[Vi + 2],
     };
 
-    if (hasFileNormals && index.normal_index >= 0) {
-        const auto ni = static_cast<std::size_t>(index.normal_index) * 3u;
-        const glm::vec3 n{
-            attrib.normals[ni + 0],
-            attrib.normals[ni + 1],
-            attrib.normals[ni + 2],
+    if (bHasFileNormals && Index.normal_index >= 0) {
+        const auto Ni = static_cast<std::size_t>(Index.normal_index) * 3u;
+        const glm::vec3 N{
+            Attrib.normals[Ni + 0],
+            Attrib.normals[Ni + 1],
+            Attrib.normals[Ni + 2],
         };
-        vertex.Normal = (glm::dot(n, n) > 0.0f) ? glm::normalize(n) : glm::vec3{0, 1, 0};
+        Vertex.Normal = (glm::dot(N, N) > 0.0f) ? glm::normalize(N) : glm::vec3{0, 1, 0};
     } else {
-        vertex.Normal = {0.0f, 1.0f, 0.0f};
+        Vertex.Normal = {0.0f, 1.0f, 0.0f};
     }
 
-    if (hasTexcoords && index.texcoord_index >= 0) {
-        const auto ti = static_cast<std::size_t>(index.texcoord_index) * 2u;
-        vertex.TexCoord = {
-            attrib.texcoords[ti + 0],
-            attrib.texcoords[ti + 1],
+    if (bHasTexcoords && Index.texcoord_index >= 0) {
+        const auto Ti = static_cast<std::size_t>(Index.texcoord_index) * 2u;
+        Vertex.TexCoord = {
+            Attrib.texcoords[Ti + 0],
+            Attrib.texcoords[Ti + 1],
         };
     }
 
-    const auto newIndex = static_cast<std::uint32_t>(data.Vertices.size());
-    unique.emplace(key, newIndex);
-    data.Vertices.push_back(vertex);
-    return newIndex;
+    const auto NewIndex = static_cast<std::uint32_t>(Data.Vertices.size());
+    Unique.emplace(Key, NewIndex);
+    Data.Vertices.push_back(Vertex);
+    return NewIndex;
 }
 
-FMaterial materialFromTiny(const tinyobj::material_t& src) {
-    FMaterial material;
-    material.Shading = EMaterialShadingModel::BlinnPhong;
-    material.Albedo = {src.diffuse[0], src.diffuse[1], src.diffuse[2]};
-    material.Specular = {src.specular[0], src.specular[1], src.specular[2]};
-    material.Alpha = src.dissolve;
+FMaterial MaterialFromTiny(const tinyobj::material_t& Src) {
+    FMaterial Material;
+    Material.Shading = EMaterialShadingModel::BlinnPhong;
+    Material.Albedo = {Src.diffuse[0], Src.diffuse[1], Src.diffuse[2]};
+    Material.Specular = {Src.specular[0], Src.specular[1], Src.specular[2]};
+    Material.Alpha = Src.dissolve;
     // Max/OBJ often exports low Ns; remap so highlights read clearly in Blinn-Phong.
-    const float ns = std::max(src.shininess, 1.0f);
-    material.Shininess = std::clamp((ns * ns * 0.25f) + (ns * 2.0f), 8.0f, 256.0f);
+    const float Ns = std::max(Src.shininess, 1.0f);
+    Material.Shininess = std::clamp((Ns * Ns * 0.25f) + (Ns * 2.0f), 8.0f, 256.0f);
 
     // Heuristic metalness from MTL (no explicit metal map): strong Ks relative to Kd.
-    const float kd = (material.Albedo.x + material.Albedo.y + material.Albedo.z) / 3.0f;
-    const float ks = (material.Specular.x + material.Specular.y + material.Specular.z) / 3.0f;
-    if (ks > 0.2f) {
-        material.Metallic = std::clamp((ks - 0.15f) / 0.6f, 0.0f, 1.0f);
+    const float Kd = (Material.Albedo.x + Material.Albedo.y + Material.Albedo.z) / 3.0f;
+    const float Ks = (Material.Specular.x + Material.Specular.y + Material.Specular.z) / 3.0f;
+    if (Ks > 0.2f) {
+        Material.Metallic = std::clamp((Ks - 0.15f) / 0.6f, 0.0f, 1.0f);
         // Painted metals in this asset use gray Ks; keep some metal even when Kd is dark.
-        if (kd < 0.35f && ks >= 0.35f) {
-            material.Metallic = std::max(material.Metallic, 0.65f);
+        if (Kd < 0.35f && Ks >= 0.35f) {
+            Material.Metallic = std::max(Material.Metallic, 0.65f);
         }
     }
     // Ensure specular floor so dielectrics still catch highlights.
-    if (ks < 0.04f) {
-        material.Specular = {0.04f, 0.04f, 0.04f};
+    if (Ks < 0.04f) {
+        Material.Specular = {0.04f, 0.04f, 0.04f};
     }
 
-    material.SyncRoughnessFromShininess();
-    material.bCastsShadows = material.Alpha >= 0.999f;
-    return material;
+    Material.SyncRoughnessFromShininess();
+    Material.bCastsShadows = Material.Alpha >= 0.999f;
+    return Material;
 }
 
 } // namespace
 
-FMeshData LoadObj(const std::string& path) {
-    tinyobj::ObjReaderConfig config;
-    config.triangulate = true;
-    config.mtl_search_path = std::filesystem::path(path).parent_path().string();
+FMeshData LoadObj(const std::string& Path) {
+    tinyobj::ObjReaderConfig Config;
+    Config.triangulate = true;
+    Config.mtl_search_path = std::filesystem::path(Path).parent_path().string();
 
-    tinyobj::ObjReader reader;
-    if (!reader.ParseFromFile(path, config)) {
-        if (!reader.Error().empty()) {
-            std::cerr << "tinyobjloader: " << reader.Error() << '\n';
+    tinyobj::ObjReader Reader;
+    if (!Reader.ParseFromFile(Path, Config)) {
+        if (!Reader.Error().empty()) {
+            std::cerr << "tinyobjloader: " << Reader.Error() << '\n';
         }
         return {};
     }
 
-    if (!reader.Warning().empty()) {
-        std::cerr << "tinyobjloader: " << reader.Warning() << '\n';
+    if (!Reader.Warning().empty()) {
+        std::cerr << "tinyobjloader: " << Reader.Warning() << '\n';
     }
 
-    const auto& attrib = reader.GetAttrib();
-    const auto& shapes = reader.GetShapes();
-    const auto& tinyMaterials = reader.GetMaterials();
+    const auto& Attrib = Reader.GetAttrib();
+    const auto& Shapes = Reader.GetShapes();
+    const auto& TinyMaterials = Reader.GetMaterials();
 
-    std::size_t indexEstimate = 0;
-    for (const auto& shape : shapes) {
-        indexEstimate += shape.mesh.indices.size();
+    std::size_t IndexEstimate = 0;
+    for (const auto& Shape : Shapes) {
+        IndexEstimate += Shape.mesh.indices.size();
     }
 
-    FMeshData data;
-    data.Vertices.reserve(indexEstimate);
+    FMeshData Data;
+    Data.Vertices.reserve(IndexEstimate);
 
-    std::unordered_map<FVertexKey, std::uint32_t, FVertexKeyHash> unique;
-    unique.reserve(indexEstimate);
+    std::unordered_map<FVertexKey, std::uint32_t, FVertexKeyHash> Unique;
+    Unique.reserve(IndexEstimate);
 
     // materialId → triangle indices (grouped so each FMeshSection is contiguous).
-    std::map<int, std::vector<std::uint32_t>> indicesByMaterial;
+    std::map<int, std::vector<std::uint32_t>> IndicesByMaterial;
 
-    const bool hasFileNormals = !attrib.normals.empty();
-    const bool hasTexcoords = !attrib.texcoords.empty();
+    const bool bHasFileNormals = !Attrib.normals.empty();
+    const bool bHasTexcoords = !Attrib.texcoords.empty();
 
-    for (const auto& shape : shapes) {
-        std::size_t indexOffset = 0;
-        for (std::size_t face = 0; face < shape.mesh.num_face_vertices.size(); ++face) {
-            const unsigned int faceVerts = shape.mesh.num_face_vertices[face];
-            const int materialId =
-                face < shape.mesh.material_ids.size() ? shape.mesh.material_ids[face] : -1;
+    for (const auto& Shape : Shapes) {
+        std::size_t IndexOffset = 0;
+        for (std::size_t Face = 0; Face < Shape.mesh.num_face_vertices.size(); ++Face) {
+            const unsigned int FaceVerts = Shape.mesh.num_face_vertices[Face];
+            const int MaterialId =
+                Face < Shape.mesh.material_ids.size() ? Shape.mesh.material_ids[Face] : -1;
 
             // Triangulated OBJ: expect 3 verts per face.
-            if (faceVerts != 3) {
-                indexOffset += faceVerts;
+            if (FaceVerts != 3) {
+                IndexOffset += FaceVerts;
                 continue;
             }
 
-            const tinyobj::index_t& i0 = shape.mesh.indices[indexOffset + 0];
-            const tinyobj::index_t& i1 = shape.mesh.indices[indexOffset + 1];
-            const tinyobj::index_t& i2 = shape.mesh.indices[indexOffset + 2];
-            indexOffset += 3;
+            const tinyobj::index_t& I0 = Shape.mesh.indices[IndexOffset + 0];
+            const tinyobj::index_t& I1 = Shape.mesh.indices[IndexOffset + 1];
+            const tinyobj::index_t& I2 = Shape.mesh.indices[IndexOffset + 2];
+            IndexOffset += 3;
 
-            if (!faceIndicesValid(attrib, i0, hasFileNormals, hasTexcoords) ||
-                !faceIndicesValid(attrib, i1, hasFileNormals, hasTexcoords) ||
-                !faceIndicesValid(attrib, i2, hasFileNormals, hasTexcoords)) {
-                std::cerr << "MeshData: skipping face with out-of-range indices in " << path
+            if (!FaceIndicesValid(Attrib, I0, bHasFileNormals, bHasTexcoords) ||
+                !FaceIndicesValid(Attrib, I1, bHasFileNormals, bHasTexcoords) ||
+                !FaceIndicesValid(Attrib, I2, bHasFileNormals, bHasTexcoords)) {
+                std::cerr << "MeshData: skipping face with out-of-range indices in " << Path
                           << '\n';
                 continue;
             }
 
-            auto& bucket = indicesByMaterial[materialId];
-            bucket.push_back(
-                getOrCreateVertex(data, unique, attrib, i0, hasFileNormals, hasTexcoords));
-            bucket.push_back(
-                getOrCreateVertex(data, unique, attrib, i1, hasFileNormals, hasTexcoords));
-            bucket.push_back(
-                getOrCreateVertex(data, unique, attrib, i2, hasFileNormals, hasTexcoords));
+            auto& Bucket = IndicesByMaterial[MaterialId];
+            Bucket.push_back(
+                GetOrCreateVertex(Data, Unique, Attrib, I0, bHasFileNormals, bHasTexcoords));
+            Bucket.push_back(
+                GetOrCreateVertex(Data, Unique, Attrib, I1, bHasFileNormals, bHasTexcoords));
+            Bucket.push_back(
+                GetOrCreateVertex(Data, Unique, Attrib, I2, bHasFileNormals, bHasTexcoords));
         }
     }
 
-    if (data.Vertices.empty() || indicesByMaterial.empty()) {
-        std::cerr << "Mesh has no geometry: " << path << '\n';
+    if (Data.Vertices.empty() || IndicesByMaterial.empty()) {
+        std::cerr << "Mesh has no geometry: " << Path << '\n';
         return {};
     }
 
-    if (!tinyMaterials.empty()) {
-        data.Materials.reserve(tinyMaterials.size());
-        data.AlbedoMapPaths.reserve(tinyMaterials.size());
-        const std::filesystem::path objDir = std::filesystem::path(path).parent_path();
-        for (const tinyobj::material_t& src : tinyMaterials) {
-            data.Materials.push_back(materialFromTiny(src));
-            if (!src.diffuse_texname.empty()) {
-                data.AlbedoMapPaths.push_back((objDir / src.diffuse_texname).string());
+    if (!TinyMaterials.empty()) {
+        Data.Materials.reserve(TinyMaterials.size());
+        Data.AlbedoMapPaths.reserve(TinyMaterials.size());
+        const std::filesystem::path ObjDir = std::filesystem::path(Path).parent_path();
+        for (const tinyobj::material_t& Src : TinyMaterials) {
+            Data.Materials.push_back(MaterialFromTiny(Src));
+            if (!Src.diffuse_texname.empty()) {
+                Data.AlbedoMapPaths.push_back((ObjDir / Src.diffuse_texname).string());
             } else {
-                data.AlbedoMapPaths.emplace_back();
+                Data.AlbedoMapPaths.emplace_back();
             }
         }
     }
 
-    data.Indices.reserve(indexEstimate);
-    for (auto& [materialId, bucket] : indicesByMaterial) {
+    Data.Indices.reserve(IndexEstimate);
+    for (auto& [materialId, bucket] : IndicesByMaterial) {
         if (bucket.empty()) {
             continue;
         }
 
-        int slot = 0;
-        if (materialId >= 0 && materialId < static_cast<int>(data.Materials.size())) {
-            slot = materialId;
-        } else if (!data.Materials.empty()) {
-            slot = 0;
+        int Slot = 0;
+        if (materialId >= 0 && materialId < static_cast<int>(Data.Materials.size())) {
+            Slot = materialId;
+        } else if (!Data.Materials.empty()) {
+            Slot = 0;
         }
 
-        FMeshSection sub;
-        sub.IndexOffset = static_cast<int>(data.Indices.size());
-        sub.IndexCount = static_cast<int>(bucket.size());
-        sub.MaterialIndex = slot;
-        data.Indices.insert(data.Indices.end(), bucket.begin(), bucket.end());
-        data.Submeshes.push_back(sub);
+        FMeshSection Sub;
+        Sub.IndexOffset = static_cast<int>(Data.Indices.size());
+        Sub.IndexCount = static_cast<int>(bucket.size());
+        Sub.MaterialIndex = Slot;
+        Data.Indices.insert(Data.Indices.end(), bucket.begin(), bucket.end());
+        Data.Submeshes.push_back(Sub);
     }
 
-    if (data.Materials.empty()) {
-        data.Materials.push_back(FMaterial{});
-        data.AlbedoMapPaths.emplace_back();
-        for (FMeshSection& sub : data.Submeshes) {
-            sub.MaterialIndex = 0;
+    if (Data.Materials.empty()) {
+        Data.Materials.push_back(FMaterial{});
+        Data.AlbedoMapPaths.emplace_back();
+        for (FMeshSection& Sub : Data.Submeshes) {
+            Sub.MaterialIndex = 0;
         }
     }
 
-    if (!hasFileNormals) {
-        computeSmoothNormals(data);
+    if (!bHasFileNormals) {
+        ComputeSmoothNormals(Data);
     }
 
-    std::cout << "OBJ '" << path << "': " << data.Vertices.size() << " verts, "
-              << (data.Indices.size() / 3) << " tris, " << data.Submeshes.size() << " submeshes, "
-              << data.Materials.size() << " materials\n";
-    return data;
+    std::cout << "OBJ '" << Path << "': " << Data.Vertices.size() << " verts, "
+              << (Data.Indices.size() / 3) << " tris, " << Data.Submeshes.size() << " submeshes, "
+              << Data.Materials.size() << " materials\n";
+    return Data;
 }
 

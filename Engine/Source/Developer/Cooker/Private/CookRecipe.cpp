@@ -11,44 +11,44 @@ namespace {
 
 namespace fs = std::filesystem;
 
-[[nodiscard]] int CookRecipeStaticMesh(const nlohmann::json& step, const fs::path& baseDir,
-                                       int stepIndex) {
-    const std::string obj = step.value("obj", "");
-    const std::string fbx = step.value("fbx", "");
-    const std::string gltf = step.value("gltf", "");
-    const std::string out = step.value("out", "");
-    const std::string materialsRel = step.value("materials", "");
-    if (out.empty()) {
-        std::cerr << "Recipe step " << stepIndex << ": staticmesh needs out\n";
+[[nodiscard]] int CookRecipeStaticMesh(const nlohmann::json& Step, const fs::path& BaseDir,
+                                       int StepIndex) {
+    const std::string Obj = Step.value("obj", "");
+    const std::string Fbx = Step.value("fbx", "");
+    const std::string Gltf = Step.value("gltf", "");
+    const std::string Out = Step.value("out", "");
+    const std::string MaterialsRel = Step.value("materials", "");
+    if (Out.empty()) {
+        std::cerr << "Recipe step " << StepIndex << ": staticmesh needs out\n";
         return 1;
     }
-    const int sources = (!obj.empty() ? 1 : 0) + (!fbx.empty() ? 1 : 0) + (!gltf.empty() ? 1 : 0);
-    if (sources != 1) {
-        std::cerr << "Recipe step " << stepIndex
+    const int Sources = (!Obj.empty() ? 1 : 0) + (!Fbx.empty() ? 1 : 0) + (!Gltf.empty() ? 1 : 0);
+    if (Sources != 1) {
+        std::cerr << "Recipe step " << StepIndex
                   << ": staticmesh needs exactly one of obj/fbx/gltf\n";
         return 1;
     }
-    const std::string outAbs = FCookPaths::ResolveBeside(baseDir, out);
-    const std::string materialsAbs =
-        materialsRel.empty() ? std::string{} : FCookPaths::ResolveBeside(baseDir, materialsRel);
-    std::string err;
-    bool ok = false;
-    if (!obj.empty()) {
-        const std::string src = FCookPaths::ResolveBeside(baseDir, obj);
-        std::cout << "Cook staticmesh OBJ '" << src << "' -> " << outAbs << '\n';
-        ok = FStaticMeshBuilder::CookFromObj(src, outAbs, err);
-    } else if (!fbx.empty()) {
-        const std::string src = FCookPaths::ResolveBeside(baseDir, fbx);
-        std::cout << "Cook staticmesh FBX '" << src << "' -> " << outAbs << '\n';
-        ok = FStaticMeshBuilder::CookFromFbx(src, outAbs, err);
+    const std::string OutAbs = FCookPaths::ResolveBeside(BaseDir, Out);
+    const std::string MaterialsAbs =
+        MaterialsRel.empty() ? std::string{} : FCookPaths::ResolveBeside(BaseDir, MaterialsRel);
+    std::string Err;
+    bool bOk = false;
+    if (!Obj.empty()) {
+        const std::string Src = FCookPaths::ResolveBeside(BaseDir, Obj);
+        std::cout << "Cook staticmesh OBJ '" << Src << "' -> " << OutAbs << '\n';
+        bOk = FStaticMeshBuilder::CookFromObj(Src, OutAbs, Err);
+    } else if (!Fbx.empty()) {
+        const std::string Src = FCookPaths::ResolveBeside(BaseDir, Fbx);
+        std::cout << "Cook staticmesh FBX '" << Src << "' -> " << OutAbs << '\n';
+        bOk = FStaticMeshBuilder::CookFromFbx(Src, OutAbs, Err);
     } else {
-        const std::string src = FCookPaths::ResolveBeside(baseDir, gltf);
-        std::cout << "Cook staticmesh glTF '" << src << "' -> " << outAbs << '\n';
-        ok = FStaticMeshBuilder::CookFromGltf(src, outAbs, materialsAbs, err);
+        const std::string Src = FCookPaths::ResolveBeside(BaseDir, Gltf);
+        std::cout << "Cook staticmesh glTF '" << Src << "' -> " << OutAbs << '\n';
+        bOk = FStaticMeshBuilder::CookFromGltf(Src, OutAbs, MaterialsAbs, Err);
     }
-    if (!ok) {
-        std::cerr << "Cook staticmesh failed (step " << stepIndex << "): "
-                  << (err.empty() ? "unknown error" : err) << '\n';
+    if (!bOk) {
+        std::cerr << "Cook staticmesh failed (step " << StepIndex << "): "
+                  << (Err.empty() ? "unknown error" : Err) << '\n';
         return 2;
     }
     return 0;
@@ -56,74 +56,74 @@ namespace fs = std::filesystem;
 
 } // namespace
 
-int FCookRecipe::RunFile(const std::string& recipePath) {
-    std::ifstream in(recipePath);
-    if (!in) {
-        std::cerr << "Cannot open recipe '" << recipePath << "'\n";
+int FCookRecipe::RunFile(const std::string& RecipePath) {
+    std::ifstream In(RecipePath);
+    if (!In) {
+        std::cerr << "Cannot open recipe '" << RecipePath << "'\n";
         return 1;
     }
 
-    nlohmann::json doc = nlohmann::json::parse(in, nullptr, false);
-    if (doc.is_discarded() || !doc.contains("steps") || !doc["steps"].is_array()) {
+    nlohmann::json Doc = nlohmann::json::parse(In, nullptr, false);
+    if (Doc.is_discarded() || !Doc.contains("steps") || !Doc["steps"].is_array()) {
         std::cerr << "Recipe must be JSON with a \"steps\" array\n";
         return 1;
     }
 
-    const fs::path baseDir = fs::path(recipePath).parent_path();
-    int stepIndex = 0;
-    for (const auto& step : doc["steps"]) {
-        ++stepIndex;
-        if (!step.is_object() || !step.contains("type") || !step["type"].is_string()) {
-            std::cerr << "Recipe step " << stepIndex << ": missing \"type\"\n";
+    const fs::path BaseDir = fs::path(RecipePath).parent_path();
+    int StepIndex = 0;
+    for (const auto& Step : Doc["steps"]) {
+        ++StepIndex;
+        if (!Step.is_object() || !Step.contains("type") || !Step["type"].is_string()) {
+            std::cerr << "Recipe step " << StepIndex << ": missing \"type\"\n";
             return 1;
         }
-        const std::string type = step["type"].get<std::string>();
-        if (type == "character") {
-            const std::string name = step.value("name", "");
-            const std::string mesh = FCookPaths::ResolveBeside(baseDir, step.value("mesh", ""));
-            const std::string run = FCookPaths::ResolveBeside(baseDir, step.value("run", ""));
-            const std::string out = FCookPaths::ResolveBeside(baseDir, step.value("out", "."));
-            FCookJumpAnimPaths jump{};
-            if (step.contains("jump") && step["jump"].is_string()) {
-                jump.JumpStartFbx = FCookPaths::ResolveBeside(baseDir, step["jump"].get<std::string>());
+        const std::string Type = Step["type"].get<std::string>();
+        if (Type == "character") {
+            const std::string Name = Step.value("name", "");
+            const std::string Mesh = FCookPaths::ResolveBeside(BaseDir, Step.value("mesh", ""));
+            const std::string Run = FCookPaths::ResolveBeside(BaseDir, Step.value("run", ""));
+            const std::string Out = FCookPaths::ResolveBeside(BaseDir, Step.value("out", "."));
+            FCookJumpAnimPaths Jump{};
+            if (Step.contains("jump") && Step["jump"].is_string()) {
+                Jump.JumpStartFbx = FCookPaths::ResolveBeside(BaseDir, Step["jump"].get<std::string>());
             }
-            if (step.contains("fall") && step["fall"].is_string()) {
-                jump.FallLoopFbx = FCookPaths::ResolveBeside(baseDir, step["fall"].get<std::string>());
+            if (Step.contains("fall") && Step["fall"].is_string()) {
+                Jump.FallLoopFbx = FCookPaths::ResolveBeside(BaseDir, Step["fall"].get<std::string>());
             }
-            if (step.contains("land") && step["land"].is_string()) {
-                jump.LandFbx = FCookPaths::ResolveBeside(baseDir, step["land"].get<std::string>());
+            if (Step.contains("land") && Step["land"].is_string()) {
+                Jump.LandFbx = FCookPaths::ResolveBeside(BaseDir, Step["land"].get<std::string>());
             }
-            if (name.empty() || mesh.empty() || run.empty()) {
-                std::cerr << "Recipe step " << stepIndex << ": character needs name/mesh/run\n";
+            if (Name.empty() || Mesh.empty() || Run.empty()) {
+                std::cerr << "Recipe step " << StepIndex << ": character needs name/mesh/run\n";
                 return 1;
             }
-            std::cout << "Cook character '" << name << "' -> " << out << '\n';
-            if (!CookCharacterFromFbx(name, mesh, run, out, jump)) {
-                std::cerr << "Cook character failed (step " << stepIndex << ")\n";
+            std::cout << "Cook character '" << Name << "' -> " << Out << '\n';
+            if (!CookCharacterFromFbx(Name, Mesh, Run, Out, Jump)) {
+                std::cerr << "Cook character failed (step " << StepIndex << ")\n";
                 return 2;
             }
-        } else if (type == "anim") {
-            const std::string fbx = FCookPaths::ResolveBeside(baseDir, step.value("fbx", ""));
-            const std::string skeleton = FCookPaths::ResolveBeside(baseDir, step.value("skeleton", ""));
-            const std::string out = FCookPaths::ResolveBeside(baseDir, step.value("out", ""));
-            const std::string name = step.value("name", "");
-            const bool looping = step.value("loop", true);
-            if (fbx.empty() || skeleton.empty() || out.empty()) {
-                std::cerr << "Recipe step " << stepIndex << ": anim needs fbx/skeleton/out\n";
+        } else if (Type == "anim") {
+            const std::string Fbx = FCookPaths::ResolveBeside(BaseDir, Step.value("fbx", ""));
+            const std::string Skeleton = FCookPaths::ResolveBeside(BaseDir, Step.value("skeleton", ""));
+            const std::string Out = FCookPaths::ResolveBeside(BaseDir, Step.value("out", ""));
+            const std::string Name = Step.value("name", "");
+            const bool bLooping = Step.value("loop", true);
+            if (Fbx.empty() || Skeleton.empty() || Out.empty()) {
+                std::cerr << "Recipe step " << StepIndex << ": anim needs fbx/skeleton/out\n";
                 return 1;
             }
-            std::cout << "Cook anim '" << name << "' -> " << out << '\n';
-            if (!CookAnimSequenceFromFbx(fbx, skeleton, out, name, looping)) {
-                std::cerr << "Cook anim failed (step " << stepIndex << ")\n";
+            std::cout << "Cook anim '" << Name << "' -> " << Out << '\n';
+            if (!CookAnimSequenceFromFbx(Fbx, Skeleton, Out, Name, bLooping)) {
+                std::cerr << "Cook anim failed (step " << StepIndex << ")\n";
                 return 2;
             }
-        } else if (type == "staticmesh") {
-            const int rc = CookRecipeStaticMesh(step, baseDir, stepIndex);
-            if (rc != 0) {
-                return rc;
+        } else if (Type == "staticmesh") {
+            const int Rc = CookRecipeStaticMesh(Step, BaseDir, StepIndex);
+            if (Rc != 0) {
+                return Rc;
             }
         } else {
-            std::cerr << "Recipe step " << stepIndex << ": unknown type '" << type << "'\n";
+            std::cerr << "Recipe step " << StepIndex << ": unknown type '" << Type << "'\n";
             return 1;
         }
     }
