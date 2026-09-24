@@ -12,53 +12,53 @@ class FGenericWindow;
 /// Add via HUD::AddWidget; call TickInput each frame from GameMode (same as UMenuListWidget).
 class UVerticalBox : public UUserWidget {
 public:
-    void SetTitle(std::string title) { title_ = std::move(title); }
-    void SetHint(std::string hint) { hint_ = std::move(hint); }
+    void SetTitle(std::string InTitle) { Title = std::move(InTitle); }
+    void SetHint(std::string InHint) { Hint = std::move(InHint); }
 
     void ClearChildren();
 
     /// Append a UButton-like child. Empty `id` = non-activatable status row.
-    UButton* AddButton(std::string id, std::string label);
+    UButton* AddButton(std::string Id, std::string Label);
 
-    [[nodiscard]] int NumButtons() const { return static_cast<int>(buttons_.size()); }
-    [[nodiscard]] UButton* GetButton(int index);
-    [[nodiscard]] const UButton* GetButton(int index) const;
+    [[nodiscard]] int NumButtons() const { return static_cast<int>(Buttons.size()); }
+    [[nodiscard]] UButton* GetButton(int Index);
+    [[nodiscard]] const UButton* GetButton(int Index) const;
 
-    [[nodiscard]] int SelectedIndex() const { return selected_; }
-    void SetSelectedIndex(int index);
+    [[nodiscard]] int SelectedIndex() const { return Selected; }
+    void SetSelectedIndex(int Index);
 
     /// Seed edges as pressed + short keyboard activate lockout (safe after travel).
     void ResetEdges();
 
     /// Returns activated button id this frame (empty if none).
-    [[nodiscard]] std::string TickInput(FGenericWindow& window, bool cursorCaptured, float deltaTime);
+    [[nodiscard]] std::string TickInput(FGenericWindow& Window, bool bCursorCaptured, float DeltaTime);
 
-    void NativePaint(FPaintContext& ctx) override;
+    void NativePaint(FPaintContext& Ctx) override;
 
 private:
-    void CacheLayout(int viewportW, int viewportH);
+    void CacheLayout(int ViewportW, int ViewportH);
     void SnapSelectionToSelectable();
-    void StepSelectable(int delta);
+    void StepSelectable(int Delta);
     void ApplySelectionVisuals();
 
-    std::string title_ = "Menu";
-    std::string hint_;
-    std::vector<std::unique_ptr<UButton>> buttons_;
-    int selected_ = 0;
+    std::string Title = "Menu";
+    std::string Hint;
+    std::vector<std::unique_ptr<UButton>> Buttons;
+    int Selected = 0;
 
-    bool upWasDown_ = false;
-    bool downWasDown_ = false;
-    bool enterWasDown_ = false;
-    bool mouseWasDown_ = false;
+    bool bUpWasDown = false;
+    bool bDownWasDown = false;
+    bool bEnterWasDown = false;
+    bool bMouseWasDown = false;
     /// Suppresses keyboard activate only (ghost Enter after travel); mouse stays live.
-    float ignoreActivateSeconds_ = 0.0f;
+    float IgnoreActivateSeconds = 0.0f;
 
-    float boxX_ = 0.0f;
-    float boxY_ = 0.0f;
-    float boxW_ = 0.0f;
-    float titleH_ = 0.0f;
-    float hintH_ = 0.0f;
-    float buttonGap_ = 8.0f;
-    float minButtonW_ = 220.0f;
+    float BoxX = 0.0f;
+    float BoxY = 0.0f;
+    float BoxW = 0.0f;
+    float TitleH = 0.0f;
+    float HintH = 0.0f;
+    float ButtonGap = 8.0f;
+    float MinButtonW = 220.0f;
 };
 

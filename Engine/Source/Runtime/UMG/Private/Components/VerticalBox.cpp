@@ -8,81 +8,81 @@
 #include "Debug/DebugOverlay.h"
 
 void UVerticalBox::ClearChildren() {
-    buttons_.clear();
-    selected_ = 0;
+    Buttons.clear();
+    Selected = 0;
 }
 
-UButton* UVerticalBox::AddButton(std::string id, std::string label) {
-    auto button = std::make_unique<UButton>();
-    button->SetId(std::move(id));
-    button->SetLabel(std::move(label));
-    UButton* raw = button.get();
-    buttons_.push_back(std::move(button));
+UButton* UVerticalBox::AddButton(std::string Id, std::string Label) {
+    auto Button = std::make_unique<UButton>();
+    Button->SetId(std::move(Id));
+    Button->SetLabel(std::move(Label));
+    UButton* Raw = Button.get();
+    Buttons.push_back(std::move(Button));
     SnapSelectionToSelectable();
     ApplySelectionVisuals();
-    return raw;
+    return Raw;
 }
 
-UButton* UVerticalBox::GetButton(int index) {
-    if (index < 0 || index >= static_cast<int>(buttons_.size())) {
+UButton* UVerticalBox::GetButton(int Index) {
+    if (Index < 0 || Index >= static_cast<int>(Buttons.size())) {
         return nullptr;
     }
-    return buttons_[static_cast<std::size_t>(index)].get();
+    return Buttons[static_cast<std::size_t>(Index)].get();
 }
 
-const UButton* UVerticalBox::GetButton(int index) const {
-    if (index < 0 || index >= static_cast<int>(buttons_.size())) {
+const UButton* UVerticalBox::GetButton(int Index) const {
+    if (Index < 0 || Index >= static_cast<int>(Buttons.size())) {
         return nullptr;
     }
-    return buttons_[static_cast<std::size_t>(index)].get();
+    return Buttons[static_cast<std::size_t>(Index)].get();
 }
 
-void UVerticalBox::SetSelectedIndex(int index) {
-    if (buttons_.empty()) {
-        selected_ = 0;
+void UVerticalBox::SetSelectedIndex(int Index) {
+    if (Buttons.empty()) {
+        Selected = 0;
         ApplySelectionVisuals();
         return;
     }
-    selected_ = std::clamp(index, 0, static_cast<int>(buttons_.size()) - 1);
+    Selected = std::clamp(Index, 0, static_cast<int>(Buttons.size()) - 1);
     ApplySelectionVisuals();
 }
 
 void UVerticalBox::ResetEdges() {
-    upWasDown_ = downWasDown_ = enterWasDown_ = mouseWasDown_ = true;
+    bUpWasDown = bDownWasDown = bEnterWasDown = bMouseWasDown = true;
     // Keyboard only — mouse must stay usable on the first click after travel.
-    ignoreActivateSeconds_ = 0.35f;
+    IgnoreActivateSeconds = 0.35f;
 }
 
 void UVerticalBox::SnapSelectionToSelectable() {
-    if (buttons_.empty()) {
-        selected_ = 0;
+    if (Buttons.empty()) {
+        Selected = 0;
         return;
     }
-    selected_ = std::clamp(selected_, 0, static_cast<int>(buttons_.size()) - 1);
-    if (!buttons_[static_cast<std::size_t>(selected_)]->GetId().empty() &&
-        buttons_[static_cast<std::size_t>(selected_)]->IsEnabled()) {
+    Selected = std::clamp(Selected, 0, static_cast<int>(Buttons.size()) - 1);
+    if (!Buttons[static_cast<std::size_t>(Selected)]->GetId().empty() &&
+        Buttons[static_cast<std::size_t>(Selected)]->IsEnabled()) {
         return;
     }
-    for (int i = 0; i < static_cast<int>(buttons_.size()); ++i) {
-        if (!buttons_[static_cast<std::size_t>(i)]->GetId().empty() &&
-            buttons_[static_cast<std::size_t>(i)]->IsEnabled()) {
-            selected_ = i;
+    for (int I = 0; I < static_cast<int>(Buttons.size()); ++I) {
+        if (!Buttons[static_cast<std::size_t>(I)]->GetId().empty() &&
+            Buttons[static_cast<std::size_t>(I)]->IsEnabled()) {
+            Selected = I;
             return;
         }
     }
 }
 
-void UVerticalBox::StepSelectable(int delta) {
-    const int n = static_cast<int>(buttons_.size());
-    if (n <= 0) {
+void UVerticalBox::StepSelectable(int Delta) {
+    const int N = static_cast<int>(Buttons.size());
+    if (N <= 0) {
         return;
     }
-    int idx = selected_;
-    for (int guard = 0; guard < n; ++guard) {
-        idx = (idx + delta + n) % n;
-        UButton* button = buttons_[static_cast<std::size_t>(idx)].get();
-        if (!button->GetId().empty() && button->IsEnabled()) {
-            selected_ = idx;
+    int Idx = Selected;
+    for (int Guard = 0; Guard < N; ++Guard) {
+        Idx = (Idx + Delta + N) % N;
+        UButton* Button = Buttons[static_cast<std::size_t>(Idx)].get();
+        if (!Button->GetId().empty() && Button->IsEnabled()) {
+            Selected = Idx;
             ApplySelectionVisuals();
             return;
         }
@@ -90,167 +90,167 @@ void UVerticalBox::StepSelectable(int delta) {
 }
 
 void UVerticalBox::ApplySelectionVisuals() {
-    for (int i = 0; i < static_cast<int>(buttons_.size()); ++i) {
-        buttons_[static_cast<std::size_t>(i)]->SetSelected(i == selected_);
+    for (int I = 0; I < static_cast<int>(Buttons.size()); ++I) {
+        Buttons[static_cast<std::size_t>(I)]->SetSelected(I == Selected);
     }
 }
 
-void UVerticalBox::CacheLayout(int viewportW, int viewportH) {
-    if (viewportW <= 0 || viewportH <= 0) {
+void UVerticalBox::CacheLayout(int ViewportW, int ViewportH) {
+    if (ViewportW <= 0 || ViewportH <= 0) {
         return;
     }
 
-    float maxButtonW = minButtonW_;
-    float buttonsH = 0.0f;
-    for (std::size_t i = 0; i < buttons_.size(); ++i) {
-        float dw = 0.0f;
-        float dh = 0.0f;
-        buttons_[i]->MeasureDesiredSize(dw, dh);
-        maxButtonW = std::max(maxButtonW, dw);
-        buttonsH += dh;
-        if (i + 1 < buttons_.size()) {
-            buttonsH += buttonGap_;
+    float MaxButtonW = MinButtonW;
+    float ButtonsH = 0.0f;
+    for (std::size_t I = 0; I < Buttons.size(); ++I) {
+        float Dw = 0.0f;
+        float Dh = 0.0f;
+        Buttons[I]->MeasureDesiredSize(Dw, Dh);
+        MaxButtonW = std::max(MaxButtonW, Dw);
+        ButtonsH += Dh;
+        if (I + 1 < Buttons.size()) {
+            ButtonsH += ButtonGap;
         }
     }
 
-    titleH_ = 0.0f;
-    if (!title_.empty()) {
-        float tw = 0.0f;
-        FDebugOverlay::MeasureText(title_, HudFontScale, tw, titleH_);
-        titleH_ += HudLineHeight; // blank separator under title
+    TitleH = 0.0f;
+    if (!Title.empty()) {
+        float Tw = 0.0f;
+        FDebugOverlay::MeasureText(Title, HudFontScale, Tw, TitleH);
+        TitleH += HudLineHeight; // blank separator under title
     }
 
-    hintH_ = 0.0f;
-    if (!hint_.empty()) {
-        float hw = 0.0f;
-        FDebugOverlay::MeasureText(hint_, HudFontScale, hw, hintH_);
-        hintH_ += 12.0f; // gap above hint
+    HintH = 0.0f;
+    if (!Hint.empty()) {
+        float Hw = 0.0f;
+        FDebugOverlay::MeasureText(Hint, HudFontScale, Hw, HintH);
+        HintH += 12.0f; // gap above hint
     }
 
-    boxW_ = maxButtonW;
-    const float totalH = titleH_ + buttonsH + hintH_;
-    boxX_ = (static_cast<float>(viewportW) - boxW_) * 0.5f;
-    boxY_ = std::clamp((static_cast<float>(viewportH) - totalH) * 0.5f, 10.0f,
-                       std::max(10.0f, static_cast<float>(viewportH) - totalH - 10.0f));
+    BoxW = MaxButtonW;
+    const float TotalH = TitleH + ButtonsH + HintH;
+    BoxX = (static_cast<float>(ViewportW) - BoxW) * 0.5f;
+    BoxY = std::clamp((static_cast<float>(ViewportH) - TotalH) * 0.5f, 10.0f,
+                       std::max(10.0f, static_cast<float>(ViewportH) - TotalH - 10.0f));
 
-    float y = boxY_ + titleH_;
-    for (std::unique_ptr<UButton>& button : buttons_) {
-        float dw = 0.0f;
-        float dh = 0.0f;
-        button->MeasureDesiredSize(dw, dh);
-        button->SetSize(boxW_, dh);
-        button->SetPosition(boxX_, y);
-        y += dh + buttonGap_;
+    float Y = BoxY + TitleH;
+    for (std::unique_ptr<UButton>& Button : Buttons) {
+        float Dw = 0.0f;
+        float Dh = 0.0f;
+        Button->MeasureDesiredSize(Dw, Dh);
+        Button->SetSize(BoxW, Dh);
+        Button->SetPosition(BoxX, Y);
+        Y += Dh + ButtonGap;
     }
 }
 
-void UVerticalBox::NativePaint(FPaintContext& ctx) {
+void UVerticalBox::NativePaint(FPaintContext& Ctx) {
     if (!IsVisible()) {
         return;
     }
-    CacheLayout(ctx.Width(), ctx.Height());
+    CacheLayout(Ctx.GetWidth(), Ctx.GetHeight());
 
-    if (!title_.empty()) {
-        ctx.DrawText(title_, static_cast<float>(ctx.Width()) * 0.5f, boxY_,
+    if (!Title.empty()) {
+        Ctx.DrawText(Title, static_cast<float>(Ctx.GetWidth()) * 0.5f, BoxY,
                      glm::vec3{1.0f, 0.82f, 0.35f}, HudFontScale, ETextJustify::Center);
     }
 
-    for (std::unique_ptr<UButton>& button : buttons_) {
-        button->NativePaint(ctx);
+    for (std::unique_ptr<UButton>& Button : Buttons) {
+        Button->NativePaint(Ctx);
     }
 
-    if (!hint_.empty()) {
-        float buttonsBottom = boxY_ + titleH_;
-        for (const std::unique_ptr<UButton>& button : buttons_) {
-            buttonsBottom = button->GetY() + button->GetHeight();
+    if (!Hint.empty()) {
+        float ButtonsBottom = BoxY + TitleH;
+        for (const std::unique_ptr<UButton>& Button : Buttons) {
+            ButtonsBottom = Button->GetY() + Button->GetHeight();
         }
-        const float hintY = buttonsBottom + 12.0f;
-        ctx.DrawText(hint_, static_cast<float>(ctx.Width()) * 0.5f, hintY,
+        const float HintY = ButtonsBottom + 12.0f;
+        Ctx.DrawText(Hint, static_cast<float>(Ctx.GetWidth()) * 0.5f, HintY,
                      glm::vec3{0.65f, 0.65f, 0.60f}, HudFontScale, ETextJustify::Center);
     }
 }
 
-std::string UVerticalBox::TickInput(FGenericWindow& window, bool cursorCaptured, float deltaTime) {
-    if (buttons_.empty()) {
+std::string UVerticalBox::TickInput(FGenericWindow& Window, bool bCursorCaptured, float DeltaTime) {
+    if (Buttons.empty()) {
         return {};
     }
-    if (ignoreActivateSeconds_ > 0.0f) {
-        ignoreActivateSeconds_ = std::max(0.0f, ignoreActivateSeconds_ - deltaTime);
+    if (IgnoreActivateSeconds > 0.0f) {
+        IgnoreActivateSeconds = std::max(0.0f, IgnoreActivateSeconds - DeltaTime);
     }
 
-    int fbW = 0;
-    int fbH = 0;
-    window.GetFramebufferSize(fbW, fbH);
-    if (fbW > 0 && fbH > 0) {
-        CacheLayout(fbW, fbH);
+    int FbW = 0;
+    int FbH = 0;
+    Window.GetFramebufferSize(FbW, FbH);
+    if (FbW > 0 && FbH > 0) {
+        CacheLayout(FbW, FbH);
     }
 
-    const bool up = window.IsKeyPressed(EKeys::Up) || window.IsKeyPressed(EKeys::W);
-    const bool down = window.IsKeyPressed(EKeys::Down) || window.IsKeyPressed(EKeys::S);
-    const bool enter = window.IsKeyPressed(EKeys::Enter) ||
-                       window.IsKeyPressed(EKeys::NumPadEnter) ||
-                       window.IsKeyPressed(EKeys::SpaceBar);
-    const bool mouse = window.IsMouseButtonDown(EMouseButtons::Left);
+    const bool bUp = Window.IsKeyPressed(EKeys::Up) || Window.IsKeyPressed(EKeys::W);
+    const bool bDown = Window.IsKeyPressed(EKeys::Down) || Window.IsKeyPressed(EKeys::S);
+    const bool bEnter = Window.IsKeyPressed(EKeys::Enter) ||
+                       Window.IsKeyPressed(EKeys::NumPadEnter) ||
+                       Window.IsKeyPressed(EKeys::SpaceBar);
+    const bool bMouse = Window.IsMouseButtonDown(EMouseButtons::Left);
 
-    if (up && !upWasDown_) {
+    if (bUp && !bUpWasDown) {
         StepSelectable(-1);
     }
-    if (down && !downWasDown_) {
+    if (bDown && !bDownWasDown) {
         StepSelectable(1);
     }
 
-    const bool allowKeyboardActivate = ignoreActivateSeconds_ <= 0.0f;
-    std::string activated;
-    if (allowKeyboardActivate && enter && !enterWasDown_) {
-        UButton* button = GetButton(selected_);
-        if (button != nullptr && button->IsEnabled() && !button->GetId().empty()) {
-            activated = button->GetId();
+    const bool bAllowKeyboardActivate = IgnoreActivateSeconds <= 0.0f;
+    std::string Activated;
+    if (bAllowKeyboardActivate && bEnter && !bEnterWasDown) {
+        UButton* Button = GetButton(Selected);
+        if (Button != nullptr && Button->IsEnabled() && !Button->GetId().empty()) {
+            Activated = Button->GetId();
         }
     }
 
     // Hover + click (never gated by travel lockout).
-    if (!cursorCaptured && fbW > 0 && fbH > 0) {
-        double mx = 0.0;
-        double my = 0.0;
-        window.GetCursorPos(mx, my);
-        int winW = 0;
-        int winH = 0;
-        window.GetWindowSize(winW, winH);
-        winW = std::max(winW, 1);
-        winH = std::max(winH, 1);
-        const float fbX =
-            static_cast<float>(mx) * static_cast<float>(fbW) / static_cast<float>(winW);
-        const float fbY =
-            static_cast<float>(my) * static_cast<float>(fbH) / static_cast<float>(winH);
+    if (!bCursorCaptured && FbW > 0 && FbH > 0) {
+        double Mx = 0.0;
+        double My = 0.0;
+        Window.GetCursorPos(Mx, My);
+        int WinW = 0;
+        int WinH = 0;
+        Window.GetWindowSize(WinW, WinH);
+        WinW = std::max(WinW, 1);
+        WinH = std::max(WinH, 1);
+        const float FbX =
+            static_cast<float>(Mx) * static_cast<float>(FbW) / static_cast<float>(WinW);
+        const float FbY =
+            static_cast<float>(My) * static_cast<float>(FbH) / static_cast<float>(WinH);
 
-        for (std::unique_ptr<UButton>& button : buttons_) {
-            button->SetHovered(button->Contains(fbX, fbY));
+        for (std::unique_ptr<UButton>& Button : Buttons) {
+            Button->SetHovered(Button->Contains(FbX, FbY));
         }
 
-        if (mouse && !mouseWasDown_) {
-            for (int i = 0; i < static_cast<int>(buttons_.size()); ++i) {
-                UButton* button = buttons_[static_cast<std::size_t>(i)].get();
-                if (!button->Contains(fbX, fbY)) {
+        if (bMouse && !bMouseWasDown) {
+            for (int I = 0; I < static_cast<int>(Buttons.size()); ++I) {
+                UButton* Button = Buttons[static_cast<std::size_t>(I)].get();
+                if (!Button->Contains(FbX, FbY)) {
                     continue;
                 }
-                selected_ = i;
+                Selected = I;
                 ApplySelectionVisuals();
-                if (button->IsEnabled() && !button->GetId().empty()) {
-                    activated = button->GetId();
+                if (Button->IsEnabled() && !Button->GetId().empty()) {
+                    Activated = Button->GetId();
                 }
                 break;
             }
         }
     } else {
-        for (std::unique_ptr<UButton>& button : buttons_) {
-            button->SetHovered(false);
+        for (std::unique_ptr<UButton>& Button : Buttons) {
+            Button->SetHovered(false);
         }
     }
 
-    upWasDown_ = up;
-    downWasDown_ = down;
-    enterWasDown_ = enter;
-    mouseWasDown_ = mouse;
-    return activated;
+    bUpWasDown = bUp;
+    bDownWasDown = bDown;
+    bEnterWasDown = bEnter;
+    bMouseWasDown = bMouse;
+    return Activated;
 }
 

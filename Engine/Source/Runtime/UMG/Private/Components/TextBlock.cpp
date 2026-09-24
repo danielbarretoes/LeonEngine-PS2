@@ -2,21 +2,21 @@
 #include "Components/TextBlock.h"
 
 
-void UTextBlock::NativePaint(FPaintContext& ctx) {
-    if (text_.empty()) {
+void UTextBlock::NativePaint(FPaintContext& Ctx) {
+    if (Text.empty()) {
         return;
     }
-    float x = x_;
-    float y = y_;
-    if (centeredOnScreen_) {
-        float w = 0.0f;
-        float h = 0.0f;
-        ctx.MeasureText(text_, scale_, w, h);
-        x = static_cast<float>(ctx.Width()) * 0.5f;
-        y = std::clamp((static_cast<float>(ctx.Height()) - h) * 0.5f, 10.0f,
-                       std::max(10.0f, static_cast<float>(ctx.Height()) - h - 10.0f));
-        justify_ = ETextJustify::Center;
+    float LocalX = X;
+    float LocalY = Y;
+    if (bCenteredOnScreen) {
+        float W = 0.0f;
+        float H = 0.0f;
+        Ctx.MeasureText(Text, Scale, W, H);
+        LocalX = static_cast<float>(Ctx.GetWidth()) * 0.5f;
+        LocalY = std::clamp((static_cast<float>(Ctx.GetHeight()) - H) * 0.5f, 10.0f,
+                       std::max(10.0f, static_cast<float>(Ctx.GetHeight()) - H - 10.0f));
+        Justify = ETextJustify::Center;
     }
-    ctx.DrawText(text_, x, y, color_, scale_, justify_);
+    Ctx.DrawText(Text, LocalX, LocalY, Color, Scale, Justify);
 }
 

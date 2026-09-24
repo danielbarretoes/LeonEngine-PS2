@@ -17,6 +17,6 @@ public:
     float NormalizedY = 0.62f;
     ETextJustify Justify = ETextJustify::Center;
 
-    void NativePaint(FPaintContext& ctx) override;
+    void NativePaint(FPaintContext& Ctx) override;
 };
 

@@ -11,25 +11,25 @@ class FDebugOverlay;
 /// Unreal analogy: FPaintContext / Slate draw elements (lite).
 class FPaintContext {
 public:
-    FPaintContext(FDebugOverlay& overlay, int framebufferWidth, int framebufferHeight)
-        : overlay_(overlay), width_(framebufferWidth), height_(framebufferHeight) {}
+    FPaintContext(FDebugOverlay& InOverlay, int FramebufferWidth, int FramebufferHeight)
+        : Overlay(InOverlay), Width(FramebufferWidth), Height(FramebufferHeight) {}
 
-    [[nodiscard]] int Width() const { return width_; }
-    [[nodiscard]] int Height() const { return height_; }
+    [[nodiscard]] int GetWidth() const { return Width; }
+    [[nodiscard]] int GetHeight() const { return Height; }
 
-    void DrawLine(float x0, float y0, float x1, float y1, const glm::vec3& color,
-                  float thickness = 2.0f);
-    void DrawRect(float x, float y, float w, float h, const glm::vec3& color);
+    void DrawLine(float X0, float Y0, float X1, float Y1, const glm::vec3& Color,
+                  float Thickness = 2.0f);
+    void DrawRect(float X, float Y, float W, float H, const glm::vec3& Color);
 
     /// Draw multiline text. `x` is left/center/right of each line per `justify`.
-    void DrawText(const std::string& text, float x, float y, const glm::vec3& color,
-                  float scale = HudFontScale, ETextJustify justify = ETextJustify::Left);
+    void DrawText(const std::string& Text, float X, float Y, const glm::vec3& Color,
+                  float Scale = HudFontScale, ETextJustify Justify = ETextJustify::Left);
 
-    void MeasureText(const std::string& text, float scale, float& outWidth, float& outHeight) const;
+    void MeasureText(const std::string& Text, float Scale, float& OutWidth, float& OutHeight) const;
 
 private:
-    FDebugOverlay& overlay_;
-    int width_ = 0;
-    int height_ = 0;
+    FDebugOverlay& Overlay;
+    int Width = 0;
+    int Height = 0;
 };
 

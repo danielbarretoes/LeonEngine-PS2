@@ -4,47 +4,47 @@
 #include "Debug/DebugOverlay.h"
 
 
-void UButton::MeasureDesiredSize(float& outW, float& outH) const {
-    float textW = 0.0f;
-    float textH = 0.0f;
-    FDebugOverlay::MeasureText(label_.empty() ? " " : label_, HudFontScale, textW, textH);
-    constexpr float kPadX = 24.0f;
-    constexpr float kPadY = 10.0f;
-    outW = textW + kPadX * 2.0f;
-    outH = std::max(textH, HudLineHeight) + kPadY * 2.0f;
+void UButton::MeasureDesiredSize(float& OutW, float& OutH) const {
+    float TextW = 0.0f;
+    float TextH = 0.0f;
+    FDebugOverlay::MeasureText(Label.empty() ? " " : Label, HudFontScale, TextW, TextH);
+    constexpr float PadX = 24.0f;
+    constexpr float PadY = 10.0f;
+    OutW = TextW + PadX * 2.0f;
+    OutH = std::max(TextH, HudLineHeight) + PadY * 2.0f;
 }
 
-bool UButton::Contains(float fbX, float fbY) const {
-    return fbX >= x_ && fbX <= x_ + w_ && fbY >= y_ && fbY <= y_ + h_;
+bool UButton::Contains(float FbX, float FbY) const {
+    return FbX >= X && FbX <= X + W && FbY >= Y && FbY <= Y + H;
 }
 
-void UButton::NativePaint(FPaintContext& ctx) {
+void UButton::NativePaint(FPaintContext& Ctx) {
     if (!IsVisible()) {
         return;
     }
-    glm::vec3 bg = backgroundColor_;
-    if (!enabled_) {
-        bg = backgroundColor_ * 0.55f;
-    } else if (selected_) {
-        bg = selectedBackgroundColor_;
-    } else if (hovered_) {
-        bg = hoverBackgroundColor_;
+    glm::vec3 Bg = BackgroundColor;
+    if (!bEnabled) {
+        Bg = BackgroundColor * 0.55f;
+    } else if (bSelected) {
+        Bg = SelectedBackgroundColor;
+    } else if (bHovered) {
+        Bg = HoverBackgroundColor;
     }
-    ctx.DrawRect(x_, y_, w_, h_, bg);
+    Ctx.DrawRect(X, Y, W, H, Bg);
 
     // Thin top highlight for selected / hover (Unreal button chrome lite).
-    if (enabled_ && (selected_ || hovered_)) {
-        const glm::vec3 edge = selected_ ? glm::vec3{1.0f, 0.82f, 0.35f}
+    if (bEnabled && (bSelected || bHovered)) {
+        const glm::vec3 Edge = bSelected ? glm::vec3{1.0f, 0.82f, 0.35f}
                                          : glm::vec3{0.55f, 0.50f, 0.35f};
-        ctx.DrawRect(x_, y_, w_, 2.0f, edge);
+        Ctx.DrawRect(X, Y, W, 2.0f, Edge);
     }
 
-    float textW = 0.0f;
-    float textH = 0.0f;
-    ctx.MeasureText(label_, HudFontScale, textW, textH);
-    const float textX = x_ + w_ * 0.5f;
-    const float textY = y_ + (h_ - textH) * 0.5f;
-    const glm::vec3 color = enabled_ ? textColor_ : disabledTextColor_;
-    ctx.DrawText(label_, textX, textY, color, HudFontScale, ETextJustify::Center);
+    float TextW = 0.0f;
+    float TextH = 0.0f;
+    Ctx.MeasureText(Label, HudFontScale, TextW, TextH);
+    const float TextX = X + W * 0.5f;
+    const float TextY = Y + (H - TextH) * 0.5f;
+    const glm::vec3 Color = bEnabled ? TextColor : DisabledTextColor;
+    Ctx.DrawText(Label, TextX, TextY, Color, HudFontScale, ETextJustify::Center);
 }
 

@@ -52,10 +52,10 @@ public:
     void RegisterComponent(UActorComponent* component);
 
     /// Heap-owned component (Unreal CreateDefaultSubobject lite — no name table).
-    template <typename T, typename... Args>
-    T* CreateDefaultSubobject(Args&&... args) {
+    template <typename T, typename... ArgsType>
+    T* CreateDefaultSubobject(ArgsType&&... args) {
         static_assert(std::is_base_of_v<UActorComponent, T>, "T must derive from ActorComponent");
-        auto owned = std::make_unique<T>(std::forward<Args>(args)...);
+        auto owned = std::make_unique<T>(std::forward<ArgsType>(args)...);
         T* raw = owned.get();
         ownedComponents_.push_back(std::move(owned));
         RegisterComponent(raw);

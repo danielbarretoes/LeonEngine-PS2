@@ -76,8 +76,8 @@ public:
     [[nodiscard]] UGameInstance& GetGameInstance() { return *gameInstance_; }
     [[nodiscard]] const UGameInstance& GetGameInstance() const { return *gameInstance_; }
 
-    template <typename T, typename... Args>
-    T* SetGameInstance(Args&&... args) {
+    template <typename T, typename... ArgsType>
+    T* SetGameInstance(ArgsType&&... args) {
         static_assert(std::is_base_of_v<UGameInstance, T>, "T must derive from GameInstance");
         // Packs call SetGameInstance after Runtime wires travel/browser callbacks — keep them.
         UGameInstance::FLevelTravelFunction travelFn;
@@ -89,7 +89,7 @@ public:
                 gameInstance_->Shutdown();
             }
         }
-        auto owned = std::make_unique<T>(std::forward<Args>(args)...);
+        auto owned = std::make_unique<T>(std::forward<ArgsType>(args)...);
         T* raw = owned.get();
         gameInstance_ = std::move(owned);
         if (travelFn) {

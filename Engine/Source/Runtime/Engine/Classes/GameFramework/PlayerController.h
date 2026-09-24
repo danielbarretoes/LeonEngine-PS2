@@ -30,10 +30,10 @@ public:
 
     /// Replaces owned PlayerState. Caller must GameMode::Logout (or RemovePlayerState) first
     /// so GameState::PlayerArray does not keep a dangling pointer.
-    template <typename T, typename... Args>
-    T* SetPlayerState(Args&&... args) {
+    template <typename T, typename... ArgsType>
+    T* SetPlayerState(ArgsType&&... args) {
         static_assert(std::is_base_of_v<APlayerState, T>, "T must derive from PlayerState");
-        auto owned = std::make_unique<T>(std::forward<Args>(args)...);
+        auto owned = std::make_unique<T>(std::forward<ArgsType>(args)...);
         T* raw = owned.get();
         playerState_ = std::move(owned);
         return raw;

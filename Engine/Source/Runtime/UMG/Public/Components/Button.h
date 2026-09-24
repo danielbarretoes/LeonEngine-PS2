@@ -11,62 +11,62 @@ class FGenericWindow;
 /// Usually owned by UVerticalBox; can also be a root HUD widget with SetPosition.
 class UButton : public UUserWidget {
 public:
-    void SetId(std::string id) { id_ = std::move(id); }
-    [[nodiscard]] const std::string& GetId() const { return id_; }
+    void SetId(std::string InId) { Id = std::move(InId); }
+    [[nodiscard]] const std::string& GetId() const { return Id; }
 
-    void SetLabel(std::string label) { label_ = std::move(label); }
-    [[nodiscard]] const std::string& GetLabel() const { return label_; }
+    void SetLabel(std::string InLabel) { Label = std::move(InLabel); }
+    [[nodiscard]] const std::string& GetLabel() const { return Label; }
 
-    void SetPosition(float x, float y) {
-        x_ = x;
-        y_ = y;
+    void SetPosition(float InX, float InY) {
+        X = InX;
+        Y = InY;
     }
-    void SetSize(float w, float h) {
-        w_ = w;
-        h_ = h;
+    void SetSize(float InW, float InH) {
+        W = InW;
+        H = InH;
     }
 
-    [[nodiscard]] float GetX() const { return x_; }
-    [[nodiscard]] float GetY() const { return y_; }
-    [[nodiscard]] float GetWidth() const { return w_; }
-    [[nodiscard]] float GetHeight() const { return h_; }
+    [[nodiscard]] float GetX() const { return X; }
+    [[nodiscard]] float GetY() const { return Y; }
+    [[nodiscard]] float GetWidth() const { return W; }
+    [[nodiscard]] float GetHeight() const { return H; }
 
-    void SetSelected(bool selected) { selected_ = selected; }
-    [[nodiscard]] bool IsSelected() const { return selected_; }
+    void SetSelected(bool bInSelected) { bSelected = bInSelected; }
+    [[nodiscard]] bool IsSelected() const { return bSelected; }
 
-    void SetEnabled(bool enabled) { enabled_ = enabled; }
-    [[nodiscard]] bool IsEnabled() const { return enabled_; }
+    void SetEnabled(bool bInEnabled) { bEnabled = bInEnabled; }
+    [[nodiscard]] bool IsEnabled() const { return bEnabled; }
 
-    void SetTextColor(const glm::vec3& color) { textColor_ = color; }
-    void SetBackgroundColor(const glm::vec3& color) { backgroundColor_ = color; }
-    void SetSelectedBackgroundColor(const glm::vec3& color) { selectedBackgroundColor_ = color; }
+    void SetTextColor(const glm::vec3& Color) { TextColor = Color; }
+    void SetBackgroundColor(const glm::vec3& Color) { BackgroundColor = Color; }
+    void SetSelectedBackgroundColor(const glm::vec3& Color) { SelectedBackgroundColor = Color; }
 
     /// Preferred size for the current label (padding included).
-    void MeasureDesiredSize(float& outW, float& outH) const;
+    void MeasureDesiredSize(float& OutW, float& OutH) const;
 
     /// Hit-test in framebuffer pixels (top-left origin).
-    [[nodiscard]] bool Contains(float fbX, float fbY) const;
+    [[nodiscard]] bool Contains(float FbX, float FbY) const;
 
-    void NativePaint(FPaintContext& ctx) override;
+    void NativePaint(FPaintContext& Ctx) override;
 
 private:
-    std::string id_;
-    std::string label_ = "Button";
-    float x_ = 0.0f;
-    float y_ = 0.0f;
-    float w_ = 160.0f;
-    float h_ = HudLineHeight + 16.0f;
-    bool selected_ = false;
-    bool enabled_ = true;
-    bool hovered_ = false;
+    std::string Id;
+    std::string Label = "Button";
+    float X = 0.0f;
+    float Y = 0.0f;
+    float W = 160.0f;
+    float H = HudLineHeight + 16.0f;
+    bool bSelected = false;
+    bool bEnabled = true;
+    bool bHovered = false;
 
-    glm::vec3 textColor_{1.0f, 0.92f, 0.75f};
-    glm::vec3 backgroundColor_{0.12f, 0.12f, 0.14f};
-    glm::vec3 selectedBackgroundColor_{0.28f, 0.22f, 0.10f};
-    glm::vec3 hoverBackgroundColor_{0.18f, 0.16f, 0.12f};
-    glm::vec3 disabledTextColor_{0.45f, 0.45f, 0.45f};
+    glm::vec3 TextColor{1.0f, 0.92f, 0.75f};
+    glm::vec3 BackgroundColor{0.12f, 0.12f, 0.14f};
+    glm::vec3 SelectedBackgroundColor{0.28f, 0.22f, 0.10f};
+    glm::vec3 HoverBackgroundColor{0.18f, 0.16f, 0.12f};
+    glm::vec3 DisabledTextColor{0.45f, 0.45f, 0.45f};
 
     friend class UVerticalBox;
-    void SetHovered(bool hovered) { hovered_ = hovered; }
+    void SetHovered(bool bInHovered) { bHovered = bInHovered; }
 };
 

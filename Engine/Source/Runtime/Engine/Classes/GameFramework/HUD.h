@@ -15,55 +15,55 @@ public:
     void Clear();
 
     /// Unreal `CreateWidget` + `AddToViewport` (lite): construct, NativeConstruct, retain.
-    template <typename T, typename... Args>
-    T* AddWidget(Args&&... args) {
+    template <typename T, typename... ArgsType>
+    T* AddWidget(ArgsType&&... Args) {
         static_assert(std::is_base_of_v<UUserWidget, T>, "T must derive from UserWidget");
-        auto owned = std::make_unique<T>(std::forward<Args>(args)...);
-        T* raw = owned.get();
-        raw->owningHud_ = this;
-        raw->NativeConstruct();
-        widgets_.push_back(std::move(owned));
-        return raw;
+        auto Owned = std::make_unique<T>(std::forward<ArgsType>(Args)...);
+        T* Raw = Owned.get();
+        Raw->OwningHud = this;
+        Raw->NativeConstruct();
+        Widgets.push_back(std::move(Owned));
+        return Raw;
     }
 
     /// Remove first widget of type T (NativeDestruct). Returns true if removed.
     template <typename T>
     bool RemoveWidget() {
         static_assert(std::is_base_of_v<UUserWidget, T>, "T must derive from UserWidget");
-        for (auto it = widgets_.begin(); it != widgets_.end(); ++it) {
-            if (dynamic_cast<T*>(it->get()) != nullptr) {
-                (*it)->NativeDestruct();
-                (*it)->owningHud_ = nullptr;
-                widgets_.erase(it);
+        for (auto It = Widgets.begin(); It != Widgets.end(); ++It) {
+            if (dynamic_cast<T*>(It->get()) != nullptr) {
+                (*It)->NativeDestruct();
+                (*It)->OwningHud = nullptr;
+                Widgets.erase(It);
                 return true;
             }
         }
         return false;
     }
 
-    bool RemoveWidget(UUserWidget* widget);
+    bool RemoveWidget(UUserWidget* Widget);
 
     template <typename T>
     [[nodiscard]] T* GetWidgetOfClass() const {
         static_assert(std::is_base_of_v<UUserWidget, T>, "T must derive from UserWidget");
-        for (const auto& w : widgets_) {
-            if (T* typed = dynamic_cast<T*>(w.get())) {
-                return typed;
+        for (const auto& W : Widgets) {
+            if (T* Typed = dynamic_cast<T*>(W.get())) {
+                return Typed;
             }
         }
         return nullptr;
     }
 
-    void Tick(float deltaTime);
+    void Tick(float DeltaTime);
 
     /// Clears prior frame screen geometry, then paints visible widgets.
-    void Paint(FDebugOverlay& overlay, int framebufferWidth, int framebufferHeight);
+    void Paint(FDebugOverlay& Overlay, int FramebufferWidth, int FramebufferHeight);
 
-    [[nodiscard]] const std::vector<std::unique_ptr<UUserWidget>>& Widgets() const {
-        return widgets_;
+    [[nodiscard]] const std::vector<std::unique_ptr<UUserWidget>>& GetWidgets() const {
+        return Widgets;
     }
 
 private:
-    std::vector<std::unique_ptr<UUserWidget>> widgets_;
+    std::vector<std::unique_ptr<UUserWidget>> Widgets;
 };
 

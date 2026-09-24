@@ -82,10 +82,10 @@ public:
     }
 
     /// Replace the GameState instance (e.g. pack-specific subclass). Calls InitGameState.
-    template <typename T, typename... Args>
-    T* SetGameState(Args&&... args) {
+    template <typename T, typename... ArgsType>
+    T* SetGameState(ArgsType&&... args) {
         static_assert(std::is_base_of_v<AGameStateBase, T>, "T must derive from GameState");
-        auto owned = std::make_unique<T>(std::forward<Args>(args)...);
+        auto owned = std::make_unique<T>(std::forward<ArgsType>(args)...);
         T* raw = owned.get();
         gameState_ = std::move(owned);
         InitGameState();

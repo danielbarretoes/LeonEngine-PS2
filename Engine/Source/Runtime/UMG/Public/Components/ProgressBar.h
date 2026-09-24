@@ -9,47 +9,47 @@
 /// Unreal-like UProgressBar (lite): background + fill rect, optional percent label.
 class UProgressBar : public UUserWidget {
 public:
-    void SetPosition(float x, float y) {
-        x_ = x;
-        y_ = y;
+    void SetPosition(float InX, float InY) {
+        X = InX;
+        Y = InY;
     }
-    void SetSize(float w, float h) {
-        w_ = w;
-        h_ = h;
+    void SetSize(float InW, float InH) {
+        W = InW;
+        H = InH;
     }
 
-    [[nodiscard]] float GetX() const { return x_; }
-    [[nodiscard]] float GetY() const { return y_; }
-    [[nodiscard]] float GetWidth() const { return w_; }
-    [[nodiscard]] float GetHeight() const { return h_; }
+    [[nodiscard]] float GetX() const { return X; }
+    [[nodiscard]] float GetY() const { return Y; }
+    [[nodiscard]] float GetWidth() const { return W; }
+    [[nodiscard]] float GetHeight() const { return H; }
 
     /// Normalized fill amount in [0, 1].
-    void SetPercent(float percent) { percent_ = std::clamp(percent, 0.0f, 1.0f); }
-    [[nodiscard]] float GetPercent() const { return percent_; }
+    void SetPercent(float InPercent) { Percent = std::clamp(InPercent, 0.0f, 1.0f); }
+    [[nodiscard]] float GetPercent() const { return Percent; }
 
-    void SetShowPercentText(bool show) { showPercentText_ = show; }
-    void SetBackgroundColor(const glm::vec3& color) { backgroundColor_ = color; }
-    void SetFillColor(const glm::vec3& color) { fillColor_ = color; }
-    void SetBorderColor(const glm::vec3& color) { borderColor_ = color; }
-    void SetTextColor(const glm::vec3& color) { textColor_ = color; }
+    void SetShowPercentText(bool bShow) { bShowPercentText = bShow; }
+    void SetBackgroundColor(const glm::vec3& Color) { BackgroundColor = Color; }
+    void SetFillColor(const glm::vec3& Color) { FillColor = Color; }
+    void SetBorderColor(const glm::vec3& Color) { BorderColor = Color; }
+    void SetTextColor(const glm::vec3& Color) { TextColor = Color; }
 
     /// Place horizontally centered near the bottom of the viewport each paint.
-    void SetAnchoredBottomCenter(bool enabled) { anchoredBottomCenter_ = enabled; }
+    void SetAnchoredBottomCenter(bool bEnabled) { bAnchoredBottomCenter = bEnabled; }
 
-    void NativePaint(FPaintContext& ctx) override;
+    void NativePaint(FPaintContext& Ctx) override;
 
 private:
-    float x_ = 0.0f;
-    float y_ = 0.0f;
-    float w_ = 280.0f;
-    float h_ = 18.0f;
-    float percent_ = 0.0f;
-    bool showPercentText_ = false;
-    bool anchoredBottomCenter_ = false;
+    float X = 0.0f;
+    float Y = 0.0f;
+    float W = 280.0f;
+    float H = 18.0f;
+    float Percent = 0.0f;
+    bool bShowPercentText = false;
+    bool bAnchoredBottomCenter = false;
 
-    glm::vec3 backgroundColor_{0.10f, 0.10f, 0.12f};
-    glm::vec3 fillColor_{0.85f, 0.65f, 0.20f};
-    glm::vec3 borderColor_{0.35f, 0.30f, 0.18f};
-    glm::vec3 textColor_{1.0f, 0.92f, 0.75f};
+    glm::vec3 BackgroundColor{0.10f, 0.10f, 0.12f};
+    glm::vec3 FillColor{0.85f, 0.65f, 0.20f};
+    glm::vec3 BorderColor{0.35f, 0.30f, 0.18f};
+    glm::vec3 TextColor{1.0f, 0.92f, 0.75f};
 };
 

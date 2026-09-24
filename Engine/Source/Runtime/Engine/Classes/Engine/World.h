@@ -53,10 +53,10 @@ public:
     /// Recreate FPhysScene with another backend (clears bodies). Call before RegisterBodiesFromLevel.
     void SetPhysicsBackend(EPhysicsBackend physicsBackend) { physics_ = FPhysScene(physicsBackend); }
 
-    template <typename T, typename... Args>
-    T* SpawnActor(Args&&... args) {
+    template <typename T, typename... ArgsType>
+    T* SpawnActor(ArgsType&&... args) {
         static_assert(std::is_base_of_v<AActor, T>, "T must derive from Actor");
-        auto owned = std::make_unique<T>(std::forward<Args>(args)...);
+        auto owned = std::make_unique<T>(std::forward<ArgsType>(args)...);
         T* raw = owned.get();
         raw->world_ = this;
         raw->SetEditorId(++nextEditorId_);

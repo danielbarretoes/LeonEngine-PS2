@@ -13,47 +13,47 @@ class FGenericWindow;
 class UMenuListWidget : public UUserWidget {
 public:
     struct FItem {
-        std::string id;
-        std::string label;
+        std::string Id;
+        std::string Label;
     };
 
-    void SetTitle(std::string title) { title_ = std::move(title); }
-    void SetHint(std::string hint) { hint_ = std::move(hint); }
-    void SetItems(std::vector<FItem> items);
-    void SetColor(const glm::vec3& color) { color_ = color; }
+    void SetTitle(std::string InTitle) { Title = std::move(InTitle); }
+    void SetHint(std::string InHint) { Hint = std::move(InHint); }
+    void SetItems(std::vector<FItem> InItems);
+    void SetColor(const glm::vec3& InColor) { Color = InColor; }
 
-    [[nodiscard]] int SelectedIndex() const { return selected_; }
-    void SetSelectedIndex(int index);
+    [[nodiscard]] int SelectedIndex() const { return Selected; }
+    void SetSelectedIndex(int Index);
 
     /// Seed edges as pressed + short activate lockout (safe after travel).
     void ResetEdges();
 
     /// Returns activated item id this frame (empty if none).
-    [[nodiscard]] std::string TickInput(FGenericWindow& window, bool cursorCaptured, float deltaTime);
+    [[nodiscard]] std::string TickInput(FGenericWindow& Window, bool bCursorCaptured, float DeltaTime);
 
-    void NativePaint(FPaintContext& ctx) override;
+    void NativePaint(FPaintContext& Ctx) override;
 
 private:
     [[nodiscard]] std::string BuildPaintText() const;
-    [[nodiscard]] int CountLines(const std::string& text) const;
-    void CacheLayout(int viewportW, int viewportH);
+    [[nodiscard]] int CountLines(const std::string& Text) const;
+    void CacheLayout(int ViewportW, int InViewportH);
 
-    std::string title_ = "Menu";
-    std::string hint_;
-    std::vector<FItem> items_;
-    int selected_ = 0;
-    glm::vec3 color_{1.0f, 0.82f, 0.35f};
+    std::string Title = "Menu";
+    std::string Hint;
+    std::vector<FItem> Items;
+    int Selected = 0;
+    glm::vec3 Color{1.0f, 0.82f, 0.35f};
 
-    bool upWasDown_ = false;
-    bool downWasDown_ = false;
-    bool enterWasDown_ = false;
-    bool mouseWasDown_ = false;
+    bool bUpWasDown = false;
+    bool bDownWasDown = false;
+    bool bEnterWasDown = false;
+    bool bMouseWasDown = false;
     /// Suppresses keyboard activate only (ghost Enter after travel); mouse stays live.
-    float ignoreActivateSeconds_ = 0.0f;
+    float IgnoreActivateSeconds = 0.0f;
 
     // Layout cached for hit-testing (Paint + TickInput).
-    float itemsTopPx_ = 0.0f;
-    float lineH_ = HudLineHeight;
-    int viewportH_ = 0;
+    float ItemsTopPx = 0.0f;
+    float LineH = HudLineHeight;
+    int ViewportH = 0;
 };
 

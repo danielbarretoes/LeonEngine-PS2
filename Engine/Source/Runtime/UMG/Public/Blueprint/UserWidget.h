@@ -17,14 +17,14 @@ public:
     virtual void NativePaint(FPaintContext& /*ctx*/) {}
     virtual void NativeDestruct() {}
 
-    void SetVisibility(bool visible) { bIsVisible = visible; }
+    void SetVisibility(bool bVisible) { bIsVisible = bVisible; }
     [[nodiscard]] bool IsVisible() const { return bIsVisible; }
 
     /// Owning AHUD (set by HUD::AddWidget). Null if not added.
-    [[nodiscard]] AHUD* GetOwningHUD() const { return owningHud_; }
+    [[nodiscard]] AHUD* GetOwningHUD() const { return OwningHud; }
 
 private:
     friend class AHUD;
-    AHUD* owningHud_ = nullptr;
+    AHUD* OwningHud = nullptr;
 };
 
