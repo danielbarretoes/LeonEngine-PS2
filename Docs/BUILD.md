@@ -195,7 +195,7 @@ leon_module(<Name>
 | `CIRCULAR_DEPENDENCIES` | Modules whose headers include each other (propagated like public ones; ignored for the dependency order) |
 | `PUBLIC_DEFINITIONS` / `PRIVATE_DEFINITIONS` | Preprocessor definitions |
 | `PUBLIC_INCLUDE_PATHS` / `PRIVATE_INCLUDE_PATHS` | Extra include paths, relative to the module folder (External modules: relative to the third-party folder) |
-| `PUBLIC_SYSTEM_LIBRARIES` | System libraries to link (`psapi`, `ws2_32`, PS2SDK `kernel`, `pad`, ...) |
+| `PUBLIC_SYSTEM_LIBRARIES` | System libraries to link (`psapi`, `dxgi`, PS2SDK `kernel`, `pad`, ...) |
 | `EXCLUDE_SOURCES` | Globs relative to the module folder removed from the sources |
 | `COMPILE_OPTIONS` | Extra private compiler options |
 | `EXTERNAL_TARGETS` | External modules: CMake targets created by `LeonExternal_<Name>()` |
@@ -227,7 +227,7 @@ leon_module(Core
 # Engine/Source/Runtime/Launch/Launch.Build.cmake
 leon_module(Launch
 	PUBLIC_DEPENDENCIES Core InputCore ApplicationCore RHI
-	PRIVATE_DEPENDENCIES_Desktop Engine NetCore Projects
+	PRIVATE_DEPENDENCIES_Desktop Engine
 )
 ```
 
@@ -303,7 +303,7 @@ Targets in the repository:
 
 | Target | File | Type | Platforms | Notes |
 | --- | --- | --- | --- | --- |
-| `LeonGame` | `Engine/Source/LeonGame.Target.cmake` | Game | Win64 | `EXTRA_MODULE_NAMES Engine AIModule`; runs a project pack (UE4Game) |
+| `LeonGame` | `Engine/Source/LeonGame.Target.cmake` | Game | Win64 | `EXTRA_MODULE_NAMES Engine AIModule`; loads one level, `-map=<.llev>` (UE4Game) |
 | `LeonCook` | `Engine/Source/Programs/LeonCook/LeonCook.Target.cmake` | Program | Desktop | offline cooker |
 | `LeonAutomationTests` | `Engine/Source/Programs/LeonAutomationTests/LeonAutomationTests.Target.cmake` | Program | Desktop | `COLLECT_AUTOMATION_TESTS`, `ENABLE_PLUGINS JoltPhysics` |
 | `BlankProgram` | `Engine/Source/Programs/BlankProgram/BlankProgram.Target.cmake` | Program | all | starts the linked modules and prints the platform |
@@ -474,7 +474,7 @@ Two ways to obtain the code:
   up front (it scans `Engine/Source/ThirdParty`, `Engine/Platforms/*/Source/ThirdParty` and every plugin's
   `Source/ThirdParty`); a build also downloads a missing one while configuring. With an empty `DOWNLOAD_SHA256` the
   download is not verified and LeonBuildTool prints the hash to pin. Extracted folders are git-ignored.
-- **Vendored** — the sources are committed next to the rules file (`Glad/glad/`, `ENet/enet/`, ...).
+- **Vendored** — the sources are committed next to the rules file (`Glad/glad/`, `UFBX/ufbx/`, ...).
 
 Example:
 

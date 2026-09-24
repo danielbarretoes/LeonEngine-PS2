@@ -58,7 +58,7 @@ public:
 		Score += Delta;
 	}
 
-	/// Stocks / lives (Unreal-like). Default 0 — packs call SetLives at match start.
+	/// Stocks / lives (Unreal-like). Default 0 — games call SetLives at match start.
 	[[nodiscard]] int GetLives() const
 	{
 		return Lives;

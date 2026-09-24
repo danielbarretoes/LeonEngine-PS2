@@ -166,8 +166,8 @@ struct ENGINE_API FLevelDocument
 /// Read a `.llev` file into `out`.
 [[nodiscard]] bool LoadLeonLevelFile(const std::string& Path, FLevelDocument& Out);
 
-/// Resolve a document into the Engine: builds a staging Level, commits on full success only,
-/// then hydrates persisted lightmaps relative to `sourcePath`.
+/// Resolve a document into the Engine: builds a staging Level and commits on full success only; asset paths
+/// resolve relative to `SourcePath`.
 [[nodiscard]] bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const std::string& SourcePath);
 
 /// Resolve a content-relative key (`Materials/M_Floor.lmat`) for a level under `…/Content/Levels/`

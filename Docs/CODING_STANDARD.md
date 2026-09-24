@@ -51,8 +51,8 @@ All identifiers are English (U.S. spelling), **PascalCase**, with no underscores
 | Member variables (public or private) | PascalCase, no `m_`, no trailing `_` | `ExitCode`, `MainWindow`, `LastFrameCycles` |
 | Methods and free functions | PascalCase verbs; a function that returns a value names the value | `StartupModule()`, `PollGameDeviceState()`, `LoadLevelFile()` |
 | Parameters and locals | PascalCase | `DeltaTime`, `NowCycles`, `ModuleManager` |
-| Constants (`constexpr`, `static const`) | PascalCase, no `k` prefix | `MainWindowWidth`, `CurrentProtocolVersion`, `InvalidTexture`, `MaxOnScreenMessages` |
-| Booleans (members, params, locals) | `b` prefix | `bDedicated`, `bCursorCaptured`, `bEnabled` |
+| Constants (`constexpr`, `static const`) | PascalCase, no `k` prefix | `MainWindowWidth`, `MaxPointLights`, `InvalidTexture`, `MaxOnScreenMessages` |
+| Booleans (members, params, locals) | `b` prefix | `bHeadless`, `bCursorCaptured`, `bEnabled` |
 | Macros | `UPPER_SNAKE_CASE` | `IMPLEMENT_MODULE`, `COMPILED_PLATFORM_HEADER`, `PLATFORM_DESKTOP` |
 
 **Accessors and questions**
@@ -60,7 +60,7 @@ All identifiers are English (U.S. spelling), **PascalCase**, with no underscores
 - Bool-returning functions ask a question: `Is…`, `Has…`, `Should…`, `Can…`
   (`IsEngineExitRequested()`, `IsGamepadConnected()`, `ShouldClose()`, `HasPath()`).
 - An accessor whose natural name would collide with a member becomes `GetX()`
-  (`FEnvironmentMap::GetId()` returns member `Id`; `FEngineLoop::GetExitCode()` returns `ExitCode`).
+  (`UButton::GetId()` returns member `Id`; `FEngineLoop::GetExitCode()` returns `ExitCode`).
 
 **`In` / `Out` parameters**
 
@@ -190,9 +190,7 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 
 - There is **no `namespace leon`** and no global engine namespace: types live at global scope like UE, and
   the prefixes keep them distinct.
-- `Leon::<Area>` is only for free functions, constants and plain protocol structs that UE would put in a
-  namespace: `Leon::Net` (NetCore protocol / snapshot codec, `Net/NetUtil.h`, `Net/RootReplication.h`),
-  `Leon::InputActions` (action name constants), `Leon::PS2` (private helpers inside `PS2RHI/Private`).
+- `Leon::<Area>` is only for free functions, constants and plain structs that UE would put in a namespace: `Leon::InputActions` (action name constants), `Leon::PS2` (private helpers inside `PS2RHI/Private`).
 - File-local helpers go in an anonymous namespace in the `.cpp`.
 - No `using namespace` at global scope (inside a function body is acceptable, e.g.
   `using namespace Leon::InputActions;`).
@@ -211,8 +209,7 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 - Include platform headers through `COMPILED_PLATFORM_HEADER(PlatformMemory.h)` from a `HAL/` header.
 - Dependencies that only exist on some platforms use suffixed keywords in the `.Build.cmake`
   (`PRIVATE_DEPENDENCIES_Desktop GLFW`) or the extension's `leon_module_extend`.
-- Known exceptions to remove: `Core/Private/Misc/Paths.cpp` and `Engine/Private/Net/NetUtil.cpp` still test
-  `_WIN32`.
+- Known exception to remove: `Core/Private/Misc/Paths.cpp` still tests `PLATFORM_WINDOWS`.
 
 ---
 
@@ -229,11 +226,10 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 
 | Asset | Convention | Example |
 | --- | --- | --- |
-| Content kind folders | PascalCase | `Engine/Content/Materials`, `Textures`, `Hdr`, `LevelTemplates` |
+| Content kind folders | PascalCase | `Engine/Content/Materials`, `Textures`, `LevelTemplates` |
 | Materials | `M_<Name>.lmat` | `M_Default.lmat`, `M_WorldGrid.lmat` |
 | Textures | `T_<Name>_<Suffix>` (`_D` diffuse, `_N` normal) | `T_Default_D.png` |
 | Level templates / levels | PascalCase `.llev` | `Blank.llev`, `Starter.llev` |
-| HDR environment maps | PascalCase, no spaces | `AutumnFieldPuresky1k.hdr` |
 | GLSL shaders (`Engine/Shaders`) | snake_case | `blinn_phong.vert`, `post_composite.frag` |
 
 File formats: [ASSET_FORMATS.md](ASSET_FORMATS.md).

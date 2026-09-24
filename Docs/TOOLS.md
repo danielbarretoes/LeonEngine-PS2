@@ -9,7 +9,7 @@ The layout mirrors Unreal Engine 4.27: edit-time code is in **Developer** module
 | Path | Kind | Role |
 | --- | --- | --- |
 | `Engine/Source/Developer/Cooker/` | Developer module | Cook commandlet (`UCookCommandlet`), recipes (`FCookRecipe`), path helpers (`FCookPaths`) |
-| `Engine/Source/Developer/MeshUtilities/` | Developer module | OBJ / FBX / glTF import and `FStaticMeshBuilder` (source → `.lmesh`) |
+| `Engine/Source/Developer/MeshUtilities/` | Developer module | OBJ / FBX / glTF import and `FStaticMeshBuilder` (source → `.lmesh`); FBX skeletal import (`FbxSkeletalImport.h`) |
 | `Engine/Source/Programs/LeonCook/` | Program target | `LeonCook` executable: `main` forwards to `UCookCommandlet::Main` |
 | `Engine/Source/Programs/LeonBuildTool/` | Build tool (CMake script) | Builds every target (UnrealBuildTool equivalent) |
 | `Engine/Source/Programs/LeonAutomationTests/` | Program target | Runs every module's `Private/Tests/**` (Catch2) |
@@ -24,9 +24,9 @@ Both Developer modules and the LeonCook target are `PLATFORMS Desktop`: they nev
 ```text
 LeonCook (Program)
   └─ Cooker (Developer)
-       ├─ Engine         (CookedSkeletal: character / anim cook, .lskel / .lskm / .lanim / .lchar writers)
-       │    └─ AnimationCore (FBX skeleton / animation import through ufbx)
-       ├─ MeshUtilities  (FStaticMeshBuilder, ObjImport, FbxStaticMesh, GltfImport)
+       ├─ Engine         (listed private dependency; no Engine header is used since the skeletal cook was removed)
+       ├─ MeshUtilities  (FStaticMeshBuilder, ObjImport, FbxStaticMesh, GltfImport, FbxSkeletalImport)
+       │    ├─ AnimationCore (skeleton / animation types filled by the FBX skeletal import)
        │    └─ Renderer  (LeonMaterialFormat: .lmat written by glTF import)
        └─ NlohmannJson   (recipe parsing)
 ```
@@ -54,29 +54,14 @@ Engine\Build\BatchFiles\Cook.bat recipe Content\CookRecipe.json
 | Mode | Required | Optional | Writes |
 | --- | --- | --- | --- |
 | `staticmesh` | `--out <m.lmesh>` and exactly one of `--obj <m.obj>`, `--fbx <m.fbx>`, `--gltf <m.gltf>` | `--materials <dir>` (glTF only: writes `M_*.lmat` and copies textures) | `.lmesh` |
-| `character` | `--name <Name>`, `--mesh <idle.fbx>`, `--run <run.fbx>`, `--out <dir>` | `--jump <JumpingUp.fbx>`, `--fall <FallingIdle.fbx>`, `--land <Land.fbx>` | Character folder (below) |
-| `anim` | `--fbx <clip.fbx>`, `--skeleton <X.lskel>`, `--out <Anims/Clip.lanim>` | `--name <ClipName>`, `--noloop` (clips loop by default) | `.lanim` |
 | `recipe` | `<file.json>` | | Whatever the steps write |
 | `help`, `-h`, `--help` | | | Prints usage |
 
 Exit codes: `0` success, `1` bad arguments or recipe, `2` cook failure. Running without a mode prints usage and returns `1`. Unknown flags are rejected.
 
-`character` writes, under `--out`:
+The `character` and `anim` modes (cooked skeletal formats) were removed in 0.12.0; skeletal assets return as `.lasset` packages.
 
-```text
-<Name>.lskel
-<Name>.lskm
-Materials/M_<Name>.lmat
-Anims/BreathingIdle.lanim
-Anims/Running.lanim
-Anims/JumpingUp.lanim          (--jump)
-Anims/FallingIdle.lanim        (--fall)
-Anims/FallingToLanding.lanim   (--land)
-<Name>_Locomotion.blendspace1d.json
-<Name>.lchar
-```
-
-Implementation: `FStaticMeshBuilder::CookFromObj` / `CookFromFbx` / `CookFromGltf` (`Engine/Source/Developer/MeshUtilities/Public/StaticMeshBuilder.h`), `CookCharacterFromFbx` / `CookAnimSequenceFromFbx` (`Engine/Source/Runtime/Engine/Public/Animation/CookedSkeletal.h`).
+Implementation: `FStaticMeshBuilder::CookFromObj` / `CookFromFbx` / `CookFromGltf` (`Engine/Source/Developer/MeshUtilities/Public/StaticMeshBuilder.h`).
 
 ### Examples
 
@@ -84,8 +69,6 @@ Implementation: `FStaticMeshBuilder::CookFromObj` / `CookFromFbx` / `CookFromGlt
 Engine\Binaries\Win64\LeonCook.exe staticmesh --obj mesh.obj --out mesh.lmesh
 Engine\Binaries\Win64\LeonCook.exe staticmesh --fbx mesh.fbx --out mesh.lmesh
 Engine\Binaries\Win64\LeonCook.exe staticmesh --gltf mesh.gltf --out mesh.lmesh --materials Materials
-Engine\Binaries\Win64\LeonCook.exe character --name Bot --mesh BreathingIdle.fbx --run Running.fbx --out Characters\Bot
-Engine\Binaries\Win64\LeonCook.exe anim --fbx Wave.fbx --skeleton Bot.lskel --name Wave --out Anims\Wave.lanim
 Engine\Binaries\Win64\LeonCook.exe recipe CookRecipe.json
 ```
 
@@ -97,28 +80,15 @@ Engine\Binaries\Win64\LeonCook.exe recipe CookRecipe.json
 {
   "steps": [
     {
-      "type": "character",
-      "name": "Bot",
-      "mesh": "BreathingIdle.fbx",
-      "run": "Running.fbx",
-      "jump": "JumpingUp.fbx",
-      "fall": "FallingIdle.fbx",
-      "land": "FallingToLanding.fbx",
-      "out": "."
-    },
-    {
       "type": "staticmesh",
       "gltf": "Prop.gltf",
       "out": "Prop.lmesh",
       "materials": "Materials"
     },
     {
-      "type": "anim",
-      "fbx": "Wave.fbx",
-      "skeleton": "Bot.lskel",
-      "name": "Wave",
-      "out": "Anims/Wave.lanim",
-      "loop": true
+      "type": "staticmesh",
+      "obj": "Crate.obj",
+      "out": "Crate.lmesh"
     }
   ]
 }
@@ -126,8 +96,6 @@ Engine\Binaries\Win64\LeonCook.exe recipe CookRecipe.json
 
 | Step `type` | Required fields | Optional |
 | --- | --- | --- |
-| `character` | `name`, `mesh`, `run` | `out` (default `.`), `jump`, `fall`, `land` |
-| `anim` | `fbx`, `skeleton`, `out` | `name`, `loop` (default `true`) |
 | `staticmesh` | `out` + exactly one of `obj` / `fbx` / `gltf` | `materials` (glTF) |
 
 The repository has no sample recipe or source FBX / glTF files; the only mesh source is the OBJ test fixture `Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/Cube.obj`.

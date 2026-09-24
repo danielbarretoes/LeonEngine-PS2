@@ -210,7 +210,7 @@ public:
 		bKeyboardOrbitEnabled = bEnabled;
 	}
 
-	/// When false, Engine mouse orbit + scroll→camera zoom are off (packs may drive SpringArm).
+	/// When false, Engine mouse orbit + scroll→camera zoom are off (games may drive SpringArm).
 	void SetOrbitMouseEnabled(bool bEnabled)
 	{
 		bOrbitMouseEnabled = bEnabled;
@@ -252,7 +252,7 @@ public:
 	void AddOnScreenDebugMessage(
 		std::string Message, float DisplaySeconds = 2.0f, const glm::vec3& Color = {1.0f, 0.0f, 0.0f});
 
-	/// Persistent top-center HUD line (cleared when empty). Packs update each Tick.
+	/// Persistent top-center HUD line (cleared when empty). Games update each Tick.
 	void SetCenterHudText(std::string Text)
 	{
 		CenterHudText = std::move(Text);

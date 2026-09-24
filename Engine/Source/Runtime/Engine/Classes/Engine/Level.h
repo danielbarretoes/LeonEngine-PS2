@@ -16,7 +16,7 @@
 #include <string_view>
 #include <vector>
 
-/// Unreal-like mobility: Static receives baked lightmaps; Movable uses only dynamic lights.
+/// Unreal-like mobility: Static never moves (baked lighting later); Movable may move at runtime.
 enum class EComponentMobility : std::uint8_t
 {
 	Static = 0,
@@ -53,7 +53,7 @@ struct ENGINE_API UStaticMeshComponent
 	bool bUseModelMatrixOverride = false;
 	glm::mat4 ModelMatrixOverride{1.0f};
 
-	/// Static = lightmap candidate; Movable = runtime-lit only.
+	/// Static = never moves; Movable = may move at runtime.
 	EComponentMobility Mobility = EComponentMobility::Static;
 
 	/// Editor / save provenance (filled by LevelLoader; used by LevelSaver).
@@ -97,7 +97,7 @@ struct ENGINE_API FTriggerVolume
 	FTransform Transform{};
 	float InteractRadius = 2.f;
 	int InteractCost = 0;
-	std::string Payload; // pack-defined e.g. Door, WallBuy:M14, Perk:Jugg
+	std::string Payload; // game-defined e.g. Door, WallBuy:M14, Perk:Jugg
 	std::string Tag;
 	bool bConsumeOnUse = false;
 };

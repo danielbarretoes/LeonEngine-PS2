@@ -6,5 +6,5 @@
 inline void WireDefaultInput(UGameEngine& Engine)
 {
 	(void)Engine;
-	// Intentionally minimal — project packs can AddMappingContext on the shared Engine input.
+	// Intentionally minimal — games can AddMappingContext on the shared Engine input.
 }

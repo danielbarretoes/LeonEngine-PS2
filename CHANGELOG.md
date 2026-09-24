@@ -7,6 +7,12 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-25
+
+First step of the Core / CoreUObject plan: UE-style descriptor extensions and the removal of the features the
+new Core replaces or postpones (environment maps, lightmaps, networking, the pack / session layer and the cooked
+skeletal formats).
+
 ### Changed
 
 - Project and plugin descriptors use the UE-style extensions `.lproj` (`.uproject`) and `.lplugin`

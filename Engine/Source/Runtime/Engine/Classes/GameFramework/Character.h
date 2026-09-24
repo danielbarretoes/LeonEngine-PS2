@@ -176,11 +176,11 @@ public:
 	void AddMovementInput(const glm::vec3& WishDirXz);
 	void Jump();
 
-	/// Smoothly face a world yaw when bOrientRotationToMovement is false (packs may snap via
+	/// Smoothly face a world yaw when bOrientRotationToMovement is false (games may snap via
 	/// SetActorYaw).
 	void FaceRotation(float YawDegrees, float DeltaTime);
 
-	/// Move capsule against an explicit FPhysScene (unit tests / tools). Packs may override.
+	/// Move capsule against an explicit FPhysScene (unit tests / tools). Games may override.
 	virtual void PerformMovement(FPhysScene& PhysScene, float DeltaTime, FDebugDraw* DebugDraw = nullptr);
 	/// Move against `GetWorld()->GetPhysicsScene()` (no-op if not in a World).
 	void TickCharacterMovement(float DeltaTime, FDebugDraw* DebugDraw = nullptr);

@@ -53,7 +53,7 @@ public:
 	virtual void PostLogin(APlayerController& NewPlayer);
 	/// Unreal `AGameModeBase::Logout` — removes PlayerState from GameState::PlayerArray.
 	virtual void Logout(APlayerController& Exiting);
-	/// Unreal `RestartPlayer` — spawn/possess pawn at a FPlayerStart (packs override).
+	/// Unreal `RestartPlayer` — spawn/possess pawn at a FPlayerStart (games override).
 	virtual void RestartPlayer(APlayerController& /*newPlayer*/)
 	{
 	}
@@ -107,7 +107,7 @@ public:
 		return dynamic_cast<const T*>(GameState.get());
 	}
 
-	/// Replace the GameState instance (e.g. pack-specific subclass). Calls InitGameState.
+	/// Replace the GameState instance (e.g. game-specific subclass). Calls InitGameState.
 	template <typename T, typename... ArgsType>
 	T* SetGameState(ArgsType&&... Args)
 	{
@@ -130,7 +130,7 @@ protected:
 	{
 	}
 
-	/// Framework helper: Level collision meshes → World FPhysScene (not pack business logic).
+	/// Framework helper: Level collision meshes → World FPhysScene (not game rules).
 	void RegisterBodiesFromLevel(const ULevel& Level)
 	{
 		GetWorld().RegisterBodiesFromLevel(Level);

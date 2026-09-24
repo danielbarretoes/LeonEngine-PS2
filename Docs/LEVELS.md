@@ -1,49 +1,42 @@
-# Levels (`.llev`), project packs and lightmaps
+# Levels (`.llev`)
 
 A level is a binary Leon Level file (`.llev`) loaded into a `ULevel` by the desktop runtime (`Engine` module). There is no JSON level format: `LoadLevelFile` rejects any path whose extension is not `.llev`. The PS2 runtime does not load levels yet; the ThirdPerson demo builds its level in code (`FThirdPersonLevel`).
 
-Code: `Engine/Source/Runtime/Engine/Classes/Engine/Level.h`, `Engine/Source/Runtime/Engine/Public/Level/` (`LeonLevelFormat.h`, `LevelLoader.h`, `LevelCatalog.h`, `LevelDirector.h`, `LightmapIO.h`, `LevelAnimation.h`), `Engine/Source/Runtime/Engine/Public/GameHostSession.h`, `Engine/Source/Runtime/Engine/Public/Validation/ContentValidator.h`.
+Code: `Engine/Source/Runtime/Engine/Classes/Engine/Level.h`, `Engine/Source/Runtime/Engine/Public/Level/` (`LeonLevelFormat.h`, `LevelLoader.h`), `Engine/Source/Runtime/Launch/Private/Desktop/GameApplication.cpp` (startup level).
 Also: [ASSET_FORMATS.md](ASSET_FORMATS.md) (`.lmat` / `.lmesh` referenced by actors) · [ARCHITECTURE.md](ARCHITECTURE.md) · [SETUP.md](SETUP.md).
 
 ## Types
 
 | Type | Header | Role |
 | --- | --- | --- |
-| `ULevel` | `Classes/Engine/Level.h` | Live level: `UStaticMeshComponent`s, `FPlayerStart`, `FTriggerVolume`, `FPainCausingVolume`, `FAISpawnPoint`, `FDirectionalLight`, `FPointLight`, environment map, name, game mode |
+| `ULevel` | `Classes/Engine/Level.h` | Live level: `UStaticMeshComponent`s, `FPlayerStart`, `FTriggerVolume`, `FPainCausingVolume`, `FAISpawnPoint`, `FDirectionalLight`, `FPointLight`, name, game mode |
 | `FLevelDocument` | `Public/Level/LeonLevelFormat.h` | In-memory mirror of a `.llev`: plain data, no GPU resources (`FLevelActorRecord`, `FLevelLightRecord`, `FLevelCameraRecord`) |
-| `FLevelAnimation` | `Public/Level/LevelAnimation.h` | Spin / bob / point-light orbit hooks produced by a load |
-| `FLevelCatalog`, `FLevelEntry` | `Public/Level/LevelCatalog.h` | Finds `.llev` files in a directory or project pack |
-| `FLevelDirector` | `Public/Level/LevelDirector.h` | Owns a catalog, loads levels into a `UGameEngine`, runs level animation, draws the level browser |
-| `FGameHostSession` | `Public/GameHostSession.h` | Play session: resolves the pack, loads its start level, wires travel and game modes |
-| `FValidationReport` | `Public/Validation/ContentValidator.h` | Errors / warnings from `ValidateLevelDocument` |
 
 ## Load pipeline
 
 ```text
-LoadLevelFile(UGameEngine&, Path, FLevelAnimation*)
+LoadLevelFile(UGameEngine&, Path)
   ├─ extension must be .llev
   ├─ LoadLeonLevelFile            .llev bytes -> FLevelDocument (DeserializeLeonLevel)
-  ├─ ValidateLevelDocument        any error rejects the load (report printed to stderr)
   └─ ApplyLevelDocument           builds a staging ULevel; commits only on full success
-        ├─ environment, actors, lights
-        ├─ camera (UGameEngine::GetCamera)
-        └─ LoadLevelLightmaps     .lm -> UTexture2D per mesh
+        ├─ actors, lights
+        └─ camera (UGameEngine::GetCamera)
 ```
 
-A failed load leaves the previous level and camera untouched. If any `StaticMesh` actor's mesh fails to load, the whole level is rejected (no partial loads). A level with no actors, no lights and no environment is rejected; blank or lights-only levels are valid.
+There is no separate validation pass: magic, version, class values and limits are enforced by the reader, and resource failures by `ApplyLevelDocument`. A failed load leaves the previous level and camera untouched. If any `StaticMesh` actor's mesh fails to load, the whole level is rejected (no partial loads). A level with no actors and no lights is rejected; blank or lights-only levels are valid.
 
-Saving: `BuildLevelDocument(const ULevel&, const UCameraComponent&)` snapshots a live level, then `SaveLeonLevelFile` (atomic write) or `SerializeLeonLevel` (bytes). Only the automation tests use these today: "Editor-style level save load apply headless" (AIModule) round-trips `Engine/Content/LevelTemplates/Blank.llev`, and the level catalog tests write temporary `.llev` files.
+Saving: `BuildLevelDocument(const ULevel&, const UCameraComponent&)` snapshots a live level, then `SaveLeonLevelFile` (atomic write) or `SerializeLeonLevel` (bytes). Only the automation tests use these today: "Editor-style level save load apply headless" (AIModule) round-trips `Engine/Content/LevelTemplates/Blank.llev`, and the `.llev` format tests (`Engine/Private/Tests/LevelFormatTests.cpp`) round-trip a document through bytes.
 
 ### Asset paths inside a level
 
 Material, mesh and environment paths are strings in the level's string table. `ResolveLevelAssetPath(LevelPath, Key)` resolves materials and meshes:
 
 1. an absolute path that exists is used as is;
-2. `<level folder>/../<Key>`, which is the pack's `Content/` for `Content/Levels/X.llev`;
+2. `<level folder>/../<Key>`, which is the `Content/` folder for `Content/Levels/X.llev`;
 3. legacy keys containing `Materials/` are retried from that folder;
-4. otherwise `FPaths::ResolveAssetPath(Key)` (active project content, then `Engine/Content`).
+4. otherwise `FPaths::ResolveAssetPath(Key)` (executable folder, then `Engine/Content`).
 
-The environment path goes straight to `FPaths::ResolveAssetPath`.
+The environment path is read and written but ignored (HDR environment maps were removed in 0.12.0).
 
 ## File layout (version 2)
 
@@ -62,7 +55,7 @@ string table:
 
 meta:
   u32 nameIdx, gameModeIdx, environmentIdx
-  f32 environmentExposure
+  f32 environmentExposure                      // environment fields: kept for compatibility, ignored
 
 camera (always present):
   u8  mode (0 = Orbit, 1 = FreeLook)
@@ -80,7 +73,7 @@ actors:
     u32 tagIdx           if hasTag
     u32 materialIdx      if hasMaterial
     u32 meshIdx          if hasMesh
-    u32 lightmapIdIdx    if hasLightmapId
+    u32 lightmapIdIdx    if hasLightmapId        // lightmap fields: kept for compatibility, ignored
     u32 lightmapPathIdx  if hasLightmapPath
     u32 lightmapResolution                       // always
     i32 sphereSegments, sphereRings              // class == Sphere
@@ -118,7 +111,7 @@ The writer always sets `hasInteractCost` for `TriggerVolume` and `hasPainData` f
 | 3 | `Plane` | Procedural |
 | 4 | `BlockingVolume` | Procedural cube whose materials never cast shadows |
 | 5 | `StaticMesh` | `FResourceCache::LoadStaticMesh` on the resolved `.lmesh` path |
-| 6 | `TriggerVolume` | `FTriggerVolume` (interact radius / cost, pack-defined `payload`, `consumeOnUse`) |
+| 6 | `TriggerVolume` | `FTriggerVolume` (interact radius / cost, game-defined `payload`, `consumeOnUse`) |
 | 7 | `PainCausingVolume` | `FPainCausingVolume` (damage per second / interval) |
 | 8 | `AISpawnPoint` | `FAISpawnPoint` (transform + tag) |
 
@@ -128,7 +121,7 @@ Unknown actor or light classes fail the read.
 
 ### Lights
 
-`DirectionalLight` and `PointLight` records become `FDirectionalLight` / `FPointLight`. If a level has no directional light, one default light is added. Counts are clamped to `MaxDirectionalLights` (2) and `MaxPointLights` (4) from `Level/Light.h`; orbits of dropped point lights are dropped too.
+`DirectionalLight` and `PointLight` records become `FDirectionalLight` / `FPointLight`. If a level has no directional light, one default light is added. Counts are clamped to `MaxDirectionalLights` (2) and `MaxPointLights` (4) from `Level/Light.h`.
 
 ### Camera
 
@@ -136,62 +129,17 @@ Always stored. The orbit fields (`target`, `distance`, `yaw`, `pitch`) are the b
 
 ### Level animation
 
-`ApplyLevelDocument` fills an `FLevelAnimation` with spins (`spinYaw` degrees per second), bobs (`bobBaseY`, `bobAmplitude`, `bobSpeed`) and point-light orbits. `FLevelDirector::Update` applies them every frame.
+Spins (`spinYaw` degrees per second), bobs (`bobBaseY`, `bobAmplitude`, `bobSpeed`) and point-light orbits are copied into the live level (`UStaticMeshComponent::SpinYaw` / `bHasBob`, `FPointLight::bHasOrbit`) and preserved on save, but nothing animates them at runtime: the level animation player was removed in 0.12.0.
 
-## Validation
+## Running a level
 
-`ValidateLevelDocument(const FLevelDocument&, SourcePath)` (`ContentValidator`) runs after decoding. Magic, version and class values are already enforced by the reader.
-
-- **Errors:** `StaticMesh` without a mesh path; a mesh path on any other class; sphere with fewer than 3 segments or 2 rings; `TriggerVolume` with a non-positive interact radius; `PainCausingVolume` with negative damage or a non-positive interval; `fitHeight` set but not positive; a material path that does not resolve; negative light intensity; point light with a non-positive range; negative environment exposure. Issues found by `ValidateMaterialFile` in a referenced `.lmat` are merged into the report.
-- **Warnings:** mesh file not found, lightmap file not found, HDR environment not found.
-
-An empty actor list is valid.
-
-## Level catalog and director
-
-`FLevelCatalog` lists `.llev` files, sorted by path:
-
-| Method | Scans |
-| --- | --- |
-| `Scan(Directory)` | `Directory/*.llev` (flat) |
-| `ScanPack(PackDirectory)` | `FPaths::ProjectContentDir(Pack)/Levels/*.llev` |
-| `ScanProjectPacks(ProjectsRoot)` | Every pack folder under the root (skips `_host` and folders starting with `.`) |
-
-Each `FLevelEntry` has `Name` (the level document's name, else the file stem), `Path`, `Pack` (pack folder name) and `GameMode` (the level's game mode override). `FindIndexByLevelKey` matches the name, the file stem or the full path, case-insensitively; `FindIndexByGameModeOrPack` matches the game mode or pack name.
-
-`FLevelDirector` wraps a catalog:
-
-- `ScanPackAndLoad(Engine, PackDirectory, PreferredLevelKey)` loads the preferred level if it is in the catalog, otherwise the first entry; `ScanAndLoad(Engine, ProjectsDirectory)` scans every pack and loads the first level.
-- `LoadIndex`, `LoadByKey` (travel by level key), `Next`, `Previous`. The current index only changes after a successful load.
-- `DrawUi` / `HandleUiInput` draw a bottom-right `< name (i/n) >` browser; `[` / `]`, digit keys `1`–`9` and clicks on the arrows switch levels. `SetBrowserVisible(false)` hides and disables it.
-
-## Project packs
-
-A runtime project pack is a folder with a `leon.game.json` marker and its content under `Content/`:
+The Win64 `LeonGame` target loads one level and runs `ADefaultGameMode` on it:
 
 ```text
-Projects/<Name>/
-├── leon.game.json            { "defaultLevel": "Levels/Main.llev" }
-└── Content/
-    ├── Levels/
-    │   ├── Main.llev
-    │   └── Lightmaps/LM_<id>.lm      (lightmap paths are relative to the .llev folder)
-    ├── Materials/M_*.lmat
-    ├── Textures/T_*.png
-    └── Meshes/*.lmesh
+Engine\Binaries\Win64\LeonGame.exe [-map=<.llev>] [-nullrhi] [--tick <Hz>] [--show-stats]
 ```
 
-Only `Content/Levels/*.llev` and the `leon.game.json` location are fixed; other folders are whatever the levels and materials reference (content-relative keys such as `Materials/M_Floor.lmat`). `FPaths::ProjectContentDir` still accepts an older layout with `<pack>/Levels` and no `Content/Levels`, in which case the pack root is the content root.
-
-`FGameHostSession::Start(Engine, PackName, RegisterModes, PreferredLevelKey, PackRootOverride)`:
-
-1. initializes `FWorldRuntime`;
-2. resolves the pack with `FProjectDescriptor::Resolve(PackName)` (`FPaths::ResolveAssetPath("Projects/<Name>")` + `leon.game.json`), or reads `leon.game.json` from `PackRootOverride`;
-3. calls `FPaths::SetActiveContentRoot(PackRoot)` so asset lookups prefer the pack's `Content/`;
-4. loads `PreferredLevelKey`, else the `defaultLevel` stem (`FProjectDescriptor::DefaultLevelKey`), else the first catalog entry (`FWorldRuntime::LoadPack` → `FLevelDirector::ScanPackAndLoad`);
-5. binds `UGameInstance` level travel to `FLevelDirector::LoadByKey`, registers game modes on the `FGameplayRouter` (`ADefaultGameMode` by default) and ticks once.
-
-The Win64 `LeonGame` target runs a pack with `Engine\Binaries\Win64\LeonGame.exe --pack <Name>`. The repository does not ship a runtime pack at the moment, and `Game/ThirdPerson` is a build project (`.lproj`), not a pack.
+`-map=` takes a path relative to the working directory (or absolute), else relative to `Engine/Content`; without it the startup level is `Engine/Content/LevelTemplates/Starter.llev`. `-nullrhi` runs headless at `--tick` Hz (default 60). The level's game mode string is stored but not used to pick a game mode. There is no level catalog, level browser or project pack (all removed in 0.12.0), and `Game/ThirdPerson` is a build project (`.lproj`), not a runtime pack.
 
 ## Level templates
 
@@ -200,29 +148,10 @@ The Win64 `LeonGame` target runs a pack with `Engine\Binaries\Win64\LeonGame.exe
 | File | Contents |
 | --- | --- |
 | `Blank.llev` | Version 1, name `Untitled`, game mode `Default`, no actors, one directional light |
-| `Starter.llev` | Version 1, name `Starter`, game mode `Default`: a `Plane` with `materials/M_WorldGrid.lmat`, a `PlayerStart`, one directional light, environment `hdr/autumn_field_puresky_1k.hdr` |
+| `Starter.llev` | Version 1, name `Starter`, game mode `Default`: a `Plane` with `materials/M_WorldGrid.lmat`, a `PlayerStart`, one directional light, environment `hdr/autumn_field_puresky_1k.hdr` (ignored) |
 
-`Starter.llev` still uses pre-rename lowercase paths; the HDR in `Engine/Content` is now `Hdr/AutumnFieldPuresky1k.hdr`, so loading it reports a missing-HDR warning.
+`Starter.llev` still uses pre-rename lowercase paths.
 
 ## Lightmaps
 
-Per-mesh fields in the level: `lightmapId` (stable id, survives actor reorder; `EnsureLightmapId` generates one), `lightmapPath` (relative path to the `.lm` file, conventionally `Lightmaps/LM_<id>.lm`) and `lightmapResolution`.
-
-### Load
-
-`LoadLevelLightmaps(ULevel&, LevelPath)` (`LightmapIO`) runs at the end of `ApplyLevelDocument`. For each `UStaticMeshComponent` with a `lightmapPath`, `ResolveLightmapAbsolutePath` looks next to the `.llev` file (a legacy lowercase `lightmaps/` prefix is retried as `Lightmaps/`); without a level path it falls back to `FPaths::ResolveAssetPath`. `LoadLightmapFile` reads the file into a `UTexture2D`.
-
-### Format `.lm`
-
-| Offset | Content |
-| --- | --- |
-| 0–3 | Magic `LM01` |
-| 4–7 | Width (`u32`, host byte order) |
-| 8–11 | Height (`u32`) |
-| 12… | `width * height * 4` bytes RGBA8 |
-
-Invalid magic, a zero dimension or a dimension above 4096 rejects the file.
-
-### Bake
-
-There is no lightmap baker in the repository: it lived in the Editor, which was removed. `.lm` files and the lightmap fields are still loaded and preserved on save.
+Lightmaps (`LightmapIO`, `.lm` files) were removed in 0.12.0. The per-actor `lightmapId`, `lightmapPath` and `lightmapResolution` fields are still read and written for binary compatibility but ignored. Static lighting returns as `<Map>_BuiltData.lasset`.

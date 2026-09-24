@@ -10,7 +10,7 @@
 class AActor;
 class UNavigationSystem;
 
-/// High-level AAIController mode for packs that do not run a UBehaviorTree.
+/// High-level AAIController mode for games that do not run a UBehaviorTree.
 enum class EAILogicState : std::uint8_t
 {
 	Idle = 0,

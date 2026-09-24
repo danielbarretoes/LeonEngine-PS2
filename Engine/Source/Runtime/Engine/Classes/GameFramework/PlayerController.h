@@ -55,11 +55,11 @@ public:
 		return Raw;
 	}
 
-	/// Apply input to the possessed Character. Packs override. Returns wish direction for
+	/// Apply input to the possessed Character. Games override. Returns wish direction for
 	/// debug HUD; default is a no-op.
 	virtual glm::vec3 TickInput(UGameEngine& Engine);
 
-	/// Unreal-like: drive view from possessed pawn SpringArm (packs override).
+	/// Unreal-like: drive view from possessed pawn SpringArm (games override).
 	virtual void UpdateCamera(UGameEngine& Engine, float DeltaTime);
 
 private:

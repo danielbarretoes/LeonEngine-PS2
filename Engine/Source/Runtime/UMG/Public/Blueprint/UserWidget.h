@@ -4,7 +4,7 @@
 
 class AHUD;
 
-/// Unreal-like UUserWidget: pack HUD elements override NativePaint / NativeTick.
+/// Unreal-like UUserWidget: game HUD elements override NativePaint / NativeTick.
 class UMG_API UUserWidget
 {
 public:

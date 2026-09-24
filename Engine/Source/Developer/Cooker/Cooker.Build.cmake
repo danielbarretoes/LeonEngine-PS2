@@ -2,5 +2,5 @@
 leon_module(Cooker
 	PLATFORMS Desktop
 	PUBLIC_DEPENDENCIES Core
-	PRIVATE_DEPENDENCIES Engine MeshUtilities NlohmannJson
+	PRIVATE_DEPENDENCIES MeshUtilities NlohmannJson
 )

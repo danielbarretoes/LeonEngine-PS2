@@ -18,7 +18,7 @@ LeonEngine-PS2/
 ├── Engine/
 │   ├── Build/                 # BatchFiles (Build, Clean, Rebuild, RunTests, Cook, FormatCode, Lint, …), Build.version
 │   ├── Config/                # Base*.ini (placeholders, not loaded yet)
-│   ├── Content/               # engine content: Materials, Textures, Hdr, LevelTemplates
+│   ├── Content/               # engine content: Materials, Textures, LevelTemplates
 │   ├── Shaders/               # GLSL (desktop renderer)
 │   ├── Source/
 │   │   ├── Runtime/           # modules that ship in games
@@ -48,7 +48,7 @@ module style) — `Game/ThirdPerson/Source/ThirdPerson` is flat.
 | **Runtime** | `Engine/Source/Runtime` | Core, HAL, application, RHI, rendering, gameplay framework, … | Runtime, ThirdParty |
 | **Developer** | `Engine/Source/Developer` | `MeshUtilities` (DCC import), `Cooker` (cook recipes, `UCookCommandlet`) | Runtime, Developer, ThirdParty |
 | **Programs** | `Engine/Source/Programs` | `LeonCook`, `LeonAutomationTests`, `BlankProgram`, `LeonBuildTool` (CMake scripts, not a module) | anything |
-| **ThirdParty** | `Engine/Source/ThirdParty` | External modules (`TYPE External`): GLM, GLFW, Glad, STB, NlohmannJson, ENet, MiniAudio, UFBX, CGLTF, TinyObjLoader, Catch2 | — |
+| **ThirdParty** | `Engine/Source/ThirdParty` | External modules (`TYPE External`): GLM, GLFW, Glad, STB, NlohmannJson, MiniAudio, UFBX, CGLTF, TinyObjLoader, Catch2 | — |
 | **Platform extension** | `Engine/Platforms/PS2` | PS2 halves of `Core`, `ApplicationCore`, `Launch` + the `PS2RHI` module; toolchain, Docker image, `PS2Engine.ini` | same as the module it extends |
 | **Plugins** | `Engine/Plugins/Runtime/JoltPhysics` | `JoltPhysics` module + its third-party `JoltLib` (Win64 only) | Runtime |
 | **Game** | `Game/ThirdPerson` | `ThirdPerson` primary game module + `ThirdPerson.Target.cmake` | Runtime (never the other way) |
@@ -94,7 +94,7 @@ Full reference: [BUILD.md](BUILD.md).
 
 | Target | File | Type | Platforms | Launch module | Roots / notes |
 | --- | --- | --- | --- | --- | --- |
-| `LeonGame` | `Engine/Source/LeonGame.Target.cmake` | Game | Win64 | `Launch` | `Engine AIModule`; `WITH_ENGINE=1`; runs a desktop pack (`LeonGame --pack <Name>`) |
+| `LeonGame` | `Engine/Source/LeonGame.Target.cmake` | Game | Win64 | `Launch` | `Engine AIModule`; `WITH_ENGINE=1`; loads one level (`LeonGame -map=<.llev>`) |
 | `ThirdPerson` | `Game/ThirdPerson/Source/ThirdPerson.Target.cmake` | Game | PS2 | `Launch` | project module `ThirdPerson`; `COMPILE_AGAINST_ENGINE OFF` → `WITH_ENGINE=0` |
 | `LeonCook` | `Engine/Source/Programs/LeonCook/` | Program | Desktop | `LeonCook` | `Cooker` → `UCookCommandlet::Main` |
 | `LeonAutomationTests` | `Engine/Source/Programs/LeonAutomationTests/` | Program | Desktop | `LeonAutomationTests` | every desktop Runtime / Developer module except `Launch`, + `JoltPhysics` plugin; `COLLECT_AUTOMATION_TESTS` |
@@ -103,8 +103,8 @@ Full reference: [BUILD.md](BUILD.md).
 Module closures in practice:
 
 - **PS2 `ThirdPerson`**: `Core`, `Launch`, `ThirdPerson`, `InputCore`, `ApplicationCore`, `RHI`, `PS2RHI`.
-- **Win64 `LeonGame`**: everything reachable from `Launch` (desktop private deps `Engine NetCore Projects`) +
-  `AIModule` — every desktop Runtime module except `Json`, no Developer modules; plugins are disabled by
+- **Win64 `LeonGame`**: everything reachable from `Launch` (desktop private dep `Engine`) +
+  `AIModule` — every desktop Runtime module except `Json` and `Projects`, no Developer modules; plugins are disabled by
   default, so `JoltPhysics` is not linked.
 
 ---
@@ -124,7 +124,6 @@ flowchart BT
     Launch
     Projects
     Json
-    NetCore
     PhysicsCore
     AnimationCore
     AudioMixer
@@ -164,8 +163,6 @@ flowchart BT
   Launch --> ApplicationCore
   Launch --> RHI
   Launch -. "Desktop" .-> Engine
-  Launch -. "Desktop" .-> NetCore
-  Launch -. "Desktop" .-> Projects
   Launch -. "PS2 ext" .-> PS2RHI
   Renderer --> RHI
   Renderer --> RenderCore
@@ -186,12 +183,11 @@ flowchart BT
   Engine --> PhysicsCore
   Engine --> AnimationCore
   Engine --> AudioMixer
-  Engine --> NetCore
-  Engine -.-> Projects
   AIModule --> Engine
   AIModule --> UMG
   AIModule --> SlateCore
   MeshUtilities --> RenderCore
+  MeshUtilities --> AnimationCore
   MeshUtilities -.-> Renderer
   Cooker -.-> Engine
   Cooker -.-> MeshUtilities
@@ -205,8 +201,8 @@ flowchart BT
 ```
 
 Solid = `PUBLIC_DEPENDENCIES`, dashed = `PRIVATE_DEPENDENCIES` (label = platform suffix or extension file),
-thick = `CIRCULAR_DEPENDENCIES`. `Json` has no dependents; it is linked only by `LeonAutomationTests`
-(`EXTRA_MODULE_NAMES`). `LeonAutomationTests` and `BlankProgram` depend only on Core (+ Catch2).
+thick = `CIRCULAR_DEPENDENCIES`. `Json` and `Projects` have no dependents; they are linked only by
+`LeonAutomationTests` (`EXTRA_MODULE_NAMES`). `LeonAutomationTests` and `BlankProgram` depend only on Core (+ Catch2).
 
 **Include-only dependency on Launch:** the launch module is compiled into the executable, not into a
 library, so a module that depends on it (`ThirdPerson` → `Launch`) only receives Launch's public include
@@ -217,17 +213,16 @@ paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable 
 | Library | Used by (public / private) | Platforms |
 | --- | --- | --- |
 | GLM | public: Core (`_Desktop`), AIModule, AnimationCore, AudioMixer, Engine, Json, MeshUtilities, PhysicsCore, RenderCore, Renderer, UMG | Desktop |
-| NlohmannJson | public: Engine, Json, Renderer; private: Projects, Cooker | Desktop |
-| GLFW | private: ApplicationCore (`_Desktop`), Engine, UMG | Desktop |
+| NlohmannJson | public: Engine, Json, Renderer; private: Cooker | Desktop |
+| GLFW | private: ApplicationCore (`_Desktop`) | Desktop |
 | STB | private: ApplicationCore (`_Desktop`), Engine, Renderer | Desktop |
 | Glad | private: OpenGLDrv, Renderer | Desktop |
-| ENet | private: Engine | Desktop |
 | MiniAudio | private: AudioMixer | Desktop |
-| UFBX | private: AnimationCore, MeshUtilities | Desktop |
+| UFBX | private: MeshUtilities | Desktop |
 | TinyObjLoader, CGLTF | private: MeshUtilities | Desktop |
 | Catch2 | private: LeonAutomationTests | Desktop |
 | JoltLib (Jolt 5.3.0) | private: JoltPhysics | Win64 |
-| System libs | Core: `psapi` (Windows), `kernel` (PS2); OpenGLDrv: `dxgi` (Windows); ENet: `ws2_32 winmm` (Windows); ApplicationCore: `pad` (PS2); PS2RHI: `draw math3d packet graph dma kernel` | — |
+| System libs | Core: `psapi` (Windows), `kernel` (PS2); OpenGLDrv: `dxgi` (Windows); ApplicationCore: `pad` (PS2); PS2RHI: `draw math3d packet graph dma kernel` | — |
 
 ---
 
@@ -242,9 +237,8 @@ paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable 
 | **OpenGLDrv** | OpenGL 3.3 RHI device | `FOpenGLDynamicRHI` | Desktop |
 | **PS2RHI** | Graphics Synthesizer immediate-mode API (platform extension module) | `FPS2RHI`, `FPS2Texture`, `FPS2Material`, `FPS2ViewTarget`, `FPS2DirectionalLight` | PS2 |
 | **Launch** | Entry points and engine loop | `GuardedMain`, `FEngineLoop`, `GEngineLoop`, `FPlatformEngineLoopHooks`; desktop-private `FGameApplication` | all |
-| **Projects** | Runtime pack descriptor | `FProjectDescriptor` | Desktop |
+| **Projects** | Project / plugin descriptors — empty placeholder (the `.lproj` / `.lplugin` readers arrive in P4) | — | Desktop |
 | **Json** | JSON helpers | `FJsonUtils` | Desktop |
-| **NetCore** | Network protocol and snapshot codec | `Leon::Net` (`ENetMsg`, `FHelloMsg`, `ProtocolMagic`, `CurrentProtocolVersion`, snapshot codec) | Desktop |
 | **PhysicsCore** | Physics types and backend seam | `IPhysicsBackend`, `EPhysicsBackend`, `FHitResult`, `FBodyInstance`, `FCollisionQueryParams`, `FCapsuleShape`, `FTriangleMeshCollision` | Desktop |
 | **AnimationCore** | Skeletons, sequences, blend spaces, anim instances | `USkeleton`, `UAnimSequence`, `UBlendSpace1D`, `UAnimInstance`, `UCharacterAnimInstance` | Desktop |
 | **AudioMixer** | Audio device (miniaudio) | `FAudioDevice` | Desktop |
@@ -252,9 +246,9 @@ paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable 
 | **Renderer** | Forward scene renderer and GPU resources | `FSceneRenderer`, `UTexture2D`, `UStaticMesh`, `USkeletalMesh`, `FShader`, `FShadowMap`, `FResourceCache`, `FDebugDraw`, `FDebugOverlay`, `FGPUPassTimer` | Desktop |
 | **SlateCore** | Text layout primitives | `ETextJustify`, HUD font metrics | Desktop |
 | **UMG** | Widgets | `UUserWidget`, `UButton`, `UTextBlock`, `UImage`, `UProgressBar`, `UVerticalBox`, `UMenuListWidget`, `UInteractionPromptWidget`, `FPaintContext` | Desktop |
-| **Engine** | Gameplay framework, world, levels, physics scene, net driver, game session | `UGameEngine`, `UGameInstance`, `UWorld`, `ULevel`, `AActor`, `APawn`, `ACharacter`, `UCharacterMovementComponent`, `AController`, `APlayerController`, `AGameModeBase`, `AGameStateBase`, `APlayerState`, `AHUD`, `UGameplayStatics`, `UNetDriver`, `FPhysScene`, `UNavigationSystem`, `FGameHostSession` | Desktop |
+| **Engine** | Gameplay framework, world, levels, physics scene | `UGameEngine`, `UGameInstance`, `UWorld`, `ULevel`, `AActor`, `APawn`, `ACharacter`, `UCharacterMovementComponent`, `AController`, `APlayerController`, `AGameModeBase`, `AGameStateBase`, `APlayerState`, `AHUD`, `UGameplayStatics`, `FPhysScene`, `UNavigationSystem` | Desktop |
 | **AIModule** | AI controller and behavior trees | `AAIController`, `UBehaviorTree`, `UBTComposite_Sequence`, `UBTComposite_Selector`, `UBTDecorator_Bool`, `UBTTask_Action`, `UBlackboardComponent`, `FAIChaseBehavior` | Desktop |
-| **MeshUtilities** | Static mesh import / build (Developer) | `FStaticMeshBuilder`, `LoadObj`, `LoadStaticMeshFromFbx`, glTF import | Desktop |
+| **MeshUtilities** | Static mesh import / build, skeletal FBX import (Developer) | `FStaticMeshBuilder`, `LoadObj`, `LoadStaticMeshFromFbx`, glTF import, `LoadSkeletalMeshFromFbx`, `LoadAnimSequenceFromFbx` | Desktop |
 | **Cooker** | Cook recipes and paths (Developer) | `UCookCommandlet`, `FCookRecipe`, `FCookPaths` | Desktop |
 | **JoltPhysics** (plugin) | Jolt rigid-body backend | `CreateJoltPhysicsBackend` | Win64 |
 | **ThirdPerson** (game) | PS2 third-person game | `FThirdPersonModule`, `FThirdPersonGameMode`, `FThirdPersonCharacter`, `FThirdPersonCameraBoom`, `FThirdPersonLevel` | PS2 (target) |
@@ -355,14 +349,16 @@ GuardedMain: GEngineLoop.PreInit → (exit if requested) → Init → while !IsE
 ### `WITH_ENGINE=1` — desktop (`LeonGame`)
 
 - `PreInit`: starts the statically linked modules (the loop does not own a window here).
-- `Init`: creates `FGameApplication` (`Launch/Private/Desktop`) and calls `Init(ArgC, ArgV, PackName, …)`;
-  the pack name is `LEON_PROJECT_NAME` or `--pack <Name>`. `FGameApplication::Init` parses the command line
-  (`--dedicated`/`--server`, `--listen`/`--host`, `--join`, `--map`, `--port`, `--tick`, `--show-stats`),
-  creates `UGameEngine` (`Initialize(1280, 720, …)`, or `InitializeHeadless()` for dedicated), wires the
-  default input, starts `FGameHostSession` and calls `UGameEngine::Start`.
-- `Tick`: ticks `FTicker`, then `FGameApplication::Tick` → `UGameEngine::Tick(DeltaTime, …)` (windowed) or a
-  fixed-rate `FGameHostSession::Tick` (dedicated); returning `false` requests engine exit.
-- `Exit`: `FGameApplication::Exit` (session stop, `UGameEngine::Shutdown`), then module shutdown.
+- `Init`: creates `FGameApplication` (`Launch/Private/Desktop`) and calls
+  `Init(ArgCount, Args, LEON_PROJECT_NAME)`. `FGameApplication::Init` parses the command line (`-map=<.llev>`,
+  `-nullrhi`, `--tick <Hz>`, `--show-stats`), creates `UGameEngine` (`Initialize(1280, 720, …)`, or
+  `InitializeHeadless()` with `-nullrhi`), wires the default input, loads one level with `LoadLevelFile`
+  (default `Engine/Content/LevelTemplates/Starter.llev`; `-map=` is relative to the working directory or to
+  `Engine/Content`), creates `ADefaultGameMode`, calls `OnEnter` and then `UGameEngine::Start`.
+- `Tick`: ticks `FTicker`, then `FGameApplication::Tick` → `UGameEngine::Tick(DeltaTime, …)` with
+  `GameMode->Tick` as the update callback (windowed), or a fixed-rate `GameMode->Tick` (headless); returning
+  `false` requests engine exit.
+- `Exit`: `FGameApplication::Exit` (`GameMode->OnExit`, `UGameEngine::Shutdown`), then module shutdown.
 - `LaunchEngineLoop.cpp` refuses `WITH_ENGINE` on non-desktop platforms (`#error`).
 
 ### `WITH_ENGINE=0` — PS2 (`ThirdPerson`)
@@ -395,14 +391,13 @@ Unreal shapes without reflection: `A`/`U` prefixes are naming only (no `UObject`
 
 | Area | Types / flow |
 | --- | --- |
-| Engine | `UGameEngine` creates its own application + window through `FPlatformApplicationMisc`, owns `ULevel`, `FSceneRenderer`, `FResourceCache`, `FAudioDevice`, `AHUD`, `FDebugOverlay`, `UPlayerInput`, camera, `UGameInstance` (`SetGameInstance<T>()`). Frame (`UGameEngine::Tick`): poll events → `UPlayerInput::Update` → shader hot reload → UI input → `HandleInput` → `TickPlayAudio` → update callback (session tick) → `TickPlayHud` → `Render` (+ UI paint) → `SwapBuffers` |
-| Session | `FGameHostSession::Start`: `FProjectDescriptor::Resolve(Pack)` → `FPaths::SetActiveContentRoot` → `FWorldRuntime::LoadPack` (`FLevelDirector`, `FLevelCatalog`, `LoadLevelFile`) → `FGameplayRouter` (default mode `ADefaultGameMode`, packs add modes through the `RegisterModes` callback; a level's `"gameMode"` id selects the override) |
+| Engine | `UGameEngine` creates its own application + window through `FPlatformApplicationMisc`, owns `ULevel`, `FSceneRenderer`, `FResourceCache`, `FAudioDevice`, `AHUD`, `FDebugOverlay`, `UPlayerInput`, camera, `UGameInstance` (`SetGameInstance<T>()`). Frame (`UGameEngine::Tick`): poll events → `UPlayerInput::Update` → shader hot reload → UI input → `HandleInput` → `TickPlayAudio` → update callback (game mode tick) → `TickPlayHud` → `Render` (+ UI paint) → `SwapBuffers` |
+| Startup | `FGameApplication::Init` (Launch): `LoadLevelFile` (one `.llev`, `-map=`) → `ADefaultGameMode::OnEnter`; `FGameApplication::Tick` drives `GameMode->Tick` |
 | World | `UWorld` (owned by `AGameModeBase`) owns spawned actors + `FPhysScene`; `SpawnActor<T>()` during tick is deferred; `TickGameplayFrame`: character move → `FPhysScene::Step` → overlaps → actor tick → sync to level → draw. `ULevel` is map content (`UStaticMeshComponent` PODs, lights, `FPlayerStart`, `FTriggerVolume`, `FPainCausingVolume`, `FAISpawnPoint`) |
-| Actors | `AActor` (root `USceneComponent`, `RegisterComponent`, `CreateDefaultSubobject<T>()`) → `APawn` → `ACharacter` (+ `UCharacterMovementComponent`, `USkeletalMeshComponent`, `TakeDamage`); `USpringArmComponent`, `UCameraComponent` |
-| Controllers / rules | `AController` → `APlayerController`, `AAIController` (AIModule); `AGameModeBase` (`OnEnter`/`Tick`/`OnExit`, `InitGameState`, `StartMatch`, `PostLogin`, `RestartPlayer`, `HandleStartingNewPlayer`, travel), `AGameStateBase` (`PlayerArray`), `APlayerState`, `UGameInstance` (`HostListen`, `Join`, `ServerTravel`, `ClientTravel`) |
-| Helpers | `UGameplayStatics` (traces over `FPhysScene`, `ApplyPointDamage`, …), `VolumeHelpers`, `ArenaCamera`, `UNavigationSystem` (grid `FNavMesh`), `UInputMappingContext` / `Leon::InputActions` |
-| UI / audio | `AHUD::AddWidget<T>()` + `Paint(FDebugOverlay&, …)` over UMG widgets; `FAudioDevice` (`PlaySound2D`, `PlaySoundAtLocation`, `PlayUiSound`, `PlayMusic`/`StopMusic`, `SetListener` from the camera each frame); dedicated servers initialise silent |
-| Network | `UNetDriver` (ENet, process-wide init refcount, per-peer rate limits `SetPeerRateLimitEnabled`); protocol in NetCore `Leon::Net` (v4: Hello / Welcome / InputCmd / Snapshot / Travel / Rpc, `ProtocolMagic`); helpers `Leon::Net::SendTravelToPeers` (`Net/NetUtil.h`), root relevancy (`Net/RootReplication.h`) |
+| Actors | `AActor` (root `USceneComponent`, `RegisterComponent`, `CreateDefaultSubobject<T>()`, `GetUniqueID()` = spawn serial from `UWorld::SpawnActor`) → `APawn` → `ACharacter` (+ `UCharacterMovementComponent`, `USkeletalMeshComponent`, `TakeDamage`); `USpringArmComponent`, `UCameraComponent` |
+| Controllers / rules | `AController` → `APlayerController`, `AAIController` (AIModule); `AGameModeBase` (`OnEnter`/`Tick`/`OnExit`, `InitGameState`, `StartMatch`, `PostLogin`, `RestartPlayer`, `HandleStartingNewPlayer`), `AGameStateBase` (`PlayerArray`), `APlayerState`, `UGameInstance` (`Init`, `Shutdown`, `NotifyLevelOpened`) |
+| Helpers | `UGameplayStatics` (traces over `FPhysScene`, `ApplyPointDamage`, …), `VolumeHelpers`, `UNavigationSystem` (grid `FNavMesh`), `UInputMappingContext` / `Leon::InputActions` |
+| UI / audio | `AHUD::AddWidget<T>()` + `Paint(FDebugOverlay&, …)` over UMG widgets; `FAudioDevice` (`PlaySound2D`, `PlaySoundAtLocation`, `PlayUiSound`, `PlayMusic`/`StopMusic`, `SetListener` from the camera each frame); headless (`-nullrhi`) initialises silent |
 
 ### Character movement (CMC lite)
 
@@ -438,38 +433,40 @@ Unreal shapes without reflection: `A`/`U` prefixes are naming only (no `UObject`
 ## 12. Rendering (desktop)
 
 - `FSceneRenderer` (Renderer) is a forward renderer: directional shadow map (light 0), optional half-res
-  planar reflection (`PlanarReflectionScale = 0.5`), opaque / skybox / transparent. With post enabled the
+  planar reflection (`PlanarReflectionScale = 0.5`), opaque / transparent (the sky is the
+  procedural gradient in `blinn_phong.frag`). With post enabled the
   color pass renders into an HDR `FSceneColorTarget` (RGB16F + depth), then SSAO (`FSSAOTarget`) → blur →
   tonemap + exposure (`post_composite.frag`) → optional FXAA.
 - Scalability: `SetPostProcessQuality(EPostProcessQuality::Off|Low|Medium|High)` (default **Low**: light SSAO,
   no FXAA, 1024 shadow map); optional early-Z (`SetEarlyZEnabled`).
 - `FGPUPassTimer` measures `Shadow / Planar / Color / Ssao / Post` with `GL_QUERY_RESULT_AVAILABLE` (no stall).
 - Resources: `FResourceCache`, `UTexture2D`, `UStaticMesh`, `USkeletalMesh`, `FShader` (GLSL from
-  `Engine/Shaders`, hot reload), `FEnvironmentMap`, `FUniformBuffer`; materials `.lmat` (`LeonMaterialFormat`).
+  `Engine/Shaders`, hot reload), `FUniformBuffer`; materials `.lmat` (`LeonMaterialFormat`).
 - Debug: `FDebugDraw` (lines, collision / nav-mesh debug) and `FDebugOverlay` (text / HUD backend).
-- Levels load from binary `.llev` (`LoadLevelFile`), then `LoadLevelLightmaps` loads baked `.lm` files — see
-  [LEVELS.md](LEVELS.md) and [ASSET_FORMATS.md](ASSET_FORMATS.md).
+- Levels load from binary `.llev` (`LoadLevelFile`) — see [LEVELS.md](LEVELS.md) and
+  [ASSET_FORMATS.md](ASSET_FORMATS.md). There are no lightmaps; static lighting returns later as
+  `<Map>_BuiltData.lasset`.
 - **PS2** does not use Renderer: games draw immediately through `FPS2RHI` (§7).
 
 ---
 
 ## 13. Content and paths
 
-- `FPaths::ResolveAssetPath` resolves relative to the executable, `Engine/Content`, `Engine/Shaders` and the
-  active project content; `FPaths::SetActiveContentRoot(ProjectRoot)` pins it to one project's `Content/`
-  (other projects are never scanned). Among engine / staging candidates the newest file wins.
+- `FPaths::ResolveAssetPath` resolves relative to the executable, `Engine/Content` and `Engine/Shaders`
+  (projects are never scanned). Among engine / staging candidates the newest file wins.
 - Engine content is system-only: `Materials/M_Default.lmat`, `M_WorldGrid.lmat`, `M_SolidMetal.lmat`,
-  `Textures/T_Default_D.png`, `Hdr/AutumnFieldPuresky1k.hdr`, `LevelTemplates/Blank.llev`, `Starter.llev`.
-- Desktop packs are resolved by `FProjectDescriptor::Resolve` as `Projects/<Name>/leon.game.json`
-  (`defaultLevel`) — see Known debt.
+  `Textures/T_Default_D.png`, `LevelTemplates/Blank.llev`, `Starter.llev`.
+- `LeonGame` runs a single level given with `-map=` (default `LevelTemplates/Starter.llev`); there is no
+  runtime project / pack resolution — see Known debt.
 
 ---
 
 ## 14. Tools and tests
 
 - **Developer/MeshUtilities**: OBJ (tinyobjloader), FBX (ufbx) and glTF (cgltf) import to `FMeshData`;
-  `FStaticMeshBuilder` cooks static meshes.
-- **Developer/Cooker**: `UCookCommandlet::Main` (modes `staticmesh`, `character`, `anim`, `recipe`),
+  `FStaticMeshBuilder` cooks static meshes; `FbxSkeletalImport.h` imports skinned meshes and animation
+  sequences from FBX.
+- **Developer/Cooker**: `UCookCommandlet::Main` (modes `staticmesh`, `recipe`),
   `FCookRecipe::RunFile`, `FCookPaths::ResolveBeside`.
 - **Programs/LeonCook**: `main` → `UCookCommandlet::Main` (UE: `UE4Editor-Cmd -run=cook`); wrapper
   `Engine\Build\BatchFiles\Cook.bat`. Details: [TOOLS.md](TOOLS.md).
@@ -499,9 +496,8 @@ roadmap is [NextSteps.md](UnrealEngine427/NextSteps.md).
 | Game → Launch | The PS2 game module reads `GEngineLoop.GetMainWindow()` / `GetApplication()` through an include-only dependency on the launch module (UE game modules never see `FEngineLoop`); there is no `GEngine` / viewport on PS2 to hand them out. |
 | Gamepad input | Game code polls `IInputInterface` state directly; no Slate application routing events. |
 | Config | `Engine/Config/Base*.ini`, `Engine/Platforms/PS2/Config/PS2Engine.ini` and `Game/ThirdPerson/Config/Default*.ini` are placeholders; nothing loads them (no `FConfigCacheIni`). |
-| Desktop packs | `FProjectDescriptor` still reads the pre-refactor pack layout (`Projects/<Name>/leon.game.json`); the repository contains no such pack, and `.lproj` files are read only by LeonBuildTool. |
+| Projects | The `Projects` module is an empty placeholder: `.lproj` files are read only by LeonBuildTool, and `LeonGame` runs one level from `-map=` (the `.lproj` / `.lplugin` readers arrive in P4). |
 | Window / RHI ownership | The window creates the RHI (`FGenericWindow::InitRHI`), so ApplicationCore depends on the platform RHI module; on desktop `UGameEngine` creates its own application and window instead of `FEngineLoop`. |
-| Unused dependencies | Engine and UMG list `GLFW` as a private dependency but no source in either module includes a GLFW header. |
-| Platform checks | `Core/Private/Misc/Paths.cpp` and `Engine/Private/Net/NetUtil.cpp` still use `#if defined(_WIN32)` outside a platform folder. |
+| Platform checks | `Core/Private/Misc/Paths.cpp` still uses `#if PLATFORM_WINDOWS` outside a platform folder. |
 | Linking | Always static (`IS_MONOLITHIC=1`), generated module table; no DLL modules or hot reload. |
 | Build tool | CMake scripts instead of C# UBT; Linux is registered but not verified. |

@@ -34,6 +34,8 @@ UE 4.27 location to mirror.
 - `NewObject`, `CreateDefaultSubobject`, garbage collection (`GarbageCollection.h`), `TWeakObjectPtr`,
   `TSubclassOf`, `ConstructorHelpers`.
 - Once available: turn the naming-only `A`/`U` classes into real `UCLASS` types.
+- Replication: the ENet networking was removed in 0.12.0 (local tag `archive/net-enet-0.11`); it returns as
+  UObject replication (`UNetDriver`, replicated properties) — `Runtime/Engine/Classes/Engine/NetDriver.h`.
 
 ## Engine / platform
 
@@ -53,11 +55,10 @@ UE 4.27 location to mirror.
   instead of `FEngineLoop` (UE: `FSlateApplication` + `UGameEngine::GameViewport`).
 - **Game → Launch:** the PS2 game module reads `GEngineLoop.GetMainWindow()` through an include-only
   dependency on Launch; give games an engine-side accessor instead (UE: `GEngine->GameViewport`).
-- **Desktop packs:** `FProjectDescriptor` still resolves the pre-refactor layout
-  (`Projects/<Name>/leon.game.json`); read `.lproj` + `<Project>/Content` like UE's `FProjectDescriptor`
-  reads `.uproject`.
-- **Platform checks in shared code:** `_WIN32` tests in `Core/Private/Misc/Paths.cpp` and
-  `Engine/Private/Net/NetUtil.cpp` should become HAL functions or move under `Private/Windows`.
-- **Unused dependencies:** Engine and UMG declare a private `GLFW` dependency that no source uses.
+- **Project descriptors:** the pre-refactor packs (`Projects/<Name>/leon.game.json`) were removed in 0.12.0 and
+  the `Projects` module is an empty placeholder; read `.lproj` + `<Project>/Content` like UE's
+  `FProjectDescriptor` reads `.uproject` (P4). Until then `LeonGame` loads one level with `-map=`.
+- **Platform checks in shared code:** the `PLATFORM_WINDOWS` tests in `Core/Private/Misc/Paths.cpp` should become
+  HAL functions or move under `Private/Windows`.
 - **Linux:** registered in LeonBuildTool but not built or tested; enable `-Werror=shadow` on the Linux host
   flags when it becomes a gate.

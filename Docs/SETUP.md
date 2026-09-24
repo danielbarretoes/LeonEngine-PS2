@@ -49,7 +49,7 @@ Engine\Build\BatchFiles\RunTests.bat
 ```
 
 This builds `LeonAutomationTests` (Win64 Development) and runs it from the repo root. The executable contains the
-automation tests of every module in its closure (`<Module>/Private/Tests/`, 156 test cases today, Catch2). Arguments
+automation tests of every module in its closure (`<Module>/Private/Tests/`, 132 test cases today, Catch2). Arguments
 are passed to Catch2:
 
 ```bat
@@ -59,17 +59,17 @@ Engine\Build\BatchFiles\RunTests.bat --list-tests
 
 ## LeonGame
 
-`LeonGame` is the engine's game executable (UE: `UE4Game`). It runs a **project pack**: a `Projects/<Name>/` folder
-with a `leon.game.json` (its `defaultLevel` is the first level to open), looked up relative to the executable and the
-working directory.
+`LeonGame` is the engine's game executable (UE: `UE4Game`). It loads **one level** (`.llev`) and runs the default
+game mode (`ADefaultGameMode`) on it:
 
 ```bat
-Engine\Binaries\Win64\LeonGame.exe --pack <Name>
+Engine\Binaries\Win64\LeonGame.exe [-map=<.llev>] [-nullrhi] [--tick <Hz>] [--show-stats]
 ```
 
-There are no packs in the repository at the moment, so `LeonGame` has nothing to run until you add one. Other flags
-(`Engine/Source/Runtime/Launch/Private/Desktop/GameApplication.cpp`): `--listen` / `--host`, `--join <ip>`,
-`--map <Key>`, `--port <n>`, `--dedicated` / `--server`, `--tick <Hz>`, `--show-stats`.
+Without `-map=` it opens `Engine/Content/LevelTemplates/Starter.llev`; a `-map=` path is taken relative to the working
+directory, else relative to `Engine/Content` (`-map=LevelTemplates/Blank.llev`). `-nullrhi` runs headless (no window,
+silent audio) at `--tick` Hz (default 60); `--show-stats` shows the HUD stats. Flags are parsed in
+`Engine/Source/Runtime/Launch/Private/Desktop/GameApplication.cpp`. Levels: [LEVELS.md](LEVELS.md).
 
 ## Cook
 
@@ -78,7 +78,7 @@ Engine\Build\BatchFiles\Cook.bat staticmesh --obj Mesh.obj --out Mesh.lmesh
 Engine\Build\BatchFiles\Cook.bat recipe CookRecipe.json
 ```
 
-`Cook.bat` builds `LeonCook` and passes the arguments through. Modes: `staticmesh`, `character`, `anim`, `recipe`
+`Cook.bat` builds `LeonCook` and passes the arguments through. Modes: `staticmesh`, `recipe`
 (run `Cook.bat --help` for the options). Formats: [ASSET_FORMATS.md](ASSET_FORMATS.md). Tool reference:
 [TOOLS.md](TOOLS.md).
 

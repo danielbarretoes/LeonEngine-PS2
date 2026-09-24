@@ -32,9 +32,9 @@ Update this page whenever a module or type is added, moved or renamed.
 | `Engine/Serialization` | `Json` | `FJsonUtils` |
 | `Engine/Utilities` widgets | `UMG` (`U*` widgets); `TextLayout` → `SlateCore` | |
 | `Engine/Utilities` HUD | `Engine` `GameFramework/HUD.h` | debt: Engine → UMG dependency |
-| `Engine/Content` (C++) | `Engine` (`Public/Validation`, `Private/Content`) | |
-| `Engine/Animation` | `AnimationCore` (+ `Engine/Classes/Animation`) | |
-| `Engine/Network` | `NetCore` (protocol, codec) + `Engine` (`UNetDriver`) | |
+| `Engine/Content` (C++) | `Engine` (`Private/Content`) | `ContentValidator` removed in 0.12.0 |
+| `Engine/Animation` | `AnimationCore`; FBX skeletal import in `Developer/MeshUtilities` | cooked skeletal formats removed in 0.12.0 |
+| `Engine/Network` | removed in 0.12.0 (local tag `archive/net-enet-0.11`) | replication returns later as UObject replication |
 | `Engine/Audio` | `AudioMixer` (`FAudioDevice`) | UE keeps `FAudioDevice` in Engine |
 | `Engine/Import` | `Developer/MeshUtilities` | |
 | `Engine/Scene` | `Engine` (`ULevel`, `Public/Level`) | |
@@ -43,8 +43,8 @@ Update this page whenever a module or type is added, moved or renamed.
 | `Plugins/Physics/Arcade` | `Engine` (`FPhysScene`, `Private/PhysicsEngine`) | |
 | `Plugins/Physics/Jolt` | plugin `Engine/Plugins/Runtime/JoltPhysics` | Win64 only |
 | `Runtime/` (GameApplication, RunLeonGame) | `Launch` (`GuardedMain`, `FEngineLoop`) | |
-| `Runtime/ProjectPack` (`leon.game.json`) | `Projects` (`FProjectDescriptor`, `.lproj`) | |
-| `Runtime/GameHostSession`, `WorldRuntime` | `Engine` | |
+| `Runtime/ProjectPack` (`leon.game.json`) | removed in 0.12.0 | `Projects` is an empty placeholder until the `.lproj` / `.lplugin` readers (P4) |
+| `Runtime/GameHostSession`, `WorldRuntime` | removed in 0.12.0 | `FGameApplication` (`Launch`) loads one level (`-map=`) |
 | `Tools/ResourceTools` | `Developer/Cooker` (`FCookRecipe`, `FCookPaths`, `UCookCommandlet`) | UE: cook commandlet in UnrealEd |
 | `Tools/AssetPipeline/leon-cook` | `Programs/LeonCook` | `UE4Editor-Cmd -run=cook` equivalent |
 | `Tools/Cli` (`leon-cli`) | removed | only forwarded to leon-cook |
@@ -76,7 +76,7 @@ Update this page whenever a module or type is added, moved or renamed.
 | `IRHIDevice`, `OpenGLDevice` | `FDynamicRHI`, `FOpenGLDynamicRHI` |
 | `Ps2*` RHI functions | `FPS2RHI::*` |
 | `MemorySnapshot` | `FPlatformMemoryStats` |
-| `NetDriver`, `AudioDevice`, `PhysScene`, `HitResult` | `UNetDriver`, `FAudioDevice`, `FPhysScene`, `FHitResult` |
+| `AudioDevice`, `PhysScene`, `HitResult` | `FAudioDevice`, `FPhysScene`, `FHitResult` |
 
 The full rename table lives in this file as phases land (see sections added per phase below).
 
@@ -108,7 +108,7 @@ pre-UE `GameApplication` loop until Phase 4.9 (see the Phase 4 table below).
 
 ### Phase 4 — Epic naming across every module
 
-`namespace leon` is gone (types are global like UE; protocol / codec helpers live in `Leon::Net`,
+`namespace leon` is gone (types are global like UE; free helpers live in `Leon::` namespaces such as
 `Leon::InputActions`). Types got UE prefixes group by group, then clang-tidy
 `readability-identifier-naming` renamed members, methods, parameters and locals over every
 translation unit (Win64 compile database; PS2-only sources through a host-clang database built from
@@ -116,18 +116,18 @@ the pinned ps2dev image headers).
 
 | Group | Leon (before) | UE name (now) |
 | --- | --- | --- |
-| 4.1 Core / Json / Projects | `Transform`, `Paths` free functions, `FileIO`, `AsciiToLower` | `FTransform`, `FPaths::*` (`ExecutableDir`, `ProjectContentDir`, …), `FFileHelper` (`Misc/FileHelper.h`), `FCString::ToLower` (`Misc/CString.h`) |
-| | `serialization::ReadVec3 / LoadJsonFile`, `ProjectPack` | `FJsonUtils` (`Serialization/JsonUtils.h`), `FProjectDescriptor` (`ProjectDescriptor.h`) |
+| 4.1 Core / Json / Projects | `Transform`, `Paths` free functions, `FileIO`, `AsciiToLower` | `FTransform`, `FPaths::*` (`ExecutableDir`, `ResolveAssetPath`, …), `FFileHelper` (`Misc/FileHelper.h`), `FCString::ToLower` (`Misc/CString.h`) |
+| | `serialization::ReadVec3 / LoadJsonFile`, `ProjectPack` | `FJsonUtils` (`Serialization/JsonUtils.h`), `FProjectDescriptor` (removed in 0.12.0 with the packs) |
 | 4.2 Render | `Renderer`, `Texture`, `StaticMesh`, `SkeletalMesh`, `Material`, `EShadingModel` | `FSceneRenderer` (`SceneRenderer.h`), `UTexture2D` (`Texture2D.h`), `UStaticMesh`, `USkeletalMesh`, `FMaterial`, `EMaterialShadingModel` |
 | | `MeshData`, `SubMesh`, `Vertex`, `Aabb`, `Plane`, `Frustum` | `FMeshData`, `FMeshSection`, `FVertex`, `FBox`, `FPlane`, `FFrustum` |
-| | `Shader`, `ShadowMap`, `EnvMap`, `GpuPassTimer`, `LdrColorTarget`, `SsaoTarget`, … | `FShader`, `FShadowMap`, `FEnvironmentMap`, `FGPUPassTimer`, `FLDRColorTarget`, `FSSAOTarget`, … |
+| | `Shader`, `ShadowMap`, `GpuPassTimer`, `LdrColorTarget`, `SsaoTarget`, … | `FShader`, `FShadowMap`, `FGPUPassTimer`, `FLDRColorTarget`, `FSSAOTarget`, … |
 | | `RHITextureId`, … , `kInvalidTexture` | `FRHITextureId`, … , `InvalidTexture` |
 | 4.3 Physics | `HitResult`, `CollisionQueryParams`, `BodyInstance`, `PhysScene`, `CapsuleShape` | `FHitResult`, `FCollisionQueryParams`, `FBodyInstance`, `FPhysScene`, `FCapsuleShape` |
-| 4.4 Anim / Audio / Net | `Skeleton`, `AnimSequence`, `BlendSpace1D`, `AnimInstance`, `AudioDevice`, `HelloMsg`, … | `USkeleton`, `UAnimSequence`, `UBlendSpace1D` (`FBlendSample`), `UAnimInstance`, `FAudioDevice`, `Leon::Net::FHelloMsg`, … (`kProtocolVersion` -> `CurrentProtocolVersion`) |
+| 4.4 Anim / Audio / Net | `Skeleton`, `AnimSequence`, `BlendSpace1D`, `AnimInstance`, `AudioDevice`, … | `USkeleton`, `UAnimSequence`, `UBlendSpace1D` (`FBlendSample`), `UAnimInstance`, `FAudioDevice`, … (the `Leon::Net` renames went away with networking in 0.12.0) |
 | 4.5 UMG | `ButtonWidget`, `ImageWidget`, `ProgressBarWidget`, `TextBlockWidget`, `VerticalBoxWidget`, `WidgetPaintContext` | `UButton`, `UImage`, `UProgressBar`, `UTextBlock`, `UVerticalBox` (files renamed to match), `FPaintContext` |
 | 4.6 Engine | `Engine`, `World`, `Level`, `Actor`, `Character`, `Camera`, `GameMode`, `GameState` | `UGameEngine`, `UWorld`, `ULevel`, `AActor`, `ACharacter`, `UCameraComponent` (`Camera/CameraComponent.h`), `AGameModeBase`, `AGameStateBase` |
 | | `LineTraceSingleByChannel(...)`, `ApplyPointDamage(...)` (Damage.h) | `UGameplayStatics::*` (`Kismet/GameplayStatics.h`) |
-| | `NavigationSystem`, `NavMesh`, `InputMappingContext`, `PlayerInput`, `NetDriver` | `UNavigationSystem`, `FNavMesh`, `UInputMappingContext`, `UPlayerInput`, `UNetDriver` |
+| | `NavigationSystem`, `NavMesh`, `InputMappingContext`, `PlayerInput` | `UNavigationSystem`, `FNavMesh`, `UInputMappingContext`, `UPlayerInput` |
 | 4.7 AI | `AIController`, `BTSequence`, `BTSelector`, `BTConditionBool`, `BTAction`, `Blackboard` | `AAIController`, `UBTComposite_Sequence`, `UBTComposite_Selector`, `UBTDecorator_Bool`, `UBTTask_Action`, `UBlackboardComponent` |
 | 4.8 Tools | LeonCook `main`, `RunCookRecipeFile`, `ResolveBeside`, `CookStaticMeshFrom*` | `UCookCommandlet::Main` (`Commandlets/CookCommandlet.h`), `FCookRecipe::RunFile`, `FCookPaths::ResolveBeside`, `FStaticMeshBuilder::CookFrom*` |
 | 4.9 Launch | `RunLeonGame` + `GameApplication::Run` loop | `FEngineLoop::Init/Tick/Exit` driving `FGameApplication::Init/Tick/Exit` -> `UGameEngine::Start/Tick` |

@@ -9,7 +9,7 @@
 #include <memory>
 #include <vector>
 
-/// Shared chase UBehaviorTree for pack AI (HasTarget → MoveToActor, else Stop).
+/// Shared chase UBehaviorTree for game AI (HasTarget → MoveToActor, else Stop).
 /// One instance is safe to reuse serially across pawns in a Tick loop.
 class AIMODULE_API FAIChaseBehavior
 {

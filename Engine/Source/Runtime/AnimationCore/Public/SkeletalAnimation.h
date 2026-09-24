@@ -110,7 +110,7 @@ enum class EAnimJumpState : std::uint8_t
 };
 
 /// Unreal-like UAnimInstance base: UBlendSpace1D locomotion only (no jump SM).
-/// Pack / Character subclasses add game-specific graphs via `NativeInitializeAnimation`.
+/// Game / Character subclasses add game-specific graphs via `NativeInitializeAnimation`.
 class ANIMATIONCORE_API UAnimInstance
 {
 public:
@@ -201,7 +201,7 @@ private:
 	float TimeB = 0.0f;
 };
 
-/// Framework Character AnimBP: locomotion UBlendSpace1D + Jump/Fall/Land SM (rates pack-tuned).
+/// Framework Character AnimBP: locomotion UBlendSpace1D + Jump/Fall/Land SM (rates game-tuned).
 class ANIMATIONCORE_API UCharacterAnimInstance : public UAnimInstance
 {
 public:
