@@ -12,6 +12,7 @@ The layout mirrors Unreal Engine 4.27: edit-time code is in **Developer** module
 | `Engine/Source/Developer/MeshUtilities/` | Developer module | OBJ / FBX / glTF import and `FStaticMeshBuilder` (source → `.lmesh`); FBX skeletal import (`FbxSkeletalImport.h`) |
 | `Engine/Source/Programs/LeonCook/` | Program target | `LeonCook` executable: `main` forwards to `UCookCommandlet::Main` |
 | `Engine/Source/Programs/LeonBuildTool/` | Build tool (CMake script) | Builds every target (UnrealBuildTool equivalent) |
+| `Engine/Source/Programs/LeonHeaderTool/` | Host program (std-only C++17, its own `CMakeLists.txt`) | Reflection code generator (UnrealHeaderTool equivalent). LeonBuildTool builds it into `Engine/Intermediate/Build/HostTools/<Host>/` and runs it for reflected modules; `LeonHeaderTool -Test` runs its golden tests. Contract: its [README](../Engine/Source/Programs/LeonHeaderTool/README.md) |
 | `Engine/Source/Programs/LeonAutomationTests/` | Program target | Runs every desktop module's `Private/Tests/**` automation tests (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`) |
 | `Engine/Source/Programs/TestPAL/` | Program target (all platforms) | Runs the Core, Json and Projects automation tests and prints `TestPAL: PASSED (N test(s), 0 failed)` plus memory / name-pool numbers (UE: `Programs/TestPAL`) |
 | `Engine/Source/Programs/BlankProgram/` | Program target | Minimal program: starts the statically linked modules |

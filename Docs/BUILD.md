@@ -76,11 +76,14 @@ Anything else starting with `-` is rejected (`unknown option`).
 1. Loads the platform registry and checks the platform and configuration.
 2. If the platform has a Docker image (PS2) and its SDK variable (`PS2DEV`) is not set, it re-runs itself inside the
    container (see [PS2 builds in Docker](#ps2-builds-in-docker)) and stops.
-3. Configures the build tree with `-G Ninja`, `LEON_PLATFORM`, `LEON_CONFIGURATION`, `LEON_PROJECT_FILE` and the
-   platform's `CMAKE_BUILD_TYPE`. The arguments are stored in `<tree>/LeonBuildTool.args`; the tree is reconfigured
-   only when they change (new or removed source files are picked up by the Ninja build itself through
-   `CONFIGURE_DEPENDS` globs).
-4. Runs `cmake --build <tree> --target <Target>`.
+3. Builds the host tools (`System/HostTools.cmake`): `Engine/Source/Programs/LeonHeaderTool` with the host compiler
+   and Ninja, Release, into `Engine/Intermediate/Build/HostTools/<Win64|Linux|LinuxMusl>/`. It is configured once
+   and is a Ninja no-op when up to date. Inside the PS2 Docker image the host is Alpine (`LinuxMusl`, g++).
+4. Configures the build tree with `-G Ninja`, `LEON_PLATFORM`, `LEON_CONFIGURATION`, `LEON_PROJECT_FILE`,
+   `LEON_HEADER_TOOL` (the tool built in step 3) and the platform's `CMAKE_BUILD_TYPE`. The arguments are stored in
+   `<tree>/LeonBuildTool.args`, and the tree is reconfigured only when they change. The Ninja build picks up new or
+   removed source files and headers by itself through `CONFIGURE_DEPENDS` globs.
+5. Runs `cmake --build <tree> --target <Target>`.
 
 | Platform | Debug | Development | Shipping |
 | --- | --- | --- | --- |
@@ -102,8 +105,13 @@ other configurations. Suffix: `.exe` on Win64, `.elf` on PS2, none on Linux. Exa
 - `Engine/Binaries/Win64/LeonGame.exe`, `Engine/Binaries/Win64/LeonGame-Win64-Debug.exe`
 - `Game/ThirdPerson/Binaries/PS2/ThirdPerson.elf`
 
-Other generated folders: `Engine/Intermediate/ThirdPartyDownloads/` (downloaded archives),
-`Engine/Intermediate/ProjectFiles/` (IDE solution), and `<tree>/Generated/<Target>.ModuleInit.gen.cpp`.
+Other generated folders:
+
+- `Engine/Intermediate/ThirdPartyDownloads/`: downloaded archives.
+- `Engine/Intermediate/ProjectFiles/`: IDE solution.
+- `Engine/Intermediate/Build/HostTools/<Host>/`: LeonHeaderTool.
+- `<tree>/Generated/<Target>.ModuleInit.gen.cpp`.
+- `<tree>/Inc/<Module>/`: reflection code for reflected modules.
 `Binaries/`, `Intermediate/`, `Saved/` and the root `compile_commands.json` are ignored by git.
 
 ## Batch files
@@ -115,7 +123,7 @@ Windows batch files live in `Engine/Build/BatchFiles/` (UE layout); run them fro
 | `Build.bat` | `Build.bat <Target> <Platform> <Config> [-Project=<file>] [-Mode=...] [-NoDocker] [-KeepGoing]` | Loads the MSVC environment (`GetVSEnv.bat vcvars quiet need-ninja`) unless the platform is `PS2`, then runs LeonBuildTool with all arguments |
 | `Clean.bat` | `Clean.bat <Target> <Platform> <Config> [-Project=<file>]` | `Build.bat ... -Mode=Clean` |
 | `Rebuild.bat` | `Rebuild.bat <Target> <Platform> <Config> [-Project=<file>]` | `Build.bat ... -Mode=Rebuild` |
-| `RunTests.bat` | `RunTests.bat [-automation=<filter>]` | Builds `LeonAutomationTests Win64 Development` and runs `Engine\Binaries\Win64\LeonAutomationTests.exe` from the repo root: every automation test (231), or only those whose name contains `<filter>` |
+| `RunTests.bat` | `RunTests.bat [-automation=<filter>]` | Builds `LeonAutomationTests Win64 Development` and runs `Engine\Binaries\Win64\LeonAutomationTests.exe` from the repo root: every automation test (231), or only those whose name contains `<filter>`. It then runs the LeonHeaderTool golden tests (`LeonHeaderTool -Test`) |
 | `Cook.bat` | `Cook.bat <LeonCook arguments>` | Builds `LeonCook Win64 Development` and runs `Engine\Binaries\Win64\LeonCook.exe` |
 | `FormatCode.bat` | `FormatCode.bat [--check]` | clang-format on every `.cpp/.h/.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game` (skips paths containing `ThirdParty`, `Intermediate`, `Binaries`). `--check` is a dry run that fails if a file needs formatting |
 | `Lint.bat` | `Lint.bat` | `FormatCode.bat --check`, then `CheckBannedApis.ps1`, then builds `LeonAutomationTests`, `LeonCook`, `LeonGame` and `BlankProgram` for Win64 Development |
@@ -341,7 +349,9 @@ receives its public include paths and an empty `LAUNCH_API`; the symbols resolve
 
 For each target LeonBuildTool writes `<tree>/Generated/<Target>.ModuleInit.gen.cpp`. It lists every `Runtime` and
 `Developer` module of the closure (dependency order, without `NO_MODULE_IMPLEMENTATION`) as
-`FStaticallyLinkedModuleInfo { Name, &InitializeModule_<Name> }`, returned by `GetStaticallyLinkedModules()`, and
+`FStaticallyLinkedModuleInfo { Name, &InitializeModule_<Name>, RegisterReflection }`, returned by
+`GetStaticallyLinkedModules()`. `RegisterReflection` is `&RegisterReflection_<Name>` for a reflected module (see
+[Reflection](#reflection-leonheadertool)) and `nullptr` otherwise. The table also
 defines `GPrimaryGameModuleName` (the first project module in `EXTRA_MODULE_NAMES` for games, otherwise `nullptr`).
 It also writes where the engine and the project are, relative to the executable's folder
 (`GLeonEngineDirFromBaseDir`, `GLeonProjectDirFromBaseDir`, `GLeonProjectName`); `FPaths` builds its desktop
@@ -358,6 +368,28 @@ IMPLEMENT_PRIMARY_GAME_MODULE(FThirdPersonModule, ThirdPerson, "ThirdPerson") //
 
 `IMPLEMENT_MODULE` defines `extern "C" IModuleInterface* InitializeModule_<Name>()`; a module in the table without it
 fails to link, which enforces the rule. `IMPLEMENT_GAME_MODULE` and `IMPLEMENT_PRIMARY_GAME_MODULE` are aliases.
+
+### Reflection (LeonHeaderTool)
+
+`Configuration/ReflectionRules.cmake` treats a module as reflected when one of its `Public/`, `Classes/` or `Private/`
+headers has `#include "<Name>.generated.h"`. No engine module is reflected yet: CoreUObject arrives in P9. For a
+reflected module:
+
+- LeonBuildTool writes `<tree>/Inc/<Module>/<Module>.lhtmanifest`.
+- A custom command runs LeonHeaderTool. It writes `<Header>.generated.h`, `<Header>.gen.cpp`,
+  `<Module>.init.gen.cpp` and `<Module>.lhttypes`, and only rewrites a file whose content changed.
+- The `.gen.cpp` files compile into the module, and `<tree>/Inc/<Module>` becomes a public include path.
+- The module table points `RegisterReflection` at `RegisterReflection_<Module>`.
+
+Targets with `COLLECT_AUTOMATION_TESTS` also reflect `<Module>/Private/Tests/**.h` (the `<Module>.Tests` unit,
+compiled into the executable). A reflected module must be a `Runtime` or `Developer` module with `IMPLEMENT_MODULE`.
+
+New headers are picked up through `CONFIGURE_DEPENDS` globs. When a header of a reflected module gains its first
+`.generated.h` include, LeonHeaderTool stops once and the next build reconfigures. In a module with no reflected
+header yet, touch its `.Build.cmake` after adding the first include.
+
+The generated-code contract, the supported UE subset and the deviations are in
+[Engine/Source/Programs/LeonHeaderTool/README.md](../Engine/Source/Programs/LeonHeaderTool/README.md).
 
 ## Projects and plugins
 
@@ -524,14 +556,16 @@ docker run --rm -v <repo root>:/leon -w /leon <image> sh /leon/Engine/Platforms/
 
 - A project outside the repo root is mounted as `/project` and passed as `-Project=/project/<file>`.
 - On Unix hosts the container runs as the calling user (`--user uid:gid`) so outputs are not owned by root.
-- `DockerEntry.sh` exports `PS2DEV` (default `/usr/local/ps2dev`), `PS2SDK` and `PATH`, installs `cmake`, `ninja` and
-  `make` with `apk` when they are missing, and re-runs `LeonBuildTool.cmake` inside the container.
+- `DockerEntry.sh` exports `PS2DEV` (default `/usr/local/ps2dev`), `PS2SDK` and `PATH`. When they are missing it
+  installs `cmake`, `ninja`, `make`, and `g++` / `musl-dev` (the host compiler for LeonHeaderTool, built into
+  `Engine/Intermediate/Build/HostTools/LinuxMusl`) with `apk`. Then it re-runs `LeonBuildTool.cmake` inside the
+  container.
 - Inside, the generator uses `PS2Toolchain.cmake`, which requires `PS2DEV` and `PS2SDK` and uses the
   `mips64r5900el-ps2-elf-` compilers.
 
 Outputs land in the mounted repo, so `Game/ThirdPerson/Binaries/PS2/ThirdPerson.elf` appears on the host.
-`Engine/Platforms/PS2/Build/Docker/Dockerfile` builds an optional local image (the pinned image plus CMake and Ninja)
-to skip the `apk add` on every build:
+`Engine/Platforms/PS2/Build/Docker/Dockerfile` builds an optional local image (the pinned image plus CMake, Ninja and
+g++) to skip the `apk add` on every build:
 
 ```
 docker build -t leon/ps2dev Engine/Platforms/PS2/Build/Docker

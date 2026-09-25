@@ -85,7 +85,9 @@ them. 22 golden tests recorded before the switch pass unchanged; 231 tests in to
 ## CoreUObject
 
 - `UObject`, `UClass`, `UStruct`, `UProperty`/`FProperty` — `Runtime/CoreUObject/Public/UObject/`.
-- A reflection generator (UnrealHeaderTool homologue) — LeonBuildTool would run it before compiling a module.
+- The reflection generator exists (P8): `Engine/Source/Programs/LeonHeaderTool`, which LeonBuildTool runs for every
+  module that includes a `.generated.h`. CoreUObject provides the macros and `UE4CodeGen_Private` runtime its
+  README lists, and calls each module's `RegisterReflection` before `StartupModule`.
 - `NewObject`, `CreateDefaultSubobject`, garbage collection (`GarbageCollection.h`), `TWeakObjectPtr`,
   `TSubclassOf`, `ConstructorHelpers`.
 - Once available: turn the naming-only `A`/`U` classes into real `UCLASS` types.

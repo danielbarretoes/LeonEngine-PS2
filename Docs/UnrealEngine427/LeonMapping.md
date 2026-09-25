@@ -318,7 +318,7 @@ the converters' allowed places: [ARCHITECTURE.md — Coordinates](../ARCHITECTUR
 
 | Topic | UE | LeonEngine | Why |
 | --- | --- | --- | --- |
-| Reflection | `UCLASS`, `UObject`, UHT | none; `A`/`U` prefixes are naming only | CoreUObject is the next plan |
+| Reflection | `UCLASS`, `UObject`, UHT | LeonHeaderTool generates UE 4.27-shaped `.generated.h` / `.gen.cpp` (no metadata, no hot-reload CRCs, explicit `RegisterReflection_<Module>` instead of static `FCompiledInDefer` objects); no `UObject` runtime yet, `A`/`U` prefixes are naming only | CoreUObject (P9) implements the runtime: [LeonHeaderTool/README.md](../../Engine/Source/Programs/LeonHeaderTool/README.md) |
 | Containers / strings | `TArray`, `TMap`, `FString` everywhere | the same everywhere since P6, enforced by `CheckBannedApis.ps1` (G4); third-party types stay at the library seams (Jolt, tinyobjloader, ufbx, cgltf), and the SSAO kernel keeps `std::mt19937` so its samples do not change | — |
 | `FString` comparison | `==` ignores case | the same; code that needs an exact match (the level string table, mesh tags, editor class names, volume payloads) calls `Equals(…, ESearchCase::CaseSensitive)` | the pre-P6 `std::string` code compared case-sensitively |
 | `TCHAR` | `wchar_t` / UTF-16 on most platforms | UTF-8 `char` on every platform; `TEXT(x)` is `x`; `WIDECHAR` only inside the Windows HAL; `TCHAR_TO_UTF8` & co. are identities | the EE has no wide-string support worth paying for; one encoding everywhere |

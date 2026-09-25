@@ -189,7 +189,7 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
   `TSharedPtr`, `TUniquePtr`); `<iostream>`, `std::cout`, `std::cerr`, `std::clog` and the `printf` family (use
   `UE_LOG`, `FString::Printf`, `FCString`). They are allowed only where Core wraps the C and C++ libraries (D2):
   ThirdParty folders, the platform HAL sources (`Private/Windows`, `Private/Linux`, the PS2 Core extension), the
-  `printf` family inside `Runtime/Core/Private`, `LeonHeaderTool` (reserved for a std-only host tool) and the test
+  `printf` family inside `Runtime/Core/Private`, `LeonHeaderTool` (a std-only host program) and the test
   program mains (`LeonAutomationTestsMain.cpp`, `TestPAL/Private`). A third-party library's own types stay in the
   file that calls it (Jolt, tinyobjloader, ufbx, cgltf). Do not add aliases that pretend to be UE types
   (`using FVector = glm::vec3` is not allowed). G4 also rejects the legacy math bridges removed in P7 (`LegacyGL`,

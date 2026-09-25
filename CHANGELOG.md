@@ -7,6 +7,42 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Eighth step of the Core / CoreUObject plan (P8): LeonHeaderTool, the UnrealHeaderTool counterpart, and its
+LeonBuildTool step. No engine module is reflected yet: CoreUObject (P9) implements the runtime side of the generated
+code.
+
+### Added
+
+- **LeonHeaderTool** (`Engine/Source/Programs/LeonHeaderTool`) is a std-only C++17 host program with its own
+  `CMakeLists.txt` (tokenizer, header parser, type model, code generator, manifest).
+  - It reads UCLASS / USTRUCT / UENUM (+UMETA) / UPROPERTY / UFUNCTION, GENERATED_BODY (and the legacy
+    GENERATED_UCLASS_BODY / GENERATED_USTRUCT_BODY) and `#if WITH_EDITORONLY_DATA` property blocks.
+  - It writes UE 4.27-shaped `<Header>.generated.h` / `<Header>.gen.cpp` and a `<Module>.init.gen.cpp`: the package,
+    plus an explicit `RegisterReflection_<Module>()` in place of static `FCompiledInDefer` objects.
+  - Errors are printed as `file(line): error: message`. Outputs are only rewritten when they change.
+  - `LeonHeaderTool -Test` runs 30 golden cases, 18 of them error cases.
+  - The generated-code contract for P9 is in its `README.md`.
+- **Host tools tree.** LeonBuildTool builds LeonHeaderTool into `Engine/Intermediate/Build/HostTools/<Host>/` before
+  configuring any target, with MSVC on Win64 and g++ inside the ps2dev Docker image. It passes
+  `-DLEON_HEADER_TOOL=<path>` to the target configure.
+- **Reflection rules.** `Configuration/ReflectionRules.cmake` reflects any module with a header that includes its
+  `.generated.h` (and `Private/Tests/**.h` for test targets):
+  - it writes a `<Module>.lhtmanifest`;
+  - a stamped custom command runs the tool;
+  - the `.gen.cpp` files compile into the module;
+  - `<tree>/Inc/<Module>` becomes a public include path.
+
+  It is inert for every current target.
+- **Module table.** `FStaticallyLinkedModuleInfo` gains `RegisterReflection` (`nullptr` for modules without reflected
+  types), filled by the generated module table.
+- **Runs.** `RunTests.bat`, and therefore the CI win64 job, runs the LeonHeaderTool golden tests after the automation
+  tests.
+
+### Changed
+
+- **Host g++.** The PS2 Docker entry point, the optional Dockerfile and the CI ps2 job install `g++ musl-dev`, the
+  host compiler for LeonHeaderTool.
+
 ## [0.14.0] - 2026-09-25
 
 Fifth to seventh steps of the Core / CoreUObject plan (P5–P7): every module uses Unreal Engine 4.27's Core types, and

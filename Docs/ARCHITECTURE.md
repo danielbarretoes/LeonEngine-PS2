@@ -403,10 +403,15 @@ and publishes it in `GDynamicRHI`. That is why ApplicationCore depends on the pl
   `Private/<Module>Module.cpp`), which defines `extern "C" IModuleInterface* InitializeModule_<Module>()`.
   `FDefaultModuleImpl` covers modules without startup logic; game modules use
   `IMPLEMENT_PRIMARY_GAME_MODULE` / `IMPLEMENT_GAME_MODULE`.
-- LeonBuildTool writes `<Target>.ModuleInit.gen.cpp` with the table `GetStaticallyLinkedModules()` (every
-  Runtime / Developer module of the closure, **dependency order**), `GPrimaryGameModuleName` and the directory
-  globals `FPaths` starts from on desktop (`GLeonEngineDirFromBaseDir`, `GLeonProjectDirFromBaseDir`,
-  `GLeonProjectName`). A module in the table without `IMPLEMENT_MODULE` fails to link.
+- LeonBuildTool writes `<Target>.ModuleInit.gen.cpp`. It holds:
+  - the table `GetStaticallyLinkedModules()`: every Runtime / Developer module of the closure in **dependency
+    order**, each with its `RegisterReflection` function (LeonHeaderTool's `RegisterReflection_<Module>`, or
+    `nullptr` for a module without reflected types);
+  - `GPrimaryGameModuleName`;
+  - the directory globals `FPaths` starts from on desktop (`GLeonEngineDirFromBaseDir`,
+    `GLeonProjectDirFromBaseDir`, `GLeonProjectName`).
+
+  A module in the table without `IMPLEMENT_MODULE` fails to link.
 - `FModuleManager::Get().StartupStaticallyLinkedModules()` creates and starts them in order;
   `ShutdownModules()` shuts them down in reverse. Programs call these directly (`BlankProgram`,
   `LeonAutomationTests`, `TestPAL`); games get them from `FEngineLoop`.
@@ -613,7 +618,7 @@ roadmap is [NextSteps.md](UnrealEngine427/NextSteps.md).
 
 | Topic | Current state |
 | --- | --- |
-| Reflection | No `UObject` / `UCLASS` / UHT / GC. `A` and `U` prefixes are naming only; objects are plain C++ owned with `TUniquePtr` or by value (e.g. `UWorld` is a member of `AGameModeBase`). |
+| Reflection | LeonHeaderTool (the UHT counterpart, `Engine/Source/Programs/LeonHeaderTool`) and its LeonBuildTool step exist, but no module is reflected yet: there is no `UObject` runtime or GC until CoreUObject (P9). `A` and `U` prefixes are naming only; objects are plain C++ owned with `TUniquePtr` or by value (e.g. `UWorld` is a member of `AGameModeBase`). |
 | Containers / strings | Every engine module, the JoltPhysics plugin, the desktop `FGameApplication` and the game use Core's `TArray`, `TMap`, `FString`, `FName`, `FText` (minimal), `TFunction`, `TUniquePtr` / `TSharedPtr`, delegates and `UE_LOG` (P5, P6); `CheckBannedApis.ps1` (G4) keeps the `std::` equivalents out. Third-party containers stay at the library seams (Jolt, tinyobjloader, ufbx, cgltf). `TCHAR` is UTF-8 `char` everywhere. |
 | Math and coordinates | Every engine module uses Core math (P5, P6) in UE's space since P7 (§6, Coordinates). Legacy data (`.llev`, `.lmesh` version 1) is still stored Y up in metres and converted by `FLegacyCoordinateConversion` in its readers; the formats go away with the `.lasset` packages. OpenGL still gets GL clip space through `ToGLClipSpace`; bone poses are `FMatrix` values rather than `FTransform`s until the skeletal mesh assets (P14). |
 | Renderer | Calls OpenGL directly (Glad) instead of going through RHI command lists; `FDynamicRHI` only covers device init, viewport and memory stats. |
