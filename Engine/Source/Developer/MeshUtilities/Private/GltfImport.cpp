@@ -10,9 +10,7 @@
 
 #include "Containers/StringConv.h"
 #include "GltfImport.h"
-#include "HAL/FileManager.h"
 #include "ImportCoordinateConversion.h"
-#include "LeonMaterialFormat.h"
 #include "MeshData.h"
 #include "Misc/CString.h"
 #include "Misc/Paths.h"
@@ -27,47 +25,22 @@ namespace
 		return static_cast<uint32>(Out);
 	}
 
-	/** Letters, digits, '_' and '-' kept; everything else becomes '_'. */
-	[[nodiscard]] FString SanitizeName(const FString& InName)
+	/** The absolute path of an external image (a file URI next to the glTF), or empty (none, or embedded). */
+	[[nodiscard]] FString GetImagePath(const cgltf_texture_view& View, const FString& GltfDir)
 	{
-		FString Name = InName.IsEmpty() ? FString("Material") : InName;
-		for (TCHAR& C : Name.GetCharArray())
+		const cgltf_image* Image = View.texture != nullptr ? View.texture->image : nullptr;
+		if (Image == nullptr || Image->uri == nullptr || FCStringAnsi::Strlen(Image->uri) == 0 ||
+			FCStringAnsi::Strncmp(Image->uri, "data:", 5) == 0)
 		{
-			if (C != '\0' && !(FChar::IsAlnum(C) || C == '_' || C == '-'))
-			{
-				C = '_';
-			}
+			return FString();
 		}
-		return Name;
+		FString ImagePath = FPaths::ConvertRelativePathToFull(FPaths::Combine(GltfDir, FString(Image->uri)));
+		FPaths::NormalizeFilename(ImagePath);
+		return ImagePath;
 	}
 
-	/** Copies an external image next to the materials; OutRelPath is "textures/<file>" (relative to the out dir). */
-	bool CopyTextureUri(
-		const cgltf_image* Image, const FString& GltfDir, const FString& TexturesDir, FString& OutRelPath)
-	{
-		OutRelPath.Empty();
-		if (Image == nullptr)
-		{
-			return false;
-		}
-		IFileManager::Get().MakeDirectory(*TexturesDir, true);
-		if (Image->uri != nullptr && FCStringAnsi::Strlen(Image->uri) > 0 &&
-			FCStringAnsi::Strncmp(Image->uri, "data:", 5) != 0)
-		{
-			const FString Uri(Image->uri);
-			const FString Src = FPaths::Combine(GltfDir, Uri);
-			const FString Dst = FPaths::Combine(TexturesDir, FPaths::GetCleanFilename(Uri));
-			if (IFileManager::Get().Copy(*Dst, *Src, true))
-			{
-				OutRelPath = FPaths::Combine("textures", FPaths::GetCleanFilename(Dst));
-				return true;
-			}
-		}
-		return false;
-	}
-
-	void WriteMaterialFromGltf(const cgltf_material* Mat, const FString& InName, const FString& MaterialsDir,
-		const FString& GltfDir, FGltfImportedMaterial& OutDesc)
+	/** A slot's material from a glTF material (metallic-roughness PBR; null: glTF's default material). */
+	void AddMaterialSlot(const cgltf_material* Mat, const FString& GltfDir, FMeshData& Mesh)
 	{
 		FMaterial M{};
 		M.Albedo = FVector(0.8f, 0.8f, 0.8f);
@@ -75,8 +48,6 @@ namespace
 		M.Roughness = 0.5f;
 		FString BaseMap;
 		FString NormalMap;
-		const FString TexturesDir = FPaths::Combine(MaterialsDir, "Textures");
-
 		if (Mat != nullptr && Mat->has_pbr_metallic_roughness)
 		{
 			const cgltf_pbr_metallic_roughness& Pbr = Mat->pbr_metallic_roughness;
@@ -84,28 +55,21 @@ namespace
 			M.Alpha = Pbr.base_color_factor[3];
 			M.Metallic = Pbr.metallic_factor;
 			M.Roughness = FMath::Clamp(Pbr.roughness_factor, 0.04f, 1.0f);
-			if (Pbr.base_color_texture.texture != nullptr)
-			{
-				(void)CopyTextureUri(Pbr.base_color_texture.texture->image, GltfDir, TexturesDir, BaseMap);
-			}
+			BaseMap = GetImagePath(Pbr.base_color_texture, GltfDir);
 		}
-		if (Mat != nullptr && Mat->normal_texture.texture != nullptr)
+		if (Mat != nullptr)
 		{
-			(void)CopyTextureUri(Mat->normal_texture.texture->image, GltfDir, TexturesDir, NormalMap);
+			NormalMap = GetImagePath(Mat->normal_texture, GltfDir);
 		}
-
-		const FString AssetName = "M_" + SanitizeName(InName);
-		const FString FileName = AssetName + ".lmat";
-		IFileManager::Get().MakeDirectory(*MaterialsDir, true);
-		(void)SaveLeonMaterialFile(FPaths::Combine(MaterialsDir, FileName), AssetName, M, BaseMap, NormalMap);
-		OutDesc.Name = AssetName;
-		OutDesc.LmatRelativePath = FPaths::Combine("materials", FileName);
+		Mesh.Materials.Add(M);
+		Mesh.MaterialSlotNames.Add(Mat != nullptr ? FString(Mat->name != nullptr ? Mat->name : "Material") : FString());
+		Mesh.AlbedoMapPaths.Add(BaseMap);
+		Mesh.NormalMapPaths.Add(NormalMap);
 	}
 
 } // namespace
 
-bool LoadStaticMeshFromGltf(const FString& Path, FMeshData& Out, const FString& MaterialsOutDir,
-	TArray<FGltfImportedMaterial>* OutMaterials, FString& OutError)
+bool LoadStaticMeshFromGltf(const FString& Path, FMeshData& Out, FString& OutError)
 {
 	Out = FMeshData();
 	OutError.Empty();
@@ -212,16 +176,7 @@ bool LoadStaticMeshFromGltf(const FString& Path, FMeshData& Out, const FString& 
 			Sm.MaterialIndex = Mesh.Materials.Num();
 			Mesh.Submeshes.Add(Sm);
 
-			Mesh.Materials.Add(FMaterial{});
-			Mesh.AlbedoMapPaths.AddDefaulted();
-
-			if (!MaterialsOutDir.IsEmpty() && OutMaterials != nullptr && Prim.material != nullptr)
-			{
-				FGltfImportedMaterial Desc;
-				const ANSICHAR* MatName = Prim.material->name != nullptr ? Prim.material->name : "Material";
-				WriteMaterialFromGltf(Prim.material, MatName, MaterialsOutDir, GltfDir, Desc);
-				OutMaterials->Add(Desc);
-			}
+			AddMaterialSlot(Prim.material, GltfDir, Mesh);
 
 			BaseVertex += static_cast<uint32>(Vcount);
 		}

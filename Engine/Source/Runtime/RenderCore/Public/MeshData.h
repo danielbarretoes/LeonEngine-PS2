@@ -12,15 +12,24 @@ struct RENDERCORE_API FMeshSection
 	int32 MaterialIndex = 0;
 };
 
-/** CPU-side mesh asset (no OpenGL handles). */
+/**
+ * CPU-side mesh data (no OpenGL handles): what the importers (MeshUtilities) read from a source file and UStaticMesh
+ * builds from. Materials and the arrays after it are parallel, one entry per material slot; the static mesh factories
+ * make a UMaterial asset of each named slot.
+ */
 struct RENDERCORE_API FMeshData
 {
 	TArray<FVertex> Vertices;
 	TArray<uint32> Indices;
 	TArray<FMeshSection> Submeshes;
+	/** Each slot's material values from the source (the OBJ `.mtl`, the glTF material). */
 	TArray<FMaterial> Materials;
-	/** Parallel to Materials: each slot's diffuse map (a content path) the mesh loader loads. */
+	/** Each slot's material name in the source; empty for a slot the source gives no material. */
+	TArray<FString> MaterialSlotNames;
+	/** Each slot's base colour map: the image file the source names (absolute), or empty. */
 	TArray<FString> AlbedoMapPaths;
+	/** Each slot's normal map: the image file the source names (absolute), or empty. */
+	TArray<FString> NormalMapPaths;
 
 	[[nodiscard]] bool IsEmpty() const
 	{

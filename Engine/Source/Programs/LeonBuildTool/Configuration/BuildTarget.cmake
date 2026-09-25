@@ -501,6 +501,16 @@ function(leon_build_target TargetName)
 	set(Roots Core ${LaunchModule} ${ExtraModules} ${PluginModules})
 	list(REMOVE_DUPLICATES Roots)
 	leon_resolve_closure("target ${TargetName}" Closure ${Roots})
+	# Editor modules are edit-time code (UE: a game target cannot depend on an editor module): programs (LeonCook,
+	# LeonAutomationTests) may link them, games never do.
+	if(Type STREQUAL "Game")
+		foreach(Module IN LISTS Closure)
+			leon_module_get(${Module} TYPE ModuleType)
+			if(ModuleType STREQUAL "Editor")
+				message(FATAL_ERROR "LeonBuildTool: game target ${TargetName} depends on the editor module '${Module}'")
+			endif()
+		endforeach()
+	endif()
 
 	# Every module except the launch module becomes a library.
 	set(LEON_CURRENT_LAUNCH_MODULE ${LaunchModule})
@@ -516,7 +526,7 @@ function(leon_build_target TargetName)
 	foreach(Module IN LISTS Ordered)
 		leon_module_get(${Module} TYPE ModuleType)
 		leon_module_get(${Module} NO_MODULE_IMPLEMENTATION NoImpl)
-		if(ModuleType MATCHES "^(Runtime|Developer)$" AND NOT NoImpl)
+		if(ModuleType MATCHES "^(Runtime|Developer|Editor)$" AND NOT NoImpl)
 			list(APPEND Implemented ${Module})
 		endif()
 	endforeach()
@@ -564,7 +574,7 @@ function(leon_build_target TargetName)
 		endif()
 		if(Reflected AND NOT Module IN_LIST Implemented)
 			message(FATAL_ERROR "LeonBuildTool: module '${Module}' has reflected types but no entry in the statically "
-				"linked module table of ${TargetName}: reflected modules must be Runtime or Developer modules with "
+				"linked module table of ${TargetName}: reflected modules must be Runtime, Developer or Editor modules with "
 				"IMPLEMENT_MODULE")
 		endif()
 	endforeach()

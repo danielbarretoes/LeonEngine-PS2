@@ -2,60 +2,67 @@
 
 #include "FbxStaticMesh.h"
 #include "GltfImport.h"
-#include "LeonMeshFormat.h"
 #include "MeshData.h"
 #include "MeshUtilitiesLog.h"
+#include "Misc/Paths.h"
 #include "ObjImport.h"
 
 DEFINE_LOG_CATEGORY(LogMeshUtilities);
 
-bool FStaticMeshBuilder::CookFromObj(const FString& ObjPath, const FString& OutMeshPath, FString& OutError)
+bool FStaticMeshBuilder::IsSupportedExtension(const FString& Extension)
 {
-	FMeshData Data = LoadObj(ObjPath);
-	if (Data.IsEmpty())
+	FString Ext = Extension;
+	Ext.RemoveFromStart(TEXT("."));
+	return Ext == TEXT("obj") || Ext == TEXT("fbx") || Ext == TEXT("gltf") || Ext == TEXT("glb");
+}
+
+bool FStaticMeshBuilder::BuildFromFile(const FString& SourcePath, FMeshData& OutData, FString& OutError)
+{
+	const FString Extension = FPaths::GetExtension(SourcePath);
+	if (Extension == TEXT("obj"))
+	{
+		return BuildFromObj(SourcePath, OutData, OutError);
+	}
+	if (Extension == TEXT("fbx"))
+	{
+		return BuildFromFbx(SourcePath, OutData, OutError);
+	}
+	if ((Extension == TEXT("gltf")) || (Extension == TEXT("glb")))
+	{
+		return BuildFromGltf(SourcePath, OutData, OutError);
+	}
+	OutError = "Not a mesh source (obj, fbx, gltf, glb): " + SourcePath;
+	return false;
+}
+
+bool FStaticMeshBuilder::BuildFromObj(const FString& ObjPath, FMeshData& OutData, FString& OutError)
+{
+	OutData = LoadObj(ObjPath);
+	if (OutData.IsEmpty())
 	{
 		OutError = "Failed to load OBJ: " + ObjPath;
 		return false;
 	}
-	ComputeTangents(Data, EMeshDataBasis::Engine);
-	if (!SaveLeonMeshFile(OutMeshPath, Data))
-	{
-		OutError = "Failed to write .lmesh: " + OutMeshPath;
-		return false;
-	}
+	ComputeTangents(OutData, EMeshDataBasis::Engine);
 	OutError.Empty();
 	return true;
 }
 
-bool FStaticMeshBuilder::CookFromFbx(const FString& FbxPath, const FString& OutMeshPath, FString& OutError)
+bool FStaticMeshBuilder::BuildFromFbx(const FString& FbxPath, FMeshData& OutData, FString& OutError)
 {
-	FMeshData Data;
-	if (!LoadStaticMeshFromFbx(FbxPath, Data))
+	if (!LoadStaticMeshFromFbx(FbxPath, OutData))
 	{
 		OutError = "Failed to load FBX: " + FbxPath;
 		return false;
 	}
-	if (!SaveLeonMeshFile(OutMeshPath, Data))
-	{
-		OutError = "Failed to write .lmesh: " + OutMeshPath;
-		return false;
-	}
 	OutError.Empty();
 	return true;
 }
 
-bool FStaticMeshBuilder::CookFromGltf(
-	const FString& GltfPath, const FString& OutMeshPath, const FString& MaterialsOutDir, FString& OutError)
+bool FStaticMeshBuilder::BuildFromGltf(const FString& GltfPath, FMeshData& OutData, FString& OutError)
 {
-	FMeshData Data;
-	TArray<FGltfImportedMaterial> Materials;
-	if (!LoadStaticMeshFromGltf(GltfPath, Data, MaterialsOutDir, &Materials, OutError))
+	if (!LoadStaticMeshFromGltf(GltfPath, OutData, OutError))
 	{
-		return false;
-	}
-	if (!SaveLeonMeshFile(OutMeshPath, Data))
-	{
-		OutError = "Failed to write .lmesh: " + OutMeshPath;
 		return false;
 	}
 	OutError.Empty();

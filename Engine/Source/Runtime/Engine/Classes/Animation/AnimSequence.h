@@ -6,6 +6,8 @@
 #include "SkeletalAnimation.h"
 #include "AnimSequence.generated.h"
 
+class UAssetImportData;
+
 /**
  * An animation clip asset (UE: UAnimSequence): one track of keys per bone of its skeleton, sampled at FrameRate. Leon's
  * keys are model-space bone matrices (FRawAnimSequenceTrack), blended linearly between frames; UE compresses local
@@ -26,6 +28,13 @@ public:
 	/** Keys per second (Leon; UE 4.27 derives the rate from NumFrames and SequenceLength). */
 	UPROPERTY()
 	float FrameRate = 30.0f;
+
+#if WITH_EDITORONLY_DATA
+	/** Where the clip was imported from: made by the factory that imported it, dropped by the cook (UE:
+	 * AssetImportData). */
+	UPROPERTY(Instanced)
+	UAssetImportData* AssetImportData = nullptr;
+#endif
 
 	/** Replaces the tracks, one per bone, and sets NumFrames from the first (Leon; UE's factories fill them). */
 	void SetRawAnimationData(TArray<FRawAnimSequenceTrack> InTracks);

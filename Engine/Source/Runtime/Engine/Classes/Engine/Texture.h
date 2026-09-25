@@ -6,6 +6,7 @@
 #include "UObject/Object.h"
 #include "Texture.generated.h"
 
+class UAssetImportData;
 class UTexture;
 
 /** One mip level of a texture (UE: FTexture2DMipMap, TextureResource.h): its size and its texels as bulk data. */
@@ -59,6 +60,13 @@ public:
 	 */
 	UPROPERTY()
 	uint8 SRGB : 1;
+
+#if WITH_EDITORONLY_DATA
+	/** Where the texture was imported from: made by the factory that imported it, dropped by the cook (UE:
+	 * AssetImportData). */
+	UPROPERTY(Instanced)
+	UAssetImportData* AssetImportData = nullptr;
+#endif
 
 	/** Width of the texture in texels (UE: GetSurfaceWidth). */
 	[[nodiscard]] virtual float GetSurfaceWidth() const

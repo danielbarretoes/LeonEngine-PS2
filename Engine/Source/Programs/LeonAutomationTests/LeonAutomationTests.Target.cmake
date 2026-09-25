@@ -4,7 +4,7 @@
 leon_target(LeonAutomationTests TYPE Program
 	PLATFORMS Desktop
 	EXTRA_MODULE_NAMES Core CoreUObject Json Projects RenderCore Renderer UMG PhysicsCore AnimationCore AudioMixer
-		Engine AIModule MeshUtilities Cooker
+		Engine AIModule MeshUtilities LeonEd
 	ENABLE_PLUGINS JoltPhysics
 	COLLECT_AUTOMATION_TESTS
 )

@@ -264,14 +264,11 @@ FMeshData LoadObjSourceSpace(const FString& Path)
 		for (const tinyobj::material_t& Src : TinyMaterials)
 		{
 			Data.Materials.Add(MaterialFromTiny(Src));
-			if (!Src.diffuse_texname.empty())
-			{
-				Data.AlbedoMapPaths.Add(FPaths::Combine(ObjDir, Src.diffuse_texname.c_str()));
-			}
-			else
-			{
-				Data.AlbedoMapPaths.AddDefaulted();
-			}
+			Data.MaterialSlotNames.Add(FString(Src.name.c_str()));
+			Data.AlbedoMapPaths.Add(
+				Src.diffuse_texname.empty() ? FString() : FPaths::Combine(ObjDir, Src.diffuse_texname.c_str()));
+			Data.NormalMapPaths.Add(
+				Src.normal_texname.empty() ? FString() : FPaths::Combine(ObjDir, Src.normal_texname.c_str()));
 		}
 	}
 
@@ -302,7 +299,9 @@ FMeshData LoadObjSourceSpace(const FString& Path)
 	if (Data.Materials.Num() == 0)
 	{
 		Data.Materials.Add(FMaterial{});
+		Data.MaterialSlotNames.AddDefaulted();
 		Data.AlbedoMapPaths.AddDefaulted();
+		Data.NormalMapPaths.AddDefaulted();
 		for (FMeshSection& Sub : Data.Submeshes)
 		{
 			Sub.MaterialIndex = 0;

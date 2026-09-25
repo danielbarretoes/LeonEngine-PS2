@@ -20,12 +20,15 @@ function(_leon_is_skipped_path Path OutVar)
 	endif()
 endfunction()
 
-# Default module type from its folder (Source/Runtime → Runtime, …); project modules are Runtime.
+# Default module type from its folder (Source/Runtime → Runtime, Source/Editor → Editor, …); project modules are
+# Runtime.
 function(_leon_default_module_type File OutVar)
 	if(File MATCHES "/Source/ThirdParty/")
 		set(${OutVar} External PARENT_SCOPE)
 	elseif(File MATCHES "/Source/Developer/")
 		set(${OutVar} Developer PARENT_SCOPE)
+	elseif(File MATCHES "/Source/Editor/")
+		set(${OutVar} Editor PARENT_SCOPE)
 	elseif(File MATCHES "/Source/Programs/")
 		set(${OutVar} Program PARENT_SCOPE)
 	else()

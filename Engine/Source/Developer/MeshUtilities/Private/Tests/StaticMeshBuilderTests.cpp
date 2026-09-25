@@ -1,7 +1,7 @@
 #include "CoreMinimal.h"
 #include "FbxStaticMesh.h"
 #include "HAL/FileManager.h"
-#include "LeonMeshFormat.h"
+#include "LegacyCoordinateConversion.h"
 #include "MeshData.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/FileHelper.h"
@@ -18,31 +18,6 @@ namespace
 							   "vt 0 0\nvt 1 0\nvt 1 1\nvt 0 1\n"
 							   "vn 0 0 1\nvn 0 1 0\n"
 							   "f 1/1/1 2/2/1 3/3/1\nf 1/1/1 3/3/1 4/4/1\nf 1/2/2 5/1/2 2/3/2\n";
-
-	/** The version field of a .lmesh (after the magic). */
-	[[nodiscard]] bool ReadLeonMeshVersion(const FString& Path, uint32& OutVersion)
-	{
-		TArray<uint8> Bytes;
-		if (!FFileHelper::LoadFileToArray(Bytes, *Path) || Bytes.Num() < 8)
-		{
-			return false;
-		}
-		FMemory::Memcpy(&OutVersion, Bytes.GetData() + 4, sizeof(uint32));
-		return true;
-	}
-
-	/** SaveLeonMeshFile with the version field set to 1: the file the cooker wrote before it converted. */
-	[[nodiscard]] bool SaveLegacyLeonMeshFile(const FString& Path, const FMeshData& LegacyData)
-	{
-		TArray<uint8> Bytes;
-		if (!SaveLeonMeshFile(Path, LegacyData) || !FFileHelper::LoadFileToArray(Bytes, *Path) || Bytes.Num() < 8)
-		{
-			return false;
-		}
-		const uint32 LegacyVersion = 1;
-		FMemory::Memcpy(Bytes.GetData() + 4, &LegacyVersion, sizeof(uint32));
-		return FFileHelper::SaveArrayToFile(Bytes, *Path);
-	}
 
 	/** Positions, normals, tangents (w too), UVs and indices within Tolerance. */
 	void CheckSameMesh(
@@ -121,14 +96,14 @@ namespace
 	}
 } // namespace
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FStaticMeshBuilderCookMatchesLegacyTest,
-	"System.MeshUtilities.StaticMeshBuilder.CookMatchesLegacy",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FStaticMeshBuilderImportMatchesLegacyTest,
+	"System.MeshUtilities.StaticMeshBuilder.ImportMatchesLegacy",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-bool FStaticMeshBuilderCookMatchesLegacyTest::RunTest(const FString& Parameters)
+bool FStaticMeshBuilderImportMatchesLegacyTest::RunTest(const FString& Parameters)
 {
-	// Cooked to version 2 (converted at import) and loaded, an OBJ is the mesh the legacy cook gave: imported in its
-	// own space, tangents in the legacy basis, written as version 1 and converted at load.
+	// Built from an OBJ (converted at import), a mesh is the one the legacy cook gave: imported in its own space,
+	// tangents in the legacy basis, then converted as a version 1 .lmesh was when it loaded.
 	const FString Dir = FPaths::EngineIntermediateDir();
 	const FString UvPath = FPaths::CreateTempFilename(*Dir, "leon_test_uv", ".obj");
 	if (!TestTrue("UV OBJ written", FFileHelper::SaveStringToFile(UvObj, *UvPath)))
@@ -137,36 +112,27 @@ bool FStaticMeshBuilderCookMatchesLegacyTest::RunTest(const FString& Parameters)
 	}
 	const FString Sources[] = {
 		FPaths::Combine(FPaths::EngineSourceDir(), "Developer/MeshUtilities/Private/Tests/Fixtures/Cube.obj"), UvPath};
-	const FString V2Path = FPaths::CreateTempFilename(*Dir, "leon_test_v2", ".lmesh");
-	const FString V1Path = FPaths::CreateTempFilename(*Dir, "leon_test_v1", ".lmesh");
 	for (const FString& Source : Sources)
 	{
 		const FString Name = FPaths::GetCleanFilename(Source);
 		FString Error;
-		uint32 Version = 0;
-		FMeshData Cooked;
-		if (!TestTrue(*(Name + ": cooked"), FStaticMeshBuilder::CookFromObj(Source, V2Path, Error)) ||
-			!TestTrue(*(Name + ": version read"), ReadLeonMeshVersion(V2Path, Version)) ||
-			!TestEqual(*(Name + ": version"), Version, 2u) ||
-			!TestTrue(*(Name + ": v2 loaded"), LoadLeonMeshFile(V2Path, Cooked)))
+		FMeshData Built;
+		if (!TestTrue(*(Name + ": built"), FStaticMeshBuilder::BuildFromFile(Source, Built, Error)))
 		{
 			continue;
 		}
-
 		FMeshData Legacy = LoadObjSourceSpace(Source);
 		ComputeTangents(Legacy, EMeshDataBasis::LegacyYUp);
-		FMeshData LegacyLoaded;
-		if (!TestTrue(*(Name + ": v1 written"), SaveLegacyLeonMeshFile(V1Path, Legacy)) ||
-			!TestTrue(*(Name + ": v1 loaded"), LoadLeonMeshFile(V1Path, LegacyLoaded)))
-		{
-			continue;
-		}
-		CheckSameMesh(*this, Name, Cooked, LegacyLoaded, 1.0e-4f);
-		TestEqual(*(Name + ": submeshes"), Cooked.Submeshes.Num(), LegacyLoaded.Submeshes.Num());
+		FLegacyCoordinateConversion::ConvertMeshData(Legacy);
+		CheckSameMesh(*this, Name, Built, Legacy, 1.0e-4f);
+		TestEqual(*(Name + ": submeshes"), Built.Submeshes.Num(), Legacy.Submeshes.Num());
+		TestEqual(*(Name + ": one slot per material"), Built.MaterialSlotNames.Num(), Built.Materials.Num());
 	}
+	FString Error;
+	FMeshData Unused;
+	TestFalse("Not a mesh source", FStaticMeshBuilder::BuildFromFile(UvPath + TEXT(".txt"), Unused, Error));
+	TestTrue("Explained", Error.Contains(TEXT("Not a mesh source")));
 	IFileManager::Get().Delete(*UvPath);
-	IFileManager::Get().Delete(*V2Path);
-	IFileManager::Get().Delete(*V1Path);
 	return true;
 }
 

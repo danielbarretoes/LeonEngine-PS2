@@ -7,6 +7,7 @@
 #include "UObject/Object.h"
 #include "StaticMesh.generated.h"
 
+class UAssetImportData;
 class UBodySetup;
 class UMaterialInterface;
 
@@ -56,6 +57,13 @@ public:
 	/** The collision (UE: BodySetup): made by BuildFromMeshData, an inner object of the mesh. */
 	UPROPERTY()
 	UBodySetup* BodySetup = nullptr;
+
+#if WITH_EDITORONLY_DATA
+	/** Where the mesh was imported from: made by the factory that imported it, dropped by the cook (UE:
+	 * AssetImportData). */
+	UPROPERTY(Instanced)
+	UAssetImportData* AssetImportData = nullptr;
+#endif
 
 	/**
 	 * Builds the mesh from Data (Leon; UE builds from its source models): the vertices, indices and sections (one

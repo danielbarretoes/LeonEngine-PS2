@@ -1,8 +1,8 @@
 # LeonBuildTool module rules (UnrealBuildTool: ModuleRules / <Module>.Build.cs).
 #
 #   leon_module(<Name>
-#     [TYPE Runtime|Developer|Program|External]     # default from folder (Source/Runtime → Runtime, …)
-#     [PLATFORMS <platform-or-group>...]            # allow-list; empty = every platform
+#     [TYPE Runtime|Developer|Editor|Program|External] # default from folder (Source/Runtime → Runtime, …)
+#     [PLATFORMS <platform-or-group>...]            # allow-list; empty = every platform (Editor: Desktop)
 #     [CXX_STANDARD <n>]                            # default: lowest standard of the allowed platforms
 #     [NO_MODULE_IMPLEMENTATION]                    # no IMPLEMENT_MODULE (Program/External imply it)
 #     [PUBLIC_DEPENDENCIES ...] [PRIVATE_DEPENDENCIES ...] [CIRCULAR_DEPENDENCIES ...]
@@ -65,8 +65,18 @@ function(leon_module Name)
 	if(NOT M_TYPE)
 		set(M_TYPE "${_LEON_DEFAULT_MODULE_TYPE}")
 	endif()
-	if(NOT M_TYPE MATCHES "^(Runtime|Developer|Program|External)$")
-		message(FATAL_ERROR "leon_module(${Name}): TYPE must be Runtime, Developer, Program or External (got '${M_TYPE}')")
+	if(NOT M_TYPE MATCHES "^(Runtime|Developer|Editor|Program|External)$")
+		message(FATAL_ERROR
+			"leon_module(${Name}): TYPE must be Runtime, Developer, Editor, Program or External (got '${M_TYPE}')")
+	endif()
+	# Editor modules (UE: Engine/Source/Editor, TargetType.Editor only) are edit-time code: desktop only, and never in
+	# a game target (checked in leon_build_target).
+	if(M_TYPE STREQUAL "Editor")
+		if(NOT M_PLATFORMS)
+			set(M_PLATFORMS Desktop)
+		elseif(NOT M_PLATFORMS STREQUAL "Desktop")
+			message(FATAL_ERROR "leon_module(${Name}): Editor modules build for PLATFORMS Desktop only")
+		endif()
 	endif()
 
 	set_property(GLOBAL APPEND PROPERTY LEON_MODULES ${Name})

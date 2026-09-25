@@ -6,6 +6,7 @@
 #include "UObject/Object.h"
 #include "SkeletalMesh.generated.h"
 
+class UAssetImportData;
 class UMaterialInterface;
 class USkeleton;
 
@@ -53,6 +54,13 @@ public:
 	/** The material of each slot (UE: Materials). */
 	UPROPERTY()
 	TArray<FSkeletalMaterial> Materials;
+
+#if WITH_EDITORONLY_DATA
+	/** Where the mesh was imported from: made by the factory that imported it, dropped by the cook (UE:
+	 * AssetImportData). */
+	UPROPERTY(Instanced)
+	UAssetImportData* AssetImportData = nullptr;
+#endif
 
 	/**
 	 * Takes the geometry and the bounds of imported data (Leon; UE builds from its import data), skinned to
