@@ -1,0 +1,1 @@
+ErrorWrongGeneratedInclude/Right.h(3): error: Expected '#include "Right.generated.h"', found 'Wrong.generated.h'

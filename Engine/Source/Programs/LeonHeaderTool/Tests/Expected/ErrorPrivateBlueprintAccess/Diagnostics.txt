@@ -1,0 +1,1 @@
+ErrorPrivateBlueprintAccess/PrivateAccess.h(14): error: BlueprintReadWrite should not be used on private members

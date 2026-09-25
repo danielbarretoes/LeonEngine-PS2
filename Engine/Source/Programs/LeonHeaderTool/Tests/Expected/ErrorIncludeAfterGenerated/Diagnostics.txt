@@ -1,0 +1,1 @@
+ErrorIncludeAfterGenerated/IncludeAfter.h(5): error: #include found after .generated.h file - the .generated.h file should always be the last #include in a header

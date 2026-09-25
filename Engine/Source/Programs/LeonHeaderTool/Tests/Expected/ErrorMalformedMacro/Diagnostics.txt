@@ -1,0 +1,1 @@
+ErrorMalformedMacro/Malformed.h(11): error: Unexpected 'Category' in UPROPERTY(...); expected ',' or ')'

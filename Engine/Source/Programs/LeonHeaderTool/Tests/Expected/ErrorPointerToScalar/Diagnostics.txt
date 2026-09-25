@@ -1,0 +1,1 @@
+ErrorPointerToScalar/PointerToScalar.h(12): error: Inappropriate '*' on variable of type 'int32', cannot have an exposed pointer to this type.

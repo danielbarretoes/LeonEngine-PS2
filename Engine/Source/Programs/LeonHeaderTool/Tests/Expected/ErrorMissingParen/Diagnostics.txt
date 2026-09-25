@@ -1,0 +1,1 @@
+ErrorMissingParen/MissingParen.h(5): error: Expected '(' after UCLASS

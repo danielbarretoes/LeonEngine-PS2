@@ -1,0 +1,1 @@
+ErrorPropertyInIfBlock/IfBlock.h(12): error: UPROPERTY must not be inside preprocessor blocks, except for WITH_EDITORONLY_DATA

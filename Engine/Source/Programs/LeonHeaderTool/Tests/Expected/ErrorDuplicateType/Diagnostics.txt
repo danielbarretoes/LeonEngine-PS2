@@ -1,0 +1,1 @@
+ErrorDuplicateType/Second.h(6): error: Type 'UDuplicate' is already defined in ErrorDuplicateType/First.h(6)

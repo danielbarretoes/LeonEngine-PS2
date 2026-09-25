@@ -1,0 +1,1 @@
+ErrorMissingGeneratedInclude/MissingInclude.h(5): error: Expected an include at the top of the header: '#include "MissingInclude.generated.h"'

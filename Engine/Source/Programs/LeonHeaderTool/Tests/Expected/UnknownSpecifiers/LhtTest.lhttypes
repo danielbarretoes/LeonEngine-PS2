@@ -1,0 +1,5 @@
+# LeonHeaderTool type index: the reflected types of module LhtTest (generated; do not edit).
+Module=LhtTest
+Enum=ESpecifierTest|EnumClass|uint8
+Struct=FSpecifierStruct
+Class=USpecifierObject

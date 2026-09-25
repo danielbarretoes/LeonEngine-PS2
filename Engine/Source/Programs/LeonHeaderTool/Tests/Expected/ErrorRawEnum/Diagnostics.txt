@@ -1,0 +1,1 @@
+ErrorRawEnum/RawEnum.h(19): error: You cannot use the raw enum name as a type for member variables, instead use TEnumAsByte or a C++11 enum class with an explicit underlying type.

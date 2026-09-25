@@ -1,0 +1,7 @@
+# LeonHeaderTool type index: the reflected types of module Engine (generated; do not edit).
+Module=Engine
+Class=AActor
+Class=UStaticMesh
+Struct=FHitResult
+Enum=ECollisionChannel|Regular|
+Enum=EMovementMode|EnumClass|uint8

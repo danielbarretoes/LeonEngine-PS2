@@ -1,0 +1,5 @@
+UnknownSpecifiers/Specifiers.h(7): warning: Unknown enum specifier 'Shiny' (ignored)
+UnknownSpecifiers/Specifiers.h(13): warning: Unknown struct specifier 'Glittery' (ignored)
+UnknownSpecifiers/Specifiers.h(19): warning: Unknown class specifier 'Sparkly' (ignored)
+UnknownSpecifiers/Specifiers.h(25): warning: Unknown property specifier 'FancyFlag' (ignored)
+UnknownSpecifiers/Specifiers.h(28): warning: Unknown function specifier 'Mystery' (ignored)

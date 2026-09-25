@@ -1,0 +1,1 @@
+ErrorUnterminatedMacro/Unterminated.h(5): error: Missing ')' to close UENUM(

@@ -1,0 +1,1 @@
+ErrorUnsupportedSpecifier/Replicated.h(11): error: Property specifier 'Replicated' is not supported by LeonHeaderTool (no replication)

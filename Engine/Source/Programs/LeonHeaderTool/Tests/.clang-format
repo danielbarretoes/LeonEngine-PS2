@@ -1,0 +1,3 @@
+# Golden test data: inputs keep their exact line numbers and expected files are LeonHeaderTool's verbatim output.
+DisableFormat: true
+SortIncludes: Never

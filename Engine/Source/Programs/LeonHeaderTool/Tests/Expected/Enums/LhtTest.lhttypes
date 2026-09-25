@@ -1,0 +1,7 @@
+# LeonHeaderTool type index: the reflected types of module LhtTest (generated; do not edit).
+Module=LhtTest
+Enum=ETeam|EnumClass|uint8
+Enum=EWeaponFlags|EnumClass|int32
+Enum=EUntyped|EnumClass|
+Enum=ERoundState|Regular|
+Class=UEnumsObject

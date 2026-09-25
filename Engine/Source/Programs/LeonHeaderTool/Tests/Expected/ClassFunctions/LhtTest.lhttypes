@@ -1,0 +1,6 @@
+# LeonHeaderTool type index: the reflected types of module LhtTest (generated; do not edit).
+Module=LhtTest
+Struct=FHitInfo
+Enum=EFireMode|EnumClass|uint8
+Enum=ELegacyChannel|Regular|
+Class=UFunctionsObject

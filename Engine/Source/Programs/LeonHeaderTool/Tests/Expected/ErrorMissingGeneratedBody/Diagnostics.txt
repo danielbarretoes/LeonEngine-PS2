@@ -1,0 +1,1 @@
+ErrorMissingGeneratedBody/MissingBody.h(6): error: Expected a GENERATED_BODY() at the start of class 'UMissingBody'

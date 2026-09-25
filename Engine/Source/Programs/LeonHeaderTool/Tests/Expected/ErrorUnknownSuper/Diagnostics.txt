@@ -1,0 +1,1 @@
+ErrorUnknownSuper/UnknownSuper.h(6): error: Couldn't find parent type for 'UUnknownSuper' named 'UMissingBase' in current module or any module it depends on.

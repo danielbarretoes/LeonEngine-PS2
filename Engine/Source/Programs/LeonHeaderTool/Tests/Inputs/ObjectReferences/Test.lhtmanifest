@@ -1,0 +1,3 @@
+# A game module that depends on a reflected Engine module (its type index).
+Module=Game
+Dependency=Deps/Engine.lhttypes
