@@ -813,6 +813,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 			OverlayDebugDraw.Flush(Camera.ViewMatrix() * GetProjectionGL(Camera));
 		}
 		OverlayDebugDraw.Clear();
+		DrawAxesGizmo(Camera);
 		SkeletalDraws.Reset();
 		StaticDraws.Reset();
 		return;
@@ -1114,6 +1115,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 		OverlayDebugDraw.Flush(Camera.ViewMatrix() * GetProjectionGL(Camera));
 	}
 	OverlayDebugDraw.Clear();
+	DrawAxesGizmo(Camera);
 	SkeletalDraws.Reset();
 	StaticDraws.Reset();
 }
@@ -1436,4 +1438,31 @@ void FSceneRenderer::DrawDebug(
 	}
 
 	DebugDraw.Flush(Camera.ViewMatrix() * GetProjectionGL(Camera));
+}
+
+void FSceneRenderer::DrawAxesGizmo(const UCameraComponent& Camera)
+{
+	if (!bAxesGizmoEnabled || !DebugDraw.IsValid())
+	{
+		return;
+	}
+
+	/** Gizmo square and its distance from the bottom-left corner (framebuffer pixels). */
+	constexpr int32 GizmoSize = 96;
+	constexpr int32 GizmoMargin = 12;
+
+	glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
+
+	// World axes at the origin, in front of everything (they lie in the floor plane and would z-fight).
+	DebugDraw.Clear();
+	DebugDraw.AddAxes(FVector::ZeroVector);
+	glViewport(0, 0, FbWidth, FbHeight);
+	DebugDraw.Flush(Camera.ViewMatrix() * GetProjectionGL(Camera), /*bDepthTest=*/false);
+
+	DebugDraw.Clear();
+	DebugDraw.AddViewAxes(Camera.ViewMatrix());
+	glViewport(GizmoMargin, GizmoMargin, GizmoSize, GizmoSize);
+	DebugDraw.Flush(FMatrix::Identity, /*bDepthTest=*/false);
+	glViewport(0, 0, FbWidth, FbHeight);
+	DebugDraw.Clear();
 }

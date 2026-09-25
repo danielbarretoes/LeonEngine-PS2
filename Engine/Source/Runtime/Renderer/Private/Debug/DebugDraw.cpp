@@ -125,11 +125,41 @@ void FDebugDraw::AddAabb(const FVector& WorldMin, const FVector& WorldMax, const
 	}
 }
 
-void FDebugDraw::AddAxes(const FVector& Origin, float Size)
+void FDebugDraw::AddAxes(const FVector& Origin, float Length)
 {
-	AddLine(Origin, Origin + FVector(Size, 0.0f, 0.0f), FLinearColor(1.0f, 0.2f, 0.2f));
-	AddLine(Origin, Origin + FVector(0.0f, Size, 0.0f), FLinearColor(0.2f, 1.0f, 0.2f));
-	AddLine(Origin, Origin + FVector(0.0f, 0.0f, Size), FLinearColor(0.2f, 0.4f, 1.0f));
+	AddLine(Origin, Origin + FVector(Length, 0.0f, 0.0f), FLinearColor::Red);
+	AddLine(Origin, Origin + FVector(0.0f, Length, 0.0f), FLinearColor::Green);
+	AddLine(Origin, Origin + FVector(0.0f, 0.0f, Length), FLinearColor::Blue);
+}
+
+void FDebugDraw::AddAxes(const FTransform& Transform, float Length)
+{
+	const FVector Origin = Transform.GetLocation();
+	AddLine(Origin, Origin + (Transform.GetUnitAxis(EAxis::X) * Length), FLinearColor::Red);
+	AddLine(Origin, Origin + (Transform.GetUnitAxis(EAxis::Y) * Length), FLinearColor::Green);
+	AddLine(Origin, Origin + (Transform.GetUnitAxis(EAxis::Z) * Length), FLinearColor::Blue);
+}
+
+void FDebugDraw::AddViewAxes(const FMatrix& View, float Extent)
+{
+	struct FViewAxis
+	{
+		FVector ViewDirection;
+		FLinearColor Color;
+	};
+	FViewAxis Axes[3] = {
+		{FVector(View.TransformVector(FVector(1.0f, 0.0f, 0.0f))), FLinearColor::Red},
+		{FVector(View.TransformVector(FVector(0.0f, 1.0f, 0.0f))), FLinearColor::Green},
+		{FVector(View.TransformVector(FVector(0.0f, 0.0f, 1.0f))), FLinearColor::Blue},
+	};
+	// View z is forward (away from the viewer): larger z is farther, so it is drawn first.
+	StableSort(Axes, UE_ARRAY_COUNT(Axes),
+		[](const FViewAxis& A, const FViewAxis& B) { return A.ViewDirection.Z > B.ViewDirection.Z; });
+	for (const FViewAxis& Axis : Axes)
+	{
+		AddLine(FVector::ZeroVector, FVector(Axis.ViewDirection.X * Extent, Axis.ViewDirection.Y * Extent, 0.0f),
+			Axis.Color);
+	}
 }
 
 void FDebugDraw::AddLightFrustum(const FMatrix& LightSpace, const FLinearColor& InColor)
@@ -163,7 +193,7 @@ void FDebugDraw::AddLightFrustum(const FMatrix& LightSpace, const FLinearColor& 
 	}
 }
 
-void FDebugDraw::Flush(const FMatrix& ViewProjection) const
+void FDebugDraw::Flush(const FMatrix& ViewProjection, bool bDepthTest) const
 {
 	if (!IsValid() || Vertices.Num() == 0)
 	{
@@ -175,9 +205,16 @@ void FDebugDraw::Flush(const FMatrix& ViewProjection) const
 		GL_DYNAMIC_DRAW);
 
 	glDisable(GL_BLEND);
-	glDepthMask(GL_TRUE);
-	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LEQUAL);
+	if (bDepthTest)
+	{
+		glDepthMask(GL_TRUE);
+		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_LEQUAL);
+	}
+	else
+	{
+		glDisable(GL_DEPTH_TEST);
+	}
 
 	Shader.Bind();
 	Shader.SetMat4("uViewProjection", ViewProjection);
@@ -185,5 +222,6 @@ void FDebugDraw::Flush(const FMatrix& ViewProjection) const
 	glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(Vertices.Num()));
 	glBindVertexArray(0);
 
+	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);
 }

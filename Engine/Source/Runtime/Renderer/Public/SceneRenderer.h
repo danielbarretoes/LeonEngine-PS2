@@ -117,6 +117,20 @@ public:
 		return bDebugDrawEnabled;
 	}
 
+	/** 1 m world axes at the origin and a view orientation gizmo (X red, Y green, Z blue); off by default (F6). */
+	void SetAxesGizmoEnabled(bool bEnabled)
+	{
+		bAxesGizmoEnabled = bEnabled;
+	}
+	void ToggleAxesGizmo()
+	{
+		bAxesGizmoEnabled = !bAxesGizmoEnabled;
+	}
+	[[nodiscard]] bool IsAxesGizmoEnabled() const
+	{
+		return bAxesGizmoEnabled;
+	}
+
 	/** When false, DrawScene skips lit geometry / shadows / post (debug overlay still flushes). */
 	void SetSceneGeometryEnabled(bool bEnabled)
 	{
@@ -210,6 +224,11 @@ private:
 	void RenderShadowPass(const ULevel& Level, const FMatrix& LightSpace);
 	void RenderPlanarReflectionPass(const ULevel& Level, const UCameraComponent& Camera, float PlaneZ);
 	void DrawDebug(const ULevel& Level, const UCameraComponent& Camera, const FMatrix& LightSpace, bool bHasLightSpace);
+	/**
+	 * After the scene: the world origin axes with no depth test, then the view orientation gizmo in a fixed-size
+	 * square at the bottom-left of the draw framebuffer.
+	 */
+	void DrawAxesGizmo(const UCameraComponent& Camera);
 	void DrawSubMesh(const FShader& Shader, const UStaticMeshComponent& Object, int32 InSubMeshIndex,
 		const FMaterial& InMaterial, const FMatrix& InView, const FMatrix& InProjection, const FMatrix& LightSpace,
 		const FDrawOptions& Options) const;
@@ -269,5 +288,6 @@ private:
 	int32 FbHeight = 0;
 	FRHIFramebufferId DrawTargetFbo = InvalidFramebuffer;
 	bool bDebugDrawEnabled = false;
+	bool bAxesGizmoEnabled = false;
 	bool bSceneGeometryEnabled = true;
 };

@@ -12,8 +12,8 @@ class FGameApplication
 {
 public:
 	/**
-	 * Reads FCommandLine (-map=<.llev>, -nullrhi, -tick=<Hz>, -showstats) and the Engine config, initialises
-	 * the engine and enters the game mode. The map defaults to GameDefaultMap
+	 * Reads FCommandLine (-map=<.llev>, -nullrhi, -tick=<Hz>, -showstats, -AxesGizmo) and the Engine config,
+	 * initialises the engine and enters the game mode. The map defaults to GameDefaultMap
 	 * ([/Script/EngineSettings.GameMapsSettings] in the Engine config), then
 	 * Engine/Content/LevelTemplates/Starter.llev.
 	 */

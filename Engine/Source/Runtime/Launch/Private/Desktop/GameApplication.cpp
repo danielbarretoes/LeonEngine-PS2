@@ -103,6 +103,10 @@ bool FGameApplication::Init()
 	{
 		Engine->SetHudStatsVisible(true);
 	}
+	if (FParse::Param(CmdLine, "AxesGizmo") && !bHeadless)
+	{
+		Engine->GetRenderer().SetAxesGizmoEnabled(true);
+	}
 	if (!bHeadless)
 	{
 		WireDefaultInput(*Engine);

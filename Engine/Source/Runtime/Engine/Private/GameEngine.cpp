@@ -221,6 +221,7 @@ void UGameEngine::Start()
 	UE_LOG(LogEngine, Log, "Debug: F3 NavMesh grid (walkable / blocked)");
 	UE_LOG(LogEngine, Log, "Stats: F4 FPS / RAM / TRI overlay (off by default)");
 	UE_LOG(LogEngine, Log, "Shaders: F5 force-reload (also auto-reloads when files change)");
+	UE_LOG(LogEngine, Log, "Debug: F6 axes gizmo (X red, Y green, Z blue; world origin + view corner)");
 }
 
 bool UGameEngine::Tick(float DeltaTime, const FUpdateCallback& OnUpdate, const FPreInputCallback& OnPreInput,
@@ -400,9 +401,9 @@ void UGameEngine::UpdateHudStats(float DeltaTime)
 	Overlay.SetText(FString());
 	Overlay.SetCenterText(FString());
 
-	Overlay.SetBottomLeftText(
-		FString::Printf("F1 AABB %s\nF2 Coll+Trace %s\nF3 NavMesh %s", Renderer.IsDebugDrawEnabled() ? "ON" : "OFF",
-			bCollisionDebugEnabled ? "ON" : "OFF", bNavMeshDebugEnabled ? "ON" : "OFF"));
+	Overlay.SetBottomLeftText(FString::Printf("F1 AABB %s\nF2 Coll+Trace %s\nF3 NavMesh %s\nF6 Axes %s",
+		Renderer.IsDebugDrawEnabled() ? "ON" : "OFF", bCollisionDebugEnabled ? "ON" : "OFF",
+		bNavMeshDebugEnabled ? "ON" : "OFF", Renderer.IsAxesGizmoEnabled() ? "ON" : "OFF"));
 }
 
 void UGameEngine::HandleInput(float DeltaTime)
@@ -460,6 +461,14 @@ void UGameEngine::HandleInput(float DeltaTime)
 		}
 	}
 	bReloadKeyWasDown = bF5Down;
+
+	const bool bF6Down = InputWindow.IsKeyPressed(EKeys::F6);
+	if (bF6Down && !bAxesGizmoKeyWasDown)
+	{
+		Renderer.ToggleAxesGizmo();
+		UE_LOG(LogEngine, Log, "Axes gizmo: %s", Renderer.IsAxesGizmoEnabled() ? "on" : "off");
+	}
+	bAxesGizmoKeyWasDown = bF6Down;
 
 	constexpr float KeyboardOrbitSpeed = 90.0f;
 	if (bKeyboardOrbitEnabled)

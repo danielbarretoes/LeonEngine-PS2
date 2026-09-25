@@ -324,6 +324,7 @@ private:
 	bool bNavMeshDebugEnabled = false;
 	bool bNavMeshDebugKeyWasDown = false;
 	bool bReloadKeyWasDown = false;
+	bool bAxesGizmoKeyWasDown = false;
 	bool bShowHudStats = false;
 	bool bHudStatsKeyWasDown = false;
 	double LastMouseX = 0.0;
