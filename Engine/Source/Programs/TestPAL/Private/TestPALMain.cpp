@@ -8,10 +8,13 @@
 #include "Misc/Parse.h"
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
+#include "UObject/UObjectArray.h"
+#include "UObject/UObjectBase.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogTestPAL, Log, All);
 
-// Runs the automation tests linked into this program (Core's Private/Tests) and prints a verdict line:
+// Runs the automation tests linked into this program (Core, CoreUObject, Json and Projects Private/Tests) and prints a
+// verdict line:
 //   TestPAL: PASSED (N test(s), 0 failed)
 // Arguments: -filter=<text> runs only the tests whose name contains <text>.
 int main(int ArgC, char* ArgV[])
@@ -29,6 +32,18 @@ int main(int ArgC, char* ArgV[])
 	UE_LOG(LogTestPAL, Display, TEXT("Base %s, engine %s, project %s"), FPlatformProcess::BaseDir(),
 		*FPaths::EngineDir(), *FPaths::ProjectDir());
 
+	// The object system as the registration left it (PS2 budget: Engine/Platforms/PS2/Documentation/Budgets.md).
+	const FUObjectReflectionStats Reflection = GetUObjectReflectionStats();
+	UE_LOG(LogTestPAL, Display,
+		TEXT(
+			"Reflection: %d classes, %d structs, %d enums, %d functions, %d properties, %d packages; construction heap "
+			"%d KB"),
+		Reflection.NumClasses, Reflection.NumStructs, Reflection.NumEnums, Reflection.NumFunctions,
+		Reflection.NumProperties, Reflection.NumPackages, int32(Reflection.ConstructionHeapBytes / 1024));
+	UE_LOG(LogTestPAL, Display, TEXT("UObject array: %d slots of %d bytes (%d KB), %d objects after registration"),
+		GUObjectArray.GetObjectArrayCapacity(), int32(sizeof(FUObjectItem)),
+		int32(GUObjectArray.GetAllocatedSize() / 1024), GUObjectArray.GetObjectArrayNumMinusAvailable());
+
 	int32 NumRun = 0;
 	const int32 NumFailed = FAutomationTestFramework::Get().RunTests(
 		*Filter, EAutomationTestFlags::Disabled | EAutomationTestFlags::NonNullRHI, &NumRun);
@@ -42,6 +57,8 @@ int main(int ArgC, char* ArgV[])
 		(unsigned long long)Usage.NumAllocations, (unsigned long long)(Stats.UsedPhysical / 1024));
 	UE_LOG(LogTestPAL, Display, TEXT("Names: %d entries, %d KB used of %d KB (blocks + hash)"), FName::GetNumNames(),
 		FName::GetNameEntryMemorySize() / 1024, FName::GetNameTableMemorySize() / 1024);
+	UE_LOG(LogTestPAL, Display, TEXT("UObjects: %d objects after the tests"),
+		GUObjectArray.GetObjectArrayNumMinusAvailable());
 	UE_LOG(LogTestPAL, Display, TEXT("TestPAL: %s (%d test(s), %d failed)"), NumFailed ? "FAILED" : "PASSED", NumRun,
 		NumFailed);
 	GLog->Flush();
