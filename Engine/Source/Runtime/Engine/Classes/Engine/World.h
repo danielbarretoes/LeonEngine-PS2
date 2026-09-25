@@ -18,6 +18,7 @@ class AGameStateBase;
 class APlayerController;
 class AWorldSettings;
 class FDebugDraw;
+class UAssetImportData;
 class FSceneInterface;
 class UGameInstance;
 class UPlayer;
@@ -124,6 +125,15 @@ public:
 	UPROPERTY(Transient)
 	UGameInstance* OwningGameInstance = nullptr;
 
+#if WITH_EDITORONLY_DATA
+	/**
+	 * Where an imported map came from (Leon: LeonEd's UGLTFMapFactory makes it, and reimports the map from it; UE's
+	 * imported scenes keep theirs on the Datasmith scene asset). Null for a map built otherwise; dropped by the cook.
+	 */
+	UPROPERTY(Instanced)
+	UAssetImportData* AssetImportData = nullptr;
+#endif
+
 	/**
 	 * The renderer's scene: the proxies of the registered primitives and lights (UE: Scene). Null when the engine
 	 * cannot render (FApp::CanEverRender, e.g. `-nullrhi`) or the target has no Renderer module.
@@ -136,14 +146,33 @@ public:
 	 */
 	FDebugDraw LineBatcher;
 
+	/** What InitWorld sets up (UE: UWorld::InitializationValues, the part Leon has). */
+	struct InitializationValues
+	{
+		InitializationValues()
+			: bInitializeScenes(true)
+		{
+		}
+
+		/** Allocates the renderer's scene (UE: bInitializeScenes); tools that only build and save a map do not. */
+		uint32 bInitializeScenes : 1;
+
+		InitializationValues& InitializeScenes(const bool bInitialize)
+		{
+			bInitializeScenes = bInitialize;
+			return *this;
+		}
+	};
+
 	/**
-	 * Creates a world with its persistent level and initializes it (UE: CreateWorld): in InWorldPackage (a map's
-	 * package; the world is then public and standalone, like UE's map assets), else in a new transient package.
-	 * bInformEngineOfWorld is kept for the UE signature (the world contexts belong to the game instances). With
-	 * bAddToRoot the world is in the root set until DestroyWorld. The world has not begun play.
+	 * Creates a world with its persistent level and initializes it with InIVS, the defaults when null (UE:
+	 * CreateWorld): in InWorldPackage (a map's package; the world is then public and standalone, like UE's map
+	 * assets), else in a new transient package. bInformEngineOfWorld is kept for the UE signature (the world contexts
+	 * belong to the game instances). With bAddToRoot the world is in the root set until DestroyWorld. The world has not
+	 * begun play.
 	 */
 	static UWorld* CreateWorld(EWorldType::Type InWorldType, bool bInformEngineOfWorld, FName WorldName = NAME_None,
-		UPackage* InWorldPackage = nullptr, bool bAddToRoot = true);
+		UPackage* InWorldPackage = nullptr, bool bAddToRoot = true, const InitializationValues* InIVS = nullptr);
 
 	/** The world of a map package (UE: FindWorldInPackage): its UWorld object, or null. */
 	static UWorld* FindWorldInPackage(UPackage* Package);
@@ -151,9 +180,9 @@ public:
 	/**
 	 * Gets a created or loaded world ready (UE: InitWorld): the persistent level (made when missing) knows its world,
 	 * the level's actors get their spawn-order IDs (AActor::GetUniqueID, in level order: a loaded map keeps the order
-	 * it was saved in), and the renderer's scene is allocated unless the engine never renders. Runs once.
+	 * it was saved in), and the renderer's scene is allocated when IVS asks and the engine can render. Runs once.
 	 */
-	void InitWorld();
+	void InitWorld(const InitializationValues IVS = InitializationValues());
 
 	/**
 	 * Registers the components of every actor of the level that are not registered yet, in level order (UE:

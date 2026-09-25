@@ -19,12 +19,16 @@ namespace
 		return FPackageName::GetLongPackagePath(AssetPackageName) + TEXT("/") + AssetName;
 	}
 
-	/** The material asset `M_<Name>` next to the mesh: the existing one, or a new one made from the source's values. */
+	/**
+	 * The material asset `M_<Name>` in MaterialPackagePath (a folder), or next to the mesh without one: the existing
+	 * one, or a new one made from the source's values.
+	 */
 	UMaterialInterface* FindOrCreateMaterial(const FString& SlotName, const FMeshData& Data, int32 Slot,
-		const FString& MeshPackageName, TArray<UObject*>& OutNewAssets)
+		const FString& MeshPackageName, const FString& MaterialPackagePath, TArray<UObject*>& OutNewAssets)
 	{
 		const FString AssetName = FAssetImportUtils::MakeAssetName(UMaterial::StaticClass(), SlotName);
-		const FString PackageName = SiblingPackageName(MeshPackageName, AssetName);
+		const FString PackageName = MaterialPackagePath.IsEmpty() ? SiblingPackageName(MeshPackageName, AssetName)
+																  : MaterialPackagePath + TEXT("/") + AssetName;
 		if (UMaterial* Existing =
 				Cast<UMaterial>(FAssetImportUtils::FindOrLoadAsset(UMaterial::StaticClass(), PackageName, AssetName)))
 		{
@@ -50,8 +54,8 @@ namespace
 
 } // namespace
 
-void StaticMeshImport::BuildStaticMesh(
-	UStaticMesh& Mesh, const FMeshData& Data, bool bImportMaterials, TArray<UObject*>& OutNewAssets)
+void StaticMeshImport::BuildStaticMesh(UStaticMesh& Mesh, const FMeshData& Data, bool bImportMaterials,
+	TArray<UObject*>& OutNewAssets, const FString& MaterialPackagePath)
 {
 	(void)Mesh.BuildFromMeshData(Data);
 
@@ -81,7 +85,7 @@ void StaticMeshImport::BuildStaticMesh(
 		}
 		if (Material == nullptr && bImportMaterials && SlotName != NAME_None)
 		{
-			Material = FindOrCreateMaterial(SourceName, Data, Slot, MeshPackageName, OutNewAssets);
+			Material = FindOrCreateMaterial(SourceName, Data, Slot, MeshPackageName, MaterialPackagePath, OutNewAssets);
 		}
 		Mesh.StaticMaterials.Add(FStaticMaterial(Material, SlotName));
 	}

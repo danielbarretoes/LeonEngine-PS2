@@ -6,6 +6,7 @@
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture.h"
+#include "Engine/World.h"
 #include "HAL/FileManager.h"
 #include "LeonEdLog.h"
 #include "Materials/MaterialInterface.h"
@@ -78,7 +79,7 @@ UObject* FAssetImportUtils::FindOrLoadAsset(UClass* Class, const FString& Packag
 	return StaticLoadObject(Class, nullptr, *ObjectPath, nullptr, LOAD_NoWarn | LOAD_Quiet);
 }
 
-FString FAssetImportUtils::GetPackageFilename(const FString& PackageName)
+FString FAssetImportUtils::GetPackageFilename(const FString& PackageName, bool bIsMap)
 {
 	FString Existing;
 	if (FPackageName::DoesPackageExist(PackageName, nullptr, &Existing) && !Existing.IsEmpty())
@@ -86,8 +87,8 @@ FString FAssetImportUtils::GetPackageFilename(const FString& PackageName)
 		return Existing;
 	}
 	FString Filename;
-	if (FPackageName::TryConvertLongPackageNameToFilename(
-			PackageName, Filename, FPackageName::GetAssetPackageExtension()))
+	if (FPackageName::TryConvertLongPackageNameToFilename(PackageName, Filename,
+			bIsMap ? FPackageName::GetMapPackageExtension() : FPackageName::GetAssetPackageExtension()))
 	{
 		return Filename;
 	}
@@ -100,7 +101,7 @@ bool FAssetImportUtils::SavePackage(UPackage* Package, UObject* Asset)
 	{
 		return false;
 	}
-	const FString Filename = GetPackageFilename(Package->GetName());
+	const FString Filename = GetPackageFilename(Package->GetName(), UWorld::FindWorldInPackage(Package) != nullptr);
 	if (Filename.IsEmpty())
 	{
 		UE_LOG(LogLeonEd, Error, "Cannot save %s: it is under no mount point", *Package->GetName());

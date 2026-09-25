@@ -9,8 +9,10 @@
  * -run=ImportAssets ...`:
  * - `-source=<file> -dest=<folder>` imports one file into the folder (a long package path, `/Game/Meshes`). The asset
  *   is named after the file with its class prefix (`Cube.obj` is `SM_Cube`), or `-name=<Asset>`. `-type=` picks what
- *   it becomes (Texture, StaticMesh, SkeletalMesh, Animation, Sound, Material), else the file's extension decides.
+ *   it becomes (Texture, StaticMesh, SkeletalMesh, Animation, Sound, Material, Map), else the file's extension decides.
  *   Every other `-Key=Value` switch is an import setting of the factory.
+ * - `-type=Map -source=<file.glb> -dest=/Game/Maps/<Map>` imports a glTF scene as the map package `-dest` names
+ *   (UGLTFMapFactory: its meshes and materials go to `/Game/Maps/<Map>/Meshes` and `/Materials`).
  * - `-importlist=<file.ini>` imports every section of an ImportList.ini: `Source` (relative to the ini's folder),
  *   `Dest`, optional `Name` and `Type`, and the other keys as import settings.
  * - `-reimport -all` reimports every asset under the mount points (`/Engine`, and `/Game` with a project) whose
@@ -31,8 +33,8 @@ public:
 
 	/**
 	 * Imports SourceFile as an asset of DestPath (a long package path), named AssetName (empty: the prefixed file
-	 * name), with the factory Type names (empty: by extension) and Settings, and saves the packages it touched.
-	 * Returns the asset, or null (logged).
+	 * name), with the factory Type names (empty: by extension) and Settings, and saves the packages it touched. A map
+	 * (Type Map) is the package DestPath itself, named after it. Returns the asset, or null (logged).
 	 */
 	static UObject* ImportAsset(const FString& SourceFile, const FString& DestPath, const FString& AssetName,
 		const FString& Type, const TMap<FString, FString>& Settings);

@@ -32,7 +32,7 @@ UWorld::UWorld(const FObjectInitializer& ObjectInitializer)
 }
 
 UWorld* UWorld::CreateWorld(EWorldType::Type InWorldType, bool /*bInformEngineOfWorld*/, FName WorldName,
-	UPackage* InWorldPackage, bool bAddToRoot)
+	UPackage* InWorldPackage, bool bAddToRoot, const InitializationValues* InIVS)
 {
 	UPackage* WorldPackage = InWorldPackage;
 	if (WorldPackage == nullptr)
@@ -54,7 +54,7 @@ UWorld* UWorld::CreateWorld(EWorldType::Type InWorldType, bool /*bInformEngineOf
 	UWorld* NewWorld = NewObject<UWorld>(WorldPackage, NewWorldName, WorldFlags);
 	NewWorld->WorldType = InWorldType;
 	NewWorld->PersistentLevel = NewObject<ULevel>(NewWorld, TEXT("PersistentLevel"));
-	NewWorld->InitWorld();
+	NewWorld->InitWorld(InIVS != nullptr ? *InIVS : InitializationValues());
 	if (bAddToRoot)
 	{
 		NewWorld->AddToRoot();
@@ -80,7 +80,7 @@ UWorld* UWorld::FindWorldInPackage(UPackage* Package)
 	return nullptr;
 }
 
-void UWorld::InitWorld()
+void UWorld::InitWorld(const InitializationValues IVS)
 {
 	if (bIsWorldInitialized)
 	{
@@ -101,7 +101,7 @@ void UWorld::InitWorld()
 		}
 	}
 	// UE: InitWorld allocates the scene unless the engine never renders (-nullrhi, a dedicated server).
-	if (FApp::CanEverRender())
+	if (IVS.bInitializeScenes && FApp::CanEverRender())
 	{
 		if (IRendererModule* RendererModule = GetRendererModulePtr())
 		{

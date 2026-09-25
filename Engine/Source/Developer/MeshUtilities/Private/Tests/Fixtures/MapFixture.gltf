@@ -1,0 +1,795 @@
+{
+ "asset": {
+  "version": "2.0",
+  "generator": "LeonEngine MakeAxisTest.py"
+ },
+ "scene": 0,
+ "scenes": [
+  {
+   "nodes": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "name": "Crate_B",
+   "translation": [
+    0,
+    0.5,
+    -2
+   ],
+   "mesh": 1
+  },
+  {
+   "name": "Floor",
+   "mesh": 0
+  },
+  {
+   "name": "Crate_A",
+   "translation": [
+    2,
+    0.5,
+    0
+   ],
+   "mesh": 1
+  },
+  {
+   "name": "Group",
+   "translation": [
+    10,
+    0,
+    0
+   ],
+   "children": [
+    0
+   ]
+  },
+  {
+   "name": "UCX_Crate_A_01",
+   "translation": [
+    2,
+    0.6,
+    0
+   ],
+   "mesh": 2
+  },
+  {
+   "name": "COL_Wall",
+   "translation": [
+    -3,
+    1,
+    0
+   ],
+   "mesh": 3
+  },
+  {
+   "name": "Clip_Edge",
+   "translation": [
+    0,
+    1,
+    5
+   ],
+   "scale": [
+    2,
+    1,
+    1
+   ],
+   "mesh": 4
+  },
+  {
+   "name": "PlayerStart_CT",
+   "translation": [
+    -8,
+    0.92,
+    -8
+   ],
+   "rotation": [
+    0,
+    -0.7071067811865476,
+    0,
+    0.7071067811865476
+   ]
+  },
+  {
+   "name": "PlayerStart_T",
+   "translation": [
+    8,
+    0.92,
+    8
+   ],
+   "rotation": [
+    0,
+    1,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "BombSite_A",
+   "translation": [
+    8,
+    1,
+    -8
+   ],
+   "mesh": 5
+  },
+  {
+   "name": "BombSite_B",
+   "translation": [
+    -8,
+    1,
+    8
+   ],
+   "mesh": 5
+  },
+  {
+   "name": "BuyZone_CT",
+   "translation": [
+    -8,
+    1,
+    -4
+   ],
+   "mesh": 5
+  },
+  {
+   "name": "BuyZone_T.001",
+   "translation": [
+    8,
+    1,
+    4
+   ],
+   "mesh": 5
+  },
+  {
+   "name": "NavWaypoint_01",
+   "translation": [
+    0,
+    0,
+    0
+   ],
+   "extras": {
+    "links": "NavWaypoint_02, NavWaypoint_03",
+    "flags": "Jump"
+   }
+  },
+  {
+   "name": "NavWaypoint_02",
+   "translation": [
+    4,
+    0,
+    0
+   ],
+   "extras": {
+    "links": [
+     "NavWaypoint_01"
+    ],
+    "flags": [
+     "Crouch",
+     "Jump"
+    ]
+   }
+  },
+  {
+   "name": "NavWaypoint_03",
+   "translation": [
+    0,
+    0,
+    4
+   ]
+  },
+  {
+   "name": "Sun",
+   "translation": [
+    0,
+    10,
+    0
+   ],
+   "rotation": [
+    -0.7382548768240265,
+    -0.22147646304720794,
+    -0.0,
+    0.6371247233953805
+   ],
+   "extensions": {
+    "KHR_lights_punctual": {
+     "light": 0
+    }
+   }
+  },
+  {
+   "name": "Lamp",
+   "translation": [
+    1,
+    3,
+    1
+   ],
+   "extensions": {
+    "KHR_lights_punctual": {
+     "light": 1
+    }
+   }
+  },
+  {
+   "name": "Spot",
+   "translation": [
+    -1,
+    3,
+    -1
+   ],
+   "extensions": {
+    "KHR_lights_punctual": {
+     "light": 2
+    }
+   }
+  },
+  {
+   "name": "Empty",
+   "translation": [
+    5,
+    5,
+    5
+   ]
+  }
+ ],
+ "meshes": [
+  {
+   "name": "Floor",
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 0,
+      "NORMAL": 1,
+      "TEXCOORD_0": 2
+     },
+     "indices": 3,
+     "material": 0
+    }
+   ]
+  },
+  {
+   "name": "Crate",
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 4,
+      "NORMAL": 5,
+      "TEXCOORD_0": 6
+     },
+     "indices": 7,
+     "material": 1
+    }
+   ]
+  },
+  {
+   "name": "CrateCollision",
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 8,
+      "NORMAL": 9,
+      "TEXCOORD_0": 10
+     },
+     "indices": 11,
+     "material": 0
+    }
+   ]
+  },
+  {
+   "name": "WallBox",
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 12,
+      "NORMAL": 13,
+      "TEXCOORD_0": 14
+     },
+     "indices": 15,
+     "material": 0
+    }
+   ]
+  },
+  {
+   "name": "ClipBox",
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 16,
+      "NORMAL": 17,
+      "TEXCOORD_0": 18
+     },
+     "indices": 19,
+     "material": 0
+    }
+   ]
+  },
+  {
+   "name": "ZoneBox",
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 20,
+      "NORMAL": 21,
+      "TEXCOORD_0": 22
+     },
+     "indices": 23,
+     "material": 2
+    }
+   ]
+  }
+ ],
+ "materials": [
+  {
+   "name": "Grey",
+   "pbrMetallicRoughness": {
+    "baseColorFactor": [
+     0.5,
+     0.5,
+     0.5,
+     1.0
+    ],
+    "metallicFactor": 0.0,
+    "roughnessFactor": 0.8
+   }
+  },
+  {
+   "name": "Crate",
+   "pbrMetallicRoughness": {
+    "baseColorFactor": [
+     1.0,
+     1.0,
+     1.0,
+     1.0
+    ],
+    "metallicFactor": 0.25,
+    "roughnessFactor": 0.6,
+    "baseColorTexture": {
+     "index": 0
+    }
+   }
+  },
+  {
+   "name": "Zone",
+   "pbrMetallicRoughness": {
+    "baseColorFactor": [
+     0.2,
+     0.8,
+     0.2,
+     1.0
+    ],
+    "metallicFactor": 0.0,
+    "roughnessFactor": 0.8
+   }
+  }
+ ],
+ "accessors": [
+  {
+   "bufferView": 0,
+   "componentType": 5126,
+   "count": 4,
+   "type": "VEC3",
+   "min": [
+    -10.0,
+    0,
+    -10.0
+   ],
+   "max": [
+    10.0,
+    0,
+    10.0
+   ]
+  },
+  {
+   "bufferView": 1,
+   "componentType": 5126,
+   "count": 4,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 2,
+   "componentType": 5126,
+   "count": 4,
+   "type": "VEC2"
+  },
+  {
+   "bufferView": 3,
+   "componentType": 5123,
+   "count": 6,
+   "type": "SCALAR"
+  },
+  {
+   "bufferView": 4,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC3",
+   "min": [
+    -0.5,
+    -0.5,
+    -0.5
+   ],
+   "max": [
+    0.5,
+    0.5,
+    0.5
+   ]
+  },
+  {
+   "bufferView": 5,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 6,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC2"
+  },
+  {
+   "bufferView": 7,
+   "componentType": 5123,
+   "count": 36,
+   "type": "SCALAR"
+  },
+  {
+   "bufferView": 8,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC3",
+   "min": [
+    -0.6,
+    -0.6,
+    -0.6
+   ],
+   "max": [
+    0.6,
+    0.6,
+    0.6
+   ]
+  },
+  {
+   "bufferView": 9,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 10,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC2"
+  },
+  {
+   "bufferView": 11,
+   "componentType": 5123,
+   "count": 36,
+   "type": "SCALAR"
+  },
+  {
+   "bufferView": 12,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC3",
+   "min": [
+    -0.1,
+    -1.0,
+    -2.0
+   ],
+   "max": [
+    0.1,
+    1.0,
+    2.0
+   ]
+  },
+  {
+   "bufferView": 13,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 14,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC2"
+  },
+  {
+   "bufferView": 15,
+   "componentType": 5123,
+   "count": 36,
+   "type": "SCALAR"
+  },
+  {
+   "bufferView": 16,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC3",
+   "min": [
+    -1.0,
+    -2.0,
+    -0.5
+   ],
+   "max": [
+    1.0,
+    2.0,
+    0.5
+   ]
+  },
+  {
+   "bufferView": 17,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 18,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC2"
+  },
+  {
+   "bufferView": 19,
+   "componentType": 5123,
+   "count": 36,
+   "type": "SCALAR"
+  },
+  {
+   "bufferView": 20,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC3",
+   "min": [
+    -2.0,
+    -1.0,
+    -2.0
+   ],
+   "max": [
+    2.0,
+    1.0,
+    2.0
+   ]
+  },
+  {
+   "bufferView": 21,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 22,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC2"
+  },
+  {
+   "bufferView": 23,
+   "componentType": 5123,
+   "count": 36,
+   "type": "SCALAR"
+  }
+ ],
+ "bufferViews": [
+  {
+   "buffer": 0,
+   "byteOffset": 0,
+   "byteLength": 48,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 48,
+   "byteLength": 48,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 96,
+   "byteLength": 32,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 128,
+   "byteLength": 12,
+   "target": 34963
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 140,
+   "byteLength": 288,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 428,
+   "byteLength": 288,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 716,
+   "byteLength": 192,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 908,
+   "byteLength": 72,
+   "target": 34963
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 980,
+   "byteLength": 288,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 1268,
+   "byteLength": 288,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 1556,
+   "byteLength": 192,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 1748,
+   "byteLength": 72,
+   "target": 34963
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 1820,
+   "byteLength": 288,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 2108,
+   "byteLength": 288,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 2396,
+   "byteLength": 192,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 2588,
+   "byteLength": 72,
+   "target": 34963
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 2660,
+   "byteLength": 288,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 2948,
+   "byteLength": 288,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 3236,
+   "byteLength": 192,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 3428,
+   "byteLength": 72,
+   "target": 34963
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 3500,
+   "byteLength": 288,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 3788,
+   "byteLength": 288,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 4076,
+   "byteLength": 192,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 4268,
+   "byteLength": 72,
+   "target": 34963
+  }
+ ],
+ "buffers": [
+  {
+   "byteLength": 4340,
+   "uri": "data:application/octet-stream;base64,AAAgwQAAAAAAACDBAAAgwQAAAAAAACBBAAAgQQAAAAAAACBBAAAgQQAAAAAAACDBAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAIA/AACAPwAAgD8AAAAAAAAAAAAAAAAAAAEAAgAAAAIAAwAAAAA/AAAAvwAAAL8AAAA/AAAAPwAAAL8AAAA/AAAAPwAAAD8AAAA/AAAAvwAAAD8AAAC/AAAAvwAAAL8AAAC/AAAAvwAAAD8AAAC/AAAAPwAAAD8AAAC/AAAAPwAAAL8AAAC/AAAAPwAAAL8AAAC/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAL8AAAC/AAAAvwAAAL8AAAA/AAAAvwAAAL8AAAA/AAAAvwAAAD8AAAC/AAAAvwAAAD8AAAC/AAAAvwAAAD8AAAA/AAAAvwAAAD8AAAA/AAAAPwAAAD8AAAC/AAAAPwAAAD8AAAC/AAAAvwAAAL8AAAC/AAAAPwAAAL8AAAA/AAAAPwAAAL8AAAA/AAAAvwAAAL8AAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAACAPwAAgD8AAIA/AACAPwAAAAAAAAAAAAAAAAAAAAAAAIA/AACAPwAAgD8AAIA/AAAAAAAAAAAAAAAAAAAAAAAAgD8AAIA/AACAPwAAgD8AAAAAAAAAAAAAAAAAAAAAAACAPwAAgD8AAIA/AACAPwAAAAAAAAAAAAAAAAAAAAAAAIA/AACAPwAAgD8AAIA/AAAAAAAAAAAAAAAAAAAAAAAAgD8AAIA/AACAPwAAgD8AAAAAAAAAAAAAAAAAAAEAAgAAAAIAAwAEAAUABgAEAAYABwAIAAkACgAIAAoACwAMAA0ADgAMAA4ADwAQABEAEgAQABIAEwAUABUAFgAUABYAFwCamRk/mpkZv5qZGb+amRk/mpkZP5qZGb+amRk/mpkZP5qZGT+amRk/mpkZv5qZGT+amRm/mpkZv5qZGb+amRm/mpkZv5qZGT+amRm/mpkZP5qZGT+amRm/mpkZP5qZGb+amRm/mpkZP5qZGb+amRm/mpkZP5qZGT+amRk/mpkZP5qZGT+amRk/mpkZP5qZGb+amRm/mpkZv5qZGb+amRk/mpkZv5qZGb+amRk/mpkZv5qZGT+amRm/mpkZv5qZGT+amRm/mpkZv5qZGT+amRk/mpkZv5qZGT+amRk/mpkZP5qZGT+amRm/mpkZP5qZGT+amRm/mpkZv5qZGb+amRm/mpkZP5qZGb+amRk/mpkZP5qZGb+amRk/mpkZv5qZGb8AAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAACAPwAAgD8AAIA/AACAPwAAAAAAAAAAAAAAAAAAAAAAAIA/AACAPwAAgD8AAIA/AAAAAAAAAAAAAAAAAAAAAAAAgD8AAIA/AACAPwAAgD8AAAAAAAAAAAAAAAAAAAAAAACAPwAAgD8AAIA/AACAPwAAAAAAAAAAAAAAAAAAAAAAAIA/AACAPwAAgD8AAIA/AAAAAAAAAAAAAAAAAAAAAAAAgD8AAIA/AACAPwAAgD8AAAAAAAAAAAAAAAAAAAEAAgAAAAIAAwAEAAUABgAEAAYABwAIAAkACgAIAAoACwAMAA0ADgAMAA4ADwAQABEAEgAQABIAEwAUABUAFgAUABYAFwDNzMw9AACAvwAAAMDNzMw9AACAPwAAAMDNzMw9AACAPwAAAEDNzMw9AACAvwAAAEDNzMy9AACAvwAAAMDNzMy9AACAvwAAAEDNzMy9AACAPwAAAEDNzMy9AACAPwAAAMDNzMy9AACAPwAAAMDNzMy9AACAPwAAAEDNzMw9AACAPwAAAEDNzMw9AACAPwAAAMDNzMy9AACAvwAAAMDNzMw9AACAvwAAAMDNzMw9AACAvwAAAEDNzMy9AACAvwAAAEDNzMy9AACAvwAAAEDNzMw9AACAvwAAAEDNzMw9AACAPwAAAEDNzMy9AACAPwAAAEDNzMy9AACAvwAAAMDNzMy9AACAPwAAAMDNzMw9AACAPwAAAMDNzMw9AACAvwAAAMAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAACAPwAAgD8AAIA/AACAPwAAAAAAAAAAAAAAAAAAAAAAAIA/AACAPwAAgD8AAIA/AAAAAAAAAAAAAAAAAAAAAAAAgD8AAIA/AACAPwAAgD8AAAAAAAAAAAAAAAAAAAAAAACAPwAAgD8AAIA/AACAPwAAAAAAAAAAAAAAAAAAAAAAAIA/AACAPwAAgD8AAIA/AAAAAAAAAAAAAAAAAAAAAAAAgD8AAIA/AACAPwAAgD8AAAAAAAAAAAAAAAAAAAEAAgAAAAIAAwAEAAUABgAEAAYABwAIAAkACgAIAAoACwAMAA0ADgAMAA4ADwAQABEAEgAQABIAEwAUABUAFgAUABYAFwAAAIA/AAAAwAAAAL8AAIA/AAAAQAAAAL8AAIA/AAAAQAAAAD8AAIA/AAAAwAAAAD8AAIC/AAAAwAAAAL8AAIC/AAAAwAAAAD8AAIC/AAAAQAAAAD8AAIC/AAAAQAAAAL8AAIC/AAAAQAAAAL8AAIC/AAAAQAAAAD8AAIA/AAAAQAAAAD8AAIA/AAAAQAAAAL8AAIC/AAAAwAAAAL8AAIA/AAAAwAAAAL8AAIA/AAAAwAAAAD8AAIC/AAAAwAAAAD8AAIC/AAAAwAAAAD8AAIA/AAAAwAAAAD8AAIA/AAAAQAAAAD8AAIC/AAAAQAAAAD8AAIC/AAAAwAAAAL8AAIC/AAAAQAAAAL8AAIA/AAAAQAAAAL8AAIA/AAAAwAAAAL8AAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAACAPwAAgD8AAIA/AACAPwAAAAAAAAAAAAAAAAAAAAAAAIA/AACAPwAAgD8AAIA/AAAAAAAAAAAAAAAAAAAAAAAAgD8AAIA/AACAPwAAgD8AAAAAAAAAAAAAAAAAAAAAAACAPwAAgD8AAIA/AACAPwAAAAAAAAAAAAAAAAAAAAAAAIA/AACAPwAAgD8AAIA/AAAAAAAAAAAAAAAAAAAAAAAAgD8AAIA/AACAPwAAgD8AAAAAAAAAAAAAAAAAAAEAAgAAAAIAAwAEAAUABgAEAAYABwAIAAkACgAIAAoACwAMAA0ADgAMAA4ADwAQABEAEgAQABIAEwAUABUAFgAUABYAFwAAAABAAACAvwAAAMAAAABAAACAPwAAAMAAAABAAACAPwAAAEAAAABAAACAvwAAAEAAAADAAACAvwAAAMAAAADAAACAvwAAAEAAAADAAACAPwAAAEAAAADAAACAPwAAAMAAAADAAACAPwAAAMAAAADAAACAPwAAAEAAAABAAACAPwAAAEAAAABAAACAPwAAAMAAAADAAACAvwAAAMAAAABAAACAvwAAAMAAAABAAACAvwAAAEAAAADAAACAvwAAAEAAAADAAACAvwAAAEAAAABAAACAvwAAAEAAAABAAACAPwAAAEAAAADAAACAPwAAAEAAAADAAACAvwAAAMAAAADAAACAPwAAAMAAAABAAACAPwAAAMAAAABAAACAvwAAAMAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAACAPwAAgD8AAIA/AACAPwAAAAAAAAAAAAAAAAAAAAAAAIA/AACAPwAAgD8AAIA/AAAAAAAAAAAAAAAAAAAAAAAAgD8AAIA/AACAPwAAgD8AAAAAAAAAAAAAAAAAAAAAAACAPwAAgD8AAIA/AACAPwAAAAAAAAAAAAAAAAAAAAAAAIA/AACAPwAAgD8AAIA/AAAAAAAAAAAAAAAAAAAAAAAAgD8AAIA/AACAPwAAgD8AAAAAAAAAAAAAAAAAAAEAAgAAAAIAAwAEAAUABgAEAAYABwAIAAkACgAIAAoACwAMAA0ADgAMAA4ADwAQABEAEgAQABIAEwAUABUAFgAUABYAFwA="
+  }
+ ],
+ "extensionsUsed": [
+  "KHR_lights_punctual"
+ ],
+ "extensions": {
+  "KHR_lights_punctual": {
+   "lights": [
+    {
+     "name": "Sun",
+     "type": "directional",
+     "color": [
+      1.0,
+      0.95,
+      0.9
+     ],
+     "intensity": 1.5
+    },
+    {
+     "name": "Lamp",
+     "type": "point",
+     "color": [
+      1.0,
+      0.8,
+      0.6
+     ],
+     "intensity": 2.0,
+     "range": 5.0
+    },
+    {
+     "name": "Spot",
+     "type": "spot",
+     "color": [
+      0.5,
+      0.5,
+      1.0
+     ],
+     "intensity": 3.0,
+     "spot": {
+      "innerConeAngle": 0.2,
+      "outerConeAngle": 0.6
+     }
+    }
+   ]
+  }
+ },
+ "images": [
+  {
+   "uri": "MapFixture_Checker.png"
+  }
+ ],
+ "textures": [
+  {
+   "source": 0
+  }
+ ]
+}

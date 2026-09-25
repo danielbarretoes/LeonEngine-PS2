@@ -3,9 +3,11 @@
 #include "AssetImportUtils.h"
 #include "EditorFramework/AssetImportData.h"
 #include "EditorReimportHandler.h"
+#include "Engine/World.h"
 #include "Factories/Factory.h"
 #include "Factories/FbxFactory.h"
 #include "Factories/GLTFImportFactory.h"
+#include "Factories/GLTFMapFactory.h"
 #include "Factories/LegacyMaterialFactory.h"
 #include "Factories/SoundFactory.h"
 #include "Factories/TextureFactory.h"
@@ -79,8 +81,13 @@ namespace
 		{
 			return ULegacyMaterialFactory::StaticClass();
 		}
+		if (Type == TEXT("Map"))
+		{
+			return UGLTFMapFactory::StaticClass();
+		}
 		UE_LOG(LogLeonEd, Error,
-			"ImportAssets: unknown type '%s' (Texture, StaticMesh, SkeletalMesh, Animation, Sound, Material)", *Type);
+			"ImportAssets: unknown type '%s' (Texture, StaticMesh, SkeletalMesh, Animation, Sound, Material, Map)",
+			*Type);
 		return nullptr;
 	}
 
@@ -122,8 +129,8 @@ UImportAssetsCommandlet::UImportAssetsCommandlet(const FObjectInitializer& Objec
 {
 	HelpDescription = TEXT("Imports source files as assets, or reimports assets from their sources");
 	HelpUsage = TEXT("-run=ImportAssets -source=<File> -dest=<LongPackagePath> [-name=<Asset>] [-type=<Type>] "
-					 "[-<Setting>=<Value>...] | -importlist=<ImportList.ini> | -reimport -all | -reimport "
-					 "-package=<LongPackageName>[,...]");
+					 "[-<Setting>=<Value>...] | -type=Map -source=<File.glb> -dest=<MapPackage> | "
+					 "-importlist=<ImportList.ini> | -reimport -all | -reimport -package=<LongPackageName>[,...]");
 	LogToConsole = 1;
 }
 
@@ -152,9 +159,12 @@ UObject* UImportAssetsCommandlet::ImportAsset(const FString& SourceFile, const F
 	UClass* AssetClass = Factory->ResolveSupportedClass();
 	FString Path = DestPath;
 	Path.RemoveFromEnd(TEXT("/"));
-	const FString Name =
-		AssetName.IsEmpty() ? FAssetImportUtils::MakeAssetName(AssetClass, FPaths::GetBaseFilename(Source)) : AssetName;
-	const FString PackageName = Path + TEXT("/") + Name;
+	// A map's destination is its package (UE's map path, /Game/Maps/<Map>); any other asset's is its folder.
+	const bool bIsMap = AssetClass != nullptr && AssetClass->IsChildOf(UWorld::StaticClass());
+	const FString Name = bIsMap ? FPackageName::GetShortName(Path)
+		: AssetName.IsEmpty()   ? FAssetImportUtils::MakeAssetName(AssetClass, FPaths::GetBaseFilename(Source))
+								: AssetName;
+	const FString PackageName = bIsMap ? Path : Path + TEXT("/") + Name;
 	if (!FPackageName::IsValidLongPackageName(PackageName))
 	{
 		UE_LOG(LogLeonEd, Error, "ImportAssets: '%s' is not a package under a mount point (-dest=%s)", *PackageName,

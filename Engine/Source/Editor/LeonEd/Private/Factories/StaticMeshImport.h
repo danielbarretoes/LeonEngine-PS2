@@ -14,11 +14,12 @@ namespace StaticMeshImport
 	 * Builds Mesh from Data: the geometry, and one slot per material slot of the source (Data.Materials and the arrays
 	 * next to it, or the sections' indices), named after its source material. A slot keeps the material it had when
 	 * Mesh is reimported and the slot's name is unchanged (UE); else, with bImportMaterials, a named slot gets the
-	 * material asset `M_<Name>` next to the mesh, made from the source's values (and its maps imported as `T_`
-	 * textures) unless it exists already, which is reused as it is. New assets go to OutNewAssets.
+	 * material asset `M_<Name>` next to the mesh (in the folder MaterialPackagePath when given), made from the source's
+	 * values (and its maps imported as `T_` textures next to it) unless it exists already, which is reused as it is.
+	 * New assets go to OutNewAssets.
 	 */
-	void BuildStaticMesh(
-		UStaticMesh& Mesh, const FMeshData& Data, bool bImportMaterials, TArray<UObject*>& OutNewAssets);
+	void BuildStaticMesh(UStaticMesh& Mesh, const FMeshData& Data, bool bImportMaterials,
+		TArray<UObject*>& OutNewAssets, const FString& MaterialPackagePath = FString());
 
 	/**
 	 * The texture of an image file next to the asset in AssetPackageName's folder (`T_<File>`): the existing one, or

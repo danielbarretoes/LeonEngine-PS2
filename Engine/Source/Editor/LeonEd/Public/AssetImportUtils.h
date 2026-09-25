@@ -36,13 +36,17 @@ public:
 	[[nodiscard]] static UObject* FindOrLoadAsset(UClass* Class, const FString& PackageName, const FString& AssetName);
 
 	/**
-	 * Saves the package of Asset to its file under its mount point (`.lasset`, or `.lmap` for a map), with Asset and
-	 * every public object of the package. False (logged) when it has no file name or the save fails.
+	 * Saves the package of Asset to its file under its mount point (`.lasset`, or `.lmap` for a package that holds a
+	 * world), with Asset and every public object of the package. False (logged) when it has no file name or the save
+	 * fails.
 	 */
 	static bool SavePackage(UPackage* Package, UObject* Asset = nullptr);
 
-	/** The file of a long package name: the existing `.lasset` / `.lmap`, else the `.lasset` it would have. */
-	[[nodiscard]] static FString GetPackageFilename(const FString& PackageName);
+	/**
+	 * The file of a long package name: the existing `.lasset` / `.lmap`, else the file it would have (`.lmap` for a map
+	 * package, `.lasset` otherwise).
+	 */
+	[[nodiscard]] static FString GetPackageFilename(const FString& PackageName, bool bIsMap = false);
 
 	/**
 	 * The long package names of every `.lasset` / `.lmap` file under a mount point's content ("/Engine/", "/Game/"),

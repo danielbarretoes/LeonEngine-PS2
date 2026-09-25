@@ -3,5 +3,5 @@
 # desktop only, linked by programs (LeonCook, LeonAutomationTests) and never by a game.
 leon_module(LeonEd
 	PUBLIC_DEPENDENCIES Core CoreUObject Engine
-	PRIVATE_DEPENDENCIES RenderCore AnimationCore MeshUtilities STB
+	PRIVATE_DEPENDENCIES RenderCore AnimationCore MeshUtilities Json STB
 )

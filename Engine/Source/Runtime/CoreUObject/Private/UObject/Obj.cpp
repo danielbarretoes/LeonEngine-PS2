@@ -75,6 +75,19 @@ void UObject::ConditionalPostLoad()
 	PostLoad();
 }
 
+bool UObject::Rename(const TCHAR* InName, UObject* NewOuter)
+{
+	UObject* const Outer = NewOuter != nullptr ? NewOuter : GetOuter();
+	const FName NewName = InName != nullptr ? FName(InName) : MakeUniqueObjectName(Outer, GetClass(), GetFName());
+	const UObject* const Existing = StaticFindObjectFast(nullptr, Outer, NewName);
+	if (Existing != nullptr && Existing != this)
+	{
+		return false;
+	}
+	LowLevelRename(NewName, NewOuter);
+	return true;
+}
+
 void UObject::BeginDestroy()
 {
 	// Out of the name hash: the name can be reused and lookups no longer find the object (UE).

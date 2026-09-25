@@ -80,6 +80,13 @@ class COREUOBJECT_API UObject : public UObjectBaseUtility
 	void ConditionalPostLoad();
 
 	/**
+	 * Gives the object another name, another outer or both (UE: Rename, without the flags, redirectors or the editor's
+	 * transactions): NewName null takes a unique name in the new outer, NewOuter null keeps the outer. False, and
+	 * nothing changes, when the new outer already holds an object of that name.
+	 */
+	bool Rename(const TCHAR* NewName = nullptr, UObject* NewOuter = nullptr);
+
+	/**
 	 * First step of destruction, called by the garbage collector on an unreachable object: release resources, start
 	 * asynchronous cleanup. Overrides must call Super::BeginDestroy, which renames the object to NAME_None (UE).
 	 */
