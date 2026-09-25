@@ -399,7 +399,7 @@ void FSceneRenderer::DrawFullscreenTriangle() const
 }
 
 void FSceneRenderer::SubmitSkeletalDraw(
-	const USkeletalMesh& InMesh, const glm::mat4& InModel, const std::vector<glm::mat4>& InBoneMatrices)
+	const USkeletalMesh& InMesh, const glm::mat4& InModel, const TArray<FMatrix>& InBoneMatrices)
 {
 	if (!InMesh.Valid())
 	{
@@ -409,15 +409,15 @@ void FSceneRenderer::SubmitSkeletalDraw(
 	Item.Mesh = &InMesh;
 	Item.Model = InModel;
 	Item.BoneMatrices = InBoneMatrices;
-	if (Item.BoneMatrices.size() > static_cast<std::size_t>(MaxSkinBones))
+	if (Item.BoneMatrices.Num() > MaxSkinBones)
 	{
-		Item.BoneMatrices.resize(static_cast<std::size_t>(MaxSkinBones));
+		Item.BoneMatrices.SetNum(MaxSkinBones);
 	}
 	SkeletalDraws.push_back(std::move(Item));
 }
 
 void FSceneRenderer::SubmitSkeletalDraw(
-	const USkeletalMesh& InMesh, const FLegacyTransform& Transform, const std::vector<glm::mat4>& InBoneMatrices)
+	const USkeletalMesh& InMesh, const FLegacyTransform& Transform, const TArray<FMatrix>& InBoneMatrices)
 {
 	SubmitSkeletalDraw(InMesh, Transform.ModelMatrix(), InBoneMatrices);
 }
@@ -601,10 +601,9 @@ void FSceneRenderer::RenderShadowPass(const ULevel& Level, const glm::mat4& Ligh
 			}
 			const glm::mat4 LightMvp = LightSpace * Item.Model;
 			SkinnedShadowShader.SetMat4("uLightMVP", glm::value_ptr(LightMvp));
-			if (!Item.BoneMatrices.empty())
+			if (Item.BoneMatrices.Num() > 0)
 			{
-				SkinnedShadowShader.SetMat4Array(
-					"uBones", glm::value_ptr(Item.BoneMatrices[0]), static_cast<int>(Item.BoneMatrices.size()));
+				SkinnedShadowShader.SetMat4Array("uBones", &Item.BoneMatrices[0].M[0][0], Item.BoneMatrices.Num());
 			}
 			Item.Mesh->Draw();
 		}
@@ -1304,10 +1303,9 @@ void FSceneRenderer::DrawQueuedSkeletal(const glm::mat4& InView, const glm::mat4
 		SkinnedLitShader.SetInt("uNormalMap", 2);
 		// Keep pass-level shadow uniforms (valid map + soft texel); do not overwrite per draw.
 
-		if (!Item.BoneMatrices.empty())
+		if (Item.BoneMatrices.Num() > 0)
 		{
-			SkinnedLitShader.SetMat4Array(
-				"uBones", glm::value_ptr(Item.BoneMatrices[0]), static_cast<int>(Item.BoneMatrices.size()));
+			SkinnedLitShader.SetMat4Array("uBones", &Item.BoneMatrices[0].M[0][0], Item.BoneMatrices.Num());
 		}
 
 		const UTexture2D* Albedo = LocalMaterial.AlbedoMap && LocalMaterial.AlbedoMap->Valid()

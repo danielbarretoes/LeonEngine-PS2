@@ -162,3 +162,70 @@ inline FArchive& operator<<(FArchive& Ar, FIntVector& V)
 {
 	return Ar << V.X << V.Y << V.Z;
 }
+
+/** A 4D vector of integers (UE: FIntVector4), e.g. skin bone indices. */
+struct CORE_API FIntVector4
+{
+	int32 X;
+	int32 Y;
+	int32 Z;
+	int32 W;
+
+	FIntVector4() = default;
+
+	FORCEINLINE constexpr FIntVector4(int32 InX, int32 InY, int32 InZ, int32 InW)
+		: X(InX)
+		, Y(InY)
+		, Z(InZ)
+		, W(InW)
+	{
+	}
+
+	explicit FORCEINLINE constexpr FIntVector4(int32 InValue)
+		: X(InValue)
+		, Y(InValue)
+		, Z(InValue)
+		, W(InValue)
+	{
+	}
+
+	explicit FORCEINLINE constexpr FIntVector4(EForceInit)
+		: X(0)
+		, Y(0)
+		, Z(0)
+		, W(0)
+	{
+	}
+
+	FORCEINLINE int32& operator[](int32 Index)
+	{
+		checkSlow(Index >= 0 && Index < 4);
+		return (&X)[Index];
+	}
+	FORCEINLINE int32 operator[](int32 Index) const
+	{
+		checkSlow(Index >= 0 && Index < 4);
+		return (&X)[Index];
+	}
+
+	FORCEINLINE bool operator==(const FIntVector4& Other) const
+	{
+		return X == Other.X && Y == Other.Y && Z == Other.Z && W == Other.W;
+	}
+	FORCEINLINE bool operator!=(const FIntVector4& Other) const
+	{
+		return !(*this == Other);
+	}
+
+	FORCEINLINE friend uint32 GetTypeHash(const FIntVector4& Vector)
+	{
+		return HashCombine(
+			HashCombine(HashCombine(GetTypeHash(Vector.X), GetTypeHash(Vector.Y)), GetTypeHash(Vector.Z)),
+			GetTypeHash(Vector.W));
+	}
+};
+
+inline FArchive& operator<<(FArchive& Ar, FIntVector4& V)
+{
+	return Ar << V.X << V.Y << V.Z << V.W;
+}

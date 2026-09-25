@@ -1,13 +1,10 @@
 #include "SkeletalAnimation.h"
 
-#include <algorithm>
-#include <cmath>
-
 void UCharacterAnimInstance::SetJumpPlayRates(float JumpStart, float FallLoop, float Land)
 {
-	JumpStartPlayRate = std::max(JumpStart, 0.01f);
-	FallLoopPlayRate = std::max(FallLoop, 0.01f);
-	LandPlayRate = std::max(Land, 0.01f);
+	JumpStartPlayRate = FMath::Max(JumpStart, 0.01f);
+	FallLoopPlayRate = FMath::Max(FallLoop, 0.01f);
+	LandPlayRate = FMath::Max(Land, 0.01f);
 }
 
 void UCharacterAnimInstance::NotifyJumped()
@@ -47,7 +44,7 @@ void UCharacterAnimInstance::AdvancePlayer(FPosePlayer& Player, float DeltaTime,
 	Player.Time += DeltaTime * PlayRate;
 	if (!Player.Sequence->bLooping && Player.Sequence->DurationSeconds > 1.0e-4f)
 	{
-		Player.Time = std::min(Player.Time, Player.Sequence->DurationSeconds);
+		Player.Time = FMath::Min(Player.Time, Player.Sequence->DurationSeconds);
 	}
 }
 
@@ -85,7 +82,7 @@ void UCharacterAnimInstance::EnterState(EAnimJumpState Next)
 	float Fade = CrossfadeDuration;
 	if (From == EAnimJumpState::Land && Next == EAnimJumpState::Locomotion)
 	{
-		Fade = std::max(CrossfadeDuration, LandToLocomotionCrossfade);
+		Fade = FMath::Max(CrossfadeDuration, LandToLocomotionCrossfade);
 	}
 	CrossfadeElapsed = 0.0f;
 	CrossfadeAlpha = (Fade <= 1.0e-6f) ? 1.0f : 0.0f;
@@ -199,10 +196,9 @@ void UCharacterAnimInstance::UpdateJumpStateMachine()
 	bJustLanded = false;
 }
 
-void UCharacterAnimInstance::SamplePlayerBoneWorld(
-	const FPosePlayer& Player, std::vector<glm::mat4>& OutBoneWorld) const
+void UCharacterAnimInstance::SamplePlayerBoneWorld(const FPosePlayer& Player, TArray<FMatrix>& OutBoneWorld) const
 {
-	OutBoneWorld.clear();
+	OutBoneWorld.Reset();
 	const USkeleton* LocalSkeleton = GetSkeleton();
 	if (LocalSkeleton == nullptr)
 	{
@@ -210,7 +206,7 @@ void UCharacterAnimInstance::SamplePlayerBoneWorld(
 	}
 	if (Player.Sequence == nullptr || Player.Sequence->FrameCount() <= 0)
 	{
-		OutBoneWorld.assign(static_cast<std::size_t>(LocalSkeleton->BoneCount()), glm::mat4(1.0f));
+		OutBoneWorld.Init(FMatrix::Identity, LocalSkeleton->BoneCount());
 		return;
 	}
 	Player.Sequence->SampleLocalPose(Player.Time, OutBoneWorld);
@@ -242,23 +238,23 @@ void UCharacterAnimInstance::NativeUpdateAnimation(float DeltaTime)
 		else
 		{
 			CrossfadeElapsed += DeltaTime;
-			const float T = std::clamp(CrossfadeElapsed / FadeDur, 0.0f, 1.0f);
+			const float T = FMath::Clamp(CrossfadeElapsed / FadeDur, 0.0f, 1.0f);
 			CrossfadeAlpha = T * T * (3.0f - (2.0f * T));
 		}
 	}
 }
 
-void UCharacterAnimInstance::GetBoneWorldMatrices(std::vector<glm::mat4>& OutBoneWorld) const
+void UCharacterAnimInstance::GetBoneWorldMatrices(TArray<FMatrix>& OutBoneWorld) const
 {
 	const USkeleton* LocalSkeleton = GetSkeleton();
 	if (LocalSkeleton == nullptr || LocalSkeleton->BoneCount() <= 0)
 	{
-		OutBoneWorld.clear();
+		OutBoneWorld.Reset();
 		return;
 	}
 
-	const int BoneCount = LocalSkeleton->BoneCount();
-	std::vector<glm::mat4> WorldCurrent;
+	const int32 BoneCount = LocalSkeleton->BoneCount();
+	TArray<FMatrix> WorldCurrent;
 	if (JumpState == EAnimJumpState::Locomotion)
 	{
 		SampleLocomotionBoneWorld(WorldCurrent);
@@ -271,7 +267,7 @@ void UCharacterAnimInstance::GetBoneWorldMatrices(std::vector<glm::mat4>& OutBon
 	OutBoneWorld = WorldCurrent;
 	if (CrossfadeAlpha < 0.999f)
 	{
-		std::vector<glm::mat4> WorldPrev;
+		TArray<FMatrix> WorldPrev;
 		if (PreviousState == EAnimJumpState::Locomotion)
 		{
 			SampleLocomotionBoneWorld(WorldPrev);
@@ -280,23 +276,20 @@ void UCharacterAnimInstance::GetBoneWorldMatrices(std::vector<glm::mat4>& OutBon
 		{
 			SamplePlayerBoneWorld(Previous, WorldPrev);
 		}
-		if (WorldPrev.size() == static_cast<std::size_t>(BoneCount) &&
-			WorldCurrent.size() == static_cast<std::size_t>(BoneCount))
+		if (WorldPrev.Num() == BoneCount && WorldCurrent.Num() == BoneCount)
 		{
-			OutBoneWorld.resize(static_cast<std::size_t>(BoneCount));
-			for (int I = 0; I < BoneCount; ++I)
+			OutBoneWorld.SetNum(BoneCount);
+			for (int32 I = 0; I < BoneCount; ++I)
 			{
-				OutBoneWorld[static_cast<std::size_t>(I)] =
-					WorldPrev[static_cast<std::size_t>(I)] * (1.0f - CrossfadeAlpha) +
-					WorldCurrent[static_cast<std::size_t>(I)] * CrossfadeAlpha;
+				OutBoneWorld[I] = WorldPrev[I] * (1.0f - CrossfadeAlpha) + WorldCurrent[I] * CrossfadeAlpha;
 			}
 		}
 	}
 }
 
-void UCharacterAnimInstance::GetSkinMatrices(std::vector<glm::mat4>& OutSkin) const
+void UCharacterAnimInstance::GetSkinMatrices(TArray<FMatrix>& OutSkin) const
 {
-	std::vector<glm::mat4> WorldBlended;
+	TArray<FMatrix> WorldBlended;
 	GetBoneWorldMatrices(WorldBlended);
 	SkinFromBoneWorld(WorldBlended, OutSkin);
 }

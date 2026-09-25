@@ -1,78 +1,79 @@
 #pragma once
 
-#include <glm/mat4x4.hpp>
-#include <glm/vec2.hpp>
-#include <glm/vec3.hpp>
-#include <glm/vec4.hpp>
-
-#include <cstdint>
-#include <string>
-#include <vector>
+#include "CoreMinimal.h"
 
 class USkeletalMeshComponent;
 
-constexpr int MaxSkinBones = 96;
-constexpr int MaxBoneInfluences = 4;
+constexpr int32 MaxSkinBones = 96;
+constexpr int32 MaxBoneInfluences = 4;
 
+/**
+ * Bone matrices (inverse bind, sampled poses, skin) are FMatrix values that keep the memory layout of the glm
+ * matrices they were imported as (column-vector transforms; see GlmInterop.h), so the renderer uploads them as they
+ * are. In FMatrix product order the skin matrix is InverseBind * BoneWorld (glm: BoneWorld * InverseBind).
+ */
 struct ANIMATIONCORE_API FSkeletalVertex
 {
-	glm::vec3 Position{};
-	glm::vec3 Normal{0.0f, 1.0f, 0.0f};
-	glm::vec2 TexCoord{};
-	glm::vec4 Tangent{1.0f, 0.0f, 0.0f, 1.0f};
-	glm::ivec4 BoneIndices{0};
-	glm::vec4 BoneWeights{0.0f};
+	FVector Position = FVector::ZeroVector;
+	FVector Normal = FVector(0.0f, 1.0f, 0.0f);
+	FVector2D TexCoord = FVector2D::ZeroVector;
+	FVector4 Tangent = FVector4(1.0f, 0.0f, 0.0f, 1.0f);
+	FIntVector4 BoneIndices = FIntVector4(0);
+	FVector4 BoneWeights = FVector4(0.0f, 0.0f, 0.0f, 0.0f);
 };
+
+static_assert(sizeof(FSkeletalVertex) == 80, "FSkeletalVertex is uploaded as an 80-byte interleaved vertex");
 
 struct ANIMATIONCORE_API USkeleton
 {
-	std::vector<std::string> BoneNames;
-	std::vector<int> ParentIndices; // -1 = root
-	std::vector<glm::mat4> InverseBindPose; // cluster geometry_to_bone
+	TArray<FName> BoneNames;
+	TArray<int32> ParentIndices; // INDEX_NONE = root
+	TArray<FMatrix> InverseBindPose; // cluster geometry_to_bone
 
-	[[nodiscard]] int BoneCount() const
+	[[nodiscard]] int32 BoneCount() const
 	{
-		return static_cast<int>(BoneNames.size());
+		return BoneNames.Num();
 	}
-	[[nodiscard]] int FindBoneIndex(const std::string& InName) const;
+	[[nodiscard]] int32 FindBoneIndex(FName InName) const;
 };
 
-/// Unreal-like UAnimSequence: per-frame bone matrices as model-space `node_to_world`
-/// at sample time. Skin matrix = boneWorld * geometry_to_bone (inverse bind).
+/**
+ * UE-like UAnimSequence: per-frame bone matrices as model-space node_to_world at sample time.
+ * Skin matrix = geometry_to_bone (inverse bind) followed by the bone's world matrix.
+ */
 struct ANIMATIONCORE_API UAnimSequence
 {
-	std::string Name;
+	FName Name;
 	float DurationSeconds = 1.0f;
 	float FramesPerSecond = 30.0f;
-	/// When false, SampleLocalPose clamps to the last frame (one-shot Jump / Land).
+	/** When false, SampleLocalPose clamps to the last frame (one-shot Jump / Land). */
 	bool bLooping = true;
-	/// [frame][bone] — model-space bone matrix (`node_to_world`), not parent-local.
-	/// Named `localPoseFrames` for historical cooked JSON compatibility.
-	std::vector<std::vector<glm::mat4>> LocalPoseFrames;
+	/** [frame][bone]: model-space bone matrix (node_to_world), not parent-local (historical name). */
+	TArray<TArray<FMatrix>> LocalPoseFrames;
 
-	[[nodiscard]] int FrameCount() const
+	[[nodiscard]] int32 FrameCount() const
 	{
-		return static_cast<int>(LocalPoseFrames.size());
+		return LocalPoseFrames.Num();
 	}
 	[[nodiscard]] bool IsFinished(float TimeSeconds) const;
-	/// Samples blended bone model-space matrices for `timeSeconds` (loops or clamps by `bLooping`).
-	void SampleLocalPose(float TimeSeconds, std::vector<glm::mat4>& OutBoneWorld) const;
+	/** Samples blended bone model-space matrices for TimeSeconds (loops or clamps by bLooping). */
+	void SampleLocalPose(float TimeSeconds, TArray<FMatrix>& OutBoneWorld) const;
 };
 
-/// Unreal-like UBlendSpace1D sample (UAnimSequence + axis position).
+/** UE-like UBlendSpace1D sample (UAnimSequence + axis position). */
 struct ANIMATIONCORE_API FBlendSample
 {
 	const UAnimSequence* Sequence = nullptr;
 	float Position = 0.0f;
 };
 
-/// Unreal-like UBlendSpace1D: blends adjacent samples along one axis (e.g. Speed).
+/** UE-like UBlendSpace1D: blends adjacent samples along one axis (e.g. Speed). */
 struct ANIMATIONCORE_API UBlendSpace1D
 {
-	std::string Name = "BlendSpace1D";
+	FName Name = FName("BlendSpace1D");
 	float AxisMin = 0.0f;
 	float AxisMax = 1.0f;
-	std::vector<FBlendSample> Samples;
+	TArray<FBlendSample> Samples;
 
 	void AddSample(const UAnimSequence* InSequence, float InPosition)
 	{
@@ -80,19 +81,19 @@ struct ANIMATIONCORE_API UBlendSpace1D
 		{
 			return;
 		}
-		Samples.push_back(FBlendSample{InSequence, InPosition});
+		Samples.Add(FBlendSample{InSequence, InPosition});
 	}
 
 	void ClearSamples()
 	{
-		Samples.clear();
+		Samples.Reset();
 	}
 
-	/// Resolve axis value into two clips + blend weight toward the higher sample.
+	/** Resolves the axis value into two clips + a blend weight toward the higher sample. */
 	void Evaluate(float AxisValue, const UAnimSequence*& OutA, const UAnimSequence*& OutB, float& OutAlpha) const;
 };
 
-/// Jump / fall / land clips layered over locomotion (Unreal AnimBP overlay).
+/** Jump / fall / land clips layered over locomotion (UE AnimBP overlay). */
 struct ANIMATIONCORE_API FAnimJumpClips
 {
 	const UAnimSequence* JumpStart = nullptr;
@@ -100,8 +101,8 @@ struct ANIMATIONCORE_API FAnimJumpClips
 	const UAnimSequence* Land = nullptr;
 };
 
-/// Unreal-like locomotion + jump state machine states.
-enum class EAnimJumpState : std::uint8_t
+/** UE-like locomotion + jump state machine states. */
+enum class EAnimJumpState : uint8
 {
 	Locomotion = 0,
 	JumpStart,
@@ -109,8 +110,10 @@ enum class EAnimJumpState : std::uint8_t
 	Land,
 };
 
-/// Unreal-like UAnimInstance base: UBlendSpace1D locomotion only (no jump SM).
-/// Game / Character subclasses add game-specific graphs via `NativeInitializeAnimation`.
+/**
+ * UE-like UAnimInstance base: UBlendSpace1D locomotion only (no jump state machine).
+ * Game / character subclasses add game-specific graphs through NativeInitializeAnimation.
+ */
 class ANIMATIONCORE_API UAnimInstance
 {
 public:
@@ -163,9 +166,9 @@ public:
 	{
 	}
 	virtual void NativeUpdateAnimation(float DeltaTime);
-	/// Current pose bone model-space matrices (`node_to_world`).
-	virtual void GetBoneWorldMatrices(std::vector<glm::mat4>& OutBoneWorld) const;
-	virtual void GetSkinMatrices(std::vector<glm::mat4>& OutSkin) const;
+	/** Current pose bone model-space matrices (node_to_world). */
+	virtual void GetBoneWorldMatrices(TArray<FMatrix>& OutBoneWorld) const;
+	virtual void GetSkinMatrices(TArray<FMatrix>& OutSkin) const;
 
 	[[nodiscard]] float GetBlendAlpha() const
 	{
@@ -174,8 +177,8 @@ public:
 
 protected:
 	void UpdateLocomotion(float DeltaTime);
-	void SampleLocomotionBoneWorld(std::vector<glm::mat4>& OutBoneWorld) const;
-	void SkinFromBoneWorld(const std::vector<glm::mat4>& BoneWorld, std::vector<glm::mat4>& OutSkin) const;
+	void SampleLocomotionBoneWorld(TArray<FMatrix>& OutBoneWorld) const;
+	void SkinFromBoneWorld(const TArray<FMatrix>& BoneWorld, TArray<FMatrix>& OutSkin) const;
 
 	[[nodiscard]] const USkeleton* GetSkeleton() const
 	{
@@ -201,7 +204,7 @@ private:
 	float TimeB = 0.0f;
 };
 
-/// Framework Character AnimBP: locomotion UBlendSpace1D + Jump/Fall/Land SM (rates game-tuned).
+/** Framework character AnimBP: locomotion UBlendSpace1D + Jump / Fall / Land state machine (rates game-tuned). */
 class ANIMATIONCORE_API UCharacterAnimInstance : public UAnimInstance
 {
 public:
@@ -246,8 +249,8 @@ public:
 	void SetMovementState(bool bInFalling, float InVelocityY, bool bInJustLanded);
 
 	void NativeUpdateAnimation(float DeltaTime) override;
-	void GetBoneWorldMatrices(std::vector<glm::mat4>& OutBoneWorld) const override;
-	void GetSkinMatrices(std::vector<glm::mat4>& OutSkin) const override;
+	void GetBoneWorldMatrices(TArray<FMatrix>& OutBoneWorld) const override;
+	void GetSkinMatrices(TArray<FMatrix>& OutSkin) const override;
 
 	[[nodiscard]] EAnimJumpState GetJumpState() const
 	{
@@ -267,7 +270,7 @@ private:
 
 	void EnterState(EAnimJumpState Next);
 	void UpdateJumpStateMachine();
-	void SamplePlayerBoneWorld(const FPosePlayer& Player, std::vector<glm::mat4>& OutBoneWorld) const;
+	void SamplePlayerBoneWorld(const FPosePlayer& Player, TArray<FMatrix>& OutBoneWorld) const;
 	void AdvancePlayer(FPosePlayer& Player, float DeltaTime, float PlayRate) const;
 	[[nodiscard]] float PlayRateForState(EAnimJumpState State) const;
 
@@ -295,14 +298,14 @@ private:
 struct ANIMATIONCORE_API FSkeletalMeshData
 {
 	USkeleton Skeleton;
-	std::vector<FSkeletalVertex> Vertices;
-	std::vector<std::uint32_t> Indices;
-	glm::vec3 LocalMin{0.0f};
-	glm::vec3 LocalMax{0.0f};
+	TArray<FSkeletalVertex> Vertices;
+	TArray<uint32> Indices;
+	FVector LocalMin = FVector::ZeroVector;
+	FVector LocalMax = FVector::ZeroVector;
 	UAnimSequence EmbeddedAnim;
 
-	[[nodiscard]] bool empty() const
+	[[nodiscard]] bool IsEmpty() const
 	{
-		return Vertices.empty() || Indices.empty();
+		return Vertices.Num() == 0 || Indices.Num() == 0;
 	}
 };

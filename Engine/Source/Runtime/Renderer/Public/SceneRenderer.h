@@ -84,9 +84,9 @@ public:
 
 	/// Queue a skinned mesh draw for the next `DrawScene` (cleared after DrawScene).
 	void SubmitSkeletalDraw(
-		const USkeletalMesh& InMesh, const glm::mat4& InModel, const std::vector<glm::mat4>& InBoneMatrices);
+		const USkeletalMesh& InMesh, const glm::mat4& InModel, const TArray<FMatrix>& InBoneMatrices);
 	void SubmitSkeletalDraw(
-		const USkeletalMesh& InMesh, const FLegacyTransform& Transform, const std::vector<glm::mat4>& InBoneMatrices);
+		const USkeletalMesh& InMesh, const FLegacyTransform& Transform, const TArray<FMatrix>& InBoneMatrices);
 
 	/// Queue a rigid static mesh with an explicit model matrix (attachments, etc.).
 	void SubmitStaticDraw(const UStaticMesh& InMesh, const glm::mat4& InModel, const FMaterial& InMaterial);
@@ -223,7 +223,8 @@ private:
 	{
 		const USkeletalMesh* Mesh = nullptr;
 		glm::mat4 Model{1.0f};
-		std::vector<glm::mat4> BoneMatrices;
+		/** Skin matrices in the glm memory layout (uploaded as they are). */
+		TArray<FMatrix> BoneMatrices;
 	};
 
 	struct FStaticDrawItem

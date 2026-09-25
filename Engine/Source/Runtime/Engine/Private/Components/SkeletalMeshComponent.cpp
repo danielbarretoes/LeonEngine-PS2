@@ -1,6 +1,7 @@
 #include "Components/SkeletalMeshComponent.h"
 
 #include "Engine/GameEngine.h"
+#include "Migration/GlmInterop.h"
 #include "SceneRenderer.h"
 #include "StaticMesh.h"
 
@@ -36,7 +37,7 @@ void USkeletalMeshComponent::BindAnimInstanceToAssets()
 	{
 		AnimInstance->SetSkeleton(nullptr);
 	}
-	if (!BlendSpace.Samples.empty())
+	if (BlendSpace.Samples.Num() > 0)
 	{
 		AnimInstance->SetBlendSpace(&BlendSpace);
 	}
@@ -61,7 +62,7 @@ UAnimSequence& USkeletalMeshComponent::GetOrCreateSequence(const std::string& Na
 		return Sequences[It->second];
 	}
 	Sequences.push_back(UAnimSequence{});
-	Sequences.back().Name = Name;
+	Sequences.back().Name = FName(Name.c_str());
 	SequenceIndexByName[Name] = Sequences.size() - 1;
 	return Sequences.back();
 }
@@ -117,17 +118,17 @@ bool USkeletalMeshComponent::GetBoneModelMatrix(const std::string& InBoneName, g
 	{
 		return false;
 	}
-	const int BoneIndex = SkeletalMesh->GetSkeleton().FindBoneIndex(InBoneName);
+	const int32 BoneIndex = SkeletalMesh->GetSkeleton().FindBoneIndex(FName(InBoneName.c_str()));
 	if (BoneIndex < 0)
 	{
 		return false;
 	}
 	AnimInstance->GetBoneWorldMatrices(BoneWorldMatrices);
-	if (BoneWorldMatrices.size() <= static_cast<std::size_t>(BoneIndex))
+	if (BoneWorldMatrices.Num() <= BoneIndex)
 	{
 		return false;
 	}
-	OutModel = BoneWorldMatrices[static_cast<std::size_t>(BoneIndex)];
+	OutModel = ToGlm(BoneWorldMatrices[BoneIndex]);
 	return true;
 }
 

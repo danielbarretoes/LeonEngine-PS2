@@ -1,118 +1,131 @@
+#include "CoreMinimal.h"
+#include "Misc/AutomationTest.h"
 #include "SkeletalAnimation.h"
 
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-
-using Catch::Matchers::WithinAbs;
+#if WITH_DEV_AUTOMATION_TESTS
 
 namespace
 {
 
+	// Translation matrices have the same memory as glm::translate, the layout the bone matrices keep.
 	USkeleton MakeTwoBoneSkeleton()
 	{
 		USkeleton Sk;
-		Sk.BoneNames = {"root", "child"};
-		Sk.ParentIndices = {-1, 0};
-		Sk.InverseBindPose = {
-			glm::mat4(1.0f), glm::inverse(glm::translate(glm::mat4(1.0f), glm::vec3{0.0f, 1.0f, 0.0f}))};
+		Sk.BoneNames = {FName("root"), FName("child")};
+		Sk.ParentIndices = {INDEX_NONE, 0};
+		Sk.InverseBindPose = {FMatrix::Identity, FTranslationMatrix(FVector(0.0f, -1.0f, 0.0f))};
 		return Sk;
 	}
 
-	UAnimSequence MakeTranslatedClip(const char* Name, const glm::vec3& ChildLocalTranslation)
+	UAnimSequence MakeTranslatedClip(const TCHAR* Name, const FVector& ChildLocalTranslation)
 	{
 		UAnimSequence Clip;
-		Clip.Name = Name;
+		Clip.Name = FName(Name);
 		Clip.DurationSeconds = 1.0f;
 		Clip.FramesPerSecond = 1.0f;
-		Clip.LocalPoseFrames.resize(1);
-		Clip.LocalPoseFrames[0].resize(2);
-		Clip.LocalPoseFrames[0][0] = glm::mat4(1.0f);
-		Clip.LocalPoseFrames[0][1] = glm::translate(glm::mat4(1.0f), ChildLocalTranslation);
+		Clip.LocalPoseFrames.SetNum(1);
+		Clip.LocalPoseFrames[0] = {FMatrix::Identity, FTranslationMatrix(ChildLocalTranslation)};
 		return Clip;
 	}
 
 } // namespace
 
-TEST_CASE("AnimSequence SampleLocalPose loops duration", "[animation][sequence]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnimSequenceLoopTest, "System.AnimationCore.Sequence.Loop",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FAnimSequenceLoopTest::RunTest(const FString& Parameters)
 {
 	UAnimSequence Clip;
 	Clip.DurationSeconds = 2.0f;
 	Clip.FramesPerSecond = 1.0f;
-	Clip.LocalPoseFrames.resize(2);
-	Clip.LocalPoseFrames[0] = {glm::mat4(1.0f)};
-	Clip.LocalPoseFrames[1] = {glm::translate(glm::mat4(1.0f), glm::vec3{1.0f, 0.0f, 0.0f})};
+	Clip.LocalPoseFrames.SetNum(2);
+	Clip.LocalPoseFrames[0] = {FMatrix::Identity};
+	Clip.LocalPoseFrames[1] = {FTranslationMatrix(FVector(1.0f, 0.0f, 0.0f))};
 
-	std::vector<glm::mat4> Pose;
+	TArray<FMatrix> Pose;
 	Clip.SampleLocalPose(0.0f, Pose);
-	REQUIRE(Pose.size() == 1);
-	REQUIRE_THAT(Pose[0][3].x, WithinAbs(0.0f, 1.0e-4f));
+	TestEqual("Bones", Pose.Num(), 1);
+	TestEqual("Start", Pose[0].M[3][0], 0.0f, 1.0e-4f);
 
-	Clip.SampleLocalPose(2.0f, Pose); // wraps to start
-	REQUIRE_THAT(Pose[0][3].x, WithinAbs(0.0f, 1.0e-4f));
+	Clip.SampleLocalPose(2.0f, Pose); // wraps to the start
+	TestEqual("Wrapped", Pose[0].M[3][0], 0.0f, 1.0e-4f);
+	return true;
 }
 
-TEST_CASE("AnimSequence one-shot clamps and reports finished", "[animation][sequence]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnimSequenceOneShotTest, "System.AnimationCore.Sequence.OneShot",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FAnimSequenceOneShotTest::RunTest(const FString& Parameters)
 {
+	// A one-shot clip clamps to its last frame and reports when it is finished.
 	UAnimSequence Clip;
 	Clip.DurationSeconds = 1.0f;
 	Clip.FramesPerSecond = 1.0f;
 	Clip.bLooping = false;
-	Clip.LocalPoseFrames.resize(2);
-	Clip.LocalPoseFrames[0] = {glm::mat4(1.0f)};
-	Clip.LocalPoseFrames[1] = {glm::translate(glm::mat4(1.0f), glm::vec3{2.0f, 0.0f, 0.0f})};
+	Clip.LocalPoseFrames.SetNum(2);
+	Clip.LocalPoseFrames[0] = {FMatrix::Identity};
+	Clip.LocalPoseFrames[1] = {FTranslationMatrix(FVector(2.0f, 0.0f, 0.0f))};
 
-	REQUIRE_FALSE(Clip.IsFinished(0.0f));
-	REQUIRE(Clip.IsFinished(1.0f));
+	TestFalse("Not finished at the start", Clip.IsFinished(0.0f));
+	TestTrue("Finished at the end", Clip.IsFinished(1.0f));
 
-	std::vector<glm::mat4> Pose;
+	TArray<FMatrix> Pose;
 	Clip.SampleLocalPose(5.0f, Pose);
-	REQUIRE_THAT(Pose[0][3].x, WithinAbs(2.0f, 1.0e-4f));
+	TestEqual("Clamped", Pose[0].M[3][0], 2.0f, 1.0e-4f);
+	return true;
 }
 
-TEST_CASE("AnimInstance BlendSpace produces skin matrices", "[animation][animinstance]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnimInstanceSkinTest, "System.AnimationCore.AnimInstance.BlendSpaceSkin",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FAnimInstanceSkinTest::RunTest(const FString& Parameters)
 {
 	const USkeleton Skeleton = MakeTwoBoneSkeleton();
-	const UAnimSequence Idle = MakeTranslatedClip("Idle", {0.0f, 1.0f, 0.0f});
-	const UAnimSequence Run = MakeTranslatedClip("Run", {0.0f, 2.0f, 0.0f});
+	const UAnimSequence Idle = MakeTranslatedClip("Idle", FVector(0.0f, 1.0f, 0.0f));
+	const UAnimSequence Run = MakeTranslatedClip("Run", FVector(0.0f, 2.0f, 0.0f));
 
 	UBlendSpace1D Bs;
 	Bs.AddSample(&Idle, 0.0f);
 	Bs.AddSample(&Run, 1.0f);
 
-	UAnimInstance Anim;
-	Anim.SetSkeleton(&Skeleton);
-	Anim.SetBlendSpace(&Bs);
-	Anim.SetLocomotionBlendInterpSpeed(0.0f); // snap for unit tests
-
-	SECTION("idle input → near bind child")
 	{
+		// Idle input: the child is at its bind pose, so its skin matrix is the identity.
+		UAnimInstance Anim;
+		Anim.SetSkeleton(&Skeleton);
+		Anim.SetBlendSpace(&Bs);
+		Anim.SetLocomotionBlendInterpSpeed(0.0f); // snap for unit tests
 		Anim.SetBlendSpaceInput(0.0f);
 		Anim.NativeUpdateAnimation(0.016f);
-		std::vector<glm::mat4> Skin;
+		TArray<FMatrix> Skin;
 		Anim.GetSkinMatrices(Skin);
-		REQUIRE(Skin.size() == 2);
-		// child global = translate(0,1,0); * inverseBind ≈ identity
-		REQUIRE_THAT(Skin[1][3].y, WithinAbs(0.0f, 1.0e-3f));
-		REQUIRE_THAT(Anim.GetBlendAlpha(), WithinAbs(0.0f, 1.0e-5f));
+		TestEqual("Idle: bones", Skin.Num(), 2);
+		TestEqual("Idle: child at bind", Skin[1].M[3][1], 0.0f, 1.0e-3f);
+		TestEqual("Idle: alpha", Anim.GetBlendAlpha(), 0.0f, 1.0e-5f);
 	}
-
-	SECTION("mid input blends")
 	{
+		// Mid input blends.
+		UAnimInstance Anim;
+		Anim.SetSkeleton(&Skeleton);
+		Anim.SetBlendSpace(&Bs);
+		Anim.SetLocomotionBlendInterpSpeed(0.0f);
 		Anim.SetBlendSpaceInput(0.5f);
 		Anim.NativeUpdateAnimation(0.016f);
-		REQUIRE_THAT(Anim.GetBlendAlpha(), WithinAbs(0.5f, 1.0e-5f));
-		std::vector<glm::mat4> Skin;
+		TestEqual("Mid: alpha", Anim.GetBlendAlpha(), 0.5f, 1.0e-5f);
+		TArray<FMatrix> Skin;
 		Anim.GetSkinMatrices(Skin);
-		REQUIRE(Skin.size() == 2);
+		TestEqual("Mid: bones", Skin.Num(), 2);
 	}
+	return true;
 }
 
-TEST_CASE("AnimInstance eases locomotion blend input", "[animation][animinstance]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnimInstanceEaseTest, "System.AnimationCore.AnimInstance.EaseBlendInput",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FAnimInstanceEaseTest::RunTest(const FString& Parameters)
 {
 	const USkeleton Skeleton = MakeTwoBoneSkeleton();
-	const UAnimSequence Idle = MakeTranslatedClip("Idle", {0.0f, 1.0f, 0.0f});
-	const UAnimSequence Run = MakeTranslatedClip("Run", {0.0f, 2.0f, 0.0f});
+	const UAnimSequence Idle = MakeTranslatedClip("Idle", FVector(0.0f, 1.0f, 0.0f));
+	const UAnimSequence Run = MakeTranslatedClip("Run", FVector(0.0f, 2.0f, 0.0f));
 	UBlendSpace1D Bs;
 	Bs.AddSample(&Idle, 0.0f);
 	Bs.AddSample(&Run, 1.0f);
@@ -123,19 +136,22 @@ TEST_CASE("AnimInstance eases locomotion blend input", "[animation][animinstance
 	Anim.SetLocomotionBlendInterpSpeed(8.0f);
 	Anim.SetBlendSpaceInput(1.0f);
 	Anim.NativeUpdateAnimation(0.016f);
-	REQUIRE(Anim.GetBlendSpaceInput() > 0.0f);
-	REQUIRE(Anim.GetBlendSpaceInput() < 1.0f);
-	REQUIRE_THAT(Anim.GetBlendSpaceInputTarget(), WithinAbs(1.0f, 1.0e-5f));
+	TestTrue("Moving toward the target", Anim.GetBlendSpaceInput() > 0.0f && Anim.GetBlendSpaceInput() < 1.0f);
+	TestEqual("Target", Anim.GetBlendSpaceInputTarget(), 1.0f, 1.0e-5f);
+	return true;
 }
 
-TEST_CASE("CharacterAnimInstance jump state machine with crossfade", "[animation][animinstance][jump]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterAnimJumpTest, "System.AnimationCore.CharacterAnimInstance.JumpStateMachine",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FCharacterAnimJumpTest::RunTest(const FString& Parameters)
 {
 	const USkeleton Skeleton = MakeTwoBoneSkeleton();
-	UAnimSequence Idle = MakeTranslatedClip("Idle", {0.0f, 1.0f, 0.0f});
-	UAnimSequence Run = MakeTranslatedClip("Run", {0.0f, 2.0f, 0.0f});
-	UAnimSequence Jump = MakeTranslatedClip("Jump", {0.0f, 3.0f, 0.0f});
-	UAnimSequence Fall = MakeTranslatedClip("Fall", {0.0f, 4.0f, 0.0f});
-	UAnimSequence Land = MakeTranslatedClip("Land", {0.0f, 1.5f, 0.0f});
+	UAnimSequence Idle = MakeTranslatedClip("Idle", FVector(0.0f, 1.0f, 0.0f));
+	UAnimSequence Run = MakeTranslatedClip("Run", FVector(0.0f, 2.0f, 0.0f));
+	UAnimSequence Jump = MakeTranslatedClip("Jump", FVector(0.0f, 3.0f, 0.0f));
+	UAnimSequence Fall = MakeTranslatedClip("Fall", FVector(0.0f, 4.0f, 0.0f));
+	UAnimSequence Land = MakeTranslatedClip("Land", FVector(0.0f, 1.5f, 0.0f));
 	Jump.bLooping = false;
 	Jump.DurationSeconds = 0.2f;
 	Fall.bLooping = true;
@@ -155,40 +171,45 @@ TEST_CASE("CharacterAnimInstance jump state machine with crossfade", "[animation
 	Anim.SetLocomotionBlendInterpSpeed(0.0f);
 	Anim.SetBlendSpaceInput(0.0f);
 
-	REQUIRE(Anim.GetJumpState() == EAnimJumpState::Locomotion);
+	TestTrue("Starts in locomotion", Anim.GetJumpState() == EAnimJumpState::Locomotion);
 
 	Anim.NotifyJumped();
 	Anim.SetMovementState(true, 5.0f, false);
 	Anim.NativeUpdateAnimation(0.016f);
-	REQUIRE(Anim.GetJumpState() == EAnimJumpState::JumpStart);
-	REQUIRE(Anim.GetCrossfadeAlpha() < 1.0f);
+	TestTrue("Jump start", Anim.GetJumpState() == EAnimJumpState::JumpStart);
+	TestTrue("Crossfading", Anim.GetCrossfadeAlpha() < 1.0f);
 
 	Anim.SetMovementState(true, -1.0f, false);
 	Anim.NativeUpdateAnimation(0.016f);
-	REQUIRE(Anim.GetJumpState() == EAnimJumpState::FallLoop);
+	TestTrue("Falling", Anim.GetJumpState() == EAnimJumpState::FallLoop);
 
 	Anim.SetMovementState(false, 0.0f, true);
 	Anim.NativeUpdateAnimation(0.016f);
-	REQUIRE(Anim.GetJumpState() == EAnimJumpState::Land);
+	TestTrue("Landing", Anim.GetJumpState() == EAnimJumpState::Land);
 
-	for (int I = 0; I < 20; ++I)
+	for (int32 I = 0; I < 20; ++I)
 	{
 		Anim.SetMovementState(false, 0.0f, false);
 		Anim.NativeUpdateAnimation(0.05f);
 	}
-	REQUIRE(Anim.GetJumpState() == EAnimJumpState::Locomotion);
+	TestTrue("Back to locomotion", Anim.GetJumpState() == EAnimJumpState::Locomotion);
 
-	std::vector<glm::mat4> Skin;
+	TArray<FMatrix> Skin;
 	Anim.GetSkinMatrices(Skin);
-	REQUIRE(Skin.size() == 2);
+	TestEqual("Skin bones", Skin.Num(), 2);
+	return true;
 }
 
-TEST_CASE("CharacterAnimInstance jump play rate finishes one-shot sooner", "[animation][animinstance][jump]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterAnimPlayRateTest, "System.AnimationCore.CharacterAnimInstance.JumpPlayRate",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FCharacterAnimPlayRateTest::RunTest(const FString& Parameters)
 {
+	// A faster jump play rate finishes the one-shot sooner.
 	const USkeleton Skeleton = MakeTwoBoneSkeleton();
-	UAnimSequence Idle = MakeTranslatedClip("Idle", {0.0f, 1.0f, 0.0f});
-	UAnimSequence Jump = MakeTranslatedClip("Jump", {0.0f, 3.0f, 0.0f});
-	UAnimSequence Fall = MakeTranslatedClip("Fall", {0.0f, 4.0f, 0.0f});
+	UAnimSequence Idle = MakeTranslatedClip("Idle", FVector(0.0f, 1.0f, 0.0f));
+	UAnimSequence Jump = MakeTranslatedClip("Jump", FVector(0.0f, 3.0f, 0.0f));
+	UAnimSequence Fall = MakeTranslatedClip("Fall", FVector(0.0f, 4.0f, 0.0f));
 	Jump.bLooping = false;
 	Jump.DurationSeconds = 1.0f;
 	Fall.bLooping = true;
@@ -207,9 +228,12 @@ TEST_CASE("CharacterAnimInstance jump play rate finishes one-shot sooner", "[ani
 	Anim.NotifyJumped();
 	Anim.SetMovementState(true, 5.0f, false);
 	Anim.NativeUpdateAnimation(0.0f);
-	REQUIRE(Anim.GetJumpState() == EAnimJumpState::JumpStart);
+	TestTrue("Jump start", Anim.GetJumpState() == EAnimJumpState::JumpStart);
 
 	Anim.SetMovementState(true, 5.0f, false);
 	Anim.NativeUpdateAnimation(0.3f);
-	REQUIRE(Anim.GetJumpState() == EAnimJumpState::FallLoop);
+	TestTrue("Falling after 0.3 s at 4x", Anim.GetJumpState() == EAnimJumpState::FallLoop);
+	return true;
 }
+
+#endif // WITH_DEV_AUTOMATION_TESTS

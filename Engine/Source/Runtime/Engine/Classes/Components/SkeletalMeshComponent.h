@@ -136,6 +136,6 @@ private:
 	UBlendSpace1D BlendSpace{};
 	std::unique_ptr<UAnimInstance> AnimInstance;
 	std::vector<FSkelMeshAttachment> Attachments;
-	mutable std::vector<glm::mat4> SkinMatrices;
-	mutable std::vector<glm::mat4> BoneWorldMatrices;
+	mutable TArray<FMatrix> SkinMatrices;
+	mutable TArray<FMatrix> BoneWorldMatrices;
 };

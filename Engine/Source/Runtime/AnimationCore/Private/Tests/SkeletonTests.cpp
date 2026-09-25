@@ -1,43 +1,56 @@
+#include "CoreMinimal.h"
+#include "Misc/AutomationTest.h"
 #include "SkeletalAnimation.h"
 
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include <glm/gtc/matrix_transform.hpp>
+#if WITH_DEV_AUTOMATION_TESTS
 
-using Catch::Matchers::WithinAbs;
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSkeletonFindBoneTest, "System.AnimationCore.Skeleton.FindBoneIndex",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-TEST_CASE("Skeleton FindBoneIndex and BoneCount", "[animation][skeleton]")
+bool FSkeletonFindBoneTest::RunTest(const FString& Parameters)
 {
 	USkeleton Sk;
-	Sk.BoneNames = {"root", "hips", "spine"};
-	Sk.ParentIndices = {-1, 0, 1};
-	Sk.InverseBindPose.assign(3, glm::mat4(1.0f));
+	Sk.BoneNames = {FName("root"), FName("hips"), FName("spine")};
+	Sk.ParentIndices = {INDEX_NONE, 0, 1};
+	Sk.InverseBindPose.Init(FMatrix::Identity, 3);
 
-	REQUIRE(Sk.BoneCount() == 3);
-	REQUIRE(Sk.FindBoneIndex("hips") == 1);
-	REQUIRE(Sk.FindBoneIndex("missing") == -1);
+	TestEqual("Bone count", Sk.BoneCount(), 3);
+	TestEqual("Found", Sk.FindBoneIndex(FName("hips")), 1);
+	TestEqual("Missing", Sk.FindBoneIndex(FName("missing")), INDEX_NONE);
+	return true;
 }
 
-TEST_CASE("AnimSequence SampleLocalPose lerps mid-frame", "[animation][sequence]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnimSequenceLerpTest, "System.AnimationCore.Sequence.LerpMidFrame",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FAnimSequenceLerpTest::RunTest(const FString& Parameters)
 {
+	// Halfway between two frames the translation is halfway too.
 	UAnimSequence Clip;
 	Clip.DurationSeconds = 1.0f;
 	Clip.FramesPerSecond = 1.0f;
-	Clip.LocalPoseFrames.resize(2);
-	Clip.LocalPoseFrames[0] = {glm::mat4(1.0f)};
-	Clip.LocalPoseFrames[1] = {glm::translate(glm::mat4(1.0f), glm::vec3{2.0f, 0.0f, 0.0f})};
+	Clip.LocalPoseFrames.SetNum(2);
+	Clip.LocalPoseFrames[0] = {FMatrix::Identity};
+	Clip.LocalPoseFrames[1] = {FTranslationMatrix(FVector(2.0f, 0.0f, 0.0f))};
 
-	std::vector<glm::mat4> Pose;
+	TArray<FMatrix> Pose;
 	Clip.SampleLocalPose(0.5f, Pose);
-	REQUIRE(Pose.size() == 1);
-	REQUIRE_THAT(Pose[0][3].x, WithinAbs(1.0f, 1.0e-3f));
+	TestEqual("Bones", Pose.Num(), 1);
+	TestEqual("Translation", Pose[0].M[3][0], 1.0f, 1.0e-3f);
+	return true;
 }
 
-TEST_CASE("AnimInstance without skeleton yields empty skin", "[animation][animinstance]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnimInstanceNoSkeletonTest, "System.AnimationCore.AnimInstance.NoSkeleton",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FAnimInstanceNoSkeletonTest::RunTest(const FString& Parameters)
 {
 	UAnimInstance Anim;
 	Anim.NativeUpdateAnimation(0.016f);
-	std::vector<glm::mat4> Skin;
+	TArray<FMatrix> Skin;
 	Anim.GetSkinMatrices(Skin);
-	REQUIRE(Skin.empty());
+	TestEqual("No skin without a skeleton", Skin.Num(), 0);
+	return true;
 }
+
+#endif // WITH_DEV_AUTOMATION_TESTS

@@ -4,6 +4,8 @@
 #include "RHIHandles.h"
 #include "SkeletalAnimation.h"
 
+#include <glm/vec3.hpp>
+
 #include <memory>
 #include <vector>
 

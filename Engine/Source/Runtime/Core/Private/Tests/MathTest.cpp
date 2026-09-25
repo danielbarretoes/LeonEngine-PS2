@@ -141,6 +141,9 @@ bool FMathVectorTest::RunTest(const FString& Parameters)
 
 	TestEqual("FVector2D GetRotated", FVector2D(1, 0).GetRotated(90.f).Y, 1.f);
 	TestEqual("FIntVector from FVector truncates", FIntVector(FVector(1.9f, -1.9f, 2.1f)).Y, -1);
+	FIntVector4 Bones(3, 1, 4, 1);
+	Bones[2] = 5;
+	TestTrue("FIntVector4 indexing", Bones == FIntVector4(3, 1, 5, 1) && sizeof(FIntVector4) == 16);
 	TestEqual("FVector4 Dot3", FVector4::Dot3(FVector4(1, 2, 3, 100), FVector4(1, 1, 1, 100)), 6.f);
 	return true;
 }
