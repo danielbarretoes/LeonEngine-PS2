@@ -117,6 +117,7 @@ bool UGameEngine::Initialize(int32 Width, int32 Height, const TCHAR* Title)
 
 	(void)AudioDevice.Initialize(/*silent=*/false);
 
+	GarbageCollectionTimer = FGarbageCollectionTimer(FGarbageCollectionSettings::LoadFromConfig());
 	if (GameInstance->GetWorld() == nullptr)
 	{
 		GameInstance->InitializeStandalone();
@@ -142,6 +143,7 @@ bool UGameEngine::InitializeHeadless()
 	Resources.SetGpuUploadEnabled(false);
 	bHeadless = true;
 	(void)AudioDevice.Initialize(/*silent=*/true);
+	GarbageCollectionTimer = FGarbageCollectionTimer(FGarbageCollectionSettings::LoadFromConfig());
 	if (GameInstance->GetWorld() == nullptr)
 	{
 		GameInstance->InitializeStandalone();
@@ -188,6 +190,11 @@ void UGameEngine::Shutdown()
 	FpsAccumFrames = 0;
 	DisplayFps = 0.0f;
 	DisplayMs = 0.0f;
+}
+
+bool UGameEngine::ConditionalCollectGarbage(float DeltaSeconds)
+{
+	return GarbageCollectionTimer.Tick(DeltaSeconds, GARBAGE_COLLECTION_KEEPFLAGS);
 }
 
 float UGameEngine::ConsumeScrollY()
@@ -317,6 +324,8 @@ bool UGameEngine::Tick(float DeltaTime, const FUpdateCallback& OnUpdate, const F
 	{
 		OnUpdate(DeltaTime);
 	}
+	// After the world ticked (the update hook ticks it), like UE's UGameEngine::Tick.
+	(void)ConditionalCollectGarbage(DeltaTime);
 	TickPlayHud(DeltaTime);
 	PendingScrollY = 0.0f; // discard unused wheel (modes that do not ConsumeScrollY)
 	Render(OnPostRender);

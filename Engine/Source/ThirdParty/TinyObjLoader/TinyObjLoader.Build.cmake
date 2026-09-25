@@ -11,4 +11,6 @@ function(LeonExternal_TinyObjLoader)
 	set(TINYOBJLOADER_BUILD_TEST_LOADER OFF CACHE BOOL "" FORCE)
 	set(TINYOBJLOADER_INSTALL OFF CACHE BOOL "" FORCE)
 	add_subdirectory("${LEON_THIRDPARTY_DIR}" "${CMAKE_BINARY_DIR}/ThirdParty/TinyObjLoader" EXCLUDE_FROM_ALL SYSTEM)
+	# A C++ library built with its own CMake files: keep the compiler's exceptions and RTTI (Leon code turns them off).
+	leon_third_party_cxx_defaults(tinyobjloader)
 endfunction()

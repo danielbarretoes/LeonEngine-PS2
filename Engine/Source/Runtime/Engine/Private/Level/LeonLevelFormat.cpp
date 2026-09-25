@@ -1174,5 +1174,7 @@ bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FS
 
 	const FString& Label = Doc.Name.IsEmpty() ? SourcePath : Doc.Name;
 	UE_LOG(LogLevel, Log, "LevelLoader: loaded '%s' (%d actors)", *Label, Engine.GetLevel().GetStaticMeshes().Num());
+	// A level (re)load is a garbage collection safe point (plan decision D11): the staging level goes now.
+	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
 	return true;
 }

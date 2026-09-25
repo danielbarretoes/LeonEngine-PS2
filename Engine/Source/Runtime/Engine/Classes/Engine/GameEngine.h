@@ -13,6 +13,7 @@
 #include "ResourceCache.h"
 #include "SceneRenderer.h"
 #include "UObject/GCObject.h"
+#include "UObject/GarbageCollection.h"
 
 class UWorld;
 
@@ -74,6 +75,13 @@ public:
 	{
 		bRunning = false;
 	}
+
+	/**
+	 * Collects garbage once gc.TimeBetweenPurgingPendingKillObjects has passed (UE: UEngine::ConditionalCollectGarbage,
+	 * [/Script/Engine.GarbageCollectionSettings] of the engine config). Tick calls it after the world ticked (a safe
+	 * point, plan decision D11); a headless loop calls it after its step. Returns true when it collected.
+	 */
+	bool ConditionalCollectGarbage(float DeltaSeconds);
 	[[nodiscard]] bool IsHeadless() const
 	{
 		return bHeadless;
@@ -314,6 +322,9 @@ private:
 	/** The view camera (a standalone component until P13's player camera manager). */
 	UCameraComponent* Camera = nullptr;
 	FResourceCache Resources;
+	/** Times the periodic garbage collection (UE: TimeSinceLastPendingKillPurge). */
+	FGarbageCollectionTimer GarbageCollectionTimer;
+
 	/** The game session; its world context holds the game world (UE: UGameEngine::GameInstance). */
 	UGameInstance* GameInstance = nullptr;
 

@@ -1,5 +1,10 @@
 #include "Components/InteractionPromptWidget.h"
 
+UInteractionPromptWidget::UInteractionPromptWidget(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
 namespace
 {
 

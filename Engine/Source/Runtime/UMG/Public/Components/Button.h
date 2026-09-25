@@ -3,6 +3,7 @@
 #include "Blueprint/UserWidget.h"
 #include "CoreMinimal.h"
 #include "Fonts/TextLayout.h"
+#include "Button.generated.h"
 
 class FGenericWindow;
 
@@ -11,9 +12,14 @@ class FGenericWindow;
  * Usually owned by UVerticalBox; can also be a root HUD widget with SetPosition. The id is what TickInput reports
  * when the button is activated (NAME_None: a status row that cannot be activated).
  */
+UCLASS()
 class UMG_API UButton : public UUserWidget
 {
+	GENERATED_BODY()
+
 public:
+	UButton(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
 	void SetId(FName InId)
 	{
 		Id = InId;

@@ -1,9 +1,14 @@
+#include "Components/ProgressBar.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Components/TextBlock.h"
 #include "CoreMinimal.h"
+#include "Engine/GameEngine.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/GameMode.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/GameState.h"
+#include "GameFramework/HUD.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "Misc/AutomationTest.h"
@@ -45,10 +50,12 @@ bool FGameFrameworkGameModeSpawnsGameAndPlayerStatesTest::RunTest(const FString&
 	TestTrue("In the player array", GameMode->GetGameState().HasPlayerState(PlayerState));
 	GameMode->Logout(*Player);
 	TestEqual("No players", GameMode->GetNumPlayers(), 0);
+	GameMode->PostLogin(*Player);
 
 	TWeakObjectPtr<APlayerState> WeakPlayerState = PlayerState;
 	Player->Destroy();
 	TestTrue("Player state destroyed with its controller", PlayerState->IsPendingKillPending());
+	TestEqual("Left the player array", GameMode->GetNumPlayers(), 0);
 	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
 	TestFalse("Player state collected", WeakPlayerState.IsValid());
 	return true;
@@ -115,6 +122,70 @@ bool FGameFrameworkControllersAreActorsTest::RunTest(const FString& Parameters)
 	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
 	TestNull("Still released after the collection", Player->GetPawn());
 	TestEqual("Controller and its player state", World.ActorCount(), static_cast<SIZE_T>(2));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameFrameworkHUDWidgetsAreObjectsTest,
+	"System.Engine.GameFramework.HUDWidgetsAreObjects",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameFrameworkHUDWidgetsAreObjectsTest::RunTest(const FString& Parameters)
+{
+	// HUD widgets are UObjects inside their HUD, found by class with Cast; a removed widget is collected.
+	AHUD* Hud = NewObject<AHUD>();
+	Hud->AddToRoot();
+	UTextBlock* Text = Hud->AddWidget<UTextBlock>();
+	TestTrue("Widget inside the HUD", Text->GetOuter() == Hud);
+	TestTrue("Owning HUD", Text->GetOwningHUD() == Hud);
+	TestTrue("Found by class", Hud->GetWidgetOfClass<UTextBlock>() == Text);
+	TestNull("Other classes are not", Hud->GetWidgetOfClass<UProgressBar>());
+
+	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
+	TestTrue("Kept by the HUD", Hud->GetWidgetOfClass<UTextBlock>() == Text);
+	TWeakObjectPtr<UTextBlock> WeakText = Text;
+	TestTrue("Removed by class", Hud->RemoveWidget<UTextBlock>());
+	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
+	TestFalse("Collected once removed", WeakText.IsValid());
+	Hud->RemoveFromRoot();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameFrameworkAnimInstanceIsAnInnerObjectTest,
+	"System.Engine.GameFramework.AnimInstanceIsAnInnerObject",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameFrameworkAnimInstanceIsAnInnerObjectTest::RunTest(const FString& Parameters)
+{
+	// A skeletal mesh component starts with a locomotion anim instance inside it; the character instance replaces it
+	// and Cast tells them apart.
+	FScopedTestWorld TestWorld;
+	ACharacter* Character = TestWorld->SpawnActor<ACharacter>();
+	USkeletalMeshComponent& Mesh = Character->GetMesh();
+	TestTrue("Default instance inside the mesh", Mesh.GetAnimInstance().GetOuter() == &Mesh);
+	TestNull("Not a character instance", Mesh.GetAnimInstance<UCharacterAnimInstance>());
+	UCharacterAnimInstance& CharacterAnim = Mesh.SetAnimInstance<UCharacterAnimInstance>();
+	TestTrue("Character instance in use", Mesh.GetAnimInstance<UCharacterAnimInstance>() == &CharacterAnim);
+	TestTrue("Owning mesh", CharacterAnim.GetOwningMeshComponent() == &Mesh);
+	TestTrue("Still a UAnimInstance", Cast<UAnimInstance>(&CharacterAnim) != nullptr);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameFrameworkEngineCollectsGarbageOnATimerTest,
+	"System.Engine.GameFramework.EngineCollectsGarbageOnATimer",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameFrameworkEngineCollectsGarbageOnATimerTest::RunTest(const FString& Parameters)
+{
+	// The engine collects once gc.TimeBetweenPurgingPendingKillObjects (61.1 s by default) has passed, not before; the
+	// engine's own objects survive, an unreferenced one does not.
+	UGameEngine Engine;
+	TWeakObjectPtr<UObject> Garbage = NewObject<AActor>();
+	TestFalse("Not yet", Engine.ConditionalCollectGarbage(30.0f));
+	TestTrue("Garbage still there", Garbage.IsValid());
+	TestTrue("Interval reached", Engine.ConditionalCollectGarbage(31.2f));
+	TestFalse("Garbage collected", Garbage.IsValid());
+	TestNotNull("Engine world kept", Engine.GetWorld());
+	TestEqual("Engine camera kept", Engine.GetCamera().GetDistance(), 500.0f);
 	return true;
 }
 

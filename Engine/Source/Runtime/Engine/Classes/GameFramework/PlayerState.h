@@ -16,6 +16,9 @@ class ENGINE_API APlayerState : public AInfo
 public:
 	APlayerState(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
+	/** Leaves the game state's PlayerArray (UE). */
+	void Destroyed() override;
+
 	/** Clears the score, the lives and the name (UE: Reset). */
 	virtual void Reset()
 	{

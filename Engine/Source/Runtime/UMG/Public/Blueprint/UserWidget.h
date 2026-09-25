@@ -2,15 +2,24 @@
 
 #include "Blueprint/PaintContext.h"
 #include "CoreMinimal.h"
+#include "UObject/Object.h"
+#include "UserWidget.generated.h"
 
 class AHUD;
 
-/** UE-like UUserWidget: game HUD elements override NativePaint / NativeTick. */
-class UMG_API UUserWidget
+/**
+ * UE-like UUserWidget: game HUD elements override NativePaint / NativeTick. Created by AHUD::AddWidget with the HUD as
+ * its outer (UE: CreateWidget + AddToViewport); the HUD keeps it alive.
+ */
+UCLASS(Abstract)
+class UMG_API UUserWidget : public UObject
 {
-public:
-	virtual ~UUserWidget() = default;
+	GENERATED_BODY()
 
+public:
+	UUserWidget(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
+	UPROPERTY()
 	bool bIsVisible = true;
 
 	virtual void NativeConstruct()
@@ -43,5 +52,7 @@ public:
 
 private:
 	friend class AHUD;
+
+	/** The HUD that added the widget (not a UPROPERTY: UMG cannot reflect Engine's AHUD; the HUD outlives it). */
 	AHUD* OwningHud = nullptr;
 };

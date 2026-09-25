@@ -121,6 +121,11 @@ void UBlendSpace1D::Evaluate(
 	}
 }
 
+UAnimInstance::UAnimInstance(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
 void UAnimInstance::SetBlendSpaceInput(float AxisValue)
 {
 	BlendInputTarget = AxisValue;

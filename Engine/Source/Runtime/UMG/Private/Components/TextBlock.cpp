@@ -1,5 +1,10 @@
 #include "Components/TextBlock.h"
 
+UTextBlock::UTextBlock(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
 void UTextBlock::NativePaint(FPaintContext& Ctx)
 {
 	if (Text.IsEmpty())

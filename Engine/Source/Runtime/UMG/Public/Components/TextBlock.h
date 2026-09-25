@@ -3,11 +3,17 @@
 #include "Blueprint/UserWidget.h"
 #include "CoreMinimal.h"
 #include "Fonts/TextLayout.h"
+#include "TextBlock.generated.h"
 
 /** UE-like UTextBlock: simple screen text (status lines, titles). */
+UCLASS()
 class UMG_API UTextBlock : public UUserWidget
 {
+	GENERATED_BODY()
+
 public:
+	UTextBlock(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
 	void SetText(const FText& InText)
 	{
 		Text = InText;

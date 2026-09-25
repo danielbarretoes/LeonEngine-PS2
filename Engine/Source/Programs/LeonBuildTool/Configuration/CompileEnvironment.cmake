@@ -6,6 +6,13 @@
 #   LEON_ENGINE_DIR="<abs>" (development fallback for FPaths).
 # Target-level macros (WITH_ENGINE, IS_PROGRAM, …) only reach the launch module compiled into the
 # executable — shared module libraries are identical for every target of a build tree.
+#
+# Leon code builds without RTTI and without C++ exceptions on every platform (plan decision D17; UE's defaults,
+# bUseRTTI and bEnableExceptions false): casts go through UObject reflection (Cast<>) and failures through check /
+# ensure. MSVC: /GR- and no /EH flag, with _HAS_EXCEPTIONS=0 so the STL does not throw either. GCC / Clang:
+# -fno-rtti -fno-exceptions (the PS2 toolchain file already passes them to everything). Third-party code keeps its
+# own flags: CMake's MSVC defaults (/EHsc, /GR) are stripped from CMAKE_CXX_FLAGS for the whole tree, and third-party
+# C++ that needs them gets them back with leon_third_party_cxx_defaults (Jolt sets its own: no exceptions, no RTTI).
 
 function(leon_read_build_version)
 	set(File "${LEON_ENGINE_DIR}/Build/Build.version")
@@ -50,6 +57,24 @@ function(leon_init_compile_environment)
 		LEON_ENGINE_DIR="${LEON_ENGINE_DIR}"
 	)
 	set_property(GLOBAL PROPERTY LEON_GLOBAL_DEFINITIONS "${Definitions}")
+
+	# CMake's MSVC defaults turn exceptions (/EHsc) and RTTI (/GR, before CMake 3.20) on for every target; Leon
+	# targets add their own flags below, third-party ones call leon_third_party_cxx_defaults.
+	if(MSVC)
+		string(REGEX REPLACE "/EH[a-z]+" "" CxxFlags "${CMAKE_CXX_FLAGS}")
+		string(REGEX REPLACE "/GR-?" "" CxxFlags "${CxxFlags}")
+		string(REGEX REPLACE "  +" " " CxxFlags "${CxxFlags}")
+		string(STRIP "${CxxFlags}" CxxFlags)
+		set(CMAKE_CXX_FLAGS "${CxxFlags}" PARENT_SCOPE)
+	endif()
+endfunction()
+
+# Third-party C++ built by its own CMake files keeps the compiler defaults Leon code turns off: C++ exceptions and
+# RTTI (MSVC /EHsc /GR; GCC and Clang have both on by default).
+function(leon_third_party_cxx_defaults Target)
+	if(MSVC)
+		target_compile_options(${Target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/EHsc /GR>)
+	endif()
 endfunction()
 
 # Warnings / language settings for a Leon-owned target.
@@ -71,13 +96,18 @@ function(leon_apply_compile_environment Target CxxStandard)
 			/we4456 /we4457 /we4458 /we4459
 			# Padding added for alignas (FMatrix, FVector4) is expected (UE disables C4324 the same way).
 			/wd4324
+			# No RTTI and no C++ exceptions (D17): no /EH flag, and 'noexcept' without an exception model is fine.
+			/GR-
+			/wd4577
 			$<$<CONFIG:Debug,RelWithDebInfo>:/FS>)
+		target_compile_definitions(${Target} PRIVATE _HAS_EXCEPTIONS=0)
 	elseif(LEON_PLATFORM STREQUAL "PS2")
 		# Shadowing is an error like on MSVC (UE: ShadowVariableWarningLevel = Error). The EE FPU is single precision:
 		# an implicit float to double promotion goes through soft-float, so it is an error too.
 		target_compile_options(${Target} PRIVATE -Wall -Wextra -Werror=shadow -Werror=double-promotion)
 	else()
-		target_compile_options(${Target} PRIVATE -Wall -Wextra -Wpedantic)
+		# No RTTI and no C++ exceptions (D17), as the PS2 toolchain does for every target.
+		target_compile_options(${Target} PRIVATE -Wall -Wextra -Wpedantic $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti -fno-exceptions>)
 	endif()
 endfunction()
 

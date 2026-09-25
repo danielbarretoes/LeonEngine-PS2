@@ -1,5 +1,10 @@
 #include "Components/Button.h"
 
+UButton::UButton(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
 void UButton::MeasureDesiredSize(float& OutW, float& OutH) const
 {
 	float TextW = 0.0f;

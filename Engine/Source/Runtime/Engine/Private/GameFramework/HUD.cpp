@@ -15,15 +15,9 @@ void AHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
-void AHUD::BeginDestroy()
-{
-	Clear();
-	Super::BeginDestroy();
-}
-
 void AHUD::Clear()
 {
-	for (const TUniquePtr<UUserWidget>& Widget : Widgets)
+	for (UUserWidget* Widget : Widgets)
 	{
 		if (Widget != nullptr)
 		{
@@ -42,7 +36,7 @@ bool AHUD::RemoveWidget(UUserWidget* Widget)
 	}
 	for (int32 Index = 0; Index < Widgets.Num(); ++Index)
 	{
-		if (Widgets[Index].Get() == Widget)
+		if (Widgets[Index] == Widget)
 		{
 			Widget->NativeDestruct();
 			Widget->OwningHud = nullptr;
@@ -56,7 +50,7 @@ bool AHUD::RemoveWidget(UUserWidget* Widget)
 void AHUD::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	for (const TUniquePtr<UUserWidget>& Widget : Widgets)
+	for (UUserWidget* Widget : Widgets)
 	{
 		if (Widget != nullptr && Widget->bIsVisible)
 		{
@@ -74,7 +68,7 @@ void AHUD::Paint(FDebugOverlay& Overlay, int FramebufferWidth, int FramebufferHe
 	}
 
 	FPaintContext Ctx(Overlay, FramebufferWidth, FramebufferHeight);
-	for (const TUniquePtr<UUserWidget>& Widget : Widgets)
+	for (UUserWidget* Widget : Widgets)
 	{
 		if (Widget != nullptr && Widget->bIsVisible)
 		{

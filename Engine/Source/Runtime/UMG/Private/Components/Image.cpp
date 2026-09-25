@@ -1,5 +1,10 @@
 #include "Components/Image.h"
 
+UImage::UImage(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
 void UImage::NativePaint(FPaintContext& Ctx)
 {
 	if (!IsVisible())

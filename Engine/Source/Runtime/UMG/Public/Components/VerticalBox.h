@@ -3,6 +3,7 @@
 #include "Blueprint/UserWidget.h"
 #include "Components/Button.h"
 #include "CoreMinimal.h"
+#include "VerticalBox.generated.h"
 
 class FGenericWindow;
 
@@ -10,9 +11,14 @@ class FGenericWindow;
  * UE-like UVerticalBox (lite): title + stacked buttons + hint.
  * Add through AHUD::AddWidget; call TickInput each frame from the game mode (same as UMenuListWidget).
  */
+UCLASS()
 class UMG_API UVerticalBox : public UUserWidget
 {
+	GENERATED_BODY()
+
 public:
+	UVerticalBox(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
 	void SetTitle(const FText& InTitle)
 	{
 		Title = InTitle;
@@ -57,7 +63,9 @@ private:
 
 	FText Title = FText::FromString("Menu");
 	FText Hint;
-	TArray<TUniquePtr<UButton>> Buttons;
+	/** The buttons, created with the box as their outer. */
+	UPROPERTY()
+	TArray<UButton*> Buttons;
 	int32 Selected = 0;
 
 	bool bUpWasDown = false;

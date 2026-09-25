@@ -93,7 +93,10 @@ bool USceneComponent::AttachToComponent(
 		return false;
 	}
 
-	const FTransform WorldBefore = GetComponentTransform();
+	const bool bKeepsEverything = AttachmentRules.LocationRule == EAttachmentRule::KeepRelative &&
+		AttachmentRules.RotationRule == EAttachmentRule::KeepRelative &&
+		AttachmentRules.ScaleRule == EAttachmentRule::KeepRelative;
+	const FTransform WorldBefore = bKeepsEverything ? FTransform::Identity : GetComponentTransform();
 	if (AttachParent != nullptr)
 	{
 		AttachParent->AttachChildren.Remove(this);
@@ -102,9 +105,6 @@ bool USceneComponent::AttachToComponent(
 	AttachSocketName = InSocketName;
 	InParent->AttachChildren.AddUnique(this);
 
-	const bool bKeepsEverything = AttachmentRules.LocationRule == EAttachmentRule::KeepRelative &&
-		AttachmentRules.RotationRule == EAttachmentRule::KeepRelative &&
-		AttachmentRules.ScaleRule == EAttachmentRule::KeepRelative;
 	if (!bKeepsEverything)
 	{
 		const FTransform KeepWorld = WorldBefore.GetRelativeTransform(GetParentToWorld());
@@ -125,7 +125,10 @@ void USceneComponent::DetachFromComponent(const FDetachmentTransformRules& Detac
 		return;
 	}
 
-	const FTransform WorldBefore = GetComponentTransform();
+	const bool bKeepsWorld = DetachmentRules.LocationRule == EDetachmentRule::KeepWorld ||
+		DetachmentRules.RotationRule == EDetachmentRule::KeepWorld ||
+		DetachmentRules.ScaleRule == EDetachmentRule::KeepWorld;
+	const FTransform WorldBefore = bKeepsWorld ? GetComponentTransform() : FTransform::Identity;
 	AttachParent->AttachChildren.Remove(this);
 	AttachParent = nullptr;
 	AttachSocketName = NAME_None;

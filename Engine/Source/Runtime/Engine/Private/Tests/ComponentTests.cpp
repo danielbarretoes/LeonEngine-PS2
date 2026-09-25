@@ -8,6 +8,8 @@
 #include "GameFramework/Character.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/ScopedTestWorld.h"
+#include "UObject/GarbageCollection.h"
+#include "UObject/WeakObjectPtrTemplates.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -60,6 +62,10 @@ bool FComponentsPrimitivesRegisterWithTheWorldTest::RunTest(const FString& Param
 	MeshComponent->RegisterComponent();
 	TestTrue("Registered", MeshComponent->IsRegistered());
 	TestTrue("In the world's primitives", World.GetPrimitives().Contains(MeshComponent));
+	// A component created after the spawn is kept by its actor's OwnedComponents (AActor::AddReferencedObjects).
+	TWeakObjectPtr<UStaticMeshComponent> WeakMeshComponent = MeshComponent;
+	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
+	TestTrue("Kept by its owner", WeakMeshComponent.IsValid());
 	TestTrue("Attached at registration", Actor->GetRootComponent()->GetAttachChildren().Contains(MeshComponent));
 	TestFalse("No mesh yet", MeshComponent->HasValidMesh());
 	TestTrue("Renders while visible", MeshComponent->ShouldRender());

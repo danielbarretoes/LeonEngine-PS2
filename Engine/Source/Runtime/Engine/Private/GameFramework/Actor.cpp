@@ -305,6 +305,13 @@ void AActor::TickActor(float DeltaSeconds)
 	}
 }
 
+void AActor::AddReferencedObjects(UObject* InThis, FReferenceCollector& Collector)
+{
+	AActor* This = CastChecked<AActor>(InThis);
+	Collector.AddReferencedObjects(This->OwnedComponents, This);
+	Super::AddReferencedObjects(InThis, Collector);
+}
+
 void AActor::SyncTransformToLevel(ULevel& Level) const
 {
 	TArray<FLevelStaticMesh>& Meshes = Level.GetStaticMeshes();

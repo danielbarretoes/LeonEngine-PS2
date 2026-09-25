@@ -6,18 +6,15 @@
 
 USkeletalMeshComponent::USkeletalMeshComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
-	, AnimInstance(MakeUnique<UAnimInstance>())
 {
+	// Every component starts with the locomotion-only instance (UE creates the anim class's instance at InitAnim).
+	AnimInstance = CreateDefaultSubobject<UAnimInstance>(TEXT("AnimInstance"), /*bTransient =*/true);
 	AnimInstance->SetOwningMeshComponent(this);
 }
 
-void USkeletalMeshComponent::SetAnimInstance(TUniquePtr<UAnimInstance> Instance)
+void USkeletalMeshComponent::SetAnimInstance(UAnimInstance* Instance)
 {
-	AnimInstance = MoveTemp(Instance);
-	if (AnimInstance == nullptr)
-	{
-		AnimInstance = MakeUnique<UAnimInstance>();
-	}
+	AnimInstance = Instance != nullptr ? Instance : NewObject<UAnimInstance>(this);
 	AnimInstance->SetOwningMeshComponent(this);
 	BindAnimInstanceToAssets();
 }

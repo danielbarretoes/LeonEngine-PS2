@@ -35,15 +35,16 @@ public:
 		return SkeletalMesh.Get();
 	}
 
-	void SetAnimInstance(TUniquePtr<UAnimInstance> Instance);
-	template <typename TAnim, typename... ArgsType>
-	TAnim& SetAnimInstance(ArgsType&&... Args)
+	/** Replaces the anim instance (a new UAnimInstance when null); the component becomes its owner. */
+	void SetAnimInstance(UAnimInstance* Instance);
+	/** Creates a TAnim with this component as outer (UE: the anim class's instance) and uses it. */
+	template <typename TAnim>
+	TAnim& SetAnimInstance()
 	{
 		static_assert(TIsDerivedFrom<TAnim, UAnimInstance>::Value, "TAnim must derive from AnimInstance");
-		auto Owned = MakeUnique<TAnim>(Forward<ArgsType>(Args)...);
-		TAnim& Ref = *Owned;
-		SetAnimInstance(MoveTemp(Owned));
-		return Ref;
+		TAnim* NewInstance = NewObject<TAnim>(this);
+		SetAnimInstance(NewInstance);
+		return *NewInstance;
 	}
 
 	[[nodiscard]] UAnimInstance& GetAnimInstance()
@@ -58,12 +59,12 @@ public:
 	template <typename TAnim>
 	[[nodiscard]] TAnim* GetAnimInstance()
 	{
-		return dynamic_cast<TAnim*>(AnimInstance.Get());
+		return Cast<TAnim>(AnimInstance);
 	}
 	template <typename TAnim>
 	[[nodiscard]] const TAnim* GetAnimInstance() const
 	{
-		return dynamic_cast<const TAnim*>(AnimInstance.Get());
+		return Cast<TAnim>(AnimInstance);
 	}
 
 	[[nodiscard]] UBlendSpace1D& GetBlendSpace()
@@ -110,7 +111,9 @@ private:
 	TArray<TUniquePtr<UAnimSequence>> Sequences;
 	TMap<FString, int32> SequenceIndexByName;
 	UBlendSpace1D BlendSpace{};
-	TUniquePtr<UAnimInstance> AnimInstance;
+	/** The animation instance, an inner object of the component (UE: AnimScriptInstance). */
+	UPROPERTY(Transient)
+	UAnimInstance* AnimInstance = nullptr;
 	mutable TArray<FMatrix> SkinMatrices;
 	mutable TArray<FMatrix> BoneWorldMatrices;
 };

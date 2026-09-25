@@ -2,14 +2,20 @@
 
 #include "Blueprint/UserWidget.h"
 #include "CoreMinimal.h"
+#include "Image.generated.h"
 
 /**
  * UE-like UImage (lite): solid tinted rect (no texture brush yet; HUD DrawRect only).
  * Useful as panel chrome, health backdrop, letterbox bars.
  */
+UCLASS()
 class UMG_API UImage : public UUserWidget
 {
+	GENERATED_BODY()
+
 public:
+	UImage(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
 	void SetPosition(float InX, float InY)
 	{
 		X = InX;

@@ -248,6 +248,9 @@ public:
 	 */
 	virtual void SyncTransformToLevel(ULevel& Level) const;
 
+	/** Reports OwnedComponents to the collector (UE). */
+	static void AddReferencedObjects(UObject* InThis, FReferenceCollector& Collector);
+
 protected:
 	/**
 	 * The root component's relative location / rotation, which are the actor's while the root is not attached (Leon:
@@ -269,8 +272,10 @@ protected:
 private:
 	friend class UWorld;
 
-	/** Every component whose outer is this actor, in creation order (UE: OwnedComponents, a TSet there). */
-	UPROPERTY(Transient)
+	/**
+	 * Every component whose outer is this actor, in creation order (UE: OwnedComponents, a TSet there). Not a
+	 * UPROPERTY, as in UE: AddReferencedObjects reports it, and a template never copies it.
+	 */
 	TArray<UActorComponent*> OwnedComponents;
 
 	UPROPERTY()

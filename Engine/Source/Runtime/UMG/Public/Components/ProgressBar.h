@@ -3,11 +3,17 @@
 #include "Blueprint/UserWidget.h"
 #include "CoreMinimal.h"
 #include "Fonts/TextLayout.h"
+#include "ProgressBar.generated.h"
 
 /** UE-like UProgressBar (lite): background + fill rect, optional percent label. */
+UCLASS()
 class UMG_API UProgressBar : public UUserWidget
 {
+	GENERATED_BODY()
+
 public:
+	UProgressBar(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
 	void SetPosition(float InX, float InY)
 	{
 		X = InX;

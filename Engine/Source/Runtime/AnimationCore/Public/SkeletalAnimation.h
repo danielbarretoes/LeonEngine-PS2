@@ -1,6 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UObject/Object.h"
+#include "SkeletalAnimation.generated.h"
 
 class USkeletalMeshComponent;
 
@@ -114,16 +116,13 @@ enum class EAnimJumpState : uint8
  * UE-like UAnimInstance base: UBlendSpace1D locomotion only (no jump state machine).
  * Game / character subclasses add game-specific graphs through NativeInitializeAnimation.
  */
-class ANIMATIONCORE_API UAnimInstance
+UCLASS(Transient)
+class ANIMATIONCORE_API UAnimInstance : public UObject
 {
-public:
-	UAnimInstance() = default;
-	virtual ~UAnimInstance() = default;
+	GENERATED_BODY()
 
-	UAnimInstance(const UAnimInstance&) = delete;
-	UAnimInstance& operator=(const UAnimInstance&) = delete;
-	UAnimInstance(UAnimInstance&&) = delete;
-	UAnimInstance& operator=(UAnimInstance&&) = delete;
+public:
+	UAnimInstance(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	void SetOwningMeshComponent(USkeletalMeshComponent* Owner)
 	{
@@ -205,9 +204,14 @@ private:
 };
 
 /** Framework character AnimBP: locomotion UBlendSpace1D + Jump / Fall / Land state machine (rates game-tuned). */
+UCLASS(Transient)
 class ANIMATIONCORE_API UCharacterAnimInstance : public UAnimInstance
 {
+	GENERATED_BODY()
+
 public:
+	UCharacterAnimInstance(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
 	void SetJumpClips(const FAnimJumpClips& Clips)
 	{
 		JumpClips = Clips;

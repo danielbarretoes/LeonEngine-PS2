@@ -1,5 +1,10 @@
 #include "Components/ProgressBar.h"
 
+UProgressBar::UProgressBar(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
 void UProgressBar::NativePaint(FPaintContext& Ctx)
 {
 	if (!IsVisible())

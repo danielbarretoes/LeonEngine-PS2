@@ -31,7 +31,7 @@ class ENGINE_API AGameModeBase : public AInfo
 public:
 	AGameModeBase(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	/** The actor tick (the world ticks the game mode like any actor); the engine hook below is another overload. */
+	/** AActor::Tick (an AInfo: the world does not tick it); the engine hook below is another overload. */
 	using Super::Tick;
 
 	virtual void OnEnter(UGameEngine& Engine, const FString& LevelPath);

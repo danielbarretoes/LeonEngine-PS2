@@ -3,6 +3,7 @@
 #include "Blueprint/UserWidget.h"
 #include "CoreMinimal.h"
 #include "Fonts/TextLayout.h"
+#include "MenuListWidget.generated.h"
 
 class FGenericWindow;
 
@@ -10,9 +11,14 @@ class FGenericWindow;
  * UE-like vertical text menu (UMG ListView lite): arrows / Enter / click.
  * Add through AHUD::AddWidget; call TickInput each frame from the game mode.
  */
+UCLASS()
 class UMG_API UMenuListWidget : public UUserWidget
 {
+	GENERATED_BODY()
+
 public:
+	UMenuListWidget(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
 	struct FItem
 	{
 		/** Reported by TickInput when activated; NAME_None makes a status row. */

@@ -1,5 +1,10 @@
 #include "SkeletalAnimation.h"
 
+UCharacterAnimInstance::UCharacterAnimInstance(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
 void UCharacterAnimInstance::SetJumpPlayRates(float JumpStart, float FallLoop, float Land)
 {
 	JumpStartPlayRate = FMath::Max(JumpStart, 0.01f);

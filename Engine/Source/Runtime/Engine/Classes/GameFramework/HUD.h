@@ -21,17 +21,19 @@ public:
 
 	void Clear();
 
-	/** Unreal CreateWidget + AddToViewport (lite): construct, NativeConstruct, retain. */
-	template <typename T, typename... ArgsType>
-	T* AddWidget(ArgsType&&... Args)
+	/**
+	 * Unreal CreateWidget + AddToViewport (lite): NewObject with the HUD as outer, NativeConstruct, retain (the HUD's
+	 * Widgets keep it alive).
+	 */
+	template <typename T>
+	T* AddWidget()
 	{
 		static_assert(TIsDerivedFrom<T, UUserWidget>::Value, "T must derive from UserWidget");
-		auto Owned = MakeUnique<T>(Forward<ArgsType>(Args)...);
-		T* Raw = Owned.Get();
-		Raw->OwningHud = this;
-		Raw->NativeConstruct();
-		Widgets.Add(MoveTemp(Owned));
-		return Raw;
+		T* Widget = NewObject<T>(this);
+		Widget->OwningHud = this;
+		Widget->NativeConstruct();
+		Widgets.Add(Widget);
+		return Widget;
 	}
 
 	/** Remove first widget of type T (NativeDestruct). Returns true if removed. */
@@ -41,7 +43,7 @@ public:
 		static_assert(TIsDerivedFrom<T, UUserWidget>::Value, "T must derive from UserWidget");
 		for (int32 Index = 0; Index < Widgets.Num(); ++Index)
 		{
-			if (dynamic_cast<T*>(Widgets[Index].Get()) != nullptr)
+			if (Cast<T>(Widgets[Index]) != nullptr)
 			{
 				Widgets[Index]->NativeDestruct();
 				Widgets[Index]->OwningHud = nullptr;
@@ -58,9 +60,9 @@ public:
 	[[nodiscard]] T* GetWidgetOfClass() const
 	{
 		static_assert(TIsDerivedFrom<T, UUserWidget>::Value, "T must derive from UserWidget");
-		for (const auto& W : Widgets)
+		for (UUserWidget* W : Widgets)
 		{
-			if (T* Typed = dynamic_cast<T*>(W.Get()))
+			if (T* Typed = Cast<T>(W))
 			{
 				return Typed;
 			}
@@ -73,16 +75,17 @@ public:
 
 	/** Removes the widgets when the HUD is destroyed or ends play. */
 	void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
-	void BeginDestroy() override;
 
 	/** Clears prior frame screen geometry, then paints visible widgets. */
 	void Paint(FDebugOverlay& Overlay, int FramebufferWidth, int FramebufferHeight);
 
-	[[nodiscard]] const TArray<TUniquePtr<UUserWidget>>& GetWidgets() const
+	[[nodiscard]] const TArray<UUserWidget*>& GetWidgets() const
 	{
 		return Widgets;
 	}
 
 private:
-	TArray<TUniquePtr<UUserWidget>> Widgets;
+	/** The added widgets, in paint order. */
+	UPROPERTY(Transient)
+	TArray<UUserWidget*> Widgets;
 };

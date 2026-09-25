@@ -45,7 +45,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnimInstanceNoSkeletonTest, "System.AnimationC
 
 bool FAnimInstanceNoSkeletonTest::RunTest(const FString& Parameters)
 {
-	UAnimInstance Anim;
+	UAnimInstance& Anim = *NewObject<UAnimInstance>();
 	Anim.NativeUpdateAnimation(0.016f);
 	TArray<FMatrix> Skin;
 	Anim.GetSkinMatrices(Skin);

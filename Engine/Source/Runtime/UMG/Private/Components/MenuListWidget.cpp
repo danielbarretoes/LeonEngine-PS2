@@ -3,6 +3,11 @@
 #include "GenericPlatform/GenericWindow.h"
 #include "InputCoreTypes.h"
 
+UMenuListWidget::UMenuListWidget(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
 namespace
 {
 

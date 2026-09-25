@@ -483,7 +483,7 @@ void ACharacter::IntegrateVertical(FPhysScene& PhysScene, float DeltaTime, FDebu
 			{
 				--JumpsRemaining;
 			}
-			if (auto* CharacterAnim = dynamic_cast<UCharacterAnimInstance*>(&Mesh->GetAnimInstance()))
+			if (auto* CharacterAnim = Cast<UCharacterAnimInstance>(&Mesh->GetAnimInstance()))
 			{
 				CharacterAnim->NotifyJumped();
 			}
@@ -613,7 +613,7 @@ void ACharacter::ResolvePawnOverlap(ACharacter& Other)
 
 void ACharacter::Tick(float DeltaTime)
 {
-	if (auto* CharacterAnim = dynamic_cast<UCharacterAnimInstance*>(&Mesh->GetAnimInstance()))
+	if (auto* CharacterAnim = Cast<UCharacterAnimInstance>(&Mesh->GetAnimInstance()))
 	{
 		CharacterAnim->SetMovementState(IsFalling(), VelocityZ, ConsumeJustLanded());
 	}

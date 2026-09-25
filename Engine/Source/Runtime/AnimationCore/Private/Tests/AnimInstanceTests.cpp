@@ -90,7 +90,7 @@ bool FAnimInstanceSkinTest::RunTest(const FString& Parameters)
 
 	{
 		// Idle input: the child is at its bind pose, so its skin matrix is the identity.
-		UAnimInstance Anim;
+		UAnimInstance& Anim = *NewObject<UAnimInstance>();
 		Anim.SetSkeleton(&Skeleton);
 		Anim.SetBlendSpace(&Bs);
 		Anim.SetLocomotionBlendInterpSpeed(0.0f); // snap for unit tests
@@ -104,7 +104,7 @@ bool FAnimInstanceSkinTest::RunTest(const FString& Parameters)
 	}
 	{
 		// Mid input blends.
-		UAnimInstance Anim;
+		UAnimInstance& Anim = *NewObject<UAnimInstance>();
 		Anim.SetSkeleton(&Skeleton);
 		Anim.SetBlendSpace(&Bs);
 		Anim.SetLocomotionBlendInterpSpeed(0.0f);
@@ -130,7 +130,7 @@ bool FAnimInstanceEaseTest::RunTest(const FString& Parameters)
 	Bs.AddSample(&Idle, 0.0f);
 	Bs.AddSample(&Run, 1.0f);
 
-	UAnimInstance Anim;
+	UAnimInstance& Anim = *NewObject<UAnimInstance>();
 	Anim.SetSkeleton(&Skeleton);
 	Anim.SetBlendSpace(&Bs);
 	Anim.SetLocomotionBlendInterpSpeed(8.0f);
@@ -162,7 +162,7 @@ bool FCharacterAnimJumpTest::RunTest(const FString& Parameters)
 	Bs.AddSample(&Idle, 0.0f);
 	Bs.AddSample(&Run, 1.0f);
 
-	UCharacterAnimInstance Anim;
+	UCharacterAnimInstance& Anim = *NewObject<UCharacterAnimInstance>();
 	Anim.SetSkeleton(&Skeleton);
 	Anim.SetBlendSpace(&Bs);
 	Anim.SetJumpClips({&Jump, &Fall, &Land});
@@ -217,7 +217,7 @@ bool FCharacterAnimPlayRateTest::RunTest(const FString& Parameters)
 	UBlendSpace1D Bs;
 	Bs.AddSample(&Idle, 0.0f);
 
-	UCharacterAnimInstance Anim;
+	UCharacterAnimInstance& Anim = *NewObject<UCharacterAnimInstance>();
 	Anim.SetSkeleton(&Skeleton);
 	Anim.SetBlendSpace(&Bs);
 	Anim.SetJumpClips({&Jump, &Fall, nullptr});

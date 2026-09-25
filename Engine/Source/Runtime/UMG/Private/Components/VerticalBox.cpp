@@ -3,6 +3,11 @@
 #include "GenericPlatform/GenericWindow.h"
 #include "InputCoreTypes.h"
 
+UVerticalBox::UVerticalBox(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
 void UVerticalBox::ClearChildren()
 {
 	Buttons.Reset();
@@ -16,24 +21,23 @@ bool UVerticalBox::IsSelectable(const UButton& Button)
 
 UButton* UVerticalBox::AddButton(FName Id, const FText& Label)
 {
-	TUniquePtr<UButton> Button = MakeUnique<UButton>();
+	UButton* Button = NewObject<UButton>(this);
 	Button->SetId(Id);
 	Button->SetLabel(Label);
-	UButton* Raw = Button.Get();
-	Buttons.Add(MoveTemp(Button));
+	Buttons.Add(Button);
 	SnapSelectionToSelectable();
 	ApplySelectionVisuals();
-	return Raw;
+	return Button;
 }
 
 UButton* UVerticalBox::GetButton(int32 Index)
 {
-	return Buttons.IsValidIndex(Index) ? Buttons[Index].Get() : nullptr;
+	return Buttons.IsValidIndex(Index) ? Buttons[Index] : nullptr;
 }
 
 const UButton* UVerticalBox::GetButton(int32 Index) const
 {
-	return Buttons.IsValidIndex(Index) ? Buttons[Index].Get() : nullptr;
+	return Buttons.IsValidIndex(Index) ? Buttons[Index] : nullptr;
 }
 
 void UVerticalBox::SetSelectedIndex(int32 Index)
@@ -150,7 +154,7 @@ void UVerticalBox::CacheLayout(int32 ViewportW, int32 ViewportH)
 		FMath::Max(10.0f, static_cast<float>(ViewportH) - TotalH - 10.0f));
 
 	float Y = BoxY + TitleH;
-	for (TUniquePtr<UButton>& Button : Buttons)
+	for (UButton* Button : Buttons)
 	{
 		float Dw = 0.0f;
 		float Dh = 0.0f;
@@ -175,7 +179,7 @@ void UVerticalBox::NativePaint(FPaintContext& Ctx)
 			FLinearColor(1.0f, 0.82f, 0.35f), HudFontScale, ETextJustify::Center);
 	}
 
-	for (TUniquePtr<UButton>& Button : Buttons)
+	for (UButton* Button : Buttons)
 	{
 		Button->NativePaint(Ctx);
 	}
@@ -183,7 +187,7 @@ void UVerticalBox::NativePaint(FPaintContext& Ctx)
 	if (!Hint.IsEmpty())
 	{
 		float ButtonsBottom = BoxY + TitleH;
-		for (const TUniquePtr<UButton>& Button : Buttons)
+		for (const UButton* Button : Buttons)
 		{
 			ButtonsBottom = Button->GetY() + Button->GetHeight();
 		}
@@ -250,7 +254,7 @@ FName UVerticalBox::TickInput(FGenericWindow& Window, bool bCursorCaptured, floa
 		const float FbX = Cursor.X * static_cast<float>(FbW) / static_cast<float>(WinW);
 		const float FbY = Cursor.Y * static_cast<float>(FbH) / static_cast<float>(WinH);
 
-		for (TUniquePtr<UButton>& Button : Buttons)
+		for (UButton* Button : Buttons)
 		{
 			Button->SetHovered(Button->Contains(FbX, FbY));
 		}
@@ -259,7 +263,7 @@ FName UVerticalBox::TickInput(FGenericWindow& Window, bool bCursorCaptured, floa
 		{
 			for (int32 I = 0; I < Buttons.Num(); ++I)
 			{
-				UButton* Button = Buttons[I].Get();
+				UButton* Button = Buttons[I];
 				if (!Button->Contains(FbX, FbY))
 				{
 					continue;
@@ -276,7 +280,7 @@ FName UVerticalBox::TickInput(FGenericWindow& Window, bool bCursorCaptured, floa
 	}
 	else
 	{
-		for (TUniquePtr<UButton>& Button : Buttons)
+		for (UButton* Button : Buttons)
 		{
 			Button->SetHovered(false);
 		}

@@ -159,6 +159,7 @@ bool FGameApplication::Tick()
 			return false;
 		}
 		GameMode->Tick(*Engine, StepSeconds);
+		(void)Engine->ConditionalCollectGarbage(StepSeconds);
 		// Keep the console current when stdout is redirected (CI smoke, servers stopped with Ctrl+C).
 		GLog->Flush();
 		NextHeadlessTick += static_cast<double>(StepSeconds);
