@@ -11,8 +11,8 @@ jobs:
     container: ghcr.io/ps2dev/ps2dev@sha256:79c24d3762f5cfeee0beabeacc94480fe580d379d3e48a0bfbac681a8895daf6
     steps:
       - uses: actions/checkout@v4
-      - name: Install CMake + Ninja
-        run: apk add --no-cache cmake ninja make
+      - name: Install CMake, Ninja and the host g++ (LeonHeaderTool)
+        run: apk add --no-cache cmake ninja make g++ musl-dev
       - name: Build ThirdPerson (PS2) with LeonBuildTool
         run: |
           sh Engine/Build/BatchFiles/Linux/Build.sh ThirdPerson PS2 Development \

@@ -24,7 +24,32 @@ include("${LEON_LBT_DIR}/System/PlatformRegistry.cmake")
 include("${LEON_LBT_DIR}/Configuration/ModuleRules.cmake")
 include("${LEON_LBT_DIR}/System/ModuleDiscovery.cmake")
 include("${LEON_LBT_DIR}/System/ThirdPartyDependencies.cmake")
+include("${LEON_LBT_DIR}/System/HostTools.cmake")
 leon_load_platforms("${LEON_ENGINE_DIR}")
+
+# Ninja reads MSVC's /showIncludes lines to track header dependencies. cl.exe prints them in its UI language (e.g.
+# "Nota: inclusión del archivo:") encoded in the console's output code page, while CMake writes the prefix it detected
+# into the build files as UTF-8 (msvc_deps_prefix). Ninja compares bytes, so under any other code page (850, 1252...)
+# a non-ASCII prefix never matches: no header is recorded and a later header edit rebuilds nothing. Configure and
+# build (host tools included) with the console in UTF-8 and give the caller back its code page.
+set(_LeonCodePage "")
+# chcp.com reads its whole command line: a forward-slash path would parse as options.
+file(TO_NATIVE_PATH "$ENV{SystemRoot}/System32/chcp.com" _LeonChcp)
+macro(_leon_use_utf8_code_page)
+	if(CMAKE_HOST_WIN32 AND EXISTS "${_LeonChcp}")
+		execute_process(COMMAND "${_LeonChcp}" OUTPUT_VARIABLE _ChcpOutput ERROR_QUIET RESULT_VARIABLE _ChcpResult)
+		if(_ChcpResult EQUAL 0 AND _ChcpOutput MATCHES "([0-9]+)[^0-9]*$" AND NOT CMAKE_MATCH_1 STREQUAL "65001")
+			set(_LeonCodePage "${CMAKE_MATCH_1}")
+			execute_process(COMMAND "${_LeonChcp}" 65001 OUTPUT_QUIET ERROR_QUIET)
+		endif()
+	endif()
+endmacro()
+macro(_leon_restore_code_page)
+	if(_LeonCodePage)
+		execute_process(COMMAND "${_LeonChcp}" ${_LeonCodePage} OUTPUT_QUIET ERROR_QUIET)
+		set(_LeonCodePage "")
+	endif()
+endmacro()
 
 # --- Arguments (everything after the script path) ---
 set(_Args)
@@ -117,12 +142,19 @@ if(_Mode STREQUAL "GenerateProjectFiles")
 		set(_HostPlatform Linux)
 		set(_GeneratorArgs)
 	endif()
+	_leon_use_utf8_code_page()
+	leon_build_host_tools(_LeonHeaderTool _HostToolsError)
+	if(_HostToolsError)
+		_leon_restore_code_page()
+		message(FATAL_ERROR "${_HostToolsError}")
+	endif()
 	set(_ConfigureArgs -S "${LEON_LBT_DIR}" -B "${_ProjectFilesDir}" ${_GeneratorArgs}
-		"-DLEON_PLATFORM=${_HostPlatform}" "-DLEON_CONFIGURATION=Development")
+		"-DLEON_PLATFORM=${_HostPlatform}" "-DLEON_CONFIGURATION=Development" "-DLEON_HEADER_TOOL=${_LeonHeaderTool}")
 	if(_ProjectFile)
 		list(APPEND _ConfigureArgs "-DLEON_PROJECT_FILE=${_ProjectFile}")
 	endif()
 	execute_process(COMMAND "${CMAKE_COMMAND}" ${_ConfigureArgs} RESULT_VARIABLE _Result)
+	_leon_restore_code_page()
 	if(NOT _Result EQUAL 0)
 		message(FATAL_ERROR "LeonBuildTool: project file generation failed")
 	endif()
@@ -213,26 +245,14 @@ if(_Mode STREQUAL "Clean" OR _Mode STREQUAL "Rebuild")
 	endif()
 endif()
 
-# Ninja reads MSVC's /showIncludes lines to track header dependencies. cl.exe prints them in its UI language (e.g.
-# "Nota: inclusión del archivo:") encoded in the console's output code page, while CMake writes the prefix it detected
-# into the build files as UTF-8 (msvc_deps_prefix). Ninja compares bytes, so under any other code page (850, 1252...)
-# a non-ASCII prefix never matches: no header is recorded and a later header edit rebuilds nothing. Configure and
-# build with the console in UTF-8 and give the caller back its code page.
-set(_LeonCodePage "")
-# chcp.com reads its whole command line: a forward-slash path would parse as options.
-file(TO_NATIVE_PATH "$ENV{SystemRoot}/System32/chcp.com" _LeonChcp)
-if(CMAKE_HOST_WIN32 AND EXISTS "${_LeonChcp}")
-	execute_process(COMMAND "${_LeonChcp}" OUTPUT_VARIABLE _ChcpOutput ERROR_QUIET RESULT_VARIABLE _ChcpResult)
-	if(_ChcpResult EQUAL 0 AND _ChcpOutput MATCHES "([0-9]+)[^0-9]*$" AND NOT CMAKE_MATCH_1 STREQUAL "65001")
-		set(_LeonCodePage "${CMAKE_MATCH_1}")
-		execute_process(COMMAND "${_LeonChcp}" 65001 OUTPUT_QUIET ERROR_QUIET)
-	endif()
+_leon_use_utf8_code_page()
+
+# LeonHeaderTool (host tools tree) before the target configure, which may need it for reflected modules.
+leon_build_host_tools(_LeonHeaderTool _HostToolsError)
+if(_HostToolsError)
+	_leon_restore_code_page()
+	message(FATAL_ERROR "${_HostToolsError}")
 endif()
-macro(_leon_restore_code_page)
-	if(_LeonCodePage)
-		execute_process(COMMAND "${_LeonChcp}" ${_LeonCodePage} OUTPUT_QUIET ERROR_QUIET)
-	endif()
-endmacro()
 
 leon_platform_get(${_Platform} BUILD_TYPE_${_Configuration} _BuildType)
 if(NOT _BuildType)
@@ -244,7 +264,8 @@ set(_ConfigureArgs
 	-G Ninja
 	"-DLEON_PLATFORM=${_Platform}"
 	"-DLEON_CONFIGURATION=${_Configuration}"
-	"-DCMAKE_BUILD_TYPE=${_BuildType}")
+	"-DCMAKE_BUILD_TYPE=${_BuildType}"
+	"-DLEON_HEADER_TOOL=${_LeonHeaderTool}")
 if(_ProjectFile)
 	list(APPEND _ConfigureArgs "-DLEON_PROJECT_FILE=${_ProjectFile}")
 endif()

@@ -8,6 +8,12 @@ struct CORE_API FStaticallyLinkedModuleInfo
 {
 	const char* Name;
 	IModuleInterface* (*InitializeModule)();
+	/**
+	 * Registers the module's reflected classes, structs and enums (RegisterReflection_<Module>, written by
+	 * LeonHeaderTool in <Module>.init.gen.cpp), or nullptr for a module without reflected types. Referencing it from
+	 * the table keeps static linking from dropping the registration; CoreUObject calls it before StartupModule.
+	 */
+	void (*RegisterReflection)();
 };
 
 /**

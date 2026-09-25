@@ -3,7 +3,8 @@
 # Do not configure this directly — use Engine/Build/BatchFiles/Build.bat (or LeonBuildTool.cmake):
 #   Build.bat <Target> <Platform> <Configuration> [-Project=<path>.lproj]
 #
-# Cache inputs: LEON_PLATFORM, LEON_CONFIGURATION (Debug|Development|Shipping), LEON_PROJECT_FILE.
+# Cache inputs: LEON_PLATFORM, LEON_CONFIGURATION (Debug|Development|Shipping), LEON_PROJECT_FILE,
+# LEON_HEADER_TOOL (the host LeonHeaderTool executable; only required once a module is reflected).
 # Without a project the tree contains every engine target (programs, LeonGame) for the platform.
 cmake_minimum_required(VERSION 3.24)
 
@@ -23,6 +24,9 @@ if(NOT LEON_CONFIGURATION)
 endif()
 if(NOT LEON_CONFIGURATION MATCHES "^(Debug|Development|Shipping)$")
 	message(FATAL_ERROR "LEON_CONFIGURATION must be Debug, Development or Shipping")
+endif()
+if(LEON_HEADER_TOOL AND NOT EXISTS "${LEON_HEADER_TOOL}")
+	message(FATAL_ERROR "LEON_HEADER_TOOL does not exist: ${LEON_HEADER_TOOL}")
 endif()
 
 leon_platform_get(${LEON_PLATFORM} TOOLCHAIN_FILE _LeonToolchain)
@@ -45,6 +49,7 @@ include("${LEON_LBT_DIR}/Configuration/ModuleRules.cmake")
 include("${LEON_LBT_DIR}/Configuration/TargetRules.cmake")
 include("${LEON_LBT_DIR}/Configuration/CompileEnvironment.cmake")
 include("${LEON_LBT_DIR}/Configuration/BuildTarget.cmake")
+include("${LEON_LBT_DIR}/Configuration/ReflectionRules.cmake")
 include("${LEON_LBT_DIR}/System/ModuleDiscovery.cmake")
 include("${LEON_LBT_DIR}/System/ProjectDescriptor.cmake")
 include("${LEON_LBT_DIR}/System/PluginDescriptor.cmake")
