@@ -11,7 +11,8 @@ What runs automatically and what a person still has to check by hand. Build and 
 | LeonHeaderTool golden tests (run by `RunTests.bat` too) | `Engine\Intermediate\Build\HostTools\Win64\LeonHeaderTool.exe -Test` | `LeonHeaderTool -Test: N of N golden cases passed` |
 | Core, CoreUObject, Json and Projects on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (106 test(s), 0 failed)` in the EE log (112 on Win64) |
 | Format, banned APIs (G4), Win64 build | `Engine\Build\BatchFiles\Lint.bat` | `Lint OK` |
-| Frame capture | `LeonGame.exe "-map=<.llev>" "-Screenshot=<file.bmp>" "-ExitAfterFrames=N"` | the BMP matches a reference capture byte for byte |
+| Frame capture | `LeonGame.exe "-map=<map>" "-Screenshot=<file.bmp>" "-ExitAfterFrames=N"` | the BMP matches a reference capture byte for byte |
+| Console commands | `LeonGame.exe "-ExecCmds=obj gc;stat fps,stat fps" "-Screenshot=<file.bmp>" "-ExitAfterFrames=30"` | a `Cmd:` line per command, the capture unchanged |
 
 The CoreUObject tests collect garbage (`CollectGarbage`) between their steps; they only keep objects through
 `UPROPERTY` members, the root set, `FGCObject` and `TStrongObjectPtr`, and read the others through weak pointers, so
@@ -38,6 +39,16 @@ P13 (stored MD5 hashes: update them only when the format changes on purpose). `L
 needs no GPU: the GPU copies are made only when a frame is drawn), and
 `System.Engine.Components.SceneProxiesFollowTheComponents` checks that the proxies follow their components.
 
+Since P13's second part the engine is a UObject and the game starts through `UEngine::LoadMap`. The tests make their
+own `UGameEngine` (`TStrongObjectPtr`, `Init(nullptr)` runs it headless) when they need one:
+`System.Engine.LoadMap.StarterLogsInThePlayer` opens the Starter map and checks the login (the controller, the default
+pawn at the Play From Here start, the HUD and the begun play), `System.Engine.LoadMap.GameModePrecedence` the game mode
+choice (D18), `System.Engine.URL.*` and `System.Engine.EngineSettings.*` the URL and the map settings.
+`System.Engine.Input.*` feed keys and mouse deltas to a player controller and check the mappings of `BaseInput.ini`,
+the mouse look and the default pawn's flight; `System.Engine.Console.ExecChain` walks the console chain (`show`,
+`stat`, `FOV`, the F1 binding, a deferred command and `open`). A world made with `FScopedTestWorld` begins play at
+once, as the worlds did before `LoadMap`.
+
 The package tests (`System.CoreUObject.Package.*`) name their packages `/PackageTest/...`, a mount point they register
 for their duration, save them to memory (`UPackage::SaveToMemory` + `FLinkerLoad::RegisterInMemoryPackage`, so they
 run on the PS2 too), destroy them (pending kill and a full collection, as a new process would start) and load them
@@ -51,9 +62,9 @@ movement, traces, navigation, cameras, shadows and reflections against tables re
 UE's axes, so any change of sign or unit fails them.
 
 `-Screenshot=<file.bmp>` saves frame `-ExitAfterFrames=N` (default 60) as a 24-bit BMP and exits. A run of
-`LeonGame.exe -ExitAfterFrames=300` should log two `LogGarbage` lines and nothing else of note: one after the level
-load (`Collected 0` on the first load: there is no previous level content to free) and one at exit (the world
-teardown), and no errors. `-AxesGizmo` turns
+`LeonGame.exe -ExitAfterFrames=300` should log `RequestEngineExit: ExitAfterFrames`, the `LogGarbage` lines of the
+level load and of the exit (the world teardown in `PreExit`, then the engine itself) and no errors; it exits with code
+0. The same holds headless (`-nullrhi`). `-AxesGizmo` turns
 the axes gizmo on from the start (see below); captures without it do not change.
 
 ## Axes gizmo
@@ -67,8 +78,8 @@ blue as in UE:
   viewer is drawn last.
 
 `FDebugDraw::AddAxes(Origin or FTransform, Length = 100)` and `FDebugDraw::AddViewAxes(View)` (Engine,
-`Public/Debug/DebugDraw.h`) draw them; the view family's `EngineShowFlags.AxesGizmo` switches the gizmo
-(`UGameEngine::SetAxesGizmoEnabled`). It is off by default.
+`Public/Debug/DebugDraw.h`) draw them; the viewport client's `EngineShowFlags.AxesGizmo` switches the gizmo
+(`show AxesGizmo`). It is off by default.
 
 ## Manual checklist: axes and units (P7)
 
@@ -80,8 +91,7 @@ close the window to quit). The world is X forward, Y right, Z up, left-handed, 1
 - [ ] **Handedness**: look straight down (pull the mouse towards you until the pitch stops at -89°) and turn until red
   points up the screen: green must point to the **right**. With green on the left the world is right-handed.
 - [ ] **Mouse X**: moving the mouse right turns the view right (clockwise seen from above; the yaw grows). The view
-  turns about 0.3° per pixel: the default game mode and the engine's free look both apply the same 0.15° per pixel,
-  as before P7.
+  turns about 0.3° per pixel, as before P7 (since P13 once, through the `AxisConfig` sensitivity of `BaseInput.ini`).
 - [ ] **Mouse Y**: moving the mouse away from you looks up (positive pitch); the pitch stops at ±89°.
 - [ ] **WASD**: turn until red points into the screen (the corner red line shrinks to a dot). **W** moves towards
   +X (the origin axes come closer if you are behind them), **S** away, **D** to the right (+Y), **A** to the left.
@@ -94,7 +104,7 @@ close the window to quit). The world is X forward, Y right, Z up, left-handed, 1
   the left in the reflection).
 - [ ] **Free-look camera**: the view never rolls while turning or looking up and down, and the Starter level opens
   with the same view as before P7 (the frame captures match).
-- [ ] **Orbit camera**: `LeonGame` always enters the default game mode (free look), so the orbit camera cannot be
+- [ ] **Orbit camera**: `LeonGame`'s default pawn flies with a free-look camera, so the orbit camera cannot be
   driven there. Its mapping (`(-Pitch, Yaw + 180, 0)` from the legacy angles) is covered by
   `System.Engine.Golden.OrbitCameraNdc` and the camera tests. The PS2 ThirdPerson orbit boom (right stick) keeps its
   own frame and did not change in P7.

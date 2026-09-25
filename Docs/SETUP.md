@@ -70,26 +70,35 @@ On PS2 see [Run TestPAL in PCSX2](#run-testpal-in-pcsx2).
 
 ## LeonGame
 
-`LeonGame` is the engine's game executable (UE: `UE4Game`). It loads **one level** (`.llev`) and runs the default
-game mode (`ADefaultGameMode`) on it:
+`LeonGame` is the engine's game executable (UE: `UE4Game`). It starts as a UE 4.27 game does: `FEngineLoop` creates
+`GEngine` (`[/Script/Engine.Engine] GameEngine=`, a `UGameEngine`) and its game instance opens the startup map
+(`UEngine::Browse` → `LoadMap`):
 
 ```bat
-Engine\Binaries\Win64\LeonGame.exe [-map=<.llev>] [-nullrhi] [-tick=<Hz>] [-showstats] [-AxesGizmo]
-                                   [-Screenshot=<file.bmp> [-ExitAfterFrames=N]]
+Engine\Binaries\Win64\LeonGame.exe [<map>[?game=<class>]] [-map=<map>] [-nullrhi] [-tick=<Hz>] [-showstats]
+                                   [-AxesGizmo] [-ExecCmds="<command>;<command>"]
+                                   [-Screenshot=<file.bmp>] [-ExitAfterFrames=N]
 ```
 
-Without `-map=` it opens the config's `GameDefaultMap` (`Engine/Content/LevelTemplates/Starter.llev`); a `-map=` path
-is taken relative to the working directory, else relative to `Engine/Content` (`-map=LevelTemplates/Blank.llev`).
-`-nullrhi` runs headless (no window, silent audio) at `-tick=` Hz (default 60); `-showstats` shows the HUD stats;
-`-AxesGizmo` starts with the axes gizmo on; `-Screenshot=` saves frame `-ExitAfterFrames=` (default 60) as a 24-bit
-BMP and exits.
+The map is the first argument (UE's form) or `-map=` (Leon's alias, which the scripts use); without one it is
+`[/Script/EngineSettings.GameMapsSettings] GameDefaultMap`, `/Engine/LevelTemplates/Starter`. A map is a long package
+name whose `.llev` sits under a mount point (`/Engine/LevelTemplates/Blank` is
+`Engine/Content/LevelTemplates/Blank.llev`), a `.llev` path (absolute or relative to the working directory) or a
+content key (`LevelTemplates/Blank.llev`). URL options follow the map: `?game=/Script/Engine.GameMode` picks the game
+mode, which otherwise comes from the level (its world settings), then `GlobalDefaultGameMode` (`AGameModeBase`, whose
+default pawn is `ADefaultPawn`). A map that cannot be opened logs `Failed to enter <map>` and exits with code 1.
 
-In the window: mouse look (the cursor is captured), **WASD** fly along the view, **Q** / **E** down / up, **F1** mesh
-AABBs and the shadow volume, **F2** collision and traces, **F3** nav mesh, **F4** stats, **F5** reload shaders,
-**F6** axes gizmo (X red, Y green, Z blue). The world is UE's: X forward, Y right, Z up, centimetres. Manual checks:
-[TESTING.md](TESTING.md).
-Flags are read with `FParse` in `Engine/Source/Runtime/Launch/Private/Desktop/GameApplication.cpp`. Levels:
-[LEVELS.md](LEVELS.md).
+`-nullrhi` runs headless (no window, silent audio) at `-tick=` Hz (default 60); `-showstats` shows the HUD stats;
+`-AxesGizmo` starts with the axes gizmo on; `-ExecCmds=` runs console commands (separated by `;` or `,`) on the first
+frame, for example `-ExecCmds="stat unit;FOV 75"`; `-Screenshot=` saves frame `-ExitAfterFrames=` (default 60) as a
+24-bit BMP and exits, and `-ExitAfterFrames=N` alone exits after frame N (headless too). In PowerShell quote an
+argument that has a dot after `=` (`"-map=LevelTemplates/Blank.llev"`), or PowerShell splits it at the dot.
+
+In the window (`Engine/Config/BaseInput.ini`): mouse look (the cursor is captured), **WASD** or the arrows fly along
+the view, **E** / **Q** up / down; the function keys run console commands: **F1** `show Bounds` (mesh AABBs and the
+shadow volume), **F2** `show Collision`, **F3** `show Navigation` (flags only, not drawn yet), **F4** `stat unit`
+(stats), **F5** `RecompileShaders all`, **F6** `show AxesGizmo` (X red, Y green, Z blue). The world is UE's: X forward,
+Y right, Z up, centimetres. Manual checks: [TESTING.md](TESTING.md). Levels: [LEVELS.md](LEVELS.md).
 
 Every run writes a log file, `Engine/Programs/LeonGame/Saved/Logs/LeonGame.log` (a project target writes to
 `<Project>/Saved/Logs/`), keeping the previous run as `-backup-<date>.log`. Config comes from `Engine/Config/Base*.ini` and the project's `Config/Default*.ini`;

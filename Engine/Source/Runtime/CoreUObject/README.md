@@ -9,8 +9,10 @@ generated code ([LeonHeaderTool/README.md](../../Programs/LeonHeaderTool/README.
 Since P12 the gameplay framework is built on it: `Engine` (actors, components, world, level, game instance, game mode
 and state, controllers, HUD, player input), `AIModule` (`AAIController`), `UMG` (`UUserWidget` and the widgets) and
 `AnimationCore` (`UAnimInstance`) are reflected modules ([ARCHITECTURE.md §10](../../../../Docs/ARCHITECTURE.md#10-gameplay-framework-engine-desktop)
-has the ownership, spawn and destroy flows). `LeonAutomationTests` and `TestPAL` link CoreUObject for its tests; the
-PS2 game does not use it until P13.
+has the ownership, spawn and destroy flows); since P13 also the engine object (`UEngine` / `UGameEngine`), the viewport
+client, the players, `EngineSettings` (`UGameMapsSettings`) and the input (`UInputSettings`, `UPlayerInput`, and
+InputCore's reflected `FKey`). `LeonAutomationTests` and `TestPAL` link CoreUObject for its tests; the PS2 game links it
+through InputCore and starts the object system, but has no UObject of its own yet.
 
 ## Headers
 
@@ -97,14 +99,13 @@ figures in `GetLastGarbageCollectionStats()`.
 
 **When it runs.** Only at safe points, never on its own: nothing may hold an unreported `UObject*` across it (the
 rule: a `UObject*` member is a `UPROPERTY`; a non-UObject holder is an `FGCObject` or uses `TStrongObjectPtr`). The
-engine (P12) calls it where UE does: after the world is destroyed (`UGameEngine::Shutdown`, a replaced game instance,
-a test's `FScopedTestWorld`), after a level (re)load (`ApplyLevelDocument`), and every frame's
-`UGameEngine::ConditionalCollectGarbage` (UE: `UEngine::ConditionalCollectGarbage`) through
+engine calls it where UE does: after the world is destroyed (`UEngine::LoadMap` before the new map,
+`UGameEngine::PreExit`, a replaced game instance, a test's `FScopedTestWorld`), after a level (re)load
+(`ApplyLevelDocument`), on `obj gc`, and every frame's `UEngine::ConditionalCollectGarbage` through
 `FGarbageCollectionTimer::Tick` after the world tick; the interval comes from
 `[/Script/Engine.GarbageCollectionSettings] gc.TimeBetweenPurgingPendingKillObjects` in the engine config
-(`FGarbageCollectionSettings::LoadFromConfig`, 61.1 s by default). P13 adds `UEngine::LoadMap` (after the old world is
-released) and the round restart. `AActor::Destroy` marks the actor and its components pending kill and the next
-collection frees them.
+(`FGarbageCollectionSettings::LoadFromConfig`, 61.1 s by default). `AActor::Destroy` marks the actor and its components
+pending kill and the next collection frees them.
 
 **References.**
 
@@ -149,8 +150,10 @@ named by the first word, parses one argument per parameter with `FProperty::Impo
 spaces; a last `FString` parameter takes the rest of the line; a first object parameter receives `Executor` when it
 fits) and calls it through `ProcessEvent`. Unknown and non-Exec functions return false (`bForceCallWithNonExec` calls
 the latter anyway); a bad argument is reported on `Ar` and the function is not called. `UObject::ProcessConsoleExec`
-calls it; Core's `FExec` / `FSelfRegisteringExec` (`Misc/CoreMisc.h`) let non-UObjects publish commands. The console
-itself arrives with P13 (`UGameViewportClient`).
+calls it; Core's `FExec` / `FSelfRegisteringExec` (`Misc/CoreMisc.h`) let non-UObjects publish commands. Since P13 the
+engine's console chain (`ULocalPlayer::Exec` → `UGameViewportClient` → `UEngine::Exec` → `UPlayer::Exec`) reaches the
+Exec functions of the player input, the player controller (`FOV`), the pawn, the game mode, the game state and the
+world settings through `ProcessConsoleExec`.
 
 ## Packages
 

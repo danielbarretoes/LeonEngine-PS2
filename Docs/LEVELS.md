@@ -2,38 +2,38 @@
 
 A level is a binary Leon Level file (`.llev`) loaded into a `ULevel` by the desktop runtime (`Engine` module). Since P13 its content is actors, as in UE: the reader spawns them into the game world and the saver writes them back. There is no JSON level format: `LoadLevelFile` rejects any path whose extension is not `.llev`. The PS2 runtime does not load levels yet; the ThirdPerson demo builds its level in code (`FThirdPersonLevel`).
 
-Code: `Engine/Source/Runtime/Engine/Classes/Engine/Level.h`, `Engine/Source/Runtime/Engine/Public/Level/` (`LeonLevelFormat.h`, `LevelLoader.h`, `LegacyLevelDataComponent.h`), the actor classes in `Engine/Source/Runtime/Engine/Classes/{Engine,GameFramework}/`, `Engine/Source/Runtime/Launch/Private/Desktop/GameApplication.cpp` (startup level).
+Code: `Engine/Source/Runtime/Engine/Classes/Engine/Level.h`, `Engine/Source/Runtime/Engine/Public/Level/` (`LeonLevelFormat.h`, `LevelLoader.h`, `LegacyLevelDataComponent.h`), the actor classes in `Engine/Source/Runtime/Engine/Classes/{Engine,GameFramework}/`, `Engine/Source/Runtime/Engine/Private/UnrealEngine.cpp` (`UEngine::LoadMap`, the startup map).
 Also: [ASSET_FORMATS.md](ASSET_FORMATS.md) (`.lmat` / `.lmesh` referenced by actors) · [ARCHITECTURE.md](ARCHITECTURE.md) · [SETUP.md](SETUP.md).
 
 ## Types
 
 | Type | Header | Role |
 | --- | --- | --- |
-| `ULevel` | `Classes/Engine/Level.h` | Live level, a UObject: the game world's persistent level (`UGameEngine::GetLevel`). It holds the world's actors (`Actors`: the level content and the gameplay actors) and its `AWorldSettings` (`GetWorldSettings`) |
-| `AWorldSettings` | `Classes/GameFramework/WorldSettings.h` | The level's settings actor, spawned first (`DefaultGameMode`, `KillZ`); its legacy data component keeps the level name, the game mode string, the environment fields and the camera framing |
+| `ULevel` | `Classes/Engine/Level.h` | Live level, a UObject: the game world's persistent level (`UWorld::PersistentLevel`). It holds the world's actors (`Actors`: the level content and the gameplay actors) and its `AWorldSettings` (`GetWorldSettings`) |
+| `AWorldSettings` | `Classes/GameFramework/WorldSettings.h` | The level's settings actor, spawned first (`DefaultGameMode`, from the level's game mode string; `KillZ`); its legacy data component keeps the level name, the game mode string, the environment fields and the camera framing |
 | `ULegacyLevelDataComponent` | `Public/Level/LegacyLevelDataComponent.h` | The record fields with no UE counterpart yet, on the actor spawned from the record (class, mesh and material keys, sphere tessellation, spin, bob, trigger data, light orbit), so the saver can write them back; it goes away with the format (P15) |
 | `FLevelDocument` | `Public/Level/LeonLevelFormat.h` | In-memory mirror of a `.llev`: plain data, no GPU resources (`FLevelActorRecord`, `FLevelLightRecord`, `FLevelCameraRecord`) |
 
 ## Load pipeline
 
 ```text
-LoadLevelFile(UGameEngine&, Path)
+LoadLevelFile(UWorld&, FResourceCache&, Path)      (UEngine::LoadMap, into the new world)
   ├─ extension must be .llev
   ├─ LoadLeonLevelFile            .llev bytes -> FLevelDocument (DeserializeLeonLevel)
   └─ ApplyLevelDocument
         ├─ resolve every record first: transform, mesh (basic shape or .lmesh), material, fit height
         │     (a failure here leaves the current level untouched)
         ├─ destroy the previous level content actors (the gameplay actors stay)
-        ├─ spawn AWorldSettings (ULevel::WorldSettings)
+        ├─ spawn AWorldSettings (ULevel::WorldSettings; DefaultGameMode from the game mode string)
         ├─ spawn one actor per record, in file order (see Actor classes)
         ├─ spawn the lights (see Lights)
-        ├─ camera: kept on the world settings and applied to UGameEngine::GetCamera
+        ├─ camera: kept on the world settings (LoadMap spawns the APlayerStartPIE the player starts at)
         └─ CollectGarbage               a level load is a safe point (D11): the replaced actors go
 ```
 
 Spawning an actor registers its components: a primitive with collision adds its body to the world's physics scene (`CreatePhysicsState`) and, when the world renders, its scene proxy to the world's scene (`CreateRenderState_Concurrent`), so there is no separate physics or render step after the load.
 
-There is no separate validation pass: magic, version, class values and limits are enforced by the reader, and resource failures by `ApplyLevelDocument`. A failed load leaves the previous level and camera untouched. If any `StaticMesh` actor's mesh fails to load, the whole level is rejected (no partial loads). Blank or lights-only levels are valid (a level always gets at least the default sun).
+There is no separate validation pass: magic, version, class values and limits are enforced by the reader, and resource failures by `ApplyLevelDocument`. A failed load leaves the level untouched (`LoadMap` checks that the file exists before it releases the old world). If any `StaticMesh` actor's mesh fails to load, the whole level is rejected (no partial loads). Blank or lights-only levels are valid (a level always gets at least the default sun).
 
 Saving: `BuildLevelDocument(const ULevel&, const UCameraComponent&)` builds a document from the level's actors, then `SaveLeonLevelFile` (atomic write) or `SerializeLeonLevel` (bytes). The records go out grouped by class, as the format always wrote them (player starts, AI spawn points, trigger volumes, pain-causing volumes, then the meshes and blocking volumes; directional, then point lights), each group in spawn order, so loading a file and saving it gives the same bytes (`System.Engine.LevelFormat.SaveWritesTheSameBytes` checks the templates and a document with every record class against the hashes the pre-P13 saver gave). Only the automation tests save levels today: "Editor-style level save load apply headless" (AIModule) round-trips `Engine/Content/LevelTemplates/Blank.llev`, and the `.llev` format tests (`Engine/Private/Tests/LevelFormatTests.cpp`) round-trip a document through bytes.
 
@@ -164,14 +164,24 @@ Spins (`spinYaw` degrees per second), bobs (`bobBaseY`, `bobAmplitude`, `bobSpee
 
 ## Running a level
 
-The Win64 `LeonGame` target loads one level and runs `ADefaultGameMode` on it:
+The Win64 `LeonGame` target opens one map with `UEngine::LoadMap` ([SETUP.md](SETUP.md#leongame) has the command
+line):
 
 ```text
-Engine\Binaries\Win64\LeonGame.exe [-map=<.llev>] [-nullrhi] [-tick=<Hz>] [-showstats] [-AxesGizmo]
-                                   [-Screenshot=<file.bmp> [-ExitAfterFrames=N]]
+Engine\Binaries\Win64\LeonGame.exe [<map>[?game=<class>]] [-map=<map>] [-nullrhi] [-tick=<Hz>] [-showstats]
+                                   [-AxesGizmo] [-ExecCmds="<command>;<command>"] [-Screenshot=<file.bmp>] [-ExitAfterFrames=N]
 ```
 
-`-map=` takes a path relative to the working directory (or absolute), else relative to the content folders; without it the startup level is `GameDefaultMap` from `[/Script/EngineSettings.GameMapsSettings]` in the engine config (`BaseEngine.ini`: `LevelTemplates/Starter.llev`). `-nullrhi` runs headless at `-tick=` Hz (default 60). `-AxesGizmo` starts with the axes gizmo on (F6 toggles it); `-Screenshot=` saves frame `-ExitAfterFrames=` (default 60) as a BMP and exits ([TESTING.md](TESTING.md)). The level's game mode string is stored (on the world settings) but not used to pick a game mode. There is no level catalog, level browser or project pack (all removed in 0.12.0), and `Game/ThirdPerson` is a build project (`.lproj`), not a runtime pack.
+The map is a long package name (`/Engine/LevelTemplates/Blank`: the `.llev` under the `/Engine/` mount point, until
+the `.lmap` packages of P15), a `.llev` path or a content key; without one it is `GameDefaultMap` from
+`[/Script/EngineSettings.GameMapsSettings]` (`BaseEngine.ini`: `/Engine/LevelTemplates/Starter`). `LoadMap` destroys
+the previous world, creates one named after the map, loads the file into it, spawns an `APlayerStartPIE` at the
+level's camera framing (the view the level opens with: UE's Play From Here start), picks the game mode (plan decision
+D18: `?game=`, the level's game mode string, `GameModeMapPrefixes`, `GlobalDefaultGameMode`), logs the local player in
+(the game mode spawns its controller and its default pawn at the start) and begins play. The game mode string
+`Default` (both templates) means the project's default. `open <map>` loads another map at the next frame. There is no
+level catalog, level browser or project pack (all removed in 0.12.0), and `Game/ThirdPerson` is a build project
+(`.lproj`), not a runtime pack.
 
 ## Level templates
 

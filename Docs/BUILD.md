@@ -236,8 +236,7 @@ leon_module(Core
 # Engine/Source/Runtime/ApplicationCore/ApplicationCore.Build.cmake
 leon_module(ApplicationCore
 	PUBLIC_DEPENDENCIES Core InputCore RHI
-	# Transitional: the window creates the platform RHI device (Launch will own this).
-	PRIVATE_DEPENDENCIES_Desktop GLFW STB OpenGLDrv
+	PRIVATE_DEPENDENCIES_Desktop GLFW STB
 )
 
 # Engine/Source/Runtime/Launch/Launch.Build.cmake
@@ -245,8 +244,10 @@ leon_module(Launch
 	PUBLIC_DEPENDENCIES Core InputCore ApplicationCore RHI
 	# The .lproj descriptor is loaded in PreInit (IProjectManager).
 	PRIVATE_DEPENDENCIES Projects
-	# Desktop games tick the gameplay framework session (UGameEngine) from FEngineLoop.
-	PRIVATE_DEPENDENCIES_Desktop Engine
+	# Desktop games tick GEngine (UGameEngine) from FEngineLoop; Engine reaches the Renderer module only by name
+	# (IRendererModule), so the launch module links it (UE: Launch's Renderer dependency), and PreInit's RHIInit needs
+	# the platform RHI (OpenGLDrv; the PS2 extension links PS2RHI).
+	PRIVATE_DEPENDENCIES_Desktop Engine Renderer OpenGLDrv
 )
 ```
 
@@ -322,7 +323,7 @@ Targets in the repository:
 
 | Target | File | Type | Platforms | Notes |
 | --- | --- | --- | --- | --- |
-| `LeonGame` | `Engine/Source/LeonGame.Target.cmake` | Game | Win64 | `EXTRA_MODULE_NAMES Engine AIModule`; loads one level, `-map=<.llev>` (UE4Game) |
+| `LeonGame` | `Engine/Source/LeonGame.Target.cmake` | Game | Win64 | `EXTRA_MODULE_NAMES Engine AIModule`; creates `GEngine` and opens a map (`LeonGame [<map>]`, `-map=`; UE4Game) |
 | `LeonCook` | `Engine/Source/Programs/LeonCook/LeonCook.Target.cmake` | Program | Desktop | offline cooker |
 | `LeonAutomationTests` | `Engine/Source/Programs/LeonAutomationTests/LeonAutomationTests.Target.cmake` | Program | Desktop | `COLLECT_AUTOMATION_TESTS`, `ENABLE_PLUGINS JoltPhysics` |
 | `TestPAL` | `Engine/Source/Programs/TestPAL/TestPAL.Target.cmake` | Program | all | `COLLECT_AUTOMATION_TESTS`; runs the Core, CoreUObject, Json and Projects automation tests (`-filter=<text>`), prints `TestPAL: PASSED (N test(s), 0 failed)`; on PS2 run it with `RunPCSX2.ps1 -Program TestPAL` |

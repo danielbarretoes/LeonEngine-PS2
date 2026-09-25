@@ -29,7 +29,7 @@ All identifiers are English (U.S. spelling), **PascalCase**, with no underscores
 | Prefix | Use | Examples |
 | --- | --- | --- |
 | `A` | Classes derived from `AActor` — **only** those | `AActor`, `APawn`, `ACharacter`, `APlayerController`, `AGameModeBase`, `AHUD` |
-| `U` | Classes that are `UObject`s in UE (components, assets, subsystems, widgets, engine objects). CoreUObject's types, the gameplay framework (P12: `UWorld`, `ULevel`, `UGameInstance`, the components, `UPlayerInput`), `UUserWidget` and `UAnimInstance` derive from `UObject`. A few `U` types are still **naming only** until their phase: `UGameEngine` (P13), `UInputMappingContext` (removed in P13), the render / animation resources `UStaticMesh`, `USkeletalMesh`, `USkeleton`, `UAnimSequence`, `UBlendSpace1D` and `UCookCommandlet` (P14), `UNavigationSystem` and the behavior tree lite (`UBehaviorTree`, `UBTNode`, `UBlackboardComponent`) | `UObject`, `UClass`, `UWorld`, `ULevel`, `UActorComponent`, `UCharacterMovementComponent`, `UUserWidget`, `UGameEngine`, `UTexture2D` |
+| `U` | Classes that are `UObject`s in UE (components, assets, subsystems, widgets, engine objects). CoreUObject's types, the gameplay framework (P12: `UWorld`, `ULevel`, `UGameInstance`, the components), the engine and its settings (P13: `UEngine`, `UGameEngine`, `UGameViewportClient`, `ULocalPlayer`, `UPlayerInput`, `UInputSettings`, `UGameMapsSettings`), `UUserWidget` and `UAnimInstance` derive from `UObject`. A few `U` types are still **naming only** until their phase: the render / animation resources `UStaticMesh`, `USkeletalMesh`, `USkeleton`, `UAnimSequence`, `UBlendSpace1D` and `UCookCommandlet` (P14), `UNavigationSystem` and the behavior tree lite (`UBehaviorTree`, `UBTNode`, `UBlackboardComponent`) | `UObject`, `UClass`, `UWorld`, `ULevel`, `UActorComponent`, `UCharacterMovementComponent`, `UUserWidget`, `UGameEngine`, `UTexture2D` |
 | `F` | Every other class or struct | `FEngineLoop`, `FTicker`, `FPaths`, `FSceneRenderer`, `FPhysScene`, `FHitResult`, `FPS2RHI` |
 | `T` | Class templates | `TArray`, `TMap`, `TSharedPtr`, `TDelegate`, `TOptional` |
 | `E` | Enums (prefer `enum class`, sized when stored) | `EKeys`, `EPhysicsBackend`, `EPostProcessQuality`, `ENetMsg` |
@@ -93,7 +93,7 @@ TUniquePtr<T> MakeUnique(ArgsType&&... Args)
   Exported globals and free functions use it too (`extern RHI_API FDynamicRHI* GDynamicRHI;`,
   `CORE_API bool IsEngineExitRequested();`).
 - LeonBuildTool defines `<MODULE>_API` as empty (static linking), but it is still required so the code keeps
-  the UE shape. Private classes (`FGLFWWindow`, `FPS2Window`, `FGameApplication`) do not use it.
+  the UE shape. Private classes (`FGLFWWindow`, `FPS2Window`, `FOpenGLDynamicRHI`) do not use it.
 
 ### 1.4 Static classes vs free functions
 
@@ -255,9 +255,9 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
     derives from `FGCObject` (reporting them in `AddReferencedObjects`) or holds a `TStrongObjectPtr`. Use
     `TWeakObjectPtr` (or a `UPROPERTY` `TWeakObjectPtr`) for references that must not keep the object alive, and
     check it before use. A local `UObject*` is only safe until the next `CollectGarbage`, which runs at safe points
-    only: the world teardown (`UGameEngine::Shutdown`, a test's `FScopedTestWorld`), a level (re)load, the engine's
-    timer after the world tick (`UGameEngine::ConditionalCollectGarbage`), later `LoadMap` and the round restart;
-    never inside a constructor or a tick.
+    only: the world teardown (`UEngine::LoadMap`, `UGameEngine::PreExit`, a test's `FScopedTestWorld`), a level
+    (re)load, `obj gc`, the engine's timer after the world tick (`UEngine::ConditionalCollectGarbage`); never inside a
+    constructor or a tick.
   - **Gameplay objects** (P12). Spawn actors with `UWorld::SpawnActor<T>(…)` (never `NewObject` or a local
     `AActor`), destroy them with `Destroy()`: the actor ends play and leaves its level at once and the next collection
     frees it, clearing every `UPROPERTY` that points at it (check actor pointers with `IsValid` or
@@ -270,8 +270,13 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
   - Config values of a class are `UPROPERTY(Config)` members of a `UCLASS(Config=<File>)` (read automatically into the
     class default object; section `/Script/<Module>.<Class>`), not hand-written `GConfig` reads, once the class is a
     `UObject`.
-  - Console commands are `UFUNCTION(Exec)` members (`CallFunctionByNameWithArguments`), or an `FSelfRegisteringExec`
-    outside UObjects.
+  - Console commands are `UFUNCTION(Exec)` members (`CallFunctionByNameWithArguments`) of an object on the player's
+    Exec chain (the player input, the player controller, the pawn, the game mode, the game state, the world settings,
+    the game instance), or an `FSelfRegisteringExec` outside UObjects.
+  - **Input** (P13). Keys are `FKey`s (`EKeys::SpaceBar`), never raw codes. Gameplay binds named actions and axes
+    (`BindAction`, `BindAxis`) in `APawn::SetupPlayerInputComponent` or `APlayerController::SetupInputComponent`; the
+    keys that drive them are mappings in `BaseInput.ini` / a project's `DefaultInput.ini`
+    (`[/Script/Engine.InputSettings]`), not code.
   - Test types with `Cast<T>` / `CastChecked<T>` / `IsA<T>()`, never `dynamic_cast` (no RTTI, D17).
   - A class whose children may not declare a constructor gives itself an `FObjectInitializer` constructor: the
     generated default constructor calls `Super(ObjectInitializer)`.
@@ -296,10 +301,10 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 
 - There is **no `namespace leon`** and no global engine namespace: types live at global scope like UE, and
   the prefixes keep them distinct.
-- `Leon::<Area>` is only for free functions, constants and plain structs that UE would put in a namespace: `Leon::InputActions` (action name constants), `Leon::PS2` (private helpers inside `PS2RHI/Private`).
+- `Leon::<Area>` is only for free functions, constants and plain structs that UE would put in a namespace: `Leon::PS2` (private helpers inside `PS2RHI/Private`).
 - File-local helpers go in an anonymous namespace in the `.cpp`.
 - No `using namespace` at global scope (inside a function body is acceptable, e.g.
-  `using namespace Leon::InputActions;`).
+  `using namespace Leon::PS2;`).
 
 ---
 

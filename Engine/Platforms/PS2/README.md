@@ -110,9 +110,12 @@ owns the application and the main window itself.
 Startup (`GuardedMain` → `FEngineLoop::PreInit`):
 
 1. `FPlatformApplicationMisc::CreateApplication()` → `FPS2Application` (initializes the pad).
-2. `MakeWindow()` + `Create(640, 448, LEON_TARGET_NAME)` → GS display, z-buffer, `FPS2DynamicRHI` in `GDynamicRHI`.
-3. `FModuleManager::StartupStaticallyLinkedModules()` — the game module's `StartupModule()` can already use
-   `GEngineLoop.GetMainWindow()` / `GetApplication()` and registers its tick with `FTicker::GetCoreTicker()`.
+2. `MakeWindow()` + `Create(640, 448, LEON_TARGET_NAME)` → GS display, z-buffer.
+3. `RHIInit()` → `FPS2DynamicRHI` in `GDynamicRHI`.
+4. `FModuleManager::StartupStaticallyLinkedModules()` — CoreUObject starts the object system (8 192 object slots; the
+   game links it through InputCore's reflected `FKey`), InputCore fills `EKeys`, and the game module's
+   `StartupModule()` can already use `GEngineLoop.GetMainWindow()` / `GetApplication()` and registers its tick with
+   `FTicker::GetCoreTicker()`.
 
 Each `FEngineLoop::Tick()`:
 
@@ -125,7 +128,7 @@ Each `FEngineLoop::Tick()`:
    work and resets the Draw3D counters (`FPS2RHI::BeginDraw3DStatsFrame()`).
 
 The loop ends when `RequestEngineExit()` is called (the ThirdPerson game does it on Start) or the window reports
-`ShouldClose()`; `FEngineLoop::Exit()` shuts the modules down and destroys the window.
+`ShouldClose()`; `FEngineLoop::Exit()` shuts the modules down, releases the RHI (`RHIExit`) and destroys the window.
 
 ## Debug overlay
 

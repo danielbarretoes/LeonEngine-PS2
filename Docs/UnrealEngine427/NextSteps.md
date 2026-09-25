@@ -79,8 +79,8 @@ them. 22 golden tests recorded before the switch pass unchanged; 231 tests in to
 
 - The plan continues with CoreUObject (below; P8 and P9 are done). What P7 left: the legacy `.llev` / `.lmesh` version-1 data and
   `FLegacyCoordinateConversion` go away with the `.lasset` packages; the deviations it kept (vertical field of view,
-  no reversed Z, the GL clip adapter, legacy content facing +Y, the doubled mouse look, the spring arm's socket
-  offset) are listed in [LeonMapping — Deviations](LeonMapping.md#deviations-from-ue-427-intentional).
+  no reversed Z, the GL clip adapter, legacy content facing +Y, the doubled mouse look (applied once since P13),
+  the spring arm's socket offset) are listed in [LeonMapping — Deviations](LeonMapping.md#deviations-from-ue-427-intentional).
 
 ## CoreUObject
 
@@ -181,17 +181,28 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
   on Engine; the cycle is gone).
 - 310 tests; the golden tables, the `.llev` bytes and the Win64 frames are unchanged.
 
+### Done — The engine object, maps, input and the viewport client (P13, part 2)
+
+([LeonMapping — P13 part 2](LeonMapping.md#p13--the-engine-object-maps-input-and-the-viewport-client-part-2),
+[ARCHITECTURE §9–§10](../ARCHITECTURE.md#9-launch-and-the-engine-loop)):
+
+- `UEngine` / `UGameEngine` are UObjects and `GEngine` is the engine, created by `FEngineLoop::Init` from
+  `[/Script/Engine.Engine] GameEngine=`; `FEngineLoop` does the boot on desktop (the window and `RHIInit` in `PreInit`,
+  `-ExecCmds`) and `FGameApplication` is gone.
+- `UGameInstance::StartGameInstance` → `UEngine::Browse` → `LoadMap`: the old world goes (end play, destroy,
+  collect), the new one loads the map's `.llev`, the game mode comes from D18's precedence (`?game=`, the world
+  settings, map prefixes, `GlobalDefaultGameMode`), the local players log in through UE's `Login` / `PostLogin` /
+  `RestartPlayer` flow and the world begins play. `EngineSettings` (`UGameMapsSettings`) and `FURL` arrived.
+- Input by config: InputCore's `FKey` is reflected (so the PS2 game boots the object system), `UInputSettings` reads
+  `BaseInput.ini`, the player controller owns its `UPlayerInput`, input component, `AHUD` and camera manager, and
+  `ADefaultPawn` replaces `ADefaultGameMode`, its controller and its camera actor.
+- `UGameViewportClient` routes the input and the console commands (`show`, `stat`, `obj gc`, `open`, the Exec
+  functions of the player's objects, `DebugExecBindings` on F1–F6) and draws the frame.
+- 318 tests; the golden tables, the `.llev` bytes and the Win64 frames are unchanged; ThirdPerson runs at 60 FPS on
+  PCSX2 with the same Draw3D numbers. Released as 0.16.0.
+
 ### Next
 
-- **P13, part 2:** `UEngine` / `UGameEngine` as UObjects with `GEngine`; `UEngine::LoadMap` releases the old world
-  (`UGameInstance::DestroyWorldContextWorld` + `CollectGarbage`), creates or loads the new one and calls
-  `UWorld::BeginPlay` (Leon worlds play from their creation until then) and picks the game mode with D18's precedence
-  (`AWorldSettings::DefaultGameMode` included; replacing `UWorld::SetGameMode(TSubclassOf)` and `FGameApplication`'s
-  `OnEnter` / `Tick(Engine)` / `OnExit` hooks); the round restart collects too. `UGameViewportClient::Draw` takes over
-  `UGameEngine::Render` (the view family, the scene view and the frame `FCanvas`). The player controller owns its
-  `UPlayerInput`, `AHUD` (`HUDClass`) and camera manager; settings classes (`UGameMapsSettings`, `UInputSettings`) use
-  `UPROPERTY(Config)` with `FSoftObjectPath` / `FSoftClassPath`; `UGameViewportClient` routes console commands to
-  `ProcessConsoleExec` / `FSelfRegisteringExec::StaticExec`.
 - Later: move the character movement code from `ACharacter` into `UCharacterMovementComponent` (UE's
   `PerformMovement`, `MovementMode`, `Velocity`, `CurrentFloor`); a cached `ComponentToWorld`; tick functions.
 - **P14:** asset classes (`UStaticMesh`, `UTexture2D`, `USoundWave`, ...) keep their payloads in `FByteBulkData`
@@ -220,18 +231,16 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 
 ## Debt surfaced by the refactor
 
-- **RHI ownership:** `FGenericWindow::InitRHI` creates the platform RHI, so ApplicationCore depends on
-  OpenGLDrv / PS2RHI. UE initialises the RHI from Launch (`FEngineLoop::PreInit` → `RHIInit`); move it there.
-- **Desktop window ownership:** with `WITH_ENGINE=1`, `UGameEngine` creates its own application and window
-  instead of `FEngineLoop` (UE: `FSlateApplication` + `UGameEngine::GameViewport`).
 - **Game → Launch:** the PS2 game module reads `GEngineLoop.GetMainWindow()` through an include-only
-  dependency on Launch; give games an engine-side accessor instead (UE: `GEngine->GameViewport`).
-- **Project descriptors:** `.lproj` is loaded in `PreInit` (P4), but `LeonGame` still has no project and loads one
-  level with `-map=`; `UEngine::LoadMap` and the config-driven game mode replace it in P13.
-- **Engine glue from P12:** `UGameEngine` is not a UObject (an `FGCObject`), owns one `AHUD` outside any world and
-  one `UPlayerInput`, builds the view family and the canvas itself, and `FGameApplication` drives the game mode through
-  `OnEnter` / `Tick(Engine)` / `OnExit`; P13's second part replaces all of it with UE's `UGameEngine`, viewport client
-  and player controller.
+  dependency on Launch; give games an engine-side accessor instead (UE: `GEngine->GameViewport`) once the gameplay
+  framework runs on the PS2.
+- **Assets for P14:** `UEngine` owns `FResourceCache`, Engine's CPU loader of meshes, textures and materials, and the
+  Renderer keeps their GPU copies in `FRenderResourceCache`; the `UStaticMesh` / `UTexture2D` / ... assets replace
+  both. `LeonCook` still takes its own mode arguments (`staticmesh`, `recipe`) instead of UE's `-run=<Commandlet>`.
+- **Console:** commands only come from `-ExecCmds` and `DebugExecBindings`; there is no `UConsole` window or console
+  variables (`IConsoleManager`), and `show Collision` / `show Navigation` only set their flags.
+- **Viewport:** no Slate; `UGameViewportClient` polls the window's keys and mouse each frame, and the desktop has no
+  gamepad mappings.
 - **Platform checks in shared code:** the `PLATFORM_WINDOWS` tests in `Core/Private/HAL/MallocAnsi.cpp` and
   `Core/Private/Misc/OutputDeviceRedirector.cpp` should become HAL functions or move under `Private/Windows`.
 - **Linux:** registered in LeonBuildTool but not built or tested; enable `-Werror=shadow` on the Linux host
