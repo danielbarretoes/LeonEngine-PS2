@@ -12,8 +12,9 @@ class UObject;
  * The path of an object that may not be loaded: the package and top-level asset, "/Game/Maps/Arena.Arena", plus the
  * path of a subobject below it, "PersistentLevel.Door" (UE: FSoftObjectPath, 4.27 layout). Reflected as a noexport
  * struct (UObject/NoExportTypes.h) whose text form is the path itself: "/Game/Maps/Arena.Arena", or
- * "/Game/Maps/Arena.Arena:PersistentLevel.Door". Until P11 loads packages, TryLoad only finds objects already in
- * memory.
+ * "/Game/Maps/Arena.Arena:PersistentLevel.Door". TryLoad loads the package when the object is not in memory. In a
+ * package it is saved as its asset path name (a name table entry) and subobject string, and the package records the
+ * soft reference in its soft package references table.
  */
 struct COREUOBJECT_API FSoftObjectPath
 {
@@ -112,10 +113,25 @@ struct COREUOBJECT_API FSoftObjectPath
 	UObject* ResolveObject() const;
 
 	/**
-	 * The object, loading its package when it is not in memory (UE). Until P11 (LoadPackage) this is ResolveObject:
-	 * only objects already in memory are found.
+	 * The object, loading its package (LoadObject) when it is not in memory; nullptr, with a warning, when it cannot
+	 * be found (UE).
 	 */
 	UObject* TryLoad() const;
+
+	/** Loads or saves the path (UE: Serialize, through the struct's WithSerializer trait). */
+	bool Serialize(FArchive& Ar);
+
+	/**
+	 * The asset path name, then the subobject string (UE: SerializePath). While UPackage::Save collects its package's
+	 * references, a saved path adds its package to the soft package references.
+	 */
+	void SerializePath(FArchive& Ar);
+
+	friend FArchive& operator<<(FArchive& Ar, FSoftObjectPath& Value)
+	{
+		Value.Serialize(Ar);
+		return Ar;
+	}
 
 	FORCEINLINE bool operator==(const FSoftObjectPath& Other) const
 	{
@@ -142,7 +158,7 @@ struct COREUOBJECT_API FSoftObjectPath
 
 	/**
 	 * A counter bumped whenever objects appear, so soft pointers that failed to resolve try again (UE: bumped when
-	 * packages load; Leon also when an object is created, since TryLoad only finds objects in memory).
+	 * packages load; Leon also bumps it when any object is created).
 	 */
 	FORCEINLINE static int32 GetCurrentTag()
 	{
@@ -197,7 +213,7 @@ struct COREUOBJECT_API FSoftClassPath : public FSoftObjectPath
 	{
 	}
 
-	/** The class if it is in memory and a T, else nullptr (UE). Until P11 only classes in memory are found. */
+	/** The class, loaded when needed, if it is a T; else nullptr (UE). */
 	template <typename T>
 	UClass* TryLoadClass() const
 	{
@@ -222,6 +238,7 @@ struct TStructOpsTypeTraits<FSoftObjectPath> : public TStructOpsTypeTraitsBase2<
 		WithIdenticalViaEquality = true,
 		WithExportTextItem = true,
 		WithImportTextItem = true,
+		WithSerializer = true,
 	};
 };
 
@@ -233,5 +250,6 @@ struct TStructOpsTypeTraits<FSoftClassPath> : public TStructOpsTypeTraitsBase2<F
 		WithIdenticalViaEquality = true,
 		WithExportTextItem = true,
 		WithImportTextItem = true,
+		WithSerializer = true,
 	};
 };

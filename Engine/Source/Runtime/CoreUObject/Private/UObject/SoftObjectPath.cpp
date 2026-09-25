@@ -1,9 +1,11 @@
 #include "UObject/SoftObjectPath.h"
 
+#include "Misc/PackageName.h"
 #include "UObject/Object.h"
 #include "UObject/PropertyHelpers.h"
 #include "UObject/SoftObjectPtr.h"
 #include "UObject/UObjectGlobals.h"
+#include "UObject/UObjectThreadContext.h"
 #include "UObject/UnrealType.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogSoftObjectPath, Log, All);
@@ -106,9 +108,33 @@ UObject* FSoftObjectPath::TryLoad() const
 	UObject* Object = ResolveObject();
 	if (!Object && IsValid())
 	{
-		UE_LOG(LogSoftObjectPath, Verbose, TEXT("TryLoad(%s): not in memory (packages load with P11)"), *ToString());
+		// Loads the package, then finds the object (and warns when it is not there) (UE: LoadObject).
+		Object = StaticLoadObject(UObject::StaticClass(), nullptr, *ToString());
 	}
 	return Object;
+}
+
+bool FSoftObjectPath::Serialize(FArchive& Ar)
+{
+	SerializePath(Ar);
+	return true;
+}
+
+void FSoftObjectPath::SerializePath(FArchive& Ar)
+{
+	if (Ar.IsSaving() && !IsNull())
+	{
+		if (TArray<FName>* SoftPackageReferences = FUObjectThreadContext::Get().SoftPackageReferenceCollector)
+		{
+			const FString PackageName = GetLongPackageName();
+			if (!FPackageName::IsScriptPackage(PackageName))
+			{
+				SoftPackageReferences->AddUnique(FName(*PackageName));
+			}
+		}
+	}
+	Ar << AssetPathName;
+	Ar << SubPathString;
 }
 
 bool FSoftObjectPath::ExportTextItem(FString& ValueStr, const FSoftObjectPath& DefaultValue, UObject* Parent,

@@ -165,6 +165,21 @@ public:
 	/** The property named InName, supers included, or nullptr (UE). */
 	FProperty* FindPropertyByName(FName InName) const;
 
+	/**
+	 * Loads or saves the properties of the instance at Data as tagged properties (UE: SerializeTaggedProperties).
+	 * Saving writes an FPropertyTag and the value of each property that ShouldSerializeValue allows and that differs
+	 * from its value in Defaults (an instance of DefaultsStruct; without defaults a struct writes every property), then
+	 * NAME_None. Loading reads tags until NAME_None: a tag whose property is gone (renamed, removed, editor-only on a
+	 * platform without editor-only data) is skipped by its size, a type change is converted when
+	 * FProperty::ConvertFromType can (integers to integers, float / double, enum bytes and enums by name), and skipped
+	 * with a warning otherwise (schema evolution).
+	 */
+	virtual void SerializeTaggedProperties(FArchive& Ar, uint8* Data, UStruct* DefaultsStruct, uint8* Defaults,
+		const UObject* BreakRecursionIfFullyLoad = nullptr) const;
+
+	/** Loads or saves every serializable property in order, without tags (UE: SerializeBin). */
+	virtual void SerializeBin(FArchive& Ar, void* Data) const;
+
 private:
 	UStruct* SuperStruct;
 };
@@ -195,6 +210,8 @@ struct TStructOpsTypeTraitsBase2
 		 * FOutputDevice* ErrorText).
 		 */
 		WithImportTextItem = false,
+		/** Loading and saving use bool Serialize(FArchive& Ar) instead of the reflected properties. */
+		WithSerializer = false,
 	};
 };
 
@@ -256,6 +273,9 @@ public:
 		/** Parses the struct from Buffer with its own format, advancing Buffer; false on an error. */
 		virtual bool ImportTextItem(
 			const TCHAR*& Buffer, void* Data, int32 PortFlags, UObject* OwnerObject, FOutputDevice* ErrorText) = 0;
+		virtual bool HasSerializer() = 0;
+		/** Loads or saves the struct with its own Serialize; false when it has none. */
+		virtual bool Serialize(FArchive& Ar, void* Data) = 0;
 
 		FORCEINLINE int32 GetSize() const
 		{
@@ -436,6 +456,25 @@ public:
 				return false;
 			}
 		}
+
+		virtual bool HasSerializer() override
+		{
+			return TTraits::WithSerializer;
+		}
+
+		virtual bool Serialize(FArchive& Ar, void* Data) override
+		{
+			if constexpr (TTraits::WithSerializer)
+			{
+				return ((CPPSTRUCT*)Data)->Serialize(Ar);
+			}
+			else
+			{
+				(void)Ar;
+				(void)Data;
+				return false;
+			}
+		}
 	};
 
 	EStructFlags StructFlags;
@@ -468,6 +507,19 @@ public:
 
 	/** "F" + the struct name: the C++ type name (UE). */
 	FString GetStructCPPName() const;
+
+	/**
+	 * Loads or saves one instance (UE: SerializeItem): with the struct's own Serialize when it has one
+	 * (TStructOpsTypeTraits::WithSerializer: FSoftObjectPath), in binary for an immutable struct (the Core math types:
+	 * FVector, FRotator, FTransform, ...), else as tagged properties delta'd against Defaults.
+	 */
+	void SerializeItem(FArchive& Ar, void* Value, void const* Defaults) const;
+
+	/**
+	 * True when instances go through SerializeBin: an immutable struct, or an archive that neither loads nor saves
+	 * (UE: UseBinarySerialization).
+	 */
+	bool UseBinarySerialization(const FArchive& Ar) const;
 
 	virtual void InitializeStruct(void* Dest, int32 ArrayDim = 1) const override;
 	virtual void DestroyStruct(void* Dest, int32 ArrayDim = 1) const override;

@@ -4,6 +4,7 @@
 
 #include "Serialization/Archive.h"
 #include "UObject/PropertyHelpers.h"
+#include "UObject/PropertyTag.h"
 #include "UObject/UnrealType.h"
 
 #include <new>
@@ -14,6 +15,8 @@
 #endif
 
 using namespace UE::CoreUObject::Private;
+
+DEFINE_LOG_CATEGORY_STATIC(LogProperty, Log, All);
 
 namespace
 {
@@ -92,6 +95,23 @@ namespace
 		const FProperty* Property;
 		uint8* Memory;
 	};
+
+	/**
+	 * Checks a loaded element count: every element takes at least one byte, so a count above what is left of the
+	 * archive is corrupt data (a critical error) rather than something to allocate.
+	 */
+	bool IsLoadedCountValid(const FProperty* Property, FArchive& Ar, int32 Num)
+	{
+		const int64 Remaining = Ar.TotalSize() != INDEX_NONE ? Ar.TotalSize() - Ar.Tell() : int64(Num);
+		if (Num < 0 || Num > Remaining)
+		{
+			UE_LOG(LogProperty, Error, TEXT("%s: %s has an invalid element count %d"), *Ar.GetArchiveName(),
+				*Property->GetName(), Num);
+			Ar.SetCriticalError();
+			return false;
+		}
+		return true;
+	}
 } // namespace
 
 // FArrayProperty
@@ -1033,4 +1053,180 @@ bool FScriptMapHelper::RemovePair(const void* KeyPtr)
 	}
 	RemoveAt(Index);
 	return true;
+}
+
+// Serialization (UE: PropertyArray.cpp, PropertySet.cpp, PropertyMap.cpp)
+
+void FArrayProperty::SerializeItem(FArchive& Ar, void* Value, void const* Defaults) const
+{
+	(void)Defaults;
+	FScriptArrayHelper ArrayHelper(this, Value);
+	int32 Num = ArrayHelper.Num();
+	Ar << Num;
+	if (Ar.IsLoading())
+	{
+		if (!IsLoadedCountValid(this, Ar, Num))
+		{
+			ArrayHelper.EmptyValues();
+			return;
+		}
+		ArrayHelper.EmptyAndAddValues(Num);
+	}
+
+	// Struct elements are preceded by a tag of the element type, so a load sees when the struct changed (UE 4.27).
+	FStructProperty* InnerStruct = CastField<FStructProperty>(Inner);
+	FPropertyTag InnerTag;
+	int64 ElementsOffset = INDEX_NONE;
+	if (InnerStruct)
+	{
+		if (Ar.IsSaving())
+		{
+			InnerTag = FPropertyTag(Inner, 0, nullptr);
+		}
+		Ar << InnerTag;
+		ElementsOffset = Ar.Tell();
+		if (Ar.IsLoading() &&
+			(InnerTag.Type != NAME_StructProperty || InnerTag.StructName != InnerStruct->Struct->GetFName()))
+		{
+			UE_LOG(LogProperty, Warning, TEXT("%s: %s holds %s elements, it was saved with %s ones; skipped"),
+				*Ar.GetArchiveName(), *GetName(), *InnerStruct->Struct->GetName(), *InnerTag.StructName.ToString());
+			ArrayHelper.EmptyValues();
+			Ar.Seek(ElementsOffset + InnerTag.Size);
+			return;
+		}
+	}
+	for (int32 Index = 0; Index < Num && !Ar.IsError(); ++Index)
+	{
+		Inner->SerializeItem(Ar, ArrayHelper.GetRawPtr(Index), nullptr);
+	}
+	if (InnerStruct && Ar.IsSaving())
+	{
+		const int64 ElementsEnd = Ar.Tell();
+		InnerTag.Size = int32(ElementsEnd - ElementsOffset);
+		Ar.Seek(InnerTag.SizeOffset);
+		Ar << InnerTag.Size;
+		Ar.Seek(ElementsEnd);
+	}
+}
+
+EConvertFromTypeResult FArrayProperty::ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const
+{
+	(void)Ar;
+	(void)Value;
+	return Tag.Type == GetID() && Tag.InnerType == Inner->GetID() ? EConvertFromTypeResult::UseSerializeItem
+																  : EConvertFromTypeResult::CannotConvert;
+}
+
+void FSetProperty::SerializeItem(FArchive& Ar, void* Value, void const* Defaults) const
+{
+	(void)Defaults;
+	FScriptSetHelper SetHelper(this, Value);
+	// UE writes the default elements a set removed; Leon writes the whole set, so there are none.
+	int32 NumElementsToRemove = 0;
+	Ar << NumElementsToRemove;
+	if (Ar.IsLoading())
+	{
+		SetHelper.EmptyElements();
+		if (!IsLoadedCountValid(this, Ar, NumElementsToRemove))
+		{
+			return;
+		}
+		if (NumElementsToRemove > 0)
+		{
+			// A package saved by an engine that writes them: the set is replaced anyway.
+			FScratchValue Removed(ElementProp);
+			for (int32 Index = 0; Index < NumElementsToRemove && !Ar.IsError(); ++Index)
+			{
+				ElementProp->SerializeItem(Ar, Removed.Get(), nullptr);
+			}
+		}
+		int32 Num = 0;
+		Ar << Num;
+		if (!IsLoadedCountValid(this, Ar, Num))
+		{
+			return;
+		}
+		for (int32 Index = 0; Index < Num && !Ar.IsError(); ++Index)
+		{
+			const int32 ElementIndex = SetHelper.AddDefaultValue_Invalid_NeedsRehash();
+			ElementProp->SerializeItem(Ar, SetHelper.GetElementPtr(ElementIndex), nullptr);
+		}
+		SetHelper.Rehash();
+		return;
+	}
+	int32 Num = SetHelper.Num();
+	Ar << Num;
+	for (int32 Index = 0; Index < SetHelper.GetMaxIndex(); ++Index)
+	{
+		if (SetHelper.IsValidIndex(Index))
+		{
+			ElementProp->SerializeItem(Ar, SetHelper.GetElementPtr(Index), nullptr);
+		}
+	}
+}
+
+EConvertFromTypeResult FSetProperty::ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const
+{
+	(void)Ar;
+	(void)Value;
+	return Tag.Type == GetID() && Tag.InnerType == ElementProp->GetID() ? EConvertFromTypeResult::UseSerializeItem
+																		: EConvertFromTypeResult::CannotConvert;
+}
+
+void FMapProperty::SerializeItem(FArchive& Ar, void* Value, void const* Defaults) const
+{
+	(void)Defaults;
+	FScriptMapHelper MapHelper(this, Value);
+	// UE writes the default keys a map removed; Leon writes the whole map, so there are none.
+	int32 NumKeysToRemove = 0;
+	Ar << NumKeysToRemove;
+	if (Ar.IsLoading())
+	{
+		MapHelper.EmptyValues();
+		if (!IsLoadedCountValid(this, Ar, NumKeysToRemove))
+		{
+			return;
+		}
+		if (NumKeysToRemove > 0)
+		{
+			FScratchValue Removed(KeyProp);
+			for (int32 Index = 0; Index < NumKeysToRemove && !Ar.IsError(); ++Index)
+			{
+				KeyProp->SerializeItem(Ar, Removed.Get(), nullptr);
+			}
+		}
+		int32 Num = 0;
+		Ar << Num;
+		if (!IsLoadedCountValid(this, Ar, Num))
+		{
+			return;
+		}
+		for (int32 Index = 0; Index < Num && !Ar.IsError(); ++Index)
+		{
+			const int32 PairIndex = MapHelper.AddDefaultValue_Invalid_NeedsRehash();
+			KeyProp->SerializeItem(Ar, MapHelper.GetKeyPtr(PairIndex), nullptr);
+			ValueProp->SerializeItem(Ar, MapHelper.GetValuePtr(PairIndex), nullptr);
+		}
+		MapHelper.Rehash();
+		return;
+	}
+	int32 Num = MapHelper.Num();
+	Ar << Num;
+	for (int32 Index = 0; Index < MapHelper.GetMaxIndex(); ++Index)
+	{
+		if (MapHelper.IsValidIndex(Index))
+		{
+			KeyProp->SerializeItem(Ar, MapHelper.GetKeyPtr(Index), nullptr);
+			ValueProp->SerializeItem(Ar, MapHelper.GetValuePtr(Index), nullptr);
+		}
+	}
+}
+
+EConvertFromTypeResult FMapProperty::ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const
+{
+	(void)Ar;
+	(void)Value;
+	return Tag.Type == GetID() && Tag.InnerType == KeyProp->GetID() && Tag.ValueType == ValueProp->GetID()
+		? EConvertFromTypeResult::UseSerializeItem
+		: EConvertFromTypeResult::CannotConvert;
 }

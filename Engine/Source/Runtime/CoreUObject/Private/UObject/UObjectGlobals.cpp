@@ -2,8 +2,10 @@
 
 #include "Containers/StringConv.h"
 #include "Misc/CString.h"
+#include "Misc/PackageName.h"
 #include "Templates/Casts.h"
 #include "UObject/Class.h"
+#include "UObject/LinkerLoad.h"
 #include "UObject/Package.h"
 #include "UObject/SoftObjectPath.h"
 #include "UObject/UObjectArray.h"
@@ -408,6 +410,136 @@ UPackage* CreatePackage(const TCHAR* PackageName)
 		Package = (UPackage*)StaticConstructObject_Internal(Params);
 	}
 	return Package;
+}
+
+UPackage* FindPackage(UObject* InOuter, const TCHAR* PackageName)
+{
+	if (!PackageName || !*PackageName)
+	{
+		return nullptr;
+	}
+	const FName Name(PackageName, FNAME_Find);
+	if (Name.IsNone())
+	{
+		return nullptr;
+	}
+	return (UPackage*)StaticFindObjectFastInternal(UPackage::StaticClass(), InOuter, Name);
+}
+
+UPackage* LoadPackage(UPackage* InOuter, const TCHAR* InLongPackageName, uint32 LoadFlags)
+{
+	const FString Requested = (InLongPackageName && *InLongPackageName) ? FString(InLongPackageName)
+																		: (InOuter ? InOuter->GetName() : FString());
+	FString PackageName;
+	if (FLinkerLoad::FindInMemoryPackage(Requested) || FPackageName::IsValidLongPackageName(Requested, true))
+	{
+		PackageName = Requested;
+	}
+	else if (!FPackageName::TryConvertFilenameToLongPackageName(Requested, PackageName))
+	{
+		if (!(LoadFlags & LOAD_Quiet))
+		{
+			UE_LOG(LogUObjectGlobals, Error,
+				TEXT("LoadPackage: '%s' is neither a long package name nor a package file"), *Requested);
+		}
+		return nullptr;
+	}
+	if (FPackageName::IsScriptPackage(PackageName))
+	{
+		// Compiled in: nothing to load.
+		return FindPackage(nullptr, *PackageName);
+	}
+
+	UPackage* Package = InOuter ? InOuter : FindPackage(nullptr, *PackageName);
+	if (Package && (Package->LinkerLoad || (!InOuter && Package->IsFullyLoaded())))
+	{
+		// Loaded, created in memory without a file, or being loaded (a circular reference: its load finishes it).
+		return Package;
+	}
+
+	const TArray<uint8>* PackageData = FLinkerLoad::FindInMemoryPackage(PackageName);
+	FString Filename;
+	if (!PackageData && !FPackageName::DoesPackageExist(PackageName, nullptr, &Filename))
+	{
+		if (!(LoadFlags & LOAD_Quiet))
+		{
+			FString Expected;
+			FPackageName::TryConvertLongPackageNameToFilename(PackageName, Expected);
+			if (LoadFlags & LOAD_NoWarn)
+			{
+				UE_LOG(LogUObjectGlobals, Log, TEXT("LoadPackage: %s does not exist (no %s.lasset / .lmap)"),
+					*PackageName, *Expected);
+			}
+			else
+			{
+				UE_LOG(LogUObjectGlobals, Error, TEXT("LoadPackage: %s does not exist (no %s.lasset / .lmap)"),
+					*PackageName, *Expected);
+			}
+		}
+		return nullptr;
+	}
+
+	BeginLoad();
+	if (!Package)
+	{
+		Package = CreatePackage(*PackageName);
+	}
+	FLinkerLoad* Linker = PackageData
+		? FLinkerLoad::CreateLinkerFromMemory(Package, *PackageName, LoadFlags, *PackageData)
+		: FLinkerLoad::CreateLinker(Package, *Filename, LoadFlags);
+	if (Linker)
+	{
+		Linker->LoadAllObjects();
+	}
+	EndLoad();
+	return Linker ? Package : nullptr;
+}
+
+UObject* StaticLoadObject(UClass* Class, UObject* InOuter, const TCHAR* Name, const TCHAR* Filename, uint32 LoadFlags,
+	bool bAllowObjectReconciliation)
+{
+	if (!Name || !*Name || FCString::Stricmp(Name, TEXT("None")) == 0)
+	{
+		return nullptr;
+	}
+	// "Class'/Game/Path.Asset'" names its object between the quotes.
+	FString ObjectPath = Name;
+	int32 QuoteIndex = INDEX_NONE;
+	if (ObjectPath.Len() > 1 && ObjectPath[ObjectPath.Len() - 1] == '\'' && ObjectPath.FindChar('\'', QuoteIndex) &&
+		QuoteIndex < ObjectPath.Len() - 1)
+	{
+		ObjectPath = ObjectPath.Mid(QuoteIndex + 1, ObjectPath.Len() - QuoteIndex - 2);
+	}
+
+	UObject* Result = bAllowObjectReconciliation ? StaticFindObject(Class, InOuter, *ObjectPath) : nullptr;
+	if (!Result)
+	{
+		const FString PackageName =
+			InOuter ? InOuter->GetOutermost()->GetName() : FPackageName::ObjectPathToPackageName(ObjectPath);
+		LoadPackage(nullptr, Filename ? Filename : *PackageName, LoadFlags | LOAD_NoWarn);
+		Result = StaticFindObject(Class, InOuter, *ObjectPath);
+	}
+	if (!Result && !(LoadFlags & (LOAD_NoWarn | LOAD_Quiet)))
+	{
+		UE_LOG(LogUObjectGlobals, Warning, TEXT("Failed to find object '%s %s'"),
+			Class ? *Class->GetName() : TEXT("Object"), *ObjectPath);
+	}
+	return Result;
+}
+
+UClass* StaticLoadClass(UClass* BaseClass, UObject* InOuter, const TCHAR* Name, const TCHAR* Filename, uint32 LoadFlags)
+{
+	UClass* Class = Cast<UClass>(StaticLoadObject(UClass::StaticClass(), InOuter, Name, Filename, LoadFlags));
+	if (Class && BaseClass && !Class->IsChildOf(BaseClass))
+	{
+		if (!(LoadFlags & (LOAD_NoWarn | LOAD_Quiet)))
+		{
+			UE_LOG(LogUObjectGlobals, Warning, TEXT("LoadClass: %s is not a child class of %s"), *Class->GetPathName(),
+				*BaseClass->GetName());
+		}
+		return nullptr;
+	}
+	return Class;
 }
 
 UPackage* GetTransientPackage()

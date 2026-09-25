@@ -16,7 +16,7 @@ class UFunction;
 /**
  * The base class of every reflected object (UE: UObject). Created with NewObject; its UClass describes its
  * properties and functions; the class default object (CDO) holds the defaults. The garbage collector destroys it
- * once nothing references it (UObject/GarbageCollection.h); loading and saving arrive with P11.
+ * once nothing references it (UObject/GarbageCollection.h); packages save and load it (UPackage::Save, LoadObject).
  */
 class COREUOBJECT_API UObject : public UObjectBaseUtility
 {
@@ -70,8 +70,14 @@ class COREUOBJECT_API UObject : public UObjectBaseUtility
 	 */
 	virtual void PostInitProperties();
 
-	/** Called after the object is loaded (P11). */
+	/**
+	 * Called once the object was loaded, after every object of the LoadPackage call (dependency packages included) was
+	 * serialized, so other loaded objects it references hold their loaded values (UE). Overrides call Super::PostLoad.
+	 */
 	virtual void PostLoad();
+
+	/** PostLoad unless it already ran: clears RF_NeedPostLoad, post-loads the archetype first, then PostLoad (UE). */
+	void ConditionalPostLoad();
 
 	/**
 	 * First step of destruction, called by the garbage collector on an unreachable object: release resources, start
@@ -147,14 +153,32 @@ class COREUOBJECT_API UObject : public UObjectBaseUtility
 	/** Runs a console command on this object: CallFunctionByNameWithArguments by default (UE). */
 	virtual bool ProcessConsoleExec(const TCHAR* Cmd, FOutputDevice& Ar, UObject* Executor);
 
-	/** Loads or saves the object's native data (P11; the reflected properties go through their FProperty). */
+	/**
+	 * Loads or saves the object (UE). This base version serializes the reflected properties
+	 * (SerializeScriptProperties); a class with native data overrides it, calls Super::Serialize(Ar) first, then
+	 * serializes its own members (the "native tail" of the object's package data), for example an FByteBulkData.
+	 */
 	virtual void Serialize(FArchive& Ar);
 
 	/**
-	 * The object this one was initialized from: its class default object, or, for a class default object, its super
-	 * class's (UE: GetArchetype; Leon does not track per-instance archetypes).
+	 * Loads or saves the reflected properties as tagged properties: on save only those that differ from the archetype,
+	 * then NAME_None; on load the tags present, skipping unknown ones (UE).
+	 */
+	void SerializeScriptProperties(FArchive& Ar) const;
+
+	/**
+	 * The object this one takes its defaults from (UE: GetArchetype): its class default object; for a class default
+	 * object its super class's; for a default subobject, the subobject of the same name in its outer's archetype (the
+	 * class default object's subobject), which the outer's constructor built the same way (D12). Packages save the
+	 * properties that differ from it.
 	 */
 	UObject* GetArchetype() const;
+
+	/**
+	 * True for an asset: public, not transient, not a class default object, directly in a package other than the
+	 * transient one (UE: IsAsset).
+	 */
+	virtual bool IsAsset() const;
 
 	/** True for an object created by CreateDefaultSubobject (UE). */
 	bool IsDefaultSubobject() const;

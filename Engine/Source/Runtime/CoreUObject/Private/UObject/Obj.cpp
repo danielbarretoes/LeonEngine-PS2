@@ -60,6 +60,21 @@ void UObject::PostLoad()
 {
 }
 
+void UObject::ConditionalPostLoad()
+{
+	if (!HasAnyFlags(RF_NeedPostLoad))
+	{
+		return;
+	}
+	ClearFlags(RF_NeedPostLoad);
+	// The object takes its defaults from its archetype: that one is post-loaded first (UE).
+	if (UObject* Archetype = GetArchetype())
+	{
+		Archetype->ConditionalPostLoad();
+	}
+	PostLoad();
+}
+
 void UObject::BeginDestroy()
 {
 	// Out of the name hash: the name can be reused and lookups no longer find the object (UE).
@@ -119,7 +134,21 @@ void UObject::AddReferencedObjects(UObject* InThis, FReferenceCollector& Collect
 
 void UObject::Serialize(FArchive& Ar)
 {
-	(void)Ar;
+	// The reflected properties; the classes' own members follow in their overrides (UE). UClass objects are native
+	// and never serialized this way.
+	if (GetClass() != UClass::StaticClass())
+	{
+		SerializeScriptProperties(Ar);
+	}
+}
+
+void UObject::SerializeScriptProperties(FArchive& Ar) const
+{
+	UClass* ObjClass = GetClass();
+	// Saving writes what differs from the archetype; loading passes it on for the nested struct defaults (UE).
+	UObject* DiffObject = GetArchetype();
+	UStruct* DefaultsStruct = DiffObject ? DiffObject->GetClass() : ObjClass;
+	ObjClass->SerializeTaggedProperties(Ar, (uint8*)this, DefaultsStruct, (uint8*)DiffObject);
 }
 
 UObject* UObject::GetArchetype() const
@@ -130,7 +159,31 @@ UObject* UObject::GetArchetype() const
 		UClass* SuperClass = Class->GetSuperClass();
 		return SuperClass ? SuperClass->GetDefaultObject(false) : nullptr;
 	}
+	// A default subobject was built by its outer's constructor like the subobject of the same name in the outer's
+	// archetype, which is its archetype (UE: GetArchetypeFromRequiredInfo; with D12 both are built, not instanced).
+	if (HasAnyFlags(RF_DefaultSubObject) && GetOuter())
+	{
+		if (UObject* OuterArchetype = GetOuter()->GetArchetype())
+		{
+			UObject* Found = StaticFindObjectFastInternal(nullptr, OuterArchetype, GetFName());
+			if (Found && Found != this && IsA(Found->GetClass()))
+			{
+				return Found;
+			}
+		}
+	}
 	return Class->GetDefaultObject(false);
+}
+
+bool UObject::IsAsset() const
+{
+	// Public, not transient, not a class default object, directly in a package that is not transient (UE).
+	if (HasAnyFlags(RF_Transient | RF_ClassDefaultObject) || !HasAnyFlags(RF_Public) || IsPendingKill())
+	{
+		return false;
+	}
+	const UPackage* Package = Cast<UPackage>(GetOuter());
+	return Package && Package != GetTransientPackage() && !Package->HasAnyFlags(RF_Transient);
 }
 
 bool UObject::IsDefaultSubobject() const

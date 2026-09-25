@@ -280,6 +280,50 @@ COREUOBJECT_API FName MakeUniqueObjectName(UObject* Outer, const UClass* Class, 
 /** The package named PackageName ("/Game/Maps/Arena"), created when it does not exist (UE: CreatePackage). */
 COREUOBJECT_API UPackage* CreatePackage(const TCHAR* PackageName);
 
+// Loading (UE: UObjectGlobals.h; implemented in UObjectGlobals.cpp and UObject/LinkerLoad.cpp).
+
+/** The package named PackageName in memory, or nullptr; InOuter scopes the search (UE: FindPackage). */
+COREUOBJECT_API UPackage* FindPackage(UObject* InOuter, const TCHAR* PackageName);
+
+/**
+ * Loads a package synchronously and returns it (UE: LoadPackage). InLongPackageName is a long package name
+ * ("/Game/Maps/Arena") or a file under a mount point; InOuter, when given, is the package object to load into (its
+ * name may differ). A package that is already loaded (or was created in memory and has no file) is returned as is; a
+ * /Script package is the compiled-in one. The data comes from bytes registered with
+ * FLinkerLoad::RegisterInMemoryPackage or from the ".lasset" / ".lmap" file. Packages the exports import are loaded
+ * first; PostLoad runs once all of them are serialized. A missing package returns nullptr with an error (a log line
+ * with LOAD_NoWarn, nothing with LOAD_Quiet).
+ */
+COREUOBJECT_API UPackage* LoadPackage(UPackage* InOuter, const TCHAR* InLongPackageName, uint32 LoadFlags);
+
+/**
+ * Finds an object, loading its package when it is not in memory (UE: StaticLoadObject). Name is an object path
+ * ("/Game/Maps/Arena.Arena", "/Game/Maps/Arena.Arena:PersistentLevel", or "Class'/Game/Path.Asset'"), or a name
+ * inside InOuter's package; Filename, when given, is the package to load. A missing object returns nullptr with a
+ * warning (unless LOAD_NoWarn / LOAD_Quiet). UE's Sandbox and InstancingContext parameters are not supported.
+ */
+COREUOBJECT_API UObject* StaticLoadObject(UClass* Class, UObject* InOuter, const TCHAR* Name,
+	const TCHAR* Filename = nullptr, uint32 LoadFlags = LOAD_None, bool bAllowObjectReconciliation = true);
+
+/** StaticLoadObject for a class that is BaseClass or derives from it (UE: StaticLoadClass). */
+COREUOBJECT_API UClass* StaticLoadClass(UClass* BaseClass, UObject* InOuter, const TCHAR* Name,
+	const TCHAR* Filename = nullptr, uint32 LoadFlags = LOAD_None);
+
+/** A T, loaded when needed (UE: LoadObject). */
+template <class T>
+inline T* LoadObject(UObject* Outer, const TCHAR* Name, const TCHAR* Filename = nullptr, uint32 LoadFlags = LOAD_None)
+{
+	return (T*)StaticLoadObject(T::StaticClass(), Outer, Name, Filename, LoadFlags);
+}
+
+/** A class derived from T, loaded when needed (UE: LoadClass). */
+template <class T>
+inline UClass* LoadClass(
+	UObject* Outer, const TCHAR* Name, const TCHAR* Filename = nullptr, uint32 LoadFlags = LOAD_None)
+{
+	return StaticLoadClass(T::StaticClass(), Outer, Name, Filename, LoadFlags);
+}
+
 // Garbage collection (UE: UObjectGlobals.h; implemented in GarbageCollection.cpp, see UObject/GarbageCollection.h).
 
 /**

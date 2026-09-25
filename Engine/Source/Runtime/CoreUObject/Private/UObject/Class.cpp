@@ -4,6 +4,7 @@
 #include "Serialization/Archive.h"
 #include "Templates/Casts.h"
 #include "UObject/Package.h"
+#include "UObject/PropertyTag.h"
 #include "UObject/Stack.h"
 #include "UObject/UObjectThreadContext.h"
 #include "UObject/UnrealType.h"
@@ -248,6 +249,133 @@ void UStruct::DestroyStruct(void* InDest, int32 ArrayDim) const
 	}
 }
 
+void UStruct::SerializeTaggedProperties(
+	FArchive& Ar, uint8* Data, UStruct* DefaultsStruct, uint8* Defaults, const UObject* BreakRecursionIfFullyLoad) const
+{
+	(void)BreakRecursionIfFullyLoad;
+	if (Ar.IsLoading())
+	{
+		// Tags until NAME_None; each says how many bytes its value takes, so what cannot be loaded is skipped.
+		while (true)
+		{
+			FPropertyTag Tag;
+			Ar << Tag;
+			if (Ar.IsError() || Tag.Name.IsNone())
+			{
+				break;
+			}
+			const int64 ValueEnd = Ar.Tell() + Tag.Size;
+			bool bLoaded = false;
+			FProperty* Property = FindPropertyByName(Tag.Name);
+			if (!Property)
+			{
+				// Renamed or removed, or editor-only data on a build without it: schema evolution.
+				UE_LOG(LogClass, Verbose, TEXT("%s: %s.%s no longer exists; its saved value is skipped"),
+					*Ar.GetArchiveName(), *GetName(), *Tag.Name.ToString());
+			}
+			else if (Tag.ArrayIndex >= Property->ArrayDim)
+			{
+				UE_LOG(LogClass, Warning, TEXT("%s: %s.%s[%d] is past the property's %d elements; skipped"),
+					*Ar.GetArchiveName(), *GetName(), *Tag.Name.ToString(), Tag.ArrayIndex, Property->ArrayDim);
+			}
+			else if (!Property->ShouldSerializeValue(Ar))
+			{
+				UE_LOG(LogClass, Verbose,
+					TEXT("%s: %s.%s is not loaded (transient, deprecated or editor-only); skipped"),
+					*Ar.GetArchiveName(), *GetName(), *Tag.Name.ToString());
+			}
+			else
+			{
+				uint8* Value = Property->ContainerPtrToValuePtr<uint8>(Data, Tag.ArrayIndex);
+				const uint8* DefaultValue =
+					Property->ContainerPtrToValuePtrForDefaults<uint8>(DefaultsStruct, Defaults, Tag.ArrayIndex);
+				switch (Property->ConvertFromType(Tag, Ar, Value))
+				{
+					case EConvertFromTypeResult::Serialized:
+					case EConvertFromTypeResult::Converted:
+						bLoaded = true;
+						break;
+					case EConvertFromTypeResult::UseSerializeItem:
+						if (Tag.Type == Property->GetID())
+						{
+							Tag.SerializeTaggedProperty(Ar, Property, Value, DefaultValue);
+							bLoaded = true;
+						}
+						break;
+					case EConvertFromTypeResult::CannotConvert:
+						break;
+				}
+				if (!bLoaded)
+				{
+					UE_LOG(LogClass, Warning,
+						TEXT("%s: %s.%s was saved as a %s and cannot be loaded into a %s; skipped"),
+						*Ar.GetArchiveName(), *GetName(), *Tag.Name.ToString(), *Tag.Type.ToString(),
+						*Property->GetID().ToString());
+				}
+			}
+			if (Ar.IsError())
+			{
+				break;
+			}
+			if (bLoaded && Ar.Tell() != ValueEnd)
+			{
+				UE_LOG(LogClass, Warning, TEXT("%s: %s.%s read %lld bytes, its tag says %d"), *Ar.GetArchiveName(),
+					*GetName(), *Tag.Name.ToString(), (long long)(Ar.Tell() - (ValueEnd - Tag.Size)), Tag.Size);
+			}
+			Ar.Seek(ValueEnd);
+		}
+		return;
+	}
+
+	// Saving: the properties that differ from the defaults (all of them without defaults), then NAME_None.
+	for (FProperty* Property = PropertyLink; Property; Property = Property->PropertyLinkNext)
+	{
+		if (!Property->ShouldSerializeValue(Ar))
+		{
+			continue;
+		}
+		for (int32 Index = 0; Index < Property->ArrayDim; ++Index)
+		{
+			uint8* Value = Property->ContainerPtrToValuePtr<uint8>(Data, Index);
+			const uint8* DefaultValue =
+				Property->ContainerPtrToValuePtrForDefaults<uint8>(DefaultsStruct, Defaults, Index);
+			if (DefaultValue && Property->Identical(Value, DefaultValue))
+			{
+				continue;
+			}
+			FPropertyTag Tag(Property, Index, Value);
+			Ar << Tag;
+			const int64 ValueOffset = Ar.Tell();
+			Tag.SerializeTaggedProperty(Ar, Property, Value, DefaultValue);
+			const int64 ValueEnd = Ar.Tell();
+			Tag.Size = int32(ValueEnd - ValueOffset);
+			if (Tag.Size != 0)
+			{
+				// The size is only known now: patch it into the tag.
+				Ar.Seek(Tag.SizeOffset);
+				Ar << Tag.Size;
+				Ar.Seek(ValueEnd);
+			}
+		}
+	}
+	FName Terminator(NAME_None);
+	Ar << Terminator;
+}
+
+void UStruct::SerializeBin(FArchive& Ar, void* Data) const
+{
+	for (FProperty* Property = PropertyLink; Property; Property = Property->PropertyLinkNext)
+	{
+		if (Property->ShouldSerializeValue(Ar))
+		{
+			for (int32 Index = 0; Index < Property->ArrayDim; ++Index)
+			{
+				Property->SerializeItem(Ar, Property->ContainerPtrToValuePtr<void>(Data, Index), nullptr);
+			}
+		}
+	}
+}
+
 // UScriptStruct
 
 UScriptStruct::UScriptStruct(EStaticConstructor, int32 InSize, int32 InAlignment, EObjectFlags InFlags)
@@ -312,6 +440,10 @@ void UScriptStruct::SetCppStructOps(ICppStructOps* InCppStructOps)
 	if (CppStructOps->HasImportTextItem())
 	{
 		StructFlags |= STRUCT_ImportTextItemNative;
+	}
+	if (CppStructOps->HasSerializer())
+	{
+		StructFlags |= STRUCT_SerializeNative;
 	}
 }
 
@@ -430,6 +562,27 @@ uint32 UScriptStruct::GetStructTypeHash(const void* Src) const
 FString UScriptStruct::GetStructCPPName() const
 {
 	return FString(TEXT("F")) + GetName();
+}
+
+bool UScriptStruct::UseBinarySerialization(const FArchive& Ar) const
+{
+	return !(Ar.IsLoading() || Ar.IsSaving()) || (StructFlags & STRUCT_Immutable) != 0;
+}
+
+void UScriptStruct::SerializeItem(FArchive& Ar, void* Value, void const* Defaults) const
+{
+	if ((StructFlags & STRUCT_SerializeNative) && CppStructOps->Serialize(Ar, Value))
+	{
+		return;
+	}
+	if (UseBinarySerialization(Ar))
+	{
+		SerializeBin(Ar, Value);
+	}
+	else
+	{
+		SerializeTaggedProperties(Ar, (uint8*)Value, const_cast<UScriptStruct*>(this), (uint8*)Defaults);
+	}
 }
 
 // UClass

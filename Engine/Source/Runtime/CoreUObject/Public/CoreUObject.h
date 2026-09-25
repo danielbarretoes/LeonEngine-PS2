@@ -3,9 +3,12 @@
 // The commonly used CoreUObject headers (UE: CoreUObject.h).
 
 #include "CoreMinimal.h"
+#include "Misc/PackageName.h"
+#include "Serialization/BulkData.h"
 #include "Templates/Casts.h"
 #include "Templates/SubclassOf.h"
 #include "UObject/Class.h"
+#include "UObject/LinkerLoad.h"
 #include "UObject/Object.h"
 #include "UObject/ObjectMacros.h"
 #include "UObject/Package.h"

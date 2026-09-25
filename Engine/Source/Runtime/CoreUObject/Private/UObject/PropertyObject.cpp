@@ -4,7 +4,10 @@
 #include "Misc/CString.h"
 #include "UObject/Package.h"
 #include "UObject/PropertyHelpers.h"
+#include "UObject/PropertyTag.h"
 #include "UObject/UnrealType.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogObjectProperty, Log, All);
 
 using namespace UE::CoreUObject::Private;
 
@@ -306,7 +309,7 @@ const TCHAR* FSoftObjectProperty::ImportText_Internal(
 	}
 	else
 	{
-		// A soft reference keeps its path even when the object is not in memory (P11 loads it).
+		// A soft reference keeps its path even when the object is not in memory (TryLoad loads it).
 		Value = FSoftObjectPath(Token);
 	}
 	return End;
@@ -339,4 +342,107 @@ FString FSoftClassProperty::GetCPPType() const
 bool FSoftClassProperty::SameType(const FProperty* Other) const
 {
 	return FSoftObjectProperty::SameType(Other) && MetaClass == ((const FSoftClassProperty*)Other)->MetaClass;
+}
+
+// Serialization (UE: PropertyBaseObject.cpp, PropertyObject.cpp, PropertyWeakObjectPtr.cpp, PropertySoftObjectPtr.cpp)
+
+namespace
+{
+	/** A loaded object the property cannot hold (its type changed) becomes null, with a warning (UE). */
+	UObject* CheckLoadedObjectType(const FObjectPropertyBase* Property, UObject* Object, FArchive& Ar)
+	{
+		if (Object && !Property->PropertyClass)
+		{
+			return Object;
+		}
+		if (Object && !Object->IsA(Property->PropertyClass))
+		{
+			UE_LOG(LogObjectProperty, Warning, TEXT("%s: %s loaded %s, which is not a %s; the reference is null"),
+				*Ar.GetArchiveName(), *Property->GetName(), *Object->GetFullName(),
+				*Property->PropertyClass->GetName());
+			return nullptr;
+		}
+		return Object;
+	}
+} // namespace
+
+EConvertFromTypeResult FObjectPropertyBase::ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const
+{
+	if (Tag.Type == GetID())
+	{
+		return EConvertFromTypeResult::UseSerializeItem;
+	}
+	// An object reference saved by a class property or the other way round: the same UObject* on disk (UE).
+	const bool bPointerTag = Tag.Type == NAME_ObjectProperty || Tag.Type == NAME_ClassProperty;
+	const bool bPointerProperty = IsA<FObjectProperty>();
+	if (bPointerTag && bPointerProperty)
+	{
+		SerializeItem(Ar, Value, nullptr);
+		return EConvertFromTypeResult::Serialized;
+	}
+	return EConvertFromTypeResult::CannotConvert;
+}
+
+void FObjectProperty::SerializeItem(FArchive& Ar, void* Value, void const* Defaults) const
+{
+	(void)Defaults;
+	UObject* Object = GetObjectPropertyValue(Value);
+	Ar << Object;
+	if (Ar.IsLoading())
+	{
+		Object = CheckLoadedObjectType(this, Object, Ar);
+		if (Object && !AllowObjectTypeReference(Object))
+		{
+			UE_LOG(LogObjectProperty, Warning, TEXT("%s: %s cannot hold %s; the reference is null"),
+				*Ar.GetArchiveName(), *GetName(), *Object->GetFullName());
+			Object = nullptr;
+		}
+		SetObjectPropertyValue(Value, Object);
+	}
+}
+
+void FWeakObjectProperty::SerializeItem(FArchive& Ar, void* Value, void const* Defaults) const
+{
+	(void)Defaults;
+	UObject* Object = GetObjectPropertyValue(Value);
+	Ar << Object;
+	if (Ar.IsLoading())
+	{
+		SetObjectPropertyValue(Value, CheckLoadedObjectType(this, Object, Ar));
+	}
+}
+
+void FSoftObjectProperty::SerializeItem(FArchive& Ar, void* Value, void const* Defaults) const
+{
+	(void)Defaults;
+	FSoftObjectPtr& SoftPtr = *(FSoftObjectPtr*)Value;
+	FSoftObjectPath Path = SoftPtr.ToSoftObjectPath();
+	Ar << Path;
+	if (Ar.IsLoading())
+	{
+		// The path only: the object is found (or loaded) when the pointer is used.
+		SoftPtr = Path;
+	}
+}
+
+EConvertFromTypeResult FSoftObjectProperty::ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const
+{
+	if (Tag.Type == GetID())
+	{
+		return EConvertFromTypeResult::UseSerializeItem;
+	}
+	if (Tag.Type == NAME_SoftObjectProperty || Tag.Type == NAME_SoftClassProperty)
+	{
+		SerializeItem(Ar, Value, nullptr);
+		return EConvertFromTypeResult::Serialized;
+	}
+	if (Tag.Type == NAME_ObjectProperty || Tag.Type == NAME_ClassProperty)
+	{
+		// A hard reference made soft: the object it named (UE).
+		UObject* Object = nullptr;
+		Ar << Object;
+		*(FSoftObjectPtr*)Value = CheckLoadedObjectType(this, Object, Ar);
+		return EConvertFromTypeResult::Converted;
+	}
+	return EConvertFromTypeResult::CannotConvert;
 }

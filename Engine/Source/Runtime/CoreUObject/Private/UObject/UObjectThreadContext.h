@@ -31,6 +31,12 @@ public:
 	TArray<FPendingConstruction> PendingConstructions;
 	TArray<FObjectInitializer*> InitializerStack;
 
+	/**
+	 * While UPackage::Save collects the references of its exports: the packages of the soft object paths they save
+	 * (UE: the soft package references of FArchiveSaveTagImports).
+	 */
+	TArray<FName>* SoftPackageReferenceCollector = nullptr;
+
 	FORCEINLINE FObjectInitializer* TopInitializer() const
 	{
 		return InitializerStack.Num() ? InitializerStack.Last() : nullptr;

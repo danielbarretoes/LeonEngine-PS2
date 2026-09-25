@@ -15,7 +15,7 @@ class UObject;
 /**
  * A soft reference: an FSoftObjectPath plus a cached weak pointer to the object once found (UE: FSoftObjectPtr, a
  * TPersistentObjectPtr<FSoftObjectPath>). It never keeps the object alive; Get() finds it when it is in memory, and
- * LoadSynchronous would load it (P11: until then it only finds objects in memory).
+ * LoadSynchronous loads its package when it is not.
  */
 struct COREUOBJECT_API FSoftObjectPtr : public TPersistentObjectPtr<FSoftObjectPath>
 {
@@ -53,7 +53,7 @@ struct COREUOBJECT_API FSoftObjectPtr : public TPersistentObjectPtr<FSoftObjectP
 		return ToSoftObjectPath().GetAssetName();
 	}
 
-	/** The object, loading it when needed (UE). Until P11 only objects in memory are found. */
+	/** The object, loading its package when needed (UE). */
 	UObject* LoadSynchronous() const;
 };
 
@@ -117,7 +117,7 @@ public:
 		return *Get();
 	}
 
-	/** The object, loading it when needed (UE). Until P11 only objects in memory are found. */
+	/** The object, loading its package when needed (UE). */
 	FORCEINLINE T* LoadSynchronous() const
 	{
 		return Cast<T>(SoftObjectPtr.LoadSynchronous());
@@ -265,7 +265,7 @@ public:
 		return Get();
 	}
 
-	/** The class, loading it when needed (UE). Until P11 only classes in memory are found. */
+	/** The class, loading its package when needed (UE). */
 	FORCEINLINE UClass* LoadSynchronous() const
 	{
 		UClass* Class = Cast<UClass>(SoftObjectPtr.LoadSynchronous());

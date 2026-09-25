@@ -20,6 +20,7 @@
 
 class FOutputDevice;
 class FStructProperty;
+struct FPropertyTag;
 
 /** Port flags of ExportTextItem / ImportText (UE: EPropertyPortFlags; the subset Leon uses). */
 enum EPropertyPortFlags
@@ -29,6 +30,19 @@ enum EPropertyPortFlags
 	PPF_ConfigOnly = 0x00000400,
 	/** Export names and strings without quotes where possible. */
 	PPF_Delimited = 0x00000002,
+};
+
+/** What FProperty::ConvertFromType did with a tag (UE: EConvertFromTypeResult). */
+enum class EConvertFromTypeResult
+{
+	/** Nothing: the value is read with SerializeItem when the tag's type is the property's. */
+	UseSerializeItem,
+	/** The value was read with SerializeItem (a compatible type, such as an object tag for a class property). */
+	Serialized,
+	/** The tag's type cannot be converted: the value is skipped with a warning. */
+	CannotConvert,
+	/** The value was read in the tag's type and converted. */
+	Converted,
 };
 
 /** Which references ContainsObjectReference looks for (UE: EPropertyObjectReferenceType). */
@@ -118,6 +132,21 @@ public:
 	FORCEINLINE bool IsInContainer(int32 ContainerSize) const
 	{
 		return Offset_Internal + GetSize() <= ContainerSize;
+	}
+
+	/**
+	 * The address of element ArrayIndex of this member in ContainerPtr, an instance of ContainerClass, or nullptr when
+	 * there is none or the member does not fit in ContainerClass (UE).
+	 */
+	template <typename ValueType>
+	FORCEINLINE ValueType* ContainerPtrToValuePtrForDefaults(
+		const UStruct* ContainerClass, const void* ContainerPtr, int32 ArrayIndex = 0) const
+	{
+		if (ContainerPtr && ContainerClass && IsInContainer(ContainerClass->GetPropertiesSize()))
+		{
+			return (ValueType*)((const uint8*)ContainerPtr + Offset_Internal + ElementSize * ArrayIndex);
+		}
+		return nullptr;
 	}
 
 	/** The address of element ArrayIndex of this member inside the owner at ContainerPtr (UE). */
@@ -315,6 +344,40 @@ public:
 	/** ExportTextItem of element ArrayIndex of the member in a container (UE: ExportText_InContainer). */
 	void ExportText_InContainer(int32 Index, FString& ValueStr, const void* Data, const void* Delta, UObject* Parent,
 		int32 PortFlags, UObject* ExportRootScope = nullptr) const;
+
+	// Serialization.
+
+	/** The type name tags record: the field class name, "IntProperty" (UE: GetID). */
+	FORCEINLINE FName GetID() const
+	{
+		return GetClass()->GetFName();
+	}
+
+	/** True for a member declared inside #if WITH_EDITORONLY_DATA (UE: IsEditorOnlyProperty). */
+	FORCEINLINE bool IsEditorOnlyProperty() const
+	{
+		return (PropertyFlags & CPF_EditorOnly) != 0;
+	}
+
+	/**
+	 * Whether Ar loads or saves this member (UE: ShouldSerializeValue): never with CPF_SkipSerialization, not a
+	 * transient one in a persistent archive, not a deprecated one when saving, not an editor-only one in an archive
+	 * that filters editor-only data.
+	 */
+	bool ShouldSerializeValue(FArchive& Ar) const;
+
+	/**
+	 * Loads or saves one element at Value (UE: SerializeItem). Defaults, when not null, is the element's default value
+	 * (a struct saves the members that differ from it).
+	 */
+	virtual void SerializeItem(FArchive& Ar, void* Value, void const* Defaults = nullptr) const = 0;
+
+	/**
+	 * Called when loading a tag of this property: reads a value saved with another type and converts it into Value
+	 * (UE: ConvertFromType; Leon passes the element address). Return UseSerializeItem to let the tag load with
+	 * SerializeItem when its type is this property's.
+	 */
+	virtual EConvertFromTypeResult ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const;
 
 	// Linking.
 
@@ -527,6 +590,12 @@ public:
 		(void)PortFlags;
 		return TTypeFundamentals::GetPropertyValue(A) == TTypeFundamentals::GetOptionalPropertyValue(B);
 	}
+
+	virtual void SerializeItem(FArchive& Ar, void* Value, void const* Defaults = nullptr) const override
+	{
+		(void)Defaults;
+		Ar << *TTypeFundamentals::GetPropertyValuePtr(Value);
+	}
 };
 
 class UEnum;
@@ -560,6 +629,9 @@ public:
 	virtual uint64 GetUnsignedIntPropertyValue(void const* Data) const;
 	virtual double GetFloatingPointPropertyValue(void const* Data) const;
 	virtual FString GetNumericPropertyValueToString(void const* Data) const;
+
+	/** Integers from any integer tag, float / double from either (UE: ConvertFromArithmeticValue). */
+	virtual EConvertFromTypeResult ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const override;
 
 protected:
 	virtual const TCHAR* ImportText_Internal(const TCHAR* Buffer, void* Data, int32 PortFlags, UObject* OwnerObject,
@@ -809,6 +881,10 @@ public:
 	virtual UEnum* GetIntPropertyEnum() const override;
 	virtual void ExportTextItem(FString& ValueStr, const void* PropertyValue, const void* DefaultValue, UObject* Parent,
 		int32 PortFlags, UObject* ExportRootScope = nullptr) const override;
+	/** With an enum, the value is saved as the enumerator's name ("EMyEnum::Value"), as UE does. */
+	virtual void SerializeItem(FArchive& Ar, void* Value, void const* Defaults = nullptr) const override;
+	/** Enum names from an enum or enum-byte tag, numbers from a plain byte or integer tag. */
+	virtual EConvertFromTypeResult ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const override;
 
 protected:
 	virtual const TCHAR* ImportText_Internal(const TCHAR* Buffer, void* Data, int32 PortFlags, UObject* OwnerObject,
@@ -887,6 +963,10 @@ public:
 	virtual void ExportTextItem(FString& ValueStr, const void* PropertyValue, const void* DefaultValue, UObject* Parent,
 		int32 PortFlags, UObject* ExportRootScope = nullptr) const override;
 	virtual void CopyCompleteValueToScriptVM(void* Dest, void const* Src) const override;
+	/** One byte, 0 or 1; a tagged bool uses the tag's BoolVal instead (FPropertyTag::SerializeTaggedProperty). */
+	virtual void SerializeItem(FArchive& Ar, void* Value, void const* Defaults = nullptr) const override;
+	/** Integer tags: non-zero is true (UE). */
+	virtual EConvertFromTypeResult ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const override;
 
 protected:
 	virtual void LinkInternal(FArchive& Ar) override;
@@ -923,6 +1003,8 @@ public:
 	virtual FString GetCPPType() const override;
 	virtual void ExportTextItem(FString& ValueStr, const void* PropertyValue, const void* DefaultValue, UObject* Parent,
 		int32 PortFlags, UObject* ExportRootScope = nullptr) const override;
+	/** Name and text tags (UE). */
+	virtual EConvertFromTypeResult ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const override;
 
 protected:
 	virtual const TCHAR* ImportText_Internal(const TCHAR* Buffer, void* Data, int32 PortFlags, UObject* OwnerObject,
@@ -944,6 +1026,8 @@ public:
 	virtual FString GetCPPType() const override;
 	virtual void ExportTextItem(FString& ValueStr, const void* PropertyValue, const void* DefaultValue, UObject* Parent,
 		int32 PortFlags, UObject* ExportRootScope = nullptr) const override;
+	/** String tags (UE). */
+	virtual EConvertFromTypeResult ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const override;
 
 protected:
 	virtual const TCHAR* ImportText_Internal(const TCHAR* Buffer, void* Data, int32 PortFlags, UObject* OwnerObject,
@@ -966,6 +1050,10 @@ public:
 	virtual bool Identical(const void* A, const void* B, uint32 PortFlags = 0) const override;
 	virtual void ExportTextItem(FString& ValueStr, const void* PropertyValue, const void* DefaultValue, UObject* Parent,
 		int32 PortFlags, UObject* ExportRootScope = nullptr) const override;
+	/** The text's display string (Leon's FText has no localization data). */
+	virtual void SerializeItem(FArchive& Ar, void* Value, void const* Defaults = nullptr) const override;
+	/** String and name tags (UE). */
+	virtual EConvertFromTypeResult ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const override;
 
 protected:
 	virtual const TCHAR* ImportText_Internal(const TCHAR* Buffer, void* Data, int32 PortFlags, UObject* OwnerObject,
@@ -1000,6 +1088,13 @@ public:
 	virtual bool Identical(const void* A, const void* B, uint32 PortFlags = 0) const override;
 	virtual void ExportTextItem(FString& ValueStr, const void* PropertyValue, const void* DefaultValue, UObject* Parent,
 		int32 PortFlags, UObject* ExportRootScope = nullptr) const override;
+	/**
+	 * The enumerator's name ("EMyEnum::Value"), so reordered enumerators keep their meaning; a name the enum no longer
+	 * has loads as the enum's _MAX value with a warning (UE).
+	 */
+	virtual void SerializeItem(FArchive& Ar, void* Value, void const* Defaults = nullptr) const override;
+	/** Enum bytes by name ("byte to enum"), plain bytes and integers by value (UE). */
+	virtual EConvertFromTypeResult ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const override;
 
 protected:
 	virtual void LinkInternal(FArchive& Ar) override;
@@ -1044,6 +1139,8 @@ public:
 	virtual void ExportTextItem(FString& ValueStr, const void* PropertyValue, const void* DefaultValue, UObject* Parent,
 		int32 PortFlags, UObject* ExportRootScope = nullptr) const override;
 	virtual bool SameType(const FProperty* Other) const override;
+	/** Object and class tags load into either kind of pointer property (the object's type is checked) (UE). */
+	virtual EConvertFromTypeResult ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const override;
 
 	/** Finds the object an ImportText path names ("None", a path, or a name in the owner's package) (UE). */
 	static UObject* FindImportedObject(const FProperty* Property, UObject* OwnerObject, UClass* ObjectClass,
@@ -1099,6 +1196,8 @@ public:
 	virtual FString GetCPPType() const override;
 	virtual UObject* GetObjectPropertyValue(const void* PropertyValueAddress) const override;
 	virtual void SetObjectPropertyValue(void* PropertyValueAddress, UObject* Value) const override;
+	/** The object through FArchive's UObject* operator; a loaded object of the wrong type becomes null (UE). */
+	virtual void SerializeItem(FArchive& Ar, void* Value, void const* Defaults = nullptr) const override;
 };
 
 /** A TSubclassOf<T> / UClass* member (UE: FClassProperty). */
@@ -1136,6 +1235,8 @@ public:
 	virtual void SetObjectPropertyValue(void* PropertyValueAddress, UObject* Value) const override;
 	virtual bool ContainsObjectReference(TArray<const FStructProperty*>& EncounteredStructProps,
 		EPropertyObjectReferenceType InReferenceType = EPropertyObjectReferenceType::Strong) const override;
+	/** The object it points to, like a UObject* (UE). */
+	virtual void SerializeItem(FArchive& Ar, void* Value, void const* Defaults = nullptr) const override;
 };
 
 /** A TSoftObjectPtr<T> member (UE: FSoftObjectProperty). */
@@ -1156,6 +1257,10 @@ public:
 		int32 PortFlags, UObject* ExportRootScope = nullptr) const override;
 	virtual bool ContainsObjectReference(TArray<const FStructProperty*>& EncounteredStructProps,
 		EPropertyObjectReferenceType InReferenceType = EPropertyObjectReferenceType::Strong) const override;
+	/** The FSoftObjectPath: the path's name and subobject string; a package records its package (UE). */
+	virtual void SerializeItem(FArchive& Ar, void* Value, void const* Defaults = nullptr) const override;
+	/** A hard object reference tag becomes a soft reference to the same object (UE). */
+	virtual EConvertFromTypeResult ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const override;
 
 protected:
 	virtual const TCHAR* ImportText_Internal(const TCHAR* Buffer, void* Data, int32 PortFlags, UObject* OwnerObject,
@@ -1198,6 +1303,10 @@ public:
 	virtual bool Identical(const void* A, const void* B, uint32 PortFlags = 0) const override;
 	virtual void ExportTextItem(FString& ValueStr, const void* PropertyValue, const void* DefaultValue, UObject* Parent,
 		int32 PortFlags, UObject* ExportRootScope = nullptr) const override;
+	/** UScriptStruct::SerializeItem: nested tagged properties (delta'd against Defaults), binary or native (UE). */
+	virtual void SerializeItem(FArchive& Ar, void* Value, void const* Defaults = nullptr) const override;
+	/** A tag of another struct cannot be converted (UE: without STRUCT_SerializeFromMismatchedTag). */
+	virtual EConvertFromTypeResult ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const override;
 
 protected:
 	virtual void LinkInternal(FArchive& Ar) override;
@@ -1233,6 +1342,13 @@ public:
 	virtual bool Identical(const void* A, const void* B, uint32 PortFlags = 0) const override;
 	virtual void ExportTextItem(FString& ValueStr, const void* PropertyValue, const void* DefaultValue, UObject* Parent,
 		int32 PortFlags, UObject* ExportRootScope = nullptr) const override;
+	/**
+	 * The element count, then (for struct elements) a tag of the element type, which a load checks against the
+	 * struct, then every element (UE).
+	 */
+	virtual void SerializeItem(FArchive& Ar, void* Value, void const* Defaults = nullptr) const override;
+	/** A tag with another element type cannot be converted. */
+	virtual EConvertFromTypeResult ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const override;
 
 protected:
 	virtual void LinkInternal(FArchive& Ar) override;
@@ -1267,6 +1383,13 @@ public:
 	virtual bool Identical(const void* A, const void* B, uint32 PortFlags = 0) const override;
 	virtual void ExportTextItem(FString& ValueStr, const void* PropertyValue, const void* DefaultValue, UObject* Parent,
 		int32 PortFlags, UObject* ExportRootScope = nullptr) const override;
+	/**
+	 * UE 4.27's layout: the number of default elements to remove (always 0: Leon writes the whole set, and a load
+	 * replaces the set), then the element count and the elements.
+	 */
+	virtual void SerializeItem(FArchive& Ar, void* Value, void const* Defaults = nullptr) const override;
+	/** A tag with another element type cannot be converted. */
+	virtual EConvertFromTypeResult ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const override;
 
 protected:
 	virtual void LinkInternal(FArchive& Ar) override;
@@ -1304,6 +1427,13 @@ public:
 	virtual bool Identical(const void* A, const void* B, uint32 PortFlags = 0) const override;
 	virtual void ExportTextItem(FString& ValueStr, const void* PropertyValue, const void* DefaultValue, UObject* Parent,
 		int32 PortFlags, UObject* ExportRootScope = nullptr) const override;
+	/**
+	 * UE 4.27's layout: the number of default keys to remove (always 0: Leon writes the whole map, and a load replaces
+	 * the map), then the pair count and each key and value.
+	 */
+	virtual void SerializeItem(FArchive& Ar, void* Value, void const* Defaults = nullptr) const override;
+	/** A tag with another key or value type cannot be converted. */
+	virtual EConvertFromTypeResult ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const override;
 
 protected:
 	virtual void LinkInternal(FArchive& Ar) override;

@@ -19,6 +19,7 @@ Engine/Source/Programs/LeonHeaderTool/Tests/** text eol=lf
 
 # Binary content
 *.lasset binary
+*.lmap binary
 *.llev binary
 *.lmesh binary
 *.hdr binary

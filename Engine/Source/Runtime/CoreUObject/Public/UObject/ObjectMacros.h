@@ -5,6 +5,7 @@
 // (Engine/Source/Programs/LeonHeaderTool/README.md).
 
 #include "CoreMinimal.h"
+#include "Serialization/Archive.h"
 #include "UObject/Script.h"
 
 class FObjectInitializer;
@@ -89,6 +90,11 @@ ENUM_CLASS_FLAGS(EObjectFlags)
 #define RF_PropagateToSubObjects ((EObjectFlags)(RF_Public | RF_ArchetypeObject | RF_Transactional | RF_Transient))
 /** Every flag (UE: RF_AllFlags). */
 #define RF_AllFlags ((EObjectFlags)0x0fffffff)
+/** The flags a package saves for each export and a load restores (UE: RF_Load). */
+#define RF_Load                                                                                                        \
+	((EObjectFlags)(RF_Public | RF_Standalone | RF_Transactional | RF_ClassDefaultObject | RF_ArchetypeObject |        \
+		RF_DefaultSubObject | RF_TextExportTransient | RF_InheritableComponentTemplate | RF_DuplicateTransient |       \
+		RF_NonPIEDuplicateTransient))
 
 /** Flags kept in the object's GUObjectArray item rather than in the object (UE: EInternalObjectFlags). */
 enum class EInternalObjectFlags : int32
@@ -314,6 +320,28 @@ enum EPackageFlags
 };
 ENUM_CLASS_FLAGS(EPackageFlags)
 
+/** Flags of LoadPackage / LoadObject (UE: ELoadFlags; the subset Leon uses, UE values). */
+enum ELoadFlags
+{
+	LOAD_None = 0x00000000,
+	/** A missing package or object is logged at Log verbosity instead of as a warning / error. */
+	LOAD_NoWarn = 0x00000002,
+	/** Nothing is logged for a missing package or object. */
+	LOAD_Quiet = 0x00002000,
+	/** StaticLoadObject: when the load fails, look for the object in memory once more. */
+	LOAD_FindIfFail = 0x00004000,
+};
+
+/** Flags of UPackage::Save (UE: ESaveFlags; the subset Leon uses, UE values). */
+enum ESaveFlags
+{
+	SAVE_None = 0x00000000,
+	/** Report failures as warnings instead of errors. */
+	SAVE_NoError = 0x00000001,
+	/** Keep the package's GUID when it has one instead of deriving it from the package name. */
+	SAVE_KeepGUID = 0x00000008,
+};
+
 /** Flags describing a struct (UE: EStructFlags, 4.27 values). */
 enum EStructFlags
 {
@@ -427,8 +455,12 @@ namespace EIncludeSuperFlag
 #define UFUNCTION(...)
 #define UMETA(...)
 
-/** Serialization helper of a generated class (UE: DECLARE_SERIALIZER; FArchive << UObject* arrives with P11). */
-#define DECLARE_SERIALIZER(TClass)
+/** `Ar << Pointer` for a pointer to a generated class: serialized as a UObject* (UE: DECLARE_SERIALIZER). */
+#define DECLARE_SERIALIZER(TClass)                                                                                     \
+	friend FArchive& operator<<(FArchive& Ar, TClass*& Res)                                                            \
+	{                                                                                                                  \
+		return Ar << (UObject*&)Res;                                                                                   \
+	}
 
 /**
  * The reflection boilerplate of a class (UE: DECLARE_CLASS): Super / ThisClass, StaticClass(), the static flags and

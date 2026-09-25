@@ -3,6 +3,7 @@
 #include "Misc/Char.h"
 #include "Serialization/Archive.h"
 #include "UObject/PropertyHelpers.h"
+#include "UObject/PropertyTag.h"
 #include "UObject/UnrealType.h"
 
 using namespace UE::CoreUObject::Private;
@@ -232,4 +233,20 @@ const TCHAR* FStructProperty::ImportText_Internal(
 			return nullptr;
 		}
 	}
+}
+
+void FStructProperty::SerializeItem(FArchive& Ar, void* Value, void const* Defaults) const
+{
+	Struct->SerializeItem(Ar, Value, Defaults);
+}
+
+EConvertFromTypeResult FStructProperty::ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const
+{
+	(void)Ar;
+	(void)Value;
+	if (Tag.Type == GetID() && Tag.StructName != Struct->GetFName())
+	{
+		return EConvertFromTypeResult::CannotConvert;
+	}
+	return Tag.Type == GetID() ? EConvertFromTypeResult::UseSerializeItem : EConvertFromTypeResult::CannotConvert;
 }

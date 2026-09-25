@@ -5,7 +5,9 @@
 #include "Misc/Char.h"
 #include "Misc/OutputDevice.h"
 #include "Serialization/Archive.h"
+#include "UObject/Package.h"
 #include "UObject/PropertyHelpers.h"
+#include "UObject/PropertyTag.h"
 #include "UObject/UnrealType.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogProperty, Log, All);
@@ -964,4 +966,359 @@ const TCHAR* FEnumProperty::ImportText_Internal(
 uint32 FEnumProperty::GetValueTypeHashInternal(const void* Src) const
 {
 	return UnderlyingProp->GetValueTypeHash(Src);
+}
+
+// Serialization (UE: the SerializeItem and ConvertFromType of each property type)
+
+namespace UE::CoreUObject::Private
+{
+	bool IsIntegerTag(const FPropertyTag& Tag)
+	{
+		return Tag.Type == NAME_Int8Property || Tag.Type == NAME_Int16Property || Tag.Type == NAME_IntProperty ||
+			Tag.Type == NAME_Int64Property || Tag.Type == NAME_UInt16Property || Tag.Type == NAME_UInt32Property ||
+			Tag.Type == NAME_UInt64Property || (Tag.Type == NAME_ByteProperty && Tag.EnumName.IsNone());
+	}
+
+	bool IsFloatingPointTag(const FPropertyTag& Tag)
+	{
+		return Tag.Type == NAME_FloatProperty || Tag.Type == NAME_DoubleProperty;
+	}
+
+	bool ReadNumericTagValue(const FPropertyTag& Tag, FArchive& Ar, FNumericTagValue& OutValue)
+	{
+		OutValue = FNumericTagValue();
+		if (Tag.Type == NAME_Int8Property)
+		{
+			int8 Value = 0;
+			Ar << Value;
+			OutValue.Signed = Value;
+		}
+		else if (Tag.Type == NAME_Int16Property)
+		{
+			int16 Value = 0;
+			Ar << Value;
+			OutValue.Signed = Value;
+		}
+		else if (Tag.Type == NAME_IntProperty)
+		{
+			int32 Value = 0;
+			Ar << Value;
+			OutValue.Signed = Value;
+		}
+		else if (Tag.Type == NAME_Int64Property)
+		{
+			Ar << OutValue.Signed;
+		}
+		else if (Tag.Type == NAME_ByteProperty && Tag.EnumName.IsNone())
+		{
+			uint8 Value = 0;
+			Ar << Value;
+			OutValue.bUnsigned = true;
+			OutValue.Unsigned = Value;
+		}
+		else if (Tag.Type == NAME_UInt16Property)
+		{
+			uint16 Value = 0;
+			Ar << Value;
+			OutValue.bUnsigned = true;
+			OutValue.Unsigned = Value;
+		}
+		else if (Tag.Type == NAME_UInt32Property)
+		{
+			uint32 Value = 0;
+			Ar << Value;
+			OutValue.bUnsigned = true;
+			OutValue.Unsigned = Value;
+		}
+		else if (Tag.Type == NAME_UInt64Property)
+		{
+			Ar << OutValue.Unsigned;
+			OutValue.bUnsigned = true;
+		}
+		else if (Tag.Type == NAME_FloatProperty)
+		{
+			float Value = 0.0f;
+			Ar << Value;
+			OutValue.bFloatingPoint = true;
+			OutValue.Float = double(Value);
+		}
+		else if (Tag.Type == NAME_DoubleProperty)
+		{
+			Ar << OutValue.Float;
+			OutValue.bFloatingPoint = true;
+		}
+		else
+		{
+			return false;
+		}
+		return true;
+	}
+
+	int64 LoadEnumValue(const UEnum* Enum, FName EnumValueName, FArchive& Ar)
+	{
+		int32 Index = Enum->GetIndexByName(EnumValueName);
+		if (Index == INDEX_NONE && !EnumValueName.IsNone())
+		{
+			// Saved from another enum (a converted property): "EOther::Value" or a regular enum's "Value".
+			const FString SavedName = EnumValueName.ToString();
+			const int32 ScopeIndex = SavedName.Find(TEXT("::"));
+			const FString ShortName = ScopeIndex != INDEX_NONE ? SavedName.RightChop(ScopeIndex + 2) : SavedName;
+			for (int32 Candidate = 0; Candidate < Enum->NumEnums(); ++Candidate)
+			{
+				if (Enum->GetNameStringByIndex(Candidate).Equals(ShortName, ESearchCase::IgnoreCase))
+				{
+					Index = Candidate;
+					break;
+				}
+			}
+		}
+		if (Index == INDEX_NONE)
+		{
+			if (!EnumValueName.IsNone())
+			{
+				UE_LOG(LogProperty, Warning, TEXT("%s: enum %s has no entry %s any more; the value becomes %s"),
+					*Ar.GetArchiveName(), *Enum->GetName(), *EnumValueName.ToString(),
+					*Enum->GetNameStringByValue(Enum->GetMaxEnumValue()));
+			}
+			return Enum->GetMaxEnumValue();
+		}
+		return Enum->GetValueByIndex(Index);
+	}
+
+	FName GetEnumValueNameForSave(const UEnum* Enum, int64 Value)
+	{
+		return Enum->IsValidEnumValue(Value) ? Enum->GetNameByValue(Value) : FName(NAME_None);
+	}
+} // namespace UE::CoreUObject::Private
+
+bool FProperty::ShouldSerializeValue(FArchive& Ar) const
+{
+	if (PropertyFlags & CPF_SkipSerialization)
+	{
+		return false;
+	}
+	if ((PropertyFlags & CPF_Transient) && Ar.IsPersistent())
+	{
+		return false;
+	}
+	if ((PropertyFlags & CPF_Deprecated) && Ar.IsSaving())
+	{
+		return false;
+	}
+	if (IsEditorOnlyProperty() && Ar.IsFilterEditorOnly())
+	{
+		return false;
+	}
+	return true;
+}
+
+EConvertFromTypeResult FProperty::ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const
+{
+	(void)Tag;
+	(void)Ar;
+	(void)Value;
+	return EConvertFromTypeResult::UseSerializeItem;
+}
+
+EConvertFromTypeResult FNumericProperty::ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const
+{
+	if (Tag.Type == GetID())
+	{
+		return EConvertFromTypeResult::UseSerializeItem;
+	}
+	// Integers load from any integer (wrapping like a C++ cast), floats from float or double (UE).
+	const bool bCompatible = IsInteger() ? IsIntegerTag(Tag) : (IsFloatingPoint() && IsFloatingPointTag(Tag));
+	FNumericTagValue TagValue;
+	if (!bCompatible || !ReadNumericTagValue(Tag, Ar, TagValue))
+	{
+		return EConvertFromTypeResult::CannotConvert;
+	}
+	if (IsFloatingPoint())
+	{
+		SetFloatingPointPropertyValue(Value, TagValue.Float);
+	}
+	else if (TagValue.bUnsigned)
+	{
+		SetIntPropertyValue(Value, TagValue.Unsigned);
+	}
+	else
+	{
+		SetIntPropertyValue(Value, TagValue.Signed);
+	}
+	return EConvertFromTypeResult::Converted;
+}
+
+void FByteProperty::SerializeItem(FArchive& Ar, void* Value, void const* Defaults) const
+{
+	if (!Enum || !(Ar.IsLoading() || Ar.IsSaving()))
+	{
+		Super::SerializeItem(Ar, Value, Defaults);
+		return;
+	}
+	// By name, so reordered enumerators keep their meaning (UE).
+	FName EnumValueName;
+	if (Ar.IsSaving())
+	{
+		EnumValueName = GetEnumValueNameForSave(Enum, *(const uint8*)Value);
+	}
+	Ar << EnumValueName;
+	if (Ar.IsLoading())
+	{
+		*(uint8*)Value = uint8(LoadEnumValue(Enum, EnumValueName, Ar));
+	}
+}
+
+EConvertFromTypeResult FByteProperty::ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const
+{
+	const bool bNamedTag = (Tag.Type == NAME_ByteProperty && !Tag.EnumName.IsNone()) || Tag.Type == NAME_EnumProperty;
+	if (Tag.Type == NAME_ByteProperty && bNamedTag == (Enum != nullptr))
+	{
+		return EConvertFromTypeResult::UseSerializeItem;
+	}
+	if (bNamedTag)
+	{
+		// An enumerator's name: this property's enum, or the tag's when this is a plain byte now.
+		FName EnumValueName;
+		Ar << EnumValueName;
+		const UEnum* ValueEnum =
+			Enum ? Enum : (const UEnum*)StaticFindObject(UEnum::StaticClass(), ANY_PACKAGE, *Tag.EnumName.ToString());
+		if (!ValueEnum)
+		{
+			return EConvertFromTypeResult::CannotConvert;
+		}
+		*(uint8*)Value = uint8(LoadEnumValue(ValueEnum, EnumValueName, Ar));
+		return EConvertFromTypeResult::Converted;
+	}
+	return Super::ConvertFromType(Tag, Ar, Value);
+}
+
+void FBoolProperty::SerializeItem(FArchive& Ar, void* Value, void const* Defaults) const
+{
+	(void)Defaults;
+	uint8 ByteValue = GetPropertyValue(Value) ? 1 : 0;
+	Ar << ByteValue;
+	if (Ar.IsLoading())
+	{
+		SetPropertyValue(Value, ByteValue != 0);
+	}
+}
+
+EConvertFromTypeResult FBoolProperty::ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const
+{
+	if (Tag.Type == GetID())
+	{
+		return EConvertFromTypeResult::UseSerializeItem;
+	}
+	FNumericTagValue TagValue;
+	if (!IsIntegerTag(Tag) || !ReadNumericTagValue(Tag, Ar, TagValue))
+	{
+		return EConvertFromTypeResult::CannotConvert;
+	}
+	SetPropertyValue(Value, TagValue.bUnsigned ? TagValue.Unsigned != 0 : TagValue.Signed != 0);
+	return EConvertFromTypeResult::Converted;
+}
+
+EConvertFromTypeResult FStrProperty::ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const
+{
+	if (Tag.Type == NAME_NameProperty)
+	{
+		FName Name;
+		Ar << Name;
+		*(FString*)Value = Name.ToString();
+		return EConvertFromTypeResult::Converted;
+	}
+	if (Tag.Type == NAME_TextProperty)
+	{
+		FText Text;
+		Ar << Text;
+		*(FString*)Value = Text.ToString();
+		return EConvertFromTypeResult::Converted;
+	}
+	return Tag.Type == GetID() ? EConvertFromTypeResult::UseSerializeItem : EConvertFromTypeResult::CannotConvert;
+}
+
+EConvertFromTypeResult FNameProperty::ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const
+{
+	if (Tag.Type == NAME_StrProperty)
+	{
+		FString String;
+		Ar << String;
+		*(FName*)Value = FName(*String);
+		return EConvertFromTypeResult::Converted;
+	}
+	return Tag.Type == GetID() ? EConvertFromTypeResult::UseSerializeItem : EConvertFromTypeResult::CannotConvert;
+}
+
+void FTextProperty::SerializeItem(FArchive& Ar, void* Value, void const* Defaults) const
+{
+	(void)Defaults;
+	Ar << *(FText*)Value;
+}
+
+EConvertFromTypeResult FTextProperty::ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const
+{
+	if (Tag.Type == NAME_StrProperty)
+	{
+		FString String;
+		Ar << String;
+		*(FText*)Value = FText::FromString(String);
+		return EConvertFromTypeResult::Converted;
+	}
+	if (Tag.Type == NAME_NameProperty)
+	{
+		FName Name;
+		Ar << Name;
+		*(FText*)Value = FText::FromString(Name.ToString());
+		return EConvertFromTypeResult::Converted;
+	}
+	return Tag.Type == GetID() ? EConvertFromTypeResult::UseSerializeItem : EConvertFromTypeResult::CannotConvert;
+}
+
+void FEnumProperty::SerializeItem(FArchive& Ar, void* Value, void const* Defaults) const
+{
+	if (!Enum || !(Ar.IsLoading() || Ar.IsSaving()))
+	{
+		UnderlyingProp->SerializeItem(Ar, Value, Defaults);
+		return;
+	}
+	FName EnumValueName;
+	if (Ar.IsSaving())
+	{
+		EnumValueName = GetEnumValueNameForSave(Enum, UnderlyingProp->GetSignedIntPropertyValue(Value));
+	}
+	Ar << EnumValueName;
+	if (Ar.IsLoading())
+	{
+		UnderlyingProp->SetIntPropertyValue(Value, LoadEnumValue(Enum, EnumValueName, Ar));
+	}
+}
+
+EConvertFromTypeResult FEnumProperty::ConvertFromType(const FPropertyTag& Tag, FArchive& Ar, void* Value) const
+{
+	if (Tag.Type == GetID())
+	{
+		return EConvertFromTypeResult::UseSerializeItem;
+	}
+	if (Enum && Tag.Type == NAME_ByteProperty && !Tag.EnumName.IsNone())
+	{
+		// A TEnumAsByte saved its enumerator's name: found by name in this enum (UE: byte to enum).
+		FName EnumValueName;
+		Ar << EnumValueName;
+		UnderlyingProp->SetIntPropertyValue(Value, LoadEnumValue(Enum, EnumValueName, Ar));
+		return EConvertFromTypeResult::Converted;
+	}
+	FNumericTagValue TagValue;
+	if (!IsIntegerTag(Tag) || !ReadNumericTagValue(Tag, Ar, TagValue))
+	{
+		return EConvertFromTypeResult::CannotConvert;
+	}
+	const int64 IntValue = TagValue.bUnsigned ? int64(TagValue.Unsigned) : TagValue.Signed;
+	if (Enum && !Enum->IsValidEnumValue(IntValue))
+	{
+		UE_LOG(LogProperty, Warning, TEXT("%s: %d is not a value of enum %s; %s keeps its value"), *Ar.GetArchiveName(),
+			int32(IntValue), *Enum->GetName(), *GetName());
+		return EConvertFromTypeResult::Converted;
+	}
+	UnderlyingProp->SetIntPropertyValue(Value, IntValue);
+	return EConvertFromTypeResult::Converted;
 }
