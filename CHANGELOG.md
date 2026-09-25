@@ -7,6 +7,100 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-25
+
+Fifth to seventh steps of the Core / CoreUObject plan (P5–P7): every module uses Unreal Engine 4.27's Core types, and
+the world uses UE's axes and units (X forward, Y right, Z up, left-handed, 1 unit = 1 cm) with UE's view and
+projection matrices.
+
+Seventh step (P7): the world moves from Y-up metres with glm's GL matrices to UE's space. Legacy data (`.llev`
+levels, version-1 `.lmesh` meshes) is converted where it is read; importers write UE space. Golden tests recorded in
+the legacy world before the switch check every step, and `LeonGame` frames match the legacy captures up to float
+rounding at texel and shadow edges.
+
+### Changed
+
+- **Axes and units**: the world is X forward, Y right, Z up, left-handed, 1 unit = 1 cm. Every metre constant in
+  Engine, AIModule, PhysicsCore, RenderCore, Renderer and the shaders is now in centimetres: movement tuning, capsule,
+  step and skin, camera near / far (10 / 10 000) / distance / zoom, spring arm, physics probes and epsilons, navigation
+  cells and bands, lights, shadow fit, AO radius / bias, debug draw sizes. Primitives are 100 cm; code that reads a
+  scale as a size uses 50 × |Scale| half extents; masses stay in kg.
+- Movement, queries, navigation, the camera boom and reflections work on Z up, with UE-style names: `QuerySupportZ`,
+  `FloorZ`, `VelXY` / `VelocityZ`, `ClampPositionXY`, `SeparateAabbXY`, NavMesh `OriginY`, `BobBaseZ`,
+  `FSceneRenderer::MakeReflectMatrix(PlaneZ)`.
+- **Transforms**: components, level data, lights, volumes, player starts and skeletal attachments hold UE's
+  `FTransform`; `AActor` stores an `FRotator`; `USceneComponent` has `RelativeLocation`, `RelativeRotation`
+  (`FRotator`) and `RelativeScale3D`, and children compose as `Relative * ParentWorld` (a non-uniform parent scale no
+  longer shears). A light shines along its rotation's forward axis. Legacy content meshes face +Y, so a character's
+  mesh sits at `RelativeRotation.Yaw = LegacyContentYaw` (-90).
+- **Legacy data**: `FLegacyCoordinateConversion` (RenderCore) converts `.llev` data and version-1 `.lmesh` meshes at
+  load, and the level saver converts back, so `.llev` files stay Y up in metres. Basis UE = 100 × (X, Z, Y) (the
+  same swap as UE's glTF importer and ufbx's `left_handed_z_up`); rotations (-X, -Z, -Y, W), tangents (X, Z, Y, -W),
+  scale (X, Z, Y). Angles: actor yaw ψ → 90 − ψ; orbit camera (yaw Y, pitch P) → `FRotator(-P, Y + 180, 0)`; free
+  look → `FRotator(P, Y, 0)`; light → `FRotator(-P, 90 - Y, 0)`. The Euler extraction is now the true inverse of
+  `Rx * Ry * Rz` (the old one inverted `Rz * Rx * Ry`; pure yaw or roll give the same result).
+- **Renderer**: render matrices are composed with `FMatrix` operators (UE's row-vector order) and uploaded as they are
+  (`FShader::SetMat4(Name, const FMatrix&)`). Views are in UE view space (x right, y up, z forward, left-handed;
+  `RenderCore/ViewMatrices.h`: `MakeViewMatrix`, `MakeLookAtView`). `UCameraComponent::ProjectionMatrix()` is Core's
+  `FPerspectiveMatrix` (vertical field of view kept) or `FOrthoMatrix` with depth in [0, 1]; the renderer converts it
+  to GL clip space last with `ToGLClipSpace` (`RenderCore/GLClipSpace.h`, z_gl = 2z − w), so frustum culling, the
+  shadow lookup, SSAO depth and the debug light frustum keep GL clip space. The shadow fit works in a left-handed
+  light view, `ssao.frag` follows the mirrored view space, the planar mirror reflects about z = PlaneZ and
+  `glFrontFace(GL_CCW)` is explicit (winding is unchanged).
+- **Camera and control**: `UCameraComponent` holds a view `FRotator` (`SetViewRotation` / `GetViewRotation` /
+  `AddViewRotation`: a positive yaw turns right, a positive pitch looks up, clamped to ±89°). `AController` has
+  `ControlRotation`; `APawn` has `AddControllerYawInput` / `AddControllerPitchInput` / `GetViewRotation`;
+  `APlayerController` applies look input and clamps the pitch (`ViewPitchMin` / `ViewPitchMax`). Move input is an
+  `FVector2D` (X forward, Y right) from `UPlayerInput::GetMoveInput`. `AActor` takes `FRotator`s instead of float
+  yaws. `USpringArmComponent` has `TargetOffset` and `SocketOffset` vectors and follows the pawn's control rotation
+  with `bUsePawnControlRotation`.
+- **MeshUtilities**: `FImportCoordinateConversion` is every importer's last step: OBJ and glTF are right-handed Y up
+  ((X, Z, Y) × 100, bit for bit `FLegacyCoordinateConversion`), FBX is right-handed Z up after ufbx resolves the file
+  axes ((X, −Y, Z) × the file unit, UE's `FFbxDataConverter`); ufbx no longer scales. The skeletal import conjugates
+  the inverse bind pose and the sampled clips (B⁻¹ M B) and builds bone rotations with `FQuatRotationMatrix`; tangents
+  are computed after the conversion.
+- **`.lmesh` version 2**: writers store UE space; the reader loads version 2 as stored and converts version 1. The
+  `Cube.obj` cook identity is now `EFF1459AE46710C6F1B44C0B1ECB2D739CB590F2492B9DF3EC11A03ECA7757C9`, the same data
+  as the version-1 cook converted at load.
+- **JoltPhysics and AudioMixer** keep their own spaces (Y up, metres) behind a boundary that swaps Y and Z and scales
+  by 0.01; Jolt's own constants stay in metres.
+- **Gate G4** (`CheckBannedApis.ps1`) bans `LegacyGL`, `FLegacyTransform` and `LegacyAxes` everywhere, tests included,
+  and allows `FLegacyCoordinateConversion` only in its own files, the `.llev` and `.lmesh` readers, `Private/Tests`
+  and `LegacyGolden.h`. Messages read `<file>:<line>: G4 <rule>: <code> -> <replacement>`; `-Root` scans another tree.
+- Tests: 231 (179 after P6). The golden tables are unchanged since they were recorded; the LegacyGLMath and
+  LegacyTransform tests became ViewMatrices, RenderMatrices and LegacyCoordinateConversion tests.
+
+### Added
+
+- Golden tests of the legacy behaviour (`System.Engine.Golden.*`: character movement, traces, navigation, spring arm,
+  yaw-relative input, orbit and free-look camera NDC, shadow light space, planar reflection, frustum culling, the
+  Starter level; `System.AIModule.Golden.AIControllerArrives`, `System.JoltPhysics.Golden.BoxDrop`) with their
+  adapters in `Engine/Public/Tests/LegacyGolden.h`; `-GoldenRecord` prints the tables instead of checking them.
+- `LeonGame -Screenshot=<file.bmp> [-ExitAfterFrames=N]` saves frame N (default 60) as a 24-bit BMP and exits;
+  `FSceneRenderer::ReadFramebufferBgr`.
+- Axes gizmo: **F6** in `LeonGame` (or `-AxesGizmo`) draws 1 m world axes at the origin and a view-orientation gizmo
+  in the bottom-left corner, X red, Y green, Z blue; `FDebugDraw::AddAxes(FVector or FTransform, Length = 100)`,
+  `AddViewAxes(View)`, `FSceneRenderer::SetAxesGizmoEnabled`. Off by default.
+- `Docs/TESTING.md` with the manual checklist for the axes and units.
+- `RenderCore/Public/LegacyCoordinateConversion.h`, `ViewMatrices.h`, `GLClipSpace.h`,
+  `MeshUtilities/Public/ImportCoordinateConversion.h`, `Renderer/Private/RenderMatrices.h` (normal matrix, 2D overlay
+  projection).
+
+### Removed
+
+- `RenderCore/Public/LegacyGLMath.h` (`LegacyGL`) and `Engine/Public/Level/LegacyTransform.h` (`FLegacyTransform`).
+- `LightDirectionFromRotation` / `RotationFromLightDirection`, the unused model-matrix override of level meshes,
+  `UCameraComponent::Orbit` / `AddLook` / `SetYawPitch` / `GetYawDegrees` / `GetPitchDegrees`, the spring arm's boom
+  angles and `AActor`'s float yaw overloads.
+
+### Fixed
+
+- `FShadowMap::FitLightSpaceMatrix` put the near plane beyond the corner nearest the light, so the casters closest to
+  the sun cast no shadow; the near plane now sits in front of it.
+- Win64 builds under a non-UTF-8 console code page recorded no header dependencies (cl.exe's localized
+  `/showIncludes` prefix never matched), so header edits rebuilt nothing; LeonBuildTool now configures and builds in
+  code page 65001 and restores the caller's.
+
 Sixth step of the Core / CoreUObject plan (P6): Renderer, Engine, AIModule, MeshUtilities, Cooker, LeonCook, the
 JoltPhysics plugin and the desktop Launch code use Unreal Engine 4.27's Core types; glm, nlohmann/json and Catch2 are
 gone. The world is still Y-up in metres (the Z-up centimetre switch is P7).

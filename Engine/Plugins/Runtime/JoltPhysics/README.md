@@ -14,6 +14,12 @@ Runtime plugin that adds a [Jolt Physics](https://github.com/jrouwe/JoltPhysics)
 
 The module also exports the transitional define `LEON_WITH_JOLT=1` to whatever links it (the automation tests check it).
 
+**Coordinates.** The engine world is UE's (X forward, Y right, Z up, left-handed, centimetres); Jolt keeps its own
+space (right-handed, Y up, metres, which its tolerances are tuned for). `FJoltPhysicsBackend` converts at the boundary:
+positions, extents, velocities and accelerations swap Y and Z and scale by 0.01 on the way in and by 100 on the way
+out; directions and normals only swap. Constants inside the backend stay in Jolt metres, Y up.
+`System.JoltPhysics.Golden.BoxDrop` checks a drop against the table recorded before P7.
+
 ## Descriptor
 
 `JoltPhysics.lplugin`: version `5.3.0`, category `Physics`, `"EnabledByDefault": false`, one `Runtime` module `JoltPhysics` with `"PlatformAllowList": [ "Win64" ]`. `JoltPhysics.Build.cmake` also restricts the module to `PLATFORMS Win64` and depends on `Core`, `PhysicsCore` (public), `Engine` and `JoltLib` (private).

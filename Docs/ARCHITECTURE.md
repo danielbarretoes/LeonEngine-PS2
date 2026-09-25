@@ -7,7 +7,7 @@ source layout, module architecture and Epic naming, and is built with CMake thro
 **Also:** [BUILD.md](BUILD.md) (LeonBuildTool reference) · [CODING_STANDARD.md](CODING_STANDARD.md) ·
 [UnrealEngine427/](UnrealEngine427/README.md) (UE 4.27 knowledge base, [LeonMapping](UnrealEngine427/LeonMapping.md),
 [NextSteps](UnrealEngine427/NextSteps.md)) · [SETUP.md](SETUP.md) · [TOOLS.md](TOOLS.md) · [LEVELS.md](LEVELS.md) ·
-[ASSET_FORMATS.md](ASSET_FORMATS.md) · [LIBRARIES.md](LIBRARIES.md) · [README](../README.md)
+[ASSET_FORMATS.md](ASSET_FORMATS.md) · [LIBRARIES.md](LIBRARIES.md) · [TESTING.md](TESTING.md) · [README](../README.md)
 
 ---
 
@@ -245,13 +245,13 @@ paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable 
 | **PhysicsCore** | Physics types and backend seam | `IPhysicsBackend`, `EPhysicsBackend`, `FHitResult`, `FBodyInstance`, `EBodyCollisionShape`, `FCollisionQueryParams`, `FCollisionShape`, `FTriangleMeshCollision` | Desktop |
 | **AnimationCore** | Skeletons, sequences, blend spaces, anim instances | `USkeleton`, `UAnimSequence`, `UBlendSpace1D`, `UAnimInstance`, `UCharacterAnimInstance` | Desktop |
 | **AudioMixer** | Audio device (miniaudio) | `FAudioDevice` | Desktop |
-| **RenderCore** | CPU-side render data; the renderer's GL matrix conventions on Core math until P7 | `FMeshData`, `FMeshSection`, `FVertex`, `FFrustum` (over Core's `FBox` / `FPlane`), `FMaterial`, `LegacyGL` (`LegacyGLMath.h`) | Desktop |
+| **RenderCore** | CPU-side render data, UE view matrices, the GL clip-space adapter, the legacy data converter | `FMeshData`, `FMeshSection`, `FVertex`, `FFrustum` (over Core's `FBox` / `FPlane`), `FMaterial`, `MakeViewMatrix` / `MakeLookAtView` (`ViewMatrices.h`), `ToGLClipSpace` (`GLClipSpace.h`), `FLegacyCoordinateConversion` | Desktop |
 | **Renderer** | Forward scene renderer and GPU resources | `FSceneRenderer`, `UTexture2D`, `UStaticMesh`, `USkeletalMesh`, `FShader`, `FShadowMap`, `FResourceCache`, `FDebugDraw`, `FDebugOverlay`, `FGPUPassTimer`, `LogRenderer` | Desktop |
 | **SlateCore** | Text layout primitives | `ETextJustify`, HUD font metrics | Desktop |
 | **UMG** | Widgets | `UUserWidget`, `UButton`, `UTextBlock`, `UImage`, `UProgressBar`, `UVerticalBox`, `UMenuListWidget`, `UInteractionPromptWidget`, `FPaintContext` | Desktop |
-| **Engine** | Gameplay framework, world, levels, physics scene | `UGameEngine`, `UGameInstance`, `UWorld`, `ULevel`, `AActor`, `APawn`, `ACharacter`, `UCharacterMovementComponent`, `AController`, `APlayerController`, `AGameModeBase`, `AGameStateBase`, `APlayerState`, `AHUD`, `UGameplayStatics`, `FPhysScene`, `UNavigationSystem`, `FLegacyTransform` (level data, until P7); `LogEngine`, `LogLevel`, `LogPath`, `LogPhysics` (`EngineLogs.h`) | Desktop |
+| **Engine** | Gameplay framework, world, levels, physics scene | `UGameEngine`, `UGameInstance`, `UWorld`, `ULevel`, `AActor`, `APawn`, `ACharacter`, `UCharacterMovementComponent`, `AController`, `APlayerController`, `AGameModeBase`, `AGameStateBase`, `APlayerState`, `AHUD`, `UGameplayStatics`, `FPhysScene`, `UNavigationSystem`; `LogEngine`, `LogLevel`, `LogPath`, `LogPhysics` (`EngineLogs.h`) | Desktop |
 | **AIModule** | AI controller and behavior trees | `AAIController`, `UBehaviorTree`, `UBTComposite_Sequence`, `UBTComposite_Selector`, `UBTDecorator_Bool`, `UBTTask_Action`, `UBlackboardComponent`, `FAIChaseBehavior` | Desktop |
-| **MeshUtilities** | Static mesh import / build, skeletal FBX import (Developer) | `FStaticMeshBuilder`, `LoadObj`, `LoadStaticMeshFromFbx`, glTF import, `LoadSkeletalMeshFromFbx`, `LoadAnimSequenceFromFbx` | Desktop |
+| **MeshUtilities** | Static mesh import / build, skeletal FBX import (Developer) | `FStaticMeshBuilder`, `LoadObj`, `LoadStaticMeshFromFbx`, glTF import, `LoadSkeletalMeshFromFbx`, `LoadAnimSequenceFromFbx`, `FImportCoordinateConversion` | Desktop |
 | **Cooker** | Cook recipes and paths (Developer) | `UCookCommandlet`, `FCookRecipe`, `FCookPaths` | Desktop |
 | **JoltPhysics** (plugin) | Jolt rigid-body backend | `CreateJoltPhysicsBackend` | Win64 |
 | **ThirdPerson** (game) | PS2 third-person game | `FThirdPersonModule`, `FThirdPersonGameMode`, `FThirdPersonCharacter`, `FThirdPersonCameraBoom`, `FThirdPersonLevel` | PS2 (target) |
@@ -315,12 +315,51 @@ Core/Public/HAL/PlatformMemory.h                      #include COMPILED_PLATFORM
 | Config | `Misc/ConfigCacheIni.h` | `FConfigCacheIni` / `GConfig` with `GEngineIni`, `GGameIni`, `GInputIni`, `GEditorIni`. Layers (D8): `Engine/Config/Base.ini` → `Base<T>.ini` → `Engine/Platforms/<P>/Config/<P><T>.ini` → `<Project>/Config/Default<T>.ini` → `<Project>/Platforms/<P>/Config/<P><T>.ini` → `<Project>/Saved/Config/<Plat>/<T>.ini` (desktop only; `Flush` writes the user changes there). `+ - . !` array operators, quoted values, `-ini:Engine:[Section]:Key=Value` overrides |
 | Misc types | `Misc/Guid.h`, `Misc/SecureHash.h`, `Misc/Crc.h`, `Misc/DateTime.h`, `Misc/Timespan.h` | `FGuid` (`NewGuid`, `NewDeterministicGuid` from MD5), `FMD5` / `FMD5Hash`, `FCrc`, `FDateTime` / `FTimespan` (integer ticks, no double) |
 
-The math follows UE's conventions (X forward, Y right, Z up, left-handed), but the engine's world is still Y-up in
-metres until P7: world directions are written out in that convention (up is `FVector(0, 1, 0)`), never taken from
-`FVector::UpVector` & co. The renderer's matrices also keep glm's GL layout until P7: `LegacyGL`
-(`RenderCore/Public/LegacyGLMath.h`) composes them with `Mul(A, B)` (glm's `A * B`) and builds them with glm's formulas
-(`Perspective`, `Ortho`, `LookAt`, `Translate`, `Rotate`, `Scale`, `QuatToMatrix`, `NormalMatrix3x3`), so they are
-uploaded as they are (`ValuePtr`).
+### Coordinates
+
+Since P7 the desktop world uses UE 4.27's space, the same one the math types assume (`FVector::ForwardVector`,
+`RightVector` and `UpVector` are the world axes):
+
+| Item | Convention |
+| --- | --- |
+| Axes | X forward, Y right, Z up; **left-handed** |
+| Units | 1 unit = 1 cm (UE's `WorldToMeters` = 100); speeds in cm/s, masses in kg, angles in degrees |
+| Rotations | `FRotator` (Pitch about Y, positive looks up; Yaw about Z, positive turns from +X toward +Y, clockwise seen from above; Roll about X), `FQuat`, `FTransform` |
+| Matrices | `FMatrix` row vectors (`V * M`); `A * B` applies A first, so an MVP is `Model * View * Projection` |
+| View space | x right, y up, z forward, left-handed (UE's `FViewMatrices`): `MakeViewMatrix(Origin, FRotator)` / `MakeLookAtView` in `RenderCore/Public/ViewMatrices.h` |
+| Projection | `FPerspectiveMatrix` with the vertical field of view, or `FOrthoMatrix`; depth z / w in [0, 1], 0 at the near plane; no reversed Z |
+| GL clip space | `ToGLClipSpace` (`RenderCore/Public/GLClipSpace.h`) keeps x, y, w and writes z_gl = 2z − w, applied last. Frustum planes, the shadow lookup, SSAO depth and the debug light frustum read the GL result |
+| Winding | triangles keep their index order through every conversion; front faces are counter-clockwise on screen (`glFrontFace(GL_CCW)`, set explicitly) |
+
+**Converters.** Every basis change below swaps or flips one axis (determinant −1): the physical scene is kept (what was
+on the right stays on the right, triangles keep their winding on screen), and what flips is whatever is built with a
+handedness: cross products (the right vector is `Up ^ Forward`), the tangent's bitangent sign and the sense of
+rotations.
+
+| Converter | From → to | Allowed in |
+| --- | --- | --- |
+| `FLegacyCoordinateConversion` (`RenderCore/Public/LegacyCoordinateConversion.h`) | legacy data (Y up, right-handed, metres, XYZ Euler degrees) ↔ world: positions (X, Z, Y) × 100, directions (X, Z, Y), rotations (−X, −Z, −Y, W), tangents (X, Z, Y, −W), scale (X, Z, Y) | its own files, the `.llev` reader and saver (`LeonLevelFormat`), the `.lmesh` reader (version 1), `Private/Tests` and `Engine/Public/Tests/LegacyGolden.h`; G4 rejects it anywhere else |
+| `FImportCoordinateConversion` (`MeshUtilities/Public/ImportCoordinateConversion.h`) | imported files → world: `RightHandedYUp` (OBJ, glTF, FBX without axes) (X, Z, Y) × 100; `RightHandedZUp` (FBX after ufbx resolves the file axes) (X, −Y, Z) × the file unit in cm (UE's `FFbxDataConverter`) | the importers' last step, after normals and winding are final; matrices convert as B⁻¹ M B |
+| `ToGLClipSpace` | UE clip space → GL clip space | the GL renderer, after the projection |
+| Jolt boundary (`JoltPhysicsBackend.cpp`) | world ↔ Jolt (right-handed, Y up, metres): Y and Z swap, lengths × 0.01; Jolt-side constants stay in metres | the JoltPhysics plugin |
+| Audio boundary (`AudioDevice.cpp`) | world ↔ miniaudio (right-handed, Y up, metres): Y and Z swap, positions × 0.01 | AudioMixer |
+
+**Angle map** (legacy `.llev` values → world), applied by the level reader and inverted by the saver:
+
+| Legacy | World |
+| --- | --- |
+| Actor yaw ψ (0 = legacy +Z, positive toward +X) | `FRotator(0, 90 − ψ, 0)`; legacy content meshes face +Y, so a character's mesh sits at `RelativeRotation.Yaw = LegacyContentYaw` (−90) |
+| Orbit camera (yaw Y, pitch P; eye at `Target + Distance * (cos P cos Y, sin P, cos P sin Y)`) | view rotation `FRotator(−P, Y + 180, 0)`; eye = `Target − Rotation.Vector() * Distance` |
+| Free-look camera (yaw Y, pitch P) | view rotation `FRotator(P, Y, 0)` |
+| Directional light (pitch P, yaw Y) | `FRotator(−P, 90 − Y, 0)`; the light shines along its forward axis |
+| Spin rate (degrees / s about legacy Y) | negated (rotations turn the other way) |
+
+On disk nothing changed: `.llev` files stay in legacy space and are converted when read (see [LEVELS.md](LEVELS.md));
+`.lmesh` version 2 is written in world space and version 1 is converted at load
+([ASSET_FORMATS.md](ASSET_FORMATS.md)). The PS2 ThirdPerson game does not use the gameplay framework and keeps its
+own Y-up frame (§9). The deliberate differences from UE (vertical field of view, no reversed Z, the GL clip adapter,
+the capsule on the feet, the Jolt boundary, legacy content facing +Y, the doubled mouse look, the spring arm's socket
+offset) are listed in [LeonMapping — Deviations](UnrealEngine427/LeonMapping.md#deviations-from-ue-427-intentional).
 
 ---
 
@@ -397,7 +436,8 @@ GuardedMain: GEngineLoop.PreInit → (exit if requested) → Init → while !IsE
 - `Init`: creates `FGameApplication` (`Launch/Private/Desktop`) and calls `Init()`, which reads the command line
   with `FParse` and the config: `-map=<.llev>` (else `[/Script/EngineSettings.GameMapsSettings] GameDefaultMap`,
   default `LevelTemplates/Starter.llev`; resolved against the working directory, then `ResolveLegacyContentPath`),
-  `-nullrhi`, `-tick=<Hz>`, `-showstats` (or `[/Script/Engine.Engine] bShowStatsByDefault`), and
+  `-nullrhi`, `-tick=<Hz>`, `-showstats` (or `[/Script/Engine.Engine] bShowStatsByDefault`), `-AxesGizmo`,
+  `-Screenshot=<file.bmp>` with `-ExitAfterFrames=N` (save frame N, default 60, as a BMP and exit), and
   `[/Script/Engine.GameViewportClient] DefaultResolutionX/Y`. It creates `UGameEngine` (`Initialize(X, Y, …)`, or
   `InitializeHeadless()` with `-nullrhi`), wires the default input, loads the level with `LoadLevelFile`, creates
   `ADefaultGameMode`, calls `OnEnter` and then `UGameEngine::Start`.
@@ -470,13 +510,14 @@ Unreal shapes without reflection: `A`/`U` prefixes are naming only (no `UObject`
   triangle-mesh collision) and the seam `IPhysicsBackend` + `CreatePhysicsBackend(EPhysicsBackendKind)` /
   `RegisterPhysicsBackendFactory(Kind, Factory)`.
 - **Engine** owns the gameplay-facing `FPhysScene` (`Public/Physics/PhysScene.h`) and the default **Arcade**
-  backend (`Private/PhysicsEngine`: AABB + triangle-mesh traces, CMC queries such as `QuerySupportY`,
+  backend (`Private/PhysicsEngine`: AABB + triangle-mesh traces, CMC queries such as `QuerySupportZ`,
   optional arcade step). `UWorld::SetPhysicsBackend` recreates the scene with another backend.
 - **JoltPhysics plugin** (Win64): `FJoltPhysicsModule::StartupModule` registers `CreateJoltPhysicsBackend` for
   `EPhysicsBackendKind::Jolt`. With Jolt, rigid bodies step in Jolt (static triangle meshes become `MeshShape`)
   and line / sphere / capsule traces use its narrow phase; the floor plane, slope planes and CMC side
   resolve stay Arcade. Asking for Jolt without the plugin logs and falls back to Arcade. The plugin is
-  `EnabledByDefault: false` and currently enabled only by `LeonAutomationTests`.
+  `EnabledByDefault: false` and currently enabled only by `LeonAutomationTests`. Jolt keeps its own space (Y up,
+  metres): the backend swaps Y and Z and scales by 0.01 at the boundary (§6, Coordinates).
 - Level statics with CPU mesh data bake to triangle-mesh collision on `SyncFromLevel` (complex-as-simple
   lite).
 
@@ -489,13 +530,22 @@ Unreal shapes without reflection: `A`/`U` prefixes are naming only (no `UObject`
   procedural gradient in `blinn_phong.frag`). With post enabled the
   color pass renders into an HDR `FSceneColorTarget` (RGB16F + depth), then SSAO (`FSSAOTarget`) → blur →
   tonemap + exposure (`post_composite.frag`) → optional FXAA.
+- Matrices are UE's (§6, Coordinates): the camera's view (`UCameraComponent::ViewMatrix`, UE view space) and
+  projection (`FPerspectiveMatrix` / `FOrthoMatrix`, depth [0, 1]) go through `ToGLClipSpace` once, so every MVP the
+  passes hand around is `Model * View * ProjectionGL`, uploaded as is with `FShader::SetMat4(Name, const FMatrix&)`.
+  The shadow fit measures near / far along +Z of a left-handed light view; the planar mirror reflects about the
+  horizontal plane z = PlaneZ (`MakeReflectMatrix`); the normal matrix and the 2D overlay projection are
+  renderer-private helpers (`Private/RenderMatrices.h`).
 - Scalability: `SetPostProcessQuality(EPostProcessQuality::Off|Low|Medium|High)` (default **Low**: light SSAO,
   no FXAA, 1024 shadow map); optional early-Z (`SetEarlyZEnabled`).
 - `FGPUPassTimer` measures `Shadow / Planar / Color / Ssao / Post` with `GL_QUERY_RESULT_AVAILABLE` (no stall).
 - Resources: `FResourceCache`, `UTexture2D`, `UStaticMesh`, `USkeletalMesh`, `FShader` (GLSL from
   `Engine/Shaders`, hot reload), `FUniformBuffer`; materials `.lmat` (`LeonMaterialFormat`), plus JSON material
   fields applied from an `FJsonObject` (`PatchMaterialFromJson`, `MaterialAsset.h`).
-- Debug: `FDebugDraw` (lines, collision / nav-mesh debug) and `FDebugOverlay` (text / HUD backend).
+- Debug: `FDebugDraw` (lines, boxes, arrows, axes, collision / nav-mesh debug) and `FDebugOverlay` (text / HUD
+  backend). `LeonGame` toggles them with F1 (mesh AABBs and the shadow volume), F2 (collision and traces), F3 (nav
+  mesh), F4 (stats) and F6 (axes gizmo: 1 m world axes at the origin and a view-orientation gizmo in the bottom-left
+  corner, X red, Y green, Z blue; `-AxesGizmo` turns it on at start); F5 reloads the shaders.
 - Levels load from binary `.llev` (`LoadLevelFile`) — see [LEVELS.md](LEVELS.md) and
   [ASSET_FORMATS.md](ASSET_FORMATS.md). There are no lightmaps; static lighting returns later as
   `<Map>_BuiltData.lasset`.
@@ -522,7 +572,8 @@ Unreal shapes without reflection: `A`/`U` prefixes are naming only (no `UObject`
 
 - **Developer/MeshUtilities**: OBJ (tinyobjloader), FBX (ufbx) and glTF (cgltf) import to `FMeshData`;
   `FStaticMeshBuilder` cooks static meshes; `FbxSkeletalImport.h` imports skinned meshes and animation
-  sequences from FBX.
+  sequences from FBX. Every importer ends with `FImportCoordinateConversion`, so imported and cooked data is in world
+  space (§6, Coordinates).
 - **Developer/Cooker**: `UCookCommandlet::Main` (modes `staticmesh`, `recipe`),
   `FCookRecipe::RunFile` (recipes read with the `Json` module), `FCookPaths::ResolveBeside`; the Developer modules log
   through `LogCook` and `LogMeshUtilities`.
@@ -530,11 +581,13 @@ Unreal shapes without reflection: `A`/`U` prefixes are naming only (no `UObject`
   `Engine\Build\BatchFiles\Cook.bat`. Details: [TOOLS.md](TOOLS.md).
 - **Tests**: each module keeps its tests in `<Module>/Private/Tests/`, excluded from the module library and compiled
   only into targets with `COLLECT_AUTOMATION_TESTS`. Every test is a UE automation test
-  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, named `System.<Module>.<Area>.<Name>`): 179 on Win64 — Core 46, Json 2,
-  Projects 2, PhysicsCore 7, RenderCore 9, AnimationCore 11, Engine 59, Renderer 5, AIModule 29, MeshUtilities 2,
-  JoltPhysics 7 (an eighth, `System.JoltPhysics.Backend.DisabledFallsBack`, compiles only without the plugin). On PS2,
+  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, named `System.<Module>.<Area>.<Name>`): 231 on Win64 — Core 46, Json 2,
+  Projects 2, PhysicsCore 8, RenderCore 24, AnimationCore 11, Engine 81, Renderer 9, AIModule 31, MeshUtilities 8,
+  JoltPhysics 9 (a tenth, `System.JoltPhysics.Backend.DisabledFallsBack`, compiles only without the plugin). On PS2,
   Core runs 43 (the platform-file, config-cache and log-file tests are desktop-only) and Projects 1. An error logged
-  during a test fails it unless the test declares it with `AddExpectedError`.
+  during a test fails it unless the test declares it with `AddExpectedError`. The golden tests
+  (`System.*.Golden.*`) replay movement, traces, navigation, cameras, shadows and reflections against tables
+  recorded in the legacy world before P7; manual checks are in [TESTING.md](TESTING.md).
   - `LeonAutomationTests` (Desktop) starts the module table, runs the automation tests through
     `FAutomationTestFramework` and fails if any fails. Run with `Engine\Build\BatchFiles\RunTests.bat`
     (`-automation=<filter>` runs the tests whose name contains `<filter>`).
@@ -543,8 +596,10 @@ Unreal shapes without reflection: `A`/`U` prefixes are naming only (no `UObject`
     (`RunPCSX2.ps1 -Program TestPAL -Build`) and the result is read from the EE console; the numbers go to
     [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md).
 - **Banned APIs (gate G4)**: `Engine\Build\BatchFiles\CheckBannedApis.ps1` fails when engine or game code uses glm,
-  nlohmann, the `std::` containers / strings / functions / smart pointers, iostream or the `printf` family
-  ([CODING_STANDARD.md §4](CODING_STANDARD.md#4-language)); `Lint.bat` and CI run it.
+  nlohmann, the `std::` containers / strings / functions / smart pointers, iostream or the `printf` family, the
+  removed legacy math bridges (`LegacyGL`, `FLegacyTransform`, `LegacyAxes`), or `FLegacyCoordinateConversion`
+  outside the legacy readers and tests ([CODING_STANDARD.md §4](CODING_STANDARD.md#4-language)); `Lint.bat` and CI
+  run it.
 - **CI** (`.github/workflows/ci.yml`): PS2 `ThirdPerson` + `BlankProgram` in the ps2dev image (ELF artifact);
   Win64 `CheckBannedApis.ps1`, `Setup.bat`, `RunTests.bat`, `LeonGame` and `LeonCook`.
 
@@ -560,7 +615,7 @@ roadmap is [NextSteps.md](UnrealEngine427/NextSteps.md).
 | --- | --- |
 | Reflection | No `UObject` / `UCLASS` / UHT / GC. `A` and `U` prefixes are naming only; objects are plain C++ owned with `TUniquePtr` or by value (e.g. `UWorld` is a member of `AGameModeBase`). |
 | Containers / strings | Every engine module, the JoltPhysics plugin, the desktop `FGameApplication` and the game use Core's `TArray`, `TMap`, `FString`, `FName`, `FText` (minimal), `TFunction`, `TUniquePtr` / `TSharedPtr`, delegates and `UE_LOG` (P5, P6); `CheckBannedApis.ps1` (G4) keeps the `std::` equivalents out. Third-party containers stay at the library seams (Jolt, tinyobjloader, ufbx, cgltf). `TCHAR` is UTF-8 `char` everywhere. |
-| Math | Every engine module uses Core math (P5, P6), still in the Y-up metre world until P7. Render, bone, skin and clip matrices keep glm's memory layout (column-vector transforms stored in `FMatrix`), so the renderer uploads them as they are; Engine, Renderer and MeshUtilities build and compose them with `LegacyGL` (`LegacyGLMath.h`); level transforms are `FLegacyTransform` (Engine `Level/LegacyTransform.h`). Both go away in P7. |
+| Math and coordinates | Every engine module uses Core math (P5, P6) in UE's space since P7 (§6, Coordinates). Legacy data (`.llev`, `.lmesh` version 1) is still stored Y up in metres and converted by `FLegacyCoordinateConversion` in its readers; the formats go away with the `.lasset` packages. OpenGL still gets GL clip space through `ToGLClipSpace`; bone poses are `FMatrix` values rather than `FTransform`s until the skeletal mesh assets (P14). |
 | Renderer | Calls OpenGL directly (Glad) instead of going through RHI command lists; `FDynamicRHI` only covers device init, viewport and memory stats. |
 | Engine ↔ Renderer | `CIRCULAR_DEPENDENCIES` both ways (`Renderer.h` includes `Level.h`, `Level.h` includes GPU resources). UMG also depends privately on Renderer. |
 | PS2 gameplay | The gameplay framework (Engine, AIModule, …) is desktop-only (`PLATFORMS Desktop`: it depends on the OpenGL Renderer, UMG and AudioMixer). The PS2 game uses its own `F*` types (`FThirdPersonCharacter`, …) and `FPS2RHI`, with no `AActor` / `ACharacter`. |

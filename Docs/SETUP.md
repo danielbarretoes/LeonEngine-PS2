@@ -49,7 +49,7 @@ Engine\Build\BatchFiles\RunTests.bat
 ```
 
 This builds `LeonAutomationTests` (Win64 Development) and runs it from the repo root. The executable contains the
-tests of every module in its closure (`<Module>/Private/Tests/`), all UE automation tests (179, named
+tests of every module in its closure (`<Module>/Private/Tests/`), all UE automation tests (231, named
 `System.<Module>.<Area>.<Name>`). The exit code is non-zero if any test fails. `-automation=<filter>` runs only the
 tests whose name contains `<filter>`:
 
@@ -74,12 +74,20 @@ On PS2 see [Run TestPAL in PCSX2](#run-testpal-in-pcsx2).
 game mode (`ADefaultGameMode`) on it:
 
 ```bat
-Engine\Binaries\Win64\LeonGame.exe [-map=<.llev>] [-nullrhi] [-tick=<Hz>] [-showstats]
+Engine\Binaries\Win64\LeonGame.exe [-map=<.llev>] [-nullrhi] [-tick=<Hz>] [-showstats] [-AxesGizmo]
+                                   [-Screenshot=<file.bmp> [-ExitAfterFrames=N]]
 ```
 
 Without `-map=` it opens the config's `GameDefaultMap` (`Engine/Content/LevelTemplates/Starter.llev`); a `-map=` path
 is taken relative to the working directory, else relative to `Engine/Content` (`-map=LevelTemplates/Blank.llev`).
-`-nullrhi` runs headless (no window, silent audio) at `-tick=` Hz (default 60); `-showstats` shows the HUD stats.
+`-nullrhi` runs headless (no window, silent audio) at `-tick=` Hz (default 60); `-showstats` shows the HUD stats;
+`-AxesGizmo` starts with the axes gizmo on; `-Screenshot=` saves frame `-ExitAfterFrames=` (default 60) as a 24-bit
+BMP and exits.
+
+In the window: mouse look (the cursor is captured), **WASD** fly along the view, **Q** / **E** down / up, **F1** mesh
+AABBs and the shadow volume, **F2** collision and traces, **F3** nav mesh, **F4** stats, **F5** reload shaders,
+**F6** axes gizmo (X red, Y green, Z blue). The world is UE's: X forward, Y right, Z up, centimetres. Manual checks:
+[TESTING.md](TESTING.md).
 Flags are read with `FParse` in `Engine/Source/Runtime/Launch/Private/Desktop/GameApplication.cpp`. Levels:
 [LEVELS.md](LEVELS.md).
 
@@ -203,7 +211,8 @@ Engine\Build\BatchFiles\Lint.bat                  :: format check + banned APIs 
 `FormatCode.bat` uses Visual Studio's LLVM `clang-format` (or one on `PATH`) with the repo's `.clang-format` (Epic
 style: tabs, Allman braces) on `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game`, skipping `ThirdParty`,
 `Intermediate` and `Binaries`. `Lint.bat` then runs `Engine\Build\BatchFiles\CheckBannedApis.ps1`, which fails on glm,
-nlohmann, `std::` containers / strings / smart pointers, iostream and `printf` in engine or game code. Coding rules:
+nlohmann, `std::` containers / strings / smart pointers, iostream, `printf`, the removed legacy math bridges and
+`FLegacyCoordinateConversion` outside the legacy readers in engine or game code. Coding rules:
 [CODING_STANDARD.md](CODING_STANDARD.md).
 
 ## Continuous integration

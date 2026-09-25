@@ -97,9 +97,30 @@ lights:
     f32 radius, height, heightAmp, speed         if hasOrbit
 ```
 
+### Coordinates in the file
+
+Every value in a `.llev` is in the **legacy space**: Y up, right-handed, metres, rotations as XYZ Euler degrees
+(applied Z, then Y, then X). `FLevelDocument` keeps them as stored. `ApplyLevelDocument` converts them to the engine
+world (UE: X forward, Y right, Z up, left-handed, centimetres) with `FLegacyCoordinateConversion`
+(`RenderCore/Public/LegacyCoordinateConversion.h`), and `BuildLevelDocument` converts back, so saved files stay in the
+legacy space:
+
+| Field | Conversion |
+| --- | --- |
+| `position`, camera `target` / `eye` | (X, Z, Y) × 100 |
+| `rotationDegrees` of meshes and volumes | `ConvertEulerXYZ`: the legacy rotation with the axes swapped, as an `FQuat` |
+| `rotationDegrees` of `PlayerStart` / `AISpawnPoint` | `ConvertActorEulerXYZ`: a pure legacy yaw ψ becomes the world yaw 90 − ψ |
+| `scale` | (X, Z, Y); a component closer to zero than 1e-4 becomes ±1e-4 |
+| lengths: camera `distance`, `fitHeight`, `bobBaseY`, `bobAmplitude`, `interactRadius`, light `range`, orbit `radius` / `height` / `heightAmp` | × 100 (`bobBaseY` becomes the live `BobBaseZ`) |
+| `spinYaw` (degrees / s) | sign flipped |
+| camera `yaw` / `pitch` | orbit: `FRotator(−pitch, yaw + 180, 0)`; free look: `FRotator(pitch, yaw, 0)` |
+| light `rotationDegrees` (x = pitch, y = yaw) | `FRotator(−pitch, 90 − yaw, 0)`; the light shines along its forward axis |
+
+Only the level reader, the saver and tests may use `FLegacyCoordinateConversion` (`CheckBannedApis.ps1`, gate G4).
+
 Actor `flags` bits (`LevelActorFlag*` constants): `0` collisionEnabled, `1` simulatePhysics, `2` enableGravity, `3` hidden, `4` hasBob, `5` hasSpinYaw, `6` hasFitHeight, `7` hasMaterial, `8` hasMesh, `9` hasLightmapId, `10` hasLightmapPath, `11` hasTag, `12` hasInteractCost, `13` hasPainData, `14` hasPayload, `15` consumeOnUse.
 
-The writer always sets `hasInteractCost` for `TriggerVolume` and `hasPainData` for `PainCausingVolume`, and for any other actor whose values differ from the defaults (cost 0, radius 2; 12 damage per second, 0.35 s interval).
+The writer always sets `hasInteractCost` for `TriggerVolume` and `hasPainData` for `PainCausingVolume`, and for any other actor whose values differ from the defaults (cost 0, radius 2 m in the file, 200 cm in the world; 12 damage per second, 0.35 s interval).
 
 ### Actor classes (`ELevelActorClass`)
 
@@ -136,10 +157,11 @@ Spins (`spinYaw` degrees per second), bobs (`bobBaseY`, `bobAmplitude`, `bobSpee
 The Win64 `LeonGame` target loads one level and runs `ADefaultGameMode` on it:
 
 ```text
-Engine\Binaries\Win64\LeonGame.exe [-map=<.llev>] [-nullrhi] [-tick=<Hz>] [-showstats]
+Engine\Binaries\Win64\LeonGame.exe [-map=<.llev>] [-nullrhi] [-tick=<Hz>] [-showstats] [-AxesGizmo]
+                                   [-Screenshot=<file.bmp> [-ExitAfterFrames=N]]
 ```
 
-`-map=` takes a path relative to the working directory (or absolute), else relative to the content folders; without it the startup level is `GameDefaultMap` from `[/Script/EngineSettings.GameMapsSettings]` in the engine config (`BaseEngine.ini`: `LevelTemplates/Starter.llev`). `-nullrhi` runs headless at `-tick=` Hz (default 60). The level's game mode string is stored but not used to pick a game mode. There is no level catalog, level browser or project pack (all removed in 0.12.0), and `Game/ThirdPerson` is a build project (`.lproj`), not a runtime pack.
+`-map=` takes a path relative to the working directory (or absolute), else relative to the content folders; without it the startup level is `GameDefaultMap` from `[/Script/EngineSettings.GameMapsSettings]` in the engine config (`BaseEngine.ini`: `LevelTemplates/Starter.llev`). `-nullrhi` runs headless at `-tick=` Hz (default 60). `-AxesGizmo` starts with the axes gizmo on (F6 toggles it); `-Screenshot=` saves frame `-ExitAfterFrames=` (default 60) as a BMP and exits ([TESTING.md](TESTING.md)). The level's game mode string is stored but not used to pick a game mode. There is no level catalog, level browser or project pack (all removed in 0.12.0), and `Game/ThirdPerson` is a build project (`.lproj`), not a runtime pack.
 
 ## Level templates
 

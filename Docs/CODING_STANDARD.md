@@ -16,6 +16,7 @@ The rules are enforced by tools where possible:
 | clang-tidy | `.clang-tidy` | `readability-identifier-naming` (PascalCase, `E` enum prefix) + bug-prone checks; shown by clangd |
 | Compiler | LeonBuildTool `CompileEnvironment.cmake` | Warnings (`/W4`, `-Wall -Wextra`), shadowing as an error |
 | EditorConfig | `.editorconfig` | Tabs, UTF-8, final newline, line endings |
+| Gate G4 | `Engine/Build/BatchFiles/CheckBannedApis.ps1` | Banned APIs and the legacy coordinate bridge (§4) |
 
 ---
 
@@ -191,18 +192,31 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
   `printf` family inside `Runtime/Core/Private`, `LeonHeaderTool` (reserved for a std-only host tool) and the test
   program mains (`LeonAutomationTestsMain.cpp`, `TestPAL/Private`). A third-party library's own types stay in the
   file that calls it (Jolt, tinyobjloader, ufbx, cgltf). Do not add aliases that pretend to be UE types
-  (`using FVector = glm::vec3` is not allowed).
-- **Render matrices until P7 (deviation).** Matrices handed to OpenGL keep glm's column-vector memory layout; build
-  and compose them with `LegacyGL` (`RenderCore/Public/LegacyGLMath.h`: `Mul(A, B)` is glm's `A * B`,
-  `TransformPoint`, `Perspective`, `LookAt`, `Translate`, `Rotate`, `Scale`, `QuatToMatrix`, …), not with
-  `FMatrix::operator*`, and upload them with `ValuePtr`. See [NextSteps.md](UnrealEngine427/NextSteps.md).
+  (`using FVector = glm::vec3` is not allowed). G4 also rejects the legacy math bridges removed in P7 (`LegacyGL`,
+  `FLegacyTransform`, `LegacyAxes`, tests included) and `FLegacyCoordinateConversion` /
+  `LegacyCoordinateConversion.h` outside the legacy bridge (its own files, the `.llev` reader and saver, the `.lmesh`
+  reader, `Private/Tests` and `Engine/Public/Tests/LegacyGolden.h`). A violation prints
+  `<file>:<line>: G4 <rule>: <code> -> <what to use>`.
 - **Math is float.** No `double` arithmetic in engine code (the EE FPU is single precision); PS2 builds fail on an
   implicit float to double promotion (`-Werror=double-promotion`), so cast explicitly where a `double` is really
   meant (`Printf` arguments, `FTicker`'s clock).
-- **World axes until P7.** Core math uses UE's axes (X forward, Y right, Z up), but the world is still Y-up in metres.
-  Write world directions in that convention (up is `FVector(0, 1, 0)`), not with `FVector::UpVector`, `ForwardVector`
-  or `RightVector`, which are UE's Z-up axes; level transforms stay `FLegacyTransform` (Engine
-  `Level/LegacyTransform.h`) until P7.
+- **Coordinates** (details: [ARCHITECTURE.md §6, Coordinates](ARCHITECTURE.md#coordinates)). The world is UE's:
+  X forward, Y right, Z up, left-handed, 1 unit = 1 cm.
+  - Write lengths, speeds and offsets in centimetres (`JumpZVelocity = 700.0f`, `MaxStepHeight = 35.0f`) and say so
+    in the comment; masses stay in kg. `FVector::UpVector`, `ForwardVector` and `RightVector` are the world axes;
+    vertical is `Z` (`FloorZ`, `VelocityZ`, `QuerySupportZ`), horizontal is `X` / `Y` (`VelXY`, `ClampPositionXY`).
+  - Rotations are `FRotator` / `FQuat` / `FTransform` in UE's sense: a positive yaw turns right (from +X toward +Y),
+    a positive pitch looks up. Build a right vector with `Up ^ Forward` (left-handed), never `Forward ^ Up`.
+  - Matrices are `FMatrix` in UE's row-vector order (`Model * View * Projection`); build views with
+    `MakeViewMatrix` / `MakeLookAtView` (`RenderCore/Public/ViewMatrices.h`) and projections with `FPerspectiveMatrix`
+    / `FOrthoMatrix`. OpenGL code applies `ToGLClipSpace` (`RenderCore/Public/GLClipSpace.h`) once, after the
+    projection, and uploads with `FShader::SetMat4(Name, const FMatrix&)`.
+  - Data from outside the world is converted where it enters: importers end with `FImportCoordinateConversion`
+    (MeshUtilities); legacy `.llev` / version-1 `.lmesh` data goes through `FLegacyCoordinateConversion` in its reader
+    only (G4 enforces it); the Jolt and miniaudio boundaries swap Y and Z and scale by 0.01 inside their own files.
+    Engine code never holds legacy (Y-up, metre) values.
+  - Keep a triangle's index order when converting data (every basis change has determinant −1 and keeps the winding
+    on screen); a tangent's `w` flips with the basis.
 - **Logging.** Log through `UE_LOG(<Category>, <Verbosity>, TEXT("..."), ...)` with a category
   (`DECLARE_LOG_CATEGORY_EXTERN` + `DEFINE_LOG_CATEGORY` for a module-wide one, `DEFINE_LOG_CATEGORY_STATIC` inside
   one `.cpp`), not `printf` / `std::cout`. On PS2 the log reaches the EE console.
@@ -284,6 +298,8 @@ File formats: [ASSET_FORMATS.md](ASSET_FORMATS.md).
 7. Tests for new behaviour live in `<Module>/Private/Tests/` and pass with `RunTests.bat` (Core changes: also
    `TestPAL` on PS2).
 8. New Core-dependent code logs with `UE_LOG` and a category and asserts with `check` / `ensure`.
+9. World values are in UE space and centimetres; data from other spaces is converted only at its boundary (§4,
+   Coordinates).
 
 ---
 

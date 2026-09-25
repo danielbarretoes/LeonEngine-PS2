@@ -47,6 +47,9 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | P6 | ThirdPerson | 444 240 | 6 924 | 29 864 | 452 328 | unchanged (the game mode moved to `TUniquePtr`) |
 | P6 | BlankProgram | 179 588 | 6 136 | 27 089 | | reports through `UE_LOG` instead of `printf` (+1 KB of text) |
 | P6 | TestPAL | 731 244 | 6 268 | 32 392 | | unchanged (the removed glm tests were desktop-only) |
+| P7 | ThirdPerson | 444 240 | 6 924 | 29 864 | 452 328 | unchanged (the axes and units switch is desktop-only; the game keeps its own frame) |
+| P7 | BlankProgram | 179 588 | 6 136 | 27 089 | | unchanged |
+| P7 | TestPAL | 731 244 | 6 268 | 32 392 | | unchanged |
 
 | Version | Program | GMalloc peak | Process | Name pool | Notes |
 |---|---|---:|---:|---:|---|
@@ -60,3 +63,5 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | P5 | ThirdPerson | | 0.6 MB | | 60 FPS, same Draw3D numbers (now logged through LogRHI) |
 | P6 | TestPAL (46 tests) | 70 KB | 836 KB | 101 names | unchanged |
 | P6 | ThirdPerson | | 0.6 MB | | 60 FPS, same Draw3D numbers |
+| P7 | TestPAL (46 tests) | 70 KB | 836 KB | 101 names | unchanged; logs `engine 0.14.0` |
+| P7 | ThirdPerson | | 0.6 MB | | 60 FPS, same Draw3D numbers (`boxes=343 ... tris=278 ... emit=254`) |

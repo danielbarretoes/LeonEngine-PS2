@@ -71,7 +71,7 @@ Update this page whenever a module or type is added, moved or renamed.
 | `AnimInstance`, `Skeleton`, `AnimSequence`, `BlendSpace1D` | `UAnimInstance`, `USkeleton`, `UAnimSequence`, `UBlendSpace1D` |
 | `Texture`, `StaticMesh`, `SkeletalMesh`, `Material` | `UTexture2D`, `UStaticMesh`, `USkeletalMesh`, `FMaterial` (render parameters; no `UMaterial` asset class yet) |
 | `UserWidget`, `TextBlockWidget`, `ButtonWidget`, … | `UUserWidget`, `UTextBlock`, `UButton`, … |
-| `Transform` | `FLegacyTransform` (Engine `Level/LegacyTransform.h`, Core math, until P7); UE's `FTransform` is Core math (P3) |
+| `Transform` | `FTransform` (Core math, P3; every component, level record and light since P7). The interim `FLegacyTransform` was removed in P7 |
 | `Window` | `FGenericWindow` (+ `FGLFWWindow`, `FPS2Window`) |
 | `EKey`, `EPadButton` | `EKeys` |
 | `IRHIDevice`, `OpenGLDevice` | `FDynamicRHI`, `FOpenGLDynamicRHI` |
@@ -187,7 +187,7 @@ UE 4.27's float math in `Core/Public/Math/` (every platform), included by `CoreM
 | `glm::quat` | `FQuat` (`A * B` applies B first) | `Math/Quat.h` |
 | `glm::mat4` | `FMatrix` (row vectors, `V * M`; `A * B` applies A first) + `FRotationMatrix`, `FRotationTranslationMatrix`, `FQuatRotationTranslationMatrix`, `FScaleRotationTranslationMatrix`, `FTranslationMatrix`, `FScaleMatrix`, `FInverseRotationMatrix`, `FRotationAboutPointMatrix`, `FPerspectiveMatrix`, `FReversedZPerspectiveMatrix`, `FOrthoMatrix`, `FReversedZOrthoMatrix`, `FLookFromMatrix`, `FLookAtMatrix` | `Math/Matrix.h` and one header per derived matrix |
 | RenderCore `FBox` (glm) / private frustum plane | `FBox`, `FBox2D`, `FPlane`, `FSphere`, `FBoxSphereBounds` | `Math/Box.h`, `Box2D.h`, `Plane.h`, `Sphere.h`, `BoxSphereBounds.h` |
-| `FTransform` (glm TRS, Euler) | `FTransform` (quaternion, translation, 3D scale; scalar version) | `Math/Transform.h`; the old type is `FLegacyTransform` (`Migration/LegacyTransform.h` in Core until P6, then `Engine/Public/Level/LegacyTransform.h`) |
+| `FTransform` (glm TRS, Euler) | `FTransform` (quaternion, translation, 3D scale; scalar version) | `Math/Transform.h`; the old type became `FLegacyTransform` (`Migration/LegacyTransform.h` in Core until P6, then `Engine/Public/Level/LegacyTransform.h`) and was removed in P7 |
 | `glm::vec4` colors | `FColor` (BGRA bytes), `FLinearColor` (sRGB table, HSV) | `Math/Color.h` |
 | `std::mt19937` / `rand()` | `FRandomStream`, `FMath::Rand` / `FRand` / `RandRange` / `VRand` / `VRandCone` | `Math/RandomStream.h`, `Math/UnrealMathUtility.h` |
 | `glm::radians`, `glm::clamp`, `glm::mix` | `FMath::DegreesToRadians`, `Clamp`, `Lerp`, `FInterpTo`, `VInterpTo`, `RInterpTo`, `QInterpTo`, `ClampAngle`, `LinePlaneIntersection`, `LineBoxIntersection`, `ClosestPointOnSegment`, … | `Math/UnrealMathUtility.h` |
@@ -215,7 +215,8 @@ to `Core/Public/`.
 ### P5 — Lower modules on the UE types
 
 ApplicationCore, RHI, OpenGLDrv, PS2RHI, the shared Launch code, PhysicsCore, RenderCore, AnimationCore, AudioMixer,
-SlateCore and UMG use Core types (InputCore had none to replace). The world keeps its Y-up metre semantics.
+SlateCore and UMG use Core types (InputCore had none to replace). The world keeps its Y-up metre semantics (until
+P7).
 
 | Leon (before) | UE name (now) | Where |
 | --- | --- | --- |
@@ -242,8 +243,8 @@ its Y-up metre semantics until P7.
 | Leon (before) | UE name (now) | Where |
 | --- | --- | --- |
 | `glm::vec2` / `vec3` / `vec4` / `mat4` in the upper modules | `FVector2D`, `FVector`, `FVector4`, `FMatrix` (render matrices keep glm's GL layout until P7) | |
-| `glm::perspective`, `ortho`, `lookAt`, `translate`, `rotate`, `scale`, `mat4_cast`, `value_ptr`, `radians`, `normalize`, `A * B`, `M * v`, the normal matrix | `LegacyGL::Perspective`, `Ortho`, `LookAt`, `Translate`, `Rotate`, `Scale`, `QuatToMatrix`, `ValuePtr`, `Radians`, `Normalize`, `Mul(A, B)`, `Transform` / `TransformPoint` / `TransformDirection`, `NormalMatrix3x3` (glm's formulas term by term) | `RenderCore/Public/LegacyGLMath.h` |
-| `FLegacyTransform` on glm (Core `Migration/LegacyTransform.h`, desktop) | `FLegacyTransform` on Core math (`ModelMatrix()` returns an `FMatrix`), until P7 | `Engine/Public/Level/LegacyTransform.h` |
+| `glm::perspective`, `ortho`, `lookAt`, `translate`, `rotate`, `scale`, `mat4_cast`, `value_ptr`, `radians`, `normalize`, `A * B`, `M * v`, the normal matrix | `LegacyGL::Perspective`, `Ortho`, `LookAt`, `Translate`, `Rotate`, `Scale`, `QuatToMatrix`, `ValuePtr`, `Radians`, `Normalize`, `Mul(A, B)`, `Transform` / `TransformPoint` / `TransformDirection`, `NormalMatrix3x3` (glm's formulas term by term); removed in P7 | `RenderCore/Public/LegacyGLMath.h` (deleted in P7) |
+| `FLegacyTransform` on glm (Core `Migration/LegacyTransform.h`, desktop) | `FLegacyTransform` on Core math (`ModelMatrix()` returns an `FMatrix`); replaced by `FTransform` in P7 | `Engine/Public/Level/LegacyTransform.h` (deleted in P7) |
 | `ToGlm` / `FromGlm`, `LegacyAxes`, `Migration/LegacyContentPath.h` | removed; `FPaths::ResolveLegacyContentPath` stays until P15 | `Core/Public/Misc/Paths.h` |
 | `std::vector`, `std::string`, `std::unordered_map`, `std::function`, `std::unique_ptr` / `std::shared_ptr` | `TArray`, `FString`, `TMap`, `TFunction`, `TUniquePtr` / `TSharedPtr` | |
 | `UInputMappingContext` / `UPlayerInput` with `std::string_view` action names | `FName` action names, `TMap<FName, …>` bindings and state | `Engine/Public/GameFramework/InputMapping.h` |
@@ -263,8 +264,55 @@ its Y-up metre semantics until P7.
 | MSVC warning C4324 (padding added for `alignas`) | disabled (`/wd4324`), as UE does | `LeonBuildTool/Configuration/CompileEnvironment.cmake` |
 | C++20 on Win64 and Linux | C++17 on every platform, as UE 4.27 | `LeonBuildTool/Platform/*/LeonBuild*.cmake` |
 | Catch2 tests of Engine, Renderer, AIModule, MeshUtilities and JoltPhysics; `-noautomation` / `-automationonly` | automation tests (`System.Engine.*`, `System.Renderer.*`, `System.AIModule.*`, `System.MeshUtilities.*`, `System.JoltPhysics.*`), 179 in total; `LeonAutomationTests` keeps only `-automation=<filter>` | `<Module>/Private/Tests/` |
-| `System.Core.Migration.GlmInterop.*`, `System.Core.Migration.LegacyTransform.*` | `System.RenderCore.LegacyGLMath.Builders` / `Composition` (checked against values glm 1.0.1 printed), `System.Engine.LegacyTransform.*` | `RenderCore/Private/Tests/LegacyGLMathTests.cpp`, `Engine/Private/Tests/LegacyTransformTests.cpp` |
+| `System.Core.Migration.GlmInterop.*`, `System.Core.Migration.LegacyTransform.*` | `System.RenderCore.LegacyGLMath.Builders` / `Composition` (checked against values glm 1.0.1 printed), `System.Engine.LegacyTransform.*`; both replaced in P7 | `RenderCore/Private/Tests/LegacyGLMathTests.cpp`, `Engine/Private/Tests/LegacyTransformTests.cpp` (deleted in P7) |
 | — | `CheckBannedApis.ps1` (gate G4): rejects glm, nlohmann, `std::` containers / strings / functions / smart pointers, iostream and the `printf` family outside the allowed places | `Engine/Build/BatchFiles/` |
+
+### P7 — UE axes and units
+
+The world moves from Y up, right-handed, metres with glm's GL matrices to UE's space: X forward, Y right, Z up,
+left-handed, 1 unit = 1 cm, UE view and projection matrices. Legacy data is converted in its readers; the importers
+write UE space. Released as 0.14.0. Conventions: [Coordinates](#coordinates).
+
+| Leon (before) | UE name (now) | Where |
+| --- | --- | --- |
+| world Y up, right-handed, 1 unit = 1 m | X forward, Y right, Z up, left-handed, 1 unit = 1 cm; every metre constant scaled by 100 (masses stay in kg) | every desktop module and the shaders |
+| `LegacyGL::Mul(A, B)`, `Transform` / `TransformPoint` / `TransformDirection`, `ValuePtr` | `B * A` (`FMatrix` order), `TransformFVector4` / `TransformPosition` / `TransformVector`, `FShader::SetMat4(Name, const FMatrix&)` | `Core/Public/Math/Matrix.h`, `Renderer/Public/Shader.h` |
+| `LegacyGL::LookAt`, `Perspective`, `Ortho` (right-handed, clip z in [-1, 1]) | `MakeViewMatrix(Origin, FRotator)` / `MakeLookAtView` (UE view space: x right, y up, z forward), `FPerspectiveMatrix` / `FOrthoMatrix` (depth [0, 1]), then `ToGLClipSpace` | `RenderCore/Public/ViewMatrices.h`, `GLClipSpace.h` |
+| `LegacyGL::NormalMatrix3x3`, the overlay's ortho matrix | renderer-private helpers | `Renderer/Private/RenderMatrices.h` |
+| `LegacyGL::QuatToMatrix` (FBX skeletal import) | `FQuatRotationMatrix` | `MeshUtilities/Private/FbxSkeletalImport.cpp` |
+| `FLegacyTransform` (Euler XYZ degrees, `T * Rx * Ry * Rz * S`) | `FTransform` / `FRotator` on components (`RelativeLocation`, `RelativeRotation`, `RelativeScale3D`), level records, lights, volumes, player starts and attachments; children compose as `Relative * ParentWorld` | `Engine/Classes/Components/SceneComponent.h`, `Engine/Public/Level/` |
+| legacy `.llev` values used as they are | `FLegacyCoordinateConversion`: basis (X, Z, Y) × 100, rotations (−X, −Z, −Y, W), tangents (X, Z, Y, −W), scale (X, Z, Y), the angle map; only in the readers, the saver and tests (G4) | `RenderCore/Public/LegacyCoordinateConversion.h` |
+| `LightDirectionFromRotation` / `RotationFromLightDirection` | the light's rotation; it shines along `GetRotation().GetForwardVector()` | `Engine/Public/Level/Light.h` |
+| actor yaw as a float (`AActor` float overloads) | `FRotator` (`GetActorRotation`, `SetActorRotation`, `SetActorLocationAndRotation`) | `Engine/Classes/GameFramework/Actor.h` |
+| `UCameraComponent::Orbit` / `AddLook` / `SetYawPitch` / `GetYawDegrees` / `GetPitchDegrees` | `AddViewRotation` / `SetViewRotation` / `GetViewRotation` (a view `FRotator`) | `Engine/Public/Camera/CameraComponent.h` |
+| controller yaw / pitch kept by the game modes | `AController::ControlRotation`, `APawn::AddControllerYawInput` / `AddControllerPitchInput` / `GetViewRotation`, `APlayerController` look input with `ViewPitchMin` / `ViewPitchMax` | `Engine/Classes/GameFramework/Controller.h`, `Pawn.h`, `PlayerController.h` |
+| move input as forward / right floats | `FVector2D` (X forward, Y right) from `UPlayerInput::GetMoveInput`; `YawRelativeMove(FRotator, FVector2D)` | `Engine/Public/GameFramework/InputMapping.h`, `Input.h` |
+| spring arm boom yaw / pitch angles | `TargetOffset`, `SocketOffset`, `bUsePawnControlRotation`, `GetTargetRotation` | `Engine/Classes/GameFramework/SpringArmComponent.h` |
+| `QuerySupportY`, `FloorY`, `VelXz` / `VelocityY`, `ClampPositionXZ`, `SeparateAabbXZ`, `AabbOverlapY`, NavMesh `OriginZ`, `BobBaseY`, `MakeReflectMatrix(PlaneY)` | `QuerySupportZ`, `FloorZ`, `VelXY` / `VelocityZ`, `ClampPositionXY`, `SeparateAabbXY`, `AabbOverlapZ`, NavMesh `OriginY`, `BobBaseZ`, `MakeReflectMatrix(PlaneZ)` | Engine, AIModule, Renderer |
+| importers producing legacy Y-up metres | `FImportCoordinateConversion` as the last step (`EImportAxes::RightHandedYUp` (X, Z, Y) × 100 for OBJ / glTF; `RightHandedZUp` (X, −Y, Z) × the file unit for FBX, UE's `FFbxDataConverter`) | `MeshUtilities/Public/ImportCoordinateConversion.h` |
+| `.lmesh` version 1 (legacy space) | version 2 (world space) written; version 1 converted at load | `RenderCore/Public/LeonMeshFormat.h` |
+| Jolt and miniaudio fed engine values directly | boundaries that swap Y and Z and scale by 0.01 (the libraries stay Y up in metres) | `JoltPhysics/Private/JoltPhysicsBackend.cpp`, `AudioMixer/Private/AudioDevice.cpp` |
+| — | golden tests of the legacy behaviour (`System.Engine.Golden.*`, `System.AIModule.Golden.*`, `System.JoltPhysics.Golden.*`) and their adapters | `Engine/Public/Tests/LegacyGolden.h`, `*/Private/Tests/Golden*Tests.cpp` |
+| — | `LeonGame -Screenshot=<file.bmp> -ExitAfterFrames=N`, `-AxesGizmo` / F6 axes gizmo (`FDebugDraw::AddAxes`, `AddViewAxes`) | `Launch/Private/Desktop/GameApplication.cpp`, `Renderer/Public/Debug/DebugDraw.h` |
+| G4 without the legacy bridges | G4 bans `LegacyGL`, `FLegacyTransform`, `LegacyAxes` and fences `FLegacyCoordinateConversion` | `Engine/Build/BatchFiles/CheckBannedApis.ps1` |
+
+## Coordinates
+
+| Topic | UE 4.27 | LeonEngine |
+| --- | --- | --- |
+| Axes | X forward, Y right, Z up, left-handed | the same since P7 |
+| Units | 1 unit = 1 cm (`WorldToMeters` 100) | the same; masses in kg |
+| Rotations | `FRotator` (positive yaw turns right, positive pitch looks up) | the same |
+| Matrices | `FMatrix` row vectors, `A * B` applies A first | the same |
+| View space | x right, y up, z forward (`FViewMatrices`) | the same (`MakeViewMatrix`, `MakeLookAtView`) |
+| Projection | reversed-Z `FReversedZPerspectiveMatrix`, horizontal FOV | `FPerspectiveMatrix` (depth [0, 1], not reversed) with a vertical FOV, then `ToGLClipSpace` |
+| Importers | `FFbxDataConverter` (X, −Y, Z); glTF `ConvertVec3` (X, Z, Y) | `FImportCoordinateConversion` with the same two bases |
+| Physics | PhysX / Chaos in cm, Z up | the arcade scene in cm, Z up; Jolt in m, Y up behind a boundary |
+| Audio | listener and emitters in world space | miniaudio in m, Y up behind a boundary |
+
+Legacy `.llev` angles convert as: actor yaw ψ → `90 − ψ`; orbit camera (yaw Y, pitch P) → `FRotator(−P, Y + 180, 0)`;
+free look → `FRotator(P, Y, 0)`; directional light → `FRotator(−P, 90 − Y, 0)`; spin rates change sign. Details and
+the converters' allowed places: [ARCHITECTURE.md — Coordinates](../ARCHITECTURE.md#coordinates).
 
 ## Deviations from UE 4.27 (intentional)
 
@@ -279,9 +327,16 @@ its Y-up metre semantics until P7.
 | Delegates | also dynamic (`DECLARE_DYNAMIC_*`) and `UObject` bindings | `TDelegate` / `TMulticastDelegate` with static, lambda, raw and SP bindings (+ payload) | dynamic / `UObject` delegates need CoreUObject |
 | `FPlatformAtomics` on PS2 | real atomics | the generic non-atomic version | Leon runs a single EE thread |
 | Automation tests | run by the session frontend / `-ExecCmds="Automation RunTests"` | `FAutomationTestFramework::RunTests(Filter)` from `LeonAutomationTests` (`-automation=<filter>`) and `TestPAL` (every platform) | no editor / session frontend |
-| Math | `FVector`, `FRotator`, `FMatrix` everywhere, SIMD `VectorRegister`, `double` helpers | Core has the scalar float API (P3) and every module uses it (P5, P6); the world stays Y-up in metres until P7 | migration step by step; the EE has no SIMD path worth matching and a single-precision FPU |
-| Render matrices | `FMatrix` in UE's row-vector convention, `A * B` applies A first | render, view and projection matrices keep glm's GL memory layout (column-vector transforms, right-handed, clip Z in [-1, 1]) and are built and composed with `LegacyGL` (`Mul(A, B)` = glm's `A * B`, glm's formulas term by term); the Starter level renders pixel-identical to the P1 and P5 captures (outside the stats text) | the shaders and the world still use the GL conventions; P7 moves to UE's axes |
-| Level transforms | `FTransform` | `FLegacyTransform` (XYZ Euler degrees, `T * Rx * Ry * Rz * S`) in Engine `Level/LegacyTransform.h` | the `.llev` data is Y-up metres; the readers convert to `FTransform` in P7 |
+| Math | `FVector`, `FRotator`, `FMatrix` everywhere, SIMD `VectorRegister`, `double` helpers | Core has the scalar float API (P3) and every module uses it (P5, P6), in UE's axes and centimetres since P7 | the EE has no SIMD path worth matching and a single-precision FPU |
+| Field of view | `FMinimalViewInfo::FOV` is horizontal (the aspect ratio keeps X) | `UCameraComponent` keeps a vertical field of view (60°) and builds `FPerspectiveMatrix` from it | the legacy camera, the goldens and the captures use a vertical FOV; switching would change every frame |
+| Depth | reversed Z (`FReversedZPerspectiveMatrix`, far at 0) | standard depth: `FPerspectiveMatrix` / `FOrthoMatrix`, z / w in [0, 1], 0 at the near plane | the GL renderer, its depth tests (`GL_LESS`) and the shadow comparisons use increasing depth |
+| Clip space | the RHI hides the API's clip conventions | the renderer multiplies the UE projection by `ToGLClipSpace` (z_gl = 2z − w) once, and every pass works in GL clip space from there | the renderer calls OpenGL directly (see Renderer below) |
+| Legacy data | assets are in UE space | `.llev` files and version-1 `.lmesh` files stay Y up in metres and are converted by `FLegacyCoordinateConversion` in their readers (the level saver converts back); G4 keeps the converter out of every other file | existing content keeps loading; the formats go away with the `.lasset` packages |
+| Content facing | meshes face +X | legacy content meshes face +Y after the conversion, so a character's mesh sits at `RelativeRotation.Yaw = LegacyContentYaw` (−90) and the level reader maps an actor yaw ψ to 90 − ψ | the content was authored facing legacy +Z; re-exporting it is content work |
+| Physics backend space | PhysX / Chaos work in the world's cm, Z up | the Jolt plugin keeps Jolt in metres, Y up: positions, extents, velocities and accelerations swap Y and Z and scale by 0.01 at the backend boundary; Jolt-side constants stay in metres | Jolt's tolerances are tuned for metres |
+| Audio space | the listener and emitters are world positions | miniaudio stays right-handed, Y up, in metres behind the same swap and 0.01 scale | miniaudio's distance attenuation is tuned for metres |
+| Mouse look | the player controller scales the mouse delta once (`InputYawScale` / `InputPitchScale`) | in `LeonGame` the engine's free look and `ADefaultGameMode` both apply 0.15° per pixel, so the view turns 0.3° per pixel | kept from the legacy engine so the feel does not change |
+| Spring arm socket offset | `SocketOffset` moves only the end of the arm | the rotated `SocketOffset` is added to the arm origin, so the whole arm moves: the camera orbits and looks at the offset point, and the collision probe starts there | the legacy boom's `SocketOffsetX` / `SocketOffsetZ` offset its pivot the same way; the goldens record that behaviour |
 | Spring arm lag | `FMath::VInterpTo` / `RInterpTo` toward the desired location and rotation | an exponential-smoothing alpha applied with `FMath::Lerp` (`A + t * (B - A)`) to the target, yaw / pitch and arm length; the pre-P6 code used `glm::mix` (`A * (1 - t) + B * t`), so the last bit of the lagged values can differ from earlier releases | `FMath::Lerp` is UE's formula; the smoothing itself is unchanged |
 | Build tool | C# UBT | CMake scripts | no .NET dependency; PS2 toolchain is CMake-based |
 | Linking | monolithic or DLLs | always static (`IS_MONOLITHIC=1`), generated module table | PS2 has no DLLs |
@@ -298,9 +353,9 @@ its Y-up metre semantics until P7.
 | Module platform lists | `WhitelistPlatforms` / `BlacklistPlatforms` (4.27) | `PlatformAllowList` / `PlatformDenyList` (UE 5 names) written; the 4.27 names are still read | the `.lplugin` files already used the UE 5 names |
 | Plugin enable state | decides which plugin modules load | `IPluginManager` reports it, but LeonBuildTool alone decides what is linked (`ENABLE_PLUGINS`) | static linking, no module loading at runtime |
 | Global `operator new` / `delete` | replaced through `FMemory` in every monolithic build (`REPLACEMENT_OPERATOR_NEW_AND_DELETE`) | replaced on the PS2 only (`PS2PlatformRuntime.cpp`) | keeps libstdc++'s allocation, unwinder and demangler code out of the ELF; desktop still uses the CRT |
-| Capsule placement | `FCollisionShape` capsules are centered on the component | Leon's character capsule stands on the actor location (feet): it spans feet to feet + 2 × half height | the CMC-lite works from the feet until the character becomes a UCapsuleComponent (P12) |
+| Capsule placement | `FCollisionShape` capsules are centered on the component | Leon's character capsule stands on the actor location (feet): it spans feet to feet + 2 × half height along Z | the CMC-lite works from the feet until the character becomes a UCapsuleComponent (P12) |
 | Body collision shape | the body setup's aggregate geometry | `FBodyInstance::CollisionShape` (`EBodyCollisionShape::Box` / `TriangleMesh`) | Leon's physics scene has AABB and triangle-mesh bodies only |
-| Bone matrices | `FTransform` bone poses, `FMatrix` in UE's row-vector convention | `FMatrix` values that keep glm's memory layout (column-vector transforms; since P6 the FBX import builds them with `LegacyGL::QuatToMatrix`); the skin matrix is `InverseBind * BoneWorld` in FMatrix order | the renderer uploads them as they are; they become proper UE transforms with the skeletal mesh assets (P14) |
+| Bone matrices | `FTransform` bone poses | `FMatrix` poses in UE's row-vector convention (the FBX import builds them with `FQuatRotationMatrix` and converts them to world space by conjugation, B⁻¹ M B); the skin matrix is `InverseBind * BoneWorld` in FMatrix order | the renderer uploads them as they are; they become `FTransform` poses with the skeletal mesh assets (P14) |
 | Widget colors | `FSlateColor` / `FLinearColor` with alpha | `FLinearColor`, alpha ignored by the debug overlay | the HUD overlay draws opaque RGB |
 | Game → Launch | game modules never see `FEngineLoop` | the PS2 game module reads `GEngineLoop.GetMainWindow()` (include-only dependency on the launch module) | no Slate / `GEngine` on PS2 to hand out the viewport |
 | Gamepad | `FSlateApplication` routes `IInputInterface` events to the player controller | game code polls `IInputInterface` state directly | no Slate; polling matches the PS2 frame loop |

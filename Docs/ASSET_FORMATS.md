@@ -35,7 +35,7 @@ The file is written with raw struct writes (little-endian on every supported hos
 ```text
 header (52 bytes, packed):
   char magic[4]        = "LMSH"
-  u32  version         = 1          // loader rejects any other version
+  u32  version         = 2          // writers emit 2; the loader also reads 1 and rejects anything else
   u32  flags           = 0
   u32  vertexCount                   // must be > 0
   u32  indexCount                    // must be > 0
@@ -50,9 +50,22 @@ char     slots[materialSlotCount][]  // null-terminated strings
 
 `FVertex` (`RenderCore/Public/Vertex.h`): `Position` 3 × f32, `Normal` 3 × f32, `TexCoord` 2 × f32, `Tangent` 4 × f32 (`w` = bitangent handedness).
 
+**Space.** Both versions have the same layout; only the space of the data differs:
+
+| Version | Space | On load |
+| --- | --- | --- |
+| 2 (written since 0.14.0) | the engine world (UE: X forward, Y right, Z up, left-handed, centimetres) | used as stored |
+| 1 | legacy: Y up, right-handed, metres | `FLegacyCoordinateConversion::ConvertMeshData`: positions (X, Z, Y) × 100, normals (X, Z, Y), tangents (X, Z, Y, −W) |
+
+UVs and the index order are kept in both, so triangles keep their winding on screen (the swap has determinant −1). The
+header AABB is computed from the vertices by the writer and is not read back. A version-1 file and the same source
+cooked to version 2 load to the same data: the `Cube.obj` test fixture
+(`Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/Cube.obj`) cooks to a file with SHA-256
+`EFF1459AE46710C6F1B44C0B1ECB2D739CB590F2492B9DF3EC11A03ECA7757C9`.
+
 Material slot strings carry the source's diffuse texture path per slot (from the OBJ `.mtl`, for example). The loader keeps a slot string only when it contains `.png` or `.jpg` and binds it as the albedo map of that material slot. A `submeshCount` of 0 on load means one section covering all indices.
 
-**Cook:** `FStaticMeshBuilder::CookFromObj` / `CookFromFbx` / `CookFromGltf` (`Engine/Source/Developer/MeshUtilities/Public/StaticMeshBuilder.h`), driven by `LeonCook staticmesh` or a recipe step. glTF / GLB import (vendored cgltf) merges every primitive of the first mesh and, with a materials directory, writes one `M_<Name>.lmat` per material plus copied textures.
+**Cook:** `FStaticMeshBuilder::CookFromObj` / `CookFromFbx` / `CookFromGltf` (`Engine/Source/Developer/MeshUtilities/Public/StaticMeshBuilder.h`), driven by `LeonCook staticmesh` or a recipe step. glTF / GLB import (vendored cgltf) merges every primitive of the first mesh and, with a materials directory, writes one `M_<Name>.lmat` per material plus copied textures. Each importer's last step is `FImportCoordinateConversion` (`MeshUtilities/Public/ImportCoordinateConversion.h`): OBJ and glTF sources are read as right-handed Y up in metres ((X, Z, Y) × 100, UE's glTF importer); FBX files are resolved by ufbx to right-handed Z up and converted with UE's `FFbxDataConverter` basis (X, −Y, Z) times the file's unit in centimetres (an FBX without declared axes is taken as right-handed Y up). Tangents are computed after the conversion.
 
 **Runtime:** `FResourceCache::LoadStaticMesh` accepts `.lmesh` only and logs an error for any other extension. In a `.llev`, a `StaticMesh` actor stores its mesh and material as content-relative paths.
 

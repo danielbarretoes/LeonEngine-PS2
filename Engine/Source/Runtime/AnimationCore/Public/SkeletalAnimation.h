@@ -8,9 +8,9 @@ constexpr int32 MaxSkinBones = 96;
 constexpr int32 MaxBoneInfluences = 4;
 
 /**
- * Bone matrices (inverse bind, sampled poses, skin) are FMatrix values that keep the memory layout of the glm
- * matrices they were imported as (column-vector transforms; see GlmInterop.h), so the renderer uploads them as they
- * are. In FMatrix product order the skin matrix is InverseBind * BoneWorld (glm: BoneWorld * InverseBind).
+ * Bone matrices (inverse bind, sampled poses, skin) are FMatrix values in UE's row-vector convention and in the
+ * engine world (the FBX import converts them with FImportCoordinateConversion), uploaded to the shaders as they are.
+ * The skin matrix is InverseBind * BoneWorld.
  */
 struct ANIMATIONCORE_API FSkeletalVertex
 {

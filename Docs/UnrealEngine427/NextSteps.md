@@ -33,7 +33,8 @@ Implemented in `Runtime/Core` on every platform, PS2 included (details:
 
 `Runtime/Core/Public/Math/` on every platform ([LeonMapping — P3](LeonMapping.md#p3--core-math)): float `FMath`,
 vectors, `FRotator`, `FQuat`, `FMatrix` and the derived matrices, `FPlane`, `FBox`, `FSphere`, `FBoxSphereBounds`, a
-scalar `FTransform`, `FColor` / `FLinearColor`, `FRandomStream`. The glm transform became `FLegacyTransform`;
+scalar `FTransform`, `FColor` / `FLinearColor`, `FRandomStream`. The glm transform became `FLegacyTransform` (until
+P7);
 RenderCore's frustum uses Core's `FBox` / `FPlane`; `GlmInterop.h` and `LegacyAxes.h` bridged the unmigrated code
 until P6. PS2 builds reject implicit float to double promotion.
 
@@ -61,14 +62,25 @@ Renderer, Engine, AIModule, MeshUtilities, Cooker, LeonCook, the JoltPhysics plu
 `TUniquePtr` / `TSharedPtr` and `UE_LOG` ([LeonMapping — P6](LeonMapping.md#p6--upper-modules-on-the-ue-types)).
 glm, nlohmann and Catch2 are gone, and so is Core's `Migration/` folder; `Json` serves the materials and the cook
 recipes; every one of the 179 tests is an automation test; every platform compiles C++17; `CheckBannedApis.ps1` (G4)
-guards the result. Until P7 the world stays Y-up in metres, render matrices keep glm's GL layout (`LegacyGL`,
-`RenderCore/Public/LegacyGLMath.h`) and `FLegacyTransform` lives in Engine (`Level/LegacyTransform.h`); the Starter
-level renders pixel-identical to the P1 and P5 captures (outside the stats text).
+guards the result. The world stayed Y-up in metres with glm's GL matrix layout until P7.
+
+### Done — UE axes and units (P7)
+
+The world is UE's: X forward, Y right, Z up, left-handed, 1 unit = 1 cm
+([LeonMapping — P7](LeonMapping.md#p7--ue-axes-and-units), [ARCHITECTURE — Coordinates](../ARCHITECTURE.md#coordinates)).
+Render matrices are composed with `FMatrix` operators; the camera builds UE view and projection matrices and the
+renderer applies `ToGLClipSpace` last. Components, level data and lights hold `FTransform`; controllers carry a
+`ControlRotation`. `FLegacyCoordinateConversion` converts `.llev` levels and version-1 `.lmesh` meshes in their
+readers only, the importers end with `FImportCoordinateConversion` and write `.lmesh` version 2, and Jolt and
+miniaudio stay Y up in metres behind a swap-and-scale boundary. `LegacyGL` and `FLegacyTransform` are gone and G4 bans
+them. 22 golden tests recorded before the switch pass unchanged; 231 tests in total. Released as 0.14.0.
 
 ### Next
 
-- **P7 — UE axes and units:** the world switches to Z-up centimetres; the level readers convert to UE's
-  `FTransform`, and `FLegacyTransform` and `LegacyGL` go away. P7 releases 0.14.0.
+- The plan continues with CoreUObject (below). What P7 left: the legacy `.llev` / `.lmesh` version-1 data and
+  `FLegacyCoordinateConversion` go away with the `.lasset` packages; the deviations it kept (vertical field of view,
+  no reversed Z, the GL clip adapter, legacy content facing +Y, the doubled mouse look, the spring arm's socket
+  offset) are listed in [LeonMapping — Deviations](LeonMapping.md#deviations-from-ue-427-intentional).
 
 ## CoreUObject
 

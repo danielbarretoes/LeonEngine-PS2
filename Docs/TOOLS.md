@@ -61,7 +61,7 @@ Exit codes: `0` success, `1` bad arguments or recipe, `2` cook failure. Running 
 
 The `character` and `anim` modes (cooked skeletal formats) were removed in 0.12.0; skeletal assets return as `.lasset` packages.
 
-Implementation: `FStaticMeshBuilder::CookFromObj` / `CookFromFbx` / `CookFromGltf` (`Engine/Source/Developer/MeshUtilities/Public/StaticMeshBuilder.h`).
+Implementation: `FStaticMeshBuilder::CookFromObj` / `CookFromFbx` / `CookFromGltf` (`Engine/Source/Developer/MeshUtilities/Public/StaticMeshBuilder.h`). Output is `.lmesh` version 2 in the engine world (X forward, Y right, Z up, left-handed, centimetres): OBJ and glTF are read as right-handed Y up in metres, FBX through ufbx as right-handed Z up in the file's unit ([ASSET_FORMATS.md](ASSET_FORMATS.md#static-mesh--lmesh)). Cooking the `Cube.obj` fixture gives a file with SHA-256 `EFF1459AE46710C6F1B44C0B1ECB2D739CB590F2492B9DF3EC11A03ECA7757C9`.
 
 ### Examples
 
@@ -119,10 +119,10 @@ All scripts forward to LeonBuildTool (`cmake -P Engine/Source/Programs/LeonBuild
 | `Engine\Build\BatchFiles\Clean.bat` | same arguments as Build | `-Mode=Clean` |
 | `Engine\Build\BatchFiles\Rebuild.bat` | same arguments as Build | `-Mode=Rebuild` |
 | `Engine\Build\BatchFiles\Cook.bat` | `<LeonCook arguments>` | Builds LeonCook (Win64 Development) and runs it |
-| `Engine\Build\BatchFiles\RunTests.bat` | `[-automation=<filter>]` | Builds LeonAutomationTests (Win64 Development) and runs it from the repo root: every automation test (179), or those whose name contains `<filter>`; fails if any fails |
+| `Engine\Build\BatchFiles\RunTests.bat` | `[-automation=<filter>]` | Builds LeonAutomationTests (Win64 Development) and runs it from the repo root: every automation test (231), or those whose name contains `<filter>`; fails if any fails |
 | `Engine\Build\BatchFiles\FormatCode.bat` | `[--check]` | clang-format on every `.cpp` / `.h` / `.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game` (skips `ThirdParty`, `Intermediate`, `Binaries`); `--check` is a dry run that fails on unformatted files |
 | `Engine\Build\BatchFiles\Lint.bat` | | `FormatCode.bat --check`, then `CheckBannedApis.ps1`, then builds LeonAutomationTests, LeonCook, LeonGame and BlankProgram for Win64 Development |
-| `Engine\Build\BatchFiles\CheckBannedApis.ps1` | | Gate G4: fails when engine or game code (`Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game`; comments ignored) uses glm, nlohmann, `std::vector` / `string` / `map` / `unordered_map` / `function` / `shared_ptr` / `unique_ptr`, iostream or the `printf` family; the allowed places are listed in [CODING_STANDARD.md §4](CODING_STANDARD.md#4-language). CI runs it with `pwsh` |
+| `Engine\Build\BatchFiles\CheckBannedApis.ps1` | | Gate G4: fails when engine or game code (`Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game`; comments ignored) uses glm, nlohmann, `std::vector` / `string` / `map` / `unordered_map` / `function` / `shared_ptr` / `unique_ptr`, iostream, the `printf` family, `LegacyGL` / `FLegacyTransform` / `LegacyAxes`, or `FLegacyCoordinateConversion` outside the legacy readers and tests; the allowed places are listed in [CODING_STANDARD.md §4](CODING_STANDARD.md#4-language). Violations print `<file>:<line>: G4 <rule>: <code> -> <replacement>`; `-Root <dir>` scans another tree. CI runs it with `pwsh` |
 | `GenerateProjectFiles.bat` (root) → `Engine\Build\BatchFiles\GenerateProjectFiles.bat` | `[-Project=<file.lproj>]` | Visual Studio solution in `<Engine or Project>\Intermediate\ProjectFiles` plus the root `compile_commands.json` for clangd; builds keep using Build.bat |
 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1` | `[-Project <dir or .lproj> \| -Program <Name>] [-Configuration Debug\|Development\|Shipping] [-Build]` | Optionally builds the project (or engine program) for PS2, then starts PCSX2 on `<Project>\Binaries\PS2\<Name>.elf` (`Engine\Binaries\PS2\<Name>.elf` with `-Program`) |
 
@@ -157,4 +157,4 @@ On PS2 the verdict (`TestPAL: PASSED (46 test(s), 0 failed)`) and the `LogTestPA
 
 ## Related docs
 
-[SETUP.md](SETUP.md) · [ASSET_FORMATS.md](ASSET_FORMATS.md) · [LEVELS.md](LEVELS.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [CODING_STANDARD.md](CODING_STANDARD.md)
+[SETUP.md](SETUP.md) · [ASSET_FORMATS.md](ASSET_FORMATS.md) · [LEVELS.md](LEVELS.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [CODING_STANDARD.md](CODING_STANDARD.md) · [TESTING.md](TESTING.md)
