@@ -30,8 +30,8 @@ struct ENGINESETTINGS_API FGameModeName
  *   level's AWorldSettings::DefaultGameMode, then this (UGameInstance::CreateGameModeForURL).
  * - GameInstanceClass: the class of the engine's game instance.
  *
- * Until the `.lmap` packages (P15) a map is a long package name whose `.llev` file sits under a mount point
- * (`/Engine/LevelTemplates/Starter` is Engine/Content/LevelTemplates/Starter.llev), or a `.llev` path.
+ * A map is the long package name of a `.lmap` package (`/Engine/Maps/Template_Default` is
+ * Engine/Content/Maps/Template_Default.lmap).
  */
 UCLASS(Config = Engine, DefaultConfig)
 class ENGINESETTINGS_API UGameMapsSettings : public UObject

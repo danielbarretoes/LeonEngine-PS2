@@ -21,12 +21,12 @@ bool FConsoleExecChainTest::RunTest(const FString& Parameters)
 {
 	// A local player's command goes to the viewport client (show), the engine (stat, open), then the controller's chain
 	// (its Exec UFUNCTIONs: FOV). BaseInput.ini's debug keys and the deferred commands (-ExecCmds) take the same way.
-	const FString StarterMap = TEXT("/Engine/LevelTemplates/Starter");
-	const FString BlankMap = TEXT("/Engine/LevelTemplates/Blank");
-	if (!FPaths::FileExists(FPackageName::LongPackageNameToFilename(StarterMap, TEXT(".llev"))))
+	const FString StarterMap = TEXT("/Engine/Maps/Template_Default");
+	const FString BlankMap = TEXT("/Engine/Maps/Entry");
+	if (!FPackageName::DoesPackageExist(StarterMap))
 	{
-		AddInfo(TEXT("Starter.llev not found"));
-		return true;
+		AddError(TEXT("Template_Default.lmap not found"));
+		return false;
 	}
 	TStrongObjectPtr<UGameEngine> Engine(NewObject<UGameEngine>());
 	UEngine* const SavedEngine = GEngine;

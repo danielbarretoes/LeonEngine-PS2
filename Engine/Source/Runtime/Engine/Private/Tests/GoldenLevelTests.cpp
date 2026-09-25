@@ -8,10 +8,11 @@
 #include "Frustum.h"
 #include "GameFramework/WorldSettings.h"
 #include "Kismet/GameplayStatics.h"
-#include "Level/LevelLoader.h"
 #include "Misc/AutomationTest.h"
+#include "Misc/PackageName.h"
 #include "Tests/LegacyGolden.h"
-#include "Tests/ScopedTestWorld.h"
+#include "UObject/GarbageCollection.h"
+#include "UObject/Package.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -22,21 +23,21 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGoldenStarterLevelTest, "System.Engine.Golden.
 
 bool FGoldenStarterLevelTest::RunTest(const FString& Parameters)
 {
-	// The Starter template loaded headless: the world box of every static mesh, the light directions and
-	// positions, and the camera it opens with.
-	#ifdef LEON_ROOT_DIR
+	// The Starter template, the default template map since P15 (/Engine/Maps/Template_Default), loaded headless: the
+	// world box of every static mesh, the light directions and positions, and the camera framing it keeps.
 	constexpr float PositionTolerance = 1.0e-3f;
 	constexpr float DirectionTolerance = 1.0e-4f;
 	constexpr float AngleTolerance = 1.0e-2f;
 
-	FScopedTestWorld TestWorld;
-	const FString LevelPath = FString(LEON_ROOT_DIR) + "/Engine/Content/LevelTemplates/Starter.llev";
-	if (!TestTrue("Starter level loaded", LoadLevelFile(*TestWorld, LevelPath)))
+	UPackage* Package = LoadPackage(nullptr, TEXT("/Engine/Maps/Template_Default"), LOAD_None);
+	UWorld* LoadedWorld = UWorld::FindWorldInPackage(Package);
+	if (!TestNotNull("Starter map loaded", LoadedWorld))
 	{
 		return false;
 	}
+	LoadedWorld->InitWorld(UWorld::InitializationValues().InitializeScenes(false));
 
-	const UWorld& World = *TestWorld;
+	const UWorld& World = *LoadedWorld;
 	TArray<AActor*> MeshActors;
 	UGameplayStatics::GetAllActorsOfClass(World, AStaticMeshActor::StaticClass(), MeshActors);
 	TArray<FVector> MeshBoxes;
@@ -110,9 +111,8 @@ bool FGoldenStarterLevelTest::RunTest(const FString& Parameters)
 		*this, "CameraAngles", CameraAngles, ExpectedCameraAngles, 2, AngleTolerance, LegacyGolden::EUnit::Unitless);
 	LegacyGolden::CheckScalars(*this, "CameraDistance", CameraDistance, ExpectedCameraDistance, 1, PositionTolerance,
 		LegacyGolden::EUnit::Length);
-	#else
-	AddInfo("LEON_ROOT_DIR unset");
-	#endif
+	Package->MarkPendingKill();
+	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
 	return true;
 }
 

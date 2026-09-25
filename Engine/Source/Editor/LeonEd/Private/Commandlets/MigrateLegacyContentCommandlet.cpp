@@ -1,12 +1,17 @@
 #include "Commandlets/MigrateLegacyContentCommandlet.h"
 
 #include "AssetImportUtils.h"
+#include "Camera/CameraActor.h"
 #include "Commandlets/ImportAssetsCommandlet.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
 #include "Engine/Texture2D.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerStart.h"
 #include "HAL/FileManager.h"
 #include "LeonEdLog.h"
 #include "Level/LegacyAssetKeys.h"
+#include "Level/LevelLoader.h"
 #include "MeshData.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
@@ -24,6 +29,7 @@ namespace
 		Sound,
 		Mesh,
 		Material,
+		Level,
 		Other,
 	};
 
@@ -46,6 +52,10 @@ namespace
 		if (Extension == TEXT("lmat"))
 		{
 			return ELegacyFileKind::Material;
+		}
+		if (Extension == TEXT("llev"))
+		{
+			return ELegacyFileKind::Level;
 		}
 		return ELegacyFileKind::Other;
 	}
@@ -171,14 +181,111 @@ namespace
 		return FAssetImportUtils::SavePackage(Mesh->GetOutermost(), Mesh);
 	}
 
+	/** A transient mesh's geometry as mesh data (its sections, no material slots). */
+	FMeshData GetMeshData(const UStaticMesh& Mesh)
+	{
+		FMeshData Data;
+		Data.Vertices = Mesh.GetLODResources().Vertices;
+		Data.Indices = Mesh.GetLODResources().Indices;
+		Data.Submeshes = Mesh.GetLODResources().Sections;
+		return Data;
+	}
+
+	/**
+	 * Saves every mesh the level's components show that the reader built at run time (transient) as `SM_<Mesh>` in
+	 * `<Map>/Meshes`, and gives it to the components instead; false when one does not save.
+	 */
+	bool SaveTransientMeshes(UWorld& World, const FString& MapPackageName)
+	{
+		TMap<UStaticMesh*, UStaticMesh*> Saved;
+		for (AActor* Actor : World.PersistentLevel->Actors)
+		{
+			AStaticMeshActor* MeshActor = Cast<AStaticMeshActor>(Actor);
+			UStaticMeshComponent* Component = MeshActor != nullptr ? MeshActor->GetStaticMeshComponent() : nullptr;
+			UStaticMesh* Mesh = Component != nullptr ? Component->GetStaticMesh() : nullptr;
+			if (Mesh == nullptr || !Mesh->GetOutermost()->HasAnyFlags(RF_Transient))
+			{
+				continue;
+			}
+			UStaticMesh** Copy = Saved.Find(Mesh);
+			if (Copy == nullptr)
+			{
+				const FString AssetName = FAssetImportUtils::MakeAssetName(UStaticMesh::StaticClass(), Mesh->GetName());
+				const FString PackageName = MapPackageName + TEXT("/Meshes/") + AssetName;
+				UStaticMesh* NewMesh = FindOrCreateEngineAsset<UStaticMesh>(PackageName);
+				NewMesh->StaticMaterials.Reset();
+				(void)NewMesh->BuildFromMeshData(GetMeshData(*Mesh));
+				if (!FAssetImportUtils::SavePackage(NewMesh->GetOutermost(), NewMesh))
+				{
+					return false;
+				}
+				Copy = &Saved.Add(Mesh, NewMesh);
+			}
+			(void)Component->SetStaticMesh(*Copy);
+		}
+		return true;
+	}
+
 } // namespace
 
 UMigrateLegacyContentCommandlet::UMigrateLegacyContentCommandlet(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	HelpDescription = TEXT("Converts legacy .lmat / .lmesh / image / .wav content into .lasset packages (temporary)");
-	HelpUsage = TEXT("-run=MigrateLegacyContent [-source=<ContentDir>] [-engine]");
+	HelpDescription =
+		TEXT("Converts legacy .lmat / .lmesh / image / .wav content into .lasset packages and .llev levels into .lmap "
+			 "maps (temporary)");
+	HelpUsage =
+		TEXT("-run=MigrateLegacyContent [-source=<ContentDir>] [-level=<File.llev> -dest=<MapPackage>] [-engine]");
 	LogToConsole = 1;
+}
+
+UWorld* UMigrateLegacyContentCommandlet::MigrateLevel(const FString& LevelFile, const FString& MapPackageName)
+{
+	if (!FPackageName::IsValidLongPackageName(MapPackageName))
+	{
+		UE_LOG(LogLeonEd, Error, "MigrateLegacyContent: '%s' is not a package under a mount point", *MapPackageName);
+		return nullptr;
+	}
+	// Built and saved, never drawn: no renderer's scene.
+	const UWorld::InitializationValues IVS = UWorld::InitializationValues().InitializeScenes(false);
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, false, FName(*FPackageName::GetShortName(MapPackageName)),
+		CreatePackage(*MapPackageName), /*bAddToRoot =*/true, &IVS);
+	const auto Discard = [World]()
+	{
+		World->DestroyWorld(false);
+		World->GetOutermost()->MarkPendingKill();
+		CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
+	};
+	if (!LoadLevelFile(*World, FPaths::ConvertRelativePathToFull(LevelFile)))
+	{
+		Discard();
+		return nullptr;
+	}
+	// The view the level opened with becomes its first player start (the camera actor keeps the framing itself).
+	if (const ACameraActor* Framing = World->FindFirst<ACameraActor>())
+	{
+		FVector Location;
+		FRotator Rotation;
+		GetLegacyPlayFromHereView(*Framing->GetCameraComponent(), Location, Rotation);
+		APlayerStart* Start = World->SpawnActor<APlayerStart>(Location, Rotation);
+		TArray<AActor*>& Actors = World->PersistentLevel->Actors;
+		const int32 FirstStart = Actors.IndexOfByPredicate(
+			[Start](const AActor* Actor) { return Actor != Start && Actor != nullptr && Actor->IsA<APlayerStart>(); });
+		if (FirstStart != INDEX_NONE)
+		{
+			Actors.Remove(Start);
+			Actors.Insert(Start, FirstStart);
+		}
+	}
+	if (!SaveTransientMeshes(*World, MapPackageName) || !FAssetImportUtils::SavePackage(World->GetOutermost(), World))
+	{
+		Discard();
+		return nullptr;
+	}
+	UE_LOG(LogLeonEd, Display, "MigrateLegacyContent: '%s' is the map %s (%d actors)", *LevelFile, *MapPackageName,
+		World->PersistentLevel->Actors.Num());
+	World->RemoveFromRoot();
+	return World;
 }
 
 int32 UMigrateLegacyContentCommandlet::SaveEngineProceduralAssets()
@@ -219,8 +326,8 @@ int32 UMigrateLegacyContentCommandlet::MigrateDirectory(const FString& ContentDi
 
 	int32 Failures = 0;
 	int32 Converted = 0;
-	for (const ELegacyFileKind Kind :
-		{ELegacyFileKind::Image, ELegacyFileKind::Sound, ELegacyFileKind::Mesh, ELegacyFileKind::Material})
+	for (const ELegacyFileKind Kind : {ELegacyFileKind::Image, ELegacyFileKind::Sound, ELegacyFileKind::Mesh,
+			 ELegacyFileKind::Material, ELegacyFileKind::Level})
 	{
 		for (const FString& File : Files)
 		{
@@ -231,6 +338,17 @@ int32 UMigrateLegacyContentCommandlet::MigrateDirectory(const FString& ContentDi
 			FString Key = File;
 			FPaths::NormalizeFilename(Key);
 			Key = Key.RightChop(Directory.Len() + 1);
+			if (Kind == ELegacyFileKind::Level)
+			{
+				// <Root>/Levels/X.llev is the map <Root>/Maps/X (UE's content layout).
+				if (MigrateLevel(File, Root + TEXT("/Maps/") + FPaths::GetBaseFilename(File)) == nullptr)
+				{
+					++Failures;
+					continue;
+				}
+				++Converted;
+				continue;
+			}
 			const FString PackageName = FLegacyAssetKeys::GetMigratedPackageName(Root, Key);
 			if (PackageName.IsEmpty())
 			{
@@ -277,7 +395,9 @@ int32 UMigrateLegacyContentCommandlet::Main(const FString& Params)
 	ParseCommandLine(*Params, Tokens, Switches, ParamsMap);
 	const bool bEngine = Switches.Contains(TEXT("engine"));
 	const FString* Source = ParamsMap.Find(TEXT("source"));
-	if (!bEngine && Source == nullptr)
+	const FString* Level = ParamsMap.Find(TEXT("level"));
+	const FString* Dest = ParamsMap.Find(TEXT("dest"));
+	if ((!bEngine && Source == nullptr && Level == nullptr) || ((Level == nullptr) != (Dest == nullptr)))
 	{
 		UE_LOG(LogLeonEd, Error, "MigrateLegacyContent: usage: %s", *HelpUsage);
 		return 1;
@@ -290,6 +410,10 @@ int32 UMigrateLegacyContentCommandlet::Main(const FString& Params)
 	if (Source != nullptr)
 	{
 		Failures += MigrateDirectory(*Source);
+	}
+	if (Level != nullptr && MigrateLevel(*Level, *Dest) == nullptr)
+	{
+		++Failures;
 	}
 	return Failures == 0 ? 0 : 1;
 }

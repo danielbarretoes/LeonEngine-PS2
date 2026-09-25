@@ -1,3 +1,4 @@
+#include "Camera/CameraActor.h"
 #include "CoreMinimal.h"
 #include "Engine/EngineBaseTypes.h"
 #include "Engine/GameEngine.h"
@@ -7,11 +8,12 @@
 #include "GameFramework/GameMode.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/PlayerController.h"
-#include "GameFramework/PlayerStartPIE.h"
+#include "GameFramework/PlayerStart.h"
 #include "GameFramework/WorldSettings.h"
 #include "GameMapsSettings.h"
 #include "Kismet/GameplayStatics.h"
 #include "Level/LeonLevelFormat.h"
+#include "Level/LevelLoader.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Misc/PackageName.h"
@@ -90,13 +92,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEngineSettingsGameMapsSettingsFromConfigTest,
 
 bool FEngineSettingsGameMapsSettingsFromConfigTest::RunTest(const FString& Parameters)
 {
-	// [/Script/EngineSettings.GameMapsSettings] of BaseEngine.ini: the Starter map (a .llev under /Engine until P15),
+	// [/Script/EngineSettings.GameMapsSettings] of BaseEngine.ini: the default template map (a .lmap under /Engine),
 	// the global default game mode and the game instance class; the game engine class of [/Script/Engine.Engine].
-	TestEqual(
-		"GameDefaultMap", UGameMapsSettings::GetGameDefaultMap(), FString(TEXT("/Engine/LevelTemplates/Starter")));
-	TestTrue("GameDefaultMap is a .llev under /Engine",
-		FPaths::FileExists(
-			FPackageName::LongPackageNameToFilename(UGameMapsSettings::GetGameDefaultMap(), TEXT(".llev"))));
+	TestEqual("GameDefaultMap", UGameMapsSettings::GetGameDefaultMap(), FString(TEXT("/Engine/Maps/Template_Default")));
+	TestTrue("GameDefaultMap is a .lmap under /Engine",
+		FPaths::FileExists(FPackageName::LongPackageNameToFilename(
+			UGameMapsSettings::GetGameDefaultMap(), FPackageName::GetMapPackageExtension())));
 	TestEqual("GlobalDefaultGameMode", UGameMapsSettings::GetGlobalDefaultGameMode(),
 		FString(TEXT("/Script/Engine.GameModeBase")));
 	TestNotNull("GlobalDefaultGameMode loads", GlobalDefaultGameModeClass());
@@ -144,14 +145,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLoadMapStarterLogsInThePlayerTest, "System.Eng
 
 bool FLoadMapStarterLogsInThePlayerTest::RunTest(const FString& Parameters)
 {
-	// A headless engine opens Starter: a new world with the global default game mode, the local player logged in with
-	// its pawn at the Play From Here start of the level's camera framing, and play begun. ?game= opens it again with
-	// another game mode (the old world goes); a missing map fails and keeps the world.
-	const FString StarterMap = TEXT("/Engine/LevelTemplates/Starter");
-	if (!FPaths::FileExists(FPackageName::LongPackageNameToFilename(StarterMap, TEXT(".llev"))))
+	// A headless engine opens the default template map (the Starter level migrated to a .lmap): its world with the
+	// global default game mode, the local player logged in with its pawn at the map's first player start (the view the
+	// legacy camera framing opened with), and play begun. ?game= opens it again with another game mode (the old world
+	// goes); a missing map fails and keeps the world.
+	const FString StarterMap = TEXT("/Engine/Maps/Template_Default");
+	if (!FPackageName::DoesPackageExist(StarterMap))
 	{
-		AddInfo(TEXT("Starter.llev not found"));
-		return true;
+		AddError(TEXT("Template_Default.lmap not found"));
+		return false;
 	}
 	TStrongObjectPtr<UGameEngine> Engine(NewObject<UGameEngine>());
 	Engine->Init(nullptr);
@@ -182,10 +184,21 @@ bool FLoadMapStarterLogsInThePlayerTest::RunTest(const FString& Parameters)
 	TestTrue("The controller's player", Controller->Player == Player);
 	TestTrue("In the game state", World->GetGameState()->GetNumPlayers() == 1);
 	TArray<AActor*> Starts;
-	UGameplayStatics::GetAllActorsOfClass(*World, APlayerStartPIE::StaticClass(), Starts);
-	if (TestEqual("One Play From Here start", Starts.Num(), 1) && TestNotNull("A pawn", Controller->GetPawn()))
+	UGameplayStatics::GetAllActorsOfClass(*World, APlayerStart::StaticClass(), Starts);
+	if (TestEqual("The framing start and the level's", Starts.Num(), 2) && TestNotNull("A pawn", Controller->GetPawn()))
 	{
+		// The first player start is the view the legacy framing (the map's camera actor) opened with.
 		const AActor* Start = Starts[0];
+		const ACameraActor* Framing = World->FindFirst<ACameraActor>();
+		FVector FramingLocation;
+		FRotator FramingRotation;
+		if (TestNotNull("The framing camera", Framing))
+		{
+			GetLegacyPlayFromHereView(*Framing->GetCameraComponent(), FramingLocation, FramingRotation);
+			TestTrue("The first start is at the framing's view",
+				Start->GetActorLocation().Equals(FramingLocation, 0.0f) &&
+					Start->GetActorRotation().Equals(FramingRotation, 0.0f));
+		}
 		TestTrue(
 			"Pawn at the start", Controller->GetPawn()->GetActorLocation().Equals(Start->GetActorLocation(), 0.0f));
 		TestTrue("Pawn turned to the start's yaw",
