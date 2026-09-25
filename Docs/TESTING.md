@@ -9,7 +9,7 @@ What runs automatically and what a person still has to check by hand. Build and 
 | --- | --- | --- |
 | Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` |
 | LeonHeaderTool golden tests (run by `RunTests.bat` too) | `Engine\Intermediate\Build\HostTools\Win64\LeonHeaderTool.exe -Test` | `LeonHeaderTool -Test: N of N golden cases passed` |
-| Core, CoreUObject, Json and Projects on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (93 test(s), 0 failed)` in the EE log (98 on Win64) |
+| Core, CoreUObject, Json and Projects on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (106 test(s), 0 failed)` in the EE log (112 on Win64) |
 | Format, banned APIs (G4), Win64 build | `Engine\Build\BatchFiles\Lint.bat` | `Lint OK` |
 | Frame capture | `LeonGame.exe "-map=<.llev>" "-Screenshot=<file.bmp>" "-ExitAfterFrames=N"` | the BMP matches a reference capture byte for byte |
 
@@ -18,6 +18,14 @@ The CoreUObject tests collect garbage (`CollectGarbage`) between their steps; th
 a collection in one test never touches another test's objects. The config tests build their ini layers in memory
 (`FConfigFile::CombineFromBuffer`) and remove them afterwards; the SaveConfig test (desktop only) writes its user
 layer under `<Project>/Intermediate/Tests/CoreUObjectConfig/` and deletes it.
+
+The package tests (`System.CoreUObject.Package.*`) name their packages `/PackageTest/...`, a mount point they register
+for their duration, save them to memory (`UPackage::SaveToMemory` + `FLinkerLoad::RegisterInMemoryPackage`, so they
+run on the PS2 too), destroy them (pending kill and a full collection, as a new process would start) and load them
+back. Only `System.CoreUObject.Package.Files` (desktop) writes real `.lasset` / `.lmap` files, under
+`<Project>/Intermediate/Tests/CoreUObjectPackage/`, and deletes them. `System.CoreUObject.Package.Deterministic`
+compares the MD5 of a saved package (its engine version cleared) with a stored hash on every platform: update the hash
+when the package format or its fixture changes on purpose.
 
 The golden tests (`System.Engine.Golden.*`, `System.AIModule.Golden.*`, `System.JoltPhysics.Golden.*`) replay
 movement, traces, navigation, cameras, shadows and reflections against tables recorded before P7 moved the world to

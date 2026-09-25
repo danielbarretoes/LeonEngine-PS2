@@ -1,10 +1,10 @@
 # CoreUObject
 
-`UObject` and its reflection, as in UE 4.27's `Runtime/CoreUObject` (plan phases P9 and P10): the object model and
-reflection (P9), then garbage collection, weak / strong / soft references, `UPROPERTY(Config)` and `UFUNCTION(Exec)`
-(P10). The module depends on Core only, builds for every platform (PS2 included) in C++17 without RTTI or exceptions,
-and is the runtime side of LeonHeaderTool's generated code
-([LeonHeaderTool/README.md](../../Programs/LeonHeaderTool/README.md) is the contract).
+`UObject` and its reflection, as in UE 4.27's `Runtime/CoreUObject` (plan phases P9 to P11): the object model and
+reflection (P9), garbage collection, weak / strong / soft references, `UPROPERTY(Config)` and `UFUNCTION(Exec)` (P10),
+then packages: saving and loading objects in `.lasset` / `.lmap` files (P11). The module depends on Core only, builds
+for every platform (PS2 included) in C++17 without RTTI or exceptions, and is the runtime side of LeonHeaderTool's
+generated code ([LeonHeaderTool/README.md](../../Programs/LeonHeaderTool/README.md) is the contract).
 
 No engine module is reflected yet: `LeonAutomationTests` and `TestPAL` link CoreUObject for its tests; the gameplay
 classes become `UCLASS` types in P12.
@@ -13,17 +13,20 @@ classes become `UCLASS` types in P12.
 
 | Header | Contents |
 | --- | --- |
-| `UObject/ObjectMacros.h` | the flag enums (`EObjectFlags`, `EInternalObjectFlags`, `EClassFlags`, `EClassCastFlags`, `EPropertyFlags`, `EStructFlags`, `EPackageFlags`, …), `UCLASS` / `USTRUCT` / `UPROPERTY` / `GENERATED_BODY`, `DECLARE_CLASS`, `IMPLEMENT_CLASS`, the constructor and vtable-helper macros, `StaticClass<T>` / `StaticStruct<T>` / `StaticEnum<T>` |
-| `UObject/UObjectBase.h`, `UObjectBaseUtility.h`, `Object.h` | the object model: `UObjectBase` (flags, index, class, name, outer), `UObjectBaseUtility` (names, paths, outer chain, `IsA`, flags, `AddToRoot`, `MarkPendingKill`), `UObject` (`PostInitProperties`, `ProcessEvent`, `CreateDefaultSubobject`, `BeginDestroy` / `FinishDestroy`, `AddReferencedObjects`, `LoadConfig` / `SaveConfig` / `ReloadConfig`, `CallFunctionByNameWithArguments`, `ProcessConsoleExec`; the P11 stubs), `IsValid` |
+| `UObject/ObjectMacros.h` | the flag enums (`EObjectFlags` with `RF_Load`, `EInternalObjectFlags`, `EClassFlags`, `EClassCastFlags`, `EPropertyFlags`, `EStructFlags`, `EPackageFlags`, `ELoadFlags`, `ESaveFlags`, …), `UCLASS` / `USTRUCT` / `UPROPERTY` / `GENERATED_BODY`, `DECLARE_CLASS`, `DECLARE_SERIALIZER`, `IMPLEMENT_CLASS`, the constructor and vtable-helper macros, `StaticClass<T>` / `StaticStruct<T>` / `StaticEnum<T>` |
+| `UObject/UObjectBase.h`, `UObjectBaseUtility.h`, `Object.h` | the object model: `UObjectBase` (flags, index, class, name, outer), `UObjectBaseUtility` (names, paths, outer chain, `IsA`, flags, `AddToRoot`, `MarkPendingKill`), `UObject` (`PostInitProperties`, `ProcessEvent`, `CreateDefaultSubobject`, `BeginDestroy` / `FinishDestroy`, `AddReferencedObjects`, `LoadConfig` / `SaveConfig` / `ReloadConfig`, `CallFunctionByNameWithArguments`, `ProcessConsoleExec`, `Serialize` / `SerializeScriptProperties`, `PostLoad` / `ConditionalPostLoad`, `GetArchetype`, `IsAsset`), `IsValid` |
 | `UObject/Class.h` | `UField`, `UStruct`, `UScriptStruct` (`ICppStructOps`), `UClass`, `UEnum` (`_MAX` appended), `UFunction` |
 | `UObject/Field.h`, `UObject/UnrealType.h` | `FField` / `FFieldClass` / `FProperty` and every property type: numeric, `FBoolProperty` (native bools and bitfields), `FByteProperty` / `FEnumProperty`, `FStrProperty` / `FNameProperty` / `FTextProperty`, object / class / weak / soft references, `FStructProperty`, `FArrayProperty` / `FSetProperty` / `FMapProperty` with their script helpers; `TFieldIterator`, `TFieldRange` |
-| `UObject/UObjectGlobals.h` | `NewObject`, `FObjectInitializer`, `StaticConstructObject_Internal`, `StaticFindObject` / `FindObject`, `MakeUniqueObjectName`, `CreatePackage`, `GetTransientPackage`, `GetDefault`, `CollectGarbage` / `TryCollectGarbage` / `IncrementalPurgeGarbage`, `FReferenceCollector`, `GARBAGE_COLLECTION_KEEPFLAGS`, the `UE4CodeGen_Private` params and `Construct*` functions |
+| `UObject/UObjectGlobals.h` | `NewObject`, `FObjectInitializer`, `StaticConstructObject_Internal`, `StaticFindObject` / `FindObject`, `MakeUniqueObjectName`, `CreatePackage`, `FindPackage`, `LoadPackage`, `StaticLoadObject` / `LoadObject`, `StaticLoadClass` / `LoadClass`, `GetTransientPackage`, `GetDefault`, `CollectGarbage` / `TryCollectGarbage` / `IncrementalPurgeGarbage`, `FReferenceCollector`, `GARBAGE_COLLECTION_KEEPFLAGS`, the `UE4CodeGen_Private` params and `Construct*` functions |
 | `UObject/GarbageCollection.h`, `GCObject.h`, `StrongObjectPtr.h` | `LogGarbage`, `FGarbageCollectionStats`, `FGarbageCollectionSettings` / `FGarbageCollectionTimer`; `FGCObject`; `TStrongObjectPtr` |
 | `UObject/UObjectArray.h`, `UObjectHash.h`, `UObjectIterator.h` | `GUObjectArray` (`FUObjectArray` / `FUObjectItem`), the name hash, `GetObjectsWithOuter` / `GetObjectsOfClass`, `TObjectIterator` / `TObjectRange` |
-| `UObject/Package.h` | `UPackage` (`/Script/<Module>` packages; P11 loads `.lasset` packages) |
+| `UObject/Package.h`, `UObject/SavePackage.h` | `UPackage` (`/Script/<Module>` packages, loaded `.lasset` / `.lmap` packages: flags, GUID, `FileName`, `LinkerLoad`, `IsFullyLoaded`) and its `Save` / `SavePackage` / `SaveToMemory`, `FSavePackageResultStruct` |
+| `UObject/PackageFileSummary.h`, `ObjectResource.h`, `Linker.h`, `LinkerLoad.h`, `LinkerSave.h`, `PropertyTag.h` | the package format: `FPackageFileSummary` (`'LEON'`), `FPackageIndex`, `FObjectImport` / `FObjectExport`, `FLinker`, `FLinkerLoad` (with `BeginLoad` / `EndLoad` and the in-memory packages), `FLinkerSave`, `FPropertyTag`, `ResetLoaders` |
+| `Serialization/BulkData.h` | `FByteBulkData` |
+| `Misc/PackageName.h` | `FPackageName`: long package names, mount points, `.lasset` / `.lmap` files |
 | `UObject/Stack.h`, `Script.h`, `ScriptMacros.h` | `FFrame`, `EFunctionFlags`, `DECLARE_FUNCTION` / `DEFINE_FUNCTION`, the `P_GET_*` family |
 | `UObject/NoExportTypes.h` | `USTRUCT(noexport)` declarations of the Core structs (`FVector`, `FVector2D`, `FVector4`, `FPlane`, `FRotator`, `FQuat`, `FTransform`, `FColor`, `FLinearColor`, `FGuid`, `FIntPoint`, `FIntVector`, `FBox`) and of `FSoftObjectPath` / `FSoftClassPath` |
-| `UObject/WeakObjectPtr*.h`, `PersistentObjectPtr.h`, `SoftObjectPath.h`, `SoftObjectPtr.h` | `FWeakObjectPtr` / `TWeakObjectPtr` (index + serial number; Core's `UObject/WeakObjectPtrTemplatesFwd.h` names it for the delegates), `TPersistentObjectPtr`, `FSoftObjectPath` / `FSoftClassPath` (4.27 layout: `AssetPathName` + `SubPathString`), `FSoftObjectPtr`, `TSoftObjectPtr` / `TSoftClassPtr` (resolve objects already in memory until P11 loads packages) |
+| `UObject/WeakObjectPtr*.h`, `PersistentObjectPtr.h`, `SoftObjectPath.h`, `SoftObjectPtr.h` | `FWeakObjectPtr` / `TWeakObjectPtr` (index + serial number; Core's `UObject/WeakObjectPtrTemplatesFwd.h` names it for the delegates), `TPersistentObjectPtr`, `FSoftObjectPath` / `FSoftClassPath` (4.27 layout: `AssetPathName` + `SubPathString`), `FSoftObjectPtr`, `TSoftObjectPtr` / `TSoftClassPtr` (`TryLoad` / `LoadSynchronous` load the package) |
 | `Templates/Casts.h`, `Templates/SubclassOf.h` | `Cast` (class cast flags as the fast path, else the super chain), `CastChecked`, `ExactCast`, `TSubclassOf` |
 | `CoreUObject.h` | everything above |
 
@@ -107,8 +110,9 @@ and the next collection frees it.
 - `FSoftObjectPath` (`"/Game/Maps/Arena.Arena"` plus a subobject path after `:`), `FSoftClassPath`,
   `TSoftObjectPtr` / `TSoftClassPtr` over `FSoftObjectPtr` (a `TPersistentObjectPtr`: a path and a cached weak
   pointer, re-resolved when objects were created since). `ResolveObject` finds objects in memory; `TryLoad` /
-  `LoadSynchronous` do the same until P11 loads packages. Both paths are reflected noexport structs whose text form is
-  the path itself (`TStructOpsTypeTraits::WithExportTextItem` / `WithImportTextItem`).
+  `LoadSynchronous` load the package when the object is not there (`StaticLoadObject`). Both paths are reflected
+  noexport structs whose text form is the path itself (`TStructOpsTypeTraits::WithExportTextItem` /
+  `WithImportTextItem`) and which serialize themselves (`WithSerializer`: the path name and the subobject string).
 
 ## Config
 
@@ -142,6 +146,74 @@ fits) and calls it through `ProcessEvent`. Unknown and non-Exec functions return
 the latter anyway); a bad argument is reported on `Ar` and the function is not called. `UObject::ProcessConsoleExec`
 calls it; Core's `FExec` / `FSelfRegisteringExec` (`Misc/CoreMisc.h`) let non-UObjects publish commands. The console
 itself arrives with P13 (`UGameViewportClient`).
+
+## Packages
+
+Objects are saved to and loaded from `.lasset` / `.lmap` packages (plan decision D13; the byte layout is in
+[ASSET_FORMATS.md](../../../../Docs/ASSET_FORMATS.md#packages--lasset--lmap)).
+
+**Names.** `FPackageName` maps long package names to files through mount points: `/Engine/` →
+`FPaths::EngineContentDir()`, `/Game/` → `FPaths::ProjectContentDir()`, plus `RegisterMountPoint` roots (plugins,
+tests). `/Script/<Module>` is a module's compiled-in package: valid (with `bIncludeReadOnlyRoots`) but without a file.
+`TryConvertLongPackageNameToFilename`, `TryConvertFilenameToLongPackageName`, `DoesPackageExist` (a `.lasset`, a
+`.lmap` or registered bytes), `ObjectPathToPackageName`, `GetShortName`, `SplitLongPackageName`, ...
+
+**Saving.** `UPackage::SavePackage(Package, Base, TopLevelFlags, Filename)` (or `Save`, `SaveToMemory`):
+
+1. **Exports**: `Base`, the package's objects with any of `TopLevelFlags`, and recursively their outers inside the
+   package, their inner objects (default subobjects included) and every object of the package they reference
+   (`FArchiveSaveTagExports` serializes each one to find them). Transient objects (`RF_Transient`, pending kill, in a
+   transient outer, of a `CLASS_Transient` class) are left out.
+2. **Imports and names**: `FArchiveSaveTagImports` serializes each export again and records every `FName` and every
+   object outside the package (with its outers and its class); an export's class is a `/Script` class import. A
+   transient object, or an object of the package that is not exported, is saved as null. Soft object paths add their
+   package to the soft package references.
+3. **Write** through `FLinkerSave`, into memory: the summary, the sorted name table, the imports and exports sorted by
+   path name, the soft package references, each export's data (`UObject::Serialize`), the bulk data payloads, the tag
+   again; then the summary and the export table are written once more with the final offsets. `Save` writes the
+   bytes with `FFileHelper::SaveArrayToFile` (through `IFileManager`); a `.lmap` file name sets `PKG_ContainsMap`.
+   The package GUID is `FGuid::NewDeterministicGuid(PackageName)`: the same objects give the same bytes (D13).
+
+**Serialize.** `UObject::Serialize(Ar)` calls `SerializeScriptProperties`: `UStruct::SerializeTaggedProperties` writes
+an `FPropertyTag` and the value of each property that differs from the archetype (`GetArchetype`: the class default
+object, or for a default subobject the subobject of the same name in its outer's archetype), then `NAME_None`. A class
+with native data overrides `Serialize`, calls `Super::Serialize(Ar)` first and serializes its members after (the
+"native tail"), for example an `FByteBulkData`. `FProperty::SerializeItem` does one value of each property type:
+structs use their own `Serialize` (`WithSerializer`), binary members for immutable structs (`FVector`, `FTransform`,
+...) or nested tagged properties; enums save the enumerator name. Loading reads the tags back: unknown names are
+skipped by size, and `FProperty::ConvertFromType` converts a changed type when it can (warning otherwise). Transient
+and `CPF_SkipSerialization` properties are never serialized; editor-only ones not in an archive that filters them
+(`PKG_FilterEditorOnly`).
+
+**Loading.** `LoadPackage(nullptr, TEXT("/Game/Maps/Arena"), LOAD_None)`, `LoadObject<T>(nullptr, Path)`,
+`StaticLoadObject`, `LoadClass<T>`, `FSoftObjectPath::TryLoad`, `TSoftObjectPtr::LoadSynchronous`. Synchronous:
+
+1. `BeginLoad`; `FLinkerLoad::CreateLinker` reads the whole file (or the bytes registered with
+   `FLinkerLoad::RegisterInMemoryPackage`), checks the tag, the end tag and the version, reads the tables and
+   attaches to the package (`UPackage::LinkerLoad`; the flags and the GUID come from the summary).
+2. `LoadAllObjects`: each export is created (`CreateExport`: its class import, its outer, then `StaticConstructObject`
+   with `RF_NeedLoad | RF_NeedPostLoad | RF_WasLoaded`, or the object of that name its outer's constructor already
+   built, D12) and serialized from its offset (`Preload`: class defaults first, then the saved deltas); a read that
+   does not end at `SerialSize` is an error. `UObject*` values resolve to exports or imports: a package import loads
+   its package first (recursively; a package already loading is used as it is), another import is found in its
+   outer. A missing import is a warning and a null reference, as in UE.
+3. `EndLoad` (the outermost one): `ConditionalPostLoad` on every loaded object, package by package in the order their
+   loads finished (imports first), in export order, so a `PostLoad` sees every object of the load serialized; the
+   packages are marked fully loaded and their linkers deleted (Leon keeps no linker: everything, bulk data included,
+   was read eagerly).
+
+A package that is already loaded, or was created in memory and has no file, is returned as it is; a missing package
+is an error (`LOAD_NoWarn`: a log line, `LOAD_Quiet`: nothing). `FLinkerLoad::CreateLinker(nullptr, ...)` reads the
+tables of a package without loading it (imports, soft package references: the cook's dependency walk).
+
+**Versions.** The summary's `FileVersionUE` is an `ELeonPackageVersion` (Core `UObject/ObjectVersion.h`); the linkers
+set `FArchive::UEVer()` from it, so native `Serialize` code checks `Ar.UEVer() >= VER_LEON_<Change>` for data added
+later. Older than `VER_LEON_OLDEST_LOADABLE_PACKAGE` or newer than `VER_LEON_LATEST` fails with an error.
+
+**Editor-only data (D14).** A build with `WITH_EDITORONLY_DATA` saves editor-only properties unless the package has
+`PKG_FilterEditorOnly`; a build without it (PS2, Shipping) marks every package it saves `PKG_FilterEditorOnly`, and
+when it loads a package without that flag (uncooked) it logs it once and skips the editor-only tags as unknown
+names (their properties do not exist there).
 
 ## UObject delegates
 
@@ -180,8 +252,13 @@ is not reflected (its layout is `float M[4][4]`, a C array of C arrays).
   `ReloadConfig` reads its class's sections parents first, as its class default object did.
 - Exec: no `CPP_Default_` metadata, so a missing trailing argument keeps its zero / default value with a warning on
   `Ar` (UE uses the C++ default, or fails when there is none). No `BindUFunction` and no dynamic delegates.
-- No packages on disk, `Serialize` is a stub, soft references only resolve objects already in memory (P11); a soft
-  pointer re-resolves after any object is created (UE: after a package loads).
+- Packages (P11): one file per package (no `.uexp` / `.ubulk`), a trimmed summary (no custom versions, generations,
+  thumbnails, asset registry data or preload dependencies), no struct or property GUIDs in the tags, sets and maps
+  saved whole, no `TemplateIndex` in the exports, a GUID derived from the package name, synchronous loading only (no
+  async loader, no lazy exports; linkers are released when the load ends), eager bulk data without compression or
+  mapping, no redirectors, soft object paths serialized by a free `operator<<`, `SavePackage` without the conform /
+  diff / platform parameters, and in-memory packages for the tests. A soft pointer re-resolves after any object is
+  created (UE: after a package loads).
 - No script VM: `FFrame::Code` is always null and `ProcessEvent` calls native thunks only.
 - Default subobjects are rebuilt per instance instead of instanced from the archetype (D12).
 - `MakeUniqueObjectName` numbers per class (UE 4.27 per outer); `StaticAllocateObject` does not replace an existing
@@ -193,12 +270,16 @@ is not reflected (its layout is `float M[4][4]`, a C array of C arrays).
 
 ## Tests
 
-`Private/Tests`: 48 `System.CoreUObject.<Area>.<Name>` automation tests (objects and names, classes and casts, CDOs
+`Private/Tests`: 62 `System.CoreUObject.<Area>.<Name>` automation tests (objects and names, classes and casts, CDOs
 and subobjects, registration order, properties, bools, enums, struct ops, containers, functions, NoExport structs,
 `WITH_EDITORONLY_DATA`; garbage collection, weak / strong / soft references, `TSubclassOf`, UObject delegates, config
-load / defaults / per-object / save, Exec) with reflected fixtures (`ReflectionTestTypes.h`, `HierarchyTestTypes.h`,
-`OrderTestParent.h`, `OrderTestChild.h`, `GarbageCollectionTestTypes.h`, `ConfigExecTestTypes.h`). They run in
-`LeonAutomationTests` and in `TestPAL` on every platform, PS2 included (`System.CoreUObject.Config.SaveConfig` is
-desktop-only: it writes a user layer under `<Project>/Intermediate/Tests/`). TestPAL also logs the reflection budget,
-the GC cost (`System.CoreUObject.GarbageCollection.Budget`) and a final collection (see
-[Budgets.md](../../../Platforms/PS2/Documentation/Budgets.md)).
+load / defaults / per-object / save, Exec; packages: round trip of every property kind, hard and soft references,
+schema evolution, missing imports, deterministic saves with a golden hash, bulk data, editor-only data, package
+names, `PostLoad` order, default subobjects, damaged data, files, the round-trip budget) with reflected fixtures
+(`ReflectionTestTypes.h`, `HierarchyTestTypes.h`, `OrderTestParent.h`, `OrderTestChild.h`,
+`GarbageCollectionTestTypes.h`, `ConfigExecTestTypes.h`, `PackageTestTypes.h`). They run in `LeonAutomationTests` and
+in `TestPAL` on every platform, PS2 included (`System.CoreUObject.Config.SaveConfig` and
+`System.CoreUObject.Package.Files` are desktop-only: they write under `<Project>/Intermediate/Tests/`; the other
+package tests save to memory). TestPAL also logs the reflection budget, the GC cost
+(`System.CoreUObject.GarbageCollection.Budget`), a package round trip (`System.CoreUObject.Package.Budget`) and a final
+collection (see [Budgets.md](../../../Platforms/PS2/Documentation/Budgets.md)).

@@ -3,9 +3,9 @@
 **Audience:** content authors and tool writers
 **Also:** [LEVELS.md](LEVELS.md) (`.llev` levels) · [TOOLS.md](TOOLS.md) (LeonCook) · [SETUP.md](SETUP.md)
 
-Runtime formats are Leon binaries plus a few small INI-style text files. DCC sources (OBJ, FBX, glTF) are cooked with LeonCook; the runtime never loads them. The desktop runtime (`Renderer`, `Engine` modules) reads these files; the PS2 runtime does not load any of them yet (see [PS2](#ps2)).
+Runtime formats are Leon binaries plus a few small INI-style text files. DCC sources (OBJ, FBX, glTF) are cooked with LeonCook; the runtime never loads them. The desktop runtime (`Renderer`, `Engine` modules) reads these files; the PS2 runtime does not load any of them yet (see [PS2](#ps2)). Since 0.15.0 CoreUObject saves and loads UObjects as `.lasset` / `.lmap` [packages](#packages--lasset--lmap), the format every other asset moves to from P14 on.
 
-> Unreal `.uasset` / `.umap` are proprietary. Leon does not read or write them. Interchange with Blender / Unreal goes through FBX or glTF, cooked to Leon formats.
+> Unreal `.uasset` / `.umap` are proprietary. Leon does not read or write them. Interchange with Blender / Unreal goes through FBX or glTF, cooked to Leon formats. The `.lasset` layout follows UE 4.27's package structure (summary, name / import / export tables, tagged properties) but is Leon's own binary format.
 
 ---
 
@@ -13,6 +13,7 @@ Runtime formats are Leon binaries plus a few small INI-style text files. DCC sou
 
 | Ext | Kind | Role | Reader / writer |
 | --- | --- | --- | --- |
+| `.lasset` / `.lmap` | Binary `LEON` | UObject package: an asset / a map (`PKG_ContainsMap`) | `UPackage::Save`, `LoadPackage` / `LoadObject` (CoreUObject), see [Packages](#packages--lasset--lmap) |
 | `.lmesh` | Binary `LMSH` | Cooked static mesh | `LeonMeshFormat` (RenderCore) |
 | `.lmat` | INI text | Material | `LeonMaterialFormat` (Renderer) |
 | `.llev` | Binary `LLEV` | Level | `LeonLevelFormat` (Engine), see [LEVELS.md](LEVELS.md) |
@@ -20,9 +21,116 @@ Runtime formats are Leon binaries plus a few small INI-style text files. DCC sou
 | `.png` (and other stb_image formats) | Image | Textures | `FResourceCache::LoadTexture` (Renderer) |
 | `.obj` / `.fbx` / `.gltf` / `.glb` | Source | Cook / import input only | MeshUtilities |
 
-There is no `.lasset` format in the engine yet. The cooked skeletal formats (`.lskel`, `.lskm`, `.lanim`, `.lchar`, `*.blendspace1d.json`), `.lm` lightmaps, `.hdr` environment maps and the `leon.game.json` pack marker were removed in 0.12.0; skeletal assets return as `USkeletalMesh` / `UAnimSequence` `.lasset` packages and static lighting as `<Map>_BuiltData.lasset`.
+No engine asset is a package yet: the asset classes (`UStaticMesh`, `UTexture2D`, `UMaterial`, …) arrive in P14 and the `.lmap` maps in P15; until then `.lmesh`, `.lmat`, `.llev` and PNG files stay the runtime formats. The cooked skeletal formats (`.lskel`, `.lskm`, `.lanim`, `.lchar`, `*.blendspace1d.json`), `.lm` lightmaps, `.hdr` environment maps and the `leon.game.json` pack marker were removed in 0.12.0; skeletal assets return as `USkeletalMesh` / `UAnimSequence` `.lasset` packages and static lighting as `<Map>_BuiltData.lasset`.
 
 Engine content lives in `Engine/Content` (`Materials/M_Default.lmat`, `Materials/M_WorldGrid.lmat`, `Materials/M_SolidMetal.lmat`, `Textures/T_Default_D.png`, `LevelTemplates/*.llev`) and GLSL shaders in `Engine/Shaders`. Paths inside assets are resolved with `FPaths::ResolveAssetPath`, which checks the executable folder and `Engine/Content` (or `Engine/Shaders` for `Shaders/...` keys).
+
+---
+
+## Packages — `.lasset` / `.lmap`
+
+A package holds UObjects, as UE's `.uasset` / `.umap` do (plan decision D13). API (CoreUObject, [README](../Engine/Source/Runtime/CoreUObject/README.md)): `UPackage::SavePackage` / `Save` / `SaveToMemory`, `LoadPackage`, `LoadObject<T>`, `LoadClass<T>`, `StaticLoadObject`, `FSoftObjectPath::TryLoad`, `TSoftObjectPtr::LoadSynchronous`; names and files: `FPackageName` (`Misc/PackageName.h`).
+
+**Names.** A package is named by its long package name, `/Game/Maps/Arena`: a mount point root plus a path. `/Engine/` maps to `Engine/Content/`, `/Game/` to the project's `Content/`, and `FPackageName::RegisterMountPoint` adds others (plugins, tests). `/Script/<Module>` names a module's compiled-in package: it is valid but has no file. An object is named by its path, `/Game/Maps/Arena.Arena`, with `:` before a subobject of a top-level object (`/Game/Maps/Arena.Arena:PersistentLevel`). A map is saved as `.lmap` (the save sets `PKG_ContainsMap`), anything else as `.lasset`.
+
+**One file.** Summary, tables, export data and bulk data are in one file. UE 4.27 cooked packages split them into `.uasset` (header), `.uexp` (export data) and `.ubulk` (bulk data); Leon keeps a single file, with the bulk data at its end (D13), so a package is read with one file open (a PS2 CD seek) and needs no companion files in a pak.
+
+### Layout
+
+Little-endian, as FArchive writes it: an `int32` is 4 bytes, `bool` is a `uint32` (0 or 1), an `FString` is its `int32` length including the terminator (0 for the empty string) followed by that many UTF-8 bytes, and an `FName` is 8 bytes: an `int32` index into the name table and an `int32` number (0 = no number, N + 1 for the suffix `_N`). An object reference is an `int32` [`FPackageIndex`](../Engine/Source/Runtime/CoreUObject/Public/UObject/ObjectResource.h): 0 is null, N > 0 the export N − 1, −N the import N − 1.
+
+```text
+FPackageFileSummary                         (UObject/PackageFileSummary.h)
+  int32   Tag                    0x4E4F454C: the file starts with the bytes "LEON"
+  int32   FileVersionUE          ELeonPackageVersion (Core UObject/ObjectVersion.h); 1 in 0.15.0
+  int32   FileVersionLicenseeUE  0
+  int32   TotalHeaderSize        summary + tables: where the export data starts
+  uint32  PackageFlags           PKG_Cooked 0x200, PKG_ContainsMap 0x20000, PKG_FilterEditorOnly 0x80000000, ...
+  int32   NameCount, NameOffset
+  int32   ExportCount, ExportOffset
+  int32   ImportCount, ImportOffset
+  int32   SoftPackageReferencesCount, SoftPackageReferencesOffset
+  FGuid   Guid                   4 x uint32: FGuid::NewDeterministicGuid(long package name) (MD5)
+  FEngineVersion SavedByEngineVersion
+          uint16 Major, Minor, Patch; uint32 Changelist; FString Branch   ("0.15.0-0+LeonEngine")
+  FString CookedPlatform         empty unless PKG_Cooked
+  int64   BulkDataStartOffset
+name table          NameCount x FString: every FName string of the package, number-less, sorted, no duplicates
+import table        ImportCount x FObjectImport (28 bytes)
+                      FName ClassPackage ("/Script/CoreUObject"), FName ClassName ("Class", "Package", ...),
+                      int32 OuterIndex (an import; 0 for a package), FName ObjectName
+export table        ExportCount x FObjectExport (60 bytes)
+                      int32 ClassIndex (a /Script class import), int32 SuperIndex (0), int32 OuterIndex (0 = the
+                      package, else an export), FName ObjectName, uint32 ObjectFlags (masked with RF_Load),
+                      int64 SerialSize, int64 SerialOffset, bool bForcedExport, bNotForClient, bNotForServer (false),
+                      uint32 PackageFlags (0), bool bIsAsset
+soft package refs   SoftPackageReferencesCount x FName: the packages the exports' FSoftObjectPaths name, sorted
+                    ---- TotalHeaderSize ----
+export data         for each export, SerialSize bytes at SerialOffset:
+                      tagged properties, ended by the FName None, then the native tail of UObject::Serialize
+bulk data           at BulkDataStartOffset: the end-of-file FByteBulkData payloads, in the order they were saved
+uint32              0x4E4F454C again: a shorter file is reported as truncated
+```
+
+**Imports and exports.** The exports are the objects the save was given: `Base`, the package's objects with the top-level flags (`RF_Public`, `RF_Standalone`), and, recursively, their outers inside the package, their inner objects (default subobjects included) and every object of the package they reference. Transient objects (`RF_Transient`, pending kill, inside a transient outer or of a `CLASS_Transient` class) are never saved, and a reference to one is saved as null; so is a reference to an object of the package that is not exported. Every other referenced object becomes an import, with its outers (up to its package) and its class; an export's class is always an import of a `/Script/<Module>` class. Native objects of `/Script` packages (classes, structs, enums) can be referenced even though they are flagged transient.
+
+### Tagged properties
+
+Each export's data starts with its reflected properties, one tag per saved value (`UObject/PropertyTag.h`, UE 4.27's order):
+
+```text
+FName  Name              NAME_None ends the list (and nothing else follows it)
+FName  Type              the property class: "IntProperty", "StructProperty", "ArrayProperty", ...
+int32  Size              bytes of the value that follows the tag
+int32  ArrayIndex        the element of a C array property, else 0
+       StructProperty:   FName StructName
+       BoolProperty:     uint8 BoolVal (the value; Size is 0)
+       Byte/EnumProperty: FName EnumName (None for a plain byte)
+       Array/SetProperty: FName InnerType
+       MapProperty:      FName InnerType (key), FName ValueType
+uint8  HasPropertyGuid   0 (a 1 would be followed by a 16-byte GUID, which Leon skips)
+value  Size bytes
+```
+
+| Property | Value |
+| --- | --- |
+| numbers | the C++ value (`int8` … `uint64`, `float`, `double`) |
+| `bool` | in the tag; as an element of a container, one byte |
+| `FString`, `FText` | an `FString` (`FText` saves its display string) |
+| `FName` | an `FName` |
+| enum class, `TEnumAsByte` | the enumerator's name as an `FName` ("EMyEnum::Value"), so reordered enumerators keep their meaning; a name the enum lost loads as its `_MAX` value with a warning |
+| `UObject*`, `TSubclassOf`, `TWeakObjectPtr` | an `FPackageIndex` |
+| `TSoftObjectPtr`, `TSoftClassPtr`, `FSoftObjectPath` | the path: `FName` asset path name + `FString` subobject path |
+| struct | its own `Serialize` when `TStructOpsTypeTraits::WithSerializer` (`FSoftObjectPath`); the members in order, untagged, for an immutable struct (the Core math types: `FVector`, `FRotator`, `FQuat`, `FTransform`, `FGuid`, ...); otherwise nested tagged properties ending with None |
+| `TArray` | `int32` count; for struct elements a tag of the element type (`StructName`, total size), which a load checks; the elements |
+| `TSet` | `int32` 0 (UE's removed-defaults count), `int32` count, the elements |
+| `TMap` | `int32` 0, `int32` count, each key then value |
+
+**Delta.** A property is saved only when it differs from the object's archetype: the class default object, or for a default subobject the subobject of the same name in its outer's archetype (built by the same constructor, D12). A struct member is compared member by member against the archetype's struct; elements of containers are saved whole. Transient, deprecated and `CPF_SkipSerialization` properties are never saved; editor-only ones (`#if WITH_EDITORONLY_DATA`) not in a package with `PKG_FilterEditorOnly`.
+
+**Schema evolution.** A load reads tags until None. A tag whose property no longer exists (renamed, removed, or editor-only data on a build without it) is skipped by its size; a property whose type changed is converted when it can be (any integer to any integer, `float` and `double` both ways, a byte to an enum by value, a `TEnumAsByte` to an enum class by enumerator name, `FName` / `FString` / `FText` among themselves, a hard object reference to a soft one, object and class references) and skipped with a `LogClass` warning otherwise. A struct tag of another struct, or a container of other element types, is skipped with a warning.
+
+**Native tail.** After the None tag comes whatever the class's `Serialize` override writes after calling `Super::Serialize(Ar)`: raw members and `FByteBulkData`. A load checks that it reads exactly `SerialSize` bytes.
+
+### Bulk data
+
+`FByteBulkData` (`Serialization/BulkData.h`) writes a header, `uint32` flags (`BULKDATA_PayloadAtEndOfFile` 0x1, `BULKDATA_Unused` 0x20 for an empty payload, `BULKDATA_ForceInlinePayload` 0x40, `BULKDATA_Size64Bit` 0x2000, always set), `int64` element count, `int64` size on disk (equal: no compression) and `int64` offset. In a package the payload goes after all the exports and the offset is relative to `BulkDataStartOffset`; with `BULKDATA_ForceInlinePayload` (and in any archive that is not a package) the payload follows the header and the offset is −1. Payloads load eagerly with their owner.
+
+### Determinism
+
+Saving the same objects gives the same bytes on every run and platform (D13): the name table is sorted (case-insensitively, then case-sensitively) and has no duplicates, the imports and exports are sorted by path name, the package GUID is `FGuid::NewDeterministicGuid` of the long package name (an MD5 of the name, not a random GUID), and nothing records a time, a machine or an address. `System.CoreUObject.Package.Deterministic` saves a fixture twice, saves it again after loading it, and compares the MD5 of the file (with the engine version cleared) against a stored hash on Win64 and on the PS2.
+
+### Versioning
+
+`FileVersionUE` is an `ELeonPackageVersion`. A format change adds a value before `VER_LEON_AUTOMATIC_VERSION_PLUS_ONE`; code that reads data added by it checks `Ar.UEVer() >= VER_LEON_<Change>` (the linker sets the archive's version from the summary). The loader rejects packages older than `VER_LEON_OLDEST_LOADABLE_PACKAGE` or newer than `VER_LEON_LATEST` with an error. A licensee version other than 0 is rejected too.
+
+### Editor-only data (D14)
+
+Desktop builds outside Shipping have `WITH_EDITORONLY_DATA`: they save editor-only properties unless the package has `PKG_FilterEditorOnly` (the cook, P16, sets it). The PS2 and Shipping builds have no editor-only properties: every package they save is marked `PKG_FilterEditorOnly`, and when they load a package without it (an uncooked package) they log it once and skip the editor-only tags as unknown names.
+
+### In memory
+
+`UPackage::SaveToMemory` returns the same bytes `Save` writes; `FLinkerLoad::RegisterInMemoryPackage` makes `LoadPackage` and `FPackageName::DoesPackageExist` use registered bytes instead of a file. The tests use it on every platform (the PS2 platform file is read-only); the tables of a package can be read without loading it with `FLinkerLoad::CreateLinker(nullptr, ...)` (the cooker's dependency walk).
 
 ---
 
@@ -197,6 +305,7 @@ Vertex upload is not implemented yet: a valid blob draws a placeholder triangle.
 
 | Concern | Location |
 | --- | --- |
+| `.lasset` / `.lmap` packages | `Engine/Source/Runtime/CoreUObject` — `UPackage::Save` (`Private/UObject/SavePackage.cpp`), `FLinkerLoad`, `FLinkerSave`, `FPackageFileSummary`, `FObjectImport` / `FObjectExport`, `FPropertyTag`, `FByteBulkData`, `FPackageName` |
 | `.lmesh` I/O | `Engine/Source/Runtime/RenderCore` — `LeonMeshFormat`, `FMeshData`, `FVertex` |
 | `.lmat` I/O | `Engine/Source/Runtime/Renderer` — `LeonMaterialFormat`, `FMaterial` (`RenderCore/Public/Material.h`) |
 | GPU resource cache | `Engine/Source/Runtime/Renderer` — `FResourceCache` (`UStaticMesh`, `UTexture2D`, materials) |

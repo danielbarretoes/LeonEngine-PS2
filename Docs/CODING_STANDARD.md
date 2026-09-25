@@ -260,6 +260,18 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
     generated default constructor calls `Super(ObjectInitializer)`.
   - A reflected Core struct is declared in `CoreUObject/Public/UObject/NoExportTypes.h` (`USTRUCT(noexport)` in
     `#if !CPP`); the generated code checks the declaration against the C++ type at compile time.
+  - **Saving.** The `UPROPERTY`s of an object are saved in packages as tagged properties (what differs from the
+    archetype); anything else a class must save goes in a `Serialize(FArchive& Ar)` override that calls
+    `Super::Serialize(Ar)` first and then serializes the same members in the same order whether `Ar` loads or saves.
+    Serialize `FName` and `UObject*` through `Ar` (the linker turns them into table indices), never as raw bytes or
+    pointers, and large payloads through an `FByteBulkData`. Save output must be deterministic (D13): no addresses,
+    times or iteration over hashes (a `TMap` / `TSet` iterates in insertion order, which is fine). When a native
+    format changes, add an `ELeonPackageVersion` value (`Core/Public/UObject/ObjectVersion.h`) and guard the new data
+    with `if (Ar.UEVer() >= VER_LEON_<Change>)`; renaming or retyping a `UPROPERTY` needs nothing (tagged properties
+    skip what they cannot load and convert numbers and enums).
+  - Load objects with `LoadObject<T>(nullptr, TEXT("/Game/Path/Asset.Asset"))` or a `TSoftObjectPtr`
+    (`LoadSynchronous`), name packages with long package names (`/Game/...`, `/Engine/...`) and convert to files
+    only through `FPackageName`.
 
 ---
 
@@ -308,6 +320,7 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 | Materials | `M_<Name>.lmat` | `M_Default.lmat`, `M_WorldGrid.lmat` |
 | Textures | `T_<Name>_<Suffix>` (`_D` diffuse, `_N` normal) | `T_Default_D.png` |
 | Level templates / levels | PascalCase `.llev` | `Blank.llev`, `Starter.llev` |
+| Packages (P14 on) | `<Prefix>_<Name>.lasset` (UE prefixes: `SM_`, `SK_`, `T_`, `M_`, `S_`, ...), maps `<Name>.lmap`; long package name = content path without extension | `/Engine/EngineMaterials/M_Default` → `Engine/Content/EngineMaterials/M_Default.lasset` |
 | GLSL shaders (`Engine/Shaders`) | snake_case | `blinn_phong.vert`, `post_composite.frag` |
 
 File formats: [ASSET_FORMATS.md](ASSET_FORMATS.md).

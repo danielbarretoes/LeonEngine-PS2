@@ -7,13 +7,55 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Eighth to tenth steps of the Core / CoreUObject plan (P8–P10): LeonHeaderTool, the UnrealHeaderTool counterpart,
-with its LeonBuildTool step; CoreUObject, the `UObject` runtime its generated code runs on; then garbage collection,
-references, `UPROPERTY(Config)` and `UFUNCTION(Exec)` on it. No engine module is reflected yet: the gameplay classes
-become UObjects in P12.
+## [0.15.0] - 2026-09-25
+
+Eighth to eleventh steps of the Core / CoreUObject plan (P8–P11): LeonHeaderTool, the UnrealHeaderTool counterpart,
+with its LeonBuildTool step; CoreUObject, the `UObject` runtime its generated code runs on; garbage collection,
+references, `UPROPERTY(Config)` and `UFUNCTION(Exec)` on it; and packages: UObjects saved to and loaded from
+`.lasset` / `.lmap` files. No engine module is reflected yet: the gameplay classes become UObjects in P12, and the
+engine's assets and maps become packages in P14 / P15.
 
 ### Added
 
+- **Packages** (P11, CoreUObject; plan decision D13; layout in `Docs/ASSET_FORMATS.md`).
+  - `.lasset` / `.lmap` files: an `FPackageFileSummary` starting with `'LEON'` (format version `ELeonPackageVersion`
+    from Core's `UObject/ObjectVersion.h`, package flags, table offsets, GUID, saving engine version, cooked platform,
+    bulk data offset), a sorted name table, the import and export tables (`FPackageIndex`, `FObjectImport`,
+    `FObjectExport`), the soft package references, each export's data and the bulk data at the end. One file per
+    package: no `.uexp` / `.ubulk`.
+  - Saving: `UPackage::SavePackage` / `Save` / `SaveToMemory` through `FLinkerSave`. The exports are `Base`, the
+    objects with the top-level flags and, recursively, their outers, inner objects (default subobjects) and the
+    package objects they reference; other packages' objects become imports (classes are `/Script/<Module>` imports),
+    transient objects are left out and references to them saved as null. Deterministic: the same objects give the
+    same bytes on every run and platform (sorted tables, GUID derived from the package name, no timestamps); a golden
+    hash checks it on Win64 and the PS2.
+  - Loading: `LoadPackage`, `LoadObject<T>`, `StaticLoadObject`, `LoadClass<T>`, `StaticLoadClass`, `FindPackage`,
+    `ResetLoaders`, through `FLinkerLoad`. Synchronous: exports are created with `StaticConstructObject` (default
+    subobjects are the ones the outer's constructor built, D12) and serialized over their class defaults; an import
+    of another package loads it first (circular references work); a missing import is a warning and a null
+    reference; a missing or damaged package is an error. `PostLoad` runs at the outermost `EndLoad`, once every
+    object of the load is serialized (imported packages first); `RF_NeedLoad`, `RF_NeedPostLoad`, `RF_WasLoaded` and
+    `RF_LoadCompleted` are maintained. `FSoftObjectPath::TryLoad` and `TSoftObjectPtr::LoadSynchronous` load
+    packages.
+  - Tagged properties: `FPropertyTag`, `UStruct::SerializeTaggedProperties` / `SerializeBin`,
+    `UScriptStruct::SerializeItem`, and `FProperty::SerializeItem` for every property type (containers, nested
+    structs, bitfield bools in the tag, enums by name, object references as `FPackageIndex`, soft paths). Properties
+    are saved as a delta against the archetype. Schema evolution: unknown tags are skipped by size, and
+    `FProperty::ConvertFromType` converts integers, `float` / `double`, bytes to enums (by value or enumerator name),
+    names / strings / text and hard to soft references; anything else is skipped with a warning.
+  - `UObject::Serialize` (tagged properties, then the class's native data), `SerializeScriptProperties`,
+    `ConditionalPostLoad`, `IsAsset`; `TStructOpsTypeTraits::WithSerializer`; `DECLARE_SERIALIZER`; `RF_Load`,
+    `ELoadFlags`, `ESaveFlags`.
+  - `FByteBulkData`: payloads stored after the exports (or inline), loaded eagerly.
+  - `FPackageName`: long package names, `/Engine/` and `/Game/` mount points plus `RegisterMountPoint`, `/Script/`
+    packages, `.lasset` / `.lmap`, file conversions, `DoesPackageExist`. `FLinkerLoad::RegisterInMemoryPackage` lets
+    `LoadPackage` read packages from memory (the tests; TestPAL on the PS2).
+  - Editor-only data (D14): `PKG_FilterEditorOnly` packages drop `#if WITH_EDITORONLY_DATA` properties; builds
+    without editor-only data mark every package they save so, and skip the editor-only tags of an uncooked package.
+  - 14 `System.CoreUObject.Package.*` tests: `LeonAutomationTests` runs 293 tests, TestPAL 112 on Win64 and 106 on
+    the PS2, which also logs the cost of a 50-object round trip (`Budgets.md`).
+- **Core archive hooks** (P11). `FArchive` gains virtual `operator<<(UObject*&)` and `GetLinker()` (no-ops in plain
+  archives, as in UE) and `UEVer()` / `LicenseeUEVer()`; `FEngineVersion` in `Misc/EngineVersion.h`.
 - **Garbage collection** (P10, CoreUObject `UObject/GarbageCollection.h`, `GCObject.h`; plan decision D11).
   - `CollectGarbage(KeepFlags, bPerformFullPurge)`, `TryCollectGarbage`, `IsGarbageCollecting`,
     `IncrementalPurgeGarbage`: UE4's stop-the-world mark and sweep. Roots are the root set (`AddToRoot`), native
@@ -31,8 +73,8 @@ become UObjects in P12.
 - **References** (P10). `TWeakObjectPtr` is complete (`Get(bEvenIfPendingKill)`, `IsStale`, `IsExplicitlyNull`,
   comparisons, hashing). `FSoftObjectPath` has UE 4.27's layout and API (`GetLongPackageName`, `GetAssetName`,
   `ResolveObject`, `TryLoad`) and, with `FSoftClassPath`, is a reflected noexport struct whose text form is the path.
-  `TPersistentObjectPtr`, `FSoftObjectPtr::LoadSynchronous`, `TSoftObjectPtr` / `TSoftClassPtr`. Until P11 loads
-  packages, soft references resolve objects already in memory.
+  `TPersistentObjectPtr`, `FSoftObjectPtr::LoadSynchronous`, `TSoftObjectPtr` / `TSoftClassPtr` (they load packages
+  since P11).
 - **Config members** (P10). `UObject::LoadConfig` / `SaveConfig` / `ReloadConfig` for `UCLASS(Config=…)` with
   `UPROPERTY(Config)` and `UPROPERTY(GlobalConfig)`, in the section `/Script/<Module>.<Class>`. Arrays follow the
   layers' `+ - . !` edits (or `Key[N]=`), C arrays read `Key[N]=`, and structs, enums, names, objects, classes and soft
@@ -117,6 +159,10 @@ become UObjects in P12.
 
 ### Changed
 
+- **Default subobject archetypes** (P11). `UObject::GetArchetype` of a default subobject is the subobject of the same
+  name in its outer's archetype, as in UE; packages save a subobject's properties against it.
+- **PS2 ELF sizes** (P11). ThirdPerson and BlankProgram still do not link CoreUObject, but the two new `FArchive`
+  virtuals add their slots to every archive vtable they link: ThirdPerson's text grows by 56 bytes.
 - **Object flags at registration** (P10). `RF_MarkAsRootSet` and `RF_MarkAsNative` become the `RootSet` and `Native`
   internal flags when an object enters `GUObjectArray`, as in UE.
 - **Reference properties** (P10). `FProperty::ContainsObjectReference` takes an `EPropertyObjectReferenceType`

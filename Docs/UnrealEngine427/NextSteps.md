@@ -121,18 +121,47 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 - 21 new `System.CoreUObject.*` tests (48 in total), in TestPAL on the PS2 too; the PS2 GC cost is in
   [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 
+### Done — Packages (P11)
+
+([LeonMapping — P11](LeonMapping.md#p11--packages), [ASSET_FORMATS — Packages](../ASSET_FORMATS.md#packages--lasset--lmap),
+[README](../../Engine/Source/Runtime/CoreUObject/README.md)):
+
+- `.lasset` / `.lmap` packages (D13): one file with a `'LEON'` summary (`FPackageFileSummary`, `ELeonPackageVersion`),
+  sorted name table, import and export tables (`FPackageIndex`, `FObjectImport`, `FObjectExport`), soft package
+  references, the export data and the bulk data at the end. Saving is deterministic (sorted tables, GUID derived from
+  the package name, no timestamps); a golden hash checks it on Win64 and the PS2.
+- `UPackage::SavePackage` / `Save` / `SaveToMemory` (`FLinkerSave`), `LoadPackage` / `LoadObject` / `LoadClass` /
+  `StaticLoadObject` / `FindPackage` (`FLinkerLoad`, synchronous: imports load their packages, `PostLoad` once
+  everything is serialized); `FSoftObjectPath::TryLoad` and `TSoftObjectPtr::LoadSynchronous` load packages.
+- Tagged properties (`FPropertyTag`, `UStruct::SerializeTaggedProperties`, `FProperty::SerializeItem` /
+  `ConvertFromType`): deltas against the archetype (D12 subobjects included), nested structs, containers, enums by
+  name, schema evolution (unknown tags skipped, numbers and enums converted). `UObject::Serialize` with a native tail;
+  `FByteBulkData`; `FPackageName` with `/Engine/`, `/Game/`, `/Script/` and registered mount points; editor-only
+  filtering (D14).
+- 14 new `System.CoreUObject.Package.*` tests (62 CoreUObject tests), 13 of them in TestPAL on the PS2 (106 tests); the
+  PS2 round-trip cost is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md). Released as 0.15.0.
+
 ### Next
 
-- **P11:** `.lasset` packages: `UObject::Serialize`, tagged properties, linkers, `LoadObject`; `FName` in archives
-  through the package name table.
 - **P12:** turn the naming-only `A`/`U` classes into real `UCLASS` types (`NewObject`, `CreateDefaultSubobject`,
   `Cast<>` instead of `dynamic_cast`); `UObject*` members become `UPROPERTY`s (GC safety), `AActor::Destroy` marks
-  the actor pending kill, `UWorld` / `ULevel` hold their actors in `UPROPERTY` arrays.
+  the actor pending kill, `UWorld` / `ULevel` hold their actors in `UPROPERTY` arrays. Actors and components then
+  save and load through packages as they are: their `UPROPERTY`s are tagged properties and their default subobjects
+  are rebuilt by their constructors (D12); anything else (render / physics state) is rebuilt in `PostLoad` or
+  `PostInitProperties`, not saved.
 - **P13:** call `CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS)` where UE does (`UEngine::LoadMap` after releasing the
   old world, the game mode's round restart) and tick an `FGarbageCollectionTimer` from `UEngine::Tick`
   (`ConditionalCollectGarbage`); settings classes (`UGameMapsSettings`, `UInputSettings`) use `UPROPERTY(Config)`
   with `FSoftObjectPath` / `FSoftClassPath`; `UGameViewportClient` routes console commands to
   `ProcessConsoleExec` / `FSelfRegisteringExec::StaticExec`.
+- **P14:** asset classes (`UStaticMesh`, `UTexture2D`, `USoundWave`, ...) keep their payloads in `FByteBulkData`
+  (saved at the end of the package) and upload them in `PostLoad`; `UAssetImportData`; the editor module saves with
+  `UPackage::SavePackage` under `/Game/` and `/Engine/`.
+- **P15:** `.lmap`: a package holding `UWorld`, `ULevel PersistentLevel`, `AWorldSettings` and the actors, saved to a
+  `.lmap` file (which sets `PKG_ContainsMap`); `UEngine::LoadMap` loads it with `LoadPackage`.
+- **P16:** the cook follows `FLinker::ImportMap` and `SoftPackageReferenceList` (`FLinkerLoad::CreateLinker(nullptr,
+  ...)` reads the tables without loading), saves with `PKG_Cooked | PKG_FilterEditorOnly` and a target platform name,
+  and packs the files into `.lpak`.
 - Replication: the ENet networking was removed in 0.12.0 (local tag `archive/net-enet-0.11`); it returns as
   UObject replication (`UNetDriver`, replicated properties) — `Runtime/Engine/Classes/Engine/NetDriver.h`.
 
