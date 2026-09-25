@@ -24,7 +24,7 @@ public:
 	[[nodiscard]] FMaterial DefaultMaterial();
 
 	[[nodiscard]] TSharedPtr<UStaticMesh> GetCubeMesh();
-	[[nodiscard]] TSharedPtr<UStaticMesh> GetPlaneMesh(float Size = 8.0f, float UvScale = 4.0f);
+	[[nodiscard]] TSharedPtr<UStaticMesh> GetPlaneMesh(float Size = 800.0f, float UvScale = 4.0f);
 	[[nodiscard]] TSharedPtr<UStaticMesh> GetSphereMesh(int32 Segments = 24, int32 Rings = 16);
 
 	/** When false, meshes stay CPU-only and textures are skipped (headless). */

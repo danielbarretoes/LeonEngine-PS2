@@ -3,21 +3,28 @@
 namespace
 {
 
+	/** Edge-side tolerance of PointInTriangle (cm^2: unit normal, edge vector and offset). */
+	constexpr float PointInTriangleTolerance = 1.0e-1f;
+	/** Degenerate triangle: |Edge1 ^ Edge2| below this (cm^2). */
+	constexpr float MinTriangleNormalLength = 1.0e-4f;
+	/** Segment parallel to the plane: |Normal | Dir| below this (cm). */
+	constexpr float MinSegmentAlongNormal = 1.0e-6f;
+
 	[[nodiscard]] bool PointInTriangle(
 		const FVector& P, const FVector& A, const FVector& B, const FVector& C, const FVector& Normal)
 	{
 		const FVector Edge0 = B - A;
 		const FVector Edge1 = C - B;
 		const FVector Edge2 = A - C;
-		if ((Normal | (Edge0 ^ (P - A))) < -1.0e-5f)
+		if ((Normal | (Edge0 ^ (P - A))) < -PointInTriangleTolerance)
 		{
 			return false;
 		}
-		if ((Normal | (Edge1 ^ (P - B))) < -1.0e-5f)
+		if ((Normal | (Edge1 ^ (P - B))) < -PointInTriangleTolerance)
 		{
 			return false;
 		}
-		if ((Normal | (Edge2 ^ (P - C))) < -1.0e-5f)
+		if ((Normal | (Edge2 ^ (P - C))) < -PointInTriangleTolerance)
 		{
 			return false;
 		}
@@ -33,7 +40,7 @@ bool SegmentTriangle(const FVector& Start, const FVector& End, const FVector& V0
 	const FVector Edge2 = V2 - V0;
 	FVector Normal = Edge1 ^ Edge2;
 	const float NLen = Normal.Size();
-	if (NLen < 1.0e-8f)
+	if (NLen < MinTriangleNormalLength)
 	{
 		return false;
 	}
@@ -41,7 +48,7 @@ bool SegmentTriangle(const FVector& Start, const FVector& End, const FVector& V0
 
 	const FVector Dir = End - Start;
 	const float Denom = Normal | Dir;
-	if (FMath::Abs(Denom) < 1.0e-8f)
+	if (FMath::Abs(Denom) < MinSegmentAlongNormal)
 	{
 		return false;
 	}
@@ -68,7 +75,7 @@ bool SegmentTriangleInflated(const FVector& Start, const FVector& End, const FVe
 	const FVector Edge2 = V2 - V0;
 	FVector Normal = Edge1 ^ Edge2;
 	const float NLen = Normal.Size();
-	if (NLen < 1.0e-8f)
+	if (NLen < MinTriangleNormalLength)
 	{
 		return false;
 	}
@@ -82,7 +89,7 @@ bool SegmentTriangleInflated(const FVector& Start, const FVector& End, const FVe
 
 	const FVector Dir = End - Start;
 	const float Denom = PlaneN | Dir;
-	if (FMath::Abs(Denom) < 1.0e-8f)
+	if (FMath::Abs(Denom) < MinSegmentAlongNormal)
 	{
 		return false;
 	}
@@ -125,7 +132,7 @@ bool SegmentTriangleMesh(const FVector& Start, const FVector& End, const FTriang
 		}
 		float HitT = 1.0f;
 		FVector HitN = FVector::ZeroVector;
-		const bool bOk = (Inflate > 1.0e-6f)
+		const bool bOk = (Inflate > 1.0e-4f)
 			? SegmentTriangleInflated(
 				  Start, End, Mesh.Positions[I0], Mesh.Positions[I1], Mesh.Positions[I2], Inflate, HitT, HitN)
 			: SegmentTriangle(Start, End, Mesh.Positions[I0], Mesh.Positions[I1], Mesh.Positions[I2], HitT, HitN);

@@ -7,11 +7,15 @@
  * engine world and back. Only code that still holds legacy values may use it: the level and mesh readers and savers,
  * the legacy Euler fields of scene components and actors, and tests. It goes away with the legacy formats.
  *
- * For now the engine world is still the legacy one: the basis is the identity and one world unit is one legacy
- * metre. Later P7 commits change the basis to UE's (UE = 100 * (X, Z, Y)).
+ * For now the basis is still the legacy one (the identity), but one world unit is one centimetre as in UE: legacy
+ * positions and lengths are scaled by UnitsPerMetre. A later P7 commit changes the basis to UE's (UE = 100 * (X, Z,
+ * Y)).
  */
 struct RENDERCORE_API FLegacyCoordinateConversion
 {
+	/** World units in one legacy metre (UE: AWorldSettings::WorldToMeters). */
+	static constexpr float UnitsPerMetre = 100.0f;
+
 	/** Legacy position (metres) to a world location. */
 	[[nodiscard]] static FVector ConvertPosition(const FVector& Legacy);
 
@@ -21,13 +25,17 @@ struct RENDERCORE_API FLegacyCoordinateConversion
 	/** Legacy per-axis scale to a world Scale3D. */
 	[[nodiscard]] static FVector ConvertScale(const FVector& Legacy);
 
-	/** Legacy length (metres) to world units. */
+	/** Legacy length (metres) to world units. Speeds (m/s) and box half extents convert the same way. */
 	[[nodiscard]] static float ConvertLength(float Metres);
+
+	/** Legacy box half extents (metres) to world units. */
+	[[nodiscard]] static FVector ConvertExtent(const FVector& Legacy);
 
 	[[nodiscard]] static FVector ToLegacyPosition(const FVector& World);
 	[[nodiscard]] static FVector ToLegacyDirection(const FVector& World);
 	[[nodiscard]] static FVector ToLegacyScale(const FVector& World);
 	[[nodiscard]] static float ToLegacyLength(float WorldLength);
+	[[nodiscard]] static FVector ToLegacyExtent(const FVector& World);
 
 	/**
 	 * Legacy XYZ Euler degrees to a world rotation. The legacy model matrix applied Rz first, then Ry, then Rx (glm

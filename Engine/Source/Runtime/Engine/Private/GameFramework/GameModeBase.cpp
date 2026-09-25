@@ -35,7 +35,12 @@ float AGameModeBase::EstimateFloorY(const ULevel& Level)
 
 float AGameModeBase::EstimateWalkBounds(const ULevel& Level)
 {
-	float MaxExtent = 40.0f;
+	// All in cm: the half size of a basic cube is half its scale times BasicShapeSize.
+	constexpr float MinExtent = 4000.0f;
+	constexpr float EdgeMargin = 100.0f;
+	constexpr float MinWalkBounds = 2000.0f;
+	constexpr float MaxWalkBounds = 12000.0f;
+	float MaxExtent = MinExtent;
 	for (const UStaticMeshComponent& Mesh : Level.GetStaticMeshes())
 	{
 		if (!Mesh.HasPhysicsBody() || Mesh.bSimulatePhysics)
@@ -43,18 +48,18 @@ float AGameModeBase::EstimateWalkBounds(const ULevel& Level)
 			continue;
 		}
 		const FVector Scale = Mesh.Transform.GetScale3D();
-		const float Hx = FMath::Abs(Scale.X) * 0.5f;
-		const float Hz = FMath::Abs(Scale.Z) * 0.5f;
+		const float Hx = FMath::Abs(Scale.X) * 0.5f * BasicShapeSize;
+		const float Hz = FMath::Abs(Scale.Z) * 0.5f * BasicShapeSize;
 		MaxExtent = FMath::Max(MaxExtent, FMath::Max(Hx, Hz));
 	}
-	return FMath::Clamp(MaxExtent - 1.0f, 20.0f, 120.0f);
+	return FMath::Clamp(MaxExtent - EdgeMargin, MinWalkBounds, MaxWalkBounds);
 }
 
 // Flow: Match enter — bodies + nav bake
 // 1. Physics backend
 // 2. Estimate floor Y / walk bounds from level
 // 3. RegisterBodiesFromLevel + SyncFromLevel
-// 4. UNavigationSystem bake (cell 0.5, agent 0.45)
+// 4. UNavigationSystem bake (cell 50 cm, agent 45 cm)
 void AGameModeBase::PrepareMatchWorld(
 	UGameEngine& Engine, float& OutFloorY, float& OutWalkBounds, EPhysicsBackend Backend)
 {
@@ -65,8 +70,8 @@ void AGameModeBase::PrepareMatchWorld(
 	GetWorld().GetPhysicsScene().SyncFromLevel(Engine.GetLevel());
 
 	UNavigationSystem& Nav = GetWorld().GetNavigationSystem();
-	Nav.SetCellSize(0.5f);
-	Nav.SetAgentRadius(0.45f);
+	Nav.SetCellSize(50.0f);
+	Nav.SetAgentRadius(45.0f);
 	Nav.BuildFromLevel(Engine.GetLevel(), GetWorld().GetPhysicsScene(), OutFloorY, OutWalkBounds);
 	UE_LOG(LogPath, Log, "GameMode: NavMesh bake blockers=%d walkable=%d/%d cell=%g", Nav.GetBlockerCount(),
 		Nav.GetWalkableCellCount(), Nav.GetNavMesh().Width * Nav.GetNavMesh().Depth,
@@ -89,5 +94,7 @@ void AGameModeBase::SnapCharacterToFloor(ACharacter& Character, FVector& InOutFe
 	Probe.Y = FMath::Max(InOutFeet.Y, FloorY);
 	const float Support = Phys.QuerySupportY(
 		Character.GetCapsule(), Probe, Move.FloorY, Move.MaxStepHeight, Move.Skin, Character.GetLevelMeshIndex());
-	InOutFeet.Y = FMath::Max(Support, FloorY) + 0.02f;
+	/** cm above the support */
+	constexpr float SnapClearance = 2.0f;
+	InOutFeet.Y = FMath::Max(Support, FloorY) + SnapClearance;
 }

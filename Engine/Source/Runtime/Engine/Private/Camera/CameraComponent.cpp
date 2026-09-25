@@ -5,6 +5,13 @@
 namespace
 {
 
+	/** Orbit distance range (cm). */
+	constexpr float MinOrbitDistance = 50.0f;
+	constexpr float MaxOrbitDistance = 8000.0f;
+	/** Orthographic view height range (cm). */
+	constexpr float MinOrthoHeight = 50.0f;
+	constexpr float MaxOrthoHeight = 50000.0f;
+
 	[[nodiscard]] FVector FreeLookForward(float InYawDegrees, float InPitchDegrees)
 	{
 		const float YawRad = FMath::DegreesToRadians(InYawDegrees);
@@ -47,7 +54,7 @@ void UCameraComponent::SetPerspective(float InFovDegrees, float InAspect, float 
 
 void UCameraComponent::SetOrthographic(float Height, float InAspect, float InNearPlane, float InFarPlane)
 {
-	OrthoHeight = FMath::Clamp(Height, 0.5f, 500.0f);
+	OrthoHeight = FMath::Clamp(Height, MinOrthoHeight, MaxOrthoHeight);
 	Aspect = InAspect > 1.0e-4f ? InAspect : (16.0f / 9.0f);
 	NearPlane = InNearPlane;
 	FarPlane = InFarPlane;
@@ -66,7 +73,7 @@ void UCameraComponent::SetOrthoHeight(float Height)
 	}
 	else
 	{
-		OrthoHeight = FMath::Clamp(Height, 0.5f, 500.0f);
+		OrthoHeight = FMath::Clamp(Height, MinOrthoHeight, MaxOrthoHeight);
 	}
 }
 
@@ -119,7 +126,7 @@ void UCameraComponent::Zoom(float DeltaDistance)
 
 void UCameraComponent::SetDistance(float InDistance)
 {
-	Distance = FMath::Clamp(InDistance, 0.5f, 80.0f);
+	Distance = FMath::Clamp(InDistance, MinOrbitDistance, MaxOrbitDistance);
 	InvalidateCache();
 }
 
@@ -185,7 +192,7 @@ FVector UCameraComponent::ForwardVector() const
 	UpdateCachedPosition();
 	const FVector ToTarget = Target - CachedPosition;
 	const float Len = ToTarget.Size();
-	if (Len < 1.0e-5f)
+	if (Len < 1.0e-3f)
 	{
 		return FVector(0.0f, 0.0f, -1.0f);
 	}

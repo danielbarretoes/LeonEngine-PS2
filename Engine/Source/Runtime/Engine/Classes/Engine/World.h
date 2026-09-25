@@ -20,10 +20,13 @@ struct ENGINE_API FWorldGameplayFrameParams
 	/** When true, FPhysScene::Step uses these values instead of the first Character's movement. */
 	bool bOverridePhysicsStep = false;
 	float PhysicsDamping = 6.0f;
-	float PhysicsWalkBounds = 18.0f;
-	float PhysicsGravity = 24.0f;
+	/** cm */
+	float PhysicsWalkBounds = 1800.0f;
+	/** cm/s^2 */
+	float PhysicsGravity = 2400.0f;
 	float PhysicsFloorY = 0.0f;
-	float PhysicsSkin = 0.02f;
+	/** cm */
+	float PhysicsSkin = 2.0f;
 };
 
 /**

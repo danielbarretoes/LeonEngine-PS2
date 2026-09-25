@@ -14,9 +14,12 @@ class FDebugDraw;
 struct ENGINE_API FCapsuleContactParams
 {
 	float PushStrength = 1.0f;
-	float StepUp = 0.35f;
-	float Skin = 0.02f;
-	float WalkBounds = 18.0f;
+	/** cm */
+	float StepUp = 35.0f;
+	/** cm */
+	float Skin = 2.0f;
+	/** cm */
+	float WalkBounds = 1800.0f;
 };
 
 /**
@@ -28,24 +31,27 @@ struct ENGINE_API FSlopePlane
 	FVector Point = FVector::ZeroVector;
 	FVector Normal = FVector(0.0f, 1.0f, 0.0f);
 	FVector BoundsCenter = FVector::ZeroVector;
-	FVector BoundsHalfExtents = FVector(1.0f, 1.0f, 1.0f);
+	/** cm */
+	FVector BoundsHalfExtents = FVector(100.0f, 100.0f, 100.0f);
 };
 
 struct ENGINE_API FPhysSceneStepParams
 {
 	float DeltaTime = 0.0f;
 	float Damping = 6.0f;
-	float WalkBounds = 18.0f;
-	/** World gravity for Dynamic bodies with bEnableGravity (UE Enable Gravity). */
-	float Gravity = 24.0f;
+	/** cm */
+	float WalkBounds = 1800.0f;
+	/** World gravity for Dynamic bodies with bEnableGravity (UE Enable Gravity), cm/s^2. */
+	float Gravity = 2400.0f;
 	float FloorY = 0.0f;
-	float Skin = 0.02f;
+	/** cm */
+	float Skin = 2.0f;
 	/** Skip bodies whose LevelMeshIndex matches (e.g. the character visual if registered). */
 	SIZE_T SkipLevelMeshIndex = NoLevelMeshIndex;
 };
 
 /**
- * Lightweight XZ + arcade-Y physics scene (UE-style FPhysScene), in the legacy Y-up metre world until P7.
+ * Lightweight XZ + arcade-Y physics scene (UE-style FPhysScene), in centimetres, still Y up until P7 moves to Z up.
  * Arcade: AABB (+ TriangleMesh statics) traces / CMC queries / optional arcade Step.
  * Jolt (EPhysicsBackend::Jolt, the JoltPhysics plugin): rigid-body Step (incremental prepare; MeshShape statics on
  * rebuild) + Line / Sphere / Capsule narrow-phase traces; the floor plane, slope planes and the CMC side resolve

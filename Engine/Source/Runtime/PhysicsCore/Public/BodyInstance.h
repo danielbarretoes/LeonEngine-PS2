@@ -35,7 +35,8 @@ struct PHYSICSCORE_API FBodyInstance
 	float Mass = 1.0f;
 	bool bEnableGravity = true;
 	FVector Position = FVector::ZeroVector;
-	FVector HalfExtents = FVector(0.5f);
+	/** cm */
+	FVector HalfExtents = FVector(50.0f);
 	/** Horizontal velocity in the legacy Y-up world (X, Z), until P7. */
 	FVector2D VelXz = FVector2D::ZeroVector;
 	float VelocityY = 0.0f;

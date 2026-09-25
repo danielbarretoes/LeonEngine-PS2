@@ -7,7 +7,8 @@ struct ENGINE_API FNavMesh
 {
 	float OriginX = 0.0f;
 	float OriginZ = 0.0f;
-	float CellSize = 0.5f;
+	/** cm */
+	float CellSize = 50.0f;
 	float FloorY = 0.0f;
 	int Width = 0;
 	int Depth = 0;

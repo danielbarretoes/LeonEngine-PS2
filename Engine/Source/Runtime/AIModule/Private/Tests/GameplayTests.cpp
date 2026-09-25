@@ -53,8 +53,8 @@ bool FGameplayWorldSpawnsTicksAndDestroysActorsTest::RunTest(const FString& Para
 	TestEqual("One actor", World.ActorCount(), static_cast<SIZE_T>(1));
 	TestTrue("Actor world", Actor->GetWorld() == &World);
 
-	Actor->SetActorLocation(FVector(1.0f, 2.0f, 3.0f));
-	TestEqual("Location Y", Actor->GetActorLocation().Y, 2.0f, 1.0e-5f);
+	Actor->SetActorLocation(FVector(100.0f, 200.0f, 300.0f));
+	TestEqual("Location Y", Actor->GetActorLocation().Y, 200.0f, 1.0e-3f);
 
 	World.DestroyActor(Actor);
 	TestTrue("Pending kill", Actor->IsPendingKillPending());
@@ -176,14 +176,14 @@ bool FGameplaySpringArmClampsPitchAndArmLengthTest::RunTest(const FString& Param
 	Arm.AddPitchInput(-400.0f);
 	TestTrue("Pitch clamped to min", Arm.BoomPitchDegrees >= Arm.PitchMin);
 
-	Arm.AddArmLengthInput(100.0f);
-	TestEqual("Arm length clamped to max", Arm.TargetArmLength, Arm.ArmLengthMax, 1.0e-5f);
+	Arm.AddArmLengthInput(10000.0f);
+	TestEqual("Arm length clamped to max", Arm.TargetArmLength, Arm.ArmLengthMax, 1.0e-3f);
 
 	Arm.SnapLagState(FVector::ZeroVector);
 	UCameraComponent Camera;
-	Arm.ApplyToCamera(Camera, FVector(1.0f, 0.0f, 0.0f), 0.016f);
+	Arm.ApplyToCamera(Camera, FVector(100.0f, 0.0f, 0.0f), 0.016f);
 	TestTrue("Orbit camera", Camera.GetMode() == ECameraMode::Orbit);
-	TestEqual("Camera target height", Camera.GetTarget().Y, Arm.SocketOffsetZ, 0.5f);
+	TestEqual("Camera target height", Camera.GetTarget().Y, Arm.SocketOffsetZ, 50.0f);
 	return true;
 }
 
@@ -196,27 +196,27 @@ bool FGameplaySpringArmCollisionProbeShortensArmTest::RunTest(const FString& Par
 	// A static box between the pawn and the camera pulls the arm in, but never below ArmLengthMin.
 	FPhysScene Scene;
 	const int32 Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
-	Scene.GetBodies()[Id].Position = FVector(2.0f, 1.0f, 0.0f);
-	Scene.GetBodies()[Id].HalfExtents = FVector(0.25f, 1.0f, 2.0f);
+	Scene.GetBodies()[Id].Position = FVector(200.0f, 100.0f, 0.0f);
+	Scene.GetBodies()[Id].HalfExtents = FVector(25.0f, 100.0f, 200.0f);
 
 	USpringArmComponent Arm;
 	Arm.bDoCollisionTest = true;
 	Arm.bEnableCameraLag = false;
 	Arm.bEnableCameraRotationLag = false;
 	Arm.ArmLengthLagSpeed = 1000.0f;
-	Arm.TargetArmLength = 6.0f;
-	Arm.ArmLengthMin = 0.5f;
+	Arm.TargetArmLength = 600.0f;
+	Arm.ArmLengthMin = 50.0f;
 	Arm.BoomYawDegrees = 0.0f;
 	Arm.BoomPitchDegrees = 0.0f;
-	Arm.SocketOffsetZ = 1.0f;
+	Arm.SocketOffsetZ = 100.0f;
 	Arm.SocketOffsetX = 0.0f;
-	Arm.ProbeSize = 0.15f;
-	Arm.CollisionProbeOffset = 0.05f;
+	Arm.ProbeSize = 15.0f;
+	Arm.CollisionProbeOffset = 5.0f;
 	Arm.SnapLagState(FVector::ZeroVector);
 
 	UCameraComponent Camera;
 	Arm.ApplyToCamera(Camera, FVector::ZeroVector, 0.016f, &Scene);
-	TestTrue("Arm shortened", Camera.GetDistance() < 3.0f);
+	TestTrue("Arm shortened", Camera.GetDistance() < 300.0f);
 	TestTrue("Arm above minimum", Camera.GetDistance() >= Arm.ArmLengthMin);
 	return true;
 }
@@ -234,14 +234,14 @@ bool FGameplayAIControllerSteersTowardTargetAndArrivesTest::RunTest(const FStrin
 
 	AAIController Ai;
 	Ai.Possess(Character);
-	Ai.SetArriveRadius(0.5f);
-	Ai.MoveToLocation(FVector(10.0f, 0.0f, 0.0f));
+	Ai.SetArriveRadius(50.0f);
+	Ai.MoveToLocation(FVector(1000.0f, 0.0f, 0.0f));
 
 	const FVector WishFar = Ai.TickAI(0.016f);
 	TestEqual("Unit wish when far", WishFar.Size(), 1.0f, 1.0e-3f);
 	TestTrue("Wish points at target", WishFar.X > 0.5f);
 
-	Character->Reset(FVector(10.0f, 0.0f, 0.0f));
+	Character->Reset(FVector(1000.0f, 0.0f, 0.0f));
 	const FVector WishNear = Ai.TickAI(0.016f);
 	TestEqual("No wish on arrival", WishNear.Size(), 0.0f, 1.0e-5f);
 	return true;
@@ -258,18 +258,18 @@ bool FGameplayAIControllerMoveToActorTracksMovingTargetTest::RunTest(const FStri
 	ACharacter* Hunter = World.SpawnActor<ACharacter>();
 	ACharacter* Prey = World.SpawnActor<ACharacter>();
 	Hunter->Reset(FVector(0.0f, 0.0f, 0.0f));
-	Prey->Reset(FVector(8.0f, 0.0f, 0.0f));
+	Prey->Reset(FVector(800.0f, 0.0f, 0.0f));
 
 	AAIController Ai;
 	Ai.Possess(Hunter);
-	Ai.SetArriveRadius(0.4f);
+	Ai.SetArriveRadius(40.0f);
 	Ai.MoveToActor(Prey);
 
 	const FVector Wish = Ai.TickAI(0.016f);
 	TestTrue("Wish points at prey", Wish.X > 0.5f);
 	TestTrue("Move actor is prey", Ai.GetMoveActor() == Prey);
 
-	Prey->Reset(FVector(0.2f, 0.0f, 0.0f));
+	Prey->Reset(FVector(20.0f, 0.0f, 0.0f));
 	const FVector WishArrived = Ai.TickAI(0.016f);
 	TestEqual("No wish on arrival", WishArrived.Size(), 0.0f, 1.0e-5f);
 	return true;
@@ -285,14 +285,14 @@ bool FGameplayAIControllerPathFollowDoesNotShortcutTest::RunTest(const FString& 
 	FPhysScene Physics;
 	FBodyInstance Wall{};
 	Wall.Type = EBodyType::Static;
-	Wall.Position = FVector(0.0f, 1.0f, 0.0f);
-	Wall.HalfExtents = FVector(0.6f, 1.5f, 4.0f);
+	Wall.Position = FVector(0.0f, 100.0f, 0.0f);
+	Wall.HalfExtents = FVector(60.0f, 150.0f, 400.0f);
 	Physics.GetBodies().Add(Wall);
 
 	UNavigationSystem Nav;
-	Nav.SetCellSize(0.5f);
-	Nav.SetAgentRadius(0.45f);
-	Nav.BuildFromPhysScene(Physics, 0.0f, 12.0f);
+	Nav.SetCellSize(50.0f);
+	Nav.SetAgentRadius(45.0f);
+	Nav.BuildFromPhysScene(Physics, 0.0f, 1200.0f);
 	if (!TestTrue("Nav mesh built", Nav.HasNavMesh()))
 	{
 		return false;
@@ -300,14 +300,14 @@ bool FGameplayAIControllerPathFollowDoesNotShortcutTest::RunTest(const FString& 
 
 	UWorld World;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
-	Character->Reset(FVector(-5.0f, 0.0f, 0.0f));
+	Character->Reset(FVector(-500.0f, 0.0f, 0.0f));
 
 	AAIController Ai;
 	Ai.Possess(Character);
 	Ai.SetNavigationSystem(&Nav);
 	// CoopTp-like large goal arrive: must not skip detour waypoints through the wall.
-	Ai.SetArriveRadius(1.25f);
-	Ai.MoveToLocation(FVector(5.0f, 0.0f, 0.0f));
+	Ai.SetArriveRadius(125.0f);
+	Ai.MoveToLocation(FVector(500.0f, 0.0f, 0.0f));
 	if (!TestTrue("Following a path", Ai.IsFollowingPath()))
 	{
 		return false;
@@ -334,19 +334,19 @@ bool FGameplayNavFindPathRoutesAroundStaticBlockerTest::RunTest(const FString& P
 	FBodyInstance Floor{};
 	Floor.Type = EBodyType::Static;
 	Floor.Position = FVector(0.0f, 0.0f, 0.0f);
-	Floor.HalfExtents = FVector(20.0f, 0.5f, 20.0f);
+	Floor.HalfExtents = FVector(2000.0f, 50.0f, 2000.0f);
 	Physics.GetBodies().Add(Floor);
 
 	FBodyInstance Wall{};
 	Wall.Type = EBodyType::Static;
-	Wall.Position = FVector(0.0f, 1.0f, 0.0f);
-	Wall.HalfExtents = FVector(0.6f, 1.5f, 5.0f);
+	Wall.Position = FVector(0.0f, 100.0f, 0.0f);
+	Wall.HalfExtents = FVector(60.0f, 150.0f, 500.0f);
 	Physics.GetBodies().Add(Wall);
 
 	UNavigationSystem Nav;
-	Nav.SetCellSize(0.5f);
-	Nav.SetAgentRadius(0.35f);
-	Nav.BuildFromPhysScene(Physics, 0.0f, 12.0f);
+	Nav.SetCellSize(50.0f);
+	Nav.SetAgentRadius(35.0f);
+	Nav.BuildFromPhysScene(Physics, 0.0f, 1200.0f);
 	if (!TestTrue("Nav mesh built", Nav.HasNavMesh()))
 	{
 		return false;
@@ -355,7 +355,7 @@ bool FGameplayNavFindPathRoutesAroundStaticBlockerTest::RunTest(const FString& P
 	TestEqual("One blocker", Nav.GetBlockerCount(), 1);
 
 	TArray<FVector> Path;
-	if (!TestTrue("Path found", Nav.FindPath(FVector(-6.0f, 0.0f, 0.0f), FVector(6.0f, 0.0f, 0.0f), Path)))
+	if (!TestTrue("Path found", Nav.FindPath(FVector(-600.0f, 0.0f, 0.0f), FVector(600.0f, 0.0f, 0.0f), Path)))
 	{
 		return false;
 	}
@@ -364,7 +364,7 @@ bool FGameplayNavFindPathRoutesAroundStaticBlockerTest::RunTest(const FString& P
 	bool bDetoured = false;
 	for (const FVector& Point : Path)
 	{
-		if (FMath::Abs(Point.Z) > 1.25f)
+		if (FMath::Abs(Point.Z) > 125.0f)
 		{
 			bDetoured = true;
 			break;
@@ -373,11 +373,11 @@ bool FGameplayNavFindPathRoutesAroundStaticBlockerTest::RunTest(const FString& P
 	TestTrue("Path leaves the X axis", bDetoured);
 
 	FVector Projected = FVector::ZeroVector;
-	if (!TestTrue("Point projected", Nav.ProjectPointToNavigation(FVector(-6.0f, 2.0f, 0.0f), Projected)))
+	if (!TestTrue("Point projected", Nav.ProjectPointToNavigation(FVector(-600.0f, 200.0f, 0.0f), Projected)))
 	{
 		return false;
 	}
-	TestEqual("Projected to the floor", Projected.Y, 0.0f, 1.0e-5f);
+	TestEqual("Projected to the floor", Projected.Y, 0.0f, 1.0e-3f);
 	return true;
 }
 
@@ -402,8 +402,8 @@ bool FGameplayNavBlocksNavBlockerKeepsNavWalkableTest::RunTest(const FString& Pa
 	FBodyInstance PlateBody{};
 	PlateBody.Type = EBodyType::Static;
 	PlateBody.LevelMeshIndex = 0;
-	PlateBody.Position = FVector(0.0f, 0.12f, 0.0f);
-	PlateBody.HalfExtents = FVector(0.9f, 0.1f, 0.9f);
+	PlateBody.Position = FVector(0.0f, 12.0f, 0.0f);
+	PlateBody.HalfExtents = FVector(90.0f, 10.0f, 90.0f);
 	Physics.GetBodies().Add(PlateBody);
 	Physics.GetTriangleMeshes().AddDefaulted();
 
@@ -416,22 +416,22 @@ bool FGameplayNavBlocksNavBlockerKeepsNavWalkableTest::RunTest(const FString& Pa
 	FBodyInstance RampBody{};
 	RampBody.Type = EBodyType::Static;
 	RampBody.LevelMeshIndex = 1;
-	RampBody.Position = FVector(4.0f, 1.0f, 0.0f);
-	RampBody.HalfExtents = FVector(2.5f, 1.0f, 1.2f);
+	RampBody.Position = FVector(400.0f, 100.0f, 0.0f);
+	RampBody.HalfExtents = FVector(250.0f, 100.0f, 120.0f);
 	RampBody.CollisionShape = EBodyCollisionShape::TriangleMesh;
 	Physics.GetBodies().Add(RampBody);
 
 	FTriangleMeshCollision Tri{};
-	// Two tris covering a 4x2 footprint around (4,0).
-	Tri.Positions = {
-		FVector(2.0f, 0.5f, -1.0f), FVector(6.0f, 1.5f, -1.0f), FVector(6.0f, 1.5f, 1.0f), FVector(2.0f, 0.5f, 1.0f)};
+	// Two tris covering a 4 x 2 m footprint around (400, 0) cm.
+	Tri.Positions = {FVector(200.0f, 50.0f, -100.0f), FVector(600.0f, 150.0f, -100.0f), FVector(600.0f, 150.0f, 100.0f),
+		FVector(200.0f, 50.0f, 100.0f)};
 	Tri.Indices = {0, 1, 2, 0, 2, 3};
 	Physics.GetTriangleMeshes().Add(MoveTemp(Tri));
 
 	UNavigationSystem Nav;
-	Nav.SetCellSize(0.5f);
-	Nav.SetAgentRadius(0.35f);
-	Nav.BuildFromLevel(Level, Physics, 0.0f, 12.0f);
+	Nav.SetCellSize(50.0f);
+	Nav.SetAgentRadius(35.0f);
+	Nav.BuildFromLevel(Level, Physics, 0.0f, 1200.0f);
 	if (!TestTrue("Nav mesh built", Nav.HasNavMesh()))
 	{
 		return false;
@@ -446,14 +446,15 @@ bool FGameplayNavBlocksNavBlockerKeepsNavWalkableTest::RunTest(const FString& Pa
 
 	// Path across the plate must detour.
 	TArray<FVector> Path;
-	if (!TestTrue("Path across the plate", Nav.FindPath(FVector(-3.0f, 0.0f, 0.0f), FVector(3.0f, 0.0f, 0.0f), Path)))
+	if (!TestTrue(
+			"Path across the plate", Nav.FindPath(FVector(-300.0f, 0.0f, 0.0f), FVector(300.0f, 0.0f, 0.0f), Path)))
 	{
 		return false;
 	}
 	bool bDetouredPlate = false;
 	for (const FVector& Point : Path)
 	{
-		if (FMath::Abs(Point.Z) > 0.8f)
+		if (FMath::Abs(Point.Z) > 80.0f)
 		{
 			bDetouredPlate = true;
 			break;
@@ -464,9 +465,9 @@ bool FGameplayNavBlocksNavBlockerKeepsNavWalkableTest::RunTest(const FString& Pa
 	// Climbable ramp footprint stays walkable (CMC handles the slope).
 	int Rix = 0;
 	int Riz = 0;
-	TestTrue("Ramp cell found", Nav.GetNavMesh().WorldToCell(4.0f, 0.0f, Rix, Riz));
+	TestTrue("Ramp cell found", Nav.GetNavMesh().WorldToCell(400.0f, 0.0f, Rix, Riz));
 	TestTrue("Ramp cell walkable", Nav.GetNavMesh().IsWalkable(Rix, Riz));
-	TestTrue("Path over the ramp", Nav.FindPath(FVector(2.0f, 0.0f, 0.0f), FVector(6.0f, 0.0f, 0.0f), Path));
+	TestTrue("Path over the ramp", Nav.FindPath(FVector(200.0f, 0.0f, 0.0f), FVector(600.0f, 0.0f, 0.0f), Path));
 	return true;
 }
 
@@ -480,13 +481,13 @@ bool FGameplayNavAppendDebugDrawFillsOverlayTest::RunTest(const FString& Paramet
 	FPhysScene Physics;
 	FBodyInstance Wall{};
 	Wall.Type = EBodyType::Static;
-	Wall.Position = FVector(0.0f, 1.0f, 0.0f);
-	Wall.HalfExtents = FVector(0.5f, 1.0f, 0.5f);
+	Wall.Position = FVector(0.0f, 100.0f, 0.0f);
+	Wall.HalfExtents = FVector(50.0f, 100.0f, 50.0f);
 	Physics.GetBodies().Add(Wall);
 
 	UNavigationSystem Nav;
-	Nav.SetCellSize(1.0f);
-	Nav.BuildFromPhysScene(Physics, 0.0f, 4.0f);
+	Nav.SetCellSize(100.0f);
+	Nav.BuildFromPhysScene(Physics, 0.0f, 400.0f);
 	if (!TestTrue("Nav mesh built", Nav.HasNavMesh()))
 	{
 		return false;
@@ -539,13 +540,13 @@ bool FGameplayActorSyncTransformToLevelWritesLinkedMeshTest::RunTest(const FStri
 	UWorld World;
 	ATestActor* Actor = World.SpawnActor<ATestActor>();
 	Actor->SetLevelMeshIndex(0);
-	Actor->SetActorLocationAndRotation(FVector(3.0f, 1.5f, -2.0f), 90.0f);
+	Actor->SetActorLocationAndRotation(FVector(300.0f, 150.0f, -200.0f), 90.0f);
 	Actor->SyncTransformToLevel(Level);
 
 	const FTransform& Transform = Level.GetStaticMeshes()[0].Transform;
-	TestEqual("Position X", Transform.GetLocation().X, 3.0f, 1.0e-5f);
-	TestEqual("Position Y", Transform.GetLocation().Y, 1.5f, 1.0e-5f);
-	TestEqual("Position Z", Transform.GetLocation().Z, -2.0f, 1.0e-5f);
+	TestEqual("Position X", Transform.GetLocation().X, 300.0f, 1.0e-3f);
+	TestEqual("Position Y", Transform.GetLocation().Y, 150.0f, 1.0e-3f);
+	TestEqual("Position Z", Transform.GetLocation().Z, -200.0f, 1.0e-3f);
 	TestTrue("Yaw",
 		Transform.GetRotation().Equals(
 			FLegacyCoordinateConversion::ConvertEulerXYZ(FVector(0.0f, 90.0f, 0.0f)), 1.0e-6f));
@@ -566,7 +567,7 @@ bool FGameplayWorldTickGameplayFrameSyncsCharacterTest::RunTest(const FString& P
 	UWorld World;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->SetLevelMeshIndex(0);
-	Character->Reset(FVector(1.0f, 0.0f, 2.0f), 45.0f);
+	Character->Reset(FVector(100.0f, 0.0f, 200.0f), 45.0f);
 
 	FWorldGameplayFrameParams Frame{};
 	Frame.DeltaTime = 1.0f / 60.0f;
@@ -574,8 +575,8 @@ bool FGameplayWorldTickGameplayFrameSyncsCharacterTest::RunTest(const FString& P
 	World.TickGameplayFrame(Frame);
 
 	const FTransform& Transform = Level.GetStaticMeshes()[0].Transform;
-	TestEqual("Position X", Transform.GetLocation().X, 1.0f, 1.0e-4f);
-	TestEqual("Position Z", Transform.GetLocation().Z, 2.0f, 1.0e-4f);
+	TestEqual("Position X", Transform.GetLocation().X, 100.0f, 1.0e-2f);
+	TestEqual("Position Z", Transform.GetLocation().Z, 200.0f, 1.0e-2f);
 	TestEqual("Yaw", FLegacyCoordinateConversion::ToLegacyEulerXYZ(Transform.GetRotation()).Y, 45.0f, 1.0e-4f);
 	return true;
 }
@@ -636,8 +637,9 @@ bool FGameplaySceneComponentAttachHierarchyTest::RunTest(const FString& Paramete
 	// Attached components add their relative offsets to the Actor pose; cycles are refused and destroy detaches.
 	UWorld World;
 	ATestActor* Actor = World.SpawnActor<ATestActor>();
-	Actor->SetActorLocationAndRotation(FVector(10.0f, 0.0f, 0.0f), 0.0f);
+	Actor->SetActorLocationAndRotation(FVector(1000.0f, 0.0f, 0.0f), 0.0f);
 
+	// The Relative* fields hold legacy values: 2 m and 1 m below are 200 cm and 100 cm in the world.
 	USceneComponent Child;
 	Child.SetOwner(Actor);
 	Child.RelativeLocation = FVector(2.0f, 0.0f, 0.0f);
@@ -646,12 +648,12 @@ bool FGameplaySceneComponentAttachHierarchyTest::RunTest(const FString& Paramete
 	TestEqual("Root has one child", Actor->GetRootComponent().GetAttachChildren().Num(), 1);
 
 	const FVector Loc = Child.GetComponentLocation();
-	TestEqual("Child world X", Loc.X, 12.0f, 1.0e-4f);
+	TestEqual("Child world X", Loc.X, 1200.0f, 1.0e-2f);
 
 	USceneComponent Grandchild;
 	Grandchild.RelativeLocation = FVector(1.0f, 0.0f, 0.0f);
 	TestTrue("Grandchild attached", Grandchild.AttachToComponent(&Child));
-	TestEqual("Grandchild world X", Grandchild.GetComponentLocation().X, 13.0f, 1.0e-4f);
+	TestEqual("Grandchild world X", Grandchild.GetComponentLocation().X, 1300.0f, 1.0e-2f);
 
 	TestFalse("Cycle refused", Child.AttachToComponent(&Grandchild));
 	Child.DestroyComponent();
@@ -672,9 +674,10 @@ bool FGameplayCharacterMeshAttachesToRootTest::RunTest(const FString& Parameters
 	TestTrue("Mesh owner", Character.GetMesh().GetOwner() == &Character);
 	TestTrue("Mesh registered", Character.GetMesh().IsRegistered());
 	TestTrue("Root registered", Character.GetRootComponent().IsRegistered());
-	Character.SetActorLocation(FVector(5.0f, 0.0f, 0.0f));
+	Character.SetActorLocation(FVector(500.0f, 0.0f, 0.0f));
+	// A legacy relative offset of 1 m (100 cm).
 	Character.GetMesh().RelativeLocation = FVector(1.0f, 0.0f, 0.0f);
-	TestEqual("Mesh world X", Character.GetMesh().GetComponentLocation().X, 6.0f, 1.0e-4f);
+	TestEqual("Mesh world X", Character.GetMesh().GetComponentLocation().X, 600.0f, 1.0e-2f);
 	return true;
 }
 

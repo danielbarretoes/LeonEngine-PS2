@@ -108,7 +108,7 @@ float USpringArmComponent::ProbeArmLength(FPhysScene& PhysScene, const FVector& 
 	float PitchDegrees, float DesiredLength, FDebugDraw* DebugDraw) const
 {
 	const float Length = FMath::Clamp(DesiredLength, ArmLengthMin, ArmLengthMax);
-	if (ProbeSize <= 0.0f || Length <= ArmLengthMin + 1.0e-4f)
+	if (ProbeSize <= 0.0f || Length <= ArmLengthMin + 1.0e-2f)
 	{
 		return Length;
 	}

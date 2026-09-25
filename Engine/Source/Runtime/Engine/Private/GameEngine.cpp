@@ -52,7 +52,7 @@ bool UGameEngine::Initialize(int32 Width, int32 Height, const TCHAR* Title)
 
 	Window->OnMouseWheel().BindLambda([this](float Delta) { PendingScrollY += Delta; });
 
-	Camera.SetPerspective(60.0f, Window->Aspect(), 0.1f, 100.0f);
+	Camera.SetPerspective(60.0f, Window->Aspect(), DefaultCameraNearPlane, DefaultCameraFarPlane);
 	Camera.SetTarget(FVector::ZeroVector);
 
 	SetCursorCaptured(true);
@@ -481,7 +481,9 @@ void UGameEngine::HandleInput(float DeltaTime)
 		const float ScrollY = ConsumeScrollY();
 		if (ScrollY != 0.0f)
 		{
-			Camera.Zoom(ScrollY * 0.4f);
+			/** cm per wheel notch */
+			constexpr float ZoomPerNotch = 40.0f;
+			Camera.Zoom(ScrollY * ZoomPerNotch);
 		}
 	}
 
@@ -535,8 +537,8 @@ void UGameEngine::Render(const FPostRenderCallback& OnPostRender)
 	{
 		LastFbWidth = FbWidth;
 		LastFbHeight = FbHeight;
-		Camera.SetPerspective(
-			Camera.FieldOfView(), static_cast<float>(FbWidth) / static_cast<float>(FbHeight), 0.1f, 100.0f);
+		Camera.SetPerspective(Camera.FieldOfView(), static_cast<float>(FbWidth) / static_cast<float>(FbHeight),
+			DefaultCameraNearPlane, DefaultCameraFarPlane);
 	}
 
 	Renderer.BeginFrame(FbWidth, FbHeight);

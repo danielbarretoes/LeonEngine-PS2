@@ -9,6 +9,9 @@ constexpr int32 MaxPointLights = 4;
 /** UE FDirectionalLight Source Angle default (~sun disc), in degrees. */
 constexpr float DefaultLightSourceAngleDegrees = 0.5357f;
 
+/** Default point light attenuation radius (8 m), in world units (cm). */
+constexpr float DefaultPointLightRange = 800.0f;
+
 /** UE-like FDirectionalLight: the transform drives the aim; no raw direction field. */
 struct ENGINE_API FDirectionalLight
 {
@@ -32,13 +35,13 @@ struct ENGINE_API FPointLight
 	FTransform Transform{FLegacyCoordinateConversion::ConvertPosition(FVector(0.0f, 2.0f, 0.0f))};
 	FVector LightColor = FVector(1.0f, 1.0f, 1.0f); // linear RGB
 	float Intensity = 1.0f;
-	float Range = 8.0f;
+	float Range = DefaultPointLightRange;
 	bool bCastShadows = false;
 
-	/** Optional orbit animation (level JSON orbit); preserved for the save round trip. */
+	/** Optional orbit animation (level JSON orbit); preserved for the save round trip. Lengths in cm. */
 	bool bHasOrbit = false;
-	float OrbitRadius = 1.0f;
-	float OrbitHeight = 1.0f;
+	float OrbitRadius = 100.0f;
+	float OrbitHeight = 100.0f;
 	float OrbitHeightAmp = 0.0f;
 	float OrbitSpeed = 1.0f;
 };

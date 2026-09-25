@@ -36,7 +36,7 @@ namespace
 
 FVector FLegacyCoordinateConversion::ConvertPosition(const FVector& Legacy)
 {
-	return Legacy;
+	return Legacy * UnitsPerMetre;
 }
 
 FVector FLegacyCoordinateConversion::ConvertDirection(const FVector& Legacy)
@@ -51,12 +51,17 @@ FVector FLegacyCoordinateConversion::ConvertScale(const FVector& Legacy)
 
 float FLegacyCoordinateConversion::ConvertLength(float Metres)
 {
-	return Metres;
+	return Metres * UnitsPerMetre;
+}
+
+FVector FLegacyCoordinateConversion::ConvertExtent(const FVector& Legacy)
+{
+	return Legacy * UnitsPerMetre;
 }
 
 FVector FLegacyCoordinateConversion::ToLegacyPosition(const FVector& World)
 {
-	return World;
+	return World / UnitsPerMetre;
 }
 
 FVector FLegacyCoordinateConversion::ToLegacyDirection(const FVector& World)
@@ -71,7 +76,12 @@ FVector FLegacyCoordinateConversion::ToLegacyScale(const FVector& World)
 
 float FLegacyCoordinateConversion::ToLegacyLength(float WorldLength)
 {
-	return WorldLength;
+	return WorldLength / UnitsPerMetre;
+}
+
+FVector FLegacyCoordinateConversion::ToLegacyExtent(const FVector& World)
+{
+	return World / UnitsPerMetre;
 }
 
 FQuat FLegacyCoordinateConversion::ConvertEulerXYZ(const FVector& Degrees)

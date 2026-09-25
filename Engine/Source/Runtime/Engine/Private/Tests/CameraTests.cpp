@@ -25,16 +25,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCameraOrbitDistanceClampsAndFreeLookIgnoresZoo
 
 bool FCameraOrbitDistanceClampsAndFreeLookIgnoresZoomTest::RunTest(const FString& Parameters)
 {
-	// Zooming in past the minimum clamps the orbit distance; FreeLook leaves the distance alone.
+	// Zooming in past the minimum (50 cm) clamps the orbit distance; FreeLook leaves the distance alone.
 	UCameraComponent Cam;
-	Cam.SetDistance(5.0f);
-	Cam.Zoom(100.0f);
-	TestEqual("Orbit distance clamped", Cam.GetDistance(), 0.5f, 1.0e-4f);
+	Cam.SetDistance(500.0f);
+	Cam.Zoom(10000.0f);
+	TestEqual("Orbit distance clamped", Cam.GetDistance(), 50.0f, 1.0e-2f);
 
-	Cam.SetDistance(5.0f);
+	Cam.SetDistance(500.0f);
 	Cam.SetMode(ECameraMode::FreeLook);
-	Cam.Zoom(2.0f);
-	TestEqual("FreeLook distance unchanged", Cam.GetDistance(), 5.0f, 1.0e-4f);
+	Cam.Zoom(200.0f);
+	TestEqual("FreeLook distance unchanged", Cam.GetDistance(), 500.0f, 1.0e-2f);
 	return true;
 }
 
@@ -49,10 +49,10 @@ bool FCameraOrbitPositionFollowsTargetAndDistanceTest::RunTest(const FString& Pa
 	Cam.SetMode(ECameraMode::Orbit);
 	Cam.SetTarget(FVector::ZeroVector);
 	Cam.SetYawPitch(0.0f, 0.0f);
-	Cam.SetDistance(4.0f);
+	Cam.SetDistance(400.0f);
 
 	const FVector Eye = Cam.GetCameraLocation();
-	TestEqual("Eye distance", Eye.Size(), 4.0f, 1.0e-3f);
+	TestEqual("Eye distance", Eye.Size(), 400.0f, 0.1f);
 	TestEqual("Forward is unit", Cam.ForwardVector().Size(), 1.0f, 1.0e-4f);
 	TestEqual("Right is unit", Cam.RightVector().Size(), 1.0f, 1.0e-4f);
 	return true;
@@ -66,11 +66,11 @@ bool FCameraFreeLookUsesEyeLocationTest::RunTest(const FString& Parameters)
 	// In FreeLook the camera location is the explicit eye location.
 	UCameraComponent Cam;
 	Cam.SetMode(ECameraMode::FreeLook);
-	Cam.SetEyeLocation(FVector(1.0f, 2.0f, 3.0f));
+	Cam.SetEyeLocation(FVector(100.0f, 200.0f, 300.0f));
 	const FVector Eye = Cam.GetCameraLocation();
-	TestEqual("Eye X", Eye.X, 1.0f, 1.0e-5f);
-	TestEqual("Eye Y", Eye.Y, 2.0f, 1.0e-5f);
-	TestEqual("Eye Z", Eye.Z, 3.0f, 1.0e-5f);
+	TestEqual("Eye X", Eye.X, 100.0f, 1.0e-3f);
+	TestEqual("Eye Y", Eye.Y, 200.0f, 1.0e-3f);
+	TestEqual("Eye Z", Eye.Z, 300.0f, 1.0e-3f);
 	return true;
 }
 
@@ -81,38 +81,38 @@ bool FCameraUEViewAndProjectionTest::RunTest(const FString& Parameters)
 {
 	// The view is UE's (x right, y up, z forward) and the projections give UE depth: 0 at near, 1 at far.
 	UCameraComponent Cam;
-	Cam.SetPerspective(60.0f, 2.0f, 0.5f, 50.0f);
+	Cam.SetPerspective(60.0f, 2.0f, 50.0f, 5000.0f);
 	Cam.SetMode(ECameraMode::Orbit);
-	Cam.SetTarget(FVector(1.0f, 0.5f, -2.0f));
+	Cam.SetTarget(FVector(100.0f, 50.0f, -200.0f));
 	Cam.SetYawPitch(30.0f, 20.0f);
-	Cam.SetDistance(6.0f);
+	Cam.SetDistance(600.0f);
 
 	const FMatrix View = Cam.ViewMatrix();
 	const FVector Eye = Cam.GetCameraLocation();
-	const FVector Ahead = FVector(View.TransformPosition(Eye + (Cam.ForwardVector() * 3.0f)));
-	const FVector Right = FVector(View.TransformPosition(Eye + Cam.RightVector()));
+	const FVector Ahead = FVector(View.TransformPosition(Eye + (Cam.ForwardVector() * 300.0f)));
+	const FVector Right = FVector(View.TransformPosition(Eye + (Cam.RightVector() * 100.0f)));
 	TestTrue("Target ahead on +z",
-		FVector(View.TransformPosition(Cam.GetTarget())).Equals(FVector(0.0f, 0.0f, 6.0f), 1.0e-4f));
-	TestTrue("Forward is +z", Ahead.Equals(FVector(0.0f, 0.0f, 3.0f), 1.0e-4f));
-	TestTrue("RightVector is +x", Right.Equals(FVector(1.0f, 0.0f, 0.0f), 1.0e-4f));
+		FVector(View.TransformPosition(Cam.GetTarget())).Equals(FVector(0.0f, 0.0f, 600.0f), 1.0e-2f));
+	TestTrue("Forward is +z", Ahead.Equals(FVector(0.0f, 0.0f, 300.0f), 1.0e-2f));
+	TestTrue("RightVector is +x", Right.Equals(FVector(100.0f, 0.0f, 0.0f), 1.0e-2f));
 	TestTrue("World up is up on screen", FVector(View.TransformVector(FVector(0.0f, 1.0f, 0.0f))).Y > 0.0f);
 
 	const FMatrix& Perspective = Cam.ProjectionMatrix();
-	const FVector4 Near = Perspective.TransformFVector4(FVector4(0.0f, 0.0f, 0.5f, 1.0f));
-	const FVector4 Far = Perspective.TransformFVector4(FVector4(0.0f, 0.0f, 50.0f, 1.0f));
+	const FVector4 Near = Perspective.TransformFVector4(FVector4(0.0f, 0.0f, 50.0f, 1.0f));
+	const FVector4 Far = Perspective.TransformFVector4(FVector4(0.0f, 0.0f, 5000.0f, 1.0f));
 	TestEqual("Perspective near depth", Near.Z / Near.W, 0.0f, 1.0e-6f);
 	TestEqual("Perspective far depth", Far.Z / Far.W, 1.0f, 1.0e-6f);
 	// The vertical field of view is kept: the top edge at 30 degrees, the right edge at aspect times as wide.
 	const float TanHalf = FMath::Tan(FMath::DegreesToRadians(30.0f));
-	const FVector4 Corner = Perspective.TransformFVector4(FVector4(2.0f * TanHalf, TanHalf, 1.0f, 1.0f));
+	const FVector4 Corner = Perspective.TransformFVector4(FVector4(200.0f * TanHalf, 100.0f * TanHalf, 100.0f, 1.0f));
 	TestEqual("Right edge", Corner.X / Corner.W, 1.0f, 1.0e-5f);
 	TestEqual("Top edge", Corner.Y / Corner.W, 1.0f, 1.0e-5f);
 
-	Cam.SetOrthographic(10.0f, 2.0f, 0.5f, 50.0f);
+	Cam.SetOrthographic(1000.0f, 2.0f, 50.0f, 5000.0f);
 	const FMatrix& Ortho = Cam.ProjectionMatrix();
 	TestTrue("Ortho near corner",
-		FVector(Ortho.TransformPosition(FVector(10.0f, 5.0f, 0.5f))).Equals(FVector(1.0f, 1.0f, 0.0f), 1.0e-5f));
-	TestEqual("Ortho far depth", Ortho.TransformPosition(FVector(0.0f, 0.0f, 50.0f)).Z, 1.0f, 1.0e-5f);
+		FVector(Ortho.TransformPosition(FVector(1000.0f, 500.0f, 50.0f))).Equals(FVector(1.0f, 1.0f, 0.0f), 1.0e-5f));
+	TestEqual("Ortho far depth", Ortho.TransformPosition(FVector(0.0f, 0.0f, 5000.0f)).Z, 1.0f, 1.0e-5f);
 	return true;
 }
 

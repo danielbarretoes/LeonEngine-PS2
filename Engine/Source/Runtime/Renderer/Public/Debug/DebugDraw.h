@@ -14,12 +14,12 @@ public:
 
 	void Clear();
 	void AddLine(const FVector& A, const FVector& B, const FLinearColor& InColor);
-	/** Shaft + V-shaped head for a world-space direction vector. */
-	void AddArrow(const FVector& From, const FVector& To, const FLinearColor& InColor, float HeadLength = 0.28f,
-		float HeadWidth = 0.14f);
+	/** Shaft + V-shaped head for a world-space direction vector (head sizes in cm). */
+	void AddArrow(const FVector& From, const FVector& To, const FLinearColor& InColor, float HeadLength = 28.0f,
+		float HeadWidth = 14.0f);
 	void AddAabb(const FVector& WorldMin, const FVector& WorldMax, const FLinearColor& InColor);
-	/** RGB axes at a scene component's world location (editor / PIE debug). */
-	void AddAxes(const FVector& Origin, float Size = 0.35f);
+	/** RGB axes at a scene component's world location (editor / PIE debug); Size in cm. */
+	void AddAxes(const FVector& Origin, float Size = 35.0f);
 	/** GL clip-space cube (+-1) transformed by inverse(LightSpace): the world-space ortho frustum. */
 	void AddLightFrustum(const FMatrix& LightSpace, const FLinearColor& InColor);
 

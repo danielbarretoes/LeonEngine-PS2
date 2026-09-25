@@ -13,12 +13,12 @@ bool FCollisionQueryLineTraceSingleByChannelHitsStaticAabbTest::RunTest(const FS
 	// A line along +Z hits the near face of a static box, whose normal faces the trace start.
 	FPhysScene Scene;
 	const int32 Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
-	Scene.GetBodies()[Id].Position = FVector(0.0f, 0.5f, 0.0f);
-	Scene.GetBodies()[Id].HalfExtents = FVector(0.5f, 0.5f, 0.5f);
+	Scene.GetBodies()[Id].Position = FVector(0.0f, 50.0f, 0.0f);
+	Scene.GetBodies()[Id].HalfExtents = FVector(50.0f, 50.0f, 50.0f);
 
 	FHitResult Hit{};
 	const bool bHit = Scene.LineTraceSingleByChannel(
-		Hit, FVector(0.0f, 0.5f, -2.0f), FVector(0.0f, 0.5f, 2.0f), ECollisionChannel::WorldStatic);
+		Hit, FVector(0.0f, 50.0f, -200.0f), FVector(0.0f, 50.0f, 200.0f), ECollisionChannel::WorldStatic);
 	TestTrue("Trace hit", bHit);
 	TestTrue("Blocking hit", Hit.bBlockingHit);
 	TestTrue("Hit before the end", Hit.Time < 1.0f);
@@ -35,15 +35,15 @@ bool FCollisionQueryLineTraceSingleByChannelFiltersByChannelTest::RunTest(const 
 	// A dynamic body is invisible to WorldStatic traces and hit by WorldDynamic traces.
 	FPhysScene Scene;
 	const int32 Id = Scene.AddBody({0, EBodyType::Dynamic, 1.0f, true});
-	Scene.GetBodies()[Id].Position = FVector(0.0f, 0.5f, 0.0f);
-	Scene.GetBodies()[Id].HalfExtents = FVector(0.5f, 0.5f, 0.5f);
+	Scene.GetBodies()[Id].Position = FVector(0.0f, 50.0f, 0.0f);
+	Scene.GetBodies()[Id].HalfExtents = FVector(50.0f, 50.0f, 50.0f);
 
 	FHitResult Hit{};
 	const bool bStaticHit = Scene.LineTraceSingleByChannel(
-		Hit, FVector(0.0f, 0.5f, -2.0f), FVector(0.0f, 0.5f, 2.0f), ECollisionChannel::WorldStatic);
+		Hit, FVector(0.0f, 50.0f, -200.0f), FVector(0.0f, 50.0f, 200.0f), ECollisionChannel::WorldStatic);
 	TestFalse("WorldStatic misses", bStaticHit);
 	const bool bDynamicHit = Scene.LineTraceSingleByChannel(
-		Hit, FVector(0.0f, 0.5f, -2.0f), FVector(0.0f, 0.5f, 2.0f), ECollisionChannel::WorldDynamic);
+		Hit, FVector(0.0f, 50.0f, -200.0f), FVector(0.0f, 50.0f, 200.0f), ECollisionChannel::WorldDynamic);
 	TestTrue("WorldDynamic hits", bDynamicHit);
 	return true;
 }
@@ -62,10 +62,10 @@ bool FCollisionQuerySphereTraceSingleByChannelHitsFloorPlaneTest::RunTest(const 
 
 	FHitResult Hit{};
 	const bool bHit = Scene.SphereTraceSingleByChannel(
-		Hit, FVector(0.0f, 1.0f, 0.0f), FVector(0.0f, -1.0f, 0.0f), 0.35f, ECollisionChannel::Visibility, Params);
+		Hit, FVector(0.0f, 100.0f, 0.0f), FVector(0.0f, -100.0f, 0.0f), 35.0f, ECollisionChannel::Visibility, Params);
 	TestTrue("Trace hit", bHit);
 	TestTrue("Floor plane hit", Hit.bFloorPlane);
-	TestEqual("Impact Y", Hit.ImpactPoint.Y, 0.0f, 1.0e-3f);
+	TestEqual("Impact Y", Hit.ImpactPoint.Y, 0.0f, 0.1f);
 	TestTrue("Normal points up", Hit.ImpactNormal.Y > 0.5f);
 	return true;
 }
@@ -79,17 +79,17 @@ bool FCollisionQueryCapsuleTraceSingleByChannelFindsPlatformTopTest::RunTest(con
 	// A downward capsule trace stops on the top of a platform.
 	FPhysScene Scene;
 	const int32 Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
-	Scene.GetBodies()[Id].Position = FVector(0.0f, 1.0f, 0.0f);
-	Scene.GetBodies()[Id].HalfExtents = FVector(1.0f, 1.0f, 1.0f); // top at y=2
+	Scene.GetBodies()[Id].Position = FVector(0.0f, 100.0f, 0.0f);
+	Scene.GetBodies()[Id].HalfExtents = FVector(100.0f, 100.0f, 100.0f); // top at y=200 cm
 
 	FHitResult Hit{};
-	const float Radius = 0.35f;
-	const float HalfHeight = 0.5f;
-	const bool bHit = Scene.CapsuleTraceSingleByChannel(
-		Hit, FVector(0.0f, 3.0f, 0.0f), FVector(0.0f, 1.5f, 0.0f), Radius, HalfHeight, ECollisionChannel::Visibility);
+	const float Radius = 35.0f;
+	const float HalfHeight = 50.0f;
+	const bool bHit = Scene.CapsuleTraceSingleByChannel(Hit, FVector(0.0f, 300.0f, 0.0f), FVector(0.0f, 150.0f, 0.0f),
+		Radius, HalfHeight, ECollisionChannel::Visibility);
 	TestTrue("Trace hit", bHit);
 	TestTrue("Blocking hit", Hit.bBlockingHit);
-	TestTrue("Impact at or below the top", Hit.ImpactPoint.Y <= 2.0f + 1.0e-2f);
+	TestTrue("Impact at or below the top", Hit.ImpactPoint.Y <= 200.0f + 1.0f);
 	TestTrue("Normal points up", Hit.ImpactNormal.Y > 0.5f);
 	return true;
 }
@@ -103,19 +103,19 @@ bool FCollisionQueryLineTraceMultiByChannelReturnsAllHitsSortedTest::RunTest(con
 	// A multi line trace returns both boxes nearest first, and the single trace returns the nearest.
 	FPhysScene Scene;
 	const int32 NearId = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
-	Scene.GetBodies()[NearId].Position = FVector(0.0f, 0.5f, 0.0f);
-	Scene.GetBodies()[NearId].HalfExtents = FVector(0.5f, 0.5f, 0.5f);
+	Scene.GetBodies()[NearId].Position = FVector(0.0f, 50.0f, 0.0f);
+	Scene.GetBodies()[NearId].HalfExtents = FVector(50.0f, 50.0f, 50.0f);
 
 	const int32 FarId = Scene.AddBody({1, EBodyType::Static, 1.0f, true});
-	Scene.GetBodies()[FarId].Position = FVector(0.0f, 0.5f, 3.0f);
-	Scene.GetBodies()[FarId].HalfExtents = FVector(0.5f, 0.5f, 0.5f);
+	Scene.GetBodies()[FarId].Position = FVector(0.0f, 50.0f, 300.0f);
+	Scene.GetBodies()[FarId].HalfExtents = FVector(50.0f, 50.0f, 50.0f);
 
 	FCollisionQueryParams Params{};
 	Params.bTraceFloorPlane = false;
 
 	TArray<FHitResult> Hits;
 	const bool bMultiHit = Scene.LineTraceMultiByChannel(
-		Hits, FVector(0.0f, 0.5f, -2.0f), FVector(0.0f, 0.5f, 5.0f), ECollisionChannel::WorldStatic, Params);
+		Hits, FVector(0.0f, 50.0f, -200.0f), FVector(0.0f, 50.0f, 500.0f), ECollisionChannel::WorldStatic, Params);
 	TestTrue("Multi trace hit", bMultiHit);
 	if (!TestEqual("Hit count", Hits.Num(), 2))
 	{
@@ -127,7 +127,7 @@ bool FCollisionQueryLineTraceMultiByChannelReturnsAllHitsSortedTest::RunTest(con
 
 	FHitResult Single{};
 	const bool bSingleHit = Scene.LineTraceSingleByChannel(
-		Single, FVector(0.0f, 0.5f, -2.0f), FVector(0.0f, 0.5f, 5.0f), ECollisionChannel::WorldStatic, Params);
+		Single, FVector(0.0f, 50.0f, -200.0f), FVector(0.0f, 50.0f, 500.0f), ECollisionChannel::WorldStatic, Params);
 	TestTrue("Single trace hit", bSingleHit);
 	TestEqual("Single matches nearest", Single.Time, Hits[0].Time, 1.0e-5f);
 	return true;
@@ -142,8 +142,8 @@ bool FCollisionQuerySphereTraceMultiByChannelIncludesFloorAndBodiesTest::RunTest
 	// A downward multi sphere trace reports both the box in the way and the floor plane.
 	FPhysScene Scene;
 	const int32 Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
-	Scene.GetBodies()[Id].Position = FVector(0.0f, 2.0f, 0.0f);
-	Scene.GetBodies()[Id].HalfExtents = FVector(1.0f, 0.5f, 1.0f); // top at 2.5, bottom at 1.5
+	Scene.GetBodies()[Id].Position = FVector(0.0f, 200.0f, 0.0f);
+	Scene.GetBodies()[Id].HalfExtents = FVector(100.0f, 50.0f, 100.0f); // top at 250 cm, bottom at 150 cm
 
 	FCollisionQueryParams Params{};
 	Params.bTraceFloorPlane = true;
@@ -151,7 +151,7 @@ bool FCollisionQuerySphereTraceMultiByChannelIncludesFloorAndBodiesTest::RunTest
 
 	TArray<FHitResult> Hits;
 	const bool bMultiHit = Scene.SphereTraceMultiByChannel(
-		Hits, FVector(0.0f, 4.0f, 0.0f), FVector(0.0f, -1.0f, 0.0f), 0.25f, ECollisionChannel::Visibility, Params);
+		Hits, FVector(0.0f, 400.0f, 0.0f), FVector(0.0f, -100.0f, 0.0f), 25.0f, ECollisionChannel::Visibility, Params);
 	TestTrue("Multi trace hit", bMultiHit);
 	if (!TestTrue("At least two hits", Hits.Num() >= 2))
 	{
@@ -179,15 +179,15 @@ bool FCollisionQueryCapsuleTraceMultiByChannelReturnsMultipleBlockingHitsTest::R
 	// A downward multi capsule trace through a dynamic and a static box returns both, nearest first.
 	FPhysScene Scene;
 	const int32 A = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
-	Scene.GetBodies()[A].Position = FVector(0.0f, 1.0f, 0.0f);
-	Scene.GetBodies()[A].HalfExtents = FVector(0.5f, 0.5f, 0.5f);
+	Scene.GetBodies()[A].Position = FVector(0.0f, 100.0f, 0.0f);
+	Scene.GetBodies()[A].HalfExtents = FVector(50.0f, 50.0f, 50.0f);
 	const int32 B = Scene.AddBody({1, EBodyType::Dynamic, 1.0f, true});
-	Scene.GetBodies()[B].Position = FVector(0.0f, 3.0f, 0.0f);
-	Scene.GetBodies()[B].HalfExtents = FVector(0.5f, 0.5f, 0.5f);
+	Scene.GetBodies()[B].Position = FVector(0.0f, 300.0f, 0.0f);
+	Scene.GetBodies()[B].HalfExtents = FVector(50.0f, 50.0f, 50.0f);
 
 	TArray<FHitResult> Hits;
 	const bool bMultiHit = Scene.CapsuleTraceMultiByChannel(
-		Hits, FVector(0.0f, 5.0f, 0.0f), FVector::ZeroVector, 0.2f, 0.3f, ECollisionChannel::Visibility);
+		Hits, FVector(0.0f, 500.0f, 0.0f), FVector::ZeroVector, 20.0f, 30.0f, ECollisionChannel::Visibility);
 	TestTrue("Multi trace hit", bMultiHit);
 	if (!TestEqual("Hit count", Hits.Num(), 2))
 	{

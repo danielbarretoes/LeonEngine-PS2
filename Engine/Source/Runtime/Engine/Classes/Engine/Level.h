@@ -52,10 +52,10 @@ struct ENGINE_API UStaticMeshComponent
 	int32 SphereSegments = 24;
 	int32 SphereRings = 16;
 
-	/** Optional bob animation (level bob); preserved for the save round trip. */
+	/** Optional bob animation (level bob); preserved for the save round trip. Lengths in cm. */
 	bool bHasBob = false;
 	float BobBaseY = 0.0f;
-	float BobAmplitude = 0.1f;
+	float BobAmplitude = 10.0f;
 	float BobSpeed = 1.0f;
 
 	/** Model matrix (Transform with its scale). */
@@ -80,21 +80,21 @@ struct ENGINE_API FPlayerStart
 	FTransform Transform;
 };
 
-/** Interact / trigger volume (POD). Overlap tested in gameplay from the position + InteractRadius. */
+/** Interact / trigger volume (POD). Overlap tested in gameplay from the position + InteractRadius (cm). */
 struct ENGINE_API FTriggerVolume
 {
 	FTransform Transform;
-	float InteractRadius = 2.f;
+	float InteractRadius = 200.0f;
 	int32 InteractCost = 0;
 	FString Payload; // game-defined, e.g. Door, WallBuy:M14, Perk:Jugg
 	FString Tag;
 	bool bConsumeOnUse = false;
 };
 
-/** Damage volume (POD). AABB from the transform location and abs(Scale3D) * 0.5. */
+/** Damage volume (POD). AABB from the transform location and abs(Scale3D) * 50 cm (a scaled 100 cm basic cube). */
 struct ENGINE_API FPainCausingVolume
 {
-	FTransform Transform; // location + scale as half-extents box (full size = abs(scale))
+	FTransform Transform; // location + scale of a basic cube (full size = abs(scale) * 100 cm)
 	float DamagePerSecond = 12.f;
 	float DamageInterval = 0.35f;
 	FString Tag;

@@ -1,6 +1,7 @@
 #include "LeonMeshFormat.h"
 
 #include "HAL/FileManager.h"
+#include "LegacyCoordinateConversion.h"
 #include "MeshData.h"
 #include "Misc/Paths.h"
 #include "Templates/UniquePtr.h"
@@ -108,6 +109,11 @@ bool LoadLeonMeshFile(const FString& Path, FMeshData& Out)
 	{
 		UE_LOG(LogLeonMesh, Error, "Truncated vertex / index data in %s", *Path);
 		return false;
+	}
+	// Version 1 stores legacy metres.
+	for (FVertex& Vertex : Data.Vertices)
+	{
+		Vertex.Position = FLegacyCoordinateConversion::ConvertPosition(Vertex.Position);
 	}
 
 	if (Header.SubmeshCount == 0)

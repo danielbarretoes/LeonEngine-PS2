@@ -25,11 +25,14 @@ namespace
 		return M;
 	}
 
-	/** The legacy model matrix, glm T * Rx * Ry * Rz * S, written as FMatrix products (applied left to right). */
+	/**
+	 * The legacy model matrix, glm T * Rx * Ry * Rz * S, written as FMatrix products (applied left to right), with the
+	 * translation in world units (100 per legacy metre).
+	 */
 	FMatrix LegacyModelMatrix(const FVector& Position, const FVector& EulerDegrees, const FVector& Scale)
 	{
 		return FScaleMatrix(Scale) * LegacyAxisRotation(2, EulerDegrees.Z) * LegacyAxisRotation(1, EulerDegrees.Y) *
-			LegacyAxisRotation(0, EulerDegrees.X) * FTranslationMatrix(Position);
+			LegacyAxisRotation(0, EulerDegrees.X) * FTranslationMatrix(Position * 100.0f);
 	}
 
 	/** The legacy light direction from pitch and yaw degrees. */
@@ -72,7 +75,18 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLegacyCoordinateConversionIdentityTest,
 
 bool FLegacyCoordinateConversionIdentityTest::RunTest(const FString& Parameters)
 {
-	// A default legacy transform is the identity, and each conversion undoes its inverse.
+	// A default legacy transform is the identity, and each conversion undoes its inverse; a legacy metre is 100 units.
+	TestEqual("Units per metre", FLegacyCoordinateConversion::UnitsPerMetre, 100.0f);
+	TestTrue("Position in cm",
+		FLegacyCoordinateConversion::ConvertPosition(FVector(1.0f, -2.0f, 0.5f))
+			.Equals(FVector(100.0f, -200.0f, 50.0f), 1.0e-4f));
+	TestEqual("Length in cm", FLegacyCoordinateConversion::ConvertLength(0.35f), 35.0f, 1.0e-4f);
+	TestTrue("Direction unchanged",
+		FLegacyCoordinateConversion::ConvertDirection(FVector(0.0f, 1.0f, 0.0f))
+			.Equals(FVector(0.0f, 1.0f, 0.0f), 1.0e-6f));
+	TestTrue("Scale unchanged",
+		FLegacyCoordinateConversion::ConvertScale(FVector(2.0f, 1.0f, 0.5f))
+			.Equals(FVector(2.0f, 1.0f, 0.5f), 1.0e-6f));
 	const FMatrix M =
 		FLegacyCoordinateConversion::ConvertTransform(FVector::ZeroVector, FVector::ZeroVector, FVector::OneVector)
 			.ToMatrixWithScale();
@@ -90,6 +104,9 @@ bool FLegacyCoordinateConversionIdentityTest::RunTest(const FString& Parameters)
 			.Equals(Legacy, 1.0e-6f));
 	TestEqual("Length", FLegacyCoordinateConversion::ToLegacyLength(FLegacyCoordinateConversion::ConvertLength(2.5f)),
 		2.5f, 1.0e-6f);
+	TestTrue("Extent",
+		FLegacyCoordinateConversion::ToLegacyExtent(FLegacyCoordinateConversion::ConvertExtent(Legacy))
+			.Equals(Legacy, 1.0e-6f));
 	return true;
 }
 
@@ -99,13 +116,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLegacyCoordinateConversionTranslationYawTest,
 
 bool FLegacyCoordinateConversionTranslationYawTest::RunTest(const FString& Parameters)
 {
-	// The position lands in the translation row; 90 degrees about legacy Y sends local +X to -Z.
+	// The position lands in the translation row in cm; 90 degrees about legacy Y sends local +X to -Z.
 	const FTransform Transform = FLegacyCoordinateConversion::ConvertTransform(
 		FVector(2.0f, 3.0f, 4.0f), FVector(0.0f, 90.0f, 0.0f), FVector::OneVector);
 	const FMatrix M = Transform.ToMatrixWithScale();
-	TestEqual("Translation x", M.M[3][0], 2.0f);
-	TestEqual("Translation y", M.M[3][1], 3.0f);
-	TestEqual("Translation z", M.M[3][2], 4.0f);
+	TestEqual("Translation x", M.M[3][0], 200.0f);
+	TestEqual("Translation y", M.M[3][1], 300.0f);
+	TestEqual("Translation z", M.M[3][2], 400.0f);
 	TestEqual("X axis x", M.M[0][0], 0.0f, 1.0e-6f);
 	TestEqual("X axis z", M.M[0][2], -1.0f, 1.0e-6f);
 	TestTrue("Local +X goes to -Z",
@@ -137,9 +154,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLegacyCoordinateConversionModelMatrixTest,
 
 bool FLegacyCoordinateConversionModelMatrixTest::RunTest(const FString& Parameters)
 {
-	// ConvertTransform builds the legacy model matrix T * Rx * Ry * Rz * S: glm's floats, and the sin / cos formula.
+	// ConvertTransform builds the legacy model matrix T * Rx * Ry * Rz * S: glm's floats (the translation row in cm),
+	// and the sin / cos formula.
 	const float GlmTrs[16] = {0.707106709f, 1.1464467f, 1.47839785f, 0, -0.306186229f, 0.369599462f, -0.140165031f, 0,
-		-1.06066012f, -0.530330062f, 0.918558598f, 0, 1, -2, 3.5f, 1};
+		-1.06066012f, -0.530330062f, 0.918558598f, 0, 100, -200, 350, 1};
 	FMatrix Glm;
 	FMemory::Memcpy(&Glm.M[0][0], GlmTrs, sizeof(GlmTrs));
 	MatricesMatch(*this, "glm translate / rotate / scale",

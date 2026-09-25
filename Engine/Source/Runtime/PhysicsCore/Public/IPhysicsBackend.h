@@ -9,6 +9,8 @@
  * Physics backend contract. Implementations live in Engine (Arcade) and in plugins (JoltPhysics).
  * FPhysScene remains the gameplay-facing API; backends plug in behind it.
  * Arcade owns the CMC side resolve / QuerySupportY; Jolt may own rigid Step + narrow-phase traces.
+ * Every length, velocity and acceleration crosses this interface in engine world units (cm); a backend with other
+ * units (Jolt: metres) converts at its own boundary.
  */
 class PHYSICSCORE_API IPhysicsBackend
 {

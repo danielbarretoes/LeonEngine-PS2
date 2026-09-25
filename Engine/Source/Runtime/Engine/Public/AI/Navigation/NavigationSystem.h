@@ -21,14 +21,14 @@ namespace NavTags
 class ENGINE_API UNavigationSystem
 {
 public:
-	/** Cell size / agent radius used when baking (defaults ~ character capsule radius). */
-	void SetCellSize(float Meters)
+	/** Cell size / agent radius used when baking, in cm, at least 5 (defaults ~ character capsule radius). */
+	void SetCellSize(float InCellSize)
 	{
-		CellSize = Meters > 0.05f ? Meters : 0.05f;
+		CellSize = InCellSize > MinBakeSize ? InCellSize : MinBakeSize;
 	}
-	void SetAgentRadius(float Meters)
+	void SetAgentRadius(float InAgentRadius)
 	{
-		AgentRadius = Meters > 0.05f ? Meters : 0.05f;
+		AgentRadius = InAgentRadius > MinBakeSize ? InAgentRadius : MinBakeSize;
 	}
 	[[nodiscard]] float GetCellSize() const
 	{
@@ -83,8 +83,12 @@ private:
 	void BakeGrid(const FPhysScene& Physics, float FloorY, float WalkBounds, const ULevel* Level);
 
 	FNavMesh Mesh{};
-	float CellSize = 0.5f;
-	float AgentRadius = 0.35f;
+	/** Smallest cell size / agent radius (cm). */
+	static constexpr float MinBakeSize = 5.0f;
+	/** cm */
+	float CellSize = 50.0f;
+	/** cm */
+	float AgentRadius = 35.0f;
 	int BlockerCount = 0;
 	int WalkableCellCount = 0;
 };

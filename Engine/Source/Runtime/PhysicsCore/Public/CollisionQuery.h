@@ -23,7 +23,7 @@ enum class EDrawDebugTrace : uint8
 	ForOneFrame,
 };
 
-/** UE-like FHitResult for FPhysScene traces (legacy Y-up metres until P7). */
+/** UE-like FHitResult for FPhysScene traces (centimetres, still Y up until P7 moves to Z up). */
 struct PHYSICSCORE_API FHitResult
 {
 	bool bBlockingHit = false;

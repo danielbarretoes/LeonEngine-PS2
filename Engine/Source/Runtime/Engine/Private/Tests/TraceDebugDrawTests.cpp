@@ -15,18 +15,18 @@ bool FTraceDebugDrawLineTraceMissAndHitFillDebugDrawTest::RunTest(const FString&
 	// DrawDebugLineTrace draws both a missed trace and a trace with a blocking hit.
 	FDebugDraw Draw;
 
-	DrawDebugLineTrace(Draw, FVector::ZeroVector, FVector(0.0f, 1.0f, 0.0f), TArray<FHitResult>());
+	DrawDebugLineTrace(Draw, FVector::ZeroVector, FVector(0.0f, 100.0f, 0.0f), TArray<FHitResult>());
 	TestFalse("Miss drawn", Draw.IsEmpty());
 
 	Draw.Clear();
 	FHitResult Hit{};
 	Hit.bBlockingHit = true;
 	Hit.Time = 0.5f;
-	Hit.ImpactPoint = FVector(0.0f, 0.5f, 0.0f);
+	Hit.ImpactPoint = FVector(0.0f, 50.0f, 0.0f);
 	Hit.ImpactNormal = FVector(0.0f, 1.0f, 0.0f);
 	TArray<FHitResult> Hits;
 	Hits.Add(Hit);
-	DrawDebugLineTrace(Draw, FVector::ZeroVector, FVector(0.0f, 1.0f, 0.0f), Hits);
+	DrawDebugLineTrace(Draw, FVector::ZeroVector, FVector(0.0f, 100.0f, 0.0f), Hits);
 	TestFalse("Hit drawn", Draw.IsEmpty());
 	return true;
 }
@@ -40,23 +40,23 @@ bool FTraceDebugDrawLineTraceForOneFrameDrawsViaPhysSceneTest::RunTest(const FSt
 	// With DrawDebugType ForOneFrame the scene traces draw into the given FDebugDraw, on a hit and on a miss.
 	FPhysScene Scene;
 	const int32 Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
-	Scene.GetBodies()[Id].Position = FVector(0.0f, 0.5f, 0.0f);
-	Scene.GetBodies()[Id].HalfExtents = FVector(0.5f, 0.5f, 0.5f);
+	Scene.GetBodies()[Id].Position = FVector(0.0f, 50.0f, 0.0f);
+	Scene.GetBodies()[Id].HalfExtents = FVector(50.0f, 50.0f, 50.0f);
 
 	FDebugDraw Draw;
 	FCollisionQueryParams Params{};
 	Params.DrawDebugType = EDrawDebugTrace::ForOneFrame;
 
 	FHitResult Hit{};
-	const bool bHit = Scene.LineTraceSingleByChannel(
-		Hit, FVector(0.0f, 0.5f, -2.0f), FVector(0.0f, 0.5f, 2.0f), ECollisionChannel::WorldStatic, Params, &Draw);
+	const bool bHit = Scene.LineTraceSingleByChannel(Hit, FVector(0.0f, 50.0f, -200.0f), FVector(0.0f, 50.0f, 200.0f),
+		ECollisionChannel::WorldStatic, Params, &Draw);
 	TestTrue("Trace hit", bHit);
 	TestFalse("Hit drawn", Draw.IsEmpty());
 
 	Draw.Clear();
 	TArray<FHitResult> Misses;
-	const bool bMissHit = Scene.LineTraceMultiByChannel(
-		Misses, FVector(10.0f, 0.5f, -2.0f), FVector(10.0f, 0.5f, 2.0f), ECollisionChannel::WorldStatic, Params, &Draw);
+	const bool bMissHit = Scene.LineTraceMultiByChannel(Misses, FVector(1000.0f, 50.0f, -200.0f),
+		FVector(1000.0f, 50.0f, 200.0f), ECollisionChannel::WorldStatic, Params, &Draw);
 	TestFalse("Trace missed", bMissHit);
 	TestFalse("Miss drawn", Draw.IsEmpty());
 	return true;
@@ -70,11 +70,11 @@ bool FTraceDebugDrawSphereTraceAndCapsuleTraceFillBatchTest::RunTest(const FStri
 {
 	// The sphere and capsule trace helpers draw even without hits.
 	FDebugDraw Draw;
-	DrawDebugSphereTrace(Draw, FVector(0.0f, 1.0f, 0.0f), FVector::ZeroVector, 0.35f, TArray<FHitResult>());
+	DrawDebugSphereTrace(Draw, FVector(0.0f, 100.0f, 0.0f), FVector::ZeroVector, 35.0f, TArray<FHitResult>());
 	TestFalse("Sphere trace drawn", Draw.IsEmpty());
 
 	Draw.Clear();
-	DrawDebugCapsuleTrace(Draw, FVector(0.0f, 1.0f, 0.0f), FVector::ZeroVector, 0.3f, 0.5f, TArray<FHitResult>());
+	DrawDebugCapsuleTrace(Draw, FVector(0.0f, 100.0f, 0.0f), FVector::ZeroVector, 30.0f, 50.0f, TArray<FHitResult>());
 	TestFalse("Capsule trace drawn", Draw.IsEmpty());
 	return true;
 }

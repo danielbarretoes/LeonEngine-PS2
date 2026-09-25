@@ -40,7 +40,7 @@ public:
 	 * (UE light view, UE ortho, then ToGLClipSpace), as the shadow pass and the lit shader's lookup use it.
 	 */
 	[[nodiscard]] static FMatrix FitLightSpaceMatrix(
-		const FVector& LightDirection, const FVector& WorldMin, const FVector& WorldMax, float Padding = 0.5f);
+		const FVector& LightDirection, const FVector& WorldMin, const FVector& WorldMax, float Padding = 50.0f);
 
 private:
 	FRHIFramebufferId Fbo = InvalidFramebuffer;

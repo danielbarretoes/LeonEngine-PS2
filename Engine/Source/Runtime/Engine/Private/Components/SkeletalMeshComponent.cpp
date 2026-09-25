@@ -87,12 +87,15 @@ void USkeletalMeshComponent::ApplyFitHeight(float FitHeight)
 		return;
 	}
 	const float Scale = SkeletalMesh->FitUniformScale(FitHeight);
-	constexpr float GroundEpsilon = 0.008f;
+	/** cm above the floor, against z-fighting with the ground. */
+	constexpr float GroundEpsilon = 0.8f;
 	const FVector Mn = SkeletalMesh->GetLocalMin();
 	const FVector Mx = SkeletalMesh->GetLocalMax();
 	const FVector Center = (Mn + Mx) * 0.5f;
 	RelativeScale3D = FVector(Scale, Scale, Scale);
-	RelativeLocation = FVector((-Center.X) * Scale, ((-Mn.Y) * Scale) + GroundEpsilon, (-Center.Z) * Scale);
+	// The scaled mesh is in world units; the Relative* fields hold legacy values.
+	const FVector Grounded((-Center.X) * Scale, ((-Mn.Y) * Scale) + GroundEpsilon, (-Center.Z) * Scale);
+	RelativeLocation = FLegacyCoordinateConversion::ToLegacyPosition(Grounded);
 }
 
 void USkeletalMeshComponent::ClearAttachments()

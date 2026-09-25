@@ -110,6 +110,7 @@ private:
 	float PathRebuildCooldown = 0.0f;
 	bool bHasTarget = false;
 	bool bUsePath = false;
-	float ArriveRadius = 0.35f;
+	/** cm */
+	float ArriveRadius = 35.0f;
 	EAILogicState LogicState = EAILogicState::Idle;
 };

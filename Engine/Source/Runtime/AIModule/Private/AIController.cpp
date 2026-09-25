@@ -10,9 +10,9 @@ namespace
 	constexpr float PathRebuildIntervalSeconds = 0.35f;
 	/**
 	 * Tight waypoint arrive — must stay well below typical obstacle half-width so path
-	 * corners are not skipped via straight-line distance through a blocker.
+	 * corners are not skipped via straight-line distance through a blocker (cm).
 	 */
-	constexpr float WaypointArriveRadius = 0.45f;
+	constexpr float WaypointArriveRadius = 45.0f;
 
 } // namespace
 

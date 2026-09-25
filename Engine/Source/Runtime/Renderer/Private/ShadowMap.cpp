@@ -106,7 +106,9 @@ FMatrix FShadowMap::FitLightSpaceMatrix(
 		Up = FVector(0.0f, 0.0f, 1.0f);
 	}
 
-	const FVector Eye = Center - (Dir * (Radius + 1.0f));
+	/** cm between the bounding sphere and the light eye. */
+	constexpr float EyeMargin = 100.0f;
+	const FVector Eye = Center - (Dir * (Radius + EyeMargin));
 	// UE view space of the light: x right, y up, z along the light (left-handed).
 	const FMatrix LightView = MakeLookAtView(Eye, Center, Up);
 
@@ -131,9 +133,9 @@ FMatrix FShadowMap::FitLightSpaceMatrix(
 		MaxLs = MaxLs.ComponentMax(Ls);
 	}
 
-	// View-space depth grows along +Z in front of the light.
-	const float ZNear = FMath::Max(0.05f, MinLs.Z - Padding);
-	const float ZFar = FMath::Max(ZNear + 0.1f, MaxLs.Z + Padding);
+	// View-space depth grows along +Z in front of the light (cm).
+	const float ZNear = FMath::Max(5.0f, MinLs.Z - Padding);
+	const float ZFar = FMath::Max(ZNear + 10.0f, MaxLs.Z + Padding);
 
 	// Off-centre box: centre it in x / y, then a UE ortho with half sizes (depth [0, 1] from ZNear to ZFar), then GL
 	// clip space.

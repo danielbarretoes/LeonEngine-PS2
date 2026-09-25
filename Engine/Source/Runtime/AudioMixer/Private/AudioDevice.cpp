@@ -15,6 +15,17 @@ namespace
 		return FMath::Clamp(V, 0.0f, 1.0f);
 	}
 
+	/**
+	 * miniaudio's distance attenuation is tuned for metres; the engine world is in centimetres. Locations are scaled
+	 * at this boundary (directions are unitless).
+	 */
+	constexpr float AudioMetresPerUnit = 0.01f;
+
+	[[nodiscard]] FVector ToAudioMetres(const FVector& WorldLocation)
+	{
+		return WorldLocation * AudioMetresPerUnit;
+	}
+
 	/** Legacy content path of a sound; empty for an empty name. */
 	[[nodiscard]] FString ResolveSoundPath(const TCHAR* AssetRelativePath)
 	{
@@ -271,7 +282,8 @@ void FAudioDevice::SetListener(const FVector& Location, const FVector& Forward, 
 	{
 		return;
 	}
-	ma_engine_listener_set_position(&Impl->Engine, 0, Location.X, Location.Y, Location.Z);
+	const FVector Metres = ToAudioMetres(Location);
+	ma_engine_listener_set_position(&Impl->Engine, 0, Metres.X, Metres.Y, Metres.Z);
 	ma_engine_listener_set_direction(&Impl->Engine, 0, Forward.X, Forward.Y, Forward.Z);
 	ma_engine_listener_set_world_up(&Impl->Engine, 0, Up.X, Up.Y, Up.Z);
 }
@@ -307,7 +319,8 @@ void FAudioDevice::PlaySoundAtLocation(const TCHAR* AssetRelativePath, const FVe
 	Voice->bInUse = true;
 	Voice->bOwnsBuffer = false;
 	ma_sound_set_spatialization_enabled(&Voice->Sound, MA_TRUE);
-	ma_sound_set_position(&Voice->Sound, Location.X, Location.Y, Location.Z);
+	const FVector Metres = ToAudioMetres(Location);
+	ma_sound_set_position(&Voice->Sound, Metres.X, Metres.Y, Metres.Z);
 	ma_sound_set_volume(&Voice->Sound, Clamp01(VolumeMultiplier));
 	ma_sound_start(&Voice->Sound);
 }

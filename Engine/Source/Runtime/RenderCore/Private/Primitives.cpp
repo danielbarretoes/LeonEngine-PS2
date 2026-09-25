@@ -3,38 +3,39 @@
 FMeshData MakeCube()
 {
 	// 6 faces x 4 vertices (unique normals / UVs per face corner).
+	constexpr float H = 0.5f * PrimitiveEdgeLength;
 	FMeshData Data;
 	Data.Vertices = {
 		// +Z
-		FVertex(FVector(-0.5f, -0.5f, 0.5f), FVector(0, 0, 1), FVector2D(0, 0)),
-		FVertex(FVector(0.5f, -0.5f, 0.5f), FVector(0, 0, 1), FVector2D(1, 0)),
-		FVertex(FVector(0.5f, 0.5f, 0.5f), FVector(0, 0, 1), FVector2D(1, 1)),
-		FVertex(FVector(-0.5f, 0.5f, 0.5f), FVector(0, 0, 1), FVector2D(0, 1)),
+		FVertex(FVector(-H, -H, H), FVector(0, 0, 1), FVector2D(0, 0)),
+		FVertex(FVector(H, -H, H), FVector(0, 0, 1), FVector2D(1, 0)),
+		FVertex(FVector(H, H, H), FVector(0, 0, 1), FVector2D(1, 1)),
+		FVertex(FVector(-H, H, H), FVector(0, 0, 1), FVector2D(0, 1)),
 		// -Z
-		FVertex(FVector(0.5f, -0.5f, -0.5f), FVector(0, 0, -1), FVector2D(0, 0)),
-		FVertex(FVector(-0.5f, -0.5f, -0.5f), FVector(0, 0, -1), FVector2D(1, 0)),
-		FVertex(FVector(-0.5f, 0.5f, -0.5f), FVector(0, 0, -1), FVector2D(1, 1)),
-		FVertex(FVector(0.5f, 0.5f, -0.5f), FVector(0, 0, -1), FVector2D(0, 1)),
+		FVertex(FVector(H, -H, -H), FVector(0, 0, -1), FVector2D(0, 0)),
+		FVertex(FVector(-H, -H, -H), FVector(0, 0, -1), FVector2D(1, 0)),
+		FVertex(FVector(-H, H, -H), FVector(0, 0, -1), FVector2D(1, 1)),
+		FVertex(FVector(H, H, -H), FVector(0, 0, -1), FVector2D(0, 1)),
 		// +Y
-		FVertex(FVector(-0.5f, 0.5f, 0.5f), FVector(0, 1, 0), FVector2D(0, 0)),
-		FVertex(FVector(0.5f, 0.5f, 0.5f), FVector(0, 1, 0), FVector2D(1, 0)),
-		FVertex(FVector(0.5f, 0.5f, -0.5f), FVector(0, 1, 0), FVector2D(1, 1)),
-		FVertex(FVector(-0.5f, 0.5f, -0.5f), FVector(0, 1, 0), FVector2D(0, 1)),
+		FVertex(FVector(-H, H, H), FVector(0, 1, 0), FVector2D(0, 0)),
+		FVertex(FVector(H, H, H), FVector(0, 1, 0), FVector2D(1, 0)),
+		FVertex(FVector(H, H, -H), FVector(0, 1, 0), FVector2D(1, 1)),
+		FVertex(FVector(-H, H, -H), FVector(0, 1, 0), FVector2D(0, 1)),
 		// -Y
-		FVertex(FVector(-0.5f, -0.5f, -0.5f), FVector(0, -1, 0), FVector2D(0, 0)),
-		FVertex(FVector(0.5f, -0.5f, -0.5f), FVector(0, -1, 0), FVector2D(1, 0)),
-		FVertex(FVector(0.5f, -0.5f, 0.5f), FVector(0, -1, 0), FVector2D(1, 1)),
-		FVertex(FVector(-0.5f, -0.5f, 0.5f), FVector(0, -1, 0), FVector2D(0, 1)),
+		FVertex(FVector(-H, -H, -H), FVector(0, -1, 0), FVector2D(0, 0)),
+		FVertex(FVector(H, -H, -H), FVector(0, -1, 0), FVector2D(1, 0)),
+		FVertex(FVector(H, -H, H), FVector(0, -1, 0), FVector2D(1, 1)),
+		FVertex(FVector(-H, -H, H), FVector(0, -1, 0), FVector2D(0, 1)),
 		// +X
-		FVertex(FVector(0.5f, -0.5f, 0.5f), FVector(1, 0, 0), FVector2D(0, 0)),
-		FVertex(FVector(0.5f, -0.5f, -0.5f), FVector(1, 0, 0), FVector2D(1, 0)),
-		FVertex(FVector(0.5f, 0.5f, -0.5f), FVector(1, 0, 0), FVector2D(1, 1)),
-		FVertex(FVector(0.5f, 0.5f, 0.5f), FVector(1, 0, 0), FVector2D(0, 1)),
+		FVertex(FVector(H, -H, H), FVector(1, 0, 0), FVector2D(0, 0)),
+		FVertex(FVector(H, -H, -H), FVector(1, 0, 0), FVector2D(1, 0)),
+		FVertex(FVector(H, H, -H), FVector(1, 0, 0), FVector2D(1, 1)),
+		FVertex(FVector(H, H, H), FVector(1, 0, 0), FVector2D(0, 1)),
 		// -X
-		FVertex(FVector(-0.5f, -0.5f, -0.5f), FVector(-1, 0, 0), FVector2D(0, 0)),
-		FVertex(FVector(-0.5f, -0.5f, 0.5f), FVector(-1, 0, 0), FVector2D(1, 0)),
-		FVertex(FVector(-0.5f, 0.5f, 0.5f), FVector(-1, 0, 0), FVector2D(1, 1)),
-		FVertex(FVector(-0.5f, 0.5f, -0.5f), FVector(-1, 0, 0), FVector2D(0, 1)),
+		FVertex(FVector(-H, -H, -H), FVector(-1, 0, 0), FVector2D(0, 0)),
+		FVertex(FVector(-H, -H, H), FVector(-1, 0, 0), FVector2D(1, 0)),
+		FVertex(FVector(-H, H, H), FVector(-1, 0, 0), FVector2D(1, 1)),
+		FVertex(FVector(-H, H, -H), FVector(-1, 0, 0), FVector2D(0, 1)),
 	};
 
 	Data.Indices.Reserve(36);
@@ -69,7 +70,7 @@ FMeshData MakeSphere(int32 Segments, int32 Rings)
 	Data.Vertices.Reserve((Rings + 1) * (Segments + 1));
 	Data.Indices.Reserve(Rings * Segments * 6);
 
-	constexpr float Radius = 0.5f;
+	constexpr float Radius = 0.5f * PrimitiveEdgeLength;
 	for (int32 Y = 0; Y <= Rings; ++Y)
 	{
 		const float V = static_cast<float>(Y) / static_cast<float>(Rings);

@@ -17,12 +17,15 @@ class FPhysScene;
 class ENGINE_API USpringArmComponent : public USceneComponent
 {
 public:
-	/** Desired boom length (scroll edits this; lag follows toward it). */
-	float TargetArmLength = 4.0f;
-	float ArmLengthMin = 1.5f;
-	float ArmLengthMax = 20.0f;
-	float SocketOffsetZ = 1.0f;
-	/** Unreal-like SocketOffset.X — positive = right of pawn along boom right (over-shoulder). */
+	/** Desired boom length in cm (scroll edits this; lag follows toward it). */
+	float TargetArmLength = 400.0f;
+	/** cm */
+	float ArmLengthMin = 150.0f;
+	/** cm */
+	float ArmLengthMax = 2000.0f;
+	/** Height of the boom target above the actor location (cm). */
+	float SocketOffsetZ = 100.0f;
+	/** Unreal-like SocketOffset.X (cm) — positive = right of pawn along boom right (over-shoulder). */
 	float SocketOffsetX = 0.0f;
 
 	/** Desired boom orientation (mouse look edits these immediately). */
@@ -41,10 +44,10 @@ public:
 
 	/** Unreal bDoCollisionTest — sphere-sweep target → camera against FPhysScene. */
 	bool bDoCollisionTest = true;
-	/** Sphere probe radius (meters). Unreal ProbeSize ≈ 12uu → ~0.12m. */
-	float ProbeSize = 0.15f;
-	/** Extra pull-in after a hit so the near plane stays clear of geometry. */
-	float CollisionProbeOffset = 0.05f;
+	/** Sphere probe radius (cm). Unreal ProbeSize defaults to 12. */
+	float ProbeSize = 15.0f;
+	/** Extra pull-in after a hit so the near plane stays clear of geometry (cm). */
+	float CollisionProbeOffset = 5.0f;
 	ECollisionChannel ProbeChannel = ECollisionChannel::WorldStatic;
 
 	void AddYawInput(float DeltaDegrees)
@@ -110,6 +113,6 @@ private:
 	FVector LaggedTarget = FVector::ZeroVector;
 	float LaggedYawDegrees = 0.0f;
 	float LaggedPitchDegrees = 15.0f;
-	float LaggedArmLength = 4.0f;
+	float LaggedArmLength = 400.0f;
 	bool bLagInitialized = false;
 };

@@ -20,7 +20,8 @@ private:
 	struct FOrbitSnapshot
 	{
 		FVector Target = FVector::ZeroVector;
-		float Distance = 8.0f;
+		/** cm */
+		float Distance = 800.0f;
 		float YawDegrees = 45.0f;
 		float PitchDegrees = 25.0f;
 	};

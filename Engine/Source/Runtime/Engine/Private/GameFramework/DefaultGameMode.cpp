@@ -11,7 +11,7 @@ namespace
 		const FVector LocalTarget = Camera.GetTarget();
 		FVector Look = LocalTarget - Eye;
 		const float LookLen = Look.Size();
-		if (LookLen > 1.0e-5f)
+		if (LookLen > 1.0e-3f)
 		{
 			Look /= LookLen;
 		}

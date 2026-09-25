@@ -42,7 +42,7 @@ namespace
 
 		for (int32 Axis = 0; Axis < 3; ++Axis)
 		{
-			if (FMath::Abs(Dir[Axis]) < 1.0e-8f)
+			if (FMath::Abs(Dir[Axis]) < 1.0e-6f)
 			{
 				if (Start[Axis] < Mn[Axis] || Start[Axis] > Mx[Axis])
 				{
@@ -101,7 +101,7 @@ namespace
 		const FVector& Start, const FVector& End, float FloorY, float& OutT, FVector& OutNormal)
 	{
 		const float Dy = End.Y - Start.Y;
-		if (FMath::Abs(Dy) < 1.0e-8f)
+		if (FMath::Abs(Dy) < 1.0e-6f)
 		{
 			return false;
 		}
@@ -146,7 +146,7 @@ namespace
 			return false;
 		}
 		const float Denom = D0 - D1;
-		if (FMath::Abs(Denom) < 1.0e-8f)
+		if (FMath::Abs(Denom) < 1.0e-6f)
 		{
 			return false;
 		}
@@ -241,11 +241,13 @@ namespace
 
 	void AddImpactMarker(FDebugDraw& Draw, const FHitResult& Hit)
 	{
-		const float S = 0.08f;
+		/** Marker half size, normal arrow length and arrow head (cm). */
+		constexpr float S = 8.0f;
+		constexpr float NormalLength = 45.0f;
 		AddLine(Draw, Hit.ImpactPoint + FVector(-S, 0, 0), Hit.ImpactPoint + FVector(S, 0, 0), TraceNormal);
 		AddLine(Draw, Hit.ImpactPoint + FVector(0, -S, 0), Hit.ImpactPoint + FVector(0, S, 0), TraceNormal);
 		AddLine(Draw, Hit.ImpactPoint + FVector(0, 0, -S), Hit.ImpactPoint + FVector(0, 0, S), TraceNormal);
-		Draw.AddArrow(Hit.ImpactPoint, Hit.ImpactPoint + (Hit.ImpactNormal * 0.45f), TraceNormal, 0.12f, 0.07f);
+		Draw.AddArrow(Hit.ImpactPoint, Hit.ImpactPoint + (Hit.ImpactNormal * NormalLength), TraceNormal, 12.0f, 7.0f);
 	}
 
 	void DrawTracePath(FDebugDraw& Draw, const FVector& Start, const FVector& End, const TArray<FHitResult>& Hits)

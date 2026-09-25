@@ -120,11 +120,11 @@ bool FLevelStoresMeshesPlayerStartsAndTagsTest::RunTest(const FString& Parameter
 	ULevel Level;
 	UStaticMeshComponent Mesh{};
 	Mesh.Tag = "player";
-	Mesh.Transform.SetLocation(FVector(1.0f, 2.0f, 3.0f));
+	Mesh.Transform.SetLocation(FVector(100.0f, 200.0f, 300.0f));
 	Level.AddStaticMesh(MoveTemp(Mesh));
 
 	FPlayerStart Start{};
-	Start.Transform.SetLocation(FVector(5.0f, 0.0f, -2.0f));
+	Start.Transform.SetLocation(FVector(500.0f, 0.0f, -200.0f));
 	Level.AddPlayerStart(Start);
 
 	TestEqual("One static mesh", Level.GetStaticMeshes().Num(), 1);
@@ -135,7 +135,7 @@ bool FLevelStoresMeshesPlayerStartsAndTagsTest::RunTest(const FString& Parameter
 	{
 		return false;
 	}
-	TestEqual("PlayerStart X", Found->Transform.GetLocation().X, 5.0f, 1.0e-5f);
+	TestEqual("PlayerStart X", Found->Transform.GetLocation().X, 500.0f, 1.0e-3f);
 
 	Level.Clear();
 	TestEqual("No static meshes", Level.GetStaticMeshes().Num(), 0);

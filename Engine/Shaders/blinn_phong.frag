@@ -91,9 +91,10 @@ vec3 shadePoint(vec3 N, vec3 V, vec3 diffuseColor, vec3 specularColor, vec3 posi
                 vec3 lightColor, float range) {
     vec3 toLight = position - vWorldPos;
     float dist = length(toLight);
-    float atten = clamp(1.0 - dist / max(range, 0.001), 0.0, 1.0);
+    // Distances in world units (cm).
+    float atten = clamp(1.0 - dist / max(range, 0.1), 0.0, 1.0);
     atten *= atten;
-    vec3 L = toLight / max(dist, 0.001);
+    vec3 L = toLight / max(dist, 0.1);
     float NdL = max(dot(N, L), 0.0);
     vec3 H = normalize(L + V);
     float spec = pow(max(dot(N, H), 0.0), max(uShininess, 1.0));
@@ -158,7 +159,8 @@ void main() {
     // Planar scene mirror (objects + sky), projective sample from the reflection pass.
     if (uHasPlanarReflection != 0) {
         vec4 rc = uReflectionViewProj * vec4(vWorldPos, 1.0);
-        vec2 uv = rc.xy / max(abs(rc.w), 1e-4) * 0.5 + 0.5;
+        // rc.w is the view depth (cm).
+        vec2 uv = rc.xy / max(abs(rc.w), 1e-2) * 0.5 + 0.5;
         if (uv.x > 0.0 && uv.x < 1.0 && uv.y > 0.0 && uv.y < 1.0 && rc.w > 0.0) {
             vec3 mirrorColor = texture(uPlanarReflection, uv).rgb;
             float mirrorW = mix(0.35, 0.92, metallic) * mix(1.0, 0.25, roughness);

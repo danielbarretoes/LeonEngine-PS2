@@ -341,7 +341,7 @@ namespace
 			Light.Intensity = Record.Intensity;
 			Light.bCastShadows = Record.bCastShadows;
 			Light.SourceAngle = Record.SourceAngle;
-			Light.Range = Record.Range;
+			Light.Range = FLegacyCoordinateConversion::ConvertLength(Record.Range);
 
 			if (Light.Type != EBasicLight::Point)
 			{
@@ -357,9 +357,9 @@ namespace
 			}
 			FPointLight& Live = Staged.GetPointLights()[LightIndex];
 			Live.bHasOrbit = true;
-			Live.OrbitRadius = Record.OrbitRadius;
-			Live.OrbitHeight = Record.OrbitHeight;
-			Live.OrbitHeightAmp = Record.OrbitHeightAmp;
+			Live.OrbitRadius = FLegacyCoordinateConversion::ConvertLength(Record.OrbitRadius);
+			Live.OrbitHeight = FLegacyCoordinateConversion::ConvertLength(Record.OrbitHeight);
+			Live.OrbitHeightAmp = FLegacyCoordinateConversion::ConvertLength(Record.OrbitHeightAmp);
 			Live.OrbitSpeed = Record.OrbitSpeed;
 		}
 
@@ -390,9 +390,9 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 	Doc.GameMode = Level.GetGameMode();
 
 	Doc.Camera.Mode = InCamera.GetMode();
-	Doc.Camera.Target = InCamera.GetTarget();
-	Doc.Camera.Eye = InCamera.EyeLocation();
-	Doc.Camera.Distance = InCamera.GetDistance();
+	Doc.Camera.Target = FLegacyCoordinateConversion::ToLegacyPosition(InCamera.GetTarget());
+	Doc.Camera.Eye = FLegacyCoordinateConversion::ToLegacyPosition(InCamera.EyeLocation());
+	Doc.Camera.Distance = FLegacyCoordinateConversion::ToLegacyLength(InCamera.GetDistance());
 	Doc.Camera.Yaw = InCamera.GetYawDegrees();
 	Doc.Camera.Pitch = InCamera.GetPitchDegrees();
 
@@ -422,7 +422,7 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 		SetLegacyTransform(Record, Volume.Transform);
 		Record.Tag = Volume.Tag;
 		Record.InteractCost = Volume.InteractCost;
-		Record.InteractRadius = Volume.InteractRadius;
+		Record.InteractRadius = FLegacyCoordinateConversion::ToLegacyLength(Volume.InteractRadius);
 		Record.Payload = Volume.Payload;
 		Record.bConsumeOnUse = Volume.bConsumeOnUse;
 		Record.bEnableGravity = false;
@@ -474,8 +474,8 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 		Record.SpinYaw = LocalMesh.SpinYaw;
 
 		Record.bHasBob = LocalMesh.bHasBob;
-		Record.BobBaseY = LocalMesh.BobBaseY;
-		Record.BobAmplitude = LocalMesh.BobAmplitude;
+		Record.BobBaseY = FLegacyCoordinateConversion::ToLegacyLength(LocalMesh.BobBaseY);
+		Record.BobAmplitude = FLegacyCoordinateConversion::ToLegacyLength(LocalMesh.BobAmplitude);
 		Record.BobSpeed = LocalMesh.BobSpeed;
 
 		Doc.Actors.Add(MoveTemp(Record));
@@ -500,11 +500,11 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 		SetLegacyLightTransform(Record, Light.Transform);
 		Record.LightColor = Light.LightColor;
 		Record.Intensity = Light.Intensity;
-		Record.Range = Light.Range;
+		Record.Range = FLegacyCoordinateConversion::ToLegacyLength(Light.Range);
 		Record.bHasOrbit = Light.bHasOrbit;
-		Record.OrbitRadius = Light.OrbitRadius;
-		Record.OrbitHeight = Light.OrbitHeight;
-		Record.OrbitHeightAmp = Light.OrbitHeightAmp;
+		Record.OrbitRadius = FLegacyCoordinateConversion::ToLegacyLength(Light.OrbitRadius);
+		Record.OrbitHeight = FLegacyCoordinateConversion::ToLegacyLength(Light.OrbitHeight);
+		Record.OrbitHeightAmp = FLegacyCoordinateConversion::ToLegacyLength(Light.OrbitHeightAmp);
 		Record.OrbitSpeed = Light.OrbitSpeed;
 		Doc.Lights.Add(Record);
 	}
@@ -1008,7 +1008,7 @@ bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FS
 		{
 			FTriggerVolume Volume;
 			Volume.Transform = Transform;
-			Volume.InteractRadius = Record.InteractRadius;
+			Volume.InteractRadius = FLegacyCoordinateConversion::ConvertLength(Record.InteractRadius);
 			Volume.InteractCost = Record.InteractCost;
 			Volume.Payload = Record.Payload;
 			Volume.Tag = Record.Tag;
@@ -1058,7 +1058,7 @@ bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FS
 
 		if (Record.bHasFitHeight && Record.FitHeight > 0.0f)
 		{
-			ApplyFitHeight(Actor, Record.FitHeight);
+			ApplyFitHeight(Actor, FLegacyCoordinateConversion::ConvertLength(Record.FitHeight));
 		}
 
 		Actor.Tag = Record.Tag;
@@ -1106,8 +1106,8 @@ bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FS
 		{
 			UStaticMeshComponent& Live = Staged.GetStaticMeshes()[ActorIndex];
 			Live.bHasBob = true;
-			Live.BobBaseY = Record.BobBaseY;
-			Live.BobAmplitude = Record.BobAmplitude;
+			Live.BobBaseY = FLegacyCoordinateConversion::ConvertLength(Record.BobBaseY);
+			Live.BobAmplitude = FLegacyCoordinateConversion::ConvertLength(Record.BobAmplitude);
 			Live.BobSpeed = Record.BobSpeed;
 		}
 	}
@@ -1134,10 +1134,10 @@ bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FS
 	Engine.GetLevel() = MoveTemp(Staged);
 
 	UCameraComponent& LocalCamera = Engine.GetCamera();
-	LocalCamera.SetTarget(Doc.Camera.Target);
-	LocalCamera.SetDistance(Doc.Camera.Distance);
+	LocalCamera.SetTarget(FLegacyCoordinateConversion::ConvertPosition(Doc.Camera.Target));
+	LocalCamera.SetDistance(FLegacyCoordinateConversion::ConvertLength(Doc.Camera.Distance));
 	LocalCamera.SetYawPitch(Doc.Camera.Yaw, Doc.Camera.Pitch);
-	LocalCamera.SetEyeLocation(Doc.Camera.Eye);
+	LocalCamera.SetEyeLocation(FLegacyCoordinateConversion::ConvertPosition(Doc.Camera.Eye));
 	LocalCamera.SetMode(Doc.Camera.Mode);
 
 	const FString& Label = Doc.Name.IsEmpty() ? SourcePath : Doc.Name;

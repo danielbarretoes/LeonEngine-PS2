@@ -12,6 +12,7 @@ uniform int uSampleCount;
 uniform mat4 uProjection;
 uniform mat4 uInvProjection;
 uniform vec2 uNoiseScale;
+// World units (cm), like every view-space length below.
 uniform float uRadius;
 uniform float uBias;
 
@@ -41,8 +42,9 @@ vec3 reconstructNormal(vec2 uv, float depth) {
     // The space is left-handed, so the operands swap to keep the normal of the right-handed view mirrored in z;
     // it then faces the camera (-z).
     vec3 n = cross(dY, dX);
+    // n scales with the square of the lengths, len2 with their fourth power (cm^4).
     float len2 = dot(n, n);
-    if (len2 < 1.0e-10) {
+    if (len2 < 1.0e-2) {
         return vec3(0.0, 0.0, -1.0);
     }
     n = n * inversesqrt(len2);
@@ -58,7 +60,7 @@ void main() {
 
     vec3 fragPos = viewPosFromDepth(vUv, depth);
     // Depth-scaled bias hides perspective depth-buffer stair steps.
-    float z = max(fragPos.z, 1.0e-3);
+    float z = max(fragPos.z, 0.1);
     float bias = max(uBias, z * 0.02);
 
     vec3 normal = reconstructNormal(vUv, depth);

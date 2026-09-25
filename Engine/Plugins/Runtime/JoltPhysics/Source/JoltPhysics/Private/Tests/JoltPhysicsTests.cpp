@@ -41,20 +41,20 @@ bool FJoltWorldSwitchesBackendTest::RunTest(const FString& Parameters)
 
 	const int32 Id = World.GetPhysicsScene().AddBody({0, EBodyType::Dynamic, 8.0f, true});
 	FBodyInstance& Body = World.GetPhysicsScene().GetBodies()[Id];
-	Body.Position = FVector(0.0f, 2.5f, 0.0f);
-	Body.HalfExtents = FVector(0.4f, 0.4f, 0.4f);
+	Body.Position = FVector(0.0f, 250.0f, 0.0f);
+	Body.HalfExtents = FVector(40.0f, 40.0f, 40.0f);
 
 	FPhysSceneStepParams Params;
 	Params.DeltaTime = 1.0f / 60.0f;
-	Params.Gravity = 24.0f;
+	Params.Gravity = 2400.0f;
 	Params.FloorY = 0.0f;
-	Params.WalkBounds = 50.0f;
+	Params.WalkBounds = 5000.0f;
 	for (int32 I = 0; I < 180; ++I)
 	{
 		World.GetPhysicsScene().Step(Params);
 	}
-	TestTrue("Fell", Body.Position.Y < 1.1f);
-	TestTrue("Above the floor", Body.Position.Y > 0.2f);
+	TestTrue("Fell", Body.Position.Y < 110.0f);
+	TestTrue("Above the floor", Body.Position.Y > 20.0f);
 	return true;
 }
 
@@ -67,23 +67,23 @@ bool FJoltGravityRestsOnFloorTest::RunTest(const FString& Parameters)
 	FPhysScene Scene(EPhysicsBackend::Jolt);
 	const int32 Id = Scene.AddBody({0, EBodyType::Dynamic, 10.0f, true});
 	FBodyInstance& Body = Scene.GetBodies()[Id];
-	Body.Position = FVector(0.0f, 3.0f, 0.0f);
-	Body.HalfExtents = FVector(0.5f, 0.5f, 0.5f);
+	Body.Position = FVector(0.0f, 300.0f, 0.0f);
+	Body.HalfExtents = FVector(50.0f, 50.0f, 50.0f);
 
 	FPhysSceneStepParams Params;
 	Params.DeltaTime = 1.0f / 60.0f;
-	Params.Gravity = 24.0f;
+	Params.Gravity = 2400.0f;
 	Params.FloorY = 0.0f;
-	Params.WalkBounds = 100.0f;
+	Params.WalkBounds = 10000.0f;
 
 	for (int32 I = 0; I < 240; ++I)
 	{
 		Scene.Step(Params);
 	}
 
-	TestTrue("Fell", Body.Position.Y < 1.2f);
-	TestTrue("Above the floor", Body.Position.Y > 0.3f);
-	TestTrue("At rest", FMath::Abs(Body.VelocityY) < 1.0f);
+	TestTrue("Fell", Body.Position.Y < 120.0f);
+	TestTrue("Above the floor", Body.Position.Y > 30.0f);
+	TestTrue("At rest", FMath::Abs(Body.VelocityY) < 100.0f);
 	return true;
 }
 
@@ -97,28 +97,28 @@ bool FJoltRestsOnStaticBoxTest::RunTest(const FString& Parameters)
 
 	const int32 GroundId = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
 	FBodyInstance& Ground = Scene.GetBodies()[GroundId];
-	Ground.Position = FVector(0.0f, 0.5f, 0.0f);
-	Ground.HalfExtents = FVector(2.0f, 0.5f, 2.0f);
+	Ground.Position = FVector(0.0f, 50.0f, 0.0f);
+	Ground.HalfExtents = FVector(200.0f, 50.0f, 200.0f);
 
 	const int32 BoxId = Scene.AddBody({1, EBodyType::Dynamic, 5.0f, true});
 	FBodyInstance& Box = Scene.GetBodies()[BoxId];
-	Box.Position = FVector(0.0f, 4.0f, 0.0f);
-	Box.HalfExtents = FVector(0.4f, 0.4f, 0.4f);
+	Box.Position = FVector(0.0f, 400.0f, 0.0f);
+	Box.HalfExtents = FVector(40.0f, 40.0f, 40.0f);
 
 	FPhysSceneStepParams Params;
 	Params.DeltaTime = 1.0f / 60.0f;
-	Params.Gravity = 24.0f;
-	Params.FloorY = -10.0f; // below the ground so the static box is the support
-	Params.WalkBounds = 100.0f;
+	Params.Gravity = 2400.0f;
+	Params.FloorY = -1000.0f; // below the ground so the static box is the support
+	Params.WalkBounds = 10000.0f;
 
 	for (int32 I = 0; I < 300; ++I)
 	{
 		Scene.Step(Params);
 	}
 
-	// The dynamic box centre settles near the ground top (1.0) + half extents (0.4) = 1.4.
-	TestEqual("Rest height", Box.Position.Y, 1.4f, 0.35f);
-	TestTrue("At rest", FMath::Abs(Box.VelocityY) < 1.5f);
+	// The dynamic box centre settles near the ground top (100 cm) + half extents (40 cm) = 140 cm.
+	TestEqual("Rest height", Box.Position.Y, 140.0f, 35.0f);
+	TestTrue("At rest", FMath::Abs(Box.VelocityY) < 150.0f);
 	return true;
 }
 
@@ -130,11 +130,13 @@ bool FJoltRestsOnTriangleMeshTest::RunTest(const FString& Parameters)
 	// A static level mesh becomes a Jolt triangle mesh and a dropped box rests on it.
 	ULevel Level;
 	FMeshData Data;
-	// Flat plane at y=1 covering xz [-3,3]
-	Data.Vertices.Add(FVertex(FVector(-3.0f, 1.0f, -3.0f), FVector(0, 1, 0), FVector2D(0, 0), FVector4(1, 0, 0, 1)));
-	Data.Vertices.Add(FVertex(FVector(3.0f, 1.0f, -3.0f), FVector(0, 1, 0), FVector2D(1, 0), FVector4(1, 0, 0, 1)));
-	Data.Vertices.Add(FVertex(FVector(3.0f, 1.0f, 3.0f), FVector(0, 1, 0), FVector2D(1, 1), FVector4(1, 0, 0, 1)));
-	Data.Vertices.Add(FVertex(FVector(-3.0f, 1.0f, 3.0f), FVector(0, 1, 0), FVector2D(0, 1), FVector4(1, 0, 0, 1)));
+	// Flat plane at y=100 cm covering xz [-300, 300] cm
+	const FVector Up(0.0f, 1.0f, 0.0f);
+	const FVector4 Tangent(1.0f, 0.0f, 0.0f, 1.0f);
+	Data.Vertices.Add(FVertex(FVector(-300.0f, 100.0f, -300.0f), Up, FVector2D(0, 0), Tangent));
+	Data.Vertices.Add(FVertex(FVector(300.0f, 100.0f, -300.0f), Up, FVector2D(1, 0), Tangent));
+	Data.Vertices.Add(FVertex(FVector(300.0f, 100.0f, 300.0f), Up, FVector2D(1, 1), Tangent));
+	Data.Vertices.Add(FVertex(FVector(-300.0f, 100.0f, 300.0f), Up, FVector2D(0, 1), Tangent));
 	Data.Indices = {0, 1, 2, 0, 2, 3};
 	Data.Submeshes.Add(FMeshSection{0, 6, 0});
 
@@ -147,26 +149,26 @@ bool FJoltRestsOnTriangleMeshTest::RunTest(const FString& Parameters)
 	Scene.AddBody({0, EBodyType::Static, 1.0f, true});
 	const int32 BoxId = Scene.AddBody({1, EBodyType::Dynamic, 5.0f, true});
 	FBodyInstance& Box = Scene.GetBodies()[BoxId];
-	Box.Position = FVector(0.0f, 5.0f, 0.0f);
-	Box.HalfExtents = FVector(0.35f, 0.35f, 0.35f);
+	Box.Position = FVector(0.0f, 500.0f, 0.0f);
+	Box.HalfExtents = FVector(35.0f, 35.0f, 35.0f);
 
 	Scene.SyncFromLevel(Level);
 	TestTrue("Triangle mesh", Scene.GetBodies()[0].CollisionShape == EBodyCollisionShape::TriangleMesh);
 
 	FPhysSceneStepParams Params;
 	Params.DeltaTime = 1.0f / 60.0f;
-	Params.Gravity = 24.0f;
-	Params.FloorY = -20.0f;
-	Params.WalkBounds = 100.0f;
+	Params.Gravity = 2400.0f;
+	Params.FloorY = -2000.0f;
+	Params.WalkBounds = 10000.0f;
 
 	for (int32 I = 0; I < 360; ++I)
 	{
 		Scene.Step(Params);
 	}
 
-	// The plane at y=1 + half extents 0.35 = 1.35.
-	TestEqual("Rest height", Box.Position.Y, 1.35f, 0.45f);
-	TestTrue("At rest", FMath::Abs(Box.VelocityY) < 2.0f);
+	// The plane at y=100 cm + half extents 35 cm = 135 cm.
+	TestEqual("Rest height", Box.Position.Y, 135.0f, 45.0f);
+	TestTrue("At rest", FMath::Abs(Box.VelocityY) < 200.0f);
 	return true;
 }
 
@@ -181,20 +183,20 @@ bool FJoltLineTraceHitsStaticBoxTest::RunTest(const FString& Parameters)
 
 	const int32 Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
 	FBodyInstance& Body = Scene.GetBodies()[Id];
-	Body.Position = FVector(0.0f, 0.5f, 0.0f);
-	Body.HalfExtents = FVector(0.5f, 0.5f, 0.5f);
+	Body.Position = FVector(0.0f, 50.0f, 0.0f);
+	Body.HalfExtents = FVector(50.0f, 50.0f, 50.0f);
 
 	FCollisionQueryParams Params;
 	Params.bTraceFloorPlane = false;
 	FHitResult Hit{};
 	const bool bHit = Scene.LineTraceSingleByChannel(
-		Hit, FVector(0.0f, 0.5f, -2.0f), FVector(0.0f, 0.5f, 2.0f), ECollisionChannel::WorldStatic, Params);
+		Hit, FVector(0.0f, 50.0f, -200.0f), FVector(0.0f, 50.0f, 200.0f), ECollisionChannel::WorldStatic, Params);
 	if (!TestTrue("Trace hit", bHit))
 	{
 		return false;
 	}
 	TestTrue("Blocking", Hit.bBlockingHit);
-	TestEqual("Impact Z", Hit.ImpactPoint.Z, -0.5f, 0.08f);
+	TestEqual("Impact Z", Hit.ImpactPoint.Z, -50.0f, 8.0f);
 	TestTrue("Normal faces the trace", Hit.ImpactNormal.Z < -0.5f);
 	return true;
 }
@@ -209,20 +211,20 @@ bool FJoltSphereTraceHitsStaticBoxTest::RunTest(const FString& Parameters)
 
 	const int32 Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
 	FBodyInstance& Body = Scene.GetBodies()[Id];
-	Body.Position = FVector(0.0f, 0.5f, 0.0f);
-	Body.HalfExtents = FVector(0.5f, 0.5f, 0.5f);
+	Body.Position = FVector(0.0f, 50.0f, 0.0f);
+	Body.HalfExtents = FVector(50.0f, 50.0f, 50.0f);
 
 	FCollisionQueryParams Params;
 	Params.bTraceFloorPlane = false;
 	FHitResult Hit{};
-	const bool bHit = Scene.SphereTraceSingleByChannel(
-		Hit, FVector(0.0f, 0.5f, -3.0f), FVector(0.0f, 0.5f, 3.0f), 0.25f, ECollisionChannel::WorldStatic, Params);
+	const bool bHit = Scene.SphereTraceSingleByChannel(Hit, FVector(0.0f, 50.0f, -300.0f), FVector(0.0f, 50.0f, 300.0f),
+		25.0f, ECollisionChannel::WorldStatic, Params);
 	if (!TestTrue("Trace hit", bHit))
 	{
 		return false;
 	}
 	TestTrue("Blocking", Hit.bBlockingHit);
-	TestEqual("Sweep centre Z", Hit.Location.Z, -0.75f, 0.12f);
+	TestEqual("Sweep centre Z", Hit.Location.Z, -75.0f, 12.0f);
 	return true;
 }
 

@@ -4,6 +4,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+	#include "LegacyCoordinateConversion.h"
 	#include "Misc/AutomationTest.h"
 
 /** Golden tables printed by -GoldenRecord (defined in Engine/Private/Tests/LegacyGolden.cpp, test builds only). */
@@ -21,53 +22,52 @@ ENGINE_API DECLARE_LOG_CATEGORY_EXTERN(LogGolden, Log, All);
  */
 namespace LegacyGolden
 {
-	/** Legacy position (metres, Y up) to the engine world. P7 replaces this with FLegacyCoordinateConversion. */
+	/** Legacy position (metres, Y up) to the engine world (FLegacyCoordinateConversion). */
 	inline FVector ToWorldPosition(const FVector& Legacy)
 	{
-		return Legacy;
+		return FLegacyCoordinateConversion::ConvertPosition(Legacy);
 	}
 
-	/** Legacy direction (unitless, Y up) to the engine world. P7 replaces this with FLegacyCoordinateConversion. */
+	/** Legacy direction (unitless, Y up) to the engine world (FLegacyCoordinateConversion). */
 	inline FVector ToWorldDirection(const FVector& Legacy)
 	{
-		return Legacy;
+		return FLegacyCoordinateConversion::ConvertDirection(Legacy);
 	}
 
-	/** Legacy box half extents (metres, Y up) to the engine world. P7 replaces this with FLegacyCoordinateConversion.
-	 */
+	/** Legacy box half extents (metres, Y up) to the engine world (FLegacyCoordinateConversion). */
 	inline FVector ToWorldExtent(const FVector& Legacy)
 	{
-		return Legacy;
+		return FLegacyCoordinateConversion::ConvertExtent(Legacy);
 	}
 
-	/** Legacy length (metres) to engine units. P7 replaces this with FLegacyCoordinateConversion. */
+	/** Legacy length (metres) to engine units (FLegacyCoordinateConversion). */
 	inline float ToWorldLength(float Metres)
 	{
-		return Metres;
+		return FLegacyCoordinateConversion::ConvertLength(Metres);
 	}
 
-	/** Legacy speed (metres per second) to engine units. P7 replaces this with FLegacyCoordinateConversion. */
+	/** Legacy speed (metres per second) to engine units per second: it scales like a length. */
 	inline float ToWorldSpeed(float MetresPerSecond)
 	{
-		return MetresPerSecond;
+		return FLegacyCoordinateConversion::ConvertLength(MetresPerSecond);
 	}
 
-	/** Engine-world position back to legacy (for recording). P7 replaces this with FLegacyCoordinateConversion. */
+	/** Engine-world position back to legacy (for recording). */
 	inline FVector ToLegacyPosition(const FVector& World)
 	{
-		return World;
+		return FLegacyCoordinateConversion::ToLegacyPosition(World);
 	}
 
-	/** Engine-world direction back to legacy (for recording). P7 replaces this with FLegacyCoordinateConversion. */
+	/** Engine-world direction back to legacy (for recording). */
 	inline FVector ToLegacyDirection(const FVector& World)
 	{
-		return World;
+		return FLegacyCoordinateConversion::ToLegacyDirection(World);
 	}
 
-	/** Engine length back to metres (for recording). P7 replaces this with FLegacyCoordinateConversion. */
+	/** Engine length back to metres (for recording). */
 	inline float ToLegacyLength(float WorldLength)
 	{
-		return WorldLength;
+		return FLegacyCoordinateConversion::ToLegacyLength(WorldLength);
 	}
 
 	/** What a scalar table holds: how it converts between the legacy and the engine world. */

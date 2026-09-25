@@ -103,8 +103,8 @@ namespace
 		}
 		if (bAny)
 		{
-			// Quantize so spinning casters don't retune the ortho light every frame (shadow flicker).
-			SnapAabbOutward(WorldMin, WorldMax, 0.5f);
+			// Quantize (50 cm) so spinning casters don't retune the ortho light every frame (shadow flicker).
+			SnapAabbOutward(WorldMin, WorldMax, 50.0f);
 		}
 		return bAny;
 	}
@@ -834,14 +834,16 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 		const FVector LightDir = Level.GetDirectionalLights()[0].GetDirection();
 		FVector WorldMin;
 		FVector WorldMax;
+		/** Shadow box padding and the box used without casters (cm). */
+		constexpr float ShadowPadding = 75.0f;
 		if (ComputeCasterAabb(Level, WorldMin, WorldMax))
 		{
-			LightSpace = FShadowMap::FitLightSpaceMatrix(LightDir, WorldMin, WorldMax, 0.75f);
+			LightSpace = FShadowMap::FitLightSpaceMatrix(LightDir, WorldMin, WorldMax, ShadowPadding);
 		}
 		else
 		{
 			LightSpace = FShadowMap::FitLightSpaceMatrix(
-				LightDir, FVector(-3.0f, 0.0f, -3.0f), FVector(3.0f, 2.0f, 3.0f), 0.75f);
+				LightDir, FVector(-300.0f, 0.0f, -300.0f), FVector(300.0f, 200.0f, 300.0f), ShadowPadding);
 		}
 		RenderShadowPass(Level, LightSpace);
 	}

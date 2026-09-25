@@ -2,14 +2,18 @@
 
 void HalfExtentsFromScale(const FVector& Scale, float& HalfX, float& HalfY, float& HalfZ)
 {
-	HalfX = 0.5f * FMath::Abs(Scale.X);
-	HalfY = 0.5f * FMath::Abs(Scale.Y);
-	HalfZ = 0.5f * FMath::Abs(Scale.Z);
+	constexpr float HalfSize = 0.5f * BasicShapeSize;
+	HalfX = HalfSize * FMath::Abs(Scale.X);
+	HalfY = HalfSize * FMath::Abs(Scale.Y);
+	HalfZ = HalfSize * FMath::Abs(Scale.Z);
 }
 
 float MassFromHalfExtents(float HalfX, float HalfY, float HalfZ)
 {
-	return FMath::Max(0.08f, 8.0f * HalfX * HalfY * HalfZ);
+	const float HalfXMetres = HalfX / PhysicsCentimetresPerMetre;
+	const float HalfYMetres = HalfY / PhysicsCentimetresPerMetre;
+	const float HalfZMetres = HalfZ / PhysicsCentimetresPerMetre;
+	return FMath::Max(0.08f, 8.0f * HalfXMetres * HalfYMetres * HalfZMetres);
 }
 
 void ClampPositionXZ(FVector& Pos, float Bounds)
@@ -40,7 +44,7 @@ bool CapsuleAabbMtv(float Px, float Pz, float InRadius, float Cx, float Cz, floa
 	const float Oz = Pz - ClosestZ;
 	const float DistSq = (Ox * Ox) + (Oz * Oz);
 
-	if (DistSq > 1.0e-8f)
+	if (DistSq > 1.0e-4f)
 	{
 		const float Dist = FMath::Sqrt(DistSq);
 		if (Dist >= InRadius)
@@ -78,7 +82,10 @@ bool AabbOverlapY(float Ay, float Ahy, float By, float Bhy)
 
 bool SeparateAabbXZ(FVector& A, float Ahx, float Ahz, FVector& B, float Bhx, float Bhz, float MoveA, float MoveB)
 {
-	return SeparateAabb(A, FVector(Ahx, 1.0e6f, Ahz), B, FVector(Bhx, 1.0e6f, Bhz), MoveA, MoveB, nullptr);
+	/** Half height (cm) that makes the boxes overlap on Y whatever their heights. */
+	constexpr float UnboundedHalfY = 1.0e8f;
+	return SeparateAabb(
+		A, FVector(Ahx, UnboundedHalfY, Ahz), B, FVector(Bhx, UnboundedHalfY, Bhz), MoveA, MoveB, nullptr);
 }
 
 bool SeparateAabb(FVector& A, const FVector& AHalfExtents, FVector& B, const FVector& BHalfExtents, float MoveA,
@@ -119,7 +126,7 @@ bool SeparateAabb(FVector& A, const FVector& AHalfExtents, FVector& B, const FVe
 	if (OutNormal != nullptr)
 	{
 		const float Len = Mtv.Size();
-		*OutNormal = Len > 1.0e-8f ? (Mtv / Len) : FVector(0.0f, 1.0f, 0.0f);
+		*OutNormal = Len > 1.0e-6f ? (Mtv / Len) : FVector(0.0f, 1.0f, 0.0f);
 	}
 	return true;
 }

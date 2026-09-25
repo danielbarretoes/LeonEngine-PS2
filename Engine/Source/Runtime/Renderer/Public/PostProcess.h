@@ -57,8 +57,10 @@ struct RENDERER_API FPostProcessSettings
 	bool bFxaa = false;
 	bool bEarlyZ = false;
 	float AoIntensity = 0.75f;
-	float AoRadius = 0.45f;
-	float AoBias = 0.04f;
+	/** View-space sample radius (cm). */
+	float AoRadius = 45.0f;
+	/** Minimum depth difference that occludes (cm). */
+	float AoBias = 4.0f;
 	float AoPower = 1.0f;
 	float Exposure = 1.0f; // scene exposure applied in the composite pass
 	int ShadowMapSize = 1024;
@@ -87,7 +89,7 @@ inline void ApplyPostProcessQuality(FPostProcessSettings& Settings, EPostProcess
 			Settings.ShadowMapSize = 1024;
 			Settings.AoSampleCount = 8;
 			Settings.AoIntensity = 0.75f;
-			Settings.AoBias = 0.04f;
+			Settings.AoBias = 4.0f;
 			Settings.AoPower = 1.0f;
 			break;
 		case EPostProcessQuality::Medium:
@@ -98,7 +100,7 @@ inline void ApplyPostProcessQuality(FPostProcessSettings& Settings, EPostProcess
 			Settings.ShadowMapSize = 2048;
 			Settings.AoSampleCount = 16;
 			Settings.AoIntensity = 0.85f;
-			Settings.AoBias = 0.035f;
+			Settings.AoBias = 3.5f;
 			Settings.AoPower = 1.0f;
 			break;
 		case EPostProcessQuality::High:
@@ -109,7 +111,7 @@ inline void ApplyPostProcessQuality(FPostProcessSettings& Settings, EPostProcess
 			Settings.ShadowMapSize = 2048;
 			Settings.AoSampleCount = 32;
 			Settings.AoIntensity = 0.9f;
-			Settings.AoBias = 0.035f;
+			Settings.AoBias = 3.5f;
 			Settings.AoPower = 1.0f;
 			break;
 	}

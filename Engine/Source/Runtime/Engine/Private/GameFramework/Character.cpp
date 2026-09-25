@@ -230,7 +230,7 @@ bool ACharacter::SafeMoveUpdatedComponent(
 {
 	FVector& Feet = MutableLocation();
 	const float DeltaLen = Delta.Size();
-	if (DeltaLen < 1.0e-6f)
+	if (DeltaLen < 1.0e-4f)
 	{
 		return true;
 	}
@@ -306,13 +306,13 @@ void ACharacter::ResolveSides(FPhysScene& PhysScene, bool bApplyPush)
 
 bool ACharacter::TryStepUp(FPhysScene& PhysScene, const FVector& ForwardDelta, FDebugDraw* DebugDraw)
 {
-	if (!IsMovingOnGround() || Movement.MaxStepHeight <= 1.0e-4f)
+	if (!IsMovingOnGround() || Movement.MaxStepHeight <= 1.0e-2f)
 	{
 		return false;
 	}
 	FVector Fwd = ForwardDelta;
 	Fwd.Y = 0.0f;
-	if (Fwd.Size() < 1.0e-5f)
+	if (Fwd.Size() < 1.0e-3f)
 	{
 		return false;
 	}
@@ -345,7 +345,7 @@ bool ACharacter::TryStepUp(FPhysScene& PhysScene, const FVector& ForwardDelta, F
 	// probe at least ~half-radius so QuerySupportY can see the top.
 	const float FwdLen = Fwd.Size();
 	const float MinFwd = FMath::Max(Capsule.GetCapsuleRadius() * 0.5f, Movement.Skin * 4.0f);
-	if (FwdLen > 1.0e-5f && FwdLen < MinFwd)
+	if (FwdLen > 1.0e-3f && FwdLen < MinFwd)
 	{
 		Fwd *= (MinFwd / FwdLen);
 	}
@@ -420,7 +420,7 @@ void ACharacter::MoveHorizontal(FPhysScene& PhysScene, float DeltaTime, FDebugDr
 	constexpr int MaxSlideIterations = 2;
 	for (int I = 0; I < MaxSlideIterations; ++I)
 	{
-		if (Remaining.Size() < 1.0e-5f)
+		if (Remaining.Size() < 1.0e-3f)
 		{
 			break;
 		}
@@ -437,7 +437,7 @@ void ACharacter::MoveHorizontal(FPhysScene& PhysScene, float DeltaTime, FDebugDr
 			break;
 		}
 		Leftover = ComputeSlideVector(Leftover, Hit.ImpactNormal);
-		if (FVector::DotProduct(Leftover, Leftover) < 1.0e-8f)
+		if (FVector::DotProduct(Leftover, Leftover) < 1.0e-4f)
 		{
 			break;
 		}
@@ -567,13 +567,13 @@ void ACharacter::ResolvePawnOverlap(ACharacter& Other)
 	FVector2D Delta = FVector2D(A.X - B.X, A.Z - B.Z);
 	float Dist = Delta.Size();
 	const float MinDist = Capsule.GetCapsuleRadius() + Other.Capsule.GetCapsuleRadius();
-	if (Dist >= MinDist - 1.0e-5f)
+	if (Dist >= MinDist - 1.0e-3f)
 	{
 		return;
 	}
 
 	FVector2D Normal{};
-	if (Dist < 1.0e-4f)
+	if (Dist < 1.0e-2f)
 	{
 		// Deterministic axis when centers coincide (avoid NaN / jitter).
 		Normal = (GetUniqueID() <= Other.GetUniqueID()) ? FVector2D(1.0f, 0.0f) : FVector2D(-1.0f, 0.0f);

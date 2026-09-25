@@ -29,6 +29,7 @@ public:
 	}
 
 private:
-	float MoveSpeed = 8.0f;
+	/** cm/s */
+	float MoveSpeed = 800.0f;
 	float LookSensitivity = 0.15f;
 };

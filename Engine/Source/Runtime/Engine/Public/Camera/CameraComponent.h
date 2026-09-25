@@ -8,6 +8,10 @@ enum class ECameraMode : uint8
 	FreeLook, // Unreal-like flying / first-person: eye + look yaw/pitch
 };
 
+/** Default perspective clip planes of the engine camera (world units, cm). */
+inline constexpr float DefaultCameraNearPlane = 10.0f;
+inline constexpr float DefaultCameraFarPlane = 10000.0f;
+
 /** View camera: orbit (default) or free-look for ADefaultCameraActor. */
 class ENGINE_API UCameraComponent
 {
@@ -113,16 +117,17 @@ private:
 	ECameraMode Mode = ECameraMode::Orbit;
 	FMatrix Projection = FMatrix::Identity;
 	FVector Target = FVector::ZeroVector;
-	FVector Eye = FVector(0.0f, 1.0f, 0.0f);
+	/** World units (cm), like every length of the camera. */
+	FVector Eye = FVector(0.0f, 100.0f, 0.0f);
 	float YawDegrees = 45.0f;
 	float PitchDegrees = 25.0f;
-	float Distance = 5.0f;
+	float Distance = 500.0f;
 	float FovDegrees = 60.0f;
 	float Aspect = 16.0f / 9.0f;
-	float NearPlane = 0.1f;
-	float FarPlane = 100.0f;
+	float NearPlane = DefaultCameraNearPlane;
+	float FarPlane = DefaultCameraFarPlane;
 	bool bOrthographic = false;
-	float OrthoHeight = 20.0f;
+	float OrthoHeight = 2000.0f;
 
 	mutable bool bCacheDirty = true;
 	mutable FVector CachedPosition = FVector::ZeroVector;

@@ -135,7 +135,10 @@ struct ENGINE_API FLevelCameraRecord
 	float Pitch = 25.0f;
 };
 
-/** In-memory mirror of a .llev file: plain data, no engine resources resolved yet. */
+/**
+ * In-memory mirror of a .llev file: plain data, no engine resources resolved yet. Every record keeps the file's legacy
+ * units (metres, Y up); ApplyLevelDocument and BuildLevelDocument convert with FLegacyCoordinateConversion.
+ */
 struct ENGINE_API FLevelDocument
 {
 	FString Name;

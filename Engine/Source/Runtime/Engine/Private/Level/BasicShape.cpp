@@ -1,5 +1,7 @@
 #include "Level/BasicShape.h"
 
+#include "Primitives.h"
+
 // Class-name parsers live in Content/LevelClassNames.cpp (shared with the level format / cook).
 
 TSharedPtr<UStaticMesh> MeshForBasicShape(
@@ -12,8 +14,8 @@ TSharedPtr<UStaticMesh> MeshForBasicShape(
 		case EBasicShape::Sphere:
 			return Resources.GetSphereMesh(InSphereSegments, InSphereRings);
 		case EBasicShape::Plane:
-			// Unit plane with 0-1 UVs; the tiling is FMaterial::UvScale.
-			return Resources.GetPlaneMesh(1.0f, 1.0f);
+			// 100 cm plane with 0-1 UVs; the tiling is FMaterial::UvScale.
+			return Resources.GetPlaneMesh(PrimitiveEdgeLength, 1.0f);
 	}
 	return nullptr;
 }

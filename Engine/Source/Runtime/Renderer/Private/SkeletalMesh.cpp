@@ -138,7 +138,8 @@ float USkeletalMesh::FitUniformScale(float FitHeight) const
 	{
 		return 1.0f;
 	}
-	const float Height = FMath::Max((LocalMax - LocalMin).Y, 0.001f);
+	/** 0.1 cm: keeps a flat mesh from dividing by zero. */
+	const float Height = FMath::Max((LocalMax - LocalMin).Y, 0.1f);
 	return FitHeight / Height;
 }
 

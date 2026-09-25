@@ -88,7 +88,7 @@ void FDebugDraw::AddArrow(
 
 	const FVector Shaft = To - From;
 	const float Len = Shaft.Size();
-	if (Len < 1.0e-4f)
+	if (Len < 1.0e-2f)
 	{
 		return;
 	}

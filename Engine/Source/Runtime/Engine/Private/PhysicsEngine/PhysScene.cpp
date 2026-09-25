@@ -60,9 +60,14 @@ namespace
 		}
 	}
 
+	/** Inset of the capsule disc against an AABB top it stands on (cm). */
+	constexpr float SupportDiscInset = -2.0f;
+
 	[[nodiscard]] float LandWindow(float VelocityY, float InDeltaTime, float InSkin)
 	{
-		return FMath::Max(0.12f, (FMath::Abs(VelocityY) * InDeltaTime) + (InSkin * 4.0f));
+		/** cm */
+		constexpr float MinLandWindow = 12.0f;
+		return FMath::Max(MinLandWindow, (FMath::Abs(VelocityY) * InDeltaTime) + (InSkin * 4.0f));
 	}
 
 	/** Flow: wish into the contact normal gives lateral velocity + an optional contact shove (light props). */
@@ -78,10 +83,12 @@ namespace
 		constexpr float PlayerMass = 80.0f;
 		const float BodyMass = FMath::Max(Body.Mass, 0.5f);
 		const float InvMass = 1.0f / BodyMass;
-		constexpr float PushScale = 2.8f;
+		/** Push velocity per unit strength and kg of the body (cm/s * kg). */
+		constexpr float PushScale = 280.0f;
 		Body.VelXz += WishN * (Into * InPushStrength * InvMass * PushScale);
 
-		constexpr float MaxPushSpeed = 4.0f;
+		/** cm/s */
+		constexpr float MaxPushSpeed = 400.0f;
 		const float Speed = Body.VelXz.Size();
 		if (Speed > MaxPushSpeed)
 		{
@@ -95,7 +102,8 @@ namespace
 
 		// Sweep-based contact never overlaps; nudge the body so the walking shove is visible the same frame.
 		const float BodyShare = PlayerMass / (PlayerMass + BodyMass);
-		constexpr float ContactShove = 0.06f;
+		/** cm per unit strength */
+		constexpr float ContactShove = 6.0f;
 		const float Shove = Into * InPushStrength * BodyShare * ContactShove;
 		Body.Position.X += WishN.X * Shove;
 		Body.Position.Z += WishN.Y * Shove;
@@ -243,8 +251,8 @@ float FPhysScene::QuerySupportY(const FCollisionShape& Capsule, const FVector& F
 		{
 			continue;
 		}
-		if (!XzDiscOverlapsAabb(
-				Feet.X, Feet.Z, R, Body.Position.X, Body.Position.Z, Body.HalfExtents.X, Body.HalfExtents.Z, -0.02f))
+		if (!XzDiscOverlapsAabb(Feet.X, Feet.Z, R, Body.Position.X, Body.Position.Z, Body.HalfExtents.X,
+				Body.HalfExtents.Z, SupportDiscInset))
 		{
 			continue;
 		}
@@ -252,11 +260,13 @@ float FPhysScene::QuerySupportY(const FCollisionShape& Capsule, const FVector& F
 		if (Body.CollisionShape == EBodyCollisionShape::TriangleMesh && Bi < TriangleMeshes.Num() &&
 			TriangleMeshes[Bi].IsValid())
 		{
-			// Vertical probe: walkable triangle tops under the capsule disc ComplexAsSimple.
+			// Vertical probe: walkable triangle tops under the capsule disc ComplexAsSimple (margins in cm).
+			constexpr float ProbeAbove = 50.0f;
+			constexpr float ProbeBelowFloor = 100.0f;
 			const float RayTop =
-				FMath::Max(Feet.Y + InStepUp + InSkin + 0.5f, Body.Position.Y + Body.HalfExtents.Y + 0.5f);
+				FMath::Max(Feet.Y + InStepUp + InSkin + ProbeAbove, Body.Position.Y + Body.HalfExtents.Y + ProbeAbove);
 			const FVector Start(Feet.X, RayTop, Feet.Z);
-			const FVector End(Feet.X, InFloorY - 1.0f, Feet.Z);
+			const FVector End(Feet.X, InFloorY - ProbeBelowFloor, Feet.Z);
 			float T = 1.0f;
 			FVector LocalNormal = FVector::ZeroVector;
 			if (SegmentTriangleMesh(Start, End, TriangleMeshes[Bi], 0.0f, T, LocalNormal) && LocalNormal.Y > 0.15f)
@@ -294,7 +304,7 @@ float FPhysScene::QuerySupportY(const FCollisionShape& Capsule, const FVector& F
 			continue;
 		}
 		if (!XzDiscOverlapsAabb(Feet.X, Feet.Z, R, Plane.BoundsCenter.X, Plane.BoundsCenter.Z,
-				Plane.BoundsHalfExtents.X, Plane.BoundsHalfExtents.Z, -0.02f))
+				Plane.BoundsHalfExtents.X, Plane.BoundsHalfExtents.Z, SupportDiscInset))
 		{
 			continue;
 		}
@@ -334,7 +344,8 @@ void FPhysScene::ResolveCapsuleSides(const FCollisionShape& Capsule, FVector& Fe
 			continue;
 		}
 
-		const bool bXzOnTop = XzDiscOverlapsAabb(Feet.X, Feet.Z, R, Body.Position.X, Body.Position.Z, Hx, Hz, -0.02f);
+		const bool bXzOnTop =
+			XzDiscOverlapsAabb(Feet.X, Feet.Z, R, Body.Position.X, Body.Position.Z, Hx, Hz, SupportDiscInset);
 		// Standing on this top: no side push.
 		if (FeetY >= Top - Params.Skin && bXzOnTop)
 		{
@@ -467,7 +478,7 @@ void FPhysScene::Step(const FPhysSceneStepParams& Params)
 
 			const float Top = Other.Position.Y + Other.HalfExtents.Y;
 			// Dynamic support only when this body is clearly above the other stacking.
-			if (Other.Type == EBodyType::Dynamic && Bottom + Params.Skin < Top - 0.02f &&
+			if (Other.Type == EBodyType::Dynamic && Bottom + Params.Skin < Top - 2.0f &&
 				Body.Position.Y <= Other.Position.Y)
 			{
 				continue;
@@ -497,7 +508,7 @@ void FPhysScene::Step(const FPhysSceneStepParams& Params)
 			Body.VelocityY = 0.0f;
 		}
 
-		if (Body.VelXz.Size() >= 1.0e-3f)
+		if (Body.VelXz.Size() >= 1.0e-1f)
 		{
 			Body.Position.X += Body.VelXz.X * Params.DeltaTime;
 			Body.Position.Z += Body.VelXz.Y * Params.DeltaTime;
@@ -593,7 +604,7 @@ void FPhysScene::Step(const FPhysSceneStepParams& Params)
 			Body.Position.Y = Support + Body.HalfExtents.Y;
 			Body.VelocityY = 0.0f;
 			// Resting friction: kill a tiny residual slide when fully supported.
-			if (Body.VelXz.Size() < 0.08f)
+			if (Body.VelXz.Size() < 8.0f)
 			{
 				Body.VelXz = FVector2D::ZeroVector;
 			}
@@ -622,11 +633,11 @@ void FPhysScene::AppendCollisionDebug(
 	AppendCapsuleRing(Draw, Feet + FVector(0.0f, CylBottom, 0.0f), R, CapsuleColor, Seg);
 	AppendCapsuleRing(Draw, Feet + FVector(0.0f, CylTop, 0.0f), R, CapsuleColor, Seg);
 
-	if (CylBottom > 1.0e-3f)
+	if (CylBottom > 1.0e-1f)
 	{
 		AppendCapsuleRing(Draw, Feet + FVector(0.0f, CylBottom * 0.5f, 0.0f), R * 0.85f, CapsuleColor, Seg / 2);
 	}
-	if (H - CylTop > 1.0e-3f)
+	if (H - CylTop > 1.0e-1f)
 	{
 		const float CapMidY = CylTop + ((H - CylTop) * 0.5f);
 		AppendCapsuleRing(Draw, Feet + FVector(0.0f, CapMidY, 0.0f), R * 0.85f, CapsuleColor, Seg / 2);

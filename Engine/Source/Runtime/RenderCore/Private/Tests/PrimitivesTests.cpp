@@ -15,9 +15,9 @@ bool FMakeCubeTest::RunTest(const FString& Parameters)
 	TestEqual("Indices", Cube.Indices.Num(), 36);
 	for (const FVertex& V : Cube.Vertices)
 	{
-		TestTrue("Inside the unit box",
-			FMath::Abs(V.Position.X) <= 0.5f + 1.0e-4f && FMath::Abs(V.Position.Y) <= 0.5f + 1.0e-4f &&
-				FMath::Abs(V.Position.Z) <= 0.5f + 1.0e-4f);
+		TestTrue("Inside the 100 cm box",
+			FMath::Abs(V.Position.X) <= 50.0f + 1.0e-3f && FMath::Abs(V.Position.Y) <= 50.0f + 1.0e-3f &&
+				FMath::Abs(V.Position.Z) <= 50.0f + 1.0e-3f);
 	}
 	return true;
 }
@@ -28,7 +28,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMakePlaneTest, "System.RenderCore.Primitives.M
 bool FMakePlaneTest::RunTest(const FString& Parameters)
 {
 	// The plane lies on XZ.
-	const FMeshData Plane = MakePlane(2.0f);
+	const FMeshData Plane = MakePlane(200.0f);
 	TestFalse("Not empty", Plane.IsEmpty());
 	for (const FVertex& V : Plane.Vertices)
 	{

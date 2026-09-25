@@ -55,7 +55,7 @@ bool FFrameworkHardeningAIControllerLogicStateTest::RunTest(const FString& Param
 	AAIController Ai;
 	Ai.Possess(Character);
 	TestTrue("Starts idle", Ai.GetLogicState() == EAILogicState::Idle);
-	Ai.MoveToLocation(FVector(3.0f, 0.0f, 0.0f));
+	Ai.MoveToLocation(FVector(300.0f, 0.0f, 0.0f));
 	TestTrue("MoveTo after MoveToLocation", Ai.GetLogicState() == EAILogicState::MoveTo);
 	Ai.MoveToActor(Character);
 	TestTrue("Chase after MoveToActor", Ai.GetLogicState() == EAILogicState::Chase);
@@ -138,24 +138,24 @@ bool FFrameworkHardeningNavAgentRadiusDilationTest::RunTest(const FString& Param
 	FBodyInstance Floor{};
 	Floor.Type = EBodyType::Static;
 	Floor.Position = FVector(0.0f, 0.0f, 0.0f);
-	Floor.HalfExtents = FVector(20.0f, 0.5f, 20.0f);
+	Floor.HalfExtents = FVector(2000.0f, 50.0f, 2000.0f);
 	Physics.GetBodies().Add(Floor);
 
 	FBodyInstance Pillar{};
 	Pillar.Type = EBodyType::Static;
-	Pillar.Position = FVector(0.0f, 1.0f, 0.0f);
-	Pillar.HalfExtents = FVector(0.4f, 1.5f, 0.4f);
+	Pillar.Position = FVector(0.0f, 100.0f, 0.0f);
+	Pillar.HalfExtents = FVector(40.0f, 150.0f, 40.0f);
 	Physics.GetBodies().Add(Pillar);
 
 	UNavigationSystem Narrow;
-	Narrow.SetCellSize(0.5f);
-	Narrow.SetAgentRadius(0.35f);
-	Narrow.BuildFromPhysScene(Physics, 0.0f, 10.0f);
+	Narrow.SetCellSize(50.0f);
+	Narrow.SetAgentRadius(35.0f);
+	Narrow.BuildFromPhysScene(Physics, 0.0f, 1000.0f);
 
 	UNavigationSystem Wide;
-	Wide.SetCellSize(0.5f);
-	Wide.SetAgentRadius(1.5f);
-	Wide.BuildFromPhysScene(Physics, 0.0f, 10.0f);
+	Wide.SetCellSize(50.0f);
+	Wide.SetAgentRadius(150.0f);
+	Wide.BuildFromPhysScene(Physics, 0.0f, 1000.0f);
 
 	TestTrue("Wide agent has fewer walkable cells", Wide.GetWalkableCellCount() < Narrow.GetWalkableCellCount());
 	return true;

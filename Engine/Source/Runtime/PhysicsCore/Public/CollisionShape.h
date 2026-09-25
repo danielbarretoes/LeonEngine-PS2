@@ -115,7 +115,7 @@ struct PHYSICSCORE_API FCollisionShape
 	/** Half the length of the capsule's segment, without the end caps (UE: GetCapsuleAxisHalfLength). */
 	float GetCapsuleAxisHalfLength() const
 	{
-		return FMath::Max(Capsule.HalfHeight - Capsule.Radius, 1.e-4f);
+		return FMath::Max(Capsule.HalfHeight - Capsule.Radius, 1.e-2f);
 	}
 
 	static FCollisionShape MakeBox(const FVector& BoxHalfExtent)
@@ -140,8 +140,19 @@ struct PHYSICSCORE_API FCollisionShape
 	}
 };
 
+/** World units (cm) in a metre: masses stay defined in kg per cubic metre. */
+inline constexpr float PhysicsCentimetresPerMetre = 100.0f;
+
+/**
+ * Edge of the engine's basic shapes (RenderCore MakeCube / MakePlane), in cm: an actor's scale is its size in units of
+ * this edge.
+ */
+inline constexpr float BasicShapeSize = 100.0f;
+
+/** Half extents (cm) of a basic cube scaled by Scale: 0.5 * BasicShapeSize * |Scale|. */
 void HalfExtentsFromScale(const FVector& Scale, float& HalfX, float& HalfY, float& HalfZ);
 
+/** Mass (kg) of a box from its half extents in cm: its volume in cubic metres, at least 0.08. */
 [[nodiscard]] float MassFromHalfExtents(float HalfX, float HalfY, float HalfZ);
 
 void ClampPositionXZ(FVector& Pos, float Bounds);

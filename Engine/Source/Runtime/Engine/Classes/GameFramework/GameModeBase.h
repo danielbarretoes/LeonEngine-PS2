@@ -118,7 +118,7 @@ public:
 
 	/** Min FPlayerStart Y, or 0 if none. */
 	[[nodiscard]] static float EstimateFloorY(const ULevel& Level);
-	/** Soft XZ walk clamp from static mesh extents (clamped 20–120). */
+	/** Soft XZ walk clamp from static mesh extents (cm, clamped 2000–12000). */
 	[[nodiscard]] static float EstimateWalkBounds(const ULevel& Level);
 
 protected:

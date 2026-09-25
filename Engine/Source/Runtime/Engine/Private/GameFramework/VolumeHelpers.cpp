@@ -8,7 +8,8 @@ namespace
 
 	[[nodiscard]] bool PointInPainAabb(const FVector& Point, const FPainCausingVolume& Vol)
 	{
-		const FVector Half = Vol.Transform.GetScale3D().GetAbs() * 0.5f;
+		// The volume is a basic cube: half its scale times BasicShapeSize (cm).
+		const FVector Half = Vol.Transform.GetScale3D().GetAbs() * (0.5f * BasicShapeSize);
 		const FVector Min = Vol.Transform.GetLocation() - Half;
 		const FVector Max = Vol.Transform.GetLocation() + Half;
 		return Point.X >= Min.X && Point.X <= Max.X && Point.Y >= Min.Y && Point.Y <= Max.Y && Point.Z >= Min.Z &&

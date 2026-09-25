@@ -125,6 +125,40 @@ namespace
 		}
 	};
 
+	/**
+	 * Jolt works in metres (its tolerances are tuned for them); the engine world is in centimetres. Every position,
+	 * extent, velocity and acceleration is scaled at this boundary; Jolt-side constants below stay in metres.
+	 */
+	constexpr float JoltMetresPerUnit = 0.01f;
+	constexpr float UnitsPerJoltMetre = 100.0f;
+
+	[[nodiscard]] float ToJoltLength(float WorldLength)
+	{
+		return WorldLength * JoltMetresPerUnit;
+	}
+
+	[[nodiscard]] JPH::Vec3 ToJoltVec3(const FVector& World)
+	{
+		return JPH::Vec3(World.X * JoltMetresPerUnit, World.Y * JoltMetresPerUnit, World.Z * JoltMetresPerUnit);
+	}
+
+	[[nodiscard]] JPH::RVec3 ToJoltRVec3(const FVector& World)
+	{
+		return JPH::RVec3(World.X * JoltMetresPerUnit, World.Y * JoltMetresPerUnit, World.Z * JoltMetresPerUnit);
+	}
+
+	/** A body instance's velocity (horizontal X / Z and vertical Y, cm/s) in Jolt metres per second. */
+	[[nodiscard]] JPH::Vec3 ToJoltVelocity(const FBodyInstance& Body)
+	{
+		return ToJoltVec3(FVector(Body.VelXz.X, Body.VelocityY, Body.VelXz.Y));
+	}
+
+	[[nodiscard]] FVector FromJolt(const JPH::Vec3& Jolt)
+	{
+		return FVector(Jolt.GetX(), Jolt.GetY(), Jolt.GetZ()) * UnitsPerJoltMetre;
+	}
+
+	/** Half extents in Jolt metres. */
 	[[nodiscard]] JPH::ShapeRefC CreateBoxShape(const FVector& HalfExtents)
 	{
 		// Half-extents must exceed convex radius or BoxShapeSettings::Create fails.
@@ -143,7 +177,7 @@ namespace
 		return ShapeResult.Get();
 	}
 
-	/// Bake FTriangleMeshCollision into a MeshShape in body-local space (origin = body.position).
+	/// Bake FTriangleMeshCollision (cm) into a MeshShape in body-local space (origin = body.position), in metres.
 	[[nodiscard]] JPH::ShapeRefC CreateMeshShape(const FTriangleMeshCollision& Mesh, const FVector& BodyPosition)
 	{
 		if (!Mesh.IsValid())
@@ -162,14 +196,12 @@ namespace
 			{
 				continue;
 			}
-			const FVector P0 = Mesh.Positions[static_cast<int32>(I0)] - BodyPosition;
-			const FVector P1 = Mesh.Positions[static_cast<int32>(I1)] - BodyPosition;
-			const FVector P2 = Mesh.Positions[static_cast<int32>(I2)] - BodyPosition;
+			const JPH::Vec3 P0 = ToJoltVec3(Mesh.Positions[static_cast<int32>(I0)] - BodyPosition);
+			const JPH::Vec3 P1 = ToJoltVec3(Mesh.Positions[static_cast<int32>(I1)] - BodyPosition);
+			const JPH::Vec3 P2 = ToJoltVec3(Mesh.Positions[static_cast<int32>(I2)] - BodyPosition);
 			// Emit both windings so single-sided MeshShape collides from either side (floors/ceilings).
-			Tris.push_back(
-				JPH::Triangle(JPH::Vec3(P0.X, P0.Y, P0.Z), JPH::Vec3(P1.X, P1.Y, P1.Z), JPH::Vec3(P2.X, P2.Y, P2.Z)));
-			Tris.push_back(
-				JPH::Triangle(JPH::Vec3(P0.X, P0.Y, P0.Z), JPH::Vec3(P2.X, P2.Y, P2.Z), JPH::Vec3(P1.X, P1.Y, P1.Z)));
+			Tris.push_back(JPH::Triangle(P0, P1, P2));
+			Tris.push_back(JPH::Triangle(P0, P2, P1));
 		}
 		if (Tris.empty())
 		{
@@ -292,9 +324,8 @@ namespace
 				}
 
 				// CMC / ResolveCapsuleSides may have nudged FBodyInstance state — push into Jolt.
-				Iface.SetPosition(
-					BodyIds[I], JPH::RVec3(Src.Position.X, Src.Position.Y, Src.Position.Z), JPH::EActivation::Activate);
-				Iface.SetLinearVelocity(BodyIds[I], JPH::Vec3(Src.VelXz.X, Src.VelocityY, Src.VelXz.Y));
+				Iface.SetPosition(BodyIds[I], ToJoltRVec3(Src.Position), JPH::EActivation::Activate);
+				Iface.SetLinearVelocity(BodyIds[I], ToJoltVelocity(Src));
 			}
 		}
 
@@ -304,8 +335,8 @@ namespace
 			{
 				return;
 			}
-			EnsureFloor(InFloorY);
-			PhysicsSystem.SetGravity(JPH::Vec3(0.0f, -FMath::Abs(GravityMagnitude), 0.0f));
+			EnsureFloor(ToJoltLength(InFloorY));
+			PhysicsSystem.SetGravity(JPH::Vec3(0.0f, -FMath::Abs(ToJoltLength(GravityMagnitude)), 0.0f));
 
 			const int32 CollisionSteps = FMath::Max(1, FMath::CeilToInt(DeltaTime * 60.0f));
 			PhysicsSystem.Update(DeltaTime, CollisionSteps, TempAllocator.Get(), JobSystem.Get());
@@ -322,11 +353,10 @@ namespace
 				{
 					continue;
 				}
-				const JPH::RVec3 Pos = Iface.GetCenterOfMassPosition(Id);
-				const JPH::Vec3 Vel = Iface.GetLinearVelocity(Id);
-				Bodies[I].Position = FVector(Pos.GetX(), Pos.GetY(), Pos.GetZ());
-				Bodies[I].VelXz = FVector2D(Vel.GetX(), Vel.GetZ());
-				Bodies[I].VelocityY = Vel.GetY();
+				const FVector Vel = FromJolt(Iface.GetLinearVelocity(Id));
+				Bodies[I].Position = FromJolt(Iface.GetCenterOfMassPosition(Id));
+				Bodies[I].VelXz = FVector2D(Vel.X, Vel.Z);
+				Bodies[I].VelocityY = Vel.Y;
 			}
 		}
 
@@ -334,9 +364,10 @@ namespace
 			ECollisionChannel InChannel, SIZE_T SkipLevelMeshIndex) override
 		{
 			OutHits.Reset();
-			const JPH::Vec3 Origin(Start.X, Start.Y, Start.Z);
-			const JPH::Vec3 Direction(End.X - Start.X, End.Y - Start.Y, End.Z - Start.Z);
+			const JPH::Vec3 Origin = ToJoltVec3(Start);
+			const JPH::Vec3 Direction = ToJoltVec3(End - Start);
 			const JPH::RRayCast Ray(Origin, Direction);
+			const float TraceLength = (End - Start).Size();
 
 			JPH::AllHitCollisionCollector<JPH::CastRayCollector> Collector;
 			JPH::RayCastSettings Settings;
@@ -373,8 +404,8 @@ namespace
 				FHitResult Out;
 				Out.bBlockingHit = true;
 				Out.Time = Hit.mFraction;
-				Out.Distance = Direction.Length() * Hit.mFraction;
-				Out.Location = FVector(Point.GetX(), Point.GetY(), Point.GetZ());
+				Out.Distance = TraceLength * Hit.mFraction;
+				Out.Location = FromJolt(Point);
 				Out.ImpactPoint = Out.Location;
 				Out.ImpactNormal = FVector(Normal.GetX(), Normal.GetY(), Normal.GetZ());
 				Out.TraceStart = Start;
@@ -389,7 +420,8 @@ namespace
 		bool RigidSphereTrace(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End, float Radius,
 			ECollisionChannel InChannel, SIZE_T SkipLevelMeshIndex) override
 		{
-			const float R = FMath::Max(Radius, 1.0e-3f);
+			// Jolt metres from here on.
+			const float R = FMath::Max(ToJoltLength(Radius), 1.0e-3f);
 			JPH::RefConst<JPH::SphereShape> Sphere = new JPH::SphereShape(R);
 			return CastShapeTrace(OutHits, Start, End, Sphere, InChannel, SkipLevelMeshIndex, R);
 		}
@@ -397,8 +429,9 @@ namespace
 		bool RigidCapsuleTrace(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End, float Radius,
 			float HalfHeight, ECollisionChannel InChannel, SIZE_T SkipLevelMeshIndex) override
 		{
-			const float R = FMath::Max(Radius, 1.0e-3f);
-			const float Hh = FMath::Max(HalfHeight, 0.0f);
+			// Jolt metres from here on.
+			const float R = FMath::Max(ToJoltLength(Radius), 1.0e-3f);
+			const float Hh = FMath::Max(ToJoltLength(HalfHeight), 0.0f);
 			JPH::RefConst<JPH::CapsuleShape> Capsule = new JPH::CapsuleShape(Hh, R);
 			return CastShapeTrace(OutHits, Start, End, Capsule, InChannel, SkipLevelMeshIndex, R + Hh);
 		}
@@ -470,9 +503,11 @@ namespace
 			{
 				return false;
 			}
-			const JPH::Vec3 Direction(End.X - Start.X, End.Y - Start.Y, End.Z - Start.Z);
+			const JPH::Vec3 Direction = ToJoltVec3(End - Start);
+			const JPH::Vec3 JoltStart = ToJoltVec3(Start);
+			const float TraceLength = (End - Start).Size();
 			const JPH::RShapeCast ShapeCast = JPH::RShapeCast::sFromWorldTransform(
-				Shape, JPH::Vec3::sOne(), JPH::RMat44::sTranslation(JPH::RVec3(Start.X, Start.Y, Start.Z)), Direction);
+				Shape, JPH::Vec3::sOne(), JPH::RMat44::sTranslation(ToJoltRVec3(Start)), Direction);
 
 			JPH::AllHitCollisionCollector<JPH::CastShapeCollector> Collector;
 			JPH::ShapeCastSettings Settings;
@@ -503,8 +538,7 @@ namespace
 				{
 					Normal = JPH::Vec3(0, 1, 0);
 				}
-				const JPH::Vec3 ToStart =
-					JPH::Vec3(Start.X, Start.Y, Start.Z) - JPH::Vec3(Point.GetX(), Point.GetY(), Point.GetZ());
+				const JPH::Vec3 ToStart = JoltStart - JPH::Vec3(Point.GetX(), Point.GetY(), Point.GetZ());
 				if (Normal.Dot(ToStart) < 0.0f)
 				{
 					Normal = -Normal;
@@ -512,9 +546,9 @@ namespace
 				FHitResult Out;
 				Out.bBlockingHit = true;
 				Out.Time = Hit.mFraction;
-				Out.Distance = Direction.Length() * Hit.mFraction;
-				Out.Location = FVector(Point.GetX(), Point.GetY(), Point.GetZ());
-				Out.ImpactPoint = FVector(Contact.GetX(), Contact.GetY(), Contact.GetZ());
+				Out.Distance = TraceLength * Hit.mFraction;
+				Out.Location = FromJolt(JPH::Vec3(Point.GetX(), Point.GetY(), Point.GetZ()));
+				Out.ImpactPoint = FromJolt(Contact);
 				Out.ImpactNormal = FVector(Normal.GetX(), Normal.GetY(), Normal.GetZ());
 				Out.TraceStart = Start;
 				Out.TraceEnd = End;
@@ -554,7 +588,7 @@ namespace
 			JPH::BodyInterface& Iface, const FBodyInstance& Src, const FTriangleMeshCollision* TriMesh) const
 		{
 			JPH::ShapeRefC Shape;
-			JPH::RVec3 BodyPos(Src.Position.X, Src.Position.Y, Src.Position.Z);
+			const JPH::RVec3 BodyPos = ToJoltRVec3(Src.Position);
 
 			if (Src.Type == EBodyType::Static && Src.CollisionShape == EBodyCollisionShape::TriangleMesh &&
 				TriMesh != nullptr && TriMesh->IsValid())
@@ -564,13 +598,12 @@ namespace
 			}
 			if (Shape == nullptr)
 			{
-				// Near-flat AABBs (zero Y from a plane mesh) need thickness > convex radius.
-				FVector He = Src.HalfExtents;
+				// Near-flat AABBs (zero Y from a plane mesh) need thickness > convex radius (Jolt metres).
+				FVector He = Src.HalfExtents * JoltMetresPerUnit;
 				He.X = FMath::Max(He.X, 0.05f);
 				He.Y = FMath::Max(He.Y, 0.05f);
 				He.Z = FMath::Max(He.Z, 0.05f);
 				Shape = CreateBoxShape(He);
-				BodyPos = JPH::RVec3(Src.Position.X, Src.Position.Y, Src.Position.Z);
 			}
 			if (Shape == nullptr)
 			{
@@ -596,7 +629,7 @@ namespace
 				Settings, bDynamic ? JPH::EActivation::Activate : JPH::EActivation::DontActivate);
 			if (bDynamic && !Id.IsInvalid())
 			{
-				Iface.SetLinearVelocity(Id, JPH::Vec3(Src.VelXz.X, Src.VelocityY, Src.VelXz.Y));
+				Iface.SetLinearVelocity(Id, ToJoltVelocity(Src));
 			}
 			return Id;
 		}
@@ -610,6 +643,7 @@ namespace
 			}
 		}
 
+		/** InFloorY in Jolt metres. */
 		void EnsureFloor(float InFloorY)
 		{
 			if (!FloorId.IsInvalid() && bHasFloorY && FMath::Abs(InFloorY - FloorY) < 1.0e-4f)

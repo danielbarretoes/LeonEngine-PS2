@@ -11,7 +11,7 @@ namespace
 
 	[[nodiscard]] bool IsFloorLikeBody(const FBodyInstance& InBody, float InCellSize)
 	{
-		const float Hy = FMath::Max(InBody.HalfExtents.Y, 0.001f);
+		const float Hy = FMath::Max(InBody.HalfExtents.Y, 0.1f);
 		const float Horiz = FMath::Max(InBody.HalfExtents.X, InBody.HalfExtents.Z);
 		// Unit plane scaled ~40x1x40 → hy=0.5 still floor-like by aspect (was wrongly a full-arena
 		// blocker).
@@ -19,7 +19,9 @@ namespace
 		{
 			return true;
 		}
-		if (InBody.HalfExtents.Y <= FMath::Max(0.35f, InCellSize * 0.75f))
+		/** Half heights up to this (cm) are floor-like: a character steps over them. */
+		constexpr float MaxFloorHalfHeight = 35.0f;
+		if (InBody.HalfExtents.Y <= FMath::Max(MaxFloorHalfHeight, InCellSize * 0.75f))
 		{
 			return true;
 		}
@@ -77,7 +79,10 @@ namespace
 		}
 		const float Bottom = InBody.Position.Y - InBody.HalfExtents.Y;
 		const float Top = InBody.Position.Y + InBody.HalfExtents.Y;
-		const bool bInHeightBand = Top > FloorY + 0.05f && Bottom < FloorY + 2.2f;
+		// Bodies overlapping the band a walking agent occupies above the floor (cm).
+		constexpr float BandBottom = 5.0f;
+		constexpr float BandTop = 220.0f;
+		const bool bInHeightBand = Top > FloorY + BandBottom && Bottom < FloorY + BandTop;
 		if (!bInHeightBand)
 		{
 			return false;
@@ -171,7 +176,8 @@ void UNavigationSystem::Clear()
 void UNavigationSystem::BakeGrid(const FPhysScene& Physics, float FloorY, float WalkBounds, const ULevel* Level)
 {
 	Clear();
-	const float Bounds = WalkBounds > 1.0f ? WalkBounds : 1.0f;
+	/** At least 1 m (cm). */
+	const float Bounds = WalkBounds > 100.0f ? WalkBounds : 100.0f;
 	const float Cell = CellSize;
 	const int Dim = FMath::Max(4, static_cast<int>(FMath::CeilToFloat((Bounds * 2.0f) / Cell)));
 
@@ -477,7 +483,8 @@ void UNavigationSystem::AppendDebugDraw(FDebugDraw& Draw) const
 		return;
 	}
 
-	const float Y = Mesh.FloorY + 0.04f;
+	/** cm above the floor, against z-fighting. */
+	const float Y = Mesh.FloorY + 4.0f;
 	const float Half = Mesh.CellSize * 0.5f;
 	constexpr FLinearColor Walkable(0.15f, 0.85f, 0.35f);
 	constexpr FLinearColor Blocked(0.95f, 0.2f, 0.15f);

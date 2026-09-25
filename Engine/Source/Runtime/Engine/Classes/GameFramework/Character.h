@@ -31,19 +31,22 @@ struct ENGINE_API FFindFloorResult
 /** Unreal-like UCharacterMovementComponent tunables (PascalCase Unreal-like field names). */
 struct ENGINE_API UCharacterMovementComponent
 {
-	/** Unreal MaxWalkSpeed. */
-	float MaxWalkSpeed = 4.5f;
-	/** Unreal JumpZVelocity. */
-	float JumpZVelocity = 7.0f;
-	/** World gravity acceleration (Leon absolute; UE uses GravityScale × world gravity). */
-	float Gravity = 24.0f;
+	/** Unreal MaxWalkSpeed (cm/s). */
+	float MaxWalkSpeed = 450.0f;
+	/** Unreal JumpZVelocity (cm/s). */
+	float JumpZVelocity = 700.0f;
+	/** World gravity acceleration, cm/s^2 (Leon absolute; UE uses GravityScale × world gravity). */
+	float Gravity = 2400.0f;
 	float TurnSharpness = 16.0f;
 	float ModelYawOffsetDegrees = 0.0f;
 	float FloorY = 0.0f;
-	float Skin = 0.02f;
-	/** Unreal MaxStepHeight: geometric step-up + floor probe window. */
-	float MaxStepHeight = 0.35f;
-	float WalkBounds = 18.0f;
+	/** Contact skin (cm). */
+	float Skin = 2.0f;
+	/** Unreal MaxStepHeight (cm): geometric step-up + floor probe window. */
+	float MaxStepHeight = 35.0f;
+	/** Half size of the square the character may walk in (cm). */
+	float WalkBounds = 1800.0f;
+	/** Unitless push strength against dynamic bodies. */
 	float PushStrength = 1.0f;
 	float PushDamping = 6.0f;
 	/** Unreal WalkableFloorZ (cos of max walkable slope). Default ~44° (UE). */
@@ -220,7 +223,8 @@ private:
 	/** Unreal CMC step-up: raise ≤ MaxStepHeight, move forward, land on walkable floor. */
 	[[nodiscard]] bool TryStepUp(FPhysScene& PhysScene, const FVector& ForwardDelta, FDebugDraw* DebugDraw);
 
-	FCollisionShape Capsule = FCollisionShape::MakeCapsule(0.35f, 0.925f);
+	/** Radius 35 cm, half height 92.5 cm. */
+	FCollisionShape Capsule = FCollisionShape::MakeCapsule(35.0f, 92.5f);
 	UCharacterMovementComponent Movement{};
 	USkeletalMeshComponent Mesh{};
 	float AnimBlendInput = 0.0f;
