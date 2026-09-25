@@ -116,9 +116,9 @@ public:
 		return Raw;
 	}
 
-	/** Min FPlayerStart Y, or 0 if none. */
-	[[nodiscard]] static float EstimateFloorY(const ULevel& Level);
-	/** Soft XZ walk clamp from static mesh extents (cm, clamped 2000–12000). */
+	/** Min FPlayerStart Z, or 0 if none. */
+	[[nodiscard]] static float EstimateFloorZ(const ULevel& Level);
+	/** Soft XY walk clamp from static mesh extents (cm, clamped 2000–12000). */
 	[[nodiscard]] static float EstimateWalkBounds(const ULevel& Level);
 
 protected:
@@ -133,7 +133,7 @@ protected:
 		GetWorld().RegisterBodiesFromLevel(Level);
 	}
 
-	/** Unreal FindPlayerStart — resolve spawn transform (slot picks among starts). */
+	/** Unreal FindPlayerStart — resolve spawn transform (slot picks among starts); the yaw is the start's UE yaw. */
 	[[nodiscard]] bool FindPlayerStart(
 		const ULevel& Level, FVector& OutLocation, float& OutYawDegrees, int Slot = 0) const
 	{
@@ -147,15 +147,15 @@ protected:
 		const int Index = FMath::Clamp(Slot, 0, static_cast<int>(Starts.Num()) - 1);
 		const FPlayerStart& Start = Starts[Index];
 		OutLocation = Start.Transform.GetLocation();
-		OutYawDegrees = FLegacyCoordinateConversion::ToLegacyEulerXYZ(Start.Transform.GetRotation()).Y;
+		OutYawDegrees = Start.Transform.Rotator().Yaw;
 		return true;
 	}
 
 	// Flow: Match enter — bodies + nav bake
 	void PrepareMatchWorld(
-		UGameEngine& Engine, float& OutFloorY, float& OutWalkBounds, EPhysicsBackend Backend = EPhysicsBackend::Jolt);
-	void RebuildNavigation(UGameEngine& Engine, float FloorY, float WalkBounds);
-	void SnapCharacterToFloor(ACharacter& Character, FVector& InOutFeet, float FloorY) const;
+		UGameEngine& Engine, float& OutFloorZ, float& OutWalkBounds, EPhysicsBackend Backend = EPhysicsBackend::Jolt);
+	void RebuildNavigation(UGameEngine& Engine, float FloorZ, float WalkBounds);
+	void SnapCharacterToFloor(ACharacter& Character, FVector& InOutFeet, float FloorZ) const;
 
 private:
 	UWorld World;

@@ -48,7 +48,7 @@ FBasicShape FBasicShape::Plane(float Size, const FTransform& InTransform, FMater
 	FBasicShape Shape;
 	Shape.Type = EBasicShape::Plane;
 	Shape.Transform = InTransform;
-	Shape.Transform.SetScale3D(FVector(Size, 1.0f, Size));
+	Shape.Transform.SetScale3D(FVector(Size, Size, 1.0f));
 	Shape.Material = MoveTemp(InMaterial);
 	Shape.bHasCustomMaterial = bHasMaterial;
 	return Shape;

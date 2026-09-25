@@ -25,25 +25,14 @@ namespace
 
 FVector USpringArmComponent::GetBoomDirection(float YawDegrees, float PitchDegrees)
 {
-	const float YawRad = YawDegrees * (PI / 180.0f);
-	const float PitchRad = PitchDegrees * (PI / 180.0f);
-	const FVector Dir = FVector(
-		FMath::Cos(PitchRad) * FMath::Cos(YawRad), FMath::Sin(PitchRad), FMath::Cos(PitchRad) * FMath::Sin(YawRad));
-	const float Len = Dir.Size();
-	if (Len < 1.0e-6f)
-	{
-		return FVector(0.0f, 0.0f, 1.0f);
-	}
-	return Dir / Len;
+	return FRotator(PitchDegrees, YawDegrees, 0.0f).Vector();
 }
 
 FVector USpringArmComponent::GetTargetLocation(const FVector& ActorLocation) const
 {
-	constexpr float DegToRad = PI / 180.0f;
-	const float YawRad = BoomYawDegrees * DegToRad;
-	// Same right basis as yawRelativeMoveXZ.
-	const FVector Right = FVector(FMath::Sin(YawRad), 0.0f, -FMath::Cos(YawRad));
-	return ActorLocation + FVector(0.0f, SocketOffsetZ, 0.0f) + (Right * SocketOffsetX);
+	// The view's right axis (the same as YawRelativeMove's).
+	const FVector Right = FRotationMatrix(FRotator(0.0f, BoomYawDegrees + 180.0f, 0.0f)).GetUnitAxis(EAxis::Y);
+	return ActorLocation + FVector(0.0f, 0.0f, SocketOffsetZ) + (Right * SocketOffsetX);
 }
 
 void USpringArmComponent::SnapLagState(const FVector& ActorLocation)
@@ -57,11 +46,8 @@ void USpringArmComponent::SnapLagState(const FVector& ActorLocation)
 
 float USpringArmComponent::GetLookFacingYawDegrees() const
 {
-	constexpr float DegToRad = PI / 180.0f;
-	constexpr float RadToDeg = 180.0f / PI;
-	const float YawRad = BoomYawDegrees * DegToRad;
-	// Same forward as yawRelativeMoveXZ / Camera orbit look on XZ.
-	return FMath::Atan2(-FMath::Cos(YawRad), -FMath::Sin(YawRad)) * RadToDeg;
+	// The camera looks back along the boom.
+	return FRotator::NormalizeAxis(BoomYawDegrees + 180.0f);
 }
 
 float USpringArmComponent::ExpSmoothAlpha(float Speed, float DeltaTime)
@@ -157,7 +143,8 @@ void USpringArmComponent::ApplyToCamera(UCameraComponent& Camera, const FVector&
 	Camera.SetMode(ECameraMode::Orbit);
 	Camera.SetTarget(LaggedTarget);
 	Camera.SetDistance(ArmLength);
-	Camera.SetYawPitch(LaggedYawDegrees, LaggedPitchDegrees);
+	// The camera looks back along the boom.
+	Camera.SetViewRotation(FRotator(-LaggedPitchDegrees, LaggedYawDegrees + 180.0f, 0.0f));
 }
 
 void USpringArmComponent::ApplyToCamera(UCameraComponent& Camera, float DeltaTime, FDebugDraw* DebugDraw)

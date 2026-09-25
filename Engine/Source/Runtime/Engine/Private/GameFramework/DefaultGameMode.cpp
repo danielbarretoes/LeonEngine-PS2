@@ -7,9 +7,9 @@ namespace
 
 	void BeginFreeLookFromOrbit(UCameraComponent& Camera)
 	{
+		// Fly from the eye, looking at the target (an orbit camera keeps its view; a free-look one turns to it).
 		const FVector Eye = Camera.GetCameraLocation();
-		const FVector LocalTarget = Camera.GetTarget();
-		FVector Look = LocalTarget - Eye;
+		FVector Look = Camera.GetTarget() - Eye;
 		const float LookLen = Look.Size();
 		if (LookLen > 1.0e-3f)
 		{
@@ -17,15 +17,12 @@ namespace
 		}
 		else
 		{
-			Look = FVector(0.0f, 0.0f, -1.0f);
+			Look = FVector(0.0f, -1.0f, 0.0f);
 		}
-
-		const float Pitch = FMath::Asin(FMath::Clamp(Look.Y, -1.0f, 1.0f)) * (180.0f / PI);
-		const float Yaw = FMath::Atan2(Look.Z, Look.X) * (180.0f / PI);
 
 		Camera.SetMode(ECameraMode::FreeLook);
 		Camera.SetEyeLocation(Eye);
-		Camera.SetYawPitch(Yaw, Pitch);
+		Camera.SetViewRotation(Look.Rotation());
 	}
 
 } // namespace
@@ -40,8 +37,7 @@ void ADefaultGameMode::OnEnter(UGameEngine& Engine, const FString& /*levelPath*/
 	UCameraComponent& Camera = Engine.GetCamera();
 	SavedOrbit.Target = Camera.GetTarget();
 	SavedOrbit.Distance = Camera.GetDistance();
-	SavedOrbit.YawDegrees = Camera.GetYawDegrees();
-	SavedOrbit.PitchDegrees = Camera.GetPitchDegrees();
+	SavedOrbit.ViewRotation = Camera.GetViewRotation();
 
 	BeginFreeLookFromOrbit(Camera);
 
@@ -77,7 +73,7 @@ void ADefaultGameMode::OnExit(UGameEngine& Engine)
 	Camera.SetMode(ECameraMode::Orbit);
 	Camera.SetTarget(SavedOrbit.Target);
 	Camera.SetDistance(SavedOrbit.Distance);
-	Camera.SetYawPitch(SavedOrbit.YawDegrees, SavedOrbit.PitchDegrees);
+	Camera.SetViewRotation(SavedOrbit.ViewRotation);
 
 	Engine.SetCursorCaptured(false);
 	Engine.SetKeyboardOrbitEnabled(true);

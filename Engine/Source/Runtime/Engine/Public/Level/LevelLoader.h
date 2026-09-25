@@ -6,8 +6,8 @@
 struct UStaticMeshComponent;
 
 /**
- * Optional: scale mesh to fitHeight and ground-align (bottom at y≈0). position is a post-fit
- * offset.
+ * Optional: scale the mesh to FitHeight (its Z extent) and ground-align it (bottom at z ~ 0, centred in X / Y); the
+ * existing location is a post-fit offset.
  */
 void ApplyFitHeight(UStaticMeshComponent& Object, float FitHeight);
 

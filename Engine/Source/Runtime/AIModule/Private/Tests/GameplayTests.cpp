@@ -14,7 +14,6 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/SpringArmComponent.h"
-#include "LegacyCoordinateConversion.h"
 #include "Misc/AutomationTest.h"
 #include "Physics/PhysScene.h"
 #include "PhysicsBackend.h"
@@ -183,7 +182,7 @@ bool FGameplaySpringArmClampsPitchAndArmLengthTest::RunTest(const FString& Param
 	UCameraComponent Camera;
 	Arm.ApplyToCamera(Camera, FVector(100.0f, 0.0f, 0.0f), 0.016f);
 	TestTrue("Orbit camera", Camera.GetMode() == ECameraMode::Orbit);
-	TestEqual("Camera target height", Camera.GetTarget().Y, Arm.SocketOffsetZ, 50.0f);
+	TestEqual("Camera target height", Camera.GetTarget().Z, Arm.SocketOffsetZ, 50.0f);
 	return true;
 }
 
@@ -196,8 +195,8 @@ bool FGameplaySpringArmCollisionProbeShortensArmTest::RunTest(const FString& Par
 	// A static box between the pawn and the camera pulls the arm in, but never below ArmLengthMin.
 	FPhysScene Scene;
 	const int32 Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
-	Scene.GetBodies()[Id].Position = FVector(200.0f, 100.0f, 0.0f);
-	Scene.GetBodies()[Id].HalfExtents = FVector(25.0f, 100.0f, 200.0f);
+	Scene.GetBodies()[Id].Position = FVector(200.0f, 0.0f, 100.0f);
+	Scene.GetBodies()[Id].HalfExtents = FVector(25.0f, 200.0f, 100.0f);
 
 	USpringArmComponent Arm;
 	Arm.bDoCollisionTest = true;
@@ -285,8 +284,8 @@ bool FGameplayAIControllerPathFollowDoesNotShortcutTest::RunTest(const FString& 
 	FPhysScene Physics;
 	FBodyInstance Wall{};
 	Wall.Type = EBodyType::Static;
-	Wall.Position = FVector(0.0f, 100.0f, 0.0f);
-	Wall.HalfExtents = FVector(60.0f, 150.0f, 400.0f);
+	Wall.Position = FVector(0.0f, 0.0f, 100.0f);
+	Wall.HalfExtents = FVector(60.0f, 400.0f, 150.0f);
 	Physics.GetBodies().Add(Wall);
 
 	UNavigationSystem Nav;
@@ -317,7 +316,7 @@ bool FGameplayAIControllerPathFollowDoesNotShortcutTest::RunTest(const FString& 
 	const FVector Wish = Ai.TickAI(0.016f);
 	TestTrue("Moving", Wish.Size() > 0.5f);
 	// Detour is off the X axis (around the wall), not a pure +X charge through it.
-	TestTrue("Steering around the wall", FMath::Abs(Wish.Z) > 0.35f);
+	TestTrue("Steering around the wall", FMath::Abs(Wish.Y) > 0.35f);
 	return true;
 }
 
@@ -334,13 +333,13 @@ bool FGameplayNavFindPathRoutesAroundStaticBlockerTest::RunTest(const FString& P
 	FBodyInstance Floor{};
 	Floor.Type = EBodyType::Static;
 	Floor.Position = FVector(0.0f, 0.0f, 0.0f);
-	Floor.HalfExtents = FVector(2000.0f, 50.0f, 2000.0f);
+	Floor.HalfExtents = FVector(2000.0f, 2000.0f, 50.0f);
 	Physics.GetBodies().Add(Floor);
 
 	FBodyInstance Wall{};
 	Wall.Type = EBodyType::Static;
-	Wall.Position = FVector(0.0f, 100.0f, 0.0f);
-	Wall.HalfExtents = FVector(60.0f, 150.0f, 500.0f);
+	Wall.Position = FVector(0.0f, 0.0f, 100.0f);
+	Wall.HalfExtents = FVector(60.0f, 500.0f, 150.0f);
 	Physics.GetBodies().Add(Wall);
 
 	UNavigationSystem Nav;
@@ -364,7 +363,7 @@ bool FGameplayNavFindPathRoutesAroundStaticBlockerTest::RunTest(const FString& P
 	bool bDetoured = false;
 	for (const FVector& Point : Path)
 	{
-		if (FMath::Abs(Point.Z) > 125.0f)
+		if (FMath::Abs(Point.Y) > 125.0f)
 		{
 			bDetoured = true;
 			break;
@@ -373,11 +372,11 @@ bool FGameplayNavFindPathRoutesAroundStaticBlockerTest::RunTest(const FString& P
 	TestTrue("Path leaves the X axis", bDetoured);
 
 	FVector Projected = FVector::ZeroVector;
-	if (!TestTrue("Point projected", Nav.ProjectPointToNavigation(FVector(-600.0f, 200.0f, 0.0f), Projected)))
+	if (!TestTrue("Point projected", Nav.ProjectPointToNavigation(FVector(-600.0f, 0.0f, 200.0f), Projected)))
 	{
 		return false;
 	}
-	TestEqual("Projected to the floor", Projected.Y, 0.0f, 1.0e-3f);
+	TestEqual("Projected to the floor", Projected.Z, 0.0f, 1.0e-3f);
 	return true;
 }
 
@@ -395,15 +394,14 @@ bool FGameplayNavBlocksNavBlockerKeepsNavWalkableTest::RunTest(const FString& Pa
 	Plate.Tag = NavTags::Blocker;
 	Plate.bCollisionEnabled = true;
 	Plate.EditorClass = "Cube";
-	Plate.Transform = FLegacyCoordinateConversion::ConvertTransform(
-		FVector(0.0f, 0.12f, 0.0f), FVector::ZeroVector, FVector(1.8f, 0.2f, 1.8f));
+	Plate.Transform = FTransform(FQuat::Identity, FVector(0.0f, 0.0f, 12.0f), FVector(1.8f, 1.8f, 0.2f));
 	Level.GetStaticMeshes().Add(MoveTemp(Plate));
 
 	FBodyInstance PlateBody{};
 	PlateBody.Type = EBodyType::Static;
 	PlateBody.LevelMeshIndex = 0;
-	PlateBody.Position = FVector(0.0f, 12.0f, 0.0f);
-	PlateBody.HalfExtents = FVector(90.0f, 10.0f, 90.0f);
+	PlateBody.Position = FVector(0.0f, 0.0f, 12.0f);
+	PlateBody.HalfExtents = FVector(90.0f, 90.0f, 10.0f);
 	Physics.GetBodies().Add(PlateBody);
 	Physics.GetTriangleMeshes().AddDefaulted();
 
@@ -416,15 +414,15 @@ bool FGameplayNavBlocksNavBlockerKeepsNavWalkableTest::RunTest(const FString& Pa
 	FBodyInstance RampBody{};
 	RampBody.Type = EBodyType::Static;
 	RampBody.LevelMeshIndex = 1;
-	RampBody.Position = FVector(400.0f, 100.0f, 0.0f);
-	RampBody.HalfExtents = FVector(250.0f, 100.0f, 120.0f);
+	RampBody.Position = FVector(400.0f, 0.0f, 100.0f);
+	RampBody.HalfExtents = FVector(250.0f, 120.0f, 100.0f);
 	RampBody.CollisionShape = EBodyCollisionShape::TriangleMesh;
 	Physics.GetBodies().Add(RampBody);
 
 	FTriangleMeshCollision Tri{};
 	// Two tris covering a 4 x 2 m footprint around (400, 0) cm.
-	Tri.Positions = {FVector(200.0f, 50.0f, -100.0f), FVector(600.0f, 150.0f, -100.0f), FVector(600.0f, 150.0f, 100.0f),
-		FVector(200.0f, 50.0f, 100.0f)};
+	Tri.Positions = {FVector(200.0f, -100.0f, 50.0f), FVector(600.0f, -100.0f, 150.0f), FVector(600.0f, 100.0f, 150.0f),
+		FVector(200.0f, 100.0f, 50.0f)};
 	Tri.Indices = {0, 1, 2, 0, 2, 3};
 	Physics.GetTriangleMeshes().Add(MoveTemp(Tri));
 
@@ -440,9 +438,9 @@ bool FGameplayNavBlocksNavBlockerKeepsNavWalkableTest::RunTest(const FString& Pa
 
 	// Cell under plate center must be blocked.
 	int Pix = 0;
-	int Piz = 0;
-	TestTrue("Plate cell found", Nav.GetNavMesh().WorldToCell(0.0f, 0.0f, Pix, Piz));
-	TestFalse("Plate cell blocked", Nav.GetNavMesh().IsWalkable(Pix, Piz));
+	int Piy = 0;
+	TestTrue("Plate cell found", Nav.GetNavMesh().WorldToCell(0.0f, 0.0f, Pix, Piy));
+	TestFalse("Plate cell blocked", Nav.GetNavMesh().IsWalkable(Pix, Piy));
 
 	// Path across the plate must detour.
 	TArray<FVector> Path;
@@ -454,7 +452,7 @@ bool FGameplayNavBlocksNavBlockerKeepsNavWalkableTest::RunTest(const FString& Pa
 	bool bDetouredPlate = false;
 	for (const FVector& Point : Path)
 	{
-		if (FMath::Abs(Point.Z) > 80.0f)
+		if (FMath::Abs(Point.Y) > 80.0f)
 		{
 			bDetouredPlate = true;
 			break;
@@ -464,9 +462,9 @@ bool FGameplayNavBlocksNavBlockerKeepsNavWalkableTest::RunTest(const FString& Pa
 
 	// Climbable ramp footprint stays walkable (CMC handles the slope).
 	int Rix = 0;
-	int Riz = 0;
-	TestTrue("Ramp cell found", Nav.GetNavMesh().WorldToCell(400.0f, 0.0f, Rix, Riz));
-	TestTrue("Ramp cell walkable", Nav.GetNavMesh().IsWalkable(Rix, Riz));
+	int Riy = 0;
+	TestTrue("Ramp cell found", Nav.GetNavMesh().WorldToCell(400.0f, 0.0f, Rix, Riy));
+	TestTrue("Ramp cell walkable", Nav.GetNavMesh().IsWalkable(Rix, Riy));
 	TestTrue("Path over the ramp", Nav.FindPath(FVector(200.0f, 0.0f, 0.0f), FVector(600.0f, 0.0f, 0.0f), Path));
 	return true;
 }
@@ -481,8 +479,8 @@ bool FGameplayNavAppendDebugDrawFillsOverlayTest::RunTest(const FString& Paramet
 	FPhysScene Physics;
 	FBodyInstance Wall{};
 	Wall.Type = EBodyType::Static;
-	Wall.Position = FVector(0.0f, 100.0f, 0.0f);
-	Wall.HalfExtents = FVector(50.0f, 100.0f, 50.0f);
+	Wall.Position = FVector(0.0f, 0.0f, 100.0f);
+	Wall.HalfExtents = FVector(50.0f, 50.0f, 100.0f);
 	Physics.GetBodies().Add(Wall);
 
 	UNavigationSystem Nav;
@@ -517,7 +515,7 @@ bool FGameplayCharacterResetJumpAndPerformMovementTest::RunTest(const FString& P
 	Character.PerformMovement(Scene, 1.0f / 60.0f);
 	TestFalse("Left the ground", Character.IsMovingOnGround());
 	TestTrue("Falling", Character.IsFalling());
-	TestTrue("Moved up", Character.GetActorLocation().Y > 0.0f);
+	TestTrue("Moved up", Character.GetActorLocation().Z > 0.0f);
 
 	Character.AddMovementInput(FVector(1.0f, 0.0f, 0.0f));
 	const float StartX = Character.GetActorLocation().X;
@@ -532,7 +530,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayActorSyncTransformToLevelWritesLinkedM
 
 bool FGameplayActorSyncTransformToLevelWritesLinkedMeshTest::RunTest(const FString& Parameters)
 {
-	// SyncTransformToLevel copies the Actor location and yaw into its linked Level mesh.
+	// SyncTransformToLevel copies the Actor location and yaw into its linked Level mesh; the mesh shows converted
+	// legacy content (facing +Y), so its yaw is the actor yaw plus LegacyContentYawDegrees.
 	ULevel Level;
 	UStaticMeshComponent Mesh{};
 	Level.AddStaticMesh(MoveTemp(Mesh));
@@ -548,8 +547,10 @@ bool FGameplayActorSyncTransformToLevelWritesLinkedMeshTest::RunTest(const FStri
 	TestEqual("Position Y", Transform.GetLocation().Y, 150.0f, 1.0e-3f);
 	TestEqual("Position Z", Transform.GetLocation().Z, -200.0f, 1.0e-3f);
 	TestTrue("Yaw",
-		Transform.GetRotation().Equals(
-			FLegacyCoordinateConversion::ConvertEulerXYZ(FVector(0.0f, 90.0f, 0.0f)), 1.0e-6f));
+		Transform.GetRotation().Equals(FRotator(0.0f, 90.0f + LegacyContentYawDegrees, 0.0f).Quaternion(), 1.0e-6f));
+	// The content's forward (+Y) now faces the actor's forward (yaw 90: +Y).
+	TestTrue("Content faces the actor forward",
+		Transform.GetRotation().RotateVector(FVector(0.0f, 1.0f, 0.0f)).Equals(FVector(0.0f, 1.0f, 0.0f), 1.0e-5f));
 	return true;
 }
 
@@ -567,7 +568,7 @@ bool FGameplayWorldTickGameplayFrameSyncsCharacterTest::RunTest(const FString& P
 	UWorld World;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->SetLevelMeshIndex(0);
-	Character->Reset(FVector(100.0f, 0.0f, 200.0f), 45.0f);
+	Character->Reset(FVector(100.0f, 200.0f, 0.0f), 45.0f);
 
 	FWorldGameplayFrameParams Frame{};
 	Frame.DeltaTime = 1.0f / 60.0f;
@@ -576,8 +577,8 @@ bool FGameplayWorldTickGameplayFrameSyncsCharacterTest::RunTest(const FString& P
 
 	const FTransform& Transform = Level.GetStaticMeshes()[0].Transform;
 	TestEqual("Position X", Transform.GetLocation().X, 100.0f, 1.0e-2f);
-	TestEqual("Position Z", Transform.GetLocation().Z, 200.0f, 1.0e-2f);
-	TestEqual("Yaw", FLegacyCoordinateConversion::ToLegacyEulerXYZ(Transform.GetRotation()).Y, 45.0f, 1.0e-4f);
+	TestEqual("Position Y", Transform.GetLocation().Y, 200.0f, 1.0e-2f);
+	TestEqual("Yaw", Transform.Rotator().Yaw, 45.0f + LegacyContentYawDegrees, 1.0e-3f);
 	return true;
 }
 
@@ -639,10 +640,10 @@ bool FGameplaySceneComponentAttachHierarchyTest::RunTest(const FString& Paramete
 	ATestActor* Actor = World.SpawnActor<ATestActor>();
 	Actor->SetActorLocationAndRotation(FVector(1000.0f, 0.0f, 0.0f), 0.0f);
 
-	// The Relative* fields hold legacy values: 2 m and 1 m below are 200 cm and 100 cm in the world.
+	// The Relative* fields are world units (cm).
 	USceneComponent Child;
 	Child.SetOwner(Actor);
-	Child.RelativeLocation = FVector(2.0f, 0.0f, 0.0f);
+	Child.RelativeLocation = FVector(200.0f, 0.0f, 0.0f);
 	TestTrue("Child attached", Child.AttachToComponent(&Actor->GetRootComponent()));
 	TestTrue("Child parent is root", Child.GetAttachParent() == &Actor->GetRootComponent());
 	TestEqual("Root has one child", Actor->GetRootComponent().GetAttachChildren().Num(), 1);
@@ -651,7 +652,7 @@ bool FGameplaySceneComponentAttachHierarchyTest::RunTest(const FString& Paramete
 	TestEqual("Child world X", Loc.X, 1200.0f, 1.0e-2f);
 
 	USceneComponent Grandchild;
-	Grandchild.RelativeLocation = FVector(1.0f, 0.0f, 0.0f);
+	Grandchild.RelativeLocation = FVector(100.0f, 0.0f, 0.0f);
 	TestTrue("Grandchild attached", Grandchild.AttachToComponent(&Child));
 	TestEqual("Grandchild world X", Grandchild.GetComponentLocation().X, 1300.0f, 1.0e-2f);
 
@@ -675,9 +676,19 @@ bool FGameplayCharacterMeshAttachesToRootTest::RunTest(const FString& Parameters
 	TestTrue("Mesh registered", Character.GetMesh().IsRegistered());
 	TestTrue("Root registered", Character.GetRootComponent().IsRegistered());
 	Character.SetActorLocation(FVector(500.0f, 0.0f, 0.0f));
-	// A legacy relative offset of 1 m (100 cm).
-	Character.GetMesh().RelativeLocation = FVector(1.0f, 0.0f, 0.0f);
+	// A relative offset of 100 cm, in the actor's space.
+	Character.GetMesh().RelativeLocation = FVector(100.0f, 0.0f, 0.0f);
 	TestEqual("Mesh world X", Character.GetMesh().GetComponentLocation().X, 600.0f, 1.0e-2f);
+
+	// The mesh shows legacy content (facing +Y) with a relative yaw of -90: the content faces the actor's forward.
+	Character.SetActorYaw(30.0f);
+	const FVector ContentForward =
+		Character.GetMesh().GetComponentTransform().GetRotation().RotateVector(FVector(0.0f, 1.0f, 0.0f));
+	TestTrue("Content faces the actor forward", ContentForward.Equals(FRotator(0.0f, 30.0f, 0.0f).Vector(), 1.0e-5f));
+	TestTrue("Offset turns with the actor",
+		Character.GetMesh().GetComponentLocation().Equals(
+			FVector(500.0f, 0.0f, 0.0f) + FRotator(0.0f, 30.0f, 0.0f).RotateVector(FVector(100.0f, 0.0f, 0.0f)),
+			1.0e-2f));
 	return true;
 }
 

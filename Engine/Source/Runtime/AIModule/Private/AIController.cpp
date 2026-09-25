@@ -45,7 +45,7 @@ void AAIController::RebuildPath()
 FVector AAIController::SteerToward(const FVector& From, const FVector& To, float InArriveRadius) const
 {
 	const FVector Delta = To - From;
-	const FVector Flat = FVector(Delta.X, 0.0f, Delta.Z);
+	const FVector Flat = FVector(Delta.X, Delta.Y, 0.0f);
 	const float DistSq = FVector::DotProduct(Flat, Flat);
 	const float Arrive = InArriveRadius * InArriveRadius;
 	if (DistSq <= Arrive)
@@ -158,7 +158,7 @@ FVector AAIController::TickAI(float DeltaTime)
 			{
 				const FVector& Wp = Path[PathIndex];
 				const FVector D = Wp - From;
-				const float DistSq = D.X * D.X + D.Z * D.Z;
+				const float DistSq = D.X * D.X + D.Y * D.Y;
 				if (DistSq <= WaypointArriveRadius * WaypointArriveRadius)
 				{
 					++PathIndex;

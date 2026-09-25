@@ -60,8 +60,8 @@ public:
 	static constexpr float PlanarReflectionScale = 0.5f;
 	static constexpr int32 MaxAoSamples = 64;
 
-	/** World-space mirror about the horizontal plane y = PlaneY, applied before the view by the planar pass. */
-	[[nodiscard]] static FMatrix MakeReflectMatrix(float PlaneY);
+	/** World-space mirror about the horizontal plane z = PlaneZ, applied before the view by the planar pass. */
+	[[nodiscard]] static FMatrix MakeReflectMatrix(float PlaneZ);
 
 	bool Initialize(const FString& InShaderDirectory);
 	void Shutdown();
@@ -208,7 +208,7 @@ private:
 	void DrawFullscreenTriangle() const;
 	void RenderPostStack(const UCameraComponent& Camera);
 	void RenderShadowPass(const ULevel& Level, const FMatrix& LightSpace);
-	void RenderPlanarReflectionPass(const ULevel& Level, const UCameraComponent& Camera, float PlaneY);
+	void RenderPlanarReflectionPass(const ULevel& Level, const UCameraComponent& Camera, float PlaneZ);
 	void DrawDebug(const ULevel& Level, const UCameraComponent& Camera, const FMatrix& LightSpace, bool bHasLightSpace);
 	void DrawSubMesh(const FShader& Shader, const UStaticMeshComponent& Object, int32 InSubMeshIndex,
 		const FMaterial& InMaterial, const FMatrix& InView, const FMatrix& InProjection, const FMatrix& LightSpace,

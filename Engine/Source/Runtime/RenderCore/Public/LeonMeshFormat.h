@@ -7,8 +7,9 @@
 [[nodiscard]] bool IsLeonMeshPath(const FString& Path);
 
 /**
- * Loads a .lmesh into the engine world. Version 1 files hold legacy metres (Y up): positions are converted with
- * FLegacyCoordinateConversion (1 m = 100 cm); normals, tangents and UVs are unitless and stay as stored.
+ * Loads a .lmesh into the engine world. Version 1 files hold legacy data (metres, Y up, right-handed): positions,
+ * normals and tangents are converted with FLegacyCoordinateConversion::ConvertMeshData (Y and Z swap, 1 m = 100 cm,
+ * the bitangent sign flips); UVs and the index order stay as stored.
  */
 [[nodiscard]] bool LoadLeonMeshFile(const FString& Path, FMeshData& Out);
 

@@ -28,5 +28,17 @@ struct RENDERCORE_API FMeshData
 	}
 };
 
-/** Orthonormalizes tangents from triangle UVs (needed for normal mapping). */
-void ComputeTangents(FMeshData& Data);
+/** The world a mesh's data is in: it picks the fallback tangent of vertices without a UV gradient. */
+enum class EMeshDataBasis : uint8
+{
+	/** The engine world (UE: Z up, left-handed). */
+	Engine,
+	/** The legacy Y-up, right-handed world the importers still produce (their output is converted at load). */
+	LegacyYUp,
+};
+
+/**
+ * Orthonormalizes tangents from triangle UVs (needed for normal mapping). A vertex without a UV gradient gets a tangent
+ * across the world up of Basis; in the engine basis it is the converted legacy fallback.
+ */
+void ComputeTangents(FMeshData& Data, EMeshDataBasis Basis = EMeshDataBasis::Engine);

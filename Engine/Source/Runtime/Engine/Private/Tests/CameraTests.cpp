@@ -83,8 +83,8 @@ bool FCameraUEViewAndProjectionTest::RunTest(const FString& Parameters)
 	UCameraComponent Cam;
 	Cam.SetPerspective(60.0f, 2.0f, 50.0f, 5000.0f);
 	Cam.SetMode(ECameraMode::Orbit);
-	Cam.SetTarget(FVector(100.0f, 50.0f, -200.0f));
-	Cam.SetYawPitch(30.0f, 20.0f);
+	Cam.SetTarget(FVector(100.0f, -200.0f, 50.0f));
+	Cam.SetYawPitch(30.0f, -20.0f);
 	Cam.SetDistance(600.0f);
 
 	const FMatrix View = Cam.ViewMatrix();
@@ -95,7 +95,7 @@ bool FCameraUEViewAndProjectionTest::RunTest(const FString& Parameters)
 		FVector(View.TransformPosition(Cam.GetTarget())).Equals(FVector(0.0f, 0.0f, 600.0f), 1.0e-2f));
 	TestTrue("Forward is +z", Ahead.Equals(FVector(0.0f, 0.0f, 300.0f), 1.0e-2f));
 	TestTrue("RightVector is +x", Right.Equals(FVector(100.0f, 0.0f, 0.0f), 1.0e-2f));
-	TestTrue("World up is up on screen", FVector(View.TransformVector(FVector(0.0f, 1.0f, 0.0f))).Y > 0.0f);
+	TestTrue("World up is up on screen", FVector(View.TransformVector(FVector(0.0f, 0.0f, 1.0f))).Y > 0.0f);
 
 	const FMatrix& Perspective = Cam.ProjectionMatrix();
 	const FVector4 Near = Perspective.TransformFVector4(FVector4(0.0f, 0.0f, 50.0f, 1.0f));
@@ -113,6 +113,45 @@ bool FCameraUEViewAndProjectionTest::RunTest(const FString& Parameters)
 	TestTrue("Ortho near corner",
 		FVector(Ortho.TransformPosition(FVector(1000.0f, 500.0f, 50.0f))).Equals(FVector(1.0f, 1.0f, 0.0f), 1.0e-5f));
 	TestEqual("Ortho far depth", Ortho.TransformPosition(FVector(0.0f, 0.0f, 5000.0f)).Z, 1.0f, 1.0e-5f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCameraOrbitEyeBehindViewRotationTest,
+	"System.Engine.Camera.OrbitEyeBehindViewRotation",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FCameraOrbitEyeBehindViewRotationTest::RunTest(const FString& Parameters)
+{
+	// An orbit camera looking down 30 degrees toward +Y sits behind the target (-Y) and above it (+Z), and its right
+	// vector is horizontal, pointing to -X (UE: WorldUp ^ Forward).
+	UCameraComponent Cam;
+	Cam.SetMode(ECameraMode::Orbit);
+	Cam.SetTarget(FVector::ZeroVector);
+	Cam.SetDistance(200.0f);
+	Cam.SetViewRotation(FRotator(-30.0f, 90.0f, 0.0f));
+	const float Cos30 = FMath::Cos(FMath::DegreesToRadians(30.0f));
+	TestTrue("Eye behind and above", Cam.GetCameraLocation().Equals(FVector(0.0f, -200.0f * Cos30, 100.0f), 1.0e-2f));
+	TestTrue("Forward toward +Y and down", Cam.ForwardVector().Equals(FVector(0.0f, Cos30, -0.5f), 1.0e-5f));
+	TestTrue("Right is -X", Cam.RightVector().Equals(FVector(-1.0f, 0.0f, 0.0f), 1.0e-5f));
+	TestTrue("Right = Up ^ Forward",
+		Cam.RightVector().Equals((FVector(0.0f, 0.0f, 1.0f) ^ Cam.ForwardVector()).GetSafeNormal(), 1.0e-5f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCameraLookInputTurnsRightAndUpTest, "System.Engine.Camera.LookInputTurnsRightAndUp",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FCameraLookInputTurnsRightAndUpTest::RunTest(const FString& Parameters)
+{
+	// A positive yaw input turns the view toward its right vector; a positive pitch input looks up.
+	UCameraComponent Cam;
+	Cam.SetMode(ECameraMode::FreeLook);
+	Cam.SetYawPitch(0.0f, 0.0f);
+	const FVector RightBefore = Cam.RightVector();
+	Cam.AddLook(90.0f, 0.0f);
+	TestTrue("Turned right", Cam.ForwardVector().Equals(RightBefore, 1.0e-5f));
+	Cam.AddLook(0.0f, 10.0f);
+	TestTrue("Looks up", Cam.ForwardVector().Z > 0.1f);
 	return true;
 }
 

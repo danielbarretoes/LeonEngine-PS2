@@ -61,7 +61,18 @@ bool FGoldenStarterLevelTest::RunTest(const FString& Parameters)
 
 	const UCameraComponent& Camera = Engine.GetCamera();
 	const TArray<FVector> CameraPoints = {Camera.GetTarget(), Camera.GetCameraLocation()};
-	const TArray<float> CameraAngles = {Camera.GetYawDegrees(), Camera.GetPitchDegrees()};
+	// The table holds the legacy angles of the camera's mode.
+	float LegacyYaw = 0.0f;
+	float LegacyPitch = 0.0f;
+	if (Camera.GetMode() == ECameraMode::FreeLook)
+	{
+		FLegacyCoordinateConversion::ToLegacyFreeLookRotation(Camera.GetViewRotation(), LegacyYaw, LegacyPitch);
+	}
+	else
+	{
+		FLegacyCoordinateConversion::ToLegacyOrbitRotation(Camera.GetViewRotation(), LegacyYaw, LegacyPitch);
+	}
+	const TArray<float> CameraAngles = {LegacyYaw, LegacyPitch};
 	const TArray<float> CameraDistance = {Camera.GetDistance()};
 	Engine.Shutdown();
 
@@ -71,7 +82,7 @@ bool FGoldenStarterLevelTest::RunTest(const FString& Parameters)
 	static const FVector ExpectedLightDirections[] = {FVector(-0.321393818f, -0.766044438f, 0.556670427f)};
 	/** Camera target, then eye. */
 	static const FVector ExpectedCameraPoints[2] = {FVector(0.0f, 0.0f, 0.0f), FVector(0.0f, 5.0f, 12.0f)};
-	/** Camera yaw, then pitch, degrees. */
+	/** Camera yaw, then pitch, legacy degrees. */
 	static const float ExpectedCameraAngles[2] = {-90.0f, -20.0f};
 	static const float ExpectedCameraDistance[1] = {12.0f};
 	LegacyGolden::CheckInts(*this, "Counts", Counts, ExpectedCounts, 4);

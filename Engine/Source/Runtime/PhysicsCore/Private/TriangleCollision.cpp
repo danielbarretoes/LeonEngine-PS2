@@ -118,7 +118,7 @@ bool SegmentTriangleMesh(const FVector& Start, const FVector& End, const FTriang
 	}
 	bool bAny = false;
 	float BestT = 1.0f;
-	FVector BestN(0.0f, 1.0f, 0.0f);
+	FVector BestN(0.0f, 0.0f, 1.0f);
 	const int32 TriCount = Mesh.Indices.Num() / 3;
 	const uint32 VertexCount = static_cast<uint32>(Mesh.Positions.Num());
 	for (int32 Tri = 0; Tri < TriCount; ++Tri)

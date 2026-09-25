@@ -16,33 +16,33 @@ float MassFromHalfExtents(float HalfX, float HalfY, float HalfZ)
 	return FMath::Max(0.08f, 8.0f * HalfXMetres * HalfYMetres * HalfZMetres);
 }
 
-void ClampPositionXZ(FVector& Pos, float Bounds)
+void ClampPositionXY(FVector& Pos, float Bounds)
 {
 	Pos.X = FMath::Clamp(Pos.X, -Bounds, Bounds);
-	Pos.Z = FMath::Clamp(Pos.Z, -Bounds, Bounds);
+	Pos.Y = FMath::Clamp(Pos.Y, -Bounds, Bounds);
 }
 
-bool XzDiscOverlapsAabb(float X, float Z, float InRadius, float Cx, float Cz, float Hx, float Hz, float Inflate)
+bool XYDiscOverlapsAabb(float X, float Y, float InRadius, float Cx, float Cy, float Hx, float Hy, float Inflate)
 {
 	Hx += Inflate;
-	Hz += Inflate;
+	Hy += Inflate;
 	const float NearestX = FMath::Clamp(X, Cx - Hx, Cx + Hx);
-	const float NearestZ = FMath::Clamp(Z, Cz - Hz, Cz + Hz);
+	const float NearestY = FMath::Clamp(Y, Cy - Hy, Cy + Hy);
 	const float Dx = X - NearestX;
-	const float Dz = Z - NearestZ;
-	return ((Dx * Dx) + (Dz * Dz)) <= (InRadius * InRadius);
+	const float Dy = Y - NearestY;
+	return ((Dx * Dx) + (Dy * Dy)) <= (InRadius * InRadius);
 }
 
-bool CapsuleAabbMtv(float Px, float Pz, float InRadius, float Cx, float Cz, float Hx, float Hz, FVector2D& OutNormal,
+bool CapsuleAabbMtv(float Px, float Py, float InRadius, float Cx, float Cy, float Hx, float Hy, FVector2D& OutNormal,
 	float& OutPenetration)
 {
 	const float Dx = Px - Cx;
-	const float Dz = Pz - Cz;
+	const float Dy = Py - Cy;
 	const float ClosestX = FMath::Clamp(Px, Cx - Hx, Cx + Hx);
-	const float ClosestZ = FMath::Clamp(Pz, Cz - Hz, Cz + Hz);
+	const float ClosestY = FMath::Clamp(Py, Cy - Hy, Cy + Hy);
 	const float Ox = Px - ClosestX;
-	const float Oz = Pz - ClosestZ;
-	const float DistSq = (Ox * Ox) + (Oz * Oz);
+	const float Oy = Py - ClosestY;
+	const float DistSq = (Ox * Ox) + (Oy * Oy);
 
 	if (DistSq > 1.0e-4f)
 	{
@@ -51,41 +51,41 @@ bool CapsuleAabbMtv(float Px, float Pz, float InRadius, float Cx, float Cz, floa
 		{
 			return false;
 		}
-		OutNormal = FVector2D(Ox / Dist, Oz / Dist);
+		OutNormal = FVector2D(Ox / Dist, Oy / Dist);
 		OutPenetration = InRadius - Dist;
 		return OutPenetration > 0.0f;
 	}
 
 	const float OverlapX = Hx + InRadius - FMath::Abs(Dx);
-	const float OverlapZ = Hz + InRadius - FMath::Abs(Dz);
-	if (OverlapX <= 0.0f || OverlapZ <= 0.0f)
+	const float OverlapY = Hy + InRadius - FMath::Abs(Dy);
+	if (OverlapX <= 0.0f || OverlapY <= 0.0f)
 	{
 		return false;
 	}
-	if (OverlapX < OverlapZ)
+	if (OverlapX < OverlapY)
 	{
 		OutNormal = FVector2D(Dx >= 0.0f ? 1.0f : -1.0f, 0.0f);
 		OutPenetration = OverlapX;
 	}
 	else
 	{
-		OutNormal = FVector2D(0.0f, Dz >= 0.0f ? 1.0f : -1.0f);
-		OutPenetration = OverlapZ;
+		OutNormal = FVector2D(0.0f, Dy >= 0.0f ? 1.0f : -1.0f);
+		OutPenetration = OverlapY;
 	}
 	return true;
 }
 
-bool AabbOverlapY(float Ay, float Ahy, float By, float Bhy)
+bool AabbOverlapZ(float Az, float Ahz, float Bz, float Bhz)
 {
-	return FMath::Abs(Ay - By) < (Ahy + Bhy);
+	return FMath::Abs(Az - Bz) < (Ahz + Bhz);
 }
 
-bool SeparateAabbXZ(FVector& A, float Ahx, float Ahz, FVector& B, float Bhx, float Bhz, float MoveA, float MoveB)
+bool SeparateAabbXY(FVector& A, float Ahx, float Ahy, FVector& B, float Bhx, float Bhy, float MoveA, float MoveB)
 {
-	/** Half height (cm) that makes the boxes overlap on Y whatever their heights. */
-	constexpr float UnboundedHalfY = 1.0e8f;
+	/** Half height (cm) that makes the boxes overlap on Z whatever their heights. */
+	constexpr float UnboundedHalfZ = 1.0e8f;
 	return SeparateAabb(
-		A, FVector(Ahx, UnboundedHalfY, Ahz), B, FVector(Bhx, UnboundedHalfY, Bhz), MoveA, MoveB, nullptr);
+		A, FVector(Ahx, Ahy, UnboundedHalfZ), B, FVector(Bhx, Bhy, UnboundedHalfZ), MoveA, MoveB, nullptr);
 }
 
 bool SeparateAabb(FVector& A, const FVector& AHalfExtents, FVector& B, const FVector& BHalfExtents, float MoveA,
@@ -105,18 +105,19 @@ bool SeparateAabb(FVector& A, const FVector& AHalfExtents, FVector& B, const FVe
 		return false;
 	}
 
+	// Ties go to X, then to the vertical Z, then to Y: the order of the Y-up world (X, vertical, second horizontal).
 	FVector Mtv = FVector::ZeroVector;
 	if (OverlapX <= OverlapY && OverlapX <= OverlapZ)
 	{
 		Mtv.X = (A.X >= B.X ? 1.0f : -1.0f) * OverlapX;
 	}
-	else if (OverlapY <= OverlapX && OverlapY <= OverlapZ)
+	else if (OverlapZ <= OverlapX && OverlapZ <= OverlapY)
 	{
-		Mtv.Y = (A.Y >= B.Y ? 1.0f : -1.0f) * OverlapY;
+		Mtv.Z = (A.Z >= B.Z ? 1.0f : -1.0f) * OverlapZ;
 	}
 	else
 	{
-		Mtv.Z = (A.Z >= B.Z ? 1.0f : -1.0f) * OverlapZ;
+		Mtv.Y = (A.Y >= B.Y ? 1.0f : -1.0f) * OverlapY;
 	}
 
 	const float Inv = 1.0f / Share;
@@ -126,7 +127,7 @@ bool SeparateAabb(FVector& A, const FVector& AHalfExtents, FVector& B, const FVe
 	if (OutNormal != nullptr)
 	{
 		const float Len = Mtv.Size();
-		*OutNormal = Len > 1.0e-6f ? (Mtv / Len) : FVector(0.0f, 1.0f, 0.0f);
+		*OutNormal = Len > 1.0e-6f ? (Mtv / Len) : FVector(0.0f, 0.0f, 1.0f);
 	}
 	return true;
 }

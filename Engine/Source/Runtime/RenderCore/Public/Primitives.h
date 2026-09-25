@@ -11,8 +11,8 @@ inline constexpr float PrimitiveEdgeLength = 100.0f;
 /** Cube of edge PrimitiveEdgeLength centered at the origin: [-50, 50]^3 cm. */
 [[nodiscard]] FMeshData MakeCube();
 
-/** Axis-aligned ground plane on XZ (Y = 0) of edge Size (world units), centered at the origin. */
+/** Axis-aligned ground plane on XY (Z = 0, facing +Z) of edge Size (world units), centered at the origin. */
 [[nodiscard]] FMeshData MakePlane(float Size, float UvScale = 1.0f);
 
-/** UV sphere centered at the origin with diameter PrimitiveEdgeLength (radius 50 cm). */
+/** UV sphere centered at the origin with diameter PrimitiveEdgeLength (radius 50 cm), poles on Z. */
 [[nodiscard]] FMeshData MakeSphere(int32 Segments = 24, int32 Rings = 16);

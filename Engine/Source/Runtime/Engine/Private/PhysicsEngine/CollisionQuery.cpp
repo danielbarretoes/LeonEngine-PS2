@@ -37,10 +37,13 @@ namespace
 		const FVector Dir = End - Start;
 		float TEnter = 0.0f;
 		float TExit = 1.0f;
-		FVector EnterNormal(0.0f, 1.0f, 0.0f);
+		FVector EnterNormal(0.0f, 0.0f, 1.0f);
 		bool bHitFace = false;
 
-		for (int32 Axis = 0; Axis < 3; ++Axis)
+		// X, then the vertical Z, then Y: on equal entry times the earlier axis gives the normal (the order of the
+		// Y-up world: X, vertical, second horizontal).
+		constexpr int32 AxisOrder[3] = {0, 2, 1};
+		for (const int32 Axis : AxisOrder)
 		{
 			if (FMath::Abs(Dir[Axis]) < 1.0e-6f)
 			{
@@ -83,7 +86,7 @@ namespace
 		if (!bHitFace && TEnter <= 0.0f)
 		{
 			OutT = 0.0f;
-			OutNormal = FVector(0.0f, 1.0f, 0.0f);
+			OutNormal = FVector(0.0f, 0.0f, 1.0f);
 			return true;
 		}
 
@@ -97,21 +100,22 @@ namespace
 		return true;
 	}
 
-	[[nodiscard]] bool SegmentFloorY(
-		const FVector& Start, const FVector& End, float FloorY, float& OutT, FVector& OutNormal)
+	/** Segment vs the horizontal plane z = FloorZ; the normal faces the segment's start. */
+	[[nodiscard]] bool SegmentFloorZ(
+		const FVector& Start, const FVector& End, float FloorZ, float& OutT, FVector& OutNormal)
 	{
-		const float Dy = End.Y - Start.Y;
-		if (FMath::Abs(Dy) < 1.0e-6f)
+		const float Dz = End.Z - Start.Z;
+		if (FMath::Abs(Dz) < 1.0e-6f)
 		{
 			return false;
 		}
-		const float T = (FloorY - Start.Y) / Dy;
+		const float T = (FloorZ - Start.Z) / Dz;
 		if (T < 0.0f || T > 1.0f)
 		{
 			return false;
 		}
 		OutT = T;
-		OutNormal = FVector(0.0f, Dy < 0.0f ? 1.0f : -1.0f, 0.0f);
+		OutNormal = FVector(0.0f, 0.0f, Dz < 0.0f ? 1.0f : -1.0f);
 		return true;
 	}
 
@@ -188,8 +192,8 @@ namespace
 		for (const FSlopePlane& Plane : Planes)
 		{
 			const float NLen = Plane.Normal.Size();
-			const float Ny = (NLen > 1.0e-6f) ? (FMath::Abs(Plane.Normal.Y) / NLen) : 1.0f;
-			const float Inflate = Radius + (HalfHeight * Ny);
+			const float Nz = (NLen > 1.0e-6f) ? (FMath::Abs(Plane.Normal.Z) / NLen) : 1.0f;
+			const float Inflate = Radius + (HalfHeight * Nz);
 			float T = 1.0f;
 			FVector Normal = FVector::ZeroVector;
 			if (!SegmentSlopePlane(Start, End, Plane, Inflate, T, Normal))
@@ -226,7 +230,8 @@ namespace
 		return true;
 	}
 
-	void AddRingXz(
+	/** A horizontal (XY) ring around Center. */
+	void AddRingXY(
 		FDebugDraw& Draw, const FVector& Center, float Radius, const FLinearColor& Color, int32 Segments = 16)
 	{
 		const float SegCount = static_cast<float>(Segments);
@@ -234,8 +239,8 @@ namespace
 		{
 			const float A0 = (static_cast<float>(I) / SegCount) * (2.0f * PI);
 			const float A1 = (static_cast<float>(I + 1) / SegCount) * (2.0f * PI);
-			AddLine(Draw, Center + FVector(FMath::Cos(A0) * Radius, 0.0f, FMath::Sin(A0) * Radius),
-				Center + FVector(FMath::Cos(A1) * Radius, 0.0f, FMath::Sin(A1) * Radius), Color);
+			AddLine(Draw, Center + FVector(FMath::Cos(A0) * Radius, FMath::Sin(A0) * Radius, 0.0f),
+				Center + FVector(FMath::Cos(A1) * Radius, FMath::Sin(A1) * Radius, 0.0f), Color);
 		}
 	}
 
@@ -283,11 +288,11 @@ void DrawDebugSphereTrace(
 {
 	const float R = FMath::Max(Radius, 0.0f);
 	DrawTracePath(Draw, Start, End, Hits);
-	AddRingXz(Draw, Start, R, TraceShape);
-	AddRingXz(Draw, End, R, TraceShape);
+	AddRingXY(Draw, Start, R, TraceShape);
+	AddRingXY(Draw, End, R, TraceShape);
 	if (Hits.Num() > 0)
 	{
-		AddRingXz(Draw, Hits[0].ImpactPoint + FVector(0.0f, R, 0.0f), R, TraceHitPath);
+		AddRingXY(Draw, Hits[0].ImpactPoint + FVector(0.0f, 0.0f, R), R, TraceHitPath);
 	}
 }
 
@@ -297,15 +302,15 @@ void DrawDebugCapsuleTrace(FDebugDraw& Draw, const FVector& Start, const FVector
 	const float R = FMath::Max(Radius, 0.0f);
 	const float Hh = FMath::Max(HalfHeight, 0.0f);
 	DrawTracePath(Draw, Start, End, Hits);
-	AddRingXz(Draw, Start + FVector(0.0f, Hh, 0.0f), R, TraceShape);
-	AddRingXz(Draw, Start - FVector(0.0f, Hh, 0.0f), R, TraceShape);
-	AddRingXz(Draw, End + FVector(0.0f, Hh, 0.0f), R, TraceShape);
-	AddRingXz(Draw, End - FVector(0.0f, Hh, 0.0f), R, TraceShape);
-	AddLine(Draw, Start + FVector(R, -Hh, 0.0f), Start + FVector(R, Hh, 0.0f), TraceShape);
-	AddLine(Draw, Start + FVector(-R, -Hh, 0.0f), Start + FVector(-R, Hh, 0.0f), TraceShape);
+	AddRingXY(Draw, Start + FVector(0.0f, 0.0f, Hh), R, TraceShape);
+	AddRingXY(Draw, Start - FVector(0.0f, 0.0f, Hh), R, TraceShape);
+	AddRingXY(Draw, End + FVector(0.0f, 0.0f, Hh), R, TraceShape);
+	AddRingXY(Draw, End - FVector(0.0f, 0.0f, Hh), R, TraceShape);
+	AddLine(Draw, Start + FVector(R, 0.0f, -Hh), Start + FVector(R, 0.0f, Hh), TraceShape);
+	AddLine(Draw, Start + FVector(-R, 0.0f, -Hh), Start + FVector(-R, 0.0f, Hh), TraceShape);
 	if (Hits.Num() > 0)
 	{
-		AddRingXz(Draw, Hits[0].ImpactPoint, R, TraceHitPath);
+		AddRingXY(Draw, Hits[0].ImpactPoint, R, TraceHitPath);
 	}
 }
 
@@ -370,7 +375,7 @@ bool FPhysScene::LineTraceMultiByChannel(TArray<FHitResult>& OutHits, const FVec
 	{
 		float T = 1.0f;
 		FVector Normal = FVector::ZeroVector;
-		if (SegmentFloorY(Start, End, Params.FloorY, T, Normal))
+		if (SegmentFloorZ(Start, End, Params.FloorZ, T, Normal))
 		{
 			FHitResult Hit;
 			WriteHit(Hit, Start, End, T, Normal, ULevel::Npos, true);
@@ -458,10 +463,10 @@ bool FPhysScene::SphereTraceMultiByChannel(TArray<FHitResult>& OutHits, const FV
 
 	if (Params.bTraceFloorPlane)
 	{
-		const float PlaneY = Params.FloorY + R;
+		const float PlaneZ = Params.FloorZ + R;
 		float T = 1.0f;
 		FVector Normal = FVector::ZeroVector;
-		if (SegmentFloorY(Start, End, PlaneY, T, Normal))
+		if (SegmentFloorZ(Start, End, PlaneZ, T, Normal))
 		{
 			FHitResult Hit;
 			WriteHit(Hit, Start, End, T, Normal, ULevel::Npos, true);
@@ -494,7 +499,7 @@ bool FPhysScene::CapsuleTraceMultiByChannel(TArray<FHitResult>& OutHits, const F
 	const float R = FMath::Max(Radius, 0.0f);
 	const float Hh = FMath::Max(HalfHeight, 0.0f);
 	OutHits.Reset();
-	const FVector Expand(R, Hh + R, R);
+	const FVector Expand(R, R, Hh + R);
 
 	if (BackendIface != nullptr && BackendIface->HasNarrowPhaseTraces())
 	{
@@ -531,7 +536,7 @@ bool FPhysScene::CapsuleTraceMultiByChannel(TArray<FHitResult>& OutHits, const F
 			if (Body.CollisionShape == EBodyCollisionShape::TriangleMesh && Bi < TriangleMeshes.Num() &&
 				TriangleMeshes[Bi].IsValid())
 			{
-				// Inflate like the slope planes: radius + |Ny| * half height, approximated with radius + half height.
+				// Inflate like the slope planes: radius + |Nz| * half height, approximated with radius + half height.
 				float TMesh = 1.0f;
 				FVector NMesh = FVector::ZeroVector;
 				if (!SegmentTriangleMesh(Start, End, TriangleMeshes[Bi], R + Hh, TMesh, NMesh))
@@ -544,7 +549,7 @@ bool FPhysScene::CapsuleTraceMultiByChannel(TArray<FHitResult>& OutHits, const F
 
 			FHitResult Hit;
 			WriteHit(Hit, Start, End, T, Normal, Body.LevelMeshIndex, false);
-			const float Pull = (FMath::Abs(Normal.Y) > 0.5f) ? (Hh + R) : R;
+			const float Pull = (FMath::Abs(Normal.Z) > 0.5f) ? (Hh + R) : R;
 			Hit.ImpactPoint = Hit.Location - (Normal * Pull);
 			OutHits.Add(Hit);
 		}
@@ -552,10 +557,10 @@ bool FPhysScene::CapsuleTraceMultiByChannel(TArray<FHitResult>& OutHits, const F
 
 	if (Params.bTraceFloorPlane)
 	{
-		const float PlaneY = Params.FloorY + Hh + R;
+		const float PlaneZ = Params.FloorZ + Hh + R;
 		float T = 1.0f;
 		FVector Normal = FVector::ZeroVector;
-		if (SegmentFloorY(Start, End, PlaneY, T, Normal))
+		if (SegmentFloorZ(Start, End, PlaneZ, T, Normal))
 		{
 			FHitResult Hit;
 			WriteHit(Hit, Start, End, T, Normal, ULevel::Npos, true);

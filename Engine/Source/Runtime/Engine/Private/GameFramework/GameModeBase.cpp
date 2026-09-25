@@ -18,19 +18,19 @@ void AGameModeBase::Logout(APlayerController& Exiting)
 	GetGameState().RemovePlayerState(&Exiting.GetPlayerState());
 }
 
-float AGameModeBase::EstimateFloorY(const ULevel& Level)
+float AGameModeBase::EstimateFloorZ(const ULevel& Level)
 {
 	const auto& Starts = Level.GetPlayerStarts();
 	if (Starts.Num() == 0)
 	{
 		return 0.0f;
 	}
-	float Y = Starts[0].Transform.GetLocation().Y;
+	float Z = Starts[0].Transform.GetLocation().Z;
 	for (const FPlayerStart& Start : Starts)
 	{
-		Y = FMath::Min(Y, Start.Transform.GetLocation().Y);
+		Z = FMath::Min(Z, Start.Transform.GetLocation().Z);
 	}
-	return Y;
+	return Z;
 }
 
 float AGameModeBase::EstimateWalkBounds(const ULevel& Level)
@@ -49,22 +49,22 @@ float AGameModeBase::EstimateWalkBounds(const ULevel& Level)
 		}
 		const FVector Scale = Mesh.Transform.GetScale3D();
 		const float Hx = FMath::Abs(Scale.X) * 0.5f * BasicShapeSize;
-		const float Hz = FMath::Abs(Scale.Z) * 0.5f * BasicShapeSize;
-		MaxExtent = FMath::Max(MaxExtent, FMath::Max(Hx, Hz));
+		const float Hy = FMath::Abs(Scale.Y) * 0.5f * BasicShapeSize;
+		MaxExtent = FMath::Max(MaxExtent, FMath::Max(Hx, Hy));
 	}
 	return FMath::Clamp(MaxExtent - EdgeMargin, MinWalkBounds, MaxWalkBounds);
 }
 
 // Flow: Match enter — bodies + nav bake
 // 1. Physics backend
-// 2. Estimate floor Y / walk bounds from level
+// 2. Estimate floor Z / walk bounds from level
 // 3. RegisterBodiesFromLevel + SyncFromLevel
 // 4. UNavigationSystem bake (cell 50 cm, agent 45 cm)
 void AGameModeBase::PrepareMatchWorld(
-	UGameEngine& Engine, float& OutFloorY, float& OutWalkBounds, EPhysicsBackend Backend)
+	UGameEngine& Engine, float& OutFloorZ, float& OutWalkBounds, EPhysicsBackend Backend)
 {
 	SetPhysicsBackend(Backend);
-	OutFloorY = EstimateFloorY(Engine.GetLevel());
+	OutFloorZ = EstimateFloorZ(Engine.GetLevel());
 	OutWalkBounds = EstimateWalkBounds(Engine.GetLevel());
 	RegisterBodiesFromLevel(Engine.GetLevel());
 	GetWorld().GetPhysicsScene().SyncFromLevel(Engine.GetLevel());
@@ -72,29 +72,29 @@ void AGameModeBase::PrepareMatchWorld(
 	UNavigationSystem& Nav = GetWorld().GetNavigationSystem();
 	Nav.SetCellSize(50.0f);
 	Nav.SetAgentRadius(45.0f);
-	Nav.BuildFromLevel(Engine.GetLevel(), GetWorld().GetPhysicsScene(), OutFloorY, OutWalkBounds);
+	Nav.BuildFromLevel(Engine.GetLevel(), GetWorld().GetPhysicsScene(), OutFloorZ, OutWalkBounds);
 	UE_LOG(LogPath, Log, "GameMode: NavMesh bake blockers=%d walkable=%d/%d cell=%g", Nav.GetBlockerCount(),
 		Nav.GetWalkableCellCount(), Nav.GetNavMesh().Width * Nav.GetNavMesh().Depth,
 		static_cast<double>(Nav.GetCellSize()));
 }
 
-void AGameModeBase::RebuildNavigation(UGameEngine& Engine, float FloorY, float WalkBounds)
+void AGameModeBase::RebuildNavigation(UGameEngine& Engine, float FloorZ, float WalkBounds)
 {
 	RegisterBodiesFromLevel(Engine.GetLevel());
 	GetWorld().GetPhysicsScene().SyncFromLevel(Engine.GetLevel());
 	UNavigationSystem& Nav = GetWorld().GetNavigationSystem();
-	Nav.BuildFromLevel(Engine.GetLevel(), GetWorld().GetPhysicsScene(), FloorY, WalkBounds);
+	Nav.BuildFromLevel(Engine.GetLevel(), GetWorld().GetPhysicsScene(), FloorZ, WalkBounds);
 }
 
-void AGameModeBase::SnapCharacterToFloor(ACharacter& Character, FVector& InOutFeet, float FloorY) const
+void AGameModeBase::SnapCharacterToFloor(ACharacter& Character, FVector& InOutFeet, float FloorZ) const
 {
 	const FPhysScene& Phys = GetWorld().GetPhysicsScene();
 	const UCharacterMovementComponent& Move = Character.GetCharacterMovement();
 	FVector Probe = InOutFeet;
-	Probe.Y = FMath::Max(InOutFeet.Y, FloorY);
-	const float Support = Phys.QuerySupportY(
-		Character.GetCapsule(), Probe, Move.FloorY, Move.MaxStepHeight, Move.Skin, Character.GetLevelMeshIndex());
+	Probe.Z = FMath::Max(InOutFeet.Z, FloorZ);
+	const float Support = Phys.QuerySupportZ(
+		Character.GetCapsule(), Probe, Move.FloorZ, Move.MaxStepHeight, Move.Skin, Character.GetLevelMeshIndex());
 	/** cm above the support */
 	constexpr float SnapClearance = 2.0f;
-	InOutFeet.Y = FMath::Max(Support, FloorY) + SnapClearance;
+	InOutFeet.Z = FMath::Max(Support, FloorZ) + SnapClearance;
 }

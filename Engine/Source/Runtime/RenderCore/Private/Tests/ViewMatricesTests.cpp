@@ -18,13 +18,20 @@ namespace
 	constexpr float GlmOrtho[16] = {0.200000003f, 0, 0, 0, 0, 0.400000006f, 0, 0, 0, 0, -0.0404040404f, 0,
 		-0.200000003f, -0.200000003f, -1.02020204f, 1};
 
-	/** glm::lookAt((3, 4, 5), (0.5, 1, -2), (0, 1, 0)): world to GL view space. */
+	/** glm::lookAt((3, 4, 5), (0.5, 1, -2), (0, 1, 0)): world to GL view space, in the right-handed Y-up world. */
 	constexpr float GlmLookAt[16] = {0.941741824f, -0.125880525f, 0.311891437f, 0, 0, 0.927319825f, 0.374269724f, 0,
 		-0.336336374f, -0.352465451f, 0.873296022f, 0, -1.14354348f, -1.56931067f, -6.79923296f, 1};
 
-	const FVector LookAtEye(3.0f, 4.0f, 5.0f);
-	const FVector LookAtTarget(0.5f, 1.0f, -2.0f);
-	const FVector WorldUp(0.0f, 1.0f, 0.0f);
+	/** glm's look-at inputs in the Y-up world, and the same camera in the engine world (Y and Z swapped, Z up). */
+	const FVector GlmEye(3.0f, 4.0f, 5.0f);
+	const FVector GlmTarget(0.5f, 1.0f, -2.0f);
+	const FVector LookAtEye(3.0f, 5.0f, 4.0f);
+	const FVector LookAtTarget(0.5f, -2.0f, 1.0f);
+	const FVector WorldUp(0.0f, 0.0f, 1.0f);
+
+	/** Row vectors: a Y-up point times this is the engine point (Y and Z swapped); it is its own inverse. */
+	const FMatrix SwapYZ(FPlane(1.0f, 0.0f, 0.0f, 0.0f), FPlane(0.0f, 0.0f, 1.0f, 0.0f), FPlane(0.0f, 1.0f, 0.0f, 0.0f),
+		FPlane(0.0f, 0.0f, 0.0f, 1.0f));
 
 	FMatrix FromGlm(const float (&Floats)[16])
 	{
@@ -104,30 +111,60 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FViewMatricesLookAtBasisTest, "System.RenderCor
 bool FViewMatricesLookAtBasisTest::RunTest(const FString& Parameters)
 {
 	// UE view space: a point to the camera's screen-right has x > 0, one above has y > 0, one in front has z > 0.
-	// The camera looks down -Z with Y up, so its screen-right is +X in the right-handed world.
-	const FMatrix Default = MakeLookAtView(FVector::ZeroVector, FVector(0.0f, 0.0f, -1.0f), WorldUp);
-	TestTrue("Right is +x",
-		FVector(Default.TransformPosition(FVector(1.0f, 0.0f, -5.0f))).Equals(FVector(1.0f, 0.0f, 5.0f)));
+	// The camera looks down +X with Z up, so its screen-right is +Y (UE: Up ^ Forward in the left-handed world).
+	const FMatrix Default = MakeLookAtView(FVector::ZeroVector, FVector(1.0f, 0.0f, 0.0f), WorldUp);
 	TestTrue(
-		"Up is +y", FVector(Default.TransformPosition(FVector(0.0f, 1.0f, -5.0f))).Equals(FVector(0.0f, 1.0f, 5.0f)));
+		"Right is +x", FVector(Default.TransformPosition(FVector(5.0f, 1.0f, 0.0f))).Equals(FVector(1.0f, 0.0f, 5.0f)));
+	TestTrue(
+		"Up is +y", FVector(Default.TransformPosition(FVector(5.0f, 0.0f, 1.0f))).Equals(FVector(0.0f, 1.0f, 5.0f)));
 	TestTrue("Forward is +z",
-		FVector(Default.TransformPosition(FVector(0.0f, 0.0f, -5.0f))).Equals(FVector(0.0f, 0.0f, 5.0f)));
+		FVector(Default.TransformPosition(FVector(5.0f, 0.0f, 0.0f))).Equals(FVector(0.0f, 0.0f, 5.0f)));
 
-	// A general camera: the view axes are Right = Forward ^ Up, Up and Forward, and the space is left-handed.
+	// A general camera: the view axes are Right = Up ^ Forward, Up = Forward ^ Right and Forward. World and view space
+	// are both left-handed.
 	const FMatrix View = MakeLookAtView(LookAtEye, LookAtTarget, WorldUp);
 	const FVector Forward = (LookAtTarget - LookAtEye).GetUnsafeNormal();
-	const FVector Right = (Forward ^ WorldUp).GetUnsafeNormal();
-	const FVector Up = Right ^ Forward;
+	const FVector Right = (WorldUp ^ Forward).GetUnsafeNormal();
+	const FVector Up = Forward ^ Right;
 	const FVector Point = LookAtEye + (Right * 1.5f) + (Up * 0.5f) + (Forward * 4.0f);
 	TestTrue("View position", FVector(View.TransformPosition(Point)).Equals(FVector(1.5f, 0.5f, 4.0f), 1.0e-5f));
 	TestTrue("Eye at the origin", FVector(View.TransformPosition(LookAtEye)).Equals(FVector::ZeroVector, 1.0e-5f));
-	TestEqual("Left-handed view (determinant -1)", View.RotDeterminant(), -1.0f, 1.0e-5f);
+	TestTrue("Same camera as glm's",
+		SwapYZ.TransformPosition(GlmEye).Equals(LookAtEye) && SwapYZ.TransformPosition(GlmTarget).Equals(LookAtTarget));
+	TestEqual("Left-handed world to left-handed view (determinant 1)", View.RotDeterminant(), 1.0f, 1.0e-5f);
 
-	// It is glm's right-handed lookAt mirrored in z.
-	MatrixMatches(*this, "glm lookAt mirrored in z", View, NegateColumn(FromGlm(GlmLookAt), 2));
+	// It is glm's right-handed lookAt of the Y-up camera, mirrored in z, after the engine-to-Y-up swap.
+	MatrixMatches(*this, "glm lookAt mirrored in z", View, SwapYZ * NegateColumn(FromGlm(GlmLookAt), 2));
 
 	// MakeViewMatrix from the same basis gives the same matrix.
 	MatrixMatches(*this, "MakeViewMatrix", MakeViewMatrix(LookAtEye, Forward, Right, Up), View);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FViewMatricesRotatorViewMatchesLookAtTest,
+	"System.RenderCore.ViewMatrices.RotatorViewMatchesLookAt",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FViewMatricesRotatorViewMatchesLookAtTest::RunTest(const FString& Parameters)
+{
+	// UE's view from a rotation (translation, inverse rotation, axis swizzle) is the look-at view along the rotation's
+	// forward with Z up, for any yaw and any pitch short of straight up or down.
+	const FVector Origin(120.0f, -40.0f, 75.0f);
+	const FRotator Rotations[] = {FRotator(0.0f, 0.0f, 0.0f), FRotator(-20.0f, 30.0f, 0.0f),
+		FRotator(35.0f, -135.0f, 0.0f), FRotator(-89.0f, 200.0f, 0.0f), FRotator(10.0f, 90.0f, 0.0f)};
+	for (const FRotator& Rotation : Rotations)
+	{
+		const FMatrix FromRotator = MakeViewMatrix(Origin, Rotation);
+		const FMatrix LookAt = MakeLookAtView(Origin, Origin + Rotation.Vector(), WorldUp);
+		for (int32 Index = 0; Index < 16; ++Index)
+		{
+			const float Value = FromRotator.M[Index / 4][Index % 4];
+			const float Reference = LookAt.M[Index / 4][Index % 4];
+			TestEqual(*FString::Printf("Rotation (%g, %g) element %d", static_cast<double>(Rotation.Pitch),
+						  static_cast<double>(Rotation.Yaw), Index),
+				Value, Reference, 1.0e-4f * FMath::Max(1.0f, FMath::Abs(Reference)));
+		}
+	}
 	return true;
 }
 
@@ -149,14 +186,15 @@ bool FViewMatricesGLClipSpaceMatchesGlmPerspectiveTest::RunTest(const FString& P
 	MatrixMatches(
 		*this, "glm perspective with the view mirrored in z", ProjectionGL, NegateRow(FromGlm(GlmPerspective), 2));
 
-	// The UE look-at view through it gives the NDC of glm's lookAt * perspective.
+	// The UE look-at view of the same camera in the engine world gives the NDC of glm's lookAt * perspective in the
+	// Y-up world.
 	const FMatrix ViewProjection = MakeLookAtView(LookAtEye, LookAtTarget, WorldUp) * ProjectionGL;
 	const FMatrix GlmViewProjection = FromGlm(GlmLookAt) * FromGlm(GlmPerspective);
 	const FVector Points[4] = {FVector(0.5f, 1.0f, -2.0f), FVector(-1.0f, 2.0f, 0.0f), FVector(2.0f, 0.0f, -6.0f),
 		FVector(4.0f, 3.5f, -10.0f)};
 	for (const FVector& Point : Points)
 	{
-		const FVector Actual = Ndc(ViewProjection, Point);
+		const FVector Actual = Ndc(ViewProjection, SwapYZ.TransformPosition(Point));
 		const FVector Expected = Ndc(GlmViewProjection, Point);
 		TestTrue(*FString::Printf("NDC of (%g, %g, %g)", static_cast<double>(Point.X), static_cast<double>(Point.Y),
 					 static_cast<double>(Point.Z)),

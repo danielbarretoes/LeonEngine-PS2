@@ -23,7 +23,7 @@ struct ENGINE_API FFindFloorResult
 {
 	bool bBlockingHit = false;
 	bool bWalkableFloor = false;
-	/** Distance from capsule feet down to floor ImpactPoint.y (>= 0 when hit below/at feet). */
+	/** Distance from capsule feet down to floor ImpactPoint.Z (>= 0 when hit below/at feet). */
 	float FloorDist = 0.0f;
 	FHitResult Hit{};
 };
@@ -38,8 +38,10 @@ struct ENGINE_API UCharacterMovementComponent
 	/** World gravity acceleration, cm/s^2 (Leon absolute; UE uses GravityScale × world gravity). */
 	float Gravity = 2400.0f;
 	float TurnSharpness = 16.0f;
+	/** Added to the yaw the character turns to when it orients to its movement (degrees). */
 	float ModelYawOffsetDegrees = 0.0f;
-	float FloorY = 0.0f;
+	/** Height of the infinite floor plane (cm). */
+	float FloorZ = 0.0f;
 	/** Contact skin (cm). */
 	float Skin = 2.0f;
 	/** Unreal MaxStepHeight (cm): geometric step-up + floor probe window. */
@@ -62,7 +64,9 @@ struct ENGINE_API UCharacterMovementComponent
  *
  * Contract:
  * - Actor location = capsule **feet** (bottom), not capsule center.
- * - The capsule (FCollisionShape) extends upward by twice its half height; XZ radius = capsule radius.
+ * - The capsule (FCollisionShape) extends up (+Z) by twice its half height; XY radius = capsule radius.
+ * - Actor yaw is a UE yaw (0 faces +X, 90 faces +Y); the mesh shows legacy content with a relative yaw of
+ *   LegacyContentYawDegrees.
  * - Not registered as a FPhysScene FBodyInstance; moves via PerformMovement queries.
  * - Modes: Walking / Falling via SetMovementMode; floor via FindFloor → IsWalkable.
  */
@@ -113,7 +117,7 @@ public:
 	/** Vertical velocity (Unreal Velocity.Z) for jump SM apex detection. */
 	[[nodiscard]] float GetVelocityZ() const
 	{
-		return VelocityY;
+		return VelocityZ;
 	}
 	/** True for one frame after leaving air → ground (consumed by UAnimInstance). */
 	[[nodiscard]] bool ConsumeJustLanded();
@@ -142,7 +146,7 @@ public:
 	}
 
 	/** Apply replicated movement state (client proxy / snapshot). */
-	void ApplyReplicatedState(const FVector& Location, float YawDegrees, float InVelocityY, bool bGrounded);
+	void ApplyReplicatedState(const FVector& Location, float YawDegrees, float InVelocityZ, bool bGrounded);
 
 	/** Normalized locomotion blend input [0,1] for Mesh UAnimInstance UBlendSpace1D. */
 	void SetAnimBlendInput(float SpeedAlpha);
@@ -175,7 +179,7 @@ public:
 	}
 
 	void Reset(const FVector& Location, float YawDegrees = 0.0f);
-	void AddMovementInput(const FVector& WishDirXz);
+	void AddMovementInput(const FVector& WishDirXY);
 	void Jump();
 
 	/**
@@ -192,7 +196,7 @@ public:
 	void ResolveOverlaps(FPhysScene& PhysScene);
 	void ResolveOverlaps();
 
-	/** Separate this capsule from another Character on XZ (equal share). No-op if Y ranges miss. */
+	/** Separate this capsule from another Character on XY (equal share). No-op if the Z ranges miss. */
 	void ResolvePawnOverlap(ACharacter& Other);
 
 	/** Ticks Mesh UAnimInstance (Unreal: Character::Tick → Mesh component). */
@@ -213,12 +217,12 @@ private:
 	/** True if a horizontal sweep should stop on this hit (not walkable floor/top). */
 	[[nodiscard]] bool BlocksHorizontalMove(const FHitResult& Hit) const;
 	/**
-	 * Unreal-like SafeMoveUpdatedComponent (XZ): sweep capsule, advance to hit, optional outHit.
+	 * Unreal-like SafeMoveUpdatedComponent (XY): sweep capsule, advance to hit, optional outHit.
 	 * Returns true if the full delta was applied (no blocking side hit).
 	 */
 	bool SafeMoveUpdatedComponent(
 		FPhysScene& PhysScene, const FVector& Delta, FHitResult* OutHit, FDebugDraw* DebugDraw);
-	/** Project velocity onto the wall plane (Unreal ComputeSlideVector lite, Y forced 0). */
+	/** Project velocity onto the wall plane (Unreal ComputeSlideVector lite, Z forced 0). */
 	[[nodiscard]] static FVector ComputeSlideVector(const FVector& Delta, const FVector& ImpactNormal);
 	/** Unreal CMC step-up: raise ≤ MaxStepHeight, move forward, land on walkable floor. */
 	[[nodiscard]] bool TryStepUp(FPhysScene& PhysScene, const FVector& ForwardDelta, FDebugDraw* DebugDraw);
@@ -233,7 +237,7 @@ private:
 	bool bAlive = true;
 
 	FVector WishDir = FVector::ZeroVector;
-	float VelocityY = 0.0f;
+	float VelocityZ = 0.0f;
 	EMovementMode MovementMode = EMovementMode::Walking;
 	bool bJumpRequested = false;
 	bool bJustLanded = false;

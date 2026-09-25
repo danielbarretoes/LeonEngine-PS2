@@ -29,7 +29,7 @@ struct ENGINE_API FCapsuleContactParams
 struct ENGINE_API FSlopePlane
 {
 	FVector Point = FVector::ZeroVector;
-	FVector Normal = FVector(0.0f, 1.0f, 0.0f);
+	FVector Normal = FVector(0.0f, 0.0f, 1.0f);
 	FVector BoundsCenter = FVector::ZeroVector;
 	/** cm */
 	FVector BoundsHalfExtents = FVector(100.0f, 100.0f, 100.0f);
@@ -43,7 +43,8 @@ struct ENGINE_API FPhysSceneStepParams
 	float WalkBounds = 1800.0f;
 	/** World gravity for Dynamic bodies with bEnableGravity (UE Enable Gravity), cm/s^2. */
 	float Gravity = 2400.0f;
-	float FloorY = 0.0f;
+	/** Height of the infinite floor plane (cm). */
+	float FloorZ = 0.0f;
 	/** cm */
 	float Skin = 2.0f;
 	/** Skip bodies whose LevelMeshIndex matches (e.g. the character visual if registered). */
@@ -51,7 +52,7 @@ struct ENGINE_API FPhysSceneStepParams
 };
 
 /**
- * Lightweight XZ + arcade-Y physics scene (UE-style FPhysScene), in centimetres, still Y up until P7 moves to Z up.
+ * Lightweight XY + arcade-Z physics scene (UE-style FPhysScene), in centimetres, Z up.
  * Arcade: AABB (+ TriangleMesh statics) traces / CMC queries / optional arcade Step.
  * Jolt (EPhysicsBackend::Jolt, the JoltPhysics plugin): rigid-body Step (incremental prepare; MeshShape statics on
  * rebuild) + Line / Sphere / Capsule narrow-phase traces; the floor plane, slope planes and the CMC side resolve
@@ -77,8 +78,8 @@ public:
 
 	/**
 	 * Adds an inclined plane clipped by a world AABB (for ramps / WalkableFloorZ tests).
-	 * PitchDegrees around +Z: the surface rises with +X; Normal.Y = cos(pitch).
-	 * Optional YawDegrees rotates the rise direction in XZ (0 = +X).
+	 * The surface rises with +X at PitchDegrees; Normal.Z = cos(pitch).
+	 * Optional YawDegrees turns the rise direction about Z (0 = +X, 90 = +Y, as a UE yaw).
 	 */
 	int32 AddSlopeRamp(
 		const FVector& InBoundsCenter, const FVector& InBoundsHalfExtents, float PitchDegrees, float YawDegrees = 0.0f);
@@ -117,7 +118,7 @@ public:
 	}
 
 	/** Highest walkable support under a capsule standing on Feet (FCollisionShape capsule). */
-	[[nodiscard]] float QuerySupportY(const FCollisionShape& Capsule, const FVector& Feet, float InFloorY,
+	[[nodiscard]] float QuerySupportZ(const FCollisionShape& Capsule, const FVector& Feet, float InFloorZ,
 		float InStepUp, float InSkin, SIZE_T InSkipLevelMeshIndex) const;
 
 	/**
@@ -151,7 +152,7 @@ public:
 		float Radius, float HalfHeight, ECollisionChannel Channel, const FCollisionQueryParams& Params = {},
 		FDebugDraw* DebugDraw = nullptr) const;
 
-	void ResolveCapsuleSides(const FCollisionShape& Capsule, FVector& Feet, const FVector2D& WishXz,
+	void ResolveCapsuleSides(const FCollisionShape& Capsule, FVector& Feet, const FVector2D& WishXY,
 		const FCapsuleContactParams& Params, SIZE_T InSkipLevelMeshIndex, bool bApplyPush = true);
 
 	/**
@@ -159,7 +160,7 @@ public:
 	 * SafeMove stops at skin before ResolveCapsuleSides can see contact; call this on block hits.
 	 * Returns true if a Dynamic body received velocity / contact shove.
 	 */
-	bool ApplyCapsuleSweepPush(SIZE_T LevelMeshIndex, const FVector2D& WishXz, const FVector& ImpactNormal,
+	bool ApplyCapsuleSweepPush(SIZE_T LevelMeshIndex, const FVector2D& WishXY, const FVector& ImpactNormal,
 		float InPushStrength, float InWalkBounds);
 
 	/** Integrates dynamic velocities and resolves body-body overlaps. */

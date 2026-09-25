@@ -36,8 +36,8 @@ bool FGoldenAIControllerArrivesTest::RunTest(const FString& Parameters)
 	}
 
 	ACharacter* Character = World.SpawnActor<ACharacter>();
-	Character->GetCharacterMovement().FloorY = LegacyGolden::ToWorldLength(0.0f);
-	Character->Reset(LegacyGolden::ToWorldPosition(FVector(-4.0f, 0.0f, 0.3f)), 0.0f);
+	Character->GetCharacterMovement().FloorZ = LegacyGolden::ToWorldLength(0.0f);
+	Character->Reset(LegacyGolden::ToWorldPosition(FVector(-4.0f, 0.0f, 0.3f)), LegacyGolden::ToWorldActorYaw(0.0f));
 
 	AAIController Ai;
 	Ai.Possess(Character);

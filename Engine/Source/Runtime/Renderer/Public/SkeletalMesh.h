@@ -55,6 +55,7 @@ public:
 	{
 		return LocalMax;
 	}
+	/** Uniform scale that makes the mesh FitHeight tall (its Z extent, world units). */
 	[[nodiscard]] float FitUniformScale(float FitHeight) const;
 
 	[[nodiscard]] FMaterial& GetMaterial()

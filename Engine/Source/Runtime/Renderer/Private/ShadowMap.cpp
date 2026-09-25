@@ -92,7 +92,7 @@ FMatrix FShadowMap::FitLightSpaceMatrix(
 	FVector Dir = LightDirection;
 	if ((Dir | Dir) < 1e-8f)
 	{
-		Dir = FVector(0.35f, -1.0f, -0.45f);
+		Dir = FVector(0.35f, -0.45f, -1.0f);
 	}
 	Dir = Dir.GetUnsafeNormal();
 
@@ -100,10 +100,10 @@ FMatrix FShadowMap::FitLightSpaceMatrix(
 	const FVector Extents = (WorldMax - WorldMin) * 0.5f + FVector(Padding);
 	const float Radius = Extents.Size();
 
-	FVector Up(0.0f, 1.0f, 0.0f);
+	FVector Up(0.0f, 0.0f, 1.0f);
 	if (FMath::Abs(Dir | Up) > 0.95f)
 	{
-		Up = FVector(0.0f, 0.0f, 1.0f);
+		Up = FVector(0.0f, 1.0f, 0.0f);
 	}
 
 	/** cm between the bounding sphere and the light eye. */

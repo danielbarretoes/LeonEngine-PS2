@@ -233,7 +233,7 @@ bool LoadStaticMeshFromGltf(const FString& Path, FMeshData& Out, const FString& 
 		OutError = "glTF contained no triangle mesh data";
 		return false;
 	}
-	ComputeTangents(Mesh);
+	ComputeTangents(Mesh, EMeshDataBasis::LegacyYUp);
 	Out = MoveTemp(Mesh);
 	return true;
 }

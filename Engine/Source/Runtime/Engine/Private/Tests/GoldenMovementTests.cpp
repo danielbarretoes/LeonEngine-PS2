@@ -34,8 +34,8 @@ namespace
 	ACharacter* SpawnGoldenCharacter(UWorld& World, const FVector& LegacyFeet, float LegacyFloorY)
 	{
 		ACharacter* Character = World.SpawnActor<ACharacter>();
-		Character->GetCharacterMovement().FloorY = LegacyGolden::ToWorldLength(LegacyFloorY);
-		Character->Reset(LegacyGolden::ToWorldPosition(LegacyFeet), 0.0f);
+		Character->GetCharacterMovement().FloorZ = LegacyGolden::ToWorldLength(LegacyFloorY);
+		Character->Reset(LegacyGolden::ToWorldPosition(LegacyFeet), LegacyGolden::ToWorldActorYaw(0.0f));
 		return Character;
 	}
 
@@ -247,7 +247,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGoldenWalkUpRampTest, "System.Engine.Golden.Wa
 
 bool FGoldenWalkUpRampTest::RunTest(const FString& Parameters)
 {
-	// A 20 degree ramp is walkable: the character settles on it, then climbs it on a walkable floor.
+	// A 20 degree ramp is walkable: the character settles on it, then climbs it on a walkable floor. The ramp rises
+	// along +X in both worlds, so its pitch is the same number.
 	UWorld World;
 	FPhysScene& Scene = World.GetPhysicsScene();
 	Scene.AddSlopeRamp(LegacyGolden::ToWorldPosition(FVector::ZeroVector),
@@ -287,7 +288,8 @@ bool FGoldenSteepSlopeKeepsFallingTest::RunTest(const FString& Parameters)
 	Scene.AddSlopeRamp(LegacyGolden::ToWorldPosition(FVector::ZeroVector),
 		LegacyGolden::ToWorldExtent(FVector(4.0f, 4.0f, 2.0f)), 55.0f);
 	ACharacter* Character = SpawnGoldenCharacter(World, FVector::ZeroVector, -100.0f);
-	Character->ApplyReplicatedState(LegacyGolden::ToWorldPosition(FVector(0.5f, 2.0f, 0.25f)), 0.0f, 0.0f, false);
+	Character->ApplyReplicatedState(
+		LegacyGolden::ToWorldPosition(FVector(0.5f, 2.0f, 0.25f)), LegacyGolden::ToWorldActorYaw(0.0f), 0.0f, false);
 	const FGoldenMovementRun Run = RunGoldenMovement(*Character, Scene, FVector::ZeroVector, 60, 6);
 
 	static const FVector ExpectedPath[] = {FVector(0.5f, 1.86000013f, 0.25f), FVector(0.5f, 1.4799999f, 0.25f),

@@ -24,7 +24,7 @@ void TickPainCausingVolumes(
 	const TArray<FPainCausingVolume>& Volumes, TArrayView<ACharacter*> Characters, float DeltaTime, float& TickAccum);
 
 /**
- * Nearest FTriggerVolume whose XZ distance from feet is within min(maxDist, interactRadius).
+ * Nearest FTriggerVolume whose XY distance from feet is within min(maxDist, interactRadius).
  * Returns Level::npos if none.
  */
 [[nodiscard]] SIZE_T FindBestTriggerVolume(const TArray<FTriggerVolume>& Volumes, const FVector& Feet, float MaxDist);

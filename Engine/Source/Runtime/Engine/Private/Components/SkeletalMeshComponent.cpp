@@ -93,9 +93,10 @@ void USkeletalMeshComponent::ApplyFitHeight(float FitHeight)
 	const FVector Mx = SkeletalMesh->GetLocalMax();
 	const FVector Center = (Mn + Mx) * 0.5f;
 	RelativeScale3D = FVector(Scale, Scale, Scale);
-	// The scaled mesh is in world units; the Relative* fields hold legacy values.
-	const FVector Grounded((-Center.X) * Scale, ((-Mn.Y) * Scale) + GroundEpsilon, (-Center.Z) * Scale);
-	RelativeLocation = FLegacyCoordinateConversion::ToLegacyPosition(Grounded);
+	// Centred on the component origin in X / Y and standing on it; the offset is in the mesh's space, so it turns with
+	// the relative rotation.
+	const FVector Grounded((-Center.X) * Scale, (-Center.Y) * Scale, (-Mn.Z) * Scale);
+	RelativeLocation = RelativeRotation.RotateVector(Grounded) + FVector(0.0f, 0.0f, GroundEpsilon);
 }
 
 void USkeletalMeshComponent::ClearAttachments()

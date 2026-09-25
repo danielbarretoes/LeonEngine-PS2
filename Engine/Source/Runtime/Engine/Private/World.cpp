@@ -50,7 +50,7 @@ void UWorld::ResolveCharacterOverlaps()
 		return;
 	}
 
-	// Flow: collect live Characters → iterate pairs → equal XZ depenetration (2–3 passes).
+	// Flow: collect live Characters → iterate pairs → equal XY depenetration (2–3 passes).
 	constexpr int Iterations = 3;
 	for (int Iter = 0; Iter < Iterations; ++Iter)
 	{
@@ -77,7 +77,7 @@ void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& Params)
 		Step.Damping = Params.PhysicsDamping;
 		Step.WalkBounds = Params.PhysicsWalkBounds;
 		Step.Gravity = Params.PhysicsGravity;
-		Step.FloorY = Params.PhysicsFloorY;
+		Step.FloorZ = Params.PhysicsFloorZ;
 		Step.Skin = Params.PhysicsSkin;
 	}
 	else if (ACharacter* Primary = FindFirst<ACharacter>())
@@ -86,7 +86,7 @@ void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& Params)
 		Step.Damping = MoveCfg.PushDamping;
 		Step.WalkBounds = MoveCfg.WalkBounds;
 		Step.Gravity = MoveCfg.Gravity;
-		Step.FloorY = MoveCfg.FloorY;
+		Step.FloorZ = MoveCfg.FloorZ;
 		Step.Skin = MoveCfg.Skin;
 		Step.SkipLevelMeshIndex = Primary->GetLevelMeshIndex();
 	}

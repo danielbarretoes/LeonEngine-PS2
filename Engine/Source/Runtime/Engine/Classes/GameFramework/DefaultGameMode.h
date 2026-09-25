@@ -22,8 +22,7 @@ private:
 		FVector Target = FVector::ZeroVector;
 		/** cm */
 		float Distance = 800.0f;
-		float YawDegrees = 45.0f;
-		float PitchDegrees = 25.0f;
+		FRotator ViewRotation = FRotator(-25.0f, 225.0f, 0.0f);
 	};
 
 	ADefaultPlayerController Player{};

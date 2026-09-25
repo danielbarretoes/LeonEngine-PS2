@@ -34,12 +34,12 @@ bool FCharacterMovementIsWalkableUsesWalkableFloorZTest::RunTest(const FString& 
 
 	FHitResult Flat{};
 	Flat.bBlockingHit = true;
-	Flat.ImpactNormal = FVector(0.0f, 1.0f, 0.0f);
+	Flat.ImpactNormal = FVector(0.0f, 0.0f, 1.0f);
 	TestTrue("Flat floor walkable", Character.IsWalkable(Flat));
 
 	FHitResult Steep{};
 	Steep.bBlockingHit = true;
-	Steep.ImpactNormal = FVector(0.0f, 0.5f, 0.0f); // ~60 degrees, steeper than the default UE walkable slope
+	Steep.ImpactNormal = FVector(0.0f, 0.0f, 0.5f); // ~60 degrees, steeper than the default UE walkable slope
 	TestFalse("Steep floor not walkable", Character.IsWalkable(Steep));
 
 	Character.GetCharacterMovement().WalkableFloorZ = 0.5f;
@@ -56,15 +56,15 @@ bool FCharacterMovementFindFloorHitsInfiniteFloorPlaneTest::RunTest(const FStrin
 	// With no bodies, FindFloor finds the infinite floor plane 1 m below the feet.
 	FPhysScene Scene;
 	ACharacter Character;
-	Character.Reset(FVector(0.0f, 100.0f, 0.0f), 0.0f);
-	Character.GetCharacterMovement().FloorY = 0.0f;
+	Character.Reset(FVector(0.0f, 0.0f, 100.0f), 0.0f);
+	Character.GetCharacterMovement().FloorZ = 0.0f;
 
 	FFindFloorResult Floor{};
 	Character.FindFloor(Scene, Floor, 200.0f, nullptr);
 	TestTrue("Blocking hit", Floor.bBlockingHit);
 	TestTrue("Walkable floor", Floor.bWalkableFloor);
 	TestTrue("Floor plane hit", Floor.Hit.bFloorPlane);
-	TestEqual("Impact Y", Floor.Hit.ImpactPoint.Y, 0.0f, 0.1f);
+	TestEqual("Impact Z", Floor.Hit.ImpactPoint.Z, 0.0f, 0.1f);
 	TestEqual("Floor distance", Floor.FloorDist, 100.0f, 0.1f);
 	return true;
 }
@@ -77,19 +77,19 @@ bool FCharacterMovementFindFloorHitsStaticAabbTopTest::RunTest(const FString& Pa
 {
 	// FindFloor prefers the top of a static box under the feet over a far floor plane.
 	FPhysScene Scene;
-	// Box top at y = 200 cm
-	AddCharacterTestBox(Scene, FVector(0.0f, 100.0f, 0.0f), FVector(100.0f, 100.0f, 100.0f));
+	// Box top at z = 200 cm
+	AddCharacterTestBox(Scene, FVector(0.0f, 0.0f, 100.0f), FVector(100.0f, 100.0f, 100.0f));
 
 	ACharacter Character;
-	Character.Reset(FVector(0.0f, 250.0f, 0.0f), 0.0f);
-	Character.GetCharacterMovement().FloorY = -10000.0f; // prefer box over far plane
+	Character.Reset(FVector(0.0f, 0.0f, 250.0f), 0.0f);
+	Character.GetCharacterMovement().FloorZ = -10000.0f; // prefer box over far plane
 
 	FFindFloorResult Floor{};
 	Character.FindFloor(Scene, Floor, 100.0f, nullptr);
 	TestTrue("Blocking hit", Floor.bBlockingHit);
 	TestTrue("Walkable floor", Floor.bWalkableFloor);
 	TestFalse("Not the floor plane", Floor.Hit.bFloorPlane);
-	TestEqual("Impact Y", Floor.Hit.ImpactPoint.Y, 200.0f, 1.0f);
+	TestEqual("Impact Z", Floor.Hit.ImpactPoint.Z, 200.0f, 1.0f);
 	return true;
 }
 
@@ -106,10 +106,10 @@ bool FCharacterMovementLandsOnFloorPlaneAfterFallTest::RunTest(const FString& Pa
 	{
 		return false;
 	}
-	Character->Reset(FVector(0.0f, 200.0f, 0.0f), 0.0f);
-	Character->GetCharacterMovement().FloorY = 0.0f;
+	Character->Reset(FVector(0.0f, 0.0f, 200.0f), 0.0f);
+	Character->GetCharacterMovement().FloorZ = 0.0f;
 	Character->GetCharacterMovement().Gravity = 2400.0f;
-	Character->ApplyReplicatedState(FVector(0.0f, 200.0f, 0.0f), 0.0f, 0.0f, false);
+	Character->ApplyReplicatedState(FVector(0.0f, 0.0f, 200.0f), 0.0f, 0.0f, false);
 	if (!TestTrue("Starts falling", Character->IsFalling()))
 	{
 		return false;
@@ -122,7 +122,7 @@ bool FCharacterMovementLandsOnFloorPlaneAfterFallTest::RunTest(const FString& Pa
 	}
 
 	TestTrue("On ground", Character->IsMovingOnGround());
-	TestEqual("Feet on the floor", Character->GetActorLocation().Y, 0.0f, 5.0f);
+	TestEqual("Feet on the floor", Character->GetActorLocation().Z, 0.0f, 5.0f);
 	TestEqual("Vertical velocity", Character->GetVelocityZ(), 0.0f, 10.0f);
 	TestTrue("Walkable floor", Character->GetCurrentFloor().bWalkableFloor);
 	return true;
@@ -138,7 +138,7 @@ bool FCharacterMovementJumpLeavesGroundThenLandsTest::RunTest(const FString& Par
 	UWorld World;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->Reset(FVector::ZeroVector, 0.0f);
-	Character->GetCharacterMovement().FloorY = 0.0f;
+	Character->GetCharacterMovement().FloorZ = 0.0f;
 	Character->GetCharacterMovement().JumpZVelocity = 700.0f;
 	Character->GetCharacterMovement().Gravity = 2400.0f;
 
@@ -178,7 +178,7 @@ bool FCharacterMovementJumpLeavesGroundThenLandsTest::RunTest(const FString& Par
 	{
 		return false;
 	}
-	TestEqual("Feet on the floor", Character->GetActorLocation().Y, 0.0f, 5.0f);
+	TestEqual("Feet on the floor", Character->GetActorLocation().Z, 0.0f, 5.0f);
 	return true;
 }
 
@@ -192,12 +192,12 @@ bool FCharacterMovementDoesNotWalkThroughStaticWallTest::RunTest(const FString& 
 	UWorld World;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->Reset(FVector(-200.0f, 0.0f, 0.0f), 0.0f);
-	Character->GetCharacterMovement().FloorY = 0.0f;
+	Character->GetCharacterMovement().FloorZ = 0.0f;
 	Character->GetCharacterMovement().MaxWalkSpeed = 600.0f;
 
 	FPhysScene& Scene = World.GetPhysicsScene();
 	// Tall wall at x=0
-	AddCharacterTestBox(Scene, FVector(0.0f, 100.0f, 0.0f), FVector(25.0f, 100.0f, 200.0f));
+	AddCharacterTestBox(Scene, FVector(0.0f, 0.0f, 100.0f), FVector(25.0f, 200.0f, 100.0f));
 
 	for (int32 I = 0; I < 120; ++I)
 	{
@@ -220,22 +220,22 @@ bool FCharacterMovementSlidesAlongWallWithDiagonalWishTest::RunTest(const FStrin
 	UWorld World;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->Reset(FVector(-150.0f, 0.0f, 0.0f), 0.0f);
-	Character->GetCharacterMovement().FloorY = 0.0f;
+	Character->GetCharacterMovement().FloorZ = 0.0f;
 	Character->GetCharacterMovement().MaxWalkSpeed = 500.0f;
 
 	FPhysScene& Scene = World.GetPhysicsScene();
 	// Wall in the YZ plane at x=0
-	AddCharacterTestBox(Scene, FVector(0.0f, 100.0f, 0.0f), FVector(25.0f, 100.0f, 400.0f));
+	AddCharacterTestBox(Scene, FVector(0.0f, 0.0f, 100.0f), FVector(25.0f, 400.0f, 100.0f));
 
-	const float Z0 = Character->GetActorLocation().Z;
+	const float Y0 = Character->GetActorLocation().Y;
 	for (int32 I = 0; I < 90; ++I)
 	{
-		Character->AddMovementInput(FVector(1.0f, 0.0f, 1.0f));
+		Character->AddMovementInput(FVector(1.0f, 1.0f, 0.0f));
 		Character->PerformMovement(Scene, CharacterTestDeltaTime, nullptr);
 	}
 
 	TestTrue("Stopped before the wall", Character->GetActorLocation().X < -50.0f);
-	TestTrue("Slid forward in Z", Character->GetActorLocation().Z > Z0 + 50.0f);
+	TestTrue("Slid forward in Y", Character->GetActorLocation().Y > Y0 + 50.0f);
 	return true;
 }
 
@@ -249,11 +249,11 @@ bool FCharacterMovementSweepDoesNotTunnelThinWallAtHighSpeedTest::RunTest(const 
 	UWorld World;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->Reset(FVector(-100.0f, 0.0f, 0.0f), 0.0f);
-	Character->GetCharacterMovement().FloorY = 0.0f;
+	Character->GetCharacterMovement().FloorZ = 0.0f;
 	Character->GetCharacterMovement().MaxWalkSpeed = 4000.0f; // far above the normal speed
 
 	FPhysScene& Scene = World.GetPhysicsScene();
-	AddCharacterTestBox(Scene, FVector(0.0f, 100.0f, 0.0f), FVector(10.0f, 100.0f, 200.0f));
+	AddCharacterTestBox(Scene, FVector(0.0f, 0.0f, 100.0f), FVector(10.0f, 200.0f, 100.0f));
 
 	for (int32 I = 0; I < 30; ++I)
 	{
@@ -275,13 +275,13 @@ bool FCharacterMovementStepsUpOntoShortLedgeTest::RunTest(const FString& Paramet
 	UWorld World;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->Reset(FVector(-150.0f, 0.0f, 0.0f), 0.0f);
-	Character->GetCharacterMovement().FloorY = 0.0f;
+	Character->GetCharacterMovement().FloorZ = 0.0f;
 	Character->GetCharacterMovement().MaxWalkSpeed = 500.0f;
 	Character->GetCharacterMovement().MaxStepHeight = 35.0f;
 
 	FPhysScene& Scene = World.GetPhysicsScene();
-	// Top at y=30 cm (< MaxStepHeight). Long/wide so we stay on the ledge after stepping up.
-	AddCharacterTestBox(Scene, FVector(800.0f, 15.0f, 0.0f), FVector(800.0f, 15.0f, 400.0f));
+	// Top at z=30 cm (< MaxStepHeight). Long/wide so we stay on the ledge after stepping up.
+	AddCharacterTestBox(Scene, FVector(800.0f, 0.0f, 15.0f), FVector(800.0f, 400.0f, 15.0f));
 
 	for (int32 I = 0; I < 120; ++I)
 	{
@@ -290,7 +290,7 @@ bool FCharacterMovementStepsUpOntoShortLedgeTest::RunTest(const FString& Paramet
 	}
 
 	TestTrue("Moved onto the ledge", Character->GetActorLocation().X > 20.0f);
-	TestTrue("Stepped up", Character->GetActorLocation().Y > 20.0f);
+	TestTrue("Stepped up", Character->GetActorLocation().Z > 20.0f);
 	TestTrue("On ground", Character->IsMovingOnGround());
 	return true;
 }
@@ -305,13 +305,13 @@ bool FCharacterMovementDoesNotStepUpTallWallTest::RunTest(const FString& Paramet
 	UWorld World;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->Reset(FVector(-150.0f, 0.0f, 0.0f), 0.0f);
-	Character->GetCharacterMovement().FloorY = 0.0f;
+	Character->GetCharacterMovement().FloorZ = 0.0f;
 	Character->GetCharacterMovement().MaxWalkSpeed = 500.0f;
 	Character->GetCharacterMovement().MaxStepHeight = 35.0f;
 
 	FPhysScene& Scene = World.GetPhysicsScene();
-	// Top at y=100 cm (> MaxStepHeight)
-	AddCharacterTestBox(Scene, FVector(50.0f, 50.0f, 0.0f), FVector(50.0f, 50.0f, 400.0f));
+	// Top at z=100 cm (> MaxStepHeight)
+	AddCharacterTestBox(Scene, FVector(50.0f, 0.0f, 50.0f), FVector(50.0f, 400.0f, 50.0f));
 
 	for (int32 I = 0; I < 120; ++I)
 	{
@@ -320,7 +320,7 @@ bool FCharacterMovementDoesNotStepUpTallWallTest::RunTest(const FString& Paramet
 	}
 
 	TestTrue("Stopped before the block", Character->GetActorLocation().X < 0.0f);
-	TestTrue("Did not step up", Character->GetActorLocation().Y < 15.0f);
+	TestTrue("Did not step up", Character->GetActorLocation().Z < 15.0f);
 	return true;
 }
 
@@ -334,7 +334,7 @@ bool FCharacterMovementMovementModeWalkingJumpFallingLandTest::RunTest(const FSt
 	UWorld World;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->Reset(FVector::ZeroVector, 0.0f);
-	Character->GetCharacterMovement().FloorY = 0.0f;
+	Character->GetCharacterMovement().FloorZ = 0.0f;
 	if (!TestTrue("Starts walking", Character->GetMovementMode() == EMovementMode::Walking))
 	{
 		return false;
@@ -379,14 +379,14 @@ bool FCharacterMovementWalksOffLedgeEntersFallingTest::RunTest(const FString& Pa
 	// Walking off the edge of a platform switches the character to Falling.
 	UWorld World;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
-	Character->Reset(FVector(0.0f, 100.0f, 0.0f), 0.0f);
-	Character->GetCharacterMovement().FloorY = -10000.0f; // no infinite floor under gap
+	Character->Reset(FVector(0.0f, 0.0f, 100.0f), 0.0f);
+	Character->GetCharacterMovement().FloorZ = -10000.0f; // no infinite floor under gap
 	Character->GetCharacterMovement().MaxWalkSpeed = 600.0f;
 	Character->GetCharacterMovement().Gravity = 2400.0f;
 
 	FPhysScene& Scene = World.GetPhysicsScene();
-	// Platform top at y=100 cm, ends at x=50 cm
-	AddCharacterTestBox(Scene, FVector(0.0f, 50.0f, 0.0f), FVector(50.0f, 50.0f, 50.0f));
+	// Platform top at z=100 cm, ends at x=50 cm
+	AddCharacterTestBox(Scene, FVector(0.0f, 0.0f, 50.0f), FVector(50.0f, 50.0f, 50.0f));
 
 	// Settle on platform.
 	for (int32 I = 0; I < 20; ++I)
@@ -397,7 +397,7 @@ bool FCharacterMovementWalksOffLedgeEntersFallingTest::RunTest(const FString& Pa
 	{
 		return false;
 	}
-	if (!TestEqual("Feet on the platform", Character->GetActorLocation().Y, 100.0f, 5.0f))
+	if (!TestEqual("Feet on the platform", Character->GetActorLocation().Z, 100.0f, 5.0f))
 	{
 		return false;
 	}
@@ -429,7 +429,7 @@ bool FCharacterMovementWalkShoveMovesDynamicCrateWithoutOverlapTest::RunTest(con
 	{
 		return false;
 	}
-	Character->GetCharacterMovement().FloorY = 0.0f;
+	Character->GetCharacterMovement().FloorZ = 0.0f;
 	Character->GetCharacterMovement().MaxWalkSpeed = 600.0f;
 	Character->GetCharacterMovement().PushStrength = 0.85f;
 	Character->Reset(FVector::ZeroVector, 0.0f);
@@ -438,8 +438,8 @@ bool FCharacterMovementWalkShoveMovesDynamicCrateWithoutOverlapTest::RunTest(con
 	const int32 Id = Scene.AddBody({3, EBodyType::Dynamic, 1.0f, true});
 	FBodyInstance& Crate = Scene.GetBodies()[Id];
 	// Capsule radius ~35 cm; place crate so walking +X contacts the west face.
-	Crate.Position = FVector(120.0f, 45.0f, 0.0f);
-	Crate.HalfExtents = FVector(40.0f, 45.0f, 40.0f);
+	Crate.Position = FVector(120.0f, 0.0f, 45.0f);
+	Crate.HalfExtents = FVector(40.0f, 40.0f, 45.0f);
 	Crate.Mass = 1.0f;
 	const float X0 = Crate.Position.X;
 
@@ -449,7 +449,7 @@ bool FCharacterMovementWalkShoveMovesDynamicCrateWithoutOverlapTest::RunTest(con
 		Character->PerformMovement(Scene, CharacterTestDeltaTime, nullptr);
 		FPhysSceneStepParams Step{};
 		Step.DeltaTime = CharacterTestDeltaTime;
-		Step.FloorY = 0.0f;
+		Step.FloorZ = 0.0f;
 		Step.Gravity = 2400.0f;
 		Scene.Step(Step);
 	}
@@ -476,8 +476,8 @@ bool FCharacterMovementWorldSeparatesOverlappingCharacterCapsulesTest::RunTest(c
 	{
 		return false;
 	}
-	A->GetCharacterMovement().FloorY = 0.0f;
-	B->GetCharacterMovement().FloorY = 0.0f;
+	A->GetCharacterMovement().FloorZ = 0.0f;
+	B->GetCharacterMovement().FloorZ = 0.0f;
 	A->Reset(FVector::ZeroVector, 0.0f);
 	B->Reset(FVector(10.0f, 0.0f, 0.0f), 0.0f);
 
@@ -486,8 +486,8 @@ bool FCharacterMovementWorldSeparatesOverlappingCharacterCapsulesTest::RunTest(c
 	World.TickGameplayFrame(Frame);
 
 	const float Dx = A->GetActorLocation().X - B->GetActorLocation().X;
-	const float Dz = A->GetActorLocation().Z - B->GetActorLocation().Z;
-	const float Dist = FMath::Sqrt((Dx * Dx) + (Dz * Dz));
+	const float Dy = A->GetActorLocation().Y - B->GetActorLocation().Y;
+	const float Dist = FMath::Sqrt((Dx * Dx) + (Dy * Dy));
 	const float MinDist = A->GetCapsule().GetCapsuleRadius() + B->GetCapsule().GetCapsuleRadius();
 	TestTrue("Separated", Dist + 0.1f >= MinDist);
 	return true;
@@ -499,11 +499,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterMovementResolvePawnOverlapIgnoresVert
 
 bool FCharacterMovementResolvePawnOverlapIgnoresVerticallySeparatedCapsulesTest::RunTest(const FString& Parameters)
 {
-	// Capsules that overlap in XZ but not in height are left where they are.
+	// Capsules that overlap in XY but not in height are left where they are.
 	ACharacter A;
 	ACharacter B;
 	A.Reset(FVector::ZeroVector, 0.0f);
-	B.Reset(FVector(5.0f, 300.0f, 0.0f), 0.0f);
+	B.Reset(FVector(5.0f, 0.0f, 300.0f), 0.0f);
 	A.ResolvePawnOverlap(B);
 	TestEqual("First X unchanged", A.GetActorLocation().X, 0.0f, 1.0e-3f);
 	TestEqual("Second X unchanged", B.GetActorLocation().X, 5.0f, 1.0e-3f);
@@ -519,17 +519,17 @@ bool FCharacterMovementWalksUpWalkableSlopeRampTest::RunTest(const FString& Para
 	// A 30 degree ramp is walkable: the character climbs it and stays on a walkable floor.
 	UWorld World;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
-	Character->GetCharacterMovement().FloorY = -10000.0f;
+	Character->GetCharacterMovement().FloorZ = -10000.0f;
 	Character->GetCharacterMovement().MaxWalkSpeed = 500.0f;
 	Character->GetCharacterMovement().WalkableFloorZ = 0.71f; // ~44 degrees
 
 	FPhysScene& Scene = World.GetPhysicsScene();
-	// 30 degree ramp (cos 30 ~ 0.866, walkable). Plane through the origin; y ~ x * tan 30.
-	Scene.AddSlopeRamp(FVector::ZeroVector, FVector(800.0f, 800.0f, 200.0f), 30.0f);
+	// 30 degree ramp (cos 30 ~ 0.866, walkable). Plane through the origin; z ~ x * tan 30.
+	Scene.AddSlopeRamp(FVector::ZeroVector, FVector(800.0f, 200.0f, 800.0f), 30.0f);
 
 	const float X0 = -150.0f;
-	const float Y0 = X0 * 0.57735027f; // tan(30 degrees)
-	Character->Reset(FVector(X0, Y0 + 5.0f, 0.0f), 0.0f);
+	const float Z0 = X0 * 0.57735027f; // tan(30 degrees)
+	Character->Reset(FVector(X0, 0.0f, Z0 + 5.0f), 0.0f);
 	for (int32 I = 0; I < 15; ++I)
 	{
 		Character->PerformMovement(Scene, CharacterTestDeltaTime, nullptr);
@@ -538,7 +538,7 @@ bool FCharacterMovementWalksUpWalkableSlopeRampTest::RunTest(const FString& Para
 	{
 		return false;
 	}
-	const float YStart = Character->GetActorLocation().Y;
+	const float ZStart = Character->GetActorLocation().Z;
 
 	for (int32 I = 0; I < 60; ++I)
 	{
@@ -548,9 +548,9 @@ bool FCharacterMovementWalksUpWalkableSlopeRampTest::RunTest(const FString& Para
 
 	TestTrue("On ground", Character->IsMovingOnGround());
 	TestTrue("Moved up the ramp in X", Character->GetActorLocation().X > X0 + 80.0f);
-	TestTrue("Climbed", Character->GetActorLocation().Y > YStart + 35.0f);
+	TestTrue("Climbed", Character->GetActorLocation().Z > ZStart + 35.0f);
 	TestTrue("Walkable floor", Character->GetCurrentFloor().bWalkableFloor);
-	TestTrue("Floor normal walkable", Character->GetCurrentFloor().Hit.ImpactNormal.Y >= 0.71f);
+	TestTrue("Floor normal walkable", Character->GetCurrentFloor().Hit.ImpactNormal.Z >= 0.71f);
 	return true;
 }
 
@@ -563,15 +563,15 @@ bool FCharacterMovementCannotStandOnSteepSlopeRampTest::RunTest(const FString& P
 	// A 60 degree ramp is not walkable: the character keeps falling but does not sink through it.
 	UWorld World;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
-	Character->GetCharacterMovement().FloorY = -10000.0f;
+	Character->GetCharacterMovement().FloorZ = -10000.0f;
 	Character->GetCharacterMovement().Gravity = 2400.0f;
 	Character->GetCharacterMovement().WalkableFloorZ = 0.71f;
 
 	FPhysScene& Scene = World.GetPhysicsScene();
 	// 60 degree ramp (cos 60 = 0.5 < WalkableFloorZ)
-	Scene.AddSlopeRamp(FVector::ZeroVector, FVector(400.0f, 400.0f, 200.0f), 60.0f);
+	Scene.AddSlopeRamp(FVector::ZeroVector, FVector(400.0f, 200.0f, 400.0f), 60.0f);
 
-	Character->ApplyReplicatedState(FVector(0.0f, 200.0f, 0.0f), 0.0f, 0.0f, false);
+	Character->ApplyReplicatedState(FVector(0.0f, 0.0f, 200.0f), 0.0f, 0.0f, false);
 	for (int32 I = 0; I < 120; ++I)
 	{
 		Character->PerformMovement(Scene, CharacterTestDeltaTime, nullptr);
@@ -580,7 +580,7 @@ bool FCharacterMovementCannotStandOnSteepSlopeRampTest::RunTest(const FString& P
 	TestTrue("Falling", Character->IsFalling());
 	TestFalse("Floor not walkable", Character->GetCurrentFloor().bWalkableFloor);
 	// Must rest on / above the steep surface, not tunnel below.
-	TestTrue("Above the surface", Character->GetActorLocation().Y > -10.0f);
+	TestTrue("Above the surface", Character->GetActorLocation().Z > -10.0f);
 	return true;
 }
 
@@ -596,13 +596,13 @@ bool FCharacterMovementAirControlScalesHorizontalMoveWhileFallingTest::RunTest(c
 	{
 		UWorld World;
 		ACharacter* Character = World.SpawnActor<ACharacter>();
-		Character->Reset(FVector(0.0f, 400.0f, 0.0f), 0.0f);
-		Character->GetCharacterMovement().FloorY = 0.0f;
+		Character->Reset(FVector(0.0f, 0.0f, 400.0f), 0.0f);
+		Character->GetCharacterMovement().FloorZ = 0.0f;
 		Character->GetCharacterMovement().MaxWalkSpeed = 600.0f;
 		Character->GetCharacterMovement().Gravity = 2400.0f;
 		Character->GetCharacterMovement().AirControl = AirControl;
 		// Start airborne high enough that 30 frames stay Falling.
-		Character->ApplyReplicatedState(FVector(0.0f, 400.0f, 0.0f), 0.0f, 0.0f, false);
+		Character->ApplyReplicatedState(FVector(0.0f, 0.0f, 400.0f), 0.0f, 0.0f, false);
 
 		FPhysScene& Scene = World.GetPhysicsScene();
 		if (!TestTrue("Starts falling", Character->IsFalling()))

@@ -5,12 +5,18 @@
 namespace
 {
 
-	/** Writes a relative transform back into the legacy Relative* fields. */
+	/** Writes a relative transform into the Relative* fields. */
 	void SetRelativeFields(USceneComponent& Component, const FTransform& Relative)
 	{
-		Component.RelativeLocation = FLegacyCoordinateConversion::ToLegacyPosition(Relative.GetLocation());
-		Component.RelativeRotation = FLegacyCoordinateConversion::ToLegacyEulerXYZ(Relative.GetRotation());
-		Component.RelativeScale3D = FLegacyCoordinateConversion::ToLegacyScale(Relative.GetScale3D());
+		Component.RelativeLocation = Relative.GetLocation();
+		Component.RelativeRotation = Relative.Rotator();
+		Component.RelativeScale3D = Relative.GetScale3D();
+	}
+
+	/** The owning actor's pose (UE: GetActorTransform). */
+	FTransform ActorTransform(const AActor& Owner)
+	{
+		return FTransform(Owner.GetActorRotation(), Owner.GetActorLocation());
 	}
 
 } // namespace
@@ -29,7 +35,7 @@ USceneComponent::~USceneComponent()
 
 FTransform USceneComponent::GetRelativeTransform() const
 {
-	return FLegacyCoordinateConversion::ConvertTransform(RelativeLocation, RelativeRotation, RelativeScale3D);
+	return FTransform(RelativeRotation, RelativeLocation, RelativeScale3D);
 }
 
 bool USceneComponent::WouldCreateCycle(const USceneComponent* CandidateParent) const
@@ -95,12 +101,9 @@ void USceneComponent::DetachFromParent(bool bKeepWorldTransform)
 
 	if (bKeepWorldTransform)
 	{
-		SetRelativeFields(*this, WorldBefore);
-		if (Owner != nullptr)
-		{
-			RelativeLocation -= FLegacyCoordinateConversion::ToLegacyPosition(Owner->GetActorLocation());
-			RelativeRotation.Y -= Owner->GetActorYaw();
-		}
+		// Without a parent the component sits on its owner's pose.
+		SetRelativeFields(
+			*this, Owner != nullptr ? WorldBefore.GetRelativeTransform(ActorTransform(*Owner)) : WorldBefore);
 	}
 }
 
@@ -112,12 +115,7 @@ FTransform USceneComponent::GetComponentTransform() const
 	}
 	if (Owner != nullptr)
 	{
-		// The owner's legacy yaw adds to the legacy Euler Y.
-		FVector Euler = RelativeRotation;
-		Euler.Y += Owner->GetActorYaw();
-		const FVector Location =
-			FLegacyCoordinateConversion::ToLegacyPosition(Owner->GetActorLocation()) + RelativeLocation;
-		return FLegacyCoordinateConversion::ConvertTransform(Location, Euler, RelativeScale3D);
+		return GetRelativeTransform() * ActorTransform(*Owner);
 	}
 	return GetRelativeTransform();
 }

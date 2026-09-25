@@ -93,10 +93,11 @@ void FDebugDraw::AddArrow(
 		return;
 	}
 	const FVector Dir = Shaft / Len;
-	FVector Side = Dir ^ FVector(0.0f, 1.0f, 0.0f);
+	// A side vector across the shaft, horizontal when it can be (world up ^ shaft; along X for a vertical shaft).
+	FVector Side = FVector(0.0f, 0.0f, 1.0f) ^ Dir;
 	if ((Side | Side) < 1.0e-6f)
 	{
-		Side = Dir ^ FVector(1.0f, 0.0f, 0.0f);
+		Side = FVector(1.0f, 0.0f, 0.0f) ^ Dir;
 	}
 	Side = Side.GetUnsafeNormal() * HeadWidth;
 	const FVector Back = To - (Dir * HeadLength);

@@ -1,4 +1,6 @@
 #include "CoreMinimal.h"
+#include "Engine/GameEngine.h"
+#include "Level/BasicLight.h"
 #include "Level/LeonLevelFormat.h"
 #include "Misc/AutomationTest.h"
 
@@ -90,6 +92,69 @@ bool FLevelFormatDeserializeRejectsBadMagicAndTruncationTest::RunTest(const FStr
 		Bytes.SetNum(Bytes.Num() / 2);
 		TestFalse("Truncated bytes rejected", DeserializeLeonLevel(Bytes, Restored));
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelFormatWorldRoundTripsThroughLegacyRecordsTest,
+	"System.Engine.LevelFormat.WorldRoundTripsThroughLegacyRecords",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FLevelFormatWorldRoundTripsThroughLegacyRecordsTest::RunTest(const FString& Parameters)
+{
+	// A player start, a sun and an orbit camera become legacy records (metres, Y up, legacy angles) and come back the
+	// same.
+	UGameEngine Engine;
+	if (!TestTrue("Headless initialize", Engine.InitializeHeadless()))
+	{
+		return false;
+	}
+	ULevel& Level = Engine.GetLevel();
+	Level.Clear();
+	FPlayerStart Start;
+	Start.Transform = FTransform(FRotator(0.0f, 30.0f, 0.0f), FVector(100.0f, 200.0f, 50.0f));
+	Level.AddPlayerStart(Start);
+	FBasicLight::Directional(FRotator(-45.0f, 20.0f, 0.0f).Quaternion()).AddTo(Level);
+	UCameraComponent& Camera = Engine.GetCamera();
+	Camera.SetMode(ECameraMode::Orbit);
+	Camera.SetTarget(FVector(0.0f, 100.0f, 0.0f));
+	Camera.SetDistance(600.0f);
+	Camera.SetViewRotation(FRotator(-20.0f, 135.0f, 0.0f));
+	const FVector Eye = Camera.GetCameraLocation();
+
+	const FLevelDocument Doc = BuildLevelDocument(Level, Camera);
+	if (!TestEqual("One actor", Doc.Actors.Num(), 1) || !TestEqual("One light", Doc.Lights.Num(), 1))
+	{
+		Engine.Shutdown();
+		return false;
+	}
+	// Legacy: Y up in metres, the start faces legacy yaw 90 - 30, the orbit eye at yaw 135 - 180 and pitch 20 above.
+	TestTrue("Legacy position", Doc.Actors[0].Position.Equals(FVector(1.0f, 0.5f, 2.0f), 1.0e-5f));
+	TestTrue("Legacy start yaw", Doc.Actors[0].RotationDegrees.Equals(FVector(0.0f, 60.0f, 0.0f), 1.0e-3f));
+	TestEqual("Legacy camera yaw", Doc.Camera.Yaw, -45.0f, 1.0e-3f);
+	TestEqual("Legacy camera pitch", Doc.Camera.Pitch, 20.0f, 1.0e-3f);
+	TestEqual("Legacy light pitch", Doc.Lights[0].RotationDegrees.X, 45.0f, 1.0e-2f);
+	TestEqual("Legacy light yaw", Doc.Lights[0].RotationDegrees.Y, 70.0f, 1.0e-2f);
+
+	Level.Clear();
+	Camera.SetViewRotation(FRotator::ZeroRotator);
+	if (!TestTrue("Applied", ApplyLevelDocument(Engine, Doc, "memory-round-trip")))
+	{
+		Engine.Shutdown();
+		return false;
+	}
+	const FPlayerStart* Restored = Engine.GetLevel().FindPlayerStart();
+	if (TestNotNull("Player start", Restored))
+	{
+		TestTrue("Start location", Restored->Transform.GetLocation().Equals(FVector(100.0f, 200.0f, 50.0f), 1.0e-3f));
+		TestTrue("Start faces yaw 30",
+			Restored->Transform.GetRotation().GetForwardVector().Equals(FRotator(0.0f, 30.0f, 0.0f).Vector(), 1.0e-5f));
+	}
+	TestTrue("Sun direction",
+		Engine.GetLevel().GetDirectionalLights()[0].GetDirection().Equals(
+			FRotator(-45.0f, 20.0f, 0.0f).Vector(), 1.0e-4f));
+	TestTrue("Camera eye", Engine.GetCamera().GetCameraLocation().Equals(Eye, 1.0e-2f));
+	TestTrue("Camera rotation", Engine.GetCamera().GetViewRotation().Equals(FRotator(-20.0f, 135.0f, 0.0f), 1.0e-3f));
+	Engine.Shutdown();
 	return true;
 }
 

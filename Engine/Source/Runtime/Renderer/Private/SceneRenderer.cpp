@@ -610,15 +610,16 @@ void FSceneRenderer::RenderShadowPass(const ULevel& Level, const FMatrix& LightS
 	PassTimers.End(FGPUPassTimer::EPass::Shadow);
 }
 
-FMatrix FSceneRenderer::MakeReflectMatrix(float PlaneY)
+FMatrix FSceneRenderer::MakeReflectMatrix(float PlaneZ)
 {
+	// Row vectors: z' = 2 PlaneZ - z.
 	FMatrix ReflectMat = FMatrix::Identity;
-	ReflectMat.M[1][1] = -1.0f;
-	ReflectMat.M[3][1] = 2.0f * PlaneY;
+	ReflectMat.M[2][2] = -1.0f;
+	ReflectMat.M[3][2] = 2.0f * PlaneZ;
 	return ReflectMat;
 }
 
-void FSceneRenderer::RenderPlanarReflectionPass(const ULevel& Level, const UCameraComponent& Camera, float PlaneY)
+void FSceneRenderer::RenderPlanarReflectionPass(const ULevel& Level, const UCameraComponent& Camera, float PlaneZ)
 {
 	const int32 ReflW = FMath::Max(1, FMath::RoundToInt(static_cast<float>(FbWidth) * PlanarReflectionScale));
 	const int32 ReflH = FMath::Max(1, FMath::RoundToInt(static_cast<float>(FbHeight) * PlanarReflectionScale));
@@ -629,12 +630,12 @@ void FSceneRenderer::RenderPlanarReflectionPass(const ULevel& Level, const UCame
 
 	PassTimers.Begin(FGPUPassTimer::EPass::Planar);
 
-	const FMatrix ReflectMat = MakeReflectMatrix(PlaneY);
+	const FMatrix ReflectMat = MakeReflectMatrix(PlaneZ);
 	const FMatrix LocalView = ReflectMat * Camera.ViewMatrix();
 	const FMatrix LocalProjection = GetProjectionGL(Camera);
 	const FMatrix LocalViewProjection = LocalView * LocalProjection;
 	const FVector Eye = Camera.GetCameraLocation();
-	const FVector ReflectedEye(Eye.X, (2.0f * PlaneY) - Eye.Y, Eye.Z);
+	const FVector ReflectedEye(Eye.X, Eye.Y, (2.0f * PlaneZ) - Eye.Z);
 
 	FFrustum ReflectedFrustum;
 	ReflectedFrustum.ExtractFromViewProjection(LocalViewProjection);
@@ -644,7 +645,8 @@ void FSceneRenderer::RenderPlanarReflectionPass(const ULevel& Level, const UCame
 
 	PlanarReflection.Begin();
 	glEnable(GL_CLIP_DISTANCE0);
-	SetClipPlane(true, FVector4(0.0f, 1.0f, 0.0f, -PlaneY));
+	// Keep what is above the mirror: z - PlaneZ >= 0.
+	SetClipPlane(true, FVector4(0.0f, 0.0f, 1.0f, -PlaneZ));
 
 	if (LitShader.Valid())
 	{
@@ -716,7 +718,7 @@ void FSceneRenderer::RenderPlanarReflectionPass(const ULevel& Level, const UCame
 	// Characters are queued before DrawScene — include them in the mirror (clip + reflected frustum).
 	DrawQueuedSkeletal(LocalView, LocalProjection, LightSpace, false, 0.0f, &ReflectedFrustum, true);
 
-	SetClipPlane(false, FVector4(0.0f, 1.0f, 0.0f, 0.0f));
+	SetClipPlane(false, FVector4(0.0f, 0.0f, 1.0f, 0.0f));
 	glDisable(GL_CLIP_DISTANCE0);
 	PlanarReflection.End(FbWidth, FbHeight, ColorRestoreFbo());
 	PassTimers.End(FGPUPassTimer::EPass::Planar);
@@ -856,7 +858,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 
 	// Optional horizontal planar mirror (first material with planarMirror=true).
 	bool bHasPlanarMirror = false;
-	float MirrorPlaneY = 0.0f;
+	float MirrorPlaneZ = 0.0f;
 	FMatrix ReflectionViewProj = FMatrix::Identity;
 	for (const UStaticMeshComponent& Object : Level.GetStaticMeshes())
 	{
@@ -867,7 +869,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 			{
 				bHasPlanarMirror = true;
 				// Reflect about the visible top of the mirror mesh (not actor origin).
-				MirrorPlaneY = WorldAabbFromObject(Object).Max.Y;
+				MirrorPlaneZ = WorldAabbFromObject(Object).Max.Z;
 				break;
 			}
 		}
@@ -878,8 +880,8 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 	}
 	if (bHasPlanarMirror)
 	{
-		RenderPlanarReflectionPass(Level, Camera, MirrorPlaneY);
-		ReflectionViewProj = MakeReflectMatrix(MirrorPlaneY) * Camera.ViewMatrix() * LocalProjection;
+		RenderPlanarReflectionPass(Level, Camera, MirrorPlaneZ);
+		ReflectionViewProj = MakeReflectMatrix(MirrorPlaneZ) * Camera.ViewMatrix() * LocalProjection;
 	}
 	else
 	{
@@ -957,7 +959,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 		glDisable(GL_BLEND);
 		UnlitShader.Bind();
 		UnlitShader.SetInt("uUseClipPlane", 0);
-		UnlitShader.SetVec4("uClipPlane", 0.0f, 1.0f, 0.0f, 0.0f);
+		UnlitShader.SetVec4("uClipPlane", 0.0f, 0.0f, 1.0f, 0.0f);
 		UnlitShader.SetInt("uAlbedoMap", 0);
 		UnlitShader.SetVec2("uUvScale", 1.0f, 1.0f);
 		UnlitShader.SetFloat("uAlpha", 1.0f);
@@ -987,7 +989,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 		UpdateLightsUbo(Level);
 		LitShader.Bind();
 		BindShadowResources(bCastDirShadows, ShadowSourceAngle);
-		SetClipPlane(false, FVector4(0.0f, 1.0f, 0.0f, 0.0f));
+		SetClipPlane(false, FVector4(0.0f, 0.0f, 1.0f, 0.0f));
 		BindPlanarReflection(false, ReflectionViewProj);
 		if (bHasPlanarMirror && PlanarReflection.Valid())
 		{
@@ -1275,7 +1277,7 @@ void FSceneRenderer::DrawQueuedSkeletal(const FMatrix& InView, const FMatrix& In
 	if (!bUseWorldClipPlane)
 	{
 		SkinnedLitShader.SetInt("uUseClipPlane", 0);
-		SkinnedLitShader.SetVec4("uClipPlane", 0.0f, 1.0f, 0.0f, 0.0f);
+		SkinnedLitShader.SetVec4("uClipPlane", 0.0f, 0.0f, 1.0f, 0.0f);
 	}
 
 	for (const FSkeletalDrawItem& Item : SkeletalDraws)
@@ -1357,7 +1359,7 @@ void FSceneRenderer::DrawQueuedStatic(const ULevel& Level, const FMatrix& InView
 
 	UnlitShader.Bind();
 	UnlitShader.SetInt("uUseClipPlane", 0);
-	UnlitShader.SetVec4("uClipPlane", 0.0f, 1.0f, 0.0f, 0.0f);
+	UnlitShader.SetVec4("uClipPlane", 0.0f, 0.0f, 1.0f, 0.0f);
 	UnlitShader.SetInt("uAlbedoMap", 0);
 	UnlitShader.SetVec2("uUvScale", 1.0f, 1.0f);
 	UnlitShader.SetFloat("uAlpha", 1.0f);

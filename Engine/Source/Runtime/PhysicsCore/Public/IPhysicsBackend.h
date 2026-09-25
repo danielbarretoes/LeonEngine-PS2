@@ -8,9 +8,9 @@
 /**
  * Physics backend contract. Implementations live in Engine (Arcade) and in plugins (JoltPhysics).
  * FPhysScene remains the gameplay-facing API; backends plug in behind it.
- * Arcade owns the CMC side resolve / QuerySupportY; Jolt may own rigid Step + narrow-phase traces.
- * Every length, velocity and acceleration crosses this interface in engine world units (cm); a backend with other
- * units (Jolt: metres) converts at its own boundary.
+ * Arcade owns the CMC side resolve / QuerySupportZ; Jolt may own rigid Step + narrow-phase traces.
+ * Every length, velocity and acceleration crosses this interface in engine world units (cm, Z up); a backend with
+ * other units or axes (Jolt: metres, Y up) converts at its own boundary.
  */
 class PHYSICSCORE_API IPhysicsBackend
 {
@@ -57,12 +57,12 @@ public:
 		(void)SkipLevelMeshIndex;
 	}
 
-	/** Integrate with gravity magnitude along -Y; optional infinite floor at FloorY. */
-	virtual void RigidStep(float DeltaTime, float GravityMagnitude, float FloorY)
+	/** Integrate with gravity magnitude along -Z; optional infinite floor at height FloorZ. */
+	virtual void RigidStep(float DeltaTime, float GravityMagnitude, float FloorZ)
 	{
 		(void)DeltaTime;
 		(void)GravityMagnitude;
-		(void)FloorY;
+		(void)FloorZ;
 	}
 
 	/** Write simulated COM positions / velocities back into dynamic body instances. */

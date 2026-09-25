@@ -246,7 +246,7 @@ public:
 	}
 
 	void NotifyJumped();
-	void SetMovementState(bool bInFalling, float InVelocityY, bool bInJustLanded);
+	void SetMovementState(bool bInFalling, float InVelocityZ, bool bInJustLanded);
 
 	void NativeUpdateAnimation(float DeltaTime) override;
 	void GetBoneWorldMatrices(TArray<FMatrix>& OutBoneWorld) const override;
@@ -290,7 +290,7 @@ private:
 	float LandPlayRate = 1.0f;
 
 	bool bFalling = false;
-	float VelocityY = 0.0f;
+	float VelocityZ = 0.0f;
 	bool bJustLanded = false;
 	bool bJumpRequested = false;
 };

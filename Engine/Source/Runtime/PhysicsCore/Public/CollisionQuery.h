@@ -23,7 +23,7 @@ enum class EDrawDebugTrace : uint8
 	ForOneFrame,
 };
 
-/** UE-like FHitResult for FPhysScene traces (centimetres, still Y up until P7 moves to Z up). */
+/** UE-like FHitResult for FPhysScene traces (centimetres, Z up). */
 struct PHYSICSCORE_API FHitResult
 {
 	bool bBlockingHit = false;
@@ -35,7 +35,7 @@ struct PHYSICSCORE_API FHitResult
 	/** Surface contact point (UE: ImpactPoint); equals Location for line traces. */
 	FVector ImpactPoint = FVector::ZeroVector;
 	/** Unit normal pointing toward the trace start (away from the surface). */
-	FVector ImpactNormal = FVector(0.0f, 1.0f, 0.0f);
+	FVector ImpactNormal = FVector(0.0f, 0.0f, 1.0f);
 	FVector TraceStart = FVector::ZeroVector;
 	FVector TraceEnd = FVector::ZeroVector;
 	SIZE_T LevelMeshIndex = NoLevelMeshIndex;
@@ -47,9 +47,9 @@ struct PHYSICSCORE_API FHitResult
 struct PHYSICSCORE_API FCollisionQueryParams
 {
 	SIZE_T SkipLevelMeshIndex = NoLevelMeshIndex;
-	/** Include an infinite horizontal floor at FloorY (UCharacterMovementComponent floor). */
+	/** Include an infinite horizontal floor at height FloorZ (UCharacterMovementComponent floor). */
 	bool bTraceFloorPlane = false;
-	float FloorY = 0.0f;
+	float FloorZ = 0.0f;
 	/** When not None, FPhysScene traces draw into the provided FDebugDraw* (F2 / gameplay debug). */
 	EDrawDebugTrace DrawDebugType = EDrawDebugTrace::None;
 };

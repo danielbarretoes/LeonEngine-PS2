@@ -12,10 +12,10 @@ void UCharacterAnimInstance::NotifyJumped()
 	bJumpRequested = true;
 }
 
-void UCharacterAnimInstance::SetMovementState(bool bInFalling, float InVelocityY, bool bInJustLanded)
+void UCharacterAnimInstance::SetMovementState(bool bInFalling, float InVelocityZ, bool bInJustLanded)
 {
 	bFalling = bInFalling;
-	VelocityY = InVelocityY;
+	VelocityZ = InVelocityZ;
 	bJustLanded = bInJustLanded;
 }
 
@@ -112,7 +112,7 @@ void UCharacterAnimInstance::UpdateJumpStateMachine()
 			}
 			else if (bFalling)
 			{
-				if (VelocityY > 0.0f && bHasJumpStart)
+				if (VelocityZ > 0.0f && bHasJumpStart)
 				{
 					EnterState(EAnimJumpState::JumpStart);
 				}
@@ -136,7 +136,7 @@ void UCharacterAnimInstance::UpdateJumpStateMachine()
 					EnterState(EAnimJumpState::Locomotion);
 				}
 			}
-			else if (VelocityY <= 0.0f || (Active.Sequence != nullptr && Active.Sequence->IsFinished(Active.Time)))
+			else if (VelocityZ <= 0.0f || (Active.Sequence != nullptr && Active.Sequence->IsFinished(Active.Time)))
 			{
 				if (bHasFallLoop)
 				{

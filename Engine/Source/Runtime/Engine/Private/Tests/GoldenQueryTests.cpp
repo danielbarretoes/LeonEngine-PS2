@@ -57,7 +57,7 @@ namespace
 	{
 		FCollisionQueryParams Params;
 		Params.bTraceFloorPlane = true;
-		Params.FloorY = LegacyGolden::ToWorldLength(0.0f);
+		Params.FloorZ = LegacyGolden::ToWorldLength(0.0f);
 		return Params;
 	}
 
@@ -249,7 +249,8 @@ bool FGoldenNavigationFindPathTest::RunTest(const FString& Parameters)
 	}
 	const FNavMesh& Mesh = Nav.GetNavMesh();
 	const TArray<int32> Counts = {Mesh.Width, Mesh.Depth, Nav.GetWalkableCellCount(), Nav.GetBlockerCount()};
-	const TArray<FVector> Origin = {FVector(Mesh.OriginX, Mesh.FloorY, Mesh.OriginZ)};
+	// The grid origin and floor height as a world point (legacy (OriginX, FloorY, OriginZ)).
+	const TArray<FVector> Origin = {FVector(Mesh.OriginX, Mesh.OriginY, Mesh.FloorZ)};
 	const uint32 MaskHash = FCrc::MemCrc32(Mesh.Walkable.GetData(), Mesh.Walkable.Num());
 
 	TArray<FVector> Path;

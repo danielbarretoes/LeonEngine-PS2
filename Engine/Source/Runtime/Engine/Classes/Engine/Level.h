@@ -48,13 +48,14 @@ struct ENGINE_API UStaticMeshComponent
 	FString EditorClass; // "Cube", "Sphere", "Plane", "BlockingVolume", "StaticMesh", ...
 	FString MeshPath; // relative mesh path when imported
 	FString MaterialPath; // relative material path when set
+	/** Optional spin (level spin yaw): yaw rate about Z, degrees per second; preserved for the save round trip. */
 	float SpinYaw = 0.0f;
 	int32 SphereSegments = 24;
 	int32 SphereRings = 16;
 
-	/** Optional bob animation (level bob); preserved for the save round trip. Lengths in cm. */
+	/** Optional bob animation (level bob) along Z; preserved for the save round trip. Lengths in cm. */
 	bool bHasBob = false;
-	float BobBaseY = 0.0f;
+	float BobBaseZ = 0.0f;
 	float BobAmplitude = 10.0f;
 	float BobSpeed = 1.0f;
 

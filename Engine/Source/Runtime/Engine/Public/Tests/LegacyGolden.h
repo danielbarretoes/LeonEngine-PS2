@@ -12,10 +12,12 @@ ENGINE_API DECLARE_LOG_CATEGORY_EXTERN(LogGolden, Log, All);
 
 /**
  * Golden results of representative scenarios, recorded in the legacy world (Y up, right-handed, 1 unit = 1 metre)
- * before P7 moves the engine to UE's axes (X forward, Y right, Z up, left-handed, 1 unit = 1 cm).
+ * before P7 moved the engine to UE's axes (X forward, Y right, Z up, left-handed, 1 unit = 1 cm).
  *
  * The tables in the Golden tests hold legacy values and never change. Scenes are set up through ToWorld*, results are
- * compared against ToWorld*(table), so a P7 commit only changes these adapters (and the APIs the tests drive).
+ * compared against ToWorld*(table), so a P7 commit only changes these adapters (and the APIs the tests drive). The
+ * adapters are FLegacyCoordinateConversion: positions (X, Z, Y) * 100, directions (X, Z, Y), extents (X, Z, Y) * 100;
+ * legacy angles go through its angle map (ConvertActorYaw, ConvertOrbitViewRotation, ConvertFreeLookRotation).
  *
  * Run a test with -GoldenRecord to print its tables (converted back to legacy with ToLegacy*) instead of checking
  * them: each row is one LogGolden line "<test> | <table> | <values>", ready to paste into Expected<table>[].
@@ -50,6 +52,12 @@ namespace LegacyGolden
 	inline float ToWorldSpeed(float MetresPerSecond)
 	{
 		return FLegacyCoordinateConversion::ConvertLength(MetresPerSecond);
+	}
+
+	/** Legacy actor yaw (0 = legacy +Z, toward +X) to the engine's actor yaw (FLegacyCoordinateConversion). */
+	inline float ToWorldActorYaw(float LegacyYawDegrees)
+	{
+		return FLegacyCoordinateConversion::ConvertActorYaw(LegacyYawDegrees);
 	}
 
 	/** Engine-world position back to legacy (for recording). */

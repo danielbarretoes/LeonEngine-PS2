@@ -24,7 +24,8 @@ struct ENGINE_API FWorldGameplayFrameParams
 	float PhysicsWalkBounds = 1800.0f;
 	/** cm/s^2 */
 	float PhysicsGravity = 2400.0f;
-	float PhysicsFloorY = 0.0f;
+	/** cm */
+	float PhysicsFloorZ = 0.0f;
 	/** cm */
 	float PhysicsSkin = 2.0f;
 };

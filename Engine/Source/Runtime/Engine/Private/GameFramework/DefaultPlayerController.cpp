@@ -24,7 +24,7 @@ FVector ADefaultPlayerController::TickInput(UGameEngine& Engine)
 	const float UpAxis = Engine.GetInput().GetAxisValue(Leon::InputActions::MoveUp);
 
 	FVector Wish = (Camera.ForwardVector() * ForwardAxis) + (Camera.RightVector() * RightAxis) +
-		(FVector(0.0f, 1.0f, 0.0f) * UpAxis);
+		(FVector(0.0f, 0.0f, 1.0f) * UpAxis);
 
 	const float Len = Wish.Size();
 	if (Len > 1.0e-4f)

@@ -41,12 +41,12 @@ public:
 
 	/**
 	 * Bake walkable grid from static box bodies. Wide/flat floor slabs stay walkable.
-	 * walkBounds is half-extent from origin on XZ (matches UCharacterMovementComponent::WalkBounds).
+	 * walkBounds is half-extent from origin on XY (matches UCharacterMovementComponent::WalkBounds).
 	 */
-	void BuildFromPhysScene(const FPhysScene& Physics, float FloorY, float WalkBounds);
+	void BuildFromPhysScene(const FPhysScene& Physics, float FloorZ, float WalkBounds);
 
 	/** Prefer this: skips Plane; honors NavTags::Blocker / NavTags::Walkable on meshes. */
-	void BuildFromLevel(const ULevel& Level, const FPhysScene& Physics, float FloorY, float WalkBounds);
+	void BuildFromLevel(const ULevel& Level, const FPhysScene& Physics, float FloorZ, float WalkBounds);
 
 	void Clear();
 
@@ -67,7 +67,7 @@ public:
 		return WalkableCellCount;
 	}
 
-	/** Snap to nearest walkable cell center (Y = floorY). Returns false if no nav mesh. */
+	/** Snap to nearest walkable cell center (Z = FloorZ). Returns false if no nav mesh. */
 	[[nodiscard]] bool ProjectPointToNavigation(const FVector& World, FVector& OutProjected) const;
 
 	/**
@@ -76,11 +76,11 @@ public:
 	 */
 	[[nodiscard]] bool FindPath(const FVector& Start, const FVector& End, TArray<FVector>& OutPath) const;
 
-	/** Draw walkable (green) / blocked (red) cell outlines at floorY (F3 / debug overlay). */
+	/** Draw walkable (green) / blocked (red) cell outlines at FloorZ (F3 / debug overlay). */
 	void AppendDebugDraw(FDebugDraw& Draw) const;
 
 private:
-	void BakeGrid(const FPhysScene& Physics, float FloorY, float WalkBounds, const ULevel* Level);
+	void BakeGrid(const FPhysScene& Physics, float FloorZ, float WalkBounds, const ULevel* Level);
 
 	FNavMesh Mesh{};
 	/** Smallest cell size / agent radius (cm). */

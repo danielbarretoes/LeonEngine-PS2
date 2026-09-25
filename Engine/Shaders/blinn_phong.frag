@@ -63,9 +63,9 @@ float shadowFactor(vec4 lightSpacePos, vec3 N, vec3 L) {
     return shadow / 9.0;
 }
 
-// Procedural gradient sky (no HDR environment maps; static lighting comes later).
+// Procedural gradient sky (no HDR environment maps; static lighting comes later). World up is +Z.
 vec3 fakeEnvironment(vec3 dir) {
-    float t = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
+    float t = clamp(dir.z * 0.5 + 0.5, 0.0, 1.0);
     vec3 ground = vec3(0.12, 0.11, 0.10);
     vec3 horizon = vec3(0.35, 0.38, 0.42);
     vec3 zenith = vec3(0.55, 0.62, 0.75);

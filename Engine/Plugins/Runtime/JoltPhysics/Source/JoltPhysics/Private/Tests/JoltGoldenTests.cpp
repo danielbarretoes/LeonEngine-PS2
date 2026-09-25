@@ -25,7 +25,7 @@ bool FJoltGoldenBoxDropTest::RunTest(const FString& Parameters)
 
 	FPhysSceneStepParams Params;
 	Params.DeltaTime = 1.0f / 60.0f;
-	Params.FloorY = LegacyGolden::ToWorldLength(0.0f);
+	Params.FloorZ = LegacyGolden::ToWorldLength(0.0f);
 
 	TArray<FVector> Samples;
 	for (int32 Frame = 1; Frame <= Frames; ++Frame)
@@ -47,7 +47,7 @@ bool FJoltGoldenBoxDropTest::RunTest(const FString& Parameters)
 		FVector(0.299832076f, 0.499993652f, -0.200154245f), FVector(0.299832433f, 0.499993652f, -0.200154603f)};
 	static const float ExpectedFinalVerticalSpeed[1] = {-7.15256533e-07f};
 	LegacyGolden::CheckPositions(*this, "Samples", Samples, ExpectedSamples, Frames / SampleEvery, 1.0e-3f);
-	LegacyGolden::CheckScalars(*this, "FinalVerticalSpeed", TArray<float>{Scene.GetBodies()[Id].VelocityY},
+	LegacyGolden::CheckScalars(*this, "FinalVerticalSpeed", TArray<float>{Scene.GetBodies()[Id].VelocityZ},
 		ExpectedFinalVerticalSpeed, 1, 1.0e-2f, LegacyGolden::EUnit::Speed);
 	return true;
 }

@@ -110,11 +110,8 @@ bool LoadLeonMeshFile(const FString& Path, FMeshData& Out)
 		UE_LOG(LogLeonMesh, Error, "Truncated vertex / index data in %s", *Path);
 		return false;
 	}
-	// Version 1 stores legacy metres.
-	for (FVertex& Vertex : Data.Vertices)
-	{
-		Vertex.Position = FLegacyCoordinateConversion::ConvertPosition(Vertex.Position);
-	}
+	// Version 1 stores legacy data (metres, Y up, right-handed).
+	FLegacyCoordinateConversion::ConvertMeshData(Data);
 
 	if (Header.SubmeshCount == 0)
 	{

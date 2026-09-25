@@ -137,7 +137,8 @@ struct ENGINE_API FLevelCameraRecord
 
 /**
  * In-memory mirror of a .llev file: plain data, no engine resources resolved yet. Every record keeps the file's legacy
- * units (metres, Y up); ApplyLevelDocument and BuildLevelDocument convert with FLegacyCoordinateConversion.
+ * values (metres, Y up, right-handed, legacy angles); ApplyLevelDocument and BuildLevelDocument convert with
+ * FLegacyCoordinateConversion.
  */
 struct ENGINE_API FLevelDocument
 {

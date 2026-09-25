@@ -109,6 +109,6 @@ bool LoadStaticMeshFromFbx(const FString& Path, FMeshData& Out)
 		return false;
 	}
 
-	ComputeTangents(Out);
+	ComputeTangents(Out, EMeshDataBasis::LegacyYUp);
 	return true;
 }

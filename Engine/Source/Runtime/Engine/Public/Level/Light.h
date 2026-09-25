@@ -1,7 +1,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "LegacyCoordinateConversion.h"
 
 constexpr int32 MaxDirectionalLights = 2;
 constexpr int32 MaxPointLights = 4;
@@ -12,11 +11,11 @@ constexpr float DefaultLightSourceAngleDegrees = 0.5357f;
 /** Default point light attenuation radius (8 m), in world units (cm). */
 constexpr float DefaultPointLightRange = 800.0f;
 
-/** UE-like FDirectionalLight: the transform drives the aim; no raw direction field. */
+/** UE-like FDirectionalLight: the transform drives the aim (the light travels along its forward axis, +X). */
 struct ENGINE_API FDirectionalLight
 {
-	/** The default sun: legacy pitch 60.3, yaw 142.1 degrees. */
-	FTransform Transform{FLegacyCoordinateConversion::ConvertLightRotation(60.3f, 142.1f)};
+	/** The default sun (the legacy pitch 60.3, yaw 142.1 degrees): down 60.3 degrees, toward yaw -52.1. */
+	FTransform Transform{FRotator(-60.3f, -52.1f, 0.0f)};
 	FVector LightColor = FVector(1.0f, 1.0f, 1.0f); // linear RGB
 	float Intensity = 1.0f;
 	bool bCastShadows = true;
@@ -24,7 +23,7 @@ struct ENGINE_API FDirectionalLight
 
 	[[nodiscard]] FVector GetDirection() const
 	{
-		const FVector Direction = Transform.GetRotation().RotateVector(FLegacyCoordinateConversion::LightForward());
+		const FVector Direction = Transform.GetRotation().GetForwardVector();
 		return Direction / Direction.Size();
 	}
 };
@@ -32,7 +31,8 @@ struct ENGINE_API FDirectionalLight
 /** UE-like FPointLight: location from the transform; attenuation Range. */
 struct ENGINE_API FPointLight
 {
-	FTransform Transform{FLegacyCoordinateConversion::ConvertPosition(FVector(0.0f, 2.0f, 0.0f))};
+	/** 2 m up. */
+	FTransform Transform{FVector(0.0f, 0.0f, 200.0f)};
 	FVector LightColor = FVector(1.0f, 1.0f, 1.0f); // linear RGB
 	float Intensity = 1.0f;
 	float Range = DefaultPointLightRange;

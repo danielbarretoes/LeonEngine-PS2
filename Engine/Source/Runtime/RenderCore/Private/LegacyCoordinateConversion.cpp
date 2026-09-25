@@ -1,7 +1,21 @@
 #include "LegacyCoordinateConversion.h"
 
+#include "MeshData.h"
+
 namespace
 {
+	/** The change of basis without the unit scale: legacy Y and Z swap (its own inverse). */
+	FVector SwapYZ(const FVector& V)
+	{
+		return FVector(V.X, V.Z, V.Y);
+	}
+
+	/** A yaw about world +Z (UE: X toward Y), in degrees. */
+	FQuat WorldYawQuat(float Degrees)
+	{
+		return FQuat(FVector(0.0f, 0.0f, 1.0f), FMath::DegreesToRadians(Degrees));
+	}
+
 	/** Keeps a scale component at least 1e-4 away from zero, as the legacy model matrix did. */
 	float SanitizeScaleComponent(float Value)
 	{
@@ -36,17 +50,22 @@ namespace
 
 FVector FLegacyCoordinateConversion::ConvertPosition(const FVector& Legacy)
 {
-	return Legacy * UnitsPerMetre;
+	return SwapYZ(Legacy) * UnitsPerMetre;
 }
 
 FVector FLegacyCoordinateConversion::ConvertDirection(const FVector& Legacy)
 {
-	return Legacy;
+	return SwapYZ(Legacy);
+}
+
+FVector4 FLegacyCoordinateConversion::ConvertTangent(const FVector4& Legacy)
+{
+	return FVector4(Legacy.X, Legacy.Z, Legacy.Y, -Legacy.W);
 }
 
 FVector FLegacyCoordinateConversion::ConvertScale(const FVector& Legacy)
 {
-	return Legacy;
+	return SwapYZ(Legacy);
 }
 
 float FLegacyCoordinateConversion::ConvertLength(float Metres)
@@ -56,22 +75,34 @@ float FLegacyCoordinateConversion::ConvertLength(float Metres)
 
 FVector FLegacyCoordinateConversion::ConvertExtent(const FVector& Legacy)
 {
-	return Legacy * UnitsPerMetre;
+	return SwapYZ(Legacy) * UnitsPerMetre;
+}
+
+FQuat FLegacyCoordinateConversion::ConvertRotation(const FQuat& Legacy)
+{
+	// The swap S is its own inverse: the world rotation is S * R * S, the same angle about S * axis turned the other
+	// way (det S = -1).
+	return FQuat(-Legacy.X, -Legacy.Z, -Legacy.Y, Legacy.W);
 }
 
 FVector FLegacyCoordinateConversion::ToLegacyPosition(const FVector& World)
 {
-	return World / UnitsPerMetre;
+	return SwapYZ(World) / UnitsPerMetre;
 }
 
 FVector FLegacyCoordinateConversion::ToLegacyDirection(const FVector& World)
 {
-	return World;
+	return SwapYZ(World);
+}
+
+FVector4 FLegacyCoordinateConversion::ToLegacyTangent(const FVector4& World)
+{
+	return FVector4(World.X, World.Z, World.Y, -World.W);
 }
 
 FVector FLegacyCoordinateConversion::ToLegacyScale(const FVector& World)
 {
-	return World;
+	return SwapYZ(World);
 }
 
 float FLegacyCoordinateConversion::ToLegacyLength(float WorldLength)
@@ -81,22 +112,28 @@ float FLegacyCoordinateConversion::ToLegacyLength(float WorldLength)
 
 FVector FLegacyCoordinateConversion::ToLegacyExtent(const FVector& World)
 {
-	return World / UnitsPerMetre;
+	return SwapYZ(World) / UnitsPerMetre;
+}
+
+FQuat FLegacyCoordinateConversion::ToLegacyRotation(const FQuat& World)
+{
+	return FQuat(-World.X, -World.Z, -World.Y, World.W);
 }
 
 FQuat FLegacyCoordinateConversion::ConvertEulerXYZ(const FVector& Degrees)
 {
+	// Legacy axes: the quaternion is built in the legacy basis, then converted.
 	const FQuat RotX(FVector(1.0f, 0.0f, 0.0f), FMath::DegreesToRadians(Degrees.X));
 	const FQuat RotY(FVector(0.0f, 1.0f, 0.0f), FMath::DegreesToRadians(Degrees.Y));
 	const FQuat RotZ(FVector(0.0f, 0.0f, 1.0f), FMath::DegreesToRadians(Degrees.Z));
-	return RotX * RotY * RotZ;
+	return ConvertRotation(RotX * RotY * RotZ);
 }
 
 FVector FLegacyCoordinateConversion::ToLegacyEulerXYZ(const FQuat& Rotation)
 {
-	// R = Rx(A) * Ry(B) * Rz(C) acting on column vectors. FMatrix row I is the image of axis I, so R[Row][Col] is
-	// M.M[Col][Row].
-	const FMatrix M = FQuatRotationMatrix(Rotation);
+	// R = Rx(A) * Ry(B) * Rz(C) acting on legacy column vectors. FMatrix row I is the image of axis I, so R[Row][Col]
+	// is M.M[Col][Row].
+	const FMatrix M = FQuatRotationMatrix(ToLegacyRotation(Rotation));
 	const float R00 = M.M[0][0];
 	const float R01 = M.M[1][0];
 	const float R02 = M.M[2][0];
@@ -133,25 +170,86 @@ FTransform FLegacyCoordinateConversion::ConvertTransform(
 	return FTransform(ConvertEulerXYZ(EulerXYZDegrees), ConvertPosition(Position), ConvertScale(SafeScale));
 }
 
+FQuat FLegacyCoordinateConversion::ConvertActorEulerXYZ(const FVector& Degrees)
+{
+	// The local yaw of 90 degrees turns the actor's forward (+X) onto the converted legacy forward (+Y).
+	return ConvertEulerXYZ(Degrees) * WorldYawQuat(90.0f);
+}
+
+FVector FLegacyCoordinateConversion::ToLegacyActorEulerXYZ(const FQuat& Rotation)
+{
+	return ToLegacyEulerXYZ(Rotation * WorldYawQuat(-90.0f));
+}
+
+float FLegacyCoordinateConversion::ConvertActorYaw(float LegacyYawDegrees)
+{
+	return 90.0f - LegacyYawDegrees;
+}
+
+float FLegacyCoordinateConversion::ToLegacyActorYaw(float WorldYawDegrees)
+{
+	return NormalizeDegrees(90.0f - WorldYawDegrees);
+}
+
+float FLegacyCoordinateConversion::ConvertYawRate(float LegacyDegreesPerSecond)
+{
+	return -LegacyDegreesPerSecond;
+}
+
+float FLegacyCoordinateConversion::ToLegacyYawRate(float WorldDegreesPerSecond)
+{
+	return -WorldDegreesPerSecond;
+}
+
+FRotator FLegacyCoordinateConversion::ConvertOrbitViewRotation(float LegacyYawDegrees, float LegacyPitchDegrees)
+{
+	// The legacy eye offset converts to FRotator(P, Y, 0).Vector(); the view looks back along it.
+	return FRotator(-LegacyPitchDegrees, LegacyYawDegrees + 180.0f, 0.0f);
+}
+
+void FLegacyCoordinateConversion::ToLegacyOrbitRotation(
+	const FRotator& ViewRotation, float& OutYawDegrees, float& OutPitchDegrees)
+{
+	OutYawDegrees = NormalizeDegrees(ViewRotation.Yaw - 180.0f);
+	OutPitchDegrees = -ViewRotation.Pitch;
+}
+
+FRotator FLegacyCoordinateConversion::ConvertFreeLookRotation(float LegacyYawDegrees, float LegacyPitchDegrees)
+{
+	// The legacy forward converts to FRotator(P, Y, 0).Vector().
+	return FRotator(LegacyPitchDegrees, LegacyYawDegrees, 0.0f);
+}
+
+void FLegacyCoordinateConversion::ToLegacyFreeLookRotation(
+	const FRotator& ViewRotation, float& OutYawDegrees, float& OutPitchDegrees)
+{
+	OutYawDegrees = NormalizeDegrees(ViewRotation.Yaw);
+	OutPitchDegrees = ViewRotation.Pitch;
+}
+
 FQuat FLegacyCoordinateConversion::ConvertLightRotation(float PitchDegrees, float YawDegrees)
 {
-	const FQuat Yaw(FVector(0.0f, 1.0f, 0.0f), FMath::DegreesToRadians(YawDegrees));
-	const FQuat Pitch(FVector(1.0f, 0.0f, 0.0f), FMath::DegreesToRadians(PitchDegrees));
-	return Yaw * Pitch;
+	// Converted, the legacy direction is (cos P sin Y, cos P cos Y, -sin P): the forward of FRotator(-P, 90 - Y, 0).
+	return FRotator(-PitchDegrees, 90.0f - YawDegrees, 0.0f).Quaternion();
 }
 
 void FLegacyCoordinateConversion::ToLegacyLightRotation(
 	const FQuat& Rotation, float& OutPitchDegrees, float& OutYawDegrees)
 {
 	// Legacy light direction: (sin Yaw cos Pitch, -sin Pitch, cos Yaw cos Pitch).
-	const FVector Direction = ToLegacyDirection(Rotation.RotateVector(LightForward()));
+	const FVector Direction = ToLegacyDirection(Rotation.GetForwardVector());
 	const float Length = Direction.Size();
 	const FVector Unit = Length > 1.0e-8f ? (Direction / Length) : FVector(0.0f, -1.0f, 0.0f);
 	OutPitchDegrees = NormalizeDegrees(FMath::RadiansToDegrees(FMath::Asin(FMath::Clamp(-Unit.Y, -1.0f, 1.0f))));
 	OutYawDegrees = NormalizeDegrees(Atan2Degrees(Unit.X, Unit.Z));
 }
 
-FVector FLegacyCoordinateConversion::LightForward()
+void FLegacyCoordinateConversion::ConvertMeshData(FMeshData& Data)
 {
-	return ConvertDirection(FVector(0.0f, 0.0f, 1.0f));
+	for (FVertex& Vertex : Data.Vertices)
+	{
+		Vertex.Position = ConvertPosition(Vertex.Position);
+		Vertex.Normal = ConvertDirection(Vertex.Normal);
+		Vertex.Tangent = ConvertTangent(Vertex.Tangent);
+	}
 }

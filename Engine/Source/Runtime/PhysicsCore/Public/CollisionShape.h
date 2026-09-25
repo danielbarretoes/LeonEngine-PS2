@@ -15,8 +15,8 @@ namespace ECollisionShape
 } // namespace ECollisionShape
 
 /**
- * A query shape (UE: FCollisionShape). Leon's capsule stands on its feet in the legacy Y-up world: the
- * character capsule spans [Feet, Feet + 2 * HalfHeight] and the XZ disc of the given radius (until P7).
+ * A query shape (UE: FCollisionShape). Leon's capsule stands on its feet (UE centres it): the character capsule spans
+ * [Feet.Z, Feet.Z + 2 * HalfHeight] over the XY disc of the given radius.
  */
 struct PHYSICSCORE_API FCollisionShape
 {
@@ -155,24 +155,27 @@ void HalfExtentsFromScale(const FVector& Scale, float& HalfX, float& HalfY, floa
 /** Mass (kg) of a box from its half extents in cm: its volume in cubic metres, at least 0.08. */
 [[nodiscard]] float MassFromHalfExtents(float HalfX, float HalfY, float HalfZ);
 
-void ClampPositionXZ(FVector& Pos, float Bounds);
+/** Clamps the horizontal position (X, Y) to [-Bounds, Bounds]. */
+void ClampPositionXY(FVector& Pos, float Bounds);
 
-[[nodiscard]] bool XzDiscOverlapsAabb(
-	float X, float Z, float InRadius, float Cx, float Cz, float Hx, float Hz, float Inflate);
+/** Disc (X, Y, InRadius) vs the XY footprint of a box (centre Cx, Cy, half extents Hx, Hy grown by Inflate). */
+[[nodiscard]] bool XYDiscOverlapsAabb(
+	float X, float Y, float InRadius, float Cx, float Cy, float Hx, float Hy, float Inflate);
 
-/** Capsule (XZ disc) vs AABB: outward normal (cube to capsule) and penetration. */
-[[nodiscard]] bool CapsuleAabbMtv(float Px, float Pz, float InRadius, float Cx, float Cz, float Hx, float Hz,
+/** Capsule (XY disc) vs AABB: outward normal (cube to capsule) and penetration. */
+[[nodiscard]] bool CapsuleAabbMtv(float Px, float Py, float InRadius, float Cx, float Cy, float Hx, float Hy,
 	FVector2D& OutNormal, float& OutPenetration);
 
-[[nodiscard]] bool AabbOverlapY(float Ay, float Ahy, float By, float Bhy);
+/** Vertical overlap of two boxes (centres and half heights on Z). */
+[[nodiscard]] bool AabbOverlapZ(float Az, float Ahz, float Bz, float Bhz);
 
-/** Separate two XZ AABBs. MoveA / MoveB are MTV shares (static: 0). */
-[[nodiscard]] bool SeparateAabbXZ(
-	FVector& A, float Ahx, float Ahz, FVector& B, float Bhx, float Bhz, float MoveA, float MoveB);
+/** Separate two XY AABBs. MoveA / MoveB are MTV shares (static: 0). */
+[[nodiscard]] bool SeparateAabbXY(
+	FVector& A, float Ahx, float Ahy, FVector& B, float Bhx, float Bhy, float MoveA, float MoveB);
 
 /**
- * Separate two AABBs on the minimum-penetration axis (X, Y, or Z). OutNormal is the unit MTV direction from B to A
- * when not null. MoveA / MoveB are shares (static: 0).
+ * Separate two AABBs on the minimum-penetration axis; on a tie X wins, then Z (vertical), then Y. OutNormal is the unit
+ * MTV direction from B to A when not null. MoveA / MoveB are shares (static: 0).
  */
 [[nodiscard]] bool SeparateAabb(FVector& A, const FVector& AHalfExtents, FVector& B, const FVector& BHalfExtents,
 	float MoveA, float MoveB, FVector* OutNormal = nullptr);

@@ -138,13 +138,13 @@ bool FFrameworkHardeningNavAgentRadiusDilationTest::RunTest(const FString& Param
 	FBodyInstance Floor{};
 	Floor.Type = EBodyType::Static;
 	Floor.Position = FVector(0.0f, 0.0f, 0.0f);
-	Floor.HalfExtents = FVector(2000.0f, 50.0f, 2000.0f);
+	Floor.HalfExtents = FVector(2000.0f, 2000.0f, 50.0f);
 	Physics.GetBodies().Add(Floor);
 
 	FBodyInstance Pillar{};
 	Pillar.Type = EBodyType::Static;
-	Pillar.Position = FVector(0.0f, 100.0f, 0.0f);
-	Pillar.HalfExtents = FVector(40.0f, 150.0f, 40.0f);
+	Pillar.Position = FVector(0.0f, 0.0f, 100.0f);
+	Pillar.HalfExtents = FVector(40.0f, 40.0f, 150.0f);
 	Physics.GetBodies().Add(Pillar);
 
 	UNavigationSystem Narrow;

@@ -316,6 +316,19 @@ namespace
 		Record.Scale = FLegacyCoordinateConversion::ToLegacyScale(Transform.GetScale3D());
 	}
 
+	/** Player starts and AI spawn points face their +X in the world; the legacy records faced their +Z. */
+	[[nodiscard]] bool IsActorLikeRecord(ELevelActorClass ActorClass)
+	{
+		return ActorClass == ELevelActorClass::PlayerStart || ActorClass == ELevelActorClass::AISpawnPoint;
+	}
+
+	/** SetLegacyTransform for an actor-like record (FLegacyCoordinateConversion::ToLegacyActorEulerXYZ). */
+	void SetLegacyActorTransform(FLevelActorRecord& Record, const FTransform& Transform)
+	{
+		SetLegacyTransform(Record, Transform);
+		Record.RotationDegrees = FLegacyCoordinateConversion::ToLegacyActorEulerXYZ(Transform.GetRotation());
+	}
+
 	/** Writes a light transform into a record's legacy position and (pitch, yaw, 0) degrees. */
 	void SetLegacyLightTransform(FLevelLightRecord& Record, const FTransform& Transform)
 	{
@@ -393,14 +406,23 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 	Doc.Camera.Target = FLegacyCoordinateConversion::ToLegacyPosition(InCamera.GetTarget());
 	Doc.Camera.Eye = FLegacyCoordinateConversion::ToLegacyPosition(InCamera.EyeLocation());
 	Doc.Camera.Distance = FLegacyCoordinateConversion::ToLegacyLength(InCamera.GetDistance());
-	Doc.Camera.Yaw = InCamera.GetYawDegrees();
-	Doc.Camera.Pitch = InCamera.GetPitchDegrees();
+	// Legacy yaw / pitch meant the eye's offset from the target in Orbit and the look direction in FreeLook.
+	if (InCamera.GetMode() == ECameraMode::FreeLook)
+	{
+		FLegacyCoordinateConversion::ToLegacyFreeLookRotation(
+			InCamera.GetViewRotation(), Doc.Camera.Yaw, Doc.Camera.Pitch);
+	}
+	else
+	{
+		FLegacyCoordinateConversion::ToLegacyOrbitRotation(
+			InCamera.GetViewRotation(), Doc.Camera.Yaw, Doc.Camera.Pitch);
+	}
 
 	for (const FPlayerStart& Start : Level.GetPlayerStarts())
 	{
 		FLevelActorRecord Record;
 		Record.ActorClass = ELevelActorClass::PlayerStart;
-		SetLegacyTransform(Record, Start.Transform);
+		SetLegacyActorTransform(Record, Start.Transform);
 		Record.bEnableGravity = false;
 		Doc.Actors.Add(MoveTemp(Record));
 	}
@@ -409,7 +431,7 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 	{
 		FLevelActorRecord Record;
 		Record.ActorClass = ELevelActorClass::AISpawnPoint;
-		SetLegacyTransform(Record, Spawn.Transform);
+		SetLegacyActorTransform(Record, Spawn.Transform);
 		Record.Tag = Spawn.Tag;
 		Record.bEnableGravity = false;
 		Doc.Actors.Add(MoveTemp(Record));
@@ -471,10 +493,10 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 		Record.SphereRings = LocalMesh.SphereRings;
 
 		Record.bHasSpinYaw = LocalMesh.SpinYaw != 0.0f;
-		Record.SpinYaw = LocalMesh.SpinYaw;
+		Record.SpinYaw = Record.bHasSpinYaw ? FLegacyCoordinateConversion::ToLegacyYawRate(LocalMesh.SpinYaw) : 0.0f;
 
 		Record.bHasBob = LocalMesh.bHasBob;
-		Record.BobBaseY = FLegacyCoordinateConversion::ToLegacyLength(LocalMesh.BobBaseY);
+		Record.BobBaseY = FLegacyCoordinateConversion::ToLegacyLength(LocalMesh.BobBaseZ);
 		Record.BobAmplitude = FLegacyCoordinateConversion::ToLegacyLength(LocalMesh.BobAmplitude);
 		Record.BobSpeed = LocalMesh.BobSpeed;
 
@@ -986,8 +1008,12 @@ bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FS
 	int32 FailedMeshes = 0;
 	for (const FLevelActorRecord& Record : Doc.Actors)
 	{
-		const FTransform Transform =
+		FTransform Transform =
 			FLegacyCoordinateConversion::ConvertTransform(Record.Position, Record.RotationDegrees, Record.Scale);
+		if (IsActorLikeRecord(Record.ActorClass))
+		{
+			Transform.SetRotation(FLegacyCoordinateConversion::ConvertActorEulerXYZ(Record.RotationDegrees));
+		}
 
 		if (Record.ActorClass == ELevelActorClass::PlayerStart)
 		{
@@ -1067,7 +1093,7 @@ bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FS
 		Actor.bEnableGravity = Record.bEnableGravity;
 		Actor.bHidden = Record.bHidden;
 		Actor.Mobility = Record.Mobility;
-		Actor.SpinYaw = Record.bHasSpinYaw ? Record.SpinYaw : 0.0f;
+		Actor.SpinYaw = Record.bHasSpinYaw ? FLegacyCoordinateConversion::ConvertYawRate(Record.SpinYaw) : 0.0f;
 		Actor.MaterialPath = Record.MaterialPath;
 
 		if (!Record.MaterialPath.IsEmpty())
@@ -1106,7 +1132,7 @@ bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FS
 		{
 			UStaticMeshComponent& Live = Staged.GetStaticMeshes()[ActorIndex];
 			Live.bHasBob = true;
-			Live.BobBaseY = FLegacyCoordinateConversion::ConvertLength(Record.BobBaseY);
+			Live.BobBaseZ = FLegacyCoordinateConversion::ConvertLength(Record.BobBaseY);
 			Live.BobAmplitude = FLegacyCoordinateConversion::ConvertLength(Record.BobAmplitude);
 			Live.BobSpeed = Record.BobSpeed;
 		}
@@ -1136,7 +1162,10 @@ bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FS
 	UCameraComponent& LocalCamera = Engine.GetCamera();
 	LocalCamera.SetTarget(FLegacyCoordinateConversion::ConvertPosition(Doc.Camera.Target));
 	LocalCamera.SetDistance(FLegacyCoordinateConversion::ConvertLength(Doc.Camera.Distance));
-	LocalCamera.SetYawPitch(Doc.Camera.Yaw, Doc.Camera.Pitch);
+	// Legacy yaw / pitch meant the eye's offset from the target in Orbit and the look direction in FreeLook.
+	LocalCamera.SetViewRotation(Doc.Camera.Mode == ECameraMode::FreeLook
+			? FLegacyCoordinateConversion::ConvertFreeLookRotation(Doc.Camera.Yaw, Doc.Camera.Pitch)
+			: FLegacyCoordinateConversion::ConvertOrbitViewRotation(Doc.Camera.Yaw, Doc.Camera.Pitch));
 	LocalCamera.SetEyeLocation(FLegacyCoordinateConversion::ConvertPosition(Doc.Camera.Eye));
 	LocalCamera.SetMode(Doc.Camera.Mode);
 

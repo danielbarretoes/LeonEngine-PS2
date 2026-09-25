@@ -37,7 +37,8 @@ struct PHYSICSCORE_API FBodyInstance
 	FVector Position = FVector::ZeroVector;
 	/** cm */
 	FVector HalfExtents = FVector(50.0f);
-	/** Horizontal velocity in the legacy Y-up world (X, Z), until P7. */
-	FVector2D VelXz = FVector2D::ZeroVector;
-	float VelocityY = 0.0f;
+	/** Horizontal velocity (X, Y), cm/s. */
+	FVector2D VelXY = FVector2D::ZeroVector;
+	/** Vertical velocity (Z), cm/s. */
+	float VelocityZ = 0.0f;
 };

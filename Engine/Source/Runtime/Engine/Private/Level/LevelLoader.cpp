@@ -29,15 +29,15 @@ void ApplyFitHeight(UStaticMeshComponent& Object, float FitHeight)
 	const FVector Mn = Object.Mesh->GetLocalMin();
 	const FVector Mx = Object.Mesh->GetLocalMax();
 	const FVector Extents = Mx - Mn;
-	/** 0.1 cm: keeps a flat mesh from dividing by zero. */
-	const float Height = FMath::Max(Extents.Y, 0.1f);
+	/** 0.1 cm: keeps a flat mesh from dividing by zero. The height is the Z extent. */
+	const float Height = FMath::Max(Extents.Z, 0.1f);
 	const float Scale = FitHeight / Height;
 	const FVector Center = (Mn + Mx) * 0.5f;
 
 	Object.Transform.SetScale3D(FVector(Scale, Scale, Scale));
 	/** cm above the floor, against z-fighting with the ground. */
 	constexpr float GroundEpsilon = 0.8f;
-	const FVector Grounded = FVector((-Center.X) * Scale, ((-Mn.Y) * Scale) + GroundEpsilon, (-Center.Z) * Scale);
+	const FVector Grounded = FVector((-Center.X) * Scale, (-Center.Y) * Scale, ((-Mn.Z) * Scale) + GroundEpsilon);
 	Object.Transform.SetLocation(Grounded + LocationOffset);
 }
 

@@ -7,7 +7,7 @@
 
 /**
  * Engine basic shapes (UE-like /Engine/BasicShapes: Cube, Sphere, Plane).
- * Unit meshes; the size comes from the transform scale. The plane lies on XZ (Y = 0).
+ * Unit meshes; the size comes from the transform scale. The plane lies on XY (Z = 0), facing +Z.
  * UV tiling lives on FMaterial::UvScale, not on the shape.
  */
 enum class EBasicShape
@@ -34,7 +34,7 @@ struct ENGINE_API FBasicShape
 		const FTransform& InTransform = FTransform::Identity, FMaterial InMaterial = {}, bool bHasMaterial = false);
 	[[nodiscard]] static FBasicShape Sphere(const FTransform& InTransform = FTransform::Identity,
 		FMaterial InMaterial = {}, bool bHasMaterial = false, int32 Segments = 24, int32 Rings = 16);
-	/** Size sets the uniform XZ scale (UE-like ground plane extent). */
+	/** Size sets the uniform XY scale (UE-like ground plane extent). */
 	[[nodiscard]] static FBasicShape Plane(float Size = 1.0f, const FTransform& InTransform = FTransform::Identity,
 		FMaterial InMaterial = {}, bool bHasMaterial = false);
 

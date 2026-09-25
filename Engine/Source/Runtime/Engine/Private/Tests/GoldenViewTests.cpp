@@ -76,13 +76,13 @@ namespace
 		}
 	}
 
-	/** An orbit camera around a legacy target. */
+	/** An orbit camera around a legacy target, with legacy orbit angles and distance. */
 	void SetGoldenOrbit(UCameraComponent& Camera, const FVector& LegacyTarget, float Yaw, float Pitch, float Distance)
 	{
 		SetGoldenPerspective(Camera);
 		Camera.SetMode(ECameraMode::Orbit);
 		Camera.SetTarget(LegacyGolden::ToWorldPosition(LegacyTarget));
-		Camera.SetYawPitch(Yaw, Pitch);
+		Camera.SetViewRotation(FLegacyCoordinateConversion::ConvertOrbitViewRotation(Yaw, Pitch));
 		Camera.SetDistance(LegacyGolden::ToWorldLength(Distance));
 	}
 
@@ -94,7 +94,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGoldenSpringArmTest, "System.Engine.Golden.Spr
 bool FGoldenSpringArmTest::RunTest(const FString& Parameters)
 {
 	// Spring arm without lag for four boom orientations, first in open space, then with a box 2 m along the boom:
-	// the camera target, eye and probed arm length.
+	// the camera target, eye and probed arm length. The boom angles are the yaw (from +X toward the second horizontal
+	// axis) and the elevation of the target-to-eye arm; legacy (X, Z) is the world's (X, Y) in the same order, so the
+	// legacy angles are the world ones.
 	constexpr float Orientations[4][2] = {{0.0f, 15.0f}, {90.0f, 30.0f}, {200.0f, -10.0f}, {315.0f, 50.0f}};
 	const FVector ActorLocation = LegacyGolden::ToWorldPosition(FVector(1.0f, 0.0f, -2.0f));
 
@@ -161,13 +163,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGoldenYawRelativeMoveTest, "System.Engine.Gold
 
 bool FGoldenYawRelativeMoveTest::RunTest(const FString& Parameters)
 {
-	// The ground-plane move direction of forward and of forward-right input for six camera yaws.
+	// The ground-plane move direction of forward and of forward-right input for six legacy orbit camera yaws (the view
+	// yaw of an orbit camera is its legacy yaw + 180).
 	constexpr float Yaws[6] = {0.0f, 45.0f, 90.0f, 180.0f, -30.0f, 270.0f};
 	TArray<FVector> Moves;
 	for (const float Yaw : Yaws)
 	{
-		Moves.Add(YawRelativeMoveXz(Yaw, FMoveAxes2D{0.0f, 1.0f}));
-		Moves.Add(YawRelativeMoveXz(Yaw, FMoveAxes2D{1.0f, 1.0f}));
+		const float ViewYaw = FLegacyCoordinateConversion::ConvertOrbitViewRotation(Yaw, 0.0f).Yaw;
+		Moves.Add(YawRelativeMove(ViewYaw, FMoveAxes2D{0.0f, 1.0f}));
+		Moves.Add(YawRelativeMove(ViewYaw, FMoveAxes2D{1.0f, 1.0f}));
 	}
 
 	static const FVector ExpectedMoves[12] = {FVector(-1.0f, 0.0f, -0.0f), FVector(-0.707106769f, 0.0f, -0.707106769f),
@@ -240,7 +244,7 @@ bool FGoldenFreeLookCameraNdcTest::RunTest(const FString& Parameters)
 		SetGoldenPerspective(Camera);
 		Camera.SetMode(ECameraMode::FreeLook);
 		Camera.SetEyeLocation(LegacyGolden::ToWorldPosition(FVector(Setting[0], Setting[1], Setting[2])));
-		Camera.SetYawPitch(Setting[3], Setting[4]);
+		Camera.SetViewRotation(FLegacyCoordinateConversion::ConvertFreeLookRotation(Setting[3], Setting[4]));
 		Forwards.Add(Camera.ForwardVector());
 		AppendGoldenNdc(Ndc, GoldenViewProjection(Camera), Points);
 	}

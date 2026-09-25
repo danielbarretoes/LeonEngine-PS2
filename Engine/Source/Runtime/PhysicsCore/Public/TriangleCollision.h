@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 
 /**
- * Baked world-space triangle mesh for static ComplexAsSimple lite (Arcade traces / QuerySupportY; Jolt MeshShape on
+ * Baked world-space triangle mesh for static ComplexAsSimple lite (Arcade traces / QuerySupportZ; Jolt MeshShape on
  * rebuild).
  */
 struct PHYSICSCORE_API FTriangleMeshCollision

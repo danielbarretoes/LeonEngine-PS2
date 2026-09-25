@@ -2,15 +2,13 @@
 
 #include "Components/ActorComponent.h"
 #include "CoreMinimal.h"
-#include "LegacyCoordinateConversion.h"
 
 class AActor;
 
 /**
  * Unreal-like USceneComponent: UActorComponent + relative TRS + parent/child attach tree.
- * World transform: root uses owning Actor location/yaw + relative; children compose relative, then parent.
- * The Relative* fields still hold legacy values (XYZ Euler degrees; gameplay adds legacy yaw to RelativeRotation.Y);
- * GetRelativeTransform converts them with FLegacyCoordinateConversion.
+ * World transform: the relative transform, then the parent's (a component without a parent uses its owning Actor's
+ * location and rotation). Relative* are UE values: world units (cm), an FRotator and a Scale3D.
  */
 class ENGINE_API USceneComponent : public UActorComponent
 {
@@ -24,7 +22,7 @@ public:
 	USceneComponent& operator=(USceneComponent&&) = delete;
 
 	FVector RelativeLocation = FVector::ZeroVector;
-	FVector RelativeRotation = FVector::ZeroVector; // legacy XYZ Euler, degrees
+	FRotator RelativeRotation = FRotator::ZeroRotator;
 	FVector RelativeScale3D = FVector::OneVector;
 
 	/** Attaches under InParent. Returns false if the parent is null, this, or would create a cycle. */

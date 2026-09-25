@@ -87,7 +87,7 @@ public:
 	/** Bind skeleton/blendspace pointers and call UAnimInstance::NativeInitializeAnimation. */
 	void BindSequencesToAnimInstance();
 
-	/** Scales the mesh to FitHeight (world units, cm) and stands it on the component origin. */
+	/** Scales the mesh to FitHeight (world units, cm; its Z extent) and stands it on the component origin. */
 	void ApplyFitHeight(float FitHeight);
 
 	void ClearAttachments();

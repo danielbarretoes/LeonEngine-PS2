@@ -31,11 +31,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelDirectionalLightGetDirectionMatchesTransf
 
 bool FLevelDirectionalLightGetDirectionMatchesTransformTest::RunTest(const FString& Parameters)
 {
-	// A directional light pitched down by its transform points downward.
+	// A directional light pitched down by its transform points downward, along its forward axis.
 	FDirectionalLight Light;
-	Light.Transform.SetRotation(FLegacyCoordinateConversion::ConvertLightRotation(30.0f, 0.0f));
+	Light.Transform.SetRotation(FRotator(-30.0f, 45.0f, 0.0f).Quaternion());
 	const FVector Dir = Light.GetDirection();
-	TestTrue("Points down", Dir.Y < 0.0f);
+	TestTrue("Points down", Dir.Z < 0.0f);
+	TestTrue("Forward axis", Dir.Equals(FRotator(-30.0f, 45.0f, 0.0f).Vector(), 1.0e-5f));
+	// The default sun is the legacy pitch 60.3, yaw 142.1.
+	TestTrue("Default sun",
+		FDirectionalLight().GetDirection().Equals(
+			FLegacyCoordinateConversion::ConvertLightRotation(60.3f, 142.1f).GetForwardVector(), 1.0e-5f));
 	return true;
 }
 
@@ -76,13 +81,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelBasicShapeFactoriesSetTypeAndPlaneScaleTe
 
 bool FLevelBasicShapeFactoriesSetTypeAndPlaneScaleTest::RunTest(const FString& Parameters)
 {
-	// The factories set the shape type, and the plane size becomes its XZ scale.
+	// The factories set the shape type, and the plane size becomes its XY scale.
 	const FBasicShape Cube = FBasicShape::Cube();
 	TestTrue("Cube type", Cube.Type == EBasicShape::Cube);
 	const FBasicShape Plane = FBasicShape::Plane(4.0f);
 	TestTrue("Plane type", Plane.Type == EBasicShape::Plane);
 	TestEqual("Plane scale X", Plane.Transform.GetScale3D().X, 4.0f, 1.0e-5f);
-	TestEqual("Plane scale Z", Plane.Transform.GetScale3D().Z, 4.0f, 1.0e-5f);
+	TestEqual("Plane scale Y", Plane.Transform.GetScale3D().Y, 4.0f, 1.0e-5f);
+	TestEqual("Plane scale Z", Plane.Transform.GetScale3D().Z, 1.0f, 1.0e-5f);
 	return true;
 }
 

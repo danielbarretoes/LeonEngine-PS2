@@ -16,14 +16,20 @@ namespace
 	}
 
 	/**
-	 * miniaudio's distance attenuation is tuned for metres; the engine world is in centimetres. Locations are scaled
-	 * at this boundary (directions are unitless).
+	 * miniaudio works in a right-handed, Y-up space and its distance attenuation is tuned for metres; the engine world
+	 * is left-handed, Z up, in centimetres. At this boundary Y and Z swap (which keeps the physical scene, so left and
+	 * right stay where they are) and locations scale by 0.01 (directions only swap).
 	 */
 	constexpr float AudioMetresPerUnit = 0.01f;
 
+	[[nodiscard]] FVector ToAudioDirection(const FVector& WorldDirection)
+	{
+		return FVector(WorldDirection.X, WorldDirection.Z, WorldDirection.Y);
+	}
+
 	[[nodiscard]] FVector ToAudioMetres(const FVector& WorldLocation)
 	{
-		return WorldLocation * AudioMetresPerUnit;
+		return ToAudioDirection(WorldLocation) * AudioMetresPerUnit;
 	}
 
 	/** Legacy content path of a sound; empty for an empty name. */
@@ -283,9 +289,11 @@ void FAudioDevice::SetListener(const FVector& Location, const FVector& Forward, 
 		return;
 	}
 	const FVector Metres = ToAudioMetres(Location);
+	const FVector AudioForward = ToAudioDirection(Forward);
+	const FVector AudioUp = ToAudioDirection(Up);
 	ma_engine_listener_set_position(&Impl->Engine, 0, Metres.X, Metres.Y, Metres.Z);
-	ma_engine_listener_set_direction(&Impl->Engine, 0, Forward.X, Forward.Y, Forward.Z);
-	ma_engine_listener_set_world_up(&Impl->Engine, 0, Up.X, Up.Y, Up.Z);
+	ma_engine_listener_set_direction(&Impl->Engine, 0, AudioForward.X, AudioForward.Y, AudioForward.Z);
+	ma_engine_listener_set_world_up(&Impl->Engine, 0, AudioUp.X, AudioUp.Y, AudioUp.Z);
 }
 
 void FAudioDevice::PlaySound2D(const TCHAR* AssetRelativePath, float VolumeMultiplier)

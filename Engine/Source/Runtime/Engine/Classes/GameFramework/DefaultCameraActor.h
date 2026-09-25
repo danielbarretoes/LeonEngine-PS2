@@ -5,7 +5,7 @@
 
 /**
  * Default possessed pawn for ADefaultGameMode (Unreal-like DefaultPawn / flying camera).
- * Free-look: LMB aims, WASD flies along look direction, Q/E world vertical.
+ * Free-look: LMB aims, WASD flies along look direction, Q/E world vertical (Z).
  */
 class ENGINE_API ADefaultCameraActor : public APawn
 {

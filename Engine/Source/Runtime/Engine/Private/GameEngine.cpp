@@ -265,7 +265,7 @@ void UGameEngine::TickPlayAudio()
 	}
 	const FVector Eye = Camera.GetCameraLocation();
 	const FVector Forward = Camera.ForwardVector();
-	const FVector Up = FVector(0.0f, 1.0f, 0.0f);
+	const FVector Up = FVector(0.0f, 0.0f, 1.0f);
 	AudioDevice.SetListener(Eye, Forward, Up);
 	AudioDevice.Tick();
 }
@@ -465,10 +465,11 @@ void UGameEngine::HandleInput(float DeltaTime)
 	constexpr float KeyboardOrbitSpeed = 90.0f;
 	if (bKeyboardOrbitEnabled)
 	{
-		// Reuse Move* axes so remapping WASD also remaps keyboard orbit tumble.
+		// Reuse Move* axes so remapping WASD also remaps keyboard orbit tumble: right turns the view right, forward
+		// tilts it up (the eye goes down).
 		const FMoveAxes2D Axes = PlayerInput.GetMoveAxes2D();
 		const float Yaw = Axes.X * KeyboardOrbitSpeed;
-		const float Pitch = -Axes.Z * KeyboardOrbitSpeed;
+		const float Pitch = Axes.Z * KeyboardOrbitSpeed;
 		if (Yaw != 0.0f || Pitch != 0.0f)
 		{
 			Camera.Orbit(Yaw * DeltaTime, Pitch * DeltaTime);
@@ -507,8 +508,9 @@ void UGameEngine::HandleInput(float DeltaTime)
 			}
 			else if (bOrbitMouseEnabled)
 			{
+				// Dragging down tilts the view down (the eye rises over the target).
 				constexpr float OrbitDegreesPerPixel = 0.3f;
-				Camera.Orbit(Dx * OrbitDegreesPerPixel, Dy * OrbitDegreesPerPixel);
+				Camera.Orbit(Dx * OrbitDegreesPerPixel, -Dy * OrbitDegreesPerPixel);
 			}
 		}
 		bMouseLookSampleValid = true;

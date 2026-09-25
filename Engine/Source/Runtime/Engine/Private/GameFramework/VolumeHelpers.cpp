@@ -43,7 +43,7 @@ void ApplyPainVolumeDamage(ACharacter& Ch, const FPainCausingVolume& Vol)
 	{
 		return;
 	}
-	(void)UGameplayStatics::ApplyPointDamage(&Ch, Amount, FVector(0.0f, -1.0f, 0.0f));
+	(void)UGameplayStatics::ApplyPointDamage(&Ch, Amount, FVector(0.0f, 0.0f, -1.0f));
 }
 
 void TickPainCausingVolumes(
@@ -99,7 +99,7 @@ SIZE_T FindBestTriggerVolume(const TArray<FTriggerVolume>& Volumes, const FVecto
 		const float Radius = Vol.InteractRadius > 0.0f ? Vol.InteractRadius : MaxDist;
 		const float Limit = Radius < MaxDist ? Radius : MaxDist;
 		const FVector VolumeLocation = Vol.Transform.GetLocation();
-		const FVector Delta = FVector(Feet.X - VolumeLocation.X, 0.0f, Feet.Z - VolumeLocation.Z);
+		const FVector Delta = FVector(Feet.X - VolumeLocation.X, Feet.Y - VolumeLocation.Y, 0.0f);
 		const float Dist = Delta.Size();
 		if (Dist < BestDist && Dist <= Limit)
 		{

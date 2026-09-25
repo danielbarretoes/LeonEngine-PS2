@@ -12,30 +12,8 @@ namespace
 	constexpr float MinOrthoHeight = 50.0f;
 	constexpr float MaxOrthoHeight = 50000.0f;
 
-	[[nodiscard]] FVector FreeLookForward(float InYawDegrees, float InPitchDegrees)
-	{
-		const float YawRad = FMath::DegreesToRadians(InYawDegrees);
-		const float PitchRad = FMath::DegreesToRadians(InPitchDegrees);
-		return FVector(
-			FMath::Cos(PitchRad) * FMath::Cos(YawRad), FMath::Sin(PitchRad), FMath::Cos(PitchRad) * FMath::Sin(YawRad))
-			.GetUnsafeNormal();
-	}
-
-	/** Stable up for lookAt when looking nearly straight up/down (ortho Top). */
-	[[nodiscard]] FVector FreeLookWorldUp(float InYawDegrees, float InPitchDegrees)
-	{
-		if (InPitchDegrees < -80.0f)
-		{
-			const float YawRad = FMath::DegreesToRadians(InYawDegrees);
-			return FVector(FMath::Cos(YawRad), 0.0f, FMath::Sin(YawRad)).GetUnsafeNormal();
-		}
-		if (InPitchDegrees > 80.0f)
-		{
-			const float YawRad = FMath::DegreesToRadians(InYawDegrees);
-			return FVector(-FMath::Cos(YawRad), 0.0f, -FMath::Sin(YawRad)).GetUnsafeNormal();
-		}
-		return FVector(0.0f, 1.0f, 0.0f);
-	}
+	/** Largest view pitch up or down (degrees). */
+	constexpr float MaxViewPitch = 89.0f;
 
 } // namespace
 
@@ -94,15 +72,15 @@ void UCameraComponent::SetMode(ECameraMode InMode)
 
 void UCameraComponent::Orbit(float DeltaYawDegrees, float DeltaPitchDegrees)
 {
-	YawDegrees += DeltaYawDegrees;
-	PitchDegrees = FMath::Clamp(PitchDegrees + DeltaPitchDegrees, -89.0f, 89.0f);
+	ViewRotation.Yaw += DeltaYawDegrees;
+	ViewRotation.Pitch = FMath::Clamp(ViewRotation.Pitch + DeltaPitchDegrees, -MaxViewPitch, MaxViewPitch);
 	InvalidateCache();
 }
 
 void UCameraComponent::Pan(float DeltaRight, float DeltaUp)
 {
 	const FVector Right = RightVector();
-	const FVector Up = FVector(0.0f, 1.0f, 0.0f);
+	const FVector Up = FVector(0.0f, 0.0f, 1.0f);
 	const FVector Delta = Right * DeltaRight + Up * DeltaUp;
 	if (Mode == ECameraMode::FreeLook)
 	{
@@ -132,8 +110,12 @@ void UCameraComponent::SetDistance(float InDistance)
 
 void UCameraComponent::SetYawPitch(float InYawDegrees, float InPitchDegrees)
 {
-	YawDegrees = InYawDegrees;
-	PitchDegrees = FMath::Clamp(InPitchDegrees, -89.0f, 89.0f);
+	SetViewRotation(FRotator(InPitchDegrees, InYawDegrees, 0.0f));
+}
+
+void UCameraComponent::SetViewRotation(const FRotator& InRotation)
+{
+	ViewRotation = FRotator(FMath::Clamp(InRotation.Pitch, -MaxViewPitch, MaxViewPitch), InRotation.Yaw, 0.0f);
 	InvalidateCache();
 }
 
@@ -168,12 +150,8 @@ void UCameraComponent::UpdateCachedPosition() const
 		return;
 	}
 
-	const float YawRad = FMath::DegreesToRadians(YawDegrees);
-	const float PitchRad = FMath::DegreesToRadians(PitchDegrees);
-
-	CachedPosition = Target +
-		FVector(Distance * FMath::Cos(PitchRad) * FMath::Cos(YawRad), Distance * FMath::Sin(PitchRad),
-			Distance * FMath::Cos(PitchRad) * FMath::Sin(YawRad));
+	// The eye sits behind the target along the view direction.
+	CachedPosition = Target - (ViewRotation.Vector() * Distance);
 	bCacheDirty = false;
 }
 
@@ -185,48 +163,17 @@ FVector UCameraComponent::GetCameraLocation() const
 
 FVector UCameraComponent::ForwardVector() const
 {
-	if (Mode == ECameraMode::FreeLook)
-	{
-		return FreeLookForward(YawDegrees, PitchDegrees);
-	}
-	UpdateCachedPosition();
-	const FVector ToTarget = Target - CachedPosition;
-	const float Len = ToTarget.Size();
-	if (Len < 1.0e-3f)
-	{
-		return FVector(0.0f, 0.0f, -1.0f);
-	}
-	return ToTarget / Len;
+	return ViewRotation.Vector();
 }
 
 FVector UCameraComponent::RightVector() const
 {
-	const FVector Forward = ForwardVector();
-	const FVector Up =
-		(Mode == ECameraMode::FreeLook) ? FreeLookWorldUp(YawDegrees, PitchDegrees) : FVector(0.0f, 1.0f, 0.0f);
-	FVector Right = FVector::CrossProduct(Forward, Up);
-	const float Len = Right.Size();
-	if (Len < 1.0e-5f)
-	{
-		Right = FVector::CrossProduct(Forward, FVector(0.0f, 0.0f, 1.0f));
-		const float Len2 = Right.Size();
-		if (Len2 < 1.0e-5f)
-		{
-			return FVector(1.0f, 0.0f, 0.0f);
-		}
-		return Right / Len2;
-	}
-	return Right / Len;
+	// The view's right axis; with no roll it is horizontal: WorldUp ^ Forward in the left-handed world.
+	return FRotationMatrix(ViewRotation).GetUnitAxis(EAxis::Y);
 }
 
 FMatrix UCameraComponent::ViewMatrix() const
 {
 	UpdateCachedPosition();
-	if (Mode == ECameraMode::FreeLook)
-	{
-		const FVector Forward = FreeLookForward(YawDegrees, PitchDegrees);
-		const FVector Up = FreeLookWorldUp(YawDegrees, PitchDegrees);
-		return MakeLookAtView(CachedPosition, CachedPosition + Forward, Up);
-	}
-	return MakeLookAtView(CachedPosition, Target, FVector(0.0f, 1.0f, 0.0f));
+	return MakeViewMatrix(CachedPosition, ViewRotation);
 }

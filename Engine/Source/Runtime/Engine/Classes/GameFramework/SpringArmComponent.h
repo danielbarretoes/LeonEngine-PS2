@@ -13,6 +13,9 @@ class FPhysScene;
 /**
  * Unreal-like Spring Arm / Camera Boom (USceneComponent) with optional camera lag,
  * rotation lag, smoothed arm length, and collision probe (sphere sweep).
+ *
+ * The boom angles are the rotation of the arm from the target to the camera (FRotator(BoomPitch, BoomYaw, 0).Vector()
+ * points at the eye); the camera looks back along it, with the view rotation FRotator(-BoomPitch, BoomYaw + 180, 0).
  */
 class ENGINE_API USpringArmComponent : public USceneComponent
 {
@@ -23,12 +26,12 @@ public:
 	float ArmLengthMin = 150.0f;
 	/** cm */
 	float ArmLengthMax = 2000.0f;
-	/** Height of the boom target above the actor location (cm). */
+	/** Height of the boom target above the actor location (cm, along +Z). */
 	float SocketOffsetZ = 100.0f;
-	/** Unreal-like SocketOffset.X (cm) — positive = right of pawn along boom right (over-shoulder). */
+	/** Over-shoulder offset (cm) along the view's right axis (UE: SocketOffset.Y); positive = right of the pawn. */
 	float SocketOffsetX = 0.0f;
 
-	/** Desired boom orientation (mouse look edits these immediately). */
+	/** Desired boom orientation, yaw about Z and pitch up (mouse look edits these immediately). */
 	float BoomYawDegrees = 0.0f;
 	float BoomPitchDegrees = 15.0f;
 	float PitchMin = -60.0f;
@@ -77,14 +80,14 @@ public:
 	void SnapLagState(const FVector& ActorLocation);
 
 	/** Movement uses *desired* boom yaw so controls stay responsive while the view lags. */
-	[[nodiscard]] FVector GetMoveDirectionXZ(const FMoveAxes2D& Axes) const
+	[[nodiscard]] FVector GetMoveDirection(const FMoveAxes2D& Axes) const
 	{
-		return YawRelativeMoveXz(BoomYawDegrees, Axes);
+		return YawRelativeMove(GetLookFacingYawDegrees(), Axes);
 	}
 
 	/**
-	 * World yaw for a pawn facing the same XZ direction the orbit camera looks
-	 * (matches yawRelativeMoveXZ forward / crosshair aim on the ground plane).
+	 * Actor yaw for a pawn facing the same ground direction the camera looks: the view yaw BoomYaw + 180, in
+	 * (-180, 180] (matches YawRelativeMove forward / crosshair aim on the ground plane).
 	 */
 	[[nodiscard]] float GetLookFacingYawDegrees() const;
 
@@ -98,7 +101,7 @@ public:
 	/** Prefer when attached under an Actor root: uses owner location + world FPhysScene. */
 	void ApplyToCamera(UCameraComponent& Camera, float DeltaTime, FDebugDraw* DebugDraw = nullptr);
 
-	/** Unit boom direction matching Camera orbit eye offset (target → camera). */
+	/** Unit boom direction, target to camera: FRotator(Pitch, Yaw, 0).Vector(). */
 	[[nodiscard]] static FVector GetBoomDirection(float YawDegrees, float PitchDegrees);
 
 	/** Sphere-sweep arm length; returns clamped length (ArmLengthMin..desiredLength). */

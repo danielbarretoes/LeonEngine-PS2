@@ -9,7 +9,7 @@ namespace
 	}
 } // namespace
 
-void ComputeTangents(FMeshData& Data)
+void ComputeTangents(FMeshData& Data, EMeshDataBasis Basis)
 {
 	if (Data.IsEmpty())
 	{
@@ -59,8 +59,16 @@ void ComputeTangents(FMeshData& Data)
 		FVector T = TanAcc[I];
 		if ((T | T) < 1e-8f)
 		{
-			T = FMath::Abs(N.Y) < 0.9f ? Normalize(N ^ FVector(0, 1, 0)) : Normalize(N ^ FVector(1, 0, 0));
-			Vertex.Tangent = FVector4(T, 1.0f);
+			if (Basis == EMeshDataBasis::LegacyYUp)
+			{
+				T = FMath::Abs(N.Y) < 0.9f ? Normalize(N ^ FVector(0, 1, 0)) : Normalize(N ^ FVector(1, 0, 0));
+				Vertex.Tangent = FVector4(T, 1.0f);
+				continue;
+			}
+			// A tangent across the world up (Z ^ N; X ^ N when the normal is vertical): the legacy fallback converted
+			// to the left-handed world, where the bitangent sign flips.
+			T = FMath::Abs(N.Z) < 0.9f ? Normalize(FVector(0, 0, 1) ^ N) : Normalize(FVector(1, 0, 0) ^ N);
+			Vertex.Tangent = FVector4(T, -1.0f);
 			continue;
 		}
 		T = Normalize(T - (N * (N | T)));

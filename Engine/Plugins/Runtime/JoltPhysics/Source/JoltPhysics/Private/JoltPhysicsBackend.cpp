@@ -126,8 +126,10 @@ namespace
 	};
 
 	/**
-	 * Jolt works in metres (its tolerances are tuned for them); the engine world is in centimetres. Every position,
-	 * extent, velocity and acceleration is scaled at this boundary; Jolt-side constants below stay in metres.
+	 * Jolt works in its own space: metres (its tolerances are tuned for them), right-handed, Y up. The engine world is
+	 * in centimetres, left-handed, Z up (UE). At this boundary every position, extent, velocity and acceleration swaps
+	 * Y and Z and scales by 0.01 (the swap keeps the physical scene, so Jolt sees the scene the legacy world had);
+	 * directions (normals) only swap. Jolt-side constants below stay in metres, Y up.
 	 */
 	constexpr float JoltMetresPerUnit = 0.01f;
 	constexpr float UnitsPerJoltMetre = 100.0f;
@@ -137,28 +139,42 @@ namespace
 		return WorldLength * JoltMetresPerUnit;
 	}
 
+	/** World vector (cm, Z up) to Jolt (m, Y up). */
 	[[nodiscard]] JPH::Vec3 ToJoltVec3(const FVector& World)
 	{
-		return JPH::Vec3(World.X * JoltMetresPerUnit, World.Y * JoltMetresPerUnit, World.Z * JoltMetresPerUnit);
+		return JPH::Vec3(World.X * JoltMetresPerUnit, World.Z * JoltMetresPerUnit, World.Y * JoltMetresPerUnit);
 	}
 
 	[[nodiscard]] JPH::RVec3 ToJoltRVec3(const FVector& World)
 	{
-		return JPH::RVec3(World.X * JoltMetresPerUnit, World.Y * JoltMetresPerUnit, World.Z * JoltMetresPerUnit);
+		return JPH::RVec3(World.X * JoltMetresPerUnit, World.Z * JoltMetresPerUnit, World.Y * JoltMetresPerUnit);
 	}
 
-	/** A body instance's velocity (horizontal X / Z and vertical Y, cm/s) in Jolt metres per second. */
+	/** Box half extents (cm, world axes) to Jolt half extents (m, Y up). */
+	[[nodiscard]] FVector ToJoltHalfExtents(const FVector& World)
+	{
+		return FVector(World.X, World.Z, World.Y) * JoltMetresPerUnit;
+	}
+
+	/** A body instance's velocity (horizontal X / Y and vertical Z, cm/s) in Jolt metres per second. */
 	[[nodiscard]] JPH::Vec3 ToJoltVelocity(const FBodyInstance& Body)
 	{
-		return ToJoltVec3(FVector(Body.VelXz.X, Body.VelocityY, Body.VelXz.Y));
+		return ToJoltVec3(FVector(Body.VelXY.X, Body.VelXY.Y, Body.VelocityZ));
 	}
 
+	/** Jolt vector (m, Y up) to the world (cm, Z up). */
 	[[nodiscard]] FVector FromJolt(const JPH::Vec3& Jolt)
 	{
-		return FVector(Jolt.GetX(), Jolt.GetY(), Jolt.GetZ()) * UnitsPerJoltMetre;
+		return FVector(Jolt.GetX(), Jolt.GetZ(), Jolt.GetY()) * UnitsPerJoltMetre;
 	}
 
-	/** Half extents in Jolt metres. */
+	/** Jolt direction (Y up) to a world direction (Z up). */
+	[[nodiscard]] FVector FromJoltDirection(const JPH::Vec3& Jolt)
+	{
+		return FVector(Jolt.GetX(), Jolt.GetZ(), Jolt.GetY());
+	}
+
+	/** Half extents in Jolt metres, Jolt axes (Y up). */
 	[[nodiscard]] JPH::ShapeRefC CreateBoxShape(const FVector& HalfExtents)
 	{
 		// Half-extents must exceed convex radius or BoxShapeSettings::Create fails.
@@ -261,7 +277,7 @@ namespace
 			BodyIds.Empty();
 			DestroyFloor(Bodies);
 			LastSkip = NoLevelMeshIndex;
-			bHasFloorY = false;
+			bHasFloorHeight = false;
 		}
 
 		void RigidRebuild(const TArray<FBodyInstance>& Bodies, const TArray<FTriangleMeshCollision>* TriangleMeshes,
@@ -329,13 +345,14 @@ namespace
 			}
 		}
 
-		void RigidStep(float DeltaTime, float GravityMagnitude, float InFloorY) override
+		void RigidStep(float DeltaTime, float GravityMagnitude, float InFloorZ) override
 		{
 			if (DeltaTime <= 0.0f)
 			{
 				return;
 			}
-			EnsureFloor(ToJoltLength(InFloorY));
+			// The world floor height (Z) is Jolt's Y; gravity pulls along Jolt -Y (world -Z).
+			EnsureFloor(ToJoltLength(InFloorZ));
 			PhysicsSystem.SetGravity(JPH::Vec3(0.0f, -FMath::Abs(ToJoltLength(GravityMagnitude)), 0.0f));
 
 			const int32 CollisionSteps = FMath::Max(1, FMath::CeilToInt(DeltaTime * 60.0f));
@@ -355,8 +372,8 @@ namespace
 				}
 				const FVector Vel = FromJolt(Iface.GetLinearVelocity(Id));
 				Bodies[I].Position = FromJolt(Iface.GetCenterOfMassPosition(Id));
-				Bodies[I].VelXz = FVector2D(Vel.X, Vel.Z);
-				Bodies[I].VelocityY = Vel.Y;
+				Bodies[I].VelXY = FVector2D(Vel.X, Vel.Y);
+				Bodies[I].VelocityZ = Vel.Z;
 			}
 		}
 
@@ -407,7 +424,7 @@ namespace
 				Out.Distance = TraceLength * Hit.mFraction;
 				Out.Location = FromJolt(Point);
 				Out.ImpactPoint = Out.Location;
-				Out.ImpactNormal = FVector(Normal.GetX(), Normal.GetY(), Normal.GetZ());
+				Out.ImpactNormal = FromJoltDirection(Normal);
 				Out.TraceStart = Start;
 				Out.TraceEnd = End;
 				Out.LevelMeshIndex = static_cast<SIZE_T>(Body.GetUserData());
@@ -429,7 +446,7 @@ namespace
 		bool RigidCapsuleTrace(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End, float Radius,
 			float HalfHeight, ECollisionChannel InChannel, SIZE_T SkipLevelMeshIndex) override
 		{
-			// Jolt metres from here on.
+			// Jolt metres from here on. Jolt's capsule stands on its Y axis: the world's vertical Z.
 			const float R = FMath::Max(ToJoltLength(Radius), 1.0e-3f);
 			const float Hh = FMath::Max(ToJoltLength(HalfHeight), 0.0f);
 			JPH::RefConst<JPH::CapsuleShape> Capsule = new JPH::CapsuleShape(Hh, R);
@@ -549,7 +566,7 @@ namespace
 				Out.Distance = TraceLength * Hit.mFraction;
 				Out.Location = FromJolt(JPH::Vec3(Point.GetX(), Point.GetY(), Point.GetZ()));
 				Out.ImpactPoint = FromJolt(Contact);
-				Out.ImpactNormal = FVector(Normal.GetX(), Normal.GetY(), Normal.GetZ());
+				Out.ImpactNormal = FromJoltDirection(Normal);
 				Out.TraceStart = Start;
 				Out.TraceEnd = End;
 				Out.LevelMeshIndex = static_cast<SIZE_T>(Body.GetUserData());
@@ -598,8 +615,8 @@ namespace
 			}
 			if (Shape == nullptr)
 			{
-				// Near-flat AABBs (zero Y from a plane mesh) need thickness > convex radius (Jolt metres).
-				FVector He = Src.HalfExtents * JoltMetresPerUnit;
+				// Near-flat AABBs (zero height from a plane mesh) need thickness > convex radius (Jolt metres).
+				FVector He = ToJoltHalfExtents(Src.HalfExtents);
 				He.X = FMath::Max(He.X, 0.05f);
 				He.Y = FMath::Max(He.Y, 0.05f);
 				He.Z = FMath::Max(He.Z, 0.05f);
@@ -643,27 +660,27 @@ namespace
 			}
 		}
 
-		/** InFloorY in Jolt metres. */
-		void EnsureFloor(float InFloorY)
+		/** InFloorHeight in Jolt metres (Jolt Y, the world's Z). */
+		void EnsureFloor(float InFloorHeight)
 		{
-			if (!FloorId.IsInvalid() && bHasFloorY && FMath::Abs(InFloorY - FloorY) < 1.0e-4f)
+			if (!FloorId.IsInvalid() && bHasFloorHeight && FMath::Abs(InFloorHeight - FloorHeight) < 1.0e-4f)
 			{
 				return;
 			}
 			JPH::BodyInterface& Iface = PhysicsSystem.GetBodyInterface();
 			DestroyFloor(Iface);
-			// Thin static slab under the world floor (Leon floorY is the support plane).
+			// Thin static slab under the world floor (the floor height is the support plane).
 			constexpr float HalfThickness = 0.5f;
 			JPH::ShapeRefC Shape = CreateBoxShape(FVector(500.0f, HalfThickness, 500.0f));
 			if (Shape == nullptr)
 			{
 				return;
 			}
-			JPH::BodyCreationSettings Settings(Shape, JPH::RVec3(0.0f, InFloorY - HalfThickness, 0.0f),
+			JPH::BodyCreationSettings Settings(Shape, JPH::RVec3(0.0f, InFloorHeight - HalfThickness, 0.0f),
 				JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::NonMoving);
 			FloorId = Iface.CreateAndAddBody(Settings, JPH::EActivation::DontActivate);
-			FloorY = InFloorY;
-			bHasFloorY = true;
+			FloorHeight = InFloorHeight;
+			bHasFloorHeight = true;
 		}
 
 		FBPLayerInterfaceImpl BroadPhaseLayerInterface;
@@ -675,8 +692,9 @@ namespace
 		TArray<JPH::BodyID> BodyIds;
 		JPH::BodyID FloorId{};
 		SIZE_T LastSkip = NoLevelMeshIndex;
-		float FloorY = 0.0f;
-		bool bHasFloorY = false;
+		/** Jolt metres, along Jolt Y. */
+		float FloorHeight = 0.0f;
+		bool bHasFloorHeight = false;
 	};
 
 } // namespace
