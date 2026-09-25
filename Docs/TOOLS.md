@@ -12,10 +12,11 @@ The layout mirrors Unreal Engine 4.27: edit-time code is in **Developer** module
 | `Engine/Source/Developer/MeshUtilities/` | Developer module | OBJ / FBX / glTF import and `FStaticMeshBuilder` (source → `.lmesh`); FBX skeletal import (`FbxSkeletalImport.h`) |
 | `Engine/Source/Programs/LeonCook/` | Program target | `LeonCook` executable: `main` forwards to `UCookCommandlet::Main` |
 | `Engine/Source/Programs/LeonBuildTool/` | Build tool (CMake script) | Builds every target (UnrealBuildTool equivalent) |
-| `Engine/Source/Programs/LeonAutomationTests/` | Program target | Runs every module's `Private/Tests/**` (Catch2) |
+| `Engine/Source/Programs/LeonAutomationTests/` | Program target | Runs every desktop module's `Private/Tests/**`: automation tests (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`), then Catch2 |
+| `Engine/Source/Programs/TestPAL/` | Program target (all platforms) | Runs Core's automation tests without Catch2 and prints `TestPAL: PASSED (N test(s), 0 failed)` plus memory / name-pool numbers (UE: `Programs/TestPAL`) |
 | `Engine/Source/Programs/BlankProgram/` | Program target | Minimal program: starts the statically linked modules |
 | `Engine/Build/BatchFiles/` | Scripts | Build / Clean / Rebuild / Cook / RunTests / FormatCode / Lint / GenerateProjectFiles |
-| `Engine/Platforms/PS2/Build/BatchFiles/` | Scripts | `RunPCSX2.ps1` (launch a PS2 build), `DockerEntry.sh` (used by LeonBuildTool) |
+| `Engine/Platforms/PS2/Build/BatchFiles/` | Scripts | `RunPCSX2.ps1` (launch a project's or an engine program's PS2 build), `DockerEntry.sh` (used by LeonBuildTool) |
 
 Both Developer modules and the LeonCook target are `PLATFORMS Desktop`: they never build for PS2.
 
@@ -119,11 +120,11 @@ All scripts forward to LeonBuildTool (`cmake -P Engine/Source/Programs/LeonBuild
 | `Engine\Build\BatchFiles\Clean.bat` | same arguments as Build | `-Mode=Clean` |
 | `Engine\Build\BatchFiles\Rebuild.bat` | same arguments as Build | `-Mode=Rebuild` |
 | `Engine\Build\BatchFiles\Cook.bat` | `<LeonCook arguments>` | Builds LeonCook (Win64 Development) and runs it |
-| `Engine\Build\BatchFiles\RunTests.bat` | `[Catch2 args]` | Builds LeonAutomationTests (Win64 Development) and runs it from the repo root |
+| `Engine\Build\BatchFiles\RunTests.bat` | `[-automation=<filter>] [-noautomation] [-automationonly] [Catch2 args]` | Builds LeonAutomationTests (Win64 Development) and runs it from the repo root: the automation tests (31), then Catch2 (124 test cases); fails if either fails |
 | `Engine\Build\BatchFiles\FormatCode.bat` | `[--check]` | clang-format on every `.cpp` / `.h` / `.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game` (skips `ThirdParty`, `Intermediate`, `Binaries`); `--check` is a dry run that fails on unformatted files |
 | `Engine\Build\BatchFiles\Lint.bat` | | `FormatCode.bat --check`, then builds LeonAutomationTests, LeonCook, LeonGame and BlankProgram for Win64 Development |
 | `GenerateProjectFiles.bat` (root) → `Engine\Build\BatchFiles\GenerateProjectFiles.bat` | `[-Project=<file.lproj>]` | Visual Studio solution in `<Engine or Project>\Intermediate\ProjectFiles` plus the root `compile_commands.json` for clangd; builds keep using Build.bat |
-| `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1` | `[-Project <dir or .lproj>] [-Configuration Debug\|Development\|Shipping] [-Build]` | Optionally builds the project for PS2, then starts PCSX2 on `<Project>\Binaries\PS2\<Name>.elf` |
+| `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1` | `[-Project <dir or .lproj> \| -Program <Name>] [-Configuration Debug\|Development\|Shipping] [-Build]` | Optionally builds the project (or engine program) for PS2, then starts PCSX2 on `<Project>\Binaries\PS2\<Name>.elf` (`Engine\Binaries\PS2\<Name>.elf` with `-Program`) |
 
 Linux equivalents: `Engine/Build/BatchFiles/Linux/Build.sh`, `Engine/Build/BatchFiles/Linux/GenerateProjectFiles.sh`, root `GenerateProjectFiles.sh` and `Setup.sh`.
 
@@ -137,7 +138,22 @@ Outputs go to `<Project or Engine>/Binaries/<Platform>/<Target><suffix>` for Dev
 Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson -Build
 ```
 
-`-Project` defaults to `Game\ThirdPerson` and takes a folder (first `*.lproj` in it) or a `.lproj` file. PCSX2 is looked up in `$env:LEON_PCSX2`, then `pcsx2-qt.exe` on `PATH`, then the default install folders; it starts with `-fastboot -elf <ELF>`.
+`-Project` defaults to `Game\ThirdPerson` and takes a folder (first `*.lproj` in it) or a `.lproj` file. `-Program <Name>` runs an engine program instead: with `-Build` it calls `Build.bat <Name> PS2 <Configuration>`, and it starts `Engine\Binaries\PS2\<Name>.elf` (`<Name>-PS2-<Configuration>.elf` outside Development). PCSX2 is looked up in `$env:LEON_PCSX2`, then `pcsx2-qt.exe` on `PATH`, then the default install folders; it starts with `-fastboot -elf <ELF>`. Program output (`UE_LOG`, `printf`) goes to the EE console, saved in `%USERPROFILE%\Documents\PCSX2\logs\emulog.txt`.
+
+## TestPAL
+
+Runs the automation tests linked into it (Core's `Private/Tests`, `COLLECT_AUTOMATION_TESTS`) on any platform, without Catch2, then logs GMalloc usage and the `FName` pool size. Exit code `0` when every test passes, `1` otherwise. `-filter=<text>` runs only the tests whose name contains `<text>`.
+
+```bat
+Engine\Build\BatchFiles\Build.bat TestPAL Win64 Development
+Engine\Binaries\Win64\TestPAL.exe [-filter=System.Core.Containers]
+```
+
+```powershell
+Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build
+```
+
+On PS2 the verdict (`TestPAL: PASSED (27 test(s), 0 failed)`) and the `LogTestPAL` numbers are read from the PCSX2 log; the numbers are recorded in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md).
 
 ## Related docs
 

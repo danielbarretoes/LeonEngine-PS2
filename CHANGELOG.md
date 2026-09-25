@@ -7,6 +7,61 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Second step of the Core / CoreUObject plan (P2): Unreal Engine 4.27's Core foundations in
+`Engine/Source/Runtime/Core`, on every platform including the PS2.
+
+### Added
+
+- **Build / defines**: `Misc/Build.h` (`UE_BUILD_DEBUG/DEVELOPMENT/SHIPPING` from `LEON_BUILD_<CONFIG>`, `DO_CHECK`,
+  `DO_GUARD_SLOW`, `DO_ENSURE`, `NO_LOGGING` in Shipping, `WITH_DEV_AUTOMATION_TESTS`), `Misc/CoreMiscDefines.h`
+  (`INDEX_NONE`, `EForceInit`, `ENoInit`, `EInPlace`, `UE_NONCOPYABLE`); `CoreTypes.h` includes both.
+- **Characters**: `TCHAR` is UTF-8 on every platform (`TEXT(x)` is `x`; `WIDECHAR` only in the Windows HAL);
+  `HAL/Platform.h` adds `LIKELY` / `UNLIKELY`, `PLATFORM_BREAK`, `LEON_PRINTF_FORMAT`.
+- **HAL**: `FPlatformMisc` (`LowLevelOutputDebugString`, `LocalPrint`, `IsDebuggerPresent`, `RequestExit`; a forced
+  exit halts the EE on PS2), `FPlatformAtomics` (Windows intrinsics, Linux `__atomic`, PS2 generic: one EE thread),
+  integer / bit helpers on `FPlatformMath`, `FMath` integer helpers (`Math/UnrealMathUtility.h`), `FMemory` over
+  `GMalloc` = `FMallocAnsi` with current / peak byte tracking, `FPlatformProperties::NamePool*` limits.
+- **Assertions**: `check`, `checkf`, `verify`, `verifyf`, `checkNoEntry`, `checkNoReentry`, `unimplemented`,
+  `checkSlow`, `ensure` / `ensureMsgf` / `ensureAlways` (reported once per call site through `GLog`), `FDebug`.
+- **Templates / Algo**: `UnrealTemplate`, `UnrealTypeTraits`, `TypeHash`, `MemoryOps`, `AlignmentTemplates`,
+  `TTuple` / `TPair`, `TUniquePtr`, `TSharedPtr` / `TSharedRef` / `TWeakPtr` (`ESPMode::NotThreadSafe` default),
+  `TFunction` / `TUniqueFunction` / `TFunctionRef`, `Sort` / `StableSort`, `TOptional`, `ENUM_CLASS_FLAGS`,
+  `Algo::IntroSort` / `BinarySearch` / `LowerBound` / `UpperBound` / binary heap.
+- **Containers**: allocator policies (heap, inline, fixed, set, sparse array), `TArray` (UE API with heap functions;
+  ranged-for catches a resize), `TArrayView`, `TBitArray`, `TSparseArray`, `TSet`, `TMap` / `TMultiMap`, `FString`
+  (case-insensitive `==` / `<` / `GetTypeHash` like UE, `Printf`, `ParseIntoArray`, path `/`, `LexToString`),
+  `StringConv` (`TCHAR_TO_UTF8` & co. are identities), `FCString` / `FChar`, `FCrc`.
+- **Names and text**: `FName` (8 bytes, case-insensitive, numeric suffix, global pool sized per platform; PS2:
+  16 KB blocks, 256 KB max, 4096 buckets, exhaustion is fatal); minimal `FText` (`Format` with `{0}` arguments,
+  `AsNumber`, `AsPercent`, `Join`; `LOCTEXT` / `NSLOCTEXT` / `INVTEXT` keep the source text).
+- **Logging**: `UE_LOG`, `UE_CLOG`, log categories (`DECLARE_LOG_CATEGORY_EXTERN`, `DEFINE_LOG_CATEGORY(_STATIC)`,
+  run-time verbosity), `FOutputDevice`, `GLog` (`FOutputDeviceRedirector`), stdout device (EE console / PCSX2 log
+  on PS2) and a Windows debugger device. Lines read `Category: Verbosity: Message`.
+- **Delegates**: `TDelegate`, `TMulticastDelegate` (static / lambda / raw / SP bindings with payload, safe removal
+  during `Broadcast`), `DECLARE_DELEGATE*` / `DECLARE_MULTICAST_DELEGATE*` / `DECLARE_EVENT*`, `FDelegateHandle`.
+- **Automation tests** (`Misc/AutomationTest.h`): `IMPLEMENT_SIMPLE_AUTOMATION_TEST`, `FAutomationTestBase`
+  (`TestEqual`, `TestTrue`, `AddExpectedError`, …), `FAutomationTestFramework::RunTests`; an unexpected error logged
+  during a test fails it.
+- **TestPAL** program (all platforms): runs the automation tests without Catch2 and prints
+  `TestPAL: PASSED (N test(s), 0 failed)` plus memory and name-pool numbers; `RunPCSX2.ps1 -Program <Name>` runs an
+  engine program's PS2 ELF. `Engine/Platforms/PS2/Documentation/Budgets.md` records ELF / heap / name-pool numbers.
+
+### Changed
+
+- `CoreMinimal.h` includes the new Core set.
+- Core's tests are automation tests (`System.Core.*`: 31 on Win64, 27 on PS2); the other modules keep Catch2
+  (124 test cases). `LeonAutomationTests` runs the automation tests first, then Catch2, and fails if either fails;
+  new arguments `-automation=<filter>`, `-noautomation`, `-automationonly`.
+- `FTicker` uses UE's `FTickerDelegate` (a `TDelegate`) and `FDelegateHandle`, with an optional delay; the
+  `std::function` API is gone. ThirdPerson logs through `UE_LOG(LogThirdPerson, …)` and ticks through
+  `FTickerDelegate::CreateLambda`.
+- PS2 toolchain compiles with `-ffunction-sections -fdata-sections` and links with `-Wl,--gc-sections`
+  (ThirdPerson text 430 KB → 362 KB).
+
+### Removed
+
+- `FCString::ToLower(std::string_view)`.
+
 ## [0.12.0] - 2026-09-25
 
 First step of the Core / CoreUObject plan: UE-style descriptor extensions and the removal of the features the

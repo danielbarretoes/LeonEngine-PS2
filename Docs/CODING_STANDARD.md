@@ -30,7 +30,7 @@ All identifiers are English (U.S. spelling), **PascalCase**, with no underscores
 | `A` | Classes derived from `AActor` — **only** those | `AActor`, `APawn`, `ACharacter`, `APlayerController`, `AGameModeBase`, `AHUD` |
 | `U` | Classes that are `UObject`s in UE (components, assets, subsystems, widgets, engine objects). **Naming only**: there is no `UObject` base, reflection or GC yet | `UGameEngine`, `UWorld`, `ULevel`, `UActorComponent`, `UCharacterMovementComponent`, `UTexture2D`, `UUserWidget`, `UCookCommandlet` |
 | `F` | Every other class or struct | `FEngineLoop`, `FTicker`, `FPaths`, `FSceneRenderer`, `FPhysScene`, `FHitResult`, `FPS2RHI` |
-| `T` | Class templates | *(none yet; reserved for Core containers)* |
+| `T` | Class templates | `TArray`, `TMap`, `TSharedPtr`, `TDelegate`, `TOptional` |
 | `E` | Enums (prefer `enum class`, sized when stored) | `EKeys`, `EPhysicsBackend`, `EPostProcessQuality`, `ENetMsg` |
 | `I` | Abstract interfaces (no data members) | `IModuleInterface`, `IInputInterface`, `IPhysicsBackend` |
 | `G` | Global variables | `GEngineLoop`, `GDynamicRHI`, `GPrimaryGameModuleName` |
@@ -39,8 +39,8 @@ All identifiers are English (U.S. spelling), **PascalCase**, with no underscores
   [LeonMapping.md](UnrealEngine427/LeonMapping.md) lists every mapping.
 - Pick `U` for a new type only when its UE homologue is a `UObject`; do not use `A` for anything that is not
   an actor. Plain data and helpers are `F`.
-- Typedefs take the prefix of what they alias (`typedef FWindowsPlatformMemory FPlatformMemory;`,
-  `using FTickerDelegate = std::function<…>;`).
+- Typedefs take the prefix of what they alias (`typedef FWindowsPlatformMemory FPlatformMemory;`); delegate types
+  declared with `DECLARE_DELEGATE*` are `F` (`DECLARE_DELEGATE_RetVal_OneParam(bool, FTickerDelegate, float);`).
 - Enumerators are PascalCase (`EPhysicsBackend::Arcade`). UE enumerators with underscores are kept as UE
   spells them (`EKeys::Gamepad_FaceButton_Bottom`); `.clang-tidy` whitelists `Gamepad_*`.
 
@@ -125,8 +125,8 @@ keep PascalCase free functions, as UE does with `DrawDebugLine` (`LoadLevelFile`
     headers, then third-party, then standard / SDK headers, one blank line between blocks.
   - Include what you use; prefer forward declarations in headers; include the specific header, not a
     catch-all.
-- Tests live in `<Module>/Private/Tests/<Topic>Tests.cpp` (Catch2) and are compiled only into
-  `LeonAutomationTests`.
+- Tests live in `<Module>/Private/Tests/` and are compiled only into targets with `COLLECT_AUTOMATION_TESTS`
+  (`LeonAutomationTests`, `TestPAL`); see §10.
 
 ---
 
@@ -177,10 +177,20 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 - Const-correctness: const methods, const references for input parameters, `const` locals that do not change.
 - Default member initializers are fine (`int32 ExitCode = 0;`).
 - Interfaces (`I*`) have no data members.
-- **Standard library and math (deviation).** Until the Core containers and math land, use `std::`
-  containers, `std::string`, `std::unique_ptr` / `std::function` and **glm** on desktop. PS2 code uses plain
-  floats and `FPlatformMath`. Do not add aliases that pretend to be UE types (`using FVector = glm::vec3` is
-  not allowed). See [NextSteps.md](UnrealEngine427/NextSteps.md).
+- **Containers and strings.** New code that depends on Core (including PS2 code) uses the UE types from
+  `CoreMinimal.h`: `TArray`, `TMap`, `TSet`, `FString`, `FName`, `FText`, `TUniquePtr` / `TSharedPtr`,
+  `TFunction` and delegates. `TCHAR` is UTF-8 `char` on every platform, so write literals with `TEXT("...")`. Element
+  types stored in UE containers must be relocatable with `memmove` (no pointers into themselves).
+- **Standard library and math (deviation).** Modules above Core keep `std::` containers, `std::string`,
+  `std::unique_ptr` / `std::function` and **glm** on desktop until they migrate (P5–P6). Core math (`FVector`, …)
+  arrives in P3; until then PS2 code uses plain floats and `FPlatformMath`. Do not add aliases that pretend to be UE
+  types (`using FVector = glm::vec3` is not allowed). See [NextSteps.md](UnrealEngine427/NextSteps.md).
+- **Logging.** Log through `UE_LOG(<Category>, <Verbosity>, TEXT("..."), ...)` with a category
+  (`DECLARE_LOG_CATEGORY_EXTERN` + `DEFINE_LOG_CATEGORY` for a module-wide one, `DEFINE_LOG_CATEGORY_STATIC` inside
+  one `.cpp`), not `printf` / `std::cout`. On PS2 the log reaches the EE console.
+- **Assertions.** `check` / `checkf` for invariants (stripped in Shipping), `verify` when the expression must run in
+  every build, `checkNoEntry` for unreachable paths, `ensure` / `ensureMsgf` for recoverable failures that should be
+  reported.
 - Use the Core fixed-width types (`int32`, `uint64`, …) from `CoreTypes.h` in engine APIs; `std::uint8_t`
   style types remain in older code.
 
@@ -244,4 +254,41 @@ File formats: [ASSET_FORMATS.md](ASSET_FORMATS.md).
 4. Platform code is in a platform folder; no new `PLATFORM_*` checks in shared code.
 5. Shared (PS2-capable) modules stay C++17.
 6. `Engine\Build\BatchFiles\FormatCode.bat` has been run; `Lint.bat` passes.
-7. Tests for new behaviour live in `<Module>/Private/Tests/` and pass with `RunTests.bat`.
+7. Tests for new behaviour live in `<Module>/Private/Tests/` and pass with `RunTests.bat` (Core changes: also
+   `TestPAL` on PS2).
+8. New Core-dependent code logs with `UE_LOG` and a category and asserts with `check` / `ensure`.
+
+---
+
+## 10. Tests
+
+- **Automation tests** (UE): `IMPLEMENT_SIMPLE_AUTOMATION_TEST(F<Name>Test, "System.<Module>.<Area>", <Flags>)` in
+  `<Module>/Private/Tests/<Area>Test.cpp`, with `bool F<Name>Test::RunTest(const FString& Parameters)` using
+  `TestEqual` / `TestTrue` / `TestNotNull` / …; wrap the file in `#if WITH_DEV_AUTOMATION_TESTS`. An error logged
+  during a test fails it unless the test declares it with `AddExpectedError`. Core's tests follow this form
+  (`System.Core.Containers.Array`, `System.Core.HAL.Memory`, …).
+- **Catch2** remains for the modules not migrated yet (RenderCore, Renderer, PhysicsCore, AnimationCore, Engine,
+  AIModule, MeshUtilities, JoltPhysics); their files are `<Topic>Tests.cpp`. They move to automation tests with the
+  module migration (P5–P6).
+- `RunTests.bat` runs both kinds (`LeonAutomationTests`); `TestPAL` runs the automation tests on every platform,
+  including PS2.
+
+```cpp
+#include "CoreMinimal.h"
+#include "Misc/AutomationTest.h"
+
+#if WITH_DEV_AUTOMATION_TESTS
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FArrayTest, "System.Core.Containers.Array",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+
+bool FArrayTest::RunTest(const FString& Parameters)
+{
+	TArray<int32> Values = {3, 1, 2};
+	Values.Sort();
+	TestEqual(TEXT("First after Sort"), Values[0], 1);
+	return true;
+}
+
+#endif
+```

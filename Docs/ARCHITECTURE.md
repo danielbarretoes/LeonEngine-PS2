@@ -47,7 +47,7 @@ module style) — `Game/ThirdPerson/Source/ThirdPerson` is flat.
 | --- | --- | --- | --- |
 | **Runtime** | `Engine/Source/Runtime` | Core, HAL, application, RHI, rendering, gameplay framework, … | Runtime, ThirdParty |
 | **Developer** | `Engine/Source/Developer` | `MeshUtilities` (DCC import), `Cooker` (cook recipes, `UCookCommandlet`) | Runtime, Developer, ThirdParty |
-| **Programs** | `Engine/Source/Programs` | `LeonCook`, `LeonAutomationTests`, `BlankProgram`, `LeonBuildTool` (CMake scripts, not a module) | anything |
+| **Programs** | `Engine/Source/Programs` | `LeonCook`, `LeonAutomationTests`, `TestPAL`, `BlankProgram`, `LeonBuildTool` (CMake scripts, not a module) | anything |
 | **ThirdParty** | `Engine/Source/ThirdParty` | External modules (`TYPE External`): GLM, GLFW, Glad, STB, NlohmannJson, MiniAudio, UFBX, CGLTF, TinyObjLoader, Catch2 | — |
 | **Platform extension** | `Engine/Platforms/PS2` | PS2 halves of `Core`, `ApplicationCore`, `Launch` + the `PS2RHI` module; toolchain, Docker image, `PS2Engine.ini` | same as the module it extends |
 | **Plugins** | `Engine/Plugins/Runtime/JoltPhysics` | `JoltPhysics` module + its third-party `JoltLib` (Win64 only) | Runtime |
@@ -98,6 +98,7 @@ Full reference: [BUILD.md](BUILD.md).
 | `ThirdPerson` | `Game/ThirdPerson/Source/ThirdPerson.Target.cmake` | Game | PS2 | `Launch` | project module `ThirdPerson`; `COMPILE_AGAINST_ENGINE OFF` → `WITH_ENGINE=0` |
 | `LeonCook` | `Engine/Source/Programs/LeonCook/` | Program | Desktop | `LeonCook` | `Cooker` → `UCookCommandlet::Main` |
 | `LeonAutomationTests` | `Engine/Source/Programs/LeonAutomationTests/` | Program | Desktop | `LeonAutomationTests` | every desktop Runtime / Developer module except `Launch`, + `JoltPhysics` plugin; `COLLECT_AUTOMATION_TESTS` |
+| `TestPAL` | `Engine/Source/Programs/TestPAL/` | Program | all | `TestPAL` | `Core` only; `COLLECT_AUTOMATION_TESTS`; runs Core's automation tests without Catch2 (PS2 included) |
 | `BlankProgram` | `Engine/Source/Programs/BlankProgram/` | Program | all | `BlankProgram` | starts the module table and prints the platform (CI builds it for PS2) |
 
 Module closures in practice:
@@ -141,6 +142,7 @@ flowchart BT
   subgraph Programs [Engine/Source/Programs]
     LeonCook
     LeonAutomationTests
+    TestPAL
     BlankProgram
   end
   subgraph PS2Ext [Engine/Platforms/PS2]
@@ -202,7 +204,8 @@ flowchart BT
 
 Solid = `PUBLIC_DEPENDENCIES`, dashed = `PRIVATE_DEPENDENCIES` (label = platform suffix or extension file),
 thick = `CIRCULAR_DEPENDENCIES`. `Json` and `Projects` have no dependents; they are linked only by
-`LeonAutomationTests` (`EXTRA_MODULE_NAMES`). `LeonAutomationTests` and `BlankProgram` depend only on Core (+ Catch2).
+`LeonAutomationTests` (`EXTRA_MODULE_NAMES`). `LeonAutomationTests`, `TestPAL` and `BlankProgram` depend only on Core
+(`LeonAutomationTests` also on Catch2).
 
 **Include-only dependency on Launch:** the launch module is compiled into the executable, not into a
 library, so a module that depends on it (`ThirdPerson` → `Launch`) only receives Launch's public include
@@ -230,7 +233,7 @@ paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable 
 
 | Module | Role | Key types | Platforms |
 | --- | --- | --- | --- |
-| **Core** | HAL, module manager, ticker, engine exit flag, paths, file helpers, transform, stats-overlay state | `FPlatformMemory`, `FPlatformTime`, `FPlatformMath`, `FPlatformProperties`, `FModuleManager`, `IModuleInterface`, `FTicker`, `FPaths`, `FFileHelper`, `FCString`, `FTransform`, `FStatsOverlay` | all (`FileHelper.cpp`, `Paths.cpp`, `Transform.cpp` excluded on PS2) |
+| **Core** | HAL, memory, assertions, templates, containers, strings / names / text, logging, delegates, automation tests, module manager, ticker, engine exit flag, paths, file helpers, transform, stats-overlay state | `FPlatformMemory`, `FPlatformTime`, `FPlatformMath`, `FPlatformMisc`, `FPlatformAtomics`, `FPlatformProperties`, `FMemory`, `TArray`, `TMap`, `TSet`, `FString`, `FName`, `FText`, `TDelegate`, `TMulticastDelegate`, `UE_LOG`, `GLog`, `FAutomationTestFramework`, `FModuleManager`, `IModuleInterface`, `FTicker`, `FPaths`, `FFileHelper`, `FCString`, `FTransform`, `FStatsOverlay` | all (`FileHelper.cpp`, `Paths.cpp`, `Transform.cpp` excluded on PS2) |
 | **InputCore** | Key / gamepad identifiers | `EKeys` | all |
 | **ApplicationCore** | Platform application, windows, gamepad input | `GenericApplication`, `FGenericWindow`, `IInputInterface`, `FPlatformApplicationMisc`; desktop `FGLFWApplication`, `FGLFWWindow`; PS2 ext `FPS2Application`, `FPS2Window`, `FPS2InputInterface` | all |
 | **RHI** | Graphics backend interface + opaque GPU handle ids | `FDynamicRHI`, `GDynamicRHI`, `FRHIGPUMemoryStats`, `FRHITextureId` … | all |
@@ -255,7 +258,7 @@ paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable 
 
 ---
 
-## 6. HAL (Core)
+## 6. Core: HAL and foundations
 
 UE pattern: a generic implementation, a per-platform subclass, and a `HAL/` header that picks the current
 platform through `COMPILED_PLATFORM_HEADER`.
@@ -274,14 +277,39 @@ Core/Public/HAL/PlatformMemory.h                      #include COMPILED_PLATFORM
   into `"Windows/WindowsPlatformMemory.h"` in-module, or `"PS2PlatformMemory.h"` for an extension.
 - `HAL/Platform.h` defaults every `PLATFORM_*` macro to 0, includes the platform's `Platform.h`
   (`FPlatformTypes`, `PLATFORM_DESKTOP`, `PLATFORM_64BITS`, `FORCEINLINE`) and defines the global fixed-width
-  types (`int32`, `uint64`, `SIZE_T`, `PTRINT`, …). The EE is ILP32 (`PS2Platform.h`).
+  types (`int32`, `uint64`, `SIZE_T`, `PTRINT`, …), `TCHAR` / `TEXT`, `LIKELY` / `UNLIKELY`, `PLATFORM_BREAK` and
+  `LEON_PRINTF_FORMAT`. The EE is ILP32 (`PS2Platform.h`). **`TCHAR` is UTF-8 `char` on every platform**
+  (`TEXT(x)` is `x`); `WIDECHAR` exists only for the Windows HAL.
 - HAL structs: `FPlatformMemory::GetStats()` → `FPlatformMemoryStats`; `FPlatformTime::Cycles64()`,
   `GetSecondsPerCycle64()`, `CyclesToMicroseconds()` (integer, for the EE), `Seconds()`;
-  `FPlatformMath::Sin256` / `Cos256` (1/256-turn angles, PS2 uses a table); `FPlatformProperties::PlatformName()`.
-- `CoreTypes.h` → `HAL/Platform.h`; `CoreMinimal.h` currently just includes `CoreTypes.h`.
-- Other Core services: `FTicker::GetCoreTicker()` (per-frame delegates, return `false` to unregister),
-  `IsEngineExitRequested()` / `RequestEngineExit()` (`CoreGlobals.h`), `FStatsOverlay` (engine debug overlay
-  state; the platform draws it).
+  `FPlatformMath::Sin256` / `Cos256` (1/256-turn angles, PS2 uses a table) plus integer / bit helpers
+  (`CountLeadingZeros`, `FloorLog2`, `RoundUpToPowerOfTwo`, …); `FPlatformMisc` (`LowLevelOutputDebugString`,
+  `LocalPrint`, `IsDebuggerPresent`, `RequestExit` — a forced exit halts the EE on PS2); `FPlatformAtomics`
+  (Windows intrinsics, Linux `__atomic`, PS2 the non-atomic generic version: Leon runs one EE thread);
+  `FPlatformProperties::PlatformName()` and the `NamePool*` limits.
+- `CoreTypes.h` → `HAL/Platform.h`, `Misc/Build.h` (`UE_BUILD_*` from `LEON_BUILD_<CONFIG>`, `DO_CHECK`,
+  `DO_GUARD_SLOW`, `DO_ENSURE`, `NO_LOGGING` = Shipping), `Misc/CoreMiscDefines.h`. `CoreMinimal.h` includes the
+  whole Core set below.
+- Other Core services: `FTicker::GetCoreTicker()` (`FTickerDelegate`s with an optional delay, `FDelegateHandle`;
+  return `false` to unregister), `IsEngineExitRequested()` / `RequestEngineExit()` (`CoreGlobals.h`), `FStatsOverlay`
+  (engine debug overlay state; the platform draws it).
+
+### Core foundations (UE 4.27 API)
+
+| Area | Headers | Notes |
+| --- | --- | --- |
+| Memory | `HAL/UnrealMemory.h`, `HAL/MallocAnsi.h` | `FMemory` over `GMalloc` = `FMallocAnsi`, which tracks current / peak bytes (`FMemory::GetUsage()`); PS2 / Linux ask `malloc_usable_size` (no per-block overhead), Windows keeps a small header |
+| Assertions | `Misc/AssertionMacros.h` | `check`, `checkf`, `verify`, `checkNoEntry`, `checkSlow`, … ; `ensure` / `ensureMsgf` / `ensureAlways` report once per call site through `GLog` |
+| Templates / Algo | `Templates/*`, `Misc/Optional.h`, `Misc/EnumClassFlags.h`, `Algo/*` | `MoveTemp`, `TTuple` / `TPair`, `TUniquePtr`, `TSharedPtr` / `TSharedRef` / `TWeakPtr` (`ESPMode::NotThreadSafe` default), `TFunction` / `TUniqueFunction` / `TFunctionRef`, `Sort` / `StableSort`, `TOptional`, `ENUM_CLASS_FLAGS`, `Algo::BinarySearch`, heap |
+| Containers | `Containers/*` | allocator policies, `TArray`, `TArrayView`, `TBitArray`, `TSparseArray`, `TSet`, `TMap` / `TMultiMap`; elements are relocated with `memmove` (UE rule: no self-pointers) |
+| Strings | `Containers/UnrealString.h`, `StringConv.h`, `Misc/CString.h`, `Misc/Char.h`, `Misc/Crc.h` | `FString` (`==` / `<` / `GetTypeHash` ignore case, like UE), `FCString`, `FChar`, `FCrc`; `TCHAR_TO_UTF8` & co. are identities |
+| Names / text | `UObject/NameTypes.h`, `Internationalization/Text.h` | `FName` (8 bytes, case-insensitive, numeric suffix, global pool sized by `FPlatformProperties::NamePool*`; exhausting it is fatal); minimal `FText` (no localization: `LOCTEXT` keeps the source text) |
+| Logging | `Logging/LogMacros.h`, `LogCategory.h`, `Misc/OutputDevice*.h` | `UE_LOG` / `UE_CLOG`, categories (`LogTemp`, `LogCore`, `LogInit`, …); `GLog` redirects to stdout (EE console / PCSX2 log on PS2) and, on Windows, the debugger. Line format `Category: Verbosity: Message` (verbosity omitted for `Log`); log file and config-driven verbosity come in P4 |
+| Delegates | `Delegates/Delegate.h`, `IDelegateInstance.h` | `TDelegate`, `TMulticastDelegate` (`Broadcast` latest-first like UE4, removal during broadcast is safe), `DECLARE_DELEGATE*` / `DECLARE_MULTICAST_DELEGATE*` / `DECLARE_EVENT*`; no dynamic delegates until CoreUObject |
+| Automation tests | `Misc/AutomationTest.h` | `IMPLEMENT_SIMPLE_AUTOMATION_TEST`, `FAutomationTestBase`, `FAutomationTestFramework::RunTests(Filter, ExcludeFlags)`; an unexpected error logged during a test fails it |
+
+Core math (`FVector`, `FRotator`, float `FMath`) is P3; `IPlatformFile`, the `FPaths` rewrite, `FArchive`, config and
+the command line are P4 ([NextSteps](UnrealEngine427/NextSteps.md)).
 
 ---
 
@@ -329,9 +357,9 @@ and publishes it in `GDynamicRHI`. That is why ApplicationCore depends on the pl
   the table without `IMPLEMENT_MODULE` fails to link.
 - `FModuleManager::Get().StartupStaticallyLinkedModules()` creates and starts them in order;
   `ShutdownModules()` shuts them down in reverse. Programs call these directly (`BlankProgram`,
-  `LeonAutomationTests`); games get them from `FEngineLoop`.
+  `LeonAutomationTests`, `TestPAL`); games get them from `FEngineLoop`.
 - Example: `JoltPhysics` registers its backend factory in `StartupModule`; `ThirdPerson` creates its game mode
-  and registers an `FTicker` delegate in `StartupModule`.
+  and registers an `FTickerDelegate::CreateLambda` with `FTicker` in `StartupModule` (keeping the `FDelegateHandle`).
 
 ---
 
@@ -380,8 +408,9 @@ GuardedMain: GEngineLoop.PreInit → (exit if requested) → Init → while !IsE
 input interface, calls `StartPlay` and ticks it from `FTicker`. The game mode owns textures / materials
 (`FPS2Texture`, `FPS2Material`), `FThirdPersonLevel` (primitive sandbox built in code), `FThirdPersonCharacter`
 (camera-relative move, jump, gravity, step-up, wall push-out) and `FThirdPersonCameraBoom`, draws through
-`FPS2RHI` and publishes debug lines with `FStatsOverlay::AddOnScreenDebugMessage`. It uses plain floats and
-`FPlatformMath` — the desktop gameplay framework is not available on PS2 (see §15).
+`FPS2RHI`, publishes debug lines with `FStatsOverlay::AddOnScreenDebugMessage` and logs with
+`UE_LOG(LogThirdPerson, …)` (EE console). It uses plain floats and `FPlatformMath` — the desktop gameplay framework
+is not available on PS2 (see §15).
 
 ---
 
@@ -470,10 +499,18 @@ Unreal shapes without reflection: `A`/`U` prefixes are naming only (no `UObject`
   `FCookRecipe::RunFile`, `FCookPaths::ResolveBeside`.
 - **Programs/LeonCook**: `main` → `UCookCommandlet::Main` (UE: `UE4Editor-Cmd -run=cook`); wrapper
   `Engine\Build\BatchFiles\Cook.bat`. Details: [TOOLS.md](TOOLS.md).
-- **Tests**: each module keeps its automation tests in `<Module>/Private/Tests/` (Catch2): Core, RenderCore,
-  Renderer, PhysicsCore, AnimationCore, Engine, AIModule, MeshUtilities and the JoltPhysics plugin. They are
-  excluded from the module library and compiled only into `LeonAutomationTests` (`COLLECT_AUTOMATION_TESTS`),
-  whose `main` starts the module table and runs Catch2. Run with `Engine\Build\BatchFiles\RunTests.bat`.
+- **Tests**: each module keeps its tests in `<Module>/Private/Tests/`, excluded from the module library and compiled
+  only into targets with `COLLECT_AUTOMATION_TESTS`. Core's are UE automation tests
+  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, `System.Core.*`: 31 on Win64, 27 on PS2 — the `FPaths` / `FTransform` tests are
+  desktop-only); RenderCore, Renderer, PhysicsCore, AnimationCore, Engine, AIModule, MeshUtilities and the
+  JoltPhysics plugin still use Catch2 (124 test cases) until they migrate (P5–P6).
+  - `LeonAutomationTests` (Desktop) starts the module table, runs the automation tests, then Catch2, and fails if
+    either fails. Run with `Engine\Build\BatchFiles\RunTests.bat` (`-automation=<filter>`, `-noautomation`,
+    `-automationonly`; other arguments go to Catch2).
+  - `TestPAL` (every platform, Core only) runs the automation tests without Catch2 and prints
+    `TestPAL: PASSED (N test(s), 0 failed)` plus GMalloc and name-pool numbers. On PS2 it runs in PCSX2
+    (`RunPCSX2.ps1 -Program TestPAL -Build`) and the result is read from the EE console; the numbers go to
+    [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md).
 - **CI** (`.github/workflows/ci.yml`): PS2 `ThirdPerson` + `BlankProgram` in the ps2dev image (ELF artifact);
   Win64 `Setup.bat`, `RunTests.bat`, `LeonGame` and `LeonCook`.
 
@@ -488,7 +525,7 @@ roadmap is [NextSteps.md](UnrealEngine427/NextSteps.md).
 | Topic | Current state |
 | --- | --- |
 | Reflection | No `UObject` / `UCLASS` / UHT / GC. `A` and `U` prefixes are naming only; objects are plain C++ owned with `std::unique_ptr` (e.g. `UWorld` is a member of `AGameModeBase`). |
-| Containers / strings | `std::` containers, `std::string`, `char` instead of `TArray`, `TMap`, `FString`, `TCHAR`. |
+| Containers / strings | Core provides `TArray`, `TMap`, `FString`, `FName`, `FText` (minimal), delegates and `UE_LOG`, but the modules above Core still use `std::` containers, `std::string` and `std::function` until they migrate (P5–P6). `TCHAR` is UTF-8 `char` everywhere. |
 | Math | glm on desktop (Y-up, lowercase API); plain floats + `FPlatformMath` on PS2. No `FVector` / `FRotator` / `FMatrix`. |
 | Renderer | Calls OpenGL directly (Glad) instead of going through RHI command lists; `FDynamicRHI` only covers device init, viewport and memory stats. |
 | Engine ↔ Renderer | `CIRCULAR_DEPENDENCIES` both ways (`Renderer.h` includes `Level.h`, `Level.h` includes GPU resources). UMG also depends privately on Renderer. |

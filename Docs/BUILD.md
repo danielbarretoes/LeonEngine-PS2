@@ -56,7 +56,7 @@ The `--` is required: without it CMake would parse `-Project=...` as its own `-P
 
 | Argument | Values |
 | --- | --- |
-| `<Target>` | a target from a `*.Target.cmake` (`LeonGame`, `LeonCook`, `LeonAutomationTests`, `BlankProgram`, or a project's target such as `ThirdPerson`) |
+| `<Target>` | a target from a `*.Target.cmake` (`LeonGame`, `LeonCook`, `LeonAutomationTests`, `TestPAL`, `BlankProgram`, or a project's target such as `ThirdPerson`) |
 | `<Platform>` | a registered platform: `Win64`, `Linux`, `PS2` |
 | `<Configuration>` | `Debug`, `Development`, `Shipping` |
 | `-Project=<file.lproj>` | build a project's target instead of an engine target. Relative paths are resolved from the current directory |
@@ -115,7 +115,7 @@ Windows batch files live in `Engine/Build/BatchFiles/` (UE layout); run them fro
 | `Build.bat` | `Build.bat <Target> <Platform> <Config> [-Project=<file>] [-Mode=...] [-NoDocker] [-KeepGoing]` | Loads the MSVC environment (`GetVSEnv.bat vcvars quiet need-ninja`) unless the platform is `PS2`, then runs LeonBuildTool with all arguments |
 | `Clean.bat` | `Clean.bat <Target> <Platform> <Config> [-Project=<file>]` | `Build.bat ... -Mode=Clean` |
 | `Rebuild.bat` | `Rebuild.bat <Target> <Platform> <Config> [-Project=<file>]` | `Build.bat ... -Mode=Rebuild` |
-| `RunTests.bat` | `RunTests.bat [Catch2 arguments]` | Builds `LeonAutomationTests Win64 Development` and runs `Engine\Binaries\Win64\LeonAutomationTests.exe` from the repo root |
+| `RunTests.bat` | `RunTests.bat [-automation=<filter>] [-noautomation] [-automationonly] [Catch2 arguments]` | Builds `LeonAutomationTests Win64 Development` and runs `Engine\Binaries\Win64\LeonAutomationTests.exe` from the repo root: automation tests first (31), then Catch2 (124 test cases); the `-automation*` flags are removed before Catch2 parses the rest |
 | `Cook.bat` | `Cook.bat <LeonCook arguments>` | Builds `LeonCook Win64 Development` and runs `Engine\Binaries\Win64\LeonCook.exe` |
 | `FormatCode.bat` | `FormatCode.bat [--check]` | clang-format on every `.cpp/.h/.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game` (skips paths containing `ThirdParty`, `Intermediate`, `Binaries`). `--check` is a dry run that fails if a file needs formatting |
 | `Lint.bat` | `Lint.bat` | `FormatCode.bat --check`, then builds `LeonAutomationTests`, `LeonCook`, `LeonGame` and `BlankProgram` for Win64 Development |
@@ -141,6 +141,8 @@ Engine\Build\BatchFiles\Build.bat BlankProgram PS2 Development
 Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.lproj
 Engine\Build\BatchFiles\Rebuild.bat LeonAutomationTests Win64 Debug -KeepGoing
 Engine\Build\BatchFiles\RunTests.bat "[physics]"
+Engine\Build\BatchFiles\RunTests.bat -automation=System.Core -automationonly
+Engine\Build\BatchFiles\Build.bat TestPAL PS2 Development
 ```
 
 ### GenerateProjectFiles
@@ -306,6 +308,7 @@ Targets in the repository:
 | `LeonGame` | `Engine/Source/LeonGame.Target.cmake` | Game | Win64 | `EXTRA_MODULE_NAMES Engine AIModule`; loads one level, `-map=<.llev>` (UE4Game) |
 | `LeonCook` | `Engine/Source/Programs/LeonCook/LeonCook.Target.cmake` | Program | Desktop | offline cooker |
 | `LeonAutomationTests` | `Engine/Source/Programs/LeonAutomationTests/LeonAutomationTests.Target.cmake` | Program | Desktop | `COLLECT_AUTOMATION_TESTS`, `ENABLE_PLUGINS JoltPhysics` |
+| `TestPAL` | `Engine/Source/Programs/TestPAL/TestPAL.Target.cmake` | Program | all | `COLLECT_AUTOMATION_TESTS`; runs Core's automation tests without Catch2 (`-filter=<text>`), prints `TestPAL: PASSED (N test(s), 0 failed)`; on PS2 run it with `RunPCSX2.ps1 -Program TestPAL` |
 | `BlankProgram` | `Engine/Source/Programs/BlankProgram/BlankProgram.Target.cmake` | Program | all | starts the linked modules and prints the platform |
 | `ThirdPerson` | `Game/ThirdPerson/Source/ThirdPerson.Target.cmake` | Game | PS2 | `COMPILE_AGAINST_ENGINE OFF` |
 
@@ -426,7 +429,7 @@ Every Leon module library and every executable gets these definitions (`CompileE
 | `PLATFORM_IS_EXTENSION` | 1 for PS2 (headers at the root of the extension's `Public/`), 0 otherwise |
 | `IS_MONOLITHIC` | 1 (everything is statically linked) |
 | `WITH_EDITOR` | 0 |
-| `LEON_BUILD_<CONFIGURATION>` | `LEON_BUILD_DEBUG`, `LEON_BUILD_DEVELOPMENT` or `LEON_BUILD_SHIPPING` = 1 |
+| `LEON_BUILD_<CONFIGURATION>` | `LEON_BUILD_DEBUG`, `LEON_BUILD_DEVELOPMENT` or `LEON_BUILD_SHIPPING` = 1; `Misc/Build.h` turns it into `UE_BUILD_*`, `DO_CHECK`, `DO_ENSURE`, `DO_GUARD_SLOW` and `NO_LOGGING` (Shipping) |
 | `ENGINE_MAJOR_VERSION` / `MINOR` / `PATCH` | from `Engine/Build/Build.version` |
 | `LEON_ENGINE_DIR` | absolute `Engine/` path (development fallback for `FPaths`) |
 | `<MODULE>_API` | empty (`CORE_API`, `ENGINE_API`, ...), defined for the module and its dependents |
@@ -439,7 +442,7 @@ shared by every target of a build tree:
 | --- | --- |
 | `WITH_ENGINE` | 1 when `COMPILE_AGAINST_ENGINE` is on |
 | `IS_PROGRAM` | 1 for `TYPE Program` |
-| `WITH_DEV_AUTOMATION_TESTS` | 1 with `COLLECT_AUTOMATION_TESTS` |
+| `WITH_DEV_AUTOMATION_TESTS` | 1 with `COLLECT_AUTOMATION_TESTS` (also seen by the collected test sources; `Misc/Build.h` defaults it to 0) |
 | `LEON_TARGET_NAME`, `LEON_PROJECT_NAME`, `LEON_ROOT_DIR` | target name, project name (empty for engine targets), repo root |
 
 Compiler settings:
@@ -449,7 +452,7 @@ Compiler settings:
 | Standard | C++20 for Desktop-only modules and executables; C++17 for modules also allowed on PS2 | C++17 | C++20 / C++17 as on Win64 |
 | Warnings | `/W4 /permissive- /Zc:__cplusplus /utf-8 /MP` | `-Wall -Wextra` | `-Wall -Wextra -Wpedantic` |
 | Shadowing is an error (UE `ShadowVariableWarningLevel = Error`) | `/we4456 /we4457 /we4458 /we4459` | `-Werror=shadow` | — |
-| Other | `/FS` in Debug and RelWithDebInfo | toolchain: `-D_EE -G0 -O2 -fno-exceptions -fno-rtti`, linked with `$PS2SDK/ee/startup/linkfile` | |
+| Other | `/FS` in Debug and RelWithDebInfo | toolchain: `-D_EE -G0 -O2 -fno-exceptions -fno-rtti -ffunction-sections -fdata-sections`, linked with `$PS2SDK/ee/startup/linkfile` and `-Wl,--gc-sections` (unused functions / data are dropped; sizes in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md)) | |
 
 The C++ standard of a module is the lowest standard among the platforms it is allowed on, so shared code (a module
 without `PLATFORMS`, such as `Core`, `RHI`, `InputCore`, `ApplicationCore`, `Launch`) also compiles as C++17 on Win64.
@@ -525,8 +528,10 @@ To use it, point `DOCKER_IMAGE` in `LeonBuildPS2.cmake` at `leon/ps2dev`. With a
 `Public/` and `Private/`, and `IMPLEMENT_MODULE(FDefaultModuleImpl, <Name>)` in a `Private/*.cpp`. Add it as a
 dependency of the module that uses it (or to a target's `EXTRA_MODULE_NAMES`).
 
-**Tests**: put Catch2 test files in `<Module>/Private/Tests/`; they are built into `LeonAutomationTests` if the module is
-in its closure (add it to `EXTRA_MODULE_NAMES` in `LeonAutomationTests.Target.cmake` otherwise).
+**Tests**: put test files in `<Module>/Private/Tests/` — automation tests (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, as in
+Core), or Catch2 for a module not migrated yet ([CODING_STANDARD.md §10](CODING_STANDARD.md#10-tests)). They are built
+into `LeonAutomationTests` if the module is in its closure (add it to `EXTRA_MODULE_NAMES` in
+`LeonAutomationTests.Target.cmake` otherwise); `TestPAL` links only Core, so it runs only Core's tests.
 
 **A new game project**: create `<Dir>/<Name>.lproj`, `<Dir>/Source/<Name>.Target.cmake` with
 `leon_target(<Name> TYPE Game ...)`, and a module in `<Dir>/Source/<Name>/` using `IMPLEMENT_PRIMARY_GAME_MODULE`. Build

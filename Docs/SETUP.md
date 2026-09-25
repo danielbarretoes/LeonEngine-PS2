@@ -49,13 +49,26 @@ Engine\Build\BatchFiles\RunTests.bat
 ```
 
 This builds `LeonAutomationTests` (Win64 Development) and runs it from the repo root. The executable contains the
-automation tests of every module in its closure (`<Module>/Private/Tests/`, 132 test cases today, Catch2). Arguments
-are passed to Catch2:
+tests of every module in its closure (`<Module>/Private/Tests/`): first the UE automation tests (Core, 31 today),
+then the Catch2 tests of the modules not migrated yet (124 test cases). The exit code is non-zero if either set
+fails. `-automation=<filter>` runs only the automation tests whose name contains `<filter>`, `-noautomation` skips
+them and `-automationonly` skips Catch2; every other argument is passed to Catch2:
 
 ```bat
-Engine\Build\BatchFiles\RunTests.bat "[physics]"
+Engine\Build\BatchFiles\RunTests.bat -automation=System.Core.Containers -automationonly
+Engine\Build\BatchFiles\RunTests.bat -noautomation "[physics]"
 Engine\Build\BatchFiles\RunTests.bat --list-tests
 ```
+
+`TestPAL` runs the same Core automation tests without Catch2, on any platform, and ends with
+`TestPAL: PASSED (N test(s), 0 failed)` plus memory and name-pool numbers:
+
+```bat
+Engine\Build\BatchFiles\Build.bat TestPAL Win64 Development
+Engine\Binaries\Win64\TestPAL.exe [-filter=<text>]
+```
+
+On PS2 see [Run TestPAL in PCSX2](#run-testpal-in-pcsx2).
 
 ## LeonGame
 
@@ -108,10 +121,23 @@ Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson    
 Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson -Build   # build first
 ```
 
-`-Project` accepts a project folder or a `.lproj` file (default `Game\ThirdPerson`); `-Configuration` is
-`Debug`, `Development` (default) or `Shipping`. The script finds PCSX2 through `$env:LEON_PCSX2`, then
-`pcsx2-qt.exe` on `PATH`, then the default install folders, and starts it with `-fastboot -elf <file>`. You can also
-use PCSX2's **File → Run ELF** directly.
+`-Project` accepts a project folder or a `.lproj` file (default `Game\ThirdPerson`); `-Program <Name>` runs an
+engine program instead (`Engine\Binaries\PS2\<Name>.elf`, built with `Build.bat <Name> PS2 <Configuration>`);
+`-Configuration` is `Debug`, `Development` (default) or `Shipping`. The script finds PCSX2 through
+`$env:LEON_PCSX2`, then `pcsx2-qt.exe` on `PATH`, then the default install folders, and starts it with
+`-fastboot -elf <file>`. You can also use PCSX2's **File → Run ELF** directly.
+
+### Run TestPAL in PCSX2
+
+```powershell
+Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build
+```
+
+TestPAL runs Core's automation tests on the EE (27 on PS2: the `FPaths` / `FTransform` tests are desktop-only) and
+logs to the EE console. With the EE console enabled (see [PCSX2 notes](#pcsx2-notes)), read
+`%USERPROFILE%\Documents\PCSX2\logs\emulog.txt` for the `TestPAL: PASSED (27 test(s), 0 failed)` line and the
+`LogTestPAL` memory / name-pool lines; their numbers are tracked in
+[Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md).
 
 ThirdPerson controls:
 
@@ -131,8 +157,9 @@ The overlay (FPS, RAM, VRAM, resolution, plus the DualShock widget) is described
 - **Controller**: bind your pad in the global **Controller Port 1** settings. Bindings made only inside an input
   profile do not reach games unless that profile is the one in use. An Xbox controller shows up as an SDL device
   (`SDL-0`).
-- **EE console log**: the ELF prints diagnostics with `printf` (for example `FPS2RHI::InitDisplay: 640x448 GS +
-  z-buffer ready`, `PS2InputInterface: ...`, `FStatsOverlay` visibility changes). Enable the EE console in PCSX2's
+- **EE console log**: `UE_LOG` output (stdout) and the remaining `printf` diagnostics go to the EE console (for
+  example the `LogThirdPerson` banner, `FPS2RHI::InitDisplay: 640x448 GS + z-buffer ready`, `PS2InputInterface: ...`,
+  `FStatsOverlay` visibility changes). Enable the EE console in PCSX2's
   logging settings (`EnableEEConsole = true` under `[Logging]` in `PCSX2.ini`) and read the PCSX2 log window or
   `logs/emulog.txt` in the PCSX2 user folder. Edit `PCSX2.ini` only while PCSX2 is closed; it rewrites the file on exit.
 - PCSX2 ignores synthetic keyboard input, so button handling has to be tested with a real pad (or keyboard bindings

@@ -9,23 +9,38 @@ platform extension and the JoltPhysics plugin, LeonBuildTool, HAL / ApplicationC
 This page lists what the refactor intentionally left out, plus the debt it surfaced. Each item names the
 UE 4.27 location to mirror.
 
-## Core (next plan)
+## Core
 
-- **Containers:** `TArray`, `TMap`, `TSet`, `TSparseArray` — `Runtime/Core/Public/Containers/`.
-- **Strings:** `FString`, `FName`, `FText`, `TCHAR`/`TEXT()` — `Containers/UnrealString.h`, `UObject/NameTypes.h`,
-  `Internationalization/Text.h`. On PS2, `TCHAR` should stay `char` (no wide strings on EE).
-- **Math:** native `FVector`, `FRotator`, `FQuat`, `FMatrix`, `FTransform` (Z-up, UE units = cm) — `Math/`.
-  Replaces glm in shared modules and lets the gameplay framework compile on PS2. (Today `FTransform` is a
-  glm-based desktop type.)
-- **Logging:** `UE_LOG`, `DECLARE_LOG_CATEGORY_EXTERN`, `FOutputDevice` — `Logging/LogMacros.h`.
-- **Assertions:** `check`, `ensure`, `verify` — `Misc/AssertionMacros.h`.
-- **Delegates:** `DECLARE_DELEGATE*`, `TMulticastDelegate` — `Delegates/` (`FTicker` currently stores
-  `std::function`).
-- **Memory:** `FMemory`, `FMalloc` (PS2: custom allocator over EE RAM) — `HAL/UnrealMemory.h`, `HAL/MallocAnsi.h`.
-- **Config:** `FConfigCacheIni`, `GConfig` — `Misc/ConfigCacheIni.h`; load `Engine/Config` + `<Project>/Config`
-  (the `.ini` files exist as placeholders).
-- **Command line / parse:** `FCommandLine`, `FParse` — `Misc/CommandLine.h`, `Misc/Parse.h` (desktop flags are
-  parsed by hand in `Launch/Private/Desktop/GameApplication.cpp`).
+### Done — Core foundations (P2)
+
+Implemented in `Runtime/Core` on every platform, PS2 included (details:
+[LeonMapping — P2](LeonMapping.md#p2--core-foundations), [ARCHITECTURE §6](../ARCHITECTURE.md#6-core-hal-and-foundations)):
+
+- `Misc/Build.h` / `Misc/CoreMiscDefines.h`; `TCHAR` = UTF-8 `char` everywhere (deviation D1).
+- HAL: `FPlatformMisc`, `FPlatformAtomics`, integer helpers on `FPlatformMath` / `FMath`; `FMemory` over
+  `GMalloc` (`FMallocAnsi`, current / peak tracking).
+- Assertions (`check`, `verify`, `ensure`), templates (`TUniquePtr`, `TSharedPtr`, `TFunction`, `TTuple`, `TOptional`,
+  sorting, `Algo`).
+- Containers (`TArray`, `TArrayView`, `TBitArray`, `TSparseArray`, `TSet`, `TMap`), `FString`, `FCString`, `FName`
+  (platform-sized pool, D5), minimal `FText`, `FCrc`.
+- Logging (`UE_LOG`, categories, `GLog`, stdout / debugger devices), delegates (`TDelegate`, `TMulticastDelegate`),
+  `FTicker` on `FTickerDelegate`.
+- Automation tests (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`) for Core, run by `LeonAutomationTests` and by the new
+  `TestPAL` program (PS2 in PCSX2); PS2 size / heap / name-pool budget in
+  [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
+
+### Next
+
+- **P3 — Math:** native `FVector`, `FRotator`, `FQuat`, `FMatrix`, `FTransform` and float `FMath` (Z-up and cm
+  come later, in P7) — `Math/`. Replaces glm in shared modules and lets the gameplay framework compile on PS2.
+  (Today `FTransform` is a glm-based desktop type.)
+- **P4 — Files, config, command line:** `IPlatformFile` / `FPlatformFileManager` and an `FPaths` rewrite (removes
+  the `std::filesystem` desktop-only code), `FArchive`, `FConfigCacheIni` / `GConfig` (`Misc/ConfigCacheIni.h`;
+  load `Engine/Config` + `<Project>/Config`, today placeholders), `FCommandLine` / `FParse` (`Misc/CommandLine.h`,
+  `Misc/Parse.h`; desktop flags are parsed by hand in `Launch/Private/Desktop/GameApplication.cpp`), native Json,
+  `Projects` (`.lproj` / `.lplugin` readers), a log file device and config-driven log verbosity.
+- **P5–P6 — Migration:** move the modules above Core to the UE types (`TArray`, `FString`, delegates, `UE_LOG`,
+  automation tests instead of Catch2), then drop glm, nlohmann and `std::` containers from engine APIs.
 
 ## CoreUObject
 
@@ -39,8 +54,8 @@ UE 4.27 location to mirror.
 
 ## Engine / platform
 
-- Gameplay framework on PS2 (needs native math + containers first); then `Game/ThirdPerson` can use
-  `AThirdPersonCharacter : ACharacter` like TP_ThirdPerson.
+- Gameplay framework on PS2 (needs native math (P3) and the module migration to UE containers (P5–P6)); then
+  `Game/ThirdPerson` can use `AThirdPersonCharacter : ACharacter` like TP_ThirdPerson.
 - Renderer through RHI command lists instead of direct GL calls; break the Engine ↔ Renderer cycle.
 - `UNavigationSystemBase` seam so NavigationSystem can move to its own module.
 - `PS2TargetPlatform` Developer module (cook formats for PS2: textures, LPS2 meshes).
@@ -59,6 +74,6 @@ UE 4.27 location to mirror.
   the `Projects` module is an empty placeholder; read `.lproj` + `<Project>/Content` like UE's
   `FProjectDescriptor` reads `.uproject` (P4). Until then `LeonGame` loads one level with `-map=`.
 - **Platform checks in shared code:** the `PLATFORM_WINDOWS` tests in `Core/Private/Misc/Paths.cpp` should become
-  HAL functions or move under `Private/Windows`.
+  HAL functions or move under `Private/Windows` (the P4 `IPlatformFile` / `FPaths` rewrite).
 - **Linux:** registered in LeonBuildTool but not built or tested; enable `-Werror=shadow` on the Linux host
   flags when it becomes a gate.

@@ -12,11 +12,12 @@ details: [Docs/BUILD.md](../../../Docs/BUILD.md).
 Engine/Platforms/PS2/
   Build/
     BatchFiles/
-      RunPCSX2.ps1            launch a project's ELF in PCSX2 (optionally build it first)
+      RunPCSX2.ps1            launch a project's (or engine program's) ELF in PCSX2 (optionally build it first)
       DockerEntry.sh          entry point inside the ps2dev container (re-runs LeonBuildTool)
     Docker/Dockerfile         optional local image: pinned ps2dev + CMake + Ninja
   Config/PS2Engine.ini        platform config (placeholder, not loaded yet)
   Documentation/CookNotes.md
+  Documentation/Budgets.md    ELF size, heap and FName pool numbers per phase
   Source/
     Programs/LeonBuildTool/
       LeonBuildPS2.cmake      leon_register_platform(PS2 ...)
@@ -45,8 +46,10 @@ Engine/Platforms/PS2/
 | SDK variable | `PS2DEV` — when it is not set on the host, the build re-runs inside the image |
 
 `PS2Toolchain.cmake` requires `PS2DEV` and `PS2SDK`, uses `$PS2DEV/ee/bin/mips64r5900el-ps2-elf-{gcc,g++}`, compiles
-with `-D_EE -G0 -O2 -Wall` (C++: `-fno-exceptions -fno-rtti`) and links with `$PS2SDK/ee/startup/linkfile`. The
-engine adds `-Wall -Wextra -Werror=shadow` to every Leon module on PS2.
+with `-D_EE -G0 -O2 -Wall -ffunction-sections -fdata-sections` (C++: `-fno-exceptions -fno-rtti`) and links with
+`$PS2SDK/ee/startup/linkfile` and `-Wl,--gc-sections`, so unused functions and data are dropped (ThirdPerson text
+430 KB → 362 KB; see [Documentation/Budgets.md](Documentation/Budgets.md)). The engine adds
+`-Wall -Wextra -Werror=shadow` to every Leon module on PS2.
 
 ## Module extensions
 
@@ -62,7 +65,9 @@ Adds `kernel` (EE timer). Implements the HAL types that `HAL/Platform*.h` select
 | Type | Header | What it does |
 | --- | --- | --- |
 | `FPS2PlatformTypes` → `FPlatformTypes` | `PS2Platform.h` | EE is ILP32: 32-bit `SIZE_T`, `PTRINT`, `UPTRINT`; `PLATFORM_DESKTOP 0`, `PLATFORM_64BITS 0` |
-| `FPS2PlatformProperties` → `FPlatformProperties` | `PS2PlatformProperties.h` | `PlatformName()` = `"PS2"`, `IsGameOnly()` = true |
+| `FPS2PlatformProperties` → `FPlatformProperties` | `PS2PlatformProperties.h` | `PlatformName()` = `"PS2"`, `IsGameOnly()` = true; `FName` pool of 16 KB blocks, at most 16 (256 KB), 4096 hash buckets |
+| `FPS2PlatformMisc` → `FPlatformMisc` | `PS2PlatformMisc.h` | debug output goes to the EE console; a forced `RequestExit` halts the EE thread so the console keeps the last messages |
+| `FPS2PlatformAtomics` → `FPlatformAtomics` | `PS2PlatformAtomics.h` | the generic non-atomic operations: Leon runs a single EE thread |
 | `FPS2PlatformMemory` → `FPlatformMemory` | `PS2PlatformMemory.h` | `GetStats()`: program image + heap (newlib break above `0x00100000`) of 32 MB EE RAM |
 | `FPS2PlatformTime` → `FPlatformTime` | `PS2PlatformTime.h` | `Cycles64()` from `GetTimerSystemTime()` (BUSCLK, 147.456 MHz), `Seconds()`, `CyclesToMicroseconds()` |
 | `FPS2PlatformMath` → `FPlatformMath` | `PS2PlatformMath.h` | `Sin256()` / `Cos256()`: quarter-wave table on a 1/256-turn angle, no libm (soft-float `double` is slow on the EE) |
@@ -178,8 +183,18 @@ Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson
 
 `RunPCSX2.ps1 [-Project <dir|file.lproj>] [-Configuration Debug|Development|Shipping] [-Build]` resolves
 `<Project>\Binaries\PS2\<Name>.elf` (`<Name>-PS2-<Configuration>.elf` outside Development), finds PCSX2 through
-`$env:LEON_PCSX2`, `PATH` or the default install folders, and starts it with `-fastboot -elf`. PCSX2 setup notes:
-[Docs/SETUP.md](../../../Docs/SETUP.md#pcsx2-notes).
+`$env:LEON_PCSX2`, `PATH` or the default install folders, and starts it with `-fastboot -elf`. With
+`-Program <Name>` it runs an engine program instead (`Engine\Binaries\PS2\<Name>.elf`, built with
+`Build.bat <Name> PS2 <Configuration>`). PCSX2 setup notes: [Docs/SETUP.md](../../../Docs/SETUP.md#pcsx2-notes).
+
+Core's automation tests run on the EE through the `TestPAL` program:
+
+```powershell
+Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build
+```
+
+`UE_LOG` output goes to the EE console; read `%USERPROFILE%\Documents\PCSX2\logs\emulog.txt` for
+`TestPAL: PASSED (27 test(s), 0 failed)` and the `LogTestPAL` memory / name-pool lines.
 
 ## Reference
 
