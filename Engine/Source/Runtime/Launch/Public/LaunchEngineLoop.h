@@ -2,8 +2,7 @@
 
 #include "CoreTypes.h"
 #include "Templates/SharedPointer.h"
-
-#include <memory>
+#include "Templates/UniquePtr.h"
 
 class FGenericWindow;
 class GenericApplication;
@@ -38,7 +37,7 @@ public:
 	/** The platform application (nullptr before PreInit). */
 	GenericApplication* GetApplication() const
 	{
-		return Application.get();
+		return Application.Get();
 	}
 
 	/** The main window (nullptr before PreInit / on desktop engine targets). */
@@ -48,11 +47,9 @@ public:
 	}
 
 private:
-	std::unique_ptr<GenericApplication> Application;
+	TUniquePtr<GenericApplication> Application;
 	TSharedPtr<FGenericWindow> MainWindow;
 	uint64 LastFrameCycles = 0;
-	int32 ArgCount = 0;
-	char** Args = nullptr;
 	int32 ExitCode = 0;
 };
 

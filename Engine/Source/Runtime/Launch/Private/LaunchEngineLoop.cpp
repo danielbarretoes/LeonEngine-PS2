@@ -27,10 +27,6 @@
 	#include "Desktop/GameApplication.h"
 #endif
 
-#include <cstdio>
-#include <cstring>
-#include <memory>
-
 FEngineLoop GEngineLoop;
 
 namespace
@@ -43,7 +39,7 @@ namespace
 
 #if WITH_ENGINE
 	/** The desktop game session (UE: GEngine + the game viewport), driven one frame per Tick. */
-	std::unique_ptr<FGameApplication> GGameApplication;
+	TUniquePtr<FGameApplication> GGameApplication;
 #endif
 } // namespace
 
@@ -53,9 +49,6 @@ FEngineLoop::~FEngineLoop() = default;
 
 int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 {
-	ArgCount = ArgC;
-	Args = ArgV;
-
 	// The command line first: everything below may read it (UE: FEngineLoop::PreInit order).
 	FPlatformProcess::SetArgV0(ArgV[0]);
 	FCommandLine::Set(*FCommandLine::BuildFromArgV(nullptr, ArgC, ArgV, nullptr));
@@ -104,11 +97,11 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 #if !WITH_ENGINE
 	// Without the engine framework the loop owns the platform application and the main window;
 	// modules starting up below (the primary game module) can already use them.
-	Application.reset(FPlatformApplicationMisc::CreateApplication());
+	Application.Reset(FPlatformApplicationMisc::CreateApplication());
 	MainWindow = Application->MakeWindow();
 	if (!MainWindow->Create(MainWindowWidth, MainWindowHeight, LEON_TARGET_NAME))
 	{
-		std::printf("FEngineLoop: failed to create the main window\n");
+		UE_LOG(LogInit, Error, "FEngineLoop: failed to create the main window");
 		MainWindow.Reset();
 		return 1;
 	}
@@ -122,10 +115,10 @@ int32 FEngineLoop::Init()
 {
 #if WITH_ENGINE
 	// LeonGame: LeonGame [-map=<.llev>] [-nullrhi] [-tick=<Hz>] [-showstats].
-	GGameApplication = std::make_unique<FGameApplication>();
+	GGameApplication = MakeUnique<FGameApplication>();
 	if (!GGameApplication->Init())
 	{
-		GGameApplication.reset();
+		GGameApplication.Reset();
 		ExitCode = 1;
 		RequestEngineExit("Game session failed to start");
 		return ExitCode;
@@ -173,7 +166,7 @@ void FEngineLoop::Exit()
 	if (GGameApplication)
 	{
 		GGameApplication->Exit();
-		GGameApplication.reset();
+		GGameApplication.Reset();
 	}
 #endif
 	FModuleManager::Get().ShutdownModules();
@@ -182,7 +175,7 @@ void FEngineLoop::Exit()
 		MainWindow->Destroy();
 		MainWindow.Reset();
 	}
-	Application.reset();
+	Application.Reset();
 
 	// Saves what changed in the user config layer (desktop).
 	if (GConfig != nullptr)

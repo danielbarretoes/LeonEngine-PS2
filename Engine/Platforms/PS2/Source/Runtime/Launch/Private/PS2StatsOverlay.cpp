@@ -4,12 +4,10 @@
 #include "HAL/PlatformMemory.h"
 #include "HAL/PlatformTime.h"
 #include "InputCoreTypes.h"
+#include "Misc/CString.h"
 #include "PS2InputInterface.h"
 #include "PS2RHI.h"
 #include "Stats/StatsOverlay.h"
-
-#include <cstdio>
-#include <cstring>
 
 namespace
 {
@@ -44,13 +42,13 @@ namespace
 	constexpr float LitAlpha = 0.9f;
 	constexpr uint64 StatsPeriodMicroseconds = 250000u;
 
-	/** Integer tenths: the EE has no hardware double, keep printf off the float path. */
+	/** Integer tenths: the EE has no hardware double, keep Snprintf off the float path. */
 	void FormatMegabytes(char* Out, uint32 OutSize, const char* Label, uint64 Used, uint64 Total)
 	{
 		const uint32 UsedTenths = static_cast<uint32>((Used * 10u + 512u * 1024u) / (1024u * 1024u));
 		const uint32 TotalTenths = static_cast<uint32>((Total * 10u + 512u * 1024u) / (1024u * 1024u));
-		std::snprintf(Out, OutSize, "%s %u.%u/%u.%u MB", Label, UsedTenths / 10u, UsedTenths % 10u, TotalTenths / 10u,
-			TotalTenths % 10u);
+		FCString::Snprintf(Out, static_cast<int32>(OutSize), "%s %u.%u/%u.%u MB", Label, UsedTenths / 10u,
+			UsedTenths % 10u, TotalTenths / 10u, TotalTenths % 10u);
 	}
 
 	void RefreshStats(int32 ScreenWidth, int32 ScreenHeight, float WorkMs)
@@ -75,7 +73,7 @@ namespace
 		{
 			Tenths = 0;
 		}
-		std::snprintf(LineFps, sizeof(LineFps), "FPS %d  %d.%d ms", Fps, Tenths / 10, Tenths % 10);
+		FCString::Sprintf(LineFps, "FPS %d  %d.%d ms", Fps, Tenths / 10, Tenths % 10);
 
 		const FPlatformMemoryStats MemoryStats = FPlatformMemory::GetStats();
 		FormatMegabytes(LineRam, sizeof(LineRam), "RAM", MemoryStats.UsedPhysical, MemoryStats.TotalPhysical);
@@ -87,7 +85,7 @@ namespace
 				FormatMegabytes(LineVram, sizeof(LineVram), "VRAM", GPUStats.UsedBytes, GPUStats.BudgetBytes);
 			}
 		}
-		std::snprintf(LineRes, sizeof(LineRes), "RES %dX%d", ScreenWidth, ScreenHeight);
+		FCString::Sprintf(LineRes, "RES %dX%d", ScreenWidth, ScreenHeight);
 
 		AccumMicroseconds = 0;
 		AccumFrames = 0;
@@ -120,10 +118,10 @@ namespace
 			}
 		}
 
-		size_t Chars = static_cast<size_t>(StatsMinChars);
+		int32 Chars = static_cast<int32>(StatsMinChars);
 		for (uint32 Index = 0; Index < Count; ++Index)
 		{
-			const size_t Length = std::strlen(Lines[Index].Text);
+			const int32 Length = FCString::Strlen(Lines[Index].Text);
 			Chars = Length > Chars ? Length : Chars;
 		}
 
