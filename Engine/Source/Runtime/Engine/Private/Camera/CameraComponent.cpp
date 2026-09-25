@@ -70,10 +70,10 @@ void UCameraComponent::SetMode(ECameraMode InMode)
 	InvalidateCache();
 }
 
-void UCameraComponent::Orbit(float DeltaYawDegrees, float DeltaPitchDegrees)
+void UCameraComponent::AddViewRotation(const FRotator& DeltaRotation)
 {
-	ViewRotation.Yaw += DeltaYawDegrees;
-	ViewRotation.Pitch = FMath::Clamp(ViewRotation.Pitch + DeltaPitchDegrees, -MaxViewPitch, MaxViewPitch);
+	ViewRotation.Yaw += DeltaRotation.Yaw;
+	ViewRotation.Pitch = FMath::Clamp(ViewRotation.Pitch + DeltaRotation.Pitch, -MaxViewPitch, MaxViewPitch);
 	InvalidateCache();
 }
 
@@ -106,11 +106,6 @@ void UCameraComponent::SetDistance(float InDistance)
 {
 	Distance = FMath::Clamp(InDistance, MinOrbitDistance, MaxOrbitDistance);
 	InvalidateCache();
-}
-
-void UCameraComponent::SetYawPitch(float InYawDegrees, float InPitchDegrees)
-{
-	SetViewRotation(FRotator(InPitchDegrees, InYawDegrees, 0.0f));
 }
 
 void UCameraComponent::SetViewRotation(const FRotator& InRotation)

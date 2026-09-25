@@ -5,17 +5,16 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FInputMoveMoveAxes2DAnyDetectsNonzeroTest,
-	"System.Engine.InputMove.MoveAxes2DAnyDetectsNonzero",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FInputMoveEitherAxisMovesTest, "System.Engine.InputMove.EitherAxisMoves",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-bool FInputMoveMoveAxes2DAnyDetectsNonzeroTest::RunTest(const FString& Parameters)
+bool FInputMoveEitherAxisMovesTest::RunTest(const FString& Parameters)
 {
-	// Any() is false for zero axes and true when either axis is nonzero.
-	const FMoveAxes2D Zero{};
-	TestFalse("Zero axes", Zero.Any());
-	TestTrue("Strafe axis", FMoveAxes2D{1.0f, 0.0f}.Any());
-	TestTrue("Forward axis", FMoveAxes2D{0.0f, -1.0f}.Any());
+	// Either move axis alone gives a unit move: backward input (X < 0) goes along -X at yaw 0, left input (Y < 0)
+	// along -Y.
+	const FRotator View = FRotator::ZeroRotator;
+	TestTrue("Backward", YawRelativeMove(View, FVector2D(-1.0f, 0.0f)).Equals(FVector(-1.0f, 0.0f, 0.0f), 1.0e-5f));
+	TestTrue("Left", YawRelativeMove(View, FVector2D(0.0f, -1.0f)).Equals(FVector(0.0f, -1.0f, 0.0f), 1.0e-5f));
 	return true;
 }
 
@@ -26,7 +25,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FInputMoveYawRelativeMoveReturnsZeroWithoutAxes
 bool FInputMoveYawRelativeMoveReturnsZeroWithoutAxesTest::RunTest(const FString& Parameters)
 {
 	// No input gives no move, whatever the yaw.
-	const FVector Move = YawRelativeMove(45.0f, FMoveAxes2D{});
+	const FVector Move = YawRelativeMove(FRotator(0.0f, 45.0f, 0.0f), FVector2D::ZeroVector);
 	TestEqual("Move X", Move.X, 0.0f, 1.0e-6f);
 	TestEqual("Move Y", Move.Y, 0.0f, 1.0e-6f);
 	TestEqual("Move Z", Move.Z, 0.0f, 1.0e-6f);
@@ -39,13 +38,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FInputMoveYawRelativeMoveForwardAtYawZeroTest,
 
 bool FInputMoveYawRelativeMoveForwardAtYawZeroTest::RunTest(const FString& Parameters)
 {
-	// Forward input at view yaw 0 is a unit move along +X; strafing right at yaw 0 moves along +Y.
-	const FVector Move = YawRelativeMove(0.0f, FMoveAxes2D{0.0f, 1.0f});
+	// Forward input (X) at view yaw 0 is a unit move along +X; right input (Y) at yaw 0 moves along +Y.
+	const FVector Move = YawRelativeMove(FRotator::ZeroRotator, FVector2D(1.0f, 0.0f));
 	TestEqual("Move length", Move.Size(), 1.0f, 1.0e-4f);
 	TestEqual("Move X", Move.X, 1.0f, 1.0e-4f);
 	TestEqual("Move Y", Move.Y, 0.0f, 1.0e-4f);
 	TestEqual("Move Z", Move.Z, 0.0f, 1.0e-4f);
-	const FVector Strafe = YawRelativeMove(0.0f, FMoveAxes2D{1.0f, 0.0f});
+	const FVector Strafe = YawRelativeMove(FRotator::ZeroRotator, FVector2D(0.0f, 1.0f));
 	TestTrue("Strafe right is +Y", Strafe.Equals(FVector(0.0f, 1.0f, 0.0f), 1.0e-5f));
 	return true;
 }
@@ -59,9 +58,9 @@ bool FInputMoveCameraRelativeMoveMatchesCameraYawTest::RunTest(const FString& Pa
 	// The camera-relative move equals the yaw-relative move for the camera's view yaw, and follows its forward on the
 	// ground even when the camera looks down.
 	UCameraComponent Cam;
-	Cam.SetYawPitch(90.0f, -40.0f);
-	const FVector A = CameraRelativeMove(Cam, FMoveAxes2D{0.0f, 1.0f});
-	const FVector B = YawRelativeMove(90.0f, FMoveAxes2D{0.0f, 1.0f});
+	Cam.SetViewRotation(FRotator(-40.0f, 90.0f, 0.0f));
+	const FVector A = CameraRelativeMove(Cam, FVector2D(1.0f, 0.0f));
+	const FVector B = YawRelativeMove(FRotator(0.0f, 90.0f, 0.0f), FVector2D(1.0f, 0.0f));
 	TestEqual("Move X", A.X, B.X, 1.0e-5f);
 	TestEqual("Move Y", A.Y, B.Y, 1.0e-5f);
 	const FVector Forward = Cam.ForwardVector();

@@ -125,6 +125,11 @@ FVector USceneComponent::GetComponentLocation() const
 	return GetComponentTransform().GetLocation();
 }
 
+FRotator USceneComponent::GetComponentRotation() const
+{
+	return GetComponentTransform().Rotator();
+}
+
 void USceneComponent::DestroyComponent()
 {
 	while (Children.Num() > 0)

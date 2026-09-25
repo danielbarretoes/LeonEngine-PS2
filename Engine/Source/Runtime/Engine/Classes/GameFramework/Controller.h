@@ -29,9 +29,20 @@ public:
 	}
 	[[nodiscard]] ACharacter* GetCharacter() const;
 
+	/** The rotation the controller aims and looks with (UE: ControlRotation), a UE rotation in degrees. */
+	[[nodiscard]] virtual FRotator GetControlRotation() const
+	{
+		return ControlRotation;
+	}
+	virtual void SetControlRotation(const FRotator& NewRotation)
+	{
+		ControlRotation = NewRotation;
+	}
+
 protected:
 	AController() = default;
 
 private:
 	APawn* Pawn = nullptr;
+	FRotator ControlRotation = FRotator::ZeroRotator;
 };

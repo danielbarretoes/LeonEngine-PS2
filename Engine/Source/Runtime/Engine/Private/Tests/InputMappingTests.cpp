@@ -79,7 +79,7 @@ bool FInputMappingPlayerInputClearContextsEmptiesMapsAfterUpdatePathTest::RunTes
 	Input.ClearContexts();
 	TestEqual("MoveForward axis", Input.GetAxisValue(FName(Leon::InputActions::MoveForward)), 0.0f, 1.0e-6f);
 	TestFalse("Jump pressed", Input.IsActionPressed(FName(Leon::InputActions::Jump)));
-	TestFalse("Move axes", Input.GetMoveAxes2D().Any());
+	TestTrue("Move input", Input.GetMoveInput().IsZero());
 	return true;
 }
 

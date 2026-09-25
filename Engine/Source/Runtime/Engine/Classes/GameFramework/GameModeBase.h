@@ -4,7 +4,6 @@
 #include "Engine/Level.h"
 #include "Engine/World.h"
 #include "GameFramework/GameStateBase.h"
-#include "LegacyCoordinateConversion.h"
 
 #include <string_view>
 
@@ -133,21 +132,24 @@ protected:
 		GetWorld().RegisterBodiesFromLevel(Level);
 	}
 
-	/** Unreal FindPlayerStart — resolve spawn transform (slot picks among starts); the yaw is the start's UE yaw. */
+	/**
+	 * Unreal FindPlayerStart — resolve the spawn transform (slot picks among starts). Like UE's spawn at a start, only
+	 * the start's yaw is kept.
+	 */
 	[[nodiscard]] bool FindPlayerStart(
-		const ULevel& Level, FVector& OutLocation, float& OutYawDegrees, int Slot = 0) const
+		const ULevel& Level, FVector& OutLocation, FRotator& OutRotation, int Slot = 0) const
 	{
 		const auto& Starts = Level.GetPlayerStarts();
 		if (Starts.Num() == 0)
 		{
 			OutLocation = {0.0f, 0.0f, 0.0f};
-			OutYawDegrees = 0.0f;
+			OutRotation = FRotator::ZeroRotator;
 			return false;
 		}
 		const int Index = FMath::Clamp(Slot, 0, static_cast<int>(Starts.Num()) - 1);
 		const FPlayerStart& Start = Starts[Index];
 		OutLocation = Start.Transform.GetLocation();
-		OutYawDegrees = Start.Transform.Rotator().Yaw;
+		OutRotation = FRotator(0.0f, Start.Transform.Rotator().Yaw, 0.0f);
 		return true;
 	}
 

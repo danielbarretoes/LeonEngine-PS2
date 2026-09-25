@@ -158,10 +158,7 @@ bool UPlayerInput::WasActionJustReleased(const FName& Action) const
 	return bWas != nullptr && *bWas;
 }
 
-FMoveAxes2D UPlayerInput::GetMoveAxes2D() const
+FVector2D UPlayerInput::GetMoveInput() const
 {
-	FMoveAxes2D LocalAxes{};
-	LocalAxes.X = GetAxisValue(Leon::InputActions::MoveRight);
-	LocalAxes.Z = GetAxisValue(Leon::InputActions::MoveForward);
-	return LocalAxes;
+	return FVector2D(GetAxisValue(Leon::InputActions::MoveForward), GetAxisValue(Leon::InputActions::MoveRight));
 }

@@ -5,7 +5,6 @@
 #include "Components/SceneComponent.h"
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "GameFramework/Input.h"
 
 class FDebugDraw;
 class FPhysScene;
@@ -14,8 +13,9 @@ class FPhysScene;
  * Unreal-like Spring Arm / Camera Boom (USceneComponent) with optional camera lag,
  * rotation lag, smoothed arm length, and collision probe (sphere sweep).
  *
- * The boom angles are the rotation of the arm from the target to the camera (FRotator(BoomPitch, BoomYaw, 0).Vector()
- * points at the eye); the camera looks back along it, with the view rotation FRotator(-BoomPitch, BoomYaw + 180, 0).
+ * The arm's rotation is the view rotation (UE: GetTargetRotation): the camera sits ArmLength behind the arm origin,
+ * at Origin - Rotation.Vector() * ArmLength, and looks along the rotation. With bUsePawnControlRotation the rotation is
+ * the owning pawn's view (control) rotation, otherwise the component's own rotation.
  */
 class ENGINE_API USpringArmComponent : public USceneComponent
 {
@@ -26,16 +26,16 @@ public:
 	float ArmLengthMin = 150.0f;
 	/** cm */
 	float ArmLengthMax = 2000.0f;
-	/** Height of the boom target above the actor location (cm, along +Z). */
-	float SocketOffsetZ = 100.0f;
-	/** Over-shoulder offset (cm) along the view's right axis (UE: SocketOffset.Y); positive = right of the pawn. */
-	float SocketOffsetX = 0.0f;
-
-	/** Desired boom orientation, yaw about Z and pitch up (mouse look edits these immediately). */
-	float BoomYawDegrees = 0.0f;
-	float BoomPitchDegrees = 15.0f;
-	float PitchMin = -60.0f;
-	float PitchMax = 70.0f;
+	/** Offset of the arm origin from the owner's location, in world space (cm; UE: TargetOffset). */
+	FVector TargetOffset = FVector(0.0f, 0.0f, 100.0f);
+	/**
+	 * Offset in the arm's rotation space (cm; UE: SocketOffset): Y > 0 puts the camera right of the pawn (over the
+	 * shoulder). Unlike UE, which moves only the end of the arm, it moves the whole arm: the camera orbits the offset
+	 * point and the collision probe starts there.
+	 */
+	FVector SocketOffset = FVector::ZeroVector;
+	/** Use the owning pawn's view rotation (UE: bUsePawnControlRotation); otherwise the component's rotation. */
+	bool bUsePawnControlRotation = false;
 
 	/** Unreal-style follow lag (higher speed = snappier). */
 	bool bEnableCameraLag = true;
@@ -53,43 +53,20 @@ public:
 	float CollisionProbeOffset = 5.0f;
 	ECollisionChannel ProbeChannel = ECollisionChannel::WorldStatic;
 
-	void AddYawInput(float DeltaDegrees)
-	{
-		BoomYawDegrees += DeltaDegrees;
-	}
-
-	void AddPitchInput(float DeltaDegrees)
-	{
-		BoomPitchDegrees = FMath::Clamp(BoomPitchDegrees + DeltaDegrees, PitchMin, PitchMax);
-	}
-
 	/** Positive delta lengthens the boom (zoom out). Clamped to ArmLengthMin/Max. */
 	void AddArmLengthInput(float DeltaLength)
 	{
 		TargetArmLength = FMath::Clamp(TargetArmLength + DeltaLength, ArmLengthMin, ArmLengthMax);
 	}
 
-	void ClampPitch()
-	{
-		BoomPitchDegrees = FMath::Clamp(BoomPitchDegrees, PitchMin, PitchMax);
-	}
+	/** The desired arm rotation (UE: GetTargetRotation): the pawn's view rotation or the component's rotation. */
+	[[nodiscard]] FRotator GetTargetRotation() const;
 
-	[[nodiscard]] FVector GetTargetLocation(const FVector& ActorLocation) const;
+	/** The arm origin, where the camera looks, for an owner location: TargetOffset, then the rotated SocketOffset. */
+	[[nodiscard]] FVector GetArmOrigin(const FVector& ActorLocation) const;
 
 	/** Snap lagged state to desired (call on possess / level enter). */
 	void SnapLagState(const FVector& ActorLocation);
-
-	/** Movement uses *desired* boom yaw so controls stay responsive while the view lags. */
-	[[nodiscard]] FVector GetMoveDirection(const FMoveAxes2D& Axes) const
-	{
-		return YawRelativeMove(GetLookFacingYawDegrees(), Axes);
-	}
-
-	/**
-	 * Actor yaw for a pawn facing the same ground direction the camera looks: the view yaw BoomYaw + 180, in
-	 * (-180, 180] (matches YawRelativeMove forward / crosshair aim on the ground plane).
-	 */
-	[[nodiscard]] float GetLookFacingYawDegrees() const;
 
 	/**
 	 * Advance lag, optional collision probe, and push the Engine orbit camera.
@@ -101,21 +78,20 @@ public:
 	/** Prefer when attached under an Actor root: uses owner location + world FPhysScene. */
 	void ApplyToCamera(UCameraComponent& Camera, float DeltaTime, FDebugDraw* DebugDraw = nullptr);
 
-	/** Unit boom direction, target to camera: FRotator(Pitch, Yaw, 0).Vector(). */
-	[[nodiscard]] static FVector GetBoomDirection(float YawDegrees, float PitchDegrees);
-
-	/** Sphere-sweep arm length; returns clamped length (ArmLengthMin..desiredLength). */
-	[[nodiscard]] float ProbeArmLength(FPhysScene& PhysScene, const FVector& Target, float YawDegrees,
-		float PitchDegrees, float DesiredLength, FDebugDraw* DebugDraw = nullptr) const;
+	/**
+	 * Sphere-sweep the arm from Origin back along Rotation (toward the camera); returns the clamped length
+	 * (ArmLengthMin..DesiredLength).
+	 */
+	[[nodiscard]] float ProbeArmLength(FPhysScene& PhysScene, const FVector& Origin, const FRotator& Rotation,
+		float DesiredLength, FDebugDraw* DebugDraw = nullptr) const;
 
 private:
 	[[nodiscard]] static float ExpSmoothAlpha(float Speed, float DeltaTime);
 	[[nodiscard]] static float LerpAngleDegrees(float FromDegrees, float ToDegrees, float Alpha);
 	void UpdateLag(float DeltaTime, const FVector& ActorLocation);
 
-	FVector LaggedTarget = FVector::ZeroVector;
-	float LaggedYawDegrees = 0.0f;
-	float LaggedPitchDegrees = 15.0f;
+	FVector LaggedOrigin = FVector::ZeroVector;
+	FRotator LaggedRotation = FRotator::ZeroRotator;
 	float LaggedArmLength = 400.0f;
 	bool bLagInitialized = false;
 };

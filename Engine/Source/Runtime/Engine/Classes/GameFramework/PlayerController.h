@@ -52,6 +52,17 @@ public:
 	}
 
 	/**
+	 * Look input in degrees (UE: AddYawInput / AddPitchInput with an input scale of 1), applied to the control rotation
+	 * at once: a positive yaw turns right, a positive pitch looks up. The pitch stays in [ViewPitchMin, ViewPitchMax].
+	 */
+	void AddYawInput(float Val);
+	void AddPitchInput(float Val);
+
+	/** Pitch limits of the control rotation in degrees (UE: APlayerCameraManager::ViewPitchMin / ViewPitchMax). */
+	float ViewPitchMin = -89.0f;
+	float ViewPitchMax = 89.0f;
+
+	/**
 	 * Apply input to the possessed Character. Games override. Returns wish direction for
 	 * debug HUD; default is a no-op.
 	 */

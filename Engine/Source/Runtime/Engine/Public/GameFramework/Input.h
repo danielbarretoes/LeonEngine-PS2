@@ -3,23 +3,12 @@
 #include "Camera/CameraComponent.h"
 #include "CoreMinimal.h"
 
-/** Keyboard move axes: X = strafe (right), Z = forward (from mapped Move* actions). */
-struct ENGINE_API FMoveAxes2D
-{
-	float X = 0.0f;
-	float Z = 0.0f;
-
-	[[nodiscard]] bool Any() const
-	{
-		return X != 0.0f || Z != 0.0f;
-	}
-};
-
-/** Unit ground-plane (XY) move for the camera's view yaw: Axes.Z along its forward, Axes.X along its right. */
-[[nodiscard]] FVector CameraRelativeMove(const UCameraComponent& Camera, const FMoveAxes2D& Axes);
-
 /**
- * Same as CameraRelativeMove from an explicit view yaw (e.g. a SpringArm's look yaw): forward and right are the X and Y
- * axes of FRotationMatrix(FRotator(0, Yaw, 0)).
+ * Unit ground-plane (XY) move for a view or control rotation (only its yaw is used): MoveInput.X along its forward,
+ * MoveInput.Y along its right, the X and Y axes of FRotationMatrix(FRotator(0, Rotation.Yaw, 0)) as in UE's
+ * AddMovementInput from the control rotation. Zero input gives a zero move.
  */
-[[nodiscard]] FVector YawRelativeMove(float YawDegrees, const FMoveAxes2D& Axes);
+[[nodiscard]] FVector YawRelativeMove(const FRotator& Rotation, const FVector2D& MoveInput);
+
+/** YawRelativeMove for the camera's view rotation. */
+[[nodiscard]] FVector CameraRelativeMove(const UCameraComponent& Camera, const FVector2D& MoveInput);

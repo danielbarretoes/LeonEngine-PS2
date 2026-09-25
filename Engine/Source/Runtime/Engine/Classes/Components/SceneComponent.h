@@ -42,6 +42,7 @@ public:
 	/** Component-to-world transform (UE: GetComponentTransform). */
 	[[nodiscard]] FTransform GetComponentTransform() const;
 	[[nodiscard]] FVector GetComponentLocation() const;
+	[[nodiscard]] FRotator GetComponentRotation() const;
 
 	/** Detaches the attach tree, then unregisters from the owner. */
 	void DestroyComponent() override;

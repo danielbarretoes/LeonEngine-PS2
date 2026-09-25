@@ -58,22 +58,17 @@ public:
 	}
 
 	/**
-	 * Adds to the view rotation: a positive yaw turns the view right, a positive pitch looks up (clamped to +-89).
-	 * Orbit: the eye tumbles around the target. FreeLook: the look direction turns.
+	 * Adds to the view rotation (UE: AddWorldRotation of the yaw and pitch): a positive yaw turns the view right, a
+	 * positive pitch looks up (clamped to +-89); the roll is ignored. Orbit: the eye tumbles around the target.
+	 * FreeLook: the look direction turns.
 	 */
-	void Orbit(float DeltaYawDegrees, float DeltaPitchDegrees);
-	void AddLook(float DeltaYawDegrees, float DeltaPitchDegrees)
-	{
-		Orbit(DeltaYawDegrees, DeltaPitchDegrees);
-	}
+	void AddViewRotation(const FRotator& DeltaRotation);
 
 	/** Slide along camera right / world up (Orbit moves pivot; FreeLook moves eye). */
 	void Pan(float DeltaRight, float DeltaUp);
 
 	void Zoom(float DeltaDistance);
 	void SetDistance(float InDistance);
-	/** Sets the view rotation FRotator(Pitch, Yaw, 0); the pitch is clamped to +-89. */
-	void SetYawPitch(float InYawDegrees, float InPitchDegrees);
 	/** Sets the view rotation (the roll is dropped; the pitch is clamped to +-89). */
 	void SetViewRotation(const FRotator& InRotation);
 	[[nodiscard]] const FRotator& GetViewRotation() const
@@ -97,16 +92,6 @@ public:
 	[[nodiscard]] float GetDistance() const
 	{
 		return Distance;
-	}
-	/** View rotation yaw (degrees). */
-	[[nodiscard]] float GetYawDegrees() const
-	{
-		return ViewRotation.Yaw;
-	}
-	/** View rotation pitch (degrees). */
-	[[nodiscard]] float GetPitchDegrees() const
-	{
-		return ViewRotation.Pitch;
 	}
 	[[nodiscard]] const FVector& GetTarget() const
 	{

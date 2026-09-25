@@ -11,11 +11,11 @@ bool FCameraOrbitClampsPitchTest::RunTest(const FString& Parameters)
 {
 	// Orbiting past the poles clamps the pitch to +/-89 degrees.
 	UCameraComponent Cam;
-	Cam.SetYawPitch(0.0f, 0.0f);
-	Cam.Orbit(0.0f, 200.0f);
-	TestEqual("Pitch clamped up", Cam.GetPitchDegrees(), 89.0f, 1.0e-4f);
-	Cam.Orbit(0.0f, -400.0f);
-	TestEqual("Pitch clamped down", Cam.GetPitchDegrees(), -89.0f, 1.0e-4f);
+	Cam.SetViewRotation(FRotator::ZeroRotator);
+	Cam.AddViewRotation(FRotator(200.0f, 0.0f, 0.0f));
+	TestEqual("Pitch clamped up", Cam.GetViewRotation().Pitch, 89.0f, 1.0e-4f);
+	Cam.AddViewRotation(FRotator(-400.0f, 0.0f, 0.0f));
+	TestEqual("Pitch clamped down", Cam.GetViewRotation().Pitch, -89.0f, 1.0e-4f);
 	return true;
 }
 
@@ -48,7 +48,7 @@ bool FCameraOrbitPositionFollowsTargetAndDistanceTest::RunTest(const FString& Pa
 	UCameraComponent Cam;
 	Cam.SetMode(ECameraMode::Orbit);
 	Cam.SetTarget(FVector::ZeroVector);
-	Cam.SetYawPitch(0.0f, 0.0f);
+	Cam.SetViewRotation(FRotator::ZeroRotator);
 	Cam.SetDistance(400.0f);
 
 	const FVector Eye = Cam.GetCameraLocation();
@@ -84,7 +84,7 @@ bool FCameraUEViewAndProjectionTest::RunTest(const FString& Parameters)
 	Cam.SetPerspective(60.0f, 2.0f, 50.0f, 5000.0f);
 	Cam.SetMode(ECameraMode::Orbit);
 	Cam.SetTarget(FVector(100.0f, -200.0f, 50.0f));
-	Cam.SetYawPitch(30.0f, -20.0f);
+	Cam.SetViewRotation(FRotator(-20.0f, 30.0f, 0.0f));
 	Cam.SetDistance(600.0f);
 
 	const FMatrix View = Cam.ViewMatrix();
@@ -146,11 +146,11 @@ bool FCameraLookInputTurnsRightAndUpTest::RunTest(const FString& Parameters)
 	// A positive yaw input turns the view toward its right vector; a positive pitch input looks up.
 	UCameraComponent Cam;
 	Cam.SetMode(ECameraMode::FreeLook);
-	Cam.SetYawPitch(0.0f, 0.0f);
+	Cam.SetViewRotation(FRotator::ZeroRotator);
 	const FVector RightBefore = Cam.RightVector();
-	Cam.AddLook(90.0f, 0.0f);
+	Cam.AddViewRotation(FRotator(0.0f, 90.0f, 0.0f));
 	TestTrue("Turned right", Cam.ForwardVector().Equals(RightBefore, 1.0e-5f));
-	Cam.AddLook(0.0f, 10.0f);
+	Cam.AddViewRotation(FRotator(10.0f, 0.0f, 0.0f));
 	TestTrue("Looks up", Cam.ForwardVector().Z > 0.1f);
 	return true;
 }

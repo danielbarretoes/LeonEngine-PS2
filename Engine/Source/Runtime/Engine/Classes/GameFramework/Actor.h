@@ -9,11 +9,11 @@
 class UWorld;
 
 /**
- * Yaw (degrees) that makes content converted from the legacy formats face an actor's forward. Legacy content faces the
+ * Yaw in degrees that makes content converted from the legacy formats face an actor's forward. Legacy content faces the
  * legacy +Z, which becomes +Y; UE actors face +X. A component showing such content gets this relative yaw (as UE's
  * mannequin mesh does), and a level mesh driven by an actor gets the actor yaw plus this.
  */
-inline constexpr float LegacyContentYawDegrees = -90.0f;
+inline constexpr float LegacyContentYaw = -90.0f;
 
 /**
  * Unreal-style Actor (no A-prefix): owns a root USceneComponent and optional Level mesh link.
@@ -21,7 +21,7 @@ inline constexpr float LegacyContentYawDegrees = -90.0f;
  * ## Transforms
  * `Location` / `Rotation` (UE: yaw about Z, 0 = +X, 90 = +Y) are the gameplay pose written to Level meshes via
  * `SyncTransformToLevel`. The root `USceneComponent` may add `Relative*` offsets on top
- * (`GetComponentTransform`). Prefer setting Actor location/yaw for pawn movement; keep root
+ * (`GetComponentTransform`). Prefer setting Actor location/rotation for pawn movement; keep root
  * Relative near identity unless you intentionally offset the visual.
  *
  * ## Components
@@ -101,14 +101,10 @@ public:
 	{
 		return Location;
 	}
+	/** UE rotation: yaw about Z in degrees, 0 faces +X, 90 faces +Y. */
 	[[nodiscard]] const FRotator& GetActorRotation() const
 	{
 		return Rotation;
-	}
-	/** Yaw about Z in degrees (UE: GetActorRotation().Yaw): 0 faces +X, 90 faces +Y. */
-	[[nodiscard]] float GetActorYaw() const
-	{
-		return Rotation.Yaw;
 	}
 
 	void SetActorLocation(const FVector& InLocation)
@@ -122,15 +118,10 @@ public:
 		Rotation = InRotation;
 		RootComponent.RelativeRotation = FRotator::ZeroRotator;
 	}
-	void SetActorYaw(float InYawDegrees)
+	void SetActorLocationAndRotation(const FVector& NewLocation, const FRotator& NewRotation)
 	{
-		SetActorRotation(FRotator(0.0f, InYawDegrees, 0.0f));
-	}
-
-	void SetActorLocationAndRotation(const FVector& InLocation, float InYawDegrees = 0.0f)
-	{
-		SetActorLocation(InLocation);
-		SetActorYaw(InYawDegrees);
+		SetActorLocation(NewLocation);
+		SetActorRotation(NewRotation);
 	}
 
 	/** Unreal-like AActor::IsPendingKill. */
@@ -172,7 +163,7 @@ public:
 
 	/**
 	 * Copy location + yaw into the linked Level UStaticMeshComponent (no-op if index is invalid). The mesh shows
-	 * converted legacy content, so its yaw is the actor yaw plus LegacyContentYawDegrees; its pitch and roll are kept.
+	 * converted legacy content, so its yaw is the actor yaw plus LegacyContentYaw; its pitch and roll are kept.
 	 */
 	virtual void SyncTransformToLevel(ULevel& Level) const
 	{
@@ -184,7 +175,7 @@ public:
 		UStaticMeshComponent& Obj = Meshes[static_cast<int32>(LevelMeshIndex)];
 		Obj.Transform.SetLocation(Location);
 		FRotator MeshRotation = Obj.Transform.Rotator();
-		MeshRotation.Yaw = Rotation.Yaw + LegacyContentYawDegrees;
+		MeshRotation.Yaw = Rotation.Yaw + LegacyContentYaw;
 		Obj.Transform.SetRotation(MeshRotation.Quaternion());
 	}
 
@@ -198,9 +189,9 @@ protected:
 	{
 		return Location;
 	}
-	[[nodiscard]] float& MutableYawDegrees()
+	[[nodiscard]] FRotator& MutableRotation()
 	{
-		return Rotation.Yaw;
+		return Rotation;
 	}
 
 	void UnregisterComponent(UActorComponent* Component);

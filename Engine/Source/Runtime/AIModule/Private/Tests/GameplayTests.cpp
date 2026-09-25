@@ -12,6 +12,7 @@
 #include "GameFramework/DefaultGameMode.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Misc/AutomationTest.h"
@@ -168,21 +169,66 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplaySpringArmClampsPitchAndArmLengthTest,
 
 bool FGameplaySpringArmClampsPitchAndArmLengthTest::RunTest(const FString& Parameters)
 {
-	// Pitch and arm length inputs clamp to their limits, and the boom drives an orbit camera at the socket height.
-	USpringArmComponent Arm;
-	Arm.AddPitchInput(200.0f);
-	TestTrue("Pitch clamped to max", Arm.BoomPitchDegrees <= Arm.PitchMax);
-	Arm.AddPitchInput(-400.0f);
-	TestTrue("Pitch clamped to min", Arm.BoomPitchDegrees >= Arm.PitchMin);
+	// With bUsePawnControlRotation the arm follows the pawn's control rotation, whose pitch the player controller
+	// clamps; the arm length input clamps to its limits, and the arm drives an orbit camera at the target offset
+	// height.
+	ATestPawn Pawn;
+	APlayerController Controller;
+	Controller.Possess(&Pawn);
+	USpringArmComponent* Arm = Pawn.CreateDefaultSubobject<USpringArmComponent>();
+	Arm->bUsePawnControlRotation = true;
 
-	Arm.AddArmLengthInput(10000.0f);
-	TestEqual("Arm length clamped to max", Arm.TargetArmLength, Arm.ArmLengthMax, 1.0e-3f);
+	Pawn.AddControllerPitchInput(200.0f);
+	TestEqual("Pitch clamped to max", Pawn.GetControlRotation().Pitch, Controller.ViewPitchMax, 1.0e-4f);
+	Pawn.AddControllerPitchInput(-400.0f);
+	TestEqual("Pitch clamped to min", Pawn.GetControlRotation().Pitch, Controller.ViewPitchMin, 1.0e-4f);
+	Pawn.AddControllerPitchInput(60.0f);
+	Pawn.AddControllerYawInput(30.0f);
+	TestTrue("Arm follows the control rotation",
+		Arm->GetTargetRotation().Equals(FRotator(Controller.ViewPitchMin + 60.0f, 30.0f, 0.0f), 1.0e-4f));
 
-	Arm.SnapLagState(FVector::ZeroVector);
+	Arm->AddArmLengthInput(10000.0f);
+	TestEqual("Arm length clamped to max", Arm->TargetArmLength, Arm->ArmLengthMax, 1.0e-3f);
+
+	Arm->SnapLagState(FVector::ZeroVector);
 	UCameraComponent Camera;
-	Arm.ApplyToCamera(Camera, FVector(100.0f, 0.0f, 0.0f), 0.016f);
+	Arm->ApplyToCamera(Camera, FVector(100.0f, 0.0f, 0.0f), 0.016f);
 	TestTrue("Orbit camera", Camera.GetMode() == ECameraMode::Orbit);
-	TestEqual("Camera target height", Camera.GetTarget().Z, Arm.SocketOffsetZ, 50.0f);
+	TestEqual("Camera target height", Camera.GetTarget().Z, Arm->TargetOffset.Z, 50.0f);
+	TestTrue("Camera looks along the control rotation",
+		Camera.GetViewRotation().Equals(Controller.GetControlRotation(), 1.0e-4f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayPawnLookInputDrivesControlRotationTest,
+	"System.AIModule.Gameplay.PawnLookInputDrivesControlRotation",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplayPawnLookInputDrivesControlRotationTest::RunTest(const FString& Parameters)
+{
+	// AddControllerYawInput / AddControllerPitchInput reach only a possessing player controller: without one the pawn
+	// has no control rotation and views along its actor rotation.
+	ATestPawn Pawn;
+	Pawn.SetActorRotation(FRotator(0.0f, 45.0f, 0.0f));
+	Pawn.AddControllerYawInput(10.0f);
+	TestTrue("No control rotation unpossessed", Pawn.GetControlRotation().Equals(FRotator::ZeroRotator, 0.0f));
+	TestTrue("Views along the actor unpossessed", Pawn.GetViewRotation().Equals(FRotator(0.0f, 45.0f, 0.0f), 0.0f));
+
+	{
+		ATestController Controller;
+		Controller.Possess(&Pawn);
+		Pawn.AddControllerYawInput(10.0f);
+		TestTrue("Not a player controller", Controller.GetControlRotation().Equals(FRotator::ZeroRotator, 0.0f));
+	}
+
+	APlayerController Player;
+	Player.Possess(&Pawn);
+	Player.SetControlRotation(FRotator(-10.0f, 90.0f, 0.0f));
+	Pawn.AddControllerYawInput(15.0f);
+	Pawn.AddControllerPitchInput(25.0f);
+	TestTrue("Look input adds to the control rotation",
+		Player.GetControlRotation().Equals(FRotator(15.0f, 105.0f, 0.0f), 1.0e-4f));
+	TestTrue("Pawn view is the control rotation", Pawn.GetViewRotation().Equals(Player.GetControlRotation(), 0.0f));
 	return true;
 }
 
@@ -198,6 +244,7 @@ bool FGameplaySpringArmCollisionProbeShortensArmTest::RunTest(const FString& Par
 	Scene.GetBodies()[Id].Position = FVector(200.0f, 0.0f, 100.0f);
 	Scene.GetBodies()[Id].HalfExtents = FVector(25.0f, 200.0f, 100.0f);
 
+	// Without a pawn the arm uses its own rotation: the view looks toward -X, so the camera sits along +X.
 	USpringArmComponent Arm;
 	Arm.bDoCollisionTest = true;
 	Arm.bEnableCameraLag = false;
@@ -205,10 +252,9 @@ bool FGameplaySpringArmCollisionProbeShortensArmTest::RunTest(const FString& Par
 	Arm.ArmLengthLagSpeed = 1000.0f;
 	Arm.TargetArmLength = 600.0f;
 	Arm.ArmLengthMin = 50.0f;
-	Arm.BoomYawDegrees = 0.0f;
-	Arm.BoomPitchDegrees = 0.0f;
-	Arm.SocketOffsetZ = 100.0f;
-	Arm.SocketOffsetX = 0.0f;
+	Arm.RelativeRotation = FRotator(0.0f, 180.0f, 0.0f);
+	Arm.TargetOffset = FVector(0.0f, 0.0f, 100.0f);
+	Arm.SocketOffset = FVector::ZeroVector;
 	Arm.ProbeSize = 15.0f;
 	Arm.CollisionProbeOffset = 5.0f;
 	Arm.SnapLagState(FVector::ZeroVector);
@@ -506,9 +552,9 @@ bool FGameplayCharacterResetJumpAndPerformMovementTest::RunTest(const FString& P
 {
 	// Reset puts the Character on the ground; Jump makes it fall upward, and movement input moves it along X.
 	ACharacter Character;
-	Character.Reset(FVector(0.0f, 0.0f, 0.0f), 45.0f);
+	Character.Reset(FVector(0.0f, 0.0f, 0.0f), FRotator(0.0f, 45.0f, 0.0f));
 	TestTrue("On ground after reset", Character.IsMovingOnGround());
-	TestEqual("Yaw after reset", Character.GetActorYaw(), 45.0f, 1.0e-5f);
+	TestEqual("Yaw after reset", Character.GetActorRotation().Yaw, 45.0f, 1.0e-5f);
 
 	FPhysScene Scene;
 	Character.Jump();
@@ -531,7 +577,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayActorSyncTransformToLevelWritesLinkedM
 bool FGameplayActorSyncTransformToLevelWritesLinkedMeshTest::RunTest(const FString& Parameters)
 {
 	// SyncTransformToLevel copies the Actor location and yaw into its linked Level mesh; the mesh shows converted
-	// legacy content (facing +Y), so its yaw is the actor yaw plus LegacyContentYawDegrees.
+	// legacy content (facing +Y), so its yaw is the actor yaw plus LegacyContentYaw.
 	ULevel Level;
 	UStaticMeshComponent Mesh{};
 	Level.AddStaticMesh(MoveTemp(Mesh));
@@ -539,15 +585,15 @@ bool FGameplayActorSyncTransformToLevelWritesLinkedMeshTest::RunTest(const FStri
 	UWorld World;
 	ATestActor* Actor = World.SpawnActor<ATestActor>();
 	Actor->SetLevelMeshIndex(0);
-	Actor->SetActorLocationAndRotation(FVector(300.0f, 150.0f, -200.0f), 90.0f);
+	Actor->SetActorLocationAndRotation(FVector(300.0f, 150.0f, -200.0f), FRotator(0.0f, 90.0f, 0.0f));
 	Actor->SyncTransformToLevel(Level);
 
 	const FTransform& Transform = Level.GetStaticMeshes()[0].Transform;
 	TestEqual("Position X", Transform.GetLocation().X, 300.0f, 1.0e-3f);
 	TestEqual("Position Y", Transform.GetLocation().Y, 150.0f, 1.0e-3f);
 	TestEqual("Position Z", Transform.GetLocation().Z, -200.0f, 1.0e-3f);
-	TestTrue("Yaw",
-		Transform.GetRotation().Equals(FRotator(0.0f, 90.0f + LegacyContentYawDegrees, 0.0f).Quaternion(), 1.0e-6f));
+	TestTrue(
+		"Yaw", Transform.GetRotation().Equals(FRotator(0.0f, 90.0f + LegacyContentYaw, 0.0f).Quaternion(), 1.0e-6f));
 	// The content's forward (+Y) now faces the actor's forward (yaw 90: +Y).
 	TestTrue("Content faces the actor forward",
 		Transform.GetRotation().RotateVector(FVector(0.0f, 1.0f, 0.0f)).Equals(FVector(0.0f, 1.0f, 0.0f), 1.0e-5f));
@@ -568,7 +614,7 @@ bool FGameplayWorldTickGameplayFrameSyncsCharacterTest::RunTest(const FString& P
 	UWorld World;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->SetLevelMeshIndex(0);
-	Character->Reset(FVector(100.0f, 200.0f, 0.0f), 45.0f);
+	Character->Reset(FVector(100.0f, 200.0f, 0.0f), FRotator(0.0f, 45.0f, 0.0f));
 
 	FWorldGameplayFrameParams Frame{};
 	Frame.DeltaTime = 1.0f / 60.0f;
@@ -578,7 +624,7 @@ bool FGameplayWorldTickGameplayFrameSyncsCharacterTest::RunTest(const FString& P
 	const FTransform& Transform = Level.GetStaticMeshes()[0].Transform;
 	TestEqual("Position X", Transform.GetLocation().X, 100.0f, 1.0e-2f);
 	TestEqual("Position Y", Transform.GetLocation().Y, 200.0f, 1.0e-2f);
-	TestEqual("Yaw", Transform.Rotator().Yaw, 45.0f + LegacyContentYawDegrees, 1.0e-3f);
+	TestEqual("Yaw", Transform.Rotator().Yaw, 45.0f + LegacyContentYaw, 1.0e-3f);
 	return true;
 }
 
@@ -638,7 +684,7 @@ bool FGameplaySceneComponentAttachHierarchyTest::RunTest(const FString& Paramete
 	// Attached components add their relative offsets to the Actor pose; cycles are refused and destroy detaches.
 	UWorld World;
 	ATestActor* Actor = World.SpawnActor<ATestActor>();
-	Actor->SetActorLocationAndRotation(FVector(1000.0f, 0.0f, 0.0f), 0.0f);
+	Actor->SetActorLocationAndRotation(FVector(1000.0f, 0.0f, 0.0f), FRotator::ZeroRotator);
 
 	// The Relative* fields are world units (cm).
 	USceneComponent Child;
@@ -681,7 +727,7 @@ bool FGameplayCharacterMeshAttachesToRootTest::RunTest(const FString& Parameters
 	TestEqual("Mesh world X", Character.GetMesh().GetComponentLocation().X, 600.0f, 1.0e-2f);
 
 	// The mesh shows legacy content (facing +Y) with a relative yaw of -90: the content faces the actor's forward.
-	Character.SetActorYaw(30.0f);
+	Character.SetActorRotation(FRotator(0.0f, 30.0f, 0.0f));
 	const FVector ContentForward =
 		Character.GetMesh().GetComponentTransform().GetRotation().RotateVector(FVector(0.0f, 1.0f, 0.0f));
 	TestTrue("Content faces the actor forward", ContentForward.Equals(FRotator(0.0f, 30.0f, 0.0f).Vector(), 1.0e-5f));

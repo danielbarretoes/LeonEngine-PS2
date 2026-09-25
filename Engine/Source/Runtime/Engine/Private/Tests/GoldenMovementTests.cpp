@@ -35,7 +35,7 @@ namespace
 	{
 		ACharacter* Character = World.SpawnActor<ACharacter>();
 		Character->GetCharacterMovement().FloorZ = LegacyGolden::ToWorldLength(LegacyFloorY);
-		Character->Reset(LegacyGolden::ToWorldPosition(LegacyFeet), LegacyGolden::ToWorldActorYaw(0.0f));
+		Character->Reset(LegacyGolden::ToWorldPosition(LegacyFeet), LegacyGolden::ToWorldActorRotation(0.0f));
 		return Character;
 	}
 
@@ -288,8 +288,8 @@ bool FGoldenSteepSlopeKeepsFallingTest::RunTest(const FString& Parameters)
 	Scene.AddSlopeRamp(LegacyGolden::ToWorldPosition(FVector::ZeroVector),
 		LegacyGolden::ToWorldExtent(FVector(4.0f, 4.0f, 2.0f)), 55.0f);
 	ACharacter* Character = SpawnGoldenCharacter(World, FVector::ZeroVector, -100.0f);
-	Character->ApplyReplicatedState(
-		LegacyGolden::ToWorldPosition(FVector(0.5f, 2.0f, 0.25f)), LegacyGolden::ToWorldActorYaw(0.0f), 0.0f, false);
+	Character->ApplyReplicatedState(LegacyGolden::ToWorldPosition(FVector(0.5f, 2.0f, 0.25f)),
+		LegacyGolden::ToWorldActorRotation(0.0f), 0.0f, false);
 	const FGoldenMovementRun Run = RunGoldenMovement(*Character, Scene, FVector::ZeroVector, 60, 6);
 
 	static const FVector ExpectedPath[] = {FVector(0.5f, 1.86000013f, 0.25f), FVector(0.5f, 1.4799999f, 0.25f),

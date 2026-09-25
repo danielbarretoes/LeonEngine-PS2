@@ -6,8 +6,8 @@
 namespace
 {
 
-	/** UE yaw of a horizontal direction: 0 = +X, 90 = +Y. */
-	float YawDegreesFromMove(const FVector& Move)
+	/** UE yaw in degrees of a horizontal direction: 0 = +X, 90 = +Y. */
+	float YawFromMove(const FVector& Move)
 	{
 		constexpr float RadToDeg = 180.0f / PI;
 		return FMath::Atan2(Move.Y, Move.X) * RadToDeg;
@@ -30,7 +30,7 @@ ACharacter::ACharacter()
 	RegisterComponent(&Mesh);
 	(void)Mesh.AttachToComponent(&GetRootComponent());
 	// Legacy content faces +Y (UE: the mannequin mesh's relative yaw of -90).
-	Mesh.RelativeRotation = FRotator(0.0f, LegacyContentYawDegrees, 0.0f);
+	Mesh.RelativeRotation = FRotator(0.0f, LegacyContentYaw, 0.0f);
 }
 
 void ACharacter::SetHealth(float InHealth)
@@ -75,9 +75,9 @@ void ACharacter::Revive(float NewHealth)
 	bAlive = true;
 }
 
-void ACharacter::Reset(const FVector& InLocation, float InYawDegrees)
+void ACharacter::Reset(const FVector& InLocation, const FRotator& InRotation)
 {
-	SetActorLocationAndRotation(InLocation, InYawDegrees);
+	SetActorLocationAndRotation(InLocation, InRotation);
 	WishDir = {};
 	VelocityZ = 0.0f;
 	SetMovementMode(EMovementMode::Walking);
@@ -90,9 +90,10 @@ void ACharacter::Reset(const FVector& InLocation, float InYawDegrees)
 	bAlive = true;
 }
 
-void ACharacter::ApplyReplicatedState(const FVector& InLocation, float InYawDegrees, float InVelocityZ, bool bGrounded)
+void ACharacter::ApplyReplicatedState(
+	const FVector& InLocation, const FRotator& InRotation, float InVelocityZ, bool bGrounded)
 {
-	SetActorLocationAndRotation(InLocation, InYawDegrees);
+	SetActorLocationAndRotation(InLocation, InRotation);
 	WishDir = {};
 	VelocityZ = InVelocityZ;
 	SetMovementMode(bGrounded ? EMovementMode::Walking : EMovementMode::Falling);
@@ -132,9 +133,9 @@ void ACharacter::Jump()
 	bJumpRequested = true;
 }
 
-void ACharacter::FaceRotation(float InYawDegrees, float DeltaTime)
+void ACharacter::FaceRotation(const FRotator& NewRotation, float DeltaTime)
 {
-	ApplyYaw(InYawDegrees, DeltaTime);
+	ApplyYaw(NewRotation.Yaw, DeltaTime);
 }
 
 bool ACharacter::IsWalkable(const FHitResult& Hit) const
@@ -177,17 +178,17 @@ void ACharacter::FindFloor(
 	OutFloor.FloorDist = FMath::Max(0.0f, Feet.Z - Hit.ImpactPoint.Z);
 }
 
-void ACharacter::ApplyYaw(float TargetYawDegrees, float DeltaTime)
+void ACharacter::ApplyYaw(float TargetYaw, float DeltaTime)
 {
 	if (!bYawInitialized)
 	{
-		MutableYawDegrees() = TargetYawDegrees;
+		MutableRotation().Yaw = TargetYaw;
 		bYawInitialized = true;
 		return;
 	}
-	const float Delta = ShortestYawDelta(GetActorYaw(), TargetYawDegrees);
+	const float Delta = ShortestYawDelta(GetActorRotation().Yaw, TargetYaw);
 	const float T = 1.0f - FMath::Exp(-Movement.TurnSharpness * DeltaTime);
-	MutableYawDegrees() += Delta * T;
+	MutableRotation().Yaw += Delta * T;
 }
 
 float ACharacter::CapsuleHalfHeight() const
@@ -408,7 +409,7 @@ void ACharacter::MoveHorizontal(FPhysScene& PhysScene, float DeltaTime, FDebugDr
 	const FVector Dir = WishDir / Len;
 	if (bOrientRotationToMovement)
 	{
-		ApplyYaw(YawDegreesFromMove(Dir) + Movement.ModelYawOffsetDegrees, DeltaTime);
+		ApplyYaw(YawFromMove(Dir) + Movement.ModelYawOffset, DeltaTime);
 	}
 
 	// Flow: SafeMove → step-up (if Walking + blocked) → slide → ResolveCapsuleSides.

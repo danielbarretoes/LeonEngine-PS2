@@ -2,6 +2,7 @@
 
 #include "Debug/DebugDraw.h"
 #include "Engine/World.h"
+#include "GameFramework/Pawn.h"
 #include "Physics/PhysScene.h"
 
 namespace
@@ -23,31 +24,31 @@ namespace
 
 } // namespace
 
-FVector USpringArmComponent::GetBoomDirection(float YawDegrees, float PitchDegrees)
+FRotator USpringArmComponent::GetTargetRotation() const
 {
-	return FRotator(PitchDegrees, YawDegrees, 0.0f).Vector();
+	if (bUsePawnControlRotation)
+	{
+		if (const auto* OwningPawn = dynamic_cast<const APawn*>(GetOwner()))
+		{
+			return OwningPawn->GetViewRotation();
+		}
+	}
+	return GetComponentRotation();
 }
 
-FVector USpringArmComponent::GetTargetLocation(const FVector& ActorLocation) const
+FVector USpringArmComponent::GetArmOrigin(const FVector& ActorLocation) const
 {
-	// The view's right axis (the same as YawRelativeMove's).
-	const FVector Right = FRotationMatrix(FRotator(0.0f, BoomYawDegrees + 180.0f, 0.0f)).GetUnitAxis(EAxis::Y);
-	return ActorLocation + FVector(0.0f, 0.0f, SocketOffsetZ) + (Right * SocketOffsetX);
+	// With no roll, the socket offset's Y goes along the view's right axis (the same as YawRelativeMove's).
+	const FVector Socket = FRotationMatrix(GetTargetRotation()).TransformVector(SocketOffset);
+	return ActorLocation + TargetOffset + Socket;
 }
 
 void USpringArmComponent::SnapLagState(const FVector& ActorLocation)
 {
-	LaggedTarget = GetTargetLocation(ActorLocation);
-	LaggedYawDegrees = BoomYawDegrees;
-	LaggedPitchDegrees = BoomPitchDegrees;
+	LaggedOrigin = GetArmOrigin(ActorLocation);
+	LaggedRotation = GetTargetRotation();
 	LaggedArmLength = TargetArmLength;
 	bLagInitialized = true;
-}
-
-float USpringArmComponent::GetLookFacingYawDegrees() const
-{
-	// The camera looks back along the boom.
-	return FRotator::NormalizeAxis(BoomYawDegrees + 180.0f);
 }
 
 float USpringArmComponent::ExpSmoothAlpha(float Speed, float DeltaTime)
@@ -67,31 +68,32 @@ float USpringArmComponent::LerpAngleDegrees(float FromDegrees, float ToDegrees, 
 
 void USpringArmComponent::UpdateLag(float DeltaTime, const FVector& ActorLocation)
 {
-	const FVector DesiredTarget = GetTargetLocation(ActorLocation);
+	const FVector DesiredOrigin = GetArmOrigin(ActorLocation);
+	const FRotator DesiredRotation = GetTargetRotation();
 	if (!bLagInitialized)
 	{
-		LaggedTarget = DesiredTarget;
-		LaggedYawDegrees = BoomYawDegrees;
-		LaggedPitchDegrees = BoomPitchDegrees;
+		LaggedOrigin = DesiredOrigin;
+		LaggedRotation = DesiredRotation;
 		LaggedArmLength = TargetArmLength;
 		bLagInitialized = true;
 		return;
 	}
 
 	const float PosAlpha = bEnableCameraLag ? ExpSmoothAlpha(CameraLagSpeed, DeltaTime) : 1.0f;
-	LaggedTarget = FMath::Lerp(LaggedTarget, DesiredTarget, PosAlpha);
+	LaggedOrigin = FMath::Lerp(LaggedOrigin, DesiredOrigin, PosAlpha);
 
 	const float RotAlpha = bEnableCameraRotationLag ? ExpSmoothAlpha(CameraRotationLagSpeed, DeltaTime) : 1.0f;
-	LaggedYawDegrees = LerpAngleDegrees(LaggedYawDegrees, BoomYawDegrees, RotAlpha);
-	LaggedPitchDegrees = FMath::Lerp(LaggedPitchDegrees, BoomPitchDegrees, RotAlpha);
+	LaggedRotation.Yaw = LerpAngleDegrees(LaggedRotation.Yaw, DesiredRotation.Yaw, RotAlpha);
+	LaggedRotation.Pitch = FMath::Lerp(LaggedRotation.Pitch, DesiredRotation.Pitch, RotAlpha);
+	LaggedRotation.Roll = 0.0f;
 
 	const float ArmAlpha = ExpSmoothAlpha(ArmLengthLagSpeed, DeltaTime);
 	LaggedArmLength = FMath::Lerp(LaggedArmLength, TargetArmLength, ArmAlpha);
 	LaggedArmLength = FMath::Clamp(LaggedArmLength, ArmLengthMin, ArmLengthMax);
 }
 
-float USpringArmComponent::ProbeArmLength(FPhysScene& PhysScene, const FVector& Target, float YawDegrees,
-	float PitchDegrees, float DesiredLength, FDebugDraw* DebugDraw) const
+float USpringArmComponent::ProbeArmLength(FPhysScene& PhysScene, const FVector& Origin, const FRotator& Rotation,
+	float DesiredLength, FDebugDraw* DebugDraw) const
 {
 	const float Length = FMath::Clamp(DesiredLength, ArmLengthMin, ArmLengthMax);
 	if (ProbeSize <= 0.0f || Length <= ArmLengthMin + 1.0e-2f)
@@ -99,8 +101,9 @@ float USpringArmComponent::ProbeArmLength(FPhysScene& PhysScene, const FVector& 
 		return Length;
 	}
 
-	const FVector BoomDir = GetBoomDirection(YawDegrees, PitchDegrees);
-	const FVector End = Target + BoomDir * Length;
+	// The camera sits behind the origin, looking along the rotation.
+	const FVector ArmDirection = -Rotation.Vector();
+	const FVector End = Origin + ArmDirection * Length;
 
 	FCollisionQueryParams Params{};
 	Params.bTraceFloorPlane = false;
@@ -110,7 +113,7 @@ float USpringArmComponent::ProbeArmLength(FPhysScene& PhysScene, const FVector& 
 	}
 
 	FHitResult Hit{};
-	if (!PhysScene.SphereTraceSingleByChannel(Hit, Target, End, ProbeSize, ProbeChannel, Params, DebugDraw) ||
+	if (!PhysScene.SphereTraceSingleByChannel(Hit, Origin, End, ProbeSize, ProbeChannel, Params, DebugDraw) ||
 		!Hit.bBlockingHit)
 	{
 		return Length;
@@ -130,9 +133,8 @@ void USpringArmComponent::ApplyToCamera(UCameraComponent& Camera, const FVector&
 	FPhysScene* Phys = ResolvePhysScene(GetOwner(), PhysScene);
 	if (bDoCollisionTest && Phys != nullptr)
 	{
-		// Flow: lag desired length → sphere probe target→eye → snap in on hit (no lerp through walls)
-		const float Probed =
-			ProbeArmLength(*Phys, LaggedTarget, LaggedYawDegrees, LaggedPitchDegrees, ArmLength, DebugDraw);
+		// Flow: lag desired length → sphere probe origin→eye → snap in on hit (no lerp through walls)
+		const float Probed = ProbeArmLength(*Phys, LaggedOrigin, LaggedRotation, ArmLength, DebugDraw);
 		if (Probed < ArmLength)
 		{
 			ArmLength = Probed;
@@ -141,10 +143,9 @@ void USpringArmComponent::ApplyToCamera(UCameraComponent& Camera, const FVector&
 	}
 
 	Camera.SetMode(ECameraMode::Orbit);
-	Camera.SetTarget(LaggedTarget);
+	Camera.SetTarget(LaggedOrigin);
 	Camera.SetDistance(ArmLength);
-	// The camera looks back along the boom.
-	Camera.SetViewRotation(FRotator(-LaggedPitchDegrees, LaggedYawDegrees + 180.0f, 0.0f));
+	Camera.SetViewRotation(LaggedRotation);
 }
 
 void USpringArmComponent::ApplyToCamera(UCameraComponent& Camera, float DeltaTime, FDebugDraw* DebugDraw)

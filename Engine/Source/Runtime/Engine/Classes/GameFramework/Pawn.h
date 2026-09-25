@@ -18,6 +18,18 @@ public:
 		return Controller != nullptr;
 	}
 
+	/** The controller's control rotation, or zero without a controller (UE: APawn::GetControlRotation). */
+	[[nodiscard]] FRotator GetControlRotation() const;
+	/** Where the pawn looks: the control rotation when possessed, else the actor rotation (UE: GetViewRotation). */
+	[[nodiscard]] FRotator GetViewRotation() const;
+
+	/**
+	 * Look input in degrees, forwarded to a possessing APlayerController (UE: AddControllerYawInput /
+	 * AddControllerPitchInput): a positive yaw turns right, a positive pitch looks up. Ignored without one.
+	 */
+	void AddControllerYawInput(float Val);
+	void AddControllerPitchInput(float Val);
+
 	/** UnPossess any Controller, then mark pending kill. */
 	void Destroy() override;
 	/** Also UnPossess when removed via World::Clear. */

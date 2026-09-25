@@ -2,7 +2,6 @@
 
 #include "DynamicRHI.h"
 #include "EngineLogs.h"
-#include "GameFramework/Input.h"
 #include "HAL/PlatformApplicationMisc.h"
 #include "HAL/PlatformMemory.h"
 #include "HAL/PlatformProcess.h"
@@ -467,12 +466,12 @@ void UGameEngine::HandleInput(float DeltaTime)
 	{
 		// Reuse Move* axes so remapping WASD also remaps keyboard orbit tumble: right turns the view right, forward
 		// tilts it up (the eye goes down).
-		const FMoveAxes2D Axes = PlayerInput.GetMoveAxes2D();
-		const float Yaw = Axes.X * KeyboardOrbitSpeed;
-		const float Pitch = Axes.Z * KeyboardOrbitSpeed;
+		const FVector2D MoveInput = PlayerInput.GetMoveInput();
+		const float Yaw = MoveInput.Y * KeyboardOrbitSpeed;
+		const float Pitch = MoveInput.X * KeyboardOrbitSpeed;
 		if (Yaw != 0.0f || Pitch != 0.0f)
 		{
-			Camera.Orbit(Yaw * DeltaTime, Pitch * DeltaTime);
+			Camera.AddViewRotation(FRotator(Pitch * DeltaTime, Yaw * DeltaTime, 0.0f));
 		}
 	}
 
@@ -504,13 +503,13 @@ void UGameEngine::HandleInput(float DeltaTime)
 			if (Camera.GetMode() == ECameraMode::FreeLook)
 			{
 				constexpr float LookDegreesPerPixel = 0.15f;
-				Camera.AddLook(Dx * LookDegreesPerPixel, -Dy * LookDegreesPerPixel);
+				Camera.AddViewRotation(FRotator(-Dy * LookDegreesPerPixel, Dx * LookDegreesPerPixel, 0.0f));
 			}
 			else if (bOrbitMouseEnabled)
 			{
 				// Dragging down tilts the view down (the eye rises over the target).
 				constexpr float OrbitDegreesPerPixel = 0.3f;
-				Camera.Orbit(Dx * OrbitDegreesPerPixel, -Dy * OrbitDegreesPerPixel);
+				Camera.AddViewRotation(FRotator(-Dy * OrbitDegreesPerPixel, Dx * OrbitDegreesPerPixel, 0.0f));
 			}
 		}
 		bMouseLookSampleValid = true;

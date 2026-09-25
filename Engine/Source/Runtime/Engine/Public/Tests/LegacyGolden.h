@@ -54,10 +54,10 @@ namespace LegacyGolden
 		return FLegacyCoordinateConversion::ConvertLength(MetresPerSecond);
 	}
 
-	/** Legacy actor yaw (0 = legacy +Z, toward +X) to the engine's actor yaw (FLegacyCoordinateConversion). */
-	inline float ToWorldActorYaw(float LegacyYawDegrees)
+	/** Legacy actor yaw (0 = legacy +Z, toward +X) to the engine's actor rotation (FLegacyCoordinateConversion). */
+	inline FRotator ToWorldActorRotation(float LegacyYaw)
 	{
-		return FLegacyCoordinateConversion::ConvertActorYaw(LegacyYawDegrees);
+		return FRotator(0.0f, FLegacyCoordinateConversion::ConvertActorYaw(LegacyYaw), 0.0f);
 	}
 
 	/** Engine-world position back to legacy (for recording). */

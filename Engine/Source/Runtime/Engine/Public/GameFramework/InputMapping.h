@@ -1,7 +1,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/Input.h"
 #include "GenericPlatform/GenericWindow.h"
 #include "InputCoreTypes.h"
 
@@ -57,8 +56,8 @@ public:
 	[[nodiscard]] bool WasActionJustPressed(const FName& Action) const;
 	[[nodiscard]] bool WasActionJustReleased(const FName& Action) const;
 
-	/** Convenience: MoveRight (x) + MoveForward (z) from the active map. */
-	[[nodiscard]] FMoveAxes2D GetMoveAxes2D() const;
+	/** The move axes as one input: X = MoveForward, Y = MoveRight (UE's forward and right axes). */
+	[[nodiscard]] FVector2D GetMoveInput() const;
 
 private:
 	struct FContextEntry

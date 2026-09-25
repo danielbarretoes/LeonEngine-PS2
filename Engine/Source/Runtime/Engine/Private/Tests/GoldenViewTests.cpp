@@ -2,7 +2,9 @@
 #include "CoreMinimal.h"
 #include "Frustum.h"
 #include "GLClipSpace.h"
+#include "GameFramework/DefaultCameraActor.h"
 #include "GameFramework/Input.h"
+#include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Misc/AutomationTest.h"
 #include "Physics/PhysScene.h"
@@ -96,7 +98,7 @@ bool FGoldenSpringArmTest::RunTest(const FString& Parameters)
 	// Spring arm without lag for four boom orientations, first in open space, then with a box 2 m along the boom:
 	// the camera target, eye and probed arm length. The boom angles are the yaw (from +X toward the second horizontal
 	// axis) and the elevation of the target-to-eye arm; legacy (X, Z) is the world's (X, Y) in the same order, so the
-	// legacy angles are the world ones.
+	// legacy angles are the world ones. The arm follows the pawn's control rotation, which looks back along the boom.
 	constexpr float Orientations[4][2] = {{0.0f, 15.0f}, {90.0f, 30.0f}, {200.0f, -10.0f}, {315.0f, 50.0f}};
 	const FVector ActorLocation = LegacyGolden::ToWorldPosition(FVector(1.0f, 0.0f, -2.0f));
 
@@ -108,28 +110,31 @@ bool FGoldenSpringArmTest::RunTest(const FString& Parameters)
 		const bool bWithObstacle = Pass == 1;
 		for (const auto& Orientation : Orientations)
 		{
-			USpringArmComponent Arm;
+			ADefaultCameraActor Pawn;
+			APlayerController Controller;
+			Controller.Possess(&Pawn);
+			Controller.SetControlRotation(FRotator(-Orientation[1], Orientation[0] + 180.0f, 0.0f));
+			USpringArmComponent& Arm = *Pawn.CreateDefaultSubobject<USpringArmComponent>();
+			Arm.bUsePawnControlRotation = true;
 			Arm.bDoCollisionTest = true;
 			Arm.bEnableCameraLag = false;
 			Arm.bEnableCameraRotationLag = false;
 			Arm.ArmLengthLagSpeed = 1000.0f;
 			Arm.TargetArmLength = LegacyGolden::ToWorldLength(4.0f);
 			Arm.ArmLengthMin = LegacyGolden::ToWorldLength(0.5f);
-			Arm.SocketOffsetZ = LegacyGolden::ToWorldLength(1.0f);
-			Arm.SocketOffsetX = LegacyGolden::ToWorldLength(0.3f);
+			Arm.TargetOffset = FVector(0.0f, 0.0f, LegacyGolden::ToWorldLength(1.0f));
+			Arm.SocketOffset = FVector(0.0f, LegacyGolden::ToWorldLength(0.3f), 0.0f);
 			Arm.ProbeSize = LegacyGolden::ToWorldLength(0.15f);
 			Arm.CollisionProbeOffset = LegacyGolden::ToWorldLength(0.05f);
-			Arm.BoomYawDegrees = Orientation[0];
-			Arm.BoomPitchDegrees = Orientation[1];
 			Arm.SnapLagState(ActorLocation);
 
 			FPhysScene Scene;
 			if (bWithObstacle)
 			{
-				const FVector BoomDirection = USpringArmComponent::GetBoomDirection(Orientation[0], Orientation[1]);
+				const FVector BoomDirection = FRotator(Orientation[1], Orientation[0], 0.0f).Vector();
 				const int32 Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
 				Scene.GetBodies()[Id].Position =
-					Arm.GetTargetLocation(ActorLocation) + (BoomDirection * LegacyGolden::ToWorldLength(2.0f));
+					Arm.GetArmOrigin(ActorLocation) + (BoomDirection * LegacyGolden::ToWorldLength(2.0f));
 				Scene.GetBodies()[Id].HalfExtents = LegacyGolden::ToWorldExtent(FVector(0.4f, 0.4f, 0.4f));
 			}
 
@@ -169,9 +174,9 @@ bool FGoldenYawRelativeMoveTest::RunTest(const FString& Parameters)
 	TArray<FVector> Moves;
 	for (const float Yaw : Yaws)
 	{
-		const float ViewYaw = FLegacyCoordinateConversion::ConvertOrbitViewRotation(Yaw, 0.0f).Yaw;
-		Moves.Add(YawRelativeMove(ViewYaw, FMoveAxes2D{0.0f, 1.0f}));
-		Moves.Add(YawRelativeMove(ViewYaw, FMoveAxes2D{1.0f, 1.0f}));
+		const FRotator ViewRotation = FLegacyCoordinateConversion::ConvertOrbitViewRotation(Yaw, 0.0f);
+		Moves.Add(YawRelativeMove(ViewRotation, FVector2D(1.0f, 0.0f)));
+		Moves.Add(YawRelativeMove(ViewRotation, FVector2D(1.0f, 1.0f)));
 	}
 
 	static const FVector ExpectedMoves[12] = {FVector(-1.0f, 0.0f, -0.0f), FVector(-0.707106769f, 0.0f, -0.707106769f),

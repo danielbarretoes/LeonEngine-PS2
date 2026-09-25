@@ -39,7 +39,7 @@ struct ENGINE_API UCharacterMovementComponent
 	float Gravity = 2400.0f;
 	float TurnSharpness = 16.0f;
 	/** Added to the yaw the character turns to when it orients to its movement (degrees). */
-	float ModelYawOffsetDegrees = 0.0f;
+	float ModelYawOffset = 0.0f;
 	/** Height of the infinite floor plane (cm). */
 	float FloorZ = 0.0f;
 	/** Contact skin (cm). */
@@ -66,7 +66,7 @@ struct ENGINE_API UCharacterMovementComponent
  * - Actor location = capsule **feet** (bottom), not capsule center.
  * - The capsule (FCollisionShape) extends up (+Z) by twice its half height; XY radius = capsule radius.
  * - Actor yaw is a UE yaw (0 faces +X, 90 faces +Y); the mesh shows legacy content with a relative yaw of
- *   LegacyContentYawDegrees.
+ *   LegacyContentYaw.
  * - Not registered as a FPhysScene FBodyInstance; moves via PerformMovement queries.
  * - Modes: Walking / Falling via SetMovementMode; floor via FindFloor → IsWalkable.
  */
@@ -146,7 +146,7 @@ public:
 	}
 
 	/** Apply replicated movement state (client proxy / snapshot). */
-	void ApplyReplicatedState(const FVector& Location, float YawDegrees, float InVelocityZ, bool bGrounded);
+	void ApplyReplicatedState(const FVector& Location, const FRotator& Rotation, float InVelocityZ, bool bGrounded);
 
 	/** Normalized locomotion blend input [0,1] for Mesh UAnimInstance UBlendSpace1D. */
 	void SetAnimBlendInput(float SpeedAlpha);
@@ -155,7 +155,7 @@ public:
 		return AnimBlendInput;
 	}
 
-	/** When true (default), yaw follows wish movement. When false, call FaceRotation / SetActorYaw. */
+	/** When true (default), yaw follows wish movement. When false, call FaceRotation / SetActorRotation. */
 	bool bOrientRotationToMovement = true;
 
 	/** Unreal-like health (ACharacter lite). */
@@ -178,15 +178,15 @@ public:
 		return bAlive;
 	}
 
-	void Reset(const FVector& Location, float YawDegrees = 0.0f);
+	void Reset(const FVector& Location, const FRotator& Rotation = FRotator::ZeroRotator);
 	void AddMovementInput(const FVector& WishDirXY);
 	void Jump();
 
 	/**
-	 * Smoothly face a world yaw when bOrientRotationToMovement is false (games may snap via
-	 * SetActorYaw).
+	 * Smoothly turn to the yaw of NewRotation when bOrientRotationToMovement is false (UE: FaceRotation; games may
+	 * snap via SetActorRotation).
 	 */
-	void FaceRotation(float YawDegrees, float DeltaTime);
+	void FaceRotation(const FRotator& NewRotation, float DeltaTime);
 
 	/** Move capsule against an explicit FPhysScene (unit tests / tools). Games may override. */
 	virtual void PerformMovement(FPhysScene& PhysScene, float DeltaTime, FDebugDraw* DebugDraw = nullptr);
@@ -206,7 +206,7 @@ public:
 	void SubmitMeshDraw(FSceneRenderer& Renderer) const;
 
 private:
-	void ApplyYaw(float TargetYawDegrees, float DeltaTime);
+	void ApplyYaw(float TargetYaw, float DeltaTime);
 	void MoveHorizontal(FPhysScene& PhysScene, float DeltaTime, FDebugDraw* DebugDraw);
 	void IntegrateVertical(FPhysScene& PhysScene, float DeltaTime, FDebugDraw* DebugDraw);
 	void ResolveSides(FPhysScene& PhysScene, bool bApplyPush);

@@ -1,17 +1,17 @@
 #include "GameFramework/Input.h"
 
-FVector YawRelativeMove(float YawDegrees, const FMoveAxes2D& Axes)
+FVector YawRelativeMove(const FRotator& Rotation, const FVector2D& MoveInput)
 {
-	if (!Axes.Any())
+	if (MoveInput.IsZero())
 	{
 		return FVector(0.0f);
 	}
 
-	const FMatrix Yaw = FRotationMatrix(FRotator(0.0f, YawDegrees, 0.0f));
+	const FMatrix Yaw = FRotationMatrix(FRotator(0.0f, Rotation.Yaw, 0.0f));
 	const FVector Forward = Yaw.GetUnitAxis(EAxis::X);
 	const FVector Right = Yaw.GetUnitAxis(EAxis::Y);
 
-	FVector Move = (Forward * Axes.Z) + (Right * Axes.X);
+	FVector Move = (Forward * MoveInput.X) + (Right * MoveInput.Y);
 	const float Len = Move.Size();
 	if (Len > 1.0e-4f)
 	{
@@ -20,7 +20,7 @@ FVector YawRelativeMove(float YawDegrees, const FMoveAxes2D& Axes)
 	return Move;
 }
 
-FVector CameraRelativeMove(const UCameraComponent& Camera, const FMoveAxes2D& Axes)
+FVector CameraRelativeMove(const UCameraComponent& Camera, const FVector2D& MoveInput)
 {
-	return YawRelativeMove(Camera.GetYawDegrees(), Axes);
+	return YawRelativeMove(Camera.GetViewRotation(), MoveInput);
 }
