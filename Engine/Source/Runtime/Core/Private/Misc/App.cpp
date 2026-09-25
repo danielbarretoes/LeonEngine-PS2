@@ -1,5 +1,6 @@
 #include "Misc/App.h"
 
+#include "Containers/UnrealString.h"
 #include "HAL/PlatformProcess.h"
 #include "Misc/Build.h"
 #include "Misc/CString.h"
@@ -74,7 +75,14 @@ FGuid FApp::GetSessionId()
 
 bool FApp::IsUnattended()
 {
-	static const bool bIsUnattended = FParse::Param(FCommandLine::Get(), "unattended");
+	// Leon's scripted captures (-Screenshot=, -ExitAfterFrames=) run unattended too: no one is at the controls.
+	static const bool bIsUnattended = []
+	{
+		const TCHAR* CmdLine = FCommandLine::Get();
+		FString Value;
+		return FParse::Param(CmdLine, "unattended") || FParse::Value(CmdLine, "Screenshot=", Value) ||
+			FParse::Value(CmdLine, "ExitAfterFrames=", Value);
+	}();
 	return bIsUnattended;
 }
 

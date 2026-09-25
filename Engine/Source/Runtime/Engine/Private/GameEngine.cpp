@@ -10,6 +10,7 @@
 #include "EngineLogs.h"
 #include "GameMapsSettings.h"
 #include "GenericPlatform/GenericWindow.h"
+#include "Misc/App.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "Misc/Paths.h"
@@ -83,6 +84,8 @@ void UGameEngine::Init(IEngineLoop* InEngineLoop)
 	}
 	GameViewport = NewObject<UGameViewportClient>(this, ViewportClientClass);
 	GameViewport->Init(*GameInstance->GetWorldContext(), GameInstance);
+	// No one is at the controls of an unattended run (a scripted capture): the OS input must not move the view.
+	GameViewport->SetIgnoreInput(FApp::IsUnattended());
 	if (Window != nullptr)
 	{
 		GameViewport->SetViewportWindow(Window);

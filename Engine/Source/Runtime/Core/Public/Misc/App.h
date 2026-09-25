@@ -33,7 +33,11 @@ public:
 	/** Unique id of this run, created on first use (UE: GetSessionId). */
 	static FGuid GetSessionId();
 
-	/** No one is watching: -unattended (UE: IsUnattended). */
+	/**
+	 * No one is watching: -unattended (UE: IsUnattended), or one of Leon's scripted captures (-Screenshot=,
+	 * -ExitAfterFrames=). An unattended game ignores the OS input (UGameViewportClient::SetIgnoreInput), so a capture
+	 * does not depend on the mouse or the keyboard.
+	 */
 	static bool IsUnattended();
 
 	/** Whether a renderer may ever be created: false with -nullrhi (UE: CanEverRender). */

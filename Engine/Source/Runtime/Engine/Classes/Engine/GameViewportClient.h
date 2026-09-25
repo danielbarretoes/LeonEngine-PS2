@@ -25,7 +25,8 @@ struct FWorldContext;
  *
  * - Input: each frame (ProcessInput, Leon's stand-in for Slate's input events) the window's key changes become
  *   InputKey events and the mouse's motion MouseX / MouseY InputAxis samples, routed to the first local player's
- *   controller.
+ *   controller. An unattended run (FApp::IsUnattended: -unattended, or Leon's -Screenshot= / -ExitAfterFrames=
+ *   captures) ignores the input (SetIgnoreInput), so what it shows does not depend on the mouse or the keyboard.
  * - Draw: the player's camera view of the world's scene (FSceneViewFamily, IRendererModule::BeginRenderingViewFamily),
  *   then the player's HUD and the engine's on-screen text into the frame's canvas.
  * - Exec: `show <Flag>` toggles EngineShowFlags, then the game instance, then the engine (UE's chain). The console
@@ -65,6 +66,18 @@ public:
 
 	/** Polls the window's keys and mouse into InputKey / InputAxis (Leon: Slate delivers these in UE). */
 	virtual void ProcessInput(float DeltaTime);
+
+	/**
+	 * Drops every key and axis event while set: ProcessInput stops polling the window and InputKey / InputAxis
+	 * return false (UE: SetIgnoreInput). UGameEngine::Init sets it for an unattended run.
+	 */
+	virtual void SetIgnoreInput(bool bIgnore);
+
+	/** Whether the input is ignored (UE: IgnoreInput). */
+	[[nodiscard]] virtual bool IgnoreInput() const
+	{
+		return bIgnoreInput;
+	}
 
 	/** After the world ticked: the on-screen messages and the stats text (UE: Tick). */
 	virtual void Tick(float DeltaTime);
@@ -122,6 +135,8 @@ private:
 	/** The keys the window reported down last frame. */
 	TSet<FKey> DownKeys;
 	bool bMouseLookSampleValid = false;
+	/** SetIgnoreInput (UE: bIgnoreInput). */
+	bool bIgnoreInput = false;
 	double LastMouseX = 0.0;
 	double LastMouseY = 0.0;
 

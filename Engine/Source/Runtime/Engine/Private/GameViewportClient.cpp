@@ -102,9 +102,21 @@ bool UGameViewportClient::IsCursorCaptured() const
 	return Window != nullptr && Window->IsCursorCaptured();
 }
 
+void UGameViewportClient::SetIgnoreInput(bool bIgnore)
+{
+	bIgnoreInput = bIgnore;
+	// Keys held when the input comes back are new presses, and the next mouse sample only records the position.
+	DownKeys.Reset();
+	bMouseLookSampleValid = false;
+}
+
 bool UGameViewportClient::InputKey(FViewport* /*InViewport*/, int32 ControllerId, FKey Key, EInputEvent EventType,
 	float AmountDepressed, bool bGamepad)
 {
+	if (IgnoreInput())
+	{
+		return false;
+	}
 	// The player of the controller id (Leon has one local player: controller 0).
 	(void)ControllerId;
 	ULocalPlayer* TargetPlayer = GameInstance != nullptr ? GameInstance->GetFirstGamePlayer() : nullptr;
@@ -118,6 +130,10 @@ bool UGameViewportClient::InputKey(FViewport* /*InViewport*/, int32 ControllerId
 bool UGameViewportClient::InputAxis(FViewport* /*InViewport*/, int32 ControllerId, FKey Key, float Delta,
 	float DeltaTime, int32 NumSamples, bool bGamepad)
 {
+	if (IgnoreInput())
+	{
+		return false;
+	}
 	(void)ControllerId;
 	ULocalPlayer* TargetPlayer = GameInstance != nullptr ? GameInstance->GetFirstGamePlayer() : nullptr;
 	if (TargetPlayer != nullptr && TargetPlayer->PlayerController != nullptr)
@@ -130,7 +146,7 @@ bool UGameViewportClient::InputAxis(FViewport* /*InViewport*/, int32 ControllerI
 void UGameViewportClient::ProcessInput(float DeltaTime)
 {
 	FGenericWindow* Window = GetWindow();
-	if (Window == nullptr)
+	if (Window == nullptr || IgnoreInput())
 	{
 		return;
 	}
