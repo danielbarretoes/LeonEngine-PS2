@@ -43,19 +43,23 @@ FixNamespaceComments: true
 LambdaBodyIndentation: Signature
 MaxEmptyLinesToKeep: 1
 # Includes: the module's own header stays first (main include), then engine headers, then third
-# party, then system / SDK headers.
+# party, then system / SDK headers. A reflected header's "<Name>.generated.h" stays the last engine include
+# (LeonHeaderTool requires it, as UHT does).
 SortIncludes: CaseSensitive
 IncludeBlocks: Regroup
 IncludeIsMainRegex: '$'
 # Within the third-party block, prerequisite headers sort first (Jolt/Jolt.h, glad before GLFW).
 IncludeCategories:
+  - Regex: '\.generated\.h"$'
+    Priority: 1
+    SortPriority: 2
   - Regex: '^"'
     Priority: 1
   - Regex: '^<(Jolt/Jolt\.h|glad/)'
-    Priority: 2
-    SortPriority: 2
-  - Regex: '^<(GLFW|glm|nlohmann|stb_|miniaudio|enet|ufbx|cgltf|tiny_obj|catch2|Jolt)'
-    Priority: 2
+    Priority: 3
     SortPriority: 3
+  - Regex: '^<(GLFW|glm|nlohmann|stb_|miniaudio|enet|ufbx|cgltf|tiny_obj|catch2|Jolt)'
+    Priority: 3
+    SortPriority: 4
   - Regex: '^<'
-    Priority: 4
+    Priority: 5
