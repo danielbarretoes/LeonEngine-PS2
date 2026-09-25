@@ -1,43 +1,53 @@
 #include "FbxSkeletalImport.h"
 
-#include "Migration/GlmInterop.h"
+#include "Containers/StringConv.h"
+#include "LegacyGLMath.h"
+#include "MeshUtilitiesLog.h"
+#include "Misc/Paths.h"
 
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/quaternion.hpp>
 #include <ufbx.h>
-
-#include <algorithm>
-#include <cmath>
-#include <cstdint>
-#include <iostream>
-#include <limits>
-#include <string>
-#include <unordered_map>
-#include <vector>
 
 namespace
 {
 
-	glm::mat4 ToGlm(const ufbx_transform& T)
+	/** node_to_parent as a GL-convention matrix: rotation * scale columns, translation in column 3 (like glm). */
+	FMatrix ToMatrix(const ufbx_transform& T)
 	{
-		const glm::quat Q(static_cast<float>(T.rotation.w), static_cast<float>(T.rotation.x),
+		FMatrix M = LegacyGL::QuatToMatrix(static_cast<float>(T.rotation.w), static_cast<float>(T.rotation.x),
 			static_cast<float>(T.rotation.y), static_cast<float>(T.rotation.z));
-		glm::mat4 M = glm::mat4_cast(Q);
-		M[0] *= static_cast<float>(T.scale.x);
-		M[1] *= static_cast<float>(T.scale.y);
-		M[2] *= static_cast<float>(T.scale.z);
-		M[3] = glm::vec4(static_cast<float>(T.translation.x), static_cast<float>(T.translation.y),
-			static_cast<float>(T.translation.z), 1.0f);
+		const float Scale[3] = {
+			static_cast<float>(T.scale.x), static_cast<float>(T.scale.y), static_cast<float>(T.scale.z)};
+		for (int32 Column = 0; Column < 3; ++Column)
+		{
+			for (int32 Row = 0; Row < 4; ++Row)
+			{
+				M.M[Column][Row] *= Scale[Column];
+			}
+		}
+		M.M[3][0] = static_cast<float>(T.translation.x);
+		M.M[3][1] = static_cast<float>(T.translation.y);
+		M.M[3][2] = static_cast<float>(T.translation.z);
+		M.M[3][3] = 1.0f;
 		return M;
 	}
 
-	glm::mat4 ToGlm(const ufbx_matrix& M)
+	/** ufbx's row-major 3x4 affine matrix in the GL memory layout (column c = the image of axis c). */
+	FMatrix ToMatrix(const ufbx_matrix& In)
 	{
-		glm::mat4 Out(1.0f);
-		Out[0] = glm::vec4(static_cast<float>(M.m00), static_cast<float>(M.m10), static_cast<float>(M.m20), 0.0f);
-		Out[1] = glm::vec4(static_cast<float>(M.m01), static_cast<float>(M.m11), static_cast<float>(M.m21), 0.0f);
-		Out[2] = glm::vec4(static_cast<float>(M.m02), static_cast<float>(M.m12), static_cast<float>(M.m22), 0.0f);
-		Out[3] = glm::vec4(static_cast<float>(M.m03), static_cast<float>(M.m13), static_cast<float>(M.m23), 1.0f);
+		FMatrix Out = FMatrix::Identity;
+		const float Columns[4][3] = {
+			{static_cast<float>(In.m00), static_cast<float>(In.m10), static_cast<float>(In.m20)},
+			{static_cast<float>(In.m01), static_cast<float>(In.m11), static_cast<float>(In.m21)},
+			{static_cast<float>(In.m02), static_cast<float>(In.m12), static_cast<float>(In.m22)},
+			{static_cast<float>(In.m03), static_cast<float>(In.m13), static_cast<float>(In.m23)},
+		};
+		for (int32 Column = 0; Column < 4; ++Column)
+		{
+			Out.M[Column][0] = Columns[Column][0];
+			Out.M[Column][1] = Columns[Column][1];
+			Out.M[Column][2] = Columns[Column][2];
+			Out.M[Column][3] = Column == 3 ? 1.0f : 0.0f;
+		}
 		return Out;
 	}
 
@@ -51,24 +61,26 @@ namespace
 		return Opts;
 	}
 
-	glm::mat4 EvaluateNodeToWorld(ufbx_anim* Anim, ufbx_node* Node, double InTime)
+	FMatrix EvaluateNodeToWorld(ufbx_anim* Anim, ufbx_node* Node, double InTime)
 	{
-		std::vector<ufbx_node*> Chain;
+		TArray<ufbx_node*> Chain;
 		for (ufbx_node* N = Node; N != nullptr; N = N->parent)
 		{
-			Chain.push_back(N);
+			Chain.Add(N);
 		}
-		glm::mat4 World(1.0f);
-		for (auto It = Chain.rbegin(); It != Chain.rend(); ++It)
+		FMatrix World = FMatrix::Identity;
+		for (int32 Index = Chain.Num() - 1; Index >= 0; --Index)
 		{
 			// child.node_to_world = parent.node_to_world * child.node_to_parent
-			World *= ToGlm(ufbx_evaluate_transform(Anim, *It, InTime));
+			World = LegacyGL::Mul(World, ToMatrix(ufbx_evaluate_transform(Anim, Chain[Index], InTime)));
 		}
 		return World;
 	}
 
-	bool BakeAnimFromScene(ufbx_scene* Scene, const USkeleton& InSkeleton,
-		const std::unordered_map<std::string, ufbx_node*>& NodesByName, UAnimSequence& Out)
+	using FNodesByName = TMap<FString, ufbx_node*>;
+
+	bool BakeAnimFromScene(
+		ufbx_scene* Scene, const USkeleton& InSkeleton, const FNodesByName& NodesByName, UAnimSequence& Out)
 	{
 		if (Scene == nullptr || InSkeleton.BoneCount() <= 0)
 		{
@@ -106,14 +118,14 @@ namespace
 
 		constexpr float Fps = 30.0f;
 		const float Duration = static_cast<float>(End - Begin);
-		const int LocalFrameCount = std::max(2, static_cast<int>(std::ceil(Duration * Fps)) + 1);
+		const int32 LocalFrameCount = FMath::Max(2, FMath::CeilToInt(Duration * Fps) + 1);
 
 		Out.Name = FName("clip");
 		Out.DurationSeconds = Duration;
 		Out.FramesPerSecond = Fps;
 		Out.LocalPoseFrames.SetNum(LocalFrameCount);
 
-		for (int F = 0; F < LocalFrameCount; ++F)
+		for (int32 F = 0; F < LocalFrameCount; ++F)
 		{
 			const double T =
 				Begin + (static_cast<double>(F) / static_cast<double>(LocalFrameCount - 1)) * (End - Begin);
@@ -121,21 +133,21 @@ namespace
 			Frame.Init(FMatrix::Identity, InSkeleton.BoneCount());
 			for (int32 B = 0; B < InSkeleton.BoneCount(); ++B)
 			{
-				const auto It = NodesByName.find(std::string(*InSkeleton.BoneNames[B].ToString()));
-				if (It == NodesByName.end() || It->second == nullptr)
+				ufbx_node* const* Node = NodesByName.Find(InSkeleton.BoneNames[B].ToString());
+				if (Node == nullptr || *Node == nullptr)
 				{
 					continue;
 				}
 				// Bake full node_to_world so skinning does not depend on cluster-only parents.
-				Frame[B] = FromGlm(EvaluateNodeToWorld(Anim, It->second, T));
+				Frame[B] = EvaluateNodeToWorld(Anim, *Node, T);
 			}
 		}
 		return LocalFrameCount > 0;
 	}
 
-	void CollectNodesByName(ufbx_scene* Scene, std::unordered_map<std::string, ufbx_node*>& Out)
+	void CollectNodesByName(ufbx_scene* Scene, FNodesByName& Out)
 	{
-		Out.clear();
+		Out.Empty();
 		for (size_t I = 0; I < Scene->nodes.count; ++I)
 		{
 			ufbx_node* Node = Scene->nodes.data[I];
@@ -143,21 +155,21 @@ namespace
 			{
 				continue;
 			}
-			Out[std::string(Node->name.data, Node->name.length)] = Node;
+			Out.Add(FString(static_cast<int32>(Node->name.length), Node->name.data), Node);
 		}
 	}
 
 } // namespace
 
-bool LoadSkeletalMeshFromFbx(const std::string& Path, FSkeletalMeshData& Out)
+bool LoadSkeletalMeshFromFbx(const FString& Path, FSkeletalMeshData& Out)
 {
-	Out = {};
+	Out = FSkeletalMeshData();
 	ufbx_error Error{};
 	const ufbx_load_opts Opts = MakeLoadOpts();
-	ufbx_scene* Scene = ufbx_load_file(Path.c_str(), &Opts, &Error);
+	ufbx_scene* Scene = ufbx_load_file(TCHAR_TO_UTF8(*Path), &Opts, &Error);
 	if (Scene == nullptr)
 	{
-		std::cerr << "ufbx: failed to load mesh FBX '" << Path << "': " << Error.description.data << '\n';
+		UE_LOG(LogMeshUtilities, Error, "ufbx: failed to load mesh FBX '%s': %s", *Path, Error.description.data);
 		return false;
 	}
 
@@ -175,15 +187,15 @@ bool LoadSkeletalMeshFromFbx(const std::string& Path, FSkeletalMeshData& Out)
 	}
 	if (Mesh == nullptr || Skin == nullptr)
 	{
-		std::cerr << "ufbx: no skinned mesh in '" << Path << "'\n";
+		UE_LOG(LogMeshUtilities, Error, "ufbx: no skinned mesh in '%s'", *Path);
 		ufbx_free_scene(Scene);
 		return false;
 	}
 
-	const int ClusterCount = static_cast<int>(Skin->clusters.count);
+	const int32 ClusterCount = static_cast<int32>(Skin->clusters.count);
 	if (ClusterCount <= 0 || ClusterCount > MaxSkinBones)
 	{
-		std::cerr << "ufbx: invalid bone count " << ClusterCount << " in '" << Path << "'\n";
+		UE_LOG(LogMeshUtilities, Error, "ufbx: invalid bone count %d in '%s'", ClusterCount, *Path);
 		ufbx_free_scene(Scene);
 		return false;
 	}
@@ -192,8 +204,8 @@ bool LoadSkeletalMeshFromFbx(const std::string& Path, FSkeletalMeshData& Out)
 	Out.Skeleton.ParentIndices.Init(INDEX_NONE, ClusterCount);
 	Out.Skeleton.InverseBindPose.Init(FMatrix::Identity, ClusterCount);
 
-	std::unordered_map<ufbx_node*, int> NodeToBone;
-	for (int C = 0; C < ClusterCount; ++C)
+	TMap<ufbx_node*, int32> NodeToBone;
+	for (int32 C = 0; C < ClusterCount; ++C)
 	{
 		ufbx_skin_cluster* Cluster = Skin->clusters.data[C];
 		if (Cluster == nullptr || Cluster->bone_node == nullptr)
@@ -201,12 +213,12 @@ bool LoadSkeletalMeshFromFbx(const std::string& Path, FSkeletalMeshData& Out)
 			continue;
 		}
 		ufbx_node* Bone = Cluster->bone_node;
-		const std::string LocalName(Bone->name.data, Bone->name.length);
-		Out.Skeleton.BoneNames[C] = FName(LocalName.c_str());
-		Out.Skeleton.InverseBindPose[C] = FromGlm(ToGlm(Cluster->geometry_to_bone));
-		NodeToBone[Bone] = C;
+		const FString LocalName(static_cast<int32>(Bone->name.length), Bone->name.data);
+		Out.Skeleton.BoneNames[C] = FName(*LocalName);
+		Out.Skeleton.InverseBindPose[C] = ToMatrix(Cluster->geometry_to_bone);
+		NodeToBone.Add(Bone, C);
 	}
-	for (int C = 0; C < ClusterCount; ++C)
+	for (int32 C = 0; C < ClusterCount; ++C)
 	{
 		ufbx_skin_cluster* Cluster = Skin->clusters.data[C];
 		if (Cluster == nullptr || Cluster->bone_node == nullptr)
@@ -216,10 +228,9 @@ bool LoadSkeletalMeshFromFbx(const std::string& Path, FSkeletalMeshData& Out)
 		ufbx_node* Parent = Cluster->bone_node->parent;
 		while (Parent != nullptr)
 		{
-			const auto It = NodeToBone.find(Parent);
-			if (It != NodeToBone.end())
+			if (const int32* ParentBone = NodeToBone.Find(Parent))
 			{
-				Out.Skeleton.ParentIndices[C] = It->second;
+				Out.Skeleton.ParentIndices[C] = *ParentBone;
 				break;
 			}
 			Parent = Parent->parent;
@@ -227,12 +238,12 @@ bool LoadSkeletalMeshFromFbx(const std::string& Path, FSkeletalMeshData& Out)
 	}
 
 	// Triangulate into unique vertices (per corner attributes).
-	// `ufbx_triangulate_face` returns the number of *triangles* (not indices).
+	// ufbx_triangulate_face returns the number of *triangles* (not indices).
 	Out.LocalMin = FVector(TNumericLimits<float>::Max());
 	Out.LocalMax = FVector(TNumericLimits<float>::Lowest());
 
-	const size_t TriIndexCapacity = std::max<size_t>(Mesh->max_face_triangles * 3u, 16u * 3u);
-	std::vector<uint32_t> Tri(TriIndexCapacity);
+	TArray<uint32> Tri;
+	Tri.SetNumZeroed(static_cast<int32>(FMath::Max<size_t>(Mesh->max_face_triangles * 3u, 16u * 3u)));
 
 	for (size_t Fi = 0; Fi < Mesh->faces.count; ++Fi)
 	{
@@ -241,27 +252,27 @@ bool LoadSkeletalMeshFromFbx(const std::string& Path, FSkeletalMeshData& Out)
 		{
 			continue;
 		}
-		const uint32_t NumTris = ufbx_triangulate_face(Tri.data(), Tri.size(), Mesh, Face);
-		for (uint32_t T = 0; T < NumTris; ++T)
+		const uint32 NumTris = ufbx_triangulate_face(Tri.GetData(), static_cast<size_t>(Tri.Num()), Mesh, Face);
+		for (uint32 T = 0; T < NumTris; ++T)
 		{
-			for (int K = 0; K < 3; ++K)
+			for (int32 K = 0; K < 3; ++K)
 			{
-				const uint32_t Index = Tri[static_cast<size_t>(T) * 3u + static_cast<size_t>(K)];
-				const uint32_t Vi = Mesh->vertex_indices.data[Index];
+				const uint32 Index = Tri[static_cast<int32>(T * 3u) + K];
+				const uint32 Vi = Mesh->vertex_indices.data[Index];
 
 				FSkeletalVertex V{};
 				const ufbx_vec3 Pos = ufbx_get_vertex_vec3(&Mesh->vertex_position, Index);
-				V.Position = {static_cast<float>(Pos.x), static_cast<float>(Pos.y), static_cast<float>(Pos.z)};
+				V.Position = FVector(static_cast<float>(Pos.x), static_cast<float>(Pos.y), static_cast<float>(Pos.z));
 				if (Mesh->vertex_normal.exists)
 				{
 					const ufbx_vec3 N = ufbx_get_vertex_vec3(&Mesh->vertex_normal, Index);
-					V.Normal = FromGlm(glm::normalize(
-						glm::vec3{static_cast<float>(N.x), static_cast<float>(N.y), static_cast<float>(N.z)}));
+					V.Normal = LegacyGL::Normalize(
+						FVector(static_cast<float>(N.x), static_cast<float>(N.y), static_cast<float>(N.z)));
 				}
 				if (Mesh->vertex_uv.exists)
 				{
 					const ufbx_vec2 Uv = ufbx_get_vertex_vec2(&Mesh->vertex_uv, Index);
-					V.TexCoord = {static_cast<float>(Uv.x), static_cast<float>(Uv.y)};
+					V.TexCoord = FVector2D(static_cast<float>(Uv.x), static_cast<float>(Uv.y));
 				}
 
 				// Skin weights (up to 4).
@@ -269,12 +280,12 @@ bool LoadSkeletalMeshFromFbx(const std::string& Path, FSkeletalMeshData& Out)
 				{
 					const ufbx_skin_vertex Sv = Skin->vertices.data[Vi];
 					float Wsum = 0.0f;
-					const uint32_t Nw = std::min<uint32_t>(Sv.num_weights, MaxBoneInfluences);
-					for (uint32_t Wi = 0; Wi < Nw; ++Wi)
+					const uint32 Nw = FMath::Min<uint32>(Sv.num_weights, MaxBoneInfluences);
+					for (uint32 Wi = 0; Wi < Nw; ++Wi)
 					{
 						const ufbx_skin_weight Sw = Skin->weights.data[Sv.weight_begin + Wi];
-						V.BoneIndices[Wi] = static_cast<int>(Sw.cluster_index);
-						V.BoneWeights[Wi] = static_cast<float>(Sw.weight);
+						V.BoneIndices[static_cast<int32>(Wi)] = static_cast<int32>(Sw.cluster_index);
+						V.BoneWeights[static_cast<int32>(Wi)] = static_cast<float>(Sw.weight);
 						Wsum += static_cast<float>(Sw.weight);
 					}
 					if (Wsum > 1.0e-6f)
@@ -304,12 +315,12 @@ bool LoadSkeletalMeshFromFbx(const std::string& Path, FSkeletalMeshData& Out)
 
 	if (Out.IsEmpty())
 	{
-		std::cerr << "ufbx: skinned mesh produced no triangles in '" << Path << "'\n";
+		UE_LOG(LogMeshUtilities, Error, "ufbx: skinned mesh produced no triangles in '%s'", *Path);
 		ufbx_free_scene(Scene);
 		return false;
 	}
 
-	std::unordered_map<std::string, ufbx_node*> NodesByName;
+	FNodesByName NodesByName;
 	CollectNodesByName(Scene, NodesByName);
 	BakeAnimFromScene(Scene, Out.Skeleton, NodesByName, Out.EmbeddedAnim);
 
@@ -317,29 +328,25 @@ bool LoadSkeletalMeshFromFbx(const std::string& Path, FSkeletalMeshData& Out)
 	return Out.Skeleton.BoneCount() > 0;
 }
 
-bool LoadAnimSequenceFromFbx(const std::string& Path, const USkeleton& InSkeleton, UAnimSequence& Out)
+bool LoadAnimSequenceFromFbx(const FString& Path, const USkeleton& InSkeleton, UAnimSequence& Out)
 {
-	Out = {};
+	Out = UAnimSequence();
 	ufbx_error Error{};
 	const ufbx_load_opts Opts = MakeLoadOpts();
-	ufbx_scene* Scene = ufbx_load_file(Path.c_str(), &Opts, &Error);
+	ufbx_scene* Scene = ufbx_load_file(TCHAR_TO_UTF8(*Path), &Opts, &Error);
 	if (Scene == nullptr)
 	{
-		std::cerr << "ufbx: failed to load anim FBX '" << Path << "': " << Error.description.data << '\n';
+		UE_LOG(LogMeshUtilities, Error, "ufbx: failed to load anim FBX '%s': %s", *Path, Error.description.data);
 		return false;
 	}
 
-	std::unordered_map<std::string, ufbx_node*> NodesByName;
+	FNodesByName NodesByName;
 	CollectNodesByName(Scene, NodesByName);
 	const bool bOk = BakeAnimFromScene(Scene, InSkeleton, NodesByName, Out);
 	if (bOk)
 	{
-		// Prefer filename stem as clip name.
-		const auto Slash = Path.find_last_of("/\\");
-		const auto Dot = Path.find_last_of('.');
-		const std::size_t Start = Slash == std::string::npos ? 0 : Slash + 1;
-		const std::size_t End = (Dot == std::string::npos || Dot < Start) ? Path.size() : Dot;
-		Out.Name = FName(Path.substr(Start, End - Start).c_str());
+		// Prefer the file name stem as the clip name.
+		Out.Name = FName(*FPaths::GetBaseFilename(Path));
 	}
 	ufbx_free_scene(Scene);
 	return bOk;

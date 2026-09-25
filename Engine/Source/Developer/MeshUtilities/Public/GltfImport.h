@@ -1,18 +1,17 @@
 #pragma once
 
+#include "CoreMinimal.h"
 #include "MeshData.h"
-
-#include <string>
-#include <vector>
 
 struct MESHUTILITIES_API FGltfImportedMaterial
 {
-	std::string Name;
-	std::string LmatRelativePath; // path written relative to out directory
+	FString Name;
+	FString LmatRelativePath; // path written relative to the output directory
 };
 
-/// Load first mesh (all primitives merged) from `.gltf` / `.glb` into FMeshData.
-/// Optionally writes `.lmat` (+ copies textures) under `materialsOutDir` when non-empty.
-/// Edit-time / cook only — not part of shipping `leon_engine`.
-[[nodiscard]] bool LoadStaticMeshFromGltf(const std::string& Path, FMeshData& Out, const std::string& MaterialsOutDir,
-	std::vector<FGltfImportedMaterial>* OutMaterials, std::string& OutError);
+/**
+ * Loads the meshes of a .gltf / .glb (all primitives merged) into FMeshData. When MaterialsOutDir is not empty it
+ * also writes a .lmat per material (and copies the textures) there. Edit time / cook only.
+ */
+[[nodiscard]] MESHUTILITIES_API bool LoadStaticMeshFromGltf(const FString& Path, FMeshData& Out,
+	const FString& MaterialsOutDir, TArray<FGltfImportedMaterial>* OutMaterials, FString& OutError);

@@ -1,11 +1,11 @@
 #include "CookPaths.h"
 
-std::string FCookPaths::ResolveBeside(const std::filesystem::path& BaseDir, const std::string& Rel)
+#include "Misc/Paths.h"
+
+FString FCookPaths::ResolveBeside(const FString& BaseDir, const FString& Relative)
 {
-	const std::filesystem::path P(Rel);
-	if (P.is_absolute())
-	{
-		return P.lexically_normal().string();
-	}
-	return (BaseDir / P).lexically_normal().string();
+	FString Path = FPaths::IsRelative(Relative) ? FPaths::Combine(BaseDir, Relative) : Relative;
+	FPaths::NormalizeFilename(Path);
+	FPaths::CollapseRelativeDirectories(Path);
+	return Path;
 }

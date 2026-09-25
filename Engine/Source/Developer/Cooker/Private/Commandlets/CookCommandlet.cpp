@@ -1,132 +1,96 @@
 #include "Commandlets/CookCommandlet.h"
 
 #include "CookRecipe.h"
+#include "CookerLog.h"
+#include "Misc/CString.h"
 #include "StaticMeshBuilder.h"
-
-#include <iostream>
-#include <string>
 
 namespace
 {
 
 	void PrintUsage()
 	{
-		std::cout << "LeonCook - cook static meshes for Leon (UCookCommandlet)\n\n"
-				  << "Usage:\n"
-				  << "  LeonCook staticmesh --obj <mesh.obj>|--fbx <m.fbx>|--gltf <m.gltf> --out <m.lmesh>\n"
-				  << "    [--materials <dir>]  (glTF: write .lmat + textures)\n\n"
-				  << "  LeonCook recipe <file.json>\n"
-				  << "    Runs steps from a recipe; relative paths resolve next to the JSON file.\n"
-				  << "    Step types: staticmesh\n\n"
-				  << "Writes (staticmesh):\n"
-				  << "  binary .lmesh (LMSH)\n";
+		UE_LOG(LogCook, Display, "LeonCook - cook static meshes for Leon (UCookCommandlet)");
+		UE_LOG(LogCook, Display, "Usage:");
+		UE_LOG(
+			LogCook, Display, "  LeonCook staticmesh --obj <mesh.obj>|--fbx <m.fbx>|--gltf <m.gltf> --out <m.lmesh>");
+		UE_LOG(LogCook, Display, "    [--materials <dir>]  (glTF: write .lmat + textures)");
+		UE_LOG(LogCook, Display, "  LeonCook recipe <file.json>");
+		UE_LOG(LogCook, Display, "    Runs steps from a recipe; relative paths resolve next to the JSON file.");
+		UE_LOG(LogCook, Display, "    Step types: staticmesh");
+		UE_LOG(LogCook, Display, "Writes (staticmesh): binary .lmesh (LMSH)");
 	}
 
-	[[nodiscard]] const char* ArgValue(int Argc, char** Argv, int& I)
+	/** The value after the switch at I (advancing I), or null when it is missing. */
+	[[nodiscard]] const ANSICHAR* ArgValue(int32 ArgC, char** ArgV, int32& I)
 	{
-		if (I + 1 >= Argc || Argv[I + 1] == nullptr || Argv[I + 1][0] == '\0')
+		if (I + 1 >= ArgC || ArgV[I + 1] == nullptr || ArgV[I + 1][0] == '\0')
 		{
 			return nullptr;
 		}
 		++I;
-		return Argv[I];
+		return ArgV[I];
 	}
 
-	[[nodiscard]] int CookStaticMesh(int Argc, char** Argv)
+	[[nodiscard]] int32 CookStaticMesh(int32 ArgC, char** ArgV)
 	{
-		std::string Obj;
-		std::string Fbx;
-		std::string Gltf;
-		std::string Out;
-		std::string Materials;
-		for (int I = 2; I < Argc; ++I)
+		struct FSwitch
 		{
-			const std::string A = Argv[I];
-			if (A == "--obj")
+			const ANSICHAR* Name;
+			FString* Value;
+		};
+		FString Obj;
+		FString Fbx;
+		FString Gltf;
+		FString Out;
+		FString Materials;
+		const FSwitch Switches[] = {
+			{"--obj", &Obj}, {"--fbx", &Fbx}, {"--gltf", &Gltf}, {"--materials", &Materials}, {"--out", &Out}};
+
+		for (int32 I = 2; I < ArgC; ++I)
+		{
+			const ANSICHAR* Arg = ArgV[I];
+			const FSwitch* Match = nullptr;
+			for (const FSwitch& Switch : Switches)
 			{
-				if (const char* V = ArgValue(Argc, Argv, I))
+				if (FCStringAnsi::Strcmp(Arg, Switch.Name) == 0)
 				{
-					Obj = V;
-				}
-				else
-				{
-					std::cerr << "--obj requires a path\n";
-					return 1;
+					Match = &Switch;
+					break;
 				}
 			}
-			else if (A == "--fbx")
+			if (Match == nullptr)
 			{
-				if (const char* V = ArgValue(Argc, Argv, I))
-				{
-					Fbx = V;
-				}
-				else
-				{
-					std::cerr << "--fbx requires a path\n";
-					return 1;
-				}
-			}
-			else if (A == "--gltf")
-			{
-				if (const char* V = ArgValue(Argc, Argv, I))
-				{
-					Gltf = V;
-				}
-				else
-				{
-					std::cerr << "--gltf requires a path\n";
-					return 1;
-				}
-			}
-			else if (A == "--materials")
-			{
-				if (const char* V = ArgValue(Argc, Argv, I))
-				{
-					Materials = V;
-				}
-				else
-				{
-					std::cerr << "--materials requires a path\n";
-					return 1;
-				}
-			}
-			else if (A == "--out")
-			{
-				if (const char* V = ArgValue(Argc, Argv, I))
-				{
-					Out = V;
-				}
-				else
-				{
-					std::cerr << "--out requires a path\n";
-					return 1;
-				}
-			}
-			else
-			{
-				std::cerr << "Unknown arg '" << A << "'\n";
+				UE_LOG(LogCook, Error, "Unknown arg '%s'", Arg);
 				return 1;
 			}
+			const ANSICHAR* Value = ArgValue(ArgC, ArgV, I);
+			if (Value == nullptr)
+			{
+				UE_LOG(LogCook, Error, "%s requires a path", Match->Name);
+				return 1;
+			}
+			*Match->Value = Value;
 		}
-		if (Out.empty())
+		if (Out.IsEmpty())
 		{
-			std::cerr << "staticmesh requires --out\n";
+			UE_LOG(LogCook, Error, "staticmesh requires --out");
 			return 1;
 		}
-		const int Sources = (!Obj.empty() ? 1 : 0) + (!Fbx.empty() ? 1 : 0) + (!Gltf.empty() ? 1 : 0);
+		const int32 Sources = (!Obj.IsEmpty() ? 1 : 0) + (!Fbx.IsEmpty() ? 1 : 0) + (!Gltf.IsEmpty() ? 1 : 0);
 		if (Sources != 1)
 		{
-			std::cerr << "staticmesh requires exactly one of --obj, --fbx, or --gltf\n";
+			UE_LOG(LogCook, Error, "staticmesh requires exactly one of --obj, --fbx, or --gltf");
 			return 1;
 		}
 
-		std::string Err;
+		FString Err;
 		bool bOk = false;
-		if (!Obj.empty())
+		if (!Obj.IsEmpty())
 		{
 			bOk = FStaticMeshBuilder::CookFromObj(Obj, Out, Err);
 		}
-		else if (!Fbx.empty())
+		else if (!Fbx.IsEmpty())
 		{
 			bOk = FStaticMeshBuilder::CookFromFbx(Fbx, Out, Err);
 		}
@@ -136,46 +100,47 @@ namespace
 		}
 		if (!bOk)
 		{
-			std::cerr << (Err.empty() ? "Cook static mesh failed" : Err) << '\n';
+			UE_LOG(LogCook, Error, "%s", Err.IsEmpty() ? "Cook static mesh failed" : *Err);
 			return 2;
 		}
-		std::cout << "Cooked static mesh -> " << Out << '\n';
+		UE_LOG(LogCook, Log, "Cooked static mesh -> %s", *Out);
 		return 0;
 	}
 
 } // namespace
 
-int32 UCookCommandlet::Main(int32 Argc, char** Argv)
+int32 UCookCommandlet::Main(int32 ArgC, char** ArgV)
 {
-	if (Argc < 2)
+	if (ArgC < 2)
 	{
 		PrintUsage();
 		return 1;
 	}
 
-	const std::string Mode = Argv[1];
-	if (Mode == "-h" || Mode == "--help" || Mode == "help")
+	const ANSICHAR* Mode = ArgV[1];
+	if (FCStringAnsi::Strcmp(Mode, "-h") == 0 || FCStringAnsi::Strcmp(Mode, "--help") == 0 ||
+		FCStringAnsi::Strcmp(Mode, "help") == 0)
 	{
 		PrintUsage();
 		return 0;
 	}
 
-	if (Mode == "staticmesh")
+	if (FCStringAnsi::Strcmp(Mode, "staticmesh") == 0)
 	{
-		return CookStaticMesh(Argc, Argv);
+		return CookStaticMesh(ArgC, ArgV);
 	}
-	if (Mode == "recipe")
+	if (FCStringAnsi::Strcmp(Mode, "recipe") == 0)
 	{
-		if (Argc < 3 || Argv[2] == nullptr)
+		if (ArgC < 3 || ArgV[2] == nullptr)
 		{
-			std::cerr << "recipe requires a JSON path\n";
+			UE_LOG(LogCook, Error, "recipe requires a JSON path");
 			PrintUsage();
 			return 1;
 		}
-		return FCookRecipe::RunFile(Argv[2]);
+		return FCookRecipe::RunFile(ArgV[2]);
 	}
 
-	std::cerr << "Unknown mode '" << Mode << "'\n";
+	UE_LOG(LogCook, Error, "Unknown mode '%s'", Mode);
 	PrintUsage();
 	return 1;
 }

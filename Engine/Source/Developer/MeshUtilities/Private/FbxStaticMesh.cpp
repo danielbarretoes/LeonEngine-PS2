@@ -1,14 +1,11 @@
 #include "FbxStaticMesh.h"
 
+#include "Containers/StringConv.h"
+#include "LegacyGLMath.h"
 #include "MeshData.h"
-#include "Migration/GlmInterop.h"
+#include "MeshUtilitiesLog.h"
 
-#include <glm/geometric.hpp>
 #include <ufbx.h>
-
-#include <algorithm>
-#include <iostream>
-#include <vector>
 
 namespace
 {
@@ -25,20 +22,20 @@ namespace
 
 } // namespace
 
-bool LoadStaticMeshFromFbx(const std::string& Path, FMeshData& Out)
+bool LoadStaticMeshFromFbx(const FString& Path, FMeshData& Out)
 {
-	Out = {};
+	Out = FMeshData();
 	ufbx_error Error{};
 	const ufbx_load_opts Opts = MakeLoadOpts();
-	ufbx_scene* Scene = ufbx_load_file(Path.c_str(), &Opts, &Error);
+	ufbx_scene* Scene = ufbx_load_file(TCHAR_TO_UTF8(*Path), &Opts, &Error);
 	if (Scene == nullptr)
 	{
-		std::cerr << "FbxStaticMesh: failed to load '" << Path << "': " << Error.description.data << '\n';
+		UE_LOG(LogMeshUtilities, Error, "FbxStaticMesh: failed to load '%s': %s", *Path, Error.description.data);
 		return false;
 	}
 
-	const size_t TriIndexCapacity = static_cast<size_t>(16u) * 3u;
-	std::vector<uint32_t> Tri(TriIndexCapacity);
+	TArray<uint32> Tri;
+	Tri.SetNumZeroed(16 * 3);
 
 	for (size_t Mi = 0; Mi < Scene->meshes.count; ++Mi)
 	{
@@ -48,12 +45,12 @@ bool LoadStaticMeshFromFbx(const std::string& Path, FMeshData& Out)
 			continue;
 		}
 
-		const int IndexOffset = Out.Indices.Num();
-		int IndexCount = 0;
+		const int32 IndexOffset = Out.Indices.Num();
+		int32 IndexCount = 0;
 
-		if (Mesh->max_face_triangles * 3u > Tri.size())
+		if (Mesh->max_face_triangles * 3u > static_cast<size_t>(Tri.Num()))
 		{
-			Tri.resize(Mesh->max_face_triangles * 3u);
+			Tri.SetNumZeroed(static_cast<int32>(Mesh->max_face_triangles * 3u));
 		}
 
 		for (size_t Fi = 0; Fi < Mesh->faces.count; ++Fi)
@@ -63,32 +60,33 @@ bool LoadStaticMeshFromFbx(const std::string& Path, FMeshData& Out)
 			{
 				continue;
 			}
-			const uint32_t NumTris = ufbx_triangulate_face(Tri.data(), Tri.size(), Mesh, Face);
-			for (uint32_t T = 0; T < NumTris; ++T)
+			const uint32 NumTris = ufbx_triangulate_face(Tri.GetData(), static_cast<size_t>(Tri.Num()), Mesh, Face);
+			for (uint32 T = 0; T < NumTris; ++T)
 			{
-				for (int K = 0; K < 3; ++K)
+				for (int32 K = 0; K < 3; ++K)
 				{
-					const uint32_t Corner = Tri[(static_cast<size_t>(T) * 3u) + static_cast<size_t>(K)];
+					const uint32 Corner = Tri[static_cast<int32>(T * 3u) + K];
 
 					FVertex V{};
 					const ufbx_vec3 Pos = ufbx_get_vertex_vec3(&Mesh->vertex_position, Corner);
-					V.Position = {static_cast<float>(Pos.x), static_cast<float>(Pos.y), static_cast<float>(Pos.z)};
+					V.Position =
+						FVector(static_cast<float>(Pos.x), static_cast<float>(Pos.y), static_cast<float>(Pos.z));
 
 					if (Mesh->vertex_normal.exists)
 					{
 						const ufbx_vec3 N = ufbx_get_vertex_vec3(&Mesh->vertex_normal, Corner);
-						V.Normal = FromGlm(glm::normalize(
-							glm::vec3{static_cast<float>(N.x), static_cast<float>(N.y), static_cast<float>(N.z)}));
+						V.Normal = LegacyGL::Normalize(
+							FVector(static_cast<float>(N.x), static_cast<float>(N.y), static_cast<float>(N.z)));
 					}
 					else
 					{
-						V.Normal = {0.0f, 1.0f, 0.0f};
+						V.Normal = FVector(0.0f, 1.0f, 0.0f);
 					}
 
 					if (Mesh->vertex_uv.exists)
 					{
 						const ufbx_vec2 Uv = ufbx_get_vertex_vec2(&Mesh->vertex_uv, Corner);
-						V.TexCoord = {static_cast<float>(Uv.x), static_cast<float>(Uv.y)};
+						V.TexCoord = FVector2D(static_cast<float>(Uv.x), static_cast<float>(Uv.y));
 					}
 
 					Out.Indices.Add(static_cast<uint32>(Out.Vertices.Num()));
@@ -108,7 +106,7 @@ bool LoadStaticMeshFromFbx(const std::string& Path, FMeshData& Out)
 
 	if (Out.IsEmpty())
 	{
-		std::cerr << "FbxStaticMesh: no triangles in '" << Path << "'\n";
+		UE_LOG(LogMeshUtilities, Error, "FbxStaticMesh: no triangles in '%s'", *Path);
 		return false;
 	}
 

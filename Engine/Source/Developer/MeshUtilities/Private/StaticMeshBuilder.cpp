@@ -4,11 +4,12 @@
 #include "GltfImport.h"
 #include "LeonMeshFormat.h"
 #include "MeshData.h"
+#include "MeshUtilitiesLog.h"
 #include "ObjImport.h"
 
-#include <vector>
+DEFINE_LOG_CATEGORY(LogMeshUtilities);
 
-bool FStaticMeshBuilder::CookFromObj(const std::string& ObjPath, const std::string& OutLmeshPath, std::string& OutError)
+bool FStaticMeshBuilder::CookFromObj(const FString& ObjPath, const FString& OutMeshPath, FString& OutError)
 {
 	FMeshData Data = LoadObj(ObjPath);
 	if (Data.IsEmpty())
@@ -17,16 +18,16 @@ bool FStaticMeshBuilder::CookFromObj(const std::string& ObjPath, const std::stri
 		return false;
 	}
 	ComputeTangents(Data);
-	if (!SaveLeonMeshFile(FString(OutLmeshPath.c_str()), Data))
+	if (!SaveLeonMeshFile(OutMeshPath, Data))
 	{
-		OutError = "Failed to write .lmesh: " + OutLmeshPath;
+		OutError = "Failed to write .lmesh: " + OutMeshPath;
 		return false;
 	}
-	OutError.clear();
+	OutError.Empty();
 	return true;
 }
 
-bool FStaticMeshBuilder::CookFromFbx(const std::string& FbxPath, const std::string& OutLmeshPath, std::string& OutError)
+bool FStaticMeshBuilder::CookFromFbx(const FString& FbxPath, const FString& OutMeshPath, FString& OutError)
 {
 	FMeshData Data;
 	if (!LoadStaticMeshFromFbx(FbxPath, Data))
@@ -34,29 +35,29 @@ bool FStaticMeshBuilder::CookFromFbx(const std::string& FbxPath, const std::stri
 		OutError = "Failed to load FBX: " + FbxPath;
 		return false;
 	}
-	if (!SaveLeonMeshFile(FString(OutLmeshPath.c_str()), Data))
+	if (!SaveLeonMeshFile(OutMeshPath, Data))
 	{
-		OutError = "Failed to write .lmesh: " + OutLmeshPath;
+		OutError = "Failed to write .lmesh: " + OutMeshPath;
 		return false;
 	}
-	OutError.clear();
+	OutError.Empty();
 	return true;
 }
 
-bool FStaticMeshBuilder::CookFromGltf(const std::string& GltfPath, const std::string& OutLmeshPath,
-	const std::string& MaterialsOutDir, std::string& OutError)
+bool FStaticMeshBuilder::CookFromGltf(
+	const FString& GltfPath, const FString& OutMeshPath, const FString& MaterialsOutDir, FString& OutError)
 {
 	FMeshData Data;
-	std::vector<FGltfImportedMaterial> Mats;
-	if (!LoadStaticMeshFromGltf(GltfPath, Data, MaterialsOutDir, &Mats, OutError))
+	TArray<FGltfImportedMaterial> Materials;
+	if (!LoadStaticMeshFromGltf(GltfPath, Data, MaterialsOutDir, &Materials, OutError))
 	{
 		return false;
 	}
-	if (!SaveLeonMeshFile(FString(OutLmeshPath.c_str()), Data))
+	if (!SaveLeonMeshFile(OutMeshPath, Data))
 	{
-		OutError = "Failed to write .lmesh: " + OutLmeshPath;
+		OutError = "Failed to write .lmesh: " + OutMeshPath;
 		return false;
 	}
-	OutError.clear();
+	OutError.Empty();
 	return true;
 }

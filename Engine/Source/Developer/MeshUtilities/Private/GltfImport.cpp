@@ -8,123 +8,116 @@
 	#pragma warning(pop)
 #endif
 
+#include "Containers/StringConv.h"
 #include "GltfImport.h"
+#include "HAL/FileManager.h"
 #include "LeonMaterialFormat.h"
 #include "MeshData.h"
-
-#include <algorithm>
-#include <cctype>
-#include <cstring>
-#include <filesystem>
-#include <system_error>
-
-namespace fs = std::filesystem;
+#include "Misc/CString.h"
+#include "Misc/Paths.h"
 
 namespace
 {
 
-	[[nodiscard]] std::uint32_t ReadIndex(const cgltf_accessor* Acc, cgltf_size I)
+	[[nodiscard]] uint32 ReadIndex(const cgltf_accessor* Acc, cgltf_size I)
 	{
 		cgltf_uint Out = 0;
 		cgltf_accessor_read_uint(Acc, I, &Out, 1);
-		return static_cast<std::uint32_t>(Out);
+		return static_cast<uint32>(Out);
 	}
 
-	[[nodiscard]] std::string SanitizeName(std::string InName)
+	/** Letters, digits, '_' and '-' kept; everything else becomes '_'. */
+	[[nodiscard]] FString SanitizeName(const FString& InName)
 	{
-		if (InName.empty())
+		FString Name = InName.IsEmpty() ? FString("Material") : InName;
+		for (TCHAR& C : Name.GetCharArray())
 		{
-			InName = "Material";
-		}
-		for (char& C : InName)
-		{
-			if (!(std::isalnum(static_cast<unsigned char>(C)) || C == '_' || C == '-'))
+			if (C != '\0' && !(FChar::IsAlnum(C) || C == '_' || C == '-'))
 			{
 				C = '_';
 			}
 		}
-		return InName;
+		return Name;
 	}
 
+	/** Copies an external image next to the materials; OutRelPath is "textures/<file>" (relative to the out dir). */
 	bool CopyTextureUri(
-		const cgltf_image* Image, const fs::path& GltfDir, const fs::path& TexturesDir, std::string& OutRelPath)
+		const cgltf_image* Image, const FString& GltfDir, const FString& TexturesDir, FString& OutRelPath)
 	{
-		OutRelPath.clear();
+		OutRelPath.Empty();
 		if (Image == nullptr)
 		{
 			return false;
 		}
-		std::error_code Ec;
-		fs::create_directories(TexturesDir, Ec);
-		if (Image->uri != nullptr && std::strlen(Image->uri) > 0 && std::strncmp(Image->uri, "data:", 5) != 0)
+		IFileManager::Get().MakeDirectory(*TexturesDir, true);
+		if (Image->uri != nullptr && FCStringAnsi::Strlen(Image->uri) > 0 &&
+			FCStringAnsi::Strncmp(Image->uri, "data:", 5) != 0)
 		{
-			const fs::path Src = GltfDir / Image->uri;
-			const fs::path Dst = TexturesDir / fs::path(Image->uri).filename();
-			fs::copy_file(Src, Dst, fs::copy_options::overwrite_existing, Ec);
-			if (!Ec)
+			const FString Uri(Image->uri);
+			const FString Src = FPaths::Combine(GltfDir, Uri);
+			const FString Dst = FPaths::Combine(TexturesDir, FPaths::GetCleanFilename(Uri));
+			if (IFileManager::Get().Copy(*Dst, *Src, true))
 			{
-				OutRelPath = (fs::path("textures") / Dst.filename()).generic_string();
+				OutRelPath = FPaths::Combine("textures", FPaths::GetCleanFilename(Dst));
 				return true;
 			}
 		}
 		return false;
 	}
 
-	void WriteMaterialFromGltf(const cgltf_material* Mat, const std::string& InName, const fs::path& MaterialsDir,
-		const fs::path& GltfDir, FGltfImportedMaterial& OutDesc)
+	void WriteMaterialFromGltf(const cgltf_material* Mat, const FString& InName, const FString& MaterialsDir,
+		const FString& GltfDir, FGltfImportedMaterial& OutDesc)
 	{
 		FMaterial M{};
-		M.Albedo = {0.8f, 0.8f, 0.8f};
+		M.Albedo = FVector(0.8f, 0.8f, 0.8f);
 		M.Metallic = 0.0f;
 		M.Roughness = 0.5f;
-		std::string BaseMap;
-		std::string NormalMap;
+		FString BaseMap;
+		FString NormalMap;
+		const FString TexturesDir = FPaths::Combine(MaterialsDir, "Textures");
 
 		if (Mat != nullptr && Mat->has_pbr_metallic_roughness)
 		{
-			const auto& Pbr = Mat->pbr_metallic_roughness;
-			M.Albedo = {Pbr.base_color_factor[0], Pbr.base_color_factor[1], Pbr.base_color_factor[2]};
+			const cgltf_pbr_metallic_roughness& Pbr = Mat->pbr_metallic_roughness;
+			M.Albedo = FVector(Pbr.base_color_factor[0], Pbr.base_color_factor[1], Pbr.base_color_factor[2]);
 			M.Alpha = Pbr.base_color_factor[3];
 			M.Metallic = Pbr.metallic_factor;
-			M.Roughness = std::clamp(Pbr.roughness_factor, 0.04f, 1.0f);
+			M.Roughness = FMath::Clamp(Pbr.roughness_factor, 0.04f, 1.0f);
 			if (Pbr.base_color_texture.texture != nullptr)
 			{
-				(void)CopyTextureUri(
-					Pbr.base_color_texture.texture->image, GltfDir, MaterialsDir / "Textures", BaseMap);
+				(void)CopyTextureUri(Pbr.base_color_texture.texture->image, GltfDir, TexturesDir, BaseMap);
 			}
 		}
 		if (Mat != nullptr && Mat->normal_texture.texture != nullptr)
 		{
-			(void)CopyTextureUri(Mat->normal_texture.texture->image, GltfDir, MaterialsDir / "Textures", NormalMap);
+			(void)CopyTextureUri(Mat->normal_texture.texture->image, GltfDir, TexturesDir, NormalMap);
 		}
 
-		const std::string FileName = "M_" + SanitizeName(InName) + ".lmat";
-		const fs::path OutPath = MaterialsDir / FileName;
-		std::error_code Ec;
-		fs::create_directories(MaterialsDir, Ec);
-		(void)SaveLeonMaterialFile(FString(OutPath.generic_string().c_str()),
-			FString(("M_" + SanitizeName(InName)).c_str()), M, FString(BaseMap.c_str()), FString(NormalMap.c_str()));
-		OutDesc.Name = "M_" + SanitizeName(InName);
-		OutDesc.LmatRelativePath = (fs::path("materials") / FileName).generic_string();
+		const FString AssetName = "M_" + SanitizeName(InName);
+		const FString FileName = AssetName + ".lmat";
+		IFileManager::Get().MakeDirectory(*MaterialsDir, true);
+		(void)SaveLeonMaterialFile(FPaths::Combine(MaterialsDir, FileName), AssetName, M, BaseMap, NormalMap);
+		OutDesc.Name = AssetName;
+		OutDesc.LmatRelativePath = FPaths::Combine("materials", FileName);
 	}
 
 } // namespace
 
-bool LoadStaticMeshFromGltf(const std::string& Path, FMeshData& Out, const std::string& MaterialsOutDir,
-	std::vector<FGltfImportedMaterial>* OutMaterials, std::string& OutError)
+bool LoadStaticMeshFromGltf(const FString& Path, FMeshData& Out, const FString& MaterialsOutDir,
+	TArray<FGltfImportedMaterial>* OutMaterials, FString& OutError)
 {
-	Out = {};
-	OutError.clear();
+	Out = FMeshData();
+	OutError.Empty();
 
 	cgltf_options Options{};
 	cgltf_data* Data = nullptr;
-	cgltf_result Result = cgltf_parse_file(&Options, Path.c_str(), &Data);
+	cgltf_result Result = cgltf_parse_file(&Options, TCHAR_TO_UTF8(*Path), &Data);
 	if (Result != cgltf_result_success)
 	{
 		OutError = "cgltf_parse_file failed for " + Path;
 		return false;
 	}
-	Result = cgltf_load_buffers(&Options, Data, Path.c_str());
+	Result = cgltf_load_buffers(&Options, Data, TCHAR_TO_UTF8(*Path));
 	if (Result != cgltf_result_success)
 	{
 		OutError = "cgltf_load_buffers failed for " + Path;
@@ -132,11 +125,10 @@ bool LoadStaticMeshFromGltf(const std::string& Path, FMeshData& Out, const std::
 		return false;
 	}
 
-	const fs::path GltfDir = fs::path(Path).parent_path();
-	const fs::path MaterialsDir = MaterialsOutDir.empty() ? fs::path{} : fs::path(MaterialsOutDir);
+	const FString GltfDir = FPaths::GetPath(Path);
 
 	FMeshData Mesh;
-	std::uint32_t BaseVertex = 0;
+	uint32 BaseVertex = 0;
 
 	for (cgltf_size Mi = 0; Mi < Data->meshes_count; ++Mi)
 	{
@@ -181,19 +173,19 @@ bool LoadStaticMeshFromGltf(const std::string& Path, FMeshData& Out, const std::
 				float Tmp[4]{};
 				if (cgltf_accessor_read_float(Pos, Vi, Tmp, 3))
 				{
-					V.Position = {Tmp[0], Tmp[1], Tmp[2]};
+					V.Position = FVector(Tmp[0], Tmp[1], Tmp[2]);
 				}
 				if (Nrm != nullptr && cgltf_accessor_read_float(Nrm, Vi, Tmp, 3))
 				{
-					V.Normal = {Tmp[0], Tmp[1], Tmp[2]};
+					V.Normal = FVector(Tmp[0], Tmp[1], Tmp[2]);
 				}
 				else
 				{
-					V.Normal = {0.0f, 1.0f, 0.0f};
+					V.Normal = FVector(0.0f, 1.0f, 0.0f);
 				}
 				if (Uv != nullptr && cgltf_accessor_read_float(Uv, Vi, Tmp, 2))
 				{
-					V.TexCoord = {Tmp[0], Tmp[1]};
+					V.TexCoord = FVector2D(Tmp[0], Tmp[1]);
 				}
 				Mesh.Vertices.Add(V);
 			}
@@ -219,19 +211,18 @@ bool LoadStaticMeshFromGltf(const std::string& Path, FMeshData& Out, const std::
 			Sm.MaterialIndex = Mesh.Materials.Num();
 			Mesh.Submeshes.Add(Sm);
 
-			FMaterial Slot{};
-			Mesh.Materials.Add(Slot);
+			Mesh.Materials.Add(FMaterial{});
 			Mesh.AlbedoMapPaths.AddDefaulted();
 
-			if (!MaterialsDir.empty() && OutMaterials != nullptr && Prim.material != nullptr)
+			if (!MaterialsOutDir.IsEmpty() && OutMaterials != nullptr && Prim.material != nullptr)
 			{
 				FGltfImportedMaterial Desc;
-				const char* MatName = Prim.material->name != nullptr ? Prim.material->name : "Material";
-				WriteMaterialFromGltf(Prim.material, MatName, MaterialsDir, GltfDir, Desc);
-				OutMaterials->push_back(Desc);
+				const ANSICHAR* MatName = Prim.material->name != nullptr ? Prim.material->name : "Material";
+				WriteMaterialFromGltf(Prim.material, MatName, MaterialsOutDir, GltfDir, Desc);
+				OutMaterials->Add(Desc);
 			}
 
-			BaseVertex += static_cast<std::uint32_t>(Vcount);
+			BaseVertex += static_cast<uint32>(Vcount);
 		}
 	}
 
@@ -243,6 +234,6 @@ bool LoadStaticMeshFromGltf(const std::string& Path, FMeshData& Out, const std::
 		return false;
 	}
 	ComputeTangents(Mesh);
-	Out = std::move(Mesh);
+	Out = MoveTemp(Mesh);
 	return true;
 }

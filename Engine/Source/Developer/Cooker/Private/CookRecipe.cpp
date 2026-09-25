@@ -1,63 +1,70 @@
 #include "CookRecipe.h"
 
 #include "CookPaths.h"
+#include "CookerLog.h"
+#include "Dom/JsonObject.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 #include "StaticMeshBuilder.h"
-
-#include <nlohmann/json.hpp>
-
-#include <fstream>
-#include <iostream>
 
 namespace
 {
 
-	namespace fs = std::filesystem;
-
-	[[nodiscard]] int CookRecipeStaticMesh(const nlohmann::json& Step, const fs::path& BaseDir, int StepIndex)
+	/** A string field, or empty when missing or not a string. */
+	[[nodiscard]] FString StringField(const FJsonObject& Step, const TCHAR* Name)
 	{
-		const std::string Obj = Step.value("obj", "");
-		const std::string Fbx = Step.value("fbx", "");
-		const std::string Gltf = Step.value("gltf", "");
-		const std::string Out = Step.value("out", "");
-		const std::string MaterialsRel = Step.value("materials", "");
-		if (Out.empty())
+		FString Value;
+		(void)Step.TryGetStringField(Name, Value);
+		return Value;
+	}
+
+	[[nodiscard]] int32 CookRecipeStaticMesh(const FJsonObject& Step, const FString& BaseDir, int32 StepIndex)
+	{
+		const FString Obj = StringField(Step, "obj");
+		const FString Fbx = StringField(Step, "fbx");
+		const FString Gltf = StringField(Step, "gltf");
+		const FString Out = StringField(Step, "out");
+		const FString MaterialsRel = StringField(Step, "materials");
+		if (Out.IsEmpty())
 		{
-			std::cerr << "Recipe step " << StepIndex << ": staticmesh needs out\n";
+			UE_LOG(LogCook, Error, "Recipe step %d: staticmesh needs out", StepIndex);
 			return 1;
 		}
-		const int Sources = (!Obj.empty() ? 1 : 0) + (!Fbx.empty() ? 1 : 0) + (!Gltf.empty() ? 1 : 0);
+		const int32 Sources = (!Obj.IsEmpty() ? 1 : 0) + (!Fbx.IsEmpty() ? 1 : 0) + (!Gltf.IsEmpty() ? 1 : 0);
 		if (Sources != 1)
 		{
-			std::cerr << "Recipe step " << StepIndex << ": staticmesh needs exactly one of obj/fbx/gltf\n";
+			UE_LOG(LogCook, Error, "Recipe step %d: staticmesh needs exactly one of obj/fbx/gltf", StepIndex);
 			return 1;
 		}
-		const std::string OutAbs = FCookPaths::ResolveBeside(BaseDir, Out);
-		const std::string MaterialsAbs =
-			MaterialsRel.empty() ? std::string{} : FCookPaths::ResolveBeside(BaseDir, MaterialsRel);
-		std::string Err;
+		const FString OutAbs = FCookPaths::ResolveBeside(BaseDir, Out);
+		const FString MaterialsAbs =
+			MaterialsRel.IsEmpty() ? FString() : FCookPaths::ResolveBeside(BaseDir, MaterialsRel);
+		FString Err;
 		bool bOk = false;
-		if (!Obj.empty())
+		if (!Obj.IsEmpty())
 		{
-			const std::string Src = FCookPaths::ResolveBeside(BaseDir, Obj);
-			std::cout << "Cook staticmesh OBJ '" << Src << "' -> " << OutAbs << '\n';
+			const FString Src = FCookPaths::ResolveBeside(BaseDir, Obj);
+			UE_LOG(LogCook, Log, "Cook staticmesh OBJ '%s' -> %s", *Src, *OutAbs);
 			bOk = FStaticMeshBuilder::CookFromObj(Src, OutAbs, Err);
 		}
-		else if (!Fbx.empty())
+		else if (!Fbx.IsEmpty())
 		{
-			const std::string Src = FCookPaths::ResolveBeside(BaseDir, Fbx);
-			std::cout << "Cook staticmesh FBX '" << Src << "' -> " << OutAbs << '\n';
+			const FString Src = FCookPaths::ResolveBeside(BaseDir, Fbx);
+			UE_LOG(LogCook, Log, "Cook staticmesh FBX '%s' -> %s", *Src, *OutAbs);
 			bOk = FStaticMeshBuilder::CookFromFbx(Src, OutAbs, Err);
 		}
 		else
 		{
-			const std::string Src = FCookPaths::ResolveBeside(BaseDir, Gltf);
-			std::cout << "Cook staticmesh glTF '" << Src << "' -> " << OutAbs << '\n';
+			const FString Src = FCookPaths::ResolveBeside(BaseDir, Gltf);
+			UE_LOG(LogCook, Log, "Cook staticmesh glTF '%s' -> %s", *Src, *OutAbs);
 			bOk = FStaticMeshBuilder::CookFromGltf(Src, OutAbs, MaterialsAbs, Err);
 		}
 		if (!bOk)
 		{
-			std::cerr << "Cook staticmesh failed (step " << StepIndex << "): " << (Err.empty() ? "unknown error" : Err)
-					  << '\n';
+			UE_LOG(LogCook, Error, "Cook staticmesh failed (step %d): %s", StepIndex,
+				Err.IsEmpty() ? "unknown error" : *Err);
 			return 2;
 		}
 		return 0;
@@ -65,36 +72,39 @@ namespace
 
 } // namespace
 
-int FCookRecipe::RunFile(const std::string& RecipePath)
+int32 FCookRecipe::RunFile(const FString& RecipePath)
 {
-	std::ifstream In(RecipePath);
-	if (!In)
+	FString Text;
+	if (!FFileHelper::LoadFileToString(Text, *RecipePath))
 	{
-		std::cerr << "Cannot open recipe '" << RecipePath << "'\n";
+		UE_LOG(LogCook, Error, "Cannot open recipe '%s'", *RecipePath);
 		return 1;
 	}
 
-	nlohmann::json Doc = nlohmann::json::parse(In, nullptr, false);
-	if (Doc.is_discarded() || !Doc.contains("steps") || !Doc["steps"].is_array())
+	TSharedPtr<FJsonObject> Doc;
+	const TArray<TSharedPtr<FJsonValue>>* Steps = nullptr;
+	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Doc) || !Doc.IsValid() ||
+		!Doc->TryGetArrayField("steps", Steps))
 	{
-		std::cerr << "Recipe must be JSON with a \"steps\" array\n";
+		UE_LOG(LogCook, Error, "Recipe must be JSON with a \"steps\" array");
 		return 1;
 	}
 
-	const fs::path BaseDir = fs::path(RecipePath).parent_path();
-	int StepIndex = 0;
-	for (const auto& Step : Doc["steps"])
+	const FString BaseDir = FPaths::GetPath(RecipePath);
+	int32 StepIndex = 0;
+	for (const TSharedPtr<FJsonValue>& StepValue : *Steps)
 	{
 		++StepIndex;
-		if (!Step.is_object() || !Step.contains("type") || !Step["type"].is_string())
+		const TSharedPtr<FJsonObject>* Step = nullptr;
+		FString Type;
+		if (!StepValue.IsValid() || !StepValue->TryGetObject(Step) || !(*Step)->TryGetStringField("type", Type))
 		{
-			std::cerr << "Recipe step " << StepIndex << ": missing \"type\"\n";
+			UE_LOG(LogCook, Error, "Recipe step %d: missing \"type\"", StepIndex);
 			return 1;
 		}
-		const std::string Type = Step["type"].get<std::string>();
-		if (Type == "staticmesh")
+		if (Type.Equals("staticmesh", ESearchCase::CaseSensitive))
 		{
-			const int Rc = CookRecipeStaticMesh(Step, BaseDir, StepIndex);
+			const int32 Rc = CookRecipeStaticMesh(**Step, BaseDir, StepIndex);
 			if (Rc != 0)
 			{
 				return Rc;
@@ -102,7 +112,7 @@ int FCookRecipe::RunFile(const std::string& RecipePath)
 		}
 		else
 		{
-			std::cerr << "Recipe step " << StepIndex << ": unknown type '" << Type << "'\n";
+			UE_LOG(LogCook, Error, "Recipe step %d: unknown type '%s'", StepIndex, *Type);
 			return 1;
 		}
 	}
