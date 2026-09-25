@@ -29,11 +29,12 @@ set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 
-# Match PS2SDK samples/Makefile.eeglobal
-set(CMAKE_C_FLAGS_INIT   "-D_EE -G0 -O2 -Wall")
-set(CMAKE_CXX_FLAGS_INIT "-D_EE -G0 -O2 -Wall -fno-exceptions -fno-rtti")
+# Match PS2SDK samples/Makefile.eeglobal; one section per function / object so the linker drops unused code
+# (-Wl,--gc-sections).
+set(CMAKE_C_FLAGS_INIT   "-D_EE -G0 -O2 -Wall -ffunction-sections -fdata-sections")
+set(CMAKE_CXX_FLAGS_INIT "-D_EE -G0 -O2 -Wall -fno-exceptions -fno-rtti -ffunction-sections -fdata-sections")
 set(CMAKE_EXE_LINKER_FLAGS_INIT
-    "-T${PS2SDK}/ee/startup/linkfile -L${PS2SDK}/ee/lib -Wl,-zmax-page-size=128")
+    "-T${PS2SDK}/ee/startup/linkfile -L${PS2SDK}/ee/lib -Wl,-zmax-page-size=128 -Wl,--gc-sections")
 
 include_directories(SYSTEM "${PS2SDK}/ee/include" "${PS2SDK}/common/include")
 link_directories("${PS2SDK}/ee/lib")
