@@ -1,10 +1,11 @@
 #include "SceneRenderer.h"
 
 #include "Frustum.h"
-#include "LegacyGLMath.h"
+#include "GLClipSpace.h"
 #include "Level/Light.h"
 #include "Misc/Paths.h"
 #include "Primitives.h"
+#include "RenderMatrices.h"
 #include "RendererLog.h"
 
 #include <glad/glad.h>
@@ -13,6 +14,12 @@
 
 namespace
 {
+
+	/** The camera's projection in GL clip space: every pass draws with it. */
+	FMatrix GetProjectionGL(const UCameraComponent& Camera)
+	{
+		return ToGLClipSpace(Camera.ProjectionMatrix());
+	}
 
 	struct FDrawItem
 	{
@@ -24,9 +31,9 @@ namespace
 	// std140 layouts — must match blinn_phong.frag uniform blocks.
 	struct alignas(16) FCameraBlock
 	{
-		FMatrix View = FMatrix::Identity;
-		FMatrix Projection = FMatrix::Identity;
-		FMatrix ViewProjection = FMatrix::Identity;
+		FMatrix View = FMatrix::Identity; // UE view space
+		FMatrix Projection = FMatrix::Identity; // view to GL clip space
+		FMatrix ViewProjection = FMatrix::Identity; // world to GL clip space
 		FVector4 CameraPos = FVector4(0.0f, 0.0f, 0.0f, 0.0f); // xyz
 	};
 
@@ -269,6 +276,8 @@ bool FSceneRenderer::Initialize(const FString& InShaderDirectory)
 
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
+	// Front faces wind counter-clockwise in GL window space (GL's default, made explicit).
+	glFrontFace(GL_CCW);
 	glCullFace(GL_BACK);
 	glEnable(GL_MULTISAMPLE);
 	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
@@ -444,7 +453,7 @@ void FSceneRenderer::AddDebugAabb(const FVector& WorldMin, const FVector& WorldM
 
 void FSceneRenderer::UpdateCameraUbo(const UCameraComponent& Camera) const
 {
-	UpdateCameraUbo(Camera.ViewMatrix(), Camera.ProjectionMatrix(), Camera.GetCameraLocation());
+	UpdateCameraUbo(Camera.ViewMatrix(), GetProjectionGL(Camera), Camera.GetCameraLocation());
 }
 
 void FSceneRenderer::UpdateCameraUbo(
@@ -622,7 +631,7 @@ void FSceneRenderer::RenderPlanarReflectionPass(const ULevel& Level, const UCame
 
 	const FMatrix ReflectMat = MakeReflectMatrix(PlaneY);
 	const FMatrix LocalView = ReflectMat * Camera.ViewMatrix();
-	const FMatrix LocalProjection = Camera.ProjectionMatrix();
+	const FMatrix LocalProjection = GetProjectionGL(Camera);
 	const FMatrix LocalViewProjection = LocalView * LocalProjection;
 	const FVector Eye = Camera.GetCameraLocation();
 	const FVector ReflectedEye(Eye.X, (2.0f * PlaneY) - Eye.Y, Eye.Z);
@@ -735,7 +744,7 @@ void FSceneRenderer::DrawSubMesh(const FShader& Shader, const UStaticMeshCompone
 	if (Options.bLitPass)
 	{
 		float Normal[9];
-		LegacyGL::NormalMatrix3x3(LocalModel, Normal);
+		GetNormalMatrix3x3(LocalModel, Normal);
 		Shader.SetMat3("uNormalMatrix", Normal);
 		Shader.SetFloat("uShininess", InMaterial.Shininess);
 		Shader.SetFloat("uRoughness", InMaterial.Roughness);
@@ -799,7 +808,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 		{
 			glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
 			glViewport(0, 0, FbWidth, FbHeight);
-			OverlayDebugDraw.Flush(Camera.ViewMatrix() * Camera.ProjectionMatrix());
+			OverlayDebugDraw.Flush(Camera.ViewMatrix() * GetProjectionGL(Camera));
 		}
 		OverlayDebugDraw.Clear();
 		SkeletalDraws.Reset();
@@ -810,7 +819,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 	const bool bPostOn = Post.bEnabled && SceneColor.Valid();
 
 	const FMatrix LocalView = Camera.ViewMatrix();
-	const FMatrix LocalProjection = Camera.ProjectionMatrix();
+	const FMatrix LocalProjection = GetProjectionGL(Camera);
 	const FMatrix LocalViewProjection = LocalView * LocalProjection;
 	const FVector LocalCameraPos = Camera.GetCameraLocation();
 
@@ -1098,7 +1107,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 	{
 		glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
 		glViewport(0, 0, FbWidth, FbHeight);
-		OverlayDebugDraw.Flush(Camera.ViewMatrix() * Camera.ProjectionMatrix());
+		OverlayDebugDraw.Flush(Camera.ViewMatrix() * GetProjectionGL(Camera));
 	}
 	OverlayDebugDraw.Clear();
 	SkeletalDraws.Reset();
@@ -1132,7 +1141,8 @@ void FSceneRenderer::RenderPostStack(const UCameraComponent& Camera)
 	PassTimers.Begin(FGPUPassTimer::EPass::Ssao);
 	if (bWantAo)
 	{
-		const FMatrix LocalProjection = Camera.ProjectionMatrix();
+		// GL clip space: ssao.frag reads GL depth and reconstructs UE view-space positions (+Z forward).
+		const FMatrix LocalProjection = GetProjectionGL(Camera);
 		const FMatrix InvProjection = LocalProjection.Inverse();
 		const int32 SampleCount = FMath::Clamp(Post.AoSampleCount, 1, MaxAoSamples);
 
@@ -1289,7 +1299,7 @@ void FSceneRenderer::DrawQueuedSkeletal(const FMatrix& InView, const FMatrix& In
 		const FMatrix& LocalModel = Item.Model;
 		const FMatrix Mvp = LocalModel * InView * InProjection;
 		float Normal[9];
-		LegacyGL::NormalMatrix3x3(LocalModel, Normal);
+		GetNormalMatrix3x3(LocalModel, Normal);
 
 		SkinnedLitShader.SetMat4("uMVP", Mvp);
 		SkinnedLitShader.SetMat4("uModel", LocalModel);
@@ -1421,5 +1431,5 @@ void FSceneRenderer::DrawDebug(
 		DebugDraw.AddLightFrustum(LightSpace, FrustumColor);
 	}
 
-	DebugDraw.Flush(Camera.ViewMatrix() * Camera.ProjectionMatrix());
+	DebugDraw.Flush(Camera.ViewMatrix() * GetProjectionGL(Camera));
 }

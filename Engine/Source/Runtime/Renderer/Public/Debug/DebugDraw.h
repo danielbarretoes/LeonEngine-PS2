@@ -20,10 +20,10 @@ public:
 	void AddAabb(const FVector& WorldMin, const FVector& WorldMax, const FLinearColor& InColor);
 	/** RGB axes at a scene component's world location (editor / PIE debug). */
 	void AddAxes(const FVector& Origin, float Size = 0.35f);
-	/** Clip-space cube (+-1) transformed by inverse(LightSpace): the world-space ortho frustum (GL convention). */
+	/** GL clip-space cube (+-1) transformed by inverse(LightSpace): the world-space ortho frustum. */
 	void AddLightFrustum(const FMatrix& LightSpace, const FLinearColor& InColor);
 
-	/** Draws the batch with a GL-convention view-projection (LegacyGLMath.h). */
+	/** Draws the batch with a world to GL clip space view-projection (GLClipSpace.h). */
 	void Flush(const FMatrix& ViewProjection) const;
 
 	[[nodiscard]] bool IsValid() const

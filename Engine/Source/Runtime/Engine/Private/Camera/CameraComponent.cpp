@@ -1,6 +1,6 @@
 #include "Camera/CameraComponent.h"
 
-#include "LegacyGLMath.h"
+#include "ViewMatrices.h"
 
 namespace
 {
@@ -39,7 +39,10 @@ void UCameraComponent::SetPerspective(float InFovDegrees, float InAspect, float 
 	NearPlane = InNearPlane;
 	FarPlane = InFarPlane;
 	bOrthographic = false;
-	Projection = LegacyGL::Perspective(FMath::DegreesToRadians(FovDegrees), Aspect, NearPlane, FarPlane);
+	// UE clip space, depth 0 at the near plane and 1 at the far one. The vertical field of view is kept: the half
+	// angle is the same on both axes and x is scaled down by the aspect ratio.
+	const float HalfFov = FMath::DegreesToRadians(FovDegrees) / 2.0f;
+	Projection = FPerspectiveMatrix(HalfFov, HalfFov, 1.0f / Aspect, 1.0f, NearPlane, FarPlane);
 }
 
 void UCameraComponent::SetOrthographic(float Height, float InAspect, float InNearPlane, float InFarPlane)
@@ -51,7 +54,8 @@ void UCameraComponent::SetOrthographic(float Height, float InAspect, float InNea
 	bOrthographic = true;
 	const float HalfH = OrthoHeight * 0.5f;
 	const float HalfW = HalfH * Aspect;
-	Projection = LegacyGL::Ortho(-HalfW, HalfW, -HalfH, HalfH, NearPlane, FarPlane);
+	// UE clip space: depth (z - Near) / (Far - Near).
+	Projection = FOrthoMatrix(HalfW, HalfH, 1.0f / (FarPlane - NearPlane), -NearPlane);
 }
 
 void UCameraComponent::SetOrthoHeight(float Height)
@@ -215,7 +219,7 @@ FMatrix UCameraComponent::ViewMatrix() const
 	{
 		const FVector Forward = FreeLookForward(YawDegrees, PitchDegrees);
 		const FVector Up = FreeLookWorldUp(YawDegrees, PitchDegrees);
-		return LegacyGL::LookAt(CachedPosition, CachedPosition + Forward, Up);
+		return MakeLookAtView(CachedPosition, CachedPosition + Forward, Up);
 	}
-	return LegacyGL::LookAt(CachedPosition, Target, FVector(0.0f, 1.0f, 0.0f));
+	return MakeLookAtView(CachedPosition, Target, FVector(0.0f, 1.0f, 0.0f));
 }

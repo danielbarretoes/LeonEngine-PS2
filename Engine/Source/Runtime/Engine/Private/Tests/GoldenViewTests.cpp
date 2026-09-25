@@ -1,6 +1,7 @@
 #include "Camera/CameraComponent.h"
 #include "CoreMinimal.h"
 #include "Frustum.h"
+#include "GLClipSpace.h"
 #include "GameFramework/Input.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Misc/AutomationTest.h"
@@ -54,10 +55,16 @@ namespace
 			60.0f, 16.0f / 9.0f, LegacyGolden::ToWorldLength(0.1f), LegacyGolden::ToWorldLength(100.0f));
 	}
 
-	/** The renderer's view-projection of a camera (projection after view). */
+	/** The camera's projection in GL clip space, as the renderer draws with it. */
+	FMatrix GoldenProjectionGL(const UCameraComponent& Camera)
+	{
+		return ToGLClipSpace(Camera.ProjectionMatrix());
+	}
+
+	/** The renderer's view-projection of a camera (UE view, then the projection in GL clip space). */
 	FMatrix GoldenViewProjection(const UCameraComponent& Camera)
 	{
-		return Camera.ViewMatrix() * Camera.ProjectionMatrix();
+		return Camera.ViewMatrix() * GoldenProjectionGL(Camera);
 	}
 
 	/** Appends the NDC of every point through a view-projection. */
@@ -312,7 +319,7 @@ bool FGoldenPlanarReflectionTest::RunTest(const FString& Parameters)
 
 	UCameraComponent Camera;
 	SetGoldenOrbit(Camera, FVector(0.0f, 0.5f, 0.0f), 30.0f, 20.0f, 6.0f);
-	const FMatrix ReflectionViewProjection = Reflect * Camera.ViewMatrix() * Camera.ProjectionMatrix();
+	const FMatrix ReflectionViewProjection = Reflect * Camera.ViewMatrix() * GoldenProjectionGL(Camera);
 
 	TArray<FVector> Mirrored;
 	TArray<FVector> Ndc;

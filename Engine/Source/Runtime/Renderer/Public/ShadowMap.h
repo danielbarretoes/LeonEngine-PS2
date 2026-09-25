@@ -35,7 +35,10 @@ public:
 		return Size;
 	}
 
-	/** Ortho light matrix tightly fitted to a world-space AABB of shadow casters (GL convention, LegacyGLMath.h). */
+	/**
+	 * Ortho light matrix tightly fitted to a world-space AABB of shadow casters: world to the light's GL clip space
+	 * (UE light view, UE ortho, then ToGLClipSpace), as the shadow pass and the lit shader's lookup use it.
+	 */
 	[[nodiscard]] static FMatrix FitLightSpaceMatrix(
 		const FVector& LightDirection, const FVector& WorldMin, const FVector& WorldMax, float Padding = 0.5f);
 

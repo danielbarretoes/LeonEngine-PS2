@@ -1,6 +1,5 @@
 #include "CoreMinimal.h"
 #include "LegacyCoordinateConversion.h"
-#include "LegacyGLMath.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -120,15 +119,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLegacyCoordinateConversionZeroScaleTest,
 
 bool FLegacyCoordinateConversionZeroScaleTest::RunTest(const FString& Parameters)
 {
-	// A scale closer to zero than 1e-4 is kept at +-1e-4, so the normal matrix stays finite.
+	// A scale closer to zero than 1e-4 is kept at +-1e-4, so the normal matrix (the model's inverse) stays finite.
 	const FTransform Transform = FLegacyCoordinateConversion::ConvertTransform(
 		FVector::ZeroVector, FVector::ZeroVector, FVector(0.0f, 1.0f, -1.0e-6f));
 	TestEqual("Scale x sanitised", Transform.GetScale3D().X, 1.0e-4f);
 	TestEqual("Scale y kept", Transform.GetScale3D().Y, 1.0f);
 	TestEqual("Scale z keeps its sign", Transform.GetScale3D().Z, -1.0e-4f);
-	float Normal[9];
-	LegacyGL::NormalMatrix3x3(Transform.ToMatrixWithScale(), Normal);
-	TestTrue("Normal matrix finite", FMath::IsFinite(Normal[0]) && FMath::IsFinite(Normal[8]));
+	const FMatrix Inverse = Transform.ToMatrixWithScale().Inverse();
+	TestTrue("Normal matrix finite", FMath::IsFinite(Inverse.M[0][0]) && FMath::IsFinite(Inverse.M[2][2]));
+	TestEqual("Normal matrix not the singular fallback", Inverse.M[0][0], 1.0e4f, 1.0f);
 	return true;
 }
 

@@ -47,7 +47,9 @@ struct RENDERER_API FDrawOptions
  * Forward renderer: directional shadow map (light 0), optional half-res planar mirror,
  * opaque / transparent, then optional post (SSAO → tonemap → FXAA).
  *
- * Matrices follow the GL conventions of LegacyGLMath.h until P7.
+ * Views are in UE view space (x right, y up, z forward; ViewMatrices.h). Projections passed between the passes are
+ * already in GL clip space (the camera's UE projection through ToGLClipSpace, GLClipSpace.h), so every MVP is
+ * Model * View * ProjectionGL.
  */
 class RENDERER_API FSceneRenderer
 {
@@ -58,7 +60,7 @@ public:
 	static constexpr float PlanarReflectionScale = 0.5f;
 	static constexpr int32 MaxAoSamples = 64;
 
-	/** Mirror about the horizontal plane y = PlaneY (GL memory layout, LegacyGLMath.h), as the planar pass uses. */
+	/** World-space mirror about the horizontal plane y = PlaneY, applied before the view by the planar pass. */
 	[[nodiscard]] static FMatrix MakeReflectMatrix(float PlaneY);
 
 	bool Initialize(const FString& InShaderDirectory);

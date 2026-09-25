@@ -1,7 +1,8 @@
 #include "ShadowMap.h"
 
-#include "LegacyGLMath.h"
+#include "GLClipSpace.h"
 #include "RendererLog.h"
+#include "ViewMatrices.h"
 
 #include <glad/glad.h>
 
@@ -106,7 +107,8 @@ FMatrix FShadowMap::FitLightSpaceMatrix(
 	}
 
 	const FVector Eye = Center - (Dir * (Radius + 1.0f));
-	const FMatrix LightView = LegacyGL::LookAt(Eye, Center, Up);
+	// UE view space of the light: x right, y up, z along the light (left-handed).
+	const FMatrix LightView = MakeLookAtView(Eye, Center, Up);
 
 	FVector MinLs(TNumericLimits<float>::Max());
 	FVector MaxLs(TNumericLimits<float>::Lowest());
@@ -129,11 +131,18 @@ FMatrix FShadowMap::FitLightSpaceMatrix(
 		MaxLs = MaxLs.ComponentMax(Ls);
 	}
 
-	// Eye-space Z is negative in front of the light camera.
-	const float ZNear = FMath::Max(0.05f, -MaxLs.Z - Padding);
-	const float ZFar = FMath::Max(ZNear + 0.1f, -MinLs.Z + Padding);
+	// View-space depth grows along +Z in front of the light.
+	const float ZNear = FMath::Max(0.05f, MinLs.Z - Padding);
+	const float ZFar = FMath::Max(ZNear + 0.1f, MaxLs.Z + Padding);
 
+	// Off-centre box: centre it in x / y, then a UE ortho with half sizes (depth [0, 1] from ZNear to ZFar), then GL
+	// clip space.
+	const float Left = MinLs.X - Padding;
+	const float Right = MaxLs.X + Padding;
+	const float Bottom = MinLs.Y - Padding;
+	const float Top = MaxLs.Y + Padding;
+	const FMatrix Centre = FTranslationMatrix(FVector(-(Left + Right) * 0.5f, -(Bottom + Top) * 0.5f, 0.0f));
 	const FMatrix LightProj =
-		LegacyGL::Ortho(MinLs.X - Padding, MaxLs.X + Padding, MinLs.Y - Padding, MaxLs.Y + Padding, ZNear, ZFar);
-	return LightView * LightProj;
+		Centre * FOrthoMatrix((Right - Left) * 0.5f, (Top - Bottom) * 0.5f, 1.0f / (ZFar - ZNear), -ZNear);
+	return LightView * ToGLClipSpace(LightProj);
 }

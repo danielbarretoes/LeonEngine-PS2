@@ -1,8 +1,8 @@
 #include "Debug/DebugOverlay.h"
 
-#include "LegacyGLMath.h"
 #include "Misc/Paths.h"
 #include "OpenGLVertexAttrib.h"
+#include "RenderMatrices.h"
 #include "RendererLog.h"
 
 #include <glad/glad.h>
@@ -529,8 +529,8 @@ void FDebugOverlay::Draw(int32 FramebufferWidth, int32 FramebufferHeight)
 		return;
 	}
 
-	const FMatrix Projection = LegacyGL::Ortho(
-		0.0f, static_cast<float>(FramebufferWidth), static_cast<float>(FramebufferHeight), 0.0f, -1.0f, 1.0f);
+	const FMatrix Projection =
+		MakePixelSpaceProjection(static_cast<float>(FramebufferWidth), static_cast<float>(FramebufferHeight));
 
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_CULL_FACE);

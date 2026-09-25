@@ -7,6 +7,8 @@ uniform sampler2D uDepth;
 uniform sampler2D uNoise;
 uniform vec3 uSamples[64];
 uniform int uSampleCount;
+// View to GL clip space and back. View space is UE's: x right, y up, z forward (left-handed), so a point in front of
+// the camera has z > 0 and a smaller z is closer.
 uniform mat4 uProjection;
 uniform mat4 uInvProjection;
 uniform vec2 uNoiseScale;
@@ -36,13 +38,15 @@ vec3 reconstructNormal(vec2 uv, float depth) {
 
     vec3 dX = (abs(pR.z - p.z) < abs(p.z - pL.z)) ? (pR - p) : (p - pL);
     vec3 dY = (abs(pU.z - p.z) < abs(p.z - pD.z)) ? (pU - p) : (p - pD);
-    vec3 n = cross(dX, dY);
+    // The space is left-handed, so the operands swap to keep the normal of the right-handed view mirrored in z;
+    // it then faces the camera (-z).
+    vec3 n = cross(dY, dX);
     float len2 = dot(n, n);
     if (len2 < 1.0e-10) {
-        return vec3(0.0, 0.0, 1.0);
+        return vec3(0.0, 0.0, -1.0);
     }
     n = n * inversesqrt(len2);
-    return (n.z < 0.0) ? -n : n;
+    return (n.z > 0.0) ? -n : n;
 }
 
 void main() {
@@ -54,21 +58,24 @@ void main() {
 
     vec3 fragPos = viewPosFromDepth(vUv, depth);
     // Depth-scaled bias hides perspective depth-buffer stair steps.
-    float z = max(-fragPos.z, 1.0e-3);
+    float z = max(fragPos.z, 1.0e-3);
     float bias = max(uBias, z * 0.02);
 
     vec3 normal = reconstructNormal(vUv, depth);
     vec3 randomVec = normalize(texture(uNoise, vUv * uNoiseScale).xyz * 2.0 - 1.0);
+    // The noise was made for a right-handed view (z toward the viewer): mirror it in z, and keep the frame's
+    // handedness with cross(tangent, normal), so the frame is the right-handed one mirrored in z.
+    randomVec.z = -randomVec.z;
 
     vec3 tangent = randomVec - normal * dot(randomVec, normal);
     float tLen2 = dot(tangent, tangent);
     if (tLen2 < 1.0e-6) {
-        tangent = abs(normal.y) < 0.999 ? cross(normal, vec3(0.0, 1.0, 0.0))
-                                        : cross(normal, vec3(1.0, 0.0, 0.0));
+        tangent = abs(normal.y) < 0.999 ? cross(vec3(0.0, 1.0, 0.0), normal)
+                                        : cross(vec3(1.0, 0.0, 0.0), normal);
     } else {
         tangent *= inversesqrt(tLen2);
     }
-    vec3 bitangent = cross(normal, tangent);
+    vec3 bitangent = cross(tangent, normal);
     mat3 tbn = mat3(tangent, bitangent, normal);
 
     float occlusion = 0.0;
@@ -85,7 +92,8 @@ void main() {
         }
 
         float sampleDepth = viewPosFromDepth(offset.xy, texture(uDepth, offset.xy).r).z;
-        float dz = sampleDepth - samplePos.z;
+        // Positive when the stored surface is closer to the camera than the sample.
+        float dz = samplePos.z - sampleDepth;
         // Soft compare: hard step against quantized depth produces parallel bands.
         float occluded = smoothstep(bias, bias + uRadius * 0.35, dz);
         float rangeCheck = 1.0 - smoothstep(0.0, uRadius, abs(fragPos.z - sampleDepth));

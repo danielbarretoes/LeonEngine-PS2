@@ -1,7 +1,6 @@
 #include "FbxSkeletalImport.h"
 
 #include "Containers/StringConv.h"
-#include "LegacyGLMath.h"
 #include "MeshUtilitiesLog.h"
 #include "Misc/Paths.h"
 
@@ -13,8 +12,8 @@ namespace
 	/** node_to_parent as a GL-convention matrix: rotation * scale columns, translation in column 3 (like glm). */
 	FMatrix ToMatrix(const ufbx_transform& T)
 	{
-		FMatrix M = LegacyGL::QuatToMatrix(static_cast<float>(T.rotation.w), static_cast<float>(T.rotation.x),
-			static_cast<float>(T.rotation.y), static_cast<float>(T.rotation.z));
+		FMatrix M = FQuatRotationMatrix(FQuat(static_cast<float>(T.rotation.x), static_cast<float>(T.rotation.y),
+			static_cast<float>(T.rotation.z), static_cast<float>(T.rotation.w)));
 		const float Scale[3] = {
 			static_cast<float>(T.scale.x), static_cast<float>(T.scale.y), static_cast<float>(T.scale.z)};
 		for (int32 Column = 0; Column < 3; ++Column)

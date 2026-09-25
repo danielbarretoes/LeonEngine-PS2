@@ -64,7 +64,12 @@ public:
 	void SetDistance(float InDistance);
 	void SetYawPitch(float InYawDegrees, float InPitchDegrees);
 
+	/** World to UE view space: x = right, y = up, z = forward (ViewMatrices.h). */
 	[[nodiscard]] FMatrix ViewMatrix() const;
+	/**
+	 * View to UE clip space: depth z / w in [0, 1], 0 at the near plane (FPerspectiveMatrix / FOrthoMatrix). The GL
+	 * renderer converts it with ToGLClipSpace (GLClipSpace.h).
+	 */
 	[[nodiscard]] const FMatrix& ProjectionMatrix() const
 	{
 		return Projection;

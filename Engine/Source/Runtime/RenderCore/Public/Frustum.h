@@ -8,7 +8,7 @@
 
 /**
  * View-projection frustum as 6 planes; a point is inside when PlaneDot >= 0 for all of them.
- * The matrix is the renderer's clip transform in the GL layout until P7 (see LegacyGLMath.h).
+ * The matrix goes from world to GL clip space (-w <= z <= w; see GLClipSpace.h).
  */
 class RENDERCORE_API FFrustum
 {

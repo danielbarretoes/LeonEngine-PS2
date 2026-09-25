@@ -74,4 +74,46 @@ bool FCameraFreeLookUsesEyeLocationTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCameraUEViewAndProjectionTest, "System.Engine.Camera.UEViewAndProjection",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FCameraUEViewAndProjectionTest::RunTest(const FString& Parameters)
+{
+	// The view is UE's (x right, y up, z forward) and the projections give UE depth: 0 at near, 1 at far.
+	UCameraComponent Cam;
+	Cam.SetPerspective(60.0f, 2.0f, 0.5f, 50.0f);
+	Cam.SetMode(ECameraMode::Orbit);
+	Cam.SetTarget(FVector(1.0f, 0.5f, -2.0f));
+	Cam.SetYawPitch(30.0f, 20.0f);
+	Cam.SetDistance(6.0f);
+
+	const FMatrix View = Cam.ViewMatrix();
+	const FVector Eye = Cam.GetCameraLocation();
+	const FVector Ahead = FVector(View.TransformPosition(Eye + (Cam.ForwardVector() * 3.0f)));
+	const FVector Right = FVector(View.TransformPosition(Eye + Cam.RightVector()));
+	TestTrue("Target ahead on +z",
+		FVector(View.TransformPosition(Cam.GetTarget())).Equals(FVector(0.0f, 0.0f, 6.0f), 1.0e-4f));
+	TestTrue("Forward is +z", Ahead.Equals(FVector(0.0f, 0.0f, 3.0f), 1.0e-4f));
+	TestTrue("RightVector is +x", Right.Equals(FVector(1.0f, 0.0f, 0.0f), 1.0e-4f));
+	TestTrue("World up is up on screen", FVector(View.TransformVector(FVector(0.0f, 1.0f, 0.0f))).Y > 0.0f);
+
+	const FMatrix& Perspective = Cam.ProjectionMatrix();
+	const FVector4 Near = Perspective.TransformFVector4(FVector4(0.0f, 0.0f, 0.5f, 1.0f));
+	const FVector4 Far = Perspective.TransformFVector4(FVector4(0.0f, 0.0f, 50.0f, 1.0f));
+	TestEqual("Perspective near depth", Near.Z / Near.W, 0.0f, 1.0e-6f);
+	TestEqual("Perspective far depth", Far.Z / Far.W, 1.0f, 1.0e-6f);
+	// The vertical field of view is kept: the top edge at 30 degrees, the right edge at aspect times as wide.
+	const float TanHalf = FMath::Tan(FMath::DegreesToRadians(30.0f));
+	const FVector4 Corner = Perspective.TransformFVector4(FVector4(2.0f * TanHalf, TanHalf, 1.0f, 1.0f));
+	TestEqual("Right edge", Corner.X / Corner.W, 1.0f, 1.0e-5f);
+	TestEqual("Top edge", Corner.Y / Corner.W, 1.0f, 1.0e-5f);
+
+	Cam.SetOrthographic(10.0f, 2.0f, 0.5f, 50.0f);
+	const FMatrix& Ortho = Cam.ProjectionMatrix();
+	TestTrue("Ortho near corner",
+		FVector(Ortho.TransformPosition(FVector(10.0f, 5.0f, 0.5f))).Equals(FVector(1.0f, 1.0f, 0.0f), 1.0e-5f));
+	TestEqual("Ortho far depth", Ortho.TransformPosition(FVector(0.0f, 0.0f, 50.0f)).Z, 1.0f, 1.0e-5f);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

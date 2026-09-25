@@ -1,7 +1,8 @@
 #include "CoreMinimal.h"
 #include "Frustum.h"
-#include "LegacyGLMath.h"
+#include "GLClipSpace.h"
 #include "Misc/AutomationTest.h"
+#include "ViewMatrices.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -45,15 +46,22 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFrustumIntersectsAabbTest, "System.RenderCore.
 
 bool FFrustumIntersectsAabbTest::RunTest(const FString& Parameters)
 {
-	// The renderer's clip transform (OpenGL conventions, LegacyGLMath.h).
-	const FMatrix View = LegacyGL::LookAt(FVector(0.0f, 0.0f, 5.0f), FVector(0.0f), FVector(0.0f, 1.0f, 0.0f));
-	const FMatrix Proj = LegacyGL::Perspective(FMath::DegreesToRadians(60.0f), 1.0f, 0.1f, 100.0f);
+	// The renderer's clip transform: a UE view, a UE perspective, then GL clip space.
+	const FMatrix View = MakeLookAtView(FVector(0.0f, 0.0f, 5.0f), FVector(0.0f), FVector(0.0f, 1.0f, 0.0f));
+	const float HalfFov = FMath::DegreesToRadians(60.0f) / 2.0f;
+	const FMatrix Proj = ToGLClipSpace(FPerspectiveMatrix(HalfFov, HalfFov, 1.0f, 1.0f, 0.1f, 100.0f));
 
 	FFrustum Frustum;
 	Frustum.ExtractFromViewProjection(View * Proj);
 
 	TestTrue("Box at the origin", Frustum.IntersectsAabb(FBox(FVector(-0.5f), FVector(0.5f))));
 	TestFalse("Box far away", Frustum.IntersectsAabb(FBox(FVector(200.0f), FVector(201.0f))));
+	TestFalse(
+		"Box behind the camera", Frustum.IntersectsAabb(FBox(FVector(-0.5f, -0.5f, 6.0f), FVector(0.5f, 0.5f, 7.0f))));
+	TestFalse("Box before the near plane",
+		Frustum.IntersectsAabb(FBox(FVector(-0.01f, -0.01f, 4.95f), FVector(0.01f, 0.01f, 4.96f))));
+	TestFalse("Box past the far plane",
+		Frustum.IntersectsAabb(FBox(FVector(-0.5f, -0.5f, -97.0f), FVector(0.5f, 0.5f, -96.0f))));
 	return true;
 }
 
