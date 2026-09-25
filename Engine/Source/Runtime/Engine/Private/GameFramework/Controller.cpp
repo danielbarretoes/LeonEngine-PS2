@@ -52,6 +52,17 @@ void AController::OnUnPossess()
 {
 }
 
+void AController::SetInitialLocationAndRotation(const FVector& NewLocation, const FRotator& NewRotation)
+{
+	SetActorLocationAndRotation(NewLocation, NewRotation);
+	SetControlRotation(NewRotation);
+}
+
+void AController::ClientSetRotation(const FRotator& NewRotation, bool /*bResetCamera*/)
+{
+	SetControlRotation(NewRotation);
+}
+
 ACharacter* AController::GetCharacter() const
 {
 	return Cast<ACharacter>(Pawn);

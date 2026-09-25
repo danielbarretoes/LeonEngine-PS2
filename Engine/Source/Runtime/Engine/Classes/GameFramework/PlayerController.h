@@ -7,6 +7,7 @@
 
 class ACharacter;
 class UGameEngine;
+class UPlayer;
 
 /**
  * Drives a possessed Character from player input (UE: APlayerController). It spawns its APlayerState when spawned
@@ -41,6 +42,16 @@ public:
 	 */
 	void AddYawInput(float Val);
 	void AddPitchInput(float Val);
+
+	/** The player this controller plays for (UE: Player); null for a controller that no player logged in with. */
+	UPROPERTY(Transient)
+	UPlayer* Player = nullptr;
+
+	/** Takes the player that logged in with this controller (UE: SetPlayer). */
+	virtual void SetPlayer(UPlayer* InPlayer);
+
+	/** Whether a player at this machine plays through this controller (UE: IsLocalController). */
+	[[nodiscard]] bool IsLocalController() const;
 
 	/** Pitch limits of the control rotation in degrees (UE: APlayerCameraManager::ViewPitchMin / ViewPitchMax). */
 	UPROPERTY()

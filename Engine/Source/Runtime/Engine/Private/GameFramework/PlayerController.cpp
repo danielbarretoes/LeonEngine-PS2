@@ -1,6 +1,7 @@
 #include "GameFramework/PlayerController.h"
 
 #include "Engine/GameEngine.h"
+#include "Engine/Player.h"
 #include "GameFramework/Character.h"
 
 APlayerController::APlayerController(const FObjectInitializer& ObjectInitializer)
@@ -12,6 +13,18 @@ APlayerController::APlayerController(const FObjectInitializer& ObjectInitializer
 void APlayerController::Possess(ACharacter* Character)
 {
 	AController::Possess(Character);
+}
+
+void APlayerController::SetPlayer(UPlayer* InPlayer)
+{
+	check(InPlayer != nullptr);
+	Player = InPlayer;
+	InPlayer->PlayerController = this;
+}
+
+bool APlayerController::IsLocalController() const
+{
+	return Player != nullptr;
 }
 
 void APlayerController::AddYawInput(float Val)

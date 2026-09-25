@@ -1,44 +1,55 @@
 #include "CoreMinimal.h"
 #include "Engine/DirectionalLight.h"
-#include "Engine/GameEngine.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerStart.h"
+#include "GameFramework/WorldSettings.h"
 #include "HAL/FileManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "LeonMeshFormat.h"
 #include "Level/BasicLight.h"
+#include "Level/LegacyLevelDataComponent.h"
 #include "Level/LeonLevelFormat.h"
 #include "Level/LevelLoader.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/Paths.h"
 #include "Misc/SecureHash.h"
 #include "Primitives.h"
+#include "ResourceCache.h"
+#include "Tests/ScopedTestWorld.h"
+#include "UObject/StrongObjectPtr.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 namespace
 {
 
-	/** MD5 of the bytes the level saver writes for the engine's level and camera, with the byte count. */
-	FString SavedHash(UGameEngine& Engine)
+	/** A camera with the level's camera framing (kept on its world settings), as the level opens. */
+	UCameraComponent& MakeFramingCamera(const UWorld& World)
 	{
-		const FLevelDocument Doc = BuildLevelDocument(Engine.GetLevel(), Engine.GetCamera());
+		UCameraComponent& Camera = *NewObject<UCameraComponent>();
+		World.GetWorldSettings()->FindComponentByClass<ULegacyLevelDataComponent>()->ApplyCameraFraming(Camera);
+		return Camera;
+	}
+
+	/** MD5 of the bytes the level saver writes for the world's level and its camera framing, with the byte count. */
+	FString SavedHash(const UWorld& World)
+	{
+		const FLevelDocument Doc = BuildLevelDocument(*World.PersistentLevel, MakeFramingCamera(World));
 		const TArray<uint8> Bytes = SerializeLeonLevel(Doc);
 		return FMD5::HashBytes(Bytes.GetData(), Bytes.Num()) + FString::Printf(" (%d bytes)", Bytes.Num());
 	}
 
-	/** SavedHash after loading a level file headless. */
+	/** SavedHash after loading a level file headless (no textures). */
 	FString LoadAndHash(const FString& Path)
 	{
-		UGameEngine Engine;
-		Engine.InitializeHeadless();
-		if (!LoadLevelFile(Engine, Path))
+		FScopedTestWorld TestWorld;
+		FResourceCache Resources;
+		Resources.SetTextureLoadingEnabled(false);
+		if (!LoadLevelFile(*TestWorld, Resources, Path))
 		{
 			return "LOAD FAILED";
 		}
-		const FString Hash = SavedHash(Engine);
-		Engine.Shutdown();
-		return Hash;
+		return SavedHash(*TestWorld);
 	}
 
 	FLevelActorRecord MakeRecord(ELevelActorClass Class, const FVector& Position,
@@ -151,17 +162,17 @@ bool FLevelFormatWorldRoundTripsThroughLegacyRecordsTest::RunTest(const FString&
 {
 	// A player start, a sun and an orbit camera become legacy records (metres, Y up, legacy angles) and come back the
 	// same.
-	UGameEngine Engine;
-	if (!TestTrue("Headless initialize", Engine.InitializeHeadless()))
-	{
-		return false;
-	}
-	ULevel& Level = Engine.GetLevel();
-	UWorld& World = *Engine.GetWorld();
+	FScopedTestWorld TestWorld;
+	FResourceCache Resources;
+	Resources.SetTextureLoadingEnabled(false);
+	UWorld& World = *TestWorld;
+	ULevel& Level = *World.PersistentLevel;
 	World.SpawnActor<APlayerStart>(
 		APlayerStart::StaticClass(), FTransform(FRotator(0.0f, 30.0f, 0.0f), FVector(100.0f, 200.0f, 50.0f)));
 	FBasicLight::Directional(FRotator(-45.0f, 20.0f, 0.0f).Quaternion()).SpawnIn(World);
-	UCameraComponent& Camera = Engine.GetCamera();
+	// The camera that frames the level (held: the level load collects garbage).
+	TStrongObjectPtr<UCameraComponent> CameraPtr(NewObject<UCameraComponent>());
+	UCameraComponent& Camera = *CameraPtr;
 	Camera.SetMode(ECameraMode::Orbit);
 	Camera.SetTarget(FVector(0.0f, 100.0f, 0.0f));
 	Camera.SetDistance(600.0f);
@@ -171,7 +182,6 @@ bool FLevelFormatWorldRoundTripsThroughLegacyRecordsTest::RunTest(const FString&
 	const FLevelDocument Doc = BuildLevelDocument(Level, Camera);
 	if (!TestEqual("One actor", Doc.Actors.Num(), 1) || !TestEqual("One light", Doc.Lights.Num(), 1))
 	{
-		Engine.Shutdown();
 		return false;
 	}
 	// Legacy: Y up in metres, the start faces legacy yaw 90 - 30, the orbit eye at yaw 135 - 180 and pitch 20 above.
@@ -184,11 +194,12 @@ bool FLevelFormatWorldRoundTripsThroughLegacyRecordsTest::RunTest(const FString&
 
 	World.Clear();
 	Camera.SetViewRotation(FRotator::ZeroRotator);
-	if (!TestTrue("Applied", ApplyLevelDocument(Engine, Doc, "memory-round-trip")))
+	if (!TestTrue("Applied", ApplyLevelDocument(World, Resources, Doc, "memory-round-trip")))
 	{
-		Engine.Shutdown();
 		return false;
 	}
+	// The framing comes back on the world settings; the camera takes it as the level opens.
+	World.GetWorldSettings()->FindComponentByClass<ULegacyLevelDataComponent>()->ApplyCameraFraming(Camera);
 	TArray<AActor*> Found;
 	UGameplayStatics::GetAllActorsOfClass(World, APlayerStart::StaticClass(), Found);
 	const AActor* Restored = Found.Num() > 0 ? Found[0] : nullptr;
@@ -203,9 +214,8 @@ bool FLevelFormatWorldRoundTripsThroughLegacyRecordsTest::RunTest(const FString&
 		Found.Num() > 0 &&
 			CastChecked<ADirectionalLight>(Found[0])->GetLightComponent()->GetDirection().Equals(
 				FRotator(-45.0f, 20.0f, 0.0f).Vector(), 1.0e-4f));
-	TestTrue("Camera eye", Engine.GetCamera().GetCameraLocation().Equals(Eye, 1.0e-2f));
-	TestTrue("Camera rotation", Engine.GetCamera().GetViewRotation().Equals(FRotator(-20.0f, 135.0f, 0.0f), 1.0e-3f));
-	Engine.Shutdown();
+	TestTrue("Camera eye", Camera.GetCameraLocation().Equals(Eye, 1.0e-2f));
+	TestTrue("Camera rotation", Camera.GetViewRotation().Equals(FRotator(-20.0f, 135.0f, 0.0f), 1.0e-3f));
 	return true;
 }
 
@@ -353,13 +363,16 @@ bool FLevelFormatSaveWritesTheSameBytesTest::RunTest(const FString& Parameters)
 			ELevelLightClass::PointLight, I == 2, FVector(static_cast<float>(I), 3.0f, 0.0f), FVector::ZeroVector));
 	}
 
-	UGameEngine Engine;
-	if (TestTrue("Headless initialize", Engine.InitializeHeadless()) &&
-		TestTrue("Applied", ApplyLevelDocument(Engine, Doc, LevelPath)))
 	{
-		TestEqual("Every record class", SavedHash(Engine), FString("9c048faf15eeb14d5fd9d408fc14dcbf (1165 bytes)"));
+		FScopedTestWorld TestWorld;
+		FResourceCache Resources;
+		Resources.SetTextureLoadingEnabled(false);
+		if (TestTrue("Applied", ApplyLevelDocument(*TestWorld, Resources, Doc, LevelPath)))
+		{
+			TestEqual(
+				"Every record class", SavedHash(*TestWorld), FString("9c048faf15eeb14d5fd9d408fc14dcbf (1165 bytes)"));
+		}
 	}
-	Engine.Shutdown();
 	IFileManager::Get().DeleteDirectory(*Dir, false, true);
 	#else
 	AddInfo("LEON_ROOT_DIR unset");

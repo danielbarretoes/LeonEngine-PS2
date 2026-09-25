@@ -27,6 +27,9 @@ public:
 		return PreviousMatchState;
 	}
 
+	/** Begin play only (UE): the match clock starts when the match state is InProgress. */
+	void HandleBeginPlay() override;
+
 	/** Called by AGameMode (UE: SetMatchState): records the state and runs OnRep_MatchState. */
 	virtual void SetMatchState(FName NewState);
 

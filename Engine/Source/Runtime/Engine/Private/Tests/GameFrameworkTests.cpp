@@ -14,6 +14,7 @@
 #include "Misc/AutomationTest.h"
 #include "Tests/ScopedTestWorld.h"
 #include "UObject/GarbageCollection.h"
+#include "UObject/StrongObjectPtr.h"
 #include "UObject/WeakObjectPtrTemplates.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -45,12 +46,12 @@ bool FGameFrameworkGameModeSpawnsGameAndPlayerStatesTest::RunTest(const FString&
 		return false;
 	}
 	TestTrue("Owned by the controller", PlayerState->GetOwner() == Player);
-	GameMode->PostLogin(*Player);
+	GameMode->PostLogin(Player);
 	TestEqual("One player", GameMode->GetNumPlayers(), 1);
 	TestTrue("In the player array", GameMode->GetGameState().HasPlayerState(PlayerState));
-	GameMode->Logout(*Player);
+	GameMode->Logout(Player);
 	TestEqual("No players", GameMode->GetNumPlayers(), 0);
-	GameMode->PostLogin(*Player);
+	GameMode->PostLogin(Player);
 
 	TWeakObjectPtr<APlayerState> WeakPlayerState = PlayerState;
 	Player->Destroy();
@@ -178,14 +179,16 @@ bool FGameFrameworkEngineCollectsGarbageOnATimerTest::RunTest(const FString& Par
 {
 	// The engine collects once gc.TimeBetweenPurgingPendingKillObjects (61.1 s by default) has passed, not before; the
 	// engine's own objects survive, an unreferenced one does not.
-	UGameEngine Engine;
+	TStrongObjectPtr<UGameEngine> Engine(NewObject<UGameEngine>());
+	Engine->Init(nullptr);
 	TWeakObjectPtr<UObject> Garbage = NewObject<AActor>();
-	TestFalse("Not yet", Engine.ConditionalCollectGarbage(30.0f));
+	TestFalse("Not yet", Engine->ConditionalCollectGarbage(30.0f));
 	TestTrue("Garbage still there", Garbage.IsValid());
-	TestTrue("Interval reached", Engine.ConditionalCollectGarbage(31.2f));
+	TestTrue("Interval reached", Engine->ConditionalCollectGarbage(31.2f));
 	TestFalse("Garbage collected", Garbage.IsValid());
-	TestNotNull("Engine world kept", Engine.GetWorld());
-	TestEqual("Engine camera kept", Engine.GetCamera().GetDistance(), 500.0f);
+	TestNotNull("Engine world kept", Engine->GetGameWorld());
+	TestEqual("Engine camera kept", Engine->GetCamera().GetDistance(), 500.0f);
+	Engine->PreExit();
 	return true;
 }
 

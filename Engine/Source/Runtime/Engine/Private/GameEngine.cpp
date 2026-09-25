@@ -1,304 +1,149 @@
 #include "Engine/GameEngine.h"
 
 #include "CanvasTypes.h"
+#include "CoreGlobals.h"
 #include "DynamicRHI.h"
 #include "Engine/BlockingVolume.h"
+#include "Engine/LocalPlayer.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "EngineLogs.h"
+#include "GameFramework/GameModeBase.h"
+#include "GameMapsSettings.h"
 #include "HAL/PlatformApplicationMisc.h"
 #include "HAL/PlatformMemory.h"
-#include "HAL/PlatformProcess.h"
-#include "HAL/PlatformTime.h"
 #include "InputCoreTypes.h"
+#include "Misc/App.h"
 #include "Misc/CString.h"
+#include "Misc/CommandLine.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Misc/FileHelper.h"
+#include "Misc/Parse.h"
 #include "Misc/Paths.h"
 #include "RendererInterface.h"
 #include "UObject/GarbageCollection.h"
 #include "UObject/Package.h"
+#include "UnrealEngine.h"
 
-UGameEngine::UGameEngine()
+namespace
 {
-	Application.Reset(FPlatformApplicationMisc::CreateApplication());
-	Window = Application->MakeWindow();
-	PlayerInput = NewObject<UPlayerInput>(GetTransientPackage());
-	PlayerInput->AddMappingContext(UInputMappingContext::MakeDefault());
-	Camera = NewObject<UCameraComponent>(GetTransientPackage());
-	Hud = NewObject<AHUD>(GetTransientPackage());
-	// UE: UGameEngine::Init creates the game instance, which creates the world context and its world.
-	SetGameInstanceObject(NewObject<UGameInstance>(GetTransientPackage()));
-}
 
-UGameEngine::~UGameEngine()
-{
-	Shutdown();
-	if (GameInstance != nullptr && GameInstance->GetWorld() != nullptr)
+	[[nodiscard]] int32 GetEngineInt(const TCHAR* Section, const TCHAR* Key, int32 Default)
 	{
-		DestroyGameWorld();
-	}
-	GameInstance = nullptr;
-}
-
-void UGameEngine::AddReferencedObjects(FReferenceCollector& Collector)
-{
-	Collector.AddReferencedObject(GameInstance);
-	Collector.AddReferencedObject(Camera);
-	Collector.AddReferencedObject(PlayerInput);
-	Collector.AddReferencedObject(Hud);
-}
-
-void UGameEngine::SetGameInstanceObject(UGameInstance* NewInstance)
-{
-	if (GameInstance != nullptr)
-	{
-		if (bInitialized)
+		int32 Value = Default;
+		if (GConfig != nullptr)
 		{
-			GameInstance->Shutdown();
+			GConfig->GetInt(Section, Key, Value, GEngineIni);
 		}
-		DestroyGameWorld();
+		return Value;
 	}
-	GameInstance = NewInstance;
-	GameInstance->InitializeStandalone();
-	if (bInitialized)
-	{
-		GameInstance->Init();
-	}
+
+} // namespace
+
+UGameEngine::UGameEngine(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
 }
 
-void UGameEngine::DestroyGameWorld()
+void UGameEngine::BeginDestroy()
 {
-	GameInstance->DestroyWorldContextWorld();
-	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
+	if (bIsInitialized)
+	{
+		PreExit();
+	}
+	Super::BeginDestroy();
 }
 
-UWorld* UGameEngine::GetWorld() const
+void UGameEngine::Init(IEngineLoop* InEngineLoop)
 {
-	return GameInstance != nullptr ? GameInstance->GetWorld() : nullptr;
-}
+	Super::Init(InEngineLoop);
 
-ULevel& UGameEngine::GetLevel()
-{
-	return *GetWorld()->PersistentLevel;
-}
+	PlayerInput = NewObject<UPlayerInput>(this);
+	PlayerInput->AddMappingContext(UInputMappingContext::MakeDefault());
+	Camera = NewObject<UCameraComponent>(this);
+	Hud = NewObject<AHUD>(this);
 
-const ULevel& UGameEngine::GetLevel() const
-{
-	return *GetWorld()->PersistentLevel;
-}
-
-bool UGameEngine::Initialize(int32 Width, int32 Height, const TCHAR* Title)
-{
-	if (bInitialized)
-	{
-		return true;
-	}
-
-	if (!Window->Create(Width, Height, Title != nullptr ? Title : "Leon Engine"))
-	{
-		return false;
-	}
-
-	// The renderer's GPU objects need the window's context (UE: the RHI and the renderer come up with the viewport).
-	const FString ShaderDir = FPaths::ResolveLegacyContentPath("assets/Shaders");
-	IRendererModule* RendererModule = GetRendererModulePtr();
-	if (RendererModule == nullptr || !RendererModule->InitRenderer(ShaderDir))
-	{
-		Window->Destroy();
-		return false;
-	}
-
-	Window->OnMouseWheel().BindLambda([this](float Delta) { PendingScrollY += Delta; });
-
-	Camera->SetPerspective(60.0f, Window->Aspect(), DefaultCameraNearPlane, DefaultCameraFarPlane);
-	Camera->SetTarget(FVector::ZeroVector);
-
-	SetCursorCaptured(true);
-
-	(void)AudioDevice.Initialize(/*silent=*/false);
-
-	GarbageCollectionTimer = FGarbageCollectionTimer(FGarbageCollectionSettings::LoadFromConfig());
-	if (GameInstance->GetWorld() == nullptr)
-	{
-		GameInstance->InitializeStandalone();
-	}
-	GameInstance->Init();
-
-	bInitialized = true;
-	bRunning = true;
-	bHeadless = false;
-	// Stats off until F4 -- matches editor Viewport / PIE (no Engine overlay by default).
-	Overlay.SetRightText(FString());
-	Overlay.SetBottomLeftText(FString());
-	return true;
-}
-
-bool UGameEngine::InitializeHeadless()
-{
-	if (bInitialized)
-	{
-		return true;
-	}
-
-	Resources.SetTextureLoadingEnabled(false);
-	bHeadless = true;
-	(void)AudioDevice.Initialize(/*silent=*/true);
-	GarbageCollectionTimer = FGarbageCollectionTimer(FGarbageCollectionSettings::LoadFromConfig());
-	if (GameInstance->GetWorld() == nullptr)
-	{
-		GameInstance->InitializeStandalone();
-	}
-	GameInstance->Init();
-	bInitialized = true;
-	bRunning = true;
-	UE_LOG(LogEngine, Log, "Leon Engine headless (no OpenGL / window)");
-	return true;
-}
-
-void UGameEngine::Shutdown()
-{
-	if (!bInitialized)
-	{
-		return;
-	}
-
-	GameInstance->Shutdown();
-	AudioDevice.Shutdown();
-	// The world goes first: its actors end play while the resources they use still exist.
-	DestroyGameWorld();
-	Resources.Clear();
 	if (!bHeadless)
 	{
-		Overlay.Clear();
-		// The GPU copies of the assets and the renderer's objects go while the context exists.
-		GetRendererModule().ShutdownRenderer();
-		Window->Destroy();
-		Window->SetCursorCaptured(false);
+		// The game window and the renderer on its context (UE: CreateGameWindow and the viewport).
+		Application.Reset(FPlatformApplicationMisc::CreateApplication());
+		Window = Application->MakeWindow();
+		const int32 ResolutionX = GetEngineInt("/Script/Engine.GameViewportClient", "DefaultResolutionX", 1280);
+		const int32 ResolutionY = GetEngineInt("/Script/Engine.GameViewportClient", "DefaultResolutionY", 720);
+		const FString Title = FApp::HasProjectName() ? FString("Leon - ") + FApp::GetProjectName() : FString("Leon");
+		if (!Window->Create(ResolutionX, ResolutionY, *Title))
+		{
+			UE_LOG(LogEngine, Error, "Failed to create the game window");
+			bIsInitialized = false;
+			return;
+		}
+		const FString ShaderDir = FPaths::ResolveLegacyContentPath("assets/Shaders");
+		IRendererModule* RendererModule = GetRendererModulePtr();
+		if (RendererModule == nullptr || !RendererModule->InitRenderer(ShaderDir))
+		{
+			UE_LOG(LogEngine, Error, "Failed to start the renderer");
+			Window->Destroy();
+			bIsInitialized = false;
+			return;
+		}
+		Camera->SetPerspective(60.0f, Window->Aspect(), DefaultCameraNearPlane, DefaultCameraFarPlane);
+		Camera->SetTarget(FVector::ZeroVector);
+		SetCursorCaptured(true);
+		// Stats off unless the config or -showstats asks for them.
+		Overlay.SetRightText(FString());
+		Overlay.SetBottomLeftText(FString());
+		if (bShowStatsByDefault || FParse::Param(FCommandLine::Get(), "showstats"))
+		{
+			SetHudStatsVisible(true);
+		}
+		if (FParse::Param(FCommandLine::Get(), "AxesGizmo"))
+		{
+			EngineShowFlags.AxesGizmo = true;
+		}
 	}
-	bRunning = false;
-	bInitialized = false;
-	bHeadless = false;
-	bMouseLookSampleValid = false;
-	bSuppressCameraDrag = false;
-	bKeyboardOrbitEnabled = true;
-	bOrbitMouseEnabled = true;
-	PendingScrollY = 0.0f;
-	Hud->Clear();
-	CenterHudText.Empty();
-	LastFbWidth = 0;
-	LastFbHeight = 0;
-	FpsAccumTime = 0.0f;
-	FpsAccumFrames = 0;
-	DisplayFps = 0.0f;
-	DisplayMs = 0.0f;
-}
-
-bool UGameEngine::ConditionalCollectGarbage(float DeltaSeconds)
-{
-	return GarbageCollectionTimer.Tick(DeltaSeconds, GARBAGE_COLLECTION_KEEPFLAGS);
-}
-
-float UGameEngine::ConsumeScrollY()
-{
-	const float Y = PendingScrollY;
-	PendingScrollY = 0.0f;
-	return Y;
-}
-
-void UGameEngine::SetCursorCaptured(bool bCaptured)
-{
-	if (bHeadless)
+	else
 	{
-		return;
-	}
-	GetPlayInputWindow().SetCursorCaptured(bCaptured);
-	bMouseLookSampleValid = false; // skip one frame to avoid a jump after mode change
-}
-
-bool UGameEngine::IsCursorCaptured() const
-{
-	if (bHeadless)
-	{
-		return false;
-	}
-	return GetPlayInputWindow().IsCursorCaptured();
-}
-
-void UGameEngine::SetPlayInputWindow(FGenericWindow* InWindow)
-{
-	FGenericWindow* Previous = PlayInputTarget.GetWindow();
-	if (Previous != nullptr && Previous != InWindow)
-	{
-		Previous->OnMouseWheel().Unbind();
-	}
-	PlayInputTarget.SetWindow(InWindow);
-	if (InWindow != nullptr)
-	{
-		// Accumulate into the same PendingScrollY as the main window (PIE New Window scroll).
-		InWindow->OnMouseWheel().BindLambda([this](float Delta) { PendingScrollY += Delta; });
-	}
-}
-
-FGenericWindow& UGameEngine::GetPlayInputWindow()
-{
-	return PlayInputTarget.Resolve(*Window);
-}
-
-const FGenericWindow& UGameEngine::GetPlayInputWindow() const
-{
-	return PlayInputTarget.Resolve(*Window);
-}
-
-void UGameEngine::AddOnScreenDebugMessage(const FString& Message, float DisplaySeconds, const FLinearColor& Color)
-{
-	if (bHeadless)
-	{
-		UE_LOG(LogEngine, Log, "[headless] %s", *Message);
-		(void)DisplaySeconds;
-		(void)Color;
-		return;
-	}
-	Overlay.AddOnScreenDebugMessage(Message, DisplaySeconds, Color);
-}
-
-EShaderReloadResult UGameEngine::ReloadAllShaders(bool bForce)
-{
-	IRendererModule* RendererModule = GetRendererModulePtr();
-	return RendererModule != nullptr ? RendererModule->ReloadShaders(bForce) : EShaderReloadResult::Unchanged;
-}
-
-void UGameEngine::Run(
-	const FUpdateCallback& OnUpdate, const FPreInputCallback& OnPreInput, const FPostRenderCallback& OnPostRender)
-{
-	if (!bInitialized)
-	{
-		UE_LOG(LogEngine, Error, "Engine is not initialized");
-		return;
+		UE_LOG(LogEngine, Log, "Leon Engine headless (no OpenGL / window)");
 	}
 
-	Start();
-	double Previous = FPlatformTime::Seconds();
-	float DeltaTime = 0.0f;
-	do
+	// The game instance of the project's class, its world context and its first player (UE).
+	UClass* GameInstanceClass = GetDefault<UGameMapsSettings>()->GameInstanceClass.IsValid()
+		? GetDefault<UGameMapsSettings>()->GameInstanceClass.TryLoadClass<UGameInstance>()
+		: nullptr;
+	if (GameInstanceClass == nullptr)
 	{
-		const double Now = FPlatformTime::Seconds();
-		DeltaTime = FMath::Min(static_cast<float>(Now - Previous), 0.1f);
-		Previous = Now;
-	} while (Tick(DeltaTime, OnUpdate, OnPreInput, OnPostRender));
+		GameInstanceClass = UGameInstance::StaticClass();
+	}
+	GameInstance = NewObject<UGameInstance>(this, GameInstanceClass);
+	GameInstance->InitializeStandalone();
+	FString Error;
+	if (GameInstance->CreateInitialPlayer(Error) == nullptr)
+	{
+		UE_LOG(LogEngine, Error, "Could not create the local player: %s", *Error);
+	}
+	GameInstance->Init();
 }
 
 void UGameEngine::Start()
 {
-	int32 NumStaticMeshes = 0;
-	for (const AActor* Actor : GetLevel().Actors)
+	GameInstance->StartGameInstance();
+	if (bHeadless || IsEngineExitRequested())
 	{
-		if (Actor != nullptr && (Actor->IsA<AStaticMeshActor>() || Actor->IsA<ABlockingVolume>()))
+		return;
+	}
+	int32 NumStaticMeshes = 0;
+	if (UWorld* World = GetGameWorld(); World != nullptr && World->PersistentLevel != nullptr)
+	{
+		for (const AActor* Actor : World->PersistentLevel->Actors)
 		{
-			++NumStaticMeshes;
+			if (Actor != nullptr && (Actor->IsA<AStaticMeshActor>() || Actor->IsA<ABlockingVolume>()))
+			{
+				++NumStaticMeshes;
+			}
 		}
 	}
 	UE_LOG(LogEngine, Log, "Level static meshes: %d", NumStaticMeshes);
-	UE_LOG(LogEngine, Log, "Controls: mouse look (cursor captured), scroll zoom orbit; close window to quit");
+	UE_LOG(LogEngine, Log, "Controls: mouse look (cursor captured); close window to quit");
 	UE_LOG(LogEngine, Log, "Default mode: mouse look, WASD fly along view, Q/E up/down");
 	UE_LOG(LogEngine, Log, "Debug: F1 mesh AABBs + light frustum; F2 collision volumes + floor traces");
 	UE_LOG(LogEngine, Log, "Debug: F3 NavMesh grid (walkable / blocked)");
@@ -307,47 +152,143 @@ void UGameEngine::Start()
 	UE_LOG(LogEngine, Log, "Debug: F6 axes gizmo (X red, Y green, Z blue; world origin + view corner)");
 }
 
-bool UGameEngine::Tick(float DeltaTime, const FUpdateCallback& OnUpdate, const FPreInputCallback& OnPreInput,
-	const FPostRenderCallback& OnPostRender)
+void UGameEngine::PreExit()
 {
-	if (!bInitialized || !bRunning || Window->ShouldClose())
+	if (!bIsInitialized)
 	{
-		return false;
+		return;
+	}
+	if (GameInstance != nullptr)
+	{
+		GameInstance->Shutdown();
+	}
+	AudioDevice.Shutdown();
+	// The world goes first: its actors end play while the resources they use still exist.
+	DestroyGameWorld();
+	Resources.Clear();
+	if (!bHeadless && Window)
+	{
+		Overlay.Clear();
+		// The GPU copies of the assets and the renderer's objects go while the context exists.
+		GetRendererModule().ShutdownRenderer();
+		Window->Destroy();
+		Window->SetCursorCaptured(false);
+	}
+	if (Hud != nullptr)
+	{
+		Hud->Clear();
+	}
+	LastFbWidth = 0;
+	LastFbHeight = 0;
+	FpsAccumTime = 0.0f;
+	FpsAccumFrames = 0;
+	DisplayFps = 0.0f;
+	DisplayMs = 0.0f;
+	Super::PreExit();
+}
+
+void UGameEngine::DestroyGameWorld()
+{
+	if (GameInstance != nullptr && GameInstance->GetWorld() != nullptr)
+	{
+		GameInstance->DestroyWorldContextWorld();
+		CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
+	}
+}
+
+UWorld* UGameEngine::GetGameWorld() const
+{
+	return GameInstance != nullptr ? GameInstance->GetWorld() : nullptr;
+}
+
+TArray<FWorldContext*> UGameEngine::GetWorldContexts()
+{
+	TArray<FWorldContext*> Contexts;
+	if (GameInstance != nullptr)
+	{
+		Contexts.Add(GameInstance->GetWorldContext());
+	}
+	return Contexts;
+}
+
+void UGameEngine::SetCursorCaptured(bool bCaptured)
+{
+	if (!Window)
+	{
+		return;
+	}
+	Window->SetCursorCaptured(bCaptured);
+	bMouseLookSampleValid = false; // skip one frame to avoid a jump after mode change
+}
+
+bool UGameEngine::IsCursorCaptured() const
+{
+	return Window && Window->IsCursorCaptured();
+}
+
+EShaderReloadResult UGameEngine::ReloadAllShaders(bool bForce)
+{
+	IRendererModule* RendererModule = GetRendererModulePtr();
+	return RendererModule != nullptr ? RendererModule->ReloadShaders(bForce) : EShaderReloadResult::Unchanged;
+}
+
+void UGameEngine::Tick(float DeltaSeconds, bool /*bIdleMode*/)
+{
+	if (!bIsInitialized)
+	{
+		return;
+	}
+	if (Window && Window->ShouldClose())
+	{
+		RequestEngineExit("Main window closed");
+		return;
+	}
+	if (Window)
+	{
+		Window->PollEvents();
+		PlayerInput->Update(*Window);
+		(void)ReloadAllShaders(false);
+		HandleInput(DeltaSeconds);
+		TickPlayAudio();
 	}
 
-	Window->PollEvents();
-	if (PlayInputTarget.HasOverride())
+	FWorldContext& Context = *GameInstance->GetWorldContext();
+	TickWorldTravel(Context, DeltaSeconds);
+	if (UWorld* World = Context.World())
 	{
-		PlayInputTarget.GetWindow()->PollEvents();
+		// The default game mode's engine hook ticks the world (until the second stage of P13).
+		if (AGameModeBase* GameMode = World->GetAuthGameMode())
+		{
+			GameMode->Tick(*this, DeltaSeconds);
+		}
+		else
+		{
+			World->Tick(DeltaSeconds);
+		}
 	}
-	PlayerInput->Update(GetPlayInputWindow());
-	(void)ReloadAllShaders(false);
-	if (OnPreInput)
+	// After the world ticked, like UE's UGameEngine::Tick (a safe point, D11).
+	(void)ConditionalCollectGarbage(DeltaSeconds);
+
+	if (Window)
 	{
-		OnPreInput();
+		TickPlayHud(DeltaSeconds);
+		Render();
+		WritePendingScreenshot();
+		Window->SwapBuffers();
+		if (Window->ShouldClose())
+		{
+			RequestEngineExit("Main window closed");
+		}
 	}
-	HandleInput(DeltaTime);
-	TickPlayAudio();
-	if (OnUpdate)
+	else
 	{
-		OnUpdate(DeltaTime);
+		// Keep the console current when stdout is redirected (CI smoke, servers stopped with Ctrl+C).
+		GLog->Flush();
 	}
-	// After the world ticked (the update hook ticks it), like UE's UGameEngine::Tick.
-	(void)ConditionalCollectGarbage(DeltaTime);
-	TickPlayHud(DeltaTime);
-	PendingScrollY = 0.0f; // discard unused wheel (modes that do not ConsumeScrollY)
-	Render(OnPostRender);
-	WritePendingScreenshot();
-	Window->SwapBuffers();
-	return bRunning && !Window->ShouldClose();
 }
 
 void UGameEngine::TickPlayAudio()
 {
-	if (!bInitialized || bHeadless)
-	{
-		return;
-	}
 	const FVector Eye = Camera->GetCameraLocation();
 	const FVector Forward = Camera->ForwardVector();
 	const FVector Up = FVector(0.0f, 0.0f, 1.0f);
@@ -357,89 +298,18 @@ void UGameEngine::TickPlayAudio()
 
 void UGameEngine::TickPlayHud(float DeltaTime)
 {
-	if (!bInitialized)
-	{
-		return;
-	}
 	Hud->Tick(DeltaTime);
 	Overlay.TickOnScreenMessages(DeltaTime);
 	if (bShowHudStats)
 	{
 		UpdateHudStats(DeltaTime);
 	}
-	Overlay.SetCenterText(CenterHudText);
-}
-
-void UGameEngine::PaintHudAndOverlay(int32 FramebufferWidth, int32 FramebufferHeight)
-{
-	if (!bInitialized || bHeadless)
-	{
-		return;
-	}
-	if (FramebufferWidth <= 0 || FramebufferHeight <= 0)
-	{
-		return;
-	}
-	FCanvas Canvas(FramebufferWidth, FramebufferHeight);
-	PaintHudAndOverlay(Canvas);
-	Canvas.Flush_GameThread();
 }
 
 void UGameEngine::PaintHudAndOverlay(FCanvas& Canvas)
 {
-	if (!bInitialized || bHeadless)
-	{
-		return;
-	}
 	Hud->Paint(Canvas);
 	Overlay.Draw(Canvas);
-}
-
-void UGameEngine::RunHeadless(const FUpdateCallback& OnUpdate, float TickHz)
-{
-	if (!bInitialized || !bHeadless)
-	{
-		UE_LOG(LogEngine, Error, "Engine::RunHeadless requires InitializeHeadless()");
-		return;
-	}
-	if (TickHz < 1.0f)
-	{
-		TickHz = 1.0f;
-	}
-	const float Dt = 1.0f / TickHz;
-	UE_LOG(LogEngine, Log, "Headless tick %g Hz -- Ctrl+C to stop", static_cast<double>(TickHz));
-
-	double Next = FPlatformTime::Seconds();
-	while (bRunning)
-	{
-		if (OnUpdate)
-		{
-			OnUpdate(Dt);
-		}
-		Next += static_cast<double>(Dt);
-		const double Now = FPlatformTime::Seconds();
-		if (Next < Now)
-		{
-			// Fell behind -- resync to avoid spiral.
-			Next = Now;
-		}
-		else
-		{
-			FPlatformProcess::Sleep(static_cast<float>(Next - Now));
-		}
-	}
-}
-
-void UGameEngine::SetHudStatsVisible(bool bVisible)
-{
-	bShowHudStats = bVisible;
-	if (!bShowHudStats)
-	{
-		Overlay.SetRightText(FString());
-		Overlay.SetBottomLeftText(FString());
-		FpsAccumTime = 0.0f;
-		FpsAccumFrames = 0;
-	}
 }
 
 void UGameEngine::UpdateHudStats(float DeltaTime)
@@ -502,10 +372,9 @@ void UGameEngine::UpdateHudStats(float DeltaTime)
 		bNavMeshDebugEnabled ? "ON" : "OFF", EngineShowFlags.AxesGizmo ? "ON" : "OFF"));
 }
 
-void UGameEngine::HandleInput(float DeltaTime)
+void UGameEngine::HandleInput(float /*DeltaTime*/)
 {
-	// PIE "New Window" routes capture + look here; fall back to the main window otherwise.
-	FGenericWindow& InputWindow = GetPlayInputWindow();
+	FGenericWindow& InputWindow = *Window;
 
 	const bool bF1Down = InputWindow.IsKeyPressed(EKeys::F1);
 	if (bF1Down && !bDebugKeyWasDown)
@@ -518,16 +387,16 @@ void UGameEngine::HandleInput(float DeltaTime)
 	const bool bF2Down = InputWindow.IsKeyPressed(EKeys::F2);
 	if (bF2Down && !bCollisionDebugKeyWasDown)
 	{
-		ToggleCollisionDebug();
-		UE_LOG(LogEngine, Log, "Collision debug: %s", IsCollisionDebugEnabled() ? "on" : "off");
+		bCollisionDebugEnabled = !bCollisionDebugEnabled;
+		UE_LOG(LogEngine, Log, "Collision debug: %s", bCollisionDebugEnabled ? "on" : "off");
 	}
 	bCollisionDebugKeyWasDown = bF2Down;
 
 	const bool bF3Down = InputWindow.IsKeyPressed(EKeys::F3);
 	if (bF3Down && !bNavMeshDebugKeyWasDown)
 	{
-		ToggleNavMeshDebug();
-		UE_LOG(LogEngine, Log, "NavMesh debug: %s", IsNavMeshDebugEnabled() ? "on" : "off");
+		bNavMeshDebugEnabled = !bNavMeshDebugEnabled;
+		UE_LOG(LogEngine, Log, "NavMesh debug: %s", bNavMeshDebugEnabled ? "on" : "off");
 	}
 	bNavMeshDebugKeyWasDown = bF3Down;
 
@@ -535,6 +404,8 @@ void UGameEngine::HandleInput(float DeltaTime)
 	if (bF4Down && !bHudStatsKeyWasDown)
 	{
 		SetHudStatsVisible(!bShowHudStats);
+		FpsAccumTime = 0.0f;
+		FpsAccumFrames = 0;
 		UE_LOG(LogEngine, Log, "HUD stats: %s", bShowHudStats ? "on" : "off");
 	}
 	bHudStatsKeyWasDown = bF4Down;
@@ -566,70 +437,30 @@ void UGameEngine::HandleInput(float DeltaTime)
 	}
 	bAxesGizmoKeyWasDown = bF6Down;
 
-	constexpr float KeyboardOrbitSpeed = 90.0f;
-	if (bKeyboardOrbitEnabled)
-	{
-		// Reuse Move* axes so remapping WASD also remaps keyboard orbit tumble: right turns the view right, forward
-		// tilts it up (the eye goes down).
-		const FVector2D MoveInput = PlayerInput->GetMoveInput();
-		const float Yaw = MoveInput.Y * KeyboardOrbitSpeed;
-		const float Pitch = MoveInput.X * KeyboardOrbitSpeed;
-		if (Yaw != 0.0f || Pitch != 0.0f)
-		{
-			Camera->AddViewRotation(FRotator(Pitch * DeltaTime, Yaw * DeltaTime, 0.0f));
-		}
-	}
-
-	// Orbit mouse: Engine owns scroll zoom on camera distance (look is continuous below).
-	if (bOrbitMouseEnabled && Camera->GetMode() == ECameraMode::Orbit)
-	{
-		const float ScrollY = ConsumeScrollY();
-		if (ScrollY != 0.0f)
-		{
-			/** cm per wheel notch */
-			constexpr float ZoomPerNotch = 40.0f;
-			Camera->Zoom(ScrollY * ZoomPerNotch);
-		}
-	}
-
 	const FVector2D Cursor = InputWindow.GetCursorPos();
 	const double MouseX = Cursor.X;
 	const double MouseY = Cursor.Y;
-
-	const bool bWantLook =
-		!bSuppressCameraDrag && (InputWindow.IsCursorCaptured() || InputWindow.IsMouseButtonDown(EMouseButtons::Left));
-
+	const bool bWantLook = InputWindow.IsCursorCaptured() || InputWindow.IsMouseButtonDown(EMouseButtons::Left);
 	if (bWantLook)
 	{
-		if (bMouseLookSampleValid)
+		if (bMouseLookSampleValid && Camera->GetMode() == ECameraMode::FreeLook)
 		{
 			const float Dx = static_cast<float>(MouseX - LastMouseX);
 			const float Dy = static_cast<float>(MouseY - LastMouseY);
-			if (Camera->GetMode() == ECameraMode::FreeLook)
-			{
-				constexpr float LookDegreesPerPixel = 0.15f;
-				Camera->AddViewRotation(FRotator(-Dy * LookDegreesPerPixel, Dx * LookDegreesPerPixel, 0.0f));
-			}
-			else if (bOrbitMouseEnabled)
-			{
-				// Dragging down tilts the view down (the eye rises over the target).
-				constexpr float OrbitDegreesPerPixel = 0.3f;
-				Camera->AddViewRotation(FRotator(-Dy * OrbitDegreesPerPixel, Dx * OrbitDegreesPerPixel, 0.0f));
-			}
+			constexpr float LookDegreesPerPixel = 0.15f;
+			Camera->AddViewRotation(FRotator(-Dy * LookDegreesPerPixel, Dx * LookDegreesPerPixel, 0.0f));
 		}
 		bMouseLookSampleValid = true;
-		LastMouseX = MouseX;
-		LastMouseY = MouseY;
 	}
 	else
 	{
 		bMouseLookSampleValid = false;
-		LastMouseX = MouseX;
-		LastMouseY = MouseY;
 	}
+	LastMouseX = MouseX;
+	LastMouseY = MouseY;
 }
 
-void UGameEngine::Render(const FPostRenderCallback& OnPostRender)
+void UGameEngine::Render()
 {
 	int32 FbWidth = 0;
 	int32 FbHeight = 0;
@@ -649,7 +480,7 @@ void UGameEngine::Render(const FPostRenderCallback& OnPostRender)
 
 	// The world's components send their moved transforms and poses to the scene, then the view family is rendered
 	// (UE: UGameViewportClient::Draw), then the HUD and the debug text go through the frame's canvas.
-	UWorld* World = GetWorld();
+	UWorld* World = GetGameWorld();
 	World->SendAllEndOfFrameUpdates();
 	FSceneViewFamily ViewFamily(FSceneViewFamily::ConstructionValues(FbWidth, FbHeight, World->Scene, EngineShowFlags));
 	const FSceneView View(FSceneView::FromCamera(ViewFamily, *Camera));
@@ -658,10 +489,6 @@ void UGameEngine::Render(const FPostRenderCallback& OnPostRender)
 	GetRendererModule().BeginRenderingViewFamily(&Canvas, &ViewFamily);
 	PaintHudAndOverlay(Canvas);
 	Canvas.Flush_GameThread();
-	if (OnPostRender)
-	{
-		OnPostRender(FbWidth, FbHeight);
-	}
 }
 
 void UGameEngine::WritePendingScreenshot()

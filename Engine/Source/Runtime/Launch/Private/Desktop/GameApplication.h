@@ -1,23 +1,21 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Engine/GameEngine.h"
-#include "GameFramework/GameModeBase.h"
+
+class IEngineLoop;
 
 /**
- * Desktop game session driven by FEngineLoop: initialises UGameEngine (windowed or headless), loads the
- * startup level and runs ADefaultGameMode, one frame per Tick.
+ * Desktop game session driven by FEngineLoop: creates GEngine from `[/Script/Engine.Engine] GameEngine=`, initialises
+ * and starts it (the game instance opens the first map through UEngine::LoadMap) and runs one frame per Tick.
  */
 class FGameApplication
 {
 public:
 	/**
-	 * Reads FCommandLine (-map=<.llev>, -nullrhi, -tick=<Hz>, -showstats, -AxesGizmo) and the Engine config,
-	 * initialises the engine and enters the game mode. The map defaults to GameDefaultMap
-	 * ([/Script/EngineSettings.GameMapsSettings] in the Engine config), then
-	 * Engine/Content/LevelTemplates/Starter.llev.
+	 * Reads FCommandLine (-nullrhi, -tick=<Hz>, -Screenshot=, -ExitAfterFrames=) and creates, initialises and starts
+	 * the engine. The map comes from the game instance (the first command-line token, -map=, else GameDefaultMap).
 	 */
-	[[nodiscard]] bool Init();
+	[[nodiscard]] bool Init(IEngineLoop* EngineLoop);
 
 	/** One frame (windowed) or one fixed step (headless). Returns false once the session is over. */
 	[[nodiscard]] bool Tick();
@@ -26,10 +24,6 @@ public:
 	void Exit();
 
 private:
-	/** The game mode the world spawned (UWorld::AuthorityGameMode); the world owns it. */
-	[[nodiscard]] AGameModeBase* GetGameMode() const;
-
-	TUniquePtr<UGameEngine> Engine;
 	bool bHeadless = false;
 	float TickHz = 60.0f;
 	/** -Screenshot=<file.bmp> saves frame -ExitAfterFrames=N (default 60), then the game exits. */

@@ -1,14 +1,17 @@
 #include "CoreMinimal.h"
 #include "Engine/DirectionalLight.h"
-#include "Engine/GameEngine.h"
 #include "Engine/PointLight.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "Frustum.h"
+#include "GameFramework/WorldSettings.h"
 #include "Kismet/GameplayStatics.h"
+#include "Level/LegacyLevelDataComponent.h"
 #include "Level/LevelLoader.h"
 #include "Misc/AutomationTest.h"
+#include "ResourceCache.h"
 #include "Tests/LegacyGolden.h"
+#include "Tests/ScopedTestWorld.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -26,19 +29,16 @@ bool FGoldenStarterLevelTest::RunTest(const FString& Parameters)
 	constexpr float DirectionTolerance = 1.0e-4f;
 	constexpr float AngleTolerance = 1.0e-2f;
 
-	UGameEngine Engine;
-	if (!TestTrue("Headless initialize", Engine.InitializeHeadless()))
-	{
-		return false;
-	}
+	FScopedTestWorld TestWorld;
+	FResourceCache Resources;
+	Resources.SetTextureLoadingEnabled(false);
 	const FString LevelPath = FString(LEON_ROOT_DIR) + "/Engine/Content/LevelTemplates/Starter.llev";
-	if (!TestTrue("Starter level loaded", LoadLevelFile(Engine, LevelPath)))
+	if (!TestTrue("Starter level loaded", LoadLevelFile(*TestWorld, Resources, LevelPath)))
 	{
-		Engine.Shutdown();
 		return false;
 	}
 
-	const UWorld& World = *Engine.GetWorld();
+	const UWorld& World = *TestWorld;
 	TArray<AActor*> MeshActors;
 	UGameplayStatics::GetAllActorsOfClass(World, AStaticMeshActor::StaticClass(), MeshActors);
 	TArray<FVector> MeshBoxes;
@@ -69,7 +69,9 @@ bool FGoldenStarterLevelTest::RunTest(const FString& Parameters)
 	const TArray<int32> Counts = {
 		MeshActors.Num(), MeshBoxes.Num() / 2, LightDirections.Num(), PointLightPositions.Num()};
 
-	const UCameraComponent& Camera = Engine.GetCamera();
+	// The camera the level opens with: its framing, kept on the world settings.
+	UCameraComponent& Camera = *NewObject<UCameraComponent>();
+	World.GetWorldSettings()->FindComponentByClass<ULegacyLevelDataComponent>()->ApplyCameraFraming(Camera);
 	const TArray<FVector> CameraPoints = {Camera.GetTarget(), Camera.GetCameraLocation()};
 	// The table holds the legacy angles of the camera's mode.
 	float LegacyYaw = 0.0f;
@@ -84,7 +86,6 @@ bool FGoldenStarterLevelTest::RunTest(const FString& Parameters)
 	}
 	const TArray<float> CameraAngles = {LegacyYaw, LegacyPitch};
 	const TArray<float> CameraDistance = {Camera.GetDistance()};
-	Engine.Shutdown();
 
 	static const int32 ExpectedCounts[4] = {1, 1, 1, 0};
 	/** Min then max corner of each static mesh's world box. */

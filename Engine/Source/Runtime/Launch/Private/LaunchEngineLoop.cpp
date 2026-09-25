@@ -114,9 +114,9 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 int32 FEngineLoop::Init()
 {
 #if WITH_ENGINE
-	// LeonGame: LeonGame [-map=<.llev>] [-nullrhi] [-tick=<Hz>] [-showstats].
+	// LeonGame: LeonGame [<map>] [-map=<map>] [-nullrhi] [-tick=<Hz>] [-showstats].
 	GGameApplication = MakeUnique<FGameApplication>();
-	if (!GGameApplication->Init())
+	if (!GGameApplication->Init(this))
 	{
 		GGameApplication.Reset();
 		ExitCode = 1;

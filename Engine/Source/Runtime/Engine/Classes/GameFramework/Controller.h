@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/Pawn.h"
+#include "UObject/WeakObjectPtrTemplates.h"
 #include "Controller.generated.h"
 
 class ACharacter;
@@ -45,6 +46,19 @@ public:
 	{
 		ControlRotation = NewRotation;
 	}
+
+	/**
+	 * Places the controller and turns its control rotation (UE: SetInitialLocationAndRotation), when the game mode
+	 * picks its start spot.
+	 */
+	virtual void SetInitialLocationAndRotation(const FVector& NewLocation, const FRotator& NewRotation);
+
+	/** Turns the control rotation, and the pawn when it follows it (UE: ClientSetRotation; no RPC in Leon). */
+	virtual void ClientSetRotation(const FRotator& NewRotation, bool bResetCamera = false);
+
+	/** Where the controller started, chosen by the game mode when it logged in (UE: StartSpot). */
+	UPROPERTY()
+	TWeakObjectPtr<AActor> StartSpot;
 
 	/** The controller's player state (UE: GetPlayerState<T>), or null. */
 	template <class T>

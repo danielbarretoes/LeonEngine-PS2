@@ -14,3 +14,7 @@ ENGINE_API DECLARE_LOG_CATEGORY_EXTERN(LogPhysics, Log, All);
 ENGINE_API DECLARE_LOG_CATEGORY_EXTERN(LogSpawn, Log, All);
 /** World creation and teardown (UE: LogWorld). */
 ENGINE_API DECLARE_LOG_CATEGORY_EXTERN(LogWorld, Log, All);
+/** Map loading (UE: LogLoad). */
+ENGINE_API DECLARE_LOG_CATEGORY_EXTERN(LogLoad, Log, All);
+/** Game mode flow: login, restart, player starts (UE: LogGameMode). */
+ENGINE_API DECLARE_LOG_CATEGORY_EXTERN(LogGameMode, Log, All);

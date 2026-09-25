@@ -11,8 +11,8 @@ class APlayerState;
  * points at (UWorld::GetGameState).
  *
  * Leon keeps a simple match clock here: HandleMatchHasStarted / HandleMatchHasEnded and a clock that Tick advances
- * while the match is in progress (the game mode ticks its game state; AInfo actors do not tick in the world).
- * AGameState adds UE's MatchState.
+ * while the match is in progress (the game mode ticks its game state; AInfo actors do not tick in the world). Begin
+ * play starts it (HandleBeginPlay). AGameState adds UE's MatchState.
  */
 UCLASS()
 class ENGINE_API AGameStateBase : public AInfo
@@ -98,6 +98,22 @@ public:
 			[PlayerState](const APlayerState* Entry) { return Entry == PlayerState; });
 	}
 
+	/**
+	 * The world began play (UE: HandleBeginPlay, from AGameModeBase::StartPlay). Without match states the match is play
+	 * itself, so Leon's clock starts (HandleMatchHasStarted); AGameState starts it when its match is in progress.
+	 */
+	virtual void HandleBeginPlay()
+	{
+		MarkHasBegunPlay();
+		HandleMatchHasStarted();
+	}
+
+	/** True once the world began play (UE: HasBegunPlay). */
+	[[nodiscard]] bool HasBegunPlay() const
+	{
+		return bReplicatedHasBegunPlay;
+	}
+
 	/** Authority: mark match in progress (pairs with GameMode::StartMatch). */
 	virtual void HandleMatchHasStarted()
 	{
@@ -135,6 +151,13 @@ public:
 		++ReplicatedWorldTimeFrames;
 	}
 
+protected:
+	/** Records that the world began play, without starting the clock (AGameState). */
+	void MarkHasBegunPlay()
+	{
+		bReplicatedHasBegunPlay = true;
+	}
+
 private:
 	/** Seconds the match has been in progress (Leon; UE: GetServerWorldTimeSeconds of a replicated world time). */
 	UPROPERTY()
@@ -142,6 +165,10 @@ private:
 
 	UPROPERTY()
 	bool bMatchInProgress = false;
+
+	/** The world began play (UE: bReplicatedHasBegunPlay). */
+	UPROPERTY()
+	bool bReplicatedHasBegunPlay = false;
 
 	UPROPERTY()
 	bool bMatchHasEnded = false;

@@ -2,16 +2,18 @@
 
 #include "Engine/BlockingVolume.h"
 #include "Engine/DirectionalLight.h"
-#include "Engine/GameEngine.h"
 #include "Engine/PointLight.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/TargetPoint.h"
 #include "Engine/TriggerVolume.h"
 #include "Engine/World.h"
 #include "EngineLogs.h"
+#include "GameFramework/GameModeBase.h"
 #include "GameFramework/PainCausingVolume.h"
 #include "GameFramework/PlayerStart.h"
+#include "GameFramework/PlayerStartPIE.h"
 #include "GameFramework/WorldSettings.h"
+#include "GameMapsSettings.h"
 #include "LegacyCoordinateConversion.h"
 #include "Level/BasicLight.h"
 #include "Level/BasicShape.h"
@@ -20,6 +22,7 @@
 #include "Level/Light.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "ResourceCache.h"
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
 #include "UObject/Package.h"
@@ -424,7 +427,8 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 
 	for (const AActor* Actor : LiveActors)
 	{
-		if (!Actor->IsA<APlayerStart>())
+		// A Play From Here start (UEngine::LoadMap's, from the camera framing) is not a level record.
+		if (!Actor->IsA<APlayerStart>() || Actor->IsA<APlayerStartPIE>())
 		{
 			continue;
 		}
@@ -1261,16 +1265,33 @@ namespace
 
 } // namespace
 
-bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FString& SourcePath)
+UClass* ResolveLegacyLevelGameMode(const FString& GameModeName)
 {
-	UWorld* World = Engine.GetWorld();
-	if (World == nullptr)
+	const FString Name = GameModeName.TrimStartAndEnd();
+	if (Name.IsEmpty() || Name.Equals(TEXT("Default"), ESearchCase::IgnoreCase))
 	{
-		UE_LOG(LogLevel, Error, "LeonLevelFormat: no world to load '%s' into", *SourcePath);
+		return nullptr;
+	}
+	const FString ClassPath = UGameMapsSettings::GetGameModeForName(Name);
+	UClass* GameModeClass = LoadClass<AGameModeBase>(nullptr, *ClassPath, nullptr, LOAD_NoWarn | LOAD_Quiet);
+	if (GameModeClass == nullptr)
+	{
+		UE_LOG(LogLevel, Warning, "LeonLevelFormat: game mode '%s' is not a game mode class; the project's is used",
+			*Name);
+	}
+	return GameModeClass;
+}
+
+bool ApplyLevelDocument(
+	UWorld& InWorld, FResourceCache& Resources, const FLevelDocument& Doc, const FString& SourcePath)
+{
+	UWorld* World = &InWorld;
+	if (World->PersistentLevel == nullptr)
+	{
+		UE_LOG(LogLevel, Error, "LeonLevelFormat: no level to load '%s' into", *SourcePath);
 		return false;
 	}
 	ULevel& Level = *World->PersistentLevel;
-	FResourceCache& Resources = Engine.GetResources();
 
 	// Every resource first: a failure leaves the current level untouched (no partial loads).
 	TArray<FResolvedActorRecord> Resolved;
@@ -1310,6 +1331,8 @@ bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FS
 	ULegacyLevelDataComponent& LevelData = AddLegacyData(*WorldSettings, ELevelActorClass::StaticMesh);
 	LevelData.LevelName = Doc.Name;
 	LevelData.GameModeName = Doc.GameMode;
+	// The level's game mode (plan decision D18); the saver writes the string back.
+	WorldSettings->DefaultGameMode = ResolveLegacyLevelGameMode(Doc.GameMode);
 
 	for (const FResolvedActorRecord& Entry : Resolved)
 	{
@@ -1317,7 +1340,7 @@ bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FS
 	}
 	SpawnDocumentLights(*World, Doc);
 
-	// The camera framing: kept on the world settings and applied to the engine's view camera.
+	// The camera framing, kept on the world settings (UEngine::LoadMap starts the player there).
 	LevelData.CameraMode = Doc.Camera.Mode;
 	LevelData.CameraTarget = FLegacyCoordinateConversion::ConvertPosition(Doc.Camera.Target);
 	LevelData.CameraDistance = FLegacyCoordinateConversion::ConvertLength(Doc.Camera.Distance);
@@ -1326,12 +1349,6 @@ bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FS
 		? FLegacyCoordinateConversion::ConvertFreeLookRotation(Doc.Camera.Yaw, Doc.Camera.Pitch)
 		: FLegacyCoordinateConversion::ConvertOrbitViewRotation(Doc.Camera.Yaw, Doc.Camera.Pitch);
 	LevelData.CameraEye = FLegacyCoordinateConversion::ConvertPosition(Doc.Camera.Eye);
-	UCameraComponent& LocalCamera = Engine.GetCamera();
-	LocalCamera.SetTarget(LevelData.CameraTarget);
-	LocalCamera.SetDistance(LevelData.CameraDistance);
-	LocalCamera.SetViewRotation(LevelData.CameraViewRotation);
-	LocalCamera.SetEyeLocation(LevelData.CameraEye);
-	LocalCamera.SetMode(LevelData.CameraMode);
 
 	int32 NumStaticMeshes = 0;
 	for (const AActor* Actor : Level.Actors)

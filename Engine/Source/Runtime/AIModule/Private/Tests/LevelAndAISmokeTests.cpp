@@ -1,9 +1,11 @@
 #include "CoreMinimal.h"
-#include "Engine/GameEngine.h"
+#include "GameFramework/WorldSettings.h"
 #include "GameplayMinimal.h"
+#include "Level/LegacyLevelDataComponent.h"
 #include "Level/LeonLevelFormat.h"
 #include "Level/LevelLoader.h"
 #include "Misc/AutomationTest.h"
+#include "ResourceCache.h"
 #include "Tests/ScopedTestWorld.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -17,17 +19,18 @@ bool FLevelAndAISmokeEditorStyleLevelSaveLoadApplyTest::RunTest(const FString& P
 	// A headless engine loads the blank template, and its level document survives a byte round trip and re-apply.
 	#ifdef LEON_ROOT_DIR
 	const FString TemplateLevel = FString(LEON_ROOT_DIR) + "/Engine/Content/LevelTemplates/Blank.llev";
-	UGameEngine Engine;
-	if (!TestTrue("Headless initialize", Engine.InitializeHeadless()))
-	{
-		return false;
-	}
-	if (!TestTrue("Template level loaded", LoadLevelFile(Engine, TemplateLevel)))
+	FScopedTestWorld TestWorld;
+	FResourceCache Resources;
+	Resources.SetTextureLoadingEnabled(false);
+	if (!TestTrue("Template level loaded", LoadLevelFile(*TestWorld, Resources, TemplateLevel)))
 	{
 		return false;
 	}
 
-	FLevelDocument Doc = BuildLevelDocument(Engine.GetLevel(), Engine.GetCamera());
+	// The camera the level opens with (its framing on the world settings).
+	UCameraComponent& Camera = *NewObject<UCameraComponent>();
+	TestWorld->GetWorldSettings()->FindComponentByClass<ULegacyLevelDataComponent>()->ApplyCameraFraming(Camera);
+	FLevelDocument Doc = BuildLevelDocument(*TestWorld->PersistentLevel, Camera);
 	TestFalse("Document has a name", Doc.Name.IsEmpty());
 
 	const TArray<uint8> Bytes = SerializeLeonLevel(Doc);
@@ -40,8 +43,7 @@ bool FLevelAndAISmokeEditorStyleLevelSaveLoadApplyTest::RunTest(const FString& P
 	}
 	TestEqual("Name kept", RoundTrip.Name, Doc.Name);
 
-	TestTrue("Document applied", ApplyLevelDocument(Engine, RoundTrip, "memory-editor-smoke"));
-	Engine.Shutdown();
+	TestTrue("Document applied", ApplyLevelDocument(*TestWorld, Resources, RoundTrip, "memory-editor-smoke"));
 	#else
 	AddInfo("LEON_ROOT_DIR unset");
 	#endif

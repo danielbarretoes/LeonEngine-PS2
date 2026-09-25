@@ -3,6 +3,9 @@
 #include "CoreTypes.h"
 #include "Templates/SharedPointer.h"
 #include "Templates/UniquePtr.h"
+#if WITH_ENGINE
+	#include "UnrealEngine.h"
+#endif
 
 class FGenericWindow;
 class GenericApplication;
@@ -13,18 +16,21 @@ class GenericApplication;
  * FTicker::GetCoreTicker(); game modules register their per-frame work there.
  */
 class LAUNCH_API FEngineLoop
+#if WITH_ENGINE
+	: public IEngineLoop
+#endif
 {
 public:
 	FEngineLoop();
-	~FEngineLoop();
+	virtual ~FEngineLoop();
 
 	/** Platform application + main window, then statically linked module startup. */
 	int32 PreInit(int32 ArgC, char* ArgV[]);
 
-	int32 Init();
+	virtual int32 Init();
 
 	/** One frame: poll devices, tick, platform end-of-frame hooks, present. */
-	void Tick();
+	virtual void Tick();
 
 	/** Module shutdown, window + application teardown. */
 	void Exit();
@@ -35,13 +41,13 @@ public:
 	}
 
 	/** The platform application (nullptr before PreInit). */
-	GenericApplication* GetApplication() const
+	virtual GenericApplication* GetApplication() const
 	{
 		return Application.Get();
 	}
 
-	/** The main window (nullptr before PreInit / on desktop engine targets). */
-	FGenericWindow* GetMainWindow() const
+	/** The main window (nullptr before PreInit, and when nothing renders). */
+	virtual FGenericWindow* GetMainWindow() const
 	{
 		return MainWindow.Get();
 	}

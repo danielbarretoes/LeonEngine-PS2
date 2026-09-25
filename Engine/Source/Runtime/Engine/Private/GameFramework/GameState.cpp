@@ -20,6 +20,12 @@ void AGameState::SetMatchState(FName NewState)
 	OnRep_MatchState();
 }
 
+void AGameState::HandleBeginPlay()
+{
+	// Unlike the base, the match does not start with play: it waits for MatchState::InProgress (OnRep_MatchState).
+	MarkHasBegunPlay();
+}
+
 bool AGameState::IsMatchInProgress() const
 {
 	return MatchState == MatchState::InProgress;

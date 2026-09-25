@@ -2,13 +2,18 @@
 
 #include "BodyInstance.h"
 #include "Components/PrimitiveComponent.h"
+#include "Engine/GameInstance.h"
 #include "Engine/Level.h"
+#include "Engine/Player.h"
 #include "EngineLogs.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/GameStateBase.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/WorldSettings.h"
 #include "Misc/App.h"
 #include "Misc/PackageName.h"
+#include "Misc/Paths.h"
 #include "RendererInterface.h"
 #include "SceneInterface.h"
 #include "UObject/Package.h"
@@ -50,8 +55,6 @@ UWorld* UWorld::CreateWorld(EWorldType::Type InWorldType, bool /*bInformEngineOf
 	{
 		NewWorld->AddToRoot();
 	}
-	// Leon worlds play from the start (no map load sequence until P13's LoadMap): actors begin play when spawned.
-	NewWorld->bBegunPlay = true;
 	return NewWorld;
 }
 
@@ -138,6 +141,15 @@ void UWorld::DestroyWorld(bool /*bInformEngineOfWorld*/)
 	MarkPendingKill();
 }
 
+bool UWorld::SetGameMode(const FURL& InURL)
+{
+	if (AuthorityGameMode == nullptr && OwningGameInstance != nullptr)
+	{
+		AuthorityGameMode = OwningGameInstance->CreateGameModeForURL(InURL, this);
+	}
+	return AuthorityGameMode != nullptr;
+}
+
 AGameModeBase* UWorld::SetGameMode(TSubclassOf<AGameModeBase> GameModeClass)
 {
 	if (AuthorityGameMode == nullptr && GameModeClass != nullptr)
@@ -153,6 +165,56 @@ AGameModeBase* UWorld::SetGameMode(TSubclassOf<AGameModeBase> GameModeClass)
 	return AuthorityGameMode;
 }
 
+void UWorld::InitializeActorsForPlay(const FURL& InURL, bool /*bResetTime*/)
+{
+	// UE registers the loaded actors' components and initializes them here; Leon's actors did both when they spawned.
+	if (AuthorityGameMode != nullptr)
+	{
+		FString Options;
+		for (const FString& Option : InURL.Op)
+		{
+			Options += TEXT("?");
+			Options += Option;
+		}
+		FString Error;
+		AuthorityGameMode->InitGame(FPaths::GetBaseFilename(InURL.Map), Options, Error);
+		if (!Error.IsEmpty())
+		{
+			UE_LOG(LogWorld, Warning, TEXT("InitGame: %s"), *Error);
+		}
+	}
+}
+
+APlayerController* UWorld::SpawnPlayActor(UPlayer* NewPlayer, const FURL& InURL, FString& Error)
+{
+	Error.Empty();
+	FString Options;
+	for (const FString& Option : InURL.Op)
+	{
+		Options += TEXT("?");
+		Options += Option;
+	}
+	AGameModeBase* const GameMode = GetAuthGameMode();
+	if (GameMode == nullptr)
+	{
+		Error = TEXT("No game mode set");
+		UE_LOG(LogSpawn, Warning, TEXT("Login failed: No game mode set."));
+		return nullptr;
+	}
+	// The game mode accepts the login and makes the controller.
+	APlayerController* const NewPlayerController = GameMode->Login(NewPlayer, InURL.Portal, Options, Error);
+	if (NewPlayerController == nullptr)
+	{
+		UE_LOG(LogSpawn, Warning, TEXT("Login failed: %s"), *Error);
+		return nullptr;
+	}
+	UE_LOG(LogSpawn, Log, TEXT("%s got player %s"), *NewPlayerController->GetName(), *NewPlayer->GetName());
+	// The controller takes the player, then the game mode finishes the login (and restarts the player).
+	NewPlayerController->SetPlayer(NewPlayer);
+	GameMode->PostLogin(NewPlayerController);
+	return NewPlayerController;
+}
+
 void UWorld::BeginPlay()
 {
 	bBegunPlay = true;
@@ -161,6 +223,21 @@ void UWorld::BeginPlay()
 		AuthorityGameMode->StartPlay();
 	}
 	ForEach<AActor>([](AActor& Actor) { Actor.DispatchBeginPlay(); });
+}
+
+AWorldSettings* UWorld::GetWorldSettings() const
+{
+	return PersistentLevel != nullptr ? PersistentLevel->GetWorldSettings() : nullptr;
+}
+
+APlayerController* UWorld::GetFirstPlayerController() const
+{
+	return FindFirst<APlayerController>();
+}
+
+FString UWorld::GetMapName() const
+{
+	return GetName();
 }
 
 AActor* UWorld::SpawnActor(

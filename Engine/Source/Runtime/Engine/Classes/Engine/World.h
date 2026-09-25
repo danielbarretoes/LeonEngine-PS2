@@ -3,6 +3,7 @@
 #include "AI/Navigation/NavigationSystem.h"
 #include "CoreMinimal.h"
 #include "Debug/DebugDraw.h"
+#include "Engine/EngineBaseTypes.h"
 #include "Engine/Level.h"
 #include "GameFramework/Actor.h"
 #include "Physics/PhysScene.h"
@@ -14,9 +15,12 @@
 class ACharacter;
 class AGameModeBase;
 class AGameStateBase;
+class APlayerController;
+class AWorldSettings;
 class FDebugDraw;
 class FSceneInterface;
 class UGameInstance;
+class UPlayer;
 
 /** What SpawnActor does when the new actor would overlap something (UE: ESpawnActorCollisionHandlingMethod). */
 enum class ESpawnActorCollisionHandlingMethod : uint8
@@ -73,13 +77,15 @@ struct ENGINE_API FWorldGameplayFrameParams
 };
 
 /**
- * The world (UE: UWorld): a UObject whose outer is its package (a transient "/Temp/Untitled_<N>" until P13's
- * UEngine::LoadMap loads map packages), which owns its persistent level (and through it the actors), the physics scene
- * and the navigation system.
+ * The world (UE: UWorld): a UObject whose outer is its package (a transient "/Temp/Untitled_<N>" until the `.lmap` map
+ * packages of P15), which owns its persistent level (and through it the actors), the physics scene and the navigation
+ * system.
  *
- * - CreateWorld makes the package, the world and its level; DestroyWorld ends play on every actor, marks the world, its
- *   level and its actors pending kill and removes the world from the root set. The owner (a UGameInstance's world
- *   context, a test's FScopedTestWorld) then collects garbage at that safe point.
+ * - CreateWorld makes the package, the world and its level; the world plays once BeginPlay runs (UEngine::LoadMap calls
+ *   it after the players logged in; a test's FScopedTestWorld at once). DestroyWorld ends play on every actor, marks
+ * the world, its level and its actors pending kill and removes the world from the root set. The owner
+ * (UEngine::LoadMap, a UGameInstance's world context, a test's FScopedTestWorld) then collects garbage at that safe
+ * point.
  * - SpawnActor creates actors with NewObject in the level (their outer). An actor spawned while the world ticks joins
  *   the level (and begins play) once the tick ends.
  * - DestroyActor ends play, unregisters the components, removes the actor from the level and marks it pending kill.
@@ -128,8 +134,8 @@ public:
 
 	/**
 	 * Creates a world in a new transient package with its persistent level (UE: CreateWorld). bInformEngineOfWorld is
-	 * kept for the UE signature (the world contexts belong to UGameInstance until P13). With bAddToRoot the world is in
-	 * the root set until DestroyWorld.
+	 * kept for the UE signature (the world contexts belong to the game instances). With bAddToRoot the world is in the
+	 * root set until DestroyWorld. The world has not begun play.
 	 */
 	static UWorld* CreateWorld(EWorldType::Type InWorldType, bool bInformEngineOfWorld, FName WorldName = NAME_None,
 		UPackage* InWorldPackage = nullptr, bool bAddToRoot = true);
@@ -183,19 +189,48 @@ public:
 	}
 
 	/**
-	 * Spawns the game mode (UE: SetGameMode(FURL), which asks the game instance for the class; Leon takes the class
-	 * until P13 brings FURL and the game mode precedence of plan decision D18), then StartPlay when the world plays.
-	 * Returns the game mode.
+	 * Spawns the game mode the owning game instance picks for the URL (UE: SetGameMode; UGameInstance::
+	 * CreateGameModeForURL with plan decision D18's precedence), once. False without a game instance or a game mode.
+	 */
+	bool SetGameMode(const FURL& InURL);
+
+	/**
+	 * Spawns a game mode of GameModeClass, once, and starts it when the world already plays (Leon: tests and tools
+	 * that make a world without a map). Returns the game mode.
 	 */
 	AGameModeBase* SetGameMode(TSubclassOf<AGameModeBase> GameModeClass);
+
+	/**
+	 * Gets the actors ready for play (UE: InitializeActorsForPlay): Leon's actors initialize when they spawn, so this
+	 * gives the game mode its map name and options (AGameModeBase::InitGame).
+	 */
+	void InitializeActorsForPlay(const FURL& InURL, bool bResetTime = true);
+
+	/**
+	 * Logs a player in (UE: SpawnPlayActor): the game mode's Login makes its controller, which takes the player
+	 * (APlayerController::SetPlayer), then PostLogin restarts it. Null with Error when the login failed.
+	 */
+	APlayerController* SpawnPlayActor(UPlayer* NewPlayer, const FURL& InURL, FString& Error);
 
 	/** True once the world plays: actors spawned from then on begin play at once (UE: HasBegunPlay). */
 	[[nodiscard]] bool HasBegunPlay() const
 	{
 		return bBegunPlay;
 	}
-	/** Begins play on every actor that has not (UE: BeginPlay). Leon worlds begin play when they are created. */
+	/**
+	 * Starts play (UE: BeginPlay): the game mode's StartPlay, then every actor that has not begun play. LoadMap calls
+	 * it once the players logged in.
+	 */
 	void BeginPlay();
+
+	/** The persistent level's world settings, or null (UE: GetWorldSettings). */
+	[[nodiscard]] AWorldSettings* GetWorldSettings() const;
+
+	/** The first player controller of the level, or null (UE: GetFirstPlayerController). */
+	[[nodiscard]] APlayerController* GetFirstPlayerController() const;
+
+	/** The map's name: the world's name (UE: GetMapName). */
+	[[nodiscard]] FString GetMapName() const;
 
 	[[nodiscard]] FPhysScene& GetPhysicsScene()
 	{

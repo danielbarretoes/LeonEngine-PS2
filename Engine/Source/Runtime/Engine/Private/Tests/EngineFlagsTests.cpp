@@ -9,14 +9,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEngineFlagsWorkBeforeInitializeTest, "System.E
 
 bool FEngineFlagsWorkBeforeInitializeTest::RunTest(const FString& Parameters)
 {
-	// The debug / input flags and the game instance counters work on an engine that was never initialized.
-	UGameEngine Engine;
+	// The debug flags work on an engine that was never initialized, and the game instance counts the levels opened.
+	UGameEngine& Engine = *NewObject<UGameEngine>();
 	TestFalse("Not initialized", Engine.IsInitialized());
-
-	Engine.SetSuppressCameraDrag(true);
-	TestTrue("Camera drag suppressed", Engine.IsCameraDragSuppressed());
-	Engine.SetSuppressCameraDrag(false);
-	TestFalse("Camera drag not suppressed", Engine.IsCameraDragSuppressed());
 
 	TestFalse("Collision debug off by default", Engine.IsCollisionDebugEnabled());
 	Engine.ToggleCollisionDebug();
@@ -30,12 +25,10 @@ bool FEngineFlagsWorkBeforeInitializeTest::RunTest(const FString& Parameters)
 	Engine.SetNavMeshDebugEnabled(false);
 	TestFalse("NavMesh debug set off", Engine.IsNavMeshDebugEnabled());
 
-	Engine.SetKeyboardOrbitEnabled(false);
-	Engine.SetOrbitMouseEnabled(false);
-
-	TestEqual("No levels opened", Engine.GetGameInstance().GetLevelsOpened(), 0);
-	Engine.GetGameInstance().NotifyLevelOpened();
-	TestEqual("One level opened", Engine.GetGameInstance().GetLevelsOpened(), 1);
+	UGameInstance& GameInstance = *NewObject<UGameInstance>();
+	TestEqual("No levels opened", GameInstance.GetLevelsOpened(), 0);
+	GameInstance.NotifyLevelOpened();
+	TestEqual("One level opened", GameInstance.GetLevelsOpened(), 1);
 	return true;
 }
 

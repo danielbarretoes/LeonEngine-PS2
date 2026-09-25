@@ -1,61 +1,38 @@
 #include "GameApplication.h"
 
 #include "CoreGlobals.h"
+#include "Engine/GameEngine.h"
 #include "Engine/World.h"
-#include "GameFramework/DefaultGameMode.h"
+#include "GameFramework/GameModeBase.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformTime.h"
-#include "Level/LevelLoader.h"
 #include "Misc/App.h"
 #include "Misc/CommandLine.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Misc/Parse.h"
-#include "Misc/Paths.h"
-#include "RuntimeInput.h"
+#include "UObject/GarbageCollection.h"
+#include "UObject/Package.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogLaunch, Log, All);
 
 namespace
 {
 
-	constexpr const TCHAR* DefaultMap = "LevelTemplates/Starter.llev";
-
-	/** A path as given (absolute or relative to the working directory), else a legacy content key under Engine/Content.
-	 */
-	[[nodiscard]] FString ResolveMapPath(const FString& Map)
+	[[nodiscard]] AGameModeBase* GetGameMode()
 	{
-		if (FPaths::FileExists(Map))
-		{
-			return FString(*FPaths::ConvertRelativePathToFull(Map));
-		}
-		return FString(*FPaths::ResolveLegacyContentPath(Map));
-	}
-
-	[[nodiscard]] int32 GetEngineInt(const TCHAR* Section, const TCHAR* Key, int32 Default)
-	{
-		int32 Value = Default;
-		if (GConfig != nullptr)
-		{
-			GConfig->GetInt(Section, Key, Value, GEngineIni);
-		}
-		return Value;
+		const UGameEngine* GameEngine = Cast<UGameEngine>(GEngine);
+		UWorld* World = GameEngine != nullptr ? GameEngine->GetGameWorld() : nullptr;
+		return World != nullptr ? World->GetAuthGameMode() : nullptr;
 	}
 
 } // namespace
 
-bool FGameApplication::Init()
+bool FGameApplication::Init(IEngineLoop* EngineLoop)
 {
 	const TCHAR* CmdLine = FCommandLine::Get();
 
 	// Console strings stay ASCII: Windows cmd often is not UTF-8 (em dash / arrows mojibake).
-	bHeadless = FParse::Param(CmdLine, "nullrhi");
-
-	bool bShowStats = false;
-	if (GConfig != nullptr)
-	{
-		GConfig->GetBool("/Script/Engine.Engine", "bShowStatsByDefault", bShowStats, GEngineIni);
-	}
-	bShowStats |= FParse::Param(CmdLine, "showstats");
+	bHeadless = !FApp::CanEverRender();
 
 	float Hz = 60.0f;
 	(void)FParse::Value(CmdLine, "ExitAfterFrames=", ExitAfterFrames);
@@ -63,90 +40,58 @@ bool FGameApplication::Init()
 	{
 		ExitAfterFrames = 60;
 	}
-
 	if (FParse::Value(CmdLine, "tick=", Hz) && Hz >= 1.0f && Hz <= 240.0f)
 	{
 		TickHz = Hz;
 	}
 
-	FString Map;
-	if (!FParse::Value(CmdLine, "map=", Map) && GConfig != nullptr)
+	// GEngine's class comes from the config (UE: FEngineLoop::Init, plan decision D18).
+	FString GameEngineClassName;
+	if (GConfig != nullptr)
 	{
-		GConfig->GetString("/Script/EngineSettings.GameMapsSettings", "GameDefaultMap", Map, GEngineIni);
+		GConfig->GetString("/Script/Engine.Engine", "GameEngine", GameEngineClassName, GEngineIni);
 	}
-	if (Map.IsEmpty() || Map.Equals("None", ESearchCase::IgnoreCase))
+	UClass* EngineClass = !GameEngineClassName.IsEmpty()
+		? StaticLoadClass(UGameEngine::StaticClass(), nullptr, *GameEngineClassName)
+		: UGameEngine::StaticClass();
+	if (EngineClass == nullptr)
 	{
-		Map = DefaultMap;
-	}
-	const FString MapPath = ResolveMapPath(Map);
-
-	const int32 ResolutionX = GetEngineInt("/Script/Engine.GameViewportClient", "DefaultResolutionX", 1280);
-	const int32 ResolutionY = GetEngineInt("/Script/Engine.GameViewportClient", "DefaultResolutionY", 720);
-	const FString Title = FApp::HasProjectName() ? FString("Leon - ") + FApp::GetProjectName() : FString("Leon");
-
-	Engine = MakeUnique<UGameEngine>();
-	if (bHeadless)
-	{
-		if (!Engine->InitializeHeadless())
-		{
-			UE_LOG(LogLaunch, Error, "Failed to initialize headless engine");
-			Engine.Reset();
-			return false;
-		}
-	}
-	else if (!Engine->Initialize(ResolutionX, ResolutionY, *Title))
-	{
-		UE_LOG(LogLaunch, Error, "Failed to initialize engine");
-		Engine.Reset();
+		UE_LOG(LogLaunch, Error, "Failed to load the engine class '%s'", *GameEngineClassName);
 		return false;
 	}
-	if (bShowStats && !bHeadless)
+	GEngine = NewObject<UEngine>(GetTransientPackage(), EngineClass);
+	GEngine->AddToRoot();
+	GEngine->Init(EngineLoop);
+	if (!GEngine->IsInitialized())
 	{
-		Engine->SetHudStatsVisible(true);
-	}
-	if (FParse::Param(CmdLine, "AxesGizmo") && !bHeadless)
-	{
-		Engine->SetAxesGizmoEnabled(true);
-	}
-	if (!bHeadless)
-	{
-		WireDefaultInput(*Engine);
-	}
-
-	if (!LoadLevelFile(*Engine, MapPath))
-	{
-		UE_LOG(LogLaunch, Error, "Failed to load map '%s'", *Map);
-		Engine->Shutdown();
-		Engine.Reset();
+		UE_LOG(LogLaunch, Error, "Failed to initialize the engine");
 		return false;
 	}
-	// The world spawns the game mode (UE: UWorld::SetGameMode); P13's LoadMap picks the class from the config (D18).
-	AGameModeBase* GameMode = Engine->GetWorld()->SetGameMode(ADefaultGameMode::StaticClass());
-	GameMode->OnEnter(*Engine, MapPath);
+	GEngine->Start();
+	if (IsEngineExitRequested())
+	{
+		return false;
+	}
+	// Leon's legacy game mode hook (until the second stage of P13).
+	if (AGameModeBase* GameMode = GetGameMode())
+	{
+		const UGameEngine* GameEngine = Cast<UGameEngine>(GEngine);
+		GameMode->OnEnter(
+			*const_cast<UGameEngine*>(GameEngine), GameEngine->GameInstance->GetWorldContext()->LastURL.Map);
+	}
 
 	if (bHeadless)
 	{
-		UE_LOG(LogLaunch, Log, "Running '%s' headless @ %g Hz (Ctrl+C to stop)", *MapPath, static_cast<double>(TickHz));
+		UE_LOG(LogLaunch, Log, "Running headless @ %g Hz (Ctrl+C to stop)", static_cast<double>(TickHz));
 		NextHeadlessTick = FPlatformTime::Seconds();
-	}
-	else
-	{
-		Engine->Start();
 	}
 	LastFrameTime = FPlatformTime::Seconds();
 	return true;
 }
 
-AGameModeBase* FGameApplication::GetGameMode() const
-{
-	UWorld* World = Engine ? Engine->GetWorld() : nullptr;
-	return World != nullptr ? World->GetAuthGameMode() : nullptr;
-}
-
 bool FGameApplication::Tick()
 {
-	AGameModeBase* GameMode = GetGameMode();
-	if (!Engine || GameMode == nullptr)
+	if (GEngine == nullptr || IsEngineExitRequested())
 	{
 		return false;
 	}
@@ -154,14 +99,7 @@ bool FGameApplication::Tick()
 	{
 		// Fixed-timestep simulation (no render / present), paced to TickHz.
 		const float StepSeconds = 1.0f / (TickHz < 1.0f ? 1.0f : TickHz);
-		if (!Engine->IsRunning())
-		{
-			return false;
-		}
-		GameMode->Tick(*Engine, StepSeconds);
-		(void)Engine->ConditionalCollectGarbage(StepSeconds);
-		// Keep the console current when stdout is redirected (CI smoke, servers stopped with Ctrl+C).
-		GLog->Flush();
+		GEngine->Tick(StepSeconds, false);
 		NextHeadlessTick += static_cast<double>(StepSeconds);
 		const double Now = FPlatformTime::Seconds();
 		if (NextHeadlessTick < Now)
@@ -172,7 +110,7 @@ bool FGameApplication::Tick()
 		{
 			FPlatformProcess::Sleep(static_cast<float>(NextHeadlessTick - Now));
 		}
-		return Engine->IsRunning();
+		return !IsEngineExitRequested();
 	}
 
 	const double Now = FPlatformTime::Seconds();
@@ -185,20 +123,30 @@ bool FGameApplication::Tick()
 	}
 	if (!ScreenshotPath.IsEmpty() && FrameCount == ExitAfterFrames)
 	{
-		Engine->RequestScreenshot(ScreenshotPath);
+		if (UGameEngine* GameEngine = Cast<UGameEngine>(GEngine))
+		{
+			GameEngine->RequestScreenshot(ScreenshotPath);
+		}
 	}
-	return Engine->Tick(DeltaTime, [this, GameMode](float Dt) { GameMode->Tick(*Engine, Dt); });
+	GEngine->Tick(DeltaTime, false);
+	return !IsEngineExitRequested();
 }
 
 void FGameApplication::Exit()
 {
+	if (GEngine == nullptr)
+	{
+		return;
+	}
 	if (AGameModeBase* GameMode = GetGameMode())
 	{
-		GameMode->OnExit(*Engine);
+		if (UGameEngine* GameEngine = Cast<UGameEngine>(GEngine))
+		{
+			GameMode->OnExit(*GameEngine);
+		}
 	}
-	if (Engine)
-	{
-		Engine->Shutdown();
-		Engine.Reset();
-	}
+	GEngine->PreExit();
+	GEngine->RemoveFromRoot();
+	GEngine = nullptr;
+	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
 }

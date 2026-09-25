@@ -5,7 +5,8 @@
 #include "Engine/EngineTypes.h"
 #include "Level/Light.h"
 
-class UGameEngine;
+class FResourceCache;
+class UWorld;
 class ULevel;
 
 /**
@@ -175,14 +176,24 @@ struct ENGINE_API FLevelDocument
 [[nodiscard]] bool LoadLeonLevelFile(const FString& Path, FLevelDocument& Out);
 
 /**
- * Resolve a document into the engine's world as actors (asset paths resolve relative to SourcePath). Every mesh and
- * material is resolved first; on a failure nothing changes. Then the previous level-content actors are destroyed and
- * the document spawns an AWorldSettings, one actor per record in record order (APlayerStart, AStaticMeshActor for
- * Cube / Sphere / Plane / StaticMesh, ABlockingVolume, ATriggerVolume, APainCausingVolume, ATargetPoint for
- * AISpawnPoint) and its lights (ADirectionalLight / APointLight, the default sun when it has no directional light).
- * The camera framing goes to the engine camera. Collects garbage (a safe point).
+ * Resolve a document into a world as actors (asset paths resolve relative to SourcePath; meshes and materials load
+ * through Resources). Every mesh and material is resolved first; on a failure nothing changes. Then the previous
+ * level-content actors are destroyed and the document spawns an AWorldSettings, one actor per record in record order
+ * (APlayerStart, AStaticMeshActor for Cube / Sphere / Plane / StaticMesh, ABlockingVolume, ATriggerVolume,
+ * APainCausingVolume, ATargetPoint for AISpawnPoint) and its lights (ADirectionalLight / APointLight, the default sun
+ * when it has no directional light). The game mode name becomes the world settings' DefaultGameMode (plan decision
+ * D18: empty or "Default" leaves it to the project), and the camera framing stays on the world settings'
+ * ULegacyLevelDataComponent. Collects garbage (a safe point).
  */
-[[nodiscard]] bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FString& SourcePath);
+[[nodiscard]] bool ApplyLevelDocument(
+	UWorld& World, FResourceCache& Resources, const FLevelDocument& Doc, const FString& SourcePath);
+
+/**
+ * The game mode class a legacy level's game mode string names (Leon, plan decision D18): none for an empty string or
+ * "Default" (the project's GlobalDefaultGameMode decides), else a class path or an alias of GameModeClassAliases
+ * (UGameMapsSettings::GetGameModeForName); a name that is no game mode class is a warning and none.
+ */
+[[nodiscard]] UClass* ResolveLegacyLevelGameMode(const FString& GameModeName);
 
 /**
  * Resolve a content-relative key (Materials/M_Floor.lmat) for a level under …/Content/Levels/

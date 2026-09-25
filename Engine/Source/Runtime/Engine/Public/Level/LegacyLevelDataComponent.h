@@ -16,8 +16,8 @@
  *   the spin and bob animation (read and saved, never played).
  * - Trigger volumes: the interact radius and cost, the game-defined payload and consume-on-use.
  * - Point lights: the orbit animation (read and saved, never played).
- * - World settings: the level name, the game mode string, the ignored environment map and the camera framing (also
- *   applied to the engine camera when the level loads).
+ * - World settings: the level name, the game mode string, the ignored environment map and the camera framing (the view
+ *   UEngine::LoadMap starts the player at, GetPlayFromHereView).
  */
 UCLASS()
 class ENGINE_API ULegacyLevelDataComponent : public UActorComponent
@@ -26,6 +26,16 @@ class ENGINE_API ULegacyLevelDataComponent : public UActorComponent
 
 public:
 	ULegacyLevelDataComponent(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
+	/** Gives Camera the level's camera framing: mode, target, distance, view rotation and eye (world settings data). */
+	void ApplyCameraFraming(UCameraComponent& Camera) const;
+
+	/**
+	 * The view the level opens with (world settings data): the framing camera's eye, looking at its target, as the
+	 * legacy engine camera turned it (the pitch clamped to +-89 degrees, no roll). UEngine::LoadMap places the Play
+	 * From Here start there, so the default pawn starts where the legacy default game mode put its camera.
+	 */
+	void GetPlayFromHereView(FVector& OutLocation, FRotator& OutRotation) const;
 
 	ELevelActorClass ActorClass = ELevelActorClass::StaticMesh;
 
