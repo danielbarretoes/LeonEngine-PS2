@@ -1,76 +1,69 @@
 #pragma once
 
+#include "CoreMinimal.h"
+#include "Level/LegacyTransform.h"
 #include "Level/Light.h"
 #include "Material.h"
-#include "Migration/LegacyTransform.h"
 #include "StaticMesh.h"
 #include "Texture2D.h"
 
-#include <glm/mat4x4.hpp>
-
-#include <cstddef>
-#include <cstdint>
-#include <limits>
-#include <memory>
-#include <string>
-#include <string_view>
-#include <vector>
-
-/// Unreal-like mobility: Static never moves (baked lighting later); Movable may move at runtime.
-enum class EComponentMobility : std::uint8_t
+/** UE-like mobility: Static never moves (baked lighting later); Movable may move at runtime. */
+enum class EComponentMobility : uint8
 {
 	Static = 0,
 	Movable = 1,
 };
 
-/// Drawable placed mesh in a Level (visual / collision proxy — not a gameplay `Actor` or
-/// Unreal `UStaticMeshComponent`). Named for level JSON familiarity.
-/// Resolution order in materialForSubMesh():
-///   1) materials[] if non-empty (per-slot overrides)
-///   2) material if materialOverride (asset / JSON override replaced MTL)
-///   3) mesh MTL materials
-///   4) material (engine default checker when procedural mesh has no MTL)
+/**
+ * Drawable placed mesh in a level (visual / collision proxy; not a gameplay actor or UE's UStaticMeshComponent).
+ * Resolution order in MaterialForSubMesh():
+ *   1) Materials if non-empty (per-slot overrides)
+ *   2) Material if bMaterialOverride (asset / JSON override replaced the MTL)
+ *   3) mesh MTL materials
+ *   4) Material (engine default checker when a procedural mesh has no MTL)
+ */
 struct ENGINE_API UStaticMeshComponent
 {
 	FLegacyTransform Transform;
-	std::shared_ptr<UStaticMesh> Mesh;
+	TSharedPtr<UStaticMesh> Mesh;
 	FMaterial Material;
-	std::vector<FMaterial> Materials; // optional per-slot overrides
-	/// When true, `material` is used for every submesh (asset/inline overrode MTL).
+	TArray<FMaterial> Materials; // optional per-slot overrides
+	/** When true, Material is used for every submesh (asset / inline overrode the MTL). */
 	bool bMaterialOverride = false;
 
-	/// Optional tag from JSON (`"tag"`). Spawn points use FPlayerStart, not tagged meshes.
-	std::string Tag;
-	/// Unreal-like collision enabled — registers a FPhysScene body (Static unless simulating).
+	/** Optional tag from the level ("tag"). Spawn points use FPlayerStart, not tagged meshes. */
+	FString Tag;
+	/** UE-like collision enabled: registers an FPhysScene body (Static unless simulating). */
 	bool bCollisionEnabled = false;
-	/// Unreal-like `bSimulatePhysics` — Dynamic body (implies collision).
+	/** UE-like bSimulatePhysics: Dynamic body (implies collision). */
 	bool bSimulatePhysics = false;
-	/// Unreal-like `bEnableGravity` — applies to simulatePhysics bodies (default true).
+	/** UE-like bEnableGravity: applies to simulated bodies (default true). */
 	bool bEnableGravity = true;
-	/// When true, skipped by the renderer (Unreal-like BlockingVolume / HiddenInGame).
+	/** When true, skipped by the renderer (UE-like BlockingVolume / HiddenInGame). */
 	bool bHidden = false;
-	/// When true, renderer uses `modelMatrixOverride` instead of `transform.modelMatrix()`.
+	/** When true, the renderer uses ModelMatrixOverride instead of Transform.ModelMatrix(). */
 	bool bUseModelMatrixOverride = false;
-	glm::mat4 ModelMatrixOverride{1.0f};
+	FMatrix ModelMatrixOverride = FMatrix::Identity;
 
-	/// Static = never moves; Movable = may move at runtime.
+	/** Static = never moves; Movable = may move at runtime. */
 	EComponentMobility Mobility = EComponentMobility::Static;
 
-	/// Editor / save provenance (filled by LevelLoader; used by LevelSaver).
-	std::string EditorClass; // "Cube", "Sphere", "Plane", "BlockingVolume", "StaticMesh", ...
-	std::string MeshPath; // relative mesh path when imported
-	std::string MaterialPath; // relative material JSON path when set
+	/** Editor / save provenance (filled by the level loader; used by the level saver). */
+	FString EditorClass; // "Cube", "Sphere", "Plane", "BlockingVolume", "StaticMesh", ...
+	FString MeshPath; // relative mesh path when imported
+	FString MaterialPath; // relative material path when set
 	float SpinYaw = 0.0f;
-	int SphereSegments = 24;
-	int SphereRings = 16;
+	int32 SphereSegments = 24;
+	int32 SphereRings = 16;
 
-	/// Optional bob animation (Level JSON `bob`); preserved for save round-trip.
+	/** Optional bob animation (level bob); preserved for the save round trip. */
 	bool bHasBob = false;
 	float BobBaseY = 0.0f;
 	float BobAmplitude = 0.1f;
 	float BobSpeed = 1.0f;
 
-	[[nodiscard]] glm::mat4 EffectiveModelMatrix() const
+	/** Model matrix in the renderer's GL convention (LegacyGLMath.h). */
+	[[nodiscard]] FMatrix EffectiveModelMatrix() const
 	{
 		return bUseModelMatrixOverride ? ModelMatrixOverride : Transform.ModelMatrix();
 	}
@@ -80,46 +73,48 @@ struct ENGINE_API UStaticMeshComponent
 		return bCollisionEnabled || bSimulatePhysics;
 	}
 
-	[[nodiscard]] std::size_t SubMeshCount() const;
-	[[nodiscard]] const FMaterial& MaterialForSubMesh(std::size_t SubMeshIndex) const;
+	[[nodiscard]] int32 SubMeshCount() const;
+	[[nodiscard]] const FMaterial& MaterialForSubMesh(int32 SubMeshIndex) const;
 	[[nodiscard]] bool IsShadowCaster() const;
 };
 
-/// Unreal-like FPlayerStart — spawn transform for GameMode-possessed pawns (not a drawable mesh).
+/** UE-like FPlayerStart: spawn transform for game-mode-possessed pawns (not a drawable mesh). */
 struct ENGINE_API FPlayerStart
 {
-	FLegacyTransform Transform{};
+	FLegacyTransform Transform;
 };
 
-/// Interact / trigger volume (POD). Overlap tested in gameplay from position + interactRadius.
+/** Interact / trigger volume (POD). Overlap tested in gameplay from the position + InteractRadius. */
 struct ENGINE_API FTriggerVolume
 {
-	FLegacyTransform Transform{};
+	FLegacyTransform Transform;
 	float InteractRadius = 2.f;
-	int InteractCost = 0;
-	std::string Payload; // game-defined e.g. Door, WallBuy:M14, Perk:Jugg
-	std::string Tag;
+	int32 InteractCost = 0;
+	FString Payload; // game-defined, e.g. Door, WallBuy:M14, Perk:Jugg
+	FString Tag;
 	bool bConsumeOnUse = false;
 };
 
-/// Damage volume (POD). AABB from transform.position and abs(scale) * 0.5.
+/** Damage volume (POD). AABB from Transform.Position and abs(Scale) * 0.5. */
 struct ENGINE_API FPainCausingVolume
 {
-	FLegacyTransform Transform{}; // position + scale as half-extents box (full size = abs(scale))
+	FLegacyTransform Transform; // position + scale as half-extents box (full size = abs(scale))
 	float DamagePerSecond = 12.f;
 	float DamageInterval = 0.35f;
-	std::string Tag;
+	FString Tag;
 };
 
-/// AI spawn marker (POD — not a drawable mesh).
+/** AI spawn marker (POD; not a drawable mesh). */
 struct ENGINE_API FAISpawnPoint
 {
-	FLegacyTransform Transform{};
-	std::string Tag;
+	FLegacyTransform Transform;
+	FString Tag;
 };
 
-/// Map content container (Unreal-style Level / ULevel): StaticMeshComponents + lights + env.
-/// Distinct from gameplay `World` (spawned Actors). The app owns contents; FSceneRenderer reads them.
+/**
+ * Map content container (UE-style ULevel): static mesh components + lights. Distinct from the gameplay UWorld
+ * (spawned actors). The application owns the contents; FSceneRenderer reads them.
+ */
 class ENGINE_API ULevel
 {
 public:
@@ -136,102 +131,103 @@ public:
 	void ClearLights();
 	void Clear();
 
-	[[nodiscard]] const std::vector<UStaticMeshComponent>& GetStaticMeshes() const
+	[[nodiscard]] const TArray<UStaticMeshComponent>& GetStaticMeshes() const
 	{
 		return StaticMeshes;
 	}
-	[[nodiscard]] std::vector<UStaticMeshComponent>& GetStaticMeshes()
+	[[nodiscard]] TArray<UStaticMeshComponent>& GetStaticMeshes()
 	{
 		return StaticMeshes;
 	}
 
-	[[nodiscard]] const std::vector<FPlayerStart>& GetPlayerStarts() const
+	[[nodiscard]] const TArray<FPlayerStart>& GetPlayerStarts() const
 	{
 		return PlayerStarts;
 	}
-	[[nodiscard]] std::vector<FPlayerStart>& GetPlayerStarts()
+	[[nodiscard]] TArray<FPlayerStart>& GetPlayerStarts()
 	{
 		return PlayerStarts;
 	}
 
-	[[nodiscard]] const std::vector<FTriggerVolume>& GetTriggerVolumes() const
+	[[nodiscard]] const TArray<FTriggerVolume>& GetTriggerVolumes() const
 	{
 		return TriggerVolumes;
 	}
-	[[nodiscard]] std::vector<FTriggerVolume>& GetTriggerVolumes()
+	[[nodiscard]] TArray<FTriggerVolume>& GetTriggerVolumes()
 	{
 		return TriggerVolumes;
 	}
 
-	[[nodiscard]] const std::vector<FPainCausingVolume>& GetPainCausingVolumes() const
+	[[nodiscard]] const TArray<FPainCausingVolume>& GetPainCausingVolumes() const
 	{
 		return PainCausingVolumes;
 	}
-	[[nodiscard]] std::vector<FPainCausingVolume>& GetPainCausingVolumes()
+	[[nodiscard]] TArray<FPainCausingVolume>& GetPainCausingVolumes()
 	{
 		return PainCausingVolumes;
 	}
 
-	[[nodiscard]] const std::vector<FAISpawnPoint>& AISpawnPoints() const
+	[[nodiscard]] const TArray<FAISpawnPoint>& AISpawnPoints() const
 	{
 		return AiSpawnPoints;
 	}
-	[[nodiscard]] std::vector<FAISpawnPoint>& AISpawnPoints()
+	[[nodiscard]] TArray<FAISpawnPoint>& AISpawnPoints()
 	{
 		return AiSpawnPoints;
 	}
 
-	/// First FPlayerStart, or nullptr if the level has none.
+	/** First FPlayerStart, or nullptr if the level has none. */
 	[[nodiscard]] const FPlayerStart* FindPlayerStart() const;
 
-	/// First static mesh whose tag matches, or npos if none.
-	[[nodiscard]] std::size_t FindStaticMeshIndexByTag(std::string_view InTag) const;
+	/** First static mesh whose tag matches (case-sensitive), or Npos if none. */
+	[[nodiscard]] SIZE_T FindStaticMeshIndexByTag(const FString& InTag) const;
 
-	[[nodiscard]] const std::vector<FDirectionalLight>& GetDirectionalLights() const
+	[[nodiscard]] const TArray<FDirectionalLight>& GetDirectionalLights() const
 	{
 		return DirectionalLights;
 	}
-	[[nodiscard]] std::vector<FDirectionalLight>& GetDirectionalLights()
+	[[nodiscard]] TArray<FDirectionalLight>& GetDirectionalLights()
 	{
 		return DirectionalLights;
 	}
 
-	[[nodiscard]] const std::vector<FPointLight>& GetPointLights() const
+	[[nodiscard]] const TArray<FPointLight>& GetPointLights() const
 	{
 		return PointLights;
 	}
-	[[nodiscard]] std::vector<FPointLight>& GetPointLights()
+	[[nodiscard]] TArray<FPointLight>& GetPointLights()
 	{
 		return PointLights;
 	}
 
-	void SetName(std::string InName)
+	void SetName(const FString& InName)
 	{
-		Name = std::move(InName);
+		Name = InName;
 	}
-	[[nodiscard]] const std::string& GetName() const
+	[[nodiscard]] const FString& GetName() const
 	{
 		return Name;
 	}
-	void SetGameMode(std::string InGameMode)
+	void SetGameMode(const FString& InGameMode)
 	{
-		GameMode = std::move(InGameMode);
+		GameMode = InGameMode;
 	}
-	[[nodiscard]] const std::string& GetGameMode() const
+	[[nodiscard]] const FString& GetGameMode() const
 	{
 		return GameMode;
 	}
 
-	static constexpr std::size_t Npos = (std::numeric_limits<std::size_t>::max)();
+	/** "No static mesh" index (the physics scene's NoLevelMeshIndex). */
+	static constexpr SIZE_T Npos = static_cast<SIZE_T>(-1);
 
 private:
-	std::vector<UStaticMeshComponent> StaticMeshes;
-	std::vector<FPlayerStart> PlayerStarts;
-	std::vector<FTriggerVolume> TriggerVolumes;
-	std::vector<FPainCausingVolume> PainCausingVolumes;
-	std::vector<FAISpawnPoint> AiSpawnPoints;
-	std::vector<FDirectionalLight> DirectionalLights{FDirectionalLight{}};
-	std::vector<FPointLight> PointLights;
-	std::string Name;
-	std::string GameMode;
+	TArray<UStaticMeshComponent> StaticMeshes;
+	TArray<FPlayerStart> PlayerStarts;
+	TArray<FTriggerVolume> TriggerVolumes;
+	TArray<FPainCausingVolume> PainCausingVolumes;
+	TArray<FAISpawnPoint> AiSpawnPoints;
+	TArray<FDirectionalLight> DirectionalLights{FDirectionalLight{}};
+	TArray<FPointLight> PointLights;
+	FString Name;
+	FString GameMode;
 };

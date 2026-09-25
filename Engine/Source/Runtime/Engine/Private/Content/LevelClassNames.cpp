@@ -1,30 +1,21 @@
 #include "Level/BasicLight.h"
 #include "Level/BasicShape.h"
-#include "Misc/CString.h"
 
-#include <string_view>
+// Class names compare ignoring case (FString's == does).
 
-namespace
+bool TryParseBasicShapeName(const FString& Name, EBasicShape& Out)
 {
-	[[nodiscard]] bool EqualsIgnoreCase(std::string_view Name, std::string_view Literal)
-	{
-		return Name.size() == Literal.size() && FCString::Strnicmp(Name.data(), Literal.data(), Name.size()) == 0;
-	}
-} // namespace
-
-bool TryParseBasicShapeName(std::string_view Name, EBasicShape& Out)
-{
-	if (EqualsIgnoreCase(Name, "cube"))
+	if (Name == "cube")
 	{
 		Out = EBasicShape::Cube;
 		return true;
 	}
-	if (EqualsIgnoreCase(Name, "sphere"))
+	if (Name == "sphere")
 	{
 		Out = EBasicShape::Sphere;
 		return true;
 	}
-	if (EqualsIgnoreCase(Name, "plane"))
+	if (Name == "plane")
 	{
 		Out = EBasicShape::Plane;
 		return true;
@@ -32,25 +23,24 @@ bool TryParseBasicShapeName(std::string_view Name, EBasicShape& Out)
 	return false;
 }
 
-bool IsBlockingVolumeName(std::string_view Name)
+bool IsBlockingVolumeName(const FString& Name)
 {
-	return EqualsIgnoreCase(Name, "blockingvolume");
+	return Name == "blockingvolume";
 }
 
-bool IsPlayerStartName(std::string_view Name)
+bool IsPlayerStartName(const FString& Name)
 {
-	return EqualsIgnoreCase(Name, "playerstart");
+	return Name == "playerstart";
 }
 
-bool TryParseBasicLightName(std::string_view Name, EBasicLight& Out)
+bool TryParseBasicLightName(const FString& Name, EBasicLight& Out)
 {
-	if (EqualsIgnoreCase(Name, "directionallight") || EqualsIgnoreCase(Name, "directional") ||
-		EqualsIgnoreCase(Name, "dirlight"))
+	if (Name == "directionallight" || Name == "directional" || Name == "dirlight")
 	{
 		Out = EBasicLight::Directional;
 		return true;
 	}
-	if (EqualsIgnoreCase(Name, "pointlight") || EqualsIgnoreCase(Name, "point"))
+	if (Name == "pointlight" || Name == "point")
 	{
 		Out = EBasicLight::Point;
 		return true;

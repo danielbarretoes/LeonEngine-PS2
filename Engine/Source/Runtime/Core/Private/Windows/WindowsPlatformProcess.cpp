@@ -70,3 +70,8 @@ FString FWindowsPlatformProcess::GetCurrentWorkingDirectory()
 	Result.ReplaceCharInline('\\', '/');
 	return Result;
 }
+
+void FWindowsPlatformProcess::Sleep(float Seconds)
+{
+	::Sleep(static_cast<DWORD>(Seconds * 1000.0f));
+}

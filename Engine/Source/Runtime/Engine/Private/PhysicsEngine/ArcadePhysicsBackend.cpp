@@ -1,6 +1,5 @@
+#include "EngineLogs.h"
 #include "IPhysicsBackend.h"
-
-DEFINE_LOG_CATEGORY_STATIC(LogPhysics, Log, All);
 
 namespace
 {

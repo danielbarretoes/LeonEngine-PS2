@@ -4,7 +4,7 @@
 
 // Class-name parsers live in Content/LevelClassNames.cpp (shared with the level format / cook).
 
-FBasicLight FBasicLight::Directional(glm::vec3 RotationDegrees, glm::vec3 InLightColor, float InIntensity)
+FBasicLight FBasicLight::Directional(const FVector& RotationDegrees, const FVector& InLightColor, float InIntensity)
 {
 	FBasicLight Light;
 	Light.Type = EBasicLight::Directional;
@@ -15,7 +15,7 @@ FBasicLight FBasicLight::Directional(glm::vec3 RotationDegrees, glm::vec3 InLigh
 	return Light;
 }
 
-FBasicLight FBasicLight::Point(glm::vec3 Position, glm::vec3 InLightColor, float InIntensity, float InRange)
+FBasicLight FBasicLight::Point(const FVector& Position, const FVector& InLightColor, float InIntensity, float InRange)
 {
 	FBasicLight Light;
 	Light.Type = EBasicLight::Point;
@@ -54,10 +54,10 @@ void FBasicLight::AddTo(ULevel& Level) const
 	switch (Type)
 	{
 		case EBasicLight::Directional:
-			Level.GetDirectionalLights().push_back(AsDirectional());
+			Level.GetDirectionalLights().Add(AsDirectional());
 			break;
 		case EBasicLight::Point:
-			Level.GetPointLights().push_back(AsPoint());
+			Level.GetPointLights().Add(AsPoint());
 			break;
 	}
 }

@@ -5,14 +5,12 @@
 #include "GameFramework/Input.h"
 #include "GameFramework/InputActions.h"
 
-#include <glm/geometric.hpp>
-
 ADefaultCameraActor* ADefaultPlayerController::GetDefaultCameraActor() const
 {
 	return dynamic_cast<ADefaultCameraActor*>(GetPawn());
 }
 
-glm::vec3 ADefaultPlayerController::TickInput(UGameEngine& Engine)
+FVector ADefaultPlayerController::TickInput(UGameEngine& Engine)
 {
 	ADefaultCameraActor* CameraActor = GetDefaultCameraActor();
 	if (CameraActor == nullptr)
@@ -25,10 +23,10 @@ glm::vec3 ADefaultPlayerController::TickInput(UGameEngine& Engine)
 	const float RightAxis = Engine.GetInput().GetAxisValue(Leon::InputActions::MoveRight);
 	const float UpAxis = Engine.GetInput().GetAxisValue(Leon::InputActions::MoveUp);
 
-	glm::vec3 Wish = (Camera.ForwardVector() * ForwardAxis) + (Camera.RightVector() * RightAxis) +
-		(glm::vec3{0.0f, 1.0f, 0.0f} * UpAxis);
+	FVector Wish = (Camera.ForwardVector() * ForwardAxis) + (Camera.RightVector() * RightAxis) +
+		(FVector(0.0f, 1.0f, 0.0f) * UpAxis);
 
-	const float Len = glm::length(Wish);
+	const float Len = Wish.Size();
 	if (Len > 1.0e-4f)
 	{
 		Wish /= Len;

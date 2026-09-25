@@ -2,8 +2,6 @@
 
 #include "Components/ActorComponent.h"
 
-#include <algorithm>
-
 AActor::~AActor()
 {
 	// Members (root, Character mesh, …) destroy after this body. Clear registry first so
@@ -16,8 +14,8 @@ AActor::~AActor()
 			Component->Owner = nullptr;
 		}
 	}
-	Components.clear();
-	OwnedComponents.clear();
+	Components.Empty();
+	OwnedComponents.Empty();
 }
 
 void AActor::RegisterComponent(UActorComponent* Component)
@@ -28,7 +26,7 @@ void AActor::RegisterComponent(UActorComponent* Component)
 	}
 	Component->SetOwner(this);
 	Component->bRegistered = true;
-	Components.push_back(Component);
+	Components.Add(Component);
 	// CreateDefaultSubobject after SpawnActor: match Unreal late-register BeginPlay.
 	if (bHasBegunPlay)
 	{
@@ -42,7 +40,7 @@ void AActor::UnregisterComponent(UActorComponent* Component)
 	{
 		return;
 	}
-	Components.erase(std::remove(Components.begin(), Components.end(), Component), Components.end());
+	Components.Remove(Component);
 	Component->bRegistered = false;
 }
 

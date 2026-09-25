@@ -1,6 +1,9 @@
 #include "GameApplication.h"
 
+#include "CoreGlobals.h"
 #include "GameFramework/DefaultGameMode.h"
+#include "HAL/PlatformProcess.h"
+#include "HAL/PlatformTime.h"
 #include "Level/LevelLoader.h"
 #include "Misc/App.h"
 #include "Misc/CommandLine.h"
@@ -9,24 +12,22 @@
 #include "Misc/Paths.h"
 #include "RuntimeInput.h"
 
-#include <algorithm>
-#include <iostream>
-#include <string>
-#include <thread>
+DEFINE_LOG_CATEGORY_STATIC(LogLaunch, Log, All);
 
 namespace
 {
 
-	constexpr const char* DefaultMap = "LevelTemplates/Starter.llev";
+	constexpr const TCHAR* DefaultMap = "LevelTemplates/Starter.llev";
 
-	/// A path as given (absolute or relative to the working directory), else a legacy content key under Engine/Content.
-	[[nodiscard]] std::string ResolveMapPath(const FString& Map)
+	/** A path as given (absolute or relative to the working directory), else a legacy content key under Engine/Content.
+	 */
+	[[nodiscard]] FString ResolveMapPath(const FString& Map)
 	{
 		if (FPaths::FileExists(Map))
 		{
-			return std::string(*FPaths::ConvertRelativePathToFull(Map));
+			return FString(*FPaths::ConvertRelativePathToFull(Map));
 		}
-		return std::string(*FPaths::ResolveLegacyContentPath(Map));
+		return FString(*FPaths::ResolveLegacyContentPath(Map));
 	}
 
 	[[nodiscard]] int32 GetEngineInt(const TCHAR* Section, const TCHAR* Key, int32 Default)
@@ -70,27 +71,26 @@ bool FGameApplication::Init()
 	{
 		Map = DefaultMap;
 	}
-	const std::string MapPath = ResolveMapPath(Map);
+	const FString MapPath = ResolveMapPath(Map);
 
 	const int32 ResolutionX = GetEngineInt("/Script/Engine.GameViewportClient", "DefaultResolutionX", 1280);
 	const int32 ResolutionY = GetEngineInt("/Script/Engine.GameViewportClient", "DefaultResolutionY", 720);
-	const std::string Title =
-		FApp::HasProjectName() ? std::string("Leon - ") + FApp::GetProjectName() : std::string("Leon");
+	const FString Title = FApp::HasProjectName() ? FString("Leon - ") + FApp::GetProjectName() : FString("Leon");
 
-	Engine = std::make_unique<UGameEngine>();
+	Engine = MakeUnique<UGameEngine>();
 	if (bHeadless)
 	{
 		if (!Engine->InitializeHeadless())
 		{
-			std::cerr << "Failed to initialize headless engine\n";
-			Engine.reset();
+			UE_LOG(LogLaunch, Error, "Failed to initialize headless engine");
+			Engine.Reset();
 			return false;
 		}
 	}
-	else if (!Engine->Initialize(ResolutionX, ResolutionY, Title.c_str()))
+	else if (!Engine->Initialize(ResolutionX, ResolutionY, *Title))
 	{
-		std::cerr << "Failed to initialize engine\n";
-		Engine.reset();
+		UE_LOG(LogLaunch, Error, "Failed to initialize engine");
+		Engine.Reset();
 		return false;
 	}
 	if (bShowStats && !bHeadless)
@@ -104,24 +104,24 @@ bool FGameApplication::Init()
 
 	if (!LoadLevelFile(*Engine, MapPath))
 	{
-		std::cerr << "Failed to load map '" << *Map << "'\n";
+		UE_LOG(LogLaunch, Error, "Failed to load map '%s'", *Map);
 		Engine->Shutdown();
-		Engine.reset();
+		Engine.Reset();
 		return false;
 	}
-	GameMode = std::make_unique<ADefaultGameMode>();
+	GameMode = MakeUnique<ADefaultGameMode>();
 	GameMode->OnEnter(*Engine, MapPath);
 
 	if (bHeadless)
 	{
-		std::cout << "Running '" << MapPath << "' headless @ " << TickHz << " Hz (Ctrl+C to stop)\n";
-		NextHeadlessTick = std::chrono::steady_clock::now();
+		UE_LOG(LogLaunch, Log, "Running '%s' headless @ %g Hz (Ctrl+C to stop)", *MapPath, static_cast<double>(TickHz));
+		NextHeadlessTick = FPlatformTime::Seconds();
 	}
 	else
 	{
 		Engine->Start();
 	}
-	LastFrameTime = std::chrono::steady_clock::now();
+	LastFrameTime = FPlatformTime::Seconds();
 	return true;
 }
 
@@ -140,22 +140,23 @@ bool FGameApplication::Tick()
 			return false;
 		}
 		GameMode->Tick(*Engine, StepSeconds);
-		using FClock = std::chrono::steady_clock;
-		NextHeadlessTick += std::chrono::duration_cast<FClock::duration>(std::chrono::duration<double>(StepSeconds));
-		const auto Now = FClock::now();
+		// Keep the console current when stdout is redirected (CI smoke, servers stopped with Ctrl+C).
+		GLog->Flush();
+		NextHeadlessTick += static_cast<double>(StepSeconds);
+		const double Now = FPlatformTime::Seconds();
 		if (NextHeadlessTick < Now)
 		{
 			NextHeadlessTick = Now; // fell behind: resync instead of spiralling
 		}
 		else
 		{
-			std::this_thread::sleep_until(NextHeadlessTick);
+			FPlatformProcess::Sleep(static_cast<float>(NextHeadlessTick - Now));
 		}
 		return Engine->IsRunning();
 	}
 
-	const auto Now = std::chrono::steady_clock::now();
-	const float DeltaTime = std::min(std::chrono::duration<float>(Now - LastFrameTime).count(), 0.1f);
+	const double Now = FPlatformTime::Seconds();
+	const float DeltaTime = FMath::Min(static_cast<float>(Now - LastFrameTime), 0.1f);
 	LastFrameTime = Now;
 	return Engine->Tick(DeltaTime, [this](float Dt) { GameMode->Tick(*Engine, Dt); });
 }
@@ -166,10 +167,10 @@ void FGameApplication::Exit()
 	{
 		GameMode->OnExit(*Engine);
 	}
-	GameMode.reset();
+	GameMode.Reset();
 	if (Engine)
 	{
 		Engine->Shutdown();
-		Engine.reset();
+		Engine.Reset();
 	}
 }

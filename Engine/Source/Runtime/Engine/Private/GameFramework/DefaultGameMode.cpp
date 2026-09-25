@@ -2,33 +2,26 @@
 
 #include "GameFramework/DefaultCameraActor.h"
 
-#include <glm/geometric.hpp>
-#include <glm/gtc/constants.hpp>
-#include <glm/vec3.hpp>
-
-#include <algorithm>
-#include <cmath>
-
 namespace
 {
 
 	void BeginFreeLookFromOrbit(UCameraComponent& Camera)
 	{
-		const glm::vec3 Eye = Camera.GetCameraLocation();
-		const glm::vec3 LocalTarget = Camera.GetTarget();
-		glm::vec3 Look = LocalTarget - Eye;
-		const float LookLen = glm::length(Look);
+		const FVector Eye = Camera.GetCameraLocation();
+		const FVector LocalTarget = Camera.GetTarget();
+		FVector Look = LocalTarget - Eye;
+		const float LookLen = Look.Size();
 		if (LookLen > 1.0e-5f)
 		{
 			Look /= LookLen;
 		}
 		else
 		{
-			Look = glm::vec3{0.0f, 0.0f, -1.0f};
+			Look = FVector(0.0f, 0.0f, -1.0f);
 		}
 
-		const float Pitch = std::asin(std::clamp(Look.y, -1.0f, 1.0f)) * (180.0f / glm::pi<float>());
-		const float Yaw = std::atan2(Look.z, Look.x) * (180.0f / glm::pi<float>());
+		const float Pitch = FMath::Asin(FMath::Clamp(Look.Y, -1.0f, 1.0f)) * (180.0f / PI);
+		const float Yaw = FMath::Atan2(Look.Z, Look.X) * (180.0f / PI);
 
 		Camera.SetMode(ECameraMode::FreeLook);
 		Camera.SetEyeLocation(Eye);
@@ -37,7 +30,7 @@ namespace
 
 } // namespace
 
-void ADefaultGameMode::OnEnter(UGameEngine& Engine, const std::string& /*levelPath*/)
+void ADefaultGameMode::OnEnter(UGameEngine& Engine, const FString& /*levelPath*/)
 {
 	Player.UnPossess();
 	GetWorld().Clear();
@@ -69,7 +62,7 @@ void ADefaultGameMode::OnEnter(UGameEngine& Engine, const std::string& /*levelPa
 	bMouseLookSampleValid = false;
 
 	Engine.AddOnScreenDebugMessage(
-		"DefaultCameraActor — mouse look, WASD fly, Q/E up/down", 5.0f, {0.35f, 0.95f, 0.55f});
+		"DefaultCameraActor -- mouse look, WASD fly, Q/E up/down", 5.0f, {0.35f, 0.95f, 0.55f});
 }
 
 void ADefaultGameMode::OnExit(UGameEngine& Engine)
@@ -125,8 +118,8 @@ void ADefaultGameMode::Tick(UGameEngine& Engine, float DeltaTime)
 		bMouseLookSampleValid = false;
 	}
 
-	const glm::vec3 Wish = Player.TickInput(Engine);
-	glm::vec3 Location = CameraActor->GetActorLocation();
+	const FVector Wish = Player.TickInput(Engine);
+	FVector Location = CameraActor->GetActorLocation();
 	Location += Wish * CameraActor->GetMoveSpeed() * DeltaTime;
 	CameraActor->SetActorLocation(Location);
 	CameraActor->SetActorYaw(Camera.GetYawDegrees());

@@ -1,14 +1,18 @@
 #pragma once
 
+#include "CoreMinimal.h"
+
 class AActor;
 
-/// Unreal-like UActorComponent (no U-prefix): non-transform logic + tick hooks.
-///
-/// Contract (Leon, not full UE):
-/// - Prefer **member** components (`RegisterComponent`) for defaults (Character mesh, root).
-/// - Use `CreateDefaultSubobject<T>()` for heap-owned extras on the Actor.
-/// - `Level::StaticMeshComponent` remains a level POD — not an UActorComponent.
-/// - No reflection / Blueprint; no CreateDefaultSubobject name registry.
+/**
+ * Unreal-like UActorComponent (no U-prefix): non-transform logic + tick hooks.
+ *
+ * Contract (Leon, not full UE):
+ * - Prefer **member** components (RegisterComponent) for defaults (Character mesh, root).
+ * - Use CreateDefaultSubobject<T>() for heap-owned extras on the Actor.
+ * - Level::StaticMeshComponent remains a level POD — not an UActorComponent.
+ * - No reflection / Blueprint; no CreateDefaultSubobject name registry.
+ */
 class ENGINE_API UActorComponent
 {
 public:
@@ -48,12 +52,12 @@ public:
 	virtual void EndPlay()
 	{
 	}
-	/// Only called when `IsComponentTickEnabled()` (off by default).
+	/** Only called when IsComponentTickEnabled() (off by default). */
 	virtual void TickComponent(float /*deltaTime*/)
 	{
 	}
 
-	/// Unregister from owner. Subclasses may detach scene links first.
+	/** Unregister from owner. Subclasses may detach scene links first. */
 	virtual void DestroyComponent();
 
 protected:

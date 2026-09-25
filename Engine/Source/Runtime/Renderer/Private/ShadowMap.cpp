@@ -1,14 +1,9 @@
 #include "ShadowMap.h"
 
-#include <glad/glad.h>
-#include <glm/geometric.hpp>
-#include <glm/gtc/matrix_transform.hpp>
+#include "LegacyGLMath.h"
+#include "RendererLog.h"
 
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <iostream>
-#include <limits>
+#include <glad/glad.h>
 
 FShadowMap::~FShadowMap()
 {
@@ -18,7 +13,7 @@ FShadowMap::~FShadowMap()
 bool FShadowMap::Create(int InSize)
 {
 	Destroy();
-	InSize = std::max(InSize, 64);
+	InSize = FMath::Max(InSize, 64);
 	Size = InSize;
 
 	glGenFramebuffers(1, &Fbo);
@@ -30,8 +25,8 @@ bool FShadowMap::Create(int InSize)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-	const std::array<float, 4> Border = {1.0f, 1.0f, 1.0f, 1.0f};
-	glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, Border.data());
+	const float Border[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+	glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, Border);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, Fbo);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, DepthTexture, 0);
@@ -42,7 +37,7 @@ bool FShadowMap::Create(int InSize)
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	if (Status != GL_FRAMEBUFFER_COMPLETE)
 	{
-		std::cerr << "ShadowMap framebuffer incomplete\n";
+		UE_LOG(LogRenderer, Error, "ShadowMap framebuffer incomplete");
 		Destroy();
 		return false;
 	}
@@ -90,55 +85,55 @@ void FShadowMap::BindDepthTexture(unsigned int Unit) const
 	glBindTexture(GL_TEXTURE_2D, DepthTexture);
 }
 
-glm::mat4 FShadowMap::FitLightSpaceMatrix(
-	const glm::vec3& LightDirection, const glm::vec3& WorldMin, const glm::vec3& WorldMax, float Padding)
+FMatrix FShadowMap::FitLightSpaceMatrix(
+	const FVector& LightDirection, const FVector& WorldMin, const FVector& WorldMax, float Padding)
 {
-	glm::vec3 Dir = LightDirection;
-	if (glm::dot(Dir, Dir) < 1e-8f)
+	FVector Dir = LightDirection;
+	if ((Dir | Dir) < 1e-8f)
 	{
-		Dir = {0.35f, -1.0f, -0.45f};
+		Dir = FVector(0.35f, -1.0f, -0.45f);
 	}
-	Dir = glm::normalize(Dir);
+	Dir = LegacyGL::Normalize(Dir);
 
-	const glm::vec3 Center = (WorldMin + WorldMax) * 0.5f;
-	const glm::vec3 Extents = (WorldMax - WorldMin) * 0.5f + glm::vec3(Padding);
-	const float Radius = glm::length(Extents);
+	const FVector Center = (WorldMin + WorldMax) * 0.5f;
+	const FVector Extents = (WorldMax - WorldMin) * 0.5f + FVector(Padding);
+	const float Radius = Extents.Size();
 
-	glm::vec3 Up{0.0f, 1.0f, 0.0f};
-	if (std::abs(glm::dot(Dir, Up)) > 0.95f)
+	FVector Up(0.0f, 1.0f, 0.0f);
+	if (FMath::Abs(Dir | Up) > 0.95f)
 	{
-		Up = {0.0f, 0.0f, 1.0f};
+		Up = FVector(0.0f, 0.0f, 1.0f);
 	}
 
-	const glm::vec3 Eye = Center - (Dir * (Radius + 1.0f));
-	const glm::mat4 LightView = glm::lookAt(Eye, Center, Up);
+	const FVector Eye = Center - (Dir * (Radius + 1.0f));
+	const FMatrix LightView = LegacyGL::LookAt(Eye, Center, Up);
 
-	glm::vec3 MinLs(std::numeric_limits<float>::max());
-	glm::vec3 MaxLs(std::numeric_limits<float>::lowest());
+	FVector MinLs(TNumericLimits<float>::Max());
+	FVector MaxLs(TNumericLimits<float>::Lowest());
 
-	const std::array<glm::vec3, 8> Corners = {{
-		{WorldMin.x, WorldMin.y, WorldMin.z},
-		{WorldMax.x, WorldMin.y, WorldMin.z},
-		{WorldMin.x, WorldMax.y, WorldMin.z},
-		{WorldMax.x, WorldMax.y, WorldMin.z},
-		{WorldMin.x, WorldMin.y, WorldMax.z},
-		{WorldMax.x, WorldMin.y, WorldMax.z},
-		{WorldMin.x, WorldMax.y, WorldMax.z},
-		{WorldMax.x, WorldMax.y, WorldMax.z},
-	}};
+	const FVector Corners[8] = {
+		FVector(WorldMin.X, WorldMin.Y, WorldMin.Z),
+		FVector(WorldMax.X, WorldMin.Y, WorldMin.Z),
+		FVector(WorldMin.X, WorldMax.Y, WorldMin.Z),
+		FVector(WorldMax.X, WorldMax.Y, WorldMin.Z),
+		FVector(WorldMin.X, WorldMin.Y, WorldMax.Z),
+		FVector(WorldMax.X, WorldMin.Y, WorldMax.Z),
+		FVector(WorldMin.X, WorldMax.Y, WorldMax.Z),
+		FVector(WorldMax.X, WorldMax.Y, WorldMax.Z),
+	};
 
-	for (const glm::vec3& Corner : Corners)
+	for (const FVector& Corner : Corners)
 	{
-		const glm::vec3 Ls = glm::vec3(LightView * glm::vec4(Corner, 1.0f));
-		MinLs = glm::min(MinLs, Ls);
-		MaxLs = glm::max(MaxLs, Ls);
+		const FVector Ls = LegacyGL::TransformPoint(LightView, Corner);
+		MinLs = MinLs.ComponentMin(Ls);
+		MaxLs = MaxLs.ComponentMax(Ls);
 	}
 
 	// Eye-space Z is negative in front of the light camera.
-	const float ZNear = std::max(0.05f, -MaxLs.z + Padding);
-	const float ZFar = std::max(ZNear + 0.1f, -MinLs.z + Padding);
+	const float ZNear = FMath::Max(0.05f, -MaxLs.Z + Padding);
+	const float ZFar = FMath::Max(ZNear + 0.1f, -MinLs.Z + Padding);
 
-	const glm::mat4 LightProj =
-		glm::ortho(MinLs.x - Padding, MaxLs.x + Padding, MinLs.y - Padding, MaxLs.y + Padding, ZNear, ZFar);
-	return LightProj * LightView;
+	const FMatrix LightProj =
+		LegacyGL::Ortho(MinLs.X - Padding, MaxLs.X + Padding, MinLs.Y - Padding, MaxLs.Y + Padding, ZNear, ZFar);
+	return LegacyGL::Mul(LightProj, LightView);
 }

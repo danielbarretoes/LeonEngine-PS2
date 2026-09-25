@@ -1,63 +1,56 @@
 #include "Camera/CameraComponent.h"
 
-#include <glm/geometric.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-
-#include <algorithm>
-#include <cmath>
+#include "LegacyGLMath.h"
 
 namespace
 {
 
-	[[nodiscard]] glm::vec3 FreeLookForward(float InYawDegrees, float InPitchDegrees)
+	[[nodiscard]] FVector FreeLookForward(float InYawDegrees, float InPitchDegrees)
 	{
-		const float YawRad = glm::radians(InYawDegrees);
-		const float PitchRad = glm::radians(InPitchDegrees);
-		return glm::normalize(glm::vec3{
-			std::cos(PitchRad) * std::cos(YawRad),
-			std::sin(PitchRad),
-			std::cos(PitchRad) * std::sin(YawRad),
-		});
+		const float YawRad = LegacyGL::Radians(InYawDegrees);
+		const float PitchRad = LegacyGL::Radians(InPitchDegrees);
+		return LegacyGL::Normalize(FVector(FMath::Cos(PitchRad) * FMath::Cos(YawRad), FMath::Sin(PitchRad),
+			FMath::Cos(PitchRad) * FMath::Sin(YawRad)));
 	}
 
-	/// Stable up for lookAt when looking nearly straight up/down (ortho Top).
-	[[nodiscard]] glm::vec3 FreeLookWorldUp(float InYawDegrees, float InPitchDegrees)
+	/** Stable up for lookAt when looking nearly straight up/down (ortho Top). */
+	[[nodiscard]] FVector FreeLookWorldUp(float InYawDegrees, float InPitchDegrees)
 	{
 		if (InPitchDegrees < -80.0f)
 		{
-			const float YawRad = glm::radians(InYawDegrees);
-			return glm::normalize(glm::vec3{std::cos(YawRad), 0.0f, std::sin(YawRad)});
+			const float YawRad = LegacyGL::Radians(InYawDegrees);
+			return LegacyGL::Normalize(FVector(FMath::Cos(YawRad), 0.0f, FMath::Sin(YawRad)));
 		}
 		if (InPitchDegrees > 80.0f)
 		{
-			const float YawRad = glm::radians(InYawDegrees);
-			return glm::normalize(glm::vec3{-std::cos(YawRad), 0.0f, -std::sin(YawRad)});
+			const float YawRad = LegacyGL::Radians(InYawDegrees);
+			return LegacyGL::Normalize(FVector(-FMath::Cos(YawRad), 0.0f, -FMath::Sin(YawRad)));
 		}
-		return glm::vec3{0.0f, 1.0f, 0.0f};
+		return FVector(0.0f, 1.0f, 0.0f);
 	}
 
 } // namespace
 
 void UCameraComponent::SetPerspective(float InFovDegrees, float InAspect, float InNearPlane, float InFarPlane)
 {
-	FovDegrees = std::clamp(InFovDegrees, 20.0f, 120.0f);
+	FovDegrees = FMath::Clamp(InFovDegrees, 20.0f, 120.0f);
 	Aspect = InAspect > 1.0e-4f ? InAspect : (16.0f / 9.0f);
 	NearPlane = InNearPlane;
 	FarPlane = InFarPlane;
 	bOrthographic = false;
-	Projection = glm::perspective(glm::radians(FovDegrees), Aspect, NearPlane, FarPlane);
+	Projection = LegacyGL::Perspective(LegacyGL::Radians(FovDegrees), Aspect, NearPlane, FarPlane);
 }
 
 void UCameraComponent::SetOrthographic(float Height, float InAspect, float InNearPlane, float InFarPlane)
 {
-	OrthoHeight = std::clamp(Height, 0.5f, 500.0f);
+	OrthoHeight = FMath::Clamp(Height, 0.5f, 500.0f);
 	Aspect = InAspect > 1.0e-4f ? InAspect : (16.0f / 9.0f);
 	NearPlane = InNearPlane;
 	FarPlane = InFarPlane;
 	bOrthographic = true;
 	const float HalfH = OrthoHeight * 0.5f;
 	const float HalfW = HalfH * Aspect;
-	Projection = glm::ortho(-HalfW, HalfW, -HalfH, HalfH, NearPlane, FarPlane);
+	Projection = LegacyGL::Ortho(-HalfW, HalfW, -HalfH, HalfH, NearPlane, FarPlane);
 }
 
 void UCameraComponent::SetOrthoHeight(float Height)
@@ -68,7 +61,7 @@ void UCameraComponent::SetOrthoHeight(float Height)
 	}
 	else
 	{
-		OrthoHeight = std::clamp(Height, 0.5f, 500.0f);
+		OrthoHeight = FMath::Clamp(Height, 0.5f, 500.0f);
 	}
 }
 
@@ -90,15 +83,15 @@ void UCameraComponent::SetMode(ECameraMode InMode)
 void UCameraComponent::Orbit(float DeltaYawDegrees, float DeltaPitchDegrees)
 {
 	YawDegrees += DeltaYawDegrees;
-	PitchDegrees = std::clamp(PitchDegrees + DeltaPitchDegrees, -89.0f, 89.0f);
+	PitchDegrees = FMath::Clamp(PitchDegrees + DeltaPitchDegrees, -89.0f, 89.0f);
 	InvalidateCache();
 }
 
 void UCameraComponent::Pan(float DeltaRight, float DeltaUp)
 {
-	const glm::vec3 Right = RightVector();
-	const glm::vec3 Up{0.0f, 1.0f, 0.0f};
-	const glm::vec3 Delta = Right * DeltaRight + Up * DeltaUp;
+	const FVector Right = RightVector();
+	const FVector Up = FVector(0.0f, 1.0f, 0.0f);
+	const FVector Delta = Right * DeltaRight + Up * DeltaUp;
 	if (Mode == ECameraMode::FreeLook)
 	{
 		Eye += Delta;
@@ -121,24 +114,24 @@ void UCameraComponent::Zoom(float DeltaDistance)
 
 void UCameraComponent::SetDistance(float InDistance)
 {
-	Distance = std::clamp(InDistance, 0.5f, 80.0f);
+	Distance = FMath::Clamp(InDistance, 0.5f, 80.0f);
 	InvalidateCache();
 }
 
 void UCameraComponent::SetYawPitch(float InYawDegrees, float InPitchDegrees)
 {
 	YawDegrees = InYawDegrees;
-	PitchDegrees = std::clamp(InPitchDegrees, -89.0f, 89.0f);
+	PitchDegrees = FMath::Clamp(InPitchDegrees, -89.0f, 89.0f);
 	InvalidateCache();
 }
 
-void UCameraComponent::SetTarget(const glm::vec3& InTarget)
+void UCameraComponent::SetTarget(const FVector& InTarget)
 {
 	Target = InTarget;
 	InvalidateCache();
 }
 
-void UCameraComponent::SetEyeLocation(const glm::vec3& InEye)
+void UCameraComponent::SetEyeLocation(const FVector& InEye)
 {
 	Eye = InEye;
 	InvalidateCache();
@@ -163,68 +156,65 @@ void UCameraComponent::UpdateCachedPosition() const
 		return;
 	}
 
-	const float YawRad = glm::radians(YawDegrees);
-	const float PitchRad = glm::radians(PitchDegrees);
+	const float YawRad = LegacyGL::Radians(YawDegrees);
+	const float PitchRad = LegacyGL::Radians(PitchDegrees);
 
 	CachedPosition = Target +
-		glm::vec3{
-			Distance * std::cos(PitchRad) * std::cos(YawRad),
-			Distance * std::sin(PitchRad),
-			Distance * std::cos(PitchRad) * std::sin(YawRad),
-		};
+		FVector(Distance * FMath::Cos(PitchRad) * FMath::Cos(YawRad), Distance * FMath::Sin(PitchRad),
+			Distance * FMath::Cos(PitchRad) * FMath::Sin(YawRad));
 	bCacheDirty = false;
 }
 
-glm::vec3 UCameraComponent::GetCameraLocation() const
+FVector UCameraComponent::GetCameraLocation() const
 {
 	UpdateCachedPosition();
 	return CachedPosition;
 }
 
-glm::vec3 UCameraComponent::ForwardVector() const
+FVector UCameraComponent::ForwardVector() const
 {
 	if (Mode == ECameraMode::FreeLook)
 	{
 		return FreeLookForward(YawDegrees, PitchDegrees);
 	}
 	UpdateCachedPosition();
-	const glm::vec3 ToTarget = Target - CachedPosition;
-	const float Len = glm::length(ToTarget);
+	const FVector ToTarget = Target - CachedPosition;
+	const float Len = ToTarget.Size();
 	if (Len < 1.0e-5f)
 	{
-		return glm::vec3{0.0f, 0.0f, -1.0f};
+		return FVector(0.0f, 0.0f, -1.0f);
 	}
 	return ToTarget / Len;
 }
 
-glm::vec3 UCameraComponent::RightVector() const
+FVector UCameraComponent::RightVector() const
 {
-	const glm::vec3 Forward = ForwardVector();
-	const glm::vec3 Up =
-		(Mode == ECameraMode::FreeLook) ? FreeLookWorldUp(YawDegrees, PitchDegrees) : glm::vec3{0.0f, 1.0f, 0.0f};
-	glm::vec3 Right = glm::cross(Forward, Up);
-	const float Len = glm::length(Right);
+	const FVector Forward = ForwardVector();
+	const FVector Up =
+		(Mode == ECameraMode::FreeLook) ? FreeLookWorldUp(YawDegrees, PitchDegrees) : FVector(0.0f, 1.0f, 0.0f);
+	FVector Right = FVector::CrossProduct(Forward, Up);
+	const float Len = Right.Size();
 	if (Len < 1.0e-5f)
 	{
-		Right = glm::cross(Forward, glm::vec3{0.0f, 0.0f, 1.0f});
-		const float Len2 = glm::length(Right);
+		Right = FVector::CrossProduct(Forward, FVector(0.0f, 0.0f, 1.0f));
+		const float Len2 = Right.Size();
 		if (Len2 < 1.0e-5f)
 		{
-			return glm::vec3{1.0f, 0.0f, 0.0f};
+			return FVector(1.0f, 0.0f, 0.0f);
 		}
 		return Right / Len2;
 	}
 	return Right / Len;
 }
 
-glm::mat4 UCameraComponent::ViewMatrix() const
+FMatrix UCameraComponent::ViewMatrix() const
 {
 	UpdateCachedPosition();
 	if (Mode == ECameraMode::FreeLook)
 	{
-		const glm::vec3 Forward = FreeLookForward(YawDegrees, PitchDegrees);
-		const glm::vec3 Up = FreeLookWorldUp(YawDegrees, PitchDegrees);
-		return glm::lookAt(CachedPosition, CachedPosition + Forward, Up);
+		const FVector Forward = FreeLookForward(YawDegrees, PitchDegrees);
+		const FVector Up = FreeLookWorldUp(YawDegrees, PitchDegrees);
+		return LegacyGL::LookAt(CachedPosition, CachedPosition + Forward, Up);
 	}
-	return glm::lookAt(CachedPosition, Target, glm::vec3{0.0f, 1.0f, 0.0f});
+	return LegacyGL::LookAt(CachedPosition, Target, FVector(0.0f, 1.0f, 0.0f));
 }

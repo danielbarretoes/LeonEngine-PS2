@@ -1,14 +1,9 @@
 #pragma once
 
 #include "AI/Navigation/NavigationSystem.h"
+#include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Physics/PhysScene.h"
-
-#include <cstdint>
-#include <memory>
-#include <type_traits>
-#include <utility>
-#include <vector>
 
 class ACharacter;
 class FDebugDraw;
@@ -22,7 +17,7 @@ struct ENGINE_API FWorldGameplayFrameParams
 	FSceneRenderer* Renderer = nullptr;
 	FDebugDraw* CollisionDebugDraw = nullptr;
 	FDebugDraw* NavMeshDebugDraw = nullptr;
-	/// When true, FPhysScene::Step uses these values instead of the first Character's movement.
+	/** When true, FPhysScene::Step uses these values instead of the first Character's movement. */
 	bool bOverridePhysicsStep = false;
 	float PhysicsDamping = 6.0f;
 	float PhysicsWalkBounds = 18.0f;
@@ -31,8 +26,10 @@ struct ENGINE_API FWorldGameplayFrameParams
 	float PhysicsSkin = 0.02f;
 };
 
-/// Owns spawned Actors + FPhysScene; ticks them and purges pending kills.
-/// Distinct from `Level` (map/visual content ≈ ULevel).
+/**
+ * Owns spawned Actors + FPhysScene; ticks them and purges pending kills.
+ * Distinct from Level (map/visual content ≈ ULevel).
+ */
 class ENGINE_API UWorld
 {
 public:
@@ -59,7 +56,7 @@ public:
 		return Physics;
 	}
 
-	/// Unreal-like UNavigationSystem lite (grid NavMesh for AI pathfinding).
+	/** Unreal-like UNavigationSystem lite (grid NavMesh for AI pathfinding). */
 	[[nodiscard]] UNavigationSystem& GetNavigationSystem()
 	{
 		return Navigation;
@@ -69,7 +66,7 @@ public:
 		return Navigation;
 	}
 
-	/// Recreate FPhysScene with another backend (clears bodies). Call before RegisterBodiesFromLevel.
+	/** Recreate FPhysScene with another backend (clears bodies). Call before RegisterBodiesFromLevel. */
 	void SetPhysicsBackend(EPhysicsBackend PhysicsBackend)
 	{
 		Physics = FPhysScene(PhysicsBackend);
@@ -78,19 +75,19 @@ public:
 	template <typename T, typename... ArgsType>
 	T* SpawnActor(ArgsType&&... Args)
 	{
-		static_assert(std::is_base_of_v<AActor, T>, "T must derive from Actor");
-		auto Owned = std::make_unique<T>(std::forward<ArgsType>(Args)...);
-		T* Raw = Owned.get();
+		static_assert(TIsDerivedFrom<T, AActor>::Value, "T must derive from Actor");
+		auto Owned = MakeUnique<T>(Forward<ArgsType>(Args)...);
+		T* Raw = Owned.Get();
 		Raw->World = this;
 		Raw->SetUniqueID(++NextUniqueID);
 		if (bTicking)
 		{
 			// Defer push_back so Tick iterators stay valid.
-			PendingSpawns.push_back(std::move(Owned));
+			PendingSpawns.Add(MoveTemp(Owned));
 		}
 		else
 		{
-			Actors.push_back(std::move(Owned));
+			Actors.Add(MoveTemp(Owned));
 			Raw->BeginPlayComponents();
 			Raw->BeginPlay();
 		}
@@ -105,33 +102,33 @@ public:
 		}
 	}
 
-	/// Actor Tick only (UAnimInstance, etc.). Prefer `TickGameplayFrame` for Character worlds.
+	/** Actor Tick only (UAnimInstance, etc.). Prefer TickGameplayFrame for Character worlds. */
 	void Tick(float InDeltaTime);
 
-	/// Unreal-like frame: Character move → FPhysScene::Step → overlaps → Actor Tick → sync → draw.
+	/** Unreal-like frame: Character move → FPhysScene::Step → overlaps → Actor Tick → sync → draw. */
 	void TickGameplayFrame(const FWorldGameplayFrameParams& Params);
 
-	/// Register StaticMeshComponents that have collision as FPhysScene bodies (clears first).
+	/** Register StaticMeshComponents that have collision as FPhysScene bodies (clears first). */
 	void RegisterBodiesFromLevel(const ULevel& InLevel);
 
 	void SubmitSkeletalDraws(FSceneRenderer& InRenderer) const;
 
 	void Clear();
 
-	[[nodiscard]] std::size_t ActorCount() const
+	[[nodiscard]] SIZE_T ActorCount() const
 	{
-		return Actors.size();
+		return Actors.Num();
 	}
 
 	template <typename T>
 	[[nodiscard]] T* FindFirst() const
 	{
-		static_assert(std::is_base_of_v<AActor, T>, "T must derive from Actor");
+		static_assert(TIsDerivedFrom<T, AActor>::Value, "T must derive from Actor");
 		for (const auto& Actor : Actors)
 		{
 			if (Actor && !Actor->IsPendingKill())
 			{
-				if (T* Typed = dynamic_cast<T*>(Actor.get()))
+				if (T* Typed = dynamic_cast<T*>(Actor.Get()))
 				{
 					return Typed;
 				}
@@ -140,16 +137,16 @@ public:
 		return nullptr;
 	}
 
-	/// Visit every live Actor of type T.
+	/** Visit every live Actor of type T. */
 	template <typename T, typename TFn>
 	void ForEach(TFn&& Fn) const
 	{
-		static_assert(std::is_base_of_v<AActor, T>, "T must derive from Actor");
+		static_assert(TIsDerivedFrom<T, AActor>::Value, "T must derive from Actor");
 		for (const auto& Actor : Actors)
 		{
 			if (Actor && !Actor->IsPendingKill())
 			{
-				if (T* Typed = dynamic_cast<T*>(Actor.get()))
+				if (T* Typed = dynamic_cast<T*>(Actor.Get()))
 				{
 					Fn(*Typed);
 				}
@@ -157,7 +154,7 @@ public:
 		}
 	}
 
-	/// Visit every live Actor (any type).
+	/** Visit every live Actor (any type). */
 	template <typename TFn>
 	void ForEachActor(TFn&& Fn) const
 	{
@@ -173,13 +170,13 @@ public:
 private:
 	void FlushPendingSpawns();
 	void PurgePending();
-	/// Pairwise Character capsule depenetration (players / AI are not FPhysScene bodies).
+	/** Pairwise Character capsule depenetration (players / AI are not FPhysScene bodies). */
 	void ResolveCharacterOverlaps();
 
 	FPhysScene Physics{};
 	UNavigationSystem Navigation{};
-	std::vector<std::unique_ptr<AActor>> Actors;
-	std::vector<std::unique_ptr<AActor>> PendingSpawns;
+	TArray<TUniquePtr<AActor>> Actors;
+	TArray<TUniquePtr<AActor>> PendingSpawns;
 	bool bTicking = false;
-	std::uint64_t NextUniqueID = 0;
+	uint64 NextUniqueID = 0;
 };

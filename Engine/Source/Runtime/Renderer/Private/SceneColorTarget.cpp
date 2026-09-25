@@ -1,8 +1,8 @@
 #include "SceneColorTarget.h"
 
-#include <glad/glad.h>
+#include "RendererLog.h"
 
-#include <iostream>
+#include <glad/glad.h>
 
 FSceneColorTarget::~FSceneColorTarget()
 {
@@ -53,7 +53,7 @@ bool FSceneColorTarget::EnsureSize(int InWidth, int InHeight)
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	if (Status != GL_FRAMEBUFFER_COMPLETE)
 	{
-		std::cerr << "SceneColorTarget framebuffer incomplete\n";
+		UE_LOG(LogRenderer, Error, "SceneColorTarget framebuffer incomplete");
 		Destroy();
 		return false;
 	}

@@ -1,42 +1,68 @@
+#include "CoreMinimal.h"
 #include "Material.h"
 #include "MaterialAsset.h"
+#include "Misc/AutomationTest.h"
 
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <nlohmann/json.hpp>
 
-using Catch::Matchers::WithinAbs;
+#if WITH_DEV_AUTOMATION_TESTS
 
-TEST_CASE("roughnessFromShininess decreases with shininess", "[render][material]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMaterialRoughnessFromShininessDecreasesWithShininessTest,
+	"System.Renderer.Material.RoughnessFromShininessDecreasesWithShininess",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FMaterialRoughnessFromShininessDecreasesWithShininessTest::RunTest(const FString& Parameters)
 {
+	// Higher shininess gives lower roughness, kept within [0.04, 1].
 	const float RoughSoft = RoughnessFromShininess(8.0f);
 	const float RoughHard = RoughnessFromShininess(256.0f);
-	REQUIRE(RoughSoft > RoughHard);
-	REQUIRE(RoughHard >= 0.04f);
-	REQUIRE(RoughSoft <= 1.0f);
+	TestTrue("Shinier is smoother", RoughSoft > RoughHard);
+	TestTrue("Lower bound", RoughHard >= 0.04f);
+	TestTrue("Upper bound", RoughSoft <= 1.0f);
+	return true;
 }
 
-TEST_CASE("Material isTransparent uses alpha threshold", "[render][material]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMaterialIsTransparentUsesAlphaThresholdTest,
+	"System.Renderer.Material.IsTransparentUsesAlphaThreshold",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FMaterialIsTransparentUsesAlphaThresholdTest::RunTest(const FString& Parameters)
 {
+	// A material is transparent only when its alpha is below one.
 	FMaterial Mat;
 	Mat.Alpha = 1.0f;
-	REQUIRE_FALSE(Mat.IsTransparent());
+	TestFalse("Opaque", Mat.IsTransparent());
 	Mat.Alpha = 0.5f;
-	REQUIRE(Mat.IsTransparent());
+	TestTrue("Transparent", Mat.IsTransparent());
+	return true;
 }
 
-TEST_CASE("Material syncRoughnessFromShininess", "[render][material]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMaterialSyncRoughnessFromShininessTest,
+	"System.Renderer.Material.SyncRoughnessFromShininess",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FMaterialSyncRoughnessFromShininessTest::RunTest(const FString& Parameters)
 {
+	// SyncRoughnessFromShininess sets the roughness from the current shininess.
 	FMaterial Mat;
 	Mat.Shininess = 128.0f;
 	Mat.SyncRoughnessFromShininess();
-	REQUIRE_THAT(Mat.Roughness, WithinAbs(RoughnessFromShininess(128.0f), 1.0e-6f));
+	TestEqual("Roughness", Mat.Roughness, RoughnessFromShininess(128.0f), 1.0e-6f);
+	return true;
 }
 
-TEST_CASE("HasMaterialSurfaceFields detects surface keys", "[render][material]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMaterialHasMaterialSurfaceFieldsDetectsSurfaceKeysTest,
+	"System.Renderer.Material.HasMaterialSurfaceFieldsDetectsSurfaceKeys",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FMaterialHasMaterialSurfaceFieldsDetectsSurfaceKeysTest::RunTest(const FString& Parameters)
 {
-	REQUIRE(HasMaterialSurfaceFields({{"albedo", {1, 1, 1}}}));
-	REQUIRE(HasMaterialSurfaceFields({{"albedoMap", "checker"}}));
-	REQUIRE_FALSE(HasMaterialSurfaceFields({{"tag", "player"}}));
-	REQUIRE_FALSE(HasMaterialSurfaceFields(nlohmann::json::object()));
+	// Surface keys (albedo, maps) count as material fields; gameplay-only keys and empty objects do not.
+	TestTrue("albedo", HasMaterialSurfaceFields({{"albedo", {1, 1, 1}}}));
+	TestTrue("albedoMap", HasMaterialSurfaceFields({{"albedoMap", "checker"}}));
+	TestFalse("tag only", HasMaterialSurfaceFields({{"tag", "player"}}));
+	TestFalse("empty object", HasMaterialSurfaceFields(nlohmann::json::object()));
+	return true;
 }
+
+#endif // WITH_DEV_AUTOMATION_TESTS

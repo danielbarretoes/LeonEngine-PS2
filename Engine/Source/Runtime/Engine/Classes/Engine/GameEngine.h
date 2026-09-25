@@ -2,6 +2,7 @@
 
 #include "AudioDevice.h"
 #include "Camera/CameraComponent.h"
+#include "CoreMinimal.h"
 #include "Debug/DebugOverlay.h"
 #include "Engine/GameInstance.h"
 #include "Engine/Level.h"
@@ -12,24 +13,18 @@
 #include "ResourceCache.h"
 #include "SceneRenderer.h"
 
-#include <glm/vec3.hpp>
-
-#include <functional>
-#include <memory>
-#include <string>
-#include <type_traits>
-#include <utility>
-
-/// Top-level runtime: platform window (FGenericWindow), per-frame Tick, orbit-camera input, FPS overlay,
-/// UGameInstance, and a Level/FResourceCache filled by the level loader.
+/**
+ * Top-level runtime: platform window (FGenericWindow), per-frame Tick, orbit-camera input, FPS overlay,
+ * UGameInstance, and a Level/FResourceCache filled by the level loader.
+ */
 class ENGINE_API UGameEngine
 {
 public:
-	using FUpdateCallback = std::function<void(float DeltaTime)>;
-	/// Runs after PollEvents, before camera/input handling (level UI, etc.).
-	using FPreInputCallback = std::function<void()>;
-	/// Runs after the 3D + stats HUD pass (level browser chrome, etc.).
-	using FPostRenderCallback = std::function<void(int FbWidth, int FbHeight)>;
+	using FUpdateCallback = TFunction<void(float DeltaTime)>;
+	/** Runs after PollEvents, before camera/input handling (level UI, etc.). */
+	using FPreInputCallback = TFunction<void()>;
+	/** Runs after the 3D + stats HUD pass (level browser chrome, etc.). */
+	using FPostRenderCallback = TFunction<void(int32 FbWidth, int32 FbHeight)>;
 
 	UGameEngine();
 	~UGameEngine();
@@ -37,29 +32,31 @@ public:
 	UGameEngine(const UGameEngine&) = delete;
 	UGameEngine& operator=(const UGameEngine&) = delete;
 
-	bool Initialize(int Width, int Height, const char* Title);
-	/// No window / RHI — CPU meshes only. For dedicated servers.
+	bool Initialize(int32 Width, int32 Height, const TCHAR* Title);
+	/** No window / RHI — CPU meshes only. For dedicated servers. */
 	bool InitializeHeadless();
 	void Shutdown();
 
-	/// Announces the play controls (UE: UGameEngine::Start). Call once before the first Tick.
+	/** Announces the play controls (UE: UGameEngine::Start). Call once before the first Tick. */
 	void Start();
-	/// One windowed frame (UE: UGameEngine::Tick): input, update hook, HUD, render, present.
-	/// Returns false once the engine should stop (window closed or RequestQuit).
+	/**
+	 * One windowed frame (UE: UGameEngine::Tick): input, update hook, HUD, render, present.
+	 * Returns false once the engine should stop (window closed or RequestQuit).
+	 */
 	bool Tick(float DeltaTime, const FUpdateCallback& OnUpdate = {}, const FPreInputCallback& OnPreInput = {},
 		const FPostRenderCallback& OnPostRender = {});
-	/// Start + Tick until stopped (standalone loops; FEngineLoop drives Tick itself).
+	/** Start + Tick until stopped (standalone loops; FEngineLoop drives Tick itself). */
 	void Run(const FUpdateCallback& OnUpdate = {}, const FPreInputCallback& OnPreInput = {},
 		const FPostRenderCallback& OnPostRender = {});
-	/// Fixed-timestep simulation loop (no render / swap).
+	/** Fixed-timestep simulation loop (no render / swap). */
 	void RunHeadless(const FUpdateCallback& OnUpdate, float TickHz = 60.0f);
 
-	/// Editor PIE / custom loops: same audio listener + device tick as `Run`.
+	/** Editor PIE / custom loops: same audio listener + device tick as Run. */
 	void TickPlayAudio();
-	/// Editor PIE / custom loops: HUD widget tick + on-screen messages + optional F4 stats.
+	/** Editor PIE / custom loops: HUD widget tick + on-screen messages + optional F4 stats. */
 	void TickPlayHud(float DeltaTime);
-	/// Editor PIE / custom loops: paint HUD widgets + FDebugOverlay (call after DrawScene).
-	void PaintHudAndOverlay(int FramebufferWidth, int FramebufferHeight);
+	/** Editor PIE / custom loops: paint HUD widgets + FDebugOverlay (call after DrawScene). */
+	void PaintHudAndOverlay(int32 FramebufferWidth, int32 FramebufferHeight);
 
 	void RequestQuit()
 	{
@@ -147,14 +144,14 @@ public:
 	template <typename T, typename... ArgsType>
 	T* SetGameInstance(ArgsType&&... Args)
 	{
-		static_assert(std::is_base_of_v<UGameInstance, T>, "T must derive from GameInstance");
+		static_assert(TIsDerivedFrom<T, UGameInstance>::Value, "T must derive from GameInstance");
 		if (GameInstance && bInitialized)
 		{
 			GameInstance->Shutdown();
 		}
-		auto Owned = std::make_unique<T>(std::forward<ArgsType>(Args)...);
+		auto Owned = MakeUnique<T>(Forward<ArgsType>(Args)...);
 		T* Raw = Owned.get();
-		GameInstance = std::move(Owned);
+		GameInstance = MoveTemp(Owned);
 		if (bInitialized)
 		{
 			GameInstance->Init();
@@ -162,7 +159,7 @@ public:
 		return Raw;
 	}
 
-	/// When true, mouse look / orbit are paused (level browser chrome, etc.).
+	/** When true, mouse look / orbit are paused (level browser chrome, etc.). */
 	void SetSuppressCameraDrag(bool bSuppress)
 	{
 		bSuppressCameraDrag = bSuppress;
@@ -172,18 +169,20 @@ public:
 		return bSuppressCameraDrag;
 	}
 
-	/// Capture + hide OS cursor for continuous mouse look (enabled by default for all levels).
+	/** Capture + hide OS cursor for continuous mouse look (enabled by default for all levels). */
 	void SetCursorCaptured(bool bCaptured);
 	[[nodiscard]] bool IsCursorCaptured() const;
 
-	/// Optional secondary window for PIE "New Window" input / cursor capture.
-	/// Prefer `GetPlayInputTarget()` when configuring multiple fields; these remain the
-	/// Unreal-like convenience API used by GameMode / APlayerController.
+	/**
+	 * Optional secondary window for PIE "New Window" input / cursor capture.
+	 * Prefer GetPlayInputTarget() when configuring multiple fields; these remain the
+	 * Unreal-like convenience API used by GameMode / APlayerController.
+	 */
 	void SetPlayInputWindow(FGenericWindow* InWindow);
 	[[nodiscard]] FGenericWindow& GetPlayInputWindow();
 	[[nodiscard]] const FGenericWindow& GetPlayInputWindow() const;
 
-	/// Grouped PIE / multi-window play input state (window override + mouse-look gate).
+	/** Grouped PIE / multi-window play input state (window override + mouse-look gate). */
 	[[nodiscard]] FPlayInputTarget& GetPlayInputTarget()
 	{
 		return PlayInputTarget;
@@ -193,8 +192,10 @@ public:
 		return PlayInputTarget;
 	}
 
-	/// Editor PIE: when cursor is not OS-captured (Selected Viewport), mouse look only applies
-	/// while this is true (typically Viewport hovered / play window focused).
+	/**
+	 * Editor PIE: when cursor is not OS-captured (Selected Viewport), mouse look only applies
+	 * while this is true (typically Viewport hovered / play window focused).
+	 */
 	void SetPlayMouseLookActive(bool bActive)
 	{
 		PlayInputTarget.SetMouseLookActive(bActive);
@@ -204,19 +205,19 @@ public:
 		return PlayInputTarget.IsMouseLookActive();
 	}
 
-	/// When false, WASD/arrows do not tumble the orbit camera (gameplay may use them).
+	/** When false, WASD/arrows do not tumble the orbit camera (gameplay may use them). */
 	void SetKeyboardOrbitEnabled(bool bEnabled)
 	{
 		bKeyboardOrbitEnabled = bEnabled;
 	}
 
-	/// When false, Engine mouse orbit + scroll→camera zoom are off (games may drive SpringArm).
+	/** When false, Engine mouse orbit + scroll→camera zoom are off (games may drive SpringArm). */
 	void SetOrbitMouseEnabled(bool bEnabled)
 	{
 		bOrbitMouseEnabled = bEnabled;
 	}
 
-	/// F2 collision volumes debug (Engine tool flag — not owned by the forward FSceneRenderer).
+	/** F2 collision volumes debug (Engine tool flag — not owned by the forward FSceneRenderer). */
 	void SetCollisionDebugEnabled(bool bEnabled)
 	{
 		bCollisionDebugEnabled = bEnabled;
@@ -230,7 +231,7 @@ public:
 		return bCollisionDebugEnabled;
 	}
 
-	/// F3 NavMesh grid debug (walkable / blocked cells).
+	/** F3 NavMesh grid debug (walkable / blocked cells). */
 	void SetNavMeshDebugEnabled(bool bEnabled)
 	{
 		bNavMeshDebugEnabled = bEnabled;
@@ -244,32 +245,34 @@ public:
 		return bNavMeshDebugEnabled;
 	}
 
-	/// Consume accumulated mouse-wheel Y this frame (platform wheel units). Cleared after return.
-	/// When orbit mouse is enabled, Engine applies scroll to Orbit distance in handleInput first.
+	/**
+	 * Consume accumulated mouse-wheel Y this frame (platform wheel units). Cleared after return.
+	 * When orbit mouse is enabled, Engine applies scroll to Orbit distance in handleInput first.
+	 */
 	[[nodiscard]] float ConsumeScrollY();
 
-	/// Unreal-like Print String / AddOnScreenDebugMessage (top-left console; default red).
-	void AddOnScreenDebugMessage(
-		std::string Message, float DisplaySeconds = 2.0f, const glm::vec3& Color = {1.0f, 0.0f, 0.0f});
+	/** Unreal-like Print String / AddOnScreenDebugMessage (top-left console; default red). */
+	void AddOnScreenDebugMessage(const FString& Message, float DisplaySeconds = 2.0f,
+		const FLinearColor& Color = FLinearColor(1.0f, 0.0f, 0.0f));
 
-	/// Persistent top-center HUD line (cleared when empty). Games update each Tick.
-	void SetCenterHudText(std::string Text)
+	/** Persistent top-center HUD line (cleared when empty). Games update each Tick. */
+	void SetCenterHudText(FString Text)
 	{
-		CenterHudText = std::move(Text);
+		CenterHudText = MoveTemp(Text);
 	}
 	void ClearCenterHudText()
 	{
-		CenterHudText.clear();
+		CenterHudText.Empty();
 	}
 
-	/// Runtime FPS / RAM / TRI overlay (F4). Off by default so Shipping matches Viewport / PIE.
+	/** Runtime FPS / RAM / TRI overlay (F4). Off by default so Shipping matches Viewport / PIE. */
 	void SetHudStatsVisible(bool bVisible);
 	[[nodiscard]] bool IsHudStatsVisible() const
 	{
 		return bShowHudStats;
 	}
 
-	/// Unreal-like AHUD (UserWidgets / crosshair, etc.).
+	/** Unreal-like AHUD (UserWidgets / crosshair, etc.). */
 	[[nodiscard]] AHUD& GetHUD()
 	{
 		return Hud;
@@ -285,7 +288,7 @@ private:
 	void Render(const FPostRenderCallback& OnPostRender);
 	void UpdateHudStats(float DeltaTime);
 
-	std::unique_ptr<GenericApplication> Application;
+	TUniquePtr<GenericApplication> Application;
 	TSharedPtr<FGenericWindow> Window;
 	FPlayInputTarget PlayInputTarget;
 	UPlayerInput PlayerInput;
@@ -296,7 +299,7 @@ private:
 	UCameraComponent Camera;
 	ULevel Level;
 	FResourceCache Resources;
-	std::unique_ptr<UGameInstance> GameInstance;
+	TUniquePtr<UGameInstance> GameInstance;
 
 	bool bRunning = false;
 	bool bInitialized = false;
@@ -305,7 +308,7 @@ private:
 	bool bKeyboardOrbitEnabled = true;
 	bool bOrbitMouseEnabled = true;
 	float PendingScrollY = 0.0f;
-	std::string CenterHudText;
+	FString CenterHudText;
 
 	bool bMouseLookSampleValid = false;
 	bool bDebugKeyWasDown = false;
@@ -319,11 +322,11 @@ private:
 	double LastMouseX = 0.0;
 	double LastMouseY = 0.0;
 
-	int LastFbWidth = 0;
-	int LastFbHeight = 0;
+	int32 LastFbWidth = 0;
+	int32 LastFbHeight = 0;
 
 	float FpsAccumTime = 0.0f;
-	int FpsAccumFrames = 0;
+	int32 FpsAccumFrames = 0;
 	float DisplayFps = 0.0f;
 	float DisplayMs = 0.0f;
 };

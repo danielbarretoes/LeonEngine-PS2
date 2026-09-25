@@ -1,14 +1,9 @@
 #pragma once
 
-#include <cstdint>
-#include <functional>
-#include <string>
-#include <unordered_map>
-#include <utility>
-#include <vector>
+#include "CoreMinimal.h"
 
-/// Minimal Behavior Tree (Unreal BT lite): composites + leaf tasks over a string blackboard.
-enum class EBTNodeResult : std::uint8_t
+/** Minimal Behavior Tree (Unreal BT lite): composites + leaf tasks over a string blackboard. */
+enum class EBTNodeResult : uint8
 {
 	Succeeded = 0,
 	Failed = 1,
@@ -18,46 +13,46 @@ enum class EBTNodeResult : std::uint8_t
 class AIMODULE_API UBlackboardComponent
 {
 public:
-	void SetBool(const std::string& InKey, bool bValue)
+	void SetBool(const FString& InKey, bool bValue)
 	{
-		Bools[InKey] = bValue;
+		Bools.Add(InKey, bValue);
 	}
-	void SetFloat(const std::string& InKey, float Value)
+	void SetFloat(const FString& InKey, float Value)
 	{
-		Floats[InKey] = Value;
+		Floats.Add(InKey, Value);
 	}
-	void SetInt(const std::string& InKey, int Value)
+	void SetInt(const FString& InKey, int32 Value)
 	{
-		Ints[InKey] = Value;
+		Ints.Add(InKey, Value);
 	}
 
-	[[nodiscard]] bool GetBool(const std::string& InKey, bool bFallback = false) const
+	[[nodiscard]] bool GetBool(const FString& InKey, bool bFallback = false) const
 	{
-		const auto It = Bools.find(InKey);
-		return It != Bools.end() ? It->second : bFallback;
+		const bool* Value = Bools.Find(InKey);
+		return Value != nullptr ? *Value : bFallback;
 	}
-	[[nodiscard]] float GetFloat(const std::string& InKey, float Fallback = 0.0f) const
+	[[nodiscard]] float GetFloat(const FString& InKey, float Fallback = 0.0f) const
 	{
-		const auto It = Floats.find(InKey);
-		return It != Floats.end() ? It->second : Fallback;
+		const float* Value = Floats.Find(InKey);
+		return Value != nullptr ? *Value : Fallback;
 	}
-	[[nodiscard]] int GetInt(const std::string& InKey, int Fallback = 0) const
+	[[nodiscard]] int32 GetInt(const FString& InKey, int32 Fallback = 0) const
 	{
-		const auto It = Ints.find(InKey);
-		return It != Ints.end() ? It->second : Fallback;
+		const int32* Value = Ints.Find(InKey);
+		return Value != nullptr ? *Value : Fallback;
 	}
 
 	void Clear()
 	{
-		Bools.clear();
-		Floats.clear();
-		Ints.clear();
+		Bools.Empty();
+		Floats.Empty();
+		Ints.Empty();
 	}
 
 private:
-	std::unordered_map<std::string, bool> Bools;
-	std::unordered_map<std::string, float> Floats;
-	std::unordered_map<std::string, int> Ints;
+	TMap<FString, bool> Bools;
+	TMap<FString, float> Floats;
+	TMap<FString, int32> Ints;
 };
 
 struct AIMODULE_API UBTNode
@@ -66,12 +61,12 @@ struct AIMODULE_API UBTNode
 	virtual EBTNodeResult Tick(UBlackboardComponent& InBoard, float DeltaTime) = 0;
 };
 
-/// Run children in order until one fails (Unreal Sequence).
+/** Run children in order until one fails (Unreal Sequence). */
 class AIMODULE_API UBTComposite_Sequence final : public UBTNode
 {
 public:
-	explicit UBTComposite_Sequence(std::vector<UBTNode*> InChildren)
-		: Children(std::move(InChildren))
+	explicit UBTComposite_Sequence(TArray<UBTNode*> InChildren)
+		: Children(MoveTemp(InChildren))
 	{
 	}
 	EBTNodeResult Tick(UBlackboardComponent& InBoard, float DeltaTime) override
@@ -92,15 +87,15 @@ public:
 	}
 
 private:
-	std::vector<UBTNode*> Children;
+	TArray<UBTNode*> Children;
 };
 
-/// Run children until one succeeds (Unreal Selector).
+/** Run children until one succeeds (Unreal Selector). */
 class AIMODULE_API UBTComposite_Selector final : public UBTNode
 {
 public:
-	explicit UBTComposite_Selector(std::vector<UBTNode*> InChildren)
-		: Children(std::move(InChildren))
+	explicit UBTComposite_Selector(TArray<UBTNode*> InChildren)
+		: Children(MoveTemp(InChildren))
 	{
 	}
 	EBTNodeResult Tick(UBlackboardComponent& InBoard, float DeltaTime) override
@@ -121,15 +116,15 @@ public:
 	}
 
 private:
-	std::vector<UBTNode*> Children;
+	TArray<UBTNode*> Children;
 };
 
-/// Leaf: succeed when blackboard bool is true.
+/** Leaf: succeed when blackboard bool is true. */
 class AIMODULE_API UBTDecorator_Bool final : public UBTNode
 {
 public:
-	UBTDecorator_Bool(std::string InKey, bool bInExpected = true)
-		: Key(std::move(InKey))
+	UBTDecorator_Bool(FString InKey, bool bInExpected = true)
+		: Key(MoveTemp(InKey))
 		, bExpected(bInExpected)
 	{
 	}
@@ -139,17 +134,17 @@ public:
 	}
 
 private:
-	std::string Key;
+	FString Key;
 	bool bExpected = true;
 };
 
-/// Leaf: invoke a callback (Succeeded/Failed/Running).
+/** Leaf: invoke a callback (Succeeded/Failed/Running). */
 class AIMODULE_API UBTTask_Action final : public UBTNode
 {
 public:
-	using FTaskFunction = std::function<EBTNodeResult(UBlackboardComponent&, float)>;
+	using FTaskFunction = TFunction<EBTNodeResult(UBlackboardComponent&, float)>;
 	explicit UBTTask_Action(FTaskFunction InFn)
-		: Fn(std::move(InFn))
+		: Fn(MoveTemp(InFn))
 	{
 	}
 	EBTNodeResult Tick(UBlackboardComponent& InBoard, float DeltaTime) override
@@ -161,7 +156,7 @@ private:
 	FTaskFunction Fn;
 };
 
-/// Owns a root node pointer (non-owning children — caller owns node storage).
+/** Owns a root node pointer (non-owning children — caller owns node storage). */
 class AIMODULE_API UBehaviorTree
 {
 public:

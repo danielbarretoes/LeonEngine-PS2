@@ -100,21 +100,14 @@ struct TIsSame
 template <typename From, typename To>
 struct TIsConvertible
 {
-	enum
-	{
-		Value = std::is_convertible_v < From,
-		To >
-	};
+	static constexpr bool Value = std::is_convertible_v<From, To>;
 };
 
-template <typename Base, typename Derived>
+/** True when DerivedType is BaseType or derives from it (UE argument order: derived first). */
+template <typename DerivedType, typename BaseType>
 struct TIsDerivedFrom
 {
-	enum
-	{
-		Value = std::is_base_of_v < Base,
-		Derived >
-	};
+	static constexpr bool Value = std::is_base_of_v<BaseType, DerivedType>;
 };
 
 template <typename T>

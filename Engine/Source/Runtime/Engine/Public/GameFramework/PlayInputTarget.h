@@ -1,10 +1,13 @@
 #pragma once
 
+#include "CoreMinimal.h"
 #include "GenericPlatform/GenericWindow.h"
 
-/// Routes play-mode input to an optional secondary `Window` (Editor PIE New Window).
-/// Shipping leaves the override unset — `Resolve` returns the main Engine window.
-/// Unreal analogy: focus the play viewport for input without a separate UObject.
+/**
+ * Routes play-mode input to an optional secondary Window (Editor PIE New Window).
+ * Shipping leaves the override unset — Resolve returns the main Engine window.
+ * Unreal analogy: focus the play viewport for input without a separate UObject.
+ */
 class ENGINE_API FPlayInputTarget
 {
 public:
@@ -30,7 +33,7 @@ public:
 		return Window != nullptr ? *Window : MainWindow;
 	}
 
-	/// When cursor is not OS-captured (Selected Viewport PIE), mouse look only while active.
+	/** When cursor is not OS-captured (Selected Viewport PIE), mouse look only while active. */
 	void SetMouseLookActive(bool bActive)
 	{
 		bMouseLookActive = bActive;

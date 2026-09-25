@@ -7,7 +7,7 @@ FUniformBuffer::~FUniformBuffer()
 	Destroy();
 }
 
-bool FUniformBuffer::Create(std::size_t InSizeBytes, unsigned int InBindingPoint)
+bool FUniformBuffer::Create(SIZE_T InSizeBytes, unsigned int InBindingPoint)
 {
 	Destroy();
 	if (InSizeBytes == 0)
@@ -37,7 +37,7 @@ void FUniformBuffer::Destroy()
 	SizeBytes = 0;
 }
 
-void FUniformBuffer::Update(const void* Data, std::size_t InSizeBytes) const
+void FUniformBuffer::Update(const void* Data, SIZE_T InSizeBytes) const
 {
 	if (!Valid() || Data == nullptr || InSizeBytes == 0 || InSizeBytes > SizeBytes)
 	{

@@ -4,24 +4,21 @@
 #include "GameFramework/Actor.h"
 #include "GameFramework/Character.h"
 
-#include <glm/geometric.hpp>
-
-#include <algorithm>
-#include <cmath>
-
 namespace
 {
 
 	constexpr float PathRebuildIntervalSeconds = 0.35f;
-	/// Tight waypoint arrive — must stay well below typical obstacle half-width so path
-	/// corners are not skipped via straight-line distance through a blocker.
+	/**
+	 * Tight waypoint arrive — must stay well below typical obstacle half-width so path
+	 * corners are not skipped via straight-line distance through a blocker.
+	 */
 	constexpr float WaypointArriveRadius = 0.45f;
 
 } // namespace
 
 void AAIController::ClearPath()
 {
-	Path.clear();
+	Path.Reset();
 	PathIndex = 0;
 	bUsePath = false;
 	PathRebuildCooldown = 0.0f;
@@ -35,48 +32,48 @@ void AAIController::RebuildPath()
 	{
 		return;
 	}
-	std::vector<glm::vec3> Found;
-	if (!Navigation->FindPath(Character->GetActorLocation(), Target, Found) || Found.empty())
+	TArray<FVector> Found;
+	if (!Navigation->FindPath(Character->GetActorLocation(), Target, Found) || Found.Num() == 0)
 	{
 		return;
 	}
-	Path = std::move(Found);
+	Path = MoveTemp(Found);
 	PathIndex = 0;
 	bUsePath = true;
 }
 
-glm::vec3 AAIController::SteerToward(const glm::vec3& From, const glm::vec3& To, float InArriveRadius) const
+FVector AAIController::SteerToward(const FVector& From, const FVector& To, float InArriveRadius) const
 {
-	const glm::vec3 Delta = To - From;
-	const glm::vec3 Flat{Delta.x, 0.0f, Delta.z};
-	const float DistSq = glm::dot(Flat, Flat);
+	const FVector Delta = To - From;
+	const FVector Flat = FVector(Delta.X, 0.0f, Delta.Z);
+	const float DistSq = FVector::DotProduct(Flat, Flat);
 	const float Arrive = InArriveRadius * InArriveRadius;
 	if (DistSq <= Arrive)
 	{
 		return {};
 	}
-	const float Len = std::sqrt(DistSq);
+	const float Len = FMath::Sqrt(DistSq);
 	return Flat / Len;
 }
 
-glm::vec3 AAIController::SteerWithNavFallback(const glm::vec3& From) const
+FVector AAIController::SteerWithNavFallback(const FVector& From) const
 {
 	// Nav is authoritative: never charge the goal in a straight line through blockers.
 	if (Navigation == nullptr || !Navigation->HasNavMesh())
 	{
 		return SteerToward(From, Target, ArriveRadius);
 	}
-	glm::vec3 OnMesh{};
+	FVector OnMesh = FVector::ZeroVector;
 	if (!Navigation->ProjectPointToNavigation(From, OnMesh))
 	{
 		return {};
 	}
-	const glm::vec3 ToMesh = SteerToward(From, OnMesh, WaypointArriveRadius);
-	if (glm::dot(ToMesh, ToMesh) > 1.0e-8f)
+	const FVector ToMesh = SteerToward(From, OnMesh, WaypointArriveRadius);
+	if (FVector::DotProduct(ToMesh, ToMesh) > 1.0e-8f)
 	{
 		return ToMesh;
 	}
-	glm::vec3 GoalNav{};
+	FVector GoalNav = FVector::ZeroVector;
 	if (!Navigation->ProjectPointToNavigation(Target, GoalNav))
 	{
 		return {};
@@ -84,7 +81,7 @@ glm::vec3 AAIController::SteerWithNavFallback(const glm::vec3& From) const
 	return SteerToward(From, GoalNav, ArriveRadius);
 }
 
-void AAIController::MoveToLocation(const glm::vec3& WorldPosition)
+void AAIController::MoveToLocation(const FVector& WorldPosition)
 {
 	MoveActor = nullptr;
 	Target = WorldPosition;
@@ -120,7 +117,7 @@ void AAIController::StopMovement()
 	ClearPath();
 }
 
-glm::vec3 AAIController::TickAI(float DeltaTime)
+FVector AAIController::TickAI(float DeltaTime)
 {
 	ACharacter* Character = GetCharacter();
 	if (Character == nullptr)
@@ -149,19 +146,19 @@ glm::vec3 AAIController::TickAI(float DeltaTime)
 		}
 	}
 
-	glm::vec3 Wish = WishDir;
+	FVector Wish = WishDir;
 	if (bHasTarget)
 	{
-		const glm::vec3 From = Character->GetActorLocation();
-		if (bUsePath && !Path.empty())
+		const FVector From = Character->GetActorLocation();
+		if (bUsePath && Path.Num() > 0)
 		{
 			// Advance at most along truly-reached waypoints (tight radius — no Euclidean
 			// shortcut through a plate/ramp whose width is smaller than ArriveRadius).
-			while (PathIndex + 1 < Path.size())
+			while (PathIndex + 1 < Path.Num())
 			{
-				const glm::vec3& Wp = Path[PathIndex];
-				const glm::vec3 D = Wp - From;
-				const float DistSq = D.x * D.x + D.z * D.z;
+				const FVector& Wp = Path[PathIndex];
+				const FVector D = Wp - From;
+				const float DistSq = D.X * D.X + D.Z * D.Z;
 				if (DistSq <= WaypointArriveRadius * WaypointArriveRadius)
 				{
 					++PathIndex;
@@ -171,8 +168,8 @@ glm::vec3 AAIController::TickAI(float DeltaTime)
 					break;
 				}
 			}
-			const bool bOnFinalSegment = PathIndex + 1 >= Path.size();
-			const glm::vec3& Wp = Path[std::min(PathIndex, Path.size() - 1)];
+			const bool bOnFinalSegment = PathIndex + 1 >= Path.Num();
+			const FVector& Wp = Path[FMath::Min(PathIndex, Path.Num() - 1)];
 			if (bOnFinalSegment)
 			{
 				Wish = SteerToward(From, Target, ArriveRadius);

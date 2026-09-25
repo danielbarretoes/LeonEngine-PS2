@@ -1,27 +1,22 @@
 #include "Components/SkeletalMeshComponent.h"
 
 #include "Engine/GameEngine.h"
-#include "Migration/GlmInterop.h"
+#include "LegacyGLMath.h"
 #include "SceneRenderer.h"
 #include "StaticMesh.h"
 
-#include <glm/common.hpp>
-#include <glm/vec3.hpp>
-
-#include <iostream>
-
 USkeletalMeshComponent::USkeletalMeshComponent()
-	: AnimInstance(std::make_unique<UAnimInstance>())
+	: AnimInstance(MakeUnique<UAnimInstance>())
 {
 	AnimInstance->SetOwningMeshComponent(this);
 }
 
-void USkeletalMeshComponent::SetAnimInstance(std::unique_ptr<UAnimInstance> Instance)
+void USkeletalMeshComponent::SetAnimInstance(TUniquePtr<UAnimInstance> Instance)
 {
-	AnimInstance = std::move(Instance);
+	AnimInstance = MoveTemp(Instance);
 	if (AnimInstance == nullptr)
 	{
-		AnimInstance = std::make_unique<UAnimInstance>();
+		AnimInstance = MakeUnique<UAnimInstance>();
 	}
 	AnimInstance->SetOwningMeshComponent(this);
 	BindAnimInstanceToAssets();
@@ -43,28 +38,28 @@ void USkeletalMeshComponent::BindAnimInstanceToAssets()
 	}
 }
 
-UAnimSequence* USkeletalMeshComponent::FindSequence(const std::string& Name)
+UAnimSequence* USkeletalMeshComponent::FindSequence(const FString& Name)
 {
-	const auto It = SequenceIndexByName.find(Name);
-	return It != SequenceIndexByName.end() ? &Sequences[It->second] : nullptr;
+	const int32* Index = SequenceIndexByName.Find(Name);
+	return Index != nullptr ? Sequences[*Index].Get() : nullptr;
 }
 
-const UAnimSequence* USkeletalMeshComponent::FindSequence(const std::string& Name) const
+const UAnimSequence* USkeletalMeshComponent::FindSequence(const FString& Name) const
 {
-	const auto It = SequenceIndexByName.find(Name);
-	return It != SequenceIndexByName.end() ? &Sequences[It->second] : nullptr;
+	const int32* Index = SequenceIndexByName.Find(Name);
+	return Index != nullptr ? Sequences[*Index].Get() : nullptr;
 }
 
-UAnimSequence& USkeletalMeshComponent::GetOrCreateSequence(const std::string& Name)
+UAnimSequence& USkeletalMeshComponent::GetOrCreateSequence(const FString& Name)
 {
-	if (const auto It = SequenceIndexByName.find(Name); It != SequenceIndexByName.end())
+	if (const int32* Index = SequenceIndexByName.Find(Name))
 	{
-		return Sequences[It->second];
+		return *Sequences[*Index];
 	}
-	Sequences.push_back(UAnimSequence{});
-	Sequences.back().Name = FName(Name.c_str());
-	SequenceIndexByName[Name] = Sequences.size() - 1;
-	return Sequences.back();
+	UAnimSequence& Sequence = *Sequences.Add_GetRef(MakeUnique<UAnimSequence>());
+	Sequence.Name = FName(*Name);
+	SequenceIndexByName.Add(Name, Sequences.Num() - 1);
+	return Sequence;
 }
 
 void USkeletalMeshComponent::BindSequencesToAnimInstance()
@@ -73,9 +68,9 @@ void USkeletalMeshComponent::BindSequencesToAnimInstance()
 	AnimInstance->NativeInitializeAnimation();
 }
 
-void USkeletalMeshComponent::SetSkeletalMesh(std::shared_ptr<USkeletalMesh> InMesh)
+void USkeletalMeshComponent::SetSkeletalMesh(TSharedPtr<USkeletalMesh> InMesh)
 {
-	SkeletalMesh = std::move(InMesh);
+	SkeletalMesh = MoveTemp(InMesh);
 	if (SkeletalMesh != nullptr && SkeletalMesh->Valid())
 	{
 		AnimInstance->SetSkeleton(&SkeletalMesh->GetSkeleton());
@@ -94,31 +89,31 @@ void USkeletalMeshComponent::ApplyFitHeight(float FitHeight)
 	}
 	const float Scale = SkeletalMesh->FitUniformScale(FitHeight);
 	constexpr float GroundEpsilon = 0.008f;
-	const glm::vec3 Mn = SkeletalMesh->GetLocalMin();
-	const glm::vec3 Mx = SkeletalMesh->GetLocalMax();
-	const glm::vec3 Center = (Mn + Mx) * 0.5f;
-	RelativeScale = {Scale, Scale, Scale};
-	RelativeLocation = {(-Center.x) * Scale, ((-Mn.y) * Scale) + GroundEpsilon, (-Center.z) * Scale};
+	const FVector Mn = SkeletalMesh->GetLocalMin();
+	const FVector Mx = SkeletalMesh->GetLocalMax();
+	const FVector Center = (Mn + Mx) * 0.5f;
+	RelativeScale = FVector(Scale, Scale, Scale);
+	RelativeLocation = FVector((-Center.X) * Scale, ((-Mn.Y) * Scale) + GroundEpsilon, (-Center.Z) * Scale);
 }
 
 void USkeletalMeshComponent::ClearAttachments()
 {
-	Attachments.clear();
+	Attachments.Empty();
 }
 
 FSkelMeshAttachment& USkeletalMeshComponent::AddAttachment(FSkelMeshAttachment Attachment)
 {
-	Attachments.push_back(std::move(Attachment));
-	return Attachments.back();
+	Attachments.Add(MoveTemp(Attachment));
+	return Attachments.Last();
 }
 
-bool USkeletalMeshComponent::GetBoneModelMatrix(const std::string& InBoneName, glm::mat4& OutModel) const
+bool USkeletalMeshComponent::GetBoneModelMatrix(const FString& InBoneName, FMatrix& OutModel) const
 {
-	if (!HasValidMesh() || InBoneName.empty())
+	if (!HasValidMesh() || InBoneName.IsEmpty())
 	{
 		return false;
 	}
-	const int32 BoneIndex = SkeletalMesh->GetSkeleton().FindBoneIndex(FName(InBoneName.c_str()));
+	const int32 BoneIndex = SkeletalMesh->GetSkeleton().FindBoneIndex(FName(*InBoneName));
 	if (BoneIndex < 0)
 	{
 		return false;
@@ -128,13 +123,13 @@ bool USkeletalMeshComponent::GetBoneModelMatrix(const std::string& InBoneName, g
 	{
 		return false;
 	}
-	OutModel = ToGlm(BoneWorldMatrices[BoneIndex]);
+	OutModel = BoneWorldMatrices[BoneIndex];
 	return true;
 }
 
-bool USkeletalMeshComponent::GetAttachmentWorldMatrix(std::size_t AttachmentIndex, glm::mat4& OutWorld) const
+bool USkeletalMeshComponent::GetAttachmentWorldMatrix(int32 AttachmentIndex, FMatrix& OutWorld) const
 {
-	if (AttachmentIndex >= Attachments.size())
+	if (!Attachments.IsValidIndex(AttachmentIndex))
 	{
 		return false;
 	}
@@ -144,12 +139,12 @@ bool USkeletalMeshComponent::GetAttachmentWorldMatrix(std::size_t AttachmentInde
 		OutWorld = Att.WorldMatrixOverride;
 		return true;
 	}
-	glm::mat4 BoneModel{};
+	FMatrix BoneModel = FMatrix::Identity;
 	if (!GetBoneModelMatrix(Att.BoneName, BoneModel))
 	{
 		return false;
 	}
-	OutWorld = GetComponentTransform() * BoneModel * Att.Relative.ModelMatrix();
+	OutWorld = LegacyGL::Mul(GetComponentTransform(), BoneModel, Att.Relative.ModelMatrix());
 	return true;
 }
 
@@ -172,14 +167,14 @@ void USkeletalMeshComponent::SubmitDraw(FSceneRenderer& Renderer) const
 	AnimInstance->GetSkinMatrices(SkinMatrices);
 	Renderer.SubmitSkeletalDraw(*SkeletalMesh, GetComponentTransform(), SkinMatrices);
 
-	for (std::size_t I = 0; I < Attachments.size(); ++I)
+	for (int32 I = 0; I < Attachments.Num(); ++I)
 	{
 		const FSkelMeshAttachment& Att = Attachments[I];
 		if (Att.Mesh == nullptr || !Att.Mesh->Valid())
 		{
 			continue;
 		}
-		glm::mat4 AttachmentWorld{};
+		FMatrix AttachmentWorld = FMatrix::Identity;
 		if (!GetAttachmentWorldMatrix(I, AttachmentWorld))
 		{
 			continue;

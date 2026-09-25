@@ -1,9 +1,7 @@
 #pragma once
 
+#include "CoreTypes.h"
 #include "RHIHandles.h"
-
-#include <cstdint>
-#include <vector>
 
 /// Full-res SSAO ping-pong targets (R16F).
 class RENDERER_API FSSAOTarget
@@ -42,7 +40,7 @@ private:
 };
 
 /// Runtime quality for post-process / shadows (Unreal-like scalability group lite).
-enum class EPostProcessQuality : std::uint8_t
+enum class EPostProcessQuality : uint8
 {
 	Off = 0,
 	Low = 1,

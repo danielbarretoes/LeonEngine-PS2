@@ -1,10 +1,9 @@
 #pragma once
 
 #include "Camera/CameraComponent.h"
+#include "CoreMinimal.h"
 
-#include <glm/vec3.hpp>
-
-/// Keyboard move axes on the ground plane: x = strafe, z = forward (from mapped Move* actions).
+/** Keyboard move axes on the ground plane: x = strafe, z = forward (from mapped Move* actions). */
 struct ENGINE_API FMoveAxes2D
 {
 	float X = 0.0f;
@@ -16,8 +15,8 @@ struct ENGINE_API FMoveAxes2D
 	}
 };
 
-/// Project camera yaw onto XZ: +Z axis of the result is "forward" for `axes.z`.
-[[nodiscard]] glm::vec3 CameraRelativeMoveXz(const UCameraComponent& Camera, const FMoveAxes2D& Axes);
+/** Project camera yaw onto XZ: +Z axis of the result is "forward" for axes.Z. */
+[[nodiscard]] FVector CameraRelativeMoveXz(const UCameraComponent& Camera, const FMoveAxes2D& Axes);
 
-/// Same as `cameraRelativeMoveXZ` but from an explicit yaw (e.g. desired SpringArm boom).
-[[nodiscard]] glm::vec3 YawRelativeMoveXz(float YawDegrees, const FMoveAxes2D& Axes);
+/** Same as cameraRelativeMoveXZ but from an explicit yaw (e.g. desired SpringArm boom). */
+[[nodiscard]] FVector YawRelativeMoveXz(float YawDegrees, const FMoveAxes2D& Axes);

@@ -1,15 +1,13 @@
 #pragma once
 
+#include "CoreTypes.h"
 #include "RHIHandles.h"
-
-#include <array>
-#include <cstdint>
 
 /// Double-buffered GL_TIME_ELAPSED queries so HUD reads last frame (no GPU stall).
 class RENDERER_API FGPUPassTimer
 {
 public:
-	enum class EPass : std::uint8_t
+	enum class EPass : uint8
 	{
 		Shadow = 0,
 		Planar = 1,
@@ -40,10 +38,22 @@ public:
 	[[nodiscard]] float Milliseconds(EPass Pass) const;
 
 private:
-	static constexpr int BufferCount = 2;
-	static constexpr auto PassCount = static_cast<int>(EPass::Count);
+	static constexpr int32 BufferCount = 2;
+	static constexpr int32 PassCount = static_cast<int32>(EPass::Count);
 
-	using FQueryBuffer = std::array<FRHIQueryId, PassCount>;
+	struct FQueryBuffer
+	{
+		FRHIQueryId Ids[PassCount] = {};
+
+		FRHIQueryId& operator[](int32 Index)
+		{
+			return Ids[Index];
+		}
+		const FRHIQueryId& operator[](int32 Index) const
+		{
+			return Ids[Index];
+		}
+	};
 
 	[[nodiscard]] FQueryBuffer& BufferQueries(int Buffer);
 	[[nodiscard]] bool& BufferPending(int Buffer);
@@ -54,10 +64,10 @@ private:
 	/// Returns false if any query is still outstanding (no GPU stall).
 	[[nodiscard]] bool ResolveBuffer(const FQueryBuffer& InQueries);
 
-	std::array<FQueryBuffer, BufferCount> Queries{};
-	std::array<float, PassCount> Ms{};
+	FQueryBuffer Queries[BufferCount]{};
+	float Ms[PassCount]{};
 	int WriteBuffer = 0;
-	std::array<bool, BufferCount> Pending{};
+	bool Pending[BufferCount]{};
 	bool bCreated = false;
-	std::array<bool, PassCount> PassOpen{};
+	bool PassOpen[PassCount]{};
 };

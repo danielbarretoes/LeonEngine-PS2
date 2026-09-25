@@ -1,14 +1,11 @@
 #pragma once
 
+#include "CoreMinimal.h"
 #include "Material.h"
 #include "MeshData.h"
 #include "RHIHandles.h"
 
-#include <glm/vec3.hpp>
-
-#include <vector>
-
-/// GPU static mesh resource (Unreal-style UStaticMesh; VAO/VBO/EBO + optional MTL).
+/** GPU static mesh resource (Unreal-style UStaticMesh; VAO/VBO/EBO + optional MTL). */
 class RENDERER_API UStaticMesh
 {
 public:
@@ -21,11 +18,11 @@ public:
 	UStaticMesh& operator=(UStaticMesh&& Other) noexcept;
 
 	[[nodiscard]] static UStaticMesh Upload(const FMeshData& Data);
-	/// Bounds + materials only (no VAO). For dedicated / headless simulation.
+	/** Bounds + materials only (no VAO). For dedicated / headless simulation. */
 	[[nodiscard]] static UStaticMesh CreateCpu(const FMeshData& Data);
 
 	void Draw() const;
-	void DrawSubMesh(std::size_t SubMeshIndex) const;
+	void DrawSubMesh(int32 SubMeshIndex) const;
 
 	[[nodiscard]] bool Valid() const
 	{
@@ -35,35 +32,35 @@ public:
 	{
 		return bCpuOnly;
 	}
-	[[nodiscard]] int GetIndexCount() const
+	[[nodiscard]] int32 GetIndexCount() const
 	{
 		return IndexCount;
 	}
-	[[nodiscard]] int TriangleCount() const
+	[[nodiscard]] int32 TriangleCount() const
 	{
 		return IndexCount / 3;
 	}
-	[[nodiscard]] const glm::vec3& GetLocalMin() const
+	[[nodiscard]] const FVector& GetLocalMin() const
 	{
 		return LocalMin;
 	}
-	[[nodiscard]] const glm::vec3& GetLocalMax() const
+	[[nodiscard]] const FVector& GetLocalMax() const
 	{
 		return LocalMax;
 	}
-	[[nodiscard]] const std::vector<FMeshSection>& GetSubmeshes() const
+	[[nodiscard]] const TArray<FMeshSection>& GetSubmeshes() const
 	{
 		return Submeshes;
 	}
-	[[nodiscard]] const std::vector<FMaterial>& GetMaterials() const
+	[[nodiscard]] const TArray<FMaterial>& GetMaterials() const
 	{
 		return Materials;
 	}
 	[[nodiscard]] bool HasMaterials() const
 	{
-		return !Materials.empty();
+		return Materials.Num() > 0;
 	}
-	/// CPU copy retained for lightmap bake / editor tools (empty if upload had no data).
+	/** CPU copy retained for editor tools (empty if the upload had no data). */
 	[[nodiscard]] const FMeshData& GetCpuData() const
 	{
 		return CpuData;
@@ -79,11 +76,11 @@ private:
 	FRHIVertexArrayId Vao = InvalidVertexArray;
 	FRHIBufferId Vbo = InvalidBuffer;
 	FRHIBufferId Ebo = InvalidBuffer;
-	int IndexCount = 0;
+	int32 IndexCount = 0;
 	bool bCpuOnly = false;
-	glm::vec3 LocalMin{0.0f};
-	glm::vec3 LocalMax{0.0f};
-	std::vector<FMeshSection> Submeshes;
-	std::vector<FMaterial> Materials;
+	FVector LocalMin = FVector::ZeroVector;
+	FVector LocalMax = FVector::ZeroVector;
+	TArray<FMeshSection> Submeshes;
+	TArray<FMaterial> Materials;
 	FMeshData CpuData{};
 };

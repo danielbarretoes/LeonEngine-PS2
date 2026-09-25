@@ -2,8 +2,8 @@
 
 // Class-name parsers live in Content/LevelClassNames.cpp (shared with the level format / cook).
 
-std::shared_ptr<UStaticMesh> MeshForBasicShape(
-	FResourceCache& Resources, EBasicShape Shape, int InSphereSegments, int InSphereRings)
+TSharedPtr<UStaticMesh> MeshForBasicShape(
+	FResourceCache& Resources, EBasicShape Shape, int32 InSphereSegments, int32 InSphereRings)
 {
 	switch (Shape)
 	{
@@ -12,7 +12,7 @@ std::shared_ptr<UStaticMesh> MeshForBasicShape(
 		case EBasicShape::Sphere:
 			return Resources.GetSphereMesh(InSphereSegments, InSphereRings);
 		case EBasicShape::Plane:
-			// Unit plane with 0–1 UVs; tiling is FMaterial::uvScale.
+			// Unit plane with 0-1 UVs; the tiling is FMaterial::UvScale.
 			return Resources.GetPlaneMesh(1.0f, 1.0f);
 	}
 	return nullptr;
@@ -23,18 +23,18 @@ FBasicShape FBasicShape::Cube(FLegacyTransform InTransform, FMaterial InMaterial
 	FBasicShape Shape;
 	Shape.Type = EBasicShape::Cube;
 	Shape.Transform = InTransform;
-	Shape.Material = std::move(InMaterial);
+	Shape.Material = MoveTemp(InMaterial);
 	Shape.bHasCustomMaterial = bHasMaterial;
 	return Shape;
 }
 
 FBasicShape FBasicShape::Sphere(
-	FLegacyTransform InTransform, FMaterial InMaterial, bool bHasMaterial, int Segments, int Rings)
+	FLegacyTransform InTransform, FMaterial InMaterial, bool bHasMaterial, int32 Segments, int32 Rings)
 {
 	FBasicShape Shape;
 	Shape.Type = EBasicShape::Sphere;
 	Shape.Transform = InTransform;
-	Shape.Material = std::move(InMaterial);
+	Shape.Material = MoveTemp(InMaterial);
 	Shape.bHasCustomMaterial = bHasMaterial;
 	Shape.SphereSegments = Segments;
 	Shape.SphereRings = Rings;
@@ -46,10 +46,10 @@ FBasicShape FBasicShape::Plane(float Size, FLegacyTransform InTransform, FMateri
 	FBasicShape Shape;
 	Shape.Type = EBasicShape::Plane;
 	Shape.Transform = InTransform;
-	Shape.Transform.Scale.x = Size;
-	Shape.Transform.Scale.y = 1.0f;
-	Shape.Transform.Scale.z = Size;
-	Shape.Material = std::move(InMaterial);
+	Shape.Transform.Scale.X = Size;
+	Shape.Transform.Scale.Y = 1.0f;
+	Shape.Transform.Scale.Z = Size;
+	Shape.Material = MoveTemp(InMaterial);
 	Shape.bHasCustomMaterial = bHasMaterial;
 	return Shape;
 }

@@ -2,36 +2,31 @@
 
 #include "Components/ActorComponent.h"
 #include "Components/SceneComponent.h"
+#include "CoreMinimal.h"
 #include "Engine/Level.h"
-
-#include <glm/vec3.hpp>
-
-#include <cstddef>
-#include <cstdint>
-#include <memory>
-#include <type_traits>
-#include <utility>
-#include <vector>
+#include "Templates/UniquePtr.h"
 
 class UWorld;
 
-/// Unreal-style Actor (no A-prefix): owns a root USceneComponent and optional Level mesh link.
-///
-/// ## Transforms
-/// `Location` / `YawDegrees` are the gameplay pose written to Level meshes via
-/// `SyncTransformToLevel`. The root `USceneComponent` may add `Relative*` offsets on top
-/// (`GetComponentTransform`). Prefer setting Actor location/yaw for pawn movement; keep root
-/// Relative near identity unless you intentionally offset the visual.
-///
-/// ## Components
-/// Root is always registered. Add member comps with `RegisterComponent`; heap extras with
-/// `CreateDefaultSubobject<T>()`. See `UActorComponent` contract.
-///
-/// ## Actor location vs Level mesh
-/// `SetLevelMeshIndex` links this Actor to a Level UStaticMeshComponent for FPhysScene bodies.
-/// `SyncTransformToLevel` writes Actor location/yaw into that mesh each gameplay frame
-/// (`World::TickGameplayFrame`). Skeletal visuals use SceneComponents (`GetMesh`), not Level
-/// meshes.
+/**
+ * Unreal-style Actor (no A-prefix): owns a root USceneComponent and optional Level mesh link.
+ *
+ * ## Transforms
+ * `Location` / `YawDegrees` are the gameplay pose written to Level meshes via
+ * `SyncTransformToLevel`. The root `USceneComponent` may add `Relative*` offsets on top
+ * (`GetComponentTransform`). Prefer setting Actor location/yaw for pawn movement; keep root
+ * Relative near identity unless you intentionally offset the visual.
+ *
+ * ## Components
+ * Root is always registered. Add member comps with `RegisterComponent`; heap extras with
+ * `CreateDefaultSubobject<T>()`. See `UActorComponent` contract.
+ *
+ * ## Actor location vs Level mesh
+ * `SetLevelMeshIndex` links this Actor to a Level UStaticMeshComponent for FPhysScene bodies.
+ * `SyncTransformToLevel` writes Actor location/yaw into that mesh each gameplay frame
+ * (`World::TickGameplayFrame`). Skeletal visuals use SceneComponents (`GetMesh`), not Level
+ * meshes.
+ */
 class ENGINE_API AActor
 {
 public:
@@ -56,46 +51,46 @@ public:
 		return RootComponent;
 	}
 
-	[[nodiscard]] const std::vector<UActorComponent*>& GetComponents() const
+	[[nodiscard]] const TArray<UActorComponent*>& GetComponents() const
 	{
 		return Components;
 	}
 
-	/// Register a component that lives on this Actor (member or already owned). Idempotent.
+	/** Register a component that lives on this Actor (member or already owned). Idempotent. */
 	void RegisterComponent(UActorComponent* Component);
 
-	/// Heap-owned component (Unreal CreateDefaultSubobject lite — no name table).
+	/** Heap-owned component (Unreal CreateDefaultSubobject lite — no name table). */
 	template <typename T, typename... ArgsType>
 	T* CreateDefaultSubobject(ArgsType&&... Args)
 	{
-		static_assert(std::is_base_of_v<UActorComponent, T>, "T must derive from ActorComponent");
-		auto Owned = std::make_unique<T>(std::forward<ArgsType>(Args)...);
-		T* Raw = Owned.get();
-		OwnedComponents.push_back(std::move(Owned));
+		static_assert(TIsDerivedFrom<T, UActorComponent>::Value, "T must derive from ActorComponent");
+		TUniquePtr<T> Owned = MakeUnique<T>(Forward<ArgsType>(Args)...);
+		T* Raw = Owned.Get();
+		OwnedComponents.Add(MoveTemp(Owned));
 		RegisterComponent(Raw);
 		return Raw;
 	}
 
-	void SetLevelMeshIndex(std::size_t Index)
+	void SetLevelMeshIndex(SIZE_T Index)
 	{
 		LevelMeshIndex = Index;
 	}
-	[[nodiscard]] std::size_t GetLevelMeshIndex() const
+	[[nodiscard]] SIZE_T GetLevelMeshIndex() const
 	{
 		return LevelMeshIndex;
 	}
 
-	/// Spawn-order serial assigned by UWorld::SpawnActor (UE: UObjectBase::GetUniqueID).
-	void SetUniqueID(std::uint64_t Id)
+	/** Spawn-order serial assigned by UWorld::SpawnActor (UE: UObjectBase::GetUniqueID). */
+	void SetUniqueID(uint64 Id)
 	{
 		UniqueID = Id;
 	}
-	[[nodiscard]] std::uint64_t GetUniqueID() const
+	[[nodiscard]] uint64 GetUniqueID() const
 	{
 		return UniqueID;
 	}
 
-	[[nodiscard]] const glm::vec3& GetActorLocation() const
+	[[nodiscard]] const FVector& GetActorLocation() const
 	{
 		return Location;
 	}
@@ -104,25 +99,25 @@ public:
 		return YawDegrees;
 	}
 
-	void SetActorLocation(const glm::vec3& InLocation)
+	void SetActorLocation(const FVector& InLocation)
 	{
 		Location = InLocation;
 		// Keep root Relative* as identity offset so GetComponentTransform matches Actor pose.
-		RootComponent.RelativeLocation = {0.0f, 0.0f, 0.0f};
+		RootComponent.RelativeLocation = FVector::ZeroVector;
 	}
 	void SetActorYaw(float InYawDegrees)
 	{
 		YawDegrees = InYawDegrees;
-		RootComponent.RelativeRotation = {0.0f, 0.0f, 0.0f};
+		RootComponent.RelativeRotation = FVector::ZeroVector;
 	}
 
-	void SetActorLocationAndRotation(const glm::vec3& InLocation, float InYawDegrees = 0.0f)
+	void SetActorLocationAndRotation(const FVector& InLocation, float InYawDegrees = 0.0f)
 	{
 		SetActorLocation(InLocation);
 		SetActorYaw(InYawDegrees);
 	}
 
-	/// Unreal-like AActor::IsPendingKill.
+	/** Unreal-like AActor::IsPendingKill. */
 	[[nodiscard]] bool IsPendingKill() const
 	{
 		return bPendingKill;
@@ -132,7 +127,7 @@ public:
 		return IsPendingKill();
 	}
 
-	/// Mark for removal at end of World::Tick (or immediately via World::Clear).
+	/** Mark for removal at end of World::Tick (or immediately via World::Clear). */
 	virtual void Destroy()
 	{
 		if (!bPendingKill)
@@ -159,17 +154,17 @@ public:
 		return bHasBegunPlay;
 	}
 
-	/// Copy location + yaw into the linked Level UStaticMeshComponent (no-op if index is invalid).
+	/** Copy location + yaw into the linked Level UStaticMeshComponent (no-op if index is invalid). */
 	virtual void SyncTransformToLevel(ULevel& Level) const
 	{
-		auto& Meshes = Level.GetStaticMeshes();
-		if (LevelMeshIndex >= Meshes.size())
+		TArray<UStaticMeshComponent>& Meshes = Level.GetStaticMeshes();
+		if (LevelMeshIndex >= static_cast<SIZE_T>(Meshes.Num()))
 		{
 			return;
 		}
-		UStaticMeshComponent& Obj = Meshes[LevelMeshIndex];
+		UStaticMeshComponent& Obj = Meshes[static_cast<int32>(LevelMeshIndex)];
 		Obj.Transform.Position = Location;
-		Obj.Transform.RotationDegrees.y = YawDegrees;
+		Obj.Transform.RotationDegrees.Y = YawDegrees;
 	}
 
 protected:
@@ -178,7 +173,7 @@ protected:
 		RegisterComponent(&RootComponent);
 	}
 
-	[[nodiscard]] glm::vec3& MutableLocation()
+	[[nodiscard]] FVector& MutableLocation()
 	{
 		return Location;
 	}
@@ -194,11 +189,11 @@ private:
 	friend class UActorComponent;
 
 	USceneComponent RootComponent{};
-	std::vector<UActorComponent*> Components{};
-	std::vector<std::unique_ptr<UActorComponent>> OwnedComponents{};
-	std::size_t LevelMeshIndex = ULevel::Npos;
-	std::uint64_t UniqueID = 0;
-	glm::vec3 Location{0.0f};
+	TArray<UActorComponent*> Components;
+	TArray<TUniquePtr<UActorComponent>> OwnedComponents;
+	SIZE_T LevelMeshIndex = ULevel::Npos;
+	uint64 UniqueID = 0;
+	FVector Location = FVector::ZeroVector;
 	float YawDegrees = 0.0f;
 	UWorld* World = nullptr;
 	bool bPendingKill = false;

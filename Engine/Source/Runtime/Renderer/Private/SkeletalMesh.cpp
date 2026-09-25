@@ -1,13 +1,8 @@
 #include "SkeletalMesh.h"
 
-#include "Migration/GlmInterop.h"
 #include "OpenGLVertexAttrib.h"
 
 #include <glad/glad.h>
-#include <glm/common.hpp>
-
-#include <algorithm>
-#include <utility>
 
 USkeletalMesh::~USkeletalMesh()
 {
@@ -20,11 +15,11 @@ USkeletalMesh::USkeletalMesh(USkeletalMesh&& Other) noexcept
 	, Ebo(Other.Ebo)
 	, IndexCount(Other.IndexCount)
 	, bCpuOnly(Other.bCpuOnly)
-	, Skeleton(std::move(Other.Skeleton))
-	, EmbeddedAnim(std::move(Other.EmbeddedAnim))
+	, Skeleton(MoveTemp(Other.Skeleton))
+	, EmbeddedAnim(MoveTemp(Other.EmbeddedAnim))
 	, LocalMin(Other.LocalMin)
 	, LocalMax(Other.LocalMax)
-	, Material(std::move(Other.Material))
+	, Material(MoveTemp(Other.Material))
 {
 	Other.Vao = 0;
 	Other.Vbo = 0;
@@ -43,11 +38,11 @@ USkeletalMesh& USkeletalMesh::operator=(USkeletalMesh&& Other) noexcept
 		Ebo = Other.Ebo;
 		IndexCount = Other.IndexCount;
 		bCpuOnly = Other.bCpuOnly;
-		Skeleton = std::move(Other.Skeleton);
-		EmbeddedAnim = std::move(Other.EmbeddedAnim);
+		Skeleton = MoveTemp(Other.Skeleton);
+		EmbeddedAnim = MoveTemp(Other.EmbeddedAnim);
 		LocalMin = Other.LocalMin;
 		LocalMax = Other.LocalMax;
-		Material = std::move(Other.Material);
+		Material = MoveTemp(Other.Material);
 		Other.Vao = 0;
 		Other.Vbo = 0;
 		Other.Ebo = 0;
@@ -64,10 +59,10 @@ USkeletalMesh USkeletalMesh::CreateCpu(FSkeletalMeshData Data)
 	{
 		return Mesh;
 	}
-	Mesh.Skeleton = std::move(Data.Skeleton);
-	Mesh.EmbeddedAnim = std::move(Data.EmbeddedAnim);
-	Mesh.LocalMin = ToGlm(Data.LocalMin);
-	Mesh.LocalMax = ToGlm(Data.LocalMax);
+	Mesh.Skeleton = MoveTemp(Data.Skeleton);
+	Mesh.EmbeddedAnim = MoveTemp(Data.EmbeddedAnim);
+	Mesh.LocalMin = Data.LocalMin;
+	Mesh.LocalMax = Data.LocalMax;
 	Mesh.IndexCount = Data.Indices.Num();
 	Mesh.bCpuOnly = true;
 	return Mesh;
@@ -81,10 +76,10 @@ USkeletalMesh USkeletalMesh::Upload(FSkeletalMeshData Data)
 		return Mesh;
 	}
 
-	Mesh.Skeleton = std::move(Data.Skeleton);
-	Mesh.EmbeddedAnim = std::move(Data.EmbeddedAnim);
-	Mesh.LocalMin = ToGlm(Data.LocalMin);
-	Mesh.LocalMax = ToGlm(Data.LocalMax);
+	Mesh.Skeleton = MoveTemp(Data.Skeleton);
+	Mesh.EmbeddedAnim = MoveTemp(Data.EmbeddedAnim);
+	Mesh.LocalMin = Data.LocalMin;
+	Mesh.LocalMax = Data.LocalMax;
 
 	glGenVertexArrays(1, &Mesh.Vao);
 	glGenBuffers(1, &Mesh.Vbo);
@@ -143,7 +138,7 @@ float USkeletalMesh::FitUniformScale(float FitHeight) const
 	{
 		return 1.0f;
 	}
-	const float Height = std::max((LocalMax - LocalMin).y, 0.001f);
+	const float Height = FMath::Max((LocalMax - LocalMin).Y, 0.001f);
 	return FitHeight / Height;
 }
 

@@ -1,85 +1,80 @@
 #pragma once
 
+#include "CoreMinimal.h"
 #include "GameFramework/Input.h"
 #include "GenericPlatform/GenericWindow.h"
 #include "InputCoreTypes.h"
 
-#include <string>
-#include <string_view>
-#include <unordered_map>
-#include <utility>
-#include <vector>
-
-/// One key contribution to a 1D axis (Unreal-like axis mapping entry).
+/** One key contribution to a 1D axis (Unreal-like axis mapping entry). */
 struct ENGINE_API FInputAxisKeyMapping
 {
-	int Key = 0; // EKeys underlying code (desktop key codes match GLFW)
+	int32 Key = 0; // EKeys underlying code (desktop key codes match GLFW)
 	float Scale = 1.0f; // typically +1 or -1
 };
 
-/// Maps action names → keys (Unreal-like Input Mapping Context).
+/** Maps action names to keys (Unreal-like Input Mapping Context). */
 class ENGINE_API UInputMappingContext
 {
 public:
-	/// Bind a key that contributes `scale` to a named axis while held.
-	void BindAxisKey(std::string_view Action, int InKey, float InScale = 1.0f);
-	void BindAxisKey(std::string_view Action, EKeys InKey, float InScale = 1.0f);
+	/** Bind a key that contributes scale to a named axis while held. */
+	void BindAxisKey(const FName& Action, int32 InKey, float InScale = 1.0f);
+	void BindAxisKey(const FName& Action, EKeys InKey, float InScale = 1.0f);
 
-	/// Bind a digital action key (pressed / just-pressed queries).
-	void BindActionKey(std::string_view Action, int InKey);
-	void BindActionKey(std::string_view Action, EKeys InKey);
+	/** Bind a digital action key (pressed / just-pressed queries). */
+	void BindActionKey(const FName& Action, int32 InKey);
+	void BindActionKey(const FName& Action, EKeys InKey);
 
-	[[nodiscard]] const std::unordered_map<std::string, std::vector<FInputAxisKeyMapping>>& GetAxes() const
+	[[nodiscard]] const TMap<FName, TArray<FInputAxisKeyMapping>>& GetAxes() const
 	{
 		return Axes;
 	}
-	[[nodiscard]] const std::unordered_map<std::string, std::vector<int>>& GetActions() const
+	[[nodiscard]] const TMap<FName, TArray<int32>>& GetActions() const
 	{
 		return Actions;
 	}
 
-	/// Default Leon gameplay map: WASD+arrows move, Q/E up, Space jump.
+	/** Default Leon gameplay map: WASD+arrows move, Q/E up, Space jump. */
 	[[nodiscard]] static UInputMappingContext MakeDefault();
 
 private:
-	std::unordered_map<std::string, std::vector<FInputAxisKeyMapping>> Axes;
-	std::unordered_map<std::string, std::vector<int>> Actions;
+	TMap<FName, TArray<FInputAxisKeyMapping>> Axes;
+	TMap<FName, TArray<int32>> Actions;
 };
 
-/// Samples mapped input once per frame (Unreal-like UPlayerInput).
+/** Samples mapped input once per frame (Unreal-like UPlayerInput). */
 class ENGINE_API UPlayerInput
 {
 public:
 	void ClearContexts();
-	/// Higher priority is merged later (same key can appear in multiple contexts).
-	void AddMappingContext(UInputMappingContext InContext, int InPriority = 0);
+	/** Higher priority is merged later (same key can appear in multiple contexts). */
+	void AddMappingContext(UInputMappingContext InContext, int32 InPriority = 0);
 
-	/// Rebuild effective binds + sample Window state. Call once per frame after pollEvents.
+	/** Rebuild effective binds + sample Window state. Call once per frame after pollEvents. */
 	void Update(const FGenericWindow& Window);
 
-	[[nodiscard]] float GetAxisValue(std::string_view Action) const;
-	[[nodiscard]] bool IsActionPressed(std::string_view Action) const;
-	[[nodiscard]] bool WasActionJustPressed(std::string_view Action) const;
-	[[nodiscard]] bool WasActionJustReleased(std::string_view Action) const;
+	[[nodiscard]] float GetAxisValue(const FName& Action) const;
+	[[nodiscard]] bool IsActionPressed(const FName& Action) const;
+	[[nodiscard]] bool WasActionJustPressed(const FName& Action) const;
+	[[nodiscard]] bool WasActionJustReleased(const FName& Action) const;
 
-	/// Convenience: MoveRight (x) + MoveForward (z) from the active map.
+	/** Convenience: MoveRight (x) + MoveForward (z) from the active map. */
 	[[nodiscard]] FMoveAxes2D GetMoveAxes2D() const;
 
 private:
 	struct FContextEntry
 	{
-		int Priority = 0;
+		int32 Priority = 0;
 		UInputMappingContext Context;
 	};
 
 	void RebuildEffectiveMaps();
 
-	std::vector<FContextEntry> Contexts;
-	std::unordered_map<std::string, std::vector<FInputAxisKeyMapping>> EffectiveAxes;
-	std::unordered_map<std::string, std::vector<int>> EffectiveActions;
+	TArray<FContextEntry> Contexts;
+	TMap<FName, TArray<FInputAxisKeyMapping>> EffectiveAxes;
+	TMap<FName, TArray<int32>> EffectiveActions;
 
-	std::unordered_map<std::string, float> AxisValues;
-	std::unordered_map<std::string, bool> ActionPressed;
-	std::unordered_map<std::string, bool> ActionPressedPrev;
+	TMap<FName, float> AxisValues;
+	TMap<FName, bool> ActionPressed;
+	TMap<FName, bool> ActionPressedPrev;
 	bool bMapsDirty = true;
 };

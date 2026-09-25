@@ -1,19 +1,11 @@
 #include "Debug/DebugOverlay.h"
 
-#include "Migration/LegacyContentPath.h"
+#include "LegacyGLMath.h"
+#include "Misc/Paths.h"
 #include "OpenGLVertexAttrib.h"
+#include "RendererLog.h"
 
 #include <glad/glad.h>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
-
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <cstddef>
-#include <iostream>
-#include <utility>
-#include <vector>
 
 #ifdef _MSC_VER
 	#pragma warning(push)
@@ -33,12 +25,17 @@ namespace
 	constexpr float MarginY = 10.0f;
 	constexpr float MessageLineStepY = 14.0f * MessagePixelScale;
 	constexpr float FadeTailSeconds = 0.5f;
-	constexpr std::size_t MaxOnScreenMessages = 12;
+	constexpr int32 MaxOnScreenMessages = 12;
+
+	struct FRgba8
+	{
+		uint8 V[4] = {};
+	};
 
 	struct FPackedVert
 	{
 		float X, Y, Z;
-		std::array<unsigned char, 4> Rgba{};
+		uint8 Rgba[4];
 	};
 
 	struct FDrawVert
@@ -47,41 +44,76 @@ namespace
 		float R, G, B, A;
 	};
 
-	void AppendTextMesh(std::vector<FDrawVert>& Tris, const std::string& InText, float OriginX, float OriginY,
-		float InPixelScale, const std::array<unsigned char, 4>& InColor)
+	/** stb_easy_font takes mutable, null-terminated text: copy [Begin, Begin + Count) into Scratch. */
+	ANSICHAR* TerminatedCopy(TArray<ANSICHAR>& Scratch, const ANSICHAR* Begin, int32 Count)
 	{
-		if (InText.empty())
+		Scratch.SetNumUninitialized(Count + 1);
+		FMemory::Memcpy(Scratch.GetData(), Begin, Count);
+		Scratch[Count] = '\0';
+		return Scratch.GetData();
+	}
+
+	/** Calls Visit(Begin, Count) for every '\n'-separated line of Text (including empty ones). */
+	template <typename VisitorType>
+	void ForEachLine(const FString& Text, const VisitorType& Visit)
+	{
+		const ANSICHAR* Cursor = *Text;
+		for (;;)
+		{
+			const ANSICHAR* End = Cursor;
+			while (*End != '\0' && *End != '\n')
+			{
+				++End;
+			}
+			Visit(Cursor, static_cast<int32>(End - Cursor));
+			if (*End == '\0')
+			{
+				break;
+			}
+			Cursor = End + 1;
+		}
+	}
+
+	float RawTextWidth(const ANSICHAR* Begin, int32 Count)
+	{
+		TArray<ANSICHAR> Scratch;
+		return static_cast<float>(stb_easy_font_width(TerminatedCopy(Scratch, Begin, Count)));
+	}
+
+	void AppendTextMesh(TArray<FDrawVert>& Tris, const ANSICHAR* InText, int32 Count, float OriginX, float OriginY,
+		float InPixelScale, const FRgba8& InColor)
+	{
+		if (Count <= 0)
 		{
 			return;
 		}
 
-		std::vector<char> FontBuf(InText.size() * 300 + 64);
-		std::vector<char> MutableText(InText.begin(), InText.end());
-		MutableText.push_back('\0');
-
-		std::array<unsigned char, 4> ColorCopy = InColor;
-		const int Quads = stb_easy_font_print(
-			0.0f, 0.0f, MutableText.data(), ColorCopy.data(), FontBuf.data(), static_cast<int>(FontBuf.size()));
+		TArray<ANSICHAR> MutableText;
+		TArray<ANSICHAR> FontBuf;
+		FontBuf.SetNumZeroed(Count * 300 + 64);
+		FRgba8 ColorCopy = InColor;
+		const int32 Quads = stb_easy_font_print(
+			0.0f, 0.0f, TerminatedCopy(MutableText, InText, Count), ColorCopy.V, FontBuf.GetData(), FontBuf.Num());
 		if (Quads <= 0)
 		{
 			return;
 		}
 
-		const auto* Packed = reinterpret_cast<const FPackedVert*>(FontBuf.data());
+		const auto* Packed = reinterpret_cast<const FPackedVert*>(FontBuf.GetData());
 		auto Push = [&](const FPackedVert& V)
 		{
 			FDrawVert Out{};
 			Out.X = (V.X * InPixelScale) + OriginX;
 			Out.Y = (V.Y * InPixelScale) + OriginY;
 			Out.Z = 0.0f;
-			Out.R = InColor[0] / 255.0f;
-			Out.G = InColor[1] / 255.0f;
-			Out.B = InColor[2] / 255.0f;
-			Out.A = InColor[3] / 255.0f;
-			Tris.push_back(Out);
+			Out.R = InColor.V[0] / 255.0f;
+			Out.G = InColor.V[1] / 255.0f;
+			Out.B = InColor.V[2] / 255.0f;
+			Out.A = InColor.V[3] / 255.0f;
+			Tris.Add(Out);
 		};
 
-		for (int Q = 0; Q < Quads; ++Q)
+		for (int32 Q = 0; Q < Quads; ++Q)
 		{
 			Push(Packed[(Q * 4) + 0]);
 			Push(Packed[(Q * 4) + 1]);
@@ -92,155 +124,90 @@ namespace
 		}
 	}
 
-	void AppendRightAlignedLines(std::vector<FDrawVert>& Tris, const std::string& InText, int FramebufferWidth,
-		float OriginY, float InPixelScale, const std::array<unsigned char, 4>& InColor)
+	void AppendTextMesh(TArray<FDrawVert>& Tris, const FString& InText, float OriginX, float OriginY,
+		float InPixelScale, const FRgba8& InColor)
 	{
-		if (InText.empty())
-		{
-			return;
-		}
-
-		float LocalY = OriginY;
-		std::size_t Start = 0;
-		while (Start <= InText.size())
-		{
-			const std::size_t End = InText.find('\n', Start);
-			const std::size_t Count = (End == std::string::npos) ? (InText.size() - Start) : (End - Start);
-			const std::string Line = InText.substr(Start, Count);
-
-			if (!Line.empty())
-			{
-				std::vector<char> MutableLine(Line.begin(), Line.end());
-				MutableLine.push_back('\0');
-				const auto RawWidth = static_cast<float>(stb_easy_font_width(MutableLine.data()));
-				const float OriginX = static_cast<float>(FramebufferWidth) - (RawWidth * InPixelScale) - MarginX;
-				AppendTextMesh(Tris, Line, OriginX, LocalY, InPixelScale, InColor);
-			}
-
-			LocalY += 14.0f * InPixelScale;
-			if (End == std::string::npos)
-			{
-				break;
-			}
-			Start = End + 1;
-		}
+		AppendTextMesh(Tris, *InText, InText.Len(), OriginX, OriginY, InPixelScale, InColor);
 	}
 
-	void AppendCenterAlignedLines(std::vector<FDrawVert>& Tris, const std::string& InText, int FramebufferWidth,
-		float OriginY, float InPixelScale, const std::array<unsigned char, 4>& InColor)
+	/** Draws multiline text. AnchorX is the left / center / right of each line per InJustify. */
+	void AppendJustifiedLines(TArray<FDrawVert>& Tris, const FString& InText, float AnchorX, float OriginY,
+		float InPixelScale, ETextJustify InJustify, const FRgba8& InColor)
 	{
-		if (InText.empty())
+		if (InText.IsEmpty())
 		{
 			return;
 		}
 
 		float LocalY = OriginY;
-		std::size_t Start = 0;
-		while (Start <= InText.size())
-		{
-			const std::size_t End = InText.find('\n', Start);
-			const std::size_t Count = (End == std::string::npos) ? (InText.size() - Start) : (End - Start);
-			const std::string Line = InText.substr(Start, Count);
-
-			if (!Line.empty())
+		ForEachLine(InText,
+			[&](const ANSICHAR* Line, int32 Count)
 			{
-				std::vector<char> MutableLine(Line.begin(), Line.end());
-				MutableLine.push_back('\0');
-				const auto RawWidth = static_cast<float>(stb_easy_font_width(MutableLine.data()));
-				const float OriginX = (static_cast<float>(FramebufferWidth) - (RawWidth * InPixelScale)) * 0.5f;
-				AppendTextMesh(Tris, Line, OriginX, LocalY, InPixelScale, InColor);
-			}
-
-			LocalY += 14.0f * InPixelScale;
-			if (End == std::string::npos)
-			{
-				break;
-			}
-			Start = End + 1;
-		}
-	}
-
-	/// Draw multiline text. `anchorX` is left / center / right of each line per `justify`.
-	void AppendJustifiedLines(std::vector<FDrawVert>& Tris, const std::string& InText, float AnchorX, float OriginY,
-		float InPixelScale, ETextJustify InJustify, const std::array<unsigned char, 4>& InColor)
-	{
-		if (InText.empty())
-		{
-			return;
-		}
-
-		float LocalY = OriginY;
-		std::size_t Start = 0;
-		while (Start <= InText.size())
-		{
-			const std::size_t End = InText.find('\n', Start);
-			const std::size_t Count = (End == std::string::npos) ? (InText.size() - Start) : (End - Start);
-			const std::string Line = InText.substr(Start, Count);
-
-			if (!Line.empty())
-			{
-				std::vector<char> MutableLine(Line.begin(), Line.end());
-				MutableLine.push_back('\0');
-				const auto RawWidth = static_cast<float>(stb_easy_font_width(MutableLine.data()));
-				const float LineW = RawWidth * InPixelScale;
-				float OriginX = AnchorX;
-				if (InJustify == ETextJustify::Center)
+				if (Count > 0)
 				{
-					OriginX = AnchorX - (LineW * 0.5f);
+					const float LineW = RawTextWidth(Line, Count) * InPixelScale;
+					float OriginX = AnchorX;
+					if (InJustify == ETextJustify::Center)
+					{
+						OriginX = AnchorX - (LineW * 0.5f);
+					}
+					else if (InJustify == ETextJustify::Right)
+					{
+						OriginX = AnchorX - LineW;
+					}
+					AppendTextMesh(Tris, Line, Count, OriginX, LocalY, InPixelScale, InColor);
 				}
-				else if (InJustify == ETextJustify::Right)
-				{
-					OriginX = AnchorX - LineW;
-				}
-				AppendTextMesh(Tris, Line, OriginX, LocalY, InPixelScale, InColor);
-			}
-
-			LocalY += 14.0f * InPixelScale;
-			if (End == std::string::npos)
-			{
-				break;
-			}
-			Start = End + 1;
-		}
+				LocalY += 14.0f * InPixelScale;
+			});
 	}
 
-	/// Measure multiline HUD text: max line width (raw font units) + line count.
-	void MeasureMultilineText(const std::string& InText, float& OutMaxRawWidth, int& OutLineCount)
+	void AppendRightAlignedLines(TArray<FDrawVert>& Tris, const FString& InText, int32 FramebufferWidth, float OriginY,
+		float InPixelScale, const FRgba8& InColor)
+	{
+		AppendJustifiedLines(Tris, InText, static_cast<float>(FramebufferWidth) - MarginX, OriginY, InPixelScale,
+			ETextJustify::Right, InColor);
+	}
+
+	void AppendCenterAlignedLines(TArray<FDrawVert>& Tris, const FString& InText, int32 FramebufferWidth, float OriginY,
+		float InPixelScale, const FRgba8& InColor)
+	{
+		AppendJustifiedLines(Tris, InText, static_cast<float>(FramebufferWidth) * 0.5f, OriginY, InPixelScale,
+			ETextJustify::Center, InColor);
+	}
+
+	/** Measures multiline HUD text: max line width (raw font units) + line count. */
+	void MeasureMultilineText(const FString& InText, float& OutMaxRawWidth, int32& OutLineCount)
 	{
 		OutMaxRawWidth = 0.0f;
-		OutLineCount = 1;
-		std::size_t Start = 0;
-		while (Start <= InText.size())
-		{
-			const std::size_t End = InText.find('\n', Start);
-			const std::size_t Count = (End == std::string::npos) ? (InText.size() - Start) : (End - Start);
-			if (Count > 0)
+		OutLineCount = 0;
+		ForEachLine(InText,
+			[&](const ANSICHAR* Line, int32 Count)
 			{
-				std::vector<char> Line(InText.begin() + static_cast<std::ptrdiff_t>(Start),
-					InText.begin() + static_cast<std::ptrdiff_t>(Start + Count));
-				Line.push_back('\0');
-				OutMaxRawWidth = std::max(OutMaxRawWidth, static_cast<float>(stb_easy_font_width(Line.data())));
-			}
-			if (End == std::string::npos)
-			{
-				break;
-			}
-			++OutLineCount;
-			Start = End + 1;
-		}
+				if (Count > 0)
+				{
+					OutMaxRawWidth = FMath::Max(OutMaxRawWidth, RawTextWidth(Line, Count));
+				}
+				++OutLineCount;
+			});
 	}
 
-	[[nodiscard]] std::array<unsigned char, 4> ColorWithAlpha(const glm::vec3& Rgb, float Alpha)
+	[[nodiscard]] FRgba8 ColorWithAlpha(const FLinearColor& Rgb, float Alpha)
 	{
-		const float LocalA = std::clamp(Alpha, 0.0f, 1.0f);
-		return {static_cast<unsigned char>(std::clamp(Rgb.r, 0.0f, 1.0f) * 255.0f),
-			static_cast<unsigned char>(std::clamp(Rgb.g, 0.0f, 1.0f) * 255.0f),
-			static_cast<unsigned char>(std::clamp(Rgb.b, 0.0f, 1.0f) * 255.0f),
-			static_cast<unsigned char>(LocalA * 255.0f)};
+		FRgba8 Out;
+		Out.V[0] = static_cast<uint8>(FMath::Clamp(Rgb.R, 0.0f, 1.0f) * 255.0f);
+		Out.V[1] = static_cast<uint8>(FMath::Clamp(Rgb.G, 0.0f, 1.0f) * 255.0f);
+		Out.V[2] = static_cast<uint8>(FMath::Clamp(Rgb.B, 0.0f, 1.0f) * 255.0f);
+		Out.V[3] = static_cast<uint8>(FMath::Clamp(Alpha, 0.0f, 1.0f) * 255.0f);
+		return Out;
 	}
 
-	void AppendScreenQuad(std::vector<FDrawVert>& Tris, float InX0, float InY0, float InX1, float InY1, float X2,
-		float Y2, float X3, float Y3, const glm::vec3& InColor)
+	[[nodiscard]] constexpr FRgba8 Rgba8(uint8 R, uint8 G, uint8 B)
+	{
+		return FRgba8{{R, G, B, 255}};
+	}
+
+	void AppendScreenQuad(TArray<FDrawVert>& Tris, float InX0, float InY0, float InX1, float InY1, float X2, float Y2,
+		float X3, float Y3, const FLinearColor& InColor)
 	{
 		auto Push = [&](float InX, float InY)
 		{
@@ -248,11 +215,11 @@ namespace
 			Out.X = InX;
 			Out.Y = InY;
 			Out.Z = 0.0f;
-			Out.R = InColor.r;
-			Out.G = InColor.g;
-			Out.B = InColor.b;
+			Out.R = InColor.R;
+			Out.G = InColor.G;
+			Out.B = InColor.B;
 			Out.A = 1.0f;
-			Tris.push_back(Out);
+			Tris.Add(Out);
 		};
 		Push(InX0, InY0);
 		Push(InX1, InY1);
@@ -262,12 +229,12 @@ namespace
 		Push(X3, Y3);
 	}
 
-	void AppendThickScreenLine(std::vector<FDrawVert>& Tris, float InX0, float InY0, float InX1, float InY1,
-		float InThickness, const glm::vec3& InColor)
+	void AppendThickScreenLine(TArray<FDrawVert>& Tris, float InX0, float InY0, float InX1, float InY1,
+		float InThickness, const FLinearColor& InColor)
 	{
 		const float Dx = InX1 - InX0;
 		const float Dy = InY1 - InY0;
-		const float Len = std::sqrt((Dx * Dx) + (Dy * Dy));
+		const float Len = FMath::Sqrt((Dx * Dx) + (Dy * Dy));
 		if (Len < 1.0e-4f)
 		{
 			return;
@@ -278,15 +245,26 @@ namespace
 			Tris, InX0 - Hx, InY0 - Hy, InX0 + Hx, InY0 + Hy, InX1 + Hx, InY1 + Hy, InX1 - Hx, InY1 - Hy, InColor);
 	}
 
+	/** Replaces Target when it differs (case-sensitive); returns true on change. */
+	bool AssignIfChanged(FString& Target, const FString& Value)
+	{
+		if (Target.Equals(Value, ESearchCase::CaseSensitive))
+		{
+			return false;
+		}
+		Target = Value;
+		return true;
+	}
+
 } // namespace
 
-bool FDebugOverlay::Initialize(const std::string& /*shaderDirectory*/)
+bool FDebugOverlay::Initialize(const FString& /*ShaderDirectory*/)
 {
-	const std::string Vert = ResolveLegacyContentPath("assets/Shaders/debug_overlay.vert");
-	const std::string Frag = ResolveLegacyContentPath("assets/Shaders/debug_overlay.frag");
+	const FString Vert = FPaths::ResolveLegacyContentPath("assets/Shaders/debug_overlay.vert");
+	const FString Frag = FPaths::ResolveLegacyContentPath("assets/Shaders/debug_overlay.frag");
 	if (!Shader.LoadFromFiles(Vert, Frag))
 	{
-		std::cerr << "Failed to load debug overlay shaders\n";
+		UE_LOG(LogRenderer, Error, "Failed to load debug overlay shaders");
 		return false;
 	}
 
@@ -315,58 +293,38 @@ void FDebugOverlay::Shutdown()
 		Vao = 0;
 	}
 	Shader.Destroy();
-	Text.clear();
-	BottomLeftText.clear();
-	CenterText.clear();
-	RightText.clear();
+	Text.Empty();
+	BottomLeftText.Empty();
+	CenterText.Empty();
+	RightText.Empty();
 	RightTextOriginY = MarginY;
-	OnScreenMessages.clear();
-	ScreenLines.clear();
-	ScreenRects.clear();
+	OnScreenMessages.Empty();
+	ScreenLines.Empty();
+	ScreenRects.Empty();
 	VertexCount = 0;
 	bDirty = true;
 	BuiltForWidth = 0;
 	BuiltForHeight = 0;
 }
 
-void FDebugOverlay::SetText(const std::string& InText)
+void FDebugOverlay::SetText(const FString& InText)
 {
-	if (Text == InText)
-	{
-		return;
-	}
-	Text = InText;
-	bDirty = true;
+	bDirty |= AssignIfChanged(Text, InText);
 }
 
-void FDebugOverlay::SetBottomLeftText(const std::string& InText)
+void FDebugOverlay::SetBottomLeftText(const FString& InText)
 {
-	if (BottomLeftText == InText)
-	{
-		return;
-	}
-	BottomLeftText = InText;
-	bDirty = true;
+	bDirty |= AssignIfChanged(BottomLeftText, InText);
 }
 
-void FDebugOverlay::SetCenterText(const std::string& InText)
+void FDebugOverlay::SetCenterText(const FString& InText)
 {
-	if (CenterText == InText)
-	{
-		return;
-	}
-	CenterText = InText;
-	bDirty = true;
+	bDirty |= AssignIfChanged(CenterText, InText);
 }
 
-void FDebugOverlay::SetRightText(const std::string& InText)
+void FDebugOverlay::SetRightText(const FString& InText)
 {
-	if (RightText == InText)
-	{
-		return;
-	}
-	RightText = InText;
-	bDirty = true;
+	bDirty |= AssignIfChanged(RightText, InText);
 }
 
 void FDebugOverlay::SetRightTextOriginY(float OriginY)
@@ -379,86 +337,75 @@ void FDebugOverlay::SetRightTextOriginY(float OriginY)
 	bDirty = true;
 }
 
-void FDebugOverlay::AddOnScreenDebugMessage(std::string Message, float DisplaySeconds, const glm::vec3& InColor)
+void FDebugOverlay::AddOnScreenDebugMessage(const FString& Message, float DisplaySeconds, const FLinearColor& InColor)
 {
-	if (Message.empty())
+	if (Message.IsEmpty())
 	{
 		return;
 	}
 	const float LocalDuration = DisplaySeconds > 0.0f ? DisplaySeconds : 0.01f;
-	OnScreenMessages.push_back(FOnScreenMessage{std::move(Message), LocalDuration, LocalDuration, InColor});
-	while (OnScreenMessages.size() > MaxOnScreenMessages)
+	OnScreenMessages.Add(FOnScreenMessage{Message, LocalDuration, LocalDuration, InColor});
+	if (OnScreenMessages.Num() > MaxOnScreenMessages)
 	{
-		OnScreenMessages.erase(OnScreenMessages.begin());
+		OnScreenMessages.RemoveAt(0, OnScreenMessages.Num() - MaxOnScreenMessages);
 	}
 	bDirty = true;
 }
 
 void FDebugOverlay::TickOnScreenMessages(float DeltaTime)
 {
-	if (OnScreenMessages.empty())
+	if (OnScreenMessages.Num() == 0)
 	{
 		return;
 	}
-	bool bChanged = false;
 	for (FOnScreenMessage& Msg : OnScreenMessages)
 	{
 		Msg.TimeRemaining -= DeltaTime;
-		bChanged = true;
 	}
-	const auto EraseIt = std::remove_if(OnScreenMessages.begin(), OnScreenMessages.end(),
-		[](const FOnScreenMessage& Msg) { return Msg.TimeRemaining <= 0.0f; });
-	if (EraseIt != OnScreenMessages.end())
-	{
-		OnScreenMessages.erase(EraseIt, OnScreenMessages.end());
-		bChanged = true;
-	}
-	if (bChanged)
-	{
-		bDirty = true;
-	}
+	OnScreenMessages.RemoveAll([](const FOnScreenMessage& Msg) { return Msg.TimeRemaining <= 0.0f; });
+	bDirty = true;
 }
 
 void FDebugOverlay::ClearScreenGeometry()
 {
-	if (ScreenLines.empty() && ScreenRects.empty() && ScreenTexts.empty())
+	if (ScreenLines.Num() == 0 && ScreenRects.Num() == 0 && ScreenTexts.Num() == 0)
 	{
 		return;
 	}
-	ScreenLines.clear();
-	ScreenRects.clear();
-	ScreenTexts.clear();
+	ScreenLines.Reset();
+	ScreenRects.Reset();
+	ScreenTexts.Reset();
 	bDirty = true;
 }
 
 void FDebugOverlay::AddScreenLine(
-	float InX0, float InY0, float InX1, float InY1, const glm::vec3& InColor, float InThickness)
+	float InX0, float InY0, float InX1, float InY1, const FLinearColor& InColor, float InThickness)
 {
-	ScreenLines.push_back(FScreenLine{InX0, InY0, InX1, InY1, InThickness, InColor});
+	ScreenLines.Add(FScreenLine{InX0, InY0, InX1, InY1, InThickness, InColor});
 	bDirty = true;
 }
 
-void FDebugOverlay::AddScreenRect(float InX, float InY, float InW, float InH, const glm::vec3& InColor)
+void FDebugOverlay::AddScreenRect(float InX, float InY, float InW, float InH, const FLinearColor& InColor)
 {
-	ScreenRects.push_back(FScreenRect{InX, InY, InW, InH, InColor});
+	ScreenRects.Add(FScreenRect{InX, InY, InW, InH, InColor});
 	bDirty = true;
 }
 
-void FDebugOverlay::AddScreenText(
-	std::string InText, float InX, float InY, const glm::vec3& InColor, float InPixelScale, ETextJustify InJustify)
+void FDebugOverlay::AddScreenText(const FString& InText, float InX, float InY, const FLinearColor& InColor,
+	float InPixelScale, ETextJustify InJustify)
 {
-	if (InText.empty())
+	if (InText.IsEmpty())
 	{
 		return;
 	}
-	ScreenTexts.push_back(FScreenText{std::move(InText), InX, InY, InPixelScale, InJustify, InColor});
+	ScreenTexts.Add(FScreenText{InText, InX, InY, InPixelScale, InJustify, InColor});
 	bDirty = true;
 }
 
-void FDebugOverlay::MeasureText(const std::string& InText, float InPixelScale, float& OutWidth, float& OutHeight)
+void FDebugOverlay::MeasureText(const FString& InText, float InPixelScale, float& OutWidth, float& OutHeight)
 {
 	float MaxRaw = 0.0f;
-	int Lines = 1;
+	int32 Lines = 1;
 	MeasureMultilineText(InText, MaxRaw, Lines);
 	OutWidth = MaxRaw * InPixelScale;
 	OutHeight = 14.0f * InPixelScale * static_cast<float>(Lines);
@@ -469,35 +416,35 @@ EShaderReloadResult FDebugOverlay::ReloadShader(bool bForce)
 	return bForce ? Shader.ForceReloadFromDisk() : Shader.ReloadFromDiskIfChanged();
 }
 
-void FDebugOverlay::RebuildMesh(int FramebufferWidth, int FramebufferHeight)
+void FDebugOverlay::RebuildMesh(int32 FramebufferWidth, int32 FramebufferHeight)
 {
 	bDirty = false;
 	BuiltForWidth = FramebufferWidth;
 	BuiltForHeight = FramebufferHeight;
 	VertexCount = 0;
 	if (Vao == 0 ||
-		(Text.empty() && BottomLeftText.empty() && CenterText.empty() && RightText.empty() &&
-			OnScreenMessages.empty() && ScreenLines.empty() && ScreenRects.empty() && ScreenTexts.empty()))
+		(Text.IsEmpty() && BottomLeftText.IsEmpty() && CenterText.IsEmpty() && RightText.IsEmpty() &&
+			OnScreenMessages.Num() == 0 && ScreenLines.Num() == 0 && ScreenRects.Num() == 0 && ScreenTexts.Num() == 0))
 	{
 		return;
 	}
 
-	std::vector<FDrawVert> Tris;
-	constexpr std::array<unsigned char, 4> LeftColor = {230, 235, 240, 255};
-	constexpr std::array<unsigned char, 4> BottomLeftColor = {200, 210, 220, 255};
-	constexpr std::array<unsigned char, 4> CenterColor = {255, 210, 90, 255};
-	constexpr std::array<unsigned char, 4> RightColor = {240, 240, 245, 255};
+	TArray<FDrawVert> Tris;
+	constexpr FRgba8 LeftColor = Rgba8(230, 235, 240);
+	constexpr FRgba8 BottomLeftColor = Rgba8(200, 210, 220);
+	constexpr FRgba8 CenterColor = Rgba8(255, 210, 90);
+	constexpr FRgba8 RightColor = Rgba8(240, 240, 245);
 	constexpr float LineStepY = 14.0f * HudPixelScale;
 
 	// Top-left HUD block (FPS / tools).
 	AppendTextMesh(Tris, Text, MarginX, MarginY, HudPixelScale, LeftColor);
 
-	if (!BottomLeftText.empty())
+	if (!BottomLeftText.IsEmpty())
 	{
-		int LineCount = 1;
-		for (char C : BottomLeftText)
+		int32 LineCount = 1;
+		for (const ANSICHAR* C = *BottomLeftText; *C != '\0'; ++C)
 		{
-			if (C == '\n')
+			if (*C == '\n')
 			{
 				++LineCount;
 			}
@@ -507,16 +454,16 @@ void FDebugOverlay::RebuildMesh(int FramebufferWidth, int FramebufferHeight)
 		AppendTextMesh(Tris, BottomLeftText, MarginX, OriginY, HudPixelScale, BottomLeftColor);
 	}
 
-	if (!CenterText.empty())
+	if (!CenterText.IsEmpty())
 	{
 		float MaxRawWidth = 0.0f;
-		int LineCount = 1;
+		int32 LineCount = 1;
 		MeasureMultilineText(CenterText, MaxRawWidth, LineCount);
 		const float BlockH = 14.0f * HudPixelScale * static_cast<float>(LineCount);
 		// Vertically center; clamp so short windows still keep the block on-screen.
 		float OriginY = (static_cast<float>(FramebufferHeight) - BlockH) * 0.5f;
-		OriginY =
-			std::clamp(OriginY, MarginY, std::max(MarginY, static_cast<float>(FramebufferHeight) - BlockH - MarginY));
+		OriginY = FMath::Clamp(
+			OriginY, MarginY, FMath::Max(MarginY, static_cast<float>(FramebufferHeight) - BlockH - MarginY));
 		// Each line centered — long Main Menu hints must not left-bias short rows.
 		AppendCenterAlignedLines(Tris, CenterText, FramebufferWidth, OriginY, HudPixelScale, CenterColor);
 	}
@@ -526,14 +473,15 @@ void FDebugOverlay::RebuildMesh(int FramebufferWidth, int FramebufferHeight)
 
 	// Top-left debug console: newest at the fixed top slot; older lines shift down (+Y).
 	float LocalY = MarginY;
-	for (auto It = OnScreenMessages.rbegin(); It != OnScreenMessages.rend(); ++It)
+	for (int32 Index = OnScreenMessages.Num() - 1; Index >= 0; --Index)
 	{
+		const FOnScreenMessage& Msg = OnScreenMessages[Index];
 		float Alpha = 1.0f;
-		if (It->TimeRemaining < FadeTailSeconds)
+		if (Msg.TimeRemaining < FadeTailSeconds)
 		{
-			Alpha = std::clamp(It->TimeRemaining / FadeTailSeconds, 0.0f, 1.0f);
+			Alpha = FMath::Clamp(Msg.TimeRemaining / FadeTailSeconds, 0.0f, 1.0f);
 		}
-		AppendTextMesh(Tris, It->Text, MarginX, LocalY, MessagePixelScale, ColorWithAlpha(It->Color, Alpha));
+		AppendTextMesh(Tris, Msg.Text, MarginX, LocalY, MessagePixelScale, ColorWithAlpha(Msg.Color, Alpha));
 		LocalY += MessageLineStepY;
 		if (LocalY > static_cast<float>(FramebufferHeight) - MarginY)
 		{
@@ -560,12 +508,12 @@ void FDebugOverlay::RebuildMesh(int FramebufferWidth, int FramebufferHeight)
 
 	glBindBuffer(GL_ARRAY_BUFFER, Vbo);
 	glBufferData(
-		GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(Tris.size() * sizeof(FDrawVert)), Tris.data(), GL_DYNAMIC_DRAW);
+		GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(Tris.Num() * sizeof(FDrawVert)), Tris.GetData(), GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	VertexCount = static_cast<int>(Tris.size());
+	VertexCount = Tris.Num();
 }
 
-void FDebugOverlay::Draw(int FramebufferWidth, int FramebufferHeight)
+void FDebugOverlay::Draw(int32 FramebufferWidth, int32 FramebufferHeight)
 {
 	if (!IsValid() || FramebufferWidth <= 0 || FramebufferHeight <= 0)
 	{
@@ -581,7 +529,7 @@ void FDebugOverlay::Draw(int FramebufferWidth, int FramebufferHeight)
 		return;
 	}
 
-	const glm::mat4 Projection = glm::ortho(
+	const FMatrix Projection = LegacyGL::Ortho(
 		0.0f, static_cast<float>(FramebufferWidth), static_cast<float>(FramebufferHeight), 0.0f, -1.0f, 1.0f);
 
 	glDisable(GL_DEPTH_TEST);
@@ -590,7 +538,7 @@ void FDebugOverlay::Draw(int FramebufferWidth, int FramebufferHeight)
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	Shader.Bind();
-	Shader.SetMat4("uProjection", glm::value_ptr(Projection));
+	Shader.SetMat4("uProjection", LegacyGL::ValuePtr(Projection));
 	glBindVertexArray(Vao);
 	glDrawArrays(GL_TRIANGLES, 0, VertexCount);
 	glBindVertexArray(0);

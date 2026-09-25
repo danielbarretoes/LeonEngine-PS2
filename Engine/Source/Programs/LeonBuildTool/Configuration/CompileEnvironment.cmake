@@ -69,6 +69,8 @@ function(leon_apply_compile_environment Target CxxStandard)
 			/MP
 			# Shadowed locals / parameters / members are errors (UE: ShadowVariableWarningLevel = Error).
 			/we4456 /we4457 /we4458 /we4459
+			# Padding added for alignas (FMatrix, FVector4) is expected (UE disables C4324 the same way).
+			/wd4324
 			$<$<CONFIG:Debug,RelWithDebInfo>:/FS>)
 	elseif(LEON_PLATFORM STREQUAL "PS2")
 		# Shadowing is an error like on MSVC (UE: ShadowVariableWarningLevel = Error). The EE FPU is single precision:

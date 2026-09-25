@@ -1,25 +1,20 @@
 #include "Engine/GameEngine.h"
 
 #include "DynamicRHI.h"
+#include "EngineLogs.h"
 #include "GameFramework/Input.h"
 #include "HAL/PlatformApplicationMisc.h"
 #include "HAL/PlatformMemory.h"
+#include "HAL/PlatformProcess.h"
+#include "HAL/PlatformTime.h"
 #include "InputCoreTypes.h"
-#include "Migration/GlmInterop.h"
-#include "Migration/LegacyContentPath.h"
-
-#include <algorithm>
-#include <array>
-#include <chrono>
-#include <cstdio>
-#include <iostream>
-#include <string>
-#include <thread>
+#include "Misc/CString.h"
+#include "Misc/Paths.h"
 
 UGameEngine::UGameEngine()
-	: GameInstance(std::make_unique<UGameInstance>())
+	: GameInstance(MakeUnique<UGameInstance>())
 {
-	Application.reset(FPlatformApplicationMisc::CreateApplication());
+	Application.Reset(FPlatformApplicationMisc::CreateApplication());
 	Window = Application->MakeWindow();
 	PlayerInput.AddMappingContext(UInputMappingContext::MakeDefault());
 }
@@ -29,7 +24,7 @@ UGameEngine::~UGameEngine()
 	Shutdown();
 }
 
-bool UGameEngine::Initialize(int Width, int Height, const char* Title)
+bool UGameEngine::Initialize(int32 Width, int32 Height, const TCHAR* Title)
 {
 	if (bInitialized)
 	{
@@ -41,7 +36,7 @@ bool UGameEngine::Initialize(int Width, int Height, const char* Title)
 		return false;
 	}
 
-	const std::string ShaderDir = ResolveLegacyContentPath("assets/Shaders");
+	const FString ShaderDir = FPaths::ResolveLegacyContentPath("assets/Shaders");
 	if (!Renderer.Initialize(ShaderDir))
 	{
 		Window->Destroy();
@@ -57,7 +52,7 @@ bool UGameEngine::Initialize(int Width, int Height, const char* Title)
 	Window->OnMouseWheel().BindLambda([this](float Delta) { PendingScrollY += Delta; });
 
 	Camera.SetPerspective(60.0f, Window->Aspect(), 0.1f, 100.0f);
-	Camera.SetTarget({0.0f, 0.0f, 0.0f});
+	Camera.SetTarget(FVector::ZeroVector);
 
 	SetCursorCaptured(true);
 
@@ -69,8 +64,8 @@ bool UGameEngine::Initialize(int Width, int Height, const char* Title)
 	bRunning = true;
 	bHeadless = false;
 	// Stats off until F4 -- matches editor Viewport / PIE (no Engine overlay by default).
-	Overlay.SetRightText({});
-	Overlay.SetBottomLeftText({});
+	Overlay.SetRightText(FString());
+	Overlay.SetBottomLeftText(FString());
 	return true;
 }
 
@@ -81,17 +76,13 @@ bool UGameEngine::InitializeHeadless()
 		return true;
 	}
 
-	// Redirected stdout (smoke / CI) is fully buffered; keep dedicated logs visible on kill.
-	std::cout.setf(std::ios::unitbuf);
-	std::cerr.setf(std::ios::unitbuf);
-
 	Resources.SetGpuUploadEnabled(false);
 	bHeadless = true;
 	(void)AudioDevice.Initialize(/*silent=*/true);
 	GameInstance->Init();
 	bInitialized = true;
 	bRunning = true;
-	std::cout << "Leon Engine headless (no OpenGL / window)\n";
+	UE_LOG(LogEngine, Log, "Leon Engine headless (no OpenGL / window)");
 	return true;
 }
 
@@ -122,7 +113,7 @@ void UGameEngine::Shutdown()
 	bOrbitMouseEnabled = true;
 	PendingScrollY = 0.0f;
 	Hud.Clear();
-	CenterHudText.clear();
+	CenterHudText.Empty();
 	LastFbWidth = 0;
 	LastFbHeight = 0;
 	FpsAccumTime = 0.0f;
@@ -182,16 +173,16 @@ const FGenericWindow& UGameEngine::GetPlayInputWindow() const
 	return PlayInputTarget.Resolve(*Window);
 }
 
-void UGameEngine::AddOnScreenDebugMessage(std::string Message, float DisplaySeconds, const glm::vec3& Color)
+void UGameEngine::AddOnScreenDebugMessage(const FString& Message, float DisplaySeconds, const FLinearColor& Color)
 {
 	if (bHeadless)
 	{
-		std::cout << "[headless] " << Message << '\n';
+		UE_LOG(LogEngine, Log, "[headless] %s", *Message);
 		(void)DisplaySeconds;
 		(void)Color;
 		return;
 	}
-	Overlay.AddOnScreenDebugMessage(std::move(Message), DisplaySeconds, Color);
+	Overlay.AddOnScreenDebugMessage(Message, DisplaySeconds, Color);
 }
 
 EShaderReloadResult UGameEngine::ReloadAllShaders(bool bForce)
@@ -206,30 +197,30 @@ void UGameEngine::Run(
 {
 	if (!bInitialized)
 	{
-		std::cerr << "Engine is not initialized\n";
+		UE_LOG(LogEngine, Error, "Engine is not initialized");
 		return;
 	}
 
 	Start();
-	auto Previous = std::chrono::steady_clock::now();
+	double Previous = FPlatformTime::Seconds();
 	float DeltaTime = 0.0f;
 	do
 	{
-		const auto Now = std::chrono::steady_clock::now();
-		DeltaTime = std::min(std::chrono::duration<float>(Now - Previous).count(), 0.1f);
+		const double Now = FPlatformTime::Seconds();
+		DeltaTime = FMath::Min(static_cast<float>(Now - Previous), 0.1f);
 		Previous = Now;
 	} while (Tick(DeltaTime, OnUpdate, OnPreInput, OnPostRender));
 }
 
 void UGameEngine::Start()
 {
-	std::cout << "Level static meshes: " << Level.GetStaticMeshes().size() << '\n';
-	std::cout << "Controls: mouse look (cursor captured), scroll zoom (orbit); close window to quit\n";
-	std::cout << "Default mode: mouse look, WASD fly along view, Q/E up/down\n";
-	std::cout << "Debug: F1 mesh AABBs + light frustum; F2 collision volumes + floor traces\n";
-	std::cout << "Debug: F3 NavMesh grid (walkable / blocked)\n";
-	std::cout << "Stats: F4 FPS / RAM / TRI overlay (off by default)\n";
-	std::cout << "Shaders: F5 force-reload (also auto-reloads when files change)\n";
+	UE_LOG(LogEngine, Log, "Level static meshes: %d", Level.GetStaticMeshes().Num());
+	UE_LOG(LogEngine, Log, "Controls: mouse look (cursor captured), scroll zoom orbit; close window to quit");
+	UE_LOG(LogEngine, Log, "Default mode: mouse look, WASD fly along view, Q/E up/down");
+	UE_LOG(LogEngine, Log, "Debug: F1 mesh AABBs + light frustum; F2 collision volumes + floor traces");
+	UE_LOG(LogEngine, Log, "Debug: F3 NavMesh grid (walkable / blocked)");
+	UE_LOG(LogEngine, Log, "Stats: F4 FPS / RAM / TRI overlay (off by default)");
+	UE_LOG(LogEngine, Log, "Shaders: F5 force-reload (also auto-reloads when files change)");
 }
 
 bool UGameEngine::Tick(float DeltaTime, const FUpdateCallback& OnUpdate, const FPreInputCallback& OnPreInput,
@@ -270,10 +261,10 @@ void UGameEngine::TickPlayAudio()
 	{
 		return;
 	}
-	const glm::vec3 Eye = Camera.GetCameraLocation();
-	const glm::vec3 Forward = Camera.ForwardVector();
-	const glm::vec3 Up{0.0f, 1.0f, 0.0f};
-	AudioDevice.SetListener(FromGlm(Eye), FromGlm(Forward), FromGlm(Up));
+	const FVector Eye = Camera.GetCameraLocation();
+	const FVector Forward = Camera.ForwardVector();
+	const FVector Up = FVector(0.0f, 1.0f, 0.0f);
+	AudioDevice.SetListener(Eye, Forward, Up);
 	AudioDevice.Tick();
 }
 
@@ -292,7 +283,7 @@ void UGameEngine::TickPlayHud(float DeltaTime)
 	Overlay.SetCenterText(CenterHudText);
 }
 
-void UGameEngine::PaintHudAndOverlay(int FramebufferWidth, int FramebufferHeight)
+void UGameEngine::PaintHudAndOverlay(int32 FramebufferWidth, int32 FramebufferHeight)
 {
 	if (!bInitialized || bHeadless)
 	{
@@ -310,7 +301,7 @@ void UGameEngine::RunHeadless(const FUpdateCallback& OnUpdate, float TickHz)
 {
 	if (!bInitialized || !bHeadless)
 	{
-		std::cerr << "Engine::RunHeadless requires InitializeHeadless()\n";
+		UE_LOG(LogEngine, Error, "Engine::RunHeadless requires InitializeHeadless()");
 		return;
 	}
 	if (TickHz < 1.0f)
@@ -318,18 +309,17 @@ void UGameEngine::RunHeadless(const FUpdateCallback& OnUpdate, float TickHz)
 		TickHz = 1.0f;
 	}
 	const float Dt = 1.0f / TickHz;
-	std::cout << "Headless tick " << TickHz << " Hz -- Ctrl+C to stop\n";
+	UE_LOG(LogEngine, Log, "Headless tick %g Hz -- Ctrl+C to stop", static_cast<double>(TickHz));
 
-	using clock = std::chrono::steady_clock;
-	auto Next = clock::now();
+	double Next = FPlatformTime::Seconds();
 	while (bRunning)
 	{
 		if (OnUpdate)
 		{
 			OnUpdate(Dt);
 		}
-		Next += std::chrono::duration_cast<clock::duration>(std::chrono::duration<double>(Dt));
-		const auto Now = clock::now();
+		Next += static_cast<double>(Dt);
+		const double Now = FPlatformTime::Seconds();
 		if (Next < Now)
 		{
 			// Fell behind -- resync to avoid spiral.
@@ -337,7 +327,7 @@ void UGameEngine::RunHeadless(const FUpdateCallback& OnUpdate, float TickHz)
 		}
 		else
 		{
-			std::this_thread::sleep_until(Next);
+			FPlatformProcess::Sleep(static_cast<float>(Next - Now));
 		}
 	}
 }
@@ -347,8 +337,8 @@ void UGameEngine::SetHudStatsVisible(bool bVisible)
 	bShowHudStats = bVisible;
 	if (!bShowHudStats)
 	{
-		Overlay.SetRightText({});
-		Overlay.SetBottomLeftText({});
+		Overlay.SetRightText(FString());
+		Overlay.SetBottomLeftText(FString());
 		FpsAccumTime = 0.0f;
 		FpsAccumFrames = 0;
 	}
@@ -370,50 +360,48 @@ void UGameEngine::UpdateHudStats(float DeltaTime)
 
 	const FFrameStats& Stats = Renderer.GetFrameStats();
 
-	int FbWidth = 0;
-	int FbHeight = 0;
+	int32 FbWidth = 0;
+	int32 FbHeight = 0;
 	Window->GetFramebufferSize(FbWidth, FbHeight);
 
 	const FPlatformMemoryStats Memory = FPlatformMemory::GetStats();
 	const auto RamMb = static_cast<double>(Memory.UsedPhysical) / (1024.0 * 1024.0);
 	const FRHIGPUMemoryStats Gpu = GDynamicRHI != nullptr ? GDynamicRHI->GetGPUMemoryStats() : FRHIGPUMemoryStats{};
 
-	std::array<char, 32> Vram{};
-	(void)std::snprintf(Vram.data(), Vram.size(), "VRAM n/a");
+	ANSICHAR Vram[32];
+	(void)FCStringAnsi::Snprintf(Vram, UE_ARRAY_COUNT(Vram), "VRAM n/a");
 	if (Gpu.bValid)
 	{
 		const auto BudgetMb = static_cast<double>(Gpu.BudgetBytes) / (1024.0 * 1024.0);
 		if (Gpu.bReportsUsage)
 		{
 			const auto UsedMb = static_cast<double>(Gpu.UsedBytes) / (1024.0 * 1024.0);
-			(void)std::snprintf(Vram.data(), Vram.size(), "VRAM %.0f/%.0fM", UsedMb, BudgetMb);
+			(void)FCStringAnsi::Snprintf(Vram, UE_ARRAY_COUNT(Vram), "VRAM %.0f/%.0fM", UsedMb, BudgetMb);
 		}
 		else
 		{
-			(void)std::snprintf(Vram.data(), Vram.size(), "VRAM %.0fM", BudgetMb);
+			(void)FCStringAnsi::Snprintf(Vram, UE_ARRAY_COUNT(Vram), "VRAM %.0fM", BudgetMb);
 		}
 	}
 
 	// Compact two-column stats (top-right).
-	std::array<char, 256> Text{};
-	(void)std::snprintf(Text.data(), Text.size(),
-		"FPS %5.0f   MS %5.2f\n"
-		"RAM %4.0fM  %s\n"
-		"TRIS %5d  OBJ %d/%d\n"
-		"RES %dx%d\n"
-		"GPU Sh %.2f Pl %.2f Col %.2f\n"
-		"    AO %.2f Pst %.2f",
-		DisplayFps, DisplayMs, RamMb, Vram.data(), Stats.TrianglesSubmitted, Stats.ObjectsVisible, Stats.ObjectsTotal,
-		FbWidth, FbHeight, Stats.ShadowMs, Stats.PlanarMs, Stats.ColorMs, Stats.SsaoMs, Stats.PostMs);
-	Overlay.SetRightText(Text.data());
-	Overlay.SetText({});
-	Overlay.SetCenterText({});
+	const FString Text = FString::Printf("FPS %5.0f   MS %5.2f\n"
+										 "RAM %4.0fM  %s\n"
+										 "TRIS %5d  OBJ %d/%d\n"
+										 "RES %dx%d\n"
+										 "GPU Sh %.2f Pl %.2f Col %.2f\n"
+										 "    AO %.2f Pst %.2f",
+		static_cast<double>(DisplayFps), static_cast<double>(DisplayMs), RamMb, Vram, Stats.TrianglesSubmitted,
+		Stats.ObjectsVisible, Stats.ObjectsTotal, FbWidth, FbHeight, static_cast<double>(Stats.ShadowMs),
+		static_cast<double>(Stats.PlanarMs), static_cast<double>(Stats.ColorMs), static_cast<double>(Stats.SsaoMs),
+		static_cast<double>(Stats.PostMs));
+	Overlay.SetRightText(Text);
+	Overlay.SetText(FString());
+	Overlay.SetCenterText(FString());
 
-	std::array<char, 96> Hints{};
-	(void)std::snprintf(Hints.data(), Hints.size(), "F1 AABB %s\nF2 Coll+Trace %s\nF3 NavMesh %s",
-		Renderer.IsDebugDrawEnabled() ? "ON" : "OFF", bCollisionDebugEnabled ? "ON" : "OFF",
-		bNavMeshDebugEnabled ? "ON" : "OFF");
-	Overlay.SetBottomLeftText(Hints.data());
+	Overlay.SetBottomLeftText(
+		FString::Printf("F1 AABB %s\nF2 Coll+Trace %s\nF3 NavMesh %s", Renderer.IsDebugDrawEnabled() ? "ON" : "OFF",
+			bCollisionDebugEnabled ? "ON" : "OFF", bNavMeshDebugEnabled ? "ON" : "OFF"));
 }
 
 void UGameEngine::HandleInput(float DeltaTime)
@@ -425,7 +413,7 @@ void UGameEngine::HandleInput(float DeltaTime)
 	if (bF1Down && !bDebugKeyWasDown)
 	{
 		Renderer.ToggleDebugDraw();
-		std::cout << "Debug draw (mesh AABB): " << (Renderer.IsDebugDrawEnabled() ? "on" : "off") << '\n';
+		UE_LOG(LogEngine, Log, "Debug draw (mesh AABB): %s", Renderer.IsDebugDrawEnabled() ? "on" : "off");
 	}
 	bDebugKeyWasDown = bF1Down;
 
@@ -433,7 +421,7 @@ void UGameEngine::HandleInput(float DeltaTime)
 	if (bF2Down && !bCollisionDebugKeyWasDown)
 	{
 		ToggleCollisionDebug();
-		std::cout << "Collision debug: " << (IsCollisionDebugEnabled() ? "on" : "off") << '\n';
+		UE_LOG(LogEngine, Log, "Collision debug: %s", IsCollisionDebugEnabled() ? "on" : "off");
 	}
 	bCollisionDebugKeyWasDown = bF2Down;
 
@@ -441,7 +429,7 @@ void UGameEngine::HandleInput(float DeltaTime)
 	if (bF3Down && !bNavMeshDebugKeyWasDown)
 	{
 		ToggleNavMeshDebug();
-		std::cout << "NavMesh debug: " << (IsNavMeshDebugEnabled() ? "on" : "off") << '\n';
+		UE_LOG(LogEngine, Log, "NavMesh debug: %s", IsNavMeshDebugEnabled() ? "on" : "off");
 	}
 	bNavMeshDebugKeyWasDown = bF3Down;
 
@@ -449,7 +437,7 @@ void UGameEngine::HandleInput(float DeltaTime)
 	if (bF4Down && !bHudStatsKeyWasDown)
 	{
 		SetHudStatsVisible(!bShowHudStats);
-		std::cout << "HUD stats: " << (bShowHudStats ? "on" : "off") << '\n';
+		UE_LOG(LogEngine, Log, "HUD stats: %s", bShowHudStats ? "on" : "off");
 	}
 	bHudStatsKeyWasDown = bF4Down;
 
@@ -459,15 +447,15 @@ void UGameEngine::HandleInput(float DeltaTime)
 		const EShaderReloadResult Result = ReloadAllShaders(true);
 		if (Result == EShaderReloadResult::Failed)
 		{
-			std::cerr << "Shader reload failed; previous programs kept where possible\n";
+			UE_LOG(LogEngine, Warning, "Shader reload failed; previous programs kept where possible");
 		}
 		else if (Result == EShaderReloadResult::Reloaded)
 		{
-			std::cout << "Shaders reloaded (F5)\n";
+			UE_LOG(LogEngine, Log, "Shaders reloaded (F5)");
 		}
 		else
 		{
-			std::cout << "Shaders unchanged (F5)\n";
+			UE_LOG(LogEngine, Log, "Shaders unchanged (F5)");
 		}
 	}
 	bReloadKeyWasDown = bF5Down;
@@ -533,8 +521,8 @@ void UGameEngine::HandleInput(float DeltaTime)
 
 void UGameEngine::Render(const FPostRenderCallback& OnPostRender)
 {
-	int FbWidth = 0;
-	int FbHeight = 0;
+	int32 FbWidth = 0;
+	int32 FbHeight = 0;
 	Window->GetFramebufferSize(FbWidth, FbHeight);
 	if (FbWidth <= 0 || FbHeight <= 0)
 	{

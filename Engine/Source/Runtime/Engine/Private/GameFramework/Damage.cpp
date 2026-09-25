@@ -1,10 +1,8 @@
 #include "GameFramework/Character.h"
 #include "Kismet/GameplayStatics.h"
 
-#include <glm/geometric.hpp>
-
 float UGameplayStatics::ApplyPointDamage(
-	ACharacter* DamagedActor, float BaseDamage, const glm::vec3& HitFromDirection, ACharacter* /*DamageCauser*/)
+	ACharacter* DamagedActor, float BaseDamage, const FVector& HitFromDirection, ACharacter* /*DamageCauser*/)
 {
 	if (DamagedActor == nullptr || BaseDamage <= 0.0f)
 	{
@@ -14,8 +12,8 @@ float UGameplayStatics::ApplyPointDamage(
 	return DamagedActor->TakeDamage(BaseDamage);
 }
 
-float UGameplayStatics::ApplyRadialDamage(const std::vector<ACharacter*>& Actors, float BaseDamage,
-	const glm::vec3& Origin, float DamageRadius, ACharacter* /*DamageCauser*/)
+float UGameplayStatics::ApplyRadialDamage(const TArray<ACharacter*>& Actors, float BaseDamage, const FVector& Origin,
+	float DamageRadius, ACharacter* /*DamageCauser*/)
 {
 	if (BaseDamage <= 0.0f || DamageRadius <= 0.0f)
 	{
@@ -28,7 +26,7 @@ float UGameplayStatics::ApplyRadialDamage(const std::vector<ACharacter*>& Actors
 		{
 			continue;
 		}
-		const float Dist = glm::length(Actor->GetActorLocation() - Origin);
+		const float Dist = (Actor->GetActorLocation() - Origin).Size();
 		if (Dist >= DamageRadius)
 		{
 			continue;

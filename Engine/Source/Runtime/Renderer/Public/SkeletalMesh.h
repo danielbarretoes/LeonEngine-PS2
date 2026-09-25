@@ -1,15 +1,11 @@
 #pragma once
 
+#include "CoreMinimal.h"
 #include "Material.h"
 #include "RHIHandles.h"
 #include "SkeletalAnimation.h"
 
-#include <glm/vec3.hpp>
-
-#include <memory>
-#include <vector>
-
-/// GPU skinned mesh (VAO with bone indices/weights).
+/** GPU skinned mesh (VAO with bone indices/weights). */
 class RENDERER_API USkeletalMesh
 {
 public:
@@ -22,7 +18,7 @@ public:
 	USkeletalMesh& operator=(USkeletalMesh&& Other) noexcept;
 
 	[[nodiscard]] static USkeletalMesh Upload(FSkeletalMeshData Data);
-	/// Skeleton / bounds / index count only (no VAO). Dedicated server path.
+	/** Skeleton / bounds / index count only (no VAO). Headless path. */
 	[[nodiscard]] static USkeletalMesh CreateCpu(FSkeletalMeshData Data);
 
 	void Draw() const;
@@ -35,11 +31,11 @@ public:
 	{
 		return bCpuOnly;
 	}
-	[[nodiscard]] int GetIndexCount() const
+	[[nodiscard]] int32 GetIndexCount() const
 	{
 		return IndexCount;
 	}
-	[[nodiscard]] int TriangleCount() const
+	[[nodiscard]] int32 TriangleCount() const
 	{
 		return IndexCount / 3;
 	}
@@ -51,11 +47,11 @@ public:
 	{
 		return EmbeddedAnim;
 	}
-	[[nodiscard]] const glm::vec3& GetLocalMin() const
+	[[nodiscard]] const FVector& GetLocalMin() const
 	{
 		return LocalMin;
 	}
-	[[nodiscard]] const glm::vec3& GetLocalMax() const
+	[[nodiscard]] const FVector& GetLocalMax() const
 	{
 		return LocalMax;
 	}
@@ -71,7 +67,7 @@ public:
 	}
 	void SetMaterial(FMaterial InMaterial)
 	{
-		Material = std::move(InMaterial);
+		Material = MoveTemp(InMaterial);
 	}
 
 private:
@@ -80,11 +76,11 @@ private:
 	FRHIVertexArrayId Vao = InvalidVertexArray;
 	FRHIBufferId Vbo = InvalidBuffer;
 	FRHIBufferId Ebo = InvalidBuffer;
-	int IndexCount = 0;
+	int32 IndexCount = 0;
 	bool bCpuOnly = false;
 	USkeleton Skeleton{};
 	UAnimSequence EmbeddedAnim{};
-	glm::vec3 LocalMin{0.0f};
-	glm::vec3 LocalMax{0.0f};
+	FVector LocalMin = FVector::ZeroVector;
+	FVector LocalMax = FVector::ZeroVector;
 	FMaterial Material{};
 };

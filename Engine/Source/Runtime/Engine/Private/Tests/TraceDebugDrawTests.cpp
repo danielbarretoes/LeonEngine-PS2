@@ -1,58 +1,82 @@
 #include "CollisionQuery.h"
+#include "CoreMinimal.h"
 #include "Debug/DebugDraw.h"
+#include "Misc/AutomationTest.h"
 #include "Physics/PhysScene.h"
 
-#include <catch2/catch_test_macros.hpp>
+#if WITH_DEV_AUTOMATION_TESTS
 
-#include <vector>
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTraceDebugDrawLineTraceMissAndHitFillDebugDrawTest,
+	"System.Engine.TraceDebugDraw.DrawDebugLineTraceMissAndHitFillDebugDraw",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-TEST_CASE("DrawDebugLineTrace miss and hit fill DebugDraw", "[physics][trace][debug]")
+bool FTraceDebugDrawLineTraceMissAndHitFillDebugDrawTest::RunTest(const FString& Parameters)
 {
+	// DrawDebugLineTrace draws both a missed trace and a trace with a blocking hit.
 	FDebugDraw Draw;
 
-	DrawDebugLineTrace(Draw, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {});
-	REQUIRE_FALSE(Draw.IsEmpty());
+	DrawDebugLineTrace(Draw, FVector::ZeroVector, FVector(0.0f, 1.0f, 0.0f), TArray<FHitResult>());
+	TestFalse("Miss drawn", Draw.IsEmpty());
 
 	Draw.Clear();
 	FHitResult Hit{};
 	Hit.bBlockingHit = true;
 	Hit.Time = 0.5f;
-	Hit.ImpactPoint = {0.0f, 0.5f, 0.0f};
-	Hit.ImpactNormal = {0.0f, 1.0f, 0.0f};
-	DrawDebugLineTrace(Draw, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {Hit});
-	REQUIRE_FALSE(Draw.IsEmpty());
+	Hit.ImpactPoint = FVector(0.0f, 0.5f, 0.0f);
+	Hit.ImpactNormal = FVector(0.0f, 1.0f, 0.0f);
+	TArray<FHitResult> Hits;
+	Hits.Add(Hit);
+	DrawDebugLineTrace(Draw, FVector::ZeroVector, FVector(0.0f, 1.0f, 0.0f), Hits);
+	TestFalse("Hit drawn", Draw.IsEmpty());
+	return true;
 }
 
-TEST_CASE("LineTrace ForOneFrame draws via PhysScene", "[physics][trace][debug]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTraceDebugDrawLineTraceForOneFrameDrawsViaPhysSceneTest,
+	"System.Engine.TraceDebugDraw.LineTraceForOneFrameDrawsViaPhysScene",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FTraceDebugDrawLineTraceForOneFrameDrawsViaPhysSceneTest::RunTest(const FString& Parameters)
 {
+	// With DrawDebugType ForOneFrame the scene traces draw into the given FDebugDraw, on a hit and on a miss.
 	FPhysScene Scene;
 	const int32 Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
-	Scene.GetBodies()[Id].Position = {0.0f, 0.5f, 0.0f};
-	Scene.GetBodies()[Id].HalfExtents = {0.5f, 0.5f, 0.5f};
+	Scene.GetBodies()[Id].Position = FVector(0.0f, 0.5f, 0.0f);
+	Scene.GetBodies()[Id].HalfExtents = FVector(0.5f, 0.5f, 0.5f);
 
 	FDebugDraw Draw;
 	FCollisionQueryParams Params{};
 	Params.DrawDebugType = EDrawDebugTrace::ForOneFrame;
 
 	FHitResult Hit{};
-	REQUIRE(Scene.LineTraceSingleByChannel(
-		Hit, {0.0f, 0.5f, -2.0f}, {0.0f, 0.5f, 2.0f}, ECollisionChannel::WorldStatic, Params, &Draw));
-	REQUIRE_FALSE(Draw.IsEmpty());
+	const bool bHit = Scene.LineTraceSingleByChannel(
+		Hit, FVector(0.0f, 0.5f, -2.0f), FVector(0.0f, 0.5f, 2.0f), ECollisionChannel::WorldStatic, Params, &Draw);
+	TestTrue("Trace hit", bHit);
+	TestFalse("Hit drawn", Draw.IsEmpty());
 
 	Draw.Clear();
 	TArray<FHitResult> Misses;
-	REQUIRE_FALSE(Scene.LineTraceMultiByChannel(
-		Misses, {10.0f, 0.5f, -2.0f}, {10.0f, 0.5f, 2.0f}, ECollisionChannel::WorldStatic, Params, &Draw));
-	REQUIRE_FALSE(Draw.IsEmpty());
+	const bool bMissHit = Scene.LineTraceMultiByChannel(
+		Misses, FVector(10.0f, 0.5f, -2.0f), FVector(10.0f, 0.5f, 2.0f), ECollisionChannel::WorldStatic, Params, &Draw);
+	TestFalse("Trace missed", bMissHit);
+	TestFalse("Miss drawn", Draw.IsEmpty());
+	return true;
 }
 
-TEST_CASE("DrawDebugSphereTrace and CapsuleTrace fill batch", "[physics][trace][debug]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTraceDebugDrawSphereTraceAndCapsuleTraceFillBatchTest,
+	"System.Engine.TraceDebugDraw.DrawDebugSphereTraceAndCapsuleTraceFillBatch",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FTraceDebugDrawSphereTraceAndCapsuleTraceFillBatchTest::RunTest(const FString& Parameters)
 {
+	// The sphere and capsule trace helpers draw even without hits.
 	FDebugDraw Draw;
-	DrawDebugSphereTrace(Draw, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, 0.35f, {});
-	REQUIRE_FALSE(Draw.IsEmpty());
+	DrawDebugSphereTrace(Draw, FVector(0.0f, 1.0f, 0.0f), FVector::ZeroVector, 0.35f, TArray<FHitResult>());
+	TestFalse("Sphere trace drawn", Draw.IsEmpty());
 
 	Draw.Clear();
-	DrawDebugCapsuleTrace(Draw, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, 0.3f, 0.5f, {});
-	REQUIRE_FALSE(Draw.IsEmpty());
+	DrawDebugCapsuleTrace(Draw, FVector(0.0f, 1.0f, 0.0f), FVector::ZeroVector, 0.3f, 0.5f, TArray<FHitResult>());
+	TestFalse("Capsule trace drawn", Draw.IsEmpty());
+	return true;
 }
+
+#endif // WITH_DEV_AUTOMATION_TESTS

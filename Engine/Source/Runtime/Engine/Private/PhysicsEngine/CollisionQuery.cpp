@@ -1,20 +1,19 @@
 #include "Debug/DebugDraw.h"
-#include "Migration/GlmInterop.h"
 #include "Physics/PhysScene.h"
 #include "TriangleCollision.h"
 
 namespace
 {
 
-	const FVector TraceMiss(0.25f, 0.85f, 1.0f);
-	const FVector TraceHitPath(0.2f, 1.0f, 0.35f);
-	const FVector TraceBeyond(1.0f, 0.25f, 0.2f);
-	const FVector TraceNormal(1.0f, 0.9f, 0.2f);
-	const FVector TraceShape(0.95f, 0.45f, 1.0f);
+	const FLinearColor TraceMiss(0.25f, 0.85f, 1.0f);
+	const FLinearColor TraceHitPath(0.2f, 1.0f, 0.35f);
+	const FLinearColor TraceBeyond(1.0f, 0.25f, 0.2f);
+	const FLinearColor TraceNormal(1.0f, 0.9f, 0.2f);
+	const FLinearColor TraceShape(0.95f, 0.45f, 1.0f);
 
-	void AddLine(FDebugDraw& Draw, const FVector& A, const FVector& B, const FVector& Color)
+	void AddLine(FDebugDraw& Draw, const FVector& A, const FVector& B, const FLinearColor& Color)
 	{
-		Draw.AddLine(ToGlm(A), ToGlm(B), ToGlm(Color));
+		Draw.AddLine(A, B, Color);
 	}
 
 	[[nodiscard]] bool BodyMatchesChannel(const FBodyInstance& Body, ECollisionChannel Channel)
@@ -227,7 +226,8 @@ namespace
 		return true;
 	}
 
-	void AddRingXz(FDebugDraw& Draw, const FVector& Center, float Radius, const FVector& Color, int32 Segments = 16)
+	void AddRingXz(
+		FDebugDraw& Draw, const FVector& Center, float Radius, const FLinearColor& Color, int32 Segments = 16)
 	{
 		const float SegCount = static_cast<float>(Segments);
 		for (int32 I = 0; I < Segments; ++I)
@@ -245,8 +245,7 @@ namespace
 		AddLine(Draw, Hit.ImpactPoint + FVector(-S, 0, 0), Hit.ImpactPoint + FVector(S, 0, 0), TraceNormal);
 		AddLine(Draw, Hit.ImpactPoint + FVector(0, -S, 0), Hit.ImpactPoint + FVector(0, S, 0), TraceNormal);
 		AddLine(Draw, Hit.ImpactPoint + FVector(0, 0, -S), Hit.ImpactPoint + FVector(0, 0, S), TraceNormal);
-		Draw.AddArrow(ToGlm(Hit.ImpactPoint), ToGlm(Hit.ImpactPoint + (Hit.ImpactNormal * 0.45f)), ToGlm(TraceNormal),
-			0.12f, 0.07f);
+		Draw.AddArrow(Hit.ImpactPoint, Hit.ImpactPoint + (Hit.ImpactNormal * 0.45f), TraceNormal, 0.12f, 0.07f);
 	}
 
 	void DrawTracePath(FDebugDraw& Draw, const FVector& Start, const FVector& End, const TArray<FHitResult>& Hits)
@@ -315,7 +314,7 @@ bool FPhysScene::LineTraceMultiByChannel(TArray<FHitResult>& OutHits, const FVec
 
 	if (BackendIface != nullptr && BackendIface->HasNarrowPhaseTraces())
 	{
-		// Body instances may have been nudged (CMC) without a Step: sync before CastRay.
+		// Body instances may have been nudged CMC without a Step: sync before CastRay.
 		if (BackendIface->HasRigidWorld())
 		{
 			BackendIface->RigidPrepareStep(Bodies, Params.SkipLevelMeshIndex);

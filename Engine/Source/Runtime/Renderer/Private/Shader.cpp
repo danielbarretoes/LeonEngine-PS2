@@ -1,60 +1,55 @@
 #include "Shader.h"
 
-#include <glad/glad.h>
+#include "HAL/FileManager.h"
+#include "Misc/CString.h"
+#include "Misc/FileHelper.h"
+#include "RendererLog.h"
 
-#include <array>
-#include <fstream>
-#include <iostream>
-#include <sstream>
-#include <system_error>
+#include <glad/glad.h>
 
 namespace
 {
 
-	bool ReadFile(const std::string& Path, std::string& Out)
+	bool ReadFile(const FString& Path, FString& Out)
 	{
-		std::ifstream File(Path, std::ios::in | std::ios::binary);
-		if (!File.is_open())
+		if (!FFileHelper::LoadFileToString(Out, *Path))
 		{
-			std::cerr << "Failed to open shader file: " << Path << '\n';
+			UE_LOG(LogRenderer, Error, "Failed to open shader file: %s", *Path);
 			return false;
 		}
-		std::ostringstream Ss;
-		Ss << File.rdbuf();
-		Out = Ss.str();
 		return true;
 	}
 
-	bool FileWriteTime(const std::string& Path, std::filesystem::file_time_type& OutTime)
+	/** The file's modification time; false when the file is missing. */
+	bool FileWriteTime(const FString& Path, FDateTime& OutTime)
 	{
-		std::error_code Ec;
-		OutTime = std::filesystem::last_write_time(Path, Ec);
-		return !Ec;
+		OutTime = IFileManager::Get().GetTimeStamp(*Path);
+		return OutTime != FDateTime::MinValue();
 	}
 
-	unsigned int CompileShader(unsigned int Type, const char* Source)
+	uint32 CompileShader(uint32 Type, const ANSICHAR* Source)
 	{
-		const unsigned int Shader = glCreateShader(Type);
+		const uint32 Shader = glCreateShader(Type);
 		glShaderSource(Shader, 1, &Source, nullptr);
 		glCompileShader(Shader);
 
-		int Success = 0;
+		int32 Success = 0;
 		glGetShaderiv(Shader, GL_COMPILE_STATUS, &Success);
 		if (Success == 0)
 		{
-			std::array<char, 1024> InfoLog{};
-			glGetShaderInfoLog(Shader, static_cast<GLsizei>(InfoLog.size()), nullptr, InfoLog.data());
-			std::cerr << "Shader compile error:\n" << InfoLog.data() << '\n';
+			ANSICHAR InfoLog[1024] = {};
+			glGetShaderInfoLog(Shader, static_cast<GLsizei>(sizeof(InfoLog)), nullptr, InfoLog);
+			UE_LOG(LogRenderer, Error, "Shader compile error:\n%s", InfoLog);
 			glDeleteShader(Shader);
 			return 0;
 		}
 		return Shader;
 	}
 
-	bool LinkProgram(const char* VertexSource, const char* FragmentSource, unsigned int& OutProgram)
+	bool LinkProgram(const ANSICHAR* VertexSource, const ANSICHAR* FragmentSource, uint32& OutProgram)
 	{
-		const unsigned int Vertex = CompileShader(GL_VERTEX_SHADER, VertexSource);
-		const unsigned int Fragment = CompileShader(GL_FRAGMENT_SHADER, FragmentSource);
+		const uint32 Vertex = CompileShader(GL_VERTEX_SHADER, VertexSource);
+		const uint32 Fragment = CompileShader(GL_FRAGMENT_SHADER, FragmentSource);
 		if (Vertex == 0 || Fragment == 0)
 		{
 			if (Vertex != 0)
@@ -68,20 +63,20 @@ namespace
 			return false;
 		}
 
-		const unsigned int LocalProgram = glCreateProgram();
+		const uint32 LocalProgram = glCreateProgram();
 		glAttachShader(LocalProgram, Vertex);
 		glAttachShader(LocalProgram, Fragment);
 		glLinkProgram(LocalProgram);
 		glDeleteShader(Vertex);
 		glDeleteShader(Fragment);
 
-		int Success = 0;
+		int32 Success = 0;
 		glGetProgramiv(LocalProgram, GL_LINK_STATUS, &Success);
 		if (Success == 0)
 		{
-			std::array<char, 1024> InfoLog{};
-			glGetProgramInfoLog(LocalProgram, static_cast<GLsizei>(InfoLog.size()), nullptr, InfoLog.data());
-			std::cerr << "Shader link error:\n" << InfoLog.data() << '\n';
+			ANSICHAR InfoLog[1024] = {};
+			glGetProgramInfoLog(LocalProgram, static_cast<GLsizei>(sizeof(InfoLog)), nullptr, InfoLog);
+			UE_LOG(LogRenderer, Error, "Shader link error:\n%s", InfoLog);
 			glDeleteProgram(LocalProgram);
 			return false;
 		}
@@ -97,9 +92,9 @@ FShader::~FShader()
 	Destroy();
 }
 
-bool FShader::Create(const char* VertexSource, const char* FragmentSource)
+bool FShader::Create(const ANSICHAR* VertexSource, const ANSICHAR* FragmentSource)
 {
-	unsigned int NewProgram = 0;
+	uint32 NewProgram = 0;
 	if (!LinkProgram(VertexSource, FragmentSource, NewProgram))
 	{
 		return false;
@@ -109,19 +104,19 @@ bool FShader::Create(const char* VertexSource, const char* FragmentSource)
 		glDeleteProgram(Program);
 	}
 	Program = NewProgram;
-	UniformCache.clear();
+	UniformCache.Reset();
 	return true;
 }
 
-bool FShader::LoadFromFiles(const std::string& InVertexPath, const std::string& InFragmentPath)
+bool FShader::LoadFromFiles(const FString& InVertexPath, const FString& InFragmentPath)
 {
-	std::string VertexSource;
-	std::string FragmentSource;
+	FString VertexSource;
+	FString FragmentSource;
 	if (!ReadFile(InVertexPath, VertexSource) || !ReadFile(InFragmentPath, FragmentSource))
 	{
 		return false;
 	}
-	if (!Create(VertexSource.c_str(), FragmentSource.c_str()))
+	if (!Create(*VertexSource, *FragmentSource))
 	{
 		return false;
 	}
@@ -140,11 +135,11 @@ EShaderReloadResult FShader::LoadFromStoredPaths(bool bForce, const FAcceptFunct
 		return EShaderReloadResult::Failed;
 	}
 
-	std::filesystem::file_time_type LocalVertexTime{};
-	std::filesystem::file_time_type LocalFragmentTime{};
+	FDateTime LocalVertexTime;
+	FDateTime LocalFragmentTime;
 	if (!FileWriteTime(VertexPath, LocalVertexTime) || !FileWriteTime(FragmentPath, LocalFragmentTime))
 	{
-		std::cerr << "Shader reload: missing file(s) " << VertexPath << " / " << FragmentPath << '\n';
+		UE_LOG(LogRenderer, Warning, "Shader reload: missing file(s) %s / %s", *VertexPath, *FragmentPath);
 		return EShaderReloadResult::Failed;
 	}
 
@@ -153,36 +148,35 @@ EShaderReloadResult FShader::LoadFromStoredPaths(bool bForce, const FAcceptFunct
 		return EShaderReloadResult::Unchanged;
 	}
 
-	std::string VertexSource;
-	std::string FragmentSource;
+	FString VertexSource;
+	FString FragmentSource;
 	if (!ReadFile(VertexPath, VertexSource) || !ReadFile(FragmentPath, FragmentSource))
 	{
-		// Advance mtimes so a briefly locked file does not spam every frame forever;
-		// the next real save still bumps mtime and retriggers.
+		// Advance the times so a briefly locked file does not retry every frame; the next real save retriggers.
 		VertexTime = LocalVertexTime;
 		FragmentTime = LocalFragmentTime;
 		return EShaderReloadResult::Failed;
 	}
 
-	unsigned int NewProgram = 0;
-	if (!LinkProgram(VertexSource.c_str(), FragmentSource.c_str(), NewProgram))
+	uint32 NewProgram = 0;
+	if (!LinkProgram(*VertexSource, *FragmentSource, NewProgram))
 	{
-		std::cerr << "Shader reload failed; keeping previous program (" << VertexPath << ")\n";
+		UE_LOG(LogRenderer, Warning, "Shader reload failed; keeping the previous program (%s)", *VertexPath);
 		VertexTime = LocalVertexTime;
 		FragmentTime = LocalFragmentTime;
 		return EShaderReloadResult::Failed;
 	}
 
-	const unsigned int Previous = Program;
+	const uint32 Previous = Program;
 	Program = NewProgram;
-	UniformCache.clear();
+	UniformCache.Reset();
 
 	if (Accept && !Accept())
 	{
-		std::cerr << "Shader reload rejected by validator; reverting (" << VertexPath << ")\n";
+		UE_LOG(LogRenderer, Warning, "Shader reload rejected by the validator; reverting (%s)", *VertexPath);
 		glDeleteProgram(NewProgram);
 		Program = Previous;
-		UniformCache.clear();
+		UniformCache.Reset();
 		VertexTime = LocalVertexTime;
 		FragmentTime = LocalFragmentTime;
 		return EShaderReloadResult::Failed;
@@ -194,7 +188,7 @@ EShaderReloadResult FShader::LoadFromStoredPaths(bool bForce, const FAcceptFunct
 	}
 	VertexTime = LocalVertexTime;
 	FragmentTime = LocalFragmentTime;
-	std::cout << "Shader reloaded: " << VertexPath << " + " << FragmentPath << '\n';
+	UE_LOG(LogRenderer, Log, "Shader reloaded: %s + %s", *VertexPath, *FragmentPath);
 	return EShaderReloadResult::Reloaded;
 }
 
@@ -215,11 +209,11 @@ void FShader::Destroy()
 		glDeleteProgram(Program);
 		Program = 0;
 	}
-	UniformCache.clear();
-	VertexPath.clear();
-	FragmentPath.clear();
-	VertexTime = {};
-	FragmentTime = {};
+	UniformCache.Reset();
+	VertexPath.Empty();
+	FragmentPath.Empty();
+	VertexTime = FDateTime();
+	FragmentTime = FDateTime();
 }
 
 void FShader::Bind() const
@@ -227,12 +221,12 @@ void FShader::Bind() const
 	glUseProgram(Program);
 }
 
-void FShader::SetMat4(const char* Name, const float* Value16) const
+void FShader::SetMat4(const ANSICHAR* Name, const float* Value16) const
 {
 	glUniformMatrix4fv(UniformLocation(Name), 1, GL_FALSE, Value16);
 }
 
-void FShader::SetMat4Array(const char* Name, const float* Values, int Count) const
+void FShader::SetMat4Array(const ANSICHAR* Name, const float* Values, int32 Count) const
 {
 	if (Count <= 0 || Values == nullptr)
 	{
@@ -241,65 +235,63 @@ void FShader::SetMat4Array(const char* Name, const float* Values, int Count) con
 	glUniformMatrix4fv(UniformLocation(Name), Count, GL_FALSE, Values);
 }
 
-void FShader::SetMat3(const char* Name, const float* Value9) const
+void FShader::SetMat3(const ANSICHAR* Name, const float* Value9) const
 {
 	glUniformMatrix3fv(UniformLocation(Name), 1, GL_FALSE, Value9);
 }
 
-void FShader::SetVec3(const char* Name, float X, float Y, float Z) const
+void FShader::SetVec3(const ANSICHAR* Name, float X, float Y, float Z) const
 {
 	glUniform3f(UniformLocation(Name), X, Y, Z);
 }
 
-void FShader::SetVec2(const char* Name, float X, float Y) const
+void FShader::SetVec2(const ANSICHAR* Name, float X, float Y) const
 {
 	glUniform2f(UniformLocation(Name), X, Y);
 }
 
-void FShader::SetVec4(const char* Name, float X, float Y, float Z, float W) const
+void FShader::SetVec4(const ANSICHAR* Name, float X, float Y, float Z, float W) const
 {
 	glUniform4f(UniformLocation(Name), X, Y, Z, W);
 }
 
-void FShader::SetFloat(const char* Name, float Value) const
+void FShader::SetFloat(const ANSICHAR* Name, float Value) const
 {
 	glUniform1f(UniformLocation(Name), Value);
 }
 
-void FShader::SetInt(const char* Name, int Value) const
+void FShader::SetInt(const ANSICHAR* Name, int32 Value) const
 {
 	glUniform1i(UniformLocation(Name), Value);
 }
 
-bool FShader::BindUniformBlock(const char* BlockName, unsigned int BindingPoint) const
+bool FShader::BindUniformBlock(const ANSICHAR* BlockName, uint32 BindingPoint) const
 {
 	if (!Valid() || BlockName == nullptr)
 	{
 		return false;
 	}
-	const unsigned int BlockIndex = glGetUniformBlockIndex(Program, BlockName);
+	const uint32 BlockIndex = glGetUniformBlockIndex(Program, BlockName);
 	if (BlockIndex == GL_INVALID_INDEX)
 	{
-		std::cerr << "Uniform block not found: " << BlockName << '\n';
+		UE_LOG(LogRenderer, Error, "Uniform block not found: %s", BlockName);
 		return false;
 	}
 	glUniformBlockBinding(Program, BlockIndex, BindingPoint);
 	return true;
 }
 
-unsigned int FShader::Compile(unsigned int Type, const char* Source)
+int32 FShader::UniformLocation(const ANSICHAR* Name) const
 {
-	return CompileShader(Type, Source);
-}
-
-int FShader::UniformLocation(const char* Name) const
-{
-	if (const auto It = UniformCache.find(Name); It != UniformCache.end())
+	for (const FUniformSlot& Slot : UniformCache)
 	{
-		return It->second;
+		if (FCStringAnsi::Strcmp(*Slot.Name, Name) == 0)
+		{
+			return Slot.Location;
+		}
 	}
 
-	const int Location = glGetUniformLocation(Program, Name);
-	UniformCache.emplace(Name, Location);
+	const int32 Location = glGetUniformLocation(Program, Name);
+	UniformCache.Add(FUniformSlot{FString(Name), Location});
 	return Location;
 }

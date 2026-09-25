@@ -1,0 +1,6 @@
+#include "EngineLogs.h"
+
+DEFINE_LOG_CATEGORY(LogEngine);
+DEFINE_LOG_CATEGORY(LogLevel);
+DEFINE_LOG_CATEGORY(LogPath);
+DEFINE_LOG_CATEGORY(LogPhysics);

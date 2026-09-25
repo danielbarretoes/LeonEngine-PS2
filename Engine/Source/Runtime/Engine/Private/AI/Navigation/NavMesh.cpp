@@ -1,15 +1,13 @@
 #include "AI/Navigation/NavMesh.h"
 
-#include <cmath>
-
 bool FNavMesh::WorldToCell(float X, float Z, int& OutIx, int& OutIz) const
 {
 	if (!IsValid() || CellSize <= 0.0f)
 	{
 		return false;
 	}
-	OutIx = static_cast<int>(std::floor((X - OriginX) / CellSize));
-	OutIz = static_cast<int>(std::floor((Z - OriginZ) / CellSize));
+	OutIx = static_cast<int>(FMath::FloorToFloat((X - OriginX) / CellSize));
+	OutIz = static_cast<int>(FMath::FloorToFloat((Z - OriginZ) / CellSize));
 	if (OutIx < 0)
 	{
 		OutIx = 0;

@@ -1,10 +1,9 @@
 #pragma once
 
+#include "CoreTypes.h"
 #include "RHIHandles.h"
 
-#include <cstddef>
-
-/// GL_UNIFORM_BUFFER wrapper bound to a fixed binding point (OpenGL 3.3+).
+/** GL_UNIFORM_BUFFER wrapper bound to a fixed binding point (OpenGL 3.3+). */
 class RENDERER_API FUniformBuffer
 {
 public:
@@ -14,10 +13,10 @@ public:
 	FUniformBuffer(const FUniformBuffer&) = delete;
 	FUniformBuffer& operator=(const FUniformBuffer&) = delete;
 
-	bool Create(std::size_t InSizeBytes, unsigned int InBindingPoint);
+	bool Create(SIZE_T InSizeBytes, unsigned int InBindingPoint);
 	void Destroy();
 
-	void Update(const void* Data, std::size_t InSizeBytes) const;
+	void Update(const void* Data, SIZE_T InSizeBytes) const;
 	void Bind() const;
 
 	[[nodiscard]] bool Valid() const
@@ -32,5 +31,5 @@ public:
 private:
 	FRHIBufferId Id = InvalidBuffer;
 	unsigned int BindingPoint = 0;
-	std::size_t SizeBytes = 0;
+	SIZE_T SizeBytes = 0;
 };

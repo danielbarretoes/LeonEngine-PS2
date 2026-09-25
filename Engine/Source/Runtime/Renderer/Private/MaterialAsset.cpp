@@ -1,13 +1,14 @@
 #include "MaterialAsset.h"
 
 #include "LeonMaterialFormat.h"
-#include "Migration/LegacyContentPath.h"
+#include "Misc/Paths.h"
+#include "RendererLog.h"
 #include "ResourceCache.h"
 
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
-#include <iostream>
+#include <string>
 
 namespace
 {
@@ -32,7 +33,7 @@ namespace
 			}
 			else
 			{
-				Material.AlbedoMap = Resources.LoadTexture(ResolveLegacyContentPath(Key));
+				Material.AlbedoMap = Resources.LoadTexture(FPaths::ResolveLegacyContentPath(FString(Key.c_str())));
 			}
 		}
 		if (Object.contains("normalMap") && Object["normalMap"].is_string())
@@ -44,7 +45,7 @@ namespace
 			}
 			else
 			{
-				Material.NormalMap = Resources.LoadTexture(ResolveLegacyContentPath(Key));
+				Material.NormalMap = Resources.LoadTexture(FPaths::ResolveLegacyContentPath(FString(Key.c_str())));
 			}
 		}
 	}
@@ -125,14 +126,15 @@ void PatchMaterialFromJson(FResourceCache& Resources, FMaterial& Material, const
 	ApplyMaterialMaps(Resources, Material, Spec);
 }
 
-bool LoadMaterialFile(FResourceCache& Resources, const std::string& Path, FMaterial& Out)
+bool LoadMaterialFile(FResourceCache& Resources, const FString& Path, FMaterial& Out)
 {
-	if (!IsLeonMaterialPath(Path))
+	const std::string PathStr(*Path);
+	if (!IsLeonMaterialPath(PathStr))
 	{
-		std::cerr << "MaterialAsset: expected .lmat, got '" << Path << "'\n";
+		UE_LOG(LogRenderer, Error, "MaterialAsset: expected .lmat, got '%s'", *Path);
 		return false;
 	}
-	return LoadLeonMaterialFile(Resources, Path, Out);
+	return LoadLeonMaterialFile(Resources, PathStr, Out);
 }
 
 FMaterial MakeDefaultCheckerMaterial(FResourceCache& Resources)

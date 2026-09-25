@@ -1,45 +1,41 @@
 #pragma once
 
 #include "Blueprint/UserWidget.h"
-
-#include <memory>
-#include <type_traits>
-#include <utility>
-#include <vector>
+#include "CoreMinimal.h"
 
 class FDebugOverlay;
 
-/// Unreal-like AHUD: owns UserWidgets painted each frame into screen geometry.
+/** Unreal-like AHUD: owns UserWidgets painted each frame into screen geometry. */
 class ENGINE_API AHUD
 {
 public:
 	void Clear();
 
-	/// Unreal `CreateWidget` + `AddToViewport` (lite): construct, NativeConstruct, retain.
+	/** Unreal CreateWidget + AddToViewport (lite): construct, NativeConstruct, retain. */
 	template <typename T, typename... ArgsType>
 	T* AddWidget(ArgsType&&... Args)
 	{
-		static_assert(std::is_base_of_v<UUserWidget, T>, "T must derive from UserWidget");
-		auto Owned = std::make_unique<T>(std::forward<ArgsType>(Args)...);
-		T* Raw = Owned.get();
+		static_assert(TIsDerivedFrom<T, UUserWidget>::Value, "T must derive from UserWidget");
+		auto Owned = MakeUnique<T>(Forward<ArgsType>(Args)...);
+		T* Raw = Owned.Get();
 		Raw->OwningHud = this;
 		Raw->NativeConstruct();
-		Widgets.push_back(std::move(Owned));
+		Widgets.Add(MoveTemp(Owned));
 		return Raw;
 	}
 
-	/// Remove first widget of type T (NativeDestruct). Returns true if removed.
+	/** Remove first widget of type T (NativeDestruct). Returns true if removed. */
 	template <typename T>
 	bool RemoveWidget()
 	{
-		static_assert(std::is_base_of_v<UUserWidget, T>, "T must derive from UserWidget");
-		for (auto It = Widgets.begin(); It != Widgets.end(); ++It)
+		static_assert(TIsDerivedFrom<T, UUserWidget>::Value, "T must derive from UserWidget");
+		for (int32 Index = 0; Index < Widgets.Num(); ++Index)
 		{
-			if (dynamic_cast<T*>(It->get()) != nullptr)
+			if (dynamic_cast<T*>(Widgets[Index].Get()) != nullptr)
 			{
-				(*It)->NativeDestruct();
-				(*It)->OwningHud = nullptr;
-				Widgets.erase(It);
+				Widgets[Index]->NativeDestruct();
+				Widgets[Index]->OwningHud = nullptr;
+				Widgets.RemoveAt(Index);
 				return true;
 			}
 		}
@@ -51,10 +47,10 @@ public:
 	template <typename T>
 	[[nodiscard]] T* GetWidgetOfClass() const
 	{
-		static_assert(std::is_base_of_v<UUserWidget, T>, "T must derive from UserWidget");
+		static_assert(TIsDerivedFrom<T, UUserWidget>::Value, "T must derive from UserWidget");
 		for (const auto& W : Widgets)
 		{
-			if (T* Typed = dynamic_cast<T*>(W.get()))
+			if (T* Typed = dynamic_cast<T*>(W.Get()))
 			{
 				return Typed;
 			}
@@ -64,14 +60,14 @@ public:
 
 	void Tick(float DeltaTime);
 
-	/// Clears prior frame screen geometry, then paints visible widgets.
+	/** Clears prior frame screen geometry, then paints visible widgets. */
 	void Paint(FDebugOverlay& Overlay, int FramebufferWidth, int FramebufferHeight);
 
-	[[nodiscard]] const std::vector<std::unique_ptr<UUserWidget>>& GetWidgets() const
+	[[nodiscard]] const TArray<TUniquePtr<UUserWidget>>& GetWidgets() const
 	{
 		return Widgets;
 	}
 
 private:
-	std::vector<std::unique_ptr<UUserWidget>> Widgets;
+	TArray<TUniquePtr<UUserWidget>> Widgets;
 };

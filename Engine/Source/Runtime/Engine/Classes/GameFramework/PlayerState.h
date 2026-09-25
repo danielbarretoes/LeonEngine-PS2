@@ -1,8 +1,8 @@
 #pragma once
 
-#include <string>
+#include "CoreMinimal.h"
 
-/// Per-player session data (Unreal-style `APlayerState`). Typically owned by APlayerController.
+/** Per-player session data (Unreal-style APlayerState). Typically owned by APlayerController. */
 class ENGINE_API APlayerState
 {
 public:
@@ -18,14 +18,14 @@ public:
 	{
 		Score = 0.0f;
 		Lives = 0;
-		PlayerName.clear();
+		PlayerName.Empty();
 	}
 
 	virtual void Tick(float /*deltaTime*/)
 	{
 	}
 
-	/// Unreal `GetPlayerId`.
+	/** Unreal GetPlayerId. */
 	[[nodiscard]] int GetPlayerId() const
 	{
 		return PlayerId;
@@ -35,14 +35,14 @@ public:
 		PlayerId = Id;
 	}
 
-	/// Unreal `GetPlayerName` / `SetPlayerName`.
-	[[nodiscard]] const std::string& GetPlayerName() const
+	/** Unreal GetPlayerName / SetPlayerName. */
+	[[nodiscard]] const FString& GetPlayerName() const
 	{
 		return PlayerName;
 	}
-	void SetPlayerName(std::string Name)
+	void SetPlayerName(FString Name)
 	{
-		PlayerName = std::move(Name);
+		PlayerName = MoveTemp(Name);
 	}
 
 	[[nodiscard]] float GetScore() const
@@ -58,7 +58,7 @@ public:
 		Score += Delta;
 	}
 
-	/// Stocks / lives (Unreal-like). Default 0 — games call SetLives at match start.
+	/** Stocks / lives (Unreal-like). Default 0 — games call SetLives at match start. */
 	[[nodiscard]] int GetLives() const
 	{
 		return Lives;
@@ -67,7 +67,7 @@ public:
 	{
 		Lives = InLives;
 	}
-	/// Decrements one life if any remain. Returns true if a life was consumed.
+	/** Decrements one life if any remain. Returns true if a life was consumed. */
 	[[nodiscard]] bool ConsumeLife()
 	{
 		if (Lives <= 0)
@@ -82,5 +82,5 @@ private:
 	int PlayerId = 0;
 	float Score = 0.0f;
 	int Lives = 0;
-	std::string PlayerName;
+	FString PlayerName;
 };

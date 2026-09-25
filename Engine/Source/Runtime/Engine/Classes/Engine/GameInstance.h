@@ -1,6 +1,8 @@
 #pragma once
 
-/// Persistent game session (Unreal-style `UGameInstance`). Survives level changes; owned by Engine.
+#include "CoreMinimal.h"
+
+/** Persistent game session (Unreal-style UGameInstance). Survives level changes; owned by Engine. */
 class ENGINE_API UGameInstance
 {
 public:
@@ -15,7 +17,7 @@ public:
 	virtual void Init();
 	virtual void Shutdown();
 
-	/// Called when a level is successfully activated for gameplay.
+	/** Called when a level is successfully activated for gameplay. */
 	virtual void NotifyLevelOpened()
 	{
 		++LevelsOpened;

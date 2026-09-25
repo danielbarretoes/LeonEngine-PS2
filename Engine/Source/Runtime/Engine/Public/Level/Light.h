@@ -1,68 +1,62 @@
 #pragma once
 
-#include "Migration/LegacyTransform.h"
+#include "CoreMinimal.h"
+#include "Level/LegacyTransform.h"
 
-#include <glm/geometric.hpp>
-#include <glm/vec3.hpp>
+constexpr int32 MaxDirectionalLights = 2;
+constexpr int32 MaxPointLights = 4;
 
-#include <algorithm>
-#include <cmath>
-#include <cstdint>
-
-constexpr int MaxDirectionalLights = 2;
-constexpr int MaxPointLights = 4;
-
-/// Unreal FDirectionalLight Source Angle default (~sun disc), in degrees.
+/** UE FDirectionalLight Source Angle default (~sun disc), in degrees. */
 constexpr float DefaultLightSourceAngleDegrees = 0.5357f;
 
-/// Light travel direction from Unreal-like pitch (X) / yaw (Y) degrees. Roll ignored.
-[[nodiscard]] inline glm::vec3 LightDirectionFromRotation(const glm::vec3& RotationDegrees)
+/** Light travel direction from UE-like pitch (X) / yaw (Y) degrees. Roll ignored. */
+[[nodiscard]] inline FVector LightDirectionFromRotation(const FVector& RotationDegrees)
 {
 	constexpr float DegToRad = 0.017453292519943295769f;
-	const float Pitch = RotationDegrees.x * DegToRad;
-	const float Yaw = RotationDegrees.y * DegToRad;
-	const float Cp = std::cos(Pitch);
-	const glm::vec3 Dir{std::sin(Yaw) * Cp, -std::sin(Pitch), std::cos(Yaw) * Cp};
-	const float Len = glm::length(Dir);
-	return Len > 1.0e-8f ? (Dir / Len) : glm::vec3{0.0f, -1.0f, 0.0f};
+	const float Pitch = RotationDegrees.X * DegToRad;
+	const float Yaw = RotationDegrees.Y * DegToRad;
+	const float Cp = FMath::Cos(Pitch);
+	const FVector Dir(FMath::Sin(Yaw) * Cp, -FMath::Sin(Pitch), FMath::Cos(Yaw) * Cp);
+	const float Len = Dir.Size();
+	return Len > 1.0e-8f ? (Dir / Len) : FVector(0.0f, -1.0f, 0.0f);
 }
 
-/// Inverse of `lightDirectionFromRotation` (roll = 0).
-[[nodiscard]] inline glm::vec3 RotationFromLightDirection(const glm::vec3& Direction)
+/** Inverse of LightDirectionFromRotation (roll = 0). */
+[[nodiscard]] inline FVector RotationFromLightDirection(const FVector& Direction)
 {
 	constexpr float RadToDeg = 57.295779513082320877f;
-	const float Len = glm::length(Direction);
-	const glm::vec3 D = Len > 1.0e-8f ? (Direction / Len) : glm::vec3{0.0f, -1.0f, 0.0f};
-	const float Pitch = std::asin(std::clamp(-D.y, -1.0f, 1.0f));
-	const float Yaw = std::atan2(D.x, D.z);
-	return {Pitch * RadToDeg, Yaw * RadToDeg, 0.0f};
+	const float Len = Direction.Size();
+	const FVector D = Len > 1.0e-8f ? (Direction / Len) : FVector(0.0f, -1.0f, 0.0f);
+	const float Pitch = FMath::Asin(FMath::Clamp(-D.Y, -1.0f, 1.0f));
+	const float Yaw = FMath::Atan2(D.X, D.Z);
+	return FVector(Pitch * RadToDeg, Yaw * RadToDeg, 0.0f);
 }
 
-/// Unreal-like FDirectionalLight: transform drives aim; no raw direction field.
+/** UE-like FDirectionalLight: the transform drives the aim; no raw direction field. */
 struct ENGINE_API FDirectionalLight
 {
-	FLegacyTransform Transform{{0.0f, 0.0f, 0.0f}, {60.3f, 142.1f, 0.0f}, {1.0f, 1.0f, 1.0f}};
-	glm::vec3 LightColor{1.0f, 1.0f, 1.0f};
+	FLegacyTransform Transform{FVector(0.0f, 0.0f, 0.0f), FVector(60.3f, 142.1f, 0.0f), FVector(1.0f, 1.0f, 1.0f)};
+	FVector LightColor = FVector(1.0f, 1.0f, 1.0f); // linear RGB
 	float Intensity = 1.0f;
 	bool bCastShadows = true;
 	float SourceAngle = DefaultLightSourceAngleDegrees;
 
-	[[nodiscard]] glm::vec3 GetDirection() const
+	[[nodiscard]] FVector GetDirection() const
 	{
 		return LightDirectionFromRotation(Transform.RotationDegrees);
 	}
 };
 
-/// Unreal-like FPointLight: location from transform; attenuation `range`.
+/** UE-like FPointLight: location from the transform; attenuation Range. */
 struct ENGINE_API FPointLight
 {
-	FLegacyTransform Transform{{0.0f, 2.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}};
-	glm::vec3 LightColor{1.0f, 1.0f, 1.0f};
+	FLegacyTransform Transform{FVector(0.0f, 2.0f, 0.0f), FVector(0.0f, 0.0f, 0.0f), FVector(1.0f, 1.0f, 1.0f)};
+	FVector LightColor = FVector(1.0f, 1.0f, 1.0f); // linear RGB
 	float Intensity = 1.0f;
 	float Range = 8.0f;
 	bool bCastShadows = false;
 
-	/// Optional orbit animation (Level JSON `orbit`); preserved for save round-trip.
+	/** Optional orbit animation (level JSON orbit); preserved for the save round trip. */
 	bool bHasOrbit = false;
 	float OrbitRadius = 1.0f;
 	float OrbitHeight = 1.0f;

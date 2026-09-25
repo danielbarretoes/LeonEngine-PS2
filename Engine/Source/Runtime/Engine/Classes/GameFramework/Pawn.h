@@ -1,10 +1,11 @@
 #pragma once
 
+#include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 
 class AController;
 
-/// Possessable Actor (Unreal-style Pawn). Character derives from this.
+/** Possessable Actor (Unreal-style Pawn). Character derives from this. */
 class ENGINE_API APawn : public AActor
 {
 public:
@@ -17,9 +18,9 @@ public:
 		return Controller != nullptr;
 	}
 
-	/// UnPossess any Controller, then mark pending kill.
+	/** UnPossess any Controller, then mark pending kill. */
 	void Destroy() override;
-	/// Also UnPossess when removed via World::Clear.
+	/** Also UnPossess when removed via World::Clear. */
 	void EndPlay() override;
 
 protected:

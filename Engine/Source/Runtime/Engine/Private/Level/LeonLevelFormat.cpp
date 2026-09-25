@@ -1,296 +1,262 @@
 #include "Level/LeonLevelFormat.h"
 
 #include "Engine/GameEngine.h"
+#include "EngineLogs.h"
 #include "Level/BasicLight.h"
 #include "Level/BasicShape.h"
 #include "Level/LevelLoader.h"
 #include "Level/Light.h"
-#include "Migration/LegacyContentPath.h"
 #include "Misc/FileHelper.h"
-
-#include <algorithm>
-#include <cstring>
-#include <filesystem>
-#include <fstream>
-#include <iostream>
-#include <unordered_map>
-#include <utility>
+#include "Misc/Paths.h"
+#include "Serialization/MemoryReader.h"
+#include "Serialization/MemoryWriter.h"
 
 namespace
 {
-	namespace fs = std::filesystem;
 
 	// Caps on file-controlled allocations (corrupt / hostile .llev).
-	constexpr std::uint32_t MaxLeonLevelStrings = 65536u;
-	constexpr std::uint32_t MaxLeonLevelActors = 100000u;
-	constexpr std::uint32_t MaxLeonLevelLights = 16384u;
-	constexpr std::uint32_t MaxLeonStringBytes = 1u << 20; // 1 MiB per string
+	constexpr uint32 MaxLeonLevelStrings = 65536u;
+	constexpr uint32 MaxLeonLevelActors = 100000u;
+	constexpr uint32 MaxLeonLevelLights = 16384u;
+	constexpr uint32 MaxLeonStringBytes = 1u << 20; // 1 MiB per string
 
-	// --- Little-endian primitive writers ---
+	// --- Little-endian primitive writers (FArchive stores native order; every target is little-endian) ---
 
-	void WriteU8(std::vector<std::uint8_t>& Out, std::uint8_t Value)
+	void WriteU8(FArchive& Out, uint8 Value)
 	{
-		Out.push_back(Value);
+		Out << Value;
 	}
 
-	void WriteU16(std::vector<std::uint8_t>& Out, std::uint16_t Value)
+	void WriteU16(FArchive& Out, uint16 Value)
 	{
-		Out.push_back(static_cast<std::uint8_t>(Value & 0xFFu));
-		Out.push_back(static_cast<std::uint8_t>((Value >> 8) & 0xFFu));
+		Out << Value;
 	}
 
-	void WriteU32(std::vector<std::uint8_t>& Out, std::uint32_t Value)
+	void WriteU32(FArchive& Out, uint32 Value)
 	{
-		Out.push_back(static_cast<std::uint8_t>(Value & 0xFFu));
-		Out.push_back(static_cast<std::uint8_t>((Value >> 8) & 0xFFu));
-		Out.push_back(static_cast<std::uint8_t>((Value >> 16) & 0xFFu));
-		Out.push_back(static_cast<std::uint8_t>((Value >> 24) & 0xFFu));
+		Out << Value;
 	}
 
-	void WriteI32(std::vector<std::uint8_t>& Out, std::int32_t Value)
+	void WriteI32(FArchive& Out, int32 Value)
 	{
-		WriteU32(Out, static_cast<std::uint32_t>(Value));
+		Out << Value;
 	}
 
-	void WriteF32(std::vector<std::uint8_t>& Out, float Value)
+	void WriteF32(FArchive& Out, float Value)
 	{
-		std::uint32_t Bits = 0;
-		static_assert(sizeof(Bits) == sizeof(Value), "float must be 32-bit");
-		std::memcpy(&Bits, &Value, sizeof(Bits));
-		WriteU32(Out, Bits);
+		Out << Value;
 	}
 
-	void WriteVec3(std::vector<std::uint8_t>& Out, const glm::vec3& Value)
+	void WriteVec3(FArchive& Out, const FVector& Value)
 	{
-		WriteF32(Out, Value.x);
-		WriteF32(Out, Value.y);
-		WriteF32(Out, Value.z);
+		WriteF32(Out, Value.X);
+		WriteF32(Out, Value.Y);
+		WriteF32(Out, Value.Z);
 	}
 
-	/// Deduplicating string table; index 0 is always the empty string.
+	/**
+	 * Deduplicating string table; index 0 is always the empty string. Lookup is case-sensitive (a TMap<FString>
+	 * would merge strings that differ only in case).
+	 */
 	class FStringTableBuilder
 	{
 	public:
 		FStringTableBuilder()
 		{
-			(void)Add(std::string{});
+			(void)Add(FString());
 		}
 
-		std::uint32_t Add(const std::string& Value)
+		uint32 Add(const FString& Value)
 		{
-			const auto It = Lookup.find(Value);
-			if (It != Lookup.end())
+			for (int32 Index = 0; Index < Strings.Num(); ++Index)
 			{
-				return It->second;
+				if (Strings[Index].Equals(Value, ESearchCase::CaseSensitive))
+				{
+					return static_cast<uint32>(Index);
+				}
 			}
-			const auto Index = static_cast<std::uint32_t>(Strings.size());
-			Strings.push_back(Value);
-			Lookup.emplace(Value, Index);
-			return Index;
+			return static_cast<uint32>(Strings.Add(Value));
 		}
 
-		void WriteTo(std::vector<std::uint8_t>& Out) const
+		void WriteTo(FArchive& Out) const
 		{
-			WriteU32(Out, static_cast<std::uint32_t>(Strings.size()));
-			for (const std::string& Value : Strings)
+			WriteU32(Out, static_cast<uint32>(Strings.Num()));
+			for (const FString& Value : Strings)
 			{
-				WriteU32(Out, static_cast<std::uint32_t>(Value.size()));
-				Out.insert(Out.end(), Value.begin(), Value.end());
+				WriteU32(Out, static_cast<uint32>(Value.Len()));
+				Out.Serialize(const_cast<ANSICHAR*>(*Value), Value.Len());
 			}
 		}
 
 	private:
-		std::vector<std::string> Strings;
-		std::unordered_map<std::string, std::uint32_t> Lookup;
+		TArray<FString> Strings;
 	};
 
-	/// Bounds-checked little-endian cursor; any overrun latches `bFailed`.
+	/** Bounds-checked little-endian cursor over FMemoryReader; any overrun latches the archive error. */
 	class FByteReader
 	{
 	public:
-		explicit FByteReader(const std::vector<std::uint8_t>& InBytes)
-			: Bytes(InBytes.data())
-			, Size(InBytes.size())
+		explicit FByteReader(const TArray<uint8>& InBytes)
+			: Ar(InBytes)
 		{
 		}
 
 		[[nodiscard]] bool HasFailed() const
 		{
-			return bFailed;
+			return Ar.IsError();
 		}
 
-		std::uint8_t ReadU8()
+		uint8 ReadU8()
 		{
-			if (!Require(1))
-			{
-				return 0;
-			}
-			return Bytes[Cursor++];
+			return Read<uint8>();
 		}
 
-		std::uint16_t ReadU16()
+		uint16 ReadU16()
 		{
-			if (!Require(2))
-			{
-				return 0;
-			}
-			const auto Value = static_cast<std::uint16_t>(Bytes[Cursor] | (Bytes[Cursor + 1] << 8));
-			Cursor += 2;
-			return Value;
+			return Read<uint16>();
 		}
 
-		std::uint32_t ReadU32()
+		uint32 ReadU32()
 		{
-			if (!Require(4))
-			{
-				return 0;
-			}
-			const std::uint32_t Value = static_cast<std::uint32_t>(Bytes[Cursor]) |
-				(static_cast<std::uint32_t>(Bytes[Cursor + 1]) << 8) |
-				(static_cast<std::uint32_t>(Bytes[Cursor + 2]) << 16) |
-				(static_cast<std::uint32_t>(Bytes[Cursor + 3]) << 24);
-			Cursor += 4;
-			return Value;
+			return Read<uint32>();
 		}
 
-		std::int32_t ReadI32()
+		int32 ReadI32()
 		{
-			return static_cast<std::int32_t>(ReadU32());
+			return Read<int32>();
 		}
 
 		float ReadF32()
 		{
-			const std::uint32_t Bits = ReadU32();
-			float Value = 0.0f;
-			std::memcpy(&Value, &Bits, sizeof(Value));
-			return Value;
+			return Read<float>();
 		}
 
-		glm::vec3 ReadVec3()
+		FVector ReadVec3()
 		{
-			glm::vec3 Value{0.0f};
-			Value.x = ReadF32();
-			Value.y = ReadF32();
-			Value.z = ReadF32();
-			return Value;
+			const float X = ReadF32();
+			const float Y = ReadF32();
+			const float Z = ReadF32();
+			return FVector(X, Y, Z);
 		}
 
-		std::string ReadBytes(std::size_t Count)
+		FString ReadBytes(uint32 Count)
 		{
-			if (!Require(Count))
+			TArray<ANSICHAR> Buffer;
+			Buffer.SetNumUninitialized(static_cast<int32>(Count));
+			Ar.Serialize(Buffer.GetData(), Count);
+			if (Ar.IsError())
 			{
-				return {};
+				return FString();
 			}
-			std::string Value(reinterpret_cast<const char*>(Bytes + Cursor), Count);
-			Cursor += Count;
-			return Value;
+			return FString(static_cast<int32>(Count), Buffer.GetData());
 		}
 
-		void Skip(std::size_t Count)
+		void Skip(int64 Count)
 		{
-			if (Require(Count))
+			if (!Ar.IsError() && Ar.Tell() + Count <= Ar.TotalSize())
 			{
-				Cursor += Count;
+				Ar.Seek(Ar.Tell() + Count);
+			}
+			else
+			{
+				Ar.SetError();
 			}
 		}
 
 	private:
-		bool Require(std::size_t Count)
+		template <typename T>
+		T Read()
 		{
-			if (bFailed || Cursor + Count > Size)
-			{
-				bFailed = true;
-				return false;
-			}
-			return true;
+			T Value = 0;
+			Ar << Value;
+			return Ar.IsError() ? T(0) : Value;
 		}
 
-		const std::uint8_t* Bytes = nullptr;
-		std::size_t Size = 0;
-		std::size_t Cursor = 0;
-		bool bFailed = false;
+		FMemoryReader Ar;
 	};
 
 } // namespace
 
-std::string ResolveLevelAssetPath(const std::string& LevelPath, const std::string& RelativeOrKey)
+FString ResolveLevelAssetPath(const FString& LevelPath, const FString& RelativeOrKey)
 {
-	namespace fs = std::filesystem;
-	std::error_code Ec;
-	if (RelativeOrKey.empty())
+	if (RelativeOrKey.IsEmpty())
 	{
-		return {};
+		return FString();
 	}
-	const fs::path Key(RelativeOrKey);
-	if (Key.is_absolute() && fs::exists(Key, Ec) && !Ec)
+	auto Normalized = [](FString Path)
 	{
-		return Key.lexically_normal().string();
-	}
-
-	// `<pack>/Content/Levels/Main.llev` → content root `<pack>/Content`
-	// (legacy `<pack>/Levels/Main.llev` → `<pack>/`).
-	const fs::path ContentRoot = fs::path(LevelPath).parent_path().parent_path();
-	const fs::path InPack = (ContentRoot / Key).lexically_normal();
-	if (fs::exists(InPack, Ec) && !Ec)
+		FPaths::NormalizeFilename(Path);
+		FPaths::CollapseRelativeDirectories(Path);
+		return Path;
+	};
+	if (!FPaths::IsRelative(RelativeOrKey) && FPaths::FileExists(RelativeOrKey))
 	{
-		return InPack.string();
+		return Normalized(RelativeOrKey);
 	}
 
-	// Legacy `Projects/<name>/Materials/...` after the pack was copied elsewhere.
-	const auto MatPos = RelativeOrKey.find("Materials/");
-	if (MatPos != std::string::npos)
+	// <pack>/Content/Levels/Main.llev -> content root <pack>/Content (legacy <pack>/Levels/Main.llev -> <pack>/).
+	const FString ContentRoot = FPaths::GetPath(FPaths::GetPath(LevelPath));
+	const FString InPack = Normalized(FPaths::Combine(ContentRoot, RelativeOrKey));
+	if (FPaths::FileExists(InPack))
 	{
-		const fs::path Legacy = (ContentRoot / RelativeOrKey.substr(MatPos)).lexically_normal();
-		if (fs::exists(Legacy, Ec) && !Ec)
+		return InPack;
+	}
+
+	// Legacy Projects/<name>/Materials/... after the pack was copied elsewhere.
+	const int32 MatPos = RelativeOrKey.Find("Materials/", ESearchCase::CaseSensitive);
+	if (MatPos != INDEX_NONE)
+	{
+		const FString Legacy = Normalized(FPaths::Combine(ContentRoot, RelativeOrKey.Mid(MatPos)));
+		if (FPaths::FileExists(Legacy))
 		{
-			return Legacy.string();
+			return Legacy;
 		}
 	}
 
-	return ResolveLegacyContentPath(RelativeOrKey);
+	return FPaths::ResolveLegacyContentPath(RelativeOrKey);
 }
 
 namespace
 {
 
-	[[nodiscard]] ELevelActorClass ActorClassFromEditorClass(const std::string& EditorClass)
+	[[nodiscard]] ELevelActorClass ActorClassFromEditorClass(const FString& EditorClass)
 	{
-		if (EditorClass == "Cube")
+		if (EditorClass.Equals("Cube", ESearchCase::CaseSensitive))
 		{
 			return ELevelActorClass::Cube;
 		}
-		if (EditorClass == "Sphere")
+		if (EditorClass.Equals("Sphere", ESearchCase::CaseSensitive))
 		{
 			return ELevelActorClass::Sphere;
 		}
-		if (EditorClass == "Plane")
+		if (EditorClass.Equals("Plane", ESearchCase::CaseSensitive))
 		{
 			return ELevelActorClass::Plane;
 		}
-		if (EditorClass == "BlockingVolume")
+		if (EditorClass.Equals("BlockingVolume", ESearchCase::CaseSensitive))
 		{
 			return ELevelActorClass::BlockingVolume;
 		}
-		if (EditorClass == "TriggerVolume")
+		if (EditorClass.Equals("TriggerVolume", ESearchCase::CaseSensitive))
 		{
 			return ELevelActorClass::TriggerVolume;
 		}
-		if (EditorClass == "PainCausingVolume")
+		if (EditorClass.Equals("PainCausingVolume", ESearchCase::CaseSensitive))
 		{
 			return ELevelActorClass::PainCausingVolume;
 		}
-		if (EditorClass == "AISpawnPoint")
+		if (EditorClass.Equals("AISpawnPoint", ESearchCase::CaseSensitive))
 		{
 			return ELevelActorClass::AISpawnPoint;
 		}
-		if (EditorClass == "PlayerStart")
+		if (EditorClass.Equals("PlayerStart", ESearchCase::CaseSensitive))
 		{
 			return ELevelActorClass::PlayerStart;
 		}
 		return ELevelActorClass::StaticMesh;
 	}
 
-	[[nodiscard]] const char* EditorClassFromActorClass(ELevelActorClass InActorClass)
+	[[nodiscard]] const TCHAR* EditorClassFromActorClass(ELevelActorClass InActorClass)
 	{
 		switch (InActorClass)
 		{
@@ -316,8 +282,10 @@ namespace
 		return "StaticMesh";
 	}
 
-	/// Basic shape backing a stored actor class; false for FPlayerStart / FAISpawnPoint / UStaticMesh.
-	/// FTriggerVolume / FPainCausingVolume map to Cube (editor debug mesh); runtime apply uses PODs only.
+	/**
+	 * Basic shape backing a stored actor class; false for FPlayerStart / FAISpawnPoint / UStaticMesh.
+	 * FTriggerVolume / FPainCausingVolume map to Cube (editor debug mesh); runtime apply uses PODs only.
+	 */
 	[[nodiscard]] bool BasicShapeForActorClass(ELevelActorClass InActorClass, EBasicShape& OutShape)
 	{
 		switch (InActorClass)
@@ -360,9 +328,9 @@ namespace
 				continue;
 			}
 
-			const std::size_t LightIndex = Staged.GetPointLights().size();
+			const int32 LightIndex = Staged.GetPointLights().Num();
 			Light.AddTo(Staged);
-			if (!Record.bHasOrbit || LightIndex >= Staged.GetPointLights().size())
+			if (!Record.bHasOrbit || !Staged.GetPointLights().IsValidIndex(LightIndex))
 			{
 				continue;
 			}
@@ -374,21 +342,21 @@ namespace
 			Live.OrbitSpeed = Record.OrbitSpeed;
 		}
 
-		if (Staged.GetDirectionalLights().empty())
+		if (Staged.GetDirectionalLights().Num() == 0)
 		{
 			FBasicLight::Directional().AddTo(Staged);
 		}
-		if (Staged.GetDirectionalLights().size() > static_cast<std::size_t>(MaxDirectionalLights))
+		if (Staged.GetDirectionalLights().Num() > MaxDirectionalLights)
 		{
-			std::cerr << "LeonLevelFormat: truncating directional lights from " << Staged.GetDirectionalLights().size()
-					  << " to " << MaxDirectionalLights << '\n';
-			Staged.GetDirectionalLights().resize(static_cast<std::size_t>(MaxDirectionalLights));
+			UE_LOG(LogLevel, Warning, "LeonLevelFormat: truncating directional lights from %d to %d",
+				Staged.GetDirectionalLights().Num(), MaxDirectionalLights);
+			Staged.GetDirectionalLights().SetNum(MaxDirectionalLights);
 		}
-		if (Staged.GetPointLights().size() > static_cast<std::size_t>(MaxPointLights))
+		if (Staged.GetPointLights().Num() > MaxPointLights)
 		{
-			std::cerr << "LeonLevelFormat: truncating point lights from " << Staged.GetPointLights().size() << " to "
-					  << MaxPointLights << '\n';
-			Staged.GetPointLights().resize(static_cast<std::size_t>(MaxPointLights));
+			UE_LOG(LogLevel, Warning, "LeonLevelFormat: truncating point lights from %d to %d",
+				Staged.GetPointLights().Num(), MaxPointLights);
+			Staged.GetPointLights().SetNum(MaxPointLights);
 		}
 	}
 
@@ -415,7 +383,7 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 		Record.RotationDegrees = Start.Transform.RotationDegrees;
 		Record.Scale = Start.Transform.Scale;
 		Record.bEnableGravity = false;
-		Doc.Actors.push_back(std::move(Record));
+		Doc.Actors.Add(MoveTemp(Record));
 	}
 
 	for (const FAISpawnPoint& Spawn : Level.AISpawnPoints())
@@ -427,7 +395,7 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 		Record.Scale = Spawn.Transform.Scale;
 		Record.Tag = Spawn.Tag;
 		Record.bEnableGravity = false;
-		Doc.Actors.push_back(std::move(Record));
+		Doc.Actors.Add(MoveTemp(Record));
 	}
 
 	for (const FTriggerVolume& Volume : Level.GetTriggerVolumes())
@@ -443,7 +411,7 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 		Record.Payload = Volume.Payload;
 		Record.bConsumeOnUse = Volume.bConsumeOnUse;
 		Record.bEnableGravity = false;
-		Doc.Actors.push_back(std::move(Record));
+		Doc.Actors.Add(MoveTemp(Record));
 	}
 
 	for (const FPainCausingVolume& Volume : Level.GetPainCausingVolumes())
@@ -457,7 +425,7 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 		Record.DamagePerSecond = Volume.DamagePerSecond;
 		Record.DamageInterval = Volume.DamageInterval;
 		Record.bEnableGravity = false;
-		Doc.Actors.push_back(std::move(Record));
+		Doc.Actors.Add(MoveTemp(Record));
 	}
 
 	for (const UStaticMeshComponent& LocalMesh : Level.GetStaticMeshes())
@@ -465,9 +433,9 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 		FLevelActorRecord Record;
 		Record.ActorClass = ActorClassFromEditorClass(LocalMesh.EditorClass);
 		// Imported meshes are only reloadable through their path.
-		if (Record.ActorClass == ELevelActorClass::StaticMesh && LocalMesh.MeshPath.empty())
+		if (Record.ActorClass == ELevelActorClass::StaticMesh && LocalMesh.MeshPath.IsEmpty())
 		{
-			std::cerr << "LeonLevelFormat: skipping StaticMesh actor without mesh path\n";
+			UE_LOG(LogLevel, Warning, "LeonLevelFormat: skipping StaticMesh actor without mesh path");
 			continue;
 		}
 
@@ -499,7 +467,7 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 		Record.BobAmplitude = LocalMesh.BobAmplitude;
 		Record.BobSpeed = LocalMesh.BobSpeed;
 
-		Doc.Actors.push_back(std::move(Record));
+		Doc.Actors.Add(MoveTemp(Record));
 	}
 
 	for (const FDirectionalLight& Light : Level.GetDirectionalLights())
@@ -512,7 +480,7 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 		Record.LightColor = Light.LightColor;
 		Record.Intensity = Light.Intensity;
 		Record.SourceAngle = Light.SourceAngle;
-		Doc.Lights.push_back(Record);
+		Doc.Lights.Add(Record);
 	}
 	for (const FPointLight& Light : Level.GetPointLights())
 	{
@@ -529,31 +497,31 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 		Record.OrbitHeight = Light.OrbitHeight;
 		Record.OrbitHeightAmp = Light.OrbitHeightAmp;
 		Record.OrbitSpeed = Light.OrbitSpeed;
-		Doc.Lights.push_back(Record);
+		Doc.Lights.Add(Record);
 	}
 
 	return Doc;
 }
 
-std::vector<std::uint8_t> SerializeLeonLevel(const FLevelDocument& Doc)
+TArray<uint8> SerializeLeonLevel(const FLevelDocument& Doc)
 {
 	FStringTableBuilder LocalStrings;
-	const std::uint32_t NameIdx = LocalStrings.Add(Doc.Name);
-	const std::uint32_t GameModeIdx = LocalStrings.Add(Doc.GameMode);
-	const std::uint32_t EnvironmentIdx = LocalStrings.Add(Doc.EnvironmentPath);
+	const uint32 NameIdx = LocalStrings.Add(Doc.Name);
+	const uint32 GameModeIdx = LocalStrings.Add(Doc.GameMode);
+	const uint32 EnvironmentIdx = LocalStrings.Add(Doc.EnvironmentPath);
 
 	struct FActorIndices
 	{
-		std::uint32_t Flags = 0;
-		std::uint32_t Tag = 0;
-		std::uint32_t Material = 0;
-		std::uint32_t Mesh = 0;
-		std::uint32_t LightmapId = 0;
-		std::uint32_t LightmapPath = 0;
-		std::uint32_t Payload = 0;
+		uint32 Flags = 0;
+		uint32 Tag = 0;
+		uint32 Material = 0;
+		uint32 Mesh = 0;
+		uint32 LightmapId = 0;
+		uint32 LightmapPath = 0;
+		uint32 Payload = 0;
 	};
-	std::vector<FActorIndices> ActorIndices;
-	ActorIndices.reserve(Doc.Actors.size());
+	TArray<FActorIndices> ActorIndices;
+	ActorIndices.Reserve(Doc.Actors.Num());
 	for (const FLevelActorRecord& Actor : Doc.Actors)
 	{
 		FActorIndices Indices;
@@ -585,27 +553,27 @@ std::vector<std::uint8_t> SerializeLeonLevel(const FLevelDocument& Doc)
 		{
 			Indices.Flags |= LevelActorFlagHasFitHeight;
 		}
-		if (!Actor.Tag.empty())
+		if (!Actor.Tag.IsEmpty())
 		{
 			Indices.Flags |= LevelActorFlagHasTag;
 			Indices.Tag = LocalStrings.Add(Actor.Tag);
 		}
-		if (!Actor.MaterialPath.empty())
+		if (!Actor.MaterialPath.IsEmpty())
 		{
 			Indices.Flags |= LevelActorFlagHasMaterial;
 			Indices.Material = LocalStrings.Add(Actor.MaterialPath);
 		}
-		if (!Actor.MeshPath.empty())
+		if (!Actor.MeshPath.IsEmpty())
 		{
 			Indices.Flags |= LevelActorFlagHasMesh;
 			Indices.Mesh = LocalStrings.Add(Actor.MeshPath);
 		}
-		if (!Actor.LightmapId.empty())
+		if (!Actor.LightmapId.IsEmpty())
 		{
 			Indices.Flags |= LevelActorFlagHasLightmapId;
 			Indices.LightmapId = LocalStrings.Add(Actor.LightmapId);
 		}
-		if (!Actor.LightmapPath.empty())
+		if (!Actor.LightmapPath.IsEmpty())
 		{
 			Indices.Flags |= LevelActorFlagHasLightmapPath;
 			Indices.LightmapPath = LocalStrings.Add(Actor.LightmapPath);
@@ -620,7 +588,7 @@ std::vector<std::uint8_t> SerializeLeonLevel(const FLevelDocument& Doc)
 		{
 			Indices.Flags |= LevelActorFlagHasPainData;
 		}
-		if (!Actor.Payload.empty())
+		if (!Actor.Payload.IsEmpty())
 		{
 			Indices.Flags |= LevelActorFlagHasPayload;
 			Indices.Payload = LocalStrings.Add(Actor.Payload);
@@ -629,10 +597,11 @@ std::vector<std::uint8_t> SerializeLeonLevel(const FLevelDocument& Doc)
 		{
 			Indices.Flags |= LevelActorFlagConsumeOnUse;
 		}
-		ActorIndices.push_back(Indices);
+		ActorIndices.Add(Indices);
 	}
 
-	std::vector<std::uint8_t> Out;
+	TArray<uint8> Bytes;
+	FMemoryWriter Out(Bytes);
 	WriteU32(Out, LeonLevelMagic);
 	WriteU32(Out, LeonLevelVersion);
 	WriteU32(Out, 0u); // flags (reserved)
@@ -644,7 +613,7 @@ std::vector<std::uint8_t> SerializeLeonLevel(const FLevelDocument& Doc)
 	WriteU32(Out, EnvironmentIdx);
 	WriteF32(Out, Doc.EnvironmentExposure);
 
-	WriteU8(Out, static_cast<std::uint8_t>(Doc.Camera.Mode));
+	WriteU8(Out, static_cast<uint8>(Doc.Camera.Mode));
 	WriteU8(Out, 0u);
 	WriteU8(Out, 0u);
 	WriteU8(Out, 0u);
@@ -654,14 +623,14 @@ std::vector<std::uint8_t> SerializeLeonLevel(const FLevelDocument& Doc)
 	WriteF32(Out, Doc.Camera.Yaw);
 	WriteF32(Out, Doc.Camera.Pitch);
 
-	WriteU32(Out, static_cast<std::uint32_t>(Doc.Actors.size()));
-	for (std::size_t I = 0; I < Doc.Actors.size(); ++I)
+	WriteU32(Out, static_cast<uint32>(Doc.Actors.Num()));
+	for (int32 I = 0; I < Doc.Actors.Num(); ++I)
 	{
 		const FLevelActorRecord& Actor = Doc.Actors[I];
 		const FActorIndices& Indices = ActorIndices[I];
 
-		WriteU8(Out, static_cast<std::uint8_t>(Actor.ActorClass));
-		WriteU8(Out, static_cast<std::uint8_t>(Actor.Mobility));
+		WriteU8(Out, static_cast<uint8>(Actor.ActorClass));
+		WriteU8(Out, static_cast<uint8>(Actor.Mobility));
 		WriteU16(Out, 0u);
 		WriteU32(Out, Indices.Flags);
 		WriteVec3(Out, Actor.Position);
@@ -725,10 +694,10 @@ std::vector<std::uint8_t> SerializeLeonLevel(const FLevelDocument& Doc)
 		}
 	}
 
-	WriteU32(Out, static_cast<std::uint32_t>(Doc.Lights.size()));
+	WriteU32(Out, static_cast<uint32>(Doc.Lights.Num()));
 	for (const FLevelLightRecord& Light : Doc.Lights)
 	{
-		std::uint32_t LocalFlags = 0;
+		uint32 LocalFlags = 0;
 		if (Light.bCastShadows)
 		{
 			LocalFlags |= LevelLightFlagCastShadows;
@@ -738,7 +707,7 @@ std::vector<std::uint8_t> SerializeLeonLevel(const FLevelDocument& Doc)
 			LocalFlags |= LevelLightFlagHasOrbit;
 		}
 
-		WriteU8(Out, static_cast<std::uint8_t>(Light.LightClass));
+		WriteU8(Out, static_cast<uint8>(Light.LightClass));
 		WriteU8(Out, 0u);
 		WriteU8(Out, 0u);
 		WriteU8(Out, 0u);
@@ -758,58 +727,58 @@ std::vector<std::uint8_t> SerializeLeonLevel(const FLevelDocument& Doc)
 		}
 	}
 
-	return Out;
+	return Bytes;
 }
 
-bool DeserializeLeonLevel(const std::vector<std::uint8_t>& InBytes, FLevelDocument& Out)
+bool DeserializeLeonLevel(const TArray<uint8>& InBytes, FLevelDocument& Out)
 {
-	Out = FLevelDocument{};
+	Out = FLevelDocument();
 
 	FByteReader Reader(InBytes);
 	if (Reader.ReadU32() != LeonLevelMagic)
 	{
-		std::cerr << "LeonLevelFormat: bad magic (expected 'LLEV')\n";
+		UE_LOG(LogLevel, Error, "LeonLevelFormat: bad magic (expected 'LLEV')");
 		return false;
 	}
-	const std::uint32_t Version = Reader.ReadU32();
+	const uint32 Version = Reader.ReadU32();
 	// Flow: .llev load — accept v1 (legacy) and v2 (typed volumes); reject unknown.
 	if (Version != 1u && Version != 2u)
 	{
-		std::cerr << "LeonLevelFormat: unsupported version " << Version << " (expected 1 or 2)\n";
+		UE_LOG(LogLevel, Error, "LeonLevelFormat: unsupported version %u (expected 1 or 2)", Version);
 		return false;
 	}
 	(void)Reader.ReadU32(); // flags (reserved)
 
-	const std::uint32_t StringCount = Reader.ReadU32();
+	const uint32 StringCount = Reader.ReadU32();
 	if (Reader.HasFailed() || StringCount > MaxLeonLevelStrings)
 	{
 		return false;
 	}
-	std::vector<std::string> LocalStrings;
-	LocalStrings.reserve(StringCount);
-	for (std::uint32_t I = 0; I < StringCount; ++I)
+	TArray<FString> LocalStrings;
+	LocalStrings.Reserve(static_cast<int32>(StringCount));
+	for (uint32 I = 0; I < StringCount; ++I)
 	{
-		const std::uint32_t Length = Reader.ReadU32();
+		const uint32 Length = Reader.ReadU32();
 		if (Reader.HasFailed() || Length > MaxLeonStringBytes)
 		{
 			return false;
 		}
-		LocalStrings.push_back(Reader.ReadBytes(Length));
+		LocalStrings.Add(Reader.ReadBytes(Length));
 		if (Reader.HasFailed())
 		{
 			return false;
 		}
 	}
 	// Out-of-range indices resolve to the empty string instead of failing the load.
-	const auto StringAt = [&LocalStrings](std::uint32_t Index) -> std::string
-	{ return Index < LocalStrings.size() ? LocalStrings[Index] : std::string{}; };
+	const auto StringAt = [&LocalStrings](uint32 Index) -> FString
+	{ return Index < static_cast<uint32>(LocalStrings.Num()) ? LocalStrings[static_cast<int32>(Index)] : FString(); };
 
 	Out.Name = StringAt(Reader.ReadU32());
 	Out.GameMode = StringAt(Reader.ReadU32());
 	Out.EnvironmentPath = StringAt(Reader.ReadU32());
 	Out.EnvironmentExposure = Reader.ReadF32();
 
-	const std::uint8_t CameraMode = Reader.ReadU8();
+	const uint8 CameraMode = Reader.ReadU8();
 	Reader.Skip(3);
 	Out.Camera.Mode = CameraMode == 1 ? ECameraMode::FreeLook : ECameraMode::Orbit;
 	Out.Camera.Target = Reader.ReadVec3();
@@ -822,26 +791,26 @@ bool DeserializeLeonLevel(const std::vector<std::uint8_t>& InBytes, FLevelDocume
 		return false;
 	}
 
-	const std::uint32_t ActorCount = Reader.ReadU32();
+	const uint32 ActorCount = Reader.ReadU32();
 	if (Reader.HasFailed() || ActorCount > MaxLeonLevelActors)
 	{
 		return false;
 	}
-	Out.Actors.reserve(ActorCount);
-	for (std::uint32_t I = 0; I < ActorCount; ++I)
+	Out.Actors.Reserve(static_cast<int32>(ActorCount));
+	for (uint32 I = 0; I < ActorCount; ++I)
 	{
 		FLevelActorRecord Actor;
-		const std::uint8_t LocalActorClass = Reader.ReadU8();
-		const std::uint8_t LocalMobility = Reader.ReadU8();
+		const uint8 LocalActorClass = Reader.ReadU8();
+		const uint8 LocalMobility = Reader.ReadU8();
 		(void)Reader.ReadU16();
-		const std::uint32_t LocalFlags = Reader.ReadU32();
+		const uint32 LocalFlags = Reader.ReadU32();
 		if (Reader.HasFailed())
 		{
 			return false;
 		}
-		if (LocalActorClass > static_cast<std::uint8_t>(ELevelActorClass::AISpawnPoint))
+		if (LocalActorClass > static_cast<uint8>(ELevelActorClass::AISpawnPoint))
 		{
-			std::cerr << "LeonLevelFormat: unknown actor class " << static_cast<int>(LocalActorClass) << '\n';
+			UE_LOG(LogLevel, Error, "LeonLevelFormat: unknown actor class %d", static_cast<int32>(LocalActorClass));
 			return false;
 		}
 		Actor.ActorClass = static_cast<ELevelActorClass>(LocalActorClass);
@@ -918,28 +887,28 @@ bool DeserializeLeonLevel(const std::vector<std::uint8_t>& InBytes, FLevelDocume
 		{
 			return false;
 		}
-		Out.Actors.push_back(std::move(Actor));
+		Out.Actors.Add(MoveTemp(Actor));
 	}
 
-	const std::uint32_t LightCount = Reader.ReadU32();
+	const uint32 LightCount = Reader.ReadU32();
 	if (Reader.HasFailed() || LightCount > MaxLeonLevelLights)
 	{
 		return false;
 	}
-	Out.Lights.reserve(LightCount);
-	for (std::uint32_t I = 0; I < LightCount; ++I)
+	Out.Lights.Reserve(static_cast<int32>(LightCount));
+	for (uint32 I = 0; I < LightCount; ++I)
 	{
 		FLevelLightRecord Light;
-		const std::uint8_t LocalLightClass = Reader.ReadU8();
+		const uint8 LocalLightClass = Reader.ReadU8();
 		Reader.Skip(3);
-		const std::uint32_t LocalFlags = Reader.ReadU32();
+		const uint32 LocalFlags = Reader.ReadU32();
 		if (Reader.HasFailed())
 		{
 			return false;
 		}
-		if (LocalLightClass > static_cast<std::uint8_t>(ELevelLightClass::PointLight))
+		if (LocalLightClass > static_cast<uint8>(ELevelLightClass::PointLight))
 		{
-			std::cerr << "LeonLevelFormat: unknown light class " << static_cast<int>(LocalLightClass) << '\n';
+			UE_LOG(LogLevel, Error, "LeonLevelFormat: unknown light class %d", static_cast<int32>(LocalLightClass));
 			return false;
 		}
 		Light.LightClass = static_cast<ELevelLightClass>(LocalLightClass);
@@ -963,208 +932,199 @@ bool DeserializeLeonLevel(const std::vector<std::uint8_t>& InBytes, FLevelDocume
 		{
 			return false;
 		}
-		Out.Lights.push_back(Light);
+		Out.Lights.Add(Light);
 	}
 
 	return !Reader.HasFailed();
 }
 
-bool SaveLeonLevelFile(const std::string& Path, const FLevelDocument& Doc)
+bool SaveLeonLevelFile(const FString& Path, const FLevelDocument& Doc)
 {
-	const std::vector<std::uint8_t> LocalBytes = SerializeLeonLevel(Doc);
-	if (!FFileHelper::SaveArrayToFile(
-			TArrayView<const uint8>(LocalBytes.data(), int32(LocalBytes.size())), *FString(Path.c_str())))
+	const TArray<uint8> LocalBytes = SerializeLeonLevel(Doc);
+	if (!FFileHelper::SaveArrayToFile(LocalBytes, *Path))
 	{
-		std::cerr << "LeonLevelFormat: cannot write: " << Path << '\n';
+		UE_LOG(LogLevel, Error, "LeonLevelFormat: cannot write: %s", *Path);
 		return false;
 	}
 	return true;
 }
 
-bool LoadLeonLevelFile(const std::string& Path, FLevelDocument& Out)
+bool LoadLeonLevelFile(const FString& Path, FLevelDocument& Out)
 {
-	std::ifstream In(Path, std::ios::binary);
-	if (!In)
+	TArray<uint8> LocalBytes;
+	if (!FFileHelper::LoadFileToArray(LocalBytes, *Path))
 	{
-		std::cerr << "LeonLevelFormat: cannot open " << Path << '\n';
+		UE_LOG(LogLevel, Error, "LeonLevelFormat: cannot open %s", *Path);
 		return false;
 	}
-	const std::vector<std::uint8_t> LocalBytes((std::istreambuf_iterator<char>(In)), std::istreambuf_iterator<char>());
 	if (!DeserializeLeonLevel(LocalBytes, Out))
 	{
-		std::cerr << "LeonLevelFormat: failed to parse " << Path << '\n';
+		UE_LOG(LogLevel, Error, "LeonLevelFormat: failed to parse %s", *Path);
 		return false;
 	}
 	return true;
 }
 
-bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const std::string& SourcePath)
+bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FString& SourcePath)
 {
 	ULevel Staged;
 	Staged.Clear();
 	FResourceCache& Resources = Engine.GetResources();
 
-	try
+	Staged.SetName(Doc.Name);
+	Staged.SetGameMode(Doc.GameMode);
+
+	int32 FailedMeshes = 0;
+	for (const FLevelActorRecord& Record : Doc.Actors)
 	{
-		Staged.SetName(Doc.Name);
-		Staged.SetGameMode(Doc.GameMode);
+		FLegacyTransform Transform;
+		Transform.Position = Record.Position;
+		Transform.RotationDegrees = Record.RotationDegrees;
+		Transform.Scale = Record.Scale;
 
-		int FailedMeshes = 0;
-		for (const FLevelActorRecord& Record : Doc.Actors)
+		if (Record.ActorClass == ELevelActorClass::PlayerStart)
 		{
-			FLegacyTransform Transform;
-			Transform.Position = Record.Position;
-			Transform.RotationDegrees = Record.RotationDegrees;
-			Transform.Scale = Record.Scale;
+			FPlayerStart Start;
+			Start.Transform = Transform;
+			Staged.AddPlayerStart(Start);
+			continue;
+		}
+		if (Record.ActorClass == ELevelActorClass::AISpawnPoint)
+		{
+			FAISpawnPoint Spawn;
+			Spawn.Transform = Transform;
+			Spawn.Tag = Record.Tag;
+			Staged.AddAISpawnPoint(MoveTemp(Spawn));
+			continue;
+		}
+		if (Record.ActorClass == ELevelActorClass::TriggerVolume)
+		{
+			FTriggerVolume Volume;
+			Volume.Transform = Transform;
+			Volume.InteractRadius = Record.InteractRadius;
+			Volume.InteractCost = Record.InteractCost;
+			Volume.Payload = Record.Payload;
+			Volume.Tag = Record.Tag;
+			Volume.bConsumeOnUse = Record.bConsumeOnUse;
+			Staged.AddTriggerVolume(MoveTemp(Volume));
+			continue;
+		}
+		if (Record.ActorClass == ELevelActorClass::PainCausingVolume)
+		{
+			FPainCausingVolume Volume;
+			Volume.Transform = Transform;
+			Volume.DamagePerSecond = Record.DamagePerSecond;
+			Volume.DamageInterval = Record.DamageInterval;
+			Volume.Tag = Record.Tag;
+			Staged.AddPainCausingVolume(MoveTemp(Volume));
+			continue;
+		}
 
-			if (Record.ActorClass == ELevelActorClass::PlayerStart)
-			{
-				FPlayerStart Start{};
-				Start.Transform = Transform;
-				Staged.AddPlayerStart(Start);
-				continue;
-			}
-			if (Record.ActorClass == ELevelActorClass::AISpawnPoint)
-			{
-				FAISpawnPoint Spawn{};
-				Spawn.Transform = Transform;
-				Spawn.Tag = Record.Tag;
-				Staged.AddAISpawnPoint(std::move(Spawn));
-				continue;
-			}
-			if (Record.ActorClass == ELevelActorClass::TriggerVolume)
-			{
-				FTriggerVolume Volume{};
-				Volume.Transform = Transform;
-				Volume.InteractRadius = Record.InteractRadius;
-				Volume.InteractCost = Record.InteractCost;
-				Volume.Payload = Record.Payload;
-				Volume.Tag = Record.Tag;
-				Volume.bConsumeOnUse = Record.bConsumeOnUse;
-				Staged.AddTriggerVolume(std::move(Volume));
-				continue;
-			}
-			if (Record.ActorClass == ELevelActorClass::PainCausingVolume)
-			{
-				FPainCausingVolume Volume{};
-				Volume.Transform = Transform;
-				Volume.DamagePerSecond = Record.DamagePerSecond;
-				Volume.DamageInterval = Record.DamageInterval;
-				Volume.Tag = Record.Tag;
-				Staged.AddPainCausingVolume(std::move(Volume));
-				continue;
-			}
+		UStaticMeshComponent Actor;
+		EBasicShape ShapeType{};
+		const bool bIsBasicShape = BasicShapeForActorClass(Record.ActorClass, ShapeType);
+		if (bIsBasicShape)
+		{
+			FBasicShape Shape;
+			Shape.Type = ShapeType;
+			Shape.Transform = Transform;
+			Shape.SphereSegments = Record.SphereSegments;
+			Shape.SphereRings = Record.SphereRings;
+			Actor = Shape.MakeStaticMesh(Resources);
+			Actor.SphereSegments = Record.SphereSegments;
+			Actor.SphereRings = Record.SphereRings;
+		}
+		else
+		{
+			Actor.Mesh = Resources.LoadStaticMesh(ResolveLevelAssetPath(SourcePath, Record.MeshPath));
+			Actor.Transform = Transform;
+			Actor.MeshPath = Record.MeshPath;
+		}
+		Actor.EditorClass = EditorClassFromActorClass(Record.ActorClass);
 
-			UStaticMeshComponent Actor;
-			EBasicShape ShapeType{};
-			const bool bIsBasicShape = BasicShapeForActorClass(Record.ActorClass, ShapeType);
-			if (bIsBasicShape)
+		if (Actor.Mesh == nullptr)
+		{
+			UE_LOG(LogLevel, Error, "LeonLevelFormat: failed mesh for actor in %s", *SourcePath);
+			++FailedMeshes;
+			continue;
+		}
+
+		if (Record.bHasFitHeight && Record.FitHeight > 0.0f)
+		{
+			ApplyFitHeight(Actor, Record.FitHeight);
+		}
+
+		Actor.Tag = Record.Tag;
+		Actor.bSimulatePhysics = Record.bSimulatePhysics;
+		Actor.bCollisionEnabled = Record.bCollisionEnabled || Record.bSimulatePhysics;
+		Actor.bEnableGravity = Record.bEnableGravity;
+		Actor.bHidden = Record.bHidden;
+		Actor.Mobility = Record.Mobility;
+		Actor.SpinYaw = Record.bHasSpinYaw ? Record.SpinYaw : 0.0f;
+		Actor.MaterialPath = Record.MaterialPath;
+
+		if (!Record.MaterialPath.IsEmpty())
+		{
+			FMaterial Base = Resources.LoadMaterial(ResolveLevelAssetPath(SourcePath, Record.MaterialPath));
+			if (Actor.Mesh->HasMaterials())
 			{
-				FBasicShape Shape;
-				Shape.Type = ShapeType;
-				Shape.Transform = Transform;
-				Shape.SphereSegments = Record.SphereSegments;
-				Shape.SphereRings = Record.SphereRings;
-				Actor = Shape.MakeStaticMesh(Resources);
-				Actor.SphereSegments = Record.SphereSegments;
-				Actor.SphereRings = Record.SphereRings;
+				Actor.Materials.Init(Base, Actor.Mesh->GetMaterials().Num());
 			}
 			else
 			{
-				Actor.Mesh = Resources.LoadStaticMesh(ResolveLevelAssetPath(SourcePath, Record.MeshPath));
-				Actor.Transform = Transform;
-				Actor.MeshPath = Record.MeshPath;
-			}
-			Actor.EditorClass = EditorClassFromActorClass(Record.ActorClass);
-
-			if (Actor.Mesh == nullptr)
-			{
-				std::cerr << "LeonLevelFormat: failed mesh for actor in " << SourcePath << '\n';
-				++FailedMeshes;
-				continue;
-			}
-
-			if (Record.bHasFitHeight && Record.FitHeight > 0.0f)
-			{
-				ApplyFitHeight(Actor, Record.FitHeight);
-			}
-
-			Actor.Tag = Record.Tag;
-			Actor.bSimulatePhysics = Record.bSimulatePhysics;
-			Actor.bCollisionEnabled = Record.bCollisionEnabled || Record.bSimulatePhysics;
-			Actor.bEnableGravity = Record.bEnableGravity;
-			Actor.bHidden = Record.bHidden;
-			Actor.Mobility = Record.Mobility;
-			Actor.SpinYaw = Record.bHasSpinYaw ? Record.SpinYaw : 0.0f;
-			Actor.MaterialPath = Record.MaterialPath;
-
-			if (!Record.MaterialPath.empty())
-			{
-				FMaterial Base = Resources.LoadMaterial(ResolveLevelAssetPath(SourcePath, Record.MaterialPath));
-				if (Actor.Mesh->HasMaterials())
-				{
-					Actor.Materials.assign(Actor.Mesh->GetMaterials().size(), Base);
-				}
-				else
-				{
-					Actor.bMaterialOverride = true;
-					Actor.Material = std::move(Base);
-				}
-			}
-			else if (!Actor.Mesh->HasMaterials())
-			{
 				Actor.bMaterialOverride = true;
-				Actor.Material = Resources.DefaultMaterial();
-			}
-
-			// BlockingVolume: invisible collision box, never a shadow caster.
-			if (Record.ActorClass == ELevelActorClass::BlockingVolume)
-			{
-				Actor.Material.bCastsShadows = false;
-				for (FMaterial& LocalMaterial : Actor.Materials)
-				{
-					LocalMaterial.bCastsShadows = false;
-				}
-			}
-
-			const std::size_t ActorIndex = Staged.GetStaticMeshes().size();
-			Staged.AddStaticMesh(std::move(Actor));
-
-			if (Record.bHasBob)
-			{
-				UStaticMeshComponent& Live = Staged.GetStaticMeshes()[ActorIndex];
-				Live.bHasBob = true;
-				Live.BobBaseY = Record.BobBaseY;
-				Live.BobAmplitude = Record.BobAmplitude;
-				Live.BobSpeed = Record.BobSpeed;
+				Actor.Material = MoveTemp(Base);
 			}
 		}
-
-		if (FailedMeshes > 0)
+		else if (!Actor.Mesh->HasMaterials())
 		{
-			std::cerr << "LeonLevelFormat: aborting '" << SourcePath << "' (" << FailedMeshes
-					  << " mesh failure(s); refusing partial load)\n";
-			return false;
+			Actor.bMaterialOverride = true;
+			Actor.Material = Resources.DefaultMaterial();
 		}
 
-		ApplyDocumentLights(Doc, Staged);
+		// BlockingVolume: invisible collision box, never a shadow caster.
+		if (Record.ActorClass == ELevelActorClass::BlockingVolume)
+		{
+			Actor.Material.bCastsShadows = false;
+			for (FMaterial& LocalMaterial : Actor.Materials)
+			{
+				LocalMaterial.bCastsShadows = false;
+			}
+		}
+
+		const int32 ActorIndex = Staged.GetStaticMeshes().Num();
+		Staged.AddStaticMesh(MoveTemp(Actor));
+
+		if (Record.bHasBob)
+		{
+			UStaticMeshComponent& Live = Staged.GetStaticMeshes()[ActorIndex];
+			Live.bHasBob = true;
+			Live.BobBaseY = Record.BobBaseY;
+			Live.BobAmplitude = Record.BobAmplitude;
+			Live.BobSpeed = Record.BobSpeed;
+		}
 	}
-	catch (const std::exception& Ex)
+
+	if (FailedMeshes > 0)
 	{
-		std::cerr << "LeonLevelFormat: failed while building " << SourcePath << ": " << Ex.what() << '\n';
+		UE_LOG(LogLevel, Error, "LeonLevelFormat: aborting '%s' (%d mesh failure(s); refusing partial load)",
+			*SourcePath, FailedMeshes);
 		return false;
 	}
+
+	ApplyDocumentLights(Doc, Staged);
 
 	// Blank / lights-only levels are valid (editor New Level → Blank).
-	if (Staged.GetStaticMeshes().empty() && Staged.GetPlayerStarts().empty() && Staged.GetTriggerVolumes().empty() &&
-		Staged.GetPainCausingVolumes().empty() && Staged.AISpawnPoints().empty() &&
-		Staged.GetDirectionalLights().empty() && Staged.GetPointLights().empty())
+	if (Staged.GetStaticMeshes().Num() == 0 && Staged.GetPlayerStarts().Num() == 0 &&
+		Staged.GetTriggerVolumes().Num() == 0 && Staged.GetPainCausingVolumes().Num() == 0 &&
+		Staged.AISpawnPoints().Num() == 0 && Staged.GetDirectionalLights().Num() == 0 &&
+		Staged.GetPointLights().Num() == 0)
 	{
-		std::cerr << "LeonLevelFormat: completely empty level in " << SourcePath << '\n';
+		UE_LOG(LogLevel, Error, "LeonLevelFormat: completely empty level in %s", *SourcePath);
 		return false;
 	}
 
-	Engine.GetLevel() = std::move(Staged);
+	Engine.GetLevel() = MoveTemp(Staged);
 
 	UCameraComponent& LocalCamera = Engine.GetCamera();
 	LocalCamera.SetTarget(Doc.Camera.Target);
@@ -1173,8 +1133,7 @@ bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const st
 	LocalCamera.SetEyeLocation(Doc.Camera.Eye);
 	LocalCamera.SetMode(Doc.Camera.Mode);
 
-	const std::string Label = Doc.Name.empty() ? SourcePath : Doc.Name;
-	std::cout << "LevelLoader: loaded '" << Label << "' (" << Engine.GetLevel().GetStaticMeshes().size()
-			  << " actors)\n";
+	const FString& Label = Doc.Name.IsEmpty() ? SourcePath : Doc.Name;
+	UE_LOG(LogLevel, Log, "LevelLoader: loaded '%s' (%d actors)", *Label, Engine.GetLevel().GetStaticMeshes().Num());
 	return true;
 }

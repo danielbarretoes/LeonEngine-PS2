@@ -2,22 +2,20 @@
 
 #include "AIController.h"
 #include "BehaviorTree/BehaviorTree.h"
+#include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 
-#include <glm/vec3.hpp>
-
-#include <memory>
-#include <vector>
-
-/// Shared chase UBehaviorTree for game AI (HasTarget → MoveToActor, else Stop).
-/// One instance is safe to reuse serially across pawns in a Tick loop.
+/**
+ * Shared chase UBehaviorTree for game AI (HasTarget → MoveToActor, else Stop).
+ * One instance is safe to reuse serially across pawns in a Tick loop.
+ */
 class AIMODULE_API FAIChaseBehavior
 {
 public:
 	FAIChaseBehavior()
 	{
-		HasTarget = std::make_unique<UBTDecorator_Bool>("HasTarget", true);
-		Chase = std::make_unique<UBTTask_Action>(
+		HasTarget = MakeUnique<UBTDecorator_Bool>("HasTarget", true);
+		Chase = MakeUnique<UBTTask_Action>(
 			[this](UBlackboardComponent&, float)
 			{
 				if (Ai == nullptr || Target == nullptr)
@@ -27,7 +25,7 @@ public:
 				Ai->MoveToActor(Target);
 				return EBTNodeResult::Succeeded;
 			});
-		Stop = std::make_unique<UBTTask_Action>(
+		Stop = MakeUnique<UBTTask_Action>(
 			[this](UBlackboardComponent&, float)
 			{
 				if (Ai != nullptr)
@@ -36,13 +34,13 @@ public:
 				}
 				return EBTNodeResult::Succeeded;
 			});
-		ChaseSeq = std::make_unique<UBTComposite_Sequence>(std::vector<UBTNode*>{HasTarget.get(), Chase.get()});
-		Root = std::make_unique<UBTComposite_Selector>(std::vector<UBTNode*>{ChaseSeq.get(), Stop.get()});
-		Tree.SetRoot(Root.get());
+		ChaseSeq = MakeUnique<UBTComposite_Sequence>(TArray<UBTNode*>{HasTarget.Get(), Chase.Get()});
+		Root = MakeUnique<UBTComposite_Selector>(TArray<UBTNode*>{ChaseSeq.Get(), Stop.Get()});
+		Tree.SetRoot(Root.Get());
 	}
 
-	/// Runs BT then `AAIController::TickAI`. Returns steering wish.
-	glm::vec3 Tick(AAIController& InAi, AActor* InTarget, float DeltaTime)
+	/** Runs BT then AAIController::TickAI. Returns steering wish. */
+	FVector Tick(AAIController& InAi, AActor* InTarget, float DeltaTime)
 	{
 		Ai = &InAi;
 		Target = InTarget;
@@ -63,10 +61,10 @@ public:
 private:
 	AAIController* Ai = nullptr;
 	AActor* Target = nullptr;
-	std::unique_ptr<UBTDecorator_Bool> HasTarget;
-	std::unique_ptr<UBTTask_Action> Chase;
-	std::unique_ptr<UBTTask_Action> Stop;
-	std::unique_ptr<UBTComposite_Sequence> ChaseSeq;
-	std::unique_ptr<UBTComposite_Selector> Root;
+	TUniquePtr<UBTDecorator_Bool> HasTarget;
+	TUniquePtr<UBTTask_Action> Chase;
+	TUniquePtr<UBTTask_Action> Stop;
+	TUniquePtr<UBTComposite_Sequence> ChaseSeq;
+	TUniquePtr<UBTComposite_Selector> Root;
 	UBehaviorTree Tree{};
 };

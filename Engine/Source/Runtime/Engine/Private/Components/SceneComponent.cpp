@@ -1,31 +1,33 @@
 #include "Components/SceneComponent.h"
 
 #include "GameFramework/Actor.h"
-
-#include <glm/gtc/matrix_transform.hpp>
-
-#include <algorithm>
-#include <cmath>
+#include "LegacyGLMath.h"
 
 namespace
 {
 
-	[[nodiscard]] FLegacyTransform DecomposeApprox(const glm::mat4& M)
+	/** Column I of a GL-convention matrix (the image of axis I). */
+	[[nodiscard]] FVector Column(const FMatrix& M, int32 I)
 	{
-		FLegacyTransform T{};
-		T.Position = glm::vec3(M[3]);
-		T.Scale.x = glm::length(glm::vec3(M[0]));
-		T.Scale.y = glm::length(glm::vec3(M[1]));
-		T.Scale.z = glm::length(glm::vec3(M[2]));
+		return FVector(M.M[I][0], M.M[I][1], M.M[I][2]);
+	}
+
+	[[nodiscard]] FLegacyTransform DecomposeApprox(const FMatrix& M)
+	{
+		FLegacyTransform T;
+		T.Position = Column(M, 3);
+		T.Scale.X = Column(M, 0).Size();
+		T.Scale.Y = Column(M, 1).Size();
+		T.Scale.Z = Column(M, 2).Size();
 		constexpr float Eps = 1.0e-6f;
-		const glm::vec3 Col0 = T.Scale.x > Eps ? glm::vec3(M[0]) / T.Scale.x : glm::vec3(1.0f, 0.0f, 0.0f);
-		const glm::vec3 Col1 = T.Scale.y > Eps ? glm::vec3(M[1]) / T.Scale.y : glm::vec3(0.0f, 1.0f, 0.0f);
-		const glm::vec3 Col2 = T.Scale.z > Eps ? glm::vec3(M[2]) / T.Scale.z : glm::vec3(0.0f, 0.0f, 1.0f);
+		constexpr float RadToDeg = 180.0f / 3.14159265358979323846f;
+		const FVector Col0 = T.Scale.X > Eps ? Column(M, 0) / T.Scale.X : FVector(1.0f, 0.0f, 0.0f);
+		const FVector Col1 = T.Scale.Y > Eps ? Column(M, 1) / T.Scale.Y : FVector(0.0f, 1.0f, 0.0f);
+		const FVector Col2 = T.Scale.Z > Eps ? Column(M, 2) / T.Scale.Z : FVector(0.0f, 0.0f, 1.0f);
 		// XYZ Euler extraction (degrees) matching FLegacyTransform::ModelMatrix order Rx*Ry*Rz.
-		T.RotationDegrees.y = std::atan2(-Col0.z, Col2.z) * (180.0f / 3.14159265358979323846f);
-		T.RotationDegrees.x = std::asin(std::clamp(Col1.z, -1.0f, 1.0f)) * (180.0f / 3.14159265358979323846f);
-		T.RotationDegrees.z = std::atan2(-Col1.x, Col1.y) * (180.0f / 3.14159265358979323846f);
-		(void)Col2;
+		T.RotationDegrees.Y = FMath::Atan2(-Col0.Z, Col2.Z) * RadToDeg;
+		T.RotationDegrees.X = FMath::Asin(FMath::Clamp(Col1.Z, -1.0f, 1.0f)) * RadToDeg;
+		T.RotationDegrees.Z = FMath::Atan2(-Col1.X, Col1.Y) * RadToDeg;
 		return T;
 	}
 
@@ -35,9 +37,9 @@ USceneComponent::~USceneComponent()
 {
 	// UActorComponent dtor also calls DestroyComponent; detach scene links first while owner may
 	// still be valid (Actor::~ clears owner before member USceneComponent dtors).
-	while (!Children.empty())
+	while (Children.Num() > 0)
 	{
-		USceneComponent* Child = Children.back();
+		USceneComponent* Child = Children.Last();
 		Child->DetachFromParent(false);
 	}
 	DetachFromParent(false);
@@ -45,7 +47,7 @@ USceneComponent::~USceneComponent()
 
 FLegacyTransform USceneComponent::GetRelativeTransform() const
 {
-	FLegacyTransform T{};
+	FLegacyTransform T;
 	T.Position = RelativeLocation;
 	T.RotationDegrees = RelativeRotation;
 	T.Scale = RelativeScale;
@@ -66,7 +68,7 @@ bool USceneComponent::WouldCreateCycle(const USceneComponent* CandidateParent) c
 
 void USceneComponent::DetachChild(USceneComponent* Child)
 {
-	Children.erase(std::remove(Children.begin(), Children.end(), Child), Children.end());
+	Children.Remove(Child);
 }
 
 bool USceneComponent::AttachToComponent(USceneComponent* InParent, bool bKeepWorldTransform)
@@ -76,7 +78,7 @@ bool USceneComponent::AttachToComponent(USceneComponent* InParent, bool bKeepWor
 		return false;
 	}
 
-	glm::mat4 WorldBefore{};
+	FMatrix WorldBefore = FMatrix::Identity;
 	if (bKeepWorldTransform)
 	{
 		WorldBefore = GetComponentTransform();
@@ -84,7 +86,7 @@ bool USceneComponent::AttachToComponent(USceneComponent* InParent, bool bKeepWor
 
 	DetachFromParent(false);
 	Parent = InParent;
-	Parent->Children.push_back(this);
+	Parent->Children.Add(this);
 	if (Owner == nullptr)
 	{
 		Owner = InParent->Owner;
@@ -92,9 +94,9 @@ bool USceneComponent::AttachToComponent(USceneComponent* InParent, bool bKeepWor
 
 	if (bKeepWorldTransform)
 	{
-		const glm::mat4 ParentWorld = Parent->GetComponentTransform();
-		const glm::mat4 ParentInv = glm::inverse(ParentWorld);
-		const FLegacyTransform Relative = DecomposeApprox(ParentInv * WorldBefore);
+		const FMatrix ParentWorld = Parent->GetComponentTransform();
+		const FMatrix ParentInv = ParentWorld.Inverse();
+		const FLegacyTransform Relative = DecomposeApprox(LegacyGL::Mul(ParentInv, WorldBefore));
 		RelativeLocation = Relative.Position;
 		RelativeRotation = Relative.RotationDegrees;
 		RelativeScale = Relative.Scale;
@@ -109,7 +111,7 @@ void USceneComponent::DetachFromParent(bool bKeepWorldTransform)
 		return;
 	}
 
-	glm::mat4 WorldBefore{};
+	FMatrix WorldBefore = FMatrix::Identity;
 	if (bKeepWorldTransform)
 	{
 		WorldBefore = GetComponentTransform();
@@ -127,40 +129,41 @@ void USceneComponent::DetachFromParent(bool bKeepWorldTransform)
 		if (Owner != nullptr)
 		{
 			RelativeLocation -= Owner->GetActorLocation();
-			RelativeRotation.y -= Owner->GetActorYaw();
+			RelativeRotation.Y -= Owner->GetActorYaw();
 		}
 	}
 }
 
-glm::mat4 USceneComponent::GetComponentTransform() const
+FMatrix USceneComponent::GetComponentTransform() const
 {
 	const FLegacyTransform Relative = GetRelativeTransform();
 	if (Parent != nullptr)
 	{
-		return Parent->GetComponentTransform() * Relative.ModelMatrix();
+		return LegacyGL::Mul(Parent->GetComponentTransform(), Relative.ModelMatrix());
 	}
 	if (Owner != nullptr)
 	{
-		FLegacyTransform World{};
+		FLegacyTransform World;
 		World.Position = Owner->GetActorLocation() + RelativeLocation;
 		World.RotationDegrees = RelativeRotation;
-		World.RotationDegrees.y += Owner->GetActorYaw();
+		World.RotationDegrees.Y += Owner->GetActorYaw();
 		World.Scale = RelativeScale;
 		return World.ModelMatrix();
 	}
 	return Relative.ModelMatrix();
 }
 
-glm::vec3 USceneComponent::GetComponentLocation() const
+FVector USceneComponent::GetComponentLocation() const
 {
-	return glm::vec3(GetComponentTransform()[3]);
+	const FMatrix World = GetComponentTransform();
+	return FVector(World.M[3][0], World.M[3][1], World.M[3][2]);
 }
 
 void USceneComponent::DestroyComponent()
 {
-	while (!Children.empty())
+	while (Children.Num() > 0)
 	{
-		USceneComponent* Child = Children.back();
+		USceneComponent* Child = Children.Last();
 		Child->DetachFromParent(false);
 	}
 	DetachFromParent(false);

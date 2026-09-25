@@ -1,10 +1,11 @@
 #pragma once
 
+#include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
 
 class ACharacter;
 
-/// Drives a possessed Pawn (Unreal-style Controller).
+/** Drives a possessed Pawn (Unreal-style Controller). */
 class ENGINE_API AController
 {
 public:

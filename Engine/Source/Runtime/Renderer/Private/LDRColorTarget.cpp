@@ -1,8 +1,8 @@
 #include "LdrColorTarget.h"
 
-#include <glad/glad.h>
+#include "RendererLog.h"
 
-#include <iostream>
+#include <glad/glad.h>
 
 FLDRColorTarget::~FLDRColorTarget()
 {
@@ -41,7 +41,7 @@ bool FLDRColorTarget::EnsureSize(int InWidth, int InHeight)
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	if (Status != GL_FRAMEBUFFER_COMPLETE)
 	{
-		std::cerr << "LdrColorTarget framebuffer incomplete\n";
+		UE_LOG(LogRenderer, Error, "LdrColorTarget framebuffer incomplete");
 		Destroy();
 		return false;
 	}

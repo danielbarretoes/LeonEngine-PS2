@@ -1,8 +1,9 @@
 #pragma once
 
+#include "CoreMinimal.h"
 #include "Engine/GameEngine.h"
 
-/// Thin wire: ensure default UInputMappingContext is present (Engine ctor already seeds one).
+/** Thin wire: ensure default UInputMappingContext is present (Engine ctor already seeds one). */
 inline void WireDefaultInput(UGameEngine& Engine)
 {
 	(void)Engine;

@@ -1,6 +1,8 @@
 #pragma once
 
-/// Engine physics: collision shapes, bodies, FPhysScene, channel traces + debug draw.
+#include "CoreMinimal.h"
+
+/** Engine physics: collision shapes, bodies, FPhysScene, channel traces + debug draw. */
 #include "BodyInstance.h"
 #include "CollisionQuery.h"
 #include "CollisionShape.h"

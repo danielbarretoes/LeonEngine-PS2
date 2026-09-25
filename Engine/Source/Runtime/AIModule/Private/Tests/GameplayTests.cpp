@@ -2,6 +2,7 @@
 #include "AIController.h"
 #include "BodyInstance.h"
 #include "Components/SceneComponent.h"
+#include "CoreMinimal.h"
 #include "Debug/DebugDraw.h"
 #include "Engine/GameInstance.h"
 #include "Engine/Level.h"
@@ -13,19 +14,12 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "Misc/AutomationTest.h"
 #include "Physics/PhysScene.h"
 #include "PhysicsBackend.h"
 #include "TriangleCollision.h"
 
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include <glm/geometric.hpp>
-
-#include <cmath>
-#include <string>
-#include <vector>
-
-using Catch::Matchers::WithinAbs;
+#if WITH_DEV_AUTOMATION_TESTS
 
 namespace
 {
@@ -42,117 +36,167 @@ namespace
 
 } // namespace
 
-TEST_CASE("World spawns ticks and destroys actors", "[gameplay][world]")
-{
-	UWorld World;
-	auto* Actor = World.SpawnActor<ATestActor>();
-	REQUIRE(Actor != nullptr);
-	REQUIRE(World.ActorCount() == 1);
-	REQUIRE(Actor->GetWorld() == &World);
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayWorldSpawnsTicksAndDestroysActorsTest,
+	"System.AIModule.Gameplay.WorldSpawnsTicksAndDestroysActors",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-	Actor->SetActorLocation({1.0f, 2.0f, 3.0f});
-	REQUIRE_THAT(Actor->GetActorLocation().y, WithinAbs(2.0f, 1.0e-5f));
+bool FGameplayWorldSpawnsTicksAndDestroysActorsTest::RunTest(const FString& Parameters)
+{
+	// A spawned Actor belongs to its World, is purged on the Tick after Destroy, and Clear empties the World.
+	UWorld World;
+	ATestActor* Actor = World.SpawnActor<ATestActor>();
+	if (!TestNotNull("Spawned actor", Actor))
+	{
+		return false;
+	}
+	TestEqual("One actor", World.ActorCount(), static_cast<SIZE_T>(1));
+	TestTrue("Actor world", Actor->GetWorld() == &World);
+
+	Actor->SetActorLocation(FVector(1.0f, 2.0f, 3.0f));
+	TestEqual("Location Y", Actor->GetActorLocation().Y, 2.0f, 1.0e-5f);
 
 	World.DestroyActor(Actor);
-	REQUIRE(Actor->IsPendingKillPending());
+	TestTrue("Pending kill", Actor->IsPendingKillPending());
 	World.Tick(0.016f);
-	REQUIRE(World.ActorCount() == 0);
+	TestEqual("Purged after tick", World.ActorCount(), static_cast<SIZE_T>(0));
 
 	World.SpawnActor<ATestActor>();
 	World.Clear();
-	REQUIRE(World.ActorCount() == 0);
+	TestEqual("Empty after clear", World.ActorCount(), static_cast<SIZE_T>(0));
+	return true;
 }
 
-TEST_CASE("World FindFirst finds derived type", "[gameplay][world]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayWorldFindFirstFindsDerivedTypeTest,
+	"System.AIModule.Gameplay.WorldFindFirstFindsDerivedType",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplayWorldFindFirstFindsDerivedTypeTest::RunTest(const FString& Parameters)
 {
+	// FindFirst returns the first Actor of the requested type and null when none matches.
 	UWorld World;
 	World.SpawnActor<ATestActor>();
-	auto* Pawn = World.SpawnActor<ATestPawn>();
-	REQUIRE(World.FindFirst<ATestPawn>() == Pawn);
-	REQUIRE(World.FindFirst<ACharacter>() == nullptr);
+	ATestPawn* Pawn = World.SpawnActor<ATestPawn>();
+	TestTrue("Finds the pawn", World.FindFirst<ATestPawn>() == Pawn);
+	TestNull("No character", World.FindFirst<ACharacter>());
+	return true;
 }
 
-TEST_CASE("Controller Possess and UnPossess", "[gameplay][controller]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayControllerPossessAndUnPossessTest,
+	"System.AIModule.Gameplay.ControllerPossessAndUnPossess",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplayControllerPossessAndUnPossessTest::RunTest(const FString& Parameters)
 {
+	// Possess links the Controller and the Pawn both ways; UnPossess clears both links.
 	UWorld World;
-	auto* Pawn = World.SpawnActor<ATestPawn>();
+	ATestPawn* Pawn = World.SpawnActor<ATestPawn>();
 	ATestController Controller;
 	Controller.Possess(Pawn);
-	REQUIRE(Controller.HasPawn());
-	REQUIRE(Pawn->IsPossessed());
-	REQUIRE(Pawn->GetController() == &Controller);
+	TestTrue("Controller has pawn", Controller.HasPawn());
+	TestTrue("Pawn possessed", Pawn->IsPossessed());
+	TestTrue("Pawn controller", Pawn->GetController() == &Controller);
 
 	Controller.UnPossess();
-	REQUIRE_FALSE(Controller.HasPawn());
-	REQUIRE_FALSE(Pawn->IsPossessed());
+	TestFalse("Controller has no pawn", Controller.HasPawn());
+	TestFalse("Pawn not possessed", Pawn->IsPossessed());
+	return true;
 }
 
-TEST_CASE("Pawn Destroy UnPossesses controller", "[gameplay][pawn]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayPawnDestroyUnPossessesControllerTest,
+	"System.AIModule.Gameplay.PawnDestroyUnPossessesController",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplayPawnDestroyUnPossessesControllerTest::RunTest(const FString& Parameters)
 {
+	// Destroying a possessed Pawn releases its Controller.
 	UWorld World;
-	auto* Pawn = World.SpawnActor<ATestPawn>();
+	ATestPawn* Pawn = World.SpawnActor<ATestPawn>();
 	ATestController Controller;
 	Controller.Possess(Pawn);
 	Pawn->Destroy();
 	World.Tick(0.0f);
-	REQUIRE_FALSE(Controller.HasPawn());
+	TestFalse("Controller released", Controller.HasPawn());
+	return true;
 }
 
-TEST_CASE("GameState match timer and PlayerState score", "[gameplay][state]")
-{
-	AGameStateBase Gs;
-	Gs.HandleMatchHasStarted();
-	Gs.Tick(0.5f);
-	REQUIRE(Gs.HasMatchStarted());
-	REQUIRE_THAT(Gs.GetServerWorldTimeSeconds(), WithinAbs(0.5f, 1.0e-5f));
-	Gs.Reset();
-	REQUIRE_THAT(Gs.GetServerWorldTimeSeconds(), WithinAbs(0.0f, 1.0e-5f));
-	REQUIRE_FALSE(Gs.HasMatchStarted());
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayGameStateMatchTimerAndPlayerStateScoreTest,
+	"System.AIModule.Gameplay.GameStateMatchTimerAndPlayerStateScore",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-	APlayerState Ps;
-	Ps.SetPlayerId(2);
-	Ps.SetPlayerName("P2");
-	Ps.AddScore(10.0f);
-	REQUIRE(Ps.GetPlayerId() == 2);
-	REQUIRE(Ps.GetPlayerName() == "P2");
-	REQUIRE_THAT(Ps.GetScore(), WithinAbs(10.0f, 1.0e-5f));
-	Ps.Reset();
-	REQUIRE_THAT(Ps.GetScore(), WithinAbs(0.0f, 1.0e-5f));
+bool FGameplayGameStateMatchTimerAndPlayerStateScoreTest::RunTest(const FString& Parameters)
+{
+	// The match clock runs only while the match is in progress; Reset clears the clock and the player score.
+	AGameStateBase GameState;
+	GameState.HandleMatchHasStarted();
+	GameState.Tick(0.5f);
+	TestTrue("Match started", GameState.HasMatchStarted());
+	TestEqual("Clock advanced", GameState.GetServerWorldTimeSeconds(), 0.5f, 1.0e-5f);
+	GameState.Reset();
+	TestEqual("Clock reset", GameState.GetServerWorldTimeSeconds(), 0.0f, 1.0e-5f);
+	TestFalse("Match reset", GameState.HasMatchStarted());
+
+	APlayerState PlayerState;
+	PlayerState.SetPlayerId(2);
+	PlayerState.SetPlayerName("P2");
+	PlayerState.AddScore(10.0f);
+	TestEqual("Player id", PlayerState.GetPlayerId(), 2);
+	TestEqual("Player name", PlayerState.GetPlayerName(), "P2");
+	TestEqual("Score", PlayerState.GetScore(), 10.0f, 1.0e-5f);
+	PlayerState.Reset();
+	TestEqual("Score reset", PlayerState.GetScore(), 0.0f, 1.0e-5f);
+	return true;
 }
 
-TEST_CASE("GameInstance NotifyLevelOpened", "[gameplay][gameinstance]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayGameInstanceNotifyLevelOpenedTest,
+	"System.AIModule.Gameplay.GameInstanceNotifyLevelOpened",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplayGameInstanceNotifyLevelOpenedTest::RunTest(const FString& Parameters)
 {
-	UGameInstance Gi;
-	REQUIRE(Gi.GetLevelsOpened() == 0);
-	Gi.NotifyLevelOpened();
-	Gi.NotifyLevelOpened();
-	REQUIRE(Gi.GetLevelsOpened() == 2);
+	// Each NotifyLevelOpened bumps the opened-level counter.
+	UGameInstance GameInstance;
+	TestEqual("No levels yet", GameInstance.GetLevelsOpened(), 0);
+	GameInstance.NotifyLevelOpened();
+	GameInstance.NotifyLevelOpened();
+	TestEqual("Two levels", GameInstance.GetLevelsOpened(), 2);
+	return true;
 }
 
-TEST_CASE("SpringArmComponent clamps pitch and arm length", "[gameplay][springarm]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplaySpringArmClampsPitchAndArmLengthTest,
+	"System.AIModule.Gameplay.SpringArmComponentClampsPitchAndArmLength",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplaySpringArmClampsPitchAndArmLengthTest::RunTest(const FString& Parameters)
 {
+	// Pitch and arm length inputs clamp to their limits, and the boom drives an orbit camera at the socket height.
 	USpringArmComponent Arm;
 	Arm.AddPitchInput(200.0f);
-	REQUIRE(Arm.BoomPitchDegrees <= Arm.PitchMax);
+	TestTrue("Pitch clamped to max", Arm.BoomPitchDegrees <= Arm.PitchMax);
 	Arm.AddPitchInput(-400.0f);
-	REQUIRE(Arm.BoomPitchDegrees >= Arm.PitchMin);
+	TestTrue("Pitch clamped to min", Arm.BoomPitchDegrees >= Arm.PitchMin);
 
 	Arm.AddArmLengthInput(100.0f);
-	REQUIRE_THAT(Arm.TargetArmLength, WithinAbs(Arm.ArmLengthMax, 1.0e-5f));
+	TestEqual("Arm length clamped to max", Arm.TargetArmLength, Arm.ArmLengthMax, 1.0e-5f);
 
-	Arm.SnapLagState({0.0f, 0.0f, 0.0f});
+	Arm.SnapLagState(FVector::ZeroVector);
 	UCameraComponent Camera;
-	Arm.ApplyToCamera(Camera, {1.0f, 0.0f, 0.0f}, 0.016f);
-	REQUIRE(Camera.GetMode() == ECameraMode::Orbit);
-	REQUIRE_THAT(Camera.GetTarget().y, WithinAbs(Arm.SocketOffsetZ, 0.5f));
+	Arm.ApplyToCamera(Camera, FVector(1.0f, 0.0f, 0.0f), 0.016f);
+	TestTrue("Orbit camera", Camera.GetMode() == ECameraMode::Orbit);
+	TestEqual("Camera target height", Camera.GetTarget().Y, Arm.SocketOffsetZ, 0.5f);
+	return true;
 }
 
-TEST_CASE("SpringArmComponent collision probe shortens arm", "[gameplay][springarm]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplaySpringArmCollisionProbeShortensArmTest,
+	"System.AIModule.Gameplay.SpringArmComponentCollisionProbeShortensArm",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplaySpringArmCollisionProbeShortensArmTest::RunTest(const FString& Parameters)
 {
+	// A static box between the pawn and the camera pulls the arm in, but never below ArmLengthMin.
 	FPhysScene Scene;
 	const int32 Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
-	Scene.GetBodies()[Id].Position = {2.0f, 1.0f, 0.0f};
-	Scene.GetBodies()[Id].HalfExtents = {0.25f, 1.0f, 2.0f};
+	Scene.GetBodies()[Id].Position = FVector(2.0f, 1.0f, 0.0f);
+	Scene.GetBodies()[Id].HalfExtents = FVector(0.25f, 1.0f, 2.0f);
 
 	USpringArmComponent Arm;
 	Arm.bDoCollisionTest = true;
@@ -167,137 +211,182 @@ TEST_CASE("SpringArmComponent collision probe shortens arm", "[gameplay][springa
 	Arm.SocketOffsetX = 0.0f;
 	Arm.ProbeSize = 0.15f;
 	Arm.CollisionProbeOffset = 0.05f;
-	Arm.SnapLagState({0.0f, 0.0f, 0.0f});
+	Arm.SnapLagState(FVector::ZeroVector);
 
 	UCameraComponent Camera;
-	Arm.ApplyToCamera(Camera, {0.0f, 0.0f, 0.0f}, 0.016f, &Scene);
-	REQUIRE(Camera.GetDistance() < 3.0f);
-	REQUIRE(Camera.GetDistance() >= Arm.ArmLengthMin);
+	Arm.ApplyToCamera(Camera, FVector::ZeroVector, 0.016f, &Scene);
+	TestTrue("Arm shortened", Camera.GetDistance() < 3.0f);
+	TestTrue("Arm above minimum", Camera.GetDistance() >= Arm.ArmLengthMin);
+	return true;
 }
 
-TEST_CASE("AIController steers toward target and arrives", "[gameplay][ai]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayAIControllerSteersTowardTargetAndArrivesTest,
+	"System.AIModule.Gameplay.AIControllerSteersTowardTargetAndArrives",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplayAIControllerSteersTowardTargetAndArrivesTest::RunTest(const FString& Parameters)
 {
+	// Far from the target the wish is a unit vector toward it; inside the arrive radius it is zero.
 	UWorld World;
-	auto* Character = World.SpawnActor<ACharacter>();
-	Character->Reset({0.0f, 0.0f, 0.0f});
+	ACharacter* Character = World.SpawnActor<ACharacter>();
+	Character->Reset(FVector(0.0f, 0.0f, 0.0f));
 
 	AAIController Ai;
 	Ai.Possess(Character);
 	Ai.SetArriveRadius(0.5f);
-	Ai.MoveToLocation({10.0f, 0.0f, 0.0f});
+	Ai.MoveToLocation(FVector(10.0f, 0.0f, 0.0f));
 
-	const glm::vec3 WishFar = Ai.TickAI(0.016f);
-	REQUIRE_THAT(glm::length(WishFar), WithinAbs(1.0f, 1.0e-3f));
-	REQUIRE(WishFar.x > 0.5f);
+	const FVector WishFar = Ai.TickAI(0.016f);
+	TestEqual("Unit wish when far", WishFar.Size(), 1.0f, 1.0e-3f);
+	TestTrue("Wish points at target", WishFar.X > 0.5f);
 
-	Character->Reset({10.0f, 0.0f, 0.0f});
-	const glm::vec3 WishNear = Ai.TickAI(0.016f);
-	REQUIRE_THAT(glm::length(WishNear), WithinAbs(0.0f, 1.0e-5f));
+	Character->Reset(FVector(10.0f, 0.0f, 0.0f));
+	const FVector WishNear = Ai.TickAI(0.016f);
+	TestEqual("No wish on arrival", WishNear.Size(), 0.0f, 1.0e-5f);
+	return true;
 }
 
-TEST_CASE("AIController MoveToActor tracks moving target", "[gameplay][ai]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayAIControllerMoveToActorTracksMovingTargetTest,
+	"System.AIModule.Gameplay.AIControllerMoveToActorTracksMovingTarget",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplayAIControllerMoveToActorTracksMovingTargetTest::RunTest(const FString& Parameters)
 {
+	// MoveToActor follows the target Actor's current location and stops once it is within the arrive radius.
 	UWorld World;
-	auto* Hunter = World.SpawnActor<ACharacter>();
-	auto* Prey = World.SpawnActor<ACharacter>();
-	Hunter->Reset({0.0f, 0.0f, 0.0f});
-	Prey->Reset({8.0f, 0.0f, 0.0f});
+	ACharacter* Hunter = World.SpawnActor<ACharacter>();
+	ACharacter* Prey = World.SpawnActor<ACharacter>();
+	Hunter->Reset(FVector(0.0f, 0.0f, 0.0f));
+	Prey->Reset(FVector(8.0f, 0.0f, 0.0f));
 
 	AAIController Ai;
 	Ai.Possess(Hunter);
 	Ai.SetArriveRadius(0.4f);
 	Ai.MoveToActor(Prey);
 
-	const glm::vec3 Wish = Ai.TickAI(0.016f);
-	REQUIRE(Wish.x > 0.5f);
-	REQUIRE(Ai.GetMoveActor() == Prey);
+	const FVector Wish = Ai.TickAI(0.016f);
+	TestTrue("Wish points at prey", Wish.X > 0.5f);
+	TestTrue("Move actor is prey", Ai.GetMoveActor() == Prey);
 
-	Prey->Reset({0.2f, 0.0f, 0.0f});
-	const glm::vec3 WishArrived = Ai.TickAI(0.016f);
-	REQUIRE_THAT(glm::length(WishArrived), WithinAbs(0.0f, 1.0e-5f));
+	Prey->Reset(FVector(0.2f, 0.0f, 0.0f));
+	const FVector WishArrived = Ai.TickAI(0.016f);
+	TestEqual("No wish on arrival", WishArrived.Size(), 0.0f, 1.0e-5f);
+	return true;
 }
 
-TEST_CASE("AIController path follow does not shortcut through blocker", "[gameplay][ai][nav]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayAIControllerPathFollowDoesNotShortcutTest,
+	"System.AIModule.Gameplay.AIControllerPathFollowDoesNotShortcutThroughBlocker",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplayAIControllerPathFollowDoesNotShortcutTest::RunTest(const FString& Parameters)
 {
+	// With a NavMesh and a wall in the way, the first steering step follows the detour instead of charging the wall.
 	FPhysScene Physics;
 	FBodyInstance Wall{};
 	Wall.Type = EBodyType::Static;
-	Wall.Position = {0.0f, 1.0f, 0.0f};
-	Wall.HalfExtents = {0.6f, 1.5f, 4.0f};
+	Wall.Position = FVector(0.0f, 1.0f, 0.0f);
+	Wall.HalfExtents = FVector(0.6f, 1.5f, 4.0f);
 	Physics.GetBodies().Add(Wall);
 
 	UNavigationSystem Nav;
 	Nav.SetCellSize(0.5f);
 	Nav.SetAgentRadius(0.45f);
 	Nav.BuildFromPhysScene(Physics, 0.0f, 12.0f);
-	REQUIRE(Nav.HasNavMesh());
+	if (!TestTrue("Nav mesh built", Nav.HasNavMesh()))
+	{
+		return false;
+	}
 
 	UWorld World;
-	auto* Character = World.SpawnActor<ACharacter>();
-	Character->Reset({-5.0f, 0.0f, 0.0f});
+	ACharacter* Character = World.SpawnActor<ACharacter>();
+	Character->Reset(FVector(-5.0f, 0.0f, 0.0f));
 
 	AAIController Ai;
 	Ai.Possess(Character);
 	Ai.SetNavigationSystem(&Nav);
-	// CoopTp-like large goal arrive — must not skip detour waypoints through the wall.
+	// CoopTp-like large goal arrive: must not skip detour waypoints through the wall.
 	Ai.SetArriveRadius(1.25f);
-	Ai.MoveToLocation({5.0f, 0.0f, 0.0f});
-	REQUIRE(Ai.IsFollowingPath());
-	REQUIRE(Ai.PathPoints().size() >= 3);
+	Ai.MoveToLocation(FVector(5.0f, 0.0f, 0.0f));
+	if (!TestTrue("Following a path", Ai.IsFollowingPath()))
+	{
+		return false;
+	}
+	TestTrue("Path has a detour", Ai.PathPoints().Num() >= 3);
 
-	const glm::vec3 Wish = Ai.TickAI(0.016f);
-	REQUIRE(glm::length(Wish) > 0.5f);
+	const FVector Wish = Ai.TickAI(0.016f);
+	TestTrue("Moving", Wish.Size() > 0.5f);
 	// Detour is off the X axis (around the wall), not a pure +X charge through it.
-	REQUIRE(std::abs(Wish.z) > 0.35f);
+	TestTrue("Steering around the wall", FMath::Abs(Wish.Z) > 0.35f);
+	return true;
 }
 
-TEST_CASE("NavigationSystem FindPath routes around static blocker", "[gameplay][nav]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayNavFindPathRoutesAroundStaticBlockerTest,
+	"System.AIModule.Gameplay.NavigationSystemFindPathRoutesAroundStaticBlocker",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplayNavFindPathRoutesAroundStaticBlockerTest::RunTest(const FString& Parameters)
 {
+	// A floor slab stays walkable, a wall blocks, FindPath detours around the wall and projection snaps to the floor.
 	FPhysScene Physics;
 
 	// Floor plane-like slab (wide aspect) must NOT wipe the whole grid.
 	FBodyInstance Floor{};
 	Floor.Type = EBodyType::Static;
-	Floor.Position = {0.0f, 0.0f, 0.0f};
-	Floor.HalfExtents = {20.0f, 0.5f, 20.0f};
+	Floor.Position = FVector(0.0f, 0.0f, 0.0f);
+	Floor.HalfExtents = FVector(20.0f, 0.5f, 20.0f);
 	Physics.GetBodies().Add(Floor);
 
 	FBodyInstance Wall{};
 	Wall.Type = EBodyType::Static;
-	Wall.Position = {0.0f, 1.0f, 0.0f};
-	Wall.HalfExtents = {0.6f, 1.5f, 5.0f};
+	Wall.Position = FVector(0.0f, 1.0f, 0.0f);
+	Wall.HalfExtents = FVector(0.6f, 1.5f, 5.0f);
 	Physics.GetBodies().Add(Wall);
 
 	UNavigationSystem Nav;
 	Nav.SetCellSize(0.5f);
 	Nav.SetAgentRadius(0.35f);
 	Nav.BuildFromPhysScene(Physics, 0.0f, 12.0f);
-	REQUIRE(Nav.HasNavMesh());
-	REQUIRE(Nav.GetWalkableCellCount() > 100);
-	REQUIRE(Nav.GetBlockerCount() == 1);
+	if (!TestTrue("Nav mesh built", Nav.HasNavMesh()))
+	{
+		return false;
+	}
+	TestTrue("Floor walkable", Nav.GetWalkableCellCount() > 100);
+	TestEqual("One blocker", Nav.GetBlockerCount(), 1);
 
-	std::vector<glm::vec3> Path;
-	REQUIRE(Nav.FindPath({-6.0f, 0.0f, 0.0f}, {6.0f, 0.0f, 0.0f}, Path));
-	REQUIRE(Path.size() >= 3);
+	TArray<FVector> Path;
+	if (!TestTrue("Path found", Nav.FindPath(FVector(-6.0f, 0.0f, 0.0f), FVector(6.0f, 0.0f, 0.0f), Path)))
+	{
+		return false;
+	}
+	TestTrue("Path has a detour", Path.Num() >= 3);
 
 	bool bDetoured = false;
-	for (const glm::vec3& P : Path)
+	for (const FVector& Point : Path)
 	{
-		if (std::abs(P.z) > 1.25f)
+		if (FMath::Abs(Point.Z) > 1.25f)
 		{
 			bDetoured = true;
 			break;
 		}
 	}
-	REQUIRE(bDetoured);
+	TestTrue("Path leaves the X axis", bDetoured);
 
-	glm::vec3 Projected{};
-	REQUIRE(Nav.ProjectPointToNavigation({-6.0f, 2.0f, 0.0f}, Projected));
-	REQUIRE_THAT(Projected.y, WithinAbs(0.0f, 1.0e-5f));
+	FVector Projected = FVector::ZeroVector;
+	if (!TestTrue("Point projected", Nav.ProjectPointToNavigation(FVector(-6.0f, 2.0f, 0.0f), Projected)))
+	{
+		return false;
+	}
+	TestEqual("Projected to the floor", Projected.Y, 0.0f, 1.0e-5f);
+	return true;
 }
 
-TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "[gameplay][nav]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayNavBlocksNavBlockerKeepsNavWalkableTest,
+	"System.AIModule.Gameplay.NavigationSystemBlocksNavBlockerButKeepsNavWalkableWalkable",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplayNavBlocksNavBlockerKeepsNavWalkableTest::RunTest(const FString& Parameters)
 {
+	// A NavBlocker-tagged plate blocks its cells and forces a detour; a NavWalkable ramp mesh stays walkable.
 	ULevel Level;
 	FPhysScene Physics;
 
@@ -305,15 +394,15 @@ TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "
 	Plate.Tag = NavTags::Blocker;
 	Plate.bCollisionEnabled = true;
 	Plate.EditorClass = "Cube";
-	Plate.Transform.Position = {0.0f, 0.12f, 0.0f};
-	Plate.Transform.Scale = {1.8f, 0.2f, 1.8f};
-	Level.GetStaticMeshes().push_back(std::move(Plate));
+	Plate.Transform.Position = FVector(0.0f, 0.12f, 0.0f);
+	Plate.Transform.Scale = FVector(1.8f, 0.2f, 1.8f);
+	Level.GetStaticMeshes().Add(MoveTemp(Plate));
 
 	FBodyInstance PlateBody{};
 	PlateBody.Type = EBodyType::Static;
 	PlateBody.LevelMeshIndex = 0;
-	PlateBody.Position = {0.0f, 0.12f, 0.0f};
-	PlateBody.HalfExtents = {0.9f, 0.1f, 0.9f};
+	PlateBody.Position = FVector(0.0f, 0.12f, 0.0f);
+	PlateBody.HalfExtents = FVector(0.9f, 0.1f, 0.9f);
 	Physics.GetBodies().Add(PlateBody);
 	Physics.GetTriangleMeshes().AddDefaulted();
 
@@ -321,19 +410,20 @@ TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "
 	Ramp.Tag = NavTags::Walkable;
 	Ramp.bCollisionEnabled = true;
 	Ramp.EditorClass = "Cube";
-	Level.GetStaticMeshes().push_back(std::move(Ramp));
+	Level.GetStaticMeshes().Add(MoveTemp(Ramp));
 
 	FBodyInstance RampBody{};
 	RampBody.Type = EBodyType::Static;
 	RampBody.LevelMeshIndex = 1;
-	RampBody.Position = {4.0f, 1.0f, 0.0f};
-	RampBody.HalfExtents = {2.5f, 1.0f, 1.2f};
+	RampBody.Position = FVector(4.0f, 1.0f, 0.0f);
+	RampBody.HalfExtents = FVector(2.5f, 1.0f, 1.2f);
 	RampBody.CollisionShape = EBodyCollisionShape::TriangleMesh;
 	Physics.GetBodies().Add(RampBody);
 
 	FTriangleMeshCollision Tri{};
 	// Two tris covering a 4x2 footprint around (4,0).
-	Tri.Positions = {{2.0f, 0.5f, -1.0f}, {6.0f, 1.5f, -1.0f}, {6.0f, 1.5f, 1.0f}, {2.0f, 0.5f, 1.0f}};
+	Tri.Positions = {
+		FVector(2.0f, 0.5f, -1.0f), FVector(6.0f, 1.5f, -1.0f), FVector(6.0f, 1.5f, 1.0f), FVector(2.0f, 0.5f, 1.0f)};
 	Tri.Indices = {0, 1, 2, 0, 2, 3};
 	Physics.GetTriangleMeshes().Add(MoveTemp(Tri));
 
@@ -341,124 +431,165 @@ TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "
 	Nav.SetCellSize(0.5f);
 	Nav.SetAgentRadius(0.35f);
 	Nav.BuildFromLevel(Level, Physics, 0.0f, 12.0f);
-	REQUIRE(Nav.HasNavMesh());
-	REQUIRE(Nav.GetBlockerCount() == 1);
+	if (!TestTrue("Nav mesh built", Nav.HasNavMesh()))
+	{
+		return false;
+	}
+	TestEqual("One blocker", Nav.GetBlockerCount(), 1);
 
 	// Cell under plate center must be blocked.
 	int Pix = 0;
 	int Piz = 0;
-	REQUIRE(Nav.GetNavMesh().WorldToCell(0.0f, 0.0f, Pix, Piz));
-	REQUIRE_FALSE(Nav.GetNavMesh().IsWalkable(Pix, Piz));
+	TestTrue("Plate cell found", Nav.GetNavMesh().WorldToCell(0.0f, 0.0f, Pix, Piz));
+	TestFalse("Plate cell blocked", Nav.GetNavMesh().IsWalkable(Pix, Piz));
 
 	// Path across the plate must detour.
-	std::vector<glm::vec3> Path;
-	REQUIRE(Nav.FindPath({-3.0f, 0.0f, 0.0f}, {3.0f, 0.0f, 0.0f}, Path));
-	bool bDetouredPlate = false;
-	for (const glm::vec3& P : Path)
+	TArray<FVector> Path;
+	if (!TestTrue("Path across the plate", Nav.FindPath(FVector(-3.0f, 0.0f, 0.0f), FVector(3.0f, 0.0f, 0.0f), Path)))
 	{
-		if (std::abs(P.z) > 0.8f)
+		return false;
+	}
+	bool bDetouredPlate = false;
+	for (const FVector& Point : Path)
+	{
+		if (FMath::Abs(Point.Z) > 0.8f)
 		{
 			bDetouredPlate = true;
 			break;
 		}
 	}
-	REQUIRE(bDetouredPlate);
+	TestTrue("Path detours around the plate", bDetouredPlate);
 
 	// Climbable ramp footprint stays walkable (CMC handles the slope).
 	int Rix = 0;
 	int Riz = 0;
-	REQUIRE(Nav.GetNavMesh().WorldToCell(4.0f, 0.0f, Rix, Riz));
-	REQUIRE(Nav.GetNavMesh().IsWalkable(Rix, Riz));
-	REQUIRE(Nav.FindPath({2.0f, 0.0f, 0.0f}, {6.0f, 0.0f, 0.0f}, Path));
+	TestTrue("Ramp cell found", Nav.GetNavMesh().WorldToCell(4.0f, 0.0f, Rix, Riz));
+	TestTrue("Ramp cell walkable", Nav.GetNavMesh().IsWalkable(Rix, Riz));
+	TestTrue("Path over the ramp", Nav.FindPath(FVector(2.0f, 0.0f, 0.0f), FVector(6.0f, 0.0f, 0.0f), Path));
+	return true;
 }
 
-TEST_CASE("NavigationSystem AppendDebugDraw fills overlay", "[gameplay][nav][debug]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayNavAppendDebugDrawFillsOverlayTest,
+	"System.AIModule.Gameplay.NavigationSystemAppendDebugDrawFillsOverlay",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplayNavAppendDebugDrawFillsOverlayTest::RunTest(const FString& Parameters)
 {
+	// Drawing a baked NavMesh adds lines to an empty debug draw batch.
 	FPhysScene Physics;
 	FBodyInstance Wall{};
 	Wall.Type = EBodyType::Static;
-	Wall.Position = {0.0f, 1.0f, 0.0f};
-	Wall.HalfExtents = {0.5f, 1.0f, 0.5f};
+	Wall.Position = FVector(0.0f, 1.0f, 0.0f);
+	Wall.HalfExtents = FVector(0.5f, 1.0f, 0.5f);
 	Physics.GetBodies().Add(Wall);
 
 	UNavigationSystem Nav;
 	Nav.SetCellSize(1.0f);
 	Nav.BuildFromPhysScene(Physics, 0.0f, 4.0f);
-	REQUIRE(Nav.HasNavMesh());
+	if (!TestTrue("Nav mesh built", Nav.HasNavMesh()))
+	{
+		return false;
+	}
 
 	FDebugDraw Draw;
-	REQUIRE(Draw.IsEmpty());
+	TestTrue("Starts empty", Draw.IsEmpty());
 	Nav.AppendDebugDraw(Draw);
-	REQUIRE_FALSE(Draw.IsEmpty());
+	TestFalse("Filled", Draw.IsEmpty());
+	return true;
 }
 
-TEST_CASE("Character Reset Jump and PerformMovement", "[gameplay][character]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayCharacterResetJumpAndPerformMovementTest,
+	"System.AIModule.Gameplay.CharacterResetJumpAndPerformMovement",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplayCharacterResetJumpAndPerformMovementTest::RunTest(const FString& Parameters)
 {
+	// Reset puts the Character on the ground; Jump makes it fall upward, and movement input moves it along X.
 	ACharacter Character;
-	Character.Reset({0.0f, 0.0f, 0.0f}, 45.0f);
-	REQUIRE(Character.IsMovingOnGround());
-	REQUIRE_THAT(Character.GetActorYaw(), WithinAbs(45.0f, 1.0e-5f));
+	Character.Reset(FVector(0.0f, 0.0f, 0.0f), 45.0f);
+	TestTrue("On ground after reset", Character.IsMovingOnGround());
+	TestEqual("Yaw after reset", Character.GetActorYaw(), 45.0f, 1.0e-5f);
 
 	FPhysScene Scene;
 	Character.Jump();
 	Character.PerformMovement(Scene, 1.0f / 60.0f);
-	REQUIRE_FALSE(Character.IsMovingOnGround());
-	REQUIRE(Character.IsFalling());
-	REQUIRE(Character.GetActorLocation().y > 0.0f);
+	TestFalse("Left the ground", Character.IsMovingOnGround());
+	TestTrue("Falling", Character.IsFalling());
+	TestTrue("Moved up", Character.GetActorLocation().Y > 0.0f);
 
-	Character.AddMovementInput({1.0f, 0.0f, 0.0f});
-	const float X0 = Character.GetActorLocation().x;
+	Character.AddMovementInput(FVector(1.0f, 0.0f, 0.0f));
+	const float StartX = Character.GetActorLocation().X;
 	Character.PerformMovement(Scene, 1.0f / 60.0f);
-	REQUIRE(Character.GetActorLocation().x > X0);
+	TestTrue("Moved along X", Character.GetActorLocation().X > StartX);
+	return true;
 }
 
-TEST_CASE("Actor SyncTransformToLevel writes linked mesh", "[gameplay][actor][sync]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayActorSyncTransformToLevelWritesLinkedMeshTest,
+	"System.AIModule.Gameplay.ActorSyncTransformToLevelWritesLinkedMesh",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplayActorSyncTransformToLevelWritesLinkedMeshTest::RunTest(const FString& Parameters)
 {
+	// SyncTransformToLevel copies the Actor location and yaw into its linked Level mesh.
 	ULevel Level;
 	UStaticMeshComponent Mesh{};
-	Mesh.Transform.Position = {0.0f, 0.0f, 0.0f};
-	Mesh.Transform.RotationDegrees = {0.0f, 0.0f, 0.0f};
-	Level.AddStaticMesh(std::move(Mesh));
+	Mesh.Transform.Position = FVector(0.0f, 0.0f, 0.0f);
+	Mesh.Transform.RotationDegrees = FVector(0.0f, 0.0f, 0.0f);
+	Level.AddStaticMesh(MoveTemp(Mesh));
 
 	UWorld World;
-	auto* Actor = World.SpawnActor<ATestActor>();
+	ATestActor* Actor = World.SpawnActor<ATestActor>();
 	Actor->SetLevelMeshIndex(0);
-	Actor->SetActorLocationAndRotation({3.0f, 1.5f, -2.0f}, 90.0f);
+	Actor->SetActorLocationAndRotation(FVector(3.0f, 1.5f, -2.0f), 90.0f);
 	Actor->SyncTransformToLevel(Level);
 
-	REQUIRE_THAT(Level.GetStaticMeshes()[0].Transform.Position.x, WithinAbs(3.0f, 1.0e-5f));
-	REQUIRE_THAT(Level.GetStaticMeshes()[0].Transform.Position.y, WithinAbs(1.5f, 1.0e-5f));
-	REQUIRE_THAT(Level.GetStaticMeshes()[0].Transform.Position.z, WithinAbs(-2.0f, 1.0e-5f));
-	REQUIRE_THAT(Level.GetStaticMeshes()[0].Transform.RotationDegrees.y, WithinAbs(90.0f, 1.0e-5f));
+	const FLegacyTransform& Transform = Level.GetStaticMeshes()[0].Transform;
+	TestEqual("Position X", Transform.Position.X, 3.0f, 1.0e-5f);
+	TestEqual("Position Y", Transform.Position.Y, 1.5f, 1.0e-5f);
+	TestEqual("Position Z", Transform.Position.Z, -2.0f, 1.0e-5f);
+	TestEqual("Yaw", Transform.RotationDegrees.Y, 90.0f, 1.0e-5f);
+	return true;
 }
 
-TEST_CASE("World TickGameplayFrame syncs Character to Level mesh", "[gameplay][world][sync]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayWorldTickGameplayFrameSyncsCharacterTest,
+	"System.AIModule.Gameplay.WorldTickGameplayFrameSyncsCharacterToLevelMesh",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplayWorldTickGameplayFrameSyncsCharacterTest::RunTest(const FString& Parameters)
 {
+	// A gameplay frame writes the Character pose into its linked Level mesh.
 	ULevel Level;
 	UStaticMeshComponent Mesh{};
-	Level.AddStaticMesh(std::move(Mesh));
+	Level.AddStaticMesh(MoveTemp(Mesh));
 
 	UWorld World;
-	auto* Character = World.SpawnActor<ACharacter>();
+	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->SetLevelMeshIndex(0);
-	Character->Reset({1.0f, 0.0f, 2.0f}, 45.0f);
+	Character->Reset(FVector(1.0f, 0.0f, 2.0f), 45.0f);
 
 	FWorldGameplayFrameParams Frame{};
 	Frame.DeltaTime = 1.0f / 60.0f;
 	Frame.Level = &Level;
 	World.TickGameplayFrame(Frame);
 
-	REQUIRE_THAT(Level.GetStaticMeshes()[0].Transform.Position.x, WithinAbs(1.0f, 1.0e-4f));
-	REQUIRE_THAT(Level.GetStaticMeshes()[0].Transform.Position.z, WithinAbs(2.0f, 1.0e-4f));
-	REQUIRE_THAT(Level.GetStaticMeshes()[0].Transform.RotationDegrees.y, WithinAbs(45.0f, 1.0e-4f));
+	const FLegacyTransform& Transform = Level.GetStaticMeshes()[0].Transform;
+	TestEqual("Position X", Transform.Position.X, 1.0f, 1.0e-4f);
+	TestEqual("Position Z", Transform.Position.Z, 2.0f, 1.0e-4f);
+	TestEqual("Yaw", Transform.RotationDegrees.Y, 45.0f, 1.0e-4f);
+	return true;
 }
 
-TEST_CASE("ActorComponent RegisterComponent and CreateDefaultSubobject tick", "[gameplay][actorcomponent]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayActorComponentRegisterAndSubobjectTickTest,
+	"System.AIModule.Gameplay.ActorComponentRegisterComponentAndCreateDefaultSubobjectTick",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplayActorComponentRegisterAndSubobjectTickTest::RunTest(const FString& Parameters)
 {
+	// A heap subobject is registered on its owner, begins play with it, ticks when enabled and stops once destroyed.
 	struct UCountingComponent : UActorComponent
 	{
-		int Ticks = 0;
-		int Begins = 0;
+		int32 Ticks = 0;
+		int32 Begins = 0;
 		void BeginPlay() override
 		{
 			++Begins;
@@ -470,69 +601,93 @@ TEST_CASE("ActorComponent RegisterComponent and CreateDefaultSubobject tick", "[
 	};
 
 	UWorld World;
-	auto* Actor = World.SpawnActor<ATestActor>();
-	REQUIRE(Actor->GetComponents().size() >= 1); // root
+	ATestActor* Actor = World.SpawnActor<ATestActor>();
+	TestTrue("Root registered", Actor->GetComponents().Num() >= 1);
 
 	UCountingComponent* Heap = Actor->CreateDefaultSubobject<UCountingComponent>();
-	REQUIRE(Heap != nullptr);
-	REQUIRE(Heap->GetOwner() == Actor);
-	REQUIRE(Heap->IsRegistered());
+	if (!TestNotNull("Subobject created", Heap))
+	{
+		return false;
+	}
+	TestTrue("Owned by actor", Heap->GetOwner() == Actor);
+	TestTrue("Registered", Heap->IsRegistered());
 	Heap->SetComponentTickEnabled(true);
 
 	// BeginPlayComponents runs on spawn before Actor::BeginPlay.
-	REQUIRE(Heap->Begins == 1);
+	TestEqual("Began play once", Heap->Begins, 1);
 
 	World.Tick(1.0f / 60.0f);
-	REQUIRE(Heap->Ticks == 1);
+	TestEqual("Ticked once", Heap->Ticks, 1);
 
 	Heap->DestroyComponent();
-	REQUIRE_FALSE(Heap->IsRegistered());
+	TestFalse("Unregistered", Heap->IsRegistered());
 	World.Tick(1.0f / 60.0f);
-	REQUIRE(Heap->Ticks == 1); // unregistered: no further ticks
+	TestEqual("No tick after unregister", Heap->Ticks, 1);
+	return true;
 }
 
-TEST_CASE("SceneComponent attach hierarchy world transform", "[gameplay][scenecomponent]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplaySceneComponentAttachHierarchyTest,
+	"System.AIModule.Gameplay.SceneComponentAttachHierarchyWorldTransform",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplaySceneComponentAttachHierarchyTest::RunTest(const FString& Parameters)
 {
+	// Attached components add their relative offsets to the Actor pose; cycles are refused and destroy detaches.
 	UWorld World;
-	auto* Actor = World.SpawnActor<ATestActor>();
-	Actor->SetActorLocationAndRotation({10.0f, 0.0f, 0.0f}, 0.0f);
+	ATestActor* Actor = World.SpawnActor<ATestActor>();
+	Actor->SetActorLocationAndRotation(FVector(10.0f, 0.0f, 0.0f), 0.0f);
 
 	USceneComponent Child;
 	Child.SetOwner(Actor);
-	Child.RelativeLocation = {2.0f, 0.0f, 0.0f};
-	REQUIRE(Child.AttachToComponent(&Actor->GetRootComponent()));
-	REQUIRE(Child.GetAttachParent() == &Actor->GetRootComponent());
-	REQUIRE(Actor->GetRootComponent().GetAttachChildren().size() == 1);
+	Child.RelativeLocation = FVector(2.0f, 0.0f, 0.0f);
+	TestTrue("Child attached", Child.AttachToComponent(&Actor->GetRootComponent()));
+	TestTrue("Child parent is root", Child.GetAttachParent() == &Actor->GetRootComponent());
+	TestEqual("Root has one child", Actor->GetRootComponent().GetAttachChildren().Num(), 1);
 
-	const glm::vec3 Loc = Child.GetComponentLocation();
-	REQUIRE_THAT(Loc.x, WithinAbs(12.0f, 1.0e-4f));
+	const FVector Loc = Child.GetComponentLocation();
+	TestEqual("Child world X", Loc.X, 12.0f, 1.0e-4f);
 
 	USceneComponent Grandchild;
-	Grandchild.RelativeLocation = {1.0f, 0.0f, 0.0f};
-	REQUIRE(Grandchild.AttachToComponent(&Child));
-	REQUIRE_THAT(Grandchild.GetComponentLocation().x, WithinAbs(13.0f, 1.0e-4f));
+	Grandchild.RelativeLocation = FVector(1.0f, 0.0f, 0.0f);
+	TestTrue("Grandchild attached", Grandchild.AttachToComponent(&Child));
+	TestEqual("Grandchild world X", Grandchild.GetComponentLocation().X, 13.0f, 1.0e-4f);
 
-	REQUIRE_FALSE(Child.AttachToComponent(&Grandchild)); // cycle
+	TestFalse("Cycle refused", Child.AttachToComponent(&Grandchild));
 	Child.DestroyComponent();
-	REQUIRE(Child.GetAttachParent() == nullptr);
-	REQUIRE(Actor->GetRootComponent().GetAttachChildren().empty());
+	TestNull("Child detached", Child.GetAttachParent());
+	TestEqual("Root has no children", Actor->GetRootComponent().GetAttachChildren().Num(), 0);
+	return true;
 }
 
-TEST_CASE("Character mesh attaches to root SceneComponent", "[gameplay][character][scenecomponent]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayCharacterMeshAttachesToRootTest,
+	"System.AIModule.Gameplay.CharacterMeshAttachesToRootSceneComponent",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplayCharacterMeshAttachesToRootTest::RunTest(const FString& Parameters)
 {
+	// The Character mesh is a registered child of the root and follows the Actor location plus its offset.
 	ACharacter Character;
-	REQUIRE(Character.GetMesh().GetAttachParent() == &Character.GetRootComponent());
-	REQUIRE(Character.GetMesh().GetOwner() == &Character);
-	REQUIRE(Character.GetMesh().IsRegistered());
-	REQUIRE(Character.GetRootComponent().IsRegistered());
-	Character.SetActorLocation({5.0f, 0.0f, 0.0f});
-	Character.GetMesh().RelativeLocation = {1.0f, 0.0f, 0.0f};
-	REQUIRE_THAT(Character.GetMesh().GetComponentLocation().x, WithinAbs(6.0f, 1.0e-4f));
+	TestTrue("Mesh parent is root", Character.GetMesh().GetAttachParent() == &Character.GetRootComponent());
+	TestTrue("Mesh owner", Character.GetMesh().GetOwner() == &Character);
+	TestTrue("Mesh registered", Character.GetMesh().IsRegistered());
+	TestTrue("Root registered", Character.GetRootComponent().IsRegistered());
+	Character.SetActorLocation(FVector(5.0f, 0.0f, 0.0f));
+	Character.GetMesh().RelativeLocation = FVector(1.0f, 0.0f, 0.0f);
+	TestEqual("Mesh world X", Character.GetMesh().GetComponentLocation().X, 6.0f, 1.0e-4f);
+	return true;
 }
 
-TEST_CASE("PhysScene reports Arcade backend by default", "[physics][backend]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayPhysSceneReportsArcadeBackendByDefaultTest,
+	"System.AIModule.Gameplay.PhysSceneReportsArcadeBackendByDefault",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplayPhysSceneReportsArcadeBackendByDefaultTest::RunTest(const FString& Parameters)
 {
+	// A default physics scene uses the Arcade backend and names it "Arcade".
 	FPhysScene Scene;
-	REQUIRE(Scene.GetBackend() == EPhysicsBackend::Arcade);
-	REQUIRE(std::string(PhysicsBackendName(Scene.GetBackend())) == "Arcade");
+	TestTrue("Arcade backend", Scene.GetBackend() == EPhysicsBackend::Arcade);
+	TestEqual("Backend name", PhysicsBackendName(Scene.GetBackend()), "Arcade");
+	return true;
 }
+
+#endif // WITH_DEV_AUTOMATION_TESTS

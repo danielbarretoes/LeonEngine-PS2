@@ -51,3 +51,8 @@ FString FLinuxPlatformProcess::GetCurrentWorkingDirectory()
 	char Buffer[PATH_MAX + 1] = {};
 	return getcwd(Buffer, PATH_MAX) != nullptr ? FString(Buffer) : FString();
 }
+
+void FLinuxPlatformProcess::Sleep(float Seconds)
+{
+	usleep(static_cast<useconds_t>(Seconds * 1000000.0f));
+}

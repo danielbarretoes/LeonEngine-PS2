@@ -1,38 +1,33 @@
 #include "Engine/Level.h"
 
-#include <algorithm>
-#include <string_view>
-#include <utility>
-
-std::size_t UStaticMeshComponent::SubMeshCount() const
+int32 UStaticMeshComponent::SubMeshCount() const
 {
 	if (Mesh == nullptr || !Mesh->Valid())
 	{
 		return 0;
 	}
-	return Mesh->GetSubmeshes().empty() ? 1 : Mesh->GetSubmeshes().size();
+	return Mesh->GetSubmeshes().Num() == 0 ? 1 : Mesh->GetSubmeshes().Num();
 }
 
-const FMaterial& UStaticMeshComponent::MaterialForSubMesh(std::size_t SubMeshIndex) const
+const FMaterial& UStaticMeshComponent::MaterialForSubMesh(int32 SubMeshIndex) const
 {
-	int Slot = 0;
-	if (Mesh != nullptr && SubMeshIndex < Mesh->GetSubmeshes().size())
+	int32 Slot = 0;
+	if (Mesh != nullptr && SubMeshIndex >= 0 && SubMeshIndex < Mesh->GetSubmeshes().Num())
 	{
 		Slot = Mesh->GetSubmeshes()[SubMeshIndex].MaterialIndex;
 	}
 
-	if (Slot >= 0 && static_cast<std::size_t>(Slot) < Materials.size())
+	if (Materials.IsValidIndex(Slot))
 	{
-		return Materials[static_cast<std::size_t>(Slot)];
+		return Materials[Slot];
 	}
 	if (bMaterialOverride)
 	{
 		return Material;
 	}
-	if (Mesh != nullptr && Mesh->HasMaterials() && Slot >= 0 &&
-		static_cast<std::size_t>(Slot) < Mesh->GetMaterials().size())
+	if (Mesh != nullptr && Mesh->HasMaterials() && Mesh->GetMaterials().IsValidIndex(Slot))
 	{
-		return Mesh->GetMaterials()[static_cast<std::size_t>(Slot)];
+		return Mesh->GetMaterials()[Slot];
 	}
 	return Material;
 }
@@ -47,9 +42,9 @@ bool UStaticMeshComponent::IsShadowCaster() const
 	const auto CountsAsCaster = [](const FMaterial& Mat)
 	{ return Mat.bCastsShadows && !Mat.IsTransparent() && Mat.Shading != EMaterialShadingModel::Unlit; };
 
-	if (!Materials.empty())
+	if (Materials.Num() > 0)
 	{
-		return std::any_of(Materials.begin(), Materials.end(), CountsAsCaster);
+		return Materials.ContainsByPredicate(CountsAsCaster);
 	}
 	if (bMaterialOverride)
 	{
@@ -57,62 +52,52 @@ bool UStaticMeshComponent::IsShadowCaster() const
 	}
 	if (Mesh->HasMaterials())
 	{
-		const auto& Mats = Mesh->GetMaterials();
-		return std::any_of(Mats.begin(), Mats.end(), CountsAsCaster);
+		return Mesh->GetMaterials().ContainsByPredicate(CountsAsCaster);
 	}
 	return CountsAsCaster(Material);
 }
 
 UStaticMeshComponent& ULevel::AddStaticMesh(UStaticMeshComponent Component)
 {
-	StaticMeshes.push_back(std::move(Component));
-	return StaticMeshes.back();
+	return StaticMeshes.Add_GetRef(MoveTemp(Component));
 }
 
 FPlayerStart& ULevel::AddPlayerStart(FPlayerStart Start)
 {
-	PlayerStarts.push_back(std::move(Start));
-	return PlayerStarts.back();
+	return PlayerStarts.Add_GetRef(MoveTemp(Start));
 }
 
 FTriggerVolume& ULevel::AddTriggerVolume(FTriggerVolume Volume)
 {
-	TriggerVolumes.push_back(std::move(Volume));
-	return TriggerVolumes.back();
+	return TriggerVolumes.Add_GetRef(MoveTemp(Volume));
 }
 
 FPainCausingVolume& ULevel::AddPainCausingVolume(FPainCausingVolume Volume)
 {
-	PainCausingVolumes.push_back(std::move(Volume));
-	return PainCausingVolumes.back();
+	return PainCausingVolumes.Add_GetRef(MoveTemp(Volume));
 }
 
 FAISpawnPoint& ULevel::AddAISpawnPoint(FAISpawnPoint Point)
 {
-	AiSpawnPoints.push_back(std::move(Point));
-	return AiSpawnPoints.back();
+	return AiSpawnPoints.Add_GetRef(MoveTemp(Point));
 }
 
 const FPlayerStart* ULevel::FindPlayerStart() const
 {
-	if (PlayerStarts.empty())
-	{
-		return nullptr;
-	}
-	return &PlayerStarts.front();
+	return PlayerStarts.Num() > 0 ? &PlayerStarts[0] : nullptr;
 }
 
-std::size_t ULevel::FindStaticMeshIndexByTag(std::string_view InTag) const
+SIZE_T ULevel::FindStaticMeshIndexByTag(const FString& InTag) const
 {
-	if (InTag.empty())
+	if (InTag.IsEmpty())
 	{
 		return Npos;
 	}
-	for (std::size_t I = 0; I < StaticMeshes.size(); ++I)
+	for (int32 I = 0; I < StaticMeshes.Num(); ++I)
 	{
-		if (StaticMeshes[I].Tag == InTag)
+		if (StaticMeshes[I].Tag.Equals(InTag, ESearchCase::CaseSensitive))
 		{
-			return I;
+			return static_cast<SIZE_T>(I);
 		}
 	}
 	return Npos;
@@ -120,33 +105,33 @@ std::size_t ULevel::FindStaticMeshIndexByTag(std::string_view InTag) const
 
 void ULevel::ClearStaticMeshes()
 {
-	StaticMeshes.clear();
+	StaticMeshes.Reset();
 }
 
 void ULevel::ClearPlayerStarts()
 {
-	PlayerStarts.clear();
+	PlayerStarts.Reset();
 }
 
 void ULevel::ClearTriggerVolumes()
 {
-	TriggerVolumes.clear();
+	TriggerVolumes.Reset();
 }
 
 void ULevel::ClearPainCausingVolumes()
 {
-	PainCausingVolumes.clear();
+	PainCausingVolumes.Reset();
 }
 
 void ULevel::ClearAISpawnPoints()
 {
-	AiSpawnPoints.clear();
+	AiSpawnPoints.Reset();
 }
 
 void ULevel::ClearLights()
 {
-	DirectionalLights.clear();
-	PointLights.clear();
+	DirectionalLights.Reset();
+	PointLights.Reset();
 }
 
 void ULevel::Clear()
@@ -157,6 +142,6 @@ void ULevel::Clear()
 	ClearPainCausingVolumes();
 	ClearAISpawnPoints();
 	ClearLights();
-	Name.clear();
-	GameMode.clear();
+	Name.Empty();
+	GameMode.Empty();
 }

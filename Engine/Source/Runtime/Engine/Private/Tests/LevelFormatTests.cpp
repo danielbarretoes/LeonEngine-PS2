@@ -1,23 +1,27 @@
+#include "CoreMinimal.h"
 #include "Level/LeonLevelFormat.h"
+#include "Misc/AutomationTest.h"
 
-#include <catch2/catch_test_macros.hpp>
+#if WITH_DEV_AUTOMATION_TESTS
 
-#include <cstdint>
-#include <vector>
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelFormatBytesRoundTripThroughBinaryFormatTest,
+	"System.Engine.LevelFormat.BytesRoundTripThroughBinaryFormat",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-TEST_CASE("Leon level bytes round-trip through the binary format", "[content][level][format]")
+bool FLevelFormatBytesRoundTripThroughBinaryFormatTest::RunTest(const FString& Parameters)
 {
+	// A document with a camera, an actor and a light survives SerializeLeonLevel / DeserializeLeonLevel.
 	FLevelDocument Doc;
 	Doc.Name = "RoundTrip";
 	Doc.GameMode = "Default";
 	Doc.Camera.Mode = ECameraMode::FreeLook;
-	Doc.Camera.Eye = {1.0f, 2.0f, 3.0f};
+	Doc.Camera.Eye = FVector(1.0f, 2.0f, 3.0f);
 	Doc.Camera.Yaw = -90.0f;
 
 	FLevelActorRecord Sphere;
 	Sphere.ActorClass = ELevelActorClass::Sphere;
-	Sphere.Position = {1.0f, 2.0f, 3.0f};
-	Sphere.Scale = {0.5f, 0.5f, 0.5f};
+	Sphere.Position = FVector(1.0f, 2.0f, 3.0f);
+	Sphere.Scale = FVector(0.5f, 0.5f, 0.5f);
 	Sphere.Tag = "ball";
 	Sphere.SphereSegments = 32;
 	Sphere.SphereRings = 20;
@@ -25,47 +29,68 @@ TEST_CASE("Leon level bytes round-trip through the binary format", "[content][le
 	Sphere.Mobility = EComponentMobility::Movable;
 	Sphere.bHasBob = true;
 	Sphere.BobBaseY = 2.0f;
-	Doc.Actors.push_back(Sphere);
+	Doc.Actors.Add(Sphere);
 
 	FLevelLightRecord Point;
 	Point.LightClass = ELevelLightClass::PointLight;
 	Point.bHasOrbit = true;
 	Point.OrbitRadius = 4.0f;
 	Point.Range = 12.0f;
-	Doc.Lights.push_back(Point);
+	Doc.Lights.Add(Point);
 
-	const std::vector<std::uint8_t> Bytes = SerializeLeonLevel(Doc);
-	REQUIRE(Bytes.size() > 16);
+	const TArray<uint8> Bytes = SerializeLeonLevel(Doc);
+	TestTrue("Bytes written", Bytes.Num() > 16);
 
 	FLevelDocument Restored;
-	REQUIRE(DeserializeLeonLevel(Bytes, Restored));
-	REQUIRE(Restored.Name == "RoundTrip");
-	REQUIRE(Restored.GameMode == "Default");
-	REQUIRE(Restored.Camera.Mode == ECameraMode::FreeLook);
-	REQUIRE(Restored.Actors.size() == 1);
-	REQUIRE(Restored.Actors[0].ActorClass == ELevelActorClass::Sphere);
-	REQUIRE(Restored.Actors[0].Tag == "ball");
-	REQUIRE(Restored.Actors[0].SphereSegments == 32);
-	REQUIRE(Restored.Actors[0].Mobility == EComponentMobility::Movable);
-	REQUIRE(Restored.Actors[0].bHasBob);
-	REQUIRE(Restored.Lights.size() == 1);
-	REQUIRE(Restored.Lights[0].bHasOrbit);
+	if (!TestTrue("Deserialized", DeserializeLeonLevel(Bytes, Restored)))
+	{
+		return false;
+	}
+	TestEqual("Name", Restored.Name, "RoundTrip");
+	TestEqual("GameMode", Restored.GameMode, "Default");
+	TestTrue("Camera mode", Restored.Camera.Mode == ECameraMode::FreeLook);
+	if (!TestEqual("Actor count", Restored.Actors.Num(), 1))
+	{
+		return false;
+	}
+	TestTrue("Actor class", Restored.Actors[0].ActorClass == ELevelActorClass::Sphere);
+	TestEqual("Actor tag", Restored.Actors[0].Tag, "ball");
+	TestEqual("Sphere segments", Restored.Actors[0].SphereSegments, 32);
+	TestTrue("Actor mobility", Restored.Actors[0].Mobility == EComponentMobility::Movable);
+	TestTrue("Actor bob", Restored.Actors[0].bHasBob);
+	if (!TestEqual("Light count", Restored.Lights.Num(), 1))
+	{
+		return false;
+	}
+	TestTrue("Light orbit", Restored.Lights[0].bHasOrbit);
+	return true;
 }
 
-TEST_CASE("DeserializeLeonLevel rejects bad magic and truncation", "[content][level][format]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelFormatDeserializeRejectsBadMagicAndTruncationTest,
+	"System.Engine.LevelFormat.DeserializeRejectsBadMagicAndTruncation",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FLevelFormatDeserializeRejectsBadMagicAndTruncationTest::RunTest(const FString& Parameters)
 {
-	const FLevelDocument Doc;
-	std::vector<std::uint8_t> Bytes = SerializeLeonLevel(Doc);
-	FLevelDocument Restored;
+	// DeserializeLeonLevel fails on a corrupted magic number and on a truncated buffer.
+	AddExpectedError("bad magic", 1);
+	{
+		const FLevelDocument Doc;
+		TArray<uint8> Bytes = SerializeLeonLevel(Doc);
+		FLevelDocument Restored;
 
-	SECTION("bad magic")
-	{
 		Bytes[0] = 'X';
-		REQUIRE_FALSE(DeserializeLeonLevel(Bytes, Restored));
+		TestFalse("Bad magic rejected", DeserializeLeonLevel(Bytes, Restored));
 	}
-	SECTION("truncated")
 	{
-		Bytes.resize(Bytes.size() / 2);
-		REQUIRE_FALSE(DeserializeLeonLevel(Bytes, Restored));
+		const FLevelDocument Doc;
+		TArray<uint8> Bytes = SerializeLeonLevel(Doc);
+		FLevelDocument Restored;
+
+		Bytes.SetNum(Bytes.Num() / 2);
+		TestFalse("Truncated bytes rejected", DeserializeLeonLevel(Bytes, Restored));
 	}
+	return true;
 }
+
+#endif // WITH_DEV_AUTOMATION_TESTS

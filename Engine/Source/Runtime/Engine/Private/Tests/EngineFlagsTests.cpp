@@ -1,33 +1,42 @@
+#include "CoreMinimal.h"
 #include "Engine/GameEngine.h"
+#include "Misc/AutomationTest.h"
 
-#include <catch2/catch_test_macros.hpp>
+#if WITH_DEV_AUTOMATION_TESTS
 
-TEST_CASE("Engine flags work before initialize", "[engine]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEngineFlagsWorkBeforeInitializeTest, "System.Engine.Flags.WorkBeforeInitialize",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FEngineFlagsWorkBeforeInitializeTest::RunTest(const FString& Parameters)
 {
+	// The debug / input flags and the game instance counters work on an engine that was never initialized.
 	UGameEngine Engine;
-	REQUIRE_FALSE(Engine.IsInitialized());
+	TestFalse("Not initialized", Engine.IsInitialized());
 
 	Engine.SetSuppressCameraDrag(true);
-	REQUIRE(Engine.IsCameraDragSuppressed());
+	TestTrue("Camera drag suppressed", Engine.IsCameraDragSuppressed());
 	Engine.SetSuppressCameraDrag(false);
-	REQUIRE_FALSE(Engine.IsCameraDragSuppressed());
+	TestFalse("Camera drag not suppressed", Engine.IsCameraDragSuppressed());
 
-	REQUIRE_FALSE(Engine.IsCollisionDebugEnabled());
+	TestFalse("Collision debug off by default", Engine.IsCollisionDebugEnabled());
 	Engine.ToggleCollisionDebug();
-	REQUIRE(Engine.IsCollisionDebugEnabled());
+	TestTrue("Collision debug toggled on", Engine.IsCollisionDebugEnabled());
 	Engine.SetCollisionDebugEnabled(false);
-	REQUIRE_FALSE(Engine.IsCollisionDebugEnabled());
+	TestFalse("Collision debug set off", Engine.IsCollisionDebugEnabled());
 
-	REQUIRE_FALSE(Engine.IsNavMeshDebugEnabled());
+	TestFalse("NavMesh debug off by default", Engine.IsNavMeshDebugEnabled());
 	Engine.ToggleNavMeshDebug();
-	REQUIRE(Engine.IsNavMeshDebugEnabled());
+	TestTrue("NavMesh debug toggled on", Engine.IsNavMeshDebugEnabled());
 	Engine.SetNavMeshDebugEnabled(false);
-	REQUIRE_FALSE(Engine.IsNavMeshDebugEnabled());
+	TestFalse("NavMesh debug set off", Engine.IsNavMeshDebugEnabled());
 
 	Engine.SetKeyboardOrbitEnabled(false);
 	Engine.SetOrbitMouseEnabled(false);
 
-	REQUIRE(Engine.GetGameInstance().GetLevelsOpened() == 0);
+	TestEqual("No levels opened", Engine.GetGameInstance().GetLevelsOpened(), 0);
 	Engine.GetGameInstance().NotifyLevelOpened();
-	REQUIRE(Engine.GetGameInstance().GetLevelsOpened() == 1);
+	TestEqual("One level opened", Engine.GetGameInstance().GetLevelsOpened(), 1);
+	return true;
 }
+
+#endif // WITH_DEV_AUTOMATION_TESTS

@@ -1,55 +1,72 @@
+#include "CoreMinimal.h"
 #include "Engine/GameEngine.h"
 #include "GameplayMinimal.h"
 #include "Level/LeonLevelFormat.h"
 #include "Level/LevelLoader.h"
-#include "Misc/CString.h"
+#include "Misc/AutomationTest.h"
 
-#include <catch2/catch_test_macros.hpp>
+#if WITH_DEV_AUTOMATION_TESTS
 
-#include <chrono>
-#include <cstring>
-#include <filesystem>
-#include <string>
-#include <thread>
-#include <vector>
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelAndAISmokeEditorStyleLevelSaveLoadApplyTest,
+	"System.AIModule.LevelAndAISmoke.EditorStyleLevelSaveLoadApplyHeadless",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-TEST_CASE("Editor-style level save load apply headless", "[editor][level]")
+bool FLevelAndAISmokeEditorStyleLevelSaveLoadApplyTest::RunTest(const FString& Parameters)
 {
-#ifdef LEON_ROOT_DIR
-	const std::string TemplateLevel = std::string(LEON_ROOT_DIR) + "/Engine/Content/LevelTemplates/Blank.llev";
+	// A headless engine loads the blank template, and its level document survives a byte round trip and re-apply.
+	#ifdef LEON_ROOT_DIR
+	const FString TemplateLevel = FString(LEON_ROOT_DIR) + "/Engine/Content/LevelTemplates/Blank.llev";
 	UGameEngine Engine;
-	REQUIRE(Engine.InitializeHeadless());
-	REQUIRE(LoadLevelFile(Engine, TemplateLevel));
+	if (!TestTrue("Headless initialize", Engine.InitializeHeadless()))
+	{
+		return false;
+	}
+	if (!TestTrue("Template level loaded", LoadLevelFile(Engine, TemplateLevel)))
+	{
+		return false;
+	}
 
 	FLevelDocument Doc = BuildLevelDocument(Engine.GetLevel(), Engine.GetCamera());
-	REQUIRE_FALSE(Doc.Name.empty());
+	TestFalse("Document has a name", Doc.Name.IsEmpty());
 
-	const std::vector<std::uint8_t> Bytes = SerializeLeonLevel(Doc);
-	REQUIRE_FALSE(Bytes.empty());
+	const TArray<uint8> Bytes = SerializeLeonLevel(Doc);
+	TestTrue("Bytes written", Bytes.Num() > 0);
 
 	FLevelDocument RoundTrip;
-	REQUIRE(DeserializeLeonLevel(Bytes, RoundTrip));
-	REQUIRE(RoundTrip.Name == Doc.Name);
+	if (!TestTrue("Deserialized", DeserializeLeonLevel(Bytes, RoundTrip)))
+	{
+		return false;
+	}
+	TestEqual("Name kept", RoundTrip.Name, Doc.Name);
 
-	REQUIRE(ApplyLevelDocument(Engine, RoundTrip, "memory-editor-smoke"));
+	TestTrue("Document applied", ApplyLevelDocument(Engine, RoundTrip, "memory-editor-smoke"));
 	Engine.Shutdown();
-#else
-	SUCCEED("LEON_ROOT_DIR unset");
-#endif
+	#else
+	AddInfo("LEON_ROOT_DIR unset");
+	#endif
+	return true;
 }
 
-TEST_CASE("AIChaseBehavior MoveTo when target present", "[gameplay][bt][ai]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelAndAISmokeAIChaseBehaviorMoveToWhenTargetPresentTest,
+	"System.AIModule.LevelAndAISmoke.AIChaseBehaviorMoveToWhenTargetPresent",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FLevelAndAISmokeAIChaseBehaviorMoveToWhenTargetPresentTest::RunTest(const FString& Parameters)
 {
+	// The chase behavior tree chases while a target exists and returns the controller to idle without one.
 	UWorld World;
-	auto* Character = World.SpawnActor<ACharacter>();
-	auto* Target = World.SpawnActor<ACharacter>();
-	Target->SetActorLocationAndRotation({5.0f, 0.0f, 0.0f}, 0.0f);
+	ACharacter* Character = World.SpawnActor<ACharacter>();
+	ACharacter* Target = World.SpawnActor<ACharacter>();
+	Target->SetActorLocationAndRotation(FVector(5.0f, 0.0f, 0.0f), 0.0f);
 
 	AAIController Ai;
 	Ai.Possess(Character);
 	FAIChaseBehavior Chase;
 	(void)Chase.Tick(Ai, Target, 0.016f);
-	REQUIRE(Ai.GetLogicState() == EAILogicState::Chase);
+	TestTrue("Chasing the target", Ai.GetLogicState() == EAILogicState::Chase);
 	(void)Chase.Tick(Ai, nullptr, 0.016f);
-	REQUIRE(Ai.GetLogicState() == EAILogicState::Idle);
+	TestTrue("Idle without a target", Ai.GetLogicState() == EAILogicState::Idle);
+	return true;
 }
+
+#endif // WITH_DEV_AUTOMATION_TESTS

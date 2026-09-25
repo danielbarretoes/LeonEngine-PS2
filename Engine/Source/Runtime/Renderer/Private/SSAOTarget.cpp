@@ -1,8 +1,7 @@
 #include "PostProcess.h"
+#include "RendererLog.h"
 
 #include <glad/glad.h>
-
-#include <iostream>
 
 FSSAOTarget::~FSSAOTarget()
 {
@@ -41,7 +40,7 @@ bool FSSAOTarget::EnsureSize(int InWidth, int InHeight)
 		const GLenum Status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 		if (Status != GL_FRAMEBUFFER_COMPLETE)
 		{
-			std::cerr << "SsaoTarget framebuffer incomplete\n";
+			UE_LOG(LogRenderer, Error, "SsaoTarget framebuffer incomplete");
 			Destroy();
 			return false;
 		}

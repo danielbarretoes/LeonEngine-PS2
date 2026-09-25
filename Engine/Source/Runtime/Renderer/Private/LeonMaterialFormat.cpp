@@ -3,6 +3,7 @@
 #include "Migration/GlmInterop.h"
 #include "Migration/LegacyContentPath.h"
 #include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "ResourceCache.h"
 
 #include <algorithm>
@@ -165,7 +166,7 @@ namespace
 			}
 			else
 			{
-				InMaterial.AlbedoMap = Resources.LoadTexture(ResolveLegacyContentPath(Value));
+				InMaterial.AlbedoMap = Resources.LoadTexture(FPaths::ResolveLegacyContentPath(FString(Value.c_str())));
 			}
 		}
 		else if (K == "normalmap")
@@ -176,7 +177,7 @@ namespace
 			}
 			else
 			{
-				InMaterial.NormalMap = Resources.LoadTexture(ResolveLegacyContentPath(Value));
+				InMaterial.NormalMap = Resources.LoadTexture(FPaths::ResolveLegacyContentPath(FString(Value.c_str())));
 			}
 		}
 	}

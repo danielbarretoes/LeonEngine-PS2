@@ -1,8 +1,8 @@
 #include "PlanarReflection.h"
 
-#include <glad/glad.h>
+#include "RendererLog.h"
 
-#include <iostream>
+#include <glad/glad.h>
 
 FPlanarReflection::~FPlanarReflection()
 {
@@ -46,7 +46,7 @@ bool FPlanarReflection::EnsureSize(int InWidth, int InHeight)
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	if (Status != GL_FRAMEBUFFER_COMPLETE)
 	{
-		std::cerr << "PlanarReflection framebuffer incomplete\n";
+		UE_LOG(LogRenderer, Error, "PlanarReflection framebuffer incomplete");
 		Destroy();
 		return false;
 	}

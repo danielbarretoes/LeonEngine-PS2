@@ -8,7 +8,7 @@ void APlayerController::Possess(ACharacter* Character)
 	AController::Possess(Character);
 }
 
-glm::vec3 APlayerController::TickInput(UGameEngine& /*engine*/)
+FVector APlayerController::TickInput(UGameEngine& /*engine*/)
 {
 	return {};
 }

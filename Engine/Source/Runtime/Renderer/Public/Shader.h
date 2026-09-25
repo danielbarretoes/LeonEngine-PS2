@@ -1,14 +1,10 @@
 #pragma once
 
+#include "CoreMinimal.h"
+#include "Misc/DateTime.h"
 #include "RHIHandles.h"
 
-#include <cstdint>
-#include <filesystem>
-#include <functional>
-#include <string>
-#include <unordered_map>
-
-enum class EShaderReloadResult : std::uint8_t
+enum class EShaderReloadResult : uint8
 {
 	Unchanged = 0,
 	Reloaded = 1,
@@ -28,12 +24,12 @@ enum class EShaderReloadResult : std::uint8_t
 	return EShaderReloadResult::Unchanged;
 }
 
-/// GLSL program with cached uniform locations and optional disk hot-reload.
+/** GLSL program with cached uniform locations and optional hot reload from disk. */
 class RENDERER_API FShader
 {
 public:
-	/// Called after a new program is linked and installed; return false to revert.
-	using FAcceptFunction = std::function<bool()>;
+	/** Called after a new program is linked and installed; return false to revert. */
+	using FAcceptFunction = TFunction<bool()>;
 
 	FShader() = default;
 	~FShader();
@@ -41,26 +37,26 @@ public:
 	FShader(const FShader&) = delete;
 	FShader& operator=(const FShader&) = delete;
 
-	bool Create(const char* VertexSource, const char* FragmentSource);
-	bool LoadFromFiles(const std::string& InVertexPath, const std::string& InFragmentPath);
+	bool Create(const ANSICHAR* VertexSource, const ANSICHAR* FragmentSource);
+	bool LoadFromFiles(const FString& InVertexPath, const FString& InFragmentPath);
 	void Destroy();
 
-	/// Recompile when file timestamps change (or force). Failed compiles keep the previous program.
+	/** Recompiles when the file timestamps change (or when forced). A failed compile keeps the previous program. */
 	[[nodiscard]] EShaderReloadResult ReloadFromDiskIfChanged(const FAcceptFunction& Accept = {});
 	[[nodiscard]] EShaderReloadResult ForceReloadFromDisk(const FAcceptFunction& Accept = {});
 
 	void Bind() const;
-	void SetMat4(const char* Name, const float* Value16) const;
-	void SetMat4Array(const char* Name, const float* Values, int Count) const;
-	void SetMat3(const char* Name, const float* Value9) const;
-	void SetVec3(const char* Name, float X, float Y, float Z) const;
-	void SetVec2(const char* Name, float X, float Y) const;
-	void SetVec4(const char* Name, float X, float Y, float Z, float W) const;
-	void SetFloat(const char* Name, float Value) const;
-	void SetInt(const char* Name, int Value) const;
+	void SetMat4(const ANSICHAR* Name, const float* Value16) const;
+	void SetMat4Array(const ANSICHAR* Name, const float* Values, int32 Count) const;
+	void SetMat3(const ANSICHAR* Name, const float* Value9) const;
+	void SetVec3(const ANSICHAR* Name, float X, float Y, float Z) const;
+	void SetVec2(const ANSICHAR* Name, float X, float Y) const;
+	void SetVec4(const ANSICHAR* Name, float X, float Y, float Z, float W) const;
+	void SetFloat(const ANSICHAR* Name, float Value) const;
+	void SetInt(const ANSICHAR* Name, int32 Value) const;
 
-	/// Bind a named uniform block to a binding point (matches FUniformBuffer::Create).
-	bool BindUniformBlock(const char* BlockName, unsigned int BindingPoint) const;
+	/** Binds a named uniform block to a binding point (matches FUniformBuffer::Create). */
+	bool BindUniformBlock(const ANSICHAR* BlockName, uint32 BindingPoint) const;
 
 	[[nodiscard]] bool Valid() const
 	{
@@ -72,18 +68,24 @@ public:
 	}
 	[[nodiscard]] bool HasFilePaths() const
 	{
-		return !VertexPath.empty() && !FragmentPath.empty();
+		return !VertexPath.IsEmpty() && !FragmentPath.IsEmpty();
 	}
 
 private:
-	static unsigned int Compile(unsigned int Type, const char* Source);
-	[[nodiscard]] int UniformLocation(const char* Name) const;
+	/** A cached uniform location (GLSL names are case-sensitive). */
+	struct FUniformSlot
+	{
+		FString Name;
+		int32 Location = -1;
+	};
+
+	[[nodiscard]] int32 UniformLocation(const ANSICHAR* Name) const;
 	EShaderReloadResult LoadFromStoredPaths(bool bForce, const FAcceptFunction& Accept);
 
 	FRHIProgramId Program = InvalidProgram;
-	mutable std::unordered_map<std::string, int> UniformCache;
-	std::string VertexPath;
-	std::string FragmentPath;
-	std::filesystem::file_time_type VertexTime;
-	std::filesystem::file_time_type FragmentTime;
+	mutable TArray<FUniformSlot> UniformCache;
+	FString VertexPath;
+	FString FragmentPath;
+	FDateTime VertexTime;
+	FDateTime FragmentTime;
 };

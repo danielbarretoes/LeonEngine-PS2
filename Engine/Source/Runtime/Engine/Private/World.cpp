@@ -3,10 +3,7 @@
 #include "BodyInstance.h"
 #include "Engine/Level.h"
 #include "GameFramework/Character.h"
-#include "Migration/GlmInterop.h"
 #include "SceneRenderer.h"
-
-#include <vector>
 
 void UWorld::Tick(float InDeltaTime)
 {
@@ -28,7 +25,7 @@ void UWorld::RegisterBodiesFromLevel(const ULevel& InLevel)
 {
 	Physics.Clear();
 	const auto& Meshes = InLevel.GetStaticMeshes();
-	for (std::size_t I = 0; I < Meshes.size(); ++I)
+	for (int32 I = 0; I < Meshes.Num(); ++I)
 	{
 		const UStaticMeshComponent& Component = Meshes[I];
 		if (!Component.HasPhysicsBody())
@@ -45,10 +42,10 @@ void UWorld::RegisterBodiesFromLevel(const ULevel& InLevel)
 
 void UWorld::ResolveCharacterOverlaps()
 {
-	std::vector<ACharacter*> Characters;
-	Characters.reserve(Actors.size());
-	ForEach<ACharacter>([&](ACharacter& Character) { Characters.push_back(&Character); });
-	if (Characters.size() < 2)
+	TArray<ACharacter*> Characters;
+	Characters.Reserve(Actors.Num());
+	ForEach<ACharacter>([&](ACharacter& Character) { Characters.Add(&Character); });
+	if (Characters.Num() < 2)
 	{
 		return;
 	}
@@ -57,9 +54,9 @@ void UWorld::ResolveCharacterOverlaps()
 	constexpr int Iterations = 3;
 	for (int Iter = 0; Iter < Iterations; ++Iter)
 	{
-		for (std::size_t I = 0; I < Characters.size(); ++I)
+		for (int32 I = 0; I < Characters.Num(); ++I)
 		{
-			for (std::size_t J = I + 1; J < Characters.size(); ++J)
+			for (int32 J = I + 1; J < Characters.Num(); ++J)
 			{
 				Characters[I]->ResolvePawnOverlap(*Characters[J]);
 			}
@@ -118,7 +115,7 @@ void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& Params)
 			[&](ACharacter& Character)
 			{
 				Physics.AppendCollisionDebug(*Params.CollisionDebugDraw, Character.GetCapsule(),
-					FromGlm(Character.GetActorLocation()), Character.GetLevelMeshIndex());
+					Character.GetActorLocation(), Character.GetLevelMeshIndex());
 			});
 	}
 
@@ -142,7 +139,7 @@ void UWorld::Clear()
 			Actor->World = nullptr;
 		}
 	}
-	PendingSpawns.clear();
+	PendingSpawns.Empty();
 	for (auto& Actor : Actors)
 	{
 		if (Actor)
@@ -152,7 +149,7 @@ void UWorld::Clear()
 			Actor->World = nullptr;
 		}
 	}
-	Actors.clear();
+	Actors.Empty();
 	Physics.Clear();
 }
 
@@ -164,31 +161,32 @@ void UWorld::FlushPendingSpawns()
 		{
 			continue;
 		}
-		AActor* Raw = Owned.get();
-		Actors.push_back(std::move(Owned));
+		AActor* Raw = Owned.Get();
+		Actors.Add(MoveTemp(Owned));
 		Raw->BeginPlayComponents();
 		Raw->BeginPlay();
 	}
-	PendingSpawns.clear();
+	PendingSpawns.Empty();
 }
 
 void UWorld::PurgePending()
 {
-	for (auto It = Actors.begin(); It != Actors.end();)
+	for (int32 Index = 0; Index < Actors.Num();)
 	{
-		if (!*It || (*It)->IsPendingKillPending())
+		TUniquePtr<AActor>& Actor = Actors[Index];
+		if (!Actor || Actor->IsPendingKillPending())
 		{
-			if (*It)
+			if (Actor)
 			{
-				(*It)->EndPlay();
-				(*It)->EndPlayComponents();
-				(*It)->World = nullptr;
+				Actor->EndPlay();
+				Actor->EndPlayComponents();
+				Actor->World = nullptr;
 			}
-			It = Actors.erase(It);
+			Actors.RemoveAt(Index);
 		}
 		else
 		{
-			++It;
+			++Index;
 		}
 	}
 }

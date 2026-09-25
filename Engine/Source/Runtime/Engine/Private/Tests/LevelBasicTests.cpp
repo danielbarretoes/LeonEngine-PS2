@@ -1,101 +1,146 @@
+#include "CoreMinimal.h"
 #include "Engine/Level.h"
 #include "Level/BasicLight.h"
 #include "Level/BasicShape.h"
 #include "Level/Light.h"
+#include "Misc/AutomationTest.h"
 
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include <glm/geometric.hpp>
+#if WITH_DEV_AUTOMATION_TESTS
 
-using Catch::Matchers::WithinAbs;
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelLightDirectionFromRotationRoundTripTest,
+	"System.Engine.Level.LightDirectionFromRotationRoundTrip",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-TEST_CASE("lightDirectionFromRotation round-trip", "[level][light]")
+bool FLevelLightDirectionFromRotationRoundTripTest::RunTest(const FString& Parameters)
 {
-	const glm::vec3 Rot{45.0f, 90.0f, 0.0f};
-	const glm::vec3 Dir = LightDirectionFromRotation(Rot);
-	REQUIRE_THAT(glm::length(Dir), WithinAbs(1.0f, 1.0e-4f));
-	const glm::vec3 Back = RotationFromLightDirection(Dir);
-	REQUIRE_THAT(Back.x, WithinAbs(Rot.x, 1.0e-2f));
-	REQUIRE_THAT(Back.y, WithinAbs(Rot.y, 1.0e-2f));
+	// A light rotation turns into a unit direction and back into the same pitch and yaw.
+	const FVector Rot = FVector(45.0f, 90.0f, 0.0f);
+	const FVector Dir = LightDirectionFromRotation(Rot);
+	TestEqual("Direction is unit", Dir.Size(), 1.0f, 1.0e-4f);
+	const FVector Back = RotationFromLightDirection(Dir);
+	TestEqual("Pitch round-trips", Back.X, Rot.X, 1.0e-2f);
+	TestEqual("Yaw round-trips", Back.Y, Rot.Y, 1.0e-2f);
+	return true;
 }
 
-TEST_CASE("DirectionalLight GetDirection matches transform", "[level][light]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelDirectionalLightGetDirectionMatchesTransformTest,
+	"System.Engine.Level.DirectionalLightGetDirectionMatchesTransform",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FLevelDirectionalLightGetDirectionMatchesTransformTest::RunTest(const FString& Parameters)
 {
+	// A directional light pitched down by its transform points downward.
 	FDirectionalLight Light;
-	Light.Transform.RotationDegrees = {30.0f, 0.0f, 0.0f};
-	const glm::vec3 Dir = Light.GetDirection();
-	REQUIRE(Dir.y < 0.0f);
+	Light.Transform.RotationDegrees = FVector(30.0f, 0.0f, 0.0f);
+	const FVector Dir = Light.GetDirection();
+	TestTrue("Points down", Dir.Y < 0.0f);
+	return true;
 }
 
-TEST_CASE("tryParseBasicShapeName is case-insensitive", "[level][basicshape]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelTryParseBasicShapeNameIsCaseInsensitiveTest,
+	"System.Engine.Level.TryParseBasicShapeNameIsCaseInsensitive",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FLevelTryParseBasicShapeNameIsCaseInsensitiveTest::RunTest(const FString& Parameters)
 {
 	EBasicShape Shape{};
-	REQUIRE(TryParseBasicShapeName("Cube", Shape));
-	REQUIRE(Shape == EBasicShape::Cube);
-	REQUIRE(TryParseBasicShapeName("sphere", Shape));
-	REQUIRE(Shape == EBasicShape::Sphere);
-	REQUIRE(TryParseBasicShapeName("PLANE", Shape));
-	REQUIRE(Shape == EBasicShape::Plane);
-	REQUIRE_FALSE(TryParseBasicShapeName("Octahedron", Shape));
+	TestTrue("Cube parsed", TryParseBasicShapeName("Cube", Shape));
+	TestTrue("Cube type", Shape == EBasicShape::Cube);
+	TestTrue("sphere parsed", TryParseBasicShapeName("sphere", Shape));
+	TestTrue("Sphere type", Shape == EBasicShape::Sphere);
+	TestTrue("PLANE parsed", TryParseBasicShapeName("PLANE", Shape));
+	TestTrue("Plane type", Shape == EBasicShape::Plane);
+	TestFalse("Unknown shape rejected", TryParseBasicShapeName("Octahedron", Shape));
+	return true;
 }
 
-TEST_CASE("BlockingVolume and PlayerStart name helpers", "[level][basicshape]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelBlockingVolumeAndPlayerStartNameHelpersTest,
+	"System.Engine.Level.BlockingVolumeAndPlayerStartNameHelpers",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FLevelBlockingVolumeAndPlayerStartNameHelpersTest::RunTest(const FString& Parameters)
 {
-	REQUIRE(IsBlockingVolumeName("BlockingVolume"));
-	REQUIRE(IsBlockingVolumeName("blockingvolume"));
-	REQUIRE(IsPlayerStartName("PlayerStart"));
-	REQUIRE_FALSE(IsPlayerStartName("Cube"));
+	// The BlockingVolume name matches in any case; PlayerStart only matches its own name.
+	TestTrue("BlockingVolume", IsBlockingVolumeName("BlockingVolume"));
+	TestTrue("blockingvolume", IsBlockingVolumeName("blockingvolume"));
+	TestTrue("PlayerStart", IsPlayerStartName("PlayerStart"));
+	TestFalse("Cube is not a PlayerStart", IsPlayerStartName("Cube"));
+	return true;
 }
 
-TEST_CASE("BasicShape factories set type and plane scale", "[level][basicshape]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelBasicShapeFactoriesSetTypeAndPlaneScaleTest,
+	"System.Engine.Level.BasicShapeFactoriesSetTypeAndPlaneScale",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FLevelBasicShapeFactoriesSetTypeAndPlaneScaleTest::RunTest(const FString& Parameters)
 {
+	// The factories set the shape type, and the plane size becomes its XZ scale.
 	const FBasicShape Cube = FBasicShape::Cube();
-	REQUIRE(Cube.Type == EBasicShape::Cube);
+	TestTrue("Cube type", Cube.Type == EBasicShape::Cube);
 	const FBasicShape Plane = FBasicShape::Plane(4.0f);
-	REQUIRE(Plane.Type == EBasicShape::Plane);
-	REQUIRE_THAT(Plane.Transform.Scale.x, WithinAbs(4.0f, 1.0e-5f));
-	REQUIRE_THAT(Plane.Transform.Scale.z, WithinAbs(4.0f, 1.0e-5f));
+	TestTrue("Plane type", Plane.Type == EBasicShape::Plane);
+	TestEqual("Plane scale X", Plane.Transform.Scale.X, 4.0f, 1.0e-5f);
+	TestEqual("Plane scale Z", Plane.Transform.Scale.Z, 4.0f, 1.0e-5f);
+	return true;
 }
 
-TEST_CASE("BasicLight parse and addTo Level", "[level][basiclight]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelBasicLightParseAndAddToLevelTest,
+	"System.Engine.Level.BasicLightParseAndAddToLevel",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FLevelBasicLightParseAndAddToLevelTest::RunTest(const FString& Parameters)
 {
+	// Light names parse to their type, and AddTo appends to the matching level light list.
 	EBasicLight Type{};
-	REQUIRE(TryParseBasicLightName("DirectionalLight", Type));
-	REQUIRE(Type == EBasicLight::Directional);
-	REQUIRE(TryParseBasicLightName("PointLight", Type));
-	REQUIRE(Type == EBasicLight::Point);
+	TestTrue("DirectionalLight parsed", TryParseBasicLightName("DirectionalLight", Type));
+	TestTrue("Directional type", Type == EBasicLight::Directional);
+	TestTrue("PointLight parsed", TryParseBasicLightName("PointLight", Type));
+	TestTrue("Point type", Type == EBasicLight::Point);
 
 	ULevel Level;
 	Level.ClearLights();
-	REQUIRE(Level.GetDirectionalLights().empty());
+	TestEqual("No directional lights", Level.GetDirectionalLights().Num(), 0);
 
 	FBasicLight::Directional().AddTo(Level);
 	FBasicLight::Point().AddTo(Level);
-	REQUIRE(Level.GetDirectionalLights().size() == 1);
-	REQUIRE(Level.GetPointLights().size() == 1);
+	TestEqual("One directional light", Level.GetDirectionalLights().Num(), 1);
+	TestEqual("One point light", Level.GetPointLights().Num(), 1);
+	return true;
 }
 
-TEST_CASE("Level stores meshes PlayerStarts and tags", "[level][container]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelStoresMeshesPlayerStartsAndTagsTest,
+	"System.Engine.Level.StoresMeshesPlayerStartsAndTags",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FLevelStoresMeshesPlayerStartsAndTagsTest::RunTest(const FString& Parameters)
 {
+	// The level keeps static meshes and PlayerStarts, finds meshes by tag and empties on Clear.
 	ULevel Level;
 	UStaticMeshComponent Mesh{};
 	Mesh.Tag = "player";
-	Mesh.Transform.Position = {1.0f, 2.0f, 3.0f};
-	Level.AddStaticMesh(std::move(Mesh));
+	Mesh.Transform.Position = FVector(1.0f, 2.0f, 3.0f);
+	Level.AddStaticMesh(MoveTemp(Mesh));
 
 	FPlayerStart Start{};
-	Start.Transform.Position = {5.0f, 0.0f, -2.0f};
+	Start.Transform.Position = FVector(5.0f, 0.0f, -2.0f);
 	Level.AddPlayerStart(Start);
 
-	REQUIRE(Level.GetStaticMeshes().size() == 1);
-	REQUIRE(Level.FindStaticMeshIndexByTag("player") == 0);
-	REQUIRE(Level.FindStaticMeshIndexByTag("missing") == ULevel::Npos);
-	REQUIRE(Level.FindPlayerStart() != nullptr);
-	REQUIRE_THAT(Level.FindPlayerStart()->Transform.Position.x, WithinAbs(5.0f, 1.0e-5f));
+	TestEqual("One static mesh", Level.GetStaticMeshes().Num(), 1);
+	TestEqual("Tag found", Level.FindStaticMeshIndexByTag("player"), static_cast<SIZE_T>(0));
+	TestEqual("Missing tag", Level.FindStaticMeshIndexByTag("missing"), ULevel::Npos);
+	const FPlayerStart* Found = Level.FindPlayerStart();
+	if (!TestNotNull("PlayerStart found", Found))
+	{
+		return false;
+	}
+	TestEqual("PlayerStart X", Found->Transform.Position.X, 5.0f, 1.0e-5f);
 
 	Level.Clear();
-	REQUIRE(Level.GetStaticMeshes().empty());
-	REQUIRE(Level.GetPlayerStarts().empty());
-	REQUIRE(Level.GetDirectionalLights().empty());
-	REQUIRE(Level.FindPlayerStart() == nullptr);
+	TestEqual("No static meshes", Level.GetStaticMeshes().Num(), 0);
+	TestEqual("No PlayerStarts", Level.GetPlayerStarts().Num(), 0);
+	TestEqual("No directional lights", Level.GetDirectionalLights().Num(), 0);
+	TestNull("No PlayerStart after Clear", Level.FindPlayerStart());
+	return true;
 }
+
+#endif // WITH_DEV_AUTOMATION_TESTS

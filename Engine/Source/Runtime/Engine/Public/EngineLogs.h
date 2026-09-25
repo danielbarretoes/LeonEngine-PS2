@@ -1,0 +1,12 @@
+#pragma once
+
+#include "CoreMinimal.h"
+
+/** General engine messages (UE: LogEngine). */
+ENGINE_API DECLARE_LOG_CATEGORY_EXTERN(LogEngine, Log, All);
+/** Level loading and level data (UE: LogLevel). */
+ENGINE_API DECLARE_LOG_CATEGORY_EXTERN(LogLevel, Log, All);
+/** Navigation and pathfinding (UE: LogPath). */
+ENGINE_API DECLARE_LOG_CATEGORY_EXTERN(LogPath, Log, All);
+/** Collision and physics scene (UE: LogPhysics). */
+ENGINE_API DECLARE_LOG_CATEGORY_EXTERN(LogPhysics, Log, All);

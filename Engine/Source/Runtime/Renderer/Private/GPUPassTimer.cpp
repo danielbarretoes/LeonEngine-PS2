@@ -1,5 +1,7 @@
 #include "GpuPassTimer.h"
 
+#include "HAL/UnrealMemory.h"
+
 #include <glad/glad.h>
 
 namespace
@@ -46,22 +48,22 @@ bool& FGPUPassTimer::BufferPending(int Buffer)
 
 FRHIQueryId& FGPUPassTimer::QuerySlot(int Buffer, EPass Pass)
 {
-	return BufferQueries(Buffer)[static_cast<std::size_t>(PassIndex(Pass))];
+	return BufferQueries(Buffer)[static_cast<int32>(PassIndex(Pass))];
 }
 
 bool& FGPUPassTimer::PassOpenSlot(EPass Pass)
 {
-	return PassOpen[static_cast<std::size_t>(PassIndex(Pass))];
+	return PassOpen[static_cast<int32>(PassIndex(Pass))];
 }
 
 float& FGPUPassTimer::MsSlot(EPass Pass)
 {
-	return Ms[static_cast<std::size_t>(PassIndex(Pass))];
+	return Ms[static_cast<int32>(PassIndex(Pass))];
 }
 
 const float& FGPUPassTimer::MsSlot(EPass Pass) const
 {
-	return Ms[static_cast<std::size_t>(PassIndex(Pass))];
+	return Ms[static_cast<int32>(PassIndex(Pass))];
 }
 
 bool FGPUPassTimer::ResolveBuffer(const FQueryBuffer& InQueries)
@@ -70,7 +72,7 @@ bool FGPUPassTimer::ResolveBuffer(const FQueryBuffer& InQueries)
 	for (int I = 0; I < PassCount; ++I)
 	{
 		GLint Available = 0;
-		glGetQueryObjectiv(InQueries[static_cast<std::size_t>(I)], GL_QUERY_RESULT_AVAILABLE, &Available);
+		glGetQueryObjectiv(InQueries[static_cast<int32>(I)], GL_QUERY_RESULT_AVAILABLE, &Available);
 		if (Available != GL_TRUE)
 		{
 			return false;
@@ -79,8 +81,8 @@ bool FGPUPassTimer::ResolveBuffer(const FQueryBuffer& InQueries)
 	GLuint64 Nanoseconds = 0;
 	for (int I = 0; I < PassCount; ++I)
 	{
-		glGetQueryObjectui64v(InQueries[static_cast<std::size_t>(I)], GL_QUERY_RESULT, &Nanoseconds);
-		Ms[static_cast<std::size_t>(I)] = static_cast<float>(Nanoseconds) / 1.0e6f;
+		glGetQueryObjectui64v(InQueries[static_cast<int32>(I)], GL_QUERY_RESULT, &Nanoseconds);
+		Ms[static_cast<int32>(I)] = static_cast<float>(Nanoseconds) / 1.0e6f;
 	}
 	return true;
 }
@@ -93,10 +95,10 @@ FGPUPassTimer::~FGPUPassTimer()
 bool FGPUPassTimer::Create()
 {
 	Destroy();
-	glGenQueries(BufferCount * PassCount, Queries[0].data());
-	Ms.fill(0.0f);
-	Pending.fill(false);
-	PassOpen.fill(false);
+	glGenQueries(BufferCount * PassCount, Queries[0].Ids);
+	FMemory::Memzero(Ms, sizeof(Ms));
+	FMemory::Memzero(Pending, sizeof(Pending));
+	FMemory::Memzero(PassOpen, sizeof(PassOpen));
 	WriteBuffer = 0;
 	bCreated = true;
 	return true;
@@ -108,11 +110,8 @@ void FGPUPassTimer::Destroy()
 	{
 		return;
 	}
-	glDeleteQueries(BufferCount * PassCount, Queries[0].data());
-	for (FQueryBuffer& Buffer : Queries)
-	{
-		Buffer.fill(0);
-	}
+	glDeleteQueries(BufferCount * PassCount, Queries[0].Ids);
+	FMemory::Memzero(Queries, sizeof(Queries));
 	bCreated = false;
 }
 
@@ -129,7 +128,7 @@ void FGPUPassTimer::BeginFrame()
 		if (!ResolveBuffer(BufferQueries(WriteBuffer)))
 		{
 			// GPU still working — skip issuing new queries this frame (no stall).
-			PassOpen.fill(false);
+			FMemory::Memzero(PassOpen, sizeof(PassOpen));
 			return;
 		}
 		BufferPending(WriteBuffer) = false;
@@ -137,7 +136,7 @@ void FGPUPassTimer::BeginFrame()
 
 	WriteBuffer = 1 - WriteBuffer;
 	BufferPending(WriteBuffer) = false;
-	PassOpen.fill(false);
+	FMemory::Memzero(PassOpen, sizeof(PassOpen));
 }
 
 void FGPUPassTimer::Begin(EPass Pass)

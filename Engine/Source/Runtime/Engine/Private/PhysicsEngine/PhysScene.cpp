@@ -3,13 +3,10 @@
 #include "Debug/DebugDraw.h"
 #include "Frustum.h"
 #include "IPhysicsBackend.h"
+#include "LegacyGLMath.h"
 #include "MeshData.h"
-#include "Migration/GlmInterop.h"
 #include "StaticMesh.h"
 #include "TriangleCollision.h"
-
-#include <glm/mat4x4.hpp>
-#include <glm/vec4.hpp>
 
 FPhysScene::FPhysScene(EPhysicsBackend InBackend)
 	: Backend(InBackend)
@@ -50,7 +47,8 @@ namespace
 		}
 	}
 
-	void AppendCapsuleRing(FDebugDraw& Draw, const FVector& Center, float Radius, const FVector& Color, int32 Segments)
+	void AppendCapsuleRing(
+		FDebugDraw& Draw, const FVector& Center, float Radius, const FLinearColor& Color, int32 Segments)
 	{
 		const float SegCount = static_cast<float>(Segments);
 		for (int32 I = 0; I < Segments; ++I)
@@ -59,7 +57,7 @@ namespace
 			const float A1 = (static_cast<float>(I + 1) / SegCount) * 6.2831853f;
 			const FVector P0(FMath::Cos(A0) * Radius, 0.0f, FMath::Sin(A0) * Radius);
 			const FVector P1(FMath::Cos(A1) * Radius, 0.0f, FMath::Sin(A1) * Radius);
-			Draw.AddLine(ToGlm(Center + P0), ToGlm(Center + P1), ToGlm(Color));
+			Draw.AddLine(Center + P0, Center + P1, Color);
 		}
 	}
 
@@ -170,15 +168,15 @@ void FPhysScene::SyncFromLevel(const ULevel& Level)
 		TriMesh.Clear();
 		Body.CollisionShape = EBodyCollisionShape::Box;
 
-		if (Body.LevelMeshIndex >= Meshes.size())
+		if (Body.LevelMeshIndex >= static_cast<SIZE_T>(Meshes.Num()))
 		{
 			continue;
 		}
-		const UStaticMeshComponent& Obj = Meshes[Body.LevelMeshIndex];
+		const UStaticMeshComponent& Obj = Meshes[static_cast<int32>(Body.LevelMeshIndex)];
 		if (Obj.Mesh != nullptr)
 		{
-			const FBox WorldAabb = TransformLocalBox(FromGlm(Obj.Mesh->GetLocalMin()), FromGlm(Obj.Mesh->GetLocalMax()),
-				FromGlm(Obj.EffectiveModelMatrix()));
+			const FBox WorldAabb =
+				TransformLocalBox(Obj.Mesh->GetLocalMin(), Obj.Mesh->GetLocalMax(), Obj.EffectiveModelMatrix());
 			Body.Position = WorldAabb.GetCenter();
 			Body.HalfExtents = WorldAabb.GetExtent();
 
@@ -186,12 +184,11 @@ void FPhysScene::SyncFromLevel(const ULevel& Level)
 			if (Body.Type == EBodyType::Static && Obj.Mesh->HasCpuData())
 			{
 				const FMeshData& Cpu = Obj.Mesh->GetCpuData();
-				const glm::mat4 Model = Obj.EffectiveModelMatrix();
+				const FMatrix Model = Obj.EffectiveModelMatrix();
 				TriMesh.Positions.SetNum(Cpu.Vertices.Num());
 				for (int32 Vi = 0; Vi < TriMesh.Positions.Num(); ++Vi)
 				{
-					const glm::vec4 World = Model * glm::vec4(ToGlm(Cpu.Vertices[Vi].Position), 1.0f);
-					TriMesh.Positions[Vi] = FVector(World.x, World.y, World.z);
+					TriMesh.Positions[Vi] = LegacyGL::TransformPoint(Model, Cpu.Vertices[Vi].Position);
 				}
 				TriMesh.Indices = Cpu.Indices;
 				if (TriMesh.IsValid())
@@ -206,9 +203,8 @@ void FPhysScene::SyncFromLevel(const ULevel& Level)
 		}
 		else
 		{
-			Body.Position = FromGlm(Obj.Transform.Position);
-			HalfExtentsFromScale(
-				FromGlm(Obj.Transform.Scale), Body.HalfExtents.X, Body.HalfExtents.Y, Body.HalfExtents.Z);
+			Body.Position = Obj.Transform.Position;
+			HalfExtentsFromScale(Obj.Transform.Scale, Body.HalfExtents.X, Body.HalfExtents.Y, Body.HalfExtents.Z);
 		}
 		if (Body.Mass <= 0.0f)
 		{
@@ -226,11 +222,11 @@ void FPhysScene::SyncToLevel(ULevel& Level) const
 	auto& Meshes = Level.GetStaticMeshes();
 	for (const FBodyInstance& Body : Bodies)
 	{
-		if (Body.LevelMeshIndex >= Meshes.size())
+		if (Body.LevelMeshIndex >= static_cast<SIZE_T>(Meshes.Num()))
 		{
 			continue;
 		}
-		Meshes[Body.LevelMeshIndex].Transform.Position = ToGlm(Body.Position);
+		Meshes[static_cast<int32>(Body.LevelMeshIndex)].Transform.Position = Body.Position;
 	}
 }
 
@@ -256,7 +252,7 @@ float FPhysScene::QuerySupportY(const FCollisionShape& Capsule, const FVector& F
 		if (Body.CollisionShape == EBodyCollisionShape::TriangleMesh && Bi < TriangleMeshes.Num() &&
 			TriangleMeshes[Bi].IsValid())
 		{
-			// Vertical probe: walkable triangle tops under the capsule disc (ComplexAsSimple).
+			// Vertical probe: walkable triangle tops under the capsule disc ComplexAsSimple.
 			const float RayTop =
 				FMath::Max(Feet.Y + InStepUp + InSkin + 0.5f, Body.Position.Y + Body.HalfExtents.Y + 0.5f);
 			const FVector Start(Feet.X, RayTop, Feet.Z);
@@ -470,7 +466,7 @@ void FPhysScene::Step(const FPhysSceneStepParams& Params)
 			}
 
 			const float Top = Other.Position.Y + Other.HalfExtents.Y;
-			// Dynamic support only when this body is clearly above the other (stacking).
+			// Dynamic support only when this body is clearly above the other stacking.
 			if (Other.Type == EBodyType::Dynamic && Bottom + Params.Skin < Top - 0.02f &&
 				Body.Position.Y <= Other.Position.Y)
 			{
@@ -612,16 +608,16 @@ void FPhysScene::AppendCollisionDebug(
 	const float H = Capsule.GetCapsuleHalfHeight() * 2.0f;
 	const float CylBottom = FMath::Min(R, H * 0.5f);
 	const float CylTop = FMath::Max(H - R, CylBottom);
-	const FVector CapsuleColor(0.2f, 1.0f, 0.45f);
+	const FLinearColor CapsuleColor(0.2f, 1.0f, 0.45f);
 	constexpr int32 Seg = 12;
 
 	const FVector B0 = Feet + FVector(0.0f, CylBottom, 0.0f);
 	const FVector T0 = Feet + FVector(0.0f, CylTop, 0.0f);
-	const glm::vec3 Color = ToGlm(CapsuleColor);
-	Draw.AddLine(ToGlm(B0 + FVector(R, 0, 0)), ToGlm(T0 + FVector(R, 0, 0)), Color);
-	Draw.AddLine(ToGlm(B0 + FVector(-R, 0, 0)), ToGlm(T0 + FVector(-R, 0, 0)), Color);
-	Draw.AddLine(ToGlm(B0 + FVector(0, 0, R)), ToGlm(T0 + FVector(0, 0, R)), Color);
-	Draw.AddLine(ToGlm(B0 + FVector(0, 0, -R)), ToGlm(T0 + FVector(0, 0, -R)), Color);
+	const FLinearColor Color = CapsuleColor;
+	Draw.AddLine(B0 + FVector(R, 0, 0), T0 + FVector(R, 0, 0), Color);
+	Draw.AddLine(B0 + FVector(-R, 0, 0), T0 + FVector(-R, 0, 0), Color);
+	Draw.AddLine(B0 + FVector(0, 0, R), T0 + FVector(0, 0, R), Color);
+	Draw.AddLine(B0 + FVector(0, 0, -R), T0 + FVector(0, 0, -R), Color);
 
 	AppendCapsuleRing(Draw, Feet + FVector(0.0f, CylBottom, 0.0f), R, CapsuleColor, Seg);
 	AppendCapsuleRing(Draw, Feet + FVector(0.0f, CylTop, 0.0f), R, CapsuleColor, Seg);
@@ -643,9 +639,9 @@ void FPhysScene::AppendCollisionDebug(
 
 void FPhysScene::AppendBodiesCollisionDebug(FDebugDraw& Draw, SIZE_T InSkipLevelMeshIndex) const
 {
-	const glm::vec3 DynamicColor(1.0f, 0.55f, 0.15f);
-	const glm::vec3 StaticColor(0.35f, 0.65f, 1.0f);
-	const glm::vec3 TriMeshColor(0.25f, 0.9f, 1.0f);
+	const FLinearColor DynamicColor(1.0f, 0.55f, 0.15f);
+	const FLinearColor StaticColor(0.35f, 0.65f, 1.0f);
+	const FLinearColor TriMeshColor(0.25f, 0.9f, 1.0f);
 	for (int32 Bi = 0; Bi < Bodies.Num(); ++Bi)
 	{
 		const FBodyInstance& Body = Bodies[Bi];
@@ -654,16 +650,16 @@ void FPhysScene::AppendBodiesCollisionDebug(FDebugDraw& Draw, SIZE_T InSkipLevel
 			continue;
 		}
 
-		// TriangleMesh: draw the actual triangles (oriented); the AABB alone looks like a fat unrotated box.
+		// TriangleMesh: draw the actual triangles oriented; the AABB alone looks like a fat unrotated box.
 		if (Body.CollisionShape == EBodyCollisionShape::TriangleMesh && Bi < TriangleMeshes.Num() &&
 			TriangleMeshes[Bi].IsValid())
 		{
 			const FTriangleMeshCollision& Mesh = TriangleMeshes[Bi];
 			for (int32 I = 0; I + 2 < Mesh.Indices.Num(); I += 3)
 			{
-				const glm::vec3 V0 = ToGlm(Mesh.Positions[static_cast<int32>(Mesh.Indices[I])]);
-				const glm::vec3 V1 = ToGlm(Mesh.Positions[static_cast<int32>(Mesh.Indices[I + 1])]);
-				const glm::vec3 V2 = ToGlm(Mesh.Positions[static_cast<int32>(Mesh.Indices[I + 2])]);
+				const FVector V0 = (Mesh.Positions[static_cast<int32>(Mesh.Indices[I])]);
+				const FVector V1 = (Mesh.Positions[static_cast<int32>(Mesh.Indices[I + 1])]);
+				const FVector V2 = (Mesh.Positions[static_cast<int32>(Mesh.Indices[I + 2])]);
 				Draw.AddLine(V0, V1, TriMeshColor);
 				Draw.AddLine(V1, V2, TriMeshColor);
 				Draw.AddLine(V2, V0, TriMeshColor);
@@ -673,11 +669,11 @@ void FPhysScene::AppendBodiesCollisionDebug(FDebugDraw& Draw, SIZE_T InSkipLevel
 
 		const FVector Mn = Body.Position - Body.HalfExtents;
 		const FVector Mx = Body.Position + Body.HalfExtents;
-		Draw.AddAabb(ToGlm(Mn), ToGlm(Mx), Body.Type == EBodyType::Dynamic ? DynamicColor : StaticColor);
+		Draw.AddAabb(Mn, Mx, Body.Type == EBodyType::Dynamic ? DynamicColor : StaticColor);
 	}
 
 	// Walkable slope planes (AddSlopeRamp): magenta wire quads for F2.
-	const glm::vec3 SlopeColor(0.95f, 0.2f, 0.85f);
+	const FLinearColor SlopeColor(0.95f, 0.2f, 0.85f);
 	for (const FSlopePlane& Plane : SlopePlanes)
 	{
 		const float Hx = Plane.BoundsHalfExtents.X;
@@ -691,10 +687,10 @@ void FPhysScene::AppendBodiesCollisionDebug(FDebugDraw& Draw, SIZE_T InSkipLevel
 		const FVector N = Plane.Normal / NLen;
 		auto YAt = [&](float X, float Z)
 		{ return Plane.Point.Y - ((N.X * (X - Plane.Point.X)) + (N.Z * (Z - Plane.Point.Z))) / N.Y; };
-		const glm::vec3 P00(C.X - Hx, YAt(C.X - Hx, C.Z - Hz), C.Z - Hz);
-		const glm::vec3 P10(C.X + Hx, YAt(C.X + Hx, C.Z - Hz), C.Z - Hz);
-		const glm::vec3 P11(C.X + Hx, YAt(C.X + Hx, C.Z + Hz), C.Z + Hz);
-		const glm::vec3 P01(C.X - Hx, YAt(C.X - Hx, C.Z + Hz), C.Z + Hz);
+		const FVector P00(C.X - Hx, YAt(C.X - Hx, C.Z - Hz), C.Z - Hz);
+		const FVector P10(C.X + Hx, YAt(C.X + Hx, C.Z - Hz), C.Z - Hz);
+		const FVector P11(C.X + Hx, YAt(C.X + Hx, C.Z + Hz), C.Z + Hz);
+		const FVector P01(C.X - Hx, YAt(C.X - Hx, C.Z + Hz), C.Z + Hz);
 		Draw.AddLine(P00, P10, SlopeColor);
 		Draw.AddLine(P10, P11, SlopeColor);
 		Draw.AddLine(P11, P01, SlopeColor);

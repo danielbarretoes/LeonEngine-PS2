@@ -4,13 +4,9 @@
 #include "Engine/GameEngine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/Level.h"
+#include "EngineLogs.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
-#include "Migration/GlmInterop.h"
-
-#include <algorithm>
-#include <cmath>
-#include <iostream>
 
 void AGameModeBase::PostLogin(APlayerController& NewPlayer)
 {
@@ -25,14 +21,14 @@ void AGameModeBase::Logout(APlayerController& Exiting)
 float AGameModeBase::EstimateFloorY(const ULevel& Level)
 {
 	const auto& Starts = Level.GetPlayerStarts();
-	if (Starts.empty())
+	if (Starts.Num() == 0)
 	{
 		return 0.0f;
 	}
-	float Y = Starts.front().Transform.Position.y;
+	float Y = Starts[0].Transform.Position.Y;
 	for (const FPlayerStart& Start : Starts)
 	{
-		Y = std::min(Y, Start.Transform.Position.y);
+		Y = FMath::Min(Y, Start.Transform.Position.Y);
 	}
 	return Y;
 }
@@ -46,11 +42,11 @@ float AGameModeBase::EstimateWalkBounds(const ULevel& Level)
 		{
 			continue;
 		}
-		const float Hx = std::abs(Mesh.Transform.Scale.x) * 0.5f;
-		const float Hz = std::abs(Mesh.Transform.Scale.z) * 0.5f;
-		MaxExtent = std::max(MaxExtent, std::max(Hx, Hz));
+		const float Hx = FMath::Abs(Mesh.Transform.Scale.X) * 0.5f;
+		const float Hz = FMath::Abs(Mesh.Transform.Scale.Z) * 0.5f;
+		MaxExtent = FMath::Max(MaxExtent, FMath::Max(Hx, Hz));
 	}
-	return std::clamp(MaxExtent - 1.0f, 20.0f, 120.0f);
+	return FMath::Clamp(MaxExtent - 1.0f, 20.0f, 120.0f);
 }
 
 // Flow: Match enter — bodies + nav bake
@@ -71,9 +67,9 @@ void AGameModeBase::PrepareMatchWorld(
 	Nav.SetCellSize(0.5f);
 	Nav.SetAgentRadius(0.45f);
 	Nav.BuildFromLevel(Engine.GetLevel(), GetWorld().GetPhysicsScene(), OutFloorY, OutWalkBounds);
-	std::cout << "GameMode: NavMesh bake blockers=" << Nav.GetBlockerCount()
-			  << " walkable=" << Nav.GetWalkableCellCount() << "/" << (Nav.GetNavMesh().Width * Nav.GetNavMesh().Depth)
-			  << " cell=" << Nav.GetCellSize() << '\n';
+	UE_LOG(LogPath, Log, "GameMode: NavMesh bake blockers=%d walkable=%d/%d cell=%g", Nav.GetBlockerCount(),
+		Nav.GetWalkableCellCount(), Nav.GetNavMesh().Width * Nav.GetNavMesh().Depth,
+		static_cast<double>(Nav.GetCellSize()));
 }
 
 void AGameModeBase::RebuildNavigation(UGameEngine& Engine, float FloorY, float WalkBounds)
@@ -84,13 +80,13 @@ void AGameModeBase::RebuildNavigation(UGameEngine& Engine, float FloorY, float W
 	Nav.BuildFromLevel(Engine.GetLevel(), GetWorld().GetPhysicsScene(), FloorY, WalkBounds);
 }
 
-void AGameModeBase::SnapCharacterToFloor(ACharacter& Character, glm::vec3& InOutFeet, float FloorY) const
+void AGameModeBase::SnapCharacterToFloor(ACharacter& Character, FVector& InOutFeet, float FloorY) const
 {
 	const FPhysScene& Phys = GetWorld().GetPhysicsScene();
 	const UCharacterMovementComponent& Move = Character.GetCharacterMovement();
-	glm::vec3 Probe = InOutFeet;
-	Probe.y = std::max(InOutFeet.y, FloorY);
-	const float Support = Phys.QuerySupportY(Character.GetCapsule(), FromGlm(Probe), Move.FloorY, Move.MaxStepHeight,
-		Move.Skin, Character.GetLevelMeshIndex());
-	InOutFeet.y = std::max(Support, FloorY) + 0.02f;
+	FVector Probe = InOutFeet;
+	Probe.Y = FMath::Max(InOutFeet.Y, FloorY);
+	const float Support = Phys.QuerySupportY(
+		Character.GetCapsule(), Probe, Move.FloorY, Move.MaxStepHeight, Move.Skin, Character.GetLevelMeshIndex());
+	InOutFeet.Y = FMath::Max(Support, FloorY) + 0.02f;
 }

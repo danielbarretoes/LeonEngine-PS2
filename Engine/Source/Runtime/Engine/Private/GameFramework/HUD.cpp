@@ -5,7 +5,7 @@
 
 void AHUD::Clear()
 {
-	for (const std::unique_ptr<UUserWidget>& Widget : Widgets)
+	for (const TUniquePtr<UUserWidget>& Widget : Widgets)
 	{
 		if (Widget != nullptr)
 		{
@@ -13,7 +13,7 @@ void AHUD::Clear()
 			Widget->OwningHud = nullptr;
 		}
 	}
-	Widgets.clear();
+	Widgets.Empty();
 }
 
 bool AHUD::RemoveWidget(UUserWidget* Widget)
@@ -22,13 +22,13 @@ bool AHUD::RemoveWidget(UUserWidget* Widget)
 	{
 		return false;
 	}
-	for (auto It = Widgets.begin(); It != Widgets.end(); ++It)
+	for (int32 Index = 0; Index < Widgets.Num(); ++Index)
 	{
-		if (It->get() == Widget)
+		if (Widgets[Index].Get() == Widget)
 		{
-			(*It)->NativeDestruct();
-			(*It)->OwningHud = nullptr;
-			Widgets.erase(It);
+			Widget->NativeDestruct();
+			Widget->OwningHud = nullptr;
+			Widgets.RemoveAt(Index);
 			return true;
 		}
 	}
@@ -37,7 +37,7 @@ bool AHUD::RemoveWidget(UUserWidget* Widget)
 
 void AHUD::Tick(float DeltaTime)
 {
-	for (const std::unique_ptr<UUserWidget>& Widget : Widgets)
+	for (const TUniquePtr<UUserWidget>& Widget : Widgets)
 	{
 		if (Widget != nullptr && Widget->bIsVisible)
 		{
@@ -49,13 +49,13 @@ void AHUD::Tick(float DeltaTime)
 void AHUD::Paint(FDebugOverlay& Overlay, int FramebufferWidth, int FramebufferHeight)
 {
 	Overlay.ClearScreenGeometry();
-	if (FramebufferWidth <= 0 || FramebufferHeight <= 0 || Widgets.empty())
+	if (FramebufferWidth <= 0 || FramebufferHeight <= 0 || Widgets.Num() == 0)
 	{
 		return;
 	}
 
 	FPaintContext Ctx(Overlay, FramebufferWidth, FramebufferHeight);
-	for (const std::unique_ptr<UUserWidget>& Widget : Widgets)
+	for (const TUniquePtr<UUserWidget>& Widget : Widgets)
 	{
 		if (Widget != nullptr && Widget->bIsVisible)
 		{

@@ -1,12 +1,13 @@
 #pragma once
 
 #include "Camera/CameraComponent.h"
+#include "CoreMinimal.h"
 #include "Debug/DebugDraw.h"
 #include "Engine/Level.h"
 #include "Frustum.h"
 #include "GpuPassTimer.h"
 #include "LdrColorTarget.h"
-#include "Migration/LegacyTransform.h"
+#include "Level/LegacyTransform.h"
 #include "PlanarReflection.h"
 #include "PostProcess.h"
 #include "RHIHandles.h"
@@ -18,24 +19,15 @@
 #include "Texture2D.h"
 #include "UniformBuffer.h"
 
-#include <glm/mat4x4.hpp>
-#include <glm/vec3.hpp>
-#include <glm/vec4.hpp>
-
-#include <array>
-#include <memory>
-#include <string>
-#include <vector>
-
-/// Per-frame measurable counters (color pass after frustum culling).
+/** Per-frame measurable counters (color pass after frustum culling). */
 struct RENDERER_API FFrameStats
 {
-	int ObjectsTotal = 0;
-	int ObjectsVisible = 0;
-	int ObjectsCulled = 0;
-	int DrawsSubmitted = 0;
-	int TrianglesSubmitted = 0;
-	int PlanarCulled = 0;
+	int32 ObjectsTotal = 0;
+	int32 ObjectsVisible = 0;
+	int32 ObjectsCulled = 0;
+	int32 DrawsSubmitted = 0;
+	int32 TrianglesSubmitted = 0;
+	int32 PlanarCulled = 0;
 	float ShadowMs = 0.0f;
 	float PlanarMs = 0.0f;
 	float ColorMs = 0.0f;
@@ -43,7 +35,7 @@ struct RENDERER_API FFrameStats
 	float PostMs = 0.0f;
 };
 
-/// Options for a single submesh draw (shared lit textures may already be bound).
+/** Options for a single submesh draw (shared lit textures may already be bound). */
 struct RENDERER_API FDrawOptions
 {
 	bool bLitPass = true;
@@ -52,24 +44,28 @@ struct RENDERER_API FDrawOptions
 	bool bBindSharedLitTextures = true; // shadow map unit; env is bound once per pass
 };
 
-/// Forward renderer: directional shadow map (light 0), optional half-res planar mirror,
-/// opaque / transparent, then optional post (SSAO → tonemap → FXAA).
+/**
+ * Forward renderer: directional shadow map (light 0), optional half-res planar mirror,
+ * opaque / transparent, then optional post (SSAO → tonemap → FXAA).
+ *
+ * Matrices follow the GL conventions of LegacyGLMath.h until P7.
+ */
 class RENDERER_API FSceneRenderer
 {
 public:
-	static constexpr unsigned int CameraUboBinding = 0;
-	static constexpr unsigned int LightsUboBinding = 1;
-	/// Planar mirror FBO scale vs framebuffer (0.5 = half-res).
+	static constexpr uint32 CameraUboBinding = 0;
+	static constexpr uint32 LightsUboBinding = 1;
+	/** Planar mirror FBO scale vs framebuffer (0.5 = half-res). */
 	static constexpr float PlanarReflectionScale = 0.5f;
-	static constexpr int MaxAoSamples = 64;
+	static constexpr int32 MaxAoSamples = 64;
 
-	bool Initialize(const std::string& InShaderDirectory);
+	bool Initialize(const FString& InShaderDirectory);
 	void Shutdown();
 
-	/// Reload shaders from disk if file timestamps changed (or force). Rebinds lit UBOs.
+	/** Reloads shaders from disk if file timestamps changed (or when forced). Rebinds lit UBOs. */
 	[[nodiscard]] EShaderReloadResult ReloadShaders(bool bForce = false);
 
-	/// When non-zero, BeginFrame / shadow / planar restore bind this FBO (editor viewport).
+	/** When non-zero, BeginFrame / shadow / planar restore bind this FBO (editor viewport). */
 	void SetDrawFramebuffer(FRHIFramebufferId Fbo)
 	{
 		DrawTargetFbo = Fbo;
@@ -79,25 +75,24 @@ public:
 		return DrawTargetFbo;
 	}
 
-	void BeginFrame(int FramebufferWidth, int FramebufferHeight);
+	void BeginFrame(int32 FramebufferWidth, int32 FramebufferHeight);
 	void DrawScene(const ULevel& Level, const UCameraComponent& Camera);
 
-	/// Queue a skinned mesh draw for the next `DrawScene` (cleared after DrawScene).
-	void SubmitSkeletalDraw(
-		const USkeletalMesh& InMesh, const glm::mat4& InModel, const TArray<FMatrix>& InBoneMatrices);
+	/** Queues a skinned mesh draw for the next DrawScene (cleared after DrawScene). */
+	void SubmitSkeletalDraw(const USkeletalMesh& InMesh, const FMatrix& InModel, const TArray<FMatrix>& InBoneMatrices);
 	void SubmitSkeletalDraw(
 		const USkeletalMesh& InMesh, const FLegacyTransform& Transform, const TArray<FMatrix>& InBoneMatrices);
 
-	/// Queue a rigid static mesh with an explicit model matrix (attachments, etc.).
-	void SubmitStaticDraw(const UStaticMesh& InMesh, const glm::mat4& InModel, const FMaterial& InMaterial);
+	/** Queues a rigid static mesh with an explicit model matrix (attachments, etc.). */
+	void SubmitStaticDraw(const UStaticMesh& InMesh, const FMatrix& InModel, const FMaterial& InMaterial);
 
-	/// World-space lines flushed at end of DrawScene (independent of F1 AABB overlay).
+	/** World-space lines flushed at the end of DrawScene (independent of the F1 AABB overlay). */
 	void ClearDebugOverlay();
-	void AddDebugLine(const glm::vec3& A, const glm::vec3& B, const glm::vec3& Color);
-	void AddDebugArrow(const glm::vec3& From, const glm::vec3& To, const glm::vec3& Color);
-	void AddDebugAabb(const glm::vec3& WorldMin, const glm::vec3& WorldMax, const glm::vec3& Color);
+	void AddDebugLine(const FVector& A, const FVector& B, const FLinearColor& Color);
+	void AddDebugArrow(const FVector& From, const FVector& To, const FLinearColor& Color);
+	void AddDebugAabb(const FVector& WorldMin, const FVector& WorldMax, const FLinearColor& Color);
 
-	/// Gameplay / physics debug lines (flushed with the scene overlay pass).
+	/** Gameplay / physics debug lines (flushed with the scene overlay pass). */
 	[[nodiscard]] FDebugDraw& GetDebugOverlay()
 	{
 		return OverlayDebugDraw;
@@ -116,7 +111,7 @@ public:
 		return bDebugDrawEnabled;
 	}
 
-	/// When false, DrawScene skips lit geometry / shadows / post (debug overlay still flushes).
+	/** When false, DrawScene skips lit geometry / shadows / post (debug overlay still flushes). */
 	void SetSceneGeometryEnabled(bool bEnabled)
 	{
 		bSceneGeometryEnabled = bEnabled;
@@ -189,7 +184,7 @@ public:
 	{
 		return FrameStats;
 	}
-	[[nodiscard]] const std::string& GetShaderDirectory() const
+	[[nodiscard]] const FString& GetShaderDirectory() const
 	{
 		return ShaderDirectory;
 	}
@@ -197,44 +192,43 @@ public:
 private:
 	bool BindLitUbos() const;
 	void UpdateCameraUbo(const UCameraComponent& Camera) const;
-	void UpdateCameraUbo(const glm::mat4& InView, const glm::mat4& InProjection, const glm::vec3& InCameraPos) const;
+	void UpdateCameraUbo(const FMatrix& InView, const FMatrix& InProjection, const FVector& InCameraPos) const;
 	void UpdateLightsUbo(const ULevel& Level) const;
 	void BindShadowResources(bool bInReceiveShadows, float SourceAngleDegrees = DefaultLightSourceAngleDegrees) const;
-	void BindPlanarReflection(bool bEnabled, const glm::mat4& ReflectionViewProj) const;
-	void SetClipPlane(bool bEnabled, const glm::vec4& Plane) const;
+	void BindPlanarReflection(bool bEnabled, const FMatrix& ReflectionViewProj) const;
+	void SetClipPlane(bool bEnabled, const FVector4& Plane) const;
 	void EnsureShadowMapSize();
 	[[nodiscard]] FRHIFramebufferId ColorRestoreFbo() const;
 	void DrawFullscreenTriangle() const;
 	void RenderPostStack(const UCameraComponent& Camera);
-	void RenderShadowPass(const ULevel& Level, const glm::mat4& LightSpace);
+	void RenderShadowPass(const ULevel& Level, const FMatrix& LightSpace);
 	void RenderPlanarReflectionPass(const ULevel& Level, const UCameraComponent& Camera, float PlaneY);
-	void DrawDebug(
-		const ULevel& Level, const UCameraComponent& Camera, const glm::mat4& LightSpace, bool bHasLightSpace);
-	void DrawSubMesh(const FShader& Shader, const UStaticMeshComponent& Object, std::size_t InSubMeshIndex,
-		const FMaterial& InMaterial, const glm::mat4& InView, const glm::mat4& InProjection,
-		const glm::mat4& LightSpace, const FDrawOptions& Options) const;
-	void DrawQueuedSkeletal(const glm::mat4& InView, const glm::mat4& InProjection, const glm::mat4& LightSpace,
+	void DrawDebug(const ULevel& Level, const UCameraComponent& Camera, const FMatrix& LightSpace, bool bHasLightSpace);
+	void DrawSubMesh(const FShader& Shader, const UStaticMeshComponent& Object, int32 InSubMeshIndex,
+		const FMaterial& InMaterial, const FMatrix& InView, const FMatrix& InProjection, const FMatrix& LightSpace,
+		const FDrawOptions& Options) const;
+	void DrawQueuedSkeletal(const FMatrix& InView, const FMatrix& InProjection, const FMatrix& LightSpace,
 		bool bInReceiveShadows, float ShadowSourceAngle, const FFrustum* CameraFrustum,
 		bool bUseWorldClipPlane = false);
-	void DrawQueuedStatic(const ULevel& Level, const glm::mat4& InView, const glm::mat4& InProjection,
-		const glm::mat4& LightSpace, bool bInReceiveShadows, float ShadowSourceAngle);
+	void DrawQueuedStatic(const ULevel& Level, const FMatrix& InView, const FMatrix& InProjection,
+		const FMatrix& LightSpace, bool bInReceiveShadows, float ShadowSourceAngle);
 
 	struct FSkeletalDrawItem
 	{
 		const USkeletalMesh* Mesh = nullptr;
-		glm::mat4 Model{1.0f};
-		/** Skin matrices in the glm memory layout (uploaded as they are). */
+		FMatrix Model = FMatrix::Identity;
+		/** Skin matrices in the GL memory layout (uploaded as they are). */
 		TArray<FMatrix> BoneMatrices;
 	};
 
 	struct FStaticDrawItem
 	{
 		const UStaticMesh* Mesh = nullptr;
-		glm::mat4 Model{1.0f};
+		FMatrix Model = FMatrix::Identity;
 		FMaterial Material{};
 	};
 
-	std::string ShaderDirectory;
+	FString ShaderDirectory;
 	FShader LitShader;
 	FShader SkinnedLitShader;
 	FShader UnlitShader;
@@ -256,17 +250,17 @@ private:
 	FUniformBuffer LightsUbo;
 	TSharedPtr<UTexture2D> WhiteTexture;
 	TSharedPtr<UTexture2D> FlatNormalTexture;
-	std::vector<FSkeletalDrawItem> SkeletalDraws;
-	std::vector<FStaticDrawItem> StaticDraws;
+	TArray<FSkeletalDrawItem> SkeletalDraws;
+	TArray<FStaticDrawItem> StaticDraws;
 	FFrameStats FrameStats{};
 	FPostProcessSettings Post{};
 
 	FRHIVertexArrayId FullscreenVao = InvalidVertexArray;
 	FRHITextureId AoNoiseTexture = InvalidTexture;
-	std::array<glm::vec3, MaxAoSamples> AoKernel{};
+	FVector AoKernel[MaxAoSamples];
 
-	int FbWidth = 0;
-	int FbHeight = 0;
+	int32 FbWidth = 0;
+	int32 FbHeight = 0;
 	FRHIFramebufferId DrawTargetFbo = InvalidFramebuffer;
 	bool bDebugDrawEnabled = false;
 	bool bSceneGeometryEnabled = true;

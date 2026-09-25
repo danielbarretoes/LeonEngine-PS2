@@ -1,114 +1,150 @@
 #include "AI/Navigation/NavigationSystem.h"
 #include "AudioDevice.h"
 #include "Components/TextBlock.h"
+#include "CoreMinimal.h"
 #include "Engine/GameEngine.h"
 #include "GameFramework/HUD.h"
 #include "GameplayMinimal.h"
 #include "Level/LeonLevelFormat.h"
+#include "Misc/AutomationTest.h"
 #include "Physics/PhysScene.h"
 
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers_floating_point.hpp>
+#if WITH_DEV_AUTOMATION_TESTS
 
-#include <cstring>
-#include <filesystem>
-#include <limits>
-#include <string>
-#include <vector>
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFrameworkHardeningBehaviorTreeSequenceAndSelectorTest,
+	"System.AIModule.FrameworkHardening.BehaviorTreeSequenceAndSelectorWithBlackboard",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-using Catch::Matchers::WithinAbs;
-
-TEST_CASE("BehaviorTree Sequence and Selector with Blackboard", "[gameplay][bt]")
+bool FFrameworkHardeningBehaviorTreeSequenceAndSelectorTest::RunTest(const FString& Parameters)
 {
+	// A Sequence runs its action only once the blackboard gate is open; a Selector falls through a failing child.
 	UBlackboardComponent Board;
 	UBTDecorator_Bool HasTarget("HasTarget", true);
-	int Ran = 0;
+	int32 Ran = 0;
 	UBTTask_Action Act(
-		[&](UBlackboardComponent& B, float)
+		[&Ran](UBlackboardComponent& InBoard, float)
 		{
 			++Ran;
-			B.SetBool("DidAct", true);
+			InBoard.SetBool("DidAct", true);
 			return EBTNodeResult::Succeeded;
 		});
-	UBTComposite_Sequence Seq({&HasTarget, &Act});
+	UBTComposite_Sequence Seq(TArray<UBTNode*>{&HasTarget, &Act});
 
-	REQUIRE(Seq.Tick(Board, 0.016f) == EBTNodeResult::Failed);
+	TestTrue("Sequence fails without target", Seq.Tick(Board, 0.016f) == EBTNodeResult::Failed);
 	Board.SetBool("HasTarget", true);
-	REQUIRE(Seq.Tick(Board, 0.016f) == EBTNodeResult::Succeeded);
-	REQUIRE(Ran == 1);
-	REQUIRE(Board.GetBool("DidAct"));
+	TestTrue("Sequence succeeds with target", Seq.Tick(Board, 0.016f) == EBTNodeResult::Succeeded);
+	TestEqual("Action ran once", Ran, 1);
+	TestTrue("Action wrote the blackboard", Board.GetBool("DidAct"));
 
 	UBTDecorator_Bool Never("Never", true);
-	UBTComposite_Selector Sel({&Never, &Act});
-	REQUIRE(Sel.Tick(Board, 0.0f) == EBTNodeResult::Succeeded);
-	REQUIRE(Ran == 2);
+	UBTComposite_Selector Sel(TArray<UBTNode*>{&Never, &Act});
+	TestTrue("Selector succeeds through the action", Sel.Tick(Board, 0.0f) == EBTNodeResult::Succeeded);
+	TestEqual("Action ran twice", Ran, 2);
+	return true;
 }
 
-TEST_CASE("AIController logic state tracks MoveTo Chase Idle", "[gameplay][ai]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFrameworkHardeningAIControllerLogicStateTest,
+	"System.AIModule.FrameworkHardening.AIControllerLogicStateTracksMoveToChaseIdle",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FFrameworkHardeningAIControllerLogicStateTest::RunTest(const FString& Parameters)
 {
+	// The AI logic state follows MoveToLocation (MoveTo), MoveToActor (Chase) and StopMovement (Idle).
 	UWorld World;
-	auto* Character = World.SpawnActor<ACharacter>();
+	ACharacter* Character = World.SpawnActor<ACharacter>();
 	AAIController Ai;
 	Ai.Possess(Character);
-	REQUIRE(Ai.GetLogicState() == EAILogicState::Idle);
-	Ai.MoveToLocation({3.0f, 0.0f, 0.0f});
-	REQUIRE(Ai.GetLogicState() == EAILogicState::MoveTo);
+	TestTrue("Starts idle", Ai.GetLogicState() == EAILogicState::Idle);
+	Ai.MoveToLocation(FVector(3.0f, 0.0f, 0.0f));
+	TestTrue("MoveTo after MoveToLocation", Ai.GetLogicState() == EAILogicState::MoveTo);
 	Ai.MoveToActor(Character);
-	REQUIRE(Ai.GetLogicState() == EAILogicState::Chase);
+	TestTrue("Chase after MoveToActor", Ai.GetLogicState() == EAILogicState::Chase);
 	Ai.StopMovement();
-	REQUIRE(Ai.GetLogicState() == EAILogicState::Idle);
+	TestTrue("Idle after StopMovement", Ai.GetLogicState() == EAILogicState::Idle);
+	return true;
 }
 
-TEST_CASE("AudioDevice silent mode is safe for Play APIs", "[audio]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFrameworkHardeningAudioDeviceSilentModeTest,
+	"System.AIModule.FrameworkHardening.AudioDeviceSilentModeIsSafeForPlayAPIs",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FFrameworkHardeningAudioDeviceSilentModeTest::RunTest(const FString& Parameters)
 {
+	// A silent audio device accepts every Play call (even for missing files) without failing.
 	FAudioDevice Audio;
-	REQUIRE(Audio.Initialize(/*silent=*/true));
+	if (!TestTrue("Silent initialize", Audio.Initialize(/*bInSilent=*/true)))
+	{
+		return false;
+	}
 	Audio.PlaySound2D("does-not-exist.wav");
 	Audio.PlayUiSound(EUISound::Click);
 	Audio.PlayMusic("MenuBed.wav");
 	Audio.StopMusic();
 	Audio.Tick();
 	Audio.Shutdown();
+	return true;
 }
 
-TEST_CASE("HUD AddWidget TextBlock and remove", "[ui][hud]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFrameworkHardeningHUDAddWidgetTextBlockAndRemoveTest,
+	"System.AIModule.FrameworkHardening.HUDAddWidgetTextBlockAndRemove",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FFrameworkHardeningHUDAddWidgetTextBlockAndRemoveTest::RunTest(const FString& Parameters)
 {
+	// The HUD finds an added TextBlock by class and forgets it once removed.
 	AHUD Hud;
-	auto* Text = Hud.AddWidget<UTextBlock>();
-	REQUIRE(Text != nullptr);
+	UTextBlock* Text = Hud.AddWidget<UTextBlock>();
+	if (!TestNotNull("Added TextBlock", Text))
+	{
+		return false;
+	}
 	Text->SetText(FText::FromString("Hello"));
-	REQUIRE(Hud.GetWidgetOfClass<UTextBlock>() == Text);
+	TestTrue("Found by class", Hud.GetWidgetOfClass<UTextBlock>() == Text);
 	Hud.Tick(0.016f);
 	Hud.RemoveWidget(Text);
-	REQUIRE(Hud.GetWidgetOfClass<UTextBlock>() == nullptr);
+	TestNull("Gone after remove", Hud.GetWidgetOfClass<UTextBlock>());
+	return true;
 }
 
-TEST_CASE("DeserializeLeonLevel adversarial inputs", "[content][fuzz]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFrameworkHardeningDeserializeLeonLevelAdversarialInputsTest,
+	"System.AIModule.FrameworkHardening.DeserializeLeonLevelAdversarialInputs",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FFrameworkHardeningDeserializeLeonLevelAdversarialInputsTest::RunTest(const FString& Parameters)
 {
+	// DeserializeLeonLevel rejects empty, junk and header-only buffers (the first two log a bad magic).
+	AddExpectedError("bad magic", 2);
 	FLevelDocument Doc;
-	std::vector<std::uint8_t> Empty;
-	REQUIRE_FALSE(DeserializeLeonLevel(Empty, Doc));
+	const TArray<uint8> Empty;
+	TestFalse("Empty rejected", DeserializeLeonLevel(Empty, Doc));
 
-	std::vector<std::uint8_t> Junk(64, 0xA5);
-	REQUIRE_FALSE(DeserializeLeonLevel(Junk, Doc));
+	TArray<uint8> Junk;
+	Junk.Init(0xA5, 64);
+	TestFalse("Junk rejected", DeserializeLeonLevel(Junk, Doc));
 
-	std::vector<std::uint8_t> AlmostMagic = {'L', 'L', 'E', 'V', 1, 0, 0, 0};
-	REQUIRE_FALSE(DeserializeLeonLevel(AlmostMagic, Doc));
+	const TArray<uint8> AlmostMagic = {'L', 'L', 'E', 'V', 1, 0, 0, 0};
+	TestFalse("Header only rejected", DeserializeLeonLevel(AlmostMagic, Doc));
+	return true;
 }
 
-TEST_CASE("NavigationSystem agent radius dilation shrinks walkable ring", "[gameplay][nav]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFrameworkHardeningNavAgentRadiusDilationTest,
+	"System.AIModule.FrameworkHardening.NavigationSystemAgentRadiusDilationShrinksWalkableRing",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FFrameworkHardeningNavAgentRadiusDilationTest::RunTest(const FString& Parameters)
 {
+	// A wider agent radius dilates the pillar more, leaving fewer walkable cells.
 	FPhysScene Physics;
 	FBodyInstance Floor{};
 	Floor.Type = EBodyType::Static;
-	Floor.Position = {0.0f, 0.0f, 0.0f};
-	Floor.HalfExtents = {20.0f, 0.5f, 20.0f};
+	Floor.Position = FVector(0.0f, 0.0f, 0.0f);
+	Floor.HalfExtents = FVector(20.0f, 0.5f, 20.0f);
 	Physics.GetBodies().Add(Floor);
 
 	FBodyInstance Pillar{};
 	Pillar.Type = EBodyType::Static;
-	Pillar.Position = {0.0f, 1.0f, 0.0f};
-	Pillar.HalfExtents = {0.4f, 1.5f, 0.4f};
+	Pillar.Position = FVector(0.0f, 1.0f, 0.0f);
+	Pillar.HalfExtents = FVector(0.4f, 1.5f, 0.4f);
 	Physics.GetBodies().Add(Pillar);
 
 	UNavigationSystem Narrow;
@@ -121,5 +157,8 @@ TEST_CASE("NavigationSystem agent radius dilation shrinks walkable ring", "[game
 	Wide.SetAgentRadius(1.5f);
 	Wide.BuildFromPhysScene(Physics, 0.0f, 10.0f);
 
-	REQUIRE(Wide.GetWalkableCellCount() < Narrow.GetWalkableCellCount());
+	TestTrue("Wide agent has fewer walkable cells", Wide.GetWalkableCellCount() < Narrow.GetWalkableCellCount());
+	return true;
 }
+
+#endif // WITH_DEV_AUTOMATION_TESTS

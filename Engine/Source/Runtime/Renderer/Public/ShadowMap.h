@@ -1,12 +1,12 @@
 #pragma once
 
+#include "CoreMinimal.h"
 #include "RHIHandles.h"
 
-#include <glm/mat4x4.hpp>
-#include <glm/vec3.hpp>
-
-/// Depth-only shadow map for directional light 0 (orthographic + manual PCF in the lit shader).
-/// Depth texture uses GL_NEAREST so PCF samples discrete texels (not hardware-filtered depth).
+/**
+ * Depth-only shadow map for directional light 0 (orthographic + manual PCF in the lit shader).
+ * The depth texture uses GL_NEAREST so PCF samples discrete texels (not hardware-filtered depth).
+ */
 class RENDERER_API FShadowMap
 {
 public:
@@ -22,7 +22,7 @@ public:
 	void Destroy();
 
 	void Begin() const;
-	/// Restore draw target to `restoreFbo` (0 = default framebuffer).
+	/** Restores the draw target to RestoreFbo (0 = default framebuffer). */
 	void End(int FramebufferWidth, int FramebufferHeight, FRHIFramebufferId RestoreFbo = InvalidFramebuffer) const;
 
 	void BindDepthTexture(unsigned int Unit) const;
@@ -35,9 +35,9 @@ public:
 		return Size;
 	}
 
-	/// Ortho light matrix tightly fitted to a world-space AABB of shadow casters.
-	[[nodiscard]] static glm::mat4 FitLightSpaceMatrix(
-		const glm::vec3& LightDirection, const glm::vec3& WorldMin, const glm::vec3& WorldMax, float Padding = 0.5f);
+	/** Ortho light matrix tightly fitted to a world-space AABB of shadow casters (GL convention, LegacyGLMath.h). */
+	[[nodiscard]] static FMatrix FitLightSpaceMatrix(
+		const FVector& LightDirection, const FVector& WorldMin, const FVector& WorldMax, float Padding = 0.5f);
 
 private:
 	FRHIFramebufferId Fbo = InvalidFramebuffer;

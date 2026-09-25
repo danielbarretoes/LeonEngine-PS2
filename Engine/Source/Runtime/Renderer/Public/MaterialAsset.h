@@ -16,7 +16,7 @@ void PatchMaterialFromJson(FResourceCache& Resources, FMaterial& Material, const
 
 /// Load a `.lmat` material asset.
 /// Returns false on I/O / parse failure (leaves `out` unchanged).
-[[nodiscard]] bool LoadMaterialFile(FResourceCache& Resources, const std::string& Path, FMaterial& Out);
+[[nodiscard]] bool LoadMaterialFile(FResourceCache& Resources, const FString& Path, FMaterial& Out);
 
 /// Engine default: grayscale checker (Unreal-like WorldGrid placeholder).
 [[nodiscard]] FMaterial MakeDefaultCheckerMaterial(FResourceCache& Resources);

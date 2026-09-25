@@ -1,9 +1,12 @@
 #pragma once
 
+#include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
 
-/// Default possessed pawn for `ADefaultGameMode` (Unreal-like DefaultPawn / flying camera).
-/// Free-look: LMB aims, WASD flies along look direction, Q/E world vertical.
+/**
+ * Default possessed pawn for ADefaultGameMode (Unreal-like DefaultPawn / flying camera).
+ * Free-look: LMB aims, WASD flies along look direction, Q/E world vertical.
+ */
 class ENGINE_API ADefaultCameraActor : public APawn
 {
 public:
