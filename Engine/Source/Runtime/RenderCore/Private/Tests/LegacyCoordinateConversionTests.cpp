@@ -42,9 +42,9 @@ namespace
 		FPlane(0.0f, 0.0f, 0.0f, 1.0f));
 
 	/** A legacy-axes matrix in the engine basis: the same transform of the physical scene. */
-	FMatrix ToEngineBasis(const FMatrix& LegacyAxes)
+	FMatrix ToEngineBasis(const FMatrix& LegacyMatrix)
 	{
-		return SwapYZ * LegacyAxes * SwapYZ;
+		return SwapYZ * LegacyMatrix * SwapYZ;
 	}
 
 	FVector RandomVector(FRandomStream& Random, float Range)
