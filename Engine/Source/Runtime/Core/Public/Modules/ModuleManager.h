@@ -11,7 +11,8 @@ struct CORE_API FStaticallyLinkedModuleInfo
 	/**
 	 * Registers the module's reflected classes, structs and enums (RegisterReflection_<Module>, written by
 	 * LeonHeaderTool in <Module>.init.gen.cpp), or nullptr for a module without reflected types. Referencing it from
-	 * the table keeps static linking from dropping the registration; CoreUObject calls it before StartupModule.
+	 * the table keeps static linking from dropping the registration. FModuleManager calls it right after creating the
+	 * module, before OnProcessLoadedObjectsCallback and StartupModule.
 	 */
 	void (*RegisterReflection)();
 };
@@ -31,8 +32,24 @@ class CORE_API FModuleManager
 public:
 	static FModuleManager& Get();
 
-	/** Creates and starts every statically linked module in dependency order. */
+	/**
+	 * Creates and starts every statically linked module in dependency order. For each module: InitializeModule, its
+	 * RegisterReflection (records its reflected types), OnProcessLoadedObjectsCallback, then StartupModule.
+	 */
 	void StartupStaticallyLinkedModules();
+
+	/**
+	 * Called after each module is created and its reflected types recorded, before its StartupModule, with the module
+	 * name and whether the new objects can be processed now (always true for statically linked modules). CoreUObject
+	 * sets it to construct the recorded types (UE: FModuleManager::OnProcessLoadedObjectsCallback, which runs
+	 * ProcessNewlyLoadedUObjects); Core never depends on CoreUObject. UE's is a multicast event; Leon's has a single
+	 * listener, CoreUObject, so it is a function pointer and targets without CoreUObject pay almost nothing for it.
+	 */
+	typedef void (*FProcessLoadedObjectsCallback)(const TCHAR* ModuleName, bool bCanProcessNewlyLoadedObjects);
+	FProcessLoadedObjectsCallback& OnProcessLoadedObjectsCallback()
+	{
+		return ProcessLoadedObjectsCallback;
+	}
 
 	/** Shuts down and destroys every module in reverse order. */
 	void ShutdownModules();
@@ -52,6 +69,7 @@ private:
 
 	FModuleEntry* Modules = nullptr;
 	int32 NumModules = 0;
+	FProcessLoadedObjectsCallback ProcessLoadedObjectsCallback = nullptr;
 };
 
 /** Default implementation for modules without startup logic. */

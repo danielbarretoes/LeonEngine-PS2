@@ -2,6 +2,8 @@
 
 // Build configuration switches (UE: Misc/Build.h). LeonBuildTool defines LEON_BUILD_<CONFIGURATION>=1.
 
+#include "HAL/Platform.h"
+
 #ifndef LEON_BUILD_DEBUG
 	#define LEON_BUILD_DEBUG 0
 #endif
@@ -43,6 +45,18 @@
 /** UE_LOG compiles out (UE: NO_LOGGING, USE_LOGGING_IN_SHIPPING=0). */
 #ifndef NO_LOGGING
 	#define NO_LOGGING UE_BUILD_SHIPPING
+#endif
+
+/**
+ * Editor-only reflected data (#if WITH_EDITORONLY_DATA members and UPROPERTYs): desktop builds outside Shipping keep
+ * it, the PS2 and Shipping builds strip it (UE: WITH_EDITORONLY_DATA, set per target by UBT; plan decision D14).
+ */
+#ifndef WITH_EDITORONLY_DATA
+	#if PLATFORM_DESKTOP && !UE_BUILD_SHIPPING
+		#define WITH_EDITORONLY_DATA 1
+	#else
+		#define WITH_EDITORONLY_DATA 0
+	#endif
 #endif
 
 /** Automation tests are compiled into test executables only (LeonBuildTool COLLECT_AUTOMATION_TESTS). */

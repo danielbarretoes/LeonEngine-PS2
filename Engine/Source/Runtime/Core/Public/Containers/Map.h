@@ -10,6 +10,7 @@
 #include "Templates/UnrealTemplate.h"
 #include "Templates/UnrealTypeTraits.h"
 
+#include <cstddef>
 #include <initializer_list>
 #include <type_traits>
 
@@ -109,6 +110,9 @@ class TMapBase
 {
 	template <typename OtherKeyType, typename OtherValueType, typename OtherSetAllocator, typename OtherKeyFuncs>
 	friend class TMapBase;
+	// Checks that its layout matches (TScriptMap::CheckConstraints).
+	template <typename>
+	friend class TScriptMap;
 
 public:
 	typedef typename TCallTraits<KeyType>::ParamType KeyConstPointerType;
@@ -982,4 +986,133 @@ struct TIsZeroConstructType<TMap<KeyType, ValueType, SetAllocator, KeyFuncs>>
 	{
 		Value = false
 	};
+};
+
+/** Key / value offsets inside a TPair of a type-erased map (UE: FScriptMapLayout). */
+struct FScriptMapLayout
+{
+	/** The key is at offset 0 of the pair; the value follows it, aligned. */
+	int32 ValueOffset;
+	FScriptSetLayout SetLayout;
+};
+
+/**
+ * Untyped view of a TMap for the reflection system (UE: TScriptMap): a TScriptSet of TPair<Key, Value>. Same layout
+ * as TMap<Key, Value, Allocator> for every key and value type; hashing and equality apply to the key only.
+ */
+template <typename AllocatorType>
+class TScriptMap
+{
+public:
+	/** The pair and set-element layout of a map with these key and value types. */
+	static FScriptMapLayout GetScriptLayout(int32 KeySize, int32 KeyAlignment, int32 ValueSize, int32 ValueAlignment)
+	{
+		FScriptMapLayout Result;
+		Result.ValueOffset = Align(KeySize, ValueAlignment);
+		const int32 PairAlignment = FMath::Max(KeyAlignment, ValueAlignment);
+		const int32 PairSize = Align(Result.ValueOffset + ValueSize, PairAlignment);
+		Result.SetLayout = TScriptSet<AllocatorType>::GetScriptLayout(PairSize, PairAlignment);
+		return Result;
+	}
+
+	TScriptMap() = default;
+	TScriptMap(const TScriptMap&) = delete;
+	TScriptMap& operator=(const TScriptMap&) = delete;
+
+	FORCEINLINE bool IsValidIndex(int32 Index) const
+	{
+		return Pairs.IsValidIndex(Index);
+	}
+
+	FORCEINLINE int32 Num() const
+	{
+		return Pairs.Num();
+	}
+
+	FORCEINLINE int32 GetMaxIndex() const
+	{
+		return Pairs.GetMaxIndex();
+	}
+
+	FORCEINLINE void* GetData(int32 Index, const FScriptMapLayout& Layout)
+	{
+		return Pairs.GetData(Index, Layout.SetLayout);
+	}
+	FORCEINLINE const void* GetData(int32 Index, const FScriptMapLayout& Layout) const
+	{
+		return Pairs.GetData(Index, Layout.SetLayout);
+	}
+
+	void MoveAssign(TScriptMap& Other, const FScriptMapLayout& Layout)
+	{
+		Pairs.MoveAssign(Other.Pairs, Layout.SetLayout);
+	}
+
+	void Empty(int32 Slack, const FScriptMapLayout& Layout)
+	{
+		Pairs.Empty(Slack, Layout.SetLayout);
+	}
+
+	void RemoveAt(int32 Index, const FScriptMapLayout& Layout)
+	{
+		Pairs.RemoveAt(Index, Layout.SetLayout);
+	}
+
+	int32 AddUninitialized(const FScriptMapLayout& Layout)
+	{
+		return Pairs.AddUninitialized(Layout.SetLayout);
+	}
+
+	/** Rebuilds the hash; GetKeyHash hashes a key (the start of a pair). */
+	template <typename HashFnType>
+	void Rehash(const FScriptMapLayout& Layout, HashFnType&& GetKeyHash)
+	{
+		Pairs.Rehash(Layout.SetLayout, GetKeyHash);
+	}
+
+	/** Index of the pair whose key equals Key, or INDEX_NONE (the key is at the start of a pair). */
+	template <typename HashFnType, typename EqualityFnType>
+	int32 FindPairIndex(
+		const void* Key, const FScriptMapLayout& Layout, HashFnType&& GetKeyHash, EqualityFnType&& KeyEqualityFn) const
+	{
+		return Pairs.FindIndex(Key, Layout.SetLayout, GetKeyHash, KeyEqualityFn);
+	}
+
+	/** The value of the pair whose key equals Key, or nullptr. */
+	template <typename HashFnType, typename EqualityFnType>
+	uint8* FindValue(
+		const void* Key, const FScriptMapLayout& Layout, HashFnType&& GetKeyHash, EqualityFnType&& KeyEqualityFn)
+	{
+		const int32 FoundIndex = FindPairIndex(Key, Layout, GetKeyHash, KeyEqualityFn);
+		return FoundIndex != INDEX_NONE ? (uint8*)GetData(FoundIndex, Layout) + Layout.ValueOffset : nullptr;
+	}
+
+	/** The pair of Key, added with ConstructPairFn when missing; returns its index. */
+	template <typename HashFnType, typename EqualityFnType, typename ConstructFnType>
+	int32 FindOrAdd(const void* Key, const FScriptMapLayout& Layout, HashFnType&& GetKeyHash,
+		EqualityFnType&& KeyEqualityFn, ConstructFnType&& ConstructPairFn)
+	{
+		return Pairs.FindOrAdd(Key, Layout.SetLayout, GetKeyHash, KeyEqualityFn, ConstructPairFn);
+	}
+
+	/** The script map must be a drop-in view of TMap (UE: TScriptMap::CheckConstraints). */
+	static void CheckConstraints()
+	{
+		typedef TScriptMap ScriptType;
+		typedef TMap<int32, int8, AllocatorType> RealType;
+		static_assert(sizeof(ScriptType) == sizeof(RealType), "TScriptMap's size doesn't match TMap");
+		static_assert(alignof(ScriptType) == alignof(RealType), "TScriptMap's alignment doesn't match TMap");
+		static_assert(sizeof(TPair<int32, int8>) == 8, "TPair must be the key then the value");
+		TScriptSet<AllocatorType>::CheckConstraints();
+	}
+
+private:
+	TScriptSet<AllocatorType> Pairs;
+};
+
+/** Untyped TMap with the default allocator (UE: FScriptMap). */
+class FScriptMap : public TScriptMap<FDefaultSetAllocator>
+{
+public:
+	FScriptMap() = default;
 };

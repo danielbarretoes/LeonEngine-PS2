@@ -12,6 +12,7 @@
 #include "Templates/UnrealTemplate.h"
 #include "Templates/UnrealTypeTraits.h"
 
+#include <cstddef>
 #include <initializer_list>
 #include <new>
 #include <type_traits>
@@ -175,6 +176,9 @@ public:
 private:
 	template <typename, typename, typename>
 	friend class TSet;
+	// Checks that its layout matches (TScriptSet::CheckConstraints).
+	template <typename>
+	friend class TScriptSet;
 
 	typedef TSparseArray<SetElementType, typename Allocator::SparseArrayAllocator> ElementArrayType;
 	typedef typename Allocator::HashAllocator::template ForElementType<FSetElementId> HashType;
@@ -1146,4 +1150,291 @@ private:
 
 	mutable HashType Hash;
 	mutable int32 HashSize;
+};
+
+/** Offsets inside a TSetElement of a type-erased set (UE: FScriptSetLayout). */
+struct FScriptSetLayout
+{
+	/** Offset of the element inside TSetElement (always 0). */
+	int32 ElementOffset;
+	int32 HashNextIdOffset;
+	int32 HashIndexOffset;
+	/** Size of a TSetElement. */
+	int32 Size;
+	FScriptSparseArrayLayout SparseArrayLayout;
+};
+
+/**
+ * Untyped view of a TSet for the reflection system (UE: TScriptSet). Same layout as TSet<ElementType, KeyFuncs,
+ * Allocator> for every ElementType. Hashing and equality come from the caller (the element property), and must be the
+ * ones TSet uses (GetTypeHash and operator==), so native code and reflection can share a set. The callbacks are
+ * template callables (UE passes TFunctionRef; Leon keeps Templates/Function.h out of the container headers).
+ */
+template <typename Allocator>
+class TScriptSet
+{
+public:
+	/** The TSetElement layout of a set of elements of this size and alignment. */
+	static FScriptSetLayout GetScriptLayout(int32 ElementSize, int32 ElementAlignment)
+	{
+		FScriptSetLayout Result;
+		const int32 Alignment = FMath::Max(ElementAlignment, int32(alignof(int32)));
+		Result.ElementOffset = 0;
+		Result.HashNextIdOffset = Align(ElementSize, alignof(FSetElementId));
+		Result.HashIndexOffset = Result.HashNextIdOffset + int32(sizeof(FSetElementId));
+		Result.Size = Align(Result.HashIndexOffset + int32(sizeof(int32)), Alignment);
+		Result.SparseArrayLayout =
+			TScriptSparseArray<typename Allocator::SparseArrayAllocator>::GetScriptLayout(Result.Size, Alignment);
+		return Result;
+	}
+
+	TScriptSet()
+		: HashSize(0)
+	{
+	}
+
+	TScriptSet(const TScriptSet&) = delete;
+	TScriptSet& operator=(const TScriptSet&) = delete;
+
+	FORCEINLINE bool IsValidIndex(int32 Index) const
+	{
+		return Elements.IsValidIndex(Index);
+	}
+
+	FORCEINLINE int32 Num() const
+	{
+		return Elements.Num();
+	}
+
+	FORCEINLINE int32 GetMaxIndex() const
+	{
+		return Elements.GetMaxIndex();
+	}
+
+	FORCEINLINE void* GetData(int32 Index, const FScriptSetLayout& Layout)
+	{
+		return Elements.GetData(Index, Layout.SparseArrayLayout);
+	}
+	FORCEINLINE const void* GetData(int32 Index, const FScriptSetLayout& Layout) const
+	{
+		return Elements.GetData(Index, Layout.SparseArrayLayout);
+	}
+
+	/** Takes Other's elements; this set must hold no constructed elements. */
+	void MoveAssign(TScriptSet& Other, const FScriptSetLayout& Layout)
+	{
+		checkSlow(this != &Other);
+		Empty(0, Layout);
+		Elements.MoveAssign(Other.Elements, Layout.SparseArrayLayout);
+		Hash.ResizeAllocation(0, 0, sizeof(FSetElementId));
+		Hash.MoveToEmpty(Other.Hash);
+		HashSize = Other.HashSize;
+		Other.HashSize = 0;
+	}
+
+	/** Removes every element (already destroyed by the caller), keeping room for Slack. */
+	void Empty(int32 Slack, const FScriptSetLayout& Layout)
+	{
+		Elements.Empty(Slack, Layout.SparseArrayLayout);
+		const int32 DesiredHashSize = Allocator::GetNumberOfHashBuckets(Slack);
+		if (Slack != 0 && (HashSize == 0 || HashSize != DesiredHashSize))
+		{
+			HashSize = DesiredHashSize;
+			Hash.ResizeAllocation(0, HashSize, sizeof(FSetElementId));
+		}
+		FSetElementId* HashPtr = (FSetElementId*)Hash.GetAllocation();
+		for (int32 Index = 0; Index < HashSize; ++Index)
+		{
+			HashPtr[Index] = FSetElementId();
+		}
+	}
+
+	/** Unlinks the element at Index from its bucket and frees its slot (the caller destroyed it). */
+	void RemoveAt(int32 Index, const FScriptSetLayout& Layout)
+	{
+		check(IsValidIndex(Index));
+		void* ElementBeingRemoved = Elements.GetData(Index, Layout.SparseArrayLayout);
+		for (FSetElementId* NextElementId = &GetTypedHash(GetHashIndexRef(ElementBeingRemoved, Layout));
+			NextElementId->IsValidId();
+			NextElementId =
+				&GetHashNextIdRef(Elements.GetData(NextElementId->AsInteger(), Layout.SparseArrayLayout), Layout))
+		{
+			if (NextElementId->AsInteger() == Index)
+			{
+				*NextElementId = GetHashNextIdRef(ElementBeingRemoved, Layout);
+				break;
+			}
+		}
+		Elements.RemoveAtUninitialized(Layout.SparseArrayLayout, Index);
+	}
+
+	/** Reserves an element slot; the set must be rehashed once the element is constructed. */
+	int32 AddUninitialized(const FScriptSetLayout& Layout)
+	{
+		return Elements.AddUninitialized(Layout.SparseArrayLayout);
+	}
+
+	/** Rebuilds the hash buckets; GetKeyHash(const void* Element) hashes an element. */
+	template <typename HashFnType>
+	void Rehash(const FScriptSetLayout& Layout, HashFnType&& GetKeyHash)
+	{
+		Hash.ResizeAllocation(0, 0, sizeof(FSetElementId));
+		HashSize = Allocator::GetNumberOfHashBuckets(Elements.Num());
+		if (HashSize)
+		{
+			checkSlow(FMath::IsPowerOfTwo(HashSize));
+			Hash.ResizeAllocation(0, HashSize, sizeof(FSetElementId));
+			for (int32 HashIndex = 0; HashIndex < HashSize; ++HashIndex)
+			{
+				GetTypedHash(HashIndex) = FSetElementId();
+			}
+			for (int32 Index = 0, Count = Elements.Num(); Count; ++Index)
+			{
+				if (Elements.IsValidIndex(Index))
+				{
+					void* Element = Elements.GetData(Index, Layout.SparseArrayLayout);
+					const int32 HashIndex = int32(GetKeyHash(Element) & uint32(HashSize - 1));
+					GetHashIndexRef(Element, Layout) = HashIndex;
+					GetHashNextIdRef(Element, Layout) = GetTypedHash(HashIndex);
+					GetTypedHash(HashIndex) = FSetElementId::FromInteger(Index);
+					--Count;
+				}
+			}
+		}
+	}
+
+	/** Index of the element equal to Element, or INDEX_NONE (EqualityFn(Element, SetElement)). */
+	template <typename HashFnType, typename EqualityFnType>
+	int32 FindIndex(
+		const void* Element, const FScriptSetLayout& Layout, HashFnType&& GetKeyHash, EqualityFnType&& EqualityFn) const
+	{
+		if (Elements.Num())
+		{
+			return FindIndexImpl(Element, Layout, GetKeyHash(Element), EqualityFn);
+		}
+		return INDEX_NONE;
+	}
+
+	/** Index of the element equal to Element; adds one built by ConstructFn(void* Slot) when there is none. */
+	template <typename HashFnType, typename EqualityFnType, typename ConstructFnType>
+	int32 FindOrAdd(const void* Element, const FScriptSetLayout& Layout, HashFnType&& GetKeyHash,
+		EqualityFnType&& EqualityFn, ConstructFnType&& ConstructFn)
+	{
+		const uint32 KeyHash = GetKeyHash(Element);
+		const int32 OldElementIndex = Elements.Num() ? FindIndexImpl(Element, Layout, KeyHash, EqualityFn) : INDEX_NONE;
+		if (OldElementIndex != INDEX_NONE)
+		{
+			return OldElementIndex;
+		}
+		return AddNewElement(Layout, GetKeyHash, KeyHash, ConstructFn);
+	}
+
+	/** Adds Element (ConstructFn builds it in its slot), replacing an equal one as TSet::Add does. */
+	template <typename HashFnType, typename EqualityFnType, typename ConstructFnType, typename DestructFnType>
+	void Add(const void* Element, const FScriptSetLayout& Layout, HashFnType&& GetKeyHash, EqualityFnType&& EqualityFn,
+		ConstructFnType&& ConstructFn, DestructFnType&& DestructFn)
+	{
+		const uint32 KeyHash = GetKeyHash(Element);
+		const int32 OldElementIndex = Elements.Num() ? FindIndexImpl(Element, Layout, KeyHash, EqualityFn) : INDEX_NONE;
+		if (OldElementIndex != INDEX_NONE)
+		{
+			void* ElementPtr = Elements.GetData(OldElementIndex, Layout.SparseArrayLayout);
+			DestructFn(ElementPtr);
+			ConstructFn(ElementPtr);
+		}
+		else
+		{
+			AddNewElement(Layout, GetKeyHash, KeyHash, ConstructFn);
+		}
+	}
+
+	/** The script set must be a drop-in view of TSet (UE: TScriptSet::CheckConstraints). */
+	static void CheckConstraints()
+	{
+		typedef TScriptSet ScriptType;
+		typedef TSet<int32, DefaultKeyFuncs<int32>, Allocator> RealType;
+		static_assert(sizeof(ScriptType) == sizeof(RealType), "TScriptSet's size doesn't match TSet");
+		static_assert(alignof(ScriptType) == alignof(RealType), "TScriptSet's alignment doesn't match TSet");
+		static_assert(offsetof(ScriptType, Elements) == offsetof(RealType, Elements),
+			"TScriptSet's Elements offset doesn't match TSet");
+		static_assert(
+			offsetof(ScriptType, Hash) == offsetof(RealType, Hash), "TScriptSet's Hash offset doesn't match TSet");
+		static_assert(offsetof(ScriptType, HashSize) == offsetof(RealType, HashSize),
+			"TScriptSet's HashSize offset doesn't match TSet");
+		static_assert(sizeof(FSetElementId) == sizeof(int32), "FSetElementId must be an int32");
+		static_assert(sizeof(TSetElement<int32>) == 12, "TSetElement must be the value, HashNextId and HashIndex");
+		TScriptSparseArray<typename Allocator::SparseArrayAllocator>::CheckConstraints();
+	}
+
+private:
+	template <typename EqualityFnType>
+	int32 FindIndexImpl(
+		const void* Element, const FScriptSetLayout& Layout, uint32 KeyHash, EqualityFnType&& EqualityFn) const
+	{
+		const void* CurrentElement = nullptr;
+		for (FSetElementId ElementId = GetTypedHash(int32(KeyHash)); ElementId.IsValidId();
+			ElementId = GetHashNextIdRef(CurrentElement, Layout))
+		{
+			CurrentElement = Elements.GetData(ElementId.AsInteger(), Layout.SparseArrayLayout);
+			if (EqualityFn(Element, CurrentElement))
+			{
+				return ElementId.AsInteger();
+			}
+		}
+		return INDEX_NONE;
+	}
+
+	template <typename HashFnType, typename ConstructFnType>
+	int32 AddNewElement(
+		const FScriptSetLayout& Layout, HashFnType&& GetKeyHash, uint32 KeyHash, ConstructFnType&& ConstructFn)
+	{
+		const int32 NewElementIndex = Elements.AddUninitialized(Layout.SparseArrayLayout);
+		void* ElementPtr = Elements.GetData(NewElementIndex, Layout.SparseArrayLayout);
+		ConstructFn(ElementPtr);
+
+		const int32 DesiredHashSize = Allocator::GetNumberOfHashBuckets(Num());
+		if (!HashSize || HashSize < DesiredHashSize)
+		{
+			// The rehash links the new element too.
+			Rehash(Layout, GetKeyHash);
+		}
+		else
+		{
+			const int32 HashIndex = int32(KeyHash & uint32(HashSize - 1));
+			FSetElementId& TypedHash = GetTypedHash(HashIndex);
+			GetHashIndexRef(ElementPtr, Layout) = HashIndex;
+			GetHashNextIdRef(ElementPtr, Layout) = TypedHash;
+			TypedHash = FSetElementId::FromInteger(NewElementIndex);
+		}
+		return NewElementIndex;
+	}
+
+	FORCEINLINE FSetElementId& GetTypedHash(int32 HashIndex) const
+	{
+		return ((FSetElementId*)Hash.GetAllocation())[HashIndex & (HashSize - 1)];
+	}
+
+	static FORCEINLINE FSetElementId& GetHashNextIdRef(const void* Element, const FScriptSetLayout& Layout)
+	{
+		return *(FSetElementId*)((uint8*)Element + Layout.HashNextIdOffset);
+	}
+
+	static FORCEINLINE int32& GetHashIndexRef(const void* Element, const FScriptSetLayout& Layout)
+	{
+		return *(int32*)((uint8*)Element + Layout.HashIndexOffset);
+	}
+
+	typedef TScriptSparseArray<typename Allocator::SparseArrayAllocator> ElementArrayType;
+	typedef typename Allocator::HashAllocator::template ForElementType<FSetElementId> HashType;
+
+	ElementArrayType Elements;
+	mutable HashType Hash;
+	mutable int32 HashSize;
+};
+
+/** Untyped TSet with the default allocator (UE: FScriptSet). */
+class FScriptSet : public TScriptSet<FDefaultSetAllocator>
+{
+public:
+	FScriptSet() = default;
 };

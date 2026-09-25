@@ -6,6 +6,7 @@
 #include "Containers/ArrayView.h"
 #include "Containers/ContainerAllocationPolicies.h"
 #include "Containers/ContainersFwd.h"
+#include "Containers/EnumAsByte.h"
 #include "Containers/Map.h"
 #include "Containers/Set.h"
 #include "Containers/SparseArray.h"

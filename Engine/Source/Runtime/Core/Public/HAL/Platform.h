@@ -64,6 +64,22 @@
 	#define LEON_PRINTF_FORMAT(FormatIndex, FirstArgIndex)
 #endif
 
+// Deprecation warnings off / on around generated reflection code; usable inside macros (UE:
+// PRAGMA_DISABLE_DEPRECATION_WARNINGS / PRAGMA_ENABLE_DEPRECATION_WARNINGS).
+#ifndef PRAGMA_DISABLE_DEPRECATION_WARNINGS
+	#if defined(_MSC_VER)
+		#define PRAGMA_DISABLE_DEPRECATION_WARNINGS __pragma(warning(push)) __pragma(warning(disable : 4995 4996))
+		#define PRAGMA_ENABLE_DEPRECATION_WARNINGS __pragma(warning(pop))
+	#elif defined(__GNUC__) || defined(__clang__)
+		#define PRAGMA_DISABLE_DEPRECATION_WARNINGS                                                                    \
+			_Pragma("GCC diagnostic push") _Pragma("GCC diagnostic ignored \"-Wdeprecated-declarations\"")
+		#define PRAGMA_ENABLE_DEPRECATION_WARNINGS _Pragma("GCC diagnostic pop")
+	#else
+		#define PRAGMA_DISABLE_DEPRECATION_WARNINGS
+		#define PRAGMA_ENABLE_DEPRECATION_WARNINGS
+	#endif
+#endif
+
 // Global fixed-width types (UE: HAL/Platform.h).
 typedef FPlatformTypes::uint8 uint8;
 typedef FPlatformTypes::uint16 uint16;

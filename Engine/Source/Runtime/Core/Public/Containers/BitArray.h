@@ -8,6 +8,7 @@
 #include "Misc/AssertionMacros.h"
 #include "Templates/UnrealTemplate.h"
 
+#include <cstddef>
 #include <type_traits>
 
 // Dynamic array of bits stored in 32-bit words (UE: Containers/BitArray.h). Invariant: the bits past Num() in the
@@ -116,6 +117,9 @@ class TBitArray
 
 	template <typename>
 	friend class TConstSetBitIterator;
+	// Checks that its layout matches (TScriptBitArray::CheckConstraints).
+	template <typename>
+	friend class TScriptBitArray;
 
 public:
 	TBitArray()
@@ -680,4 +684,146 @@ private:
 
 	const TBitArray<Allocator>& Array;
 	int32 CurrentBitIndex;
+};
+
+/**
+ * Untyped view of a TBitArray for the reflection system (UE: TScriptBitArray). Same layout as
+ * TBitArray<Allocator>, and the same invariant: the words past NumBits inside the allocation are zero.
+ */
+template <typename Allocator /* = FDefaultBitArrayAllocator */>
+class TScriptBitArray
+{
+public:
+	TScriptBitArray()
+		: NumBits(0)
+		, MaxBits(0)
+	{
+	}
+
+	TScriptBitArray(const TScriptBitArray&) = delete;
+	TScriptBitArray& operator=(const TScriptBitArray&) = delete;
+
+	FORCEINLINE bool IsValidIndex(int32 Index) const
+	{
+		return Index >= 0 && Index < NumBits;
+	}
+
+	FORCEINLINE int32 Num() const
+	{
+		return NumBits;
+	}
+
+	FORCEINLINE FBitReference operator[](int32 Index)
+	{
+		check(IsValidIndex(Index));
+		return FBitReference(GetData()[Index / NumBitsPerDWORD], 1u << (Index & (NumBitsPerDWORD - 1)));
+	}
+
+	FORCEINLINE const FConstBitReference operator[](int32 Index) const
+	{
+		check(IsValidIndex(Index));
+		return FConstBitReference(GetData()[Index / NumBitsPerDWORD], 1u << (Index & (NumBitsPerDWORD - 1)));
+	}
+
+	/** Takes Other's bits (TBitArray's move). */
+	void MoveAssign(TScriptBitArray& Other)
+	{
+		checkSlow(this != &Other);
+		Empty(0);
+		AllocatorInstance.MoveToEmpty(Other.AllocatorInstance);
+		NumBits = Other.NumBits;
+		MaxBits = Other.MaxBits;
+		Other.NumBits = 0;
+		Other.MaxBits = Other.AllocatorInstance.GetInitialCapacity() * NumBitsPerDWORD;
+		Other.ClearWordsFrom(0);
+	}
+
+	/** Removes every bit; the allocation shrinks / grows to ExpectedNumBits (TBitArray::Empty). */
+	void Empty(int32 ExpectedNumBits = 0)
+	{
+		ExpectedNumBits = FMath::DivideAndRoundUp(ExpectedNumBits, int32(NumBitsPerDWORD)) * NumBitsPerDWORD;
+		const int32 InitialMaxBits = AllocatorInstance.GetInitialCapacity() * NumBitsPerDWORD;
+		NumBits = 0;
+		if (ExpectedNumBits > MaxBits || MaxBits > InitialMaxBits)
+		{
+			Realloc(0, FMath::Max(ExpectedNumBits, InitialMaxBits) / NumBitsPerDWORD);
+		}
+		else
+		{
+			ClearWordsFrom(0);
+		}
+	}
+
+	/** Appends a bit; returns its index (TBitArray::Add). */
+	int32 Add(const bool bValue)
+	{
+		const int32 Index = NumBits;
+		const int32 OldNumWords = GetNumWords();
+		++NumBits;
+		if (NumBits > MaxBits)
+		{
+			const int32 MaxDWORDs = AllocatorInstance.CalculateSlackGrow(
+				FMath::DivideAndRoundUp(NumBits, int32(NumBitsPerDWORD)), MaxBits / NumBitsPerDWORD, sizeof(uint32));
+			Realloc(OldNumWords, MaxDWORDs);
+		}
+		const int32 NewNumWords = GetNumWords();
+		if (NewNumWords > OldNumWords)
+		{
+			FMemory::Memzero(GetData() + OldNumWords, (NewNumWords - OldNumWords) * sizeof(uint32));
+		}
+		(*this)[Index] = bValue;
+		return Index;
+	}
+
+	/** The script bit array must be a drop-in view of TBitArray (UE: TScriptBitArray::CheckConstraints). */
+	static void CheckConstraints()
+	{
+		typedef TScriptBitArray ScriptType;
+		typedef TBitArray<Allocator> RealType;
+		static_assert(sizeof(ScriptType) == sizeof(RealType), "TScriptBitArray's size doesn't match TBitArray");
+		static_assert(alignof(ScriptType) == alignof(RealType), "TScriptBitArray's alignment doesn't match TBitArray");
+		static_assert(offsetof(ScriptType, AllocatorInstance) == offsetof(RealType, AllocatorInstance),
+			"TScriptBitArray's allocator offset doesn't match TBitArray");
+		static_assert(offsetof(ScriptType, NumBits) == offsetof(RealType, NumBits),
+			"TScriptBitArray's NumBits offset doesn't match TBitArray");
+		static_assert(offsetof(ScriptType, MaxBits) == offsetof(RealType, MaxBits),
+			"TScriptBitArray's MaxBits offset doesn't match TBitArray");
+	}
+
+private:
+	typedef typename Allocator::template ForElementType<uint32> AllocatorType;
+
+	FORCEINLINE uint32* GetData()
+	{
+		return static_cast<uint32*>(AllocatorInstance.GetAllocation());
+	}
+	FORCEINLINE const uint32* GetData() const
+	{
+		return static_cast<const uint32*>(AllocatorInstance.GetAllocation());
+	}
+
+	FORCEINLINE int32 GetNumWords() const
+	{
+		return FMath::DivideAndRoundUp(NumBits, int32(NumBitsPerDWORD));
+	}
+
+	FORCEINLINE void ClearWordsFrom(int32 FirstWord)
+	{
+		const int32 MaxWords = MaxBits / NumBitsPerDWORD;
+		if (FirstWord < MaxWords)
+		{
+			FMemory::Memzero(GetData() + FirstWord, (MaxWords - FirstWord) * sizeof(uint32));
+		}
+	}
+
+	FORCENOINLINE void Realloc(int32 PreviousNumWords, int32 MaxDWORDs)
+	{
+		AllocatorInstance.ResizeAllocation(PreviousNumWords, MaxDWORDs, sizeof(uint32));
+		MaxBits = MaxDWORDs * NumBitsPerDWORD;
+		ClearWordsFrom(PreviousNumWords);
+	}
+
+	AllocatorType AllocatorInstance;
+	int32 NumBits;
+	int32 MaxBits;
 };

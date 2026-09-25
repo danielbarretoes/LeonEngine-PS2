@@ -16,6 +16,10 @@
  */
 struct CORE_API FTransform
 {
+	// The reflection data of the NoExport declaration (CoreUObject's NoExportTypes.h) reads the protected members'
+	// offsets, as in UE.
+	friend struct Z_Construct_UScriptStruct_FTransform_Statics;
+
 protected:
 	FQuat Rotation;
 	FVector Translation;

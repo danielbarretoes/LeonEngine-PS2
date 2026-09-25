@@ -23,6 +23,16 @@ void FModuleManager::StartupStaticallyLinkedModules()
 	{
 		Modules[Index].Name = Infos[Index].Name;
 		Modules[Index].Module = Infos[Index].InitializeModule();
+		// Record the module's reflected types, then let CoreUObject (once it is up) construct them, before the module
+		// starts (UE: the per-module ProcessNewlyLoadedUObjects).
+		if (Infos[Index].RegisterReflection)
+		{
+			Infos[Index].RegisterReflection();
+		}
+		if (ProcessLoadedObjectsCallback)
+		{
+			ProcessLoadedObjectsCallback(Infos[Index].Name, true);
+		}
 		Modules[Index].Module->StartupModule();
 	}
 }

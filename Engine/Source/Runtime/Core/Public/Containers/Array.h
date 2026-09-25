@@ -169,6 +169,9 @@ class TArray
 {
 	template <typename OtherInElementType, typename OtherAllocator>
 	friend class TArray;
+	// Checks that its layout matches (TScriptArray::CheckConstraints).
+	template <typename>
+	friend class TScriptArray;
 
 public:
 	typedef typename InAllocatorType::SizeType SizeType;

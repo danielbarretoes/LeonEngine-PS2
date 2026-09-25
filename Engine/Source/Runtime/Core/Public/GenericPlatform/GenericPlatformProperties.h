@@ -33,4 +33,10 @@ struct CORE_API FGenericPlatformProperties
 	static constexpr uint32 NamePoolBlockSize = 64 * 1024;
 	static constexpr uint32 NamePoolMaxBlocks = 1024;
 	static constexpr uint32 NamePoolHashBuckets = 65536;
+
+	/**
+	 * Capacity of the UObject array (GUObjectArray); creating more objects is a fatal error that logs the capacity
+	 * (UE: gc.MaxObjectsInGame, a config value; Leon: a platform constant).
+	 */
+	static constexpr int32 MaxObjectsInGame = 131072;
 };
