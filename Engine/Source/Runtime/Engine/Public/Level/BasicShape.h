@@ -51,9 +51,9 @@ struct ENGINE_API FBasicShape
 };
 
 [[nodiscard]] bool TryParseBasicShapeName(const FString& Name, EBasicShape& Out);
-/** The `.llev` BlockingVolume class name (an ABlockingVolume: an invisible box, plan decision D16). */
+/** The BlockingVolume class name (an ABlockingVolume: an invisible box, plan decision D16). */
 [[nodiscard]] bool IsBlockingVolumeName(const FString& Name);
-/** The `.llev` PlayerStart class name (an APlayerStart: a spawn point, no mesh). */
+/** The PlayerStart class name (an APlayerStart: a spawn point, no mesh). */
 [[nodiscard]] bool IsPlayerStartName(const FString& Name);
 
 /**
@@ -65,6 +65,6 @@ struct ENGINE_API FBasicShape
 /**
  * A UV sphere of Segments x Rings: the `/Engine/BasicShapes/Sphere` package for the default 24 x 16, else a transient
  * mesh built by the procedural generator (MakeSphere), one per tessellation while it is used
- * (`/Temp/BasicShapes/Sphere_<Segments>x<Rings>`): the `.llev` spheres may ask for any tessellation.
+ * (`/Temp/BasicShapes/Sphere_<Segments>x<Rings>`): FBasicShape::Sphere may ask for any tessellation.
  */
 [[nodiscard]] UStaticMesh* GetSphereMesh(int32 Segments, int32 Rings);

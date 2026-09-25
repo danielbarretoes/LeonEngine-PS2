@@ -5,7 +5,6 @@
 #include "Engine/GameEngine.h"
 #include "GameFramework/HUD.h"
 #include "GameplayMinimal.h"
-#include "Level/LeonLevelFormat.h"
 #include "Misc/AutomationTest.h"
 #include "Physics/PhysScene.h"
 #include "Tests/ScopedTestWorld.h"
@@ -120,27 +119,6 @@ bool FFrameworkHardeningHUDAddWidgetTextBlockAndRemoveTest::RunTest(const FStrin
 	Hud.Tick(0.016f);
 	Hud.RemoveWidget(Text);
 	TestNull("Gone after remove", Hud.GetWidgetOfClass<UTextBlock>());
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFrameworkHardeningDeserializeLeonLevelAdversarialInputsTest,
-	"System.AIModule.FrameworkHardening.DeserializeLeonLevelAdversarialInputs",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
-
-bool FFrameworkHardeningDeserializeLeonLevelAdversarialInputsTest::RunTest(const FString& Parameters)
-{
-	// DeserializeLeonLevel rejects empty, junk and header-only buffers (the first two log a bad magic).
-	AddExpectedError("bad magic", 2);
-	FLevelDocument Doc;
-	const TArray<uint8> Empty;
-	TestFalse("Empty rejected", DeserializeLeonLevel(Empty, Doc));
-
-	TArray<uint8> Junk;
-	Junk.Init(0xA5, 64);
-	TestFalse("Junk rejected", DeserializeLeonLevel(Junk, Doc));
-
-	const TArray<uint8> AlmostMagic = {'L', 'L', 'E', 'V', 1, 0, 0, 0};
-	TestFalse("Header only rejected", DeserializeLeonLevel(AlmostMagic, Doc));
 	return true;
 }
 

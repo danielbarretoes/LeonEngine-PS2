@@ -3,24 +3,23 @@
 #include "EditorFramework/AssetImportData.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture2D.h"
+#include "Engine/World.h"
 #include "Factories/FbxFactory.h"
 #include "Factories/GLTFImportFactory.h"
-#include "Factories/LegacyMaterialFactory.h"
-#include "Factories/LegacyStaticMeshFactory.h"
+#include "Factories/GLTFMapFactory.h"
 #include "Factories/MaterialFactoryNew.h"
 #include "Factories/SoundFactory.h"
 #include "Factories/TextureFactory.h"
 #include "Materials/Material.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/SecureHash.h"
-#include "Primitives.h"
 #include "Sound/SoundWave.h"
 #include "Tests/LeonEdTestUtils.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// The LeonEd factories: each source format to its asset class, the import data every imported asset keeps, the
-// materials and textures a mesh import makes, and the legacy factories of the migration.
+// The LeonEd factories: each source format to its asset class, the import data every imported asset keeps, and the
+// materials and textures a mesh import makes (MapFactoryTests.cpp has the map importer).
 
 namespace
 {
@@ -80,8 +79,9 @@ bool FLeonEdFactoryForFileTest::RunTest(const FString& Parameters)
 	TestTrue("gltf", UFactory::FindFactoryClassForFile(TEXT("A.gltf")) == UGLTFImportFactory::StaticClass());
 	TestTrue("glb", UFactory::FindFactoryClassForFile(TEXT("A.glb")) == UGLTFImportFactory::StaticClass());
 	TestTrue("wav", UFactory::FindFactoryClassForFile(TEXT("A.wav")) == USoundFactory::StaticClass());
-	TestTrue("lmat", UFactory::FindFactoryClassForFile(TEXT("A.lmat")) == ULegacyMaterialFactory::StaticClass());
-	TestTrue("lmesh", UFactory::FindFactoryClassForFile(TEXT("A.lmesh")) == ULegacyStaticMeshFactory::StaticClass());
+	TestTrue("glb as a map",
+		UFactory::FindFactoryClassForFile(TEXT("A.glb"), UWorld::StaticClass()) == UGLTFMapFactory::StaticClass());
+	TestNull("lmat", UFactory::FindFactoryClassForFile(TEXT("A.lmat")));
 	TestNull("unknown", UFactory::FindFactoryClassForFile(TEXT("A.xyz")));
 	TestNull("not for this class", UFactory::FindFactoryClassForFile(TEXT("A.png"), USoundWave::StaticClass()));
 
@@ -281,8 +281,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLeonEdMaterialFactoriesTest, "System.LeonEd.Fa
 
 bool FLeonEdMaterialFactoriesTest::RunTest(const FString& Parameters)
 {
-	// UMaterialFactoryNew makes a default material; the legacy .lmat factory reads every parameter the runtime read
-	// and resolves its maps to texture packages through the content keys; neither keeps import data.
+	// UMaterialFactoryNew makes a default material, without import data.
 	LeonEdTest::FScopedTestContent Content;
 	UMaterialFactoryNew* NewFactory = NewObject<UMaterialFactoryNew>();
 	UMaterial* Fresh = Cast<UMaterial>(NewFactory->FactoryCreateNew(
@@ -291,77 +290,8 @@ bool FLeonEdMaterialFactoriesTest::RunTest(const FString& Parameters)
 	{
 		const FMaterial Default;
 		TestTrue("Default values", Fresh->GetRenderProxy().Albedo == Default.Albedo);
+		TestNull("No import data", UFactory::GetAssetImportData(Fresh));
 	}
-
-	const TArray<uint8> RGB = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
-	UTexture2D* Map = Cast<UTexture2D>(ImportWith(UTextureFactory::StaticClass(),
-		LeonEdTest::WriteSource(TEXT("T_Map.bmp"), LeonEdTest::MakeBmp(2, 2, RGB)), TEXT("T_Map")));
-	TestNotNull("The map's package", Map);
-	TestTrue("Saved", FAssetImportUtils::SavePackage(Map->GetOutermost(), Map));
-	const FString Lmat = LeonEdTest::WriteSource(TEXT("M_Test.lmat"),
-		FString(TEXT("[Info]\nName=M_Test\nShadingModel=Unlit\n[Parameters]\nBaseColor=0.25,0.5,0.75\nOpacity=0.5\n"
-					 "UVScale=2,3\nCastsShadows=false\nPlanarMirror=yes\nShininess=8\n[Textures]\n"
-					 "BaseColorMap=T_Map.png\nNormalMap=\n")));
-	TMap<FString, FString> Root;
-	Root.Add(TEXT("ContentRootPath"), TEXT("/LeonEdTest"));
-	UMaterial* Material =
-		Cast<UMaterial>(ImportWith(ULegacyMaterialFactory::StaticClass(), Lmat, TEXT("M_Test"), Root));
-	if (TestNotNull("From the .lmat", Material))
-	{
-		TestTrue("Unlit", Material->ShadingModel == MSM_Unlit);
-		TestTrue("Base colour", Material->BaseColor.Equals(FLinearColor(0.25f, 0.5f, 0.75f, 1.0f)));
-		TestEqual("Opacity", Material->Opacity, 0.5f);
-		TestTrue("UV scale", Material->UVScale == FVector2D(2.0f, 3.0f));
-		TestFalse("No shadows", Material->bCastsShadows);
-		TestTrue("Mirror", Material->bPlanarMirror);
-		TestEqual("Roughness from shininess", Material->Roughness, RoughnessFromShininess(8.0f));
-		// The key T_Map.png names /LeonEdTest/T_Map.
-		TestTrue("The map's package", Material->BaseColorMap == Map);
-		TestNull("No normal map", Material->NormalMap);
-	}
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLeonEdLegacyStaticMeshFactoryTest, "System.LeonEd.Factories.LegacyStaticMesh",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
-
-bool FLeonEdLegacyStaticMeshFactoryTest::RunTest(const FString& Parameters)
-{
-	// A version 2 .lmesh keeps its geometry, and each slot the material the runtime gave it; version 1 is refused.
-	LeonEdTest::FScopedTestContent Content;
-	const FMeshData Cube = MakeCube();
-	TArray<uint8> Bytes;
-	Bytes.Append(reinterpret_cast<const uint8*>("LMSH"), 4);
-	const uint32 Header[6] = {
-		2, 0, static_cast<uint32>(Cube.Vertices.Num()), static_cast<uint32>(Cube.Indices.Num()), 0, 1};
-	Bytes.Append(reinterpret_cast<const uint8*>(Header), sizeof(Header));
-	const float Aabb[6] = {};
-	Bytes.Append(reinterpret_cast<const uint8*>(Aabb), sizeof(Aabb));
-	Bytes.Append(reinterpret_cast<const uint8*>(Cube.Vertices.GetData()), Cube.Vertices.Num() * sizeof(FVertex));
-	Bytes.Append(reinterpret_cast<const uint8*>(Cube.Indices.GetData()), Cube.Indices.Num() * sizeof(uint32));
-	Bytes.Add(0);
-	const FString File = LeonEdTest::WriteSource(TEXT("Crate.lmesh"), Bytes);
-
-	UStaticMesh* Mesh = Cast<UStaticMesh>(ImportWith(ULegacyStaticMeshFactory::StaticClass(), File, TEXT("SM_Crate")));
-	if (TestNotNull("Imported", Mesh))
-	{
-		TestEqual("Triangles", Mesh->GetNumTriangles(), 12);
-		TestTrue("Positions as stored", Mesh->GetLODResources().Vertices[3].Position == Cube.Vertices[3].Position);
-		const UMaterial* Slot = Cast<UMaterial>(Mesh->GetMaterial(0));
-		if (TestNotNull("The slot's material", Slot))
-		{
-			const FMaterial Default;
-			TestEqual("Named after the slot", Slot->GetName(), FString("M_Crate_Slot0"));
-			TestTrue("The default parameters", Slot->GetRenderProxy().Albedo == Default.Albedo);
-		}
-		TestNull("No import data: the .lmesh is not a source", Mesh->AssetImportData);
-	}
-
-	Bytes[4] = 1;
-	const FString Legacy = LeonEdTest::WriteSource(TEXT("Old.lmesh"), Bytes);
-	AddExpectedError(TEXT("a version 1 .lmesh"), 1);
-	AddExpectedError(TEXT("failed to import"), 1);
-	TestNull("Version 1", ImportWith(ULegacyStaticMeshFactory::StaticClass(), Legacy, TEXT("SM_Old")));
 	return true;
 }
 

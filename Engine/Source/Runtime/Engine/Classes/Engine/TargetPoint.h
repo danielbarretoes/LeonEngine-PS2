@@ -5,8 +5,8 @@
 #include "TargetPoint.generated.h"
 
 /**
- * A named point in a level (UE: ATargetPoint): only a transform and Tags. The `.llev` reader turns the legacy
- * AISpawnPoint records into target points and puts the record's tag in Tags (plan decision D15).
+ * A named point in a level (UE: ATargetPoint): only a transform and Tags (plan decision D15: the game meaning of
+ * a point is in its tags).
  */
 UCLASS()
 class ENGINE_API ATargetPoint : public AActor

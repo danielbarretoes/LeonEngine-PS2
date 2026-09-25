@@ -556,27 +556,3 @@ void FPaths::CombineInternal(FString& OutPath, const TCHAR** Pathes, int32 NumPa
 		}
 	}
 }
-
-FString FPaths::ResolveLegacyContentPath(const FString& RelativePath)
-{
-	FString Key = RelativePath;
-	NormalizeFilename(Key);
-	Key.RemoveFromStart("assets/", ESearchCase::CaseSensitive);
-
-	if (!IsRelative(Key) || FileExists(Key) || DirectoryExists(Key))
-	{
-		return ConvertRelativePathToFull(Key);
-	}
-
-	if (Key.Equals("Shaders") || Key.StartsWith("Shaders/", ESearchCase::CaseSensitive))
-	{
-		return EngineDir() + Key;
-	}
-
-	const FString ProjectCandidate = ProjectContentDir() + Key;
-	if (FileExists(ProjectCandidate) || DirectoryExists(ProjectCandidate))
-	{
-		return ProjectCandidate;
-	}
-	return EngineContentDir() + Key;
-}

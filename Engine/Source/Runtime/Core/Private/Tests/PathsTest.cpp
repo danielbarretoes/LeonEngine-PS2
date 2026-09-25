@@ -84,10 +84,8 @@ bool FPathsDirectoriesTest::RunTest(const FString& Parameters)
 	TestTrue("Root holds Engine/", FPaths::DirectoryExists(FPaths::RootDir() + "Engine"));
 	TestFalse("Engine dir is absolute", FPaths::IsRelative(FPaths::EngineDir()));
 
-	const FString Shader = FPaths::ResolveLegacyContentPath("assets/Shaders/blinn_phong.vert");
-	TestTrue("Legacy shader key", FPaths::FileExists(Shader));
-	TestEqual("Legacy shader location", Shader, FPaths::EngineDir() + "Shaders/blinn_phong.vert");
-	TestTrue("Legacy level key", FPaths::FileExists(FPaths::ResolveLegacyContentPath("LevelTemplates/Starter.llev")));
+	// The renderer's shaders sit under Engine/Shaders (UE: the /Engine/Shaders virtual folder).
+	TestTrue("Engine shaders", FPaths::FileExists(FPaths::Combine(FPaths::EngineDir(), "Shaders/blinn_phong.vert")));
 	#endif
 	return true;
 }

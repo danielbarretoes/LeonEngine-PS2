@@ -9,7 +9,6 @@
 #include "GameFramework/HUD.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerStart.h"
-#include "GameFramework/PlayerStartPIE.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/WorldSettings.h"
 
@@ -399,14 +398,6 @@ AActor* AGameModeBase::ChoosePlayerStart(AController* /*Player*/)
 	}
 	TArray<APlayerStart*> Starts;
 	GetPlayerStarts(*World->PersistentLevel, Starts);
-	for (APlayerStart* Start : Starts)
-	{
-		// Always prefer the first Play From Here start (UE).
-		if (Start->IsA<APlayerStartPIE>())
-		{
-			return Start;
-		}
-	}
 	return Starts.Num() > 0 ? Starts[0] : nullptr;
 }
 
@@ -423,11 +414,6 @@ float AGameModeBase::EstimateFloorZ(const ULevel& Level)
 	bool bFound = false;
 	for (const APlayerStart* Start : Starts)
 	{
-		// A Play From Here start is a view, not a floor.
-		if (Start->IsA<APlayerStartPIE>())
-		{
-			continue;
-		}
 		Z = bFound ? FMath::Min(Z, Start->GetActorLocation().Z) : Start->GetActorLocation().Z;
 		bFound = true;
 	}

@@ -1,13 +1,13 @@
 #include "CoreMinimal.h"
 #include "FbxStaticMesh.h"
 #include "HAL/FileManager.h"
-#include "LegacyCoordinateConversion.h"
 #include "MeshData.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "ObjImportPrivate.h"
 #include "StaticMeshBuilder.h"
+#include "Tests/LegacyCoordinateConversion.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 

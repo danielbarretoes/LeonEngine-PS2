@@ -144,13 +144,11 @@ public:
 	 * Replaces the context's world with the URL's map (UE: LoadMap):
 	 * 1. the map is found: a `.lmap` package, named by its long package name (`/Game/Maps/X`, `/Engine/Maps/X`) or by
 	 *    its file (a map file no mount point contains mounts its content folder, the folder above its `Maps/`
-	 *    folder), else a legacy `.llev` (a long package name's `.llev` file under its mount point, or a `.llev` path,
-	 *    until the migration of P15); a missing map fails and leaves the current world as it is;
+	 *    folder); a missing map fails and leaves the current world as it is;
 	 * 2. the players leave their controllers and the old world ends play (EEndPlayReason::LevelTransition), is
 	 *    destroyed and the garbage collected (a safe point, plan decision D11);
 	 * 3. the map package is loaded (LoadPackage) and its world (UWorld::FindWorldInPackage) is rooted and initialized
-	 *    (UWorld::InitWorld); a legacy `.llev` fills a new world (UWorld::CreateWorld) through its reader instead, and
-	 *    its camera framing becomes an APlayerStartPIE (Leon: the editor's Play From Here start);
+	 *    (UWorld::InitWorld);
 	 * 4. the game mode (UWorld::SetGameMode: `?game=`, the world settings, GlobalDefaultGameMode) and
 	 *    InitializeActorsForPlay (the map's components register, AGameModeBase::InitGame, the actors initialize);
 	 * 5. every local player logs in (ULocalPlayer::SpawnPlayActor: Login, PostLogin, RestartPlayer);

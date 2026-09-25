@@ -10,7 +10,8 @@
  * counting the seconds it ticked), the component's world location is (Radius * cos A, Radius * sin A,
  * Height + HeightAmplitude * sin 2A): it starts on +X and turns toward +Y.
  *
- * The legacy levels' orbiting point lights use it (P15), with the legacy level player's formula.
+ * The legacy levels' orbiting point lights became one when they became maps (P15), with the legacy level player's
+ * formula.
  */
 UCLASS()
 class ENGINE_API UOrbitMovementComponent : public UMovementComponent

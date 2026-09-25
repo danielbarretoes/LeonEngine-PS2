@@ -10,7 +10,7 @@
  * PivotTranslation (in the component's local space) makes the component orbit that pivot as it turns. Leon moves the
  * component without sweeping (UE's MoveUpdatedComponent without collision, as the rotating movement does).
  *
- * The legacy levels' spinning meshes use it (P15): a yaw rate in world space.
+ * The legacy levels' spinning meshes became one when they became maps (P15): a yaw rate in world space.
  */
 UCLASS()
 class ENGINE_API URotatingMovementComponent : public UMovementComponent

@@ -1,7 +1,7 @@
 #include "Primitives.h"
 
 // The shapes are the legacy (Y-up) primitives in the engine basis: every position and normal has Y and Z swapped, UVs
-// and index order are kept (FLegacyCoordinateConversion), so they look the same on screen.
+// and index order are kept (the legacy conversion of the tests), so they look the same on screen.
 
 FMeshData MakeCube()
 {

@@ -5,11 +5,11 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerStart.h"
 #include "Kismet/GameplayStatics.h"
-#include "LegacyCoordinateConversion.h"
 #include "Level/BasicLight.h"
 #include "Level/BasicShape.h"
 #include "Level/Light.h"
 #include "Misc/AutomationTest.h"
+#include "Tests/LegacyCoordinateConversion.h"
 #include "Tests/ScopedTestWorld.h"
 
 #if WITH_DEV_AUTOMATION_TESTS

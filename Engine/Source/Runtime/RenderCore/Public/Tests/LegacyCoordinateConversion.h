@@ -2,12 +2,16 @@
 
 #include "CoreMinimal.h"
 
+#if WITH_DEV_AUTOMATION_TESTS
+
 struct FMeshData;
 
 /**
- * Temporary: converts legacy data (.llev levels: Y up, right-handed, 1 unit = 1 metre, XYZ Euler degrees) to the
- * engine world (UE: X forward, Y right, Z up, left-handed, 1 unit = 1 cm) and back. Only code that still holds legacy
- * values may use it: the level reader and saver, and tests. It goes away with the `.llev` levels (P15).
+ * Test only: converts legacy data (the pre-P7 world: Y up, right-handed, 1 unit = 1 metre, XYZ Euler degrees) to the
+ * engine world (UE: X forward, Y right, Z up, left-handed, 1 unit = 1 cm) and back. The golden tests recorded their
+ * tables in the legacy world and compare through it (Engine's Tests/LegacyGolden.h), and the mesh tests compare with
+ * the legacy procedural meshes. No runtime module has it since the legacy levels went (P15): it is compiled with the
+ * automation tests only, and CheckBannedApis.ps1 (gate G4) allows it in test folders only.
  *
  * The basis is UE = UnitsPerMetre * (X, Z, Y): legacy Y and Z swap, as UE 4.27's glTF importer converts ({X, Z, Y})
  * and ufbx's left_handed_z_up. The swap has determinant -1, so it keeps the physical scene: what was on the right is
@@ -128,3 +132,5 @@ struct RENDERCORE_API FLegacyCoordinateConversion
 	 */
 	static void ConvertMeshData(FMeshData& Data);
 };
+
+#endif // WITH_DEV_AUTOMATION_TESTS

@@ -130,8 +130,9 @@ public:
 	[[nodiscard]] virtual AActor* FindPlayerStart(AController* Player, const FString& IncomingName = FString());
 
 	/**
-	 * Picks a start (UE: ChoosePlayerStart): the first Play From Here start (APlayerStartPIE), else the first player
-	 * start in spawn order (UE picks a random unoccupied one; Leon is deterministic and tests no overlap).
+	 * Picks a start (UE: ChoosePlayerStart): the first player start in the level's order (UE prefers a Play From Here
+	 * start, which only its editor makes, then picks a random unoccupied one; Leon is deterministic and tests no
+	 * overlap). A map migrated from a legacy level has the view it opened with as its first start.
 	 */
 	[[nodiscard]] virtual AActor* ChoosePlayerStart(AController* Player);
 

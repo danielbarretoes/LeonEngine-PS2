@@ -9,7 +9,7 @@
  * control points at a constant speed, not along a sine). Each tick the component's world height is
  * BaseZ + Amplitude * (0.5 + 0.5 * sin(Speed * Time)), Time counting the seconds it ticked; X and Y are left alone.
  *
- * The legacy levels' bobbing meshes use it (P15), with the legacy level player's formula.
+ * The legacy levels' bobbing meshes became one when they became maps (P15), with the legacy level player's formula.
  */
 UCLASS()
 class ENGINE_API UBobbingMovementComponent : public UMovementComponent

@@ -10,8 +10,8 @@
  * in MeshUtilities: every triangle primitive merged into one mesh, one section and material slot per primitive, glTF's
  * right-handed Y-up metres converted to the engine world. With bImportMaterials each named glTF material becomes an
  * `M_<Name>` UMaterial next to the mesh (base colour, metallic, roughness, opacity) with its external base colour
- * and normal images imported as `T_` textures; embedded images are not read. Maps and skins come with P15's map
- * importer.
+ * and normal images imported as `T_` textures; embedded images are not read. A glTF scene imported as a map is
+ * UGLTFMapFactory's (`-type=Map`); skins are not read.
  */
 UCLASS()
 class LEONED_API UGLTFImportFactory

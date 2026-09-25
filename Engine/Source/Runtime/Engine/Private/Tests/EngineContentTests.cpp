@@ -6,7 +6,6 @@
 #include "Engine/StaticMeshActor.h"
 #include "Engine/Texture2D.h"
 #include "Level/BasicShape.h"
-#include "Level/LeonLevelFormat.h"
 #include "Materials/Material.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/PackageName.h"
@@ -130,8 +129,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEngineContentMigratedTest, "System.Engine.Engi
 
 bool FEngineContentMigratedTest::RunTest(const FString& Parameters)
 {
-	// The .lmat materials became M_ packages with the same parameters; the .llev keys name them; T_Default_D keeps its
-	// source in Engine/SourceArt, relative to the engine and with its MD5 (a reimport writes the same bytes, G5).
+	// The .lmat materials became M_ packages with the same parameters; the template map's plane shows the one its
+	// level named; T_Default_D keeps its source in Engine/SourceArt, relative to the engine and with its MD5 (a
+	// reimport writes the same bytes, G5).
 	const UMaterial* WorldGrid =
 		LoadObject<UMaterial>(nullptr, TEXT("/Engine/EngineMaterials/M_WorldGrid.M_WorldGrid"));
 	if (TestNotNull("M_WorldGrid", WorldGrid))
@@ -150,9 +150,11 @@ bool FEngineContentMigratedTest::RunTest(const FString& Parameters)
 		TestEqual("Roughness", SolidMetal->Roughness, 0.35f);
 		TestNull("No map", SolidMetal->BaseColorMap);
 	}
-	const FString Starter = FPaths::EngineContentDir() + TEXT("LevelTemplates/Starter.llev");
-	TestEqual("The Starter's material key", ResolveLevelAssetObjectPath(Starter, TEXT("materials/M_WorldGrid.lmat")),
-		FString("/Engine/EngineMaterials/M_WorldGrid.M_WorldGrid"));
+	UPackage* Starter = LoadPackage(nullptr, TEXT("/Engine/Maps/Template_Default"), LOAD_None);
+	const UWorld* StarterWorld = UWorld::FindWorldInPackage(Starter);
+	const AStaticMeshActor* Plane = StarterWorld != nullptr ? StarterWorld->FindFirst<AStaticMeshActor>() : nullptr;
+	TestTrue("The template's plane shows M_WorldGrid",
+		Plane != nullptr && Plane->GetStaticMeshComponent()->GetMaterial(0) == WorldGrid);
 
 	const UTexture2D* Texture =
 		LoadObject<UTexture2D>(nullptr, TEXT("/Engine/EngineMaterials/T_Default_D.T_Default_D"));

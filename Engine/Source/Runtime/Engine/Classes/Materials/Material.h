@@ -95,7 +95,7 @@ public:
 	/**
 	 * The engine's default material (UE: GetDefaultMaterial): UEngine::DefaultMaterialName, `[/Script/Engine.Engine]
 	 * DefaultMaterialName=` in the engine config (`/Engine/EngineMaterials/M_Default`), loaded once from its package
-	 * and kept in the root set. What a mesh slot without a material draws with; the `.llev` basic shapes use it. Leon
+	 * and kept in the root set. What a mesh slot without a material draws with; the basic shapes use it. Leon
 	 * has one domain, MD_Surface.
 	 */
 	[[nodiscard]] static UMaterial* GetDefaultMaterial(EMaterialDomain Domain);

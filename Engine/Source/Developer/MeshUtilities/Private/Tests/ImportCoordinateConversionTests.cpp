@@ -1,12 +1,12 @@
 #include "CoreMinimal.h"
 #include "ImportCoordinateConversion.h"
-#include "LegacyCoordinateConversion.h"
 #include "Math/RandomStream.h"
 #include "MeshData.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/Paths.h"
 #include "ObjImportPrivate.h"
 #include "SkeletalAnimation.h"
+#include "Tests/LegacyCoordinateConversion.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 

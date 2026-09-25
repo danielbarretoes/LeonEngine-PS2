@@ -7,8 +7,8 @@
 
 /**
  * A region of a level (UE: AVolume, an ABrush). Plan decision D16: Leon's volumes are boxes, not BSP brushes. The
- * root, BrushComponent, is a UBoxComponent whose unscaled extent is BrushExtent (a 100 cm cube, the size of the legacy
- * `.llev` volumes); the actor scale sizes it. Collision is off unless a subclass or the level reader turns it on.
+ * root, BrushComponent, is a UBoxComponent whose unscaled extent is BrushExtent (a 100 cm cube); the actor scale sizes
+ * it. Collision is off unless a subclass or the map turns it on.
  */
 UCLASS(Abstract)
 class ENGINE_API AVolume : public AActor

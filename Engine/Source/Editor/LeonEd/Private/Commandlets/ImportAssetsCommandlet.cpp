@@ -8,7 +8,6 @@
 #include "Factories/FbxFactory.h"
 #include "Factories/GLTFImportFactory.h"
 #include "Factories/GLTFMapFactory.h"
-#include "Factories/LegacyMaterialFactory.h"
 #include "Factories/SoundFactory.h"
 #include "Factories/TextureFactory.h"
 #include "LeonEdLog.h"
@@ -77,17 +76,12 @@ namespace
 		{
 			return USoundFactory::StaticClass();
 		}
-		if (Type == TEXT("Material"))
-		{
-			return ULegacyMaterialFactory::StaticClass();
-		}
 		if (Type == TEXT("Map"))
 		{
 			return UGLTFMapFactory::StaticClass();
 		}
 		UE_LOG(LogLeonEd, Error,
-			"ImportAssets: unknown type '%s' (Texture, StaticMesh, SkeletalMesh, Animation, Sound, Material, Map)",
-			*Type);
+			"ImportAssets: unknown type '%s' (Texture, StaticMesh, SkeletalMesh, Animation, Sound, Map)", *Type);
 		return nullptr;
 	}
 

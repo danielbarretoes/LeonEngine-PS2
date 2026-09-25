@@ -181,16 +181,7 @@ bool FSceneRenderer::BindLitUbos() const
 bool FSceneRenderer::Initialize(const FString& InShaderDirectory)
 {
 	ShaderDirectory = InShaderDirectory;
-	auto ShaderFile = [&](const ANSICHAR* Name)
-	{
-		const FString UnderDir = FPaths::Combine(InShaderDirectory, Name);
-		if (FPaths::FileExists(UnderDir))
-		{
-			return UnderDir;
-		}
-		// Fallback: executable-relative assets (POST_BUILD copy / packaged layout).
-		return FPaths::ResolveLegacyContentPath(FPaths::Combine("assets/Shaders", Name));
-	};
+	auto ShaderFile = [&](const ANSICHAR* Name) { return FPaths::Combine(InShaderDirectory, Name); };
 	if (!LitShader.LoadFromFiles(ShaderFile("blinn_phong.vert"), ShaderFile("blinn_phong.frag")))
 	{
 		UE_LOG(LogRenderer, Error, "Failed to load lit shaders from %s", *InShaderDirectory);

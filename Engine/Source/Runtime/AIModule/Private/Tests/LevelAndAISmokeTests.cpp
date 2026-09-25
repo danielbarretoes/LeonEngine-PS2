@@ -1,48 +1,48 @@
-#include "Camera/CameraActor.h"
 #include "CoreMinimal.h"
+#include "Engine/World.h"
 #include "GameFramework/WorldSettings.h"
 #include "GameplayMinimal.h"
-#include "Level/LeonLevelFormat.h"
-#include "Level/LevelLoader.h"
 #include "Misc/AutomationTest.h"
+#include "Misc/FileHelper.h"
+#include "Misc/PackageName.h"
 #include "Tests/ScopedTestWorld.h"
+#include "UObject/GarbageCollection.h"
+#include "UObject/Package.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelAndAISmokeEditorStyleLevelSaveLoadApplyTest,
-	"System.AIModule.LevelAndAISmoke.EditorStyleLevelSaveLoadApplyHeadless",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelAndAISmokeEditorStyleMapResaveTest,
+	"System.AIModule.LevelAndAISmoke.EditorStyleMapResaveHeadless",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-bool FLevelAndAISmokeEditorStyleLevelSaveLoadApplyTest::RunTest(const FString& Parameters)
+bool FLevelAndAISmokeEditorStyleMapResaveTest::RunTest(const FString& Parameters)
 {
-	// A headless engine loads the blank template, and its level document survives a byte round trip and re-apply.
-	#ifdef LEON_ROOT_DIR
-	const FString TemplateLevel = FString(LEON_ROOT_DIR) + "/Engine/Content/LevelTemplates/Blank.llev";
-	FScopedTestWorld TestWorld;
-	if (!TestTrue("Template level loaded", LoadLevelFile(*TestWorld, TemplateLevel)))
+	// A headless tool loads the engine's template maps and saves them again (ResavePackages): a loaded map writes the
+	// bytes of its file (plan decision D13), its world settings first and every transform exact.
+	for (const TCHAR* MapName : {TEXT("/Engine/Maps/Entry"), TEXT("/Engine/Maps/Template_Default")})
 	{
-		return false;
+		FString Filename;
+		if (!TestTrue(*FString::Printf(TEXT("%s exists"), MapName),
+				FPackageName::DoesPackageExist(MapName, nullptr, &Filename)))
+		{
+			continue;
+		}
+		TArray<uint8> FileBytes;
+		(void)FFileHelper::LoadFileToArray(FileBytes, *Filename);
+		UPackage* Package = LoadPackage(nullptr, MapName, LOAD_None);
+		UWorld* World = UWorld::FindWorldInPackage(Package);
+		if (!TestNotNull(*FString::Printf(TEXT("%s's world"), MapName), World))
+		{
+			continue;
+		}
+		TestTrue("The world settings first",
+			World->PersistentLevel->Actors.Num() > 0 && World->PersistentLevel->Actors[0] == World->GetWorldSettings());
+		TArray<uint8> Resaved;
+		TestTrue("Resaved", UPackage::SaveToMemory(Package, World, RF_Public | RF_Standalone, Resaved).IsSuccessful());
+		TestTrue(*FString::Printf(TEXT("%s: the same bytes"), MapName), Resaved == FileBytes);
+		Package->MarkPendingKill();
+		CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
 	}
-
-	// The camera the level opens with (its framing, the level's camera actor).
-	const UCameraComponent& Camera = *TestWorld->FindFirst<ACameraActor>()->GetCameraComponent();
-	FLevelDocument Doc = BuildLevelDocument(*TestWorld->PersistentLevel, Camera);
-	TestFalse("Document has a name", Doc.Name.IsEmpty());
-
-	const TArray<uint8> Bytes = SerializeLeonLevel(Doc);
-	TestTrue("Bytes written", Bytes.Num() > 0);
-
-	FLevelDocument RoundTrip;
-	if (!TestTrue("Deserialized", DeserializeLeonLevel(Bytes, RoundTrip)))
-	{
-		return false;
-	}
-	TestEqual("Name kept", RoundTrip.Name, Doc.Name);
-
-	TestTrue("Document applied", ApplyLevelDocument(*TestWorld, RoundTrip, "memory-editor-smoke"));
-	#else
-	AddInfo("LEON_ROOT_DIR unset");
-	#endif
 	return true;
 }
 

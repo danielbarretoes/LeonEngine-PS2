@@ -1,6 +1,5 @@
 #include "UnrealEngine.h"
 
-#include "Camera/CameraActor.h"
 #include "CoreGlobals.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
@@ -9,11 +8,8 @@
 #include "Engine/World.h"
 #include "EngineLogs.h"
 #include "GameFramework/PlayerController.h"
-#include "GameFramework/PlayerStartPIE.h"
 #include "GameFramework/WorldSettings.h"
 #include "HAL/PlatformTime.h"
-#include "Level/LeonLevelFormat.h"
-#include "Level/LevelLoader.h"
 #include "Materials/Material.h"
 #include "Misc/App.h"
 #include "Misc/CoreMisc.h"
@@ -97,57 +93,6 @@ namespace
 		OutPackageName = PackageName;
 		// A map package: a `.lmap` file, or bytes registered in memory.
 		return Filename.IsEmpty() || FPaths::GetExtension(Filename, true) == FPackageName::GetMapPackageExtension();
-	}
-
-	/**
-	 * The `.llev` file of a legacy map (until the `.lmap` migration of P15): a long package name under a mount point
-	 * (`/Engine/LevelTemplates/Starter` → Engine/Content/LevelTemplates/Starter.llev), a file path (absolute or
-	 * relative to the working directory) or a legacy content key (`LevelTemplates/Starter.llev`).
-	 */
-	[[nodiscard]] bool FindLegacyMapFile(const FString& Map, FString& OutFilename)
-	{
-		if (FPackageName::IsValidLongPackageName(Map))
-		{
-			const FString Filename = FPackageName::LongPackageNameToFilename(Map, LeonLevelExtension);
-			if (FPaths::FileExists(Filename))
-			{
-				OutFilename = FPaths::ConvertRelativePathToFull(Filename);
-				return true;
-			}
-			return false;
-		}
-		if (FPaths::FileExists(Map))
-		{
-			OutFilename = FPaths::ConvertRelativePathToFull(Map);
-			return true;
-		}
-		const FString ContentPath = FPaths::ResolveLegacyContentPath(Map);
-		if (FPaths::FileExists(ContentPath))
-		{
-			OutFilename = ContentPath;
-			return true;
-		}
-		return false;
-	}
-
-	/**
-	 * Spawns the Play From Here start of a `.llev` level at the view its camera framing (the level's ACameraActor)
-	 * opens with (Leon: UE's editor spawns an APlayerStartPIE at its viewport camera). A migrated map saves an
-	 * APlayerStart there instead.
-	 */
-	void SpawnLegacyPlayFromHereStart(UWorld& World)
-	{
-		const ACameraActor* Framing = World.FindFirst<ACameraActor>();
-		if (Framing == nullptr)
-		{
-			return;
-		}
-		FVector Location;
-		FRotator Rotation;
-		GetLegacyPlayFromHereView(*Framing->GetCameraComponent(), Location, Rotation);
-		FActorSpawnParameters SpawnInfo;
-		SpawnInfo.ObjectFlags |= RF_Transient;
-		(void)World.SpawnActor<APlayerStartPIE>(APlayerStartPIE::StaticClass(), Location, Rotation, SpawnInfo);
 	}
 
 } // namespace
@@ -327,11 +272,9 @@ bool UEngine::LoadMap(FWorldContext& WorldContext, FURL URL, UPendingNetGame* /*
 	Error.Empty();
 	UE_LOG(LogLoad, Log, TEXT("LoadMap: %s"), *URL.ToString());
 
-	// The map is found before the current world goes: a map that is not there leaves it playing. A `.lmap` package,
-	// else a legacy `.llev` file.
+	// The map is found before the current world goes: a map that is not there leaves it playing.
 	FString MapPackageName;
-	FString LevelFilename;
-	if (!FindMapPackage(URL.Map, MapPackageName) && !FindLegacyMapFile(URL.Map, LevelFilename))
+	if (!FindMapPackage(URL.Map, MapPackageName))
 	{
 		Error = FString::Printf(TEXT("Failed to load package '%s'"), *URL.Map);
 		return false;
@@ -369,36 +312,18 @@ bool UEngine::LoadMap(FWorldContext& WorldContext, FURL URL, UPendingNetGame* /*
 		CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
 	}
 
-	const EWorldType::Type WorldType =
-		WorldContext.WorldType != EWorldType::None ? WorldContext.WorldType : EWorldType::Game;
-	UWorld* NewWorld = nullptr;
-	if (!MapPackageName.IsEmpty())
+	// The world of the map package, with its level and actors (UE).
+	UPackage* const WorldPackage = LoadPackage(nullptr, *MapPackageName, LOAD_None);
+	UWorld* const NewWorld = UWorld::FindWorldInPackage(WorldPackage);
+	if (NewWorld == nullptr)
 	{
-		// The world of the map package, with its level and actors (UE).
-		UPackage* const WorldPackage = LoadPackage(nullptr, *MapPackageName, LOAD_None);
-		NewWorld = UWorld::FindWorldInPackage(WorldPackage);
-		if (NewWorld == nullptr)
-		{
-			Error = FString::Printf(TEXT("Failed to load map '%s': no world in the package"), *MapPackageName);
-			return false;
-		}
-		NewWorld->SetWorldType(WorldType);
-		NewWorld->AddToRoot();
-		NewWorld->InitWorld();
-		WorldContext.SetCurrentWorld(NewWorld);
+		Error = FString::Printf(TEXT("Failed to load map '%s': no world in the package"), *MapPackageName);
+		return false;
 	}
-	else
-	{
-		// A legacy `.llev`: a new world named after it, with the level's actors from the reader.
-		NewWorld = UWorld::CreateWorld(WorldType, true, FName(*FPaths::GetBaseFilename(URL.Map)));
-		WorldContext.SetCurrentWorld(NewWorld);
-		if (!LoadLevelFile(*NewWorld, LevelFilename))
-		{
-			Error = FString::Printf(TEXT("Failed to load map '%s'"), *LevelFilename);
-			return false;
-		}
-		SpawnLegacyPlayFromHereStart(*NewWorld);
-	}
+	NewWorld->SetWorldType(WorldContext.WorldType != EWorldType::None ? WorldContext.WorldType : EWorldType::Game);
+	NewWorld->AddToRoot();
+	NewWorld->InitWorld();
+	WorldContext.SetCurrentWorld(NewWorld);
 
 	// The game mode (plan decision D18), then the actors get ready for play (a loaded map's components register).
 	NewWorld->SetGameMode(URL);

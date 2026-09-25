@@ -4,8 +4,8 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-	#include "LegacyCoordinateConversion.h"
 	#include "Misc/AutomationTest.h"
+	#include "Tests/LegacyCoordinateConversion.h"
 
 /** Golden tables printed by -GoldenRecord (defined in Engine/Private/Tests/LegacyGolden.cpp, test builds only). */
 ENGINE_API DECLARE_LOG_CATEGORY_EXTERN(LogGolden, Log, All);

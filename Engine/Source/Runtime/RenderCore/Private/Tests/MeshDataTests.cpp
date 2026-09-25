@@ -1,8 +1,8 @@
 #include "CoreMinimal.h"
-#include "LegacyCoordinateConversion.h"
 #include "MeshData.h"
 #include "Misc/AutomationTest.h"
 #include "Primitives.h"
+#include "Tests/LegacyCoordinateConversion.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 

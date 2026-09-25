@@ -2,7 +2,6 @@
 #include "CommandletHelpers.h"
 #include "Commandlets/CookCommandlet.h"
 #include "Commandlets/ImportAssetsCommandlet.h"
-#include "Commandlets/MigrateLegacyContentCommandlet.h"
 #include "Commandlets/ResavePackagesCommandlet.h"
 #include "Commandlets/ValidateAssetsCommandlet.h"
 #include "CoreMinimal.h"
@@ -11,7 +10,6 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture2D.h"
 #include "Factories/Factory.h"
-#include "Level/LegacyAssetKeys.h"
 #include "Materials/Material.h"
 #include "Misc/AutomationTest.h"
 #include "Sound/SoundWave.h"
@@ -22,8 +20,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 // The LeonEd commandlets, called as LeonCook calls them (Main with the command line after -run=): import, import
-// lists, reimport (gate G5: the same source saves the same bytes), resave, validation, the minimal cook and the legacy
-// content migration.
+// lists, reimport (gate G5: the same source saves the same bytes), resave, validation and the minimal cook.
 
 namespace
 {
@@ -67,8 +64,7 @@ bool FLeonEdCommandletLookupTest::RunTest(const FString& Parameters)
 	TArray<UClass*> Classes;
 	CommandletHelpers::GetCommandletClasses(Classes);
 	for (UClass* Expected : {UCookCommandlet::StaticClass(), UImportAssetsCommandlet::StaticClass(),
-			 UMigrateLegacyContentCommandlet::StaticClass(), UResavePackagesCommandlet::StaticClass(),
-			 UValidateAssetsCommandlet::StaticClass()})
+			 UResavePackagesCommandlet::StaticClass(), UValidateAssetsCommandlet::StaticClass()})
 	{
 		TestTrue(*FString::Printf(TEXT("%s listed"), *Expected->GetName()), Classes.Contains(Expected));
 	}
@@ -222,50 +218,6 @@ bool FLeonEdResaveValidateCookTest::RunTest(const FString& Parameters)
 	IFileManager::Get().Delete(*PackageFile(TEXT("/LeonEdTest/T_Rock")));
 	AddExpectedError(TEXT("does not resolve"), 2);
 	TestEqual("A missing import", UValidateAssetsCommandlet::ValidatePackage(TEXT("/LeonEdTest/M_Rock")) > 0, true);
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLeonEdMigrateLegacyContentTest, "System.LeonEd.Commandlets.MigrateLegacyContent",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
-
-bool FLeonEdMigrateLegacyContentTest::RunTest(const FString& Parameters)
-{
-	// A legacy content folder outside every mount point gets one named after it; its images and sounds are imported,
-	// its .lmat materials converted with their maps resolved to the new packages, and the content keys of the old
-	// files resolve to them.
-	LeonEdTest::FScopedTestContent Content;
-	const FString Legacy = LeonEdTest::GetTestDir() + TEXT("LegacyPack/");
-	(void)FFileHelper::SaveArrayToFile(LeonEdTest::MakeBmp(2, 2, TestRGB), *(Legacy + TEXT("Textures/Bricks.bmp")));
-	(void)FFileHelper::SaveArrayToFile(
-		LeonEdTest::MakeWave(TArray<int16>({7, 8}), 1, 8000), *(Legacy + TEXT("Audio/Hit.wav")));
-	(void)FFileHelper::SaveStringToFile(
-		FString(TEXT(
-			"[Parameters]\nBaseColor=0.8,0.2,0.15\nRoughness=0.5\n[Textures]\nBaseColorMap=Textures/Bricks.bmp\n")),
-		*(Legacy + TEXT("Materials/Red.lmat")));
-	(void)FFileHelper::SaveStringToFile(FString(TEXT("not legacy content")), *(Legacy + TEXT("README.md")));
-
-	TestEqual("Migrated", RunCommandlet(TEXT("MigrateLegacyContent"), TEXT("-source=\"") + Legacy + TEXT("\"")), 0);
-	const FString Root = FLegacyAssetKeys::MountContentDirectory(Legacy);
-	TestEqual("A mount point named after the folder", Root, FString("/LegacyPack"));
-	TestTrue("T_Bricks next to its source", FPaths::FileExists(Legacy + TEXT("Textures/T_Bricks.lasset")));
-	TestTrue("S_Hit", FPaths::FileExists(Legacy + TEXT("Audio/S_Hit.lasset")));
-	TestTrue("M_Red", FPaths::FileExists(Legacy + TEXT("Materials/M_Red.lasset")));
-	LeonEdTest::DestroyPackagesUnder(TEXT("/LegacyPack/"));
-
-	const FString RedPath = FLegacyAssetKeys::ResolveKey(Root, TEXT("Materials/Red.lmat"));
-	TestEqual("The .lmat key resolves", RedPath, FString("/LegacyPack/Materials/M_Red.M_Red"));
-	const UMaterial* Red = LoadObject<UMaterial>(nullptr, *RedPath);
-	if (TestNotNull("M_Red loads", Red))
-	{
-		TestTrue("Its parameters",
-			Red->BaseColor.Equals(FLinearColor(0.8f, 0.2f, 0.15f, 1.0f)) && FMath::IsNearlyEqual(Red->Roughness, 0.5f));
-		TestTrue("Its map is the migrated texture",
-			Red->BaseColorMap != nullptr &&
-				Red->BaseColorMap->GetPathName() == TEXT("/LegacyPack/Textures/T_Bricks.T_Bricks"));
-		TestNull("No import data on a material", UFactory::GetAssetImportData(const_cast<UMaterial*>(Red)));
-	}
-	LeonEdTest::DestroyPackagesUnder(TEXT("/LegacyPack/"));
-	FPackageName::UnRegisterMountPoint(TEXT("/LegacyPack/"), Legacy);
 	return true;
 }
 

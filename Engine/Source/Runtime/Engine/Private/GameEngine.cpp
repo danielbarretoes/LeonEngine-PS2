@@ -39,8 +39,9 @@ void UGameEngine::Init(IEngineLoop* InEngineLoop)
 	FGenericWindow* Window = !bHeadless ? InEngineLoop->GetMainWindow() : nullptr;
 	if (Window != nullptr)
 	{
-		// The renderer's GPU objects need the window's context (UE: the renderer comes up with the viewport).
-		const FString ShaderDir = FPaths::ResolveLegacyContentPath("assets/Shaders");
+		// The renderer's GPU objects need the window's context (UE: the renderer comes up with the viewport). The
+		// shaders are the engine's (UE: the /Engine/Shaders virtual folder, Engine/Shaders on disk).
+		const FString ShaderDir = FPaths::Combine(FPaths::EngineDir(), TEXT("Shaders"));
 		IRendererModule* RendererModule = GetRendererModulePtr();
 		if (RendererModule == nullptr || !RendererModule->InitRenderer(ShaderDir))
 		{

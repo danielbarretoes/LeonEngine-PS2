@@ -11,14 +11,14 @@ makes).
 
 | Area | Types | Headers |
 | --- | --- | --- |
-| Factories | `UFactory` (`SupportedClass`, `Formats`, `FactoryCreateNew` / `FactoryCreateBinary` / `FactoryCreateFile`, `StaticImportObject`, `ApplyImportSettings`, `CreateOrOverwriteAsset`), `UTextureFactory` (stb_image: the engine's only image decoder), `UFbxFactory` (FBX, OBJ: static / skeletal meshes, animations), `UGLTFImportFactory`, `USoundFactory`, `UMaterialFactoryNew`; temporary: `ULegacyMaterialFactory` (`.lmat`), `ULegacyStaticMeshFactory` (`.lmesh` v2) | `Classes/Factories/` |
+| Factories | `UFactory` (`SupportedClass`, `Formats`, `FactoryCreateNew` / `FactoryCreateBinary` / `FactoryCreateFile`, `StaticImportObject`, `ApplyImportSettings`, `CreateOrOverwriteAsset`), `UTextureFactory` (stb_image: the engine's only image decoder), `UFbxFactory` (FBX, OBJ: static / skeletal meshes, animations), `UGLTFImportFactory`, `UGLTFMapFactory` (glTF scenes as `.lmap` maps, with its rules in `UMapImportSettings`), `USoundFactory`, `UMaterialFactoryNew` | `Classes/Factories/` |
 | Reimport | `FReimportHandler` (the import factories implement it), `FReimportManager`, `EReimportResult` | `Public/EditorReimportHandler.h` |
-| Commandlets | `UImportAssetsCommandlet`, `UResavePackagesCommandlet`, `UValidateAssetsCommandlet`, `UMigrateLegacyContentCommandlet` (temporary), `UCookCommandlet` (minimal before P16) | `Classes/Commandlets/` |
+| Commandlets | `UImportAssetsCommandlet`, `UResavePackagesCommandlet`, `UValidateAssetsCommandlet`, `UCookCommandlet` (minimal before P16) | `Classes/Commandlets/` |
 | Helpers | `FAssetImportUtils` (UE prefixes, package files and saves, content scans), `CommandletHelpers` (the `-run=` lookup) | `Public/` |
 
 Imported assets keep their source in their `UAssetImportData` (Engine, editor-only): the file relative to the engine or
 project folder, its MD5 and the import settings, never a timestamp, so a reimport saves the same bytes.
 
 Dependencies (`LeonEd.Build.cmake`): public `Core`, `CoreUObject`, `Engine`; private `RenderCore`, `AnimationCore`,
-`MeshUtilities`, `STB`. Log category: `LogLeonEd` (the cook logs to `LogCook`). Tests: `Private/Tests`
+`MeshUtilities`, `Json` (the map nodes' extras), `STB`. Log category: `LogLeonEd` (the cook logs to `LogCook`). Tests: `Private/Tests`
 (`System.LeonEd.*`), writing under the program's `Intermediate/Tests/LeonEd` through a `/LeonEdTest/` mount point.

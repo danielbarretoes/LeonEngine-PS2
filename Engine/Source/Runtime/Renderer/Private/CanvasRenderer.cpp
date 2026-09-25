@@ -10,8 +10,9 @@
 
 bool FCanvasRenderer::Initialize()
 {
-	const FString Vert = FPaths::ResolveLegacyContentPath("assets/Shaders/debug_overlay.vert");
-	const FString Frag = FPaths::ResolveLegacyContentPath("assets/Shaders/debug_overlay.frag");
+	// The engine's shaders (UE: /Engine/Shaders).
+	const FString Vert = FPaths::Combine(FPaths::EngineDir(), TEXT("Shaders/debug_overlay.vert"));
+	const FString Frag = FPaths::Combine(FPaths::EngineDir(), TEXT("Shaders/debug_overlay.frag"));
 	if (!Shader.LoadFromFiles(Vert, Frag))
 	{
 		UE_LOG(LogRenderer, Error, "Failed to load debug overlay shaders");

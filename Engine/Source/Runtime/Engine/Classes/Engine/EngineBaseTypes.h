@@ -35,10 +35,9 @@ namespace EBrowseReturnVal
  * `Map?Option1=Value?Option2#Portal`. `?game=<GameMode>` picks the game mode (plan decision D18) and the portal is the
  * PlayerStartTag of the start to spawn at.
  *
- * The map is a long package name (`/Engine/Maps/Entry`, `/Game/Maps/X`), a file path (a `.lmap`, or a legacy `.llev`)
- * or a legacy content key (`LevelTemplates/Starter.llev`); a path that starts with a drive letter, or with `/` without
- * being a long package name, is a plain file name (UE's rule). Leon has no networking, so the protocol, host and port
- * of UE's URL are left out.
+ * The map is a long package name (`/Engine/Maps/Entry`, `/Game/Maps/X`) or the path of a `.lmap` file; a path that
+ * starts with a drive letter, or with `/` without being a long package name, is a plain file name (UE's rule). Leon has
+ * no networking, so the protocol, host and port of UE's URL are left out.
  */
 USTRUCT()
 struct ENGINE_API FURL

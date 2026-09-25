@@ -25,7 +25,7 @@ enum class EImportAxes : uint8
  *
  * Each basis swaps or flips one axis and scales by UnitsToCm:
  * - RightHandedYUp: (X, Z, Y), as UE's glTF importer ({X, Z, Y}, quaternions (-X, -Z, -Y, W)) and ufbx's
- *   left_handed_z_up. With UnitsToCm = 100 it is FLegacyCoordinateConversion, bit for bit.
+ *   left_handed_z_up. With UnitsToCm = 100 it is the pre-P7 legacy conversion the golden tests keep, bit for bit.
  * - RightHandedZUp: (X, -Y, Z), as UE's FFbxDataConverter (ConvertPos, ConvertRotToQuat). A right-handed Y-up point
  *   (x, y, z) is (x, -z, y) in this frame, so both bases put it at (x, z, y): an FBX file ends up where the same scene
  *   exported to glTF does.

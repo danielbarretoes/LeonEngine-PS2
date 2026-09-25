@@ -8,8 +8,9 @@
 
 bool FLineBatchRenderer::Initialize()
 {
-	const FString Vert = FPaths::ResolveLegacyContentPath("assets/Shaders/debug_line.vert");
-	const FString Frag = FPaths::ResolveLegacyContentPath("assets/Shaders/debug_line.frag");
+	// The engine's shaders (UE: /Engine/Shaders).
+	const FString Vert = FPaths::Combine(FPaths::EngineDir(), TEXT("Shaders/debug_line.vert"));
+	const FString Frag = FPaths::Combine(FPaths::EngineDir(), TEXT("Shaders/debug_line.frag"));
 	if (!Shader.LoadFromFiles(Vert, Frag))
 	{
 		UE_LOG(LogRenderer, Error, "Failed to load debug line shaders");

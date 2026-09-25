@@ -12,8 +12,7 @@ class UStaticMesh;
  * attachable to a socket of another component (a weapon in a hand bone).
  *
  * The mesh is a UStaticMesh asset the component references (a UPROPERTY, so the garbage collector keeps it while the
- * component lives); the renderer keeps its GPU copy. AStaticMeshActor's root is one: the `.llev` reader spawns one per
- * placed mesh.
+ * component lives); the renderer keeps its GPU copy. AStaticMeshActor's root is one: a map holds one per placed mesh.
  */
 UCLASS()
 class ENGINE_API UStaticMeshComponent : public UMeshComponent

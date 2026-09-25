@@ -7,8 +7,7 @@
 
 /**
  * A static mesh placed in a level (UE: AStaticMeshActor): its root is the UStaticMeshComponent that draws the mesh and,
- * when its collision is enabled, gives the physics scene a body. The `.llev` reader spawns one per Cube, Sphere,
- * Plane and StaticMesh record.
+ * when its collision is enabled, gives the physics scene a body. The map importer places one per mesh node.
  */
 UCLASS()
 class ENGINE_API AStaticMeshActor : public AActor

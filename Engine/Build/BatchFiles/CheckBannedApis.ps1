@@ -8,8 +8,8 @@
 #   printf and its variants                  -> UE_LOG / FString::Printf / FCString
 #   LegacyGL, FLegacyTransform, LegacyAxes   -> removed in P7 (UE view and projection, FTransform, UE axes); tests too
 #   FLegacyCoordinateConversion and LegacyCoordinateConversion.h
-#                                            -> UE-space data; only the legacy bridge converts legacy (Y up, metres)
-#                                               data: see $LegacyBridge
+#                                            -> UE-space data; only tests convert legacy (Y up, metres) data, the
+#                                               golden tables: see $TestsOnly
 #
 # Allowed where Core wraps the C and C++ libraries (D2): ThirdParty, the platform HAL sources (Private/Windows,
 # Private/Linux, the PS2 Core), the printf family inside Core/Private, LeonHeaderTool (a std-only host tool) and the
@@ -23,12 +23,10 @@ if ($Root -eq "") {
 }
 $Root = (Resolve-Path $Root).Path.TrimEnd('\', '/')
 
-# The legacy bridge: FLegacyCoordinateConversion itself, the legacy level reader and saver (.llev, until P15), the tests
-# and the golden adapters that compare against legacy-space tables.
-$LegacyBridge = '[\\/]Runtime[\\/]RenderCore[\\/](Public|Private)[\\/]LegacyCoordinateConversion\.(h|cpp)$|' +
-	'[\\/]Runtime[\\/]Engine[\\/](Public|Private)[\\/]Level[\\/]LeonLevelFormat\.(h|cpp)$|' +
-	'[\\/]Private[\\/]Tests[\\/]|' +
-	'[\\/]Runtime[\\/]Engine[\\/]Public[\\/]Tests[\\/]LegacyGolden\.h$'
+# The legacy world lives in tests only since the legacy levels went (P15): FLegacyCoordinateConversion itself
+# (RenderCore's Public/Tests and Private/Tests), the golden adapters (Engine's Public/Tests/LegacyGolden.h) and the tests
+# that compare against legacy-space tables. No runtime or editor source may use it.
+$TestsOnly = '[\\/](Public|Private)[\\/]Tests[\\/]'
 
 $Rules = @(
 	@{ Name = "glm"; Pattern = 'glm::|<glm/'; Use = "Core math" },
@@ -41,9 +39,9 @@ $Rules = @(
 		Use = "UE_LOG, FString::Printf or FCString" },
 	@{ Name = "legacy GL / transform / axes"; Pattern = 'LegacyGL|FLegacyTransform|LegacyAxes'
 		Use = "UE view and projection matrices (ToGLClipSpace last), FTransform, UE axes" },
-	@{ Name = "legacy coordinate conversion outside the legacy bridge"
-		Pattern = 'FLegacyCoordinateConversion|LegacyCoordinateConversion\.h'; AllowedIn = $LegacyBridge
-		Use = "UE-space data; convert legacy data in its reader or saver (allowlist: `$LegacyBridge in CheckBannedApis.ps1)" }
+	@{ Name = "legacy coordinate conversion outside the tests"
+		Pattern = 'FLegacyCoordinateConversion|LegacyCoordinateConversion\.h'; AllowedIn = $TestsOnly
+		Use = "UE-space data; only tests convert legacy data (allowlist: `$TestsOnly in CheckBannedApis.ps1)" }
 )
 $Excluded = '[\\/](ThirdParty|Intermediate|Binaries|Saved)[\\/]|[\\/]Private[\\/](Windows|Linux)[\\/]|' +
 	'[\\/]Platforms[\\/]PS2[\\/]Source[\\/]Runtime[\\/]Core[\\/]|[\\/]LeonHeaderTool[\\/]|' +

@@ -10,7 +10,7 @@
  * FormatDefaultInteractPrompt); the payload's meaning is the game's (plan decision D15 keeps game meaning out of the
  * engine's classes).
  *
- * The legacy levels' trigger volumes carry their interaction data in one (P15).
+ * The legacy levels' trigger data became one when they became maps (P15).
  */
 UCLASS()
 class ENGINE_API UInteractableComponent : public UActorComponent

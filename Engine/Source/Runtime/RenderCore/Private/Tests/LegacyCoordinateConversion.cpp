@@ -1,6 +1,8 @@
-#include "LegacyCoordinateConversion.h"
+#include "Tests/LegacyCoordinateConversion.h"
 
-#include "MeshData.h"
+#if WITH_DEV_AUTOMATION_TESTS
+
+	#include "MeshData.h"
 
 namespace
 {
@@ -253,3 +255,5 @@ void FLegacyCoordinateConversion::ConvertMeshData(FMeshData& Data)
 		Vertex.Tangent = ConvertTangent(Vertex.Tangent);
 	}
 }
+
+#endif // WITH_DEV_AUTOMATION_TESTS

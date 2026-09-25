@@ -123,13 +123,6 @@ public:
 		return Out;
 	}
 
-	/**
-	 * Legacy (until P15): finds a content file by the old keys ("LevelTemplates/X.llev", "Shaders/x.vert", an
-	 * optional "assets/" prefix): as given, then the project's and the engine's Content (Shaders/ under Engine).
-	 * Returns the engine content path when nothing exists.
-	 */
-	static FString ResolveLegacyContentPath(const FString& RelativePath);
-
 private:
 	static const TCHAR* GetTCharPtr(const TCHAR* Ptr)
 	{

@@ -12,8 +12,6 @@
 #include "GameFramework/WorldSettings.h"
 #include "GameMapsSettings.h"
 #include "Kismet/GameplayStatics.h"
-#include "Level/LeonLevelFormat.h"
-#include "Level/LevelLoader.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Misc/PackageName.h"
@@ -63,8 +61,8 @@ bool FURLParsesMapOptionsAndPortalTest::RunTest(const FString& Parameters)
 	TestEqual(
 		"Round trip", URL.ToString(), FString(TEXT("/Game/Maps/Arena?game=/Script/Engine.GameMode?Name=Bob#Red")));
 
-	const FURL File(nullptr, TEXT("C:/Levels/Test.llev?listen"), TRAVEL_Absolute);
-	TestEqual("File name map", File.Map, FString(TEXT("C:/Levels/Test.llev")));
+	const FURL File(nullptr, TEXT("C:/Content/Maps/Test.lmap?listen"), TRAVEL_Absolute);
+	TestEqual("File name map", File.Map, FString(TEXT("C:/Content/Maps/Test.lmap")));
 	TestTrue("File option", File.HasOption(TEXT("listen")));
 
 	const FURL Base(nullptr, TEXT("/Game/A?Quiet?Difficulty=2#Start"), TRAVEL_Absolute);
@@ -122,8 +120,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLoadMapGameModePrecedenceTest, "System.Engine.
 
 bool FLoadMapGameModePrecedenceTest::RunTest(const FString& Parameters)
 {
-	// Plan decision D18: ?game= in the URL, then the level's world settings, then GlobalDefaultGameMode. A legacy
-	// level's game mode string maps to the world settings: "Default" and "" leave it to the project.
+	// Plan decision D18: ?game= in the URL, then the level's world settings, then GlobalDefaultGameMode.
 	UClass* GlobalDefault = GlobalDefaultGameModeClass();
 	TestTrue("Neither: the global default", PickGameMode(TEXT("/Game/Maps/X"), nullptr) == GlobalDefault);
 	TestTrue(
@@ -134,9 +131,6 @@ bool FLoadMapGameModePrecedenceTest::RunTest(const FString& Parameters)
 	TestTrue("?game= over the global default",
 		PickGameMode(TEXT("/Game/Maps/X?game=/Script/Engine.GameMode"), nullptr) == AGameMode::StaticClass());
 
-	TestNull("Default level game mode", ResolveLegacyLevelGameMode(TEXT("Default")));
-	TestNull("Empty level game mode", ResolveLegacyLevelGameMode(TEXT("")));
-	TestTrue("A class path", ResolveLegacyLevelGameMode(TEXT("/Script/Engine.GameMode")) == AGameMode::StaticClass());
 	return true;
 }
 
@@ -187,17 +181,18 @@ bool FLoadMapStarterLogsInThePlayerTest::RunTest(const FString& Parameters)
 	UGameplayStatics::GetAllActorsOfClass(*World, APlayerStart::StaticClass(), Starts);
 	if (TestEqual("The framing start and the level's", Starts.Num(), 2) && TestNotNull("A pawn", Controller->GetPawn()))
 	{
-		// The first player start is the view the legacy framing (the map's camera actor) opened with.
+		// The first player start is the view the legacy framing (the map's camera actor) opened with: at its eye,
+		// looking at its target.
 		const AActor* Start = Starts[0];
 		const ACameraActor* Framing = World->FindFirst<ACameraActor>();
-		FVector FramingLocation;
-		FRotator FramingRotation;
 		if (TestNotNull("The framing camera", Framing))
 		{
-			GetLegacyPlayFromHereView(*Framing->GetCameraComponent(), FramingLocation, FramingRotation);
-			TestTrue("The first start is at the framing's view",
-				Start->GetActorLocation().Equals(FramingLocation, 0.0f) &&
-					Start->GetActorRotation().Equals(FramingRotation, 0.0f));
+			const UCameraComponent& Camera = *Framing->GetCameraComponent();
+			TestTrue("The first start is at the framing's eye",
+				Start->GetActorLocation().Equals(Camera.GetCameraLocation(), 1.0e-3f));
+			TestTrue("It looks at the framing's target",
+				Start->GetActorRotation().Vector().Equals(
+					(Camera.GetTarget() - Camera.GetCameraLocation()).GetSafeNormal(), 1.0e-4f));
 		}
 		TestTrue(
 			"Pawn at the start", Controller->GetPawn()->GetActorLocation().Equals(Start->GetActorLocation(), 0.0f));

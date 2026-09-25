@@ -6,7 +6,7 @@
 
 /**
  * What every light shares (UE: ULightComponentBase): brightness, colour and whether it casts shadows. LightColor is a
- * linear FLinearColor, not UE's 8-bit FColor, so the values the `.llev` files store reach the renderer exactly.
+ * linear FLinearColor, not UE's 8-bit FColor, so the values a map stores reach the renderer exactly.
  */
 UCLASS(Abstract)
 class ENGINE_API ULightComponentBase : public USceneComponent

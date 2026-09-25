@@ -9,7 +9,7 @@
  * -run=ImportAssets ...`:
  * - `-source=<file> -dest=<folder>` imports one file into the folder (a long package path, `/Game/Meshes`). The asset
  *   is named after the file with its class prefix (`Cube.obj` is `SM_Cube`), or `-name=<Asset>`. `-type=` picks what
- *   it becomes (Texture, StaticMesh, SkeletalMesh, Animation, Sound, Material, Map), else the file's extension decides.
+ *   it becomes (Texture, StaticMesh, SkeletalMesh, Animation, Sound, Map), else the file's extension decides.
  *   Every other `-Key=Value` switch is an import setting of the factory.
  * - `-type=Map -source=<file.glb> -dest=/Game/Maps/<Map>` imports a glTF scene as the map package `-dest` names
  *   (UGLTFMapFactory: its meshes and materials go to `/Game/Maps/<Map>/Meshes` and `/Materials`).
