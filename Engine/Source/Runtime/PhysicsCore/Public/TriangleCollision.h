@@ -1,38 +1,39 @@
 #pragma once
 
-#include <glm/vec3.hpp>
+#include "CoreMinimal.h"
 
-#include <cstdint>
-#include <vector>
-
-/// Baked world-space triangle mesh for static ComplexAsSimple lite (Arcade traces /
-/// QuerySupportY; Jolt MeshShape on rebuild).
+/**
+ * Baked world-space triangle mesh for static ComplexAsSimple lite (Arcade traces / QuerySupportY; Jolt MeshShape on
+ * rebuild).
+ */
 struct PHYSICSCORE_API FTriangleMeshCollision
 {
-	std::vector<glm::vec3> Positions;
-	std::vector<std::uint32_t> Indices;
+	TArray<FVector> Positions;
+	TArray<uint32> Indices;
 
 	[[nodiscard]] bool IsValid() const
 	{
-		return !Positions.empty() && Indices.size() >= 3 && (Indices.size() % 3) == 0;
+		return Positions.Num() > 0 && Indices.Num() >= 3 && (Indices.Num() % 3) == 0;
 	}
 
 	void Clear()
 	{
-		Positions.clear();
-		Indices.clear();
+		Positions.Reset();
+		Indices.Reset();
 	}
 };
 
-/// Segment [start,end] vs triangle. `t` in [0,1] along the segment. Outward/front normal.
-[[nodiscard]] bool SegmentTriangle(const glm::vec3& Start, const glm::vec3& End, const glm::vec3& V0,
-	const glm::vec3& V1, const glm::vec3& V2, float& OutT, glm::vec3& OutNormal);
+/** Segment [Start, End] vs triangle. OutT in [0, 1] along the segment; the normal faces the segment's start. */
+[[nodiscard]] bool SegmentTriangle(const FVector& Start, const FVector& End, const FVector& V0, const FVector& V1,
+	const FVector& V2, float& OutT, FVector& OutNormal);
 
-/// Sphere/capsule approximation: intersect against the plane offset by `inflate` along the
-/// triangle normal (same idea as slope inflate). Hit only if the impact projects inside the tri.
-[[nodiscard]] bool SegmentTriangleInflated(const glm::vec3& Start, const glm::vec3& End, const glm::vec3& V0,
-	const glm::vec3& V1, const glm::vec3& V2, float Inflate, float& OutT, glm::vec3& OutNormal);
+/**
+ * Sphere / capsule approximation: intersects the plane offset by Inflate along the triangle normal (the slope
+ * inflate idea). A hit counts only if the impact projects inside the triangle.
+ */
+[[nodiscard]] bool SegmentTriangleInflated(const FVector& Start, const FVector& End, const FVector& V0,
+	const FVector& V1, const FVector& V2, float Inflate, float& OutT, FVector& OutNormal);
 
-/// Nearest segment hit against a triangle mesh (optional inflate for sphere/capsule).
-[[nodiscard]] bool SegmentTriangleMesh(const glm::vec3& Start, const glm::vec3& End, const FTriangleMeshCollision& Mesh,
-	float Inflate, float& OutT, glm::vec3& OutNormal);
+/** Nearest segment hit against a triangle mesh (optional inflate for sphere / capsule). */
+[[nodiscard]] bool SegmentTriangleMesh(const FVector& Start, const FVector& End, const FTriangleMeshCollision& Mesh,
+	float Inflate, float& OutT, FVector& OutNormal);

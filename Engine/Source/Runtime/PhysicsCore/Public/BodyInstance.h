@@ -1,19 +1,15 @@
 #pragma once
 
-#include <glm/vec2.hpp>
-#include <glm/vec3.hpp>
+#include "CoreMinimal.h"
 
-#include <cstddef>
-#include <cstdint>
-
-enum class EBodyType : std::uint8_t
+enum class EBodyType : uint8
 {
 	Static,
 	Dynamic,
 };
 
-/// Unreal-like collision representation for a FPhysScene body.
-enum class ECollisionShape : std::uint8_t
+/** How an FPhysScene body collides (Leon; UE keeps this in the body setup's aggregate geometry). */
+enum class EBodyCollisionShape : uint8
 {
 	Box = 0, // AABB (BlockingVolume / dynamics / fallback)
 	TriangleMesh = 1, // Static mesh ComplexAsSimple lite (CPU MeshData)
@@ -21,24 +17,26 @@ enum class ECollisionShape : std::uint8_t
 
 struct PHYSICSCORE_API FBodyInstanceDesc
 {
-	std::size_t LevelMeshIndex = 0;
+	/** Index of the level's static mesh the body mirrors (until levels hold actors, P13). */
+	SIZE_T LevelMeshIndex = 0;
 	EBodyType Type = EBodyType::Static;
-	/// 0 = derive from AABB volume on SyncFromLevel.
+	/** 0 = derive from AABB volume on SyncFromLevel. */
 	float Mass = 0.0f;
-	/// Unreal-like Enable Gravity (only for Dynamic / simulatePhysics).
+	/** UE-like Enable Gravity (only for Dynamic / simulatePhysics). */
 	bool bEnableGravity = true;
 };
 
-/// Physics-owned state. Level transforms are visuals; SyncFromLevel / SyncToLevel bridge them.
+/** Physics-owned state. Level transforms are visuals; SyncFromLevel / SyncToLevel bridge them. */
 struct PHYSICSCORE_API FBodyInstance
 {
-	std::size_t LevelMeshIndex = 0;
+	SIZE_T LevelMeshIndex = 0;
 	EBodyType Type = EBodyType::Static;
-	ECollisionShape CollisionShape = ECollisionShape::Box;
+	EBodyCollisionShape CollisionShape = EBodyCollisionShape::Box;
 	float Mass = 1.0f;
 	bool bEnableGravity = true;
-	glm::vec3 Position{0.0f};
-	glm::vec3 HalfExtents{0.5f};
-	glm::vec2 VelXz{0.0f};
+	FVector Position = FVector::ZeroVector;
+	FVector HalfExtents = FVector(0.5f);
+	/** Horizontal velocity in the legacy Y-up world (X, Z), until P7. */
+	FVector2D VelXz = FVector2D::ZeroVector;
 	float VelocityY = 0.0f;
 };

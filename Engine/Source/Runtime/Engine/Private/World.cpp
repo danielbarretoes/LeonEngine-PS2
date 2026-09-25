@@ -3,6 +3,7 @@
 #include "BodyInstance.h"
 #include "Engine/Level.h"
 #include "GameFramework/Character.h"
+#include "Migration/GlmInterop.h"
 #include "SceneRenderer.h"
 
 #include <vector>
@@ -117,7 +118,7 @@ void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& Params)
 			[&](ACharacter& Character)
 			{
 				Physics.AppendCollisionDebug(*Params.CollisionDebugDraw, Character.GetCapsule(),
-					Character.GetActorLocation(), Character.GetLevelMeshIndex());
+					FromGlm(Character.GetActorLocation()), Character.GetLevelMeshIndex());
 			});
 	}
 

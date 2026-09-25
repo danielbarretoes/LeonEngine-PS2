@@ -2,7 +2,5 @@
 
 #include "IPhysicsBackend.h"
 
-#include <memory>
-
-/// Factory for the Jolt rigid-body backend (JoltPhysics plugin).
-[[nodiscard]] std::unique_ptr<IPhysicsBackend> CreateJoltPhysicsBackend();
+/** Factory for the Jolt rigid-body backend (JoltPhysics plugin). */
+[[nodiscard]] TUniquePtr<IPhysicsBackend> CreateJoltPhysicsBackend();

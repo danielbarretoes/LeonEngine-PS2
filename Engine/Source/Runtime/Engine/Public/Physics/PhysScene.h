@@ -3,15 +3,11 @@
 #include "BodyInstance.h"
 #include "CollisionQuery.h"
 #include "CollisionShape.h"
+#include "CoreMinimal.h"
 #include "Engine/Level.h"
 #include "IPhysicsBackend.h"
 #include "PhysicsBackend.h"
 #include "TriangleCollision.h"
-
-#include <cstddef>
-#include <limits>
-#include <memory>
-#include <vector>
 
 class FDebugDraw;
 
@@ -23,14 +19,16 @@ struct ENGINE_API FCapsuleContactParams
 	float WalkBounds = 18.0f;
 };
 
-/// Inclined walkable/blocking surface for Arcade traces (CMC slope lite).
-/// Plane through `point` with unit `normal`, clipped by world AABB bounds.
+/**
+ * Inclined walkable / blocking surface for Arcade traces (CMC slope lite).
+ * Plane through Point with the unit Normal, clipped by the world AABB bounds.
+ */
 struct ENGINE_API FSlopePlane
 {
-	glm::vec3 Point{0.0f};
-	glm::vec3 Normal{0.0f, 1.0f, 0.0f};
-	glm::vec3 BoundsCenter{0.0f};
-	glm::vec3 BoundsHalfExtents{1.0f, 1.0f, 1.0f};
+	FVector Point = FVector::ZeroVector;
+	FVector Normal = FVector(0.0f, 1.0f, 0.0f);
+	FVector BoundsCenter = FVector::ZeroVector;
+	FVector BoundsHalfExtents = FVector(1.0f, 1.0f, 1.0f);
 };
 
 struct ENGINE_API FPhysSceneStepParams
@@ -38,21 +36,22 @@ struct ENGINE_API FPhysSceneStepParams
 	float DeltaTime = 0.0f;
 	float Damping = 6.0f;
 	float WalkBounds = 18.0f;
-	/// World gravity for Dynamic bodies with enableGravity (Unreal Enable Gravity).
+	/** World gravity for Dynamic bodies with bEnableGravity (UE Enable Gravity). */
 	float Gravity = 24.0f;
 	float FloorY = 0.0f;
 	float Skin = 0.02f;
-	/// Skip bodies whose levelMeshIndex matches (e.g. character visual if registered).
-	std::size_t SkipLevelMeshIndex = (std::numeric_limits<std::size_t>::max)();
+	/** Skip bodies whose LevelMeshIndex matches (e.g. the character visual if registered). */
+	SIZE_T SkipLevelMeshIndex = NoLevelMeshIndex;
 };
 
-/// Lightweight XZ + arcade-Y physics scene (Unreal-style FPhysScene / FPhysScene).
-/// Arcade: AABB (+ TriangleMesh statics) traces / CMC queries / optional arcade Step.
-/// Jolt (`EPhysicsBackend::Jolt`, `LEON_WITH_JOLT`): rigid-body Step (incremental prepare;
-/// MeshShape statics on rebuild) + Line/Sphere/Capsule narrow-phase traces; floor plane,
-/// slope planes, and CMC side resolve stay Arcade.
-/// Body owns position + AABB; Level is synced explicitly.
-/// Implementation lives in Plugins/Physics/*; `IPhysicsBackend` is the swap seam.
+/**
+ * Lightweight XZ + arcade-Y physics scene (UE-style FPhysScene), in the legacy Y-up metre world until P7.
+ * Arcade: AABB (+ TriangleMesh statics) traces / CMC queries / optional arcade Step.
+ * Jolt (EPhysicsBackend::Jolt, the JoltPhysics plugin): rigid-body Step (incremental prepare; MeshShape statics on
+ * rebuild) + Line / Sphere / Capsule narrow-phase traces; the floor plane, slope planes and the CMC side resolve
+ * stay Arcade.
+ * A body owns position + AABB; the level is synced explicitly. IPhysicsBackend is the swap seam.
+ */
 class ENGINE_API FPhysScene
 {
 public:
@@ -64,109 +63,113 @@ public:
 	}
 	[[nodiscard]] const IPhysicsBackend* GetBackendIface() const
 	{
-		return BackendIface.get();
+		return BackendIface.Get();
 	}
 
 	void Clear();
-	std::size_t AddBody(const FBodyInstanceDesc& Desc);
+	int32 AddBody(const FBodyInstanceDesc& Desc);
 
-	/// Add an inclined plane clipped by a world AABB (for ramps / WalkableFloorZ tests).
-	/// `pitchDegrees` around +Z: surface rises with +X; normal.y = cos(pitch).
-	/// Optional `yawDegrees` rotates the rise direction in XZ (0 = +X).
-	std::size_t AddSlopeRamp(const glm::vec3& InBoundsCenter, const glm::vec3& InBoundsHalfExtents, float PitchDegrees,
-		float YawDegrees = 0.0f);
+	/**
+	 * Adds an inclined plane clipped by a world AABB (for ramps / WalkableFloorZ tests).
+	 * PitchDegrees around +Z: the surface rises with +X; Normal.Y = cos(pitch).
+	 * Optional YawDegrees rotates the rise direction in XZ (0 = +X).
+	 */
+	int32 AddSlopeRamp(
+		const FVector& InBoundsCenter, const FVector& InBoundsHalfExtents, float PitchDegrees, float YawDegrees = 0.0f);
 
-	[[nodiscard]] const std::vector<FSlopePlane>& GetSlopePlanes() const
+	[[nodiscard]] const TArray<FSlopePlane>& GetSlopePlanes() const
 	{
 		return SlopePlanes;
 	}
-	[[nodiscard]] std::vector<FSlopePlane>& GetSlopePlanes()
+	[[nodiscard]] TArray<FSlopePlane>& GetSlopePlanes()
 	{
 		return SlopePlanes;
 	}
 
-	/// Pull position / half-extents / mass from UStaticMeshComponent transforms.
+	/** Pulls position / half-extents / mass from the UStaticMeshComponent transforms. */
 	void SyncFromLevel(const ULevel& Level);
-	/// Write body positions back to UStaticMeshComponent transforms.
+	/** Writes body positions back to the UStaticMeshComponent transforms. */
 	void SyncToLevel(ULevel& Level) const;
 
-	[[nodiscard]] const std::vector<FBodyInstance>& GetBodies() const
+	[[nodiscard]] const TArray<FBodyInstance>& GetBodies() const
 	{
 		return Bodies;
 	}
-	[[nodiscard]] std::vector<FBodyInstance>& GetBodies()
+	[[nodiscard]] TArray<FBodyInstance>& GetBodies()
 	{
 		return Bodies;
 	}
 
-	/// Parallel to Bodies(); empty / invalid when collisionShape is Box.
-	[[nodiscard]] const std::vector<FTriangleMeshCollision>& GetTriangleMeshes() const
+	/** Parallel to GetBodies(); empty / invalid when the body's collision shape is Box. */
+	[[nodiscard]] const TArray<FTriangleMeshCollision>& GetTriangleMeshes() const
 	{
 		return TriangleMeshes;
 	}
-	[[nodiscard]] std::vector<FTriangleMeshCollision>& GetTriangleMeshes()
+	[[nodiscard]] TArray<FTriangleMeshCollision>& GetTriangleMeshes()
 	{
 		return TriangleMeshes;
 	}
 
-	[[nodiscard]] float QuerySupportY(const FCapsuleShape& Capsule, const glm::vec3& Feet, float InFloorY,
-		float InStepUp, float InSkin, std::size_t InSkipLevelMeshIndex) const;
+	/** Highest walkable support under a capsule standing on Feet (FCollisionShape capsule). */
+	[[nodiscard]] float QuerySupportY(const FCollisionShape& Capsule, const FVector& Feet, float InFloorY,
+		float InStepUp, float InSkin, SIZE_T InSkipLevelMeshIndex) const;
 
-	/// Unreal-like UWorld::LineTraceSingleByChannel against FPhysScene AABBs (+ optional floor).
-	/// Pass `debugDraw` + `params.DrawDebugType = ForOneFrame` to visualize (F2 / gameplay).
-	[[nodiscard]] bool LineTraceSingleByChannel(FHitResult& OutHit, const glm::vec3& Start, const glm::vec3& End,
+	/**
+	 * UE-like UWorld::LineTraceSingleByChannel against the FPhysScene AABBs (+ optional floor).
+	 * Pass a DebugDraw and Params.DrawDebugType = ForOneFrame to visualize (F2 / gameplay).
+	 */
+	[[nodiscard]] bool LineTraceSingleByChannel(FHitResult& OutHit, const FVector& Start, const FVector& End,
 		ECollisionChannel Channel, const FCollisionQueryParams& Params = {}, FDebugDraw* DebugDraw = nullptr) const;
 
-	/// Unreal-like UWorld::LineTraceMultiByChannel — all hits sorted nearest→farthest.
-	[[nodiscard]] bool LineTraceMultiByChannel(std::vector<FHitResult>& OutHits, const glm::vec3& Start,
-		const glm::vec3& End, ECollisionChannel Channel, const FCollisionQueryParams& Params = {},
-		FDebugDraw* DebugDraw = nullptr) const;
+	/** UE-like UWorld::LineTraceMultiByChannel: all hits sorted nearest to farthest. */
+	[[nodiscard]] bool LineTraceMultiByChannel(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End,
+		ECollisionChannel Channel, const FCollisionQueryParams& Params = {}, FDebugDraw* DebugDraw = nullptr) const;
 
-	/// Unreal-like UWorld::SphereTraceSingleByChannel (swept sphere ≈ expanded AABB).
-	[[nodiscard]] bool SphereTraceSingleByChannel(FHitResult& OutHit, const glm::vec3& Start, const glm::vec3& End,
+	/** UE-like UWorld::SphereTraceSingleByChannel (swept sphere as an expanded AABB). */
+	[[nodiscard]] bool SphereTraceSingleByChannel(FHitResult& OutHit, const FVector& Start, const FVector& End,
 		float Radius, ECollisionChannel Channel, const FCollisionQueryParams& Params = {},
 		FDebugDraw* DebugDraw = nullptr) const;
 
-	/// Unreal-like UWorld::SphereTraceMultiByChannel.
-	[[nodiscard]] bool SphereTraceMultiByChannel(std::vector<FHitResult>& OutHits, const glm::vec3& Start,
-		const glm::vec3& End, float Radius, ECollisionChannel Channel, const FCollisionQueryParams& Params = {},
+	/** UE-like UWorld::SphereTraceMultiByChannel. */
+	[[nodiscard]] bool SphereTraceMultiByChannel(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End,
+		float Radius, ECollisionChannel Channel, const FCollisionQueryParams& Params = {},
 		FDebugDraw* DebugDraw = nullptr) const;
 
-	/// Unreal-like UWorld::CapsuleTraceSingleByChannel (`halfHeight` = cylinder half, excl. caps).
-	[[nodiscard]] bool CapsuleTraceSingleByChannel(FHitResult& OutHit, const glm::vec3& Start, const glm::vec3& End,
+	/** UE-like UWorld::CapsuleTraceSingleByChannel (HalfHeight = cylinder half, without the caps). */
+	[[nodiscard]] bool CapsuleTraceSingleByChannel(FHitResult& OutHit, const FVector& Start, const FVector& End,
 		float Radius, float HalfHeight, ECollisionChannel Channel, const FCollisionQueryParams& Params = {},
 		FDebugDraw* DebugDraw = nullptr) const;
 
-	/// Unreal-like UWorld::CapsuleTraceMultiByChannel.
-	[[nodiscard]] bool CapsuleTraceMultiByChannel(std::vector<FHitResult>& OutHits, const glm::vec3& Start,
-		const glm::vec3& End, float Radius, float HalfHeight, ECollisionChannel Channel,
-		const FCollisionQueryParams& Params = {}, FDebugDraw* DebugDraw = nullptr) const;
+	/** UE-like UWorld::CapsuleTraceMultiByChannel. */
+	[[nodiscard]] bool CapsuleTraceMultiByChannel(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End,
+		float Radius, float HalfHeight, ECollisionChannel Channel, const FCollisionQueryParams& Params = {},
+		FDebugDraw* DebugDraw = nullptr) const;
 
-	void ResolveCapsuleSides(const FCapsuleShape& Capsule, glm::vec3& Feet, const glm::vec2& WishXz,
-		const FCapsuleContactParams& Params, std::size_t InSkipLevelMeshIndex, bool bApplyPush = true);
+	void ResolveCapsuleSides(const FCollisionShape& Capsule, FVector& Feet, const FVector2D& WishXz,
+		const FCapsuleContactParams& Params, SIZE_T InSkipLevelMeshIndex, bool bApplyPush = true);
 
-	/// Push a Dynamic body from a CMC capsule sweep hit (no penetration required).
-	/// SafeMove stops at skin before ResolveCapsuleSides can see contact; call this on block hits.
-	/// Returns true if a Dynamic body received velocity / contact shove.
-	bool ApplyCapsuleSweepPush(std::size_t LevelMeshIndex, const glm::vec2& WishXz, const glm::vec3& ImpactNormal,
+	/**
+	 * Pushes a Dynamic body from a CMC capsule sweep hit (no penetration required).
+	 * SafeMove stops at skin before ResolveCapsuleSides can see contact; call this on block hits.
+	 * Returns true if a Dynamic body received velocity / contact shove.
+	 */
+	bool ApplyCapsuleSweepPush(SIZE_T LevelMeshIndex, const FVector2D& WishXz, const FVector& ImpactNormal,
 		float InPushStrength, float InWalkBounds);
 
-	/// Integrate dynamic velocities + resolve body–body overlaps.
+	/** Integrates dynamic velocities and resolves body-body overlaps. */
 	void Step(const FPhysSceneStepParams& Params);
 
 	void AppendCollisionDebug(
-		FDebugDraw& Draw, const FCapsuleShape& Capsule, const glm::vec3& Feet, std::size_t InSkipLevelMeshIndex) const;
+		FDebugDraw& Draw, const FCollisionShape& Capsule, const FVector& Feet, SIZE_T InSkipLevelMeshIndex) const;
 
-	/// Body / triangle-mesh / slope wireframes only (editor Player Collision view mode).
-	void AppendBodiesCollisionDebug(
-		FDebugDraw& Draw, std::size_t InSkipLevelMeshIndex = (std::numeric_limits<std::size_t>::max)()) const;
+	/** Body / triangle-mesh / slope wireframes only (editor Player Collision view mode). */
+	void AppendBodiesCollisionDebug(FDebugDraw& Draw, SIZE_T InSkipLevelMeshIndex = NoLevelMeshIndex) const;
 
 private:
 	EPhysicsBackend Backend = EPhysicsBackend::Arcade;
-	/// Mutable: const Line/Sphere/Capsule traces may RigidPrepareStep so Jolt matches
-	/// BodyInstances.
-	mutable std::unique_ptr<IPhysicsBackend> BackendIface;
-	std::vector<FBodyInstance> Bodies;
-	std::vector<FTriangleMeshCollision> TriangleMeshes;
-	std::vector<FSlopePlane> SlopePlanes;
+	/** Mutable: const Line / Sphere / Capsule traces may RigidPrepareStep so Jolt matches the body instances. */
+	mutable TUniquePtr<IPhysicsBackend> BackendIface;
+	TArray<FBodyInstance> Bodies;
+	TArray<FTriangleMeshCollision> TriangleMeshes;
+	TArray<FSlopePlane> SlopePlanes;
 };

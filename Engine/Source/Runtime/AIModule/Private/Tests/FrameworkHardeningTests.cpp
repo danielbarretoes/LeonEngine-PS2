@@ -103,13 +103,13 @@ TEST_CASE("NavigationSystem agent radius dilation shrinks walkable ring", "[game
 	Floor.Type = EBodyType::Static;
 	Floor.Position = {0.0f, 0.0f, 0.0f};
 	Floor.HalfExtents = {20.0f, 0.5f, 20.0f};
-	Physics.GetBodies().push_back(Floor);
+	Physics.GetBodies().Add(Floor);
 
 	FBodyInstance Pillar{};
 	Pillar.Type = EBodyType::Static;
 	Pillar.Position = {0.0f, 1.0f, 0.0f};
 	Pillar.HalfExtents = {0.4f, 1.5f, 0.4f};
-	Physics.GetBodies().push_back(Pillar);
+	Physics.GetBodies().Add(Pillar);
 
 	UNavigationSystem Narrow;
 	Narrow.SetCellSize(0.5f);

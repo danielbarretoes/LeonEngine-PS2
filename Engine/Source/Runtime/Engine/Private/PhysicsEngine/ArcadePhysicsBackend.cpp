@@ -1,6 +1,6 @@
 #include "IPhysicsBackend.h"
 
-#include <iostream>
+DEFINE_LOG_CATEGORY_STATIC(LogPhysics, Log, All);
 
 namespace
 {
@@ -8,7 +8,7 @@ namespace
 	class FArcadePhysicsBackend final : public IPhysicsBackend
 	{
 	public:
-		[[nodiscard]] const char* GetName() const override
+		[[nodiscard]] const TCHAR* GetName() const override
 		{
 			return "Arcade";
 		}
@@ -30,7 +30,7 @@ void RegisterPhysicsBackendFactory(EPhysicsBackendKind Kind, FPhysicsBackendFact
 	}
 }
 
-std::unique_ptr<IPhysicsBackend> CreatePhysicsBackend(EPhysicsBackendKind Kind)
+TUniquePtr<IPhysicsBackend> CreatePhysicsBackend(EPhysicsBackendKind Kind)
 {
 	if (Kind == EPhysicsBackendKind::Jolt)
 	{
@@ -38,12 +38,12 @@ std::unique_ptr<IPhysicsBackend> CreatePhysicsBackend(EPhysicsBackendKind Kind)
 		{
 			return JoltFactory()();
 		}
-		static bool bSLoggedJoltFallback = false;
-		if (!bSLoggedJoltFallback)
+		static bool bLoggedJoltFallback = false;
+		if (!bLoggedJoltFallback)
 		{
-			bSLoggedJoltFallback = true;
-			std::cerr << "CreatePhysicsBackend: JoltPhysics plugin not enabled; falling back to Arcade\n";
+			bLoggedJoltFallback = true;
+			UE_LOG(LogPhysics, Warning, "CreatePhysicsBackend: JoltPhysics plugin not enabled; falling back to Arcade");
 		}
 	}
-	return std::make_unique<FArcadePhysicsBackend>();
+	return MakeUnique<FArcadePhysicsBackend>();
 }

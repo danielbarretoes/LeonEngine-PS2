@@ -1,28 +1,23 @@
 #include "TriangleCollision.h"
 
-#include <glm/geometric.hpp>
-
-#include <cmath>
-
 namespace
 {
 
 	[[nodiscard]] bool PointInTriangle(
-		const glm::vec3& P, const glm::vec3& A, const glm::vec3& B, const glm::vec3& C, const glm::vec3& Normal)
+		const FVector& P, const FVector& A, const FVector& B, const FVector& C, const FVector& Normal)
 	{
-		const glm::vec3 N = Normal;
-		const glm::vec3 Edge0 = B - A;
-		const glm::vec3 Edge1 = C - B;
-		const glm::vec3 Edge2 = A - C;
-		if (glm::dot(N, glm::cross(Edge0, P - A)) < -1.0e-5f)
+		const FVector Edge0 = B - A;
+		const FVector Edge1 = C - B;
+		const FVector Edge2 = A - C;
+		if ((Normal | (Edge0 ^ (P - A))) < -1.0e-5f)
 		{
 			return false;
 		}
-		if (glm::dot(N, glm::cross(Edge1, P - B)) < -1.0e-5f)
+		if ((Normal | (Edge1 ^ (P - B))) < -1.0e-5f)
 		{
 			return false;
 		}
-		if (glm::dot(N, glm::cross(Edge2, P - C)) < -1.0e-5f)
+		if ((Normal | (Edge2 ^ (P - C))) < -1.0e-5f)
 		{
 			return false;
 		}
@@ -31,73 +26,73 @@ namespace
 
 } // namespace
 
-bool SegmentTriangle(const glm::vec3& Start, const glm::vec3& End, const glm::vec3& V0, const glm::vec3& V1,
-	const glm::vec3& V2, float& OutT, glm::vec3& OutNormal)
+bool SegmentTriangle(const FVector& Start, const FVector& End, const FVector& V0, const FVector& V1, const FVector& V2,
+	float& OutT, FVector& OutNormal)
 {
-	const glm::vec3 Edge1 = V1 - V0;
-	const glm::vec3 Edge2 = V2 - V0;
-	glm::vec3 Normal = glm::cross(Edge1, Edge2);
-	const float NLen = glm::length(Normal);
+	const FVector Edge1 = V1 - V0;
+	const FVector Edge2 = V2 - V0;
+	FVector Normal = Edge1 ^ Edge2;
+	const float NLen = Normal.Size();
 	if (NLen < 1.0e-8f)
 	{
 		return false;
 	}
 	Normal /= NLen;
 
-	const glm::vec3 Dir = End - Start;
-	const float Denom = glm::dot(Normal, Dir);
-	if (std::abs(Denom) < 1.0e-8f)
+	const FVector Dir = End - Start;
+	const float Denom = Normal | Dir;
+	if (FMath::Abs(Denom) < 1.0e-8f)
 	{
 		return false;
 	}
-	const float T = glm::dot(Normal, V0 - Start) / Denom;
+	const float T = (Normal | (V0 - Start)) / Denom;
 	if (T < 0.0f || T > 1.0f)
 	{
 		return false;
 	}
-	const glm::vec3 Hit = Start + (Dir * T);
+	const FVector Hit = Start + (Dir * T);
 	if (!PointInTriangle(Hit, V0, V1, V2, Normal))
 	{
 		return false;
 	}
 	OutT = T;
-	// Face the incoming ray (Unreal blocking normal points toward the tracer).
+	// Face the incoming ray (the UE blocking normal points toward the tracer).
 	OutNormal = (Denom < 0.0f) ? Normal : -Normal;
 	return true;
 }
 
-bool SegmentTriangleInflated(const glm::vec3& Start, const glm::vec3& End, const glm::vec3& V0, const glm::vec3& V1,
-	const glm::vec3& V2, float Inflate, float& OutT, glm::vec3& OutNormal)
+bool SegmentTriangleInflated(const FVector& Start, const FVector& End, const FVector& V0, const FVector& V1,
+	const FVector& V2, float Inflate, float& OutT, FVector& OutNormal)
 {
-	const glm::vec3 Edge1 = V1 - V0;
-	const glm::vec3 Edge2 = V2 - V0;
-	glm::vec3 Normal = glm::cross(Edge1, Edge2);
-	const float NLen = glm::length(Normal);
+	const FVector Edge1 = V1 - V0;
+	const FVector Edge2 = V2 - V0;
+	FVector Normal = Edge1 ^ Edge2;
+	const float NLen = Normal.Size();
 	if (NLen < 1.0e-8f)
 	{
 		return false;
 	}
 	Normal /= NLen;
 
-	const float Pad = std::max(Inflate, 0.0f);
-	// Offset plane toward the start of the segment (sphere center approach).
-	const float DStart = glm::dot(Start - V0, Normal);
-	const glm::vec3 PlaneN = (DStart >= 0.0f) ? Normal : -Normal;
-	const glm::vec3 PlanePoint = V0 + (PlaneN * Pad);
+	const float Pad = FMath::Max(Inflate, 0.0f);
+	// Offset the plane toward the start of the segment (sphere center approach).
+	const float DStart = (Start - V0) | Normal;
+	const FVector PlaneN = (DStart >= 0.0f) ? Normal : -Normal;
+	const FVector PlanePoint = V0 + (PlaneN * Pad);
 
-	const glm::vec3 Dir = End - Start;
-	const float Denom = glm::dot(PlaneN, Dir);
-	if (std::abs(Denom) < 1.0e-8f)
+	const FVector Dir = End - Start;
+	const float Denom = PlaneN | Dir;
+	if (FMath::Abs(Denom) < 1.0e-8f)
 	{
 		return false;
 	}
-	const float T = glm::dot(PlaneN, PlanePoint - Start) / Denom;
+	const float T = (PlaneN | (PlanePoint - Start)) / Denom;
 	if (T < 0.0f || T > 1.0f)
 	{
 		return false;
 	}
-	const glm::vec3 Hit = Start + (Dir * T);
-	const glm::vec3 OnTri = Hit - (PlaneN * Pad);
+	const FVector Hit = Start + (Dir * T);
+	const FVector OnTri = Hit - (PlaneN * Pad);
 	if (!PointInTriangle(OnTri, V0, V1, V2, Normal))
 	{
 		return false;
@@ -107,8 +102,8 @@ bool SegmentTriangleInflated(const glm::vec3& Start, const glm::vec3& End, const
 	return true;
 }
 
-bool SegmentTriangleMesh(const glm::vec3& Start, const glm::vec3& End, const FTriangleMeshCollision& Mesh,
-	float Inflate, float& OutT, glm::vec3& OutNormal)
+bool SegmentTriangleMesh(const FVector& Start, const FVector& End, const FTriangleMeshCollision& Mesh, float Inflate,
+	float& OutT, FVector& OutNormal)
 {
 	if (!Mesh.IsValid())
 	{
@@ -116,19 +111,20 @@ bool SegmentTriangleMesh(const glm::vec3& Start, const glm::vec3& End, const FTr
 	}
 	bool bAny = false;
 	float BestT = 1.0f;
-	glm::vec3 BestN{0.0f, 1.0f, 0.0f};
-	const std::size_t TriCount = Mesh.Indices.size() / 3;
-	for (std::size_t T = 0; T < TriCount; ++T)
+	FVector BestN(0.0f, 1.0f, 0.0f);
+	const int32 TriCount = Mesh.Indices.Num() / 3;
+	const uint32 VertexCount = static_cast<uint32>(Mesh.Positions.Num());
+	for (int32 Tri = 0; Tri < TriCount; ++Tri)
 	{
-		const std::uint32_t I0 = Mesh.Indices[T * 3 + 0];
-		const std::uint32_t I1 = Mesh.Indices[T * 3 + 1];
-		const std::uint32_t I2 = Mesh.Indices[T * 3 + 2];
-		if (I0 >= Mesh.Positions.size() || I1 >= Mesh.Positions.size() || I2 >= Mesh.Positions.size())
+		const uint32 I0 = Mesh.Indices[Tri * 3 + 0];
+		const uint32 I1 = Mesh.Indices[Tri * 3 + 1];
+		const uint32 I2 = Mesh.Indices[Tri * 3 + 2];
+		if (I0 >= VertexCount || I1 >= VertexCount || I2 >= VertexCount)
 		{
 			continue;
 		}
 		float HitT = 1.0f;
-		glm::vec3 HitN{};
+		FVector HitN = FVector::ZeroVector;
 		const bool bOk = (Inflate > 1.0e-6f)
 			? SegmentTriangleInflated(
 				  Start, End, Mesh.Positions[I0], Mesh.Positions[I1], Mesh.Positions[I2], Inflate, HitT, HitN)

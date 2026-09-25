@@ -1,35 +1,167 @@
 #pragma once
 
-#include <glm/vec2.hpp>
-#include <glm/vec3.hpp>
+#include "CoreMinimal.h"
 
-struct PHYSICSCORE_API FCapsuleShape
+/** Shapes a query can sweep (UE: ECollisionShape in CollisionShape.h). */
+namespace ECollisionShape
 {
-	float Radius = 0.35f;
-	/// Full vertical extent from feet to top (cylinder + end caps approximated in XZ).
-	float Height = 1.85f;
+	enum Type
+	{
+		Line,
+		Box,
+		Sphere,
+		Capsule
+	};
+} // namespace ECollisionShape
+
+/**
+ * A query shape (UE: FCollisionShape). Leon's capsule stands on its feet in the legacy Y-up world: the
+ * character capsule spans [Feet, Feet + 2 * HalfHeight] and the XZ disc of the given radius (until P7).
+ */
+struct PHYSICSCORE_API FCollisionShape
+{
+	ECollisionShape::Type ShapeType;
+
+	union
+	{
+		struct
+		{
+			float HalfExtentX;
+			float HalfExtentY;
+			float HalfExtentZ;
+		} Box;
+
+		struct
+		{
+			float Radius;
+		} Sphere;
+
+		struct
+		{
+			float Radius;
+			float HalfHeight;
+		} Capsule;
+	};
+
+	FCollisionShape()
+		: ShapeType(ECollisionShape::Line)
+	{
+		Box.HalfExtentX = 0.0f;
+		Box.HalfExtentY = 0.0f;
+		Box.HalfExtentZ = 0.0f;
+	}
+
+	bool IsLine() const
+	{
+		return ShapeType == ECollisionShape::Line;
+	}
+
+	bool IsBox() const
+	{
+		return ShapeType == ECollisionShape::Box;
+	}
+
+	bool IsSphere() const
+	{
+		return ShapeType == ECollisionShape::Sphere;
+	}
+
+	bool IsCapsule() const
+	{
+		return ShapeType == ECollisionShape::Capsule;
+	}
+
+	void SetBox(const FVector& HalfExtent)
+	{
+		ShapeType = ECollisionShape::Box;
+		Box.HalfExtentX = HalfExtent.X;
+		Box.HalfExtentY = HalfExtent.Y;
+		Box.HalfExtentZ = HalfExtent.Z;
+	}
+
+	void SetSphere(float Radius)
+	{
+		ShapeType = ECollisionShape::Sphere;
+		Sphere.Radius = Radius;
+	}
+
+	void SetCapsule(float Radius, float HalfHeight)
+	{
+		ShapeType = ECollisionShape::Capsule;
+		Capsule.Radius = Radius;
+		Capsule.HalfHeight = HalfHeight;
+	}
+
+	FVector GetBox() const
+	{
+		return FVector(Box.HalfExtentX, Box.HalfExtentY, Box.HalfExtentZ);
+	}
+
+	float GetSphereRadius() const
+	{
+		return Sphere.Radius;
+	}
+
+	float GetCapsuleRadius() const
+	{
+		return Capsule.Radius;
+	}
+
+	float GetCapsuleHalfHeight() const
+	{
+		return Capsule.HalfHeight;
+	}
+
+	/** Half the length of the capsule's segment, without the end caps (UE: GetCapsuleAxisHalfLength). */
+	float GetCapsuleAxisHalfLength() const
+	{
+		return FMath::Max(Capsule.HalfHeight - Capsule.Radius, 1.e-4f);
+	}
+
+	static FCollisionShape MakeBox(const FVector& BoxHalfExtent)
+	{
+		FCollisionShape Shape;
+		Shape.SetBox(BoxHalfExtent);
+		return Shape;
+	}
+
+	static FCollisionShape MakeSphere(float SphereRadius)
+	{
+		FCollisionShape Shape;
+		Shape.SetSphere(SphereRadius);
+		return Shape;
+	}
+
+	static FCollisionShape MakeCapsule(float CapsuleRadius, float CapsuleHalfHeight)
+	{
+		FCollisionShape Shape;
+		Shape.SetCapsule(CapsuleRadius, CapsuleHalfHeight);
+		return Shape;
+	}
 };
 
-void HalfExtentsFromScale(const glm::vec3& Scale, float& HalfX, float& HalfY, float& HalfZ);
+void HalfExtentsFromScale(const FVector& Scale, float& HalfX, float& HalfY, float& HalfZ);
 
 [[nodiscard]] float MassFromHalfExtents(float HalfX, float HalfY, float HalfZ);
 
-void ClampPositionXZ(glm::vec3& Pos, float Bounds);
+void ClampPositionXZ(FVector& Pos, float Bounds);
 
 [[nodiscard]] bool XzDiscOverlapsAabb(
 	float X, float Z, float InRadius, float Cx, float Cz, float Hx, float Hz, float Inflate);
 
-/// Capsule (XZ disc) vs AABB: outward normal (cube → capsule) and penetration.
+/** Capsule (XZ disc) vs AABB: outward normal (cube to capsule) and penetration. */
 [[nodiscard]] bool CapsuleAabbMtv(float Px, float Pz, float InRadius, float Cx, float Cz, float Hx, float Hz,
-	glm::vec2& OutNormal, float& OutPenetration);
+	FVector2D& OutNormal, float& OutPenetration);
 
 [[nodiscard]] bool AabbOverlapY(float Ay, float Ahy, float By, float Bhy);
 
-/// Separate two XZ AABBs. moveA/moveB are MTV shares (static → 0).
+/** Separate two XZ AABBs. MoveA / MoveB are MTV shares (static: 0). */
 [[nodiscard]] bool SeparateAabbXZ(
-	glm::vec3& A, float Ahx, float Ahz, glm::vec3& B, float Bhx, float Bhz, float MoveA, float MoveB);
+	FVector& A, float Ahx, float Ahz, FVector& B, float Bhx, float Bhz, float MoveA, float MoveB);
 
-/// Separate two AABBs on the minimum-penetration axis (X, Y, or Z).
-/// `outNormal` is unit MTV direction a←b when non-null. moveA/moveB are shares (static → 0).
-[[nodiscard]] bool SeparateAabb(glm::vec3& A, const glm::vec3& AHalfExtents, glm::vec3& B,
-	const glm::vec3& bHalfExtents, float MoveA, float MoveB, glm::vec3* OutNormal = nullptr);
+/**
+ * Separate two AABBs on the minimum-penetration axis (X, Y, or Z). OutNormal is the unit MTV direction from B to A
+ * when not null. MoveA / MoveB are shares (static: 0).
+ */
+[[nodiscard]] bool SeparateAabb(FVector& A, const FVector& AHalfExtents, FVector& B, const FVector& BHalfExtents,
+	float MoveA, float MoveB, FVector* OutNormal = nullptr);

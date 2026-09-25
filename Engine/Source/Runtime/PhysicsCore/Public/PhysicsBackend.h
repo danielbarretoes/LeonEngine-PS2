@@ -1,11 +1,11 @@
 #pragma once
 
-#include <cstdint>
+#include "CoreTypes.h"
 
 /// Physics implementation behind `FPhysScene`.
 /// Default remains Arcade (AABB traces + CMC). Pass `EPhysicsBackend::Jolt` for rigid Step
 /// and narrow-phase traces when built with `LEON_WITH_JOLT` (the JoltPhysics plugin, Win64).
-enum class EPhysicsBackend : std::uint8_t
+enum class EPhysicsBackend : uint8
 {
 	Arcade = 0,
 	Jolt = 1,
@@ -17,7 +17,7 @@ enum class EPhysicsBackend : std::uint8_t
 	return EPhysicsBackend::Arcade;
 }
 
-[[nodiscard]] inline const char* PhysicsBackendName(EPhysicsBackend Backend)
+[[nodiscard]] inline const TCHAR* PhysicsBackendName(EPhysicsBackend Backend)
 {
 	switch (Backend)
 	{

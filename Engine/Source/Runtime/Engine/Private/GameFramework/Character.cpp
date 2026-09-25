@@ -1,6 +1,7 @@
 #include "GameFramework/Character.h"
 
 #include "Engine/World.h"
+#include "Migration/GlmInterop.h"
 #include "SceneRenderer.h"
 
 #include <glm/geometric.hpp>
@@ -17,6 +18,14 @@ namespace
 	{
 		constexpr float RadToDeg = 180.0f / std::numbers::pi_v<float>;
 		return std::atan2(MoveXz.x, MoveXz.z) * RadToDeg;
+	}
+
+	/** The character still moves in glm (until Engine migrates, P6); the physics helpers take FVector. */
+	void ClampPositionXZ(glm::vec3& Pos, float Bounds)
+	{
+		FVector Position = FromGlm(Pos);
+		::ClampPositionXZ(Position, Bounds);
+		Pos = ToGlm(Position);
 	}
 
 	float ShortestYawDelta(float FromDeg, float ToDeg)
@@ -148,7 +157,7 @@ bool ACharacter::IsWalkable(const FHitResult& Hit) const
 	{
 		return false;
 	}
-	return Hit.ImpactNormal.y >= Movement.WalkableFloorZ;
+	return Hit.ImpactNormal.Y >= Movement.WalkableFloorZ;
 }
 
 void ACharacter::FindFloor(
@@ -158,7 +167,7 @@ void ACharacter::FindFloor(
 	const float Distance = std::max(TraceDistance, Movement.Skin);
 	const glm::vec3 Feet = GetActorLocation();
 	// Sphere rests on the feet (center = feet + radius up).
-	const glm::vec3 SphereCenter = Feet + glm::vec3{0.0f, Capsule.Radius, 0.0f};
+	const glm::vec3 SphereCenter = Feet + glm::vec3{0.0f, Capsule.GetCapsuleRadius(), 0.0f};
 	const glm::vec3 TraceStart = SphereCenter + glm::vec3{0.0f, Movement.Skin, 0.0f};
 	const glm::vec3 TraceEnd = SphereCenter - glm::vec3{0.0f, Distance, 0.0f};
 
@@ -169,8 +178,8 @@ void ACharacter::FindFloor(
 	Query.DrawDebugType = DebugDraw != nullptr ? EDrawDebugTrace::ForOneFrame : EDrawDebugTrace::None;
 
 	FHitResult Hit{};
-	const bool bHitFloor = PhysScene.SphereTraceSingleByChannel(
-		Hit, TraceStart, TraceEnd, Capsule.Radius, ECollisionChannel::Visibility, Query, DebugDraw);
+	const bool bHitFloor = PhysScene.SphereTraceSingleByChannel(Hit, FromGlm(TraceStart), FromGlm(TraceEnd),
+		Capsule.GetCapsuleRadius(), ECollisionChannel::Visibility, Query, DebugDraw);
 	if (!bHitFloor)
 	{
 		return;
@@ -179,7 +188,7 @@ void ACharacter::FindFloor(
 	OutFloor.bBlockingHit = true;
 	OutFloor.Hit = Hit;
 	OutFloor.bWalkableFloor = IsWalkable(Hit);
-	OutFloor.FloorDist = std::max(0.0f, Feet.y - Hit.ImpactPoint.y);
+	OutFloor.FloorDist = std::max(0.0f, Feet.y - Hit.ImpactPoint.Y);
 }
 
 void ACharacter::ApplyYaw(float TargetYawDegrees, float DeltaTime)
@@ -197,12 +206,12 @@ void ACharacter::ApplyYaw(float TargetYawDegrees, float DeltaTime)
 
 float ACharacter::CapsuleHalfHeight() const
 {
-	return std::max(0.0f, Capsule.Height * 0.5f - Capsule.Radius);
+	return std::max(0.0f, Capsule.GetCapsuleHalfHeight() - Capsule.GetCapsuleRadius());
 }
 
 glm::vec3 ACharacter::CapsuleCenterFromFeet(const glm::vec3& Feet) const
 {
-	return Feet + glm::vec3{0.0f, Capsule.Height * 0.5f, 0.0f};
+	return Feet + glm::vec3{0.0f, Capsule.GetCapsuleHalfHeight(), 0.0f};
 }
 
 bool ACharacter::BlocksHorizontalMove(const FHitResult& Hit) const
@@ -212,7 +221,7 @@ bool ACharacter::BlocksHorizontalMove(const FHitResult& Hit) const
 		return false;
 	}
 	// Walkable tops must not stop XZ travel (standing on / stepping onto AABB).
-	if (IsWalkable(Hit) || Hit.ImpactNormal.y > 0.5f)
+	if (IsWalkable(Hit) || Hit.ImpactNormal.Y > 0.5f)
 	{
 		return false;
 	}
@@ -252,9 +261,9 @@ bool ACharacter::SafeMoveUpdatedComponent(
 	Query.bTraceFloorPlane = false;
 	Query.DrawDebugType = DebugDraw != nullptr ? EDrawDebugTrace::ForOneFrame : EDrawDebugTrace::None;
 
-	std::vector<FHitResult> Hits;
-	(void)PhysScene.CapsuleTraceMultiByChannel(
-		Hits, StartCenter, EndCenter, Capsule.Radius, HalfH, ECollisionChannel::Visibility, Query, DebugDraw);
+	TArray<FHitResult> Hits;
+	(void)PhysScene.CapsuleTraceMultiByChannel(Hits, FromGlm(StartCenter), FromGlm(EndCenter),
+		Capsule.GetCapsuleRadius(), HalfH, ECollisionChannel::Visibility, Query, DebugDraw);
 
 	const FHitResult* Block = nullptr;
 	for (const FHitResult& Hit : Hits)
@@ -281,7 +290,7 @@ bool ACharacter::SafeMoveUpdatedComponent(
 	T = std::max(0.0f, T - (Movement.Skin / DeltaLen));
 	Feet += Delta * T;
 	// Nudge out of the wall so the next iteration does not re-hit at t=0.
-	glm::vec3 N{Block->ImpactNormal.x, 0.0f, Block->ImpactNormal.z};
+	glm::vec3 N{Block->ImpactNormal.X, 0.0f, Block->ImpactNormal.Z};
 	const float NLen = glm::length(N);
 	if (NLen > 1.0e-4f)
 	{
@@ -289,8 +298,8 @@ bool ACharacter::SafeMoveUpdatedComponent(
 		Feet += N * Movement.Skin;
 	}
 	// Sweep stops before overlap; ResolveCapsuleSides push never fires — shove from the hit.
-	(void)PhysScene.ApplyCapsuleSweepPush(
-		Block->LevelMeshIndex, {WishDir.x, WishDir.z}, Block->ImpactNormal, Movement.PushStrength, Movement.WalkBounds);
+	(void)PhysScene.ApplyCapsuleSweepPush(Block->LevelMeshIndex, FVector2D(WishDir.x, WishDir.z), Block->ImpactNormal,
+		Movement.PushStrength, Movement.WalkBounds);
 	ClampPositionXZ(Feet, Movement.WalkBounds);
 	if (OutHit != nullptr)
 	{
@@ -306,8 +315,10 @@ void ACharacter::ResolveSides(FPhysScene& PhysScene, bool bApplyPush)
 	Params.StepUp = Movement.MaxStepHeight;
 	Params.Skin = Movement.Skin;
 	Params.WalkBounds = Movement.WalkBounds;
+	FVector Feet = FromGlm(MutableLocation());
 	PhysScene.ResolveCapsuleSides(
-		Capsule, MutableLocation(), {WishDir.x, WishDir.z}, Params, GetLevelMeshIndex(), bApplyPush);
+		Capsule, Feet, FVector2D(WishDir.x, WishDir.z), Params, GetLevelMeshIndex(), bApplyPush);
+	MutableLocation() = ToGlm(Feet);
 }
 
 bool ACharacter::TryStepUp(FPhysScene& PhysScene, const glm::vec3& ForwardDelta, FDebugDraw* DebugDraw)
@@ -335,12 +346,12 @@ bool ACharacter::TryStepUp(FPhysScene& PhysScene, const glm::vec3& ForwardDelta,
 	// 1) Raise by MaxStepHeight; only a true ceiling (downward normal) aborts.
 	const glm::vec3 UpStart = CapsuleCenterFromFeet(Feet);
 	const glm::vec3 UpEnd = UpStart + glm::vec3{0.0f, Movement.MaxStepHeight, 0.0f};
-	std::vector<FHitResult> UpHits;
-	(void)PhysScene.CapsuleTraceMultiByChannel(
-		UpHits, UpStart, UpEnd, Capsule.Radius, HalfH, ECollisionChannel::Visibility, Query, DebugDraw);
+	TArray<FHitResult> UpHits;
+	(void)PhysScene.CapsuleTraceMultiByChannel(UpHits, FromGlm(UpStart), FromGlm(UpEnd), Capsule.GetCapsuleRadius(),
+		HalfH, ECollisionChannel::Visibility, Query, DebugDraw);
 	for (const FHitResult& UpHit : UpHits)
 	{
-		if (UpHit.ImpactNormal.y < -0.5f)
+		if (UpHit.ImpactNormal.Y < -0.5f)
 		{
 			return false;
 		}
@@ -350,7 +361,7 @@ bool ACharacter::TryStepUp(FPhysScene& PhysScene, const glm::vec3& ForwardDelta,
 	// 2) Forward onto the ledge while elevated. One frame of leftover is often << radius;
 	// probe at least ~half-radius so QuerySupportY can see the top.
 	const float FwdLen = glm::length(Fwd);
-	const float MinFwd = std::max(Capsule.Radius * 0.5f, Movement.Skin * 4.0f);
+	const float MinFwd = std::max(Capsule.GetCapsuleRadius() * 0.5f, Movement.Skin * 4.0f);
 	if (FwdLen > 1.0e-5f && FwdLen < MinFwd)
 	{
 		Fwd *= (MinFwd / FwdLen);
@@ -371,7 +382,7 @@ bool ACharacter::TryStepUp(FPhysScene& PhysScene, const glm::vec3& ForwardDelta,
 		Feet = StartFeet;
 		return false;
 	}
-	const float HeightGain = Floor.Hit.ImpactPoint.y - StartFeet.y;
+	const float HeightGain = Floor.Hit.ImpactPoint.Y - StartFeet.y;
 	if (HeightGain < Movement.Skin || HeightGain > Movement.MaxStepHeight + Movement.Skin)
 	{
 		Feet = StartFeet;
@@ -379,14 +390,14 @@ bool ACharacter::TryStepUp(FPhysScene& PhysScene, const glm::vec3& ForwardDelta,
 	}
 	// Sphere FindFloor can report a phantom shelf in front of an AABB; require real support.
 	const float Support = PhysScene.QuerySupportY(
-		Capsule, Feet, Movement.FloorY, Movement.MaxStepHeight, Movement.Skin, GetLevelMeshIndex());
+		Capsule, FromGlm(Feet), Movement.FloorY, Movement.MaxStepHeight, Movement.Skin, GetLevelMeshIndex());
 	if (Support < StartFeet.y + Movement.Skin)
 	{
 		Feet = StartFeet;
 		return false;
 	}
 
-	Feet.y = std::max(Floor.Hit.ImpactPoint.y, Support);
+	Feet.y = std::max(Floor.Hit.ImpactPoint.Y, Support);
 	if (Feet.y - StartFeet.y > Movement.MaxStepHeight + Movement.Skin)
 	{
 		Feet = StartFeet;
@@ -442,7 +453,7 @@ void ACharacter::MoveHorizontal(FPhysScene& PhysScene, float DeltaTime, FDebugDr
 		{
 			break;
 		}
-		Leftover = ComputeSlideVector(Leftover, Hit.ImpactNormal);
+		Leftover = ComputeSlideVector(Leftover, ToGlm(Hit.ImpactNormal));
 		if (glm::dot(Leftover, Leftover) < 1.0e-8f)
 		{
 			break;
@@ -490,7 +501,7 @@ void ACharacter::IntegrateVertical(FPhysScene& PhysScene, float DeltaTime, FDebu
 
 	if (VelocityY <= 0.0f && CurrentFloor.bBlockingHit)
 	{
-		const float SurfaceY = CurrentFloor.Hit.ImpactPoint.y;
+		const float SurfaceY = CurrentFloor.Hit.ImpactPoint.Y;
 		if (CurrentFloor.bWalkableFloor)
 		{
 			MutableLocation().y = SurfaceY;
@@ -563,8 +574,8 @@ void ACharacter::ResolvePawnOverlap(ACharacter& Other)
 
 	glm::vec3& A = MutableLocation();
 	glm::vec3& B = Other.MutableLocation();
-	const float ATop = A.y + Capsule.Height;
-	const float bTop = B.y + Other.Capsule.Height;
+	const float ATop = A.y + Capsule.GetCapsuleHalfHeight() * 2.0f;
+	const float bTop = B.y + Other.Capsule.GetCapsuleHalfHeight() * 2.0f;
 	if (ATop < B.y || bTop < A.y)
 	{
 		return;
@@ -572,7 +583,7 @@ void ACharacter::ResolvePawnOverlap(ACharacter& Other)
 
 	glm::vec2 Delta{A.x - B.x, A.z - B.z};
 	float Dist = glm::length(Delta);
-	const float MinDist = Capsule.Radius + Other.Capsule.Radius;
+	const float MinDist = Capsule.GetCapsuleRadius() + Other.Capsule.GetCapsuleRadius();
 	if (Dist >= MinDist - 1.0e-5f)
 	{
 		return;

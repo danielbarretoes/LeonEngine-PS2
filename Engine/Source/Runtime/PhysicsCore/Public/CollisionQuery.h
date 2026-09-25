@@ -1,16 +1,14 @@
 #pragma once
 
-#include <glm/vec3.hpp>
-
-#include <cstddef>
-#include <cstdint>
-#include <limits>
-#include <vector>
+#include "CoreMinimal.h"
 
 class FDebugDraw;
 
-/// Unreal-like ECollisionChannel (micro-engine subset).
-enum class ECollisionChannel : std::uint8_t
+/** No level mesh (UE: INDEX_NONE for an item); the value of ULevel::Npos. */
+inline constexpr SIZE_T NoLevelMeshIndex = static_cast<SIZE_T>(-1);
+
+/** UE-like ECollisionChannel (micro-engine subset). */
+enum class ECollisionChannel : uint8
 {
 	WorldStatic, // Static PhysScene bodies
 	WorldDynamic, // Dynamic PhysScene bodies
@@ -18,48 +16,47 @@ enum class ECollisionChannel : std::uint8_t
 	Visibility, // Both (generic line/sphere checks)
 };
 
-/// Unreal-like EDrawDebugTrace — draw the query for one frame when a FDebugDraw* is passed.
-enum class EDrawDebugTrace : std::uint8_t
+/** UE-like EDrawDebugTrace: draw the query for one frame when an FDebugDraw* is passed. */
+enum class EDrawDebugTrace : uint8
 {
 	None,
 	ForOneFrame,
 };
 
-/// Unreal-like FHitResult for FPhysScene traces.
+/** UE-like FHitResult for FPhysScene traces (legacy Y-up metres until P7). */
 struct PHYSICSCORE_API FHitResult
 {
 	bool bBlockingHit = false;
-	/// Normalized distance along [Start, End] in [0, 1].
+	/** Normalized distance along [Start, End] in [0, 1]. */
 	float Time = 1.0f;
 	float Distance = 0.0f;
-	/// World location of the sweep shape center at the blocking time (Unreal `Location`).
-	glm::vec3 Location{0.0f};
-	/// Surface contact point (Unreal `ImpactPoint`); equals Location for line traces.
-	glm::vec3 ImpactPoint{0.0f};
-	/// Unit normal pointing toward the trace start (away from the surface).
-	glm::vec3 ImpactNormal{0.0f, 1.0f, 0.0f};
-	glm::vec3 TraceStart{0.0f};
-	glm::vec3 TraceEnd{0.0f};
-	std::size_t LevelMeshIndex = (std::numeric_limits<std::size_t>::max)();
-	/// True when the hit is the virtual infinite floor plane (FCollisionQueryParams).
+	/** World location of the sweep shape center at the blocking time (UE: Location). */
+	FVector Location = FVector::ZeroVector;
+	/** Surface contact point (UE: ImpactPoint); equals Location for line traces. */
+	FVector ImpactPoint = FVector::ZeroVector;
+	/** Unit normal pointing toward the trace start (away from the surface). */
+	FVector ImpactNormal = FVector(0.0f, 1.0f, 0.0f);
+	FVector TraceStart = FVector::ZeroVector;
+	FVector TraceEnd = FVector::ZeroVector;
+	SIZE_T LevelMeshIndex = NoLevelMeshIndex;
+	/** True when the hit is the virtual infinite floor plane (FCollisionQueryParams). */
 	bool bFloorPlane = false;
 };
 
-/// Unreal-like FCollisionQueryParams.
+/** UE-like FCollisionQueryParams. */
 struct PHYSICSCORE_API FCollisionQueryParams
 {
-	std::size_t SkipLevelMeshIndex = (std::numeric_limits<std::size_t>::max)();
-	/// Include an infinite horizontal floor at FloorY (UCharacterMovementComponent floor).
+	SIZE_T SkipLevelMeshIndex = NoLevelMeshIndex;
+	/** Include an infinite horizontal floor at FloorY (UCharacterMovementComponent floor). */
 	bool bTraceFloorPlane = false;
 	float FloorY = 0.0f;
-	/// When not None, FPhysScene traces draw into the provided FDebugDraw* (F2 / gameplay debug).
+	/** When not None, FPhysScene traces draw into the provided FDebugDraw* (F2 / gameplay debug). */
 	EDrawDebugTrace DrawDebugType = EDrawDebugTrace::None;
 };
 
-/// Unreal-like DrawDebugLineTrace / Kismet System Library helpers (one frame into FDebugDraw).
-void DrawDebugLineTrace(
-	FDebugDraw& Draw, const glm::vec3& Start, const glm::vec3& End, const std::vector<FHitResult>& Hits);
+/** UE-like DrawDebugLineTrace / Kismet System Library helpers (one frame into FDebugDraw; defined in Engine). */
+void DrawDebugLineTrace(FDebugDraw& Draw, const FVector& Start, const FVector& End, const TArray<FHitResult>& Hits);
 void DrawDebugSphereTrace(
-	FDebugDraw& Draw, const glm::vec3& Start, const glm::vec3& End, float Radius, const std::vector<FHitResult>& Hits);
-void DrawDebugCapsuleTrace(FDebugDraw& Draw, const glm::vec3& Start, const glm::vec3& End, float Radius,
-	float HalfHeight, const std::vector<FHitResult>& Hits);
+	FDebugDraw& Draw, const FVector& Start, const FVector& End, float Radius, const TArray<FHitResult>& Hits);
+void DrawDebugCapsuleTrace(FDebugDraw& Draw, const FVector& Start, const FVector& End, float Radius, float HalfHeight,
+	const TArray<FHitResult>& Hits);

@@ -32,7 +32,7 @@ TEST_CASE("World SetPhysicsBackend switches to Jolt", "[physics][jolt][world]")
 	World.SetPhysicsBackend(EPhysicsBackend::Jolt);
 	REQUIRE(World.GetPhysicsScene().GetBackend() == EPhysicsBackend::Jolt);
 
-	const std::size_t Id = World.GetPhysicsScene().AddBody({0, EBodyType::Dynamic, 8.0f, true});
+	const int32 Id = World.GetPhysicsScene().AddBody({0, EBodyType::Dynamic, 8.0f, true});
 	auto& Body = World.GetPhysicsScene().GetBodies()[Id];
 	Body.Position = {0.0f, 2.5f, 0.0f};
 	Body.HalfExtents = {0.4f, 0.4f, 0.4f};
@@ -46,14 +46,14 @@ TEST_CASE("World SetPhysicsBackend switches to Jolt", "[physics][jolt][world]")
 	{
 		World.GetPhysicsScene().Step(Params);
 	}
-	REQUIRE(Body.Position.y < 1.1f);
-	REQUIRE(Body.Position.y > 0.2f);
+	REQUIRE(Body.Position.Y < 1.1f);
+	REQUIRE(Body.Position.Y > 0.2f);
 }
 
 TEST_CASE("PhysScene Jolt Step applies gravity and rests on floor", "[physics][jolt]")
 {
 	FPhysScene Scene(EPhysicsBackend::Jolt);
-	const std::size_t Id = Scene.AddBody({0, EBodyType::Dynamic, 10.0f, true});
+	const int32 Id = Scene.AddBody({0, EBodyType::Dynamic, 10.0f, true});
 	auto& Body = Scene.GetBodies()[Id];
 	Body.Position = {0.0f, 3.0f, 0.0f};
 	Body.HalfExtents = {0.5f, 0.5f, 0.5f};
@@ -69,8 +69,8 @@ TEST_CASE("PhysScene Jolt Step applies gravity and rests on floor", "[physics][j
 		Scene.Step(Params);
 	}
 
-	REQUIRE(Body.Position.y < 1.2f);
-	REQUIRE(Body.Position.y > 0.3f);
+	REQUIRE(Body.Position.Y < 1.2f);
+	REQUIRE(Body.Position.Y > 0.3f);
 	REQUIRE(std::abs(Body.VelocityY) < 1.0f);
 }
 
@@ -78,12 +78,12 @@ TEST_CASE("PhysScene Jolt dynamic rests on static box", "[physics][jolt]")
 {
 	FPhysScene Scene(EPhysicsBackend::Jolt);
 
-	const std::size_t GroundId = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
+	const int32 GroundId = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
 	auto& Ground = Scene.GetBodies()[GroundId];
 	Ground.Position = {0.0f, 0.5f, 0.0f};
 	Ground.HalfExtents = {2.0f, 0.5f, 2.0f};
 
-	const std::size_t BoxId = Scene.AddBody({1, EBodyType::Dynamic, 5.0f, true});
+	const int32 BoxId = Scene.AddBody({1, EBodyType::Dynamic, 5.0f, true});
 	auto& Box = Scene.GetBodies()[BoxId];
 	Box.Position = {0.0f, 4.0f, 0.0f};
 	Box.HalfExtents = {0.4f, 0.4f, 0.4f};
@@ -100,7 +100,7 @@ TEST_CASE("PhysScene Jolt dynamic rests on static box", "[physics][jolt]")
 	}
 
 	// Dynamic COM should settle near ground top (1.0) + halfExtents (0.4) ≈ 1.4
-	REQUIRE_THAT(Box.Position.y, WithinAbs(1.4f, 0.35f));
+	REQUIRE_THAT(Box.Position.Y, WithinAbs(1.4f, 0.35f));
 	REQUIRE(std::abs(Box.VelocityY) < 1.5f);
 }
 
@@ -123,13 +123,13 @@ TEST_CASE("PhysScene Jolt dynamic rests on TriangleMesh static", "[physics][jolt
 
 	FPhysScene Scene(EPhysicsBackend::Jolt);
 	Scene.AddBody({0, EBodyType::Static, 1.0f, true});
-	const std::size_t BoxId = Scene.AddBody({1, EBodyType::Dynamic, 5.0f, true});
+	const int32 BoxId = Scene.AddBody({1, EBodyType::Dynamic, 5.0f, true});
 	auto& Box = Scene.GetBodies()[BoxId];
 	Box.Position = {0.0f, 5.0f, 0.0f};
 	Box.HalfExtents = {0.35f, 0.35f, 0.35f};
 
 	Scene.SyncFromLevel(Level);
-	REQUIRE(Scene.GetBodies()[0].CollisionShape == ECollisionShape::TriangleMesh);
+	REQUIRE(Scene.GetBodies()[0].CollisionShape == EBodyCollisionShape::TriangleMesh);
 
 	FPhysSceneStepParams Params;
 	Params.DeltaTime = 1.0f / 60.0f;
@@ -143,7 +143,7 @@ TEST_CASE("PhysScene Jolt dynamic rests on TriangleMesh static", "[physics][jolt
 	}
 
 	// FPlane at y=1 + halfExtents 0.35 ≈ 1.35
-	REQUIRE_THAT(Box.Position.y, WithinAbs(1.35f, 0.45f));
+	REQUIRE_THAT(Box.Position.Y, WithinAbs(1.35f, 0.45f));
 	REQUIRE(std::abs(Box.VelocityY) < 2.0f);
 }
 
@@ -152,7 +152,7 @@ TEST_CASE("PhysScene Jolt LineTrace hits static box", "[physics][jolt][trace]")
 	FPhysScene Scene(EPhysicsBackend::Jolt);
 	REQUIRE(Scene.GetBackendIface()->HasNarrowPhaseTraces());
 
-	const std::size_t Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
+	const int32 Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
 	auto& Body = Scene.GetBodies()[Id];
 	Body.Position = {0.0f, 0.5f, 0.0f};
 	Body.HalfExtents = {0.5f, 0.5f, 0.5f};
@@ -163,15 +163,15 @@ TEST_CASE("PhysScene Jolt LineTrace hits static box", "[physics][jolt][trace]")
 	REQUIRE(Scene.LineTraceSingleByChannel(
 		Hit, {0.0f, 0.5f, -2.0f}, {0.0f, 0.5f, 2.0f}, ECollisionChannel::WorldStatic, Params));
 	REQUIRE(Hit.bBlockingHit);
-	REQUIRE_THAT(Hit.ImpactPoint.z, WithinAbs(-0.5f, 0.08f));
-	REQUIRE(Hit.ImpactNormal.z < -0.5f);
+	REQUIRE_THAT(Hit.ImpactPoint.Z, WithinAbs(-0.5f, 0.08f));
+	REQUIRE(Hit.ImpactNormal.Z < -0.5f);
 }
 
 TEST_CASE("PhysScene Jolt SphereTrace hits static box", "[physics][jolt][trace]")
 {
 	FPhysScene Scene(EPhysicsBackend::Jolt);
 
-	const std::size_t Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
+	const int32 Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
 	auto& Body = Scene.GetBodies()[Id];
 	Body.Position = {0.0f, 0.5f, 0.0f};
 	Body.HalfExtents = {0.5f, 0.5f, 0.5f};
@@ -183,7 +183,7 @@ TEST_CASE("PhysScene Jolt SphereTrace hits static box", "[physics][jolt][trace]"
 		Hit, {0.0f, 0.5f, -3.0f}, {0.0f, 0.5f, 3.0f}, 0.25f, ECollisionChannel::WorldStatic, Params));
 	REQUIRE(Hit.bBlockingHit);
 	// Sweep center stops before the face by ~radius.
-	REQUIRE_THAT(Hit.Location.z, WithinAbs(-0.75f, 0.12f));
+	REQUIRE_THAT(Hit.Location.Z, WithinAbs(-0.75f, 0.12f));
 }
 
 #else

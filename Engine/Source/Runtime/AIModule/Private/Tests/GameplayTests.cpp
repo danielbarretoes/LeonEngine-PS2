@@ -150,7 +150,7 @@ TEST_CASE("SpringArmComponent clamps pitch and arm length", "[gameplay][springar
 TEST_CASE("SpringArmComponent collision probe shortens arm", "[gameplay][springarm]")
 {
 	FPhysScene Scene;
-	const std::size_t Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
+	const int32 Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
 	Scene.GetBodies()[Id].Position = {2.0f, 1.0f, 0.0f};
 	Scene.GetBodies()[Id].HalfExtents = {0.25f, 1.0f, 2.0f};
 
@@ -224,7 +224,7 @@ TEST_CASE("AIController path follow does not shortcut through blocker", "[gamepl
 	Wall.Type = EBodyType::Static;
 	Wall.Position = {0.0f, 1.0f, 0.0f};
 	Wall.HalfExtents = {0.6f, 1.5f, 4.0f};
-	Physics.GetBodies().push_back(Wall);
+	Physics.GetBodies().Add(Wall);
 
 	UNavigationSystem Nav;
 	Nav.SetCellSize(0.5f);
@@ -260,13 +260,13 @@ TEST_CASE("NavigationSystem FindPath routes around static blocker", "[gameplay][
 	Floor.Type = EBodyType::Static;
 	Floor.Position = {0.0f, 0.0f, 0.0f};
 	Floor.HalfExtents = {20.0f, 0.5f, 20.0f};
-	Physics.GetBodies().push_back(Floor);
+	Physics.GetBodies().Add(Floor);
 
 	FBodyInstance Wall{};
 	Wall.Type = EBodyType::Static;
 	Wall.Position = {0.0f, 1.0f, 0.0f};
 	Wall.HalfExtents = {0.6f, 1.5f, 5.0f};
-	Physics.GetBodies().push_back(Wall);
+	Physics.GetBodies().Add(Wall);
 
 	UNavigationSystem Nav;
 	Nav.SetCellSize(0.5f);
@@ -314,8 +314,8 @@ TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "
 	PlateBody.LevelMeshIndex = 0;
 	PlateBody.Position = {0.0f, 0.12f, 0.0f};
 	PlateBody.HalfExtents = {0.9f, 0.1f, 0.9f};
-	Physics.GetBodies().push_back(PlateBody);
-	Physics.GetTriangleMeshes().emplace_back();
+	Physics.GetBodies().Add(PlateBody);
+	Physics.GetTriangleMeshes().AddDefaulted();
 
 	UStaticMeshComponent Ramp{};
 	Ramp.Tag = NavTags::Walkable;
@@ -328,14 +328,14 @@ TEST_CASE("NavigationSystem blocks NavBlocker but keeps NavWalkable walkable", "
 	RampBody.LevelMeshIndex = 1;
 	RampBody.Position = {4.0f, 1.0f, 0.0f};
 	RampBody.HalfExtents = {2.5f, 1.0f, 1.2f};
-	RampBody.CollisionShape = ECollisionShape::TriangleMesh;
-	Physics.GetBodies().push_back(RampBody);
+	RampBody.CollisionShape = EBodyCollisionShape::TriangleMesh;
+	Physics.GetBodies().Add(RampBody);
 
 	FTriangleMeshCollision Tri{};
 	// Two tris covering a 4x2 footprint around (4,0).
 	Tri.Positions = {{2.0f, 0.5f, -1.0f}, {6.0f, 1.5f, -1.0f}, {6.0f, 1.5f, 1.0f}, {2.0f, 0.5f, 1.0f}};
 	Tri.Indices = {0, 1, 2, 0, 2, 3};
-	Physics.GetTriangleMeshes().push_back(std::move(Tri));
+	Physics.GetTriangleMeshes().Add(MoveTemp(Tri));
 
 	UNavigationSystem Nav;
 	Nav.SetCellSize(0.5f);
@@ -379,7 +379,7 @@ TEST_CASE("NavigationSystem AppendDebugDraw fills overlay", "[gameplay][nav][deb
 	Wall.Type = EBodyType::Static;
 	Wall.Position = {0.0f, 1.0f, 0.0f};
 	Wall.HalfExtents = {0.5f, 1.0f, 0.5f};
-	Physics.GetBodies().push_back(Wall);
+	Physics.GetBodies().Add(Wall);
 
 	UNavigationSystem Nav;
 	Nav.SetCellSize(1.0f);

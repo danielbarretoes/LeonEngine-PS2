@@ -2,6 +2,8 @@
 
 #include "CollisionQuery.h"
 #include "Engine/World.h"
+#include "Migration/GlmInterop.h"
+#include "Physics/PhysScene.h"
 
 #include <glm/vec3.hpp>
 
@@ -18,14 +20,16 @@ public:
 		const glm::vec3& End, ECollisionChannel Channel, const FCollisionQueryParams& Params = {},
 		FDebugDraw* Debug = nullptr)
 	{
-		return World.GetPhysicsScene().LineTraceSingleByChannel(OutHit, Start, End, Channel, Params, Debug);
+		return World.GetPhysicsScene().LineTraceSingleByChannel(
+			OutHit, FromGlm(Start), FromGlm(End), Channel, Params, Debug);
 	}
 
 	[[nodiscard]] static bool SphereTraceSingleByChannel(UWorld& World, FHitResult& OutHit, const glm::vec3& Start,
 		const glm::vec3& End, float Radius, ECollisionChannel Channel, const FCollisionQueryParams& Params = {},
 		FDebugDraw* Debug = nullptr)
 	{
-		return World.GetPhysicsScene().SphereTraceSingleByChannel(OutHit, Start, End, Radius, Channel, Params, Debug);
+		return World.GetPhysicsScene().SphereTraceSingleByChannel(
+			OutHit, FromGlm(Start), FromGlm(End), Radius, Channel, Params, Debug);
 	}
 
 	[[nodiscard]] static bool CapsuleTraceSingleByChannel(UWorld& World, FHitResult& OutHit, const glm::vec3& Start,
@@ -33,7 +37,7 @@ public:
 		const FCollisionQueryParams& Params = {}, FDebugDraw* Debug = nullptr)
 	{
 		return World.GetPhysicsScene().CapsuleTraceSingleByChannel(
-			OutHit, Start, End, Radius, HalfHeight, Channel, Params, Debug);
+			OutHit, FromGlm(Start), FromGlm(End), Radius, HalfHeight, Channel, Params, Debug);
 	}
 
 	/** Melee / sweep helper: capsule along a segment (forwards to CapsuleTraceSingleByChannel). */

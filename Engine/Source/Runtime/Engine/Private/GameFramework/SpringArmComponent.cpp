@@ -2,6 +2,7 @@
 
 #include "Debug/DebugDraw.h"
 #include "Engine/World.h"
+#include "Migration/GlmInterop.h"
 #include "Physics/PhysScene.h"
 
 #include <glm/geometric.hpp>
@@ -132,7 +133,8 @@ float USpringArmComponent::ProbeArmLength(FPhysScene& PhysScene, const glm::vec3
 	}
 
 	FHitResult Hit{};
-	if (!PhysScene.SphereTraceSingleByChannel(Hit, Target, End, ProbeSize, ProbeChannel, Params, DebugDraw) ||
+	if (!PhysScene.SphereTraceSingleByChannel(
+			Hit, FromGlm(Target), FromGlm(End), ProbeSize, ProbeChannel, Params, DebugDraw) ||
 		!Hit.bBlockingHit)
 	{
 		return Length;

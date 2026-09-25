@@ -2,31 +2,28 @@
 
 #include "BodyInstance.h"
 #include "CollisionQuery.h"
+#include "CoreMinimal.h"
 #include "TriangleCollision.h"
 
-#include <cstddef>
-#include <cstdint>
-#include <limits>
-#include <memory>
-#include <vector>
-
-/// Physics backend contract. Implementations live under Plugins/Physics/*.
-/// `FPhysScene` remains the gameplay-facing API; backends plug in behind it.
-/// Arcade owns CMC side resolve / QuerySupportY; Jolt may own rigid Step + narrow-phase traces.
+/**
+ * Physics backend contract. Implementations live in Engine (Arcade) and in plugins (JoltPhysics).
+ * FPhysScene remains the gameplay-facing API; backends plug in behind it.
+ * Arcade owns the CMC side resolve / QuerySupportY; Jolt may own rigid Step + narrow-phase traces.
+ */
 class PHYSICSCORE_API IPhysicsBackend
 {
 public:
 	virtual ~IPhysicsBackend() = default;
 
-	[[nodiscard]] virtual const char* GetName() const = 0;
+	[[nodiscard]] virtual const TCHAR* GetName() const = 0;
 
-	/// True when FPhysScene::Step should drive dynamics through this backend (Jolt).
+	/** True when FPhysScene::Step should drive dynamics through this backend (Jolt). */
 	[[nodiscard]] virtual bool HasRigidWorld() const
 	{
 		return false;
 	}
 
-	/// True when FPhysScene Single/Multi traces should query this backend's narrow phase.
+	/** True when FPhysScene Single / Multi traces should query this backend's narrow phase. */
 	[[nodiscard]] virtual bool HasNarrowPhaseTraces() const
 	{
 		return false;
@@ -36,27 +33,29 @@ public:
 	{
 	}
 
-	/// Full rebuild after SyncFromLevel / Clear. Optional parallel triangle meshes for
-	/// static ComplexAsSimple (Jolt MeshShape); boxes otherwise.
-	virtual void RigidRebuild(const std::vector<FBodyInstance>& Bodies,
-		const std::vector<FTriangleMeshCollision>* TriangleMeshes = nullptr,
-		std::size_t SkipLevelMeshIndex = (std::numeric_limits<std::size_t>::max)())
+	/**
+	 * Full rebuild after SyncFromLevel / Clear. Optional parallel triangle meshes for static ComplexAsSimple (Jolt
+	 * MeshShape); boxes otherwise.
+	 */
+	virtual void RigidRebuild(const TArray<FBodyInstance>& Bodies,
+		const TArray<FTriangleMeshCollision>* TriangleMeshes = nullptr, SIZE_T SkipLevelMeshIndex = NoLevelMeshIndex)
 	{
 		(void)Bodies;
 		(void)TriangleMeshes;
 		(void)SkipLevelMeshIndex;
 	}
 
-	/// Before Step: push dynamic FBodyInstance state (e.g. CMC side push) without rebuilding.
-	/// Creates/removes bodies only when `skipLevelMeshIndex` membership changes.
-	virtual void RigidPrepareStep(const std::vector<FBodyInstance>& Bodies,
-		std::size_t SkipLevelMeshIndex = (std::numeric_limits<std::size_t>::max)())
+	/**
+	 * Before Step: push dynamic FBodyInstance state (e.g. CMC side push) without rebuilding. Creates / removes bodies
+	 * only when SkipLevelMeshIndex membership changes.
+	 */
+	virtual void RigidPrepareStep(const TArray<FBodyInstance>& Bodies, SIZE_T SkipLevelMeshIndex = NoLevelMeshIndex)
 	{
 		(void)Bodies;
 		(void)SkipLevelMeshIndex;
 	}
 
-	/// Integrate with gravity magnitude along -Y; optional infinite floor at `floorY`.
+	/** Integrate with gravity magnitude along -Y; optional infinite floor at FloorY. */
 	virtual void RigidStep(float DeltaTime, float GravityMagnitude, float FloorY)
 	{
 		(void)DeltaTime;
@@ -64,15 +63,15 @@ public:
 		(void)FloorY;
 	}
 
-	/// Write simulated COM positions / velocities back into dynamic BodyInstances.
-	virtual void RigidReadBack(std::vector<FBodyInstance>& Bodies)
+	/** Write simulated COM positions / velocities back into dynamic body instances. */
+	virtual void RigidReadBack(TArray<FBodyInstance>& Bodies)
 	{
 		(void)Bodies;
 	}
 
-	/// Append body hits (not floor/slopes) sorted is caller's job. Returns true if any hit.
-	virtual bool RigidLineTrace(std::vector<FHitResult>& OutHits, const glm::vec3& Start, const glm::vec3& End,
-		ECollisionChannel Channel, std::size_t SkipLevelMeshIndex)
+	/** Appends body hits (not floor / slopes); sorting is the caller's job. Returns true if any hit. */
+	virtual bool RigidLineTrace(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End,
+		ECollisionChannel Channel, SIZE_T SkipLevelMeshIndex)
 	{
 		(void)OutHits;
 		(void)Start;
@@ -82,8 +81,8 @@ public:
 		return false;
 	}
 
-	virtual bool RigidSphereTrace(std::vector<FHitResult>& OutHits, const glm::vec3& Start, const glm::vec3& End,
-		float Radius, ECollisionChannel Channel, std::size_t SkipLevelMeshIndex)
+	virtual bool RigidSphereTrace(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End, float Radius,
+		ECollisionChannel Channel, SIZE_T SkipLevelMeshIndex)
 	{
 		(void)OutHits;
 		(void)Start;
@@ -94,8 +93,8 @@ public:
 		return false;
 	}
 
-	virtual bool RigidCapsuleTrace(std::vector<FHitResult>& OutHits, const glm::vec3& Start, const glm::vec3& End,
-		float Radius, float HalfHeight, ECollisionChannel Channel, std::size_t SkipLevelMeshIndex)
+	virtual bool RigidCapsuleTrace(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End, float Radius,
+		float HalfHeight, ECollisionChannel Channel, SIZE_T SkipLevelMeshIndex)
 	{
 		(void)OutHits;
 		(void)Start;
@@ -108,16 +107,17 @@ public:
 	}
 };
 
-enum class EPhysicsBackendKind : std::uint8_t
+enum class EPhysicsBackendKind : uint8
 {
 	Arcade = 0,
 	Jolt = 1,
 };
 
-[[nodiscard]] std::unique_ptr<IPhysicsBackend> CreatePhysicsBackend(
-	EPhysicsBackendKind Kind = EPhysicsBackendKind::Arcade);
+[[nodiscard]] TUniquePtr<IPhysicsBackend> CreatePhysicsBackend(EPhysicsBackendKind Kind = EPhysicsBackendKind::Arcade);
 
-/// Plugins register extra backends at module startup (e.g. the JoltPhysics plugin registers Jolt).
-/// CreatePhysicsBackend falls back to Arcade when no factory is registered for a kind.
-using FPhysicsBackendFactory = std::unique_ptr<IPhysicsBackend> (*)();
+/**
+ * Plugins register extra backends at module startup (e.g. the JoltPhysics plugin registers Jolt).
+ * CreatePhysicsBackend falls back to Arcade when no factory is registered for a kind.
+ */
+using FPhysicsBackendFactory = TUniquePtr<IPhysicsBackend> (*)();
 void RegisterPhysicsBackendFactory(EPhysicsBackendKind Kind, FPhysicsBackendFactory Factory);

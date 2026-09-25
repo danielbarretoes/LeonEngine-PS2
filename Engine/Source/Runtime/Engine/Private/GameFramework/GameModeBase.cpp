@@ -6,6 +6,7 @@
 #include "Engine/Level.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
+#include "Migration/GlmInterop.h"
 
 #include <algorithm>
 #include <cmath>
@@ -89,7 +90,7 @@ void AGameModeBase::SnapCharacterToFloor(ACharacter& Character, glm::vec3& InOut
 	const UCharacterMovementComponent& Move = Character.GetCharacterMovement();
 	glm::vec3 Probe = InOutFeet;
 	Probe.y = std::max(InOutFeet.y, FloorY);
-	const float Support = Phys.QuerySupportY(
-		Character.GetCapsule(), Probe, Move.FloorY, Move.MaxStepHeight, Move.Skin, Character.GetLevelMeshIndex());
+	const float Support = Phys.QuerySupportY(Character.GetCapsule(), FromGlm(Probe), Move.FloorY, Move.MaxStepHeight,
+		Move.Skin, Character.GetLevelMeshIndex());
 	InOutFeet.y = std::max(Support, FloorY) + 0.02f;
 }

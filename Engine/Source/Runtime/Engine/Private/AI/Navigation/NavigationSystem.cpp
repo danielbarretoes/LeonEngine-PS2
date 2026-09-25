@@ -20,15 +20,15 @@ namespace
 
 	[[nodiscard]] bool IsFloorLikeBody(const FBodyInstance& InBody, float InCellSize)
 	{
-		const float Hy = std::max(InBody.HalfExtents.y, 0.001f);
-		const float Horiz = std::max(InBody.HalfExtents.x, InBody.HalfExtents.z);
+		const float Hy = std::max(InBody.HalfExtents.Y, 0.001f);
+		const float Horiz = std::max(InBody.HalfExtents.X, InBody.HalfExtents.Z);
 		// Unit plane scaled ~40x1x40 → hy=0.5 still floor-like by aspect (was wrongly a full-arena
 		// blocker).
 		if (Horiz / Hy >= 6.0f)
 		{
 			return true;
 		}
-		if (InBody.HalfExtents.y <= std::max(0.35f, InCellSize * 0.75f))
+		if (InBody.HalfExtents.Y <= std::max(0.35f, InCellSize * 0.75f))
 		{
 			return true;
 		}
@@ -81,8 +81,8 @@ namespace
 		{
 			return false;
 		}
-		const float Bottom = InBody.Position.y - InBody.HalfExtents.y;
-		const float Top = InBody.Position.y + InBody.HalfExtents.y;
+		const float Bottom = InBody.Position.Y - InBody.HalfExtents.Y;
+		const float Top = InBody.Position.Y + InBody.HalfExtents.Y;
 		const bool bInHeightBand = Top > FloorY + 0.05f && Bottom < FloorY + 2.2f;
 		if (!bInHeightBand)
 		{
@@ -110,9 +110,9 @@ namespace
 		float Cx, float Cz, float CellHalf, float InAgentRadius, const FBodyInstance& InBody)
 	{
 		const float Inflate = InAgentRadius + CellHalf;
-		return AabbXZOverlapsPoint(Cx, Cz, Inflate, InBody.Position.x - InBody.HalfExtents.x,
-			InBody.Position.x + InBody.HalfExtents.x, InBody.Position.z - InBody.HalfExtents.z,
-			InBody.Position.z + InBody.HalfExtents.z);
+		return AabbXZOverlapsPoint(Cx, Cz, Inflate, InBody.Position.X - InBody.HalfExtents.X,
+			InBody.Position.X + InBody.HalfExtents.X, InBody.Position.Z - InBody.HalfExtents.Z,
+			InBody.Position.Z + InBody.HalfExtents.Z);
 	}
 
 	/// Tighter XZ footprint from baked tris (rotated ramp) vs fat world AABB.
@@ -120,15 +120,15 @@ namespace
 		float Cx, float Cz, float CellHalf, float InAgentRadius, const FTriangleMeshCollision& InMesh)
 	{
 		const float Inflate = InAgentRadius + CellHalf;
-		for (std::size_t I = 0; I + 2 < InMesh.Indices.size(); I += 3)
+		for (int32 I = 0; I + 2 < InMesh.Indices.Num(); I += 3)
 		{
-			const glm::vec3& V0 = InMesh.Positions[InMesh.Indices[I]];
-			const glm::vec3& V1 = InMesh.Positions[InMesh.Indices[I + 1]];
-			const glm::vec3& V2 = InMesh.Positions[InMesh.Indices[I + 2]];
-			const float MinX = std::min({V0.x, V1.x, V2.x});
-			const float MaxX = std::max({V0.x, V1.x, V2.x});
-			const float MinZ = std::min({V0.z, V1.z, V2.z});
-			const float MaxZ = std::max({V0.z, V1.z, V2.z});
+			const FVector& V0 = InMesh.Positions[static_cast<int32>(InMesh.Indices[I])];
+			const FVector& V1 = InMesh.Positions[static_cast<int32>(InMesh.Indices[I + 1])];
+			const FVector& V2 = InMesh.Positions[static_cast<int32>(InMesh.Indices[I + 2])];
+			const float MinX = FMath::Min3(V0.X, V1.X, V2.X);
+			const float MaxX = FMath::Max3(V0.X, V1.X, V2.X);
+			const float MinZ = FMath::Min3(V0.Z, V1.Z, V2.Z);
+			const float MaxZ = FMath::Max3(V0.Z, V1.Z, V2.Z);
 			if (AabbXZOverlapsPoint(Cx, Cz, Inflate, MinX, MaxX, MinZ, MaxZ))
 			{
 				return true;
@@ -195,9 +195,9 @@ void UNavigationSystem::BakeGrid(const FPhysScene& Physics, float FloorY, float 
 		const FTriangleMeshCollision* TriMesh = nullptr;
 	};
 	std::vector<FNavBlocker> Blockers;
-	Blockers.reserve(Physics.GetBodies().size());
+	Blockers.reserve(static_cast<std::size_t>(Physics.GetBodies().Num()));
 	const auto& TriMeshes = Physics.GetTriangleMeshes();
-	for (std::size_t Bi = 0; Bi < Physics.GetBodies().size(); ++Bi)
+	for (int32 Bi = 0; Bi < Physics.GetBodies().Num(); ++Bi)
 	{
 		const FBodyInstance& LocalBody = Physics.GetBodies()[Bi];
 		if (!BodyBlocksNavigation(LocalBody, FloorY, Cell, Level))
@@ -206,7 +206,7 @@ void UNavigationSystem::BakeGrid(const FPhysScene& Physics, float FloorY, float 
 		}
 		FNavBlocker Blocker{};
 		Blocker.Body = &LocalBody;
-		if (LocalBody.CollisionShape == ECollisionShape::TriangleMesh && Bi < TriMeshes.size() &&
+		if (LocalBody.CollisionShape == EBodyCollisionShape::TriangleMesh && Bi < TriMeshes.Num() &&
 			TriMeshes[Bi].IsValid())
 		{
 			Blocker.TriMesh = &TriMeshes[Bi];

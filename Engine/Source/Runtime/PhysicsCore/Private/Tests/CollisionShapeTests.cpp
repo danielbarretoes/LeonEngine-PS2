@@ -1,60 +1,88 @@
 #include "CollisionShape.h"
+#include "CoreMinimal.h"
+#include "Misc/AutomationTest.h"
 
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include <glm/geometric.hpp>
+#if WITH_DEV_AUTOMATION_TESTS
 
-using Catch::Matchers::WithinAbs;
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FHalfExtentsFromScaleTest, "System.PhysicsCore.Collision.HalfExtentsFromScale",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-TEST_CASE("HalfExtentsFromScale uses absolute half scale", "[physics][collision]")
+bool FHalfExtentsFromScaleTest::RunTest(const FString& Parameters)
 {
-	float Hx = 0.0f, Hy = 0.0f, Hz = 0.0f;
-	HalfExtentsFromScale({2.0f, -4.0f, 6.0f}, Hx, Hy, Hz);
-	REQUIRE_THAT(Hx, WithinAbs(1.0f, 1.0e-5f));
-	REQUIRE_THAT(Hy, WithinAbs(2.0f, 1.0e-5f));
-	REQUIRE_THAT(Hz, WithinAbs(3.0f, 1.0e-5f));
+	// The half extents are the absolute half scale.
+	float Hx = 0.0f;
+	float Hy = 0.0f;
+	float Hz = 0.0f;
+	HalfExtentsFromScale(FVector(2.0f, -4.0f, 6.0f), Hx, Hy, Hz);
+	TestEqual("HalfX", Hx, 1.0f, 1.0e-5f);
+	TestEqual("HalfY", Hy, 2.0f, 1.0e-5f);
+	TestEqual("HalfZ", Hz, 3.0f, 1.0e-5f);
+	return true;
 }
 
-TEST_CASE("MassFromHalfExtents floors tiny volumes", "[physics][collision]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMassFromHalfExtentsTest, "System.PhysicsCore.Collision.MassFromHalfExtents",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FMassFromHalfExtentsTest::RunTest(const FString& Parameters)
 {
-	REQUIRE(MassFromHalfExtents(0.01f, 0.01f, 0.01f) >= 0.08f);
-	REQUIRE_THAT(MassFromHalfExtents(1.0f, 1.0f, 1.0f), WithinAbs(8.0f, 1.0e-5f));
+	// Tiny volumes get a floor.
+	TestTrue("Floor", MassFromHalfExtents(0.01f, 0.01f, 0.01f) >= 0.08f);
+	TestEqual("Unit cube", MassFromHalfExtents(1.0f, 1.0f, 1.0f), 8.0f, 1.0e-5f);
+	return true;
 }
 
-TEST_CASE("ClampPositionXZ clamps to bounds", "[physics][collision]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FClampPositionXZTest, "System.PhysicsCore.Collision.ClampPositionXZ",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FClampPositionXZTest::RunTest(const FString& Parameters)
 {
-	glm::vec3 P{100.0f, 5.0f, -50.0f};
+	FVector P(100.0f, 5.0f, -50.0f);
 	ClampPositionXZ(P, 18.0f);
-	REQUIRE_THAT(P.x, WithinAbs(18.0f, 1.0e-5f));
-	REQUIRE_THAT(P.y, WithinAbs(5.0f, 1.0e-5f));
-	REQUIRE_THAT(P.z, WithinAbs(-18.0f, 1.0e-5f));
+	TestEqual("X", P.X, 18.0f, 1.0e-5f);
+	TestEqual("Y untouched", P.Y, 5.0f, 1.0e-5f);
+	TestEqual("Z", P.Z, -18.0f, 1.0e-5f);
+	return true;
 }
 
-TEST_CASE("XzDiscOverlapsAabb detects overlap", "[physics][collision]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FXzDiscOverlapsAabbTest, "System.PhysicsCore.Collision.XzDiscOverlapsAabb",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FXzDiscOverlapsAabbTest::RunTest(const FString& Parameters)
 {
-	REQUIRE(XzDiscOverlapsAabb(0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0.5f, 0.5f, 0.0f));
-	REQUIRE_FALSE(XzDiscOverlapsAabb(5.0f, 0.0f, 0.3f, 0.0f, 0.0f, 0.5f, 0.5f, 0.0f));
+	TestTrue("Overlap", XzDiscOverlapsAabb(0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0.5f, 0.5f, 0.0f));
+	TestFalse("Apart", XzDiscOverlapsAabb(5.0f, 0.0f, 0.3f, 0.0f, 0.0f, 0.5f, 0.5f, 0.0f));
+	return true;
 }
 
-TEST_CASE("CapsuleAabbMtv pushes capsule out of AABB", "[physics][collision]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCapsuleAabbMtvTest, "System.PhysicsCore.Collision.CapsuleAabbMtv",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FCapsuleAabbMtvTest::RunTest(const FString& Parameters)
 {
-	glm::vec2 Normal{};
+	// The capsule is pushed out of the box.
+	FVector2D Normal = FVector2D::ZeroVector;
 	float Penetration = 0.0f;
-	REQUIRE(CapsuleAabbMtv(0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0.4f, 0.4f, Normal, Penetration));
-	REQUIRE(Penetration > 0.0f);
-	REQUIRE(glm::length(Normal) > 0.5f);
-
-	REQUIRE_FALSE(CapsuleAabbMtv(3.0f, 0.0f, 0.3f, 0.0f, 0.0f, 0.4f, 0.4f, Normal, Penetration));
+	TestTrue("Overlap", CapsuleAabbMtv(0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0.4f, 0.4f, Normal, Penetration));
+	TestTrue("Penetration", Penetration > 0.0f);
+	TestTrue("Normal", Normal.Size() > 0.5f);
+	TestFalse("Apart", CapsuleAabbMtv(3.0f, 0.0f, 0.3f, 0.0f, 0.0f, 0.4f, 0.4f, Normal, Penetration));
+	return true;
 }
 
-TEST_CASE("SeparateAabb separates overlapping boxes", "[physics][collision]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSeparateAabbTest, "System.PhysicsCore.Collision.SeparateAabb",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FSeparateAabbTest::RunTest(const FString& Parameters)
 {
-	glm::vec3 A{0.0f, 0.0f, 0.0f};
-	glm::vec3 B{0.5f, 0.0f, 0.0f};
-	const glm::vec3 Half{0.5f, 0.5f, 0.5f};
-	glm::vec3 Normal{};
-	REQUIRE(SeparateAabb(A, Half, B, Half, 0.5f, 0.5f, &Normal));
-	// Centers should move apart along X
-	REQUIRE(A.x < 0.0f);
-	REQUIRE(B.x > 0.5f);
+	FVector A(0.0f, 0.0f, 0.0f);
+	FVector B(0.5f, 0.0f, 0.0f);
+	const FVector Half(0.5f, 0.5f, 0.5f);
+	FVector Normal = FVector::ZeroVector;
+	TestTrue("Separated", SeparateAabb(A, Half, B, Half, 0.5f, 0.5f, &Normal));
+	// The centers move apart along X.
+	TestTrue("A moved", A.X < 0.0f);
+	TestTrue("B moved", B.X > 0.5f);
+	return true;
 }
+
+#endif // WITH_DEV_AUTOMATION_TESTS

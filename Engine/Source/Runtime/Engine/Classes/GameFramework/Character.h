@@ -61,7 +61,7 @@ struct ENGINE_API UCharacterMovementComponent
 ///
 /// Contract:
 /// - Actor location = capsule **feet** (bottom), not capsule center.
-/// - Capsule extends upward by FCapsuleShape::height; XZ radius FCapsuleShape::radius.
+/// - The capsule (FCollisionShape) extends upward by twice its half height; XZ radius = capsule radius.
 /// - Not registered as a FPhysScene FBodyInstance; moves via PerformMovement queries.
 /// - Modes: Walking / Falling via SetMovementMode; floor via FindFloor → IsWalkable.
 class ENGINE_API ACharacter : public APawn
@@ -69,7 +69,7 @@ class ENGINE_API ACharacter : public APawn
 public:
 	ACharacter();
 
-	void SetCapsule(const FCapsuleShape& InCapsule)
+	void SetCapsule(const FCollisionShape& InCapsule)
 	{
 		Capsule = InCapsule;
 	}
@@ -78,7 +78,7 @@ public:
 		Movement = InMovement;
 	}
 
-	[[nodiscard]] const FCapsuleShape& GetCapsule() const
+	[[nodiscard]] const FCollisionShape& GetCapsule() const
 	{
 		return Capsule;
 	}
@@ -217,7 +217,7 @@ private:
 	/// Unreal CMC step-up: raise ≤ MaxStepHeight, move forward, land on walkable floor.
 	[[nodiscard]] bool TryStepUp(FPhysScene& PhysScene, const glm::vec3& ForwardDelta, FDebugDraw* DebugDraw);
 
-	FCapsuleShape Capsule{};
+	FCollisionShape Capsule = FCollisionShape::MakeCapsule(0.35f, 0.925f);
 	UCharacterMovementComponent Movement{};
 	USkeletalMeshComponent Mesh{};
 	float AnimBlendInput = 0.0f;

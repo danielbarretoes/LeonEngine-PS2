@@ -1,5 +1,6 @@
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
+#include "Migration/GlmInterop.h"
 #include "Physics/PhysScene.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -14,10 +15,10 @@ namespace
 
 	void AddFloorBox(FPhysScene& Scene, const glm::vec3& Center, const glm::vec3& HalfExtents)
 	{
-		const std::size_t Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
+		const int32 Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
 		FBodyInstance& Body = Scene.GetBodies()[Id];
-		Body.Position = Center;
-		Body.HalfExtents = HalfExtents;
+		Body.Position = FromGlm(Center);
+		Body.HalfExtents = FromGlm(HalfExtents);
 	}
 
 } // namespace
@@ -53,7 +54,7 @@ TEST_CASE("FindFloor hits infinite floor plane", "[gameplay][character][floor]")
 	REQUIRE(Floor.bBlockingHit);
 	REQUIRE(Floor.bWalkableFloor);
 	REQUIRE(Floor.Hit.bFloorPlane);
-	REQUIRE_THAT(Floor.Hit.ImpactPoint.y, WithinAbs(0.0f, 1.0e-3f));
+	REQUIRE_THAT(Floor.Hit.ImpactPoint.Y, WithinAbs(0.0f, 1.0e-3f));
 	REQUIRE_THAT(Floor.FloorDist, WithinAbs(1.0f, 1.0e-3f));
 }
 
@@ -72,7 +73,7 @@ TEST_CASE("FindFloor hits static AABB top", "[gameplay][character][floor]")
 	REQUIRE(Floor.bBlockingHit);
 	REQUIRE(Floor.bWalkableFloor);
 	REQUIRE_FALSE(Floor.Hit.bFloorPlane);
-	REQUIRE_THAT(Floor.Hit.ImpactPoint.y, WithinAbs(2.0f, 1.0e-2f));
+	REQUIRE_THAT(Floor.Hit.ImpactPoint.Y, WithinAbs(2.0f, 1.0e-2f));
 }
 
 TEST_CASE("Character lands on floor plane after fall", "[gameplay][character][movement]")
@@ -318,13 +319,13 @@ TEST_CASE("Character walk shove moves Dynamic crate without overlap", "[gameplay
 	Character->Reset({0.0f, 0.0f, 0.0f}, 0.0f);
 
 	FPhysScene& Scene = World.GetPhysicsScene();
-	const std::size_t Id = Scene.AddBody({3, EBodyType::Dynamic, 1.0f, true});
+	const int32 Id = Scene.AddBody({3, EBodyType::Dynamic, 1.0f, true});
 	FBodyInstance& Crate = Scene.GetBodies()[Id];
 	// Capsule radius ~0.35; place crate so walking +X contacts the west face.
 	Crate.Position = {1.2f, 0.45f, 0.0f};
 	Crate.HalfExtents = {0.4f, 0.45f, 0.4f};
 	Crate.Mass = 1.0f;
-	const float X0 = Crate.Position.x;
+	const float X0 = Crate.Position.X;
 
 	for (int I = 0; I < 45; ++I)
 	{
@@ -337,7 +338,7 @@ TEST_CASE("Character walk shove moves Dynamic crate without overlap", "[gameplay
 		Scene.Step(Step);
 	}
 
-	REQUIRE(Crate.Position.x > X0 + 0.15f);
+	REQUIRE(Crate.Position.X > X0 + 0.15f);
 }
 
 TEST_CASE("World separates overlapping Character capsules", "[gameplay][character][pawn]")
@@ -359,7 +360,7 @@ TEST_CASE("World separates overlapping Character capsules", "[gameplay][characte
 	const float Dx = A->GetActorLocation().x - B->GetActorLocation().x;
 	const float Dz = A->GetActorLocation().z - B->GetActorLocation().z;
 	const float Dist = std::sqrt((Dx * Dx) + (Dz * Dz));
-	const float MinDist = A->GetCapsule().Radius + B->GetCapsule().Radius;
+	const float MinDist = A->GetCapsule().GetCapsuleRadius() + B->GetCapsule().GetCapsuleRadius();
 	REQUIRE(Dist + 1.0e-3f >= MinDist);
 }
 
@@ -406,7 +407,7 @@ TEST_CASE("Character walks up walkable slope ramp", "[gameplay][character][movem
 	REQUIRE(Character->GetActorLocation().x > X0 + 0.8f);
 	REQUIRE(Character->GetActorLocation().y > YStart + 0.35f);
 	REQUIRE(Character->GetCurrentFloor().bWalkableFloor);
-	REQUIRE(Character->GetCurrentFloor().Hit.ImpactNormal.y >= 0.71f);
+	REQUIRE(Character->GetCurrentFloor().Hit.ImpactNormal.Y >= 0.71f);
 }
 
 TEST_CASE("Character cannot stand on steep slope ramp", "[gameplay][character][movement][slope]")

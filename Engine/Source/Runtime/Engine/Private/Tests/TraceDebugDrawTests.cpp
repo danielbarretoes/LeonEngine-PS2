@@ -26,7 +26,7 @@ TEST_CASE("DrawDebugLineTrace miss and hit fill DebugDraw", "[physics][trace][de
 TEST_CASE("LineTrace ForOneFrame draws via PhysScene", "[physics][trace][debug]")
 {
 	FPhysScene Scene;
-	const std::size_t Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
+	const int32 Id = Scene.AddBody({0, EBodyType::Static, 1.0f, true});
 	Scene.GetBodies()[Id].Position = {0.0f, 0.5f, 0.0f};
 	Scene.GetBodies()[Id].HalfExtents = {0.5f, 0.5f, 0.5f};
 
@@ -40,7 +40,7 @@ TEST_CASE("LineTrace ForOneFrame draws via PhysScene", "[physics][trace][debug]"
 	REQUIRE_FALSE(Draw.IsEmpty());
 
 	Draw.Clear();
-	std::vector<FHitResult> Misses;
+	TArray<FHitResult> Misses;
 	REQUIRE_FALSE(Scene.LineTraceMultiByChannel(
 		Misses, {10.0f, 0.5f, -2.0f}, {10.0f, 0.5f, 2.0f}, ECollisionChannel::WorldStatic, Params, &Draw));
 	REQUIRE_FALSE(Draw.IsEmpty());
