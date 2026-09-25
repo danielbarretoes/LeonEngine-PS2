@@ -7,18 +7,22 @@
 #include "CoreTypes.h"
 #include "Misc/AssertionMacros.h"
 #include "UObject/NameTypes.h"
+#include "UObject/ObjectVersion.h"
 
 #include <type_traits>
 
+class FLinker;
 class FText;
+class UObject;
 
 /**
  * Base of every serializer: one operator<< per type both reads and writes, depending on IsLoading / IsSaving
  * (UE: FArchive, with FArchiveState folded in). Integers are little-endian on disk.
  *
- * Leon: FName and FText serialize as their strings in this base class (UE's base does nothing for FName; the
- * package linker overrides it in P11). FString is written as UTF-8 bytes with a positive length (UE writes UTF-16
- * with a negative length for non-ASCII text).
+ * Leon: FName and FText serialize as their strings in this base class (UE's base does nothing for FName); the
+ * package linkers (CoreUObject's FLinkerLoad / FLinkerSave) override the FName and UObject* operators with their name
+ * and object tables. FString is written as UTF-8 bytes with a positive length (UE writes UTF-16 with a negative length
+ * for non-ASCII text).
  */
 class CORE_API FArchive
 {
@@ -41,6 +45,21 @@ public:
 
 	virtual FArchive& operator<<(FName& Value);
 	virtual FArchive& operator<<(FText& Value);
+
+	/**
+	 * An object reference (UE). This base archive does nothing on either side: only archives that can name objects
+	 * override it (the package linkers write an FPackageIndex into their import / export tables).
+	 */
+	virtual FArchive& operator<<(UObject*& /*Value*/)
+	{
+		return *this;
+	}
+
+	/** The package linker this archive is, or nullptr (UE: GetLinker). */
+	virtual FLinker* GetLinker()
+	{
+		return nullptr;
+	}
 
 	/** Position, or INDEX_NONE when the archive cannot tell. */
 	virtual int64 Tell()
@@ -132,6 +151,21 @@ public:
 		return ArIsCooking;
 	}
 
+	/**
+	 * The package format version of the data (ELeonPackageVersion): the latest when saving, the package's own when a
+	 * linker loads it (UE 5: UEVer; UE 4.27: UE4Ver).
+	 */
+	FORCEINLINE int32 UEVer() const
+	{
+		return ArUEVer;
+	}
+
+	/** The licensee version of the data: always 0 in Leon (UE 5: LicenseeUEVer). */
+	FORCEINLINE int32 LicenseeUEVer() const
+	{
+		return ArLicenseeUEVer;
+	}
+
 	void SetIsLoading(bool bIsLoading)
 	{
 		ArIsLoading = bIsLoading;
@@ -155,6 +189,14 @@ public:
 	void SetIsCooking(bool bCooking)
 	{
 		ArIsCooking = bCooking;
+	}
+	void SetUEVer(int32 InVer)
+	{
+		ArUEVer = InVer;
+	}
+	void SetLicenseeUEVer(int32 InVer)
+	{
+		ArLicenseeUEVer = InVer;
 	}
 
 	void SetError()
@@ -266,6 +308,8 @@ protected:
 	bool ArIsFilterEditorOnly = false;
 	bool ArForceByteSwapping = false;
 	bool ArIsCooking = false;
+	int32 ArUEVer = VER_LEON_LATEST;
+	int32 ArLicenseeUEVer = VER_LEON_LATEST_LICENSEE;
 };
 
 /**
