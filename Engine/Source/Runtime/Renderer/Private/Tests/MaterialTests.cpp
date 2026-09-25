@@ -1,11 +1,26 @@
 #include "CoreMinimal.h"
+#include "Dom/JsonObject.h"
 #include "Material.h"
 #include "MaterialAsset.h"
 #include "Misc/AutomationTest.h"
-
-#include <nlohmann/json.hpp>
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
+
+namespace
+{
+	/** Parses a JSON object literal; an empty object when the text does not parse. */
+	FJsonObject ParseObject(const FString& Text)
+	{
+		TSharedPtr<FJsonObject> Object;
+		if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Object) || !Object.IsValid())
+		{
+			return FJsonObject();
+		}
+		return *Object;
+	}
+} // namespace
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMaterialRoughnessFromShininessDecreasesWithShininessTest,
 	"System.Renderer.Material.RoughnessFromShininessDecreasesWithShininess",
@@ -58,10 +73,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMaterialHasMaterialSurfaceFieldsDetectsSurface
 bool FMaterialHasMaterialSurfaceFieldsDetectsSurfaceKeysTest::RunTest(const FString& Parameters)
 {
 	// Surface keys (albedo, maps) count as material fields; gameplay-only keys and empty objects do not.
-	TestTrue("albedo", HasMaterialSurfaceFields({{"albedo", {1, 1, 1}}}));
-	TestTrue("albedoMap", HasMaterialSurfaceFields({{"albedoMap", "checker"}}));
-	TestFalse("tag only", HasMaterialSurfaceFields({{"tag", "player"}}));
-	TestFalse("empty object", HasMaterialSurfaceFields(nlohmann::json::object()));
+	TestTrue("albedo", HasMaterialSurfaceFields(ParseObject("{\"albedo\": [1, 1, 1]}")));
+	TestTrue("albedoMap", HasMaterialSurfaceFields(ParseObject("{\"albedoMap\": \"checker\"}")));
+	TestFalse("tag only", HasMaterialSurfaceFields(ParseObject("{\"tag\": \"player\"}")));
+	TestFalse("empty object", HasMaterialSurfaceFields(FJsonObject()));
 	return true;
 }
 

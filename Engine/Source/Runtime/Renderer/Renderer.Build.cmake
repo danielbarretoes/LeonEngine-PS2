@@ -2,8 +2,8 @@
 # Debt: calls OpenGL directly instead of going through RHI command lists.
 leon_module(Renderer
 	PLATFORMS Desktop
-	PUBLIC_DEPENDENCIES Core RHI RenderCore SlateCore AnimationCore GLM NlohmannJson
-	PRIVATE_DEPENDENCIES OpenGLDrv Glad STB
+	PUBLIC_DEPENDENCIES Core RHI RenderCore SlateCore AnimationCore
+	PRIVATE_DEPENDENCIES OpenGLDrv Glad STB Json
 	# Debt: Renderer.h includes Level.h and Level.h includes GPU resources.
 	CIRCULAR_DEPENDENCIES Engine
 )

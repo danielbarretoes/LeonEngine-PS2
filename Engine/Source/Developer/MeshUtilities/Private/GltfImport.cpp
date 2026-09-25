@@ -102,7 +102,8 @@ namespace
 		const fs::path OutPath = MaterialsDir / FileName;
 		std::error_code Ec;
 		fs::create_directories(MaterialsDir, Ec);
-		(void)SaveLeonMaterialFile(OutPath.generic_string(), "M_" + SanitizeName(InName), M, BaseMap, NormalMap);
+		(void)SaveLeonMaterialFile(FString(OutPath.generic_string().c_str()),
+			FString(("M_" + SanitizeName(InName)).c_str()), M, FString(BaseMap.c_str()), FString(NormalMap.c_str()));
 		OutDesc.Name = "M_" + SanitizeName(InName);
 		OutDesc.LmatRelativePath = (fs::path("materials") / FileName).generic_string();
 	}
