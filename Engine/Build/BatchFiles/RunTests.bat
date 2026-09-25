@@ -1,5 +1,5 @@
 @echo off
-REM Engine\Build\BatchFiles\RunTests.bat [Catch2 args]
+REM Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]
 REM Builds LeonAutomationTests (Win64 Development) and runs every module's Private/Tests from the repo root.
 setlocal EnableExtensions
 set "LEON_ROOT=%~dp0..\..\.."

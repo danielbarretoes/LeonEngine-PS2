@@ -19,27 +19,24 @@
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
 
-#include <algorithm>
-#include <cmath>
 #include <cstdarg>
-#include <cstdio>
-#include <iostream>
-#include <limits>
-#include <vector>
 
 JPH_SUPPRESS_WARNINGS
+
+DEFINE_LOG_CATEGORY_STATIC(LogJolt, Log, All);
 
 namespace
 {
 
+	/** Jolt's trace hook, routed to the log. */
 	void TraceImpl(const char* Fmt, ...)
 	{
-		char Buffer[1024];
+		ANSICHAR Buffer[1024];
 		va_list Args;
 		va_start(Args, Fmt);
-		std::vsnprintf(Buffer, sizeof(Buffer), Fmt, Args);
+		(void)FCStringAnsi::GetVarArgs(Buffer, sizeof(Buffer), Fmt, Args);
 		va_end(Args);
-		std::cerr << Buffer << '\n';
+		UE_LOG(LogJolt, Log, "%s", Buffer);
 	}
 
 	namespace Layers
@@ -133,9 +130,9 @@ namespace
 		// Half-extents must exceed convex radius or BoxShapeSettings::Create fails.
 		constexpr float ConvexRadius = 0.001f;
 		constexpr float MinHalf = 0.002f;
-		const float Hx = std::max(HalfExtents.X, MinHalf);
-		const float Hy = std::max(HalfExtents.Y, MinHalf);
-		const float Hz = std::max(HalfExtents.Z, MinHalf);
+		const float Hx = FMath::Max(HalfExtents.X, MinHalf);
+		const float Hy = FMath::Max(HalfExtents.Y, MinHalf);
+		const float Hz = FMath::Max(HalfExtents.Z, MinHalf);
 		JPH::BoxShapeSettings ShapeSettings(JPH::Vec3(Hx, Hy, Hz), ConvexRadius);
 		ShapeSettings.SetEmbedded();
 		JPH::ShapeSettings::ShapeResult ShapeResult = ShapeSettings.Create();
@@ -154,7 +151,7 @@ namespace
 			return nullptr;
 		}
 		JPH::TriangleList Tris;
-		Tris.reserve(static_cast<std::size_t>(Mesh.Indices.Num() / 3));
+		Tris.reserve(static_cast<size_t>(Mesh.Indices.Num() / 3));
 		const uint32 VertexCount = static_cast<uint32>(Mesh.Positions.Num());
 		for (int32 I = 0; I + 2 < Mesh.Indices.Num(); I += 3)
 		{
@@ -194,8 +191,8 @@ namespace
 		FJoltPhysicsBackend()
 		{
 			EnsureJoltTypes();
-			TempAllocator = std::make_unique<JPH::TempAllocatorImpl>(4 * 1024 * 1024);
-			JobSystem = std::make_unique<JPH::JobSystemSingleThreaded>(JPH::cMaxPhysicsJobs);
+			TempAllocator = MakeUnique<JPH::TempAllocatorImpl>(4 * 1024 * 1024);
+			JobSystem = MakeUnique<JPH::JobSystemSingleThreaded>(JPH::cMaxPhysicsJobs);
 
 			constexpr JPH::uint MaxBodies = 4096;
 			constexpr JPH::uint MaxBodyPairs = 4096;
@@ -229,17 +226,17 @@ namespace
 			{
 				DestroyBody(Bodies, Id);
 			}
-			BodyIds.clear();
+			BodyIds.Empty();
 			DestroyFloor(Bodies);
 			LastSkip = NoLevelMeshIndex;
-			FloorY = std::numeric_limits<float>::quiet_NaN();
+			bHasFloorY = false;
 		}
 
 		void RigidRebuild(const TArray<FBodyInstance>& Bodies, const TArray<FTriangleMeshCollision>* TriangleMeshes,
 			SIZE_T SkipLevelMeshIndex) override
 		{
 			RigidClear();
-			BodyIds.assign(static_cast<std::size_t>(Bodies.Num()), JPH::BodyID());
+			BodyIds.Init(JPH::BodyID(), Bodies.Num());
 			LastSkip = SkipLevelMeshIndex;
 
 			JPH::BodyInterface& Iface = PhysicsSystem.GetBodyInterface();
@@ -251,7 +248,7 @@ namespace
 				}
 				const FTriangleMeshCollision* Tri =
 					(TriangleMeshes != nullptr && I < TriangleMeshes->Num()) ? &(*TriangleMeshes)[I] : nullptr;
-				BodyIds[static_cast<std::size_t>(I)] = CreateBody(Iface, Bodies[I], Tri);
+				BodyIds[I] = CreateBody(Iface, Bodies[I], Tri);
 			}
 			PhysicsSystem.OptimizeBroadPhase();
 		}
@@ -259,7 +256,7 @@ namespace
 		void RigidPrepareStep(const TArray<FBodyInstance>& Bodies, SIZE_T SkipLevelMeshIndex) override
 		{
 			// Structure changed outside SyncFromLevel — rebuild as boxes (meshes need SyncFromLevel).
-			if (BodyIds.size() != static_cast<std::size_t>(Bodies.Num()))
+			if (BodyIds.Num() != Bodies.Num())
 			{
 				RigidRebuild(Bodies, nullptr, SkipLevelMeshIndex);
 				return;
@@ -268,9 +265,9 @@ namespace
 			JPH::BodyInterface& Iface = PhysicsSystem.GetBodyInterface();
 			LastSkip = SkipLevelMeshIndex;
 
-			for (std::size_t I = 0; I < BodyIds.size(); ++I)
+			for (int32 I = 0; I < BodyIds.Num(); ++I)
 			{
-				const FBodyInstance& Src = Bodies[static_cast<int32>(I)];
+				const FBodyInstance& Src = Bodies[I];
 				const bool bSkip = Src.LevelMeshIndex == SkipLevelMeshIndex;
 
 				if (bSkip)
@@ -308,19 +305,19 @@ namespace
 				return;
 			}
 			EnsureFloor(InFloorY);
-			PhysicsSystem.SetGravity(JPH::Vec3(0.0f, -std::abs(GravityMagnitude), 0.0f));
+			PhysicsSystem.SetGravity(JPH::Vec3(0.0f, -FMath::Abs(GravityMagnitude), 0.0f));
 
-			const int CollisionSteps = std::max(1, static_cast<int>(std::ceil(DeltaTime * 60.0f)));
-			PhysicsSystem.Update(DeltaTime, CollisionSteps, TempAllocator.get(), JobSystem.get());
+			const int32 CollisionSteps = FMath::Max(1, FMath::CeilToInt(DeltaTime * 60.0f));
+			PhysicsSystem.Update(DeltaTime, CollisionSteps, TempAllocator.Get(), JobSystem.Get());
 		}
 
 		void RigidReadBack(TArray<FBodyInstance>& Bodies) override
 		{
 			JPH::BodyInterface& Iface = PhysicsSystem.GetBodyInterface();
-			const int32 N = FMath::Min(Bodies.Num(), static_cast<int32>(BodyIds.size()));
+			const int32 N = FMath::Min(Bodies.Num(), BodyIds.Num());
 			for (int32 I = 0; I < N; ++I)
 			{
-				const JPH::BodyID Id = BodyIds[static_cast<std::size_t>(I)];
+				const JPH::BodyID Id = BodyIds[I];
 				if (Id.IsInvalid() || Bodies[I].Type != EBodyType::Dynamic)
 				{
 					continue;
@@ -392,7 +389,7 @@ namespace
 		bool RigidSphereTrace(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End, float Radius,
 			ECollisionChannel InChannel, SIZE_T SkipLevelMeshIndex) override
 		{
-			const float R = std::max(Radius, 1.0e-3f);
+			const float R = FMath::Max(Radius, 1.0e-3f);
 			JPH::RefConst<JPH::SphereShape> Sphere = new JPH::SphereShape(R);
 			return CastShapeTrace(OutHits, Start, End, Sphere, InChannel, SkipLevelMeshIndex, R);
 		}
@@ -400,8 +397,8 @@ namespace
 		bool RigidCapsuleTrace(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End, float Radius,
 			float HalfHeight, ECollisionChannel InChannel, SIZE_T SkipLevelMeshIndex) override
 		{
-			const float R = std::max(Radius, 1.0e-3f);
-			const float Hh = std::max(HalfHeight, 0.0f);
+			const float R = FMath::Max(Radius, 1.0e-3f);
+			const float Hh = FMath::Max(HalfHeight, 0.0f);
 			JPH::RefConst<JPH::CapsuleShape> Capsule = new JPH::CapsuleShape(Hh, R);
 			return CastShapeTrace(OutHits, Start, End, Capsule, InChannel, SkipLevelMeshIndex, R + Hh);
 		}
@@ -569,9 +566,9 @@ namespace
 			{
 				// Near-flat AABBs (zero Y from a plane mesh) need thickness > convex radius.
 				FVector He = Src.HalfExtents;
-				He.X = std::max(He.X, 0.05f);
-				He.Y = std::max(He.Y, 0.05f);
-				He.Z = std::max(He.Z, 0.05f);
+				He.X = FMath::Max(He.X, 0.05f);
+				He.Y = FMath::Max(He.Y, 0.05f);
+				He.Z = FMath::Max(He.Z, 0.05f);
 				Shape = CreateBoxShape(He);
 				BodyPos = JPH::RVec3(Src.Position.X, Src.Position.Y, Src.Position.Z);
 			}
@@ -588,7 +585,7 @@ namespace
 			if (bDynamic)
 			{
 				Settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
-				Settings.mMassPropertiesOverride.mMass = std::max(Src.Mass, 0.5f);
+				Settings.mMassPropertiesOverride.mMass = FMath::Max(Src.Mass, 0.5f);
 				if (!Src.bEnableGravity)
 				{
 					Settings.mGravityFactor = 0.0f;
@@ -615,7 +612,7 @@ namespace
 
 		void EnsureFloor(float InFloorY)
 		{
-			if (!FloorId.IsInvalid() && std::isfinite(FloorY) && std::abs(InFloorY - FloorY) < 1.0e-4f)
+			if (!FloorId.IsInvalid() && bHasFloorY && FMath::Abs(InFloorY - FloorY) < 1.0e-4f)
 			{
 				return;
 			}
@@ -632,18 +629,20 @@ namespace
 				JPH::Quat::sIdentity(), JPH::EMotionType::Static, Layers::NonMoving);
 			FloorId = Iface.CreateAndAddBody(Settings, JPH::EActivation::DontActivate);
 			FloorY = InFloorY;
+			bHasFloorY = true;
 		}
 
 		FBPLayerInterfaceImpl BroadPhaseLayerInterface;
 		FObjectVsBroadPhaseLayerFilterImpl ObjectVsBroadphaseLayerFilter;
 		FObjectLayerPairFilterImpl ObjectVsObjectLayerFilter;
 		JPH::PhysicsSystem PhysicsSystem;
-		std::unique_ptr<JPH::TempAllocatorImpl> TempAllocator;
-		std::unique_ptr<JPH::JobSystemSingleThreaded> JobSystem;
-		std::vector<JPH::BodyID> BodyIds;
+		TUniquePtr<JPH::TempAllocatorImpl> TempAllocator;
+		TUniquePtr<JPH::JobSystemSingleThreaded> JobSystem;
+		TArray<JPH::BodyID> BodyIds;
 		JPH::BodyID FloorId{};
 		SIZE_T LastSkip = NoLevelMeshIndex;
-		float FloorY = std::numeric_limits<float>::quiet_NaN();
+		float FloorY = 0.0f;
+		bool bHasFloorY = false;
 	};
 
 } // namespace

@@ -1,5 +1,5 @@
-# Runs the automation tests of every module in its closure (<Module>/Private/Tests/**): the UE-style automation tests
-# (IMPLEMENT_SIMPLE_AUTOMATION_TEST) first, then the Catch2 tests of the modules not migrated yet.
+# Runs the automation tests (IMPLEMENT_SIMPLE_AUTOMATION_TEST) of every module in its closure
+# (<Module>/Private/Tests/**).
 # UE: automation tests (IMPLEMENT_SIMPLE_AUTOMATION_TEST) run by the session frontend / -ExecCmds.
 leon_target(LeonAutomationTests TYPE Program
 	PLATFORMS Desktop
