@@ -34,7 +34,7 @@ Material, mesh and environment paths are strings in the level's string table. `R
 1. an absolute path that exists is used as is;
 2. `<level folder>/../<Key>`, which is the `Content/` folder for `Content/Levels/X.llev`;
 3. legacy keys containing `Materials/` are retried from that folder;
-4. otherwise `FPaths::ResolveAssetPath(Key)` (executable folder, then `Engine/Content`).
+4. otherwise `FPaths::ResolveLegacyContentPath(Key)` (the path as given, then the project content, then `Engine/Content`).
 
 The environment path is read and written but ignored (HDR environment maps were removed in 0.12.0).
 
@@ -136,10 +136,10 @@ Spins (`spinYaw` degrees per second), bobs (`bobBaseY`, `bobAmplitude`, `bobSpee
 The Win64 `LeonGame` target loads one level and runs `ADefaultGameMode` on it:
 
 ```text
-Engine\Binaries\Win64\LeonGame.exe [-map=<.llev>] [-nullrhi] [--tick <Hz>] [--show-stats]
+Engine\Binaries\Win64\LeonGame.exe [-map=<.llev>] [-nullrhi] [-tick=<Hz>] [-showstats]
 ```
 
-`-map=` takes a path relative to the working directory (or absolute), else relative to `Engine/Content`; without it the startup level is `Engine/Content/LevelTemplates/Starter.llev`. `-nullrhi` runs headless at `--tick` Hz (default 60). The level's game mode string is stored but not used to pick a game mode. There is no level catalog, level browser or project pack (all removed in 0.12.0), and `Game/ThirdPerson` is a build project (`.lproj`), not a runtime pack.
+`-map=` takes a path relative to the working directory (or absolute), else relative to the content folders; without it the startup level is `GameDefaultMap` from `[/Script/EngineSettings.GameMapsSettings]` in the engine config (`BaseEngine.ini`: `LevelTemplates/Starter.llev`). `-nullrhi` runs headless at `-tick=` Hz (default 60). The level's game mode string is stored but not used to pick a game mode. There is no level catalog, level browser or project pack (all removed in 0.12.0), and `Game/ThirdPerson` is a build project (`.lproj`), not a runtime pack.
 
 ## Level templates
 

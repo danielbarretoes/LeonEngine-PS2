@@ -98,7 +98,7 @@ T* CreateDefaultSubobject(ArgsType&&... Args)
 ### 1.4 Static classes vs free functions
 
 Sets of related free functions become a static class **only where UE has that homologue**
-(`FPaths`, `FFileHelper`, `FCString`, `FJsonUtils`, `UGameplayStatics`, `FCookRecipe`, `FPS2RHI`). Otherwise
+(`FPaths`, `FFileHelper`, `FCString`, `FParse`, `FJsonSerializer`, `UGameplayStatics`, `FCookRecipe`, `FPS2RHI`). Otherwise
 keep PascalCase free functions, as UE does with `DrawDebugLine` (`LoadLevelFile`, `LoadObj`,
 `CreatePhysicsBackend`).
 
@@ -199,6 +199,14 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 - **Assertions.** `check` / `checkf` for invariants (stripped in Shipping), `verify` when the expression must run in
   every build, `checkNoEntry` for unreachable paths, `ensure` / `ensureMsgf` for recoverable failures that should be
   reported.
+- **Files.** Open, read and list files through `IFileManager::Get()`, `FFileHelper` or
+  `FPlatformFileManager::Get().GetPlatformFile()`, and build paths with `FPaths` (`FPaths::ProjectContentDir() /
+  "Maps"`). No `fopen`, `std::fstream` or `std::filesystem` in engine code: on the PS2 the only backend is the
+  platform file layer, and later a pak file layer sits on top of it.
+- **Settings and flags.** A tunable goes in the config (`GConfig->GetFloat(Section, Key, Value, GGameIni)`, section
+  `/Script/<Module>.<Class>` as UE names it) with the compiled value as the default, so the code still works when the
+  file cannot be read (PS2 without the PCSX2 host filesystem). Command-line switches are read with
+  `FParse::Param` / `FParse::Value` on `FCommandLine::Get()` (`-name` / `-name=value`), never from `argv`.
 - Use the Core fixed-width types (`int32`, `uint64`, …) from `CoreTypes.h` in engine APIs; `std::uint8_t`
   style types remain in older code.
 
@@ -227,7 +235,8 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 - Include platform headers through `COMPILED_PLATFORM_HEADER(PlatformMemory.h)` from a `HAL/` header.
 - Dependencies that only exist on some platforms use suffixed keywords in the `.Build.cmake`
   (`PRIVATE_DEPENDENCIES_Desktop GLFW`) or the extension's `leon_module_extend`.
-- Known exception to remove: `Core/Private/Misc/Paths.cpp` still tests `PLATFORM_WINDOWS`.
+- Known exceptions to remove: `Core/Private/HAL/MallocAnsi.cpp` and `Core/Private/Misc/OutputDeviceRedirector.cpp`
+  still test `PLATFORM_WINDOWS`.
 
 ---
 

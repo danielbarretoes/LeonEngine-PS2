@@ -15,7 +15,7 @@ Engine/Platforms/PS2/
       RunPCSX2.ps1            launch a project's (or engine program's) ELF in PCSX2 (optionally build it first)
       DockerEntry.sh          entry point inside the ps2dev container (re-runs LeonBuildTool)
     Docker/Dockerfile         optional local image: pinned ps2dev + CMake + Ninja
-  Config/PS2Engine.ini        platform config (placeholder, not loaded yet)
+  Config/PS2Engine.ini        platform config layer (resolution, stats)
   Documentation/CookNotes.md
   Documentation/Budgets.md    ELF size, heap and FName pool numbers per phase
   Source/

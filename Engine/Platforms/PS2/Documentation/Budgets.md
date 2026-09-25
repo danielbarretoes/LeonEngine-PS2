@@ -37,6 +37,10 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | P2 | TestPAL | 479 822 | 6 220 | 37 416 | | Core automation tests, section GC |
 | P3 | ThirdPerson | 361 566 | 6 884 | 36 096 | 371 068 | Core math unused by the game yet: section GC drops all of it |
 | P3 | TestPAL | 571 870 | 6 232 | 38 096 | | Core math and its tests (+92 KB of text) |
+| P4 | ThirdPerson | 561 070 | | | | file layer, config, Json, Projects; `__cxa_guard`, the global `operator new` and `__cxa_pure_virtual` pulled in libstdc++'s unwinder and demangler |
+| P4 | ThirdPerson | 442 144 | 6 916 | 29 848 | 450 152 | `-fno-threadsafe-statics` and `PS2PlatformRuntime.cpp` (new / delete through `FMemory`, own pure-virtual handler) |
+| P4 | BlankProgram | 178 560 | 6 132 | 27 084 | | same fix |
+| P4 | TestPAL | 731 204 | 6 268 | 32 392 | | Core services, Json, Projects and their tests |
 
 | Version | Program | GMalloc peak | Process | Name pool | Notes |
 |---|---|---:|---:|---:|---|
@@ -44,3 +48,5 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | P2 | ThirdPerson | | 0.5 MB | | overlay `RAM 0.5/32.0 MB`, 60 FPS, Draw3D `boxes=343 tris=278 emit=254` |
 | P3 | TestPAL (35 tests) | 69 KB | 688 KB | 85 names, 32 KB allocated (1 block + hash) | math tests pass with the Win64 reference values |
 | P3 | ThirdPerson | | 0.5 MB | | unchanged; 60 FPS, same Draw3D numbers |
+| P4 | TestPAL (46 tests) | 70 KB | 836 KB | 101 names, 32 KB allocated (1 block + hash) | Core, Json and Projects tests; config read from memory |
+| P4 | ThirdPerson | | 0.6 MB | | 60 FPS, same Draw3D numbers; PCSX2 host filesystem off, so `Character tuning from compiled defaults` |

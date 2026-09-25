@@ -39,7 +39,7 @@ The script finds PCSX2 through `$env:LEON_PCSX2`, `pcsx2-qt.exe` on `PATH`, or t
 ```text
 Game/ThirdPerson/
 ├── ThirdPerson.lproj          project descriptor (module ThirdPerson, TargetPlatforms PS2, no plugins)
-├── Config/                          DefaultEngine.ini, DefaultGame.ini, DefaultInput.ini (placeholders)
+├── Config/                          DefaultEngine.ini, DefaultGame.ini (character tuning), DefaultInput.ini
 ├── Content/                         Levels/, Materials/, Textures/ (README only; content is built in code)
 └── Source/
     ├── ThirdPerson.Target.cmake     game target
@@ -87,7 +87,9 @@ LeonBuildTool generates the target's module table and marks ThirdPerson as the p
 
 ## Config
 
-`Config/DefaultEngine.ini`, `DefaultGame.ini` and `DefaultInput.ini` follow Unreal's layout but are placeholders: nothing loads them yet. `DefaultInput.ini` documents the pad bindings that `FThirdPersonGameMode::Tick` hard-codes.
+`Config/DefaultEngine.ini`, `DefaultGame.ini` and `DefaultInput.ini` follow Unreal's layout and are loaded by `GConfig` at startup, on top of `Engine/Config/Base*.ini` and `Engine/Platforms/PS2/Config/PS2Engine.ini`. `FThirdPersonCharacter::LoadConfig` reads `MoveSpeed`, `Gravity` and `JumpSpeed` from `[/Script/ThirdPerson.ThirdPersonCharacter]` in `DefaultGame.ini` and logs where they came from (`Character tuning from DefaultGame.ini` or `... compiled defaults`). `DefaultInput.ini` only documents the pad bindings that `FThirdPersonGameMode::Tick` hard-codes (input from config arrives in P13).
+
+On the PS2 the files are read through PCSX2's `host:` device, which is the ELF's folder. `RunPCSX2.ps1` stages the ini files and `ThirdPerson.lproj` there before launching (`-NoStage` skips it). PCSX2 only opens them with **Settings > Advanced > Enable Host Filesystem** (`[EmuCore] HostFs = true` in `PCSX2.ini`); without it the game runs with the compiled defaults, which are the same values.
 
 ## Isolation
 

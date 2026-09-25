@@ -76,13 +76,19 @@ On PS2 see [Run TestPAL in PCSX2](#run-testpal-in-pcsx2).
 game mode (`ADefaultGameMode`) on it:
 
 ```bat
-Engine\Binaries\Win64\LeonGame.exe [-map=<.llev>] [-nullrhi] [--tick <Hz>] [--show-stats]
+Engine\Binaries\Win64\LeonGame.exe [-map=<.llev>] [-nullrhi] [-tick=<Hz>] [-showstats]
 ```
 
-Without `-map=` it opens `Engine/Content/LevelTemplates/Starter.llev`; a `-map=` path is taken relative to the working
-directory, else relative to `Engine/Content` (`-map=LevelTemplates/Blank.llev`). `-nullrhi` runs headless (no window,
-silent audio) at `--tick` Hz (default 60); `--show-stats` shows the HUD stats. Flags are parsed in
-`Engine/Source/Runtime/Launch/Private/Desktop/GameApplication.cpp`. Levels: [LEVELS.md](LEVELS.md).
+Without `-map=` it opens the config's `GameDefaultMap` (`Engine/Content/LevelTemplates/Starter.llev`); a `-map=` path
+is taken relative to the working directory, else relative to `Engine/Content` (`-map=LevelTemplates/Blank.llev`).
+`-nullrhi` runs headless (no window, silent audio) at `-tick=` Hz (default 60); `-showstats` shows the HUD stats.
+Flags are read with `FParse` in `Engine/Source/Runtime/Launch/Private/Desktop/GameApplication.cpp`. Levels:
+[LEVELS.md](LEVELS.md).
+
+Every run writes a log file, `Engine/Programs/LeonGame/Saved/Logs/LeonGame.log` (a project target writes to
+`<Project>/Saved/Logs/`), keeping the previous run as `-backup-<date>.log`. Config comes from `Engine/Config/Base*.ini` and the project's `Config/Default*.ini`;
+a single key can be overridden from the command line with `-ini:Engine:[Section]:Key=Value`, and log verbosity with
+`-LogCmds="LogInit Verbose"`.
 
 ## Cook
 

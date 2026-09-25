@@ -37,13 +37,18 @@ scalar `FTransform`, `FColor` / `FLinearColor`, `FRandomStream`. The glm transfo
 RenderCore's frustum uses Core's `FBox` / `FPlane`; `GlmInterop.h` and `LegacyAxes.h` bridge the unmigrated code.
 PS2 builds reject implicit float to double promotion.
 
+### Done — Files, config, command line, Json and Projects (P4)
+
+Every platform ([LeonMapping — P4](LeonMapping.md#p4--files-config-command-line-json-and-projects)):
+`IPlatformFile` / `FPlatformFileManager` (Win32, POSIX, PS2 read-only on `host:`), `IFileManager`, `FArchive` and the
+memory archives, `FPaths` with UE's API (no more `std::filesystem`), `FFileHelper`, `FCommandLine` / `FParse` /
+`FApp`, `FGuid`, `FMD5`, `FDateTime`, `FConfigCacheIni` / `GConfig` with the D8 layers, the log file
+(`FOutputDeviceFile`) and `[Core.Log]` / `-LogCmds` verbosity, and `FEngineLoop::PreInit` in UE's order. `Json` is now
+native (no nlohmann) and `Projects` reads `.lproj` / `.lplugin`. ThirdPerson reads its character
+tuning from `DefaultGame.ini` (compiled defaults when PCSX2's host filesystem is off). Released as 0.13.0.
+
 ### Next
 
-- **P4 — Files, config, command line:** `IPlatformFile` / `FPlatformFileManager` and an `FPaths` rewrite (removes
-  the `std::filesystem` desktop-only code), `FArchive`, `FConfigCacheIni` / `GConfig` (`Misc/ConfigCacheIni.h`;
-  load `Engine/Config` + `<Project>/Config`, today placeholders), `FCommandLine` / `FParse` (`Misc/CommandLine.h`,
-  `Misc/Parse.h`; desktop flags are parsed by hand in `Launch/Private/Desktop/GameApplication.cpp`), native Json,
-  `Projects` (`.lproj` / `.lplugin` readers), a log file device and config-driven log verbosity.
 - **P5–P6 — Migration:** move the modules above Core to the UE types (`TArray`, `FString`, delegates, `UE_LOG`,
   automation tests instead of Catch2), then drop glm, nlohmann and `std::` containers from engine APIs.
 
@@ -75,10 +80,9 @@ PS2 builds reject implicit float to double promotion.
   instead of `FEngineLoop` (UE: `FSlateApplication` + `UGameEngine::GameViewport`).
 - **Game → Launch:** the PS2 game module reads `GEngineLoop.GetMainWindow()` through an include-only
   dependency on Launch; give games an engine-side accessor instead (UE: `GEngine->GameViewport`).
-- **Project descriptors:** the pre-refactor packs (`Projects/<Name>/leon.game.json`) were removed in 0.12.0 and
-  the `Projects` module is an empty placeholder; read `.lproj` + `<Project>/Content` like UE's
-  `FProjectDescriptor` reads `.uproject` (P4). Until then `LeonGame` loads one level with `-map=`.
-- **Platform checks in shared code:** the `PLATFORM_WINDOWS` tests in `Core/Private/Misc/Paths.cpp` should become
-  HAL functions or move under `Private/Windows` (the P4 `IPlatformFile` / `FPaths` rewrite).
+- **Project descriptors:** `.lproj` is loaded in `PreInit` (P4), but `LeonGame` still has no project and loads one
+  level with `-map=`; `UEngine::LoadMap` and the config-driven game mode replace it in P13.
+- **Platform checks in shared code:** the `PLATFORM_WINDOWS` tests in `Core/Private/HAL/MallocAnsi.cpp` and
+  `Core/Private/Misc/OutputDeviceRedirector.cpp` should become HAL functions or move under `Private/Windows`.
 - **Linux:** registered in LeonBuildTool but not built or tested; enable `-Werror=shadow` on the Linux host
   flags when it becomes a gate.

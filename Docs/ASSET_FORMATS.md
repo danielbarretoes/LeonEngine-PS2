@@ -103,7 +103,7 @@ NormalMap=
 | `[Textures]` | `BaseColorMap` (`AlbedoMap`, `DiffuseMap`) | Texture path, `checker` (procedural 64 px checker), or empty |
 | `[Textures]` | `NormalMap` | Texture path, `bump` (procedural normal map), or empty |
 
-Section and key names are case-insensitive. `#` and `;` start comments. Unknown keys are reported on stderr and ignored. Texture paths are resolved with `FPaths::ResolveAssetPath` (content-relative, not relative to the `.lmat` file).
+Section and key names are case-insensitive. `#` and `;` start comments. Unknown keys are reported on stderr and ignored. Texture paths are resolved with `FPaths::ResolveLegacyContentPath` (content-relative, not relative to the `.lmat` file: the project content first, then the engine content).
 
 **API:** `LoadLeonMaterialDocument` (parse only, paths kept as strings in `FLeonMaterialDocument`), `LoadLeonMaterialFile` (parse and load textures into an `FMaterial`), `SaveLeonMaterialFile`, `MakeDefaultLeonMaterialText`. Runtime cache: `FResourceCache::LoadMaterial` / `InvalidateMaterial`.
 

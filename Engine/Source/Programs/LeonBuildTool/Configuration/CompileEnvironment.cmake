@@ -13,6 +13,8 @@ function(leon_read_build_version)
 	set(Minor 0)
 	set(Patch 0)
 	if(EXISTS "${File}")
+		# A version bump re-runs the configure step, so existing build trees pick up the new ENGINE_*_VERSION.
+		set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${File}")
 		file(READ "${File}" Json)
 		string(JSON Major ERROR_VARIABLE Error GET "${Json}" MajorVersion)
 		string(JSON Minor ERROR_VARIABLE Error GET "${Json}" MinorVersion)

@@ -29,7 +29,7 @@ Update this page whenever a module or type is added, moved or renamed.
 | `Plugins/RHI/OpenGL` | `OpenGLDrv` (device) + `Renderer` (GL renderer) | debt: Renderer calls GL directly |
 | `Plugins/RHI/PS2` | `Engine/Platforms/PS2/Source/Runtime/PS2RHI` | `FPS2RHI` static API |
 | `Engine/Renderer` CPU side | `RenderCore` | |
-| `Engine/Serialization` | `Json` | `FJsonUtils` |
+| `Engine/Serialization` | `Json` | native since P4 (`FJsonObject`, `TJsonReader`, `TJsonWriter`, `FJsonSerializer`); `FJsonUtils` removed |
 | `Engine/Utilities` widgets | `UMG` (`U*` widgets); `TextLayout` → `SlateCore` | |
 | `Engine/Utilities` HUD | `Engine` `GameFramework/HUD.h` | debt: Engine → UMG dependency |
 | `Engine/Content` (C++) | `Engine` (`Private/Content`) | `ContentValidator` removed in 0.12.0 |
@@ -43,7 +43,7 @@ Update this page whenever a module or type is added, moved or renamed.
 | `Plugins/Physics/Arcade` | `Engine` (`FPhysScene`, `Private/PhysicsEngine`) | |
 | `Plugins/Physics/Jolt` | plugin `Engine/Plugins/Runtime/JoltPhysics` | Win64 only |
 | `Runtime/` (GameApplication, RunLeonGame) | `Launch` (`GuardedMain`, `FEngineLoop`) | |
-| `Runtime/ProjectPack` (`leon.game.json`) | removed in 0.12.0 | `Projects` is an empty placeholder until the `.lproj` / `.lplugin` readers (P4) |
+| `Runtime/ProjectPack` (`leon.game.json`) | removed in 0.12.0 | `Projects` reads `.lproj` / `.lplugin` since P4 (`FProjectDescriptor`, `FPluginDescriptor`) |
 | `Runtime/GameHostSession`, `WorldRuntime` | removed in 0.12.0 | `FGameApplication` (`Launch`) loads one level (`-map=`) |
 | `Tools/ResourceTools` | `Developer/Cooker` (`FCookRecipe`, `FCookPaths`, `UCookCommandlet`) | UE: cook commandlet in UnrealEd |
 | `Tools/AssetPipeline/leon-cook` | `Programs/LeonCook` | `UE4Editor-Cmd -run=cook` equivalent |
@@ -117,8 +117,8 @@ the pinned ps2dev image headers).
 
 | Group | Leon (before) | UE name (now) |
 | --- | --- | --- |
-| 4.1 Core / Json / Projects | `Transform`, `Paths` free functions, `FileIO`, `AsciiToLower` | `FTransform`, `FPaths::*` (`ExecutableDir`, `ResolveAssetPath`, …), `FFileHelper` (`Misc/FileHelper.h`), `FCString::ToLower` (`Misc/CString.h`; removed in P2) |
-| | `serialization::ReadVec3 / LoadJsonFile`, `ProjectPack` | `FJsonUtils` (`Serialization/JsonUtils.h`), `FProjectDescriptor` (removed in 0.12.0 with the packs) |
+| 4.1 Core / Json / Projects | `Transform`, `Paths` free functions, `FileIO`, `AsciiToLower` | `FTransform`, `FPaths::*` (`ExecutableDir`, `ResolveAssetPath` — P4 rewrote `FPaths` with UE's API and kept only `ResolveLegacyContentPath`), `FFileHelper` (`Misc/FileHelper.h`), `FCString::ToLower` (`Misc/CString.h`; removed in P2) |
+| | `serialization::ReadVec3 / LoadJsonFile`, `ProjectPack` | `FJsonUtils` (`Serialization/JsonUtils.h`; replaced by the native Json module in P4), `FProjectDescriptor` (removed in 0.12.0 with the packs, back in P4 for `.lproj`) |
 | 4.2 Render | `Renderer`, `Texture`, `StaticMesh`, `SkeletalMesh`, `Material`, `EShadingModel` | `FSceneRenderer` (`SceneRenderer.h`), `UTexture2D` (`Texture2D.h`), `UStaticMesh`, `USkeletalMesh`, `FMaterial`, `EMaterialShadingModel` |
 | | `MeshData`, `SubMesh`, `Vertex`, `Aabb`, `Plane`, `Frustum` | `FMeshData`, `FMeshSection`, `FVertex`, `FBox` / `FPlane` (Core's since P3), `FFrustum` |
 | | `Shader`, `ShadowMap`, `GpuPassTimer`, `LdrColorTarget`, `SsaoTarget`, … | `FShader`, `FShadowMap`, `FGPUPassTimer`, `FLDRColorTarget`, `FSSAOTarget`, … |
@@ -147,7 +147,7 @@ Identifier conventions applied (Epic coding standard):
 - Shadowing is a compile error on every platform (MSVC `/we4456 /we4457 /we4458 /we4459`, GCC
   `-Werror=shadow`), mirroring UE's `ShadowVariableWarningLevel = Error`.
 - Sets of free functions become static classes only where UE has that homologue (`FPaths`,
-  `FFileHelper`, `FCString`, `FJsonUtils`, `UGameplayStatics`, `FCookRecipe`, …); other free functions stay
+  `FFileHelper`, `FCString`, `FParse`, `FJsonSerializer`, `UGameplayStatics`, `FCookRecipe`, …); other free functions stay
   free and PascalCase like UE's `DrawDebugLine`.
 
 ### P2 — Core foundations
@@ -193,6 +193,25 @@ UE 4.27's float math in `Core/Public/Math/` (every platform), included by `CoreM
 | `glm::radians`, `glm::clamp`, `glm::mix` | `FMath::DegreesToRadians`, `Clamp`, `Lerp`, `FInterpTo`, `VInterpTo`, `RInterpTo`, `QInterpTo`, `ClampAngle`, `LinePlaneIntersection`, `LineBoxIntersection`, `ClosestPointOnSegment`, … | `Math/UnrealMathUtility.h` |
 | — | `ToGlm` / `FromGlm` (desktop, until P6), `LegacyAxes` (until P7) | `Migration/GlmInterop.h`, `Migration/LegacyAxes.h` |
 
+### P4 — Files, config, command line, Json and Projects
+
+UE 4.27's platform services in `Core` (every platform) plus the `Json` and `Projects` modules. Core paths are relative
+to `Core/Public/`.
+
+| Leon (before) | UE name (now) | Where |
+| --- | --- | --- |
+| `std::filesystem` in `FPaths` / `FFileHelper` | `IPlatformFile`, `IFileHandle`, `IPhysicalPlatformFile`, `FPlatformFileManager`; backends `FWindowsPlatformFile`, `FLinuxPlatformFile`, `FPS2PlatformFile` (read-only) | `GenericPlatform/GenericPlatformFile.h`, `HAL/PlatformFilemanager.h`, `Private/<Platform>/`, PS2 ext |
+| `std::ifstream` / `std::ofstream` | `IFileManager` (`CreateFileReader` / `CreateFileWriter`, `FindFiles`, `IterateDirectory`), `FFileHelper::LoadFileToString` / `LoadFileToArray` / `SaveStringToFile` / `SaveArrayToFile` | `HAL/FileManager.h`, `HAL/FileManagerGeneric.h`, `Misc/FileHelper.h` |
+| — | `FArchive`, `FMemoryArchive`, `FMemoryReader`, `FMemoryWriter`, `FBufferArchive` | `Serialization/` |
+| `FPaths::ResolveAssetPath`, `ExecutableDir` | `FPaths` with UE's API (`EngineDir`, `EngineContentDir`, `ProjectDir`, `ProjectContentDir`, `ProjectSavedDir`, `ProjectLogDir`, `ProjectPluginsDir`, `Combine`, `/`, `NormalizeFilename`, `ConvertRelativePathToFull`, `MakePathRelativeTo`, `GetBaseFilename`, …); `ResolveLegacyContentPath` until P15 | `Misc/Paths.h`, `Migration/LegacyContentPath.h` (`std::string` bridge) |
+| hand-written `argv` loops (`--tick`, `--show-stats`) | `FCommandLine`, `FParse` (`Param`, `Value`, `Token`, `Command`, `Bool`), `FApp`, `FPlatformProcess` (`BaseDir`, `SetArgV0`) | `Misc/CommandLine.h`, `Misc/Parse.h`, `Misc/App.h`, `HAL/PlatformProcess.h` |
+| `.ini` placeholders | `FConfigCacheIni`, `FConfigFile`, `FConfigSection`, `FConfigValue`, `GConfig`, `GEngineIni` / `GGameIni` / `GInputIni` / `GEditorIni` | `Misc/ConfigCacheIni.h` |
+| — | `FOutputDeviceFile` (`<Project>/Saved/Logs`), `FLogSuppressionInterface` (`[Core.Log]`, `-LogCmds`) | `Misc/OutputDeviceFile.h`, `Logging/LogSuppressionInterface.h` |
+| — | `FGuid`, `FMD5` / `FMD5Hash`, `FDateTime`, `FTimespan`, `FPlatformTime::SystemTime` / `UtcTime`, `FPlatformMisc::CreateGuid` | `Misc/Guid.h`, `Misc/SecureHash.h`, `Misc/DateTime.h`, `Misc/Timespan.h` |
+| `FJsonUtils` over nlohmann | `FJsonValue` (+ `FJsonValueString` / `Number` / `Boolean` / `Array` / `Object` / `Null`), `FJsonObject`, `TJsonReader` / `TJsonReaderFactory`, `TJsonWriter` / `TJsonWriterFactory` (pretty / condensed policies), `FJsonSerializer` | `Json/Public/Dom/`, `Json/Public/Serialization/`, `Json/Public/Policies/` |
+| `.lproj` / `.lplugin` read only by LeonBuildTool | `FProjectDescriptor`, `FPluginDescriptor`, `FModuleDescriptor` (`EHostType`, `ELoadingPhase`), `FPluginReferenceDescriptor`, `IProjectManager`, `IPluginManager`, `IPlugin` | `Projects/Public/`, `Projects/Public/Interfaces/` |
+| — | `FEngineLoop::PreInit` order: command line → project → config → log file and verbosity → project descriptor → modules | `Launch/Private/LaunchEngineLoop.cpp` |
+
 ## Deviations from UE 4.27 (intentional)
 
 | Topic | UE | LeonEngine | Why |
@@ -211,6 +230,15 @@ UE 4.27's float math in `Core/Public/Math/` (every platform), included by `CoreM
 | Renderer | API-agnostic via RHI command lists | calls OpenGL directly | debt |
 | Engine ↔ Renderer | acyclic | `CIRCULAR_DEPENDENCIES` | debt |
 | PS2 gameplay | full framework on consoles | PS2 game uses `F*` types, no `AActor` | the gameplay framework is desktop-only (glm/json, C++20) |
-| Config | `FConfigCacheIni` loads layered ini | ini files exist as placeholders, not loaded | next plan |
+| Config layers | `Base.ini`, `Base<T>`, `Engine/Config/<P>/`, `Engine/Platforms/<P>/Config`, project `Default<T>`, `Config/<P>/`, `Platforms/<P>/Config`, `Saved/Config` (plus `NotForLicensees` / `Restricted` folders and a binary config cache) | the same order without `NotForLicensees` / `Restricted` or the binary cache; the `Saved/Config` user layer exists only on desktop; the PS2 reads the ini files through `host:` and keeps compiled defaults when they are missing | the PS2 build has no writable storage and PCSX2's host filesystem is optional |
+| Config usage | `UPROPERTY(Config)` / `LoadConfig` everywhere, input from `BaseInput.ini` | only a few keys are read (map, resolution, stats, ThirdPerson tuning) | `UPROPERTY(Config)` needs reflection (P10); config-driven input comes in P13 |
+| `FString` in archives | ANSI when possible, else UTF-16 with a negative length | always UTF-8 with a positive length (including the terminator); a negative length is rejected | `TCHAR` is UTF-8 (D1) |
+| `FName` in archives | an index into the package name table (the base `FArchive` does not store names) | the base `FArchive` writes it as a string | there are no packages until P11; the linker will replace this |
+| `FPaths` directories | relative to the process (`../../../Engine/`) | absolute on desktop, built from the executable folder and the generated `GLeon*FromBaseDir` globals; on PS2 a staged layout under the ELF folder (`<Base>/Engine/`, `<Base>/<Project>/`) | independent of the working directory; PCSX2's `host:` is the ELF folder |
+| `FDateTime` | Julian-day and `double` helpers | integer ticks only; the Julian-day helpers are left out | float-only math (D6) |
+| JSON numbers | written with `%.17g` | the shortest `%.15g`–`%.17g` form that reads back to the same value | readable descriptors; still round-trips |
+| Module platform lists | `WhitelistPlatforms` / `BlacklistPlatforms` (4.27) | `PlatformAllowList` / `PlatformDenyList` (UE 5 names) written; the 4.27 names are still read | the `.lplugin` files already used the UE 5 names |
+| Plugin enable state | decides which plugin modules load | `IPluginManager` reports it, but LeonBuildTool alone decides what is linked (`ENABLE_PLUGINS`) | static linking, no module loading at runtime |
+| Global `operator new` / `delete` | replaced through `FMemory` in every monolithic build (`REPLACEMENT_OPERATOR_NEW_AND_DELETE`) | replaced on the PS2 only (`PS2PlatformRuntime.cpp`) | keeps libstdc++'s allocation, unwinder and demangler code out of the ELF; desktop still uses the CRT |
 | Game → Launch | game modules never see `FEngineLoop` | the PS2 game module reads `GEngineLoop.GetMainWindow()` (include-only dependency on the launch module) | no Slate / `GEngine` on PS2 to hand out the viewport |
 | Gamepad | `FSlateApplication` routes `IInputInterface` events to the player controller | game code polls `IInputInterface` state directly | no Slate; polling matches the PS2 frame loop |

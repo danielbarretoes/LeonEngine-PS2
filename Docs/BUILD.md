@@ -222,13 +222,17 @@ Real examples from the engine:
 # Engine/Source/Runtime/Core/Core.Build.cmake
 leon_module(Core
 	PUBLIC_DEPENDENCIES_Desktop GLM
-	PUBLIC_SYSTEM_LIBRARIES_Windows psapi
-	EXCLUDE_SOURCES_PS2 Private/Misc/FileHelper.cpp Private/Misc/Paths.cpp Private/Migration/LegacyTransform.cpp
+	PUBLIC_SYSTEM_LIBRARIES_Windows psapi ole32
+	# The glm migration bridge is desktop-only until P6.
+	EXCLUDE_SOURCES_PS2 Private/Migration/LegacyTransform.cpp
 )
 
 # Engine/Source/Runtime/Launch/Launch.Build.cmake
 leon_module(Launch
 	PUBLIC_DEPENDENCIES Core InputCore ApplicationCore RHI
+	# The .lproj descriptor is loaded in PreInit (IProjectManager).
+	PRIVATE_DEPENDENCIES Projects
+	# Desktop games tick the gameplay framework session (UGameEngine) from FEngineLoop.
 	PRIVATE_DEPENDENCIES_Desktop Engine
 )
 ```
@@ -334,6 +338,9 @@ For each target LeonBuildTool writes `<tree>/Generated/<Target>.ModuleInit.gen.c
 `Developer` module of the closure (dependency order, without `NO_MODULE_IMPLEMENTATION`) as
 `FStaticallyLinkedModuleInfo { Name, &InitializeModule_<Name> }`, returned by `GetStaticallyLinkedModules()`, and
 defines `GPrimaryGameModuleName` (the first project module in `EXTRA_MODULE_NAMES` for games, otherwise `nullptr`).
+It also writes where the engine and the project are, relative to the executable's folder
+(`GLeonEngineDirFromBaseDir`, `GLeonProjectDirFromBaseDir`, `GLeonProjectName`); `FPaths` builds its desktop
+directories from them (the PS2 uses the staged layout under the ELF folder instead).
 `FModuleManager::StartupStaticallyLinkedModules()` creates and starts them in that order
 (`Engine/Source/Runtime/Core/Public/Modules/ModuleManager.h`).
 
@@ -452,7 +459,7 @@ Compiler settings:
 | Standard | C++20 for Desktop-only modules and executables; C++17 for modules also allowed on PS2 | C++17 | C++20 / C++17 as on Win64 |
 | Warnings | `/W4 /permissive- /Zc:__cplusplus /utf-8 /MP` | `-Wall -Wextra` | `-Wall -Wextra -Wpedantic` |
 | Shadowing is an error (UE `ShadowVariableWarningLevel = Error`) | `/we4456 /we4457 /we4458 /we4459` | `-Werror=shadow` | — |
-| Other | `/FS` in Debug and RelWithDebInfo | toolchain: `-D_EE -G0 -O2 -fno-exceptions -fno-rtti -ffunction-sections -fdata-sections`, linked with `$PS2SDK/ee/startup/linkfile` and `-Wl,--gc-sections` (unused functions / data are dropped; sizes in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md)) | |
+| Other | `/FS` in Debug and RelWithDebInfo | toolchain: `-D_EE -G0 -O2 -fno-exceptions -fno-rtti -fno-threadsafe-statics -ffunction-sections -fdata-sections`, linked with `$PS2SDK/ee/startup/linkfile` and `-Wl,--gc-sections` (unused functions / data are dropped; sizes in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md)). Leon runs one EE thread, so function-local statics need no guard; together with `PS2PlatformRuntime.cpp` (global `operator new` / `delete` through `FMemory`, `__cxa_pure_virtual`) this keeps libstdc++'s unwinder and demangler out of the ELF | |
 
 The C++ standard of a module is the lowest standard among the platforms it is allowed on, so shared code (a module
 without `PLATFORMS`, such as `Core`, `RHI`, `InputCore`, `ApplicationCore`, `Launch`) also compiles as C++17 on Win64.

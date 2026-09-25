@@ -7,8 +7,11 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Second and third steps of the Core / CoreUObject plan (P2, P3): Unreal Engine 4.27's Core foundations and float
-math in `Engine/Source/Runtime/Core`, on every platform including the PS2.
+## [0.13.0] - 2026-09-25
+
+Second to fourth steps of the Core / CoreUObject plan (P2–P4): Unreal Engine 4.27's Core foundations, float math and
+platform services (files, archives, paths, config, command line) in `Engine/Source/Runtime/Core`, plus native `Json`
+and `Projects` modules, on every platform including the PS2.
 
 ### Added
 
@@ -56,6 +59,29 @@ math in `Engine/Source/Runtime/Core`, on every platform including the PS2.
   reference values pass on Win64 and on PS2 (TestPAL); desktop tests also compare against glm.
 - **Migration bridges** (`Core/Public/Migration/`): `GlmInterop.h` (`ToGlm` / `FromGlm`, desktop, until P6) and
   `LegacyAxes.h` (the Y-up metre world directions, until P7).
+- **Platform file layer** (P4): `IPlatformFile`, `IFileHandle`, `IPhysicalPlatformFile`, `FPlatformFileManager`, with
+  Win32, POSIX (Linux) and PS2 backends (read-only newlib POSIX on `host:`); `IFileManager` with buffered file
+  archives, `FindFiles`, directory iteration, copy / move / delete; `FFileHelper` loads and saves strings and arrays
+  (saves write a temporary file, then move it).
+- **Archives**: `FArchive` with `<<` for scalars, `FString` (UTF-8), `FName`, `FText`, `TArray`, `TSet`, `TMap` and
+  the math types; `FMemoryArchive`, `FMemoryReader`, `FMemoryWriter`, `FBufferArchive`.
+- **Command line and app**: `FCommandLine` (every `main` builds it from `argv`), `FParse` (`Param`, `Value`, `Token`,
+  `Command`, `Bool`, `Line`, …), `FApp`, `FPlatformProcess` (`BaseDir`, `SetArgV0`, current directory).
+- **Misc types**: `FGuid` (`NewGuid`, `NewDeterministicGuid`), `FMD5` / `FMD5Hash`, `FDateTime` / `FTimespan`
+  (integer ticks), `FPlatformTime::SystemTime` / `UtcTime`, `FPlatformMisc::CreateGuid`, `BytesToHex` / `HexToBytes`.
+- **Config**: `FConfigCacheIni` / `GConfig` with `GEngineIni`, `GGameIni`, `GInputIni`, `GEditorIni`, loading UE's
+  layers (engine base, engine platform, project default, project platform, and the desktop-only
+  `Saved/Config/<Platform>` user layer that `Flush` writes); `+ - . !` operators, quoted values and
+  `-ini:<Name>:[Section]:Key=Value` overrides.
+- **Log file and verbosity**: `FOutputDeviceFile` writes `<Project>/Saved/Logs/<Project>.log` on desktop (flushed per
+  line, previous run kept as a backup); `FLogSuppressionInterface` applies `[Core.Log]` and `-LogCmds=`.
+- **Json module** (all platforms, no third-party code): `FJsonValue` and its subclasses, `FJsonObject`, streaming
+  `TJsonReader`, `TJsonWriter` with pretty and condensed print policies, `FJsonSerializer`.
+- **Projects module** (all platforms): `FProjectDescriptor` (`.lproj`), `FPluginDescriptor` (`.lplugin`),
+  `FModuleDescriptor` (`EHostType`, `ELoadingPhase`, platform allow / deny lists), `FPluginReferenceDescriptor`,
+  `IProjectManager`, `IPluginManager` (discovers engine and project plugins).
+- `RunPCSX2.ps1` stages the ini files and the `.lproj` beside the ELF (`-NoStage` skips it) and documents that
+  PCSX2's host filesystem must be enabled for the PS2 build to read them.
 
 ### Changed
 
@@ -64,18 +90,41 @@ math in `Engine/Source/Runtime/Core`, on every platform including the PS2.
   `FTransform` is UE's. RenderCore's `FBox` and frustum plane are Core's `FBox` / `FPlane`:
   `FBox::FromLocalTransformed` became `TransformLocalBox`, and the ray test became `FMath::LineBoxIntersection`.
 - PS2 modules compile with `-Werror=double-promotion`; `FTicker` converts to its `double` clock explicitly.
-- Core's tests are automation tests (`System.Core.*`: 41 on Win64, 35 on PS2); the other modules keep Catch2
-  (124 test cases). `LeonAutomationTests` runs the automation tests first, then Catch2, and fails if either fails;
+- Core's tests are automation tests (`System.Core.*`: 51 on Win64, 43 on PS2), and Json and Projects add their own;
+  the other modules keep Catch2 (124 test cases). `LeonAutomationTests` runs the automation tests first, then Catch2, and fails if either fails;
   new arguments `-automation=<filter>`, `-noautomation`, `-automationonly`.
 - `FTicker` uses UE's `FTickerDelegate` (a `TDelegate`) and `FDelegateHandle`, with an optional delay; the
   `std::function` API is gone. ThirdPerson logs through `UE_LOG(LogThirdPerson, …)` and ticks through
   `FTickerDelegate::CreateLambda`.
 - PS2 toolchain compiles with `-ffunction-sections -fdata-sections` and links with `-Wl,--gc-sections`
   (ThirdPerson text 430 KB → 362 KB).
+- `FEngineLoop::PreInit` follows UE's order on every platform: command line, project (`-project=`, a first `.lproj`
+  argument or the target's project), config, log file and verbosity, `.lproj` descriptor, then modules. `Exit`
+  flushes `GConfig`.
+- `FPaths` is rewritten over `FString` with UE's API (`EngineDir`, `ProjectDir`, `ProjectContentDir`,
+  `ProjectSavedDir`, `Combine`, …) and no `std::filesystem`; desktop directories come from new generated globals in
+  `<Target>.ModuleInit.gen.cpp`, the PS2 uses a staged layout under the ELF folder. `FFileHelper` and `FPaths` build
+  on the PS2 too.
+- `LeonGame` reads its flags with `FParse`: `-tick=<Hz>` and `-showstats` replace `--tick <Hz>` and `--show-stats`;
+  the default map, the window size and the stats default come from the engine config (`GameDefaultMap`,
+  `DefaultResolutionX/Y`, `bShowStatsByDefault`).
+- ThirdPerson reads `MoveSpeed`, `Gravity` and `JumpSpeed` from `DefaultGame.ini` (compiled defaults when the file
+  cannot be read) and logs where they came from.
+- Math `InitFromString` uses `FParse`.
+- LeonBuildTool re-runs the configure step when `Engine/Build/Build.version` changes, so a version bump reaches
+  existing build trees.
+- `Launch` depends privately on `Projects`; `TestPAL` depends on Core and Projects.
+- PS2: `-fno-threadsafe-statics`, and `PS2PlatformRuntime.cpp` routes the global `operator new` / `delete` through
+  `FMemory` and defines the pure-virtual handlers, which keeps libstdc++'s unwinder and demangler out of the ELF
+  (ThirdPerson text 561 KB → 442 KB).
 
 ### Removed
 
 - `FCString::ToLower(std::string_view)`.
+- `FJsonUtils` and the `Json` module's nlohmann dependency (Engine, Renderer and Cooker still use nlohmann until P6).
+- `FPaths::ResolveAssetPath` (the legacy loaders use `FPaths::ResolveLegacyContentPath` until P15) and the
+  `std::filesystem` code in Core.
+- `Math/MathStringParsing.h`.
 
 ## [0.12.0] - 2026-09-25
 
