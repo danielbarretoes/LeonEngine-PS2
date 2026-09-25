@@ -37,8 +37,20 @@ public:
 	virtual const char* GetAPIVersionString() const = 0;
 };
 
-/** The active RHI (UE: GDynamicRHI); set by the window that owns the graphics context. */
+/** The active RHI (UE: GDynamicRHI); RHIInit creates it, RHIExit frees it. */
 extern RHI_API FDynamicRHI* GDynamicRHI;
 
 /** Implemented by the platform's RHI module (Win64/Linux: OpenGLDrv, PS2: PS2RHI); the caller owns the result. */
 FDynamicRHI* PlatformCreateDynamicRHI();
+
+/** How an RHI finds the graphics API's entry points (OpenGL: glfwGetProcAddress); null when it needs none (PS2). */
+using FRHIProcAddressLoader = void* (*)(const char*);
+
+/**
+ * Creates the platform's RHI (PlatformCreateDynamicRHI), initializes it and publishes it in GDynamicRHI (UE: RHIInit,
+ * from FEngineLoop::PreInit). The main window's graphics context must exist and be current. False on failure.
+ */
+RHI_API bool RHIInit(FRHIProcAddressLoader ProcAddressLoader);
+
+/** Frees GDynamicRHI (UE: RHIExit, from FEngineLoop::Exit). */
+RHI_API void RHIExit();

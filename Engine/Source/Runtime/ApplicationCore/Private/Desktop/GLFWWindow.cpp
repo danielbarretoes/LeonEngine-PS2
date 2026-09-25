@@ -194,13 +194,12 @@ bool FGLFWWindow::Create(int32 InWidth, int32 InHeight, const TCHAR* Title)
 	InstallCallbacks();
 	glfwSwapInterval(1);
 	SyncSizesFromBackend();
-
-	if (!InitRHI(reinterpret_cast<void* (*)(const char*)>(glfwGetProcAddress)))
-	{
-		Destroy();
-		return false;
-	}
 	return true;
+}
+
+FRHIProcAddressLoader FGLFWWindow::GetRHIProcAddressLoader() const
+{
+	return reinterpret_cast<FRHIProcAddressLoader>(glfwGetProcAddress);
 }
 
 bool FGLFWWindow::CreateShared(const FGenericWindow& ShareWith, int32 InWidth, int32 InHeight, const TCHAR* Title)
@@ -241,7 +240,6 @@ bool FGLFWWindow::CreateShared(const FGenericWindow& ShareWith, int32 InWidth, i
 
 void FGLFWWindow::Destroy()
 {
-	ReleaseRHI();
 	if (GLFWwindow* Window = AsGLFW(Handle))
 	{
 		glfwDestroyWindow(Window);

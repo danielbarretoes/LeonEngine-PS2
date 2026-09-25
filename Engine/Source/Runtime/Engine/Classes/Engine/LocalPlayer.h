@@ -5,11 +5,13 @@
 #include "LocalPlayer.generated.h"
 
 class UGameInstance;
+class UGameViewportClient;
 
 /**
- * The player at this machine (UE: ULocalPlayer), created by the game instance (CreateInitialPlayer) inside the engine.
- * When a map loads it logs in (SpawnPlayActor → UWorld::SpawnPlayActor → AGameModeBase::Login / PostLogin) and keeps
- * the controller it got.
+ * The player at this machine (UE: ULocalPlayer), created by the game instance (CreateInitialPlayer, through the
+ * viewport client's SetupInitialLocalPlayer) inside the engine. When a map loads it logs in (SpawnPlayActor →
+ * UWorld::SpawnPlayActor → AGameModeBase::Login / PostLogin) and keeps the controller it got. Its console commands go
+ * to the viewport client first, then to its controller's chain (Exec).
  */
 UCLASS(Transient, Config = Engine)
 class ENGINE_API ULocalPlayer : public UPlayer
@@ -23,8 +25,12 @@ public:
 	 */
 	virtual bool SpawnPlayActor(const FString& URL, FString& OutError, UWorld* InWorld);
 
-	/** Joined the game instance (UE: PlayerAdded). */
-	virtual void PlayerAdded(int32 InControllerId);
+	/** Joined the game instance, shown by a viewport client (UE: PlayerAdded). */
+	virtual void PlayerAdded(UGameViewportClient* InViewportClient, int32 InControllerId);
+
+	/** The viewport client that shows the player (UE: ViewportClient); null without one. */
+	UPROPERTY(Transient)
+	UGameViewportClient* ViewportClient = nullptr;
 
 	/** Left the game instance (UE: PlayerRemoved). */
 	virtual void PlayerRemoved();
@@ -51,7 +57,7 @@ public:
 	/** The game instance's world (UE: GetWorld). */
 	[[nodiscard]] UWorld* GetWorld() const;
 
-	/** The local player's commands, then the player's (UE: ULocalPlayer::Exec). */
+	/** The viewport client's commands, then the player's (UE: ULocalPlayer::Exec). */
 	bool Exec(UWorld* InWorld, const TCHAR* Cmd, FOutputDevice& Ar) override;
 
 private:

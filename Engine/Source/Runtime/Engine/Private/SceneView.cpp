@@ -2,6 +2,32 @@
 
 #include "Camera/CameraComponent.h"
 
+namespace
+{
+
+	const TCHAR* const ShowFlagNames[] = {TEXT("Bounds"), TEXT("Collision"), TEXT("Navigation"), TEXT("AxesGizmo")};
+
+} // namespace
+
+bool* FEngineShowFlags::FindFlag(const FString& Name)
+{
+	bool* const Flags[] = {&Bounds, &Collision, &Navigation, &AxesGizmo};
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(ShowFlagNames); ++Index)
+	{
+		if (Name.Equals(ShowFlagNames[Index], ESearchCase::IgnoreCase))
+		{
+			return Flags[Index];
+		}
+	}
+	return nullptr;
+}
+
+const TCHAR* const* FEngineShowFlags::GetFlagNames(int32& OutNum)
+{
+	OutNum = UE_ARRAY_COUNT(ShowFlagNames);
+	return ShowFlagNames;
+}
+
 FSceneViewFamily::FSceneViewFamily(const ConstructionValues& CVS)
 	: RenderTargetSizeX(CVS.RenderTargetSizeX)
 	, RenderTargetSizeY(CVS.RenderTargetSizeY)

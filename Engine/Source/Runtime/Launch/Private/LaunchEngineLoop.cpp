@@ -2,6 +2,7 @@
 
 #include "Containers/Ticker.h"
 #include "CoreGlobals.h"
+#include "DynamicRHI.h"
 #include "GenericPlatform/GenericApplication.h"
 #include "GenericPlatform/GenericWindow.h"
 #include "HAL/PlatformApplicationMisc.h"
@@ -24,22 +25,33 @@
 	#if !PLATFORM_DESKTOP
 		#error "WITH_ENGINE targets currently require a desktop platform (the gameplay framework is host-only)"
 	#endif
-	#include "Desktop/GameApplication.h"
+	#include "Engine/Engine.h"
+	#include "Engine/GameEngine.h"
+	#include "UObject/GarbageCollection.h"
+	#include "UObject/Package.h"
+	#include "UnrealClient.h"
 #endif
 
 FEngineLoop GEngineLoop;
+
+DEFINE_LOG_CATEGORY_STATIC(LogLaunch, Log, All);
 
 namespace
 {
 	/** The log file (desktop): <Project>/Saved/Logs/<Name>.log. */
 	TUniquePtr<FOutputDeviceFile> GLogFile;
 
-	constexpr int32 MainWindowWidth = 640;
-	constexpr int32 MainWindowHeight = 448;
-
 #if WITH_ENGINE
-	/** The desktop game session (UE: GEngine + the game viewport), driven one frame per Tick. */
-	TUniquePtr<FGameApplication> GGameApplication;
+	/** The game window's size: [/Script/Engine.GameViewportClient] DefaultResolutionX / Y of the Engine config. */
+	[[nodiscard]] int32 GetEngineInt(const TCHAR* Section, const TCHAR* Key, int32 Default)
+	{
+		int32 Value = Default;
+		if (GConfig != nullptr)
+		{
+			GConfig->GetInt(Section, Key, Value, GEngineIni);
+		}
+		return Value;
+	}
 #endif
 } // namespace
 
@@ -94,18 +106,39 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 	UE_LOG(LogInit, Log, "Project: %s (%s)", FApp::HasProjectName() ? FApp::GetProjectName() : "none",
 		*FPaths::ProjectDir());
 
-#if !WITH_ENGINE
-	// Without the engine framework the loop owns the platform application and the main window;
-	// modules starting up below (the primary game module) can already use them.
-	Application.Reset(FPlatformApplicationMisc::CreateApplication());
-	MainWindow = Application->MakeWindow();
-	if (!MainWindow->Create(MainWindowWidth, MainWindowHeight, LEON_TARGET_NAME))
-	{
-		UE_LOG(LogInit, Error, "FEngineLoop: failed to create the main window");
-		MainWindow.Reset();
-		return 1;
-	}
+	// The platform application, the main window and the RHI on its graphics context (UE: PreInit's RHIInit). The
+	// modules starting up below (the renderer, the PS2 game module) can already use them. A desktop game with -nullrhi
+	// has none: the engine runs headless.
+#if WITH_ENGINE
+	const bool bCreateMainWindow = FApp::CanEverRender();
+	const int32 WindowWidth = GetEngineInt("/Script/Engine.GameViewportClient", "DefaultResolutionX", 1280);
+	const int32 WindowHeight = GetEngineInt("/Script/Engine.GameViewportClient", "DefaultResolutionY", 720);
+	const FString WindowTitle = FApp::HasProjectName() ? FString("Leon - ") + FApp::GetProjectName() : FString("Leon");
+#else
+	const bool bCreateMainWindow = true;
+	constexpr int32 WindowWidth = 640;
+	constexpr int32 WindowHeight = 448;
+	const FString WindowTitle(LEON_TARGET_NAME);
 #endif
+	if (bCreateMainWindow)
+	{
+		Application.Reset(FPlatformApplicationMisc::CreateApplication());
+		MainWindow = Application->MakeWindow();
+		if (!MainWindow->Create(WindowWidth, WindowHeight, *WindowTitle))
+		{
+			UE_LOG(LogInit, Error, "FEngineLoop: failed to create the main window");
+			MainWindow.Reset();
+			return 1;
+		}
+		if (!RHIInit(MainWindow->GetRHIProcAddressLoader()))
+		{
+			UE_LOG(LogInit, Error, "FEngineLoop: failed to initialize the RHI");
+			MainWindow->Destroy();
+			MainWindow.Reset();
+			return 1;
+		}
+		MainWindow->BindRHIViewport();
+	}
 
 	FModuleManager::Get().StartupStaticallyLinkedModules();
 	return 0;
@@ -114,15 +147,79 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 int32 FEngineLoop::Init()
 {
 #if WITH_ENGINE
-	// LeonGame: LeonGame [<map>] [-map=<map>] [-nullrhi] [-tick=<Hz>] [-showstats].
-	GGameApplication = MakeUnique<FGameApplication>();
-	if (!GGameApplication->Init(this))
+	const TCHAR* CmdLine = FCommandLine::Get();
+
+	// Leon's capture and pacing switches: -Screenshot=<file.bmp> saves frame -ExitAfterFrames=N (60 by default), then
+	// the game exits; -tick=<Hz> paces a headless run.
+	(void)FParse::Value(CmdLine, "ExitAfterFrames=", ExitAfterFrames);
+	if (FParse::Value(CmdLine, "Screenshot=", ScreenshotPath) && ExitAfterFrames <= 0)
 	{
-		GGameApplication.Reset();
+		ExitAfterFrames = 60;
+	}
+	float Hz = 60.0f;
+	if (FParse::Value(CmdLine, "tick=", Hz) && Hz >= 1.0f && Hz <= 240.0f)
+	{
+		TickHz = Hz;
+	}
+
+	// GEngine's class comes from the config (UE: FEngineLoop::Init, plan decision D18).
+	FString GameEngineClassName;
+	if (GConfig != nullptr)
+	{
+		GConfig->GetString("/Script/Engine.Engine", "GameEngine", GameEngineClassName, GEngineIni);
+	}
+	UClass* EngineClass = !GameEngineClassName.IsEmpty()
+		? StaticLoadClass(UEngine::StaticClass(), nullptr, *GameEngineClassName)
+		: UGameEngine::StaticClass();
+	if (EngineClass == nullptr)
+	{
+		UE_LOG(LogLaunch, Error, "Failed to load the engine class '%s'", *GameEngineClassName);
 		ExitCode = 1;
-		RequestEngineExit("Game session failed to start");
+		RequestEngineExit("No engine class");
 		return ExitCode;
 	}
+	GEngine = NewObject<UEngine>(GetTransientPackage(), EngineClass);
+	GEngine->AddToRoot();
+
+	// -ExecCmds="Cmd1;Cmd2": console commands for the first frame, once the map plays (UE: DeferredCommands; UE
+	// separates them with commas, which Leon accepts too).
+	FString ExecCmds;
+	if (FParse::Value(CmdLine, "ExecCmds=", ExecCmds, false))
+	{
+		ExecCmds.ReplaceInline(TEXT(","), TEXT(";"));
+		TArray<FString> Commands;
+		ExecCmds.ParseIntoArray(Commands, TEXT(";"), true);
+		for (const FString& Command : Commands)
+		{
+			const FString Trimmed = Command.TrimStartAndEnd();
+			if (!Trimmed.IsEmpty())
+			{
+				GEngine->DeferredCommands.Add(Trimmed);
+			}
+		}
+	}
+
+	GEngine->Init(this);
+	if (!GEngine->IsInitialized())
+	{
+		UE_LOG(LogLaunch, Error, "Failed to initialize the engine");
+		ExitCode = 1;
+		RequestEngineExit("Engine initialization failed");
+		return ExitCode;
+	}
+	// The game instance opens the first map.
+	GEngine->Start();
+	if (IsEngineExitRequested())
+	{
+		ExitCode = 1;
+		return ExitCode;
+	}
+	if (MainWindow == nullptr)
+	{
+		UE_LOG(LogLaunch, Log, "Running headless @ %g Hz (Ctrl+C to stop)", static_cast<double>(TickHz));
+		NextHeadlessTick = FPlatformTime::Seconds();
+	}
+	LastFrameTime = FPlatformTime::Seconds();
 #endif
 	LastFrameCycles = FPlatformTime::Cycles64();
 	return 0;
@@ -136,11 +233,57 @@ void FEngineLoop::Tick()
 	LastFrameCycles = NowCycles;
 
 #if WITH_ENGINE
-	// The engine frame (input, world tick, render, present) runs inside the game session.
 	FTicker::GetCoreTicker().Tick(DeltaTime);
-	if (!GGameApplication || !GGameApplication->Tick())
+	// The platform's events (UE: Slate pumps them before the engine ticks).
+	if (Application)
 	{
-		RequestEngineExit("Game session finished");
+		Application->PollGameDeviceState();
+	}
+	if (MainWindow)
+	{
+		MainWindow->PollEvents();
+	}
+	if (GEngine == nullptr)
+	{
+		RequestEngineExit("No engine");
+		return;
+	}
+	GEngine->TickDeferredCommands();
+
+	++FrameCount;
+	if (ExitAfterFrames > 0 && FrameCount > ExitAfterFrames)
+	{
+		RequestEngineExit("ExitAfterFrames");
+		return;
+	}
+	if (!ScreenshotPath.IsEmpty() && FrameCount == ExitAfterFrames)
+	{
+		FScreenshotRequest::RequestScreenshot(ScreenshotPath, true, false);
+	}
+
+	if (MainWindow)
+	{
+		// A windowed frame: the real frame time, at most 0.1 s.
+		const double Now = FPlatformTime::Seconds();
+		const float FrameTime = FMath::Min(static_cast<float>(Now - LastFrameTime), 0.1f);
+		LastFrameTime = Now;
+		GEngine->Tick(FrameTime, false);
+	}
+	else
+	{
+		// Headless: fixed steps paced to -tick=<Hz> (no render, no present).
+		const float StepSeconds = 1.0f / (TickHz < 1.0f ? 1.0f : TickHz);
+		GEngine->Tick(StepSeconds, false);
+		NextHeadlessTick += static_cast<double>(StepSeconds);
+		const double Now = FPlatformTime::Seconds();
+		if (NextHeadlessTick < Now)
+		{
+			NextHeadlessTick = Now; // fell behind: resync instead of spiralling
+		}
+		else
+		{
+			FPlatformProcess::Sleep(static_cast<float>(NextHeadlessTick - Now));
+		}
 	}
 #else
 
@@ -163,13 +306,17 @@ void FEngineLoop::Tick()
 void FEngineLoop::Exit()
 {
 #if WITH_ENGINE
-	if (GGameApplication)
+	// The engine ends first: the world, then the renderer while the window's context exists (UE: GEngine->PreExit).
+	if (GEngine != nullptr)
 	{
-		GGameApplication->Exit();
-		GGameApplication.Reset();
+		GEngine->PreExit();
+		GEngine->RemoveFromRoot();
+		GEngine = nullptr;
+		CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
 	}
 #endif
 	FModuleManager::Get().ShutdownModules();
+	RHIExit();
 	if (MainWindow)
 	{
 		MainWindow->Destroy();

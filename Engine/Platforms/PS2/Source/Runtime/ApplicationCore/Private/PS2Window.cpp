@@ -43,18 +43,11 @@ bool FPS2Window::Create(int32 InWidth, int32 InHeight, const TCHAR* Title)
 	WindowHeight = DisplayHeight;
 	FramebufferWidth = DisplayWidth;
 	FramebufferHeight = DisplayHeight;
-
-	if (!InitRHI(nullptr))
-	{
-		Destroy();
-		return false;
-	}
 	return true;
 }
 
 void FPS2Window::Destroy()
 {
-	ReleaseRHI();
 	if (GPS2Display.bInitialized)
 	{
 		graph_shutdown();

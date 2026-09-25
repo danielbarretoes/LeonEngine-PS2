@@ -13,8 +13,8 @@ leon_module(PS2RHI
 It provides two things:
 
 - **`FPS2DynamicRHI`** (private, `PS2DynamicRHI.cpp`): the `FDynamicRHI` implementation returned by
-  `PlatformCreateDynamicRHI()`. `FPS2Window` creates it through `FGenericWindow::InitRHI()` and it is published in
-  `GDynamicRHI`. `GetName()` is `"PS2"`; `GetGPUMemoryStats()` reports the VRAM allocated so far against a 4 MB budget
+  `PlatformCreateDynamicRHI()`. `FEngineLoop::PreInit` creates it through `RHIInit()` once `FPS2Window` is up, and
+  it is published in `GDynamicRHI`. `GetName()` is `"PS2"`; `GetGPUMemoryStats()` reports the VRAM allocated so far against a 4 MB budget
   (shown as `VRAM` in the debug overlay).
 - **`FPS2RHI`** (public, `PS2RHI.h`): a static immediate-mode API that games and the engine overlay call directly.
 

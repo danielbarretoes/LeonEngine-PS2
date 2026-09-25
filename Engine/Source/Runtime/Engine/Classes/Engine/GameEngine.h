@@ -1,33 +1,28 @@
 #pragma once
 
-#include "Camera/CameraComponent.h"
 #include "CoreMinimal.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
-#include "Engine/Level.h"
-#include "GenericPlatform/GenericApplication.h"
-#include "InputCoreTypes.h"
-#include "SceneView.h"
 #include "ShaderCore.h"
 #include "GameEngine.generated.h"
 
-class APlayerController;
 class UWorld;
 
 /**
  * The engine of a game (UE: UGameEngine), GEngine's class by default (`[/Script/Engine.Engine]
  * GameEngine=/Script/Engine.GameEngine`).
  *
- * - Init creates the game window and starts the renderer on its context (unless headless), then the game instance
- *   (GameInstanceClass of UGameMapsSettings) with its world context and its first local player.
+ * - Init starts the renderer on the main window FEngineLoop::PreInit made (none when headless), then creates the game
+ *   instance (GameInstanceClass of UGameMapsSettings) with its world context, the game viewport client
+ *   (GameViewportClientClassName) and its first local player.
  * - Start: the game instance opens the first map (UGameInstance::StartGameInstance → Browse → LoadMap).
- * - Tick: a frame (input, the world, the garbage collection timer, the HUD, the render, the present).
+ * - Tick: the viewport client's input, the pending travel, the world tick, the garbage collection timer, then the
+ *   viewport draws and presents the frame.
  * - PreExit: the game instance shuts down, the world goes (a garbage collection safe point, plan decision D11), then
- *   the renderer and the window.
+ *   the renderer; FEngineLoop destroys the window after.
  *
  * It draws through the Renderer module's interface (IRendererModule, found by name); Engine never includes a Renderer
- * header. Until the third stage of P13 it also plays the viewport client's part: it sends the window's keys and mouse
- * motion to the first local player's controller and draws that player's camera view and HUD.
+ * header.
  */
 UCLASS(Config = Engine, Transient)
 class ENGINE_API UGameEngine : public UEngine
@@ -54,103 +49,11 @@ public:
 	/** The game world: the game instance's world (UE: GetGameWorld). */
 	[[nodiscard]] UWorld* GetGameWorld() const;
 
-	/** Saves the next rendered frame as a 24-bit .bmp (UE: FScreenshotRequest). */
-	void RequestScreenshot(const FString& Path)
-	{
-		PendingScreenshotPath = Path;
-	}
-
-	/** The game window, or null when headless. */
-	[[nodiscard]] FGenericWindow* GetWindow() const
-	{
-		return Window.Get();
-	}
-
-	/** The first local player's controller in the game world, or null. */
-	[[nodiscard]] APlayerController* GetFirstLocalPlayerController() const;
-
-	/** The camera the view is drawn with: the first local player's camera, else a default one. */
-	[[nodiscard]] UCameraComponent* GetViewCamera() const;
-
-	/** What the view draws besides the scene: the bounds (F1) and the axes gizmo (F6) (UE: EngineShowFlags). */
-	[[nodiscard]] FEngineShowFlags& GetEngineShowFlags()
-	{
-		return EngineShowFlags;
-	}
-
-	/** F2 collision volumes debug (Engine tool flag, not a renderer show flag). */
-	void SetCollisionDebugEnabled(bool bEnabled)
-	{
-		bCollisionDebugEnabled = bEnabled;
-	}
-	void ToggleCollisionDebug()
-	{
-		bCollisionDebugEnabled = !bCollisionDebugEnabled;
-	}
-	[[nodiscard]] bool IsCollisionDebugEnabled() const
-	{
-		return bCollisionDebugEnabled;
-	}
-
-	/** F3 NavMesh grid debug (walkable / blocked cells). */
-	void SetNavMeshDebugEnabled(bool bEnabled)
-	{
-		bNavMeshDebugEnabled = bEnabled;
-	}
-	void ToggleNavMeshDebug()
-	{
-		bNavMeshDebugEnabled = !bNavMeshDebugEnabled;
-	}
-	[[nodiscard]] bool IsNavMeshDebugEnabled() const
-	{
-		return bNavMeshDebugEnabled;
-	}
-
-	/** Capture + hide the OS cursor for continuous mouse look. */
-	void SetCursorCaptured(bool bCaptured);
-	[[nodiscard]] bool IsCursorCaptured() const;
-
 private:
 	/** Destroys the game instance's world and collects garbage (world teardown is a safe point). */
 	void DestroyGameWorld();
+	/** The shaders whose files changed (Leon's hot reload; `RecompileShaders` forces it). */
 	[[nodiscard]] EShaderReloadResult ReloadAllShaders(bool bForce);
-	void HandleInput(float DeltaTime);
-	/** Sends the window's key changes and mouse motion to the first local player's controller. */
-	void ProcessInput(float DeltaTime);
+	/** The audio listener follows the view camera. */
 	void TickPlayAudio();
-	void TickPlayHud(float DeltaTime);
-	/** Paints the HUD's widgets and the debug text into Canvas (UE: the viewport client drawing the HUD). */
-	void PaintHudAndOverlay(FCanvas& Canvas);
-	void Render();
-	void WritePendingScreenshot();
-	void UpdateHudStats(float DeltaTime);
-
-	TUniquePtr<GenericApplication> Application;
-	TSharedPtr<FGenericWindow> Window;
-	/** The view when no player has a camera. */
-	UPROPERTY(Transient)
-	UCameraComponent* DefaultViewCamera = nullptr;
-	/** The keys the window reported down last frame. */
-	TSet<FKey> DownKeys;
-	/** The view's show flags (UE: the viewport client's EngineShowFlags). */
-	FEngineShowFlags EngineShowFlags;
-
-	FString PendingScreenshotPath;
-
-	bool bMouseLookSampleValid = false;
-	bool bDebugKeyWasDown = false;
-	bool bCollisionDebugEnabled = false;
-	bool bCollisionDebugKeyWasDown = false;
-	bool bNavMeshDebugEnabled = false;
-	bool bNavMeshDebugKeyWasDown = false;
-	bool bReloadKeyWasDown = false;
-	bool bAxesGizmoKeyWasDown = false;
-	bool bHudStatsKeyWasDown = false;
-	double LastMouseX = 0.0;
-	double LastMouseY = 0.0;
-
-	float FpsAccumTime = 0.0f;
-	int32 FpsAccumFrames = 0;
-	float DisplayFps = 0.0f;
-	float DisplayMs = 0.0f;
 };

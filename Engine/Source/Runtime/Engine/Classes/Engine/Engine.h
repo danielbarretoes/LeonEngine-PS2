@@ -14,6 +14,7 @@
 #include "Engine.generated.h"
 
 class IEngineLoop;
+class UGameViewportClient;
 class ULocalPlayer;
 class UPendingNetGame;
 class UWorld;
@@ -50,6 +51,14 @@ public:
 	/** LocalPlayerClassName, loaded by Init (UE: LocalPlayerClass). */
 	UPROPERTY(Transient)
 	TSubclassOf<ULocalPlayer> LocalPlayerClass;
+
+	/** The game viewport client's class (UE: GameViewportClientClassName). */
+	UPROPERTY(Config)
+	FSoftClassPath GameViewportClientClassName;
+
+	/** The game's view (UE: GameViewport); null before Init. */
+	UPROPERTY(Transient)
+	UGameViewportClient* GameViewport = nullptr;
 
 	/** Shows the stats overlay from the start (Leon: bShowStatsByDefault; `-showstats` does the same). */
 	UPROPERTY(Config)

@@ -12,6 +12,7 @@ class AGameModeBase;
 class APlayerController;
 class UEngine;
 class UGameInstance;
+class UGameViewportClient;
 class ULocalPlayer;
 class UPackage;
 class UWorld;
@@ -32,6 +33,10 @@ struct ENGINE_API FWorldContext
 	/** The game instance this context belongs to (UE: OwningGameInstance). */
 	UPROPERTY(Transient)
 	UGameInstance* OwningGameInstance = nullptr;
+
+	/** The viewport client that shows this context's world (UE: GameViewport). */
+	UPROPERTY(Transient)
+	UGameViewportClient* GameViewport = nullptr;
 
 	/** A name that identifies the context (UE: ContextHandle). */
 	UPROPERTY(Transient)
@@ -141,6 +146,12 @@ public:
 	[[nodiscard]] ULocalPlayer* GetFirstGamePlayer() const;
 	/** The first local player's controller in World (the context's world when null) (UE). */
 	[[nodiscard]] APlayerController* GetFirstLocalPlayerController(const UWorld* World = nullptr) const;
+
+	/** The viewport client of the context (UE: GetGameViewportClient). */
+	[[nodiscard]] UGameViewportClient* GetGameViewportClient() const
+	{
+		return WorldContext.GameViewport;
+	}
 
 	/** The engine that owns this game instance (its outer), or null (UE: GetEngine). */
 	[[nodiscard]] UEngine* GetEngine() const;

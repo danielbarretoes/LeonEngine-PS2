@@ -6,15 +6,24 @@ class FSceneInterface;
 class UCameraComponent;
 
 /**
- * What a view family draws besides the scene (UE: FEngineShowFlags). UE's flag for the bounds view is Bounds; the axes
- * gizmo is Leon's.
+ * What a view family draws besides the scene (UE: FEngineShowFlags), toggled by the console's `show <Flag>`
+ * (UGameViewportClient). UE's flags are Bounds, Collision and Navigation; the axes gizmo is Leon's.
  */
 struct ENGINE_API FEngineShowFlags
 {
 	/** The static meshes' world boxes and the directional shadow volume (UE: ShowFlag.Bounds; F1 in LeonGame). */
 	bool Bounds = false;
+	/** The collision volumes and floor traces (UE: ShowFlag.Collision; F2; the renderer does not draw it yet). */
+	bool Collision = false;
+	/** The navigation mesh (UE: ShowFlag.Navigation; F3; the renderer does not draw it yet). */
+	bool Navigation = false;
 	/** 1 m world axes at the origin and a view orientation gizmo in the bottom-left corner (Leon; F6 in LeonGame). */
 	bool AxesGizmo = false;
+
+	/** The flag named Name (case ignored), or null (UE: FindIndexByName). */
+	[[nodiscard]] bool* FindFlag(const FString& Name);
+	/** The flags' names, for `show` without a flag. */
+	[[nodiscard]] static const TCHAR* const* GetFlagNames(int32& OutNum);
 };
 
 /** The views drawn into one render target with one scene (UE: FSceneViewFamily). Leon draws one view per family. */

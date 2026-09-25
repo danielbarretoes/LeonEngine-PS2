@@ -8,6 +8,7 @@
 
 class APlayerController;
 class UInputComponent;
+class UWorld;
 
 /** A key that triggers an action, with the modifiers it needs (UE: FInputActionKeyMapping). */
 USTRUCT()
@@ -120,6 +121,63 @@ struct ENGINE_API FInputAxisConfigEntry
 	FInputAxisProperties AxisProperties;
 };
 
+/** A console command bound to a key, for development (UE: FKeyBind, UPlayerInput::DebugExecBindings). */
+USTRUCT()
+struct ENGINE_API FKeyBind
+{
+	GENERATED_BODY()
+
+	/** The key (UE: Key). */
+	UPROPERTY()
+	FKey Key;
+
+	/** The command, `|`-separated for several; `OnRelease <Cmd>` runs on release (UE: Command). */
+	UPROPERTY()
+	FString Command;
+
+	/** The modifiers that must be down (UE: Control, Shift, Alt, Cmd) or may be (UE: bIgnoreCtrl ...). */
+	UPROPERTY()
+	uint8 Control : 1;
+
+	UPROPERTY()
+	uint8 Shift : 1;
+
+	UPROPERTY()
+	uint8 Alt : 1;
+
+	UPROPERTY()
+	uint8 Cmd : 1;
+
+	UPROPERTY()
+	uint8 bIgnoreCtrl : 1;
+
+	UPROPERTY()
+	uint8 bIgnoreShift : 1;
+
+	UPROPERTY()
+	uint8 bIgnoreAlt : 1;
+
+	UPROPERTY()
+	uint8 bIgnoreCmd : 1;
+
+	/** Not used (UE: bDisabled). */
+	UPROPERTY()
+	uint8 bDisabled : 1;
+
+	FKeyBind()
+		: Control(0)
+		, Shift(0)
+		, Alt(0)
+		, Cmd(0)
+		, bIgnoreCtrl(0)
+		, bIgnoreShift(0)
+		, bIgnoreAlt(0)
+		, bIgnoreCmd(0)
+		, bDisabled(0)
+	{
+	}
+};
+
 /** The input state of one key (UE: FKeyState). */
 struct FKeyState
 {
@@ -219,6 +277,22 @@ public:
 	/** The controller this input belongs to (its outer), or null (UE: GetOuterAPlayerController). */
 	[[nodiscard]] APlayerController* GetOuterAPlayerController() const;
 
+	/**
+	 * Keys that run console commands, outside shipping builds (UE: DebugExecBindings, [/Script/Engine.PlayerInput] of
+	 * the Input config): LeonGame's F1-F6.
+	 */
+	UPROPERTY(Config)
+	TArray<FKeyBind> DebugExecBindings;
+
+	/** The command bound to a key with the current modifiers, or empty (UE: GetBind). */
+	[[nodiscard]] FString GetBind(FKey Key) const;
+
+	/**
+	 * Runs a bound command through the player's Exec chain; `OnRelease` commands run on release, the others on
+	 * press (UE: ExecInputCommands).
+	 */
+	bool ExecInputCommands(UWorld* InWorld, const TCHAR* Cmd, FOutputDevice& Ar);
+
 	/** This player's action mappings (UE: ActionMappings). */
 	UPROPERTY(Transient)
 	TArray<FInputActionKeyMapping> ActionMappings;
@@ -256,6 +330,8 @@ private:
 	TMap<FName, FAxisKeyDetails> AxisKeyMap;
 	/** The axis properties of the settings' AxisConfig, by key (UE: AxisProperties). */
 	TMap<FKey, FInputAxisProperties> AxisProperties;
+	/** The event of the key InputKey is handling (UE: CurrentEvent), for ExecInputCommands. */
+	EInputEvent CurrentEvent = IE_Pressed;
 	/** Numbers the events so the actions dispatch in arrival order (UE: EventCount). */
 	uint32 EventCount = 0;
 	bool bKeyMapsBuilt = false;

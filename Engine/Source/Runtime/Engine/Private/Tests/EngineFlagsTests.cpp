@@ -1,5 +1,6 @@
 #include "CoreMinimal.h"
-#include "Engine/GameEngine.h"
+#include "Engine/GameInstance.h"
+#include "Engine/GameViewportClient.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -9,21 +10,21 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEngineFlagsWorkBeforeInitializeTest, "System.E
 
 bool FEngineFlagsWorkBeforeInitializeTest::RunTest(const FString& Parameters)
 {
-	// The debug flags work on an engine that was never initialized, and the game instance counts the levels opened.
-	UGameEngine& Engine = *NewObject<UGameEngine>();
-	TestFalse("Not initialized", Engine.IsInitialized());
+	// The debug views are show flags the viewport client's `show` command toggles (F2 and F3 in LeonGame), before any
+	// map or window; the game instance counts the levels opened.
+	UGameViewportClient& Viewport = *NewObject<UGameViewportClient>();
 
-	TestFalse("Collision debug off by default", Engine.IsCollisionDebugEnabled());
-	Engine.ToggleCollisionDebug();
-	TestTrue("Collision debug toggled on", Engine.IsCollisionDebugEnabled());
-	Engine.SetCollisionDebugEnabled(false);
-	TestFalse("Collision debug set off", Engine.IsCollisionDebugEnabled());
+	TestFalse("Collision debug off by default", Viewport.EngineShowFlags.Collision);
+	TestTrue("show Collision", Viewport.Exec(nullptr, TEXT("show Collision"), *GLog));
+	TestTrue("Collision debug toggled on", Viewport.EngineShowFlags.Collision);
+	TestTrue("show collision again", Viewport.Exec(nullptr, TEXT("show collision"), *GLog));
+	TestFalse("Collision debug toggled off", Viewport.EngineShowFlags.Collision);
 
-	TestFalse("NavMesh debug off by default", Engine.IsNavMeshDebugEnabled());
-	Engine.ToggleNavMeshDebug();
-	TestTrue("NavMesh debug toggled on", Engine.IsNavMeshDebugEnabled());
-	Engine.SetNavMeshDebugEnabled(false);
-	TestFalse("NavMesh debug set off", Engine.IsNavMeshDebugEnabled());
+	TestFalse("NavMesh debug off by default", Viewport.EngineShowFlags.Navigation);
+	TestTrue("show Navigation", Viewport.Exec(nullptr, TEXT("show Navigation"), *GLog));
+	TestTrue("NavMesh debug toggled on", Viewport.EngineShowFlags.Navigation);
+	TestTrue("show Navigation again", Viewport.Exec(nullptr, TEXT("show Navigation"), *GLog));
+	TestFalse("NavMesh debug set off", Viewport.EngineShowFlags.Navigation);
 
 	UGameInstance& GameInstance = *NewObject<UGameInstance>();
 	TestEqual("No levels opened", GameInstance.GetLevelsOpened(), 0);

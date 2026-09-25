@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Containers/UnrealString.h"
 #include "CoreTypes.h"
 #include "Templates/SharedPointer.h"
 #include "Templates/UniquePtr.h"
@@ -11,9 +12,15 @@ class FGenericWindow;
 class GenericApplication;
 
 /**
- * Engine loop driven by GuardedMain (UE: FEngineLoop). Without the engine framework
- * (WITH_ENGINE=0, e.g. the PS2 game) it owns the platform application and main window and ticks
- * FTicker::GetCoreTicker(); game modules register their per-frame work there.
+ * Engine loop driven by GuardedMain (UE: FEngineLoop).
+ *
+ * - PreInit: the command line, the project, the config and the log, then the platform application, the main window
+ *   and the RHI on its context (RHIInit; none for a desktop game with -nullrhi), then the statically linked modules.
+ * - With the engine (WITH_ENGINE=1, LeonGame): Init creates GEngine of `[/Script/Engine.Engine] GameEngine=`, queues
+ *   `-ExecCmds=`, calls GEngine->Init and Start (the first map); Tick pumps the window's events, runs the deferred
+ *   commands and GEngine->Tick; Exit calls GEngine->PreExit.
+ * - Without it (WITH_ENGINE=0, the PS2 game) Tick ticks FTicker::GetCoreTicker(), where game modules register their
+ *   per-frame work, and presents.
  */
 class LAUNCH_API FEngineLoop
 #if WITH_ENGINE
@@ -57,6 +64,17 @@ private:
 	TSharedPtr<FGenericWindow> MainWindow;
 	uint64 LastFrameCycles = 0;
 	int32 ExitCode = 0;
+
+	/** -Screenshot=<file.bmp>: frame ExitAfterFrames is saved (Leon). */
+	FString ScreenshotPath;
+	/** -ExitAfterFrames=N: the game exits after frame N (Leon). */
+	int32 ExitAfterFrames = 0;
+	int32 FrameCount = 0;
+	/** -tick=<Hz>: the fixed step of a headless run (Leon). */
+	float TickHz = 60.0f;
+	/** FPlatformTime::Seconds of the last frame / the next headless step. */
+	double LastFrameTime = 0.0;
+	double NextHeadlessTick = 0.0;
 };
 
 /** The process' engine loop (UE: GEngineLoop). */

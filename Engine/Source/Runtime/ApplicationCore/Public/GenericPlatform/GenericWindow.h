@@ -2,12 +2,10 @@
 
 #include "CoreTypes.h"
 #include "Delegates/Delegate.h"
+#include "DynamicRHI.h"
 #include "GenericPlatform/GenericApplicationMessageHandler.h"
 #include "InputCoreTypes.h"
 #include "Math/Vector2D.h"
-#include "Templates/UniquePtr.h"
-
-class FDynamicRHI;
 
 /** Opaque OS / graphics window handle (GLFWwindow* on desktop, GS state on PS2). */
 using FNativeWindowHandle = void*;
@@ -16,8 +14,9 @@ using FNativeWindowHandle = void*;
 DECLARE_DELEGATE_OneParam(FOnWindowMouseWheel, float /* Delta */);
 
 /**
- * Platform window + graphics context (UE: FGenericWindow). Created by
- * GenericApplication::MakeWindow(); owns the RHI device it creates (published in GDynamicRHI).
+ * Platform window + graphics context (UE: FGenericWindow). Created by GenericApplication::MakeWindow(). The RHI is made
+ * on its context by RHIInit (FEngineLoop::PreInit, with GetRHIProcAddressLoader); the window whose BindRHIViewport ran
+ * keeps the RHI viewport at its framebuffer size.
  */
 class APPLICATIONCORE_API FGenericWindow
 {
@@ -71,10 +70,14 @@ public:
 		return Handle;
 	}
 
-	FDynamicRHI* RHIDevice() const
+	/** How RHIInit finds the graphics API on this window's context (OpenGL: glfwGetProcAddress); null for none. */
+	virtual FRHIProcAddressLoader GetRHIProcAddressLoader() const
 	{
-		return OwnedRHI.Get();
+		return nullptr;
 	}
+
+	/** The RHI viewport follows this window's framebuffer from now on, starting with its current size. */
+	void BindRHIViewport();
 
 	int32 Width() const
 	{
@@ -119,17 +122,12 @@ public:
 	void NotifyMouseWheel(float Delta);
 
 protected:
-	/** Creates the platform RHI, loads it and publishes it in GDynamicRHI. */
-	bool InitRHI(void* (*ProcAddressLoader)(const char*));
-
-	/** Releases the RHI created by InitRHI (clears GDynamicRHI if it is ours). */
-	void ReleaseRHI();
-
 	/** Resets the size / cursor / delegate state after the backend window is gone. */
 	void ResetWindowState();
 
 	FNativeWindowHandle Handle = nullptr;
-	TUniquePtr<FDynamicRHI> OwnedRHI;
+	/** The RHI viewport follows this window's framebuffer (BindRHIViewport). */
+	bool bDrivesRHIViewport = false;
 	int32 WindowWidth = 0;
 	int32 WindowHeight = 0;
 	int32 FramebufferWidth = 0;

@@ -4,6 +4,7 @@
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerInput.h"
 #include "GameFramework/WorldSettings.h"
 #include "Misc/OutputDevice.h"
 #include "Misc/OutputDeviceRedirector.h"
@@ -26,6 +27,10 @@ bool UPlayer::Exec(UWorld* InWorld, const TCHAR* Cmd, FOutputDevice& Ar)
 	}
 	// The chain of UE's UPlayer::Exec: each object answers with its Exec UFUNCTIONs.
 	APawn* Pawn = PC->GetPawn();
+	if (PC->PlayerInput != nullptr && PC->PlayerInput->ProcessConsoleExec(Cmd, Ar, Pawn))
+	{
+		return true;
+	}
 	if (PC->ProcessConsoleExec(Cmd, Ar, Pawn))
 	{
 		return true;

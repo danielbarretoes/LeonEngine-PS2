@@ -2,8 +2,12 @@
 
 #include "Camera/PlayerCameraManager.h"
 #include "Components/InputComponent.h"
+#include "Engine/Player.h"
 #include "GameFramework/InputSettings.h"
 #include "GameFramework/PlayerController.h"
+#include "Misc/OutputDevice.h"
+#include "Misc/OutputDeviceRedirector.h"
+#include "Misc/Parse.h"
 #include "Templates/Sorting.h"
 
 FInputActionKeyMapping::FInputActionKeyMapping(const FName InActionName, const FKey InKey, const bool bInShift,
@@ -157,7 +161,65 @@ bool UPlayerInput::InputKey(FKey Key, EInputEvent Event, float AmountDepressed, 
 			break;
 	}
 	++KeyState.SampleCountAccumulator;
+
+#if !UE_BUILD_SHIPPING
+	// A debug exec binding runs its command at once (UE).
+	CurrentEvent = Event;
+	const FString Command = GetBind(Key);
+	if (!Command.IsEmpty())
+	{
+		APlayerController* PlayerController = GetOuterAPlayerController();
+		(void)ExecInputCommands(PlayerController != nullptr ? PlayerController->GetWorld() : nullptr, *Command, *GLog);
+		return true;
+	}
+#endif
 	return Event == IE_Pressed ? IsKeyHandledByAction(Key) : true;
+}
+
+FString UPlayerInput::GetBind(FKey Key) const
+{
+	const bool bControl = IsPressed(EKeys::LeftControl) || IsPressed(EKeys::RightControl);
+	const bool bShift = IsPressed(EKeys::LeftShift) || IsPressed(EKeys::RightShift);
+	const bool bAlt = IsPressed(EKeys::LeftAlt) || IsPressed(EKeys::RightAlt);
+	const bool bCmd = IsPressed(EKeys::LeftCommand) || IsPressed(EKeys::RightCommand);
+	for (const FKeyBind& Bind : DebugExecBindings)
+	{
+		if (Bind.bDisabled != 0 || Bind.Key != Key)
+		{
+			continue;
+		}
+		if ((Bind.bIgnoreCtrl != 0 || (Bind.Control != 0) == bControl) &&
+			(Bind.bIgnoreShift != 0 || (Bind.Shift != 0) == bShift) &&
+			(Bind.bIgnoreAlt != 0 || (Bind.Alt != 0) == bAlt) && (Bind.bIgnoreCmd != 0 || (Bind.Cmd != 0) == bCmd))
+		{
+			return Bind.Command;
+		}
+	}
+	return FString();
+}
+
+bool UPlayerInput::ExecInputCommands(UWorld* InWorld, const TCHAR* Cmd, FOutputDevice& Ar)
+{
+	APlayerController* PlayerController = GetOuterAPlayerController();
+	UPlayer* Player = PlayerController != nullptr ? PlayerController->Player : nullptr;
+	TArray<FString> Commands;
+	FString(Cmd).ParseIntoArray(Commands, TEXT("|"), true);
+	bool bResult = false;
+	for (const FString& Line : Commands)
+	{
+		const TCHAR* Str = *Line;
+		while (*Str == ' ')
+		{
+			++Str;
+		}
+		const bool bOnRelease = FParse::Command(&Str, TEXT("OnRelease"));
+		if ((bOnRelease ? IE_Released : IE_Pressed) != CurrentEvent || Player == nullptr)
+		{
+			continue;
+		}
+		bResult |= Player->Exec(InWorld, Str, Ar);
+	}
+	return bResult;
 }
 
 bool UPlayerInput::InputAxis(FKey Key, float Delta, float /*DeltaTime*/, int32 NumSamples, bool /*bGamepad*/)

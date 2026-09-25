@@ -3,13 +3,9 @@
 #include "DynamicRHI.h"
 #include "GenericPlatform/GenericApplication.h"
 
-// Out of line: the TUniquePtr<FDynamicRHI> member needs the complete type.
 FGenericWindow::FGenericWindow() = default;
 
-FGenericWindow::~FGenericWindow()
-{
-	ReleaseRHI();
-}
+FGenericWindow::~FGenericWindow() = default;
 
 bool FGenericWindow::CreateShared(const FGenericWindow&, int32, int32, const TCHAR*)
 {
@@ -72,41 +68,24 @@ void FGenericWindow::ApplyFramebufferSize(int32 InWidth, int32 InHeight)
 {
 	FramebufferWidth = InWidth;
 	FramebufferHeight = InHeight;
-	if (OwnedRHI)
+	if (bDrivesRHIViewport && GDynamicRHI != nullptr)
 	{
-		OwnedRHI->SetViewport(0, 0, InWidth, InHeight);
+		GDynamicRHI->SetViewport(0, 0, InWidth, InHeight);
+	}
+}
+
+void FGenericWindow::BindRHIViewport()
+{
+	bDrivesRHIViewport = true;
+	if (GDynamicRHI != nullptr && FramebufferWidth > 0 && FramebufferHeight > 0)
+	{
+		GDynamicRHI->SetViewport(0, 0, FramebufferWidth, FramebufferHeight);
 	}
 }
 
 void FGenericWindow::NotifyMouseWheel(float Delta)
 {
 	MouseWheelDelegate.ExecuteIfBound(Delta);
-}
-
-bool FGenericWindow::InitRHI(void* (*ProcAddressLoader)(const char*))
-{
-	OwnedRHI.Reset(PlatformCreateDynamicRHI());
-	if (!OwnedRHI || !OwnedRHI->Init(ProcAddressLoader))
-	{
-		UE_LOG(LogApplicationCore, Error, "FGenericWindow: failed to initialize the RHI");
-		OwnedRHI.Reset();
-		return false;
-	}
-	GDynamicRHI = OwnedRHI.Get();
-	if (FramebufferWidth > 0 && FramebufferHeight > 0)
-	{
-		OwnedRHI->SetViewport(0, 0, FramebufferWidth, FramebufferHeight);
-	}
-	return true;
-}
-
-void FGenericWindow::ReleaseRHI()
-{
-	if (GDynamicRHI != nullptr && GDynamicRHI == OwnedRHI.Get())
-	{
-		GDynamicRHI = nullptr;
-	}
-	OwnedRHI.Reset();
 }
 
 void FGenericWindow::ResetWindowState()
@@ -117,5 +96,6 @@ void FGenericWindow::ResetWindowState()
 	FramebufferHeight = 0;
 	bCursorCaptured = false;
 	bShouldClose = false;
+	bDrivesRHIViewport = false;
 	MouseWheelDelegate.Unbind();
 }

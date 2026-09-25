@@ -28,9 +28,8 @@ public:
 	[[nodiscard]] APlayerController* GetPlayerController(const UWorld* InWorld) const;
 
 	/**
-	 * The player's console commands (UE: UPlayer::Exec): offered to the player input, the controller, its pawn, its
-	 * HUD, the game mode, the game state, the camera manager and the world settings, each through ProcessConsoleExec
-	 * (their Exec UFUNCTIONs).
+	 * The player's console commands (UE: UPlayer::Exec): offered to the player input, the controller, its pawn, the
+	 * game mode, the game state and the world settings, each through ProcessConsoleExec (their Exec UFUNCTIONs).
 	 */
 	bool Exec(UWorld* InWorld, const TCHAR* Cmd, FOutputDevice& Ar) override;
 

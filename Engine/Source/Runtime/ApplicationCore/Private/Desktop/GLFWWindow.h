@@ -26,6 +26,7 @@ public:
 	virtual FVector2D GetCursorPos() const override;
 	virtual void SetCursorCaptured(bool bCaptured) override;
 	virtual bool SetIconFromFile(const TCHAR* PngPath) override;
+	virtual FRHIProcAddressLoader GetRHIProcAddressLoader() const override;
 
 private:
 	void InstallCallbacks();

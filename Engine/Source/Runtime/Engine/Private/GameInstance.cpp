@@ -219,7 +219,7 @@ int32 UGameInstance::AddLocalPlayer(ULocalPlayer* NewPlayer, int32 ControllerId)
 	}
 	const int32 InsertIndex = LocalPlayers.AddUnique(NewPlayer);
 	NewPlayer->OwningGameInstance = this;
-	NewPlayer->PlayerAdded(ControllerId);
+	NewPlayer->PlayerAdded(GetGameViewportClient(), ControllerId);
 	return InsertIndex;
 }
 

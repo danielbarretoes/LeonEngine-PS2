@@ -87,8 +87,8 @@ UEngine::UEngine(const FObjectInitializer& ObjectInitializer)
 
 void UEngine::Init(IEngineLoop* InEngineLoop)
 {
-	// Without an engine loop, or with -nullrhi, nothing renders: no window, no textures, silent audio.
-	bHeadless = InEngineLoop == nullptr || !FApp::CanEverRender();
+	// Without a main window (-nullrhi, tests) nothing renders: no textures are loaded and the audio is silent.
+	bHeadless = InEngineLoop == nullptr || InEngineLoop->GetMainWindow() == nullptr;
 
 	LocalPlayerClass = LocalPlayerClassName.IsValid() ? LocalPlayerClassName.TryLoadClass<ULocalPlayer>() : nullptr;
 	if (LocalPlayerClass == nullptr)

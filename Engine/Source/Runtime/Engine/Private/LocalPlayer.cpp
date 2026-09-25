@@ -1,6 +1,7 @@
 #include "Engine/LocalPlayer.h"
 
 #include "Engine/GameInstance.h"
+#include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 
@@ -23,8 +24,9 @@ bool ULocalPlayer::SpawnPlayActor(const FString& URL, FString& OutError, UWorld*
 	return PlayerController != nullptr;
 }
 
-void ULocalPlayer::PlayerAdded(int32 InControllerId)
+void ULocalPlayer::PlayerAdded(UGameViewportClient* InViewportClient, int32 InControllerId)
 {
+	ViewportClient = InViewportClient;
 	SetControllerId(InControllerId);
 }
 
@@ -55,5 +57,10 @@ UWorld* ULocalPlayer::GetWorld() const
 
 bool ULocalPlayer::Exec(UWorld* InWorld, const TCHAR* Cmd, FOutputDevice& Ar)
 {
+	// The viewport client (show, the game instance, the engine), then the controller's chain (UE).
+	if (ViewportClient != nullptr && ViewportClient->Exec(InWorld, Cmd, Ar))
+	{
+		return true;
+	}
 	return Super::Exec(InWorld, Cmd, Ar);
 }
