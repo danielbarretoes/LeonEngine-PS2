@@ -1,6 +1,7 @@
 #include "FbxStaticMesh.h"
 
 #include "MeshData.h"
+#include "Migration/GlmInterop.h"
 
 #include <glm/geometric.hpp>
 #include <ufbx.h>
@@ -47,7 +48,7 @@ bool LoadStaticMeshFromFbx(const std::string& Path, FMeshData& Out)
 			continue;
 		}
 
-		const int IndexOffset = static_cast<int>(Out.Indices.size());
+		const int IndexOffset = Out.Indices.Num();
 		int IndexCount = 0;
 
 		if (Mesh->max_face_triangles * 3u > Tri.size())
@@ -76,8 +77,8 @@ bool LoadStaticMeshFromFbx(const std::string& Path, FMeshData& Out)
 					if (Mesh->vertex_normal.exists)
 					{
 						const ufbx_vec3 N = ufbx_get_vertex_vec3(&Mesh->vertex_normal, Corner);
-						V.Normal = glm::normalize(
-							glm::vec3{static_cast<float>(N.x), static_cast<float>(N.y), static_cast<float>(N.z)});
+						V.Normal = FromGlm(glm::normalize(
+							glm::vec3{static_cast<float>(N.x), static_cast<float>(N.y), static_cast<float>(N.z)}));
 					}
 					else
 					{
@@ -90,8 +91,8 @@ bool LoadStaticMeshFromFbx(const std::string& Path, FMeshData& Out)
 						V.TexCoord = {static_cast<float>(Uv.x), static_cast<float>(Uv.y)};
 					}
 
-					Out.Indices.push_back(static_cast<std::uint32_t>(Out.Vertices.size()));
-					Out.Vertices.push_back(V);
+					Out.Indices.Add(static_cast<uint32>(Out.Vertices.Num()));
+					Out.Vertices.Add(V);
 					++IndexCount;
 				}
 			}
@@ -99,13 +100,13 @@ bool LoadStaticMeshFromFbx(const std::string& Path, FMeshData& Out)
 
 		if (IndexCount > 0)
 		{
-			Out.Submeshes.push_back(FMeshSection{IndexOffset, IndexCount, static_cast<int>(Out.Submeshes.size())});
+			Out.Submeshes.Add(FMeshSection{IndexOffset, IndexCount, Out.Submeshes.Num()});
 		}
 	}
 
 	ufbx_free_scene(Scene);
 
-	if (Out.empty())
+	if (Out.IsEmpty())
 	{
 		std::cerr << "FbxStaticMesh: no triangles in '" << Path << "'\n";
 		return false;

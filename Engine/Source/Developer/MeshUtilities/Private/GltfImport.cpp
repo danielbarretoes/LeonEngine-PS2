@@ -173,7 +173,7 @@ bool LoadStaticMeshFromGltf(const std::string& Path, FMeshData& Out, const std::
 			}
 
 			const cgltf_size Vcount = Pos->count;
-			const std::size_t StartIndex = Mesh.Indices.size();
+			const int32 StartIndex = Mesh.Indices.Num();
 			for (cgltf_size Vi = 0; Vi < Vcount; ++Vi)
 			{
 				FVertex V{};
@@ -194,33 +194,33 @@ bool LoadStaticMeshFromGltf(const std::string& Path, FMeshData& Out, const std::
 				{
 					V.TexCoord = {Tmp[0], Tmp[1]};
 				}
-				Mesh.Vertices.push_back(V);
+				Mesh.Vertices.Add(V);
 			}
 
 			if (Prim.indices != nullptr)
 			{
 				for (cgltf_size Ii = 0; Ii < Prim.indices->count; ++Ii)
 				{
-					Mesh.Indices.push_back(BaseVertex + ReadIndex(Prim.indices, Ii));
+					Mesh.Indices.Add(BaseVertex + ReadIndex(Prim.indices, Ii));
 				}
 			}
 			else
 			{
 				for (cgltf_size Ii = 0; Ii < Vcount; ++Ii)
 				{
-					Mesh.Indices.push_back(BaseVertex + static_cast<std::uint32_t>(Ii));
+					Mesh.Indices.Add(BaseVertex + static_cast<uint32>(Ii));
 				}
 			}
 
 			FMeshSection Sm;
-			Sm.IndexOffset = static_cast<int>(StartIndex);
-			Sm.IndexCount = static_cast<int>(Mesh.Indices.size() - StartIndex);
-			Sm.MaterialIndex = static_cast<int>(Mesh.Materials.size());
-			Mesh.Submeshes.push_back(Sm);
+			Sm.IndexOffset = StartIndex;
+			Sm.IndexCount = Mesh.Indices.Num() - StartIndex;
+			Sm.MaterialIndex = Mesh.Materials.Num();
+			Mesh.Submeshes.Add(Sm);
 
 			FMaterial Slot{};
-			Mesh.Materials.push_back(Slot);
-			Mesh.AlbedoMapPaths.emplace_back();
+			Mesh.Materials.Add(Slot);
+			Mesh.AlbedoMapPaths.AddDefaulted();
 
 			if (!MaterialsDir.empty() && OutMaterials != nullptr && Prim.material != nullptr)
 			{
@@ -236,7 +236,7 @@ bool LoadStaticMeshFromGltf(const std::string& Path, FMeshData& Out, const std::
 
 	cgltf_free(Data);
 
-	if (Mesh.empty())
+	if (Mesh.IsEmpty())
 	{
 		OutError = "glTF contained no triangle mesh data";
 		return false;

@@ -1,12 +1,9 @@
 #include "Frustum.h"
 
-#include "Math/Matrix.h"
-#include "Migration/GlmInterop.h"
-
 namespace
 {
 
-	/// Plane A*x + B*y + C*z + D >= 0 as a normalized FPlane (N.x - W >= 0 inside).
+	/** Plane A*x + B*y + C*z + D >= 0 as a normalized FPlane (N.x - W >= 0 inside). */
 	FPlane MakeInsidePlane(float InA, float InB, float InC, float InD)
 	{
 		const FVector Normal(InA, InB, InC);
@@ -21,15 +18,16 @@ namespace
 
 } // namespace
 
-FBox TransformLocalBox(const glm::vec3& LocalMin, const glm::vec3& LocalMax, const glm::mat4& Model)
+FBox TransformLocalBox(const FVector& LocalMin, const FVector& LocalMax, const FMatrix& Model)
 {
-	return FBox(FromGlm(LocalMin), FromGlm(LocalMax)).TransformBy(FromGlm(Model));
+	return FBox(LocalMin, LocalMax).TransformBy(Model);
 }
 
-void FFrustum::ExtractFromViewProjection(const glm::mat4& ViewProjection)
+void FFrustum::ExtractFromViewProjection(const FMatrix& ViewProjection)
 {
-	// Gribb/Hartmann: combine clip-matrix columns into frustum planes.
-	const glm::mat4& M = ViewProjection;
+	// Gribb / Hartmann: combine the clip-matrix columns into frustum planes. M[C][R] is column C, row R of the
+	// column-vector clip transform (the memory layout glm uses; see GlmInterop.h).
+	const float (&M)[4][4] = ViewProjection.M;
 	Planes[0] = MakeInsidePlane(M[0][3] + M[0][0], M[1][3] + M[1][0], M[2][3] + M[2][0], M[3][3] + M[3][0]); // left
 	Planes[1] = MakeInsidePlane(M[0][3] - M[0][0], M[1][3] - M[1][0], M[2][3] - M[2][0], M[3][3] - M[3][0]); // right
 	Planes[2] = MakeInsidePlane(M[0][3] + M[0][1], M[1][3] + M[1][1], M[2][3] + M[2][1], M[3][3] + M[3][1]); // bottom

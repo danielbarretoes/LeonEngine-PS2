@@ -109,12 +109,12 @@ TEST_CASE("PhysScene Jolt dynamic rests on TriangleMesh static", "[physics][jolt
 	ULevel Level;
 	FMeshData Data;
 	// Flat plane at y=1 covering xz [-3,3]
-	Data.Vertices.push_back({{-3.0f, 1.0f, -3.0f}, {0, 1, 0}, {0, 0}, {1, 0, 0, 1}});
-	Data.Vertices.push_back({{3.0f, 1.0f, -3.0f}, {0, 1, 0}, {1, 0}, {1, 0, 0, 1}});
-	Data.Vertices.push_back({{3.0f, 1.0f, 3.0f}, {0, 1, 0}, {1, 1}, {1, 0, 0, 1}});
-	Data.Vertices.push_back({{-3.0f, 1.0f, 3.0f}, {0, 1, 0}, {0, 1}, {1, 0, 0, 1}});
+	Data.Vertices.Add(FVertex(FVector(-3.0f, 1.0f, -3.0f), FVector(0, 1, 0), FVector2D(0, 0), FVector4(1, 0, 0, 1)));
+	Data.Vertices.Add(FVertex(FVector(3.0f, 1.0f, -3.0f), FVector(0, 1, 0), FVector2D(1, 0), FVector4(1, 0, 0, 1)));
+	Data.Vertices.Add(FVertex(FVector(3.0f, 1.0f, 3.0f), FVector(0, 1, 0), FVector2D(1, 1), FVector4(1, 0, 0, 1)));
+	Data.Vertices.Add(FVertex(FVector(-3.0f, 1.0f, 3.0f), FVector(0, 1, 0), FVector2D(0, 1), FVector4(1, 0, 0, 1)));
 	Data.Indices = {0, 1, 2, 0, 2, 3};
-	Data.Submeshes.push_back({0, 6, 0});
+	Data.Submeshes.Add(FMeshSection{0, 6, 0});
 
 	UStaticMeshComponent Component{};
 	Component.Mesh = std::make_shared<UStaticMesh>(UStaticMesh::CreateCpu(Data));

@@ -1,5 +1,6 @@
 #include "StaticMesh.h"
 
+#include "Migration/GlmInterop.h"
 #include "OpenGLVertexAttrib.h"
 
 #include <glad/glad.h>
@@ -71,7 +72,7 @@ UStaticMesh& UStaticMesh::operator=(UStaticMesh&& Other) noexcept
 UStaticMesh UStaticMesh::CreateCpu(const FMeshData& Data)
 {
 	UStaticMesh Mesh;
-	if (Data.empty())
+	if (Data.IsEmpty())
 	{
 		return Mesh;
 	}
@@ -80,18 +81,18 @@ UStaticMesh UStaticMesh::CreateCpu(const FMeshData& Data)
 	Mesh.LocalMax = glm::vec3(std::numeric_limits<float>::lowest());
 	for (const FVertex& Vertex : Data.Vertices)
 	{
-		Mesh.LocalMin = glm::min(Mesh.LocalMin, Vertex.Position);
-		Mesh.LocalMax = glm::max(Mesh.LocalMax, Vertex.Position);
+		Mesh.LocalMin = glm::min(Mesh.LocalMin, ToGlm(Vertex.Position));
+		Mesh.LocalMax = glm::max(Mesh.LocalMax, ToGlm(Vertex.Position));
 	}
-	Mesh.IndexCount = static_cast<int>(Data.Indices.size());
-	Mesh.Materials = Data.Materials;
-	if (Data.Submeshes.empty())
+	Mesh.IndexCount = Data.Indices.Num();
+	Mesh.Materials.assign(Data.Materials.GetData(), Data.Materials.GetData() + Data.Materials.Num());
+	if (Data.Submeshes.Num() == 0)
 	{
 		Mesh.Submeshes.push_back(FMeshSection{0, Mesh.IndexCount, 0});
 	}
 	else
 	{
-		Mesh.Submeshes = Data.Submeshes;
+		Mesh.Submeshes.assign(Data.Submeshes.GetData(), Data.Submeshes.GetData() + Data.Submeshes.Num());
 	}
 	Mesh.bCpuOnly = true;
 	Mesh.CpuData = Data;
@@ -101,7 +102,7 @@ UStaticMesh UStaticMesh::CreateCpu(const FMeshData& Data)
 UStaticMesh UStaticMesh::Upload(const FMeshData& Data)
 {
 	UStaticMesh Result;
-	if (Data.empty())
+	if (Data.IsEmpty())
 	{
 		return Result;
 	}
@@ -113,8 +114,8 @@ UStaticMesh UStaticMesh::Upload(const FMeshData& Data)
 	Result.LocalMax = glm::vec3(std::numeric_limits<float>::lowest());
 	for (const FVertex& Vertex : UploadData.Vertices)
 	{
-		Result.LocalMin = glm::min(Result.LocalMin, Vertex.Position);
-		Result.LocalMax = glm::max(Result.LocalMax, Vertex.Position);
+		Result.LocalMin = glm::min(Result.LocalMin, ToGlm(Vertex.Position));
+		Result.LocalMax = glm::max(Result.LocalMax, ToGlm(Vertex.Position));
 	}
 
 	glGenVertexArrays(1, &Result.Vao);
@@ -124,12 +125,12 @@ UStaticMesh UStaticMesh::Upload(const FMeshData& Data)
 	glBindVertexArray(Result.Vao);
 
 	glBindBuffer(GL_ARRAY_BUFFER, Result.Vbo);
-	glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(UploadData.Vertices.size() * sizeof(FVertex)),
-		UploadData.Vertices.data(), GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(UploadData.Vertices.Num() * sizeof(FVertex)),
+		UploadData.Vertices.GetData(), GL_STATIC_DRAW);
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Result.Ebo);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(UploadData.Indices.size() * sizeof(std::uint32_t)),
-		UploadData.Indices.data(), GL_STATIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(UploadData.Indices.Num() * sizeof(uint32)),
+		UploadData.Indices.GetData(), GL_STATIC_DRAW);
 
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(FVertex), GlAttribOffset(&FVertex::Position));
@@ -144,16 +145,18 @@ UStaticMesh UStaticMesh::Upload(const FMeshData& Data)
 	glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(FVertex), GlAttribOffset(&FVertex::Tangent));
 
 	glBindVertexArray(0);
-	Result.IndexCount = static_cast<int>(UploadData.Indices.size());
-	Result.Materials = UploadData.Materials;
+	Result.IndexCount = UploadData.Indices.Num();
+	Result.Materials.assign(
+		UploadData.Materials.GetData(), UploadData.Materials.GetData() + UploadData.Materials.Num());
 
-	if (UploadData.Submeshes.empty())
+	if (UploadData.Submeshes.Num() == 0)
 	{
 		Result.Submeshes.push_back(FMeshSection{0, Result.IndexCount, 0});
 	}
 	else
 	{
-		Result.Submeshes = UploadData.Submeshes;
+		Result.Submeshes.assign(
+			UploadData.Submeshes.GetData(), UploadData.Submeshes.GetData() + UploadData.Submeshes.Num());
 	}
 	Result.CpuData = std::move(UploadData);
 	return Result;

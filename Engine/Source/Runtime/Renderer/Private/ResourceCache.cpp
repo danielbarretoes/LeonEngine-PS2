@@ -24,7 +24,7 @@ std::shared_ptr<UStaticMesh> FResourceCache::CacheMesh(const std::string& Key, F
 	{
 		return It->second;
 	}
-	if (Data.empty())
+	if (Data.IsEmpty())
 	{
 		return nullptr;
 	}
@@ -47,9 +47,9 @@ std::shared_ptr<UStaticMesh> FResourceCache::LoadStaticMesh(const std::string& P
 	}
 
 	FMeshData Data;
-	if (IsLeonMeshPath(Path))
+	if (IsLeonMeshPath(FString(Path.c_str())))
 	{
-		if (!LoadLeonMeshFile(Path, Data))
+		if (!LoadLeonMeshFile(FString(Path.c_str()), Data))
 		{
 			std::cerr << "ResourceCache: failed to load .lmesh '" << Path << "'\n";
 			return nullptr;
@@ -63,23 +63,23 @@ std::shared_ptr<UStaticMesh> FResourceCache::LoadStaticMesh(const std::string& P
 	}
 
 	// Bind diffuse textures referenced by the MTL before GPU upload.
-	for (std::size_t I = 0; I < Data.Materials.size() && I < Data.AlbedoMapPaths.size(); ++I)
+	for (int32 I = 0; I < Data.Materials.Num() && I < Data.AlbedoMapPaths.Num(); ++I)
 	{
-		if (Data.AlbedoMapPaths[I].empty())
+		if (Data.AlbedoMapPaths[I].IsEmpty())
 		{
 			continue;
 		}
-		Data.Materials[I].AlbedoMap = LoadTexture(Data.AlbedoMapPaths[I]);
+		Data.Materials[I].AlbedoMap = LoadTexture(std::string(*Data.AlbedoMapPaths[I]));
 		if (Data.Materials[I].AlbedoMap == nullptr)
 		{
-			std::cerr << "ResourceCache: missing albedo map '" << Data.AlbedoMapPaths[I] << "'\n";
+			std::cerr << "ResourceCache: missing albedo map '" << *Data.AlbedoMapPaths[I] << "'\n";
 		}
 	}
 
 	return CacheMesh(CacheKey, std::move(Data));
 }
 
-std::shared_ptr<UTexture2D> FResourceCache::LoadTexture(const std::string& Path)
+TSharedPtr<UTexture2D> FResourceCache::LoadTexture(const std::string& Path)
 {
 	if (!bGpuUploadEnabled)
 	{
@@ -91,7 +91,7 @@ std::shared_ptr<UTexture2D> FResourceCache::LoadTexture(const std::string& Path)
 		return It->second;
 	}
 
-	auto Texture = std::make_shared<UTexture2D>(UTexture2D::LoadFromFile(Path));
+	auto Texture = MakeShared<UTexture2D>(UTexture2D::LoadFromFile(Path));
 	if (!Texture->Valid())
 	{
 		return nullptr;
@@ -100,7 +100,7 @@ std::shared_ptr<UTexture2D> FResourceCache::LoadTexture(const std::string& Path)
 	return Texture;
 }
 
-std::shared_ptr<UTexture2D> FResourceCache::CheckerTexture(int Size)
+TSharedPtr<UTexture2D> FResourceCache::CheckerTexture(int Size)
 {
 	if (!bGpuUploadEnabled)
 	{
@@ -113,7 +113,7 @@ std::shared_ptr<UTexture2D> FResourceCache::CheckerTexture(int Size)
 		return It->second;
 	}
 
-	auto Texture = std::make_shared<UTexture2D>(UTexture2D::CreateChecker(Size));
+	auto Texture = MakeShared<UTexture2D>(UTexture2D::CreateChecker(Size));
 	if (!Texture->Valid())
 	{
 		return nullptr;
@@ -122,7 +122,7 @@ std::shared_ptr<UTexture2D> FResourceCache::CheckerTexture(int Size)
 	return Texture;
 }
 
-std::shared_ptr<UTexture2D> FResourceCache::BumpNormalTexture(int Size)
+TSharedPtr<UTexture2D> FResourceCache::BumpNormalTexture(int Size)
 {
 	if (!bGpuUploadEnabled)
 	{
@@ -134,7 +134,7 @@ std::shared_ptr<UTexture2D> FResourceCache::BumpNormalTexture(int Size)
 	{
 		return It->second;
 	}
-	auto Texture = std::make_shared<UTexture2D>(UTexture2D::CreateBumpNormal(Size));
+	auto Texture = MakeShared<UTexture2D>(UTexture2D::CreateBumpNormal(Size));
 	if (!Texture->Valid())
 	{
 		return nullptr;

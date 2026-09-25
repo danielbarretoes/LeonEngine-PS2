@@ -1,40 +1,52 @@
+#include "CoreMinimal.h"
+#include "Misc/AutomationTest.h"
 #include "Primitives.h"
 
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers_floating_point.hpp>
+#if WITH_DEV_AUTOMATION_TESTS
 
-#include <cmath>
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMakeCubeTest, "System.RenderCore.Primitives.MakeCube",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-using Catch::Matchers::WithinAbs;
-
-TEST_CASE("MakeCube has expected topology and bounds", "[render][primitives]")
+bool FMakeCubeTest::RunTest(const FString& Parameters)
 {
 	const FMeshData Cube = MakeCube();
-	REQUIRE_FALSE(Cube.empty());
-	REQUIRE(Cube.Vertices.size() == 24);
-	REQUIRE(Cube.Indices.size() == 36);
-
-	for (const auto& V : Cube.Vertices)
+	TestFalse("Not empty", Cube.IsEmpty());
+	TestEqual("Vertices", Cube.Vertices.Num(), 24);
+	TestEqual("Indices", Cube.Indices.Num(), 36);
+	for (const FVertex& V : Cube.Vertices)
 	{
-		REQUIRE(std::abs(V.Position.x) <= 0.5f + 1.0e-4f);
-		REQUIRE(std::abs(V.Position.y) <= 0.5f + 1.0e-4f);
-		REQUIRE(std::abs(V.Position.z) <= 0.5f + 1.0e-4f);
+		TestTrue("Inside the unit box",
+			FMath::Abs(V.Position.X) <= 0.5f + 1.0e-4f && FMath::Abs(V.Position.Y) <= 0.5f + 1.0e-4f &&
+				FMath::Abs(V.Position.Z) <= 0.5f + 1.0e-4f);
 	}
+	return true;
 }
 
-TEST_CASE("MakePlane lies on XZ", "[render][primitives]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMakePlaneTest, "System.RenderCore.Primitives.MakePlane",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FMakePlaneTest::RunTest(const FString& Parameters)
 {
+	// The plane lies on XZ.
 	const FMeshData Plane = MakePlane(2.0f);
-	REQUIRE_FALSE(Plane.empty());
-	for (const auto& V : Plane.Vertices)
+	TestFalse("Not empty", Plane.IsEmpty());
+	for (const FVertex& V : Plane.Vertices)
 	{
-		REQUIRE_THAT(V.Position.y, WithinAbs(0.0f, 1.0e-5f));
+		TestEqual("Y", V.Position.Y, 0.0f, 1.0e-5f);
 	}
+	return true;
 }
 
-TEST_CASE("MakeSphere clamps low tessellation", "[render][primitives]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMakeSphereTest, "System.RenderCore.Primitives.MakeSphere",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FMakeSphereTest::RunTest(const FString& Parameters)
 {
+	// Too-low tessellation is clamped to a valid mesh.
 	const FMeshData Sphere = MakeSphere(2, 1);
-	REQUIRE_FALSE(Sphere.empty());
-	REQUIRE(Sphere.Indices.size() % 3 == 0);
+	TestFalse("Not empty", Sphere.IsEmpty());
+	TestEqual("Triangles", Sphere.Indices.Num() % 3, 0);
+	return true;
 }
+
+#endif // WITH_DEV_AUTOMATION_TESTS

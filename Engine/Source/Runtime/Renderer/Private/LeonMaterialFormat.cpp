@@ -1,5 +1,6 @@
 #include "LeonMaterialFormat.h"
 
+#include "Migration/GlmInterop.h"
 #include "Migration/LegacyContentPath.h"
 #include "Misc/FileHelper.h"
 #include "ResourceCache.h"
@@ -88,7 +89,7 @@ namespace
 		}
 	}
 
-	[[nodiscard]] bool ParseVec3(const std::string& V, glm::vec3& Out)
+	[[nodiscard]] bool ParseVec3(const std::string& V, FVector& Out)
 	{
 		std::stringstream Ss(V);
 		char Comma = 0;
@@ -121,7 +122,7 @@ namespace
 		return true;
 	}
 
-	[[nodiscard]] bool ParseVec2(const std::string& V, glm::vec2& Out)
+	[[nodiscard]] bool ParseVec2(const std::string& V, FVector2D& Out)
 	{
 		std::stringstream Ss(V);
 		char Comma = 0;
@@ -137,10 +138,10 @@ namespace
 			{
 				return false;
 			}
-			Out = {A, B};
+			Out = FVector2D(A, B);
 			return true;
 		}
-		Out = {A, A};
+		Out = FVector2D(A, A);
 		return true;
 	}
 
@@ -406,13 +407,13 @@ bool SaveLeonMaterialFile(const std::string& Path, const std::string& InName, co
 	Out << "Name=" << (InName.empty() ? "Material" : InName) << '\n';
 	Out << "ShadingModel=" << (InMaterial.Shading == EMaterialShadingModel::Unlit ? "Unlit" : "DefaultLit") << "\n\n";
 	Out << "[Parameters]\n";
-	Out << "BaseColor=" << InMaterial.Albedo.x << ',' << InMaterial.Albedo.y << ',' << InMaterial.Albedo.z << '\n';
-	Out << "Specular=" << InMaterial.Specular.x << ',' << InMaterial.Specular.y << ',' << InMaterial.Specular.z << '\n';
+	Out << "BaseColor=" << InMaterial.Albedo.X << ',' << InMaterial.Albedo.Y << ',' << InMaterial.Albedo.Z << '\n';
+	Out << "Specular=" << InMaterial.Specular.X << ',' << InMaterial.Specular.Y << ',' << InMaterial.Specular.Z << '\n';
 	Out << "Metallic=" << InMaterial.Metallic << '\n';
 	Out << "Roughness=" << InMaterial.Roughness << '\n';
 	Out << "Opacity=" << InMaterial.Alpha << '\n';
 	Out << "Shininess=" << InMaterial.Shininess << '\n';
-	Out << "UVScale=" << InMaterial.UvScale.x << ',' << InMaterial.UvScale.y << '\n';
+	Out << "UVScale=" << InMaterial.UvScale.X << ',' << InMaterial.UvScale.Y << '\n';
 	Out << "CastsShadows=" << (InMaterial.bCastsShadows ? "true" : "false") << '\n';
 	Out << "PlanarMirror=" << (InMaterial.bPlanarMirror ? "true" : "false") << "\n\n";
 	Out << "[Textures]\n";
@@ -430,7 +431,7 @@ std::string MakeDefaultLeonMaterialText(
 	const std::string& InName, const glm::vec3& BaseColor, float Metallic, float Roughness)
 {
 	FMaterial M{};
-	M.Albedo = BaseColor;
+	M.Albedo = FromGlm(BaseColor);
 	M.Metallic = Metallic;
 	M.Roughness = std::clamp(Roughness, 0.04f, 1.0f);
 	M.Shininess = 32.0f;

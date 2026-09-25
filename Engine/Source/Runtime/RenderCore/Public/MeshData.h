@@ -1,35 +1,32 @@
 #pragma once
 
+#include "CoreMinimal.h"
 #include "Material.h"
 #include "Vertex.h"
 
-#include <cstdint>
-#include <string>
-#include <vector>
-
-/// Contiguous index range drawn with one material slot.
+/** Contiguous index range drawn with one material slot. */
 struct RENDERCORE_API FMeshSection
 {
-	int IndexOffset = 0; // in indices (not bytes)
-	int IndexCount = 0;
-	int MaterialIndex = 0;
+	int32 IndexOffset = 0; // in indices (not bytes)
+	int32 IndexCount = 0;
+	int32 MaterialIndex = 0;
 };
 
-/// CPU-side mesh asset (no OpenGL handles).
+/** CPU-side mesh asset (no OpenGL handles). */
 struct RENDERCORE_API FMeshData
 {
-	std::vector<FVertex> Vertices;
-	std::vector<std::uint32_t> Indices;
-	std::vector<FMeshSection> Submeshes;
-	std::vector<FMaterial> Materials;
-	/// Parallel to materials; resolved to FMaterial::albedoMap by FResourceCache.
-	std::vector<std::string> AlbedoMapPaths;
+	TArray<FVertex> Vertices;
+	TArray<uint32> Indices;
+	TArray<FMeshSection> Submeshes;
+	TArray<FMaterial> Materials;
+	/** Parallel to Materials; resolved to FMaterial::AlbedoMap by FResourceCache. */
+	TArray<FString> AlbedoMapPaths;
 
-	[[nodiscard]] bool empty() const
+	[[nodiscard]] bool IsEmpty() const
 	{
-		return Vertices.empty() || Indices.empty();
+		return Vertices.Num() == 0 || Indices.Num() == 0;
 	}
 };
 
-/// Orthonormalize tangents from triangle UVs (needed for normal mapping).
+/** Orthonormalizes tangents from triangle UVs (needed for normal mapping). */
 void ComputeTangents(FMeshData& Data);

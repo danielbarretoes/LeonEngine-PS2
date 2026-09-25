@@ -1,5 +1,7 @@
 #include "ObjImport.h"
 
+#include "Migration/GlmInterop.h"
+
 #include <glm/geometric.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
@@ -69,21 +71,21 @@ namespace
 			Vertex.Normal = {0.0f, 0.0f, 0.0f};
 		}
 
-		for (std::size_t I = 0; I + 2 < Data.Indices.size(); I += 3)
+		for (int32 I = 0; I + 2 < Data.Indices.Num(); I += 3)
 		{
-			const auto I0 = Data.Indices[I + 0];
-			const auto I1 = Data.Indices[I + 1];
-			const auto I2 = Data.Indices[I + 2];
+			const int32 I0 = static_cast<int32>(Data.Indices[I + 0]);
+			const int32 I1 = static_cast<int32>(Data.Indices[I + 1]);
+			const int32 I2 = static_cast<int32>(Data.Indices[I + 2]);
 
-			const glm::vec3 Edge1 = Data.Vertices[I1].Position - Data.Vertices[I0].Position;
-			const glm::vec3 Edge2 = Data.Vertices[I2].Position - Data.Vertices[I0].Position;
+			const glm::vec3 Edge1 = ToGlm(Data.Vertices[I1].Position - Data.Vertices[I0].Position);
+			const glm::vec3 Edge2 = ToGlm(Data.Vertices[I2].Position - Data.Vertices[I0].Position);
 			const glm::vec3 FaceNormal = glm::cross(Edge1, Edge2);
 			if (glm::dot(FaceNormal, FaceNormal) < 1e-20f)
 			{
 				continue;
 			}
 
-			const glm::vec3 N = glm::normalize(FaceNormal);
+			const FVector N = FromGlm(glm::normalize(FaceNormal));
 			Data.Vertices[I0].Normal += N;
 			Data.Vertices[I1].Normal += N;
 			Data.Vertices[I2].Normal += N;
@@ -91,9 +93,10 @@ namespace
 
 		for (auto& Vertex : Data.Vertices)
 		{
-			if (glm::dot(Vertex.Normal, Vertex.Normal) > 0.0f)
+			const glm::vec3 Normal = ToGlm(Vertex.Normal);
+			if (glm::dot(Normal, Normal) > 0.0f)
 			{
-				Vertex.Normal = glm::normalize(Vertex.Normal);
+				Vertex.Normal = FromGlm(glm::normalize(Normal));
 			}
 			else
 			{
@@ -157,7 +160,7 @@ namespace
 				Attrib.normals[Ni + 1],
 				Attrib.normals[Ni + 2],
 			};
-			Vertex.Normal = (glm::dot(N, N) > 0.0f) ? glm::normalize(N) : glm::vec3{0, 1, 0};
+			Vertex.Normal = FromGlm((glm::dot(N, N) > 0.0f) ? glm::normalize(N) : glm::vec3{0, 1, 0});
 		}
 		else
 		{
@@ -173,9 +176,9 @@ namespace
 			};
 		}
 
-		const auto NewIndex = static_cast<std::uint32_t>(Data.Vertices.size());
+		const auto NewIndex = static_cast<std::uint32_t>(Data.Vertices.Num());
 		Unique.emplace(Key, NewIndex);
-		Data.Vertices.push_back(Vertex);
+		Data.Vertices.Add(Vertex);
 		return NewIndex;
 	}
 
@@ -191,8 +194,8 @@ namespace
 		Material.Shininess = std::clamp((Ns * Ns * 0.25f) + (Ns * 2.0f), 8.0f, 256.0f);
 
 		// Heuristic metalness from MTL (no explicit metal map): strong Ks relative to Kd.
-		const float Kd = (Material.Albedo.x + Material.Albedo.y + Material.Albedo.z) / 3.0f;
-		const float Ks = (Material.Specular.x + Material.Specular.y + Material.Specular.z) / 3.0f;
+		const float Kd = (Material.Albedo.X + Material.Albedo.Y + Material.Albedo.Z) / 3.0f;
+		const float Ks = (Material.Specular.X + Material.Specular.Y + Material.Specular.Z) / 3.0f;
 		if (Ks > 0.2f)
 		{
 			Material.Metallic = std::clamp((Ks - 0.15f) / 0.6f, 0.0f, 1.0f);
@@ -247,7 +250,7 @@ FMeshData LoadObj(const std::string& Path)
 	}
 
 	FMeshData Data;
-	Data.Vertices.reserve(IndexEstimate);
+	Data.Vertices.Reserve(static_cast<int32>(IndexEstimate));
 
 	std::unordered_map<FVertexKey, std::uint32_t, FVertexKeyHash> Unique;
 	Unique.reserve(IndexEstimate);
@@ -293,7 +296,7 @@ FMeshData LoadObj(const std::string& Path)
 		}
 	}
 
-	if (Data.Vertices.empty() || IndicesByMaterial.empty())
+	if (Data.Vertices.Num() == 0 || IndicesByMaterial.empty())
 	{
 		std::cerr << "Mesh has no geometry: " << Path << '\n';
 		return {};
@@ -301,24 +304,24 @@ FMeshData LoadObj(const std::string& Path)
 
 	if (!TinyMaterials.empty())
 	{
-		Data.Materials.reserve(TinyMaterials.size());
-		Data.AlbedoMapPaths.reserve(TinyMaterials.size());
+		Data.Materials.Reserve(static_cast<int32>(TinyMaterials.size()));
+		Data.AlbedoMapPaths.Reserve(static_cast<int32>(TinyMaterials.size()));
 		const std::filesystem::path ObjDir = std::filesystem::path(Path).parent_path();
 		for (const tinyobj::material_t& Src : TinyMaterials)
 		{
-			Data.Materials.push_back(MaterialFromTiny(Src));
+			Data.Materials.Add(MaterialFromTiny(Src));
 			if (!Src.diffuse_texname.empty())
 			{
-				Data.AlbedoMapPaths.push_back((ObjDir / Src.diffuse_texname).string());
+				Data.AlbedoMapPaths.Add(FString((ObjDir / Src.diffuse_texname).string().c_str()));
 			}
 			else
 			{
-				Data.AlbedoMapPaths.emplace_back();
+				Data.AlbedoMapPaths.AddDefaulted();
 			}
 		}
 	}
 
-	Data.Indices.reserve(IndexEstimate);
+	Data.Indices.Reserve(static_cast<int32>(IndexEstimate));
 	for (auto& [materialId, bucket] : IndicesByMaterial)
 	{
 		if (bucket.empty())
@@ -327,27 +330,27 @@ FMeshData LoadObj(const std::string& Path)
 		}
 
 		int Slot = 0;
-		if (materialId >= 0 && materialId < static_cast<int>(Data.Materials.size()))
+		if (materialId >= 0 && materialId < Data.Materials.Num())
 		{
 			Slot = materialId;
 		}
-		else if (!Data.Materials.empty())
+		else if (Data.Materials.Num() > 0)
 		{
 			Slot = 0;
 		}
 
 		FMeshSection Sub;
-		Sub.IndexOffset = static_cast<int>(Data.Indices.size());
-		Sub.IndexCount = static_cast<int>(bucket.size());
+		Sub.IndexOffset = Data.Indices.Num();
+		Sub.IndexCount = static_cast<int32>(bucket.size());
 		Sub.MaterialIndex = Slot;
-		Data.Indices.insert(Data.Indices.end(), bucket.begin(), bucket.end());
-		Data.Submeshes.push_back(Sub);
+		Data.Indices.Append(bucket.data(), static_cast<int32>(bucket.size()));
+		Data.Submeshes.Add(Sub);
 	}
 
-	if (Data.Materials.empty())
+	if (Data.Materials.Num() == 0)
 	{
-		Data.Materials.push_back(FMaterial{});
-		Data.AlbedoMapPaths.emplace_back();
+		Data.Materials.Add(FMaterial{});
+		Data.AlbedoMapPaths.AddDefaulted();
 		for (FMeshSection& Sub : Data.Submeshes)
 		{
 			Sub.MaterialIndex = 0;
@@ -359,7 +362,7 @@ FMeshData LoadObj(const std::string& Path)
 		ComputeSmoothNormals(Data);
 	}
 
-	std::cout << "OBJ '" << Path << "': " << Data.Vertices.size() << " verts, " << (Data.Indices.size() / 3)
-			  << " tris, " << Data.Submeshes.size() << " submeshes, " << Data.Materials.size() << " materials\n";
+	std::cout << "OBJ '" << Path << "': " << Data.Vertices.Num() << " verts, " << (Data.Indices.Num() / 3) << " tris, "
+			  << Data.Submeshes.Num() << " submeshes, " << Data.Materials.Num() << " materials\n";
 	return Data;
 }

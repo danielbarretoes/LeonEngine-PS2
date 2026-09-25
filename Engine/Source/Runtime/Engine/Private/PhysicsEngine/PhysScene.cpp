@@ -177,8 +177,8 @@ void FPhysScene::SyncFromLevel(const ULevel& Level)
 		const UStaticMeshComponent& Obj = Meshes[Body.LevelMeshIndex];
 		if (Obj.Mesh != nullptr)
 		{
-			const FBox WorldAabb =
-				TransformLocalBox(Obj.Mesh->GetLocalMin(), Obj.Mesh->GetLocalMax(), Obj.EffectiveModelMatrix());
+			const FBox WorldAabb = TransformLocalBox(FromGlm(Obj.Mesh->GetLocalMin()), FromGlm(Obj.Mesh->GetLocalMax()),
+				FromGlm(Obj.EffectiveModelMatrix()));
 			Body.Position = WorldAabb.GetCenter();
 			Body.HalfExtents = WorldAabb.GetExtent();
 
@@ -187,13 +187,13 @@ void FPhysScene::SyncFromLevel(const ULevel& Level)
 			{
 				const FMeshData& Cpu = Obj.Mesh->GetCpuData();
 				const glm::mat4 Model = Obj.EffectiveModelMatrix();
-				TriMesh.Positions.SetNum(static_cast<int32>(Cpu.Vertices.size()));
+				TriMesh.Positions.SetNum(Cpu.Vertices.Num());
 				for (int32 Vi = 0; Vi < TriMesh.Positions.Num(); ++Vi)
 				{
-					const glm::vec4 World = Model * glm::vec4(Cpu.Vertices[static_cast<SIZE_T>(Vi)].Position, 1.0f);
+					const glm::vec4 World = Model * glm::vec4(ToGlm(Cpu.Vertices[Vi].Position), 1.0f);
 					TriMesh.Positions[Vi] = FVector(World.x, World.y, World.z);
 				}
-				TriMesh.Indices.Append(Cpu.Indices.data(), static_cast<int32>(Cpu.Indices.size()));
+				TriMesh.Indices = Cpu.Indices;
 				if (TriMesh.IsValid())
 				{
 					Body.CollisionShape = EBodyCollisionShape::TriangleMesh;

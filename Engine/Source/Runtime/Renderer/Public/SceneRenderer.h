@@ -253,8 +253,8 @@ private:
 	FDebugDraw OverlayDebugDraw; // gameplay vectors, etc. (always drawn)
 	FUniformBuffer CameraUbo;
 	FUniformBuffer LightsUbo;
-	std::shared_ptr<UTexture2D> WhiteTexture;
-	std::shared_ptr<UTexture2D> FlatNormalTexture;
+	TSharedPtr<UTexture2D> WhiteTexture;
+	TSharedPtr<UTexture2D> FlatNormalTexture;
 	std::vector<FSkeletalDrawItem> SkeletalDraws;
 	std::vector<FStaticDrawItem> StaticDraws;
 	FFrameStats FrameStats{};

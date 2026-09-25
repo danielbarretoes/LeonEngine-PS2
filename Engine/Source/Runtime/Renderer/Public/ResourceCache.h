@@ -15,9 +15,9 @@ class RENDERER_API FResourceCache
 {
 public:
 	[[nodiscard]] std::shared_ptr<UStaticMesh> LoadStaticMesh(const std::string& Path);
-	[[nodiscard]] std::shared_ptr<UTexture2D> LoadTexture(const std::string& Path);
-	[[nodiscard]] std::shared_ptr<UTexture2D> CheckerTexture(int Size = 64);
-	[[nodiscard]] std::shared_ptr<UTexture2D> BumpNormalTexture(int Size = 256);
+	[[nodiscard]] TSharedPtr<UTexture2D> LoadTexture(const std::string& Path);
+	[[nodiscard]] TSharedPtr<UTexture2D> CheckerTexture(int Size = 64);
+	[[nodiscard]] TSharedPtr<UTexture2D> BumpNormalTexture(int Size = 256);
 
 	/// Load `.lmat` material asset (cached by resolved path). On failure → DefaultMaterial().
 	[[nodiscard]] FMaterial LoadMaterial(const std::string& Path);
@@ -48,6 +48,6 @@ private:
 
 	bool bGpuUploadEnabled = true;
 	std::unordered_map<std::string, std::shared_ptr<UStaticMesh>> Meshes;
-	std::unordered_map<std::string, std::shared_ptr<UTexture2D>> Textures;
+	std::unordered_map<std::string, TSharedPtr<UTexture2D>> Textures;
 	std::unordered_map<std::string, FMaterial> Materials;
 };

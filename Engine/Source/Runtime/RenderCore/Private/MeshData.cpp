@@ -1,45 +1,49 @@
 #include "MeshData.h"
 
-#include <glm/geometric.hpp>
-#include <glm/vec3.hpp>
-#include <glm/vec4.hpp>
-
-#include <cmath>
-#include <vector>
+namespace
+{
+	/** glm::normalize: V / |V| with no tolerance (the tangents keep the values glm produced). */
+	FVector Normalize(const FVector& V)
+	{
+		return V * (1.0f / FMath::Sqrt(V | V));
+	}
+} // namespace
 
 void ComputeTangents(FMeshData& Data)
 {
-	if (Data.empty())
+	if (Data.IsEmpty())
 	{
 		return;
 	}
 
-	std::vector<glm::vec3> TanAcc(Data.Vertices.size(), glm::vec3(0.0f));
-	std::vector<glm::vec3> BitAcc(Data.Vertices.size(), glm::vec3(0.0f));
+	TArray<FVector> TanAcc;
+	TArray<FVector> BitAcc;
+	TanAcc.Init(FVector::ZeroVector, Data.Vertices.Num());
+	BitAcc.Init(FVector::ZeroVector, Data.Vertices.Num());
 
-	for (std::size_t I = 0; I + 2 < Data.Indices.size(); I += 3)
+	for (int32 I = 0; I + 2 < Data.Indices.Num(); I += 3)
 	{
-		const auto I0 = Data.Indices[I + 0];
-		const auto I1 = Data.Indices[I + 1];
-		const auto I2 = Data.Indices[I + 2];
+		const int32 I0 = static_cast<int32>(Data.Indices[I + 0]);
+		const int32 I1 = static_cast<int32>(Data.Indices[I + 1]);
+		const int32 I2 = static_cast<int32>(Data.Indices[I + 2]);
 
 		const FVertex& V0 = Data.Vertices[I0];
 		const FVertex& V1 = Data.Vertices[I1];
 		const FVertex& V2 = Data.Vertices[I2];
 
-		const glm::vec3 E1 = V1.Position - V0.Position;
-		const glm::vec3 E2 = V2.Position - V0.Position;
-		const glm::vec2 D1 = V1.TexCoord - V0.TexCoord;
-		const glm::vec2 D2 = V2.TexCoord - V0.TexCoord;
+		const FVector E1 = V1.Position - V0.Position;
+		const FVector E2 = V2.Position - V0.Position;
+		const FVector2D D1 = V1.TexCoord - V0.TexCoord;
+		const FVector2D D2 = V2.TexCoord - V0.TexCoord;
 
-		const float Det = (D1.x * D2.y) - (D2.x * D1.y);
-		if (std::abs(Det) < 1e-8f)
+		const float Det = (D1.X * D2.Y) - (D2.X * D1.Y);
+		if (FMath::Abs(Det) < 1e-8f)
 		{
 			continue;
 		}
 		const float Inv = 1.0f / Det;
-		const glm::vec3 Tangent = ((E1 * D2.y) - (E2 * D1.y)) * Inv;
-		const glm::vec3 Bitangent = ((E2 * D1.x) - (E1 * D2.x)) * Inv;
+		const FVector Tangent = ((E1 * D2.Y) - (E2 * D1.Y)) * Inv;
+		const FVector Bitangent = ((E2 * D1.X) - (E1 * D2.X)) * Inv;
 		TanAcc[I0] += Tangent;
 		TanAcc[I1] += Tangent;
 		TanAcc[I2] += Tangent;
@@ -48,20 +52,19 @@ void ComputeTangents(FMeshData& Data)
 		BitAcc[I2] += Bitangent;
 	}
 
-	for (std::size_t I = 0; I < Data.Vertices.size(); ++I)
+	for (int32 I = 0; I < Data.Vertices.Num(); ++I)
 	{
 		FVertex& Vertex = Data.Vertices[I];
-		const glm::vec3 N = Vertex.Normal;
-		glm::vec3 T = TanAcc[I];
-		if (glm::dot(T, T) < 1e-8f)
+		const FVector N = Vertex.Normal;
+		FVector T = TanAcc[I];
+		if ((T | T) < 1e-8f)
 		{
-			T = std::abs(N.y) < 0.9f ? glm::normalize(glm::cross(N, {0, 1, 0}))
-									 : glm::normalize(glm::cross(N, {1, 0, 0}));
-			Vertex.Tangent = glm::vec4(T, 1.0f);
+			T = FMath::Abs(N.Y) < 0.9f ? Normalize(N ^ FVector(0, 1, 0)) : Normalize(N ^ FVector(1, 0, 0));
+			Vertex.Tangent = FVector4(T, 1.0f);
 			continue;
 		}
-		T = glm::normalize(T - (N * glm::dot(N, T)));
-		const float Handedness = (glm::dot(glm::cross(N, T), BitAcc[I]) < 0.0f) ? -1.0f : 1.0f;
-		Vertex.Tangent = glm::vec4(T, Handedness);
+		T = Normalize(T - (N * (N | T)));
+		const float Handedness = (((N ^ T) | BitAcc[I]) < 0.0f) ? -1.0f : 1.0f;
+		Vertex.Tangent = FVector4(T, Handedness);
 	}
 }

@@ -1,45 +1,62 @@
+#include "CoreMinimal.h"
 #include "Frustum.h"
-#include "Math/UnrealMathUtility.h"
+#include "Migration/GlmInterop.h"
+#include "Misc/AutomationTest.h"
 
-#include <catch2/catch_test_macros.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-TEST_CASE("TransformLocalBox expands under rotation", "[render][frustum]")
+#if WITH_DEV_AUTOMATION_TESTS
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTransformLocalBoxTest, "System.RenderCore.Frustum.TransformLocalBox",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FTransformLocalBoxTest::RunTest(const FString& Parameters)
 {
-	const glm::mat4 Model = glm::rotate(glm::mat4(1.0f), glm::radians(45.0f), {0.0f, 1.0f, 0.0f});
-	const FBox Box = TransformLocalBox({-0.5f, -0.5f, -0.5f}, {0.5f, 0.5f, 0.5f}, Model);
-	REQUIRE(Box.Min.X < -0.5f);
-	REQUIRE(Box.Max.X > 0.5f);
-	REQUIRE(Box.Min.Y <= -0.5f + 1.0e-4f);
-	REQUIRE(Box.Max.Y >= 0.5f - 1.0e-4f);
+	// A unit box turned 45 degrees about the vertical axis grows in X and keeps its height.
+	const FMatrix Model = FromGlm(glm::rotate(glm::mat4(1.0f), glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
+	const FBox Box = TransformLocalBox(FVector(-0.5f), FVector(0.5f), Model);
+	TestTrue("Min X grows", Box.Min.X < -0.5f);
+	TestTrue("Max X grows", Box.Max.X > 0.5f);
+	TestTrue("Min Y kept", Box.Min.Y <= -0.5f + 1.0e-4f);
+	TestTrue("Max Y kept", Box.Max.Y >= 0.5f - 1.0e-4f);
+	return true;
 }
 
-TEST_CASE("LineBoxIntersection hits unit cube from -Z", "[render][frustum]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLineBoxIntersectionTest, "System.RenderCore.Frustum.LineBoxIntersection",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FLineBoxIntersectionTest::RunTest(const FString& Parameters)
 {
+	// A segment from +Z hits the unit cube only when it points at it.
 	const FBox Box(FVector(-0.5f), FVector(0.5f));
 	const FVector Start(0.0f, 0.0f, 5.0f);
 
-	const FVector Down = FVector(0.0f, 0.0f, -10.0f);
-	REQUIRE(FMath::LineBoxIntersection(Box, Start, Start + Down, Down));
+	const FVector Down(0.0f, 0.0f, -10.0f);
+	TestTrue("Toward the box", FMath::LineBoxIntersection(Box, Start, Start + Down, Down));
 
-	const FVector Up = FVector(0.0f, 0.0f, 10.0f);
-	REQUIRE_FALSE(FMath::LineBoxIntersection(Box, Start, Start + Up, Up));
+	const FVector Up(0.0f, 0.0f, 10.0f);
+	TestFalse("Away from the box", FMath::LineBoxIntersection(Box, Start, Start + Up, Up));
 
 	const FVector Beside(2.0f, 0.0f, 5.0f);
-	REQUIRE_FALSE(FMath::LineBoxIntersection(Box, Beside, Beside + Down, Down));
+	TestFalse("Beside the box", FMath::LineBoxIntersection(Box, Beside, Beside + Down, Down));
+	return true;
 }
 
-TEST_CASE("Frustum intersectsAabb contains near origin box", "[render][frustum]")
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFrustumIntersectsAabbTest, "System.RenderCore.Frustum.IntersectsAabb",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FFrustumIntersectsAabbTest::RunTest(const FString& Parameters)
 {
-	const glm::mat4 View = glm::lookAt(glm::vec3{0.0f, 0.0f, 5.0f}, glm::vec3{0.0f}, glm::vec3{0.0f, 1.0f, 0.0f});
+	// The renderer's clip transform (OpenGL conventions, built with glm until the renderer migrates).
+	const glm::mat4 View = glm::lookAt(glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 	const glm::mat4 Proj = glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 100.0f);
 
 	FFrustum Frustum;
-	Frustum.ExtractFromViewProjection(Proj * View);
+	Frustum.ExtractFromViewProjection(FromGlm(Proj * View));
 
-	const FBox Inside(FVector(-0.5f), FVector(0.5f));
-	REQUIRE(Frustum.IntersectsAabb(Inside));
-
-	const FBox FarAway(FVector(200.0f), FVector(201.0f));
-	REQUIRE_FALSE(Frustum.IntersectsAabb(FarAway));
+	TestTrue("Box at the origin", Frustum.IntersectsAabb(FBox(FVector(-0.5f), FVector(0.5f))));
+	TestFalse("Box far away", Frustum.IntersectsAabb(FBox(FVector(200.0f), FVector(201.0f))));
+	return true;
 }
+
+#endif // WITH_DEV_AUTOMATION_TESTS

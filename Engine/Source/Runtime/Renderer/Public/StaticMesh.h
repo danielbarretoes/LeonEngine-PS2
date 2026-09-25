@@ -70,7 +70,7 @@ public:
 	}
 	[[nodiscard]] bool HasCpuData() const
 	{
-		return !CpuData.empty();
+		return !CpuData.IsEmpty();
 	}
 
 private:

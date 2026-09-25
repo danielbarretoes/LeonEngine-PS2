@@ -60,8 +60,8 @@ namespace
 
 	float DistanceSqToCamera(const UStaticMeshComponent& Object, const glm::vec3& InCameraPos)
 	{
-		const FBox Box =
-			TransformLocalBox(Object.Mesh->GetLocalMin(), Object.Mesh->GetLocalMax(), Object.EffectiveModelMatrix());
+		const FBox Box = TransformLocalBox(FromGlm(Object.Mesh->GetLocalMin()), FromGlm(Object.Mesh->GetLocalMax()),
+			FromGlm(Object.EffectiveModelMatrix()));
 		const glm::vec3 Center = ToGlm(Box.GetCenter());
 		const glm::vec3 D = Center - InCameraPos;
 		return glm::dot(D, D);
@@ -69,7 +69,8 @@ namespace
 
 	FBox WorldAabbFromObject(const UStaticMeshComponent& Object)
 	{
-		return TransformLocalBox(Object.Mesh->GetLocalMin(), Object.Mesh->GetLocalMax(), Object.EffectiveModelMatrix());
+		return TransformLocalBox(FromGlm(Object.Mesh->GetLocalMin()), FromGlm(Object.Mesh->GetLocalMax()),
+			FromGlm(Object.EffectiveModelMatrix()));
 	}
 
 	void ExpandWorldAabbFromObject(const UStaticMeshComponent& Object, glm::vec3& WorldMin, glm::vec3& WorldMax)
@@ -262,8 +263,8 @@ bool FSceneRenderer::Initialize(const std::string& InShaderDirectory)
 	}
 
 	const std::array<unsigned char, 4> White = {255, 255, 255, 255};
-	WhiteTexture = std::make_shared<UTexture2D>(UTexture2D::Create(1, 1, White.data()));
-	FlatNormalTexture = std::make_shared<UTexture2D>(UTexture2D::CreateFlatNormal(4));
+	WhiteTexture = MakeShared<UTexture2D>(UTexture2D::Create(1, 1, White.data()));
+	FlatNormalTexture = MakeShared<UTexture2D>(UTexture2D::CreateFlatNormal(4));
 	if (!WhiteTexture->Valid() || !FlatNormalTexture->Valid())
 	{
 		std::cerr << "Failed to create default textures/meshes\n";
@@ -293,8 +294,8 @@ void FSceneRenderer::Shutdown()
 	CameraUbo.Destroy();
 	OverlayDebugDraw.Shutdown();
 	DebugDraw.Shutdown();
-	FlatNormalTexture.reset();
-	WhiteTexture.reset();
+	FlatNormalTexture.Reset();
+	WhiteTexture.Reset();
 	PassTimers.Destroy();
 	LdrColor.Destroy();
 	SsaoTarget.Destroy();
@@ -632,7 +633,7 @@ void FSceneRenderer::RenderPlanarReflectionPass(const ULevel& Level, const UCame
 	const glm::vec3 ReflectedEye{Eye.x, (2.0f * PlaneY) - Eye.y, Eye.z};
 
 	FFrustum ReflectedFrustum;
-	ReflectedFrustum.ExtractFromViewProjection(LocalViewProjection);
+	ReflectedFrustum.ExtractFromViewProjection(FromGlm(LocalViewProjection));
 
 	// Identity light space — reflection pass skips shadows (cheaper mirror).
 	const glm::mat4 LightSpace(1.0f);
@@ -731,9 +732,9 @@ void FSceneRenderer::DrawSubMesh(const FShader& Shader, const UStaticMeshCompone
 
 	Shader.SetMat4("uMVP", glm::value_ptr(Mvp));
 	Shader.SetMat4("uModel", glm::value_ptr(LocalModel));
-	Shader.SetVec3("uAlbedo", InMaterial.Albedo.x, InMaterial.Albedo.y, InMaterial.Albedo.z);
+	Shader.SetVec3("uAlbedo", InMaterial.Albedo.X, InMaterial.Albedo.Y, InMaterial.Albedo.Z);
 	Shader.SetFloat("uAlpha", InMaterial.Alpha);
-	Shader.SetVec2("uUvScale", InMaterial.UvScale.x, InMaterial.UvScale.y);
+	Shader.SetVec2("uUvScale", InMaterial.UvScale.X, InMaterial.UvScale.Y);
 	Shader.SetInt("uAlbedoMap", 0);
 
 	if (Options.bLitPass)
@@ -742,7 +743,7 @@ void FSceneRenderer::DrawSubMesh(const FShader& Shader, const UStaticMeshCompone
 		Shader.SetMat3("uNormalMatrix", glm::value_ptr(Normal));
 		Shader.SetFloat("uShininess", InMaterial.Shininess);
 		Shader.SetFloat("uRoughness", InMaterial.Roughness);
-		Shader.SetVec3("uSpecular", InMaterial.Specular.x, InMaterial.Specular.y, InMaterial.Specular.z);
+		Shader.SetVec3("uSpecular", InMaterial.Specular.X, InMaterial.Specular.Y, InMaterial.Specular.Z);
 		Shader.SetFloat("uMetallic", InMaterial.Metallic);
 		Shader.SetMat4("uLightSpaceMatrix", glm::value_ptr(LightSpace));
 		Shader.SetInt("uNormalMap", 2);
@@ -760,14 +761,14 @@ void FSceneRenderer::DrawSubMesh(const FShader& Shader, const UStaticMeshCompone
 	}
 
 	const UTexture2D* Albedo =
-		(InMaterial.AlbedoMap && InMaterial.AlbedoMap->Valid()) ? InMaterial.AlbedoMap.get() : WhiteTexture.get();
+		(InMaterial.AlbedoMap && InMaterial.AlbedoMap->Valid()) ? InMaterial.AlbedoMap.Get() : WhiteTexture.Get();
 	Albedo->Bind(0);
 
 	if (Options.bLitPass)
 	{
 		const UTexture2D* Normals = (Options.bUseNormalMaps && InMaterial.NormalMap && InMaterial.NormalMap->Valid())
-			? InMaterial.NormalMap.get()
-			: FlatNormalTexture.get();
+			? InMaterial.NormalMap.Get()
+			: FlatNormalTexture.Get();
 		Normals->Bind(2);
 	}
 
@@ -819,7 +820,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 	const glm::vec3 LocalCameraPos = Camera.GetCameraLocation();
 
 	FFrustum CameraFrustum;
-	CameraFrustum.ExtractFromViewProjection(LocalViewProjection);
+	CameraFrustum.ExtractFromViewProjection(FromGlm(LocalViewProjection));
 
 	glm::mat4 LightSpace(1.0f);
 	// Shadow map follows directional light 0 when castShadows; extras are lighting-only.
@@ -1270,7 +1271,8 @@ void FSceneRenderer::DrawQueuedSkeletal(const glm::mat4& InView, const glm::mat4
 		++FrameStats.ObjectsTotal;
 		if (CameraFrustum != nullptr)
 		{
-			const FBox WorldBox = TransformLocalBox(Item.Mesh->GetLocalMin(), Item.Mesh->GetLocalMax(), Item.Model);
+			const FBox WorldBox = TransformLocalBox(
+				FromGlm(Item.Mesh->GetLocalMin()), FromGlm(Item.Mesh->GetLocalMax()), FromGlm(Item.Model));
 			if (!CameraFrustum->IntersectsAabb(WorldBox))
 			{
 				++FrameStats.ObjectsCulled;
@@ -1290,13 +1292,13 @@ void FSceneRenderer::DrawQueuedSkeletal(const glm::mat4& InView, const glm::mat4
 		SkinnedLitShader.SetMat4("uModel", glm::value_ptr(LocalModel));
 		SkinnedLitShader.SetMat3("uNormalMatrix", glm::value_ptr(Normal));
 		SkinnedLitShader.SetMat4("uLightSpaceMatrix", glm::value_ptr(LightSpace));
-		SkinnedLitShader.SetVec3("uAlbedo", LocalMaterial.Albedo.x, LocalMaterial.Albedo.y, LocalMaterial.Albedo.z);
+		SkinnedLitShader.SetVec3("uAlbedo", LocalMaterial.Albedo.X, LocalMaterial.Albedo.Y, LocalMaterial.Albedo.Z);
 		SkinnedLitShader.SetFloat("uAlpha", LocalMaterial.Alpha);
-		SkinnedLitShader.SetVec2("uUvScale", LocalMaterial.UvScale.x, LocalMaterial.UvScale.y);
+		SkinnedLitShader.SetVec2("uUvScale", LocalMaterial.UvScale.X, LocalMaterial.UvScale.Y);
 		SkinnedLitShader.SetFloat("uShininess", LocalMaterial.Shininess);
 		SkinnedLitShader.SetFloat("uRoughness", LocalMaterial.Roughness);
 		SkinnedLitShader.SetVec3(
-			"uSpecular", LocalMaterial.Specular.x, LocalMaterial.Specular.y, LocalMaterial.Specular.z);
+			"uSpecular", LocalMaterial.Specular.X, LocalMaterial.Specular.Y, LocalMaterial.Specular.Z);
 		SkinnedLitShader.SetFloat("uMetallic", LocalMaterial.Metallic);
 		SkinnedLitShader.SetInt("uAlbedoMap", 0);
 		SkinnedLitShader.SetInt("uNormalMap", 2);
@@ -1309,12 +1311,12 @@ void FSceneRenderer::DrawQueuedSkeletal(const glm::mat4& InView, const glm::mat4
 		}
 
 		const UTexture2D* Albedo = LocalMaterial.AlbedoMap && LocalMaterial.AlbedoMap->Valid()
-			? LocalMaterial.AlbedoMap.get()
-			: WhiteTexture.get();
+			? LocalMaterial.AlbedoMap.Get()
+			: WhiteTexture.Get();
 		Albedo->Bind(0);
 		const UTexture2D* Normals = LocalMaterial.NormalMap && LocalMaterial.NormalMap->Valid()
-			? LocalMaterial.NormalMap.get()
-			: FlatNormalTexture.get();
+			? LocalMaterial.NormalMap.Get()
+			: FlatNormalTexture.Get();
 		Normals->Bind(2);
 
 		Item.Mesh->Draw();
@@ -1363,7 +1365,7 @@ void FSceneRenderer::DrawQueuedStatic(const ULevel& Level, const glm::mat4& InVi
 
 		UnlitShader.SetMat4("uMVP", glm::value_ptr(Mvp));
 		UnlitShader.SetMat4("uModel", glm::value_ptr(LocalModel));
-		UnlitShader.SetVec3("uAlbedo", LocalMaterial.Albedo.x, LocalMaterial.Albedo.y, LocalMaterial.Albedo.z);
+		UnlitShader.SetVec3("uAlbedo", LocalMaterial.Albedo.X, LocalMaterial.Albedo.Y, LocalMaterial.Albedo.Z);
 
 		// Pass 1: establish closest depth (both windings compete).
 		glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);

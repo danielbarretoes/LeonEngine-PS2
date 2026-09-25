@@ -12,13 +12,13 @@
 namespace
 {
 
-	glm::vec3 ReadVec3(const nlohmann::json& J, const glm::vec3& Fallback)
+	FVector ReadVec3(const nlohmann::json& J, const FVector& Fallback)
 	{
 		if (!J.is_array() || J.size() < 3)
 		{
 			return Fallback;
 		}
-		return {J[0].get<float>(), J[1].get<float>(), J[2].get<float>()};
+		return FVector(J[0].get<float>(), J[1].get<float>(), J[2].get<float>());
 	}
 
 	void ApplyMaterialMaps(FResourceCache& Resources, FMaterial& Material, const nlohmann::json& Object)

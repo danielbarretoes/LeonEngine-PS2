@@ -11,13 +11,13 @@
 bool FStaticMeshBuilder::CookFromObj(const std::string& ObjPath, const std::string& OutLmeshPath, std::string& OutError)
 {
 	FMeshData Data = LoadObj(ObjPath);
-	if (Data.empty())
+	if (Data.IsEmpty())
 	{
 		OutError = "Failed to load OBJ: " + ObjPath;
 		return false;
 	}
 	ComputeTangents(Data);
-	if (!SaveLeonMeshFile(OutLmeshPath, Data))
+	if (!SaveLeonMeshFile(FString(OutLmeshPath.c_str()), Data))
 	{
 		OutError = "Failed to write .lmesh: " + OutLmeshPath;
 		return false;
@@ -34,7 +34,7 @@ bool FStaticMeshBuilder::CookFromFbx(const std::string& FbxPath, const std::stri
 		OutError = "Failed to load FBX: " + FbxPath;
 		return false;
 	}
-	if (!SaveLeonMeshFile(OutLmeshPath, Data))
+	if (!SaveLeonMeshFile(FString(OutLmeshPath.c_str()), Data))
 	{
 		OutError = "Failed to write .lmesh: " + OutLmeshPath;
 		return false;
@@ -52,7 +52,7 @@ bool FStaticMeshBuilder::CookFromGltf(const std::string& GltfPath, const std::st
 	{
 		return false;
 	}
-	if (!SaveLeonMeshFile(OutLmeshPath, Data))
+	if (!SaveLeonMeshFile(FString(OutLmeshPath.c_str()), Data))
 	{
 		OutError = "Failed to write .lmesh: " + OutLmeshPath;
 		return false;
