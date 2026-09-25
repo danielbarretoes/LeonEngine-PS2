@@ -1,0 +1,1 @@
+ErrorNoExportOutsideCpp/OutsideCpp.h(5): error: USTRUCT(NoExport) 'FOutsideCpp' must be declared inside an '#if !CPP' block: the C++ type is defined elsewhere

@@ -1,0 +1,1 @@
+ErrorNoExportFixedArray/NoExportArray.h(10): error: NoExport struct 'FNoExportArray' cannot reflect 'M': bitfields, C arrays and editor-only members are not supported in NoExport structs

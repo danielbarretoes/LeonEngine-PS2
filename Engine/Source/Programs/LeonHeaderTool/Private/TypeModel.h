@@ -85,6 +85,7 @@ namespace EFunctionFlagBits
 namespace EStructFlagBits
 {
 	constexpr uint32_t Native = 0x00000001u;
+	constexpr uint32_t NoExport = 0x00000008u;
 	constexpr uint32_t Atomic = 0x00000010u;
 	constexpr uint32_t Immutable = 0x00000020u;
 	constexpr uint32_t RequiredAPI = 0x00000200u;
@@ -218,6 +219,11 @@ struct FStructDef
 	int DeclarationLine = 0;
 	int BodyLine = 0;
 	uint32_t StructFlags = 0;
+	/**
+	 * USTRUCT(NoExport) inside #if !CPP: the C++ type is defined elsewhere (a Core type such as FVector). The generated
+	 * code reads the real type's offsets and checks that this declaration matches it; there is no GENERATED_BODY.
+	 */
+	bool bNoExport = false;
 	std::vector<FPropertyDef> Properties;
 	std::string SuperModule;
 };

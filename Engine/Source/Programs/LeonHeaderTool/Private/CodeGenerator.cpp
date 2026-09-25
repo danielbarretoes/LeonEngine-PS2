@@ -558,6 +558,36 @@ namespace
 	{
 		return Name.size() > 1 ? Name.substr(1) : Name;
 	}
+
+	/**
+	 * Checks that a NoExport declaration describes its C++ type: a layout struct with the declared members (derived
+	 * from the declared base) must have the C++ type's size, and each member the C++ member's type and offset. The
+	 * reflection data itself uses the C++ type's offsets (STRUCT_OFFSET), so a mismatch is a compile error, never wrong
+	 * data. Non-public members need the C++ type to befriend the _Statics struct (FTransform does, as in UE).
+	 */
+	std::string NoExportLayoutChecks(const FStructDef& Struct)
+	{
+		const std::string& Name = Struct.Name;
+		std::string Text = "\t\t/** The NoExport declaration of " + Name + ", checked against the C++ type. */\n";
+		Text += "\t\tstruct FNoExportLayout" + (Struct.SuperName.empty() ? std::string() : " : " + Struct.SuperName) +
+			"\n\t\t{\n";
+		for (const FPropertyDef& Property : Struct.Properties)
+		{
+			Text += "\t\t\t" + Property.Type.GetCppType() + " " + Property.Name + ";\n";
+		}
+		Text += "\t\t};\n";
+		Text += "\t\tstatic_assert(sizeof(FNoExportLayout) == sizeof(" + Name + "), \"NoExport " + Name +
+			" does not match the size of the C++ type\");\n";
+		for (const FPropertyDef& Property : Struct.Properties)
+		{
+			const std::string Member = Name + "::" + Property.Name;
+			Text += "\t\tstatic_assert(TIsSame<decltype(" + Member + "), " + Property.Type.GetCppType() +
+				">::Value, \"NoExport " + Member + " does not match the type of the C++ member\");\n";
+			Text += "\t\tstatic_assert(STRUCT_OFFSET(FNoExportLayout, " + Property.Name + ") == STRUCT_OFFSET(" + Name +
+				", " + Property.Name + "), \"NoExport " + Member + " does not match the offset of the C++ member\");\n";
+		}
+		return Text;
+	}
 } // namespace
 
 FCodeGenerator::FCodeGenerator(const FManifest& InManifest)
@@ -682,13 +712,18 @@ std::string FCodeGenerator::GenerateGeneratedHeader(const FUnrealSourceFile& Fil
 		else if (Entry.first == ETypeKind::Struct)
 		{
 			const FStructDef& Struct = File.Structs[Entry.second];
-			std::vector<std::string> Body = {"\tfriend struct Z_Construct_UScriptStruct_" + Struct.Name + "_Statics;",
-				"\tstatic class UScriptStruct* StaticStruct();"};
-			if (!Struct.SuperName.empty())
+			// A NoExport struct has no GENERATED_BODY: its C++ type is defined elsewhere.
+			if (!Struct.bNoExport)
 			{
-				Body.push_back("\ttypedef " + Struct.SuperName + " Super;");
+				std::vector<std::string> Body = {
+					"\tfriend struct Z_Construct_UScriptStruct_" + Struct.Name + "_Statics;",
+					"\tstatic class UScriptStruct* StaticStruct();"};
+				if (!Struct.SuperName.empty())
+				{
+					Body.push_back("\ttypedef " + Struct.SuperName + " Super;");
+				}
+				Text += DefineMacro(FileId + "_" + std::to_string(Struct.BodyLine) + "_GENERATED_BODY", Body) + "\n";
 			}
-			Text += DefineMacro(FileId + "_" + std::to_string(Struct.BodyLine) + "_GENERATED_BODY", Body) + "\n";
 			Text += "template<> " + Manifest.Api + " UScriptStruct* StaticStruct<struct " + Struct.Name + ">();\n\n";
 		}
 		else
@@ -782,12 +817,16 @@ std::string FCodeGenerator::GenerateGenCpp(const FUnrealSourceFile& File) const
 			const std::string& Name = Struct.Name;
 			const std::string Construct = Symbols.Struct(Name, Module);
 			const std::string Statics = Construct + "_Statics";
-			Body += "\tclass UScriptStruct* " + Name + "::StaticStruct()\n\t{\n";
+			// A NoExport struct cannot get a StaticStruct() member: it gets a file-local function, as enums do.
+			const std::string StaticStructFunction =
+				Struct.bNoExport ? Name + "_StaticStruct" : Name + "::StaticStruct";
+			Body += std::string(Struct.bNoExport ? "\tstatic class UScriptStruct* " : "\tclass UScriptStruct* ") +
+				StaticStructFunction + "()\n\t{\n";
 			Body += "\t\tstatic class UScriptStruct* Singleton = nullptr;\n\t\tif (!Singleton)\n\t\t{\n";
 			Body += "\t\t\tSingleton = GetStaticStruct(" + Construct + ", " + PackageFunction + "(), TEXT(\"" +
 				StripPrefix(Name) + "\"), sizeof(" + Name + "), 0);\n\t\t}\n\t\treturn Singleton;\n\t}\n";
 			Body += "\ttemplate<> " + Manifest.Api + " UScriptStruct* StaticStruct<" + Name + ">()\n\t{\n\t\treturn " +
-				Name + "::StaticStruct();\n\t}\n";
+				StaticStructFunction + "();\n\t}\n";
 
 			FPropertyTables Tables;
 			Tables.Statics = Statics;
@@ -800,6 +839,10 @@ std::string FCodeGenerator::GenerateGenCpp(const FUnrealSourceFile& File) const
 				Struct.SuperName.empty() ? "nullptr" : Symbols.Struct(Struct.SuperName, Struct.SuperModule);
 
 			Body += "\tstruct " + Statics + "\n\t{\n\t\tstatic void* NewStructOps();\n";
+			if (Struct.bNoExport)
+			{
+				Body += NoExportLayoutChecks(Struct);
+			}
 			Body += Tables.Declarations();
 			Body += "\t\tstatic const UE4CodeGen_Private::FStructParams ReturnStructParams;\n\t};\n";
 			Body += "\tvoid* " + Statics +

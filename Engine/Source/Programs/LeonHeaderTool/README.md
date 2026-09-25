@@ -1,8 +1,8 @@
 # LeonHeaderTool
 
 The UnrealHeaderTool counterpart: a C++17 host program that uses only the standard library (no Core). It reads the
-UE macros in a module's headers and writes UE 4.27-shaped reflection code. CoreUObject (plan phase P9) implements the
-runtime side. This page is the contract between the two.
+UE macros in a module's headers and writes UE 4.27-shaped reflection code. CoreUObject
+(`Engine/Source/Runtime/CoreUObject`, since P9) implements the runtime side. This page is the contract between the two.
 
 ```
 LeonHeaderTool <Module>.lhtmanifest      generate one module (unit); exit code 1 on any error
@@ -32,7 +32,8 @@ LeonHeaderTool -Test [<dir>] [-Update]   golden tests: <dir>/Inputs/<Case> again
 - **Module table.** `FStaticallyLinkedModuleInfo::RegisterReflection` (in `Modules/ModuleManager.h`) points at
   `RegisterReflection_<Module>`, or at a wrapper that also calls `RegisterReflection_<Module>_Tests` in test targets.
   It is `nullptr` for modules without reflected types. A reflected module must have a table entry (Runtime or
-  Developer, with `IMPLEMENT_MODULE`), otherwise configure fails.
+  Developer, with `IMPLEMENT_MODULE`), otherwise configure fails. `FModuleManager` calls it right after creating the
+  module, then `OnProcessLoadedObjectsCallback` (bound by CoreUObject), then `StartupModule`.
 - **New headers.** Header lists are `CONFIGURE_DEPENDS` globs, so a new header reconfigures the tree.
 - **First include in an existing header.** If a header of a reflected unit gains its first `.generated.h` include,
   LeonHeaderTool reports it and touches `<Unit>.lhtreconfigure`, and the next build reconfigures. In a module with no
@@ -52,6 +53,11 @@ LeonHeaderTool -Test [<dir>] [-Update]   golden tests: <dir>/Inputs/<Case> again
   - A property or function inside any other `#if` block is an error.
 - **Class specifiers with an effect:** `Abstract`, `Config=<Name>`, `DefaultConfig`, `Transient`, `NotPlaceable`,
   `MinimalAPI` and `EditInlineNew`. `Interface`, `Within`, `PerObjectConfig`, `NoExport` and similar are errors.
+- **Struct specifiers with an effect:** `Atomic`, `Immutable` and `NoExport`.
+  - `USTRUCT(NoExport)` declares the reflection of a C++ type defined elsewhere (UE: CoreUObject's
+    `NoExportTypes.h`). It must sit inside an `#if !CPP` block, so the compiler never sees it, and must not have a
+    `GENERATED_BODY`. Bitfields, C arrays and `WITH_EDITORONLY_DATA` members are errors in it, since the generated
+    layout check cannot express them.
 - **Property specifiers:** `Config`, `GlobalConfig`, `Transient`, `DuplicateTransient`, `SaveGame`, the `Edit*` /
   `Visible*` / `BlueprintRead*` family, `Instanced` and others each map to their `CPF_` flags. `Replicated*` is an
   error.
@@ -127,6 +133,7 @@ include. It ends with `#undef CURRENT_FILE_ID` / `#define CURRENT_FILE_ID <FileI
 
 - `<FileId>_<L>_GENERATED_BODY`: `friend struct Z_Construct_UScriptStruct_<S>_Statics;`,
   `static class UScriptStruct* StaticStruct();` and, when the struct has a reflected base, `typedef <Base> Super;`.
+  A NoExport struct gets no `GENERATED_BODY` macro.
 - `template<> MODULE_API UScriptStruct* StaticStruct<struct S>();`
 
 **Enum.**
@@ -154,6 +161,12 @@ include. It ends with `#undef CURRENT_FILE_ID` / `#define CURRENT_FILE_ID <FileI
   - `Z_Construct_UScriptStruct_S_Statics { NewStructOps(); NewProp_*; PropPointers[]; ReturnStructParams; }`.
     `NewStructOps` returns `new UScriptStruct::TCppStructOps<S>()`.
   - `Z_Construct_UScriptStruct_S()` calling `ConstructUScriptStruct`.
+  - **NoExport:** `S::StaticStruct()` becomes a file-local `static UScriptStruct* S_StaticStruct()`. The offsets are
+    still `STRUCT_OFFSET(S, Member)` on the real C++ type, and the `_Statics` struct also holds a check of the
+    declaration against it: a `struct FNoExportLayout [: <Base>] { <declared members> };` with `static_assert`s on
+    `sizeof(FNoExportLayout) == sizeof(S)`, on each member's type (`TIsSame<decltype(S::M), T>`) and on each member's
+    offset. A declaration that drifts from the C++ type is a compile error, never wrong data. Non-public members need
+    the C++ type to befriend `Z_Construct_UScriptStruct_S_Statics` (Core's `FTransform` does).
 - **Per class:**
   - `DEFINE_FUNCTION(C::exec<F>) { P_GET_*; P_FINISH; P_NATIVE_BEGIN; [*(R*)Z_Param__Result=]P_THIS->F(args); P_NATIVE_END; }`
     (`C::F(args)` for static functions).
@@ -188,7 +201,7 @@ include. It ends with `#undef CURRENT_FILE_ID` / `#define CURRENT_FILE_ID <FileI
 - Includes every reflected header of the unit.
 - Defines `Z_Construct_UPackage__Script_<Module>()`: `FPackageParams { "/Script/<Module>", nullptr, 0,
   PKG_CompiledIn | 0, 0, 0 }` and `ConstructUPackage`. The Tests unit only declares it when the module defines it.
-- Defines the registration function, called from the module table before `StartupModule`:
+- Defines the registration function, which `FModuleManager` calls through the module table before `StartupModule`:
 
 ```cpp
 void RegisterReflection_<Module>()   // or RegisterReflection_<Module>_Tests
@@ -202,9 +215,15 @@ void RegisterReflection_<Module>()   // or RegisterReflection_<Module>_Tests
 
 An empty table is passed as `nullptr, 0`. Order is declaration order: headers in manifest (path) order, then file
 order. A class can come before its super. Construction resolves that through `DependentSingletons` (each `Z_Construct_*`
-is idempotent), so P9 should record registrations first and construct afterwards.
+is idempotent): `RegisterCompiledInInfo` only records, and `ProcessNewlyLoadedUObjects` constructs afterwards.
 
-## What P9 must provide
+## What CoreUObject provides
+
+P8 wrote this list as the requirements for P9; CoreUObject implements all of it (`Public/UObject/ObjectMacros.h`,
+`ScriptMacros.h`, `GeneratedCppIncludes.h`, `UObjectGlobals.h`, `UObjectBase.h`, `Class.h`; see
+[CoreUObject/README.md](../../Runtime/CoreUObject/README.md)). The CoreUObject `NoExportTypes.h` declares the
+NoExport Core structs (`FVector`, `FRotator`, `FTransform`, …), so a `UPROPERTY() FVector X;` in any module resolves to
+`Z_Construct_UScriptStruct_FVector`.
 
 - **`UObject/ObjectMacros.h`:**
   - `UCLASS(...)` → `BODY_MACRO_COMBINE(CURRENT_FILE_ID,_,__LINE__,_PROLOG)`.
@@ -263,7 +282,8 @@ is idempotent), so P9 should record registrations first and construct afterwards
       const FStructRegisterCompiledInInfo* StructInfo, SIZE_T NumStructInfo, const FEnumRegisterCompiledInInfo* EnumInfo, SIZE_T NumEnumInfo);
   ```
 - **Module startup:** before `StartupModule`, call each `FStaticallyLinkedModuleInfo::RegisterReflection` that is not
-  null (`FModuleManager` does not do it yet).
+  null. `FModuleManager::StartupStaticallyLinkedModules` does it, then calls `OnProcessLoadedObjectsCallback`, which
+  CoreUObject binds to `ProcessNewlyLoadedUObjects`.
 
 ### `UE4CodeGen_Private` params (field order = initializer order; no metadata fields)
 
@@ -299,12 +319,16 @@ is idempotent), so P9 should record registrations first and construct afterwards
   `#pragma warning` block.
 - **Declaration order.** Functions keep declaration order; UHT sorts them by name.
 - **Not supported:** interfaces, delegates (`DECLARE_DYNAMIC_*`), `BlueprintImplementableEvent` /
-  `BlueprintNativeEvent`, RPCs, `NoExport` / `Within`, namespaced enums, out parameters, and `WITH_EDITOR` functions.
+  `BlueprintNativeEvent`, RPCs, `NoExport` classes, `Within`, namespaced enums, out parameters, and `WITH_EDITOR`
+  functions.
+- **NoExport structs.** UHT trusts a NoExport declaration to match the C++ type. LeonHeaderTool takes the offsets from
+  the C++ type and emits `static_assert`s on the size, member types and member offsets, so a mismatch fails the build.
 - **Per-module runs.** Each unit runs separately and sees other modules through their `.lhttypes` index, whereas UHT
   runs once for all modules.
 
 ## Golden tests
 
+- 34 cases: 13 feature cases and 21 error cases (`Error*`).
 - `Tests/Inputs/<Case>/*.h` is one module (`LhtTest`, or the case's `Test.lhtmanifest`).
 - `Tests/Expected/<Case>/` holds every output plus `Diagnostics.txt` when there are messages. Error cases expect only
   `Diagnostics.txt`, with the exact `file(line): error:` text.

@@ -1,0 +1,1 @@
+ErrorNoExportGeneratedBody/NoExportBody.h(9): error: NoExport struct 'FNoExportBody' must not have a GENERATED_BODY (it is never compiled)

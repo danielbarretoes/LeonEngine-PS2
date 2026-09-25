@@ -202,6 +202,8 @@ void FHeaderParser::Preprocess(const std::vector<FToken>& RawTokens)
 	{
 		EConditional Kind;
 		int Line;
+		/** The branch is the '#if !CPP' one (NoExport declarations). */
+		bool bNotCpp = false;
 	};
 	std::vector<FEntry> Stack;
 	const auto IsSkipping = [&Stack]()
@@ -224,6 +226,7 @@ void FHeaderParser::Preprocess(const std::vector<FToken>& RawTokens)
 			{
 				Token.bEditorOnlyData |= Entry.Kind == EConditional::EditorOnlyData;
 				Token.bInOtherConditional |= Entry.Kind == EConditional::Other;
+				Token.bInNotCppBlock |= Entry.Kind == EConditional::Active && Entry.bNotCpp;
 			}
 			Tokens.push_back(Token);
 			continue;
@@ -251,7 +254,7 @@ void FHeaderParser::Preprocess(const std::vector<FToken>& RawTokens)
 			{
 				Kind = EConditional::Active;
 			}
-			Stack.push_back({Kind, Raw.Line});
+			Stack.push_back({Kind, Raw.Line, Keyword == "if" && Argument == "!CPP"});
 		}
 		else if (Keyword == "else" || Keyword == "elif")
 		{
@@ -263,6 +266,7 @@ void FHeaderParser::Preprocess(const std::vector<FToken>& RawTokens)
 			if (Kind == EConditional::Skip)
 			{
 				Kind = Keyword == "else" ? EConditional::Active : EConditional::Other;
+				Stack.back().bNotCpp = false;
 			}
 			else if (Kind == EConditional::Active)
 			{
@@ -677,7 +681,14 @@ void FHeaderParser::ParseStruct(const FToken& Macro)
 		}
 		else if (Key == "noexport")
 		{
-			Fail(Specifier.Line, "Struct specifier 'NoExport' is not supported by LeonHeaderTool");
+			if (!Macro.bInNotCppBlock)
+			{
+				Fail(Specifier.Line,
+					"USTRUCT(NoExport) '" + Struct.Name +
+						"' must be declared inside an '#if !CPP' block: the C++ type is defined elsewhere");
+			}
+			Struct.bNoExport = true;
+			Struct.StructFlags |= EStructFlagBits::NoExport;
 		}
 		else if (!IsOneOf(Key, {"blueprinttype", "notblueprinttype", "meta"}))
 		{
@@ -693,6 +704,19 @@ void FHeaderParser::ParseStruct(const FToken& Macro)
 	if (!MatchSymbol(";"))
 	{
 		Fail(Peek().Line, "Expected ';' after the body of struct '" + Struct.Name + "'");
+	}
+	if (Struct.bNoExport)
+	{
+		// The generated code checks each member against the real type; these forms cannot be checked.
+		for (const FPropertyDef& Property : Struct.Properties)
+		{
+			if (Property.bBitfield || Property.bFixedArray || Property.bEditorOnly)
+			{
+				Fail(Property.Line,
+					"NoExport struct '" + Struct.Name + "' cannot reflect '" + Property.Name +
+						"': bitfields, C arrays and editor-only members are not supported in NoExport structs");
+			}
+		}
 	}
 	File.Order.emplace_back(ETypeKind::Struct, static_cast<int>(File.Structs.size()));
 	File.Structs.push_back(std::move(Struct));
@@ -894,10 +918,14 @@ int FHeaderParser::ParseBody(FClassDef* Class, FStructDef* Struct, const std::st
 		}
 		SkipDeclaration();
 	}
-	if (BodyLine == 0)
+	if (BodyLine == 0 && !(Struct && Struct->bNoExport))
 	{
 		Fail(DeclarationLine,
 			"Expected a GENERATED_BODY() at the start of " + std::string(OwnerKind) + " '" + OwnerName + "'");
+	}
+	if (BodyLine != 0 && Struct && Struct->bNoExport)
+	{
+		Fail(BodyLine, "NoExport struct '" + OwnerName + "' must not have a GENERATED_BODY (it is never compiled)");
 	}
 	return BodyLine;
 }

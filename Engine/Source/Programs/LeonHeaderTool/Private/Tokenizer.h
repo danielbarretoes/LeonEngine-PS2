@@ -25,6 +25,8 @@ struct FToken
 	bool bEditorOnlyData = false;
 	/** Set by the preprocessor pass: inside any other #if / #ifdef block. */
 	bool bInOtherConditional = false;
+	/** Set by the preprocessor pass: inside an #if !CPP block (declarations only UHT sees: NoExport types). */
+	bool bInNotCppBlock = false;
 
 	bool IsIdentifier(const char* Name) const
 	{
