@@ -23,14 +23,17 @@ namespace
 		return true;
 	}
 
-	/** The transform shared by both tests: glm::translate, then rotate X / Y / Z, then scale. */
+	/**
+	 * The transform shared by both tests, glm::translate(1, -2, 3.5) * rotate X 30 * rotate Y -45 * rotate Z 60 *
+	 * scale(2, 0.5, 1.5): as FMatrix products it reads in the order the transforms apply.
+	 */
 	FMatrix MakeTrs()
 	{
-		FMatrix M = LegacyGL::Translate(FMatrix::Identity, FVector(1.0f, -2.0f, 3.5f));
-		M = LegacyGL::Rotate(M, FMath::DegreesToRadians(30.0f), FVector(1.0f, 0.0f, 0.0f));
-		M = LegacyGL::Rotate(M, FMath::DegreesToRadians(-45.0f), FVector(0.0f, 1.0f, 0.0f));
-		M = LegacyGL::Rotate(M, FMath::DegreesToRadians(60.0f), FVector(0.0f, 0.0f, 1.0f));
-		return LegacyGL::Scale(M, FVector(2.0f, 0.5f, 1.5f));
+		const FQuat RotX(FVector(1.0f, 0.0f, 0.0f), FMath::DegreesToRadians(30.0f));
+		const FQuat RotY(FVector(0.0f, 1.0f, 0.0f), FMath::DegreesToRadians(-45.0f));
+		const FQuat RotZ(FVector(0.0f, 0.0f, 1.0f), FMath::DegreesToRadians(60.0f));
+		return FScaleMatrix(FVector(2.0f, 0.5f, 1.5f)) * FQuatRotationMatrix(RotZ) * FQuatRotationMatrix(RotY) *
+			FQuatRotationMatrix(RotX) * FTranslationMatrix(FVector(1.0f, -2.0f, 3.5f));
 	}
 
 	FMatrix MakeLookAt()
@@ -44,7 +47,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLegacyGLMathBuildersTest, "System.RenderCore.L
 
 bool FLegacyGLMathBuildersTest::RunTest(const FString& Parameters)
 {
-	// Perspective, Ortho, LookAt, Translate / Rotate / Scale and QuatToMatrix build glm's matrices.
+	// Perspective, Ortho, LookAt and QuatToMatrix build glm's matrices; FMatrix products build glm's translate /
+	// rotate / scale chain.
 	const float Perspective[16] = {
 		0.974278629f, 0, 0, 0, 0, 1.7320509f, 0, 0, 0, 0, -1.002002f, -1, 0, 0, -0.2002002f, 0};
 	MatrixMatches(*this, "Perspective",

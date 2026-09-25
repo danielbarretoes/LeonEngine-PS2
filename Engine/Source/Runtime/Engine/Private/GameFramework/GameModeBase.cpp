@@ -25,10 +25,10 @@ float AGameModeBase::EstimateFloorY(const ULevel& Level)
 	{
 		return 0.0f;
 	}
-	float Y = Starts[0].Transform.Position.Y;
+	float Y = Starts[0].Transform.GetLocation().Y;
 	for (const FPlayerStart& Start : Starts)
 	{
-		Y = FMath::Min(Y, Start.Transform.Position.Y);
+		Y = FMath::Min(Y, Start.Transform.GetLocation().Y);
 	}
 	return Y;
 }
@@ -42,8 +42,9 @@ float AGameModeBase::EstimateWalkBounds(const ULevel& Level)
 		{
 			continue;
 		}
-		const float Hx = FMath::Abs(Mesh.Transform.Scale.X) * 0.5f;
-		const float Hz = FMath::Abs(Mesh.Transform.Scale.Z) * 0.5f;
+		const FVector Scale = Mesh.Transform.GetScale3D();
+		const float Hx = FMath::Abs(Scale.X) * 0.5f;
+		const float Hz = FMath::Abs(Scale.Z) * 0.5f;
 		MaxExtent = FMath::Max(MaxExtent, FMath::Max(Hx, Hz));
 	}
 	return FMath::Clamp(MaxExtent - 1.0f, 20.0f, 120.0f);

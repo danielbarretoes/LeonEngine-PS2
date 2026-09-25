@@ -2,14 +2,15 @@
 
 #include "Components/ActorComponent.h"
 #include "CoreMinimal.h"
-#include "Level/LegacyTransform.h"
+#include "LegacyCoordinateConversion.h"
 
 class AActor;
 
 /**
  * Unreal-like USceneComponent: UActorComponent + relative TRS + parent/child attach tree.
- * World transform: root uses owning Actor location/yaw + relative; children compose parent * relative
- * (GL-convention matrices, LegacyGLMath.h).
+ * World transform: root uses owning Actor location/yaw + relative; children compose relative, then parent.
+ * The Relative* fields still hold legacy values (XYZ Euler degrees; gameplay adds legacy yaw to RelativeRotation.Y);
+ * GetRelativeTransform converts them with FLegacyCoordinateConversion.
  */
 class ENGINE_API USceneComponent : public UActorComponent
 {
@@ -23,8 +24,8 @@ public:
 	USceneComponent& operator=(USceneComponent&&) = delete;
 
 	FVector RelativeLocation = FVector::ZeroVector;
-	FVector RelativeRotation = FVector::ZeroVector; // XYZ Euler, degrees
-	FVector RelativeScale = FVector::OneVector;
+	FVector RelativeRotation = FVector::ZeroVector; // legacy XYZ Euler, degrees
+	FVector RelativeScale3D = FVector::OneVector;
 
 	/** Attaches under InParent. Returns false if the parent is null, this, or would create a cycle. */
 	[[nodiscard]] bool AttachToComponent(USceneComponent* InParent, bool bKeepWorldTransform = false);
@@ -39,9 +40,9 @@ public:
 		return Children;
 	}
 
-	[[nodiscard]] FLegacyTransform GetRelativeTransform() const;
-	/** Component-to-world matrix (Unreal GetComponentTransform; GL convention). */
-	[[nodiscard]] FMatrix GetComponentTransform() const;
+	[[nodiscard]] FTransform GetRelativeTransform() const;
+	/** Component-to-world transform (UE: GetComponentTransform). */
+	[[nodiscard]] FTransform GetComponentTransform() const;
 	[[nodiscard]] FVector GetComponentLocation() const;
 
 	/** Detaches the attach tree, then unregisters from the owner. */

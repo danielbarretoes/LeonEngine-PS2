@@ -54,7 +54,7 @@ bool FGoldenStarterLevelTest::RunTest(const FString& Parameters)
 	TArray<FVector> PointLightPositions;
 	for (const FPointLight& Light : Level.GetPointLights())
 	{
-		PointLightPositions.Add(Light.Transform.Position);
+		PointLightPositions.Add(Light.Transform.GetLocation());
 	}
 	const TArray<int32> Counts = {
 		Level.GetStaticMeshes().Num(), MeshBoxes.Num() / 2, LightDirections.Num(), PointLightPositions.Num()};

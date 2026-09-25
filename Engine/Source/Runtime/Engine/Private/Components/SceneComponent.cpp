@@ -5,29 +5,12 @@
 namespace
 {
 
-	/** Column I of a GL-convention matrix (the image of axis I). */
-	[[nodiscard]] FVector Column(const FMatrix& M, int32 I)
+	/** Writes a relative transform back into the legacy Relative* fields. */
+	void SetRelativeFields(USceneComponent& Component, const FTransform& Relative)
 	{
-		return FVector(M.M[I][0], M.M[I][1], M.M[I][2]);
-	}
-
-	[[nodiscard]] FLegacyTransform DecomposeApprox(const FMatrix& M)
-	{
-		FLegacyTransform T;
-		T.Position = Column(M, 3);
-		T.Scale.X = Column(M, 0).Size();
-		T.Scale.Y = Column(M, 1).Size();
-		T.Scale.Z = Column(M, 2).Size();
-		constexpr float Eps = 1.0e-6f;
-		constexpr float RadToDeg = 180.0f / 3.14159265358979323846f;
-		const FVector Col0 = T.Scale.X > Eps ? Column(M, 0) / T.Scale.X : FVector(1.0f, 0.0f, 0.0f);
-		const FVector Col1 = T.Scale.Y > Eps ? Column(M, 1) / T.Scale.Y : FVector(0.0f, 1.0f, 0.0f);
-		const FVector Col2 = T.Scale.Z > Eps ? Column(M, 2) / T.Scale.Z : FVector(0.0f, 0.0f, 1.0f);
-		// XYZ Euler extraction (degrees) matching FLegacyTransform::ModelMatrix order Rx*Ry*Rz.
-		T.RotationDegrees.Y = FMath::Atan2(-Col0.Z, Col2.Z) * RadToDeg;
-		T.RotationDegrees.X = FMath::Asin(FMath::Clamp(Col1.Z, -1.0f, 1.0f)) * RadToDeg;
-		T.RotationDegrees.Z = FMath::Atan2(-Col1.X, Col1.Y) * RadToDeg;
-		return T;
+		Component.RelativeLocation = FLegacyCoordinateConversion::ToLegacyPosition(Relative.GetLocation());
+		Component.RelativeRotation = FLegacyCoordinateConversion::ToLegacyEulerXYZ(Relative.GetRotation());
+		Component.RelativeScale3D = FLegacyCoordinateConversion::ToLegacyScale(Relative.GetScale3D());
 	}
 
 } // namespace
@@ -44,13 +27,9 @@ USceneComponent::~USceneComponent()
 	DetachFromParent(false);
 }
 
-FLegacyTransform USceneComponent::GetRelativeTransform() const
+FTransform USceneComponent::GetRelativeTransform() const
 {
-	FLegacyTransform T;
-	T.Position = RelativeLocation;
-	T.RotationDegrees = RelativeRotation;
-	T.Scale = RelativeScale;
-	return T;
+	return FLegacyCoordinateConversion::ConvertTransform(RelativeLocation, RelativeRotation, RelativeScale3D);
 }
 
 bool USceneComponent::WouldCreateCycle(const USceneComponent* CandidateParent) const
@@ -77,7 +56,7 @@ bool USceneComponent::AttachToComponent(USceneComponent* InParent, bool bKeepWor
 		return false;
 	}
 
-	FMatrix WorldBefore = FMatrix::Identity;
+	FTransform WorldBefore;
 	if (bKeepWorldTransform)
 	{
 		WorldBefore = GetComponentTransform();
@@ -93,12 +72,7 @@ bool USceneComponent::AttachToComponent(USceneComponent* InParent, bool bKeepWor
 
 	if (bKeepWorldTransform)
 	{
-		const FMatrix ParentWorld = Parent->GetComponentTransform();
-		const FMatrix ParentInv = ParentWorld.Inverse();
-		const FLegacyTransform Relative = DecomposeApprox(WorldBefore * ParentInv);
-		RelativeLocation = Relative.Position;
-		RelativeRotation = Relative.RotationDegrees;
-		RelativeScale = Relative.Scale;
+		SetRelativeFields(*this, WorldBefore.GetRelativeTransform(Parent->GetComponentTransform()));
 	}
 	return true;
 }
@@ -110,7 +84,7 @@ void USceneComponent::DetachFromParent(bool bKeepWorldTransform)
 		return;
 	}
 
-	FMatrix WorldBefore = FMatrix::Identity;
+	FTransform WorldBefore;
 	if (bKeepWorldTransform)
 	{
 		WorldBefore = GetComponentTransform();
@@ -121,41 +95,36 @@ void USceneComponent::DetachFromParent(bool bKeepWorldTransform)
 
 	if (bKeepWorldTransform)
 	{
-		const FLegacyTransform World = DecomposeApprox(WorldBefore);
-		RelativeLocation = World.Position;
-		RelativeRotation = World.RotationDegrees;
-		RelativeScale = World.Scale;
+		SetRelativeFields(*this, WorldBefore);
 		if (Owner != nullptr)
 		{
-			RelativeLocation -= Owner->GetActorLocation();
+			RelativeLocation -= FLegacyCoordinateConversion::ToLegacyPosition(Owner->GetActorLocation());
 			RelativeRotation.Y -= Owner->GetActorYaw();
 		}
 	}
 }
 
-FMatrix USceneComponent::GetComponentTransform() const
+FTransform USceneComponent::GetComponentTransform() const
 {
-	const FLegacyTransform Relative = GetRelativeTransform();
 	if (Parent != nullptr)
 	{
-		return Relative.ModelMatrix() * Parent->GetComponentTransform();
+		return GetRelativeTransform() * Parent->GetComponentTransform();
 	}
 	if (Owner != nullptr)
 	{
-		FLegacyTransform World;
-		World.Position = Owner->GetActorLocation() + RelativeLocation;
-		World.RotationDegrees = RelativeRotation;
-		World.RotationDegrees.Y += Owner->GetActorYaw();
-		World.Scale = RelativeScale;
-		return World.ModelMatrix();
+		// The owner's legacy yaw adds to the legacy Euler Y.
+		FVector Euler = RelativeRotation;
+		Euler.Y += Owner->GetActorYaw();
+		const FVector Location =
+			FLegacyCoordinateConversion::ToLegacyPosition(Owner->GetActorLocation()) + RelativeLocation;
+		return FLegacyCoordinateConversion::ConvertTransform(Location, Euler, RelativeScale3D);
 	}
-	return Relative.ModelMatrix();
+	return GetRelativeTransform();
 }
 
 FVector USceneComponent::GetComponentLocation() const
 {
-	const FMatrix World = GetComponentTransform();
-	return FVector(World.M[3][0], World.M[3][1], World.M[3][2]);
+	return GetComponentTransform().GetLocation();
 }
 
 void USceneComponent::DestroyComponent()

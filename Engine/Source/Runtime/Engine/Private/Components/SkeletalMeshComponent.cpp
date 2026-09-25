@@ -91,7 +91,7 @@ void USkeletalMeshComponent::ApplyFitHeight(float FitHeight)
 	const FVector Mn = SkeletalMesh->GetLocalMin();
 	const FVector Mx = SkeletalMesh->GetLocalMax();
 	const FVector Center = (Mn + Mx) * 0.5f;
-	RelativeScale = FVector(Scale, Scale, Scale);
+	RelativeScale3D = FVector(Scale, Scale, Scale);
 	RelativeLocation = FVector((-Center.X) * Scale, ((-Mn.Y) * Scale) + GroundEpsilon, (-Center.Z) * Scale);
 }
 
@@ -143,7 +143,7 @@ bool USkeletalMeshComponent::GetAttachmentWorldMatrix(int32 AttachmentIndex, FMa
 	{
 		return false;
 	}
-	OutWorld = Att.Relative.ModelMatrix() * BoneModel * GetComponentTransform();
+	OutWorld = Att.Relative.ToMatrixWithScale() * BoneModel * GetComponentTransform().ToMatrixWithScale();
 	return true;
 }
 

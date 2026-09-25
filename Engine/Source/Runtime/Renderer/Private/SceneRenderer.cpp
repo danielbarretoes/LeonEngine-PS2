@@ -404,9 +404,9 @@ void FSceneRenderer::SubmitSkeletalDraw(
 }
 
 void FSceneRenderer::SubmitSkeletalDraw(
-	const USkeletalMesh& InMesh, const FLegacyTransform& Transform, const TArray<FMatrix>& InBoneMatrices)
+	const USkeletalMesh& InMesh, const FTransform& Transform, const TArray<FMatrix>& InBoneMatrices)
 {
-	SubmitSkeletalDraw(InMesh, Transform.ModelMatrix(), InBoneMatrices);
+	SubmitSkeletalDraw(InMesh, Transform.ToMatrixWithScale(), InBoneMatrices);
 }
 
 void FSceneRenderer::SubmitStaticDraw(const UStaticMesh& InMesh, const FMatrix& InModel, const FMaterial& InMaterial)
@@ -477,7 +477,7 @@ void FSceneRenderer::UpdateLightsUbo(const ULevel& Level) const
 	for (int32 I = 0; I < Block.PointCount; ++I)
 	{
 		const FPointLight& Light = Points[I];
-		Block.PointPositions[I] = FVector4(Light.Transform.Position, 1.0f);
+		Block.PointPositions[I] = FVector4(Light.Transform.GetLocation(), 1.0f);
 		Block.PointColors[I] = FVector4(Light.LightColor * Light.Intensity, 0.0f);
 		Block.PointRanges[I] = FVector4(Light.Range, 0.0f, 0.0f, 0.0f);
 	}

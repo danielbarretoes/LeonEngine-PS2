@@ -202,8 +202,9 @@ void FPhysScene::SyncFromLevel(const ULevel& Level)
 		}
 		else
 		{
-			Body.Position = Obj.Transform.Position;
-			HalfExtentsFromScale(Obj.Transform.Scale, Body.HalfExtents.X, Body.HalfExtents.Y, Body.HalfExtents.Z);
+			Body.Position = Obj.Transform.GetLocation();
+			HalfExtentsFromScale(
+				Obj.Transform.GetScale3D(), Body.HalfExtents.X, Body.HalfExtents.Y, Body.HalfExtents.Z);
 		}
 		if (Body.Mass <= 0.0f)
 		{
@@ -225,7 +226,7 @@ void FPhysScene::SyncToLevel(ULevel& Level) const
 		{
 			continue;
 		}
-		Meshes[static_cast<int32>(Body.LevelMeshIndex)].Transform.Position = Body.Position;
+		Meshes[static_cast<int32>(Body.LevelMeshIndex)].Transform.SetLocation(Body.Position);
 	}
 }
 

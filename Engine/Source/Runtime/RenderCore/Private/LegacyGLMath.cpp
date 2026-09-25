@@ -61,57 +61,6 @@ namespace LegacyGL
 		return Result;
 	}
 
-	FMatrix Translate(const FMatrix& M, const FVector& V)
-	{
-		FMatrix Result = M;
-		for (int32 R = 0; R < 4; ++R)
-		{
-			Result.M[3][R] = M.M[0][R] * V.X + M.M[1][R] * V.Y + M.M[2][R] * V.Z + M.M[3][R];
-		}
-		return Result;
-	}
-
-	FMatrix Rotate(const FMatrix& M, float Radians, const FVector& Axis)
-	{
-		const float C = FMath::Cos(Radians);
-		const float S = FMath::Sin(Radians);
-		const FVector A = Axis.GetUnsafeNormal();
-		const FVector Temp = A * (1.0f - C);
-
-		float Rot[3][3];
-		Rot[0][0] = C + Temp.X * A.X;
-		Rot[0][1] = Temp.X * A.Y + S * A.Z;
-		Rot[0][2] = Temp.X * A.Z - S * A.Y;
-		Rot[1][0] = Temp.Y * A.X - S * A.Z;
-		Rot[1][1] = C + Temp.Y * A.Y;
-		Rot[1][2] = Temp.Y * A.Z + S * A.X;
-		Rot[2][0] = Temp.Z * A.X + S * A.Y;
-		Rot[2][1] = Temp.Z * A.Y - S * A.X;
-		Rot[2][2] = C + Temp.Z * A.Z;
-
-		FMatrix Result = M;
-		for (int32 Col = 0; Col < 3; ++Col)
-		{
-			for (int32 R = 0; R < 4; ++R)
-			{
-				Result.M[Col][R] = M.M[0][R] * Rot[Col][0] + M.M[1][R] * Rot[Col][1] + M.M[2][R] * Rot[Col][2];
-			}
-		}
-		return Result;
-	}
-
-	FMatrix Scale(const FMatrix& M, const FVector& V)
-	{
-		FMatrix Result = M;
-		for (int32 R = 0; R < 4; ++R)
-		{
-			Result.M[0][R] = M.M[0][R] * V.X;
-			Result.M[1][R] = M.M[1][R] * V.Y;
-			Result.M[2][R] = M.M[2][R] * V.Z;
-		}
-		return Result;
-	}
-
 	FMatrix QuatToMatrix(float W, float X, float Y, float Z)
 	{
 		const float Qxx = X * X;

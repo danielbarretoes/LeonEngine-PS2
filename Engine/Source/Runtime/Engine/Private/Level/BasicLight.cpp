@@ -4,22 +4,22 @@
 
 // Class-name parsers live in Content/LevelClassNames.cpp (shared with the level format / cook).
 
-FBasicLight FBasicLight::Directional(const FVector& RotationDegrees, const FVector& InLightColor, float InIntensity)
+FBasicLight FBasicLight::Directional(const FQuat& Rotation, const FVector& InLightColor, float InIntensity)
 {
 	FBasicLight Light;
 	Light.Type = EBasicLight::Directional;
-	Light.Transform.RotationDegrees = RotationDegrees;
+	Light.Transform.SetRotation(Rotation);
 	Light.LightColor = InLightColor;
 	Light.Intensity = InIntensity;
 	Light.bCastShadows = true;
 	return Light;
 }
 
-FBasicLight FBasicLight::Point(const FVector& Position, const FVector& InLightColor, float InIntensity, float InRange)
+FBasicLight FBasicLight::Point(const FVector& Location, const FVector& InLightColor, float InIntensity, float InRange)
 {
 	FBasicLight Light;
 	Light.Type = EBasicLight::Point;
-	Light.Transform.Position = Position;
+	Light.Transform.SetLocation(Location);
 	Light.LightColor = InLightColor;
 	Light.Intensity = InIntensity;
 	Light.Range = InRange;

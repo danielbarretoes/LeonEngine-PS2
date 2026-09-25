@@ -2,7 +2,6 @@
 
 #include "Components/SceneComponent.h"
 #include "CoreMinimal.h"
-#include "Level/LegacyTransform.h"
 #include "Material.h"
 #include "SkeletalAnimation.h"
 #include "SkeletalMesh.h"
@@ -19,7 +18,7 @@ struct ENGINE_API FSkelMeshAttachment
 	FMaterial Material{};
 	bool bMaterialOverride = true;
 	/** Bone-local TRS applied after the bone model matrix. */
-	FLegacyTransform Relative;
+	FTransform Relative;
 	/** When true, WorldMatrixOverride replaces component * bone * relative. */
 	bool bOverrideWorldMatrix = false;
 	FMatrix WorldMatrixOverride = FMatrix::Identity;
@@ -104,7 +103,7 @@ public:
 	/** Bone model-space matrix from the current UAnimInstance pose. */
 	[[nodiscard]] bool GetBoneModelMatrix(const FString& InBoneName, FMatrix& OutModel) const;
 
-	/** Component world * bone * attachment relative (or WorldMatrixOverride); GL convention. */
+	/** Attachment relative, then bone, then component world (or WorldMatrixOverride). */
 	[[nodiscard]] bool GetAttachmentWorldMatrix(int32 AttachmentIndex, FMatrix& OutWorld) const;
 
 	void TickComponent(float DeltaTime);

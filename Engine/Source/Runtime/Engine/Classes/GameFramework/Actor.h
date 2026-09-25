@@ -4,6 +4,7 @@
 #include "Components/SceneComponent.h"
 #include "CoreMinimal.h"
 #include "Engine/Level.h"
+#include "LegacyCoordinateConversion.h"
 #include "Templates/UniquePtr.h"
 
 class UWorld;
@@ -163,8 +164,11 @@ public:
 			return;
 		}
 		UStaticMeshComponent& Obj = Meshes[static_cast<int32>(LevelMeshIndex)];
-		Obj.Transform.Position = Location;
-		Obj.Transform.RotationDegrees.Y = YawDegrees;
+		Obj.Transform.SetLocation(Location);
+		// The actor yaw is a legacy yaw: it replaces the Y of the mesh's legacy Euler angles, X and Z are kept.
+		FVector Euler = FLegacyCoordinateConversion::ToLegacyEulerXYZ(Obj.Transform.GetRotation());
+		Euler.Y = YawDegrees;
+		Obj.Transform.SetRotation(FLegacyCoordinateConversion::ConvertEulerXYZ(Euler));
 	}
 
 protected:

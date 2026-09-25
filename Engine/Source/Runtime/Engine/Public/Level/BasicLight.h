@@ -16,7 +16,7 @@ enum class EBasicLight
 struct ENGINE_API FBasicLight
 {
 	EBasicLight Type = EBasicLight::Directional;
-	FLegacyTransform Transform{};
+	FTransform Transform;
 	FVector LightColor = FVector(1.0f, 1.0f, 1.0f);
 	float Intensity = 1.0f;
 	bool bCastShadows = true;
@@ -25,9 +25,10 @@ struct ENGINE_API FBasicLight
 	/** Point: attenuation radius. */
 	float Range = 8.0f;
 
-	[[nodiscard]] static FBasicLight Directional(const FVector& RotationDegrees = FVector(60.3f, 142.1f, 0.0f),
+	/** A directional light; the default rotation is the default sun (FDirectionalLight). */
+	[[nodiscard]] static FBasicLight Directional(const FQuat& Rotation = FDirectionalLight().Transform.GetRotation(),
 		const FVector& InLightColor = FVector(1.0f, 1.0f, 1.0f), float InIntensity = 1.0f);
-	[[nodiscard]] static FBasicLight Point(const FVector& Position = FVector(0.0f, 2.0f, 0.0f),
+	[[nodiscard]] static FBasicLight Point(const FVector& Location = FPointLight().Transform.GetLocation(),
 		const FVector& InLightColor = FVector(1.0f, 1.0f, 1.0f), float InIntensity = 1.0f, float InRange = 8.0f);
 
 	[[nodiscard]] FDirectionalLight AsDirectional() const;

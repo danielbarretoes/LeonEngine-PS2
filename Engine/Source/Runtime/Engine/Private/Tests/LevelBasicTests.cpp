@@ -1,5 +1,6 @@
 #include "CoreMinimal.h"
 #include "Engine/Level.h"
+#include "LegacyCoordinateConversion.h"
 #include "Level/BasicLight.h"
 #include "Level/BasicShape.h"
 #include "Level/Light.h"
@@ -7,19 +8,20 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelLightDirectionFromRotationRoundTripTest,
-	"System.Engine.Level.LightDirectionFromRotationRoundTrip",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelLightRotationRoundTripTest, "System.Engine.Level.LightRotationRoundTrip",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-bool FLevelLightDirectionFromRotationRoundTripTest::RunTest(const FString& Parameters)
+bool FLevelLightRotationRoundTripTest::RunTest(const FString& Parameters)
 {
 	// A light rotation turns into a unit direction and back into the same pitch and yaw.
-	const FVector Rot = FVector(45.0f, 90.0f, 0.0f);
-	const FVector Dir = LightDirectionFromRotation(Rot);
-	TestEqual("Direction is unit", Dir.Size(), 1.0f, 1.0e-4f);
-	const FVector Back = RotationFromLightDirection(Dir);
-	TestEqual("Pitch round-trips", Back.X, Rot.X, 1.0e-2f);
-	TestEqual("Yaw round-trips", Back.Y, Rot.Y, 1.0e-2f);
+	FDirectionalLight Light;
+	Light.Transform.SetRotation(FLegacyCoordinateConversion::ConvertLightRotation(45.0f, 90.0f));
+	TestEqual("Direction is unit", Light.GetDirection().Size(), 1.0f, 1.0e-4f);
+	float Pitch = 0.0f;
+	float Yaw = 0.0f;
+	FLegacyCoordinateConversion::ToLegacyLightRotation(Light.Transform.GetRotation(), Pitch, Yaw);
+	TestEqual("Pitch round-trips", Pitch, 45.0f, 1.0e-2f);
+	TestEqual("Yaw round-trips", Yaw, 90.0f, 1.0e-2f);
 	return true;
 }
 
@@ -31,7 +33,7 @@ bool FLevelDirectionalLightGetDirectionMatchesTransformTest::RunTest(const FStri
 {
 	// A directional light pitched down by its transform points downward.
 	FDirectionalLight Light;
-	Light.Transform.RotationDegrees = FVector(30.0f, 0.0f, 0.0f);
+	Light.Transform.SetRotation(FLegacyCoordinateConversion::ConvertLightRotation(30.0f, 0.0f));
 	const FVector Dir = Light.GetDirection();
 	TestTrue("Points down", Dir.Y < 0.0f);
 	return true;
@@ -79,8 +81,8 @@ bool FLevelBasicShapeFactoriesSetTypeAndPlaneScaleTest::RunTest(const FString& P
 	TestTrue("Cube type", Cube.Type == EBasicShape::Cube);
 	const FBasicShape Plane = FBasicShape::Plane(4.0f);
 	TestTrue("Plane type", Plane.Type == EBasicShape::Plane);
-	TestEqual("Plane scale X", Plane.Transform.Scale.X, 4.0f, 1.0e-5f);
-	TestEqual("Plane scale Z", Plane.Transform.Scale.Z, 4.0f, 1.0e-5f);
+	TestEqual("Plane scale X", Plane.Transform.GetScale3D().X, 4.0f, 1.0e-5f);
+	TestEqual("Plane scale Z", Plane.Transform.GetScale3D().Z, 4.0f, 1.0e-5f);
 	return true;
 }
 
@@ -118,11 +120,11 @@ bool FLevelStoresMeshesPlayerStartsAndTagsTest::RunTest(const FString& Parameter
 	ULevel Level;
 	UStaticMeshComponent Mesh{};
 	Mesh.Tag = "player";
-	Mesh.Transform.Position = FVector(1.0f, 2.0f, 3.0f);
+	Mesh.Transform.SetLocation(FVector(1.0f, 2.0f, 3.0f));
 	Level.AddStaticMesh(MoveTemp(Mesh));
 
 	FPlayerStart Start{};
-	Start.Transform.Position = FVector(5.0f, 0.0f, -2.0f);
+	Start.Transform.SetLocation(FVector(5.0f, 0.0f, -2.0f));
 	Level.AddPlayerStart(Start);
 
 	TestEqual("One static mesh", Level.GetStaticMeshes().Num(), 1);
@@ -133,7 +135,7 @@ bool FLevelStoresMeshesPlayerStartsAndTagsTest::RunTest(const FString& Parameter
 	{
 		return false;
 	}
-	TestEqual("PlayerStart X", Found->Transform.Position.X, 5.0f, 1.0e-5f);
+	TestEqual("PlayerStart X", Found->Transform.GetLocation().X, 5.0f, 1.0e-5f);
 
 	Level.Clear();
 	TestEqual("No static meshes", Level.GetStaticMeshes().Num(), 0);

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Level/LegacyTransform.h"
 #include "Level/Light.h"
 #include "Material.h"
 #include "StaticMesh.h"
@@ -24,7 +23,7 @@ enum class EComponentMobility : uint8
  */
 struct ENGINE_API UStaticMeshComponent
 {
-	FLegacyTransform Transform;
+	FTransform Transform;
 	TSharedPtr<UStaticMesh> Mesh;
 	FMaterial Material;
 	TArray<FMaterial> Materials; // optional per-slot overrides
@@ -41,9 +40,6 @@ struct ENGINE_API UStaticMeshComponent
 	bool bEnableGravity = true;
 	/** When true, skipped by the renderer (UE-like BlockingVolume / HiddenInGame). */
 	bool bHidden = false;
-	/** When true, the renderer uses ModelMatrixOverride instead of Transform.ModelMatrix(). */
-	bool bUseModelMatrixOverride = false;
-	FMatrix ModelMatrixOverride = FMatrix::Identity;
 
 	/** Static = never moves; Movable = may move at runtime. */
 	EComponentMobility Mobility = EComponentMobility::Static;
@@ -62,10 +58,10 @@ struct ENGINE_API UStaticMeshComponent
 	float BobAmplitude = 0.1f;
 	float BobSpeed = 1.0f;
 
-	/** Model matrix in the renderer's GL convention (LegacyGLMath.h). */
+	/** Model matrix (Transform with its scale). */
 	[[nodiscard]] FMatrix EffectiveModelMatrix() const
 	{
-		return bUseModelMatrixOverride ? ModelMatrixOverride : Transform.ModelMatrix();
+		return Transform.ToMatrixWithScale();
 	}
 
 	[[nodiscard]] bool HasPhysicsBody() const
@@ -81,13 +77,13 @@ struct ENGINE_API UStaticMeshComponent
 /** UE-like FPlayerStart: spawn transform for game-mode-possessed pawns (not a drawable mesh). */
 struct ENGINE_API FPlayerStart
 {
-	FLegacyTransform Transform;
+	FTransform Transform;
 };
 
 /** Interact / trigger volume (POD). Overlap tested in gameplay from the position + InteractRadius. */
 struct ENGINE_API FTriggerVolume
 {
-	FLegacyTransform Transform;
+	FTransform Transform;
 	float InteractRadius = 2.f;
 	int32 InteractCost = 0;
 	FString Payload; // game-defined, e.g. Door, WallBuy:M14, Perk:Jugg
@@ -95,10 +91,10 @@ struct ENGINE_API FTriggerVolume
 	bool bConsumeOnUse = false;
 };
 
-/** Damage volume (POD). AABB from Transform.Position and abs(Scale) * 0.5. */
+/** Damage volume (POD). AABB from the transform location and abs(Scale3D) * 0.5. */
 struct ENGINE_API FPainCausingVolume
 {
-	FLegacyTransform Transform; // position + scale as half-extents box (full size = abs(scale))
+	FTransform Transform; // location + scale as half-extents box (full size = abs(scale))
 	float DamagePerSecond = 12.f;
 	float DamageInterval = 0.35f;
 	FString Tag;
@@ -107,7 +103,7 @@ struct ENGINE_API FPainCausingVolume
 /** AI spawn marker (POD; not a drawable mesh). */
 struct ENGINE_API FAISpawnPoint
 {
-	FLegacyTransform Transform;
+	FTransform Transform;
 	FString Tag;
 };
 

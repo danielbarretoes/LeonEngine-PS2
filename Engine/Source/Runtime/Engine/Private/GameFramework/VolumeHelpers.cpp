@@ -8,9 +8,9 @@ namespace
 
 	[[nodiscard]] bool PointInPainAabb(const FVector& Point, const FPainCausingVolume& Vol)
 	{
-		const FVector Half = Vol.Transform.Scale.GetAbs() * 0.5f;
-		const FVector Min = Vol.Transform.Position - Half;
-		const FVector Max = Vol.Transform.Position + Half;
+		const FVector Half = Vol.Transform.GetScale3D().GetAbs() * 0.5f;
+		const FVector Min = Vol.Transform.GetLocation() - Half;
+		const FVector Max = Vol.Transform.GetLocation() + Half;
 		return Point.X >= Min.X && Point.X <= Max.X && Point.Y >= Min.Y && Point.Y <= Max.Y && Point.Z >= Min.Z &&
 			Point.Z <= Max.Z;
 	}
@@ -97,7 +97,8 @@ SIZE_T FindBestTriggerVolume(const TArray<FTriggerVolume>& Volumes, const FVecto
 		const FTriggerVolume& Vol = Volumes[I];
 		const float Radius = Vol.InteractRadius > 0.0f ? Vol.InteractRadius : MaxDist;
 		const float Limit = Radius < MaxDist ? Radius : MaxDist;
-		const FVector Delta = FVector(Feet.X - Vol.Transform.Position.X, 0.0f, Feet.Z - Vol.Transform.Position.Z);
+		const FVector VolumeLocation = Vol.Transform.GetLocation();
+		const FVector Delta = FVector(Feet.X - VolumeLocation.X, 0.0f, Feet.Z - VolumeLocation.Z);
 		const float Dist = Delta.Size();
 		if (Dist < BestDist && Dist <= Limit)
 		{

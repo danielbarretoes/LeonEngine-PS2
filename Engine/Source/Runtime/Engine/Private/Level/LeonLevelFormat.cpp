@@ -2,6 +2,7 @@
 
 #include "Engine/GameEngine.h"
 #include "EngineLogs.h"
+#include "LegacyCoordinateConversion.h"
 #include "Level/BasicLight.h"
 #include "Level/BasicShape.h"
 #include "Level/LevelLoader.h"
@@ -307,6 +308,24 @@ namespace
 		}
 	}
 
+	/** Writes a world transform into a record's legacy position, XYZ Euler degrees and scale. */
+	void SetLegacyTransform(FLevelActorRecord& Record, const FTransform& Transform)
+	{
+		Record.Position = FLegacyCoordinateConversion::ToLegacyPosition(Transform.GetLocation());
+		Record.RotationDegrees = FLegacyCoordinateConversion::ToLegacyEulerXYZ(Transform.GetRotation());
+		Record.Scale = FLegacyCoordinateConversion::ToLegacyScale(Transform.GetScale3D());
+	}
+
+	/** Writes a light transform into a record's legacy position and (pitch, yaw, 0) degrees. */
+	void SetLegacyLightTransform(FLevelLightRecord& Record, const FTransform& Transform)
+	{
+		float Pitch = 0.0f;
+		float Yaw = 0.0f;
+		FLegacyCoordinateConversion::ToLegacyLightRotation(Transform.GetRotation(), Pitch, Yaw);
+		Record.Position = FLegacyCoordinateConversion::ToLegacyPosition(Transform.GetLocation());
+		Record.RotationDegrees = FVector(Pitch, Yaw, 0.0f);
+	}
+
 	void ApplyDocumentLights(const FLevelDocument& Doc, ULevel& Staged)
 	{
 		for (const FLevelLightRecord& Record : Doc.Lights)
@@ -314,8 +333,10 @@ namespace
 			FBasicLight Light;
 			Light.Type =
 				Record.LightClass == ELevelLightClass::PointLight ? EBasicLight::Point : EBasicLight::Directional;
-			Light.Transform.Position = Record.Position;
-			Light.Transform.RotationDegrees = Record.RotationDegrees;
+			// Legacy lights keep pitch in X and yaw in Y; the roll in Z was never used.
+			Light.Transform = FTransform(
+				FLegacyCoordinateConversion::ConvertLightRotation(Record.RotationDegrees.X, Record.RotationDegrees.Y),
+				FLegacyCoordinateConversion::ConvertPosition(Record.Position));
 			Light.LightColor = Record.LightColor;
 			Light.Intensity = Record.Intensity;
 			Light.bCastShadows = Record.bCastShadows;
@@ -379,9 +400,7 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 	{
 		FLevelActorRecord Record;
 		Record.ActorClass = ELevelActorClass::PlayerStart;
-		Record.Position = Start.Transform.Position;
-		Record.RotationDegrees = Start.Transform.RotationDegrees;
-		Record.Scale = Start.Transform.Scale;
+		SetLegacyTransform(Record, Start.Transform);
 		Record.bEnableGravity = false;
 		Doc.Actors.Add(MoveTemp(Record));
 	}
@@ -390,9 +409,7 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 	{
 		FLevelActorRecord Record;
 		Record.ActorClass = ELevelActorClass::AISpawnPoint;
-		Record.Position = Spawn.Transform.Position;
-		Record.RotationDegrees = Spawn.Transform.RotationDegrees;
-		Record.Scale = Spawn.Transform.Scale;
+		SetLegacyTransform(Record, Spawn.Transform);
 		Record.Tag = Spawn.Tag;
 		Record.bEnableGravity = false;
 		Doc.Actors.Add(MoveTemp(Record));
@@ -402,9 +419,7 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 	{
 		FLevelActorRecord Record;
 		Record.ActorClass = ELevelActorClass::TriggerVolume;
-		Record.Position = Volume.Transform.Position;
-		Record.RotationDegrees = Volume.Transform.RotationDegrees;
-		Record.Scale = Volume.Transform.Scale;
+		SetLegacyTransform(Record, Volume.Transform);
 		Record.Tag = Volume.Tag;
 		Record.InteractCost = Volume.InteractCost;
 		Record.InteractRadius = Volume.InteractRadius;
@@ -418,9 +433,7 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 	{
 		FLevelActorRecord Record;
 		Record.ActorClass = ELevelActorClass::PainCausingVolume;
-		Record.Position = Volume.Transform.Position;
-		Record.RotationDegrees = Volume.Transform.RotationDegrees;
-		Record.Scale = Volume.Transform.Scale;
+		SetLegacyTransform(Record, Volume.Transform);
 		Record.Tag = Volume.Tag;
 		Record.DamagePerSecond = Volume.DamagePerSecond;
 		Record.DamageInterval = Volume.DamageInterval;
@@ -445,9 +458,7 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 		Record.bEnableGravity = LocalMesh.bEnableGravity;
 		Record.bHidden = LocalMesh.bHidden;
 
-		Record.Position = LocalMesh.Transform.Position;
-		Record.RotationDegrees = LocalMesh.Transform.RotationDegrees;
-		Record.Scale = LocalMesh.Transform.Scale;
+		SetLegacyTransform(Record, LocalMesh.Transform);
 
 		Record.Tag = LocalMesh.Tag;
 		Record.MaterialPath = LocalMesh.MaterialPath;
@@ -475,8 +486,7 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 		FLevelLightRecord Record;
 		Record.LightClass = ELevelLightClass::DirectionalLight;
 		Record.bCastShadows = Light.bCastShadows;
-		Record.Position = Light.Transform.Position;
-		Record.RotationDegrees = Light.Transform.RotationDegrees;
+		SetLegacyLightTransform(Record, Light.Transform);
 		Record.LightColor = Light.LightColor;
 		Record.Intensity = Light.Intensity;
 		Record.SourceAngle = Light.SourceAngle;
@@ -487,8 +497,7 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 		FLevelLightRecord Record;
 		Record.LightClass = ELevelLightClass::PointLight;
 		Record.bCastShadows = Light.bCastShadows;
-		Record.Position = Light.Transform.Position;
-		Record.RotationDegrees = Light.Transform.RotationDegrees;
+		SetLegacyLightTransform(Record, Light.Transform);
 		Record.LightColor = Light.LightColor;
 		Record.Intensity = Light.Intensity;
 		Record.Range = Light.Range;
@@ -977,10 +986,8 @@ bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FS
 	int32 FailedMeshes = 0;
 	for (const FLevelActorRecord& Record : Doc.Actors)
 	{
-		FLegacyTransform Transform;
-		Transform.Position = Record.Position;
-		Transform.RotationDegrees = Record.RotationDegrees;
-		Transform.Scale = Record.Scale;
+		const FTransform Transform =
+			FLegacyCoordinateConversion::ConvertTransform(Record.Position, Record.RotationDegrees, Record.Scale);
 
 		if (Record.ActorClass == ELevelActorClass::PlayerStart)
 		{

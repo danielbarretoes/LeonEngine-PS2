@@ -2,13 +2,12 @@
 
 #include "CoreMinimal.h"
 #include "Engine/Level.h"
-#include "Level/LegacyTransform.h"
 #include "Material.h"
 #include "ResourceCache.h"
 
 /**
  * Engine basic shapes (UE-like /Engine/BasicShapes: Cube, Sphere, Plane).
- * Unit meshes; the size comes from Transform.Scale. The plane lies on XZ (Y = 0).
+ * Unit meshes; the size comes from the transform scale. The plane lies on XZ (Y = 0).
  * UV tiling lives on FMaterial::UvScale, not on the shape.
  */
 enum class EBasicShape
@@ -22,7 +21,7 @@ enum class EBasicShape
 struct ENGINE_API FBasicShape
 {
 	EBasicShape Type = EBasicShape::Cube;
-	FLegacyTransform Transform{};
+	FTransform Transform;
 	FMaterial Material{};
 	/** When false, MakeStaticMesh uses FResourceCache::DefaultMaterial() (checker). */
 	bool bHasCustomMaterial = false;
@@ -32,12 +31,12 @@ struct ENGINE_API FBasicShape
 	int32 SphereRings = 16;
 
 	[[nodiscard]] static FBasicShape Cube(
-		FLegacyTransform InTransform = {}, FMaterial InMaterial = {}, bool bHasMaterial = false);
-	[[nodiscard]] static FBasicShape Sphere(FLegacyTransform InTransform = {}, FMaterial InMaterial = {},
-		bool bHasMaterial = false, int32 Segments = 24, int32 Rings = 16);
+		const FTransform& InTransform = FTransform::Identity, FMaterial InMaterial = {}, bool bHasMaterial = false);
+	[[nodiscard]] static FBasicShape Sphere(const FTransform& InTransform = FTransform::Identity,
+		FMaterial InMaterial = {}, bool bHasMaterial = false, int32 Segments = 24, int32 Rings = 16);
 	/** Size sets the uniform XZ scale (UE-like ground plane extent). */
-	[[nodiscard]] static FBasicShape Plane(
-		float Size = 1.0f, FLegacyTransform InTransform = {}, FMaterial InMaterial = {}, bool bHasMaterial = false);
+	[[nodiscard]] static FBasicShape Plane(float Size = 1.0f, const FTransform& InTransform = FTransform::Identity,
+		FMaterial InMaterial = {}, bool bHasMaterial = false);
 
 	/** Builds a level UStaticMeshComponent (mesh + transform + material override). */
 	[[nodiscard]] UStaticMeshComponent MakeStaticMesh(FResourceCache& Resources) const;

@@ -4,6 +4,7 @@
 #include "Engine/Level.h"
 #include "Engine/World.h"
 #include "GameFramework/GameStateBase.h"
+#include "LegacyCoordinateConversion.h"
 
 #include <string_view>
 
@@ -145,8 +146,8 @@ protected:
 		}
 		const int Index = FMath::Clamp(Slot, 0, static_cast<int>(Starts.Num()) - 1);
 		const FPlayerStart& Start = Starts[Index];
-		OutLocation = Start.Transform.Position;
-		OutYawDegrees = Start.Transform.RotationDegrees.Y;
+		OutLocation = Start.Transform.GetLocation();
+		OutYawDegrees = FLegacyCoordinateConversion::ToLegacyEulerXYZ(Start.Transform.GetRotation()).Y;
 		return true;
 	}
 

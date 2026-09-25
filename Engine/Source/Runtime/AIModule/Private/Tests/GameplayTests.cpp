@@ -14,6 +14,7 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "LegacyCoordinateConversion.h"
 #include "Misc/AutomationTest.h"
 #include "Physics/PhysScene.h"
 #include "PhysicsBackend.h"
@@ -394,8 +395,8 @@ bool FGameplayNavBlocksNavBlockerKeepsNavWalkableTest::RunTest(const FString& Pa
 	Plate.Tag = NavTags::Blocker;
 	Plate.bCollisionEnabled = true;
 	Plate.EditorClass = "Cube";
-	Plate.Transform.Position = FVector(0.0f, 0.12f, 0.0f);
-	Plate.Transform.Scale = FVector(1.8f, 0.2f, 1.8f);
+	Plate.Transform = FLegacyCoordinateConversion::ConvertTransform(
+		FVector(0.0f, 0.12f, 0.0f), FVector::ZeroVector, FVector(1.8f, 0.2f, 1.8f));
 	Level.GetStaticMeshes().Add(MoveTemp(Plate));
 
 	FBodyInstance PlateBody{};
@@ -533,8 +534,6 @@ bool FGameplayActorSyncTransformToLevelWritesLinkedMeshTest::RunTest(const FStri
 	// SyncTransformToLevel copies the Actor location and yaw into its linked Level mesh.
 	ULevel Level;
 	UStaticMeshComponent Mesh{};
-	Mesh.Transform.Position = FVector(0.0f, 0.0f, 0.0f);
-	Mesh.Transform.RotationDegrees = FVector(0.0f, 0.0f, 0.0f);
 	Level.AddStaticMesh(MoveTemp(Mesh));
 
 	UWorld World;
@@ -543,11 +542,13 @@ bool FGameplayActorSyncTransformToLevelWritesLinkedMeshTest::RunTest(const FStri
 	Actor->SetActorLocationAndRotation(FVector(3.0f, 1.5f, -2.0f), 90.0f);
 	Actor->SyncTransformToLevel(Level);
 
-	const FLegacyTransform& Transform = Level.GetStaticMeshes()[0].Transform;
-	TestEqual("Position X", Transform.Position.X, 3.0f, 1.0e-5f);
-	TestEqual("Position Y", Transform.Position.Y, 1.5f, 1.0e-5f);
-	TestEqual("Position Z", Transform.Position.Z, -2.0f, 1.0e-5f);
-	TestEqual("Yaw", Transform.RotationDegrees.Y, 90.0f, 1.0e-5f);
+	const FTransform& Transform = Level.GetStaticMeshes()[0].Transform;
+	TestEqual("Position X", Transform.GetLocation().X, 3.0f, 1.0e-5f);
+	TestEqual("Position Y", Transform.GetLocation().Y, 1.5f, 1.0e-5f);
+	TestEqual("Position Z", Transform.GetLocation().Z, -2.0f, 1.0e-5f);
+	TestTrue("Yaw",
+		Transform.GetRotation().Equals(
+			FLegacyCoordinateConversion::ConvertEulerXYZ(FVector(0.0f, 90.0f, 0.0f)), 1.0e-6f));
 	return true;
 }
 
@@ -572,10 +573,10 @@ bool FGameplayWorldTickGameplayFrameSyncsCharacterTest::RunTest(const FString& P
 	Frame.Level = &Level;
 	World.TickGameplayFrame(Frame);
 
-	const FLegacyTransform& Transform = Level.GetStaticMeshes()[0].Transform;
-	TestEqual("Position X", Transform.Position.X, 1.0f, 1.0e-4f);
-	TestEqual("Position Z", Transform.Position.Z, 2.0f, 1.0e-4f);
-	TestEqual("Yaw", Transform.RotationDegrees.Y, 45.0f, 1.0e-4f);
+	const FTransform& Transform = Level.GetStaticMeshes()[0].Transform;
+	TestEqual("Position X", Transform.GetLocation().X, 1.0f, 1.0e-4f);
+	TestEqual("Position Z", Transform.GetLocation().Z, 2.0f, 1.0e-4f);
+	TestEqual("Yaw", FLegacyCoordinateConversion::ToLegacyEulerXYZ(Transform.GetRotation()).Y, 45.0f, 1.0e-4f);
 	return true;
 }
 

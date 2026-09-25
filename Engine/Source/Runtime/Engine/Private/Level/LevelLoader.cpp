@@ -23,8 +23,8 @@ void ApplyFitHeight(UStaticMeshComponent& Object, float FitHeight)
 		return;
 	}
 
-	// Existing position is kept as an offset after auto scale / ground align.
-	const FVector PositionOffset = Object.Transform.Position;
+	// Existing location is kept as an offset after auto scale / ground align.
+	const FVector LocationOffset = Object.Transform.GetLocation();
 
 	const FVector Mn = Object.Mesh->GetLocalMin();
 	const FVector Mx = Object.Mesh->GetLocalMax();
@@ -33,10 +33,10 @@ void ApplyFitHeight(UStaticMeshComponent& Object, float FitHeight)
 	const float Scale = FitHeight / Height;
 	const FVector Center = (Mn + Mx) * 0.5f;
 
-	Object.Transform.Scale = FVector(Scale, Scale, Scale);
+	Object.Transform.SetScale3D(FVector(Scale, Scale, Scale));
 	constexpr float GroundEpsilon = 0.008f;
 	const FVector Grounded = FVector((-Center.X) * Scale, ((-Mn.Y) * Scale) + GroundEpsilon, (-Center.Z) * Scale);
-	Object.Transform.Position = Grounded + PositionOffset;
+	Object.Transform.SetLocation(Grounded + LocationOffset);
 }
 
 bool LoadLevelFile(UGameEngine& Engine, const FString& LevelPath)

@@ -11,8 +11,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTransformLocalBoxTest, "System.RenderCore.Frus
 bool FTransformLocalBoxTest::RunTest(const FString& Parameters)
 {
 	// A unit box turned 45 degrees about the vertical axis grows in X and keeps its height.
-	const FMatrix Model =
-		LegacyGL::Rotate(FMatrix::Identity, FMath::DegreesToRadians(45.0f), FVector(0.0f, 1.0f, 0.0f));
+	const FMatrix Model = FQuatRotationMatrix(FQuat(FVector(0.0f, 1.0f, 0.0f), FMath::DegreesToRadians(45.0f)));
 	const FBox Box = TransformLocalBox(FVector(-0.5f), FVector(0.5f), Model);
 	TestTrue("Min X grows", Box.Min.X < -0.5f);
 	TestTrue("Max X grows", Box.Max.X > 0.5f);

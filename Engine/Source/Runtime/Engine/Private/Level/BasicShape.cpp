@@ -18,7 +18,7 @@ TSharedPtr<UStaticMesh> MeshForBasicShape(
 	return nullptr;
 }
 
-FBasicShape FBasicShape::Cube(FLegacyTransform InTransform, FMaterial InMaterial, bool bHasMaterial)
+FBasicShape FBasicShape::Cube(const FTransform& InTransform, FMaterial InMaterial, bool bHasMaterial)
 {
 	FBasicShape Shape;
 	Shape.Type = EBasicShape::Cube;
@@ -29,7 +29,7 @@ FBasicShape FBasicShape::Cube(FLegacyTransform InTransform, FMaterial InMaterial
 }
 
 FBasicShape FBasicShape::Sphere(
-	FLegacyTransform InTransform, FMaterial InMaterial, bool bHasMaterial, int32 Segments, int32 Rings)
+	const FTransform& InTransform, FMaterial InMaterial, bool bHasMaterial, int32 Segments, int32 Rings)
 {
 	FBasicShape Shape;
 	Shape.Type = EBasicShape::Sphere;
@@ -41,14 +41,12 @@ FBasicShape FBasicShape::Sphere(
 	return Shape;
 }
 
-FBasicShape FBasicShape::Plane(float Size, FLegacyTransform InTransform, FMaterial InMaterial, bool bHasMaterial)
+FBasicShape FBasicShape::Plane(float Size, const FTransform& InTransform, FMaterial InMaterial, bool bHasMaterial)
 {
 	FBasicShape Shape;
 	Shape.Type = EBasicShape::Plane;
 	Shape.Transform = InTransform;
-	Shape.Transform.Scale.X = Size;
-	Shape.Transform.Scale.Y = 1.0f;
-	Shape.Transform.Scale.Z = Size;
+	Shape.Transform.SetScale3D(FVector(Size, 1.0f, Size));
 	Shape.Material = MoveTemp(InMaterial);
 	Shape.bHasCustomMaterial = bHasMaterial;
 	return Shape;

@@ -7,7 +7,6 @@
 #include "Frustum.h"
 #include "GpuPassTimer.h"
 #include "LdrColorTarget.h"
-#include "Level/LegacyTransform.h"
 #include "PlanarReflection.h"
 #include "PostProcess.h"
 #include "RHIHandles.h"
@@ -86,7 +85,7 @@ public:
 	/** Queues a skinned mesh draw for the next DrawScene (cleared after DrawScene). */
 	void SubmitSkeletalDraw(const USkeletalMesh& InMesh, const FMatrix& InModel, const TArray<FMatrix>& InBoneMatrices);
 	void SubmitSkeletalDraw(
-		const USkeletalMesh& InMesh, const FLegacyTransform& Transform, const TArray<FMatrix>& InBoneMatrices);
+		const USkeletalMesh& InMesh, const FTransform& Transform, const TArray<FMatrix>& InBoneMatrices);
 
 	/** Queues a rigid static mesh with an explicit model matrix (attachments, etc.). */
 	void SubmitStaticDraw(const UStaticMesh& InMesh, const FMatrix& InModel, const FMaterial& InMaterial);
