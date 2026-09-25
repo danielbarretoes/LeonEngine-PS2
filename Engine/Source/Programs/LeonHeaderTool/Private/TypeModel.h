@@ -58,6 +58,7 @@ namespace EClassFlagBits
 	constexpr uint32_t MatchedSerializers = 0x00000020u;
 	constexpr uint32_t Native = 0x00000080u;
 	constexpr uint32_t NotPlaceable = 0x00000200u;
+	constexpr uint32_t PerObjectConfig = 0x00000400u;
 	constexpr uint32_t EditInlineNew = 0x00001000u;
 	constexpr uint32_t MinimalAPI = 0x00080000u;
 	constexpr uint32_t RequiredAPI = 0x00100000u;

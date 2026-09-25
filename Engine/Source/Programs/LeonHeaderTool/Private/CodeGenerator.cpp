@@ -459,6 +459,7 @@ namespace
 		static const std::pair<uint32_t, const char*> Names[] = {{EClassFlagBits::Abstract, "CLASS_Abstract"},
 			{EClassFlagBits::DefaultConfig, "CLASS_DefaultConfig"}, {EClassFlagBits::Config, "CLASS_Config"},
 			{EClassFlagBits::Transient, "CLASS_Transient"}, {EClassFlagBits::NotPlaceable, "CLASS_NotPlaceable"},
+			{EClassFlagBits::PerObjectConfig, "CLASS_PerObjectConfig"},
 			{EClassFlagBits::EditInlineNew, "CLASS_EditInlineNew"}, {EClassFlagBits::MinimalAPI, "CLASS_MinimalAPI"}};
 		std::string Text = "0";
 		for (const auto& Name : Names)

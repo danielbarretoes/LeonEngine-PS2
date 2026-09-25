@@ -582,6 +582,10 @@ void FHeaderParser::ParseClass(const FToken& Macro)
 		{
 			Class.ClassFlags |= EClassFlagBits::DefaultConfig;
 		}
+		else if (Key == "perobjectconfig")
+		{
+			Class.ClassFlags |= EClassFlagBits::PerObjectConfig;
+		}
 		else if (Key == "transient")
 		{
 			Class.ClassFlags |= EClassFlagBits::Transient;
@@ -599,8 +603,8 @@ void FHeaderParser::ParseClass(const FToken& Macro)
 			Class.ClassFlags |= EClassFlagBits::EditInlineNew;
 		}
 		else if (IsOneOf(Key,
-					 {"interface", "perobjectconfig", "globaluserconfig", "projectuserconfig", "within", "noexport",
-						 "intrinsic", "customconstructor", "deprecated"}))
+					 {"interface", "globaluserconfig", "projectuserconfig", "within", "noexport", "intrinsic",
+						 "customconstructor", "deprecated"}))
 		{
 			Fail(Specifier.Line, "Class specifier '" + Specifier.Name + "' is not supported by LeonHeaderTool");
 		}
