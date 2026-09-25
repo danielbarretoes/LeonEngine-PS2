@@ -1,0 +1,47 @@
+#include "CoreMinimal.h"
+#include "HAL/PlatformMemory.h"
+#include "HAL/PlatformProperties.h"
+#include "Misc/AutomationTest.h"
+#include "Modules/ModuleManager.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogTestPAL, Log, All);
+
+// Runs the automation tests linked into this program (Core's Private/Tests) and prints a verdict line:
+//   TestPAL: PASSED (N test(s), 0 failed)
+// Arguments: -filter=<text> runs only the tests whose name contains <text>.
+int main(int ArgC, char* ArgV[])
+{
+	FModuleManager::Get().StartupStaticallyLinkedModules();
+
+	const TCHAR* Filter = TEXT("");
+	for (int Index = 1; Index < ArgC; ++Index)
+	{
+		if (ArgV[Index] && FCString::Strnicmp(ArgV[Index], "-filter=", 8) == 0)
+		{
+			Filter = ArgV[Index] + 8;
+		}
+	}
+
+	UE_LOG(LogTestPAL, Display, TEXT("TestPAL on %s, engine %d.%d.%d"), FPlatformProperties::PlatformName(),
+		ENGINE_MAJOR_VERSION, ENGINE_MINOR_VERSION, ENGINE_PATCH_VERSION);
+
+	int32 NumRun = 0;
+	const int32 NumFailed = FAutomationTestFramework::Get().RunTests(
+		Filter, EAutomationTestFlags::Disabled | EAutomationTestFlags::NonNullRHI, &NumRun);
+
+	// Numbers for the platform budgets (PS2: Engine/Platforms/PS2/Documentation/Budgets.md).
+	const FMallocUsage Usage = FMemory::GetUsage();
+	const FPlatformMemoryStats Stats = FPlatformMemory::GetStats();
+	UE_LOG(LogTestPAL, Display,
+		TEXT("Memory: GMalloc peak %llu KB, current %llu KB, %llu live allocations; process %llu KB"),
+		(unsigned long long)(Usage.PeakBytes / 1024), (unsigned long long)(Usage.CurrentBytes / 1024),
+		(unsigned long long)Usage.NumAllocations, (unsigned long long)(Stats.UsedPhysical / 1024));
+	UE_LOG(LogTestPAL, Display, TEXT("Names: %d entries, %d KB used of %d KB (blocks + hash)"), FName::GetNumNames(),
+		FName::GetNameEntryMemorySize() / 1024, FName::GetNameTableMemorySize() / 1024);
+	UE_LOG(LogTestPAL, Display, TEXT("TestPAL: %s (%d test(s), %d failed)"), NumFailed ? "FAILED" : "PASSED", NumRun,
+		NumFailed);
+	GLog->Flush();
+
+	FModuleManager::Get().ShutdownModules();
+	return NumFailed ? 1 : 0;
+}

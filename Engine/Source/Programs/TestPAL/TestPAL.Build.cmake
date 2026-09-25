@@ -1,0 +1,1 @@
+leon_module(TestPAL PRIVATE_DEPENDENCIES Core)

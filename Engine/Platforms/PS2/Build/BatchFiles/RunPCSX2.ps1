@@ -1,8 +1,11 @@
-# Launch a project's PS2 build in PCSX2, optionally building it first with LeonBuildTool.
+# Launch a project's (or an engine program's) PS2 build in PCSX2, optionally building it first with LeonBuildTool.
 # Usage: Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 [-Project <dir|file.lproj>] [-Configuration Development] [-Build]
+#        Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL [-Build]
+# Program output (printf / UE_LOG) goes to the EE console: PCSX2 log, %USERPROFILE%\Documents\PCSX2\logs\emulog.txt.
 # PCSX2 path: $env:LEON_PCSX2, else PATH, else default install locations.
 param(
     [string]$Project = "Game\ThirdPerson",
+    [string]$Program = "",
     [ValidateSet("Debug", "Development", "Shipping")]
     [string]$Configuration = "Development",
     [switch]$Build
@@ -11,26 +14,35 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..\..\..")).Path
 
-$ProjectPath = if ([System.IO.Path]::IsPathRooted($Project)) { $Project } else { Join-Path $Root $Project }
-if ((Get-Item $ProjectPath).PSIsContainer) {
-    $ProjectFile = Get-ChildItem -Path $ProjectPath -Filter *.lproj | Select-Object -First 1
-    if (-not $ProjectFile) { Write-Error "No .lproj in $ProjectPath" }
-    $ProjectFile = $ProjectFile.FullName
+if ($Program) {
+    if ($Build) {
+        & cmd /c "`"$Root\Engine\Build\BatchFiles\Build.bat`" $Program PS2 $Configuration"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    }
+    $ElfName = if ($Configuration -eq "Development") { "$Program.elf" } else { "$Program-PS2-$Configuration.elf" }
+    $Elf = Join-Path $Root "Engine\Binaries\PS2\$ElfName"
 } else {
-    $ProjectFile = (Resolve-Path $ProjectPath).Path
-}
-$ProjectDir = Split-Path $ProjectFile -Parent
-$ProjectName = [System.IO.Path]::GetFileNameWithoutExtension($ProjectFile)
+    $ProjectPath = if ([System.IO.Path]::IsPathRooted($Project)) { $Project } else { Join-Path $Root $Project }
+    if ((Get-Item $ProjectPath).PSIsContainer) {
+        $ProjectFile = Get-ChildItem -Path $ProjectPath -Filter *.lproj | Select-Object -First 1
+        if (-not $ProjectFile) { Write-Error "No .lproj in $ProjectPath" }
+        $ProjectFile = $ProjectFile.FullName
+    } else {
+        $ProjectFile = (Resolve-Path $ProjectPath).Path
+    }
+    $ProjectDir = Split-Path $ProjectFile -Parent
+    $ProjectName = [System.IO.Path]::GetFileNameWithoutExtension($ProjectFile)
 
-if ($Build) {
-    & cmd /c "`"$Root\Engine\Build\BatchFiles\Build.bat`" $ProjectName PS2 $Configuration `"-Project=$ProjectFile`""
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-}
+    if ($Build) {
+        & cmd /c "`"$Root\Engine\Build\BatchFiles\Build.bat`" $ProjectName PS2 $Configuration `"-Project=$ProjectFile`""
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    }
 
-$ElfName = if ($Configuration -eq "Development") { "$ProjectName.elf" } else { "$ProjectName-PS2-$Configuration.elf" }
-$Elf = Join-Path $ProjectDir "Binaries\PS2\$ElfName"
+    $ElfName = if ($Configuration -eq "Development") { "$ProjectName.elf" } else { "$ProjectName-PS2-$Configuration.elf" }
+    $Elf = Join-Path $ProjectDir "Binaries\PS2\$ElfName"
+}
 if (-not (Test-Path $Elf)) {
-    Write-Error "ELF not found: $Elf (run with -Build, or Engine\Build\BatchFiles\Build.bat $ProjectName PS2 $Configuration -Project=$ProjectFile)"
+    Write-Error "ELF not found: $Elf (run with -Build)"
 }
 
 $Pcsx2 = $env:LEON_PCSX2
