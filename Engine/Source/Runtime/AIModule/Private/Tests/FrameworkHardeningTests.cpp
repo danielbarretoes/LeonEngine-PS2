@@ -54,7 +54,7 @@ bool FFrameworkHardeningAIControllerLogicStateTest::RunTest(const FString& Param
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
-	AAIController Ai;
+	AAIController& Ai = *World.SpawnActor<AAIController>();
 	Ai.Possess(Character);
 	TestTrue("Starts idle", Ai.GetLogicState() == EAILogicState::Idle);
 	Ai.MoveToLocation(FVector(300.0f, 0.0f, 0.0f));
@@ -94,7 +94,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFrameworkHardeningHUDAddWidgetTextBlockAndRemo
 bool FFrameworkHardeningHUDAddWidgetTextBlockAndRemoveTest::RunTest(const FString& Parameters)
 {
 	// The HUD finds an added TextBlock by class and forgets it once removed.
-	AHUD Hud;
+	AHUD& Hud = *NewObject<AHUD>();
 	UTextBlock* Text = Hud.AddWidget<UTextBlock>();
 	if (!TestNotNull("Added TextBlock", Text))
 	{

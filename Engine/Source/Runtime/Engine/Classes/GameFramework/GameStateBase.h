@@ -1,23 +1,26 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameFramework/Info.h"
+#include "GameStateBase.generated.h"
 
 class APlayerState;
 
 /**
- * Shared match/session state (Unreal-style AGameStateBase / AGameState).
- * Owned by GameMode; replicated fields are advanced by the net GameMode on authority.
+ * Shared match/session state (UE: AGameStateBase), an AInfo the game mode spawns (GameStateClass) and the world
+ * points at (UWorld::GetGameState).
+ *
+ * Leon keeps a simple match clock here: HandleMatchHasStarted / HandleMatchHasEnded and a clock that Tick advances
+ * while the match is in progress (the game mode ticks its game state; AInfo actors do not tick in the world).
+ * AGameState adds UE's MatchState.
  */
-class ENGINE_API AGameStateBase
+UCLASS()
+class ENGINE_API AGameStateBase : public AInfo
 {
-public:
-	AGameStateBase() = default;
-	virtual ~AGameStateBase() = default;
+	GENERATED_BODY()
 
-	AGameStateBase(const AGameStateBase&) = delete;
-	AGameStateBase& operator=(const AGameStateBase&) = delete;
-	AGameStateBase(AGameStateBase&&) = delete;
-	AGameStateBase& operator=(AGameStateBase&&) = delete;
+public:
+	AGameStateBase(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	/** Resets match clock / flags / map — not PlayerArray (Unreal: logout removes players). */
 	virtual void Reset()
@@ -29,8 +32,9 @@ public:
 		MapName.Empty();
 	}
 
-	virtual void Tick(float DeltaTime)
+	void Tick(float DeltaTime) override
 	{
+		Super::Tick(DeltaTime);
 		if (bMatchInProgress && !bMatchHasEnded)
 		{
 			ElapsedSeconds += DeltaTime;
@@ -132,10 +136,23 @@ public:
 	}
 
 private:
+	/** Seconds the match has been in progress (Leon; UE: GetServerWorldTimeSeconds of a replicated world time). */
+	UPROPERTY()
 	float ElapsedSeconds = 0.0f;
+
+	UPROPERTY()
 	bool bMatchInProgress = false;
+
+	UPROPERTY()
 	bool bMatchHasEnded = false;
+
+	UPROPERTY()
 	uint32 ReplicatedWorldTimeFrames = 0;
+
+	UPROPERTY()
 	FString MapName;
+
+	/** The players' states (UE: PlayerArray). */
+	UPROPERTY()
 	TArray<APlayerState*> PlayerArray;
 };

@@ -113,7 +113,7 @@ bool FGoldenSpringArmTest::RunTest(const FString& Parameters)
 		{
 			FScopedTestWorld TestWorld;
 			ADefaultCameraActor& Pawn = *TestWorld->SpawnActor<ADefaultCameraActor>();
-			APlayerController Controller;
+			APlayerController& Controller = *TestWorld->SpawnActor<APlayerController>();
 			Controller.Possess(&Pawn);
 			Controller.SetControlRotation(FRotator(-Orientation[1], Orientation[0] + 180.0f, 0.0f));
 			USpringArmComponent& Arm = *NewObject<USpringArmComponent>(&Pawn);

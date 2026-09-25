@@ -12,6 +12,7 @@
 
 class ACharacter;
 class AGameModeBase;
+class AGameStateBase;
 class FDebugDraw;
 class FSceneRenderer;
 class UGameInstance;
@@ -102,6 +103,10 @@ public:
 	UPROPERTY(Transient)
 	AGameModeBase* AuthorityGameMode = nullptr;
 
+	/** The game state the game mode spawned (UE: GameState). */
+	UPROPERTY(Transient)
+	AGameStateBase* GameState = nullptr;
+
 	/** The game instance whose world context holds this world (UE: OwningGameInstance). */
 	UPROPERTY(Transient)
 	UGameInstance* OwningGameInstance = nullptr;
@@ -147,10 +152,25 @@ public:
 	{
 		return Cast<T>(AuthorityGameMode);
 	}
+	/** UE: GetGameState / SetGameState. */
+	[[nodiscard]] AGameStateBase* GetGameState() const
+	{
+		return GameState;
+	}
+	template <class T>
+	[[nodiscard]] T* GetGameState() const
+	{
+		return Cast<T>(GameState);
+	}
+	void SetGameState(AGameStateBase* NewGameState)
+	{
+		GameState = NewGameState;
+	}
 
 	/**
 	 * Spawns the game mode (UE: SetGameMode(FURL), which asks the game instance for the class; Leon takes the class
-	 * until P13 brings FURL and the game mode precedence of plan decision D18). Returns the game mode.
+	 * until P13 brings FURL and the game mode precedence of plan decision D18), then StartPlay when the world plays.
+	 * Returns the game mode.
 	 */
 	AGameModeBase* SetGameMode(TSubclassOf<AGameModeBase> GameModeClass);
 

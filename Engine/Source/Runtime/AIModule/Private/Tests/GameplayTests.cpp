@@ -24,15 +24,6 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-namespace
-{
-
-	class ATestController : public AController
-	{
-	};
-
-} // namespace
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayWorldSpawnsTicksAndDestroysActorsTest,
 	"System.AIModule.Gameplay.WorldSpawnsTicksAndDestroysActors",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
@@ -90,7 +81,7 @@ bool FGameplayControllerPossessAndUnPossessTest::RunTest(const FString& Paramete
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	ATestPawn* Pawn = World.SpawnActor<ATestPawn>();
-	ATestController Controller;
+	ATestController& Controller = *World.SpawnActor<ATestController>();
 	Controller.Possess(Pawn);
 	TestTrue("Controller has pawn", Controller.HasPawn());
 	TestTrue("Pawn possessed", Pawn->IsPossessed());
@@ -112,7 +103,7 @@ bool FGameplayPawnDestroyUnPossessesControllerTest::RunTest(const FString& Param
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	ATestPawn* Pawn = World.SpawnActor<ATestPawn>();
-	ATestController Controller;
+	ATestController& Controller = *World.SpawnActor<ATestController>();
 	Controller.Possess(Pawn);
 	Pawn->Destroy();
 	World.Tick(0.0f);
@@ -127,7 +118,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayGameStateMatchTimerAndPlayerStateScore
 bool FGameplayGameStateMatchTimerAndPlayerStateScoreTest::RunTest(const FString& Parameters)
 {
 	// The match clock runs only while the match is in progress; Reset clears the clock and the player score.
-	AGameStateBase GameState;
+	AGameStateBase& GameState = *NewObject<AGameStateBase>();
 	GameState.HandleMatchHasStarted();
 	GameState.Tick(0.5f);
 	TestTrue("Match started", GameState.HasMatchStarted());
@@ -136,7 +127,7 @@ bool FGameplayGameStateMatchTimerAndPlayerStateScoreTest::RunTest(const FString&
 	TestEqual("Clock reset", GameState.GetServerWorldTimeSeconds(), 0.0f, 1.0e-5f);
 	TestFalse("Match reset", GameState.HasMatchStarted());
 
-	APlayerState PlayerState;
+	APlayerState& PlayerState = *NewObject<APlayerState>();
 	PlayerState.SetPlayerId(2);
 	PlayerState.SetPlayerName("P2");
 	PlayerState.AddScore(10.0f);
@@ -174,7 +165,7 @@ bool FGameplaySpringArmClampsPitchAndArmLengthTest::RunTest(const FString& Param
 	// height.
 	FScopedTestWorld TestWorld;
 	ATestPawn& Pawn = *TestWorld->SpawnActor<ATestPawn>();
-	APlayerController Controller;
+	APlayerController& Controller = *TestWorld->SpawnActor<APlayerController>();
 	Controller.Possess(&Pawn);
 	USpringArmComponent* Arm = NewObject<USpringArmComponent>(&Pawn);
 	Arm->bUsePawnControlRotation = true;
@@ -217,13 +208,14 @@ bool FGameplayPawnLookInputDrivesControlRotationTest::RunTest(const FString& Par
 	TestTrue("Views along the actor unpossessed", Pawn.GetViewRotation().Equals(FRotator(0.0f, 45.0f, 0.0f), 0.0f));
 
 	{
-		ATestController Controller;
+		ATestController& Controller = *TestWorld->SpawnActor<ATestController>();
 		Controller.Possess(&Pawn);
 		Pawn.AddControllerYawInput(10.0f);
 		TestTrue("Not a player controller", Controller.GetControlRotation().Equals(FRotator::ZeroRotator, 0.0f));
+		Controller.Destroy();
 	}
 
-	APlayerController Player;
+	APlayerController& Player = *TestWorld->SpawnActor<APlayerController>();
 	Player.Possess(&Pawn);
 	Player.SetControlRotation(FRotator(-10.0f, 90.0f, 0.0f));
 	Pawn.AddControllerYawInput(15.0f);
@@ -280,7 +272,7 @@ bool FGameplayAIControllerSteersTowardTargetAndArrivesTest::RunTest(const FStrin
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->Reset(FVector(0.0f, 0.0f, 0.0f));
 
-	AAIController Ai;
+	AAIController& Ai = *World.SpawnActor<AAIController>();
 	Ai.Possess(Character);
 	Ai.SetArriveRadius(50.0f);
 	Ai.MoveToLocation(FVector(1000.0f, 0.0f, 0.0f));
@@ -309,7 +301,7 @@ bool FGameplayAIControllerMoveToActorTracksMovingTargetTest::RunTest(const FStri
 	Hunter->Reset(FVector(0.0f, 0.0f, 0.0f));
 	Prey->Reset(FVector(800.0f, 0.0f, 0.0f));
 
-	AAIController Ai;
+	AAIController& Ai = *World.SpawnActor<AAIController>();
 	Ai.Possess(Hunter);
 	Ai.SetArriveRadius(40.0f);
 	Ai.MoveToActor(Prey);
@@ -352,7 +344,7 @@ bool FGameplayAIControllerPathFollowDoesNotShortcutTest::RunTest(const FString& 
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->Reset(FVector(-500.0f, 0.0f, 0.0f));
 
-	AAIController Ai;
+	AAIController& Ai = *World.SpawnActor<AAIController>();
 	Ai.Possess(Character);
 	Ai.SetNavigationSystem(&Nav);
 	// CoopTp-like large goal arrive: must not skip detour waypoints through the wall.

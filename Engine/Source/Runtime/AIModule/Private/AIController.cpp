@@ -16,6 +16,11 @@ namespace
 
 } // namespace
 
+AAIController::AAIController(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
 void AAIController::ClearPath()
 {
 	Path.Reset();

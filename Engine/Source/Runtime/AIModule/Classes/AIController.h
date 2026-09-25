@@ -2,11 +2,13 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Controller.h"
+#include "AIController.generated.h"
 
 class AActor;
 class UNavigationSystem;
 
 /** High-level AAIController mode for games that do not run a UBehaviorTree. */
+UENUM()
 enum class EAILogicState : uint8
 {
 	Idle = 0,
@@ -15,12 +17,17 @@ enum class EAILogicState : uint8
 };
 
 /**
- * Drives a possessed Pawn with simple steering (Unreal-style AAIController).
+ * Drives a possessed Pawn with simple steering (Unreal-style AAIController), an actor the world spawns.
  * When a UNavigationSystem is set, MoveTo* follows a NavMesh path; otherwise line-of-sight XY.
  */
+UCLASS()
 class AIMODULE_API AAIController : public AController
 {
+	GENERATED_BODY()
+
 public:
+	AAIController(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
 	void SetWishDirection(const FVector& WishDirXY)
 	{
 		WishDir = WishDirXY;
@@ -103,7 +110,12 @@ private:
 
 	FVector WishDir = FVector::ZeroVector;
 	FVector Target = FVector::ZeroVector;
+
+	/** The actor MoveToActor chases; cleared by the collector when it is destroyed. */
+	UPROPERTY()
 	AActor* MoveActor = nullptr;
+
+	/** Not a UObject (UNavigationSystem lite): the caller keeps it alive. */
 	UNavigationSystem* Navigation = nullptr;
 	TArray<FVector> Path;
 	int32 PathIndex = 0;
@@ -111,6 +123,9 @@ private:
 	bool bHasTarget = false;
 	bool bUsePath = false;
 	/** cm */
+	UPROPERTY()
 	float ArriveRadius = 35.0f;
+
+	UPROPERTY()
 	EAILogicState LogicState = EAILogicState::Idle;
 };

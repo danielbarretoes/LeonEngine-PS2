@@ -3,6 +3,24 @@
 #include "Blueprint/PaintContext.h"
 #include "Debug/DebugOverlay.h"
 
+AHUD::AHUD(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	bHidden = true;
+}
+
+void AHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	Clear();
+	Super::EndPlay(EndPlayReason);
+}
+
+void AHUD::BeginDestroy()
+{
+	Clear();
+	Super::BeginDestroy();
+}
+
 void AHUD::Clear()
 {
 	for (const TUniquePtr<UUserWidget>& Widget : Widgets)
@@ -37,6 +55,7 @@ bool AHUD::RemoveWidget(UUserWidget* Widget)
 
 void AHUD::Tick(float DeltaTime)
 {
+	Super::Tick(DeltaTime);
 	for (const TUniquePtr<UUserWidget>& Widget : Widgets)
 	{
 		if (Widget != nullptr && Widget->bIsVisible)

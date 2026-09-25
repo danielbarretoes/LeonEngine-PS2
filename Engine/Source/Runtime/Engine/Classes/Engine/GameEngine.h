@@ -115,11 +115,11 @@ public:
 	}
 	[[nodiscard]] UPlayerInput& GetInput()
 	{
-		return PlayerInput;
+		return *PlayerInput;
 	}
 	[[nodiscard]] const UPlayerInput& GetInput() const
 	{
-		return PlayerInput;
+		return *PlayerInput;
 	}
 	[[nodiscard]] FSceneRenderer& GetRenderer()
 	{
@@ -277,11 +277,11 @@ public:
 	/** Unreal-like AHUD (UserWidgets / crosshair, etc.). */
 	[[nodiscard]] AHUD& GetHUD()
 	{
-		return Hud;
+		return *Hud;
 	}
 	[[nodiscard]] const AHUD& GetHUD() const
 	{
-		return Hud;
+		return *Hud;
 	}
 
 	// FGCObject
@@ -304,10 +304,12 @@ private:
 	TUniquePtr<GenericApplication> Application;
 	TSharedPtr<FGenericWindow> Window;
 	FPlayInputTarget PlayInputTarget;
-	UPlayerInput PlayerInput;
+	/** The player's input (UE keeps it on the player controller; P13 moves it there with input by config). */
+	UPlayerInput* PlayerInput = nullptr;
 	FSceneRenderer Renderer;
 	FDebugOverlay Overlay;
-	AHUD Hud;
+	/** The HUD, outside any world (UE spawns one per player controller; P13). */
+	AHUD* Hud = nullptr;
 	FAudioDevice AudioDevice;
 	/** The view camera (a standalone component until P13's player camera manager). */
 	UCameraComponent* Camera = nullptr;

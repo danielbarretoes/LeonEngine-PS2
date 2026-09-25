@@ -16,6 +16,8 @@ class ENGINE_API ADefaultGameMode final : public AGameModeBase
 	GENERATED_BODY()
 
 public:
+	ADefaultGameMode(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
 	using Super::Tick;
 
 	void OnEnter(UGameEngine& Engine, const FString& LevelPath) override;
@@ -31,7 +33,10 @@ private:
 		FRotator ViewRotation = FRotator(-25.0f, 225.0f, 0.0f);
 	};
 
-	ADefaultPlayerController Player{};
+	/** The player's controller, spawned on enter (UE: the controller Login spawns). */
+	UPROPERTY(Transient)
+	ADefaultPlayerController* Player = nullptr;
+
 	FOrbitSnapshot SavedOrbit{};
 	double LastMouseX = 0.0;
 	double LastMouseY = 0.0;

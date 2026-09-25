@@ -6,12 +6,45 @@
 #include "Engine/Level.h"
 #include "EngineLogs.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/HUD.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerState.h"
 
 AGameModeBase::AGameModeBase(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
-	, GameState(MakeUnique<AGameStateBase>())
 {
+	GameStateClass = AGameStateBase::StaticClass();
+	PlayerControllerClass = APlayerController::StaticClass();
+	PlayerStateClass = APlayerState::StaticClass();
+	DefaultPawnClass = APawn::StaticClass();
+	HUDClass = AHUD::StaticClass();
+}
+
+void AGameModeBase::PreInitializeComponents()
+{
+	Super::PreInitializeComponents();
+	SpawnGameState();
+}
+
+void AGameModeBase::SpawnGameState()
+{
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return;
+	}
+	if (GameState != nullptr)
+	{
+		GameState->Destroy();
+		GameState = nullptr;
+	}
+	FActorSpawnParameters SpawnInfo;
+	SpawnInfo.Instigator = GetInstigator();
+	SpawnInfo.ObjectFlags |= RF_Transient;
+	GameState = World->SpawnActor<AGameStateBase>(
+		GameStateClass != nullptr ? GameStateClass.Get() : AGameStateBase::StaticClass(), SpawnInfo);
+	World->SetGameState(GameState);
+	InitGameState();
 }
 
 void AGameModeBase::OnEnter(UGameEngine& /*Engine*/, const FString& /*LevelPath*/)
@@ -29,12 +62,12 @@ void AGameModeBase::Tick(UGameEngine& /*Engine*/, float DeltaTime)
 
 void AGameModeBase::PostLogin(APlayerController& NewPlayer)
 {
-	GetGameState().AddPlayerState(&NewPlayer.GetPlayerState());
+	GetGameState().AddPlayerState(NewPlayer.GetPlayerState<APlayerState>());
 }
 
 void AGameModeBase::Logout(APlayerController& Exiting)
 {
-	GetGameState().RemovePlayerState(&Exiting.GetPlayerState());
+	GetGameState().RemovePlayerState(Exiting.GetPlayerState<APlayerState>());
 }
 
 float AGameModeBase::EstimateFloorZ(const ULevel& Level)

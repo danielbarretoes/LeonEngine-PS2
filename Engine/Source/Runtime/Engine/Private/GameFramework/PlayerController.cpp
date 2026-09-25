@@ -3,6 +3,12 @@
 #include "Engine/GameEngine.h"
 #include "GameFramework/Character.h"
 
+APlayerController::APlayerController(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	bWantsPlayerState = true;
+}
+
 void APlayerController::Possess(ACharacter* Character)
 {
 	AController::Possess(Character);

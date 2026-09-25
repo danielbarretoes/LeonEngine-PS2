@@ -50,5 +50,7 @@ private:
 	}
 	void DetachController();
 
+	/** The possessing controller (UE: Controller). */
+	UPROPERTY()
 	AController* Controller = nullptr;
 };

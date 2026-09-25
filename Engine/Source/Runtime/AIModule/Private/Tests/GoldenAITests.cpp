@@ -42,7 +42,7 @@ bool FGoldenAIControllerArrivesTest::RunTest(const FString& Parameters)
 	Character->Reset(
 		LegacyGolden::ToWorldPosition(FVector(-4.0f, 0.0f, 0.3f)), LegacyGolden::ToWorldActorRotation(0.0f));
 
-	AAIController Ai;
+	AAIController& Ai = *World.SpawnActor<AAIController>();
 	Ai.Possess(Character);
 	Ai.SetNavigationSystem(&Nav);
 	Ai.SetArriveRadius(LegacyGolden::ToWorldLength(0.4f));

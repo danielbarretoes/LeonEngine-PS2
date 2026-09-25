@@ -4,6 +4,7 @@
 #include "Components/ActorComponent.h"
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "GameFramework/Controller.h"
 #include "GameFramework/Pawn.h"
 #include "GameplayTestTypes.generated.h"
 
@@ -17,6 +18,13 @@ class ATestActor : public AActor
 /** A plain pawn. */
 UCLASS()
 class ATestPawn : public APawn
+{
+	GENERATED_BODY()
+};
+
+/** A plain controller (not a player controller). */
+UCLASS()
+class ATestController : public AController
 {
 	GENERATED_BODY()
 };

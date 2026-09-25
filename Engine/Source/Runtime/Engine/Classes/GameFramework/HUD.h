@@ -2,13 +2,23 @@
 
 #include "Blueprint/UserWidget.h"
 #include "CoreMinimal.h"
+#include "GameFramework/Actor.h"
+#include "HUD.generated.h"
 
 class FDebugOverlay;
 
-/** Unreal-like AHUD: owns UserWidgets painted each frame into screen geometry. */
-class ENGINE_API AHUD
+/**
+ * Unreal-like AHUD (an actor): owns UserWidgets painted each frame into screen geometry. UE spawns one per player
+ * controller; until P13 the engine owns a single HUD outside any world (UGameEngine::GetHUD) and ticks and paints it.
+ */
+UCLASS()
+class ENGINE_API AHUD : public AActor
 {
+	GENERATED_BODY()
+
 public:
+	AHUD(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
 	void Clear();
 
 	/** Unreal CreateWidget + AddToViewport (lite): construct, NativeConstruct, retain. */
@@ -58,7 +68,12 @@ public:
 		return nullptr;
 	}
 
-	void Tick(float DeltaTime);
+	/** Ticks the visible widgets. */
+	void Tick(float DeltaTime) override;
+
+	/** Removes the widgets when the HUD is destroyed or ends play. */
+	void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	void BeginDestroy() override;
 
 	/** Clears prior frame screen geometry, then paints visible widgets. */
 	void Paint(FDebugOverlay& Overlay, int FramebufferWidth, int FramebufferHeight);

@@ -6,6 +6,7 @@
 #include "EngineLogs.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/GameModeBase.h"
+#include "GameFramework/GameStateBase.h"
 #include "Misc/PackageName.h"
 #include "SceneRenderer.h"
 #include "UObject/Package.h"
@@ -91,6 +92,7 @@ void UWorld::DestroyWorld(bool /*bInformEngineOfWorld*/)
 	PendingSpawnActors.Empty();
 	Primitives.Empty();
 	AuthorityGameMode = nullptr;
+	GameState = nullptr;
 	if (PersistentLevel != nullptr)
 	{
 		PersistentLevel->Actors.Empty();
@@ -117,6 +119,10 @@ AGameModeBase* UWorld::SetGameMode(TSubclassOf<AGameModeBase> GameModeClass)
 		FActorSpawnParameters SpawnInfo;
 		SpawnInfo.ObjectFlags |= RF_Transient;
 		AuthorityGameMode = SpawnActor<AGameModeBase>(GameModeClass, SpawnInfo);
+		if (AuthorityGameMode != nullptr && bBegunPlay)
+		{
+			AuthorityGameMode->StartPlay();
+		}
 	}
 	return AuthorityGameMode;
 }
@@ -124,6 +130,10 @@ AGameModeBase* UWorld::SetGameMode(TSubclassOf<AGameModeBase> GameModeClass)
 void UWorld::BeginPlay()
 {
 	bBegunPlay = true;
+	if (AuthorityGameMode != nullptr)
+	{
+		AuthorityGameMode->StartPlay();
+	}
 	ForEach<AActor>([](AActor& Actor) { Actor.DispatchBeginPlay(); });
 }
 
@@ -262,6 +272,10 @@ bool UWorld::DestroyActor(AActor* Actor, bool /*bNetForce*/, bool /*bShouldModif
 	if (AuthorityGameMode == Actor)
 	{
 		AuthorityGameMode = nullptr;
+	}
+	if (GameState == Actor)
+	{
+		GameState = nullptr;
 	}
 
 	for (UActorComponent* Component : Actor->GetComponents())

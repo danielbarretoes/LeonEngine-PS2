@@ -1,6 +1,7 @@
 #include "GameFramework/DefaultGameMode.h"
 
 #include "GameFramework/DefaultCameraActor.h"
+#include "GameFramework/PlayerState.h"
 
 namespace
 {
@@ -27,11 +28,25 @@ namespace
 
 } // namespace
 
+ADefaultGameMode::ADefaultGameMode(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	PlayerControllerClass = ADefaultPlayerController::StaticClass();
+	DefaultPawnClass = ADefaultCameraActor::StaticClass();
+}
+
 void ADefaultGameMode::OnEnter(UGameEngine& Engine, const FString& /*levelPath*/)
 {
-	Player.UnPossess();
+	if (Player == nullptr)
+	{
+		// UE: Login spawns the PlayerControllerClass controller, which spawns its player state.
+		FActorSpawnParameters SpawnInfo;
+		SpawnInfo.ObjectFlags |= RF_Transient;
+		Player = GetWorld()->SpawnActor<ADefaultPlayerController>(PlayerControllerClass, SpawnInfo);
+	}
+	Player->UnPossess();
 	GetGameState().Reset();
-	Player.GetPlayerState().Reset();
+	Player->GetPlayerState<APlayerState>()->Reset();
 
 	UCameraComponent& Camera = Engine.GetCamera();
 	SavedOrbit.Target = Camera.GetTarget();
@@ -40,12 +55,12 @@ void ADefaultGameMode::OnEnter(UGameEngine& Engine, const FString& /*levelPath*/
 
 	BeginFreeLookFromOrbit(Camera);
 
-	auto* CameraActor = GetWorld()->SpawnActor<ADefaultCameraActor>();
+	auto* CameraActor = GetWorld()->SpawnActor<ADefaultCameraActor>(DefaultPawnClass);
 	CameraActor->SetActorLocationAndRotation(Camera.EyeLocation(), FRotator(0.0f, Camera.GetViewRotation().Yaw, 0.0f));
-	Player.Possess(CameraActor);
+	Player->Possess(CameraActor);
 	// The player looks where the camera looks; mouse look turns the control rotation, which the camera follows.
-	Player.SetControlRotation(Camera.GetViewRotation());
-	PostLogin(Player);
+	Player->SetControlRotation(Camera.GetViewRotation());
+	PostLogin(*Player);
 
 	GetGameState().HandleMatchHasStarted();
 	Engine.GetGameInstance().NotifyLevelOpened();
@@ -63,10 +78,14 @@ void ADefaultGameMode::OnEnter(UGameEngine& Engine, const FString& /*levelPath*/
 
 void ADefaultGameMode::OnExit(UGameEngine& Engine)
 {
+	if (Player == nullptr)
+	{
+		return;
+	}
 	GetGameState().HandleMatchHasEnded();
-	Logout(Player);
-	ADefaultCameraActor* CameraActor = Player.GetDefaultCameraActor();
-	Player.UnPossess();
+	Logout(*Player);
+	ADefaultCameraActor* CameraActor = Player->GetDefaultCameraActor();
+	Player->UnPossess();
 	if (CameraActor != nullptr)
 	{
 		CameraActor->Destroy();
@@ -86,10 +105,15 @@ void ADefaultGameMode::OnExit(UGameEngine& Engine)
 
 void ADefaultGameMode::Tick(UGameEngine& Engine, float DeltaTime)
 {
+	if (Player == nullptr)
+	{
+		return;
+	}
+	// The game mode ticks its game and player states (AInfo actors do not tick in the world).
 	GetGameState().Tick(DeltaTime);
-	Player.GetPlayerState().Tick(DeltaTime);
+	Player->GetPlayerState<APlayerState>()->Tick(DeltaTime);
 
-	ADefaultCameraActor* CameraActor = Player.GetDefaultCameraActor();
+	ADefaultCameraActor* CameraActor = Player->GetDefaultCameraActor();
 	if (CameraActor == nullptr || CameraActor->IsPendingKillPending())
 	{
 		return;
@@ -97,7 +121,7 @@ void ADefaultGameMode::Tick(UGameEngine& Engine, float DeltaTime)
 
 	UCameraComponent& Camera = Engine.GetCamera();
 	// UGameEngine::HandleInput's free look may already have turned the shared camera this frame: start from it.
-	Player.SetControlRotation(Camera.GetViewRotation());
+	Player->SetControlRotation(Camera.GetViewRotation());
 	const FVector2D Cursor = Engine.GetPlayInputWindow().GetCursorPos();
 	const double MouseX = Cursor.X;
 	const double MouseY = Cursor.Y;
@@ -121,10 +145,10 @@ void ADefaultGameMode::Tick(UGameEngine& Engine, float DeltaTime)
 		bMouseLookSampleValid = false;
 	}
 
-	const FRotator ControlRotation = Player.GetControlRotation();
+	const FRotator ControlRotation = Player->GetControlRotation();
 	Camera.SetViewRotation(ControlRotation);
 
-	const FVector Wish = Player.TickInput(Engine);
+	const FVector Wish = Player->TickInput(Engine);
 	FVector Location = CameraActor->GetActorLocation();
 	Location += Wish * CameraActor->GetMoveSpeed() * DeltaTime;
 	// Like UE's pawns (bUseControllerRotationYaw), the camera actor turns with the control yaw.
@@ -132,7 +156,7 @@ void ADefaultGameMode::Tick(UGameEngine& Engine, float DeltaTime)
 
 	GetWorld()->Tick(DeltaTime);
 
-	CameraActor = Player.GetDefaultCameraActor();
+	CameraActor = Player->GetDefaultCameraActor();
 	if (CameraActor == nullptr)
 	{
 		return;

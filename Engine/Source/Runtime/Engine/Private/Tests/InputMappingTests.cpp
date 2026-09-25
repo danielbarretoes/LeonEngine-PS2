@@ -74,7 +74,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FInputMappingPlayerInputClearContextsEmptiesMap
 bool FInputMappingPlayerInputClearContextsEmptiesMapsAfterUpdatePathTest::RunTest(const FString& Parameters)
 {
 	// After ClearContexts no axis, action or move input is reported.
-	UPlayerInput Input;
+	UPlayerInput& Input = *NewObject<UPlayerInput>();
 	Input.AddMappingContext(UInputMappingContext::MakeDefault());
 	Input.ClearContexts();
 	TestEqual("MoveForward axis", Input.GetAxisValue(FName(Leon::InputActions::MoveForward)), 0.0f, 1.0e-6f);

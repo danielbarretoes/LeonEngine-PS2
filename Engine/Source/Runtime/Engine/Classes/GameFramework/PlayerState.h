@@ -1,19 +1,22 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameFramework/Info.h"
+#include "PlayerState.generated.h"
 
-/** Per-player session data (Unreal-style APlayerState). Typically owned by APlayerController. */
-class ENGINE_API APlayerState
+/**
+ * Per-player session data (UE: APlayerState), an AInfo its controller spawns (AController::InitPlayerState) and owns
+ * (GetOwner). The game mode registers it in the game state's PlayerArray (PostLogin).
+ */
+UCLASS()
+class ENGINE_API APlayerState : public AInfo
 {
+	GENERATED_BODY()
+
 public:
-	APlayerState() = default;
-	virtual ~APlayerState() = default;
+	APlayerState(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	APlayerState(const APlayerState&) = delete;
-	APlayerState& operator=(const APlayerState&) = delete;
-	APlayerState(APlayerState&&) = delete;
-	APlayerState& operator=(APlayerState&&) = delete;
-
+	/** Clears the score, the lives and the name (UE: Reset). */
 	virtual void Reset()
 	{
 		Score = 0.0f;
@@ -21,21 +24,17 @@ public:
 		PlayerName.Empty();
 	}
 
-	virtual void Tick(float /*deltaTime*/)
-	{
-	}
-
-	/** Unreal GetPlayerId. */
-	[[nodiscard]] int GetPlayerId() const
+	/** UE: GetPlayerId. */
+	[[nodiscard]] int32 GetPlayerId() const
 	{
 		return PlayerId;
 	}
-	void SetPlayerId(int Id)
+	void SetPlayerId(int32 Id)
 	{
 		PlayerId = Id;
 	}
 
-	/** Unreal GetPlayerName / SetPlayerName. */
+	/** UE: GetPlayerName / SetPlayerName. */
 	[[nodiscard]] const FString& GetPlayerName() const
 	{
 		return PlayerName;
@@ -45,6 +44,7 @@ public:
 		PlayerName = MoveTemp(Name);
 	}
 
+	/** UE: GetScore / SetScore. */
 	[[nodiscard]] float GetScore() const
 	{
 		return Score;
@@ -58,12 +58,12 @@ public:
 		Score += Delta;
 	}
 
-	/** Stocks / lives (Unreal-like). Default 0 — games call SetLives at match start. */
-	[[nodiscard]] int GetLives() const
+	/** Stocks / lives (Leon). Default 0: games call SetLives at match start. */
+	[[nodiscard]] int32 GetLives() const
 	{
 		return Lives;
 	}
-	void SetLives(int InLives)
+	void SetLives(int32 InLives)
 	{
 		Lives = InLives;
 	}
@@ -79,8 +79,18 @@ public:
 	}
 
 private:
-	int PlayerId = 0;
+	/** UE: PlayerId. */
+	UPROPERTY()
+	int32 PlayerId = 0;
+
+	/** UE: Score. */
+	UPROPERTY()
 	float Score = 0.0f;
-	int Lives = 0;
+
+	UPROPERTY()
+	int32 Lives = 0;
+
+	/** UE: PlayerNamePrivate. */
+	UPROPERTY()
 	FString PlayerName;
 };

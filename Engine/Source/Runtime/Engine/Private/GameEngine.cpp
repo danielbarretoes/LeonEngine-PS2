@@ -18,8 +18,10 @@ UGameEngine::UGameEngine()
 {
 	Application.Reset(FPlatformApplicationMisc::CreateApplication());
 	Window = Application->MakeWindow();
-	PlayerInput.AddMappingContext(UInputMappingContext::MakeDefault());
+	PlayerInput = NewObject<UPlayerInput>(GetTransientPackage());
+	PlayerInput->AddMappingContext(UInputMappingContext::MakeDefault());
 	Camera = NewObject<UCameraComponent>(GetTransientPackage());
+	Hud = NewObject<AHUD>(GetTransientPackage());
 	// UE: UGameEngine::Init creates the game instance, which creates the world context and its world.
 	SetGameInstanceObject(NewObject<UGameInstance>(GetTransientPackage()));
 }
@@ -38,6 +40,8 @@ void UGameEngine::AddReferencedObjects(FReferenceCollector& Collector)
 {
 	Collector.AddReferencedObject(GameInstance);
 	Collector.AddReferencedObject(Camera);
+	Collector.AddReferencedObject(PlayerInput);
+	Collector.AddReferencedObject(Hud);
 }
 
 void UGameEngine::SetGameInstanceObject(UGameInstance* NewInstance)
@@ -176,7 +180,7 @@ void UGameEngine::Shutdown()
 	bKeyboardOrbitEnabled = true;
 	bOrbitMouseEnabled = true;
 	PendingScrollY = 0.0f;
-	Hud.Clear();
+	Hud->Clear();
 	CenterHudText.Empty();
 	LastFbWidth = 0;
 	LastFbHeight = 0;
@@ -301,7 +305,7 @@ bool UGameEngine::Tick(float DeltaTime, const FUpdateCallback& OnUpdate, const F
 	{
 		PlayInputTarget.GetWindow()->PollEvents();
 	}
-	PlayerInput.Update(GetPlayInputWindow());
+	PlayerInput->Update(GetPlayInputWindow());
 	(void)ReloadAllShaders(false);
 	if (OnPreInput)
 	{
@@ -340,7 +344,7 @@ void UGameEngine::TickPlayHud(float DeltaTime)
 	{
 		return;
 	}
-	Hud.Tick(DeltaTime);
+	Hud->Tick(DeltaTime);
 	Overlay.TickOnScreenMessages(DeltaTime);
 	if (bShowHudStats)
 	{
@@ -359,7 +363,7 @@ void UGameEngine::PaintHudAndOverlay(int32 FramebufferWidth, int32 FramebufferHe
 	{
 		return;
 	}
-	Hud.Paint(Overlay, FramebufferWidth, FramebufferHeight);
+	Hud->Paint(Overlay, FramebufferWidth, FramebufferHeight);
 	Overlay.Draw(FramebufferWidth, FramebufferHeight);
 }
 
@@ -539,7 +543,7 @@ void UGameEngine::HandleInput(float DeltaTime)
 	{
 		// Reuse Move* axes so remapping WASD also remaps keyboard orbit tumble: right turns the view right, forward
 		// tilts it up (the eye goes down).
-		const FVector2D MoveInput = PlayerInput.GetMoveInput();
+		const FVector2D MoveInput = PlayerInput->GetMoveInput();
 		const float Yaw = MoveInput.Y * KeyboardOrbitSpeed;
 		const float Pitch = MoveInput.X * KeyboardOrbitSpeed;
 		if (Yaw != 0.0f || Pitch != 0.0f)

@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "GenericPlatform/GenericWindow.h"
 #include "InputCoreTypes.h"
+#include "UObject/Object.h"
+#include "InputMapping.generated.h"
 
 /** One key contribution to a 1D axis (Unreal-like axis mapping entry). */
 struct ENGINE_API FInputAxisKeyMapping
@@ -40,9 +42,15 @@ private:
 	TMap<FName, TArray<int32>> Actions;
 };
 
-/** Samples mapped input once per frame (Unreal-like UPlayerInput). */
-class ENGINE_API UPlayerInput
+/**
+ * Samples mapped input once per frame (UE: UPlayerInput). UE creates one per player controller from the input
+ * settings; until P13 (UInputSettings, input by config) the engine owns one fed by UInputMappingContext values.
+ */
+UCLASS(Transient)
+class ENGINE_API UPlayerInput : public UObject
 {
+	GENERATED_BODY()
+
 public:
 	void ClearContexts();
 	/** Higher priority is merged later (same key can appear in multiple contexts). */

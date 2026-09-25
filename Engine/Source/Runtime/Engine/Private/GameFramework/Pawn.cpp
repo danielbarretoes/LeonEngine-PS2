@@ -24,7 +24,7 @@ void APawn::AddControllerYawInput(float Val)
 	{
 		return;
 	}
-	if (auto* PlayerController = dynamic_cast<APlayerController*>(Controller))
+	if (APlayerController* PlayerController = Cast<APlayerController>(Controller))
 	{
 		PlayerController->AddYawInput(Val);
 	}
@@ -36,7 +36,7 @@ void APawn::AddControllerPitchInput(float Val)
 	{
 		return;
 	}
-	if (auto* PlayerController = dynamic_cast<APlayerController*>(Controller))
+	if (APlayerController* PlayerController = Cast<APlayerController>(Controller))
 	{
 		PlayerController->AddPitchInput(Val);
 	}

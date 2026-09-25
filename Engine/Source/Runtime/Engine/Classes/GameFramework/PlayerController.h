@@ -3,18 +3,25 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/PlayerState.h"
+#include "PlayerController.generated.h"
 
 class ACharacter;
 class UGameEngine;
 
-/** Drives a possessed Character from player input (Unreal-style APlayerController). */
+/**
+ * Drives a possessed Character from player input (UE: APlayerController). It spawns its APlayerState when spawned
+ * (bWantsPlayerState).
+ *
+ * Until P13 (UPlayerInput per player, UInputComponent bindings, APlayerCameraManager) input comes from the engine's
+ * UPlayerInput through TickInput and the view through UpdateCamera, both called by the game mode.
+ */
+UCLASS()
 class ENGINE_API APlayerController : public AController
 {
+	GENERATED_BODY()
+
 public:
-	APlayerController()
-		: PlayerState(MakeUnique<APlayerState>())
-	{
-	}
+	APlayerController(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	using AController::Possess;
 	void Possess(ACharacter* Character);
@@ -28,29 +35,6 @@ public:
 		return GetCharacter() != nullptr;
 	}
 
-	[[nodiscard]] APlayerState& GetPlayerState()
-	{
-		return *PlayerState;
-	}
-	[[nodiscard]] const APlayerState& GetPlayerState() const
-	{
-		return *PlayerState;
-	}
-
-	/**
-	 * Replaces owned PlayerState. Caller must GameMode::Logout (or RemovePlayerState) first
-	 * so GameState::PlayerArray does not keep a dangling pointer.
-	 */
-	template <typename T, typename... ArgsType>
-	T* SetPlayerState(ArgsType&&... Args)
-	{
-		static_assert(TIsDerivedFrom<T, APlayerState>::Value, "T must derive from PlayerState");
-		auto Owned = MakeUnique<T>(Forward<ArgsType>(Args)...);
-		T* Raw = Owned.get();
-		PlayerState = MoveTemp(Owned);
-		return Raw;
-	}
-
 	/**
 	 * Look input in degrees (UE: AddYawInput / AddPitchInput with an input scale of 1), applied to the control rotation
 	 * at once: a positive yaw turns right, a positive pitch looks up. The pitch stays in [ViewPitchMin, ViewPitchMax].
@@ -59,7 +43,10 @@ public:
 	void AddPitchInput(float Val);
 
 	/** Pitch limits of the control rotation in degrees (UE: APlayerCameraManager::ViewPitchMin / ViewPitchMax). */
+	UPROPERTY()
 	float ViewPitchMin = -89.0f;
+
+	UPROPERTY()
 	float ViewPitchMax = 89.0f;
 
 	/**
@@ -70,7 +57,4 @@ public:
 
 	/** Unreal-like: drive view from possessed pawn SpringArm (games override). */
 	virtual void UpdateCamera(UGameEngine& Engine, float DeltaTime);
-
-private:
-	TUniquePtr<APlayerState> PlayerState;
 };

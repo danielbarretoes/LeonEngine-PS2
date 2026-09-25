@@ -5,15 +5,20 @@
 #include "Engine/World.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/Info.h"
+#include "Templates/SubclassOf.h"
 #include "GameModeBase.generated.h"
 
 class ACharacter;
-class UGameEngine;
+class AHUD;
+class APawn;
 class APlayerController;
+class APlayerState;
+class UGameEngine;
 
 /**
  * Level gameplay rules (UE: AGameModeBase), an AInfo the world spawns (UWorld::SetGameMode) and keeps in
- * AuthorityGameMode. Games subclass this; the engine never includes game headers.
+ * AuthorityGameMode. Games subclass this; the engine never includes game headers. PreInitializeComponents spawns the
+ * game state (GameStateClass); the class members choose what the mode spawns, as in UE.
  *
  * Until P13 (UEngine::LoadMap, input by config) FGameApplication drives it through three engine hooks: OnEnter once
  * the map is loaded, Tick(Engine, DeltaTime) every frame (which ticks the world) and OnExit before shutdown.
@@ -33,7 +38,35 @@ public:
 	virtual void OnExit(UGameEngine& Engine);
 	virtual void Tick(UGameEngine& Engine, float DeltaTime);
 
-	/** Unreal InitGameState — configure / replace GameState after construction. */
+	/** The game state class (UE: GameStateClass). */
+	UPROPERTY()
+	TSubclassOf<AGameStateBase> GameStateClass;
+
+	/** The class of the players' controllers (UE: PlayerControllerClass). */
+	UPROPERTY()
+	TSubclassOf<APlayerController> PlayerControllerClass;
+
+	/** The class of the players' states (UE: PlayerStateClass). */
+	UPROPERTY()
+	TSubclassOf<APlayerState> PlayerStateClass;
+
+	/** The pawn a player starts with (UE: DefaultPawnClass). */
+	UPROPERTY()
+	TSubclassOf<APawn> DefaultPawnClass;
+
+	/** The HUD class (UE: HUDClass; the engine keeps one HUD until P13's viewport client). */
+	UPROPERTY()
+	TSubclassOf<AHUD> HUDClass;
+
+	/** Spawns the game state before the components initialize (UE). */
+	void PreInitializeComponents() override;
+
+	/** The world begins play for this mode (UE: StartPlay, from UWorld::BeginPlay or SetGameMode). */
+	virtual void StartPlay()
+	{
+	}
+
+	/** Unreal InitGameState — configure the GameState once spawned. */
 	virtual void InitGameState()
 	{
 	}
@@ -75,6 +108,9 @@ public:
 		GetWorld()->SetPhysicsBackend(Backend);
 	}
 
+	/**
+	 * The game state. A reference (UE's GameState member is a pointer): the mode spawns it before anything can ask.
+	 */
 	[[nodiscard]] AGameStateBase& GetGameState()
 	{
 		return *GameState;
@@ -86,28 +122,20 @@ public:
 
 	/** Unreal GetGameState<T>(). */
 	template <typename T>
-	[[nodiscard]] T* GetGameState()
+	[[nodiscard]] T* GetGameState() const
 	{
 		static_assert(TIsDerivedFrom<T, AGameStateBase>::Value, "T must derive from GameState");
-		return dynamic_cast<T*>(GameState.Get());
-	}
-	template <typename T>
-	[[nodiscard]] const T* GetGameState() const
-	{
-		static_assert(TIsDerivedFrom<T, AGameStateBase>::Value, "T must derive from GameState");
-		return dynamic_cast<const T*>(GameState.Get());
+		return Cast<T>(GameState);
 	}
 
-	/** Replace the GameState instance (e.g. game-specific subclass). Calls InitGameState. */
-	template <typename T, typename... ArgsType>
-	T* SetGameState(ArgsType&&... Args)
+	/** Replaces the GameState with a new T (e.g. a game-specific subclass): the old one is destroyed. */
+	template <typename T>
+	T* SetGameState()
 	{
 		static_assert(TIsDerivedFrom<T, AGameStateBase>::Value, "T must derive from GameState");
-		auto Owned = MakeUnique<T>(Forward<ArgsType>(Args)...);
-		T* Raw = Owned.Get();
-		GameState = MoveTemp(Owned);
-		InitGameState();
-		return Raw;
+		GameStateClass = T::StaticClass();
+		SpawnGameState();
+		return Cast<T>(GameState);
 	}
 
 	/** Min FPlayerStart Z, or 0 if none. */
@@ -149,6 +177,10 @@ protected:
 	void RebuildNavigation(UGameEngine& Engine, float FloorZ, float WalkBounds);
 	void SnapCharacterToFloor(ACharacter& Character, FVector& InOutFeet, float FloorZ) const;
 
-private:
-	TUniquePtr<AGameStateBase> GameState;
+	/** Spawns a GameStateClass game state, destroying the current one, then InitGameState (UE). */
+	void SpawnGameState();
+
+	/** The game state (UE: GameState). */
+	UPROPERTY(Transient)
+	AGameStateBase* GameState = nullptr;
 };

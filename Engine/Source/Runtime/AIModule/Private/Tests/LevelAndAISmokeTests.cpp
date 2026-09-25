@@ -61,7 +61,7 @@ bool FLevelAndAISmokeAIChaseBehaviorMoveToWhenTargetPresentTest::RunTest(const F
 	ACharacter* Target = World.SpawnActor<ACharacter>();
 	Target->SetActorLocationAndRotation(FVector(500.0f, 0.0f, 0.0f), FRotator::ZeroRotator);
 
-	AAIController Ai;
+	AAIController& Ai = *World.SpawnActor<AAIController>();
 	Ai.Possess(Character);
 	FAIChaseBehavior Chase;
 	(void)Chase.Tick(Ai, Target, 0.016f);
