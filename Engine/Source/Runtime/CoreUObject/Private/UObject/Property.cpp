@@ -706,8 +706,14 @@ void FStrProperty::ExportTextItem(FString& ValueStr, const void* PropertyValue, 
 {
 	(void)DefaultValue;
 	(void)Parent;
-	(void)PortFlags;
 	(void)ExportRootScope;
+	// A config value is the text itself (the ini file quotes it when needed); inside a struct or container it is
+	// quoted.
+	if ((PortFlags & PPF_ConfigOnly) && !(PortFlags & PPF_Delimited))
+	{
+		ValueStr += *(const FString*)PropertyValue;
+		return;
+	}
 	AppendQuoted(ValueStr, *(const FString*)PropertyValue);
 }
 
@@ -824,8 +830,12 @@ void FTextProperty::ExportTextItem(FString& ValueStr, const void* PropertyValue,
 {
 	(void)DefaultValue;
 	(void)Parent;
-	(void)PortFlags;
 	(void)ExportRootScope;
+	if ((PortFlags & PPF_ConfigOnly) && !(PortFlags & PPF_Delimited))
+	{
+		ValueStr += ((const FText*)PropertyValue)->ToString();
+		return;
+	}
 	AppendQuoted(ValueStr, ((const FText*)PropertyValue)->ToString());
 }
 

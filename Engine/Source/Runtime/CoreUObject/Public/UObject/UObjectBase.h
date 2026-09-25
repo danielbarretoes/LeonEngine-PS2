@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UObject/ObjectMacros.h"
 
+class FReferenceCollector;
 class UClass;
 class UEnum;
 class UObject;
@@ -20,7 +21,7 @@ class COREUOBJECT_API UObjectBase
 	friend COREUOBJECT_API void UObjectForceRegistration(UObjectBase* Object);
 	friend COREUOBJECT_API void GetPrivateStaticClassBody(const TCHAR*, const TCHAR*, UClass*&, void (*)(), uint32,
 		uint32, EClassFlags, EClassCastFlags, const TCHAR*, void (*)(const FObjectInitializer&),
-		UObject* (*)(FVTableHelper&), UClass* (*)());
+		UObject* (*)(FVTableHelper&), void (*)(UObject*, FReferenceCollector&), UClass* (*)());
 
 protected:
 	/**
@@ -88,8 +89,17 @@ protected:
 	/** Gives the class object its package, UClass and name, and adds it to GUObjectArray (UE). */
 	virtual void DeferredRegister(UClass* UClassStaticClass, const TCHAR* PackageName, const TCHAR* Name);
 
+	/**
+	 * Changes the name (and optionally the outer) and rehashes the object; no uniqueness check. UObject::BeginDestroy
+	 * renames the object to NAME_None, which takes it out of the name hash (UE).
+	 */
+	void LowLevelRename(FName NewName, UObject* NewOuter = nullptr);
+
 private:
-	/** Takes a slot in GUObjectArray and enters the name hash. */
+	/**
+	 * Takes a slot in GUObjectArray and enters the name hash. RF_MarkAsRootSet and RF_MarkAsNative become the
+	 * RootSet and Native internal flags (UE).
+	 */
 	void AddObject(FName Name, EInternalObjectFlags InSetInternalFlags);
 
 	EObjectFlags ObjectFlags;
@@ -160,7 +170,8 @@ COREUOBJECT_API void UObjectForceRegistration(UObjectBase* Object);
 COREUOBJECT_API void GetPrivateStaticClassBody(const TCHAR* PackageName, const TCHAR* Name, UClass*& ReturnClass,
 	void (*RegisterNativeFunc)(), uint32 InSize, uint32 InAlignment, EClassFlags InClassFlags,
 	EClassCastFlags InClassCastFlags, const TCHAR* InConfigName, void (*InClassConstructor)(const FObjectInitializer&),
-	UObject* (*InClassVTableHelperCtorCaller)(FVTableHelper&), UClass* (*InSuperClassFn)());
+	UObject* (*InClassVTableHelperCtorCaller)(FVTableHelper&),
+	void (*InClassAddReferencedObjects)(UObject*, FReferenceCollector&), UClass* (*InSuperClassFn)());
 
 /** Memory figures of the reflection system, for platform budgets (Leon). */
 struct FUObjectReflectionStats

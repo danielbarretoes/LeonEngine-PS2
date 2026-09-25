@@ -5,6 +5,7 @@
 #include "Templates/Casts.h"
 #include "UObject/Class.h"
 #include "UObject/Package.h"
+#include "UObject/SoftObjectPath.h"
 #include "UObject/UObjectArray.h"
 #include "UObject/UObjectHash.h"
 #include "UObject/UObjectThreadContext.h"
@@ -181,6 +182,12 @@ void FObjectInitializer::PostConstructInit()
 			InitProperties(Obj, BaseClass, Defaults, bCopyTransientsFromClassDefaults);
 		}
 	}
+	// A class default object reads its config (its parents' sections first); instances copied the config members
+	// from it above. A PerObjectConfig object reads its own section (UE).
+	if (bIsCDO || Class->HasAnyClassFlags(CLASS_PerObjectConfig))
+	{
+		Obj->LoadConfig(nullptr, nullptr, bIsCDO ? UE4::LCPF_ReadParentSections : UE4::LCPF_None);
+	}
 	Obj->PostInitProperties();
 	Obj->ClearFlags(RF_NeedInitialization);
 }
@@ -276,6 +283,8 @@ UObject* StaticAllocateObject(const UClass* InClass, UObject* InOuter, FName InN
 	Pending.Name = InName;
 	Pending.Flags = InFlags | RF_NeedInitialization;
 	FUObjectThreadContext::Get().PendingConstructions.Add(Pending);
+	// Soft pointers that did not find their object look again (UE bumps the tag when packages load).
+	FSoftObjectPath::InvalidateTag();
 	return (UObject*)Memory;
 }
 

@@ -19,16 +19,29 @@
 #include <type_traits>
 
 class FOutputDevice;
+class FStructProperty;
 
 /** Port flags of ExportTextItem / ImportText (UE: EPropertyPortFlags; the subset Leon uses). */
 enum EPropertyPortFlags
 {
 	PPF_None = 0x00000000,
-	/** Export for a config file (P10). */
+	/** Export for a config file (SaveConfig): a top-level FString / FText is written without quotes. */
 	PPF_ConfigOnly = 0x00000400,
 	/** Export names and strings without quotes where possible. */
 	PPF_Delimited = 0x00000002,
 };
+
+/** Which references ContainsObjectReference looks for (UE: EPropertyObjectReferenceType). */
+enum class EPropertyObjectReferenceType : uint32
+{
+	None = 0,
+	/** References that keep their object alive: UObject* and TSubclassOf (the garbage collector follows them). */
+	Strong = 1 << 0,
+	/** References that do not: TWeakObjectPtr, TSoftObjectPtr, TSoftClassPtr. */
+	Weak = 1 << 1,
+	Any = Strong | Weak,
+};
+ENUM_CLASS_FLAGS(EPropertyObjectReferenceType)
 
 /**
  * A reflected member of a struct, class or function (UE 4.25+: FProperty). It knows the member's offset, size and
@@ -148,10 +161,24 @@ public:
 		PropertyFlags &= ~NewFlags;
 	}
 
-	/** True for an object reference property or a container / struct holding one (P10: RefLink). */
-	virtual bool ContainsObjectReference() const
+	/**
+	 * True for an object reference of InReferenceType, or a container / struct holding one (UE). EncounteredStructProps
+	 * stops the recursion through a struct that (through an array) contains itself.
+	 */
+	virtual bool ContainsObjectReference(TArray<const FStructProperty*>& EncounteredStructProps,
+		EPropertyObjectReferenceType InReferenceType = EPropertyObjectReferenceType::Strong) const
 	{
+		(void)EncounteredStructProps;
+		(void)InReferenceType;
 		return false;
+	}
+
+	/** ContainsObjectReference without the recursion guard: strong references by default (UE). */
+	FORCEINLINE bool ContainsObjectReference(
+		EPropertyObjectReferenceType InReferenceType = EPropertyObjectReferenceType::Strong) const
+	{
+		TArray<const FStructProperty*> EncounteredStructProps;
+		return ContainsObjectReference(EncounteredStructProps, InReferenceType);
 	}
 
 	// Values. These handle the whole member (ArrayDim elements) unless named Single.
@@ -1050,9 +1077,12 @@ public:
 		this->PropertyClass = InClass;
 	}
 
-	virtual bool ContainsObjectReference() const override
+	/** A pointer keeps its object alive; the weak and soft property types override this (UE). */
+	virtual bool ContainsObjectReference(TArray<const FStructProperty*>& EncounteredStructProps,
+		EPropertyObjectReferenceType InReferenceType = EPropertyObjectReferenceType::Strong) const override
 	{
-		return true;
+		(void)EncounteredStructProps;
+		return !!(InReferenceType & EPropertyObjectReferenceType::Strong);
 	}
 };
 
@@ -1104,6 +1134,8 @@ public:
 	virtual FString GetCPPType() const override;
 	virtual UObject* GetObjectPropertyValue(const void* PropertyValueAddress) const override;
 	virtual void SetObjectPropertyValue(void* PropertyValueAddress, UObject* Value) const override;
+	virtual bool ContainsObjectReference(TArray<const FStructProperty*>& EncounteredStructProps,
+		EPropertyObjectReferenceType InReferenceType = EPropertyObjectReferenceType::Strong) const override;
 };
 
 /** A TSoftObjectPtr<T> member (UE: FSoftObjectProperty). */
@@ -1122,6 +1154,8 @@ public:
 	virtual bool Identical(const void* A, const void* B, uint32 PortFlags = 0) const override;
 	virtual void ExportTextItem(FString& ValueStr, const void* PropertyValue, const void* DefaultValue, UObject* Parent,
 		int32 PortFlags, UObject* ExportRootScope = nullptr) const override;
+	virtual bool ContainsObjectReference(TArray<const FStructProperty*>& EncounteredStructProps,
+		EPropertyObjectReferenceType InReferenceType = EPropertyObjectReferenceType::Strong) const override;
 
 protected:
 	virtual const TCHAR* ImportText_Internal(const TCHAR* Buffer, void* Data, int32 PortFlags, UObject* OwnerObject,
@@ -1158,7 +1192,8 @@ public:
 
 	virtual FString GetCPPType() const override;
 	virtual int32 GetMinAlignment() const override;
-	virtual bool ContainsObjectReference() const override;
+	virtual bool ContainsObjectReference(TArray<const FStructProperty*>& EncounteredStructProps,
+		EPropertyObjectReferenceType InReferenceType = EPropertyObjectReferenceType::Strong) const override;
 	virtual bool SameType(const FProperty* Other) const override;
 	virtual bool Identical(const void* A, const void* B, uint32 PortFlags = 0) const override;
 	virtual void ExportTextItem(FString& ValueStr, const void* PropertyValue, const void* DefaultValue, UObject* Parent,
@@ -1192,7 +1227,8 @@ public:
 	virtual void AddCppProperty(FProperty* Property) override;
 	virtual FString GetCPPType() const override;
 	virtual int32 GetMinAlignment() const override;
-	virtual bool ContainsObjectReference() const override;
+	virtual bool ContainsObjectReference(TArray<const FStructProperty*>& EncounteredStructProps,
+		EPropertyObjectReferenceType InReferenceType = EPropertyObjectReferenceType::Strong) const override;
 	virtual bool SameType(const FProperty* Other) const override;
 	virtual bool Identical(const void* A, const void* B, uint32 PortFlags = 0) const override;
 	virtual void ExportTextItem(FString& ValueStr, const void* PropertyValue, const void* DefaultValue, UObject* Parent,
@@ -1225,7 +1261,8 @@ public:
 	virtual void AddCppProperty(FProperty* Property) override;
 	virtual FString GetCPPType() const override;
 	virtual int32 GetMinAlignment() const override;
-	virtual bool ContainsObjectReference() const override;
+	virtual bool ContainsObjectReference(TArray<const FStructProperty*>& EncounteredStructProps,
+		EPropertyObjectReferenceType InReferenceType = EPropertyObjectReferenceType::Strong) const override;
 	virtual bool SameType(const FProperty* Other) const override;
 	virtual bool Identical(const void* A, const void* B, uint32 PortFlags = 0) const override;
 	virtual void ExportTextItem(FString& ValueStr, const void* PropertyValue, const void* DefaultValue, UObject* Parent,
@@ -1261,7 +1298,8 @@ public:
 	virtual void AddCppProperty(FProperty* Property) override;
 	virtual FString GetCPPType() const override;
 	virtual int32 GetMinAlignment() const override;
-	virtual bool ContainsObjectReference() const override;
+	virtual bool ContainsObjectReference(TArray<const FStructProperty*>& EncounteredStructProps,
+		EPropertyObjectReferenceType InReferenceType = EPropertyObjectReferenceType::Strong) const override;
 	virtual bool SameType(const FProperty* Other) const override;
 	virtual bool Identical(const void* A, const void* B, uint32 PortFlags = 0) const override;
 	virtual void ExportTextItem(FString& ValueStr, const void* PropertyValue, const void* DefaultValue, UObject* Parent,

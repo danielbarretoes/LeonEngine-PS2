@@ -138,9 +138,10 @@ int32 FArrayProperty::GetMinAlignment() const
 	return alignof(FScriptArray);
 }
 
-bool FArrayProperty::ContainsObjectReference() const
+bool FArrayProperty::ContainsObjectReference(
+	TArray<const FStructProperty*>& EncounteredStructProps, EPropertyObjectReferenceType InReferenceType) const
 {
-	return Inner && Inner->ContainsObjectReference();
+	return Inner && Inner->ContainsObjectReference(EncounteredStructProps, InReferenceType);
 }
 
 bool FArrayProperty::SameType(const FProperty* Other) const
@@ -449,9 +450,10 @@ int32 FSetProperty::GetMinAlignment() const
 	return alignof(FScriptSet);
 }
 
-bool FSetProperty::ContainsObjectReference() const
+bool FSetProperty::ContainsObjectReference(
+	TArray<const FStructProperty*>& EncounteredStructProps, EPropertyObjectReferenceType InReferenceType) const
 {
-	return ElementProp && ElementProp->ContainsObjectReference();
+	return ElementProp && ElementProp->ContainsObjectReference(EncounteredStructProps, InReferenceType);
 }
 
 bool FSetProperty::SameType(const FProperty* Other) const
@@ -748,9 +750,11 @@ int32 FMapProperty::GetMinAlignment() const
 	return alignof(FScriptMap);
 }
 
-bool FMapProperty::ContainsObjectReference() const
+bool FMapProperty::ContainsObjectReference(
+	TArray<const FStructProperty*>& EncounteredStructProps, EPropertyObjectReferenceType InReferenceType) const
 {
-	return (KeyProp && KeyProp->ContainsObjectReference()) || (ValueProp && ValueProp->ContainsObjectReference());
+	return (KeyProp && KeyProp->ContainsObjectReference(EncounteredStructProps, InReferenceType)) ||
+		(ValueProp && ValueProp->ContainsObjectReference(EncounteredStructProps, InReferenceType));
 }
 
 bool FMapProperty::SameType(const FProperty* Other) const

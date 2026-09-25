@@ -12,7 +12,7 @@ class UObjectBase;
 /** Adds an object to the name hash (UE: HashObject). */
 COREUOBJECT_API void HashObject(UObjectBase* Object);
 
-/** Removes an object from the name hash (UE: UnhashObject; used by P10). */
+/** Removes an object from the name hash (UE: UnhashObject; LowLevelRename and the destructor use it). */
 COREUOBJECT_API void UnhashObject(UObjectBase* Object);
 
 /**

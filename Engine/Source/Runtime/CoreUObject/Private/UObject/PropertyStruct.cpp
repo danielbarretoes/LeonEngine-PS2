@@ -35,9 +35,23 @@ int32 FStructProperty::GetMinAlignment() const
 	return Struct->GetMinAlignment();
 }
 
-bool FStructProperty::ContainsObjectReference() const
+bool FStructProperty::ContainsObjectReference(
+	TArray<const FStructProperty*>& EncounteredStructProps, EPropertyObjectReferenceType InReferenceType) const
 {
-	return Struct && Struct->RefLink != nullptr;
+	// A struct reached again through its own members (an array of itself) adds nothing new (UE).
+	if (!Struct || EncounteredStructProps.Contains(this))
+	{
+		return false;
+	}
+	EncounteredStructProps.Add(this);
+	bool bContainsReference = false;
+	for (FProperty* Property = Struct->PropertyLink; Property && !bContainsReference;
+		Property = Property->PropertyLinkNext)
+	{
+		bContainsReference = Property->ContainsObjectReference(EncounteredStructProps, InReferenceType);
+	}
+	EncounteredStructProps.RemoveSingleSwap(this);
+	return bContainsReference;
 }
 
 bool FStructProperty::SameType(const FProperty* Other) const
@@ -106,7 +120,13 @@ uint32 FStructProperty::GetValueTypeHashInternal(const void* Src) const
 void FStructProperty::ExportTextItem(FString& ValueStr, const void* PropertyValue, const void* DefaultValue,
 	UObject* Parent, int32 PortFlags, UObject* ExportRootScope) const
 {
-	(void)DefaultValue;
+	// A struct with its own text format (TStructOpsTypeTraits::WithExportTextItem: FSoftObjectPath) (UE).
+	if ((Struct->StructFlags & STRUCT_ExportTextItemNative) &&
+		Struct->GetCppStructOps()->ExportTextItem(
+			ValueStr, PropertyValue, DefaultValue, Parent, PortFlags, ExportRootScope))
+	{
+		return;
+	}
 	// (Name=Value,Name2=Value2), every property, values delimited (UE writes the ones that differ from the defaults).
 	ValueStr += TEXT("(");
 	bool bFirst = true;
@@ -137,6 +157,16 @@ const TCHAR* FStructProperty::ImportText_Internal(
 	const TCHAR* Buffer, void* Data, int32 PortFlags, UObject* OwnerObject, FOutputDevice* ErrorText) const
 {
 	Buffer = SkipWhitespace(Buffer);
+	// A struct with its own text format (TStructOpsTypeTraits::WithImportTextItem: FSoftObjectPath); when it does not
+	// take the text, the generic (Name=Value,...) form is tried (UE).
+	if (Struct->StructFlags & STRUCT_ImportTextItemNative)
+	{
+		const TCHAR* NativeBuffer = Buffer;
+		if (Struct->GetCppStructOps()->ImportTextItem(NativeBuffer, Data, PortFlags, OwnerObject, ErrorText))
+		{
+			return NativeBuffer;
+		}
+	}
 	if (*Buffer != '(')
 	{
 		ReportImportError(ErrorText, FString::Printf(TEXT("%s: expected '(' to start a struct value"), *GetName()));

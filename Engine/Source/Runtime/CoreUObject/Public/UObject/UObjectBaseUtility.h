@@ -57,12 +57,22 @@ public:
 	void SetInternalFlags(EInternalObjectFlags FlagsToSet) const;
 	void ClearInternalFlags(EInternalObjectFlags FlagsToClear) const;
 
-	/** Marks the object for destruction (the garbage collector of P10 destroys it). */
+	/**
+	 * Marks the object for destruction: weak pointers stop resolving it at once, and the next garbage collection
+	 * clears the strong references to it and destroys it even if it is still referenced (UE 4.27). A rooted object
+	 * cannot be marked.
+	 */
 	void MarkPendingKill();
 	void ClearPendingKill();
 	bool IsPendingKill() const;
 
-	/** Keeps the object alive regardless of references (P10 garbage collection). */
+	/** True for an object the running (or last, not yet purged) collection found unreachable (UE). */
+	bool IsUnreachable() const;
+
+	/** IsPendingKill() || IsUnreachable() (UE). */
+	bool IsPendingKillOrUnreachable() const;
+
+	/** Keeps the object alive regardless of references, until RemoveFromRoot (UE: the root set). */
 	void AddToRoot();
 	void RemoveFromRoot();
 	bool IsRooted() const;

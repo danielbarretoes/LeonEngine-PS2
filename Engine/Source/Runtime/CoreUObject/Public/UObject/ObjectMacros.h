@@ -8,6 +8,7 @@
 #include "UObject/Script.h"
 
 class FObjectInitializer;
+class FReferenceCollector;
 class UClass;
 class UEnum;
 class UFunction;
@@ -45,7 +46,7 @@ enum EObjectFlags
 	RF_NoFlags = 0x00000000,
 	/** Visible outside its package. */
 	RF_Public = 0x00000001,
-	/** Kept even when unreferenced (P10 garbage collection). */
+	/** Kept by a collection that passes it in KeepFlags (the editor's; GARBAGE_COLLECTION_KEEPFLAGS). */
 	RF_Standalone = 0x00000002,
 	/** Native object: its memory is not tracked by the loader. */
 	RF_MarkAsNative = 0x00000004,
@@ -65,9 +66,9 @@ enum EObjectFlags
 	RF_NeedPostLoad = 0x00001000,
 	RF_NeedPostLoadSubobjects = 0x00002000,
 	RF_NewerVersionExists = 0x00004000,
-	/** BeginDestroy has been called (P10). */
+	/** BeginDestroy has been called (garbage collection). */
 	RF_BeginDestroyed = 0x00008000,
-	/** FinishDestroy has been called (P10). */
+	/** FinishDestroy has been called (garbage collection). */
 	RF_FinishDestroyed = 0x00010000,
 	RF_BeingRegenerated = 0x00020000,
 	/** Created by CreateDefaultSubobject. */
@@ -99,11 +100,11 @@ enum class EInternalObjectFlags : int32
 	Native = 1 << 25,
 	Async = 1 << 26,
 	AsyncLoading = 1 << 27,
-	/** Found unreachable by the garbage collector (P10). */
+	/** Found unreachable by the garbage collector; destroyed by its purge. */
 	Unreachable = 1 << 28,
-	/** Marked for destruction (P10). */
+	/** Marked for destruction (MarkPendingKill): collected even if referenced. */
 	PendingKill = 1 << 29,
-	/** Never collected (P10: AddToRoot). */
+	/** Never collected (AddToRoot). */
 	RootSet = 1 << 30,
 	GarbageCollectionKeepFlags = Native | Async | AsyncLoading,
 	AllFlags = ReachableInCluster | ClusterRoot | Native | Async | AsyncLoading | Unreachable | PendingKill | RootSet,
@@ -245,7 +246,7 @@ enum EPropertyFlags : uint64
 	CPF_ReturnParm = 0x0000000000000400,
 	CPF_DisableEditOnTemplate = 0x0000000000000800,
 	CPF_Transient = 0x0000000000002000,
-	/** Loaded from / saved to the config (P10). */
+	/** Loaded from / saved to the config (UObject::LoadConfig / SaveConfig). */
 	CPF_Config = 0x0000000000004000,
 	CPF_DisableEditOnInstance = 0x0000000000010000,
 	CPF_EditConst = 0x0000000000020000,
@@ -376,6 +377,25 @@ enum class EMapPropertyFlags
 	None,
 	UsesMemoryImageAllocator
 };
+
+namespace UE4
+{
+	/** How UObject::LoadConfig spreads a load to other sections and objects (UE: UE4::ELoadConfigPropagationFlags). */
+	enum ELoadConfigPropagationFlags
+	{
+		LCPF_None = 0,
+		/** Read the sections of the parent classes first (class default objects do). */
+		LCPF_ReadParentSections = 1 << 0,
+		/** Also load the class default objects of the child classes. */
+		LCPF_PropagateToChildDefaultObjects = 1 << 1,
+		/** Also load every instance of the class (ReloadConfig on a class default object). */
+		LCPF_PropagateToInstances = 1 << 2,
+		/** The load is a reload: PostReloadConfig is called on each object. */
+		LCPF_ReloadingConfigData = 1 << 3,
+		/** Flags kept when the load propagates. */
+		LCPF_PersistentFlags = LCPF_ReloadingConfigData,
+	};
+} // namespace UE4
 
 /** Search flag of FindFunctionByName (UE: EIncludeSuperFlag). */
 namespace EIncludeSuperFlag
@@ -529,7 +549,8 @@ UObject* InternalVTableHelperCtorCaller(FVTableHelper& Helper)
 
 /**
  * Defines GetPrivateStaticClass(): the class's UClass, built on first use (UE: IMPLEMENT_CLASS). The CRC is always 0
- * (no hot reload).
+ * (no hot reload). The class's static AddReferencedObjects (UObject's, unless the class declares its own) becomes
+ * UClass::ClassAddReferencedObjects, which the garbage collector calls.
  */
 #define IMPLEMENT_CLASS(TClass, TClassCrc)                                                                             \
 	UClass* TClass::GetPrivateStaticClass()                                                                            \
@@ -543,7 +564,7 @@ UObject* InternalVTableHelperCtorCaller(FVTableHelper& Helper)
 				TClass::StaticClassCastFlags(), TClass::StaticConfigName(),                                            \
 				(UClass::ClassConstructorType)InternalConstructor<TClass>,                                             \
 				(UClass::ClassVTableHelperCtorCallerType)InternalVTableHelperCtorCaller<TClass>,                       \
-				&TClass::Super::StaticClass);                                                                          \
+				&TClass::AddReferencedObjects, &TClass::Super::StaticClass);                                           \
 		}                                                                                                              \
 		return PrivateStaticClass;                                                                                     \
 	}

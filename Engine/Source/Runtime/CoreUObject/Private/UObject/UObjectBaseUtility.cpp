@@ -46,6 +46,16 @@ bool UObjectBaseUtility::IsPendingKill() const
 	return HasAnyInternalFlags(EInternalObjectFlags::PendingKill);
 }
 
+bool UObjectBaseUtility::IsUnreachable() const
+{
+	return HasAnyInternalFlags(EInternalObjectFlags::Unreachable);
+}
+
+bool UObjectBaseUtility::IsPendingKillOrUnreachable() const
+{
+	return HasAnyInternalFlags(EInternalObjectFlags::PendingKill | EInternalObjectFlags::Unreachable);
+}
+
 void UObjectBaseUtility::AddToRoot()
 {
 	SetInternalFlags(EInternalObjectFlags::RootSet);

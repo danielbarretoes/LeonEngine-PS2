@@ -95,7 +95,8 @@ UObjectBase::UObjectBase(EObjectFlags InFlags)
 
 UObjectBase::~UObjectBase()
 {
-	// Objects are only destroyed by the P10 garbage collector; keep the array and the hash consistent when they are.
+	// The garbage collector destroys objects after BeginDestroy renamed them to NAME_None (out of the name hash); the
+	// slot is freed here, which makes weak pointers to the object stale (UE).
 	if (InternalIndex != INDEX_NONE && GUObjectArray.IsInitialized())
 	{
 		UnhashObject(this);
@@ -106,10 +107,32 @@ UObjectBase::~UObjectBase()
 void UObjectBase::AddObject(FName Name, EInternalObjectFlags InSetInternalFlags)
 {
 	NamePrivate = Name;
-	GUObjectArray.AllocateUObjectIndex(this);
-	if (InSetInternalFlags != EInternalObjectFlags::None)
+	EInternalObjectFlags InternalFlagsToSet = InSetInternalFlags;
+	if (ObjectFlags & RF_MarkAsRootSet)
 	{
-		GUObjectArray.IndexToObject(InternalIndex)->SetFlags(InSetInternalFlags);
+		InternalFlagsToSet |= EInternalObjectFlags::RootSet;
+		ObjectFlags &= ~RF_MarkAsRootSet;
+	}
+	if (ObjectFlags & RF_MarkAsNative)
+	{
+		InternalFlagsToSet |= EInternalObjectFlags::Native;
+		ObjectFlags &= ~RF_MarkAsNative;
+	}
+	GUObjectArray.AllocateUObjectIndex(this);
+	if (InternalFlagsToSet != EInternalObjectFlags::None)
+	{
+		GUObjectArray.IndexToObject(InternalIndex)->SetFlags(InternalFlagsToSet);
+	}
+	HashObject(this);
+}
+
+void UObjectBase::LowLevelRename(FName NewName, UObject* NewOuter)
+{
+	UnhashObject(this);
+	NamePrivate = NewName;
+	if (NewOuter)
+	{
+		OuterPrivate = NewOuter;
 	}
 	HashObject(this);
 }
@@ -327,14 +350,15 @@ void ProcessNewlyLoadedUObjects(const TCHAR* ModuleName, bool bCanProcessNewlyLo
 void GetPrivateStaticClassBody(const TCHAR* PackageName, const TCHAR* Name, UClass*& ReturnClass,
 	void (*RegisterNativeFunc)(), uint32 InSize, uint32 InAlignment, EClassFlags InClassFlags,
 	EClassCastFlags InClassCastFlags, const TCHAR* InConfigName, void (*InClassConstructor)(const FObjectInitializer&),
-	UObject* (*InClassVTableHelperCtorCaller)(FVTableHelper&), UClass* (*InSuperClassFn)())
+	UObject* (*InClassVTableHelperCtorCaller)(FVTableHelper&),
+	void (*InClassAddReferencedObjects)(UObject*, FReferenceCollector&), UClass* (*InSuperClassFn)())
 {
 	// ReturnClass is set before anything else runs: building the super class or registering may need this class.
 	void* Memory = FMemory::Malloc(sizeof(UClass), alignof(UClass));
 	ReturnClass =
 		::new (Memory) UClass(EC_StaticConstructor, FName(Name), InSize, InAlignment, InClassFlags, InClassCastFlags,
 			InConfigName, EObjectFlags(RF_Public | RF_Standalone | RF_Transient | RF_MarkAsNative | RF_MarkAsRootSet),
-			InClassConstructor, InClassVTableHelperCtorCaller);
+			InClassConstructor, InClassVTableHelperCtorCaller, InClassAddReferencedObjects);
 
 	UClass* SuperClass = InSuperClassFn();
 	if (SuperClass != ReturnClass)

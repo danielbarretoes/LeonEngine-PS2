@@ -51,7 +51,7 @@ struct FUObjectItem
 /**
  * Every live UObject, by index (UE: FUObjectArray). A fixed array of FPlatformProperties::MaxObjectsInGame slots,
  * allocated once when the object system starts; running out of slots is a fatal error that logs the capacity. Freed
- * slots (P10 garbage collection) are reused.
+ * slots (garbage collection) are reused.
  */
 class COREUOBJECT_API FUObjectArray
 {

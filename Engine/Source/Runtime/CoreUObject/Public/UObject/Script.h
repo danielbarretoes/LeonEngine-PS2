@@ -20,7 +20,7 @@ enum EFunctionFlags : uint32
 	FUNC_Net = 0x00000040,
 	FUNC_NetReliable = 0x00000080,
 	FUNC_NetRequest = 0x00000100,
-	/** A console command (P10: CallFunctionByNameWithArguments). */
+	/** A console command (UFUNCTION(Exec): UObject::CallFunctionByNameWithArguments). */
 	FUNC_Exec = 0x00000200,
 	/** Implemented in C++ (always set in Leon). */
 	FUNC_Native = 0x00000400,

@@ -1,7 +1,8 @@
 #pragma once
 
-// Reflection of Core types (UE: UObject/NoExportTypes.h). The C++ types live in Core, which knows nothing about
-// reflection; the USTRUCT(noexport) declarations below are only read by LeonHeaderTool (CPP is 1 for the compiler).
+// Reflection of Core types, and of CoreUObject's soft paths (UE: UObject/NoExportTypes.h). The C++ types live in Core,
+// which knows nothing about reflection, or in their CoreUObject header; the USTRUCT(noexport) declarations below are
+// only read by LeonHeaderTool (CPP is 1 for the compiler).
 // They generate Z_Construct_UScriptStruct_FVector and friends, so UPROPERTY() FVector X; works in any module. The
 // generated code takes the offsets from the Core types and checks, at compile time, that each declaration here matches
 // its Core type (members, types, offsets and size). FMatrix is not reflected: its C++ layout is float M[4][4].
@@ -20,6 +21,7 @@
 #include "Math/Vector4.h"
 #include "Misc/Guid.h"
 #include "UObject/ObjectMacros.h"
+#include "UObject/SoftObjectPath.h"
 #include "NoExportTypes.generated.h"
 
 #if !CPP
@@ -207,6 +209,26 @@ struct FBox
 
 	UPROPERTY()
 	uint8 IsValid;
+};
+
+/**
+ * The path of an object that may not be loaded (UObject/SoftObjectPath.h). Its text form is the path itself
+ * ("/Game/Maps/Arena.Arena"), through FSoftObjectPath::ExportTextItem / ImportTextItem.
+ */
+USTRUCT(noexport, BlueprintType)
+struct FSoftObjectPath
+{
+	UPROPERTY()
+	FName AssetPathName;
+
+	UPROPERTY()
+	FString SubPathString;
+};
+
+/** The soft path of a class ("/Script/Engine.Actor") (UObject/SoftObjectPath.h). */
+USTRUCT(noexport, BlueprintType)
+struct FSoftClassPath : public FSoftObjectPath
+{
 };
 
 #endif // !CPP

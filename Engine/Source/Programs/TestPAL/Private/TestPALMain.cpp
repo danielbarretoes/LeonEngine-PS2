@@ -8,6 +8,7 @@
 #include "Misc/Parse.h"
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
+#include "UObject/GarbageCollection.h"
 #include "UObject/UObjectArray.h"
 #include "UObject/UObjectBase.h"
 
@@ -57,8 +58,14 @@ int main(int ArgC, char* ArgV[])
 		(unsigned long long)Usage.NumAllocations, (unsigned long long)(Stats.UsedPhysical / 1024));
 	UE_LOG(LogTestPAL, Display, TEXT("Names: %d entries, %d KB used of %d KB (blocks + hash)"), FName::GetNumNames(),
 		FName::GetNameEntryMemorySize() / 1024, FName::GetNameTableMemorySize() / 1024);
-	UE_LOG(LogTestPAL, Display, TEXT("UObjects: %d objects after the tests"),
-		GUObjectArray.GetObjectArrayNumMinusAvailable());
+	const int32 ObjectsAfterTests = GUObjectArray.GetObjectArrayNumMinusAvailable();
+	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
+	const FGarbageCollectionStats& GCStats = GetLastGarbageCollectionStats();
+	UE_LOG(LogTestPAL, Display,
+		TEXT(
+			"UObjects: %d objects after the tests, %d after a final garbage collection (%.3f ms, heap %d KB -> %d KB)"),
+		ObjectsAfterTests, GCStats.NumObjectsAfter, (GCStats.MarkSeconds + GCStats.PurgeSeconds) * 1000.0,
+		int32(GCStats.HeapBytesBefore / 1024), int32(GCStats.HeapBytesAfter / 1024));
 	UE_LOG(LogTestPAL, Display, TEXT("TestPAL: %s (%d test(s), %d failed)"), NumFailed ? "FAILED" : "PASSED", NumRun,
 		NumFailed);
 	GLog->Flush();

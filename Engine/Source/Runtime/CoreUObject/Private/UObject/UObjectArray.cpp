@@ -17,7 +17,7 @@ FUObjectArray::FUObjectArray()
 FUObjectArray::~FUObjectArray()
 {
 	// The slots are released with the process: objects may still be referenced by other static objects while the
-	// program exits (objects are only destroyed by the P10 garbage collector).
+	// program exits (the garbage collector destroys objects and frees their slots while it runs).
 }
 
 void FUObjectArray::AllocateObjectPool(int32 InMaxUObjects)

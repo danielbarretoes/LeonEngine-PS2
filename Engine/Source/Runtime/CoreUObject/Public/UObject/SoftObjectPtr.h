@@ -1,22 +1,28 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Templates/Casts.h"
+#include "UObject/PersistentObjectPtr.h"
 #include "UObject/SoftObjectPath.h"
 #include "UObject/WeakObjectPtr.h"
+
+#include <cstddef>
+#include <type_traits>
 
 class UClass;
 class UObject;
 
 /**
- * A soft reference: an FSoftObjectPath plus a cached weak pointer to the object once resolved (UE: FSoftObjectPtr,
- * a TPersistentObjectPtr<FSoftObjectPath>). Minimal until P10 / P11: Get() resolves objects already in memory.
+ * A soft reference: an FSoftObjectPath plus a cached weak pointer to the object once found (UE: FSoftObjectPtr, a
+ * TPersistentObjectPtr<FSoftObjectPath>). It never keeps the object alive; Get() finds it when it is in memory, and
+ * LoadSynchronous would load it (P11: until then it only finds objects in memory).
  */
-struct COREUOBJECT_API FSoftObjectPtr
+struct COREUOBJECT_API FSoftObjectPtr : public TPersistentObjectPtr<FSoftObjectPath>
 {
 	FSoftObjectPtr() = default;
 
 	explicit FSoftObjectPtr(const FSoftObjectPath& InObjectID)
-		: ObjectID(InObjectID)
+		: TPersistentObjectPtr<FSoftObjectPath>(InObjectID)
 	{
 	}
 
@@ -25,73 +31,30 @@ struct COREUOBJECT_API FSoftObjectPtr
 		(*this) = Object;
 	}
 
-	/** Points at Object (its path and the object itself), or at nothing. */
-	void operator=(const UObject* Object);
-
-	FORCEINLINE void operator=(const FSoftObjectPath& InObjectID)
-	{
-		WeakPtr.Reset();
-		ObjectID = InObjectID;
-	}
-
-	FORCEINLINE void Reset()
-	{
-		WeakPtr.Reset();
-		ObjectID.Reset();
-	}
-
-	/** The object when it is in memory, else nullptr (UE). */
-	UObject* Get() const;
-
-	FORCEINLINE const FSoftObjectPath& GetUniqueID() const
-	{
-		return ObjectID;
-	}
+	using TPersistentObjectPtr<FSoftObjectPath>::operator=;
 
 	FORCEINLINE const FSoftObjectPath& ToSoftObjectPath() const
 	{
-		return ObjectID;
-	}
-
-	FORCEINLINE bool IsNull() const
-	{
-		return ObjectID.IsNull();
-	}
-
-	FORCEINLINE bool IsValid() const
-	{
-		return Get() != nullptr;
-	}
-
-	/** True when the path names an object that is not in memory (UE). */
-	FORCEINLINE bool IsPending() const
-	{
-		return !IsNull() && !IsValid();
+		return GetUniqueID();
 	}
 
 	FORCEINLINE FString ToString() const
 	{
-		return ObjectID.ToString();
+		return ToSoftObjectPath().ToString();
 	}
 
-	FORCEINLINE bool operator==(const FSoftObjectPtr& Other) const
+	FORCEINLINE FString GetLongPackageName() const
 	{
-		return ObjectID == Other.ObjectID;
+		return ToSoftObjectPath().GetLongPackageName();
 	}
 
-	FORCEINLINE bool operator!=(const FSoftObjectPtr& Other) const
+	FORCEINLINE FString GetAssetName() const
 	{
-		return ObjectID != Other.ObjectID;
+		return ToSoftObjectPath().GetAssetName();
 	}
 
-	FORCEINLINE friend uint32 GetTypeHash(const FSoftObjectPtr& Ptr)
-	{
-		return GetTypeHash(Ptr.ObjectID);
-	}
-
-private:
-	mutable FWeakObjectPtr WeakPtr;
-	FSoftObjectPath ObjectID;
+	/** The object, loading it when needed (UE). Until P11 only objects in memory are found. */
+	UObject* LoadSynchronous() const;
 };
 
 /** A typed FSoftObjectPtr (UE: TSoftObjectPtr). Same layout, so an FSoftObjectProperty reflects it. */
@@ -100,6 +63,10 @@ struct TSoftObjectPtr
 {
 public:
 	TSoftObjectPtr() = default;
+
+	FORCEINLINE TSoftObjectPtr(std::nullptr_t)
+	{
+	}
 
 	FORCEINLINE TSoftObjectPtr(const T* Object)
 		: SoftObjectPtr((const UObject*)Object)
@@ -111,9 +78,21 @@ public:
 	{
 	}
 
+	template <class OtherT, typename = std::enable_if_t<std::is_convertible_v<OtherT*, T*>>>
+	FORCEINLINE TSoftObjectPtr(const TSoftObjectPtr<OtherT>& Other)
+		: SoftObjectPtr(Other.SoftObjectPtr)
+	{
+	}
+
 	FORCEINLINE TSoftObjectPtr& operator=(const T* Object)
 	{
 		SoftObjectPtr = (const UObject*)Object;
+		return *this;
+	}
+
+	FORCEINLINE TSoftObjectPtr& operator=(const FSoftObjectPath& ObjectPath)
+	{
+		SoftObjectPtr = ObjectPath;
 		return *this;
 	}
 
@@ -122,10 +101,10 @@ public:
 		SoftObjectPtr.Reset();
 	}
 
-	/** The object when it is in memory, else nullptr (UE). */
+	/** The object when it is in memory and a T, else nullptr (UE). */
 	FORCEINLINE T* Get() const
 	{
-		return (T*)SoftObjectPtr.Get();
+		return Cast<T>(SoftObjectPtr.Get());
 	}
 
 	FORCEINLINE T* operator->() const
@@ -133,19 +112,44 @@ public:
 		return Get();
 	}
 
+	FORCEINLINE T& operator*() const
+	{
+		return *Get();
+	}
+
+	/** The object, loading it when needed (UE). Until P11 only objects in memory are found. */
+	FORCEINLINE T* LoadSynchronous() const
+	{
+		return Cast<T>(SoftObjectPtr.LoadSynchronous());
+	}
+
+	/** True when no path is set (UE). */
 	FORCEINLINE bool IsNull() const
 	{
 		return SoftObjectPtr.IsNull();
 	}
 
+	/** True when the object is in memory (UE). */
 	FORCEINLINE bool IsValid() const
 	{
-		return SoftObjectPtr.IsValid();
+		return Get() != nullptr;
 	}
 
+	/** True when the path names an object that is not in memory (UE). */
 	FORCEINLINE bool IsPending() const
 	{
 		return SoftObjectPtr.IsPending();
+	}
+
+	/** True when the object was found once and has gone since (UE). */
+	FORCEINLINE bool IsStale() const
+	{
+		return SoftObjectPtr.IsStale();
+	}
+
+	FORCEINLINE explicit operator bool() const
+	{
+		return IsValid();
 	}
 
 	FORCEINLINE const FSoftObjectPath& ToSoftObjectPath() const
@@ -156,6 +160,16 @@ public:
 	FORCEINLINE FString ToString() const
 	{
 		return SoftObjectPtr.ToString();
+	}
+
+	FORCEINLINE FString GetLongPackageName() const
+	{
+		return SoftObjectPtr.GetLongPackageName();
+	}
+
+	FORCEINLINE FString GetAssetName() const
+	{
+		return SoftObjectPtr.GetAssetName();
 	}
 
 	FORCEINLINE bool operator==(const TSoftObjectPtr& Other) const
@@ -168,21 +182,38 @@ public:
 		return SoftObjectPtr != Other.SoftObjectPtr;
 	}
 
+	FORCEINLINE bool operator==(std::nullptr_t) const
+	{
+		return IsNull();
+	}
+
+	FORCEINLINE bool operator!=(std::nullptr_t) const
+	{
+		return !IsNull();
+	}
+
 	FORCEINLINE friend uint32 GetTypeHash(const TSoftObjectPtr& Ptr)
 	{
 		return GetTypeHash(Ptr.SoftObjectPtr);
 	}
 
 private:
+	template <class>
+	friend struct TSoftObjectPtr;
+
 	FSoftObjectPtr SoftObjectPtr;
 };
 
-/** A soft reference to a class that is T or derives from it (UE: TSoftClassPtr). Same layout as FSoftObjectPtr. */
+/** A soft reference to a class that is TClass or derives from it (UE: TSoftClassPtr). Same layout as FSoftObjectPtr. */
 template <class TClass = UObject>
 struct TSoftClassPtr
 {
 public:
 	TSoftClassPtr() = default;
+
+	FORCEINLINE TSoftClassPtr(std::nullptr_t)
+	{
+	}
 
 	FORCEINLINE TSoftClassPtr(const UClass* From)
 		: SoftObjectPtr((const UObject*)From)
@@ -194,15 +225,51 @@ public:
 	{
 	}
 
+	template <class OtherT, typename = std::enable_if_t<std::is_base_of_v<TClass, OtherT>>>
+	FORCEINLINE TSoftClassPtr(const TSoftClassPtr<OtherT>& Other)
+		: SoftObjectPtr(Other.SoftObjectPtr)
+	{
+	}
+
+	FORCEINLINE TSoftClassPtr& operator=(const UClass* From)
+	{
+		SoftObjectPtr = (const UObject*)From;
+		return *this;
+	}
+
+	FORCEINLINE TSoftClassPtr& operator=(const FSoftObjectPath& ObjectPath)
+	{
+		SoftObjectPtr = ObjectPath;
+		return *this;
+	}
+
 	FORCEINLINE void Reset()
 	{
 		SoftObjectPtr.Reset();
 	}
 
-	/** The class when it is in memory, else nullptr (UE). */
+	/** The class when it is in memory and derives from TClass, else nullptr (UE). */
 	FORCEINLINE UClass* Get() const
 	{
-		return (UClass*)SoftObjectPtr.Get();
+		UClass* Class = Cast<UClass>(SoftObjectPtr.Get());
+		return Class && Class->IsChildOf(TClass::StaticClass()) ? Class : nullptr;
+	}
+
+	FORCEINLINE UClass* operator*() const
+	{
+		return Get();
+	}
+
+	FORCEINLINE UClass* operator->() const
+	{
+		return Get();
+	}
+
+	/** The class, loading it when needed (UE). Until P11 only classes in memory are found. */
+	FORCEINLINE UClass* LoadSynchronous() const
+	{
+		UClass* Class = Cast<UClass>(SoftObjectPtr.LoadSynchronous());
+		return Class && Class->IsChildOf(TClass::StaticClass()) ? Class : nullptr;
 	}
 
 	FORCEINLINE bool IsNull() const
@@ -212,7 +279,22 @@ public:
 
 	FORCEINLINE bool IsValid() const
 	{
-		return SoftObjectPtr.IsValid();
+		return Get() != nullptr;
+	}
+
+	FORCEINLINE bool IsPending() const
+	{
+		return SoftObjectPtr.IsPending();
+	}
+
+	FORCEINLINE bool IsStale() const
+	{
+		return SoftObjectPtr.IsStale();
+	}
+
+	FORCEINLINE explicit operator bool() const
+	{
+		return IsValid();
 	}
 
 	FORCEINLINE const FSoftObjectPath& ToSoftObjectPath() const
@@ -223,6 +305,16 @@ public:
 	FORCEINLINE FString ToString() const
 	{
 		return SoftObjectPtr.ToString();
+	}
+
+	FORCEINLINE FString GetLongPackageName() const
+	{
+		return SoftObjectPtr.GetLongPackageName();
+	}
+
+	FORCEINLINE FString GetAssetName() const
+	{
+		return SoftObjectPtr.GetAssetName();
 	}
 
 	FORCEINLINE bool operator==(const TSoftClassPtr& Other) const
@@ -241,6 +333,9 @@ public:
 	}
 
 private:
+	template <class>
+	friend struct TSoftClassPtr;
+
 	FSoftObjectPtr SoftObjectPtr;
 };
 

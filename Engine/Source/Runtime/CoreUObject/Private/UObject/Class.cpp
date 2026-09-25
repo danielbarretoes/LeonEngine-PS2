@@ -190,7 +190,8 @@ void UStruct::Link(FArchive& Ar, bool bRelinkExistingProperties)
 
 		*PropertyLinkPtr = Property;
 		PropertyLinkPtr = &Property->PropertyLinkNext;
-		if (Property->ContainsObjectReference())
+		// Weak and soft references too (UE): RefLink lists every property that names an object.
+		if (Property->ContainsObjectReference(EPropertyObjectReferenceType::Any))
 		{
 			*RefLinkPtr = Property;
 			RefLinkPtr = &Property->NextRef;
@@ -303,6 +304,14 @@ void UScriptStruct::SetCppStructOps(ICppStructOps* InCppStructOps)
 	if (CppStructOps->HasIdentical())
 	{
 		StructFlags |= STRUCT_IdenticalNative;
+	}
+	if (CppStructOps->HasExportTextItem())
+	{
+		StructFlags |= STRUCT_ExportTextItemNative;
+	}
+	if (CppStructOps->HasImportTextItem())
+	{
+		StructFlags |= STRUCT_ImportTextItemNative;
 	}
 }
 
@@ -427,10 +436,12 @@ FString UScriptStruct::GetStructCPPName() const
 
 UClass::UClass(EStaticConstructor, FName InName, uint32 InSize, uint32 InAlignment, EClassFlags InClassFlags,
 	EClassCastFlags InClassCastFlags, const TCHAR* InClassConfigName, EObjectFlags InFlags,
-	ClassConstructorType InClassConstructor, ClassVTableHelperCtorCallerType InClassVTableHelperCtorCaller)
+	ClassConstructorType InClassConstructor, ClassVTableHelperCtorCallerType InClassVTableHelperCtorCaller,
+	ClassAddReferencedObjectsType InClassAddReferencedObjects)
 	: UStruct(EC_StaticConstructor, int32(InSize), int32(InAlignment), InFlags)
 	, ClassConstructor(InClassConstructor)
 	, ClassVTableHelperCtorCaller(InClassVTableHelperCtorCaller)
+	, ClassAddReferencedObjects(InClassAddReferencedObjects)
 	, ClassUnique(0)
 	, ClassFlags(InClassFlags | CLASS_Native)
 	, ClassCastFlags(InClassCastFlags)
@@ -445,6 +456,7 @@ UClass::UClass(const FObjectInitializer& ObjectInitializer)
 	: UStruct(ObjectInitializer)
 	, ClassConstructor(nullptr)
 	, ClassVTableHelperCtorCaller(nullptr)
+	, ClassAddReferencedObjects(&UObject::AddReferencedObjects)
 	, ClassUnique(0)
 	, ClassFlags(CLASS_None)
 	, ClassCastFlags(CASTCLASS_None)
@@ -456,6 +468,62 @@ UClass::UClass(const FObjectInitializer& ObjectInitializer)
 FName UClass::GetDefaultObjectName() const
 {
 	return FName(*(FString(TEXT("Default__")) + GetName()));
+}
+
+void UClass::AssembleReferenceTokenStream(bool bForce)
+{
+	if (HasAnyClassFlags(CLASS_TokenStreamAssembled) && !bForce)
+	{
+		return;
+	}
+	// UE compiles a token stream of offsets and opcodes; Leon keeps the properties themselves and walks them. RefLink
+	// already skips every property without a reference; weak and soft references do not keep objects alive.
+	ReferenceTokenStream.Reset();
+	for (FProperty* Property = RefLink; Property; Property = Property->NextRef)
+	{
+		if (Property->ContainsObjectReference(EPropertyObjectReferenceType::Strong))
+		{
+			ReferenceTokenStream.Add(Property);
+		}
+	}
+	ReferenceTokenStream.Shrink();
+	ClassFlags |= CLASS_TokenStreamAssembled;
+}
+
+FString UClass::GetConfigName() const
+{
+	if (!GConfig)
+	{
+		return FString();
+	}
+	const FString ConfigName = ClassConfigName.ToString();
+	// The global files, when InitializeConfigSystem loaded them (UE: GEngineIni and friends).
+	const auto GlobalFile = [&ConfigName](const TCHAR* BaseName, const FString& Key) -> const FString*
+	{ return ConfigName.Equals(BaseName) && !Key.IsEmpty() ? &Key : nullptr; };
+	if (const FString* Key = GlobalFile(TEXT("Engine"), GEngineIni))
+	{
+		return *Key;
+	}
+	if (const FString* Key = GlobalFile(TEXT("Game"), GGameIni))
+	{
+		return *Key;
+	}
+	if (const FString* Key = GlobalFile(TEXT("Input"), GInputIni))
+	{
+		return *Key;
+	}
+	if (const FString* Key = GlobalFile(TEXT("Editor"), GEditorIni))
+	{
+		return *Key;
+	}
+	if (ClassConfigName.IsNone())
+	{
+		UE_LOG(LogClass, Fatal, TEXT("UClass::GetConfigName() called on class %s with config name 'None'"), *GetName());
+	}
+	// Any other name: its own hierarchy (Base<Name>.ini, Default<Name>.ini, ...), loaded on first use (UE).
+	FString ConfigGameName;
+	FConfigCacheIni::LoadGlobalIniFile(ConfigGameName, *ConfigName);
+	return ConfigGameName;
 }
 
 UObject* UClass::CreateDefaultObject()

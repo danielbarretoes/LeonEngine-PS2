@@ -18,7 +18,7 @@ public:
 
 	virtual void ShutdownModule() override
 	{
-		// Objects stay alive until the process exits: destroying them is the P10 garbage collector's job.
+		// Objects left when the modules shut down stay until the process exits (UE does not collect at exit either).
 		FModuleManager::Get().OnProcessLoadedObjectsCallback() = nullptr;
 	}
 };

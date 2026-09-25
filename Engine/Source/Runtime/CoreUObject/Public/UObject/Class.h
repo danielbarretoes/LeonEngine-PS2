@@ -14,7 +14,9 @@
 #include <type_traits>
 
 class FArchive;
+class FOutputDevice;
 class FProperty;
+class FReferenceCollector;
 struct FFrame;
 
 /**
@@ -86,7 +88,7 @@ public:
 	/** Every property, this struct's first, then its supers' (set by Link). */
 	FProperty* PropertyLink;
 
-	/** The properties that hold object references, supers included (for the P10 garbage collector). */
+	/** The properties that hold object references (weak and soft too), supers included (UE: RefLink). */
 	FProperty* RefLink;
 
 	/** The properties that need a destructor call, supers included. */
@@ -183,6 +185,16 @@ struct TStructOpsTypeTraitsBase2
 		WithIdenticalViaEquality = false,
 		/** Identical uses bool Identical(const CPPSTRUCT* Other, uint32 PortFlags) const. */
 		WithIdentical = false,
+		/**
+		 * Text export uses bool ExportTextItem(FString& ValueStr, const CPPSTRUCT& DefaultValue, UObject* Parent,
+		 * int32 PortFlags, UObject* ExportRootScope) const.
+		 */
+		WithExportTextItem = false,
+		/**
+		 * Text import uses bool ImportTextItem(const TCHAR*& Buffer, int32 PortFlags, UObject* Parent,
+		 * FOutputDevice* ErrorText).
+		 */
+		WithImportTextItem = false,
 	};
 };
 
@@ -236,6 +248,14 @@ public:
 		virtual bool Identical(const void* A, const void* B, uint32 PortFlags, bool& bOutResult) = 0;
 		virtual bool HasGetTypeHash() = 0;
 		virtual uint32 GetStructTypeHash(const void* Src) = 0;
+		virtual bool HasExportTextItem() = 0;
+		/** Appends the struct as text with its own format; false when it has none. */
+		virtual bool ExportTextItem(FString& ValueStr, const void* PropertyValue, const void* DefaultValue,
+			UObject* Parent, int32 PortFlags, UObject* ExportRootScope) = 0;
+		virtual bool HasImportTextItem() = 0;
+		/** Parses the struct from Buffer with its own format, advancing Buffer; false on an error. */
+		virtual bool ImportTextItem(
+			const TCHAR*& Buffer, void* Data, int32 PortFlags, UObject* OwnerObject, FOutputDevice* ErrorText) = 0;
 
 		FORCEINLINE int32 GetSize() const
 		{
@@ -361,6 +381,61 @@ public:
 				return 0;
 			}
 		}
+
+		virtual bool HasExportTextItem() override
+		{
+			return TTraits::WithExportTextItem;
+		}
+
+		virtual bool ExportTextItem(FString& ValueStr, const void* PropertyValue, const void* DefaultValue,
+			UObject* Parent, int32 PortFlags, UObject* ExportRootScope) override
+		{
+			if constexpr (TTraits::WithExportTextItem)
+			{
+				// A null default compares against a default-constructed value (UE).
+				if (DefaultValue)
+				{
+					return ((const CPPSTRUCT*)PropertyValue)
+						->ExportTextItem(ValueStr, *(const CPPSTRUCT*)DefaultValue, Parent, PortFlags, ExportRootScope);
+				}
+				const CPPSTRUCT Default;
+				return ((const CPPSTRUCT*)PropertyValue)
+					->ExportTextItem(ValueStr, Default, Parent, PortFlags, ExportRootScope);
+			}
+			else
+			{
+				(void)ValueStr;
+				(void)PropertyValue;
+				(void)DefaultValue;
+				(void)Parent;
+				(void)PortFlags;
+				(void)ExportRootScope;
+				return false;
+			}
+		}
+
+		virtual bool HasImportTextItem() override
+		{
+			return TTraits::WithImportTextItem;
+		}
+
+		virtual bool ImportTextItem(
+			const TCHAR*& Buffer, void* Data, int32 PortFlags, UObject* OwnerObject, FOutputDevice* ErrorText) override
+		{
+			if constexpr (TTraits::WithImportTextItem)
+			{
+				return ((CPPSTRUCT*)Data)->ImportTextItem(Buffer, PortFlags, OwnerObject, ErrorText);
+			}
+			else
+			{
+				(void)Buffer;
+				(void)Data;
+				(void)PortFlags;
+				(void)OwnerObject;
+				(void)ErrorText;
+				return false;
+			}
+		}
 	};
 
 	EStructFlags StructFlags;
@@ -473,11 +548,25 @@ class COREUOBJECT_API UClass : public UStruct
 public:
 	typedef void (*ClassConstructorType)(const FObjectInitializer&);
 	typedef UObject* (*ClassVTableHelperCtorCallerType)(FVTableHelper& Helper);
+	typedef void (*ClassAddReferencedObjectsType)(UObject*, FReferenceCollector&);
 	typedef UClass* (*StaticClassFunctionType)();
 
 	/** Constructs an instance in the memory of FObjectInitializer::GetObj() (InternalConstructor<T>). */
 	ClassConstructorType ClassConstructor;
 	ClassVTableHelperCtorCallerType ClassVTableHelperCtorCaller;
+
+	/**
+	 * The class's static AddReferencedObjects: UObject::AddReferencedObjects unless the class declares its own, which
+	 * reports references the reflected properties do not show (UE).
+	 */
+	ClassAddReferencedObjectsType ClassAddReferencedObjects;
+
+	/**
+	 * The properties the garbage collector walks on an instance: those holding strong object references (object and
+	 * class pointers, and arrays, sets, maps and structs containing them), supers included. Built on the first
+	 * collection that visits an instance (CLASS_TokenStreamAssembled) (UE: the class's reference token stream).
+	 */
+	TArray<FProperty*> ReferenceTokenStream;
 
 	/** Counter of MakeUniqueObjectName. */
 	mutable int32 ClassUnique;
@@ -487,7 +576,7 @@ public:
 	/** The class's own cast bit plus its supers' (Cast<T> fast path). */
 	EClassCastFlags ClassCastFlags;
 
-	/** The config file of the class ("Engine", "Game") (P10: LoadConfig). */
+	/** The config file of the class ("Engine", "Game"): UCLASS(Config=...), inherited otherwise (UE). */
 	FName ClassConfigName;
 
 	/** The exec thunks of the class, by function name. */
@@ -498,8 +587,25 @@ public:
 
 	UClass(EStaticConstructor, FName InName, uint32 InSize, uint32 InAlignment, EClassFlags InClassFlags,
 		EClassCastFlags InClassCastFlags, const TCHAR* InClassConfigName, EObjectFlags InFlags,
-		ClassConstructorType InClassConstructor, ClassVTableHelperCtorCallerType InClassVTableHelperCtorCaller);
+		ClassConstructorType InClassConstructor, ClassVTableHelperCtorCallerType InClassVTableHelperCtorCaller,
+		ClassAddReferencedObjectsType InClassAddReferencedObjects);
 	explicit UClass(const FObjectInitializer& ObjectInitializer);
+
+	/** Calls the class's AddReferencedObjects on an instance (UE). */
+	FORCEINLINE void CallAddReferencedObjects(UObject* Obj, FReferenceCollector& Collector) const
+	{
+		ClassAddReferencedObjects(Obj, Collector);
+	}
+
+	/** Builds ReferenceTokenStream (again with bForce) (UE: AssembleReferenceTokenStream). */
+	void AssembleReferenceTokenStream(bool bForce = false);
+
+	/**
+	 * The GConfig key of the class's config file: GEngineIni, GGameIni, GInputIni or GEditorIni for Engine, Game,
+	 * Input and Editor, else the file LoadGlobalIniFile loads for ClassConfigName (UE: GetConfigName). Empty without
+	 * GConfig.
+	 */
+	FString GetConfigName() const;
 
 	/** The class default object, created (super class's first) when bCreateIfNeeded (UE). */
 	UObject* GetDefaultObject(bool bCreateIfNeeded = true) const

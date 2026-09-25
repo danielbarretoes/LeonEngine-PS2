@@ -220,6 +220,13 @@ void FWeakObjectProperty::SetObjectPropertyValue(void* PropertyValueAddress, UOb
 	*(FWeakObjectPtr*)PropertyValueAddress = Value;
 }
 
+bool FWeakObjectProperty::ContainsObjectReference(
+	TArray<const FStructProperty*>& EncounteredStructProps, EPropertyObjectReferenceType InReferenceType) const
+{
+	(void)EncounteredStructProps;
+	return !!(InReferenceType & EPropertyObjectReferenceType::Weak);
+}
+
 // FSoftObjectProperty
 
 IMPLEMENT_FIELD(FSoftObjectProperty)
@@ -250,6 +257,13 @@ UObject* FSoftObjectProperty::GetObjectPropertyValue(const void* PropertyValueAd
 void FSoftObjectProperty::SetObjectPropertyValue(void* PropertyValueAddress, UObject* Value) const
 {
 	*(FSoftObjectPtr*)PropertyValueAddress = Value;
+}
+
+bool FSoftObjectProperty::ContainsObjectReference(
+	TArray<const FStructProperty*>& EncounteredStructProps, EPropertyObjectReferenceType InReferenceType) const
+{
+	(void)EncounteredStructProps;
+	return !!(InReferenceType & EPropertyObjectReferenceType::Weak);
 }
 
 bool FSoftObjectProperty::Identical(const void* A, const void* B, uint32 PortFlags) const

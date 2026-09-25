@@ -8,6 +8,7 @@
 #include "UObject/Script.h"
 
 class FOutputDevice;
+class FProperty;
 class UClass;
 class UEnum;
 class UFunction;
@@ -278,6 +279,125 @@ COREUOBJECT_API FName MakeUniqueObjectName(UObject* Outer, const UClass* Class, 
 
 /** The package named PackageName ("/Game/Maps/Arena"), created when it does not exist (UE: CreatePackage). */
 COREUOBJECT_API UPackage* CreatePackage(const TCHAR* PackageName);
+
+// Garbage collection (UE: UObjectGlobals.h; implemented in GarbageCollection.cpp, see UObject/GarbageCollection.h).
+
+/**
+ * The object flags that keep an unreferenced object alive in a collection the engine starts (UE:
+ * GARBAGE_COLLECTION_KEEPFLAGS, RF_Standalone in the editor). Leon has no editor yet: none.
+ */
+#define GARBAGE_COLLECTION_KEEPFLAGS RF_NoFlags
+
+/**
+ * Reports the objects something references to the garbage collector (UE: FReferenceCollector). Classes report extra
+ * references from their static AddReferencedObjects, FGCObject holders from their AddReferencedObjects. A reference
+ * passed by reference may be set to null: a reference to a pending-kill object is cleared.
+ */
+class COREUOBJECT_API FReferenceCollector
+{
+public:
+	virtual ~FReferenceCollector();
+
+	template <class UObjectType>
+	void AddReferencedObject(UObjectType*& Object, const UObject* ReferencingObject = nullptr,
+		const FProperty* ReferencingProperty = nullptr)
+	{
+		HandleObjectReference(*(UObject**)&Object, ReferencingObject, ReferencingProperty);
+	}
+
+	template <class UObjectType>
+	void AddReferencedObject(const UObjectType*& Object, const UObject* ReferencingObject = nullptr,
+		const FProperty* ReferencingProperty = nullptr)
+	{
+		HandleObjectReference(*(UObject**)const_cast<UObjectType**>(&Object), ReferencingObject, ReferencingProperty);
+	}
+
+	template <class UObjectType, typename AllocatorType>
+	void AddReferencedObjects(TArray<UObjectType*, AllocatorType>& ObjectArray,
+		const UObject* ReferencingObject = nullptr, const FProperty* ReferencingProperty = nullptr)
+	{
+		for (UObjectType*& Object : ObjectArray)
+		{
+			AddReferencedObject(Object, ReferencingObject, ReferencingProperty);
+		}
+	}
+
+	/** The elements are reported but never cleared: clearing would change their hash (UE). */
+	template <class UObjectType>
+	void AddReferencedObjects(TSet<UObjectType*>& ObjectSet, const UObject* ReferencingObject = nullptr,
+		const FProperty* ReferencingProperty = nullptr)
+	{
+		const bool bWasAllowingElimination = bAllowEliminatingReferences;
+		AllowEliminatingReferences(false);
+		for (UObjectType*& Object : ObjectSet)
+		{
+			AddReferencedObject(Object, ReferencingObject, ReferencingProperty);
+		}
+		AllowEliminatingReferences(bWasAllowingElimination);
+	}
+
+	/** The keys are reported but never cleared (their hash); the values may be (UE). */
+	template <class KeyType, class ValueType>
+	void AddReferencedObjects(TMap<KeyType*, ValueType*>& Map, const UObject* ReferencingObject = nullptr,
+		const FProperty* ReferencingProperty = nullptr)
+	{
+		for (TPair<KeyType*, ValueType*>& Pair : Map)
+		{
+			const bool bWasAllowingElimination = bAllowEliminatingReferences;
+			AllowEliminatingReferences(false);
+			AddReferencedObject(Pair.Key, ReferencingObject, ReferencingProperty);
+			AllowEliminatingReferences(bWasAllowingElimination);
+			AddReferencedObject(Pair.Value, ReferencingObject, ReferencingProperty);
+		}
+	}
+
+	/** Reports the references of a struct instance through its reflected properties (UE). */
+	void AddReferencedObjects(const UScriptStruct* ScriptStruct, void* StructMemory,
+		const UObject* ReferencingObject = nullptr, const FProperty* ReferencingProperty = nullptr);
+
+	/** UE: a collector that skips archetype references (the garbage collector does not). */
+	virtual bool IsIgnoringArchetypeRef() const = 0;
+
+	/** UE: a collector that skips transient references (the garbage collector does not). */
+	virtual bool IsIgnoringTransient() const = 0;
+
+	/** Whether references to pending-kill objects may be cleared (the garbage collector clears them) (UE). */
+	virtual void AllowEliminatingReferences(bool bAllow)
+	{
+		bAllowEliminatingReferences = bAllow;
+	}
+
+protected:
+	/** Receives one reference; may set Object to null (UE). */
+	virtual void HandleObjectReference(
+		UObject*& InObject, const UObject* InReferencingObject, const FProperty* InReferencingProperty) = 0;
+
+	bool bAllowEliminatingReferences = true;
+};
+
+/**
+ * Collects the objects nothing references: marks everything reachable from the roots (rooted, native, class default
+ * objects, compiled-in packages, objects with KeepFlags, FGCObject references) through outers and strong references,
+ * clears references to pending-kill objects, then BeginDestroys the rest; with bPerformFullPurge also finishes and
+ * frees them, otherwise IncrementalPurgeGarbage does (UE: CollectGarbage). Only call it at a safe point: nothing may
+ * hold an unreported UObject* across it (see UObject/GarbageCollection.h).
+ */
+COREUOBJECT_API void CollectGarbage(EObjectFlags KeepFlags, bool bPerformFullPurge = true);
+
+/** CollectGarbage unless a collection is already running; returns whether it ran (UE: TryCollectGarbage). */
+COREUOBJECT_API bool TryCollectGarbage(EObjectFlags KeepFlags, bool bPerformFullPurge = true);
+
+/** True while CollectGarbage runs (UE: IsGarbageCollecting). */
+COREUOBJECT_API bool IsGarbageCollecting();
+
+/**
+ * Finishes and frees the objects the last collection found unreachable: all of them, or (bUseTimeLimit) as many as
+ * fit in TimeLimit seconds (UE: IncrementalPurgeGarbage).
+ */
+COREUOBJECT_API void IncrementalPurgeGarbage(bool bUseTimeLimit, float TimeLimit = 0.002f);
+
+/** True while unreachable objects wait for IncrementalPurgeGarbage (UE: IsIncrementalPurgePending). */
+COREUOBJECT_API bool IsIncrementalPurgePending();
 
 /** The class default object of T, which holds the defaults of every T (UE: GetDefault). */
 template <class T>
