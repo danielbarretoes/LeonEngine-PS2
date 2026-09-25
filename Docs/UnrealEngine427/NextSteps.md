@@ -47,10 +47,19 @@ memory archives, `FPaths` with UE's API (no more `std::filesystem`), `FFileHelpe
 native (no nlohmann) and `Projects` reads `.lproj` / `.lplugin`. ThirdPerson reads its character
 tuning from `DefaultGame.ini` (compiled defaults when PCSX2's host filesystem is off). Released as 0.13.0.
 
+### Done — Lower modules on the UE types (P5)
+
+ApplicationCore, RHI, OpenGLDrv, PS2RHI, the shared Launch code, PhysicsCore (with `FPhysScene`), RenderCore,
+AnimationCore, AudioMixer, SlateCore and UMG use `TArray`, `FString` / `FName` / `FText`, `TUniquePtr` /
+`TSharedPtr`, delegates, `UE_LOG` and Core math ([LeonMapping — P5](LeonMapping.md#p5--lower-modules-on-the-ue-types));
+their Catch2 tests became automation tests. Engine, Renderer, AIModule, MeshUtilities, Cooker and JoltPhysics
+convert with `ToGlm` / `FromGlm` where they call them.
+
 ### Next
 
-- **P5–P6 — Migration:** move the modules above Core to the UE types (`TArray`, `FString`, delegates, `UE_LOG`,
-  automation tests instead of Catch2), then drop glm, nlohmann and `std::` containers from engine APIs.
+- **P6 — Migration of the upper modules:** Renderer, Engine (by area), AIModule, MeshUtilities, Cooker, LeonCook,
+  JoltPhysics and the desktop Launch code move to the UE types; glm, nlohmann, `Migration/*`, `FLegacyTransform` and
+  every try / catch go away, the modules drop C++20, and `CheckBannedApis.ps1` (G4) guards the result.
 
 ## CoreUObject
 
@@ -64,7 +73,7 @@ tuning from `DefaultGame.ini` (compiled defaults when PCSX2's host filesystem is
 
 ## Engine / platform
 
-- Gameplay framework on PS2 (needs the module migration to UE containers and Core math (P5–P6)); then
+- Gameplay framework on PS2 (needs the rest of the module migration to UE containers and Core math (P6)); then
   `Game/ThirdPerson` can use `AThirdPersonCharacter : ACharacter` like TP_ThirdPerson.
 - Renderer through RHI command lists instead of direct GL calls; break the Engine ↔ Renderer cycle.
 - `UNavigationSystemBase` seam so NavigationSystem can move to its own module.

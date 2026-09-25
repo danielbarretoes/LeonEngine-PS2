@@ -7,6 +7,36 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Fifth step of the Core / CoreUObject plan (P5): the modules below Engine use Unreal Engine 4.27's Core types.
+
+### Changed
+
+- **ApplicationCore**: `GenericApplication::MakeWindow` returns `TSharedRef<FGenericWindow>`; windows own their RHI
+  in a `TUniquePtr`, report the cursor as an `FVector2D` and the mouse wheel through the `FOnWindowMouseWheel`
+  delegate (`OnMouseWheel`); the GLFW and PS2 backends log through `LogApplicationCore`.
+- **RHI / OpenGLDrv / PS2RHI**: `PlatformCreateDynamicRHI` returns an owned pointer like UE's; `LogRHI` replaces
+  `printf` / iostream (the PS2 `[Draw3D]` stats line keeps its text); handle ids are `uint32`.
+- **Launch**: the engine loop owns the application and the desktop session in `TUniquePtr`; the PS2 stats overlay
+  formats with `FCString`.
+- **PhysicsCore** (and `FPhysScene` in Engine): `FVector` / `FVector2D` / `TArray` API, `FCapsuleShape` became UE's
+  `FCollisionShape`, the body shape enum is `EBodyCollisionShape`, backends are `TUniquePtr` and take `TArray` /
+  `FVector`; hits are sorted with a stable sort.
+- **RenderCore**: `FVertex`, `FMeshData`, `FMaterial`, `FFrustum` and `TransformLocalBox` use Core math and
+  containers (`TSharedPtr` textures); the `.lmesh` reader / writer uses `IFileManager` archives and produces the same
+  bytes.
+- **AnimationCore**: skeletons, clips, blend spaces and anim instances use `TArray<FMatrix>`, `FName` names and the
+  new `FIntVector4` (Core) for bone indices; bone matrices keep the glm memory layout.
+- **AudioMixer**: `TCHAR` sound paths, `FVector` listener / emitter, `LogAudioMixer`.
+- **SlateCore / UMG**: `FLinearColor` colors, `FText` display text (`UTextBlock::SetText(FText)`), `FName` ids.
+- The PhysicsCore, RenderCore and AnimationCore tests are automation tests now (80 automation + 99 Catch2 test
+  cases, 179 as before); the tests that need Engine or MeshUtilities moved into those modules.
+- Engine, Renderer, AIModule, MeshUtilities and JoltPhysics convert with `ToGlm` / `FromGlm` where they call the
+  migrated modules (until P6).
+
+### Added
+
+- `FIntVector4` (UE 4.27's) in `Core/Public/Math/IntVector.h`.
+
 ## [0.13.0] - 2026-09-25
 
 Second to fourth steps of the Core / CoreUObject plan (P2–P4): Unreal Engine 4.27's Core foundations, float math and

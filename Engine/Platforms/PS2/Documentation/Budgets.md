@@ -41,6 +41,9 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | P4 | ThirdPerson | 442 144 | 6 916 | 29 848 | 450 152 | `-fno-threadsafe-statics` and `PS2PlatformRuntime.cpp` (new / delete through `FMemory`, own pure-virtual handler) |
 | P4 | BlankProgram | 178 560 | 6 132 | 27 084 | | same fix |
 | P4 | TestPAL | 731 204 | 6 268 | 32 392 | | Core services, Json, Projects and their tests |
+| P5 | ThirdPerson | 444 240 | 6 924 | 29 864 | 452 328 | ApplicationCore / RHI / PS2RHI / Launch on Core types (UE_LOG, TSharedRef windows, FCString) |
+| P5 | BlankProgram | 178 560 | 6 132 | 27 084 | | unchanged |
+| P5 | TestPAL | 731 244 | 6 268 | 32 392 | | FIntVector4 test |
 
 | Version | Program | GMalloc peak | Process | Name pool | Notes |
 |---|---|---:|---:|---:|---|
@@ -50,3 +53,5 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | P3 | ThirdPerson | | 0.5 MB | | unchanged; 60 FPS, same Draw3D numbers |
 | P4 | TestPAL (46 tests) | 70 KB | 836 KB | 101 names, 32 KB allocated (1 block + hash) | Core, Json and Projects tests; config read from memory |
 | P4 | ThirdPerson | | 0.6 MB | | 60 FPS, same Draw3D numbers; PCSX2 host filesystem off, so `Character tuning from compiled defaults` |
+| P5 | TestPAL (46 tests) | 70 KB | 836 KB | 101 names | unchanged |
+| P5 | ThirdPerson | | 0.6 MB | | 60 FPS, same Draw3D numbers (now logged through LogRHI) |

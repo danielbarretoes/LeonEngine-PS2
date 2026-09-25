@@ -48,7 +48,7 @@ Update this page whenever a module or type is added, moved or renamed.
 | `Tools/ResourceTools` | `Developer/Cooker` (`FCookRecipe`, `FCookPaths`, `UCookCommandlet`) | UE: cook commandlet in UnrealEd |
 | `Tools/AssetPipeline/leon-cook` | `Programs/LeonCook` | `UE4Editor-Cmd -run=cook` equivalent |
 | `Tools/Cli` (`leon-cli`) | removed | only forwarded to leon-cook |
-| `Tests/` (Catch2) | `<Module>/Private/Tests/` + `Programs/LeonAutomationTests` | Core's tests are UE automation tests (P2); the other modules keep Catch2 until P5–P6 |
+| `Tests/` (Catch2) | `<Module>/Private/Tests/` + `Programs/LeonAutomationTests` | UE automation tests for Core (P2), Json, Projects (P4), PhysicsCore, RenderCore and AnimationCore (P5); the other modules keep Catch2 until P6 |
 | — | `Programs/TestPAL` | UE `Programs/TestPAL`: runs Core's automation tests on every platform (PS2 in PCSX2) |
 | `ThirdParty/`, `Build/Dependencies.cmake` | `Engine/Source/ThirdParty/<Lib>/<Lib>.Build.cmake` | |
 | `Engine/Assets` | `Engine/Content` + `Engine/Shaders` | |
@@ -212,19 +212,40 @@ to `Core/Public/`.
 | `.lproj` / `.lplugin` read only by LeonBuildTool | `FProjectDescriptor`, `FPluginDescriptor`, `FModuleDescriptor` (`EHostType`, `ELoadingPhase`), `FPluginReferenceDescriptor`, `IProjectManager`, `IPluginManager`, `IPlugin` | `Projects/Public/`, `Projects/Public/Interfaces/` |
 | — | `FEngineLoop::PreInit` order: command line → project → config → log file and verbosity → project descriptor → modules | `Launch/Private/LaunchEngineLoop.cpp` |
 
+### P5 — Lower modules on the UE types
+
+ApplicationCore, RHI, OpenGLDrv, PS2RHI, the shared Launch code, PhysicsCore, RenderCore, AnimationCore, AudioMixer,
+SlateCore and UMG use Core types (InputCore had none to replace). The world keeps its Y-up metre semantics.
+
+| Leon (before) | UE name (now) | Where |
+| --- | --- | --- |
+| `std::unique_ptr<FGenericWindow> MakeWindow()` | `TSharedRef<FGenericWindow> MakeWindow()` | `ApplicationCore/Public/GenericPlatform/GenericApplication.h` |
+| `GetCursorPos(double&, double&)`, `SetScrollCallback(std::function)` | `FVector2D GetCursorPos()`, `OnMouseWheel()` (`FOnWindowMouseWheel` delegate, float notches) | `GenericPlatform/GenericWindow.h` |
+| `std::unique_ptr<FDynamicRHI> PlatformCreateDynamicRHI()` | `FDynamicRHI* PlatformCreateDynamicRHI()` (caller owns), `LogRHI` | `RHI/Public/DynamicRHI.h` |
+| `printf` / `std::cerr` in the platform layers | `LogApplicationCore`, `LogRHI`, `LogInit`, `LogAudioMixer` | |
+| `FCapsuleShape` (Radius, full Height) | `FCollisionShape` (`MakeCapsule(Radius, HalfHeight)`, `GetCapsuleRadius`, `GetCapsuleHalfHeight`) + UE's `ECollisionShape::Type` | `PhysicsCore/Public/CollisionShape.h` |
+| `ECollisionShape` (body Box / TriangleMesh) | `EBodyCollisionShape` (Leon; frees the UE name) | `PhysicsCore/Public/BodyInstance.h` |
+| glm fields of `FHitResult`, `FBodyInstance`, `FTriangleMeshCollision`; `std::vector` in `IPhysicsBackend` | `FVector` / `FVector2D` fields, `TArray`, `TUniquePtr` backends | `PhysicsCore/Public/` |
+| `FVertex`, `FMeshData`, `FMaterial` on glm / std | `FVector` / `FVector2D` / `FVector4`, `TArray`, `FString`, `TSharedPtr<UTexture2D>`; `FMeshData::IsEmpty` | `RenderCore/Public/` |
+| `FFrustum::ExtractFromViewProjection(glm::mat4)` | `ExtractFromViewProjection(FMatrix)` | `RenderCore/Public/Frustum.h` |
+| bone data on glm (`glm::ivec4` indices, `glm::mat4` matrices, `std::string` names) | `FIntVector4` (added to Core), `FMatrix`, `FName` bone / clip names | `AnimationCore/Public/SkeletalAnimation.h`, `Core/Public/Math/IntVector.h` |
+| `FAudioDevice` paths as `std::string_view`, glm listener | `const TCHAR*` paths, `FVector` listener / emitter | `AudioMixer/Public/AudioDevice.h` |
+| `UTextBlock::SetText(std::string)`, glm widget colors, string ids | `SetText(FText)`, `FLinearColor` colors, `FName` ids (`TickInput` returns `NAME_None` when nothing was activated) | `UMG/Public/Components/` |
+| Catch2 tests of PhysicsCore, RenderCore, AnimationCore | automation tests (`System.PhysicsCore.*`, `System.RenderCore.*`, `System.AnimationCore.*`) | `<Module>/Private/Tests/` |
+
 ## Deviations from UE 4.27 (intentional)
 
 | Topic | UE | LeonEngine | Why |
 | --- | --- | --- | --- |
 | Reflection | `UCLASS`, `UObject`, UHT | none; `A`/`U` prefixes are naming only | CoreUObject is the next plan |
-| Containers / strings | `TArray`, `TMap`, `FString` everywhere | Core has them (P2); the modules above Core still use `std::` containers / `std::string` | migration in P5–P6 |
+| Containers / strings | `TArray`, `TMap`, `FString` everywhere | Core has them (P2) and the modules up to UMG use them (P5); Engine, Renderer, AIModule, the Developer modules and Jolt still use `std::` containers / `std::string` | migration finishes in P6 |
 | `TCHAR` | `wchar_t` / UTF-16 on most platforms | UTF-8 `char` on every platform; `TEXT(x)` is `x`; `WIDECHAR` only inside the Windows HAL; `TCHAR_TO_UTF8` & co. are identities | the EE has no wide-string support worth paying for; one encoding everywhere |
 | `FName` pool | growing name blocks, `FNamePool` sized for desktop | 8-byte `FName`, hard-coded `EName` list; block size / count and hash buckets from `FPlatformProperties::NamePool*` (PS2: 16 KB blocks, at most 256 KB, 4096 buckets); exhausting the pool is fatal | fixed memory budget on 32 MB ([Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md)) |
 | `FText` | localized text (`FTextLocalizationManager`, culture formatting) | minimal: `FromString`, `AsNumber`, `AsPercent`, `Format` (`{0}` arguments), `Join`; `LOCTEXT` / `NSLOCTEXT` keep the source text | no localization yet |
 | Delegates | also dynamic (`DECLARE_DYNAMIC_*`) and `UObject` bindings | `TDelegate` / `TMulticastDelegate` with static, lambda, raw and SP bindings (+ payload) | dynamic / `UObject` delegates need CoreUObject |
 | `FPlatformAtomics` on PS2 | real atomics | the generic non-atomic version | Leon runs a single EE thread |
 | Automation tests | run by the session frontend / `-ExecCmds="Automation RunTests"` | `FAutomationTestFramework::RunTests(Filter)` from `LeonAutomationTests` (with Catch2) and `TestPAL` (every platform) | no editor / session frontend |
-| Math | `FVector`, `FRotator`, `FMatrix` everywhere, SIMD `VectorRegister`, `double` helpers | Core has the scalar float API (P3); the modules above Core still use glm (Y-up metres) until P5–P6, converting with `ToGlm` / `FromGlm`; the world stays Y-up in metres until P7 | migration step by step; the EE has no SIMD path worth matching and a single-precision FPU |
+| Math | `FVector`, `FRotator`, `FMatrix` everywhere, SIMD `VectorRegister`, `double` helpers | Core has the scalar float API (P3) and the modules up to UMG use it (P5); Engine, Renderer, AIModule, the Developer modules and Jolt still use glm (Y-up metres) until P6, converting with `ToGlm` / `FromGlm`; the world stays Y-up in metres until P7 | migration step by step; the EE has no SIMD path worth matching and a single-precision FPU |
 | Build tool | C# UBT | CMake scripts | no .NET dependency; PS2 toolchain is CMake-based |
 | Linking | monolithic or DLLs | always static (`IS_MONOLITHIC=1`), generated module table | PS2 has no DLLs |
 | Renderer | API-agnostic via RHI command lists | calls OpenGL directly | debt |
@@ -240,5 +261,9 @@ to `Core/Public/`.
 | Module platform lists | `WhitelistPlatforms` / `BlacklistPlatforms` (4.27) | `PlatformAllowList` / `PlatformDenyList` (UE 5 names) written; the 4.27 names are still read | the `.lplugin` files already used the UE 5 names |
 | Plugin enable state | decides which plugin modules load | `IPluginManager` reports it, but LeonBuildTool alone decides what is linked (`ENABLE_PLUGINS`) | static linking, no module loading at runtime |
 | Global `operator new` / `delete` | replaced through `FMemory` in every monolithic build (`REPLACEMENT_OPERATOR_NEW_AND_DELETE`) | replaced on the PS2 only (`PS2PlatformRuntime.cpp`) | keeps libstdc++'s allocation, unwinder and demangler code out of the ELF; desktop still uses the CRT |
+| Capsule placement | `FCollisionShape` capsules are centered on the component | Leon's character capsule stands on the actor location (feet): it spans feet to feet + 2 × half height | the CMC-lite works from the feet until the character becomes a UCapsuleComponent (P12) |
+| Body collision shape | the body setup's aggregate geometry | `FBodyInstance::CollisionShape` (`EBodyCollisionShape::Box` / `TriangleMesh`) | Leon's physics scene has AABB and triangle-mesh bodies only |
+| Bone matrices | `FTransform` bone poses, `FMatrix` in UE's row-vector convention | `FMatrix` values that keep the memory of the imported glm matrices (column-vector transforms); the skin matrix is `InverseBind * BoneWorld` in FMatrix order | the renderer uploads them as they are; they become proper UE transforms with the skeletal mesh assets (P14) |
+| Widget colors | `FSlateColor` / `FLinearColor` with alpha | `FLinearColor`, alpha ignored by the debug overlay | the HUD overlay draws opaque RGB |
 | Game → Launch | game modules never see `FEngineLoop` | the PS2 game module reads `GEngineLoop.GetMainWindow()` (include-only dependency on the launch module) | no Slate / `GEngine` on PS2 to hand out the viewport |
 | Gamepad | `FSlateApplication` routes `IInputInterface` events to the player controller | game code polls `IInputInterface` state directly | no Slate; polling matches the PS2 frame loop |

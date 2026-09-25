@@ -217,7 +217,7 @@ paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable 
 
 | Library | Used by (public / private) | Platforms |
 | --- | --- | --- |
-| GLM | public: Core (`_Desktop`), AIModule, AnimationCore, AudioMixer, Engine, Json, MeshUtilities, PhysicsCore, RenderCore, Renderer, UMG | Desktop |
+| GLM | public: Core (`_Desktop`, for the `Migration/` bridges), AIModule, Engine, MeshUtilities, Renderer | Desktop |
 | NlohmannJson | public: Engine, Renderer; private: Cooker (the `Json` module is native and does not use it) | Desktop |
 | GLFW | private: ApplicationCore (`_Desktop`) | Desktop |
 | STB | private: ApplicationCore (`_Desktop`), Engine, Renderer | Desktop |
@@ -244,7 +244,7 @@ paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable 
 | **Launch** | Entry points and engine loop | `GuardedMain`, `FEngineLoop`, `GEngineLoop`, `FPlatformEngineLoopHooks`; desktop-private `FGameApplication` | all |
 | **Projects** | `.lproj` / `.lplugin` descriptors (UE `.uproject` / `.uplugin` fields), current project, plugin discovery | `FProjectDescriptor`, `FPluginDescriptor`, `FModuleDescriptor`, `FPluginReferenceDescriptor`, `IProjectManager`, `IPluginManager`, `IPlugin` | all |
 | **Json** | Native JSON DOM, streaming reader / writer, serializer (UE API, no exceptions) | `FJsonObject`, `FJsonValue`, `TJsonReader`, `TJsonWriter`, `FJsonSerializer` | all |
-| **PhysicsCore** | Physics types and backend seam | `IPhysicsBackend`, `EPhysicsBackend`, `FHitResult`, `FBodyInstance`, `FCollisionQueryParams`, `FCapsuleShape`, `FTriangleMeshCollision` | Desktop |
+| **PhysicsCore** | Physics types and backend seam | `IPhysicsBackend`, `EPhysicsBackend`, `FHitResult`, `FBodyInstance`, `EBodyCollisionShape`, `FCollisionQueryParams`, `FCollisionShape`, `FTriangleMeshCollision` | Desktop |
 | **AnimationCore** | Skeletons, sequences, blend spaces, anim instances | `USkeleton`, `UAnimSequence`, `UBlendSpace1D`, `UAnimInstance`, `UCharacterAnimInstance` | Desktop |
 | **AudioMixer** | Audio device (miniaudio) | `FAudioDevice` | Desktop |
 | **RenderCore** | CPU-side render data | `FMeshData`, `FMeshSection`, `FVertex`, `FFrustum` (over Core's `FBox` / `FPlane`), `FMaterial` | Desktop |
@@ -329,8 +329,8 @@ metres until P7: world directions come from `LegacyAxes`, never from `FVector::U
 | Abstraction | Desktop (`Private/Desktop`, GLFW) | PS2 (extension) |
 | --- | --- | --- |
 | `FPlatformApplicationMisc::CreateApplication()` | `FWindowsPlatformApplicationMisc` / `FLinuxPlatformApplicationMisc` | `FPS2PlatformApplicationMisc` |
-| `GenericApplication` (`MakeWindow`, `PollGameDeviceState`, `GetInputInterface`) | `FGLFWApplication` | `FPS2Application` |
-| `FGenericWindow` (`Create`, `PollEvents`, `SwapBuffers`, sizes, cursor, keys) | `FGLFWWindow` | `FPS2Window` (GS display; `SwapBuffers` waits for vsync) |
+| `GenericApplication` (`MakeWindow` returning `TSharedRef<FGenericWindow>`, `PollGameDeviceState`, `GetInputInterface`) | `FGLFWApplication` | `FPS2Application` |
+| `FGenericWindow` (`Create`, `PollEvents`, `SwapBuffers`, sizes, `GetCursorPos` as `FVector2D`, keys, the `OnMouseWheel` delegate) | `FGLFWWindow` | `FPS2Window` (GS display; `SwapBuffers` waits for vsync) |
 | `IInputInterface` (`IsGamepadConnected`, `IsGamepadKeyDown(EKeys)`, `GetGamepadAnalog(EKeys)`) | — | `FPS2InputInterface` (DualShock, libpad port 0; UE homologue `XInputInterface`) |
 
 The window owns the graphics device: `FGenericWindow::InitRHI` calls `PlatformCreateDynamicRHI()`, loads it
@@ -341,7 +341,8 @@ and publishes it in `GDynamicRHI`. That is why ApplicationCore depends on the pl
 
 - `FDynamicRHI` (`RHI/Public/DynamicRHI.h`): `Init(ProcAddressLoader)`, `SetViewport`, `GetGPUMemoryStats`,
   `GetName`, `GetAPIVersionString`. `GDynamicRHI` is the active instance; `PlatformCreateDynamicRHI()` is
-  implemented by the platform RHI module.
+  implemented by the platform RHI module and returns an owned pointer (the window keeps it in a `TUniquePtr`). RHI
+  code logs through `LogRHI`.
 - `RHIHandles.h`: opaque GPU ids (`FRHITextureId`, `FRHIFramebufferId`, `FRHIBufferId`, …, `InvalidTexture`)
   used in public Renderer headers so they do not expose GL types.
 - **OpenGLDrv**: `FOpenGLDynamicRHI` (Glad loader, GPU memory stats per platform under `Private/Windows` and
@@ -448,7 +449,8 @@ Unreal shapes without reflection: `A`/`U` prefixes are naming only (no `UObject`
 
 ### Character movement (CMC lite)
 
-- Kinematic capsule pawn: actor location = feet; `FCapsuleShape`; not an `FBodyInstance`.
+- Kinematic capsule pawn: actor location = feet; an `FCollisionShape` capsule (radius, half height; it stands on the
+  feet, so its top is at feet + 2 × half height); not an `FBodyInstance`.
 - Modes `EMovementMode` Walking / Falling (`IsMovingOnGround`, `IsFalling`); floor via `FindFloor` /
   `FFindFloorResult`; walkable test against `WalkableFloorZ` (UE ~0.71).
 - Tunables with UE names on `UCharacterMovementComponent`: `MaxWalkSpeed`, `JumpZVelocity`, `MaxStepHeight`,
@@ -461,7 +463,7 @@ Unreal shapes without reflection: `A`/`U` prefixes are naming only (no `UObject`
 
 ## 11. Physics
 
-- **PhysicsCore** holds the types (`FHitResult`, `FBodyInstance`, `FCollisionQueryParams`, `FCapsuleShape`,
+- **PhysicsCore** holds the types (`FHitResult`, `FBodyInstance`, `FCollisionQueryParams`, `FCollisionShape`,
   triangle-mesh collision) and the seam `IPhysicsBackend` + `CreatePhysicsBackend(EPhysicsBackendKind)` /
   `RegisterPhysicsBackendFactory(Kind, Factory)`.
 - **Engine** owns the gameplay-facing `FPhysScene` (`Public/Physics/PhysScene.h`) and the default **Arcade**
@@ -524,8 +526,9 @@ Unreal shapes without reflection: `A`/`U` prefixes are naming only (no `UObject`
 - **Tests**: each module keeps its tests in `<Module>/Private/Tests/`, excluded from the module library and compiled
   only into targets with `COLLECT_AUTOMATION_TESTS`. Core's are UE automation tests
   (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`: `System.Core.*` 51 on Win64 and 43 on PS2 — the desktop file-system, `FLegacyTransform`
-  and glm comparison tests are desktop-only; Json 2, Projects 2 on Win64 and 1 on PS2); RenderCore, Renderer, PhysicsCore, AnimationCore, Engine, AIModule, MeshUtilities and the
-  JoltPhysics plugin still use Catch2 (124 test cases) until they migrate (P5–P6).
+  and glm comparison tests are desktop-only; Json 2, Projects 2 on Win64 and 1 on PS2; PhysicsCore 7, RenderCore 7,
+  AnimationCore 11: 80 on Win64). Renderer, Engine, AIModule, MeshUtilities and the JoltPhysics plugin still use
+  Catch2 (99 test cases) until they migrate (P6).
   - `LeonAutomationTests` (Desktop) starts the module table, runs the automation tests, then Catch2, and fails if
     either fails. Run with `Engine\Build\BatchFiles\RunTests.bat` (`-automation=<filter>`, `-noautomation`,
     `-automationonly`; other arguments go to Catch2).
@@ -547,8 +550,8 @@ roadmap is [NextSteps.md](UnrealEngine427/NextSteps.md).
 | Topic | Current state |
 | --- | --- |
 | Reflection | No `UObject` / `UCLASS` / UHT / GC. `A` and `U` prefixes are naming only; objects are plain C++ owned with `std::unique_ptr` (e.g. `UWorld` is a member of `AGameModeBase`). |
-| Containers / strings | Core provides `TArray`, `TMap`, `FString`, `FName`, `FText` (minimal), delegates and `UE_LOG`, but the modules above Core still use `std::` containers, `std::string` and `std::function` until they migrate (P5–P6). `TCHAR` is UTF-8 `char` everywhere. |
-| Math | Core has UE's float math (P3) on every platform, but the modules above Core still use glm on desktop (Y-up metres, lowercase API) until they migrate (P5–P6); `GlmInterop.h` converts at the seams. The world stays Y-up in metres until P7. |
+| Containers / strings | The modules up to UMG use Core's `TArray`, `TMap`, `FString`, `FName`, `FText` (minimal), delegates and `UE_LOG` (P5); Engine, Renderer, AIModule, the Developer modules, the JoltPhysics plugin and the desktop `FGameApplication` still use `std::` containers, `std::string` and `std::function` until they migrate (P6). `TCHAR` is UTF-8 `char` everywhere. |
+| Math | The modules up to UMG use Core math (P5), still in the Y-up metre world; Engine, Renderer, AIModule, the Developer modules and the JoltPhysics plugin still use glm until P6 and convert with `ToGlm` / `FromGlm` (`GlmInterop.h`) where they call the migrated modules. Bone, skin and clip matrices keep glm's memory layout (column-vector transforms stored in `FMatrix`), so the renderer uploads them as they are. The world stays Y-up in metres until P7. |
 | Renderer | Calls OpenGL directly (Glad) instead of going through RHI command lists; `FDynamicRHI` only covers device init, viewport and memory stats. |
 | Engine ↔ Renderer | `CIRCULAR_DEPENDENCIES` both ways (`Renderer.h` includes `Level.h`, `Level.h` includes GPU resources). UMG also depends privately on Renderer. |
 | PS2 gameplay | The gameplay framework (Engine, AIModule, …) is desktop-only (glm / JSON, C++20). The PS2 game uses its own `F*` types (`FThirdPersonCharacter`, …) and `FPS2RHI`, with no `AActor` / `ACharacter`. |

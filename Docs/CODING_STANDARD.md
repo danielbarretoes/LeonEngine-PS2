@@ -181,11 +181,12 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
   `CoreMinimal.h`: `TArray`, `TMap`, `TSet`, `FString`, `FName`, `FText`, `TUniquePtr` / `TSharedPtr`,
   `TFunction` and delegates. `TCHAR` is UTF-8 `char` on every platform, so write literals with `TEXT("...")`. Element
   types stored in UE containers must be relocatable with `memmove` (no pointers into themselves).
-- **Standard library and math (deviation).** Modules above Core keep `std::` containers, `std::string`,
-  `std::unique_ptr` / `std::function` and **glm** on desktop until they migrate (P5–P6). Core has UE's math
-  (`FVector`, `FRotator`, `FQuat`, `FMatrix`, `FTransform`, `FMath`, …); new code that only depends on Core uses it.
-  Where Core math meets glm code, convert explicitly with `ToGlm` / `FromGlm` (`Migration/GlmInterop.h`, desktop
-  only). Do not add aliases that pretend to be UE types (`using FVector = glm::vec3` is not allowed). See
+- **Standard library and math (deviation).** The modules up to UMG use the UE types (P5). Engine, Renderer,
+  AIModule, the Developer modules and the JoltPhysics plugin keep `std::` containers, `std::string`,
+  `std::unique_ptr` / `std::function` and **glm** until they migrate (P6). Core has UE's math (`FVector`,
+  `FRotator`, `FQuat`, `FMatrix`, `FTransform`, `FMath`, …); new code uses it. Where Core math meets glm code,
+  convert explicitly with `ToGlm` / `FromGlm` (`Migration/GlmInterop.h`, desktop only); keep the conversion at the
+  call into the migrated module rather than widening the migrated API back to glm. Do not add aliases that pretend to be UE types (`using FVector = glm::vec3` is not allowed). See
   [NextSteps.md](UnrealEngine427/NextSteps.md).
 - **Math is float.** No `double` arithmetic in engine code (the EE FPU is single precision); PS2 builds fail on an
   implicit float to double promotion (`-Werror=double-promotion`), so cast explicitly where a `double` is really
@@ -284,9 +285,9 @@ File formats: [ASSET_FORMATS.md](ASSET_FORMATS.md).
   `TestEqual` / `TestTrue` / `TestNotNull` / …; wrap the file in `#if WITH_DEV_AUTOMATION_TESTS`. An error logged
   during a test fails it unless the test declares it with `AddExpectedError`. Core's tests follow this form
   (`System.Core.Containers.Array`, `System.Core.HAL.Memory`, …).
-- **Catch2** remains for the modules not migrated yet (RenderCore, Renderer, PhysicsCore, AnimationCore, Engine,
-  AIModule, MeshUtilities, JoltPhysics); their files are `<Topic>Tests.cpp`. They move to automation tests with the
-  module migration (P5–P6).
+- **Catch2** remains for the modules not migrated yet (Renderer, Engine, AIModule, MeshUtilities, JoltPhysics);
+  their files are `<Topic>Tests.cpp`. They move to automation tests with the module migration (P6); a migrated
+  module's Catch2 case becomes one automation test (sections become blocks inside it), so the count stays the same.
 - `RunTests.bat` runs both kinds (`LeonAutomationTests`); `TestPAL` runs the automation tests on every platform,
   including PS2.
 
