@@ -336,7 +336,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAssetMaterialDefaultsTest, "System.Engine.Asse
 bool FAssetMaterialDefaultsTest::RunTest(const FString& Parameters)
 {
 	// A new material draws what an unset slot always drew (the renderer's default FMaterial), and a renderer FMaterial
-	// round-trips through a material (the `.lmat` path).
+	// round-trips through a material (what the importers do).
 	const FMaterial Default;
 	const UMaterial& Material = *NewObject<UMaterial>();
 	const FMaterial Values = Material.GetRenderProxy();

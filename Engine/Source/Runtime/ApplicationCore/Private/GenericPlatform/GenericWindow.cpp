@@ -32,7 +32,7 @@ void FGenericWindow::SetCursorCaptured(bool bCaptured)
 	bCursorCaptured = bCaptured;
 }
 
-bool FGenericWindow::SetIconFromFile(const TCHAR*)
+bool FGenericWindow::SetIcon(int32, int32, const uint8*)
 {
 	return false;
 }

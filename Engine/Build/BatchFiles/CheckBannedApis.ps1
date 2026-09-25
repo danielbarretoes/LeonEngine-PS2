@@ -23,11 +23,10 @@ if ($Root -eq "") {
 }
 $Root = (Resolve-Path $Root).Path.TrimEnd('\', '/')
 
-# The legacy bridge: FLegacyCoordinateConversion itself, the legacy readers and savers (.llev levels, .lmesh v1 meshes),
-# the tests and the golden adapters that compare against legacy-space tables.
+# The legacy bridge: FLegacyCoordinateConversion itself, the legacy level reader and saver (.llev, until P15), the tests
+# and the golden adapters that compare against legacy-space tables.
 $LegacyBridge = '[\\/]Runtime[\\/]RenderCore[\\/](Public|Private)[\\/]LegacyCoordinateConversion\.(h|cpp)$|' +
 	'[\\/]Runtime[\\/]Engine[\\/](Public|Private)[\\/]Level[\\/]LeonLevelFormat\.(h|cpp)$|' +
-	'[\\/]Runtime[\\/]RenderCore[\\/]Private[\\/]LeonMeshFormat\.cpp$|' +
 	'[\\/]Private[\\/]Tests[\\/]|' +
 	'[\\/]Runtime[\\/]Engine[\\/]Public[\\/]Tests[\\/]LegacyGolden\.h$'
 

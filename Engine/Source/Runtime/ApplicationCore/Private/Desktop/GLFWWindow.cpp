@@ -5,7 +5,6 @@
 #include "GenericPlatform/GenericApplication.h"
 
 #include <GLFW/glfw3.h>
-#include <stb_image.h>
 
 namespace
 {
@@ -365,26 +364,14 @@ void FGLFWWindow::SetCursorCaptured(bool bCaptured)
 	}
 }
 
-bool FGLFWWindow::SetIconFromFile(const TCHAR* PngPath)
+bool FGLFWWindow::SetIcon(int32 Width, int32 Height, const uint8* RGBA)
 {
 	GLFWwindow* Window = AsGLFW(Handle);
-	if (Window == nullptr || PngPath == nullptr || PngPath[0] == '\0')
+	if (Window == nullptr || RGBA == nullptr || Width <= 0 || Height <= 0)
 	{
 		return false;
 	}
-
-	int32 Width = 0;
-	int32 Height = 0;
-	int32 Channels = 0;
-	uint8* Pixels = stbi_load(PngPath, &Width, &Height, &Channels, 4);
-	if (Pixels == nullptr || Width <= 0 || Height <= 0)
-	{
-		if (Pixels != nullptr)
-		{
-			stbi_image_free(Pixels);
-		}
-		return false;
-	}
+	const uint8* Pixels = RGBA;
 
 	struct FIconLevel
 	{
@@ -427,7 +414,6 @@ bool FGLFWWindow::SetIconFromFile(const TCHAR* PngPath)
 		}
 		Levels.Add(MoveTemp(IconLevel));
 	}
-	stbi_image_free(Pixels);
 
 	if (Levels.Num() == 0)
 	{

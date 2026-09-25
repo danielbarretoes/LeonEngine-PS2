@@ -5,9 +5,9 @@
 struct FMeshData;
 
 /**
- * Temporary: converts legacy data (.llev / .lmesh version 1: Y up, right-handed, 1 unit = 1 metre, XYZ Euler degrees)
- * to the engine world (UE: X forward, Y right, Z up, left-handed, 1 unit = 1 cm) and back. Only code that still holds
- * legacy values may use it: the level and mesh readers and savers, and tests. It goes away with the legacy formats.
+ * Temporary: converts legacy data (.llev levels: Y up, right-handed, 1 unit = 1 metre, XYZ Euler degrees) to the
+ * engine world (UE: X forward, Y right, Z up, left-handed, 1 unit = 1 cm) and back. Only code that still holds legacy
+ * values may use it: the level reader and saver, and tests. It goes away with the `.llev` levels (P15).
  *
  * The basis is UE = UnitsPerMetre * (X, Z, Y): legacy Y and Z swap, as UE 4.27's glTF importer converts ({X, Z, Y})
  * and ufbx's left_handed_z_up. The swap has determinant -1, so it keeps the physical scene: what was on the right is
@@ -122,8 +122,9 @@ struct RENDERCORE_API FLegacyCoordinateConversion
 	static void ToLegacyLightRotation(const FQuat& Rotation, float& OutPitchDegrees, float& OutYawDegrees);
 
 	/**
-	 * Legacy mesh data (version-1 .lmesh) to the world in place: positions, normals and tangents. The index order is
-	 * kept: the physical triangles, and their winding on screen, do not change.
+	 * Legacy mesh data (Y up, metres: the old version 1 cooked meshes, which tests compare against) to the world in
+	 * place: positions, normals and tangents. The index order is kept: the physical triangles, and their winding on
+	 * screen, do not change.
 	 */
 	static void ConvertMeshData(FMeshData& Data);
 };

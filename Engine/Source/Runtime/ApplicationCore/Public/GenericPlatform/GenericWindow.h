@@ -63,7 +63,12 @@ public:
 	virtual FVector2D GetCursorPos() const;
 
 	virtual void SetCursorCaptured(bool bCaptured);
-	virtual bool SetIconFromFile(const TCHAR* PngPath);
+
+	/**
+	 * Sets the window's icon from Width x Height RGBA8 texels, top row first (a UTexture2D's texels flipped: Leon
+	 * decodes no image file at run time). False when the platform has no window icon.
+	 */
+	virtual bool SetIcon(int32 Width, int32 Height, const uint8* RGBA);
 
 	FNativeWindowHandle NativeHandle() const
 	{

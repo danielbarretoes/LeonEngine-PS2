@@ -10,9 +10,9 @@ class UTexture2D;
 
 /**
  * A material asset (UE: UMaterial). Leon's materials are fixed shading models with parameters and textures, the
- * `.lmat` set (plan decision in P14): UE builds a material from a graph of expressions compiled to shaders, which
- * Leon does not have (a documented deviation). Every default equals the renderer's default FMaterial, so
- * GetRenderProxy of a new material draws what an unset material slot always drew.
+ * parameters the legacy `.lmat` files had (plan decision in P14): UE builds a material from a graph of expressions
+ * compiled to shaders, which Leon does not have (a documented deviation). Every default equals the renderer's default
+ * FMaterial, so GetRenderProxy of a new material draws what an unset material slot always drew.
  */
 UCLASS()
 class ENGINE_API UMaterial : public UMaterialInterface
@@ -38,7 +38,7 @@ public:
 	UPROPERTY()
 	float Metallic = 0.0f;
 
-	/** 0 = mirror, 1 = fully blurred, clamped to [0.04, 1] by the `.lmat` reader (UE: the Roughness input). */
+	/** 0 = mirror, 1 = fully blurred; the importers clamp it to [0.04, 1] (UE: the Roughness input). */
 	UPROPERTY()
 	float Roughness = RoughnessFromShininess(32.0f);
 
@@ -83,7 +83,7 @@ public:
 	FMaterial GetRenderProxy() const override;
 	void GetUsedTextures(TArray<UTexture*>& OutTextures) const override;
 
-	/** Takes every value of a renderer FMaterial, its maps included (Leon: the `.lmat` reader's result). */
+	/** Takes every value of a renderer FMaterial, its maps included (Leon: what the importers read). */
 	void SetFromRenderProxy(const FMaterial& Values);
 
 	/** True when the material is drawn in the transparent pass (UE: IsTranslucentBlendMode of its blend mode). */

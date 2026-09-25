@@ -45,3 +45,6 @@ jobs:
         run: |
           call Engine\Build\BatchFiles\Build.bat LeonGame Win64 Development || exit /b 1
           call Engine\Build\BatchFiles\Build.bat LeonCook Win64 Development
+      - name: Reproducible reimport (G5)
+        shell: cmd
+        run: call Engine\Build\BatchFiles\CheckReimport.bat Game\ThirdPerson\ThirdPerson.lproj

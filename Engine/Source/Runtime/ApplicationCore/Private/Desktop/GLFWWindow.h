@@ -25,7 +25,7 @@ public:
 	virtual bool IsMouseButtonDown(EMouseButtons Button) const override;
 	virtual FVector2D GetCursorPos() const override;
 	virtual void SetCursorCaptured(bool bCaptured) override;
-	virtual bool SetIconFromFile(const TCHAR* PngPath) override;
+	virtual bool SetIcon(int32 Width, int32 Height, const uint8* RGBA) override;
 	virtual FRHIProcAddressLoader GetRHIProcAddressLoader() const override;
 
 private:

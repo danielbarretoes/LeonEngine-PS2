@@ -31,7 +31,7 @@ enum class EMaterialShadingModel : uint8
 	Unlit = 1,
 };
 
-/** PS2-lite material aligned to .lmat: BaseColor, BaseColorMap, ShadingModel. */
+/** PS2-lite material aligned to UMaterial: BaseColor, BaseColorMap, ShadingModel. */
 struct PS2RHI_API FPS2Material
 {
 	float BaseColorR = 1.0f;

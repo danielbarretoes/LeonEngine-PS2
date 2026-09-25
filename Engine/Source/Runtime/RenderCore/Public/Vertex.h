@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 
-/** Interleaved GPU vertex attributes (matches the mesh VAO layout and the .lmesh vertex records). */
+/** Interleaved GPU vertex attributes (matches the mesh VAO layout: the renderer uploads the array as it is). */
 struct RENDERCORE_API FVertex
 {
 	FVector Position = FVector::ZeroVector;
@@ -23,7 +23,7 @@ struct RENDERCORE_API FVertex
 	}
 };
 
-// The .lmesh format stores vertices as raw 48-byte records.
-static_assert(sizeof(FVertex) == 48, "FVertex must stay 48 bytes (.lmesh vertex records)");
+// The vertex buffer holds raw 48-byte records (the VAO strides and offsets).
+static_assert(sizeof(FVertex) == 48, "FVertex must stay 48 bytes (the VAO stride)");
 static_assert(offsetof(FVertex, Normal) == 12 && offsetof(FVertex, TexCoord) == 24 && offsetof(FVertex, Tangent) == 32,
-	"FVertex attribute offsets are part of the .lmesh format and the VAO layout");
+	"FVertex attribute offsets are part of the VAO layout");

@@ -75,7 +75,7 @@ struct ENGINE_API FLevelActorRecord
 	FVector Scale = FVector::OneVector;
 
 	FString Tag;
-	FString MaterialPath; // `.lmat` path (empty = mesh / default material)
+	FString MaterialPath; // material key, a `.lmat` path (empty = mesh / default material): ResolveLevelAssetObjectPath
 	FString MeshPath; // imported mesh path (UStaticMesh only)
 	FString LightmapId;
 	FString LightmapPath;
