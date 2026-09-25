@@ -1,5 +1,7 @@
 // Constructors and UFUNCTION bodies of the reflected test fixtures.
 
+#include "Tests/ConfigExecTestTypes.h"
+#include "Tests/GarbageCollectionTestTypes.h"
 #include "Tests/HierarchyTestTypes.h"
 #include "Tests/OrderTestChild.h"
 #include "Tests/OrderTestParent.h"
@@ -110,6 +112,110 @@ UHierarchyTestOptionalOwner::UHierarchyTestOptionalOwner(const FObjectInitialize
 UHierarchyTestNoOptional::UHierarchyTestNoOptional(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.DoNotCreateDefaultSubobject(TEXT("Optional")))
 {
+}
+
+// Garbage collection fixtures
+
+UGCTestObject::UGCTestObject()
+{
+	FixedRefs[0] = nullptr;
+	FixedRefs[1] = nullptr;
+}
+
+void UGCTestObject::AddReferencedObjects(UObject* InThis, FReferenceCollector& Collector)
+{
+	Super::AddReferencedObjects(InThis, Collector);
+	Collector.AddReferencedObject(((UGCTestObject*)InThis)->NativeRef, InThis);
+}
+
+UGCTestDestroyTracker::~UGCTestDestroyTracker()
+{
+	GetEventLog().Add(FString::Printf(TEXT("Destroy %d"), Id));
+}
+
+void UGCTestDestroyTracker::BeginDestroy()
+{
+	GetEventLog().Add(FString::Printf(TEXT("Begin %d"), Id));
+	Super::BeginDestroy();
+}
+
+bool UGCTestDestroyTracker::IsReadyForFinishDestroy()
+{
+	if (NotReadyCount > 0)
+	{
+		--NotReadyCount;
+		GetEventLog().Add(FString::Printf(TEXT("NotReady %d"), Id));
+		return false;
+	}
+	return Super::IsReadyForFinishDestroy();
+}
+
+void UGCTestDestroyTracker::FinishDestroy()
+{
+	GetEventLog().Add(FString::Printf(TEXT("Finish %d"), Id));
+	Super::FinishDestroy();
+}
+
+TArray<FString>& UGCTestDestroyTracker::GetEventLog()
+{
+	static TArray<FString> EventLog;
+	return EventLog;
+}
+
+// Config and console command fixtures
+
+UConfigTestObject::UConfigTestObject(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	Fixed[0] = 10;
+	Fixed[1] = 20;
+	Fixed[2] = 30;
+}
+
+void UConfigTestObject::PostReloadConfig(FProperty* PropertyThatWasLoaded)
+{
+	Super::PostReloadConfig(PropertyThatWasLoaded);
+	++ReloadCount;
+}
+
+void UExecTestObject::SetValues(int32 InInt, float InFloat, FName InName)
+{
+	IntValue = InInt;
+	FloatValue = InFloat;
+	NameValue = InName;
+	++NumCalls;
+}
+
+void UExecTestObject::SetMode(EConfigTestMode InMode)
+{
+	Mode = InMode;
+	++NumCalls;
+}
+
+void UExecTestObject::SetTarget(UObject* InTarget)
+{
+	Target = InTarget;
+	++NumCalls;
+}
+
+void UExecTestObject::Say(int32 InTimes, FString InMessage)
+{
+	Times = InTimes;
+	Message = InMessage;
+	++NumCalls;
+}
+
+void UExecTestObject::Greet(UObject* InExecutor, FString InName)
+{
+	Executor = InExecutor;
+	Message = InName;
+	++NumCalls;
+}
+
+void UExecTestObject::NotExec(int32 Value)
+{
+	IntValue = Value;
+	++NumCalls;
 }
 
 // Registration-order fixtures
