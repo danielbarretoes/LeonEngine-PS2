@@ -5,6 +5,7 @@
 #include "HAL/PlatformApplicationMisc.h"
 #include "HAL/PlatformMemory.h"
 #include "InputCoreTypes.h"
+#include "Migration/GlmInterop.h"
 #include "Migration/LegacyContentPath.h"
 
 #include <algorithm>
@@ -272,7 +273,7 @@ void UGameEngine::TickPlayAudio()
 	const glm::vec3 Eye = Camera.GetCameraLocation();
 	const glm::vec3 Forward = Camera.ForwardVector();
 	const glm::vec3 Up{0.0f, 1.0f, 0.0f};
-	AudioDevice.SetListener(Eye, Forward, Up);
+	AudioDevice.SetListener(FromGlm(Eye), FromGlm(Forward), FromGlm(Up));
 	AudioDevice.Tick();
 }
 

@@ -1,26 +1,31 @@
 #include "AudioDevice.h"
 
-#include "Migration/LegacyContentPath.h"
+#include "Containers/StringConv.h"
+#include "Misc/Paths.h"
 
 #include <miniaudio.h>
 
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <cstring>
-#include <iostream>
-#include <string>
-#include <vector>
+DEFINE_LOG_CATEGORY_STATIC(LogAudioMixer, Log, All);
 
 namespace
 {
 
 	[[nodiscard]] float Clamp01(float V)
 	{
-		return std::clamp(V, 0.0f, 1.0f);
+		return FMath::Clamp(V, 0.0f, 1.0f);
 	}
 
-	void BuildUiTone(EUISound InSound, std::vector<float>& OutSamples, int& OutSampleRate)
+	/** Legacy content path of a sound; empty for an empty name. */
+	[[nodiscard]] FString ResolveSoundPath(const TCHAR* AssetRelativePath)
+	{
+		if (AssetRelativePath == nullptr || AssetRelativePath[0] == '\0')
+		{
+			return FString();
+		}
+		return FPaths::ResolveLegacyContentPath(AssetRelativePath);
+	}
+
+	void BuildUiTone(EUISound InSound, TArray<float>& OutSamples, int32& OutSampleRate)
 	{
 		OutSampleRate = 44100;
 		float Freq = 660.0f;
@@ -49,23 +54,24 @@ namespace
 				Amp = 0.2f;
 				break;
 		}
-		const int N = std::max(1, static_cast<int>(Duration * static_cast<float>(OutSampleRate)));
-		OutSamples.resize(static_cast<std::size_t>(N));
+		const int32 N = FMath::Max(1, static_cast<int32>(Duration * static_cast<float>(OutSampleRate)));
+		OutSamples.SetNum(N);
 		constexpr float Pi = 3.14159265f;
-		for (int I = 0; I < N; ++I)
+		for (int32 I = 0; I < N; ++I)
 		{
 			const float T = static_cast<float>(I) / static_cast<float>(OutSampleRate);
 			const float Env = 1.0f - (static_cast<float>(I) / static_cast<float>(N));
-			float Sample = std::sin(2.0f * Pi * Freq * T) * Amp * Env;
+			float Sample = FMath::Sin(2.0f * Pi * Freq * T) * Amp * Env;
 			if (InSound == EUISound::Confirm && T > 0.04f)
 			{
-				Sample += std::sin(2.0f * Pi * 780.0f * T) * Amp * 0.55f * Env;
+				Sample += FMath::Sin(2.0f * Pi * 780.0f * T) * Amp * 0.55f * Env;
 			}
 			if (InSound == EUISound::Error)
 			{
-				Sample = (std::sin(2.0f * Pi * Freq * T) + 0.5f * std::sin(2.0f * Pi * (Freq * 1.5f) * T)) * Amp * Env;
+				Sample =
+					(FMath::Sin(2.0f * Pi * Freq * T) + 0.5f * FMath::Sin(2.0f * Pi * (Freq * 1.5f) * T)) * Amp * Env;
 			}
-			OutSamples[static_cast<std::size_t>(I)] = Sample;
+			OutSamples[I] = Sample;
 		}
 	}
 
@@ -73,20 +79,20 @@ namespace
 
 struct FAudioDevice::FImpl
 {
-	static constexpr int MaxVoices = 24;
+	static constexpr int32 MaxVoices = 24;
 
 	struct FVoice
 	{
 		ma_sound Sound{};
 		ma_audio_buffer Buffer{};
-		std::vector<float> Pcm; // keeps buffer memory alive for UI tones
+		TArray<float> Pcm; // keeps buffer memory alive for UI tones
 		bool bInUse = false;
 		bool bOwnsBuffer = false;
 	};
 
 	ma_engine Engine{};
 	bool bEngineOk = false;
-	std::array<FVoice, MaxVoices> Voices{};
+	FVoice Voices[MaxVoices]{};
 	ma_sound Music{};
 	bool bMusicInUse = false;
 
@@ -124,10 +130,10 @@ struct FAudioDevice::FImpl
 			ma_audio_buffer_uninit(&Voice.Buffer);
 			Voice.bOwnsBuffer = false;
 		}
-		Voice.Pcm.clear();
+		Voice.Pcm.Empty();
 		Voice.bInUse = false;
-		std::memset(&Voice.Sound, 0, sizeof(Voice.Sound));
-		std::memset(&Voice.Buffer, 0, sizeof(Voice.Buffer));
+		FMemory::Memzero(&Voice.Sound, sizeof(Voice.Sound));
+		FMemory::Memzero(&Voice.Buffer, sizeof(Voice.Buffer));
 	}
 
 	void ReleaseMusic()
@@ -137,7 +143,7 @@ struct FAudioDevice::FImpl
 			return;
 		}
 		ma_sound_uninit(&Music);
-		std::memset(&Music, 0, sizeof(Music));
+		FMemory::Memzero(&Music, sizeof(Music));
 		bMusicInUse = false;
 	}
 
@@ -161,20 +167,20 @@ struct FAudioDevice::FImpl
 		}
 	}
 
-	[[nodiscard]] bool PlayFile2D(std::string_view AssetRelativePath, float VolumeMultiplier)
+	[[nodiscard]] bool PlayFile2D(const TCHAR* AssetRelativePath, float VolumeMultiplier)
 	{
-		if (!bEngineOk || AssetRelativePath.empty())
+		if (!bEngineOk)
+		{
+			return false;
+		}
+		const FString Path = ResolveSoundPath(AssetRelativePath);
+		if (Path.IsEmpty())
 		{
 			return false;
 		}
 		ReapFinished();
-		const std::string Path = ResolveLegacyContentPath(std::string(AssetRelativePath));
-		if (Path.empty())
-		{
-			return false;
-		}
 		FVoice* Voice = AcquireVoice();
-		const ma_result Result = ma_sound_init_from_file(&Engine, Path.c_str(),
+		const ma_result Result = ma_sound_init_from_file(&Engine, TCHAR_TO_UTF8(*Path),
 			MA_SOUND_FLAG_ASYNC | MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_SPATIALIZATION, nullptr, nullptr,
 			&Voice->Sound);
 		if (Result != MA_SUCCESS)
@@ -190,7 +196,7 @@ struct FAudioDevice::FImpl
 };
 
 FAudioDevice::FAudioDevice()
-	: Impl(std::make_unique<FImpl>())
+	: Impl(MakeUnique<FImpl>())
 {
 }
 
@@ -214,7 +220,7 @@ bool FAudioDevice::Initialize(bool bInSilent)
 	const ma_result Result = ma_engine_init(&Config, &Impl->Engine);
 	if (Result != MA_SUCCESS)
 	{
-		std::cerr << "AudioDevice: ma_engine_init failed (" << static_cast<int>(Result) << ") -- audio disabled\n";
+		UE_LOG(LogAudioMixer, Warning, "ma_engine_init failed (%d); audio disabled", static_cast<int32>(Result));
 		bSilent = true;
 		bInitialized = true;
 		return false;
@@ -222,7 +228,7 @@ bool FAudioDevice::Initialize(bool bInSilent)
 	Impl->bEngineOk = true;
 	ma_engine_set_volume(&Impl->Engine, MasterVolume);
 	bInitialized = true;
-	std::cout << "AudioDevice: miniaudio engine ready\n";
+	UE_LOG(LogAudioMixer, Log, "miniaudio engine ready");
 	return true;
 }
 
@@ -235,7 +241,7 @@ void FAudioDevice::Shutdown()
 		{
 			ma_engine_uninit(&Impl->Engine);
 			Impl->bEngineOk = false;
-			std::memset(&Impl->Engine, 0, sizeof(Impl->Engine));
+			FMemory::Memzero(&Impl->Engine, sizeof(Impl->Engine));
 		}
 	}
 	bInitialized = false;
@@ -259,18 +265,18 @@ void FAudioDevice::SetMasterVolume(float Volume01)
 	}
 }
 
-void FAudioDevice::SetListener(const glm::vec3& Location, const glm::vec3& Forward, const glm::vec3& Up)
+void FAudioDevice::SetListener(const FVector& Location, const FVector& Forward, const FVector& Up)
 {
 	if (!Impl || !Impl->bEngineOk)
 	{
 		return;
 	}
-	ma_engine_listener_set_position(&Impl->Engine, 0, Location.x, Location.y, Location.z);
-	ma_engine_listener_set_direction(&Impl->Engine, 0, Forward.x, Forward.y, Forward.z);
-	ma_engine_listener_set_world_up(&Impl->Engine, 0, Up.x, Up.y, Up.z);
+	ma_engine_listener_set_position(&Impl->Engine, 0, Location.X, Location.Y, Location.Z);
+	ma_engine_listener_set_direction(&Impl->Engine, 0, Forward.X, Forward.Y, Forward.Z);
+	ma_engine_listener_set_world_up(&Impl->Engine, 0, Up.X, Up.Y, Up.Z);
 }
 
-void FAudioDevice::PlaySound2D(std::string_view AssetRelativePath, float VolumeMultiplier)
+void FAudioDevice::PlaySound2D(const TCHAR* AssetRelativePath, float VolumeMultiplier)
 {
 	if (!Impl)
 	{
@@ -279,22 +285,21 @@ void FAudioDevice::PlaySound2D(std::string_view AssetRelativePath, float VolumeM
 	(void)Impl->PlayFile2D(AssetRelativePath, VolumeMultiplier);
 }
 
-void FAudioDevice::PlaySoundAtLocation(
-	std::string_view AssetRelativePath, const glm::vec3& Location, float VolumeMultiplier)
+void FAudioDevice::PlaySoundAtLocation(const TCHAR* AssetRelativePath, const FVector& Location, float VolumeMultiplier)
 {
-	if (!Impl || !Impl->bEngineOk || AssetRelativePath.empty())
+	if (!Impl || !Impl->bEngineOk)
+	{
+		return;
+	}
+	const FString Path = ResolveSoundPath(AssetRelativePath);
+	if (Path.IsEmpty())
 	{
 		return;
 	}
 	Impl->ReapFinished();
-	const std::string Path = ResolveLegacyContentPath(std::string(AssetRelativePath));
-	if (Path.empty())
-	{
-		return;
-	}
 	FImpl::FVoice* Voice = Impl->AcquireVoice();
-	const ma_result Result = ma_sound_init_from_file(
-		&Impl->Engine, Path.c_str(), MA_SOUND_FLAG_ASYNC | MA_SOUND_FLAG_DECODE, nullptr, nullptr, &Voice->Sound);
+	const ma_result Result = ma_sound_init_from_file(&Impl->Engine, TCHAR_TO_UTF8(*Path),
+		MA_SOUND_FLAG_ASYNC | MA_SOUND_FLAG_DECODE, nullptr, nullptr, &Voice->Sound);
 	if (Result != MA_SUCCESS)
 	{
 		return;
@@ -302,7 +307,7 @@ void FAudioDevice::PlaySoundAtLocation(
 	Voice->bInUse = true;
 	Voice->bOwnsBuffer = false;
 	ma_sound_set_spatialization_enabled(&Voice->Sound, MA_TRUE);
-	ma_sound_set_position(&Voice->Sound, Location.x, Location.y, Location.z);
+	ma_sound_set_position(&Voice->Sound, Location.X, Location.Y, Location.Z);
 	ma_sound_set_volume(&Voice->Sound, Clamp01(VolumeMultiplier));
 	ma_sound_start(&Voice->Sound);
 }
@@ -336,31 +341,31 @@ void FAudioDevice::PlayUiSound(EUISound InSound, float VolumeMultiplier)
 	}
 
 	Impl->ReapFinished();
-	std::vector<float> Samples;
-	int SampleRate = 44100;
+	TArray<float> Samples;
+	int32 SampleRate = 44100;
 	BuildUiTone(InSound, Samples, SampleRate);
-	if (Samples.empty())
+	if (Samples.Num() == 0)
 	{
 		return;
 	}
 
 	FImpl::FVoice* Voice = Impl->AcquireVoice();
-	Voice->Pcm = std::move(Samples);
+	Voice->Pcm = MoveTemp(Samples);
 
 	ma_audio_buffer_config BufferConfig = ma_audio_buffer_config_init(
-		ma_format_f32, 1, static_cast<ma_uint64>(Voice->Pcm.size()), Voice->Pcm.data(), nullptr);
+		ma_format_f32, 1, static_cast<ma_uint64>(Voice->Pcm.Num()), Voice->Pcm.GetData(), nullptr);
 	BufferConfig.sampleRate = static_cast<ma_uint32>(SampleRate);
 
 	if (ma_audio_buffer_init(&BufferConfig, &Voice->Buffer) != MA_SUCCESS)
 	{
-		Voice->Pcm.clear();
+		Voice->Pcm.Empty();
 		return;
 	}
 	if (ma_sound_init_from_data_source(&Impl->Engine, &Voice->Buffer,
 			MA_SOUND_FLAG_ASYNC | MA_SOUND_FLAG_NO_SPATIALIZATION, nullptr, &Voice->Sound) != MA_SUCCESS)
 	{
 		ma_audio_buffer_uninit(&Voice->Buffer);
-		Voice->Pcm.clear();
+		Voice->Pcm.Empty();
 		return;
 	}
 	Voice->bInUse = true;
@@ -369,19 +374,19 @@ void FAudioDevice::PlayUiSound(EUISound InSound, float VolumeMultiplier)
 	ma_sound_start(&Voice->Sound);
 }
 
-void FAudioDevice::PlayMusic(std::string_view AssetRelativePath, float VolumeMultiplier)
+void FAudioDevice::PlayMusic(const TCHAR* AssetRelativePath, float VolumeMultiplier)
 {
-	if (!Impl || !Impl->bEngineOk || AssetRelativePath.empty())
+	if (!Impl || !Impl->bEngineOk)
 	{
 		return;
 	}
-	const std::string Path = ResolveLegacyContentPath(std::string(AssetRelativePath));
-	if (Path.empty())
+	const FString Path = ResolveSoundPath(AssetRelativePath);
+	if (Path.IsEmpty())
 	{
 		return;
 	}
 	Impl->ReleaseMusic();
-	const ma_result Result = ma_sound_init_from_file(&Impl->Engine, Path.c_str(),
+	const ma_result Result = ma_sound_init_from_file(&Impl->Engine, TCHAR_TO_UTF8(*Path),
 		MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_SPATIALIZATION, nullptr, nullptr, &Impl->Music);
 	if (Result != MA_SUCCESS)
 	{

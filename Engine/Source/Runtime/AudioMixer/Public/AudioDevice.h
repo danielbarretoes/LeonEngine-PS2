@@ -1,14 +1,9 @@
 #pragma once
 
-#include <glm/vec3.hpp>
+#include "CoreMinimal.h"
 
-#include <cstdint>
-#include <memory>
-#include <string>
-#include <string_view>
-
-/// Built-in UI / feedback cues. Prefers Content WAVs when present; procedural fallback.
-enum class EUISound : std::uint8_t
+/** Built-in UI / feedback cues. Prefers Content WAVs when present; procedural fallback. */
+enum class EUISound : uint8
 {
 	Click = 0,
 	Confirm = 1,
@@ -16,8 +11,11 @@ enum class EUISound : std::uint8_t
 	Error = 3,
 };
 
-/// Unreal-like audio subsystem (UAudioDevice / UGameplayStatics PlaySound lite).
-/// Backed by miniaudio. Safe no-op when Initialize fails or headless silent mode.
+/**
+ * UE-like audio subsystem (FAudioDevice / UGameplayStatics PlaySound lite), backed by miniaudio.
+ * Safe no-op when Initialize fails or in headless silent mode. Sound paths are legacy content names resolved with
+ * FPaths::ResolveLegacyContentPath (until sounds become USoundWave assets, P14).
+ */
 class AUDIOMIXER_API FAudioDevice
 {
 public:
@@ -27,11 +25,13 @@ public:
 	FAudioDevice(const FAudioDevice&) = delete;
 	FAudioDevice& operator=(const FAudioDevice&) = delete;
 
-	/// `silent` skips device open (dedicated / CI). Returns false only on hard failure when
-	/// not silent (engine still runs; subsequent Play* become no-ops).
+	/**
+	 * bInSilent skips opening the device (dedicated / CI). Returns false only on a hard failure when not silent (the
+	 * engine still runs; the Play* calls become no-ops).
+	 */
 	bool Initialize(bool bInSilent = false);
 	void Shutdown();
-	/// Reap finished one-shots (call once per frame from Engine).
+	/** Reaps finished one-shots (called once per frame by the engine). */
 	void Tick();
 	[[nodiscard]] bool IsInitialized() const
 	{
@@ -48,27 +48,26 @@ public:
 		return MasterVolume;
 	}
 
-	/// Listener for 3D (Unreal SetListener). Call from Engine after camera update.
-	void SetListener(const glm::vec3& Location, const glm::vec3& Forward, const glm::vec3& Up);
+	/** Listener for 3D sounds (UE SetListener); called by the engine after the camera update. */
+	void SetListener(const FVector& Location, const FVector& Forward, const FVector& Up);
 
-	/// Unreal PlaySound2D — fire-and-forget WAV/FLAC/MP3/OGG under FPaths::ResolveLegacyContentPath.
-	void PlaySound2D(std::string_view AssetRelativePath, float VolumeMultiplier = 1.0f);
+	/** UE PlaySound2D: fire-and-forget WAV / FLAC / MP3 / OGG. */
+	void PlaySound2D(const TCHAR* AssetRelativePath, float VolumeMultiplier = 1.0f);
 
-	/// Unreal PlaySoundAtLocation — spatialized one-shot.
-	void PlaySoundAtLocation(
-		std::string_view AssetRelativePath, const glm::vec3& Location, float VolumeMultiplier = 1.0f);
+	/** UE PlaySoundAtLocation: spatialized one-shot. */
+	void PlaySoundAtLocation(const TCHAR* AssetRelativePath, const FVector& Location, float VolumeMultiplier = 1.0f);
 
-	/// UI cue: tries Content `assets/Audio/UI/UI_*.wav`, else procedural tone.
+	/** UI cue: tries Content assets/Audio/UI/UI_*.wav, else a procedural tone. */
 	void PlayUiSound(EUISound InSound, float VolumeMultiplier = 1.0f);
 
-	/// Looping 2D music bed (dedicated slot, not the one-shot voice pool). Replaces any prior bed.
-	void PlayMusic(std::string_view AssetRelativePath, float VolumeMultiplier = 0.35f);
+	/** Looping 2D music bed (dedicated slot, not the one-shot voice pool). Replaces any prior bed. */
+	void PlayMusic(const TCHAR* AssetRelativePath, float VolumeMultiplier = 0.35f);
 	void StopMusic();
 	[[nodiscard]] bool IsMusicPlaying() const;
 
 private:
 	struct FImpl;
-	std::unique_ptr<FImpl> Impl;
+	TUniquePtr<FImpl> Impl;
 	bool bInitialized = false;
 	bool bSilent = true;
 	float MasterVolume = 1.0f;
