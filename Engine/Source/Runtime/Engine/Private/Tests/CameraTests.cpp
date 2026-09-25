@@ -10,7 +10,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCameraOrbitClampsPitchTest, "System.Engine.Cam
 bool FCameraOrbitClampsPitchTest::RunTest(const FString& Parameters)
 {
 	// Orbiting past the poles clamps the pitch to +/-89 degrees.
-	UCameraComponent Cam;
+	UCameraComponent& Cam = *NewObject<UCameraComponent>();
 	Cam.SetViewRotation(FRotator::ZeroRotator);
 	Cam.AddViewRotation(FRotator(200.0f, 0.0f, 0.0f));
 	TestEqual("Pitch clamped up", Cam.GetViewRotation().Pitch, 89.0f, 1.0e-4f);
@@ -26,7 +26,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCameraOrbitDistanceClampsAndFreeLookIgnoresZoo
 bool FCameraOrbitDistanceClampsAndFreeLookIgnoresZoomTest::RunTest(const FString& Parameters)
 {
 	// Zooming in past the minimum (50 cm) clamps the orbit distance; FreeLook leaves the distance alone.
-	UCameraComponent Cam;
+	UCameraComponent& Cam = *NewObject<UCameraComponent>();
 	Cam.SetDistance(500.0f);
 	Cam.Zoom(10000.0f);
 	TestEqual("Orbit distance clamped", Cam.GetDistance(), 50.0f, 1.0e-2f);
@@ -45,7 +45,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCameraOrbitPositionFollowsTargetAndDistanceTes
 bool FCameraOrbitPositionFollowsTargetAndDistanceTest::RunTest(const FString& Parameters)
 {
 	// The orbit eye sits at the distance from the target, and the view basis vectors are unit length.
-	UCameraComponent Cam;
+	UCameraComponent& Cam = *NewObject<UCameraComponent>();
 	Cam.SetMode(ECameraMode::Orbit);
 	Cam.SetTarget(FVector::ZeroVector);
 	Cam.SetViewRotation(FRotator::ZeroRotator);
@@ -64,7 +64,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCameraFreeLookUsesEyeLocationTest, "System.Eng
 bool FCameraFreeLookUsesEyeLocationTest::RunTest(const FString& Parameters)
 {
 	// In FreeLook the camera location is the explicit eye location.
-	UCameraComponent Cam;
+	UCameraComponent& Cam = *NewObject<UCameraComponent>();
 	Cam.SetMode(ECameraMode::FreeLook);
 	Cam.SetEyeLocation(FVector(100.0f, 200.0f, 300.0f));
 	const FVector Eye = Cam.GetCameraLocation();
@@ -80,7 +80,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCameraUEViewAndProjectionTest, "System.Engine.
 bool FCameraUEViewAndProjectionTest::RunTest(const FString& Parameters)
 {
 	// The view is UE's (x right, y up, z forward) and the projections give UE depth: 0 at near, 1 at far.
-	UCameraComponent Cam;
+	UCameraComponent& Cam = *NewObject<UCameraComponent>();
 	Cam.SetPerspective(60.0f, 2.0f, 50.0f, 5000.0f);
 	Cam.SetMode(ECameraMode::Orbit);
 	Cam.SetTarget(FVector(100.0f, -200.0f, 50.0f));
@@ -124,7 +124,7 @@ bool FCameraOrbitEyeBehindViewRotationTest::RunTest(const FString& Parameters)
 {
 	// An orbit camera looking down 30 degrees toward +Y sits behind the target (-Y) and above it (+Z), and its right
 	// vector is horizontal, pointing to -X (UE: WorldUp ^ Forward).
-	UCameraComponent Cam;
+	UCameraComponent& Cam = *NewObject<UCameraComponent>();
 	Cam.SetMode(ECameraMode::Orbit);
 	Cam.SetTarget(FVector::ZeroVector);
 	Cam.SetDistance(200.0f);
@@ -144,7 +144,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCameraLookInputTurnsRightAndUpTest, "System.En
 bool FCameraLookInputTurnsRightAndUpTest::RunTest(const FString& Parameters)
 {
 	// A positive yaw input turns the view toward its right vector; a positive pitch input looks up.
-	UCameraComponent Cam;
+	UCameraComponent& Cam = *NewObject<UCameraComponent>();
 	Cam.SetMode(ECameraMode::FreeLook);
 	Cam.SetViewRotation(FRotator::ZeroRotator);
 	const FVector RightBefore = Cam.RightVector();

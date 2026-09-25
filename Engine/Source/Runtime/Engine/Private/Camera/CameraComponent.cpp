@@ -17,6 +17,11 @@ namespace
 
 } // namespace
 
+UCameraComponent::UCameraComponent(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
 void UCameraComponent::SetPerspective(float InFovDegrees, float InAspect, float InNearPlane, float InFarPlane)
 {
 	FovDegrees = FMath::Clamp(InFovDegrees, 20.0f, 120.0f);

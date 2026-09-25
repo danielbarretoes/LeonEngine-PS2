@@ -99,11 +99,11 @@ public:
 	}
 	[[nodiscard]] UCameraComponent& GetCamera()
 	{
-		return Camera;
+		return *Camera;
 	}
 	[[nodiscard]] const UCameraComponent& GetCamera() const
 	{
-		return Camera;
+		return *Camera;
 	}
 	[[nodiscard]] FGenericWindow& GetWindow()
 	{
@@ -309,7 +309,8 @@ private:
 	FDebugOverlay Overlay;
 	AHUD Hud;
 	FAudioDevice AudioDevice;
-	UCameraComponent Camera;
+	/** The view camera (a standalone component until P13's player camera manager). */
+	UCameraComponent* Camera = nullptr;
 	FResourceCache Resources;
 	/** The game session; its world context holds the game world (UE: UGameEngine::GameInstance). */
 	UGameInstance* GameInstance = nullptr;

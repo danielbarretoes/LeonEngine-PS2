@@ -140,7 +140,7 @@ bool FGoldenSpringArmTest::RunTest(const FString& Parameters)
 				Scene.GetBodies()[Id].HalfExtents = LegacyGolden::ToWorldExtent(FVector(0.4f, 0.4f, 0.4f));
 			}
 
-			UCameraComponent Camera;
+			UCameraComponent& Camera = *NewObject<UCameraComponent>();
 			Arm.ApplyToCamera(Camera, ActorLocation, 1.0f / 60.0f, &Scene);
 			Targets.Add(Camera.GetTarget());
 			Eyes.Add(Camera.GetCameraLocation());
@@ -201,12 +201,12 @@ bool FGoldenOrbitCameraNdcTest::RunTest(const FString& Parameters)
 	TArray<FVector> Eyes;
 	TArray<FVector> Ndc;
 
-	UCameraComponent First;
+	UCameraComponent& First = *NewObject<UCameraComponent>();
 	SetGoldenOrbit(First, FVector(0.0f, 0.5f, 0.0f), 30.0f, 20.0f, 6.0f);
 	Eyes.Add(First.GetCameraLocation());
 	AppendGoldenNdc(Ndc, GoldenViewProjection(First), Points);
 
-	UCameraComponent Second;
+	UCameraComponent& Second = *NewObject<UCameraComponent>();
 	SetGoldenOrbit(Second, FVector(0.5f, 1.0f, -0.5f), -120.0f, 45.0f, 9.0f);
 	Eyes.Add(Second.GetCameraLocation());
 	AppendGoldenNdc(Ndc, GoldenViewProjection(Second), Points);
@@ -247,7 +247,7 @@ bool FGoldenFreeLookCameraNdcTest::RunTest(const FString& Parameters)
 	TArray<FVector> Ndc;
 	for (const auto& Setting : Settings)
 	{
-		UCameraComponent Camera;
+		UCameraComponent& Camera = *NewObject<UCameraComponent>();
 		SetGoldenPerspective(Camera);
 		Camera.SetMode(ECameraMode::FreeLook);
 		Camera.SetEyeLocation(LegacyGolden::ToWorldPosition(FVector(Setting[0], Setting[1], Setting[2])));
@@ -328,7 +328,7 @@ bool FGoldenPlanarReflectionTest::RunTest(const FString& Parameters)
 	const FVector LegacyPoints[6] = {FVector(0.0f, 0.25f, 0.0f), FVector(1.0f, 1.0f, 0.0f), FVector(-2.0f, 0.5f, 1.5f),
 		FVector(0.5f, 3.0f, -1.0f), FVector(1.5f, -0.5f, 2.0f), FVector(-1.0f, 2.25f, -2.0f)};
 
-	UCameraComponent Camera;
+	UCameraComponent& Camera = *NewObject<UCameraComponent>();
 	SetGoldenOrbit(Camera, FVector(0.0f, 0.5f, 0.0f), 30.0f, 20.0f, 6.0f);
 	const FMatrix ReflectionViewProjection = Reflect * Camera.ViewMatrix() * GoldenProjectionGL(Camera);
 
@@ -359,7 +359,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGoldenFrustumCullingTest, "System.Engine.Golde
 bool FGoldenFrustumCullingTest::RunTest(const FString& Parameters)
 {
 	// Frustum culling of 20 boxes around an orbit camera's target, near and far, in view and out of it.
-	UCameraComponent Camera;
+	UCameraComponent& Camera = *NewObject<UCameraComponent>();
 	SetGoldenOrbit(Camera, FVector::ZeroVector, 30.0f, 20.0f, 8.0f);
 	FFrustum Frustum;
 	Frustum.ExtractFromViewProjection(GoldenViewProjection(Camera));

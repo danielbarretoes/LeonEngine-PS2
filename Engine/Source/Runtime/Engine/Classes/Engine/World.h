@@ -15,6 +15,7 @@ class AGameModeBase;
 class FDebugDraw;
 class FSceneRenderer;
 class UGameInstance;
+class UPrimitiveComponent;
 
 /** What SpawnActor does when the new actor would overlap something (UE: ESpawnActorCollisionHandlingMethod). */
 enum class ESpawnActorCollisionHandlingMethod : uint8
@@ -258,7 +259,19 @@ public:
 	/** Register StaticMeshComponents that have collision as FPhysScene bodies (clears first). */
 	void RegisterBodiesFromLevel(const ULevel& InLevel);
 
-	void SubmitSkeletalDraws(FSceneRenderer& InRenderer) const;
+	/**
+	 * The render state of the registered primitive components (UPrimitiveComponent::CreateRenderState_Concurrent):
+	 * P13 replaces this list with FScene::AddPrimitive / RemovePrimitive.
+	 */
+	void AddPrimitive(UPrimitiveComponent* Primitive);
+	void RemovePrimitive(UPrimitiveComponent* Primitive);
+	[[nodiscard]] const TArray<UPrimitiveComponent*>& GetPrimitives() const
+	{
+		return Primitives;
+	}
+
+	/** Every registered primitive that should render submits its draw, in registration order. */
+	void SubmitPrimitiveDraws(FSceneRenderer& InRenderer) const;
 
 	/** Destroys every actor (EEndPlayReason::Destroyed) and clears the physics scene (Leon; UE has no counterpart). */
 	void Clear();
@@ -330,6 +343,10 @@ private:
 	/** Actors spawned during a tick: they join the level when it ends (UE adds them at once). */
 	UPROPERTY(Transient)
 	TArray<AActor*> PendingSpawnActors;
+
+	/** Registered primitive components (the render scene until P13's FScene). */
+	UPROPERTY(Transient)
+	TArray<UPrimitiveComponent*> Primitives;
 
 	FPhysScene Physics{};
 	UNavigationSystem Navigation{};

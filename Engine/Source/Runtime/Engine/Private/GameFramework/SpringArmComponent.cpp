@@ -24,6 +24,11 @@ namespace
 
 } // namespace
 
+USpringArmComponent::USpringArmComponent(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
 FRotator USpringArmComponent::GetTargetRotation() const
 {
 	if (bUsePawnControlRotation)

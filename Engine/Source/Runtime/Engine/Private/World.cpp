@@ -1,6 +1,7 @@
 #include "Engine/World.h"
 
 #include "BodyInstance.h"
+#include "Components/PrimitiveComponent.h"
 #include "Engine/Level.h"
 #include "EngineLogs.h"
 #include "GameFramework/Character.h"
@@ -88,6 +89,7 @@ void UWorld::DestroyWorld(bool /*bInformEngineOfWorld*/)
 		}
 	}
 	PendingSpawnActors.Empty();
+	Primitives.Empty();
 	AuthorityGameMode = nullptr;
 	if (PersistentLevel != nullptr)
 	{
@@ -423,7 +425,7 @@ void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& Params)
 
 	if (Params.Renderer != nullptr)
 	{
-		SubmitSkeletalDraws(*Params.Renderer);
+		SubmitPrimitiveDraws(*Params.Renderer);
 	}
 
 	if (Params.CollisionDebugDraw != nullptr)
@@ -442,9 +444,28 @@ void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& Params)
 	}
 }
 
-void UWorld::SubmitSkeletalDraws(FSceneRenderer& InRenderer) const
+void UWorld::AddPrimitive(UPrimitiveComponent* Primitive)
 {
-	ForEach<ACharacter>([&](ACharacter& Character) { Character.SubmitMeshDraw(InRenderer); });
+	if (Primitive != nullptr)
+	{
+		Primitives.AddUnique(Primitive);
+	}
+}
+
+void UWorld::RemovePrimitive(UPrimitiveComponent* Primitive)
+{
+	Primitives.Remove(Primitive);
+}
+
+void UWorld::SubmitPrimitiveDraws(FSceneRenderer& InRenderer) const
+{
+	for (const UPrimitiveComponent* Primitive : Primitives)
+	{
+		if (Primitive != nullptr && !Primitive->IsPendingKill() && Primitive->ShouldRender())
+		{
+			Primitive->SubmitDraw(InRenderer);
+		}
+	}
 }
 
 void UWorld::Clear()

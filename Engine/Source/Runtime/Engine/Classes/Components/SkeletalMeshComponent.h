@@ -1,33 +1,24 @@
 #pragma once
 
-#include "Components/SceneComponent.h"
+#include "Components/MeshComponent.h"
 #include "CoreMinimal.h"
 #include "Material.h"
 #include "SkeletalAnimation.h"
 #include "SkeletalMesh.h"
-#include "StaticMesh.h"
 #include "SkeletalMeshComponent.generated.h"
 
 class UGameEngine;
 class FSceneRenderer;
 
-/** Static mesh glued to a skeletal bone (Unreal-like socket attachment). */
-struct ENGINE_API FSkelMeshAttachment
-{
-	FString BoneName;
-	TSharedPtr<UStaticMesh> Mesh;
-	FMaterial Material{};
-	bool bMaterialOverride = true;
-	/** Bone-local TRS applied after the bone model matrix. */
-	FTransform Relative;
-	/** When true, WorldMatrixOverride replaces component * bone * relative. */
-	bool bOverrideWorldMatrix = false;
-	FMatrix WorldMatrixOverride = FMatrix::Identity;
-};
-
-/** Unreal-like USkeletalMeshComponent — USceneComponent with skeletal mesh + UAnimInstance. */
+/**
+ * Unreal-like USkeletalMeshComponent — a mesh component with a skeletal mesh + UAnimInstance (UE derives it from
+ * USkinnedMeshComponent; Leon has no skinned base yet).
+ *
+ * Its bones are sockets: a component attached at a bone name (AttachToComponent / SetupAttachment with the socket
+ * name, a UStaticMeshComponent weapon for example) follows the animated bone.
+ */
 UCLASS()
-class ENGINE_API USkeletalMeshComponent : public USceneComponent
+class ENGINE_API USkeletalMeshComponent : public UMeshComponent
 {
 	GENERATED_BODY()
 
@@ -94,26 +85,17 @@ public:
 	/** Scales the mesh to FitHeight (world units, cm; its Z extent) and stands it on the component origin. */
 	void ApplyFitHeight(float FitHeight);
 
-	void ClearAttachments();
-	FSkelMeshAttachment& AddAttachment(FSkelMeshAttachment Attachment);
-	[[nodiscard]] TArray<FSkelMeshAttachment>& GetAttachments()
-	{
-		return Attachments;
-	}
-	[[nodiscard]] const TArray<FSkelMeshAttachment>& GetAttachments() const
-	{
-		return Attachments;
-	}
-
 	/** Bone model-space matrix from the current UAnimInstance pose. */
 	[[nodiscard]] bool GetBoneModelMatrix(const FString& InBoneName, FMatrix& OutModel) const;
 
-	/** Attachment relative, then bone, then component world (or WorldMatrixOverride). */
-	[[nodiscard]] bool GetAttachmentWorldMatrix(int32 AttachmentIndex, FMatrix& OutWorld) const;
+	/** A bone's world transform (the bone's pose, then the component transform); the component's for other names. */
+	[[nodiscard]] FTransform GetSocketTransform(FName InSocketName) const override;
+	/** True for the names of the mesh's bones. */
+	[[nodiscard]] bool DoesSocketExist(FName InSocketName) const override;
 
 	void TickComponent(float DeltaTime) override;
 	/** Submit using this component's USceneComponent world transform. */
-	void SubmitDraw(FSceneRenderer& Renderer) const;
+	void SubmitDraw(FSceneRenderer& Renderer) const override;
 
 	[[nodiscard]] bool HasValidMesh() const
 	{
@@ -129,7 +111,6 @@ private:
 	TMap<FString, int32> SequenceIndexByName;
 	UBlendSpace1D BlendSpace{};
 	TUniquePtr<UAnimInstance> AnimInstance;
-	TArray<FSkelMeshAttachment> Attachments;
 	mutable TArray<FMatrix> SkinMatrices;
 	mutable TArray<FMatrix> BoneWorldMatrices;
 };

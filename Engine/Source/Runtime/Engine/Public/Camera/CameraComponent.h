@@ -1,7 +1,10 @@
 #pragma once
 
+#include "Components/SceneComponent.h"
 #include "CoreMinimal.h"
+#include "CameraComponent.generated.h"
 
+UENUM()
 enum class ECameraMode : uint8
 {
 	Orbit, // Blender-style tumble around a target: the eye is Target - ViewRotation.Vector() * Distance
@@ -13,12 +16,21 @@ inline constexpr float DefaultCameraNearPlane = 10.0f;
 inline constexpr float DefaultCameraFarPlane = 10000.0f;
 
 /**
- * View camera: orbit (default) or free-look for ADefaultCameraActor. Both modes look along a UE view rotation (yaw
- * about Z from +X toward +Y, pitch up from the horizontal; roll is always 0).
+ * View camera (UE: UCameraComponent, a scene component): orbit (default) or free-look for ADefaultCameraActor. Both
+ * modes look along a UE view rotation (yaw about Z from +X toward +Y, pitch up from the horizontal; roll is always 0).
+ *
+ * Unlike UE's camera, the view does not come from the component transform: the engine's camera (UGameEngine) is a
+ * standalone component whose eye comes from the orbit target / distance or the free-look eye, and a spring arm pushes
+ * into it with ApplyToCamera. P13 moves the view to APlayerCameraManager / UGameViewportClient.
  */
-class ENGINE_API UCameraComponent
+UCLASS()
+class ENGINE_API UCameraComponent : public USceneComponent
 {
+	GENERATED_BODY()
+
 public:
+	UCameraComponent(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
 	void SetPerspective(float InFovDegrees, float InAspect, float InNearPlane, float InFarPlane);
 	/** Orthographic projection; height is the full vertical world extent visible. */
 	void SetOrthographic(float Height, float InAspect, float InNearPlane, float InFarPlane);
@@ -114,19 +126,48 @@ private:
 	void InvalidateCache();
 	void UpdateCachedPosition() const;
 
+	UPROPERTY()
 	ECameraMode Mode = ECameraMode::Orbit;
+
+	/** Rebuilt by SetPerspective / SetOrthographic (FMatrix is not reflected). */
 	FMatrix Projection = FMatrix::Identity;
+
+	/** Orbit pivot (cm). */
+	UPROPERTY()
 	FVector Target = FVector::ZeroVector;
-	/** World units (cm), like every length of the camera. */
+
+	/** Free-look eye. World units (cm), like every length of the camera. */
+	UPROPERTY()
 	FVector Eye = FVector(0.0f, 0.0f, 100.0f);
+
 	/** Orbit default: the eye 25 degrees above the target, looking down at it. */
+	UPROPERTY()
 	FRotator ViewRotation = FRotator(-25.0f, 225.0f, 0.0f);
+
+	/** Orbit distance (cm). */
+	UPROPERTY()
 	float Distance = 500.0f;
+
+	/** Vertical field of view in degrees (UE: FieldOfView, horizontal there). */
+	UPROPERTY()
 	float FovDegrees = 60.0f;
+
+	/** UE: AspectRatio. */
+	UPROPERTY()
 	float Aspect = 16.0f / 9.0f;
+
+	UPROPERTY()
 	float NearPlane = DefaultCameraNearPlane;
+
+	UPROPERTY()
 	float FarPlane = DefaultCameraFarPlane;
+
+	/** UE: ProjectionMode == Orthographic. */
+	UPROPERTY()
 	bool bOrthographic = false;
+
+	/** Full vertical extent of the orthographic view (cm; UE: OrthoWidth, horizontal there). */
+	UPROPERTY()
 	float OrthoHeight = 2000.0f;
 
 	mutable bool bCacheDirty = true;

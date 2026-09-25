@@ -57,7 +57,7 @@ bool FInputMoveCameraRelativeMoveMatchesCameraYawTest::RunTest(const FString& Pa
 {
 	// The camera-relative move equals the yaw-relative move for the camera's view yaw, and follows its forward on the
 	// ground even when the camera looks down.
-	UCameraComponent Cam;
+	UCameraComponent& Cam = *NewObject<UCameraComponent>();
 	Cam.SetViewRotation(FRotator(-40.0f, 90.0f, 0.0f));
 	const FVector A = CameraRelativeMove(Cam, FVector2D(1.0f, 0.0f));
 	const FVector B = YawRelativeMove(FRotator(0.0f, 90.0f, 0.0f), FVector2D(1.0f, 0.0f));

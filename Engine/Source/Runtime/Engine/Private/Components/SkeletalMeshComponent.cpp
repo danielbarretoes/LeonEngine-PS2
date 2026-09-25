@@ -100,17 +100,6 @@ void USkeletalMeshComponent::ApplyFitHeight(float FitHeight)
 	RelativeLocation = RelativeRotation.RotateVector(Grounded) + FVector(0.0f, 0.0f, GroundEpsilon);
 }
 
-void USkeletalMeshComponent::ClearAttachments()
-{
-	Attachments.Empty();
-}
-
-FSkelMeshAttachment& USkeletalMeshComponent::AddAttachment(FSkelMeshAttachment Attachment)
-{
-	Attachments.Add(MoveTemp(Attachment));
-	return Attachments.Last();
-}
-
 bool USkeletalMeshComponent::GetBoneModelMatrix(const FString& InBoneName, FMatrix& OutModel) const
 {
 	if (!HasValidMesh() || InBoneName.IsEmpty())
@@ -131,25 +120,19 @@ bool USkeletalMeshComponent::GetBoneModelMatrix(const FString& InBoneName, FMatr
 	return true;
 }
 
-bool USkeletalMeshComponent::GetAttachmentWorldMatrix(int32 AttachmentIndex, FMatrix& OutWorld) const
+FTransform USkeletalMeshComponent::GetSocketTransform(FName InSocketName) const
 {
-	if (!Attachments.IsValidIndex(AttachmentIndex))
-	{
-		return false;
-	}
-	const FSkelMeshAttachment& Att = Attachments[AttachmentIndex];
-	if (Att.bOverrideWorldMatrix)
-	{
-		OutWorld = Att.WorldMatrixOverride;
-		return true;
-	}
 	FMatrix BoneModel = FMatrix::Identity;
-	if (!GetBoneModelMatrix(Att.BoneName, BoneModel))
+	if (InSocketName.IsNone() || !GetBoneModelMatrix(InSocketName.ToString(), BoneModel))
 	{
-		return false;
+		return GetComponentTransform();
 	}
-	OutWorld = Att.Relative.ToMatrixWithScale() * BoneModel * GetComponentTransform().ToMatrixWithScale();
-	return true;
+	return FTransform(BoneModel * GetComponentTransform().ToMatrixWithScale());
+}
+
+bool USkeletalMeshComponent::DoesSocketExist(FName InSocketName) const
+{
+	return HasValidMesh() && !InSocketName.IsNone() && SkeletalMesh->GetSkeleton().FindBoneIndex(InSocketName) >= 0;
 }
 
 void USkeletalMeshComponent::TickComponent(float DeltaTime)
@@ -170,19 +153,4 @@ void USkeletalMeshComponent::SubmitDraw(FSceneRenderer& Renderer) const
 
 	AnimInstance->GetSkinMatrices(SkinMatrices);
 	Renderer.SubmitSkeletalDraw(*SkeletalMesh, GetComponentTransform(), SkinMatrices);
-
-	for (int32 I = 0; I < Attachments.Num(); ++I)
-	{
-		const FSkelMeshAttachment& Att = Attachments[I];
-		if (Att.Mesh == nullptr || !Att.Mesh->Valid())
-		{
-			continue;
-		}
-		FMatrix AttachmentWorld = FMatrix::Identity;
-		if (!GetAttachmentWorldMatrix(I, AttachmentWorld))
-		{
-			continue;
-		}
-		Renderer.SubmitStaticDraw(*Att.Mesh, AttachmentWorld, Att.Material);
-	}
 }

@@ -192,7 +192,7 @@ bool FGameplaySpringArmClampsPitchAndArmLengthTest::RunTest(const FString& Param
 	TestEqual("Arm length clamped to max", Arm->TargetArmLength, Arm->ArmLengthMax, 1.0e-3f);
 
 	Arm->SnapLagState(FVector::ZeroVector);
-	UCameraComponent Camera;
+	UCameraComponent& Camera = *NewObject<UCameraComponent>();
 	Arm->ApplyToCamera(Camera, FVector(100.0f, 0.0f, 0.0f), 0.016f);
 	TestTrue("Orbit camera", Camera.GetMode() == ECameraMode::Orbit);
 	TestEqual("Camera target height", Camera.GetTarget().Z, Arm->TargetOffset.Z, 50.0f);
@@ -261,7 +261,7 @@ bool FGameplaySpringArmCollisionProbeShortensArmTest::RunTest(const FString& Par
 	Arm.CollisionProbeOffset = 5.0f;
 	Arm.SnapLagState(FVector::ZeroVector);
 
-	UCameraComponent Camera;
+	UCameraComponent& Camera = *NewObject<UCameraComponent>();
 	Arm.ApplyToCamera(Camera, FVector::ZeroVector, 0.016f, &Scene);
 	TestTrue("Arm shortened", Camera.GetDistance() < 300.0f);
 	TestTrue("Arm above minimum", Camera.GetDistance() >= Arm.ArmLengthMin);

@@ -24,37 +24,66 @@ class ENGINE_API USpringArmComponent : public USceneComponent
 	GENERATED_BODY()
 
 public:
+	USpringArmComponent(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
 	/** Desired boom length in cm (scroll edits this; lag follows toward it). */
+	UPROPERTY()
 	float TargetArmLength = 400.0f;
+
 	/** cm */
+	UPROPERTY()
 	float ArmLengthMin = 150.0f;
+
 	/** cm */
+	UPROPERTY()
 	float ArmLengthMax = 2000.0f;
+
 	/** Offset of the arm origin from the owner's location, in world space (cm; UE: TargetOffset). */
+	UPROPERTY()
 	FVector TargetOffset = FVector(0.0f, 0.0f, 100.0f);
+
 	/**
 	 * Offset in the arm's rotation space (cm; UE: SocketOffset): Y > 0 puts the camera right of the pawn (over the
 	 * shoulder). Unlike UE, which moves only the end of the arm, it moves the whole arm: the camera orbits the offset
 	 * point and the collision probe starts there.
 	 */
+	UPROPERTY()
 	FVector SocketOffset = FVector::ZeroVector;
+
 	/** Use the owning pawn's view rotation (UE: bUsePawnControlRotation); otherwise the component's rotation. */
+	UPROPERTY()
 	bool bUsePawnControlRotation = false;
 
 	/** Unreal-style follow lag (higher speed = snappier). */
+	UPROPERTY()
 	bool bEnableCameraLag = true;
+
+	UPROPERTY()
 	float CameraLagSpeed = 10.0f;
+
+	UPROPERTY()
 	bool bEnableCameraRotationLag = true;
+
+	UPROPERTY()
 	float CameraRotationLagSpeed = 14.0f;
+
 	/** Smooth zoom toward TargetArmLength. */
+	UPROPERTY()
 	float ArmLengthLagSpeed = 10.0f;
 
 	/** Unreal bDoCollisionTest — sphere-sweep target → camera against FPhysScene. */
+	UPROPERTY()
 	bool bDoCollisionTest = true;
+
 	/** Sphere probe radius (cm). Unreal ProbeSize defaults to 12. */
+	UPROPERTY()
 	float ProbeSize = 15.0f;
+
 	/** Extra pull-in after a hit so the near plane stays clear of geometry (cm). */
+	UPROPERTY()
 	float CollisionProbeOffset = 5.0f;
+
+	/** The channel of the collision probe (ECollisionChannel is not reflected yet). */
 	ECollisionChannel ProbeChannel = ECollisionChannel::WorldStatic;
 
 	/** Positive delta lengthens the boom (zoom out). Clamped to ArmLengthMin/Max. */

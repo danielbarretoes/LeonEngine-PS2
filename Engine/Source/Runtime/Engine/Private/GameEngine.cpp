@@ -19,6 +19,7 @@ UGameEngine::UGameEngine()
 	Application.Reset(FPlatformApplicationMisc::CreateApplication());
 	Window = Application->MakeWindow();
 	PlayerInput.AddMappingContext(UInputMappingContext::MakeDefault());
+	Camera = NewObject<UCameraComponent>(GetTransientPackage());
 	// UE: UGameEngine::Init creates the game instance, which creates the world context and its world.
 	SetGameInstanceObject(NewObject<UGameInstance>(GetTransientPackage()));
 }
@@ -36,6 +37,7 @@ UGameEngine::~UGameEngine()
 void UGameEngine::AddReferencedObjects(FReferenceCollector& Collector)
 {
 	Collector.AddReferencedObject(GameInstance);
+	Collector.AddReferencedObject(Camera);
 }
 
 void UGameEngine::SetGameInstanceObject(UGameInstance* NewInstance)
@@ -104,8 +106,8 @@ bool UGameEngine::Initialize(int32 Width, int32 Height, const TCHAR* Title)
 
 	Window->OnMouseWheel().BindLambda([this](float Delta) { PendingScrollY += Delta; });
 
-	Camera.SetPerspective(60.0f, Window->Aspect(), DefaultCameraNearPlane, DefaultCameraFarPlane);
-	Camera.SetTarget(FVector::ZeroVector);
+	Camera->SetPerspective(60.0f, Window->Aspect(), DefaultCameraNearPlane, DefaultCameraFarPlane);
+	Camera->SetTarget(FVector::ZeroVector);
 
 	SetCursorCaptured(true);
 
@@ -325,8 +327,8 @@ void UGameEngine::TickPlayAudio()
 	{
 		return;
 	}
-	const FVector Eye = Camera.GetCameraLocation();
-	const FVector Forward = Camera.ForwardVector();
+	const FVector Eye = Camera->GetCameraLocation();
+	const FVector Forward = Camera->ForwardVector();
 	const FVector Up = FVector(0.0f, 0.0f, 1.0f);
 	AudioDevice.SetListener(Eye, Forward, Up);
 	AudioDevice.Tick();
@@ -542,19 +544,19 @@ void UGameEngine::HandleInput(float DeltaTime)
 		const float Pitch = MoveInput.X * KeyboardOrbitSpeed;
 		if (Yaw != 0.0f || Pitch != 0.0f)
 		{
-			Camera.AddViewRotation(FRotator(Pitch * DeltaTime, Yaw * DeltaTime, 0.0f));
+			Camera->AddViewRotation(FRotator(Pitch * DeltaTime, Yaw * DeltaTime, 0.0f));
 		}
 	}
 
 	// Orbit mouse: Engine owns scroll zoom on camera distance (look is continuous below).
-	if (bOrbitMouseEnabled && Camera.GetMode() == ECameraMode::Orbit)
+	if (bOrbitMouseEnabled && Camera->GetMode() == ECameraMode::Orbit)
 	{
 		const float ScrollY = ConsumeScrollY();
 		if (ScrollY != 0.0f)
 		{
 			/** cm per wheel notch */
 			constexpr float ZoomPerNotch = 40.0f;
-			Camera.Zoom(ScrollY * ZoomPerNotch);
+			Camera->Zoom(ScrollY * ZoomPerNotch);
 		}
 	}
 
@@ -571,16 +573,16 @@ void UGameEngine::HandleInput(float DeltaTime)
 		{
 			const float Dx = static_cast<float>(MouseX - LastMouseX);
 			const float Dy = static_cast<float>(MouseY - LastMouseY);
-			if (Camera.GetMode() == ECameraMode::FreeLook)
+			if (Camera->GetMode() == ECameraMode::FreeLook)
 			{
 				constexpr float LookDegreesPerPixel = 0.15f;
-				Camera.AddViewRotation(FRotator(-Dy * LookDegreesPerPixel, Dx * LookDegreesPerPixel, 0.0f));
+				Camera->AddViewRotation(FRotator(-Dy * LookDegreesPerPixel, Dx * LookDegreesPerPixel, 0.0f));
 			}
 			else if (bOrbitMouseEnabled)
 			{
 				// Dragging down tilts the view down (the eye rises over the target).
 				constexpr float OrbitDegreesPerPixel = 0.3f;
-				Camera.AddViewRotation(FRotator(-Dy * OrbitDegreesPerPixel, Dx * OrbitDegreesPerPixel, 0.0f));
+				Camera->AddViewRotation(FRotator(-Dy * OrbitDegreesPerPixel, Dx * OrbitDegreesPerPixel, 0.0f));
 			}
 		}
 		bMouseLookSampleValid = true;
@@ -609,12 +611,12 @@ void UGameEngine::Render(const FPostRenderCallback& OnPostRender)
 	{
 		LastFbWidth = FbWidth;
 		LastFbHeight = FbHeight;
-		Camera.SetPerspective(Camera.FieldOfView(), static_cast<float>(FbWidth) / static_cast<float>(FbHeight),
+		Camera->SetPerspective(Camera->FieldOfView(), static_cast<float>(FbWidth) / static_cast<float>(FbHeight),
 			DefaultCameraNearPlane, DefaultCameraFarPlane);
 	}
 
 	Renderer.BeginFrame(FbWidth, FbHeight);
-	Renderer.DrawScene(GetLevel(), Camera);
+	Renderer.DrawScene(GetLevel(), *Camera);
 	PaintHudAndOverlay(FbWidth, FbHeight);
 	if (OnPostRender)
 	{

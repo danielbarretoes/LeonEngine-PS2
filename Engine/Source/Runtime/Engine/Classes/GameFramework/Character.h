@@ -2,8 +2,10 @@
 
 #include "CollisionQuery.h"
 #include "CollisionShape.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "CoreMinimal.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Pawn.h"
 #include "Physics/PhysScene.h"
 #include "Character.generated.h"
@@ -11,61 +13,16 @@
 class FSceneRenderer;
 class FDebugDraw;
 
-/** Unreal-like EMovementMode (CMC lite: Walking / Falling only). */
-enum class EMovementMode : uint8
-{
-	None = 0,
-	Walking,
-	Falling,
-};
-
-/** Unreal-like FFindFloorResult (CMC floor query). */
-struct ENGINE_API FFindFloorResult
-{
-	bool bBlockingHit = false;
-	bool bWalkableFloor = false;
-	/** Distance from capsule feet down to floor ImpactPoint.Z (>= 0 when hit below/at feet). */
-	float FloorDist = 0.0f;
-	FHitResult Hit{};
-};
-
-/** Unreal-like UCharacterMovementComponent tunables (PascalCase Unreal-like field names). */
-struct ENGINE_API UCharacterMovementComponent
-{
-	/** Unreal MaxWalkSpeed (cm/s). */
-	float MaxWalkSpeed = 450.0f;
-	/** Unreal JumpZVelocity (cm/s). */
-	float JumpZVelocity = 700.0f;
-	/** World gravity acceleration, cm/s^2 (Leon absolute; UE uses GravityScale × world gravity). */
-	float Gravity = 2400.0f;
-	float TurnSharpness = 16.0f;
-	/** Added to the yaw the character turns to when it orients to its movement (degrees). */
-	float ModelYawOffset = 0.0f;
-	/** Height of the infinite floor plane (cm). */
-	float FloorZ = 0.0f;
-	/** Contact skin (cm). */
-	float Skin = 2.0f;
-	/** Unreal MaxStepHeight (cm): geometric step-up + floor probe window. */
-	float MaxStepHeight = 35.0f;
-	/** Half size of the square the character may walk in (cm). */
-	float WalkBounds = 1800.0f;
-	/** Unitless push strength against dynamic bodies. */
-	float PushStrength = 1.0f;
-	float PushDamping = 6.0f;
-	/** Unreal WalkableFloorZ (cos of max walkable slope). Default ~44° (UE). */
-	float WalkableFloorZ = 0.71f;
-	/** Unreal AirControl [0,1]: fraction of MaxWalkSpeed applied while Falling. */
-	float AirControl = 0.35f;
-	/** Max jumps from ground before landing (1 = normal, 2 = double jump). Projects may raise. */
-	int MaxJumpCount = 1;
-};
-
 /**
  * Kinematic capsule pawn (Unreal-style ACharacter + CMC lite).
  *
+ * Components (default subobjects, UE names): the root UCapsuleComponent "CollisionCylinder", the
+ * UCharacterMovementComponent "CharMoveComp" (its tunables) and the USkeletalMeshComponent "CharacterMesh0" attached to
+ * the capsule.
+ *
  * Contract:
- * - Actor location = capsule **feet** (bottom), not capsule center.
- * - The capsule (FCollisionShape) extends up (+Z) by twice its half height; XY radius = capsule radius.
+ * - Actor location = capsule **feet** (bottom), not capsule center (UE: the capsule center; a documented deviation).
+ * - The capsule extends up (+Z) by twice its half height from the feet; XY radius = capsule radius.
  * - Actor yaw is a UE yaw (0 faces +X, 90 faces +Y); the mesh shows legacy content with a relative yaw of
  *   LegacyContentYaw.
  * - Not registered as a FPhysScene FBodyInstance; moves via PerformMovement queries.
@@ -79,29 +36,38 @@ class ENGINE_API ACharacter : public APawn
 public:
 	ACharacter(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	/** Name of the mesh default subobject (UE: MeshComponentName). */
+	/** Names of the default subobjects (UE). */
+	static const FName CapsuleComponentName;
+	static const FName CharacterMovementComponentName;
 	static const FName MeshComponentName;
 
+	/** Resizes the capsule component from a capsule shape (radius, half height). */
 	void SetCapsule(const FCollisionShape& InCapsule)
 	{
-		Capsule = InCapsule;
-	}
-	void SetCharacterMovement(const UCharacterMovementComponent& InMovement)
-	{
-		Movement = InMovement;
+		CapsuleComponent->SetCapsuleSize(InCapsule.GetCapsuleRadius(), InCapsule.GetCapsuleHalfHeight());
 	}
 
-	[[nodiscard]] const FCollisionShape& GetCapsule() const
+	/** The capsule component's shape (radius 35 cm, half height 92.5 cm by default). */
+	[[nodiscard]] FCollisionShape GetCapsule() const
 	{
-		return Capsule;
+		return CapsuleComponent->GetCollisionShape();
 	}
+	/** The root capsule (UE: GetCapsuleComponent). */
+	[[nodiscard]] UCapsuleComponent* GetCapsuleComponent() const
+	{
+		return CapsuleComponent;
+	}
+	/**
+	 * The movement component (UE: GetCharacterMovement). A reference (UE returns the pointer): every character has its
+	 * movement default subobject.
+	 */
 	[[nodiscard]] UCharacterMovementComponent& GetCharacterMovement()
 	{
-		return Movement;
+		return *CharacterMovement;
 	}
 	[[nodiscard]] const UCharacterMovementComponent& GetCharacterMovement() const
 	{
-		return Movement;
+		return *CharacterMovement;
 	}
 
 	/** Unreal-like UCharacterMovementComponent::SetMovementMode / MovementMode. */
@@ -166,6 +132,7 @@ public:
 	}
 
 	/** When true (default), yaw follows wish movement. When false, call FaceRotation / SetActorRotation. */
+	UPROPERTY()
 	bool bOrientRotationToMovement = true;
 
 	/** Unreal-like health (ACharacter lite). */
@@ -237,17 +204,27 @@ private:
 	/** Unreal CMC step-up: raise ≤ MaxStepHeight, move forward, land on walkable floor. */
 	[[nodiscard]] bool TryStepUp(FPhysScene& PhysScene, const FVector& ForwardDelta, FDebugDraw* DebugDraw);
 
-	/** Radius 35 cm, half height 92.5 cm. */
-	FCollisionShape Capsule = FCollisionShape::MakeCapsule(35.0f, 92.5f);
-	UCharacterMovementComponent Movement{};
+	/** The root: the character's collision capsule (UE: CapsuleComponent). */
+	UPROPERTY()
+	UCapsuleComponent* CapsuleComponent = nullptr;
+
+	/** The movement tunables (UE: CharacterMovement). */
+	UPROPERTY()
+	UCharacterMovementComponent* CharacterMovement = nullptr;
 
 	/** The skeletal visual, attached to the root (UE: Mesh). */
 	UPROPERTY()
 	USkeletalMeshComponent* Mesh = nullptr;
 
 	float AnimBlendInput = 0.0f;
+
+	UPROPERTY()
 	float Health = 100.0f;
+
+	UPROPERTY()
 	float MaxHealth = 100.0f;
+
+	UPROPERTY()
 	bool bAlive = true;
 
 	FVector WishDir = FVector::ZeroVector;

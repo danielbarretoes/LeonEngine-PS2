@@ -1,0 +1,45 @@
+// Reflected fixtures of the Engine tests.
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Engine/World.h"
+#include "GameFramework/Actor.h"
+#include "EngineTestTypes.generated.h"
+
+/** An actor that, on its first tick, spawns an actor and destroys another, to check what a tick may do. */
+UCLASS()
+class AEngineTestTickSpawner : public AActor
+{
+	GENERATED_BODY()
+
+public:
+	/** Destroyed on the first tick. */
+	UPROPERTY()
+	AActor* Victim = nullptr;
+
+	/** Spawned on the first tick. */
+	UPROPERTY()
+	AActor* Spawned = nullptr;
+
+	/** What the tick saw right after spawning. */
+	bool bSpawnedInLevelDuringTick = true;
+	bool bSpawnedBegunDuringTick = true;
+	bool bVictimSlotNulledDuringTick = false;
+
+	void Tick(float DeltaSeconds) override
+	{
+		Super::Tick(DeltaSeconds);
+		if (Spawned != nullptr)
+		{
+			return;
+		}
+		UWorld* World = GetWorld();
+		Spawned = World->SpawnActor<AActor>();
+		bSpawnedInLevelDuringTick = World->PersistentLevel->Actors.Contains(Spawned);
+		bSpawnedBegunDuringTick = Spawned->HasActorBegunPlay();
+		const int32 NumBefore = World->PersistentLevel->Actors.Num();
+		World->DestroyActor(Victim);
+		bVictimSlotNulledDuringTick =
+			World->PersistentLevel->Actors.Num() == NumBefore && !World->PersistentLevel->Actors.Contains(Victim);
+	}
+};
