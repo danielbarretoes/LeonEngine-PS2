@@ -96,7 +96,7 @@ void FGenericWindow::NotifyScroll(double YOffset)
 
 bool FGenericWindow::InitRHI(void* (*ProcAddressLoader)(const char*))
 {
-	OwnedRHI = PlatformCreateDynamicRHI();
+	OwnedRHI.reset(PlatformCreateDynamicRHI());
 	if (!OwnedRHI || !OwnedRHI->Init(ProcAddressLoader))
 	{
 		std::printf("FGenericWindow: failed to initialize the RHI\n");

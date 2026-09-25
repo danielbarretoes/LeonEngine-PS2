@@ -1,9 +1,8 @@
 #include "HAL/PlatformMath.h"
+#include "HAL/UnrealMemory.h"
 #include "PS2GSContext.h"
 #include "PS2RHI.h"
 
-#include <cstdint>
-#include <cstring>
 #include <dma.h>
 #include <draw2d.h>
 #include <draw_blending.h>
@@ -16,9 +15,9 @@ namespace
 	struct Ps2MeshHeader
 	{
 		char Magic[4]; // LPS2
-		std::uint32_t Version;
-		std::uint32_t VertexCount;
-		std::uint32_t IndexCount;
+		uint32 Version;
+		uint32 VertexCount;
+		uint32 IndexCount;
 	};
 #pragma pack(pop)
 
@@ -200,8 +199,8 @@ bool FPS2RHI::DrawCookedMesh(const void* Data, unsigned Size)
 		return false;
 	}
 	Ps2MeshHeader Header{};
-	std::memcpy(&Header, Data, sizeof(Header));
-	if (std::memcmp(Header.Magic, "LPS2", 4) != 0 || Header.Version != 1)
+	FMemory::Memcpy(&Header, Data, sizeof(Header));
+	if (FMemory::Memcmp(Header.Magic, "LPS2", 4) != 0 || Header.Version != 1)
 	{
 		return false;
 	}

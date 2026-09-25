@@ -2,11 +2,9 @@
 #include "PS2GSContext.h"
 #include "PS2RHI.h"
 
-#include <cstdio>
 #include <dma.h>
 #include <graph.h>
 #include <gs_psm.h>
-#include <memory>
 
 namespace
 {
@@ -65,7 +63,7 @@ namespace
 		virtual bool Init(void* (*)(const char*)) override
 		{
 			Version = "GS";
-			std::printf("Leon RHI: PS2 %s\n", Version);
+			UE_LOG(LogRHI, Log, "PS2 %s", Version);
 			return true;
 		}
 
@@ -136,7 +134,7 @@ bool FPS2RHI::InitDisplay(int Width, int Height)
 	const int FrameVram = Leon::PS2::AllocateVram(W, H, GS_PSM_32, GRAPH_ALIGN_PAGE);
 	if (FrameVram < 0)
 	{
-		std::printf("FPS2RHI::InitDisplay: frame VRAM allocate failed\n");
+		UE_LOG(LogRHI, Error, "FPS2RHI::InitDisplay: frame VRAM allocate failed");
 		return false;
 	}
 	Gs.Frame.address = static_cast<unsigned int>(FrameVram);
@@ -144,7 +142,7 @@ bool FPS2RHI::InitDisplay(int Width, int Height)
 	const int ZVram = Leon::PS2::AllocateVram(W, H, GS_ZBUF_32, GRAPH_ALIGN_PAGE);
 	if (ZVram < 0)
 	{
-		std::printf("FPS2RHI::InitDisplay: z-buffer VRAM allocate failed\n");
+		UE_LOG(LogRHI, Error, "FPS2RHI::InitDisplay: z-buffer VRAM allocate failed");
 		return false;
 	}
 	Gs.Z.enable = DRAW_ENABLE;
@@ -155,13 +153,13 @@ bool FPS2RHI::InitDisplay(int Width, int Height)
 
 	if (graph_initialize(Gs.Frame.address, W, H, GS_PSM_32, 0, 0) < 0)
 	{
-		std::printf("FPS2RHI::InitDisplay: graph_initialize failed\n");
+		UE_LOG(LogRHI, Error, "FPS2RHI::InitDisplay: graph_initialize failed");
 		return false;
 	}
 
 	if (!SetupDrawingEnvironment(Gs))
 	{
-		std::printf("FPS2RHI::InitDisplay: draw environment failed\n");
+		UE_LOG(LogRHI, Error, "FPS2RHI::InitDisplay: draw environment failed");
 		return false;
 	}
 
@@ -171,7 +169,7 @@ bool FPS2RHI::InitDisplay(int Width, int Height)
 	graph_wait_vsync();
 
 	Gs.bReady = true;
-	std::printf("FPS2RHI::InitDisplay: %dx%d GS + z-buffer ready\n", W, H);
+	UE_LOG(LogRHI, Log, "FPS2RHI::InitDisplay: %dx%d GS + z-buffer ready", W, H);
 	return true;
 }
 
@@ -183,10 +181,10 @@ void FPS2RHI::WaitVSync()
 	}
 }
 
-std::unique_ptr<FDynamicRHI> PlatformCreateDynamicRHI()
+FDynamicRHI* PlatformCreateDynamicRHI()
 {
-	auto Device = std::make_unique<FPS2DynamicRHI>();
-	GPS2DynamicRHI = Device.get();
+	FPS2DynamicRHI* Device = new FPS2DynamicRHI();
+	GPS2DynamicRHI = Device;
 	return Device;
 }
 

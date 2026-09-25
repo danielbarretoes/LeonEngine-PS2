@@ -1,10 +1,9 @@
+#include "DynamicRHI.h"
 #include "HAL/PlatformMath.h"
 #include "PS2GSContext.h"
 #include "PS2RHI.h"
 #include "PS2SceneState.h"
 
-#include <cstdint>
-#include <cstdio>
 #include <dma.h>
 #include <draw.h>
 #include <draw3d.h>
@@ -316,7 +315,7 @@ namespace
 	/// Writes one GIF REGLIST vertex group (RGBAQ [+ ST] + XYZ2) after the perspective divide.
 	struct TriangleWriter
 	{
-		std::uint64_t* Dw = nullptr;
+		uint64* Dw = nullptr;
 		bool bTextured = false;
 		int Count = 0;
 
@@ -559,7 +558,7 @@ bool FPS2RHI::DrawBox(float LocationX, float LocationY, float LocationZ, unsigne
 
 	TriangleWriter Writer{};
 	Writer.bTextured = bTextured;
-	Writer.Dw = reinterpret_cast<std::uint64_t*>(draw_prim_start(Q, 0, &Prim, &BaseColor));
+	Writer.Dw = reinterpret_cast<uint64*>(draw_prim_start(Q, 0, &Prim, &BaseColor));
 
 	for (int F = 0; F < FaceCount; ++F)
 	{
@@ -593,7 +592,7 @@ bool FPS2RHI::DrawBox(float LocationX, float LocationY, float LocationZ, unsigne
 	{
 		return true;
 	}
-	if ((reinterpret_cast<std::uintptr_t>(Writer.Dw) % 16u) != 0u)
+	if ((reinterpret_cast<UPTRINT>(Writer.Dw) % 16u) != 0u)
 	{
 		*Writer.Dw++ = 0;
 	}
@@ -620,7 +619,6 @@ void FPS2RHI::GetDraw3DStats(FPS2Draw3DStats& Out)
 
 void FPS2RHI::PrintDraw3DStats(const FPS2Draw3DStats& S)
 {
-	std::printf("[Draw3D] boxes=%u culled=%u backfaces=%u tris=%u keep=%u drop=%u clip=%u "
-				"emit=%u qwPeak=%u\n",
+	UE_LOG(LogRHI, Log, "[Draw3D] boxes=%u culled=%u backfaces=%u tris=%u keep=%u drop=%u clip=%u emit=%u qwPeak=%u",
 		S.Boxes, S.CulledBoxes, S.BackFaces, S.InTris, S.Keep3, S.Drop0, S.Clipped, S.Emitted, S.PacketQwordsPeak);
 }

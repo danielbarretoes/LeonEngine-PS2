@@ -1,16 +1,15 @@
 #pragma once
 
-#include <cstdint>
+#include "CoreTypes.h"
 
-/// Opaque GPU object ids for public Engine headers.
-/// Under the OpenGL plugin these are GLuint-compatible; 0 means invalid / default FB.
-using FRHITextureId = std::uint32_t;
-using FRHIFramebufferId = std::uint32_t;
-using FRHIBufferId = std::uint32_t;
-using FRHIVertexArrayId = std::uint32_t;
-using FRHIProgramId = std::uint32_t;
-using FRHIQueryId = std::uint32_t;
-using FRHIRenderbufferId = std::uint32_t;
+/** Opaque GPU object ids for public Engine headers: GLuint-compatible under OpenGLDrv; 0 means invalid / default FB. */
+using FRHITextureId = uint32;
+using FRHIFramebufferId = uint32;
+using FRHIBufferId = uint32;
+using FRHIVertexArrayId = uint32;
+using FRHIProgramId = uint32;
+using FRHIQueryId = uint32;
+using FRHIRenderbufferId = uint32;
 
 constexpr FRHITextureId InvalidTexture = 0;
 constexpr FRHIFramebufferId InvalidFramebuffer = 0;

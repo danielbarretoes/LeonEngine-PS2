@@ -1,8 +1,7 @@
 #pragma once
 
+#include "Containers/UnrealString.h"
 #include "DynamicRHI.h"
-
-#include <string>
 
 /** OpenGL 3.3 core RHI backend (UE: FOpenGLDynamicRHI). */
 class OPENGLDRV_API FOpenGLDynamicRHI final : public FDynamicRHI
@@ -19,9 +18,9 @@ public:
 
 	virtual const char* GetAPIVersionString() const override
 	{
-		return Version.c_str();
+		return *Version;
 	}
 
 private:
-	std::string Version = "unknown";
+	FString Version = "unknown";
 };

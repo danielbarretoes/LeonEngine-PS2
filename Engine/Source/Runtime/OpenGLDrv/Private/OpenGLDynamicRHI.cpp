@@ -2,10 +2,6 @@
 
 #include <glad/glad.h>
 
-#include <array>
-#include <iostream>
-#include <memory>
-
 /** Windows: DXGI adapter budget/usage (more accurate than the GL extensions). */
 bool GetOpenGLPlatformGPUMemoryStats(FRHIGPUMemoryStats& OutStats);
 
@@ -17,12 +13,12 @@ bool FOpenGLDynamicRHI::Init(void* (*ProcAddressLoader)(const char*))
 	}
 	if (gladLoadGLLoader(reinterpret_cast<GLADloadproc>(ProcAddressLoader)) == 0)
 	{
-		std::cerr << "Failed to initialize GLAD (OpenGL RHI)\n";
+		UE_LOG(LogRHI, Error, "Failed to initialize GLAD (OpenGL RHI)");
 		return false;
 	}
 	const char* VersionString = reinterpret_cast<const char*>(glGetString(GL_VERSION));
 	Version = VersionString != nullptr ? VersionString : "unknown";
-	std::cout << "OpenGL " << Version << '\n';
+	UE_LOG(LogRHI, Log, "OpenGL %s", *Version);
 	return true;
 }
 
@@ -56,8 +52,8 @@ FRHIGPUMemoryStats FOpenGLDynamicRHI::GetGPUMemoryStats() const
 	}
 	if (GLAD_GL_ATI_meminfo != 0)
 	{
-		std::array<GLint, 4> TextureFree{};
-		glGetIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, TextureFree.data());
+		GLint TextureFree[4] = {};
+		glGetIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, TextureFree);
 		if (TextureFree[0] > 0)
 		{
 			Stats.bValid = true;
@@ -69,7 +65,7 @@ FRHIGPUMemoryStats FOpenGLDynamicRHI::GetGPUMemoryStats() const
 	return Stats;
 }
 
-std::unique_ptr<FDynamicRHI> PlatformCreateDynamicRHI()
+FDynamicRHI* PlatformCreateDynamicRHI()
 {
-	return std::make_unique<FOpenGLDynamicRHI>();
+	return new FOpenGLDynamicRHI();
 }

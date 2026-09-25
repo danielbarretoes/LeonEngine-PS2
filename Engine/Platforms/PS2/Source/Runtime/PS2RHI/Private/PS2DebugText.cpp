@@ -1,7 +1,7 @@
+#include "Misc/Char.h"
 #include "PS2GSContext.h"
 #include "PS2RHI.h"
 
-#include <cctype>
 #include <dma.h>
 #include <draw2d.h>
 #include <draw_tests.h>
@@ -350,7 +350,7 @@ void FPS2RHI::DrawDebugText(float X, float Y, const char* Text, float InR, float
 		char Ch = *P;
 		if (Ch >= 'a' && Ch <= 'z' && Ch != 'm' && Ch != 's')
 		{
-			Ch = static_cast<char>(std::toupper(static_cast<unsigned char>(Ch)));
+			Ch = FChar::ToUpper(Ch);
 		}
 		Q = AppendGlyphRuns(Gs, Q, Cx, Y, Ch, LocalCell, Color);
 		Cx += GlyphAdvanceCells * LocalCell;

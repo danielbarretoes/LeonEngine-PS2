@@ -1,8 +1,9 @@
 #pragma once
 
 #include "CoreTypes.h"
+#include "Logging/LogMacros.h"
 
-#include <memory>
+RHI_API DECLARE_LOG_CATEGORY_EXTERN(LogRHI, Log, All);
 
 /** GPU memory reported by the active RHI (0 / invalid when the API cannot tell). */
 struct RHI_API FRHIGPUMemoryStats
@@ -39,5 +40,5 @@ public:
 /** The active RHI (UE: GDynamicRHI); set by the window that owns the graphics context. */
 extern RHI_API FDynamicRHI* GDynamicRHI;
 
-/** Implemented by the platform's RHI module (Win64/Linux: OpenGLDrv, PS2: PS2RHI). */
-std::unique_ptr<FDynamicRHI> PlatformCreateDynamicRHI();
+/** Implemented by the platform's RHI module (Win64/Linux: OpenGLDrv, PS2: PS2RHI); the caller owns the result. */
+FDynamicRHI* PlatformCreateDynamicRHI();

@@ -1,8 +1,8 @@
+#include "HAL/UnrealMemory.h"
 #include "PS2GSContext.h"
 #include "PS2RHI.h"
 #include "PS2SceneState.h"
 
-#include <cstring>
 #include <dma.h>
 #include <draw.h>
 #include <graph.h>
@@ -161,7 +161,7 @@ FPS2Texture FPS2Texture::Create(int InWidth, int InHeight, const unsigned char* 
 	{
 		return {};
 	}
-	std::memcpy(Aligned, Rgba, static_cast<size_t>(InWidth * InHeight * 4));
+	FMemory::Memcpy(Aligned, Rgba, static_cast<SIZE_T>(InWidth * InHeight * 4));
 	FPS2Texture Tex = CreateFromAlignedRgba(InWidth, InHeight, Aligned);
 	free(Aligned);
 	return Tex;
