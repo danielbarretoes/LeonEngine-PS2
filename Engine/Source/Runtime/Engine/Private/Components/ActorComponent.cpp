@@ -93,6 +93,18 @@ void UActorComponent::UnregisterComponent()
 	WorldPrivate = nullptr;
 }
 
+void UActorComponent::RecreatePhysicsState()
+{
+	if (bPhysicsStateCreated)
+	{
+		DestroyPhysicsState();
+	}
+	if (bRegistered && GetWorld() != nullptr)
+	{
+		CreatePhysicsState();
+	}
+}
+
 void UActorComponent::DestroyComponent(bool /*bPromoteChildren*/)
 {
 	if (bIsBeingDestroyed)

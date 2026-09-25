@@ -147,14 +147,14 @@ bool FJoltRestsOnTriangleMeshTest::RunTest(const FString& Parameters)
 	(void)Component.SetStaticMesh(MakeShared<UStaticMesh>(UStaticMesh::CreateCpu(Data)));
 	Component.SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 
-	FPhysScene Scene(EPhysicsBackend::Jolt);
-	Scene.AddBody({0, EBodyType::Static, 1.0f, true});
+	World.SetPhysicsBackend(EPhysicsBackend::Jolt);
+	FPhysScene& Scene = World.GetPhysicsScene();
 	const int32 BoxId = Scene.AddBody({1, EBodyType::Dynamic, 5.0f, true});
 	FBodyInstance& Box = Scene.GetBodies()[BoxId];
 	Box.Position = FVector(0.0f, 0.0f, 500.0f);
 	Box.HalfExtents = FVector(35.0f, 35.0f, 35.0f);
 
-	Scene.SyncFromLevel(*World.PersistentLevel);
+	Scene.RebuildRigidWorld();
 	TestTrue("Triangle mesh", Scene.GetBodies()[0].CollisionShape == EBodyCollisionShape::TriangleMesh);
 
 	FPhysSceneStepParams Params;

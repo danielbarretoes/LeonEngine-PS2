@@ -47,7 +47,7 @@ namespace
 		return Data != nullptr && Data->ActorClass == ELevelActorClass::Plane;
 	}
 
-	/** Component is the body's primitive (null without a level to look it up in). */
+	/** Component is the body's owner (null for a body without one, or without a level). */
 	[[nodiscard]] bool BodyBlocksNavigation(
 		const FBodyInstance& InBody, float FloorZ, float InCellSize, const UPrimitiveComponent* Component)
 	{
@@ -185,17 +185,11 @@ void UNavigationSystem::BakeGrid(const FPhysScene& Physics, float FloorZ, float 
 	TArray<FNavBlocker> Blockers;
 	Blockers.Reserve(static_cast<SIZE_T>(Physics.GetBodies().Num()));
 	const auto& TriMeshes = Physics.GetTriangleMeshes();
-	TArray<UPrimitiveComponent*> Primitives;
-	if (Level != nullptr)
-	{
-		Level->GetCollisionPrimitives(Primitives);
-	}
 	for (int32 Bi = 0; Bi < Physics.GetBodies().Num(); ++Bi)
 	{
 		const FBodyInstance& LocalBody = Physics.GetBodies()[Bi];
-		const UPrimitiveComponent* Component = LocalBody.LevelMeshIndex < static_cast<SIZE_T>(Primitives.Num())
-			? Primitives[static_cast<int32>(LocalBody.LevelMeshIndex)]
-			: nullptr;
+		// With a level, a body's component tells what it is (its actor's tags, the `.llev` floor plane).
+		const UPrimitiveComponent* Component = Level != nullptr ? Physics.GetBodyOwner(Bi) : nullptr;
 		if (!BodyBlocksNavigation(LocalBody, FloorZ, Cell, Component))
 		{
 			continue;

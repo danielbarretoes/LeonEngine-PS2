@@ -12,8 +12,11 @@ class FSceneRenderer;
  *
  * Its render state is its entry in the world's primitive list: registering in a world adds it
  * (CreateRenderState_Concurrent → UWorld::AddPrimitive) and each gameplay frame the world asks every visible primitive
- * to SubmitDraw. P13 replaces the list with FScene::AddPrimitive and a FPrimitiveSceneProxy. Physics bodies still come
- * from the legacy level meshes (UWorld::RegisterBodiesFromLevel); P13 moves them to CreatePhysicsState.
+ * to SubmitDraw. P13 replaces the list with FScene::AddPrimitive and a FPrimitiveSceneProxy.
+ *
+ * Its physics state is its body in the world's FPhysScene: CreatePhysicsState adds one when the collision is enabled
+ * (FPhysScene::AddComponentBody) and DestroyPhysicsState removes it. Changing the collision settings of a registered
+ * component recreates the body.
  */
 UCLASS(Abstract)
 class ENGINE_API UPrimitiveComponent : public USceneComponent
@@ -36,10 +39,7 @@ public:
 	 * scene only holds level geometry, which the level reader enables per record, and characters are swept capsules,
 	 * never bodies.
 	 */
-	void SetCollisionEnabled(ECollisionEnabled::Type NewType)
-	{
-		CollisionEnabled = NewType;
-	}
+	void SetCollisionEnabled(ECollisionEnabled::Type NewType);
 	[[nodiscard]] ECollisionEnabled::Type GetCollisionEnabled() const
 	{
 		return CollisionEnabled;
@@ -50,19 +50,13 @@ public:
 		return CollisionEnabled != ECollisionEnabled::NoCollision;
 	}
 	/** A simulated (Dynamic) body instead of a static one (UE: SetSimulatePhysics / IsSimulatingPhysics). */
-	void SetSimulatePhysics(bool bSimulate)
-	{
-		bSimulatePhysics = bSimulate;
-	}
+	void SetSimulatePhysics(bool bSimulate);
 	[[nodiscard]] bool IsSimulatingPhysics() const
 	{
 		return bSimulatePhysics;
 	}
 	/** Gravity on the simulated body (UE: SetEnableGravity / IsGravityEnabled). */
-	void SetEnableGravity(bool bGravityEnabled)
-	{
-		bEnableGravity = bGravityEnabled;
-	}
+	void SetEnableGravity(bool bGravityEnabled);
 	[[nodiscard]] bool IsGravityEnabled() const
 	{
 		return bEnableGravity;
@@ -80,6 +74,8 @@ public:
 protected:
 	void CreateRenderState_Concurrent() override;
 	void DestroyRenderState_Concurrent() override;
+	void CreatePhysicsState() override;
+	void DestroyPhysicsState() override;
 
 private:
 	/** UE keeps these in the component's FBodyInstance (BodyInstance); Leon's physics scene owns its bodies. */

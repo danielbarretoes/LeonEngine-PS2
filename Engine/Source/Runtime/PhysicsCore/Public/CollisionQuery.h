@@ -4,8 +4,8 @@
 
 class FDebugDraw;
 
-/** No level mesh (UE: INDEX_NONE for an item); the value of ULevel::Npos. */
-inline constexpr SIZE_T NoLevelMeshIndex = static_cast<SIZE_T>(-1);
+/** No body owner (UE: an empty FCollisionQueryParams::IgnoreComponents, a null FHitResult::Component). */
+inline constexpr SIZE_T NoComponentID = static_cast<SIZE_T>(-1);
 
 /** UE-like ECollisionChannel (micro-engine subset). */
 enum class ECollisionChannel : uint8
@@ -38,7 +38,8 @@ struct PHYSICSCORE_API FHitResult
 	FVector ImpactNormal = FVector(0.0f, 0.0f, 1.0f);
 	FVector TraceStart = FVector::ZeroVector;
 	FVector TraceEnd = FVector::ZeroVector;
-	SIZE_T LevelMeshIndex = NoLevelMeshIndex;
+	/** The hit body's ComponentID (UE: FHitResult::Component). */
+	SIZE_T ComponentID = NoComponentID;
 	/** True when the hit is the virtual infinite floor plane (FCollisionQueryParams). */
 	bool bFloorPlane = false;
 };
@@ -46,7 +47,8 @@ struct PHYSICSCORE_API FHitResult
 /** UE-like FCollisionQueryParams. */
 struct PHYSICSCORE_API FCollisionQueryParams
 {
-	SIZE_T SkipLevelMeshIndex = NoLevelMeshIndex;
+	/** A body id the query ignores (UE: FCollisionQueryParams::AddIgnoredComponent). */
+	SIZE_T IgnoreComponentID = NoComponentID;
 	/** Include an infinite horizontal floor at height FloorZ (UCharacterMovementComponent floor). */
 	bool bTraceFloorPlane = false;
 	float FloorZ = 0.0f;

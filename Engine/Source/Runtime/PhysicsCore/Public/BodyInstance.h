@@ -17,19 +17,26 @@ enum class EBodyCollisionShape : uint8
 
 struct PHYSICSCORE_API FBodyInstanceDesc
 {
-	/** Index of the level's static mesh the body mirrors (until levels hold actors, P13). */
-	SIZE_T LevelMeshIndex = 0;
+	/**
+	 * Who the body belongs to: the owning primitive component's unique id (UObject::GetUniqueID) for the bodies
+	 * UPrimitiveComponent::CreatePhysicsState adds, any caller-chosen id otherwise. Traces report it and skip it.
+	 */
+	SIZE_T ComponentID = 0;
 	EBodyType Type = EBodyType::Static;
-	/** 0 = derive from AABB volume on SyncFromLevel. */
+	/** 0 = derive from the AABB volume when the component's shape is applied (FPhysScene::UpdateBodyFromComponent). */
 	float Mass = 0.0f;
 	/** UE-like Enable Gravity (only for Dynamic / simulatePhysics). */
 	bool bEnableGravity = true;
 };
 
-/** Physics-owned state. Level transforms are visuals; SyncFromLevel / SyncToLevel bridge them. */
+/**
+ * Physics-owned state (UE: FBodyInstance, which a component owns there). A component's body takes its shape from the
+ * component when it is created; a simulated body moves its component back after each step
+ * (FPhysScene::SyncComponentsToBodies).
+ */
 struct PHYSICSCORE_API FBodyInstance
 {
-	SIZE_T LevelMeshIndex = 0;
+	SIZE_T ComponentID = 0;
 	EBodyType Type = EBodyType::Static;
 	EBodyCollisionShape CollisionShape = EBodyCollisionShape::Box;
 	float Mass = 1.0f;

@@ -92,6 +92,10 @@ public:
 	/** Destroys the render and physics state and runs OnUnregister (UE: UnregisterComponent). */
 	void UnregisterComponent();
 
+	/** Destroys and creates the physics state again, for a registered component in a world (UE: RecreatePhysicsState).
+	 */
+	void RecreatePhysicsState();
+
 	/**
 	 * Ends play, unregisters, removes the component from its owner and marks it pending kill (UE: DestroyComponent).
 	 */
@@ -124,7 +128,10 @@ protected:
 	 */
 	virtual void CreateRenderState_Concurrent();
 	virtual void DestroyRenderState_Concurrent();
-	/** The physics state (UE: CreatePhysicsState): nothing registers bodies yet (level meshes do; see UWorld). */
+	/**
+	 * The physics state (UE: CreatePhysicsState): UPrimitiveComponent adds its body to the world's physics scene.
+	 * Only called when the component registers in a world.
+	 */
 	virtual void CreatePhysicsState();
 	virtual void DestroyPhysicsState();
 

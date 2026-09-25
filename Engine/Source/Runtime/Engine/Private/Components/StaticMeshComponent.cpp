@@ -14,6 +14,7 @@ bool UStaticMeshComponent::SetStaticMesh(TSharedPtr<UStaticMesh> NewMesh)
 		return false;
 	}
 	StaticMesh = MoveTemp(NewMesh);
+	RecreatePhysicsState();
 	return true;
 }
 

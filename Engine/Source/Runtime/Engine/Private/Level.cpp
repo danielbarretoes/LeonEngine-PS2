@@ -1,6 +1,5 @@
 #include "Engine/Level.h"
 
-#include "Components/PrimitiveComponent.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/PointLight.h"
 #include "Engine/StaticMeshActor.h"
@@ -103,26 +102,6 @@ void ULevel::GetLightSnapshots(TArray<FDirectionalLight>& OutDirectional, TArray
 			Light.Intensity = Component->Intensity;
 			Light.Range = Component->AttenuationRadius;
 			Light.bCastShadows = Component->CastShadows;
-		}
-	}
-}
-
-void ULevel::GetCollisionPrimitives(TArray<UPrimitiveComponent*>& OutPrimitives) const
-{
-	OutPrimitives.Reset();
-	for (const AActor* Actor : Actors)
-	{
-		if (!IsLiveActor(Actor))
-		{
-			continue;
-		}
-		for (UActorComponent* Component : Actor->GetComponents())
-		{
-			UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(Component);
-			if (Primitive != nullptr && !Primitive->IsPendingKill() && Primitive->IsCollisionEnabled())
-			{
-				OutPrimitives.Add(Primitive);
-			}
 		}
 	}
 }

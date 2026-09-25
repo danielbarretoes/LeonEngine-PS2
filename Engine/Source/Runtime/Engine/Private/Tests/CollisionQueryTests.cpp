@@ -122,8 +122,8 @@ bool FCollisionQueryLineTraceMultiByChannelReturnsAllHitsSortedTest::RunTest(con
 		return false;
 	}
 	TestTrue("Sorted by time", Hits[0].Time < Hits[1].Time);
-	TestEqual("Near mesh index", Hits[0].LevelMeshIndex, static_cast<SIZE_T>(0));
-	TestEqual("Far mesh index", Hits[1].LevelMeshIndex, static_cast<SIZE_T>(1));
+	TestEqual("Near mesh index", Hits[0].ComponentID, static_cast<SIZE_T>(0));
+	TestEqual("Far mesh index", Hits[1].ComponentID, static_cast<SIZE_T>(1));
 
 	FHitResult Single{};
 	const bool bSingleHit = Scene.LineTraceSingleByChannel(

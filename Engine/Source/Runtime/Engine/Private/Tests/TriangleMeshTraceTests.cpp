@@ -16,7 +16,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTriangleMeshTraceLineTraceAndQuerySupportZUseT
 
 bool FTriangleMeshTraceLineTraceAndQuerySupportZUseTriangleMeshSurfaceTest::RunTest(const FString& Parameters)
 {
-	// A collidable static mesh syncs as a TriangleMesh body; line traces and capsule support use its surface.
+	// A collidable static mesh component gets a TriangleMesh body; line traces and capsule support use its surface.
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	FMeshData Data;
@@ -34,9 +34,7 @@ bool FTriangleMeshTraceLineTraceAndQuerySupportZUseTriangleMeshSurfaceTest::RunT
 	(void)Component.SetStaticMesh(MakeShared<UStaticMesh>(UStaticMesh::CreateCpu(Data)));
 	Component.SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 
-	FPhysScene Scene;
-	Scene.AddBody({0, EBodyType::Static, 1.0f, true});
-	Scene.SyncFromLevel(*World.PersistentLevel);
+	const FPhysScene& Scene = World.GetPhysicsScene();
 	TestTrue("TriangleMesh body", Scene.GetBodies()[0].CollisionShape == EBodyCollisionShape::TriangleMesh);
 
 	FHitResult Hit{};
@@ -48,7 +46,7 @@ bool FTriangleMeshTraceLineTraceAndQuerySupportZUseTriangleMeshSurfaceTest::RunT
 	TestTrue("Normal points up", Hit.ImpactNormal.Z > 0.5f);
 
 	const FCollisionShape Capsule = FCollisionShape::MakeCapsule(35.0f, 50.0f);
-	const float Support = Scene.QuerySupportZ(Capsule, FVector(0.0f, 0.0f, 100.0f), 0.0f, 40.0f, 2.0f, ULevel::Npos);
+	const float Support = Scene.QuerySupportZ(Capsule, FVector(0.0f, 0.0f, 100.0f), 0.0f, 40.0f, 2.0f, NoComponentID);
 	TestEqual("Support height", Support, 50.0f, 5.0f);
 	return true;
 }

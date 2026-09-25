@@ -90,10 +90,10 @@ bool FPhysSceneQuerySupportZUsesBodyTopsTest::RunTest(const FString& Parameters)
 
 	const FCollisionShape Capsule = FCollisionShape::MakeCapsule(35.0f, 92.5f);
 
-	const float Support = Scene.QuerySupportZ(Capsule, FVector(0.0f, 0.0f, 210.0f), 0.0f, 35.0f, 2.0f, ULevel::Npos);
+	const float Support = Scene.QuerySupportZ(Capsule, FVector(0.0f, 0.0f, 210.0f), 0.0f, 35.0f, 2.0f, NoComponentID);
 	TestEqual("Support height", Support, 200.0f, 0.1f);
 	// Off to the side along Y, the box does not support the capsule.
-	const float Beside = Scene.QuerySupportZ(Capsule, FVector(0.0f, 300.0f, 210.0f), 0.0f, 35.0f, 2.0f, ULevel::Npos);
+	const float Beside = Scene.QuerySupportZ(Capsule, FVector(0.0f, 300.0f, 210.0f), 0.0f, 35.0f, 2.0f, NoComponentID);
 	TestEqual("Floor beside the box", Beside, 0.0f, 0.1f);
 	return true;
 }
@@ -116,9 +116,9 @@ bool FPhysSceneSlopeRampRisesAlongYawTest::RunTest(const FString& Parameters)
 	const FCollisionShape Capsule = FCollisionShape::MakeCapsule(35.0f, 92.5f);
 	FPhysScene Turned;
 	(void)Turned.AddSlopeRamp(FVector::ZeroVector, FVector(400.0f, 400.0f, 400.0f), 30.0f, 90.0f);
-	const float Low = Turned.QuerySupportZ(Capsule, FVector(0.0f, -100.0f, 0.0f), -1000.0f, 35.0f, 2.0f, ULevel::Npos);
+	const float Low = Turned.QuerySupportZ(Capsule, FVector(0.0f, -100.0f, 0.0f), -1000.0f, 35.0f, 2.0f, NoComponentID);
 	const float High =
-		Turned.QuerySupportZ(Capsule, FVector(0.0f, 100.0f, 200.0f), -1000.0f, 35.0f, 2.0f, ULevel::Npos);
+		Turned.QuerySupportZ(Capsule, FVector(0.0f, 100.0f, 200.0f), -1000.0f, 35.0f, 2.0f, NoComponentID);
 	TestEqual("Low side", Low, -100.0f * (S / C), 0.1f);
 	TestEqual("High side", High, 100.0f * (S / C), 0.1f);
 	return true;
@@ -141,7 +141,7 @@ bool FPhysSceneResolveCapsuleSidesPushesOutOfAabbTest::RunTest(const FString& Pa
 
 	FVector Feet(10.0f, 0.0f, 0.0f);
 	FCapsuleContactParams Contact{};
-	Scene.ResolveCapsuleSides(Capsule, Feet, FVector2D(0.0f, 0.0f), Contact, ULevel::Npos, false);
+	Scene.ResolveCapsuleSides(Capsule, Feet, FVector2D(0.0f, 0.0f), Contact, NoComponentID, false);
 
 	const float DistXY = FMath::Sqrt((Feet.X * Feet.X) + (Feet.Y * Feet.Y));
 	TestTrue("Pushed out", DistXY > 40.0f);

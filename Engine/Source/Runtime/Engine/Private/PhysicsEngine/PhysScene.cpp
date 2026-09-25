@@ -120,6 +120,7 @@ void FPhysScene::Clear()
 	Bodies.Reset();
 	TriangleMeshes.Reset();
 	SlopePlanes.Reset();
+	BodyOwners.Reset();
 	if (BackendIface != nullptr)
 	{
 		BackendIface->RigidClear();
@@ -129,13 +130,73 @@ void FPhysScene::Clear()
 int32 FPhysScene::AddBody(const FBodyInstanceDesc& Desc)
 {
 	FBodyInstance Body;
-	Body.LevelMeshIndex = Desc.LevelMeshIndex;
+	Body.ComponentID = Desc.ComponentID;
 	Body.Type = Desc.Type;
 	Body.Mass = Desc.Mass > 0.0f ? Desc.Mass : 0.0f;
 	Body.bEnableGravity = Desc.bEnableGravity;
 	Bodies.Add(Body);
-	TriangleMeshes.AddDefaulted();
+	TriangleMeshes.SetNum(Bodies.Num());
+	BodyOwners.SetNum(Bodies.Num());
 	return Bodies.Num() - 1;
+}
+
+int32 FPhysScene::AddComponentBody(UPrimitiveComponent& Component)
+{
+	FBodyInstanceDesc Desc{};
+	Desc.ComponentID = Component.GetUniqueID();
+	Desc.Type = Component.IsSimulatingPhysics() ? EBodyType::Dynamic : EBodyType::Static;
+	Desc.bEnableGravity = Component.IsGravityEnabled();
+	const int32 BodyIndex = AddBody(Desc);
+	BodyOwners[BodyIndex] = &Component;
+	UpdateBodyFromComponent(BodyIndex, Component);
+	RebuildRigidWorld();
+	return BodyIndex;
+}
+
+void FPhysScene::RemoveComponentBody(const UPrimitiveComponent& Component)
+{
+	for (int32 BodyIndex = BodyOwners.Num() - 1; BodyIndex >= 0; --BodyIndex)
+	{
+		if (BodyOwners[BodyIndex] != &Component)
+		{
+			continue;
+		}
+		Bodies.RemoveAt(BodyIndex);
+		if (TriangleMeshes.IsValidIndex(BodyIndex))
+		{
+			TriangleMeshes.RemoveAt(BodyIndex);
+		}
+		BodyOwners.RemoveAt(BodyIndex);
+		RebuildRigidWorld();
+	}
+}
+
+UPrimitiveComponent* FPhysScene::GetBodyOwner(int32 BodyIndex) const
+{
+	return BodyOwners.IsValidIndex(BodyIndex) ? BodyOwners[BodyIndex] : nullptr;
+}
+
+void FPhysScene::SyncComponentsToBodies() const
+{
+	for (int32 BodyIndex = 0; BodyIndex < Bodies.Num() && BodyIndex < BodyOwners.Num(); ++BodyIndex)
+	{
+		if (Bodies[BodyIndex].Type == EBodyType::Dynamic && BodyOwners[BodyIndex] != nullptr)
+		{
+			BodyOwners[BodyIndex]->SetWorldLocation(Bodies[BodyIndex].Position);
+		}
+	}
+}
+
+void FPhysScene::RebuildRigidWorld()
+{
+	if (TriangleMeshes.Num() != Bodies.Num())
+	{
+		TriangleMeshes.SetNum(Bodies.Num());
+	}
+	if (BackendIface != nullptr && BackendIface->HasRigidWorld())
+	{
+		BackendIface->RigidRebuild(Bodies, &TriangleMeshes);
+	}
 }
 
 int32 FPhysScene::AddSlopeRamp(
@@ -163,31 +224,6 @@ int32 FPhysScene::AddSlopeRamp(
 	Plane.BoundsHalfExtents = InBoundsHalfExtents;
 	SlopePlanes.Add(Plane);
 	return SlopePlanes.Num() - 1;
-}
-
-void FPhysScene::SyncFromLevel(const ULevel& Level)
-{
-	TArray<UPrimitiveComponent*> Primitives;
-	Level.GetCollisionPrimitives(Primitives);
-	if (TriangleMeshes.Num() != Bodies.Num())
-	{
-		TriangleMeshes.SetNum(Bodies.Num());
-	}
-	for (int32 Bi = 0; Bi < Bodies.Num(); ++Bi)
-	{
-		FBodyInstance& Body = Bodies[Bi];
-		TriangleMeshes[Bi].Clear();
-		Body.CollisionShape = EBodyCollisionShape::Box;
-		if (Body.LevelMeshIndex >= static_cast<SIZE_T>(Primitives.Num()))
-		{
-			continue;
-		}
-		UpdateBodyFromComponent(Bi, *Primitives[static_cast<int32>(Body.LevelMeshIndex)]);
-	}
-	if (BackendIface != nullptr && BackendIface->HasRigidWorld())
-	{
-		BackendIface->RigidRebuild(Bodies, &TriangleMeshes);
-	}
 }
 
 void FPhysScene::UpdateBodyFromComponent(int32 BodyIndex, const UPrimitiveComponent& Component)
@@ -244,22 +280,8 @@ void FPhysScene::UpdateBodyFromComponent(int32 BodyIndex, const UPrimitiveCompon
 	}
 }
 
-void FPhysScene::SyncToLevel(ULevel& Level) const
-{
-	TArray<UPrimitiveComponent*> Primitives;
-	Level.GetCollisionPrimitives(Primitives);
-	for (const FBodyInstance& Body : Bodies)
-	{
-		if (Body.LevelMeshIndex >= static_cast<SIZE_T>(Primitives.Num()))
-		{
-			continue;
-		}
-		Primitives[static_cast<int32>(Body.LevelMeshIndex)]->SetWorldLocation(Body.Position);
-	}
-}
-
 float FPhysScene::QuerySupportZ(const FCollisionShape& Capsule, const FVector& Feet, float InFloorZ, float InStepUp,
-	float InSkin, SIZE_T InSkipLevelMeshIndex) const
+	float InSkin, SIZE_T InIgnoreComponentID) const
 {
 	float Support = InFloorZ;
 	const float R = Capsule.GetCapsuleRadius();
@@ -267,7 +289,7 @@ float FPhysScene::QuerySupportZ(const FCollisionShape& Capsule, const FVector& F
 	for (int32 Bi = 0; Bi < Bodies.Num(); ++Bi)
 	{
 		const FBodyInstance& Body = Bodies[Bi];
-		if (Body.LevelMeshIndex == InSkipLevelMeshIndex)
+		if (Body.ComponentID == InIgnoreComponentID)
 		{
 			continue;
 		}
@@ -334,7 +356,7 @@ float FPhysScene::QuerySupportZ(const FCollisionShape& Capsule, const FVector& F
 }
 
 void FPhysScene::ResolveCapsuleSides(const FCollisionShape& Capsule, FVector& Feet, const FVector2D& WishXY,
-	const FCapsuleContactParams& Params, SIZE_T InSkipLevelMeshIndex, bool bApplyPush)
+	const FCapsuleContactParams& Params, SIZE_T InIgnoreComponentID, bool bApplyPush)
 {
 	const float R = Capsule.GetCapsuleRadius();
 	const float FeetZ = Feet.Z;
@@ -344,7 +366,7 @@ void FPhysScene::ResolveCapsuleSides(const FCollisionShape& Capsule, FVector& Fe
 
 	for (FBodyInstance& Body : Bodies)
 	{
-		if (Body.LevelMeshIndex == InSkipLevelMeshIndex)
+		if (Body.ComponentID == InIgnoreComponentID)
 		{
 			continue;
 		}
@@ -418,10 +440,10 @@ void FPhysScene::ResolveCapsuleSides(const FCollisionShape& Capsule, FVector& Fe
 	}
 }
 
-bool FPhysScene::ApplyCapsuleSweepPush(SIZE_T LevelMeshIndex, const FVector2D& WishXY, const FVector& ImpactNormal,
-	float InPushStrength, float InWalkBounds)
+bool FPhysScene::ApplyCapsuleSweepPush(
+	SIZE_T ComponentID, const FVector2D& WishXY, const FVector& ImpactNormal, float InPushStrength, float InWalkBounds)
 {
-	if (LevelMeshIndex == ULevel::Npos || WishXY.Size() <= 1.0e-4f)
+	if (ComponentID == NoComponentID || WishXY.Size() <= 1.0e-4f)
 	{
 		return false;
 	}
@@ -437,7 +459,7 @@ bool FPhysScene::ApplyCapsuleSweepPush(SIZE_T LevelMeshIndex, const FVector2D& W
 
 	for (FBodyInstance& Body : Bodies)
 	{
-		if (Body.LevelMeshIndex != LevelMeshIndex || Body.Type != EBodyType::Dynamic)
+		if (Body.ComponentID != ComponentID || Body.Type != EBodyType::Dynamic)
 		{
 			continue;
 		}
@@ -456,7 +478,7 @@ void FPhysScene::Step(const FPhysSceneStepParams& Params)
 {
 	if (BackendIface != nullptr && BackendIface->HasRigidWorld())
 	{
-		BackendIface->RigidPrepareStep(Bodies, Params.SkipLevelMeshIndex);
+		BackendIface->RigidPrepareStep(Bodies, Params.IgnoreComponentID);
 		BackendIface->RigidStep(Params.DeltaTime, Params.Gravity, Params.FloorZ);
 		BackendIface->RigidReadBack(Bodies);
 		for (FBodyInstance& Body : Bodies)
@@ -483,7 +505,7 @@ void FPhysScene::Step(const FPhysSceneStepParams& Params)
 
 		for (const FBodyInstance& Other : Bodies)
 		{
-			if (Other.LevelMeshIndex == Body.LevelMeshIndex || Other.LevelMeshIndex == Params.SkipLevelMeshIndex)
+			if (Other.ComponentID == Body.ComponentID || Other.ComponentID == Params.IgnoreComponentID)
 			{
 				continue;
 			}
@@ -547,13 +569,13 @@ void FPhysScene::Step(const FPhysSceneStepParams& Params)
 	{
 		for (int32 I = 0; I < Bodies.Num(); ++I)
 		{
-			if (Bodies[I].LevelMeshIndex == Params.SkipLevelMeshIndex)
+			if (Bodies[I].ComponentID == Params.IgnoreComponentID)
 			{
 				continue;
 			}
 			for (int32 J = I + 1; J < Bodies.Num(); ++J)
 			{
-				if (Bodies[J].LevelMeshIndex == Params.SkipLevelMeshIndex)
+				if (Bodies[J].ComponentID == Params.IgnoreComponentID)
 				{
 					continue;
 				}
@@ -633,7 +655,7 @@ void FPhysScene::Step(const FPhysSceneStepParams& Params)
 }
 
 void FPhysScene::AppendCollisionDebug(
-	FDebugDraw& Draw, const FCollisionShape& Capsule, const FVector& Feet, SIZE_T InSkipLevelMeshIndex) const
+	FDebugDraw& Draw, const FCollisionShape& Capsule, const FVector& Feet, SIZE_T InIgnoreComponentID) const
 {
 	const float R = Capsule.GetCapsuleRadius();
 	const float H = Capsule.GetCapsuleHalfHeight() * 2.0f;
@@ -665,10 +687,10 @@ void FPhysScene::AppendCollisionDebug(
 	AppendCapsuleRing(Draw, Feet, R * 0.35f, CapsuleColor, 6);
 	AppendCapsuleRing(Draw, Feet + FVector(0.0f, 0.0f, H), R * 0.35f, CapsuleColor, 6);
 
-	AppendBodiesCollisionDebug(Draw, InSkipLevelMeshIndex);
+	AppendBodiesCollisionDebug(Draw, InIgnoreComponentID);
 }
 
-void FPhysScene::AppendBodiesCollisionDebug(FDebugDraw& Draw, SIZE_T InSkipLevelMeshIndex) const
+void FPhysScene::AppendBodiesCollisionDebug(FDebugDraw& Draw, SIZE_T InIgnoreComponentID) const
 {
 	const FLinearColor DynamicColor(1.0f, 0.55f, 0.15f);
 	const FLinearColor StaticColor(0.35f, 0.65f, 1.0f);
@@ -676,7 +698,7 @@ void FPhysScene::AppendBodiesCollisionDebug(FDebugDraw& Draw, SIZE_T InSkipLevel
 	for (int32 Bi = 0; Bi < Bodies.Num(); ++Bi)
 	{
 		const FBodyInstance& Body = Bodies[Bi];
-		if (Body.LevelMeshIndex == InSkipLevelMeshIndex)
+		if (Body.ComponentID == InIgnoreComponentID)
 		{
 			continue;
 		}

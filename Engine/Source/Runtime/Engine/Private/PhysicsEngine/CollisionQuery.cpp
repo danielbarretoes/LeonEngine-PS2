@@ -170,7 +170,7 @@ namespace
 	}
 
 	void WriteHit(FHitResult& Out, const FVector& Start, const FVector& End, float T, const FVector& Normal,
-		SIZE_T LevelMeshIndex, bool bFloorPlane)
+		SIZE_T ComponentID, bool bFloorPlane)
 	{
 		const FVector Delta = End - Start;
 		const float SegLen = Delta.Size();
@@ -182,7 +182,7 @@ namespace
 		Out.ImpactNormal = Normal;
 		Out.TraceStart = Start;
 		Out.TraceEnd = End;
-		Out.LevelMeshIndex = LevelMeshIndex;
+		Out.ComponentID = ComponentID;
 		Out.bFloorPlane = bFloorPlane;
 	}
 
@@ -201,7 +201,7 @@ namespace
 				continue;
 			}
 			FHitResult Hit;
-			WriteHit(Hit, Start, End, T, Normal, ULevel::Npos, false);
+			WriteHit(Hit, Start, End, T, Normal, NoComponentID, false);
 			Hit.ImpactPoint = Hit.Location - (Normal * Inflate);
 			OutHits.Add(Hit);
 		}
@@ -324,16 +324,16 @@ bool FPhysScene::LineTraceMultiByChannel(TArray<FHitResult>& OutHits, const FVec
 		// Body instances may have been nudged CMC without a Step: sync before CastRay.
 		if (BackendIface->HasRigidWorld())
 		{
-			BackendIface->RigidPrepareStep(Bodies, Params.SkipLevelMeshIndex);
+			BackendIface->RigidPrepareStep(Bodies, Params.IgnoreComponentID);
 		}
-		(void)BackendIface->RigidLineTrace(OutHits, Start, End, Channel, Params.SkipLevelMeshIndex);
+		(void)BackendIface->RigidLineTrace(OutHits, Start, End, Channel, Params.IgnoreComponentID);
 	}
 	else
 	{
 		for (int32 Bi = 0; Bi < Bodies.Num(); ++Bi)
 		{
 			const FBodyInstance& Body = Bodies[Bi];
-			if (Body.LevelMeshIndex == Params.SkipLevelMeshIndex)
+			if (Body.ComponentID == Params.IgnoreComponentID)
 			{
 				continue;
 			}
@@ -366,7 +366,7 @@ bool FPhysScene::LineTraceMultiByChannel(TArray<FHitResult>& OutHits, const FVec
 			}
 
 			FHitResult Hit;
-			WriteHit(Hit, Start, End, T, Normal, Body.LevelMeshIndex, false);
+			WriteHit(Hit, Start, End, T, Normal, Body.ComponentID, false);
 			OutHits.Add(Hit);
 		}
 	}
@@ -378,7 +378,7 @@ bool FPhysScene::LineTraceMultiByChannel(TArray<FHitResult>& OutHits, const FVec
 		if (SegmentFloorZ(Start, End, Params.FloorZ, T, Normal))
 		{
 			FHitResult Hit;
-			WriteHit(Hit, Start, End, T, Normal, ULevel::Npos, true);
+			WriteHit(Hit, Start, End, T, Normal, NoComponentID, true);
 			OutHits.Add(Hit);
 		}
 	}
@@ -411,16 +411,16 @@ bool FPhysScene::SphereTraceMultiByChannel(TArray<FHitResult>& OutHits, const FV
 		// Push the body instances to Jolt before CastShape (same as the Step prepare).
 		if (BackendIface->HasRigidWorld())
 		{
-			BackendIface->RigidPrepareStep(Bodies, Params.SkipLevelMeshIndex);
+			BackendIface->RigidPrepareStep(Bodies, Params.IgnoreComponentID);
 		}
-		(void)BackendIface->RigidSphereTrace(OutHits, Start, End, R, Channel, Params.SkipLevelMeshIndex);
+		(void)BackendIface->RigidSphereTrace(OutHits, Start, End, R, Channel, Params.IgnoreComponentID);
 	}
 	else
 	{
 		for (int32 Bi = 0; Bi < Bodies.Num(); ++Bi)
 		{
 			const FBodyInstance& Body = Bodies[Bi];
-			if (Body.LevelMeshIndex == Params.SkipLevelMeshIndex)
+			if (Body.ComponentID == Params.IgnoreComponentID)
 			{
 				continue;
 			}
@@ -454,7 +454,7 @@ bool FPhysScene::SphereTraceMultiByChannel(TArray<FHitResult>& OutHits, const FV
 			}
 
 			FHitResult Hit;
-			WriteHit(Hit, Start, End, T, Normal, Body.LevelMeshIndex, false);
+			WriteHit(Hit, Start, End, T, Normal, Body.ComponentID, false);
 			// UE FHitResult: Location = sweep shape center; ImpactPoint = surface contact.
 			Hit.ImpactPoint = Hit.Location - (Normal * R);
 			OutHits.Add(Hit);
@@ -469,7 +469,7 @@ bool FPhysScene::SphereTraceMultiByChannel(TArray<FHitResult>& OutHits, const FV
 		if (SegmentFloorZ(Start, End, PlaneZ, T, Normal))
 		{
 			FHitResult Hit;
-			WriteHit(Hit, Start, End, T, Normal, ULevel::Npos, true);
+			WriteHit(Hit, Start, End, T, Normal, NoComponentID, true);
 			Hit.ImpactPoint = Hit.Location - (Normal * R);
 			OutHits.Add(Hit);
 		}
@@ -505,16 +505,16 @@ bool FPhysScene::CapsuleTraceMultiByChannel(TArray<FHitResult>& OutHits, const F
 	{
 		if (BackendIface->HasRigidWorld())
 		{
-			BackendIface->RigidPrepareStep(Bodies, Params.SkipLevelMeshIndex);
+			BackendIface->RigidPrepareStep(Bodies, Params.IgnoreComponentID);
 		}
-		(void)BackendIface->RigidCapsuleTrace(OutHits, Start, End, R, Hh, Channel, Params.SkipLevelMeshIndex);
+		(void)BackendIface->RigidCapsuleTrace(OutHits, Start, End, R, Hh, Channel, Params.IgnoreComponentID);
 	}
 	else
 	{
 		for (int32 Bi = 0; Bi < Bodies.Num(); ++Bi)
 		{
 			const FBodyInstance& Body = Bodies[Bi];
-			if (Body.LevelMeshIndex == Params.SkipLevelMeshIndex)
+			if (Body.ComponentID == Params.IgnoreComponentID)
 			{
 				continue;
 			}
@@ -548,7 +548,7 @@ bool FPhysScene::CapsuleTraceMultiByChannel(TArray<FHitResult>& OutHits, const F
 			}
 
 			FHitResult Hit;
-			WriteHit(Hit, Start, End, T, Normal, Body.LevelMeshIndex, false);
+			WriteHit(Hit, Start, End, T, Normal, Body.ComponentID, false);
 			const float Pull = (FMath::Abs(Normal.Z) > 0.5f) ? (Hh + R) : R;
 			Hit.ImpactPoint = Hit.Location - (Normal * Pull);
 			OutHits.Add(Hit);
@@ -563,7 +563,7 @@ bool FPhysScene::CapsuleTraceMultiByChannel(TArray<FHitResult>& OutHits, const F
 		if (SegmentFloorZ(Start, End, PlaneZ, T, Normal))
 		{
 			FHitResult Hit;
-			WriteHit(Hit, Start, End, T, Normal, ULevel::Npos, true);
+			WriteHit(Hit, Start, End, T, Normal, NoComponentID, true);
 			Hit.ImpactPoint = Hit.Location - (Normal * (Hh + R));
 			OutHits.Add(Hit);
 		}

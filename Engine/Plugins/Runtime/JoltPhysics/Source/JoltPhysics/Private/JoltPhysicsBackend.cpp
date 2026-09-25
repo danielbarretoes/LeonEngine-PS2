@@ -276,21 +276,21 @@ namespace
 			}
 			BodyIds.Empty();
 			DestroyFloor(Bodies);
-			LastSkip = NoLevelMeshIndex;
+			LastSkip = NoComponentID;
 			bHasFloorHeight = false;
 		}
 
 		void RigidRebuild(const TArray<FBodyInstance>& Bodies, const TArray<FTriangleMeshCollision>* TriangleMeshes,
-			SIZE_T SkipLevelMeshIndex) override
+			SIZE_T IgnoreComponentID) override
 		{
 			RigidClear();
 			BodyIds.Init(JPH::BodyID(), Bodies.Num());
-			LastSkip = SkipLevelMeshIndex;
+			LastSkip = IgnoreComponentID;
 
 			JPH::BodyInterface& Iface = PhysicsSystem.GetBodyInterface();
 			for (int32 I = 0; I < Bodies.Num(); ++I)
 			{
-				if (Bodies[I].LevelMeshIndex == SkipLevelMeshIndex)
+				if (Bodies[I].ComponentID == IgnoreComponentID)
 				{
 					continue;
 				}
@@ -301,22 +301,22 @@ namespace
 			PhysicsSystem.OptimizeBroadPhase();
 		}
 
-		void RigidPrepareStep(const TArray<FBodyInstance>& Bodies, SIZE_T SkipLevelMeshIndex) override
+		void RigidPrepareStep(const TArray<FBodyInstance>& Bodies, SIZE_T IgnoreComponentID) override
 		{
 			// Structure changed outside SyncFromLevel — rebuild as boxes (meshes need SyncFromLevel).
 			if (BodyIds.Num() != Bodies.Num())
 			{
-				RigidRebuild(Bodies, nullptr, SkipLevelMeshIndex);
+				RigidRebuild(Bodies, nullptr, IgnoreComponentID);
 				return;
 			}
 
 			JPH::BodyInterface& Iface = PhysicsSystem.GetBodyInterface();
-			LastSkip = SkipLevelMeshIndex;
+			LastSkip = IgnoreComponentID;
 
 			for (int32 I = 0; I < BodyIds.Num(); ++I)
 			{
 				const FBodyInstance& Src = Bodies[I];
-				const bool bSkip = Src.LevelMeshIndex == SkipLevelMeshIndex;
+				const bool bSkip = Src.ComponentID == IgnoreComponentID;
 
 				if (bSkip)
 				{
@@ -378,7 +378,7 @@ namespace
 		}
 
 		bool RigidLineTrace(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End,
-			ECollisionChannel InChannel, SIZE_T SkipLevelMeshIndex) override
+			ECollisionChannel InChannel, SIZE_T IgnoreComponentID) override
 		{
 			OutHits.Reset();
 			const JPH::Vec3 Origin = ToJoltVec3(Start);
@@ -389,7 +389,7 @@ namespace
 			JPH::AllHitCollisionCollector<JPH::CastRayCollector> Collector;
 			JPH::RayCastSettings Settings;
 			FChannelObjectLayerFilter LayerFilter(InChannel);
-			FTraceBodyFilter BodyFilter(FloorId, SkipLevelMeshIndex);
+			FTraceBodyFilter BodyFilter(FloorId, IgnoreComponentID);
 			PhysicsSystem.GetNarrowPhaseQuery().CastRay(Ray, Settings, Collector, {}, LayerFilter, BodyFilter);
 			Collector.Sort();
 
@@ -427,7 +427,7 @@ namespace
 				Out.ImpactNormal = FromJoltDirection(Normal);
 				Out.TraceStart = Start;
 				Out.TraceEnd = End;
-				Out.LevelMeshIndex = static_cast<SIZE_T>(Body.GetUserData());
+				Out.ComponentID = static_cast<SIZE_T>(Body.GetUserData());
 				Out.bFloorPlane = false;
 				OutHits.Add(Out);
 			}
@@ -435,22 +435,22 @@ namespace
 		}
 
 		bool RigidSphereTrace(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End, float Radius,
-			ECollisionChannel InChannel, SIZE_T SkipLevelMeshIndex) override
+			ECollisionChannel InChannel, SIZE_T IgnoreComponentID) override
 		{
 			// Jolt metres from here on.
 			const float R = FMath::Max(ToJoltLength(Radius), 1.0e-3f);
 			JPH::RefConst<JPH::SphereShape> Sphere = new JPH::SphereShape(R);
-			return CastShapeTrace(OutHits, Start, End, Sphere, InChannel, SkipLevelMeshIndex, R);
+			return CastShapeTrace(OutHits, Start, End, Sphere, InChannel, IgnoreComponentID, R);
 		}
 
 		bool RigidCapsuleTrace(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End, float Radius,
-			float HalfHeight, ECollisionChannel InChannel, SIZE_T SkipLevelMeshIndex) override
+			float HalfHeight, ECollisionChannel InChannel, SIZE_T IgnoreComponentID) override
 		{
 			// Jolt metres from here on. Jolt's capsule stands on its Y axis: the world's vertical Z.
 			const float R = FMath::Max(ToJoltLength(Radius), 1.0e-3f);
 			const float Hh = FMath::Max(ToJoltLength(HalfHeight), 0.0f);
 			JPH::RefConst<JPH::CapsuleShape> Capsule = new JPH::CapsuleShape(Hh, R);
-			return CastShapeTrace(OutHits, Start, End, Capsule, InChannel, SkipLevelMeshIndex, R + Hh);
+			return CastShapeTrace(OutHits, Start, End, Capsule, InChannel, IgnoreComponentID, R + Hh);
 		}
 
 	private:
@@ -500,7 +500,7 @@ namespace
 				{
 					return false;
 				}
-				if (SkipMesh == NoLevelMeshIndex)
+				if (SkipMesh == NoComponentID)
 				{
 					return true;
 				}
@@ -513,7 +513,7 @@ namespace
 		};
 
 		bool CastShapeTrace(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End,
-			const JPH::Shape* Shape, ECollisionChannel InChannel, SIZE_T SkipLevelMeshIndex, float InflateHint)
+			const JPH::Shape* Shape, ECollisionChannel InChannel, SIZE_T IgnoreComponentID, float InflateHint)
 		{
 			OutHits.Reset();
 			if (Shape == nullptr)
@@ -529,7 +529,7 @@ namespace
 			JPH::AllHitCollisionCollector<JPH::CastShapeCollector> Collector;
 			JPH::ShapeCastSettings Settings;
 			FChannelObjectLayerFilter LayerFilter(InChannel);
-			FTraceBodyFilter BodyFilter(FloorId, SkipLevelMeshIndex);
+			FTraceBodyFilter BodyFilter(FloorId, IgnoreComponentID);
 			PhysicsSystem.GetNarrowPhaseQuery().CastShape(
 				ShapeCast, Settings, JPH::RVec3::sZero(), Collector, {}, LayerFilter, BodyFilter);
 			Collector.Sort();
@@ -569,7 +569,7 @@ namespace
 				Out.ImpactNormal = FromJoltDirection(Normal);
 				Out.TraceStart = Start;
 				Out.TraceEnd = End;
-				Out.LevelMeshIndex = static_cast<SIZE_T>(Body.GetUserData());
+				Out.ComponentID = static_cast<SIZE_T>(Body.GetUserData());
 				Out.bFloorPlane = false;
 				(void)InflateHint;
 				OutHits.Add(Out);
@@ -631,7 +631,7 @@ namespace
 			JPH::BodyCreationSettings Settings(Shape, BodyPos, JPH::Quat::sIdentity(),
 				bDynamic ? JPH::EMotionType::Dynamic : JPH::EMotionType::Static,
 				bDynamic ? Layers::MOVING : Layers::NonMoving);
-			Settings.mUserData = static_cast<JPH::uint64>(Src.LevelMeshIndex);
+			Settings.mUserData = static_cast<JPH::uint64>(Src.ComponentID);
 			if (bDynamic)
 			{
 				Settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
@@ -691,7 +691,7 @@ namespace
 		TUniquePtr<JPH::JobSystemSingleThreaded> JobSystem;
 		TArray<JPH::BodyID> BodyIds;
 		JPH::BodyID FloorId{};
-		SIZE_T LastSkip = NoLevelMeshIndex;
+		SIZE_T LastSkip = NoComponentID;
 		/** Jolt metres, along Jolt Y. */
 		float FloorHeight = 0.0f;
 		bool bHasFloorHeight = false;

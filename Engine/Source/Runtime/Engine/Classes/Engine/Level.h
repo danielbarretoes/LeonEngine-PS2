@@ -9,7 +9,6 @@
 
 class AActor;
 class AWorldSettings;
-class UPrimitiveComponent;
 class UWorld;
 
 /**
@@ -43,8 +42,9 @@ struct ENGINE_API FLevelStaticMesh
  * with the level as their outer, so the level keeps them alive through the garbage collector).
  *
  * A `.llev` file becomes actors of the persistent level (AStaticMeshActor, APlayerStart, the volumes, the lights,
- * ATargetPoint and AWorldSettings; see LeonLevelFormat.h). Until the FScene boundary, the renderer and the physics
- * scene read those actors through GetStaticMeshSnapshots, GetLightSnapshots and GetCollisionPrimitives.
+ * ATargetPoint and AWorldSettings; see LeonLevelFormat.h). Their components give the physics scene its bodies
+ * (UPrimitiveComponent::CreatePhysicsState). Until the FScene boundary, the renderer reads the actors through
+ * GetStaticMeshSnapshots and GetLightSnapshots.
  */
 UCLASS()
 class ENGINE_API ULevel : public UObject
@@ -78,12 +78,6 @@ public:
 
 	/** Every visible directional and point light actor, in actor order, as the renderer's light structs. */
 	void GetLightSnapshots(TArray<FDirectionalLight>& OutDirectional, TArray<FPointLight>& OutPoint) const;
-
-	/** The primitive components of the live actors whose collision is enabled, in actor then component order. */
-	void GetCollisionPrimitives(TArray<UPrimitiveComponent*>& OutPrimitives) const;
-
-	/** "No static mesh" index (the physics scene's NoLevelMeshIndex). */
-	static constexpr SIZE_T Npos = static_cast<SIZE_T>(-1);
 
 private:
 	/** UE: WorldSettings. */

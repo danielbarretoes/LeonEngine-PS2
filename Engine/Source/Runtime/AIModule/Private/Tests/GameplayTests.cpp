@@ -4,6 +4,7 @@
 #include "Components/SceneComponent.h"
 #include "CoreMinimal.h"
 #include "Debug/DebugDraw.h"
+#include "Engine/BlockingVolume.h"
 #include "Engine/GameInstance.h"
 #include "Engine/Level.h"
 #include "Engine/StaticMeshActor.h"
@@ -16,9 +17,11 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "MeshData.h"
 #include "Misc/AutomationTest.h"
 #include "Physics/PhysScene.h"
 #include "PhysicsBackend.h"
+#include "StaticMesh.h"
 #include "Tests/GameplayTestTypes.h"
 #include "Tests/ScopedTestWorld.h"
 #include "TriangleCollision.h"
@@ -434,39 +437,28 @@ bool FGameplayNavBlocksNavBlockerKeepsNavWalkableTest::RunTest(const FString& Pa
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	const ULevel& Level = *World.PersistentLevel;
-	FPhysScene Physics;
+	const FPhysScene& Physics = World.GetPhysicsScene();
 
-	AStaticMeshActor* Plate = World.SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(),
+	// The plate: a 180 x 180 x 20 cm box (the 100 cm brush scaled) centred 12 cm up.
+	ABlockingVolume* Plate = World.SpawnActor<ABlockingVolume>(ABlockingVolume::StaticClass(),
 		FTransform(FQuat::Identity, FVector(0.0f, 0.0f, 12.0f), FVector(1.8f, 1.8f, 0.2f)));
 	Plate->Tags.Add(FName(NavTags::Blocker));
-	Plate->GetStaticMeshComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 
-	FBodyInstance PlateBody{};
-	PlateBody.Type = EBodyType::Static;
-	PlateBody.LevelMeshIndex = 0;
-	PlateBody.Position = FVector(0.0f, 0.0f, 12.0f);
-	PlateBody.HalfExtents = FVector(90.0f, 90.0f, 10.0f);
-	Physics.GetBodies().Add(PlateBody);
-	Physics.GetTriangleMeshes().AddDefaulted();
-
+	// The ramp: two tris covering a 4 x 2 m footprint around (400, 0) cm, rising 1 m.
+	FMeshData RampData;
+	const FVector Up(0.0f, 0.0f, 1.0f);
+	const FVector4 Tangent(1.0f, 0.0f, 0.0f, 1.0f);
+	RampData.Vertices.Add(FVertex(FVector(200.0f, -100.0f, 50.0f), Up, FVector2D(0.0f, 0.0f), Tangent));
+	RampData.Vertices.Add(FVertex(FVector(600.0f, -100.0f, 150.0f), Up, FVector2D(1.0f, 0.0f), Tangent));
+	RampData.Vertices.Add(FVertex(FVector(600.0f, 100.0f, 150.0f), Up, FVector2D(1.0f, 1.0f), Tangent));
+	RampData.Vertices.Add(FVertex(FVector(200.0f, 100.0f, 50.0f), Up, FVector2D(0.0f, 1.0f), Tangent));
+	RampData.Indices = {0, 1, 2, 0, 2, 3};
 	AStaticMeshActor* Ramp = World.SpawnActor<AStaticMeshActor>();
 	Ramp->Tags.Add(FName(NavTags::Walkable));
+	(void)Ramp->GetStaticMeshComponent()->SetStaticMesh(MakeShared<UStaticMesh>(UStaticMesh::CreateCpu(RampData)));
 	Ramp->GetStaticMeshComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-
-	FBodyInstance RampBody{};
-	RampBody.Type = EBodyType::Static;
-	RampBody.LevelMeshIndex = 1;
-	RampBody.Position = FVector(400.0f, 0.0f, 100.0f);
-	RampBody.HalfExtents = FVector(250.0f, 120.0f, 100.0f);
-	RampBody.CollisionShape = EBodyCollisionShape::TriangleMesh;
-	Physics.GetBodies().Add(RampBody);
-
-	FTriangleMeshCollision Tri{};
-	// Two tris covering a 4 x 2 m footprint around (400, 0) cm.
-	Tri.Positions = {FVector(200.0f, -100.0f, 50.0f), FVector(600.0f, -100.0f, 150.0f), FVector(600.0f, 100.0f, 150.0f),
-		FVector(200.0f, 100.0f, 50.0f)};
-	Tri.Indices = {0, 1, 2, 0, 2, 3};
-	Physics.GetTriangleMeshes().Add(MoveTemp(Tri));
+	TestTrue("Ramp is a triangle mesh body",
+		Physics.GetBodies().Num() == 2 && Physics.GetBodies()[1].CollisionShape == EBodyCollisionShape::TriangleMesh);
 
 	UNavigationSystem Nav;
 	Nav.SetCellSize(50.0f);
@@ -610,7 +602,6 @@ bool FGameplayWorldTickGameplayFrameMovesCharacterMeshTest::RunTest(const FStrin
 
 	FWorldGameplayFrameParams Frame{};
 	Frame.DeltaTime = 1.0f / 60.0f;
-	Frame.Level = World.PersistentLevel;
 	World.TickGameplayFrame(Frame);
 
 	const FTransform Transform = Character->GetMesh().GetComponentTransform();

@@ -36,25 +36,25 @@ public:
 	}
 
 	/**
-	 * Full rebuild after SyncFromLevel / Clear. Optional parallel triangle meshes for static ComplexAsSimple (Jolt
-	 * MeshShape); boxes otherwise.
+	 * Full rebuild after the bodies changed (FPhysScene::RebuildRigidWorld) / Clear. Optional parallel triangle meshes
+	 * for static ComplexAsSimple (Jolt MeshShape); boxes otherwise.
 	 */
 	virtual void RigidRebuild(const TArray<FBodyInstance>& Bodies,
-		const TArray<FTriangleMeshCollision>* TriangleMeshes = nullptr, SIZE_T SkipLevelMeshIndex = NoLevelMeshIndex)
+		const TArray<FTriangleMeshCollision>* TriangleMeshes = nullptr, SIZE_T IgnoreComponentID = NoComponentID)
 	{
 		(void)Bodies;
 		(void)TriangleMeshes;
-		(void)SkipLevelMeshIndex;
+		(void)IgnoreComponentID;
 	}
 
 	/**
 	 * Before Step: push dynamic FBodyInstance state (e.g. CMC side push) without rebuilding. Creates / removes bodies
-	 * only when SkipLevelMeshIndex membership changes.
+	 * only when IgnoreComponentID membership changes.
 	 */
-	virtual void RigidPrepareStep(const TArray<FBodyInstance>& Bodies, SIZE_T SkipLevelMeshIndex = NoLevelMeshIndex)
+	virtual void RigidPrepareStep(const TArray<FBodyInstance>& Bodies, SIZE_T IgnoreComponentID = NoComponentID)
 	{
 		(void)Bodies;
-		(void)SkipLevelMeshIndex;
+		(void)IgnoreComponentID;
 	}
 
 	/** Integrate with gravity magnitude along -Z; optional infinite floor at height FloorZ. */
@@ -73,30 +73,30 @@ public:
 
 	/** Appends body hits (not floor / slopes); sorting is the caller's job. Returns true if any hit. */
 	virtual bool RigidLineTrace(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End,
-		ECollisionChannel Channel, SIZE_T SkipLevelMeshIndex)
+		ECollisionChannel Channel, SIZE_T IgnoreComponentID)
 	{
 		(void)OutHits;
 		(void)Start;
 		(void)End;
 		(void)Channel;
-		(void)SkipLevelMeshIndex;
+		(void)IgnoreComponentID;
 		return false;
 	}
 
 	virtual bool RigidSphereTrace(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End, float Radius,
-		ECollisionChannel Channel, SIZE_T SkipLevelMeshIndex)
+		ECollisionChannel Channel, SIZE_T IgnoreComponentID)
 	{
 		(void)OutHits;
 		(void)Start;
 		(void)End;
 		(void)Radius;
 		(void)Channel;
-		(void)SkipLevelMeshIndex;
+		(void)IgnoreComponentID;
 		return false;
 	}
 
 	virtual bool RigidCapsuleTrace(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End, float Radius,
-		float HalfHeight, ECollisionChannel Channel, SIZE_T SkipLevelMeshIndex)
+		float HalfHeight, ECollisionChannel Channel, SIZE_T IgnoreComponentID)
 	{
 		(void)OutHits;
 		(void)Start;
@@ -104,7 +104,7 @@ public:
 		(void)Radius;
 		(void)HalfHeight;
 		(void)Channel;
-		(void)SkipLevelMeshIndex;
+		(void)IgnoreComponentID;
 		return false;
 	}
 };

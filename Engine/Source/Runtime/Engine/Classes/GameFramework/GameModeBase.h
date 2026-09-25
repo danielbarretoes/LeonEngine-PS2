@@ -102,7 +102,7 @@ public:
 		return GetGameState().GetNumPlayers();
 	}
 
-	/** Recreate World FPhysScene backend (clears bodies). Prefer before RegisterBodiesFromLevel. */
+	/** Recreate World FPhysScene backend; the registered components' bodies come back (UWorld::SetPhysicsBackend). */
 	void SetPhysicsBackend(EPhysicsBackend Backend)
 	{
 		GetWorld()->SetPhysicsBackend(Backend);
@@ -144,12 +144,6 @@ public:
 	[[nodiscard]] static float EstimateWalkBounds(const ULevel& Level);
 
 protected:
-	/** Framework helper: the level's collision primitives → World FPhysScene (not game rules). */
-	void RegisterBodiesFromLevel(const ULevel& Level)
-	{
-		GetWorld()->RegisterBodiesFromLevel(Level);
-	}
-
 	/**
 	 * Unreal FindPlayerStart — resolve the spawn transform from the level's APlayerStart actors (slot picks among them,
 	 * in spawn order). Like UE's spawn at a start, only the start's yaw is kept.

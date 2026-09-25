@@ -296,7 +296,7 @@ bool ACharacter::SafeMoveUpdatedComponent(
 		Feet += N * CharacterMovement->Skin;
 	}
 	// Sweep stops before overlap; ResolveCapsuleSides push never fires — shove from the hit.
-	(void)PhysScene.ApplyCapsuleSweepPush(Block->LevelMeshIndex, FVector2D(WishDir.X, WishDir.Y), Block->ImpactNormal,
+	(void)PhysScene.ApplyCapsuleSweepPush(Block->ComponentID, FVector2D(WishDir.X, WishDir.Y), Block->ImpactNormal,
 		CharacterMovement->PushStrength, CharacterMovement->WalkBounds);
 	ClampPositionXY(Feet, CharacterMovement->WalkBounds);
 	if (OutHit != nullptr)
@@ -315,7 +315,7 @@ void ACharacter::ResolveSides(FPhysScene& PhysScene, bool bApplyPush)
 	Params.WalkBounds = CharacterMovement->WalkBounds;
 	FVector Feet = MutableLocation();
 	PhysScene.ResolveCapsuleSides(
-		GetCapsule(), Feet, FVector2D(WishDir.X, WishDir.Y), Params, NoLevelMeshIndex, bApplyPush);
+		GetCapsule(), Feet, FVector2D(WishDir.X, WishDir.Y), Params, NoComponentID, bApplyPush);
 	MutableLocation() = Feet;
 }
 
@@ -387,7 +387,7 @@ bool ACharacter::TryStepUp(FPhysScene& PhysScene, const FVector& ForwardDelta, F
 	}
 	// Sphere FindFloor can report a phantom shelf in front of an AABB; require real support.
 	const float Support = PhysScene.QuerySupportZ(GetCapsule(), Feet, CharacterMovement->FloorZ,
-		CharacterMovement->MaxStepHeight, CharacterMovement->Skin, NoLevelMeshIndex);
+		CharacterMovement->MaxStepHeight, CharacterMovement->Skin, NoComponentID);
 	if (Support < StartFeet.Z + CharacterMovement->Skin)
 	{
 		Feet = StartFeet;

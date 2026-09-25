@@ -57,7 +57,6 @@ struct ENGINE_API FActorSpawnParameters
 struct ENGINE_API FWorldGameplayFrameParams
 {
 	float DeltaTime = 0.0f;
-	ULevel* Level = nullptr;
 	FSceneRenderer* Renderer = nullptr;
 	FDebugDraw* CollisionDebugDraw = nullptr;
 	FDebugDraw* NavMeshDebugDraw = nullptr;
@@ -201,11 +200,18 @@ public:
 		return Navigation;
 	}
 
-	/** Recreate FPhysScene with another backend (clears bodies). Call before RegisterBodiesFromLevel. */
-	void SetPhysicsBackend(EPhysicsBackend PhysicsBackend)
-	{
-		Physics = FPhysScene(PhysicsBackend);
-	}
+	/**
+	 * Recreates FPhysScene with another backend: the slope planes and the bodies added by hand go, and every registered
+	 * primitive gets its body again (RecreatePhysicsBodies).
+	 */
+	void SetPhysicsBackend(EPhysicsBackend PhysicsBackend);
+
+	/**
+	 * Clears the physics scene and recreates the physics state of every registered primitive component, in actor then
+	 * component order (Leon; UE recreates one component's state at a time): the bodies start again from the components'
+	 * transforms, at rest.
+	 */
+	void RecreatePhysicsBodies();
 
 	/**
 	 * Spawns an actor of Class (UE: SpawnActor): NewObject in the level, root placed at Location / Rotation (zero when
@@ -277,16 +283,10 @@ public:
 	void Tick(float InDeltaTime);
 
 	/**
-	 * Unreal-like frame: Character move → FPhysScene::Step → overlaps → Actor Tick → the bodies move their components
-	 * (FPhysScene::SyncToLevel, with Params.Level) → draw.
+	 * Unreal-like frame: Character move → FPhysScene::Step → overlaps → Actor Tick → the simulated bodies move their
+	 * components (FPhysScene::SyncComponentsToBodies) → draw.
 	 */
 	void TickGameplayFrame(const FWorldGameplayFrameParams& Params);
-
-	/**
-	 * Registers a physics scene body for every primitive component of the level whose collision is enabled
-	 * (ULevel::GetCollisionPrimitives; clears first). A body's LevelMeshIndex is the component's index in that list.
-	 */
-	void RegisterBodiesFromLevel(const ULevel& InLevel);
 
 	/**
 	 * The render state of the registered primitive components (UPrimitiveComponent::CreateRenderState_Concurrent):

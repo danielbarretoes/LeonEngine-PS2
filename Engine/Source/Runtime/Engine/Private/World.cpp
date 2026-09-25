@@ -356,19 +356,33 @@ SIZE_T UWorld::ActorCount() const
 	return Count;
 }
 
-void UWorld::RegisterBodiesFromLevel(const ULevel& InLevel)
+void UWorld::SetPhysicsBackend(EPhysicsBackend PhysicsBackend)
+{
+	Physics = FPhysScene(PhysicsBackend);
+	RecreatePhysicsBodies();
+}
+
+void UWorld::RecreatePhysicsBodies()
 {
 	Physics.Clear();
-	TArray<UPrimitiveComponent*> LevelPrimitives;
-	InLevel.GetCollisionPrimitives(LevelPrimitives);
-	for (int32 I = 0; I < LevelPrimitives.Num(); ++I)
+	if (PersistentLevel == nullptr)
 	{
-		const UPrimitiveComponent& Component = *LevelPrimitives[I];
-		FBodyInstanceDesc Desc{};
-		Desc.LevelMeshIndex = I;
-		Desc.Type = Component.IsSimulatingPhysics() ? EBodyType::Dynamic : EBodyType::Static;
-		Desc.bEnableGravity = Component.IsGravityEnabled();
-		Physics.AddBody(Desc);
+		return;
+	}
+	for (AActor* Actor : PersistentLevel->Actors)
+	{
+		if (Actor == nullptr || Actor->IsPendingKillPending())
+		{
+			continue;
+		}
+		for (UActorComponent* Component : Actor->GetComponents())
+		{
+			UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(Component);
+			if (Primitive != nullptr && Primitive->IsRegistered() && !Primitive->IsPendingKill())
+			{
+				Primitive->RecreatePhysicsState();
+			}
+		}
 	}
 }
 
@@ -427,10 +441,7 @@ void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& Params)
 
 	Tick(Params.DeltaTime);
 
-	if (Params.Level != nullptr)
-	{
-		Physics.SyncToLevel(*Params.Level);
-	}
+	Physics.SyncComponentsToBodies();
 
 	if (Params.Renderer != nullptr)
 	{
@@ -443,7 +454,7 @@ void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& Params)
 			[&](ACharacter& Character)
 			{
 				Physics.AppendCollisionDebug(
-					*Params.CollisionDebugDraw, Character.GetCapsule(), Character.GetActorLocation(), NoLevelMeshIndex);
+					*Params.CollisionDebugDraw, Character.GetCapsule(), Character.GetActorLocation(), NoComponentID);
 			});
 	}
 

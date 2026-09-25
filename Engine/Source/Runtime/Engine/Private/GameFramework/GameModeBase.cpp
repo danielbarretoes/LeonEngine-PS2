@@ -1,6 +1,7 @@
 #include "GameFramework/GameModeBase.h"
 
 #include "AI/Navigation/NavigationSystem.h"
+#include "Components/PrimitiveComponent.h"
 #include "Engine/GameEngine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/Level.h"
@@ -130,11 +131,13 @@ float AGameModeBase::EstimateWalkBounds(const ULevel& Level)
 	constexpr float MinWalkBounds = 2000.0f;
 	constexpr float MaxWalkBounds = 12000.0f;
 	float MaxExtent = MinExtent;
-	TArray<UPrimitiveComponent*> Primitives;
-	Level.GetCollisionPrimitives(Primitives);
-	for (const UPrimitiveComponent* Primitive : Primitives)
+	const FPhysScene* Physics = Level.OwningWorld != nullptr ? &Level.OwningWorld->GetPhysicsScene() : nullptr;
+	for (int32 BodyIndex = 0; Physics != nullptr && BodyIndex < Physics->GetBodies().Num(); ++BodyIndex)
 	{
-		if (Primitive->IsSimulatingPhysics())
+		// The static bodies of the level's components (a simulated body is a prop, not the arena).
+		const UPrimitiveComponent* Primitive = Physics->GetBodyOwner(BodyIndex);
+		if (Primitive == nullptr || Primitive->IsSimulatingPhysics() || Primitive->GetOwner() == nullptr ||
+			Primitive->GetOwner()->GetLevel() != &Level)
 		{
 			continue;
 		}
@@ -147,18 +150,15 @@ float AGameModeBase::EstimateWalkBounds(const ULevel& Level)
 }
 
 // Flow: Match enter — bodies + nav bake
-// 1. Physics backend
+// 1. Physics backend (the level's components get their bodies again, from their current transforms)
 // 2. Estimate floor Z / walk bounds from level
-// 3. RegisterBodiesFromLevel + SyncFromLevel
-// 4. UNavigationSystem bake (cell 50 cm, agent 45 cm)
+// 3. UNavigationSystem bake (cell 50 cm, agent 45 cm)
 void AGameModeBase::PrepareMatchWorld(
 	UGameEngine& Engine, float& OutFloorZ, float& OutWalkBounds, EPhysicsBackend Backend)
 {
 	SetPhysicsBackend(Backend);
 	OutFloorZ = EstimateFloorZ(Engine.GetLevel());
 	OutWalkBounds = EstimateWalkBounds(Engine.GetLevel());
-	RegisterBodiesFromLevel(Engine.GetLevel());
-	GetWorld()->GetPhysicsScene().SyncFromLevel(Engine.GetLevel());
 
 	UNavigationSystem& Nav = GetWorld()->GetNavigationSystem();
 	Nav.SetCellSize(50.0f);
@@ -171,8 +171,7 @@ void AGameModeBase::PrepareMatchWorld(
 
 void AGameModeBase::RebuildNavigation(UGameEngine& Engine, float FloorZ, float WalkBounds)
 {
-	RegisterBodiesFromLevel(Engine.GetLevel());
-	GetWorld()->GetPhysicsScene().SyncFromLevel(Engine.GetLevel());
+	GetWorld()->RecreatePhysicsBodies();
 	UNavigationSystem& Nav = GetWorld()->GetNavigationSystem();
 	Nav.BuildFromLevel(Engine.GetLevel(), GetWorld()->GetPhysicsScene(), FloorZ, WalkBounds);
 }
@@ -184,7 +183,7 @@ void AGameModeBase::SnapCharacterToFloor(ACharacter& Character, FVector& InOutFe
 	FVector Probe = InOutFeet;
 	Probe.Z = FMath::Max(InOutFeet.Z, FloorZ);
 	const float Support =
-		Phys.QuerySupportZ(Character.GetCapsule(), Probe, Move.FloorZ, Move.MaxStepHeight, Move.Skin, NoLevelMeshIndex);
+		Phys.QuerySupportZ(Character.GetCapsule(), Probe, Move.FloorZ, Move.MaxStepHeight, Move.Skin, NoComponentID);
 	/** cm above the support */
 	constexpr float SnapClearance = 2.0f;
 	InOutFeet.Z = FMath::Max(Support, FloorZ) + SnapClearance;

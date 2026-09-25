@@ -42,3 +42,52 @@ void UPrimitiveComponent::DestroyRenderState_Concurrent()
 	}
 	Super::DestroyRenderState_Concurrent();
 }
+
+void UPrimitiveComponent::SetCollisionEnabled(ECollisionEnabled::Type NewType)
+{
+	if (CollisionEnabled == NewType)
+	{
+		return;
+	}
+	CollisionEnabled = NewType;
+	RecreatePhysicsState();
+}
+
+void UPrimitiveComponent::SetSimulatePhysics(bool bSimulate)
+{
+	if (bSimulatePhysics == bSimulate)
+	{
+		return;
+	}
+	bSimulatePhysics = bSimulate;
+	RecreatePhysicsState();
+}
+
+void UPrimitiveComponent::SetEnableGravity(bool bGravityEnabled)
+{
+	if (bEnableGravity == bGravityEnabled)
+	{
+		return;
+	}
+	bEnableGravity = bGravityEnabled;
+	RecreatePhysicsState();
+}
+
+void UPrimitiveComponent::CreatePhysicsState()
+{
+	Super::CreatePhysicsState();
+	UWorld* World = GetWorld();
+	if (World != nullptr && IsCollisionEnabled())
+	{
+		World->GetPhysicsScene().AddComponentBody(*this);
+	}
+}
+
+void UPrimitiveComponent::DestroyPhysicsState()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetPhysicsScene().RemoveComponentBody(*this);
+	}
+	Super::DestroyPhysicsState();
+}

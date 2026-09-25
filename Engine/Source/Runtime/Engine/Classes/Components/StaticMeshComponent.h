@@ -21,7 +21,7 @@ class ENGINE_API UStaticMeshComponent : public UMeshComponent
 public:
 	UStaticMeshComponent(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	/** Sets the mesh (UE: SetStaticMesh). Returns false when it did not change. */
+	/** Sets the mesh (UE: SetStaticMesh); a registered component's body takes the new shape. False when unchanged. */
 	bool SetStaticMesh(TSharedPtr<UStaticMesh> NewMesh);
 	[[nodiscard]] UStaticMesh* GetStaticMesh() const
 	{
