@@ -7,6 +7,7 @@
 #include "HAL/PlatformApplicationMisc.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformTime.h"
+#include "Interfaces/IProjectManager.h"
 #include "Logging/LogMacros.h"
 #include "Logging/LogSuppressionInterface.h"
 #include "Misc/App.h"
@@ -88,6 +89,12 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 	GLog->AddOutputDevice(GLogFile.Get());
 #endif
 	FLogSuppressionInterface::Get().ProcessConfigAndCommandLine();
+
+	if (FPaths::IsProjectFilePathSet())
+	{
+		// Logs a warning itself when the .lproj cannot be read (PS2 without the PCSX2 host filesystem).
+		IProjectManager::Get().LoadProjectFile(FPaths::GetProjectFilePath());
+	}
 
 	UE_LOG(LogInit, Log, "Command line: %s", FCommandLine::Get());
 	UE_LOG(LogInit, Log, "Base directory: %s", FPlatformProcess::BaseDir());

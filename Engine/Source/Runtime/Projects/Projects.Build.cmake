@@ -1,5 +1,4 @@
-# Projects: project / plugin descriptors (Unreal: Runtime/Projects). The .lproj / .lplugin readers land in P4.
+# Projects: .lproj / .lplugin descriptors, IProjectManager and IPluginManager (Unreal: Runtime/Projects).
 leon_module(Projects
-	PLATFORMS Desktop
-	PUBLIC_DEPENDENCIES Core
+	PUBLIC_DEPENDENCIES Core Json
 )

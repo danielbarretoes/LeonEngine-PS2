@@ -5,11 +5,11 @@
 # PCSX2 path: $env:LEON_PCSX2, else PATH, else default install locations.
 #
 # Config staging: PCSX2's host: device is the ELF's folder, and the PS2 FPaths expects a staged layout under it
-# (<ELF dir>\Engine\Config, <ELF dir>\Engine\Platforms\PS2\Config, <ELF dir>\<Project>\Config). The script copies the
-# .ini files there before launching (the Binaries folder is git-ignored). With -NoStage nothing is copied and the game
-# runs on its compiled defaults, which must behave the same. PCSX2 only serves files other than the ELF through host:
-# with Settings > Advanced > "Enable Host Filesystem" ([EmuCore] HostFs = true in PCSX2.ini); without it the staged
-# config is not read and the compiled defaults apply.
+# (<ELF dir>\Engine\Config, <ELF dir>\Engine\Platforms\PS2\Config, <ELF dir>\<Project>\Config). The script copies
+# the .ini files (and the .lproj) there before launching; the Binaries folder is git-ignored. With -NoStage nothing is
+# copied and the game runs on its compiled defaults, which must behave the same. PCSX2 only serves files other than
+# the ELF through host: with Settings > Advanced > "Enable Host Filesystem" ([EmuCore] HostFs = true in PCSX2.ini);
+# without it the staged files are not read and the compiled defaults apply.
 param(
     [string]$Project = "Game\ThirdPerson",
     [string]$Program = "",
@@ -89,6 +89,7 @@ if (-not $NoStage) {
     if (-not $Program) {
         Copy-Config (Join-Path $ProjectDir "Config") (Join-Path $StagedProject "Config")
         Copy-Config (Join-Path $ProjectDir "Platforms\PS2\Config") (Join-Path $StagedProject "Platforms\PS2\Config")
+        Copy-Item -Path $ProjectFile -Destination (Join-Path $StagedProject (Split-Path $ProjectFile -Leaf)) -Force
     }
     Write-Host "Staged config under $StageDir"
 }

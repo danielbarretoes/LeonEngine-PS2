@@ -1,5 +1,4 @@
-# Json: JSON helpers (Unreal: Runtime/Json).
+# Json: JSON DOM, reader, writer and serializer (Unreal: Runtime/Json). Every platform; no third-party library.
 leon_module(Json
-	PLATFORMS Desktop
-	PUBLIC_DEPENDENCIES Core GLM NlohmannJson
+	PUBLIC_DEPENDENCIES Core
 )
