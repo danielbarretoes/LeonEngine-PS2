@@ -133,6 +133,35 @@ bool FGuidAndHashTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSHA1Test, "System.Core.Misc.SHA1",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FSHA1Test::RunTest(const FString& Parameters)
+{
+	// FIPS 180-1 test vectors, the empty message, and a message fed in pieces across a block boundary.
+	const auto Sha = [](const char* Text)
+	{ return FSHA1::HashBuffer(Text, uint64(FCStringAnsi::Strlen(Text))).ToString(); };
+	TestEqual("SHA1 empty", Sha(""), TEXT("DA39A3EE5E6B4B0D3255BFEF95601890AFD80709"));
+	TestEqual("SHA1 abc", Sha("abc"), TEXT("A9993E364706816ABA3E25717850C26C9CD0D89D"));
+	TestEqual("SHA1 two blocks", Sha("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"),
+		TEXT("84983E441C3BD26EBAAE4AA1F95129E5E54670F1"));
+
+	TArray<uint8> Million;
+	Million.Init(uint8('a'), 1000000);
+	FSHA1 Pieces;
+	Pieces.Update(Million.GetData(), 100);
+	Pieces.Update(Million.GetData() + 100, uint64(Million.Num() - 100));
+	TestEqual("SHA1 a million a's, in pieces", Pieces.Finalize().ToString(),
+		TEXT("34AA973CD4C4DAA4F61EEB2BDBAD27316534016F"));
+
+	uint8 Raw[FSHA1::DigestSize];
+	FSHA1::HashBuffer("abc", 3, Raw);
+	FSHAHash FromRaw;
+	FMemory::Memcpy(FromRaw.Hash, Raw, sizeof(Raw));
+	TestTrue("The raw digest", FSHA1::HashBuffer("abc", 3) == FromRaw);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDateTimeTest, "System.Core.Misc.DateTime",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 

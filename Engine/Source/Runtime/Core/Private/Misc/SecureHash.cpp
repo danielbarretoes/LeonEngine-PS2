@@ -268,3 +268,155 @@ void FMD5::Decode(uint32* Output, const uint8* Input, uint32 Len)
 			(uint32(Input[ByteIndex + 2]) << 16) | (uint32(Input[ByteIndex + 3]) << 24);
 	}
 }
+
+// SHA-1 after FIPS 180-1 (UE: FSHA1). Big-endian words, 64-byte blocks, 80 rounds.
+
+namespace
+{
+	FORCEINLINE uint32 Sha1RotateLeft(uint32 Value, uint32 Bits)
+	{
+		return (Value << Bits) | (Value >> (32 - Bits));
+	}
+} // namespace
+
+FSHA1::FSHA1()
+{
+	Reset();
+}
+
+void FSHA1::Reset()
+{
+	State[0] = 0x67452301;
+	State[1] = 0xEFCDAB89;
+	State[2] = 0x98BADCFE;
+	State[3] = 0x10325476;
+	State[4] = 0xC3D2E1F0;
+	TotalBytes = 0;
+	std::memset(Buffer, 0, sizeof(Buffer));
+	std::memset(Digest, 0, sizeof(Digest));
+}
+
+void FSHA1::Update(const uint8* Data, uint64 Length)
+{
+	uint32 Used = uint32(TotalBytes & 63);
+	TotalBytes += Length;
+	while (Length > 0)
+	{
+		const uint32 Take = uint32(Length < uint64(64 - Used) ? Length : uint64(64 - Used));
+		std::memcpy(Buffer + Used, Data, Take);
+		Used += Take;
+		Data += Take;
+		Length -= Take;
+		if (Used == 64)
+		{
+			Transform(Buffer);
+			Used = 0;
+		}
+	}
+}
+
+void FSHA1::Final()
+{
+	const uint64 BitLength = TotalBytes * 8;
+	const uint8 One = 0x80;
+	Update(&One, 1);
+	const uint8 Zero = 0;
+	while ((TotalBytes & 63) != 56)
+	{
+		Update(&Zero, 1);
+	}
+	uint8 LengthBytes[8];
+	for (int32 Index = 0; Index < 8; ++Index)
+	{
+		LengthBytes[Index] = uint8(BitLength >> (56 - 8 * Index));
+	}
+	Update(LengthBytes, 8);
+	for (int32 Index = 0; Index < 20; ++Index)
+	{
+		Digest[Index] = uint8(State[Index / 4] >> (24 - 8 * (Index % 4)));
+	}
+}
+
+void FSHA1::GetHash(uint8* OutHash) const
+{
+	std::memcpy(OutHash, Digest, sizeof(Digest));
+}
+
+FSHAHash FSHA1::Finalize()
+{
+	Final();
+	FSHAHash Result;
+	GetHash(Result.Hash);
+	return Result;
+}
+
+void FSHA1::HashBuffer(const void* Data, uint64 DataSize, uint8* OutHash)
+{
+	FSHA1 Sha;
+	Sha.Update(static_cast<const uint8*>(Data), DataSize);
+	Sha.Final();
+	Sha.GetHash(OutHash);
+}
+
+FSHAHash FSHA1::HashBuffer(const void* Data, uint64 DataSize)
+{
+	FSHAHash Result;
+	HashBuffer(Data, DataSize, Result.Hash);
+	return Result;
+}
+
+void FSHA1::Transform(const uint8* Block)
+{
+	uint32 W[80];
+	for (int32 Index = 0; Index < 16; ++Index)
+	{
+		W[Index] = (uint32(Block[Index * 4]) << 24) | (uint32(Block[Index * 4 + 1]) << 16) |
+			(uint32(Block[Index * 4 + 2]) << 8) | uint32(Block[Index * 4 + 3]);
+	}
+	for (int32 Index = 16; Index < 80; ++Index)
+	{
+		W[Index] = Sha1RotateLeft(W[Index - 3] ^ W[Index - 8] ^ W[Index - 14] ^ W[Index - 16], 1);
+	}
+
+	uint32 A = State[0];
+	uint32 B = State[1];
+	uint32 C = State[2];
+	uint32 D = State[3];
+	uint32 E = State[4];
+	for (int32 Index = 0; Index < 80; ++Index)
+	{
+		uint32 F;
+		uint32 K;
+		if (Index < 20)
+		{
+			F = (B & C) | (~B & D);
+			K = 0x5A827999;
+		}
+		else if (Index < 40)
+		{
+			F = B ^ C ^ D;
+			K = 0x6ED9EBA1;
+		}
+		else if (Index < 60)
+		{
+			F = (B & C) | (B & D) | (C & D);
+			K = 0x8F1BBCDC;
+		}
+		else
+		{
+			F = B ^ C ^ D;
+			K = 0xCA62C1D6;
+		}
+		const uint32 Temp = Sha1RotateLeft(A, 5) + F + E + K + W[Index];
+		E = D;
+		D = C;
+		C = Sha1RotateLeft(B, 30);
+		B = A;
+		A = Temp;
+	}
+	State[0] += A;
+	State[1] += B;
+	State[2] += C;
+	State[3] += D;
+	State[4] += E;
+}

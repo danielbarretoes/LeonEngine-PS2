@@ -9,4 +9,7 @@ leon_module(Launch
 	# (IRendererModule), so the launch module links it (UE: Launch's Renderer dependency), and PreInit's RHIInit needs
 	# the platform RHI (OpenGLDrv; the PS2 extension links PS2RHI).
 	PRIVATE_DEPENDENCIES_Desktop Engine Renderer OpenGLDrv
+	# PreInit puts the pak platform file on the chain when the build has paks (UE: Launch's PakFile dependency). The
+	# PS2 mounts none yet: its pak on cdrom0: comes with the Engine port.
+	PRIVATE_DEPENDENCIES_Desktop PakFile
 )

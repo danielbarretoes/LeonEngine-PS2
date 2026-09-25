@@ -6,6 +6,7 @@
 #include "GenericPlatform/GenericApplication.h"
 #include "GenericPlatform/GenericWindow.h"
 #include "HAL/PlatformApplicationMisc.h"
+#include "HAL/PlatformFilemanager.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformTime.h"
 #include "Interfaces/IProjectManager.h"
@@ -20,6 +21,10 @@
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
 #include "PlatformEngineLoopHooks.h"
+
+#if PLATFORM_DESKTOP
+	#include "IPlatformFilePak.h"
+#endif
 
 #if WITH_ENGINE
 	#if !PLATFORM_DESKTOP
@@ -40,6 +45,35 @@ namespace
 {
 	/** The log file (desktop): <Project>/Saved/Logs/<Name>.log. */
 	TUniquePtr<FOutputDeviceFile> GLogFile;
+
+#if PLATFORM_DESKTOP
+	/** The pak platform file PreInit put on top of the chain, if any. */
+	TUniquePtr<FPakPlatformFile> GPakPlatformFile;
+#endif
+
+	/**
+	 * The platform file wrappers the command line and the build ask for, on top of the physical one (UE:
+	 * LaunchCheckForFileOverride): the pak platform file when the build has paks (.lpak files in the project's
+	 * Content/Paks folder, or -pak), always in Shipping, which reads nothing but its paks. False when a Shipping build
+	 * finds no pak.
+	 */
+	bool LaunchCheckForFileOverride()
+	{
+#if PLATFORM_DESKTOP
+		IPlatformFile& CurrentPlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+		TUniquePtr<FPakPlatformFile> PakPlatformFile = MakeUnique<FPakPlatformFile>();
+		if (PakPlatformFile->ShouldBeUsed(&CurrentPlatformFile, FCommandLine::Get()))
+		{
+			if (!PakPlatformFile->Initialize(&CurrentPlatformFile, FCommandLine::Get()))
+			{
+				return false;
+			}
+			FPlatformFileManager::Get().SetPlatformFile(*PakPlatformFile);
+			GPakPlatformFile = MoveTemp(PakPlatformFile);
+		}
+#endif
+		return true;
+	}
 
 #if WITH_ENGINE
 	/** The game window's size: [/Script/Engine.GameViewportClient] DefaultResolutionX / Y of the Engine config. */
@@ -85,6 +119,13 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 	{
 		FApp::SetProjectName(LEON_PROJECT_NAME);
 		FPaths::SetProjectFilePath(FPaths::ProjectDir() + LEON_PROJECT_NAME + ".lproj");
+	}
+
+	// The paks mount before anything reads a file: the config, the .lproj and the content may all be in them.
+	if (!LaunchCheckForFileOverride())
+	{
+		RequestEngineExit("No pak file: this build reads its content from <Project>/Content/Paks/*.lpak only");
+		return 1;
 	}
 
 	// Config, then the log file and the verbosity it asks for.
@@ -335,4 +376,12 @@ void FEngineLoop::Exit()
 		GLog->RemoveOutputDevice(GLogFile.Get());
 		GLogFile.Reset();
 	}
+#if PLATFORM_DESKTOP
+	// The paks go last: nothing reads a file after this.
+	if (GPakPlatformFile)
+	{
+		FPlatformFileManager::Get().SetPlatformFile(*GPakPlatformFile->GetLowerLevel());
+		GPakPlatformFile.Reset();
+	}
+#endif
 }

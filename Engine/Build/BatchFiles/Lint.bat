@@ -11,7 +11,7 @@ if errorlevel 1 (
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0CheckBannedApis.ps1"
 if errorlevel 1 exit /b 1
 
-for %%T in (LeonAutomationTests LeonCook LeonGame BlankProgram) do (
+for %%T in (LeonAutomationTests LeonCook LeonPak LeonGame BlankProgram) do (
   call "%~dp0Build.bat" %%T Win64 Development
   if errorlevel 1 exit /b 1
 )

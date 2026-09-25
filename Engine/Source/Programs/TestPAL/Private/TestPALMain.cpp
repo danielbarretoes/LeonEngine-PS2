@@ -14,8 +14,8 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogTestPAL, Log, All);
 
-// Runs the automation tests linked into this program (Core, CoreUObject, Json and Projects Private/Tests) and prints a
-// verdict line:
+// Runs the automation tests linked into this program (Core, CoreUObject, Json, Projects and PakFile Private/Tests) and
+// prints a verdict line:
 //   TestPAL: PASSED (N test(s), 0 failed)
 // Arguments: -filter=<text> runs only the tests whose name contains <text>.
 int main(int ArgC, char* ArgV[])
