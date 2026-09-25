@@ -18,6 +18,8 @@
 #include "Misc/AutomationTest.h"
 #include "Physics/PhysScene.h"
 #include "PhysicsBackend.h"
+#include "Tests/GameplayTestTypes.h"
+#include "Tests/ScopedTestWorld.h"
 #include "TriangleCollision.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -25,12 +27,6 @@
 namespace
 {
 
-	class ATestActor : public AActor
-	{
-	};
-	class ATestPawn : public APawn
-	{
-	};
 	class ATestController : public AController
 	{
 	};
@@ -44,7 +40,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayWorldSpawnsTicksAndDestroysActorsTest,
 bool FGameplayWorldSpawnsTicksAndDestroysActorsTest::RunTest(const FString& Parameters)
 {
 	// A spawned Actor belongs to its World, is purged on the Tick after Destroy, and Clear empties the World.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ATestActor* Actor = World.SpawnActor<ATestActor>();
 	if (!TestNotNull("Spawned actor", Actor))
 	{
@@ -74,7 +71,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayWorldFindFirstFindsDerivedTypeTest,
 bool FGameplayWorldFindFirstFindsDerivedTypeTest::RunTest(const FString& Parameters)
 {
 	// FindFirst returns the first Actor of the requested type and null when none matches.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	World.SpawnActor<ATestActor>();
 	ATestPawn* Pawn = World.SpawnActor<ATestPawn>();
 	TestTrue("Finds the pawn", World.FindFirst<ATestPawn>() == Pawn);
@@ -89,7 +87,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayControllerPossessAndUnPossessTest,
 bool FGameplayControllerPossessAndUnPossessTest::RunTest(const FString& Parameters)
 {
 	// Possess links the Controller and the Pawn both ways; UnPossess clears both links.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ATestPawn* Pawn = World.SpawnActor<ATestPawn>();
 	ATestController Controller;
 	Controller.Possess(Pawn);
@@ -110,7 +109,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayPawnDestroyUnPossessesControllerTest,
 bool FGameplayPawnDestroyUnPossessesControllerTest::RunTest(const FString& Parameters)
 {
 	// Destroying a possessed Pawn releases its Controller.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ATestPawn* Pawn = World.SpawnActor<ATestPawn>();
 	ATestController Controller;
 	Controller.Possess(Pawn);
@@ -155,7 +155,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayGameInstanceNotifyLevelOpenedTest,
 bool FGameplayGameInstanceNotifyLevelOpenedTest::RunTest(const FString& Parameters)
 {
 	// Each NotifyLevelOpened bumps the opened-level counter.
-	UGameInstance GameInstance;
+	UGameInstance& GameInstance = *NewObject<UGameInstance>();
 	TestEqual("No levels yet", GameInstance.GetLevelsOpened(), 0);
 	GameInstance.NotifyLevelOpened();
 	GameInstance.NotifyLevelOpened();
@@ -172,10 +172,11 @@ bool FGameplaySpringArmClampsPitchAndArmLengthTest::RunTest(const FString& Param
 	// With bUsePawnControlRotation the arm follows the pawn's control rotation, whose pitch the player controller
 	// clamps; the arm length input clamps to its limits, and the arm drives an orbit camera at the target offset
 	// height.
-	ATestPawn Pawn;
+	FScopedTestWorld TestWorld;
+	ATestPawn& Pawn = *TestWorld->SpawnActor<ATestPawn>();
 	APlayerController Controller;
 	Controller.Possess(&Pawn);
-	USpringArmComponent* Arm = Pawn.CreateDefaultSubobject<USpringArmComponent>();
+	USpringArmComponent* Arm = NewObject<USpringArmComponent>(&Pawn);
 	Arm->bUsePawnControlRotation = true;
 
 	Pawn.AddControllerPitchInput(200.0f);
@@ -208,7 +209,8 @@ bool FGameplayPawnLookInputDrivesControlRotationTest::RunTest(const FString& Par
 {
 	// AddControllerYawInput / AddControllerPitchInput reach only a possessing player controller: without one the pawn
 	// has no control rotation and views along its actor rotation.
-	ATestPawn Pawn;
+	FScopedTestWorld TestWorld;
+	ATestPawn& Pawn = *TestWorld->SpawnActor<ATestPawn>();
 	Pawn.SetActorRotation(FRotator(0.0f, 45.0f, 0.0f));
 	Pawn.AddControllerYawInput(10.0f);
 	TestTrue("No control rotation unpossessed", Pawn.GetControlRotation().Equals(FRotator::ZeroRotator, 0.0f));
@@ -245,7 +247,7 @@ bool FGameplaySpringArmCollisionProbeShortensArmTest::RunTest(const FString& Par
 	Scene.GetBodies()[Id].HalfExtents = FVector(25.0f, 200.0f, 100.0f);
 
 	// Without a pawn the arm uses its own rotation: the view looks toward -X, so the camera sits along +X.
-	USpringArmComponent Arm;
+	USpringArmComponent& Arm = *NewObject<USpringArmComponent>();
 	Arm.bDoCollisionTest = true;
 	Arm.bEnableCameraLag = false;
 	Arm.bEnableCameraRotationLag = false;
@@ -273,7 +275,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayAIControllerSteersTowardTargetAndArriv
 bool FGameplayAIControllerSteersTowardTargetAndArrivesTest::RunTest(const FString& Parameters)
 {
 	// Far from the target the wish is a unit vector toward it; inside the arrive radius it is zero.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->Reset(FVector(0.0f, 0.0f, 0.0f));
 
@@ -299,7 +302,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayAIControllerMoveToActorTracksMovingTar
 bool FGameplayAIControllerMoveToActorTracksMovingTargetTest::RunTest(const FString& Parameters)
 {
 	// MoveToActor follows the target Actor's current location and stops once it is within the arrive radius.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Hunter = World.SpawnActor<ACharacter>();
 	ACharacter* Prey = World.SpawnActor<ACharacter>();
 	Hunter->Reset(FVector(0.0f, 0.0f, 0.0f));
@@ -343,7 +347,8 @@ bool FGameplayAIControllerPathFollowDoesNotShortcutTest::RunTest(const FString& 
 		return false;
 	}
 
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->Reset(FVector(-500.0f, 0.0f, 0.0f));
 
@@ -433,10 +438,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayNavBlocksNavBlockerKeepsNavWalkableTes
 bool FGameplayNavBlocksNavBlockerKeepsNavWalkableTest::RunTest(const FString& Parameters)
 {
 	// A NavBlocker-tagged plate blocks its cells and forces a detour; a NavWalkable ramp mesh stays walkable.
-	ULevel Level;
+	ULevel& Level = *NewObject<ULevel>();
 	FPhysScene Physics;
 
-	UStaticMeshComponent Plate{};
+	FLevelStaticMesh Plate{};
 	Plate.Tag = NavTags::Blocker;
 	Plate.bCollisionEnabled = true;
 	Plate.EditorClass = "Cube";
@@ -451,7 +456,7 @@ bool FGameplayNavBlocksNavBlockerKeepsNavWalkableTest::RunTest(const FString& Pa
 	Physics.GetBodies().Add(PlateBody);
 	Physics.GetTriangleMeshes().AddDefaulted();
 
-	UStaticMeshComponent Ramp{};
+	FLevelStaticMesh Ramp{};
 	Ramp.Tag = NavTags::Walkable;
 	Ramp.bCollisionEnabled = true;
 	Ramp.EditorClass = "Cube";
@@ -551,7 +556,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayCharacterResetJumpAndPerformMovementTe
 bool FGameplayCharacterResetJumpAndPerformMovementTest::RunTest(const FString& Parameters)
 {
 	// Reset puts the Character on the ground; Jump makes it fall upward, and movement input moves it along X.
-	ACharacter Character;
+	FScopedTestWorld TestWorld;
+	ACharacter& Character = *TestWorld->SpawnActor<ACharacter>();
 	Character.Reset(FVector(0.0f, 0.0f, 0.0f), FRotator(0.0f, 45.0f, 0.0f));
 	TestTrue("On ground after reset", Character.IsMovingOnGround());
 	TestEqual("Yaw after reset", Character.GetActorRotation().Yaw, 45.0f, 1.0e-5f);
@@ -578,11 +584,12 @@ bool FGameplayActorSyncTransformToLevelWritesLinkedMeshTest::RunTest(const FStri
 {
 	// SyncTransformToLevel copies the Actor location and yaw into its linked Level mesh; the mesh shows converted
 	// legacy content (facing +Y), so its yaw is the actor yaw plus LegacyContentYaw.
-	ULevel Level;
-	UStaticMeshComponent Mesh{};
+	ULevel& Level = *NewObject<ULevel>();
+	FLevelStaticMesh Mesh{};
 	Level.AddStaticMesh(MoveTemp(Mesh));
 
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ATestActor* Actor = World.SpawnActor<ATestActor>();
 	Actor->SetLevelMeshIndex(0);
 	Actor->SetActorLocationAndRotation(FVector(300.0f, 150.0f, -200.0f), FRotator(0.0f, 90.0f, 0.0f));
@@ -607,11 +614,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayWorldTickGameplayFrameSyncsCharacterTe
 bool FGameplayWorldTickGameplayFrameSyncsCharacterTest::RunTest(const FString& Parameters)
 {
 	// A gameplay frame writes the Character pose into its linked Level mesh.
-	ULevel Level;
-	UStaticMeshComponent Mesh{};
+	ULevel& Level = *NewObject<ULevel>();
+	FLevelStaticMesh Mesh{};
 	Level.AddStaticMesh(MoveTemp(Mesh));
 
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->SetLevelMeshIndex(0);
 	Character->Reset(FVector(100.0f, 200.0f, 0.0f), FRotator(0.0f, 45.0f, 0.0f));
@@ -634,35 +642,24 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayActorComponentRegisterAndSubobjectTick
 
 bool FGameplayActorComponentRegisterAndSubobjectTickTest::RunTest(const FString& Parameters)
 {
-	// A heap subobject is registered on its owner, begins play with it, ticks when enabled and stops once destroyed.
-	struct UCountingComponent : UActorComponent
-	{
-		int32 Ticks = 0;
-		int32 Begins = 0;
-		void BeginPlay() override
-		{
-			++Begins;
-		}
-		void TickComponent(float) override
-		{
-			++Ticks;
-		}
-	};
-
-	UWorld World;
+	// A component created after the spawn is registered on its owner, begins play with it, ticks when enabled and
+	// stops once destroyed.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ATestActor* Actor = World.SpawnActor<ATestActor>();
 	TestTrue("Root registered", Actor->GetComponents().Num() >= 1);
 
-	UCountingComponent* Heap = Actor->CreateDefaultSubobject<UCountingComponent>();
+	UCountingComponent* Heap = NewObject<UCountingComponent>(Actor);
 	if (!TestNotNull("Subobject created", Heap))
 	{
 		return false;
 	}
+	Heap->RegisterComponent();
 	TestTrue("Owned by actor", Heap->GetOwner() == Actor);
 	TestTrue("Registered", Heap->IsRegistered());
 	Heap->SetComponentTickEnabled(true);
 
-	// BeginPlayComponents runs on spawn before Actor::BeginPlay.
+	// Registered on an actor that already plays: the component begins play at once.
 	TestEqual("Began play once", Heap->Begins, 1);
 
 	World.Tick(1.0f / 60.0f);
@@ -682,30 +679,32 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplaySceneComponentAttachHierarchyTest,
 bool FGameplaySceneComponentAttachHierarchyTest::RunTest(const FString& Parameters)
 {
 	// Attached components add their relative offsets to the Actor pose; cycles are refused and destroy detaches.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ATestActor* Actor = World.SpawnActor<ATestActor>();
 	Actor->SetActorLocationAndRotation(FVector(1000.0f, 0.0f, 0.0f), FRotator::ZeroRotator);
 
 	// The Relative* fields are world units (cm).
-	USceneComponent Child;
-	Child.SetOwner(Actor);
+	USceneComponent& Child = *NewObject<USceneComponent>(Actor);
 	Child.RelativeLocation = FVector(200.0f, 0.0f, 0.0f);
-	TestTrue("Child attached", Child.AttachToComponent(&Actor->GetRootComponent()));
-	TestTrue("Child parent is root", Child.GetAttachParent() == &Actor->GetRootComponent());
-	TestEqual("Root has one child", Actor->GetRootComponent().GetAttachChildren().Num(), 1);
+	TestTrue("Child attached",
+		Child.AttachToComponent(Actor->GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform));
+	TestTrue("Child parent is root", Child.GetAttachParent() == Actor->GetRootComponent());
+	TestEqual("Root has one child", Actor->GetRootComponent()->GetAttachChildren().Num(), 1);
 
 	const FVector Loc = Child.GetComponentLocation();
 	TestEqual("Child world X", Loc.X, 1200.0f, 1.0e-2f);
 
-	USceneComponent Grandchild;
+	USceneComponent& Grandchild = *NewObject<USceneComponent>(Actor);
 	Grandchild.RelativeLocation = FVector(100.0f, 0.0f, 0.0f);
-	TestTrue("Grandchild attached", Grandchild.AttachToComponent(&Child));
+	TestTrue(
+		"Grandchild attached", Grandchild.AttachToComponent(&Child, FAttachmentTransformRules::KeepRelativeTransform));
 	TestEqual("Grandchild world X", Grandchild.GetComponentLocation().X, 1300.0f, 1.0e-2f);
 
-	TestFalse("Cycle refused", Child.AttachToComponent(&Grandchild));
+	TestFalse("Cycle refused", Child.AttachToComponent(&Grandchild, FAttachmentTransformRules::KeepRelativeTransform));
 	Child.DestroyComponent();
 	TestNull("Child detached", Child.GetAttachParent());
-	TestEqual("Root has no children", Actor->GetRootComponent().GetAttachChildren().Num(), 0);
+	TestEqual("Root has no children", Actor->GetRootComponent()->GetAttachChildren().Num(), 0);
 	return true;
 }
 
@@ -716,11 +715,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayCharacterMeshAttachesToRootTest,
 bool FGameplayCharacterMeshAttachesToRootTest::RunTest(const FString& Parameters)
 {
 	// The Character mesh is a registered child of the root and follows the Actor location plus its offset.
-	ACharacter Character;
-	TestTrue("Mesh parent is root", Character.GetMesh().GetAttachParent() == &Character.GetRootComponent());
+	FScopedTestWorld TestWorld;
+	ACharacter& Character = *TestWorld->SpawnActor<ACharacter>();
+	TestTrue("Mesh parent is root", Character.GetMesh().GetAttachParent() == Character.GetRootComponent());
 	TestTrue("Mesh owner", Character.GetMesh().GetOwner() == &Character);
 	TestTrue("Mesh registered", Character.GetMesh().IsRegistered());
-	TestTrue("Root registered", Character.GetRootComponent().IsRegistered());
+	TestTrue("Root registered", Character.GetRootComponent()->IsRegistered());
 	Character.SetActorLocation(FVector(500.0f, 0.0f, 0.0f));
 	// A relative offset of 100 cm, in the actor's space.
 	Character.GetMesh().RelativeLocation = FVector(100.0f, 0.0f, 0.0f);

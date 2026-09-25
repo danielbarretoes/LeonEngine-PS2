@@ -1,80 +1,320 @@
 #include "GameFramework/Actor.h"
 
 #include "Components/ActorComponent.h"
+#include "Engine/World.h"
 
-AActor::~AActor()
+const FName AActor::DefaultSceneRootName(TEXT("DefaultSceneRoot"));
+
+AActor::AActor(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
 {
-	// Members (root, Character mesh, …) destroy after this body. Clear registry first so
-	// component dtors do not touch a destroyed `Components` vector.
+	bHidden = false;
+	bCanEverTick = true;
+	// UE actors have no root by default; Leon gives every actor one so it always has a transform. A subclass with its
+	// own root (ACharacter's capsule) skips it through DoNotCreateDefaultSubobject(DefaultSceneRootName).
+	RootComponent = ObjectInitializer.CreateOptionalDefaultSubobject<USceneComponent>(this, DefaultSceneRootName);
+}
+
+UWorld* AActor::GetWorld() const
+{
+	const ULevel* Level = GetLevel();
+	return Level != nullptr ? Level->OwningWorld : nullptr;
+}
+
+ULevel* AActor::GetLevel() const
+{
+	return GetTypedOuter<ULevel>();
+}
+
+bool AActor::SetRootComponent(USceneComponent* NewRootComponent)
+{
+	if (NewRootComponent != nullptr && NewRootComponent->GetOwner() != this)
+	{
+		return false;
+	}
+	RootComponent = NewRootComponent;
+	return true;
+}
+
+void AActor::AddOwnedComponent(UActorComponent* Component)
+{
+	if (Component != nullptr)
+	{
+		OwnedComponents.AddUnique(Component);
+	}
+}
+
+void AActor::RemoveOwnedComponent(UActorComponent* Component)
+{
+	OwnedComponents.Remove(Component);
+}
+
+void AActor::RegisterAllComponents()
+{
+	UWorld* World = GetWorld();
+	// The root first, so its children find it registered (UE).
+	if (RootComponent != nullptr && RootComponent->bAutoRegister)
+	{
+		RootComponent->RegisterComponentWithWorld(World);
+	}
+	// Registration may add components (a component creating another): iterate over a copy.
+	const TArray<UActorComponent*> Components = OwnedComponents;
 	for (UActorComponent* Component : Components)
 	{
-		if (Component != nullptr)
+		if (Component != nullptr && Component->bAutoRegister && !Component->IsPendingKill())
 		{
-			Component->bRegistered = false;
-			Component->Owner = nullptr;
+			Component->RegisterComponentWithWorld(World);
 		}
 	}
-	Components.Empty();
-	OwnedComponents.Empty();
 }
 
-void AActor::RegisterComponent(UActorComponent* Component)
+void AActor::UnregisterAllComponents()
 {
-	if (Component == nullptr || Component->bRegistered)
-	{
-		return;
-	}
-	Component->SetOwner(this);
-	Component->bRegistered = true;
-	Components.Add(Component);
-	// CreateDefaultSubobject after SpawnActor: match Unreal late-register BeginPlay.
-	if (bHasBegunPlay)
-	{
-		Component->BeginPlay();
-	}
-}
-
-void AActor::UnregisterComponent(UActorComponent* Component)
-{
-	if (Component == nullptr)
-	{
-		return;
-	}
-	Components.Remove(Component);
-	Component->bRegistered = false;
-}
-
-void AActor::BeginPlayComponents()
-{
-	bHasBegunPlay = true;
+	const TArray<UActorComponent*> Components = OwnedComponents;
 	for (UActorComponent* Component : Components)
 	{
-		if (Component != nullptr)
+		if (Component != nullptr && Component->IsRegistered())
+		{
+			Component->UnregisterComponent();
+		}
+	}
+}
+
+void AActor::SetOwner(AActor* NewOwner)
+{
+	Owner = NewOwner;
+}
+
+FVector AActor::GetActorLocation() const
+{
+	return RootComponent != nullptr ? RootComponent->GetComponentLocation() : FVector::ZeroVector;
+}
+
+FRotator AActor::GetActorRotation() const
+{
+	return RootComponent != nullptr ? RootComponent->GetComponentRotation() : FRotator::ZeroRotator;
+}
+
+FQuat AActor::GetActorQuat() const
+{
+	return RootComponent != nullptr ? RootComponent->GetComponentQuat() : FQuat::Identity;
+}
+
+FTransform AActor::GetActorTransform() const
+{
+	return RootComponent != nullptr ? RootComponent->GetComponentTransform() : FTransform::Identity;
+}
+
+FVector AActor::GetActorScale3D() const
+{
+	return RootComponent != nullptr ? RootComponent->GetComponentScale() : FVector::OneVector;
+}
+
+FVector AActor::GetActorForwardVector() const
+{
+	return RootComponent != nullptr ? RootComponent->GetForwardVector() : FVector(1.0f, 0.0f, 0.0f);
+}
+
+FVector AActor::GetActorRightVector() const
+{
+	return RootComponent != nullptr ? RootComponent->GetRightVector() : FVector(0.0f, 1.0f, 0.0f);
+}
+
+FVector AActor::GetActorUpVector() const
+{
+	return RootComponent != nullptr ? RootComponent->GetUpVector() : FVector(0.0f, 0.0f, 1.0f);
+}
+
+bool AActor::SetActorLocation(const FVector& NewLocation)
+{
+	if (RootComponent == nullptr)
+	{
+		return false;
+	}
+	RootComponent->SetWorldLocation(NewLocation);
+	return true;
+}
+
+bool AActor::SetActorRotation(const FRotator& NewRotation)
+{
+	if (RootComponent == nullptr)
+	{
+		return false;
+	}
+	RootComponent->SetWorldRotation(NewRotation);
+	return true;
+}
+
+bool AActor::SetActorLocationAndRotation(const FVector& NewLocation, const FRotator& NewRotation)
+{
+	if (RootComponent == nullptr)
+	{
+		return false;
+	}
+	RootComponent->SetWorldLocationAndRotation(NewLocation, NewRotation);
+	return true;
+}
+
+bool AActor::SetActorTransform(const FTransform& NewTransform)
+{
+	if (RootComponent == nullptr)
+	{
+		return false;
+	}
+	RootComponent->SetWorldTransform(NewTransform);
+	return true;
+}
+
+void AActor::SetActorScale3D(const FVector& NewScale3D)
+{
+	if (RootComponent != nullptr)
+	{
+		RootComponent->SetRelativeScale3D(NewScale3D);
+	}
+}
+
+bool AActor::Destroy()
+{
+	if (bActorIsBeingDestroyed || IsPendingKill())
+	{
+		return true;
+	}
+	if (UWorld* World = GetWorld())
+	{
+		return World->DestroyActor(this);
+	}
+	// Outside any world (an engine-owned HUD, a test actor): no level to leave.
+	bActorIsBeingDestroyed = true;
+	Destroyed();
+	RouteEndPlay(EEndPlayReason::Destroyed);
+	UnregisterAllComponents();
+	MarkPendingKill();
+	return true;
+}
+
+void AActor::Destroyed()
+{
+}
+
+void AActor::PreInitializeComponents()
+{
+}
+
+void AActor::InitializeComponents()
+{
+	const TArray<UActorComponent*> Components = OwnedComponents;
+	for (UActorComponent* Component : Components)
+	{
+		if (Component != nullptr && Component->IsRegistered() && Component->bWantsInitializeComponent &&
+			!Component->HasBeenInitialized())
+		{
+			Component->InitializeComponent();
+		}
+	}
+}
+
+void AActor::PostInitializeComponents()
+{
+	bActorInitialized = true;
+}
+
+void AActor::FinishSpawning(const FTransform& Transform)
+{
+	if (bActorInitialized)
+	{
+		return;
+	}
+	SetActorTransform(Transform);
+	if (UWorld* World = GetWorld())
+	{
+		World->PostActorConstruction(this);
+	}
+}
+
+void AActor::DispatchBeginPlay()
+{
+	if (bActorHasBegunPlay || bActorBeginningPlay || IsPendingKillPending())
+	{
+		return;
+	}
+	bActorBeginningPlay = true;
+	BeginPlay();
+	bActorBeginningPlay = false;
+	bActorHasBegunPlay = true;
+}
+
+void AActor::BeginPlay()
+{
+	// Components begin before the rest of the actor's BeginPlay (overrides call Super first). A component registered
+	// during the loop begins through its registration.
+	bActorHasBegunPlay = true;
+	const TArray<UActorComponent*> Components = OwnedComponents;
+	for (UActorComponent* Component : Components)
+	{
+		if (Component != nullptr && Component->IsRegistered() && !Component->HasBegunPlay())
 		{
 			Component->BeginPlay();
 		}
 	}
 }
 
-void AActor::EndPlayComponents()
+void AActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	const TArray<UActorComponent*> Components = OwnedComponents;
 	for (UActorComponent* Component : Components)
 	{
-		if (Component != nullptr)
+		if (Component != nullptr && Component->HasBegunPlay())
 		{
-			Component->EndPlay();
+			Component->EndPlay(EndPlayReason);
 		}
 	}
-	bHasBegunPlay = false;
 }
 
-void AActor::TickComponents(float DeltaTime)
+void AActor::RouteEndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (bHasEndedPlay)
+	{
+		return;
+	}
+	bHasEndedPlay = true;
+	if (bActorHasBegunPlay)
+	{
+		EndPlay(EndPlayReason);
+	}
+	bActorHasBegunPlay = false;
+}
+
+void AActor::Tick(float /*DeltaSeconds*/)
+{
+}
+
+void AActor::TickActor(float DeltaSeconds)
+{
+	const TArray<UActorComponent*> Components = OwnedComponents;
 	for (UActorComponent* Component : Components)
 	{
-		if (Component != nullptr && Component->IsComponentTickEnabled())
+		if (Component != nullptr && Component->IsRegistered() && Component->IsComponentTickEnabled() &&
+			!Component->IsPendingKill())
 		{
-			Component->TickComponent(DeltaTime);
+			Component->TickComponent(DeltaSeconds);
 		}
 	}
+	if (bCanEverTick)
+	{
+		Tick(DeltaSeconds);
+	}
+}
+
+void AActor::SyncTransformToLevel(ULevel& Level) const
+{
+	TArray<FLevelStaticMesh>& Meshes = Level.GetStaticMeshes();
+	if (LevelMeshIndex >= static_cast<SIZE_T>(Meshes.Num()))
+	{
+		return;
+	}
+	FLevelStaticMesh& Obj = Meshes[static_cast<int32>(LevelMeshIndex)];
+	Obj.Transform.SetLocation(GetActorLocation());
+	FRotator MeshRotation = Obj.Transform.Rotator();
+	MeshRotation.Yaw = GetActorRotation().Yaw + LegacyContentYaw;
+	Obj.Transform.SetRotation(MeshRotation.Quaternion());
 }

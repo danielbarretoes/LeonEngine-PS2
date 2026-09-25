@@ -26,8 +26,10 @@ public:
 	void Exit();
 
 private:
+	/** The game mode the world spawned (UWorld::AuthorityGameMode); the world owns it. */
+	[[nodiscard]] AGameModeBase* GetGameMode() const;
+
 	TUniquePtr<UGameEngine> Engine;
-	TUniquePtr<AGameModeBase> GameMode;
 	bool bHeadless = false;
 	float TickHz = 60.0f;
 	/** -Screenshot=<file.bmp> saves frame -ExitAfterFrames=N (default 60), then the game exits. */

@@ -1,6 +1,7 @@
 #include "GameApplication.h"
 
 #include "CoreGlobals.h"
+#include "Engine/World.h"
 #include "GameFramework/DefaultGameMode.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformTime.h"
@@ -119,7 +120,8 @@ bool FGameApplication::Init()
 		Engine.Reset();
 		return false;
 	}
-	GameMode = MakeUnique<ADefaultGameMode>();
+	// The world spawns the game mode (UE: UWorld::SetGameMode); P13's LoadMap picks the class from the config (D18).
+	AGameModeBase* GameMode = Engine->GetWorld()->SetGameMode(ADefaultGameMode::StaticClass());
 	GameMode->OnEnter(*Engine, MapPath);
 
 	if (bHeadless)
@@ -135,9 +137,16 @@ bool FGameApplication::Init()
 	return true;
 }
 
+AGameModeBase* FGameApplication::GetGameMode() const
+{
+	UWorld* World = Engine ? Engine->GetWorld() : nullptr;
+	return World != nullptr ? World->GetAuthGameMode() : nullptr;
+}
+
 bool FGameApplication::Tick()
 {
-	if (!Engine)
+	AGameModeBase* GameMode = GetGameMode();
+	if (!Engine || GameMode == nullptr)
 	{
 		return false;
 	}
@@ -177,16 +186,15 @@ bool FGameApplication::Tick()
 	{
 		Engine->RequestScreenshot(ScreenshotPath);
 	}
-	return Engine->Tick(DeltaTime, [this](float Dt) { GameMode->Tick(*Engine, Dt); });
+	return Engine->Tick(DeltaTime, [this, GameMode](float Dt) { GameMode->Tick(*Engine, Dt); });
 }
 
 void FGameApplication::Exit()
 {
-	if (GameMode && Engine)
+	if (AGameModeBase* GameMode = GetGameMode())
 	{
 		GameMode->OnExit(*Engine);
 	}
-	GameMode.Reset();
 	if (Engine)
 	{
 		Engine->Shutdown();

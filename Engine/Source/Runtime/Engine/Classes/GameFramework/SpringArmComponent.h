@@ -5,6 +5,7 @@
 #include "Components/SceneComponent.h"
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "SpringArmComponent.generated.h"
 
 class FDebugDraw;
 class FPhysScene;
@@ -17,8 +18,11 @@ class FPhysScene;
  * at Origin - Rotation.Vector() * ArmLength, and looks along the rotation. With bUsePawnControlRotation the rotation is
  * the owning pawn's view (control) rotation, otherwise the component's own rotation.
  */
+UCLASS()
 class ENGINE_API USpringArmComponent : public USceneComponent
 {
+	GENERATED_BODY()
+
 public:
 	/** Desired boom length in cm (scroll edits this; lag follows toward it). */
 	float TargetArmLength = 400.0f;

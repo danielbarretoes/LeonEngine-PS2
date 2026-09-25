@@ -53,7 +53,7 @@ namespace
 	static_assert(sizeof(FCameraBlock) == 208, "FCameraBlock must match std140 Camera UBO");
 	static_assert(sizeof(FLightsBlock) == 272, "FLightsBlock must match std140 Lights UBO");
 
-	float DistanceSqToCamera(const UStaticMeshComponent& Object, const FVector& InCameraPos)
+	float DistanceSqToCamera(const FLevelStaticMesh& Object, const FVector& InCameraPos)
 	{
 		const FBox Box =
 			TransformLocalBox(Object.Mesh->GetLocalMin(), Object.Mesh->GetLocalMax(), Object.EffectiveModelMatrix());
@@ -61,12 +61,12 @@ namespace
 		return D | D;
 	}
 
-	FBox WorldAabbFromObject(const UStaticMeshComponent& Object)
+	FBox WorldAabbFromObject(const FLevelStaticMesh& Object)
 	{
 		return TransformLocalBox(Object.Mesh->GetLocalMin(), Object.Mesh->GetLocalMax(), Object.EffectiveModelMatrix());
 	}
 
-	void ExpandWorldAabbFromObject(const UStaticMeshComponent& Object, FVector& WorldMin, FVector& WorldMax)
+	void ExpandWorldAabbFromObject(const FLevelStaticMesh& Object, FVector& WorldMin, FVector& WorldMax)
 	{
 		const FBox Box = WorldAabbFromObject(Object);
 		WorldMin = WorldMin.ComponentMin(Box.Min);
@@ -92,7 +92,7 @@ namespace
 		WorldMin = FVector(TNumericLimits<float>::Max());
 		WorldMax = FVector(TNumericLimits<float>::Lowest());
 		bool bAny = false;
-		for (const UStaticMeshComponent& Object : Level.GetStaticMeshes())
+		for (const FLevelStaticMesh& Object : Level.GetStaticMeshes())
 		{
 			if (!Object.IsShadowCaster())
 			{
@@ -558,7 +558,7 @@ void FSceneRenderer::RenderShadowPass(const ULevel& Level, const FMatrix& LightS
 	if (ShadowShader.Valid())
 	{
 		ShadowShader.Bind();
-		for (const UStaticMeshComponent& Object : Level.GetStaticMeshes())
+		for (const FLevelStaticMesh& Object : Level.GetStaticMeshes())
 		{
 			if (!Object.IsShadowCaster())
 			{
@@ -668,7 +668,7 @@ void FSceneRenderer::RenderPlanarReflectionPass(const ULevel& Level, const UCame
 	UnlitOpts.bBindSharedLitTextures = false;
 
 	bool bLitGlobalsBound = LitShader.Valid();
-	for (const UStaticMeshComponent& Object : Level.GetStaticMeshes())
+	for (const FLevelStaticMesh& Object : Level.GetStaticMeshes())
 	{
 		if (Object.bHidden || Object.Mesh == nullptr || !Object.Mesh->Valid())
 		{
@@ -724,7 +724,7 @@ void FSceneRenderer::RenderPlanarReflectionPass(const ULevel& Level, const UCame
 	PassTimers.End(FGPUPassTimer::EPass::Planar);
 }
 
-void FSceneRenderer::DrawSubMesh(const FShader& Shader, const UStaticMeshComponent& Object, int32 InSubMeshIndex,
+void FSceneRenderer::DrawSubMesh(const FShader& Shader, const FLevelStaticMesh& Object, int32 InSubMeshIndex,
 	const FMaterial& InMaterial, const FMatrix& InView, const FMatrix& InProjection, const FMatrix& LightSpace,
 	const FDrawOptions& Options) const
 {
@@ -861,7 +861,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 	bool bHasPlanarMirror = false;
 	float MirrorPlaneZ = 0.0f;
 	FMatrix ReflectionViewProj = FMatrix::Identity;
-	for (const UStaticMeshComponent& Object : Level.GetStaticMeshes())
+	for (const FLevelStaticMesh& Object : Level.GetStaticMeshes())
 	{
 		const int32 SubCount = Object.SubMeshCount();
 		for (int32 S = 0; S < SubCount; ++S)
@@ -897,7 +897,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 
 	for (int32 I = 0; I < Level.GetStaticMeshes().Num(); ++I)
 	{
-		const UStaticMeshComponent& Object = Level.GetStaticMeshes()[I];
+		const FLevelStaticMesh& Object = Level.GetStaticMeshes()[I];
 		if (Object.bHidden || Object.Mesh == nullptr || !Object.Mesh->Valid())
 		{
 			continue;
@@ -967,7 +967,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 		WhiteTexture->Bind(0);
 		for (const FDrawItem& Item : Opaque)
 		{
-			const UStaticMeshComponent& Object = Level.GetStaticMeshes()[Item.ObjectIndex];
+			const FLevelStaticMesh& Object = Level.GetStaticMeshes()[Item.ObjectIndex];
 			const FMaterial& Mat = Object.MaterialForSubMesh(Item.SubMeshIndex);
 			if (Mat.Shading == EMaterialShadingModel::Unlit)
 			{
@@ -1015,7 +1015,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 
 		for (const FDrawItem& Item : Items)
 		{
-			const UStaticMeshComponent& Object = Level.GetStaticMeshes()[Item.ObjectIndex];
+			const FLevelStaticMesh& Object = Level.GetStaticMeshes()[Item.ObjectIndex];
 			const FMaterial& Mat = Object.MaterialForSubMesh(Item.SubMeshIndex);
 			const bool bLit = Mat.Shading == EMaterialShadingModel::BlinnPhong;
 			FShader& Shader = bLit ? LitShader : UnlitShader;
@@ -1422,7 +1422,7 @@ void FSceneRenderer::DrawDebug(
 	constexpr FLinearColor HiddenAabbColor(0.95f, 0.35f, 0.85f); // BlockingVolume / hidden
 	constexpr FLinearColor FrustumColor(1.0f, 0.85f, 0.15f);
 
-	for (const UStaticMeshComponent& Object : Level.GetStaticMeshes())
+	for (const FLevelStaticMesh& Object : Level.GetStaticMeshes())
 	{
 		if (Object.Mesh == nullptr || !Object.Mesh->Valid())
 		{

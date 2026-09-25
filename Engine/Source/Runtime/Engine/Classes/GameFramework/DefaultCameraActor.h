@@ -2,13 +2,17 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
+#include "DefaultCameraActor.generated.h"
 
 /**
  * Default possessed pawn for ADefaultGameMode (Unreal-like DefaultPawn / flying camera).
  * Free-look: LMB aims, WASD flies along look direction, Q/E world vertical (Z).
  */
+UCLASS()
 class ENGINE_API ADefaultCameraActor : public APawn
 {
+	GENERATED_BODY()
+
 public:
 	[[nodiscard]] float GetMoveSpeed() const
 	{
@@ -30,6 +34,10 @@ public:
 
 private:
 	/** cm/s */
+	UPROPERTY()
 	float MoveSpeed = 800.0f;
+
+	/** Degrees per pixel of mouse movement. */
+	UPROPERTY()
 	float LookSensitivity = 0.15f;
 };

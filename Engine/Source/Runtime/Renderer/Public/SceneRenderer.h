@@ -229,7 +229,7 @@ private:
 	 * square at the bottom-left of the draw framebuffer.
 	 */
 	void DrawAxesGizmo(const UCameraComponent& Camera);
-	void DrawSubMesh(const FShader& Shader, const UStaticMeshComponent& Object, int32 InSubMeshIndex,
+	void DrawSubMesh(const FShader& Shader, const FLevelStaticMesh& Object, int32 InSubMeshIndex,
 		const FMaterial& InMaterial, const FMatrix& InView, const FMatrix& InProjection, const FMatrix& LightSpace,
 		const FDrawOptions& Options) const;
 	void DrawQueuedSkeletal(const FMatrix& InView, const FMatrix& InProjection, const FMatrix& LightSpace,

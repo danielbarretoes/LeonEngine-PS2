@@ -6,6 +6,7 @@
 #include "SkeletalAnimation.h"
 #include "SkeletalMesh.h"
 #include "StaticMesh.h"
+#include "SkeletalMeshComponent.generated.h"
 
 class UGameEngine;
 class FSceneRenderer;
@@ -25,10 +26,13 @@ struct ENGINE_API FSkelMeshAttachment
 };
 
 /** Unreal-like USkeletalMeshComponent — USceneComponent with skeletal mesh + UAnimInstance. */
+UCLASS()
 class ENGINE_API USkeletalMeshComponent : public USceneComponent
 {
+	GENERATED_BODY()
+
 public:
-	USkeletalMeshComponent();
+	USkeletalMeshComponent(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	void SetSkeletalMesh(TSharedPtr<USkeletalMesh> InMesh);
 	[[nodiscard]] USkeletalMesh* GetSkeletalMesh()
@@ -107,7 +111,7 @@ public:
 	/** Attachment relative, then bone, then component world (or WorldMatrixOverride). */
 	[[nodiscard]] bool GetAttachmentWorldMatrix(int32 AttachmentIndex, FMatrix& OutWorld) const;
 
-	void TickComponent(float DeltaTime);
+	void TickComponent(float DeltaTime) override;
 	/** Submit using this component's USceneComponent world transform. */
 	void SubmitDraw(FSceneRenderer& Renderer) const;
 

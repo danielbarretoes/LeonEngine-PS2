@@ -40,5 +40,5 @@ void AController::UnPossess()
 
 ACharacter* AController::GetCharacter() const
 {
-	return dynamic_cast<ACharacter*>(Pawn);
+	return Cast<ACharacter>(Pawn);
 }

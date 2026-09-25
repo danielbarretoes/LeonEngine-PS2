@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
 #include "Physics/PhysScene.h"
+#include "Character.generated.h"
 
 class FSceneRenderer;
 class FDebugDraw;
@@ -70,10 +71,16 @@ struct ENGINE_API UCharacterMovementComponent
  * - Not registered as a FPhysScene FBodyInstance; moves via PerformMovement queries.
  * - Modes: Walking / Falling via SetMovementMode; floor via FindFloor → IsWalkable.
  */
+UCLASS()
 class ENGINE_API ACharacter : public APawn
 {
+	GENERATED_BODY()
+
 public:
-	ACharacter();
+	ACharacter(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
+	/** Name of the mesh default subobject (UE: MeshComponentName). */
+	static const FName MeshComponentName;
 
 	void SetCapsule(const FCollisionShape& InCapsule)
 	{
@@ -135,14 +142,17 @@ public:
 	void FindFloor(
 		FPhysScene& PhysScene, FFindFloorResult& OutFloor, float TraceDistance, FDebugDraw* DebugDraw = nullptr) const;
 
-	/** Unreal-like ACharacter::GetMesh() — skeletal visual + UAnimInstance. */
+	/**
+	 * Unreal-like ACharacter::GetMesh() — skeletal visual + UAnimInstance. A reference (UE returns the pointer): every
+	 * character has its mesh default subobject.
+	 */
 	[[nodiscard]] USkeletalMeshComponent& GetMesh()
 	{
-		return Mesh;
+		return *Mesh;
 	}
 	[[nodiscard]] const USkeletalMeshComponent& GetMesh() const
 	{
-		return Mesh;
+		return *Mesh;
 	}
 
 	/** Apply replicated movement state (client proxy / snapshot). */
@@ -230,7 +240,11 @@ private:
 	/** Radius 35 cm, half height 92.5 cm. */
 	FCollisionShape Capsule = FCollisionShape::MakeCapsule(35.0f, 92.5f);
 	UCharacterMovementComponent Movement{};
-	USkeletalMeshComponent Mesh{};
+
+	/** The skeletal visual, attached to the root (UE: Mesh). */
+	UPROPERTY()
+	USkeletalMeshComponent* Mesh = nullptr;
+
 	float AnimBlendInput = 0.0f;
 	float Health = 100.0f;
 	float MaxHealth = 100.0f;

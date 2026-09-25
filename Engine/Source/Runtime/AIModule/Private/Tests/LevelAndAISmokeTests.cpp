@@ -4,6 +4,7 @@
 #include "Level/LeonLevelFormat.h"
 #include "Level/LevelLoader.h"
 #include "Misc/AutomationTest.h"
+#include "Tests/ScopedTestWorld.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -54,7 +55,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelAndAISmokeAIChaseBehaviorMoveToWhenTarget
 bool FLevelAndAISmokeAIChaseBehaviorMoveToWhenTargetPresentTest::RunTest(const FString& Parameters)
 {
 	// The chase behavior tree chases while a target exists and returns the controller to idle without one.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	ACharacter* Target = World.SpawnActor<ACharacter>();
 	Target->SetActorLocationAndRotation(FVector(500.0f, 0.0f, 0.0f), FRotator::ZeroRotator);

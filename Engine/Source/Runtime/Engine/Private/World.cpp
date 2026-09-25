@@ -2,23 +2,341 @@
 
 #include "BodyInstance.h"
 #include "Engine/Level.h"
+#include "EngineLogs.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/GameModeBase.h"
+#include "Misc/PackageName.h"
 #include "SceneRenderer.h"
+#include "UObject/Package.h"
+#include "UObject/UObjectHash.h"
+
+FActorSpawnParameters::FActorSpawnParameters()
+	: bDeferConstruction(false)
+	, bNoFail(false)
+{
+}
+
+UWorld::UWorld(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
+UWorld* UWorld::CreateWorld(EWorldType::Type InWorldType, bool /*bInformEngineOfWorld*/, FName WorldName,
+	UPackage* InWorldPackage, bool bAddToRoot)
+{
+	UPackage* WorldPackage = InWorldPackage;
+	if (WorldPackage == nullptr)
+	{
+		// UE: CreatePackage(nullptr) names the package "/Temp/Untitled_<N>". A transient package is never saved.
+		static int32 NextUntitledIndex = 0;
+		FString PackageName;
+		do
+		{
+			PackageName = FString::Printf(TEXT("/Temp/Untitled_%d"), NextUntitledIndex++);
+		} while (FindPackage(nullptr, *PackageName) != nullptr);
+		WorldPackage = CreatePackage(*PackageName);
+		WorldPackage->SetFlags(RF_Transient);
+	}
+	const FName NewWorldName = WorldName.IsNone() ? FName(*FPackageName::GetShortName(WorldPackage)) : WorldName;
+
+	UWorld* NewWorld = NewObject<UWorld>(WorldPackage, NewWorldName);
+	NewWorld->WorldType = InWorldType;
+	NewWorld->InitWorld();
+	if (bAddToRoot)
+	{
+		NewWorld->AddToRoot();
+	}
+	// Leon worlds play from the start (no map load sequence until P13's LoadMap): actors begin play when spawned.
+	NewWorld->bBegunPlay = true;
+	return NewWorld;
+}
+
+void UWorld::InitWorld()
+{
+	PersistentLevel = NewObject<ULevel>(this, TEXT("PersistentLevel"));
+	PersistentLevel->OwningWorld = this;
+}
+
+void UWorld::DestroyWorld(bool /*bInformEngineOfWorld*/)
+{
+	if (bIsTearingDown)
+	{
+		return;
+	}
+	bIsTearingDown = true;
+
+	// Every actor ends play in spawn order (UE: the level's actors end play with the world); spawns still waiting for
+	// the end of a tick never began.
+	TArray<AActor*> Actors;
+	if (PersistentLevel != nullptr)
+	{
+		Actors = PersistentLevel->Actors;
+	}
+	for (AActor* Actor : Actors)
+	{
+		if (Actor != nullptr && !Actor->IsPendingKill())
+		{
+			Actor->RouteEndPlay(EEndPlayReason::Quit);
+		}
+	}
+	Actors.Append(PendingSpawnActors);
+	for (AActor* Actor : Actors)
+	{
+		if (Actor != nullptr)
+		{
+			Actor->UnregisterAllComponents();
+		}
+	}
+	PendingSpawnActors.Empty();
+	AuthorityGameMode = nullptr;
+	if (PersistentLevel != nullptr)
+	{
+		PersistentLevel->Actors.Empty();
+	}
+	Physics.Clear();
+	Navigation.Clear();
+
+	// Everything inside the world goes with it (UE: MarkObjectsPendingKill): references held elsewhere are cleared by
+	// the next collection instead of keeping the objects alive.
+	TArray<UObject*> Inner;
+	GetObjectsWithOuter(this, Inner, /*bIncludeNestedObjects =*/true);
+	for (UObject* Object : Inner)
+	{
+		Object->MarkPendingKill();
+	}
+	RemoveFromRoot();
+	MarkPendingKill();
+}
+
+AGameModeBase* UWorld::SetGameMode(TSubclassOf<AGameModeBase> GameModeClass)
+{
+	if (AuthorityGameMode == nullptr && GameModeClass != nullptr)
+	{
+		FActorSpawnParameters SpawnInfo;
+		SpawnInfo.ObjectFlags |= RF_Transient;
+		AuthorityGameMode = SpawnActor<AGameModeBase>(GameModeClass, SpawnInfo);
+	}
+	return AuthorityGameMode;
+}
+
+void UWorld::BeginPlay()
+{
+	bBegunPlay = true;
+	ForEach<AActor>([](AActor& Actor) { Actor.DispatchBeginPlay(); });
+}
+
+AActor* UWorld::SpawnActor(
+	UClass* Class, const FVector* Location, const FRotator* Rotation, const FActorSpawnParameters& SpawnParameters)
+{
+	if (Class == nullptr)
+	{
+		UE_LOG(LogSpawn, Warning, TEXT("SpawnActor failed because no class was specified"));
+		return nullptr;
+	}
+	if (!Class->IsChildOf(AActor::StaticClass()))
+	{
+		UE_LOG(LogSpawn, Warning, TEXT("SpawnActor failed because %s is not an actor class"), *Class->GetName());
+		return nullptr;
+	}
+	if (Class->HasAnyClassFlags(CLASS_Abstract))
+	{
+		UE_LOG(LogSpawn, Warning, TEXT("SpawnActor failed because class %s is abstract"), *Class->GetName());
+		return nullptr;
+	}
+	if (bIsTearingDown)
+	{
+		UE_LOG(LogSpawn, Warning, TEXT("SpawnActor failed because the world is being destroyed"));
+		return nullptr;
+	}
+	ULevel* LevelToSpawnIn = SpawnParameters.OverrideLevel != nullptr ? SpawnParameters.OverrideLevel : PersistentLevel;
+	if (!SpawnParameters.Name.IsNone() &&
+		StaticFindObjectFast(nullptr, LevelToSpawnIn, SpawnParameters.Name) != nullptr)
+	{
+		UE_LOG(LogSpawn, Error, TEXT("SpawnActor failed because an object named %s already exists in %s"),
+			*SpawnParameters.Name.ToString(), *LevelToSpawnIn->GetPathName());
+		return nullptr;
+	}
+
+	AActor* Actor = NewObject<AActor>(
+		LevelToSpawnIn, Class, SpawnParameters.Name, SpawnParameters.ObjectFlags, SpawnParameters.Template);
+	Actor->SetUniqueID(++NextUniqueID);
+	Actor->SetOwner(SpawnParameters.Owner);
+	Actor->SetInstigator(SpawnParameters.Instigator);
+	if (USceneComponent* Root = Actor->GetRootComponent())
+	{
+		if (Location != nullptr)
+		{
+			Root->RelativeLocation = *Location;
+		}
+		if (Rotation != nullptr)
+		{
+			Root->RelativeRotation = *Rotation;
+		}
+	}
+
+	// While the world ticks the actor joins the level once the tick ends (the tick loop never sees it half-made).
+	if (bTicking)
+	{
+		PendingSpawnActors.Add(Actor);
+	}
+	else
+	{
+		LevelToSpawnIn->Actors.Add(Actor);
+	}
+
+	Actor->RegisterAllComponents();
+	if (!SpawnParameters.bDeferConstruction)
+	{
+		PostActorConstruction(Actor);
+	}
+	return Actor;
+}
+
+AActor* UWorld::SpawnActor(UClass* Class, const FTransform* Transform, const FActorSpawnParameters& SpawnParameters)
+{
+	if (Transform == nullptr)
+	{
+		return SpawnActor(Class, nullptr, nullptr, SpawnParameters);
+	}
+	const FVector Location = Transform->GetLocation();
+	const FRotator Rotation = Transform->Rotator();
+	AActor* Actor = SpawnActor(Class, &Location, &Rotation, SpawnParameters);
+	if (Actor != nullptr)
+	{
+		Actor->SetActorScale3D(Transform->GetScale3D());
+	}
+	return Actor;
+}
+
+void UWorld::PostActorConstruction(AActor* Actor)
+{
+	if (Actor == nullptr || Actor->IsPendingKillPending())
+	{
+		return;
+	}
+	Actor->PreInitializeComponents();
+	Actor->InitializeComponents();
+	Actor->PostInitializeComponents();
+	Actor->bActorInitialized = true;
+	if (bBegunPlay && !bTicking && !PendingSpawnActors.Contains(Actor))
+	{
+		Actor->DispatchBeginPlay();
+	}
+}
+
+bool UWorld::DestroyActor(AActor* Actor, bool /*bNetForce*/, bool /*bShouldModifyLevel*/)
+{
+	if (Actor == nullptr || Actor->GetWorld() != this)
+	{
+		return false;
+	}
+	if (Actor->IsPendingKillPending())
+	{
+		return true;
+	}
+	Actor->bActorIsBeingDestroyed = true;
+	Actor->Destroyed();
+	Actor->RouteEndPlay(EEndPlayReason::Destroyed);
+	Actor->UnregisterAllComponents();
+
+	if (ULevel* Level = Actor->GetLevel())
+	{
+		const int32 Index = Level->Actors.Find(Actor);
+		if (Index != INDEX_NONE)
+		{
+			if (bTicking)
+			{
+				// The tick loop walks the array by index: keep its size until the tick ends.
+				Level->Actors[Index] = nullptr;
+				bHasNullActorSlots = true;
+			}
+			else
+			{
+				Level->Actors.RemoveAt(Index);
+			}
+		}
+	}
+	PendingSpawnActors.Remove(Actor);
+	if (AuthorityGameMode == Actor)
+	{
+		AuthorityGameMode = nullptr;
+	}
+
+	for (UActorComponent* Component : Actor->GetComponents())
+	{
+		if (Component != nullptr)
+		{
+			Component->MarkPendingKill();
+		}
+	}
+	Actor->MarkPendingKill();
+	return true;
+}
 
 void UWorld::Tick(float InDeltaTime)
 {
 	bTicking = true;
-	for (auto& Actor : Actors)
+	if (PersistentLevel != nullptr)
 	{
-		if (Actor && !Actor->IsPendingKillPending())
+		// Spawns wait in PendingSpawnActors and destroys null their slot: the array keeps its size during the loop.
+		const int32 NumActors = PersistentLevel->Actors.Num();
+		for (int32 Index = 0; Index < NumActors; ++Index)
 		{
-			Actor->TickComponents(InDeltaTime);
-			Actor->Tick(InDeltaTime);
+			AActor* Actor = PersistentLevel->Actors[Index];
+			if (Actor != nullptr && !Actor->IsPendingKillPending())
+			{
+				Actor->TickActor(InDeltaTime);
+			}
 		}
 	}
 	bTicking = false;
 	FlushPendingSpawns();
-	PurgePending();
+	CompactActors();
+}
+
+void UWorld::FlushPendingSpawns()
+{
+	// A BeginPlay may spawn again (not ticking any more: those join the level directly).
+	TArray<AActor*> Spawned = MoveTemp(PendingSpawnActors);
+	PendingSpawnActors.Reset();
+	for (AActor* Actor : Spawned)
+	{
+		if (Actor == nullptr || Actor->IsPendingKillPending())
+		{
+			continue;
+		}
+		ULevel* Level = Actor->GetLevel();
+		if (Level == nullptr)
+		{
+			continue;
+		}
+		Level->Actors.Add(Actor);
+		if (bBegunPlay && Actor->IsActorInitialized())
+		{
+			Actor->DispatchBeginPlay();
+		}
+	}
+}
+
+void UWorld::CompactActors()
+{
+	if (PersistentLevel == nullptr)
+	{
+		return;
+	}
+	if (!bHasNullActorSlots)
+	{
+		return;
+	}
+	bHasNullActorSlots = false;
+	PersistentLevel->Actors.RemoveAll([](const AActor* Actor) { return Actor == nullptr || Actor->IsPendingKill(); });
+}
+
+SIZE_T UWorld::ActorCount() const
+{
+	SIZE_T Count = 0;
+	ForEach<AActor>([&Count](AActor&) { ++Count; });
+	return Count;
 }
 
 void UWorld::RegisterBodiesFromLevel(const ULevel& InLevel)
@@ -27,7 +345,7 @@ void UWorld::RegisterBodiesFromLevel(const ULevel& InLevel)
 	const auto& Meshes = InLevel.GetStaticMeshes();
 	for (int32 I = 0; I < Meshes.Num(); ++I)
 	{
-		const UStaticMeshComponent& Component = Meshes[I];
+		const FLevelStaticMesh& Component = Meshes[I];
 		if (!Component.HasPhysicsBody())
 		{
 			continue;
@@ -43,7 +361,6 @@ void UWorld::RegisterBodiesFromLevel(const ULevel& InLevel)
 void UWorld::ResolveCharacterOverlaps()
 {
 	TArray<ACharacter*> Characters;
-	Characters.Reserve(Actors.Num());
 	ForEach<ACharacter>([&](ACharacter& Character) { Characters.Add(&Character); });
 	if (Characters.Num() < 2)
 	{
@@ -132,61 +449,23 @@ void UWorld::SubmitSkeletalDraws(FSceneRenderer& InRenderer) const
 
 void UWorld::Clear()
 {
-	for (auto& Actor : PendingSpawns)
+	for (AActor* Actor : PendingSpawnActors)
 	{
-		if (Actor)
+		if (Actor != nullptr)
 		{
-			Actor->World = nullptr;
+			Actor->UnregisterAllComponents();
+			Actor->MarkPendingKill();
 		}
 	}
-	PendingSpawns.Empty();
-	for (auto& Actor : Actors)
+	PendingSpawnActors.Empty();
+	if (PersistentLevel != nullptr)
 	{
-		if (Actor)
+		const TArray<AActor*> Actors = PersistentLevel->Actors;
+		for (AActor* Actor : Actors)
 		{
-			Actor->EndPlay();
-			Actor->EndPlayComponents();
-			Actor->World = nullptr;
+			DestroyActor(Actor);
 		}
+		PersistentLevel->Actors.RemoveAll([](const AActor* Actor) { return Actor == nullptr; });
 	}
-	Actors.Empty();
 	Physics.Clear();
-}
-
-void UWorld::FlushPendingSpawns()
-{
-	for (auto& Owned : PendingSpawns)
-	{
-		if (!Owned)
-		{
-			continue;
-		}
-		AActor* Raw = Owned.Get();
-		Actors.Add(MoveTemp(Owned));
-		Raw->BeginPlayComponents();
-		Raw->BeginPlay();
-	}
-	PendingSpawns.Empty();
-}
-
-void UWorld::PurgePending()
-{
-	for (int32 Index = 0; Index < Actors.Num();)
-	{
-		TUniquePtr<AActor>& Actor = Actors[Index];
-		if (!Actor || Actor->IsPendingKillPending())
-		{
-			if (Actor)
-			{
-				Actor->EndPlay();
-				Actor->EndPlayComponents();
-				Actor->World = nullptr;
-			}
-			Actors.RemoveAt(Index);
-		}
-		else
-		{
-			++Index;
-		}
-	}
 }

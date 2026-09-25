@@ -10,3 +10,7 @@ ENGINE_API DECLARE_LOG_CATEGORY_EXTERN(LogLevel, Log, All);
 ENGINE_API DECLARE_LOG_CATEGORY_EXTERN(LogPath, Log, All);
 /** Collision and physics scene (UE: LogPhysics). */
 ENGINE_API DECLARE_LOG_CATEGORY_EXTERN(LogPhysics, Log, All);
+/** Actor spawning (UE: LogSpawn). */
+ENGINE_API DECLARE_LOG_CATEGORY_EXTERN(LogSpawn, Log, All);
+/** World creation and teardown (UE: LogWorld). */
+ENGINE_API DECLARE_LOG_CATEGORY_EXTERN(LogWorld, Log, All);

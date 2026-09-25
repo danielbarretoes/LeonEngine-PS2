@@ -2,35 +2,53 @@
 
 #include "GameFramework/Actor.h"
 
+const FAttachmentTransformRules FAttachmentTransformRules::KeepRelativeTransform(EAttachmentRule::KeepRelative, false);
+const FAttachmentTransformRules FAttachmentTransformRules::KeepWorldTransform(EAttachmentRule::KeepWorld, false);
+const FAttachmentTransformRules FAttachmentTransformRules::SnapToTargetNotIncludingScale(
+	EAttachmentRule::SnapToTarget, EAttachmentRule::SnapToTarget, EAttachmentRule::KeepWorld, false);
+const FAttachmentTransformRules FAttachmentTransformRules::SnapToTargetIncludingScale(
+	EAttachmentRule::SnapToTarget, false);
+
+const FDetachmentTransformRules FDetachmentTransformRules::KeepRelativeTransform(EDetachmentRule::KeepRelative, true);
+const FDetachmentTransformRules FDetachmentTransformRules::KeepWorldTransform(EDetachmentRule::KeepWorld, true);
+
 namespace
 {
 
-	/** Writes a relative transform into the Relative* fields. */
-	void SetRelativeFields(USceneComponent& Component, const FTransform& Relative)
+	/** The relative field a rule keeps: the current one, the one that keeps the world value, or the snapped one. */
+	FVector PickVector(EAttachmentRule Rule, const FVector& Current, const FVector& KeepWorld, const FVector& Snap)
 	{
-		Component.RelativeLocation = Relative.GetLocation();
-		Component.RelativeRotation = Relative.Rotator();
-		Component.RelativeScale3D = Relative.GetScale3D();
+		switch (Rule)
+		{
+			case EAttachmentRule::KeepWorld:
+				return KeepWorld;
+			case EAttachmentRule::SnapToTarget:
+				return Snap;
+			default:
+				return Current;
+		}
 	}
 
-	/** The owning actor's pose (UE: GetActorTransform). */
-	FTransform ActorTransform(const AActor& Owner)
+	FRotator PickRotator(EAttachmentRule Rule, const FRotator& Current, const FRotator& KeepWorld, const FRotator& Snap)
 	{
-		return FTransform(Owner.GetActorRotation(), Owner.GetActorLocation());
+		switch (Rule)
+		{
+			case EAttachmentRule::KeepWorld:
+				return KeepWorld;
+			case EAttachmentRule::SnapToTarget:
+				return Snap;
+			default:
+				return Current;
+		}
 	}
 
 } // namespace
 
-USceneComponent::~USceneComponent()
+USceneComponent::USceneComponent(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
 {
-	// UActorComponent dtor also calls DestroyComponent; detach scene links first while owner may
-	// still be valid (Actor::~ clears owner before member USceneComponent dtors).
-	while (Children.Num() > 0)
-	{
-		USceneComponent* Child = Children.Last();
-		Child->DetachFromParent(false);
-	}
-	DetachFromParent(false);
+	bVisible = true;
+	bHiddenInGame = false;
 }
 
 FTransform USceneComponent::GetRelativeTransform() const
@@ -38,11 +56,18 @@ FTransform USceneComponent::GetRelativeTransform() const
 	return FTransform(RelativeRotation, RelativeLocation, RelativeScale3D);
 }
 
-bool USceneComponent::WouldCreateCycle(const USceneComponent* CandidateParent) const
+void USceneComponent::SetRelativeTransform(const FTransform& NewTransform)
 {
-	for (const USceneComponent* Walk = CandidateParent; Walk != nullptr; Walk = Walk->Parent)
+	RelativeLocation = NewTransform.GetLocation();
+	RelativeRotation = NewTransform.Rotator();
+	RelativeScale3D = NewTransform.GetScale3D();
+}
+
+bool USceneComponent::IsAttachedTo(const USceneComponent* InParent) const
+{
+	for (const USceneComponent* Walk = this; Walk != nullptr; Walk = Walk->AttachParent)
 	{
-		if (Walk == this)
+		if (Walk == InParent)
 		{
 			return true;
 		}
@@ -50,93 +75,214 @@ bool USceneComponent::WouldCreateCycle(const USceneComponent* CandidateParent) c
 	return false;
 }
 
-void USceneComponent::DetachChild(USceneComponent* Child)
+void USceneComponent::SetupAttachment(USceneComponent* InParent, FName InSocketName)
 {
-	Children.Remove(Child);
+	if (InParent == this || (InParent != nullptr && InParent->IsAttachedTo(this)))
+	{
+		return;
+	}
+	AttachParent = InParent;
+	AttachSocketName = InSocketName;
 }
 
-bool USceneComponent::AttachToComponent(USceneComponent* InParent, bool bKeepWorldTransform)
+bool USceneComponent::AttachToComponent(
+	USceneComponent* InParent, const FAttachmentTransformRules& AttachmentRules, FName InSocketName)
 {
-	if (InParent == nullptr || InParent == this || WouldCreateCycle(InParent))
+	if (InParent == nullptr || InParent == this || InParent->IsAttachedTo(this))
 	{
 		return false;
 	}
 
-	FTransform WorldBefore;
-	if (bKeepWorldTransform)
+	const FTransform WorldBefore = GetComponentTransform();
+	if (AttachParent != nullptr)
 	{
-		WorldBefore = GetComponentTransform();
+		AttachParent->AttachChildren.Remove(this);
 	}
+	AttachParent = InParent;
+	AttachSocketName = InSocketName;
+	InParent->AttachChildren.AddUnique(this);
 
-	DetachFromParent(false);
-	Parent = InParent;
-	Parent->Children.Add(this);
-	if (Owner == nullptr)
+	const bool bKeepsEverything = AttachmentRules.LocationRule == EAttachmentRule::KeepRelative &&
+		AttachmentRules.RotationRule == EAttachmentRule::KeepRelative &&
+		AttachmentRules.ScaleRule == EAttachmentRule::KeepRelative;
+	if (!bKeepsEverything)
 	{
-		Owner = InParent->Owner;
-	}
-
-	if (bKeepWorldTransform)
-	{
-		SetRelativeFields(*this, WorldBefore.GetRelativeTransform(Parent->GetComponentTransform()));
+		const FTransform KeepWorld = WorldBefore.GetRelativeTransform(GetParentToWorld());
+		RelativeLocation =
+			PickVector(AttachmentRules.LocationRule, RelativeLocation, KeepWorld.GetLocation(), FVector::ZeroVector);
+		RelativeRotation =
+			PickRotator(AttachmentRules.RotationRule, RelativeRotation, KeepWorld.Rotator(), FRotator::ZeroRotator);
+		RelativeScale3D =
+			PickVector(AttachmentRules.ScaleRule, RelativeScale3D, KeepWorld.GetScale3D(), FVector::OneVector);
 	}
 	return true;
 }
 
-void USceneComponent::DetachFromParent(bool bKeepWorldTransform)
+void USceneComponent::DetachFromComponent(const FDetachmentTransformRules& DetachmentRules)
 {
-	if (Parent == nullptr)
+	if (AttachParent == nullptr)
 	{
 		return;
 	}
 
-	FTransform WorldBefore;
-	if (bKeepWorldTransform)
-	{
-		WorldBefore = GetComponentTransform();
-	}
+	const FTransform WorldBefore = GetComponentTransform();
+	AttachParent->AttachChildren.Remove(this);
+	AttachParent = nullptr;
+	AttachSocketName = NAME_None;
 
-	Parent->DetachChild(this);
-	Parent = nullptr;
-
-	if (bKeepWorldTransform)
+	// Without a parent the relative transform is the world transform.
+	if (DetachmentRules.LocationRule == EDetachmentRule::KeepWorld)
 	{
-		// Without a parent the component sits on its owner's pose.
-		SetRelativeFields(
-			*this, Owner != nullptr ? WorldBefore.GetRelativeTransform(ActorTransform(*Owner)) : WorldBefore);
+		RelativeLocation = WorldBefore.GetLocation();
 	}
+	if (DetachmentRules.RotationRule == EDetachmentRule::KeepWorld)
+	{
+		RelativeRotation = WorldBefore.Rotator();
+	}
+	if (DetachmentRules.ScaleRule == EDetachmentRule::KeepWorld)
+	{
+		RelativeScale3D = WorldBefore.GetScale3D();
+	}
+}
+
+FTransform USceneComponent::GetSocketTransform(FName /*InSocketName*/) const
+{
+	return GetComponentTransform();
+}
+
+bool USceneComponent::DoesSocketExist(FName /*InSocketName*/) const
+{
+	return false;
+}
+
+FTransform USceneComponent::GetParentToWorld() const
+{
+	return AttachParent != nullptr ? AttachParent->GetSocketTransform(AttachSocketName) : FTransform::Identity;
 }
 
 FTransform USceneComponent::GetComponentTransform() const
 {
-	if (Parent != nullptr)
+	if (AttachParent != nullptr)
 	{
-		return GetRelativeTransform() * Parent->GetComponentTransform();
-	}
-	if (Owner != nullptr)
-	{
-		return GetRelativeTransform() * ActorTransform(*Owner);
+		return GetRelativeTransform() * AttachParent->GetSocketTransform(AttachSocketName);
 	}
 	return GetRelativeTransform();
 }
 
 FVector USceneComponent::GetComponentLocation() const
 {
-	return GetComponentTransform().GetLocation();
+	return AttachParent != nullptr ? GetComponentTransform().GetLocation() : RelativeLocation;
 }
 
 FRotator USceneComponent::GetComponentRotation() const
 {
-	return GetComponentTransform().Rotator();
+	return AttachParent != nullptr ? GetComponentTransform().Rotator() : RelativeRotation;
 }
 
-void USceneComponent::DestroyComponent()
+FQuat USceneComponent::GetComponentQuat() const
 {
-	while (Children.Num() > 0)
+	return GetComponentTransform().GetRotation();
+}
+
+FVector USceneComponent::GetComponentScale() const
+{
+	return AttachParent != nullptr ? GetComponentTransform().GetScale3D() : RelativeScale3D;
+}
+
+FVector USceneComponent::GetForwardVector() const
+{
+	return GetComponentTransform().GetUnitAxis(EAxis::X);
+}
+
+FVector USceneComponent::GetRightVector() const
+{
+	return GetComponentTransform().GetUnitAxis(EAxis::Y);
+}
+
+FVector USceneComponent::GetUpVector() const
+{
+	return GetComponentTransform().GetUnitAxis(EAxis::Z);
+}
+
+void USceneComponent::SetWorldLocation(const FVector& NewLocation)
+{
+	RelativeLocation = AttachParent != nullptr ? GetParentToWorld().InverseTransformPosition(NewLocation) : NewLocation;
+}
+
+void USceneComponent::SetWorldRotation(const FRotator& NewRotation)
+{
+	if (AttachParent == nullptr)
 	{
-		USceneComponent* Child = Children.Last();
-		Child->DetachFromParent(false);
+		RelativeRotation = NewRotation;
+		return;
 	}
-	DetachFromParent(false);
-	UActorComponent::DestroyComponent();
+	RelativeRotation = (GetParentToWorld().GetRotation().Inverse() * NewRotation.Quaternion()).Rotator();
+}
+
+void USceneComponent::SetWorldLocationAndRotation(const FVector& NewLocation, const FRotator& NewRotation)
+{
+	SetWorldLocation(NewLocation);
+	SetWorldRotation(NewRotation);
+}
+
+void USceneComponent::SetWorldTransform(const FTransform& NewTransform)
+{
+	SetRelativeTransform(
+		AttachParent != nullptr ? NewTransform.GetRelativeTransform(GetParentToWorld()) : NewTransform);
+}
+
+void USceneComponent::SetVisibility(bool bNewVisibility)
+{
+	bVisible = bNewVisibility;
+}
+
+void USceneComponent::SetHiddenInGame(bool bNewHidden)
+{
+	bHiddenInGame = bNewHidden;
+}
+
+bool USceneComponent::IsVisible() const
+{
+	return bVisible && !bHiddenInGame;
+}
+
+void USceneComponent::OnRegister()
+{
+	// SetupAttachment only recorded the parent: link it now (UE).
+	if (AttachParent != nullptr && !AttachParent->AttachChildren.Contains(this))
+	{
+		USceneComponent* Parent = AttachParent;
+		AttachParent = nullptr;
+		(void)AttachToComponent(Parent, FAttachmentTransformRules::KeepRelativeTransform, AttachSocketName);
+	}
+	Super::OnRegister();
+}
+
+void USceneComponent::DetachAllChildren()
+{
+	while (AttachChildren.Num() > 0)
+	{
+		USceneComponent* Child = AttachChildren.Last();
+		if (Child == nullptr)
+		{
+			AttachChildren.Pop(false);
+			continue;
+		}
+		Child->DetachFromComponent(FDetachmentTransformRules::KeepRelativeTransform);
+	}
+}
+
+void USceneComponent::DestroyComponent(bool bPromoteChildren)
+{
+	DetachAllChildren();
+	DetachFromComponent(FDetachmentTransformRules::KeepRelativeTransform);
+	Super::DestroyComponent(bPromoteChildren);
+}
+
+void USceneComponent::BeginDestroy()
+{
+	// The collector may free a parent and its children in one pass: unlink first so no side keeps a stale pointer.
+	DetachAllChildren();
+	DetachFromComponent(FDetachmentTransformRules::KeepRelativeTransform);
+	Super::BeginDestroy();
 }

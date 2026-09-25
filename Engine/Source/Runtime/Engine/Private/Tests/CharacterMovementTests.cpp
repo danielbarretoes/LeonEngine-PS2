@@ -3,6 +3,7 @@
 #include "GameFramework/Character.h"
 #include "Misc/AutomationTest.h"
 #include "Physics/PhysScene.h"
+#include "Tests/ScopedTestWorld.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -29,7 +30,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterMovementIsWalkableUsesWalkableFloorZT
 bool FCharacterMovementIsWalkableUsesWalkableFloorZTest::RunTest(const FString& Parameters)
 {
 	// A hit is walkable when its normal's up component reaches WalkableFloorZ.
-	ACharacter Character;
+	FScopedTestWorld TestWorld;
+	ACharacter& Character = *TestWorld->SpawnActor<ACharacter>();
 	Character.GetCharacterMovement().WalkableFloorZ = 0.71f;
 
 	FHitResult Flat{};
@@ -55,7 +57,8 @@ bool FCharacterMovementFindFloorHitsInfiniteFloorPlaneTest::RunTest(const FStrin
 {
 	// With no bodies, FindFloor finds the infinite floor plane 1 m below the feet.
 	FPhysScene Scene;
-	ACharacter Character;
+	FScopedTestWorld TestWorld;
+	ACharacter& Character = *TestWorld->SpawnActor<ACharacter>();
 	Character.Reset(FVector(0.0f, 0.0f, 100.0f));
 	Character.GetCharacterMovement().FloorZ = 0.0f;
 
@@ -80,7 +83,8 @@ bool FCharacterMovementFindFloorHitsStaticAabbTopTest::RunTest(const FString& Pa
 	// Box top at z = 200 cm
 	AddCharacterTestBox(Scene, FVector(0.0f, 0.0f, 100.0f), FVector(100.0f, 100.0f, 100.0f));
 
-	ACharacter Character;
+	FScopedTestWorld TestWorld;
+	ACharacter& Character = *TestWorld->SpawnActor<ACharacter>();
 	Character.Reset(FVector(0.0f, 0.0f, 250.0f));
 	Character.GetCharacterMovement().FloorZ = -10000.0f; // prefer box over far plane
 
@@ -100,7 +104,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterMovementLandsOnFloorPlaneAfterFallTes
 bool FCharacterMovementLandsOnFloorPlaneAfterFallTest::RunTest(const FString& Parameters)
 {
 	// An airborne character falls and comes to rest walking on the floor plane.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	if (!TestNotNull("Character spawned", Character))
 	{
@@ -135,7 +140,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterMovementJumpLeavesGroundThenLandsTest
 bool FCharacterMovementJumpLeavesGroundThenLandsTest::RunTest(const FString& Parameters)
 {
 	// A jump leaves the ground moving up and lands back on the floor.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->Reset(FVector::ZeroVector);
 	Character->GetCharacterMovement().FloorZ = 0.0f;
@@ -189,7 +195,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterMovementDoesNotWalkThroughStaticWallT
 bool FCharacterMovementDoesNotWalkThroughStaticWallTest::RunTest(const FString& Parameters)
 {
 	// Walking into a tall wall stops the character in front of it.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->Reset(FVector(-200.0f, 0.0f, 0.0f));
 	Character->GetCharacterMovement().FloorZ = 0.0f;
@@ -217,7 +224,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterMovementSlidesAlongWallWithDiagonalWi
 bool FCharacterMovementSlidesAlongWallWithDiagonalWishTest::RunTest(const FString& Parameters)
 {
 	// A diagonal move into a wall is blocked across the wall and slides along it.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->Reset(FVector(-150.0f, 0.0f, 0.0f));
 	Character->GetCharacterMovement().FloorZ = 0.0f;
@@ -246,7 +254,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterMovementSweepDoesNotTunnelThinWallAtH
 bool FCharacterMovementSweepDoesNotTunnelThinWallAtHighSpeedTest::RunTest(const FString& Parameters)
 {
 	// The movement sweep stops a very fast character at a thin wall instead of passing through it.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->Reset(FVector(-100.0f, 0.0f, 0.0f));
 	Character->GetCharacterMovement().FloorZ = 0.0f;
@@ -272,7 +281,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterMovementStepsUpOntoShortLedgeTest,
 bool FCharacterMovementStepsUpOntoShortLedgeTest::RunTest(const FString& Parameters)
 {
 	// A ledge lower than MaxStepHeight is stepped onto and walked on.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->Reset(FVector(-150.0f, 0.0f, 0.0f));
 	Character->GetCharacterMovement().FloorZ = 0.0f;
@@ -302,7 +312,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterMovementDoesNotStepUpTallWallTest,
 bool FCharacterMovementDoesNotStepUpTallWallTest::RunTest(const FString& Parameters)
 {
 	// A block taller than MaxStepHeight stops the character without a step up.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->Reset(FVector(-150.0f, 0.0f, 0.0f));
 	Character->GetCharacterMovement().FloorZ = 0.0f;
@@ -331,7 +342,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterMovementMovementModeWalkingJumpFallin
 bool FCharacterMovementMovementModeWalkingJumpFallingLandTest::RunTest(const FString& Parameters)
 {
 	// The movement mode goes Walking, Falling after a jump, and Walking again on landing.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->Reset(FVector::ZeroVector);
 	Character->GetCharacterMovement().FloorZ = 0.0f;
@@ -377,7 +389,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterMovementWalksOffLedgeEntersFallingTes
 bool FCharacterMovementWalksOffLedgeEntersFallingTest::RunTest(const FString& Parameters)
 {
 	// Walking off the edge of a platform switches the character to Falling.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->Reset(FVector(0.0f, 0.0f, 100.0f));
 	Character->GetCharacterMovement().FloorZ = -10000.0f; // no infinite floor under gap
@@ -423,7 +436,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterMovementWalkShoveMovesDynamicCrateWit
 bool FCharacterMovementWalkShoveMovesDynamicCrateWithoutOverlapTest::RunTest(const FString& Parameters)
 {
 	// Walking into a dynamic crate shoves it forward.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	if (!TestNotNull("Character spawned", Character))
 	{
@@ -465,7 +479,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterMovementWorldSeparatesOverlappingChar
 bool FCharacterMovementWorldSeparatesOverlappingCharacterCapsulesTest::RunTest(const FString& Parameters)
 {
 	// One gameplay frame pushes two overlapping characters at least a capsule diameter apart.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* A = World.SpawnActor<ACharacter>();
 	ACharacter* B = World.SpawnActor<ACharacter>();
 	if (!TestNotNull("First character spawned", A))
@@ -500,8 +515,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterMovementResolvePawnOverlapIgnoresVert
 bool FCharacterMovementResolvePawnOverlapIgnoresVerticallySeparatedCapsulesTest::RunTest(const FString& Parameters)
 {
 	// Capsules that overlap in XY but not in height are left where they are.
-	ACharacter A;
-	ACharacter B;
+	FScopedTestWorld TestWorld;
+	ACharacter& A = *TestWorld->SpawnActor<ACharacter>();
+	ACharacter& B = *TestWorld->SpawnActor<ACharacter>();
 	A.Reset(FVector::ZeroVector);
 	B.Reset(FVector(5.0f, 0.0f, 300.0f));
 	A.ResolvePawnOverlap(B);
@@ -517,7 +533,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterMovementWalksUpWalkableSlopeRampTest,
 bool FCharacterMovementWalksUpWalkableSlopeRampTest::RunTest(const FString& Parameters)
 {
 	// A 30 degree ramp is walkable: the character climbs it and stays on a walkable floor.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->GetCharacterMovement().FloorZ = -10000.0f;
 	Character->GetCharacterMovement().MaxWalkSpeed = 500.0f;
@@ -561,7 +578,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterMovementCannotStandOnSteepSlopeRampTe
 bool FCharacterMovementCannotStandOnSteepSlopeRampTest::RunTest(const FString& Parameters)
 {
 	// A 60 degree ramp is not walkable: the character keeps falling but does not sink through it.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->GetCharacterMovement().FloorZ = -10000.0f;
 	Character->GetCharacterMovement().Gravity = 2400.0f;
@@ -594,7 +612,8 @@ bool FCharacterMovementAirControlScalesHorizontalMoveWhileFallingTest::RunTest(c
 	// Runs 30 falling frames of +X input and returns the X travelled; false when the character stops falling.
 	auto RunAirMove = [this](float AirControl, float& OutDx) -> bool
 	{
-		UWorld World;
+		FScopedTestWorld TestWorld;
+		UWorld& World = *TestWorld;
 		ACharacter* Character = World.SpawnActor<ACharacter>();
 		Character->Reset(FVector(0.0f, 0.0f, 400.0f));
 		Character->GetCharacterMovement().FloorZ = 0.0f;

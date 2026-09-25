@@ -5,6 +5,7 @@
 #include "Misc/AutomationTest.h"
 #include "Physics/PhysScene.h"
 #include "StaticMesh.h"
+#include "Tests/ScopedTestWorld.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -33,7 +34,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FJoltWorldSwitchesBackendTest, "System.JoltPhys
 bool FJoltWorldSwitchesBackendTest::RunTest(const FString& Parameters)
 {
 	// SetPhysicsBackend moves the world to Jolt; a dropped box then settles near the floor.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	TestTrue("Starts on Arcade", World.GetPhysicsScene().GetBackend() == EPhysicsBackend::Arcade);
 
 	World.SetPhysicsBackend(EPhysicsBackend::Jolt);
@@ -128,7 +130,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FJoltRestsOnTriangleMeshTest, "System.JoltPhysi
 bool FJoltRestsOnTriangleMeshTest::RunTest(const FString& Parameters)
 {
 	// A static level mesh becomes a Jolt triangle mesh and a dropped box rests on it.
-	ULevel Level;
+	ULevel& Level = *NewObject<ULevel>();
 	FMeshData Data;
 	// Flat plane at z=100 cm covering xy [-300, 300] cm
 	const FVector Up(0.0f, 0.0f, 1.0f);
@@ -140,7 +142,7 @@ bool FJoltRestsOnTriangleMeshTest::RunTest(const FString& Parameters)
 	Data.Indices = {0, 1, 2, 0, 2, 3};
 	Data.Submeshes.Add(FMeshSection{0, 6, 0});
 
-	UStaticMeshComponent Component{};
+	FLevelStaticMesh Component{};
 	Component.Mesh = MakeShared<UStaticMesh>(UStaticMesh::CreateCpu(Data));
 	Component.bCollisionEnabled = true;
 	Level.GetStaticMeshes().Add(MoveTemp(Component));

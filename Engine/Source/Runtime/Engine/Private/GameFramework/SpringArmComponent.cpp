@@ -28,7 +28,7 @@ FRotator USpringArmComponent::GetTargetRotation() const
 {
 	if (bUsePawnControlRotation)
 	{
-		if (const auto* OwningPawn = dynamic_cast<const APawn*>(GetOwner()))
+		if (const APawn* OwningPawn = Cast<APawn>(GetOwner()))
 		{
 			return OwningPawn->GetViewRotation();
 		}

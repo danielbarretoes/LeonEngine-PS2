@@ -6,6 +6,7 @@
 #include "Misc/AutomationTest.h"
 #include "Physics/PhysScene.h"
 #include "Tests/LegacyGolden.h"
+#include "Tests/ScopedTestWorld.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -20,7 +21,8 @@ bool FGoldenAIControllerArrivesTest::RunTest(const FString& Parameters)
 	constexpr int32 Frames = 240;
 	constexpr int32 SampleEvery = 12;
 
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	FPhysScene& Physics = World.GetPhysicsScene();
 	const int32 PillarId = Physics.AddBody({0, EBodyType::Static, 1.0f, true});
 	Physics.GetBodies()[PillarId].Position = LegacyGolden::ToWorldPosition(FVector(0.0f, 1.0f, 0.2f));

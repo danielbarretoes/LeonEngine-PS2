@@ -93,9 +93,9 @@ public:
 		return SlopePlanes;
 	}
 
-	/** Pulls position / half-extents / mass from the UStaticMeshComponent transforms. */
+	/** Pulls position / half-extents / mass from the FLevelStaticMesh transforms. */
 	void SyncFromLevel(const ULevel& Level);
-	/** Writes body positions back to the UStaticMeshComponent transforms. */
+	/** Writes body positions back to the FLevelStaticMesh transforms. */
 	void SyncToLevel(ULevel& Level) const;
 
 	[[nodiscard]] const TArray<FBodyInstance>& GetBodies() const

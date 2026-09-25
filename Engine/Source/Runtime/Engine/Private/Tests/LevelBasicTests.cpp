@@ -105,7 +105,7 @@ bool FLevelBasicLightParseAndAddToLevelTest::RunTest(const FString& Parameters)
 	TestTrue("PointLight parsed", TryParseBasicLightName("PointLight", Type));
 	TestTrue("Point type", Type == EBasicLight::Point);
 
-	ULevel Level;
+	ULevel& Level = *NewObject<ULevel>();
 	Level.ClearLights();
 	TestEqual("No directional lights", Level.GetDirectionalLights().Num(), 0);
 
@@ -123,8 +123,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelStoresMeshesPlayerStartsAndTagsTest,
 bool FLevelStoresMeshesPlayerStartsAndTagsTest::RunTest(const FString& Parameters)
 {
 	// The level keeps static meshes and PlayerStarts, finds meshes by tag and empties on Clear.
-	ULevel Level;
-	UStaticMeshComponent Mesh{};
+	ULevel& Level = *NewObject<ULevel>();
+	FLevelStaticMesh Mesh{};
 	Mesh.Tag = "player";
 	Mesh.Transform.SetLocation(FVector(100.0f, 200.0f, 300.0f));
 	Level.AddStaticMesh(MoveTemp(Mesh));

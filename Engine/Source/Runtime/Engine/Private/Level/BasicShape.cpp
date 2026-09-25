@@ -54,9 +54,9 @@ FBasicShape FBasicShape::Plane(float Size, const FTransform& InTransform, FMater
 	return Shape;
 }
 
-UStaticMeshComponent FBasicShape::MakeStaticMesh(FResourceCache& Resources) const
+FLevelStaticMesh FBasicShape::MakeStaticMesh(FResourceCache& Resources) const
 {
-	UStaticMeshComponent Component;
+	FLevelStaticMesh Component;
 	Component.Mesh = MeshForBasicShape(Resources, Type, SphereSegments, SphereRings);
 	Component.Transform = Transform;
 	Component.bMaterialOverride = true;

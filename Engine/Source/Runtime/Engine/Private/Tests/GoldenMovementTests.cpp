@@ -4,6 +4,7 @@
 #include "Misc/AutomationTest.h"
 #include "Physics/PhysScene.h"
 #include "Tests/LegacyGolden.h"
+#include "Tests/ScopedTestWorld.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -110,7 +111,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGoldenWalkOnFlatGroundTest, "System.Engine.Gol
 bool FGoldenWalkOnFlatGroundTest::RunTest(const FString& Parameters)
 {
 	// One second of walking on the floor plane along a diagonal wish: the path, then a grounded walk at full speed.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = SpawnGoldenCharacter(World, FVector::ZeroVector, 0.0f);
 	const FGoldenMovementRun Run =
 		RunGoldenMovement(*Character, World.GetPhysicsScene(), FVector(1.0f, 0.0f, 0.5f), 60, 6);
@@ -136,7 +138,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGoldenSlideAlongWallTest, "System.Engine.Golde
 bool FGoldenSlideAlongWallTest::RunTest(const FString& Parameters)
 {
 	// A diagonal walk into a long wall stops across the wall and slides along it.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = SpawnGoldenCharacter(World, FVector(-1.5f, 0.0f, 0.0f), 0.0f);
 	AddGoldenMovementBox(World.GetPhysicsScene(), FVector(0.0f, 1.0f, 0.0f), FVector(0.25f, 1.0f, 4.0f));
 	const FGoldenMovementRun Run =
@@ -163,7 +166,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGoldenJumpArcTest, "System.Engine.Golden.JumpA
 bool FGoldenJumpArcTest::RunTest(const FString& Parameters)
 {
 	// A jump from rest: the whole arc every 3 frames, the frame it lands on, and the rest state after landing.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = SpawnGoldenCharacter(World, FVector(0.5f, 0.0f, -0.5f), 0.0f);
 	FPhysScene& Scene = World.GetPhysicsScene();
 	(void)RunGoldenMovement(*Character, Scene, FVector::ZeroVector, 10, 10);
@@ -194,7 +198,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGoldenStepUpLedgeTest, "System.Engine.Golden.S
 bool FGoldenStepUpLedgeTest::RunTest(const FString& Parameters)
 {
 	// A 0.3 m ledge (below MaxStepHeight) is stepped onto and walked along.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = SpawnGoldenCharacter(World, FVector(-1.5f, 0.0f, 0.2f), 0.0f);
 	AddGoldenMovementBox(World.GetPhysicsScene(), FVector(8.0f, 0.15f, 0.0f), FVector(8.0f, 0.15f, 4.0f));
 	const FGoldenMovementRun Run =
@@ -221,7 +226,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGoldenRefuseTallStepTest, "System.Engine.Golde
 bool FGoldenRefuseTallStepTest::RunTest(const FString& Parameters)
 {
 	// A 0.5 m block (above MaxStepHeight) stops the character in front of it without a step up.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = SpawnGoldenCharacter(World, FVector(-1.5f, 0.0f, -0.3f), 0.0f);
 	AddGoldenMovementBox(World.GetPhysicsScene(), FVector(0.5f, 0.25f, 0.0f), FVector(0.5f, 0.25f, 4.0f));
 	const FGoldenMovementRun Run =
@@ -249,7 +255,8 @@ bool FGoldenWalkUpRampTest::RunTest(const FString& Parameters)
 {
 	// A 20 degree ramp is walkable: the character settles on it, then climbs it on a walkable floor. The ramp rises
 	// along +X in both worlds, so its pitch is the same number.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	FPhysScene& Scene = World.GetPhysicsScene();
 	Scene.AddSlopeRamp(LegacyGolden::ToWorldPosition(FVector::ZeroVector),
 		LegacyGolden::ToWorldExtent(FVector(8.0f, 8.0f, 2.0f)), 20.0f);
@@ -283,7 +290,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGoldenSteepSlopeKeepsFallingTest, "System.Engi
 bool FGoldenSteepSlopeKeepsFallingTest::RunTest(const FString& Parameters)
 {
 	// A 55 degree slope is not walkable: a character dropped on it keeps falling and does not sink through it.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	FPhysScene& Scene = World.GetPhysicsScene();
 	Scene.AddSlopeRamp(LegacyGolden::ToWorldPosition(FVector::ZeroVector),
 		LegacyGolden::ToWorldExtent(FVector(4.0f, 4.0f, 2.0f)), 55.0f);
@@ -311,7 +319,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGoldenWalkOffLedgeAndFallTest, "System.Engine.
 bool FGoldenWalkOffLedgeAndFallTest::RunTest(const FString& Parameters)
 {
 	// Walking off a 1 m platform: the frame the character starts falling, the fall, and the landing on the floor.
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	FPhysScene& Scene = World.GetPhysicsScene();
 	AddGoldenMovementBox(Scene, FVector(0.0f, 0.5f, 0.0f), FVector(0.5f, 0.5f, 0.5f));
 	ACharacter* Character = SpawnGoldenCharacter(World, FVector(0.0f, 1.0f, 0.1f), 0.0f);

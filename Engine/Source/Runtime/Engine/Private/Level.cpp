@@ -1,6 +1,6 @@
 #include "Engine/Level.h"
 
-int32 UStaticMeshComponent::SubMeshCount() const
+int32 FLevelStaticMesh::SubMeshCount() const
 {
 	if (Mesh == nullptr || !Mesh->Valid())
 	{
@@ -9,7 +9,7 @@ int32 UStaticMeshComponent::SubMeshCount() const
 	return Mesh->GetSubmeshes().Num() == 0 ? 1 : Mesh->GetSubmeshes().Num();
 }
 
-const FMaterial& UStaticMeshComponent::MaterialForSubMesh(int32 SubMeshIndex) const
+const FMaterial& FLevelStaticMesh::MaterialForSubMesh(int32 SubMeshIndex) const
 {
 	int32 Slot = 0;
 	if (Mesh != nullptr && SubMeshIndex >= 0 && SubMeshIndex < Mesh->GetSubmeshes().Num())
@@ -32,7 +32,7 @@ const FMaterial& UStaticMeshComponent::MaterialForSubMesh(int32 SubMeshIndex) co
 	return Material;
 }
 
-bool UStaticMeshComponent::IsShadowCaster() const
+bool FLevelStaticMesh::IsShadowCaster() const
 {
 	if (bHidden || Mesh == nullptr || !Mesh->Valid())
 	{
@@ -57,7 +57,7 @@ bool UStaticMeshComponent::IsShadowCaster() const
 	return CountsAsCaster(Material);
 }
 
-UStaticMeshComponent& ULevel::AddStaticMesh(UStaticMeshComponent Component)
+FLevelStaticMesh& ULevel::AddStaticMesh(FLevelStaticMesh Component)
 {
 	return StaticMeshes.Add_GetRef(MoveTemp(Component));
 }
@@ -142,6 +142,20 @@ void ULevel::Clear()
 	ClearPainCausingVolumes();
 	ClearAISpawnPoints();
 	ClearLights();
-	Name.Empty();
+	LevelName.Empty();
 	GameMode.Empty();
+}
+
+void ULevel::MoveLevelContentFrom(ULevel& Source)
+{
+	StaticMeshes = MoveTemp(Source.StaticMeshes);
+	PlayerStarts = MoveTemp(Source.PlayerStarts);
+	TriggerVolumes = MoveTemp(Source.TriggerVolumes);
+	PainCausingVolumes = MoveTemp(Source.PainCausingVolumes);
+	AiSpawnPoints = MoveTemp(Source.AiSpawnPoints);
+	DirectionalLights = MoveTemp(Source.DirectionalLights);
+	PointLights = MoveTemp(Source.PointLights);
+	LevelName = MoveTemp(Source.LevelName);
+	GameMode = MoveTemp(Source.GameMode);
+	Source.Clear();
 }

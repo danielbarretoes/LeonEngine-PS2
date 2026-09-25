@@ -7,7 +7,7 @@
 
 ADefaultCameraActor* ADefaultPlayerController::GetDefaultCameraActor() const
 {
-	return dynamic_cast<ADefaultCameraActor*>(GetPawn());
+	return Cast<ADefaultCameraActor>(GetPawn());
 }
 
 FVector ADefaultPlayerController::TickInput(UGameEngine& Engine)

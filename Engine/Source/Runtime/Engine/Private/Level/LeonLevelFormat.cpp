@@ -11,6 +11,7 @@
 #include "Misc/Paths.h"
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
+#include "UObject/Package.h"
 
 namespace
 {
@@ -399,7 +400,7 @@ namespace
 FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& InCamera)
 {
 	FLevelDocument Doc;
-	Doc.Name = Level.GetName();
+	Doc.Name = Level.GetLevelName();
 	Doc.GameMode = Level.GetGameMode();
 
 	Doc.Camera.Mode = InCamera.GetMode();
@@ -463,7 +464,7 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 		Doc.Actors.Add(MoveTemp(Record));
 	}
 
-	for (const UStaticMeshComponent& LocalMesh : Level.GetStaticMeshes())
+	for (const FLevelStaticMesh& LocalMesh : Level.GetStaticMeshes())
 	{
 		FLevelActorRecord Record;
 		Record.ActorClass = ActorClassFromEditorClass(LocalMesh.EditorClass);
@@ -998,11 +999,13 @@ bool LoadLeonLevelFile(const FString& Path, FLevelDocument& Out)
 
 bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FString& SourcePath)
 {
-	ULevel Staged;
+	// A transient level stages the load: a failure leaves the engine's level untouched, success moves the content over
+	// and the staging level becomes garbage.
+	ULevel& Staged = *NewObject<ULevel>(GetTransientPackage(), NAME_None, RF_Transient);
 	Staged.Clear();
 	FResourceCache& Resources = Engine.GetResources();
 
-	Staged.SetName(Doc.Name);
+	Staged.SetLevelName(Doc.Name);
 	Staged.SetGameMode(Doc.GameMode);
 
 	int32 FailedMeshes = 0;
@@ -1053,7 +1056,7 @@ bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FS
 			continue;
 		}
 
-		UStaticMeshComponent Actor;
+		FLevelStaticMesh Actor;
 		EBasicShape ShapeType{};
 		const bool bIsBasicShape = BasicShapeForActorClass(Record.ActorClass, ShapeType);
 		if (bIsBasicShape)
@@ -1130,7 +1133,7 @@ bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FS
 
 		if (Record.bHasBob)
 		{
-			UStaticMeshComponent& Live = Staged.GetStaticMeshes()[ActorIndex];
+			FLevelStaticMesh& Live = Staged.GetStaticMeshes()[ActorIndex];
 			Live.bHasBob = true;
 			Live.BobBaseZ = FLegacyCoordinateConversion::ConvertLength(Record.BobBaseY);
 			Live.BobAmplitude = FLegacyCoordinateConversion::ConvertLength(Record.BobAmplitude);
@@ -1157,7 +1160,7 @@ bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FS
 		return false;
 	}
 
-	Engine.GetLevel() = MoveTemp(Staged);
+	Engine.GetLevel().MoveLevelContentFrom(Staged);
 
 	UCameraComponent& LocalCamera = Engine.GetCamera();
 	LocalCamera.SetTarget(FLegacyCoordinateConversion::ConvertPosition(Doc.Camera.Target));

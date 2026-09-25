@@ -5,6 +5,11 @@
 #include "Material.h"
 #include "StaticMesh.h"
 #include "Texture2D.h"
+#include "UObject/Object.h"
+#include "Level.generated.h"
+
+class AActor;
+class UWorld;
 
 /** UE-like mobility: Static never moves (baked lighting later); Movable may move at runtime. */
 enum class EComponentMobility : uint8
@@ -14,14 +19,15 @@ enum class EComponentMobility : uint8
 };
 
 /**
- * Drawable placed mesh in a level (visual / collision proxy; not a gameplay actor or UE's UStaticMeshComponent).
+ * Drawable placed mesh of a legacy .llev level (visual / collision proxy; not an actor or a UStaticMeshComponent: P13
+ * turns these into AStaticMeshActors).
  * Resolution order in MaterialForSubMesh():
  *   1) Materials if non-empty (per-slot overrides)
  *   2) Material if bMaterialOverride (asset / JSON override replaced the MTL)
  *   3) mesh MTL materials
  *   4) Material (engine default checker when a procedural mesh has no MTL)
  */
-struct ENGINE_API UStaticMeshComponent
+struct ENGINE_API FLevelStaticMesh
 {
 	FTransform Transform;
 	TSharedPtr<UStaticMesh> Mesh;
@@ -109,13 +115,30 @@ struct ENGINE_API FAISpawnPoint
 };
 
 /**
- * Map content container (UE-style ULevel): static mesh components + lights. Distinct from the gameplay UWorld
- * (spawned actors). The application owns the contents; FSceneRenderer reads them.
+ * A level of a world (UE: ULevel): its outer is the owning UWorld and it holds the world's actors in Actors (spawned
+ * with the level as their outer, so the level keeps them alive through the garbage collector).
+ *
+ * Until levels become actors (P13) it also carries the content of the legacy .llev level: static meshes, player starts,
+ * volumes, AI spawn points and lights, which FSceneRenderer draws and FPhysScene turns into bodies.
  */
-class ENGINE_API ULevel
+UCLASS()
+class ENGINE_API ULevel : public UObject
 {
+	GENERATED_BODY()
+
 public:
-	UStaticMeshComponent& AddStaticMesh(UStaticMeshComponent Component);
+	/** The world this level belongs to (UE: OwningWorld); null for a standalone level (tests, level staging). */
+	UPROPERTY(Transient)
+	UWorld* OwningWorld = nullptr;
+
+	/**
+	 * The actors of the level, in spawn order (UE: Actors). An entry becomes null when its actor is destroyed during a
+	 * world tick; the world compacts the array once the tick ends.
+	 */
+	UPROPERTY()
+	TArray<AActor*> Actors;
+
+	FLevelStaticMesh& AddStaticMesh(FLevelStaticMesh Component);
 	FPlayerStart& AddPlayerStart(FPlayerStart Start);
 	FTriggerVolume& AddTriggerVolume(FTriggerVolume Volume);
 	FPainCausingVolume& AddPainCausingVolume(FPainCausingVolume Volume);
@@ -126,13 +149,16 @@ public:
 	void ClearPainCausingVolumes();
 	void ClearAISpawnPoints();
 	void ClearLights();
+	/** Clears the legacy level content (not Actors). */
 	void Clear();
+	/** Replaces the legacy level content with Source's, which is left empty (a staged level load commits this way). */
+	void MoveLevelContentFrom(ULevel& Source);
 
-	[[nodiscard]] const TArray<UStaticMeshComponent>& GetStaticMeshes() const
+	[[nodiscard]] const TArray<FLevelStaticMesh>& GetStaticMeshes() const
 	{
 		return StaticMeshes;
 	}
-	[[nodiscard]] TArray<UStaticMeshComponent>& GetStaticMeshes()
+	[[nodiscard]] TArray<FLevelStaticMesh>& GetStaticMeshes()
 	{
 		return StaticMeshes;
 	}
@@ -197,13 +223,14 @@ public:
 		return PointLights;
 	}
 
-	void SetName(const FString& InName)
+	/** The name the .llev document gives the level (not the object name, which is "PersistentLevel"). */
+	void SetLevelName(const FString& InName)
 	{
-		Name = InName;
+		LevelName = InName;
 	}
-	[[nodiscard]] const FString& GetName() const
+	[[nodiscard]] const FString& GetLevelName() const
 	{
-		return Name;
+		return LevelName;
 	}
 	void SetGameMode(const FString& InGameMode)
 	{
@@ -218,13 +245,13 @@ public:
 	static constexpr SIZE_T Npos = static_cast<SIZE_T>(-1);
 
 private:
-	TArray<UStaticMeshComponent> StaticMeshes;
+	TArray<FLevelStaticMesh> StaticMeshes;
 	TArray<FPlayerStart> PlayerStarts;
 	TArray<FTriggerVolume> TriggerVolumes;
 	TArray<FPainCausingVolume> PainCausingVolumes;
 	TArray<FAISpawnPoint> AiSpawnPoints;
 	TArray<FDirectionalLight> DirectionalLights{FDirectionalLight{}};
 	TArray<FPointLight> PointLights;
-	FString Name;
+	FString LevelName;
 	FString GameMode;
 };

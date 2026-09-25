@@ -4,8 +4,9 @@
 #include "SceneRenderer.h"
 #include "StaticMesh.h"
 
-USkeletalMeshComponent::USkeletalMeshComponent()
-	: AnimInstance(MakeUnique<UAnimInstance>())
+USkeletalMeshComponent::USkeletalMeshComponent(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+	, AnimInstance(MakeUnique<UAnimInstance>())
 {
 	AnimInstance->SetOwningMeshComponent(this);
 }

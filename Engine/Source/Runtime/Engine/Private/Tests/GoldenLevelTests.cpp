@@ -36,7 +36,7 @@ bool FGoldenStarterLevelTest::RunTest(const FString& Parameters)
 
 	const ULevel& Level = Engine.GetLevel();
 	TArray<FVector> MeshBoxes;
-	for (const UStaticMeshComponent& Component : Level.GetStaticMeshes())
+	for (const FLevelStaticMesh& Component : Level.GetStaticMeshes())
 	{
 		if (Component.Mesh)
 		{

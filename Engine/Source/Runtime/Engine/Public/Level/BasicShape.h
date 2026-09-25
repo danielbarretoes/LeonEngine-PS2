@@ -38,8 +38,8 @@ struct ENGINE_API FBasicShape
 	[[nodiscard]] static FBasicShape Plane(float Size = 1.0f, const FTransform& InTransform = FTransform::Identity,
 		FMaterial InMaterial = {}, bool bHasMaterial = false);
 
-	/** Builds a level UStaticMeshComponent (mesh + transform + material override). */
-	[[nodiscard]] UStaticMeshComponent MakeStaticMesh(FResourceCache& Resources) const;
+	/** Builds a level FLevelStaticMesh (mesh + transform + material override). */
+	[[nodiscard]] FLevelStaticMesh MakeStaticMesh(FResourceCache& Resources) const;
 };
 
 [[nodiscard]] bool TryParseBasicShapeName(const FString& Name, EBasicShape& Out);

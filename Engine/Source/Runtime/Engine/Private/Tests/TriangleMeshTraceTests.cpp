@@ -15,7 +15,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTriangleMeshTraceLineTraceAndQuerySupportZUseT
 bool FTriangleMeshTraceLineTraceAndQuerySupportZUseTriangleMeshSurfaceTest::RunTest(const FString& Parameters)
 {
 	// A collidable static mesh syncs as a TriangleMesh body; line traces and capsule support use its surface.
-	ULevel Level;
+	ULevel& Level = *NewObject<ULevel>();
 	FMeshData Data;
 	// Flat plane at z=50 cm covering xy [-200, 200] cm
 	const FVector Up(0.0f, 0.0f, 1.0f);
@@ -27,7 +27,7 @@ bool FTriangleMeshTraceLineTraceAndQuerySupportZUseTriangleMeshSurfaceTest::RunT
 	Data.Indices = {0, 1, 2, 0, 2, 3};
 	Data.Submeshes.Add(FMeshSection{0, 6, 0});
 
-	UStaticMeshComponent Component{};
+	FLevelStaticMesh Component{};
 	Component.Mesh = MakeShared<UStaticMesh>(UStaticMesh::CreateCpu(Data));
 	Component.bCollisionEnabled = true;
 	Level.GetStaticMeshes().Add(MoveTemp(Component));

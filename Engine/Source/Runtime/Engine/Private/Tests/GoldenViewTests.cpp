@@ -11,6 +11,7 @@
 #include "SceneRenderer.h"
 #include "ShadowMap.h"
 #include "Tests/LegacyGolden.h"
+#include "Tests/ScopedTestWorld.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -110,11 +111,12 @@ bool FGoldenSpringArmTest::RunTest(const FString& Parameters)
 		const bool bWithObstacle = Pass == 1;
 		for (const auto& Orientation : Orientations)
 		{
-			ADefaultCameraActor Pawn;
+			FScopedTestWorld TestWorld;
+			ADefaultCameraActor& Pawn = *TestWorld->SpawnActor<ADefaultCameraActor>();
 			APlayerController Controller;
 			Controller.Possess(&Pawn);
 			Controller.SetControlRotation(FRotator(-Orientation[1], Orientation[0] + 180.0f, 0.0f));
-			USpringArmComponent& Arm = *Pawn.CreateDefaultSubobject<USpringArmComponent>();
+			USpringArmComponent& Arm = *NewObject<USpringArmComponent>(&Pawn);
 			Arm.bUsePawnControlRotation = true;
 			Arm.bDoCollisionTest = true;
 			Arm.bEnableCameraLag = false;

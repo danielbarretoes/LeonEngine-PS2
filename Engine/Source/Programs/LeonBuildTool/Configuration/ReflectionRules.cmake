@@ -242,6 +242,11 @@ function(_leon_reflection_setup Name Unit)
 		COMMENT "LeonHeaderTool ${UnitName}"
 		VERBATIM)
 	list(APPEND Sources "${Stamp}")
+	if(Unit STREQUAL "Module")
+		# The generation step as a target of its own, for modules that include these headers without a link edge the
+		# build orders by (CIRCULAR_DEPENDENCIES: Renderer includes Engine's reflected headers).
+		add_custom_target(LeonHeaderTool.${Name} DEPENDS "${Stamp}")
+	endif()
 
 	set_property(GLOBAL PROPERTY ${Key}_SOURCES "${Sources}")
 	set_property(GLOBAL PROPERTY ${Key}_INCLUDE_DIR "${OutputDir}")

@@ -25,12 +25,15 @@ namespace
 
 } // namespace
 
-ACharacter::ACharacter()
+const FName ACharacter::MeshComponentName(TEXT("CharacterMesh0"));
+
+ACharacter::ACharacter(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
 {
-	RegisterComponent(&Mesh);
-	(void)Mesh.AttachToComponent(&GetRootComponent());
+	Mesh = CreateDefaultSubobject<USkeletalMeshComponent>(MeshComponentName);
+	Mesh->SetupAttachment(GetRootComponent());
 	// Legacy content faces +Y (UE: the mannequin mesh's relative yaw of -90).
-	Mesh.RelativeRotation = FRotator(0.0f, LegacyContentYaw, 0.0f);
+	Mesh->RelativeRotation = FRotator(0.0f, LegacyContentYaw, 0.0f);
 }
 
 void ACharacter::SetHealth(float InHealth)
@@ -118,7 +121,7 @@ void ACharacter::AddMovementInput(const FVector& WishDirXY)
 void ACharacter::SetAnimBlendInput(float SpeedAlpha)
 {
 	AnimBlendInput = FMath::Clamp(SpeedAlpha, 0.0f, 1.0f);
-	Mesh.GetAnimInstance().SetBlendSpaceInput(AnimBlendInput);
+	Mesh->GetAnimInstance().SetBlendSpaceInput(AnimBlendInput);
 }
 
 bool ACharacter::ConsumeJustLanded()
@@ -470,7 +473,7 @@ void ACharacter::IntegrateVertical(FPhysScene& PhysScene, float DeltaTime, FDebu
 			{
 				--JumpsRemaining;
 			}
-			if (auto* CharacterAnim = dynamic_cast<UCharacterAnimInstance*>(&Mesh.GetAnimInstance()))
+			if (auto* CharacterAnim = dynamic_cast<UCharacterAnimInstance*>(&Mesh->GetAnimInstance()))
 			{
 				CharacterAnim->NotifyJumped();
 			}
@@ -600,7 +603,7 @@ void ACharacter::ResolvePawnOverlap(ACharacter& Other)
 
 void ACharacter::Tick(float DeltaTime)
 {
-	if (auto* CharacterAnim = dynamic_cast<UCharacterAnimInstance*>(&Mesh.GetAnimInstance()))
+	if (auto* CharacterAnim = dynamic_cast<UCharacterAnimInstance*>(&Mesh->GetAnimInstance()))
 	{
 		CharacterAnim->SetMovementState(IsFalling(), VelocityZ, ConsumeJustLanded());
 	}
@@ -608,10 +611,10 @@ void ACharacter::Tick(float DeltaTime)
 	{
 		(void)ConsumeJustLanded();
 	}
-	Mesh.TickComponent(DeltaTime);
+	Mesh->TickComponent(DeltaTime);
 }
 
 void ACharacter::SubmitMeshDraw(FSceneRenderer& Renderer) const
 {
-	Mesh.SubmitDraw(Renderer);
+	Mesh->SubmitDraw(Renderer);
 }

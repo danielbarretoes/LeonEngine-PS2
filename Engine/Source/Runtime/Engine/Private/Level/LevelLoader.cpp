@@ -16,7 +16,7 @@ namespace
 
 } // namespace
 
-void ApplyFitHeight(UStaticMeshComponent& Object, float FitHeight)
+void ApplyFitHeight(FLevelStaticMesh& Object, float FitHeight)
 {
 	if (Object.Mesh == nullptr || FitHeight <= 0.0f)
 	{

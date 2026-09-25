@@ -3,13 +3,13 @@
 #include "CoreMinimal.h"
 #include "Engine/GameEngine.h"
 
-struct UStaticMeshComponent;
+struct FLevelStaticMesh;
 
 /**
  * Optional: scale the mesh to FitHeight (its Z extent) and ground-align it (bottom at z ~ 0, centred in X / Y); the
  * existing location is a post-fit offset.
  */
-void ApplyFitHeight(UStaticMeshComponent& Object, float FitHeight);
+void ApplyFitHeight(FLevelStaticMesh& Object, float FitHeight);
 
 /**
  * Loads a binary Leon Level (.llev) into an Engine. Any other extension is rejected — there is

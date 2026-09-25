@@ -3,6 +3,11 @@
 #include "GameFramework/Controller.h"
 #include "GameFramework/PlayerController.h"
 
+APawn::APawn(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
 FRotator APawn::GetControlRotation() const
 {
 	return Controller != nullptr ? Controller->GetControlRotation() : FRotator::ZeroRotator;
@@ -47,17 +52,14 @@ void APawn::DetachController()
 	Controller->UnPossess();
 }
 
-void APawn::Destroy()
+void APawn::Destroyed()
 {
-	if (IsPendingKillPending())
-	{
-		return;
-	}
 	DetachController();
-	AActor::Destroy();
+	Super::Destroyed();
 }
 
-void APawn::EndPlay()
+void APawn::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	DetachController();
+	Super::EndPlay(EndPlayReason);
 }

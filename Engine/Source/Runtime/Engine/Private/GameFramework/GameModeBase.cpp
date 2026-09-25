@@ -8,6 +8,25 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
 
+AGameModeBase::AGameModeBase(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+	, GameState(MakeUnique<AGameStateBase>())
+{
+}
+
+void AGameModeBase::OnEnter(UGameEngine& /*Engine*/, const FString& /*LevelPath*/)
+{
+}
+
+void AGameModeBase::OnExit(UGameEngine& /*Engine*/)
+{
+}
+
+void AGameModeBase::Tick(UGameEngine& /*Engine*/, float DeltaTime)
+{
+	GetWorld()->Tick(DeltaTime);
+}
+
 void AGameModeBase::PostLogin(APlayerController& NewPlayer)
 {
 	GetGameState().AddPlayerState(&NewPlayer.GetPlayerState());
@@ -41,7 +60,7 @@ float AGameModeBase::EstimateWalkBounds(const ULevel& Level)
 	constexpr float MinWalkBounds = 2000.0f;
 	constexpr float MaxWalkBounds = 12000.0f;
 	float MaxExtent = MinExtent;
-	for (const UStaticMeshComponent& Mesh : Level.GetStaticMeshes())
+	for (const FLevelStaticMesh& Mesh : Level.GetStaticMeshes())
 	{
 		if (!Mesh.HasPhysicsBody() || Mesh.bSimulatePhysics)
 		{
@@ -67,12 +86,12 @@ void AGameModeBase::PrepareMatchWorld(
 	OutFloorZ = EstimateFloorZ(Engine.GetLevel());
 	OutWalkBounds = EstimateWalkBounds(Engine.GetLevel());
 	RegisterBodiesFromLevel(Engine.GetLevel());
-	GetWorld().GetPhysicsScene().SyncFromLevel(Engine.GetLevel());
+	GetWorld()->GetPhysicsScene().SyncFromLevel(Engine.GetLevel());
 
-	UNavigationSystem& Nav = GetWorld().GetNavigationSystem();
+	UNavigationSystem& Nav = GetWorld()->GetNavigationSystem();
 	Nav.SetCellSize(50.0f);
 	Nav.SetAgentRadius(45.0f);
-	Nav.BuildFromLevel(Engine.GetLevel(), GetWorld().GetPhysicsScene(), OutFloorZ, OutWalkBounds);
+	Nav.BuildFromLevel(Engine.GetLevel(), GetWorld()->GetPhysicsScene(), OutFloorZ, OutWalkBounds);
 	UE_LOG(LogPath, Log, "GameMode: NavMesh bake blockers=%d walkable=%d/%d cell=%g", Nav.GetBlockerCount(),
 		Nav.GetWalkableCellCount(), Nav.GetNavMesh().Width * Nav.GetNavMesh().Depth,
 		static_cast<double>(Nav.GetCellSize()));
@@ -81,14 +100,14 @@ void AGameModeBase::PrepareMatchWorld(
 void AGameModeBase::RebuildNavigation(UGameEngine& Engine, float FloorZ, float WalkBounds)
 {
 	RegisterBodiesFromLevel(Engine.GetLevel());
-	GetWorld().GetPhysicsScene().SyncFromLevel(Engine.GetLevel());
-	UNavigationSystem& Nav = GetWorld().GetNavigationSystem();
-	Nav.BuildFromLevel(Engine.GetLevel(), GetWorld().GetPhysicsScene(), FloorZ, WalkBounds);
+	GetWorld()->GetPhysicsScene().SyncFromLevel(Engine.GetLevel());
+	UNavigationSystem& Nav = GetWorld()->GetNavigationSystem();
+	Nav.BuildFromLevel(Engine.GetLevel(), GetWorld()->GetPhysicsScene(), FloorZ, WalkBounds);
 }
 
 void AGameModeBase::SnapCharacterToFloor(ACharacter& Character, FVector& InOutFeet, float FloorZ) const
 {
-	const FPhysScene& Phys = GetWorld().GetPhysicsScene();
+	const FPhysScene& Phys = GetWorld()->GetPhysicsScene();
 	const UCharacterMovementComponent& Move = Character.GetCharacterMovement();
 	FVector Probe = InOutFeet;
 	Probe.Z = FMath::Max(InOutFeet.Z, FloorZ);

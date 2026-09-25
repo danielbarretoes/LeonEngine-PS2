@@ -4,30 +4,34 @@
 #include "Engine/Level.h"
 #include "Engine/World.h"
 #include "GameFramework/GameStateBase.h"
-
-#include <string_view>
+#include "GameFramework/Info.h"
+#include "GameModeBase.generated.h"
 
 class ACharacter;
 class UGameEngine;
 class APlayerController;
 
 /**
- * Level gameplay rules (Unreal-style AGameModeBase / AGameMode).
- * Games subclass this; the engine never includes game headers.
+ * Level gameplay rules (UE: AGameModeBase), an AInfo the world spawns (UWorld::SetGameMode) and keeps in
+ * AuthorityGameMode. Games subclass this; the engine never includes game headers.
+ *
+ * Until P13 (UEngine::LoadMap, input by config) FGameApplication drives it through three engine hooks: OnEnter once
+ * the map is loaded, Tick(Engine, DeltaTime) every frame (which ticks the world) and OnExit before shutdown.
  */
-class ENGINE_API AGameModeBase
+UCLASS()
+class ENGINE_API AGameModeBase : public AInfo
 {
+	GENERATED_BODY()
+
 public:
-	virtual ~AGameModeBase() = default;
+	AGameModeBase(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	AGameModeBase(const AGameModeBase&) = delete;
-	AGameModeBase& operator=(const AGameModeBase&) = delete;
-	AGameModeBase(AGameModeBase&&) = delete;
-	AGameModeBase& operator=(AGameModeBase&&) = delete;
+	/** The actor tick (the world ticks the game mode like any actor); the engine hook below is another overload. */
+	using Super::Tick;
 
-	virtual void OnEnter(UGameEngine& Engine, const FString& LevelPath) = 0;
-	virtual void OnExit(UGameEngine& Engine) = 0;
-	virtual void Tick(UGameEngine& Engine, float DeltaTime) = 0;
+	virtual void OnEnter(UGameEngine& Engine, const FString& LevelPath);
+	virtual void OnExit(UGameEngine& Engine);
+	virtual void Tick(UGameEngine& Engine, float DeltaTime);
 
 	/** Unreal InitGameState — configure / replace GameState after construction. */
 	virtual void InitGameState()
@@ -65,19 +69,10 @@ public:
 		return GetGameState().GetNumPlayers();
 	}
 
-	[[nodiscard]] UWorld& GetWorld()
-	{
-		return World;
-	}
-	[[nodiscard]] const UWorld& GetWorld() const
-	{
-		return World;
-	}
-
 	/** Recreate World FPhysScene backend (clears bodies). Prefer before RegisterBodiesFromLevel. */
 	void SetPhysicsBackend(EPhysicsBackend Backend)
 	{
-		World.SetPhysicsBackend(Backend);
+		GetWorld()->SetPhysicsBackend(Backend);
 	}
 
 	[[nodiscard]] AGameStateBase& GetGameState()
@@ -121,15 +116,10 @@ public:
 	[[nodiscard]] static float EstimateWalkBounds(const ULevel& Level);
 
 protected:
-	AGameModeBase()
-		: GameState(MakeUnique<AGameStateBase>())
-	{
-	}
-
 	/** Framework helper: Level collision meshes → World FPhysScene (not game rules). */
 	void RegisterBodiesFromLevel(const ULevel& Level)
 	{
-		GetWorld().RegisterBodiesFromLevel(Level);
+		GetWorld()->RegisterBodiesFromLevel(Level);
 	}
 
 	/**
@@ -160,6 +150,5 @@ protected:
 	void SnapCharacterToFloor(ACharacter& Character, FVector& InOutFeet, float FloorZ) const;
 
 private:
-	UWorld World;
 	TUniquePtr<AGameStateBase> GameState;
 };

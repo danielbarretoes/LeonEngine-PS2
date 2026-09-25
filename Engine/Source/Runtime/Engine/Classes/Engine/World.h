@@ -2,13 +2,55 @@
 
 #include "AI/Navigation/NavigationSystem.h"
 #include "CoreMinimal.h"
+#include "Engine/Level.h"
 #include "GameFramework/Actor.h"
 #include "Physics/PhysScene.h"
+#include "Templates/Casts.h"
+#include "Templates/SubclassOf.h"
+#include "UObject/Object.h"
+#include "World.generated.h"
 
 class ACharacter;
+class AGameModeBase;
 class FDebugDraw;
-class ULevel;
 class FSceneRenderer;
+class UGameInstance;
+
+/** What SpawnActor does when the new actor would overlap something (UE: ESpawnActorCollisionHandlingMethod). */
+enum class ESpawnActorCollisionHandlingMethod : uint8
+{
+	/** The class default decides (Leon: always spawns). */
+	Undefined,
+	AlwaysSpawn,
+	AdjustIfPossibleButAlwaysSpawn,
+	AdjustIfPossibleButDontSpawnIfColliding,
+	DontSpawnIfColliding,
+};
+
+/** Optional parameters of UWorld::SpawnActor (UE: FActorSpawnParameters). */
+struct ENGINE_API FActorSpawnParameters
+{
+	FActorSpawnParameters();
+
+	/** The actor's name; NAME_None makes a unique one. An existing actor of that name in the level is a fatal error. */
+	FName Name;
+	/** An actor whose properties are copied into the new one instead of the class defaults. */
+	AActor* Template = nullptr;
+	/** The new actor's owner (AActor::GetOwner). */
+	AActor* Owner = nullptr;
+	/** The pawn responsible for the new actor (AActor::GetInstigator). */
+	APawn* Instigator = nullptr;
+	/** The level to spawn in; the world's persistent level when null. */
+	ULevel* OverrideLevel = nullptr;
+	/** Kept for the UE signature: Leon does not test spawn collisions (every spawn succeeds). */
+	ESpawnActorCollisionHandlingMethod SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::Undefined;
+	/** The caller calls AActor::FinishSpawning itself (UE: bDeferConstruction). */
+	uint8 bDeferConstruction : 1;
+	/** Kept for the UE signature (every spawn succeeds). */
+	uint8 bNoFail : 1;
+	/** Flags of the new actor (UE: ObjectFlags; RF_Transactional there, none here). */
+	EObjectFlags ObjectFlags = RF_NoFlags;
+};
 
 struct ENGINE_API FWorldGameplayFrameParams
 {
@@ -31,25 +73,93 @@ struct ENGINE_API FWorldGameplayFrameParams
 };
 
 /**
- * Owns spawned Actors + FPhysScene; ticks them and purges pending kills.
- * Distinct from Level (map/visual content ≈ ULevel).
+ * The world (UE: UWorld): a UObject whose outer is its package (a transient "/Temp/Untitled_<N>" until P13's
+ * UEngine::LoadMap loads map packages), which owns its persistent level (and through it the actors), the physics scene
+ * and the navigation system.
+ *
+ * - CreateWorld makes the package, the world and its level; DestroyWorld ends play on every actor, marks the world, its
+ *   level and its actors pending kill and removes the world from the root set. The owner (a UGameInstance's world
+ *   context, a test's FScopedTestWorld) then collects garbage at that safe point.
+ * - SpawnActor creates actors with NewObject in the level (their outer). An actor spawned while the world ticks joins
+ *   the level (and begins play) once the tick ends.
+ * - DestroyActor ends play, unregisters the components, removes the actor from the level and marks it pending kill.
+ * - The game mode is spawned by the world (SetGameMode) and kept in AuthorityGameMode.
  */
-class ENGINE_API UWorld
+UCLASS()
+class ENGINE_API UWorld : public UObject
 {
+	GENERATED_BODY()
+
 public:
-	explicit UWorld(EPhysicsBackend PhysicsBackend = DefaultPhysicsBackend())
-		: Physics(PhysicsBackend)
+	UWorld(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
+	/** The level the world was created with; every actor spawns here (UE: PersistentLevel). */
+	UPROPERTY(Transient)
+	ULevel* PersistentLevel = nullptr;
+
+	/** The game mode, spawned by SetGameMode (UE: AuthorityGameMode). */
+	UPROPERTY(Transient)
+	AGameModeBase* AuthorityGameMode = nullptr;
+
+	/** The game instance whose world context holds this world (UE: OwningGameInstance). */
+	UPROPERTY(Transient)
+	UGameInstance* OwningGameInstance = nullptr;
+
+	/**
+	 * Creates a world in a new transient package with its persistent level (UE: CreateWorld). bInformEngineOfWorld is
+	 * kept for the UE signature (the world contexts belong to UGameInstance until P13). With bAddToRoot the world is in
+	 * the root set until DestroyWorld.
+	 */
+	static UWorld* CreateWorld(EWorldType::Type InWorldType, bool bInformEngineOfWorld, FName WorldName = NAME_None,
+		UPackage* InWorldPackage = nullptr, bool bAddToRoot = true);
+
+	/**
+	 * Ends play on every actor (EEndPlayReason::Quit), clears the physics and navigation, and marks the actors, the
+	 * level and the world pending kill (UE: DestroyWorld). The caller collects garbage afterwards.
+	 */
+	void DestroyWorld(bool bInformEngineOfWorld);
+
+	/** UWorld::GetWorld is the world itself (UE). */
+	[[nodiscard]] UWorld* GetWorld() const
 	{
-	}
-	~UWorld()
-	{
-		Clear();
+		return const_cast<UWorld*>(this);
 	}
 
-	UWorld(const UWorld&) = delete;
-	UWorld& operator=(const UWorld&) = delete;
-	UWorld(UWorld&&) = delete;
-	UWorld& operator=(UWorld&&) = delete;
+	[[nodiscard]] EWorldType::Type GetWorldType() const
+	{
+		return WorldType;
+	}
+	[[nodiscard]] ULevel* GetCurrentLevel() const
+	{
+		return PersistentLevel;
+	}
+	[[nodiscard]] UGameInstance* GetGameInstance() const
+	{
+		return OwningGameInstance;
+	}
+	[[nodiscard]] AGameModeBase* GetAuthGameMode() const
+	{
+		return AuthorityGameMode;
+	}
+	template <class T>
+	[[nodiscard]] T* GetAuthGameMode() const
+	{
+		return Cast<T>(AuthorityGameMode);
+	}
+
+	/**
+	 * Spawns the game mode (UE: SetGameMode(FURL), which asks the game instance for the class; Leon takes the class
+	 * until P13 brings FURL and the game mode precedence of plan decision D18). Returns the game mode.
+	 */
+	AGameModeBase* SetGameMode(TSubclassOf<AGameModeBase> GameModeClass);
+
+	/** True once the world plays: actors spawned from then on begin play at once (UE: HasBegunPlay). */
+	[[nodiscard]] bool HasBegunPlay() const
+	{
+		return bBegunPlay;
+	}
+	/** Begins play on every actor that has not (UE: BeginPlay). Leon worlds begin play when they are created. */
+	void BeginPlay();
 
 	[[nodiscard]] FPhysScene& GetPhysicsScene()
 	{
@@ -76,35 +186,68 @@ public:
 		Physics = FPhysScene(PhysicsBackend);
 	}
 
-	template <typename T, typename... ArgsType>
-	T* SpawnActor(ArgsType&&... Args)
+	/**
+	 * Spawns an actor of Class (UE: SpawnActor): NewObject in the level, root placed at Location / Rotation (zero when
+	 * null), components registered, PreInitializeComponents / InitializeComponents / PostInitializeComponents, then
+	 * BeginPlay (after the current tick when the world is ticking). Returns null for a null or abstract class.
+	 */
+	AActor* SpawnActor(UClass* Class, const FVector* Location = nullptr, const FRotator* Rotation = nullptr,
+		const FActorSpawnParameters& SpawnParameters = FActorSpawnParameters());
+	/** SpawnActor at a transform (its scale goes to the root component). */
+	AActor* SpawnActor(UClass* Class, const FTransform* Transform,
+		const FActorSpawnParameters& SpawnParameters = FActorSpawnParameters());
+
+	template <class T>
+	T* SpawnActor(const FActorSpawnParameters& SpawnParameters = FActorSpawnParameters())
 	{
-		static_assert(TIsDerivedFrom<T, AActor>::Value, "T must derive from Actor");
-		auto Owned = MakeUnique<T>(Forward<ArgsType>(Args)...);
-		T* Raw = Owned.Get();
-		Raw->World = this;
-		Raw->SetUniqueID(++NextUniqueID);
-		if (bTicking)
-		{
-			// Defer push_back so Tick iterators stay valid.
-			PendingSpawns.Add(MoveTemp(Owned));
-		}
-		else
-		{
-			Actors.Add(MoveTemp(Owned));
-			Raw->BeginPlayComponents();
-			Raw->BeginPlay();
-		}
-		return Raw;
+		return CastChecked<T>(
+			SpawnActor(T::StaticClass(), nullptr, nullptr, SpawnParameters), ECastCheckedType::NullAllowed);
+	}
+	template <class T>
+	T* SpawnActor(const FVector& Location, const FRotator& Rotation,
+		const FActorSpawnParameters& SpawnParameters = FActorSpawnParameters())
+	{
+		return CastChecked<T>(
+			SpawnActor(T::StaticClass(), &Location, &Rotation, SpawnParameters), ECastCheckedType::NullAllowed);
+	}
+	template <class T>
+	T* SpawnActor(UClass* Class, const FActorSpawnParameters& SpawnParameters = FActorSpawnParameters())
+	{
+		return CastChecked<T>(SpawnActor(Class, nullptr, nullptr, SpawnParameters), ECastCheckedType::NullAllowed);
+	}
+	template <class T>
+	T* SpawnActor(UClass* Class, const FVector& Location, const FRotator& Rotation,
+		const FActorSpawnParameters& SpawnParameters = FActorSpawnParameters())
+	{
+		return CastChecked<T>(SpawnActor(Class, &Location, &Rotation, SpawnParameters), ECastCheckedType::NullAllowed);
+	}
+	template <class T>
+	T* SpawnActor(UClass* Class, const FTransform& Transform,
+		const FActorSpawnParameters& SpawnParameters = FActorSpawnParameters())
+	{
+		return CastChecked<T>(SpawnActor(Class, &Transform, SpawnParameters), ECastCheckedType::NullAllowed);
+	}
+	/** Spawns with bDeferConstruction: the caller finishes with AActor::FinishSpawning (UE: SpawnActorDeferred). */
+	template <class T>
+	T* SpawnActorDeferred(
+		UClass* Class, const FTransform& Transform, AActor* Owner = nullptr, APawn* Instigator = nullptr)
+	{
+		FActorSpawnParameters SpawnParameters;
+		SpawnParameters.Owner = Owner;
+		SpawnParameters.Instigator = Instigator;
+		SpawnParameters.bDeferConstruction = true;
+		return CastChecked<T>(SpawnActor(Class, &Transform, SpawnParameters), ECastCheckedType::NullAllowed);
 	}
 
-	void DestroyActor(AActor* Actor)
-	{
-		if (Actor != nullptr && Actor->World == this)
-		{
-			Actor->Destroy();
-		}
-	}
+	/**
+	 * Destroys an actor of this world (UE: DestroyActor): Destroyed, EndPlay, components unregistered, removed from the
+	 * level (its slot is nulled while the world ticks), marked pending kill. Returns false for an actor of another
+	 * world.
+	 */
+	bool DestroyActor(AActor* Actor, bool bNetForce = false, bool bShouldModifyLevel = true);
+
+	/** The rest of a spawn once the actor exists (UE: AActor::PostActorConstruction); FinishSpawning calls it. */
+	void PostActorConstruction(AActor* Actor);
 
 	/** Actor Tick only (UAnimInstance, etc.). Prefer TickGameplayFrame for Character worlds. */
 	void Tick(float InDeltaTime);
@@ -117,22 +260,25 @@ public:
 
 	void SubmitSkeletalDraws(FSceneRenderer& InRenderer) const;
 
+	/** Destroys every actor (EEndPlayReason::Destroyed) and clears the physics scene (Leon; UE has no counterpart). */
 	void Clear();
 
-	[[nodiscard]] SIZE_T ActorCount() const
-	{
-		return Actors.Num();
-	}
+	/** Actors in the level that are not pending kill (spawns waiting for the end of a tick are not counted). */
+	[[nodiscard]] SIZE_T ActorCount() const;
 
 	template <typename T>
 	[[nodiscard]] T* FindFirst() const
 	{
 		static_assert(TIsDerivedFrom<T, AActor>::Value, "T must derive from Actor");
-		for (const auto& Actor : Actors)
+		if (PersistentLevel == nullptr)
 		{
-			if (Actor && !Actor->IsPendingKill())
+			return nullptr;
+		}
+		for (AActor* Actor : PersistentLevel->Actors)
+		{
+			if (Actor != nullptr && !Actor->IsPendingKillPending())
 			{
-				if (T* Typed = dynamic_cast<T*>(Actor.Get()))
+				if (T* Typed = Cast<T>(Actor))
 				{
 					return Typed;
 				}
@@ -146,11 +292,17 @@ public:
 	void ForEach(TFn&& Fn) const
 	{
 		static_assert(TIsDerivedFrom<T, AActor>::Value, "T must derive from Actor");
-		for (const auto& Actor : Actors)
+		if (PersistentLevel == nullptr)
 		{
-			if (Actor && !Actor->IsPendingKill())
+			return;
+		}
+		// Index loop: Fn may destroy actors (their slots become null) but the array does not shrink meanwhile.
+		for (int32 Index = 0; Index < PersistentLevel->Actors.Num(); ++Index)
+		{
+			AActor* Actor = PersistentLevel->Actors[Index];
+			if (Actor != nullptr && !Actor->IsPendingKillPending())
 			{
-				if (T* Typed = dynamic_cast<T*>(Actor.Get()))
+				if (T* Typed = Cast<T>(Actor))
 				{
 					Fn(*Typed);
 				}
@@ -162,25 +314,30 @@ public:
 	template <typename TFn>
 	void ForEachActor(TFn&& Fn) const
 	{
-		for (const auto& Actor : Actors)
-		{
-			if (Actor && !Actor->IsPendingKill())
-			{
-				Fn(*Actor);
-			}
-		}
+		ForEach<AActor>(Forward<TFn>(Fn));
 	}
 
 private:
+	friend class AActor;
+
+	void InitWorld();
 	void FlushPendingSpawns();
-	void PurgePending();
+	/** Removes the null slots destroyed actors left in the level while the world ticked. */
+	void CompactActors();
 	/** Pairwise Character capsule depenetration (players / AI are not FPhysScene bodies). */
 	void ResolveCharacterOverlaps();
 
+	/** Actors spawned during a tick: they join the level when it ends (UE adds them at once). */
+	UPROPERTY(Transient)
+	TArray<AActor*> PendingSpawnActors;
+
 	FPhysScene Physics{};
 	UNavigationSystem Navigation{};
-	TArray<TUniquePtr<AActor>> Actors;
-	TArray<TUniquePtr<AActor>> PendingSpawns;
-	bool bTicking = false;
+	EWorldType::Type WorldType = EWorldType::None;
 	uint64 NextUniqueID = 0;
+	bool bBegunPlay = false;
+	bool bTicking = false;
+	bool bIsTearingDown = false;
+	/** A DestroyActor during the tick left null slots in the level. */
+	bool bHasNullActorSlots = false;
 };

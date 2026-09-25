@@ -181,7 +181,7 @@ void FPhysScene::SyncFromLevel(const ULevel& Level)
 		{
 			continue;
 		}
-		const UStaticMeshComponent& Obj = Meshes[static_cast<int32>(Body.LevelMeshIndex)];
+		const FLevelStaticMesh& Obj = Meshes[static_cast<int32>(Body.LevelMeshIndex)];
 		if (Obj.Mesh != nullptr)
 		{
 			const FBox WorldAabb =

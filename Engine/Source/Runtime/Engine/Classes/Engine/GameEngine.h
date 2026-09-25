@@ -12,12 +12,19 @@
 #include "GenericPlatform/GenericApplication.h"
 #include "ResourceCache.h"
 #include "SceneRenderer.h"
+#include "UObject/GCObject.h"
+
+class UWorld;
 
 /**
  * Top-level runtime: platform window (FGenericWindow), per-frame Tick, orbit-camera input, FPS overlay,
- * UGameInstance, and a Level/FResourceCache filled by the level loader.
+ * UGameInstance, and a FResourceCache the level loader fills.
+ *
+ * Not a UObject yet (P13 makes it UEngine / UGameEngine with GEngine): it keeps its UObjects alive as an FGCObject.
+ * It creates the UGameInstance, whose world context holds the game UWorld; GetLevel is that world's persistent level.
+ * Shutdown ends the world and collects garbage (a safe point, plan decision D11).
  */
-class ENGINE_API UGameEngine
+class ENGINE_API UGameEngine : public FGCObject
 {
 public:
 	using FUpdateCallback = TFunction<void(float DeltaTime)>;
@@ -27,7 +34,7 @@ public:
 	using FPostRenderCallback = TFunction<void(int32 FbWidth, int32 FbHeight)>;
 
 	UGameEngine();
-	~UGameEngine();
+	~UGameEngine() override;
 
 	UGameEngine(const UGameEngine&) = delete;
 	UGameEngine& operator=(const UGameEngine&) = delete;
@@ -76,14 +83,12 @@ public:
 		return bRunning;
 	}
 
-	[[nodiscard]] ULevel& GetLevel()
-	{
-		return Level;
-	}
-	[[nodiscard]] const ULevel& GetLevel() const
-	{
-		return Level;
-	}
+	/** The game world (the game instance's world context). */
+	[[nodiscard]] UWorld* GetWorld() const;
+
+	/** The game world's persistent level: the loaded .llev content the renderer draws. */
+	[[nodiscard]] ULevel& GetLevel();
+	[[nodiscard]] const ULevel& GetLevel() const;
 	[[nodiscard]] FResourceCache& GetResources()
 	{
 		return Resources;
@@ -146,22 +151,14 @@ public:
 		return *GameInstance;
 	}
 
-	template <typename T, typename... ArgsType>
-	T* SetGameInstance(ArgsType&&... Args)
+	/** Replaces the game instance with a new T and its own world (the old world is destroyed). */
+	template <typename T>
+	T* SetGameInstance()
 	{
 		static_assert(TIsDerivedFrom<T, UGameInstance>::Value, "T must derive from GameInstance");
-		if (GameInstance && bInitialized)
-		{
-			GameInstance->Shutdown();
-		}
-		auto Owned = MakeUnique<T>(Forward<ArgsType>(Args)...);
-		T* Raw = Owned.get();
-		GameInstance = MoveTemp(Owned);
-		if (bInitialized)
-		{
-			GameInstance->Init();
-		}
-		return Raw;
+		T* NewInstance = NewObject<T>(GetTransientPackage());
+		SetGameInstanceObject(NewInstance);
+		return NewInstance;
 	}
 
 	/** When true, mouse look / orbit are paused (level browser chrome, etc.). */
@@ -287,7 +284,17 @@ public:
 		return Hud;
 	}
 
+	// FGCObject
+	void AddReferencedObjects(FReferenceCollector& Collector) override;
+	FString GetReferencerName() const override
+	{
+		return TEXT("UGameEngine");
+	}
+
 private:
+	void SetGameInstanceObject(UGameInstance* NewInstance);
+	/** Destroys the game instance's world and collects garbage (world teardown is a safe point). */
+	void DestroyGameWorld();
 	[[nodiscard]] EShaderReloadResult ReloadAllShaders(bool bForce);
 	void HandleInput(float DeltaTime);
 	void Render(const FPostRenderCallback& OnPostRender);
@@ -303,9 +310,9 @@ private:
 	AHUD Hud;
 	FAudioDevice AudioDevice;
 	UCameraComponent Camera;
-	ULevel Level;
 	FResourceCache Resources;
-	TUniquePtr<UGameInstance> GameInstance;
+	/** The game session; its world context holds the game world (UE: UGameEngine::GameInstance). */
+	UGameInstance* GameInstance = nullptr;
 
 	bool bRunning = false;
 	bool bInitialized = false;

@@ -1,6 +1,7 @@
 #include "Engine/GameEngine.h"
 
 #include "DynamicRHI.h"
+#include "Engine/World.h"
 #include "EngineLogs.h"
 #include "HAL/PlatformApplicationMisc.h"
 #include "HAL/PlatformMemory.h"
@@ -10,18 +11,70 @@
 #include "Misc/CString.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "UObject/GarbageCollection.h"
+#include "UObject/Package.h"
 
 UGameEngine::UGameEngine()
-	: GameInstance(MakeUnique<UGameInstance>())
 {
 	Application.Reset(FPlatformApplicationMisc::CreateApplication());
 	Window = Application->MakeWindow();
 	PlayerInput.AddMappingContext(UInputMappingContext::MakeDefault());
+	// UE: UGameEngine::Init creates the game instance, which creates the world context and its world.
+	SetGameInstanceObject(NewObject<UGameInstance>(GetTransientPackage()));
 }
 
 UGameEngine::~UGameEngine()
 {
 	Shutdown();
+	if (GameInstance != nullptr && GameInstance->GetWorld() != nullptr)
+	{
+		DestroyGameWorld();
+	}
+	GameInstance = nullptr;
+}
+
+void UGameEngine::AddReferencedObjects(FReferenceCollector& Collector)
+{
+	Collector.AddReferencedObject(GameInstance);
+}
+
+void UGameEngine::SetGameInstanceObject(UGameInstance* NewInstance)
+{
+	if (GameInstance != nullptr)
+	{
+		if (bInitialized)
+		{
+			GameInstance->Shutdown();
+		}
+		DestroyGameWorld();
+	}
+	GameInstance = NewInstance;
+	GameInstance->InitializeStandalone();
+	if (bInitialized)
+	{
+		GameInstance->Init();
+	}
+}
+
+void UGameEngine::DestroyGameWorld()
+{
+	GameInstance->DestroyWorldContextWorld();
+	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
+}
+
+UWorld* UGameEngine::GetWorld() const
+{
+	return GameInstance != nullptr ? GameInstance->GetWorld() : nullptr;
+}
+
+ULevel& UGameEngine::GetLevel()
+{
+	return *GetWorld()->PersistentLevel;
+}
+
+const ULevel& UGameEngine::GetLevel() const
+{
+	return *GetWorld()->PersistentLevel;
 }
 
 bool UGameEngine::Initialize(int32 Width, int32 Height, const TCHAR* Title)
@@ -58,6 +111,10 @@ bool UGameEngine::Initialize(int32 Width, int32 Height, const TCHAR* Title)
 
 	(void)AudioDevice.Initialize(/*silent=*/false);
 
+	if (GameInstance->GetWorld() == nullptr)
+	{
+		GameInstance->InitializeStandalone();
+	}
 	GameInstance->Init();
 
 	bInitialized = true;
@@ -79,6 +136,10 @@ bool UGameEngine::InitializeHeadless()
 	Resources.SetGpuUploadEnabled(false);
 	bHeadless = true;
 	(void)AudioDevice.Initialize(/*silent=*/true);
+	if (GameInstance->GetWorld() == nullptr)
+	{
+		GameInstance->InitializeStandalone();
+	}
 	GameInstance->Init();
 	bInitialized = true;
 	bRunning = true;
@@ -95,7 +156,8 @@ void UGameEngine::Shutdown()
 
 	GameInstance->Shutdown();
 	AudioDevice.Shutdown();
-	Level.Clear();
+	// The world goes first: its actors end play while the resources they use still exist.
+	DestroyGameWorld();
 	Resources.Clear();
 	if (!bHeadless)
 	{
@@ -214,7 +276,7 @@ void UGameEngine::Run(
 
 void UGameEngine::Start()
 {
-	UE_LOG(LogEngine, Log, "Level static meshes: %d", Level.GetStaticMeshes().Num());
+	UE_LOG(LogEngine, Log, "Level static meshes: %d", GetLevel().GetStaticMeshes().Num());
 	UE_LOG(LogEngine, Log, "Controls: mouse look (cursor captured), scroll zoom orbit; close window to quit");
 	UE_LOG(LogEngine, Log, "Default mode: mouse look, WASD fly along view, Q/E up/down");
 	UE_LOG(LogEngine, Log, "Debug: F1 mesh AABBs + light frustum; F2 collision volumes + floor traces");
@@ -552,7 +614,7 @@ void UGameEngine::Render(const FPostRenderCallback& OnPostRender)
 	}
 
 	Renderer.BeginFrame(FbWidth, FbHeight);
-	Renderer.DrawScene(Level, Camera);
+	Renderer.DrawScene(GetLevel(), Camera);
 	PaintHudAndOverlay(FbWidth, FbHeight);
 	if (OnPostRender)
 	{

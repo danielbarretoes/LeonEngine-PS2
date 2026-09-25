@@ -2,13 +2,19 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Pawn.generated.h"
 
 class AController;
 
 /** Possessable Actor (Unreal-style Pawn). Character derives from this. */
+UCLASS()
 class ENGINE_API APawn : public AActor
 {
+	GENERATED_BODY()
+
 public:
+	APawn(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
 	[[nodiscard]] AController* GetController() const
 	{
 		return Controller;
@@ -30,13 +36,10 @@ public:
 	void AddControllerYawInput(float Val);
 	void AddControllerPitchInput(float Val);
 
-	/** UnPossess any Controller, then mark pending kill. */
-	void Destroy() override;
-	/** Also UnPossess when removed via World::Clear. */
-	void EndPlay() override;
-
-protected:
-	APawn() = default;
+	/** Releases the Controller before the actor is destroyed (UE: APawn::Destroyed). */
+	void Destroyed() override;
+	/** Also releases the Controller when the world ends play (World::Clear, DestroyWorld). */
+	void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
 	friend class AController;

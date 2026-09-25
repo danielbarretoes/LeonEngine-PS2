@@ -8,6 +8,7 @@
 #include "Level/LeonLevelFormat.h"
 #include "Misc/AutomationTest.h"
 #include "Physics/PhysScene.h"
+#include "Tests/ScopedTestWorld.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -50,7 +51,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFrameworkHardeningAIControllerLogicStateTest,
 bool FFrameworkHardeningAIControllerLogicStateTest::RunTest(const FString& Parameters)
 {
 	// The AI logic state follows MoveToLocation (MoveTo), MoveToActor (Chase) and StopMovement (Idle).
-	UWorld World;
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	AAIController Ai;
 	Ai.Possess(Character);
