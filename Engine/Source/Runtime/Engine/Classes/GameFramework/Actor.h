@@ -15,7 +15,7 @@ class UWorld;
 /**
  * Yaw in degrees that makes content converted from the legacy formats face an actor's forward. Legacy content faces the
  * legacy +Z, which becomes +Y; UE actors face +X. A component showing such content gets this relative yaw (as UE's
- * mannequin mesh does), and a level mesh driven by an actor gets the actor yaw plus this.
+ * mannequin mesh does).
  */
 inline constexpr float LegacyContentYaw = -90.0f;
 
@@ -36,11 +36,6 @@ inline constexpr float LegacyContentYaw = -90.0f;
  * ## Components
  * Components are default subobjects (CreateDefaultSubobject in a constructor) or NewObject<T>(Actor) followed by
  * RegisterComponent. The actor keeps them in OwnedComponents; SpawnActor registers them (RegisterAllComponents).
- *
- * ## Legacy level meshes
- * SetLevelMeshIndex links the actor to a FLevelStaticMesh of the .llev level (the one FPhysScene skips for its own
- * queries); SyncTransformToLevel writes the actor location and yaw into it each gameplay frame
- * (UWorld::TickGameplayFrame). P13 replaces this link with actors that own their mesh components.
  */
 UCLASS()
 class ENGINE_API AActor : public UObject
@@ -142,15 +137,6 @@ public:
 		return Tags.Contains(Tag);
 	}
 
-	void SetLevelMeshIndex(SIZE_T Index)
-	{
-		LevelMeshIndex = Index;
-	}
-	[[nodiscard]] SIZE_T GetLevelMeshIndex() const
-	{
-		return LevelMeshIndex;
-	}
-
 	/** Spawn-order serial assigned by UWorld::SpawnActor (a deterministic tie-break between actors). */
 	void SetUniqueID(uint64 Id)
 	{
@@ -242,12 +228,6 @@ public:
 		return bActorInitialized;
 	}
 
-	/**
-	 * Copies location + yaw into the linked legacy FLevelStaticMesh (no-op if the index is invalid). The mesh shows
-	 * converted legacy content, so its yaw is the actor yaw plus LegacyContentYaw; its pitch and roll are kept.
-	 */
-	virtual void SyncTransformToLevel(ULevel& Level) const;
-
 	/** Reports OwnedComponents to the collector (UE). */
 	static void AddReferencedObjects(UObject* InThis, FReferenceCollector& Collector);
 
@@ -284,7 +264,6 @@ private:
 	UPROPERTY()
 	APawn* Instigator = nullptr;
 
-	SIZE_T LevelMeshIndex = ULevel::Npos;
 	uint64 UniqueID = 0;
 	bool bActorIsBeingDestroyed = false;
 	bool bActorInitialized = false;

@@ -213,7 +213,7 @@ private:
 	bool BindLitUbos() const;
 	void UpdateCameraUbo(const UCameraComponent& Camera) const;
 	void UpdateCameraUbo(const FMatrix& InView, const FMatrix& InProjection, const FVector& InCameraPos) const;
-	void UpdateLightsUbo(const ULevel& Level) const;
+	void UpdateLightsUbo() const;
 	void BindShadowResources(bool bInReceiveShadows, float SourceAngleDegrees = DefaultLightSourceAngleDegrees) const;
 	void BindPlanarReflection(bool bEnabled, const FMatrix& ReflectionViewProj) const;
 	void SetClipPlane(bool bEnabled, const FVector4& Plane) const;
@@ -221,9 +221,9 @@ private:
 	[[nodiscard]] FRHIFramebufferId ColorRestoreFbo() const;
 	void DrawFullscreenTriangle() const;
 	void RenderPostStack(const UCameraComponent& Camera);
-	void RenderShadowPass(const ULevel& Level, const FMatrix& LightSpace);
-	void RenderPlanarReflectionPass(const ULevel& Level, const UCameraComponent& Camera, float PlaneZ);
-	void DrawDebug(const ULevel& Level, const UCameraComponent& Camera, const FMatrix& LightSpace, bool bHasLightSpace);
+	void RenderShadowPass(const FMatrix& LightSpace);
+	void RenderPlanarReflectionPass(const UCameraComponent& Camera, float PlaneZ);
+	void DrawDebug(const UCameraComponent& Camera, const FMatrix& LightSpace, bool bHasLightSpace);
 	/**
 	 * After the scene: the world origin axes with no depth test, then the view orientation gizmo in a fixed-size
 	 * square at the bottom-left of the draw framebuffer.
@@ -277,6 +277,10 @@ private:
 	TSharedPtr<UTexture2D> FlatNormalTexture;
 	TArray<FSkeletalDrawItem> SkeletalDraws;
 	TArray<FStaticDrawItem> StaticDraws;
+	/** The level's static mesh actors and lights, gathered at the start of DrawScene. */
+	TArray<FLevelStaticMesh> FrameMeshes;
+	TArray<FDirectionalLight> FrameDirectionalLights;
+	TArray<FPointLight> FramePointLights;
 	FFrameStats FrameStats{};
 	FPostProcessSettings Post{};
 

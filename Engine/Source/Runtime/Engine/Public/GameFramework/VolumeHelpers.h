@@ -2,32 +2,31 @@
 
 #include "Containers/ArrayView.h"
 #include "CoreMinimal.h"
-#include "Engine/Level.h"
 
 class ACharacter;
+class APainCausingVolume;
+class ATriggerVolume;
+
+/** True when the character's feet lie inside the volume's brush box (AVolume::EncompassesPoint). */
+[[nodiscard]] bool CharacterOverlapsPainVolume(const ACharacter& Ch, const APainCausingVolume& Vol);
+
+/** Apply one pain tick: DamagePerSec * PainInterval via UGameplayStatics::ApplyPointDamage. */
+void ApplyPainVolumeDamage(ACharacter& Ch, const APainCausingVolume& Vol);
 
 /**
- * True when character feet lie inside the volume AABB
- * (center = transform.position, half-extents = abs(scale) * 0.5).
+ * Authority tick: global accumulator (Zombies lava style). When TickAccum reaches the smallest positive PainInterval
+ * among the volumes that cause pain, damages each alive character that overlaps any of them (one tick from the first
+ * overlapping volume).
  */
-[[nodiscard]] bool CharacterOverlapsPainVolume(const ACharacter& Ch, const FPainCausingVolume& Vol);
-
-/** Apply one pain tick: damagePerSecond * damageInterval via UGameplayStatics::ApplyPointDamage. */
-void ApplyPainVolumeDamage(ACharacter& Ch, const FPainCausingVolume& Vol);
+void TickPainCausingVolumes(TArrayView<APainCausingVolume* const> Volumes, TArrayView<ACharacter*> Characters,
+	float DeltaTime, float& TickAccum);
 
 /**
- * Authority tick: global accumulator (Zombies lava style). When tickAccum reaches the
- * smallest positive damageInterval among volumes, damages each alive character that
- * overlaps any volume (one tick from the first overlapping volume).
+ * Nearest trigger volume whose XY distance from Feet is within min(MaxDist, its interact radius), or null. The
+ * interact radius comes from the volume's `.llev` data (ULegacyLevelDataComponent; 200 cm without one).
  */
-void TickPainCausingVolumes(
-	const TArray<FPainCausingVolume>& Volumes, TArrayView<ACharacter*> Characters, float DeltaTime, float& TickAccum);
+[[nodiscard]] ATriggerVolume* FindBestTriggerVolume(
+	TArrayView<ATriggerVolume* const> Volumes, const FVector& Feet, float MaxDist);
 
-/**
- * Nearest FTriggerVolume whose XY distance from feet is within min(maxDist, interactRadius).
- * Returns Level::npos if none.
- */
-[[nodiscard]] SIZE_T FindBestTriggerVolume(const TArray<FTriggerVolume>& Volumes, const FVector& Feet, float MaxDist);
-
-/** Default [F] … [cost] prompt from payload / interactCost (Door, WallBuy:…, Perk:…). */
-[[nodiscard]] FString FormatDefaultInteractPrompt(const FTriggerVolume& Volume);
+/** Default [F] … [cost] prompt from the volume's `.llev` payload / interact cost (Door, WallBuy:…, Perk:…). */
+[[nodiscard]] FString FormatDefaultInteractPrompt(const ATriggerVolume& Volume);

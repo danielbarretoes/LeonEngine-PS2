@@ -10,6 +10,7 @@
 #include "TriangleCollision.h"
 
 class FDebugDraw;
+class UPrimitiveComponent;
 
 struct ENGINE_API FCapsuleContactParams
 {
@@ -93,10 +94,19 @@ public:
 		return SlopePlanes;
 	}
 
-	/** Pulls position / half-extents / mass from the FLevelStaticMesh transforms. */
+	/**
+	 * Pulls each body's position / half extents / mass (and a static mesh's triangles) from the primitive component its
+	 * LevelMeshIndex names in ULevel::GetCollisionPrimitives.
+	 */
 	void SyncFromLevel(const ULevel& Level);
-	/** Writes body positions back to the FLevelStaticMesh transforms. */
+	/** Writes body positions back to the locations of those components. */
 	void SyncToLevel(ULevel& Level) const;
+
+	/**
+	 * A body's shape from a component: a static mesh's world box (and its CPU triangles for a static body), a box
+	 * component's scaled box, else a basic cube scaled like the component.
+	 */
+	void UpdateBodyFromComponent(int32 BodyIndex, const UPrimitiveComponent& Component);
 
 	[[nodiscard]] const TArray<FBodyInstance>& GetBodies() const
 	{

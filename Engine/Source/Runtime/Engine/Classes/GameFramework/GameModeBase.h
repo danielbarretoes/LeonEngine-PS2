@@ -86,7 +86,7 @@ public:
 	virtual void PostLogin(APlayerController& NewPlayer);
 	/** Unreal AGameModeBase::Logout — removes PlayerState from GameState::PlayerArray. */
 	virtual void Logout(APlayerController& Exiting);
-	/** Unreal RestartPlayer — spawn/possess pawn at a FPlayerStart (games override). */
+	/** Unreal RestartPlayer — spawn/possess pawn at an APlayerStart (games override). */
 	virtual void RestartPlayer(APlayerController& /*newPlayer*/)
 	{
 	}
@@ -138,38 +138,24 @@ public:
 		return Cast<T>(GameState);
 	}
 
-	/** Min FPlayerStart Z, or 0 if none. */
+	/** Min APlayerStart Z, or 0 if none. */
 	[[nodiscard]] static float EstimateFloorZ(const ULevel& Level);
-	/** Soft XY walk clamp from static mesh extents (cm, clamped 2000–12000). */
+	/** Soft XY walk clamp from the scale of the static collision primitives (cm, clamped 2000–12000). */
 	[[nodiscard]] static float EstimateWalkBounds(const ULevel& Level);
 
 protected:
-	/** Framework helper: Level collision meshes → World FPhysScene (not game rules). */
+	/** Framework helper: the level's collision primitives → World FPhysScene (not game rules). */
 	void RegisterBodiesFromLevel(const ULevel& Level)
 	{
 		GetWorld()->RegisterBodiesFromLevel(Level);
 	}
 
 	/**
-	 * Unreal FindPlayerStart — resolve the spawn transform (slot picks among starts). Like UE's spawn at a start, only
-	 * the start's yaw is kept.
+	 * Unreal FindPlayerStart — resolve the spawn transform from the level's APlayerStart actors (slot picks among them,
+	 * in spawn order). Like UE's spawn at a start, only the start's yaw is kept.
 	 */
 	[[nodiscard]] bool FindPlayerStart(
-		const ULevel& Level, FVector& OutLocation, FRotator& OutRotation, int Slot = 0) const
-	{
-		const auto& Starts = Level.GetPlayerStarts();
-		if (Starts.Num() == 0)
-		{
-			OutLocation = {0.0f, 0.0f, 0.0f};
-			OutRotation = FRotator::ZeroRotator;
-			return false;
-		}
-		const int Index = FMath::Clamp(Slot, 0, static_cast<int>(Starts.Num()) - 1);
-		const FPlayerStart& Start = Starts[Index];
-		OutLocation = Start.Transform.GetLocation();
-		OutRotation = FRotator(0.0f, Start.Transform.Rotator().Yaw, 0.0f);
-		return true;
-	}
+		const ULevel& Level, FVector& OutLocation, FRotator& OutRotation, int Slot = 0) const;
 
 	// Flow: Match enter — bodies + nav bake
 	void PrepareMatchWorld(

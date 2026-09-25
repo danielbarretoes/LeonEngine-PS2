@@ -1,5 +1,7 @@
 #include "Physics/PhysScene.h"
 
+#include "Components/BoxComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Debug/DebugDraw.h"
 #include "Frustum.h"
 #include "IPhysicsBackend.h"
@@ -165,7 +167,8 @@ int32 FPhysScene::AddSlopeRamp(
 
 void FPhysScene::SyncFromLevel(const ULevel& Level)
 {
-	const auto& Meshes = Level.GetStaticMeshes();
+	TArray<UPrimitiveComponent*> Primitives;
+	Level.GetCollisionPrimitives(Primitives);
 	if (TriangleMeshes.Num() != Bodies.Num())
 	{
 		TriangleMeshes.SetNum(Bodies.Num());
@@ -173,53 +176,13 @@ void FPhysScene::SyncFromLevel(const ULevel& Level)
 	for (int32 Bi = 0; Bi < Bodies.Num(); ++Bi)
 	{
 		FBodyInstance& Body = Bodies[Bi];
-		FTriangleMeshCollision& TriMesh = TriangleMeshes[Bi];
-		TriMesh.Clear();
+		TriangleMeshes[Bi].Clear();
 		Body.CollisionShape = EBodyCollisionShape::Box;
-
-		if (Body.LevelMeshIndex >= static_cast<SIZE_T>(Meshes.Num()))
+		if (Body.LevelMeshIndex >= static_cast<SIZE_T>(Primitives.Num()))
 		{
 			continue;
 		}
-		const FLevelStaticMesh& Obj = Meshes[static_cast<int32>(Body.LevelMeshIndex)];
-		if (Obj.Mesh != nullptr)
-		{
-			const FBox WorldAabb =
-				TransformLocalBox(Obj.Mesh->GetLocalMin(), Obj.Mesh->GetLocalMax(), Obj.EffectiveModelMatrix());
-			Body.Position = WorldAabb.GetCenter();
-			Body.HalfExtents = WorldAabb.GetExtent();
-
-			// UE ComplexAsSimple lite: static meshes with CPU triangles use triangle queries.
-			if (Body.Type == EBodyType::Static && Obj.Mesh->HasCpuData())
-			{
-				const FMeshData& Cpu = Obj.Mesh->GetCpuData();
-				const FMatrix Model = Obj.EffectiveModelMatrix();
-				TriMesh.Positions.SetNum(Cpu.Vertices.Num());
-				for (int32 Vi = 0; Vi < TriMesh.Positions.Num(); ++Vi)
-				{
-					TriMesh.Positions[Vi] = FVector(Model.TransformPosition(Cpu.Vertices[Vi].Position));
-				}
-				TriMesh.Indices = Cpu.Indices;
-				if (TriMesh.IsValid())
-				{
-					Body.CollisionShape = EBodyCollisionShape::TriangleMesh;
-				}
-				else
-				{
-					TriMesh.Clear();
-				}
-			}
-		}
-		else
-		{
-			Body.Position = Obj.Transform.GetLocation();
-			HalfExtentsFromScale(
-				Obj.Transform.GetScale3D(), Body.HalfExtents.X, Body.HalfExtents.Y, Body.HalfExtents.Z);
-		}
-		if (Body.Mass <= 0.0f)
-		{
-			Body.Mass = MassFromHalfExtents(Body.HalfExtents.X, Body.HalfExtents.Y, Body.HalfExtents.Z);
-		}
+		UpdateBodyFromComponent(Bi, *Primitives[static_cast<int32>(Body.LevelMeshIndex)]);
 	}
 	if (BackendIface != nullptr && BackendIface->HasRigidWorld())
 	{
@@ -227,16 +190,71 @@ void FPhysScene::SyncFromLevel(const ULevel& Level)
 	}
 }
 
+void FPhysScene::UpdateBodyFromComponent(int32 BodyIndex, const UPrimitiveComponent& Component)
+{
+	FBodyInstance& Body = Bodies[BodyIndex];
+	FTriangleMeshCollision& TriMesh = TriangleMeshes[BodyIndex];
+	TriMesh.Clear();
+	Body.CollisionShape = EBodyCollisionShape::Box;
+
+	const FTransform Transform = Component.GetComponentTransform();
+	const UStaticMeshComponent* MeshComponent = Cast<UStaticMeshComponent>(&Component);
+	const UStaticMesh* Mesh = MeshComponent != nullptr ? MeshComponent->GetStaticMesh() : nullptr;
+	if (Mesh != nullptr)
+	{
+		const FMatrix Model = Transform.ToMatrixWithScale();
+		const FBox WorldAabb = TransformLocalBox(Mesh->GetLocalMin(), Mesh->GetLocalMax(), Model);
+		Body.Position = WorldAabb.GetCenter();
+		Body.HalfExtents = WorldAabb.GetExtent();
+
+		// UE ComplexAsSimple lite: static meshes with CPU triangles use triangle queries.
+		if (Body.Type == EBodyType::Static && Mesh->HasCpuData())
+		{
+			const FMeshData& Cpu = Mesh->GetCpuData();
+			TriMesh.Positions.SetNum(Cpu.Vertices.Num());
+			for (int32 Vi = 0; Vi < TriMesh.Positions.Num(); ++Vi)
+			{
+				TriMesh.Positions[Vi] = FVector(Model.TransformPosition(Cpu.Vertices[Vi].Position));
+			}
+			TriMesh.Indices = Cpu.Indices;
+			if (TriMesh.IsValid())
+			{
+				Body.CollisionShape = EBodyCollisionShape::TriangleMesh;
+			}
+			else
+			{
+				TriMesh.Clear();
+			}
+		}
+	}
+	else if (const UBoxComponent* Box = Cast<UBoxComponent>(&Component))
+	{
+		// Plan decision D16: a volume's brush is a box; its body is the axis-aligned scaled box.
+		Body.Position = Transform.GetLocation();
+		Body.HalfExtents = Box->GetScaledBoxExtent();
+	}
+	else
+	{
+		Body.Position = Transform.GetLocation();
+		HalfExtentsFromScale(Transform.GetScale3D(), Body.HalfExtents.X, Body.HalfExtents.Y, Body.HalfExtents.Z);
+	}
+	if (Body.Mass <= 0.0f)
+	{
+		Body.Mass = MassFromHalfExtents(Body.HalfExtents.X, Body.HalfExtents.Y, Body.HalfExtents.Z);
+	}
+}
+
 void FPhysScene::SyncToLevel(ULevel& Level) const
 {
-	auto& Meshes = Level.GetStaticMeshes();
+	TArray<UPrimitiveComponent*> Primitives;
+	Level.GetCollisionPrimitives(Primitives);
 	for (const FBodyInstance& Body : Bodies)
 	{
-		if (Body.LevelMeshIndex >= static_cast<SIZE_T>(Meshes.Num()))
+		if (Body.LevelMeshIndex >= static_cast<SIZE_T>(Primitives.Num()))
 		{
 			continue;
 		}
-		Meshes[static_cast<int32>(Body.LevelMeshIndex)].Transform.SetLocation(Body.Position);
+		Primitives[static_cast<int32>(Body.LevelMeshIndex)]->SetWorldLocation(Body.Position);
 	}
 }
 

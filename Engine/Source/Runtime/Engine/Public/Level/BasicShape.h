@@ -1,9 +1,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Engine/Level.h"
 #include "Material.h"
 #include "ResourceCache.h"
+
+class AStaticMeshActor;
+class UStaticMeshComponent;
+class UWorld;
 
 /**
  * Engine basic shapes (UE-like /Engine/BasicShapes: Cube, Sphere, Plane).
@@ -38,14 +41,18 @@ struct ENGINE_API FBasicShape
 	[[nodiscard]] static FBasicShape Plane(float Size = 1.0f, const FTransform& InTransform = FTransform::Identity,
 		FMaterial InMaterial = {}, bool bHasMaterial = false);
 
-	/** Builds a level FLevelStaticMesh (mesh + transform + material override). */
-	[[nodiscard]] FLevelStaticMesh MakeStaticMesh(FResourceCache& Resources) const;
+	/** Gives a component the shape's mesh and its material (every section's slot 0; the default material without one).
+	 */
+	void ApplyTo(UStaticMeshComponent& Component, FResourceCache& Resources) const;
+
+	/** Spawns an AStaticMeshActor at Transform showing the shape (UE: placing a /Engine/BasicShapes mesh). */
+	AStaticMeshActor* SpawnIn(UWorld& World, FResourceCache& Resources) const;
 };
 
 [[nodiscard]] bool TryParseBasicShapeName(const FString& Name, EBasicShape& Out);
-/** UE-like BlockingVolume: invisible collision box (Cube + bCollisionEnabled + bHidden). */
+/** The `.llev` BlockingVolume class name (an ABlockingVolume: an invisible box, plan decision D16). */
 [[nodiscard]] bool IsBlockingVolumeName(const FString& Name);
-/** UE-like FPlayerStart: spawn point only (no mesh). */
+/** The `.llev` PlayerStart class name (an APlayerStart: a spawn point, no mesh). */
 [[nodiscard]] bool IsPlayerStartName(const FString& Name);
 [[nodiscard]] TSharedPtr<UStaticMesh> MeshForBasicShape(
 	FResourceCache& Resources, EBasicShape Shape, int32 InSphereSegments = 24, int32 InSphereRings = 16);

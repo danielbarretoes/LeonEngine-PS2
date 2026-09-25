@@ -1,8 +1,11 @@
 #include "AI/Navigation/NavigationSystem.h"
 
 #include "BodyInstance.h"
+#include "Components/PrimitiveComponent.h"
 #include "Debug/DebugDraw.h"
 #include "Engine/Level.h"
+#include "GameFramework/Actor.h"
+#include "Level/LegacyLevelDataComponent.h"
 #include "Physics/PhysScene.h"
 #include "TriangleCollision.h"
 
@@ -28,52 +31,36 @@ namespace
 		return false;
 	}
 
-	[[nodiscard]] bool IsForcedNavBlockerTag(const ULevel& Level, SIZE_T MeshIndex)
+	/** True when the body's component belongs to an actor tagged Tag (plan decision D15: meaning lives in Tags). */
+	[[nodiscard]] bool OwnerHasTag(const UPrimitiveComponent* Component, const TCHAR* Tag)
 	{
-		if (MeshIndex >= Level.GetStaticMeshes().Num())
-		{
-			return false;
-		}
-		// Thin pads / volumes: keep as obstacle so paths go around (not climbable floor).
-		return Level.GetStaticMeshes()[static_cast<int32>(MeshIndex)].Tag.Equals(
-			NavTags::Blocker, ESearchCase::CaseSensitive);
+		const AActor* Owner = Component != nullptr ? Component->GetOwner() : nullptr;
+		return Owner != nullptr && Owner->ActorHasTag(FName(Tag));
 	}
 
-	/** Walkable for CMC (slopes) — must not carve a hole in the flat grid NavMesh. */
-	[[nodiscard]] bool IsWalkableNavSurfaceTag(const ULevel& Level, SIZE_T MeshIndex)
+	/** The arena floor: a plane read from a `.llev` Plane record. */
+	[[nodiscard]] bool IsLevelFloorPlane(const UPrimitiveComponent* Component)
 	{
-		if (MeshIndex >= Level.GetStaticMeshes().Num())
-		{
-			return false;
-		}
-		return Level.GetStaticMeshes()[static_cast<int32>(MeshIndex)].Tag.Equals(
-			NavTags::Walkable, ESearchCase::CaseSensitive);
+		const AActor* Owner = Component != nullptr ? Component->GetOwner() : nullptr;
+		const ULegacyLevelDataComponent* Data =
+			Owner != nullptr ? Owner->FindComponentByClass<ULegacyLevelDataComponent>() : nullptr;
+		return Data != nullptr && Data->ActorClass == ELevelActorClass::Plane;
 	}
 
-	[[nodiscard]] bool ShouldSkipLevelMesh(const ULevel& Level, SIZE_T MeshIndex)
-	{
-		if (MeshIndex >= Level.GetStaticMeshes().Num())
-		{
-			return false;
-		}
-		// Arena floor plane only.
-		return Level.GetStaticMeshes()[static_cast<int32>(MeshIndex)].EditorClass.Equals(
-			"Plane", ESearchCase::CaseSensitive);
-	}
-
+	/** Component is the body's primitive (null without a level to look it up in). */
 	[[nodiscard]] bool BodyBlocksNavigation(
-		const FBodyInstance& InBody, float FloorZ, float InCellSize, const ULevel* Level)
+		const FBodyInstance& InBody, float FloorZ, float InCellSize, const UPrimitiveComponent* Component)
 	{
 		if (InBody.Type != EBodyType::Static)
 		{
 			return false;
 		}
-		if (Level != nullptr && ShouldSkipLevelMesh(*Level, InBody.LevelMeshIndex))
+		if (IsLevelFloorPlane(Component))
 		{
 			return false;
 		}
 		// NavWalkable (ramps): path across footprint; UCharacterMovementComponent climbs the mesh.
-		if (Level != nullptr && IsWalkableNavSurfaceTag(*Level, InBody.LevelMeshIndex))
+		if (OwnerHasTag(Component, NavTags::Walkable))
 		{
 			return false;
 		}
@@ -88,7 +75,7 @@ namespace
 			return false;
 		}
 		// FNavBlocker: thin slab may look floor-like by aspect but must block paths.
-		if (Level != nullptr && IsForcedNavBlockerTag(*Level, InBody.LevelMeshIndex))
+		if (OwnerHasTag(Component, NavTags::Blocker))
 		{
 			return true;
 		}
@@ -198,10 +185,18 @@ void UNavigationSystem::BakeGrid(const FPhysScene& Physics, float FloorZ, float 
 	TArray<FNavBlocker> Blockers;
 	Blockers.Reserve(static_cast<SIZE_T>(Physics.GetBodies().Num()));
 	const auto& TriMeshes = Physics.GetTriangleMeshes();
+	TArray<UPrimitiveComponent*> Primitives;
+	if (Level != nullptr)
+	{
+		Level->GetCollisionPrimitives(Primitives);
+	}
 	for (int32 Bi = 0; Bi < Physics.GetBodies().Num(); ++Bi)
 	{
 		const FBodyInstance& LocalBody = Physics.GetBodies()[Bi];
-		if (!BodyBlocksNavigation(LocalBody, FloorZ, Cell, Level))
+		const UPrimitiveComponent* Component = LocalBody.LevelMeshIndex < static_cast<SIZE_T>(Primitives.Num())
+			? Primitives[static_cast<int32>(LocalBody.LevelMeshIndex)]
+			: nullptr;
+		if (!BodyBlocksNavigation(LocalBody, FloorZ, Cell, Component))
 		{
 			continue;
 		}

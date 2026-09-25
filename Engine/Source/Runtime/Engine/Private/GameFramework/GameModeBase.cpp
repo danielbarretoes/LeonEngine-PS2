@@ -8,6 +8,7 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/HUD.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerStart.h"
 #include "GameFramework/PlayerState.h"
 
 AGameModeBase::AGameModeBase(const FObjectInitializer& ObjectInitializer)
@@ -70,17 +71,53 @@ void AGameModeBase::Logout(APlayerController& Exiting)
 	GetGameState().RemovePlayerState(Exiting.GetPlayerState<APlayerState>());
 }
 
+namespace
+{
+
+	/** The level's live APlayerStart actors, in spawn order. */
+	void GetPlayerStarts(const ULevel& Level, TArray<const APlayerStart*>& OutStarts)
+	{
+		for (const AActor* Actor : Level.Actors)
+		{
+			const APlayerStart* Start = Cast<APlayerStart>(Actor);
+			if (Start != nullptr && !Start->IsPendingKillPending())
+			{
+				OutStarts.Add(Start);
+			}
+		}
+	}
+
+} // namespace
+
+bool AGameModeBase::FindPlayerStart(const ULevel& Level, FVector& OutLocation, FRotator& OutRotation, int Slot) const
+{
+	TArray<const APlayerStart*> Starts;
+	GetPlayerStarts(Level, Starts);
+	if (Starts.Num() == 0)
+	{
+		OutLocation = {0.0f, 0.0f, 0.0f};
+		OutRotation = FRotator::ZeroRotator;
+		return false;
+	}
+	const int Index = FMath::Clamp(Slot, 0, static_cast<int>(Starts.Num()) - 1);
+	const FTransform Start = Starts[Index]->GetActorTransform();
+	OutLocation = Start.GetLocation();
+	OutRotation = FRotator(0.0f, Start.Rotator().Yaw, 0.0f);
+	return true;
+}
+
 float AGameModeBase::EstimateFloorZ(const ULevel& Level)
 {
-	const auto& Starts = Level.GetPlayerStarts();
+	TArray<const APlayerStart*> Starts;
+	GetPlayerStarts(Level, Starts);
 	if (Starts.Num() == 0)
 	{
 		return 0.0f;
 	}
-	float Z = Starts[0].Transform.GetLocation().Z;
-	for (const FPlayerStart& Start : Starts)
+	float Z = Starts[0]->GetActorLocation().Z;
+	for (const APlayerStart* Start : Starts)
 	{
-		Z = FMath::Min(Z, Start.Transform.GetLocation().Z);
+		Z = FMath::Min(Z, Start->GetActorLocation().Z);
 	}
 	return Z;
 }
@@ -93,13 +130,15 @@ float AGameModeBase::EstimateWalkBounds(const ULevel& Level)
 	constexpr float MinWalkBounds = 2000.0f;
 	constexpr float MaxWalkBounds = 12000.0f;
 	float MaxExtent = MinExtent;
-	for (const FLevelStaticMesh& Mesh : Level.GetStaticMeshes())
+	TArray<UPrimitiveComponent*> Primitives;
+	Level.GetCollisionPrimitives(Primitives);
+	for (const UPrimitiveComponent* Primitive : Primitives)
 	{
-		if (!Mesh.HasPhysicsBody() || Mesh.bSimulatePhysics)
+		if (Primitive->IsSimulatingPhysics())
 		{
 			continue;
 		}
-		const FVector Scale = Mesh.Transform.GetScale3D();
+		const FVector Scale = Primitive->GetComponentScale();
 		const float Hx = FMath::Abs(Scale.X) * 0.5f * BasicShapeSize;
 		const float Hy = FMath::Abs(Scale.Y) * 0.5f * BasicShapeSize;
 		MaxExtent = FMath::Max(MaxExtent, FMath::Max(Hx, Hy));
@@ -144,8 +183,8 @@ void AGameModeBase::SnapCharacterToFloor(ACharacter& Character, FVector& InOutFe
 	const UCharacterMovementComponent& Move = Character.GetCharacterMovement();
 	FVector Probe = InOutFeet;
 	Probe.Z = FMath::Max(InOutFeet.Z, FloorZ);
-	const float Support = Phys.QuerySupportZ(
-		Character.GetCapsule(), Probe, Move.FloorZ, Move.MaxStepHeight, Move.Skin, Character.GetLevelMeshIndex());
+	const float Support =
+		Phys.QuerySupportZ(Character.GetCapsule(), Probe, Move.FloorZ, Move.MaxStepHeight, Move.Skin, NoLevelMeshIndex);
 	/** cm above the support */
 	constexpr float SnapClearance = 2.0f;
 	InOutFeet.Z = FMath::Max(Support, FloorZ) + SnapClearance;

@@ -1,9 +1,9 @@
 #include "Level/LevelLoader.h"
 
-#include "Engine/Level.h"
 #include "EngineLogs.h"
 #include "Level/LeonLevelFormat.h"
 #include "Misc/Paths.h"
+#include "StaticMesh.h"
 
 namespace
 {
@@ -16,29 +16,29 @@ namespace
 
 } // namespace
 
-void ApplyFitHeight(FLevelStaticMesh& Object, float FitHeight)
+void ApplyFitHeight(FTransform& Transform, const UStaticMesh& Mesh, float FitHeight)
 {
-	if (Object.Mesh == nullptr || FitHeight <= 0.0f)
+	if (FitHeight <= 0.0f)
 	{
 		return;
 	}
 
 	// Existing location is kept as an offset after auto scale / ground align.
-	const FVector LocationOffset = Object.Transform.GetLocation();
+	const FVector LocationOffset = Transform.GetLocation();
 
-	const FVector Mn = Object.Mesh->GetLocalMin();
-	const FVector Mx = Object.Mesh->GetLocalMax();
+	const FVector Mn = Mesh.GetLocalMin();
+	const FVector Mx = Mesh.GetLocalMax();
 	const FVector Extents = Mx - Mn;
 	/** 0.1 cm: keeps a flat mesh from dividing by zero. The height is the Z extent. */
 	const float Height = FMath::Max(Extents.Z, 0.1f);
 	const float Scale = FitHeight / Height;
 	const FVector Center = (Mn + Mx) * 0.5f;
 
-	Object.Transform.SetScale3D(FVector(Scale, Scale, Scale));
+	Transform.SetScale3D(FVector(Scale, Scale, Scale));
 	/** cm above the floor, against z-fighting with the ground. */
 	constexpr float GroundEpsilon = 0.8f;
 	const FVector Grounded = FVector((-Center.X) * Scale, (-Center.Y) * Scale, ((-Mn.Z) * Scale) + GroundEpsilon);
-	Object.Transform.SetLocation(Grounded + LocationOffset);
+	Transform.SetLocation(Grounded + LocationOffset);
 }
 
 bool LoadLevelFile(UGameEngine& Engine, const FString& LevelPath)

@@ -31,6 +31,43 @@ public:
 	UPROPERTY()
 	uint8 bGenerateOverlapEvents : 1;
 
+	/**
+	 * What the collision takes part in (UE: BodyInstance.CollisionEnabled). Leon's default is NoCollision: the physics
+	 * scene only holds level geometry, which the level reader enables per record, and characters are swept capsules,
+	 * never bodies.
+	 */
+	void SetCollisionEnabled(ECollisionEnabled::Type NewType)
+	{
+		CollisionEnabled = NewType;
+	}
+	[[nodiscard]] ECollisionEnabled::Type GetCollisionEnabled() const
+	{
+		return CollisionEnabled;
+	}
+	/** True unless the collision is NoCollision (UE: IsCollisionEnabled). */
+	[[nodiscard]] bool IsCollisionEnabled() const
+	{
+		return CollisionEnabled != ECollisionEnabled::NoCollision;
+	}
+	/** A simulated (Dynamic) body instead of a static one (UE: SetSimulatePhysics / IsSimulatingPhysics). */
+	void SetSimulatePhysics(bool bSimulate)
+	{
+		bSimulatePhysics = bSimulate;
+	}
+	[[nodiscard]] bool IsSimulatingPhysics() const
+	{
+		return bSimulatePhysics;
+	}
+	/** Gravity on the simulated body (UE: SetEnableGravity / IsGravityEnabled). */
+	void SetEnableGravity(bool bGravityEnabled)
+	{
+		bEnableGravity = bGravityEnabled;
+	}
+	[[nodiscard]] bool IsGravityEnabled() const
+	{
+		return bEnableGravity;
+	}
+
 	/** The collision shape in world units, grown by Inflation (UE: GetCollisionShape); a line by default. */
 	[[nodiscard]] virtual FCollisionShape GetCollisionShape(float Inflation = 0.0f) const;
 
@@ -43,4 +80,10 @@ public:
 protected:
 	void CreateRenderState_Concurrent() override;
 	void DestroyRenderState_Concurrent() override;
+
+private:
+	/** UE keeps these in the component's FBodyInstance (BodyInstance); Leon's physics scene owns its bodies. */
+	ECollisionEnabled::Type CollisionEnabled = ECollisionEnabled::NoCollision;
+	bool bSimulatePhysics = false;
+	bool bEnableGravity = true;
 };

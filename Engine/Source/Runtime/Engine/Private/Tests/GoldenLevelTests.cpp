@@ -1,7 +1,11 @@
 #include "CoreMinimal.h"
+#include "Engine/DirectionalLight.h"
 #include "Engine/GameEngine.h"
-#include "Engine/Level.h"
+#include "Engine/PointLight.h"
+#include "Engine/StaticMeshActor.h"
+#include "Engine/World.h"
 #include "Frustum.h"
+#include "Kismet/GameplayStatics.h"
 #include "Level/LevelLoader.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/LegacyGolden.h"
@@ -34,30 +38,36 @@ bool FGoldenStarterLevelTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
-	const ULevel& Level = Engine.GetLevel();
+	const UWorld& World = *Engine.GetWorld();
+	TArray<AActor*> MeshActors;
+	UGameplayStatics::GetAllActorsOfClass(World, AStaticMeshActor::StaticClass(), MeshActors);
 	TArray<FVector> MeshBoxes;
-	for (const FLevelStaticMesh& Component : Level.GetStaticMeshes())
+	for (const AActor* Actor : MeshActors)
 	{
-		if (Component.Mesh)
+		const UStaticMeshComponent* Component = CastChecked<AStaticMeshActor>(Actor)->GetStaticMeshComponent();
+		if (const UStaticMesh* Mesh = Component->GetStaticMesh())
 		{
 			const FBox Box = TransformLocalBox(
-				Component.Mesh->GetLocalMin(), Component.Mesh->GetLocalMax(), Component.EffectiveModelMatrix());
+				Mesh->GetLocalMin(), Mesh->GetLocalMax(), Component->GetComponentTransform().ToMatrixWithScale());
 			MeshBoxes.Add(Box.Min);
 			MeshBoxes.Add(Box.Max);
 		}
 	}
+	TArray<AActor*> Lights;
+	UGameplayStatics::GetAllActorsOfClass(World, ADirectionalLight::StaticClass(), Lights);
 	TArray<FVector> LightDirections;
-	for (const FDirectionalLight& Light : Level.GetDirectionalLights())
+	for (const AActor* Light : Lights)
 	{
-		LightDirections.Add(Light.GetDirection());
+		LightDirections.Add(CastChecked<ADirectionalLight>(Light)->GetLightComponent()->GetDirection());
 	}
+	UGameplayStatics::GetAllActorsOfClass(World, APointLight::StaticClass(), Lights);
 	TArray<FVector> PointLightPositions;
-	for (const FPointLight& Light : Level.GetPointLights())
+	for (const AActor* Light : Lights)
 	{
-		PointLightPositions.Add(Light.Transform.GetLocation());
+		PointLightPositions.Add(Light->GetActorLocation());
 	}
 	const TArray<int32> Counts = {
-		Level.GetStaticMeshes().Num(), MeshBoxes.Num() / 2, LightDirections.Num(), PointLightPositions.Num()};
+		MeshActors.Num(), MeshBoxes.Num() / 2, LightDirections.Num(), PointLightPositions.Num()};
 
 	const UCameraComponent& Camera = Engine.GetCamera();
 	const TArray<FVector> CameraPoints = {Camera.GetTarget(), Camera.GetCameraLocation()};

@@ -49,6 +49,12 @@ public:
 	static float ApplyPointDamage(ACharacter* DamagedActor, float BaseDamage, const FVector& HitFromDirection,
 		ACharacter* DamageCauser = nullptr);
 
+	/** Every live actor of the class (or a subclass) in the world, in spawn order (UE: GetAllActorsOfClass). */
+	static void GetAllActorsOfClass(const UWorld& World, TSubclassOf<AActor> ActorClass, TArray<AActor*>& OutActors);
+
+	/** Every live actor with the tag, in spawn order (UE: GetAllActorsWithTag). */
+	static void GetAllActorsWithTag(const UWorld& World, FName Tag, TArray<AActor*>& OutActors);
+
 	/** Radial damage with linear falloff by distance; returns the total applied across all actors. */
 	static float ApplyRadialDamage(const TArray<ACharacter*>& Actors, float BaseDamage, const FVector& Origin,
 		float DamageRadius, ACharacter* DamageCauser = nullptr);

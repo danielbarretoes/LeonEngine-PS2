@@ -1,6 +1,8 @@
 #include "Level/BasicLight.h"
 
-#include "Engine/Level.h"
+#include "Engine/DirectionalLight.h"
+#include "Engine/PointLight.h"
+#include "Engine/World.h"
 
 // Class-name parsers live in Content/LevelClassNames.cpp (shared with the level format / cook).
 
@@ -49,15 +51,29 @@ FPointLight FBasicLight::AsPoint() const
 	return Light;
 }
 
-void FBasicLight::AddTo(ULevel& Level) const
+ALight* FBasicLight::SpawnIn(UWorld& World) const
 {
-	switch (Type)
+	if (Type == EBasicLight::Directional)
 	{
-		case EBasicLight::Directional:
-			Level.GetDirectionalLights().Add(AsDirectional());
-			break;
-		case EBasicLight::Point:
-			Level.GetPointLights().Add(AsPoint());
-			break;
+		ADirectionalLight* Light = World.SpawnActor<ADirectionalLight>(ADirectionalLight::StaticClass(), Transform);
+		if (Light != nullptr)
+		{
+			UDirectionalLightComponent* Component = Light->GetDirectionalLightComponent();
+			Component->SetLightColor(FLinearColor(LightColor.X, LightColor.Y, LightColor.Z));
+			Component->SetIntensity(Intensity);
+			Component->SetCastShadows(bCastShadows);
+			Component->LightSourceAngle = SourceAngle;
+		}
+		return Light;
 	}
+	APointLight* Light = World.SpawnActor<APointLight>(APointLight::StaticClass(), Transform);
+	if (Light != nullptr)
+	{
+		UPointLightComponent* Component = Light->GetPointLightComponent();
+		Component->SetLightColor(FLinearColor(LightColor.X, LightColor.Y, LightColor.Z));
+		Component->SetIntensity(Intensity);
+		Component->SetCastShadows(bCastShadows);
+		Component->SetAttenuationRadius(Range);
+	}
+	return Light;
 }

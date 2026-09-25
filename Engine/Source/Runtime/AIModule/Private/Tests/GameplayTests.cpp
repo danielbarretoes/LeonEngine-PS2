@@ -6,6 +6,7 @@
 #include "Debug/DebugDraw.h"
 #include "Engine/GameInstance.h"
 #include "Engine/Level.h"
+#include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/Controller.h"
@@ -430,15 +431,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayNavBlocksNavBlockerKeepsNavWalkableTes
 bool FGameplayNavBlocksNavBlockerKeepsNavWalkableTest::RunTest(const FString& Parameters)
 {
 	// A NavBlocker-tagged plate blocks its cells and forces a detour; a NavWalkable ramp mesh stays walkable.
-	ULevel& Level = *NewObject<ULevel>();
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	const ULevel& Level = *World.PersistentLevel;
 	FPhysScene Physics;
 
-	FLevelStaticMesh Plate{};
-	Plate.Tag = NavTags::Blocker;
-	Plate.bCollisionEnabled = true;
-	Plate.EditorClass = "Cube";
-	Plate.Transform = FTransform(FQuat::Identity, FVector(0.0f, 0.0f, 12.0f), FVector(1.8f, 1.8f, 0.2f));
-	Level.GetStaticMeshes().Add(MoveTemp(Plate));
+	AStaticMeshActor* Plate = World.SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(),
+		FTransform(FQuat::Identity, FVector(0.0f, 0.0f, 12.0f), FVector(1.8f, 1.8f, 0.2f)));
+	Plate->Tags.Add(FName(NavTags::Blocker));
+	Plate->GetStaticMeshComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 
 	FBodyInstance PlateBody{};
 	PlateBody.Type = EBodyType::Static;
@@ -448,11 +449,9 @@ bool FGameplayNavBlocksNavBlockerKeepsNavWalkableTest::RunTest(const FString& Pa
 	Physics.GetBodies().Add(PlateBody);
 	Physics.GetTriangleMeshes().AddDefaulted();
 
-	FLevelStaticMesh Ramp{};
-	Ramp.Tag = NavTags::Walkable;
-	Ramp.bCollisionEnabled = true;
-	Ramp.EditorClass = "Cube";
-	Level.GetStaticMeshes().Add(MoveTemp(Ramp));
+	AStaticMeshActor* Ramp = World.SpawnActor<AStaticMeshActor>();
+	Ramp->Tags.Add(FName(NavTags::Walkable));
+	Ramp->GetStaticMeshComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 
 	FBodyInstance RampBody{};
 	RampBody.Type = EBodyType::Static;
@@ -568,26 +567,24 @@ bool FGameplayCharacterResetJumpAndPerformMovementTest::RunTest(const FString& P
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayActorSyncTransformToLevelWritesLinkedMeshTest,
-	"System.AIModule.Gameplay.ActorSyncTransformToLevelWritesLinkedMesh",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayActorMeshComponentFollowsActorWithLegacyContentYawTest,
+	"System.AIModule.Gameplay.ActorMeshComponentFollowsActorWithLegacyContentYaw",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-bool FGameplayActorSyncTransformToLevelWritesLinkedMeshTest::RunTest(const FString& Parameters)
+bool FGameplayActorMeshComponentFollowsActorWithLegacyContentYawTest::RunTest(const FString& Parameters)
 {
-	// SyncTransformToLevel copies the Actor location and yaw into its linked Level mesh; the mesh shows converted
-	// legacy content (facing +Y), so its yaw is the actor yaw plus LegacyContentYaw.
-	ULevel& Level = *NewObject<ULevel>();
-	FLevelStaticMesh Mesh{};
-	Level.AddStaticMesh(MoveTemp(Mesh));
-
+	// A mesh component attached to the actor's root follows the actor's location and yaw; it shows converted legacy
+	// content (facing +Y), so its relative yaw is LegacyContentYaw and its world yaw is the actor yaw plus that.
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	ATestActor* Actor = World.SpawnActor<ATestActor>();
-	Actor->SetLevelMeshIndex(0);
+	UStaticMeshComponent* Mesh = NewObject<UStaticMeshComponent>(Actor);
+	Mesh->SetupAttachment(Actor->GetRootComponent());
+	Mesh->RelativeRotation = FRotator(0.0f, LegacyContentYaw, 0.0f);
+	Mesh->RegisterComponent();
 	Actor->SetActorLocationAndRotation(FVector(300.0f, 150.0f, -200.0f), FRotator(0.0f, 90.0f, 0.0f));
-	Actor->SyncTransformToLevel(Level);
 
-	const FTransform& Transform = Level.GetStaticMeshes()[0].Transform;
+	const FTransform Transform = Mesh->GetComponentTransform();
 	TestEqual("Position X", Transform.GetLocation().X, 300.0f, 1.0e-3f);
 	TestEqual("Position Y", Transform.GetLocation().Y, 150.0f, 1.0e-3f);
 	TestEqual("Position Z", Transform.GetLocation().Z, -200.0f, 1.0e-3f);
@@ -599,29 +596,24 @@ bool FGameplayActorSyncTransformToLevelWritesLinkedMeshTest::RunTest(const FStri
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayWorldTickGameplayFrameSyncsCharacterTest,
-	"System.AIModule.Gameplay.WorldTickGameplayFrameSyncsCharacterToLevelMesh",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayWorldTickGameplayFrameMovesCharacterMeshTest,
+	"System.AIModule.Gameplay.WorldTickGameplayFrameMovesCharacterMesh",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-bool FGameplayWorldTickGameplayFrameSyncsCharacterTest::RunTest(const FString& Parameters)
+bool FGameplayWorldTickGameplayFrameMovesCharacterMeshTest::RunTest(const FString& Parameters)
 {
-	// A gameplay frame writes the Character pose into its linked Level mesh.
-	ULevel& Level = *NewObject<ULevel>();
-	FLevelStaticMesh Mesh{};
-	Level.AddStaticMesh(MoveTemp(Mesh));
-
+	// After a gameplay frame the Character's mesh component shows the Character pose.
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
-	Character->SetLevelMeshIndex(0);
 	Character->Reset(FVector(100.0f, 200.0f, 0.0f), FRotator(0.0f, 45.0f, 0.0f));
 
 	FWorldGameplayFrameParams Frame{};
 	Frame.DeltaTime = 1.0f / 60.0f;
-	Frame.Level = &Level;
+	Frame.Level = World.PersistentLevel;
 	World.TickGameplayFrame(Frame);
 
-	const FTransform& Transform = Level.GetStaticMeshes()[0].Transform;
+	const FTransform Transform = Character->GetMesh().GetComponentTransform();
 	TestEqual("Position X", Transform.GetLocation().X, 100.0f, 1.0e-2f);
 	TestEqual("Position Y", Transform.GetLocation().Y, 200.0f, 1.0e-2f);
 	TestEqual("Yaw", Transform.Rotator().Yaw, 45.0f + LegacyContentYaw, 1.0e-3f);

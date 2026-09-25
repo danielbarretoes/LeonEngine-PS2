@@ -37,6 +37,70 @@ namespace EEndPlayReason
 	};
 } // namespace EEndPlayReason
 
+/**
+ * Whether a component may move while the game runs (UE: EComponentMobility). The values are the `.llev` on-disk ones:
+ * UE's Stationary (lights that change colour but not position) does not exist in Leon.
+ */
+enum class EComponentMobility : uint8
+{
+	/** Never moves (static lighting, when it exists, bakes it). */
+	Static = 0,
+	/** May move at runtime. */
+	Movable = 1,
+};
+
+/** What a primitive's collision takes part in (UE: ECollisionEnabled). */
+namespace ECollisionEnabled
+{
+	enum Type : uint8
+	{
+		/** No body in the physics scene. */
+		NoCollision,
+		/** Traces and overlaps only. */
+		QueryOnly,
+		/** Simulation only. */
+		PhysicsOnly,
+		/** Traces, overlaps and simulation. */
+		QueryAndPhysics,
+	};
+} // namespace ECollisionEnabled
+
+/**
+ * Converts a rotator to a quaternion and back through a one-entry cache (UE: FRotationConversionCache), so a rotation
+ * set as a quaternion reads back bit for bit: USceneComponent keeps its relative rotation as an FRotator, and a
+ * transform set through SetRelativeTransform / SetWorldTransform must not pick up the rotator round trip's rounding.
+ * Unlike UE, the quaternion is cached as given (not normalized) and the rotator as set (not normalized), so a rotator
+ * that never went through a quaternion converts exactly as FTransform(FRotator, ...) does.
+ */
+struct FRotationConversionCache
+{
+	/** The quaternion of InRotator: the cached one when InRotator is the cached rotator, else FQuat(InRotator). */
+	[[nodiscard]] FQuat RotatorToQuat(const FRotator& InRotator) const
+	{
+		if (CachedRotator != InRotator)
+		{
+			CachedRotator = InRotator;
+			CachedQuat = FQuat(InRotator);
+		}
+		return CachedQuat;
+	}
+
+	/** The rotator of InQuat, remembering both so RotatorToQuat returns InQuat itself for that rotator. */
+	[[nodiscard]] FRotator QuatToRotator(const FQuat& InQuat) const
+	{
+		if (CachedQuat != InQuat)
+		{
+			CachedQuat = InQuat;
+			CachedRotator = InQuat.Rotator();
+		}
+		return CachedRotator;
+	}
+
+private:
+	mutable FQuat CachedQuat = FQuat::Identity;
+	mutable FRotator CachedRotator = FRotator::ZeroRotator;
+};
+
 /** How a component's relative transform is set when it is attached (UE: EAttachmentRule). */
 enum class EAttachmentRule : uint8
 {

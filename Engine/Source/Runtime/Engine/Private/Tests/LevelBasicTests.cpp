@@ -1,10 +1,16 @@
 #include "CoreMinimal.h"
-#include "Engine/Level.h"
+#include "Engine/DirectionalLight.h"
+#include "Engine/PointLight.h"
+#include "Engine/StaticMeshActor.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerStart.h"
+#include "Kismet/GameplayStatics.h"
 #include "LegacyCoordinateConversion.h"
 #include "Level/BasicLight.h"
 #include "Level/BasicShape.h"
 #include "Level/Light.h"
 #include "Misc/AutomationTest.h"
+#include "Tests/ScopedTestWorld.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -98,21 +104,25 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelBasicLightParseAndAddToLevelTest,
 
 bool FLevelBasicLightParseAndAddToLevelTest::RunTest(const FString& Parameters)
 {
-	// Light names parse to their type, and AddTo appends to the matching level light list.
+	// Light names parse to their type, and SpawnIn spawns the matching light actor.
 	EBasicLight Type{};
 	TestTrue("DirectionalLight parsed", TryParseBasicLightName("DirectionalLight", Type));
 	TestTrue("Directional type", Type == EBasicLight::Directional);
 	TestTrue("PointLight parsed", TryParseBasicLightName("PointLight", Type));
 	TestTrue("Point type", Type == EBasicLight::Point);
 
-	ULevel& Level = *NewObject<ULevel>();
-	Level.ClearLights();
-	TestEqual("No directional lights", Level.GetDirectionalLights().Num(), 0);
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	TArray<AActor*> Lights;
+	UGameplayStatics::GetAllActorsOfClass(World, ADirectionalLight::StaticClass(), Lights);
+	TestEqual("No directional lights", Lights.Num(), 0);
 
-	FBasicLight::Directional().AddTo(Level);
-	FBasicLight::Point().AddTo(Level);
-	TestEqual("One directional light", Level.GetDirectionalLights().Num(), 1);
-	TestEqual("One point light", Level.GetPointLights().Num(), 1);
+	FBasicLight::Directional().SpawnIn(World);
+	FBasicLight::Point().SpawnIn(World);
+	UGameplayStatics::GetAllActorsOfClass(World, ADirectionalLight::StaticClass(), Lights);
+	TestEqual("One directional light", Lights.Num(), 1);
+	UGameplayStatics::GetAllActorsOfClass(World, APointLight::StaticClass(), Lights);
+	TestEqual("One point light", Lights.Num(), 1);
 	return true;
 }
 
@@ -122,32 +132,34 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelStoresMeshesPlayerStartsAndTagsTest,
 
 bool FLevelStoresMeshesPlayerStartsAndTagsTest::RunTest(const FString& Parameters)
 {
-	// The level keeps static meshes and PlayerStarts, finds meshes by tag and empties on Clear.
-	ULevel& Level = *NewObject<ULevel>();
-	FLevelStaticMesh Mesh{};
-	Mesh.Tag = "player";
-	Mesh.Transform.SetLocation(FVector(100.0f, 200.0f, 300.0f));
-	Level.AddStaticMesh(MoveTemp(Mesh));
+	// The level keeps static mesh actors and player starts, finds actors by tag and empties on Clear.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AStaticMeshActor* Mesh = World.SpawnActor<AStaticMeshActor>(FVector(100.0f, 200.0f, 300.0f), FRotator::ZeroRotator);
+	Mesh->Tags.Add(FName("player"));
+	World.SpawnActor<APlayerStart>(FVector(500.0f, 0.0f, -200.0f), FRotator::ZeroRotator);
 
-	FPlayerStart Start{};
-	Start.Transform.SetLocation(FVector(500.0f, 0.0f, -200.0f));
-	Level.AddPlayerStart(Start);
-
-	TestEqual("One static mesh", Level.GetStaticMeshes().Num(), 1);
-	TestEqual("Tag found", Level.FindStaticMeshIndexByTag("player"), static_cast<SIZE_T>(0));
-	TestEqual("Missing tag", Level.FindStaticMeshIndexByTag("missing"), ULevel::Npos);
-	const FPlayerStart* Found = Level.FindPlayerStart();
-	if (!TestNotNull("PlayerStart found", Found))
+	TArray<AActor*> Found;
+	UGameplayStatics::GetAllActorsOfClass(World, AStaticMeshActor::StaticClass(), Found);
+	TestEqual("One static mesh", Found.Num(), 1);
+	UGameplayStatics::GetAllActorsWithTag(World, FName("player"), Found);
+	TestTrue("Tag found", Found.Num() == 1 && Found[0] == Mesh);
+	UGameplayStatics::GetAllActorsWithTag(World, FName("missing"), Found);
+	TestEqual("Missing tag", Found.Num(), 0);
+	UGameplayStatics::GetAllActorsOfClass(World, APlayerStart::StaticClass(), Found);
+	if (!TestEqual("PlayerStart found", Found.Num(), 1))
 	{
 		return false;
 	}
-	TestEqual("PlayerStart X", Found->Transform.GetLocation().X, 500.0f, 1.0e-3f);
+	TestEqual("PlayerStart X", Found[0]->GetActorLocation().X, 500.0f, 1.0e-3f);
 
-	Level.Clear();
-	TestEqual("No static meshes", Level.GetStaticMeshes().Num(), 0);
-	TestEqual("No PlayerStarts", Level.GetPlayerStarts().Num(), 0);
-	TestEqual("No directional lights", Level.GetDirectionalLights().Num(), 0);
-	TestNull("No PlayerStart after Clear", Level.FindPlayerStart());
+	World.Clear();
+	UGameplayStatics::GetAllActorsOfClass(World, AStaticMeshActor::StaticClass(), Found);
+	TestEqual("No static meshes", Found.Num(), 0);
+	UGameplayStatics::GetAllActorsOfClass(World, APlayerStart::StaticClass(), Found);
+	TestEqual("No PlayerStarts", Found.Num(), 0);
+	UGameplayStatics::GetAllActorsOfClass(World, ADirectionalLight::StaticClass(), Found);
+	TestEqual("No directional lights", Found.Num(), 0);
 	return true;
 }
 

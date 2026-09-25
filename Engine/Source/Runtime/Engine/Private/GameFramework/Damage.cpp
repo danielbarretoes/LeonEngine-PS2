@@ -36,3 +36,38 @@ float UGameplayStatics::ApplyRadialDamage(const TArray<ACharacter*>& Actors, flo
 	}
 	return TotalApplied;
 }
+
+void UGameplayStatics::GetAllActorsOfClass(
+	const UWorld& World, TSubclassOf<AActor> ActorClass, TArray<AActor*>& OutActors)
+{
+	OutActors.Reset();
+	if (ActorClass == nullptr)
+	{
+		return;
+	}
+	World.ForEach<AActor>(
+		[&](AActor& Actor)
+		{
+			if (Actor.IsA(ActorClass))
+			{
+				OutActors.Add(&Actor);
+			}
+		});
+}
+
+void UGameplayStatics::GetAllActorsWithTag(const UWorld& World, FName Tag, TArray<AActor*>& OutActors)
+{
+	OutActors.Reset();
+	if (Tag.IsNone())
+	{
+		return;
+	}
+	World.ForEach<AActor>(
+		[&](AActor& Actor)
+		{
+			if (Actor.ActorHasTag(Tag))
+			{
+				OutActors.Add(&Actor);
+			}
+		});
+}

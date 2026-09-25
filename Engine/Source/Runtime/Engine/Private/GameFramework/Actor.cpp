@@ -311,17 +311,3 @@ void AActor::AddReferencedObjects(UObject* InThis, FReferenceCollector& Collecto
 	Collector.AddReferencedObjects(This->OwnedComponents, This);
 	Super::AddReferencedObjects(InThis, Collector);
 }
-
-void AActor::SyncTransformToLevel(ULevel& Level) const
-{
-	TArray<FLevelStaticMesh>& Meshes = Level.GetStaticMeshes();
-	if (LevelMeshIndex >= static_cast<SIZE_T>(Meshes.Num()))
-	{
-		return;
-	}
-	FLevelStaticMesh& Obj = Meshes[static_cast<int32>(LevelMeshIndex)];
-	Obj.Transform.SetLocation(GetActorLocation());
-	FRotator MeshRotation = Obj.Transform.Rotator();
-	MeshRotation.Yaw = GetActorRotation().Yaw + LegacyContentYaw;
-	Obj.Transform.SetRotation(MeshRotation.Quaternion());
-}

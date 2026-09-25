@@ -1,9 +1,11 @@
 #include "CoreMinimal.h"
-#include "Engine/Level.h"
+#include "Engine/StaticMeshActor.h"
+#include "Engine/World.h"
 #include "MeshData.h"
 #include "Misc/AutomationTest.h"
 #include "Physics/PhysScene.h"
 #include "StaticMesh.h"
+#include "Tests/ScopedTestWorld.h"
 #include "TriangleCollision.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -15,7 +17,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTriangleMeshTraceLineTraceAndQuerySupportZUseT
 bool FTriangleMeshTraceLineTraceAndQuerySupportZUseTriangleMeshSurfaceTest::RunTest(const FString& Parameters)
 {
 	// A collidable static mesh syncs as a TriangleMesh body; line traces and capsule support use its surface.
-	ULevel& Level = *NewObject<ULevel>();
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	FMeshData Data;
 	// Flat plane at z=50 cm covering xy [-200, 200] cm
 	const FVector Up(0.0f, 0.0f, 1.0f);
@@ -27,14 +30,13 @@ bool FTriangleMeshTraceLineTraceAndQuerySupportZUseTriangleMeshSurfaceTest::RunT
 	Data.Indices = {0, 1, 2, 0, 2, 3};
 	Data.Submeshes.Add(FMeshSection{0, 6, 0});
 
-	FLevelStaticMesh Component{};
-	Component.Mesh = MakeShared<UStaticMesh>(UStaticMesh::CreateCpu(Data));
-	Component.bCollisionEnabled = true;
-	Level.GetStaticMeshes().Add(MoveTemp(Component));
+	UStaticMeshComponent& Component = *World.SpawnActor<AStaticMeshActor>()->GetStaticMeshComponent();
+	(void)Component.SetStaticMesh(MakeShared<UStaticMesh>(UStaticMesh::CreateCpu(Data)));
+	Component.SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 
 	FPhysScene Scene;
 	Scene.AddBody({0, EBodyType::Static, 1.0f, true});
-	Scene.SyncFromLevel(Level);
+	Scene.SyncFromLevel(*World.PersistentLevel);
 	TestTrue("TriangleMesh body", Scene.GetBodies()[0].CollisionShape == EBodyCollisionShape::TriangleMesh);
 
 	FHitResult Hit{};

@@ -1,44 +1,47 @@
 #include "GameFramework/VolumeHelpers.h"
 
+#include "Engine/TriggerVolume.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/PainCausingVolume.h"
 #include "Kismet/GameplayStatics.h"
+#include "Level/LegacyLevelDataComponent.h"
 
 namespace
 {
 
-	[[nodiscard]] bool PointInPainAabb(const FVector& Point, const FPainCausingVolume& Vol)
-	{
-		// The volume is a basic cube: half its scale times BasicShapeSize (cm).
-		const FVector Half = Vol.Transform.GetScale3D().GetAbs() * (0.5f * BasicShapeSize);
-		const FVector Min = Vol.Transform.GetLocation() - Half;
-		const FVector Max = Vol.Transform.GetLocation() + Half;
-		return Point.X >= Min.X && Point.X <= Max.X && Point.Y >= Min.Y && Point.Y <= Max.Y && Point.Z >= Min.Z &&
-			Point.Z <= Max.Z;
-	}
-
-	[[nodiscard]] float SmallestPositiveInterval(const TArray<FPainCausingVolume>& Volumes)
+	[[nodiscard]] float SmallestPositiveInterval(TArrayView<APainCausingVolume* const> Volumes)
 	{
 		float Best = TNumericLimits<float>::Max();
-		for (const FPainCausingVolume& Vol : Volumes)
+		for (const APainCausingVolume* Vol : Volumes)
 		{
-			if (Vol.DamageInterval > 0.0f && Vol.DamageInterval < Best)
+			if (Vol != nullptr && Vol->bPainCausing && Vol->PainInterval > 0.0f && Vol->PainInterval < Best)
 			{
-				Best = Vol.DamageInterval;
+				Best = Vol->PainInterval;
 			}
 		}
 		return Best;
 	}
 
+	/** The volume's `.llev` trigger data, or the record defaults. */
+	[[nodiscard]] const ULegacyLevelDataComponent& TriggerData(const ATriggerVolume& Volume)
+	{
+		if (const ULegacyLevelDataComponent* Data = Volume.FindComponentByClass<ULegacyLevelDataComponent>())
+		{
+			return *Data;
+		}
+		return *GetDefault<ULegacyLevelDataComponent>();
+	}
+
 } // namespace
 
-bool CharacterOverlapsPainVolume(const ACharacter& Ch, const FPainCausingVolume& Vol)
+bool CharacterOverlapsPainVolume(const ACharacter& Ch, const APainCausingVolume& Vol)
 {
-	return PointInPainAabb(Ch.GetActorLocation(), Vol);
+	return Vol.EncompassesPoint(Ch.GetActorLocation());
 }
 
-void ApplyPainVolumeDamage(ACharacter& Ch, const FPainCausingVolume& Vol)
+void ApplyPainVolumeDamage(ACharacter& Ch, const APainCausingVolume& Vol)
 {
-	const float Amount = Vol.DamagePerSecond * Vol.DamageInterval;
+	const float Amount = Vol.DamagePerSec * Vol.PainInterval;
 	if (Amount <= 0.0f)
 	{
 		return;
@@ -46,8 +49,8 @@ void ApplyPainVolumeDamage(ACharacter& Ch, const FPainCausingVolume& Vol)
 	(void)UGameplayStatics::ApplyPointDamage(&Ch, Amount, FVector(0.0f, 0.0f, -1.0f));
 }
 
-void TickPainCausingVolumes(
-	const TArray<FPainCausingVolume>& Volumes, TArrayView<ACharacter*> Characters, float DeltaTime, float& TickAccum)
+void TickPainCausingVolumes(TArrayView<APainCausingVolume* const> Volumes, TArrayView<ACharacter*> Characters,
+	float DeltaTime, float& TickAccum)
 {
 	if (Volumes.Num() == 0 || Characters.Num() == 0 || DeltaTime <= 0.0f)
 	{
@@ -72,48 +75,53 @@ void TickPainCausingVolumes(
 		{
 			continue;
 		}
-		for (const FPainCausingVolume& Vol : Volumes)
+		for (const APainCausingVolume* Vol : Volumes)
 		{
-			if (!CharacterOverlapsPainVolume(*Ch, Vol))
+			if (Vol == nullptr || !Vol->bPainCausing || !CharacterOverlapsPainVolume(*Ch, *Vol))
 			{
 				continue;
 			}
-			ApplyPainVolumeDamage(*Ch, Vol);
+			ApplyPainVolumeDamage(*Ch, *Vol);
 			break;
 		}
 	}
 }
 
-SIZE_T FindBestTriggerVolume(const TArray<FTriggerVolume>& Volumes, const FVector& Feet, float MaxDist)
+ATriggerVolume* FindBestTriggerVolume(TArrayView<ATriggerVolume* const> Volumes, const FVector& Feet, float MaxDist)
 {
 	if (Volumes.Num() == 0 || MaxDist <= 0.0f)
 	{
-		return ULevel::Npos;
+		return nullptr;
 	}
 
-	SIZE_T Best = ULevel::Npos;
+	ATriggerVolume* Best = nullptr;
 	float BestDist = MaxDist;
-	for (int32 I = 0; I < Volumes.Num(); ++I)
+	for (ATriggerVolume* Vol : Volumes)
 	{
-		const FTriggerVolume& Vol = Volumes[I];
-		const float Radius = Vol.InteractRadius > 0.0f ? Vol.InteractRadius : MaxDist;
+		if (Vol == nullptr)
+		{
+			continue;
+		}
+		const float InteractRadius = TriggerData(*Vol).InteractRadius;
+		const float Radius = InteractRadius > 0.0f ? InteractRadius : MaxDist;
 		const float Limit = Radius < MaxDist ? Radius : MaxDist;
-		const FVector VolumeLocation = Vol.Transform.GetLocation();
+		const FVector VolumeLocation = Vol->GetActorLocation();
 		const FVector Delta = FVector(Feet.X - VolumeLocation.X, Feet.Y - VolumeLocation.Y, 0.0f);
 		const float Dist = Delta.Size();
 		if (Dist < BestDist && Dist <= Limit)
 		{
 			BestDist = Dist;
-			Best = static_cast<SIZE_T>(I);
+			Best = Vol;
 		}
 	}
 	return Best;
 }
 
-FString FormatDefaultInteractPrompt(const FTriggerVolume& Volume)
+FString FormatDefaultInteractPrompt(const ATriggerVolume& Volume)
 {
-	const FString& Payload = Volume.Payload;
-	const FString CostSuffix = Volume.InteractCost > 0 ? FString::Printf(" [%d]", Volume.InteractCost) : FString();
+	const ULegacyLevelDataComponent& Data = TriggerData(Volume);
+	const FString& Payload = Data.Payload;
+	const FString CostSuffix = Data.InteractCost > 0 ? FString::Printf(" [%d]", Data.InteractCost) : FString();
 
 	if (Payload.IsEmpty())
 	{

@@ -1,5 +1,5 @@
 #include "CoreMinimal.h"
-#include "Engine/Level.h"
+#include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "MeshData.h"
 #include "Misc/AutomationTest.h"
@@ -130,7 +130,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FJoltRestsOnTriangleMeshTest, "System.JoltPhysi
 bool FJoltRestsOnTriangleMeshTest::RunTest(const FString& Parameters)
 {
 	// A static level mesh becomes a Jolt triangle mesh and a dropped box rests on it.
-	ULevel& Level = *NewObject<ULevel>();
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
 	FMeshData Data;
 	// Flat plane at z=100 cm covering xy [-300, 300] cm
 	const FVector Up(0.0f, 0.0f, 1.0f);
@@ -142,10 +143,9 @@ bool FJoltRestsOnTriangleMeshTest::RunTest(const FString& Parameters)
 	Data.Indices = {0, 1, 2, 0, 2, 3};
 	Data.Submeshes.Add(FMeshSection{0, 6, 0});
 
-	FLevelStaticMesh Component{};
-	Component.Mesh = MakeShared<UStaticMesh>(UStaticMesh::CreateCpu(Data));
-	Component.bCollisionEnabled = true;
-	Level.GetStaticMeshes().Add(MoveTemp(Component));
+	UStaticMeshComponent& Component = *World.SpawnActor<AStaticMeshActor>()->GetStaticMeshComponent();
+	(void)Component.SetStaticMesh(MakeShared<UStaticMesh>(UStaticMesh::CreateCpu(Data)));
+	Component.SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 
 	FPhysScene Scene(EPhysicsBackend::Jolt);
 	Scene.AddBody({0, EBodyType::Static, 1.0f, true});
@@ -154,7 +154,7 @@ bool FJoltRestsOnTriangleMeshTest::RunTest(const FString& Parameters)
 	Box.Position = FVector(0.0f, 0.0f, 500.0f);
 	Box.HalfExtents = FVector(35.0f, 35.0f, 35.0f);
 
-	Scene.SyncFromLevel(Level);
+	Scene.SyncFromLevel(*World.PersistentLevel);
 	TestTrue("Triangle mesh", Scene.GetBodies()[0].CollisionShape == EBodyCollisionShape::TriangleMesh);
 
 	FPhysSceneStepParams Params;

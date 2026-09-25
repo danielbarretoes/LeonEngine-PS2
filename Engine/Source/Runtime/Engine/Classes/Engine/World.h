@@ -214,7 +214,10 @@ public:
 	 */
 	AActor* SpawnActor(UClass* Class, const FVector* Location = nullptr, const FRotator* Rotation = nullptr,
 		const FActorSpawnParameters& SpawnParameters = FActorSpawnParameters());
-	/** SpawnActor at a transform (its scale goes to the root component). */
+	/**
+	 * SpawnActor at a transform: the root takes it whole (rotation as the quaternion given, scale) before the
+	 * components register.
+	 */
 	AActor* SpawnActor(UClass* Class, const FTransform* Transform,
 		const FActorSpawnParameters& SpawnParameters = FActorSpawnParameters());
 
@@ -273,10 +276,16 @@ public:
 	/** Actor Tick only (UAnimInstance, etc.). Prefer TickGameplayFrame for Character worlds. */
 	void Tick(float InDeltaTime);
 
-	/** Unreal-like frame: Character move → FPhysScene::Step → overlaps → Actor Tick → sync → draw. */
+	/**
+	 * Unreal-like frame: Character move → FPhysScene::Step → overlaps → Actor Tick → the bodies move their components
+	 * (FPhysScene::SyncToLevel, with Params.Level) → draw.
+	 */
 	void TickGameplayFrame(const FWorldGameplayFrameParams& Params);
 
-	/** Register StaticMeshComponents that have collision as FPhysScene bodies (clears first). */
+	/**
+	 * Registers a physics scene body for every primitive component of the level whose collision is enabled
+	 * (ULevel::GetCollisionPrimitives; clears first). A body's LevelMeshIndex is the component's index in that list.
+	 */
 	void RegisterBodiesFromLevel(const ULevel& InLevel);
 
 	/**
@@ -354,6 +363,8 @@ private:
 	friend class AActor;
 
 	void InitWorld();
+	AActor* SpawnActorInternal(UClass* Class, const FVector* Location, const FRotator* Rotation,
+		const FTransform* Transform, const FActorSpawnParameters& SpawnParameters);
 	void FlushPendingSpawns();
 	/** Removes the null slots destroyed actors left in the level while the world ticked. */
 	void CompactActors();

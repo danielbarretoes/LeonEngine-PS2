@@ -1,10 +1,21 @@
 #include "Level/LeonLevelFormat.h"
 
+#include "Engine/BlockingVolume.h"
+#include "Engine/DirectionalLight.h"
 #include "Engine/GameEngine.h"
+#include "Engine/PointLight.h"
+#include "Engine/StaticMeshActor.h"
+#include "Engine/TargetPoint.h"
+#include "Engine/TriggerVolume.h"
+#include "Engine/World.h"
 #include "EngineLogs.h"
+#include "GameFramework/PainCausingVolume.h"
+#include "GameFramework/PlayerStart.h"
+#include "GameFramework/WorldSettings.h"
 #include "LegacyCoordinateConversion.h"
 #include "Level/BasicLight.h"
 #include "Level/BasicShape.h"
+#include "Level/LegacyLevelDataComponent.h"
 #include "Level/LevelLoader.h"
 #include "Level/Light.h"
 #include "Misc/FileHelper.h"
@@ -221,81 +232,15 @@ FString ResolveLevelAssetPath(const FString& LevelPath, const FString& RelativeO
 namespace
 {
 
-	[[nodiscard]] ELevelActorClass ActorClassFromEditorClass(const FString& EditorClass)
-	{
-		if (EditorClass.Equals("Cube", ESearchCase::CaseSensitive))
-		{
-			return ELevelActorClass::Cube;
-		}
-		if (EditorClass.Equals("Sphere", ESearchCase::CaseSensitive))
-		{
-			return ELevelActorClass::Sphere;
-		}
-		if (EditorClass.Equals("Plane", ESearchCase::CaseSensitive))
-		{
-			return ELevelActorClass::Plane;
-		}
-		if (EditorClass.Equals("BlockingVolume", ESearchCase::CaseSensitive))
-		{
-			return ELevelActorClass::BlockingVolume;
-		}
-		if (EditorClass.Equals("TriggerVolume", ESearchCase::CaseSensitive))
-		{
-			return ELevelActorClass::TriggerVolume;
-		}
-		if (EditorClass.Equals("PainCausingVolume", ESearchCase::CaseSensitive))
-		{
-			return ELevelActorClass::PainCausingVolume;
-		}
-		if (EditorClass.Equals("AISpawnPoint", ESearchCase::CaseSensitive))
-		{
-			return ELevelActorClass::AISpawnPoint;
-		}
-		if (EditorClass.Equals("PlayerStart", ESearchCase::CaseSensitive))
-		{
-			return ELevelActorClass::PlayerStart;
-		}
-		return ELevelActorClass::StaticMesh;
-	}
-
-	[[nodiscard]] const TCHAR* EditorClassFromActorClass(ELevelActorClass InActorClass)
-	{
-		switch (InActorClass)
-		{
-			case ELevelActorClass::Cube:
-				return "Cube";
-			case ELevelActorClass::Sphere:
-				return "Sphere";
-			case ELevelActorClass::Plane:
-				return "Plane";
-			case ELevelActorClass::BlockingVolume:
-				return "BlockingVolume";
-			case ELevelActorClass::TriggerVolume:
-				return "TriggerVolume";
-			case ELevelActorClass::PainCausingVolume:
-				return "PainCausingVolume";
-			case ELevelActorClass::AISpawnPoint:
-				return "AISpawnPoint";
-			case ELevelActorClass::PlayerStart:
-				return "PlayerStart";
-			case ELevelActorClass::StaticMesh:
-				break;
-		}
-		return "StaticMesh";
-	}
-
 	/**
-	 * Basic shape backing a stored actor class; false for FPlayerStart / FAISpawnPoint / UStaticMesh.
-	 * FTriggerVolume / FPainCausingVolume map to Cube (editor debug mesh); runtime apply uses PODs only.
+	 * Basic shape backing a stored actor class; false for PlayerStart / AISpawnPoint / StaticMesh / the volumes (a
+	 * BlockingVolume's box is its brush).
 	 */
 	[[nodiscard]] bool BasicShapeForActorClass(ELevelActorClass InActorClass, EBasicShape& OutShape)
 	{
 		switch (InActorClass)
 		{
 			case ELevelActorClass::Cube:
-			case ELevelActorClass::BlockingVolume:
-			case ELevelActorClass::TriggerVolume:
-			case ELevelActorClass::PainCausingVolume:
 				OutShape = EBasicShape::Cube;
 				return true;
 			case ELevelActorClass::Sphere:
@@ -307,6 +252,13 @@ namespace
 			default:
 				return false;
 		}
+	}
+
+	/** Records that become an AStaticMeshActor. */
+	[[nodiscard]] bool IsMeshRecord(ELevelActorClass ActorClass)
+	{
+		EBasicShape Shape{};
+		return ActorClass == ELevelActorClass::StaticMesh || BasicShapeForActorClass(ActorClass, Shape);
 	}
 
 	/** Writes a world transform into a record's legacy position, XYZ Euler degrees and scale. */
@@ -340,59 +292,95 @@ namespace
 		Record.RotationDegrees = FVector(Pitch, Yaw, 0.0f);
 	}
 
-	void ApplyDocumentLights(const FLevelDocument& Doc, ULevel& Staged)
+	/** The actor's first tag as the record's tag (the reader stores a non-empty record tag as the only tag). */
+	[[nodiscard]] FString RecordTag(const AActor& Actor)
 	{
-		for (const FLevelLightRecord& Record : Doc.Lights)
-		{
-			FBasicLight Light;
-			Light.Type =
-				Record.LightClass == ELevelLightClass::PointLight ? EBasicLight::Point : EBasicLight::Directional;
-			// Legacy lights keep pitch in X and yaw in Y; the roll in Z was never used.
-			Light.Transform = FTransform(
-				FLegacyCoordinateConversion::ConvertLightRotation(Record.RotationDegrees.X, Record.RotationDegrees.Y),
-				FLegacyCoordinateConversion::ConvertPosition(Record.Position));
-			Light.LightColor = Record.LightColor;
-			Light.Intensity = Record.Intensity;
-			Light.bCastShadows = Record.bCastShadows;
-			Light.SourceAngle = Record.SourceAngle;
-			Light.Range = FLegacyCoordinateConversion::ConvertLength(Record.Range);
+		return Actor.Tags.Num() > 0 ? Actor.Tags[0].ToString() : FString();
+	}
 
-			if (Light.Type != EBasicLight::Point)
-			{
-				Light.AddTo(Staged);
-				continue;
-			}
+	/** The record tag as the actor's Tags (plan decision D15: meaning lives in Tags). */
+	void ApplyRecordTag(AActor& Actor, const FString& Tag)
+	{
+		if (!Tag.IsEmpty())
+		{
+			Actor.Tags.Add(FName(*Tag));
+		}
+	}
 
-			const int32 LightIndex = Staged.GetPointLights().Num();
-			Light.AddTo(Staged);
-			if (!Record.bHasOrbit || !Staged.GetPointLights().IsValidIndex(LightIndex))
-			{
-				continue;
-			}
-			FPointLight& Live = Staged.GetPointLights()[LightIndex];
-			Live.bHasOrbit = true;
-			Live.OrbitRadius = FLegacyCoordinateConversion::ConvertLength(Record.OrbitRadius);
-			Live.OrbitHeight = FLegacyCoordinateConversion::ConvertLength(Record.OrbitHeight);
-			Live.OrbitHeightAmp = FLegacyCoordinateConversion::ConvertLength(Record.OrbitHeightAmp);
-			Live.OrbitSpeed = Record.OrbitSpeed;
+	/** The actor's `.llev` data, or the record defaults for an actor the reader did not spawn. */
+	[[nodiscard]] const ULegacyLevelDataComponent& LegacyData(const AActor& Actor)
+	{
+		if (const ULegacyLevelDataComponent* Data = Actor.FindComponentByClass<ULegacyLevelDataComponent>())
+		{
+			return *Data;
+		}
+		return *GetDefault<ULegacyLevelDataComponent>();
+	}
+
+	/** Gives a spawned actor its `.llev` data component. */
+	ULegacyLevelDataComponent& AddLegacyData(AActor& Actor, ELevelActorClass ActorClass)
+	{
+		ULegacyLevelDataComponent* Data = NewObject<ULegacyLevelDataComponent>(&Actor, TEXT("LegacyLevelData"));
+		Data->RegisterComponent();
+		Data->ActorClass = ActorClass;
+		return *Data;
+	}
+
+	/** The mesh record an AStaticMeshActor or an ABlockingVolume writes; false when it cannot be written. */
+	[[nodiscard]] bool BuildMeshRecord(const AActor& Actor, FLevelActorRecord& Record)
+	{
+		const UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(Actor.GetRootComponent());
+		if (Primitive == nullptr)
+		{
+			return false;
+		}
+		const ULegacyLevelDataComponent& Data = LegacyData(Actor);
+		const bool bBlockingVolume = Actor.IsA<ABlockingVolume>();
+		Record.ActorClass = bBlockingVolume ? ELevelActorClass::BlockingVolume : Data.ActorClass;
+		if (!bBlockingVolume && !IsMeshRecord(Record.ActorClass))
+		{
+			Record.ActorClass = ELevelActorClass::StaticMesh;
+		}
+		// Imported meshes are only reloadable through their path.
+		if (Record.ActorClass == ELevelActorClass::StaticMesh && Data.MeshPath.IsEmpty())
+		{
+			UE_LOG(LogLevel, Warning, "LeonLevelFormat: skipping StaticMesh actor without mesh path");
+			return false;
 		}
 
-		if (Staged.GetDirectionalLights().Num() == 0)
+		Record.Mobility = Primitive->Mobility;
+		Record.bCollisionEnabled = Primitive->IsCollisionEnabled();
+		Record.bSimulatePhysics = Primitive->IsSimulatingPhysics();
+		Record.bEnableGravity = Primitive->IsGravityEnabled();
+		Record.bHidden = Actor.IsHidden();
+
+		SetLegacyTransform(Record, Primitive->GetComponentTransform());
+
+		Record.Tag = RecordTag(Actor);
+		Record.MaterialPath = Data.MaterialPath;
+		if (Record.ActorClass == ELevelActorClass::StaticMesh)
 		{
-			FBasicLight::Directional().AddTo(Staged);
+			Record.MeshPath = Data.MeshPath;
 		}
-		if (Staged.GetDirectionalLights().Num() > MaxDirectionalLights)
-		{
-			UE_LOG(LogLevel, Warning, "LeonLevelFormat: truncating directional lights from %d to %d",
-				Staged.GetDirectionalLights().Num(), MaxDirectionalLights);
-			Staged.GetDirectionalLights().SetNum(MaxDirectionalLights);
-		}
-		if (Staged.GetPointLights().Num() > MaxPointLights)
-		{
-			UE_LOG(LogLevel, Warning, "LeonLevelFormat: truncating point lights from %d to %d",
-				Staged.GetPointLights().Num(), MaxPointLights);
-			Staged.GetPointLights().SetNum(MaxPointLights);
-		}
+
+		Record.SphereSegments = Data.SphereSegments;
+		Record.SphereRings = Data.SphereRings;
+
+		Record.bHasSpinYaw = Data.SpinYaw != 0.0f;
+		Record.SpinYaw = Record.bHasSpinYaw ? FLegacyCoordinateConversion::ToLegacyYawRate(Data.SpinYaw) : 0.0f;
+
+		Record.bHasBob = Data.bHasBob;
+		Record.BobBaseY = FLegacyCoordinateConversion::ToLegacyLength(Data.BobBaseZ);
+		Record.BobAmplitude = FLegacyCoordinateConversion::ToLegacyLength(Data.BobAmplitude);
+		Record.BobSpeed = Data.BobSpeed;
+		return true;
+	}
+
+	/** The level-content classes a `.llev` spawns; a reload replaces them (gameplay actors stay). */
+	[[nodiscard]] bool IsLevelContentActor(const AActor& Actor)
+	{
+		return Actor.IsA<AStaticMeshActor>() || Actor.IsA<APlayerStart>() || Actor.IsA<AVolume>() ||
+			Actor.IsA<ALight>() || Actor.IsA<ATargetPoint>() || Actor.IsA<AWorldSettings>();
 	}
 
 } // namespace
@@ -400,8 +388,12 @@ namespace
 FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& InCamera)
 {
 	FLevelDocument Doc;
-	Doc.Name = Level.GetLevelName();
-	Doc.GameMode = Level.GetGameMode();
+	if (const AWorldSettings* WorldSettings = Level.GetWorldSettings())
+	{
+		const ULegacyLevelDataComponent& Data = LegacyData(*WorldSettings);
+		Doc.Name = Data.LevelName;
+		Doc.GameMode = Data.GameModeName;
+	}
 
 	Doc.Camera.Mode = InCamera.GetMode();
 	Doc.Camera.Target = FLegacyCoordinateConversion::ToLegacyPosition(InCamera.GetTarget());
@@ -419,116 +411,131 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 			InCamera.GetViewRotation(), Doc.Camera.Yaw, Doc.Camera.Pitch);
 	}
 
-	for (const FPlayerStart& Start : Level.GetPlayerStarts())
+	// The records go out grouped by class in this order, as the format always wrote them; each group keeps the actors'
+	// spawn order.
+	TArray<const AActor*> LiveActors;
+	for (const AActor* Actor : Level.Actors)
 	{
-		FLevelActorRecord Record;
-		Record.ActorClass = ELevelActorClass::PlayerStart;
-		SetLegacyActorTransform(Record, Start.Transform);
-		Record.bEnableGravity = false;
-		Doc.Actors.Add(MoveTemp(Record));
-	}
-
-	for (const FAISpawnPoint& Spawn : Level.AISpawnPoints())
-	{
-		FLevelActorRecord Record;
-		Record.ActorClass = ELevelActorClass::AISpawnPoint;
-		SetLegacyActorTransform(Record, Spawn.Transform);
-		Record.Tag = Spawn.Tag;
-		Record.bEnableGravity = false;
-		Doc.Actors.Add(MoveTemp(Record));
-	}
-
-	for (const FTriggerVolume& Volume : Level.GetTriggerVolumes())
-	{
-		FLevelActorRecord Record;
-		Record.ActorClass = ELevelActorClass::TriggerVolume;
-		SetLegacyTransform(Record, Volume.Transform);
-		Record.Tag = Volume.Tag;
-		Record.InteractCost = Volume.InteractCost;
-		Record.InteractRadius = FLegacyCoordinateConversion::ToLegacyLength(Volume.InteractRadius);
-		Record.Payload = Volume.Payload;
-		Record.bConsumeOnUse = Volume.bConsumeOnUse;
-		Record.bEnableGravity = false;
-		Doc.Actors.Add(MoveTemp(Record));
-	}
-
-	for (const FPainCausingVolume& Volume : Level.GetPainCausingVolumes())
-	{
-		FLevelActorRecord Record;
-		Record.ActorClass = ELevelActorClass::PainCausingVolume;
-		SetLegacyTransform(Record, Volume.Transform);
-		Record.Tag = Volume.Tag;
-		Record.DamagePerSecond = Volume.DamagePerSecond;
-		Record.DamageInterval = Volume.DamageInterval;
-		Record.bEnableGravity = false;
-		Doc.Actors.Add(MoveTemp(Record));
-	}
-
-	for (const FLevelStaticMesh& LocalMesh : Level.GetStaticMeshes())
-	{
-		FLevelActorRecord Record;
-		Record.ActorClass = ActorClassFromEditorClass(LocalMesh.EditorClass);
-		// Imported meshes are only reloadable through their path.
-		if (Record.ActorClass == ELevelActorClass::StaticMesh && LocalMesh.MeshPath.IsEmpty())
+		if (Actor != nullptr && !Actor->IsPendingKillPending())
 		{
-			UE_LOG(LogLevel, Warning, "LeonLevelFormat: skipping StaticMesh actor without mesh path");
+			LiveActors.Add(Actor);
+		}
+	}
+
+	for (const AActor* Actor : LiveActors)
+	{
+		if (!Actor->IsA<APlayerStart>())
+		{
 			continue;
 		}
-
-		Record.Mobility = LocalMesh.Mobility;
-		Record.bCollisionEnabled = LocalMesh.bCollisionEnabled;
-		Record.bSimulatePhysics = LocalMesh.bSimulatePhysics;
-		Record.bEnableGravity = LocalMesh.bEnableGravity;
-		Record.bHidden = LocalMesh.bHidden;
-
-		SetLegacyTransform(Record, LocalMesh.Transform);
-
-		Record.Tag = LocalMesh.Tag;
-		Record.MaterialPath = LocalMesh.MaterialPath;
-		if (Record.ActorClass == ELevelActorClass::StaticMesh)
-		{
-			Record.MeshPath = LocalMesh.MeshPath;
-		}
-
-		Record.SphereSegments = LocalMesh.SphereSegments;
-		Record.SphereRings = LocalMesh.SphereRings;
-
-		Record.bHasSpinYaw = LocalMesh.SpinYaw != 0.0f;
-		Record.SpinYaw = Record.bHasSpinYaw ? FLegacyCoordinateConversion::ToLegacyYawRate(LocalMesh.SpinYaw) : 0.0f;
-
-		Record.bHasBob = LocalMesh.bHasBob;
-		Record.BobBaseY = FLegacyCoordinateConversion::ToLegacyLength(LocalMesh.BobBaseZ);
-		Record.BobAmplitude = FLegacyCoordinateConversion::ToLegacyLength(LocalMesh.BobAmplitude);
-		Record.BobSpeed = LocalMesh.BobSpeed;
-
+		FLevelActorRecord Record;
+		Record.ActorClass = ELevelActorClass::PlayerStart;
+		SetLegacyActorTransform(Record, Actor->GetActorTransform());
+		Record.bEnableGravity = false;
 		Doc.Actors.Add(MoveTemp(Record));
 	}
 
-	for (const FDirectionalLight& Light : Level.GetDirectionalLights())
+	for (const AActor* Actor : LiveActors)
 	{
+		if (!Actor->IsA<ATargetPoint>())
+		{
+			continue;
+		}
+		FLevelActorRecord Record;
+		Record.ActorClass = ELevelActorClass::AISpawnPoint;
+		SetLegacyActorTransform(Record, Actor->GetActorTransform());
+		Record.Tag = RecordTag(*Actor);
+		Record.bEnableGravity = false;
+		Doc.Actors.Add(MoveTemp(Record));
+	}
+
+	for (const AActor* Actor : LiveActors)
+	{
+		if (!Actor->IsA<ATriggerVolume>())
+		{
+			continue;
+		}
+		const ULegacyLevelDataComponent& Data = LegacyData(*Actor);
+		FLevelActorRecord Record;
+		Record.ActorClass = ELevelActorClass::TriggerVolume;
+		SetLegacyTransform(Record, Actor->GetActorTransform());
+		Record.Tag = RecordTag(*Actor);
+		Record.InteractCost = Data.InteractCost;
+		Record.InteractRadius = FLegacyCoordinateConversion::ToLegacyLength(Data.InteractRadius);
+		Record.Payload = Data.Payload;
+		Record.bConsumeOnUse = Data.bConsumeOnUse;
+		Record.bEnableGravity = false;
+		Doc.Actors.Add(MoveTemp(Record));
+	}
+
+	for (const AActor* Actor : LiveActors)
+	{
+		const APainCausingVolume* Volume = Cast<APainCausingVolume>(Actor);
+		if (Volume == nullptr)
+		{
+			continue;
+		}
+		FLevelActorRecord Record;
+		Record.ActorClass = ELevelActorClass::PainCausingVolume;
+		SetLegacyTransform(Record, Volume->GetActorTransform());
+		Record.Tag = RecordTag(*Volume);
+		Record.DamagePerSecond = Volume->DamagePerSec;
+		Record.DamageInterval = Volume->PainInterval;
+		Record.bEnableGravity = false;
+		Doc.Actors.Add(MoveTemp(Record));
+	}
+
+	for (const AActor* Actor : LiveActors)
+	{
+		if (!Actor->IsA<AStaticMeshActor>() && !Actor->IsA<ABlockingVolume>())
+		{
+			continue;
+		}
+		FLevelActorRecord Record;
+		if (BuildMeshRecord(*Actor, Record))
+		{
+			Doc.Actors.Add(MoveTemp(Record));
+		}
+	}
+
+	for (const AActor* Actor : LiveActors)
+	{
+		const ADirectionalLight* Light = Cast<ADirectionalLight>(Actor);
+		if (Light == nullptr)
+		{
+			continue;
+		}
+		const UDirectionalLightComponent& Component = *Light->GetDirectionalLightComponent();
 		FLevelLightRecord Record;
 		Record.LightClass = ELevelLightClass::DirectionalLight;
-		Record.bCastShadows = Light.bCastShadows;
-		SetLegacyLightTransform(Record, Light.Transform);
-		Record.LightColor = Light.LightColor;
-		Record.Intensity = Light.Intensity;
-		Record.SourceAngle = Light.SourceAngle;
+		Record.bCastShadows = Component.CastShadows;
+		SetLegacyLightTransform(Record, Component.GetComponentTransform());
+		Record.LightColor = FVector(Component.LightColor.R, Component.LightColor.G, Component.LightColor.B);
+		Record.Intensity = Component.Intensity;
+		Record.SourceAngle = Component.LightSourceAngle;
 		Doc.Lights.Add(Record);
 	}
-	for (const FPointLight& Light : Level.GetPointLights())
+	for (const AActor* Actor : LiveActors)
 	{
+		const APointLight* Light = Cast<APointLight>(Actor);
+		if (Light == nullptr)
+		{
+			continue;
+		}
+		const UPointLightComponent& Component = *Light->GetPointLightComponent();
+		const ULegacyLevelDataComponent& Data = LegacyData(*Light);
 		FLevelLightRecord Record;
 		Record.LightClass = ELevelLightClass::PointLight;
-		Record.bCastShadows = Light.bCastShadows;
-		SetLegacyLightTransform(Record, Light.Transform);
-		Record.LightColor = Light.LightColor;
-		Record.Intensity = Light.Intensity;
-		Record.Range = FLegacyCoordinateConversion::ToLegacyLength(Light.Range);
-		Record.bHasOrbit = Light.bHasOrbit;
-		Record.OrbitRadius = FLegacyCoordinateConversion::ToLegacyLength(Light.OrbitRadius);
-		Record.OrbitHeight = FLegacyCoordinateConversion::ToLegacyLength(Light.OrbitHeight);
-		Record.OrbitHeightAmp = FLegacyCoordinateConversion::ToLegacyLength(Light.OrbitHeightAmp);
-		Record.OrbitSpeed = Light.OrbitSpeed;
+		Record.bCastShadows = Component.CastShadows;
+		SetLegacyLightTransform(Record, Component.GetComponentTransform());
+		Record.LightColor = FVector(Component.LightColor.R, Component.LightColor.G, Component.LightColor.B);
+		Record.Intensity = Component.Intensity;
+		Record.Range = FLegacyCoordinateConversion::ToLegacyLength(Component.AttenuationRadius);
+		Record.bHasOrbit = Data.bHasOrbit;
+		Record.OrbitRadius = FLegacyCoordinateConversion::ToLegacyLength(Data.OrbitRadius);
+		Record.OrbitHeight = FLegacyCoordinateConversion::ToLegacyLength(Data.OrbitHeight);
+		Record.OrbitHeightAmp = FLegacyCoordinateConversion::ToLegacyLength(Data.OrbitHeightAmp);
+		Record.OrbitSpeed = Data.OrbitSpeed;
 		Doc.Lights.Add(Record);
 	}
 
@@ -997,150 +1004,288 @@ bool LoadLeonLevelFile(const FString& Path, FLevelDocument& Out)
 	return true;
 }
 
-bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FString& SourcePath)
+namespace
 {
-	// A transient level stages the load: a failure leaves the engine's level untouched, success moves the content over
-	// and the staging level becomes garbage.
-	ULevel& Staged = *NewObject<ULevel>(GetTransientPackage(), NAME_None, RF_Transient);
-	Staged.Clear();
-	FResourceCache& Resources = Engine.GetResources();
 
-	Staged.SetLevelName(Doc.Name);
-	Staged.SetGameMode(Doc.GameMode);
-
-	int32 FailedMeshes = 0;
-	for (const FLevelActorRecord& Record : Doc.Actors)
+	/** A record with its world transform and the resources its actor needs, resolved before anything spawns. */
+	struct FResolvedActorRecord
 	{
-		FTransform Transform =
+		const FLevelActorRecord* Record = nullptr;
+		FTransform Transform;
+		TSharedPtr<UStaticMesh> Mesh;
+		/** The `.lmat` material, or the default material for a mesh without materials of its own. */
+		FMaterial Material;
+		bool bHasMaterial = false;
+	};
+
+	/**
+	 * Resolves a record: its transform, and for a mesh or a blocking volume its mesh (a basic shape or the `.lmesh`)
+	 * and material, then the fit height. False when the mesh cannot be loaded.
+	 */
+	[[nodiscard]] bool ResolveActorRecord(const FLevelActorRecord& Record, FResourceCache& Resources,
+		const FString& SourcePath, FResolvedActorRecord& Out)
+	{
+		Out.Record = &Record;
+		Out.Transform =
 			FLegacyCoordinateConversion::ConvertTransform(Record.Position, Record.RotationDegrees, Record.Scale);
 		if (IsActorLikeRecord(Record.ActorClass))
 		{
-			Transform.SetRotation(FLegacyCoordinateConversion::ConvertActorEulerXYZ(Record.RotationDegrees));
+			Out.Transform.SetRotation(FLegacyCoordinateConversion::ConvertActorEulerXYZ(Record.RotationDegrees));
+		}
+		const bool bBlockingVolume = Record.ActorClass == ELevelActorClass::BlockingVolume;
+		if (!IsMeshRecord(Record.ActorClass) && !bBlockingVolume)
+		{
+			return true;
 		}
 
-		if (Record.ActorClass == ELevelActorClass::PlayerStart)
-		{
-			FPlayerStart Start;
-			Start.Transform = Transform;
-			Staged.AddPlayerStart(Start);
-			continue;
-		}
-		if (Record.ActorClass == ELevelActorClass::AISpawnPoint)
-		{
-			FAISpawnPoint Spawn;
-			Spawn.Transform = Transform;
-			Spawn.Tag = Record.Tag;
-			Staged.AddAISpawnPoint(MoveTemp(Spawn));
-			continue;
-		}
-		if (Record.ActorClass == ELevelActorClass::TriggerVolume)
-		{
-			FTriggerVolume Volume;
-			Volume.Transform = Transform;
-			Volume.InteractRadius = FLegacyCoordinateConversion::ConvertLength(Record.InteractRadius);
-			Volume.InteractCost = Record.InteractCost;
-			Volume.Payload = Record.Payload;
-			Volume.Tag = Record.Tag;
-			Volume.bConsumeOnUse = Record.bConsumeOnUse;
-			Staged.AddTriggerVolume(MoveTemp(Volume));
-			continue;
-		}
-		if (Record.ActorClass == ELevelActorClass::PainCausingVolume)
-		{
-			FPainCausingVolume Volume;
-			Volume.Transform = Transform;
-			Volume.DamagePerSecond = Record.DamagePerSecond;
-			Volume.DamageInterval = Record.DamageInterval;
-			Volume.Tag = Record.Tag;
-			Staged.AddPainCausingVolume(MoveTemp(Volume));
-			continue;
-		}
-
-		FLevelStaticMesh Actor;
 		EBasicShape ShapeType{};
-		const bool bIsBasicShape = BasicShapeForActorClass(Record.ActorClass, ShapeType);
+		// A blocking volume's brush is a 100 cm box, the basic cube's size: its fit height measures that cube.
+		const bool bIsBasicShape = bBlockingVolume || BasicShapeForActorClass(Record.ActorClass, ShapeType);
+		if (bBlockingVolume)
+		{
+			ShapeType = EBasicShape::Cube;
+		}
 		if (bIsBasicShape)
 		{
-			FBasicShape Shape;
-			Shape.Type = ShapeType;
-			Shape.Transform = Transform;
-			Shape.SphereSegments = Record.SphereSegments;
-			Shape.SphereRings = Record.SphereRings;
-			Actor = Shape.MakeStaticMesh(Resources);
-			Actor.SphereSegments = Record.SphereSegments;
-			Actor.SphereRings = Record.SphereRings;
+			Out.Mesh = MeshForBasicShape(Resources, ShapeType, Record.SphereSegments, Record.SphereRings);
+			Out.Material = Resources.DefaultMaterial();
+			Out.bHasMaterial = true;
 		}
 		else
 		{
-			Actor.Mesh = Resources.LoadStaticMesh(ResolveLevelAssetPath(SourcePath, Record.MeshPath));
-			Actor.Transform = Transform;
-			Actor.MeshPath = Record.MeshPath;
+			Out.Mesh = Resources.LoadStaticMesh(ResolveLevelAssetPath(SourcePath, Record.MeshPath));
 		}
-		Actor.EditorClass = EditorClassFromActorClass(Record.ActorClass);
-
-		if (Actor.Mesh == nullptr)
+		if (Out.Mesh == nullptr)
 		{
 			UE_LOG(LogLevel, Error, "LeonLevelFormat: failed mesh for actor in %s", *SourcePath);
-			++FailedMeshes;
-			continue;
+			return false;
 		}
 
 		if (Record.bHasFitHeight && Record.FitHeight > 0.0f)
 		{
-			ApplyFitHeight(Actor, FLegacyCoordinateConversion::ConvertLength(Record.FitHeight));
+			ApplyFitHeight(Out.Transform, *Out.Mesh, FLegacyCoordinateConversion::ConvertLength(Record.FitHeight));
 		}
-
-		Actor.Tag = Record.Tag;
-		Actor.bSimulatePhysics = Record.bSimulatePhysics;
-		Actor.bCollisionEnabled = Record.bCollisionEnabled || Record.bSimulatePhysics;
-		Actor.bEnableGravity = Record.bEnableGravity;
-		Actor.bHidden = Record.bHidden;
-		Actor.Mobility = Record.Mobility;
-		Actor.SpinYaw = Record.bHasSpinYaw ? FLegacyCoordinateConversion::ConvertYawRate(Record.SpinYaw) : 0.0f;
-		Actor.MaterialPath = Record.MaterialPath;
 
 		if (!Record.MaterialPath.IsEmpty())
 		{
-			FMaterial Base = Resources.LoadMaterial(ResolveLevelAssetPath(SourcePath, Record.MaterialPath));
-			if (Actor.Mesh->HasMaterials())
+			Out.Material = Resources.LoadMaterial(ResolveLevelAssetPath(SourcePath, Record.MaterialPath));
+			Out.bHasMaterial = true;
+		}
+		else if (!Out.Mesh->HasMaterials())
+		{
+			Out.Material = Resources.DefaultMaterial();
+			Out.bHasMaterial = true;
+		}
+		return true;
+	}
+
+	/**
+	 * A mesh record's material on its component: every slot of a mesh with materials when the record names one, else
+	 * every section's slot of a mesh without materials; a mesh with materials and no record material keeps its own.
+	 */
+	void ApplyRecordMaterial(UStaticMeshComponent& Component, const FResolvedActorRecord& Resolved)
+	{
+		if (!Resolved.bHasMaterial)
+		{
+			return;
+		}
+		const UStaticMesh& Mesh = *Resolved.Mesh;
+		int32 NumSlots = Mesh.GetMaterials().Num();
+		if (!Mesh.HasMaterials())
+		{
+			NumSlots = 1;
+			for (const FMeshSection& Section : Mesh.GetSubmeshes())
 			{
-				Actor.Materials.Init(Base, Actor.Mesh->GetMaterials().Num());
-			}
-			else
-			{
-				Actor.bMaterialOverride = true;
-				Actor.Material = MoveTemp(Base);
+				NumSlots = FMath::Max(NumSlots, Section.MaterialIndex + 1);
 			}
 		}
-		else if (!Actor.Mesh->HasMaterials())
+		for (int32 Slot = 0; Slot < NumSlots; ++Slot)
 		{
-			Actor.bMaterialOverride = true;
-			Actor.Material = Resources.DefaultMaterial();
-		}
-
-		// BlockingVolume: invisible collision box, never a shadow caster.
-		if (Record.ActorClass == ELevelActorClass::BlockingVolume)
-		{
-			Actor.Material.bCastsShadows = false;
-			for (FMaterial& LocalMaterial : Actor.Materials)
-			{
-				LocalMaterial.bCastsShadows = false;
-			}
-		}
-
-		const int32 ActorIndex = Staged.GetStaticMeshes().Num();
-		Staged.AddStaticMesh(MoveTemp(Actor));
-
-		if (Record.bHasBob)
-		{
-			FLevelStaticMesh& Live = Staged.GetStaticMeshes()[ActorIndex];
-			Live.bHasBob = true;
-			Live.BobBaseZ = FLegacyCoordinateConversion::ConvertLength(Record.BobBaseY);
-			Live.BobAmplitude = FLegacyCoordinateConversion::ConvertLength(Record.BobAmplitude);
-			Live.BobSpeed = Record.BobSpeed;
+			Component.SetMaterial(Slot, Resolved.Material);
 		}
 	}
 
+	/** The collision flags of a mesh or blocking volume record (simulating implies collision). */
+	void ApplyRecordCollision(UPrimitiveComponent& Component, const FLevelActorRecord& Record)
+	{
+		Component.SetMobility(Record.Mobility);
+		Component.SetSimulatePhysics(Record.bSimulatePhysics);
+		Component.SetEnableGravity(Record.bEnableGravity);
+		Component.SetCollisionEnabled(Record.bCollisionEnabled || Record.bSimulatePhysics
+				? ECollisionEnabled::QueryAndPhysics
+				: ECollisionEnabled::NoCollision);
+	}
+
+	/** The spin / bob animation and the tessellation of a mesh or blocking volume record. */
+	void ApplyRecordMeshData(ULegacyLevelDataComponent& Data, const FLevelActorRecord& Record)
+	{
+		Data.MaterialPath = Record.MaterialPath;
+		Data.SphereSegments = Record.SphereSegments;
+		Data.SphereRings = Record.SphereRings;
+		Data.SpinYaw = Record.bHasSpinYaw ? FLegacyCoordinateConversion::ConvertYawRate(Record.SpinYaw) : 0.0f;
+		if (Record.bHasBob)
+		{
+			Data.bHasBob = true;
+			Data.BobBaseZ = FLegacyCoordinateConversion::ConvertLength(Record.BobBaseY);
+			Data.BobAmplitude = FLegacyCoordinateConversion::ConvertLength(Record.BobAmplitude);
+			Data.BobSpeed = Record.BobSpeed;
+		}
+	}
+
+	/** Spawns the actor of a resolved record in World. */
+	void SpawnRecordActor(UWorld& World, const FResolvedActorRecord& Resolved)
+	{
+		const FLevelActorRecord& Record = *Resolved.Record;
+		const FTransform& Transform = Resolved.Transform;
+		switch (Record.ActorClass)
+		{
+			case ELevelActorClass::PlayerStart:
+				(void)World.SpawnActor<APlayerStart>(APlayerStart::StaticClass(), Transform);
+				return;
+			case ELevelActorClass::AISpawnPoint:
+				if (ATargetPoint* Point = World.SpawnActor<ATargetPoint>(ATargetPoint::StaticClass(), Transform))
+				{
+					ApplyRecordTag(*Point, Record.Tag);
+				}
+				return;
+			case ELevelActorClass::TriggerVolume:
+				if (ATriggerVolume* Volume = World.SpawnActor<ATriggerVolume>(ATriggerVolume::StaticClass(), Transform))
+				{
+					ApplyRecordTag(*Volume, Record.Tag);
+					ULegacyLevelDataComponent& Data = AddLegacyData(*Volume, Record.ActorClass);
+					Data.InteractRadius = FLegacyCoordinateConversion::ConvertLength(Record.InteractRadius);
+					Data.InteractCost = Record.InteractCost;
+					Data.Payload = Record.Payload;
+					Data.bConsumeOnUse = Record.bConsumeOnUse;
+				}
+				return;
+			case ELevelActorClass::PainCausingVolume:
+				if (APainCausingVolume* Volume =
+						World.SpawnActor<APainCausingVolume>(APainCausingVolume::StaticClass(), Transform))
+				{
+					ApplyRecordTag(*Volume, Record.Tag);
+					Volume->DamagePerSec = Record.DamagePerSecond;
+					Volume->PainInterval = Record.DamageInterval;
+				}
+				return;
+			case ELevelActorClass::BlockingVolume:
+				if (ABlockingVolume* Volume =
+						World.SpawnActor<ABlockingVolume>(ABlockingVolume::StaticClass(), Transform))
+				{
+					// Plan decision D16: the brush box stands for the legacy cube; it is never drawn.
+					ApplyRecordTag(*Volume, Record.Tag);
+					Volume->SetActorHiddenInGame(Record.bHidden);
+					ApplyRecordMeshData(AddLegacyData(*Volume, Record.ActorClass), Record);
+					ApplyRecordCollision(*Volume->GetBrushComponent(), Record);
+				}
+				return;
+			default:
+				break;
+		}
+
+		AStaticMeshActor* Actor = World.SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), Transform);
+		if (Actor == nullptr)
+		{
+			return;
+		}
+		ApplyRecordTag(*Actor, Record.Tag);
+		Actor->SetActorHiddenInGame(Record.bHidden);
+		ULegacyLevelDataComponent& Data = AddLegacyData(*Actor, Record.ActorClass);
+		if (Record.ActorClass == ELevelActorClass::StaticMesh)
+		{
+			Data.MeshPath = Record.MeshPath;
+		}
+		ApplyRecordMeshData(Data, Record);
+		UStaticMeshComponent& Component = *Actor->GetStaticMeshComponent();
+		(void)Component.SetStaticMesh(Resolved.Mesh);
+		ApplyRecordMaterial(Component, Resolved);
+		ApplyRecordCollision(Component, Record);
+	}
+
+	/**
+	 * Spawns the document's lights: at most MaxDirectionalLights directional and MaxPointLights point lights (the
+	 * first ones of each kind), and the default sun when there is no directional light.
+	 */
+	void SpawnDocumentLights(UWorld& World, const FLevelDocument& Doc)
+	{
+		int32 NumDirectional = 0;
+		int32 NumPoint = 0;
+		for (const FLevelLightRecord& Record : Doc.Lights)
+		{
+			const bool bPoint = Record.LightClass == ELevelLightClass::PointLight;
+			int32& Count = bPoint ? NumPoint : NumDirectional;
+			++Count;
+			if (Count > (bPoint ? MaxPointLights : MaxDirectionalLights))
+			{
+				continue;
+			}
+			FBasicLight Light;
+			Light.Type = bPoint ? EBasicLight::Point : EBasicLight::Directional;
+			// Legacy lights keep pitch in X and yaw in Y; the roll in Z was never used.
+			Light.Transform = FTransform(
+				FLegacyCoordinateConversion::ConvertLightRotation(Record.RotationDegrees.X, Record.RotationDegrees.Y),
+				FLegacyCoordinateConversion::ConvertPosition(Record.Position));
+			Light.LightColor = Record.LightColor;
+			Light.Intensity = Record.Intensity;
+			Light.bCastShadows = Record.bCastShadows;
+			Light.SourceAngle = Record.SourceAngle;
+			Light.Range = FLegacyCoordinateConversion::ConvertLength(Record.Range);
+			ALight* Spawned = Light.SpawnIn(World);
+			if (!bPoint || Spawned == nullptr || !Record.bHasOrbit)
+			{
+				continue;
+			}
+			ULegacyLevelDataComponent& Data = AddLegacyData(*Spawned, ELevelActorClass::StaticMesh);
+			Data.bHasOrbit = true;
+			Data.OrbitRadius = FLegacyCoordinateConversion::ConvertLength(Record.OrbitRadius);
+			Data.OrbitHeight = FLegacyCoordinateConversion::ConvertLength(Record.OrbitHeight);
+			Data.OrbitHeightAmp = FLegacyCoordinateConversion::ConvertLength(Record.OrbitHeightAmp);
+			Data.OrbitSpeed = Record.OrbitSpeed;
+		}
+
+		if (NumDirectional == 0)
+		{
+			(void)FBasicLight::Directional().SpawnIn(World);
+		}
+		if (NumDirectional > MaxDirectionalLights)
+		{
+			UE_LOG(LogLevel, Warning, "LeonLevelFormat: truncating directional lights from %d to %d", NumDirectional,
+				MaxDirectionalLights);
+		}
+		if (NumPoint > MaxPointLights)
+		{
+			UE_LOG(
+				LogLevel, Warning, "LeonLevelFormat: truncating point lights from %d to %d", NumPoint, MaxPointLights);
+		}
+	}
+
+} // namespace
+
+bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FString& SourcePath)
+{
+	UWorld* World = Engine.GetWorld();
+	if (World == nullptr)
+	{
+		UE_LOG(LogLevel, Error, "LeonLevelFormat: no world to load '%s' into", *SourcePath);
+		return false;
+	}
+	ULevel& Level = *World->PersistentLevel;
+	FResourceCache& Resources = Engine.GetResources();
+
+	// Every resource first: a failure leaves the current level untouched (no partial loads).
+	TArray<FResolvedActorRecord> Resolved;
+	Resolved.Reserve(Doc.Actors.Num());
+	int32 FailedMeshes = 0;
+	for (const FLevelActorRecord& Record : Doc.Actors)
+	{
+		FResolvedActorRecord Entry;
+		if (!ResolveActorRecord(Record, Resources, SourcePath, Entry))
+		{
+			++FailedMeshes;
+			continue;
+		}
+		Resolved.Add(MoveTemp(Entry));
+	}
 	if (FailedMeshes > 0)
 	{
 		UE_LOG(LogLevel, Error, "LeonLevelFormat: aborting '%s' (%d mesh failure(s); refusing partial load)",
@@ -1148,33 +1293,59 @@ bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FS
 		return false;
 	}
 
-	ApplyDocumentLights(Doc, Staged);
-
-	// Blank / lights-only levels are valid (editor New Level → Blank).
-	if (Staged.GetStaticMeshes().Num() == 0 && Staged.GetPlayerStarts().Num() == 0 &&
-		Staged.GetTriggerVolumes().Num() == 0 && Staged.GetPainCausingVolumes().Num() == 0 &&
-		Staged.AISpawnPoints().Num() == 0 && Staged.GetDirectionalLights().Num() == 0 &&
-		Staged.GetPointLights().Num() == 0)
+	// The previous level content goes (the gameplay actors stay, as before levels were actors).
+	const TArray<AActor*> Previous = Level.Actors;
+	for (AActor* Actor : Previous)
 	{
-		UE_LOG(LogLevel, Error, "LeonLevelFormat: completely empty level in %s", *SourcePath);
-		return false;
+		if (Actor != nullptr && !Actor->IsPendingKillPending() && IsLevelContentActor(*Actor))
+		{
+			Actor->Destroy();
+		}
 	}
+	Level.SetWorldSettings(nullptr);
 
-	Engine.GetLevel().MoveLevelContentFrom(Staged);
+	// The world settings come first (UE spawns them as the level's first actor).
+	AWorldSettings* WorldSettings = World->SpawnActor<AWorldSettings>(AWorldSettings::StaticClass());
+	Level.SetWorldSettings(WorldSettings);
+	ULegacyLevelDataComponent& LevelData = AddLegacyData(*WorldSettings, ELevelActorClass::StaticMesh);
+	LevelData.LevelName = Doc.Name;
+	LevelData.GameModeName = Doc.GameMode;
 
-	UCameraComponent& LocalCamera = Engine.GetCamera();
-	LocalCamera.SetTarget(FLegacyCoordinateConversion::ConvertPosition(Doc.Camera.Target));
-	LocalCamera.SetDistance(FLegacyCoordinateConversion::ConvertLength(Doc.Camera.Distance));
+	for (const FResolvedActorRecord& Entry : Resolved)
+	{
+		SpawnRecordActor(*World, Entry);
+	}
+	SpawnDocumentLights(*World, Doc);
+
+	// The camera framing: kept on the world settings and applied to the engine's view camera.
+	LevelData.CameraMode = Doc.Camera.Mode;
+	LevelData.CameraTarget = FLegacyCoordinateConversion::ConvertPosition(Doc.Camera.Target);
+	LevelData.CameraDistance = FLegacyCoordinateConversion::ConvertLength(Doc.Camera.Distance);
 	// Legacy yaw / pitch meant the eye's offset from the target in Orbit and the look direction in FreeLook.
-	LocalCamera.SetViewRotation(Doc.Camera.Mode == ECameraMode::FreeLook
-			? FLegacyCoordinateConversion::ConvertFreeLookRotation(Doc.Camera.Yaw, Doc.Camera.Pitch)
-			: FLegacyCoordinateConversion::ConvertOrbitViewRotation(Doc.Camera.Yaw, Doc.Camera.Pitch));
-	LocalCamera.SetEyeLocation(FLegacyCoordinateConversion::ConvertPosition(Doc.Camera.Eye));
-	LocalCamera.SetMode(Doc.Camera.Mode);
+	LevelData.CameraViewRotation = Doc.Camera.Mode == ECameraMode::FreeLook
+		? FLegacyCoordinateConversion::ConvertFreeLookRotation(Doc.Camera.Yaw, Doc.Camera.Pitch)
+		: FLegacyCoordinateConversion::ConvertOrbitViewRotation(Doc.Camera.Yaw, Doc.Camera.Pitch);
+	LevelData.CameraEye = FLegacyCoordinateConversion::ConvertPosition(Doc.Camera.Eye);
+	UCameraComponent& LocalCamera = Engine.GetCamera();
+	LocalCamera.SetTarget(LevelData.CameraTarget);
+	LocalCamera.SetDistance(LevelData.CameraDistance);
+	LocalCamera.SetViewRotation(LevelData.CameraViewRotation);
+	LocalCamera.SetEyeLocation(LevelData.CameraEye);
+	LocalCamera.SetMode(LevelData.CameraMode);
 
+	int32 NumStaticMeshes = 0;
+	for (const AActor* Actor : Level.Actors)
+	{
+		// The legacy count: the placed meshes and the blocking volumes' cubes.
+		if (Actor != nullptr && !Actor->IsPendingKillPending() &&
+			(Actor->IsA<AStaticMeshActor>() || Actor->IsA<ABlockingVolume>()))
+		{
+			++NumStaticMeshes;
+		}
+	}
 	const FString& Label = Doc.Name.IsEmpty() ? SourcePath : Doc.Name;
-	UE_LOG(LogLevel, Log, "LevelLoader: loaded '%s' (%d actors)", *Label, Engine.GetLevel().GetStaticMeshes().Num());
-	// A level (re)load is a garbage collection safe point (plan decision D11): the staging level goes now.
+	UE_LOG(LogLevel, Log, "LevelLoader: loaded '%s' (%d actors)", *Label, NumStaticMeshes);
+	// A level (re)load is a garbage collection safe point (plan decision D11): the replaced actors go now.
 	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
 	return true;
 }

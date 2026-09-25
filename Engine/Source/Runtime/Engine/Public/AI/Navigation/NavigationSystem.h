@@ -7,7 +7,7 @@ class ULevel;
 class FPhysScene;
 class FDebugDraw;
 
-/** Level mesh tags recognized by UNavigationSystem bake (Unreal NavArea-style hints). */
+/** Actor tags recognized by UNavigationSystem bake (Unreal NavArea-style hints; plan decision D15). */
 namespace NavTags
 {
 	inline constexpr const TCHAR* Blocker = "NavBlocker";
@@ -45,7 +45,10 @@ public:
 	 */
 	void BuildFromPhysScene(const FPhysScene& Physics, float FloorZ, float WalkBounds);
 
-	/** Prefer this: skips Plane; honors NavTags::Blocker / NavTags::Walkable on meshes. */
+	/**
+	 * Prefer this: skips the `.llev` floor Plane; honors NavTags::Blocker / NavTags::Walkable on the Tags of the actors
+	 * whose components own the bodies.
+	 */
 	void BuildFromLevel(const ULevel& Level, const FPhysScene& Physics, float FloorZ, float WalkBounds);
 
 	void Clear();

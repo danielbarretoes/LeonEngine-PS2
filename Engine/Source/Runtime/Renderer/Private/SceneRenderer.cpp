@@ -87,12 +87,12 @@ namespace
 			Step;
 	}
 
-	bool ComputeCasterAabb(const ULevel& Level, FVector& WorldMin, FVector& WorldMax)
+	bool ComputeCasterAabb(const TArray<FLevelStaticMesh>& Meshes, FVector& WorldMin, FVector& WorldMax)
 	{
 		WorldMin = FVector(TNumericLimits<float>::Max());
 		WorldMax = FVector(TNumericLimits<float>::Lowest());
 		bool bAny = false;
-		for (const FLevelStaticMesh& Object : Level.GetStaticMeshes())
+		for (const FLevelStaticMesh& Object : Meshes)
 		{
 			if (!Object.IsShadowCaster())
 			{
@@ -467,12 +467,12 @@ void FSceneRenderer::UpdateCameraUbo(
 	CameraUbo.Update(&Block, sizeof(Block));
 }
 
-void FSceneRenderer::UpdateLightsUbo(const ULevel& Level) const
+void FSceneRenderer::UpdateLightsUbo() const
 {
 	FLightsBlock Block;
 	FMemory::Memzero(&Block, sizeof(Block));
-	const auto& Dirs = Level.GetDirectionalLights();
-	const auto& Points = Level.GetPointLights();
+	const auto& Dirs = FrameDirectionalLights;
+	const auto& Points = FramePointLights;
 
 	Block.DirCount = FMath::Min(Dirs.Num(), MaxDirectionalLights);
 	Block.PointCount = FMath::Min(Points.Num(), MaxPointLights);
@@ -545,7 +545,7 @@ void FSceneRenderer::SetClipPlane(bool bEnabled, const FVector4& Plane) const
 	}
 }
 
-void FSceneRenderer::RenderShadowPass(const ULevel& Level, const FMatrix& LightSpace)
+void FSceneRenderer::RenderShadowPass(const FMatrix& LightSpace)
 {
 	if (!ShadowMap.Valid())
 	{
@@ -558,7 +558,7 @@ void FSceneRenderer::RenderShadowPass(const ULevel& Level, const FMatrix& LightS
 	if (ShadowShader.Valid())
 	{
 		ShadowShader.Bind();
-		for (const FLevelStaticMesh& Object : Level.GetStaticMeshes())
+		for (const FLevelStaticMesh& Object : FrameMeshes)
 		{
 			if (!Object.IsShadowCaster())
 			{
@@ -619,7 +619,7 @@ FMatrix FSceneRenderer::MakeReflectMatrix(float PlaneZ)
 	return ReflectMat;
 }
 
-void FSceneRenderer::RenderPlanarReflectionPass(const ULevel& Level, const UCameraComponent& Camera, float PlaneZ)
+void FSceneRenderer::RenderPlanarReflectionPass(const UCameraComponent& Camera, float PlaneZ)
 {
 	const int32 ReflW = FMath::Max(1, FMath::RoundToInt(static_cast<float>(FbWidth) * PlanarReflectionScale));
 	const int32 ReflH = FMath::Max(1, FMath::RoundToInt(static_cast<float>(FbHeight) * PlanarReflectionScale));
@@ -651,7 +651,7 @@ void FSceneRenderer::RenderPlanarReflectionPass(const ULevel& Level, const UCame
 	if (LitShader.Valid())
 	{
 		UpdateCameraUbo(LocalView, LocalProjection, ReflectedEye);
-		UpdateLightsUbo(Level);
+		UpdateLightsUbo();
 		LitShader.Bind();
 		BindShadowResources(false);
 		BindPlanarReflection(false, FMatrix::Identity);
@@ -668,7 +668,7 @@ void FSceneRenderer::RenderPlanarReflectionPass(const ULevel& Level, const UCame
 	UnlitOpts.bBindSharedLitTextures = false;
 
 	bool bLitGlobalsBound = LitShader.Valid();
-	for (const FLevelStaticMesh& Object : Level.GetStaticMeshes())
+	for (const FLevelStaticMesh& Object : FrameMeshes)
 	{
 		if (Object.bHidden || Object.Mesh == nullptr || !Object.Mesh->Valid())
 		{
@@ -821,6 +821,10 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 
 	const bool bPostOn = Post.bEnabled && SceneColor.Valid();
 
+	// This frame's view of the level's actors (the FScene boundary replaces these snapshots).
+	Level.GetStaticMeshSnapshots(FrameMeshes);
+	Level.GetLightSnapshots(FrameDirectionalLights, FramePointLights);
+
 	const FMatrix LocalView = Camera.ViewMatrix();
 	const FMatrix LocalProjection = GetProjectionGL(Camera);
 	const FMatrix LocalViewProjection = LocalView * LocalProjection;
@@ -831,15 +835,15 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 
 	FMatrix LightSpace = FMatrix::Identity;
 	// Shadow map follows directional light 0 when castShadows; extras are lighting-only.
-	const bool bCastDirShadows = Level.GetDirectionalLights().Num() > 0 && Level.GetDirectionalLights()[0].bCastShadows;
+	const bool bCastDirShadows = FrameDirectionalLights.Num() > 0 && FrameDirectionalLights[0].bCastShadows;
 	if (bCastDirShadows)
 	{
-		const FVector LightDir = Level.GetDirectionalLights()[0].GetDirection();
+		const FVector LightDir = FrameDirectionalLights[0].GetDirection();
 		FVector WorldMin;
 		FVector WorldMax;
 		/** Shadow box padding and the box used without casters (cm). */
 		constexpr float ShadowPadding = 75.0f;
-		if (ComputeCasterAabb(Level, WorldMin, WorldMax))
+		if (ComputeCasterAabb(FrameMeshes, WorldMin, WorldMax))
 		{
 			LightSpace = FShadowMap::FitLightSpaceMatrix(LightDir, WorldMin, WorldMax, ShadowPadding);
 		}
@@ -848,7 +852,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 			LightSpace = FShadowMap::FitLightSpaceMatrix(
 				LightDir, FVector(-300.0f, 0.0f, -300.0f), FVector(300.0f, 200.0f, 300.0f), ShadowPadding);
 		}
-		RenderShadowPass(Level, LightSpace);
+		RenderShadowPass(LightSpace);
 	}
 	else
 	{
@@ -861,7 +865,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 	bool bHasPlanarMirror = false;
 	float MirrorPlaneZ = 0.0f;
 	FMatrix ReflectionViewProj = FMatrix::Identity;
-	for (const FLevelStaticMesh& Object : Level.GetStaticMeshes())
+	for (const FLevelStaticMesh& Object : FrameMeshes)
 	{
 		const int32 SubCount = Object.SubMeshCount();
 		for (int32 S = 0; S < SubCount; ++S)
@@ -881,7 +885,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 	}
 	if (bHasPlanarMirror)
 	{
-		RenderPlanarReflectionPass(Level, Camera, MirrorPlaneZ);
+		RenderPlanarReflectionPass(Camera, MirrorPlaneZ);
 		ReflectionViewProj = MakeReflectMatrix(MirrorPlaneZ) * Camera.ViewMatrix() * LocalProjection;
 	}
 	else
@@ -892,12 +896,12 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 
 	TArray<FDrawItem> Opaque;
 	TArray<FDrawItem> Transparent;
-	Opaque.Reserve(Level.GetStaticMeshes().Num());
-	Transparent.Reserve(Level.GetStaticMeshes().Num());
+	Opaque.Reserve(FrameMeshes.Num());
+	Transparent.Reserve(FrameMeshes.Num());
 
-	for (int32 I = 0; I < Level.GetStaticMeshes().Num(); ++I)
+	for (int32 I = 0; I < FrameMeshes.Num(); ++I)
 	{
-		const FLevelStaticMesh& Object = Level.GetStaticMeshes()[I];
+		const FLevelStaticMesh& Object = FrameMeshes[I];
 		if (Object.bHidden || Object.Mesh == nullptr || !Object.Mesh->Valid())
 		{
 			continue;
@@ -949,7 +953,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 	}
 
 	const float ShadowSourceAngle =
-		bCastDirShadows ? Level.GetDirectionalLights()[0].SourceAngle : DefaultLightSourceAngleDegrees;
+		bCastDirShadows ? FrameDirectionalLights[0].SourceAngle : DefaultLightSourceAngleDegrees;
 
 	// Optional early-Z: write opaque depth before expensive lit shading.
 	if (Post.bEarlyZ && UnlitShader.Valid() && Opaque.Num() > 0)
@@ -967,7 +971,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 		WhiteTexture->Bind(0);
 		for (const FDrawItem& Item : Opaque)
 		{
-			const FLevelStaticMesh& Object = Level.GetStaticMeshes()[Item.ObjectIndex];
+			const FLevelStaticMesh& Object = FrameMeshes[Item.ObjectIndex];
 			const FMaterial& Mat = Object.MaterialForSubMesh(Item.SubMeshIndex);
 			if (Mat.Shading == EMaterialShadingModel::Unlit)
 			{
@@ -987,7 +991,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 	if (LitShader.Valid())
 	{
 		UpdateCameraUbo(Camera);
-		UpdateLightsUbo(Level);
+		UpdateLightsUbo();
 		LitShader.Bind();
 		BindShadowResources(bCastDirShadows, ShadowSourceAngle);
 		SetClipPlane(false, FVector4(0.0f, 0.0f, 1.0f, 0.0f));
@@ -1015,7 +1019,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 
 		for (const FDrawItem& Item : Items)
 		{
-			const FLevelStaticMesh& Object = Level.GetStaticMeshes()[Item.ObjectIndex];
+			const FLevelStaticMesh& Object = FrameMeshes[Item.ObjectIndex];
 			const FMaterial& Mat = Object.MaterialForSubMesh(Item.SubMeshIndex);
 			const bool bLit = Mat.Shading == EMaterialShadingModel::BlinnPhong;
 			FShader& Shader = bLit ? LitShader : UnlitShader;
@@ -1092,7 +1096,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 	PassTimers.End(FGPUPassTimer::EPass::Color);
 
 	// Debug into the color target (scene HDR or backbuffer) so depth occlusion stays correct.
-	DrawDebug(Level, Camera, LightSpace, bCastDirShadows);
+	DrawDebug(Camera, LightSpace, bCastDirShadows);
 
 	if (bPostOn)
 	{
@@ -1408,8 +1412,7 @@ void FSceneRenderer::DrawQueuedStatic(const ULevel& Level, const FMatrix& InView
 	glEnable(GL_CULL_FACE);
 }
 
-void FSceneRenderer::DrawDebug(
-	const ULevel& Level, const UCameraComponent& Camera, const FMatrix& LightSpace, bool bHasLightSpace)
+void FSceneRenderer::DrawDebug(const UCameraComponent& Camera, const FMatrix& LightSpace, bool bHasLightSpace)
 {
 	if (!bDebugDrawEnabled || !DebugDraw.IsValid())
 	{
@@ -1422,7 +1425,7 @@ void FSceneRenderer::DrawDebug(
 	constexpr FLinearColor HiddenAabbColor(0.95f, 0.35f, 0.85f); // BlockingVolume / hidden
 	constexpr FLinearColor FrustumColor(1.0f, 0.85f, 0.15f);
 
-	for (const FLevelStaticMesh& Object : Level.GetStaticMeshes())
+	for (const FLevelStaticMesh& Object : FrameMeshes)
 	{
 		if (Object.Mesh == nullptr || !Object.Mesh->Valid())
 		{

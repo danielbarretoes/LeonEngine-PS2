@@ -172,7 +172,6 @@ void ACharacter::FindFloor(
 	const FVector TraceEnd = SphereCenter - FVector(0.0f, 0.0f, Distance);
 
 	FCollisionQueryParams Query{};
-	Query.SkipLevelMeshIndex = GetLevelMeshIndex();
 	Query.bTraceFloorPlane = true;
 	Query.FloorZ = CharacterMovement->FloorZ;
 	Query.DrawDebugType = DebugDraw != nullptr ? EDrawDebugTrace::ForOneFrame : EDrawDebugTrace::None;
@@ -257,7 +256,6 @@ bool ACharacter::SafeMoveUpdatedComponent(
 	const float HalfH = CapsuleHalfHeight();
 
 	FCollisionQueryParams Query{};
-	Query.SkipLevelMeshIndex = GetLevelMeshIndex();
 	Query.bTraceFloorPlane = false;
 	Query.DrawDebugType = DebugDraw != nullptr ? EDrawDebugTrace::ForOneFrame : EDrawDebugTrace::None;
 
@@ -317,7 +315,7 @@ void ACharacter::ResolveSides(FPhysScene& PhysScene, bool bApplyPush)
 	Params.WalkBounds = CharacterMovement->WalkBounds;
 	FVector Feet = MutableLocation();
 	PhysScene.ResolveCapsuleSides(
-		GetCapsule(), Feet, FVector2D(WishDir.X, WishDir.Y), Params, GetLevelMeshIndex(), bApplyPush);
+		GetCapsule(), Feet, FVector2D(WishDir.X, WishDir.Y), Params, NoLevelMeshIndex, bApplyPush);
 	MutableLocation() = Feet;
 }
 
@@ -339,7 +337,6 @@ bool ACharacter::TryStepUp(FPhysScene& PhysScene, const FVector& ForwardDelta, F
 	const float HalfH = CapsuleHalfHeight();
 
 	FCollisionQueryParams Query{};
-	Query.SkipLevelMeshIndex = GetLevelMeshIndex();
 	Query.bTraceFloorPlane = false;
 	Query.DrawDebugType = DebugDraw != nullptr ? EDrawDebugTrace::ForOneFrame : EDrawDebugTrace::None;
 
@@ -390,7 +387,7 @@ bool ACharacter::TryStepUp(FPhysScene& PhysScene, const FVector& ForwardDelta, F
 	}
 	// Sphere FindFloor can report a phantom shelf in front of an AABB; require real support.
 	const float Support = PhysScene.QuerySupportZ(GetCapsule(), Feet, CharacterMovement->FloorZ,
-		CharacterMovement->MaxStepHeight, CharacterMovement->Skin, GetLevelMeshIndex());
+		CharacterMovement->MaxStepHeight, CharacterMovement->Skin, NoLevelMeshIndex);
 	if (Support < StartFeet.Z + CharacterMovement->Skin)
 	{
 		Feet = StartFeet;

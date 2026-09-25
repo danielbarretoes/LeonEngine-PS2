@@ -53,13 +53,13 @@ USceneComponent::USceneComponent(const FObjectInitializer& ObjectInitializer)
 
 FTransform USceneComponent::GetRelativeTransform() const
 {
-	return FTransform(RelativeRotation, RelativeLocation, RelativeScale3D);
+	return FTransform(RelativeRotationCache.RotatorToQuat(RelativeRotation), RelativeLocation, RelativeScale3D);
 }
 
 void USceneComponent::SetRelativeTransform(const FTransform& NewTransform)
 {
 	RelativeLocation = NewTransform.GetLocation();
-	RelativeRotation = NewTransform.Rotator();
+	RelativeRotation = RelativeRotationCache.QuatToRotator(NewTransform.GetRotation());
 	RelativeScale3D = NewTransform.GetScale3D();
 }
 

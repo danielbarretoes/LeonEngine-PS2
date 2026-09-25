@@ -1,5 +1,7 @@
 #include "Level/BasicShape.h"
 
+#include "Engine/StaticMeshActor.h"
+#include "Engine/World.h"
 #include "Primitives.h"
 
 // Class-name parsers live in Content/LevelClassNames.cpp (shared with the level format / cook).
@@ -54,12 +56,19 @@ FBasicShape FBasicShape::Plane(float Size, const FTransform& InTransform, FMater
 	return Shape;
 }
 
-FLevelStaticMesh FBasicShape::MakeStaticMesh(FResourceCache& Resources) const
+void FBasicShape::ApplyTo(UStaticMeshComponent& Component, FResourceCache& Resources) const
 {
-	FLevelStaticMesh Component;
-	Component.Mesh = MeshForBasicShape(Resources, Type, SphereSegments, SphereRings);
-	Component.Transform = Transform;
-	Component.bMaterialOverride = true;
-	Component.Material = bHasCustomMaterial ? Material : Resources.DefaultMaterial();
-	return Component;
+	(void)Component.SetStaticMesh(MeshForBasicShape(Resources, Type, SphereSegments, SphereRings));
+	// The procedural shapes have one section with no material of their own: slot 0 draws every section.
+	Component.SetMaterial(0, bHasCustomMaterial ? Material : Resources.DefaultMaterial());
+}
+
+AStaticMeshActor* FBasicShape::SpawnIn(UWorld& World, FResourceCache& Resources) const
+{
+	AStaticMeshActor* Actor = World.SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), Transform);
+	if (Actor != nullptr)
+	{
+		ApplyTo(*Actor->GetStaticMeshComponent(), Resources);
+	}
+	return Actor;
 }

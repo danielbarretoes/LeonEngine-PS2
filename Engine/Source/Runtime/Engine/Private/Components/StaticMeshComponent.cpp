@@ -36,6 +36,37 @@ int32 UStaticMeshComponent::GetNumMaterials() const
 	return FMath::Max(MeshMaterials, Super::GetNumMaterials());
 }
 
+void UStaticMeshComponent::GetSectionMaterials(TArray<FMaterial>& OutMaterials) const
+{
+	OutMaterials.Reset();
+	if (!HasValidMesh())
+	{
+		return;
+	}
+	const TArray<FMeshSection>& Sections = StaticMesh->GetSubmeshes();
+	const int32 NumSections = Sections.Num() == 0 ? 1 : Sections.Num();
+	OutMaterials.Reserve(NumSections);
+	for (int32 SectionIndex = 0; SectionIndex < NumSections; ++SectionIndex)
+	{
+		const int32 Slot = Sections.IsValidIndex(SectionIndex) ? Sections[SectionIndex].MaterialIndex : 0;
+		OutMaterials.Add(GetMaterial(Slot));
+	}
+}
+
+bool UStaticMeshComponent::HasShadowCastingMaterial() const
+{
+	const int32 NumSlots = FMath::Max(GetNumMaterials(), 1);
+	for (int32 Slot = 0; Slot < NumSlots; ++Slot)
+	{
+		const FMaterial Material = GetMaterial(Slot);
+		if (Material.bCastsShadows && !Material.IsTransparent() && Material.Shading != EMaterialShadingModel::Unlit)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void UStaticMeshComponent::SubmitDraw(FSceneRenderer& Renderer) const
 {
 	if (!HasValidMesh())

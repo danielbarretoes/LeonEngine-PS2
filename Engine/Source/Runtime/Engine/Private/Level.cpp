@@ -1,5 +1,28 @@
 #include "Engine/Level.h"
 
+#include "Components/PrimitiveComponent.h"
+#include "Engine/DirectionalLight.h"
+#include "Engine/PointLight.h"
+#include "Engine/StaticMeshActor.h"
+#include "GameFramework/WorldSettings.h"
+
+namespace
+{
+
+	/** The material MaterialForSubMesh returns for a section the snapshot does not have. */
+	const FMaterial& MissingSectionMaterial()
+	{
+		static const FMaterial Material;
+		return Material;
+	}
+
+	[[nodiscard]] bool IsLiveActor(const AActor* Actor)
+	{
+		return Actor != nullptr && !Actor->IsPendingKillPending();
+	}
+
+} // namespace
+
 int32 FLevelStaticMesh::SubMeshCount() const
 {
 	if (Mesh == nullptr || !Mesh->Valid())
@@ -11,151 +34,95 @@ int32 FLevelStaticMesh::SubMeshCount() const
 
 const FMaterial& FLevelStaticMesh::MaterialForSubMesh(int32 SubMeshIndex) const
 {
-	int32 Slot = 0;
-	if (Mesh != nullptr && SubMeshIndex >= 0 && SubMeshIndex < Mesh->GetSubmeshes().Num())
-	{
-		Slot = Mesh->GetSubmeshes()[SubMeshIndex].MaterialIndex;
-	}
-
-	if (Materials.IsValidIndex(Slot))
-	{
-		return Materials[Slot];
-	}
-	if (bMaterialOverride)
-	{
-		return Material;
-	}
-	if (Mesh != nullptr && Mesh->HasMaterials() && Mesh->GetMaterials().IsValidIndex(Slot))
-	{
-		return Mesh->GetMaterials()[Slot];
-	}
-	return Material;
+	return SectionMaterials.IsValidIndex(SubMeshIndex) ? SectionMaterials[SubMeshIndex] : MissingSectionMaterial();
 }
 
 bool FLevelStaticMesh::IsShadowCaster() const
 {
-	if (bHidden || Mesh == nullptr || !Mesh->Valid())
+	return !bHidden && Mesh != nullptr && Mesh->Valid() && bCastShadow;
+}
+
+void ULevel::GetStaticMeshSnapshots(TArray<FLevelStaticMesh>& OutMeshes) const
+{
+	OutMeshes.Reset();
+	for (const AActor* Actor : Actors)
 	{
-		return false;
-	}
-
-	const auto CountsAsCaster = [](const FMaterial& Mat)
-	{ return Mat.bCastsShadows && !Mat.IsTransparent() && Mat.Shading != EMaterialShadingModel::Unlit; };
-
-	if (Materials.Num() > 0)
-	{
-		return Materials.ContainsByPredicate(CountsAsCaster);
-	}
-	if (bMaterialOverride)
-	{
-		return CountsAsCaster(Material);
-	}
-	if (Mesh->HasMaterials())
-	{
-		return Mesh->GetMaterials().ContainsByPredicate(CountsAsCaster);
-	}
-	return CountsAsCaster(Material);
-}
-
-FLevelStaticMesh& ULevel::AddStaticMesh(FLevelStaticMesh Component)
-{
-	return StaticMeshes.Add_GetRef(MoveTemp(Component));
-}
-
-FPlayerStart& ULevel::AddPlayerStart(FPlayerStart Start)
-{
-	return PlayerStarts.Add_GetRef(MoveTemp(Start));
-}
-
-FTriggerVolume& ULevel::AddTriggerVolume(FTriggerVolume Volume)
-{
-	return TriggerVolumes.Add_GetRef(MoveTemp(Volume));
-}
-
-FPainCausingVolume& ULevel::AddPainCausingVolume(FPainCausingVolume Volume)
-{
-	return PainCausingVolumes.Add_GetRef(MoveTemp(Volume));
-}
-
-FAISpawnPoint& ULevel::AddAISpawnPoint(FAISpawnPoint Point)
-{
-	return AiSpawnPoints.Add_GetRef(MoveTemp(Point));
-}
-
-const FPlayerStart* ULevel::FindPlayerStart() const
-{
-	return PlayerStarts.Num() > 0 ? &PlayerStarts[0] : nullptr;
-}
-
-SIZE_T ULevel::FindStaticMeshIndexByTag(const FString& InTag) const
-{
-	if (InTag.IsEmpty())
-	{
-		return Npos;
-	}
-	for (int32 I = 0; I < StaticMeshes.Num(); ++I)
-	{
-		if (StaticMeshes[I].Tag.Equals(InTag, ESearchCase::CaseSensitive))
+		const AStaticMeshActor* MeshActor = Cast<AStaticMeshActor>(Actor);
+		if (!IsLiveActor(MeshActor))
 		{
-			return static_cast<SIZE_T>(I);
+			continue;
+		}
+		const UStaticMeshComponent* Component = MeshActor->GetStaticMeshComponent();
+		if (Component == nullptr)
+		{
+			continue;
+		}
+		FLevelStaticMesh& Snapshot = OutMeshes.AddDefaulted_GetRef();
+		Snapshot.Transform = Component->GetComponentTransform();
+		Snapshot.Mesh = Component->GetStaticMeshShared();
+		Component->GetSectionMaterials(Snapshot.SectionMaterials);
+		Snapshot.bHidden = !Component->ShouldRender();
+		Snapshot.bCastShadow = Component->CastShadow && Component->HasShadowCastingMaterial();
+	}
+}
+
+void ULevel::GetLightSnapshots(TArray<FDirectionalLight>& OutDirectional, TArray<FPointLight>& OutPoint) const
+{
+	OutDirectional.Reset();
+	OutPoint.Reset();
+	for (const AActor* Actor : Actors)
+	{
+		if (!IsLiveActor(Actor) || Actor->IsHidden())
+		{
+			continue;
+		}
+		if (const ADirectionalLight* Directional = Cast<ADirectionalLight>(Actor))
+		{
+			const UDirectionalLightComponent* Component = Directional->GetDirectionalLightComponent();
+			if (Component == nullptr || !Component->IsVisible())
+			{
+				continue;
+			}
+			FDirectionalLight& Light = OutDirectional.AddDefaulted_GetRef();
+			Light.Transform = Component->GetComponentTransform();
+			Light.LightColor = FVector(Component->LightColor.R, Component->LightColor.G, Component->LightColor.B);
+			Light.Intensity = Component->Intensity;
+			Light.bCastShadows = Component->CastShadows;
+			Light.SourceAngle = Component->LightSourceAngle;
+		}
+		else if (const APointLight* Point = Cast<APointLight>(Actor))
+		{
+			const UPointLightComponent* Component = Point->GetPointLightComponent();
+			if (Component == nullptr || !Component->IsVisible())
+			{
+				continue;
+			}
+			FPointLight& Light = OutPoint.AddDefaulted_GetRef();
+			Light.Transform = Component->GetComponentTransform();
+			Light.LightColor = FVector(Component->LightColor.R, Component->LightColor.G, Component->LightColor.B);
+			Light.Intensity = Component->Intensity;
+			Light.Range = Component->AttenuationRadius;
+			Light.bCastShadows = Component->CastShadows;
 		}
 	}
-	return Npos;
 }
 
-void ULevel::ClearStaticMeshes()
+void ULevel::GetCollisionPrimitives(TArray<UPrimitiveComponent*>& OutPrimitives) const
 {
-	StaticMeshes.Reset();
-}
-
-void ULevel::ClearPlayerStarts()
-{
-	PlayerStarts.Reset();
-}
-
-void ULevel::ClearTriggerVolumes()
-{
-	TriggerVolumes.Reset();
-}
-
-void ULevel::ClearPainCausingVolumes()
-{
-	PainCausingVolumes.Reset();
-}
-
-void ULevel::ClearAISpawnPoints()
-{
-	AiSpawnPoints.Reset();
-}
-
-void ULevel::ClearLights()
-{
-	DirectionalLights.Reset();
-	PointLights.Reset();
-}
-
-void ULevel::Clear()
-{
-	ClearStaticMeshes();
-	ClearPlayerStarts();
-	ClearTriggerVolumes();
-	ClearPainCausingVolumes();
-	ClearAISpawnPoints();
-	ClearLights();
-	LevelName.Empty();
-	GameMode.Empty();
-}
-
-void ULevel::MoveLevelContentFrom(ULevel& Source)
-{
-	StaticMeshes = MoveTemp(Source.StaticMeshes);
-	PlayerStarts = MoveTemp(Source.PlayerStarts);
-	TriggerVolumes = MoveTemp(Source.TriggerVolumes);
-	PainCausingVolumes = MoveTemp(Source.PainCausingVolumes);
-	AiSpawnPoints = MoveTemp(Source.AiSpawnPoints);
-	DirectionalLights = MoveTemp(Source.DirectionalLights);
-	PointLights = MoveTemp(Source.PointLights);
-	LevelName = MoveTemp(Source.LevelName);
-	GameMode = MoveTemp(Source.GameMode);
-	Source.Clear();
+	OutPrimitives.Reset();
+	for (const AActor* Actor : Actors)
+	{
+		if (!IsLiveActor(Actor))
+		{
+			continue;
+		}
+		for (UActorComponent* Component : Actor->GetComponents())
+		{
+			UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(Component);
+			if (Primitive != nullptr && !Primitive->IsPendingKill() && Primitive->IsCollisionEnabled())
+			{
+				OutPrimitives.Add(Primitive);
+			}
+		}
+	}
 }

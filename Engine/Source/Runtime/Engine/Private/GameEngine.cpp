@@ -1,6 +1,8 @@
 #include "Engine/GameEngine.h"
 
 #include "DynamicRHI.h"
+#include "Engine/BlockingVolume.h"
+#include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "EngineLogs.h"
 #include "HAL/PlatformApplicationMisc.h"
@@ -289,7 +291,15 @@ void UGameEngine::Run(
 
 void UGameEngine::Start()
 {
-	UE_LOG(LogEngine, Log, "Level static meshes: %d", GetLevel().GetStaticMeshes().Num());
+	int32 NumStaticMeshes = 0;
+	for (const AActor* Actor : GetLevel().Actors)
+	{
+		if (Actor != nullptr && (Actor->IsA<AStaticMeshActor>() || Actor->IsA<ABlockingVolume>()))
+		{
+			++NumStaticMeshes;
+		}
+	}
+	UE_LOG(LogEngine, Log, "Level static meshes: %d", NumStaticMeshes);
 	UE_LOG(LogEngine, Log, "Controls: mouse look (cursor captured), scroll zoom orbit; close window to quit");
 	UE_LOG(LogEngine, Log, "Default mode: mouse look, WASD fly along view, Q/E up/down");
 	UE_LOG(LogEngine, Log, "Debug: F1 mesh AABBs + light frustum; F2 collision volumes + floor traces");

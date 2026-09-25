@@ -10,8 +10,8 @@
  * attachable to a socket of another component (a weapon in a hand bone).
  *
  * The mesh is the renderer's UStaticMesh resource, shared through FResourceCache, until P14 makes UStaticMesh an asset
- * UObject; then StaticMesh becomes a UPROPERTY. Legacy .llev meshes are FLevelStaticMesh entries of ULevel, not these
- * components, until P13 turns them into AStaticMeshActors.
+ * UObject; then StaticMesh becomes a UPROPERTY. AStaticMeshActor's root is one: the `.llev` reader spawns one per
+ * placed mesh.
  */
 UCLASS()
 class ENGINE_API UStaticMeshComponent : public UMeshComponent
@@ -27,6 +27,11 @@ public:
 	{
 		return StaticMesh.Get();
 	}
+	/** The mesh with its shared ownership (render and physics snapshots keep it alive). */
+	[[nodiscard]] const TSharedPtr<UStaticMesh>& GetStaticMeshShared() const
+	{
+		return StaticMesh;
+	}
 	[[nodiscard]] bool HasValidMesh() const
 	{
 		return StaticMesh != nullptr && StaticMesh->Valid();
@@ -35,6 +40,15 @@ public:
 	/** The override, else the mesh's material for the slot, else the default material. */
 	[[nodiscard]] FMaterial GetMaterial(int32 ElementIndex) const override;
 	[[nodiscard]] int32 GetNumMaterials() const override;
+
+	/** The material of each mesh section, in section order: GetMaterial of the section's slot. */
+	void GetSectionMaterials(TArray<FMaterial>& OutMaterials) const;
+
+	/**
+	 * True when one of the slots' materials casts shadows, is opaque and is lit (every slot up to GetNumMaterials, at
+	 * least slot 0).
+	 */
+	[[nodiscard]] bool HasShadowCastingMaterial() const;
 
 	/** Submits the mesh with the material of slot 0 at the component transform (scale included). */
 	void SubmitDraw(FSceneRenderer& Renderer) const override;

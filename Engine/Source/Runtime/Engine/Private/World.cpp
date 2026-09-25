@@ -140,6 +140,12 @@ void UWorld::BeginPlay()
 AActor* UWorld::SpawnActor(
 	UClass* Class, const FVector* Location, const FRotator* Rotation, const FActorSpawnParameters& SpawnParameters)
 {
+	return SpawnActorInternal(Class, Location, Rotation, nullptr, SpawnParameters);
+}
+
+AActor* UWorld::SpawnActorInternal(UClass* Class, const FVector* Location, const FRotator* Rotation,
+	const FTransform* Transform, const FActorSpawnParameters& SpawnParameters)
+{
 	if (Class == nullptr)
 	{
 		UE_LOG(LogSpawn, Warning, TEXT("SpawnActor failed because no class was specified"));
@@ -176,6 +182,12 @@ AActor* UWorld::SpawnActor(
 	Actor->SetInstigator(SpawnParameters.Instigator);
 	if (USceneComponent* Root = Actor->GetRootComponent())
 	{
+		// UE: the root takes the spawn transform before the components register, so their render and physics state
+		// start where the actor is.
+		if (Transform != nullptr)
+		{
+			Root->SetRelativeTransform(*Transform);
+		}
 		if (Location != nullptr)
 		{
 			Root->RelativeLocation = *Location;
@@ -206,18 +218,7 @@ AActor* UWorld::SpawnActor(
 
 AActor* UWorld::SpawnActor(UClass* Class, const FTransform* Transform, const FActorSpawnParameters& SpawnParameters)
 {
-	if (Transform == nullptr)
-	{
-		return SpawnActor(Class, nullptr, nullptr, SpawnParameters);
-	}
-	const FVector Location = Transform->GetLocation();
-	const FRotator Rotation = Transform->Rotator();
-	AActor* Actor = SpawnActor(Class, &Location, &Rotation, SpawnParameters);
-	if (Actor != nullptr)
-	{
-		Actor->SetActorScale3D(Transform->GetScale3D());
-	}
-	return Actor;
+	return SpawnActorInternal(Class, nullptr, nullptr, Transform, SpawnParameters);
 }
 
 void UWorld::PostActorConstruction(AActor* Actor)
@@ -358,18 +359,15 @@ SIZE_T UWorld::ActorCount() const
 void UWorld::RegisterBodiesFromLevel(const ULevel& InLevel)
 {
 	Physics.Clear();
-	const auto& Meshes = InLevel.GetStaticMeshes();
-	for (int32 I = 0; I < Meshes.Num(); ++I)
+	TArray<UPrimitiveComponent*> LevelPrimitives;
+	InLevel.GetCollisionPrimitives(LevelPrimitives);
+	for (int32 I = 0; I < LevelPrimitives.Num(); ++I)
 	{
-		const FLevelStaticMesh& Component = Meshes[I];
-		if (!Component.HasPhysicsBody())
-		{
-			continue;
-		}
+		const UPrimitiveComponent& Component = *LevelPrimitives[I];
 		FBodyInstanceDesc Desc{};
 		Desc.LevelMeshIndex = I;
-		Desc.Type = Component.bSimulatePhysics ? EBodyType::Dynamic : EBodyType::Static;
-		Desc.bEnableGravity = Component.bEnableGravity;
+		Desc.Type = Component.IsSimulatingPhysics() ? EBodyType::Dynamic : EBodyType::Static;
+		Desc.bEnableGravity = Component.IsGravityEnabled();
 		Physics.AddBody(Desc);
 	}
 }
@@ -421,7 +419,6 @@ void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& Params)
 		Step.Gravity = MoveCfg.Gravity;
 		Step.FloorZ = MoveCfg.FloorZ;
 		Step.Skin = MoveCfg.Skin;
-		Step.SkipLevelMeshIndex = Primary->GetLevelMeshIndex();
 	}
 	Physics.Step(Step);
 
@@ -433,8 +430,6 @@ void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& Params)
 	if (Params.Level != nullptr)
 	{
 		Physics.SyncToLevel(*Params.Level);
-		ForEach<ACharacter>(
-			[LocalLevel = Params.Level](ACharacter& Character) { Character.SyncTransformToLevel(*LocalLevel); });
 	}
 
 	if (Params.Renderer != nullptr)
@@ -447,8 +442,8 @@ void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& Params)
 		ForEach<ACharacter>(
 			[&](ACharacter& Character)
 			{
-				Physics.AppendCollisionDebug(*Params.CollisionDebugDraw, Character.GetCapsule(),
-					Character.GetActorLocation(), Character.GetLevelMeshIndex());
+				Physics.AppendCollisionDebug(
+					*Params.CollisionDebugDraw, Character.GetCapsule(), Character.GetActorLocation(), NoLevelMeshIndex);
 			});
 	}
 

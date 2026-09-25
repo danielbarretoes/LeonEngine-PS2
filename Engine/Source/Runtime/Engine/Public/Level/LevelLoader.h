@@ -3,17 +3,17 @@
 #include "CoreMinimal.h"
 #include "Engine/GameEngine.h"
 
-struct FLevelStaticMesh;
+class UStaticMesh;
 
 /**
- * Optional: scale the mesh to FitHeight (its Z extent) and ground-align it (bottom at z ~ 0, centred in X / Y); the
- * existing location is a post-fit offset.
+ * Optional: scale Transform so Mesh is FitHeight tall (its Z extent) and ground-align it (bottom at z ~ 0, centred in
+ * X / Y); the existing location is a post-fit offset.
  */
-void ApplyFitHeight(FLevelStaticMesh& Object, float FitHeight);
+void ApplyFitHeight(FTransform& Transform, const UStaticMesh& Mesh, float FitHeight);
 
 /**
- * Loads a binary Leon Level (.llev) into an Engine. Any other extension is rejected — there is
- * no JSON level format. Builds into a staging Level and commits only on success (failed loads
- * leave the previous Level and camera untouched).
+ * Loads a binary Leon Level (.llev) into an Engine's world as actors. Any other extension is rejected — there is
+ * no JSON level format. Resources are resolved before anything is spawned: a failed load leaves the previous level
+ * actors and the camera untouched.
  */
 bool LoadLevelFile(UGameEngine& Engine, const FString& LevelPath);

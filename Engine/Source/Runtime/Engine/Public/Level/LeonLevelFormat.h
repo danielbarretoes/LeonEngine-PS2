@@ -2,9 +2,11 @@
 
 #include "Camera/CameraComponent.h"
 #include "CoreMinimal.h"
-#include "Engine/Level.h"
+#include "Engine/EngineTypes.h"
+#include "Level/Light.h"
 
 class UGameEngine;
+class ULevel;
 
 /**
  * Binary Leon Level container (.llev): little-endian, string-table based.
@@ -94,7 +96,7 @@ struct ENGINE_API FLevelActorRecord
 	bool bHasFitHeight = false;
 	float FitHeight = 0.0f;
 
-	// FTriggerVolume / interactables (written when HasInteractCost / HasPayload / ConsumeOnUse).
+	// Trigger volumes / interactables (written when HasInteractCost / HasPayload / ConsumeOnUse).
 	int32 InteractCost = 0;
 	float InteractRadius = 2.0f;
 	float DamagePerSecond = 12.0f;
@@ -152,7 +154,12 @@ struct ENGINE_API FLevelDocument
 	TArray<FLevelLightRecord> Lights;
 };
 
-/** Snapshot a live Level + Camera into a serializable document. */
+/**
+ * Snapshot a live level + camera into a serializable document: the level's world settings, player starts, target
+ * points, trigger and pain volumes, static meshes and blocking volumes, then directional and point lights, each group
+ * in spawn order (the grouping the format always wrote). The legacy fields come from each actor's
+ * ULegacyLevelDataComponent.
+ */
 [[nodiscard]] FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& InCamera);
 
 /** Encode a document as .llev bytes. */
@@ -168,8 +175,12 @@ struct ENGINE_API FLevelDocument
 [[nodiscard]] bool LoadLeonLevelFile(const FString& Path, FLevelDocument& Out);
 
 /**
- * Resolve a document into the Engine: builds a staging Level and commits on full success only; asset paths
- * resolve relative to SourcePath.
+ * Resolve a document into the engine's world as actors (asset paths resolve relative to SourcePath). Every mesh and
+ * material is resolved first; on a failure nothing changes. Then the previous level-content actors are destroyed and
+ * the document spawns an AWorldSettings, one actor per record in record order (APlayerStart, AStaticMeshActor for
+ * Cube / Sphere / Plane / StaticMesh, ABlockingVolume, ATriggerVolume, APainCausingVolume, ATargetPoint for
+ * AISpawnPoint) and its lights (ADirectionalLight / APointLight, the default sun when it has no directional light).
+ * The camera framing goes to the engine camera. Collects garbage (a safe point).
  */
 [[nodiscard]] bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const FString& SourcePath);
 

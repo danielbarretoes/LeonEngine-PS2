@@ -3,7 +3,8 @@
 #include "CoreMinimal.h"
 #include "Level/Light.h"
 
-class ULevel;
+class ALight;
+class UWorld;
 
 /** Engine light primitives (UE-like FDirectionalLight / FPointLight). */
 enum class EBasicLight
@@ -35,8 +36,8 @@ struct ENGINE_API FBasicLight
 	[[nodiscard]] FDirectionalLight AsDirectional() const;
 	[[nodiscard]] FPointLight AsPoint() const;
 
-	/** Appends this light to the level's directional or point list. */
-	void AddTo(ULevel& Level) const;
+	/** Spawns an ADirectionalLight or APointLight at Transform with these settings. */
+	ALight* SpawnIn(UWorld& World) const;
 };
 
 [[nodiscard]] bool TryParseBasicLightName(const FString& Name, EBasicLight& Out);

@@ -45,6 +45,9 @@ public:
 	UPROPERTY()
 	uint8 bHiddenInGame : 1;
 
+	/** Whether the component may move at runtime (UE: Mobility); the level reader sets it from the `.llev` record. */
+	EComponentMobility Mobility = EComponentMobility::Static;
+
 	[[nodiscard]] FVector GetRelativeLocation() const
 	{
 		return RelativeLocation;
@@ -74,8 +77,18 @@ public:
 		RelativeLocation = NewLocation;
 		RelativeRotation = NewRotation;
 	}
+	/**
+	 * The relative transform; its rotation is exactly the quaternion SetRelativeTransform last stored while
+	 * RelativeRotation still holds the rotator that came with it (RelativeRotationCache).
+	 */
 	[[nodiscard]] FTransform GetRelativeTransform() const;
 	void SetRelativeTransform(const FTransform& NewTransform);
+
+	/** UE: SetMobility / Mobility. */
+	void SetMobility(EComponentMobility NewMobility)
+	{
+		Mobility = NewMobility;
+	}
 
 	/**
 	 * Records the parent to attach to when the component registers (UE: SetupAttachment). For constructors, before the
@@ -164,4 +177,7 @@ private:
 	/** The components attached to this one (UE: AttachChildren). */
 	UPROPERTY(Transient)
 	TArray<USceneComponent*> AttachChildren;
+
+	/** Keeps a quaternion set through SetRelativeTransform exact (UE: RelativeRotationCache). */
+	FRotationConversionCache RelativeRotationCache;
 };
