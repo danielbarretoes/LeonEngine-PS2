@@ -46,8 +46,8 @@ public:
 	void BuildFromPhysScene(const FPhysScene& Physics, float FloorZ, float WalkBounds);
 
 	/**
-	 * Prefer this: skips the `.llev` floor Plane; honors NavTags::Blocker / NavTags::Walkable on the Tags of the actors
-	 * whose components own the bodies.
+	 * Prefer this: skips a floor made of the basic plane (/Engine/BasicShapes/Plane); honors NavTags::Blocker /
+	 * NavTags::Walkable on the Tags of the actors whose components own the bodies.
 	 */
 	void BuildFromLevel(const ULevel& Level, const FPhysScene& Physics, float FloorZ, float WalkBounds);
 

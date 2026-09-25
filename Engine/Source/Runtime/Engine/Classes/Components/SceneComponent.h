@@ -45,7 +45,8 @@ public:
 	UPROPERTY()
 	uint8 bHiddenInGame : 1;
 
-	/** Whether the component may move at runtime (UE: Mobility); the level reader sets it from the `.llev` record. */
+	/** Whether the component may move at runtime (UE: Mobility). */
+	UPROPERTY()
 	EComponentMobility Mobility = EComponentMobility::Static;
 
 	[[nodiscard]] FVector GetRelativeLocation() const
@@ -157,6 +158,12 @@ public:
 
 	// UObject
 	void BeginDestroy() override;
+	/**
+	 * The tagged properties, then the quaternion the relative transform uses (GetRelativeTransform), so a loaded
+	 * component's transform is the saved one bit for bit (Leon; UE saves RelativeRotation only and rebuilds the
+	 * quaternion from it, which may round differently). Every package with a scene component (the maps, P15) has it.
+	 */
+	void Serialize(FArchive& Ar) override;
 
 protected:
 	void OnRegister() override;

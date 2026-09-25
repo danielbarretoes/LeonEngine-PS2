@@ -1,3 +1,4 @@
+#include "Camera/CameraActor.h"
 #include "CoreMinimal.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/StaticMesh.h"
@@ -26,18 +27,16 @@
 namespace
 {
 
-	/** A camera with the level's camera framing (kept on its world settings), as the level opens. */
-	UCameraComponent& MakeFramingCamera(const UWorld& World)
+	/** The level's camera framing: the camera of the camera actor the reader spawned. */
+	const UCameraComponent& GetFramingCamera(const UWorld& World)
 	{
-		UCameraComponent& Camera = *NewObject<UCameraComponent>();
-		World.GetWorldSettings()->FindComponentByClass<ULegacyLevelDataComponent>()->ApplyCameraFraming(Camera);
-		return Camera;
+		return *World.FindFirst<ACameraActor>()->GetCameraComponent();
 	}
 
 	/** MD5 of the bytes the level saver writes for the world's level and its camera framing, with the byte count. */
 	FString SavedHash(const UWorld& World)
 	{
-		const FLevelDocument Doc = BuildLevelDocument(*World.PersistentLevel, MakeFramingCamera(World));
+		const FLevelDocument Doc = BuildLevelDocument(*World.PersistentLevel, GetFramingCamera(World));
 		const TArray<uint8> Bytes = SerializeLeonLevel(Doc);
 		return FMD5::HashBytes(Bytes.GetData(), Bytes.Num()) + FString::Printf(" (%d bytes)", Bytes.Num());
 	}
@@ -192,13 +191,12 @@ bool FLevelFormatWorldRoundTripsThroughLegacyRecordsTest::RunTest(const FString&
 	TestEqual("Legacy light yaw", Doc.Lights[0].RotationDegrees.Y, 70.0f, 1.0e-2f);
 
 	World.Clear();
-	Camera.SetViewRotation(FRotator::ZeroRotator);
 	if (!TestTrue("Applied", ApplyLevelDocument(World, Doc, "memory-round-trip")))
 	{
 		return false;
 	}
-	// The framing comes back on the world settings; the camera takes it as the level opens.
-	World.GetWorldSettings()->FindComponentByClass<ULegacyLevelDataComponent>()->ApplyCameraFraming(Camera);
+	// The framing comes back as the level's camera actor.
+	const UCameraComponent& Framing = GetFramingCamera(World);
 	TArray<AActor*> Found;
 	UGameplayStatics::GetAllActorsOfClass(World, APlayerStart::StaticClass(), Found);
 	const AActor* Restored = Found.Num() > 0 ? Found[0] : nullptr;
@@ -213,8 +211,8 @@ bool FLevelFormatWorldRoundTripsThroughLegacyRecordsTest::RunTest(const FString&
 		Found.Num() > 0 &&
 			CastChecked<ADirectionalLight>(Found[0])->GetLightComponent()->GetDirection().Equals(
 				FRotator(-45.0f, 20.0f, 0.0f).Vector(), 1.0e-4f));
-	TestTrue("Camera eye", Camera.GetCameraLocation().Equals(Eye, 1.0e-2f));
-	TestTrue("Camera rotation", Camera.GetViewRotation().Equals(FRotator(-20.0f, 135.0f, 0.0f), 1.0e-3f));
+	TestTrue("Camera eye", Framing.GetCameraLocation().Equals(Eye, 1.0e-2f));
+	TestTrue("Camera rotation", Framing.GetViewRotation().Equals(FRotator(-20.0f, 135.0f, 0.0f), 1.0e-3f));
 	return true;
 }
 

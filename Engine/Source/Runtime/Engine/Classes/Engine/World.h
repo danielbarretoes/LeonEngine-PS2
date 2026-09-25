@@ -77,15 +77,19 @@ struct ENGINE_API FWorldGameplayFrameParams
 };
 
 /**
- * The world (UE: UWorld): a UObject whose outer is its package (a transient "/Temp/Untitled_<N>" until the `.lmap` map
- * packages of P15), which owns its persistent level (and through it the actors), the physics scene and the navigation
- * system.
+ * The world (UE: UWorld): a UObject whose outer is its package, which owns its persistent level (and through it the
+ * actors), the physics scene and the navigation system. A map is a `.lmap` package holding a world (the asset, named
+ * after the package), its persistent level, the level's AWorldSettings and the actors with their components (plan
+ * decision D13: PKG_ContainsMap).
  *
- * - CreateWorld makes the package, the world and its level; the world plays once BeginPlay runs (UEngine::LoadMap calls
- *   it after the players logged in; a test's FScopedTestWorld at once). DestroyWorld ends play on every actor, marks
- * the world, its level and its actors pending kill and removes the world from the root set. The owner
- * (UEngine::LoadMap, a UGameInstance's world context, a test's FScopedTestWorld) then collects garbage at that safe
- * point.
+ * - CreateWorld makes the world and its level, in a new transient "/Temp/Untitled_<N>" package or in the package it is
+ *   given (a map being built: UPackage::SavePackage with a `.lmap` file name saves it). A map loaded with LoadPackage
+ *   gives its world (FindWorldInPackage); the loader then calls InitWorld, and InitializeActorsForPlay registers the
+ *   actors' components and initializes the actors (UEngine::LoadMap).
+ * - The world plays once BeginPlay runs (UEngine::LoadMap calls it after the players logged in; a test's
+ *   FScopedTestWorld at once). DestroyWorld ends play on every actor, marks the world, its level and its actors
+ *   pending kill and removes the world from the root set. The owner (UEngine::LoadMap, a UGameInstance's world
+ *   context, a test's FScopedTestWorld) then collects garbage at that safe point.
  * - SpawnActor creates actors with NewObject in the level (their outer). An actor spawned while the world ticks joins
  *   the level (and begins play) once the tick ends.
  * - DestroyActor ends play, unregisters the components, removes the actor from the level and marks it pending kill.
@@ -104,8 +108,8 @@ public:
 	// UObject
 	void BeginDestroy() override;
 
-	/** The level the world was created with; every actor spawns here (UE: PersistentLevel). */
-	UPROPERTY(Transient)
+	/** The level the world was created with; every actor spawns here (UE: PersistentLevel). A map saves it. */
+	UPROPERTY()
 	ULevel* PersistentLevel = nullptr;
 
 	/** The game mode, spawned by SetGameMode (UE: AuthorityGameMode). */
@@ -133,12 +137,36 @@ public:
 	FDebugDraw LineBatcher;
 
 	/**
-	 * Creates a world in a new transient package with its persistent level (UE: CreateWorld). bInformEngineOfWorld is
-	 * kept for the UE signature (the world contexts belong to the game instances). With bAddToRoot the world is in the
-	 * root set until DestroyWorld. The world has not begun play.
+	 * Creates a world with its persistent level and initializes it (UE: CreateWorld): in InWorldPackage (a map's
+	 * package; the world is then public and standalone, like UE's map assets), else in a new transient package.
+	 * bInformEngineOfWorld is kept for the UE signature (the world contexts belong to the game instances). With
+	 * bAddToRoot the world is in the root set until DestroyWorld. The world has not begun play.
 	 */
 	static UWorld* CreateWorld(EWorldType::Type InWorldType, bool bInformEngineOfWorld, FName WorldName = NAME_None,
 		UPackage* InWorldPackage = nullptr, bool bAddToRoot = true);
+
+	/** The world of a map package (UE: FindWorldInPackage): its UWorld object, or null. */
+	static UWorld* FindWorldInPackage(UPackage* Package);
+
+	/**
+	 * Gets a created or loaded world ready (UE: InitWorld): the persistent level (made when missing) knows its world,
+	 * the level's actors get their spawn-order IDs (AActor::GetUniqueID, in level order: a loaded map keeps the order
+	 * it was saved in), and the renderer's scene is allocated unless the engine never renders. Runs once.
+	 */
+	void InitWorld();
+
+	/**
+	 * Registers the components of every actor of the level that are not registered yet, in level order (UE:
+	 * UpdateWorldComponents): a loaded map's components get their physics bodies and scene proxies here. The flags are
+	 * kept for the UE signature (Leon has no construction scripts and one level).
+	 */
+	void UpdateWorldComponents(bool bRerunConstructionScripts = false, bool bCurrentLevelOnly = true);
+
+	/** Sets what the world is for (Leon: UE sets WorldType directly); UEngine::LoadMap sets a loaded map's. */
+	void SetWorldType(EWorldType::Type InWorldType)
+	{
+		WorldType = InWorldType;
+	}
 
 	/**
 	 * Ends play on every actor (EEndPlayReason::Quit), clears the physics and navigation, and marks the actors, the
@@ -201,8 +229,11 @@ public:
 	AGameModeBase* SetGameMode(TSubclassOf<AGameModeBase> GameModeClass);
 
 	/**
-	 * Gets the actors ready for play (UE: InitializeActorsForPlay): Leon's actors initialize when they spawn, so this
-	 * gives the game mode its map name and options (AGameModeBase::InitGame).
+	 * Gets the actors ready for play (UE: InitializeActorsForPlay): registers the components that are not registered
+	 * (UpdateWorldComponents), gives the game mode its map name and options (AGameModeBase::InitGame), then initializes
+	 * the level's actors that are not initialized yet (UE: ULevel::RouteActorInitialize: PreInitializeComponents,
+	 * InitializeComponents, PostInitializeComponents). A spawned actor is registered and initialized already; a loaded
+	 * map's actors are done here.
 	 */
 	void InitializeActorsForPlay(const FURL& InURL, bool bResetTime = true);
 
@@ -415,7 +446,6 @@ public:
 private:
 	friend class AActor;
 
-	void InitWorld();
 	AActor* SpawnActorInternal(UClass* Class, const FVector* Location, const FRotator* Rotation,
 		const FTransform* Transform, const FActorSpawnParameters& SpawnParameters);
 	void FlushPendingSpawns();
@@ -437,6 +467,7 @@ private:
 	bool bBegunPlay = false;
 	bool bTicking = false;
 	bool bIsTearingDown = false;
+	bool bIsWorldInitialized = false;
 	/** A DestroyActor during the tick left null slots in the level. */
 	bool bHasNullActorSlots = false;
 };

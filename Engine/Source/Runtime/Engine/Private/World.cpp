@@ -49,8 +49,11 @@ UWorld* UWorld::CreateWorld(EWorldType::Type InWorldType, bool /*bInformEngineOf
 	}
 	const FName NewWorldName = WorldName.IsNone() ? FName(*FPackageName::GetShortName(WorldPackage)) : WorldName;
 
-	UWorld* NewWorld = NewObject<UWorld>(WorldPackage, NewWorldName);
+	// A map's world is its package's asset (UE: UWorldFactory makes it public and standalone).
+	const EObjectFlags WorldFlags = InWorldPackage != nullptr ? RF_Public | RF_Standalone : RF_NoFlags;
+	UWorld* NewWorld = NewObject<UWorld>(WorldPackage, NewWorldName, WorldFlags);
 	NewWorld->WorldType = InWorldType;
+	NewWorld->PersistentLevel = NewObject<ULevel>(NewWorld, TEXT("PersistentLevel"));
 	NewWorld->InitWorld();
 	if (bAddToRoot)
 	{
@@ -59,16 +62,67 @@ UWorld* UWorld::CreateWorld(EWorldType::Type InWorldType, bool /*bInformEngineOf
 	return NewWorld;
 }
 
+UWorld* UWorld::FindWorldInPackage(UPackage* Package)
+{
+	if (Package == nullptr)
+	{
+		return nullptr;
+	}
+	TArray<UObject*> Objects;
+	GetObjectsWithOuter(Package, Objects, /*bIncludeNestedObjects =*/false);
+	for (UObject* Object : Objects)
+	{
+		if (UWorld* World = Cast<UWorld>(Object))
+		{
+			return World;
+		}
+	}
+	return nullptr;
+}
+
 void UWorld::InitWorld()
 {
-	PersistentLevel = NewObject<ULevel>(this, TEXT("PersistentLevel"));
+	if (bIsWorldInitialized)
+	{
+		return;
+	}
+	bIsWorldInitialized = true;
+	if (PersistentLevel == nullptr)
+	{
+		PersistentLevel = NewObject<ULevel>(this, TEXT("PersistentLevel"));
+	}
 	PersistentLevel->OwningWorld = this;
+	// A loaded map's actors were saved in spawn order: they take their IDs in that order, before anything spawns.
+	for (AActor* Actor : PersistentLevel->Actors)
+	{
+		if (Actor != nullptr && Actor->GetUniqueID() == 0)
+		{
+			Actor->SetUniqueID(++NextUniqueID);
+		}
+	}
 	// UE: InitWorld allocates the scene unless the engine never renders (-nullrhi, a dedicated server).
 	if (FApp::CanEverRender())
 	{
 		if (IRendererModule* RendererModule = GetRendererModulePtr())
 		{
 			Scene = RendererModule->AllocateScene(this);
+		}
+	}
+}
+
+void UWorld::UpdateWorldComponents(bool /*bRerunConstructionScripts*/, bool /*bCurrentLevelOnly*/)
+{
+	if (PersistentLevel == nullptr)
+	{
+		return;
+	}
+	// Registration may spawn (a component creating an actor): walk a copy.
+	const TArray<AActor*> Actors = PersistentLevel->Actors;
+	for (AActor* Actor : Actors)
+	{
+		if (Actor != nullptr && !Actor->IsPendingKillPending())
+		{
+			Actor->RegisterAllComponents();
 		}
 	}
 }
@@ -168,7 +222,8 @@ AGameModeBase* UWorld::SetGameMode(TSubclassOf<AGameModeBase> GameModeClass)
 
 void UWorld::InitializeActorsForPlay(const FURL& InURL, bool /*bResetTime*/)
 {
-	// UE registers the loaded actors' components and initializes them here; Leon's actors did both when they spawned.
+	// A loaded map's components register here; spawned actors registered theirs when they spawned.
+	UpdateWorldComponents();
 	if (AuthorityGameMode != nullptr)
 	{
 		FString Options;
@@ -182,6 +237,18 @@ void UWorld::InitializeActorsForPlay(const FURL& InURL, bool /*bResetTime*/)
 		if (!Error.IsEmpty())
 		{
 			UE_LOG(LogWorld, Warning, TEXT("InitGame: %s"), *Error);
+		}
+	}
+	// UE: ULevel::RouteActorInitialize, in level order.
+	if (PersistentLevel != nullptr)
+	{
+		const TArray<AActor*> Actors = PersistentLevel->Actors;
+		for (AActor* Actor : Actors)
+		{
+			if (Actor != nullptr && !Actor->IsActorInitialized())
+			{
+				PostActorConstruction(Actor);
+			}
 		}
 	}
 }

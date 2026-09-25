@@ -8,9 +8,8 @@
 class AGameModeBase;
 
 /**
- * Per-level settings (UE: AWorldSettings), an AInfo in the level that ULevel::GetWorldSettings returns. The `.llev`
- * reader spawns one first. Its legacy fields with no UE home (the level name, the game mode string, the ignored
- * environment map and the camera framing) live in the ULegacyLevelDataComponent the reader gives it.
+ * Per-level settings (UE: AWorldSettings), an AInfo in the level that ULevel::GetWorldSettings returns: the first
+ * actor of a map, saved with it.
  */
 UCLASS(NotPlaceable)
 class ENGINE_API AWorldSettings : public AInfo
@@ -22,8 +21,7 @@ public:
 
 	/**
 	 * The game mode this level asks for (UE: DefaultGameMode), after `?game=` and before the project's
-	 * GlobalDefaultGameMode (plan decision D18). The `.llev` game mode is a free string, so levels read from it leave
-	 * this empty.
+	 * GlobalDefaultGameMode (plan decision D18); empty leaves it to the project.
 	 */
 	UPROPERTY()
 	TSubclassOf<AGameModeBase> DefaultGameMode;

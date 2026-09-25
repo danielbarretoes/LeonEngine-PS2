@@ -36,11 +36,10 @@ public:
 
 	/**
 	 * What the collision takes part in (UE: BodyInstance.CollisionEnabled). Leon's default is NoCollision: the physics
-	 * scene only holds level geometry, which the level reader enables per record, and characters are swept capsules,
-	 * never bodies.
+	 * scene only holds level geometry, which a map enables per actor, and characters are swept capsules, never bodies.
 	 */
-	void SetCollisionEnabled(ECollisionEnabled::Type NewType);
-	[[nodiscard]] ECollisionEnabled::Type GetCollisionEnabled() const
+	void SetCollisionEnabled(ECollisionEnabled NewType);
+	[[nodiscard]] ECollisionEnabled GetCollisionEnabled() const
 	{
 		return CollisionEnabled;
 	}
@@ -87,8 +86,18 @@ protected:
 	void DestroyPhysicsState() override;
 
 private:
-	/** UE keeps these in the component's FBodyInstance (BodyInstance); Leon's physics scene owns its bodies. */
-	ECollisionEnabled::Type CollisionEnabled = ECollisionEnabled::NoCollision;
+	// UE keeps these in the component's FBodyInstance (BodyInstance, a USTRUCT); Leon's physics scene owns its bodies,
+	// so they are the component's own properties (saved with a map).
+
+	/** UE: BodyInstance.CollisionEnabled. */
+	UPROPERTY()
+	ECollisionEnabled CollisionEnabled = ECollisionEnabled::NoCollision;
+
+	/** UE: BodyInstance.bSimulatePhysics. */
+	UPROPERTY()
 	bool bSimulatePhysics = false;
+
+	/** UE: BodyInstance.bEnableGravity. */
+	UPROPERTY()
 	bool bEnableGravity = true;
 };

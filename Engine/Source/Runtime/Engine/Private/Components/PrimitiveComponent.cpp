@@ -57,7 +57,7 @@ void UPrimitiveComponent::SendRenderTransform_Concurrent()
 	}
 }
 
-void UPrimitiveComponent::SetCollisionEnabled(ECollisionEnabled::Type NewType)
+void UPrimitiveComponent::SetCollisionEnabled(ECollisionEnabled NewType)
 {
 	if (CollisionEnabled == NewType)
 	{

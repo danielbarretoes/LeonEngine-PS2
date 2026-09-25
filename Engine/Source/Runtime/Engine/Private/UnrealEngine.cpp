@@ -1,5 +1,6 @@
 #include "UnrealEngine.h"
 
+#include "Camera/CameraActor.h"
 #include "CoreGlobals.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
@@ -11,7 +12,6 @@
 #include "GameFramework/PlayerStartPIE.h"
 #include "GameFramework/WorldSettings.h"
 #include "HAL/PlatformTime.h"
-#include "Level/LegacyLevelDataComponent.h"
 #include "Level/LeonLevelFormat.h"
 #include "Level/LevelLoader.h"
 #include "Materials/Material.h"
@@ -23,6 +23,7 @@
 #include "RendererInterface.h"
 #include "Sound/SoundWave.h"
 #include "UObject/GarbageCollection.h"
+#include "UObject/Package.h"
 
 UEngine* GEngine = nullptr;
 
@@ -30,7 +31,76 @@ namespace
 {
 
 	/**
-	 * The `.llev` file of a map (Leon until the `.lmap` packages of P15): a long package name under a mount point
+	 * Mounts the content folder of a map file that no mount point contains, and gives the map's long package name
+	 * (Leon; UE only opens maps under its mount points). The content folder is the one above the map's `Maps/` folder
+	 * (`<Root>/Maps/X.lmap`, UE's content layout), else the map's own folder; its mount point is named after it
+	 * (`.../RenderTest/Maps/RenderTest.lmap` mounts `.../RenderTest` as `/RenderTest/`), so the packages the map
+	 * references by that root load from there. False when that name already names another folder.
+	 */
+	[[nodiscard]] bool MountMapContentRoot(const FString& MapFile, FString& OutPackageName)
+	{
+		FString Root = FPaths::GetPath(MapFile);
+		for (FString Folder = Root; !Folder.IsEmpty(); Folder = FPaths::GetPath(Folder))
+		{
+			if (FPaths::GetCleanFilename(Folder) == TEXT("Maps"))
+			{
+				Root = FPaths::GetPath(Folder);
+				break;
+			}
+			if (FPaths::GetPath(Folder) == Folder)
+			{
+				break;
+			}
+		}
+		const FString MountPoint = TEXT("/") + FPaths::GetCleanFilename(Root) + TEXT("/");
+		if (FPackageName::MountPointExists(MountPoint))
+		{
+			UE_LOG(LogLoad, Error, TEXT("Cannot mount '%s' as %s: that mount point names another folder"), *Root,
+				*MountPoint);
+			return false;
+		}
+		FPackageName::RegisterMountPoint(MountPoint, Root + TEXT("/"));
+		UE_LOG(LogLoad, Log, TEXT("Mounted '%s' as %s"), *Root, *MountPoint);
+		return FPackageName::TryConvertFilenameToLongPackageName(MapFile, OutPackageName);
+	}
+
+	/**
+	 * The long package name of a map's `.lmap` package: a long package name (`/Engine/Maps/Entry`, `/Game/Maps/X`)
+	 * whose `.lmap` exists (or whose bytes are registered in memory), or a `.lmap` file path (absolute or relative to
+	 * the working directory; MountMapContentRoot mounts it when no mount point contains it).
+	 */
+	[[nodiscard]] bool FindMapPackage(const FString& Map, FString& OutPackageName)
+	{
+		FString PackageName;
+		if (FPackageName::IsValidLongPackageName(Map))
+		{
+			PackageName = Map;
+		}
+		else if (FPaths::GetExtension(Map, true) == FPackageName::GetMapPackageExtension() && FPaths::FileExists(Map))
+		{
+			const FString MapFile = FPaths::ConvertRelativePathToFull(Map);
+			if (!FPackageName::TryConvertFilenameToLongPackageName(MapFile, PackageName) &&
+				!MountMapContentRoot(MapFile, PackageName))
+			{
+				return false;
+			}
+		}
+		else
+		{
+			return false;
+		}
+		FString Filename;
+		if (!FPackageName::DoesPackageExist(PackageName, nullptr, &Filename))
+		{
+			return false;
+		}
+		OutPackageName = PackageName;
+		// A map package: a `.lmap` file, or bytes registered in memory.
+		return Filename.IsEmpty() || FPaths::GetExtension(Filename, true) == FPackageName::GetMapPackageExtension();
+	}
+
+	/**
+	 * The `.llev` file of a legacy map (until the `.lmap` migration of P15): a long package name under a mount point
 	 * (`/Engine/LevelTemplates/Starter` → Engine/Content/LevelTemplates/Starter.llev), a file path (absolute or
 	 * relative to the working directory) or a legacy content key (`LevelTemplates/Starter.llev`).
 	 */
@@ -61,21 +131,20 @@ namespace
 	}
 
 	/**
-	 * Spawns the Play From Here start of a `.llev` level at the view its camera framing opens with (Leon: UE's editor
-	 * spawns an APlayerStartPIE at its viewport camera).
+	 * Spawns the Play From Here start of a `.llev` level at the view its camera framing (the level's ACameraActor)
+	 * opens with (Leon: UE's editor spawns an APlayerStartPIE at its viewport camera). A migrated map saves an
+	 * APlayerStart there instead.
 	 */
 	void SpawnLegacyPlayFromHereStart(UWorld& World)
 	{
-		const AWorldSettings* WorldSettings = World.GetWorldSettings();
-		const ULegacyLevelDataComponent* LevelData =
-			WorldSettings != nullptr ? WorldSettings->FindComponentByClass<ULegacyLevelDataComponent>() : nullptr;
-		if (LevelData == nullptr)
+		const ACameraActor* Framing = World.FindFirst<ACameraActor>();
+		if (Framing == nullptr)
 		{
 			return;
 		}
 		FVector Location;
 		FRotator Rotation;
-		LevelData->GetPlayFromHereView(Location, Rotation);
+		GetLegacyPlayFromHereView(*Framing->GetCameraComponent(), Location, Rotation);
 		FActorSpawnParameters SpawnInfo;
 		SpawnInfo.ObjectFlags |= RF_Transient;
 		(void)World.SpawnActor<APlayerStartPIE>(APlayerStartPIE::StaticClass(), Location, Rotation, SpawnInfo);
@@ -258,9 +327,11 @@ bool UEngine::LoadMap(FWorldContext& WorldContext, FURL URL, UPendingNetGame* /*
 	Error.Empty();
 	UE_LOG(LogLoad, Log, TEXT("LoadMap: %s"), *URL.ToString());
 
-	// The map is found before the current world goes: a map that is not there leaves it playing.
+	// The map is found before the current world goes: a map that is not there leaves it playing. A `.lmap` package,
+	// else a legacy `.llev` file.
+	FString MapPackageName;
 	FString LevelFilename;
-	if (!FindLegacyMapFile(URL.Map, LevelFilename))
+	if (!FindMapPackage(URL.Map, MapPackageName) && !FindLegacyMapFile(URL.Map, LevelFilename))
 	{
 		Error = FString::Printf(TEXT("Failed to load package '%s'"), *URL.Map);
 		return false;
@@ -298,21 +369,38 @@ bool UEngine::LoadMap(FWorldContext& WorldContext, FURL URL, UPendingNetGame* /*
 		CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
 	}
 
-	// The new world, named after the map (UE: the world of the map package; P15).
-	UWorld* NewWorld =
-		UWorld::CreateWorld(WorldContext.WorldType != EWorldType::None ? WorldContext.WorldType : EWorldType::Game,
-			true, FName(*FPaths::GetBaseFilename(URL.Map)));
-	WorldContext.SetCurrentWorld(NewWorld);
-
-	// The level's actors (the `.llev` reader until P15).
-	if (!LoadLevelFile(*NewWorld, LevelFilename))
+	const EWorldType::Type WorldType =
+		WorldContext.WorldType != EWorldType::None ? WorldContext.WorldType : EWorldType::Game;
+	UWorld* NewWorld = nullptr;
+	if (!MapPackageName.IsEmpty())
 	{
-		Error = FString::Printf(TEXT("Failed to load map '%s'"), *LevelFilename);
-		return false;
+		// The world of the map package, with its level and actors (UE).
+		UPackage* const WorldPackage = LoadPackage(nullptr, *MapPackageName, LOAD_None);
+		NewWorld = UWorld::FindWorldInPackage(WorldPackage);
+		if (NewWorld == nullptr)
+		{
+			Error = FString::Printf(TEXT("Failed to load map '%s': no world in the package"), *MapPackageName);
+			return false;
+		}
+		NewWorld->SetWorldType(WorldType);
+		NewWorld->AddToRoot();
+		NewWorld->InitWorld();
+		WorldContext.SetCurrentWorld(NewWorld);
 	}
-	SpawnLegacyPlayFromHereStart(*NewWorld);
+	else
+	{
+		// A legacy `.llev`: a new world named after it, with the level's actors from the reader.
+		NewWorld = UWorld::CreateWorld(WorldType, true, FName(*FPaths::GetBaseFilename(URL.Map)));
+		WorldContext.SetCurrentWorld(NewWorld);
+		if (!LoadLevelFile(*NewWorld, LevelFilename))
+		{
+			Error = FString::Printf(TEXT("Failed to load map '%s'"), *LevelFilename);
+			return false;
+		}
+		SpawnLegacyPlayFromHereStart(*NewWorld);
+	}
 
-	// The game mode (plan decision D18), then the actors get ready for play.
+	// The game mode (plan decision D18), then the actors get ready for play (a loaded map's components register).
 	NewWorld->SetGameMode(URL);
 	NewWorld->InitializeActorsForPlay(URL);
 	WorldContext.LastURL = URL;

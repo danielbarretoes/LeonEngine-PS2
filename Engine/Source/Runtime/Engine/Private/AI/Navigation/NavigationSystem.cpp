@@ -2,10 +2,11 @@
 
 #include "BodyInstance.h"
 #include "Components/PrimitiveComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Debug/DebugDraw.h"
 #include "Engine/Level.h"
+#include "Engine/StaticMesh.h"
 #include "GameFramework/Actor.h"
-#include "Level/LegacyLevelDataComponent.h"
 #include "Physics/PhysScene.h"
 #include "TriangleCollision.h"
 
@@ -38,13 +39,12 @@ namespace
 		return Owner != nullptr && Owner->ActorHasTag(FName(Tag));
 	}
 
-	/** The arena floor: a plane read from a `.llev` Plane record. */
+	/** The arena floor: a mesh component showing the engine's basic plane (/Engine/BasicShapes/Plane). */
 	[[nodiscard]] bool IsLevelFloorPlane(const UPrimitiveComponent* Component)
 	{
-		const AActor* Owner = Component != nullptr ? Component->GetOwner() : nullptr;
-		const ULegacyLevelDataComponent* Data =
-			Owner != nullptr ? Owner->FindComponentByClass<ULegacyLevelDataComponent>() : nullptr;
-		return Data != nullptr && Data->ActorClass == ELevelActorClass::Plane;
+		const UStaticMeshComponent* MeshComponent = Cast<UStaticMeshComponent>(Component);
+		const UStaticMesh* Mesh = MeshComponent != nullptr ? MeshComponent->GetStaticMesh() : nullptr;
+		return Mesh != nullptr && Mesh->GetPathName() == TEXT("/Engine/BasicShapes/Plane.Plane");
 	}
 
 	/** Component is the body's owner (null for a body without one, or without a level). */
@@ -188,7 +188,7 @@ void UNavigationSystem::BakeGrid(const FPhysScene& Physics, float FloorZ, float 
 	for (int32 Bi = 0; Bi < Physics.GetBodies().Num(); ++Bi)
 	{
 		const FBodyInstance& LocalBody = Physics.GetBodies()[Bi];
-		// With a level, a body's component tells what it is (its actor's tags, the `.llev` floor plane).
+		// With a level, a body's component tells what it is (its actor's tags, the basic floor plane).
 		const UPrimitiveComponent* Component = Level != nullptr ? Physics.GetBodyOwner(Bi) : nullptr;
 		if (!BodyBlocksNavigation(LocalBody, FloorZ, Cell, Component))
 		{

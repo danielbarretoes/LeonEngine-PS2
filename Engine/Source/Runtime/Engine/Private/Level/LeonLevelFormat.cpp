@@ -1,5 +1,7 @@
 #include "Level/LeonLevelFormat.h"
 
+#include "Camera/CameraActor.h"
+#include "Components/InteractableComponent.h"
 #include "Engine/BlockingVolume.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/PointLight.h"
@@ -9,10 +11,13 @@
 #include "Engine/TriggerVolume.h"
 #include "Engine/World.h"
 #include "EngineLogs.h"
+#include "GameFramework/BobbingMovementComponent.h"
 #include "GameFramework/GameModeBase.h"
+#include "GameFramework/OrbitMovementComponent.h"
 #include "GameFramework/PainCausingVolume.h"
 #include "GameFramework/PlayerStart.h"
 #include "GameFramework/PlayerStartPIE.h"
+#include "GameFramework/RotatingMovementComponent.h"
 #include "GameFramework/WorldSettings.h"
 #include "GameMapsSettings.h"
 #include "LegacyCoordinateConversion.h"
@@ -353,13 +358,18 @@ namespace
 		Record.SphereSegments = Data.SphereSegments;
 		Record.SphereRings = Data.SphereRings;
 
-		Record.bHasSpinYaw = Data.SpinYaw != 0.0f;
-		Record.SpinYaw = Record.bHasSpinYaw ? FLegacyCoordinateConversion::ToLegacyYawRate(Data.SpinYaw) : 0.0f;
+		// The spin is a rotating movement's world yaw rate; the bob a bobbing movement.
+		const URotatingMovementComponent* Spin = Actor.FindComponentByClass<URotatingMovementComponent>();
+		const float SpinYaw = Spin != nullptr ? Spin->RotationRate.Yaw : 0.0f;
+		Record.bHasSpinYaw = SpinYaw != 0.0f;
+		Record.SpinYaw = Record.bHasSpinYaw ? FLegacyCoordinateConversion::ToLegacyYawRate(SpinYaw) : 0.0f;
 
-		Record.bHasBob = Data.bHasBob;
-		Record.BobBaseY = FLegacyCoordinateConversion::ToLegacyLength(Data.BobBaseZ);
-		Record.BobAmplitude = FLegacyCoordinateConversion::ToLegacyLength(Data.BobAmplitude);
-		Record.BobSpeed = Data.BobSpeed;
+		const UBobbingMovementComponent* Bob = Actor.FindComponentByClass<UBobbingMovementComponent>();
+		const UBobbingMovementComponent& BobValues = Bob != nullptr ? *Bob : *GetDefault<UBobbingMovementComponent>();
+		Record.bHasBob = Bob != nullptr;
+		Record.BobBaseY = FLegacyCoordinateConversion::ToLegacyLength(BobValues.BaseZ);
+		Record.BobAmplitude = FLegacyCoordinateConversion::ToLegacyLength(BobValues.Amplitude);
+		Record.BobSpeed = BobValues.Speed;
 		return true;
 	}
 
@@ -367,7 +377,8 @@ namespace
 	[[nodiscard]] bool IsLevelContentActor(const AActor& Actor)
 	{
 		return Actor.IsA<AStaticMeshActor>() || Actor.IsA<APlayerStart>() || Actor.IsA<AVolume>() ||
-			Actor.IsA<ALight>() || Actor.IsA<ATargetPoint>() || Actor.IsA<AWorldSettings>();
+			Actor.IsA<ALight>() || Actor.IsA<ATargetPoint>() || Actor.IsA<AWorldSettings>() ||
+			Actor.IsA<ACameraActor>();
 	}
 
 } // namespace
@@ -443,7 +454,9 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 		{
 			continue;
 		}
-		const ULegacyLevelDataComponent& Data = LegacyData(*Actor);
+		const UInteractableComponent* Interactable = Actor->FindComponentByClass<UInteractableComponent>();
+		const UInteractableComponent& Data =
+			Interactable != nullptr ? *Interactable : *GetDefault<UInteractableComponent>();
 		FLevelActorRecord Record;
 		Record.ActorClass = ELevelActorClass::TriggerVolume;
 		SetLegacyTransform(Record, Actor->GetActorTransform());
@@ -511,7 +524,8 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 			continue;
 		}
 		const UPointLightComponent& Component = *Light->GetPointLightComponent();
-		const ULegacyLevelDataComponent& Data = LegacyData(*Light);
+		const UOrbitMovementComponent* Orbit = Light->FindComponentByClass<UOrbitMovementComponent>();
+		const UOrbitMovementComponent& OrbitValues = Orbit != nullptr ? *Orbit : *GetDefault<UOrbitMovementComponent>();
 		FLevelLightRecord Record;
 		Record.LightClass = ELevelLightClass::PointLight;
 		Record.bCastShadows = Component.CastShadows;
@@ -519,11 +533,11 @@ FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& I
 		Record.LightColor = FVector(Component.LightColor.R, Component.LightColor.G, Component.LightColor.B);
 		Record.Intensity = Component.Intensity;
 		Record.Range = FLegacyCoordinateConversion::ToLegacyLength(Component.AttenuationRadius);
-		Record.bHasOrbit = Data.bHasOrbit;
-		Record.OrbitRadius = FLegacyCoordinateConversion::ToLegacyLength(Data.OrbitRadius);
-		Record.OrbitHeight = FLegacyCoordinateConversion::ToLegacyLength(Data.OrbitHeight);
-		Record.OrbitHeightAmp = FLegacyCoordinateConversion::ToLegacyLength(Data.OrbitHeightAmp);
-		Record.OrbitSpeed = Data.OrbitSpeed;
+		Record.bHasOrbit = Orbit != nullptr;
+		Record.OrbitRadius = FLegacyCoordinateConversion::ToLegacyLength(OrbitValues.Radius);
+		Record.OrbitHeight = FLegacyCoordinateConversion::ToLegacyLength(OrbitValues.Height);
+		Record.OrbitHeightAmp = FLegacyCoordinateConversion::ToLegacyLength(OrbitValues.HeightAmplitude);
+		Record.OrbitSpeed = OrbitValues.Speed;
 		Doc.Lights.Add(Record);
 	}
 
@@ -1117,19 +1131,30 @@ namespace
 				: ECollisionEnabled::NoCollision);
 	}
 
-	/** The spin / bob animation and the tessellation of a mesh or blocking volume record. */
-	void ApplyRecordMeshData(ULegacyLevelDataComponent& Data, const FLevelActorRecord& Record)
+	/**
+	 * The material key and the tessellation of a mesh or blocking volume record (the saver's bookkeeping), and its
+	 * animation: a spin becomes a URotatingMovementComponent (a world yaw rate), a bob a UBobbingMovementComponent.
+	 */
+	void ApplyRecordMeshData(AActor& Actor, ULegacyLevelDataComponent& Data, const FLevelActorRecord& Record)
 	{
 		Data.MaterialPath = Record.MaterialPath;
 		Data.SphereSegments = Record.SphereSegments;
 		Data.SphereRings = Record.SphereRings;
-		Data.SpinYaw = Record.bHasSpinYaw ? FLegacyCoordinateConversion::ConvertYawRate(Record.SpinYaw) : 0.0f;
+		const float SpinYaw = Record.bHasSpinYaw ? FLegacyCoordinateConversion::ConvertYawRate(Record.SpinYaw) : 0.0f;
+		if (SpinYaw != 0.0f)
+		{
+			URotatingMovementComponent* Spin = NewObject<URotatingMovementComponent>(&Actor, TEXT("RotatingMovement"));
+			Spin->RotationRate = FRotator(0.0f, SpinYaw, 0.0f);
+			Spin->bRotationInLocalSpace = false;
+			Spin->RegisterComponent();
+		}
 		if (Record.bHasBob)
 		{
-			Data.bHasBob = true;
-			Data.BobBaseZ = FLegacyCoordinateConversion::ConvertLength(Record.BobBaseY);
-			Data.BobAmplitude = FLegacyCoordinateConversion::ConvertLength(Record.BobAmplitude);
-			Data.BobSpeed = Record.BobSpeed;
+			UBobbingMovementComponent* Bob = NewObject<UBobbingMovementComponent>(&Actor, TEXT("BobbingMovement"));
+			Bob->BaseZ = FLegacyCoordinateConversion::ConvertLength(Record.BobBaseY);
+			Bob->Amplitude = FLegacyCoordinateConversion::ConvertLength(Record.BobAmplitude);
+			Bob->Speed = Record.BobSpeed;
+			Bob->RegisterComponent();
 		}
 	}
 
@@ -1152,12 +1177,14 @@ namespace
 			case ELevelActorClass::TriggerVolume:
 				if (ATriggerVolume* Volume = World.SpawnActor<ATriggerVolume>(ATriggerVolume::StaticClass(), Transform))
 				{
+					// The interaction data lives in a UInteractableComponent.
 					ApplyRecordTag(*Volume, Record.Tag);
-					ULegacyLevelDataComponent& Data = AddLegacyData(*Volume, Record.ActorClass);
-					Data.InteractRadius = FLegacyCoordinateConversion::ConvertLength(Record.InteractRadius);
-					Data.InteractCost = Record.InteractCost;
-					Data.Payload = Record.Payload;
-					Data.bConsumeOnUse = Record.bConsumeOnUse;
+					UInteractableComponent* Data = NewObject<UInteractableComponent>(Volume, TEXT("Interactable"));
+					Data->InteractRadius = FLegacyCoordinateConversion::ConvertLength(Record.InteractRadius);
+					Data->InteractCost = Record.InteractCost;
+					Data->Payload = Record.Payload;
+					Data->bConsumeOnUse = Record.bConsumeOnUse;
+					Data->RegisterComponent();
 				}
 				return;
 			case ELevelActorClass::PainCausingVolume:
@@ -1176,7 +1203,7 @@ namespace
 					// Plan decision D16: the brush box stands for the legacy cube; it is never drawn.
 					ApplyRecordTag(*Volume, Record.Tag);
 					Volume->SetActorHiddenInGame(Record.bHidden);
-					ApplyRecordMeshData(AddLegacyData(*Volume, Record.ActorClass), Record);
+					ApplyRecordMeshData(*Volume, AddLegacyData(*Volume, Record.ActorClass), Record);
 					ApplyRecordCollision(*Volume->GetBrushComponent(), Record);
 				}
 				return;
@@ -1196,11 +1223,31 @@ namespace
 		{
 			Data.MeshPath = Record.MeshPath;
 		}
-		ApplyRecordMeshData(Data, Record);
+		ApplyRecordMeshData(*Actor, Data, Record);
 		UStaticMeshComponent& Component = *Actor->GetStaticMeshComponent();
 		(void)Component.SetStaticMesh(Resolved.Mesh);
 		ApplyRecordMaterial(Component, Resolved);
 		ApplyRecordCollision(Component, Record);
+	}
+
+	/**
+	 * Spawns the ACameraActor of a document's camera framing: its camera takes the framing's mode, target, distance,
+	 * view rotation and eye, and the actor stands at the camera's location facing the view.
+	 */
+	void SpawnFramingCamera(UWorld& World, const FLevelCameraRecord& Camera)
+	{
+		// Legacy yaw / pitch meant the eye's offset from the target in Orbit and the look direction in FreeLook.
+		const FRotator ViewRotation = Camera.Mode == ECameraMode::FreeLook
+			? FLegacyCoordinateConversion::ConvertFreeLookRotation(Camera.Yaw, Camera.Pitch)
+			: FLegacyCoordinateConversion::ConvertOrbitViewRotation(Camera.Yaw, Camera.Pitch);
+		ACameraActor* CameraActor = World.SpawnActor<ACameraActor>();
+		UCameraComponent& Component = *CameraActor->GetCameraComponent();
+		Component.SetTarget(FLegacyCoordinateConversion::ConvertPosition(Camera.Target));
+		Component.SetDistance(FLegacyCoordinateConversion::ConvertLength(Camera.Distance));
+		Component.SetViewRotation(ViewRotation);
+		Component.SetEyeLocation(FLegacyCoordinateConversion::ConvertPosition(Camera.Eye));
+		Component.SetMode(Camera.Mode);
+		CameraActor->SetActorLocationAndRotation(Component.GetCameraLocation(), Component.GetViewRotation());
 	}
 
 	/**
@@ -1236,12 +1283,13 @@ namespace
 			{
 				continue;
 			}
-			ULegacyLevelDataComponent& Data = AddLegacyData(*Spawned, ELevelActorClass::StaticMesh);
-			Data.bHasOrbit = true;
-			Data.OrbitRadius = FLegacyCoordinateConversion::ConvertLength(Record.OrbitRadius);
-			Data.OrbitHeight = FLegacyCoordinateConversion::ConvertLength(Record.OrbitHeight);
-			Data.OrbitHeightAmp = FLegacyCoordinateConversion::ConvertLength(Record.OrbitHeightAmp);
-			Data.OrbitSpeed = Record.OrbitSpeed;
+			// The orbit animation is a UOrbitMovementComponent.
+			UOrbitMovementComponent* Orbit = NewObject<UOrbitMovementComponent>(Spawned, TEXT("OrbitMovement"));
+			Orbit->Radius = FLegacyCoordinateConversion::ConvertLength(Record.OrbitRadius);
+			Orbit->Height = FLegacyCoordinateConversion::ConvertLength(Record.OrbitHeight);
+			Orbit->HeightAmplitude = FLegacyCoordinateConversion::ConvertLength(Record.OrbitHeightAmp);
+			Orbit->Speed = Record.OrbitSpeed;
+			Orbit->RegisterComponent();
 		}
 
 		if (NumDirectional == 0)
@@ -1336,15 +1384,8 @@ bool ApplyLevelDocument(UWorld& InWorld, const FLevelDocument& Doc, const FStrin
 	}
 	SpawnDocumentLights(*World, Doc);
 
-	// The camera framing, kept on the world settings (UEngine::LoadMap starts the player there).
-	LevelData.CameraMode = Doc.Camera.Mode;
-	LevelData.CameraTarget = FLegacyCoordinateConversion::ConvertPosition(Doc.Camera.Target);
-	LevelData.CameraDistance = FLegacyCoordinateConversion::ConvertLength(Doc.Camera.Distance);
-	// Legacy yaw / pitch meant the eye's offset from the target in Orbit and the look direction in FreeLook.
-	LevelData.CameraViewRotation = Doc.Camera.Mode == ECameraMode::FreeLook
-		? FLegacyCoordinateConversion::ConvertFreeLookRotation(Doc.Camera.Yaw, Doc.Camera.Pitch)
-		: FLegacyCoordinateConversion::ConvertOrbitViewRotation(Doc.Camera.Yaw, Doc.Camera.Pitch);
-	LevelData.CameraEye = FLegacyCoordinateConversion::ConvertPosition(Doc.Camera.Eye);
+	// The camera framing becomes a camera actor holding it (UEngine::LoadMap starts the player at its view).
+	SpawnFramingCamera(*World, Doc.Camera);
 
 	int32 NumStaticMeshes = 0;
 	for (const AActor* Actor : Level.Actors)

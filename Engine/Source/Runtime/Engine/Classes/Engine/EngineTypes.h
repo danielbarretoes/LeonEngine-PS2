@@ -39,9 +39,10 @@ namespace EEndPlayReason
 } // namespace EEndPlayReason
 
 /**
- * Whether a component may move while the game runs (UE: EComponentMobility). The values are the `.llev` on-disk ones:
- * UE's Stationary (lights that change colour but not position) does not exist in Leon.
+ * Whether a component may move while the game runs (UE: EComponentMobility, a namespaced enum there; Leon's reflection
+ * reads enum classes). UE's Stationary (lights that change colour but not position) does not exist in Leon.
  */
+UENUM()
 enum class EComponentMobility : uint8
 {
 	/** Never moves (static lighting, when it exists, bakes it). */
@@ -71,21 +72,22 @@ enum EMaterialDomain
 	MD_Surface,
 };
 
-/** What a primitive's collision takes part in (UE: ECollisionEnabled). */
-namespace ECollisionEnabled
+/**
+ * What a primitive's collision takes part in (UE: ECollisionEnabled, a namespaced enum there; Leon's reflection reads
+ * enum classes, so the type is ECollisionEnabled instead of ECollisionEnabled::Type).
+ */
+UENUM()
+enum class ECollisionEnabled : uint8
 {
-	enum Type : uint8
-	{
-		/** No body in the physics scene. */
-		NoCollision,
-		/** Traces and overlaps only. */
-		QueryOnly,
-		/** Simulation only. */
-		PhysicsOnly,
-		/** Traces, overlaps and simulation. */
-		QueryAndPhysics,
-	};
-} // namespace ECollisionEnabled
+	/** No body in the physics scene. */
+	NoCollision,
+	/** Traces and overlaps only. */
+	QueryOnly,
+	/** Simulation only. */
+	PhysicsOnly,
+	/** Traces, overlaps and simulation. */
+	QueryAndPhysics,
+};
 
 /**
  * Converts a rotator to a quaternion and back through a one-entry cache (UE: FRotationConversionCache), so a rotation
@@ -116,6 +118,13 @@ struct FRotationConversionCache
 			CachedRotator = InQuat.Rotator();
 		}
 		return CachedRotator;
+	}
+
+	/** Remembers a pair read back from a saved component (Leon), so RotatorToQuat returns InQuat for InRotator. */
+	void SetCachedValues(const FRotator& InRotator, const FQuat& InQuat)
+	{
+		CachedRotator = InRotator;
+		CachedQuat = InQuat;
 	}
 
 private:

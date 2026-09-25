@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 
+class UCameraComponent;
 class UStaticMesh;
 class UWorld;
 
@@ -19,3 +20,11 @@ void ApplyFitHeight(FTransform& Transform, const UStaticMesh& Mesh, float FitHei
  * of P15).
  */
 bool LoadLevelFile(UWorld& World, const FString& LevelPath);
+
+/**
+ * The view a legacy level opens with, from its camera framing (the ACameraActor the reader spawns): the framing
+ * camera's eye, looking at its target, as the legacy engine camera turned it (the pitch clamped to +-89 degrees, no
+ * roll). The legacy default game mode flew the camera from there, so UEngine::LoadMap starts the player at this view
+ * (and the `.lmap` migration saves an APlayerStart there).
+ */
+void GetLegacyPlayFromHereView(const UCameraComponent& Framing, FVector& OutLocation, FRotator& OutRotation);

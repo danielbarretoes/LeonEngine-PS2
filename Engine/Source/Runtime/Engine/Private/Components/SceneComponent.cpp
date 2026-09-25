@@ -51,6 +51,17 @@ USceneComponent::USceneComponent(const FObjectInitializer& ObjectInitializer)
 	bHiddenInGame = false;
 }
 
+void USceneComponent::Serialize(FArchive& Ar)
+{
+	Super::Serialize(Ar);
+	FQuat RelativeQuat = RelativeRotationCache.RotatorToQuat(RelativeRotation);
+	Ar << RelativeQuat;
+	if (Ar.IsLoading())
+	{
+		RelativeRotationCache.SetCachedValues(RelativeRotation, RelativeQuat);
+	}
+}
+
 FTransform USceneComponent::GetRelativeTransform() const
 {
 	return FTransform(RelativeRotationCache.RotatorToQuat(RelativeRotation), RelativeLocation, RelativeScale3D);

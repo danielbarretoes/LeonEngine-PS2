@@ -1,10 +1,10 @@
 #include "GameFramework/VolumeHelpers.h"
 
+#include "Components/InteractableComponent.h"
 #include "Engine/TriggerVolume.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PainCausingVolume.h"
 #include "Kismet/GameplayStatics.h"
-#include "Level/LegacyLevelDataComponent.h"
 
 namespace
 {
@@ -22,14 +22,14 @@ namespace
 		return Best;
 	}
 
-	/** The volume's `.llev` trigger data, or the record defaults. */
-	[[nodiscard]] const ULegacyLevelDataComponent& TriggerData(const ATriggerVolume& Volume)
+	/** The volume's interaction data, or the defaults. */
+	[[nodiscard]] const UInteractableComponent& TriggerData(const ATriggerVolume& Volume)
 	{
-		if (const ULegacyLevelDataComponent* Data = Volume.FindComponentByClass<ULegacyLevelDataComponent>())
+		if (const UInteractableComponent* Data = Volume.FindComponentByClass<UInteractableComponent>())
 		{
 			return *Data;
 		}
-		return *GetDefault<ULegacyLevelDataComponent>();
+		return *GetDefault<UInteractableComponent>();
 	}
 
 } // namespace
@@ -119,7 +119,7 @@ ATriggerVolume* FindBestTriggerVolume(TArrayView<ATriggerVolume* const> Volumes,
 
 FString FormatDefaultInteractPrompt(const ATriggerVolume& Volume)
 {
-	const ULegacyLevelDataComponent& Data = TriggerData(Volume);
+	const UInteractableComponent& Data = TriggerData(Volume);
 	const FString& Payload = Data.Payload;
 	const FString CostSuffix = Data.InteractCost > 0 ? FString::Printf(" [%d]", Data.InteractCost) : FString();
 

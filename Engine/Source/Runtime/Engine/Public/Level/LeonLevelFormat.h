@@ -157,7 +157,9 @@ struct ENGINE_API FLevelDocument
 /**
  * Snapshot a live level + camera into a serializable document: the level's world settings, player starts, target
  * points, trigger and pain volumes, static meshes and blocking volumes, then directional and point lights, each group
- * in spawn order (the grouping the format always wrote). The legacy fields come from each actor's
+ * in spawn order (the grouping the format always wrote). The animations and the trigger data come from their
+ * components (URotatingMovementComponent, UBobbingMovementComponent, UOrbitMovementComponent,
+ * UInteractableComponent), the record classes, content keys and level strings from each actor's
  * ULegacyLevelDataComponent.
  */
 [[nodiscard]] FLevelDocument BuildLevelDocument(const ULevel& Level, const UCameraComponent& InCamera);
@@ -178,13 +180,13 @@ struct ENGINE_API FLevelDocument
  * Resolve a document into a world as actors (the records' mesh and material keys name `.lasset` packages, loaded with
  * LoadObject: ResolveLevelAssetObjectPath; the basic shapes are /Engine/BasicShapes meshes and a record without a
  * material gets the engine's default material). Every mesh and material is resolved first; on a failure nothing
- * changes. Then the previous
- * level-content actors are destroyed and the document spawns an AWorldSettings, one actor per record in record order
- * (APlayerStart, AStaticMeshActor for Cube / Sphere / Plane / StaticMesh, ABlockingVolume, ATriggerVolume,
- * APainCausingVolume, ATargetPoint for AISpawnPoint) and its lights (ADirectionalLight / APointLight, the default sun
- * when it has no directional light). The game mode name becomes the world settings' DefaultGameMode (plan decision
- * D18: empty or "Default" leaves it to the project), and the camera framing stays on the world settings'
- * ULegacyLevelDataComponent. Collects garbage (a safe point).
+ * changes. Then the previous level-content actors are destroyed and the document spawns an AWorldSettings, one actor
+ * per record in record order (APlayerStart, AStaticMeshActor for Cube / Sphere / Plane / StaticMesh, ABlockingVolume,
+ * ATriggerVolume with a UInteractableComponent, APainCausingVolume, ATargetPoint for AISpawnPoint; a spin becomes a
+ * URotatingMovementComponent, a bob a UBobbingMovementComponent), its lights (ADirectionalLight / APointLight, an orbit
+ * a UOrbitMovementComponent, the default sun when it has no directional light) and an ACameraActor holding the camera
+ * framing. The game mode name becomes the world settings' DefaultGameMode (plan decision D18: empty or "Default" leaves
+ * it to the project). Collects garbage (a safe point).
  */
 [[nodiscard]] bool ApplyLevelDocument(UWorld& World, const FLevelDocument& Doc, const FString& SourcePath);
 

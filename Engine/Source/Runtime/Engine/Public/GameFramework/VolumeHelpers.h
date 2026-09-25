@@ -23,10 +23,10 @@ void TickPainCausingVolumes(TArrayView<APainCausingVolume* const> Volumes, TArra
 
 /**
  * Nearest trigger volume whose XY distance from Feet is within min(MaxDist, its interact radius), or null. The
- * interact radius comes from the volume's `.llev` data (ULegacyLevelDataComponent; 200 cm without one).
+ * interact radius comes from the volume's UInteractableComponent (200 cm without one).
  */
 [[nodiscard]] ATriggerVolume* FindBestTriggerVolume(
 	TArrayView<ATriggerVolume* const> Volumes, const FVector& Feet, float MaxDist);
 
-/** Default [F] … [cost] prompt from the volume's `.llev` payload / interact cost (Door, WallBuy:…, Perk:…). */
+/** Default [F] … [cost] prompt from the volume's UInteractableComponent payload / cost (Door, WallBuy:…, Perk:…). */
 [[nodiscard]] FString FormatDefaultInteractPrompt(const ATriggerVolume& Volume);

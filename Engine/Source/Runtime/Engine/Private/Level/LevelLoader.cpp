@@ -1,9 +1,11 @@
 #include "Level/LevelLoader.h"
 
+#include "Camera/CameraComponent.h"
 #include "Engine/StaticMesh.h"
 #include "EngineLogs.h"
 #include "Level/LeonLevelFormat.h"
 #include "Misc/Paths.h"
+#include "UObject/Package.h"
 
 namespace
 {
@@ -39,6 +41,35 @@ void ApplyFitHeight(FTransform& Transform, const UStaticMesh& Mesh, float FitHei
 	constexpr float GroundEpsilon = 0.8f;
 	const FVector Grounded = FVector((-Center.X) * Scale, (-Center.Y) * Scale, ((-Mn.Z) * Scale) + GroundEpsilon);
 	Transform.SetLocation(Grounded + LocationOffset);
+}
+
+void GetLegacyPlayFromHereView(const UCameraComponent& Framing, FVector& OutLocation, FRotator& OutRotation)
+{
+	// The legacy engine camera took the framing, then its default game mode flew from the eye looking at the target
+	// (an orbit framing keeps its view, a free-look one turns to the target): the same camera math gives the same view.
+	UCameraComponent* Camera = NewObject<UCameraComponent>(GetTransientPackage());
+	Camera->SetTarget(Framing.GetTarget());
+	Camera->SetDistance(Framing.GetDistance());
+	Camera->SetViewRotation(Framing.GetViewRotation());
+	Camera->SetEyeLocation(Framing.EyeLocation());
+	Camera->SetMode(Framing.GetMode());
+	const FVector Eye = Camera->GetCameraLocation();
+	FVector Look = Camera->GetTarget() - Eye;
+	const float LookLen = Look.Size();
+	if (LookLen > 1.0e-3f)
+	{
+		Look /= LookLen;
+	}
+	else
+	{
+		Look = FVector(0.0f, -1.0f, 0.0f);
+	}
+	Camera->SetMode(ECameraMode::FreeLook);
+	Camera->SetEyeLocation(Eye);
+	Camera->SetViewRotation(Look.Rotation());
+	OutLocation = Camera->EyeLocation();
+	OutRotation = Camera->GetViewRotation();
+	Camera->MarkPendingKill();
 }
 
 bool LoadLevelFile(UWorld& World, const FString& LevelPath)

@@ -1,3 +1,4 @@
+#include "Camera/CameraActor.h"
 #include "CoreMinimal.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/PointLight.h"
@@ -7,7 +8,6 @@
 #include "Frustum.h"
 #include "GameFramework/WorldSettings.h"
 #include "Kismet/GameplayStatics.h"
-#include "Level/LegacyLevelDataComponent.h"
 #include "Level/LevelLoader.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/LegacyGolden.h"
@@ -67,9 +67,13 @@ bool FGoldenStarterLevelTest::RunTest(const FString& Parameters)
 	const TArray<int32> Counts = {
 		MeshActors.Num(), MeshBoxes.Num() / 2, LightDirections.Num(), PointLightPositions.Num()};
 
-	// The camera the level opens with: its framing, kept on the world settings.
-	UCameraComponent& Camera = *NewObject<UCameraComponent>();
-	World.GetWorldSettings()->FindComponentByClass<ULegacyLevelDataComponent>()->ApplyCameraFraming(Camera);
+	// The camera the level opens with: its framing, the level's camera actor.
+	const ACameraActor* Framing = World.FindFirst<ACameraActor>();
+	if (!TestNotNull("Framing camera", Framing))
+	{
+		return false;
+	}
+	const UCameraComponent& Camera = *Framing->GetCameraComponent();
 	const TArray<FVector> CameraPoints = {Camera.GetTarget(), Camera.GetCameraLocation()};
 	// The table holds the legacy angles of the camera's mode.
 	float LegacyYaw = 0.0f;

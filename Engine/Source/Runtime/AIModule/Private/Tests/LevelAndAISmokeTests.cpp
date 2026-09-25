@@ -1,7 +1,7 @@
+#include "Camera/CameraActor.h"
 #include "CoreMinimal.h"
 #include "GameFramework/WorldSettings.h"
 #include "GameplayMinimal.h"
-#include "Level/LegacyLevelDataComponent.h"
 #include "Level/LeonLevelFormat.h"
 #include "Level/LevelLoader.h"
 #include "Misc/AutomationTest.h"
@@ -24,9 +24,8 @@ bool FLevelAndAISmokeEditorStyleLevelSaveLoadApplyTest::RunTest(const FString& P
 		return false;
 	}
 
-	// The camera the level opens with (its framing on the world settings).
-	UCameraComponent& Camera = *NewObject<UCameraComponent>();
-	TestWorld->GetWorldSettings()->FindComponentByClass<ULegacyLevelDataComponent>()->ApplyCameraFraming(Camera);
+	// The camera the level opens with (its framing, the level's camera actor).
+	const UCameraComponent& Camera = *TestWorld->FindFirst<ACameraActor>()->GetCameraComponent();
 	FLevelDocument Doc = BuildLevelDocument(*TestWorld->PersistentLevel, Camera);
 	TestFalse("Document has a name", Doc.Name.IsEmpty());
 
