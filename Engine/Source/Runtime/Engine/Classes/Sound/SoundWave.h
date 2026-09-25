@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AudioDevice.h"
 #include "CoreMinimal.h"
 #include "Serialization/BulkData.h"
 #include "Sound/SoundBase.h"
@@ -12,8 +13,8 @@ class UAssetImportData;
  * keeps the imported `.wav` file in RawData and the cooked, compressed audio for the platform; Leon keeps the PCM
  * (RawPCMData) and compresses nothing.
  *
- * The audio device still plays sounds by file path (AudioMixer is below Engine); playing a USoundWave comes with the
- * gameplay sounds.
+ * The audio device plays the samples from memory (UGameplayStatics::PlaySound2D / PlaySoundAtLocation, the UI cues
+ * of the engine config); LeonEd's USoundFactory imports `.wav` files into it.
  */
 UCLASS()
 class ENGINE_API USoundWave : public USoundBase
@@ -50,6 +51,9 @@ public:
 
 	/** Copies the interleaved samples out. */
 	void GetPCMData(TArray<int16>& OutSamples) const;
+
+	/** Copies the samples into OutSamples and describes them for the audio device (Leon). */
+	[[nodiscard]] FSoundWavePCM GetPCMView(TArray<int16>& OutSamples) const;
 
 	/** The samples as bulk data (bytes, little-endian PCM16). */
 	[[nodiscard]] const FByteBulkData& GetRawPCMData() const

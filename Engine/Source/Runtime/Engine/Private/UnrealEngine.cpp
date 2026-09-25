@@ -11,7 +11,6 @@
 #include "GameFramework/PlayerStartPIE.h"
 #include "GameFramework/WorldSettings.h"
 #include "HAL/PlatformTime.h"
-#include "LegacyAssetLoader.h"
 #include "Level/LegacyLevelDataComponent.h"
 #include "Level/LeonLevelFormat.h"
 #include "Level/LevelLoader.h"
@@ -22,6 +21,7 @@
 #include "Misc/Parse.h"
 #include "Misc/Paths.h"
 #include "RendererInterface.h"
+#include "Sound/SoundWave.h"
 #include "UObject/GarbageCollection.h"
 
 UEngine* GEngine = nullptr;
@@ -102,14 +102,29 @@ void UEngine::Init(IEngineLoop* InEngineLoop)
 	GarbageCollectionTimer = FGarbageCollectionTimer(FGarbageCollectionSettings::LoadFromConfig());
 	InitializeObjectReferences();
 	(void)AudioDevice.Initialize(/*silent=*/bHeadless);
+	// The UI cues with a sound wave in the config play it; the others keep their procedural tone.
+	for (int32 Cue = 0; Cue < UISounds.Num() && Cue < NumUISounds; ++Cue)
+	{
+		if (UISounds[Cue] != nullptr)
+		{
+			TArray<int16> Samples;
+			AudioDevice.SetUiSound(static_cast<EUISound>(Cue), UISounds[Cue]->GetPCMView(Samples));
+		}
+	}
 	bIsInitialized = true;
 }
 
 void UEngine::InitializeObjectReferences()
 {
-	DefaultTexture = FLegacyAssetLoader::LoadEngineObject<UTexture2D>(DefaultTextureName);
-	DefaultBumpNormalTexture = FLegacyAssetLoader::LoadEngineObject<UTexture2D>(DefaultBumpNormalTextureName);
+	// UE: LoadEngineTexture. A missing package is a warning (LoadObject) and a null texture.
+	DefaultTexture = LoadObject<UTexture2D>(nullptr, *DefaultTextureName.ToString());
+	DefaultBumpNormalTexture = LoadObject<UTexture2D>(nullptr, *DefaultBumpNormalTextureName.ToString());
 	(void)UMaterial::GetDefaultMaterial(MD_Surface);
+	UISounds.Reset();
+	for (const FSoftObjectPath* Name : {&UIClickSoundName, &UIConfirmSoundName, &UIBackSoundName, &UIErrorSoundName})
+	{
+		UISounds.Add(Name->IsNull() ? nullptr : LoadObject<USoundWave>(nullptr, *Name->ToString()));
+	}
 }
 
 void UEngine::Start()

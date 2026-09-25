@@ -54,6 +54,17 @@ void USoundWave::GetPCMData(TArray<int16>& OutSamples) const
 	}
 }
 
+FSoundWavePCM USoundWave::GetPCMView(TArray<int16>& OutSamples) const
+{
+	GetPCMData(OutSamples);
+	FSoundWavePCM View;
+	View.Samples = OutSamples.GetData();
+	View.NumChannels = NumChannels;
+	View.NumFrames = NumChannels > 0 ? OutSamples.Num() / NumChannels : 0;
+	View.SampleRate = SampleRate;
+	return View;
+}
+
 void USoundWave::Serialize(FArchive& Ar)
 {
 	Super::Serialize(Ar);

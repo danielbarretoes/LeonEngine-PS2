@@ -175,8 +175,8 @@ struct ENGINE_API FLevelDocument
 [[nodiscard]] bool LoadLeonLevelFile(const FString& Path, FLevelDocument& Out);
 
 /**
- * Resolve a document into a world as actors (asset paths resolve relative to SourcePath; meshes and materials load as
- * asset UObjects through FLegacyAssetLoader, the basic shapes are /Engine/BasicShapes meshes and a record without a
+ * Resolve a document into a world as actors (the records' mesh and material keys name `.lasset` packages, loaded with
+ * LoadObject: ResolveLevelAssetObjectPath; the basic shapes are /Engine/BasicShapes meshes and a record without a
  * material gets the engine's default material). Every mesh and material is resolved first; on a failure nothing
  * changes. Then the previous
  * level-content actors are destroyed and the document spawns an AWorldSettings, one actor per record in record order
@@ -196,8 +196,9 @@ struct ENGINE_API FLevelDocument
 [[nodiscard]] UClass* ResolveLegacyLevelGameMode(const FString& GameModeName);
 
 /**
- * Resolve a content-relative key (Materials/M_Floor.lmat) for a level under …/Content/Levels/
- * (or legacy …/Levels/).
- * Prefers <pack>/key, then global FPaths::ResolveLegacyContentPath.
+ * The object path of the package a record's content key names (`Materials/M_Floor.lmat`, `Meshes/Crate.lmesh`): the
+ * key is relative to the level's content root, the folder above its `Levels/` folder (`<Root>/Levels/X.llev`), and
+ * resolves as FLegacyAssetKeys::ResolveKey does (the migrated package under the content root's mount point, a mount
+ * point named after a folder outside them, then /Game, then /Engine). Empty for an empty key or no package.
  */
-[[nodiscard]] FString ResolveLevelAssetPath(const FString& LevelPath, const FString& RelativeOrKey);
+[[nodiscard]] FString ResolveLevelAssetObjectPath(const FString& LevelPath, const FString& Key);

@@ -15,10 +15,10 @@
 #include "GameFramework/PlayerStartPIE.h"
 #include "GameFramework/WorldSettings.h"
 #include "GameMapsSettings.h"
-#include "LegacyAssetLoader.h"
 #include "LegacyCoordinateConversion.h"
 #include "Level/BasicLight.h"
 #include "Level/BasicShape.h"
+#include "Level/LegacyAssetKeys.h"
 #include "Level/LegacyLevelDataComponent.h"
 #include "Level/LevelLoader.h"
 #include "Level/Light.h"
@@ -195,43 +195,25 @@ namespace
 
 } // namespace
 
-FString ResolveLevelAssetPath(const FString& LevelPath, const FString& RelativeOrKey)
+FString ResolveLevelAssetObjectPath(const FString& LevelPath, const FString& Key)
 {
-	if (RelativeOrKey.IsEmpty())
+	if (Key.IsEmpty())
 	{
 		return FString();
 	}
-	auto Normalized = [](FString Path)
+	// <Root>/Levels/Main.llev: the keys are relative to <Root> (a pack's Content folder, the engine's content).
+	FString ContentRoot = FPaths::ConvertRelativePathToFull(FPaths::GetPath(FPaths::GetPath(LevelPath)));
+	FPaths::NormalizeFilename(ContentRoot);
+	const FString ContentRootPath =
+		ContentRoot.IsEmpty() ? FString() : FLegacyAssetKeys::MountContentDirectory(ContentRoot);
+	const FString ObjectPath = FLegacyAssetKeys::ResolveKey(ContentRootPath, Key);
+	if (!ObjectPath.IsEmpty())
 	{
-		FPaths::NormalizeFilename(Path);
-		FPaths::CollapseRelativeDirectories(Path);
-		return Path;
-	};
-	if (!FPaths::IsRelative(RelativeOrKey) && FPaths::FileExists(RelativeOrKey))
-	{
-		return Normalized(RelativeOrKey);
+		return ObjectPath;
 	}
-
-	// <pack>/Content/Levels/Main.llev -> content root <pack>/Content (legacy <pack>/Levels/Main.llev -> <pack>/).
-	const FString ContentRoot = FPaths::GetPath(FPaths::GetPath(LevelPath));
-	const FString InPack = Normalized(FPaths::Combine(ContentRoot, RelativeOrKey));
-	if (FPaths::FileExists(InPack))
-	{
-		return InPack;
-	}
-
-	// Legacy Projects/<name>/Materials/... after the pack was copied elsewhere.
-	const int32 MatPos = RelativeOrKey.Find("Materials/", ESearchCase::CaseSensitive);
-	if (MatPos != INDEX_NONE)
-	{
-		const FString Legacy = Normalized(FPaths::Combine(ContentRoot, RelativeOrKey.Mid(MatPos)));
-		if (FPaths::FileExists(Legacy))
-		{
-			return Legacy;
-		}
-	}
-
-	return FPaths::ResolveLegacyContentPath(RelativeOrKey);
+	// Legacy Projects/<name>/Materials/... after the pack was copied elsewhere: the key from its Materials/ folder.
+	const int32 MatPos = Key.Find("Materials/", ESearchCase::CaseSensitive);
+	return MatPos > 0 ? FLegacyAssetKeys::ResolveKey(ContentRootPath, Key.Mid(MatPos)) : FString();
 }
 
 namespace
@@ -1019,14 +1001,15 @@ namespace
 		const FLevelActorRecord* Record = nullptr;
 		FTransform Transform;
 		UStaticMesh* Mesh = nullptr;
-		/** The `.lmat` material, or the default material for a mesh without materials of its own. */
+		/** The record's material, or the default material for a mesh without materials of its own. */
 		UMaterialInterface* Material = nullptr;
 		bool bHasMaterial = false;
 	};
 
 	/**
-	 * Resolves a record: its transform, and for a mesh or a blocking volume its mesh (a basic shape or the `.lmesh`)
-	 * and material, then the fit height. False when the mesh cannot be loaded.
+	 * Resolves a record: its transform, and for a mesh or a blocking volume its mesh (a basic shape or the package its
+	 * mesh key names) and material (the package of its material key), then the fit height. False when the mesh cannot
+	 * be loaded.
 	 */
 	[[nodiscard]] bool ResolveActorRecord(
 		const FLevelActorRecord& Record, const FString& SourcePath, FResolvedActorRecord& Out)
@@ -1059,7 +1042,12 @@ namespace
 		}
 		else
 		{
-			Out.Mesh = FLegacyAssetLoader::LoadStaticMesh(ResolveLevelAssetPath(SourcePath, Record.MeshPath));
+			const FString MeshPath = ResolveLevelAssetObjectPath(SourcePath, Record.MeshPath);
+			Out.Mesh = MeshPath.IsEmpty() ? nullptr : LoadObject<UStaticMesh>(nullptr, *MeshPath);
+			if (MeshPath.IsEmpty())
+			{
+				UE_LOG(LogLevel, Error, "LeonLevelFormat: no package for the mesh '%s'", *Record.MeshPath);
+			}
 		}
 		if (Out.Mesh == nullptr)
 		{
@@ -1074,11 +1062,12 @@ namespace
 
 		if (!Record.MaterialPath.IsEmpty())
 		{
-			const FString MaterialPath = ResolveLevelAssetPath(SourcePath, Record.MaterialPath);
-			Out.Material = FLegacyAssetLoader::LoadMaterial(MaterialPath);
+			const FString MaterialPath = ResolveLevelAssetObjectPath(SourcePath, Record.MaterialPath);
+			Out.Material = MaterialPath.IsEmpty() ? nullptr : LoadObject<UMaterialInterface>(nullptr, *MaterialPath);
 			if (Out.Material == nullptr)
 			{
-				UE_LOG(LogLevel, Warning, "LeonLevelFormat: using the default material (failed '%s')", *MaterialPath);
+				UE_LOG(LogLevel, Warning, "LeonLevelFormat: using the default material (no package for '%s')",
+					*Record.MaterialPath);
 				Out.Material = UMaterial::GetDefaultMaterial(MD_Surface);
 			}
 			Out.bHasMaterial = true;

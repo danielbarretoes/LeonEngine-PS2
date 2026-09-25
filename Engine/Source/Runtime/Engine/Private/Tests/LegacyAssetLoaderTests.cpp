@@ -22,8 +22,8 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// The transitional legacy loader (FLegacyAssetLoader), the engine's default assets from the config, and the
-// garbage-collection safety of the assets the components and the scene proxies use.
+// The transitional legacy loader (FLegacyAssetLoader): the legacy files it still reads, and the garbage collection of
+// what it made.
 
 namespace
 {
@@ -89,7 +89,6 @@ namespace
 	{
 		return GEngine != nullptr ? *GEngine : *GetDefault<UEngine>();
 	}
-
 } // namespace
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLegacyAssetLoaderFilesTest, "System.Engine.LegacyAssets.LoadsLegacyFiles",
@@ -104,9 +103,12 @@ bool FLegacyAssetLoaderFilesTest::RunTest(const FString& Parameters)
 	const FString MeshFile = Dir + TEXT("Meshes/SM_Test.lmesh");
 	const FString SoundFile = Dir + TEXT("Audio/S_Test.wav");
 	const FString BadSoundFile = Dir + TEXT("Audio/S_Bad.wav");
+	// The engine's texture source (an absolute map path is kept as it is).
+	const FString EngineTexture = FPaths::EngineDir() + TEXT("SourceArt/EngineMaterials/T_Default_D.png");
 	const FString Material =
-		TEXT("[Info]\nName=M_Test\nShadingModel=Unlit\n[Parameters]\nBaseColor=0.25,0.5,0.75\nOpacity=0.5\n") TEXT(
-			"UVScale=2,3\nCastsShadows=false\n[Textures]\nBaseColorMap=Textures/T_Default_D.png\nNormalMap=bump\n");
+		TEXT("[Info]\nName=M_Test\nShadingModel=Unlit\n[Parameters]\nBaseColor=0.25,0.5,0.75\nOpacity=0.5\n")
+			TEXT("UVScale=2,3\nCastsShadows=false\n[Textures]\nBaseColorMap=") +
+		EngineTexture + TEXT("\nNormalMap=bump\n");
 	TestTrue("Material written", FFileHelper::SaveStringToFile(Material, *MaterialFile));
 	TestTrue("Mesh written", SaveLeonMeshFile(MeshFile, MakeCube()));
 	const TArray<int16> Samples = {0, 1000, -1000, 32767, -32768, 5};
@@ -130,14 +132,13 @@ bool FLegacyAssetLoaderFilesTest::RunTest(const FString& Parameters)
 	TestEqual("Opacity", Loaded->Opacity, 0.5f);
 	TestTrue("UV scale", Loaded->UVScale == FVector2D(2.0f, 3.0f));
 	TestFalse("No shadows", Loaded->bCastsShadows);
-	const FString EngineTexture = FPaths::EngineContentDir() + TEXT("Textures/T_Default_D.png");
 	if (TestNotNull("Base colour map", Loaded->BaseColorMap))
 	{
 		TestTrue("The texture file's asset", Loaded->BaseColorMap == FLegacyAssetLoader::LoadTexture(EngineTexture));
 		TestTrue("Texels", Loaded->BaseColorMap->HasValidPlatformData());
-		TestTrue("An engine content file's package",
+		TestTrue("A file outside the content's package",
 			Loaded->BaseColorMap->GetOutermost()->GetName().StartsWith(
-				FString(FLegacyAssetLoader::LegacyPackageRoot) + TEXT("/Engine/")));
+				FString(FLegacyAssetLoader::LegacyPackageRoot) + TEXT("/External/")));
 	}
 	TestTrue("The bump map is the engine's",
 		Loaded->NormalMap != nullptr &&
@@ -212,145 +213,6 @@ bool FLegacyAssetLoaderGarbageTest::RunTest(const FString& Parameters)
 		}
 	}
 	IFileManager::Get().DeleteDirectory(*GetLegacyTestDir(), false, true);
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEngineDefaultAssetsTest, "System.Engine.LegacyAssets.EngineDefaultsFromConfig",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
-
-bool FEngineDefaultAssetsTest::RunTest(const FString& Parameters)
-{
-	// BaseEngine.ini names the default assets on UEngine; the loader makes them once, at those paths and in the root
-	// set, where LoadObject finds them like any other asset; the basic shapes live at /Engine/BasicShapes.
-	const UEngine& Engine = GetEngineConfig();
-	TestEqual("DefaultMaterialName from the config", Engine.DefaultMaterialName.ToString(),
-		FString("/Engine/EngineMaterials/M_Default.M_Default"));
-	TestEqual("DefaultTextureName from the config", Engine.DefaultTextureName.ToString(),
-		FString("/Engine/EngineResources/DefaultTexture.DefaultTexture"));
-	TestEqual("DefaultBumpNormalTextureName from the config", Engine.DefaultBumpNormalTextureName.ToString(),
-		FString("/Engine/EngineMaterials/T_Default_Bump_N.T_Default_Bump_N"));
-
-	UMaterial* DefaultMaterial = UMaterial::GetDefaultMaterial(MD_Surface);
-	if (!TestNotNull("Default material", DefaultMaterial))
-	{
-		return false;
-	}
-	TestEqual("At its config path", DefaultMaterial->GetPathName(), Engine.DefaultMaterialName.ToString());
-	TestTrue("Rooted", DefaultMaterial->IsRooted());
-	TestFalse("Not transient", DefaultMaterial->HasAnyFlags(RF_Transient));
-	TestTrue("Made once", UMaterial::GetDefaultMaterial(MD_Surface) == DefaultMaterial);
-	TestTrue("LoadObject finds it",
-		LoadObject<UMaterial>(nullptr, *Engine.DefaultMaterialName.ToString()) == DefaultMaterial);
-	TestTrue("Resolved by its soft path", Engine.DefaultMaterialName.ResolveObject() == DefaultMaterial);
-	// M_Default.lmat: white, 8 shininess, the engine's T_Default_D.png.
-	TestTrue("M_Default's base colour", DefaultMaterial->BaseColor.Equals(FLinearColor(1.0f, 1.0f, 1.0f, 1.0f)));
-	TestEqual("M_Default's shininess", DefaultMaterial->Shininess, 8.0f);
-	TestNotNull("M_Default's map", DefaultMaterial->BaseColorMap);
-
-	UTexture2D* Checker = FLegacyAssetLoader::LoadEngineObject<UTexture2D>(Engine.DefaultTextureName);
-	if (TestNotNull("DefaultTexture", Checker))
-	{
-		TestEqual("Checker size", Checker->GetSizeX(), 64);
-		TestTrue("Rooted checker", Checker->IsRooted());
-		TestTrue("Found by path",
-			FindObject<UTexture2D>(nullptr, TEXT("/Engine/EngineResources/DefaultTexture.DefaultTexture")) == Checker);
-	}
-	UTexture2D* Bump = FLegacyAssetLoader::LoadEngineObject<UTexture2D>(Engine.DefaultBumpNormalTextureName);
-	if (TestNotNull("Bump map", Bump))
-	{
-		TestEqual("Bump size", Bump->GetSizeX(), 256);
-		TestEqual("A normal map is not sRGB", static_cast<int32>(Bump->SRGB), 0);
-	}
-	TestNull("The wrong class",
-		FLegacyAssetLoader::LoadEngineObject<UMaterial>(FSoftObjectPath(TEXT("/Engine/BasicShapes/Cube.Cube"))));
-	TestNull("No source",
-		FLegacyAssetLoader::LoadEngineObject<UMaterial>(
-			FSoftObjectPath(TEXT("/Engine/EngineMaterials/M_None.M_None"))));
-
-	const UStaticMesh* Cube =
-		FLegacyAssetLoader::LoadEngineObject<UStaticMesh>(FSoftObjectPath(TEXT("/Engine/BasicShapes/Cube.Cube")));
-	const UStaticMesh* Plane =
-		FLegacyAssetLoader::LoadEngineObject<UStaticMesh>(FSoftObjectPath(TEXT("/Engine/BasicShapes/Plane.Plane")));
-	if (TestNotNull("Cube", Cube) && TestNotNull("Plane", Plane))
-	{
-		TestEqual("Cube triangles", Cube->GetNumTriangles(), 12);
-		TestEqual("Cube size (cm)", Cube->GetBoundingBox().Max.X - Cube->GetBoundingBox().Min.X, 100.0f, 1.0e-3f);
-		TestEqual("The shapes have no slots", Cube->GetStaticMaterials().Num(), 0);
-		TestEqual("Plane size (cm)", Plane->GetBoundingBox().Max.Y - Plane->GetBoundingBox().Min.Y, 100.0f, 1.0e-3f);
-	}
-	UStaticMesh* Sphere = FLegacyAssetLoader::GetSphereMesh(24, 16);
-	UStaticMesh* CoarseSphere = FLegacyAssetLoader::GetSphereMesh(8, 6);
-	if (TestNotNull("Sphere", Sphere) && TestNotNull("Coarse sphere", CoarseSphere))
-	{
-		TestEqual("The default sphere", Sphere->GetPathName(), FString("/Engine/BasicShapes/Sphere.Sphere"));
-		TestTrue(
-			"Another tessellation is another mesh", CoarseSphere != Sphere && CoarseSphere->HasAnyFlags(RF_Transient));
-		TestTrue("Coarser", CoarseSphere->GetNumTriangles() < Sphere->GetNumTriangles());
-		TestTrue("Cached per tessellation", FLegacyAssetLoader::GetSphereMesh(8, 6) == CoarseSphere);
-	}
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FScenePrimitiveAssetsSurviveTest, "System.Engine.LegacyAssets.ProxiesKeepTheirAssets",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
-
-bool FScenePrimitiveAssetsSurviveTest::RunTest(const FString& Parameters)
-{
-	// A proxy never outlives the assets it draws: the scene reports them to the garbage collector, even when the
-	// component let go of them without recreating its proxy, and even pending kill; once the proxy is gone they go.
-	// A slot without a material draws with the engine's default material.
-	FScopedTestWorld TestWorld;
-	if (!TestNotNull("The world has a scene", TestWorld->Scene))
-	{
-		return false;
-	}
-	UStaticMeshComponent& Component = *TestWorld->SpawnActor<AStaticMeshActor>()->GetStaticMeshComponent();
-	UStaticMesh* Mesh = NewObject<UStaticMesh>();
-	(void)Mesh->BuildFromMeshData(MakeCube());
-	UTexture2D* Texture = UTexture2D::CreateTransient(2, 2);
-	UMaterial* Material = NewObject<UMaterial>();
-	Material->BaseColorMap = Texture;
-	(void)Component.SetStaticMesh(Mesh);
-	Component.SetMaterial(0, Material);
-	const FStaticMeshSceneProxy* Proxy = static_cast<const FStaticMeshSceneProxy*>(Component.SceneProxy);
-	if (!TestNotNull("A proxy", Proxy))
-	{
-		return false;
-	}
-	TestTrue("The proxy's map", Proxy->GetSectionMaterial(0).AlbedoMap == Texture);
-
-	const TWeakObjectPtr<UStaticMesh> WeakMesh = Mesh;
-	const TWeakObjectPtr<UTexture2D> WeakTexture = Texture;
-	const TWeakObjectPtr<UMaterial> WeakMaterial = Material;
-	// Let go of everything behind the proxy's back (no MarkRenderStateDirty).
-	Component.StaticMesh = nullptr;
-	Component.OverrideMaterials.Empty();
-	Material->BaseColorMap = nullptr;
-	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
-	TestTrue("The mesh stays while the proxy draws it", WeakMesh.IsValid());
-	TestTrue("The texture stays while the proxy draws it", WeakTexture.IsValid());
-	TestFalse("The material itself is not drawn", WeakMaterial.IsValid());
-
-	Mesh->MarkPendingKill();
-	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
-	TestNotNull("Even pending kill", WeakMesh.Get(/*bEvenIfPendingKill =*/true));
-
-	Component.MarkRenderStateDirty();
-	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
-	TestTrue("The mesh goes with the proxy", WeakMesh.IsStale());
-	TestTrue("The texture goes with the proxy", WeakTexture.IsStale());
-
-	// No material: the default one.
-	UStaticMesh* Cube = NewObject<UStaticMesh>();
-	(void)Cube->BuildFromMeshData(MakeCube());
-	(void)Component.SetStaticMesh(Cube);
-	const FStaticMeshSceneProxy* CubeProxy = static_cast<const FStaticMeshSceneProxy*>(Component.SceneProxy);
-	if (TestNotNull("A proxy for the cube", CubeProxy))
-	{
-		const FMaterial Default = UMaterial::GetDefaultMaterial(MD_Surface)->GetRenderProxy();
-		TestTrue("The default material's values", CubeProxy->GetSectionMaterial(0).Albedo == Default.Albedo);
-		TestTrue("The default material's map", CubeProxy->GetSectionMaterial(0).AlbedoMap == Default.AlbedoMap);
-	}
 	return true;
 }
 

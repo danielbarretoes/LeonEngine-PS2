@@ -3,7 +3,6 @@
 #include "Engine/Engine.h"
 #include "Engine/Texture2D.h"
 #include "EngineLogs.h"
-#include "LegacyAssetLoader.h"
 #include "UObject/Package.h"
 #include "UObject/WeakObjectPtrTemplates.h"
 
@@ -58,7 +57,7 @@ UMaterial* UMaterial::GetDefaultMaterial(EMaterialDomain Domain)
 	}
 	// GEngine's config, or its class default object's before the engine exists (tests, tools): the same values.
 	const UEngine& Engine = GEngine != nullptr ? *GEngine : *GetDefault<UEngine>();
-	UMaterial* Material = FLegacyAssetLoader::LoadEngineObject<UMaterial>(Engine.DefaultMaterialName);
+	UMaterial* Material = LoadObject<UMaterial>(nullptr, *Engine.DefaultMaterialName.ToString());
 	if (Material == nullptr)
 	{
 		UE_LOG(LogEngine, Error, "The default material '%s' cannot be loaded; a plain material stands in for it",

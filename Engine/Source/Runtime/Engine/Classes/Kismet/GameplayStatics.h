@@ -7,6 +7,7 @@
 
 class ACharacter;
 class FDebugDraw;
+class USoundBase;
 
 /** Static gameplay helpers: world traces over FPhysScene and damage (UE: UGameplayStatics / UKismetSystemLibrary). */
 class ENGINE_API UGameplayStatics
@@ -58,4 +59,14 @@ public:
 	/** Radial damage with linear falloff by distance; returns the total applied across all actors. */
 	static float ApplyRadialDamage(const TArray<ACharacter*>& Actors, float BaseDamage, const FVector& Origin,
 		float DamageRadius, ACharacter* DamageCauser = nullptr);
+
+	/**
+	 * Plays a sound wave once, not spatialized, on the engine's audio device (UE: PlaySound2D; silent headless). A
+	 * null sound or no engine plays nothing.
+	 */
+	static void PlaySound2D(const UObject* WorldContextObject, USoundBase* Sound, float VolumeMultiplier = 1.0f);
+
+	/** Plays a sound wave once at Location, spatialized for the listener (UE: PlaySoundAtLocation). */
+	static void PlaySoundAtLocation(
+		const UObject* WorldContextObject, USoundBase* Sound, const FVector& Location, float VolumeMultiplier = 1.0f);
 };

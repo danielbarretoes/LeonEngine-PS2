@@ -57,7 +57,14 @@ struct ENGINE_API FBasicShape
 [[nodiscard]] bool IsPlayerStartName(const FString& Name);
 
 /**
- * The mesh of a basic shape: `/Engine/BasicShapes/Cube`, `Plane` or `Sphere` (100 cm), or a sphere of another
- * tessellation (FLegacyAssetLoader makes them until the engine content is packaged).
+ * The mesh of a basic shape: the `/Engine/BasicShapes/Cube`, `Plane` or `Sphere` package (100 cm; the sphere is 24 x
+ * 16), or a sphere of another tessellation, built at run time (GetSphereMesh).
  */
 [[nodiscard]] UStaticMesh* MeshForBasicShape(EBasicShape Shape, int32 InSphereSegments = 24, int32 InSphereRings = 16);
+
+/**
+ * A UV sphere of Segments x Rings: the `/Engine/BasicShapes/Sphere` package for the default 24 x 16, else a transient
+ * mesh built by the procedural generator (MakeSphere), one per tessellation while it is used
+ * (`/Temp/BasicShapes/Sphere_<Segments>x<Rings>`): the `.llev` spheres may ask for any tessellation.
+ */
+[[nodiscard]] UStaticMesh* GetSphereMesh(int32 Segments, int32 Rings);

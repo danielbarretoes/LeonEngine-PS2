@@ -16,6 +16,7 @@ class IEngineLoop;
 class UGameViewportClient;
 class ULocalPlayer;
 class UPendingNetGame;
+class USoundWave;
 class UTexture2D;
 class UWorld;
 struct FWorldContext;
@@ -72,7 +73,7 @@ public:
 	UPROPERTY(GlobalConfig)
 	FSoftObjectPath DefaultMaterialName;
 
-	/** The engine's default texture, a grey checker, and the `.lmat` `checker` map (UE: DefaultTextureName). */
+	/** The engine's default texture, a grey checker (UE: DefaultTextureName). */
 	UPROPERTY(GlobalConfig)
 	FSoftObjectPath DefaultTextureName;
 
@@ -80,13 +81,30 @@ public:
 	UPROPERTY(Transient)
 	UTexture2D* DefaultTexture = nullptr;
 
-	/** The procedural bump normal map, the `.lmat` `bump` map (Leon). */
+	/** The engine's bump normal map, a strong procedural ripple (Leon). */
 	UPROPERTY(GlobalConfig)
 	FSoftObjectPath DefaultBumpNormalTextureName;
 
 	/** DefaultBumpNormalTextureName, loaded by Init (Leon). */
 	UPROPERTY(Transient)
 	UTexture2D* DefaultBumpNormalTexture = nullptr;
+
+	/**
+	 * The sound wave of each UI cue FAudioDevice::PlayUiSound plays (Leon; UE's Slate styles name their sounds):
+	 * Click, Confirm, Back and Error. Empty keeps the cue's procedural tone.
+	 */
+	UPROPERTY(GlobalConfig)
+	FSoftObjectPath UIClickSoundName;
+	UPROPERTY(GlobalConfig)
+	FSoftObjectPath UIConfirmSoundName;
+	UPROPERTY(GlobalConfig)
+	FSoftObjectPath UIBackSoundName;
+	UPROPERTY(GlobalConfig)
+	FSoftObjectPath UIErrorSoundName;
+
+	/** The UI cues' sound waves, loaded by Init in EUISound order (null: the procedural tone) (Leon). */
+	UPROPERTY(Transient)
+	TArray<USoundWave*> UISounds;
 
 	/** Console commands to run at the start of the next frame (UE: DeferredCommands; `-ExecCmds=` fills it). */
 	TArray<FString> DeferredCommands;
@@ -95,9 +113,9 @@ public:
 	virtual void Init(IEngineLoop* InEngineLoop);
 
 	/**
-	 * Loads the default assets the config names (UE: InitializeObjectReferences): DefaultTexture,
-	 * DefaultBumpNormalTexture and the default material (UMaterial::GetDefaultMaterial). Until the engine content is
-	 * packaged (P14 part 2) FLegacyAssetLoader makes them, at the same paths.
+	 * Loads the default assets the config names from their packages (UE: InitializeObjectReferences):
+	 * DefaultTexture, DefaultBumpNormalTexture, the default material (UMaterial::GetDefaultMaterial) and the UI
+	 * sounds.
 	 */
 	virtual void InitializeObjectReferences();
 

@@ -72,15 +72,30 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFrameworkHardeningAudioDeviceSilentModeTest,
 
 bool FFrameworkHardeningAudioDeviceSilentModeTest::RunTest(const FString& Parameters)
 {
-	// A silent audio device accepts every Play call (even for missing files) without failing.
+	// A silent audio device accepts every Play call (even for empty samples) without failing; a UI cue keeps the
+	// samples it is given until they are cleared.
 	FAudioDevice Audio;
 	if (!TestTrue("Silent initialize", Audio.Initialize(/*bInSilent=*/true)))
 	{
 		return false;
 	}
-	Audio.PlaySound2D("does-not-exist.wav");
+	const int16 Samples[4] = {0, 1000, -1000, 0};
+	FSoundWavePCM Sound;
+	Sound.Samples = Samples;
+	Sound.NumFrames = 4;
+	Sound.NumChannels = 1;
+	Sound.SampleRate = 22050;
+	Audio.PlaySound2D(Sound);
+	Audio.PlaySound2D(FSoundWavePCM());
+	Audio.PlaySoundAtLocation(Sound, FVector(100.0f, 0.0f, 0.0f));
+	TestFalse("A procedural cue", Audio.HasUiSound(EUISound::Click));
+	Audio.SetUiSound(EUISound::Click, Sound);
+	TestTrue("A cue with samples", Audio.HasUiSound(EUISound::Click));
 	Audio.PlayUiSound(EUISound::Click);
-	Audio.PlayMusic("MenuBed.wav");
+	Audio.SetUiSound(EUISound::Click, FSoundWavePCM());
+	TestFalse("Back to the tone", Audio.HasUiSound(EUISound::Click));
+	Audio.PlayUiSound(EUISound::Click);
+	Audio.PlayMusic(Sound);
 	Audio.StopMusic();
 	Audio.Tick();
 	Audio.Shutdown();

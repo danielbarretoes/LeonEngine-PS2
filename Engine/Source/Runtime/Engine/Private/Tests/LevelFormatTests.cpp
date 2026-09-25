@@ -1,20 +1,24 @@
 #include "CoreMinimal.h"
 #include "Engine/DirectionalLight.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerStart.h"
 #include "GameFramework/WorldSettings.h"
 #include "HAL/FileManager.h"
 #include "Kismet/GameplayStatics.h"
-#include "LeonMeshFormat.h"
 #include "Level/BasicLight.h"
+#include "Level/LegacyAssetKeys.h"
 #include "Level/LegacyLevelDataComponent.h"
 #include "Level/LeonLevelFormat.h"
 #include "Level/LevelLoader.h"
 #include "Misc/AutomationTest.h"
+#include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "Misc/SecureHash.h"
 #include "Primitives.h"
 #include "Tests/ScopedTestWorld.h"
+#include "UObject/GarbageCollection.h"
+#include "UObject/Package.h"
 #include "UObject/StrongObjectPtr.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -222,7 +226,8 @@ bool FLevelFormatSaveWritesTheSameBytesTest::RunTest(const FString& Parameters)
 {
 	// Loading a level and saving it back writes the bytes the level saver wrote before levels became actors (hashes
 	// recorded at P12 from the POD level): the templates, and a document with every record class, the legacy-only
-	// fields, a fit height, a loaded .lmesh and more lights than the renderer keeps.
+	// fields, a fit height, a mesh loaded from the package its .lmesh key names and more lights than the renderer
+	// keeps.
 	#ifdef LEON_ROOT_DIR
 	const FString Root = FString(LEON_ROOT_DIR);
 	TestEqual("Starter", LoadAndHash(Root + "/Engine/Content/LevelTemplates/Starter.llev"),
@@ -231,9 +236,22 @@ bool FLevelFormatSaveWritesTheSameBytesTest::RunTest(const FString& Parameters)
 		FString("700599a4fffc3b1fcb3392341c70bf0d (163 bytes)"));
 
 	const FString Dir = FPaths::ProjectIntermediateDir() + TEXT("Tests/LevelFormat/");
-	const FString MeshPath = Dir + TEXT("Meshes/HashCube.lmesh");
 	const FString LevelPath = Dir + TEXT("Levels/SaveBytes.llev");
-	TestTrue("Mesh written", SaveLeonMeshFile(MeshPath, MakeCube()));
+	// The key Meshes/HashCube.lmesh names the migrated SM_HashCube under the level's content root (Dir: a mount point
+	// named after it).
+	const FString ContentRoot = FLegacyAssetKeys::MountContentDirectory(Dir);
+	const FString MeshPackageName = ContentRoot + TEXT("/Meshes/SM_HashCube");
+	{
+		UPackage* MeshPackage = CreatePackage(*MeshPackageName);
+		UStaticMesh* HashCube = NewObject<UStaticMesh>(MeshPackage, TEXT("SM_HashCube"), RF_Public | RF_Standalone);
+		(void)HashCube->BuildFromMeshData(MakeCube());
+		TestTrue("Mesh saved",
+			UPackage::SavePackage(
+				MeshPackage, HashCube, RF_Public | RF_Standalone, *(Dir + TEXT("Meshes/SM_HashCube.lasset"))));
+		HashCube->MarkPendingKill();
+		MeshPackage->MarkPendingKill();
+		CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
+	}
 
 	FLevelDocument Doc;
 	Doc.Name = "SaveBytes";
@@ -366,6 +384,7 @@ bool FLevelFormatSaveWritesTheSameBytesTest::RunTest(const FString& Parameters)
 				"Every record class", SavedHash(*TestWorld), FString("9c048faf15eeb14d5fd9d408fc14dcbf (1165 bytes)"));
 		}
 	}
+	FPackageName::UnRegisterMountPoint(ContentRoot + TEXT("/"), Dir);
 	IFileManager::Get().DeleteDirectory(*Dir, false, true);
 	#else
 	AddInfo("LEON_ROOT_DIR unset");
