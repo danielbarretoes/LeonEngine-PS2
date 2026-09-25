@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Material.h"
+#include "MaterialShared.h"
 
 /** Parsed .lmat for authoring (paths kept as strings; maps not required). */
 struct RENDERCORE_API FLeonMaterialDocument

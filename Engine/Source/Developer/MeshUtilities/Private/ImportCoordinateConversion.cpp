@@ -146,18 +146,18 @@ void FImportCoordinateConversion::ConvertSkeletalMeshData(FSkeletalMeshData& Dat
 	const FVector Max = ConvertPosition(Data.LocalMax);
 	Data.LocalMin = Min.ComponentMin(Max);
 	Data.LocalMax = Min.ComponentMax(Max);
-	for (FMatrix& InverseBind : Data.Skeleton.InverseBindPose)
+	for (FMatrix& InverseBind : Data.RefSkeleton.InverseBindPose)
 	{
 		InverseBind = ConvertMatrix(InverseBind);
 	}
 	ConvertAnimSequence(Data.EmbeddedAnim);
 }
 
-void FImportCoordinateConversion::ConvertAnimSequence(UAnimSequence& Sequence) const
+void FImportCoordinateConversion::ConvertAnimSequence(FRawAnimSequence& Sequence) const
 {
-	for (TArray<FMatrix>& Frame : Sequence.LocalPoseFrames)
+	for (FRawAnimSequenceTrack& Track : Sequence.Tracks)
 	{
-		for (FMatrix& BoneWorld : Frame)
+		for (FMatrix& BoneWorld : Track.Keys)
 		{
 			BoneWorld = ConvertMatrix(BoneWorld);
 		}

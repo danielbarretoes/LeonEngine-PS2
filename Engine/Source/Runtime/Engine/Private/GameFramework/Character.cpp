@@ -1,5 +1,6 @@
 #include "GameFramework/Character.h"
 
+#include "Animation/CharacterAnimInstance.h"
 #include "Engine/World.h"
 
 namespace

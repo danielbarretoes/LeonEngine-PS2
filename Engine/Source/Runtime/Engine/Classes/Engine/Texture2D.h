@@ -1,49 +1,84 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/Texture.h"
+#include "Texture2D.generated.h"
 
 /**
- * A 2D texture asset (UE: UTexture2D): RGBA8 pixels, bottom row first (as OpenGL reads them). The renderer uploads it,
- * with mipmaps, linear filtering and repeat wrapping, the first time a material that uses it is drawn.
+ * A 2D texture asset (UE: UTexture2D): its texels in the platform data, mip 0 as bulk data, bottom row first (as
+ * OpenGL reads them). The renderer uploads it with mipmaps, trilinear filtering and repeat wrapping, and keeps the GPU
+ * copy.
  *
- * Plain C++ shared through TSharedPtr and FResourceCache (FMaterial holds its maps as TSharedPtr<UTexture2D>) until
- * P14 makes it a UObject asset.
+ * Made by CreateTransient (UE) or NewObject followed by SetPlatformData, and saved and loaded in `.lasset` packages.
  */
-class ENGINE_API UTexture2D
+UCLASS()
+class ENGINE_API UTexture2D : public UTexture
 {
-public:
-	/** A texture of Width x Height RGBA8 pixels; empty (not Valid) for a null or empty image. */
-	[[nodiscard]] static UTexture2D Create(int32 Width, int32 Height, const uint8* Rgba);
-	/** A grey checker with 8 cells per side (the default material's map). */
-	[[nodiscard]] static UTexture2D CreateChecker(int32 Size = 64);
-	/** Flat normal map in tangent space (points along +Z). */
-	[[nodiscard]] static UTexture2D CreateFlatNormal(int32 Size = 4);
-	/** Strong procedural bumps for demo normal mapping (tileable). */
-	[[nodiscard]] static UTexture2D CreateBumpNormal(int32 Size = 256);
-	/** Decodes an image file (PNG, JPEG, TGA, ... through stb_image), flipped so the bottom row comes first. */
-	[[nodiscard]] static UTexture2D LoadFromFile(const FString& Path);
+	GENERATED_BODY()
 
-	[[nodiscard]] bool Valid() const
-	{
-		return SizeX > 0 && SizeY > 0;
-	}
-	/** UE: GetSizeX / GetSizeY. */
+public:
+	UTexture2D(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
+	/**
+	 * A texture made at run time in the transient package (UE: CreateTransient): InSizeX x InSizeY zeroed texels of
+	 * InFormat in mip 0. Null for an empty size or a format Leon cannot store. Leon's default format is PF_R8G8B8A8,
+	 * the texel order of its textures (UE: PF_B8G8R8A8).
+	 */
+	[[nodiscard]] static UTexture2D* CreateTransient(
+		int32 InSizeX, int32 InSizeY, EPixelFormat InFormat = PF_R8G8B8A8, FName InName = NAME_None);
+
+	/**
+	 * Replaces the texels with InSizeX x InSizeY texels of InFormat copied from TexelData (bottom row first); a null
+	 * TexelData leaves them zeroed. False (and nothing changed) for an empty size or an unknown format (Leon; UE
+	 * fills PlatformData->Mips[0].BulkData by hand).
+	 */
+	bool SetPlatformData(int32 InSizeX, int32 InSizeY, EPixelFormat InFormat, const void* TexelData);
+
+	/** Width of mip 0 (UE: GetSizeX). */
 	[[nodiscard]] int32 GetSizeX() const
 	{
-		return SizeX;
+		return PlatformData.SizeX;
 	}
+	/** Height of mip 0 (UE: GetSizeY). */
 	[[nodiscard]] int32 GetSizeY() const
 	{
-		return SizeY;
+		return PlatformData.SizeY;
 	}
-	/** SizeX * SizeY RGBA8 pixels, bottom row first. */
-	[[nodiscard]] const TArray<uint8>& GetPixels() const
+	/** UE: GetPixelFormat. */
+	[[nodiscard]] EPixelFormat GetPixelFormat() const
 	{
-		return Pixels;
+		return PlatformData.PixelFormat;
+	}
+	/** UE: GetNumMips. */
+	[[nodiscard]] int32 GetNumMips() const
+	{
+		return PlatformData.Mips.Num();
+	}
+	/** True when mip 0 holds every texel of the size and format (Leon: something the renderer can upload). */
+	[[nodiscard]] bool HasValidPlatformData() const;
+
+	/** The texels (UE: GetPlatformData). */
+	[[nodiscard]] const FTexturePlatformData& GetPlatformData() const
+	{
+		return PlatformData;
+	}
+	[[nodiscard]] FTexturePlatformData& GetPlatformData()
+	{
+		return PlatformData;
 	}
 
+	float GetSurfaceWidth() const override
+	{
+		return static_cast<float>(GetSizeX());
+	}
+	float GetSurfaceHeight() const override
+	{
+		return static_cast<float>(GetSizeY());
+	}
+
+	/** The tagged properties, then the platform data (its mips' texels as bulk data). */
+	void Serialize(FArchive& Ar) override;
+
 private:
-	int32 SizeX = 0;
-	int32 SizeY = 0;
-	TArray<uint8> Pixels;
+	FTexturePlatformData PlatformData;
 };

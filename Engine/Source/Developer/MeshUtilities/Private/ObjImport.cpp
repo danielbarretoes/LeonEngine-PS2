@@ -139,7 +139,7 @@ namespace
 	FMaterial MaterialFromTiny(const tinyobj::material_t& Src)
 	{
 		FMaterial Material;
-		Material.Shading = EMaterialShadingModel::BlinnPhong;
+		Material.Shading = EMaterialLightingModel::BlinnPhong;
 		Material.Albedo = FVector(Src.diffuse[0], Src.diffuse[1], Src.diffuse[2]);
 		Material.Specular = FVector(Src.specular[0], Src.specular[1], Src.specular[2]);
 		Material.Alpha = Src.dissolve;

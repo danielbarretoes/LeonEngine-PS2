@@ -7,34 +7,33 @@
 namespace
 {
 
-	template <typename MapType, typename AssetType, typename ResourceType>
-	const ResourceType& FindOrCreate(MapType& Map, const TSharedPtr<AssetType>& Asset)
+	template <typename ResourceType, typename AssetType>
+	const ResourceType& FindOrCreate(TMap<const UObject*, TUniquePtr<ResourceType>>& Map, const AssetType& Asset)
 	{
-		if (auto* Found = Map.Find(Asset.Get()))
+		if (TUniquePtr<ResourceType>* Found = Map.Find(&Asset))
 		{
-			return *Found->Resource;
+			return **Found;
 		}
-		auto& Entry = Map.Add(Asset.Get());
-		Entry.Asset = Asset;
-		Entry.Resource = MakeUnique<ResourceType>(*Asset);
-		return *Entry.Resource;
+		TUniquePtr<ResourceType>& Entry = Map.Add(&Asset);
+		Entry = MakeUnique<ResourceType>(Asset);
+		return *Entry;
 	}
 
 } // namespace
 
-const FStaticMeshRenderData& FRenderResourceCache::GetStaticMesh(const TSharedPtr<UStaticMesh>& Mesh)
+const FStaticMeshRenderData& FRenderResourceCache::GetStaticMesh(const UStaticMesh& Mesh)
 {
-	return FindOrCreate<decltype(StaticMeshes), UStaticMesh, FStaticMeshRenderData>(StaticMeshes, Mesh);
+	return FindOrCreate(StaticMeshes, Mesh);
 }
 
-const FSkeletalMeshRenderData& FRenderResourceCache::GetSkeletalMesh(const TSharedPtr<USkeletalMesh>& Mesh)
+const FSkeletalMeshRenderData& FRenderResourceCache::GetSkeletalMesh(const USkeletalMesh& Mesh)
 {
-	return FindOrCreate<decltype(SkeletalMeshes), USkeletalMesh, FSkeletalMeshRenderData>(SkeletalMeshes, Mesh);
+	return FindOrCreate(SkeletalMeshes, Mesh);
 }
 
-const FTexture2DResource& FRenderResourceCache::GetTexture(const TSharedPtr<UTexture2D>& Texture)
+const FTexture2DResource& FRenderResourceCache::GetTexture(const UTexture2D& Texture)
 {
-	return FindOrCreate<decltype(Textures), UTexture2D, FTexture2DResource>(Textures, Texture);
+	return FindOrCreate(Textures, Texture);
 }
 
 void FRenderResourceCache::ReleaseResources()

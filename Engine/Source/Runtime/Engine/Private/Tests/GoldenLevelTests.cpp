@@ -1,6 +1,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/PointLight.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "Frustum.h"
@@ -47,8 +48,8 @@ bool FGoldenStarterLevelTest::RunTest(const FString& Parameters)
 		const UStaticMeshComponent* Component = CastChecked<AStaticMeshActor>(Actor)->GetStaticMeshComponent();
 		if (const UStaticMesh* Mesh = Component->GetStaticMesh())
 		{
-			const FBox Box = TransformLocalBox(
-				Mesh->GetLocalMin(), Mesh->GetLocalMax(), Component->GetComponentTransform().ToMatrixWithScale());
+			const FBox Box = TransformLocalBox(Mesh->GetBoundingBox().Min, Mesh->GetBoundingBox().Max,
+				Component->GetComponentTransform().ToMatrixWithScale());
 			MeshBoxes.Add(Box.Min);
 			MeshBoxes.Add(Box.Max);
 		}

@@ -1,64 +1,88 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Material.h"
+#include "Serialization/BulkData.h"
 #include "SkeletalAnimation.h"
+#include "UObject/Object.h"
+#include "SkeletalMesh.generated.h"
+
+class UMaterialInterface;
+class USkeleton;
+
+/** A material slot of a skeletal mesh (UE: FSkeletalMaterial). */
+USTRUCT()
+struct ENGINE_API FSkeletalMaterial
+{
+	GENERATED_BODY()
+
+	FSkeletalMaterial() = default;
+	explicit FSkeletalMaterial(UMaterialInterface* InMaterialInterface, FName InMaterialSlotName = NAME_None)
+		: MaterialInterface(InMaterialInterface)
+		, MaterialSlotName(InMaterialSlotName)
+	{
+	}
+
+	UPROPERTY()
+	UMaterialInterface* MaterialInterface = nullptr;
+
+	UPROPERTY()
+	FName MaterialSlotName;
+};
 
 /**
- * A skinned mesh asset (UE: USkeletalMesh): the skeleton, the embedded animation, the skinned vertices and indices, the
- * bounds and the material. The renderer builds its GPU buffers from it the first time it draws it.
+ * A skinned mesh asset (UE: USkeletalMesh): its skeleton, its material slots, the skinned vertices (bone indices and
+ * weights) and indices, and the bounds. The renderer keeps the GPU copy, which it makes the first time it draws the
+ * mesh; the bones come from the skeleton asset (Leon keeps no copy of the reference skeleton on the mesh).
  *
- * Plain C++ shared through TSharedPtr until P14 makes it a UObject asset.
+ * In a package: the tagged properties, then the bounds and the vertices and indices as bulk data. Leon has one LOD
+ * and one section drawn with slot 0, no morph targets, cloth or physics asset.
  */
-class ENGINE_API USkeletalMesh
+UCLASS()
+class ENGINE_API USkeletalMesh : public UObject
 {
-public:
-	/** The asset of Data; an empty mesh is not Valid. */
-	[[nodiscard]] static USkeletalMesh CreateCpu(FSkeletalMeshData Data);
+	GENERATED_BODY()
 
-	[[nodiscard]] bool Valid() const
+public:
+	USkeletalMesh(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
+	/** The skeleton the mesh is skinned to (UE: Skeleton). */
+	UPROPERTY()
+	USkeleton* Skeleton = nullptr;
+
+	/** The material of each slot (UE: Materials). */
+	UPROPERTY()
+	TArray<FSkeletalMaterial> Materials;
+
+	/**
+	 * Takes the geometry and the bounds of imported data (Leon; UE builds from its import data), skinned to
+	 * InSkeleton. The skeleton's bones must be those the data's vertices index (the FBX import's RefSkeleton). False
+	 * for empty data.
+	 */
+	bool BuildFromImportData(const FSkeletalMeshData& Data, USkeleton* InSkeleton);
+
+	/** True when the mesh has triangles to draw (UE: HasValidRenderData). */
+	[[nodiscard]] bool HasValidRenderData() const
 	{
-		return IndexCount > 0;
+		return Indices.Num() > 0 && Vertices.Num() > 0;
 	}
-	[[nodiscard]] int32 GetIndexCount() const
+	[[nodiscard]] int32 GetNumTriangles() const
 	{
-		return IndexCount;
+		return Indices.Num() / 3;
 	}
-	[[nodiscard]] int32 TriangleCount() const
+
+	/** The skeleton's bones, or an empty skeleton without one (UE: GetRefSkeleton). */
+	[[nodiscard]] const FReferenceSkeleton& GetRefSkeleton() const;
+
+	/** The local bounding box (UE: GetImportedBounds().GetBox()). */
+	[[nodiscard]] const FBox& GetBoundingBox() const
 	{
-		return IndexCount / 3;
-	}
-	[[nodiscard]] const USkeleton& GetSkeleton() const
-	{
-		return Skeleton;
-	}
-	[[nodiscard]] const UAnimSequence& GetEmbeddedAnim() const
-	{
-		return EmbeddedAnim;
-	}
-	[[nodiscard]] const FVector& GetLocalMin() const
-	{
-		return LocalMin;
-	}
-	[[nodiscard]] const FVector& GetLocalMax() const
-	{
-		return LocalMax;
+		return BoundingBox;
 	}
 	/** Uniform scale that makes the mesh FitHeight tall (its Z extent, world units). */
 	[[nodiscard]] float FitUniformScale(float FitHeight) const;
 
-	[[nodiscard]] FMaterial& GetMaterial()
-	{
-		return Material;
-	}
-	[[nodiscard]] const FMaterial& GetMaterial() const
-	{
-		return Material;
-	}
-	void SetMaterial(FMaterial InMaterial)
-	{
-		Material = MoveTemp(InMaterial);
-	}
+	/** The material of a slot, or null (UE: GetMaterial via Materials). */
+	[[nodiscard]] UMaterialInterface* GetMaterial(int32 MaterialIndex) const;
 
 	/** The skinned vertices and the indices the renderer uploads. */
 	[[nodiscard]] const TArray<FSkeletalVertex>& GetVertices() const
@@ -70,13 +94,13 @@ public:
 		return Indices;
 	}
 
+	/** The tagged properties, then the bounds and the geometry (bulk data). */
+	void Serialize(FArchive& Ar) override;
+
 private:
-	int32 IndexCount = 0;
-	USkeleton Skeleton{};
-	UAnimSequence EmbeddedAnim{};
-	FVector LocalMin = FVector::ZeroVector;
-	FVector LocalMax = FVector::ZeroVector;
-	FMaterial Material{};
 	TArray<FSkeletalVertex> Vertices;
 	TArray<uint32> Indices;
+	FBox BoundingBox = FBox(FVector::ZeroVector, FVector::ZeroVector);
+	/** The geometry in a package: filled while saving, read back and emptied while loading. */
+	FByteBulkData GeometryBulkData;
 };

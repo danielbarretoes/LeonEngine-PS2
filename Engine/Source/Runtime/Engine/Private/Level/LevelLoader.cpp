@@ -26,8 +26,8 @@ void ApplyFitHeight(FTransform& Transform, const UStaticMesh& Mesh, float FitHei
 	// Existing location is kept as an offset after auto scale / ground align.
 	const FVector LocationOffset = Transform.GetLocation();
 
-	const FVector Mn = Mesh.GetLocalMin();
-	const FVector Mx = Mesh.GetLocalMax();
+	const FVector Mn = Mesh.GetBoundingBox().Min;
+	const FVector Mx = Mesh.GetBoundingBox().Max;
 	const FVector Extents = Mx - Mn;
 	/** 0.1 cm: keeps a flat mesh from dividing by zero. The height is the Z extent. */
 	const float Height = FMath::Max(Extents.Z, 0.1f);

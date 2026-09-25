@@ -68,9 +68,9 @@ namespace
 	using FNodesByName = TMap<FString, ufbx_node*>;
 
 	bool BakeAnimFromScene(
-		ufbx_scene* Scene, const USkeleton& InSkeleton, const FNodesByName& NodesByName, UAnimSequence& Out)
+		ufbx_scene* Scene, const FReferenceSkeleton& InSkeleton, const FNodesByName& NodesByName, FRawAnimSequence& Out)
 	{
-		if (Scene == nullptr || InSkeleton.BoneCount() <= 0)
+		if (Scene == nullptr || InSkeleton.GetNum() <= 0)
 		{
 			return false;
 		}
@@ -109,17 +109,19 @@ namespace
 		const int32 LocalFrameCount = FMath::Max(2, FMath::CeilToInt(Duration * Fps) + 1);
 
 		Out.Name = FName("clip");
-		Out.DurationSeconds = Duration;
-		Out.FramesPerSecond = Fps;
-		Out.LocalPoseFrames.SetNum(LocalFrameCount);
+		Out.SequenceLength = Duration;
+		Out.FrameRate = Fps;
+		Out.Tracks.SetNum(InSkeleton.GetNum());
+		for (FRawAnimSequenceTrack& Track : Out.Tracks)
+		{
+			Track.Keys.Init(FMatrix::Identity, LocalFrameCount);
+		}
 
 		for (int32 F = 0; F < LocalFrameCount; ++F)
 		{
 			const double T =
 				Begin + (static_cast<double>(F) / static_cast<double>(LocalFrameCount - 1)) * (End - Begin);
-			TArray<FMatrix>& Frame = Out.LocalPoseFrames[F];
-			Frame.Init(FMatrix::Identity, InSkeleton.BoneCount());
-			for (int32 B = 0; B < InSkeleton.BoneCount(); ++B)
+			for (int32 B = 0; B < InSkeleton.GetNum(); ++B)
 			{
 				ufbx_node* const* Node = NodesByName.Find(InSkeleton.BoneNames[B].ToString());
 				if (Node == nullptr || *Node == nullptr)
@@ -127,7 +129,7 @@ namespace
 					continue;
 				}
 				// Bake full node_to_world so skinning does not depend on cluster-only parents.
-				Frame[B] = EvaluateNodeToWorld(Anim, *Node, T);
+				Out.Tracks[B].Keys[F] = EvaluateNodeToWorld(Anim, *Node, T);
 			}
 		}
 		return LocalFrameCount > 0;
@@ -194,9 +196,9 @@ bool LoadSkeletalMeshFromFbx(const FString& Path, FSkeletalMeshData& Out)
 	const FMatrix RootAxesInverse = RootAxes.GetTransposed();
 	const FImportCoordinateConversion Conversion = FFbxImportCommon::MakeCoordinateConversion(*Scene);
 
-	Out.Skeleton.BoneNames.SetNum(ClusterCount);
-	Out.Skeleton.ParentIndices.Init(INDEX_NONE, ClusterCount);
-	Out.Skeleton.InverseBindPose.Init(FMatrix::Identity, ClusterCount);
+	Out.RefSkeleton.BoneNames.SetNum(ClusterCount);
+	Out.RefSkeleton.ParentIndices.Init(INDEX_NONE, ClusterCount);
+	Out.RefSkeleton.InverseBindPose.Init(FMatrix::Identity, ClusterCount);
 
 	TMap<ufbx_node*, int32> NodeToBone;
 	for (int32 C = 0; C < ClusterCount; ++C)
@@ -208,8 +210,8 @@ bool LoadSkeletalMeshFromFbx(const FString& Path, FSkeletalMeshData& Out)
 		}
 		ufbx_node* Bone = Cluster->bone_node;
 		const FString LocalName(static_cast<int32>(Bone->name.length), Bone->name.data);
-		Out.Skeleton.BoneNames[C] = FName(*LocalName);
-		Out.Skeleton.InverseBindPose[C] = RootAxesInverse * ToMatrix(Cluster->geometry_to_bone);
+		Out.RefSkeleton.BoneNames[C] = FName(*LocalName);
+		Out.RefSkeleton.InverseBindPose[C] = RootAxesInverse * ToMatrix(Cluster->geometry_to_bone);
 		NodeToBone.Add(Bone, C);
 	}
 	for (int32 C = 0; C < ClusterCount; ++C)
@@ -224,7 +226,7 @@ bool LoadSkeletalMeshFromFbx(const FString& Path, FSkeletalMeshData& Out)
 		{
 			if (const int32* ParentBone = NodeToBone.Find(Parent))
 			{
-				Out.Skeleton.ParentIndices[C] = *ParentBone;
+				Out.RefSkeleton.ParentIndices[C] = *ParentBone;
 				break;
 			}
 			Parent = Parent->parent;
@@ -319,16 +321,16 @@ bool LoadSkeletalMeshFromFbx(const FString& Path, FSkeletalMeshData& Out)
 
 	FNodesByName NodesByName;
 	CollectNodesByName(Scene, NodesByName);
-	BakeAnimFromScene(Scene, Out.Skeleton, NodesByName, Out.EmbeddedAnim);
+	BakeAnimFromScene(Scene, Out.RefSkeleton, NodesByName, Out.EmbeddedAnim);
 	Conversion.ConvertSkeletalMeshData(Out);
 
 	ufbx_free_scene(Scene);
-	return Out.Skeleton.BoneCount() > 0;
+	return Out.RefSkeleton.GetNum() > 0;
 }
 
-bool LoadAnimSequenceFromFbx(const FString& Path, const USkeleton& InSkeleton, UAnimSequence& Out)
+bool LoadAnimSequenceFromFbx(const FString& Path, const FReferenceSkeleton& InSkeleton, FRawAnimSequence& Out)
 {
-	Out = UAnimSequence();
+	Out = FRawAnimSequence();
 	ufbx_error Error{};
 	const ufbx_load_opts Opts = FFbxImportCommon::MakeLoadOptions();
 	ufbx_scene* Scene = ufbx_load_file(TCHAR_TO_UTF8(*Path), &Opts, &Error);

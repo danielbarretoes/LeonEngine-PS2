@@ -179,7 +179,7 @@ private:
 	 */
 	void DrawAxesGizmo(const FSceneView& View);
 	/** Binds the texture's GPU copy, or Fallback when there is no valid texture. */
-	void BindTexture(const TSharedPtr<UTexture2D>& Texture, const FTexture2DResource& Fallback, uint32 Unit);
+	void BindTexture(const UTexture2D* Texture, const FTexture2DResource& Fallback, uint32 Unit);
 	void DrawSubMesh(const FShader& Shader, const FStaticMeshSceneProxy& Object, int32 InSubMeshIndex,
 		const FMaterial& InMaterial, const FMatrix& InView, const FMatrix& InProjection, const FMatrix& LightSpace,
 		const FDrawOptions& Options);
@@ -191,7 +191,9 @@ private:
 
 	struct FSkeletalDrawItem
 	{
-		TSharedPtr<USkeletalMesh> Mesh;
+		const USkeletalMesh* Mesh = nullptr;
+		/** The material of the mesh's proxy. */
+		FMaterial Material;
 		FMatrix Model = FMatrix::Identity;
 		/** Skin matrices in the GL memory layout (uploaded as they are). */
 		TArray<FMatrix> BoneMatrices;

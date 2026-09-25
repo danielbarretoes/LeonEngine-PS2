@@ -7,6 +7,7 @@
 #include "Frustum.h"
 #include "IPhysicsBackend.h"
 #include "MeshData.h"
+#include "PhysicsEngine/BodySetup.h"
 #include "TriangleCollision.h"
 
 FPhysScene::FPhysScene(EPhysicsBackend InBackend)
@@ -238,15 +239,22 @@ void FPhysScene::UpdateBodyFromComponent(int32 BodyIndex, const UPrimitiveCompon
 	const UStaticMesh* Mesh = MeshComponent != nullptr ? MeshComponent->GetStaticMesh() : nullptr;
 	if (Mesh != nullptr)
 	{
+		// The mesh's body setup (UBodySetup): its boxes, else the mesh's bounding box, as the simple shape; the
+		// triangles of a static body unless the setup asks for the simple shape everywhere.
+		const UBodySetup* BodySetup = Mesh->GetBodySetup();
 		const FMatrix Model = Transform.ToMatrixWithScale();
-		const FBox WorldAabb = TransformLocalBox(Mesh->GetLocalMin(), Mesh->GetLocalMax(), Model);
+		const FBox LocalBox = Mesh->GetBoundingBox();
+		const FBox WorldAabb = BodySetup != nullptr && BodySetup->AggGeom.GetElementCount() > 0
+			? BodySetup->AggGeom.CalcAABB(Transform)
+			: TransformLocalBox(LocalBox.Min, LocalBox.Max, Model);
 		Body.Position = WorldAabb.GetCenter();
 		Body.HalfExtents = WorldAabb.GetExtent();
 
 		// UE ComplexAsSimple lite: static meshes with CPU triangles use triangle queries.
-		if (Body.Type == EBodyType::Static && Mesh->HasCpuData())
+		const bool bComplexAsSimple = BodySetup == nullptr || BodySetup->UsesComplexAsSimpleForStaticBodies();
+		if (Body.Type == EBodyType::Static && bComplexAsSimple && Mesh->HasValidRenderData())
 		{
-			const FMeshData& Cpu = Mesh->GetCpuData();
+			const FStaticMeshLODResources& Cpu = Mesh->GetLODResources();
 			TriMesh.Positions.SetNum(Cpu.Vertices.Num());
 			for (int32 Vi = 0; Vi < TriMesh.Positions.Num(); ++Vi)
 			{

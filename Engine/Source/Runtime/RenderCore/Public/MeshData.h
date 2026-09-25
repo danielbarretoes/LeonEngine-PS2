@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Material.h"
+#include "MaterialShared.h"
 #include "Vertex.h"
 
 /** Contiguous index range drawn with one material slot. */
@@ -19,7 +19,7 @@ struct RENDERCORE_API FMeshData
 	TArray<uint32> Indices;
 	TArray<FMeshSection> Submeshes;
 	TArray<FMaterial> Materials;
-	/** Parallel to Materials; resolved to FMaterial::AlbedoMap by FResourceCache. */
+	/** Parallel to Materials: each slot's diffuse map (a content path) the mesh loader loads. */
 	TArray<FString> AlbedoMapPaths;
 
 	[[nodiscard]] bool IsEmpty() const

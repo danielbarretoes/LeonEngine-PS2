@@ -1,5 +1,8 @@
 #include "Components/SkeletalMeshComponent.h"
 
+#include "Animation/Skeleton.h"
+#include "Engine/SkeletalMesh.h"
+#include "Engine/SkeletalMeshSocket.h"
 #include "SkeletalMeshSceneProxy.h"
 
 USkeletalMeshComponent::USkeletalMeshComponent(const FObjectInitializer& ObjectInitializer)
@@ -10,70 +13,27 @@ USkeletalMeshComponent::USkeletalMeshComponent(const FObjectInitializer& ObjectI
 	AnimInstance->SetOwningMeshComponent(this);
 }
 
+bool USkeletalMeshComponent::HasValidMesh() const
+{
+	return SkeletalMesh != nullptr && SkeletalMesh->HasValidRenderData();
+}
+
 void USkeletalMeshComponent::SetAnimInstance(UAnimInstance* Instance)
 {
 	AnimInstance = Instance != nullptr ? Instance : NewObject<UAnimInstance>(this);
 	AnimInstance->SetOwningMeshComponent(this);
-	BindAnimInstanceToAssets();
+	BindAnimInstanceToMesh();
 }
 
-void USkeletalMeshComponent::BindAnimInstanceToAssets()
+void USkeletalMeshComponent::BindAnimInstanceToMesh()
 {
-	if (SkeletalMesh != nullptr && SkeletalMesh->Valid())
-	{
-		AnimInstance->SetSkeleton(&SkeletalMesh->GetSkeleton());
-	}
-	else
-	{
-		AnimInstance->SetSkeleton(nullptr);
-	}
-	if (BlendSpace.Samples.Num() > 0)
-	{
-		AnimInstance->SetBlendSpace(&BlendSpace);
-	}
+	AnimInstance->SetSkeleton(HasValidMesh() ? SkeletalMesh->Skeleton : nullptr);
 }
 
-UAnimSequence* USkeletalMeshComponent::FindSequence(const FString& Name)
+void USkeletalMeshComponent::SetSkeletalMesh(USkeletalMesh* InMesh)
 {
-	const int32* Index = SequenceIndexByName.Find(Name);
-	return Index != nullptr ? Sequences[*Index].Get() : nullptr;
-}
-
-const UAnimSequence* USkeletalMeshComponent::FindSequence(const FString& Name) const
-{
-	const int32* Index = SequenceIndexByName.Find(Name);
-	return Index != nullptr ? Sequences[*Index].Get() : nullptr;
-}
-
-UAnimSequence& USkeletalMeshComponent::GetOrCreateSequence(const FString& Name)
-{
-	if (const int32* Index = SequenceIndexByName.Find(Name))
-	{
-		return *Sequences[*Index];
-	}
-	UAnimSequence& Sequence = *Sequences.Add_GetRef(MakeUnique<UAnimSequence>());
-	Sequence.Name = FName(*Name);
-	SequenceIndexByName.Add(Name, Sequences.Num() - 1);
-	return Sequence;
-}
-
-void USkeletalMeshComponent::BindSequencesToAnimInstance()
-{
-	BindAnimInstanceToAssets();
-	AnimInstance->NativeInitializeAnimation();
-}
-
-void USkeletalMeshComponent::SetSkeletalMesh(TSharedPtr<USkeletalMesh> InMesh)
-{
-	SkeletalMesh = MoveTemp(InMesh);
-	if (SkeletalMesh != nullptr && SkeletalMesh->Valid())
-	{
-		AnimInstance->SetSkeleton(&SkeletalMesh->GetSkeleton());
-	}
-	else
-	{
-		AnimInstance->SetSkeleton(nullptr);
-	}
+	SkeletalMesh = InMesh;
+	BindAnimInstanceToMesh();
 	MarkRenderStateDirty();
 }
 
@@ -86,8 +46,8 @@ void USkeletalMeshComponent::ApplyFitHeight(float FitHeight)
 	const float Scale = SkeletalMesh->FitUniformScale(FitHeight);
 	/** cm above the floor, against z-fighting with the ground. */
 	constexpr float GroundEpsilon = 0.8f;
-	const FVector Mn = SkeletalMesh->GetLocalMin();
-	const FVector Mx = SkeletalMesh->GetLocalMax();
+	const FVector Mn = SkeletalMesh->GetBoundingBox().Min;
+	const FVector Mx = SkeletalMesh->GetBoundingBox().Max;
 	const FVector Center = (Mn + Mx) * 0.5f;
 	RelativeScale3D = FVector(Scale, Scale, Scale);
 	// Centred on the component origin in X / Y and standing on it; the offset is in the mesh's space, so it turns with
@@ -102,7 +62,7 @@ bool USkeletalMeshComponent::GetBoneModelMatrix(const FString& InBoneName, FMatr
 	{
 		return false;
 	}
-	const int32 BoneIndex = SkeletalMesh->GetSkeleton().FindBoneIndex(FName(*InBoneName));
+	const int32 BoneIndex = SkeletalMesh->GetRefSkeleton().FindBoneIndex(FName(*InBoneName));
 	if (BoneIndex < 0)
 	{
 		return false;
@@ -118,8 +78,22 @@ bool USkeletalMeshComponent::GetBoneModelMatrix(const FString& InBoneName, FMatr
 
 FTransform USkeletalMeshComponent::GetSocketTransform(FName InSocketName) const
 {
+	if (InSocketName.IsNone())
+	{
+		return GetComponentTransform();
+	}
 	FMatrix BoneModel = FMatrix::Identity;
-	if (InSocketName.IsNone() || !GetBoneModelMatrix(InSocketName.ToString(), BoneModel))
+	const USkeleton* MeshSkeleton = HasValidMesh() ? SkeletalMesh->Skeleton : nullptr;
+	if (const USkeletalMeshSocket* Socket = MeshSkeleton != nullptr ? MeshSkeleton->FindSocket(InSocketName) : nullptr)
+	{
+		if (GetBoneModelMatrix(Socket->BoneName.ToString(), BoneModel))
+		{
+			return FTransform(Socket->GetSocketLocalTransform().ToMatrixWithScale() * BoneModel *
+				GetComponentTransform().ToMatrixWithScale());
+		}
+		return GetComponentTransform();
+	}
+	if (!GetBoneModelMatrix(InSocketName.ToString(), BoneModel))
 	{
 		return GetComponentTransform();
 	}
@@ -128,7 +102,13 @@ FTransform USkeletalMeshComponent::GetSocketTransform(FName InSocketName) const
 
 bool USkeletalMeshComponent::DoesSocketExist(FName InSocketName) const
 {
-	return HasValidMesh() && !InSocketName.IsNone() && SkeletalMesh->GetSkeleton().FindBoneIndex(InSocketName) >= 0;
+	if (!HasValidMesh() || InSocketName.IsNone())
+	{
+		return false;
+	}
+	const USkeleton* MeshSkeleton = SkeletalMesh->Skeleton;
+	return (MeshSkeleton != nullptr && MeshSkeleton->FindSocket(InSocketName) != nullptr) ||
+		SkeletalMesh->GetRefSkeleton().FindBoneIndex(InSocketName) >= 0;
 }
 
 void USkeletalMeshComponent::TickComponent(float DeltaTime)

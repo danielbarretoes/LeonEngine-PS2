@@ -454,7 +454,9 @@ bool FGameplayNavBlocksNavBlockerKeepsNavWalkableTest::RunTest(const FString& Pa
 	RampData.Indices = {0, 1, 2, 0, 2, 3};
 	AStaticMeshActor* Ramp = World.SpawnActor<AStaticMeshActor>();
 	Ramp->Tags.Add(FName(NavTags::Walkable));
-	(void)Ramp->GetStaticMeshComponent()->SetStaticMesh(MakeShared<UStaticMesh>(UStaticMesh::CreateCpu(RampData)));
+	UStaticMesh* RampMesh = NewObject<UStaticMesh>();
+	(void)RampMesh->BuildFromMeshData(RampData);
+	(void)Ramp->GetStaticMeshComponent()->SetStaticMesh(RampMesh);
 	Ramp->GetStaticMeshComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	TestTrue("Ramp is a triangle mesh body",
 		Physics.GetBodies().Num() == 2 && Physics.GetBodies()[1].CollisionShape == EBodyCollisionShape::TriangleMesh);

@@ -5,6 +5,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "CoreMinimal.h"
 #include "Engine/DirectionalLight.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
@@ -117,7 +118,9 @@ bool FComponentsSceneProxiesFollowTheComponentsTest::RunTest(const FString& Para
 	AStaticMeshActor* MeshActor = World.SpawnActor<AStaticMeshActor>();
 	UStaticMeshComponent* MeshComponent = MeshActor->GetStaticMeshComponent();
 	TestEqual("No proxy without a mesh", Scene.GetNumPrimitives(), 0);
-	(void)MeshComponent->SetStaticMesh(MakeShared<UStaticMesh>(UStaticMesh::CreateCpu(MakeCube())));
+	UStaticMesh* Cube = NewObject<UStaticMesh>();
+	(void)Cube->BuildFromMeshData(MakeCube());
+	(void)MeshComponent->SetStaticMesh(Cube);
 	TestEqual("A proxy with a mesh", Scene.GetNumPrimitives(), 1);
 	if (!TestNotNull("The component knows its proxy", MeshComponent->SceneProxy))
 	{

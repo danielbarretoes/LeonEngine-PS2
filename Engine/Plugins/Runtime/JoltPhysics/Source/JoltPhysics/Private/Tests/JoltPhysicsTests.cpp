@@ -144,7 +144,9 @@ bool FJoltRestsOnTriangleMeshTest::RunTest(const FString& Parameters)
 	Data.Submeshes.Add(FMeshSection{0, 6, 0});
 
 	UStaticMeshComponent& Component = *World.SpawnActor<AStaticMeshActor>()->GetStaticMeshComponent();
-	(void)Component.SetStaticMesh(MakeShared<UStaticMesh>(UStaticMesh::CreateCpu(Data)));
+	UStaticMesh* Mesh = NewObject<UStaticMesh>();
+	(void)Mesh->BuildFromMeshData(Data);
+	(void)Component.SetStaticMesh(Mesh);
 	Component.SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 
 	World.SetPhysicsBackend(EPhysicsBackend::Jolt);

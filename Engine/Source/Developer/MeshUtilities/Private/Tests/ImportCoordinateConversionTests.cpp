@@ -290,18 +290,18 @@ bool FImportCoordinateConversionSkeletalTest::RunTest(const FString& Parameters)
 		constexpr int32 Bones = 3;
 		constexpr int32 Frames = 4;
 		FSkeletalMeshData Source;
-		Source.Skeleton.BoneNames = {FName("Root"), FName("Spine"), FName("Head")};
-		Source.Skeleton.ParentIndices = {INDEX_NONE, 0, 1};
+		Source.RefSkeleton.BoneNames = {FName("Root"), FName("Spine"), FName("Head")};
+		Source.RefSkeleton.ParentIndices = {INDEX_NONE, 0, 1};
 		for (int32 Bone = 0; Bone < Bones; ++Bone)
 		{
-			Source.Skeleton.InverseBindPose.Add(RandomAffine(Random));
+			Source.RefSkeleton.InverseBindPose.Add(RandomAffine(Random));
 		}
-		Source.EmbeddedAnim.LocalPoseFrames.SetNum(Frames);
-		for (TArray<FMatrix>& Frame : Source.EmbeddedAnim.LocalPoseFrames)
+		Source.EmbeddedAnim.Tracks.SetNum(Bones);
+		for (int32 Frame = 0; Frame < Frames; ++Frame)
 		{
 			for (int32 Bone = 0; Bone < Bones; ++Bone)
 			{
-				Frame.Add(RandomAffine(Random));
+				Source.EmbeddedAnim.Tracks[Bone].Keys.Add(RandomAffine(Random));
 			}
 		}
 		Source.LocalMin = FVector(TNumericLimits<float>::Max());
@@ -341,9 +341,9 @@ bool FImportCoordinateConversionSkeletalTest::RunTest(const FString& Parameters)
 			for (int32 Frame = 0; Frame < Frames; ++Frame)
 			{
 				const FMatrix SourceSkin =
-					Source.Skeleton.InverseBindPose[Bone] * Source.EmbeddedAnim.LocalPoseFrames[Frame][Bone];
+					Source.RefSkeleton.InverseBindPose[Bone] * Source.EmbeddedAnim.Tracks[Bone].Keys[Frame];
 				const FMatrix ConvertedSkin =
-					Converted.Skeleton.InverseBindPose[Bone] * Converted.EmbeddedAnim.LocalPoseFrames[Frame][Bone];
+					Converted.RefSkeleton.InverseBindPose[Bone] * Converted.EmbeddedAnim.Tracks[Bone].Keys[Frame];
 				const FVector Expected =
 					Conversion.ConvertPosition(FVector(SourceSkin.TransformPosition(SourcePosition)));
 				const FVector Actual(ConvertedSkin.TransformPosition(ConvertedPosition));
@@ -356,11 +356,10 @@ bool FImportCoordinateConversionSkeletalTest::RunTest(const FString& Parameters)
 		}
 
 		// A clip imported on its own converts the same way.
-		UAnimSequence Clip = Source.EmbeddedAnim;
+		FRawAnimSequence Clip = Source.EmbeddedAnim;
 		Conversion.ConvertAnimSequence(Clip);
 		TestTrue(*FString::Printf("%s: clip", Name),
-			Clip.LocalPoseFrames[Frames - 1][Bones - 1] ==
-				Converted.EmbeddedAnim.LocalPoseFrames[Frames - 1][Bones - 1]);
+			Clip.Tracks[Bones - 1].Keys[Frames - 1] == Converted.EmbeddedAnim.Tracks[Bones - 1].Keys[Frames - 1]);
 	}
 	return true;
 }

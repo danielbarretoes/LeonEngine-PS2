@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Material.h"
+#include "MaterialShared.h"
 #include "ResourceCache.h"
 
 class AStaticMeshActor;
@@ -56,5 +56,5 @@ struct ENGINE_API FBasicShape
 [[nodiscard]] bool IsBlockingVolumeName(const FString& Name);
 /** The `.llev` PlayerStart class name (an APlayerStart: a spawn point, no mesh). */
 [[nodiscard]] bool IsPlayerStartName(const FString& Name);
-[[nodiscard]] TSharedPtr<UStaticMesh> MeshForBasicShape(
+[[nodiscard]] UStaticMesh* MeshForBasicShape(
 	FResourceCache& Resources, EBasicShape Shape, int32 InSphereSegments = 24, int32 InSphereRings = 16);

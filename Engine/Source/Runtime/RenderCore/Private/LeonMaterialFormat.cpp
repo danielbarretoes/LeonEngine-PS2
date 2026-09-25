@@ -149,7 +149,7 @@ bool LoadLeonMaterialDocument(const FString& Path, FLeonMaterialDocument& Out)
 	}
 
 	FLeonMaterialDocument Doc;
-	Doc.Material.Shading = EMaterialShadingModel::BlinnPhong;
+	Doc.Material.Shading = EMaterialLightingModel::BlinnPhong;
 	bool bHasRoughness = false;
 	FString Section;
 
@@ -184,7 +184,7 @@ bool LoadLeonMaterialDocument(const FString& Path, FLeonMaterialDocument& Out)
 			else if (KeyLower == "shadingmodel" || KeyLower == "shading")
 			{
 				Doc.Material.Shading =
-					(Value.ToLower() == "unlit") ? EMaterialShadingModel::Unlit : EMaterialShadingModel::BlinnPhong;
+					(Value.ToLower() == "unlit") ? EMaterialLightingModel::Unlit : EMaterialLightingModel::BlinnPhong;
 			}
 			else
 			{
@@ -292,7 +292,7 @@ bool LoadLeonMaterialDocument(const FString& Path, FLeonMaterialDocument& Out)
 		{
 			if (ParseBool(Value, false))
 			{
-				Doc.Material.Shading = EMaterialShadingModel::Unlit;
+				Doc.Material.Shading = EMaterialLightingModel::Unlit;
 			}
 		}
 		else
@@ -319,7 +319,7 @@ bool SaveLeonMaterialFile(const FString& Path, const FString& InName, const FMat
 	FString Out = MaterialHeader;
 	Out += "[Info]\n";
 	Out += "Name=" + (InName.IsEmpty() ? FString("Material") : InName) + "\n";
-	Out += FString("ShadingModel=") + (InMaterial.Shading == EMaterialShadingModel::Unlit ? "Unlit" : "DefaultLit") +
+	Out += FString("ShadingModel=") + (InMaterial.Shading == EMaterialLightingModel::Unlit ? "Unlit" : "DefaultLit") +
 		"\n\n";
 	Out += "[Parameters]\n";
 	Out += "BaseColor=" + FormatVector(InMaterial.Albedo) + "\n";

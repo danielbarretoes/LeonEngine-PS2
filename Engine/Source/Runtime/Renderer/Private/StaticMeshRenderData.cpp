@@ -18,12 +18,13 @@ namespace
 
 FStaticMeshRenderData::FStaticMeshRenderData(const UStaticMesh& Mesh)
 {
-	if (!Mesh.HasCpuData())
+	if (!Mesh.HasValidRenderData())
 	{
 		return;
 	}
 
-	FMeshData UploadData = Mesh.GetCpuData();
+	FMeshData UploadData;
+	Mesh.GetLODResources().ToMeshData(UploadData);
 	ComputeTangents(UploadData);
 
 	glGenVertexArrays(1, &Vao);
@@ -54,7 +55,7 @@ FStaticMeshRenderData::FStaticMeshRenderData(const UStaticMesh& Mesh)
 
 	glBindVertexArray(0);
 	IndexCount = UploadData.Indices.Num();
-	Submeshes = Mesh.GetSubmeshes();
+	Submeshes = Mesh.GetLODResources().Sections;
 }
 
 FStaticMeshRenderData::~FStaticMeshRenderData()

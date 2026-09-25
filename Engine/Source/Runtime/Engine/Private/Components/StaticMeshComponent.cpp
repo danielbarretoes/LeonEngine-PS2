@@ -1,5 +1,7 @@
 #include "Components/StaticMeshComponent.h"
 
+#include "Engine/StaticMesh.h"
+#include "Materials/MaterialInterface.h"
 #include "StaticMeshSceneProxy.h"
 
 UStaticMeshComponent::UStaticMeshComponent(const FObjectInitializer& ObjectInitializer)
@@ -7,16 +9,21 @@ UStaticMeshComponent::UStaticMeshComponent(const FObjectInitializer& ObjectIniti
 {
 }
 
-bool UStaticMeshComponent::SetStaticMesh(TSharedPtr<UStaticMesh> NewMesh)
+bool UStaticMeshComponent::SetStaticMesh(UStaticMesh* NewMesh)
 {
 	if (NewMesh == StaticMesh)
 	{
 		return false;
 	}
-	StaticMesh = MoveTemp(NewMesh);
+	StaticMesh = NewMesh;
 	MarkRenderStateDirty();
 	RecreatePhysicsState();
 	return true;
+}
+
+bool UStaticMeshComponent::HasValidMesh() const
+{
+	return StaticMesh != nullptr && StaticMesh->HasValidRenderData();
 }
 
 FMaterial UStaticMeshComponent::GetMaterial(int32 ElementIndex) const
@@ -25,16 +32,17 @@ FMaterial UStaticMeshComponent::GetMaterial(int32 ElementIndex) const
 	{
 		return OverrideMaterials[ElementIndex];
 	}
-	if (StaticMesh != nullptr && StaticMesh->GetMaterials().IsValidIndex(ElementIndex))
+	if (StaticMesh != nullptr && StaticMesh->GetStaticMaterials().IsValidIndex(ElementIndex))
 	{
-		return StaticMesh->GetMaterials()[ElementIndex];
+		const UMaterialInterface* Material = StaticMesh->GetMaterial(ElementIndex);
+		return Material != nullptr ? Material->GetRenderProxy() : FMaterial();
 	}
 	return FMaterial();
 }
 
 int32 UStaticMeshComponent::GetNumMaterials() const
 {
-	const int32 MeshMaterials = StaticMesh != nullptr ? StaticMesh->GetMaterials().Num() : 0;
+	const int32 MeshMaterials = StaticMesh != nullptr ? StaticMesh->GetStaticMaterials().Num() : 0;
 	return FMath::Max(MeshMaterials, Super::GetNumMaterials());
 }
 
@@ -45,7 +53,7 @@ void UStaticMeshComponent::GetSectionMaterials(TArray<FMaterial>& OutMaterials) 
 	{
 		return;
 	}
-	const TArray<FMeshSection>& Sections = StaticMesh->GetSubmeshes();
+	const TArray<FMeshSection>& Sections = StaticMesh->GetLODResources().Sections;
 	const int32 NumSections = Sections.Num() == 0 ? 1 : Sections.Num();
 	OutMaterials.Reserve(NumSections);
 	for (int32 SectionIndex = 0; SectionIndex < NumSections; ++SectionIndex)
@@ -61,7 +69,7 @@ bool UStaticMeshComponent::HasShadowCastingMaterial() const
 	for (int32 Slot = 0; Slot < NumSlots; ++Slot)
 	{
 		const FMaterial Material = GetMaterial(Slot);
-		if (Material.bCastsShadows && !Material.IsTransparent() && Material.Shading != EMaterialShadingModel::Unlit)
+		if (Material.bCastsShadows && !Material.IsTransparent() && Material.Shading != EMaterialLightingModel::Unlit)
 		{
 			return true;
 		}

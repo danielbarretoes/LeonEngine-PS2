@@ -6,7 +6,7 @@
 
 // Class-name parsers live in Content/LevelClassNames.cpp (shared with the level format / cook).
 
-TSharedPtr<UStaticMesh> MeshForBasicShape(
+UStaticMesh* MeshForBasicShape(
 	FResourceCache& Resources, EBasicShape Shape, int32 InSphereSegments, int32 InSphereRings)
 {
 	switch (Shape)

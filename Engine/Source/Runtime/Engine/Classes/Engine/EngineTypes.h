@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "EngineTypes.generated.h"
 
 /** What a world is for (UE: EWorldType). */
 namespace EWorldType
@@ -47,6 +48,27 @@ enum class EComponentMobility : uint8
 	Static = 0,
 	/** May move at runtime. */
 	Movable = 1,
+};
+
+/**
+ * How a material is lit (UE: EMaterialShadingModel). Leon's forward renderer has two: Blinn-Phong lighting for
+ * MSM_DefaultLit (UE: its default lit PBR model) and none for MSM_Unlit.
+ */
+UENUM()
+enum EMaterialShadingModel
+{
+	/** The base colour as it is, with no lighting or shadows. */
+	MSM_Unlit,
+	/** Lit by the scene's lights, with shadows, specular and the normal map. */
+	MSM_DefaultLit,
+};
+
+/** What a material is used for (UE: EMaterialDomain). Leon's materials are all surface materials. */
+UENUM()
+enum EMaterialDomain
+{
+	/** Drawn on a mesh's surface. */
+	MD_Surface,
 };
 
 /** What a primitive's collision takes part in (UE: ECollisionEnabled). */

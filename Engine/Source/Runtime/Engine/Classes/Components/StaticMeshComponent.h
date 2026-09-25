@@ -2,16 +2,17 @@
 
 #include "Components/MeshComponent.h"
 #include "CoreMinimal.h"
-#include "Engine/StaticMesh.h"
 #include "StaticMeshComponent.generated.h"
+
+class UStaticMesh;
 
 /**
  * Draws a static mesh at its component transform (UE: UStaticMeshComponent): the mesh and materials an actor shows,
  * attachable to a socket of another component (a weapon in a hand bone).
  *
- * The mesh is a UStaticMesh asset (CPU data; the renderer keeps its GPU copy), shared through FResourceCache until P14
- * makes UStaticMesh an asset UObject; then StaticMesh becomes a UPROPERTY. AStaticMeshActor's root is one: the
- * `.llev` reader spawns one per placed mesh.
+ * The mesh is a UStaticMesh asset the component references (a UPROPERTY, so the garbage collector keeps it while the
+ * component lives); the renderer keeps its GPU copy. AStaticMeshActor's root is one: the `.llev` reader spawns one per
+ * placed mesh.
  */
 UCLASS()
 class ENGINE_API UStaticMeshComponent : public UMeshComponent
@@ -21,24 +22,21 @@ class ENGINE_API UStaticMeshComponent : public UMeshComponent
 public:
 	UStaticMeshComponent(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
+	/** The mesh (UE: StaticMesh). Change it with SetStaticMesh, which updates the proxy and the body. */
+	UPROPERTY()
+	UStaticMesh* StaticMesh = nullptr;
+
 	/**
 	 * Sets the mesh (UE: SetStaticMesh); a registered component's proxy and body take the new mesh. False when
 	 * unchanged.
 	 */
-	bool SetStaticMesh(TSharedPtr<UStaticMesh> NewMesh);
+	bool SetStaticMesh(UStaticMesh* NewMesh);
 	[[nodiscard]] UStaticMesh* GetStaticMesh() const
-	{
-		return StaticMesh.Get();
-	}
-	/** The mesh with its shared ownership (render and physics snapshots keep it alive). */
-	[[nodiscard]] const TSharedPtr<UStaticMesh>& GetStaticMeshShared() const
 	{
 		return StaticMesh;
 	}
-	[[nodiscard]] bool HasValidMesh() const
-	{
-		return StaticMesh != nullptr && StaticMesh->Valid();
-	}
+	/** A mesh with triangles is set. */
+	[[nodiscard]] bool HasValidMesh() const;
 
 	/** The override, else the mesh's material for the slot, else the default material. */
 	[[nodiscard]] FMaterial GetMaterial(int32 ElementIndex) const override;
@@ -55,7 +53,4 @@ public:
 
 	/** A FStaticMeshSceneProxy for a valid mesh (UE: CreateSceneProxy). */
 	[[nodiscard]] FPrimitiveSceneProxy* CreateSceneProxy() override;
-
-private:
-	TSharedPtr<UStaticMesh> StaticMesh;
 };

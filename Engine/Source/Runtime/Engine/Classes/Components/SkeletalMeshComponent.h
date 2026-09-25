@@ -1,20 +1,19 @@
 #pragma once
 
+#include "Animation/AnimInstance.h"
 #include "Components/MeshComponent.h"
 #include "CoreMinimal.h"
-#include "Engine/SkeletalMesh.h"
-#include "Material.h"
-#include "SkeletalAnimation.h"
 #include "SkeletalMeshComponent.generated.h"
 
-class UGameEngine;
+class USkeletalMesh;
 
 /**
  * Unreal-like USkeletalMeshComponent — a mesh component with a skeletal mesh + UAnimInstance (UE derives it from
  * USkinnedMeshComponent; Leon has no skinned base yet).
  *
- * Its bones are sockets: a component attached at a bone name (AttachToComponent / SetupAttachment with the socket
- * name, a UStaticMeshComponent weapon for example) follows the animated bone.
+ * Its bones and its skeleton's sockets are sockets: a component attached with a bone or socket name (AttachToComponent
+ * / SetupAttachment with the socket name, a UStaticMeshComponent weapon for example) follows the animated bone, offset
+ * by the socket's relative transform.
  */
 UCLASS()
 class ENGINE_API USkeletalMeshComponent : public UMeshComponent
@@ -24,17 +23,13 @@ class ENGINE_API USkeletalMeshComponent : public UMeshComponent
 public:
 	USkeletalMeshComponent(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	void SetSkeletalMesh(TSharedPtr<USkeletalMesh> InMesh);
-	[[nodiscard]] USkeletalMesh* GetSkeletalMesh()
-	{
-		return SkeletalMesh.Get();
-	}
-	[[nodiscard]] const USkeletalMesh* GetSkeletalMesh() const
-	{
-		return SkeletalMesh.Get();
-	}
-	/** The mesh with its shared ownership (the renderer's proxy keeps it alive). */
-	[[nodiscard]] const TSharedPtr<USkeletalMesh>& GetSkeletalMeshShared() const
+	/** The mesh (UE: SkeletalMesh, on USkinnedMeshComponent). Change it with SetSkeletalMesh. */
+	UPROPERTY()
+	USkeletalMesh* SkeletalMesh = nullptr;
+
+	/** Sets the mesh and gives its skeleton to the anim instance (UE: SetSkeletalMesh); the proxy is recreated. */
+	void SetSkeletalMesh(USkeletalMesh* InMesh);
+	[[nodiscard]] USkeletalMesh* GetSkeletalMesh() const
 	{
 		return SkeletalMesh;
 	}
@@ -71,31 +66,18 @@ public:
 		return Cast<TAnim>(AnimInstance);
 	}
 
-	[[nodiscard]] UBlendSpace1D& GetBlendSpace()
-	{
-		return BlendSpace;
-	}
-	[[nodiscard]] const UBlendSpace1D& GetBlendSpace() const
-	{
-		return BlendSpace;
-	}
-
-	[[nodiscard]] UAnimSequence* FindSequence(const FString& Name);
-	[[nodiscard]] const UAnimSequence* FindSequence(const FString& Name) const;
-	[[nodiscard]] UAnimSequence& GetOrCreateSequence(const FString& Name);
-
-	/** Bind skeleton/blendspace pointers and call UAnimInstance::NativeInitializeAnimation. */
-	void BindSequencesToAnimInstance();
-
 	/** Scales the mesh to FitHeight (world units, cm; its Z extent) and stands it on the component origin. */
 	void ApplyFitHeight(float FitHeight);
 
 	/** Bone model-space matrix from the current UAnimInstance pose. */
 	[[nodiscard]] bool GetBoneModelMatrix(const FString& InBoneName, FMatrix& OutModel) const;
 
-	/** A bone's world transform (the bone's pose, then the component transform); the component's for other names. */
+	/**
+	 * A socket's world transform: a skeleton socket's (its bone's pose, then the socket's offset), a bone's, else the
+	 * component's.
+	 */
 	[[nodiscard]] FTransform GetSocketTransform(FName InSocketName) const override;
-	/** True for the names of the mesh's bones. */
+	/** True for the names of the skeleton's sockets and of the mesh's bones. */
 	[[nodiscard]] bool DoesSocketExist(FName InSocketName) const override;
 
 	void TickComponent(float DeltaTime) override;
@@ -104,19 +86,13 @@ public:
 	/** Sends the pose's skin matrices to the proxy (UE: SendRenderDynamicData_Concurrent). */
 	void SendRenderDynamicData_Concurrent() override;
 
-	[[nodiscard]] bool HasValidMesh() const
-	{
-		return SkeletalMesh != nullptr && SkeletalMesh->Valid();
-	}
+	/** A mesh with triangles is set. */
+	[[nodiscard]] bool HasValidMesh() const;
 
 private:
-	void BindAnimInstanceToAssets();
+	/** Gives the anim instance the mesh's skeleton (none without a valid mesh). */
+	void BindAnimInstanceToMesh();
 
-	TSharedPtr<USkeletalMesh> SkeletalMesh;
-	/** Heap elements: BlendSpace / UAnimInstance keep raw pointers to the sequences. */
-	TArray<TUniquePtr<UAnimSequence>> Sequences;
-	TMap<FString, int32> SequenceIndexByName;
-	UBlendSpace1D BlendSpace{};
 	/** The animation instance, an inner object of the component (UE: AnimScriptInstance). */
 	UPROPERTY(Transient)
 	UAnimInstance* AnimInstance = nullptr;

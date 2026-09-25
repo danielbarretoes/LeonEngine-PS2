@@ -1,4 +1,7 @@
-#include "SkeletalAnimation.h"
+#include "Animation/CharacterAnimInstance.h"
+
+#include "Animation/AnimSequence.h"
+#include "Animation/Skeleton.h"
 
 UCharacterAnimInstance::UCharacterAnimInstance(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -40,16 +43,16 @@ float UCharacterAnimInstance::PlayRateForState(EAnimJumpState State) const
 	}
 }
 
-void UCharacterAnimInstance::AdvancePlayer(FPosePlayer& Player, float DeltaTime, float PlayRate) const
+void UCharacterAnimInstance::AdvancePlayer(FAnimPosePlayer& Player, float DeltaTime, float PlayRate) const
 {
 	if (Player.Sequence == nullptr)
 	{
 		return;
 	}
 	Player.Time += DeltaTime * PlayRate;
-	if (!Player.Sequence->bLooping && Player.Sequence->DurationSeconds > 1.0e-4f)
+	if (!Player.Sequence->bLoop && Player.Sequence->SequenceLength > 1.0e-4f)
 	{
-		Player.Time = FMath::Min(Player.Time, Player.Sequence->DurationSeconds);
+		Player.Time = FMath::Min(Player.Time, Player.Sequence->SequenceLength);
 	}
 }
 
@@ -96,9 +99,9 @@ void UCharacterAnimInstance::EnterState(EAnimJumpState Next)
 
 void UCharacterAnimInstance::UpdateJumpStateMachine()
 {
-	const bool bHasJumpStart = JumpClips.JumpStart != nullptr && JumpClips.JumpStart->FrameCount() > 0;
-	const bool bHasFallLoop = JumpClips.FallLoop != nullptr && JumpClips.FallLoop->FrameCount() > 0;
-	const bool bHasLand = JumpClips.Land != nullptr && JumpClips.Land->FrameCount() > 0;
+	const bool bHasJumpStart = JumpClips.JumpStart != nullptr && JumpClips.JumpStart->GetNumberOfFrames() > 0;
+	const bool bHasFallLoop = JumpClips.FallLoop != nullptr && JumpClips.FallLoop->GetNumberOfFrames() > 0;
+	const bool bHasLand = JumpClips.Land != nullptr && JumpClips.Land->GetNumberOfFrames() > 0;
 
 	switch (JumpState)
 	{
@@ -201,20 +204,19 @@ void UCharacterAnimInstance::UpdateJumpStateMachine()
 	bJustLanded = false;
 }
 
-void UCharacterAnimInstance::SamplePlayerBoneWorld(const FPosePlayer& Player, TArray<FMatrix>& OutBoneWorld) const
+void UCharacterAnimInstance::SamplePlayerBoneWorld(const FAnimPosePlayer& Player, TArray<FMatrix>& OutBoneWorld) const
 {
 	OutBoneWorld.Reset();
-	const USkeleton* LocalSkeleton = GetSkeleton();
-	if (LocalSkeleton == nullptr)
+	if (GetSkeleton() == nullptr)
 	{
 		return;
 	}
-	if (Player.Sequence == nullptr || Player.Sequence->FrameCount() <= 0)
+	if (Player.Sequence == nullptr || Player.Sequence->GetNumberOfFrames() <= 0)
 	{
-		OutBoneWorld.Init(FMatrix::Identity, LocalSkeleton->BoneCount());
+		OutBoneWorld.Init(FMatrix::Identity, GetNumBones());
 		return;
 	}
-	Player.Sequence->SampleLocalPose(Player.Time, OutBoneWorld);
+	Player.Sequence->GetBonePose(Player.Time, OutBoneWorld);
 }
 
 void UCharacterAnimInstance::NativeUpdateAnimation(float DeltaTime)
@@ -251,14 +253,13 @@ void UCharacterAnimInstance::NativeUpdateAnimation(float DeltaTime)
 
 void UCharacterAnimInstance::GetBoneWorldMatrices(TArray<FMatrix>& OutBoneWorld) const
 {
-	const USkeleton* LocalSkeleton = GetSkeleton();
-	if (LocalSkeleton == nullptr || LocalSkeleton->BoneCount() <= 0)
+	const int32 BoneCount = GetNumBones();
+	if (BoneCount <= 0)
 	{
 		OutBoneWorld.Reset();
 		return;
 	}
 
-	const int32 BoneCount = LocalSkeleton->BoneCount();
 	TArray<FMatrix> WorldCurrent;
 	if (JumpState == EAnimJumpState::Locomotion)
 	{

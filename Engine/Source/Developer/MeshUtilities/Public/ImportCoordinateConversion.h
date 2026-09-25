@@ -4,7 +4,7 @@
 
 struct FMeshData;
 struct FSkeletalMeshData;
-struct UAnimSequence;
+struct FRawAnimSequence;
 
 /** The axes of an imported source file. Both are right-handed; the engine world is left-handed. */
 enum class EImportAxes : uint8
@@ -91,7 +91,7 @@ public:
 	void ConvertSkeletalMeshData(FSkeletalMeshData& Data) const;
 
 	/** Every sampled bone matrix of a clip in place (conjugation, as ConvertMatrix). */
-	void ConvertAnimSequence(UAnimSequence& Sequence) const;
+	void ConvertAnimSequence(FRawAnimSequence& Sequence) const;
 
 private:
 	[[nodiscard]] float SignedAxis(const FVector& Source, int32 WorldAxis) const;

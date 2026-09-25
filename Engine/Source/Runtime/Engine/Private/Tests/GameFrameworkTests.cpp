@@ -1,3 +1,4 @@
+#include "Animation/CharacterAnimInstance.h"
 #include "Components/ProgressBar.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/TextBlock.h"

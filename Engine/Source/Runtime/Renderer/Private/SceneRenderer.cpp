@@ -65,16 +65,14 @@ namespace
 
 	float DistanceSqToCamera(const FStaticMeshSceneProxy& Object, const FVector& InCameraPos)
 	{
-		const FBox Box = TransformLocalBox(
-			Object.GetStaticMesh().GetLocalMin(), Object.GetStaticMesh().GetLocalMax(), Object.GetLocalToWorld());
+		const FBox Box = Object.GetWorldBounds();
 		const FVector D = Box.GetCenter() - InCameraPos;
 		return D | D;
 	}
 
 	FBox WorldAabbFromObject(const FStaticMeshSceneProxy& Object)
 	{
-		return TransformLocalBox(
-			Object.GetStaticMesh().GetLocalMin(), Object.GetStaticMesh().GetLocalMax(), Object.GetLocalToWorld());
+		return Object.GetWorldBounds();
 	}
 
 	void ExpandWorldAabbFromObject(const FStaticMeshSceneProxy& Object, FVector& WorldMin, FVector& WorldMax)
@@ -265,8 +263,18 @@ bool FSceneRenderer::Initialize(const FString& InShaderDirectory)
 	}
 
 	const uint8 White[4] = {255, 255, 255, 255};
-	WhiteTexture = MakeUnique<FTexture2DResource>(UTexture2D::Create(1, 1, White));
-	FlatNormalTexture = MakeUnique<FTexture2DResource>(UTexture2D::CreateFlatNormal(4));
+	WhiteTexture = MakeUnique<FTexture2DResource>(1, 1, White);
+	// A flat tangent-space normal map (+Z) for materials without one.
+	constexpr int32 FlatNormalSize = 4;
+	uint8 FlatNormal[FlatNormalSize * FlatNormalSize * 4];
+	for (int32 I = 0; I < FlatNormalSize * FlatNormalSize * 4; I += 4)
+	{
+		FlatNormal[I + 0] = 128; // X
+		FlatNormal[I + 1] = 128; // Y
+		FlatNormal[I + 2] = 255; // Z
+		FlatNormal[I + 3] = 255;
+	}
+	FlatNormalTexture = MakeUnique<FTexture2DResource>(FlatNormalSize, FlatNormalSize, FlatNormal);
 	if (!WhiteTexture->Valid() || !FlatNormalTexture->Valid())
 	{
 		UE_LOG(LogRenderer, Error, "Failed to create default textures/meshes");
@@ -525,11 +533,11 @@ void FSceneRenderer::RenderShadowPass(const FMatrix& LightSpace)
 			for (int32 S = 0; S < SubCount; ++S)
 			{
 				const FMaterial& Mat = Object.GetSectionMaterial(S);
-				if (!Mat.bCastsShadows || Mat.IsTransparent() || Mat.Shading == EMaterialShadingModel::Unlit)
+				if (!Mat.bCastsShadows || Mat.IsTransparent() || Mat.Shading == EMaterialLightingModel::Unlit)
 				{
 					continue;
 				}
-				Resources.GetStaticMesh(Object.GetStaticMeshShared()).DrawSubMesh(S);
+				Resources.GetStaticMesh(Object.GetStaticMesh()).DrawSubMesh(S);
 			}
 		}
 	}
@@ -540,13 +548,13 @@ void FSceneRenderer::RenderShadowPass(const FMatrix& LightSpace)
 		SkinnedShadowShader.Bind();
 		for (const FSkeletalDrawItem& Item : SkeletalDraws)
 		{
-			if (Item.Mesh == nullptr || !Item.Mesh->Valid())
+			if (Item.Mesh == nullptr || !Item.Mesh->HasValidRenderData())
 			{
 				continue;
 			}
-			const FMaterial& LocalMaterial = Item.Mesh->GetMaterial();
+			const FMaterial& LocalMaterial = Item.Material;
 			if (!LocalMaterial.bCastsShadows || LocalMaterial.IsTransparent() ||
-				LocalMaterial.Shading == EMaterialShadingModel::Unlit)
+				LocalMaterial.Shading == EMaterialLightingModel::Unlit)
 			{
 				continue;
 			}
@@ -556,7 +564,7 @@ void FSceneRenderer::RenderShadowPass(const FMatrix& LightSpace)
 			{
 				SkinnedShadowShader.SetMat4Array("uBones", &Item.BoneMatrices[0].M[0][0], Item.BoneMatrices.Num());
 			}
-			Resources.GetSkeletalMesh(Item.Mesh).Draw();
+			Resources.GetSkeletalMesh(*Item.Mesh).Draw();
 		}
 	}
 
@@ -616,7 +624,7 @@ void FSceneRenderer::RenderPlanarReflectionPass(const FSceneView& View, float Pl
 	for (const FStaticMeshSceneProxy* ObjectProxy : FrameMeshes)
 	{
 		const FStaticMeshSceneProxy& Object = *ObjectProxy;
-		if (!Object.IsShown() || !Object.GetStaticMesh().Valid())
+		if (!Object.IsShown() || !Object.GetStaticMesh().HasValidRenderData())
 		{
 			continue;
 		}
@@ -636,7 +644,7 @@ void FSceneRenderer::RenderPlanarReflectionPass(const FSceneView& View, float Pl
 			{
 				continue;
 			}
-			const bool bLit = Mat.Shading == EMaterialShadingModel::BlinnPhong;
+			const bool bLit = Mat.Shading == EMaterialLightingModel::BlinnPhong;
 			FShader& Shader = bLit ? LitShader : UnlitShader;
 			if (!Shader.Valid())
 			{
@@ -670,11 +678,11 @@ void FSceneRenderer::RenderPlanarReflectionPass(const FSceneView& View, float Pl
 	PassTimers.End(FGPUPassTimer::EPass::Planar);
 }
 
-void FSceneRenderer::BindTexture(const TSharedPtr<UTexture2D>& Texture, const FTexture2DResource& Fallback, uint32 Unit)
+void FSceneRenderer::BindTexture(const UTexture2D* Texture, const FTexture2DResource& Fallback, uint32 Unit)
 {
-	if (Texture != nullptr && Texture->Valid())
+	if (Texture != nullptr && Texture->HasValidPlatformData())
 	{
-		Resources.GetTexture(Texture).Bind(Unit);
+		Resources.GetTexture(*Texture).Bind(Unit);
 	}
 	else
 	{
@@ -686,7 +694,7 @@ void FSceneRenderer::DrawSubMesh(const FShader& Shader, const FStaticMeshScenePr
 	const FMaterial& InMaterial, const FMatrix& InView, const FMatrix& InProjection, const FMatrix& LightSpace,
 	const FDrawOptions& Options)
 {
-	if (!Object.GetStaticMesh().Valid())
+	if (!Object.GetStaticMesh().HasValidRenderData())
 	{
 		return;
 	}
@@ -729,11 +737,10 @@ void FSceneRenderer::DrawSubMesh(const FShader& Shader, const FStaticMeshScenePr
 
 	if (Options.bLitPass)
 	{
-		static const TSharedPtr<UTexture2D> NoNormalMap;
-		BindTexture(Options.bUseNormalMaps ? InMaterial.NormalMap : NoNormalMap, *FlatNormalTexture, 2);
+		BindTexture(Options.bUseNormalMaps ? InMaterial.NormalMap : nullptr, *FlatNormalTexture, 2);
 	}
 
-	Resources.GetStaticMesh(Object.GetStaticMeshShared()).DrawSubMesh(InSubMeshIndex);
+	Resources.GetStaticMesh(Object.GetStaticMesh()).DrawSubMesh(InSubMeshIndex);
 }
 
 void FSceneRenderer::GatherScene(FSceneInterface* InScene)
@@ -757,12 +764,13 @@ void FSceneRenderer::GatherScene(FSceneInterface* InScene)
 			continue;
 		}
 		const FSkeletalMeshSceneProxy* Skeletal = static_cast<const FSkeletalMeshSceneProxy*>(Proxy);
-		if (!Skeletal->IsShown() || !Skeletal->GetSkeletalMesh().Valid())
+		if (!Skeletal->IsShown() || !Skeletal->GetSkeletalMesh().HasValidRenderData())
 		{
 			continue;
 		}
 		FSkeletalDrawItem Item;
-		Item.Mesh = Skeletal->GetSkeletalMeshShared();
+		Item.Mesh = &Skeletal->GetSkeletalMesh();
+		Item.Material = Skeletal->GetMaterial();
 		Item.Model = Skeletal->GetLocalToWorld();
 		Item.BoneMatrices = Skeletal->GetBoneMatrices();
 		if (Item.BoneMatrices.Num() > MaxSkinBones)
@@ -908,7 +916,7 @@ void FSceneRenderer::Render(const FSceneViewFamily& ViewFamily)
 	for (int32 I = 0; I < FrameMeshes.Num(); ++I)
 	{
 		const FStaticMeshSceneProxy& Object = *FrameMeshes[I];
-		if (!Object.IsShown() || !Object.GetStaticMesh().Valid())
+		if (!Object.IsShown() || !Object.GetStaticMesh().HasValidRenderData())
 		{
 			continue;
 		}
@@ -925,7 +933,7 @@ void FSceneRenderer::Render(const FSceneViewFamily& ViewFamily)
 		const float LocalSortKey = DistanceSqToCamera(Object, LocalCameraPos);
 		const int32 SubCount = Object.GetNumSections();
 		FrameStats.DrawsSubmitted += SubCount;
-		FrameStats.TrianglesSubmitted += Object.GetStaticMesh().TriangleCount();
+		FrameStats.TrianglesSubmitted += Object.GetStaticMesh().GetNumTriangles();
 
 		for (int32 S = 0; S < SubCount; ++S)
 		{
@@ -979,7 +987,7 @@ void FSceneRenderer::Render(const FSceneViewFamily& ViewFamily)
 		{
 			const FStaticMeshSceneProxy& Object = *FrameMeshes[Item.ObjectIndex];
 			const FMaterial& Mat = Object.GetSectionMaterial(Item.SubMeshIndex);
-			if (Mat.Shading == EMaterialShadingModel::Unlit)
+			if (Mat.Shading == EMaterialLightingModel::Unlit)
 			{
 				continue;
 			}
@@ -988,7 +996,7 @@ void FSceneRenderer::Render(const FSceneViewFamily& ViewFamily)
 			UnlitShader.SetMat4("uMVP", Mvp);
 			UnlitShader.SetMat4("uModel", LocalModel);
 			UnlitShader.SetVec3("uAlbedo", 1.0f, 1.0f, 1.0f);
-			Resources.GetStaticMesh(Object.GetStaticMeshShared()).DrawSubMesh(Item.SubMeshIndex);
+			Resources.GetStaticMesh(Object.GetStaticMesh()).DrawSubMesh(Item.SubMeshIndex);
 		}
 		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 		glDepthFunc(GL_LEQUAL);
@@ -1027,7 +1035,7 @@ void FSceneRenderer::Render(const FSceneViewFamily& ViewFamily)
 		{
 			const FStaticMeshSceneProxy& Object = *FrameMeshes[Item.ObjectIndex];
 			const FMaterial& Mat = Object.GetSectionMaterial(Item.SubMeshIndex);
-			const bool bLit = Mat.Shading == EMaterialShadingModel::BlinnPhong;
+			const bool bLit = Mat.Shading == EMaterialLightingModel::BlinnPhong;
 			FShader& Shader = bLit ? LitShader : UnlitShader;
 			if (!Shader.Valid())
 			{
@@ -1301,7 +1309,7 @@ void FSceneRenderer::DrawQueuedSkeletal(const FMatrix& InView, const FMatrix& In
 
 	for (const FSkeletalDrawItem& Item : SkeletalDraws)
 	{
-		if (Item.Mesh == nullptr || !Item.Mesh->Valid())
+		if (Item.Mesh == nullptr || !Item.Mesh->HasValidRenderData())
 		{
 			continue;
 		}
@@ -1309,7 +1317,8 @@ void FSceneRenderer::DrawQueuedSkeletal(const FMatrix& InView, const FMatrix& In
 		++FrameStats.ObjectsTotal;
 		if (CameraFrustum != nullptr)
 		{
-			const FBox WorldBox = TransformLocalBox(Item.Mesh->GetLocalMin(), Item.Mesh->GetLocalMax(), Item.Model);
+			const FBox& LocalBox = Item.Mesh->GetBoundingBox();
+			const FBox WorldBox = TransformLocalBox(LocalBox.Min, LocalBox.Max, Item.Model);
 			if (!CameraFrustum->IntersectsAabb(WorldBox))
 			{
 				++FrameStats.ObjectsCulled;
@@ -1318,7 +1327,7 @@ void FSceneRenderer::DrawQueuedSkeletal(const FMatrix& InView, const FMatrix& In
 		}
 		++FrameStats.ObjectsVisible;
 
-		const FMaterial& LocalMaterial = Item.Mesh->GetMaterial();
+		const FMaterial& LocalMaterial = Item.Material;
 		const FMatrix& LocalModel = Item.Model;
 		const FMatrix Mvp = LocalModel * InView * InProjection;
 		float Normal[9];
@@ -1348,9 +1357,9 @@ void FSceneRenderer::DrawQueuedSkeletal(const FMatrix& InView, const FMatrix& In
 		BindTexture(LocalMaterial.AlbedoMap, *WhiteTexture, 0);
 		BindTexture(LocalMaterial.NormalMap, *FlatNormalTexture, 2);
 
-		Resources.GetSkeletalMesh(Item.Mesh).Draw();
+		Resources.GetSkeletalMesh(*Item.Mesh).Draw();
 		++FrameStats.DrawsSubmitted;
-		FrameStats.TrianglesSubmitted += Item.Mesh->TriangleCount();
+		FrameStats.TrianglesSubmitted += Item.Mesh->GetNumTriangles();
 	}
 }
 
@@ -1370,7 +1379,7 @@ void FSceneRenderer::DrawDebug(const FSceneView& View, const FMatrix& LightSpace
 	for (const FStaticMeshSceneProxy* ObjectProxy : FrameMeshes)
 	{
 		const FStaticMeshSceneProxy& Object = *ObjectProxy;
-		if (!Object.GetStaticMesh().Valid())
+		if (!Object.GetStaticMesh().HasValidRenderData())
 		{
 			continue;
 		}

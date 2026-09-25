@@ -2,7 +2,7 @@
 
 #include "Components/PrimitiveComponent.h"
 #include "CoreMinimal.h"
-#include "Material.h"
+#include "MaterialShared.h"
 #include "MeshComponent.generated.h"
 
 /**

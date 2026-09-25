@@ -1,10 +1,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Engine/StaticMesh.h"
-#include "Material.h"
+#include "MaterialShared.h"
 #include "PrimitiveSceneProxy.h"
 
+class UStaticMesh;
 class UStaticMeshComponent;
 
 /**
@@ -16,13 +16,10 @@ class ENGINE_API FStaticMeshSceneProxy : public FPrimitiveSceneProxy
 public:
 	explicit FStaticMeshSceneProxy(const UStaticMeshComponent* InComponent);
 
+	/** The mesh asset (the renderer's GPU copy is keyed by it). */
 	[[nodiscard]] const UStaticMesh& GetStaticMesh() const
 	{
 		return *StaticMesh;
-	}
-	[[nodiscard]] const TSharedPtr<UStaticMesh>& GetStaticMeshShared() const
-	{
-		return StaticMesh;
 	}
 
 	/** Mesh sections the renderer draws (one for a mesh without sections). */
@@ -43,7 +40,7 @@ public:
 	[[nodiscard]] FBox GetWorldBounds() const;
 
 private:
-	TSharedPtr<UStaticMesh> StaticMesh;
+	UStaticMesh* StaticMesh = nullptr;
 	TArray<FMaterial> SectionMaterials;
 	bool bHasShadowCastingMaterial = false;
 };

@@ -7,8 +7,9 @@
 class UStaticMesh;
 
 /**
- * The GPU buffers of a UStaticMesh (UE: FStaticMeshRenderData): its vertices, with tangents computed at upload, and its
- * indices in one VAO, drawn whole or by section. FRenderResourceCache makes it the first time the mesh is drawn.
+ * The GPU buffers of a UStaticMesh (UE: FStaticMeshRenderData): its LOD resources' vertices, with tangents computed at
+ * upload, and indices in one VAO, drawn whole or by section. FRenderResourceCache makes it the first time the mesh is
+ * drawn.
  */
 class FStaticMeshRenderData
 {

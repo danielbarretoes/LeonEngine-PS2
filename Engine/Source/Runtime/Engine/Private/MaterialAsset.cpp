@@ -95,7 +95,7 @@ void PatchMaterialFromJson(FResourceCache& Resources, FMaterial& Material, const
 	bool bUnlit = false;
 	if (Spec.TryGetBoolField("unlit", bUnlit) && bUnlit)
 	{
-		Material.Shading = EMaterialShadingModel::Unlit;
+		Material.Shading = EMaterialLightingModel::Unlit;
 	}
 	Material.Albedo = ReadVec3(Spec, "albedo", Material.Albedo);
 	Material.Specular = ReadVec3(Spec, "specular", Material.Specular);
@@ -140,7 +140,7 @@ bool LoadMaterialFile(FResourceCache& Resources, const FString& Path, FMaterial&
 FMaterial MakeDefaultCheckerMaterial(FResourceCache& Resources)
 {
 	FMaterial Material;
-	Material.Shading = EMaterialShadingModel::BlinnPhong;
+	Material.Shading = EMaterialLightingModel::BlinnPhong;
 	Material.Albedo = FVector(1.0f, 1.0f, 1.0f);
 	Material.Specular = FVector(0.04f, 0.04f, 0.04f);
 	Material.Metallic = 0.0f;

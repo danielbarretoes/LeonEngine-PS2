@@ -3,6 +3,7 @@
 #include "Engine/BlockingVolume.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/PointLight.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/TargetPoint.h"
 #include "Engine/TriggerVolume.h"
@@ -1016,7 +1017,7 @@ namespace
 	{
 		const FLevelActorRecord* Record = nullptr;
 		FTransform Transform;
-		TSharedPtr<UStaticMesh> Mesh;
+		UStaticMesh* Mesh = nullptr;
 		/** The `.lmat` material, or the default material for a mesh without materials of its own. */
 		FMaterial Material;
 		bool bHasMaterial = false;
@@ -1075,7 +1076,7 @@ namespace
 			Out.Material = Resources.LoadMaterial(ResolveLevelAssetPath(SourcePath, Record.MaterialPath));
 			Out.bHasMaterial = true;
 		}
-		else if (!Out.Mesh->HasMaterials())
+		else if (Out.Mesh->GetStaticMaterials().Num() == 0)
 		{
 			Out.Material = Resources.DefaultMaterial();
 			Out.bHasMaterial = true;
@@ -1094,11 +1095,11 @@ namespace
 			return;
 		}
 		const UStaticMesh& Mesh = *Resolved.Mesh;
-		int32 NumSlots = Mesh.GetMaterials().Num();
-		if (!Mesh.HasMaterials())
+		int32 NumSlots = Mesh.GetStaticMaterials().Num();
+		if (NumSlots == 0)
 		{
 			NumSlots = 1;
-			for (const FMeshSection& Section : Mesh.GetSubmeshes())
+			for (const FMeshSection& Section : Mesh.GetLODResources().Sections)
 			{
 				NumSlots = FMath::Max(NumSlots, Section.MaterialIndex + 1);
 			}

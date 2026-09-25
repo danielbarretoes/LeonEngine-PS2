@@ -1,9 +1,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Engine/SkeletalMesh.h"
+#include "MaterialShared.h"
 #include "PrimitiveSceneProxy.h"
 
+class USkeletalMesh;
 class USkeletalMeshComponent;
 
 /**
@@ -15,13 +16,15 @@ class ENGINE_API FSkeletalMeshSceneProxy : public FPrimitiveSceneProxy
 public:
 	explicit FSkeletalMeshSceneProxy(const USkeletalMeshComponent* InComponent);
 
+	/** The mesh asset (the renderer's GPU copy is keyed by it). */
 	[[nodiscard]] const USkeletalMesh& GetSkeletalMesh() const
 	{
 		return *SkeletalMesh;
 	}
-	[[nodiscard]] const TSharedPtr<USkeletalMesh>& GetSkeletalMeshShared() const
+	/** The material of the mesh's slot 0, which draws the whole mesh (Leon: one section). */
+	[[nodiscard]] const FMaterial& GetMaterial() const
 	{
-		return SkeletalMesh;
+		return Material;
 	}
 
 	/** Skin matrices in the GL memory layout (uploaded as they are). */
@@ -36,6 +39,7 @@ public:
 	}
 
 private:
-	TSharedPtr<USkeletalMesh> SkeletalMesh;
+	USkeletalMesh* SkeletalMesh = nullptr;
+	FMaterial Material;
 	TArray<FMatrix> BoneMatrices;
 };
