@@ -11,6 +11,7 @@
 #include "Containers/StringConv.h"
 #include "GltfImport.h"
 #include "HAL/FileManager.h"
+#include "ImportCoordinateConversion.h"
 #include "LeonMaterialFormat.h"
 #include "MeshData.h"
 #include "Misc/CString.h"
@@ -233,7 +234,10 @@ bool LoadStaticMeshFromGltf(const FString& Path, FMeshData& Out, const FString& 
 		OutError = "glTF contained no triangle mesh data";
 		return false;
 	}
-	ComputeTangents(Mesh, EMeshDataBasis::LegacyYUp);
+	// glTF 2.0 is right-handed, Y up, in metres.
+	FImportCoordinateConversion(EImportAxes::RightHandedYUp, FImportCoordinateConversion::CmPerMetre)
+		.ConvertMeshData(Mesh);
+	ComputeTangents(Mesh, EMeshDataBasis::Engine);
 	Out = MoveTemp(Mesh);
 	return true;
 }

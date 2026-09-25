@@ -1,10 +1,9 @@
 #include "FbxSkeletalImport.h"
 
 #include "Containers/StringConv.h"
+#include "FbxImportCommon.h"
 #include "MeshUtilitiesLog.h"
 #include "Misc/Paths.h"
-
-#include <ufbx.h>
 
 namespace
 {
@@ -48,16 +47,6 @@ namespace
 			Out.M[Column][3] = Column == 3 ? 1.0f : 0.0f;
 		}
 		return Out;
-	}
-
-	ufbx_load_opts MakeLoadOpts()
-	{
-		ufbx_load_opts Opts{};
-		Opts.target_axes = ufbx_axes_right_handed_y_up;
-		Opts.target_unit_meters = 1.0f;
-		Opts.space_conversion = UFBX_SPACE_CONVERSION_MODIFY_GEOMETRY;
-		Opts.generate_missing_normals = true;
-		return Opts;
 	}
 
 	FMatrix EvaluateNodeToWorld(ufbx_anim* Anim, ufbx_node* Node, double InTime)
@@ -164,7 +153,7 @@ bool LoadSkeletalMeshFromFbx(const FString& Path, FSkeletalMeshData& Out)
 {
 	Out = FSkeletalMeshData();
 	ufbx_error Error{};
-	const ufbx_load_opts Opts = MakeLoadOpts();
+	const ufbx_load_opts Opts = FFbxImportCommon::MakeLoadOptions();
 	ufbx_scene* Scene = ufbx_load_file(TCHAR_TO_UTF8(*Path), &Opts, &Error);
 	if (Scene == nullptr)
 	{
@@ -199,6 +188,12 @@ bool LoadSkeletalMeshFromFbx(const FString& Path, FSkeletalMeshData& Out)
 		return false;
 	}
 
+	// Mesh-space data is still in the file's axes: RootAxes turns it to the resolved right-handed frame (the bones'
+	// frame), and the inverse bind pose starts with the way back so skinning is unchanged.
+	const FMatrix RootAxes = FFbxImportCommon::GetRootAxesMatrix(*Scene);
+	const FMatrix RootAxesInverse = RootAxes.GetTransposed();
+	const FImportCoordinateConversion Conversion = FFbxImportCommon::MakeCoordinateConversion(*Scene);
+
 	Out.Skeleton.BoneNames.SetNum(ClusterCount);
 	Out.Skeleton.ParentIndices.Init(INDEX_NONE, ClusterCount);
 	Out.Skeleton.InverseBindPose.Init(FMatrix::Identity, ClusterCount);
@@ -214,7 +209,7 @@ bool LoadSkeletalMeshFromFbx(const FString& Path, FSkeletalMeshData& Out)
 		ufbx_node* Bone = Cluster->bone_node;
 		const FString LocalName(static_cast<int32>(Bone->name.length), Bone->name.data);
 		Out.Skeleton.BoneNames[C] = FName(*LocalName);
-		Out.Skeleton.InverseBindPose[C] = ToMatrix(Cluster->geometry_to_bone);
+		Out.Skeleton.InverseBindPose[C] = RootAxesInverse * ToMatrix(Cluster->geometry_to_bone);
 		NodeToBone.Add(Bone, C);
 	}
 	for (int32 C = 0; C < ClusterCount; ++C)
@@ -261,12 +256,15 @@ bool LoadSkeletalMeshFromFbx(const FString& Path, FSkeletalMeshData& Out)
 
 				FSkeletalVertex V{};
 				const ufbx_vec3 Pos = ufbx_get_vertex_vec3(&Mesh->vertex_position, Index);
-				V.Position = FVector(static_cast<float>(Pos.x), static_cast<float>(Pos.y), static_cast<float>(Pos.z));
+				V.Position = RootAxes.TransformVector(
+					FVector(static_cast<float>(Pos.x), static_cast<float>(Pos.y), static_cast<float>(Pos.z)));
+				V.Normal = Conversion.GetSourceUp();
 				if (Mesh->vertex_normal.exists)
 				{
 					const ufbx_vec3 N = ufbx_get_vertex_vec3(&Mesh->vertex_normal, Index);
-					V.Normal = FVector(static_cast<float>(N.x), static_cast<float>(N.y), static_cast<float>(N.z))
-								   .GetUnsafeNormal();
+					V.Normal = RootAxes.TransformVector(
+						FVector(static_cast<float>(N.x), static_cast<float>(N.y), static_cast<float>(N.z))
+							.GetUnsafeNormal());
 				}
 				if (Mesh->vertex_uv.exists)
 				{
@@ -322,6 +320,7 @@ bool LoadSkeletalMeshFromFbx(const FString& Path, FSkeletalMeshData& Out)
 	FNodesByName NodesByName;
 	CollectNodesByName(Scene, NodesByName);
 	BakeAnimFromScene(Scene, Out.Skeleton, NodesByName, Out.EmbeddedAnim);
+	Conversion.ConvertSkeletalMeshData(Out);
 
 	ufbx_free_scene(Scene);
 	return Out.Skeleton.BoneCount() > 0;
@@ -331,7 +330,7 @@ bool LoadAnimSequenceFromFbx(const FString& Path, const USkeleton& InSkeleton, U
 {
 	Out = UAnimSequence();
 	ufbx_error Error{};
-	const ufbx_load_opts Opts = MakeLoadOpts();
+	const ufbx_load_opts Opts = FFbxImportCommon::MakeLoadOptions();
 	ufbx_scene* Scene = ufbx_load_file(TCHAR_TO_UTF8(*Path), &Opts, &Error);
 	if (Scene == nullptr)
 	{
@@ -344,6 +343,7 @@ bool LoadAnimSequenceFromFbx(const FString& Path, const USkeleton& InSkeleton, U
 	const bool bOk = BakeAnimFromScene(Scene, InSkeleton, NodesByName, Out);
 	if (bOk)
 	{
+		FFbxImportCommon::MakeCoordinateConversion(*Scene).ConvertAnimSequence(Out);
 		// Prefer the file name stem as the clip name.
 		Out.Name = FName(*FPaths::GetBaseFilename(Path));
 	}

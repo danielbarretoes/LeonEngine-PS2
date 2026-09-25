@@ -12,7 +12,10 @@ namespace
 {
 
 	constexpr ANSICHAR Magic[4] = {'L', 'M', 'S', 'H'};
-	constexpr uint32 Version = 1;
+	/** Legacy data: metres, Y up, right-handed. Read only, converted at load. */
+	constexpr uint32 LegacyVersion = 1;
+	/** Engine world data (UE: Z up, left-handed, centimetres), as the importers produce it. Written. */
+	constexpr uint32 Version = 2;
 
 #pragma pack(push, 1)
 	struct FLeonMeshHeader
@@ -90,7 +93,7 @@ bool LoadLeonMeshFile(const FString& Path, FMeshData& Out)
 	}
 	FLeonMeshHeader Header{};
 	if (!ReadBytes(*In, &Header, sizeof(Header)) || FMemory::Memcmp(Header.Magic, Magic, 4) != 0 ||
-		Header.Version != Version)
+		(Header.Version != Version && Header.Version != LegacyVersion))
 	{
 		UE_LOG(LogLeonMesh, Error, "Bad header in %s", *Path);
 		return false;
@@ -110,8 +113,10 @@ bool LoadLeonMeshFile(const FString& Path, FMeshData& Out)
 		UE_LOG(LogLeonMesh, Error, "Truncated vertex / index data in %s", *Path);
 		return false;
 	}
-	// Version 1 stores legacy data (metres, Y up, right-handed).
-	FLegacyCoordinateConversion::ConvertMeshData(Data);
+	if (Header.Version == LegacyVersion)
+	{
+		FLegacyCoordinateConversion::ConvertMeshData(Data);
+	}
 
 	if (Header.SubmeshCount == 0)
 	{

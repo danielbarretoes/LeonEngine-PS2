@@ -33,7 +33,7 @@ enum class EMeshDataBasis : uint8
 {
 	/** The engine world (UE: Z up, left-handed). */
 	Engine,
-	/** The legacy Y-up, right-handed world the importers still produce (their output is converted at load). */
+	/** The legacy Y-up, right-handed world of version 1 .lmesh data (tests compare against it). */
 	LegacyYUp,
 };
 

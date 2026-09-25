@@ -1,37 +1,25 @@
 #include "FbxStaticMesh.h"
 
 #include "Containers/StringConv.h"
+#include "FbxImportCommon.h"
 #include "MeshData.h"
 #include "MeshUtilitiesLog.h"
-
-#include <ufbx.h>
-
-namespace
-{
-
-	ufbx_load_opts MakeLoadOpts()
-	{
-		ufbx_load_opts Opts{};
-		Opts.target_axes = ufbx_axes_right_handed_y_up;
-		Opts.target_unit_meters = 1.0f;
-		Opts.space_conversion = UFBX_SPACE_CONVERSION_MODIFY_GEOMETRY;
-		Opts.generate_missing_normals = true;
-		return Opts;
-	}
-
-} // namespace
 
 bool LoadStaticMeshFromFbx(const FString& Path, FMeshData& Out)
 {
 	Out = FMeshData();
 	ufbx_error Error{};
-	const ufbx_load_opts Opts = MakeLoadOpts();
+	const ufbx_load_opts Opts = FFbxImportCommon::MakeLoadOptions();
 	ufbx_scene* Scene = ufbx_load_file(TCHAR_TO_UTF8(*Path), &Opts, &Error);
 	if (Scene == nullptr)
 	{
 		UE_LOG(LogMeshUtilities, Error, "FbxStaticMesh: failed to load '%s': %s", *Path, Error.description.data);
 		return false;
 	}
+
+	// Mesh-space data is still in the file's axes: RootAxes turns it to the resolved right-handed frame.
+	const FMatrix RootAxes = FFbxImportCommon::GetRootAxesMatrix(*Scene);
+	const FImportCoordinateConversion Conversion = FFbxImportCommon::MakeCoordinateConversion(*Scene);
 
 	TArray<uint32> Tri;
 	Tri.SetNumZeroed(16 * 3);
@@ -68,18 +56,19 @@ bool LoadStaticMeshFromFbx(const FString& Path, FMeshData& Out)
 
 					FVertex V{};
 					const ufbx_vec3 Pos = ufbx_get_vertex_vec3(&Mesh->vertex_position, Corner);
-					V.Position =
-						FVector(static_cast<float>(Pos.x), static_cast<float>(Pos.y), static_cast<float>(Pos.z));
+					V.Position = RootAxes.TransformVector(
+						FVector(static_cast<float>(Pos.x), static_cast<float>(Pos.y), static_cast<float>(Pos.z)));
 
 					if (Mesh->vertex_normal.exists)
 					{
 						const ufbx_vec3 N = ufbx_get_vertex_vec3(&Mesh->vertex_normal, Corner);
-						V.Normal = FVector(static_cast<float>(N.x), static_cast<float>(N.y), static_cast<float>(N.z))
-									   .GetUnsafeNormal();
+						V.Normal = RootAxes.TransformVector(
+							FVector(static_cast<float>(N.x), static_cast<float>(N.y), static_cast<float>(N.z))
+								.GetUnsafeNormal());
 					}
 					else
 					{
-						V.Normal = FVector(0.0f, 1.0f, 0.0f);
+						V.Normal = Conversion.GetSourceUp();
 					}
 
 					if (Mesh->vertex_uv.exists)
@@ -109,6 +98,7 @@ bool LoadStaticMeshFromFbx(const FString& Path, FMeshData& Out)
 		return false;
 	}
 
-	ComputeTangents(Out, EMeshDataBasis::LegacyYUp);
+	Conversion.ConvertMeshData(Out);
+	ComputeTangents(Out, EMeshDataBasis::Engine);
 	return true;
 }

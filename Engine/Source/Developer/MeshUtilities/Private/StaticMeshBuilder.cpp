@@ -17,7 +17,7 @@ bool FStaticMeshBuilder::CookFromObj(const FString& ObjPath, const FString& OutM
 		OutError = "Failed to load OBJ: " + ObjPath;
 		return false;
 	}
-	ComputeTangents(Data, EMeshDataBasis::LegacyYUp);
+	ComputeTangents(Data, EMeshDataBasis::Engine);
 	if (!SaveLeonMeshFile(OutMeshPath, Data))
 	{
 		OutError = "Failed to write .lmesh: " + OutMeshPath;

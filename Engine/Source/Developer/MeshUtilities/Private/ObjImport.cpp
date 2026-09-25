@@ -1,8 +1,10 @@
 #include "ObjImport.h"
 
 #include "Containers/StringConv.h"
+#include "ImportCoordinateConversion.h"
 #include "MeshUtilitiesLog.h"
 #include "Misc/Paths.h"
+#include "ObjImportPrivate.h"
 
 #include <tiny_obj_loader.h>
 
@@ -170,7 +172,7 @@ namespace
 
 } // namespace
 
-FMeshData LoadObj(const FString& Path)
+FMeshData LoadObjSourceSpace(const FString& Path)
 {
 	tinyobj::ObjReaderConfig Config;
 	Config.triangulate = true;
@@ -314,5 +316,14 @@ FMeshData LoadObj(const FString& Path)
 
 	UE_LOG(LogMeshUtilities, Log, "OBJ '%s': %d verts, %d tris, %d submeshes, %d materials", *Path, Data.Vertices.Num(),
 		Data.Indices.Num() / 3, Data.Submeshes.Num(), Data.Materials.Num());
+	return Data;
+}
+
+FMeshData LoadObj(const FString& Path)
+{
+	FMeshData Data = LoadObjSourceSpace(Path);
+	// OBJ declares no axes or unit; the files in use are right-handed, Y up, in metres.
+	FImportCoordinateConversion(EImportAxes::RightHandedYUp, FImportCoordinateConversion::CmPerMetre)
+		.ConvertMeshData(Data);
 	return Data;
 }
