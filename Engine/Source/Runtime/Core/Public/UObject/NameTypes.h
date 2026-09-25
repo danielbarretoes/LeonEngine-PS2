@@ -302,7 +302,7 @@ private:
 	uint32 Number;
 };
 
-static_assert(sizeof(FName) == 8, "FName is 8 bytes (D5)");
+static_assert(sizeof(FName) == 8, "FName must stay 8 bytes");
 
 FORCEINLINE bool operator==(EName Lhs, FName Rhs)
 {

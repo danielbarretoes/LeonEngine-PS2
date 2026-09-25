@@ -22,7 +22,7 @@ namespace
 	{
 		const float Hy = std::max(InBody.HalfExtents.y, 0.001f);
 		const float Horiz = std::max(InBody.HalfExtents.x, InBody.HalfExtents.z);
-		// Unit FPlane scaled ~40x1x40 → hy=0.5 still floor-like by aspect (was wrongly a full-arena
+		// Unit plane scaled ~40x1x40 → hy=0.5 still floor-like by aspect (was wrongly a full-arena
 		// blocker).
 		if (Horiz / Hy >= 6.0f)
 		{
@@ -61,7 +61,7 @@ namespace
 		{
 			return false;
 		}
-		// Arena floor FPlane only.
+		// Arena floor plane only.
 		return Level.GetStaticMeshes()[MeshIndex].EditorClass == "Plane";
 	}
 

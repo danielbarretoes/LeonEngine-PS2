@@ -1011,7 +1011,7 @@ bool ApplyLevelDocument(UGameEngine& Engine, const FLevelDocument& Doc, const st
 		int FailedMeshes = 0;
 		for (const FLevelActorRecord& Record : Doc.Actors)
 		{
-			FTransform Transform;
+			FLegacyTransform Transform;
 			Transform.Position = Record.Position;
 			Transform.RotationDegrees = Record.RotationDegrees;
 			Transform.Scale = Record.Scale;

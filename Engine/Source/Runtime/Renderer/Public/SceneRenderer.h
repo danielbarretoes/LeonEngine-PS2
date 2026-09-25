@@ -6,7 +6,7 @@
 #include "Frustum.h"
 #include "GpuPassTimer.h"
 #include "LdrColorTarget.h"
-#include "Math/Transform.h"
+#include "Migration/LegacyTransform.h"
 #include "PlanarReflection.h"
 #include "PostProcess.h"
 #include "RHIHandles.h"
@@ -86,7 +86,7 @@ public:
 	void SubmitSkeletalDraw(
 		const USkeletalMesh& InMesh, const glm::mat4& InModel, const std::vector<glm::mat4>& InBoneMatrices);
 	void SubmitSkeletalDraw(
-		const USkeletalMesh& InMesh, const FTransform& Transform, const std::vector<glm::mat4>& InBoneMatrices);
+		const USkeletalMesh& InMesh, const FLegacyTransform& Transform, const std::vector<glm::mat4>& InBoneMatrices);
 
 	/// Queue a rigid static mesh with an explicit model matrix (attachments, etc.).
 	void SubmitStaticDraw(const UStaticMesh& InMesh, const glm::mat4& InModel, const FMaterial& InMaterial);

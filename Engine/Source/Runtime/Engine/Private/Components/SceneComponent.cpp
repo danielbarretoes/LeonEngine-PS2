@@ -10,9 +10,9 @@
 namespace
 {
 
-	[[nodiscard]] FTransform DecomposeApprox(const glm::mat4& M)
+	[[nodiscard]] FLegacyTransform DecomposeApprox(const glm::mat4& M)
 	{
-		FTransform T{};
+		FLegacyTransform T{};
 		T.Position = glm::vec3(M[3]);
 		T.Scale.x = glm::length(glm::vec3(M[0]));
 		T.Scale.y = glm::length(glm::vec3(M[1]));
@@ -21,7 +21,7 @@ namespace
 		const glm::vec3 Col0 = T.Scale.x > Eps ? glm::vec3(M[0]) / T.Scale.x : glm::vec3(1.0f, 0.0f, 0.0f);
 		const glm::vec3 Col1 = T.Scale.y > Eps ? glm::vec3(M[1]) / T.Scale.y : glm::vec3(0.0f, 1.0f, 0.0f);
 		const glm::vec3 Col2 = T.Scale.z > Eps ? glm::vec3(M[2]) / T.Scale.z : glm::vec3(0.0f, 0.0f, 1.0f);
-		// XYZ Euler extraction (degrees) matching FTransform::modelMatrix order Rx*Ry*Rz.
+		// XYZ Euler extraction (degrees) matching FLegacyTransform::ModelMatrix order Rx*Ry*Rz.
 		T.RotationDegrees.y = std::atan2(-Col0.z, Col2.z) * (180.0f / 3.14159265358979323846f);
 		T.RotationDegrees.x = std::asin(std::clamp(Col1.z, -1.0f, 1.0f)) * (180.0f / 3.14159265358979323846f);
 		T.RotationDegrees.z = std::atan2(-Col1.x, Col1.y) * (180.0f / 3.14159265358979323846f);
@@ -43,9 +43,9 @@ USceneComponent::~USceneComponent()
 	DetachFromParent(false);
 }
 
-FTransform USceneComponent::GetRelativeTransform() const
+FLegacyTransform USceneComponent::GetRelativeTransform() const
 {
-	FTransform T{};
+	FLegacyTransform T{};
 	T.Position = RelativeLocation;
 	T.RotationDegrees = RelativeRotation;
 	T.Scale = RelativeScale;
@@ -94,7 +94,7 @@ bool USceneComponent::AttachToComponent(USceneComponent* InParent, bool bKeepWor
 	{
 		const glm::mat4 ParentWorld = Parent->GetComponentTransform();
 		const glm::mat4 ParentInv = glm::inverse(ParentWorld);
-		const FTransform Relative = DecomposeApprox(ParentInv * WorldBefore);
+		const FLegacyTransform Relative = DecomposeApprox(ParentInv * WorldBefore);
 		RelativeLocation = Relative.Position;
 		RelativeRotation = Relative.RotationDegrees;
 		RelativeScale = Relative.Scale;
@@ -120,7 +120,7 @@ void USceneComponent::DetachFromParent(bool bKeepWorldTransform)
 
 	if (bKeepWorldTransform)
 	{
-		const FTransform World = DecomposeApprox(WorldBefore);
+		const FLegacyTransform World = DecomposeApprox(WorldBefore);
 		RelativeLocation = World.Position;
 		RelativeRotation = World.RotationDegrees;
 		RelativeScale = World.Scale;
@@ -134,14 +134,14 @@ void USceneComponent::DetachFromParent(bool bKeepWorldTransform)
 
 glm::mat4 USceneComponent::GetComponentTransform() const
 {
-	const FTransform Relative = GetRelativeTransform();
+	const FLegacyTransform Relative = GetRelativeTransform();
 	if (Parent != nullptr)
 	{
 		return Parent->GetComponentTransform() * Relative.ModelMatrix();
 	}
 	if (Owner != nullptr)
 	{
-		FTransform World{};
+		FLegacyTransform World{};
 		World.Position = Owner->GetActorLocation() + RelativeLocation;
 		World.RotationDegrees = RelativeRotation;
 		World.RotationDegrees.y += Owner->GetActorYaw();

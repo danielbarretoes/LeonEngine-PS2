@@ -4,6 +4,7 @@
 #include "Frustum.h"
 #include "IPhysicsBackend.h"
 #include "MeshData.h"
+#include "Migration/GlmInterop.h"
 #include "StaticMesh.h"
 #include "TriangleCollision.h"
 
@@ -181,10 +182,10 @@ void FPhysScene::SyncFromLevel(const ULevel& Level)
 		const UStaticMeshComponent& Obj = Meshes[Body.LevelMeshIndex];
 		if (Obj.Mesh != nullptr)
 		{
-			const FBox WorldAabb = FBox::FromLocalTransformed(
-				Obj.Mesh->GetLocalMin(), Obj.Mesh->GetLocalMax(), Obj.EffectiveModelMatrix());
-			Body.Position = (WorldAabb.Min + WorldAabb.Max) * 0.5f;
-			Body.HalfExtents = (WorldAabb.Max - WorldAabb.Min) * 0.5f;
+			const FBox WorldAabb =
+				TransformLocalBox(Obj.Mesh->GetLocalMin(), Obj.Mesh->GetLocalMax(), Obj.EffectiveModelMatrix());
+			Body.Position = ToGlm(WorldAabb.GetCenter());
+			Body.HalfExtents = ToGlm(WorldAabb.GetExtent());
 
 			// Unreal ComplexAsSimple lite: static meshes with CPU tris use triangle queries.
 			if (Body.Type == EBodyType::Static && Obj.Mesh->HasCpuData())
@@ -292,7 +293,7 @@ float FPhysScene::QuerySupportY(const FCapsuleShape& Capsule, const glm::vec3& F
 		{
 			continue;
 		}
-		// FPlane height at feet XZ: dot((x,y,z)-point, n) = 0.
+		// Plane height at feet XZ: dot((x,y,z)-point, n) = 0.
 		const float YOnPlane = Plane.Point.y -
 			((Plane.Normal.x * (Feet.x - Plane.Point.x)) + (Plane.Normal.z * (Feet.z - Plane.Point.z))) /
 				Plane.Normal.y;

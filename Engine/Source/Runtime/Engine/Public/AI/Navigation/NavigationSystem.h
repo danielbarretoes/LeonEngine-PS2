@@ -45,7 +45,7 @@ public:
 	/// `walkBounds` is half-extent from origin on XZ (matches UCharacterMovementComponent::WalkBounds).
 	void BuildFromPhysScene(const FPhysScene& Physics, float FloorY, float WalkBounds);
 
-	/// Prefer this: skips FPlane; honors NavTags::Blocker / NavTags::Walkable on meshes.
+	/// Prefer this: skips Plane; honors NavTags::Blocker / NavTags::Walkable on meshes.
 	void BuildFromLevel(const ULevel& Level, const FPhysScene& Physics, float FloorY, float WalkBounds);
 
 	void Clear();

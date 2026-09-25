@@ -24,7 +24,7 @@ struct ENGINE_API FCapsuleContactParams
 };
 
 /// Inclined walkable/blocking surface for Arcade traces (CMC slope lite).
-/// FPlane through `point` with unit `normal`, clipped by world AABB bounds.
+/// Plane through `point` with unit `normal`, clipped by world AABB bounds.
 struct ENGINE_API FSlopePlane
 {
 	glm::vec3 Point{0.0f};

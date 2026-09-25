@@ -2,7 +2,7 @@
 
 #include "Level/Light.h"
 #include "Material.h"
-#include "Math/Transform.h"
+#include "Migration/LegacyTransform.h"
 #include "StaticMesh.h"
 #include "Texture2D.h"
 
@@ -32,7 +32,7 @@ enum class EComponentMobility : std::uint8_t
 ///   4) material (engine default checker when procedural mesh has no MTL)
 struct ENGINE_API UStaticMeshComponent
 {
-	FTransform Transform;
+	FLegacyTransform Transform;
 	std::shared_ptr<UStaticMesh> Mesh;
 	FMaterial Material;
 	std::vector<FMaterial> Materials; // optional per-slot overrides
@@ -88,13 +88,13 @@ struct ENGINE_API UStaticMeshComponent
 /// Unreal-like FPlayerStart — spawn transform for GameMode-possessed pawns (not a drawable mesh).
 struct ENGINE_API FPlayerStart
 {
-	FTransform Transform{};
+	FLegacyTransform Transform{};
 };
 
 /// Interact / trigger volume (POD). Overlap tested in gameplay from position + interactRadius.
 struct ENGINE_API FTriggerVolume
 {
-	FTransform Transform{};
+	FLegacyTransform Transform{};
 	float InteractRadius = 2.f;
 	int InteractCost = 0;
 	std::string Payload; // game-defined e.g. Door, WallBuy:M14, Perk:Jugg
@@ -105,7 +105,7 @@ struct ENGINE_API FTriggerVolume
 /// Damage volume (POD). AABB from transform.position and abs(scale) * 0.5.
 struct ENGINE_API FPainCausingVolume
 {
-	FTransform Transform{}; // position + scale as half-extents box (full size = abs(scale))
+	FLegacyTransform Transform{}; // position + scale as half-extents box (full size = abs(scale))
 	float DamagePerSecond = 12.f;
 	float DamageInterval = 0.35f;
 	std::string Tag;
@@ -114,7 +114,7 @@ struct ENGINE_API FPainCausingVolume
 /// AI spawn marker (POD — not a drawable mesh).
 struct ENGINE_API FAISpawnPoint
 {
-	FTransform Transform{};
+	FLegacyTransform Transform{};
 	std::string Tag;
 };
 

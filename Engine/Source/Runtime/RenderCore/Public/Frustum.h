@@ -1,25 +1,16 @@
 #pragma once
 
+#include "Math/Box.h"
+#include "Math/Plane.h"
+
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
-#include <array>
+/// World AABB of a local box moved by a glm model matrix (bridge for the glm mesh bounds until P6).
+[[nodiscard]] RENDERCORE_API FBox TransformLocalBox(
+	const glm::vec3& LocalMin, const glm::vec3& LocalMax, const glm::mat4& Model);
 
-/// Axis-aligned bounding box in world space.
-struct RENDERCORE_API FBox
-{
-	glm::vec3 Min{0.0f};
-	glm::vec3 Max{0.0f};
-
-	/// FTransform local AABB corners by `model` and re-wrap as a world AABB.
-	[[nodiscard]] static FBox FromLocalTransformed(
-		const glm::vec3& LocalMin, const glm::vec3& LocalMax, const glm::mat4& Model);
-
-	/// Ray–AABB slab test. `dir` need not be unit length. Returns true if hit with t >= 0.
-	[[nodiscard]] bool IntersectRay(const glm::vec3& Origin, const glm::vec3& Dir, float& OutT) const;
-};
-
-/// View-projection frustum as 6 planes (inside = n·x + d >= 0).
+/// View-projection frustum as 6 planes; a point is inside when PlaneDot >= 0 for all of them.
 class RENDERCORE_API FFrustum
 {
 public:
@@ -29,11 +20,5 @@ public:
 	[[nodiscard]] bool IntersectsAabb(const FBox& Box) const;
 
 private:
-	struct FPlane
-	{
-		glm::vec3 Normal{0.0f};
-		float Distance = 0.0f;
-	};
-
-	std::array<FPlane, 6> Planes{};
+	FPlane Planes[6]{};
 };

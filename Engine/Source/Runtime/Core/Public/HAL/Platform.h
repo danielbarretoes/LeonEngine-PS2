@@ -80,7 +80,7 @@ static_assert(sizeof(int16) == 2 && sizeof(uint16) == 2, "16-bit types must be 2
 static_assert(sizeof(int32) == 4 && sizeof(uint32) == 4, "32-bit types must be 4 bytes");
 static_assert(sizeof(int64) == 8 && sizeof(uint64) == 8, "64-bit types must be 8 bytes");
 static_assert(sizeof(PTRINT) == sizeof(void*) && sizeof(UPTRINT) == sizeof(void*), "PTRINT must be pointer sized");
-static_assert(sizeof(TCHAR) == 1, "TCHAR is UTF-8 (D1)");
+static_assert(sizeof(TCHAR) == 1, "TCHAR is UTF-8 on every platform");
 
 /** String literal of TCHARs (UE: TEXT). TCHAR is UTF-8, so a literal is already a TCHAR string. */
 #define TEXT(x) x

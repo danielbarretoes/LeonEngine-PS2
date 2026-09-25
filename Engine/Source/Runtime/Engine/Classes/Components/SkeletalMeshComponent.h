@@ -2,7 +2,7 @@
 
 #include "Components/SceneComponent.h"
 #include "Material.h"
-#include "Math/Transform.h"
+#include "Migration/LegacyTransform.h"
 #include "SkeletalAnimation.h"
 #include "SkeletalMesh.h"
 #include "StaticMesh.h"
@@ -29,7 +29,7 @@ struct ENGINE_API FSkelMeshAttachment
 	FMaterial Material{};
 	bool bMaterialOverride = true;
 	/// Bone-local TRS applied after the bone model matrix.
-	FTransform Relative{};
+	FLegacyTransform Relative{};
 	/// When true, `worldMatrixOverride` replaces `component * bone * relative`.
 	bool bOverrideWorldMatrix = false;
 	glm::mat4 WorldMatrixOverride{1.0f};

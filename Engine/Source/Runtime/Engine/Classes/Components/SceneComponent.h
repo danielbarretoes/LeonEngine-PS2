@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Components/ActorComponent.h"
-#include "Math/Transform.h"
+#include "Migration/LegacyTransform.h"
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
@@ -41,7 +41,7 @@ public:
 		return Children;
 	}
 
-	[[nodiscard]] FTransform GetRelativeTransform() const;
+	[[nodiscard]] FLegacyTransform GetRelativeTransform() const;
 	/// Component-to-world matrix (Unreal GetComponentTransform).
 	[[nodiscard]] glm::mat4 GetComponentTransform() const;
 	[[nodiscard]] glm::vec3 GetComponentLocation() const;

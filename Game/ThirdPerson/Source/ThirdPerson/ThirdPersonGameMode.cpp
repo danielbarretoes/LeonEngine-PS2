@@ -3,8 +3,8 @@
 #include "CoreGlobals.h"
 #include "GenericPlatform/GenericWindow.h"
 #include "GenericPlatform/IInputInterface.h"
-#include "PS2RHI.h"
 #include "Misc/CString.h"
+#include "PS2RHI.h"
 #include "Stats/StatsOverlay.h"
 #include "ThirdPerson.h"
 

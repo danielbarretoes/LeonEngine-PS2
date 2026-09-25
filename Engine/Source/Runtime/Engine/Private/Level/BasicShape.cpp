@@ -18,7 +18,7 @@ std::shared_ptr<UStaticMesh> MeshForBasicShape(
 	return nullptr;
 }
 
-FBasicShape FBasicShape::Cube(FTransform InTransform, FMaterial InMaterial, bool bHasMaterial)
+FBasicShape FBasicShape::Cube(FLegacyTransform InTransform, FMaterial InMaterial, bool bHasMaterial)
 {
 	FBasicShape Shape;
 	Shape.Type = EBasicShape::Cube;
@@ -29,7 +29,7 @@ FBasicShape FBasicShape::Cube(FTransform InTransform, FMaterial InMaterial, bool
 }
 
 FBasicShape FBasicShape::Sphere(
-	FTransform InTransform, FMaterial InMaterial, bool bHasMaterial, int Segments, int Rings)
+	FLegacyTransform InTransform, FMaterial InMaterial, bool bHasMaterial, int Segments, int Rings)
 {
 	FBasicShape Shape;
 	Shape.Type = EBasicShape::Sphere;
@@ -41,7 +41,7 @@ FBasicShape FBasicShape::Sphere(
 	return Shape;
 }
 
-FBasicShape FBasicShape::Plane(float Size, FTransform InTransform, FMaterial InMaterial, bool bHasMaterial)
+FBasicShape FBasicShape::Plane(float Size, FLegacyTransform InTransform, FMaterial InMaterial, bool bHasMaterial)
 {
 	FBasicShape Shape;
 	Shape.Type = EBasicShape::Plane;

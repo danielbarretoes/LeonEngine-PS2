@@ -2,6 +2,7 @@
 
 #include "Frustum.h"
 #include "Level/Light.h"
+#include "Migration/GlmInterop.h"
 #include "Misc/Paths.h"
 #include "Primitives.h"
 
@@ -59,24 +60,23 @@ namespace
 
 	float DistanceSqToCamera(const UStaticMeshComponent& Object, const glm::vec3& InCameraPos)
 	{
-		const FBox Box = FBox::FromLocalTransformed(
-			Object.Mesh->GetLocalMin(), Object.Mesh->GetLocalMax(), Object.EffectiveModelMatrix());
-		const glm::vec3 Center = (Box.Min + Box.Max) * 0.5f;
+		const FBox Box =
+			TransformLocalBox(Object.Mesh->GetLocalMin(), Object.Mesh->GetLocalMax(), Object.EffectiveModelMatrix());
+		const glm::vec3 Center = ToGlm(Box.GetCenter());
 		const glm::vec3 D = Center - InCameraPos;
 		return glm::dot(D, D);
 	}
 
 	FBox WorldAabbFromObject(const UStaticMeshComponent& Object)
 	{
-		return FBox::FromLocalTransformed(
-			Object.Mesh->GetLocalMin(), Object.Mesh->GetLocalMax(), Object.EffectiveModelMatrix());
+		return TransformLocalBox(Object.Mesh->GetLocalMin(), Object.Mesh->GetLocalMax(), Object.EffectiveModelMatrix());
 	}
 
 	void ExpandWorldAabbFromObject(const UStaticMeshComponent& Object, glm::vec3& WorldMin, glm::vec3& WorldMax)
 	{
 		const FBox Box = WorldAabbFromObject(Object);
-		WorldMin = glm::min(WorldMin, Box.Min);
-		WorldMax = glm::max(WorldMax, Box.Max);
+		WorldMin = glm::min(WorldMin, ToGlm(Box.Min));
+		WorldMax = glm::max(WorldMax, ToGlm(Box.Max));
 	}
 
 	void SnapAabbOutward(glm::vec3& WorldMin, glm::vec3& WorldMax, float Step)
@@ -416,7 +416,7 @@ void FSceneRenderer::SubmitSkeletalDraw(
 }
 
 void FSceneRenderer::SubmitSkeletalDraw(
-	const USkeletalMesh& InMesh, const FTransform& Transform, const std::vector<glm::mat4>& InBoneMatrices)
+	const USkeletalMesh& InMesh, const FLegacyTransform& Transform, const std::vector<glm::mat4>& InBoneMatrices)
 {
 	SubmitSkeletalDraw(InMesh, Transform.ModelMatrix(), InBoneMatrices);
 }
@@ -860,7 +860,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 			{
 				bHasPlanarMirror = true;
 				// Reflect about the visible top of the mirror mesh (not actor origin).
-				MirrorPlaneY = WorldAabbFromObject(Object).Max.y;
+				MirrorPlaneY = WorldAabbFromObject(Object).Max.Y;
 				break;
 			}
 		}
@@ -1270,8 +1270,7 @@ void FSceneRenderer::DrawQueuedSkeletal(const glm::mat4& InView, const glm::mat4
 		++FrameStats.ObjectsTotal;
 		if (CameraFrustum != nullptr)
 		{
-			const FBox WorldBox =
-				FBox::FromLocalTransformed(Item.Mesh->GetLocalMin(), Item.Mesh->GetLocalMax(), Item.Model);
+			const FBox WorldBox = TransformLocalBox(Item.Mesh->GetLocalMin(), Item.Mesh->GetLocalMax(), Item.Model);
 			if (!CameraFrustum->IntersectsAabb(WorldBox))
 			{
 				++FrameStats.ObjectsCulled;
@@ -1410,7 +1409,7 @@ void FSceneRenderer::DrawDebug(
 			continue;
 		}
 		const FBox Box = WorldAabbFromObject(Object);
-		DebugDraw.AddAabb(Box.Min, Box.Max, Object.bHidden ? HiddenAabbColor : AabbColor);
+		DebugDraw.AddAabb(ToGlm(Box.Min), ToGlm(Box.Max), Object.bHidden ? HiddenAabbColor : AabbColor);
 	}
 
 	if (bHasLightSpace)

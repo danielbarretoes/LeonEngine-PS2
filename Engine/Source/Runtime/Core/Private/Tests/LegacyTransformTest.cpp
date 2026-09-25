@@ -1,19 +1,19 @@
 #include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
 
-// The glm-based FTransform is desktop only until Core math replaces it.
+// FLegacyTransform (glm) is desktop only; it goes away in P6.
 #if WITH_DEV_AUTOMATION_TESTS && PLATFORM_DESKTOP
 
-	#include "Math/Transform.h"
+	#include "Migration/LegacyTransform.h"
 
 	#include <cmath>
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTransformIdentityTest, "System.Core.Math.Transform.Identity",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLegacyTransformIdentityTest, "System.Core.Migration.LegacyTransform.Identity",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-bool FTransformIdentityTest::RunTest(const FString& Parameters)
+bool FLegacyTransformIdentityTest::RunTest(const FString& Parameters)
 {
-	const FTransform Transform;
+	const FLegacyTransform Transform;
 	const glm::mat4 M = Transform.ModelMatrix();
 	TestEqual("M[0][0]", M[0][0], 1.0f);
 	TestEqual("M[1][1]", M[1][1], 1.0f);
@@ -24,12 +24,13 @@ bool FTransformIdentityTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTransformTranslationYawTest, "System.Core.Math.Transform.TranslationYaw",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLegacyTransformTranslationYawTest,
+	"System.Core.Migration.LegacyTransform.TranslationYaw",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-bool FTransformTranslationYawTest::RunTest(const FString& Parameters)
+bool FLegacyTransformTranslationYawTest::RunTest(const FString& Parameters)
 {
-	FTransform Transform;
+	FLegacyTransform Transform;
 	Transform.Position = {2.0f, 3.0f, 4.0f};
 	Transform.RotationDegrees = {0.0f, 90.0f, 0.0f};
 	const glm::mat4 M = Transform.ModelMatrix();
@@ -42,12 +43,12 @@ bool FTransformTranslationYawTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTransformZeroScaleTest, "System.Core.Math.Transform.ZeroScale",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLegacyTransformZeroScaleTest, "System.Core.Migration.LegacyTransform.ZeroScale",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-bool FTransformZeroScaleTest::RunTest(const FString& Parameters)
+bool FLegacyTransformZeroScaleTest::RunTest(const FString& Parameters)
 {
-	FTransform Transform;
+	FLegacyTransform Transform;
 	Transform.Scale = {0.0f, 1.0f, 0.0f};
 	const glm::mat4 M = Transform.ModelMatrix();
 	TestTrue("Scale x sanitised", std::abs(M[0][0]) >= 1.0e-4f);

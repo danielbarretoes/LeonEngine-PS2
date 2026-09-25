@@ -19,7 +19,7 @@
 #include "HAL/UnrealMemory.h"
 #include "Internationalization/Text.h"
 #include "Logging/LogMacros.h"
-#include "Math/UnrealMathUtility.h"
+#include "Math/UnrealMath.h"
 #include "Misc/AssertionMacros.h"
 #include "Misc/CString.h"
 #include "Misc/Char.h"

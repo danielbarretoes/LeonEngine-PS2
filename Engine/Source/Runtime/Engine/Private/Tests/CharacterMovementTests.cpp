@@ -383,7 +383,7 @@ TEST_CASE("Character walks up walkable slope ramp", "[gameplay][character][movem
 	Character->GetCharacterMovement().WalkableFloorZ = 0.71f; // ~44°
 
 	FPhysScene& Scene = World.GetPhysicsScene();
-	// 30° ramp (cos30≈0.866 walkable). FPlane through origin; y ≈ x * tan30.
+	// 30° ramp (cos30≈0.866 walkable). Plane through origin; y ≈ x * tan30.
 	Scene.AddSlopeRamp({0.0f, 0.0f, 0.0f}, {8.0f, 8.0f, 2.0f}, 30.0f);
 
 	const float X0 = -1.5f;
