@@ -3,7 +3,7 @@
 A level is a binary Leon Level file (`.llev`) loaded into a `ULevel` by the desktop runtime (`Engine` module). Since P13 its content is actors, as in UE: the reader spawns them into the game world and the saver writes them back. There is no JSON level format: `LoadLevelFile` rejects any path whose extension is not `.llev`. The PS2 runtime does not load levels yet; the ThirdPerson demo builds its level in code (`FThirdPersonLevel`).
 
 Code: `Engine/Source/Runtime/Engine/Classes/Engine/Level.h`, `Engine/Source/Runtime/Engine/Public/Level/` (`LeonLevelFormat.h`, `LevelLoader.h`, `LegacyLevelDataComponent.h`), the actor classes in `Engine/Source/Runtime/Engine/Classes/{Engine,GameFramework}/`, `Engine/Source/Runtime/Engine/Private/UnrealEngine.cpp` (`UEngine::LoadMap`, the startup map).
-Also: [ASSET_FORMATS.md](ASSET_FORMATS.md) (`.lmat` / `.lmesh` referenced by actors) · [ARCHITECTURE.md](ARCHITECTURE.md) · [SETUP.md](SETUP.md).
+Also: [ASSET_FORMATS.md](ASSET_FORMATS.md) (the `.lasset` packages the actors' keys name) · [ARCHITECTURE.md](ARCHITECTURE.md) · [SETUP.md](SETUP.md).
 
 ## Types
 
@@ -21,8 +21,8 @@ LoadLevelFile(UWorld&, Path)                       (UEngine::LoadMap, into the n
   ├─ extension must be .llev
   ├─ LoadLeonLevelFile            .llev bytes -> FLevelDocument (DeserializeLeonLevel)
   └─ ApplyLevelDocument
-        ├─ resolve every record first: transform, mesh (/Engine/BasicShapes or .lmesh), material, fit height
-        │     (FLegacyAssetLoader; a failure here leaves the current level untouched)
+        ├─ resolve every record first: transform, mesh (/Engine/BasicShapes or the mesh key's package), material
+        │     (the material key's package), fit height (LoadObject; a failure leaves the current level untouched)
         ├─ destroy the previous level content actors (the gameplay actors stay)
         ├─ spawn AWorldSettings (ULevel::WorldSettings; DefaultGameMode from the game mode string)
         ├─ spawn one actor per record, in file order (see Actor classes)
@@ -39,12 +39,26 @@ Saving: `BuildLevelDocument(const ULevel&, const UCameraComponent&)` builds a do
 
 ### Asset paths inside a level
 
-Material, mesh and environment paths are strings in the level's string table. `ResolveLevelAssetPath(LevelPath, Key)` resolves materials and meshes:
+Material, mesh and environment paths are strings in the level's string table: content keys, the paths the legacy
+`.lmat` / `.lmesh` files had (`materials/M_WorldGrid.lmat`). Since P14 the files are `.lasset` packages, and
+`ResolveLevelAssetObjectPath(LevelPath, Key)` resolves a key to the object path of the package the migration made of
+its file (`FLegacyAssetKeys`, `Public/Level/LegacyAssetKeys.h`), which the reader loads with `LoadObject`:
 
-1. an absolute path that exists is used as is;
-2. `<level folder>/../<Key>`, which is the `Content/` folder for `Content/Levels/X.llev`;
-3. legacy keys containing `Materials/` are retried from that folder;
-4. otherwise `FPaths::ResolveLegacyContentPath(Key)` (the path as given, then the project content, then `Engine/Content`).
+1. the key's content root is the folder above the level's folder (`Content/` for `Content/Levels/X.llev`). A root under
+   a mount point uses that mount point's path (`Engine/Content` is `/Engine`); any other folder gets a mount point
+   named after it for the rest of the run (`.../RenderTest/Levels/RenderTest.llev` mounts `.../RenderTest` as
+   `/RenderTest`, with a `_2` suffix when the name maps elsewhere); an absolute key's folder is its root;
+2. the key loses its extension and its leaf gains the class prefix of the extension unless it has it (`.lmat` `M_`,
+   `.lmesh` `SM_`, images `T_`, `.wav` `S_`); under `/Engine` the legacy `Materials/` and `Textures/` folders are
+   `EngineMaterials/`;
+3. that migrated name, then the key as it is, are tried under the content root, then under `/Game`, then under
+   `/Engine`; the first package that exists wins (`materials/M_WorldGrid.lmat` in the Starter template is
+   `/Engine/EngineMaterials/M_WorldGrid.M_WorldGrid`);
+4. a legacy key with a `Materials/` folder deeper in it is retried from that folder.
+
+A key that names no package gives the default material with a warning (a material) or rejects the level (a mesh). The
+`.lasset` files of a level outside the mount points sit next to it: `LeonCook -run=MigrateLegacyContent
+-source=<ContentRoot>` converts its legacy files in place ([TOOLS.md](TOOLS.md)).
 
 The environment path is read and written but ignored (HDR environment maps were removed in 0.12.0).
 
@@ -141,12 +155,12 @@ The writer always sets `hasInteractCost` for `TriggerVolume` and `hasPainData` f
 | 2 | `Sphere` | `AStaticMeshActor` with `/Engine/BasicShapes/Sphere` for 24 × 16 `sphereSegments` / `sphereRings`, else a transient sphere of that tessellation |
 | 3 | `Plane` | `AStaticMeshActor` with `/Engine/BasicShapes/Plane` |
 | 4 | `BlockingVolume` | `ABlockingVolume`: a 100 cm brush box (plan decision D16) sized by the scale, never drawn; its collision flags come from the record |
-| 5 | `StaticMesh` | `AStaticMeshActor` with `FLegacyAssetLoader::LoadStaticMesh` on the resolved `.lmesh` path (a transient `UStaticMesh`) |
+| 5 | `StaticMesh` | `AStaticMeshActor` with the `UStaticMesh` package its mesh key names (`ResolveLevelAssetObjectPath`) |
 | 6 | `TriggerVolume` | `ATriggerVolume` (interact radius / cost, game-defined `payload`, `consumeOnUse` on its legacy data component) |
 | 7 | `PainCausingVolume` | `APainCausingVolume` (`DamagePerSec`, `PainInterval`) |
 | 8 | `AISpawnPoint` | `ATargetPoint` (transform + tag) |
 
-Only `StaticMesh` carries a mesh path. The record `tag` becomes the actor's first `Tags` entry (`UGameplayStatics::GetAllActorsWithTag`) and `hidden` its `bHidden`. Mesh actors take their material from `materialPath` (`.lmat`, a transient `UMaterial` from `FLegacyAssetLoader::LoadMaterial`; the default material with a warning when it cannot be read); without one, a mesh with no materials of its own gets the default material (`UMaterial::GetDefaultMaterial`, `[/Script/Engine.Engine] DefaultMaterialName`). The assets are the components' `UPROPERTY`s and are collected with the level. `mobility`, `collisionEnabled`, `simulatePhysics` and `enableGravity` go to the mesh component or the volume's brush (`SetMobility`, `SetCollisionEnabled`, `SetSimulatePhysics`, `SetEnableGravity`); `collisionEnabled` is forced on when `simulatePhysics` is set. `fitHeight` scales the mesh (or the blocking volume's 100 cm cube) to that height and grounds it (`ApplyFitHeight`). The `TriggerVolume` payload string is interpreted by the game mode. Volumes test containment with the axis-aligned box around the actor (`AVolume::EncompassesPoint`), as before.
+Only `StaticMesh` carries a mesh path. The record `tag` becomes the actor's first `Tags` entry (`UGameplayStatics::GetAllActorsWithTag`) and `hidden` its `bHidden`. Mesh actors take their material from `materialPath` (the `UMaterial` package the key names; the default material with a warning when there is none); without one, a mesh with no materials of its own gets the default material (`UMaterial::GetDefaultMaterial`, `[/Script/Engine.Engine] DefaultMaterialName`). The assets are the components' `UPROPERTY`s and are collected with the level. `mobility`, `collisionEnabled`, `simulatePhysics` and `enableGravity` go to the mesh component or the volume's brush (`SetMobility`, `SetCollisionEnabled`, `SetSimulatePhysics`, `SetEnableGravity`); `collisionEnabled` is forced on when `simulatePhysics` is set. `fitHeight` scales the mesh (or the blocking volume's 100 cm cube) to that height and grounds it (`ApplyFitHeight`). The `TriggerVolume` payload string is interpreted by the game mode. Volumes test containment with the axis-aligned box around the actor (`AVolume::EncompassesPoint`), as before.
 
 Unknown actor or light classes fail the read.
 

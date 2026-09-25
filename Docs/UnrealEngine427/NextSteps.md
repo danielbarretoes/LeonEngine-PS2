@@ -70,15 +70,15 @@ The world is UE's: X forward, Y right, Z up, left-handed, 1 unit = 1 cm
 ([LeonMapping — P7](LeonMapping.md#p7--ue-axes-and-units), [ARCHITECTURE — Coordinates](../ARCHITECTURE.md#coordinates)).
 Render matrices are composed with `FMatrix` operators; the camera builds UE view and projection matrices and the
 renderer applies `ToGLClipSpace` last. Components, level data and lights hold `FTransform`; controllers carry a
-`ControlRotation`. `FLegacyCoordinateConversion` converts `.llev` levels and version-1 `.lmesh` meshes in their
-readers only, the importers end with `FImportCoordinateConversion` and write `.lmesh` version 2, and Jolt and
+`ControlRotation`. `FLegacyCoordinateConversion` converted `.llev` levels and version-1 `.lmesh` meshes in their
+readers only (the `.lmesh` reader went in P14), the importers end with `FImportCoordinateConversion`, and Jolt and
 miniaudio stay Y up in metres behind a swap-and-scale boundary. `LegacyGL` and `FLegacyTransform` are gone and G4 bans
 them. 22 golden tests recorded before the switch pass unchanged; 231 tests in total. Released as 0.14.0.
 
 ### Next
 
-- The plan continues with CoreUObject (below; P8 and P9 are done). What P7 left: the legacy `.llev` / `.lmesh` version-1 data and
-  `FLegacyCoordinateConversion` go away with the `.lasset` packages; the deviations it kept (vertical field of view,
+- The plan continues with CoreUObject (below; P8 and P9 are done). What P7 left: the legacy `.llev` data and
+  `FLegacyCoordinateConversion` go away with the `.lmap` maps (P15; the `.lmesh` files went in P14); the deviations it kept (vertical field of view,
   no reversed Z, the GL clip adapter, legacy content facing +Y, the doubled mouse look (applied once since P13),
   the spring arm's socket offset) are listed in [LeonMapping — Deviations](LeonMapping.md#deviations-from-ue-427-intentional).
 
@@ -220,21 +220,45 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
   `BeginDestroy`, and the scene keeps its proxies' assets alive through the garbage collector.
 - 328 tests; the golden tables, the `.llev` bytes and the Win64 frames are unchanged; the PS2 ELFs are unchanged.
 
+### Done — Editor module, import and content (P14, part 2)
+
+([LeonMapping — P14 part 2](LeonMapping.md#p14--editor-module-import-and-content-part-2),
+[ASSET_FORMATS — Importing assets](../ASSET_FORMATS.md#importing-assets), [TOOLS — LeonCook](../TOOLS.md#leoncook)):
+
+- The editor module `LeonEd` (`Engine/Source/Editor`, a new `Editor` module type: desktop only, never in a game
+  target) brings `UFactory` and UE's factories (`UTextureFactory`, `UFbxFactory` for FBX and OBJ static and skeletal
+  meshes and animations, `UGLTFImportFactory`, `USoundFactory`, `UMaterialFactoryNew`), reimport through
+  `FReimportHandler` / `FReimportManager`, and the commandlets `ImportAssets` (`-source` / `-dest`, `-importlist`,
+  `-reimport -all`), `ResavePackages`, `ValidateAssets`, `MigrateLegacyContent` (temporary) and a minimal `Cook`
+  (`Developer/Cooker` and its recipes are gone). LeonCook is `LeonCook [<Project>.lproj] -run=<Commandlet>`.
+- Imported assets keep an editor-only, instanced `UAssetImportData`: the source relative to the engine or project,
+  its MD5 and the import settings, never a timestamp. Gate G5 starts: `CheckReimport.bat` (CI) reimports the content
+  and fails when git sees a change.
+- The engine content is `/Engine` packages: `T_Default_D` imported from `Engine/SourceArt` (`ImportList.ini`), the
+  three materials migrated from their `.lmat` files (deleted), `DefaultTexture`, `T_Default_Bump_N` and the
+  BasicShapes saved once from their generators. The runtime loads them with `LoadObject`; the `.llev` keys resolve to
+  packages (`FLegacyAssetKeys`). The UI sounds are config keys (empty: no licensed WAVs), and sounds play PCM16 from
+  memory.
+- `LeonMeshFormat`, `LeonMaterialFormat`, `FLegacyAssetLoader` and run-time image / WAV loading are gone; stb_image
+  lives only in the texture factory.
+- 340 tests; the golden tables, the `.llev` bytes and the Win64 frames (Starter and the render test level, migrated
+  with `MigrateLegacyContent`) are unchanged; the PS2 ThirdPerson ELF grows by 8 bytes of alignment (the window icon
+  API), BlankProgram and TestPAL are unchanged.
+
 ### Next
 
 - Later: move the character movement code from `ACharacter` into `UCharacterMovementComponent` (UE's
   `PerformMovement`, `MovementMode`, `Velocity`, `CurrentFloor`); a cached `ComponentToWorld`; tick functions.
-- **P14, part 2:** the editor module `LeonEd` (factories for textures, static and skeletal meshes, animations and
-  sounds; `UAssetImportData`; the `ImportAssets`, `ResavePackages`, `ValidateAssets` and `MigrateLegacyContent`
-  commandlets on `UCommandlet`; `UCookCommandlet` moves there and LeonCook runs `-run=<Commandlet>`), then the content
-  migration to `.lasset` packages at the paths the config already names (`/Engine/EngineMaterials/M_Default`, ...);
-  after it `FLegacyAssetLoader`, LeonMeshFormat, LeonMaterialFormat and the run-time PNG / WAV / STB loading go. The
-  UI sounds become `USoundWave` assets named by the config.
 - **P15:** `.lmap`: a package holding `UWorld`, `ULevel PersistentLevel`, `AWorldSettings` and the actors, saved to a
-  `.lmap` file (which sets `PKG_ContainsMap`); `UEngine::LoadMap` loads it with `LoadPackage`.
-- **P16:** the cook follows `FLinker::ImportMap` and `SoftPackageReferenceList` (`FLinkerLoad::CreateLinker(nullptr,
-  ...)` reads the tables without loading), saves with `PKG_Cooked | PKG_FilterEditorOnly` and a target platform name,
-  and packs the files into `.lpak`.
+  `.lmap` file (which sets `PKG_ContainsMap`); `UEngine::LoadMap` loads it with `LoadPackage`. The glTF map importer
+  (`UGLTFMapFactory`, `-run=ImportAssets -type=Map`) is a LeonEd factory; the two templates migrate from `.llev`
+  (their material and mesh keys already resolve to packages through `FLegacyAssetKeys`, which goes with the `.llev`
+  reader, `LevelLoader`, `FLegacyCoordinateConversion` and `FPaths::ResolveLegacyContentPath`). `MigrateLegacyContent`
+  and the legacy `.lmat` / `.lmesh` factories can go once no content needs them.
+- **P16:** the cook (`UCookCommandlet`, LeonEd) follows `FLinker::ImportMap` and `SoftPackageReferenceList`
+  (`FLinkerLoad::CreateLinker(nullptr, ...)` reads the tables without loading) from the maps and
+  `DirectoriesToAlwaysCook` instead of cooking every package, uses `Developer/TargetPlatform` for `-TargetPlatform=`,
+  stages the config and shaders, and packs the files into `.lpak`.
 - Replication: the ENet networking was removed in 0.12.0 (local tag `archive/net-enet-0.11`); it returns as
   UObject replication (`UNetDriver`, replicated properties) — `Runtime/Engine/Classes/Engine/NetDriver.h`.
 
@@ -255,10 +279,12 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 - **Game → Launch:** the PS2 game module reads `GEngineLoop.GetMainWindow()` through an include-only
   dependency on Launch; give games an engine-side accessor instead (UE: `GEngine->GameViewport`) once the gameplay
   framework runs on the PS2.
-- **Legacy content (P14 part 2):** the content is still `.lmesh`, `.lmat`, PNG and `.llev` files that
-  `FLegacyAssetLoader` turns into transient assets; the engine assets it makes in memory at `/Engine/...` paths shadow
-  no package yet. `LeonCook` still takes its own mode arguments (`staticmesh`, `recipe`) instead of UE's
-  `-run=<Commandlet>`, and `UCookCommandlet` is not a `UCommandlet` yet.
+- **Legacy content (P15):** the levels are still `.llev` files whose material and mesh keys resolve to packages
+  through `FLegacyAssetKeys` (with a mount point named after a content folder outside the mount points);
+  `MigrateLegacyContent` and its `.lmat` / `.lmesh` factories stay until no content needs them.
+- **Editor settings:** the factories take their options as properties set from text (ImportList.ini, switches) and the
+  import data keeps them as a string map; UE's typed import data classes (`UFbxAssetImportData`, ...) and an import UI
+  come with an editor.
 - **Render resources:** the GPU copies live in the Renderer's cache keyed by asset, not on the asset (UE's `Resource`
   / `RenderData`), and there is no render thread; a render thread would need UE's resource fences.
 - **Console:** commands only come from `-ExecCmds` and `DebugExecBindings`; there is no `UConsole` window or console

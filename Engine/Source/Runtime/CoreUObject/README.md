@@ -255,8 +255,8 @@ is not reflected (its layout is `float M[4][4]`, a C array of C arrays).
   collector). Sets and maps of pointers lose the element / pair of a pending-kill object instead of keeping a null
   key. `GARBAGE_COLLECTION_KEEPFLAGS` is `RF_NoFlags` (no editor).
 - Config: no `GlobalUserConfig` / `ProjectUserConfig` classes (LeonHeaderTool rejects them: D8 has no per-user global
-  layer), no `UpdateDefaultConfigFile` for `DefaultConfig` classes (the editor module, P14, will write
-  `Default<Name>.ini`), no console variables (`gc.*` keys are read directly). An instance reloaded through
+  layer), no `UpdateDefaultConfigFile` for `DefaultConfig` classes (`Default<Name>.ini` is edited by hand: the
+  editor module, LeonEd, has no settings UI), no console variables (`gc.*` keys are read directly). An instance reloaded through
   `ReloadConfig` reads its class's sections parents first, as its class default object did.
 - Exec: no `CPP_Default_` metadata, so a missing trailing argument keeps its zero / default value with a warning on
   `Ar` (UE uses the C++ default, or fails when there is none). No `BindUFunction` and no dynamic delegates.

@@ -30,6 +30,7 @@ Requires CMake 3.24 or later and Ninja. Host setup is in [SETUP.md](SETUP.md).
 | `PublicDefinitions`, `PublicIncludePaths`, `PublicSystemLibraries` | `PUBLIC_DEFINITIONS`, `PUBLIC_INCLUDE_PATHS`, `PUBLIC_SYSTEM_LIBRARIES` |
 | `if (Target.Platform == ...)` inside a `Build.cs` | `_<Platform>` or `_<Group>` keyword suffix (`PUBLIC_DEPENDENCIES_Desktop`) |
 | `Type = ModuleType.External` (ThirdParty) | `TYPE External` (default under `Source/ThirdParty/`) |
+| Editor modules (`Engine/Source/Editor`, descriptor module type `Editor`) | `TYPE Editor` (default under `Source/Editor/`): desktop only, rejected in a `Game` target |
 | Platform-extension module rules under `Engine/Platforms/<P>/` | `<Module>_<P>.Build.cmake` → `leon_module_extend()` |
 | `<Target>.Target.cs` (`TargetRules`) | `<Target>.Target.cmake` → `leon_target()` |
 | `TargetType.Game` / `TargetType.Program` | `TYPE Game` / `TYPE Program` |
@@ -123,11 +124,12 @@ Windows batch files live in `Engine/Build/BatchFiles/` (UE layout); run them fro
 | `Build.bat` | `Build.bat <Target> <Platform> <Config> [-Project=<file>] [-Mode=...] [-NoDocker] [-KeepGoing]` | Loads the MSVC environment (`GetVSEnv.bat vcvars quiet need-ninja`) unless the platform is `PS2`, then runs LeonBuildTool with all arguments |
 | `Clean.bat` | `Clean.bat <Target> <Platform> <Config> [-Project=<file>]` | `Build.bat ... -Mode=Clean` |
 | `Rebuild.bat` | `Rebuild.bat <Target> <Platform> <Config> [-Project=<file>]` | `Build.bat ... -Mode=Rebuild` |
-| `RunTests.bat` | `RunTests.bat [-automation=<filter>]` | Builds `LeonAutomationTests Win64 Development` and runs `Engine\Binaries\Win64\LeonAutomationTests.exe` from the repo root: every automation test (258), or only those whose name contains `<filter>`. It then runs the LeonHeaderTool golden tests (`LeonHeaderTool -Test`) |
-| `Cook.bat` | `Cook.bat <LeonCook arguments>` | Builds `LeonCook Win64 Development` and runs `Engine\Binaries\Win64\LeonCook.exe` |
+| `RunTests.bat` | `RunTests.bat [-automation=<filter>]` | Builds `LeonAutomationTests Win64 Development` and runs `Engine\Binaries\Win64\LeonAutomationTests.exe` from the repo root: every automation test (340), or only those whose name contains `<filter>`. It then runs the LeonHeaderTool golden tests (`LeonHeaderTool -Test`) |
+| `Cook.bat` | `Cook.bat <LeonCook arguments>` | Builds `LeonCook Win64 Development` and runs `Engine\Binaries\Win64\LeonCook.exe` (`Cook.bat -run=ImportAssets -reimport -all`) |
+| `CheckReimport.bat` | `CheckReimport.bat [<Project>.lproj ...]` | Gate G5: builds LeonCook, reimports the engine content (and each project's) with `-run=ImportAssets -reimport -all`, then fails when `git diff --exit-code` sees a change, or a new file appears, under `Engine/Content` or `Game/*/Content` (CI runs it on a clean checkout) |
 | `FormatCode.bat` | `FormatCode.bat [--check]` | clang-format on every `.cpp/.h/.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game` (skips paths containing `ThirdParty`, `Intermediate`, `Binaries`). `--check` is a dry run that fails if a file needs formatting |
 | `Lint.bat` | `Lint.bat` | `FormatCode.bat --check`, then `CheckBannedApis.ps1`, then builds `LeonAutomationTests`, `LeonCook`, `LeonGame` and `BlankProgram` for Win64 Development |
-| `CheckBannedApis.ps1` | `powershell -File CheckBannedApis.ps1` (or `pwsh`) | Gate G4: scans `.h/.cpp/.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game` (comments ignored) and fails on glm, nlohmann, `std::vector/string/map/unordered_map/function/shared_ptr/unique_ptr`, `<iostream>` / `std::cout/cerr/clog`, the `printf` family, `LegacyGL` / `FLegacyTransform` / `LegacyAxes`, or `FLegacyCoordinateConversion` outside the legacy readers and tests; `-Root <dir>` scans another tree; exceptions in [CODING_STANDARD.md §4](CODING_STANDARD.md#4-language) |
+| `CheckBannedApis.ps1` | `powershell -File CheckBannedApis.ps1` (or `pwsh`) | Gate G4: scans `.h/.cpp/.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game` (comments ignored) and fails on glm, nlohmann, `std::vector/string/map/unordered_map/function/shared_ptr/unique_ptr`, `<iostream>` / `std::cout/cerr/clog`, the `printf` family, `LegacyGL` / `FLegacyTransform` / `LegacyAxes`, or `FLegacyCoordinateConversion` outside the `.llev` reader and saver and the tests; `-Root <dir>` scans another tree; exceptions in [CODING_STANDARD.md §4](CODING_STANDARD.md#4-language) |
 | `GenerateProjectFiles.bat` | `GenerateProjectFiles.bat [-Project=<file>]` | `-Mode=GenerateProjectFiles`, then `LeonAutomationTests Win64 Development -Mode=GenerateClangDatabase` (root `compile_commands.json`) |
 | `GetVSEnv.bat` | `call GetVSEnv.bat vcvars [quiet] [optional] [need-ninja] [need-git]` (or `vsdev`) | Helper for the other scripts: finds Visual Studio `18` then `2022` (Community, Professional, Enterprise), runs `vcvars64.bat` or `VsDevCmd.bat`, prepends `C:\Program Files\CMake\bin` to `PATH` and checks the required tools |
 | `Linux/Build.sh` | `Build.sh <Target> <Platform> <Config> [-Project=<file>] [-Mode=...]` | LeonBuildTool with all arguments (no environment setup; used by CI for PS2) |
@@ -181,7 +183,7 @@ tests live in `<Module>/Tests/`.
 
 ```cmake
 leon_module(<Name>
-  [TYPE Runtime|Developer|Program|External]
+  [TYPE Runtime|Developer|Editor|Program|External]
   [PLATFORMS <platform-or-group>...]
   [CXX_STANDARD <n>]
   [NO_MODULE_IMPLEMENTATION]
@@ -197,7 +199,7 @@ leon_module(<Name>
 
 | Keyword | Meaning |
 | --- | --- |
-| `TYPE` | Defaults from the folder: `Source/ThirdParty/` → `External`, `Source/Developer/` → `Developer`, `Source/Programs/` → `Program`, anything else (including project modules) → `Runtime` |
+| `TYPE` | Defaults from the folder: `Source/ThirdParty/` → `External`, `Source/Developer/` → `Developer`, `Source/Editor/` → `Editor`, `Source/Programs/` → `Program`, anything else (including project modules) → `Runtime`. An `Editor` module (UE: `Engine/Source/Editor`, edit-time code such as LeonEd) defaults to `PLATFORMS Desktop` (any other allow-list is an error) and may be linked by programs only: a `Game` target whose closure reaches one fails to configure |
 | `PLATFORMS` | Allow-list of platforms or groups; empty means every platform. Depending on a module that is not allowed on the current platform is a configure error |
 | `CXX_STANDARD` | Overrides the default: the **lowest** standard of the platforms the module is allowed on (see [Compile environment](#compile-environment)) |
 | `NO_MODULE_IMPLEMENTATION` | Leave the module out of the generated module table (no `IMPLEMENT_MODULE` required). `Program` and `External` modules are never in the table |
@@ -324,7 +326,7 @@ Targets in the repository:
 | Target | File | Type | Platforms | Notes |
 | --- | --- | --- | --- | --- |
 | `LeonGame` | `Engine/Source/LeonGame.Target.cmake` | Game | Win64 | `EXTRA_MODULE_NAMES Engine AIModule`; creates `GEngine` and opens a map (`LeonGame [<map>]`, `-map=`; UE4Game) |
-| `LeonCook` | `Engine/Source/Programs/LeonCook/LeonCook.Target.cmake` | Program | Desktop | offline cooker |
+| `LeonCook` | `Engine/Source/Programs/LeonCook/LeonCook.Target.cmake` | Program | Desktop | the command-line editor: `LeonCook [<Project>.lproj] -run=<Commandlet>` (UE4Editor-Cmd), links LeonEd ([TOOLS.md](TOOLS.md#leoncook)) |
 | `LeonAutomationTests` | `Engine/Source/Programs/LeonAutomationTests/LeonAutomationTests.Target.cmake` | Program | Desktop | `COLLECT_AUTOMATION_TESTS`, `ENABLE_PLUGINS JoltPhysics` |
 | `TestPAL` | `Engine/Source/Programs/TestPAL/TestPAL.Target.cmake` | Program | all | `COLLECT_AUTOMATION_TESTS`; runs the Core, CoreUObject, Json and Projects automation tests (`-filter=<text>`), prints `TestPAL: PASSED (N test(s), 0 failed)`; on PS2 run it with `RunPCSX2.ps1 -Program TestPAL` |
 | `BlankProgram` | `Engine/Source/Programs/BlankProgram/BlankProgram.Target.cmake` | Program | all | starts the linked modules and prints the platform |
@@ -348,8 +350,8 @@ receives its public include paths and an empty `LAUNCH_API`; the symbols resolve
 
 ### Generated module table
 
-For each target LeonBuildTool writes `<tree>/Generated/<Target>.ModuleInit.gen.cpp`. It lists every `Runtime` and
-`Developer` module of the closure (dependency order, without `NO_MODULE_IMPLEMENTATION`) as
+For each target LeonBuildTool writes `<tree>/Generated/<Target>.ModuleInit.gen.cpp`. It lists every `Runtime`,
+`Developer` and `Editor` module of the closure (dependency order, without `NO_MODULE_IMPLEMENTATION`) as
 `FStaticallyLinkedModuleInfo { Name, &InitializeModule_<Name>, RegisterReflection }`, returned by
 `GetStaticallyLinkedModules()`. `RegisterReflection` is `&RegisterReflection_<Name>` for a reflected module (see
 [Reflection](#reflection-leonheadertool)) and `nullptr` otherwise. The table also
@@ -388,7 +390,7 @@ InputCore (P13), plus their test fixtures in test targets. For a reflected modul
   (no build-order edge) waits for it with `add_dependencies` (UMG, circular on Engine, waits for Engine's headers).
 
 Targets with `COLLECT_AUTOMATION_TESTS` also reflect `<Module>/Private/Tests/**.h` (the `<Module>.Tests` unit,
-compiled into the executable). A reflected module must be a `Runtime` or `Developer` module with `IMPLEMENT_MODULE`.
+compiled into the executable). A reflected module must be a `Runtime`, `Developer` or `Editor` module with `IMPLEMENT_MODULE`.
 
 New headers are picked up through `CONFIGURE_DEPENDS` globs. When a header of a reflected module gains its first
 `.generated.h` include, LeonHeaderTool stops once and the next build reconfigures. In a module with no reflected

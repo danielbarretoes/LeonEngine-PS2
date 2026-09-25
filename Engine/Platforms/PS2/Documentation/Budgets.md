@@ -72,6 +72,9 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | P13 | ThirdPerson | 668 000 | 6 984 | 33 880 | 675 944 | the object system boots: InputCore's `FKey` is a reflected struct, so InputCore depends on CoreUObject and the game links and starts it (+223 624 bytes of text, breakdown below) |
 | P13 | BlankProgram | 179 628 | 6 136 | 27 097 | 186 804 | unchanged |
 | P13 | TestPAL | 1 373 348 | 6 376 | 39 136 | 1 380 840 | unchanged (Core, CoreUObject, Json and Projects did not change) |
+| P14 | ThirdPerson | 668 008 | 6 984 | 33 880 | 676 072 | ApplicationCore's window icon takes texels (`FGenericWindow::SetIcon(int32, int32, const uint8*)`) instead of a PNG path (`SetIconFromFile`): the base's 8-byte `return false` body is the same, but under its new name it lands elsewhere among the ApplicationCore functions (right after `SetCursorCaptured`) and the alignment padding of the text grows by 8 bytes (+8 bytes of text, no new code) |
+| P14 | BlankProgram | 179 628 | 6 136 | 27 097 | 186 804 | unchanged |
+| P14 | TestPAL | 1 373 348 | 6 376 | 39 136 | 1 380 840 | unchanged |
 
 **P9 reflection in TestPAL** (`nm -S` over the ELF, bytes):
 

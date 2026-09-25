@@ -29,7 +29,7 @@ All identifiers are English (U.S. spelling), **PascalCase**, with no underscores
 | Prefix | Use | Examples |
 | --- | --- | --- |
 | `A` | Classes derived from `AActor` — **only** those | `AActor`, `APawn`, `ACharacter`, `APlayerController`, `AGameModeBase`, `AHUD` |
-| `U` | Classes that are `UObject`s in UE (components, assets, subsystems, widgets, engine objects). CoreUObject's types, the gameplay framework (P12: `UWorld`, `ULevel`, `UGameInstance`, the components), the engine and its settings (P13: `UEngine`, `UGameEngine`, `UGameViewportClient`, `ULocalPlayer`, `UPlayerInput`, `UInputSettings`, `UGameMapsSettings`), the assets (P14: `UTexture2D`, `UStaticMesh`, `UMaterial`, `USkeleton`, `USkeletalMesh`, `UAnimSequence`, `UBlendSpace1D`, `USoundWave`, `UDataAsset`, `UCommandlet`), `UUserWidget` and `UAnimInstance` derive from `UObject`. A few `U` types are still **naming only** until their phase: `UCookCommandlet` (P14 part 2 makes it a `UCommandlet`), `UNavigationSystem` and the behavior tree lite (`UBehaviorTree`, `UBTNode`, `UBlackboardComponent`) | `UObject`, `UClass`, `UWorld`, `ULevel`, `UActorComponent`, `UCharacterMovementComponent`, `UUserWidget`, `UGameEngine`, `UTexture2D` |
+| `U` | Classes that are `UObject`s in UE (components, assets, subsystems, widgets, engine objects). CoreUObject's types, the gameplay framework (P12: `UWorld`, `ULevel`, `UGameInstance`, the components), the engine and its settings (P13: `UEngine`, `UGameEngine`, `UGameViewportClient`, `ULocalPlayer`, `UPlayerInput`, `UInputSettings`, `UGameMapsSettings`), the assets (P14: `UTexture2D`, `UStaticMesh`, `UMaterial`, `USkeleton`, `USkeletalMesh`, `UAnimSequence`, `UBlendSpace1D`, `USoundWave`, `UDataAsset`, `UCommandlet`, `UAssetImportData`), the editor module's factories and commandlets (P14: `UFactory`, `UTextureFactory`, `UImportAssetsCommandlet`, `UCookCommandlet`, ...), `UUserWidget` and `UAnimInstance` derive from `UObject`. A few `U` types are still **naming only** until their phase: `UNavigationSystem` and the behavior tree lite (`UBehaviorTree`, `UBTNode`, `UBlackboardComponent`) | `UObject`, `UClass`, `UWorld`, `ULevel`, `UActorComponent`, `UCharacterMovementComponent`, `UUserWidget`, `UGameEngine`, `UTexture2D` |
 | `F` | Every other class or struct | `FEngineLoop`, `FTicker`, `FPaths`, `FSceneRenderer`, `FPhysScene`, `FHitResult`, `FPS2RHI` |
 | `T` | Class templates | `TArray`, `TMap`, `TSharedPtr`, `TDelegate`, `TOptional` |
 | `E` | Enums (prefer `enum class`, sized when stored) | `EKeys`, `EPhysicsBackend`, `EPostProcessQuality`, `ENetMsg` |
@@ -201,8 +201,8 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
   file that calls it (Jolt, tinyobjloader, ufbx, cgltf). Do not add aliases that pretend to be UE types
   (`using FVector = glm::vec3` is not allowed). G4 also rejects the legacy math bridges removed in P7 (`LegacyGL`,
   `FLegacyTransform`, `LegacyAxes`, tests included) and `FLegacyCoordinateConversion` /
-  `LegacyCoordinateConversion.h` outside the legacy bridge (its own files, the `.llev` reader and saver, the `.lmesh`
-  reader, `Private/Tests` and `Engine/Public/Tests/LegacyGolden.h`). A violation prints
+  `LegacyCoordinateConversion.h` outside the legacy bridge (its own files, the `.llev` reader and saver,
+  `Private/Tests` and `Engine/Public/Tests/LegacyGolden.h`). A violation prints
   `<file>:<line>: G4 <rule>: <code> -> <what to use>`.
 - **Math is float.** No `double` arithmetic in engine code (the EE FPU is single precision); PS2 builds fail on an
   implicit float to double promotion (`-Werror=double-promotion`), so cast explicitly where a `double` is really
@@ -219,8 +219,8 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
     / `FOrthoMatrix`. OpenGL code applies `ToGLClipSpace` (`RenderCore/Public/GLClipSpace.h`) once, after the
     projection, and uploads with `FShader::SetMat4(Name, const FMatrix&)`.
   - Data from outside the world is converted where it enters: importers end with `FImportCoordinateConversion`
-    (MeshUtilities); legacy `.llev` / version-1 `.lmesh` data goes through `FLegacyCoordinateConversion` in its reader
-    only (G4 enforces it); the Jolt and miniaudio boundaries swap Y and Z and scale by 0.01 inside their own files.
+    (MeshUtilities); legacy `.llev` data goes through `FLegacyCoordinateConversion` in its reader and saver only (G4
+    enforces it); the Jolt and miniaudio boundaries swap Y and Z and scale by 0.01 inside their own files.
     Engine code never holds legacy (Y-up, metre) values.
   - Keep a triangle's index order when converting data (every basis change has determinant −1 and keeps the winding
     on screen); a tangent's `w` flips with the basis.
@@ -299,9 +299,14 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
     engine needs is a `UPROPERTY(Config)` / `GlobalConfig` `FSoftObjectPath` of its config class (`UEngine`'s
     `DefaultMaterialName`), not a path in code. An asset's big arrays are bulk data in its native tail
     (`FByteBulkData`; `SerializeBulkPayload` for arrays it keeps on the CPU). Its GPU copy is the Renderer's: call
-    `UpdateResource` / `InitResources` after changing its data, and release it in `BeginDestroy`. Until P14 part 2 the
-    legacy files (`.lmesh`, `.lmat`, images, `.wav`) are read only through `FLegacyAssetLoader`, and the engine
-    assets without a package come from its `LoadEngineObject`.
+    `UpdateResource` / `InitResources` after changing its data, and release it in `BeginDestroy`. Assets load from
+    packages (`LoadObject`, `TSoftObjectPtr`); run-time code never reads an image, sound or mesh source file: LeonEd's
+    factories import them. An imported asset class keeps an editor-only `UPROPERTY(Instanced) UAssetImportData*
+    AssetImportData` (inside `#if WITH_EDITORONLY_DATA`), and an import records nothing that changes between runs
+    (no timestamps, no absolute paths under the source root), so reimports are reproducible (gate G5).
+  - **Editor code** (P14) lives in `Engine/Source/Editor` modules (`TYPE Editor`, LeonEd): factories derive from
+    `UFactory`, commandlets from `UCommandlet` (`U<Name>Commandlet`, found by `-run=<Name>`). Runtime and game modules
+    never depend on an editor module (LeonBuildTool rejects it in a game target).
 
 ---
 
@@ -346,11 +351,11 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 
 | Asset | Convention | Example |
 | --- | --- | --- |
-| Content kind folders | PascalCase | `Engine/Content/Materials`, `Textures`, `LevelTemplates` |
-| Materials | `M_<Name>.lmat` | `M_Default.lmat`, `M_WorldGrid.lmat` |
-| Textures | `T_<Name>_<Suffix>` (`_D` diffuse, `_N` normal) | `T_Default_D.png` |
-| Level templates / levels | PascalCase `.llev` | `Blank.llev`, `Starter.llev` |
-| Packages (P14 on) | `<Prefix>_<Name>.lasset` (UE prefixes: `SM_`, `SK_`, `T_`, `M_`, `S_`, ...), maps `<Name>.lmap`; long package name = content path without extension | `/Engine/EngineMaterials/M_Default` → `Engine/Content/EngineMaterials/M_Default.lasset` |
+| Content folders | PascalCase, UE's where one exists | `Engine/Content/EngineMaterials`, `EngineResources`, `BasicShapes`, `LevelTemplates` |
+| Assets (packages) | `<Prefix>_<Name>.lasset` with UE's prefixes: `SM_` static mesh, `SK_` skeletal mesh, `SKEL_` skeleton, `A_` animation, `BS_` blend space, `T_` texture, `M_` material, `S_` sound wave; maps `<Name>.lmap`; long package name = content path without extension | `/Engine/EngineMaterials/M_Default` → `Engine/Content/EngineMaterials/M_Default.lasset` |
+| Textures | `T_<Name>_<Suffix>` (`_D` diffuse, `_N` normal: imported linear) | `T_Default_D`, `T_Default_Bump_N` |
+| Source art | outside `Content`: `<Engine or Project>/SourceArt/`, folders mirroring the package paths, plus `ImportList.ini` | `Engine/SourceArt/EngineMaterials/T_Default_D.png` |
+| Level templates / levels | PascalCase `.llev` (until P15) | `Blank.llev`, `Starter.llev` |
 | GLSL shaders (`Engine/Shaders`) | snake_case | `blinn_phong.vert`, `post_composite.frag` |
 
 File formats: [ASSET_FORMATS.md](ASSET_FORMATS.md).

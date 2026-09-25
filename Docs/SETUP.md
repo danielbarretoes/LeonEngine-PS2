@@ -105,16 +105,18 @@ Every run writes a log file, `Engine/Programs/LeonGame/Saved/Logs/LeonGame.log` 
 a single key can be overridden from the command line with `-ini:Engine:[Section]:Key=Value`, and log verbosity with
 `-LogCmds="LogInit Verbose"`.
 
-## Cook
+## Import and cook (LeonCook)
 
 ```bat
-Engine\Build\BatchFiles\Cook.bat staticmesh --obj Mesh.obj --out Mesh.lmesh
-Engine\Build\BatchFiles\Cook.bat recipe CookRecipe.json
+Engine\Build\BatchFiles\Cook.bat -run=ImportAssets -source=SourceArt\Crate.fbx -dest=/Game/Props
+Engine\Build\BatchFiles\Cook.bat -run=ImportAssets -importlist=Engine/SourceArt/ImportList.ini
+Engine\Build\BatchFiles\Cook.bat -run=ImportAssets -reimport -all
 ```
 
-`Cook.bat` builds `LeonCook` and passes the arguments through. Modes: `staticmesh`, `recipe`
-(run `Cook.bat --help` for the options). Formats: [ASSET_FORMATS.md](ASSET_FORMATS.md). Tool reference:
-[TOOLS.md](TOOLS.md).
+`Cook.bat` builds `LeonCook` and passes the arguments through: `LeonCook [<Project>.lproj] -run=<Commandlet>` runs one
+of the editor module's commandlets (`ImportAssets`, `ResavePackages`, `ValidateAssets`, `MigrateLegacyContent`,
+`Cook`; `Cook.bat -help` lists them). Formats and the import pipeline: [ASSET_FORMATS.md](ASSET_FORMATS.md). Tool
+reference: [TOOLS.md](TOOLS.md).
 
 ## PS2
 
@@ -230,7 +232,8 @@ nlohmann, `std::` containers / strings / smart pointers, iostream, `printf`, the
 
 - **ps2**: inside the pinned ps2dev image, builds `ThirdPerson` and `BlankProgram` for PS2 with
   `Engine/Build/BatchFiles/Linux/Build.sh` and uploads `ThirdPerson.elf`.
-- **win64**: `CheckBannedApis.ps1` (with `pwsh`), `Setup.bat`, `RunTests.bat`, then builds `LeonGame` and `LeonCook`.
+- **win64**: `CheckBannedApis.ps1` (with `pwsh`), `Setup.bat`, `RunTests.bat`, then builds `LeonGame` and `LeonCook`,
+  then `CheckReimport.bat` (gate G5: reimporting the content leaves it unchanged).
 
 Formatting is checked locally with `Lint.bat` (the runner's clang-format version may differ from Visual Studio's).
 

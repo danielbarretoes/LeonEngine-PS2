@@ -7,10 +7,11 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-First part of the fourteenth step of the Core / CoreUObject plan (P14): the engine's assets become UObjects that save
-to and load from `.lasset` packages, with their payloads as bulk data, and `FResourceCache` gives way to a transitional
-legacy asset loader and to engine defaults named by the config. Behaviour, the golden tests, the `.llev` bytes and the
-Win64 frames are unchanged; the PS2 ELFs are unchanged.
+The fourteenth step of the Core / CoreUObject plan (P14): the engine's assets become UObjects saved in `.lasset`
+packages, an editor module (LeonEd) imports source files into them through LeonCook's commandlets, and the engine
+content is migrated to `/Engine` packages; the legacy `.lmesh` / `.lmat` formats and run-time image and WAV loading
+are gone. Behaviour, the golden tests, the `.llev` bytes and the Win64 frames are unchanged; the PS2 ThirdPerson ELF
+grows by 8 bytes of alignment, BlankProgram and TestPAL are unchanged.
 
 ### Added
 
@@ -20,28 +21,54 @@ Win64 frames are unchanged; the PS2 ELFs are unchanged.
   - `UStaticMesh`: one LOD of geometry (`FStaticMeshLODResources`, saved as bulk data), the bounds, `StaticMaterials`
     (`FStaticMaterial`) and a `UBodySetup` inner object (`FKAggregateGeom` boxes, `ECollisionTraceFlag`), which the
     physics scene follows.
-  - `UMaterialInterface` / `UMaterial`: the `.lmat` parameters and maps as `UPROPERTY`s with fixed shading models
+  - `UMaterialInterface` / `UMaterial`: the material parameters and maps as `UPROPERTY`s with fixed shading models
     (`EMaterialShadingModel`: `MSM_DefaultLit`, `MSM_Unlit`), `GetRenderProxy`, `UMaterial::GetDefaultMaterial`.
   - `USkeleton` (`FReferenceSkeleton`, `USkeletalMeshSocket` sockets), `USkeletalMesh`, `UAnimationAsset` /
     `UAnimSequenceBase` / `UAnimSequence` (per-bone tracks as bulk data), `UBlendSpaceBase` / `UBlendSpace1D`.
   - `USoundBase` / `USoundWave` (PCM16 bulk data, channels, rate, duration), `UDataAsset` and the `UCommandlet` base
     (`Main`, `ParseCommandLine`).
-- **`FLegacyAssetLoader`** (transitional, deleted by P14's second part): `.lmesh`, `.lmat`, image and `.wav` files become
-  transient assets in `/Temp/LegacyAssets/...` packages, cached by path while they are used; the engine assets without
-  a package (the default material and textures, the `/Engine/BasicShapes` meshes) are made once at their final paths.
-- **Engine defaults from the config**: `[/Script/Engine.Engine] DefaultMaterialName`, `DefaultTextureName` and
-  `DefaultBumpNormalTextureName` (`UEngine` `GlobalConfig` soft paths), loaded by `UEngine::InitializeObjectReferences`.
+  - `UAssetImportData` (`FAssetImportInfo`: the source file relative to the engine or project, its MD5, the import
+    settings; no timestamps), an editor-only instanced `AssetImportData` on textures, meshes, clips and sounds.
+- **The editor module `LeonEd`** (`Engine/Source/Editor`; LeonBuildTool's new `Editor` module type, desktop only and
+  rejected in game targets; [TOOLS.md](Docs/TOOLS.md#leoncook)).
+  - Factories: `UFactory`, `UTextureFactory` (PNG, JPEG, TGA, BMP), `UFbxFactory` (FBX and OBJ static meshes, FBX
+    skeletal meshes and animations), `UGLTFImportFactory`, `USoundFactory` (PCM16 `.wav`), `UMaterialFactoryNew`, and
+    the temporary `.lmat` / `.lmesh` factories of the migration. A mesh import makes `M_` materials and `T_` textures
+    for the named slots of its source; importing over an asset reimports it in place.
+  - Reimport: `FReimportHandler`, `FReimportManager`.
+  - Commandlets: `ImportAssets` (`-source` / `-dest`, `-importlist=ImportList.ini`, `-reimport -all`),
+    `ResavePackages`, `ValidateAssets`, `MigrateLegacyContent` (temporary) and a minimal `Cook` (saves without the
+    editor-only data into `Saved/Cooked/<Platform>/`; the dependency walk, target platforms and paks come in P16).
+- **LeonCook `-run=`**: `LeonCook [<Project>.lproj] -run=<Commandlet> [arguments]` (UE: `UE4Editor-Cmd`) finds the
+  `U<Name>Commandlet` class through reflection; engine-only without a project; an error / warning summary at the end.
+- **Engine content as packages**: `/Engine/EngineMaterials/M_Default`, `M_WorldGrid`, `M_SolidMetal`, `T_Default_D`,
+  `T_Default_Bump_N`, `/Engine/EngineResources/DefaultTexture` and `/Engine/BasicShapes/Cube`, `Plane`, `Sphere`;
+  `Engine/SourceArt/` holds `T_Default_D.png` and `ImportList.ini`.
+- **Engine defaults from the config**: `[/Script/Engine.Engine] DefaultMaterialName`, `DefaultTextureName`,
+  `DefaultBumpNormalTextureName` and the UI cue sounds `UIClickSoundName`, `UIConfirmSoundName`, `UIBackSoundName`,
+  `UIErrorSoundName` (empty: the procedural tones), loaded by `UEngine::InitializeObjectReferences`.
+- `UGameplayStatics::PlaySound2D` / `PlaySoundAtLocation` for sound waves; `FAudioDevice` plays PCM16 samples from
+  memory (`FSoundWavePCM`, `SetUiSound`).
+- `FLegacyAssetKeys` (until P15): the `.llev` material and mesh keys resolve to the migrated packages
+  (`ResolveLevelAssetObjectPath`), with a mount point named after a level's content folder outside the mount points.
+- **Gate G5**: `Engine/Build/BatchFiles/CheckReimport.bat` reimports the content and fails when git sees a change;
+  CI runs it.
 - `IRendererModule::ReleaseAssetResources`: the assets free the renderer's GPU copy when their data changes and in
   `BeginDestroy`.
-- 11 new tests (328 in all): every asset class saved to a package and loaded back (bulk data, references between packages), the
-  commandlet's command line, the legacy files, the collection of unused legacy assets, the config defaults and the
-  scene keeping its proxies' assets.
+- 23 new tests (340 in all): every asset class saved to a package and loaded back, the factories, the commandlets
+  (import lists, reproducible reimport, resave, validation, cook, migration), the engine content, the content keys and
+  the scene keeping its proxies' assets.
 
 ### Changed
 
 - The components hold their assets through `UPROPERTY`s: `UStaticMeshComponent::StaticMesh`,
   `USkeletalMeshComponent::SkeletalMesh`, `UMeshComponent::OverrideMaterials` (`UMaterialInterface*`; `GetMaterial`
   returns one). A slot without a material draws with the default material.
+- The runtime loads the engine's assets from their packages (`LoadObject`); a `.llev` sphere of another tessellation
+  is built at run time (`GetSphereMesh`).
+- MeshUtilities returns mesh data with its material slots (`FStaticMeshBuilder::BuildFromFile`) instead of writing
+  `.lmesh` and `.lmat` files.
+- `FGenericWindow::SetIconFromFile(PngPath)` is `SetIcon(Width, Height, RGBA)`: texels, not a file.
 - The Renderer's `FRenderResourceCache` is keyed by asset instead of pinning shared pointers, and `FScene` is an
   `FGCObject` that keeps its proxies' assets alive.
 - `UAnimInstance` and `UCharacterAnimInstance` moved from AnimationCore to Engine (`Classes/Animation`); AnimationCore
@@ -51,11 +78,20 @@ Win64 frames are unchanged; the PS2 ELFs are unchanged.
   `EMaterialShadingModel` is Engine's); its texture maps are `UTexture2D*`.
 - `LoadLevelFile`, `ApplyLevelDocument`, `FBasicShape` and `MeshForBasicShape` lose their resource cache parameter.
 - Headless runs (`-nullrhi`, tests) load textures too.
+- `.gitattributes` marks `.lpak` files binary.
 
 ### Removed
 
-- `FResourceCache` (and `UEngine::GetResources`), `MaterialAsset.h` with the JSON material fields
-  (`PatchMaterialFromJson`, `HasMaterialSurfaceFields`) and its test; Engine's dependency on Json.
+- The `Developer/Cooker` module (the cook commandlet moved to LeonEd), the cook recipes (`FCookRecipe`, `FCookPaths`)
+  and LeonCook's `staticmesh` / `recipe` modes.
+- `LeonMeshFormat` (`.lmesh`) and `LeonMaterialFormat` (`.lmat`) in RenderCore, the engine's `.lmat` files, and
+  run-time image and WAV loading: `stb_image` only decodes in LeonEd's texture factory, and ApplicationCore no longer
+  depends on STB.
+- `FResourceCache` (and `UEngine::GetResources`), and the transitional `FLegacyAssetLoader` that replaced it during
+  P14; `MaterialAsset.h` with the JSON material fields (`PatchMaterialFromJson`, `HasMaterialSurfaceFields`) and its
+  test; Engine's dependency on Json.
+- `FAudioDevice`'s file-path playback (`PlaySound2D` / `PlaySoundAtLocation` / `PlayMusic` by path, the UI `.wav`
+  lookup).
 
 ## [0.16.0] - 2026-09-25
 
