@@ -9,6 +9,7 @@
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
+#include "Materials/Material.h"
 #include "Misc/AutomationTest.h"
 #include "PrimitiveSceneProxy.h"
 #include "Primitives.h"
@@ -78,12 +79,16 @@ bool FComponentsPrimitivesRegisterWithTheWorldTest::RunTest(const FString& Param
 	Actor->SetActorHiddenInGame(true);
 	TestFalse("Hidden with its owner", MeshComponent->ShouldRender());
 
-	FMaterial Override;
-	Override.Roughness = 0.25f;
+	UMaterial* Override = NewObject<UMaterial>();
+	Override->Roughness = 0.25f;
 	MeshComponent->SetMaterial(1, Override);
 	TestTrue("Slot 1 overridden", MeshComponent->HasOverrideMaterial(1));
 	TestFalse("Slot 0 not overridden", MeshComponent->HasOverrideMaterial(0));
-	TestEqual("Override material", MeshComponent->GetMaterial(1).Roughness, 0.25f);
+	TestTrue("Override material", MeshComponent->GetMaterial(1) == Override);
+	TestEqual("Override material values", MeshComponent->GetMaterial(1)->GetRenderProxy().Roughness, 0.25f);
+	// The overrides are UPROPERTYs: the material lives while the component does.
+	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
+	TestTrue("Override kept by the component", MeshComponent->GetMaterial(1) == Override);
 
 	MeshComponent->DestroyComponent();
 	TestFalse("Left the world's primitives", MeshComponent->IsRenderStateCreated());

@@ -4,6 +4,7 @@
 #include "EngineLogs.h"
 #include "Materials/MaterialInterface.h"
 #include "PhysicsEngine/BodySetup.h"
+#include "RendererInterface.h"
 
 namespace
 {
@@ -90,7 +91,31 @@ bool UStaticMesh::BuildFromMeshData(const FMeshData& Data)
 	ComputeLocalBounds(LODResources.Vertices, Min, Max);
 	BoundingBox = FBox(Min, Max);
 	CreateBodySetup();
+	InitResources();
 	return true;
+}
+
+void UStaticMesh::InitResources()
+{
+	// The next draw uploads the new geometry.
+	ReleaseResources();
+}
+
+void UStaticMesh::ReleaseResources()
+{
+	ReleaseAssetRenderResources(this);
+}
+
+void UStaticMesh::PostLoad()
+{
+	Super::PostLoad();
+	InitResources();
+}
+
+void UStaticMesh::BeginDestroy()
+{
+	ReleaseResources();
+	Super::BeginDestroy();
 }
 
 void UStaticMesh::CreateBodySetup()

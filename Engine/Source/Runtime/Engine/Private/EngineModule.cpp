@@ -12,3 +12,11 @@ IRendererModule& GetRendererModule()
 {
 	return FModuleManager::LoadModuleChecked<IRendererModule>("Renderer");
 }
+
+void ReleaseAssetRenderResources(const UObject* Asset)
+{
+	if (IRendererModule* Renderer = GetRendererModulePtr())
+	{
+		Renderer->ReleaseAssetResources(Asset);
+	}
+}

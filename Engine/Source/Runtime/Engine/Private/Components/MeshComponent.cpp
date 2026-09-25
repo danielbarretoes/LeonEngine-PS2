@@ -1,11 +1,13 @@
 #include "Components/MeshComponent.h"
 
+#include "Materials/MaterialInterface.h"
+
 UMeshComponent::UMeshComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 }
 
-void UMeshComponent::SetMaterial(int32 ElementIndex, const FMaterial& Material)
+void UMeshComponent::SetMaterial(int32 ElementIndex, UMaterialInterface* Material)
 {
 	if (ElementIndex < 0)
 	{
@@ -13,17 +15,15 @@ void UMeshComponent::SetMaterial(int32 ElementIndex, const FMaterial& Material)
 	}
 	if (ElementIndex >= OverrideMaterials.Num())
 	{
-		OverrideMaterials.SetNum(ElementIndex + 1);
-		OverrideMaterialSet.SetNum(ElementIndex + 1);
+		OverrideMaterials.SetNumZeroed(ElementIndex + 1);
 	}
 	OverrideMaterials[ElementIndex] = Material;
-	OverrideMaterialSet[ElementIndex] = true;
 	MarkRenderStateDirty();
 }
 
-FMaterial UMeshComponent::GetMaterial(int32 ElementIndex) const
+UMaterialInterface* UMeshComponent::GetMaterial(int32 ElementIndex) const
 {
-	return HasOverrideMaterial(ElementIndex) ? OverrideMaterials[ElementIndex] : FMaterial();
+	return OverrideMaterials.IsValidIndex(ElementIndex) ? OverrideMaterials[ElementIndex] : nullptr;
 }
 
 int32 UMeshComponent::GetNumMaterials() const
@@ -33,12 +33,11 @@ int32 UMeshComponent::GetNumMaterials() const
 
 bool UMeshComponent::HasOverrideMaterial(int32 ElementIndex) const
 {
-	return OverrideMaterialSet.IsValidIndex(ElementIndex) && OverrideMaterialSet[ElementIndex];
+	return OverrideMaterials.IsValidIndex(ElementIndex) && OverrideMaterials[ElementIndex] != nullptr;
 }
 
 void UMeshComponent::EmptyOverrideMaterials()
 {
 	OverrideMaterials.Empty();
-	OverrideMaterialSet.Empty();
 	MarkRenderStateDirty();
 }

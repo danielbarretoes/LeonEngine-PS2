@@ -16,6 +16,7 @@ public:
 	// IRendererModule
 	bool InitRenderer(const FString& ShaderDirectory) override;
 	void ShutdownRenderer() override;
+	void ReleaseAssetResources(const UObject* Asset) override;
 	[[nodiscard]] bool IsRendererInitialized() const override
 	{
 		return bRendererInitialized;

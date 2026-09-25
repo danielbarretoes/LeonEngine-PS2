@@ -4,15 +4,18 @@
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/Texture2D.h"
 #include "Engine/World.h"
 #include "EngineLogs.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerStartPIE.h"
 #include "GameFramework/WorldSettings.h"
 #include "HAL/PlatformTime.h"
+#include "LegacyAssetLoader.h"
 #include "Level/LegacyLevelDataComponent.h"
 #include "Level/LeonLevelFormat.h"
 #include "Level/LevelLoader.h"
+#include "Materials/Material.h"
 #include "Misc/App.h"
 #include "Misc/CoreMisc.h"
 #include "Misc/PackageName.h"
@@ -87,7 +90,7 @@ UEngine::UEngine(const FObjectInitializer& ObjectInitializer)
 
 void UEngine::Init(IEngineLoop* InEngineLoop)
 {
-	// Without a main window (-nullrhi, tests) nothing renders: no textures are loaded and the audio is silent.
+	// Without a main window (-nullrhi, tests) nothing renders and the audio is silent.
 	bHeadless = InEngineLoop == nullptr || InEngineLoop->GetMainWindow() == nullptr;
 
 	LocalPlayerClass = LocalPlayerClassName.IsValid() ? LocalPlayerClassName.TryLoadClass<ULocalPlayer>() : nullptr;
@@ -97,9 +100,16 @@ void UEngine::Init(IEngineLoop* InEngineLoop)
 	}
 
 	GarbageCollectionTimer = FGarbageCollectionTimer(FGarbageCollectionSettings::LoadFromConfig());
-	Resources.SetTextureLoadingEnabled(!bHeadless);
+	InitializeObjectReferences();
 	(void)AudioDevice.Initialize(/*silent=*/bHeadless);
 	bIsInitialized = true;
+}
+
+void UEngine::InitializeObjectReferences()
+{
+	DefaultTexture = FLegacyAssetLoader::LoadEngineObject<UTexture2D>(DefaultTextureName);
+	DefaultBumpNormalTexture = FLegacyAssetLoader::LoadEngineObject<UTexture2D>(DefaultBumpNormalTextureName);
+	(void)UMaterial::GetDefaultMaterial(MD_Surface);
 }
 
 void UEngine::Start()
@@ -280,7 +290,7 @@ bool UEngine::LoadMap(FWorldContext& WorldContext, FURL URL, UPendingNetGame* /*
 	WorldContext.SetCurrentWorld(NewWorld);
 
 	// The level's actors (the `.llev` reader until P15).
-	if (!LoadLevelFile(*NewWorld, Resources, LevelFilename))
+	if (!LoadLevelFile(*NewWorld, LevelFilename))
 	{
 		Error = FString::Printf(TEXT("Failed to load map '%s'"), *LevelFilename);
 		return false;

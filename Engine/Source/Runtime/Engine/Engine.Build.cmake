@@ -4,5 +4,5 @@ leon_module(Engine
 	PLATFORMS Desktop
 	PUBLIC_DEPENDENCIES Core CoreUObject EngineSettings InputCore ApplicationCore RHI RenderCore SlateCore UMG
 		PhysicsCore AnimationCore AudioMixer
-	PRIVATE_DEPENDENCIES STB Json
+	PRIVATE_DEPENDENCIES STB
 )

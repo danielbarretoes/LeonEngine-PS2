@@ -15,15 +15,16 @@
 #include "GameFramework/PlayerStartPIE.h"
 #include "GameFramework/WorldSettings.h"
 #include "GameMapsSettings.h"
+#include "LegacyAssetLoader.h"
 #include "LegacyCoordinateConversion.h"
 #include "Level/BasicLight.h"
 #include "Level/BasicShape.h"
 #include "Level/LegacyLevelDataComponent.h"
 #include "Level/LevelLoader.h"
 #include "Level/Light.h"
+#include "Materials/Material.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
-#include "ResourceCache.h"
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
 #include "UObject/Package.h"
@@ -1019,7 +1020,7 @@ namespace
 		FTransform Transform;
 		UStaticMesh* Mesh = nullptr;
 		/** The `.lmat` material, or the default material for a mesh without materials of its own. */
-		FMaterial Material;
+		UMaterialInterface* Material = nullptr;
 		bool bHasMaterial = false;
 	};
 
@@ -1027,8 +1028,8 @@ namespace
 	 * Resolves a record: its transform, and for a mesh or a blocking volume its mesh (a basic shape or the `.lmesh`)
 	 * and material, then the fit height. False when the mesh cannot be loaded.
 	 */
-	[[nodiscard]] bool ResolveActorRecord(const FLevelActorRecord& Record, FResourceCache& Resources,
-		const FString& SourcePath, FResolvedActorRecord& Out)
+	[[nodiscard]] bool ResolveActorRecord(
+		const FLevelActorRecord& Record, const FString& SourcePath, FResolvedActorRecord& Out)
 	{
 		Out.Record = &Record;
 		Out.Transform =
@@ -1052,13 +1053,13 @@ namespace
 		}
 		if (bIsBasicShape)
 		{
-			Out.Mesh = MeshForBasicShape(Resources, ShapeType, Record.SphereSegments, Record.SphereRings);
-			Out.Material = Resources.DefaultMaterial();
+			Out.Mesh = MeshForBasicShape(ShapeType, Record.SphereSegments, Record.SphereRings);
+			Out.Material = UMaterial::GetDefaultMaterial(MD_Surface);
 			Out.bHasMaterial = true;
 		}
 		else
 		{
-			Out.Mesh = Resources.LoadStaticMesh(ResolveLevelAssetPath(SourcePath, Record.MeshPath));
+			Out.Mesh = FLegacyAssetLoader::LoadStaticMesh(ResolveLevelAssetPath(SourcePath, Record.MeshPath));
 		}
 		if (Out.Mesh == nullptr)
 		{
@@ -1073,12 +1074,18 @@ namespace
 
 		if (!Record.MaterialPath.IsEmpty())
 		{
-			Out.Material = Resources.LoadMaterial(ResolveLevelAssetPath(SourcePath, Record.MaterialPath));
+			const FString MaterialPath = ResolveLevelAssetPath(SourcePath, Record.MaterialPath);
+			Out.Material = FLegacyAssetLoader::LoadMaterial(MaterialPath);
+			if (Out.Material == nullptr)
+			{
+				UE_LOG(LogLevel, Warning, "LeonLevelFormat: using the default material (failed '%s')", *MaterialPath);
+				Out.Material = UMaterial::GetDefaultMaterial(MD_Surface);
+			}
 			Out.bHasMaterial = true;
 		}
 		else if (Out.Mesh->GetStaticMaterials().Num() == 0)
 		{
-			Out.Material = Resources.DefaultMaterial();
+			Out.Material = UMaterial::GetDefaultMaterial(MD_Surface);
 			Out.bHasMaterial = true;
 		}
 		return true;
@@ -1283,8 +1290,7 @@ UClass* ResolveLegacyLevelGameMode(const FString& GameModeName)
 	return GameModeClass;
 }
 
-bool ApplyLevelDocument(
-	UWorld& InWorld, FResourceCache& Resources, const FLevelDocument& Doc, const FString& SourcePath)
+bool ApplyLevelDocument(UWorld& InWorld, const FLevelDocument& Doc, const FString& SourcePath)
 {
 	UWorld* World = &InWorld;
 	if (World->PersistentLevel == nullptr)
@@ -1301,7 +1307,7 @@ bool ApplyLevelDocument(
 	for (const FLevelActorRecord& Record : Doc.Actors)
 	{
 		FResolvedActorRecord Entry;
-		if (!ResolveActorRecord(Record, Resources, SourcePath, Entry))
+		if (!ResolveActorRecord(Record, SourcePath, Entry))
 		{
 			++FailedMeshes;
 			continue;

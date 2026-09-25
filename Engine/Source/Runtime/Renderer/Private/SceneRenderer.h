@@ -22,6 +22,7 @@
 class FLightSceneProxy;
 class FSceneInterface;
 class FStaticMeshSceneProxy;
+class UObject;
 class USkeletalMesh;
 class UTexture2D;
 
@@ -66,6 +67,12 @@ public:
 	[[nodiscard]] FRHIFramebufferId GetDrawFramebuffer() const
 	{
 		return DrawTargetFbo;
+	}
+
+	/** Frees the GPU copy of an asset, if the resource cache has one (IRendererModule::ReleaseAssetResources). */
+	void ReleaseAssetResources(const UObject* Asset)
+	{
+		Resources.ReleaseResources(Asset);
 	}
 
 	void BeginFrame(int32 FramebufferWidth, int32 FramebufferHeight);

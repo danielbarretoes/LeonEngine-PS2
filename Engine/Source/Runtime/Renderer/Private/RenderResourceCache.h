@@ -13,7 +13,9 @@ class UTexture2D;
 /**
  * The renderer's GPU resources for the engine's asset UObjects, keyed by asset (Leon; UE keeps them on the assets:
  * UStaticMesh's RenderData, UTexture's Resource). A resource is made the first time its asset is drawn and lives until
- * ReleaseResources (the renderer's shutdown), so every GL object is released while the context exists.
+ * its asset releases it (the asset's data changed, or BeginDestroy: IRendererModule::ReleaseAssetResources) or the
+ * renderer shuts down, so every GL object is released while the context exists and an address is never reused for
+ * another asset while it is cached. No render thread: everything happens on the game thread.
  */
 class FRenderResourceCache
 {
@@ -24,6 +26,9 @@ public:
 
 	/** Frees every GPU resource. */
 	void ReleaseResources();
+
+	/** Frees the resource of one asset, if there is one. */
+	void ReleaseResources(const UObject* Asset);
 
 private:
 	TMap<const UObject*, TUniquePtr<FStaticMeshRenderData>> StaticMeshes;

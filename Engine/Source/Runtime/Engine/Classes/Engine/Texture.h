@@ -39,7 +39,8 @@ struct ENGINE_API FTexturePlatformData
 /**
  * The base of the texture assets (UE: UTexture, Engine/Classes/Engine/Texture.h). The texels live in the subclass's
  * platform data (bulk data in a package); the renderer keeps the GPU copy, which it makes the first time a material
- * that uses the texture is drawn.
+ * that uses the texture is drawn. UpdateResource drops that copy when the texels change (and after a load), and
+ * BeginDestroy releases it, so the copy never outlives the texture.
  *
  * Leon has no texture source (the editor-only FTextureSource and its import settings come with the editor module) and
  * no compression, LOD groups or streaming.
@@ -69,4 +70,18 @@ public:
 	{
 		return 0.0f;
 	}
+
+	/**
+	 * The texels changed: the renderer drops its GPU copy and uploads the texture again the next time it is drawn (UE:
+	 * UpdateResource, which recreates the resource at once).
+	 */
+	void UpdateResource();
+
+	/** Frees the renderer's GPU copy (UE: ReleaseResource). */
+	void ReleaseResource();
+
+	/** UE: a loaded texture updates its resource. */
+	void PostLoad() override;
+	/** UE: the resource goes with the texture. */
+	void BeginDestroy() override;
 };

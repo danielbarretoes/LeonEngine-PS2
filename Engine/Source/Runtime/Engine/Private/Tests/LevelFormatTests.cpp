@@ -14,7 +14,6 @@
 #include "Misc/Paths.h"
 #include "Misc/SecureHash.h"
 #include "Primitives.h"
-#include "ResourceCache.h"
 #include "Tests/ScopedTestWorld.h"
 #include "UObject/StrongObjectPtr.h"
 
@@ -39,13 +38,11 @@ namespace
 		return FMD5::HashBytes(Bytes.GetData(), Bytes.Num()) + FString::Printf(" (%d bytes)", Bytes.Num());
 	}
 
-	/** SavedHash after loading a level file headless (no textures). */
+	/** SavedHash after loading a level file into a test world. */
 	FString LoadAndHash(const FString& Path)
 	{
 		FScopedTestWorld TestWorld;
-		FResourceCache Resources;
-		Resources.SetTextureLoadingEnabled(false);
-		if (!LoadLevelFile(*TestWorld, Resources, Path))
+		if (!LoadLevelFile(*TestWorld, Path))
 		{
 			return "LOAD FAILED";
 		}
@@ -163,8 +160,6 @@ bool FLevelFormatWorldRoundTripsThroughLegacyRecordsTest::RunTest(const FString&
 	// A player start, a sun and an orbit camera become legacy records (metres, Y up, legacy angles) and come back the
 	// same.
 	FScopedTestWorld TestWorld;
-	FResourceCache Resources;
-	Resources.SetTextureLoadingEnabled(false);
 	UWorld& World = *TestWorld;
 	ULevel& Level = *World.PersistentLevel;
 	World.SpawnActor<APlayerStart>(
@@ -194,7 +189,7 @@ bool FLevelFormatWorldRoundTripsThroughLegacyRecordsTest::RunTest(const FString&
 
 	World.Clear();
 	Camera.SetViewRotation(FRotator::ZeroRotator);
-	if (!TestTrue("Applied", ApplyLevelDocument(World, Resources, Doc, "memory-round-trip")))
+	if (!TestTrue("Applied", ApplyLevelDocument(World, Doc, "memory-round-trip")))
 	{
 		return false;
 	}
@@ -365,9 +360,7 @@ bool FLevelFormatSaveWritesTheSameBytesTest::RunTest(const FString& Parameters)
 
 	{
 		FScopedTestWorld TestWorld;
-		FResourceCache Resources;
-		Resources.SetTextureLoadingEnabled(false);
-		if (TestTrue("Applied", ApplyLevelDocument(*TestWorld, Resources, Doc, LevelPath)))
+		if (TestTrue("Applied", ApplyLevelDocument(*TestWorld, Doc, LevelPath)))
 		{
 			TestEqual(
 				"Every record class", SavedHash(*TestWorld), FString("9c048faf15eeb14d5fd9d408fc14dcbf (1165 bytes)"));

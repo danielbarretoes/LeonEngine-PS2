@@ -69,6 +69,20 @@ uint64 FScene::GetOrderKey(const UActorComponent* Component)
 	return (Owner->GetUniqueID() << 20) | (ComponentIndex & 0xFFFFFu);
 }
 
+void FScene::AddReferencedObjects(FReferenceCollector& Collector)
+{
+	// A proxy's assets stay alive, pending kill or not: their references are not cleared while it may draw them.
+	Collector.AllowEliminatingReferences(false);
+	for (FPrimitiveSceneInfo& Info : Primitives)
+	{
+		if (Info.Proxy != nullptr)
+		{
+			Info.Proxy->AddReferencedObjects(Collector);
+		}
+	}
+	Collector.AllowEliminatingReferences(true);
+}
+
 void FScene::AddPrimitive(UPrimitiveComponent* Primitive)
 {
 	if (Primitive == nullptr || FindInfo(Primitives, Primitive) != INDEX_NONE)

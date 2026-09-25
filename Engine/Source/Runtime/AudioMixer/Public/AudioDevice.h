@@ -14,7 +14,8 @@ enum class EUISound : uint8
 /**
  * UE-like audio subsystem (FAudioDevice / UGameplayStatics PlaySound lite), backed by miniaudio.
  * Safe no-op when Initialize fails or in headless silent mode. Sound paths are legacy content names resolved with
- * FPaths::ResolveLegacyContentPath (until sounds become USoundWave assets, P14).
+ * FPaths::ResolveLegacyContentPath: the device sits below Engine and plays files, not Engine's USoundWave assets
+ * (FLegacyAssetLoader::LoadSoundWave reads a `.wav` into one; playing them comes with the gameplay sounds).
  */
 class AUDIOMIXER_API FAudioDevice
 {

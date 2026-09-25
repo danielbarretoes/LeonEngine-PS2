@@ -2,6 +2,7 @@
 
 #include "Components/MeshComponent.h"
 #include "CoreMinimal.h"
+#include "MaterialShared.h"
 #include "StaticMeshComponent.generated.h"
 
 class UStaticMesh;
@@ -38,11 +39,15 @@ public:
 	/** A mesh with triangles is set. */
 	[[nodiscard]] bool HasValidMesh() const;
 
-	/** The override, else the mesh's material for the slot, else the default material. */
-	[[nodiscard]] FMaterial GetMaterial(int32 ElementIndex) const override;
+	/** The override, else the mesh's material for the slot, else null (UE: GetMaterial). */
+	[[nodiscard]] UMaterialInterface* GetMaterial(int32 ElementIndex) const override;
 	[[nodiscard]] int32 GetNumMaterials() const override;
 
-	/** The material of each mesh section, in section order: GetMaterial of the section's slot. */
+	/**
+	 * The values each mesh section draws with, in section order: the render proxy of GetMaterial of the section's
+	 * slot, or of the engine's default material for a slot without one (UE: the proxy's fallback to
+	 * UMaterial::GetDefaultMaterial).
+	 */
 	void GetSectionMaterials(TArray<FMaterial>& OutMaterials) const;
 
 	/**

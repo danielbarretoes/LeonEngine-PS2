@@ -1,8 +1,23 @@
 #include "Components/StaticMeshComponent.h"
 
 #include "Engine/StaticMesh.h"
-#include "Materials/MaterialInterface.h"
+#include "Materials/Material.h"
 #include "StaticMeshSceneProxy.h"
+
+namespace
+{
+
+	/** What a slot draws with: its material, else the engine's default material. */
+	FMaterial GetSlotRenderProxy(const UMaterialInterface* Material)
+	{
+		if (Material == nullptr)
+		{
+			Material = UMaterial::GetDefaultMaterial(MD_Surface);
+		}
+		return Material != nullptr ? Material->GetRenderProxy() : FMaterial();
+	}
+
+} // namespace
 
 UStaticMeshComponent::UStaticMeshComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -26,18 +41,13 @@ bool UStaticMeshComponent::HasValidMesh() const
 	return StaticMesh != nullptr && StaticMesh->HasValidRenderData();
 }
 
-FMaterial UStaticMeshComponent::GetMaterial(int32 ElementIndex) const
+UMaterialInterface* UStaticMeshComponent::GetMaterial(int32 ElementIndex) const
 {
 	if (HasOverrideMaterial(ElementIndex))
 	{
 		return OverrideMaterials[ElementIndex];
 	}
-	if (StaticMesh != nullptr && StaticMesh->GetStaticMaterials().IsValidIndex(ElementIndex))
-	{
-		const UMaterialInterface* Material = StaticMesh->GetMaterial(ElementIndex);
-		return Material != nullptr ? Material->GetRenderProxy() : FMaterial();
-	}
-	return FMaterial();
+	return StaticMesh != nullptr ? StaticMesh->GetMaterial(ElementIndex) : nullptr;
 }
 
 int32 UStaticMeshComponent::GetNumMaterials() const
@@ -59,7 +69,7 @@ void UStaticMeshComponent::GetSectionMaterials(TArray<FMaterial>& OutMaterials) 
 	for (int32 SectionIndex = 0; SectionIndex < NumSections; ++SectionIndex)
 	{
 		const int32 Slot = Sections.IsValidIndex(SectionIndex) ? Sections[SectionIndex].MaterialIndex : 0;
-		OutMaterials.Add(GetMaterial(Slot));
+		OutMaterials.Add(GetSlotRenderProxy(GetMaterial(Slot)));
 	}
 }
 
@@ -68,7 +78,7 @@ bool UStaticMeshComponent::HasShadowCastingMaterial() const
 	const int32 NumSlots = FMath::Max(GetNumMaterials(), 1);
 	for (int32 Slot = 0; Slot < NumSlots; ++Slot)
 	{
-		const FMaterial Material = GetMaterial(Slot);
+		const FMaterial Material = GetSlotRenderProxy(GetMaterial(Slot));
 		if (Material.bCastsShadows && !Material.IsTransparent() && Material.Shading != EMaterialLightingModel::Unlit)
 		{
 			return true;

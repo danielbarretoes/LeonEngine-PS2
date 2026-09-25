@@ -32,7 +32,8 @@ struct ENGINE_API FSkeletalMaterial
 /**
  * A skinned mesh asset (UE: USkeletalMesh): its skeleton, its material slots, the skinned vertices (bone indices and
  * weights) and indices, and the bounds. The renderer keeps the GPU copy, which it makes the first time it draws the
- * mesh; the bones come from the skeleton asset (Leon keeps no copy of the reference skeleton on the mesh).
+ * mesh (InitResources drops it when the geometry changes and after a load, BeginDestroy releases it); the bones come
+ * from the skeleton asset (Leon keeps no copy of the reference skeleton on the mesh).
  *
  * In a package: the tagged properties, then the bounds and the vertices and indices as bulk data. Leon has one LOD
  * and one section drawn with slot 0, no morph targets, cloth or physics asset.
@@ -94,8 +95,15 @@ public:
 		return Indices;
 	}
 
+	/** The geometry changed: the renderer's GPU copy is dropped and made again when drawn (UE: InitResources). */
+	void InitResources();
+	/** Frees the renderer's GPU copy (UE: ReleaseResources). */
+	void ReleaseResources();
+
 	/** The tagged properties, then the bounds and the geometry (bulk data). */
 	void Serialize(FArchive& Ar) override;
+	void PostLoad() override;
+	void BeginDestroy() override;
 
 private:
 	TArray<FSkeletalVertex> Vertices;

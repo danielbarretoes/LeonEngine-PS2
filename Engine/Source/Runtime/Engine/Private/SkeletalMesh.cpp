@@ -3,6 +3,7 @@
 #include "Animation/Skeleton.h"
 #include "AssetBulkData.h"
 #include "EngineLogs.h"
+#include "RendererInterface.h"
 
 USkeletalMesh::USkeletalMesh(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -19,7 +20,30 @@ bool USkeletalMesh::BuildFromImportData(const FSkeletalMeshData& Data, USkeleton
 	Vertices = Data.Vertices;
 	Indices = Data.Indices;
 	BoundingBox = FBox(Data.LocalMin, Data.LocalMax);
+	InitResources();
 	return true;
+}
+
+void USkeletalMesh::InitResources()
+{
+	ReleaseResources();
+}
+
+void USkeletalMesh::ReleaseResources()
+{
+	ReleaseAssetRenderResources(this);
+}
+
+void USkeletalMesh::PostLoad()
+{
+	Super::PostLoad();
+	InitResources();
+}
+
+void USkeletalMesh::BeginDestroy()
+{
+	ReleaseResources();
+	Super::BeginDestroy();
 }
 
 const FReferenceSkeleton& USkeletalMesh::GetRefSkeleton() const

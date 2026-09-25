@@ -4,6 +4,7 @@
 #include "LightSceneProxy.h"
 #include "PrimitiveSceneProxy.h"
 #include "SceneInterface.h"
+#include "UObject/GCObject.h"
 
 class UActorComponent;
 
@@ -29,8 +30,13 @@ struct FLightSceneInfo
  * FSceneRenderer draws. Primitives and lights are kept in the order of their actors' spawn, then of the component in
  * its actor (GetOrderKey), so a proxy recreated for a changed component keeps its place and the draw order does not
  * depend on when a component last changed.
+ *
+ * It is an FGCObject: the assets its proxies draw (meshes, textures) are reported to the garbage collector, even when
+ * they are pending kill, so no asset is collected while a proxy points at it.
  */
-class FScene final : public FSceneInterface
+class FScene final
+	: public FSceneInterface
+	, public FGCObject
 {
 public:
 	explicit FScene(UWorld* InWorld);
@@ -71,6 +77,13 @@ public:
 
 	/** The component's place: its owner's spawn serial (AActor::GetUniqueID), then its index among the owner's. */
 	[[nodiscard]] static uint64 GetOrderKey(const UActorComponent* Component);
+
+	// FGCObject
+	void AddReferencedObjects(FReferenceCollector& Collector) override;
+	FString GetReferencerName() const override
+	{
+		return TEXT("FScene");
+	}
 
 private:
 	UWorld* World = nullptr;

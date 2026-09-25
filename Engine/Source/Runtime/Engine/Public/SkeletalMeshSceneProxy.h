@@ -8,8 +8,9 @@ class USkeletalMesh;
 class USkeletalMeshComponent;
 
 /**
- * A USkeletalMeshComponent for the renderer (UE: FSkeletalMeshSceneProxy): its mesh and the skin matrices of the
- * current pose, which the component sends before each frame (USkeletalMeshComponent::SendRenderDynamicData_Concurrent).
+ * A USkeletalMeshComponent for the renderer (UE: FSkeletalMeshSceneProxy): its mesh, the values of the mesh's material
+ * (slot 0, else the default material) and the skin matrices of the current pose, which the component sends before
+ * each frame (USkeletalMeshComponent::SendRenderDynamicData_Concurrent).
  */
 class ENGINE_API FSkeletalMeshSceneProxy : public FPrimitiveSceneProxy
 {
@@ -37,6 +38,9 @@ public:
 	{
 		BoneMatrices = InBoneMatrices;
 	}
+
+	/** The mesh and the maps of its material. */
+	void AddReferencedObjects(FReferenceCollector& Collector) override;
 
 private:
 	USkeletalMesh* SkeletalMesh = nullptr;

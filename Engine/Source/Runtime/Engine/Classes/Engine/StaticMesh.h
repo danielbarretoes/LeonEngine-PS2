@@ -33,8 +33,9 @@ struct ENGINE_API FStaticMaterial
 /**
  * A static mesh asset (UE: UStaticMesh): its geometry (one LOD: vertices, indices and sections), the bounds, a
  * material per slot and the collision description. The renderer keeps the GPU copy of the geometry, which it makes the
- * first time it draws the mesh (Engine never sees GPU objects), and the physics scene reads the triangles and the body
- * setup for the mesh's bodies.
+ * first time it draws the mesh (Engine never sees GPU objects); InitResources drops it when the geometry changes (and
+ * after a load) and BeginDestroy releases it. The physics scene reads the triangles and the body setup for the mesh's
+ * bodies.
  *
  * In a package: the tagged properties (the slots, the body setup, an inner object), then the bounds and the geometry
  * as bulk data (at the end of the file, plan decision D13). Leon has no source models, LODs, nanite, sockets, UV
@@ -65,6 +66,15 @@ public:
 
 	/** Makes the body setup if the mesh has none (UE: CreateBodySetup). */
 	void CreateBodySetup();
+
+	/**
+	 * The geometry changed: the renderer drops its GPU copy and uploads the mesh again the next time it is drawn (UE:
+	 * InitResources, which creates the render resources at once).
+	 */
+	void InitResources();
+
+	/** Frees the renderer's GPU copy (UE: ReleaseResources). */
+	void ReleaseResources();
 
 	/** True when the mesh has triangles to draw (UE: HasValidRenderData). */
 	[[nodiscard]] bool HasValidRenderData() const
@@ -115,6 +125,10 @@ public:
 
 	/** The tagged properties, then the bounds and the geometry (bulk data). */
 	void Serialize(FArchive& Ar) override;
+	/** UE: a loaded mesh initializes its resources. */
+	void PostLoad() override;
+	/** UE: the resources go with the mesh. */
+	void BeginDestroy() override;
 
 private:
 	FStaticMeshLODResources LODResources;

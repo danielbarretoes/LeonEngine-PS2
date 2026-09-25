@@ -139,7 +139,6 @@ void UGameEngine::PreExit()
 	AudioDevice.Shutdown();
 	// The world goes first: its actors end play while the resources they use still exist.
 	DestroyGameWorld();
-	Resources.Clear();
 	FGenericWindow* Window = GameViewport != nullptr ? GameViewport->GetWindow() : nullptr;
 	if (Window != nullptr)
 	{

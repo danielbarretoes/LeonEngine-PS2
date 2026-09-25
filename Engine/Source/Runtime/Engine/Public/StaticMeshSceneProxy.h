@@ -39,6 +39,9 @@ public:
 	/** The mesh's local bounds through the transform. */
 	[[nodiscard]] FBox GetWorldBounds() const;
 
+	/** The mesh and the maps of the section materials. */
+	void AddReferencedObjects(FReferenceCollector& Collector) override;
+
 private:
 	UStaticMesh* StaticMesh = nullptr;
 	TArray<FMaterial> SectionMaterials;

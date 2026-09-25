@@ -5,7 +5,6 @@
 #include "Level/LeonLevelFormat.h"
 #include "Level/LevelLoader.h"
 #include "Misc/AutomationTest.h"
-#include "ResourceCache.h"
 #include "Tests/ScopedTestWorld.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -20,9 +19,7 @@ bool FLevelAndAISmokeEditorStyleLevelSaveLoadApplyTest::RunTest(const FString& P
 	#ifdef LEON_ROOT_DIR
 	const FString TemplateLevel = FString(LEON_ROOT_DIR) + "/Engine/Content/LevelTemplates/Blank.llev";
 	FScopedTestWorld TestWorld;
-	FResourceCache Resources;
-	Resources.SetTextureLoadingEnabled(false);
-	if (!TestTrue("Template level loaded", LoadLevelFile(*TestWorld, Resources, TemplateLevel)))
+	if (!TestTrue("Template level loaded", LoadLevelFile(*TestWorld, TemplateLevel)))
 	{
 		return false;
 	}
@@ -43,7 +40,7 @@ bool FLevelAndAISmokeEditorStyleLevelSaveLoadApplyTest::RunTest(const FString& P
 	}
 	TestEqual("Name kept", RoundTrip.Name, Doc.Name);
 
-	TestTrue("Document applied", ApplyLevelDocument(*TestWorld, Resources, RoundTrip, "memory-editor-smoke"));
+	TestTrue("Document applied", ApplyLevelDocument(*TestWorld, RoundTrip, "memory-editor-smoke"));
 	#else
 	AddInfo("LEON_ROOT_DIR unset");
 	#endif

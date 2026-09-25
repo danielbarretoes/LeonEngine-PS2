@@ -5,9 +5,10 @@
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "Frustum.h"
-#include "Materials/MaterialInterface.h"
+#include "Materials/Material.h"
 #include "SkeletalMeshSceneProxy.h"
 #include "StaticMeshSceneProxy.h"
+#include "UObject/UObjectGlobals.h"
 
 FPrimitiveSceneProxy::FPrimitiveSceneProxy(const UPrimitiveComponent* InComponent, EPrimitiveSceneProxyType InProxyType)
 	: LocalToWorld(InComponent->GetComponentTransform().ToMatrixWithScale())
@@ -31,6 +32,16 @@ const FMaterial& FStaticMeshSceneProxy::GetSectionMaterial(int32 SectionIndex) c
 	return SectionMaterials.IsValidIndex(SectionIndex) ? SectionMaterials[SectionIndex] : MissingSectionMaterial;
 }
 
+void FStaticMeshSceneProxy::AddReferencedObjects(FReferenceCollector& Collector)
+{
+	Collector.AddReferencedObject(StaticMesh);
+	for (FMaterial& Material : SectionMaterials)
+	{
+		Collector.AddReferencedObject(Material.AlbedoMap);
+		Collector.AddReferencedObject(Material.NormalMap);
+	}
+}
+
 FBox FStaticMeshSceneProxy::GetWorldBounds() const
 {
 	const FBox& LocalBox = StaticMesh->GetBoundingBox();
@@ -42,5 +53,16 @@ FSkeletalMeshSceneProxy::FSkeletalMeshSceneProxy(const USkeletalMeshComponent* I
 	, SkeletalMesh(InComponent->GetSkeletalMesh())
 {
 	const UMaterialInterface* SlotMaterial = SkeletalMesh->GetMaterial(0);
+	if (SlotMaterial == nullptr)
+	{
+		SlotMaterial = UMaterial::GetDefaultMaterial(MD_Surface);
+	}
 	Material = SlotMaterial != nullptr ? SlotMaterial->GetRenderProxy() : FMaterial();
+}
+
+void FSkeletalMeshSceneProxy::AddReferencedObjects(FReferenceCollector& Collector)
+{
+	Collector.AddReferencedObject(SkeletalMesh);
+	Collector.AddReferencedObject(Material.AlbedoMap);
+	Collector.AddReferencedObject(Material.NormalMap);
 }

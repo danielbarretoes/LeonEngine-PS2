@@ -1,5 +1,7 @@
 #include "Engine/Texture.h"
 
+#include "RendererInterface.h"
+
 void FTexture2DMipMap::Serialize(FArchive& Ar, UObject* Owner, int32 MipIndex)
 {
 	Ar << SizeX << SizeY;
@@ -33,4 +35,27 @@ UTexture::UTexture(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 	SRGB = 1;
+}
+
+void UTexture::UpdateResource()
+{
+	// The next draw uploads the new texels.
+	ReleaseResource();
+}
+
+void UTexture::ReleaseResource()
+{
+	ReleaseAssetRenderResources(this);
+}
+
+void UTexture::PostLoad()
+{
+	Super::PostLoad();
+	UpdateResource();
+}
+
+void UTexture::BeginDestroy()
+{
+	ReleaseResource();
+	Super::BeginDestroy();
 }

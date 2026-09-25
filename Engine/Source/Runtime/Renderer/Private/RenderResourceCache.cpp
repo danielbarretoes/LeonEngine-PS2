@@ -36,6 +36,13 @@ const FTexture2DResource& FRenderResourceCache::GetTexture(const UTexture2D& Tex
 	return FindOrCreate(Textures, Texture);
 }
 
+void FRenderResourceCache::ReleaseResources(const UObject* Asset)
+{
+	StaticMeshes.Remove(Asset);
+	SkeletalMeshes.Remove(Asset);
+	Textures.Remove(Asset);
+}
+
 void FRenderResourceCache::ReleaseResources()
 {
 	StaticMeshes.Empty();

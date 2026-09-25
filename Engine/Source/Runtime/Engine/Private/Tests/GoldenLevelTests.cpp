@@ -10,7 +10,6 @@
 #include "Level/LegacyLevelDataComponent.h"
 #include "Level/LevelLoader.h"
 #include "Misc/AutomationTest.h"
-#include "ResourceCache.h"
 #include "Tests/LegacyGolden.h"
 #include "Tests/ScopedTestWorld.h"
 
@@ -31,10 +30,8 @@ bool FGoldenStarterLevelTest::RunTest(const FString& Parameters)
 	constexpr float AngleTolerance = 1.0e-2f;
 
 	FScopedTestWorld TestWorld;
-	FResourceCache Resources;
-	Resources.SetTextureLoadingEnabled(false);
 	const FString LevelPath = FString(LEON_ROOT_DIR) + "/Engine/Content/LevelTemplates/Starter.llev";
-	if (!TestTrue("Starter level loaded", LoadLevelFile(*TestWorld, Resources, LevelPath)))
+	if (!TestTrue("Starter level loaded", LoadLevelFile(*TestWorld, LevelPath)))
 	{
 		return false;
 	}

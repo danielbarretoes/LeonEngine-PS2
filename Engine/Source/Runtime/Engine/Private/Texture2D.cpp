@@ -47,6 +47,7 @@ bool UTexture2D::SetPlatformData(int32 InSizeX, int32 InSizeY, EPixelFormat InFo
 		FMemory::Memzero(Data, static_cast<SIZE_T>(NumBytes));
 	}
 	Mip.BulkData.Unlock();
+	UpdateResource();
 	return true;
 }
 

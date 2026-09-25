@@ -20,7 +20,7 @@ struct RENDERCORE_API FLeonMaterialDocument
 
 /**
  * Parses a .lmat without resolving textures (the map paths stay strings). Engine's LoadLeonMaterialFile
- * (MaterialAsset.h) loads the maps through its resource cache.
+ * (FLegacyAssetLoader::LoadMaterial) makes a UMaterial of it and loads the maps as textures.
  */
 [[nodiscard]] RENDERCORE_API bool LoadLeonMaterialDocument(const FString& Path, FLeonMaterialDocument& Out);
 

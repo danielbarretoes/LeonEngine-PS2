@@ -39,6 +39,11 @@ void FRendererModule::ShutdownRenderer()
 	bRendererInitialized = false;
 }
 
+void FRendererModule::ReleaseAssetResources(const UObject* Asset)
+{
+	SceneRenderer.ReleaseAssetResources(Asset);
+}
+
 FSceneInterface* FRendererModule::AllocateScene(UWorld* World)
 {
 	FScene* Scene = new FScene(World);

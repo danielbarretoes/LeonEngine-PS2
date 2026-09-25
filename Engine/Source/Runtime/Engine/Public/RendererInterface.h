@@ -7,6 +7,7 @@
 class FCanvas;
 class FSceneInterface;
 class FSceneViewFamily;
+class UObject;
 class UWorld;
 
 /** Per-frame counters of the scene pass (color pass after frustum culling) and the GPU time of each pass. */
@@ -46,6 +47,15 @@ public:
 	virtual bool InitRenderer(const FString& ShaderDirectory) = 0;
 	/** Frees every GPU object, the cached copies of the engine's assets included, before the context goes. */
 	virtual void ShutdownRenderer() = 0;
+
+	/**
+	 * Frees the GPU copy the renderer keeps of an asset (a texture's, a static or skeletal mesh's), if it has one; the
+	 * next draw of the asset makes a new copy. Leon's renderer keeps the copies keyed by asset (UE: the assets own
+	 * their render resources and release them with BeginReleaseResource); the assets call it when their data changes
+	 * and in BeginDestroy (ReleaseAssetRenderResources), so a copy never outlives its asset. Leon has no render thread:
+	 * it runs at once, on the game thread, while the context is current.
+	 */
+	virtual void ReleaseAssetResources(const UObject* Asset) = 0;
 	[[nodiscard]] virtual bool IsRendererInitialized() const = 0;
 
 	/** A new scene for a world (UE: AllocateScene); the world frees it with RemoveScene. */
@@ -78,3 +88,10 @@ public:
 
 /** The Renderer module; a target without it is a fatal error (UE: GetRendererModule, EngineModule.h). */
 [[nodiscard]] ENGINE_API IRendererModule& GetRendererModule();
+
+/**
+ * Frees the renderer's GPU copy of an asset (IRendererModule::ReleaseAssetResources) when the target links the
+ * Renderer module; nothing otherwise (LeonCook, the tools). The asset classes call it (UTexture::ReleaseResource,
+ * UStaticMesh::ReleaseResources, USkeletalMesh::ReleaseResources).
+ */
+ENGINE_API void ReleaseAssetRenderResources(const UObject* Asset);

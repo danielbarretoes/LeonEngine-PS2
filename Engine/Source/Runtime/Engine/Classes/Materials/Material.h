@@ -91,4 +91,12 @@ public:
 	{
 		return GetRenderProxy().IsTransparent();
 	}
+
+	/**
+	 * The engine's default material (UE: GetDefaultMaterial): UEngine::DefaultMaterialName, `[/Script/Engine.Engine]
+	 * DefaultMaterialName=` in the engine config, loaded once and kept in the root set (FLegacyAssetLoader until the
+	 * engine content is packaged). What a mesh slot without a material draws with; the `.llev` basic shapes use it.
+	 * Leon has one domain, MD_Surface.
+	 */
+	[[nodiscard]] static UMaterial* GetDefaultMaterial(EMaterialDomain Domain);
 };

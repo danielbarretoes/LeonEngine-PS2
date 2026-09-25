@@ -41,7 +41,7 @@ void ApplyFitHeight(FTransform& Transform, const UStaticMesh& Mesh, float FitHei
 	Transform.SetLocation(Grounded + LocationOffset);
 }
 
-bool LoadLevelFile(UWorld& World, FResourceCache& Resources, const FString& LevelPath)
+bool LoadLevelFile(UWorld& World, const FString& LevelPath)
 {
 	if (!HasLeonLevelExtension(LevelPath))
 	{
@@ -56,5 +56,5 @@ bool LoadLevelFile(UWorld& World, FResourceCache& Resources, const FString& Leve
 		return false;
 	}
 
-	return ApplyLevelDocument(World, Resources, Doc, LevelPath);
+	return ApplyLevelDocument(World, Doc, LevelPath);
 }

@@ -5,7 +5,6 @@
 #include "Debug/DebugOverlay.h"
 #include "Engine/EngineBaseTypes.h"
 #include "Misc/Exec.h"
-#include "ResourceCache.h"
 #include "Templates/SubclassOf.h"
 #include "UObject/GarbageCollection.h"
 #include "UObject/NoExportTypes.h"
@@ -17,6 +16,7 @@ class IEngineLoop;
 class UGameViewportClient;
 class ULocalPlayer;
 class UPendingNetGame;
+class UTexture2D;
 class UWorld;
 struct FWorldContext;
 
@@ -28,8 +28,9 @@ struct FWorldContext;
  * - Browse / LoadMap: a URL opens a map in a world context (the flow is on LoadMap).
  * - Exec: the engine's console commands (`exit`, `obj gc`, `stat unit`, `RecompileShaders`, `open`), then every
  *   FSelfRegisteringExec. The console reaches it through the viewport client and the local player.
- * - The CPU assets (FResourceCache, until the P14 assets), the audio device and the on-screen debug text
- *   (AddOnScreenDebugMessage) belong to it.
+ * - Its default assets come from the config (the *Name paths below, as UE's DefaultTextureName & co.): Init loads
+ *   them (InitializeObjectReferences). The audio device and the on-screen debug text (AddOnScreenDebugMessage) belong
+ *   to it.
  *
  * Leon keeps the world contexts on the game instances (P12): GetWorldContexts collects them (UE: the engine's
  * WorldList).
@@ -64,11 +65,41 @@ public:
 	UPROPERTY(Config)
 	bool bShowStatsByDefault = false;
 
+	/**
+	 * The material of a mesh slot without one (UE: the `DefaultMaterialName` of the engine config, which
+	 * UMaterial::GetDefaultMaterial loads).
+	 */
+	UPROPERTY(GlobalConfig)
+	FSoftObjectPath DefaultMaterialName;
+
+	/** The engine's default texture, a grey checker, and the `.lmat` `checker` map (UE: DefaultTextureName). */
+	UPROPERTY(GlobalConfig)
+	FSoftObjectPath DefaultTextureName;
+
+	/** DefaultTextureName, loaded by Init (UE: DefaultTexture). */
+	UPROPERTY(Transient)
+	UTexture2D* DefaultTexture = nullptr;
+
+	/** The procedural bump normal map, the `.lmat` `bump` map (Leon). */
+	UPROPERTY(GlobalConfig)
+	FSoftObjectPath DefaultBumpNormalTextureName;
+
+	/** DefaultBumpNormalTextureName, loaded by Init (Leon). */
+	UPROPERTY(Transient)
+	UTexture2D* DefaultBumpNormalTexture = nullptr;
+
 	/** Console commands to run at the start of the next frame (UE: DeferredCommands; `-ExecCmds=` fills it). */
 	TArray<FString> DeferredCommands;
 
-	/** Starts the engine (UE: Init): the config classes, the resources, the audio device, the game instance. */
+	/** Starts the engine (UE: Init): the config classes, the default assets, the audio device, the game instance. */
 	virtual void Init(IEngineLoop* InEngineLoop);
+
+	/**
+	 * Loads the default assets the config names (UE: InitializeObjectReferences): DefaultTexture,
+	 * DefaultBumpNormalTexture and the default material (UMaterial::GetDefaultMaterial). Until the engine content is
+	 * packaged (P14 part 2) FLegacyAssetLoader makes them, at the same paths.
+	 */
+	virtual void InitializeObjectReferences();
 
 	/** Starts the game (UE: Start): the game instance opens its first map. */
 	virtual void Start();
@@ -137,16 +168,6 @@ public:
 		return Overlay;
 	}
 
-	/** The CPU assets the level reader loads (Leon until the P14 assets). */
-	[[nodiscard]] FResourceCache& GetResources()
-	{
-		return Resources;
-	}
-	[[nodiscard]] const FResourceCache& GetResources() const
-	{
-		return Resources;
-	}
-
 	[[nodiscard]] FAudioDevice& GetAudioDevice()
 	{
 		return AudioDevice;
@@ -158,7 +179,7 @@ public:
 		return bIsInitialized;
 	}
 
-	/** Nothing renders: no window, silent audio, no textures loaded (`-nullrhi`, tests) (UE: !FApp::CanEverRender). */
+	/** Nothing renders: no window, silent audio (`-nullrhi`, tests) (UE: !FApp::CanEverRender). */
 	[[nodiscard]] bool IsHeadless() const
 	{
 		return bHeadless;
@@ -174,8 +195,6 @@ public:
 protected:
 	/** The on-screen debug text. */
 	FDebugOverlay Overlay;
-	/** The CPU assets (Leon until P14). */
-	FResourceCache Resources;
 	FAudioDevice AudioDevice;
 	/** Times the periodic garbage collection (UE: TimeSinceLastPendingKillPurge). */
 	FGarbageCollectionTimer GarbageCollectionTimer;

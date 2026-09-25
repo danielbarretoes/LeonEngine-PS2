@@ -2,7 +2,6 @@
 
 #include "CoreMinimal.h"
 
-class FResourceCache;
 class UStaticMesh;
 class UWorld;
 
@@ -13,9 +12,10 @@ class UWorld;
 void ApplyFitHeight(FTransform& Transform, const UStaticMesh& Mesh, float FitHeight);
 
 /**
- * Loads a binary Leon Level (.llev) into a world as actors, its meshes and materials through Resources (the engine's
- * FResourceCache). Any other extension is rejected — there is no JSON level format. Resources are resolved before
- * anything is spawned: a failed load leaves the previous level actors untouched. UEngine::LoadMap calls it for a
- * `.llev` map (until the `.lmap` packages of P15).
+ * Loads a binary Leon Level (.llev) into a world as actors, its meshes and materials as asset UObjects
+ * (FLegacyAssetLoader: the `.lmesh` / `.lmat` files, the basic shapes and the default material). Any other extension
+ * is rejected — there is no JSON level format. The assets are resolved before anything is spawned: a failed load
+ * leaves the previous level actors untouched. UEngine::LoadMap calls it for a `.llev` map (until the `.lmap` packages
+ * of P15).
  */
-bool LoadLevelFile(UWorld& World, FResourceCache& Resources, const FString& LevelPath);
+bool LoadLevelFile(UWorld& World, const FString& LevelPath);

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 
+class FReferenceCollector;
 class UPrimitiveComponent;
 
 /** Which proxy class a FPrimitiveSceneProxy is (Leon: no RTTI, so the renderer asks instead of casting blind). */
@@ -17,6 +18,10 @@ enum class EPrimitiveSceneProxyType : uint8
  * the world sends again before each frame (FSceneInterface::UpdatePrimitiveTransform). The scene owns the proxy. A
  * change the snapshot does not follow (a new mesh or material, the visibility) recreates it
  * (UActorComponent::MarkRenderStateDirty).
+ *
+ * The snapshot points at assets (a mesh, the textures of its materials): the scene reports them to the garbage
+ * collector through AddReferencedObjects, so an asset outlives every proxy that draws it, even when its component let
+ * go of it without recreating the proxy (Leon; UE fences the render thread instead).
  */
 class ENGINE_API FPrimitiveSceneProxy
 {
@@ -52,6 +57,12 @@ public:
 	[[nodiscard]] bool CastsDynamicShadow() const
 	{
 		return bCastDynamicShadow;
+	}
+
+	/** Reports the assets the snapshot points at (Leon: the scene calls it from its FGCObject). */
+	virtual void AddReferencedObjects(FReferenceCollector& Collector)
+	{
+		(void)Collector;
 	}
 
 private:
