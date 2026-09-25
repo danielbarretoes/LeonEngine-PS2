@@ -69,6 +69,9 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | P11 | ThirdPerson | 444 376 | 6 924 | 29 928 | 452 328 | still no CoreUObject, but `FArchive` gains two virtuals (`operator<<(UObject*&)`, `GetLinker`) and the package version fields: the two archive vtables it links grow by 8 bytes each, the two 8-byte no-op bodies are linked, and the archive constructors store the version (+56 bytes of text); stripped size unchanged |
 | P11 | BlankProgram | 179 628 | 6 136 | 27 097 | 186 804 | unchanged (no archive) |
 | P11 | TestPAL | 1 373 348 | 6 376 | 39 136 | 1 380 840 | packages and 14 more tests (+216 376 bytes of text; about 108 KB of it is the P11 runtime by symbol, breakdown below; 70 KB the package tests and their fixtures; the rest template code) |
+| P13 | ThirdPerson | 668 000 | 6 984 | 33 880 | 675 944 | the object system boots: InputCore's `FKey` is a reflected struct, so InputCore depends on CoreUObject and the game links and starts it (+223 624 bytes of text, breakdown below) |
+| P13 | BlankProgram | 179 628 | 6 136 | 27 097 | 186 804 | unchanged |
+| P13 | TestPAL | 1 373 348 | 6 376 | 39 136 | 1 380 840 | unchanged (Core, CoreUObject, Json and Projects did not change) |
 
 **P9 reflection in TestPAL** (`nm -S` over the ELF, bytes):
 
@@ -105,6 +108,8 @@ costs its generated code and tables plus its `UClass` / `UScriptStruct` and `FPr
 | P10 | TestPAL (93 tests) | 837 KB | 2 036 KB | 346 names, 8 KB used of 32 KB allocated | `Reflection: 24 classes, 19 structs, 3 enums, 14 functions, 186 properties, 2 packages; construction heap 30 KB`; 89 objects after registration, 91 after the tests, 89 after a final collection (0.33 ms). The peak comes from the GC budget test's 2 000 objects (about 330 bytes each); GMalloc ends at 227 KB |
 | P11 | TestPAL (106 tests) | 849 KB | 2 260 KB | 446 names, 10 KB used of 32 KB allocated | `Reflection: 29 classes, 21 structs, 6 enums, 14 functions, 279 properties, 2 packages; construction heap 40 KB` (the package fixtures); 105 objects after registration, 107 after the tests, 105 after a final collection (0.34 ms). The peak is still the GC budget test; GMalloc ends at 241 KB |
 | P11 | ThirdPerson | | 0.6 MB | | 60 FPS, same Draw3D numbers (`boxes=343 ... tris=278 ... emit=254` every 30 frames) |
+| P13 | TestPAL (106 tests) | 849 KB | 2 260 KB | 446 names, 10 KB used of 32 KB allocated | unchanged: `TestPAL: PASSED (106 test(s), 0 failed)`, 105 objects after a final collection (0.339 ms) |
+| P13 | ThirdPerson | | 0.9 MB | | the object system starts (`UObject array: 8192 objects, 98304 bytes`, `Object system started: 8192 object slots, transient package /Engine/Transient`); 60 FPS, same Draw3D numbers (`boxes=343 culled=291 backfaces=173 tris=278 keep=254 drop=24 clip=0 emit=254` every 30 frames). The overlay rounds to 0.1 MB: with the 692 KB image, the heap high-water is about 180 to 280 KB (P11: about 90 to 190 KB), 96 KB of it the object array |
 
 **P10 garbage collection** (TestPAL, `System.CoreUObject.GarbageCollection.Budget`: a chain of 2 000 objects from one
 rooted head, 2 089 objects alive in total; `FPlatformTime` in PCSX2):
@@ -154,3 +159,22 @@ P11 runtime code in TestPAL (`nm -S` by symbol, bytes; template instantiations a
 CoreUObject's runtime code in the ELF is now about 318 KB (P9 183 KB, P10 30 KB, P11 105 KB). The save path (about
 30 KB) and most of `FPackageName`'s file conversions are only needed by the editor and the cook; a PS2 game build could
 leave them out if the budget gets tight.
+
+**P13 object system in ThirdPerson** (`nm -S` over the ELF by symbol name, bytes; template instantiations and the Core
+code the object system newly references are not attributed):
+
+| Part | Size |
+|---|---:|
+| CoreUObject runtime code (objects, classes, properties, GC, config, packages) | 160 584 |
+| CoreUObject data | 413 |
+| InputCore code (`FKey`, `EKeys`, `FKeyDetails`, the module) | 9 872 |
+| InputCore data | 1 380 |
+| Generated code (`Z_Construct_*`, `StaticStruct`, `RegisterReflection_*`) | 7 008 |
+| Generated tables (`_Statics`) | 3 688 |
+| Attributed total | 182 945 (179 KB) |
+| `GUObjectArray` (8 192 slots × 12 bytes, heap) | 96 KB |
+
+The rest of the +223 624 bytes of text is template code and the Core services the object system calls (`FExec`,
+archives, config), which section GC dropped while nothing referenced them. The game itself does not use UObjects yet;
+each class it reflects later adds its generated code, its `UClass` and its `FProperty` objects. The reflection budget
+(400 KB) now also holds for ThirdPerson: about 179 KB of code and tables, the object array and the construction heap.

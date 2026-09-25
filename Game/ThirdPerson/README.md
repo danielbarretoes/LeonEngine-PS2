@@ -67,7 +67,7 @@ leon_target(ThirdPerson TYPE Game
 
 The gameplay framework (`Engine` module) is desktop-only, so the target compiles its launch module with `WITH_ENGINE=0`. The executable's `main` comes from the engine's `Launch` module (the default launch module of a Game target): on PS2, `LaunchPS2.cpp` calls `GuardedMain`, which runs `FEngineLoop`:
 
-1. `FEngineLoop::PreInit` creates the platform application and the main window (only when `WITH_ENGINE=0`), then starts the statically linked modules, including ThirdPerson.
+1. `FEngineLoop::PreInit` creates the platform application, the main window and the RHI on it (`RHIInit`), then starts the statically linked modules: CoreUObject (the object array of 8 192 slots and the transient package, logged as `LogUObjectBase: Object system started`), InputCore (`EKeys`, the reflected `FKey`) and ThirdPerson.
 2. `FEngineLoop::Tick` polls the pad, ticks `FTicker::GetCoreTicker()`, lets the platform hooks draw the stats overlay, and presents.
 3. When `RequestEngineExit` is called (Start pressed), `FEngineLoop::Exit` shuts the modules down.
 
@@ -75,7 +75,7 @@ LeonBuildTool generates the target's module table and marks ThirdPerson as the p
 
 ## Module
 
-`ThirdPerson.Build.cmake`: public dependencies `Core`, `InputCore`, `ApplicationCore`; private dependencies `Launch` (for `GEngineLoop`'s main window and application) and `PS2RHI` (GS drawing).
+`ThirdPerson.Build.cmake`: public dependencies `Core`, `InputCore`, `ApplicationCore`; private dependencies `Launch` (for `GEngineLoop`'s main window and application) and `PS2RHI` (GS drawing). InputCore depends on CoreUObject (`FKey` is a `USTRUCT`), so the game boots the object system although it has no UObject of its own yet; `Engine/Platforms/PS2/Documentation/Budgets.md` has its cost.
 
 | Class | Role |
 | --- | --- |
