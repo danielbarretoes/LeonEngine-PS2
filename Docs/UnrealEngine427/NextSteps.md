@@ -77,20 +77,41 @@ them. 22 golden tests recorded before the switch pass unchanged; 231 tests in to
 
 ### Next
 
-- The plan continues with CoreUObject (below). What P7 left: the legacy `.llev` / `.lmesh` version-1 data and
+- The plan continues with CoreUObject (below; P8 and P9 are done). What P7 left: the legacy `.llev` / `.lmesh` version-1 data and
   `FLegacyCoordinateConversion` go away with the `.lasset` packages; the deviations it kept (vertical field of view,
   no reversed Z, the GL clip adapter, legacy content facing +Y, the doubled mouse look, the spring arm's socket
   offset) are listed in [LeonMapping — Deviations](LeonMapping.md#deviations-from-ue-427-intentional).
 
 ## CoreUObject
 
-- `UObject`, `UClass`, `UStruct`, `UProperty`/`FProperty` — `Runtime/CoreUObject/Public/UObject/`.
-- The reflection generator exists (P8): `Engine/Source/Programs/LeonHeaderTool`, which LeonBuildTool runs for every
-  module that includes a `.generated.h`. CoreUObject provides the macros and `UE4CodeGen_Private` runtime its
-  README lists, and calls each module's `RegisterReflection` before `StartupModule`.
-- `NewObject`, `CreateDefaultSubobject`, garbage collection (`GarbageCollection.h`), `TWeakObjectPtr`,
-  `TSubclassOf`, `ConstructorHelpers`.
-- Once available: turn the naming-only `A`/`U` classes into real `UCLASS` types.
+### Done — LeonHeaderTool (P8)
+
+The reflection generator: `Engine/Source/Programs/LeonHeaderTool`, which LeonBuildTool runs for every module that
+includes a `.generated.h` ([README](../../Engine/Source/Programs/LeonHeaderTool/README.md)).
+
+### Done — CoreUObject (P9)
+
+`Engine/Source/Runtime/CoreUObject` on every platform, PS2 included
+([LeonMapping — P9](LeonMapping.md#p9--coreuobject), [README](../../Engine/Source/Runtime/CoreUObject/README.md)):
+`UObject`, `UClass`, `UScriptStruct`, `UEnum`, `UFunction`, `UPackage`, `FProperty` and every property type, the script
+containers over Core's `TArray` / `TSet` / `TMap` layouts, `NewObject`, `FObjectInitializer`, `CreateDefaultSubobject`
+(rebuilt per instance, D12), `FindObject`, `GUObjectArray` (8192 objects on the PS2), `Cast`, `TSubclassOf`,
+`ProcessEvent`, and the NoExport Core structs (`FVector`, `FTransform`, …, with LeonHeaderTool `NoExport` support).
+`FModuleManager` calls each module's `RegisterReflection`, then CoreUObject's `ProcessNewlyLoadedUObjects`, before its
+`StartupModule`. 27 `System.CoreUObject.*` tests run in `LeonAutomationTests` and in TestPAL on the PS2; the reflection
+budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
+
+### Next
+
+- **P10:** garbage collection (`GarbageCollection.h`, `FGCObject`, `AddToRoot`, `BeginDestroy` / `FinishDestroy`,
+  `UnhashObject` and slot reuse, which weak pointers already expect), the full `FSoftObjectPath` / `TSoftObjectPtr` /
+  `TStrongObjectPtr`, `LoadConfig` / `SaveConfig` for `UPROPERTY(Config)` (the `PostConstructLink` chain and the
+  `PPF_ConfigOnly` text export exist), `UFUNCTION(Exec)` with `CallFunctionByNameWithArguments`, and `UObject`
+  delegate bindings.
+- **P11:** `.lasset` packages: `UObject::Serialize`, tagged properties, linkers, `LoadObject`; `FName` in archives
+  through the package name table.
+- **P12:** turn the naming-only `A`/`U` classes into real `UCLASS` types (`NewObject`, `CreateDefaultSubobject`,
+  `Cast<>` instead of `dynamic_cast`).
 - Replication: the ENet networking was removed in 0.12.0 (local tag `archive/net-enet-0.11`); it returns as
   UObject replication (`UNetDriver`, replicated properties) — `Runtime/Engine/Classes/Engine/NetDriver.h`.
 

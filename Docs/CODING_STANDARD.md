@@ -29,7 +29,7 @@ All identifiers are English (U.S. spelling), **PascalCase**, with no underscores
 | Prefix | Use | Examples |
 | --- | --- | --- |
 | `A` | Classes derived from `AActor` — **only** those | `AActor`, `APawn`, `ACharacter`, `APlayerController`, `AGameModeBase`, `AHUD` |
-| `U` | Classes that are `UObject`s in UE (components, assets, subsystems, widgets, engine objects). **Naming only**: there is no `UObject` base, reflection or GC yet | `UGameEngine`, `UWorld`, `ULevel`, `UActorComponent`, `UCharacterMovementComponent`, `UTexture2D`, `UUserWidget`, `UCookCommandlet` |
+| `U` | Classes that are `UObject`s in UE (components, assets, subsystems, widgets, engine objects). CoreUObject's types (`UObject`, `UClass`, `UPackage`, …) and its test fixtures derive from `UObject`; the engine's `U` classes are **naming only** until they become `UCLASS` types (P12) | `UObject`, `UClass`, `UGameEngine`, `UWorld`, `ULevel`, `UActorComponent`, `UCharacterMovementComponent`, `UTexture2D`, `UUserWidget`, `UCookCommandlet` |
 | `F` | Every other class or struct | `FEngineLoop`, `FTicker`, `FPaths`, `FSceneRenderer`, `FPhysScene`, `FHitResult`, `FPS2RHI` |
 | `T` | Class templates | `TArray`, `TMap`, `TSharedPtr`, `TDelegate`, `TOptional` |
 | `E` | Enums (prefer `enum class`, sized when stored) | `EKeys`, `EPhysicsBackend`, `EPostProcessQuality`, `ENetMsg` |
@@ -123,7 +123,8 @@ keep PascalCase free functions, as UE does with `DrawDebugLine` (`LoadLevelFile`
     Never `../` paths.
   - Third-party and system headers: angle brackets (`<glad/glad.h>`, `<cstring>`).
   - Order (enforced by clang-format `IncludeBlocks: Regroup`): the file's own header first, then engine
-    headers, then third-party, then standard / SDK headers, one blank line between blocks.
+    headers, then third-party, then standard / SDK headers, one blank line between blocks. A reflected header's
+    `"<Header>.generated.h"` sorts after the other engine headers (LeonHeaderTool requires it last).
   - Include what you use; prefer forward declarations in headers; include the specific header, not a
     catch-all.
 - Tests live in `<Module>/Private/Tests/` and are compiled only into targets with `COLLECT_AUTOMATION_TESTS`
@@ -233,6 +234,17 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
   `FParse::Param` / `FParse::Value` on `FCommandLine::Get()` (`-name` / `-name=value`), never from `argv`.
 - Use the Core fixed-width types (`int32`, `uint64`, …) from `CoreTypes.h` in engine APIs, not `std::uint8_t` and
   the like.
+- **UObjects** (CoreUObject, [README](../Engine/Source/Runtime/CoreUObject/README.md)). A reflected header includes
+  `"<Header>.generated.h"` as its **last** include (clang-format keeps it there) and puts `GENERATED_BODY()` first in
+  every `UCLASS` / `USTRUCT`. LeonHeaderTool's supported subset is in its
+  [README](../Engine/Source/Programs/LeonHeaderTool/README.md).
+  - Create objects with `NewObject<T>(Outer, …)`, never `new`, and subobjects with `CreateDefaultSubobject` inside the
+    constructor only. Objects are not deleted by hand (garbage collection arrives in P10).
+  - Test types with `Cast<T>` / `CastChecked<T>` / `IsA<T>()`, never `dynamic_cast` (no RTTI, D17).
+  - A class whose children may not declare a constructor gives itself an `FObjectInitializer` constructor: the
+    generated default constructor calls `Super(ObjectInitializer)`.
+  - A reflected Core struct is declared in `CoreUObject/Public/UObject/NoExportTypes.h` (`USTRUCT(noexport)` in
+    `#if !CPP`); the generated code checks the declaration against the C++ type at compile time.
 
 ---
 
@@ -311,8 +323,10 @@ File formats: [ASSET_FORMATS.md](ASSET_FORMATS.md).
   file in `#if WITH_DEV_AUTOMATION_TESTS`. An error logged during a test fails it unless the test declares it with
   `AddExpectedError` (the two tests that feed `DeserializeLeonLevel` a bad buffer do). Every test follows this form
   (`System.Core.Containers.Array`, `System.Engine.PhysScene.…`, `System.JoltPhysics.Step.…`); Catch2 is gone.
-- `RunTests.bat` runs all of them (`LeonAutomationTests`, `-automation=<filter>`); `TestPAL` runs the Core, Json and
-  Projects tests on every platform, including PS2.
+- `RunTests.bat` runs all of them (`LeonAutomationTests`, `-automation=<filter>`); `TestPAL` runs the Core,
+  CoreUObject, Json and Projects tests on every platform, including PS2.
+- Reflected test types (`UCLASS` / `USTRUCT` fixtures) go in `<Module>/Private/Tests/*.h`; LeonHeaderTool compiles them
+  into the test targets only (the `<Module>.Tests` unit).
 
 ```cpp
 #include "CoreMinimal.h"

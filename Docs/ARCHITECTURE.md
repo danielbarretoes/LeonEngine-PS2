@@ -97,15 +97,15 @@ Full reference: [BUILD.md](BUILD.md).
 | `ThirdPerson` | `Game/ThirdPerson/Source/ThirdPerson.Target.cmake` | Game | PS2 | `Launch` | project module `ThirdPerson`; `COMPILE_AGAINST_ENGINE OFF` → `WITH_ENGINE=0` |
 | `LeonCook` | `Engine/Source/Programs/LeonCook/` | Program | Desktop | `LeonCook` | `Cooker` → `UCookCommandlet::Main` |
 | `LeonAutomationTests` | `Engine/Source/Programs/LeonAutomationTests/` | Program | Desktop | `LeonAutomationTests` | every desktop Runtime / Developer module except `Launch`, + `JoltPhysics` plugin; `COLLECT_AUTOMATION_TESTS` |
-| `TestPAL` | `Engine/Source/Programs/TestPAL/` | Program | all | `TestPAL` | `Core`, `Projects` (→ `Json`); `COLLECT_AUTOMATION_TESTS`; runs their automation tests (PS2 included) |
+| `TestPAL` | `Engine/Source/Programs/TestPAL/` | Program | all | `TestPAL` | `Core`, `CoreUObject`, `Projects` (→ `Json`); `COLLECT_AUTOMATION_TESTS`; runs their automation tests (PS2 included) and logs the reflection budget |
 | `BlankProgram` | `Engine/Source/Programs/BlankProgram/` | Program | all | `BlankProgram` | starts the module table and prints the platform (CI builds it for PS2) |
 
 Module closures in practice:
 
 - **PS2 `ThirdPerson`**: `Core`, `Launch`, `ThirdPerson`, `InputCore`, `ApplicationCore`, `RHI`, `PS2RHI`.
 - **Win64 `LeonGame`**: everything reachable from `Launch` (desktop private dep `Engine`) +
-  `AIModule` — every desktop Runtime module (`Json` and `Projects` included), no Developer modules; plugins are
-  disabled by default, so `JoltPhysics` is not linked.
+  `AIModule` — every desktop Runtime module except `CoreUObject`, which no engine module depends on yet (`Json` and
+  `Projects` included), no Developer modules; plugins are disabled by default, so `JoltPhysics` is not linked.
 
 ---
 
@@ -117,6 +117,7 @@ third-party modules are listed in the next table.
 ```mermaid
 flowchart BT
   subgraph Runtime [Engine/Source/Runtime]
+    CoreUObject
     InputCore
     RHI
     ApplicationCore
@@ -202,13 +203,16 @@ flowchart BT
   ThirdPerson --> ApplicationCore
   ThirdPerson -. "include-only" .-> Launch
   ThirdPerson -.-> PS2RHI
+  TestPAL -.-> CoreUObject
 ```
 
 Solid = `PUBLIC_DEPENDENCIES`, dashed = `PRIVATE_DEPENDENCIES` (label = platform suffix or extension file),
 thick = `CIRCULAR_DEPENDENCIES`. `Projects` (→ `Json`) is a private dependency of `Launch`, which loads the
 `.lproj` in `PreInit`; every game target therefore links both, on every platform. `Json` also serves the Renderer
 (JSON material fields) and the Cooker (recipes). `LeonAutomationTests` and `BlankProgram` depend on Core only, `TestPAL`
-on Core and Projects.
+on Core, CoreUObject and Projects; `LeonAutomationTests` links `CoreUObject` through its target's module list.
+`CoreUObject` depends on Core only, and no engine module depends on it until the gameplay classes become UObjects
+(P12).
 
 **Include-only dependency on Launch:** the launch module is compiled into the executable, not into a
 library, so a module that depends on it (`ThirdPerson` → `Launch`) only receives Launch's public include
@@ -234,6 +238,7 @@ paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable 
 | Module | Role | Key types | Platforms |
 | --- | --- | --- | --- |
 | **Core** | HAL, memory, assertions, templates, containers, strings / names / text, logging, delegates, automation tests, math, platform file layer, archives, paths, config, command line, misc types (GUID, MD5, date / time), module manager, ticker, engine exit flag, stats-overlay state | `FPlatformMemory`, `FPlatformTime`, `FPlatformMath`, `FPlatformMisc`, `FPlatformProcess`, `FPlatformProperties`, `FMemory`, `TArray`, `TMap`, `TSet`, `FString`, `FName`, `FText`, `TDelegate`, `UE_LOG`, `GLog`, `FAutomationTestFramework`, `FMath`, `FVector`, `FRotator`, `FQuat`, `FMatrix`, `FTransform`, `IPlatformFile`, `FPlatformFileManager`, `IFileManager`, `FArchive`, `FMemoryReader`, `FMemoryWriter`, `FPaths`, `FFileHelper`, `FConfigCacheIni` / `GConfig`, `FCommandLine`, `FParse`, `FApp`, `FGuid`, `FMD5`, `FDateTime`, `FOutputDeviceFile`, `FModuleManager`, `FTicker`, `FStatsOverlay` | all |
+| **CoreUObject** | `UObject` and its reflection: object model, classes / structs / enums / functions, properties, object creation and lookup, the object array, casts, the runtime side of LeonHeaderTool's generated code ([README](../Engine/Source/Runtime/CoreUObject/README.md)) | `UObject`, `UClass`, `UScriptStruct`, `UEnum`, `UFunction`, `UPackage`, `FProperty` (+ every property type), `FObjectInitializer`, `NewObject`, `FindObject`, `GUObjectArray`, `TObjectIterator`, `Cast`, `TSubclassOf`, `TWeakObjectPtr`, `TSoftObjectPtr` | all |
 | **InputCore** | Key / gamepad identifiers | `EKeys` | all |
 | **ApplicationCore** | Platform application, windows, gamepad input | `GenericApplication`, `FGenericWindow`, `IInputInterface`, `FPlatformApplicationMisc`; desktop `FGLFWApplication`, `FGLFWWindow`; PS2 ext `FPS2Application`, `FPS2Window`, `FPS2InputInterface` | all |
 | **RHI** | Graphics backend interface + opaque GPU handle ids | `FDynamicRHI`, `GDynamicRHI`, `FRHIGPUMemoryStats`, `FRHITextureId` … | all |
@@ -305,7 +310,7 @@ Core/Public/HAL/PlatformMemory.h                      #include COMPILED_PLATFORM
 | Strings | `Containers/UnrealString.h`, `StringConv.h`, `Misc/CString.h`, `Misc/Char.h`, `Misc/Crc.h` | `FString` (`==` / `<` / `GetTypeHash` ignore case, like UE), `FCString`, `FChar`, `FCrc`; `TCHAR_TO_UTF8` & co. are identities |
 | Names / text | `UObject/NameTypes.h`, `Internationalization/Text.h` | `FName` (8 bytes, case-insensitive, numeric suffix, global pool sized by `FPlatformProperties::NamePool*`; exhausting it is fatal); minimal `FText` (no localization: `LOCTEXT` keeps the source text) |
 | Logging | `Logging/LogMacros.h`, `LogCategory.h`, `Misc/OutputDevice*.h` | `UE_LOG` / `UE_CLOG`, categories (`LogTemp`, `LogCore`, `LogInit`, …); `GLog` redirects to stdout (EE console / PCSX2 log on PS2) and, on Windows, the debugger. Line format `Category: Verbosity: Message` (verbosity omitted for `Log`). Desktop also writes `<Project>/Saved/Logs/<Project>.log` (`FOutputDeviceFile`, flushed per line, the previous run kept as `<Project>-backup-<date>.log`); verbosity comes from `[Core.Log]` and `-LogCmds="LogFoo Verbose, …"` (`FLogSuppressionInterface`) |
-| Delegates | `Delegates/Delegate.h`, `IDelegateInstance.h` | `TDelegate`, `TMulticastDelegate` (`Broadcast` latest-first like UE4, removal during broadcast is safe), `DECLARE_DELEGATE*` / `DECLARE_MULTICAST_DELEGATE*` / `DECLARE_EVENT*`; no dynamic delegates until CoreUObject |
+| Delegates | `Delegates/Delegate.h`, `IDelegateInstance.h` | `TDelegate`, `TMulticastDelegate` (`Broadcast` latest-first like UE4, removal during broadcast is safe), `DECLARE_DELEGATE*` / `DECLARE_MULTICAST_DELEGATE*` / `DECLARE_EVENT*`; no dynamic delegates, and `UObject` bindings arrive with P10 |
 | Automation tests | `Misc/AutomationTest.h` | `IMPLEMENT_SIMPLE_AUTOMATION_TEST`, `FAutomationTestBase`, `FAutomationTestFramework::RunTests(Filter, ExcludeFlags)`; an unexpected error logged during a test fails it |
 | Math | `Math/UnrealMath.h` (from `CoreMinimal.h`) | UE 4.27's float math: `FMath` (constants, interpolation, `VRand`, line / box / plane helpers), `FVector`, `FVector2D`, `FVector4`, `FIntPoint`, `FIntVector`, `FRotator`, `FQuat`, `FMatrix` (row vectors, `V * M`) and the derived matrices (`FRotationMatrix`, `FTranslationMatrix`, `FScaleMatrix`, `FPerspectiveMatrix`, `FLookAtMatrix`, …), `FPlane`, `FBox`, `FBox2D`, `FSphere`, `FBoxSphereBounds`, `FTransform` (scalar), `FColor` / `FLinearColor`, `FRandomStream`. No `double` math; PS2 builds reject implicit float to double promotion |
 | Files | `GenericPlatform/GenericPlatformFile.h`, `HAL/PlatformFilemanager.h`, `HAL/FileManager.h`, `Misc/FileHelper.h` | `IPlatformFile` (UE's layered chain; `FPlatformFileManager::Get().GetPlatformFile()`), backends Windows (Win32), Linux (POSIX) and PS2 (read-only newlib POSIX on `host:`); `IFileManager::Get()` opens buffered `FArchive` readers / writers and walks directories; `FFileHelper::LoadFileToString` / `LoadFileToArray` / `SaveStringToFile` (writes a temporary file, then moves it) |
@@ -413,7 +418,12 @@ and publishes it in `GDynamicRHI`. That is why ApplicationCore depends on the pl
 
   A module in the table without `IMPLEMENT_MODULE` fails to link.
 - `FModuleManager::Get().StartupStaticallyLinkedModules()` creates and starts them in order;
-  `ShutdownModules()` shuts them down in reverse. Programs call these directly (`BlankProgram`,
+  `ShutdownModules()` shuts them down in reverse. For each module it calls `InitializeModule`, then its
+  `RegisterReflection` (records the module's reflected types), then `OnProcessLoadedObjectsCallback`, then
+  `StartupModule`. CoreUObject binds the callback to `ProcessNewlyLoadedUObjects` in its own `StartupModule`, after
+  `UObjectBaseInit`, so every later module's packages, enums, structs, classes and class default objects exist before
+  its `StartupModule` runs (UE's per-module `ProcessNewlyLoadedUObjects`). Targets without CoreUObject leave the
+  callback null. Programs call these directly (`BlankProgram`,
   `LeonAutomationTests`, `TestPAL`); games get them from `FEngineLoop`.
 - Example: `JoltPhysics` registers its backend factory in `StartupModule`; `ThirdPerson` creates its game mode
   and registers an `FTickerDelegate::CreateLambda` with `FTicker` in `StartupModule` (keeping the `FDelegateHandle`).
@@ -483,7 +493,8 @@ ini files cannot be opened and the compiled defaults (the same values) are used.
 
 ## 10. Gameplay framework (Engine, desktop)
 
-Unreal shapes without reflection: `A`/`U` prefixes are naming only (no `UObject`, no GC).
+Unreal shapes without reflection: `A`/`U` prefixes are naming only. CoreUObject exists (P9), but these classes do not
+derive from `UObject` until P12 (no `UCLASS`, no GC).
 
 | Area | Types / flow |
 | --- | --- |
@@ -586,18 +597,20 @@ Unreal shapes without reflection: `A`/`U` prefixes are naming only (no `UObject`
   `Engine\Build\BatchFiles\Cook.bat`. Details: [TOOLS.md](TOOLS.md).
 - **Tests**: each module keeps its tests in `<Module>/Private/Tests/`, excluded from the module library and compiled
   only into targets with `COLLECT_AUTOMATION_TESTS`. Every test is a UE automation test
-  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, named `System.<Module>.<Area>.<Name>`): 231 on Win64 — Core 46, Json 2,
-  Projects 2, PhysicsCore 8, RenderCore 24, AnimationCore 11, Engine 81, Renderer 9, AIModule 31, MeshUtilities 8,
+  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, named `System.<Module>.<Area>.<Name>`): 258 on Win64 — Core 46, CoreUObject 27,
+  Json 2, Projects 2, PhysicsCore 8, RenderCore 24, AnimationCore 11, Engine 81, Renderer 9, AIModule 31, MeshUtilities 8,
   JoltPhysics 9 (a tenth, `System.JoltPhysics.Backend.DisabledFallsBack`, compiles only without the plugin). On PS2,
-  Core runs 43 (the platform-file, config-cache and log-file tests are desktop-only) and Projects 1. An error logged
-  during a test fails it unless the test declares it with `AddExpectedError`. The golden tests
+  Core runs 43 (the platform-file, config-cache and log-file tests are desktop-only), CoreUObject 27 and Projects 1.
+  CoreUObject's reflected test fixtures live in `CoreUObject/Private/Tests/*.h` (LeonHeaderTool's Tests unit). An
+  error logged during a test fails it unless the test declares it with `AddExpectedError`. The golden tests
   (`System.*.Golden.*`) replay movement, traces, navigation, cameras, shadows and reflections against tables
   recorded in the legacy world before P7; manual checks are in [TESTING.md](TESTING.md).
   - `LeonAutomationTests` (Desktop) starts the module table, runs the automation tests through
     `FAutomationTestFramework` and fails if any fails. Run with `Engine\Build\BatchFiles\RunTests.bat`
     (`-automation=<filter>` runs the tests whose name contains `<filter>`).
-  - `TestPAL` (every platform; Core, Json and Projects: 50 tests on Win64, 46 on PS2) runs the automation tests and
-    prints `TestPAL: PASSED (N test(s), 0 failed)` plus GMalloc and name-pool numbers. On PS2 it runs in PCSX2
+  - `TestPAL` (every platform; Core, CoreUObject, Json and Projects: 77 tests on Win64, 73 on PS2) runs the
+    automation tests and prints `TestPAL: PASSED (N test(s), 0 failed)` plus the reflection (types, construction
+    heap), object array, GMalloc and name-pool numbers. On PS2 it runs in PCSX2
     (`RunPCSX2.ps1 -Program TestPAL -Build`) and the result is read from the EE console; the numbers go to
     [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md).
 - **Banned APIs (gate G4)**: `Engine\Build\BatchFiles\CheckBannedApis.ps1` fails when engine or game code uses glm,
@@ -618,7 +631,7 @@ roadmap is [NextSteps.md](UnrealEngine427/NextSteps.md).
 
 | Topic | Current state |
 | --- | --- |
-| Reflection | LeonHeaderTool (the UHT counterpart, `Engine/Source/Programs/LeonHeaderTool`) and its LeonBuildTool step exist, but no module is reflected yet: there is no `UObject` runtime or GC until CoreUObject (P9). `A` and `U` prefixes are naming only; objects are plain C++ owned with `TUniquePtr` or by value (e.g. `UWorld` is a member of `AGameModeBase`). |
+| Reflection | LeonHeaderTool (the UHT counterpart) generates the code and CoreUObject (P9, [README](../Engine/Source/Runtime/CoreUObject/README.md)) runs it: `UObject`, `UClass`, `FProperty`, `NewObject`, CDOs, default subobjects (rebuilt per instance, D12), `ProcessEvent`, NoExport Core structs. Only CoreUObject's own types and its test fixtures are reflected: the engine's `A` and `U` classes are still plain C++ owned with `TUniquePtr` or by value (e.g. `UWorld` is a member of `AGameModeBase`) until P12. There is no garbage collection (objects live until exit) and no `UPROPERTY(Config)` until P10, no packages on disk until P11. |
 | Containers / strings | Every engine module, the JoltPhysics plugin, the desktop `FGameApplication` and the game use Core's `TArray`, `TMap`, `FString`, `FName`, `FText` (minimal), `TFunction`, `TUniquePtr` / `TSharedPtr`, delegates and `UE_LOG` (P5, P6); `CheckBannedApis.ps1` (G4) keeps the `std::` equivalents out. Third-party containers stay at the library seams (Jolt, tinyobjloader, ufbx, cgltf). `TCHAR` is UTF-8 `char` everywhere. |
 | Math and coordinates | Every engine module uses Core math (P5, P6) in UE's space since P7 (§6, Coordinates). Legacy data (`.llev`, `.lmesh` version 1) is still stored Y up in metres and converted by `FLegacyCoordinateConversion` in its readers; the formats go away with the `.lasset` packages. OpenGL still gets GL clip space through `ToGLClipSpace`; bone poses are `FMatrix` values rather than `FTransform`s until the skeletal mesh assets (P14). |
 | Renderer | Calls OpenGL directly (Glad) instead of going through RHI command lists; `FDynamicRHI` only covers device init, viewport and memory stats. |

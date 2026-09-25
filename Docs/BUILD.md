@@ -123,7 +123,7 @@ Windows batch files live in `Engine/Build/BatchFiles/` (UE layout); run them fro
 | `Build.bat` | `Build.bat <Target> <Platform> <Config> [-Project=<file>] [-Mode=...] [-NoDocker] [-KeepGoing]` | Loads the MSVC environment (`GetVSEnv.bat vcvars quiet need-ninja`) unless the platform is `PS2`, then runs LeonBuildTool with all arguments |
 | `Clean.bat` | `Clean.bat <Target> <Platform> <Config> [-Project=<file>]` | `Build.bat ... -Mode=Clean` |
 | `Rebuild.bat` | `Rebuild.bat <Target> <Platform> <Config> [-Project=<file>]` | `Build.bat ... -Mode=Rebuild` |
-| `RunTests.bat` | `RunTests.bat [-automation=<filter>]` | Builds `LeonAutomationTests Win64 Development` and runs `Engine\Binaries\Win64\LeonAutomationTests.exe` from the repo root: every automation test (231), or only those whose name contains `<filter>`. It then runs the LeonHeaderTool golden tests (`LeonHeaderTool -Test`) |
+| `RunTests.bat` | `RunTests.bat [-automation=<filter>]` | Builds `LeonAutomationTests Win64 Development` and runs `Engine\Binaries\Win64\LeonAutomationTests.exe` from the repo root: every automation test (258), or only those whose name contains `<filter>`. It then runs the LeonHeaderTool golden tests (`LeonHeaderTool -Test`) |
 | `Cook.bat` | `Cook.bat <LeonCook arguments>` | Builds `LeonCook Win64 Development` and runs `Engine\Binaries\Win64\LeonCook.exe` |
 | `FormatCode.bat` | `FormatCode.bat [--check]` | clang-format on every `.cpp/.h/.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game` (skips paths containing `ThirdParty`, `Intermediate`, `Binaries`). `--check` is a dry run that fails if a file needs formatting |
 | `Lint.bat` | `Lint.bat` | `FormatCode.bat --check`, then `CheckBannedApis.ps1`, then builds `LeonAutomationTests`, `LeonCook`, `LeonGame` and `BlankProgram` for Win64 Development |
@@ -325,7 +325,7 @@ Targets in the repository:
 | `LeonGame` | `Engine/Source/LeonGame.Target.cmake` | Game | Win64 | `EXTRA_MODULE_NAMES Engine AIModule`; loads one level, `-map=<.llev>` (UE4Game) |
 | `LeonCook` | `Engine/Source/Programs/LeonCook/LeonCook.Target.cmake` | Program | Desktop | offline cooker |
 | `LeonAutomationTests` | `Engine/Source/Programs/LeonAutomationTests/LeonAutomationTests.Target.cmake` | Program | Desktop | `COLLECT_AUTOMATION_TESTS`, `ENABLE_PLUGINS JoltPhysics` |
-| `TestPAL` | `Engine/Source/Programs/TestPAL/TestPAL.Target.cmake` | Program | all | `COLLECT_AUTOMATION_TESTS`; runs the Core, Json and Projects automation tests (`-filter=<text>`), prints `TestPAL: PASSED (N test(s), 0 failed)`; on PS2 run it with `RunPCSX2.ps1 -Program TestPAL` |
+| `TestPAL` | `Engine/Source/Programs/TestPAL/TestPAL.Target.cmake` | Program | all | `COLLECT_AUTOMATION_TESTS`; runs the Core, CoreUObject, Json and Projects automation tests (`-filter=<text>`), prints `TestPAL: PASSED (N test(s), 0 failed)`; on PS2 run it with `RunPCSX2.ps1 -Program TestPAL` |
 | `BlankProgram` | `Engine/Source/Programs/BlankProgram/BlankProgram.Target.cmake` | Program | all | starts the linked modules and prints the platform |
 | `ThirdPerson` | `Game/ThirdPerson/Source/ThirdPerson.Target.cmake` | Game | PS2 | `COMPILE_AGAINST_ENGINE OFF` |
 
@@ -357,7 +357,9 @@ It also writes where the engine and the project are, relative to the executable'
 (`GLeonEngineDirFromBaseDir`, `GLeonProjectDirFromBaseDir`, `GLeonProjectName`); `FPaths` builds its desktop
 directories from them (the PS2 uses the staged layout under the ELF folder instead).
 `FModuleManager::StartupStaticallyLinkedModules()` creates and starts them in that order
-(`Engine/Source/Runtime/Core/Public/Modules/ModuleManager.h`).
+(`Engine/Source/Runtime/Core/Public/Modules/ModuleManager.h`): for each module `InitializeModule`, its
+`RegisterReflection`, `OnProcessLoadedObjectsCallback` (CoreUObject constructs the recorded types), then
+`StartupModule`.
 
 Each listed module must define its entry point once, in a `Private/*.cpp`:
 
@@ -372,8 +374,8 @@ fails to link, which enforces the rule. `IMPLEMENT_GAME_MODULE` and `IMPLEMENT_P
 ### Reflection (LeonHeaderTool)
 
 `Configuration/ReflectionRules.cmake` treats a module as reflected when one of its `Public/`, `Classes/` or `Private/`
-headers has `#include "<Name>.generated.h"`. No engine module is reflected yet: CoreUObject arrives in P9. For a
-reflected module:
+headers has `#include "<Name>.generated.h"`. Only CoreUObject is reflected so far (its `NoExportTypes.h`, plus its
+test fixtures in test targets); it runs the generated code (P9). For a reflected module:
 
 - LeonBuildTool writes `<tree>/Inc/<Module>/<Module>.lhtmanifest`.
 - A custom command runs LeonHeaderTool. It writes `<Header>.generated.h`, `<Header>.gen.cpp`,

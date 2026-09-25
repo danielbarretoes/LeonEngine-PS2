@@ -17,6 +17,7 @@ Update this page whenever a module or type is added, moved or renamed.
 | Setup.bat / GitDependencies | `Setup.bat/.sh` → pinned third-party downloads |
 | `Engine/Platforms/<P>/` platform extension | `Engine/Platforms/PS2/` |
 | `UBT_COMPILED_PLATFORM` | `LBT_COMPILED_PLATFORM` |
+| UnrealHeaderTool | **LeonHeaderTool** (P8) — `Engine/Source/Programs/LeonHeaderTool/`, run by LeonBuildTool for every module that includes a `.generated.h`; its code runs on CoreUObject (P9) |
 
 ## Modules
 
@@ -49,7 +50,8 @@ Update this page whenever a module or type is added, moved or renamed.
 | `Tools/AssetPipeline/leon-cook` | `Programs/LeonCook` | `UE4Editor-Cmd -run=cook` equivalent |
 | `Tools/Cli` (`leon-cli`) | removed | only forwarded to leon-cook |
 | `Tests/` (Catch2) | `<Module>/Private/Tests/` + `Programs/LeonAutomationTests` | UE automation tests for Core (P2), Json, Projects (P4), PhysicsCore, RenderCore and AnimationCore (P5), and every other module (P6); Catch2 removed in P6 |
-| — | `Programs/TestPAL` | UE `Programs/TestPAL`: runs the Core, Json and Projects automation tests on every platform (PS2 in PCSX2) |
+| — | `Programs/TestPAL` | UE `Programs/TestPAL`: runs the Core, CoreUObject, Json and Projects automation tests on every platform (PS2 in PCSX2) |
+| — | `CoreUObject` (P9) | UE `Runtime/CoreUObject`: `UObject`, reflection, `NewObject`, the object array; every platform; only its own types and test fixtures are reflected until P12 |
 | `ThirdParty/`, `Build/Dependencies.cmake` | `Engine/Source/ThirdParty/<Lib>/<Lib>.Build.cmake` | |
 | `Engine/Assets` | `Engine/Content` + `Engine/Shaders` | |
 | `Projects/Ps2ThirdPerson` | `Game/ThirdPerson` | isolated project |
@@ -296,6 +298,27 @@ write UE space. Released as 0.14.0. Conventions: [Coordinates](#coordinates).
 | — | `LeonGame -Screenshot=<file.bmp> -ExitAfterFrames=N`, `-AxesGizmo` / F6 axes gizmo (`FDebugDraw::AddAxes`, `AddViewAxes`) | `Launch/Private/Desktop/GameApplication.cpp`, `Renderer/Public/Debug/DebugDraw.h` |
 | G4 without the legacy bridges | G4 bans `LegacyGL`, `FLegacyTransform`, `LegacyAxes` and fences `FLegacyCoordinateConversion` | `Engine/Build/BatchFiles/CheckBannedApis.ps1` |
 
+### P9 — CoreUObject
+
+The runtime side of LeonHeaderTool's code: `UObject` and its reflection, on every platform (PS2 included). No engine
+class is a `UObject` yet (P12). Details: [CoreUObject/README.md](../../Engine/Source/Runtime/CoreUObject/README.md).
+
+| Leon (before) | UE name (now) | Where |
+| --- | --- | --- |
+| — | `UObjectBase` / `UObjectBaseUtility` / `UObject`, `EObjectFlags`, `EInternalObjectFlags` | `CoreUObject/Public/UObject/UObjectBase.h`, `UObjectBaseUtility.h`, `Object.h`, `ObjectMacros.h` |
+| — | `UField`, `UStruct`, `UScriptStruct` (`ICppStructOps`, `TCppStructOps`), `UClass`, `UEnum` (`_MAX`), `UFunction`, `UPackage` | `Class.h`, `Package.h` |
+| — | `FField` / `FFieldClass` / `FProperty` and the property types (numeric, bool with bitfields, byte / enum, string / name / text, object / class / weak / soft, struct, array / set / map), `TFieldIterator` | `Field.h`, `UnrealType.h` |
+| — | `NewObject`, `StaticConstructObject_Internal`, `FObjectInitializer`, `CreateDefaultSubobject`, `StaticFindObject` / `FindObject`, `MakeUniqueObjectName`, `CreatePackage`, `GetTransientPackage`, `GetDefault` | `UObjectGlobals.h` |
+| — | `GUObjectArray` (`FUObjectArray`, `FUObjectItem`), the name hash, `TObjectIterator` / `TObjectRange` | `UObjectArray.h`, `UObjectHash.h`, `UObjectIterator.h` |
+| — | `Cast` / `CastChecked` / `ExactCast`, `TSubclassOf`, `TWeakObjectPtr`, `TSoftObjectPtr` / `TSoftClassPtr`, `FSoftObjectPath` | `Templates/Casts.h`, `Templates/SubclassOf.h`, `UObject/WeakObjectPtr*.h`, `SoftObject*.h` |
+| — | `FFrame`, `DECLARE_FUNCTION` / `DEFINE_FUNCTION`, `P_GET_*`, `UObject::ProcessEvent` | `Stack.h`, `Script.h`, `ScriptMacros.h`, `Private/UObject/ScriptCore.cpp` |
+| — | `UE4CodeGen_Private` (params, `ConstructUClass` & co.), `RegisterCompiledInInfo`, `ProcessNewlyLoadedUObjects`, `UObjectBaseInit`, the intrinsic classes (`IMPLEMENT_CORE_INTRINSIC_CLASS`) | `UObjectGlobals.h`, `UObjectBase.h`, `GeneratedCppIncludes.h`, `Private/UObject/Class.cpp` |
+| — | `NoExportTypes.h`: `USTRUCT(noexport)` `FVector`, `FVector2D`, `FVector4`, `FPlane`, `FRotator`, `FQuat`, `FTransform`, `FColor`, `FLinearColor`, `FGuid`, `FIntPoint`, `FIntVector`, `FBox` | `CoreUObject/Public/UObject/NoExportTypes.h`; LeonHeaderTool `NoExport` support |
+| — | `FScriptArray`, `FScriptSparseArray`, `FScriptSet`, `FScriptMap`, `TScriptBitArray` (layout views of the Core containers, checked with `static_assert`s) | `Core/Public/Containers/ScriptArray.h`, `SparseArray.h`, `Set.h`, `Map.h`, `BitArray.h` |
+| — | `TEnumAsByte`, `WITH_EDITORONLY_DATA`, `PRAGMA_DISABLE/ENABLE_DEPRECATION_WARNINGS`, `FPlatformProperties::MaxObjectsInGame` (8192 on PS2, 131072 on desktop) | `Core/Public/Containers/EnumAsByte.h`, `Misc/Build.h`, `HAL/Platform.h`, `GenericPlatformProperties.h` |
+| `FModuleManager` started modules only | `RegisterReflection` then `OnProcessLoadedObjectsCallback` before each `StartupModule` | `Core/Public/Modules/ModuleManager.h` |
+| — | `System.CoreUObject.*` automation tests (27) with reflected fixtures | `CoreUObject/Private/Tests/` |
+
 ## Coordinates
 
 | Topic | UE 4.27 | LeonEngine |
@@ -318,13 +341,21 @@ the converters' allowed places: [ARCHITECTURE.md — Coordinates](../ARCHITECTUR
 
 | Topic | UE | LeonEngine | Why |
 | --- | --- | --- | --- |
-| Reflection | `UCLASS`, `UObject`, UHT | LeonHeaderTool generates UE 4.27-shaped `.generated.h` / `.gen.cpp` (no metadata, no hot-reload CRCs, explicit `RegisterReflection_<Module>` instead of static `FCompiledInDefer` objects); no `UObject` runtime yet, `A`/`U` prefixes are naming only | CoreUObject (P9) implements the runtime: [LeonHeaderTool/README.md](../../Engine/Source/Programs/LeonHeaderTool/README.md) |
+| Reflection | `UCLASS`, `UObject`, UHT | LeonHeaderTool generates UE 4.27-shaped `.generated.h` / `.gen.cpp` (no metadata, no hot-reload CRCs, explicit `RegisterReflection_<Module>` instead of static `FCompiledInDefer` objects) and CoreUObject runs it (P9); only CoreUObject's types and test fixtures are reflected, the engine's `A`/`U` classes are naming only until P12 | [LeonHeaderTool/README.md](../../Engine/Source/Programs/LeonHeaderTool/README.md), [CoreUObject/README.md](../../Engine/Source/Runtime/CoreUObject/README.md) |
+| Default subobjects | instanced from the archetype's subobjects (`FObjectInstancingGraph`) | every instance runs its constructor and builds its own subobjects; when an object is created from a template, a copied reference to a template subobject is redirected to the new object's subobject of the same name | plan decision D12: simpler, and the loaded properties are applied afterwards (P11) |
+| Object names | `MakeUniqueObjectName` counts per outer; `StaticAllocateObject` replaces an existing object with the same name | numbered per class; creating an object whose name is taken is a fatal error | no replacement semantics without packages and GC |
+| Object storage | `FUObjectArray` allocates chunks on demand up to `MaxObjectsInGame`, items carry a cluster index; name hash and per-class / per-outer hashes | a fixed array of `FPlatformProperties::MaxObjectsInGame` slots (8192 × 12 bytes on PS2, 131072 × 16 bytes on desktop; running out is fatal); one `TMultiMap` name hash; `GetObjectsOfClass` / `GetObjectsWithOuter` walk the array | fixed memory budget on the PS2 ([Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md)) |
+| Object lifetime | garbage collection | objects live until the process exits | GC is P10 |
+| Script | Blueprint VM (`FFrame::Code`, `ProcessInternal`) | native thunks only: `FFrame::Code` is always null and `ProcessEvent` calls the `exec` thunk | no Blueprints |
+| Registration hook | `FModuleManager::OnProcessLoadedObjectsCallback` is a multicast event | a single function pointer, bound by CoreUObject | one listener; targets without CoreUObject pay a pointer and a branch |
+| NoExport structs | UHT trusts the `NoExportTypes.h` declaration | the generated code takes the offsets from the C++ type and `static_assert`s the declared size, member types and offsets against it; `FMatrix` is not reflected | a drifting declaration fails the build instead of corrupting data |
+| Script containers | `FScriptArray` / `FScriptSet` / `FScriptMap` with `TFunctionRef` callbacks | the same layouts and `static_assert`s; the set and map callbacks are template callables | keeps `Set.h` / `Map.h` free of `TFunctionRef` and the call indirection |
 | Containers / strings | `TArray`, `TMap`, `FString` everywhere | the same everywhere since P6, enforced by `CheckBannedApis.ps1` (G4); third-party types stay at the library seams (Jolt, tinyobjloader, ufbx, cgltf), and the SSAO kernel keeps `std::mt19937` so its samples do not change | — |
 | `FString` comparison | `==` ignores case | the same; code that needs an exact match (the level string table, mesh tags, editor class names, volume payloads) calls `Equals(…, ESearchCase::CaseSensitive)` | the pre-P6 `std::string` code compared case-sensitively |
 | `TCHAR` | `wchar_t` / UTF-16 on most platforms | UTF-8 `char` on every platform; `TEXT(x)` is `x`; `WIDECHAR` only inside the Windows HAL; `TCHAR_TO_UTF8` & co. are identities | the EE has no wide-string support worth paying for; one encoding everywhere |
 | `FName` pool | growing name blocks, `FNamePool` sized for desktop | 8-byte `FName`, hard-coded `EName` list; block size / count and hash buckets from `FPlatformProperties::NamePool*` (PS2: 16 KB blocks, at most 256 KB, 4096 buckets); exhausting the pool is fatal | fixed memory budget on 32 MB ([Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md)) |
 | `FText` | localized text (`FTextLocalizationManager`, culture formatting) | minimal: `FromString`, `AsNumber`, `AsPercent`, `Format` (`{0}` arguments), `Join`; `LOCTEXT` / `NSLOCTEXT` keep the source text | no localization yet |
-| Delegates | also dynamic (`DECLARE_DYNAMIC_*`) and `UObject` bindings | `TDelegate` / `TMulticastDelegate` with static, lambda, raw and SP bindings (+ payload) | dynamic / `UObject` delegates need CoreUObject |
+| Delegates | also dynamic (`DECLARE_DYNAMIC_*`) and `UObject` bindings | `TDelegate` / `TMulticastDelegate` with static, lambda, raw and SP bindings (+ payload) | `UObject` bindings arrive with P10; dynamic delegates are not planned yet |
 | `FPlatformAtomics` on PS2 | real atomics | the generic non-atomic version | Leon runs a single EE thread |
 | Automation tests | run by the session frontend / `-ExecCmds="Automation RunTests"` | `FAutomationTestFramework::RunTests(Filter)` from `LeonAutomationTests` (`-automation=<filter>`) and `TestPAL` (every platform) | no editor / session frontend |
 | Math | `FVector`, `FRotator`, `FMatrix` everywhere, SIMD `VectorRegister`, `double` helpers | Core has the scalar float API (P3) and every module uses it (P5, P6), in UE's axes and centimetres since P7 | the EE has no SIMD path worth matching and a single-precision FPU |

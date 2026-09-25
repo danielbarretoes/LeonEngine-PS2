@@ -7,11 +7,49 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Eighth step of the Core / CoreUObject plan (P8): LeonHeaderTool, the UnrealHeaderTool counterpart, and its
-LeonBuildTool step. No engine module is reflected yet: CoreUObject (P9) implements the runtime side of the generated
-code.
+Eighth and ninth steps of the Core / CoreUObject plan (P8, P9): LeonHeaderTool, the UnrealHeaderTool counterpart,
+with its LeonBuildTool step, and CoreUObject, the `UObject` runtime its generated code runs on. No engine module is
+reflected yet: the gameplay classes become UObjects in P12.
 
 ### Added
+
+- **CoreUObject** (`Engine/Source/Runtime/CoreUObject`, every platform, PS2 included; depends on Core only). See its
+  `README.md`.
+  - Object model: `UObjectBase`, `UObjectBaseUtility` and `UObject`, with UE's object flags, names, outer chains and
+    path names.
+  - Types: `UField`, `UStruct`, `UScriptStruct`, `UClass`, `UEnum` (with `_MAX`), `UFunction` and `UPackage`. They are
+    UE's intrinsic classes, written by hand.
+  - Properties: `FField` / `FProperty` and every property type: numeric, bool (including bitfields), byte / enum,
+    string / name / text, object / class / weak / soft references, struct, array / set / map. Properties export and
+    import text.
+  - Objects: `NewObject`, `FObjectInitializer`, `CreateDefaultSubobject` (every instance builds its own subobjects,
+    D12), class default objects, `StaticFindObject` / `FindObject`, `MakeUniqueObjectName`, `CreatePackage` and the
+    transient package.
+  - Storage: `GUObjectArray` with a fixed capacity of `FPlatformProperties::MaxObjectsInGame` (8192 on the PS2,
+    131072 on desktop), the name hash and `TObjectIterator`.
+  - Casts and references: `Cast`, `CastChecked`, `ExactCast`, `TSubclassOf`, `TWeakObjectPtr`, and minimal
+    `TSoftObjectPtr` / `FSoftObjectPath`.
+  - Calls: `FFrame`, the `P_GET_*` macros and `UObject::ProcessEvent` over the generated exec thunks.
+  - Registration: `RegisterCompiledInInfo` records a module's types, and `ProcessNewlyLoadedUObjects` constructs the
+    packages, enums, structs, classes (supers first) and class default objects.
+  - NoExport Core structs in `NoExportTypes.h`: `FVector`, `FVector2D`, `FVector4`, `FPlane`, `FRotator`, `FQuat`,
+    `FTransform`, `FColor`, `FLinearColor`, `FGuid`, `FIntPoint`, `FIntVector` and `FBox`.
+  - 27 `System.CoreUObject.*` automation tests with reflected fixtures in `Private/Tests`. They run in
+    `LeonAutomationTests` (258 tests) and in TestPAL on every platform (73 on the PS2).
+- **Script containers in Core.** `FScriptArray`, `FScriptSparseArray`, `FScriptSet`, `FScriptMap` and
+  `TScriptBitArray` are type-erased views with the exact layout of the Core containers, checked with `static_assert`s.
+  Core also gains `TEnumAsByte`, `WITH_EDITORONLY_DATA` (1 on desktop outside Shipping) and
+  `PRAGMA_DISABLE/ENABLE_DEPRECATION_WARNINGS`.
+- **LeonHeaderTool `USTRUCT(NoExport)`.**
+  - NoExport structs are declared inside `#if !CPP` and have no `GENERATED_BODY`.
+  - The generated code takes the offsets from the real C++ type and `static_assert`s the declared size, member types
+    and offsets against it.
+  - There are 4 new golden cases, so `LeonHeaderTool -Test` now runs 34 cases.
+- **Module registration hook.** `FModuleManager::StartupStaticallyLinkedModules` calls each module's
+  `RegisterReflection`, then `OnProcessLoadedObjectsCallback` (bound by CoreUObject), before `StartupModule`.
+- **TestPAL budget lines.** TestPAL links CoreUObject and logs the reflected types, the heap used to construct them,
+  the object array and the live object count. The PS2 figures are in `Budgets.md`: reflection is about 220 KB of its
+  400 KB budget, and the object array takes 96 KB.
 
 - **LeonHeaderTool** (`Engine/Source/Programs/LeonHeaderTool`) is a std-only C++17 host program with its own
   `CMakeLists.txt` (tokenizer, header parser, type model, code generator, manifest).
@@ -32,7 +70,7 @@ code.
   - the `.gen.cpp` files compile into the module;
   - `<tree>/Inc/<Module>` becomes a public include path.
 
-  It is inert for every current target.
+  Only CoreUObject (and its test fixtures, in test targets) is reflected so far.
 - **Module table.** `FStaticallyLinkedModuleInfo` gains `RegisterReflection` (`nullptr` for modules without reflected
   types), filled by the generated module table.
 - **Runs.** `RunTests.bat`, and therefore the CI win64 job, runs the LeonHeaderTool golden tests after the automation
@@ -42,6 +80,10 @@ code.
 
 - **Host g++.** The PS2 Docker entry point, the optional Dockerfile and the CI ps2 job install `g++ musl-dev`, the
   host compiler for LeonHeaderTool.
+- **Include order.** `.clang-format` keeps a reflected header's `"<Name>.generated.h"` after its other engine includes,
+  as LeonHeaderTool requires.
+- **PS2 ELF sizes.** ThirdPerson and BlankProgram do not link CoreUObject. The registration hook adds 40 bytes of text
+  to `FModuleManager`; ThirdPerson's stripped ELF is unchanged.
 
 ## [0.14.0] - 2026-09-25
 

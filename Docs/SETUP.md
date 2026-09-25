@@ -49,7 +49,7 @@ Engine\Build\BatchFiles\RunTests.bat
 ```
 
 This builds `LeonAutomationTests` (Win64 Development) and runs it from the repo root. The executable contains the
-tests of every module in its closure (`<Module>/Private/Tests/`), all UE automation tests (231, named
+tests of every module in its closure (`<Module>/Private/Tests/`), all UE automation tests (258, named
 `System.<Module>.<Area>.<Name>`). The exit code is non-zero if any test fails. `-automation=<filter>` runs only the
 tests whose name contains `<filter>`:
 
@@ -58,7 +58,7 @@ Engine\Build\BatchFiles\RunTests.bat -automation=System.Core.Containers
 Engine\Build\BatchFiles\RunTests.bat -automation=System.JoltPhysics
 ```
 
-`TestPAL` runs the Core, Json and Projects automation tests on any platform, and ends with
+`TestPAL` runs the Core, CoreUObject, Json and Projects automation tests on any platform, and ends with
 `TestPAL: PASSED (N test(s), 0 failed)` plus memory and name-pool numbers:
 
 ```bat
@@ -145,11 +145,11 @@ engine program instead (`Engine\Binaries\PS2\<Name>.elf`, built with `Build.bat 
 Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build
 ```
 
-TestPAL runs the Core, Json and Projects automation tests on the EE (46 on PS2: Core 43, Json 2, Projects 1; the
-platform-file, config-cache, log-file and real-descriptor tests are desktop-only) and
+TestPAL runs the Core, CoreUObject, Json and Projects automation tests on the EE (73 on PS2: Core 43, CoreUObject 27,
+Json 2, Projects 1; the platform-file, config-cache, log-file and real-descriptor tests are desktop-only) and
 logs to the EE console. With the EE console enabled (see [PCSX2 notes](#pcsx2-notes)), read
-`%USERPROFILE%\Documents\PCSX2\logs\emulog.txt` for the `TestPAL: PASSED (46 test(s), 0 failed)` line and the
-`LogTestPAL` memory / name-pool lines; their numbers are tracked in
+`%USERPROFILE%\Documents\PCSX2\logs\emulog.txt` for the `TestPAL: PASSED (73 test(s), 0 failed)` line and the
+`LogTestPAL` reflection / object-array / memory / name-pool lines; their numbers are tracked in
 [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md).
 
 ThirdPerson controls:
