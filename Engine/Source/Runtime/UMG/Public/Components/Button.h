@@ -1,33 +1,33 @@
 #pragma once
 
 #include "Blueprint/UserWidget.h"
+#include "CoreMinimal.h"
 #include "Fonts/TextLayout.h"
-
-#include <glm/vec3.hpp>
-
-#include <string>
 
 class FGenericWindow;
 
-/// Unreal-like UButton (lite): filled rect + label; hover / selected / press.
-/// Usually owned by UVerticalBox; can also be a root HUD widget with SetPosition.
+/**
+ * UE-like UButton (lite): filled rect + label; hover / selected / press.
+ * Usually owned by UVerticalBox; can also be a root HUD widget with SetPosition. The id is what TickInput reports
+ * when the button is activated (NAME_None: a status row that cannot be activated).
+ */
 class UMG_API UButton : public UUserWidget
 {
 public:
-	void SetId(std::string InId)
+	void SetId(FName InId)
 	{
-		Id = std::move(InId);
+		Id = InId;
 	}
-	[[nodiscard]] const std::string& GetId() const
+	[[nodiscard]] FName GetId() const
 	{
 		return Id;
 	}
 
-	void SetLabel(std::string InLabel)
+	void SetLabel(const FText& InLabel)
 	{
-		Label = std::move(InLabel);
+		Label = InLabel;
 	}
-	[[nodiscard]] const std::string& GetLabel() const
+	[[nodiscard]] const FText& GetLabel() const
 	{
 		return Label;
 	}
@@ -78,30 +78,30 @@ public:
 		return bEnabled;
 	}
 
-	void SetTextColor(const glm::vec3& Color)
+	void SetTextColor(const FLinearColor& Color)
 	{
 		TextColor = Color;
 	}
-	void SetBackgroundColor(const glm::vec3& Color)
+	void SetBackgroundColor(const FLinearColor& Color)
 	{
 		BackgroundColor = Color;
 	}
-	void SetSelectedBackgroundColor(const glm::vec3& Color)
+	void SetSelectedBackgroundColor(const FLinearColor& Color)
 	{
 		SelectedBackgroundColor = Color;
 	}
 
-	/// Preferred size for the current label (padding included).
+	/** Preferred size for the current label (padding included). */
 	void MeasureDesiredSize(float& OutW, float& OutH) const;
 
-	/// Hit-test in framebuffer pixels (top-left origin).
+	/** Hit test in framebuffer pixels (top-left origin). */
 	[[nodiscard]] bool Contains(float FbX, float FbY) const;
 
 	void NativePaint(FPaintContext& Ctx) override;
 
 private:
-	std::string Id;
-	std::string Label = "Button";
+	FName Id;
+	FText Label = FText::FromString("Button");
 	float X = 0.0f;
 	float Y = 0.0f;
 	float W = 160.0f;
@@ -110,11 +110,11 @@ private:
 	bool bEnabled = true;
 	bool bHovered = false;
 
-	glm::vec3 TextColor{1.0f, 0.92f, 0.75f};
-	glm::vec3 BackgroundColor{0.12f, 0.12f, 0.14f};
-	glm::vec3 SelectedBackgroundColor{0.28f, 0.22f, 0.10f};
-	glm::vec3 HoverBackgroundColor{0.18f, 0.16f, 0.12f};
-	glm::vec3 DisabledTextColor{0.45f, 0.45f, 0.45f};
+	FLinearColor TextColor = FLinearColor(1.0f, 0.92f, 0.75f);
+	FLinearColor BackgroundColor = FLinearColor(0.12f, 0.12f, 0.14f);
+	FLinearColor SelectedBackgroundColor = FLinearColor(0.28f, 0.22f, 0.10f);
+	FLinearColor HoverBackgroundColor = FLinearColor(0.18f, 0.16f, 0.12f);
+	FLinearColor DisabledTextColor = FLinearColor(0.45f, 0.45f, 0.45f);
 
 	friend class UVerticalBox;
 	void SetHovered(bool bInHovered)

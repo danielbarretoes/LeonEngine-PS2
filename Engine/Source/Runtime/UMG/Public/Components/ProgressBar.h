@@ -1,13 +1,10 @@
 #pragma once
 
 #include "Blueprint/UserWidget.h"
+#include "CoreMinimal.h"
 #include "Fonts/TextLayout.h"
 
-#include <glm/vec3.hpp>
-
-#include <algorithm>
-
-/// Unreal-like UProgressBar (lite): background + fill rect, optional percent label.
+/** UE-like UProgressBar (lite): background + fill rect, optional percent label. */
 class UMG_API UProgressBar : public UUserWidget
 {
 public:
@@ -39,10 +36,10 @@ public:
 		return H;
 	}
 
-	/// Normalized fill amount in [0, 1].
+	/** Normalized fill amount in [0, 1]. */
 	void SetPercent(float InPercent)
 	{
-		Percent = std::clamp(InPercent, 0.0f, 1.0f);
+		Percent = FMath::Clamp(InPercent, 0.0f, 1.0f);
 	}
 	[[nodiscard]] float GetPercent() const
 	{
@@ -53,24 +50,24 @@ public:
 	{
 		bShowPercentText = bShow;
 	}
-	void SetBackgroundColor(const glm::vec3& Color)
+	void SetBackgroundColor(const FLinearColor& Color)
 	{
 		BackgroundColor = Color;
 	}
-	void SetFillColor(const glm::vec3& Color)
+	void SetFillColor(const FLinearColor& Color)
 	{
 		FillColor = Color;
 	}
-	void SetBorderColor(const glm::vec3& Color)
+	void SetBorderColor(const FLinearColor& Color)
 	{
 		BorderColor = Color;
 	}
-	void SetTextColor(const glm::vec3& Color)
+	void SetTextColor(const FLinearColor& Color)
 	{
 		TextColor = Color;
 	}
 
-	/// Place horizontally centered near the bottom of the viewport each paint.
+	/** Places the bar horizontally centered near the bottom of the viewport each paint. */
 	void SetAnchoredBottomCenter(bool bEnabled)
 	{
 		bAnchoredBottomCenter = bEnabled;
@@ -87,8 +84,8 @@ private:
 	bool bShowPercentText = false;
 	bool bAnchoredBottomCenter = false;
 
-	glm::vec3 BackgroundColor{0.10f, 0.10f, 0.12f};
-	glm::vec3 FillColor{0.85f, 0.65f, 0.20f};
-	glm::vec3 BorderColor{0.35f, 0.30f, 0.18f};
-	glm::vec3 TextColor{1.0f, 0.92f, 0.75f};
+	FLinearColor BackgroundColor = FLinearColor(0.10f, 0.10f, 0.12f);
+	FLinearColor FillColor = FLinearColor(0.85f, 0.65f, 0.20f);
+	FLinearColor BorderColor = FLinearColor(0.35f, 0.30f, 0.18f);
+	FLinearColor TextColor = FLinearColor(1.0f, 0.92f, 0.75f);
 };

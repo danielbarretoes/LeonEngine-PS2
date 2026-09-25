@@ -1,10 +1,11 @@
 #pragma once
 
 #include "Blueprint/PaintContext.h"
+#include "CoreMinimal.h"
 
 class AHUD;
 
-/// Unreal-like UUserWidget: game HUD elements override NativePaint / NativeTick.
+/** UE-like UUserWidget: game HUD elements override NativePaint / NativeTick. */
 class UMG_API UUserWidget
 {
 public:
@@ -15,10 +16,10 @@ public:
 	virtual void NativeConstruct()
 	{
 	}
-	virtual void NativeTick(float /*deltaTime*/)
+	virtual void NativeTick(float /*DeltaTime*/)
 	{
 	}
-	virtual void NativePaint(FPaintContext& /*ctx*/)
+	virtual void NativePaint(FPaintContext& /*Ctx*/)
 	{
 	}
 	virtual void NativeDestruct()
@@ -34,7 +35,7 @@ public:
 		return bIsVisible;
 	}
 
-	/// Owning AHUD (set by HUD::AddWidget). Null if not added.
+	/** Owning AHUD (set by AHUD::AddWidget); null if not added. */
 	[[nodiscard]] AHUD* GetOwningHUD() const
 	{
 		return OwningHud;

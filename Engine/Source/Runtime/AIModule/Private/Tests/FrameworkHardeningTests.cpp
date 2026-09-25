@@ -76,7 +76,7 @@ TEST_CASE("HUD AddWidget TextBlock and remove", "[ui][hud]")
 	AHUD Hud;
 	auto* Text = Hud.AddWidget<UTextBlock>();
 	REQUIRE(Text != nullptr);
-	Text->SetText("Hello");
+	Text->SetText(FText::FromString("Hello"));
 	REQUIRE(Hud.GetWidgetOfClass<UTextBlock>() == Text);
 	Hud.Tick(0.016f);
 	Hud.RemoveWidget(Text);

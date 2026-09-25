@@ -3,21 +3,18 @@
 #include "GenericPlatform/GenericWindow.h"
 #include "InputCoreTypes.h"
 
-#include <algorithm>
-#include <cmath>
-
 namespace
 {
 
-	/// Lines before the first menu item in BuildPaintText (title + blank separator).
-	[[nodiscard]] int ItemStartLine(const std::string& InTitle)
+	/** Lines before the first menu item in BuildPaintText (title + blank separator). */
+	[[nodiscard]] int32 ItemStartLine(const FString& InTitle)
 	{
-		if (InTitle.empty())
+		if (InTitle.IsEmpty())
 		{
-			return 1; // leading "\n\n" still inserts one blank row before items
+			return 1; // the leading "\n\n" still inserts one blank row before the items
 		}
-		int TitleLines = 1;
-		for (char C : InTitle)
+		int32 TitleLines = 1;
+		for (const TCHAR C : InTitle)
 		{
 			if (C == '\n')
 			{
@@ -29,21 +26,21 @@ namespace
 
 } // namespace
 
-void UMenuListWidget::SetItems(std::vector<FItem> InItems)
+void UMenuListWidget::SetItems(TArray<FItem> InItems)
 {
-	Items = std::move(InItems);
-	if (Items.empty())
+	Items = MoveTemp(InItems);
+	if (Items.Num() == 0)
 	{
 		Selected = 0;
 		return;
 	}
-	Selected = std::clamp(Selected, 0, static_cast<int>(Items.size()) - 1);
-	// Prefer a selectable row (non-empty id) — status labels are not activatable.
-	if (Items[static_cast<std::size_t>(Selected)].Id.empty())
+	Selected = FMath::Clamp(Selected, 0, Items.Num() - 1);
+	// Prefer a selectable row (an id): status labels are not activatable.
+	if (Items[Selected].Id.IsNone())
 	{
-		for (int I = 0; I < static_cast<int>(Items.size()); ++I)
+		for (int32 I = 0; I < Items.Num(); ++I)
 		{
-			if (!Items[static_cast<std::size_t>(I)].Id.empty())
+			if (!Items[I].Id.IsNone())
 			{
 				Selected = I;
 				break;
@@ -52,31 +49,31 @@ void UMenuListWidget::SetItems(std::vector<FItem> InItems)
 	}
 }
 
-void UMenuListWidget::SetSelectedIndex(int Index)
+void UMenuListWidget::SetSelectedIndex(int32 Index)
 {
-	if (Items.empty())
+	if (Items.Num() == 0)
 	{
 		Selected = 0;
 		return;
 	}
-	Selected = std::clamp(Index, 0, static_cast<int>(Items.size()) - 1);
+	Selected = FMath::Clamp(Index, 0, Items.Num() - 1);
 }
 
 void UMenuListWidget::ResetEdges()
 {
 	bUpWasDown = bDownWasDown = bEnterWasDown = bMouseWasDown = true;
-	// Keyboard only — mouse must stay usable on the first click after travel.
+	// Keyboard only: the mouse must stay usable on the first click after travel.
 	IgnoreActivateSeconds = 0.35f;
 }
 
-int UMenuListWidget::CountLines(const std::string& Text) const
+int32 UMenuListWidget::CountLines(const FString& Text)
 {
-	if (Text.empty())
+	if (Text.IsEmpty())
 	{
 		return 0;
 	}
-	int N = 1;
-	for (char C : Text)
+	int32 N = 1;
+	for (const TCHAR C : Text)
 	{
 		if (C == '\n')
 		{
@@ -86,66 +83,66 @@ int UMenuListWidget::CountLines(const std::string& Text) const
 	return N;
 }
 
-std::string UMenuListWidget::BuildPaintText() const
+FString UMenuListWidget::BuildPaintText() const
 {
-	std::string Text = Title;
+	FString Text = Title.ToString();
 	Text += "\n\n";
-	for (int I = 0; I < static_cast<int>(Items.size()); ++I)
+	for (int32 I = 0; I < Items.Num(); ++I)
 	{
 		Text += (I == Selected) ? "> " : "  ";
-		Text += Items[static_cast<std::size_t>(I)].Label;
-		Text += '\n';
+		Text += Items[I].Label.ToString();
+		Text += "\n";
 	}
-	if (!Hint.empty())
+	if (!Hint.IsEmpty())
 	{
 		Text += "\n";
-		Text += Hint;
+		Text += Hint.ToString();
 	}
 	return Text;
 }
 
-void UMenuListWidget::CacheLayout(int /*viewportW*/, int InViewportH)
+void UMenuListWidget::CacheLayout(int32 /*ViewportW*/, int32 InViewportH)
 {
 	ViewportH = InViewportH;
 	LineH = HudLineHeight;
-	if (Items.empty() || InViewportH <= 0)
+	if (Items.Num() == 0 || InViewportH <= 0)
 	{
 		ItemsTopPx = 0.0f;
 		return;
 	}
 	// Same vertical center as NativePaint / FDebugOverlay::MeasureText (14 * scale per line).
-	const int Lines = CountLines(BuildPaintText());
-	const float H = LineH * static_cast<float>(std::max(Lines, 1));
+	const int32 Lines = CountLines(BuildPaintText());
+	const float H = LineH * static_cast<float>(FMath::Max(Lines, 1));
 	float Top = (static_cast<float>(InViewportH) - H) * 0.5f;
-	Top = std::clamp(Top, 10.0f, std::max(10.0f, static_cast<float>(InViewportH) - H - 10.0f));
-	ItemsTopPx = Top + LineH * static_cast<float>(ItemStartLine(Title));
+	Top = FMath::Clamp(Top, 10.0f, FMath::Max(10.0f, static_cast<float>(InViewportH) - H - 10.0f));
+	ItemsTopPx = Top + LineH * static_cast<float>(ItemStartLine(Title.ToString()));
 }
 
 void UMenuListWidget::NativePaint(FPaintContext& Ctx)
 {
-	if (Items.empty())
+	if (Items.Num() == 0)
 	{
 		return;
 	}
 	CacheLayout(Ctx.GetWidth(), Ctx.GetHeight());
-	const std::string Text = BuildPaintText();
+	const FString Text = BuildPaintText();
 	float W = 0.0f;
 	float H = 0.0f;
 	Ctx.MeasureText(Text, HudFontScale, W, H);
 	float Top = (static_cast<float>(Ctx.GetHeight()) - H) * 0.5f;
-	Top = std::clamp(Top, 10.0f, std::max(10.0f, static_cast<float>(Ctx.GetHeight()) - H - 10.0f));
+	Top = FMath::Clamp(Top, 10.0f, FMath::Max(10.0f, static_cast<float>(Ctx.GetHeight()) - H - 10.0f));
 	Ctx.DrawText(Text, static_cast<float>(Ctx.GetWidth()) * 0.5f, Top, Color, HudFontScale, ETextJustify::Center);
 }
 
-std::string UMenuListWidget::TickInput(FGenericWindow& Window, bool bCursorCaptured, float DeltaTime)
+FName UMenuListWidget::TickInput(FGenericWindow& Window, bool bCursorCaptured, float DeltaTime)
 {
-	if (Items.empty())
+	if (Items.Num() == 0)
 	{
-		return {};
+		return NAME_None;
 	}
 	if (IgnoreActivateSeconds > 0.0f)
 	{
-		IgnoreActivateSeconds = std::max(0.0f, IgnoreActivateSeconds - DeltaTime);
+		IgnoreActivateSeconds = FMath::Max(0.0f, IgnoreActivateSeconds - DeltaTime);
 	}
 
 	const bool bUp = Window.IsKeyPressed(EKeys::Up) || Window.IsKeyPressed(EKeys::W);
@@ -154,18 +151,18 @@ std::string UMenuListWidget::TickInput(FGenericWindow& Window, bool bCursorCaptu
 		Window.IsKeyPressed(EKeys::SpaceBar);
 	const bool bMouse = Window.IsMouseButtonDown(EMouseButtons::Left);
 
-	auto StepSelectable = [this](int Delta)
+	auto StepSelectable = [this](int32 Delta)
 	{
-		const int N = static_cast<int>(Items.size());
+		const int32 N = Items.Num();
 		if (N <= 0)
 		{
 			return;
 		}
-		int Idx = Selected;
-		for (int Guard = 0; Guard < N; ++Guard)
+		int32 Idx = Selected;
+		for (int32 Guard = 0; Guard < N; ++Guard)
 		{
 			Idx = (Idx + Delta + N) % N;
-			if (!Items[static_cast<std::size_t>(Idx)].Id.empty())
+			if (!Items[Idx].Id.IsNone())
 			{
 				Selected = Idx;
 				return;
@@ -183,42 +180,37 @@ std::string UMenuListWidget::TickInput(FGenericWindow& Window, bool bCursorCaptu
 	}
 
 	const bool bAllowKeyboardActivate = IgnoreActivateSeconds <= 0.0f;
-	std::string Activated;
+	FName Activated = NAME_None;
 	if (bAllowKeyboardActivate && bEnter && !bEnterWasDown)
 	{
-		const std::string& LocalId = Items[static_cast<std::size_t>(Selected)].Id;
-		if (!LocalId.empty())
-		{
-			Activated = LocalId;
-		}
+		Activated = Items[Selected].Id;
 	}
 
-	// Mouse activate is never gated by travel lockout (only edges / capture).
+	// Mouse activate is never gated by the travel lockout (only edges / capture).
 	if (bMouse && !bMouseWasDown && !bCursorCaptured)
 	{
-		const double My = Window.GetCursorPos().Y;
-		int WinW = 0;
-		int WinH = 0;
+		const float My = Window.GetCursorPos().Y;
+		int32 WinW = 0;
+		int32 WinH = 0;
 		Window.GetWindowSize(WinW, WinH);
-		int FbW = 0;
-		int FbH = 0;
+		int32 FbW = 0;
+		int32 FbH = 0;
 		Window.GetFramebufferSize(FbW, FbH);
-		WinW = std::max(WinW, 1);
-		WinH = std::max(WinH, 1);
+		WinW = FMath::Max(WinW, 1);
+		WinH = FMath::Max(WinH, 1);
 		if (FbW > 0 && FbH > 0)
 		{
 			CacheLayout(FbW, FbH);
-			const float FbY = static_cast<float>(My) * static_cast<float>(FbH) / static_cast<float>(WinH);
-			// Inclusive band with small pad so the first row is not a dead zone.
+			const float FbY = My * static_cast<float>(FbH) / static_cast<float>(WinH);
+			// Inclusive band with a small pad so the first row is not a dead zone.
 			const float Rel = FbY - ItemsTopPx + (LineH * 0.15f);
-			const int Hit = static_cast<int>(std::floor(Rel / LineH));
-			if (Hit >= 0 && Hit < static_cast<int>(Items.size()))
+			const int32 Hit = FMath::FloorToInt(Rel / LineH);
+			if (Hit >= 0 && Hit < Items.Num())
 			{
 				Selected = Hit;
-				const std::string& LocalId = Items[static_cast<std::size_t>(Selected)].Id;
-				if (!LocalId.empty())
+				if (!Items[Selected].Id.IsNone())
 				{
-					Activated = LocalId;
+					Activated = Items[Selected].Id;
 				}
 			}
 		}

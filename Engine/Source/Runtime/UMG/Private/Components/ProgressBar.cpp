@@ -1,8 +1,5 @@
 #include "Components/ProgressBar.h"
 
-#include <cstdio>
-#include <string>
-
 void UProgressBar::NativePaint(FPaintContext& Ctx)
 {
 	if (!IsVisible())
@@ -16,7 +13,7 @@ void UProgressBar::NativePaint(FPaintContext& Ctx)
 	float LocalH = H;
 	if (bAnchoredBottomCenter)
 	{
-		LocalW = std::min(W, static_cast<float>(Ctx.GetWidth()) * 0.55f);
+		LocalW = FMath::Min(W, static_cast<float>(Ctx.GetWidth()) * 0.55f);
 		LocalH = H;
 		LocalX = (static_cast<float>(Ctx.GetWidth()) - LocalW) * 0.5f;
 		LocalY = static_cast<float>(Ctx.GetHeight()) - LocalH - 36.0f;
@@ -36,8 +33,7 @@ void UProgressBar::NativePaint(FPaintContext& Ctx)
 
 	if (bShowPercentText)
 	{
-		char Buf[16];
-		std::snprintf(Buf, sizeof(Buf), "%d%%", static_cast<int>(Percent * 100.0f + 0.5f));
+		const FString Buf = FString::Printf("%d%%", static_cast<int32>(Percent * 100.0f + 0.5f));
 		float Tw = 0.0f;
 		float Th = 0.0f;
 		Ctx.MeasureText(Buf, HudFontScale, Tw, Th);

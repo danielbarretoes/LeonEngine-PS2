@@ -1,11 +1,12 @@
 #pragma once
 
 #include "Blueprint/UserWidget.h"
+#include "CoreMinimal.h"
 
-#include <glm/vec3.hpp>
-
-/// Unreal-like UImage (lite): solid tinted rect (no texture brush yet — HUD DrawRect only).
-/// Useful as panel chrome, health backdrop, letterbox bars.
+/**
+ * UE-like UImage (lite): solid tinted rect (no texture brush yet; HUD DrawRect only).
+ * Useful as panel chrome, health backdrop, letterbox bars.
+ */
 class UMG_API UImage : public UUserWidget
 {
 public:
@@ -37,16 +38,16 @@ public:
 		return H;
 	}
 
-	void SetColor(const glm::vec3& InColor)
+	void SetColor(const FLinearColor& InColor)
 	{
 		Color = InColor;
 	}
-	[[nodiscard]] const glm::vec3& GetColor() const
+	[[nodiscard]] const FLinearColor& GetColor() const
 	{
 		return Color;
 	}
 
-	void SetBorderColor(const glm::vec3& InColor)
+	void SetBorderColor(const FLinearColor& InColor)
 	{
 		BorderColor = InColor;
 	}
@@ -55,7 +56,7 @@ public:
 		bDrawBorder = bEnabled;
 	}
 
-	/// Stretch to full framebuffer each paint (dim overlay / letterbox).
+	/** Stretches to the full framebuffer each paint (dim overlay / letterbox). */
 	void SetFillScreen(bool bEnabled)
 	{
 		bFillScreen = bEnabled;
@@ -70,6 +71,6 @@ private:
 	float H = 64.0f;
 	bool bDrawBorder = false;
 	bool bFillScreen = false;
-	glm::vec3 Color{0.08f, 0.08f, 0.10f};
-	glm::vec3 BorderColor{0.45f, 0.38f, 0.22f};
+	FLinearColor Color = FLinearColor(0.08f, 0.08f, 0.10f);
+	FLinearColor BorderColor = FLinearColor(0.45f, 0.38f, 0.22f);
 };

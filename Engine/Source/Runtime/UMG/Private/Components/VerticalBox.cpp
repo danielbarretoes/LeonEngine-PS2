@@ -1,83 +1,75 @@
 #include "Components/VerticalBox.h"
 
-#include "Debug/DebugOverlay.h"
 #include "GenericPlatform/GenericWindow.h"
 #include "InputCoreTypes.h"
 
-#include <algorithm>
-#include <cmath>
-
 void UVerticalBox::ClearChildren()
 {
-	Buttons.clear();
+	Buttons.Reset();
 	Selected = 0;
 }
 
-UButton* UVerticalBox::AddButton(std::string Id, std::string Label)
+bool UVerticalBox::IsSelectable(const UButton& Button)
 {
-	auto Button = std::make_unique<UButton>();
-	Button->SetId(std::move(Id));
-	Button->SetLabel(std::move(Label));
-	UButton* Raw = Button.get();
-	Buttons.push_back(std::move(Button));
+	return !Button.GetId().IsNone() && Button.IsEnabled();
+}
+
+UButton* UVerticalBox::AddButton(FName Id, const FText& Label)
+{
+	TUniquePtr<UButton> Button = MakeUnique<UButton>();
+	Button->SetId(Id);
+	Button->SetLabel(Label);
+	UButton* Raw = Button.Get();
+	Buttons.Add(MoveTemp(Button));
 	SnapSelectionToSelectable();
 	ApplySelectionVisuals();
 	return Raw;
 }
 
-UButton* UVerticalBox::GetButton(int Index)
+UButton* UVerticalBox::GetButton(int32 Index)
 {
-	if (Index < 0 || Index >= static_cast<int>(Buttons.size()))
-	{
-		return nullptr;
-	}
-	return Buttons[static_cast<std::size_t>(Index)].get();
+	return Buttons.IsValidIndex(Index) ? Buttons[Index].Get() : nullptr;
 }
 
-const UButton* UVerticalBox::GetButton(int Index) const
+const UButton* UVerticalBox::GetButton(int32 Index) const
 {
-	if (Index < 0 || Index >= static_cast<int>(Buttons.size()))
-	{
-		return nullptr;
-	}
-	return Buttons[static_cast<std::size_t>(Index)].get();
+	return Buttons.IsValidIndex(Index) ? Buttons[Index].Get() : nullptr;
 }
 
-void UVerticalBox::SetSelectedIndex(int Index)
+void UVerticalBox::SetSelectedIndex(int32 Index)
 {
-	if (Buttons.empty())
+	if (Buttons.Num() == 0)
 	{
 		Selected = 0;
 		ApplySelectionVisuals();
 		return;
 	}
-	Selected = std::clamp(Index, 0, static_cast<int>(Buttons.size()) - 1);
+	Selected = FMath::Clamp(Index, 0, Buttons.Num() - 1);
 	ApplySelectionVisuals();
 }
 
 void UVerticalBox::ResetEdges()
 {
 	bUpWasDown = bDownWasDown = bEnterWasDown = bMouseWasDown = true;
-	// Keyboard only — mouse must stay usable on the first click after travel.
+	// Keyboard only: the mouse must stay usable on the first click after travel.
 	IgnoreActivateSeconds = 0.35f;
 }
 
 void UVerticalBox::SnapSelectionToSelectable()
 {
-	if (Buttons.empty())
+	if (Buttons.Num() == 0)
 	{
 		Selected = 0;
 		return;
 	}
-	Selected = std::clamp(Selected, 0, static_cast<int>(Buttons.size()) - 1);
-	if (!Buttons[static_cast<std::size_t>(Selected)]->GetId().empty() &&
-		Buttons[static_cast<std::size_t>(Selected)]->IsEnabled())
+	Selected = FMath::Clamp(Selected, 0, Buttons.Num() - 1);
+	if (IsSelectable(*Buttons[Selected]))
 	{
 		return;
 	}
-	for (int I = 0; I < static_cast<int>(Buttons.size()); ++I)
+	for (int32 I = 0; I < Buttons.Num(); ++I)
 	{
-		if (!Buttons[static_cast<std::size_t>(I)]->GetId().empty() && Buttons[static_cast<std::size_t>(I)]->IsEnabled())
+		if (IsSelectable(*Buttons[I]))
 		{
 			Selected = I;
 			return;
@@ -85,19 +77,18 @@ void UVerticalBox::SnapSelectionToSelectable()
 	}
 }
 
-void UVerticalBox::StepSelectable(int Delta)
+void UVerticalBox::StepSelectable(int32 Delta)
 {
-	const int N = static_cast<int>(Buttons.size());
+	const int32 N = Buttons.Num();
 	if (N <= 0)
 	{
 		return;
 	}
-	int Idx = Selected;
-	for (int Guard = 0; Guard < N; ++Guard)
+	int32 Idx = Selected;
+	for (int32 Guard = 0; Guard < N; ++Guard)
 	{
 		Idx = (Idx + Delta + N) % N;
-		UButton* Button = Buttons[static_cast<std::size_t>(Idx)].get();
-		if (!Button->GetId().empty() && Button->IsEnabled())
+		if (IsSelectable(*Buttons[Idx]))
 		{
 			Selected = Idx;
 			ApplySelectionVisuals();
@@ -108,13 +99,13 @@ void UVerticalBox::StepSelectable(int Delta)
 
 void UVerticalBox::ApplySelectionVisuals()
 {
-	for (int I = 0; I < static_cast<int>(Buttons.size()); ++I)
+	for (int32 I = 0; I < Buttons.Num(); ++I)
 	{
-		Buttons[static_cast<std::size_t>(I)]->SetSelected(I == Selected);
+		Buttons[I]->SetSelected(I == Selected);
 	}
 }
 
-void UVerticalBox::CacheLayout(int ViewportW, int ViewportH)
+void UVerticalBox::CacheLayout(int32 ViewportW, int32 ViewportH)
 {
 	if (ViewportW <= 0 || ViewportH <= 0)
 	{
@@ -123,43 +114,43 @@ void UVerticalBox::CacheLayout(int ViewportW, int ViewportH)
 
 	float MaxButtonW = MinButtonW;
 	float ButtonsH = 0.0f;
-	for (std::size_t I = 0; I < Buttons.size(); ++I)
+	for (int32 I = 0; I < Buttons.Num(); ++I)
 	{
 		float Dw = 0.0f;
 		float Dh = 0.0f;
 		Buttons[I]->MeasureDesiredSize(Dw, Dh);
-		MaxButtonW = std::max(MaxButtonW, Dw);
+		MaxButtonW = FMath::Max(MaxButtonW, Dw);
 		ButtonsH += Dh;
-		if (I + 1 < Buttons.size())
+		if (I + 1 < Buttons.Num())
 		{
 			ButtonsH += ButtonGap;
 		}
 	}
 
 	TitleH = 0.0f;
-	if (!Title.empty())
+	if (!Title.IsEmpty())
 	{
 		float Tw = 0.0f;
-		FDebugOverlay::MeasureText(Title, HudFontScale, Tw, TitleH);
-		TitleH += HudLineHeight; // blank separator under title
+		FPaintContext::MeasureTextOnly(Title.ToString(), HudFontScale, Tw, TitleH);
+		TitleH += HudLineHeight; // blank separator under the title
 	}
 
 	HintH = 0.0f;
-	if (!Hint.empty())
+	if (!Hint.IsEmpty())
 	{
 		float Hw = 0.0f;
-		FDebugOverlay::MeasureText(Hint, HudFontScale, Hw, HintH);
-		HintH += 12.0f; // gap above hint
+		FPaintContext::MeasureTextOnly(Hint.ToString(), HudFontScale, Hw, HintH);
+		HintH += 12.0f; // gap above the hint
 	}
 
 	BoxW = MaxButtonW;
 	const float TotalH = TitleH + ButtonsH + HintH;
 	BoxX = (static_cast<float>(ViewportW) - BoxW) * 0.5f;
-	BoxY = std::clamp((static_cast<float>(ViewportH) - TotalH) * 0.5f, 10.0f,
-		std::max(10.0f, static_cast<float>(ViewportH) - TotalH - 10.0f));
+	BoxY = FMath::Clamp((static_cast<float>(ViewportH) - TotalH) * 0.5f, 10.0f,
+		FMath::Max(10.0f, static_cast<float>(ViewportH) - TotalH - 10.0f));
 
 	float Y = BoxY + TitleH;
-	for (std::unique_ptr<UButton>& Button : Buttons)
+	for (TUniquePtr<UButton>& Button : Buttons)
 	{
 		float Dw = 0.0f;
 		float Dh = 0.0f;
@@ -178,43 +169,43 @@ void UVerticalBox::NativePaint(FPaintContext& Ctx)
 	}
 	CacheLayout(Ctx.GetWidth(), Ctx.GetHeight());
 
-	if (!Title.empty())
+	if (!Title.IsEmpty())
 	{
-		Ctx.DrawText(Title, static_cast<float>(Ctx.GetWidth()) * 0.5f, BoxY, glm::vec3{1.0f, 0.82f, 0.35f},
-			HudFontScale, ETextJustify::Center);
+		Ctx.DrawText(Title.ToString(), static_cast<float>(Ctx.GetWidth()) * 0.5f, BoxY,
+			FLinearColor(1.0f, 0.82f, 0.35f), HudFontScale, ETextJustify::Center);
 	}
 
-	for (std::unique_ptr<UButton>& Button : Buttons)
+	for (TUniquePtr<UButton>& Button : Buttons)
 	{
 		Button->NativePaint(Ctx);
 	}
 
-	if (!Hint.empty())
+	if (!Hint.IsEmpty())
 	{
 		float ButtonsBottom = BoxY + TitleH;
-		for (const std::unique_ptr<UButton>& Button : Buttons)
+		for (const TUniquePtr<UButton>& Button : Buttons)
 		{
 			ButtonsBottom = Button->GetY() + Button->GetHeight();
 		}
 		const float HintY = ButtonsBottom + 12.0f;
-		Ctx.DrawText(Hint, static_cast<float>(Ctx.GetWidth()) * 0.5f, HintY, glm::vec3{0.65f, 0.65f, 0.60f},
-			HudFontScale, ETextJustify::Center);
+		Ctx.DrawText(Hint.ToString(), static_cast<float>(Ctx.GetWidth()) * 0.5f, HintY,
+			FLinearColor(0.65f, 0.65f, 0.60f), HudFontScale, ETextJustify::Center);
 	}
 }
 
-std::string UVerticalBox::TickInput(FGenericWindow& Window, bool bCursorCaptured, float DeltaTime)
+FName UVerticalBox::TickInput(FGenericWindow& Window, bool bCursorCaptured, float DeltaTime)
 {
-	if (Buttons.empty())
+	if (Buttons.Num() == 0)
 	{
-		return {};
+		return NAME_None;
 	}
 	if (IgnoreActivateSeconds > 0.0f)
 	{
-		IgnoreActivateSeconds = std::max(0.0f, IgnoreActivateSeconds - DeltaTime);
+		IgnoreActivateSeconds = FMath::Max(0.0f, IgnoreActivateSeconds - DeltaTime);
 	}
 
-	int FbW = 0;
-	int FbH = 0;
+	int32 FbW = 0;
+	int32 FbH = 0;
 	Window.GetFramebufferSize(FbW, FbH);
 	if (FbW > 0 && FbH > 0)
 	{
@@ -237,47 +228,45 @@ std::string UVerticalBox::TickInput(FGenericWindow& Window, bool bCursorCaptured
 	}
 
 	const bool bAllowKeyboardActivate = IgnoreActivateSeconds <= 0.0f;
-	std::string Activated;
+	FName Activated = NAME_None;
 	if (bAllowKeyboardActivate && bEnter && !bEnterWasDown)
 	{
 		UButton* Button = GetButton(Selected);
-		if (Button != nullptr && Button->IsEnabled() && !Button->GetId().empty())
+		if (Button != nullptr && IsSelectable(*Button))
 		{
 			Activated = Button->GetId();
 		}
 	}
 
-	// Hover + click (never gated by travel lockout).
+	// Hover + click (never gated by the travel lockout).
 	if (!bCursorCaptured && FbW > 0 && FbH > 0)
 	{
 		const FVector2D Cursor = Window.GetCursorPos();
-		const double Mx = Cursor.X;
-		const double My = Cursor.Y;
-		int WinW = 0;
-		int WinH = 0;
+		int32 WinW = 0;
+		int32 WinH = 0;
 		Window.GetWindowSize(WinW, WinH);
-		WinW = std::max(WinW, 1);
-		WinH = std::max(WinH, 1);
-		const float FbX = static_cast<float>(Mx) * static_cast<float>(FbW) / static_cast<float>(WinW);
-		const float FbY = static_cast<float>(My) * static_cast<float>(FbH) / static_cast<float>(WinH);
+		WinW = FMath::Max(WinW, 1);
+		WinH = FMath::Max(WinH, 1);
+		const float FbX = Cursor.X * static_cast<float>(FbW) / static_cast<float>(WinW);
+		const float FbY = Cursor.Y * static_cast<float>(FbH) / static_cast<float>(WinH);
 
-		for (std::unique_ptr<UButton>& Button : Buttons)
+		for (TUniquePtr<UButton>& Button : Buttons)
 		{
 			Button->SetHovered(Button->Contains(FbX, FbY));
 		}
 
 		if (bMouse && !bMouseWasDown)
 		{
-			for (int I = 0; I < static_cast<int>(Buttons.size()); ++I)
+			for (int32 I = 0; I < Buttons.Num(); ++I)
 			{
-				UButton* Button = Buttons[static_cast<std::size_t>(I)].get();
+				UButton* Button = Buttons[I].Get();
 				if (!Button->Contains(FbX, FbY))
 				{
 					continue;
 				}
 				Selected = I;
 				ApplySelectionVisuals();
-				if (Button->IsEnabled() && !Button->GetId().empty())
+				if (IsSelectable(*Button))
 				{
 					Activated = Button->GetId();
 				}
@@ -287,7 +276,7 @@ std::string UVerticalBox::TickInput(FGenericWindow& Window, bool bCursorCaptured
 	}
 	else
 	{
-		for (std::unique_ptr<UButton>& Button : Buttons)
+		for (TUniquePtr<UButton>& Button : Buttons)
 		{
 			Button->SetHovered(false);
 		}
