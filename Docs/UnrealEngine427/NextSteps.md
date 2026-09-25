@@ -163,23 +163,40 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
   after the world tick. Tests create worlds with `FScopedTestWorld`. 308 tests; the golden tests only changed how
   they construct objects; Win64 frames and PS2 ELFs are unchanged.
 
+### Done — Levels as actors and the render boundary (P13, part 1)
+
+([LeonMapping — P13](LeonMapping.md#p13--levels-as-actors-and-the-render-boundary-part-1),
+[LEVELS.md](../LEVELS.md), [ARCHITECTURE §12](../ARCHITECTURE.md#12-rendering-desktop)):
+
+- The `.llev` reader spawns `AWorldSettings`, `AStaticMeshActor`, `APlayerStart`, `ATargetPoint`, `ATriggerVolume`,
+  `ABlockingVolume`, `APainCausingVolume` (box volumes, D16), `ADirectionalLight` and `APointLight`; the saver writes
+  the same bytes back from the actors. `FLevelStaticMesh` and the level snapshots are gone; `ULegacyLevelDataComponent`
+  keeps the fields with no UE home until P15.
+- Physics bodies come from `UPrimitiveComponent::CreatePhysicsState` and are keyed by component
+  (`RegisterBodiesFromLevel`, `SyncFromLevel` / `SyncToLevel` are gone).
+- The render boundary: `FSceneInterface` and the scene proxies, `IRendererModule`, `FSceneViewFamily` / `FSceneView`
+  and `FCanvas` are Engine headers; the Renderer implements `FRendererModule` and `FScene` and owns the GPU copies of
+  the assets, which are CPU data in Engine. `UWorld::Scene` is allocated through the module (none with `-nullrhi`),
+  the HUD, UMG and the debug text draw through `FCanvas`, and Engine includes no Renderer header (the Renderer depends
+  on Engine; the cycle is gone).
+- 310 tests; the golden tables, the `.llev` bytes and the Win64 frames are unchanged.
+
 ### Next
 
-- **P13:** `UEngine` / `UGameEngine` as UObjects with `GEngine`; `UEngine::LoadMap` releases the old world
+- **P13, part 2:** `UEngine` / `UGameEngine` as UObjects with `GEngine`; `UEngine::LoadMap` releases the old world
   (`UGameInstance::DestroyWorldContextWorld` + `CollectGarbage`), creates or loads the new one and calls
   `UWorld::BeginPlay` (Leon worlds play from their creation until then) and picks the game mode with D18's precedence
-  (replacing `UWorld::SetGameMode(TSubclassOf)` and `FGameApplication`'s `OnEnter` / `Tick(Engine)` / `OnExit` hooks);
-  the round restart collects too. Levels become actors (`AStaticMeshActor` owning a `UStaticMeshComponent`,
-  `APlayerStart`, volumes, lights, `AWorldSettings`) and `FLevelStaticMesh` goes; `UPrimitiveComponent` registers with
-  `FScene` (replacing `UWorld::AddPrimitive` / `SubmitPrimitiveDraws`) and creates its physics body in
-  `CreatePhysicsState` (replacing `UWorld::RegisterBodiesFromLevel`). The player controller owns its `UPlayerInput`,
-  `AHUD` (`HUDClass`) and camera manager; settings classes (`UGameMapsSettings`, `UInputSettings`) use
+  (`AWorldSettings::DefaultGameMode` included; replacing `UWorld::SetGameMode(TSubclassOf)` and `FGameApplication`'s
+  `OnEnter` / `Tick(Engine)` / `OnExit` hooks); the round restart collects too. `UGameViewportClient::Draw` takes over
+  `UGameEngine::Render` (the view family, the scene view and the frame `FCanvas`). The player controller owns its
+  `UPlayerInput`, `AHUD` (`HUDClass`) and camera manager; settings classes (`UGameMapsSettings`, `UInputSettings`) use
   `UPROPERTY(Config)` with `FSoftObjectPath` / `FSoftClassPath`; `UGameViewportClient` routes console commands to
   `ProcessConsoleExec` / `FSelfRegisteringExec::StaticExec`.
 - Later: move the character movement code from `ACharacter` into `UCharacterMovementComponent` (UE's
   `PerformMovement`, `MovementMode`, `Velocity`, `CurrentFloor`); a cached `ComponentToWorld`; tick functions.
 - **P14:** asset classes (`UStaticMesh`, `UTexture2D`, `USoundWave`, ...) keep their payloads in `FByteBulkData`
-  (saved at the end of the package) and upload them in `PostLoad`; `UAssetImportData`; the editor module saves with
+  (saved at the end of the package) and create their render resources in `PostLoad` (replacing Engine's
+  `FResourceCache` and the Renderer's `FRenderResourceCache`); `UAssetImportData`; the editor module saves with
   `UPackage::SavePackage` under `/Game/` and `/Engine/`.
 - **P15:** `.lmap`: a package holding `UWorld`, `ULevel PersistentLevel`, `AWorldSettings` and the actors, saved to a
   `.lmap` file (which sets `PKG_ContainsMap`); `UEngine::LoadMap` loads it with `LoadPackage`.
@@ -194,7 +211,8 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 - Gameplay framework on PS2 (the modules use UE containers and Core math since P6, but Engine still depends on the
   desktop-only Renderer, UMG and AudioMixer); then `Game/ThirdPerson` can use `AThirdPersonCharacter : ACharacter`
   like TP_ThirdPerson.
-- Renderer through RHI command lists instead of direct GL calls; break the Engine ↔ Renderer cycle.
+- Renderer through RHI command lists instead of direct GL calls (the Engine ↔ Renderer cycle is gone since P13); a
+  render thread (the scene proxies are the seam).
 - `UNavigationSystemBase` seam so NavigationSystem can move to its own module.
 - `PS2TargetPlatform` Developer module (cook formats for PS2: textures, LPS2 meshes).
 - Texture mipmaps on PS2 (GS MIPTBP registers) — fixes floor moiré in ThirdPerson.
@@ -211,8 +229,9 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 - **Project descriptors:** `.lproj` is loaded in `PreInit` (P4), but `LeonGame` still has no project and loads one
   level with `-map=`; `UEngine::LoadMap` and the config-driven game mode replace it in P13.
 - **Engine glue from P12:** `UGameEngine` is not a UObject (an `FGCObject`), owns one `AHUD` outside any world and
-  one `UPlayerInput`, and `FGameApplication` drives the game mode through `OnEnter` / `Tick(Engine)` / `OnExit`; P13
-  replaces all of it with UE's `UGameEngine`, viewport client and player controller.
+  one `UPlayerInput`, builds the view family and the canvas itself, and `FGameApplication` drives the game mode through
+  `OnEnter` / `Tick(Engine)` / `OnExit`; P13's second part replaces all of it with UE's `UGameEngine`, viewport client
+  and player controller.
 - **Platform checks in shared code:** the `PLATFORM_WINDOWS` tests in `Core/Private/HAL/MallocAnsi.cpp` and
   `Core/Private/Misc/OutputDeviceRedirector.cpp` should become HAL functions or move under `Private/Windows`.
 - **Linux:** registered in LeonBuildTool but not built or tested; enable `-Werror=shadow` on the Linux host

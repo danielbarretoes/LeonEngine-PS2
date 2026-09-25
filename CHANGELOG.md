@@ -7,12 +7,48 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Twelfth step of the Core / CoreUObject plan (P12): the gameplay framework becomes UObjects, owned through the world
-and the game instance and freed by the garbage collector at safe points; Leon code builds without RTTI or C++
-exceptions. Behaviour, the golden tests, the Win64 frames and the PS2 ELFs are unchanged.
+Twelfth and thirteenth steps of the Core / CoreUObject plan (P12, P13 part 1): the gameplay framework becomes
+UObjects, owned through the world and the game instance and freed by the garbage collector at safe points; Leon code
+builds without RTTI or C++ exceptions. Levels become actors (static meshes, player starts, volumes, lights, target
+points and the world settings), physics bodies come from the components, and the Engine talks to the Renderer only
+through UE's render boundary: `FSceneInterface` and scene proxies, `IRendererModule`, `FSceneView` and `FCanvas`.
+Behaviour, the golden tests, the `.llev` bytes and the Win64 frames are unchanged.
 
 ### Added
 
+- **Levels as actors** (P13, Engine; plan decision D16 for the volumes).
+  - `AStaticMeshActor` (root `StaticMeshComponent0`), `APlayerStart` (`CollisionCapsule` 40 / 92, `PlayerStartTag`),
+    `ATargetPoint`, `AVolume` (a `UBoxComponent` brush, `EncompassesPoint`, `GetBrushBounds`), `ATriggerVolume`,
+    `ABlockingVolume` (blocks by default), `APainCausingVolume` (`bPainCausing`, `DamagePerSec`, `PainInterval`),
+    `ALight` / `ADirectionalLight` / `APointLight` with `ULightComponentBase`, `ULightComponent`,
+    `ULocalLightComponent`, `UDirectionalLightComponent` and `UPointLightComponent`, and `AWorldSettings`
+    (`DefaultGameMode`, `KillZ`; `ULevel::WorldSettings`).
+  - The `.llev` reader spawns them (`AWorldSettings` first, then one actor per record in file order, then the lights:
+    at most 2 directional and 4 point lights, a default sun when there is none) and the saver writes the same bytes
+    back from the actors (`System.Engine.LevelFormat.SaveWritesTheSameBytes`). `ULegacyLevelDataComponent` keeps the
+    record fields that have no UE counterpart yet (mesh and material paths, spin, bob, interaction data, the level
+    name, the game mode name and the camera framing).
+  - `EComponentMobility` and `USceneComponent::SetMobility`; `ECollisionEnabled` and
+    `UPrimitiveComponent::SetCollisionEnabled` / `SetSimulatePhysics` / `SetEnableGravity`;
+    `FRotationConversionCache` (a component's rotation keeps the exact quaternion it was given).
+  - `UGameplayStatics::GetAllActorsOfClass` / `GetAllActorsWithTag`.
+- **Physics state from the components** (P13). `UPrimitiveComponent::CreatePhysicsState` adds a body to the world's
+  physics scene when collision is on and `DestroyPhysicsState` removes it; `UActorComponent::RecreatePhysicsState`;
+  `FPhysScene::AddComponentBody` / `RemoveComponentBody` / `GetBodyOwner` / `SyncComponentsToBodies` /
+  `RebuildRigidWorld`.
+- **The render boundary** (P13, Engine and Renderer).
+  - Engine headers: `SceneInterface.h` (`FSceneInterface`), `PrimitiveSceneProxy.h`, `StaticMeshSceneProxy.h`,
+    `SkeletalMeshSceneProxy.h`, `LightSceneProxy.h`, `RendererInterface.h` (`IRendererModule`, `GetRendererModule`,
+    `FFrameStats`), `SceneView.h` (`FEngineShowFlags`, `FSceneViewFamily`, `FSceneView`, `FSceneViewInitOptions`)
+    and `CanvasTypes.h` (`FCanvas`: tiles, lines and text batched by depth sort key, `Flush_GameThread`).
+  - Components create their scene proxies (`CreateSceneProxy`, `CreateRenderState_Concurrent`,
+    `MarkRenderStateDirty`, `SendRenderTransform_Concurrent`, `SendRenderDynamicData_Concurrent`) in `UWorld::Scene`,
+    which `UWorld::InitWorld` allocates through `IRendererModule::AllocateScene` (null in headless runs);
+    `UWorld::SendAllEndOfFrameUpdates` before each frame; `UWorld::LineBatcher`.
+  - The Renderer implements `FRendererModule` and `FScene` (primitives and lights in level order) and owns the GPU
+    copies of the CPU assets (`FRenderResourceCache`: static and skeletal mesh buffers, textures) and the canvas pass.
+  - `FModuleManager::GetModulePtr` / `LoadModuleChecked`; `System.Engine.Components.SceneProxiesFollowTheComponents`:
+    310 tests in total.
 - **Gameplay framework as UObjects** (Engine, AIModule, UMG, AnimationCore; plan decisions D11, D12).
   - `UCLASS` types with `UPROPERTY` members: `AActor`, `AInfo`, `UActorComponent`, `USceneComponent`, `APawn`,
     `ACharacter`, `AController`, `APlayerController`, `AAIController`, `AGameModeBase`, `AGameStateBase`,
@@ -67,13 +103,37 @@ exceptions. Behaviour, the golden tests, the Win64 frames and the PS2 ELFs are u
   GCC / Clang `-fno-rtti -fno-exceptions`. CMake's MSVC defaults are stripped from `CMAKE_CXX_FLAGS`; third-party C++
   that needs them gets them back with `leon_third_party_cxx_defaults` (tinyobjloader); Jolt keeps its own flags.
 - LeonBuildTool: every reflected module also has a `LeonHeaderTool.<Module>` target, which modules with a circular
-  dependency on it wait for (the Renderer includes Engine's reflected `Level.h`).
+  dependency on it wait for (UMG waits for Engine's reflected headers).
+- Levels (P13): `ULevel` holds only its actors and `AWorldSettings`; `GetAllActorsOfClass<APlayerStart>` replaces the
+  player start snapshots, the volume helpers and the navigation read the volume and static mesh actors, and
+  `AGameModeBase::FindPlayerStart` returns an `APlayerStart`. Physics bodies and hits carry a `ComponentID` (the
+  component's `GetUniqueID`) instead of a level mesh index (`IgnoreComponentID`, `NoComponentID`); the world keeps
+  dynamic bodies' components in step (`SyncComponentsToBodies`) instead of copying the level to and from the physics
+  scene.
+- Assets (P13): `UStaticMesh`, `USkeletalMesh` and `UTexture2D` (now `Engine/StaticMesh.h`, `Engine/SkeletalMesh.h`,
+  `Engine/Texture2D.h`), `FResourceCache`, the material assets and `FDebugDraw` / `FDebugOverlay` move from the
+  Renderer to Engine as CPU data; their GPU buffers and textures live in the Renderer's cache.
+  `FResourceCache::SetGpuUploadEnabled` is `SetTextureLoadingEnabled`. Their messages log as `LogEngine`, and the
+  `.lmat` reader's as `LogLeonMaterial` (both were `LogRenderer`).
+- Drawing (P13): `UGameEngine::Render` renders a view family through `IRendererModule::BeginRenderingViewFamily` and
+  draws the HUD and the debug text through a frame `FCanvas`; UMG's `FPaintContext`, `AHUD::Paint` and
+  `FDebugOverlay::Draw` take an `FCanvas`. The show flags (F1 bounds, F6 axes gizmo) are `UGameEngine`'s
+  `FEngineShowFlags` (`SetAxesGizmoEnabled`). `EShaderReloadResult` / `MergeShaderReload` move to RenderCore's
+  `ShaderCore.h`, `MakeReflectMatrix` / `FitLightSpaceMatrix` to `ViewMatrices.h`, and the `.lmat` document and
+  writer to RenderCore's `LeonMaterialFormat.h`.
+- Module graph (P13): Engine no longer depends on the Renderer or includes its headers; the Renderer depends on
+  Engine; Launch links both. Engine depends on UMG publicly and UMG on Engine circularly (it was the other way round).
 
 ### Removed
 
 - `FSkelMeshAttachment` and `USkeletalMeshComponent::AddAttachment` / `GetAttachments` / `GetAttachmentWorldMatrix`
   (unused; attach a `UStaticMeshComponent` to a bone socket instead); `ACharacter::SetCharacterMovement` (the
   movement is a component: edit `GetCharacterMovement()`); `UWorld::SubmitSkeletalDraws` (`SubmitPrimitiveDraws`).
+- P13: `FLevelStaticMesh` and the level's snapshots (meshes, player starts, trigger, pain and blocking volumes,
+  lights, the camera; `ULevel::Npos`), `AActor::LevelMeshIndex` / `SyncTransformToLevel`,
+  `UWorld::RegisterBodiesFromLevel`, `FPhysScene::SyncFromLevel` / `SyncToLevel`, `FWorldGameplayFrameParams::Level`,
+  `UWorld::Primitives` / `AddPrimitive` / `SubmitPrimitiveDraws` and every `SubmitDraw`, `UGameEngine::GetRenderer`
+  and the Renderer's public `SceneRenderer.h`.
 
 ## [0.15.0] - 2026-09-25
 

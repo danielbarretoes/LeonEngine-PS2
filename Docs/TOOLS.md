@@ -28,7 +28,7 @@ LeonCook (Program)
   └─ Cooker (Developer)
        ├─ MeshUtilities  (FStaticMeshBuilder, ObjImport, FbxStaticMesh, GltfImport, FbxSkeletalImport)
        │    ├─ AnimationCore (skeleton / animation types filled by the FBX skeletal import)
-       │    └─ Renderer  (LeonMaterialFormat: .lmat written by glTF import)
+       │    └─ RenderCore (LeonMaterialFormat: .lmat written by glTF import)
        └─ Json           (recipe parsing, native UE-style module)
 ```
 

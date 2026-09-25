@@ -31,6 +31,13 @@ actor that spawns during its tick, test pawns, controllers and a component that 
 collection, attachment rules and sockets, the primitive render state, the game mode, game state and match states, the
 HUD widgets and anim instances as objects, and the engine's collection timer.
 
+Since P13 the level content is actors. The level tests load `.llev` documents into a test world and check the
+spawned actors (`GetAllActorsOfClass`), their physics bodies and, with
+`System.Engine.LevelFormat.SaveWritesTheSameBytes`, that saving a loaded level gives the bytes the saver wrote before
+P13 (stored MD5 hashes: update them only when the format changes on purpose). `LeonAutomationTests` links the Renderer, so test worlds have the Renderer's `FScene` (it
+needs no GPU: the GPU copies are made only when a frame is drawn), and
+`System.Engine.Components.SceneProxiesFollowTheComponents` checks that the proxies follow their components.
+
 The package tests (`System.CoreUObject.Package.*`) name their packages `/PackageTest/...`, a mount point they register
 for their duration, save them to memory (`UPackage::SaveToMemory` + `FLinkerLoad::RegisterInMemoryPackage`, so they
 run on the PS2 too), destroy them (pending kill and a full collection, as a new process would start) and load them
@@ -45,7 +52,8 @@ UE's axes, so any change of sign or unit fails them.
 
 `-Screenshot=<file.bmp>` saves frame `-ExitAfterFrames=N` (default 60) as a 24-bit BMP and exits. A run of
 `LeonGame.exe -ExitAfterFrames=300` should log two `LogGarbage` lines and nothing else of note: one after the level
-load (the staging level) and one at exit (the world teardown), and no errors. `-AxesGizmo` turns
+load (`Collected 0` on the first load: there is no previous level content to free) and one at exit (the world
+teardown), and no errors. `-AxesGizmo` turns
 the axes gizmo on from the start (see below); captures without it do not change.
 
 ## Axes gizmo
@@ -58,8 +66,9 @@ blue as in UE:
   rotation only, projected orthographically. An axis pointing into the screen shrinks to a dot; the axis nearest the
   viewer is drawn last.
 
-`FDebugDraw::AddAxes(Origin or FTransform, Length = 100)` and `FDebugDraw::AddViewAxes(View)` (Renderer,
-`Public/Debug/DebugDraw.h`) draw them; `FSceneRenderer::SetAxesGizmoEnabled` switches the gizmo. It is off by default.
+`FDebugDraw::AddAxes(Origin or FTransform, Length = 100)` and `FDebugDraw::AddViewAxes(View)` (Engine,
+`Public/Debug/DebugDraw.h`) draw them; the view family's `EngineShowFlags.AxesGizmo` switches the gizmo
+(`UGameEngine::SetAxesGizmoEnabled`). It is off by default.
 
 ## Manual checklist: axes and units (P7)
 

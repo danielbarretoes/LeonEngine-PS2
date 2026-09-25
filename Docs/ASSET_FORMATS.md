@@ -3,7 +3,7 @@
 **Audience:** content authors and tool writers
 **Also:** [LEVELS.md](LEVELS.md) (`.llev` levels) · [TOOLS.md](TOOLS.md) (LeonCook) · [SETUP.md](SETUP.md)
 
-Runtime formats are Leon binaries plus a few small INI-style text files. DCC sources (OBJ, FBX, glTF) are cooked with LeonCook; the runtime never loads them. The desktop runtime (`Renderer`, `Engine` modules) reads these files; the PS2 runtime does not load any of them yet (see [PS2](#ps2)). Since 0.15.0 CoreUObject saves and loads UObjects as `.lasset` / `.lmap` [packages](#packages--lasset--lmap), the format every other asset moves to from P14 on.
+Runtime formats are Leon binaries plus a few small INI-style text files. DCC sources (OBJ, FBX, glTF) are cooked with LeonCook; the runtime never loads them. The desktop runtime (`Engine` and `RenderCore` modules; the `Renderer` only uploads what they read) reads these files; the PS2 runtime does not load any of them yet (see [PS2](#ps2)). Since 0.15.0 CoreUObject saves and loads UObjects as `.lasset` / `.lmap` [packages](#packages--lasset--lmap), the format every other asset moves to from P14 on.
 
 > Unreal `.uasset` / `.umap` are proprietary. Leon does not read or write them. Interchange with Blender / Unreal goes through FBX or glTF, cooked to Leon formats. The `.lasset` layout follows UE 4.27's package structure (summary, name / import / export tables, tagged properties) but is Leon's own binary format.
 
@@ -15,10 +15,10 @@ Runtime formats are Leon binaries plus a few small INI-style text files. DCC sou
 | --- | --- | --- | --- |
 | `.lasset` / `.lmap` | Binary `LEON` | UObject package: an asset / a map (`PKG_ContainsMap`) | `UPackage::Save`, `LoadPackage` / `LoadObject` (CoreUObject), see [Packages](#packages--lasset--lmap) |
 | `.lmesh` | Binary `LMSH` | Cooked static mesh | `LeonMeshFormat` (RenderCore) |
-| `.lmat` | INI text | Material | `LeonMaterialFormat` (Renderer) |
+| `.lmat` | INI text | Material | `LeonMaterialFormat` (RenderCore), `LoadLeonMaterialFile` (Engine) |
 | `.llev` | Binary `LLEV` | Level | `LeonLevelFormat` (Engine), see [LEVELS.md](LEVELS.md) |
 | `.lproj` / `.lplugin` | JSON | Build descriptors | LeonBuildTool (CMake) |
-| `.png` (and other stb_image formats) | Image | Textures | `FResourceCache::LoadTexture` (Renderer) |
+| `.png` (and other stb_image formats) | Image | Textures | `FResourceCache::LoadTexture` (Engine) |
 | `.obj` / `.fbx` / `.gltf` / `.glb` | Source | Cook / import input only | MeshUtilities |
 
 No engine asset is a package yet: the asset classes (`UStaticMesh`, `UTexture2D`, `UMaterial`, …) arrive in P14 and the `.lmap` maps in P15; until then `.lmesh`, `.lmat`, `.llev` and PNG files stay the runtime formats. The cooked skeletal formats (`.lskel`, `.lskm`, `.lanim`, `.lchar`, `*.blendspace1d.json`), `.lm` lightmaps, `.hdr` environment maps and the `leon.game.json` pack marker were removed in 0.12.0; skeletal assets return as `USkeletalMesh` / `UAnimSequence` `.lasset` packages and static lighting as `<Map>_BuiltData.lasset`.
@@ -181,7 +181,7 @@ Material slot strings carry the source's diffuse texture path per slot (from the
 
 ## Material — `.lmat`
 
-Header: `Engine/Source/Runtime/Renderer/Public/LeonMaterialFormat.h`. INI-style text, similar to an Unreal Material Instance's parameters.
+Header: `Engine/Source/Runtime/RenderCore/Public/LeonMaterialFormat.h` (the document, the reader and the writer); Engine's `MaterialAsset.h` loads a file into an `FMaterial` with its textures. INI-style text, similar to an Unreal Material Instance's parameters.
 
 ```ini
 # Leon Material (.lmat)
@@ -224,7 +224,7 @@ NormalMap=
 | `[Textures]` | `BaseColorMap` (`AlbedoMap`, `DiffuseMap`) | Texture path, `checker` (procedural 64 px checker), or empty |
 | `[Textures]` | `NormalMap` | Texture path, `bump` (procedural normal map), or empty |
 
-Section and key names are case-insensitive. `#` and `;` start comments. Unknown keys are reported as `LogRenderer` warnings and ignored. Texture paths are resolved with `FPaths::ResolveLegacyContentPath` (content-relative, not relative to the `.lmat` file: the project content first, then the engine content).
+Section and key names are case-insensitive. `#` and `;` start comments. Unknown keys are reported as `LogLeonMaterial` warnings and ignored. Texture paths are resolved with `FPaths::ResolveLegacyContentPath` (content-relative, not relative to the `.lmat` file: the project content first, then the engine content).
 
 **API:** `LoadLeonMaterialDocument` (parse only, paths kept as strings in `FLeonMaterialDocument`), `LoadLeonMaterialFile` (parse and load textures into an `FMaterial`), `SaveLeonMaterialFile`, `MakeDefaultLeonMaterialText`. Runtime cache: `FResourceCache::LoadMaterial` / `InvalidateMaterial`.
 
@@ -307,8 +307,8 @@ Vertex upload is not implemented yet: a valid blob draws a placeholder triangle.
 | --- | --- |
 | `.lasset` / `.lmap` packages | `Engine/Source/Runtime/CoreUObject` — `UPackage::Save` (`Private/UObject/SavePackage.cpp`), `FLinkerLoad`, `FLinkerSave`, `FPackageFileSummary`, `FObjectImport` / `FObjectExport`, `FPropertyTag`, `FByteBulkData`, `FPackageName` |
 | `.lmesh` I/O | `Engine/Source/Runtime/RenderCore` — `LeonMeshFormat`, `FMeshData`, `FVertex` |
-| `.lmat` I/O | `Engine/Source/Runtime/Renderer` — `LeonMaterialFormat`, `FMaterial` (`RenderCore/Public/Material.h`) |
-| GPU resource cache | `Engine/Source/Runtime/Renderer` — `FResourceCache` (`UStaticMesh`, `UTexture2D`, materials) |
+| `.lmat` I/O | `Engine/Source/Runtime/RenderCore` — `LeonMaterialFormat`, `FMaterial` (`Public/Material.h`); `Engine` — `MaterialAsset` (`LoadLeonMaterialFile`) |
+| Resource cache | `Engine/Source/Runtime/Engine` — `FResourceCache` (CPU `UStaticMesh`, `USkeletalMesh`, `UTexture2D`, materials); the GPU copies in the Renderer's private `FRenderResourceCache` |
 | `.llev` I/O and apply | `Engine/Source/Runtime/Engine` — `LeonLevelFormat`, `LevelLoader` |
 | Skeletal FBX import | `Engine/Source/Developer/MeshUtilities` — `FbxSkeletalImport` |
 | Content paths | `Engine/Source/Runtime/Core` — `FPaths` |

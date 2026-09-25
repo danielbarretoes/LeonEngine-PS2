@@ -384,7 +384,7 @@ targets. For a reflected module:
 - The `.gen.cpp` files compile into the module, and `<tree>/Inc/<Module>` becomes a public include path.
 - The module table points `RegisterReflection` at `RegisterReflection_<Module>`.
 - A `LeonHeaderTool.<Module>` custom target wraps the step: a module with a circular dependency on the reflected one
-  (no build-order edge) waits for it with `add_dependencies` (the Renderer includes Engine's `Level.h`).
+  (no build-order edge) waits for it with `add_dependencies` (UMG, circular on Engine, waits for Engine's headers).
 
 Targets with `COLLECT_AUTOMATION_TESTS` also reflect `<Module>/Private/Tests/**.h` (the `<Module>.Tests` unit,
 compiled into the executable). A reflected module must be a `Runtime` or `Developer` module with `IMPLEMENT_MODULE`.

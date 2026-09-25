@@ -1,15 +1,17 @@
 # Levels (`.llev`)
 
-A level is a binary Leon Level file (`.llev`) loaded into a `ULevel` by the desktop runtime (`Engine` module). There is no JSON level format: `LoadLevelFile` rejects any path whose extension is not `.llev`. The PS2 runtime does not load levels yet; the ThirdPerson demo builds its level in code (`FThirdPersonLevel`).
+A level is a binary Leon Level file (`.llev`) loaded into a `ULevel` by the desktop runtime (`Engine` module). Since P13 its content is actors, as in UE: the reader spawns them into the game world and the saver writes them back. There is no JSON level format: `LoadLevelFile` rejects any path whose extension is not `.llev`. The PS2 runtime does not load levels yet; the ThirdPerson demo builds its level in code (`FThirdPersonLevel`).
 
-Code: `Engine/Source/Runtime/Engine/Classes/Engine/Level.h`, `Engine/Source/Runtime/Engine/Public/Level/` (`LeonLevelFormat.h`, `LevelLoader.h`), `Engine/Source/Runtime/Launch/Private/Desktop/GameApplication.cpp` (startup level).
+Code: `Engine/Source/Runtime/Engine/Classes/Engine/Level.h`, `Engine/Source/Runtime/Engine/Public/Level/` (`LeonLevelFormat.h`, `LevelLoader.h`, `LegacyLevelDataComponent.h`), the actor classes in `Engine/Source/Runtime/Engine/Classes/{Engine,GameFramework}/`, `Engine/Source/Runtime/Launch/Private/Desktop/GameApplication.cpp` (startup level).
 Also: [ASSET_FORMATS.md](ASSET_FORMATS.md) (`.lmat` / `.lmesh` referenced by actors) · [ARCHITECTURE.md](ARCHITECTURE.md) · [SETUP.md](SETUP.md).
 
 ## Types
 
 | Type | Header | Role |
 | --- | --- | --- |
-| `ULevel` | `Classes/Engine/Level.h` | Live level, a UObject: the game world's persistent level (`UGameEngine::GetLevel`). Besides the world's actors (`Actors`) it carries the `.llev` content until P13 turns it into actors: `FLevelStaticMesh`es, `FPlayerStart`, `FTriggerVolume`, `FPainCausingVolume`, `FAISpawnPoint`, `FDirectionalLight`, `FPointLight`, level name (`GetLevelName`), game mode |
+| `ULevel` | `Classes/Engine/Level.h` | Live level, a UObject: the game world's persistent level (`UGameEngine::GetLevel`). It holds the world's actors (`Actors`: the level content and the gameplay actors) and its `AWorldSettings` (`GetWorldSettings`) |
+| `AWorldSettings` | `Classes/GameFramework/WorldSettings.h` | The level's settings actor, spawned first (`DefaultGameMode`, `KillZ`); its legacy data component keeps the level name, the game mode string, the environment fields and the camera framing |
+| `ULegacyLevelDataComponent` | `Public/Level/LegacyLevelDataComponent.h` | The record fields with no UE counterpart yet, on the actor spawned from the record (class, mesh and material keys, sphere tessellation, spin, bob, trigger data, light orbit), so the saver can write them back; it goes away with the format (P15) |
 | `FLevelDocument` | `Public/Level/LeonLevelFormat.h` | In-memory mirror of a `.llev`: plain data, no GPU resources (`FLevelActorRecord`, `FLevelLightRecord`, `FLevelCameraRecord`) |
 
 ## Load pipeline
@@ -18,16 +20,22 @@ Also: [ASSET_FORMATS.md](ASSET_FORMATS.md) (`.lmat` / `.lmesh` referenced by act
 LoadLevelFile(UGameEngine&, Path)
   ├─ extension must be .llev
   ├─ LoadLeonLevelFile            .llev bytes -> FLevelDocument (DeserializeLeonLevel)
-  └─ ApplyLevelDocument           builds a transient staging ULevel; commits only on full success
-        ├─ actors, lights
-        ├─ commit: GetLevel().MoveLevelContentFrom(Staged)
-        ├─ camera (UGameEngine::GetCamera)
-        └─ CollectGarbage               a level load is a safe point (D11): the staging level goes
+  └─ ApplyLevelDocument
+        ├─ resolve every record first: transform, mesh (basic shape or .lmesh), material, fit height
+        │     (a failure here leaves the current level untouched)
+        ├─ destroy the previous level content actors (the gameplay actors stay)
+        ├─ spawn AWorldSettings (ULevel::WorldSettings)
+        ├─ spawn one actor per record, in file order (see Actor classes)
+        ├─ spawn the lights (see Lights)
+        ├─ camera: kept on the world settings and applied to UGameEngine::GetCamera
+        └─ CollectGarbage               a level load is a safe point (D11): the replaced actors go
 ```
 
-There is no separate validation pass: magic, version, class values and limits are enforced by the reader, and resource failures by `ApplyLevelDocument`. A failed load leaves the previous level and camera untouched. If any `StaticMesh` actor's mesh fails to load, the whole level is rejected (no partial loads). A level with no actors and no lights is rejected; blank or lights-only levels are valid.
+Spawning an actor registers its components: a primitive with collision adds its body to the world's physics scene (`CreatePhysicsState`) and, when the world renders, its scene proxy to the world's scene (`CreateRenderState_Concurrent`), so there is no separate physics or render step after the load.
 
-Saving: `BuildLevelDocument(const ULevel&, const UCameraComponent&)` snapshots a live level, then `SaveLeonLevelFile` (atomic write) or `SerializeLeonLevel` (bytes). Only the automation tests use these today: "Editor-style level save load apply headless" (AIModule) round-trips `Engine/Content/LevelTemplates/Blank.llev`, and the `.llev` format tests (`Engine/Private/Tests/LevelFormatTests.cpp`) round-trip a document through bytes.
+There is no separate validation pass: magic, version, class values and limits are enforced by the reader, and resource failures by `ApplyLevelDocument`. A failed load leaves the previous level and camera untouched. If any `StaticMesh` actor's mesh fails to load, the whole level is rejected (no partial loads). Blank or lights-only levels are valid (a level always gets at least the default sun).
+
+Saving: `BuildLevelDocument(const ULevel&, const UCameraComponent&)` builds a document from the level's actors, then `SaveLeonLevelFile` (atomic write) or `SerializeLeonLevel` (bytes). The records go out grouped by class, as the format always wrote them (player starts, AI spawn points, trigger volumes, pain-causing volumes, then the meshes and blocking volumes; directional, then point lights), each group in spawn order, so loading a file and saving it gives the same bytes (`System.Engine.LevelFormat.SaveWritesTheSameBytes` checks the templates and a document with every record class against the hashes the pre-P13 saver gave). Only the automation tests save levels today: "Editor-style level save load apply headless" (AIModule) round-trips `Engine/Content/LevelTemplates/Blank.llev`, and the `.llev` format tests (`Engine/Private/Tests/LevelFormatTests.cpp`) round-trip a document through bytes.
 
 ### Asset paths inside a level
 
@@ -126,25 +134,25 @@ The writer always sets `hasInteractCost` for `TriggerVolume` and `hasPainData` f
 
 ### Actor classes (`ELevelActorClass`)
 
-| Value | Class | Applied as |
+| Value | Class | Spawned as |
 | --- | --- | --- |
-| 0 | `PlayerStart` | `FPlayerStart` (spawn transform) |
-| 1 | `Cube` | Procedural `FLevelStaticMesh` (`FBasicShape`) |
-| 2 | `Sphere` | Procedural, uses `sphereSegments` / `sphereRings` |
-| 3 | `Plane` | Procedural |
-| 4 | `BlockingVolume` | Procedural cube whose materials never cast shadows |
-| 5 | `StaticMesh` | `FResourceCache::LoadStaticMesh` on the resolved `.lmesh` path |
-| 6 | `TriggerVolume` | `FTriggerVolume` (interact radius / cost, game-defined `payload`, `consumeOnUse`) |
-| 7 | `PainCausingVolume` | `FPainCausingVolume` (damage per second / interval) |
-| 8 | `AISpawnPoint` | `FAISpawnPoint` (transform + tag) |
+| 0 | `PlayerStart` | `APlayerStart` (the spawn transform; `AGameModeBase::FindPlayerStart`) |
+| 1 | `Cube` | `AStaticMeshActor` with a procedural mesh (`FBasicShape`) |
+| 2 | `Sphere` | `AStaticMeshActor`, procedural, uses `sphereSegments` / `sphereRings` |
+| 3 | `Plane` | `AStaticMeshActor`, procedural |
+| 4 | `BlockingVolume` | `ABlockingVolume`: a 100 cm brush box (plan decision D16) sized by the scale, never drawn; its collision flags come from the record |
+| 5 | `StaticMesh` | `AStaticMeshActor` with `FResourceCache::LoadStaticMesh` on the resolved `.lmesh` path |
+| 6 | `TriggerVolume` | `ATriggerVolume` (interact radius / cost, game-defined `payload`, `consumeOnUse` on its legacy data component) |
+| 7 | `PainCausingVolume` | `APainCausingVolume` (`DamagePerSec`, `PainInterval`) |
+| 8 | `AISpawnPoint` | `ATargetPoint` (transform + tag) |
 
-Only `StaticMesh` carries a mesh path. `PlayerStart`, `AISpawnPoint`, `TriggerVolume` and `PainCausingVolume` are plain data (no drawable mesh). Mesh actors take their material from `materialPath` (`.lmat`); without one, a mesh with no materials of its own gets the default material. `collisionEnabled` is forced on when `simulatePhysics` is set. `fitHeight` scales the mesh to that height and grounds it (`ApplyFitHeight`). The `TriggerVolume` payload string is interpreted by the game mode.
+Only `StaticMesh` carries a mesh path. The record `tag` becomes the actor's first `Tags` entry (`UGameplayStatics::GetAllActorsWithTag`) and `hidden` its `bHidden`. Mesh actors take their material from `materialPath` (`.lmat`); without one, a mesh with no materials of its own gets the default material. `mobility`, `collisionEnabled`, `simulatePhysics` and `enableGravity` go to the mesh component or the volume's brush (`SetMobility`, `SetCollisionEnabled`, `SetSimulatePhysics`, `SetEnableGravity`); `collisionEnabled` is forced on when `simulatePhysics` is set. `fitHeight` scales the mesh (or the blocking volume's 100 cm cube) to that height and grounds it (`ApplyFitHeight`). The `TriggerVolume` payload string is interpreted by the game mode. Volumes test containment with the axis-aligned box around the actor (`AVolume::EncompassesPoint`), as before.
 
 Unknown actor or light classes fail the read.
 
 ### Lights
 
-`DirectionalLight` and `PointLight` records become `FDirectionalLight` / `FPointLight`. If a level has no directional light, one default light is added. Counts are clamped to `MaxDirectionalLights` (2) and `MaxPointLights` (4) from `Level/Light.h`.
+`DirectionalLight` and `PointLight` records become `ADirectionalLight` / `APointLight` actors (`UDirectionalLightComponent`: `LightColor`, `Intensity`, `CastShadows`, `LightSourceAngle`; `UPointLightComponent`: `AttenuationRadius` from `range`). If a level has no directional light, the default sun is spawned. Only the first `MaxDirectionalLights` (2) and `MaxPointLights` (4) of each kind are spawned (`Level/Light.h`), with a warning for the rest.
 
 ### Camera
 
@@ -152,7 +160,7 @@ Always stored. The orbit fields (`target`, `distance`, `yaw`, `pitch`) are the b
 
 ### Level animation
 
-Spins (`spinYaw` degrees per second), bobs (`bobBaseY`, `bobAmplitude`, `bobSpeed`) and point-light orbits are copied into the live level (`FLevelStaticMesh::SpinYaw` / `bHasBob`, `FPointLight::bHasOrbit`) and preserved on save, but nothing animates them at runtime: the level animation player was removed in 0.12.0.
+Spins (`spinYaw` degrees per second), bobs (`bobBaseY`, `bobAmplitude`, `bobSpeed`) and point-light orbits are kept on the actors' legacy data components (`SpinYaw`, `bHasBob`, `bHasOrbit`) and preserved on save, but nothing animates them at runtime: the level animation player was removed in 0.12.0.
 
 ## Running a level
 
@@ -163,7 +171,7 @@ Engine\Binaries\Win64\LeonGame.exe [-map=<.llev>] [-nullrhi] [-tick=<Hz>] [-show
                                    [-Screenshot=<file.bmp> [-ExitAfterFrames=N]]
 ```
 
-`-map=` takes a path relative to the working directory (or absolute), else relative to the content folders; without it the startup level is `GameDefaultMap` from `[/Script/EngineSettings.GameMapsSettings]` in the engine config (`BaseEngine.ini`: `LevelTemplates/Starter.llev`). `-nullrhi` runs headless at `-tick=` Hz (default 60). `-AxesGizmo` starts with the axes gizmo on (F6 toggles it); `-Screenshot=` saves frame `-ExitAfterFrames=` (default 60) as a BMP and exits ([TESTING.md](TESTING.md)). The level's game mode string is stored but not used to pick a game mode. There is no level catalog, level browser or project pack (all removed in 0.12.0), and `Game/ThirdPerson` is a build project (`.lproj`), not a runtime pack.
+`-map=` takes a path relative to the working directory (or absolute), else relative to the content folders; without it the startup level is `GameDefaultMap` from `[/Script/EngineSettings.GameMapsSettings]` in the engine config (`BaseEngine.ini`: `LevelTemplates/Starter.llev`). `-nullrhi` runs headless at `-tick=` Hz (default 60). `-AxesGizmo` starts with the axes gizmo on (F6 toggles it); `-Screenshot=` saves frame `-ExitAfterFrames=` (default 60) as a BMP and exits ([TESTING.md](TESTING.md)). The level's game mode string is stored (on the world settings) but not used to pick a game mode. There is no level catalog, level browser or project pack (all removed in 0.12.0), and `Game/ThirdPerson` is a build project (`.lproj`), not a runtime pack.
 
 ## Level templates
 
