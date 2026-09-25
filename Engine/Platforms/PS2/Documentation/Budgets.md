@@ -44,6 +44,9 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | P5 | ThirdPerson | 444 240 | 6 924 | 29 864 | 452 328 | ApplicationCore / RHI / PS2RHI / Launch on Core types (UE_LOG, TSharedRef windows, FCString) |
 | P5 | BlankProgram | 178 560 | 6 132 | 27 084 | | unchanged |
 | P5 | TestPAL | 731 244 | 6 268 | 32 392 | | FIntVector4 test |
+| P6 | ThirdPerson | 444 240 | 6 924 | 29 864 | 452 328 | unchanged (the game mode moved to `TUniquePtr`) |
+| P6 | BlankProgram | 179 588 | 6 136 | 27 089 | | reports through `UE_LOG` instead of `printf` (+1 KB of text) |
+| P6 | TestPAL | 731 244 | 6 268 | 32 392 | | unchanged (the removed glm tests were desktop-only) |
 
 | Version | Program | GMalloc peak | Process | Name pool | Notes |
 |---|---|---:|---:|---:|---|
@@ -55,3 +58,5 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | P4 | ThirdPerson | | 0.6 MB | | 60 FPS, same Draw3D numbers; PCSX2 host filesystem off, so `Character tuning from compiled defaults` |
 | P5 | TestPAL (46 tests) | 70 KB | 836 KB | 101 names | unchanged |
 | P5 | ThirdPerson | | 0.6 MB | | 60 FPS, same Draw3D numbers (now logged through LogRHI) |
+| P6 | TestPAL (46 tests) | 70 KB | 836 KB | 101 names | unchanged |
+| P6 | ThirdPerson | | 0.6 MB | | 60 FPS, same Draw3D numbers |

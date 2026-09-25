@@ -53,7 +53,7 @@ Engine/
     Runtime/             Core, ApplicationCore, InputCore, RHI, OpenGLDrv, RenderCore, Renderer, Engine, Launch, ...
     Developer/           MeshUtilities, Cooker
     Programs/            LeonBuildTool, LeonAutomationTests, LeonCook, BlankProgram
-    ThirdParty/          GLFW, GLM, Glad, STB, ... (one External module per library)
+    ThirdParty/          GLFW, Glad, STB, ... (one External module per library)
     LeonGame.Target.cmake
   Plugins/Runtime/JoltPhysics/   Jolt rigid-body backend (Win64, disabled by default)
   Platforms/PS2/         PS2 platform extension

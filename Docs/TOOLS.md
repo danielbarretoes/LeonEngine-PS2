@@ -12,10 +12,10 @@ The layout mirrors Unreal Engine 4.27: edit-time code is in **Developer** module
 | `Engine/Source/Developer/MeshUtilities/` | Developer module | OBJ / FBX / glTF import and `FStaticMeshBuilder` (source → `.lmesh`); FBX skeletal import (`FbxSkeletalImport.h`) |
 | `Engine/Source/Programs/LeonCook/` | Program target | `LeonCook` executable: `main` forwards to `UCookCommandlet::Main` |
 | `Engine/Source/Programs/LeonBuildTool/` | Build tool (CMake script) | Builds every target (UnrealBuildTool equivalent) |
-| `Engine/Source/Programs/LeonAutomationTests/` | Program target | Runs every desktop module's `Private/Tests/**`: automation tests (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`), then Catch2 |
-| `Engine/Source/Programs/TestPAL/` | Program target (all platforms) | Runs Core's automation tests without Catch2 and prints `TestPAL: PASSED (N test(s), 0 failed)` plus memory / name-pool numbers (UE: `Programs/TestPAL`) |
+| `Engine/Source/Programs/LeonAutomationTests/` | Program target | Runs every desktop module's `Private/Tests/**` automation tests (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`) |
+| `Engine/Source/Programs/TestPAL/` | Program target (all platforms) | Runs the Core, Json and Projects automation tests and prints `TestPAL: PASSED (N test(s), 0 failed)` plus memory / name-pool numbers (UE: `Programs/TestPAL`) |
 | `Engine/Source/Programs/BlankProgram/` | Program target | Minimal program: starts the statically linked modules |
-| `Engine/Build/BatchFiles/` | Scripts | Build / Clean / Rebuild / Cook / RunTests / FormatCode / Lint / GenerateProjectFiles |
+| `Engine/Build/BatchFiles/` | Scripts | Build / Clean / Rebuild / Cook / RunTests / FormatCode / Lint / CheckBannedApis / GenerateProjectFiles |
 | `Engine/Platforms/PS2/Build/BatchFiles/` | Scripts | `RunPCSX2.ps1` (launch a project's or an engine program's PS2 build), `DockerEntry.sh` (used by LeonBuildTool) |
 
 Both Developer modules and the LeonCook target are `PLATFORMS Desktop`: they never build for PS2.
@@ -25,11 +25,10 @@ Both Developer modules and the LeonCook target are `PLATFORMS Desktop`: they nev
 ```text
 LeonCook (Program)
   └─ Cooker (Developer)
-       ├─ Engine         (listed private dependency; no Engine header is used since the skeletal cook was removed)
        ├─ MeshUtilities  (FStaticMeshBuilder, ObjImport, FbxStaticMesh, GltfImport, FbxSkeletalImport)
        │    ├─ AnimationCore (skeleton / animation types filled by the FBX skeletal import)
        │    └─ Renderer  (LeonMaterialFormat: .lmat written by glTF import)
-       └─ NlohmannJson   (recipe parsing)
+       └─ Json           (recipe parsing, native UE-style module)
 ```
 
 Rules from `Engine/Source/Programs/LeonCook/LeonCook.Build.cmake`, `Engine/Source/Developer/Cooker/Cooker.Build.cmake` and `Engine/Source/Developer/MeshUtilities/MeshUtilities.Build.cmake`. Programs do not get plugins unless their target enables them (see [JoltPhysics](../Engine/Plugins/Runtime/JoltPhysics/README.md)), so LeonCook has no physics backend plugin.
@@ -120,9 +119,10 @@ All scripts forward to LeonBuildTool (`cmake -P Engine/Source/Programs/LeonBuild
 | `Engine\Build\BatchFiles\Clean.bat` | same arguments as Build | `-Mode=Clean` |
 | `Engine\Build\BatchFiles\Rebuild.bat` | same arguments as Build | `-Mode=Rebuild` |
 | `Engine\Build\BatchFiles\Cook.bat` | `<LeonCook arguments>` | Builds LeonCook (Win64 Development) and runs it |
-| `Engine\Build\BatchFiles\RunTests.bat` | `[-automation=<filter>] [-noautomation] [-automationonly] [Catch2 args]` | Builds LeonAutomationTests (Win64 Development) and runs it from the repo root: the automation tests (31), then Catch2 (124 test cases); fails if either fails |
+| `Engine\Build\BatchFiles\RunTests.bat` | `[-automation=<filter>]` | Builds LeonAutomationTests (Win64 Development) and runs it from the repo root: every automation test (179), or those whose name contains `<filter>`; fails if any fails |
 | `Engine\Build\BatchFiles\FormatCode.bat` | `[--check]` | clang-format on every `.cpp` / `.h` / `.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game` (skips `ThirdParty`, `Intermediate`, `Binaries`); `--check` is a dry run that fails on unformatted files |
-| `Engine\Build\BatchFiles\Lint.bat` | | `FormatCode.bat --check`, then builds LeonAutomationTests, LeonCook, LeonGame and BlankProgram for Win64 Development |
+| `Engine\Build\BatchFiles\Lint.bat` | | `FormatCode.bat --check`, then `CheckBannedApis.ps1`, then builds LeonAutomationTests, LeonCook, LeonGame and BlankProgram for Win64 Development |
+| `Engine\Build\BatchFiles\CheckBannedApis.ps1` | | Gate G4: fails when engine or game code (`Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game`; comments ignored) uses glm, nlohmann, `std::vector` / `string` / `map` / `unordered_map` / `function` / `shared_ptr` / `unique_ptr`, iostream or the `printf` family; the allowed places are listed in [CODING_STANDARD.md §4](CODING_STANDARD.md#4-language). CI runs it with `pwsh` |
 | `GenerateProjectFiles.bat` (root) → `Engine\Build\BatchFiles\GenerateProjectFiles.bat` | `[-Project=<file.lproj>]` | Visual Studio solution in `<Engine or Project>\Intermediate\ProjectFiles` plus the root `compile_commands.json` for clangd; builds keep using Build.bat |
 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1` | `[-Project <dir or .lproj> \| -Program <Name>] [-Configuration Debug\|Development\|Shipping] [-Build]` | Optionally builds the project (or engine program) for PS2, then starts PCSX2 on `<Project>\Binaries\PS2\<Name>.elf` (`Engine\Binaries\PS2\<Name>.elf` with `-Program`) |
 
@@ -142,7 +142,7 @@ Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson -Bu
 
 ## TestPAL
 
-Runs the automation tests linked into it (Core's `Private/Tests`, `COLLECT_AUTOMATION_TESTS`) on any platform, without Catch2, then logs GMalloc usage and the `FName` pool size. Exit code `0` when every test passes, `1` otherwise. `-filter=<text>` runs only the tests whose name contains `<text>`.
+Runs the automation tests linked into it (the `Private/Tests` of Core, Json and Projects, `COLLECT_AUTOMATION_TESTS`) on any platform, then logs GMalloc usage and the `FName` pool size. Exit code `0` when every test passes, `1` otherwise. `-filter=<text>` runs only the tests whose name contains `<text>`.
 
 ```bat
 Engine\Build\BatchFiles\Build.bat TestPAL Win64 Development
@@ -153,7 +153,7 @@ Engine\Binaries\Win64\TestPAL.exe [-filter=System.Core.Containers]
 Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build
 ```
 
-On PS2 the verdict (`TestPAL: PASSED (27 test(s), 0 failed)`) and the `LogTestPAL` numbers are read from the PCSX2 log; the numbers are recorded in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md).
+On PS2 the verdict (`TestPAL: PASSED (46 test(s), 0 failed)`) and the `LogTestPAL` numbers are read from the PCSX2 log; the numbers are recorded in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md).
 
 ## Related docs
 

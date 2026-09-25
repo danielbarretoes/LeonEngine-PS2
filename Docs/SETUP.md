@@ -23,9 +23,9 @@ From the repo root:
 Setup.bat
 ```
 
-`Setup.bat` downloads the pinned third-party archives (GLFW, GLM, miniaudio, nlohmann/json, tinyobjloader, Catch2,
-Jolt) into `Engine/Intermediate/ThirdPartyDownloads/`, checks their SHA-256 and extracts them next to their module
-rules. Run it again after pulling a change that bumps a library. List of libraries: [LIBRARIES.md](LIBRARIES.md).
+`Setup.bat` downloads the pinned third-party archives (GLFW, miniaudio, tinyobjloader, Jolt) into
+`Engine/Intermediate/ThirdPartyDownloads/`, checks their SHA-256 and extracts them next to their module rules. Run it
+again after pulling a change that bumps a library. List of libraries: [LIBRARIES.md](LIBRARIES.md).
 
 ## Build the engine (Win64)
 
@@ -49,18 +49,16 @@ Engine\Build\BatchFiles\RunTests.bat
 ```
 
 This builds `LeonAutomationTests` (Win64 Development) and runs it from the repo root. The executable contains the
-tests of every module in its closure (`<Module>/Private/Tests/`): first the UE automation tests (Core, 31 today),
-then the Catch2 tests of the modules not migrated yet (124 test cases). The exit code is non-zero if either set
-fails. `-automation=<filter>` runs only the automation tests whose name contains `<filter>`, `-noautomation` skips
-them and `-automationonly` skips Catch2; every other argument is passed to Catch2:
+tests of every module in its closure (`<Module>/Private/Tests/`), all UE automation tests (179, named
+`System.<Module>.<Area>.<Name>`). The exit code is non-zero if any test fails. `-automation=<filter>` runs only the
+tests whose name contains `<filter>`:
 
 ```bat
-Engine\Build\BatchFiles\RunTests.bat -automation=System.Core.Containers -automationonly
-Engine\Build\BatchFiles\RunTests.bat -noautomation "[physics]"
-Engine\Build\BatchFiles\RunTests.bat --list-tests
+Engine\Build\BatchFiles\RunTests.bat -automation=System.Core.Containers
+Engine\Build\BatchFiles\RunTests.bat -automation=System.JoltPhysics
 ```
 
-`TestPAL` runs the same Core automation tests without Catch2, on any platform, and ends with
+`TestPAL` runs the Core, Json and Projects automation tests on any platform, and ends with
 `TestPAL: PASSED (N test(s), 0 failed)` plus memory and name-pool numbers:
 
 ```bat
@@ -139,10 +137,10 @@ engine program instead (`Engine\Binaries\PS2\<Name>.elf`, built with `Build.bat 
 Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build
 ```
 
-TestPAL runs Core's automation tests on the EE (35 on PS2: the `FPaths`, `FLegacyTransform` and glm comparison tests
-are desktop-only) and
+TestPAL runs the Core, Json and Projects automation tests on the EE (46 on PS2: Core 43, Json 2, Projects 1; the
+platform-file, config-cache, log-file and real-descriptor tests are desktop-only) and
 logs to the EE console. With the EE console enabled (see [PCSX2 notes](#pcsx2-notes)), read
-`%USERPROFILE%\Documents\PCSX2\logs\emulog.txt` for the `TestPAL: PASSED (35 test(s), 0 failed)` line and the
+`%USERPROFILE%\Documents\PCSX2\logs\emulog.txt` for the `TestPAL: PASSED (46 test(s), 0 failed)` line and the
 `LogTestPAL` memory / name-pool lines; their numbers are tracked in
 [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md).
 
@@ -199,12 +197,14 @@ The database is Win64 only; PS2-only files (`Engine/Platforms/PS2/`, `Game/Third
 ```bat
 Engine\Build\BatchFiles\FormatCode.bat            :: clang-format in place
 Engine\Build\BatchFiles\FormatCode.bat --check    :: dry run, fails if a file needs formatting
-Engine\Build\BatchFiles\Lint.bat                  :: format check + Win64 build of every engine target
+Engine\Build\BatchFiles\Lint.bat                  :: format check + banned APIs (G4) + Win64 build of every engine target
 ```
 
 `FormatCode.bat` uses Visual Studio's LLVM `clang-format` (or one on `PATH`) with the repo's `.clang-format` (Epic
 style: tabs, Allman braces) on `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game`, skipping `ThirdParty`,
-`Intermediate` and `Binaries`. Coding rules: [CODING_STANDARD.md](CODING_STANDARD.md).
+`Intermediate` and `Binaries`. `Lint.bat` then runs `Engine\Build\BatchFiles\CheckBannedApis.ps1`, which fails on glm,
+nlohmann, `std::` containers / strings / smart pointers, iostream and `printf` in engine or game code. Coding rules:
+[CODING_STANDARD.md](CODING_STANDARD.md).
 
 ## Continuous integration
 
@@ -212,7 +212,7 @@ style: tabs, Allman braces) on `Engine\Source`, `Engine\Platforms`, `Engine\Plug
 
 - **ps2**: inside the pinned ps2dev image, builds `ThirdPerson` and `BlankProgram` for PS2 with
   `Engine/Build/BatchFiles/Linux/Build.sh` and uploads `ThirdPerson.elf`.
-- **win64**: `Setup.bat`, `RunTests.bat`, then builds `LeonGame` and `LeonCook`.
+- **win64**: `CheckBannedApis.ps1` (with `pwsh`), `Setup.bat`, `RunTests.bat`, then builds `LeonGame` and `LeonCook`.
 
 Formatting is checked locally with `Lint.bat` (the runner's clang-format version may differ from Visual Studio's).
 

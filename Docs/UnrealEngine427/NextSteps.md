@@ -34,8 +34,8 @@ Implemented in `Runtime/Core` on every platform, PS2 included (details:
 `Runtime/Core/Public/Math/` on every platform ([LeonMapping — P3](LeonMapping.md#p3--core-math)): float `FMath`,
 vectors, `FRotator`, `FQuat`, `FMatrix` and the derived matrices, `FPlane`, `FBox`, `FSphere`, `FBoxSphereBounds`, a
 scalar `FTransform`, `FColor` / `FLinearColor`, `FRandomStream`. The glm transform became `FLegacyTransform`;
-RenderCore's frustum uses Core's `FBox` / `FPlane`; `GlmInterop.h` and `LegacyAxes.h` bridge the unmigrated code.
-PS2 builds reject implicit float to double promotion.
+RenderCore's frustum uses Core's `FBox` / `FPlane`; `GlmInterop.h` and `LegacyAxes.h` bridged the unmigrated code
+until P6. PS2 builds reject implicit float to double promotion.
 
 ### Done — Files, config, command line, Json and Projects (P4)
 
@@ -52,14 +52,23 @@ tuning from `DefaultGame.ini` (compiled defaults when PCSX2's host filesystem is
 ApplicationCore, RHI, OpenGLDrv, PS2RHI, the shared Launch code, PhysicsCore (with `FPhysScene`), RenderCore,
 AnimationCore, AudioMixer, SlateCore and UMG use `TArray`, `FString` / `FName` / `FText`, `TUniquePtr` /
 `TSharedPtr`, delegates, `UE_LOG` and Core math ([LeonMapping — P5](LeonMapping.md#p5--lower-modules-on-the-ue-types));
-their Catch2 tests became automation tests. Engine, Renderer, AIModule, MeshUtilities, Cooker and JoltPhysics
-convert with `ToGlm` / `FromGlm` where they call them.
+their Catch2 tests became automation tests.
+
+### Done — Upper modules on the UE types (P6)
+
+Renderer, Engine, AIModule, MeshUtilities, Cooker, LeonCook, the JoltPhysics plugin and the desktop Launch code
+(`FGameApplication`) use `FVector` / `FMatrix`, `TArray`, `TMap`, `FString` / `FName` / `FText`, `TFunction`,
+`TUniquePtr` / `TSharedPtr` and `UE_LOG` ([LeonMapping — P6](LeonMapping.md#p6--upper-modules-on-the-ue-types)).
+glm, nlohmann and Catch2 are gone, and so is Core's `Migration/` folder; `Json` serves the materials and the cook
+recipes; every one of the 179 tests is an automation test; every platform compiles C++17; `CheckBannedApis.ps1` (G4)
+guards the result. Until P7 the world stays Y-up in metres, render matrices keep glm's GL layout (`LegacyGL`,
+`RenderCore/Public/LegacyGLMath.h`) and `FLegacyTransform` lives in Engine (`Level/LegacyTransform.h`); the Starter
+level renders pixel-identical to the P1 and P5 captures (outside the stats text).
 
 ### Next
 
-- **P6 — Migration of the upper modules:** Renderer, Engine (by area), AIModule, MeshUtilities, Cooker, LeonCook,
-  JoltPhysics and the desktop Launch code move to the UE types; glm, nlohmann, `Migration/*`, `FLegacyTransform` and
-  every try / catch go away, the modules drop C++20, and `CheckBannedApis.ps1` (G4) guards the result.
+- **P7 — UE axes and units:** the world switches to Z-up centimetres; the level readers convert to UE's
+  `FTransform`, and `FLegacyTransform` and `LegacyGL` go away. P7 releases 0.14.0.
 
 ## CoreUObject
 
@@ -73,8 +82,9 @@ convert with `ToGlm` / `FromGlm` where they call them.
 
 ## Engine / platform
 
-- Gameplay framework on PS2 (needs the rest of the module migration to UE containers and Core math (P6)); then
-  `Game/ThirdPerson` can use `AThirdPersonCharacter : ACharacter` like TP_ThirdPerson.
+- Gameplay framework on PS2 (the modules use UE containers and Core math since P6, but Engine still depends on the
+  desktop-only Renderer, UMG and AudioMixer); then `Game/ThirdPerson` can use `AThirdPersonCharacter : ACharacter`
+  like TP_ThirdPerson.
 - Renderer through RHI command lists instead of direct GL calls; break the Engine ↔ Renderer cycle.
 - `UNavigationSystemBase` seam so NavigationSystem can move to its own module.
 - `PS2TargetPlatform` Developer module (cook formats for PS2: textures, LPS2 meshes).

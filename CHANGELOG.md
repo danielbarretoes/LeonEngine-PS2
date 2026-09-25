@@ -7,6 +7,67 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Sixth step of the Core / CoreUObject plan (P6): Renderer, Engine, AIModule, MeshUtilities, Cooker, LeonCook, the
+JoltPhysics plugin and the desktop Launch code use Unreal Engine 4.27's Core types; glm, nlohmann/json and Catch2 are
+gone. The world is still Y-up in metres (the Z-up centimetre switch is P7).
+
+### Changed
+
+- **Engine, Renderer, AIModule, desktop Launch**: glm is replaced by `FVector` / `FMatrix`; `std::vector` / `string` /
+  `map` / `function` / smart pointers by `TArray`, `FString`, `TMap`, `TFunction`, `TUniquePtr` / `TSharedPtr`.
+  Input mapping takes `FName` action names, the debug draw / overlay take `FLinearColor` colors and `FString` text,
+  `FResourceCache` returns `TSharedPtr<UStaticMesh>` / `TSharedPtr<UTexture2D>`, mesh bounds are `FVector`, `ULevel`
+  uses `TArray` / `FString` and `SIZE_T` mesh indices (`ULevel::Npos`), the navigation A* open set is a `TArray` heap.
+- Render matrices keep glm's GL memory layout until P7: the new `LegacyGLMath.h` (RenderCore, namespace `LegacyGL`)
+  composes them with `Mul(A, B)` (glm's `A * B`) and builds them with glm's formulas term by term (`Perspective`,
+  `Ortho`, `LookAt`, `Translate`, `Rotate`, `Scale`, `QuatToMatrix`, `NormalMatrix3x3`). The Starter level renders
+  pixel-identical to the P1 and P5 captures (outside the stats text).
+- `FLegacyTransform` moves from Core (`Migration/LegacyTransform.h`) to Engine (`Level/LegacyTransform.h`) on Core
+  math, until P7.
+- The `.llev` reader / writer uses `FMemoryReader` / `FMemoryWriter` and `FFileHelper` and writes the same bytes; the
+  string table stays case-sensitive. The level loader no longer uses try / catch.
+- **Renderer**: the `.lmat` reader / writer works on `FString` through `FFileHelper` with its own line parser (same
+  rules); `PatchMaterialFromJson` / `HasMaterialSurfaceFields` take an `FJsonObject` from the native `Json` module, and
+  missing or mistyped fields keep their value instead of throwing. Renderer depends privately on `Json`.
+- **MeshUtilities / Cooker / LeonCook**: the OBJ, FBX and glTF importers take `FString` paths and build `FVector` /
+  `FMatrix` data (the skeletal import through `LegacyGL::QuatToMatrix`); vertex dedup uses `TMap`, and cooked `.lmesh`
+  files are byte-identical. Files go through `IFileManager` / `FPaths`, cook recipes are read with the `Json` module,
+  and the commandlet parses switches with `FCString`.
+- **JoltPhysics**: bodies in a `TArray`, allocator and job system in `TUniquePtr`, Jolt's trace hook routed to
+  `UE_LOG`; the floor plane tracks "no floor yet" with a flag instead of a NaN.
+- iostream, `printf` and `std::chrono` become `UE_LOG` and `FPlatformTime`: new categories `LogEngine`, `LogLevel`,
+  `LogPath`, `LogPhysics` (`EngineLogs.h`), `LogRenderer`, `LogMeshUtilities`, `LogCook`, `LogJolt`, `LogLaunch` and
+  `LogBlankProgram`. Headless `LeonGame` flushes `GLog` every tick so redirected output stays current.
+- Every test is a UE automation test (179: the 90 Engine, Renderer and AIModule cases, the two OBJ import cases and
+  the seven Jolt cases migrated). `LeonAutomationTests` runs only `FAutomationTestFramework` and keeps
+  `-automation=<filter>`; `RunTests.bat [-automation=<filter>]`. The glm comparison tests became
+  `System.RenderCore.LegacyGLMath.Builders` / `Composition` (values glm 1.0.1 printed), and
+  `System.Core.Migration.LegacyTransform.*` became `System.Engine.LegacyTransform.*`. Two level-format tests declare
+  their expected errors with `AddExpectedError`.
+- C++17 on every platform (Win64 and Linux were C++20), like UE 4.27.
+- **Core**: `TIsDerivedFrom` takes UE's `<Derived, Base>` order; `FPlatformProcess::Sleep` on Windows and Linux; the
+  Windows HAL and OpenGLDrv include `<Windows.h>` through `Windows/WindowsHWrapper.h` (UE's name), which keeps Core's
+  `TEXT`. MSVC no longer warns about `alignas` padding (C4324), as in UE.
+- `FString ==` ignores case (UE), so exact-case comparisons use `Equals(…, ESearchCase::CaseSensitive)`; the spring
+  arm lag uses `FMath::Lerp`, whose last bit can differ from `glm::mix`.
+- ThirdPerson keeps its game mode in a `TUniquePtr`; BlankProgram prints through `UE_LOG`.
+
+### Removed
+
+- ThirdParty modules `GLM`, `NlohmannJson` and `Catch2`.
+- Core's `Migration/` folder: `GlmInterop.h` (`ToGlm` / `FromGlm`), `LegacyAxes.h`, `LegacyContentPath.h` and
+  `LegacyTransform`. `FPaths::ResolveLegacyContentPath` stays until P15.
+- The `-noautomation` / `-automationonly` switches and the Catch2 arguments of `LeonAutomationTests` / `RunTests.bat`.
+
+### Added
+
+- `Engine\Build\BatchFiles\CheckBannedApis.ps1` (gate G4): rejects glm, nlohmann, `std::vector` / `string` / `map` /
+  `unordered_map` / `function` / `shared_ptr` / `unique_ptr`, iostream and the `printf` family outside ThirdParty, the
+  platform HAL sources, Core's `printf` wrappers, LeonHeaderTool and the test program mains. `Lint.bat` runs it after
+  the format check; the CI win64 job runs it with `pwsh`.
+- `RenderCore/Public/LegacyGLMath.h`, `Engine/Public/Level/LegacyTransform.h`, `Engine/Public/EngineLogs.h`,
+  `Core/Public/Windows/WindowsHWrapper.h`.
+
 Fifth step of the Core / CoreUObject plan (P5): the modules below Engine use Unreal Engine 4.27's Core types.
 
 ### Changed

@@ -115,10 +115,11 @@ Windows batch files live in `Engine/Build/BatchFiles/` (UE layout); run them fro
 | `Build.bat` | `Build.bat <Target> <Platform> <Config> [-Project=<file>] [-Mode=...] [-NoDocker] [-KeepGoing]` | Loads the MSVC environment (`GetVSEnv.bat vcvars quiet need-ninja`) unless the platform is `PS2`, then runs LeonBuildTool with all arguments |
 | `Clean.bat` | `Clean.bat <Target> <Platform> <Config> [-Project=<file>]` | `Build.bat ... -Mode=Clean` |
 | `Rebuild.bat` | `Rebuild.bat <Target> <Platform> <Config> [-Project=<file>]` | `Build.bat ... -Mode=Rebuild` |
-| `RunTests.bat` | `RunTests.bat [-automation=<filter>] [-noautomation] [-automationonly] [Catch2 arguments]` | Builds `LeonAutomationTests Win64 Development` and runs `Engine\Binaries\Win64\LeonAutomationTests.exe` from the repo root: automation tests first (31), then Catch2 (124 test cases); the `-automation*` flags are removed before Catch2 parses the rest |
+| `RunTests.bat` | `RunTests.bat [-automation=<filter>]` | Builds `LeonAutomationTests Win64 Development` and runs `Engine\Binaries\Win64\LeonAutomationTests.exe` from the repo root: every automation test (179), or only those whose name contains `<filter>` |
 | `Cook.bat` | `Cook.bat <LeonCook arguments>` | Builds `LeonCook Win64 Development` and runs `Engine\Binaries\Win64\LeonCook.exe` |
 | `FormatCode.bat` | `FormatCode.bat [--check]` | clang-format on every `.cpp/.h/.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game` (skips paths containing `ThirdParty`, `Intermediate`, `Binaries`). `--check` is a dry run that fails if a file needs formatting |
-| `Lint.bat` | `Lint.bat` | `FormatCode.bat --check`, then builds `LeonAutomationTests`, `LeonCook`, `LeonGame` and `BlankProgram` for Win64 Development |
+| `Lint.bat` | `Lint.bat` | `FormatCode.bat --check`, then `CheckBannedApis.ps1`, then builds `LeonAutomationTests`, `LeonCook`, `LeonGame` and `BlankProgram` for Win64 Development |
+| `CheckBannedApis.ps1` | `powershell -File CheckBannedApis.ps1` (or `pwsh`) | Gate G4: scans `.h/.cpp/.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game` (comments ignored) and fails on glm, nlohmann, `std::vector/string/map/unordered_map/function/shared_ptr/unique_ptr`, `<iostream>` / `std::cout/cerr/clog` or the `printf` family; exceptions in [CODING_STANDARD.md §4](CODING_STANDARD.md#4-language) |
 | `GenerateProjectFiles.bat` | `GenerateProjectFiles.bat [-Project=<file>]` | `-Mode=GenerateProjectFiles`, then `LeonAutomationTests Win64 Development -Mode=GenerateClangDatabase` (root `compile_commands.json`) |
 | `GetVSEnv.bat` | `call GetVSEnv.bat vcvars [quiet] [optional] [need-ninja] [need-git]` (or `vsdev`) | Helper for the other scripts: finds Visual Studio `18` then `2022` (Community, Professional, Enterprise), runs `vcvars64.bat` or `VsDevCmd.bat`, prepends `C:\Program Files\CMake\bin` to `PATH` and checks the required tools |
 | `Linux/Build.sh` | `Build.sh <Target> <Platform> <Config> [-Project=<file>] [-Mode=...]` | LeonBuildTool with all arguments (no environment setup; used by CI for PS2) |
@@ -140,8 +141,8 @@ Engine\Build\BatchFiles\Build.bat LeonGame Win64 Development
 Engine\Build\BatchFiles\Build.bat BlankProgram PS2 Development
 Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.lproj
 Engine\Build\BatchFiles\Rebuild.bat LeonAutomationTests Win64 Debug -KeepGoing
-Engine\Build\BatchFiles\RunTests.bat "[physics]"
-Engine\Build\BatchFiles\RunTests.bat -automation=System.Core -automationonly
+Engine\Build\BatchFiles\RunTests.bat -automation=System.Engine.PhysScene
+Engine\Build\BatchFiles\RunTests.bat -automation=System.Core
 Engine\Build\BatchFiles\Build.bat TestPAL PS2 Development
 ```
 
@@ -221,10 +222,14 @@ Real examples from the engine:
 ```cmake
 # Engine/Source/Runtime/Core/Core.Build.cmake
 leon_module(Core
-	PUBLIC_DEPENDENCIES_Desktop GLM
 	PUBLIC_SYSTEM_LIBRARIES_Windows psapi ole32
-	# The glm migration bridge is desktop-only until P6.
-	EXCLUDE_SOURCES_PS2 Private/Migration/LegacyTransform.cpp
+)
+
+# Engine/Source/Runtime/ApplicationCore/ApplicationCore.Build.cmake
+leon_module(ApplicationCore
+	PUBLIC_DEPENDENCIES Core InputCore RHI
+	# Transitional: the window creates the platform RHI device (Launch will own this).
+	PRIVATE_DEPENDENCIES_Desktop GLFW STB OpenGLDrv
 )
 
 # Engine/Source/Runtime/Launch/Launch.Build.cmake
@@ -312,7 +317,7 @@ Targets in the repository:
 | `LeonGame` | `Engine/Source/LeonGame.Target.cmake` | Game | Win64 | `EXTRA_MODULE_NAMES Engine AIModule`; loads one level, `-map=<.llev>` (UE4Game) |
 | `LeonCook` | `Engine/Source/Programs/LeonCook/LeonCook.Target.cmake` | Program | Desktop | offline cooker |
 | `LeonAutomationTests` | `Engine/Source/Programs/LeonAutomationTests/LeonAutomationTests.Target.cmake` | Program | Desktop | `COLLECT_AUTOMATION_TESTS`, `ENABLE_PLUGINS JoltPhysics` |
-| `TestPAL` | `Engine/Source/Programs/TestPAL/TestPAL.Target.cmake` | Program | all | `COLLECT_AUTOMATION_TESTS`; runs Core's automation tests without Catch2 (`-filter=<text>`), prints `TestPAL: PASSED (N test(s), 0 failed)`; on PS2 run it with `RunPCSX2.ps1 -Program TestPAL` |
+| `TestPAL` | `Engine/Source/Programs/TestPAL/TestPAL.Target.cmake` | Program | all | `COLLECT_AUTOMATION_TESTS`; runs the Core, Json and Projects automation tests (`-filter=<text>`), prints `TestPAL: PASSED (N test(s), 0 failed)`; on PS2 run it with `RunPCSX2.ps1 -Program TestPAL` |
 | `BlankProgram` | `Engine/Source/Programs/BlankProgram/BlankProgram.Target.cmake` | Program | all | starts the linked modules and prints the platform |
 | `ThirdPerson` | `Game/ThirdPerson/Source/ThirdPerson.Target.cmake` | Game | PS2 | `COMPILE_AGAINST_ENGINE OFF` |
 
@@ -415,7 +420,7 @@ touching the build tool.
 | File | `Platform/Windows/LeonBuildWindows.cmake` | `Platform/Linux/LeonBuildLinux.cmake` | `Engine/Platforms/PS2/Source/Programs/LeonBuildTool/LeonBuildPS2.cmake` |
 | Groups | `Windows Microsoft Desktop` | `Unix Linux Desktop` | `PS2 Console` |
 | Header folder (`LBT_COMPILED_PLATFORM`) | `Windows` | `Linux` | `PS2` |
-| C++ standard | 20 | 20 | 17 |
+| C++ standard | 17 | 17 | 17 |
 | Executable suffix | `.exe` | none | `.elf` |
 | RHI module | `OpenGLDrv` | `OpenGLDrv` | `PS2RHI` |
 | Definitions | `PLATFORM_WINDOWS=1 NOMINMAX WIN32_LEAN_AND_MEAN` | `PLATFORM_LINUX=1` | `PLATFORM_PS2=1` |
@@ -456,14 +461,14 @@ Compiler settings:
 
 | | Win64 (MSVC) | PS2 (EE GCC) | Linux |
 | --- | --- | --- | --- |
-| Standard | C++20 for Desktop-only modules and executables; C++17 for modules also allowed on PS2 | C++17 | C++20 / C++17 as on Win64 |
+| Standard | C++17 | C++17 | C++17 |
 | Warnings | `/W4 /permissive- /Zc:__cplusplus /utf-8 /MP` | `-Wall -Wextra` | `-Wall -Wextra -Wpedantic` |
 | Shadowing is an error (UE `ShadowVariableWarningLevel = Error`) | `/we4456 /we4457 /we4458 /we4459` | `-Werror=shadow` | — |
-| Other | `/FS` in Debug and RelWithDebInfo | toolchain: `-D_EE -G0 -O2 -fno-exceptions -fno-rtti -fno-threadsafe-statics -ffunction-sections -fdata-sections`, linked with `$PS2SDK/ee/startup/linkfile` and `-Wl,--gc-sections` (unused functions / data are dropped; sizes in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md)). Leon runs one EE thread, so function-local statics need no guard; together with `PS2PlatformRuntime.cpp` (global `operator new` / `delete` through `FMemory`, `__cxa_pure_virtual`) this keeps libstdc++'s unwinder and demangler out of the ELF | |
+| Other | `/wd4324` (padding added for `alignas`, disabled as in UE); `/FS` in Debug and RelWithDebInfo | toolchain: `-D_EE -G0 -O2 -fno-exceptions -fno-rtti -fno-threadsafe-statics -ffunction-sections -fdata-sections`, linked with `$PS2SDK/ee/startup/linkfile` and `-Wl,--gc-sections` (unused functions / data are dropped; sizes in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md)). Leon runs one EE thread, so function-local statics need no guard; together with `PS2PlatformRuntime.cpp` (global `operator new` / `delete` through `FMemory`, `__cxa_pure_virtual`) this keeps libstdc++'s unwinder and demangler out of the ELF | |
 
-The C++ standard of a module is the lowest standard among the platforms it is allowed on, so shared code (a module
-without `PLATFORMS`, such as `Core`, `RHI`, `InputCore`, `ApplicationCore`, `Launch`) also compiles as C++17 on Win64.
-`CXX_EXTENSIONS` is off everywhere.
+The C++ standard of a module is the lowest standard among the platforms it is allowed on (unless the module sets
+`CXX_STANDARD`); an executable uses its platform's. Every platform registers C++17, as UE 4.27 does, so all engine and
+game code compiles as C++17. `CXX_EXTENSIONS` is off everywhere.
 
 ## ThirdParty modules
 
@@ -480,7 +485,7 @@ Two ways to obtain the code:
 
 - **Downloaded (pinned)** — `DOWNLOAD_URL` + `DOWNLOAD_SHA256` + `DOWNLOAD_DIR`. The archive is downloaded once to
   `Engine/Intermediate/ThirdPartyDownloads/<Name>-<archive>`, verified against the SHA-256 and extracted next to the
-  rules file; `DOWNLOAD_DIR` must be the archive's top-level folder (`glm-1.0.1`). `Setup.bat` fetches all of them
+  rules file; `DOWNLOAD_DIR` must be the archive's top-level folder (`tinyobjloader-2.0.0rc13`). `Setup.bat` fetches all of them
   up front (it scans `Engine/Source/ThirdParty`, `Engine/Platforms/*/Source/ThirdParty` and every plugin's
   `Source/ThirdParty`); a build also downloads a missing one while configuring. With an empty `DOWNLOAD_SHA256` the
   download is not verified and LeonBuildTool prints the hash to pin. Extracted folders are git-ignored.
@@ -489,14 +494,20 @@ Two ways to obtain the code:
 Example:
 
 ```cmake
-# Engine/Source/ThirdParty/GLM/GLM.Build.cmake
-leon_module(GLM
+# Engine/Source/ThirdParty/TinyObjLoader/TinyObjLoader.Build.cmake
+leon_module(TinyObjLoader
 	PLATFORMS Desktop
-	DOWNLOAD_URL https://github.com/g-truc/glm/archive/refs/tags/1.0.1.tar.gz
-	DOWNLOAD_SHA256 9f3174561fd26904b23f0db5e560971cbf9b3cbda0b280f04d5c379d03bf234c
-	DOWNLOAD_DIR glm-1.0.1
-	PUBLIC_INCLUDE_PATHS .
+	DOWNLOAD_URL https://github.com/tinyobjloader/tinyobjloader/archive/refs/tags/v2.0.0rc13.tar.gz
+	DOWNLOAD_SHA256 0feb92b838f8ce4aa6eb0ccc32dff30cb64a891e0ec3bde837fca49c78d44334
+	DOWNLOAD_DIR tinyobjloader-2.0.0rc13
+	EXTERNAL_TARGETS tinyobjloader
 )
+
+function(LeonExternal_TinyObjLoader)
+	set(TINYOBJLOADER_BUILD_TEST_LOADER OFF CACHE BOOL "" FORCE)
+	set(TINYOBJLOADER_INSTALL OFF CACHE BOOL "" FORCE)
+	add_subdirectory("${LEON_THIRDPARTY_DIR}" "${CMAKE_BINARY_DIR}/ThirdParty/TinyObjLoader" EXCLUDE_FROM_ALL SYSTEM)
+endfunction()
 ```
 
 The list of libraries, versions and licenses is in [LIBRARIES.md](LIBRARIES.md).
@@ -535,10 +546,10 @@ To use it, point `DOCKER_IMAGE` in `LeonBuildPS2.cmake` at `leon/ps2dev`. With a
 `Public/` and `Private/`, and `IMPLEMENT_MODULE(FDefaultModuleImpl, <Name>)` in a `Private/*.cpp`. Add it as a
 dependency of the module that uses it (or to a target's `EXTRA_MODULE_NAMES`).
 
-**Tests**: put test files in `<Module>/Private/Tests/` — automation tests (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, as in
-Core), or Catch2 for a module not migrated yet ([CODING_STANDARD.md §10](CODING_STANDARD.md#10-tests)). They are built
-into `LeonAutomationTests` if the module is in its closure (add it to `EXTRA_MODULE_NAMES` in
-`LeonAutomationTests.Target.cmake` otherwise); `TestPAL` links only Core, so it runs only Core's tests.
+**Tests**: put test files in `<Module>/Private/Tests/` — automation tests (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`;
+[CODING_STANDARD.md §10](CODING_STANDARD.md#10-tests)). They are built into `LeonAutomationTests` if the module is in
+its closure (add it to `EXTRA_MODULE_NAMES` in `LeonAutomationTests.Target.cmake` otherwise); `TestPAL` links Core and
+Projects (→ Json), so it runs only their tests.
 
 **A new game project**: create `<Dir>/<Name>.lproj`, `<Dir>/Source/<Name>.Target.cmake` with
 `leon_target(<Name> TYPE Game ...)`, and a module in `<Dir>/Source/<Name>/` using `IMPLEMENT_PRIMARY_GAME_MODULE`. Build

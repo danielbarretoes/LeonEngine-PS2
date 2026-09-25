@@ -65,9 +65,9 @@ All identifiers are English (U.S. spelling), **PascalCase**, with no underscores
 **`In` / `Out` parameters**
 
 - A parameter the function writes through a reference/pointer is prefixed `Out`
-  (`GetSkinMatrices(std::vector<glm::mat4>& OutSkin)`, `GetStaticallyLinkedModules(int32& OutCount)`).
+  (`GetSkinMatrices(TArray<FMatrix>& OutSkin)`, `GetStaticallyLinkedModules(int32& OutCount)`).
   A bool out-parameter is `bOutX`.
-- A parameter that would shadow a member is prefixed `In` (`SetActorLocation(const glm::vec3& InLocation)`
+- A parameter that would shadow a member is prefixed `In` (`SetActorLocation(const FVector& InLocation)`
   → `Location = InLocation;`, `FGenericWindow::Create(int InWidth, int InHeight, …)`).
 - A local that would shadow a member or a namespace-scope name is prefixed `Local`
   (`const USkeleton* LocalSkeleton = GetSkeleton();`).
@@ -81,7 +81,7 @@ All identifiers are English (U.S. spelling), **PascalCase**, with no underscores
 template <typename T, typename... ArgsType>
 T* CreateDefaultSubobject(ArgsType&&... Args)
 {
-	auto Owned = std::make_unique<T>(std::forward<ArgsType>(Args)...);
+	TUniquePtr<T> Owned = MakeUnique<T>(Forward<ArgsType>(Args)...);
 	…
 }
 ```
@@ -120,7 +120,7 @@ keep PascalCase free functions, as UE does with `DrawDebugLine` (`LoadLevelFile`
   - Engine and game headers: quotes, **module-relative** path from `Public/`, `Classes/` or `Private/`:
     `#include "HAL/PlatformTime.h"`, `#include "GameFramework/Actor.h"`, `#include "LaunchEngineLoop.h"`.
     Never `../` paths.
-  - Third-party and system headers: angle brackets (`<glm/vec3.hpp>`, `<memory>`).
+  - Third-party and system headers: angle brackets (`<glad/glad.h>`, `<cstring>`).
   - Order (enforced by clang-format `IncludeBlocks: Regroup`): the file's own header first, then engine
     headers, then third-party, then standard / SDK headers, one blank line between blocks.
   - Include what you use; prefer forward declarations in headers; include the specific header, not a
@@ -137,8 +137,9 @@ Formatting is **not** a matter of taste: run the formatter.
 - `Engine\Build\BatchFiles\FormatCode.bat` formats every `.cpp` / `.h` / `.inl` under `Engine\Source`,
   `Engine\Platforms`, `Engine\Plugins` and `Game\` (skips `ThirdParty`, `Intermediate`, `Binaries`; never
   touches GLSL). `FormatCode.bat --check` is a dry run that fails if anything needs formatting.
-- `Engine\Build\BatchFiles\Lint.bat` = format check + Win64 Development build of `LeonAutomationTests`,
-  `LeonCook`, `LeonGame` and `BlankProgram` (warnings on, shadowing as errors).
+- `Engine\Build\BatchFiles\Lint.bat` = format check + banned-API check (`CheckBannedApis.ps1`, gate G4; §4) + Win64
+  Development build of `LeonAutomationTests`, `LeonCook`, `LeonGame` and `BlankProgram` (warnings on, shadowing as
+  errors).
 - `.clang-format` (Epic style): tabs for indentation (width 4), **Allman braces** everywhere (including
   one-line functions), 120 columns, `public:` aligned with `class`, constructor initializers and base lists
   broken before the comma, `PointerAlignment: Left` (`FShaderType* Ptr`), namespaces indented.
@@ -162,10 +163,8 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 
 ## 4. Language
 
-- **C++ standard.** Code that compiles for PS2 (modules with no `PLATFORMS` restriction such as Core,
-  InputCore, RHI, ApplicationCore and Launch, the PS2 extension and the PS2 game) must be **C++17** — the EE
-  toolchain's standard; LeonBuildTool builds such module libraries as C++17 on every platform. Desktop-only
-  modules (`PLATFORMS Desktop` / `Win64`) are **C++20**. C++20 features in shared code break the PS2 build.
+- **C++ standard.** All engine and game code is **C++17** on every platform (Win64, Linux, PS2), as in UE 4.27 and
+  the EE toolchain; LeonBuildTool registers C++17 for each platform. Do not use C++20 features.
 - **Shadowing is a compile error** (UE: `ShadowVariableWarningLevel = Error`): MSVC (Win64)
   `/we4456 /we4457 /we4458 /we4459`, PS2 GCC `-Werror=shadow`. The Linux host flags
   (`-Wall -Wextra -Wpedantic`) do not include it yet, so verify on Win64 or PS2. Resolve shadowing with the
@@ -181,19 +180,29 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
   `CoreMinimal.h`: `TArray`, `TMap`, `TSet`, `FString`, `FName`, `FText`, `TUniquePtr` / `TSharedPtr`,
   `TFunction` and delegates. `TCHAR` is UTF-8 `char` on every platform, so write literals with `TEXT("...")`. Element
   types stored in UE containers must be relocatable with `memmove` (no pointers into themselves).
-- **Standard library and math (deviation).** The modules up to UMG use the UE types (P5). Engine, Renderer,
-  AIModule, the Developer modules and the JoltPhysics plugin keep `std::` containers, `std::string`,
-  `std::unique_ptr` / `std::function` and **glm** until they migrate (P6). Core has UE's math (`FVector`,
-  `FRotator`, `FQuat`, `FMatrix`, `FTransform`, `FMath`, …); new code uses it. Where Core math meets glm code,
-  convert explicitly with `ToGlm` / `FromGlm` (`Migration/GlmInterop.h`, desktop only); keep the conversion at the
-  call into the migrated module rather than widening the migrated API back to glm. Do not add aliases that pretend to be UE types (`using FVector = glm::vec3` is not allowed). See
-  [NextSteps.md](UnrealEngine427/NextSteps.md).
+- **Banned APIs (gate G4).** Every module uses the UE types and Core math (`FVector`, `FRotator`, `FQuat`,
+  `FMatrix`, `FTransform`, `FMath`, …) since P6. `Engine\Build\BatchFiles\CheckBannedApis.ps1` (run by `Lint.bat` and
+  CI) scans `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game`, ignoring comments, and rejects: glm and
+  nlohmann (use Core math and the `Json` module); `std::vector`, `std::string`, `std::map`, `std::unordered_map`,
+  `std::function`, `std::shared_ptr`, `std::unique_ptr` (use `TArray`, `FString`, `TMap`, `TFunction`,
+  `TSharedPtr`, `TUniquePtr`); `<iostream>`, `std::cout`, `std::cerr`, `std::clog` and the `printf` family (use
+  `UE_LOG`, `FString::Printf`, `FCString`). They are allowed only where Core wraps the C and C++ libraries (D2):
+  ThirdParty folders, the platform HAL sources (`Private/Windows`, `Private/Linux`, the PS2 Core extension), the
+  `printf` family inside `Runtime/Core/Private`, `LeonHeaderTool` (reserved for a std-only host tool) and the test
+  program mains (`LeonAutomationTestsMain.cpp`, `TestPAL/Private`). A third-party library's own types stay in the
+  file that calls it (Jolt, tinyobjloader, ufbx, cgltf). Do not add aliases that pretend to be UE types
+  (`using FVector = glm::vec3` is not allowed).
+- **Render matrices until P7 (deviation).** Matrices handed to OpenGL keep glm's column-vector memory layout; build
+  and compose them with `LegacyGL` (`RenderCore/Public/LegacyGLMath.h`: `Mul(A, B)` is glm's `A * B`,
+  `TransformPoint`, `Perspective`, `LookAt`, `Translate`, `Rotate`, `Scale`, `QuatToMatrix`, …), not with
+  `FMatrix::operator*`, and upload them with `ValuePtr`. See [NextSteps.md](UnrealEngine427/NextSteps.md).
 - **Math is float.** No `double` arithmetic in engine code (the EE FPU is single precision); PS2 builds fail on an
   implicit float to double promotion (`-Werror=double-promotion`), so cast explicitly where a `double` is really
   meant (`Printf` arguments, `FTicker`'s clock).
 - **World axes until P7.** Core math uses UE's axes (X forward, Y right, Z up), but the world is still Y-up in metres.
-  Take world directions from `LegacyAxes` (`Migration/LegacyAxes.h`: `Up`, `Forward`, `Right`, `UnitsPerMetre`), not
-  from `FVector::UpVector`, `ForwardVector` or `RightVector`, so the P7 switch finds every use.
+  Write world directions in that convention (up is `FVector(0, 1, 0)`), not with `FVector::UpVector`, `ForwardVector`
+  or `RightVector`, which are UE's Z-up axes; level transforms stay `FLegacyTransform` (Engine
+  `Level/LegacyTransform.h`) until P7.
 - **Logging.** Log through `UE_LOG(<Category>, <Verbosity>, TEXT("..."), ...)` with a category
   (`DECLARE_LOG_CATEGORY_EXTERN` + `DEFINE_LOG_CATEGORY` for a module-wide one, `DEFINE_LOG_CATEGORY_STATIC` inside
   one `.cpp`), not `printf` / `std::cout`. On PS2 the log reaches the EE console.
@@ -208,8 +217,8 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
   `/Script/<Module>.<Class>` as UE names it) with the compiled value as the default, so the code still works when the
   file cannot be read (PS2 without the PCSX2 host filesystem). Command-line switches are read with
   `FParse::Param` / `FParse::Value` on `FCommandLine::Get()` (`-name` / `-name=value`), never from `argv`.
-- Use the Core fixed-width types (`int32`, `uint64`, …) from `CoreTypes.h` in engine APIs; `std::uint8_t`
-  style types remain in older code.
+- Use the Core fixed-width types (`int32`, `uint64`, …) from `CoreTypes.h` in engine APIs, not `std::uint8_t` and
+  the like.
 
 ---
 
@@ -270,8 +279,8 @@ File formats: [ASSET_FORMATS.md](ASSET_FORMATS.md).
 2. Public classes carry `<MODULE>_API`; file name matches the type without its prefix.
 3. Includes are quoted and module-relative; no `../`.
 4. Platform code is in a platform folder; no new `PLATFORM_*` checks in shared code.
-5. Shared (PS2-capable) modules stay C++17.
-6. `Engine\Build\BatchFiles\FormatCode.bat` has been run; `Lint.bat` passes.
+5. The code is C++17 and uses no banned API (§4).
+6. `Engine\Build\BatchFiles\FormatCode.bat` has been run; `Lint.bat` passes (format, `CheckBannedApis.ps1`, build).
 7. Tests for new behaviour live in `<Module>/Private/Tests/` and pass with `RunTests.bat` (Core changes: also
    `TestPAL` on PS2).
 8. New Core-dependent code logs with `UE_LOG` and a category and asserts with `check` / `ensure`.
@@ -280,16 +289,14 @@ File formats: [ASSET_FORMATS.md](ASSET_FORMATS.md).
 
 ## 10. Tests
 
-- **Automation tests** (UE): `IMPLEMENT_SIMPLE_AUTOMATION_TEST(F<Name>Test, "System.<Module>.<Area>", <Flags>)` in
-  `<Module>/Private/Tests/<Area>Test.cpp`, with `bool F<Name>Test::RunTest(const FString& Parameters)` using
-  `TestEqual` / `TestTrue` / `TestNotNull` / …; wrap the file in `#if WITH_DEV_AUTOMATION_TESTS`. An error logged
-  during a test fails it unless the test declares it with `AddExpectedError`. Core's tests follow this form
-  (`System.Core.Containers.Array`, `System.Core.HAL.Memory`, …).
-- **Catch2** remains for the modules not migrated yet (Renderer, Engine, AIModule, MeshUtilities, JoltPhysics);
-  their files are `<Topic>Tests.cpp`. They move to automation tests with the module migration (P6); a migrated
-  module's Catch2 case becomes one automation test (sections become blocks inside it), so the count stays the same.
-- `RunTests.bat` runs both kinds (`LeonAutomationTests`); `TestPAL` runs the automation tests on every platform,
-  including PS2.
+- **Automation tests** (UE): `IMPLEMENT_SIMPLE_AUTOMATION_TEST(F<Name>Test, "System.<Module>.<Area>.<Name>", <Flags>)`
+  in `<Module>/Private/Tests/<Area>Test.cpp` (`<Area>Tests.cpp` in the modules migrated in P5 / P6), with
+  `bool F<Name>Test::RunTest(const FString& Parameters)` using `TestEqual` / `TestTrue` / `TestNotNull` / …; wrap the
+  file in `#if WITH_DEV_AUTOMATION_TESTS`. An error logged during a test fails it unless the test declares it with
+  `AddExpectedError` (the two tests that feed `DeserializeLeonLevel` a bad buffer do). Every test follows this form
+  (`System.Core.Containers.Array`, `System.Engine.PhysScene.…`, `System.JoltPhysics.Step.…`); Catch2 is gone.
+- `RunTests.bat` runs all of them (`LeonAutomationTests`, `-automation=<filter>`); `TestPAL` runs the Core, Json and
+  Projects tests on every platform, including PS2.
 
 ```cpp
 #include "CoreMinimal.h"

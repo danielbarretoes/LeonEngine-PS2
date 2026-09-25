@@ -52,8 +52,8 @@ Currently only `LeonAutomationTests` enables it. `LeonGame` and `LeonCook` do no
 
 ## Tests
 
-`Source/JoltPhysics/Private/Tests/JoltPhysicsTests.cpp` runs in `LeonAutomationTests`, tagged `[jolt]`: backend name, `UWorld::SetPhysicsBackend`, gravity and resting on the floor / a static box / a triangle mesh, and line and sphere traces. Without `LEON_WITH_JOLT` the file instead checks that a Jolt request falls back to Arcade.
+`Source/JoltPhysics/Private/Tests/JoltPhysicsTests.cpp` holds seven automation tests (`System.JoltPhysics.*`) that run in `LeonAutomationTests`: backend name, `UWorld::SetPhysicsBackend`, gravity and resting on the floor / a static box / a triangle mesh, and line and sphere traces. Without `LEON_WITH_JOLT` the file instead compiles `System.JoltPhysics.Backend.DisabledFallsBack`, which checks that a Jolt request falls back to Arcade.
 
 ```bat
-Engine\Build\BatchFiles\RunTests.bat "[jolt]"
+Engine\Build\BatchFiles\RunTests.bat -automation=System.JoltPhysics
 ```

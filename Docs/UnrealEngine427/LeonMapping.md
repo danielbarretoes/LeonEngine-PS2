@@ -29,7 +29,7 @@ Update this page whenever a module or type is added, moved or renamed.
 | `Plugins/RHI/OpenGL` | `OpenGLDrv` (device) + `Renderer` (GL renderer) | debt: Renderer calls GL directly |
 | `Plugins/RHI/PS2` | `Engine/Platforms/PS2/Source/Runtime/PS2RHI` | `FPS2RHI` static API |
 | `Engine/Renderer` CPU side | `RenderCore` | |
-| `Engine/Serialization` | `Json` | native since P4 (`FJsonObject`, `TJsonReader`, `TJsonWriter`, `FJsonSerializer`); `FJsonUtils` removed |
+| `Engine/Serialization` | `Json` | native since P4 (`FJsonObject`, `TJsonReader`, `TJsonWriter`, `FJsonSerializer`); `FJsonUtils` removed; also serves `MaterialAsset` and the cook recipes since P6 (nlohmann removed) |
 | `Engine/Utilities` widgets | `UMG` (`U*` widgets); `TextLayout` → `SlateCore` | |
 | `Engine/Utilities` HUD | `Engine` `GameFramework/HUD.h` | debt: Engine → UMG dependency |
 | `Engine/Content` (C++) | `Engine` (`Private/Content`) | `ContentValidator` removed in 0.12.0 |
@@ -48,8 +48,8 @@ Update this page whenever a module or type is added, moved or renamed.
 | `Tools/ResourceTools` | `Developer/Cooker` (`FCookRecipe`, `FCookPaths`, `UCookCommandlet`) | UE: cook commandlet in UnrealEd |
 | `Tools/AssetPipeline/leon-cook` | `Programs/LeonCook` | `UE4Editor-Cmd -run=cook` equivalent |
 | `Tools/Cli` (`leon-cli`) | removed | only forwarded to leon-cook |
-| `Tests/` (Catch2) | `<Module>/Private/Tests/` + `Programs/LeonAutomationTests` | UE automation tests for Core (P2), Json, Projects (P4), PhysicsCore, RenderCore and AnimationCore (P5); the other modules keep Catch2 until P6 |
-| — | `Programs/TestPAL` | UE `Programs/TestPAL`: runs Core's automation tests on every platform (PS2 in PCSX2) |
+| `Tests/` (Catch2) | `<Module>/Private/Tests/` + `Programs/LeonAutomationTests` | UE automation tests for Core (P2), Json, Projects (P4), PhysicsCore, RenderCore and AnimationCore (P5), and every other module (P6); Catch2 removed in P6 |
+| — | `Programs/TestPAL` | UE `Programs/TestPAL`: runs the Core, Json and Projects automation tests on every platform (PS2 in PCSX2) |
 | `ThirdParty/`, `Build/Dependencies.cmake` | `Engine/Source/ThirdParty/<Lib>/<Lib>.Build.cmake` | |
 | `Engine/Assets` | `Engine/Content` + `Engine/Shaders` | |
 | `Projects/Ps2ThirdPerson` | `Game/ThirdPerson` | isolated project |
@@ -71,7 +71,7 @@ Update this page whenever a module or type is added, moved or renamed.
 | `AnimInstance`, `Skeleton`, `AnimSequence`, `BlendSpace1D` | `UAnimInstance`, `USkeleton`, `UAnimSequence`, `UBlendSpace1D` |
 | `Texture`, `StaticMesh`, `SkeletalMesh`, `Material` | `UTexture2D`, `UStaticMesh`, `USkeletalMesh`, `FMaterial` (render parameters; no `UMaterial` asset class yet) |
 | `UserWidget`, `TextBlockWidget`, `ButtonWidget`, … | `UUserWidget`, `UTextBlock`, `UButton`, … |
-| `Transform` | `FLegacyTransform` (glm, desktop, until P6); UE's `FTransform` is Core math (P3) |
+| `Transform` | `FLegacyTransform` (Engine `Level/LegacyTransform.h`, Core math, until P7); UE's `FTransform` is Core math (P3) |
 | `Window` | `FGenericWindow` (+ `FGLFWWindow`, `FPS2Window`) |
 | `EKey`, `EPadButton` | `EKeys` |
 | `IRHIDevice`, `OpenGLDevice` | `FDynamicRHI`, `FOpenGLDynamicRHI` |
@@ -187,11 +187,11 @@ UE 4.27's float math in `Core/Public/Math/` (every platform), included by `CoreM
 | `glm::quat` | `FQuat` (`A * B` applies B first) | `Math/Quat.h` |
 | `glm::mat4` | `FMatrix` (row vectors, `V * M`; `A * B` applies A first) + `FRotationMatrix`, `FRotationTranslationMatrix`, `FQuatRotationTranslationMatrix`, `FScaleRotationTranslationMatrix`, `FTranslationMatrix`, `FScaleMatrix`, `FInverseRotationMatrix`, `FRotationAboutPointMatrix`, `FPerspectiveMatrix`, `FReversedZPerspectiveMatrix`, `FOrthoMatrix`, `FReversedZOrthoMatrix`, `FLookFromMatrix`, `FLookAtMatrix` | `Math/Matrix.h` and one header per derived matrix |
 | RenderCore `FBox` (glm) / private frustum plane | `FBox`, `FBox2D`, `FPlane`, `FSphere`, `FBoxSphereBounds` | `Math/Box.h`, `Box2D.h`, `Plane.h`, `Sphere.h`, `BoxSphereBounds.h` |
-| `FTransform` (glm TRS, Euler) | `FTransform` (quaternion, translation, 3D scale; scalar version) | `Math/Transform.h`; the old type is `FLegacyTransform` in `Migration/LegacyTransform.h` |
+| `FTransform` (glm TRS, Euler) | `FTransform` (quaternion, translation, 3D scale; scalar version) | `Math/Transform.h`; the old type is `FLegacyTransform` (`Migration/LegacyTransform.h` in Core until P6, then `Engine/Public/Level/LegacyTransform.h`) |
 | `glm::vec4` colors | `FColor` (BGRA bytes), `FLinearColor` (sRGB table, HSV) | `Math/Color.h` |
 | `std::mt19937` / `rand()` | `FRandomStream`, `FMath::Rand` / `FRand` / `RandRange` / `VRand` / `VRandCone` | `Math/RandomStream.h`, `Math/UnrealMathUtility.h` |
 | `glm::radians`, `glm::clamp`, `glm::mix` | `FMath::DegreesToRadians`, `Clamp`, `Lerp`, `FInterpTo`, `VInterpTo`, `RInterpTo`, `QInterpTo`, `ClampAngle`, `LinePlaneIntersection`, `LineBoxIntersection`, `ClosestPointOnSegment`, … | `Math/UnrealMathUtility.h` |
-| — | `ToGlm` / `FromGlm` (desktop, until P6), `LegacyAxes` (until P7) | `Migration/GlmInterop.h`, `Migration/LegacyAxes.h` |
+| — | `ToGlm` / `FromGlm` (desktop), `LegacyAxes`; both removed in P6 | `Migration/GlmInterop.h`, `Migration/LegacyAxes.h` (deleted) |
 
 ### P4 — Files, config, command line, Json and Projects
 
@@ -203,7 +203,7 @@ to `Core/Public/`.
 | `std::filesystem` in `FPaths` / `FFileHelper` | `IPlatformFile`, `IFileHandle`, `IPhysicalPlatformFile`, `FPlatformFileManager`; backends `FWindowsPlatformFile`, `FLinuxPlatformFile`, `FPS2PlatformFile` (read-only) | `GenericPlatform/GenericPlatformFile.h`, `HAL/PlatformFilemanager.h`, `Private/<Platform>/`, PS2 ext |
 | `std::ifstream` / `std::ofstream` | `IFileManager` (`CreateFileReader` / `CreateFileWriter`, `FindFiles`, `IterateDirectory`), `FFileHelper::LoadFileToString` / `LoadFileToArray` / `SaveStringToFile` / `SaveArrayToFile` | `HAL/FileManager.h`, `HAL/FileManagerGeneric.h`, `Misc/FileHelper.h` |
 | — | `FArchive`, `FMemoryArchive`, `FMemoryReader`, `FMemoryWriter`, `FBufferArchive` | `Serialization/` |
-| `FPaths::ResolveAssetPath`, `ExecutableDir` | `FPaths` with UE's API (`EngineDir`, `EngineContentDir`, `ProjectDir`, `ProjectContentDir`, `ProjectSavedDir`, `ProjectLogDir`, `ProjectPluginsDir`, `Combine`, `/`, `NormalizeFilename`, `ConvertRelativePathToFull`, `MakePathRelativeTo`, `GetBaseFilename`, …); `ResolveLegacyContentPath` until P15 | `Misc/Paths.h`, `Migration/LegacyContentPath.h` (`std::string` bridge) |
+| `FPaths::ResolveAssetPath`, `ExecutableDir` | `FPaths` with UE's API (`EngineDir`, `EngineContentDir`, `ProjectDir`, `ProjectContentDir`, `ProjectSavedDir`, `ProjectLogDir`, `ProjectPluginsDir`, `Combine`, `/`, `NormalizeFilename`, `ConvertRelativePathToFull`, `MakePathRelativeTo`, `GetBaseFilename`, …); `ResolveLegacyContentPath` until P15 | `Misc/Paths.h` (the `Migration/LegacyContentPath.h` `std::string` bridge was removed in P6) |
 | hand-written `argv` loops (`--tick`, `--show-stats`) | `FCommandLine`, `FParse` (`Param`, `Value`, `Token`, `Command`, `Bool`), `FApp`, `FPlatformProcess` (`BaseDir`, `SetArgV0`) | `Misc/CommandLine.h`, `Misc/Parse.h`, `Misc/App.h`, `HAL/PlatformProcess.h` |
 | `.ini` placeholders | `FConfigCacheIni`, `FConfigFile`, `FConfigSection`, `FConfigValue`, `GConfig`, `GEngineIni` / `GGameIni` / `GInputIni` / `GEditorIni` | `Misc/ConfigCacheIni.h` |
 | — | `FOutputDeviceFile` (`<Project>/Saved/Logs`), `FLogSuppressionInterface` (`[Core.Log]`, `-LogCmds`) | `Misc/OutputDeviceFile.h`, `Logging/LogSuppressionInterface.h` |
@@ -233,24 +233,61 @@ SlateCore and UMG use Core types (InputCore had none to replace). The world keep
 | `UTextBlock::SetText(std::string)`, glm widget colors, string ids | `SetText(FText)`, `FLinearColor` colors, `FName` ids (`TickInput` returns `NAME_None` when nothing was activated) | `UMG/Public/Components/` |
 | Catch2 tests of PhysicsCore, RenderCore, AnimationCore | automation tests (`System.PhysicsCore.*`, `System.RenderCore.*`, `System.AnimationCore.*`) | `<Module>/Private/Tests/` |
 
+### P6 — Upper modules on the UE types
+
+Renderer, Engine, AIModule, MeshUtilities, Cooker, LeonCook, the JoltPhysics plugin and the desktop Launch code
+(`FGameApplication`) use Core types; glm, nlohmann, Catch2 and Core's `Migration/` folder are removed. The world keeps
+its Y-up metre semantics until P7.
+
+| Leon (before) | UE name (now) | Where |
+| --- | --- | --- |
+| `glm::vec2` / `vec3` / `vec4` / `mat4` in the upper modules | `FVector2D`, `FVector`, `FVector4`, `FMatrix` (render matrices keep glm's GL layout until P7) | |
+| `glm::perspective`, `ortho`, `lookAt`, `translate`, `rotate`, `scale`, `mat4_cast`, `value_ptr`, `radians`, `normalize`, `A * B`, `M * v`, the normal matrix | `LegacyGL::Perspective`, `Ortho`, `LookAt`, `Translate`, `Rotate`, `Scale`, `QuatToMatrix`, `ValuePtr`, `Radians`, `Normalize`, `Mul(A, B)`, `Transform` / `TransformPoint` / `TransformDirection`, `NormalMatrix3x3` (glm's formulas term by term) | `RenderCore/Public/LegacyGLMath.h` |
+| `FLegacyTransform` on glm (Core `Migration/LegacyTransform.h`, desktop) | `FLegacyTransform` on Core math (`ModelMatrix()` returns an `FMatrix`), until P7 | `Engine/Public/Level/LegacyTransform.h` |
+| `ToGlm` / `FromGlm`, `LegacyAxes`, `Migration/LegacyContentPath.h` | removed; `FPaths::ResolveLegacyContentPath` stays until P15 | `Core/Public/Misc/Paths.h` |
+| `std::vector`, `std::string`, `std::unordered_map`, `std::function`, `std::unique_ptr` / `std::shared_ptr` | `TArray`, `FString`, `TMap`, `TFunction`, `TUniquePtr` / `TSharedPtr` | |
+| `UInputMappingContext` / `UPlayerInput` with `std::string_view` action names | `FName` action names, `TMap<FName, …>` bindings and state | `Engine/Public/GameFramework/InputMapping.h` |
+| `FDebugDraw` / `FDebugOverlay` with `glm::vec3` colors and `std::string` text | `FLinearColor` colors, `FString` text | `Renderer/Public/Debug/` |
+| `FResourceCache` returning `std::shared_ptr<UStaticMesh>`, `std::unordered_map` caches | `TSharedPtr<UStaticMesh>` / `TSharedPtr<UTexture2D>`, `TMap<FString, …>` caches | `Renderer/Public/ResourceCache.h` |
+| `UStaticMesh` / `USkeletalMesh` bounds as `glm::vec3` | `FVector` (`GetLocalMin`, `GetLocalMax`) | `Renderer/Public/StaticMesh.h`, `SkeletalMesh.h` |
+| `ULevel` on `std::vector` / `std::string`, `std::size_t` mesh indices with `npos` | `TArray`, `FString`, `SIZE_T` mesh indices with `ULevel::Npos` | `Engine/Classes/Engine/Level.h` |
+| `.llev` reader / writer on `std::ifstream` and `std::filesystem` | `FMemoryReader` / `FMemoryWriter` and `FFileHelper`; the same bytes, the string table stays case-sensitive | `Engine/Public/Level/LeonLevelFormat.h` |
+| `.lmat` reader / writer on `std::string` streams | `FString` and `FFileHelper` with its own line parser (same rules: `#` / `;` comments, case-insensitive sections and keys) | `Renderer/Public/LeonMaterialFormat.h` |
+| `PatchMaterialFromJson` / `HasMaterialSurfaceFields` on `nlohmann::json` | take a `const FJsonObject&` (`Json` module); missing or mistyped fields keep their value | `Renderer/Public/MaterialAsset.h` |
+| cook recipes on nlohmann, switches parsed into `std::string` | `FJsonSerializer` / `FJsonObject`; switches read with `FCString`; files through `IFileManager` / `FPaths` | `Cooker/Private/CookRecipe.cpp`, `Commandlets/CookCommandlet.cpp` |
+| navigation A* open set in a `std::priority_queue` | `TArray` heap (`HeapPush` / `HeapPop`) | `Engine/Private/AI/Navigation/NavigationSystem.cpp` |
+| `std::cout` / `std::cerr` in the upper modules, `printf` in BlankProgram | `UE_LOG` with `LogEngine`, `LogLevel`, `LogPath`, `LogPhysics` (`Engine/Public/EngineLogs.h`), `LogRenderer` (`Renderer/Private/RendererLog.h`), `LogMeshUtilities`, `LogCook`, `LogJolt`, `LogLaunch`, `LogBlankProgram`; headless `LeonGame` flushes `GLog` every tick | |
+| `std::chrono`, `std::this_thread::sleep_until` | `FPlatformTime`, `FPlatformProcess::Sleep` (Windows and Linux) | `Core/Public/HAL/PlatformProcess.h` |
+| `TIsDerivedFrom<Base, Derived>` | `TIsDerivedFrom<Derived, Base>` (UE's order) | `Core/Public/Templates/UnrealTypeTraits.h` |
+| `#include <Windows.h>` in the Windows HAL and OpenGLDrv | `Windows/WindowsHWrapper.h` (UE's name; keeps Core's `TEXT`) | `Core/Public/Windows/WindowsHWrapper.h` |
+| MSVC warning C4324 (padding added for `alignas`) | disabled (`/wd4324`), as UE does | `LeonBuildTool/Configuration/CompileEnvironment.cmake` |
+| C++20 on Win64 and Linux | C++17 on every platform, as UE 4.27 | `LeonBuildTool/Platform/*/LeonBuild*.cmake` |
+| Catch2 tests of Engine, Renderer, AIModule, MeshUtilities and JoltPhysics; `-noautomation` / `-automationonly` | automation tests (`System.Engine.*`, `System.Renderer.*`, `System.AIModule.*`, `System.MeshUtilities.*`, `System.JoltPhysics.*`), 179 in total; `LeonAutomationTests` keeps only `-automation=<filter>` | `<Module>/Private/Tests/` |
+| `System.Core.Migration.GlmInterop.*`, `System.Core.Migration.LegacyTransform.*` | `System.RenderCore.LegacyGLMath.Builders` / `Composition` (checked against values glm 1.0.1 printed), `System.Engine.LegacyTransform.*` | `RenderCore/Private/Tests/LegacyGLMathTests.cpp`, `Engine/Private/Tests/LegacyTransformTests.cpp` |
+| — | `CheckBannedApis.ps1` (gate G4): rejects glm, nlohmann, `std::` containers / strings / functions / smart pointers, iostream and the `printf` family outside the allowed places | `Engine/Build/BatchFiles/` |
+
 ## Deviations from UE 4.27 (intentional)
 
 | Topic | UE | LeonEngine | Why |
 | --- | --- | --- | --- |
 | Reflection | `UCLASS`, `UObject`, UHT | none; `A`/`U` prefixes are naming only | CoreUObject is the next plan |
-| Containers / strings | `TArray`, `TMap`, `FString` everywhere | Core has them (P2) and the modules up to UMG use them (P5); Engine, Renderer, AIModule, the Developer modules and Jolt still use `std::` containers / `std::string` | migration finishes in P6 |
+| Containers / strings | `TArray`, `TMap`, `FString` everywhere | the same everywhere since P6, enforced by `CheckBannedApis.ps1` (G4); third-party types stay at the library seams (Jolt, tinyobjloader, ufbx, cgltf), and the SSAO kernel keeps `std::mt19937` so its samples do not change | — |
+| `FString` comparison | `==` ignores case | the same; code that needs an exact match (the level string table, mesh tags, editor class names, volume payloads) calls `Equals(…, ESearchCase::CaseSensitive)` | the pre-P6 `std::string` code compared case-sensitively |
 | `TCHAR` | `wchar_t` / UTF-16 on most platforms | UTF-8 `char` on every platform; `TEXT(x)` is `x`; `WIDECHAR` only inside the Windows HAL; `TCHAR_TO_UTF8` & co. are identities | the EE has no wide-string support worth paying for; one encoding everywhere |
 | `FName` pool | growing name blocks, `FNamePool` sized for desktop | 8-byte `FName`, hard-coded `EName` list; block size / count and hash buckets from `FPlatformProperties::NamePool*` (PS2: 16 KB blocks, at most 256 KB, 4096 buckets); exhausting the pool is fatal | fixed memory budget on 32 MB ([Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md)) |
 | `FText` | localized text (`FTextLocalizationManager`, culture formatting) | minimal: `FromString`, `AsNumber`, `AsPercent`, `Format` (`{0}` arguments), `Join`; `LOCTEXT` / `NSLOCTEXT` keep the source text | no localization yet |
 | Delegates | also dynamic (`DECLARE_DYNAMIC_*`) and `UObject` bindings | `TDelegate` / `TMulticastDelegate` with static, lambda, raw and SP bindings (+ payload) | dynamic / `UObject` delegates need CoreUObject |
 | `FPlatformAtomics` on PS2 | real atomics | the generic non-atomic version | Leon runs a single EE thread |
-| Automation tests | run by the session frontend / `-ExecCmds="Automation RunTests"` | `FAutomationTestFramework::RunTests(Filter)` from `LeonAutomationTests` (with Catch2) and `TestPAL` (every platform) | no editor / session frontend |
-| Math | `FVector`, `FRotator`, `FMatrix` everywhere, SIMD `VectorRegister`, `double` helpers | Core has the scalar float API (P3) and the modules up to UMG use it (P5); Engine, Renderer, AIModule, the Developer modules and Jolt still use glm (Y-up metres) until P6, converting with `ToGlm` / `FromGlm`; the world stays Y-up in metres until P7 | migration step by step; the EE has no SIMD path worth matching and a single-precision FPU |
+| Automation tests | run by the session frontend / `-ExecCmds="Automation RunTests"` | `FAutomationTestFramework::RunTests(Filter)` from `LeonAutomationTests` (`-automation=<filter>`) and `TestPAL` (every platform) | no editor / session frontend |
+| Math | `FVector`, `FRotator`, `FMatrix` everywhere, SIMD `VectorRegister`, `double` helpers | Core has the scalar float API (P3) and every module uses it (P5, P6); the world stays Y-up in metres until P7 | migration step by step; the EE has no SIMD path worth matching and a single-precision FPU |
+| Render matrices | `FMatrix` in UE's row-vector convention, `A * B` applies A first | render, view and projection matrices keep glm's GL memory layout (column-vector transforms, right-handed, clip Z in [-1, 1]) and are built and composed with `LegacyGL` (`Mul(A, B)` = glm's `A * B`, glm's formulas term by term); the Starter level renders pixel-identical to the P1 and P5 captures (outside the stats text) | the shaders and the world still use the GL conventions; P7 moves to UE's axes |
+| Level transforms | `FTransform` | `FLegacyTransform` (XYZ Euler degrees, `T * Rx * Ry * Rz * S`) in Engine `Level/LegacyTransform.h` | the `.llev` data is Y-up metres; the readers convert to `FTransform` in P7 |
+| Spring arm lag | `FMath::VInterpTo` / `RInterpTo` toward the desired location and rotation | an exponential-smoothing alpha applied with `FMath::Lerp` (`A + t * (B - A)`) to the target, yaw / pitch and arm length; the pre-P6 code used `glm::mix` (`A * (1 - t) + B * t`), so the last bit of the lagged values can differ from earlier releases | `FMath::Lerp` is UE's formula; the smoothing itself is unchanged |
 | Build tool | C# UBT | CMake scripts | no .NET dependency; PS2 toolchain is CMake-based |
 | Linking | monolithic or DLLs | always static (`IS_MONOLITHIC=1`), generated module table | PS2 has no DLLs |
 | Renderer | API-agnostic via RHI command lists | calls OpenGL directly | debt |
 | Engine ↔ Renderer | acyclic | `CIRCULAR_DEPENDENCIES` | debt |
-| PS2 gameplay | full framework on consoles | PS2 game uses `F*` types, no `AActor` | the gameplay framework is desktop-only (glm/json, C++20) |
+| PS2 gameplay | full framework on consoles | PS2 game uses `F*` types, no `AActor` | the gameplay framework is desktop-only (Engine depends on the OpenGL Renderer, UMG and AudioMixer) |
 | Config layers | `Base.ini`, `Base<T>`, `Engine/Config/<P>/`, `Engine/Platforms/<P>/Config`, project `Default<T>`, `Config/<P>/`, `Platforms/<P>/Config`, `Saved/Config` (plus `NotForLicensees` / `Restricted` folders and a binary config cache) | the same order without `NotForLicensees` / `Restricted` or the binary cache; the `Saved/Config` user layer exists only on desktop; the PS2 reads the ini files through `host:` and keeps compiled defaults when they are missing | the PS2 build has no writable storage and PCSX2's host filesystem is optional |
 | Config usage | `UPROPERTY(Config)` / `LoadConfig` everywhere, input from `BaseInput.ini` | only a few keys are read (map, resolution, stats, ThirdPerson tuning) | `UPROPERTY(Config)` needs reflection (P10); config-driven input comes in P13 |
 | `FString` in archives | ANSI when possible, else UTF-16 with a negative length | always UTF-8 with a positive length (including the terminator); a negative length is rejected | `TCHAR` is UTF-8 (D1) |
@@ -263,7 +300,7 @@ SlateCore and UMG use Core types (InputCore had none to replace). The world keep
 | Global `operator new` / `delete` | replaced through `FMemory` in every monolithic build (`REPLACEMENT_OPERATOR_NEW_AND_DELETE`) | replaced on the PS2 only (`PS2PlatformRuntime.cpp`) | keeps libstdc++'s allocation, unwinder and demangler code out of the ELF; desktop still uses the CRT |
 | Capsule placement | `FCollisionShape` capsules are centered on the component | Leon's character capsule stands on the actor location (feet): it spans feet to feet + 2 × half height | the CMC-lite works from the feet until the character becomes a UCapsuleComponent (P12) |
 | Body collision shape | the body setup's aggregate geometry | `FBodyInstance::CollisionShape` (`EBodyCollisionShape::Box` / `TriangleMesh`) | Leon's physics scene has AABB and triangle-mesh bodies only |
-| Bone matrices | `FTransform` bone poses, `FMatrix` in UE's row-vector convention | `FMatrix` values that keep the memory of the imported glm matrices (column-vector transforms); the skin matrix is `InverseBind * BoneWorld` in FMatrix order | the renderer uploads them as they are; they become proper UE transforms with the skeletal mesh assets (P14) |
+| Bone matrices | `FTransform` bone poses, `FMatrix` in UE's row-vector convention | `FMatrix` values that keep glm's memory layout (column-vector transforms; since P6 the FBX import builds them with `LegacyGL::QuatToMatrix`); the skin matrix is `InverseBind * BoneWorld` in FMatrix order | the renderer uploads them as they are; they become proper UE transforms with the skeletal mesh assets (P14) |
 | Widget colors | `FSlateColor` / `FLinearColor` with alpha | `FLinearColor`, alpha ignored by the debug overlay | the HUD overlay draws opaque RGB |
 | Game → Launch | game modules never see `FEngineLoop` | the PS2 game module reads `GEngineLoop.GetMainWindow()` (include-only dependency on the launch module) | no Slate / `GEngine` on PS2 to hand out the viewport |
 | Gamepad | `FSlateApplication` routes `IInputInterface` events to the player controller | game code polls `IInputInterface` state directly | no Slate; polling matches the PS2 frame loop |

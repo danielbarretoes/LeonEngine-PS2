@@ -72,8 +72,7 @@ Adds `kernel` (EE timer). Implements the HAL types that `HAL/Platform*.h` select
 | `FPS2PlatformTime` → `FPlatformTime` | `PS2PlatformTime.h` | `Cycles64()` from `GetTimerSystemTime()` (BUSCLK, 147.456 MHz), `Seconds()`, `CyclesToMicroseconds()` |
 | `FPS2PlatformMath` → `FPlatformMath` | `PS2PlatformMath.h` | `Sin256()` / `Cos256()`: quarter-wave table on a 1/256-turn angle, no libm (soft-float `double` is slow on the EE) |
 
-`Core.Build.cmake` excludes `Private/Misc/FileHelper.cpp`, `Private/Misc/Paths.cpp` and `Private/Math/Transform.cpp` on
-PS2 (`EXCLUDE_SOURCES_PS2`), and GLM is a Desktop-only dependency.
+`Core.Build.cmake` excludes no source on PS2, and Core has no third-party dependency on any platform.
 
 ### ApplicationCore — `Source/Runtime/ApplicationCore/`
 
@@ -187,14 +186,14 @@ Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson
 `-Program <Name>` it runs an engine program instead (`Engine\Binaries\PS2\<Name>.elf`, built with
 `Build.bat <Name> PS2 <Configuration>`). PCSX2 setup notes: [Docs/SETUP.md](../../../Docs/SETUP.md#pcsx2-notes).
 
-Core's automation tests run on the EE through the `TestPAL` program:
+The Core, Json and Projects automation tests run on the EE through the `TestPAL` program:
 
 ```powershell
 Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build
 ```
 
 `UE_LOG` output goes to the EE console; read `%USERPROFILE%\Documents\PCSX2\logs\emulog.txt` for
-`TestPAL: PASSED (27 test(s), 0 failed)` and the `LogTestPAL` memory / name-pool lines.
+`TestPAL: PASSED (46 test(s), 0 failed)` and the `LogTestPAL` memory / name-pool lines.
 
 ## Reference
 
