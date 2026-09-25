@@ -7,6 +7,7 @@
 #include "Engine/Player.h"
 #include "EngineLogs.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/Controller.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerController.h"
@@ -395,23 +396,64 @@ bool UWorld::DestroyActor(AActor* Actor, bool /*bNetForce*/, bool /*bShouldModif
 
 void UWorld::Tick(float InDeltaTime)
 {
+	DeltaTimeSeconds = InDeltaTime;
 	bTicking = true;
 	if (PersistentLevel != nullptr)
 	{
-		// Spawns wait in PendingSpawnActors and destroys null their slot: the array keeps its size during the loop.
+		// Spawns wait in PendingSpawnActors and destroys null their slot: the array keeps its size during the loop. A
+		// possessed pawn ticks after its controller, so its movement consumes the input the controller processed this
+		// frame (UE: AController::AddPawnTickDependency); a pawn met before its controller waits for it.
 		const int32 NumActors = PersistentLevel->Actors.Num();
+		TArray<APawn*> WaitingPawns;
+		const auto TickWaitingPawn = [&WaitingPawns, InDeltaTime](const AController& Controller)
+		{
+			APawn* Pawn = Controller.GetPawn();
+			if (Pawn != nullptr && WaitingPawns.Remove(Pawn) > 0 && !Pawn->IsPendingKillPending())
+			{
+				Pawn->TickActor(InDeltaTime);
+			}
+		};
 		for (int32 Index = 0; Index < NumActors; ++Index)
 		{
 			AActor* Actor = PersistentLevel->Actors[Index];
-			if (Actor != nullptr && !Actor->IsPendingKillPending())
+			if (Actor == nullptr || Actor->IsPendingKillPending())
 			{
-				Actor->TickActor(InDeltaTime);
+				continue;
+			}
+			if (APawn* Pawn = Cast<APawn>(Actor))
+			{
+				const AController* Controller = Pawn->GetController();
+				const int32 ControllerIndex = Controller != nullptr
+					? PersistentLevel->Actors.Find(const_cast<AController*>(Controller))
+					: INDEX_NONE;
+				if (ControllerIndex > Index)
+				{
+					WaitingPawns.Add(Pawn);
+					continue;
+				}
+			}
+			Actor->TickActor(InDeltaTime);
+			if (const AController* Controller = Cast<AController>(Actor))
+			{
+				TickWaitingPawn(*Controller);
+			}
+		}
+		// A pawn whose controller went away during the tick still ticks.
+		for (APawn* Pawn : WaitingPawns)
+		{
+			if (Pawn != nullptr && !Pawn->IsPendingKillPending())
+			{
+				Pawn->TickActor(InDeltaTime);
 			}
 		}
 	}
 	bTicking = false;
 	FlushPendingSpawns();
 	CompactActors();
+
+	// The cameras last, after every actor moved (UE).
+	ForEach<APlayerController>(
+		[InDeltaTime](APlayerController& PlayerController) { PlayerController.UpdateCameraManager(InDeltaTime); });
 }
 
 void UWorld::FlushPendingSpawns()

@@ -5,11 +5,13 @@
 #include "GameFramework/Actor.h"
 #include "HUD.generated.h"
 
+class APlayerController;
 class FCanvas;
 
 /**
- * Unreal-like AHUD (an actor): owns UserWidgets painted each frame into screen geometry. UE spawns one per player
- * controller; until P13 the engine owns a single HUD outside any world (UGameEngine::GetHUD) and ticks and paints it.
+ * Unreal-like AHUD (an actor): owns UserWidgets painted each frame into screen geometry. Each player controller gets
+ * one from the game mode (AGameModeBase::HUDClass, APlayerController::ClientSetHUD); it ticks in the world and the
+ * viewport paints it after the scene.
  */
 UCLASS()
 class ENGINE_API AHUD : public AActor
@@ -20,6 +22,13 @@ public:
 	AHUD(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	void Clear();
+
+	/** The player controller that owns this HUD (UE: PlayerOwner), set from the owner when it spawns. */
+	UPROPERTY(Transient)
+	APlayerController* PlayerOwner = nullptr;
+
+	/** Takes its owner as PlayerOwner (UE). */
+	void PostInitializeComponents() override;
 
 	/**
 	 * Unreal CreateWidget + AddToViewport (lite): NewObject with the HUD as outer, NativeConstruct, retain (the HUD's

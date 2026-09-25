@@ -5,6 +5,7 @@
 #include "Engine/Level.h"
 #include "EngineLogs.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/DefaultPawn.h"
 #include "GameFramework/HUD.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerStart.h"
@@ -20,7 +21,7 @@ AGameModeBase::AGameModeBase(const FObjectInitializer& ObjectInitializer)
 	GameStateClass = AGameStateBase::StaticClass();
 	PlayerControllerClass = APlayerController::StaticClass();
 	PlayerStateClass = APlayerState::StaticClass();
-	DefaultPawnClass = APawn::StaticClass();
+	DefaultPawnClass = ADefaultPawn::StaticClass();
 	HUDClass = AHUD::StaticClass();
 	DefaultPlayerName = TEXT("Player");
 }
@@ -70,19 +71,6 @@ void AGameModeBase::Tick(float DeltaSeconds)
 	{
 		GameState->Tick(DeltaSeconds);
 	}
-}
-
-void AGameModeBase::OnEnter(UGameEngine& /*Engine*/, const FString& /*LevelPath*/)
-{
-}
-
-void AGameModeBase::OnExit(UGameEngine& /*Engine*/)
-{
-}
-
-void AGameModeBase::Tick(UGameEngine& /*Engine*/, float DeltaTime)
-{
-	GetWorld()->Tick(DeltaTime);
 }
 
 APlayerController* AGameModeBase::Login(
@@ -180,8 +168,17 @@ void AGameModeBase::PostLogin(APlayerController* NewPlayer)
 	HandleStartingNewPlayer(NewPlayer);
 }
 
-void AGameModeBase::GenericPlayerInitialization(AController* /*C*/)
+void AGameModeBase::GenericPlayerInitialization(AController* C)
 {
+	if (APlayerController* PlayerController = Cast<APlayerController>(C))
+	{
+		InitializeHUDForPlayer(PlayerController);
+	}
+}
+
+void AGameModeBase::InitializeHUDForPlayer(APlayerController* NewPlayer)
+{
+	NewPlayer->ClientSetHUD(HUDClass);
 }
 
 void AGameModeBase::Logout(AController* Exiting)

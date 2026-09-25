@@ -43,3 +43,30 @@ public:
 			World->PersistentLevel->Actors.Num() == NumBefore && !World->PersistentLevel->Actors.Contains(Victim);
 	}
 };
+
+/** Counts the input bindings it receives, for the input tests. */
+UCLASS()
+class UEngineTestInputReceiver : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	int32 Presses = 0;
+	int32 Releases = 0;
+	int32 AxisCalls = 0;
+	float LastAxisValue = 0.0f;
+
+	void OnPressed()
+	{
+		++Presses;
+	}
+	void OnReleased()
+	{
+		++Releases;
+	}
+	void OnAxis(float Value)
+	{
+		++AxisCalls;
+		LastAxisValue = Value;
+	}
+};

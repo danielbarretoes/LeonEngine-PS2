@@ -21,7 +21,7 @@ public:
 	virtual void PollEvents() override;
 	virtual void SwapBuffers() override;
 
-	virtual bool IsKeyPressed(EKeys Key) const override;
+	virtual bool IsKeyPressed(const FKey& Key) const override;
 	virtual bool IsMouseButtonDown(EMouseButtons Button) const override;
 	virtual FVector2D GetCursorPos() const override;
 	virtual void SetCursorCaptured(bool bCaptured) override;

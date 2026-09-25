@@ -56,7 +56,8 @@ public:
 	/** Presents the frame (desktop: swap chain; PS2: vsync). */
 	virtual void SwapBuffers() = 0;
 
-	virtual bool IsKeyPressed(EKeys Key) const;
+	/** Whether a keyboard key or a mouse button is down (the platform maps the FKey to its own code). */
+	virtual bool IsKeyPressed(const FKey& Key) const;
 	virtual bool IsMouseButtonDown(EMouseButtons Button) const;
 
 	/** Cursor position in window coordinates (UE: ICursor::GetPosition). */

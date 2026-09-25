@@ -3,6 +3,7 @@
 #include "Components/TextBlock.h"
 #include "CoreMinimal.h"
 #include "Engine/GameEngine.h"
+#include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/GameMode.h"
@@ -187,7 +188,7 @@ bool FGameFrameworkEngineCollectsGarbageOnATimerTest::RunTest(const FString& Par
 	TestTrue("Interval reached", Engine->ConditionalCollectGarbage(31.2f));
 	TestFalse("Garbage collected", Garbage.IsValid());
 	TestNotNull("Engine world kept", Engine->GetGameWorld());
-	TestEqual("Engine camera kept", Engine->GetCamera().GetDistance(), 500.0f);
+	TestNotNull("Engine local player kept", Engine->GameInstance->GetFirstGamePlayer());
 	Engine->PreExit();
 	return true;
 }

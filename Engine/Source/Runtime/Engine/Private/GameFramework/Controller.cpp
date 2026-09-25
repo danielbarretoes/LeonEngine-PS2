@@ -29,6 +29,7 @@ void AController::Possess(APawn* InPawn)
 	if (Pawn != nullptr)
 	{
 		Pawn->BindController(this);
+		Pawn->PossessedBy(this);
 		OnPossess(Pawn);
 	}
 }
@@ -39,8 +40,10 @@ void AController::UnPossess()
 	{
 		return;
 	}
-	Pawn->BindController(nullptr);
+	APawn* OldPawn = Pawn;
+	OldPawn->BindController(nullptr);
 	Pawn = nullptr;
+	OldPawn->UnPossessed();
 	OnUnPossess();
 }
 

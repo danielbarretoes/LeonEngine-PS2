@@ -98,7 +98,7 @@ bool FEngineSettingsGameMapsSettingsFromConfigTest::RunTest(const FString& Param
 		FPaths::FileExists(
 			FPackageName::LongPackageNameToFilename(UGameMapsSettings::GetGameDefaultMap(), TEXT(".llev"))));
 	TestEqual("GlobalDefaultGameMode", UGameMapsSettings::GetGlobalDefaultGameMode(),
-		FString(TEXT("/Script/Engine.DefaultGameMode")));
+		FString(TEXT("/Script/Engine.GameModeBase")));
 	TestNotNull("GlobalDefaultGameMode loads", GlobalDefaultGameModeClass());
 	TestTrue("GameInstanceClass",
 		GetDefault<UGameMapsSettings>()->GameInstanceClass.TryLoadClass<UGameInstance>() ==

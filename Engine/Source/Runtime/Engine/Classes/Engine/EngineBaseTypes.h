@@ -99,6 +99,22 @@ struct ENGINE_API FURL
 	}
 };
 
+/** How the game window captures the mouse (UE: EMouseCaptureMode). */
+UENUM()
+enum class EMouseCaptureMode : uint8
+{
+	/** Never captured. */
+	NoCapture,
+	/** Captured from the start, until the game releases it. */
+	CapturePermanently,
+	/** Captured from the start, the first click included (UE's default). */
+	CapturePermanently_IncludingInitialMouseDown,
+	/** Captured while a mouse button is down. */
+	CaptureDuringMouseDown,
+	/** Captured while the right mouse button is down. */
+	CaptureDuringRightMouseDown,
+};
+
 /** Input events (UE: EInputEvent, EngineBaseTypes.h). */
 enum EInputEvent
 {

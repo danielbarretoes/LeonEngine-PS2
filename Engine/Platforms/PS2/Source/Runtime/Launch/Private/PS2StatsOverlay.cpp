@@ -160,9 +160,9 @@ namespace
 			(void)FPS2RHI::DrawUnlitRectAlpha(
 				X + X0 * Scale, Y + Y0 * Scale, X + X1 * Scale, Y + Y1 * Scale, R, G, B, A);
 		};
-		const auto IsDown = [&](EKeys Key) { return bLive && Pad->IsGamepadKeyDown(Key); };
+		const auto IsDown = [&](const FKey& Key) { return bLive && Pad->IsGamepadKeyDown(Key); };
 		// Lit colour while held, dim grey otherwise.
-		const auto Button = [&](EKeys Key, float X0, float Y0, float X1, float Y1, float R, float G, float B)
+		const auto Button = [&](const FKey& Key, float X0, float Y0, float X1, float Y1, float R, float G, float B)
 		{
 			if (IsDown(Key))
 			{
@@ -174,7 +174,7 @@ namespace
 			}
 		};
 		// Screen y grows down like the raw vertical axis.
-		const auto Stick = [&](uint8 RawX, uint8 RawY, EKeys ClickKey, float CenterX, float CenterY)
+		const auto Stick = [&](uint8 RawX, uint8 RawY, const FKey& ClickKey, float CenterX, float CenterY)
 		{
 			if (IsDown(ClickKey))
 			{

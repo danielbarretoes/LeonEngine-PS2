@@ -16,12 +16,12 @@ inline constexpr float DefaultCameraNearPlane = 10.0f;
 inline constexpr float DefaultCameraFarPlane = 10000.0f;
 
 /**
- * View camera (UE: UCameraComponent, a scene component): orbit (default) or free-look for ADefaultCameraActor. Both
- * modes look along a UE view rotation (yaw about Z from +X toward +Y, pitch up from the horizontal; roll is always 0).
+ * View camera (UE: UCameraComponent, a scene component): orbit (default) or free-look. Both modes look along a UE view
+ * rotation (yaw about Z from +X toward +Y, pitch up from the horizontal; roll is always 0).
  *
- * Unlike UE's camera, the view does not come from the component transform: the engine's camera (UGameEngine) is a
- * standalone component whose eye comes from the orbit target / distance or the free-look eye, and a spring arm pushes
- * into it with ApplyToCamera. P13 moves the view to APlayerCameraManager / UGameViewportClient.
+ * Unlike UE's camera, the view does not come from the component transform: the eye comes from the orbit target /
+ * distance or the free-look eye, and a spring arm pushes into it with ApplyToCamera. The player camera manager keeps
+ * the player's view in one (APlayerCameraManager::GetViewCamera), in free look, and the renderer draws with it.
  */
 UCLASS()
 class ENGINE_API UCameraComponent : public USceneComponent

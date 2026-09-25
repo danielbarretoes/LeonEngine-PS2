@@ -22,8 +22,8 @@ public:
 	void SendControllerEvents();
 
 	virtual bool IsGamepadConnected() const override;
-	virtual bool IsGamepadKeyDown(EKeys Key) const override;
-	virtual float GetGamepadAnalog(EKeys Axis) const override;
+	virtual bool IsGamepadKeyDown(const FKey& Key) const override;
+	virtual float GetGamepadAnalog(const FKey& Axis) const override;
 
 	// Raw state for the engine debug widget.
 	bool IsPortOpen() const;

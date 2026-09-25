@@ -1,6 +1,7 @@
 #include "Desktop/GLFWWindow.h"
 
 #include "Containers/Array.h"
+#include "Containers/Map.h"
 #include "GenericPlatform/GenericApplication.h"
 
 #include <GLFW/glfw3.h>
@@ -26,6 +27,106 @@ namespace
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 		glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 		glfwWindowHint(GLFW_SAMPLES, 0);
+	}
+
+	/** A key's GLFW code: a keyboard key, or a mouse button (UE: the platform key map, FPlatformInput::GetKeyMap). */
+	struct FGLFWKeyCode
+	{
+		int32 Code = GLFW_KEY_UNKNOWN;
+		bool bMouseButton = false;
+	};
+
+	const TMap<FName, FGLFWKeyCode>& GetGLFWKeyMap()
+	{
+		static const TMap<FName, FGLFWKeyCode> KeyMap = []()
+		{
+			TMap<FName, FGLFWKeyCode> Map;
+			const auto Key = [&Map](const FKey& InKey, int32 Code)
+			{ Map.Add(InKey.GetFName(), FGLFWKeyCode{Code, false}); };
+			const auto Button = [&Map](const FKey& InKey, int32 Code)
+			{ Map.Add(InKey.GetFName(), FGLFWKeyCode{Code, true}); };
+			Button(EKeys::LeftMouseButton, GLFW_MOUSE_BUTTON_LEFT);
+			Button(EKeys::RightMouseButton, GLFW_MOUSE_BUTTON_RIGHT);
+			Button(EKeys::MiddleMouseButton, GLFW_MOUSE_BUTTON_MIDDLE);
+			Button(EKeys::ThumbMouseButton, GLFW_MOUSE_BUTTON_4);
+			Button(EKeys::ThumbMouseButton2, GLFW_MOUSE_BUTTON_5);
+			Key(EKeys::SpaceBar, GLFW_KEY_SPACE);
+			Key(EKeys::Apostrophe, GLFW_KEY_APOSTROPHE);
+			Key(EKeys::Comma, GLFW_KEY_COMMA);
+			Key(EKeys::Hyphen, GLFW_KEY_MINUS);
+			Key(EKeys::Period, GLFW_KEY_PERIOD);
+			Key(EKeys::Slash, GLFW_KEY_SLASH);
+			const FKey* Digits[] = {&EKeys::Zero, &EKeys::One, &EKeys::Two, &EKeys::Three, &EKeys::Four, &EKeys::Five,
+				&EKeys::Six, &EKeys::Seven, &EKeys::Eight, &EKeys::Nine};
+			for (int32 Index = 0; Index < 10; ++Index)
+			{
+				Key(*Digits[Index], GLFW_KEY_0 + Index);
+			}
+			Key(EKeys::Semicolon, GLFW_KEY_SEMICOLON);
+			Key(EKeys::Equals, GLFW_KEY_EQUAL);
+			const FKey* Letters[] = {&EKeys::A, &EKeys::B, &EKeys::C, &EKeys::D, &EKeys::E, &EKeys::F, &EKeys::G,
+				&EKeys::H, &EKeys::I, &EKeys::J, &EKeys::K, &EKeys::L, &EKeys::M, &EKeys::N, &EKeys::O, &EKeys::P,
+				&EKeys::Q, &EKeys::R, &EKeys::S, &EKeys::T, &EKeys::U, &EKeys::V, &EKeys::W, &EKeys::X, &EKeys::Y,
+				&EKeys::Z};
+			for (int32 Index = 0; Index < 26; ++Index)
+			{
+				Key(*Letters[Index], GLFW_KEY_A + Index);
+			}
+			Key(EKeys::LeftBracket, GLFW_KEY_LEFT_BRACKET);
+			Key(EKeys::Backslash, GLFW_KEY_BACKSLASH);
+			Key(EKeys::RightBracket, GLFW_KEY_RIGHT_BRACKET);
+			Key(EKeys::Tilde, GLFW_KEY_GRAVE_ACCENT);
+			Key(EKeys::Escape, GLFW_KEY_ESCAPE);
+			Key(EKeys::Enter, GLFW_KEY_ENTER);
+			Key(EKeys::Tab, GLFW_KEY_TAB);
+			Key(EKeys::BackSpace, GLFW_KEY_BACKSPACE);
+			Key(EKeys::Insert, GLFW_KEY_INSERT);
+			Key(EKeys::Delete, GLFW_KEY_DELETE);
+			Key(EKeys::Right, GLFW_KEY_RIGHT);
+			Key(EKeys::Left, GLFW_KEY_LEFT);
+			Key(EKeys::Down, GLFW_KEY_DOWN);
+			Key(EKeys::Up, GLFW_KEY_UP);
+			Key(EKeys::PageUp, GLFW_KEY_PAGE_UP);
+			Key(EKeys::PageDown, GLFW_KEY_PAGE_DOWN);
+			Key(EKeys::Home, GLFW_KEY_HOME);
+			Key(EKeys::End, GLFW_KEY_END);
+			Key(EKeys::CapsLock, GLFW_KEY_CAPS_LOCK);
+			Key(EKeys::ScrollLock, GLFW_KEY_SCROLL_LOCK);
+			Key(EKeys::NumLock, GLFW_KEY_NUM_LOCK);
+			Key(EKeys::PrintScreen, GLFW_KEY_PRINT_SCREEN);
+			Key(EKeys::Pause, GLFW_KEY_PAUSE);
+			const FKey* Functions[] = {&EKeys::F1, &EKeys::F2, &EKeys::F3, &EKeys::F4, &EKeys::F5, &EKeys::F6,
+				&EKeys::F7, &EKeys::F8, &EKeys::F9, &EKeys::F10, &EKeys::F11, &EKeys::F12};
+			for (int32 Index = 0; Index < 12; ++Index)
+			{
+				Key(*Functions[Index], GLFW_KEY_F1 + Index);
+			}
+			const FKey* NumPad[] = {&EKeys::NumPadZero, &EKeys::NumPadOne, &EKeys::NumPadTwo, &EKeys::NumPadThree,
+				&EKeys::NumPadFour, &EKeys::NumPadFive, &EKeys::NumPadSix, &EKeys::NumPadSeven, &EKeys::NumPadEight,
+				&EKeys::NumPadNine};
+			for (int32 Index = 0; Index < 10; ++Index)
+			{
+				Key(*NumPad[Index], GLFW_KEY_KP_0 + Index);
+			}
+			Key(EKeys::Decimal, GLFW_KEY_KP_DECIMAL);
+			Key(EKeys::Divide, GLFW_KEY_KP_DIVIDE);
+			Key(EKeys::Multiply, GLFW_KEY_KP_MULTIPLY);
+			Key(EKeys::Subtract, GLFW_KEY_KP_SUBTRACT);
+			Key(EKeys::Add, GLFW_KEY_KP_ADD);
+			Key(EKeys::NumPadEnter, GLFW_KEY_KP_ENTER);
+			Key(EKeys::NumPadEquals, GLFW_KEY_KP_EQUAL);
+			Key(EKeys::LeftShift, GLFW_KEY_LEFT_SHIFT);
+			Key(EKeys::LeftControl, GLFW_KEY_LEFT_CONTROL);
+			Key(EKeys::LeftAlt, GLFW_KEY_LEFT_ALT);
+			Key(EKeys::LeftCommand, GLFW_KEY_LEFT_SUPER);
+			Key(EKeys::RightShift, GLFW_KEY_RIGHT_SHIFT);
+			Key(EKeys::RightControl, GLFW_KEY_RIGHT_CONTROL);
+			Key(EKeys::RightAlt, GLFW_KEY_RIGHT_ALT);
+			Key(EKeys::RightCommand, GLFW_KEY_RIGHT_SUPER);
+			Key(EKeys::Menu, GLFW_KEY_MENU);
+			return Map;
+		}();
+		return KeyMap;
 	}
 } // namespace
 
@@ -221,10 +322,16 @@ void FGLFWWindow::SyncSizesFromBackend()
 	glfwGetFramebufferSize(Window, &FramebufferWidth, &FramebufferHeight);
 }
 
-bool FGLFWWindow::IsKeyPressed(EKeys Key) const
+bool FGLFWWindow::IsKeyPressed(const FKey& Key) const
 {
 	GLFWwindow* Window = AsGLFW(Handle);
-	return Window != nullptr && !IsGamepadKey(Key) && glfwGetKey(Window, ToKeyCode(Key)) == GLFW_PRESS;
+	const FGLFWKeyCode* Code = GetGLFWKeyMap().Find(Key.GetFName());
+	if (Window == nullptr || Code == nullptr)
+	{
+		return false;
+	}
+	return Code->bMouseButton ? glfwGetMouseButton(Window, Code->Code) == GLFW_PRESS
+							  : glfwGetKey(Window, Code->Code) == GLFW_PRESS;
 }
 
 bool FGLFWWindow::IsMouseButtonDown(EMouseButtons Button) const

@@ -15,8 +15,8 @@ public:
 	virtual bool IsGamepadConnected() const = 0;
 
 	/** Gamepad button state from the last GenericApplication::PollGameDeviceState(). */
-	virtual bool IsGamepadKeyDown(EKeys Key) const = 0;
+	virtual bool IsGamepadKeyDown(const FKey& Key) const = 0;
 
 	/** Gamepad axis (EKeys::Gamepad_LeftX ... Gamepad_RightY) in [-1, 1], dead zone applied. */
-	virtual float GetGamepadAnalog(EKeys Axis) const = 0;
+	virtual float GetGamepadAnalog(const FKey& Axis) const = 0;
 };

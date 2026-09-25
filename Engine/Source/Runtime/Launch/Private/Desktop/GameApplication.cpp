@@ -2,8 +2,6 @@
 
 #include "CoreGlobals.h"
 #include "Engine/GameEngine.h"
-#include "Engine/World.h"
-#include "GameFramework/GameModeBase.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformTime.h"
 #include "Misc/App.h"
@@ -14,18 +12,6 @@
 #include "UObject/Package.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogLaunch, Log, All);
-
-namespace
-{
-
-	[[nodiscard]] AGameModeBase* GetGameMode()
-	{
-		const UGameEngine* GameEngine = Cast<UGameEngine>(GEngine);
-		UWorld* World = GameEngine != nullptr ? GameEngine->GetGameWorld() : nullptr;
-		return World != nullptr ? World->GetAuthGameMode() : nullptr;
-	}
-
-} // namespace
 
 bool FGameApplication::Init(IEngineLoop* EngineLoop)
 {
@@ -72,14 +58,6 @@ bool FGameApplication::Init(IEngineLoop* EngineLoop)
 	{
 		return false;
 	}
-	// Leon's legacy game mode hook (until the second stage of P13).
-	if (AGameModeBase* GameMode = GetGameMode())
-	{
-		const UGameEngine* GameEngine = Cast<UGameEngine>(GEngine);
-		GameMode->OnEnter(
-			*const_cast<UGameEngine*>(GameEngine), GameEngine->GameInstance->GetWorldContext()->LastURL.Map);
-	}
-
 	if (bHeadless)
 	{
 		UE_LOG(LogLaunch, Log, "Running headless @ %g Hz (Ctrl+C to stop)", static_cast<double>(TickHz));
@@ -137,13 +115,6 @@ void FGameApplication::Exit()
 	if (GEngine == nullptr)
 	{
 		return;
-	}
-	if (AGameModeBase* GameMode = GetGameMode())
-	{
-		if (UGameEngine* GameEngine = Cast<UGameEngine>(GEngine))
-		{
-			GameMode->OnExit(*GameEngine);
-		}
 	}
 	GEngine->PreExit();
 	GEngine->RemoveFromRoot();

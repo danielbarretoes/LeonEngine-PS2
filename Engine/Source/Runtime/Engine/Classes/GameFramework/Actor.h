@@ -10,7 +10,9 @@
 #include "Actor.generated.h"
 
 class APawn;
+class UInputComponent;
 class UWorld;
+struct FMinimalViewInfo;
 
 /**
  * Yaw in degrees that makes content converted from the legacy formats face an actor's forward. Legacy content faces the
@@ -227,6 +229,19 @@ public:
 
 	/** Reports OwnedComponents to the collector (UE). */
 	static void AddReferencedObjects(UObject* InThis, FReferenceCollector& Collector);
+
+	/**
+	 * The view of a player camera manager that views this actor (UE: CalcCamera): its first camera component's view,
+	 * else its eyes (GetActorEyesViewPoint).
+	 */
+	virtual void CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult);
+
+	/** Where the actor looks from: its location and rotation (UE: GetActorEyesViewPoint). */
+	virtual void GetActorEyesViewPoint(FVector& OutLocation, FRotator& OutRotation) const;
+
+	/** The actor's input bindings (UE: InputComponent): a player controller's or a possessed pawn's. */
+	UPROPERTY(Transient)
+	UInputComponent* InputComponent = nullptr;
 
 protected:
 	/**

@@ -23,6 +23,15 @@ public:
 
 	void PostInitProperties() override;
 
+	/** Adds to the owning pawn's input vector for this frame (UE: AddInputVector). */
+	virtual void AddInputVector(FVector WorldVector, bool bForce = false);
+
+	/** The pawn's pending input vector (UE: GetPendingInputVector). */
+	[[nodiscard]] FVector GetPendingInputVector() const;
+
+	/** Returns the pawn's input vector and clears it for the next frame (UE: ConsumeInputVector). */
+	virtual FVector ConsumeInputVector();
+
 protected:
 	/** The owning pawn (UE: PawnOwner). */
 	UPROPERTY(Transient)

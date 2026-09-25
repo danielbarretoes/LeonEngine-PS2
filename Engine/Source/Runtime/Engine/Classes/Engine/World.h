@@ -330,8 +330,17 @@ public:
 	/** The rest of a spawn once the actor exists (UE: AActor::PostActorConstruction); FinishSpawning calls it. */
 	void PostActorConstruction(AActor* Actor);
 
-	/** Actor Tick only (UAnimInstance, etc.). Prefer TickGameplayFrame for Character worlds. */
+	/**
+	 * Ticks the actors, then updates the player controllers' camera managers (UE: UWorld::Tick updates the cameras
+	 * last). Prefer TickGameplayFrame for Character worlds.
+	 */
 	void Tick(float InDeltaTime);
+
+	/** The delta time of the current or last tick, seconds (UE: GetDeltaSeconds). */
+	[[nodiscard]] float GetDeltaSeconds() const
+	{
+		return DeltaTimeSeconds;
+	}
 
 	/**
 	 * Unreal-like frame: Character move → FPhysScene::Step → overlaps → Actor Tick → the simulated bodies move their
@@ -423,6 +432,8 @@ private:
 	UNavigationSystem Navigation{};
 	EWorldType::Type WorldType = EWorldType::None;
 	uint64 NextUniqueID = 0;
+	/** UE: DeltaTimeSeconds. */
+	float DeltaTimeSeconds = 0.0f;
 	bool bBegunPlay = false;
 	bool bTicking = false;
 	bool bIsTearingDown = false;

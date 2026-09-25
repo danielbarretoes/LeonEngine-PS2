@@ -28,8 +28,8 @@ public:
 	bool Tick(float DeltaTime);
 
 private:
-	bool IsGamepadKeyDown(EKeys Key) const;
-	float GetGamepadAnalog(EKeys Axis) const;
+	bool IsGamepadKeyDown(const FKey& Key) const;
+	float GetGamepadAnalog(const FKey& Axis) const;
 	void UpdateStatsMessages();
 
 	FGenericWindow& Window;

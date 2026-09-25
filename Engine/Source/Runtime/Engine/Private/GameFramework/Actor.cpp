@@ -1,5 +1,7 @@
 #include "GameFramework/Actor.h"
 
+#include "Camera/CameraComponent.h"
+#include "Camera/CameraTypes.h"
 #include "Components/ActorComponent.h"
 #include "Engine/World.h"
 
@@ -327,4 +329,23 @@ void AActor::AddReferencedObjects(UObject* InThis, FReferenceCollector& Collecto
 	AActor* This = CastChecked<AActor>(InThis);
 	Collector.AddReferencedObjects(This->OwnedComponents, This);
 	Super::AddReferencedObjects(InThis, Collector);
+}
+
+void AActor::CalcCamera(float /*DeltaTime*/, FMinimalViewInfo& OutResult)
+{
+	// Leon's camera component is not placed by its transform: its own eye and view rotation are the view.
+	if (const UCameraComponent* Camera = FindComponentByClass<UCameraComponent>())
+	{
+		OutResult.Location = Camera->GetCameraLocation();
+		OutResult.Rotation = Camera->GetViewRotation();
+		OutResult.FOV = Camera->FieldOfView();
+		return;
+	}
+	GetActorEyesViewPoint(OutResult.Location, OutResult.Rotation);
+}
+
+void AActor::GetActorEyesViewPoint(FVector& OutLocation, FRotator& OutRotation) const
+{
+	OutLocation = GetActorLocation();
+	OutRotation = GetActorRotation();
 }

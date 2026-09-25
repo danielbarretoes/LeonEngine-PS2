@@ -14,7 +14,6 @@ class AHUD;
 class APawn;
 class APlayerController;
 class APlayerState;
-class UGameEngine;
 class UPlayer;
 
 /**
@@ -30,8 +29,8 @@ class UPlayer;
  *   possesses it and turns the control rotation to the start's rotation.
  * - UWorld::BeginPlay calls StartPlay (the game state begins play).
  *
- * Until the second stage of P13 (input by config) the default game mode still has Leon's engine hooks: OnEnter once the
- * map plays, Tick(Engine, DeltaTime) every frame (which ticks the world) and OnExit before shutdown.
+ * The defaults are UE's: ADefaultPawn (a flying pawn the input settings' axes move), APlayerController, AHUD (each
+ * player gets one, InitializeHUDForPlayer), AGameStateBase and APlayerState.
  */
 UCLASS()
 class ENGINE_API AGameModeBase : public AInfo
@@ -40,10 +39,6 @@ class ENGINE_API AGameModeBase : public AInfo
 
 public:
 	AGameModeBase(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
-
-	virtual void OnEnter(UGameEngine& Engine, const FString& LevelPath);
-	virtual void OnExit(UGameEngine& Engine);
-	virtual void Tick(UGameEngine& Engine, float DeltaTime);
 
 	/** The game state class (UE: GameStateClass). */
 	UPROPERTY()
@@ -61,7 +56,7 @@ public:
 	UPROPERTY()
 	TSubclassOf<APawn> DefaultPawnClass;
 
-	/** The HUD class (UE: HUDClass; the engine keeps one HUD until the player controller owns it). */
+	/** The HUD class each player gets (UE: HUDClass). */
 	UPROPERTY()
 	TSubclassOf<AHUD> HUDClass;
 
@@ -224,8 +219,11 @@ protected:
 	/** The restart failed (UE: FailedToRestartPlayer). */
 	virtual void FailedToRestartPlayer(AController* NewPlayer);
 
-	/** Shared set-up of a joining player (UE: GenericPlayerInitialization). */
+	/** Shared set-up of a joining player: its HUD (UE: GenericPlayerInitialization). */
 	virtual void GenericPlayerInitialization(AController* C);
+
+	/** Gives a player its HUDClass HUD (UE: InitializeHUDForPlayer). */
+	virtual void InitializeHUDForPlayer(APlayerController* NewPlayer);
 
 	// Flow: Match enter — bodies + nav bake
 	void PrepareMatchWorld(float& OutFloorZ, float& OutWalkBounds, EPhysicsBackend Backend = EPhysicsBackend::Jolt);

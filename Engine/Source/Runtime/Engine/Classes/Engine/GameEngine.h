@@ -5,13 +5,13 @@
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/Level.h"
-#include "GameFramework/HUD.h"
-#include "GameFramework/InputMapping.h"
 #include "GenericPlatform/GenericApplication.h"
+#include "InputCoreTypes.h"
 #include "SceneView.h"
 #include "ShaderCore.h"
 #include "GameEngine.generated.h"
 
+class APlayerController;
 class UWorld;
 
 /**
@@ -26,7 +26,8 @@ class UWorld;
  *   the renderer and the window.
  *
  * It draws through the Renderer module's interface (IRendererModule, found by name); Engine never includes a Renderer
- * header. Until the second stage of P13 it still owns the view camera, the HUD and the player input.
+ * header. Until the third stage of P13 it also plays the viewport client's part: it sends the window's keys and mouse
+ * motion to the first local player's controller and draws that player's camera view and HUD.
  */
 UCLASS(Config = Engine, Transient)
 class ENGINE_API UGameEngine : public UEngine
@@ -65,19 +66,11 @@ public:
 		return Window.Get();
 	}
 
-	/** The view camera (a standalone component until the player camera manager). */
-	[[nodiscard]] UCameraComponent& GetCamera()
-	{
-		return *Camera;
-	}
-	[[nodiscard]] UPlayerInput& GetInput()
-	{
-		return *PlayerInput;
-	}
-	[[nodiscard]] AHUD& GetHUD()
-	{
-		return *Hud;
-	}
+	/** The first local player's controller in the game world, or null. */
+	[[nodiscard]] APlayerController* GetFirstLocalPlayerController() const;
+
+	/** The camera the view is drawn with: the first local player's camera, else a default one. */
+	[[nodiscard]] UCameraComponent* GetViewCamera() const;
 
 	/** What the view draws besides the scene: the bounds (F1) and the axes gizmo (F6) (UE: EngineShowFlags). */
 	[[nodiscard]] FEngineShowFlags& GetEngineShowFlags()
@@ -122,6 +115,8 @@ private:
 	void DestroyGameWorld();
 	[[nodiscard]] EShaderReloadResult ReloadAllShaders(bool bForce);
 	void HandleInput(float DeltaTime);
+	/** Sends the window's key changes and mouse motion to the first local player's controller. */
+	void ProcessInput(float DeltaTime);
 	void TickPlayAudio();
 	void TickPlayHud(float DeltaTime);
 	/** Paints the HUD's widgets and the debug text into Canvas (UE: the viewport client drawing the HUD). */
@@ -132,15 +127,11 @@ private:
 
 	TUniquePtr<GenericApplication> Application;
 	TSharedPtr<FGenericWindow> Window;
-	/** The player's input (UE keeps it on the player controller; the second stage of P13 moves it there). */
+	/** The view when no player has a camera. */
 	UPROPERTY(Transient)
-	UPlayerInput* PlayerInput = nullptr;
-	/** The HUD, outside any world (UE spawns one per player controller). */
-	UPROPERTY(Transient)
-	AHUD* Hud = nullptr;
-	/** The view camera (a standalone component until the player camera manager). */
-	UPROPERTY(Transient)
-	UCameraComponent* Camera = nullptr;
+	UCameraComponent* DefaultViewCamera = nullptr;
+	/** The keys the window reported down last frame. */
+	TSet<FKey> DownKeys;
 	/** The view's show flags (UE: the viewport client's EngineShowFlags). */
 	FEngineShowFlags EngineShowFlags;
 
@@ -157,9 +148,6 @@ private:
 	bool bHudStatsKeyWasDown = false;
 	double LastMouseX = 0.0;
 	double LastMouseY = 0.0;
-
-	int32 LastFbWidth = 0;
-	int32 LastFbHeight = 0;
 
 	float FpsAccumTime = 0.0f;
 	int32 FpsAccumFrames = 0;

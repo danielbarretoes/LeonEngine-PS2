@@ -2,11 +2,18 @@
 
 #include "Blueprint/PaintContext.h"
 #include "CanvasTypes.h"
+#include "GameFramework/PlayerController.h"
 
 AHUD::AHUD(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 	bHidden = true;
+}
+
+void AHUD::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+	PlayerOwner = Cast<APlayerController>(GetOwner());
 }
 
 void AHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)

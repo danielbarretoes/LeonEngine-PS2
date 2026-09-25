@@ -2,7 +2,7 @@
 #include "CoreMinimal.h"
 #include "Frustum.h"
 #include "GLClipSpace.h"
-#include "GameFramework/DefaultCameraActor.h"
+#include "GameFramework/DefaultPawn.h"
 #include "GameFramework/Input.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -111,7 +111,7 @@ bool FGoldenSpringArmTest::RunTest(const FString& Parameters)
 		for (const auto& Orientation : Orientations)
 		{
 			FScopedTestWorld TestWorld;
-			ADefaultCameraActor& Pawn = *TestWorld->SpawnActor<ADefaultCameraActor>();
+			ADefaultPawn& Pawn = *TestWorld->SpawnActor<ADefaultPawn>();
 			APlayerController& Controller = *TestWorld->SpawnActor<APlayerController>();
 			Controller.Possess(&Pawn);
 			Controller.SetControlRotation(FRotator(-Orientation[1], Orientation[0] + 180.0f, 0.0f));

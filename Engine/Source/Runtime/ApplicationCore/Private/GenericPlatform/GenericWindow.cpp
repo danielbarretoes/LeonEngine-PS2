@@ -16,7 +16,7 @@ bool FGenericWindow::CreateShared(const FGenericWindow&, int32, int32, const TCH
 	return false;
 }
 
-bool FGenericWindow::IsKeyPressed(EKeys) const
+bool FGenericWindow::IsKeyPressed(const FKey&) const
 {
 	return false;
 }

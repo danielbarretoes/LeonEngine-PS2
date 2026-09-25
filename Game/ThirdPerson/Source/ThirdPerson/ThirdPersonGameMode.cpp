@@ -120,12 +120,12 @@ bool FThirdPersonGameMode::Tick(float DeltaTime)
 	return true;
 }
 
-bool FThirdPersonGameMode::IsGamepadKeyDown(EKeys Key) const
+bool FThirdPersonGameMode::IsGamepadKeyDown(const FKey& Key) const
 {
 	return InputInterface != nullptr && InputInterface->IsGamepadKeyDown(Key);
 }
 
-float FThirdPersonGameMode::GetGamepadAnalog(EKeys Axis) const
+float FThirdPersonGameMode::GetGamepadAnalog(const FKey& Axis) const
 {
 	return InputInterface != nullptr ? InputInterface->GetGamepadAnalog(Axis) : 0.0f;
 }

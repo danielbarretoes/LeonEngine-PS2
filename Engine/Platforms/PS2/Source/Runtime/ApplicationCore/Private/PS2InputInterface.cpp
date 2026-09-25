@@ -63,45 +63,40 @@ namespace
 		UE_LOG(LogApplicationCore, Log, "PS2InputInterface: DualShock analog mode requested");
 	}
 
-	uint16 PadMaskForKey(EKeys Key)
+	/** The DualShock button of a gamepad key (the pad masks of libpad), or 0. */
+	uint16 PadMaskForKey(const FKey& Key)
 	{
-		switch (Key)
+		struct FPadButton
 		{
-			case EKeys::Gamepad_FaceButton_Bottom:
-				return PAD_CROSS;
-			case EKeys::Gamepad_FaceButton_Right:
-				return PAD_CIRCLE;
-			case EKeys::Gamepad_FaceButton_Left:
-				return PAD_SQUARE;
-			case EKeys::Gamepad_FaceButton_Top:
-				return PAD_TRIANGLE;
-			case EKeys::Gamepad_LeftShoulder:
-				return PAD_L1;
-			case EKeys::Gamepad_RightShoulder:
-				return PAD_R1;
-			case EKeys::Gamepad_LeftTrigger:
-				return PAD_L2;
-			case EKeys::Gamepad_RightTrigger:
-				return PAD_R2;
-			case EKeys::Gamepad_Special_Left:
-				return PAD_SELECT;
-			case EKeys::Gamepad_Special_Right:
-				return PAD_START;
-			case EKeys::Gamepad_LeftThumbstick:
-				return PAD_L3;
-			case EKeys::Gamepad_RightThumbstick:
-				return PAD_R3;
-			case EKeys::Gamepad_DPad_Up:
-				return PAD_UP;
-			case EKeys::Gamepad_DPad_Down:
-				return PAD_DOWN;
-			case EKeys::Gamepad_DPad_Left:
-				return PAD_LEFT;
-			case EKeys::Gamepad_DPad_Right:
-				return PAD_RIGHT;
-			default:
-				return 0;
+			const FKey* Key;
+			uint16 Mask;
+		};
+		static const FPadButton Buttons[] = {
+			{&EKeys::Gamepad_FaceButton_Bottom, PAD_CROSS},
+			{&EKeys::Gamepad_FaceButton_Right, PAD_CIRCLE},
+			{&EKeys::Gamepad_FaceButton_Left, PAD_SQUARE},
+			{&EKeys::Gamepad_FaceButton_Top, PAD_TRIANGLE},
+			{&EKeys::Gamepad_LeftShoulder, PAD_L1},
+			{&EKeys::Gamepad_RightShoulder, PAD_R1},
+			{&EKeys::Gamepad_LeftTrigger, PAD_L2},
+			{&EKeys::Gamepad_RightTrigger, PAD_R2},
+			{&EKeys::Gamepad_Special_Left, PAD_SELECT},
+			{&EKeys::Gamepad_Special_Right, PAD_START},
+			{&EKeys::Gamepad_LeftThumbstick, PAD_L3},
+			{&EKeys::Gamepad_RightThumbstick, PAD_R3},
+			{&EKeys::Gamepad_DPad_Up, PAD_UP},
+			{&EKeys::Gamepad_DPad_Down, PAD_DOWN},
+			{&EKeys::Gamepad_DPad_Left, PAD_LEFT},
+			{&EKeys::Gamepad_DPad_Right, PAD_RIGHT},
+		};
+		for (const FPadButton& Button : Buttons)
+		{
+			if (*Button.Key == Key)
+			{
+				return Button.Mask;
+			}
 		}
+		return 0;
 	}
 } // namespace
 
@@ -166,31 +161,35 @@ bool FPS2InputInterface::IsGamepadConnected() const
 	return bSampleValid;
 }
 
-bool FPS2InputInterface::IsGamepadKeyDown(EKeys Key) const
+bool FPS2InputInterface::IsGamepadKeyDown(const FKey& Key) const
 {
 	const uint16 Mask = PadMaskForKey(Key);
 	return Mask != 0 && (GetRawButtonMask() & Mask) != 0;
 }
 
-float FPS2InputInterface::GetGamepadAnalog(EKeys Axis) const
+float FPS2InputInterface::GetGamepadAnalog(const FKey& Axis) const
 {
 	if (!bSampleValid)
 	{
 		return 0.0f;
 	}
-	switch (Axis)
+	if (Axis == EKeys::Gamepad_LeftX)
 	{
-		case EKeys::Gamepad_LeftX:
-			return AxisFromByte(GPad.ljoy_h);
-		case EKeys::Gamepad_LeftY:
-			return -AxisFromByte(GPad.ljoy_v); // raw 0 = stick up
-		case EKeys::Gamepad_RightX:
-			return AxisFromByte(GPad.rjoy_h);
-		case EKeys::Gamepad_RightY:
-			return -AxisFromByte(GPad.rjoy_v);
-		default:
-			return 0.0f;
+		return AxisFromByte(GPad.ljoy_h);
 	}
+	if (Axis == EKeys::Gamepad_LeftY)
+	{
+		return -AxisFromByte(GPad.ljoy_v); // raw 0 = stick up
+	}
+	if (Axis == EKeys::Gamepad_RightX)
+	{
+		return AxisFromByte(GPad.rjoy_h);
+	}
+	if (Axis == EKeys::Gamepad_RightY)
+	{
+		return -AxisFromByte(GPad.rjoy_v);
+	}
+	return 0.0f;
 }
 
 bool FPS2InputInterface::IsPortOpen() const

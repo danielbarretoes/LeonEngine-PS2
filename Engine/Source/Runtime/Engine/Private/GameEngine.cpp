@@ -1,5 +1,6 @@
 #include "Engine/GameEngine.h"
 
+#include "Camera/PlayerCameraManager.h"
 #include "CanvasTypes.h"
 #include "CoreGlobals.h"
 #include "DynamicRHI.h"
@@ -8,7 +9,9 @@
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "EngineLogs.h"
-#include "GameFramework/GameModeBase.h"
+#include "GameFramework/HUD.h"
+#include "GameFramework/InputSettings.h"
+#include "GameFramework/PlayerController.h"
 #include "GameMapsSettings.h"
 #include "HAL/PlatformApplicationMisc.h"
 #include "HAL/PlatformMemory.h"
@@ -58,10 +61,7 @@ void UGameEngine::Init(IEngineLoop* InEngineLoop)
 {
 	Super::Init(InEngineLoop);
 
-	PlayerInput = NewObject<UPlayerInput>(this);
-	PlayerInput->AddMappingContext(UInputMappingContext::MakeDefault());
-	Camera = NewObject<UCameraComponent>(this);
-	Hud = NewObject<AHUD>(this);
+	DefaultViewCamera = NewObject<UCameraComponent>(this);
 
 	if (!bHeadless)
 	{
@@ -86,9 +86,10 @@ void UGameEngine::Init(IEngineLoop* InEngineLoop)
 			bIsInitialized = false;
 			return;
 		}
-		Camera->SetPerspective(60.0f, Window->Aspect(), DefaultCameraNearPlane, DefaultCameraFarPlane);
-		Camera->SetTarget(FVector::ZeroVector);
-		SetCursorCaptured(true);
+		// The input settings say whether the window keeps the mouse (UE: DefaultViewportMouseCaptureMode).
+		const EMouseCaptureMode CaptureMode = GetDefault<UInputSettings>()->DefaultViewportMouseCaptureMode;
+		SetCursorCaptured(CaptureMode == EMouseCaptureMode::CapturePermanently ||
+			CaptureMode == EMouseCaptureMode::CapturePermanently_IncludingInitialMouseDown);
 		// Stats off unless the config or -showstats asks for them.
 		Overlay.SetRightText(FString());
 		Overlay.SetBottomLeftText(FString());
@@ -174,12 +175,7 @@ void UGameEngine::PreExit()
 		Window->Destroy();
 		Window->SetCursorCaptured(false);
 	}
-	if (Hud != nullptr)
-	{
-		Hud->Clear();
-	}
-	LastFbWidth = 0;
-	LastFbHeight = 0;
+	DownKeys.Empty();
 	FpsAccumTime = 0.0f;
 	FpsAccumFrames = 0;
 	DisplayFps = 0.0f;
@@ -199,6 +195,21 @@ void UGameEngine::DestroyGameWorld()
 UWorld* UGameEngine::GetGameWorld() const
 {
 	return GameInstance != nullptr ? GameInstance->GetWorld() : nullptr;
+}
+
+APlayerController* UGameEngine::GetFirstLocalPlayerController() const
+{
+	return GameInstance != nullptr ? GameInstance->GetFirstLocalPlayerController() : nullptr;
+}
+
+UCameraComponent* UGameEngine::GetViewCamera() const
+{
+	const APlayerController* PlayerController = GetFirstLocalPlayerController();
+	if (PlayerController != nullptr && PlayerController->PlayerCameraManager != nullptr)
+	{
+		return PlayerController->PlayerCameraManager->GetViewCamera();
+	}
+	return DefaultViewCamera;
 }
 
 TArray<FWorldContext*> UGameEngine::GetWorldContexts()
@@ -246,9 +257,9 @@ void UGameEngine::Tick(float DeltaSeconds, bool /*bIdleMode*/)
 	if (Window)
 	{
 		Window->PollEvents();
-		PlayerInput->Update(*Window);
 		(void)ReloadAllShaders(false);
 		HandleInput(DeltaSeconds);
+		ProcessInput(DeltaSeconds);
 		TickPlayAudio();
 	}
 
@@ -256,15 +267,8 @@ void UGameEngine::Tick(float DeltaSeconds, bool /*bIdleMode*/)
 	TickWorldTravel(Context, DeltaSeconds);
 	if (UWorld* World = Context.World())
 	{
-		// The default game mode's engine hook ticks the world (until the second stage of P13).
-		if (AGameModeBase* GameMode = World->GetAuthGameMode())
-		{
-			GameMode->Tick(*this, DeltaSeconds);
-		}
-		else
-		{
-			World->Tick(DeltaSeconds);
-		}
+		// The player controllers process their input as they tick, then the world updates their cameras.
+		World->Tick(DeltaSeconds);
 	}
 	// After the world ticked, like UE's UGameEngine::Tick (a safe point, D11).
 	(void)ConditionalCollectGarbage(DeltaSeconds);
@@ -289,8 +293,9 @@ void UGameEngine::Tick(float DeltaSeconds, bool /*bIdleMode*/)
 
 void UGameEngine::TickPlayAudio()
 {
-	const FVector Eye = Camera->GetCameraLocation();
-	const FVector Forward = Camera->ForwardVector();
+	const UCameraComponent& Camera = *GetViewCamera();
+	const FVector Eye = Camera.GetCameraLocation();
+	const FVector Forward = Camera.ForwardVector();
 	const FVector Up = FVector(0.0f, 0.0f, 1.0f);
 	AudioDevice.SetListener(Eye, Forward, Up);
 	AudioDevice.Tick();
@@ -298,7 +303,7 @@ void UGameEngine::TickPlayAudio()
 
 void UGameEngine::TickPlayHud(float DeltaTime)
 {
-	Hud->Tick(DeltaTime);
+	// The HUDs tick in the world; the engine's text counts its messages down.
 	Overlay.TickOnScreenMessages(DeltaTime);
 	if (bShowHudStats)
 	{
@@ -308,7 +313,14 @@ void UGameEngine::TickPlayHud(float DeltaTime)
 
 void UGameEngine::PaintHudAndOverlay(FCanvas& Canvas)
 {
-	Hud->Paint(Canvas);
+	// The player's HUD, then the engine's text (UE: the viewport client posts the HUD, then the screen messages).
+	if (const APlayerController* PlayerController = GetFirstLocalPlayerController())
+	{
+		if (PlayerController->MyHUD != nullptr)
+		{
+			PlayerController->MyHUD->Paint(Canvas);
+		}
+	}
 	Overlay.Draw(Canvas);
 }
 
@@ -436,19 +448,61 @@ void UGameEngine::HandleInput(float /*DeltaTime*/)
 		UE_LOG(LogEngine, Log, "Axes gizmo: %s", EngineShowFlags.AxesGizmo ? "on" : "off");
 	}
 	bAxesGizmoKeyWasDown = bF6Down;
+}
 
-	const FVector2D Cursor = InputWindow.GetCursorPos();
+void UGameEngine::ProcessInput(float DeltaTime)
+{
+	// UE: the viewport's key and mouse events reach the player controller's input (UGameViewportClient::InputKey /
+	// InputAxis). The window is polled: a key that changed state is a pressed or released event.
+	APlayerController* PlayerController = GetFirstLocalPlayerController();
+	TArray<FKey> AllKeys;
+	EKeys::GetAllKeys(AllKeys);
+	for (const FKey& Key : AllKeys)
+	{
+		if (Key.IsGamepadKey() || Key.IsAxis1D())
+		{
+			continue;
+		}
+		const bool bDown = Window->IsKeyPressed(Key);
+		const bool bWasDown = DownKeys.Contains(Key);
+		if (bDown == bWasDown)
+		{
+			continue;
+		}
+		if (bDown)
+		{
+			DownKeys.Add(Key);
+		}
+		else
+		{
+			DownKeys.Remove(Key);
+		}
+		if (PlayerController != nullptr)
+		{
+			(void)PlayerController->InputKey(Key, bDown ? IE_Pressed : IE_Released, bDown ? 1.0f : 0.0f, false);
+		}
+	}
+
+	// The mouse moves the MouseX / MouseY axes in pixels (up is positive, as in UE) while the cursor is captured or
+	// the left button is down; the first sample after a change only records the position.
+	const FVector2D Cursor = Window->GetCursorPos();
 	const double MouseX = Cursor.X;
 	const double MouseY = Cursor.Y;
-	const bool bWantLook = InputWindow.IsCursorCaptured() || InputWindow.IsMouseButtonDown(EMouseButtons::Left);
+	const bool bWantLook = Window->IsCursorCaptured() || Window->IsMouseButtonDown(EMouseButtons::Left);
 	if (bWantLook)
 	{
-		if (bMouseLookSampleValid && Camera->GetMode() == ECameraMode::FreeLook)
+		if (bMouseLookSampleValid && PlayerController != nullptr)
 		{
 			const float Dx = static_cast<float>(MouseX - LastMouseX);
 			const float Dy = static_cast<float>(MouseY - LastMouseY);
-			constexpr float LookDegreesPerPixel = 0.15f;
-			Camera->AddViewRotation(FRotator(-Dy * LookDegreesPerPixel, Dx * LookDegreesPerPixel, 0.0f));
+			if (Dx != 0.0f)
+			{
+				(void)PlayerController->InputAxis(EKeys::MouseX, Dx, DeltaTime, 1, false);
+			}
+			if (Dy != 0.0f)
+			{
+				(void)PlayerController->InputAxis(EKeys::MouseY, -Dy, DeltaTime, 1, false);
+			}
 		}
 		bMouseLookSampleValid = true;
 	}
@@ -470,20 +524,17 @@ void UGameEngine::Render()
 		return;
 	}
 
-	if (FbWidth != LastFbWidth || FbHeight != LastFbHeight)
-	{
-		LastFbWidth = FbWidth;
-		LastFbHeight = FbHeight;
-		Camera->SetPerspective(Camera->FieldOfView(), static_cast<float>(FbWidth) / static_cast<float>(FbHeight),
-			DefaultCameraNearPlane, DefaultCameraFarPlane);
-	}
+	// The view camera's projection follows the framebuffer (a new player camera starts with its own).
+	UCameraComponent& Camera = *GetViewCamera();
+	Camera.SetPerspective(Camera.FieldOfView(), static_cast<float>(FbWidth) / static_cast<float>(FbHeight),
+		DefaultCameraNearPlane, DefaultCameraFarPlane);
 
 	// The world's components send their moved transforms and poses to the scene, then the view family is rendered
 	// (UE: UGameViewportClient::Draw), then the HUD and the debug text go through the frame's canvas.
 	UWorld* World = GetGameWorld();
 	World->SendAllEndOfFrameUpdates();
 	FSceneViewFamily ViewFamily(FSceneViewFamily::ConstructionValues(FbWidth, FbHeight, World->Scene, EngineShowFlags));
-	const FSceneView View(FSceneView::FromCamera(ViewFamily, *Camera));
+	const FSceneView View(FSceneView::FromCamera(ViewFamily, Camera));
 	ViewFamily.Views.Add(&View);
 	FCanvas Canvas(FbWidth, FbHeight);
 	GetRendererModule().BeginRenderingViewFamily(&Canvas, &ViewFamily);
