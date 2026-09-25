@@ -69,8 +69,9 @@ function(leon_apply_compile_environment Target CxxStandard)
 			/we4456 /we4457 /we4458 /we4459
 			$<$<CONFIG:Debug,RelWithDebInfo>:/FS>)
 	elseif(LEON_PLATFORM STREQUAL "PS2")
-		# Shadowing is an error like on MSVC (UE: ShadowVariableWarningLevel = Error).
-		target_compile_options(${Target} PRIVATE -Wall -Wextra -Werror=shadow)
+		# Shadowing is an error like on MSVC (UE: ShadowVariableWarningLevel = Error). The EE FPU is single precision:
+		# an implicit float to double promotion goes through soft-float, so it is an error too.
+		target_compile_options(${Target} PRIVATE -Wall -Wextra -Werror=shadow -Werror=double-promotion)
 	else()
 		target_compile_options(${Target} PRIVATE -Wall -Wextra -Wpedantic)
 	endif()

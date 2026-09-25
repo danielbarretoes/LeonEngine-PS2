@@ -11,7 +11,7 @@ FTicker& FTicker::GetCoreTicker()
 FDelegateHandle FTicker::AddTicker(const FTickerDelegate& InDelegate, float InDelay)
 {
 	FElement& Element = Elements.AddDefaulted_GetRef();
-	Element.FireTime = CurrentTime + InDelay;
+	Element.FireTime = CurrentTime + double(InDelay);
 	Element.DelayTime = InDelay;
 	Element.Delegate = InDelegate;
 	return InDelegate.GetHandle();
@@ -44,7 +44,7 @@ void FTicker::RemoveTicker(FDelegateHandle Handle)
 
 void FTicker::Tick(float DeltaTime)
 {
-	CurrentTime += DeltaTime;
+	CurrentTime += double(DeltaTime);
 	bInTick = true;
 
 	// Delegates added during this Tick fire next frame.
@@ -66,7 +66,7 @@ void FTicker::Tick(float DeltaTime)
 		}
 		else
 		{
-			Elements[Index].FireTime = CurrentTime + Elements[Index].DelayTime;
+			Elements[Index].FireTime = CurrentTime + double(Elements[Index].DelayTime);
 		}
 	}
 

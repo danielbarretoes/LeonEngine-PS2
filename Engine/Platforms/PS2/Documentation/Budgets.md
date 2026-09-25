@@ -35,8 +35,12 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | P2 | ThirdPerson | 361 566 | 6 884 | 36 096 | 371 068 | `-ffunction-sections -fdata-sections -Wl,--gc-sections` |
 | P2 | BlankProgram | 266 578 | 6 156 | 33 560 | | section GC |
 | P2 | TestPAL | 479 822 | 6 220 | 37 416 | | Core automation tests, section GC |
+| P3 | ThirdPerson | 361 566 | 6 884 | 36 096 | 371 068 | Core math unused by the game yet: section GC drops all of it |
+| P3 | TestPAL | 571 870 | 6 232 | 38 096 | | Core math and its tests (+92 KB of text) |
 
 | Version | Program | GMalloc peak | Process | Name pool | Notes |
 |---|---|---:|---:|---:|---|
 | P2 | TestPAL (27 tests) | 68 KB | 600 KB | 85 names, 32 KB allocated (1 block + hash) | |
 | P2 | ThirdPerson | | 0.5 MB | | overlay `RAM 0.5/32.0 MB`, 60 FPS, Draw3D `boxes=343 tris=278 emit=254` |
+| P3 | TestPAL (35 tests) | 69 KB | 688 KB | 85 names, 32 KB allocated (1 block + hash) | math tests pass with the Win64 reference values |
+| P3 | ThirdPerson | | 0.5 MB | | unchanged; 60 FPS, same Draw3D numbers |
