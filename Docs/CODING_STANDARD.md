@@ -182,9 +182,17 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
   `TFunction` and delegates. `TCHAR` is UTF-8 `char` on every platform, so write literals with `TEXT("...")`. Element
   types stored in UE containers must be relocatable with `memmove` (no pointers into themselves).
 - **Standard library and math (deviation).** Modules above Core keep `std::` containers, `std::string`,
-  `std::unique_ptr` / `std::function` and **glm** on desktop until they migrate (P5–P6). Core math (`FVector`, …)
-  arrives in P3; until then PS2 code uses plain floats and `FPlatformMath`. Do not add aliases that pretend to be UE
-  types (`using FVector = glm::vec3` is not allowed). See [NextSteps.md](UnrealEngine427/NextSteps.md).
+  `std::unique_ptr` / `std::function` and **glm** on desktop until they migrate (P5–P6). Core has UE's math
+  (`FVector`, `FRotator`, `FQuat`, `FMatrix`, `FTransform`, `FMath`, …); new code that only depends on Core uses it.
+  Where Core math meets glm code, convert explicitly with `ToGlm` / `FromGlm` (`Migration/GlmInterop.h`, desktop
+  only). Do not add aliases that pretend to be UE types (`using FVector = glm::vec3` is not allowed). See
+  [NextSteps.md](UnrealEngine427/NextSteps.md).
+- **Math is float.** No `double` arithmetic in engine code (the EE FPU is single precision); PS2 builds fail on an
+  implicit float to double promotion (`-Werror=double-promotion`), so cast explicitly where a `double` is really
+  meant (`Printf` arguments, `FTicker`'s clock).
+- **World axes until P7.** Core math uses UE's axes (X forward, Y right, Z up), but the world is still Y-up in metres.
+  Take world directions from `LegacyAxes` (`Migration/LegacyAxes.h`: `Up`, `Forward`, `Right`, `UnitsPerMetre`), not
+  from `FVector::UpVector`, `ForwardVector` or `RightVector`, so the P7 switch finds every use.
 - **Logging.** Log through `UE_LOG(<Category>, <Verbosity>, TEXT("..."), ...)` with a category
   (`DECLARE_LOG_CATEGORY_EXTERN` + `DEFINE_LOG_CATEGORY` for a module-wide one, `DEFINE_LOG_CATEGORY_STATIC` inside
   one `.cpp`), not `printf` / `std::cout`. On PS2 the log reaches the EE console.

@@ -29,11 +29,16 @@ Implemented in `Runtime/Core` on every platform, PS2 included (details:
   `TestPAL` program (PS2 in PCSX2); PS2 size / heap / name-pool budget in
   [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 
+### Done — Core math (P3)
+
+`Runtime/Core/Public/Math/` on every platform ([LeonMapping — P3](LeonMapping.md#p3--core-math)): float `FMath`,
+vectors, `FRotator`, `FQuat`, `FMatrix` and the derived matrices, `FPlane`, `FBox`, `FSphere`, `FBoxSphereBounds`, a
+scalar `FTransform`, `FColor` / `FLinearColor`, `FRandomStream`. The glm transform became `FLegacyTransform`;
+RenderCore's frustum uses Core's `FBox` / `FPlane`; `GlmInterop.h` and `LegacyAxes.h` bridge the unmigrated code.
+PS2 builds reject implicit float to double promotion.
+
 ### Next
 
-- **P3 — Math:** native `FVector`, `FRotator`, `FQuat`, `FMatrix`, `FTransform` and float `FMath` (Z-up and cm
-  come later, in P7) — `Math/`. Replaces glm in shared modules and lets the gameplay framework compile on PS2.
-  (Today `FTransform` is a glm-based desktop type.)
 - **P4 — Files, config, command line:** `IPlatformFile` / `FPlatformFileManager` and an `FPaths` rewrite (removes
   the `std::filesystem` desktop-only code), `FArchive`, `FConfigCacheIni` / `GConfig` (`Misc/ConfigCacheIni.h`;
   load `Engine/Config` + `<Project>/Config`, today placeholders), `FCommandLine` / `FParse` (`Misc/CommandLine.h`,
@@ -54,7 +59,7 @@ Implemented in `Runtime/Core` on every platform, PS2 included (details:
 
 ## Engine / platform
 
-- Gameplay framework on PS2 (needs native math (P3) and the module migration to UE containers (P5–P6)); then
+- Gameplay framework on PS2 (needs the module migration to UE containers and Core math (P5–P6)); then
   `Game/ThirdPerson` can use `AThirdPersonCharacter : ACharacter` like TP_ThirdPerson.
 - Renderer through RHI command lists instead of direct GL calls; break the Engine ↔ Renderer cycle.
 - `UNavigationSystemBase` seam so NavigationSystem can move to its own module.

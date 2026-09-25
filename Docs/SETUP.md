@@ -133,9 +133,10 @@ engine program instead (`Engine\Binaries\PS2\<Name>.elf`, built with `Build.bat 
 Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build
 ```
 
-TestPAL runs Core's automation tests on the EE (27 on PS2: the `FPaths` / `FTransform` tests are desktop-only) and
+TestPAL runs Core's automation tests on the EE (35 on PS2: the `FPaths`, `FLegacyTransform` and glm comparison tests
+are desktop-only) and
 logs to the EE console. With the EE console enabled (see [PCSX2 notes](#pcsx2-notes)), read
-`%USERPROFILE%\Documents\PCSX2\logs\emulog.txt` for the `TestPAL: PASSED (27 test(s), 0 failed)` line and the
+`%USERPROFILE%\Documents\PCSX2\logs\emulog.txt` for the `TestPAL: PASSED (35 test(s), 0 failed)` line and the
 `LogTestPAL` memory / name-pool lines; their numbers are tracked in
 [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md).
 

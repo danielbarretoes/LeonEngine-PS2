@@ -7,8 +7,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Second step of the Core / CoreUObject plan (P2): Unreal Engine 4.27's Core foundations in
-`Engine/Source/Runtime/Core`, on every platform including the PS2.
+Second and third steps of the Core / CoreUObject plan (P2, P3): Unreal Engine 4.27's Core foundations and float
+math in `Engine/Source/Runtime/Core`, on every platform including the PS2.
 
 ### Added
 
@@ -45,11 +45,26 @@ Second step of the Core / CoreUObject plan (P2): Unreal Engine 4.27's Core found
 - **TestPAL** program (all platforms): runs the automation tests without Catch2 and prints
   `TestPAL: PASSED (N test(s), 0 failed)` plus memory and name-pool numbers; `RunPCSX2.ps1 -Program <Name>` runs an
   engine program's PS2 ELF. `Engine/Platforms/PS2/Documentation/Budgets.md` records ELF / heap / name-pool numbers.
+- **Math** (`Math/UnrealMath.h`, P3): float `FMath` (constants, `Clamp`, `Lerp`, `FInterpTo` / `VInterpTo` /
+  `RInterpTo` / `QInterpTo`, `ClampAngle`, `VRand` / `VRandCone`, `LinePlaneIntersection`, `LineBoxIntersection`,
+  `ClosestPointOnSegment`, …), `FVector`, `FVector2D`, `FVector4`, `FIntPoint`, `FIntVector`, `FRotator`, `FQuat`,
+  `FMatrix` (row vectors, `V * M`) with `FRotationMatrix` (`MakeFromX` & co.), `FRotationTranslationMatrix`,
+  `FQuatRotationTranslationMatrix`, `FScaleRotationTranslationMatrix`, `FTranslationMatrix`, `FScaleMatrix`,
+  `FInverseRotationMatrix`, `FRotationAboutPointMatrix`, perspective / ortho (normal and reversed Z) and
+  `FLookFromMatrix` / `FLookAtMatrix`; `FPlane`, `FBox`, `FBox2D`, `FSphere`, `FBoxSphereBounds`, a scalar
+  `FTransform`, `FColor` / `FLinearColor` (sRGB table, HSV, hex) and `FRandomStream`. Automation tests with
+  reference values pass on Win64 and on PS2 (TestPAL); desktop tests also compare against glm.
+- **Migration bridges** (`Core/Public/Migration/`): `GlmInterop.h` (`ToGlm` / `FromGlm`, desktop, until P6) and
+  `LegacyAxes.h` (the Y-up metre world directions, until P7).
 
 ### Changed
 
-- `CoreMinimal.h` includes the new Core set.
-- Core's tests are automation tests (`System.Core.*`: 31 on Win64, 27 on PS2); the other modules keep Catch2
+- `CoreMinimal.h` includes the new Core set, math included.
+- The glm-based `FTransform` is now `FLegacyTransform` (`Migration/LegacyTransform.h`, desktop only);
+  `FTransform` is UE's. RenderCore's `FBox` and frustum plane are Core's `FBox` / `FPlane`:
+  `FBox::FromLocalTransformed` became `TransformLocalBox`, and the ray test became `FMath::LineBoxIntersection`.
+- PS2 modules compile with `-Werror=double-promotion`; `FTicker` converts to its `double` clock explicitly.
+- Core's tests are automation tests (`System.Core.*`: 41 on Win64, 35 on PS2); the other modules keep Catch2
   (124 test cases). `LeonAutomationTests` runs the automation tests first, then Catch2, and fails if either fails;
   new arguments `-automation=<filter>`, `-noautomation`, `-automationonly`.
 - `FTicker` uses UE's `FTickerDelegate` (a `TDelegate`) and `FDelegateHandle`, with an optional delay; the

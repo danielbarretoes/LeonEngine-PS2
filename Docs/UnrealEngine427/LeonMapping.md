@@ -71,7 +71,7 @@ Update this page whenever a module or type is added, moved or renamed.
 | `AnimInstance`, `Skeleton`, `AnimSequence`, `BlendSpace1D` | `UAnimInstance`, `USkeleton`, `UAnimSequence`, `UBlendSpace1D` |
 | `Texture`, `StaticMesh`, `SkeletalMesh`, `Material` | `UTexture2D`, `UStaticMesh`, `USkeletalMesh`, `FMaterial` (render parameters; no `UMaterial` asset class yet) |
 | `UserWidget`, `TextBlockWidget`, `ButtonWidget`, … | `UUserWidget`, `UTextBlock`, `UButton`, … |
-| `Transform` | `FTransform` |
+| `Transform` | `FLegacyTransform` (glm, desktop, until P6); UE's `FTransform` is Core math (P3) |
 | `Window` | `FGenericWindow` (+ `FGLFWWindow`, `FPS2Window`) |
 | `EKey`, `EPadButton` | `EKeys` |
 | `IRHIDevice`, `OpenGLDevice` | `FDynamicRHI`, `FOpenGLDynamicRHI` |
@@ -120,7 +120,7 @@ the pinned ps2dev image headers).
 | 4.1 Core / Json / Projects | `Transform`, `Paths` free functions, `FileIO`, `AsciiToLower` | `FTransform`, `FPaths::*` (`ExecutableDir`, `ResolveAssetPath`, …), `FFileHelper` (`Misc/FileHelper.h`), `FCString::ToLower` (`Misc/CString.h`; removed in P2) |
 | | `serialization::ReadVec3 / LoadJsonFile`, `ProjectPack` | `FJsonUtils` (`Serialization/JsonUtils.h`), `FProjectDescriptor` (removed in 0.12.0 with the packs) |
 | 4.2 Render | `Renderer`, `Texture`, `StaticMesh`, `SkeletalMesh`, `Material`, `EShadingModel` | `FSceneRenderer` (`SceneRenderer.h`), `UTexture2D` (`Texture2D.h`), `UStaticMesh`, `USkeletalMesh`, `FMaterial`, `EMaterialShadingModel` |
-| | `MeshData`, `SubMesh`, `Vertex`, `Aabb`, `Plane`, `Frustum` | `FMeshData`, `FMeshSection`, `FVertex`, `FBox`, `FPlane`, `FFrustum` |
+| | `MeshData`, `SubMesh`, `Vertex`, `Aabb`, `Plane`, `Frustum` | `FMeshData`, `FMeshSection`, `FVertex`, `FBox` / `FPlane` (Core's since P3), `FFrustum` |
 | | `Shader`, `ShadowMap`, `GpuPassTimer`, `LdrColorTarget`, `SsaoTarget`, … | `FShader`, `FShadowMap`, `FGPUPassTimer`, `FLDRColorTarget`, `FSSAOTarget`, … |
 | | `RHITextureId`, … , `kInvalidTexture` | `FRHITextureId`, … , `InvalidTexture` |
 | 4.3 Physics | `HitResult`, `CollisionQueryParams`, `BodyInstance`, `PhysScene`, `CapsuleShape` | `FHitResult`, `FCollisionQueryParams`, `FBodyInstance`, `FPhysScene`, `FCapsuleShape` |
@@ -176,6 +176,23 @@ UE 4.27 Core APIs implemented in `Engine/Source/Runtime/Core` (every platform, P
 | — | `TDelegate`, `TMulticastDelegate`, `DECLARE_DELEGATE*`, `DECLARE_MULTICAST_DELEGATE*`, `DECLARE_EVENT*` | `Delegates/Delegate.h`, `Delegates/IDelegateInstance.h` |
 | Core Catch2 tests (`*Tests.cpp`) | `IMPLEMENT_SIMPLE_AUTOMATION_TEST`, `FAutomationTestBase`, `FAutomationTestFramework` (`System.Core.*`) | `Misc/AutomationTest.h`, `Core/Private/Tests/*Test.cpp` |
 
+### P3 — Core math
+
+UE 4.27's float math in `Core/Public/Math/` (every platform), included by `CoreMinimal.h` through `Math/UnrealMath.h`.
+
+| Leon (before) | UE name (now) | Where |
+| --- | --- | --- |
+| `glm::vec2` / `vec3` / `vec4`, `glm::ivec2` / `ivec3` | `FVector2D`, `FVector` (`\|` dot, `^` cross), `FVector4`, `FIntPoint`, `FIntVector` | `Math/Vector2D.h`, `Vector.h`, `Vector4.h`, `IntPoint.h`, `IntVector.h` |
+| Euler degrees in a `glm::vec3` | `FRotator` (Pitch / Yaw / Roll in degrees) | `Math/Rotator.h` |
+| `glm::quat` | `FQuat` (`A * B` applies B first) | `Math/Quat.h` |
+| `glm::mat4` | `FMatrix` (row vectors, `V * M`; `A * B` applies A first) + `FRotationMatrix`, `FRotationTranslationMatrix`, `FQuatRotationTranslationMatrix`, `FScaleRotationTranslationMatrix`, `FTranslationMatrix`, `FScaleMatrix`, `FInverseRotationMatrix`, `FRotationAboutPointMatrix`, `FPerspectiveMatrix`, `FReversedZPerspectiveMatrix`, `FOrthoMatrix`, `FReversedZOrthoMatrix`, `FLookFromMatrix`, `FLookAtMatrix` | `Math/Matrix.h` and one header per derived matrix |
+| RenderCore `FBox` (glm) / private frustum plane | `FBox`, `FBox2D`, `FPlane`, `FSphere`, `FBoxSphereBounds` | `Math/Box.h`, `Box2D.h`, `Plane.h`, `Sphere.h`, `BoxSphereBounds.h` |
+| `FTransform` (glm TRS, Euler) | `FTransform` (quaternion, translation, 3D scale; scalar version) | `Math/Transform.h`; the old type is `FLegacyTransform` in `Migration/LegacyTransform.h` |
+| `glm::vec4` colors | `FColor` (BGRA bytes), `FLinearColor` (sRGB table, HSV) | `Math/Color.h` |
+| `std::mt19937` / `rand()` | `FRandomStream`, `FMath::Rand` / `FRand` / `RandRange` / `VRand` / `VRandCone` | `Math/RandomStream.h`, `Math/UnrealMathUtility.h` |
+| `glm::radians`, `glm::clamp`, `glm::mix` | `FMath::DegreesToRadians`, `Clamp`, `Lerp`, `FInterpTo`, `VInterpTo`, `RInterpTo`, `QInterpTo`, `ClampAngle`, `LinePlaneIntersection`, `LineBoxIntersection`, `ClosestPointOnSegment`, … | `Math/UnrealMathUtility.h` |
+| — | `ToGlm` / `FromGlm` (desktop, until P6), `LegacyAxes` (until P7) | `Migration/GlmInterop.h`, `Migration/LegacyAxes.h` |
+
 ## Deviations from UE 4.27 (intentional)
 
 | Topic | UE | LeonEngine | Why |
@@ -188,7 +205,7 @@ UE 4.27 Core APIs implemented in `Engine/Source/Runtime/Core` (every platform, P
 | Delegates | also dynamic (`DECLARE_DYNAMIC_*`) and `UObject` bindings | `TDelegate` / `TMulticastDelegate` with static, lambda, raw and SP bindings (+ payload) | dynamic / `UObject` delegates need CoreUObject |
 | `FPlatformAtomics` on PS2 | real atomics | the generic non-atomic version | Leon runs a single EE thread |
 | Automation tests | run by the session frontend / `-ExecCmds="Automation RunTests"` | `FAutomationTestFramework::RunTests(Filter)` from `LeonAutomationTests` (with Catch2) and `TestPAL` (every platform) | no editor / session frontend |
-| Math | `FVector`, `FRotator`, `FMatrix` | glm on desktop, plain floats + `FPlatformMath` on PS2 | glm is Y-up and lowercase; aliasing would mislead |
+| Math | `FVector`, `FRotator`, `FMatrix` everywhere, SIMD `VectorRegister`, `double` helpers | Core has the scalar float API (P3); the modules above Core still use glm (Y-up metres) until P5–P6, converting with `ToGlm` / `FromGlm`; the world stays Y-up in metres until P7 | migration step by step; the EE has no SIMD path worth matching and a single-precision FPU |
 | Build tool | C# UBT | CMake scripts | no .NET dependency; PS2 toolchain is CMake-based |
 | Linking | monolithic or DLLs | always static (`IS_MONOLITHIC=1`), generated module table | PS2 has no DLLs |
 | Renderer | API-agnostic via RHI command lists | calls OpenGL directly | debt |

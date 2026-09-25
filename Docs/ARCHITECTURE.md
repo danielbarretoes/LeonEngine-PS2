@@ -233,7 +233,7 @@ paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable 
 
 | Module | Role | Key types | Platforms |
 | --- | --- | --- | --- |
-| **Core** | HAL, memory, assertions, templates, containers, strings / names / text, logging, delegates, automation tests, module manager, ticker, engine exit flag, paths, file helpers, transform, stats-overlay state | `FPlatformMemory`, `FPlatformTime`, `FPlatformMath`, `FPlatformMisc`, `FPlatformAtomics`, `FPlatformProperties`, `FMemory`, `TArray`, `TMap`, `TSet`, `FString`, `FName`, `FText`, `TDelegate`, `TMulticastDelegate`, `UE_LOG`, `GLog`, `FAutomationTestFramework`, `FModuleManager`, `IModuleInterface`, `FTicker`, `FPaths`, `FFileHelper`, `FCString`, `FTransform`, `FStatsOverlay` | all (`FileHelper.cpp`, `Paths.cpp`, `Transform.cpp` excluded on PS2) |
+| **Core** | HAL, memory, assertions, templates, containers, strings / names / text, logging, delegates, automation tests, math, module manager, ticker, engine exit flag, paths, file helpers, glm migration bridges, stats-overlay state | `FPlatformMemory`, `FPlatformTime`, `FPlatformMath`, `FPlatformMisc`, `FPlatformAtomics`, `FPlatformProperties`, `FMemory`, `TArray`, `TMap`, `TSet`, `FString`, `FName`, `FText`, `TDelegate`, `TMulticastDelegate`, `UE_LOG`, `GLog`, `FAutomationTestFramework`, `FMath`, `FVector`, `FRotator`, `FQuat`, `FMatrix`, `FTransform`, `FBox`, `FColor`, `FModuleManager`, `IModuleInterface`, `FTicker`, `FPaths`, `FFileHelper`, `FCString`, `FLegacyTransform`, `FStatsOverlay` | all (`FileHelper.cpp`, `Paths.cpp`, `Migration/LegacyTransform.cpp` excluded on PS2) |
 | **InputCore** | Key / gamepad identifiers | `EKeys` | all |
 | **ApplicationCore** | Platform application, windows, gamepad input | `GenericApplication`, `FGenericWindow`, `IInputInterface`, `FPlatformApplicationMisc`; desktop `FGLFWApplication`, `FGLFWWindow`; PS2 ext `FPS2Application`, `FPS2Window`, `FPS2InputInterface` | all |
 | **RHI** | Graphics backend interface + opaque GPU handle ids | `FDynamicRHI`, `GDynamicRHI`, `FRHIGPUMemoryStats`, `FRHITextureId` … | all |
@@ -245,7 +245,7 @@ paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable 
 | **PhysicsCore** | Physics types and backend seam | `IPhysicsBackend`, `EPhysicsBackend`, `FHitResult`, `FBodyInstance`, `FCollisionQueryParams`, `FCapsuleShape`, `FTriangleMeshCollision` | Desktop |
 | **AnimationCore** | Skeletons, sequences, blend spaces, anim instances | `USkeleton`, `UAnimSequence`, `UBlendSpace1D`, `UAnimInstance`, `UCharacterAnimInstance` | Desktop |
 | **AudioMixer** | Audio device (miniaudio) | `FAudioDevice` | Desktop |
-| **RenderCore** | CPU-side render data | `FMeshData`, `FMeshSection`, `FVertex`, `FBox`, `FFrustum`, `FMaterial` | Desktop |
+| **RenderCore** | CPU-side render data | `FMeshData`, `FMeshSection`, `FVertex`, `FFrustum` (over Core's `FBox` / `FPlane`), `FMaterial` | Desktop |
 | **Renderer** | Forward scene renderer and GPU resources | `FSceneRenderer`, `UTexture2D`, `UStaticMesh`, `USkeletalMesh`, `FShader`, `FShadowMap`, `FResourceCache`, `FDebugDraw`, `FDebugOverlay`, `FGPUPassTimer` | Desktop |
 | **SlateCore** | Text layout primitives | `ETextJustify`, HUD font metrics | Desktop |
 | **UMG** | Widgets | `UUserWidget`, `UButton`, `UTextBlock`, `UImage`, `UProgressBar`, `UVerticalBox`, `UMenuListWidget`, `UInteractionPromptWidget`, `FPaintContext` | Desktop |
@@ -307,9 +307,12 @@ Core/Public/HAL/PlatformMemory.h                      #include COMPILED_PLATFORM
 | Logging | `Logging/LogMacros.h`, `LogCategory.h`, `Misc/OutputDevice*.h` | `UE_LOG` / `UE_CLOG`, categories (`LogTemp`, `LogCore`, `LogInit`, …); `GLog` redirects to stdout (EE console / PCSX2 log on PS2) and, on Windows, the debugger. Line format `Category: Verbosity: Message` (verbosity omitted for `Log`); log file and config-driven verbosity come in P4 |
 | Delegates | `Delegates/Delegate.h`, `IDelegateInstance.h` | `TDelegate`, `TMulticastDelegate` (`Broadcast` latest-first like UE4, removal during broadcast is safe), `DECLARE_DELEGATE*` / `DECLARE_MULTICAST_DELEGATE*` / `DECLARE_EVENT*`; no dynamic delegates until CoreUObject |
 | Automation tests | `Misc/AutomationTest.h` | `IMPLEMENT_SIMPLE_AUTOMATION_TEST`, `FAutomationTestBase`, `FAutomationTestFramework::RunTests(Filter, ExcludeFlags)`; an unexpected error logged during a test fails it |
+| Math | `Math/UnrealMath.h` (from `CoreMinimal.h`) | UE 4.27's float math: `FMath` (constants, interpolation, `VRand`, line / box / plane helpers), `FVector`, `FVector2D`, `FVector4`, `FIntPoint`, `FIntVector`, `FRotator`, `FQuat`, `FMatrix` (row vectors, `V * M`) and the derived matrices (`FRotationMatrix`, `FTranslationMatrix`, `FScaleMatrix`, `FPerspectiveMatrix`, `FLookAtMatrix`, …), `FPlane`, `FBox`, `FBox2D`, `FSphere`, `FBoxSphereBounds`, `FTransform` (scalar), `FColor` / `FLinearColor`, `FRandomStream`. No `double` math; PS2 builds reject implicit float to double promotion |
+| Migration bridges | `Migration/` | desktop: `FLegacyTransform` (the old glm TRS transform, until P6) and `GlmInterop.h` (`ToGlm` / `FromGlm`, a plain copy: `FMatrix` and `glm::mat4` share the memory layout); every platform: `LegacyAxes.h` (Y-up metres, until P7) |
 
-Core math (`FVector`, `FRotator`, float `FMath`) is P3; `IPlatformFile`, the `FPaths` rewrite, `FArchive`, config and
-the command line are P4 ([NextSteps](UnrealEngine427/NextSteps.md)).
+The math follows UE's conventions (X forward, Y right, Z up, left-handed), but the engine's world is still Y-up in
+metres until P7: world directions come from `LegacyAxes`, never from `FVector::UpVector` & co. `IPlatformFile`, the
+`FPaths` rewrite, `FArchive`, config and the command line are P4 ([NextSteps](UnrealEngine427/NextSteps.md)).
 
 ---
 
@@ -409,8 +412,8 @@ input interface, calls `StartPlay` and ticks it from `FTicker`. The game mode ow
 (`FPS2Texture`, `FPS2Material`), `FThirdPersonLevel` (primitive sandbox built in code), `FThirdPersonCharacter`
 (camera-relative move, jump, gravity, step-up, wall push-out) and `FThirdPersonCameraBoom`, draws through
 `FPS2RHI`, publishes debug lines with `FStatsOverlay::AddOnScreenDebugMessage` and logs with
-`UE_LOG(LogThirdPerson, …)` (EE console). It uses plain floats and `FPlatformMath` — the desktop gameplay framework
-is not available on PS2 (see §15).
+`UE_LOG(LogThirdPerson, …)` (EE console). It uses plain floats and `FPlatformMath` (Core math is available on PS2
+but the game does not use it yet) — the desktop gameplay framework is not available on PS2 (see §15).
 
 ---
 
@@ -501,8 +504,8 @@ Unreal shapes without reflection: `A`/`U` prefixes are naming only (no `UObject`
   `Engine\Build\BatchFiles\Cook.bat`. Details: [TOOLS.md](TOOLS.md).
 - **Tests**: each module keeps its tests in `<Module>/Private/Tests/`, excluded from the module library and compiled
   only into targets with `COLLECT_AUTOMATION_TESTS`. Core's are UE automation tests
-  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, `System.Core.*`: 31 on Win64, 27 on PS2 — the `FPaths` / `FTransform` tests are
-  desktop-only); RenderCore, Renderer, PhysicsCore, AnimationCore, Engine, AIModule, MeshUtilities and the
+  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, `System.Core.*`: 41 on Win64, 35 on PS2 — the `FPaths`, `FLegacyTransform` and
+  glm comparison tests are desktop-only); RenderCore, Renderer, PhysicsCore, AnimationCore, Engine, AIModule, MeshUtilities and the
   JoltPhysics plugin still use Catch2 (124 test cases) until they migrate (P5–P6).
   - `LeonAutomationTests` (Desktop) starts the module table, runs the automation tests, then Catch2, and fails if
     either fails. Run with `Engine\Build\BatchFiles\RunTests.bat` (`-automation=<filter>`, `-noautomation`,
@@ -526,7 +529,7 @@ roadmap is [NextSteps.md](UnrealEngine427/NextSteps.md).
 | --- | --- |
 | Reflection | No `UObject` / `UCLASS` / UHT / GC. `A` and `U` prefixes are naming only; objects are plain C++ owned with `std::unique_ptr` (e.g. `UWorld` is a member of `AGameModeBase`). |
 | Containers / strings | Core provides `TArray`, `TMap`, `FString`, `FName`, `FText` (minimal), delegates and `UE_LOG`, but the modules above Core still use `std::` containers, `std::string` and `std::function` until they migrate (P5–P6). `TCHAR` is UTF-8 `char` everywhere. |
-| Math | glm on desktop (Y-up, lowercase API); plain floats + `FPlatformMath` on PS2. No `FVector` / `FRotator` / `FMatrix`. |
+| Math | Core has UE's float math (P3) on every platform, but the modules above Core still use glm on desktop (Y-up metres, lowercase API) until they migrate (P5–P6); `GlmInterop.h` converts at the seams. The world stays Y-up in metres until P7. |
 | Renderer | Calls OpenGL directly (Glad) instead of going through RHI command lists; `FDynamicRHI` only covers device init, viewport and memory stats. |
 | Engine ↔ Renderer | `CIRCULAR_DEPENDENCIES` both ways (`Renderer.h` includes `Level.h`, `Level.h` includes GPU resources). UMG also depends privately on Renderer. |
 | PS2 gameplay | The gameplay framework (Engine, AIModule, …) is desktop-only (glm / JSON, C++20). The PS2 game uses its own `F*` types (`FThirdPersonCharacter`, …) and `FPS2RHI`, with no `AActor` / `ACharacter`. |
