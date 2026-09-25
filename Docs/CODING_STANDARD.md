@@ -239,7 +239,22 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
   every `UCLASS` / `USTRUCT`. LeonHeaderTool's supported subset is in its
   [README](../Engine/Source/Programs/LeonHeaderTool/README.md).
   - Create objects with `NewObject<T>(Outer, …)`, never `new`, and subobjects with `CreateDefaultSubobject` inside the
-    constructor only. Objects are not deleted by hand (garbage collection arrives in P10).
+    constructor only. Objects are never deleted by hand: the garbage collector destroys what nothing references;
+    `MarkPendingKill` asks for an object to go at the next collection (it is then collected even if referenced, and
+    the strong references to it are cleared).
+  - **GC safety.** A `UObject*` member of a `UObject` or `USTRUCT` is a `UPROPERTY()` (containers and structs of them
+    too): otherwise the collector does not see it, may destroy the object and leave the pointer dangling. A class that
+    must keep other references declares a static `AddReferencedObjects(UObject* InThis, FReferenceCollector&)` that
+    calls `Super::AddReferencedObjects` and reports them. Code that is not a `UObject` and keeps objects alive
+    derives from `FGCObject` (reporting them in `AddReferencedObjects`) or holds a `TStrongObjectPtr`. Use
+    `TWeakObjectPtr` (or a `UPROPERTY` `TWeakObjectPtr`) for references that must not keep the object alive, and
+    check it before use. A local `UObject*` is only safe until the next `CollectGarbage`, which runs at safe points
+    only (`LoadMap`, the round restart, the engine's timer), never inside a constructor.
+  - Config values of a class are `UPROPERTY(Config)` members of a `UCLASS(Config=<File>)` (read automatically into the
+    class default object; section `/Script/<Module>.<Class>`), not hand-written `GConfig` reads, once the class is a
+    `UObject`.
+  - Console commands are `UFUNCTION(Exec)` members (`CallFunctionByNameWithArguments`), or an `FSelfRegisteringExec`
+    outside UObjects.
   - Test types with `Cast<T>` / `CastChecked<T>` / `IsA<T>()`, never `dynamic_cast` (no RTTI, D17).
   - A class whose children may not declare a constructor gives itself an `FObjectInitializer` constructor: the
     generated default constructor calls `Super(ObjectInitializer)`.

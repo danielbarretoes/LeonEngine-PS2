@@ -51,18 +51,20 @@ LeonHeaderTool -Test [<dir>] [-Update]   golden tests: <dir>/Inputs/<Case> again
     in the same `#if`.
   - `#if CPP` / `#if 0` branches are skipped; `#if !CPP` / `#if 1` branches are parsed.
   - A property or function inside any other `#if` block is an error.
-- **Class specifiers with an effect:** `Abstract`, `Config=<Name>`, `DefaultConfig`, `Transient`, `NotPlaceable`,
-  `MinimalAPI` and `EditInlineNew`. `Interface`, `Within`, `PerObjectConfig`, `NoExport` and similar are errors.
+- **Class specifiers with an effect:** `Abstract`, `Config=<Name>`, `DefaultConfig`, `PerObjectConfig`, `Transient`,
+  `NotPlaceable`, `MinimalAPI` and `EditInlineNew`. `Interface`, `Within`, `GlobalUserConfig`, `ProjectUserConfig`,
+  `NoExport` and similar are errors.
 - **Struct specifiers with an effect:** `Atomic`, `Immutable` and `NoExport`.
   - `USTRUCT(NoExport)` declares the reflection of a C++ type defined elsewhere (UE: CoreUObject's
     `NoExportTypes.h`). It must sit inside an `#if !CPP` block, so the compiler never sees it, and must not have a
     `GENERATED_BODY`. Bitfields, C arrays and `WITH_EDITORONLY_DATA` members are errors in it, since the generated
     layout check cannot express them.
-- **Property specifiers:** `Config`, `GlobalConfig`, `Transient`, `DuplicateTransient`, `SaveGame`, the `Edit*` /
+- **Property specifiers:** `Config` (`CPF_Config`), `GlobalConfig` (`CPF_GlobalConfig | CPF_Config`), `Transient`,
+  `DuplicateTransient`, `SaveGame`, the `Edit*` /
   `Visible*` / `BlueprintRead*` family, `Instanced` and others each map to their `CPF_` flags. `Replicated*` is an
   error.
-- **Function specifiers:** `Exec`, `BlueprintCallable`, `BlueprintPure`, `BlueprintAuthorityOnly` and
-  `BlueprintCosmetic`. Events and RPC specifiers are errors.
+- **Function specifiers:** `Exec` (`FUNC_Exec`, for `UObject::CallFunctionByNameWithArguments`), `BlueprintCallable`,
+  `BlueprintPure`, `BlueprintAuthorityOnly` and `BlueprintCosmetic`. Events and RPC specifiers are errors.
 - **Ignored silently:** `meta=(...)`, `Category`, `BlueprintType` and the like. Unknown specifiers produce a warning.
 - **Property types:**
   - Scalars: `bool` (including `uint8 bX : 1` bitfields), `int8/16/32/64`, `uint8/16/32/64`, `int`,
@@ -108,7 +110,9 @@ include. It ends with `#undef CURRENT_FILE_ID` / `#define CURRENT_FILE_ID <FileI
   - `private: static void StaticRegisterNatives<C>(); friend struct Z_Construct_UClass_<C>_Statics;`
   - `public: DECLARE_CLASS(C, Super, COMPILED_IN_FLAGS(0 | CLASS_...), CASTCLASS_None, TEXT("/Script/<Module>"), API)`
   - `DECLARE_SERIALIZER(C)`
-  - `static const TCHAR* StaticConfigName()` with `Config=`.
+  - `static const TCHAR* StaticConfigName()` with `Config=` (a class without it inherits its super's config name).
+  - The class's static `AddReferencedObjects` needs no generated code: `IMPLEMENT_CLASS` passes
+    `&C::AddReferencedObjects` (UObject's unless the class declares its own) to the class.
 - `_STANDARD_CONSTRUCTORS` (legacy):
   - `API C(const FObjectInitializer& = FObjectInitializer::Get());`
   - `DEFINE_DEFAULT_OBJECT_INITIALIZER_CONSTRUCTOR_CALL(C)`
@@ -328,7 +332,8 @@ NoExport Core structs (`FVector`, `FRotator`, `FTransform`, …), so a `UPROPERT
 
 ## Golden tests
 
-- 34 cases: 13 feature cases and 21 error cases (`Error*`).
+- 35 cases: 14 feature cases and 21 error cases (`Error*`). `ConfigAndExec` covers `Config=`, `DefaultConfig`,
+  `PerObjectConfig`, an inherited config class, `Config` / `GlobalConfig` members and `Exec` functions.
 - `Tests/Inputs/<Case>/*.h` is one module (`LhtTest`, or the case's `Test.lhtmanifest`).
 - `Tests/Expected/<Case>/` holds every output plus `Diagnostics.txt` when there are messages. Error cases expect only
   `Diagnostics.txt`, with the exact `file(line): error:` text.

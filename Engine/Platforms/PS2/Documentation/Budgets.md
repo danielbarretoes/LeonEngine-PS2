@@ -23,6 +23,8 @@ out of memory.
   process size (program image + heap high-water, `sbrk`) and the name pool. Since P9 also the reflected type counts
   with the GMalloc bytes allocated while `UObjectBaseInit` and `ProcessNewlyLoadedUObjects` constructed them
   (`GetUObjectReflectionStats`; the object array is not included), and the object array's capacity and live objects.
+  Since P10 also the `LogGarbage: Display: GC budget:` line (the cost of marking and destroying 2 000 objects) and a
+  final collection after the tests.
 - **Reflection code in the ELF**: `mips64r5900el-ps2-elf-nm -S -C --size-sort` over `TestPAL.elf`, summing the
   CoreUObject symbols, the generated `Z_Construct_*` / `exec*` / `StaticClass` / `RegisterReflection_*` code and the
   `_Statics` tables.
@@ -61,6 +63,9 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | P9 | ThirdPerson | 444 320 | 6 924 | 29 928 | 452 328 | no CoreUObject; only `FModuleManager`'s registration hook: `StartupStaticallyLinkedModules` +40 bytes, the manager +4 bytes (the 64-byte aligned `.bss` grows by 64); stripped size unchanged |
 | P9 | BlankProgram | 179 628 | 6 136 | 27 097 | 186 804 | the same hook |
 | P9 | TestPAL | 1 019 420 | 6 320 | 36 128 | 1 026 920 | CoreUObject and its 27 tests (+288 168 bytes of text, breakdown below) |
+| P10 | ThirdPerson | 444 320 | 6 924 | 29 928 | 452 328 | unchanged: no CoreUObject, and the Core additions (`FExec`, `FSelfRegisteringExec`, the UObject delegate templates) are not referenced, so section GC drops them |
+| P10 | BlankProgram | 179 628 | 6 136 | 27 097 | | unchanged |
+| P10 | TestPAL | 1 156 972 | 6 348 | 37 840 | 1 164 520 | garbage collection, references, config, Exec and 21 more tests (+137 552 bytes of text; about 30 KB of it is the P10 runtime by symbol: GC 11.6 KB, soft / weak references 8.4 KB, config 5.7 KB, Exec 4.6 KB; the rest is the new tests, their fixtures and template code) |
 
 **P9 reflection in TestPAL** (`nm -S` over the ELF, bytes):
 
@@ -94,3 +99,20 @@ costs its generated code and tables plus its `UClass` / `UScriptStruct` and `FPr
 | P7 | TestPAL (46 tests) | 70 KB | 836 KB | 101 names | unchanged; logs `engine 0.14.0` |
 | P7 | ThirdPerson | | 0.6 MB | | 60 FPS, same Draw3D numbers (`boxes=343 ... tris=278 ... emit=254`) |
 | P9 | TestPAL (73 tests) | 188 KB | 1 236 KB | 263 names, 5 KB used of 32 KB allocated | `Reflection: 18 classes, 15 structs, 2 enums, 8 functions, 117 properties, 2 packages; construction heap 19 KB`; `UObject array: 8192 slots of 12 bytes (96 KB), 66 objects after registration`; 122 objects after the tests. The peak includes the 96 KB object array |
+| P10 | TestPAL (93 tests) | 837 KB | 2 036 KB | 346 names, 8 KB used of 32 KB allocated | `Reflection: 24 classes, 19 structs, 3 enums, 14 functions, 186 properties, 2 packages; construction heap 30 KB`; 89 objects after registration, 91 after the tests, 89 after a final collection (0.33 ms). The peak comes from the GC budget test's 2 000 objects (about 330 bytes each); GMalloc ends at 227 KB |
+
+**P10 garbage collection** (TestPAL, `System.CoreUObject.GarbageCollection.Budget`: a chain of 2 000 objects from one
+rooted head, 2 089 objects alive in total; `FPlatformTime` in PCSX2):
+
+| Step | PS2 | Win64 (reference) |
+|---|---:|---:|
+| Collection that keeps everything (mark 2 089 objects, 2 000 through one reference each) | 9.98 ms | 0.22 ms |
+| Collection that destroys the 2 000 objects: mark | 0.42 ms | 0.01 ms |
+| — purge (`BeginDestroy`, `FinishDestroy`, destructors, `FMemory::Free`) | 16.07 ms | 0.22 ms |
+| Heap: before / with the objects / after | 169 / 827 / 226 KB | |
+| Final collection after the tests (89 objects left, none collected) | 0.33 ms | 0.02 ms |
+
+About 5 µs per reachable object to mark and 8 µs per object to destroy on the EE: a full collection over a few
+thousand objects costs a frame or two at 60 FPS, so it belongs where UE puts it (loading a map, restarting a round, a
+timer of a minute). The heap left after the purge (57 KB above the start) is the capacity the name hash and the
+collector's arrays keep for the next time, not leaked objects.

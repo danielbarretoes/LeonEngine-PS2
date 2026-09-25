@@ -51,7 +51,7 @@ Update this page whenever a module or type is added, moved or renamed.
 | `Tools/Cli` (`leon-cli`) | removed | only forwarded to leon-cook |
 | `Tests/` (Catch2) | `<Module>/Private/Tests/` + `Programs/LeonAutomationTests` | UE automation tests for Core (P2), Json, Projects (P4), PhysicsCore, RenderCore and AnimationCore (P5), and every other module (P6); Catch2 removed in P6 |
 | — | `Programs/TestPAL` | UE `Programs/TestPAL`: runs the Core, CoreUObject, Json and Projects automation tests on every platform (PS2 in PCSX2) |
-| — | `CoreUObject` (P9) | UE `Runtime/CoreUObject`: `UObject`, reflection, `NewObject`, the object array; every platform; only its own types and test fixtures are reflected until P12 |
+| — | `CoreUObject` (P9, P10) | UE `Runtime/CoreUObject`: `UObject`, reflection, `NewObject`, the object array, garbage collection, references, config and Exec; every platform; only its own types and test fixtures are reflected until P12 |
 | `ThirdParty/`, `Build/Dependencies.cmake` | `Engine/Source/ThirdParty/<Lib>/<Lib>.Build.cmake` | |
 | `Engine/Assets` | `Engine/Content` + `Engine/Shaders` | |
 | `Projects/Ps2ThirdPerson` | `Game/ThirdPerson` | isolated project |
@@ -319,6 +319,30 @@ class is a `UObject` yet (P12). Details: [CoreUObject/README.md](../../Engine/So
 | `FModuleManager` started modules only | `RegisterReflection` then `OnProcessLoadedObjectsCallback` before each `StartupModule` | `Core/Public/Modules/ModuleManager.h` |
 | — | `System.CoreUObject.*` automation tests (27) with reflected fixtures | `CoreUObject/Private/Tests/` |
 
+### P10 — GC and references, config and Exec
+
+Garbage collection, the reference types, config members and console commands on CoreUObject, every platform (PS2
+included). Nothing in the engine calls them until P12 / P13. Details:
+[CoreUObject/README.md](../../Engine/Source/Runtime/CoreUObject/README.md).
+
+| Leon (before) | UE name (now) | Where |
+| --- | --- | --- |
+| objects lived until exit; `AddToRoot` only set a flag | `CollectGarbage(KeepFlags, bPerformFullPurge)`, `TryCollectGarbage`, `IsGarbageCollecting`, `IncrementalPurgeGarbage`, `IsIncrementalPurgePending`, `GARBAGE_COLLECTION_KEEPFLAGS`, `FReferenceCollector`; `LogGarbage` | `CoreUObject/Public/UObject/UObjectGlobals.h`, `GarbageCollection.h`, `Private/UObject/GarbageCollection.cpp` |
+| — | `FGCObject` (`AddReferencedObjects`, `GetReferencerName`), `TStrongObjectPtr` | `GCObject.h`, `StrongObjectPtr.h` |
+| — | `UObject::AddReferencedObjects` / `UClass::ClassAddReferencedObjects` (passed by `IMPLEMENT_CLASS`), `UClass::ReferenceTokenStream` / `AssembleReferenceTokenStream`, `CLASS_TokenStreamAssembled` | `Object.h`, `Class.h`, `ObjectMacros.h` |
+| `BeginDestroy` / `FinishDestroy` stubs | `ConditionalBeginDestroy` (renames to `NAME_None`), `IsReadyForFinishDestroy`, `ConditionalFinishDestroy`, `LowLevelRename`, routing checks | `Object.h`, `UObjectBase.h`, `Private/UObject/Obj.cpp` |
+| — | `MarkPendingKill` / `IsPendingKill` semantics of 4.27 (references cleared during the mark), `IsUnreachable`, `IsPendingKillOrUnreachable`, `IsValid(UObject*)`; `RF_MarkAsRootSet` / `RF_MarkAsNative` become `RootSet` / `Native` | `UObjectBaseUtility.h`, `Object.h`, `UObjectBase.cpp` |
+| — | `FGarbageCollectionSettings` (`gc.TimeBetweenPurgingPendingKillObjects` from `[/Script/Engine.GarbageCollectionSettings]`), `FGarbageCollectionTimer` (UE: `UEngine::ConditionalCollectGarbage`), `FGarbageCollectionStats` | `GarbageCollection.h` |
+| `FWeakObjectPtr` (`Get`, `IsValid`, `IsStale`) | + `Get(bEvenIfPendingKill)`, `IsExplicitlyNull`, `HasSameIndexAndSerialNumber`; `TWeakObjectPtr<T, TWeakObjectPtrBase>` with UE's comparisons | `WeakObjectPtr.h`, `WeakObjectPtrTemplates.h`, Core `UObject/WeakObjectPtrTemplatesFwd.h` |
+| minimal `FSoftObjectPath` / `FSoftObjectPtr` | `FSoftObjectPath` (4.27 layout, `GetLongPackageName`, `GetAssetName`, `IsAsset`, `TryLoad`, `ExportTextItem` / `ImportTextItem`, `GetCurrentTag`), `FSoftClassPath`, `TPersistentObjectPtr`, `FSoftObjectPtr::LoadSynchronous`, `TSoftObjectPtr` / `TSoftClassPtr` (`LoadSynchronous`, `IsStale`) | `SoftObjectPath.h`, `PersistentObjectPtr.h`, `SoftObjectPtr.h`; `NoExportTypes.h` reflects the paths |
+| — | `TStructOpsTypeTraits::WithExportTextItem` / `WithImportTextItem`, `STRUCT_ExportTextItemNative` / `STRUCT_ImportTextItemNative` | `Class.h`, `PropertyStruct.cpp` |
+| — | `EPropertyObjectReferenceType`, `FProperty::ContainsObjectReference(EncounteredStructProps, Type)` | `UnrealType.h` |
+| `PostConstructLink` and `PPF_ConfigOnly` unused | `UObject::LoadConfig` / `SaveConfig` / `ReloadConfig` / `PostReloadConfig` / `OverridePerObjectConfigSection` / `GetDefaultConfigFilename`, `UE4::ELoadConfigPropagationFlags`, `GetConfigFilename`, `UsesPerObjectConfig`, `UClass::GetConfigName`; class default objects load their config in `PostConstructInit` | `Object.h`, `ObjectMacros.h`, `Class.h`, `Private/UObject/Obj.cpp`, `UObjectGlobals.cpp` |
+| `FUNC_Exec` unused | `UObject::CallFunctionByNameWithArguments`, `ProcessConsoleExec`; Core `FExec`, `FSelfRegisteringExec`, `FStaticSelfRegisteringExec` | `Object.h`, `Private/UObject/ScriptCore.cpp`, Core `Misc/Exec.h`, `Misc/CoreMisc.h` |
+| delegates bound static / lambda / raw / SP | + `BindUObject` / `CreateUObject` / `AddUObject` (`TUObjectDelegateInstance` over `TWeakObjectPtr`); `Add` compacts dead bindings | Core `Delegates/Delegate.h`, `DelegateInstancesImpl.h` |
+| `PerObjectConfig` rejected | LeonHeaderTool emits `CLASS_PerObjectConfig`; golden case `ConfigAndExec` (35 cases) | `Programs/LeonHeaderTool` |
+| — | 21 new `System.CoreUObject.*` tests (GarbageCollection, Delegates, SoftObject, Config, Exec: 48 in total) | `CoreUObject/Private/Tests/` |
+
 ## Coordinates
 
 | Topic | UE 4.27 | LeonEngine |
@@ -345,7 +369,7 @@ the converters' allowed places: [ARCHITECTURE.md — Coordinates](../ARCHITECTUR
 | Default subobjects | instanced from the archetype's subobjects (`FObjectInstancingGraph`) | every instance runs its constructor and builds its own subobjects; when an object is created from a template, a copied reference to a template subobject is redirected to the new object's subobject of the same name | plan decision D12: simpler, and the loaded properties are applied afterwards (P11) |
 | Object names | `MakeUniqueObjectName` counts per outer; `StaticAllocateObject` replaces an existing object with the same name | numbered per class; creating an object whose name is taken is a fatal error | no replacement semantics without packages and GC |
 | Object storage | `FUObjectArray` allocates chunks on demand up to `MaxObjectsInGame`, items carry a cluster index; name hash and per-class / per-outer hashes | a fixed array of `FPlatformProperties::MaxObjectsInGame` slots (8192 × 12 bytes on PS2, 131072 × 16 bytes on desktop; running out is fatal); one `TMultiMap` name hash; `GetObjectsOfClass` / `GetObjectsWithOuter` walk the array | fixed memory budget on the PS2 ([Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md)) |
-| Object lifetime | garbage collection | objects live until the process exits | GC is P10 |
+| Garbage collection | mark and sweep over a token stream, disregard-for-GC pool, clusters, parallel reachability, `UGCObjectReferencer` | the same mark and sweep, single-threaded, over each class's list of strong reference properties; class default objects, native objects and compiled-in packages are roots by their flags (no disregard pool); no clusters; the `FGCObject` list lives in the collector; a pending-kill pointer in a set or a map key removes the element / pair instead of leaving a null key; `GARBAGE_COLLECTION_KEEPFLAGS` is `RF_NoFlags` | one EE thread; object counts of a game; no editor |
 | Script | Blueprint VM (`FFrame::Code`, `ProcessInternal`) | native thunks only: `FFrame::Code` is always null and `ProcessEvent` calls the `exec` thunk | no Blueprints |
 | Registration hook | `FModuleManager::OnProcessLoadedObjectsCallback` is a multicast event | a single function pointer, bound by CoreUObject | one listener; targets without CoreUObject pay a pointer and a branch |
 | NoExport structs | UHT trusts the `NoExportTypes.h` declaration | the generated code takes the offsets from the C++ type and `static_assert`s the declared size, member types and offsets against it; `FMatrix` is not reflected | a drifting declaration fails the build instead of corrupting data |
@@ -355,7 +379,8 @@ the converters' allowed places: [ARCHITECTURE.md — Coordinates](../ARCHITECTUR
 | `TCHAR` | `wchar_t` / UTF-16 on most platforms | UTF-8 `char` on every platform; `TEXT(x)` is `x`; `WIDECHAR` only inside the Windows HAL; `TCHAR_TO_UTF8` & co. are identities | the EE has no wide-string support worth paying for; one encoding everywhere |
 | `FName` pool | growing name blocks, `FNamePool` sized for desktop | 8-byte `FName`, hard-coded `EName` list; block size / count and hash buckets from `FPlatformProperties::NamePool*` (PS2: 16 KB blocks, at most 256 KB, 4096 buckets); exhausting the pool is fatal | fixed memory budget on 32 MB ([Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md)) |
 | `FText` | localized text (`FTextLocalizationManager`, culture formatting) | minimal: `FromString`, `AsNumber`, `AsPercent`, `Format` (`{0}` arguments), `Join`; `LOCTEXT` / `NSLOCTEXT` keep the source text | no localization yet |
-| Delegates | also dynamic (`DECLARE_DYNAMIC_*`) and `UObject` bindings | `TDelegate` / `TMulticastDelegate` with static, lambda, raw and SP bindings (+ payload) | `UObject` bindings arrive with P10; dynamic delegates are not planned yet |
+| Delegates | also dynamic (`DECLARE_DYNAMIC_*`) and `BindUFunction` | `TDelegate` / `TMulticastDelegate` with static, lambda, raw, SP and `UObject` bindings (+ payload) | no Blueprints to bind dynamic delegates or functions by name; `ProcessEvent` covers native calls |
+| Console commands | `CPP_Default_` metadata fills missing trailing arguments; `IConsoleManager` console variables | a missing argument keeps its zero / default value and a warning goes to the output device; no console variables (the `gc.*` settings are read from the ini directly) | LeonHeaderTool generates no metadata; the console arrives with P13 |
 | `FPlatformAtomics` on PS2 | real atomics | the generic non-atomic version | Leon runs a single EE thread |
 | Automation tests | run by the session frontend / `-ExecCmds="Automation RunTests"` | `FAutomationTestFramework::RunTests(Filter)` from `LeonAutomationTests` (`-automation=<filter>`) and `TestPAL` (every platform) | no editor / session frontend |
 | Math | `FVector`, `FRotator`, `FMatrix` everywhere, SIMD `VectorRegister`, `double` helpers | Core has the scalar float API (P3) and every module uses it (P5, P6), in UE's axes and centimetres since P7 | the EE has no SIMD path worth matching and a single-precision FPU |
@@ -375,7 +400,8 @@ the converters' allowed places: [ARCHITECTURE.md — Coordinates](../ARCHITECTUR
 | Engine ↔ Renderer | acyclic | `CIRCULAR_DEPENDENCIES` | debt |
 | PS2 gameplay | full framework on consoles | PS2 game uses `F*` types, no `AActor` | the gameplay framework is desktop-only (Engine depends on the OpenGL Renderer, UMG and AudioMixer) |
 | Config layers | `Base.ini`, `Base<T>`, `Engine/Config/<P>/`, `Engine/Platforms/<P>/Config`, project `Default<T>`, `Config/<P>/`, `Platforms/<P>/Config`, `Saved/Config` (plus `NotForLicensees` / `Restricted` folders and a binary config cache) | the same order without `NotForLicensees` / `Restricted` or the binary cache; the `Saved/Config` user layer exists only on desktop; the PS2 reads the ini files through `host:` and keeps compiled defaults when they are missing | the PS2 build has no writable storage and PCSX2's host filesystem is optional |
-| Config usage | `UPROPERTY(Config)` / `LoadConfig` everywhere, input from `BaseInput.ini` | only a few keys are read (map, resolution, stats, ThirdPerson tuning) | `UPROPERTY(Config)` needs reflection (P10); config-driven input comes in P13 |
+| Config usage | `UPROPERTY(Config)` / `LoadConfig` everywhere, input from `BaseInput.ini` | `UPROPERTY(Config)` / `LoadConfig` / `SaveConfig` work (P10), but the engine still reads only a few keys by hand (map, resolution, stats, ThirdPerson tuning) | the engine classes become UObjects in P12; config-driven input comes in P13 |
+| Config classes | `GlobalUserConfig` / `ProjectUserConfig` classes and `UpdateDefaultConfigFile` | not supported (LeonHeaderTool rejects the specifiers); `SaveConfig` writes the desktop user layer only | D8 has no per-user global layer; `Default<T>.ini` is edited by the editor module (P14) |
 | `FString` in archives | ANSI when possible, else UTF-16 with a negative length | always UTF-8 with a positive length (including the terminator); a negative length is rejected | `TCHAR` is UTF-8 (D1) |
 | `FName` in archives | an index into the package name table (the base `FArchive` does not store names) | the base `FArchive` writes it as a string | there are no packages until P11; the linker will replace this |
 | `FPaths` directories | relative to the process (`../../../Engine/`) | absolute on desktop, built from the executable folder and the generated `GLeon*FromBaseDir` globals; on PS2 a staged layout under the ELF folder (`<Base>/Engine/`, `<Base>/<Project>/`) | independent of the working directory; PCSX2's `host:` is the ELF folder |

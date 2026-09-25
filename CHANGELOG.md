@@ -7,11 +7,50 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Eighth and ninth steps of the Core / CoreUObject plan (P8, P9): LeonHeaderTool, the UnrealHeaderTool counterpart,
-with its LeonBuildTool step, and CoreUObject, the `UObject` runtime its generated code runs on. No engine module is
-reflected yet: the gameplay classes become UObjects in P12.
+Eighth to tenth steps of the Core / CoreUObject plan (P8–P10): LeonHeaderTool, the UnrealHeaderTool counterpart,
+with its LeonBuildTool step; CoreUObject, the `UObject` runtime its generated code runs on; then garbage collection,
+references, `UPROPERTY(Config)` and `UFUNCTION(Exec)` on it. No engine module is reflected yet: the gameplay classes
+become UObjects in P12.
 
 ### Added
+
+- **Garbage collection** (P10, CoreUObject `UObject/GarbageCollection.h`, `GCObject.h`; plan decision D11).
+  - `CollectGarbage(KeepFlags, bPerformFullPurge)`, `TryCollectGarbage`, `IsGarbageCollecting`,
+    `IncrementalPurgeGarbage`: UE4's stop-the-world mark and sweep. Roots are the root set (`AddToRoot`), native
+    objects, class default objects and their subobjects, the compiled-in packages, `KeepFlags` objects and `FGCObject`
+    holders; the mark follows outers, each class's strong reference properties (`UObject*`, `TSubclassOf`, and
+    arrays / sets / maps / structs of them) and `AddReferencedObjects`.
+  - UE 4.27 pending kill: `MarkPendingKill` objects are collected even while referenced, and the references to them
+    are cleared.
+  - Destruction: `BeginDestroy` (out of the name hash) → `IsReadyForFinishDestroy` → `FinishDestroy` → destructor;
+    the freed `GUObjectArray` slot is reused and old weak pointers stay stale.
+  - `FGCObject`, `FReferenceCollector`, `TStrongObjectPtr`, `UObject::AddReferencedObjects` (per class, through
+    `IMPLEMENT_CLASS`), `LogGarbage` statistics, and `FGarbageCollectionTimer` with
+    `[/Script/Engine.GarbageCollectionSettings] gc.TimeBetweenPurgingPendingKillObjects`. The engine calls it from
+    P12 / P13 (`LoadMap`, round restart, timer).
+- **References** (P10). `TWeakObjectPtr` is complete (`Get(bEvenIfPendingKill)`, `IsStale`, `IsExplicitlyNull`,
+  comparisons, hashing). `FSoftObjectPath` has UE 4.27's layout and API (`GetLongPackageName`, `GetAssetName`,
+  `ResolveObject`, `TryLoad`) and, with `FSoftClassPath`, is a reflected noexport struct whose text form is the path.
+  `TPersistentObjectPtr`, `FSoftObjectPtr::LoadSynchronous`, `TSoftObjectPtr` / `TSoftClassPtr`. Until P11 loads
+  packages, soft references resolve objects already in memory.
+- **Config members** (P10). `UObject::LoadConfig` / `SaveConfig` / `ReloadConfig` for `UCLASS(Config=…)` with
+  `UPROPERTY(Config)` and `UPROPERTY(GlobalConfig)`, in the section `/Script/<Module>.<Class>`. Arrays follow the
+  layers' `+ - . !` edits (or `Key[N]=`), C arrays read `Key[N]=`, and structs, enums, names, objects, classes and soft
+  paths are parsed as text. A class default object loads its config when it is created, reading its parents' sections
+  first, and instances copy it. `PerObjectConfig` classes read one section per object. `SaveConfig` writes the
+  desktop user layer (`Saved/Config`); on the PS2 it only logs.
+- **Console commands** (P10). `UObject::CallFunctionByNameWithArguments` calls `UFUNCTION(Exec)` functions with
+  arguments parsed by `ImportText`; `UObject::ProcessConsoleExec`; Core's `FExec`, `FSelfRegisteringExec` and
+  `FStaticSelfRegisteringExec` (`Misc/Exec.h`, `Misc/CoreMisc.h`).
+- **UObject delegates** (P10). `BindUObject` / `CreateUObject` / `AddUObject` hold a `TWeakObjectPtr`: the binding is
+  inert once the object is gone, and multicast `Add` drops dead bindings. Core names the pointer through
+  `UObject/WeakObjectPtrTemplatesFwd.h`.
+- **Struct text operations.** `TStructOpsTypeTraits::WithExportTextItem` / `WithImportTextItem` let a struct use its
+  own text form (`STRUCT_ExportTextItemNative` / `STRUCT_ImportTextItemNative`).
+- **LeonHeaderTool `PerObjectConfig`** (`CLASS_PerObjectConfig`) and the `ConfigAndExec` golden case (35 cases).
+- **P10 tests.** 21 new `System.CoreUObject.*` tests (GarbageCollection, Delegates, SoftObject, Config, Exec):
+  `LeonAutomationTests` runs 279 tests, TestPAL 98 on Win64 and 93 on the PS2. TestPAL logs the GC cost and a final
+  collection; the PS2 numbers are in `Budgets.md`.
 
 - **CoreUObject** (`Engine/Source/Runtime/CoreUObject`, every platform, PS2 included; depends on Core only). See its
   `README.md`.
@@ -78,6 +117,11 @@ reflected yet: the gameplay classes become UObjects in P12.
 
 ### Changed
 
+- **Object flags at registration** (P10). `RF_MarkAsRootSet` and `RF_MarkAsNative` become the `RootSet` and `Native`
+  internal flags when an object enters `GUObjectArray`, as in UE.
+- **Reference properties** (P10). `FProperty::ContainsObjectReference` takes an `EPropertyObjectReferenceType`
+  (strong by default); `RefLink` lists weak and soft references too, and the collector only follows strong ones.
+- **Config strings** (P10). With `PPF_ConfigOnly`, a top-level `FString` / `FText` exports without quotes.
 - **Host g++.** The PS2 Docker entry point, the optional Dockerfile and the CI ps2 job install `g++ musl-dev`, the
   host compiler for LeonHeaderTool.
 - **Include order.** `.clang-format` keeps a reflected header's `"<Name>.generated.h"` after its other engine includes,

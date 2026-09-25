@@ -9,9 +9,15 @@ What runs automatically and what a person still has to check by hand. Build and 
 | --- | --- | --- |
 | Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` |
 | LeonHeaderTool golden tests (run by `RunTests.bat` too) | `Engine\Intermediate\Build\HostTools\Win64\LeonHeaderTool.exe -Test` | `LeonHeaderTool -Test: N of N golden cases passed` |
-| Core, CoreUObject, Json and Projects on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (73 test(s), 0 failed)` in the EE log (77 on Win64) |
+| Core, CoreUObject, Json and Projects on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (93 test(s), 0 failed)` in the EE log (98 on Win64) |
 | Format, banned APIs (G4), Win64 build | `Engine\Build\BatchFiles\Lint.bat` | `Lint OK` |
 | Frame capture | `LeonGame.exe "-map=<.llev>" "-Screenshot=<file.bmp>" "-ExitAfterFrames=N"` | the BMP matches a reference capture byte for byte |
+
+The CoreUObject tests collect garbage (`CollectGarbage`) between their steps; they only keep objects through
+`UPROPERTY` members, the root set, `FGCObject` and `TStrongObjectPtr`, and read the others through weak pointers, so
+a collection in one test never touches another test's objects. The config tests build their ini layers in memory
+(`FConfigFile::CombineFromBuffer`) and remove them afterwards; the SaveConfig test (desktop only) writes its user
+layer under `<Project>/Intermediate/Tests/CoreUObjectConfig/` and deletes it.
 
 The golden tests (`System.Engine.Golden.*`, `System.AIModule.Golden.*`, `System.JoltPhysics.Golden.*`) replay
 movement, traces, navigation, cameras, shadows and reflections against tables recorded before P7 moved the world to

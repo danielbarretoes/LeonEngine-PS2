@@ -101,17 +101,38 @@ containers over Core's `TArray` / `TSet` / `TMap` layouts, `NewObject`, `FObject
 `StartupModule`. 27 `System.CoreUObject.*` tests run in `LeonAutomationTests` and in TestPAL on the PS2; the reflection
 budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 
+### Done — GC and references, config and Exec (P10)
+
+([LeonMapping — P10](LeonMapping.md#p10--gc-and-references-config-and-exec),
+[README](../../Engine/Source/Runtime/CoreUObject/README.md)):
+
+- Garbage collection: UE4's stop-the-world mark and sweep (D11) from the root set, native objects, class default
+  objects, compiled-in packages, `KeepFlags` objects and `FGCObject` holders, through outers and the strong reference
+  properties of each class (`UObject*`, `TSubclassOf`, containers and structs of them) plus `AddReferencedObjects`;
+  UE 4.27 pending kill (references cleared, object collected); `BeginDestroy` → `IsReadyForFinishDestroy` →
+  `FinishDestroy` → destructor, slot freed (weak pointers go stale) and reused; incremental purge;
+  `FGarbageCollectionTimer` over `gc.TimeBetweenPurgingPendingKillObjects`.
+- References: `TWeakObjectPtr` complete, `TStrongObjectPtr`, `FSoftObjectPath` / `FSoftClassPath` (reflected noexport
+  structs with UE's text form), `TPersistentObjectPtr`, `TSoftObjectPtr` / `TSoftClassPtr`.
+- Config: `LoadConfig` / `SaveConfig` / `ReloadConfig` for `UCLASS(Config=…)` (and `PerObjectConfig`) with
+  `UPROPERTY(Config)` / `GlobalConfig`; class default objects load at creation, instances copy.
+- `UFUNCTION(Exec)` with `CallFunctionByNameWithArguments` / `ProcessConsoleExec`, Core's `FExec` /
+  `FSelfRegisteringExec`; `BindUObject` / `AddUObject` delegates.
+- 21 new `System.CoreUObject.*` tests (48 in total), in TestPAL on the PS2 too; the PS2 GC cost is in
+  [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
+
 ### Next
 
-- **P10:** garbage collection (`GarbageCollection.h`, `FGCObject`, `AddToRoot`, `BeginDestroy` / `FinishDestroy`,
-  `UnhashObject` and slot reuse, which weak pointers already expect), the full `FSoftObjectPath` / `TSoftObjectPtr` /
-  `TStrongObjectPtr`, `LoadConfig` / `SaveConfig` for `UPROPERTY(Config)` (the `PostConstructLink` chain and the
-  `PPF_ConfigOnly` text export exist), `UFUNCTION(Exec)` with `CallFunctionByNameWithArguments`, and `UObject`
-  delegate bindings.
 - **P11:** `.lasset` packages: `UObject::Serialize`, tagged properties, linkers, `LoadObject`; `FName` in archives
   through the package name table.
 - **P12:** turn the naming-only `A`/`U` classes into real `UCLASS` types (`NewObject`, `CreateDefaultSubobject`,
-  `Cast<>` instead of `dynamic_cast`).
+  `Cast<>` instead of `dynamic_cast`); `UObject*` members become `UPROPERTY`s (GC safety), `AActor::Destroy` marks
+  the actor pending kill, `UWorld` / `ULevel` hold their actors in `UPROPERTY` arrays.
+- **P13:** call `CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS)` where UE does (`UEngine::LoadMap` after releasing the
+  old world, the game mode's round restart) and tick an `FGarbageCollectionTimer` from `UEngine::Tick`
+  (`ConditionalCollectGarbage`); settings classes (`UGameMapsSettings`, `UInputSettings`) use `UPROPERTY(Config)`
+  with `FSoftObjectPath` / `FSoftClassPath`; `UGameViewportClient` routes console commands to
+  `ProcessConsoleExec` / `FSelfRegisteringExec::StaticExec`.
 - Replication: the ENet networking was removed in 0.12.0 (local tag `archive/net-enet-0.11`); it returns as
   UObject replication (`UNetDriver`, replicated properties) — `Runtime/Engine/Classes/Engine/NetDriver.h`.
 
