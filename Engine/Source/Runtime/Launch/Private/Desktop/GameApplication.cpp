@@ -2,13 +2,14 @@
 
 #include "GameFramework/DefaultGameMode.h"
 #include "Level/LevelLoader.h"
-#include "Migration/LegacyContentPath.h"
+#include "Misc/App.h"
+#include "Misc/CommandLine.h"
+#include "Misc/ConfigCacheIni.h"
+#include "Misc/Parse.h"
+#include "Misc/Paths.h"
 #include "RuntimeInput.h"
 
 #include <algorithm>
-#include <cstdlib>
-#include <cstring>
-#include <filesystem>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -18,75 +19,63 @@ namespace
 
 	constexpr const char* DefaultMap = "LevelTemplates/Starter.llev";
 
-	[[nodiscard]] bool HasFlag(int Argc, char** Argv, const char* Flag)
+	/// A path as given (absolute or relative to the working directory), else a legacy content key under Engine/Content.
+	[[nodiscard]] std::string ResolveMapPath(const FString& Map)
 	{
-		for (int I = 1; I < Argc; ++I)
+		if (FPaths::FileExists(Map))
 		{
-			if (Argv[I] != nullptr && std::strcmp(Argv[I], Flag) == 0)
-			{
-				return true;
-			}
+			return std::string(*FPaths::ConvertRelativePathToFull(Map));
 		}
-		return false;
+		return std::string(*FPaths::ResolveLegacyContentPath(Map));
 	}
 
-	/// Value of `-Key=Value` (UE command-line style), or empty.
-	[[nodiscard]] std::string ParseValue(int Argc, char** Argv, const char* Key)
+	[[nodiscard]] int32 GetEngineInt(const TCHAR* Section, const TCHAR* Key, int32 Default)
 	{
-		const std::size_t KeyLength = std::strlen(Key);
-		for (int I = 1; I < Argc; ++I)
+		int32 Value = Default;
+		if (GConfig != nullptr)
 		{
-			if (Argv[I] != nullptr && std::strncmp(Argv[I], Key, KeyLength) == 0)
-			{
-				return Argv[I] + KeyLength;
-			}
+			GConfig->GetInt(Section, Key, Value, GEngineIni);
 		}
-		return {};
-	}
-
-	[[nodiscard]] float ParseTickHz(int Argc, char** Argv, float Fallback)
-	{
-		for (int I = 1; I + 1 < Argc; ++I)
-		{
-			if (Argv[I] != nullptr && std::strcmp(Argv[I], "--tick") == 0 && Argv[I + 1] != nullptr)
-			{
-				const float Hz = std::strtof(Argv[I + 1], nullptr);
-				if (Hz >= 1.0f && Hz <= 240.0f)
-				{
-					return Hz;
-				}
-			}
-		}
-		return Fallback;
-	}
-
-	/// A path as given (absolute or relative to the working directory), else relative to Engine/Content.
-	[[nodiscard]] std::string ResolveMapPath(const std::string& Map)
-	{
-		std::error_code Ec;
-		if (std::filesystem::is_regular_file(Map, Ec) && !Ec)
-		{
-			return std::filesystem::path(Map).lexically_normal().string();
-		}
-		return ResolveLegacyContentPath(Map);
+		return Value;
 	}
 
 } // namespace
 
-bool FGameApplication::Init(int Argc, char** Argv, const char* ProjectName)
+bool FGameApplication::Init()
 {
+	const TCHAR* CmdLine = FCommandLine::Get();
+
 	// Console strings stay ASCII: Windows cmd often is not UTF-8 (em dash / arrows mojibake).
-	bHeadless = HasFlag(Argc, Argv, "-nullrhi");
-	const bool bShowStats = HasFlag(Argc, Argv, "--show-stats");
-	TickHz = ParseTickHz(Argc, Argv, 60.0f);
-	std::string Map = ParseValue(Argc, Argv, "-map=");
-	if (Map.empty())
+	bHeadless = FParse::Param(CmdLine, "nullrhi");
+
+	bool bShowStats = false;
+	if (GConfig != nullptr)
+	{
+		GConfig->GetBool("/Script/Engine.Engine", "bShowStatsByDefault", bShowStats, GEngineIni);
+	}
+	bShowStats |= FParse::Param(CmdLine, "showstats");
+
+	float Hz = 60.0f;
+	if (FParse::Value(CmdLine, "tick=", Hz) && Hz >= 1.0f && Hz <= 240.0f)
+	{
+		TickHz = Hz;
+	}
+
+	FString Map;
+	if (!FParse::Value(CmdLine, "map=", Map) && GConfig != nullptr)
+	{
+		GConfig->GetString("/Script/EngineSettings.GameMapsSettings", "GameDefaultMap", Map, GEngineIni);
+	}
+	if (Map.IsEmpty() || Map.Equals("None", ESearchCase::IgnoreCase))
 	{
 		Map = DefaultMap;
 	}
 	const std::string MapPath = ResolveMapPath(Map);
-	const bool bHasProjectName = ProjectName != nullptr && std::strlen(ProjectName) > 0;
-	const std::string Title = bHasProjectName ? std::string("Leon - ") + ProjectName : std::string("Leon");
+
+	const int32 ResolutionX = GetEngineInt("/Script/Engine.GameViewportClient", "DefaultResolutionX", 1280);
+	const int32 ResolutionY = GetEngineInt("/Script/Engine.GameViewportClient", "DefaultResolutionY", 720);
+	const std::string Title =
+		FApp::HasProjectName() ? std::string("Leon - ") + FApp::GetProjectName() : std::string("Leon");
 
 	Engine = std::make_unique<UGameEngine>();
 	if (bHeadless)
@@ -98,7 +87,7 @@ bool FGameApplication::Init(int Argc, char** Argv, const char* ProjectName)
 			return false;
 		}
 	}
-	else if (!Engine->Initialize(1280, 720, Title.c_str()))
+	else if (!Engine->Initialize(ResolutionX, ResolutionY, Title.c_str()))
 	{
 		std::cerr << "Failed to initialize engine\n";
 		Engine.reset();
@@ -115,7 +104,7 @@ bool FGameApplication::Init(int Argc, char** Argv, const char* ProjectName)
 
 	if (!LoadLevelFile(*Engine, MapPath))
 	{
-		std::cerr << "Failed to load map '" << Map << "'\n";
+		std::cerr << "Failed to load map '" << *Map << "'\n";
 		Engine->Shutdown();
 		Engine.reset();
 		return false;

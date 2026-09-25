@@ -72,6 +72,7 @@ void FThirdPersonGameMode::StartPlay()
 	CharacterMaterial.BaseColorB = 0.95f;
 
 	Level.Build(&GroundMaterial, &PlatformMaterial, &CrateMaterial);
+	Character.LoadConfig();
 	Character.SpawnAt(Level);
 	CameraBoom.ResetTo(Character.LocationX, Character.LocationY, Character.LocationZ);
 

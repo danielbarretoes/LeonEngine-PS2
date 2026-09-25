@@ -1,15 +1,16 @@
 #include "ThirdPersonCharacter.h"
 
 #include "HAL/PlatformMath.h"
+#include "Math/UnrealMathUtility.h"
+#include "Misc/ConfigCacheIni.h"
 #include "PS2RHI.h"
+#include "ThirdPerson.h"
 #include "ThirdPersonLevel.h"
 
 namespace
 {
-	constexpr float MoveSpeed = 0.55f;
-	constexpr float Gravity = 0.045f;
-	constexpr float JumpSpeed = 0.95f;
 	constexpr float GroundSkin = 0.08f;
+	constexpr const TCHAR* ConfigSection = "/Script/ThirdPerson.ThirdPersonCharacter";
 
 	float MaxF(float A, float B)
 	{
@@ -21,6 +22,23 @@ namespace
 		return A < B ? A : B;
 	}
 } // namespace
+
+bool FThirdPersonCharacter::LoadConfig()
+{
+	const bool bFound = GConfig != nullptr && GConfig->DoesSectionExist(ConfigSection, GGameIni);
+	if (bFound)
+	{
+		GConfig->GetFloat(ConfigSection, "MoveSpeed", MoveSpeed, GGameIni);
+		GConfig->GetFloat(ConfigSection, "Gravity", Gravity, GGameIni);
+		GConfig->GetFloat(ConfigSection, "JumpSpeed", JumpSpeed, GGameIni);
+	}
+
+	// Milli-units keep the log integer: no float varargs on the EE.
+	UE_LOG(LogThirdPerson, Display, TEXT("Character tuning from %s: MoveSpeed %d, Gravity %d, JumpSpeed %d (x0.001)"),
+		bFound ? "DefaultGame.ini" : "compiled defaults", FMath::RoundToInt(MoveSpeed * 1000.0f),
+		FMath::RoundToInt(Gravity * 1000.0f), FMath::RoundToInt(JumpSpeed * 1000.0f));
+	return bFound;
+}
 
 void FThirdPersonCharacter::SpawnAt(const FThirdPersonLevel& Level)
 {

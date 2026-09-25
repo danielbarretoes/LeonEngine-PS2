@@ -7,7 +7,15 @@
 #include "HAL/PlatformApplicationMisc.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformTime.h"
+#include "Logging/LogMacros.h"
+#include "Logging/LogSuppressionInterface.h"
+#include "Misc/App.h"
 #include "Misc/CommandLine.h"
+#include "Misc/ConfigCacheIni.h"
+#include "Misc/OutputDeviceFile.h"
+#include "Misc/OutputDeviceRedirector.h"
+#include "Misc/Parse.h"
+#include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
 #include "PlatformEngineLoopHooks.h"
 
@@ -26,6 +34,9 @@ FEngineLoop GEngineLoop;
 
 namespace
 {
+	/** The log file (desktop): <Project>/Saved/Logs/<Name>.log. */
+	TUniquePtr<FOutputDeviceFile> GLogFile;
+
 	constexpr int32 MainWindowWidth = 640;
 	constexpr int32 MainWindowHeight = 448;
 
@@ -48,6 +59,41 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 	FPlatformProcess::SetArgV0(ArgV[0]);
 	FCommandLine::Set(*FCommandLine::BuildFromArgV(nullptr, ArgC, ArgV, nullptr));
 
+	// The project: -project=<path>.lproj (or a first argument ending in .lproj), else the target's own project.
+	FString ProjectFile;
+	if (!FParse::Value(FCommandLine::Get(), "project=", ProjectFile))
+	{
+		const TCHAR* Stream = FCommandLine::Get();
+		const FString FirstToken = FParse::Token(Stream, false);
+		if (FirstToken.EndsWith(".lproj"))
+		{
+			ProjectFile = FirstToken;
+		}
+	}
+	if (!ProjectFile.IsEmpty())
+	{
+		FPaths::SetProjectFilePath(ProjectFile);
+		FApp::SetProjectName(*FPaths::GetBaseFilename(ProjectFile));
+	}
+	else if (LEON_PROJECT_NAME[0] != 0)
+	{
+		FApp::SetProjectName(LEON_PROJECT_NAME);
+		FPaths::SetProjectFilePath(FPaths::ProjectDir() + LEON_PROJECT_NAME + ".lproj");
+	}
+
+	// Config, then the log file and the verbosity it asks for.
+	FConfigCacheIni::InitializeConfigSystem();
+#if PLATFORM_DESKTOP
+	GLogFile = MakeUnique<FOutputDeviceFile>();
+	GLog->AddOutputDevice(GLogFile.Get());
+#endif
+	FLogSuppressionInterface::Get().ProcessConfigAndCommandLine();
+
+	UE_LOG(LogInit, Log, "Command line: %s", FCommandLine::Get());
+	UE_LOG(LogInit, Log, "Base directory: %s", FPlatformProcess::BaseDir());
+	UE_LOG(LogInit, Log, "Project: %s (%s)", FApp::HasProjectName() ? FApp::GetProjectName() : "none",
+		*FPaths::ProjectDir());
+
 #if !WITH_ENGINE
 	// Without the engine framework the loop owns the platform application and the main window;
 	// modules starting up below (the primary game module) can already use them.
@@ -68,9 +114,9 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 int32 FEngineLoop::Init()
 {
 #if WITH_ENGINE
-	// LeonGame: LeonGame [-map=<.llev>] [-nullrhi] [--tick <Hz>] [--show-stats].
+	// LeonGame: LeonGame [-map=<.llev>] [-nullrhi] [-tick=<Hz>] [-showstats].
 	GGameApplication = std::make_unique<FGameApplication>();
-	if (!GGameApplication->Init(ArgCount, Args, LEON_PROJECT_NAME))
+	if (!GGameApplication->Init())
 	{
 		GGameApplication.reset();
 		ExitCode = 1;
@@ -130,4 +176,16 @@ void FEngineLoop::Exit()
 		MainWindow.reset();
 	}
 	Application.reset();
+
+	// Saves what changed in the user config layer (desktop).
+	if (GConfig != nullptr)
+	{
+		GConfig->Flush(false);
+	}
+	GLog->Flush();
+	if (GLogFile)
+	{
+		GLog->RemoveOutputDevice(GLogFile.Get());
+		GLogFile.Reset();
+	}
 }

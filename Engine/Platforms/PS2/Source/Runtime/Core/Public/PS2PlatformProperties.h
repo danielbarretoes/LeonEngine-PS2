@@ -9,6 +9,11 @@ struct CORE_API FPS2PlatformProperties : public FGenericPlatformProperties
 		return "PS2";
 	}
 
+	static FORCEINLINE const char* IniPlatformName()
+	{
+		return "PS2";
+	}
+
 	static FORCEINLINE bool IsGameOnly()
 	{
 		return true;

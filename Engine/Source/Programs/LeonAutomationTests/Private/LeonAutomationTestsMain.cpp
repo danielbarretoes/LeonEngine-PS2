@@ -3,6 +3,7 @@
 #include "Misc/AutomationTest.h"
 #include "Misc/CString.h"
 #include "Misc/CommandLine.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Modules/ModuleManager.h"
 
 #include <catch2/catch_session.hpp>
@@ -18,6 +19,7 @@ int main(int ArgC, char* ArgV[])
 {
 	FPlatformProcess::SetArgV0(ArgV[0]);
 	FCommandLine::Set(*FCommandLine::BuildFromArgV(nullptr, ArgC, ArgV, nullptr));
+	FConfigCacheIni::InitializeConfigSystem();
 	FModuleManager::Get().StartupStaticallyLinkedModules();
 
 	const char* AutomationFilter = "";

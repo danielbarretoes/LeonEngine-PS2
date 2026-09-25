@@ -4,6 +4,7 @@
 #include "HAL/PlatformProperties.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/CommandLine.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Misc/Parse.h"
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
@@ -17,6 +18,7 @@ int main(int ArgC, char* ArgV[])
 {
 	FPlatformProcess::SetArgV0(ArgV[0]);
 	FCommandLine::Set(*FCommandLine::BuildFromArgV(nullptr, ArgC, ArgV, nullptr));
+	FConfigCacheIni::InitializeConfigSystem();
 	FModuleManager::Get().StartupStaticallyLinkedModules();
 
 	FString Filter;

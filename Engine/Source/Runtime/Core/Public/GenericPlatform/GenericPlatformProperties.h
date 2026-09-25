@@ -11,6 +11,12 @@ struct CORE_API FGenericPlatformProperties
 		return "";
 	}
 
+	/** Platform name in config paths: Engine/Config/<Name>/<Name>Engine.ini (UE: IniPlatformName). */
+	static FORCEINLINE const char* IniPlatformName()
+	{
+		return "";
+	}
+
 	/** True for platforms that only ever run the game (no tools, no cooking). */
 	static FORCEINLINE bool IsGameOnly()
 	{

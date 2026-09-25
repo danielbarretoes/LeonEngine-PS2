@@ -11,9 +11,11 @@
 class FGameApplication
 {
 public:
-	/// Parses the command line (`-map=<.llev>`, `-nullrhi`, `--tick <Hz>`, `--show-stats`), initialises the
-	/// engine and enters the game mode. The map defaults to Engine/Content/LevelTemplates/Starter.llev.
-	[[nodiscard]] bool Init(int Argc, char** Argv, const char* ProjectName);
+	/// Reads FCommandLine (`-map=<.llev>`, `-nullrhi`, `-tick=<Hz>`, `-showstats`) and the Engine config, initialises
+	/// the engine and enters the game mode. The map defaults to GameDefaultMap
+	/// ([/Script/EngineSettings.GameMapsSettings] in the Engine config), then
+	/// Engine/Content/LevelTemplates/Starter.llev.
+	[[nodiscard]] bool Init();
 
 	/// One frame (windowed) or one fixed step (headless). Returns false once the session is over.
 	[[nodiscard]] bool Tick();

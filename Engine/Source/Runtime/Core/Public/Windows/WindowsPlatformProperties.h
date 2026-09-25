@@ -8,6 +8,11 @@ struct CORE_API FWindowsPlatformProperties : public FGenericPlatformProperties
 	{
 		return "Win64";
 	}
+
+	static FORCEINLINE const char* IniPlatformName()
+	{
+		return "Windows";
+	}
 };
 
 typedef FWindowsPlatformProperties FPlatformProperties;

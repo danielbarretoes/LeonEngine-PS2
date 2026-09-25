@@ -24,6 +24,18 @@ public:
 	float VelocityZ = 0.0f;
 	bool bOnGround = true;
 
+	/** Movement tuning (world units per frame). LoadConfig overrides these compiled values. */
+	float MoveSpeed = 0.55f;
+	float Gravity = 0.045f;
+	float JumpSpeed = 0.95f;
+
+	/**
+	 * Reads [/Script/ThirdPerson.ThirdPersonCharacter] from the Game config (DefaultGame.ini; on the PS2 through
+	 * host: when it is staged next to the ELF). Missing keys keep the compiled values. Returns true when the section
+	 * was found.
+	 */
+	bool LoadConfig();
+
 	/** Stands the character on whatever supports the origin. */
 	void SpawnAt(const FThirdPersonLevel& Level);
 

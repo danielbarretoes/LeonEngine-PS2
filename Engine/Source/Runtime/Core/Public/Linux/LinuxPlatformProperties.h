@@ -8,6 +8,11 @@ struct CORE_API FLinuxPlatformProperties : public FGenericPlatformProperties
 	{
 		return "Linux";
 	}
+
+	static FORCEINLINE const char* IniPlatformName()
+	{
+		return "Linux";
+	}
 };
 
 typedef FLinuxPlatformProperties FPlatformProperties;
