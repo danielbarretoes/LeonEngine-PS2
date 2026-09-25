@@ -22,4 +22,9 @@ struct CORE_API FGenericPlatformProperties
 	{
 		return PLATFORM_DESKTOP != 0;
 	}
+
+	/** FName pool: bytes per block, block count limit (exceeding it is a fatal error) and hash buckets (Leon). */
+	static constexpr uint32 NamePoolBlockSize = 64 * 1024;
+	static constexpr uint32 NamePoolMaxBlocks = 1024;
+	static constexpr uint32 NamePoolHashBuckets = 65536;
 };

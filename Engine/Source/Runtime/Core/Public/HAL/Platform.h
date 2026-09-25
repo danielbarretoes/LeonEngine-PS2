@@ -32,6 +32,32 @@
 #ifndef FORCENOINLINE
 	#define FORCENOINLINE
 #endif
+#ifndef FORCEINLINE_DEBUGGABLE
+	#define FORCEINLINE_DEBUGGABLE inline
+#endif
+
+// Branch prediction hints (UE: LIKELY / UNLIKELY).
+#ifndef LIKELY
+	#if defined(__GNUC__) || defined(__clang__)
+		#define LIKELY(x) __builtin_expect(!!(x), 1)
+		#define UNLIKELY(x) __builtin_expect(!!(x), 0)
+	#else
+		#define LIKELY(x) (x)
+		#define UNLIKELY(x) (x)
+	#endif
+#endif
+
+// Stops in the debugger (UE: PLATFORM_BREAK); callers check FPlatformMisc::IsDebuggerPresent first.
+#ifndef PLATFORM_BREAK
+	#define PLATFORM_BREAK() __builtin_trap()
+#endif
+
+// printf-style format checking on GCC / Clang (UE: PRINTF_FORMAT_STRING-like annotations).
+#if defined(__GNUC__) || defined(__clang__)
+	#define LEON_PRINTF_FORMAT(FormatIndex, FirstArgIndex) __attribute__((format(printf, FormatIndex, FirstArgIndex)))
+#else
+	#define LEON_PRINTF_FORMAT(FormatIndex, FirstArgIndex)
+#endif
 
 // Global fixed-width types (UE: HAL/Platform.h).
 typedef FPlatformTypes::uint8 uint8;
@@ -43,6 +69,8 @@ typedef FPlatformTypes::int16 int16;
 typedef FPlatformTypes::int32 int32;
 typedef FPlatformTypes::int64 int64;
 typedef FPlatformTypes::ANSICHAR ANSICHAR;
+typedef FPlatformTypes::WIDECHAR WIDECHAR;
+typedef FPlatformTypes::TCHAR TCHAR;
 typedef FPlatformTypes::SIZE_T SIZE_T;
 typedef FPlatformTypes::PTRINT PTRINT;
 typedef FPlatformTypes::UPTRINT UPTRINT;
@@ -52,3 +80,7 @@ static_assert(sizeof(int16) == 2 && sizeof(uint16) == 2, "16-bit types must be 2
 static_assert(sizeof(int32) == 4 && sizeof(uint32) == 4, "32-bit types must be 4 bytes");
 static_assert(sizeof(int64) == 8 && sizeof(uint64) == 8, "64-bit types must be 8 bytes");
 static_assert(sizeof(PTRINT) == sizeof(void*) && sizeof(UPTRINT) == sizeof(void*), "PTRINT must be pointer sized");
+static_assert(sizeof(TCHAR) == 1, "TCHAR is UTF-8 (D1)");
+
+/** String literal of TCHARs (UE: TEXT). TCHAR is UTF-8, so a literal is already a TCHAR string. */
+#define TEXT(x) x

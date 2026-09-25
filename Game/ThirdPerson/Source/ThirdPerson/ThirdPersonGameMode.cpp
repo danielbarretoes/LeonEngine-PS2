@@ -4,9 +4,9 @@
 #include "GenericPlatform/GenericWindow.h"
 #include "GenericPlatform/IInputInterface.h"
 #include "PS2RHI.h"
+#include "Misc/CString.h"
 #include "Stats/StatsOverlay.h"
-
-#include <cstdio>
+#include "ThirdPerson.h"
 
 namespace
 {
@@ -16,15 +16,14 @@ namespace
 
 	void PrintBanner()
 	{
-		std::printf("\n======= Leon ThirdPerson =======\n");
-		std::printf("  Camera follows character + orbit\n");
-		std::printf("  Large grounded primitive level\n");
-		std::printf("  Left stick    move (cam-relative)\n");
-		std::printf("  Right stick   camera orbit\n");
-		std::printf("  Cross         jump\n");
-		std::printf("  Start         quit | Select  debug HUD\n");
-		std::printf("Draw3D stats: HUD + PCSX2 console every 30 frames\n");
-		std::printf("================================\n\n");
+		UE_LOG(LogThirdPerson, Display, TEXT("======= Leon ThirdPerson ======="));
+		UE_LOG(LogThirdPerson, Display, TEXT("  Camera follows character + orbit"));
+		UE_LOG(LogThirdPerson, Display, TEXT("  Large grounded primitive level"));
+		UE_LOG(LogThirdPerson, Display, TEXT("  Left stick    move (cam-relative)"));
+		UE_LOG(LogThirdPerson, Display, TEXT("  Right stick   camera orbit"));
+		UE_LOG(LogThirdPerson, Display, TEXT("  Cross         jump"));
+		UE_LOG(LogThirdPerson, Display, TEXT("  Start         quit | Select  debug HUD"));
+		UE_LOG(LogThirdPerson, Display, TEXT("Draw3D stats: HUD + PCSX2 console every 30 frames"));
 	}
 } // namespace
 
@@ -92,7 +91,7 @@ bool FThirdPersonGameMode::Tick(float DeltaTime)
 
 	if (IsGamepadKeyDown(EKeys::Gamepad_Special_Right))
 	{
-		std::printf("ThirdPerson: quit after %u frames\n", FrameNumber);
+		UE_LOG(LogThirdPerson, Display, TEXT("Quit after %u frames"), FrameNumber);
 		RequestEngineExit("ThirdPerson: Start pressed");
 		return false;
 	}
@@ -138,8 +137,8 @@ void FThirdPersonGameMode::UpdateStatsMessages()
 
 	char Boxes[32];
 	char Triangles[32];
-	std::snprintf(Boxes, sizeof(Boxes), "BOXES %u/%u", DrawStats.Boxes - DrawStats.CulledBoxes, DrawStats.Boxes);
-	std::snprintf(Triangles, sizeof(Triangles), "TRIS %u CLIP %u", DrawStats.Emitted, DrawStats.Clipped);
+	FCString::Snprintf(Boxes, sizeof(Boxes), "BOXES %u/%u", DrawStats.Boxes - DrawStats.CulledBoxes, DrawStats.Boxes);
+	FCString::Snprintf(Triangles, sizeof(Triangles), "TRIS %u CLIP %u", DrawStats.Emitted, DrawStats.Clipped);
 	FStatsOverlay::AddOnScreenDebugMessage(BoxesMessageKey, Boxes);
 	FStatsOverlay::AddOnScreenDebugMessage(TrianglesMessageKey, Triangles);
 

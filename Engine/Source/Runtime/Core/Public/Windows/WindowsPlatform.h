@@ -16,3 +16,5 @@ typedef FWindowsPlatformTypes FPlatformTypes;
 
 #define FORCEINLINE __forceinline
 #define FORCENOINLINE __declspec(noinline)
+#define FORCEINLINE_DEBUGGABLE inline
+#define PLATFORM_BREAK() __debugbreak()

@@ -18,8 +18,11 @@ struct CORE_API FGenericPlatformTypes
 	typedef signed int int32;
 	typedef signed long long int64;
 
-	// Character types.
+	// Character types. TCHAR is UTF-8 on every platform (Leon deviation from UE's UTF-16 TCHAR on Windows);
+	// WIDECHAR only appears inside the Windows HAL.
 	typedef char ANSICHAR;
+	typedef wchar_t WIDECHAR;
+	typedef ANSICHAR TCHAR;
 
 	// Pointer-sized integers (platforms override for their pointer width).
 	typedef decltype(sizeof(0)) SIZE_T;

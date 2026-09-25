@@ -2,20 +2,29 @@
 #include "Level/BasicShape.h"
 #include "Misc/CString.h"
 
+#include <string_view>
+
+namespace
+{
+	[[nodiscard]] bool EqualsIgnoreCase(std::string_view Name, std::string_view Literal)
+	{
+		return Name.size() == Literal.size() && FCString::Strnicmp(Name.data(), Literal.data(), Name.size()) == 0;
+	}
+} // namespace
+
 bool TryParseBasicShapeName(std::string_view Name, EBasicShape& Out)
 {
-	const std::string Key = FCString::ToLower(Name);
-	if (Key == "cube")
+	if (EqualsIgnoreCase(Name, "cube"))
 	{
 		Out = EBasicShape::Cube;
 		return true;
 	}
-	if (Key == "sphere")
+	if (EqualsIgnoreCase(Name, "sphere"))
 	{
 		Out = EBasicShape::Sphere;
 		return true;
 	}
-	if (Key == "plane")
+	if (EqualsIgnoreCase(Name, "plane"))
 	{
 		Out = EBasicShape::Plane;
 		return true;
@@ -25,23 +34,23 @@ bool TryParseBasicShapeName(std::string_view Name, EBasicShape& Out)
 
 bool IsBlockingVolumeName(std::string_view Name)
 {
-	return FCString::ToLower(Name) == "blockingvolume";
+	return EqualsIgnoreCase(Name, "blockingvolume");
 }
 
 bool IsPlayerStartName(std::string_view Name)
 {
-	return FCString::ToLower(Name) == "playerstart";
+	return EqualsIgnoreCase(Name, "playerstart");
 }
 
 bool TryParseBasicLightName(std::string_view Name, EBasicLight& Out)
 {
-	const std::string Key = FCString::ToLower(Name);
-	if (Key == "directionallight" || Key == "directional" || Key == "dirlight")
+	if (EqualsIgnoreCase(Name, "directionallight") || EqualsIgnoreCase(Name, "directional") ||
+		EqualsIgnoreCase(Name, "dirlight"))
 	{
 		Out = EBasicLight::Directional;
 		return true;
 	}
-	if (Key == "pointlight" || Key == "point")
+	if (EqualsIgnoreCase(Name, "pointlight") || EqualsIgnoreCase(Name, "point"))
 	{
 		Out = EBasicLight::Point;
 		return true;

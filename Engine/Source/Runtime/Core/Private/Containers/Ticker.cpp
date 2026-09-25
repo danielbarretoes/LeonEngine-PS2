@@ -1,7 +1,6 @@
 #include "Containers/Ticker.h"
 
-#include <cstddef>
-#include <utility>
+#include "HAL/PlatformAtomics.h"
 
 FTicker& FTicker::GetCoreTicker()
 {
@@ -9,24 +8,35 @@ FTicker& FTicker::GetCoreTicker()
 	return Ticker;
 }
 
-FTicker::FDelegateHandle FTicker::AddTicker(FTickerDelegate Delegate)
+FDelegateHandle FTicker::AddTicker(const FTickerDelegate& InDelegate, float InDelay)
 {
-	FElement Element;
-	Element.Id = NextId++;
-	Element.Delegate = std::move(Delegate);
-	Elements.push_back(std::move(Element));
-	FDelegateHandle Handle;
-	Handle.Id = Elements.back().Id;
-	return Handle;
+	FElement& Element = Elements.AddDefaulted_GetRef();
+	Element.FireTime = CurrentTime + InDelay;
+	Element.DelayTime = InDelay;
+	Element.Delegate = InDelegate;
+	return InDelegate.GetHandle();
+}
+
+FDelegateHandle FTicker::AddTicker(const TCHAR* /*InName*/, float InDelay, TFunction<bool(float)> Function)
+{
+	return AddTicker(FTickerDelegate::CreateLambda(MoveTemp(Function)), InDelay);
 }
 
 void FTicker::RemoveTicker(FDelegateHandle Handle)
 {
-	for (size_t Index = 0; Index < Elements.size(); ++Index)
+	for (int32 Index = 0; Index < Elements.Num(); ++Index)
 	{
-		if (Elements[Index].Id == Handle.Id)
+		if (Elements[Index].Delegate.GetHandle() == Handle)
 		{
-			Elements.erase(Elements.begin() + static_cast<std::ptrdiff_t>(Index));
+			if (bInTick)
+			{
+				// Keep indices stable while ticking; dropped after the loop.
+				Elements[Index].bRemoved = true;
+			}
+			else
+			{
+				Elements.RemoveAt(Index);
+			}
 			return;
 		}
 	}
@@ -34,15 +44,39 @@ void FTicker::RemoveTicker(FDelegateHandle Handle)
 
 void FTicker::Tick(float DeltaTime)
 {
-	for (size_t Index = 0; Index < Elements.size();)
+	CurrentTime += DeltaTime;
+	bInTick = true;
+
+	// Delegates added during this Tick fire next frame.
+	const int32 NumAtStart = Elements.Num();
+	for (int32 Index = 0; Index < NumAtStart; ++Index)
 	{
-		if (Elements[Index].Delegate(DeltaTime))
+		if (Elements[Index].bRemoved || Elements[Index].FireTime > CurrentTime)
 		{
-			++Index;
+			continue;
+		}
+
+		// Copy: the delegate may add tickers (reallocating Elements) while it runs.
+		const FTickerDelegate Delegate = Elements[Index].Delegate;
+		const bool bKeep = Delegate.IsBound() &&
+			Delegate.Execute(Elements[Index].DelayTime > 0.0f ? Elements[Index].DelayTime : DeltaTime);
+		if (!bKeep)
+		{
+			Elements[Index].bRemoved = true;
 		}
 		else
 		{
-			Elements.erase(Elements.begin() + static_cast<std::ptrdiff_t>(Index));
+			Elements[Index].FireTime = CurrentTime + Elements[Index].DelayTime;
 		}
 	}
+
+	bInTick = false;
+	Elements.RemoveAll([](const FElement& Element) { return Element.bRemoved; });
+}
+
+uint64 FDelegateHandle::GenerateNewID()
+{
+	// Starts at 1: 0 is the invalid handle.
+	static volatile int64 NextID = 1;
+	return uint64(FPlatformAtomics::InterlockedIncrement(&NextID));
 }

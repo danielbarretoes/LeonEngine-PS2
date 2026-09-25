@@ -1,45 +1,43 @@
 #pragma once
 
+#include "Containers/Array.h"
 #include "CoreTypes.h"
+#include "Delegates/Delegate.h"
+#include "Templates/Function.h"
 
-#include <functional>
-#include <vector>
+/** Per-frame callback; return false to unregister (UE: FTickerDelegate). */
+DECLARE_DELEGATE_RetVal_OneParam(bool, FTickerDelegate, float);
 
 /**
- * Per-frame callbacks ticked by the engine loop (UE: FTicker / FTickerDelegate).
- * A callback returns false to unregister itself.
+ * Callbacks ticked by the engine loop (UE: FTicker). A delegate fires every Tick (or every InDelay seconds) until it
+ * returns false or is removed; removing during Tick is safe.
  */
 class CORE_API FTicker
 {
 public:
-	using FTickerDelegate = std::function<bool(float DeltaTime)>;
-
-	struct FDelegateHandle
-	{
-		int32 Id = 0;
-
-		bool IsValid() const
-		{
-			return Id != 0;
-		}
-	};
-
 	/** The ticker FEngineLoop::Tick drives every frame. */
 	static FTicker& GetCoreTicker();
 
-	FDelegateHandle AddTicker(FTickerDelegate Delegate);
+	FDelegateHandle AddTicker(const FTickerDelegate& InDelegate, float InDelay = 0.0f);
+
+	/** Wraps a function in a delegate (UE: AddTicker(Name, Delay, Function)). */
+	FDelegateHandle AddTicker(const TCHAR* InName, float InDelay, TFunction<bool(float)> Function);
+
 	void RemoveTicker(FDelegateHandle Handle);
 
-	/** Runs every registered delegate; removes the ones that return false. */
+	/** Fires the due delegates; DeltaTime is the frame time in seconds. */
 	void Tick(float DeltaTime);
 
 private:
 	struct FElement
 	{
-		int32 Id = 0;
+		double FireTime = 0.0;
+		float DelayTime = 0.0f;
 		FTickerDelegate Delegate;
+		bool bRemoved = false;
 	};
 
-	std::vector<FElement> Elements;
-	int32 NextId = 1;
+	TArray<FElement> Elements;
+	double CurrentTime = 0.0;
+	bool bInTick = false;
 };

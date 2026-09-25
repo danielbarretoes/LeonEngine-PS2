@@ -1,11 +1,14 @@
 #pragma once
 
 #include "Containers/Ticker.h"
+#include "Logging/LogMacros.h"
 #include "Modules/ModuleInterface.h"
 
 #include <memory>
 
 class FThirdPersonGameMode;
+
+DECLARE_LOG_CATEGORY_EXTERN(LogThirdPerson, Log, All);
 
 /** Primary game module: starts the game mode and ticks it from the core ticker. */
 class THIRDPERSON_API FThirdPersonModule : public IModuleInterface
@@ -21,5 +24,5 @@ public:
 
 private:
 	std::unique_ptr<FThirdPersonGameMode> GameMode;
-	FTicker::FDelegateHandle TickHandle;
+	FDelegateHandle TickHandle;
 };
