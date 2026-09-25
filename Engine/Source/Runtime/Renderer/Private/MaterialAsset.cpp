@@ -1,7 +1,7 @@
 #include "MaterialAsset.h"
 
 #include "LeonMaterialFormat.h"
-#include "Misc/Paths.h"
+#include "Migration/LegacyContentPath.h"
 #include "ResourceCache.h"
 
 #include <nlohmann/json.hpp>
@@ -32,7 +32,7 @@ namespace
 			}
 			else
 			{
-				Material.AlbedoMap = Resources.LoadTexture(FPaths::ResolveAssetPath(Key));
+				Material.AlbedoMap = Resources.LoadTexture(ResolveLegacyContentPath(Key));
 			}
 		}
 		if (Object.contains("normalMap") && Object["normalMap"].is_string())
@@ -44,7 +44,7 @@ namespace
 			}
 			else
 			{
-				Material.NormalMap = Resources.LoadTexture(FPaths::ResolveAssetPath(Key));
+				Material.NormalMap = Resources.LoadTexture(ResolveLegacyContentPath(Key));
 			}
 		}
 	}

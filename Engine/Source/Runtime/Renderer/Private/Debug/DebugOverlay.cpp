@@ -1,6 +1,6 @@
 #include "Debug/DebugOverlay.h"
 
-#include "Misc/Paths.h"
+#include "Migration/LegacyContentPath.h"
 #include "OpenGLVertexAttrib.h"
 
 #include <glad/glad.h>
@@ -282,8 +282,8 @@ namespace
 
 bool FDebugOverlay::Initialize(const std::string& /*shaderDirectory*/)
 {
-	const std::string Vert = FPaths::ResolveAssetPath("assets/Shaders/debug_overlay.vert");
-	const std::string Frag = FPaths::ResolveAssetPath("assets/Shaders/debug_overlay.frag");
+	const std::string Vert = ResolveLegacyContentPath("assets/Shaders/debug_overlay.vert");
+	const std::string Frag = ResolveLegacyContentPath("assets/Shaders/debug_overlay.frag");
 	if (!Shader.LoadFromFiles(Vert, Frag))
 	{
 		std::cerr << "Failed to load debug overlay shaders\n";

@@ -13,6 +13,7 @@ typedef FWindowsPlatformTypes FPlatformTypes;
 #define PLATFORM_DESKTOP 1
 #define PLATFORM_64BITS 1
 #define PLATFORM_LITTLE_ENDIAN 1
+#define LINE_TERMINATOR "\r\n"
 
 #define FORCEINLINE __forceinline
 #define FORCENOINLINE __declspec(noinline)

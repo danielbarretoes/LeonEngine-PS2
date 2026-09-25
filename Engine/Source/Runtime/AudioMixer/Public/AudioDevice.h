@@ -51,7 +51,7 @@ public:
 	/// Listener for 3D (Unreal SetListener). Call from Engine after camera update.
 	void SetListener(const glm::vec3& Location, const glm::vec3& Forward, const glm::vec3& Up);
 
-	/// Unreal PlaySound2D — fire-and-forget WAV/FLAC/MP3/OGG under FPaths::ResolveAssetPath.
+	/// Unreal PlaySound2D — fire-and-forget WAV/FLAC/MP3/OGG under FPaths::ResolveLegacyContentPath.
 	void PlaySound2D(std::string_view AssetRelativePath, float VolumeMultiplier = 1.0f);
 
 	/// Unreal PlaySoundAtLocation — spatialized one-shot.

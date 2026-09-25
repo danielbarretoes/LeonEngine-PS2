@@ -8,6 +8,7 @@
 #include "Math/Rotator.h"
 #include "Math/UnrealMathUtility.h"
 #include "Math/Vector.h"
+#include "Serialization/Archive.h"
 
 /**
  * Rotation, translation and 3D scale (UE: FTransform, the scalar non-SIMD version). Applied to a point as
@@ -337,6 +338,12 @@ public:
 	FORCEINLINE float GetMinimumAxisScale() const
 	{
 		return Scale3D.GetAbsMin();
+	}
+
+	/** Rotation, translation, scale (UE). */
+	friend FArchive& operator<<(FArchive& Ar, FTransform& M)
+	{
+		return Ar << M.Rotation << M.Translation << M.Scale3D;
 	}
 
 private:

@@ -5,6 +5,7 @@
 #include "Math/MathFwd.h"
 #include "Math/UnrealMathUtility.h"
 #include "Math/Vector.h"
+#include "Serialization/Archive.h"
 #include "Templates/TypeHash.h"
 
 /**
@@ -266,4 +267,9 @@ FORCEINLINE uint32 GetTypeHash(const FRotator& Rotator)
 inline FString LexToString(const FRotator& Rotator)
 {
 	return Rotator.ToString();
+}
+
+inline FArchive& operator<<(FArchive& Ar, FRotator& V)
+{
+	return Ar << V.Pitch << V.Yaw << V.Roll;
 }

@@ -9,6 +9,7 @@
 #include "Math/UnrealMathUtility.h"
 #include "Math/Vector.h"
 #include "Math/Vector4.h"
+#include "Serialization/Archive.h"
 
 /**
  * 4x4 matrix, row-major, for row vectors: V' = V * M, translation in M[3][0..2], axes in rows 0..2 (UE: FMatrix).
@@ -172,3 +173,12 @@ struct CORE_API FLookAtMatrix : public FLookFromMatrix
 	{
 	}
 };
+
+inline FArchive& operator<<(FArchive& Ar, FMatrix& M)
+{
+	for (int32 Row = 0; Row < 4; ++Row)
+	{
+		Ar << M.M[Row][0] << M.M[Row][1] << M.M[Row][2] << M.M[Row][3];
+	}
+	return Ar;
+}

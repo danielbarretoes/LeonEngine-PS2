@@ -11,6 +11,7 @@ struct CORE_API FWindowsPlatformMisc : public FGenericPlatformMisc
 	{
 		RequestExitWithStatus(bForce, 3);
 	}
+	static void CreateGuid(FGuid& Result);
 };
 
 typedef FWindowsPlatformMisc FPlatformMisc;

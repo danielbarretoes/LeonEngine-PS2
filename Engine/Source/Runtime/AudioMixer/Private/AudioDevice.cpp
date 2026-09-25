@@ -1,6 +1,6 @@
 #include "AudioDevice.h"
 
-#include "Misc/Paths.h"
+#include "Migration/LegacyContentPath.h"
 
 #include <miniaudio.h>
 
@@ -168,7 +168,7 @@ struct FAudioDevice::FImpl
 			return false;
 		}
 		ReapFinished();
-		const std::string Path = FPaths::ResolveAssetPath(std::string(AssetRelativePath));
+		const std::string Path = ResolveLegacyContentPath(std::string(AssetRelativePath));
 		if (Path.empty())
 		{
 			return false;
@@ -287,7 +287,7 @@ void FAudioDevice::PlaySoundAtLocation(
 		return;
 	}
 	Impl->ReapFinished();
-	const std::string Path = FPaths::ResolveAssetPath(std::string(AssetRelativePath));
+	const std::string Path = ResolveLegacyContentPath(std::string(AssetRelativePath));
 	if (Path.empty())
 	{
 		return;
@@ -375,7 +375,7 @@ void FAudioDevice::PlayMusic(std::string_view AssetRelativePath, float VolumeMul
 	{
 		return;
 	}
-	const std::string Path = FPaths::ResolveAssetPath(std::string(AssetRelativePath));
+	const std::string Path = ResolveLegacyContentPath(std::string(AssetRelativePath));
 	if (Path.empty())
 	{
 		return;

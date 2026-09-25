@@ -6,6 +6,7 @@
 #include "Math/MathFwd.h"
 #include "Math/UnrealMathUtility.h"
 #include "Misc/AssertionMacros.h"
+#include "Serialization/Archive.h"
 #include "Templates/TypeHash.h"
 
 /**
@@ -548,3 +549,8 @@ struct TIsPODType<FVector>
 		Value = true
 	};
 };
+
+inline FArchive& operator<<(FArchive& Ar, FVector& V)
+{
+	return Ar << V.X << V.Y << V.Z;
+}

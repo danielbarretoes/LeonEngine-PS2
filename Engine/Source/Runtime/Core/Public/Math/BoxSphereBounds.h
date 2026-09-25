@@ -7,6 +7,7 @@
 #include "Math/Sphere.h"
 #include "Math/UnrealMathUtility.h"
 #include "Math/Vector.h"
+#include "Serialization/Archive.h"
 
 /** Box and sphere bounds sharing an origin (UE: FBoxSphereBounds). */
 struct CORE_API FBoxSphereBounds
@@ -111,3 +112,8 @@ struct CORE_API FBoxSphereBounds
 		return A + B;
 	}
 };
+
+inline FArchive& operator<<(FArchive& Ar, FBoxSphereBounds& V)
+{
+	return Ar << V.Origin << V.BoxExtent << V.SphereRadius;
+}

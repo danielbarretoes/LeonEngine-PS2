@@ -1,6 +1,6 @@
 #include "Debug/DebugDraw.h"
 
-#include "Misc/Paths.h"
+#include "Migration/LegacyContentPath.h"
 #include "OpenGLVertexAttrib.h"
 
 #include <glad/glad.h>
@@ -15,8 +15,8 @@
 
 bool FDebugDraw::Initialize(const std::string& /*shaderDirectory*/)
 {
-	const std::string Vert = FPaths::ResolveAssetPath("assets/Shaders/debug_line.vert");
-	const std::string Frag = FPaths::ResolveAssetPath("assets/Shaders/debug_line.frag");
+	const std::string Vert = ResolveLegacyContentPath("assets/Shaders/debug_line.vert");
+	const std::string Frag = ResolveLegacyContentPath("assets/Shaders/debug_line.frag");
 	if (!Shader.LoadFromFiles(Vert, Frag))
 	{
 		std::cerr << "Failed to load debug line shaders\n";

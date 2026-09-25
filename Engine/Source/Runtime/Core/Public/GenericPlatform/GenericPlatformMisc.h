@@ -2,6 +2,8 @@
 
 #include "HAL/Platform.h"
 
+struct FGuid;
+
 /** Low-level platform services (UE: FGenericPlatformMisc, reduced). */
 struct CORE_API FGenericPlatformMisc
 {
@@ -31,4 +33,10 @@ struct CORE_API FGenericPlatformMisc
 
 	/** RequestExit with the process return code used when the exit is forced. */
 	static void RequestExitWithStatus(bool bForce, uint8 ReturnCode);
+
+	/**
+	 * A new GUID from the calendar time, a counter and FMath::Rand; unique within a process, likely unique across
+	 * machines (UE: CreateGuid). Windows uses CoCreateGuid.
+	 */
+	static void CreateGuid(FGuid& Result);
 };

@@ -1,8 +1,12 @@
 #include "CoreGlobals.h"
 #include "HAL/PlatformMisc.h"
+#include "Misc/AssertionMacros.h"
+#include "Misc/Guid.h"
 
 #include <Windows.h>
+#include <combaseapi.h>
 #include <cstdio>
+#include <cstring>
 
 void FWindowsPlatformMisc::LocalPrint(const TCHAR* Message)
 {
@@ -24,4 +28,12 @@ void FWindowsPlatformMisc::RequestExitWithStatus(bool bForce, uint8 ReturnCode)
 		TerminateProcess(GetCurrentProcess(), ReturnCode);
 	}
 	RequestEngineExit("FPlatformMisc::RequestExit");
+}
+
+void FWindowsPlatformMisc::CreateGuid(FGuid& Result)
+{
+	static_assert(sizeof(GUID) == sizeof(FGuid), "GUID and FGuid must have the same size");
+	GUID NewGuid;
+	verify(CoCreateGuid(&NewGuid) == S_OK);
+	std::memcpy(&Result, &NewGuid, sizeof(Result));
 }

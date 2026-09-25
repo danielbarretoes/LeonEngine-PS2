@@ -1,7 +1,11 @@
 #include "CoreMinimal.h"
 #include "HAL/PlatformMemory.h"
+#include "HAL/PlatformProcess.h"
 #include "HAL/PlatformProperties.h"
 #include "Misc/AutomationTest.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
+#include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogTestPAL, Log, All);
@@ -11,23 +15,21 @@ DEFINE_LOG_CATEGORY_STATIC(LogTestPAL, Log, All);
 // Arguments: -filter=<text> runs only the tests whose name contains <text>.
 int main(int ArgC, char* ArgV[])
 {
+	FPlatformProcess::SetArgV0(ArgV[0]);
+	FCommandLine::Set(*FCommandLine::BuildFromArgV(nullptr, ArgC, ArgV, nullptr));
 	FModuleManager::Get().StartupStaticallyLinkedModules();
 
-	const TCHAR* Filter = TEXT("");
-	for (int Index = 1; Index < ArgC; ++Index)
-	{
-		if (ArgV[Index] && FCString::Strnicmp(ArgV[Index], "-filter=", 8) == 0)
-		{
-			Filter = ArgV[Index] + 8;
-		}
-	}
+	FString Filter;
+	FParse::Value(FCommandLine::Get(), "filter=", Filter);
 
 	UE_LOG(LogTestPAL, Display, TEXT("TestPAL on %s, engine %d.%d.%d"), FPlatformProperties::PlatformName(),
 		ENGINE_MAJOR_VERSION, ENGINE_MINOR_VERSION, ENGINE_PATCH_VERSION);
+	UE_LOG(LogTestPAL, Display, TEXT("Base %s, engine %s, project %s"), FPlatformProcess::BaseDir(),
+		*FPaths::EngineDir(), *FPaths::ProjectDir());
 
 	int32 NumRun = 0;
 	const int32 NumFailed = FAutomationTestFramework::Get().RunTests(
-		Filter, EAutomationTestFlags::Disabled | EAutomationTestFlags::NonNullRHI, &NumRun);
+		*Filter, EAutomationTestFlags::Disabled | EAutomationTestFlags::NonNullRHI, &NumRun);
 
 	// Numbers for the platform budgets (PS2: Engine/Platforms/PS2/Documentation/Budgets.md).
 	const FMallocUsage Usage = FMemory::GetUsage();

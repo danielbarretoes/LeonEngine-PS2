@@ -1,6 +1,6 @@
 #include "Math/UnrealMath.h"
 
-#include "MathStringParsing.h"
+#include "Misc/Parse.h"
 
 #include <cstring>
 
@@ -335,9 +335,8 @@ bool FVector::InitFromString(const FString& InSourceString)
 	X = Y = Z = 0;
 
 	// The initialization is only successful if the X, Y, and Z values can all be parsed from the string.
-	return MathStringParsing::ParseFloat(*InSourceString, "X=", X) &&
-		MathStringParsing::ParseFloat(*InSourceString, "Y=", Y) &&
-		MathStringParsing::ParseFloat(*InSourceString, "Z=", Z);
+	return FParse::Value(*InSourceString, "X=", X) && FParse::Value(*InSourceString, "Y=", Y) &&
+		FParse::Value(*InSourceString, "Z=", Z);
 }
 
 float FVector::CosineAngle2D(FVector A, FVector B)
@@ -417,8 +416,7 @@ bool FVector2D::InitFromString(const FString& InSourceString)
 	X = Y = 0;
 
 	// The initialization is only successful if the X and Y values can all be parsed from the string.
-	return MathStringParsing::ParseFloat(*InSourceString, "X=", X) &&
-		MathStringParsing::ParseFloat(*InSourceString, "Y=", Y);
+	return FParse::Value(*InSourceString, "X=", X) && FParse::Value(*InSourceString, "Y=", Y);
 }
 
 FRotator FVector4::ToOrientationRotator() const
@@ -442,12 +440,11 @@ bool FVector4::InitFromString(const FString& InSourceString)
 	W = 1.0f;
 
 	// The initialization is only successful if the X, Y, and Z values can all be parsed from the string.
-	const bool bSuccessful = MathStringParsing::ParseFloat(*InSourceString, "X=", X) &&
-		MathStringParsing::ParseFloat(*InSourceString, "Y=", Y) &&
-		MathStringParsing::ParseFloat(*InSourceString, "Z=", Z);
+	const bool bSuccessful = FParse::Value(*InSourceString, "X=", X) && FParse::Value(*InSourceString, "Y=", Y) &&
+		FParse::Value(*InSourceString, "Z=", Z);
 
 	// W is optional, so don't factor in its presence (or lack thereof) in determining initialization success.
-	MathStringParsing::ParseFloat(*InSourceString, "W=", W);
+	FParse::Value(*InSourceString, "W=", W);
 
 	return bSuccessful;
 }
@@ -457,8 +454,7 @@ bool FIntPoint::InitFromString(const FString& InSourceString)
 	X = Y = 0;
 
 	// The initialization is only successful if the X and Y values can all be parsed from the string.
-	return MathStringParsing::ParseInt(*InSourceString, "X=", X) &&
-		MathStringParsing::ParseInt(*InSourceString, "Y=", Y);
+	return FParse::Value(*InSourceString, "X=", X) && FParse::Value(*InSourceString, "Y=", Y);
 }
 
 FIntVector::FIntVector(const FVector& InVector)
@@ -608,9 +604,8 @@ bool FRotator::InitFromString(const FString& InSourceString)
 	Pitch = Yaw = Roll = 0;
 
 	// The initialization is only successful if the X, Y, and Z values can all be parsed from the string.
-	return MathStringParsing::ParseFloat(*InSourceString, "P=", Pitch) &&
-		MathStringParsing::ParseFloat(*InSourceString, "Y=", Yaw) &&
-		MathStringParsing::ParseFloat(*InSourceString, "R=", Roll);
+	return FParse::Value(*InSourceString, "P=", Pitch) && FParse::Value(*InSourceString, "Y=", Yaw) &&
+		FParse::Value(*InSourceString, "R=", Roll);
 }
 
 // FQuat --------------------------------------------------------------------------------------------------------------
@@ -773,10 +768,8 @@ bool FQuat::InitFromString(const FString& InSourceString)
 	X = Y = Z = 0.f;
 	W = 1.f;
 
-	return MathStringParsing::ParseFloat(*InSourceString, "X=", X) &&
-		MathStringParsing::ParseFloat(*InSourceString, "Y=", Y) &&
-		MathStringParsing::ParseFloat(*InSourceString, "Z=", Z) &&
-		MathStringParsing::ParseFloat(*InSourceString, "W=", W);
+	return FParse::Value(*InSourceString, "X=", X) && FParse::Value(*InSourceString, "Y=", Y) &&
+		FParse::Value(*InSourceString, "Z=", Z) && FParse::Value(*InSourceString, "W=", W);
 }
 
 namespace

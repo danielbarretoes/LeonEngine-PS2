@@ -1,7 +1,8 @@
 #include "Math/Transform.h"
 
 #include "Math/Vector4.h"
-#include "MathStringParsing.h"
+
+#include <cstdlib>
 
 // FTransform, scalar version (UE: Math/TransformNonVectorized.h and Math/Transform.cpp).
 
@@ -9,6 +10,32 @@ namespace
 {
 	/** Blend weights below this pick one of the two transforms outright (UE: ZERO_ANIMWEIGHT_THRESH). */
 	constexpr float ZeroAnimWeightThresh = 0.00001f;
+
+	/** Reads "A,B,C" into three floats; Stream advances past them. */
+	bool ParseFloatTriple(const TCHAR*& Stream, float& A, float& B, float& C)
+	{
+		float* const Out[3] = {&A, &B, &C};
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			TCHAR* End = nullptr;
+			const float Parsed = std::strtof(Stream, &End);
+			if (End == Stream)
+			{
+				return false;
+			}
+			*Out[Index] = Parsed;
+			Stream = End;
+			if (Index < 2)
+			{
+				if (*Stream != ',')
+				{
+					return false;
+				}
+				++Stream;
+			}
+		}
+		return true;
+	}
 } // namespace
 
 const FTransform FTransform::Identity(FQuat(0.f, 0.f, 0.f, 1.f), FVector(0.f), FVector(1.f));
@@ -50,17 +77,15 @@ bool FTransform::InitFromString(const FString& InSourceString)
 	FRotator ParsedRotation;
 	FVector ParsedScale;
 
-	if (!MathStringParsing::ParseFloatTriple(Stream, ParsedTranslation.X, ParsedTranslation.Y, ParsedTranslation.Z) ||
-		*Stream++ != '|')
+	if (!ParseFloatTriple(Stream, ParsedTranslation.X, ParsedTranslation.Y, ParsedTranslation.Z) || *Stream++ != '|')
 	{
 		return false;
 	}
-	if (!MathStringParsing::ParseFloatTriple(Stream, ParsedRotation.Pitch, ParsedRotation.Yaw, ParsedRotation.Roll) ||
-		*Stream++ != '|')
+	if (!ParseFloatTriple(Stream, ParsedRotation.Pitch, ParsedRotation.Yaw, ParsedRotation.Roll) || *Stream++ != '|')
 	{
 		return false;
 	}
-	if (!MathStringParsing::ParseFloatTriple(Stream, ParsedScale.X, ParsedScale.Y, ParsedScale.Z) || *Stream != '\0')
+	if (!ParseFloatTriple(Stream, ParsedScale.X, ParsedScale.Y, ParsedScale.Z) || *Stream != '\0')
 	{
 		return false;
 	}

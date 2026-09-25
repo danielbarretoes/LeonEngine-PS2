@@ -172,5 +172,5 @@ struct ENGINE_API FLevelDocument
 
 /// Resolve a content-relative key (`Materials/M_Floor.lmat`) for a level under `…/Content/Levels/`
 /// (or legacy `…/Levels/`).
-/// Prefers `<pack>/key`, then global `FPaths::ResolveAssetPath`.
+/// Prefers `<pack>/key`, then global `FPaths::ResolveLegacyContentPath`.
 [[nodiscard]] std::string ResolveLevelAssetPath(const std::string& LevelPath, const std::string& RelativeOrKey);

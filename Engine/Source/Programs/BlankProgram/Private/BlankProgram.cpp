@@ -1,11 +1,16 @@
 #include "CoreTypes.h"
+#include "HAL/PlatformProcess.h"
 #include "HAL/PlatformProperties.h"
+#include "Misc/CommandLine.h"
 #include "Modules/ModuleManager.h"
 
 #include <cstdio>
 
-int main()
+int main(int ArgC, char* ArgV[])
 {
+	FPlatformProcess::SetArgV0(ArgV[0]);
+	FCommandLine::Set(*FCommandLine::BuildFromArgV(nullptr, ArgC, ArgV, nullptr));
+
 	FModuleManager& ModuleManager = FModuleManager::Get();
 	ModuleManager.StartupStaticallyLinkedModules();
 

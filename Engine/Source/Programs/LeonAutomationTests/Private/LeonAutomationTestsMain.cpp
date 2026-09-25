@@ -1,6 +1,8 @@
 #include "CoreTypes.h"
+#include "HAL/PlatformProcess.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/CString.h"
+#include "Misc/CommandLine.h"
 #include "Modules/ModuleManager.h"
 
 #include <catch2/catch_session.hpp>
@@ -14,6 +16,8 @@
 //   -automationonly       skip the Catch2 tests
 int main(int ArgC, char* ArgV[])
 {
+	FPlatformProcess::SetArgV0(ArgV[0]);
+	FCommandLine::Set(*FCommandLine::BuildFromArgV(nullptr, ArgC, ArgV, nullptr));
 	FModuleManager::Get().StartupStaticallyLinkedModules();
 
 	const char* AutomationFilter = "";

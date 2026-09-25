@@ -4,6 +4,7 @@
 #include "CoreTypes.h"
 #include "Math/UnrealMathUtility.h"
 #include "Misc/AssertionMacros.h"
+#include "Serialization/Archive.h"
 #include "Templates/TypeHash.h"
 
 /** A 2D point of integers (UE: FIntPoint). */
@@ -180,3 +181,8 @@ struct CORE_API FIntPoint
 		return HashCombine(GetTypeHash(InPoint.X), GetTypeHash(InPoint.Y));
 	}
 };
+
+inline FArchive& operator<<(FArchive& Ar, FIntPoint& V)
+{
+	return Ar << V.X << V.Y;
+}

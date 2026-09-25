@@ -5,6 +5,7 @@
 #include "Math/MathFwd.h"
 #include "Math/UnrealMathUtility.h"
 #include "Math/Vector.h"
+#include "Serialization/Archive.h"
 
 /** Axis-aligned bounding box; IsValid is 0 for an empty box (UE: FBox). */
 struct CORE_API FBox
@@ -249,4 +250,9 @@ struct CORE_API FBox
 FORCEINLINE uint32 GetTypeHash(const FBox& Box)
 {
 	return HashCombine(GetTypeHash(Box.Min), GetTypeHash(Box.Max));
+}
+
+inline FArchive& operator<<(FArchive& Ar, FBox& V)
+{
+	return Ar << V.Min << V.Max << V.IsValid;
 }

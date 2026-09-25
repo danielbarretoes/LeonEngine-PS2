@@ -226,6 +226,42 @@ struct TCString
 		return nullptr;
 	}
 
+	/**
+	 * Case-insensitive search for Find that starts a word: the character before the match must not be A-Z / 0-9.
+	 * With bSkipQuotedChars, text between double quotes is ignored (UE: FCString::Strifind).
+	 */
+	static const CharType* Strifind(const CharType* Str, const CharType* Find, bool bSkipQuotedChars = false)
+	{
+		if (Find == nullptr || Str == nullptr)
+		{
+			return nullptr;
+		}
+
+		bool bAlnum = false;
+		const CharType First = (*Find < 'a' || *Find > 'z') ? (*Find) : CharType(*Find + 'A' - 'a');
+		const int32 Length = Strlen(Find++) - 1;
+		CharType C = *Str++;
+		bool bInQuotedStr = false;
+		while (C)
+		{
+			if (!bInQuotedStr && C >= 'a' && C <= 'z')
+			{
+				C = CharType(C + 'A' - 'a');
+			}
+			if (!bInQuotedStr && !bAlnum && C == First && !Strnicmp(Str, Find, Length))
+			{
+				return Str - 1;
+			}
+			if (bSkipQuotedChars && C == '"')
+			{
+				bInQuotedStr = !bInQuotedStr;
+			}
+			bAlnum = (C >= 'A' && C <= 'Z') || (C >= '0' && C <= '9');
+			C = *Str++;
+		}
+		return nullptr;
+	}
+
 	static FORCEINLINE CharType* Strchr(CharType* String, CharType Char)
 	{
 		return const_cast<CharType*>(Strchr(const_cast<const CharType*>(String), Char));

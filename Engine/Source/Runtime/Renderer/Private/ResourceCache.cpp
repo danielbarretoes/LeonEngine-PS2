@@ -3,7 +3,7 @@
 #include "LeonMeshFormat.h"
 #include "MaterialAsset.h"
 #include "MeshData.h"
-#include "Misc/Paths.h"
+#include "Migration/LegacyContentPath.h"
 #include "Primitives.h"
 
 #include <algorithm>
@@ -170,7 +170,7 @@ FMaterial FResourceCache::DefaultMaterial()
 	}
 
 	FMaterial Material;
-	const std::string LmatPath = FPaths::ResolveAssetPath("assets/Materials/M_Default.lmat");
+	const std::string LmatPath = ResolveLegacyContentPath("assets/Materials/M_Default.lmat");
 	if (std::filesystem::exists(LmatPath) && LoadMaterialFile(*this, LmatPath, Material))
 	{
 		Materials.emplace(Key, Material);

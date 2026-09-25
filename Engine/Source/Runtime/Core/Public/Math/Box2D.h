@@ -4,6 +4,7 @@
 #include "CoreTypes.h"
 #include "Math/UnrealMathUtility.h"
 #include "Math/Vector2D.h"
+#include "Serialization/Archive.h"
 
 /** Axis-aligned 2D box; bIsValid is false for an empty box (UE: FBox2D). */
 struct CORE_API FBox2D
@@ -126,3 +127,8 @@ struct CORE_API FBox2D
 			"bIsValid=%s, Min=(%s), Max=(%s)", bIsValid ? "true" : "false", *Min.ToString(), *Max.ToString());
 	}
 };
+
+inline FArchive& operator<<(FArchive& Ar, FBox2D& V)
+{
+	return Ar << V.Min << V.Max << V.bIsValid;
+}

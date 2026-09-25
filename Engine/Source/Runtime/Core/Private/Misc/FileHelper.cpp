@@ -1,89 +1,218 @@
 #include "Misc/FileHelper.h"
 
-#include <chrono>
-#include <fstream>
-#include <iostream>
-#include <random>
-#include <string>
-#include <system_error>
+#include "Math/NumericLimits.h"
+#include "Misc/Guid.h"
+#include "Misc/Paths.h"
+#include "Serialization/Archive.h"
+#include "Templates/UniquePtr.h"
 
 namespace
 {
-
-	[[nodiscard]] std::filesystem::path MakeTempSibling(const std::filesystem::path& Path)
+	/** Appends a code point as UTF-8. */
+	void AppendUtf8(FString& Out, uint32 CodePoint)
 	{
-		const auto Parent = Path.parent_path();
-		const auto Stem = Path.filename().string();
-		const auto Now = std::chrono::steady_clock::now().time_since_epoch().count();
-		std::mt19937 Rng{static_cast<std::mt19937::result_type>(Now)};
-		const std::uint32_t Roll = Rng();
-		return Parent / (Stem + ".tmp." + std::to_string(Now) + "." + std::to_string(Roll));
+		if (CodePoint < 0x80)
+		{
+			Out.AppendChar(TCHAR(CodePoint));
+		}
+		else if (CodePoint < 0x800)
+		{
+			Out.AppendChar(TCHAR(0xC0 | (CodePoint >> 6)));
+			Out.AppendChar(TCHAR(0x80 | (CodePoint & 0x3F)));
+		}
+		else if (CodePoint < 0x10000)
+		{
+			Out.AppendChar(TCHAR(0xE0 | (CodePoint >> 12)));
+			Out.AppendChar(TCHAR(0x80 | ((CodePoint >> 6) & 0x3F)));
+			Out.AppendChar(TCHAR(0x80 | (CodePoint & 0x3F)));
+		}
+		else
+		{
+			Out.AppendChar(TCHAR(0xF0 | (CodePoint >> 18)));
+			Out.AppendChar(TCHAR(0x80 | ((CodePoint >> 12) & 0x3F)));
+			Out.AppendChar(TCHAR(0x80 | ((CodePoint >> 6) & 0x3F)));
+			Out.AppendChar(TCHAR(0x80 | (CodePoint & 0x3F)));
+		}
 	}
 
+	/** UTF-16 (after the BOM) to UTF-8. */
+	void Utf16ToString(FString& Result, const uint8* Buffer, int32 Size, bool bBigEndian)
+	{
+		const int32 NumUnits = Size / 2;
+		Result.Reserve(NumUnits);
+		for (int32 Index = 0; Index < NumUnits; ++Index)
+		{
+			auto Unit = [Buffer, bBigEndian](int32 UnitIndex)
+			{
+				const uint8 Lo = Buffer[UnitIndex * 2 + (bBigEndian ? 1 : 0)];
+				const uint8 Hi = Buffer[UnitIndex * 2 + (bBigEndian ? 0 : 1)];
+				return uint32(Lo) | (uint32(Hi) << 8);
+			};
+			uint32 CodePoint = Unit(Index);
+			if (CodePoint >= 0xD800 && CodePoint <= 0xDBFF && Index + 1 < NumUnits)
+			{
+				const uint32 Low = Unit(Index + 1);
+				if (Low >= 0xDC00 && Low <= 0xDFFF)
+				{
+					CodePoint = 0x10000 + ((CodePoint - 0xD800) << 10) + (Low - 0xDC00);
+					++Index;
+				}
+			}
+			AppendUtf8(Result, CodePoint);
+		}
+	}
+
+	/** Writes through "<Filename>.<guid>.tmp" and a rename, or in place when appending. */
+	bool WriteBytes(const uint8* Data, int64 Size, const TCHAR* Filename, IFileManager* FileManager, uint32 WriteFlags)
+	{
+		if (WriteFlags & FILEWRITE_Append)
+		{
+			TUniquePtr<FArchive> Ar(FileManager->CreateFileWriter(Filename, WriteFlags));
+			if (!Ar)
+			{
+				return false;
+			}
+			Ar->Serialize(const_cast<uint8*>(Data), Size);
+			return Ar->Close();
+		}
+
+		const FString TempFilename = FString(Filename) + "." + FGuid::NewGuid().ToString() + ".tmp";
+		{
+			TUniquePtr<FArchive> Ar(
+				FileManager->CreateFileWriter(*TempFilename, WriteFlags & ~uint32(FILEWRITE_NoReplaceExisting)));
+			if (!Ar)
+			{
+				return false;
+			}
+			Ar->Serialize(const_cast<uint8*>(Data), Size);
+			if (!Ar->Close())
+			{
+				Ar.Reset();
+				FileManager->Delete(*TempFilename, false, true, true);
+				return false;
+			}
+		}
+
+		if ((WriteFlags & FILEWRITE_NoReplaceExisting) && FileManager->FileExists(Filename))
+		{
+			FileManager->Delete(*TempFilename, false, true, true);
+			return false;
+		}
+
+		if (!FileManager->Move(Filename, *TempFilename, true, (WriteFlags & FILEWRITE_EvenIfReadOnly) != 0))
+		{
+			FileManager->Delete(*TempFilename, false, true, true);
+			return false;
+		}
+		return true;
+	}
 } // namespace
 
-bool FFileHelper::WriteFileAtomic(const std::filesystem::path& Path, const void* Data, std::size_t Size)
+bool FFileHelper::LoadFileToArray(TArray<uint8>& Result, const TCHAR* Filename, uint32 Flags)
 {
-	if (Path.empty())
+	TUniquePtr<FArchive> Reader(IFileManager::Get().CreateFileReader(Filename, Flags));
+	if (!Reader)
 	{
 		return false;
 	}
-	std::error_code Ec;
-	if (!Path.parent_path().empty())
+
+	const int64 TotalSize = Reader->TotalSize();
+	if (TotalSize < 0 || TotalSize >= MAX_int32)
 	{
-		std::filesystem::create_directories(Path.parent_path(), Ec);
-		if (Ec)
-		{
-			std::cerr << "FileIO: cannot create directory for " << Path.string() << ": " << Ec.message() << '\n';
-			return false;
-		}
+		return false;
 	}
 
-	const std::filesystem::path Temp = MakeTempSibling(Path);
+	Result.Reset(int32(TotalSize));
+	Result.AddUninitialized(int32(TotalSize));
+	Reader->Serialize(Result.GetData(), TotalSize);
+	const bool bSuccess = Reader->Close();
+	return bSuccess;
+}
+
+void FFileHelper::BufferToString(FString& Result, const uint8* Buffer, int32 Size)
+{
+	Result.Empty();
+
+	if (Size >= 2 && !(Size & 1) && Buffer[0] == 0xff && Buffer[1] == 0xfe)
 	{
-		std::ofstream Out(Temp, std::ios::binary | std::ios::trunc);
-		if (!Out)
+		// Unicode Intel byte order.
+		Utf16ToString(Result, Buffer + 2, Size - 2, false);
+	}
+	else if (Size >= 2 && !(Size & 1) && Buffer[0] == 0xfe && Buffer[1] == 0xff)
+	{
+		// Unicode non-Intel byte order.
+		Utf16ToString(Result, Buffer + 2, Size - 2, true);
+	}
+	else
+	{
+		if (Size >= 3 && Buffer[0] == 0xef && Buffer[1] == 0xbb && Buffer[2] == 0xbf)
 		{
-			std::cerr << "FileIO: cannot open temp for write: " << Temp.string() << '\n';
-			return false;
+			// Skip the UTF-8 BOM.
+			Buffer += 3;
+			Size -= 3;
 		}
-		if (Size > 0 && Data != nullptr)
-		{
-			Out.write(static_cast<const char*>(Data), static_cast<std::streamsize>(Size));
-		}
-		Out.flush();
-		if (!Out)
-		{
-			std::cerr << "FileIO: write failed: " << Temp.string() << '\n';
-			std::filesystem::remove(Temp, Ec);
-			return false;
-		}
+		Result = FString(Size, reinterpret_cast<const TCHAR*>(Buffer));
 	}
 
-	std::filesystem::rename(Temp, Path, Ec);
-	if (Ec)
+	// Stop at the first terminator, like UE.
+	const int32 NullIndex = FCString::Strlen(*Result);
+	if (NullIndex < Result.Len())
 	{
-		// Windows: replace existing target when rename-over fails.
-		std::filesystem::remove(Path, Ec);
-		Ec.clear();
-		std::filesystem::rename(Temp, Path, Ec);
-		if (Ec)
-		{
-			std::cerr << "FileIO: rename failed " << Temp.string() << " -> " << Path.string() << ": " << Ec.message()
-					  << '\n';
-			std::filesystem::remove(Temp, Ec);
-			return false;
-		}
+		Result = Result.Mid(0, NullIndex);
 	}
+}
+
+bool FFileHelper::LoadFileToString(FString& Result, const TCHAR* Filename, uint32 ReadFlags)
+{
+	TArray<uint8> Bytes;
+	if (!LoadFileToArray(Bytes, Filename, ReadFlags))
+	{
+		return false;
+	}
+	BufferToString(Result, Bytes.GetData(), Bytes.Num());
 	return true;
 }
 
-bool FFileHelper::WriteFileAtomic(const std::filesystem::path& Path, const std::vector<std::uint8_t>& Bytes)
+bool FFileHelper::LoadFileToStringArray(TArray<FString>& Result, const TCHAR* Filename)
 {
-	return FFileHelper::WriteFileAtomic(Path, Bytes.data(), Bytes.size());
+	FString Buffer;
+	if (!LoadFileToString(Buffer, Filename))
+	{
+		return false;
+	}
+	Result.Empty();
+	Buffer.ParseIntoArrayLines(Result, false);
+	return true;
 }
 
-bool FFileHelper::WriteTextFileAtomic(const std::filesystem::path& Path, std::string_view Text)
+bool FFileHelper::SaveArrayToFile(
+	TArrayView<const uint8> Array, const TCHAR* Filename, IFileManager* FileManager, uint32 WriteFlags)
 {
-	return FFileHelper::WriteFileAtomic(Path, Text.data(), Text.size());
+	return WriteBytes(Array.GetData(), Array.Num(), Filename, FileManager, WriteFlags);
+}
+
+bool FFileHelper::SaveStringToFile(const FString& String, const TCHAR* Filename, EEncodingOptions EncodingOptions,
+	IFileManager* FileManager, uint32 WriteFlags)
+{
+	TArray<uint8> Bytes;
+	if (EncodingOptions == EEncodingOptions::ForceUTF8)
+	{
+		Bytes.Add(0xef);
+		Bytes.Add(0xbb);
+		Bytes.Add(0xbf);
+	}
+	Bytes.Append(reinterpret_cast<const uint8*>(*String), String.Len());
+	return WriteBytes(Bytes.GetData(), Bytes.Num(), Filename, FileManager, WriteFlags);
+}
+
+bool FFileHelper::SaveStringArrayToFile(const TArray<FString>& Lines, const TCHAR* Filename,
+	EEncodingOptions EncodingOptions, IFileManager* FileManager, uint32 WriteFlags)
+{
+	FString CombinedString;
+	for (const FString& Line : Lines)
+	{
+		CombinedString += Line;
+		CombinedString += LINE_TERMINATOR;
+	}
+	return SaveStringToFile(CombinedString, Filename, EncodingOptions, FileManager, WriteFlags);
 }

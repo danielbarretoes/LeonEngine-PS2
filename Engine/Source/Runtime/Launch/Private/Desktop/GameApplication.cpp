@@ -2,7 +2,7 @@
 
 #include "GameFramework/DefaultGameMode.h"
 #include "Level/LevelLoader.h"
-#include "Misc/Paths.h"
+#include "Migration/LegacyContentPath.h"
 #include "RuntimeInput.h"
 
 #include <algorithm>
@@ -68,7 +68,7 @@ namespace
 		{
 			return std::filesystem::path(Map).lexically_normal().string();
 		}
-		return FPaths::ResolveAssetPath(Map);
+		return ResolveLegacyContentPath(Map);
 	}
 
 } // namespace

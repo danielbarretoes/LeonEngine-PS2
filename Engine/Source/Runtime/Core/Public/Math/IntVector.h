@@ -4,6 +4,7 @@
 #include "CoreTypes.h"
 #include "Math/UnrealMathUtility.h"
 #include "Misc/AssertionMacros.h"
+#include "Serialization/Archive.h"
 #include "Templates/TypeHash.h"
 
 /** A 3D vector of integers (UE: FIntVector). */
@@ -156,3 +157,8 @@ struct CORE_API FIntVector
 		return HashCombine(HashCombine(GetTypeHash(Vector.X), GetTypeHash(Vector.Y)), GetTypeHash(Vector.Z));
 	}
 };
+
+inline FArchive& operator<<(FArchive& Ar, FIntVector& V)
+{
+	return Ar << V.X << V.Y << V.Z;
+}

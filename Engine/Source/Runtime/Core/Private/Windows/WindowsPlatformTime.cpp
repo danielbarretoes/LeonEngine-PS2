@@ -39,3 +39,35 @@ double FWindowsPlatformTime::Seconds()
 {
 	return static_cast<double>(Cycles64()) * GetSecondsPerCycle64();
 }
+
+namespace
+{
+	void FromSystemTime(const SYSTEMTIME& St, int32& Year, int32& Month, int32& DayOfWeek, int32& Day, int32& Hour,
+		int32& Min, int32& Sec, int32& MSec)
+	{
+		Year = St.wYear;
+		Month = St.wMonth;
+		DayOfWeek = St.wDayOfWeek;
+		Day = St.wDay;
+		Hour = St.wHour;
+		Min = St.wMinute;
+		Sec = St.wSecond;
+		MSec = St.wMilliseconds;
+	}
+} // namespace
+
+void FWindowsPlatformTime::SystemTime(
+	int32& Year, int32& Month, int32& DayOfWeek, int32& Day, int32& Hour, int32& Min, int32& Sec, int32& MSec)
+{
+	SYSTEMTIME St;
+	GetLocalTime(&St);
+	FromSystemTime(St, Year, Month, DayOfWeek, Day, Hour, Min, Sec, MSec);
+}
+
+void FWindowsPlatformTime::UtcTime(
+	int32& Year, int32& Month, int32& DayOfWeek, int32& Day, int32& Hour, int32& Min, int32& Sec, int32& MSec)
+{
+	SYSTEMTIME St;
+	GetSystemTime(&St);
+	FromSystemTime(St, Year, Month, DayOfWeek, Day, Hour, Min, Sec, MSec);
+}

@@ -4,6 +4,7 @@
 #include "CoreTypes.h"
 #include "Math/MathFwd.h"
 #include "Math/UnrealMathUtility.h"
+#include "Serialization/Archive.h"
 #include "Templates/TypeHash.h"
 
 /** Linear-space RGBA color in floats (UE: FLinearColor). */
@@ -353,4 +354,21 @@ struct alignas(4) CORE_API FColor
 FORCEINLINE uint32 GetTypeHash(const FColor& Color)
 {
 	return Color.DWColor();
+}
+
+inline FArchive& operator<<(FArchive& Ar, FLinearColor& Color)
+{
+	return Ar << Color.R << Color.G << Color.B << Color.A;
+}
+
+/** Stored as the packed ARGB uint32 (UE). */
+inline FArchive& operator<<(FArchive& Ar, FColor& Color)
+{
+	uint32 Packed = Color.DWColor();
+	Ar << Packed;
+	if (Ar.IsLoading())
+	{
+		Color = FColor(Packed);
+	}
+	return Ar;
 }

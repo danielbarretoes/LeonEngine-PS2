@@ -2,7 +2,7 @@
 
 #include "Math/Vector.h"
 #include "Math/Vector4.h"
-#include "MathStringParsing.h"
+#include "Misc/Parse.h"
 
 #include <cstring>
 
@@ -487,12 +487,11 @@ bool FLinearColor::InitFromString(const FString& InSourceString)
 	A = 1.f;
 
 	// The initialization is only successful if the R, G, and B values can all be parsed from the string.
-	const bool bSuccessful = MathStringParsing::ParseFloat(*InSourceString, "R=", R) &&
-		MathStringParsing::ParseFloat(*InSourceString, "G=", G) &&
-		MathStringParsing::ParseFloat(*InSourceString, "B=", B);
+	const bool bSuccessful = FParse::Value(*InSourceString, "R=", R) && FParse::Value(*InSourceString, "G=", G) &&
+		FParse::Value(*InSourceString, "B=", B);
 
 	// Alpha is optional, so don't factor in its presence (or lack thereof) in determining initialization success.
-	MathStringParsing::ParseFloat(*InSourceString, "A=", A);
+	FParse::Value(*InSourceString, "A=", A);
 
 	return bSuccessful;
 }
@@ -620,12 +619,11 @@ bool FColor::InitFromString(const FString& InSourceString)
 	int32 ParsedG = 0;
 	int32 ParsedB = 0;
 	int32 ParsedA = 255;
-	const bool bSuccessful = MathStringParsing::ParseInt(*InSourceString, "R=", ParsedR) &&
-		MathStringParsing::ParseInt(*InSourceString, "G=", ParsedG) &&
-		MathStringParsing::ParseInt(*InSourceString, "B=", ParsedB);
+	const bool bSuccessful = FParse::Value(*InSourceString, "R=", ParsedR) &&
+		FParse::Value(*InSourceString, "G=", ParsedG) && FParse::Value(*InSourceString, "B=", ParsedB);
 
 	// Alpha is optional, so don't factor in its presence (or lack thereof) in determining initialization success.
-	MathStringParsing::ParseInt(*InSourceString, "A=", ParsedA);
+	FParse::Value(*InSourceString, "A=", ParsedA);
 
 	R = uint8(ParsedR);
 	G = uint8(ParsedG);

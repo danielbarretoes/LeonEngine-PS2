@@ -7,6 +7,7 @@
 #include "Math/Vector.h"
 #include "Math/Vector2D.h"
 #include "Misc/AssertionMacros.h"
+#include "Serialization/Archive.h"
 #include "Templates/TypeHash.h"
 
 /** A 4D homogeneous vector of floats (UE: FVector4). */
@@ -251,4 +252,9 @@ FORCEINLINE uint32 GetTypeHash(const FVector4& Vector)
 {
 	return HashCombine(HashCombine(GetTypeHash(Vector.X), GetTypeHash(Vector.Y)),
 		HashCombine(GetTypeHash(Vector.Z), GetTypeHash(Vector.W)));
+}
+
+inline FArchive& operator<<(FArchive& Ar, FVector4& V)
+{
+	return Ar << V.X << V.Y << V.Z << V.W;
 }

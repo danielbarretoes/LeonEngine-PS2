@@ -6,6 +6,7 @@
 #include "Math/UnrealMathUtility.h"
 #include "Math/Vector.h"
 #include "Math/Vector4.h"
+#include "Serialization/Archive.h"
 
 /** Plane X*x + Y*y + Z*z = W with a unit normal (X, Y, Z) (UE: FPlane, derives from FVector). */
 struct CORE_API FPlane : public FVector
@@ -148,3 +149,8 @@ struct CORE_API FPlane : public FVector
 
 	FString ToString() const;
 };
+
+inline FArchive& operator<<(FArchive& Ar, FPlane& V)
+{
+	return Ar << static_cast<FVector&>(V) << V.W;
+}

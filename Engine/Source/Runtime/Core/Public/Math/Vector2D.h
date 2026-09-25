@@ -5,6 +5,7 @@
 #include "Math/MathFwd.h"
 #include "Math/UnrealMathUtility.h"
 #include "Misc/AssertionMacros.h"
+#include "Serialization/Archive.h"
 #include "Templates/TypeHash.h"
 
 /** A 2D vector of floats (UE: FVector2D). `|` is the dot product and `^` the 2D cross product (a scalar). */
@@ -308,4 +309,9 @@ FORCEINLINE uint32 GetTypeHash(const FVector2D& Vector)
 inline FString LexToString(const FVector2D& Vector)
 {
 	return Vector.ToString();
+}
+
+inline FArchive& operator<<(FArchive& Ar, FVector2D& V)
+{
+	return Ar << V.X << V.Y;
 }

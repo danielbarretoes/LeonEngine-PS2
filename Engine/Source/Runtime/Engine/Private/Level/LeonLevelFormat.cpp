@@ -5,8 +5,8 @@
 #include "Level/BasicShape.h"
 #include "Level/LevelLoader.h"
 #include "Level/Light.h"
+#include "Migration/LegacyContentPath.h"
 #include "Misc/FileHelper.h"
-#include "Misc/Paths.h"
 
 #include <algorithm>
 #include <cstring>
@@ -247,7 +247,7 @@ std::string ResolveLevelAssetPath(const std::string& LevelPath, const std::strin
 		}
 	}
 
-	return FPaths::ResolveAssetPath(RelativeOrKey);
+	return ResolveLegacyContentPath(RelativeOrKey);
 }
 
 namespace
@@ -972,7 +972,8 @@ bool DeserializeLeonLevel(const std::vector<std::uint8_t>& InBytes, FLevelDocume
 bool SaveLeonLevelFile(const std::string& Path, const FLevelDocument& Doc)
 {
 	const std::vector<std::uint8_t> LocalBytes = SerializeLeonLevel(Doc);
-	if (!FFileHelper::WriteFileAtomic(Path, LocalBytes))
+	if (!FFileHelper::SaveArrayToFile(
+			TArrayView<const uint8>(LocalBytes.data(), int32(LocalBytes.size())), *FString(Path.c_str())))
 	{
 		std::cerr << "LeonLevelFormat: cannot write: " << Path << '\n';
 		return false;

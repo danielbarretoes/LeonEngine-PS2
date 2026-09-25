@@ -4,6 +4,7 @@
 #include "Math/MathFwd.h"
 #include "Math/UnrealMathUtility.h"
 #include "Math/Vector.h"
+#include "Serialization/Archive.h"
 
 /** Bounding sphere (UE: FSphere). W is the radius; W == 0 means empty. */
 struct CORE_API FSphere
@@ -68,3 +69,8 @@ struct CORE_API FSphere
 		return FSphere(*this) += Other;
 	}
 };
+
+inline FArchive& operator<<(FArchive& Ar, FSphere& V)
+{
+	return Ar << V.Center << V.W;
+}

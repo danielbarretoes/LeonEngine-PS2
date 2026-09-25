@@ -5,7 +5,9 @@
 #include "GenericPlatform/GenericApplication.h"
 #include "GenericPlatform/GenericWindow.h"
 #include "HAL/PlatformApplicationMisc.h"
+#include "HAL/PlatformProcess.h"
 #include "HAL/PlatformTime.h"
+#include "Misc/CommandLine.h"
 #include "Modules/ModuleManager.h"
 #include "PlatformEngineLoopHooks.h"
 
@@ -41,6 +43,10 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 {
 	ArgCount = ArgC;
 	Args = ArgV;
+
+	// The command line first: everything below may read it (UE: FEngineLoop::PreInit order).
+	FPlatformProcess::SetArgV0(ArgV[0]);
+	FCommandLine::Set(*FCommandLine::BuildFromArgV(nullptr, ArgC, ArgV, nullptr));
 
 #if !WITH_ENGINE
 	// Without the engine framework the loop owns the platform application and the main window;

@@ -6,6 +6,7 @@
 #include "Math/Rotator.h"
 #include "Math/UnrealMathUtility.h"
 #include "Math/Vector.h"
+#include "Serialization/Archive.h"
 #include "Templates/TypeHash.h"
 
 /**
@@ -329,4 +330,9 @@ FORCEINLINE uint32 GetTypeHash(const FQuat& Quat)
 inline FString LexToString(const FQuat& Quat)
 {
 	return Quat.ToString();
+}
+
+inline FArchive& operator<<(FArchive& Ar, FQuat& V)
+{
+	return Ar << V.X << V.Y << V.Z << V.W;
 }

@@ -3,7 +3,7 @@
 #include "Frustum.h"
 #include "Level/Light.h"
 #include "Migration/GlmInterop.h"
-#include "Misc/Paths.h"
+#include "Migration/LegacyContentPath.h"
 #include "Primitives.h"
 
 #include <glad/glad.h>
@@ -184,7 +184,7 @@ bool FSceneRenderer::Initialize(const std::string& InShaderDirectory)
 			return UnderDir.string();
 		}
 		// Fallback: executable-relative assets (POST_BUILD copy / packaged layout).
-		return FPaths::ResolveAssetPath((fs::path("assets/Shaders") / Name).string());
+		return ResolveLegacyContentPath((fs::path("assets/Shaders") / Name).string());
 	};
 	if (!LitShader.LoadFromFiles(ShaderFile("blinn_phong.vert"), ShaderFile("blinn_phong.frag")))
 	{

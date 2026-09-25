@@ -5,7 +5,7 @@
 #include "HAL/PlatformApplicationMisc.h"
 #include "HAL/PlatformMemory.h"
 #include "InputCoreTypes.h"
-#include "Misc/Paths.h"
+#include "Migration/LegacyContentPath.h"
 
 #include <algorithm>
 #include <array>
@@ -40,7 +40,7 @@ bool UGameEngine::Initialize(int Width, int Height, const char* Title)
 		return false;
 	}
 
-	const std::string ShaderDir = FPaths::ResolveAssetPath("assets/Shaders");
+	const std::string ShaderDir = ResolveLegacyContentPath("assets/Shaders");
 	if (!Renderer.Initialize(ShaderDir))
 	{
 		Window->Destroy();

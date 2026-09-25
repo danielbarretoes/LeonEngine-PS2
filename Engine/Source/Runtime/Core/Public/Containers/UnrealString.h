@@ -756,3 +756,76 @@ inline bool LexTryParseString(bool& OutValue, const TCHAR* Buffer)
 	}
 	return false;
 }
+
+/** '0'-'9' / 'A'-'F' for a value 0-15 (UE: NibbleToTChar). */
+inline TCHAR NibbleToTChar(uint8 Num)
+{
+	if (Num > 9)
+	{
+		return TCHAR('A' + (Num - 10));
+	}
+	return TCHAR('0' + Num);
+}
+
+/** Appends two upper-case hex digits (UE: ByteToHex). */
+inline void ByteToHex(uint8 In, FString& Result)
+{
+	Result += NibbleToTChar(uint8(In >> 4));
+	Result += NibbleToTChar(uint8(In & 15));
+}
+
+/** Upper-case hex of Count bytes (UE: BytesToHex). */
+inline FString BytesToHex(const uint8* In, int32 Count)
+{
+	FString Result;
+	Result.Reserve(Count * 2);
+	while (Count)
+	{
+		ByteToHex(*In++, Result);
+		Count--;
+	}
+	return Result;
+}
+
+/** Whether Char is a hex digit (UE: CheckTCharIsHex). */
+inline bool CheckTCharIsHex(const TCHAR Char)
+{
+	return (Char >= '0' && Char <= '9') || (Char >= 'A' && Char <= 'F') || (Char >= 'a' && Char <= 'f');
+}
+
+/** Value of a hex digit, 0 for anything else (UE: TCharToNibble). */
+inline uint8 TCharToNibble(const TCHAR Char)
+{
+	if (Char >= '0' && Char <= '9')
+	{
+		return uint8(Char - '0');
+	}
+	if (Char >= 'A' && Char <= 'F')
+	{
+		return uint8(Char - 'A' + 10);
+	}
+	if (Char >= 'a' && Char <= 'f')
+	{
+		return uint8(Char - 'a' + 10);
+	}
+	return 0;
+}
+
+/** Bytes of a hex string; an odd length pads the first nibble (UE: HexToBytes). Returns the byte count. */
+inline int32 HexToBytes(const FString& HexString, uint8* OutBytes)
+{
+	int32 NumBytes = 0;
+	const bool bPadNibble = (HexString.Len() % 2) == 1;
+	const TCHAR* CharPos = *HexString;
+	if (bPadNibble)
+	{
+		OutBytes[NumBytes++] = TCharToNibble(*CharPos++);
+	}
+	while (*CharPos)
+	{
+		OutBytes[NumBytes] = uint8(TCharToNibble(*CharPos++) << 4);
+		OutBytes[NumBytes] = uint8(OutBytes[NumBytes] + TCharToNibble(*CharPos++));
+		++NumBytes;
+	}
+	return NumBytes;
+}

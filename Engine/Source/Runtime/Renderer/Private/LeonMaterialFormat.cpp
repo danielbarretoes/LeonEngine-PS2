@@ -1,7 +1,7 @@
 #include "LeonMaterialFormat.h"
 
+#include "Migration/LegacyContentPath.h"
 #include "Misc/FileHelper.h"
-#include "Misc/Paths.h"
 #include "ResourceCache.h"
 
 #include <algorithm>
@@ -164,7 +164,7 @@ namespace
 			}
 			else
 			{
-				InMaterial.AlbedoMap = Resources.LoadTexture(FPaths::ResolveAssetPath(Value));
+				InMaterial.AlbedoMap = Resources.LoadTexture(ResolveLegacyContentPath(Value));
 			}
 		}
 		else if (K == "normalmap")
@@ -175,7 +175,7 @@ namespace
 			}
 			else
 			{
-				InMaterial.NormalMap = Resources.LoadTexture(FPaths::ResolveAssetPath(Value));
+				InMaterial.NormalMap = Resources.LoadTexture(ResolveLegacyContentPath(Value));
 			}
 		}
 	}
@@ -418,7 +418,7 @@ bool SaveLeonMaterialFile(const std::string& Path, const std::string& InName, co
 	Out << "[Textures]\n";
 	Out << "BaseColorMap=" << InBaseColorMapPath << '\n';
 	Out << "NormalMap=" << InNormalMapPath << '\n';
-	if (!FFileHelper::WriteTextFileAtomic(Path, Out.str()))
+	if (!FFileHelper::SaveStringToFile(FString(Out.str().c_str()), *FString(Path.c_str())))
 	{
 		std::cerr << "LeonMaterial: cannot write " << Path << '\n';
 		return false;

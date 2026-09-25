@@ -36,6 +36,11 @@
 	#define FORCEINLINE_DEBUGGABLE inline
 #endif
 
+// Line end written to text files (UE: LINE_TERMINATOR).
+#ifndef LINE_TERMINATOR
+	#define LINE_TERMINATOR "\n"
+#endif
+
 // Branch prediction hints (UE: LIKELY / UNLIKELY).
 #ifndef LIKELY
 	#if defined(__GNUC__) || defined(__clang__)
