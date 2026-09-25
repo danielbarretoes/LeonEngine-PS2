@@ -2,5 +2,5 @@
 leon_module(MeshUtilities
 	PLATFORMS Desktop
 	PUBLIC_DEPENDENCIES Core RenderCore AnimationCore
-	PRIVATE_DEPENDENCIES Renderer TinyObjLoader UFBX CGLTF
+	PRIVATE_DEPENDENCIES TinyObjLoader UFBX CGLTF
 )

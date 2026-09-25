@@ -303,7 +303,7 @@ namespace
 
 		void RigidPrepareStep(const TArray<FBodyInstance>& Bodies, SIZE_T IgnoreComponentID) override
 		{
-			// Structure changed outside SyncFromLevel — rebuild as boxes (meshes need SyncFromLevel).
+			// Structure changed without a RebuildRigidWorld — rebuild as boxes (meshes need RebuildRigidWorld).
 			if (BodyIds.Num() != Bodies.Num())
 			{
 				RigidRebuild(Bodies, nullptr, IgnoreComponentID);

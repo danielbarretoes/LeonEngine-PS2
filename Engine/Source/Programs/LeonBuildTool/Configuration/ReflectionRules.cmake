@@ -244,7 +244,7 @@ function(_leon_reflection_setup Name Unit)
 	list(APPEND Sources "${Stamp}")
 	if(Unit STREQUAL "Module")
 		# The generation step as a target of its own, for modules that include these headers without a link edge the
-		# build orders by (CIRCULAR_DEPENDENCIES: Renderer includes Engine's reflected headers).
+		# build orders by (CIRCULAR_DEPENDENCIES: UMG's circular edge to Engine waits for Engine's reflected headers).
 		add_custom_target(LeonHeaderTool.${Name} DEPENDS "${Stamp}")
 	endif()
 

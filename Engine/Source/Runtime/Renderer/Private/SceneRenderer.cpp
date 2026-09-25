@@ -1,5 +1,9 @@
 #include "SceneRenderer.h"
 
+#include "Engine/SkeletalMesh.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/Texture2D.h"
+#include "Engine/World.h"
 #include "Frustum.h"
 #include "GLClipSpace.h"
 #include "Level/Light.h"
@@ -9,8 +13,10 @@
 #include "RenderMatrices.h"
 #include "RendererLog.h"
 #include "ScenePrivate.h"
+#include "SceneView.h"
 #include "SkeletalMeshSceneProxy.h"
 #include "StaticMeshSceneProxy.h"
+#include "ViewMatrices.h"
 
 #include <glad/glad.h>
 
@@ -20,9 +26,9 @@ namespace
 {
 
 	/** The camera's projection in GL clip space: every pass draws with it. */
-	FMatrix GetProjectionGL(const UCameraComponent& Camera)
+	FMatrix GetProjectionGL(const FSceneView& View)
 	{
-		return ToGLClipSpace(Camera.ProjectionMatrix());
+		return ToGLClipSpace(View.ProjectionMatrix);
 	}
 
 	struct FDrawItem
@@ -232,11 +238,7 @@ bool FSceneRenderer::Initialize(const FString& InShaderDirectory)
 		UE_LOG(LogRenderer, Error, "Failed to load FXAA shaders from %s", *InShaderDirectory);
 		return false;
 	}
-	if (!DebugDraw.Initialize(InShaderDirectory))
-	{
-		return false;
-	}
-	if (!OverlayDebugDraw.Initialize(InShaderDirectory))
+	if (!LineBatch.Initialize())
 	{
 		return false;
 	}
@@ -263,8 +265,8 @@ bool FSceneRenderer::Initialize(const FString& InShaderDirectory)
 	}
 
 	const uint8 White[4] = {255, 255, 255, 255};
-	WhiteTexture = MakeShared<UTexture2D>(UTexture2D::Create(1, 1, White));
-	FlatNormalTexture = MakeShared<UTexture2D>(UTexture2D::CreateFlatNormal(4));
+	WhiteTexture = MakeUnique<FTexture2DResource>(UTexture2D::Create(1, 1, White));
+	FlatNormalTexture = MakeUnique<FTexture2DResource>(UTexture2D::CreateFlatNormal(4));
 	if (!WhiteTexture->Valid() || !FlatNormalTexture->Valid())
 	{
 		UE_LOG(LogRenderer, Error, "Failed to create default textures/meshes");
@@ -294,10 +296,11 @@ void FSceneRenderer::Shutdown()
 {
 	LightsUbo.Destroy();
 	CameraUbo.Destroy();
-	OverlayDebugDraw.Shutdown();
-	DebugDraw.Shutdown();
+	LineBatch.Shutdown();
+	DebugDraw.Clear();
 	FlatNormalTexture.Reset();
 	WhiteTexture.Reset();
+	Resources.ReleaseResources();
 	PassTimers.Destroy();
 	LdrColor.Destroy();
 	SsaoTarget.Destroy();
@@ -349,8 +352,7 @@ EShaderReloadResult FSceneRenderer::ReloadShaders(bool bForce)
 	{
 		return EShaderReloadResult::Failed;
 	}
-	Result = MergeShaderReload(Result, DebugDraw.ReloadShader(bForce));
-	Result = MergeShaderReload(Result, OverlayDebugDraw.ReloadShader(bForce));
+	Result = MergeShaderReload(Result, LineBatch.ReloadShader(bForce));
 	return Result;
 }
 
@@ -402,29 +404,9 @@ void FSceneRenderer::DrawFullscreenTriangle() const
 	glBindVertexArray(0);
 }
 
-void FSceneRenderer::ClearDebugOverlay()
+void FSceneRenderer::UpdateCameraUbo(const FSceneView& View) const
 {
-	OverlayDebugDraw.Clear();
-}
-
-void FSceneRenderer::AddDebugLine(const FVector& A, const FVector& B, const FLinearColor& Color)
-{
-	OverlayDebugDraw.AddLine(A, B, Color);
-}
-
-void FSceneRenderer::AddDebugArrow(const FVector& From, const FVector& To, const FLinearColor& Color)
-{
-	OverlayDebugDraw.AddArrow(From, To, Color);
-}
-
-void FSceneRenderer::AddDebugAabb(const FVector& WorldMin, const FVector& WorldMax, const FLinearColor& Color)
-{
-	OverlayDebugDraw.AddAabb(WorldMin, WorldMax, Color);
-}
-
-void FSceneRenderer::UpdateCameraUbo(const UCameraComponent& Camera) const
-{
-	UpdateCameraUbo(Camera.ViewMatrix(), GetProjectionGL(Camera), Camera.GetCameraLocation());
+	UpdateCameraUbo(View.ViewMatrix, GetProjectionGL(View), View.ViewLocation);
 }
 
 void FSceneRenderer::UpdateCameraUbo(
@@ -547,7 +529,7 @@ void FSceneRenderer::RenderShadowPass(const FMatrix& LightSpace)
 				{
 					continue;
 				}
-				Object.GetStaticMesh().DrawSubMesh(S);
+				Resources.GetStaticMesh(Object.GetStaticMeshShared()).DrawSubMesh(S);
 			}
 		}
 	}
@@ -574,7 +556,7 @@ void FSceneRenderer::RenderShadowPass(const FMatrix& LightSpace)
 			{
 				SkinnedShadowShader.SetMat4Array("uBones", &Item.BoneMatrices[0].M[0][0], Item.BoneMatrices.Num());
 			}
-			Item.Mesh->Draw();
+			Resources.GetSkeletalMesh(Item.Mesh).Draw();
 		}
 	}
 
@@ -582,16 +564,7 @@ void FSceneRenderer::RenderShadowPass(const FMatrix& LightSpace)
 	PassTimers.End(FGPUPassTimer::EPass::Shadow);
 }
 
-FMatrix FSceneRenderer::MakeReflectMatrix(float PlaneZ)
-{
-	// Row vectors: z' = 2 PlaneZ - z.
-	FMatrix ReflectMat = FMatrix::Identity;
-	ReflectMat.M[2][2] = -1.0f;
-	ReflectMat.M[3][2] = 2.0f * PlaneZ;
-	return ReflectMat;
-}
-
-void FSceneRenderer::RenderPlanarReflectionPass(const UCameraComponent& Camera, float PlaneZ)
+void FSceneRenderer::RenderPlanarReflectionPass(const FSceneView& View, float PlaneZ)
 {
 	const int32 ReflW = FMath::Max(1, FMath::RoundToInt(static_cast<float>(FbWidth) * PlanarReflectionScale));
 	const int32 ReflH = FMath::Max(1, FMath::RoundToInt(static_cast<float>(FbHeight) * PlanarReflectionScale));
@@ -603,10 +576,10 @@ void FSceneRenderer::RenderPlanarReflectionPass(const UCameraComponent& Camera, 
 	PassTimers.Begin(FGPUPassTimer::EPass::Planar);
 
 	const FMatrix ReflectMat = MakeReflectMatrix(PlaneZ);
-	const FMatrix LocalView = ReflectMat * Camera.ViewMatrix();
-	const FMatrix LocalProjection = GetProjectionGL(Camera);
+	const FMatrix LocalView = ReflectMat * View.ViewMatrix;
+	const FMatrix LocalProjection = GetProjectionGL(View);
 	const FMatrix LocalViewProjection = LocalView * LocalProjection;
-	const FVector Eye = Camera.GetCameraLocation();
+	const FVector Eye = View.ViewLocation;
 	const FVector ReflectedEye(Eye.X, Eye.Y, (2.0f * PlaneZ) - Eye.Z);
 
 	FFrustum ReflectedFrustum;
@@ -697,9 +670,21 @@ void FSceneRenderer::RenderPlanarReflectionPass(const UCameraComponent& Camera, 
 	PassTimers.End(FGPUPassTimer::EPass::Planar);
 }
 
+void FSceneRenderer::BindTexture(const TSharedPtr<UTexture2D>& Texture, const FTexture2DResource& Fallback, uint32 Unit)
+{
+	if (Texture != nullptr && Texture->Valid())
+	{
+		Resources.GetTexture(Texture).Bind(Unit);
+	}
+	else
+	{
+		Fallback.Bind(Unit);
+	}
+}
+
 void FSceneRenderer::DrawSubMesh(const FShader& Shader, const FStaticMeshSceneProxy& Object, int32 InSubMeshIndex,
 	const FMaterial& InMaterial, const FMatrix& InView, const FMatrix& InProjection, const FMatrix& LightSpace,
-	const FDrawOptions& Options) const
+	const FDrawOptions& Options)
 {
 	if (!Object.GetStaticMesh().Valid())
 	{
@@ -740,19 +725,15 @@ void FSceneRenderer::DrawSubMesh(const FShader& Shader, const FStaticMeshScenePr
 		}
 	}
 
-	const UTexture2D* Albedo =
-		(InMaterial.AlbedoMap && InMaterial.AlbedoMap->Valid()) ? InMaterial.AlbedoMap.Get() : WhiteTexture.Get();
-	Albedo->Bind(0);
+	BindTexture(InMaterial.AlbedoMap, *WhiteTexture, 0);
 
 	if (Options.bLitPass)
 	{
-		const UTexture2D* Normals = (Options.bUseNormalMaps && InMaterial.NormalMap && InMaterial.NormalMap->Valid())
-			? InMaterial.NormalMap.Get()
-			: FlatNormalTexture.Get();
-		Normals->Bind(2);
+		static const TSharedPtr<UTexture2D> NoNormalMap;
+		BindTexture(Options.bUseNormalMaps ? InMaterial.NormalMap : NoNormalMap, *FlatNormalTexture, 2);
 	}
 
-	Object.GetStaticMesh().DrawSubMesh(InSubMeshIndex);
+	Resources.GetStaticMesh(Object.GetStaticMeshShared()).DrawSubMesh(InSubMeshIndex);
 }
 
 void FSceneRenderer::GatherScene(FSceneInterface* InScene)
@@ -781,7 +762,7 @@ void FSceneRenderer::GatherScene(FSceneInterface* InScene)
 			continue;
 		}
 		FSkeletalDrawItem Item;
-		Item.Mesh = &Skeletal->GetSkeletalMesh();
+		Item.Mesh = Skeletal->GetSkeletalMeshShared();
 		Item.Model = Skeletal->GetLocalToWorld();
 		Item.BoneMatrices = Skeletal->GetBoneMatrices();
 		if (Item.BoneMatrices.Num() > MaxSkinBones)
@@ -804,9 +785,21 @@ void FSceneRenderer::GatherScene(FSceneInterface* InScene)
 	}
 }
 
-void FSceneRenderer::DrawScene(FSceneInterface* Scene, const UCameraComponent& Camera)
+void FSceneRenderer::Render(const FSceneViewFamily& ViewFamily)
 {
-	GatherScene(Scene);
+	if (ViewFamily.Views.Num() == 0 || ViewFamily.Views[0] == nullptr)
+	{
+		return;
+	}
+	const FSceneView& View = *ViewFamily.Views[0];
+	ShowFlags = ViewFamily.EngineShowFlags;
+	GatherScene(ViewFamily.Scene);
+	// The world's debug lines of this frame (UE: the world's line batch components).
+	FDebugDraw* WorldLines = nullptr;
+	if (ViewFamily.Scene != nullptr && ViewFamily.Scene->GetWorld() != nullptr)
+	{
+		WorldLines = &ViewFamily.Scene->GetWorld()->LineBatcher;
+	}
 	FrameStats = {};
 	PassTimers.BeginFrame();
 	FrameStats.ShadowMs = PassTimers.Milliseconds(FGPUPassTimer::EPass::Shadow);
@@ -829,24 +822,18 @@ void FSceneRenderer::DrawScene(FSceneInterface* Scene, const UCameraComponent& C
 		PassTimers.Begin(FGPUPassTimer::EPass::Post);
 		PassTimers.End(FGPUPassTimer::EPass::Post);
 
-		if (OverlayDebugDraw.IsValid() && !OverlayDebugDraw.IsEmpty())
-		{
-			glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
-			glViewport(0, 0, FbWidth, FbHeight);
-			OverlayDebugDraw.Flush(Camera.ViewMatrix() * GetProjectionGL(Camera));
-		}
-		OverlayDebugDraw.Clear();
-		DrawAxesGizmo(Camera);
+		FlushWorldLines(View, WorldLines);
+		DrawAxesGizmo(View);
 		SkeletalDraws.Reset();
 		return;
 	}
 
 	const bool bPostOn = Post.bEnabled && SceneColor.Valid();
 
-	const FMatrix LocalView = Camera.ViewMatrix();
-	const FMatrix LocalProjection = GetProjectionGL(Camera);
+	const FMatrix LocalView = View.ViewMatrix;
+	const FMatrix LocalProjection = GetProjectionGL(View);
 	const FMatrix LocalViewProjection = LocalView * LocalProjection;
-	const FVector LocalCameraPos = Camera.GetCameraLocation();
+	const FVector LocalCameraPos = View.ViewLocation;
 
 	FFrustum CameraFrustum;
 	CameraFrustum.ExtractFromViewProjection(LocalViewProjection);
@@ -863,11 +850,11 @@ void FSceneRenderer::DrawScene(FSceneInterface* Scene, const UCameraComponent& C
 		constexpr float ShadowPadding = 75.0f;
 		if (ComputeCasterAabb(FrameMeshes, WorldMin, WorldMax))
 		{
-			LightSpace = FShadowMap::FitLightSpaceMatrix(LightDir, WorldMin, WorldMax, ShadowPadding);
+			LightSpace = FitLightSpaceMatrix(LightDir, WorldMin, WorldMax, ShadowPadding);
 		}
 		else
 		{
-			LightSpace = FShadowMap::FitLightSpaceMatrix(
+			LightSpace = FitLightSpaceMatrix(
 				LightDir, FVector(-300.0f, 0.0f, -300.0f), FVector(300.0f, 200.0f, 300.0f), ShadowPadding);
 		}
 		RenderShadowPass(LightSpace);
@@ -904,8 +891,8 @@ void FSceneRenderer::DrawScene(FSceneInterface* Scene, const UCameraComponent& C
 	}
 	if (bHasPlanarMirror)
 	{
-		RenderPlanarReflectionPass(Camera, MirrorPlaneZ);
-		ReflectionViewProj = MakeReflectMatrix(MirrorPlaneZ) * Camera.ViewMatrix() * LocalProjection;
+		RenderPlanarReflectionPass(View, MirrorPlaneZ);
+		ReflectionViewProj = MakeReflectMatrix(MirrorPlaneZ) * View.ViewMatrix * LocalProjection;
 	}
 	else
 	{
@@ -1001,7 +988,7 @@ void FSceneRenderer::DrawScene(FSceneInterface* Scene, const UCameraComponent& C
 			UnlitShader.SetMat4("uMVP", Mvp);
 			UnlitShader.SetMat4("uModel", LocalModel);
 			UnlitShader.SetVec3("uAlbedo", 1.0f, 1.0f, 1.0f);
-			Object.GetStaticMesh().DrawSubMesh(Item.SubMeshIndex);
+			Resources.GetStaticMesh(Object.GetStaticMeshShared()).DrawSubMesh(Item.SubMeshIndex);
 		}
 		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 		glDepthFunc(GL_LEQUAL);
@@ -1009,7 +996,7 @@ void FSceneRenderer::DrawScene(FSceneInterface* Scene, const UCameraComponent& C
 
 	if (LitShader.Valid())
 	{
-		UpdateCameraUbo(Camera);
+		UpdateCameraUbo(View);
 		UpdateLightsUbo();
 		LitShader.Bind();
 		BindShadowResources(bCastDirShadows, ShadowSourceAngle);
@@ -1114,11 +1101,11 @@ void FSceneRenderer::DrawScene(FSceneInterface* Scene, const UCameraComponent& C
 	PassTimers.End(FGPUPassTimer::EPass::Color);
 
 	// Debug into the color target (scene HDR or backbuffer) so depth occlusion stays correct.
-	DrawDebug(Camera, LightSpace, bCastDirShadows);
+	DrawDebug(View, LightSpace, bCastDirShadows);
 
 	if (bPostOn)
 	{
-		RenderPostStack(Camera);
+		RenderPostStack(View);
 	}
 	else
 	{
@@ -1130,15 +1117,24 @@ void FSceneRenderer::DrawScene(FSceneInterface* Scene, const UCameraComponent& C
 		glViewport(0, 0, FbWidth, FbHeight);
 	}
 
-	if (OverlayDebugDraw.IsValid() && !OverlayDebugDraw.IsEmpty())
+	FlushWorldLines(View, WorldLines);
+	DrawAxesGizmo(View);
+	SkeletalDraws.Reset();
+}
+
+void FSceneRenderer::FlushWorldLines(const FSceneView& View, FDebugDraw* WorldLines)
+{
+	if (WorldLines == nullptr)
+	{
+		return;
+	}
+	if (LineBatch.IsValid() && !WorldLines->IsEmpty())
 	{
 		glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
 		glViewport(0, 0, FbWidth, FbHeight);
-		OverlayDebugDraw.Flush(Camera.ViewMatrix() * GetProjectionGL(Camera));
+		LineBatch.Flush(*WorldLines, View.ViewMatrix * GetProjectionGL(View));
 	}
-	OverlayDebugDraw.Clear();
-	DrawAxesGizmo(Camera);
-	SkeletalDraws.Reset();
+	WorldLines->Clear();
 }
 
 void FSceneRenderer::ReadFramebufferBgr(int32 Width, int32 Height, TArray<uint8>& OutBgr) const
@@ -1153,7 +1149,7 @@ void FSceneRenderer::ReadFramebufferBgr(int32 Width, int32 Height, TArray<uint8>
 	glReadPixels(0, 0, Width, Height, GL_BGR, GL_UNSIGNED_BYTE, OutBgr.GetData());
 }
 
-void FSceneRenderer::RenderPostStack(const UCameraComponent& Camera)
+void FSceneRenderer::RenderPostStack(const FSceneView& View)
 {
 	// Flow: SceneColor(+Depth) → SSAO → bilateral blur → composite+tonemap → FXAA → present
 	glDisable(GL_DEPTH_TEST);
@@ -1169,7 +1165,7 @@ void FSceneRenderer::RenderPostStack(const UCameraComponent& Camera)
 	if (bWantAo)
 	{
 		// GL clip space: ssao.frag reads GL depth and reconstructs UE view-space positions (+Z forward).
-		const FMatrix LocalProjection = GetProjectionGL(Camera);
+		const FMatrix LocalProjection = GetProjectionGL(View);
 		const FMatrix InvProjection = LocalProjection.Inverse();
 		const int32 SampleCount = FMath::Clamp(Post.AoSampleCount, 1, MaxAoSamples);
 
@@ -1349,24 +1345,18 @@ void FSceneRenderer::DrawQueuedSkeletal(const FMatrix& InView, const FMatrix& In
 			SkinnedLitShader.SetMat4Array("uBones", &Item.BoneMatrices[0].M[0][0], Item.BoneMatrices.Num());
 		}
 
-		const UTexture2D* Albedo = LocalMaterial.AlbedoMap && LocalMaterial.AlbedoMap->Valid()
-			? LocalMaterial.AlbedoMap.Get()
-			: WhiteTexture.Get();
-		Albedo->Bind(0);
-		const UTexture2D* Normals = LocalMaterial.NormalMap && LocalMaterial.NormalMap->Valid()
-			? LocalMaterial.NormalMap.Get()
-			: FlatNormalTexture.Get();
-		Normals->Bind(2);
+		BindTexture(LocalMaterial.AlbedoMap, *WhiteTexture, 0);
+		BindTexture(LocalMaterial.NormalMap, *FlatNormalTexture, 2);
 
-		Item.Mesh->Draw();
+		Resources.GetSkeletalMesh(Item.Mesh).Draw();
 		++FrameStats.DrawsSubmitted;
 		FrameStats.TrianglesSubmitted += Item.Mesh->TriangleCount();
 	}
 }
 
-void FSceneRenderer::DrawDebug(const UCameraComponent& Camera, const FMatrix& LightSpace, bool bHasLightSpace)
+void FSceneRenderer::DrawDebug(const FSceneView& View, const FMatrix& LightSpace, bool bHasLightSpace)
 {
-	if (!bDebugDrawEnabled || !DebugDraw.IsValid())
+	if (!ShowFlags.Bounds || !LineBatch.IsValid())
 	{
 		return;
 	}
@@ -1393,12 +1383,12 @@ void FSceneRenderer::DrawDebug(const UCameraComponent& Camera, const FMatrix& Li
 		DebugDraw.AddLightFrustum(LightSpace, FrustumColor);
 	}
 
-	DebugDraw.Flush(Camera.ViewMatrix() * GetProjectionGL(Camera));
+	LineBatch.Flush(DebugDraw, View.ViewMatrix * GetProjectionGL(View));
 }
 
-void FSceneRenderer::DrawAxesGizmo(const UCameraComponent& Camera)
+void FSceneRenderer::DrawAxesGizmo(const FSceneView& View)
 {
-	if (!bAxesGizmoEnabled || !DebugDraw.IsValid())
+	if (!ShowFlags.AxesGizmo || !LineBatch.IsValid())
 	{
 		return;
 	}
@@ -1413,12 +1403,12 @@ void FSceneRenderer::DrawAxesGizmo(const UCameraComponent& Camera)
 	DebugDraw.Clear();
 	DebugDraw.AddAxes(FVector::ZeroVector);
 	glViewport(0, 0, FbWidth, FbHeight);
-	DebugDraw.Flush(Camera.ViewMatrix() * GetProjectionGL(Camera), /*bDepthTest=*/false);
+	LineBatch.Flush(DebugDraw, View.ViewMatrix * GetProjectionGL(View), /*bDepthTest=*/false);
 
 	DebugDraw.Clear();
-	DebugDraw.AddViewAxes(Camera.ViewMatrix());
+	DebugDraw.AddViewAxes(View.ViewMatrix);
 	glViewport(GizmoMargin, GizmoMargin, GizmoSize, GizmoSize);
-	DebugDraw.Flush(FMatrix::Identity, /*bDepthTest=*/false);
+	LineBatch.Flush(DebugDraw, FMatrix::Identity, /*bDepthTest=*/false);
 	glViewport(0, 0, FbWidth, FbHeight);
 	DebugDraw.Clear();
 }

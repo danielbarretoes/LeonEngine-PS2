@@ -2,6 +2,7 @@
 
 #include "AI/Navigation/NavigationSystem.h"
 #include "CoreMinimal.h"
+#include "Debug/DebugDraw.h"
 #include "Engine/Level.h"
 #include "GameFramework/Actor.h"
 #include "Physics/PhysScene.h"
@@ -118,6 +119,12 @@ public:
 	 * cannot render (FApp::CanEverRender, e.g. `-nullrhi`) or the target has no Renderer module.
 	 */
 	FSceneInterface* Scene = nullptr;
+
+	/**
+	 * This frame's debug lines (UE: LineBatcher, a ULineBatchComponent): gameplay and physics debug draws add lines,
+	 * the renderer draws them after the scene and empties the batch.
+	 */
+	FDebugDraw LineBatcher;
 
 	/**
 	 * Creates a world in a new transient package with its persistent level (UE: CreateWorld). bInformEngineOfWorld is

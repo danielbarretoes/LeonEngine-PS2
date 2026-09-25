@@ -1,13 +1,45 @@
 #include "MaterialAsset.h"
 
 #include "Dom/JsonObject.h"
+#include "EngineLogs.h"
 #include "LeonMaterialFormat.h"
 #include "Misc/Paths.h"
-#include "RendererLog.h"
 #include "ResourceCache.h"
 
 namespace
 {
+
+	/** Loads a map key ("basecolormap" / "normalmap"); "checker" and "bump" are the built-in procedural maps. */
+	void ApplyTextureKey(
+		FResourceCache& Resources, FMaterial& InMaterial, const FString& KeyLower, const FString& Value)
+	{
+		if (Value.IsEmpty())
+		{
+			return;
+		}
+		if (KeyLower == "basecolormap" || KeyLower == "albedomap" || KeyLower == "diffusemap")
+		{
+			if (Value.Equals("checker", ESearchCase::CaseSensitive))
+			{
+				InMaterial.AlbedoMap = Resources.CheckerTexture(64);
+			}
+			else
+			{
+				InMaterial.AlbedoMap = Resources.LoadTexture(FPaths::ResolveLegacyContentPath(Value));
+			}
+		}
+		else if (KeyLower == "normalmap")
+		{
+			if (Value.Equals("bump", ESearchCase::CaseSensitive))
+			{
+				InMaterial.NormalMap = Resources.BumpNormalTexture(256);
+			}
+			else
+			{
+				InMaterial.NormalMap = Resources.LoadTexture(FPaths::ResolveLegacyContentPath(Value));
+			}
+		}
+	}
 
 	/** A numeric [x, y, z] array, else Fallback. */
 	FVector ReadVec3(const FJsonObject& Object, const FString& Field, const FVector& Fallback)
@@ -99,7 +131,7 @@ bool LoadMaterialFile(FResourceCache& Resources, const FString& Path, FMaterial&
 {
 	if (!IsLeonMaterialPath(Path))
 	{
-		UE_LOG(LogRenderer, Error, "MaterialAsset: expected .lmat, got '%s'", *Path);
+		UE_LOG(LogEngine, Error, "MaterialAsset: expected .lmat, got '%s'", *Path);
 		return false;
 	}
 	return LoadLeonMaterialFile(Resources, Path, Out);
@@ -118,4 +150,17 @@ FMaterial MakeDefaultCheckerMaterial(FResourceCache& Resources)
 	Material.bPlanarMirror = false;
 	Material.AlbedoMap = Resources.CheckerTexture(64);
 	return Material;
+}
+
+bool LoadLeonMaterialFile(FResourceCache& Resources, const FString& Path, FMaterial& Out)
+{
+	FLeonMaterialDocument Doc;
+	if (!LoadLeonMaterialDocument(Path, Doc))
+	{
+		return false;
+	}
+	ApplyTextureKey(Resources, Doc.Material, "basecolormap", Doc.BaseColorMapPath);
+	ApplyTextureKey(Resources, Doc.Material, "normalmap", Doc.NormalMapPath);
+	Out = MoveTemp(Doc.Material);
+	return true;
 }

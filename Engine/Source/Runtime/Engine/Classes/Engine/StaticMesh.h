@@ -3,34 +3,23 @@
 #include "CoreMinimal.h"
 #include "Material.h"
 #include "MeshData.h"
-#include "RHIHandles.h"
 
-/** GPU static mesh resource (Unreal-style UStaticMesh; VAO/VBO/EBO + optional MTL). */
-class RENDERER_API UStaticMesh
+/**
+ * A static mesh asset (UE: UStaticMesh): the CPU mesh data with its bounds, sections and materials. The renderer
+ * builds its GPU buffers from it the first time it draws it (its own render resource cache: Engine never sees GPU
+ * objects), and the physics scene reads its triangles for static collision.
+ *
+ * Plain C++ shared through TSharedPtr and FResourceCache until P14 makes it a UObject asset loaded with LoadObject.
+ */
+class ENGINE_API UStaticMesh
 {
 public:
-	UStaticMesh() = default;
-	~UStaticMesh();
-
-	UStaticMesh(const UStaticMesh&) = delete;
-	UStaticMesh& operator=(const UStaticMesh&) = delete;
-	UStaticMesh(UStaticMesh&& Other) noexcept;
-	UStaticMesh& operator=(UStaticMesh&& Other) noexcept;
-
-	[[nodiscard]] static UStaticMesh Upload(const FMeshData& Data);
-	/** Bounds + materials only (no VAO). For dedicated / headless simulation. */
+	/** The asset of Data (UE: built from its mesh description); an empty mesh is not Valid. */
 	[[nodiscard]] static UStaticMesh CreateCpu(const FMeshData& Data);
-
-	void Draw() const;
-	void DrawSubMesh(int32 SubMeshIndex) const;
 
 	[[nodiscard]] bool Valid() const
 	{
-		return IndexCount > 0 && (bCpuOnly || Vao != InvalidVertexArray);
-	}
-	[[nodiscard]] bool IsCpuOnly() const
-	{
-		return bCpuOnly;
+		return IndexCount > 0;
 	}
 	[[nodiscard]] int32 GetIndexCount() const
 	{
@@ -48,6 +37,7 @@ public:
 	{
 		return LocalMax;
 	}
+	/** The sections (one covering every index when the data had none). */
 	[[nodiscard]] const TArray<FMeshSection>& GetSubmeshes() const
 	{
 		return Submeshes;
@@ -60,7 +50,7 @@ public:
 	{
 		return Materials.Num() > 0;
 	}
-	/** CPU copy retained for editor tools (empty if the upload had no data). */
+	/** The mesh data the asset was made from (vertices, indices, sections); the renderer uploads it. */
 	[[nodiscard]] const FMeshData& GetCpuData() const
 	{
 		return CpuData;
@@ -71,13 +61,7 @@ public:
 	}
 
 private:
-	void Destroy();
-
-	FRHIVertexArrayId Vao = InvalidVertexArray;
-	FRHIBufferId Vbo = InvalidBuffer;
-	FRHIBufferId Ebo = InvalidBuffer;
 	int32 IndexCount = 0;
-	bool bCpuOnly = false;
 	FVector LocalMin = FVector::ZeroVector;
 	FVector LocalMax = FVector::ZeroVector;
 	TArray<FMeshSection> Submeshes;

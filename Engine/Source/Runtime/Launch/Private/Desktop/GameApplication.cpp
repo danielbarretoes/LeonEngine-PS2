@@ -106,7 +106,7 @@ bool FGameApplication::Init()
 	}
 	if (FParse::Param(CmdLine, "AxesGizmo") && !bHeadless)
 	{
-		Engine->GetRenderer().SetAxesGizmoEnabled(true);
+		Engine->SetAxesGizmoEnabled(true);
 	}
 	if (!bHeadless)
 	{

@@ -3,8 +3,8 @@
 #include "Misc/CString.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
-#include "RendererLog.h"
-#include "ResourceCache.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogLeonMaterial, Log, All);
 
 namespace
 {
@@ -117,38 +117,6 @@ namespace
 		return true;
 	}
 
-	/** Loads a map key ("basecolormap" / "normalmap"); "checker" and "bump" are the built-in procedural maps. */
-	void ApplyTextureKey(
-		FResourceCache& Resources, FMaterial& InMaterial, const FString& KeyLower, const FString& Value)
-	{
-		if (Value.IsEmpty())
-		{
-			return;
-		}
-		if (KeyLower == "basecolormap" || KeyLower == "albedomap" || KeyLower == "diffusemap")
-		{
-			if (Value.Equals("checker", ESearchCase::CaseSensitive))
-			{
-				InMaterial.AlbedoMap = Resources.CheckerTexture(64);
-			}
-			else
-			{
-				InMaterial.AlbedoMap = Resources.LoadTexture(FPaths::ResolveLegacyContentPath(Value));
-			}
-		}
-		else if (KeyLower == "normalmap")
-		{
-			if (Value.Equals("bump", ESearchCase::CaseSensitive))
-			{
-				InMaterial.NormalMap = Resources.BumpNormalTexture(256);
-			}
-			else
-			{
-				InMaterial.NormalMap = Resources.LoadTexture(FPaths::ResolveLegacyContentPath(Value));
-			}
-		}
-	}
-
 	/** %g, like the default formatting of the stream writer it replaces. */
 	[[nodiscard]] FString FormatFloat(float Value)
 	{
@@ -176,7 +144,7 @@ bool LoadLeonMaterialDocument(const FString& Path, FLeonMaterialDocument& Out)
 	TArray<FString> Lines;
 	if (!FFileHelper::LoadFileToStringArray(Lines, *Path))
 	{
-		UE_LOG(LogRenderer, Error, "LeonMaterial: cannot open %s", *Path);
+		UE_LOG(LogLeonMaterial, Error, "LeonMaterial: cannot open %s", *Path);
 		return false;
 	}
 
@@ -200,7 +168,7 @@ bool LoadLeonMaterialDocument(const FString& Path, FLeonMaterialDocument& Out)
 		int32 Eq = INDEX_NONE;
 		if (!Line.FindChar('=', Eq))
 		{
-			UE_LOG(LogRenderer, Warning, "LeonMaterial: ignoring line without '=': %s", *Path);
+			UE_LOG(LogLeonMaterial, Warning, "LeonMaterial: ignoring line without '=': %s", *Path);
 			continue;
 		}
 		const FString Key = Line.Left(Eq).TrimStartAndEnd();
@@ -220,7 +188,7 @@ bool LoadLeonMaterialDocument(const FString& Path, FLeonMaterialDocument& Out)
 			}
 			else
 			{
-				UE_LOG(LogRenderer, Warning, "LeonMaterial: unknown [Info] key '%s' in %s", *Key, *Path);
+				UE_LOG(LogLeonMaterial, Warning, "LeonMaterial: unknown [Info] key '%s' in %s", *Key, *Path);
 			}
 			continue;
 		}
@@ -237,7 +205,7 @@ bool LoadLeonMaterialDocument(const FString& Path, FLeonMaterialDocument& Out)
 			}
 			else if (Section == "textures")
 			{
-				UE_LOG(LogRenderer, Warning, "LeonMaterial: unknown [Textures] key '%s' in %s", *Key, *Path);
+				UE_LOG(LogLeonMaterial, Warning, "LeonMaterial: unknown [Textures] key '%s' in %s", *Key, *Path);
 			}
 			continue;
 		}
@@ -246,14 +214,14 @@ bool LoadLeonMaterialDocument(const FString& Path, FLeonMaterialDocument& Out)
 		{
 			if (!ParseVec3(Value, Doc.Material.Albedo))
 			{
-				UE_LOG(LogRenderer, Warning, "LeonMaterial: bad BaseColor '%s' in %s", *Value, *Path);
+				UE_LOG(LogLeonMaterial, Warning, "LeonMaterial: bad BaseColor '%s' in %s", *Value, *Path);
 			}
 		}
 		else if (KeyLower == "specular")
 		{
 			if (!ParseVec3(Value, Doc.Material.Specular))
 			{
-				UE_LOG(LogRenderer, Warning, "LeonMaterial: bad Specular '%s' in %s", *Value, *Path);
+				UE_LOG(LogLeonMaterial, Warning, "LeonMaterial: bad Specular '%s' in %s", *Value, *Path);
 			}
 		}
 		else if (KeyLower == "metallic")
@@ -265,7 +233,7 @@ bool LoadLeonMaterialDocument(const FString& Path, FLeonMaterialDocument& Out)
 			}
 			else
 			{
-				UE_LOG(LogRenderer, Warning, "LeonMaterial: bad Metallic '%s' in %s", *Value, *Path);
+				UE_LOG(LogLeonMaterial, Warning, "LeonMaterial: bad Metallic '%s' in %s", *Value, *Path);
 			}
 		}
 		else if (KeyLower == "roughness")
@@ -278,7 +246,7 @@ bool LoadLeonMaterialDocument(const FString& Path, FLeonMaterialDocument& Out)
 			}
 			else
 			{
-				UE_LOG(LogRenderer, Warning, "LeonMaterial: bad Roughness '%s' in %s", *Value, *Path);
+				UE_LOG(LogLeonMaterial, Warning, "LeonMaterial: bad Roughness '%s' in %s", *Value, *Path);
 			}
 		}
 		else if (KeyLower == "opacity" || KeyLower == "alpha")
@@ -290,7 +258,7 @@ bool LoadLeonMaterialDocument(const FString& Path, FLeonMaterialDocument& Out)
 			}
 			else
 			{
-				UE_LOG(LogRenderer, Warning, "LeonMaterial: bad Opacity '%s' in %s", *Value, *Path);
+				UE_LOG(LogLeonMaterial, Warning, "LeonMaterial: bad Opacity '%s' in %s", *Value, *Path);
 			}
 		}
 		else if (KeyLower == "shininess")
@@ -302,14 +270,14 @@ bool LoadLeonMaterialDocument(const FString& Path, FLeonMaterialDocument& Out)
 			}
 			else
 			{
-				UE_LOG(LogRenderer, Warning, "LeonMaterial: bad Shininess '%s' in %s", *Value, *Path);
+				UE_LOG(LogLeonMaterial, Warning, "LeonMaterial: bad Shininess '%s' in %s", *Value, *Path);
 			}
 		}
 		else if (KeyLower == "uvscale" || KeyLower == "tiling")
 		{
 			if (!ParseVec2(Value, Doc.Material.UvScale))
 			{
-				UE_LOG(LogRenderer, Warning, "LeonMaterial: bad UVScale '%s' in %s", *Value, *Path);
+				UE_LOG(LogLeonMaterial, Warning, "LeonMaterial: bad UVScale '%s' in %s", *Value, *Path);
 			}
 		}
 		else if (KeyLower == "castsshadows")
@@ -329,7 +297,7 @@ bool LoadLeonMaterialDocument(const FString& Path, FLeonMaterialDocument& Out)
 		}
 		else
 		{
-			UE_LOG(LogRenderer, Warning, "LeonMaterial: unknown key '%s' in %s", *Key, *Path);
+			UE_LOG(LogLeonMaterial, Warning, "LeonMaterial: unknown key '%s' in %s", *Key, *Path);
 		}
 	}
 
@@ -342,19 +310,6 @@ bool LoadLeonMaterialDocument(const FString& Path, FLeonMaterialDocument& Out)
 		Doc.Name = "Material";
 	}
 	Out = MoveTemp(Doc);
-	return true;
-}
-
-bool LoadLeonMaterialFile(FResourceCache& Resources, const FString& Path, FMaterial& Out)
-{
-	FLeonMaterialDocument Doc;
-	if (!LoadLeonMaterialDocument(Path, Doc))
-	{
-		return false;
-	}
-	ApplyTextureKey(Resources, Doc.Material, "basecolormap", Doc.BaseColorMapPath);
-	ApplyTextureKey(Resources, Doc.Material, "normalmap", Doc.NormalMapPath);
-	Out = MoveTemp(Doc.Material);
 	return true;
 }
 
@@ -381,7 +336,7 @@ bool SaveLeonMaterialFile(const FString& Path, const FString& InName, const FMat
 	Out += "NormalMap=" + InNormalMapPath + "\n";
 	if (!FFileHelper::SaveStringToFile(Out, *Path))
 	{
-		UE_LOG(LogRenderer, Error, "LeonMaterial: cannot write %s", *Path);
+		UE_LOG(LogLeonMaterial, Error, "LeonMaterial: cannot write %s", *Path);
 		return false;
 	}
 	return true;

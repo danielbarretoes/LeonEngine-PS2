@@ -1,45 +1,32 @@
 #pragma once
 
-#include "Camera/CameraComponent.h"
 #include "CoreMinimal.h"
 #include "Debug/DebugDraw.h"
 #include "Frustum.h"
 #include "GpuPassTimer.h"
 #include "LdrColorTarget.h"
 #include "Level/Light.h"
+#include "LineBatchRenderer.h"
 #include "PlanarReflection.h"
 #include "PostProcess.h"
 #include "RHIHandles.h"
+#include "RenderResourceCache.h"
+#include "RendererInterface.h"
 #include "SceneColorTarget.h"
+#include "SceneView.h"
 #include "Shader.h"
 #include "ShadowMap.h"
-#include "SkeletalMesh.h"
-#include "StaticMesh.h"
-#include "Texture2D.h"
+#include "Texture2DResource.h"
 #include "UniformBuffer.h"
-
-/** Per-frame measurable counters (color pass after frustum culling). */
-struct RENDERER_API FFrameStats
-{
-	int32 ObjectsTotal = 0;
-	int32 ObjectsVisible = 0;
-	int32 ObjectsCulled = 0;
-	int32 DrawsSubmitted = 0;
-	int32 TrianglesSubmitted = 0;
-	int32 PlanarCulled = 0;
-	float ShadowMs = 0.0f;
-	float PlanarMs = 0.0f;
-	float ColorMs = 0.0f;
-	float SsaoMs = 0.0f;
-	float PostMs = 0.0f;
-};
 
 class FLightSceneProxy;
 class FSceneInterface;
 class FStaticMeshSceneProxy;
+class USkeletalMesh;
+class UTexture2D;
 
 /** Options for a single submesh draw (shared lit textures may already be bound). */
-struct RENDERER_API FDrawOptions
+struct FDrawOptions
 {
 	bool bLitPass = true;
 	bool bReceiveShadows = true;
@@ -51,11 +38,12 @@ struct RENDERER_API FDrawOptions
  * Forward renderer: directional shadow map (light 0), optional half-res planar mirror,
  * opaque / transparent, then optional post (SSAO → tonemap → FXAA).
  *
- * Views are in UE view space (x right, y up, z forward; ViewMatrices.h). Projections passed between the passes are
- * already in GL clip space (the camera's UE projection through ToGLClipSpace, GLClipSpace.h), so every MVP is
- * Model * View * ProjectionGL.
+ * It draws a view family's scene (FScene's proxies, in the scene's order) through its view (UE: the scene renderer of
+ * a view family). Views are in UE view space (x right, y up, z forward; ViewMatrices.h). Projections passed between
+ * the passes are already in GL clip space (the view's UE projection through ToGLClipSpace, GLClipSpace.h), so every
+ * MVP is Model * View * ProjectionGL. The GPU copies of the engine's meshes and textures come from its resource cache.
  */
-class RENDERER_API FSceneRenderer
+class FSceneRenderer
 {
 public:
 	static constexpr uint32 CameraUboBinding = 0;
@@ -63,9 +51,6 @@ public:
 	/** Planar mirror FBO scale vs framebuffer (0.5 = half-res). */
 	static constexpr float PlanarReflectionScale = 0.5f;
 	static constexpr int32 MaxAoSamples = 64;
-
-	/** World-space mirror about the horizontal plane z = PlaneZ, applied before the view by the planar pass. */
-	[[nodiscard]] static FMatrix MakeReflectMatrix(float PlaneZ);
 
 	bool Initialize(const FString& InShaderDirectory);
 	void Shutdown();
@@ -84,51 +69,16 @@ public:
 	}
 
 	void BeginFrame(int32 FramebufferWidth, int32 FramebufferHeight);
-	/** Draws the scene's proxies (static and skinned meshes, lights) through the camera; nothing for a null scene. */
-	void DrawScene(FSceneInterface* Scene, const UCameraComponent& Camera);
+	/**
+	 * Draws the family's first view of its scene: shadows, the planar mirror, the opaque meshes, the skinned meshes,
+	 * the translucent meshes, the bounds debug, post processing, the world's debug lines and the axes gizmo (the show
+	 * flags decide the debug parts). A family without a scene draws only the background.
+	 */
+	void Render(const FSceneViewFamily& ViewFamily);
 	/** Reads the draw framebuffer as bottom-up BGR rows with no padding (screenshots). */
 	void ReadFramebufferBgr(int32 Width, int32 Height, TArray<uint8>& OutBgr) const;
 
-	/** World-space lines flushed at the end of DrawScene (independent of the F1 AABB overlay). */
-	void ClearDebugOverlay();
-	void AddDebugLine(const FVector& A, const FVector& B, const FLinearColor& Color);
-	void AddDebugArrow(const FVector& From, const FVector& To, const FLinearColor& Color);
-	void AddDebugAabb(const FVector& WorldMin, const FVector& WorldMax, const FLinearColor& Color);
-
-	/** Gameplay / physics debug lines (flushed with the scene overlay pass). */
-	[[nodiscard]] FDebugDraw& GetDebugOverlay()
-	{
-		return OverlayDebugDraw;
-	}
-
-	void SetDebugDrawEnabled(bool bEnabled)
-	{
-		bDebugDrawEnabled = bEnabled;
-	}
-	void ToggleDebugDraw()
-	{
-		bDebugDrawEnabled = !bDebugDrawEnabled;
-	}
-	[[nodiscard]] bool IsDebugDrawEnabled() const
-	{
-		return bDebugDrawEnabled;
-	}
-
-	/** 1 m world axes at the origin and a view orientation gizmo (X red, Y green, Z blue); off by default (F6). */
-	void SetAxesGizmoEnabled(bool bEnabled)
-	{
-		bAxesGizmoEnabled = bEnabled;
-	}
-	void ToggleAxesGizmo()
-	{
-		bAxesGizmoEnabled = !bAxesGizmoEnabled;
-	}
-	[[nodiscard]] bool IsAxesGizmoEnabled() const
-	{
-		return bAxesGizmoEnabled;
-	}
-
-	/** When false, DrawScene skips lit geometry / shadows / post (debug overlay still flushes). */
+	/** When false, Render skips lit geometry / shadows / post (debug overlay still flushes). */
 	void SetSceneGeometryEnabled(bool bEnabled)
 	{
 		bSceneGeometryEnabled = bEnabled;
@@ -208,7 +158,7 @@ public:
 
 private:
 	bool BindLitUbos() const;
-	void UpdateCameraUbo(const UCameraComponent& Camera) const;
+	void UpdateCameraUbo(const FSceneView& View) const;
 	void UpdateCameraUbo(const FMatrix& InView, const FMatrix& InProjection, const FVector& InCameraPos) const;
 	void UpdateLightsUbo() const;
 	void BindShadowResources(bool bInReceiveShadows, float SourceAngleDegrees = DefaultLightSourceAngleDegrees) const;
@@ -217,18 +167,22 @@ private:
 	void EnsureShadowMapSize();
 	[[nodiscard]] FRHIFramebufferId ColorRestoreFbo() const;
 	void DrawFullscreenTriangle() const;
-	void RenderPostStack(const UCameraComponent& Camera);
+	void RenderPostStack(const FSceneView& View);
 	void RenderShadowPass(const FMatrix& LightSpace);
-	void RenderPlanarReflectionPass(const UCameraComponent& Camera, float PlaneZ);
-	void DrawDebug(const UCameraComponent& Camera, const FMatrix& LightSpace, bool bHasLightSpace);
+	void RenderPlanarReflectionPass(const FSceneView& View, float PlaneZ);
+	void DrawDebug(const FSceneView& View, const FMatrix& LightSpace, bool bHasLightSpace);
+	/** Draws and empties the world's debug line batch (UWorld::LineBatcher). */
+	void FlushWorldLines(const FSceneView& View, FDebugDraw* WorldLines);
 	/**
 	 * After the scene: the world origin axes with no depth test, then the view orientation gizmo in a fixed-size
 	 * square at the bottom-left of the draw framebuffer.
 	 */
-	void DrawAxesGizmo(const UCameraComponent& Camera);
+	void DrawAxesGizmo(const FSceneView& View);
+	/** Binds the texture's GPU copy, or Fallback when there is no valid texture. */
+	void BindTexture(const TSharedPtr<UTexture2D>& Texture, const FTexture2DResource& Fallback, uint32 Unit);
 	void DrawSubMesh(const FShader& Shader, const FStaticMeshSceneProxy& Object, int32 InSubMeshIndex,
 		const FMaterial& InMaterial, const FMatrix& InView, const FMatrix& InProjection, const FMatrix& LightSpace,
-		const FDrawOptions& Options) const;
+		const FDrawOptions& Options);
 	/** Fills FrameMeshes, SkeletalDraws and the light lists from the scene. */
 	void GatherScene(FSceneInterface* InScene);
 	void DrawQueuedSkeletal(const FMatrix& InView, const FMatrix& InProjection, const FMatrix& LightSpace,
@@ -237,7 +191,7 @@ private:
 
 	struct FSkeletalDrawItem
 	{
-		const USkeletalMesh* Mesh = nullptr;
+		TSharedPtr<USkeletalMesh> Mesh;
 		FMatrix Model = FMatrix::Identity;
 		/** Skin matrices in the GL memory layout (uploaded as they are). */
 		TArray<FMatrix> BoneMatrices;
@@ -259,13 +213,16 @@ private:
 	FSSAOTarget SsaoTarget;
 	FLDRColorTarget LdrColor;
 	FGPUPassTimer PassTimers;
+	/** The renderer's own lines: the bounds view and the axes gizmo. */
 	FDebugDraw DebugDraw;
-	FDebugDraw OverlayDebugDraw; // gameplay vectors, etc. (always drawn)
+	FLineBatchRenderer LineBatch;
 	FUniformBuffer CameraUbo;
 	FUniformBuffer LightsUbo;
-	TSharedPtr<UTexture2D> WhiteTexture;
-	TSharedPtr<UTexture2D> FlatNormalTexture;
-	/** The scene's proxies, gathered in its order at the start of DrawScene. */
+	TUniquePtr<FTexture2DResource> WhiteTexture;
+	TUniquePtr<FTexture2DResource> FlatNormalTexture;
+	/** The GPU copies of the engine's meshes and textures. */
+	FRenderResourceCache Resources;
+	/** The scene's proxies, gathered in its order at the start of Render. */
 	TArray<FSkeletalDrawItem> SkeletalDraws;
 	TArray<const FStaticMeshSceneProxy*> FrameMeshes;
 	TArray<const FLightSceneProxy*> FrameDirectionalLights;
@@ -280,7 +237,7 @@ private:
 	int32 FbWidth = 0;
 	int32 FbHeight = 0;
 	FRHIFramebufferId DrawTargetFbo = InvalidFramebuffer;
-	bool bDebugDrawEnabled = false;
-	bool bAxesGizmoEnabled = false;
+	/** The show flags of the family being rendered. */
+	FEngineShowFlags ShowFlags;
 	bool bSceneGeometryEnabled = true;
 };

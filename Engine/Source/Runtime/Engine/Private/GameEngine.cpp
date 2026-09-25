@@ -1,5 +1,6 @@
 #include "Engine/GameEngine.h"
 
+#include "CanvasTypes.h"
 #include "DynamicRHI.h"
 #include "Engine/BlockingVolume.h"
 #include "Engine/StaticMeshActor.h"
@@ -13,6 +14,7 @@
 #include "Misc/CString.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "RendererInterface.h"
 #include "UObject/GarbageCollection.h"
 #include "UObject/Package.h"
 
@@ -97,15 +99,11 @@ bool UGameEngine::Initialize(int32 Width, int32 Height, const TCHAR* Title)
 		return false;
 	}
 
+	// The renderer's GPU objects need the window's context (UE: the RHI and the renderer come up with the viewport).
 	const FString ShaderDir = FPaths::ResolveLegacyContentPath("assets/Shaders");
-	if (!Renderer.Initialize(ShaderDir))
+	IRendererModule* RendererModule = GetRendererModulePtr();
+	if (RendererModule == nullptr || !RendererModule->InitRenderer(ShaderDir))
 	{
-		Window->Destroy();
-		return false;
-	}
-	if (!Overlay.Initialize(ShaderDir))
-	{
-		Renderer.Shutdown();
 		Window->Destroy();
 		return false;
 	}
@@ -142,7 +140,7 @@ bool UGameEngine::InitializeHeadless()
 		return true;
 	}
 
-	Resources.SetGpuUploadEnabled(false);
+	Resources.SetTextureLoadingEnabled(false);
 	bHeadless = true;
 	(void)AudioDevice.Initialize(/*silent=*/true);
 	GarbageCollectionTimer = FGarbageCollectionTimer(FGarbageCollectionSettings::LoadFromConfig());
@@ -171,8 +169,9 @@ void UGameEngine::Shutdown()
 	Resources.Clear();
 	if (!bHeadless)
 	{
-		Overlay.Shutdown();
-		Renderer.Shutdown();
+		Overlay.Clear();
+		// The GPU copies of the assets and the renderer's objects go while the context exists.
+		GetRendererModule().ShutdownRenderer();
 		Window->Destroy();
 		Window->SetCursorCaptured(false);
 	}
@@ -264,9 +263,8 @@ void UGameEngine::AddOnScreenDebugMessage(const FString& Message, float DisplayS
 
 EShaderReloadResult UGameEngine::ReloadAllShaders(bool bForce)
 {
-	EShaderReloadResult Result = Renderer.ReloadShaders(bForce);
-	Result = MergeShaderReload(Result, Overlay.ReloadShader(bForce));
-	return Result;
+	IRendererModule* RendererModule = GetRendererModulePtr();
+	return RendererModule != nullptr ? RendererModule->ReloadShaders(bForce) : EShaderReloadResult::Unchanged;
 }
 
 void UGameEngine::Run(
@@ -382,8 +380,19 @@ void UGameEngine::PaintHudAndOverlay(int32 FramebufferWidth, int32 FramebufferHe
 	{
 		return;
 	}
-	Hud->Paint(Overlay, FramebufferWidth, FramebufferHeight);
-	Overlay.Draw(FramebufferWidth, FramebufferHeight);
+	FCanvas Canvas(FramebufferWidth, FramebufferHeight);
+	PaintHudAndOverlay(Canvas);
+	Canvas.Flush_GameThread();
+}
+
+void UGameEngine::PaintHudAndOverlay(FCanvas& Canvas)
+{
+	if (!bInitialized || bHeadless)
+	{
+		return;
+	}
+	Hud->Paint(Canvas);
+	Overlay.Draw(Canvas);
 }
 
 void UGameEngine::RunHeadless(const FUpdateCallback& OnUpdate, float TickHz)
@@ -447,7 +456,7 @@ void UGameEngine::UpdateHudStats(float DeltaTime)
 	FpsAccumTime = 0.0f;
 	FpsAccumFrames = 0;
 
-	const FFrameStats& Stats = Renderer.GetFrameStats();
+	const FFrameStats& Stats = GetRendererModule().GetFrameStats();
 
 	int32 FbWidth = 0;
 	int32 FbHeight = 0;
@@ -489,8 +498,8 @@ void UGameEngine::UpdateHudStats(float DeltaTime)
 	Overlay.SetCenterText(FString());
 
 	Overlay.SetBottomLeftText(FString::Printf("F1 AABB %s\nF2 Coll+Trace %s\nF3 NavMesh %s\nF6 Axes %s",
-		Renderer.IsDebugDrawEnabled() ? "ON" : "OFF", bCollisionDebugEnabled ? "ON" : "OFF",
-		bNavMeshDebugEnabled ? "ON" : "OFF", Renderer.IsAxesGizmoEnabled() ? "ON" : "OFF"));
+		EngineShowFlags.Bounds ? "ON" : "OFF", bCollisionDebugEnabled ? "ON" : "OFF",
+		bNavMeshDebugEnabled ? "ON" : "OFF", EngineShowFlags.AxesGizmo ? "ON" : "OFF"));
 }
 
 void UGameEngine::HandleInput(float DeltaTime)
@@ -501,8 +510,8 @@ void UGameEngine::HandleInput(float DeltaTime)
 	const bool bF1Down = InputWindow.IsKeyPressed(EKeys::F1);
 	if (bF1Down && !bDebugKeyWasDown)
 	{
-		Renderer.ToggleDebugDraw();
-		UE_LOG(LogEngine, Log, "Debug draw (mesh AABB): %s", Renderer.IsDebugDrawEnabled() ? "on" : "off");
+		EngineShowFlags.Bounds = !EngineShowFlags.Bounds;
+		UE_LOG(LogEngine, Log, "Debug draw (mesh AABB): %s", EngineShowFlags.Bounds ? "on" : "off");
 	}
 	bDebugKeyWasDown = bF1Down;
 
@@ -552,8 +561,8 @@ void UGameEngine::HandleInput(float DeltaTime)
 	const bool bF6Down = InputWindow.IsKeyPressed(EKeys::F6);
 	if (bF6Down && !bAxesGizmoKeyWasDown)
 	{
-		Renderer.ToggleAxesGizmo();
-		UE_LOG(LogEngine, Log, "Axes gizmo: %s", Renderer.IsAxesGizmoEnabled() ? "on" : "off");
+		EngineShowFlags.AxesGizmo = !EngineShowFlags.AxesGizmo;
+		UE_LOG(LogEngine, Log, "Axes gizmo: %s", EngineShowFlags.AxesGizmo ? "on" : "off");
 	}
 	bAxesGizmoKeyWasDown = bF6Down;
 
@@ -638,12 +647,17 @@ void UGameEngine::Render(const FPostRenderCallback& OnPostRender)
 			DefaultCameraNearPlane, DefaultCameraFarPlane);
 	}
 
-	// The world's components send their moved transforms and poses to the scene, then the scene is drawn.
+	// The world's components send their moved transforms and poses to the scene, then the view family is rendered
+	// (UE: UGameViewportClient::Draw), then the HUD and the debug text go through the frame's canvas.
 	UWorld* World = GetWorld();
 	World->SendAllEndOfFrameUpdates();
-	Renderer.BeginFrame(FbWidth, FbHeight);
-	Renderer.DrawScene(World->Scene, *Camera);
-	PaintHudAndOverlay(FbWidth, FbHeight);
+	FSceneViewFamily ViewFamily(FSceneViewFamily::ConstructionValues(FbWidth, FbHeight, World->Scene, EngineShowFlags));
+	const FSceneView View(FSceneView::FromCamera(ViewFamily, *Camera));
+	ViewFamily.Views.Add(&View);
+	FCanvas Canvas(FbWidth, FbHeight);
+	GetRendererModule().BeginRenderingViewFamily(&Canvas, &ViewFamily);
+	PaintHudAndOverlay(Canvas);
+	Canvas.Flush_GameThread();
 	if (OnPostRender)
 	{
 		OnPostRender(FbWidth, FbHeight);
@@ -663,7 +677,7 @@ void UGameEngine::WritePendingScreenshot()
 	int32 Height = 0;
 	Window->GetFramebufferSize(Width, Height);
 	TArray<uint8> Bgr;
-	Renderer.ReadFramebufferBgr(Width, Height, Bgr);
+	GetRendererModule().ReadFramebufferBgr(Width, Height, Bgr);
 	if (Bgr.Num() == 0)
 	{
 		UE_LOG(LogEngine, Warning, "Screenshot skipped: empty framebuffer");

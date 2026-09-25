@@ -3,26 +3,7 @@
 #include "CoreMinimal.h"
 #include "Misc/DateTime.h"
 #include "RHIHandles.h"
-
-enum class EShaderReloadResult : uint8
-{
-	Unchanged = 0,
-	Reloaded = 1,
-	Failed = 2,
-};
-
-[[nodiscard]] inline EShaderReloadResult MergeShaderReload(EShaderReloadResult A, EShaderReloadResult B)
-{
-	if (A == EShaderReloadResult::Failed || B == EShaderReloadResult::Failed)
-	{
-		return EShaderReloadResult::Failed;
-	}
-	if (A == EShaderReloadResult::Reloaded || B == EShaderReloadResult::Reloaded)
-	{
-		return EShaderReloadResult::Reloaded;
-	}
-	return EShaderReloadResult::Unchanged;
-}
+#include "ShaderCore.h"
 
 /** GLSL program with cached uniform locations and optional hot reload from disk. */
 class RENDERER_API FShader

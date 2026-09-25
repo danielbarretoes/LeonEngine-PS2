@@ -2,9 +2,9 @@
 
 #include "Components/MeshComponent.h"
 #include "CoreMinimal.h"
+#include "Engine/SkeletalMesh.h"
 #include "Material.h"
 #include "SkeletalAnimation.h"
-#include "SkeletalMesh.h"
 #include "SkeletalMeshComponent.generated.h"
 
 class UGameEngine;

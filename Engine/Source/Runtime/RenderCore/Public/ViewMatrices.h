@@ -26,3 +26,16 @@
  * screen-right side is WorldUp ^ Forward and the view up is Forward ^ Right.
  */
 [[nodiscard]] RENDERCORE_API FMatrix MakeLookAtView(const FVector& Eye, const FVector& Target, const FVector& WorldUp);
+
+/**
+ * World-space mirror about the horizontal plane z = PlaneZ, applied before the view by the planar reflection pass (row
+ * vectors: z' = 2 PlaneZ - z).
+ */
+[[nodiscard]] RENDERCORE_API FMatrix MakeReflectMatrix(float PlaneZ);
+
+/**
+ * Ortho light matrix tightly fitted to a world-space AABB of shadow casters: world to the light's GL clip space (UE
+ * light view, UE ortho, then ToGLClipSpace), as the shadow pass and the lit shader's lookup use it.
+ */
+[[nodiscard]] RENDERCORE_API FMatrix FitLightSpaceMatrix(
+	const FVector& LightDirection, const FVector& WorldMin, const FVector& WorldMax, float Padding = 50.0f);

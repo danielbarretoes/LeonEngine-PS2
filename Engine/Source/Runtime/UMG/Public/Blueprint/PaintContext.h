@@ -3,21 +3,17 @@
 #include "CoreMinimal.h"
 #include "Fonts/TextLayout.h"
 
-class FDebugOverlay;
+class FCanvas;
 
 /**
- * Immediate screen-space draw for UUserWidget::NativePaint (pixel coords, top-left origin).
- * UE analogy: FPaintContext / Slate draw elements (lite). Colors are linear RGB (alpha unused).
+ * Immediate screen-space draw for UUserWidget::NativePaint (pixel coords, top-left origin), into the frame's FCanvas
+ * (Engine's CanvasTypes.h). UE analogy: FPaintContext / Slate draw elements (lite). Colors are linear RGB (alpha
+ * unused).
  */
 class UMG_API FPaintContext
 {
 public:
-	FPaintContext(FDebugOverlay& InOverlay, int32 FramebufferWidth, int32 FramebufferHeight)
-		: Overlay(InOverlay)
-		, Width(FramebufferWidth)
-		, Height(FramebufferHeight)
-	{
-	}
+	explicit FPaintContext(FCanvas& InCanvas);
 
 	[[nodiscard]] int32 GetWidth() const
 	{
@@ -41,7 +37,7 @@ public:
 	static void MeasureTextOnly(const FString& Text, float Scale, float& OutWidth, float& OutHeight);
 
 private:
-	FDebugOverlay& Overlay;
+	FCanvas& Canvas;
 	int32 Width = 0;
 	int32 Height = 0;
 };

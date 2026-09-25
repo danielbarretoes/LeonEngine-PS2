@@ -1,9 +1,7 @@
-#include "Texture2D.h"
+#include "Engine/Texture2D.h"
 
 #include "Containers/StringConv.h"
-#include "RendererLog.h"
-
-#include <glad/glad.h>
+#include "EngineLogs.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -18,28 +16,6 @@ namespace
 
 } // namespace
 
-UTexture2D::~UTexture2D()
-{
-	Destroy();
-}
-
-UTexture2D::UTexture2D(UTexture2D&& Other) noexcept
-	: Id(Other.Id)
-{
-	Other.Id = 0;
-}
-
-UTexture2D& UTexture2D::operator=(UTexture2D&& Other) noexcept
-{
-	if (this != &Other)
-	{
-		Destroy();
-		Id = Other.Id;
-		Other.Id = 0;
-	}
-	return *this;
-}
-
 UTexture2D UTexture2D::Create(int32 Width, int32 Height, const uint8* Rgba)
 {
 	UTexture2D Texture;
@@ -47,16 +23,9 @@ UTexture2D UTexture2D::Create(int32 Width, int32 Height, const uint8* Rgba)
 	{
 		return Texture;
 	}
-
-	glGenTextures(1, &Texture.Id);
-	glBindTexture(GL_TEXTURE_2D, Texture.Id);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, Width, Height, 0, GL_RGBA, GL_UNSIGNED_BYTE, Rgba);
-	glGenerateMipmap(GL_TEXTURE_2D);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	glBindTexture(GL_TEXTURE_2D, 0);
+	Texture.SizeX = Width;
+	Texture.SizeY = Height;
+	Texture.Pixels.Append(Rgba, Width * Height * 4);
 	return Texture;
 }
 
@@ -164,26 +133,11 @@ UTexture2D UTexture2D::LoadFromFile(const FString& Path)
 	uint8* Data = stbi_load(TCHAR_TO_UTF8(*Path), &Width, &Height, &Channels, 4);
 	if (Data == nullptr)
 	{
-		UE_LOG(LogRenderer, Error, "Failed to load texture: %s (%s)", *Path, stbi_failure_reason());
+		UE_LOG(LogEngine, Error, "Failed to load texture: %s (%s)", *Path, stbi_failure_reason());
 		return {};
 	}
 
 	UTexture2D Texture = Create(Width, Height, Data);
 	stbi_image_free(Data);
 	return Texture;
-}
-
-void UTexture2D::Bind(uint32 Unit) const
-{
-	glActiveTexture(GL_TEXTURE0 + Unit);
-	glBindTexture(GL_TEXTURE_2D, Id);
-}
-
-void UTexture2D::Destroy()
-{
-	if (Id != 0)
-	{
-		glDeleteTextures(1, &Id);
-		Id = 0;
-	}
 }

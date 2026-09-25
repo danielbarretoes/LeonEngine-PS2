@@ -1,10 +1,10 @@
 #include "CoreMinimal.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "MeshData.h"
 #include "Misc/AutomationTest.h"
 #include "Physics/PhysScene.h"
-#include "StaticMesh.h"
 #include "Tests/ScopedTestWorld.h"
 
 #if WITH_DEV_AUTOMATION_TESTS

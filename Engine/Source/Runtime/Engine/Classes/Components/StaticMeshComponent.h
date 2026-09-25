@@ -2,16 +2,16 @@
 
 #include "Components/MeshComponent.h"
 #include "CoreMinimal.h"
-#include "StaticMesh.h"
+#include "Engine/StaticMesh.h"
 #include "StaticMeshComponent.generated.h"
 
 /**
  * Draws a static mesh at its component transform (UE: UStaticMeshComponent): the mesh and materials an actor shows,
  * attachable to a socket of another component (a weapon in a hand bone).
  *
- * The mesh is the renderer's UStaticMesh resource, shared through FResourceCache, until P14 makes UStaticMesh an asset
- * UObject; then StaticMesh becomes a UPROPERTY. AStaticMeshActor's root is one: the `.llev` reader spawns one per
- * placed mesh.
+ * The mesh is a UStaticMesh asset (CPU data; the renderer keeps its GPU copy), shared through FResourceCache until P14
+ * makes UStaticMesh an asset UObject; then StaticMesh becomes a UPROPERTY. AStaticMeshActor's root is one: the
+ * `.llev` reader spawns one per placed mesh.
  */
 UCLASS()
 class ENGINE_API UStaticMeshComponent : public UMeshComponent

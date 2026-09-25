@@ -1,9 +1,9 @@
 #include "Level/LevelLoader.h"
 
+#include "Engine/StaticMesh.h"
 #include "EngineLogs.h"
 #include "Level/LeonLevelFormat.h"
 #include "Misc/Paths.h"
-#include "StaticMesh.h"
 
 namespace
 {

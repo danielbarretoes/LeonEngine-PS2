@@ -8,10 +8,9 @@
 #include "GameFramework/SpringArmComponent.h"
 #include "Misc/AutomationTest.h"
 #include "Physics/PhysScene.h"
-#include "SceneRenderer.h"
-#include "ShadowMap.h"
 #include "Tests/LegacyGolden.h"
 #include "Tests/ScopedTestWorld.h"
+#include "ViewMatrices.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -293,7 +292,7 @@ bool FGoldenShadowLightSpaceTest::RunTest(const FString& Parameters)
 	TArray<FVector> Ndc;
 	for (const FVector& LightDirection : LightDirections)
 	{
-		const FMatrix LightSpace = FShadowMap::FitLightSpaceMatrix(LegacyGolden::ToWorldDirection(LightDirection),
+		const FMatrix LightSpace = FitLightSpaceMatrix(LegacyGolden::ToWorldDirection(LightDirection),
 			LegacyGolden::ToWorldPosition(LegacyMin), LegacyGolden::ToWorldPosition(LegacyMax),
 			LegacyGolden::ToWorldLength(0.5f));
 		for (int32 Corner = 0; Corner < 8; ++Corner)
@@ -324,7 +323,7 @@ bool FGoldenPlanarReflectionTest::RunTest(const FString& Parameters)
 {
 	// The planar mirror about the floor at 0.25 m: six mirrored points, and their NDC through the reflected
 	// view-projection of an orbit camera (as the renderer composes it).
-	const FMatrix Reflect = FSceneRenderer::MakeReflectMatrix(LegacyGolden::ToWorldLength(0.25f));
+	const FMatrix Reflect = MakeReflectMatrix(LegacyGolden::ToWorldLength(0.25f));
 	const FVector LegacyPoints[6] = {FVector(0.0f, 0.25f, 0.0f), FVector(1.0f, 1.0f, 0.0f), FVector(-2.0f, 0.5f, 1.5f),
 		FVector(0.5f, 3.0f, -1.0f), FVector(1.5f, -0.5f, 2.0f), FVector(-1.0f, 2.25f, -2.0f)};
 

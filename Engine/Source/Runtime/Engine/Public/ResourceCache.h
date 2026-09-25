@@ -1,16 +1,18 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/Texture2D.h"
 #include "Material.h"
 #include "MeshData.h"
-#include "StaticMesh.h"
-#include "Texture2D.h"
 
 /**
- * Path- and key-keyed cache for GPU meshes/textures: cooked mesh loads plus
- * procedural checker/bump normals, material assets, and cube/plane/sphere meshes.
+ * Path- and key-keyed cache of the legacy content (Leon): cooked `.lmesh` meshes, PNG textures, `.lmat` materials, the
+ * procedural checker / bump maps and the basic cube / plane / sphere meshes, as CPU assets (UStaticMesh, UTexture2D,
+ * FMaterial). The engine owns one (UGameEngine::GetResources) and the level reader fills it; the renderer keeps its own
+ * GPU copies. P14 replaces it with asset loading (LoadObject / TSoftObjectPtr).
  */
-class RENDERER_API FResourceCache
+class ENGINE_API FResourceCache
 {
 public:
 	[[nodiscard]] TSharedPtr<UStaticMesh> LoadStaticMesh(const FString& Path);
@@ -27,14 +29,17 @@ public:
 	[[nodiscard]] TSharedPtr<UStaticMesh> GetPlaneMesh(float Size = 800.0f, float UvScale = 4.0f);
 	[[nodiscard]] TSharedPtr<UStaticMesh> GetSphereMesh(int32 Segments = 24, int32 Rings = 16);
 
-	/** When false, meshes stay CPU-only and textures are skipped (headless). */
-	void SetGpuUploadEnabled(bool bEnabled)
+	/**
+	 * When false, textures are not loaded (null maps) and the default material is a plain grey instead of the checker:
+	 * the headless engine (`-nullrhi`) never draws them.
+	 */
+	void SetTextureLoadingEnabled(bool bEnabled)
 	{
-		bGpuUploadEnabled = bEnabled;
+		bTextureLoadingEnabled = bEnabled;
 	}
-	[[nodiscard]] bool IsGpuUploadEnabled() const
+	[[nodiscard]] bool IsTextureLoadingEnabled() const
 	{
-		return bGpuUploadEnabled;
+		return bTextureLoadingEnabled;
 	}
 
 	void Clear();
@@ -46,7 +51,7 @@ private:
 	[[nodiscard]] TSharedPtr<UStaticMesh> CacheMesh(const FString& Key, const FMeshData& Data);
 	[[nodiscard]] TSharedPtr<UTexture2D> CacheTexture(const FString& Key, UTexture2D&& Texture);
 
-	bool bGpuUploadEnabled = true;
+	bool bTextureLoadingEnabled = true;
 	TMap<FString, TSharedPtr<UStaticMesh>> Meshes;
 	TMap<FString, TSharedPtr<UTexture2D>> Textures;
 	TMap<FString, FMaterial> Materials;

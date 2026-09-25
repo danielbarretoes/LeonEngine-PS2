@@ -1,9 +1,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/StaticMesh.h"
 #include "Material.h"
 #include "PrimitiveSceneProxy.h"
-#include "StaticMesh.h"
 
 class UStaticMeshComponent;
 

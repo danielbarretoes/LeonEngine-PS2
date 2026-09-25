@@ -115,7 +115,7 @@ void UMenuListWidget::CacheLayout(int32 /*ViewportW*/, int32 InViewportH)
 		ItemsTopPx = 0.0f;
 		return;
 	}
-	// Same vertical center as NativePaint / FDebugOverlay::MeasureText (14 * scale per line).
+	// Same vertical center as NativePaint / FCanvas::MeasureText (14 * scale per line).
 	const int32 Lines = CountLines(BuildPaintText());
 	const float H = LineH * static_cast<float>(FMath::Max(Lines, 1));
 	float Top = (static_cast<float>(InViewportH) - H) * 0.5f;

@@ -1,7 +1,7 @@
 #include "GameFramework/HUD.h"
 
 #include "Blueprint/PaintContext.h"
-#include "Debug/DebugOverlay.h"
+#include "CanvasTypes.h"
 
 AHUD::AHUD(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -59,15 +59,14 @@ void AHUD::Tick(float DeltaTime)
 	}
 }
 
-void AHUD::Paint(FDebugOverlay& Overlay, int FramebufferWidth, int FramebufferHeight)
+void AHUD::Paint(FCanvas& Canvas)
 {
-	Overlay.ClearScreenGeometry();
-	if (FramebufferWidth <= 0 || FramebufferHeight <= 0 || Widgets.Num() == 0)
+	if (Canvas.GetSizeX() <= 0 || Canvas.GetSizeY() <= 0 || Widgets.Num() == 0)
 	{
 		return;
 	}
 
-	FPaintContext Ctx(Overlay, FramebufferWidth, FramebufferHeight);
+	FPaintContext Ctx(Canvas);
 	for (UUserWidget* Widget : Widgets)
 	{
 		if (Widget != nullptr && Widget->bIsVisible)

@@ -1,9 +1,8 @@
-# Renderer: Scene renderer and GPU resources (Unreal: Runtime/Renderer).
+# Renderer: Scene renderer and GPU resources (Unreal: Runtime/Renderer). It implements Engine's IRendererModule and
+# FSceneInterface, so it depends on Engine (as in UE); Engine never includes a Renderer header.
 # Debt: calls OpenGL directly instead of going through RHI command lists.
 leon_module(Renderer
 	PLATFORMS Desktop
-	PUBLIC_DEPENDENCIES Core RHI RenderCore SlateCore AnimationCore
-	PRIVATE_DEPENDENCIES OpenGLDrv Glad STB Json
-	# Debt: Renderer.h includes Level.h and Level.h includes GPU resources.
-	CIRCULAR_DEPENDENCIES Engine
+	PUBLIC_DEPENDENCIES Core RHI RenderCore Engine
+	PRIVATE_DEPENDENCIES OpenGLDrv Glad
 )

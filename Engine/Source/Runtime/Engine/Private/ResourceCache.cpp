@@ -1,11 +1,11 @@
 #include "ResourceCache.h"
 
+#include "EngineLogs.h"
 #include "LeonMeshFormat.h"
 #include "MaterialAsset.h"
 #include "MeshData.h"
 #include "Misc/Paths.h"
 #include "Primitives.h"
-#include "RendererLog.h"
 
 FString FResourceCache::NormalizeKey(const FString& Path)
 {
@@ -25,8 +25,7 @@ TSharedPtr<UStaticMesh> FResourceCache::CacheMesh(const FString& Key, const FMes
 	{
 		return nullptr;
 	}
-	TSharedPtr<UStaticMesh> Mesh =
-		MakeShared<UStaticMesh>(bGpuUploadEnabled ? UStaticMesh::Upload(Data) : UStaticMesh::CreateCpu(Data));
+	TSharedPtr<UStaticMesh> Mesh = MakeShared<UStaticMesh>(UStaticMesh::CreateCpu(Data));
 	if (!Mesh->Valid())
 	{
 		return nullptr;
@@ -57,17 +56,17 @@ TSharedPtr<UStaticMesh> FResourceCache::LoadStaticMesh(const FString& Path)
 	// Shipping / runtime: cooked .lmesh only (OBJ/FBX/glTF go through LeonCook).
 	if (!IsLeonMeshPath(Path))
 	{
-		UE_LOG(LogRenderer, Error, "ResourceCache: expected .lmesh path, got '%s'", *Path);
+		UE_LOG(LogEngine, Error, "ResourceCache: expected .lmesh path, got '%s'", *Path);
 		return nullptr;
 	}
 	FMeshData Data;
 	if (!LoadLeonMeshFile(Path, Data))
 	{
-		UE_LOG(LogRenderer, Error, "ResourceCache: failed to load .lmesh '%s'", *Path);
+		UE_LOG(LogEngine, Error, "ResourceCache: failed to load .lmesh '%s'", *Path);
 		return nullptr;
 	}
 
-	// Bind diffuse textures referenced by the MTL before GPU upload.
+	// The diffuse textures the MTL references.
 	for (int32 I = 0; I < Data.Materials.Num() && I < Data.AlbedoMapPaths.Num(); ++I)
 	{
 		if (Data.AlbedoMapPaths[I].IsEmpty())
@@ -77,7 +76,7 @@ TSharedPtr<UStaticMesh> FResourceCache::LoadStaticMesh(const FString& Path)
 		Data.Materials[I].AlbedoMap = LoadTexture(Data.AlbedoMapPaths[I]);
 		if (Data.Materials[I].AlbedoMap == nullptr)
 		{
-			UE_LOG(LogRenderer, Error, "ResourceCache: missing albedo map '%s'", *Data.AlbedoMapPaths[I]);
+			UE_LOG(LogEngine, Error, "ResourceCache: missing albedo map '%s'", *Data.AlbedoMapPaths[I]);
 		}
 	}
 
@@ -86,7 +85,7 @@ TSharedPtr<UStaticMesh> FResourceCache::LoadStaticMesh(const FString& Path)
 
 TSharedPtr<UTexture2D> FResourceCache::LoadTexture(const FString& Path)
 {
-	if (!bGpuUploadEnabled)
+	if (!bTextureLoadingEnabled)
 	{
 		return nullptr;
 	}
@@ -100,7 +99,7 @@ TSharedPtr<UTexture2D> FResourceCache::LoadTexture(const FString& Path)
 
 TSharedPtr<UTexture2D> FResourceCache::CheckerTexture(int32 Size)
 {
-	if (!bGpuUploadEnabled)
+	if (!bTextureLoadingEnabled)
 	{
 		return nullptr;
 	}
@@ -115,7 +114,7 @@ TSharedPtr<UTexture2D> FResourceCache::CheckerTexture(int32 Size)
 
 TSharedPtr<UTexture2D> FResourceCache::BumpNormalTexture(int32 Size)
 {
-	if (!bGpuUploadEnabled)
+	if (!bTextureLoadingEnabled)
 	{
 		return nullptr;
 	}
@@ -139,7 +138,7 @@ FMaterial FResourceCache::LoadMaterial(const FString& Path)
 	FMaterial Material;
 	if (!LoadMaterialFile(*this, Path, Material))
 	{
-		UE_LOG(LogRenderer, Warning, "ResourceCache: using default material (failed '%s')", *Path);
+		UE_LOG(LogEngine, Warning, "ResourceCache: using default material (failed '%s')", *Path);
 		return DefaultMaterial();
 	}
 	Materials.Add(CacheKey, Material);
@@ -162,7 +161,7 @@ FMaterial FResourceCache::DefaultMaterial()
 		return Material;
 	}
 
-	if (bGpuUploadEnabled)
+	if (bTextureLoadingEnabled)
 	{
 		Material = MakeDefaultCheckerMaterial(*this);
 	}

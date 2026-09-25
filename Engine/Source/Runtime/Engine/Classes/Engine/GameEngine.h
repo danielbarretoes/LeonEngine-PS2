@@ -11,7 +11,8 @@
 #include "GameFramework/PlayInputTarget.h"
 #include "GenericPlatform/GenericApplication.h"
 #include "ResourceCache.h"
-#include "SceneRenderer.h"
+#include "SceneView.h"
+#include "ShaderCore.h"
 #include "UObject/GCObject.h"
 #include "UObject/GarbageCollection.h"
 
@@ -20,6 +21,11 @@ class UWorld;
 /**
  * Top-level runtime: platform window (FGenericWindow), per-frame Tick, orbit-camera input, FPS overlay,
  * UGameInstance, and a FResourceCache the level loader fills.
+ *
+ * It draws through the Renderer module's interface (IRendererModule, found by name): Initialize starts the renderer
+ * on the window's context, each frame renders a view family of the game world's scene through the view camera and
+ * flushes a canvas with the HUD and the debug text, and Shutdown stops the renderer before the window goes. Engine
+ * never includes a Renderer header.
  *
  * Not a UObject yet (P13 makes it UEngine / UGameEngine with GEngine): it keeps its UObjects alive as an FGCObject.
  * It creates the UGameInstance, whose world context holds the game UWorld; GetLevel is that world's persistent level.
@@ -63,8 +69,10 @@ public:
 	void TickPlayAudio();
 	/** Editor PIE / custom loops: HUD widget tick + on-screen messages + optional F4 stats. */
 	void TickPlayHud(float DeltaTime);
-	/** Editor PIE / custom loops: paint HUD widgets + FDebugOverlay (call after DrawScene). */
+	/** Editor PIE / custom loops: paint HUD widgets + FDebugOverlay into a canvas and draw it (after the scene). */
 	void PaintHudAndOverlay(int32 FramebufferWidth, int32 FramebufferHeight);
+	/** Paints the HUD's widgets and the debug text into Canvas (UE: the viewport client drawing the HUD). */
+	void PaintHudAndOverlay(FCanvas& Canvas);
 	/** Saves the next rendered frame as a 24-bit .bmp (UE: FScreenshotRequest). */
 	void RequestScreenshot(const FString& Path)
 	{
@@ -129,13 +137,23 @@ public:
 	{
 		return *PlayerInput;
 	}
-	[[nodiscard]] FSceneRenderer& GetRenderer()
+	/** What the view draws besides the scene: the bounds (F1) and the axes gizmo (F6) (UE: EngineShowFlags). */
+	[[nodiscard]] FEngineShowFlags& GetEngineShowFlags()
 	{
-		return Renderer;
+		return EngineShowFlags;
 	}
-	[[nodiscard]] const FSceneRenderer& GetRenderer() const
+	[[nodiscard]] const FEngineShowFlags& GetEngineShowFlags() const
 	{
-		return Renderer;
+		return EngineShowFlags;
+	}
+	/** F6: 1 m world axes and the view orientation gizmo (EngineShowFlags.AxesGizmo); off by default. */
+	void SetAxesGizmoEnabled(bool bEnabled)
+	{
+		EngineShowFlags.AxesGizmo = bEnabled;
+	}
+	[[nodiscard]] bool IsAxesGizmoEnabled() const
+	{
+		return EngineShowFlags.AxesGizmo;
 	}
 	[[nodiscard]] FAudioDevice& GetAudioDevice()
 	{
@@ -227,7 +245,7 @@ public:
 		bOrbitMouseEnabled = bEnabled;
 	}
 
-	/** F2 collision volumes debug (Engine tool flag — not owned by the forward FSceneRenderer). */
+	/** F2 collision volumes debug (Engine tool flag, not a renderer show flag). */
 	void SetCollisionDebugEnabled(bool bEnabled)
 	{
 		bCollisionDebugEnabled = bEnabled;
@@ -314,7 +332,9 @@ private:
 	FPlayInputTarget PlayInputTarget;
 	/** The player's input (UE keeps it on the player controller; P13 moves it there with input by config). */
 	UPlayerInput* PlayerInput = nullptr;
-	FSceneRenderer Renderer;
+	/** The view's show flags (UE: the viewport client's EngineShowFlags). */
+	FEngineShowFlags EngineShowFlags;
+	/** The on-screen debug text, drawn into each frame's canvas. */
 	FDebugOverlay Overlay;
 	/** The HUD, outside any world (UE spawns one per player controller; P13). */
 	AHUD* Hud = nullptr;

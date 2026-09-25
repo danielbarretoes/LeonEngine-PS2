@@ -1,10 +1,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Shader.h"
 
-/** Immediate-mode colored line batch for 3D debug (AABBs, light frustum, etc.). Colors are linear RGB. */
-class RENDERER_API FDebugDraw
+/**
+ * A batch of coloured world-space lines for 3D debug (AABBs, light frustum, collision, navigation, the axes gizmo).
+ * Colours are linear RGB. It only collects the lines: the renderer draws a batch it is given (the world's
+ * UWorld::LineBatcher after the scene, its own bounds and gizmo batches), which UE does with ULineBatchComponent.
+ */
+class ENGINE_API FDebugDraw
 {
 public:
 	struct FLineVertex
@@ -12,11 +15,6 @@ public:
 		FVector Position = FVector::ZeroVector;
 		FVector Color = FVector::ZeroVector;
 	};
-
-	bool Initialize(const FString& ShaderDirectory);
-	void Shutdown();
-	/** Reloads the line shader from disk if its timestamps changed (or when forced). */
-	[[nodiscard]] EShaderReloadResult ReloadShader(bool bForce = false);
 
 	void Clear();
 	void AddLine(const FVector& A, const FVector& B, const FLinearColor& InColor);
@@ -38,13 +36,6 @@ public:
 	/** GL clip-space cube (+-1) transformed by inverse(LightSpace): the world-space ortho frustum. */
 	void AddLightFrustum(const FMatrix& LightSpace, const FLinearColor& InColor);
 
-	/** Draws the batch with a world to GL clip space view-projection (GLClipSpace.h). */
-	void Flush(const FMatrix& ViewProjection, bool bDepthTest = true) const;
-
-	[[nodiscard]] bool IsValid() const
-	{
-		return Shader.Valid() && Vao != 0;
-	}
 	[[nodiscard]] bool IsEmpty() const
 	{
 		return Vertices.Num() == 0;
@@ -56,8 +47,5 @@ public:
 	}
 
 private:
-	FShader Shader;
-	uint32 Vao = 0;
-	uint32 Vbo = 0;
 	TArray<FLineVertex> Vertices;
 };

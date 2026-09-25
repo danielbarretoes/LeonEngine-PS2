@@ -2,34 +2,23 @@
 
 #include "CoreMinimal.h"
 #include "Material.h"
-#include "RHIHandles.h"
 #include "SkeletalAnimation.h"
 
-/** GPU skinned mesh (VAO with bone indices/weights). */
-class RENDERER_API USkeletalMesh
+/**
+ * A skinned mesh asset (UE: USkeletalMesh): the skeleton, the embedded animation, the skinned vertices and indices, the
+ * bounds and the material. The renderer builds its GPU buffers from it the first time it draws it.
+ *
+ * Plain C++ shared through TSharedPtr until P14 makes it a UObject asset.
+ */
+class ENGINE_API USkeletalMesh
 {
 public:
-	USkeletalMesh() = default;
-	~USkeletalMesh();
-
-	USkeletalMesh(const USkeletalMesh&) = delete;
-	USkeletalMesh& operator=(const USkeletalMesh&) = delete;
-	USkeletalMesh(USkeletalMesh&& Other) noexcept;
-	USkeletalMesh& operator=(USkeletalMesh&& Other) noexcept;
-
-	[[nodiscard]] static USkeletalMesh Upload(FSkeletalMeshData Data);
-	/** Skeleton / bounds / index count only (no VAO). Headless path. */
+	/** The asset of Data; an empty mesh is not Valid. */
 	[[nodiscard]] static USkeletalMesh CreateCpu(FSkeletalMeshData Data);
-
-	void Draw() const;
 
 	[[nodiscard]] bool Valid() const
 	{
-		return IndexCount > 0 && (bCpuOnly || Vao != InvalidVertexArray);
-	}
-	[[nodiscard]] bool IsCpuOnly() const
-	{
-		return bCpuOnly;
+		return IndexCount > 0;
 	}
 	[[nodiscard]] int32 GetIndexCount() const
 	{
@@ -71,17 +60,23 @@ public:
 		Material = MoveTemp(InMaterial);
 	}
 
-private:
-	void Destroy();
+	/** The skinned vertices and the indices the renderer uploads. */
+	[[nodiscard]] const TArray<FSkeletalVertex>& GetVertices() const
+	{
+		return Vertices;
+	}
+	[[nodiscard]] const TArray<uint32>& GetIndices() const
+	{
+		return Indices;
+	}
 
-	FRHIVertexArrayId Vao = InvalidVertexArray;
-	FRHIBufferId Vbo = InvalidBuffer;
-	FRHIBufferId Ebo = InvalidBuffer;
+private:
 	int32 IndexCount = 0;
-	bool bCpuOnly = false;
 	USkeleton Skeleton{};
 	UAnimSequence EmbeddedAnim{};
 	FVector LocalMin = FVector::ZeroVector;
 	FVector LocalMax = FVector::ZeroVector;
 	FMaterial Material{};
+	TArray<FSkeletalVertex> Vertices;
+	TArray<uint32> Indices;
 };

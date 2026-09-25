@@ -1,8 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/SkeletalMesh.h"
 #include "PrimitiveSceneProxy.h"
-#include "SkeletalMesh.h"
 
 class USkeletalMeshComponent;
 
@@ -18,6 +18,10 @@ public:
 	[[nodiscard]] const USkeletalMesh& GetSkeletalMesh() const
 	{
 		return *SkeletalMesh;
+	}
+	[[nodiscard]] const TSharedPtr<USkeletalMesh>& GetSkeletalMeshShared() const
+	{
+		return SkeletalMesh;
 	}
 
 	/** Skin matrices in the GL memory layout (uploaded as they are). */

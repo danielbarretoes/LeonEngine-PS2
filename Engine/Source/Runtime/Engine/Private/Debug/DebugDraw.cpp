@@ -1,11 +1,5 @@
 #include "Debug/DebugDraw.h"
 
-#include "Misc/Paths.h"
-#include "OpenGLVertexAttrib.h"
-#include "RendererLog.h"
-
-#include <glad/glad.h>
-
 namespace
 {
 	/** The 12 edges of a box whose corners are numbered like AddAabb's. */
@@ -24,50 +18,6 @@ namespace
 		{3, 7},
 	};
 } // namespace
-
-bool FDebugDraw::Initialize(const FString& /*ShaderDirectory*/)
-{
-	const FString Vert = FPaths::ResolveLegacyContentPath("assets/Shaders/debug_line.vert");
-	const FString Frag = FPaths::ResolveLegacyContentPath("assets/Shaders/debug_line.frag");
-	if (!Shader.LoadFromFiles(Vert, Frag))
-	{
-		UE_LOG(LogRenderer, Error, "Failed to load debug line shaders");
-		return false;
-	}
-
-	glGenVertexArrays(1, &Vao);
-	glGenBuffers(1, &Vbo);
-	glBindVertexArray(Vao);
-	glBindBuffer(GL_ARRAY_BUFFER, Vbo);
-	glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(FLineVertex), GlAttribOffset(&FLineVertex::Position));
-	glEnableVertexAttribArray(1);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(FLineVertex), GlAttribOffset(&FLineVertex::Color));
-	glBindVertexArray(0);
-	return true;
-}
-
-EShaderReloadResult FDebugDraw::ReloadShader(bool bForce)
-{
-	return bForce ? Shader.ForceReloadFromDisk() : Shader.ReloadFromDiskIfChanged();
-}
-
-void FDebugDraw::Shutdown()
-{
-	if (Vbo != 0)
-	{
-		glDeleteBuffers(1, &Vbo);
-		Vbo = 0;
-	}
-	if (Vao != 0)
-	{
-		glDeleteVertexArrays(1, &Vao);
-		Vao = 0;
-	}
-	Shader.Destroy();
-	Vertices.Empty();
-}
 
 void FDebugDraw::Clear()
 {
@@ -191,37 +141,4 @@ void FDebugDraw::AddLightFrustum(const FMatrix& LightSpace, const FLinearColor& 
 	{
 		AddLine(World[Edge[0]], World[Edge[1]], InColor);
 	}
-}
-
-void FDebugDraw::Flush(const FMatrix& ViewProjection, bool bDepthTest) const
-{
-	if (!IsValid() || Vertices.Num() == 0)
-	{
-		return;
-	}
-
-	glBindBuffer(GL_ARRAY_BUFFER, Vbo);
-	glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(Vertices.Num() * sizeof(FLineVertex)), Vertices.GetData(),
-		GL_DYNAMIC_DRAW);
-
-	glDisable(GL_BLEND);
-	if (bDepthTest)
-	{
-		glDepthMask(GL_TRUE);
-		glEnable(GL_DEPTH_TEST);
-		glDepthFunc(GL_LEQUAL);
-	}
-	else
-	{
-		glDisable(GL_DEPTH_TEST);
-	}
-
-	Shader.Bind();
-	Shader.SetMat4("uViewProjection", ViewProjection);
-	glBindVertexArray(Vao);
-	glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(Vertices.Num()));
-	glBindVertexArray(0);
-
-	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LESS);
 }

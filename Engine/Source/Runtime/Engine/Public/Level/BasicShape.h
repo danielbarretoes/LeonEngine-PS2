@@ -41,7 +41,9 @@ struct ENGINE_API FBasicShape
 	[[nodiscard]] static FBasicShape Plane(float Size = 1.0f, const FTransform& InTransform = FTransform::Identity,
 		FMaterial InMaterial = {}, bool bHasMaterial = false);
 
-	/** Gives a component the shape's mesh and its material (every section's slot 0; the default material without one).
+	/**
+	 * Gives a component the shape's mesh and its material (every section's slot 0; the default material without
+	 * one).
 	 */
 	void ApplyTo(UStaticMeshComponent& Component, FResourceCache& Resources) const;
 

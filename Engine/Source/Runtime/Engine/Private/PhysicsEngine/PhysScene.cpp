@@ -3,10 +3,10 @@
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Debug/DebugDraw.h"
+#include "Engine/StaticMesh.h"
 #include "Frustum.h"
 #include "IPhysicsBackend.h"
 #include "MeshData.h"
-#include "StaticMesh.h"
 #include "TriangleCollision.h"
 
 FPhysScene::FPhysScene(EPhysicsBackend InBackend)

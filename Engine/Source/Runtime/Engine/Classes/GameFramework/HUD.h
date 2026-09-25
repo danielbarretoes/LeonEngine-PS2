@@ -5,7 +5,7 @@
 #include "GameFramework/Actor.h"
 #include "HUD.generated.h"
 
-class FDebugOverlay;
+class FCanvas;
 
 /**
  * Unreal-like AHUD (an actor): owns UserWidgets painted each frame into screen geometry. UE spawns one per player
@@ -76,8 +76,11 @@ public:
 	/** Removes the widgets when the HUD is destroyed or ends play. */
 	void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-	/** Clears prior frame screen geometry, then paints visible widgets. */
-	void Paint(FDebugOverlay& Overlay, int FramebufferWidth, int FramebufferHeight);
+	/**
+	 * Paints the visible widgets into the frame's canvas (UE: DrawHUD with the canvas; UMG widgets paint through
+	 * it).
+	 */
+	void Paint(FCanvas& Canvas);
 
 	[[nodiscard]] const TArray<UUserWidget*>& GetWidgets() const
 	{
