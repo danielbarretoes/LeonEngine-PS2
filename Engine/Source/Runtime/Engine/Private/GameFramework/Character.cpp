@@ -1,7 +1,6 @@
 #include "GameFramework/Character.h"
 
 #include "Engine/World.h"
-#include "SceneRenderer.h"
 
 namespace
 {
@@ -619,9 +618,4 @@ void ACharacter::Tick(float DeltaTime)
 		(void)ConsumeJustLanded();
 	}
 	Mesh->TickComponent(DeltaTime);
-}
-
-void ACharacter::SubmitMeshDraw(FSceneRenderer& Renderer) const
-{
-	Mesh->SubmitDraw(Renderer);
 }

@@ -18,9 +18,6 @@ public:
 	UPROPERTY()
 	float AttenuationRadius = DefaultPointLightRange;
 
-	/** UE: SetAttenuationRadius. */
-	void SetAttenuationRadius(float NewRadius)
-	{
-		AttenuationRadius = NewRadius;
-	}
+	/** UE: SetAttenuationRadius; a registered light's proxy is recreated. */
+	void SetAttenuationRadius(float NewRadius);
 };

@@ -1,6 +1,6 @@
 #include "Components/StaticMeshComponent.h"
 
-#include "SceneRenderer.h"
+#include "StaticMeshSceneProxy.h"
 
 UStaticMeshComponent::UStaticMeshComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -14,6 +14,7 @@ bool UStaticMeshComponent::SetStaticMesh(TSharedPtr<UStaticMesh> NewMesh)
 		return false;
 	}
 	StaticMesh = MoveTemp(NewMesh);
+	MarkRenderStateDirty();
 	RecreatePhysicsState();
 	return true;
 }
@@ -68,11 +69,7 @@ bool UStaticMeshComponent::HasShadowCastingMaterial() const
 	return false;
 }
 
-void UStaticMeshComponent::SubmitDraw(FSceneRenderer& Renderer) const
+FPrimitiveSceneProxy* UStaticMeshComponent::CreateSceneProxy()
 {
-	if (!HasValidMesh())
-	{
-		return;
-	}
-	Renderer.SubmitStaticDraw(*StaticMesh, GetComponentTransform().ToMatrixWithScale(), GetMaterial(0));
+	return HasValidMesh() ? new FStaticMeshSceneProxy(this) : nullptr;
 }

@@ -236,12 +236,20 @@ void USceneComponent::SetWorldTransform(const FTransform& NewTransform)
 
 void USceneComponent::SetVisibility(bool bNewVisibility)
 {
-	bVisible = bNewVisibility;
+	if (bVisible != bNewVisibility)
+	{
+		bVisible = bNewVisibility;
+		MarkRenderStateDirty();
+	}
 }
 
 void USceneComponent::SetHiddenInGame(bool bNewHidden)
 {
-	bHiddenInGame = bNewHidden;
+	if (bHiddenInGame != bNewHidden)
+	{
+		bHiddenInGame = bNewHidden;
+		MarkRenderStateDirty();
+	}
 }
 
 bool USceneComponent::IsVisible() const

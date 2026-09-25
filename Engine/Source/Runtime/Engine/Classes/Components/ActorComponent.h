@@ -92,9 +92,31 @@ public:
 	/** Destroys the render and physics state and runs OnUnregister (UE: UnregisterComponent). */
 	void UnregisterComponent();
 
-	/** Destroys and creates the physics state again, for a registered component in a world (UE: RecreatePhysicsState).
+	/**
+	 * Destroys and creates the physics state again, for a registered component in a world (UE:
+	 * RecreatePhysicsState).
 	 */
 	void RecreatePhysicsState();
+
+	/**
+	 * Recreates the render state of a component that has one, so the renderer's proxy follows a change it does not
+	 * track (a new mesh or material, the visibility). UE defers it to the end of the frame; Leon recreates at once.
+	 */
+	void MarkRenderStateDirty();
+
+	/** True while the component has a render state (registered in a world; UE: IsRenderStateCreated). */
+	[[nodiscard]] bool IsRenderStateCreated() const
+	{
+		return bRenderStateCreated;
+	}
+
+	/** Sends the current world transform to the renderer's proxy (UE: SendRenderTransform_Concurrent). */
+	virtual void SendRenderTransform_Concurrent();
+	/**
+	 * Sends per-frame data such as a skinned mesh's pose to the renderer's proxy (UE:
+	 * SendRenderDynamicData_Concurrent).
+	 */
+	virtual void SendRenderDynamicData_Concurrent();
 
 	/**
 	 * Ends play, unregisters, removes the component from its owner and marks it pending kill (UE: DestroyComponent).
@@ -123,8 +145,8 @@ protected:
 	virtual void OnUnregister();
 
 	/**
-	 * The render state: what the renderer needs to draw the component (UE: CreateRenderState_Concurrent; P13 moves
-	 * this to FScene::AddPrimitive). Only called when the component registers in a world.
+	 * The render state: what the renderer needs to draw the component (UE: CreateRenderState_Concurrent). Primitives
+	 * and lights add their proxy to the world's FSceneInterface. Only called when the component registers in a world.
 	 */
 	virtual void CreateRenderState_Concurrent();
 	virtual void DestroyRenderState_Concurrent();
@@ -135,10 +157,6 @@ protected:
 	virtual void CreatePhysicsState();
 	virtual void DestroyPhysicsState();
 
-	[[nodiscard]] bool IsRenderStateCreated() const
-	{
-		return bRenderStateCreated;
-	}
 	[[nodiscard]] bool IsPhysicsStateCreated() const
 	{
 		return bPhysicsStateCreated;

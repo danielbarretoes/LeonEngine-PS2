@@ -62,7 +62,7 @@ ALight* FBasicLight::SpawnIn(UWorld& World) const
 			Component->SetLightColor(FLinearColor(LightColor.X, LightColor.Y, LightColor.Z));
 			Component->SetIntensity(Intensity);
 			Component->SetCastShadows(bCastShadows);
-			Component->LightSourceAngle = SourceAngle;
+			Component->SetLightSourceAngle(SourceAngle);
 		}
 		return Light;
 	}

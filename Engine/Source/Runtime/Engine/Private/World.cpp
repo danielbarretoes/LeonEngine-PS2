@@ -7,8 +7,10 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/GameStateBase.h"
+#include "Misc/App.h"
 #include "Misc/PackageName.h"
-#include "SceneRenderer.h"
+#include "RendererInterface.h"
+#include "SceneInterface.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectHash.h"
 
@@ -57,6 +59,25 @@ void UWorld::InitWorld()
 {
 	PersistentLevel = NewObject<ULevel>(this, TEXT("PersistentLevel"));
 	PersistentLevel->OwningWorld = this;
+	// UE: InitWorld allocates the scene unless the engine never renders (-nullrhi, a dedicated server).
+	if (FApp::CanEverRender())
+	{
+		if (IRendererModule* RendererModule = GetRendererModulePtr())
+		{
+			Scene = RendererModule->AllocateScene(this);
+		}
+	}
+}
+
+void UWorld::BeginDestroy()
+{
+	// A world the collector frees without DestroyWorld (a world made outside the root set) still frees its scene.
+	if (Scene != nullptr)
+	{
+		GetRendererModule().RemoveScene(Scene);
+		Scene = nullptr;
+	}
+	Super::BeginDestroy();
 }
 
 void UWorld::DestroyWorld(bool /*bInformEngineOfWorld*/)
@@ -90,7 +111,12 @@ void UWorld::DestroyWorld(bool /*bInformEngineOfWorld*/)
 		}
 	}
 	PendingSpawnActors.Empty();
-	Primitives.Empty();
+	// Every component left the scene when it unregistered: the scene goes now.
+	if (Scene != nullptr)
+	{
+		GetRendererModule().RemoveScene(Scene);
+		Scene = nullptr;
+	}
 	AuthorityGameMode = nullptr;
 	GameState = nullptr;
 	if (PersistentLevel != nullptr)
@@ -443,11 +469,6 @@ void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& Params)
 
 	Physics.SyncComponentsToBodies();
 
-	if (Params.Renderer != nullptr)
-	{
-		SubmitPrimitiveDraws(*Params.Renderer);
-	}
-
 	if (Params.CollisionDebugDraw != nullptr)
 	{
 		ForEach<ACharacter>(
@@ -464,26 +485,25 @@ void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& Params)
 	}
 }
 
-void UWorld::AddPrimitive(UPrimitiveComponent* Primitive)
+void UWorld::SendAllEndOfFrameUpdates()
 {
-	if (Primitive != nullptr)
+	if (Scene == nullptr || PersistentLevel == nullptr)
 	{
-		Primitives.AddUnique(Primitive);
+		return;
 	}
-}
-
-void UWorld::RemovePrimitive(UPrimitiveComponent* Primitive)
-{
-	Primitives.Remove(Primitive);
-}
-
-void UWorld::SubmitPrimitiveDraws(FSceneRenderer& InRenderer) const
-{
-	for (const UPrimitiveComponent* Primitive : Primitives)
+	for (AActor* Actor : PersistentLevel->Actors)
 	{
-		if (Primitive != nullptr && !Primitive->IsPendingKill() && Primitive->ShouldRender())
+		if (Actor == nullptr || Actor->IsPendingKillPending())
 		{
-			Primitive->SubmitDraw(InRenderer);
+			continue;
+		}
+		for (UActorComponent* Component : Actor->GetComponents())
+		{
+			if (Component != nullptr && Component->IsRenderStateCreated())
+			{
+				Component->SendRenderTransform_Concurrent();
+				Component->SendRenderDynamicData_Concurrent();
+			}
 		}
 	}
 }

@@ -165,11 +165,8 @@ public:
 	bool SetActorTransform(const FTransform& NewTransform);
 	void SetActorScale3D(const FVector& NewScale3D);
 
-	/** UE: SetActorHiddenInGame / IsHidden. */
-	virtual void SetActorHiddenInGame(bool bNewHidden)
-	{
-		bHidden = bNewHidden;
-	}
+	/** UE: SetActorHiddenInGame / IsHidden; a change recreates the components' render state (their proxies). */
+	virtual void SetActorHiddenInGame(bool bNewHidden);
 	[[nodiscard]] bool IsHidden() const
 	{
 		return bHidden;

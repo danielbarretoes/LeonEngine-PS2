@@ -4,9 +4,14 @@
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "CoreMinimal.h"
+#include "Engine/DirectionalLight.h"
+#include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
 #include "Misc/AutomationTest.h"
+#include "PrimitiveSceneProxy.h"
+#include "Primitives.h"
+#include "SceneInterface.h"
 #include "Tests/ScopedTestWorld.h"
 #include "UObject/GarbageCollection.h"
 #include "UObject/WeakObjectPtrTemplates.h"
@@ -51,17 +56,17 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FComponentsPrimitivesRegisterWithTheWorldTest,
 
 bool FComponentsPrimitivesRegisterWithTheWorldTest::RunTest(const FString& Parameters)
 {
-	// A primitive registered in a world joins the world's primitive list (its render state) and leaves it when it is
+	// A primitive registered in a world gets its render state (its place in the world's scene) and loses it when it is
 	// destroyed; a hidden owner is not rendered.
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	AActor* Actor = World.SpawnActor<AActor>();
 	UStaticMeshComponent* MeshComponent = NewObject<UStaticMeshComponent>(Actor);
-	TestFalse("Not registered yet", World.GetPrimitives().Contains(MeshComponent));
+	TestFalse("Not registered yet", MeshComponent->IsRenderStateCreated());
 	MeshComponent->SetupAttachment(Actor->GetRootComponent());
 	MeshComponent->RegisterComponent();
 	TestTrue("Registered", MeshComponent->IsRegistered());
-	TestTrue("In the world's primitives", World.GetPrimitives().Contains(MeshComponent));
+	TestTrue("In the world's primitives", MeshComponent->IsRenderStateCreated());
 	// A component created after the spawn is kept by its actor's OwnedComponents (AActor::AddReferencedObjects).
 	TWeakObjectPtr<UStaticMeshComponent> WeakMeshComponent = MeshComponent;
 	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
@@ -80,15 +85,59 @@ bool FComponentsPrimitivesRegisterWithTheWorldTest::RunTest(const FString& Param
 	TestEqual("Override material", MeshComponent->GetMaterial(1).Roughness, 0.25f);
 
 	MeshComponent->DestroyComponent();
-	TestFalse("Left the world's primitives", World.GetPrimitives().Contains(MeshComponent));
+	TestFalse("Left the world's primitives", MeshComponent->IsRenderStateCreated());
 	TestFalse("Not an owned component", Actor->GetComponents().Contains(MeshComponent));
 
 	// Every character registers its capsule and its mesh.
 	ACharacter* Character = World.SpawnActor<ACharacter>();
-	TestTrue("Capsule primitive", World.GetPrimitives().Contains(Character->GetCapsuleComponent()));
-	TestTrue("Mesh primitive", World.GetPrimitives().Contains(&Character->GetMesh()));
+	TestTrue("Capsule primitive", Character->GetCapsuleComponent()->IsRenderStateCreated());
+	TestTrue("Mesh primitive", Character->GetMesh().IsRenderStateCreated());
 	Character->Destroy();
-	TestFalse("Capsule gone", World.GetPrimitives().Contains(Character->GetCapsuleComponent()));
+	TestFalse("Capsule gone", Character->GetCapsuleComponent()->IsRenderStateCreated());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FComponentsSceneProxiesFollowTheComponentsTest,
+	"System.Engine.Components.SceneProxiesFollowTheComponents",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FComponentsSceneProxiesFollowTheComponentsTest::RunTest(const FString& Parameters)
+{
+	// A mesh component with a mesh and a visible light add their proxies to the world's scene; the proxy follows a
+	// hidden owner and the moved transform, and leaves with the component. A world that cannot render has no scene.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	if (!TestNotNull("The world has a scene", World.Scene))
+	{
+		return false;
+	}
+	FSceneInterface& Scene = *World.Scene;
+	TestTrue("The scene's world", Scene.GetWorld() == &World);
+
+	AStaticMeshActor* MeshActor = World.SpawnActor<AStaticMeshActor>();
+	UStaticMeshComponent* MeshComponent = MeshActor->GetStaticMeshComponent();
+	TestEqual("No proxy without a mesh", Scene.GetNumPrimitives(), 0);
+	(void)MeshComponent->SetStaticMesh(MakeShared<UStaticMesh>(UStaticMesh::CreateCpu(MakeCube())));
+	TestEqual("A proxy with a mesh", Scene.GetNumPrimitives(), 1);
+	if (!TestNotNull("The component knows its proxy", MeshComponent->SceneProxy))
+	{
+		return false;
+	}
+	TestTrue("Shown", MeshComponent->SceneProxy->IsShown());
+	MeshActor->SetActorHiddenInGame(true);
+	TestFalse("Hidden with its owner", MeshComponent->SceneProxy->IsShown());
+	MeshActor->SetActorLocation(FVector(100.0f, 0.0f, 0.0f));
+	World.SendAllEndOfFrameUpdates();
+	TestEqual("Moved with the component", MeshComponent->SceneProxy->GetLocalToWorld().GetOrigin().X, 100.0f);
+
+	ADirectionalLight* Light = World.SpawnActor<ADirectionalLight>();
+	TestEqual("A light", Scene.GetNumLights(), 1);
+	Light->SetActorHiddenInGame(true);
+	TestEqual("A hidden light leaves the scene", Scene.GetNumLights(), 0);
+
+	MeshActor->Destroy();
+	TestEqual("The proxy leaves with the component", Scene.GetNumPrimitives(), 0);
+	TestNull("The component forgets it", MeshComponent->SceneProxy);
 	return true;
 }
 

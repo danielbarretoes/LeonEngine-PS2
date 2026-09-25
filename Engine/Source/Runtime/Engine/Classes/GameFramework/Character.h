@@ -10,7 +10,6 @@
 #include "Physics/PhysScene.h"
 #include "Character.generated.h"
 
-class FSceneRenderer;
 class FDebugDraw;
 
 /**
@@ -178,9 +177,6 @@ public:
 
 	/** Ticks Mesh UAnimInstance (Unreal: Character::Tick → Mesh component). */
 	void Tick(float DeltaTime) override;
-
-	/** Draw GetMesh() via USceneComponent world transform. */
-	void SubmitMeshDraw(FSceneRenderer& Renderer) const;
 
 private:
 	void ApplyYaw(float TargetYaw, float DeltaTime);

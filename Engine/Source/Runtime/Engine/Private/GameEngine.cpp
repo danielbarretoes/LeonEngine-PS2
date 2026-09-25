@@ -638,8 +638,11 @@ void UGameEngine::Render(const FPostRenderCallback& OnPostRender)
 			DefaultCameraNearPlane, DefaultCameraFarPlane);
 	}
 
+	// The world's components send their moved transforms and poses to the scene, then the scene is drawn.
+	UWorld* World = GetWorld();
+	World->SendAllEndOfFrameUpdates();
 	Renderer.BeginFrame(FbWidth, FbHeight);
-	Renderer.DrawScene(GetLevel(), *Camera);
+	Renderer.DrawScene(World->Scene, *Camera);
 	PaintHudAndOverlay(FbWidth, FbHeight);
 	if (OnPostRender)
 	{

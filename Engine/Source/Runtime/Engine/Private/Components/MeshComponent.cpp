@@ -18,6 +18,7 @@ void UMeshComponent::SetMaterial(int32 ElementIndex, const FMaterial& Material)
 	}
 	OverrideMaterials[ElementIndex] = Material;
 	OverrideMaterialSet[ElementIndex] = true;
+	MarkRenderStateDirty();
 }
 
 FMaterial UMeshComponent::GetMaterial(int32 ElementIndex) const
@@ -39,4 +40,5 @@ void UMeshComponent::EmptyOverrideMaterials()
 {
 	OverrideMaterials.Empty();
 	OverrideMaterialSet.Empty();
+	MarkRenderStateDirty();
 }

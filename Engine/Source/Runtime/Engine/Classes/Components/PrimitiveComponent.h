@@ -5,14 +5,14 @@
 #include "CoreMinimal.h"
 #include "PrimitiveComponent.generated.h"
 
-class FSceneRenderer;
+class FPrimitiveSceneProxy;
 
 /**
  * A scene component with geometry: something drawn, collided with or both (UE: UPrimitiveComponent).
  *
- * Its render state is its entry in the world's primitive list: registering in a world adds it
- * (CreateRenderState_Concurrent → UWorld::AddPrimitive) and each gameplay frame the world asks every visible primitive
- * to SubmitDraw. P13 replaces the list with FScene::AddPrimitive and a FPrimitiveSceneProxy.
+ * Its render state is its scene proxy: registering in a world adds it to the world's scene
+ * (CreateRenderState_Concurrent → FSceneInterface::AddPrimitive → CreateSceneProxy), and the world sends the moved
+ * transforms before each frame (UWorld::SendAllEndOfFrameUpdates). A world without a scene (`-nullrhi`) keeps none.
  *
  * Its physics state is its body in the world's FPhysScene: CreatePhysicsState adds one when the collision is enabled
  * (FPhysScene::AddComponentBody) and DestroyPhysicsState removes it. Changing the collision settings of a registered
@@ -65,11 +65,20 @@ public:
 	/** The collision shape in world units, grown by Inflation (UE: GetCollisionShape); a line by default. */
 	[[nodiscard]] virtual FCollisionShape GetCollisionShape(float Inflation = 0.0f) const;
 
-	/** Draws the component (Leon until P13's scene proxies). Nothing by default. */
-	virtual void SubmitDraw(FSceneRenderer& Renderer) const;
+	/**
+	 * The renderer's snapshot of the component (UE: CreateSceneProxy), owned by the scene; null when there is nothing
+	 * to draw (no mesh, a collision shape).
+	 */
+	[[nodiscard]] virtual FPrimitiveSceneProxy* CreateSceneProxy();
 
-	/** True when the world should draw it: visible, and its owner is not hidden. */
+	/** True when the world should draw it: visible, and its owner is not hidden (UE: ShouldRender). */
 	[[nodiscard]] bool ShouldRender() const;
+
+	/** Sends the world transform to the proxy (FSceneInterface::UpdatePrimitiveTransform). */
+	void SendRenderTransform_Concurrent() override;
+
+	/** The proxy the scene made from the component, while it is in a scene (UE: SceneProxy). */
+	FPrimitiveSceneProxy* SceneProxy = nullptr;
 
 protected:
 	void CreateRenderState_Concurrent() override;

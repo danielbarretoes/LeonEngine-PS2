@@ -3,10 +3,14 @@
 #include "Frustum.h"
 #include "GLClipSpace.h"
 #include "Level/Light.h"
+#include "LightSceneProxy.h"
 #include "Misc/Paths.h"
 #include "Primitives.h"
 #include "RenderMatrices.h"
 #include "RendererLog.h"
+#include "ScenePrivate.h"
+#include "SkeletalMeshSceneProxy.h"
+#include "StaticMeshSceneProxy.h"
 
 #include <glad/glad.h>
 
@@ -53,20 +57,21 @@ namespace
 	static_assert(sizeof(FCameraBlock) == 208, "FCameraBlock must match std140 Camera UBO");
 	static_assert(sizeof(FLightsBlock) == 272, "FLightsBlock must match std140 Lights UBO");
 
-	float DistanceSqToCamera(const FLevelStaticMesh& Object, const FVector& InCameraPos)
+	float DistanceSqToCamera(const FStaticMeshSceneProxy& Object, const FVector& InCameraPos)
 	{
-		const FBox Box =
-			TransformLocalBox(Object.Mesh->GetLocalMin(), Object.Mesh->GetLocalMax(), Object.EffectiveModelMatrix());
+		const FBox Box = TransformLocalBox(
+			Object.GetStaticMesh().GetLocalMin(), Object.GetStaticMesh().GetLocalMax(), Object.GetLocalToWorld());
 		const FVector D = Box.GetCenter() - InCameraPos;
 		return D | D;
 	}
 
-	FBox WorldAabbFromObject(const FLevelStaticMesh& Object)
+	FBox WorldAabbFromObject(const FStaticMeshSceneProxy& Object)
 	{
-		return TransformLocalBox(Object.Mesh->GetLocalMin(), Object.Mesh->GetLocalMax(), Object.EffectiveModelMatrix());
+		return TransformLocalBox(
+			Object.GetStaticMesh().GetLocalMin(), Object.GetStaticMesh().GetLocalMax(), Object.GetLocalToWorld());
 	}
 
-	void ExpandWorldAabbFromObject(const FLevelStaticMesh& Object, FVector& WorldMin, FVector& WorldMax)
+	void ExpandWorldAabbFromObject(const FStaticMeshSceneProxy& Object, FVector& WorldMin, FVector& WorldMax)
 	{
 		const FBox Box = WorldAabbFromObject(Object);
 		WorldMin = WorldMin.ComponentMin(Box.Min);
@@ -87,13 +92,14 @@ namespace
 			Step;
 	}
 
-	bool ComputeCasterAabb(const TArray<FLevelStaticMesh>& Meshes, FVector& WorldMin, FVector& WorldMax)
+	bool ComputeCasterAabb(const TArray<const FStaticMeshSceneProxy*>& Meshes, FVector& WorldMin, FVector& WorldMax)
 	{
 		WorldMin = FVector(TNumericLimits<float>::Max());
 		WorldMax = FVector(TNumericLimits<float>::Lowest());
 		bool bAny = false;
-		for (const FLevelStaticMesh& Object : Meshes)
+		for (const FStaticMeshSceneProxy* ObjectProxy : Meshes)
 		{
+			const FStaticMeshSceneProxy& Object = *ObjectProxy;
 			if (!Object.IsShadowCaster())
 			{
 				continue;
@@ -318,7 +324,9 @@ void FSceneRenderer::Shutdown()
 	SkinnedLitShader.Destroy();
 	LitShader.Destroy();
 	SkeletalDraws.Empty();
-	StaticDraws.Empty();
+	FrameMeshes.Empty();
+	FrameDirectionalLights.Empty();
+	FramePointLights.Empty();
 	ShaderDirectory.Empty();
 }
 
@@ -394,43 +402,6 @@ void FSceneRenderer::DrawFullscreenTriangle() const
 	glBindVertexArray(0);
 }
 
-void FSceneRenderer::SubmitSkeletalDraw(
-	const USkeletalMesh& InMesh, const FMatrix& InModel, const TArray<FMatrix>& InBoneMatrices)
-{
-	if (!InMesh.Valid())
-	{
-		return;
-	}
-	FSkeletalDrawItem Item;
-	Item.Mesh = &InMesh;
-	Item.Model = InModel;
-	Item.BoneMatrices = InBoneMatrices;
-	if (Item.BoneMatrices.Num() > MaxSkinBones)
-	{
-		Item.BoneMatrices.SetNum(MaxSkinBones);
-	}
-	SkeletalDraws.Add(MoveTemp(Item));
-}
-
-void FSceneRenderer::SubmitSkeletalDraw(
-	const USkeletalMesh& InMesh, const FTransform& Transform, const TArray<FMatrix>& InBoneMatrices)
-{
-	SubmitSkeletalDraw(InMesh, Transform.ToMatrixWithScale(), InBoneMatrices);
-}
-
-void FSceneRenderer::SubmitStaticDraw(const UStaticMesh& InMesh, const FMatrix& InModel, const FMaterial& InMaterial)
-{
-	if (!InMesh.Valid())
-	{
-		return;
-	}
-	FStaticDrawItem Item;
-	Item.Mesh = &InMesh;
-	Item.Model = InModel;
-	Item.Material = InMaterial;
-	StaticDraws.Add(MoveTemp(Item));
-}
-
 void FSceneRenderer::ClearDebugOverlay()
 {
 	OverlayDebugDraw.Clear();
@@ -479,16 +450,16 @@ void FSceneRenderer::UpdateLightsUbo() const
 
 	for (int32 I = 0; I < Block.DirCount; ++I)
 	{
-		const FDirectionalLight& Light = Dirs[I];
+		const FLightSceneProxy& Light = *Dirs[I];
 		Block.DirDirections[I] = FVector4(Light.GetDirection(), 0.0f);
-		Block.DirColors[I] = FVector4(Light.LightColor * Light.Intensity, 0.0f);
+		Block.DirColors[I] = FVector4(Light.GetColor(), 0.0f);
 	}
 	for (int32 I = 0; I < Block.PointCount; ++I)
 	{
-		const FPointLight& Light = Points[I];
-		Block.PointPositions[I] = FVector4(Light.Transform.GetLocation(), 1.0f);
-		Block.PointColors[I] = FVector4(Light.LightColor * Light.Intensity, 0.0f);
-		Block.PointRanges[I] = FVector4(Light.Range, 0.0f, 0.0f, 0.0f);
+		const FLightSceneProxy& Light = *Points[I];
+		Block.PointPositions[I] = FVector4(Light.GetPosition(), 1.0f);
+		Block.PointColors[I] = FVector4(Light.GetColor(), 0.0f);
+		Block.PointRanges[I] = FVector4(Light.GetRadius(), 0.0f, 0.0f, 0.0f);
 	}
 	LightsUbo.Update(&Block, sizeof(Block));
 }
@@ -558,24 +529,25 @@ void FSceneRenderer::RenderShadowPass(const FMatrix& LightSpace)
 	if (ShadowShader.Valid())
 	{
 		ShadowShader.Bind();
-		for (const FLevelStaticMesh& Object : FrameMeshes)
+		for (const FStaticMeshSceneProxy* ObjectProxy : FrameMeshes)
 		{
+			const FStaticMeshSceneProxy& Object = *ObjectProxy;
 			if (!Object.IsShadowCaster())
 			{
 				continue;
 			}
-			const FMatrix LightMvp = Object.EffectiveModelMatrix() * LightSpace;
+			const FMatrix LightMvp = Object.GetLocalToWorld() * LightSpace;
 			ShadowShader.SetMat4("uLightMVP", LightMvp);
 
-			const int32 SubCount = Object.SubMeshCount();
+			const int32 SubCount = Object.GetNumSections();
 			for (int32 S = 0; S < SubCount; ++S)
 			{
-				const FMaterial& Mat = Object.MaterialForSubMesh(S);
+				const FMaterial& Mat = Object.GetSectionMaterial(S);
 				if (!Mat.bCastsShadows || Mat.IsTransparent() || Mat.Shading == EMaterialShadingModel::Unlit)
 				{
 					continue;
 				}
-				Object.Mesh->DrawSubMesh(S);
+				Object.GetStaticMesh().DrawSubMesh(S);
 			}
 		}
 	}
@@ -668,9 +640,10 @@ void FSceneRenderer::RenderPlanarReflectionPass(const UCameraComponent& Camera, 
 	UnlitOpts.bBindSharedLitTextures = false;
 
 	bool bLitGlobalsBound = LitShader.Valid();
-	for (const FLevelStaticMesh& Object : FrameMeshes)
+	for (const FStaticMeshSceneProxy* ObjectProxy : FrameMeshes)
 	{
-		if (Object.bHidden || Object.Mesh == nullptr || !Object.Mesh->Valid())
+		const FStaticMeshSceneProxy& Object = *ObjectProxy;
+		if (!Object.IsShown() || !Object.GetStaticMesh().Valid())
 		{
 			continue;
 		}
@@ -682,10 +655,10 @@ void FSceneRenderer::RenderPlanarReflectionPass(const UCameraComponent& Camera, 
 			continue;
 		}
 
-		const int32 SubCount = Object.SubMeshCount();
+		const int32 SubCount = Object.GetNumSections();
 		for (int32 S = 0; S < SubCount; ++S)
 		{
-			const FMaterial& Mat = Object.MaterialForSubMesh(S);
+			const FMaterial& Mat = Object.GetSectionMaterial(S);
 			if (Mat.bPlanarMirror || Mat.IsTransparent())
 			{
 				continue;
@@ -724,16 +697,16 @@ void FSceneRenderer::RenderPlanarReflectionPass(const UCameraComponent& Camera, 
 	PassTimers.End(FGPUPassTimer::EPass::Planar);
 }
 
-void FSceneRenderer::DrawSubMesh(const FShader& Shader, const FLevelStaticMesh& Object, int32 InSubMeshIndex,
+void FSceneRenderer::DrawSubMesh(const FShader& Shader, const FStaticMeshSceneProxy& Object, int32 InSubMeshIndex,
 	const FMaterial& InMaterial, const FMatrix& InView, const FMatrix& InProjection, const FMatrix& LightSpace,
 	const FDrawOptions& Options) const
 {
-	if (Object.Mesh == nullptr || !Object.Mesh->Valid())
+	if (!Object.GetStaticMesh().Valid())
 	{
 		return;
 	}
 
-	const FMatrix LocalModel = Object.EffectiveModelMatrix();
+	const FMatrix LocalModel = Object.GetLocalToWorld();
 	const FMatrix Mvp = LocalModel * InView * InProjection;
 
 	Shader.SetMat4("uMVP", Mvp);
@@ -779,11 +752,61 @@ void FSceneRenderer::DrawSubMesh(const FShader& Shader, const FLevelStaticMesh& 
 		Normals->Bind(2);
 	}
 
-	Object.Mesh->DrawSubMesh(InSubMeshIndex);
+	Object.GetStaticMesh().DrawSubMesh(InSubMeshIndex);
 }
 
-void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Camera)
+void FSceneRenderer::GatherScene(FSceneInterface* InScene)
 {
+	FrameMeshes.Reset();
+	FrameDirectionalLights.Reset();
+	FramePointLights.Reset();
+	SkeletalDraws.Reset();
+	FScene* Scene = InScene != nullptr ? InScene->GetRenderScene() : nullptr;
+	if (Scene == nullptr)
+	{
+		return;
+	}
+	// The scene's order is the level's: static meshes, skinned meshes and lights keep it.
+	for (const FPrimitiveSceneInfo& Info : Scene->GetPrimitives())
+	{
+		const FPrimitiveSceneProxy* Proxy = Info.Proxy.Get();
+		if (Proxy->GetProxyType() == EPrimitiveSceneProxyType::StaticMesh)
+		{
+			FrameMeshes.Add(static_cast<const FStaticMeshSceneProxy*>(Proxy));
+			continue;
+		}
+		const FSkeletalMeshSceneProxy* Skeletal = static_cast<const FSkeletalMeshSceneProxy*>(Proxy);
+		if (!Skeletal->IsShown() || !Skeletal->GetSkeletalMesh().Valid())
+		{
+			continue;
+		}
+		FSkeletalDrawItem Item;
+		Item.Mesh = &Skeletal->GetSkeletalMesh();
+		Item.Model = Skeletal->GetLocalToWorld();
+		Item.BoneMatrices = Skeletal->GetBoneMatrices();
+		if (Item.BoneMatrices.Num() > MaxSkinBones)
+		{
+			Item.BoneMatrices.SetNum(MaxSkinBones);
+		}
+		SkeletalDraws.Add(MoveTemp(Item));
+	}
+	for (const FLightSceneInfo& Info : Scene->GetLights())
+	{
+		const FLightSceneProxy* Light = Info.Proxy.Get();
+		if (Light->GetLightType() == ELightSceneProxyType::Directional)
+		{
+			FrameDirectionalLights.Add(Light);
+		}
+		else
+		{
+			FramePointLights.Add(Light);
+		}
+	}
+}
+
+void FSceneRenderer::DrawScene(FSceneInterface* Scene, const UCameraComponent& Camera)
+{
+	GatherScene(Scene);
 	FrameStats = {};
 	PassTimers.BeginFrame();
 	FrameStats.ShadowMs = PassTimers.Milliseconds(FGPUPassTimer::EPass::Shadow);
@@ -815,15 +838,10 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 		OverlayDebugDraw.Clear();
 		DrawAxesGizmo(Camera);
 		SkeletalDraws.Reset();
-		StaticDraws.Reset();
 		return;
 	}
 
 	const bool bPostOn = Post.bEnabled && SceneColor.Valid();
-
-	// This frame's view of the level's actors (the FScene boundary replaces these snapshots).
-	Level.GetStaticMeshSnapshots(FrameMeshes);
-	Level.GetLightSnapshots(FrameDirectionalLights, FramePointLights);
 
 	const FMatrix LocalView = Camera.ViewMatrix();
 	const FMatrix LocalProjection = GetProjectionGL(Camera);
@@ -835,10 +853,10 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 
 	FMatrix LightSpace = FMatrix::Identity;
 	// Shadow map follows directional light 0 when castShadows; extras are lighting-only.
-	const bool bCastDirShadows = FrameDirectionalLights.Num() > 0 && FrameDirectionalLights[0].bCastShadows;
+	const bool bCastDirShadows = FrameDirectionalLights.Num() > 0 && FrameDirectionalLights[0]->CastsDynamicShadow();
 	if (bCastDirShadows)
 	{
-		const FVector LightDir = FrameDirectionalLights[0].GetDirection();
+		const FVector LightDir = FrameDirectionalLights[0]->GetDirection();
 		FVector WorldMin;
 		FVector WorldMax;
 		/** Shadow box padding and the box used without casters (cm). */
@@ -865,12 +883,13 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 	bool bHasPlanarMirror = false;
 	float MirrorPlaneZ = 0.0f;
 	FMatrix ReflectionViewProj = FMatrix::Identity;
-	for (const FLevelStaticMesh& Object : FrameMeshes)
+	for (const FStaticMeshSceneProxy* ObjectProxy : FrameMeshes)
 	{
-		const int32 SubCount = Object.SubMeshCount();
+		const FStaticMeshSceneProxy& Object = *ObjectProxy;
+		const int32 SubCount = Object.GetNumSections();
 		for (int32 S = 0; S < SubCount; ++S)
 		{
-			if (Object.MaterialForSubMesh(S).bPlanarMirror)
+			if (Object.GetSectionMaterial(S).bPlanarMirror)
 			{
 				bHasPlanarMirror = true;
 				// Reflect about the visible top of the mirror mesh (not actor origin).
@@ -901,8 +920,8 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 
 	for (int32 I = 0; I < FrameMeshes.Num(); ++I)
 	{
-		const FLevelStaticMesh& Object = FrameMeshes[I];
-		if (Object.bHidden || Object.Mesh == nullptr || !Object.Mesh->Valid())
+		const FStaticMeshSceneProxy& Object = *FrameMeshes[I];
+		if (!Object.IsShown() || !Object.GetStaticMesh().Valid())
 		{
 			continue;
 		}
@@ -917,13 +936,13 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 		++FrameStats.ObjectsVisible;
 
 		const float LocalSortKey = DistanceSqToCamera(Object, LocalCameraPos);
-		const int32 SubCount = Object.SubMeshCount();
+		const int32 SubCount = Object.GetNumSections();
 		FrameStats.DrawsSubmitted += SubCount;
-		FrameStats.TrianglesSubmitted += Object.Mesh->TriangleCount();
+		FrameStats.TrianglesSubmitted += Object.GetStaticMesh().TriangleCount();
 
 		for (int32 S = 0; S < SubCount; ++S)
 		{
-			const FMaterial& Mat = Object.MaterialForSubMesh(S);
+			const FMaterial& Mat = Object.GetSectionMaterial(S);
 			const FDrawItem Item{I, S, LocalSortKey};
 			if (Mat.IsTransparent())
 			{
@@ -953,7 +972,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 	}
 
 	const float ShadowSourceAngle =
-		bCastDirShadows ? FrameDirectionalLights[0].SourceAngle : DefaultLightSourceAngleDegrees;
+		bCastDirShadows ? FrameDirectionalLights[0]->GetSourceAngle() : DefaultLightSourceAngleDegrees;
 
 	// Optional early-Z: write opaque depth before expensive lit shading.
 	if (Post.bEarlyZ && UnlitShader.Valid() && Opaque.Num() > 0)
@@ -971,18 +990,18 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 		WhiteTexture->Bind(0);
 		for (const FDrawItem& Item : Opaque)
 		{
-			const FLevelStaticMesh& Object = FrameMeshes[Item.ObjectIndex];
-			const FMaterial& Mat = Object.MaterialForSubMesh(Item.SubMeshIndex);
+			const FStaticMeshSceneProxy& Object = *FrameMeshes[Item.ObjectIndex];
+			const FMaterial& Mat = Object.GetSectionMaterial(Item.SubMeshIndex);
 			if (Mat.Shading == EMaterialShadingModel::Unlit)
 			{
 				continue;
 			}
-			const FMatrix LocalModel = Object.EffectiveModelMatrix();
+			const FMatrix LocalModel = Object.GetLocalToWorld();
 			const FMatrix Mvp = LocalModel * LocalView * LocalProjection;
 			UnlitShader.SetMat4("uMVP", Mvp);
 			UnlitShader.SetMat4("uModel", LocalModel);
 			UnlitShader.SetVec3("uAlbedo", 1.0f, 1.0f, 1.0f);
-			Object.Mesh->DrawSubMesh(Item.SubMeshIndex);
+			Object.GetStaticMesh().DrawSubMesh(Item.SubMeshIndex);
 		}
 		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 		glDepthFunc(GL_LEQUAL);
@@ -1019,8 +1038,8 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 
 		for (const FDrawItem& Item : Items)
 		{
-			const FLevelStaticMesh& Object = FrameMeshes[Item.ObjectIndex];
-			const FMaterial& Mat = Object.MaterialForSubMesh(Item.SubMeshIndex);
+			const FStaticMeshSceneProxy& Object = *FrameMeshes[Item.ObjectIndex];
+			const FMaterial& Mat = Object.GetSectionMaterial(Item.SubMeshIndex);
 			const bool bLit = Mat.Shading == EMaterialShadingModel::BlinnPhong;
 			FShader& Shader = bLit ? LitShader : UnlitShader;
 			if (!Shader.Valid())
@@ -1075,7 +1094,6 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 
 	DrawList(Opaque, false);
 	DrawQueuedSkeletal(LocalView, LocalProjection, LightSpace, bCastDirShadows, ShadowSourceAngle, &CameraFrustum);
-	DrawQueuedStatic(Level, LocalView, LocalProjection, LightSpace, bCastDirShadows, ShadowSourceAngle);
 	if (LitShader.Valid())
 	{
 		LitShader.Bind();
@@ -1121,7 +1139,6 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 	OverlayDebugDraw.Clear();
 	DrawAxesGizmo(Camera);
 	SkeletalDraws.Reset();
-	StaticDraws.Reset();
 }
 
 void FSceneRenderer::ReadFramebufferBgr(int32 Width, int32 Height, TArray<uint8>& OutBgr) const
@@ -1347,71 +1364,6 @@ void FSceneRenderer::DrawQueuedSkeletal(const FMatrix& InView, const FMatrix& In
 	}
 }
 
-void FSceneRenderer::DrawQueuedStatic(const ULevel& Level, const FMatrix& InView, const FMatrix& InProjection,
-	const FMatrix& LightSpace, bool bInReceiveShadows, float ShadowSourceAngle)
-{
-	if (StaticDraws.Num() == 0 || WhiteTexture == nullptr || !UnlitShader.Valid())
-	{
-		return;
-	}
-
-	// Attachments: unlit + two-pass depth (avoids grey ghost from two-sided z-fight).
-	glDisable(GL_CLIP_DISTANCE0);
-	glDisable(GL_BLEND);
-	glDisable(GL_POLYGON_OFFSET_FILL);
-	glDisable(GL_CULL_FACE);
-	glEnable(GL_DEPTH_TEST);
-	glDepthMask(GL_TRUE);
-
-	UnlitShader.Bind();
-	UnlitShader.SetInt("uUseClipPlane", 0);
-	UnlitShader.SetVec4("uClipPlane", 0.0f, 0.0f, 1.0f, 0.0f);
-	UnlitShader.SetInt("uAlbedoMap", 0);
-	UnlitShader.SetVec2("uUvScale", 1.0f, 1.0f);
-	UnlitShader.SetFloat("uAlpha", 1.0f);
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
-	WhiteTexture->Bind(0);
-
-	for (const FStaticDrawItem& Item : StaticDraws)
-	{
-		if (Item.Mesh == nullptr || !Item.Mesh->Valid())
-		{
-			continue;
-		}
-
-		const FMaterial& LocalMaterial = Item.Material;
-		const FMatrix& LocalModel = Item.Model;
-		const FMatrix Mvp = LocalModel * InView * InProjection;
-
-		UnlitShader.SetMat4("uMVP", Mvp);
-		UnlitShader.SetMat4("uModel", LocalModel);
-		UnlitShader.SetVec3("uAlbedo", LocalMaterial.Albedo.X, LocalMaterial.Albedo.Y, LocalMaterial.Albedo.Z);
-
-		// Pass 1: establish closest depth (both windings compete).
-		glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-		glDepthFunc(GL_LESS);
-		Item.Mesh->Draw();
-		// Pass 2: solid color only on the winning depth samples.
-		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-		glDepthFunc(GL_EQUAL);
-		Item.Mesh->Draw();
-		glDepthFunc(GL_LESS);
-
-		++FrameStats.ObjectsTotal;
-		++FrameStats.ObjectsVisible;
-		++FrameStats.DrawsSubmitted;
-		FrameStats.TrianglesSubmitted += Item.Mesh->TriangleCount();
-		(void)Level;
-		(void)LightSpace;
-		(void)bInReceiveShadows;
-		(void)ShadowSourceAngle;
-	}
-
-	glEnable(GL_CULL_FACE);
-}
-
 void FSceneRenderer::DrawDebug(const UCameraComponent& Camera, const FMatrix& LightSpace, bool bHasLightSpace)
 {
 	if (!bDebugDrawEnabled || !DebugDraw.IsValid())
@@ -1425,14 +1377,15 @@ void FSceneRenderer::DrawDebug(const UCameraComponent& Camera, const FMatrix& Li
 	constexpr FLinearColor HiddenAabbColor(0.95f, 0.35f, 0.85f); // BlockingVolume / hidden
 	constexpr FLinearColor FrustumColor(1.0f, 0.85f, 0.15f);
 
-	for (const FLevelStaticMesh& Object : FrameMeshes)
+	for (const FStaticMeshSceneProxy* ObjectProxy : FrameMeshes)
 	{
-		if (Object.Mesh == nullptr || !Object.Mesh->Valid())
+		const FStaticMeshSceneProxy& Object = *ObjectProxy;
+		if (!Object.GetStaticMesh().Valid())
 		{
 			continue;
 		}
 		const FBox Box = WorldAabbFromObject(Object);
-		DebugDraw.AddAabb(Box.Min, Box.Max, Object.bHidden ? HiddenAabbColor : AabbColor);
+		DebugDraw.AddAabb(Box.Min, Box.Max, !Object.IsShown() ? HiddenAabbColor : AabbColor);
 	}
 
 	if (bHasLightSpace)

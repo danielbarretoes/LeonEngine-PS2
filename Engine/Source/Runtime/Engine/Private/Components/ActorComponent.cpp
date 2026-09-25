@@ -105,6 +105,24 @@ void UActorComponent::RecreatePhysicsState()
 	}
 }
 
+void UActorComponent::MarkRenderStateDirty()
+{
+	if (!bRenderStateCreated)
+	{
+		return;
+	}
+	DestroyRenderState_Concurrent();
+	CreateRenderState_Concurrent();
+}
+
+void UActorComponent::SendRenderTransform_Concurrent()
+{
+}
+
+void UActorComponent::SendRenderDynamicData_Concurrent()
+{
+}
+
 void UActorComponent::DestroyComponent(bool /*bPromoteChildren*/)
 {
 	if (bIsBeingDestroyed)

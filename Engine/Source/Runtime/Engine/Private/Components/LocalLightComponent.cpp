@@ -4,3 +4,9 @@ ULocalLightComponent::ULocalLightComponent(const FObjectInitializer& ObjectIniti
 	: Super(ObjectInitializer)
 {
 }
+
+void ULocalLightComponent::SetAttenuationRadius(float NewRadius)
+{
+	AttenuationRadius = NewRadius;
+	MarkRenderStateDirty();
+}

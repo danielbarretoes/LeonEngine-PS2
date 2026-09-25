@@ -21,7 +21,10 @@ class ENGINE_API UStaticMeshComponent : public UMeshComponent
 public:
 	UStaticMeshComponent(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	/** Sets the mesh (UE: SetStaticMesh); a registered component's body takes the new shape. False when unchanged. */
+	/**
+	 * Sets the mesh (UE: SetStaticMesh); a registered component's proxy and body take the new mesh. False when
+	 * unchanged.
+	 */
 	bool SetStaticMesh(TSharedPtr<UStaticMesh> NewMesh);
 	[[nodiscard]] UStaticMesh* GetStaticMesh() const
 	{
@@ -50,8 +53,8 @@ public:
 	 */
 	[[nodiscard]] bool HasShadowCastingMaterial() const;
 
-	/** Submits the mesh with the material of slot 0 at the component transform (scale included). */
-	void SubmitDraw(FSceneRenderer& Renderer) const override;
+	/** A FStaticMeshSceneProxy for a valid mesh (UE: CreateSceneProxy). */
+	[[nodiscard]] FPrimitiveSceneProxy* CreateSceneProxy() override;
 
 private:
 	TSharedPtr<UStaticMesh> StaticMesh;

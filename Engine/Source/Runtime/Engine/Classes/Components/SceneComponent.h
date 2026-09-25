@@ -147,7 +147,7 @@ public:
 	void SetWorldLocationAndRotation(const FVector& NewLocation, const FRotator& NewRotation);
 	void SetWorldTransform(const FTransform& NewTransform);
 
-	/** UE: SetVisibility / IsVisible (visible and not hidden in game). */
+	/** UE: SetVisibility / IsVisible (visible and not hidden in game); a change recreates the render state. */
 	void SetVisibility(bool bNewVisibility);
 	void SetHiddenInGame(bool bNewHidden);
 	[[nodiscard]] bool IsVisible() const;

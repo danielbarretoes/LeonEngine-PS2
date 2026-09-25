@@ -4,3 +4,9 @@ UDirectionalLightComponent::UDirectionalLightComponent(const FObjectInitializer&
 	: Super(ObjectInitializer)
 {
 }
+
+void UDirectionalLightComponent::SetLightSourceAngle(float NewLightSourceAngle)
+{
+	LightSourceAngle = NewLightSourceAngle;
+	MarkRenderStateDirty();
+}

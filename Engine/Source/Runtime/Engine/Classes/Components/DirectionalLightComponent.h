@@ -17,4 +17,7 @@ public:
 	/** Angular diameter of the light source, degrees; widens the shadow filter (UE: LightSourceAngle). */
 	UPROPERTY()
 	float LightSourceAngle = DefaultLightSourceAngleDegrees;
+
+	/** UE: SetLightSourceAngle; a registered light's proxy is recreated. */
+	void SetLightSourceAngle(float NewLightSourceAngle);
 };

@@ -1,8 +1,6 @@
 #include "Components/SkeletalMeshComponent.h"
 
-#include "Engine/GameEngine.h"
-#include "SceneRenderer.h"
-#include "StaticMesh.h"
+#include "SkeletalMeshSceneProxy.h"
 
 USkeletalMeshComponent::USkeletalMeshComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -76,6 +74,7 @@ void USkeletalMeshComponent::SetSkeletalMesh(TSharedPtr<USkeletalMesh> InMesh)
 	{
 		AnimInstance->SetSkeleton(nullptr);
 	}
+	MarkRenderStateDirty();
 }
 
 void USkeletalMeshComponent::ApplyFitHeight(float FitHeight)
@@ -141,13 +140,17 @@ void USkeletalMeshComponent::TickComponent(float DeltaTime)
 	AnimInstance->NativeUpdateAnimation(DeltaTime);
 }
 
-void USkeletalMeshComponent::SubmitDraw(FSceneRenderer& Renderer) const
+FPrimitiveSceneProxy* USkeletalMeshComponent::CreateSceneProxy()
 {
-	if (!HasValidMesh())
+	return HasValidMesh() ? new FSkeletalMeshSceneProxy(this) : nullptr;
+}
+
+void USkeletalMeshComponent::SendRenderDynamicData_Concurrent()
+{
+	if (SceneProxy == nullptr || !HasValidMesh())
 	{
 		return;
 	}
-
 	AnimInstance->GetSkinMatrices(SkinMatrices);
-	Renderer.SubmitSkeletalDraw(*SkeletalMesh, GetComponentTransform(), SkinMatrices);
+	static_cast<FSkeletalMeshSceneProxy*>(SceneProxy)->SetBoneMatrices(SkinMatrices);
 }

@@ -3,10 +3,10 @@
 #include "Camera/CameraComponent.h"
 #include "CoreMinimal.h"
 #include "Debug/DebugDraw.h"
-#include "Engine/Level.h"
 #include "Frustum.h"
 #include "GpuPassTimer.h"
 #include "LdrColorTarget.h"
+#include "Level/Light.h"
 #include "PlanarReflection.h"
 #include "PostProcess.h"
 #include "RHIHandles.h"
@@ -33,6 +33,10 @@ struct RENDERER_API FFrameStats
 	float SsaoMs = 0.0f;
 	float PostMs = 0.0f;
 };
+
+class FLightSceneProxy;
+class FSceneInterface;
+class FStaticMeshSceneProxy;
 
 /** Options for a single submesh draw (shared lit textures may already be bound). */
 struct RENDERER_API FDrawOptions
@@ -80,17 +84,10 @@ public:
 	}
 
 	void BeginFrame(int32 FramebufferWidth, int32 FramebufferHeight);
-	void DrawScene(const ULevel& Level, const UCameraComponent& Camera);
+	/** Draws the scene's proxies (static and skinned meshes, lights) through the camera; nothing for a null scene. */
+	void DrawScene(FSceneInterface* Scene, const UCameraComponent& Camera);
 	/** Reads the draw framebuffer as bottom-up BGR rows with no padding (screenshots). */
 	void ReadFramebufferBgr(int32 Width, int32 Height, TArray<uint8>& OutBgr) const;
-
-	/** Queues a skinned mesh draw for the next DrawScene (cleared after DrawScene). */
-	void SubmitSkeletalDraw(const USkeletalMesh& InMesh, const FMatrix& InModel, const TArray<FMatrix>& InBoneMatrices);
-	void SubmitSkeletalDraw(
-		const USkeletalMesh& InMesh, const FTransform& Transform, const TArray<FMatrix>& InBoneMatrices);
-
-	/** Queues a rigid static mesh with an explicit model matrix (attachments, etc.). */
-	void SubmitStaticDraw(const UStaticMesh& InMesh, const FMatrix& InModel, const FMaterial& InMaterial);
 
 	/** World-space lines flushed at the end of DrawScene (independent of the F1 AABB overlay). */
 	void ClearDebugOverlay();
@@ -229,14 +226,14 @@ private:
 	 * square at the bottom-left of the draw framebuffer.
 	 */
 	void DrawAxesGizmo(const UCameraComponent& Camera);
-	void DrawSubMesh(const FShader& Shader, const FLevelStaticMesh& Object, int32 InSubMeshIndex,
+	void DrawSubMesh(const FShader& Shader, const FStaticMeshSceneProxy& Object, int32 InSubMeshIndex,
 		const FMaterial& InMaterial, const FMatrix& InView, const FMatrix& InProjection, const FMatrix& LightSpace,
 		const FDrawOptions& Options) const;
+	/** Fills FrameMeshes, SkeletalDraws and the light lists from the scene. */
+	void GatherScene(FSceneInterface* InScene);
 	void DrawQueuedSkeletal(const FMatrix& InView, const FMatrix& InProjection, const FMatrix& LightSpace,
 		bool bInReceiveShadows, float ShadowSourceAngle, const FFrustum* CameraFrustum,
 		bool bUseWorldClipPlane = false);
-	void DrawQueuedStatic(const ULevel& Level, const FMatrix& InView, const FMatrix& InProjection,
-		const FMatrix& LightSpace, bool bInReceiveShadows, float ShadowSourceAngle);
 
 	struct FSkeletalDrawItem
 	{
@@ -244,13 +241,6 @@ private:
 		FMatrix Model = FMatrix::Identity;
 		/** Skin matrices in the GL memory layout (uploaded as they are). */
 		TArray<FMatrix> BoneMatrices;
-	};
-
-	struct FStaticDrawItem
-	{
-		const UStaticMesh* Mesh = nullptr;
-		FMatrix Model = FMatrix::Identity;
-		FMaterial Material{};
 	};
 
 	FString ShaderDirectory;
@@ -275,12 +265,11 @@ private:
 	FUniformBuffer LightsUbo;
 	TSharedPtr<UTexture2D> WhiteTexture;
 	TSharedPtr<UTexture2D> FlatNormalTexture;
+	/** The scene's proxies, gathered in its order at the start of DrawScene. */
 	TArray<FSkeletalDrawItem> SkeletalDraws;
-	TArray<FStaticDrawItem> StaticDraws;
-	/** The level's static mesh actors and lights, gathered at the start of DrawScene. */
-	TArray<FLevelStaticMesh> FrameMeshes;
-	TArray<FDirectionalLight> FrameDirectionalLights;
-	TArray<FPointLight> FramePointLights;
+	TArray<const FStaticMeshSceneProxy*> FrameMeshes;
+	TArray<const FLightSceneProxy*> FrameDirectionalLights;
+	TArray<const FLightSceneProxy*> FramePointLights;
 	FFrameStats FrameStats{};
 	FPostProcessSettings Post{};
 

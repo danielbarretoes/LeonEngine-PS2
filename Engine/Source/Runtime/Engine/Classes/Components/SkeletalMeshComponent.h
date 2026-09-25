@@ -8,7 +8,6 @@
 #include "SkeletalMeshComponent.generated.h"
 
 class UGameEngine;
-class FSceneRenderer;
 
 /**
  * Unreal-like USkeletalMeshComponent — a mesh component with a skeletal mesh + UAnimInstance (UE derives it from
@@ -33,6 +32,11 @@ public:
 	[[nodiscard]] const USkeletalMesh* GetSkeletalMesh() const
 	{
 		return SkeletalMesh.Get();
+	}
+	/** The mesh with its shared ownership (the renderer's proxy keeps it alive). */
+	[[nodiscard]] const TSharedPtr<USkeletalMesh>& GetSkeletalMeshShared() const
+	{
+		return SkeletalMesh;
 	}
 
 	/** Replaces the anim instance (a new UAnimInstance when null); the component becomes its owner. */
@@ -95,8 +99,10 @@ public:
 	[[nodiscard]] bool DoesSocketExist(FName InSocketName) const override;
 
 	void TickComponent(float DeltaTime) override;
-	/** Submit using this component's USceneComponent world transform. */
-	void SubmitDraw(FSceneRenderer& Renderer) const override;
+	/** A FSkeletalMeshSceneProxy for a valid mesh (UE: CreateSceneProxy). */
+	[[nodiscard]] FPrimitiveSceneProxy* CreateSceneProxy() override;
+	/** Sends the pose's skin matrices to the proxy (UE: SendRenderDynamicData_Concurrent). */
+	void SendRenderDynamicData_Concurrent() override;
 
 	[[nodiscard]] bool HasValidMesh() const
 	{

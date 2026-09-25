@@ -28,17 +28,8 @@ public:
 	UPROPERTY()
 	uint8 CastShadows : 1;
 
-	/** UE: SetIntensity / SetLightColor / SetCastShadows. */
-	void SetIntensity(float NewIntensity)
-	{
-		Intensity = NewIntensity;
-	}
-	void SetLightColor(const FLinearColor& NewLightColor)
-	{
-		LightColor = NewLightColor;
-	}
-	void SetCastShadows(bool bNewValue)
-	{
-		CastShadows = bNewValue;
-	}
+	/** UE: SetIntensity / SetLightColor / SetCastShadows; a registered light's proxy is recreated. */
+	void SetIntensity(float NewIntensity);
+	void SetLightColor(const FLinearColor& NewLightColor);
+	void SetCastShadows(bool bNewValue);
 };

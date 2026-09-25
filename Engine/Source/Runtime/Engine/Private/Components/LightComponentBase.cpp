@@ -5,3 +5,21 @@ ULightComponentBase::ULightComponentBase(const FObjectInitializer& ObjectInitial
 {
 	CastShadows = true;
 }
+
+void ULightComponentBase::SetIntensity(float NewIntensity)
+{
+	Intensity = NewIntensity;
+	MarkRenderStateDirty();
+}
+
+void ULightComponentBase::SetLightColor(const FLinearColor& NewLightColor)
+{
+	LightColor = NewLightColor;
+	MarkRenderStateDirty();
+}
+
+void ULightComponentBase::SetCastShadows(bool bNewValue)
+{
+	CastShadows = bNewValue;
+	MarkRenderStateDirty();
+}

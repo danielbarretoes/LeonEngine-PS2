@@ -80,6 +80,23 @@ void AActor::UnregisterAllComponents()
 	}
 }
 
+void AActor::SetActorHiddenInGame(bool bNewHidden)
+{
+	if (bHidden == bNewHidden)
+	{
+		return;
+	}
+	bHidden = bNewHidden;
+	// UE: MarkComponentsRenderStateDirty.
+	for (UActorComponent* Component : OwnedComponents)
+	{
+		if (Component != nullptr)
+		{
+			Component->MarkRenderStateDirty();
+		}
+	}
+}
+
 void AActor::SetOwner(AActor* NewOwner)
 {
 	Owner = NewOwner;

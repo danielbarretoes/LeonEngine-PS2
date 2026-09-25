@@ -17,7 +17,7 @@ class ENGINE_API UMeshComponent : public UPrimitiveComponent
 public:
 	UMeshComponent(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	/** Overrides the material of a slot (UE: SetMaterial). */
+	/** Overrides the material of a slot (UE: SetMaterial); a registered component's proxy is recreated. */
 	virtual void SetMaterial(int32 ElementIndex, const FMaterial& Material);
 	/** The material a slot draws with: its override, else the mesh's (UE: GetMaterial). */
 	[[nodiscard]] virtual FMaterial GetMaterial(int32 ElementIndex) const;

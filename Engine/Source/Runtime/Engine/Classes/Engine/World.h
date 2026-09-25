@@ -14,9 +14,8 @@ class ACharacter;
 class AGameModeBase;
 class AGameStateBase;
 class FDebugDraw;
-class FSceneRenderer;
+class FSceneInterface;
 class UGameInstance;
-class UPrimitiveComponent;
 
 /** What SpawnActor does when the new actor would overlap something (UE: ESpawnActorCollisionHandlingMethod). */
 enum class ESpawnActorCollisionHandlingMethod : uint8
@@ -57,7 +56,6 @@ struct ENGINE_API FActorSpawnParameters
 struct ENGINE_API FWorldGameplayFrameParams
 {
 	float DeltaTime = 0.0f;
-	FSceneRenderer* Renderer = nullptr;
 	FDebugDraw* CollisionDebugDraw = nullptr;
 	FDebugDraw* NavMeshDebugDraw = nullptr;
 	/** When true, FPhysScene::Step uses these values instead of the first Character's movement. */
@@ -85,6 +83,8 @@ struct ENGINE_API FWorldGameplayFrameParams
  *   the level (and begins play) once the tick ends.
  * - DestroyActor ends play, unregisters the components, removes the actor from the level and marks it pending kill.
  * - The game mode is spawned by the world (SetGameMode) and kept in AuthorityGameMode.
+ * - Scene is the renderer's copy of the world (IRendererModule::AllocateScene at creation, RemoveScene in
+ *   DestroyWorld); null when nothing can render (`-nullrhi`, no Renderer module).
  */
 UCLASS()
 class ENGINE_API UWorld : public UObject
@@ -93,6 +93,9 @@ class ENGINE_API UWorld : public UObject
 
 public:
 	UWorld(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
+	// UObject
+	void BeginDestroy() override;
 
 	/** The level the world was created with; every actor spawns here (UE: PersistentLevel). */
 	UPROPERTY(Transient)
@@ -109,6 +112,12 @@ public:
 	/** The game instance whose world context holds this world (UE: OwningGameInstance). */
 	UPROPERTY(Transient)
 	UGameInstance* OwningGameInstance = nullptr;
+
+	/**
+	 * The renderer's scene: the proxies of the registered primitives and lights (UE: Scene). Null when the engine
+	 * cannot render (FApp::CanEverRender, e.g. `-nullrhi`) or the target has no Renderer module.
+	 */
+	FSceneInterface* Scene = nullptr;
 
 	/**
 	 * Creates a world in a new transient package with its persistent level (UE: CreateWorld). bInformEngineOfWorld is
@@ -284,23 +293,16 @@ public:
 
 	/**
 	 * Unreal-like frame: Character move → FPhysScene::Step → overlaps → Actor Tick → the simulated bodies move their
-	 * components (FPhysScene::SyncComponentsToBodies) → draw.
+	 * components (FPhysScene::SyncComponentsToBodies) → debug draws.
 	 */
 	void TickGameplayFrame(const FWorldGameplayFrameParams& Params);
 
 	/**
-	 * The render state of the registered primitive components (UPrimitiveComponent::CreateRenderState_Concurrent):
-	 * P13 replaces this list with FScene::AddPrimitive / RemovePrimitive.
+	 * Sends the renderer what changed since the last frame (UE: SendAllEndOfFrameUpdates): every registered
+	 * component's world transform and per-frame data (a skinned mesh's pose) go to its proxy. The engine calls it
+	 * before drawing the world.
 	 */
-	void AddPrimitive(UPrimitiveComponent* Primitive);
-	void RemovePrimitive(UPrimitiveComponent* Primitive);
-	[[nodiscard]] const TArray<UPrimitiveComponent*>& GetPrimitives() const
-	{
-		return Primitives;
-	}
-
-	/** Every registered primitive that should render submits its draw, in registration order. */
-	void SubmitPrimitiveDraws(FSceneRenderer& InRenderer) const;
+	void SendAllEndOfFrameUpdates();
 
 	/** Destroys every actor (EEndPlayReason::Destroyed) and clears the physics scene (Leon; UE has no counterpart). */
 	void Clear();
@@ -374,10 +376,6 @@ private:
 	/** Actors spawned during a tick: they join the level when it ends (UE adds them at once). */
 	UPROPERTY(Transient)
 	TArray<AActor*> PendingSpawnActors;
-
-	/** Registered primitive components (the render scene until P13's FScene). */
-	UPROPERTY(Transient)
-	TArray<UPrimitiveComponent*> Primitives;
 
 	FPhysScene Physics{};
 	UNavigationSystem Navigation{};

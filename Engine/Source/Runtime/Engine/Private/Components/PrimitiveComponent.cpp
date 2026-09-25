@@ -2,6 +2,7 @@
 
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "SceneInterface.h"
 
 UPrimitiveComponent::UPrimitiveComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -15,8 +16,9 @@ FCollisionShape UPrimitiveComponent::GetCollisionShape(float /*Inflation*/) cons
 	return FCollisionShape();
 }
 
-void UPrimitiveComponent::SubmitDraw(FSceneRenderer& /*Renderer*/) const
+FPrimitiveSceneProxy* UPrimitiveComponent::CreateSceneProxy()
 {
+	return nullptr;
 }
 
 bool UPrimitiveComponent::ShouldRender() const
@@ -28,19 +30,31 @@ bool UPrimitiveComponent::ShouldRender() const
 void UPrimitiveComponent::CreateRenderState_Concurrent()
 {
 	Super::CreateRenderState_Concurrent();
-	if (UWorld* World = GetWorld())
+	UWorld* World = GetWorld();
+	if (World != nullptr && World->Scene != nullptr)
 	{
-		World->AddPrimitive(this);
+		World->Scene->AddPrimitive(this);
 	}
 }
 
 void UPrimitiveComponent::DestroyRenderState_Concurrent()
 {
-	if (UWorld* World = GetWorld())
+	UWorld* World = GetWorld();
+	if (World != nullptr && World->Scene != nullptr)
 	{
-		World->RemovePrimitive(this);
+		World->Scene->RemovePrimitive(this);
 	}
+	SceneProxy = nullptr;
 	Super::DestroyRenderState_Concurrent();
+}
+
+void UPrimitiveComponent::SendRenderTransform_Concurrent()
+{
+	UWorld* World = GetWorld();
+	if (SceneProxy != nullptr && World != nullptr && World->Scene != nullptr)
+	{
+		World->Scene->UpdatePrimitiveTransform(this);
+	}
 }
 
 void UPrimitiveComponent::SetCollisionEnabled(ECollisionEnabled::Type NewType)
