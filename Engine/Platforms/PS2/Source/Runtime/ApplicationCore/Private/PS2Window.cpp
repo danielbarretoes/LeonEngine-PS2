@@ -1,8 +1,8 @@
 #include "PS2Window.h"
 
+#include "GenericPlatform/GenericApplication.h"
 #include "PS2RHI.h"
 
-#include <cstdio>
 #include <graph.h>
 
 namespace
@@ -20,19 +20,19 @@ FPS2Window::~FPS2Window()
 	Destroy();
 }
 
-bool FPS2Window::Create(int InWidth, int InHeight, const char* Title)
+bool FPS2Window::Create(int32 InWidth, int32 InHeight, const TCHAR* Title)
 {
 	if (Handle != nullptr)
 	{
 		return true;
 	}
 	(void)Title;
-	const int DisplayWidth = InWidth > 0 ? InWidth : 640;
-	const int DisplayHeight = InHeight > 0 ? InHeight : 448;
+	const int32 DisplayWidth = InWidth > 0 ? InWidth : 640;
+	const int32 DisplayHeight = InHeight > 0 ? InHeight : 448;
 
 	if (!FPS2RHI::InitDisplay(DisplayWidth, DisplayHeight))
 	{
-		std::printf("FPS2Window: FPS2RHI::InitDisplay failed\n");
+		UE_LOG(LogApplicationCore, Error, "FPS2Window: FPS2RHI::InitDisplay failed");
 		return false;
 	}
 

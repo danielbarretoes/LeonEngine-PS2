@@ -1,11 +1,9 @@
 #include "GenericPlatform/GenericWindow.h"
 
 #include "DynamicRHI.h"
+#include "GenericPlatform/GenericApplication.h"
 
-#include <cstdio>
-#include <utility>
-
-// Out of line: the unique_ptr<FDynamicRHI> member needs the complete type.
+// Out of line: the TUniquePtr<FDynamicRHI> member needs the complete type.
 FGenericWindow::FGenericWindow() = default;
 
 FGenericWindow::~FGenericWindow()
@@ -13,7 +11,7 @@ FGenericWindow::~FGenericWindow()
 	ReleaseRHI();
 }
 
-bool FGenericWindow::CreateShared(const FGenericWindow&, int, int, const char*)
+bool FGenericWindow::CreateShared(const FGenericWindow&, int32, int32, const TCHAR*)
 {
 	return false;
 }
@@ -28,10 +26,9 @@ bool FGenericWindow::IsMouseButtonDown(EMouseButtons) const
 	return false;
 }
 
-void FGenericWindow::GetCursorPos(double& X, double& Y) const
+FVector2D FGenericWindow::GetCursorPos() const
 {
-	X = 0.0;
-	Y = 0.0;
+	return FVector2D::ZeroVector;
 }
 
 void FGenericWindow::SetCursorCaptured(bool bCaptured)
@@ -39,21 +36,21 @@ void FGenericWindow::SetCursorCaptured(bool bCaptured)
 	bCursorCaptured = bCaptured;
 }
 
-bool FGenericWindow::SetIconFromFile(const char*)
+bool FGenericWindow::SetIconFromFile(const TCHAR*)
 {
 	return false;
 }
 
-void FGenericWindow::GetWindowSize(int& InWidth, int& InHeight) const
+void FGenericWindow::GetWindowSize(int32& OutWidth, int32& OutHeight) const
 {
-	InWidth = WindowWidth;
-	InHeight = WindowHeight;
+	OutWidth = WindowWidth;
+	OutHeight = WindowHeight;
 }
 
-void FGenericWindow::GetFramebufferSize(int& InWidth, int& InHeight) const
+void FGenericWindow::GetFramebufferSize(int32& OutWidth, int32& OutHeight) const
 {
-	InWidth = FramebufferWidth;
-	InHeight = FramebufferHeight;
+	OutWidth = FramebufferWidth;
+	OutHeight = FramebufferHeight;
 }
 
 float FGenericWindow::Aspect() const
@@ -65,18 +62,13 @@ float FGenericWindow::Aspect() const
 	return WindowHeight > 0 ? static_cast<float>(WindowWidth) / static_cast<float>(WindowHeight) : 1.0f;
 }
 
-void FGenericWindow::SetScrollCallback(FScrollCallback Callback)
-{
-	ScrollCallback = std::move(Callback);
-}
-
-void FGenericWindow::ApplyWindowSize(int InWidth, int InHeight)
+void FGenericWindow::ApplyWindowSize(int32 InWidth, int32 InHeight)
 {
 	WindowWidth = InWidth;
 	WindowHeight = InHeight;
 }
 
-void FGenericWindow::ApplyFramebufferSize(int InWidth, int InHeight)
+void FGenericWindow::ApplyFramebufferSize(int32 InWidth, int32 InHeight)
 {
 	FramebufferWidth = InWidth;
 	FramebufferHeight = InHeight;
@@ -86,24 +78,21 @@ void FGenericWindow::ApplyFramebufferSize(int InWidth, int InHeight)
 	}
 }
 
-void FGenericWindow::NotifyScroll(double YOffset)
+void FGenericWindow::NotifyMouseWheel(float Delta)
 {
-	if (ScrollCallback)
-	{
-		ScrollCallback(YOffset);
-	}
+	MouseWheelDelegate.ExecuteIfBound(Delta);
 }
 
 bool FGenericWindow::InitRHI(void* (*ProcAddressLoader)(const char*))
 {
-	OwnedRHI.reset(PlatformCreateDynamicRHI());
+	OwnedRHI.Reset(PlatformCreateDynamicRHI());
 	if (!OwnedRHI || !OwnedRHI->Init(ProcAddressLoader))
 	{
-		std::printf("FGenericWindow: failed to initialize the RHI\n");
-		OwnedRHI.reset();
+		UE_LOG(LogApplicationCore, Error, "FGenericWindow: failed to initialize the RHI");
+		OwnedRHI.Reset();
 		return false;
 	}
-	GDynamicRHI = OwnedRHI.get();
+	GDynamicRHI = OwnedRHI.Get();
 	if (FramebufferWidth > 0 && FramebufferHeight > 0)
 	{
 		OwnedRHI->SetViewport(0, 0, FramebufferWidth, FramebufferHeight);
@@ -113,11 +102,11 @@ bool FGenericWindow::InitRHI(void* (*ProcAddressLoader)(const char*))
 
 void FGenericWindow::ReleaseRHI()
 {
-	if (GDynamicRHI != nullptr && GDynamicRHI == OwnedRHI.get())
+	if (GDynamicRHI != nullptr && GDynamicRHI == OwnedRHI.Get())
 	{
 		GDynamicRHI = nullptr;
 	}
-	OwnedRHI.reset();
+	OwnedRHI.Reset();
 }
 
 void FGenericWindow::ResetWindowState()
@@ -128,5 +117,5 @@ void FGenericWindow::ResetWindowState()
 	FramebufferHeight = 0;
 	bCursorCaptured = false;
 	bShouldClose = false;
-	ScrollCallback = nullptr;
+	MouseWheelDelegate.Unbind();
 }

@@ -1,10 +1,10 @@
 #include "Desktop/GLFWWindow.h"
 
+#include "Containers/Array.h"
+#include "GenericPlatform/GenericApplication.h"
+
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
-
-#include <iostream>
-#include <vector>
 
 namespace
 {
@@ -59,12 +59,12 @@ void FGLFWWindow::InstallCallbacks()
 		{
 			if (FGLFWWindow* Self = FromGLFW(W))
 			{
-				Self->NotifyScroll(YOffset);
+				Self->NotifyMouseWheel(static_cast<float>(YOffset));
 			}
 		});
 }
 
-bool FGLFWWindow::Create(int Width, int Height, const char* Title)
+bool FGLFWWindow::Create(int32 InWidth, int32 InHeight, const TCHAR* Title)
 {
 	if (Handle != nullptr)
 	{
@@ -73,18 +73,18 @@ bool FGLFWWindow::Create(int Width, int Height, const char* Title)
 
 	if (GGLFWInitCount == 0 && glfwInit() != GLFW_TRUE)
 	{
-		std::cerr << "Failed to initialize GLFW\n";
+		UE_LOG(LogApplicationCore, Error, "Failed to initialize GLFW");
 		return false;
 	}
 	++GGLFWInitCount;
 	bBackendOwned = true;
 
 	SetContextHints();
-	GLFWwindow* Window = glfwCreateWindow(Width, Height, Title, nullptr, nullptr);
+	GLFWwindow* Window = glfwCreateWindow(InWidth, InHeight, Title, nullptr, nullptr);
 	Handle = Window;
 	if (Handle == nullptr)
 	{
-		std::cerr << "Failed to create GLFW window\n";
+		UE_LOG(LogApplicationCore, Error, "Failed to create GLFW window");
 		Destroy();
 		return false;
 	}
@@ -102,7 +102,7 @@ bool FGLFWWindow::Create(int Width, int Height, const char* Title)
 	return true;
 }
 
-bool FGLFWWindow::CreateShared(const FGenericWindow& ShareWith, int Width, int Height, const char* Title)
+bool FGLFWWindow::CreateShared(const FGenericWindow& ShareWith, int32 InWidth, int32 InHeight, const TCHAR* Title)
 {
 	if (Handle != nullptr)
 	{
@@ -111,17 +111,18 @@ bool FGLFWWindow::CreateShared(const FGenericWindow& ShareWith, int Width, int H
 	GLFWwindow* ShareWindow = AsGLFW(ShareWith.NativeHandle());
 	if (ShareWindow == nullptr || GGLFWInitCount == 0)
 	{
-		std::cerr << "FGLFWWindow::CreateShared requires an initialised share context\n";
+		UE_LOG(LogApplicationCore, Error, "FGLFWWindow::CreateShared requires an initialised share context");
 		return false;
 	}
 
 	SetContextHints();
 	glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
-	GLFWwindow* Window = glfwCreateWindow(Width, Height, Title != nullptr ? Title : "Leon Play", nullptr, ShareWindow);
+	GLFWwindow* Window =
+		glfwCreateWindow(InWidth, InHeight, Title != nullptr ? Title : "Leon Play", nullptr, ShareWindow);
 	Handle = Window;
 	if (Handle == nullptr)
 	{
-		std::cerr << "Failed to create shared GLFW window\n";
+		UE_LOG(LogApplicationCore, Error, "Failed to create shared GLFW window");
 		return false;
 	}
 
@@ -230,20 +231,18 @@ bool FGLFWWindow::IsMouseButtonDown(EMouseButtons Button) const
 {
 	GLFWwindow* Window = AsGLFW(Handle);
 	return Window != nullptr && Button != EMouseButtons::Invalid &&
-		glfwGetMouseButton(Window, static_cast<int>(Button)) == GLFW_PRESS;
+		glfwGetMouseButton(Window, static_cast<int32>(Button)) == GLFW_PRESS;
 }
 
-void FGLFWWindow::GetCursorPos(double& X, double& Y) const
+FVector2D FGLFWWindow::GetCursorPos() const
 {
+	double X = 0.0;
+	double Y = 0.0;
 	if (GLFWwindow* Window = AsGLFW(Handle))
 	{
 		glfwGetCursorPos(Window, &X, &Y);
 	}
-	else
-	{
-		X = 0.0;
-		Y = 0.0;
-	}
+	return FVector2D(static_cast<float>(X), static_cast<float>(Y));
 }
 
 void FGLFWWindow::SetCursorCaptured(bool bCaptured)
@@ -261,7 +260,7 @@ void FGLFWWindow::SetCursorCaptured(bool bCaptured)
 	}
 }
 
-bool FGLFWWindow::SetIconFromFile(const char* PngPath)
+bool FGLFWWindow::SetIconFromFile(const TCHAR* PngPath)
 {
 	GLFWwindow* Window = AsGLFW(Handle);
 	if (Window == nullptr || PngPath == nullptr || PngPath[0] == '\0')
@@ -269,10 +268,10 @@ bool FGLFWWindow::SetIconFromFile(const char* PngPath)
 		return false;
 	}
 
-	int Width = 0;
-	int Height = 0;
-	int Channels = 0;
-	unsigned char* Pixels = stbi_load(PngPath, &Width, &Height, &Channels, 4);
+	int32 Width = 0;
+	int32 Height = 0;
+	int32 Channels = 0;
+	uint8* Pixels = stbi_load(PngPath, &Width, &Height, &Channels, 4);
 	if (Pixels == nullptr || Width <= 0 || Height <= 0)
 	{
 		if (Pixels != nullptr)
@@ -284,13 +283,13 @@ bool FGLFWWindow::SetIconFromFile(const char* PngPath)
 
 	struct FIconLevel
 	{
-		int Size = 0;
-		std::vector<unsigned char> Pixels;
+		int32 Size = 0;
+		TArray<uint8> Pixels;
 	};
-	const int Sizes[] = {16, 32, 48, Width};
-	std::vector<FIconLevel> Levels;
-	Levels.reserve(4);
-	for (int Size : Sizes)
+	const int32 Sizes[] = {16, 32, 48, Width};
+	TArray<FIconLevel> Levels;
+	Levels.Reserve(4);
+	for (int32 Size : Sizes)
 	{
 		if (Size <= 0 || Size > Width || Size > Height)
 		{
@@ -308,37 +307,36 @@ bool FGLFWWindow::SetIconFromFile(const char* PngPath)
 
 		FIconLevel IconLevel;
 		IconLevel.Size = Size;
-		IconLevel.Pixels.resize(static_cast<size_t>(Size) * static_cast<size_t>(Size) * 4u);
-		for (int Y = 0; Y < Size; ++Y)
+		IconLevel.Pixels.SetNumUninitialized(Size * Size * 4);
+		for (int32 Y = 0; Y < Size; ++Y)
 		{
-			for (int X = 0; X < Size; ++X)
+			for (int32 X = 0; X < Size; ++X)
 			{
-				const size_t Dst = (static_cast<size_t>(Y) * static_cast<size_t>(Size) + static_cast<size_t>(X)) * 4u;
-				const size_t Src = (static_cast<size_t>(Y * Height / Size) * static_cast<size_t>(Width) +
-									   static_cast<size_t>(X * Width / Size)) *
-					4u;
-				for (size_t Channel = 0; Channel < 4u; ++Channel)
+				const int32 Dst = (Y * Size + X) * 4;
+				const int32 Src = ((Y * Height / Size) * Width + X * Width / Size) * 4;
+				for (int32 Channel = 0; Channel < 4; ++Channel)
 				{
 					IconLevel.Pixels[Dst + Channel] = Pixels[Src + Channel];
 				}
 			}
 		}
-		Levels.push_back(std::move(IconLevel));
+		Levels.Add(MoveTemp(IconLevel));
 	}
 	stbi_image_free(Pixels);
 
-	if (Levels.empty())
+	if (Levels.Num() == 0)
 	{
 		return false;
 	}
 
-	std::vector<GLFWimage> Images(Levels.size());
-	for (size_t Index = 0; Index < Levels.size(); ++Index)
+	TArray<GLFWimage> Images;
+	Images.SetNumZeroed(Levels.Num());
+	for (int32 Index = 0; Index < Levels.Num(); ++Index)
 	{
 		Images[Index].width = Levels[Index].Size;
 		Images[Index].height = Levels[Index].Size;
-		Images[Index].pixels = Levels[Index].Pixels.data();
+		Images[Index].pixels = Levels[Index].Pixels.GetData();
 	}
-	glfwSetWindowIcon(Window, static_cast<int>(Images.size()), Images.data());
+	glfwSetWindowIcon(Window, Images.Num(), Images.GetData());
 	return true;
 }

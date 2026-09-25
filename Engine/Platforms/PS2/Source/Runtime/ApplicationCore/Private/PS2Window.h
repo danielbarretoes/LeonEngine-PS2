@@ -8,7 +8,7 @@ class FPS2Window final : public FGenericWindow
 public:
 	virtual ~FPS2Window() override;
 
-	virtual bool Create(int InWidth, int InHeight, const char* Title) override;
+	virtual bool Create(int32 InWidth, int32 InHeight, const TCHAR* Title) override;
 	virtual void Destroy() override;
 
 	virtual bool IsFocused() const override

@@ -3,8 +3,10 @@
 #include "CoreTypes.h"
 #include "GenericPlatform/GenericWindow.h"
 #include "GenericPlatform/IInputInterface.h"
+#include "Logging/LogMacros.h"
+#include "Templates/SharedPointer.h"
 
-#include <memory>
+APPLICATIONCORE_API DECLARE_LOG_CATEGORY_EXTERN(LogApplicationCore, Log, All);
 
 /**
  * Platform application: creates windows and owns input devices (UE: GenericApplication).
@@ -16,7 +18,7 @@ public:
 	virtual ~GenericApplication() = default;
 
 	/** Creates an (uninitialised) platform window; call Create() on it. */
-	virtual std::unique_ptr<FGenericWindow> MakeWindow() = 0;
+	virtual TSharedRef<FGenericWindow> MakeWindow() = 0;
 
 	/** Polls game controllers once per frame (UE: PollGameDeviceState). */
 	virtual void PollGameDeviceState()

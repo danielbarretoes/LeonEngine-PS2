@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreTypes.h"
+#include "Templates/SharedPointer.h"
 
 #include <memory>
 
@@ -43,12 +44,12 @@ public:
 	/** The main window (nullptr before PreInit / on desktop engine targets). */
 	FGenericWindow* GetMainWindow() const
 	{
-		return MainWindow.get();
+		return MainWindow.Get();
 	}
 
 private:
 	std::unique_ptr<GenericApplication> Application;
-	std::unique_ptr<FGenericWindow> MainWindow;
+	TSharedPtr<FGenericWindow> MainWindow;
 	uint64 LastFrameCycles = 0;
 	int32 ArgCount = 0;
 	char** Args = nullptr;

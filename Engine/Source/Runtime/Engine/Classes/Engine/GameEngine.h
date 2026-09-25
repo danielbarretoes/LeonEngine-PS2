@@ -286,7 +286,7 @@ private:
 	void UpdateHudStats(float DeltaTime);
 
 	std::unique_ptr<GenericApplication> Application;
-	std::unique_ptr<FGenericWindow> Window;
+	TSharedPtr<FGenericWindow> Window;
 	FPlayInputTarget PlayInputTarget;
 	UPlayerInput PlayerInput;
 	FSceneRenderer Renderer;

@@ -250,9 +250,9 @@ std::string UVerticalBox::TickInput(FGenericWindow& Window, bool bCursorCaptured
 	// Hover + click (never gated by travel lockout).
 	if (!bCursorCaptured && FbW > 0 && FbH > 0)
 	{
-		double Mx = 0.0;
-		double My = 0.0;
-		Window.GetCursorPos(Mx, My);
+		const FVector2D Cursor = Window.GetCursorPos();
+		const double Mx = Cursor.X;
+		const double My = Cursor.Y;
 		int WinW = 0;
 		int WinH = 0;
 		Window.GetWindowSize(WinW, WinH);

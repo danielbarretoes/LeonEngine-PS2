@@ -12,9 +12,9 @@ public:
 		InputInterface.Initialize();
 	}
 
-	virtual std::unique_ptr<FGenericWindow> MakeWindow() override
+	virtual TSharedRef<FGenericWindow> MakeWindow() override
 	{
-		return std::make_unique<FPS2Window>();
+		return MakeShared<FPS2Window>();
 	}
 
 	virtual void PollGameDeviceState() override

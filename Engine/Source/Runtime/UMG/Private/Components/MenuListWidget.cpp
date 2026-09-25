@@ -196,9 +196,7 @@ std::string UMenuListWidget::TickInput(FGenericWindow& Window, bool bCursorCaptu
 	// Mouse activate is never gated by travel lockout (only edges / capture).
 	if (bMouse && !bMouseWasDown && !bCursorCaptured)
 	{
-		double Mx = 0.0;
-		double My = 0.0;
-		Window.GetCursorPos(Mx, My);
+		const double My = Window.GetCursorPos().Y;
 		int WinW = 0;
 		int WinH = 0;
 		Window.GetWindowSize(WinW, WinH);

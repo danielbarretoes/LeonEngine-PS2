@@ -53,7 +53,7 @@ bool UGameEngine::Initialize(int Width, int Height, const char* Title)
 		return false;
 	}
 
-	Window->SetScrollCallback([this](double YOffset) { PendingScrollY += static_cast<float>(YOffset); });
+	Window->OnMouseWheel().BindLambda([this](float Delta) { PendingScrollY += Delta; });
 
 	Camera.SetPerspective(60.0f, Window->Aspect(), 0.1f, 100.0f);
 	Camera.SetTarget({0.0f, 0.0f, 0.0f});
@@ -161,13 +161,13 @@ void UGameEngine::SetPlayInputWindow(FGenericWindow* InWindow)
 	FGenericWindow* Previous = PlayInputTarget.GetWindow();
 	if (Previous != nullptr && Previous != InWindow)
 	{
-		Previous->SetScrollCallback(nullptr);
+		Previous->OnMouseWheel().Unbind();
 	}
 	PlayInputTarget.SetWindow(InWindow);
 	if (InWindow != nullptr)
 	{
 		// Accumulate into the same PendingScrollY as the main window (PIE New Window scroll).
-		InWindow->SetScrollCallback([this](double YOffset) { PendingScrollY += static_cast<float>(YOffset); });
+		InWindow->OnMouseWheel().BindLambda([this](float Delta) { PendingScrollY += Delta; });
 	}
 }
 
@@ -494,9 +494,9 @@ void UGameEngine::HandleInput(float DeltaTime)
 		}
 	}
 
-	double MouseX = 0.0;
-	double MouseY = 0.0;
-	InputWindow.GetCursorPos(MouseX, MouseY);
+	const FVector2D Cursor = InputWindow.GetCursorPos();
+	const double MouseX = Cursor.X;
+	const double MouseY = Cursor.Y;
 
 	const bool bWantLook =
 		!bSuppressCameraDrag && (InputWindow.IsCursorCaptured() || InputWindow.IsMouseButtonDown(EMouseButtons::Left));

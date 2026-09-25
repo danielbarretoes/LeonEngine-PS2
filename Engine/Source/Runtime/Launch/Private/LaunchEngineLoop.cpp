@@ -109,7 +109,7 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 	if (!MainWindow->Create(MainWindowWidth, MainWindowHeight, LEON_TARGET_NAME))
 	{
 		std::printf("FEngineLoop: failed to create the main window\n");
-		MainWindow.reset();
+		MainWindow.Reset();
 		return 1;
 	}
 #endif
@@ -180,7 +180,7 @@ void FEngineLoop::Exit()
 	if (MainWindow)
 	{
 		MainWindow->Destroy();
-		MainWindow.reset();
+		MainWindow.Reset();
 	}
 	Application.reset();
 

@@ -6,5 +6,5 @@
 class FGLFWApplication final : public GenericApplication
 {
 public:
-	virtual std::unique_ptr<FGenericWindow> MakeWindow() override;
+	virtual TSharedRef<FGenericWindow> MakeWindow() override;
 };

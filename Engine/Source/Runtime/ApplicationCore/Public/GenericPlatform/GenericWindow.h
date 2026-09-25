@@ -1,16 +1,19 @@
 #pragma once
 
 #include "CoreTypes.h"
+#include "Delegates/Delegate.h"
 #include "GenericPlatform/GenericApplicationMessageHandler.h"
 #include "InputCoreTypes.h"
-
-#include <functional>
-#include <memory>
+#include "Math/Vector2D.h"
+#include "Templates/UniquePtr.h"
 
 class FDynamicRHI;
 
 /** Opaque OS / graphics window handle (GLFWwindow* on desktop, GS state on PS2). */
 using FNativeWindowHandle = void*;
+
+/** Mouse wheel over a window, in notches (UE routes it through FGenericApplicationMessageHandler::OnMouseWheel). */
+DECLARE_DELEGATE_OneParam(FOnWindowMouseWheel, float /* Delta */);
 
 /**
  * Platform window + graphics context (UE: FGenericWindow). Created by
@@ -19,18 +22,16 @@ using FNativeWindowHandle = void*;
 class APPLICATIONCORE_API FGenericWindow
 {
 public:
-	using FScrollCallback = std::function<void(double YOffset)>;
-
 	FGenericWindow();
 	virtual ~FGenericWindow();
 
 	FGenericWindow(const FGenericWindow&) = delete;
 	FGenericWindow& operator=(const FGenericWindow&) = delete;
 
-	virtual bool Create(int InWidth, int InHeight, const char* Title) = 0;
+	virtual bool Create(int32 InWidth, int32 InHeight, const TCHAR* Title) = 0;
 
-	/** Secondary window sharing the graphics context of `shareWith` (desktop only). */
-	virtual bool CreateShared(const FGenericWindow& ShareWith, int InWidth, int InHeight, const char* Title);
+	/** Secondary window sharing the graphics context of ShareWith (desktop only). */
+	virtual bool CreateShared(const FGenericWindow& ShareWith, int32 InWidth, int32 InHeight, const TCHAR* Title);
 
 	virtual void Destroy() = 0;
 
@@ -57,9 +58,12 @@ public:
 
 	virtual bool IsKeyPressed(EKeys Key) const;
 	virtual bool IsMouseButtonDown(EMouseButtons Button) const;
-	virtual void GetCursorPos(double& X, double& Y) const;
+
+	/** Cursor position in window coordinates (UE: ICursor::GetPosition). */
+	virtual FVector2D GetCursorPos() const;
+
 	virtual void SetCursorCaptured(bool bCaptured);
-	virtual bool SetIconFromFile(const char* PngPath);
+	virtual bool SetIconFromFile(const TCHAR* PngPath);
 
 	FNativeWindowHandle NativeHandle() const
 	{
@@ -68,32 +72,32 @@ public:
 
 	FDynamicRHI* RHIDevice() const
 	{
-		return OwnedRHI.get();
+		return OwnedRHI.Get();
 	}
 
-	int Width() const
+	int32 Width() const
 	{
 		return WindowWidth;
 	}
 
-	int Height() const
+	int32 Height() const
 	{
 		return WindowHeight;
 	}
 
-	void GetWindowSize(int& InWidth, int& InHeight) const;
+	void GetWindowSize(int32& OutWidth, int32& OutHeight) const;
 
-	int GetFramebufferWidth() const
+	int32 GetFramebufferWidth() const
 	{
 		return FramebufferWidth;
 	}
 
-	int GetFramebufferHeight() const
+	int32 GetFramebufferHeight() const
 	{
 		return FramebufferHeight;
 	}
 
-	void GetFramebufferSize(int& InWidth, int& InHeight) const;
+	void GetFramebufferSize(int32& OutWidth, int32& OutHeight) const;
 
 	float Aspect() const;
 
@@ -102,12 +106,16 @@ public:
 		return bCursorCaptured;
 	}
 
-	void SetScrollCallback(FScrollCallback Callback);
+	/** Bound by the consumer of the wheel (the game engine's camera zoom). */
+	FOnWindowMouseWheel& OnMouseWheel()
+	{
+		return MouseWheelDelegate;
+	}
 
-	/** Backend callbacks update sizes / scroll through these. */
-	void ApplyWindowSize(int InWidth, int InHeight);
-	void ApplyFramebufferSize(int InWidth, int InHeight);
-	void NotifyScroll(double YOffset);
+	/** Backend callbacks update sizes / the wheel through these. */
+	void ApplyWindowSize(int32 InWidth, int32 InHeight);
+	void ApplyFramebufferSize(int32 InWidth, int32 InHeight);
+	void NotifyMouseWheel(float Delta);
 
 protected:
 	/** Creates the platform RHI, loads it and publishes it in GDynamicRHI. */
@@ -116,17 +124,17 @@ protected:
 	/** Releases the RHI created by InitRHI (clears GDynamicRHI if it is ours). */
 	void ReleaseRHI();
 
-	/** Resets the size / cursor / callback state after the backend window is gone. */
+	/** Resets the size / cursor / delegate state after the backend window is gone. */
 	void ResetWindowState();
 
 	FNativeWindowHandle Handle = nullptr;
-	std::unique_ptr<FDynamicRHI> OwnedRHI;
-	int WindowWidth = 0;
-	int WindowHeight = 0;
-	int FramebufferWidth = 0;
-	int FramebufferHeight = 0;
+	TUniquePtr<FDynamicRHI> OwnedRHI;
+	int32 WindowWidth = 0;
+	int32 WindowHeight = 0;
+	int32 FramebufferWidth = 0;
+	int32 FramebufferHeight = 0;
 	bool bBackendOwned = false;
 	bool bCursorCaptured = false;
 	bool bShouldClose = false;
-	FScrollCallback ScrollCallback;
+	FOnWindowMouseWheel MouseWheelDelegate;
 };

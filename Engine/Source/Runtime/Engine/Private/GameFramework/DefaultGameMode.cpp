@@ -103,9 +103,9 @@ void ADefaultGameMode::Tick(UGameEngine& Engine, float DeltaTime)
 	}
 
 	UCameraComponent& Camera = Engine.GetCamera();
-	double MouseX = 0.0;
-	double MouseY = 0.0;
-	Engine.GetPlayInputWindow().GetCursorPos(MouseX, MouseY);
+	const FVector2D Cursor = Engine.GetPlayInputWindow().GetCursorPos();
+	const double MouseX = Cursor.X;
+	const double MouseY = Cursor.Y;
 	// EditorApp does not call Engine::handleInput — apply look here for PIE + runtime.
 	if (Engine.IsCursorCaptured() || Engine.IsPlayMouseLookActive())
 	{

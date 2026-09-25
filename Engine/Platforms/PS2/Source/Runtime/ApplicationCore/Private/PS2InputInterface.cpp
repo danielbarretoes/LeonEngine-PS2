@@ -1,6 +1,7 @@
 #include "PS2InputInterface.h"
 
-#include <cstdio>
+#include "GenericPlatform/GenericApplication.h"
+
 #include <libpad.h>
 #include <loadfile.h>
 #include <sifrpc.h>
@@ -24,11 +25,11 @@ namespace
 		SifInitRpc(0);
 		if (SifLoadModule("rom0:SIO2MAN", 0, nullptr) < 0)
 		{
-			std::printf("PS2InputInterface: SIO2MAN load failed\n");
+			UE_LOG(LogApplicationCore, Error, "PS2InputInterface: SIO2MAN load failed");
 		}
 		if (SifLoadModule("rom0:PADMAN", 0, nullptr) < 0)
 		{
-			std::printf("PS2InputInterface: PADMAN load failed\n");
+			UE_LOG(LogApplicationCore, Error, "PS2InputInterface: PADMAN load failed");
 		}
 	}
 
@@ -59,7 +60,7 @@ namespace
 		}
 		padSetMainMode(0, 0, PAD_MMODE_DUALSHOCK, PAD_MMODE_LOCK);
 		bAnalogRequested = true;
-		std::printf("PS2InputInterface: DualShock analog mode requested\n");
+		UE_LOG(LogApplicationCore, Log, "PS2InputInterface: DualShock analog mode requested");
 	}
 
 	uint16 PadMaskForKey(EKeys Key)
@@ -129,7 +130,7 @@ bool FPS2InputInterface::Initialize()
 	bPortOpen = padPortOpen(0, 0, GPadBuffer) != 0;
 	bAnalogRequested = false;
 	bSampleValid = false;
-	std::printf("PS2InputInterface: pad port 0 %s\n", bPortOpen ? "open" : "failed");
+	UE_LOG(LogApplicationCore, Log, "PS2InputInterface: pad port 0 %s", bPortOpen ? "open" : "failed");
 	return bPortOpen;
 }
 
@@ -144,7 +145,7 @@ void FPS2InputInterface::SendControllerEvents()
 	const int32 State = padGetState(0, 0);
 	if (State != LastPadState)
 	{
-		std::printf("PS2InputInterface: port0 state %d\n", State);
+		UE_LOG(LogApplicationCore, Log, "PS2InputInterface: port0 state %d", State);
 		LastPadState = State;
 	}
 	if (!IsPadStateReadable(State) || padRead(0, 0, &GPad) == 0)
@@ -155,7 +156,7 @@ void FPS2InputInterface::SendControllerEvents()
 	const uint16 Buttons = GetRawButtonMask();
 	if (Buttons != LastLoggedButtons)
 	{
-		std::printf("PS2InputInterface: btns 0x%04X\n", Buttons);
+		UE_LOG(LogApplicationCore, Log, "PS2InputInterface: btns 0x%04X", Buttons);
 		LastLoggedButtons = Buttons;
 	}
 }

@@ -3,9 +3,9 @@
 #include "Desktop/GLFWWindow.h"
 #include "HAL/PlatformApplicationMisc.h"
 
-std::unique_ptr<FGenericWindow> FGLFWApplication::MakeWindow()
+TSharedRef<FGenericWindow> FGLFWApplication::MakeWindow()
 {
-	return std::make_unique<FGLFWWindow>();
+	return MakeShared<FGLFWWindow>();
 }
 
 GenericApplication* FPlatformApplicationMisc::CreateApplication()
