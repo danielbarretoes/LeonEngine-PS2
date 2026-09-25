@@ -38,7 +38,10 @@ LeonHeaderTool -Test [<dir>] [-Update]   golden tests: <dir>/Inputs/<Case> again
 - **First include in an existing header.** If a header of a reflected unit gains its first `.generated.h` include,
   LeonHeaderTool reports it and touches `<Unit>.lhtreconfigure`, and the next build reconfigures. In a module with no
   reflected header yet, touch its `.Build.cmake` after adding the first include.
-- **Circular dependencies.** `CIRCULAR_DEPENDENCIES` are not followed for type indexes.
+- **Circular dependencies.** `CIRCULAR_DEPENDENCIES` are not followed for type indexes. A circular edge does not order
+  the build either, so a module whose circular dependency is reflected waits for that module's generation step: each
+  reflected module also gets a `LeonHeaderTool.<Module>` custom target (`add_dependencies`; the Renderer waits for
+  Engine's, whose `Level.h` it includes).
 
 ## Supported subset
 

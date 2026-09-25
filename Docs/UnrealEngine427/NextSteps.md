@@ -141,19 +141,43 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 - 14 new `System.CoreUObject.Package.*` tests (62 CoreUObject tests), 13 of them in TestPAL on the PS2 (106 tests); the
   PS2 round-trip cost is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md). Released as 0.15.0.
 
+### Done — Gameplay framework as UObjects (P12)
+
+([LeonMapping — P12](LeonMapping.md#p12--gameplay-framework-as-uobjects),
+[ARCHITECTURE §10](../ARCHITECTURE.md#10-gameplay-framework-engine-desktop)):
+
+- Engine, AIModule, UMG and AnimationCore are reflected. `AActor`, `UActorComponent`, `USceneComponent`, the new
+  `UPrimitiveComponent` / `UShapeComponent` / `UCapsuleComponent` / `UBoxComponent` / `USphereComponent` /
+  `UMeshComponent` / `UStaticMeshComponent`, `USkeletalMeshComponent`, `UCameraComponent`, `USpringArmComponent`,
+  `UMovementComponent` / `UPawnMovementComponent` / `UCharacterMovementComponent`, `APawn`, `ACharacter`, `AController`,
+  `APlayerController`, `AAIController`, `AInfo`, `AGameModeBase`, `AGameMode` (`MatchState`), `AGameStateBase`,
+  `AGameState`, `APlayerState`, `AHUD`, `UGameInstance` (`FWorldContext`), `UWorld`, `ULevel`, `UPlayerInput`,
+  `UUserWidget` and the widgets, `UAnimInstance` are `UCLASS` types with `UPROPERTY` members; the level POD is
+  `FLevelStaticMesh`.
+- Ownership: `UGameEngine` (an `FGCObject`) → `UGameInstance` → `FWorldContext` → `UWorld` (transient package, root set)
+  → `ULevel` → actors → components. `UWorld::SpawnActor` / `SpawnActor<T>` with `FActorSpawnParameters`, UE's spawn
+  sequence and `DestroyActor`; the world spawns the game mode (`SetGameMode`), the game mode its game state, player
+  controllers their player states.
+- `Cast<>` replaces every `dynamic_cast`; Leon code builds without RTTI or C++ exceptions on every platform (D17).
+- Garbage collection at safe points (D11): world teardown, level load, `UGameEngine::ConditionalCollectGarbage`
+  after the world tick. Tests create worlds with `FScopedTestWorld`. 308 tests; the golden tests only changed how
+  they construct objects; Win64 frames and PS2 ELFs are unchanged.
+
 ### Next
 
-- **P12:** turn the naming-only `A`/`U` classes into real `UCLASS` types (`NewObject`, `CreateDefaultSubobject`,
-  `Cast<>` instead of `dynamic_cast`); `UObject*` members become `UPROPERTY`s (GC safety), `AActor::Destroy` marks
-  the actor pending kill, `UWorld` / `ULevel` hold their actors in `UPROPERTY` arrays. Actors and components then
-  save and load through packages as they are: their `UPROPERTY`s are tagged properties and their default subobjects
-  are rebuilt by their constructors (D12); anything else (render / physics state) is rebuilt in `PostLoad` or
-  `PostInitProperties`, not saved.
-- **P13:** call `CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS)` where UE does (`UEngine::LoadMap` after releasing the
-  old world, the game mode's round restart) and tick an `FGarbageCollectionTimer` from `UEngine::Tick`
-  (`ConditionalCollectGarbage`); settings classes (`UGameMapsSettings`, `UInputSettings`) use `UPROPERTY(Config)`
-  with `FSoftObjectPath` / `FSoftClassPath`; `UGameViewportClient` routes console commands to
+- **P13:** `UEngine` / `UGameEngine` as UObjects with `GEngine`; `UEngine::LoadMap` releases the old world
+  (`UGameInstance::DestroyWorldContextWorld` + `CollectGarbage`), creates or loads the new one and calls
+  `UWorld::BeginPlay` (Leon worlds play from their creation until then) and picks the game mode with D18's precedence
+  (replacing `UWorld::SetGameMode(TSubclassOf)` and `FGameApplication`'s `OnEnter` / `Tick(Engine)` / `OnExit` hooks);
+  the round restart collects too. Levels become actors (`AStaticMeshActor` owning a `UStaticMeshComponent`,
+  `APlayerStart`, volumes, lights, `AWorldSettings`) and `FLevelStaticMesh` goes; `UPrimitiveComponent` registers with
+  `FScene` (replacing `UWorld::AddPrimitive` / `SubmitPrimitiveDraws`) and creates its physics body in
+  `CreatePhysicsState` (replacing `UWorld::RegisterBodiesFromLevel`). The player controller owns its `UPlayerInput`,
+  `AHUD` (`HUDClass`) and camera manager; settings classes (`UGameMapsSettings`, `UInputSettings`) use
+  `UPROPERTY(Config)` with `FSoftObjectPath` / `FSoftClassPath`; `UGameViewportClient` routes console commands to
   `ProcessConsoleExec` / `FSelfRegisteringExec::StaticExec`.
+- Later: move the character movement code from `ACharacter` into `UCharacterMovementComponent` (UE's
+  `PerformMovement`, `MovementMode`, `Velocity`, `CurrentFloor`); a cached `ComponentToWorld`; tick functions.
 - **P14:** asset classes (`UStaticMesh`, `UTexture2D`, `USoundWave`, ...) keep their payloads in `FByteBulkData`
   (saved at the end of the package) and upload them in `PostLoad`; `UAssetImportData`; the editor module saves with
   `UPackage::SavePackage` under `/Game/` and `/Engine/`.
@@ -186,6 +210,9 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
   dependency on Launch; give games an engine-side accessor instead (UE: `GEngine->GameViewport`).
 - **Project descriptors:** `.lproj` is loaded in `PreInit` (P4), but `LeonGame` still has no project and loads one
   level with `-map=`; `UEngine::LoadMap` and the config-driven game mode replace it in P13.
+- **Engine glue from P12:** `UGameEngine` is not a UObject (an `FGCObject`), owns one `AHUD` outside any world and
+  one `UPlayerInput`, and `FGameApplication` drives the game mode through `OnEnter` / `Tick(Engine)` / `OnExit`; P13
+  replaces all of it with UE's `UGameEngine`, viewport client and player controller.
 - **Platform checks in shared code:** the `PLATFORM_WINDOWS` tests in `Core/Private/HAL/MallocAnsi.cpp` and
   `Core/Private/Misc/OutputDeviceRedirector.cpp` should become HAL functions or move under `Private/Windows`.
 - **Linux:** registered in LeonBuildTool but not built or tested; enable `-Werror=shadow` on the Linux host

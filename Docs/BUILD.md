@@ -374,14 +374,17 @@ fails to link, which enforces the rule. `IMPLEMENT_GAME_MODULE` and `IMPLEMENT_P
 ### Reflection (LeonHeaderTool)
 
 `Configuration/ReflectionRules.cmake` treats a module as reflected when one of its `Public/`, `Classes/` or `Private/`
-headers has `#include "<Name>.generated.h"`. Only CoreUObject is reflected so far (its `NoExportTypes.h`, plus its
-test fixtures in test targets); it runs the generated code (P9). For a reflected module:
+headers has `#include "<Name>.generated.h"`. CoreUObject runs the generated code (P9); the reflected modules are
+CoreUObject (its `NoExportTypes.h`), Engine, AIModule, UMG and AnimationCore (P12), plus their test fixtures in test
+targets. For a reflected module:
 
 - LeonBuildTool writes `<tree>/Inc/<Module>/<Module>.lhtmanifest`.
 - A custom command runs LeonHeaderTool. It writes `<Header>.generated.h`, `<Header>.gen.cpp`,
   `<Module>.init.gen.cpp` and `<Module>.lhttypes`, and only rewrites a file whose content changed.
 - The `.gen.cpp` files compile into the module, and `<tree>/Inc/<Module>` becomes a public include path.
 - The module table points `RegisterReflection` at `RegisterReflection_<Module>`.
+- A `LeonHeaderTool.<Module>` custom target wraps the step: a module with a circular dependency on the reflected one
+  (no build-order edge) waits for it with `add_dependencies` (the Renderer includes Engine's `Level.h`).
 
 Targets with `COLLECT_AUTOMATION_TESTS` also reflect `<Module>/Private/Tests/**.h` (the `<Module>.Tests` unit,
 compiled into the executable). A reflected module must be a `Runtime` or `Developer` module with `IMPLEMENT_MODULE`.
@@ -498,6 +501,7 @@ Compiler settings:
 | Standard | C++17 | C++17 | C++17 |
 | Warnings | `/W4 /permissive- /Zc:__cplusplus /utf-8 /MP` | `-Wall -Wextra` | `-Wall -Wextra -Wpedantic` |
 | Shadowing is an error (UE `ShadowVariableWarningLevel = Error`) | `/we4456 /we4457 /we4458 /we4459` | `-Werror=shadow` | — |
+| No RTTI, no C++ exceptions (D17) | `/GR-`, no `/EH` flag, `_HAS_EXCEPTIONS=0`, `/wd4577` (CMake's `/EHsc` / `/GR` defaults are stripped from `CMAKE_CXX_FLAGS`; `leon_third_party_cxx_defaults(<target>)` gives them back to third-party C++ that needs them) | `-fno-rtti -fno-exceptions` (toolchain file, below) | `-fno-rtti -fno-exceptions` on Leon targets |
 | Other | `/wd4324` (padding added for `alignas`, disabled as in UE); `/FS` in Debug and RelWithDebInfo | toolchain: `-D_EE -G0 -O2 -fno-exceptions -fno-rtti -fno-threadsafe-statics -ffunction-sections -fdata-sections`, linked with `$PS2SDK/ee/startup/linkfile` and `-Wl,--gc-sections` (unused functions / data are dropped; sizes in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md)). Leon runs one EE thread, so function-local statics need no guard; together with `PS2PlatformRuntime.cpp` (global `operator new` / `delete` through `FMemory`, `__cxa_pure_virtual`) this keeps libstdc++'s unwinder and demangler out of the ELF | |
 
 The C++ standard of a module is the lowest standard among the platforms it is allowed on (unless the module sets

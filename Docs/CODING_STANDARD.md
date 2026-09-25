@@ -29,7 +29,7 @@ All identifiers are English (U.S. spelling), **PascalCase**, with no underscores
 | Prefix | Use | Examples |
 | --- | --- | --- |
 | `A` | Classes derived from `AActor` — **only** those | `AActor`, `APawn`, `ACharacter`, `APlayerController`, `AGameModeBase`, `AHUD` |
-| `U` | Classes that are `UObject`s in UE (components, assets, subsystems, widgets, engine objects). CoreUObject's types (`UObject`, `UClass`, `UPackage`, …) and its test fixtures derive from `UObject`; the engine's `U` classes are **naming only** until they become `UCLASS` types (P12) | `UObject`, `UClass`, `UGameEngine`, `UWorld`, `ULevel`, `UActorComponent`, `UCharacterMovementComponent`, `UTexture2D`, `UUserWidget`, `UCookCommandlet` |
+| `U` | Classes that are `UObject`s in UE (components, assets, subsystems, widgets, engine objects). CoreUObject's types, the gameplay framework (P12: `UWorld`, `ULevel`, `UGameInstance`, the components, `UPlayerInput`), `UUserWidget` and `UAnimInstance` derive from `UObject`. A few `U` types are still **naming only** until their phase: `UGameEngine` (P13), `UInputMappingContext` (removed in P13), the render / animation resources `UStaticMesh`, `USkeletalMesh`, `USkeleton`, `UAnimSequence`, `UBlendSpace1D` and `UCookCommandlet` (P14), `UNavigationSystem` and the behavior tree lite (`UBehaviorTree`, `UBTNode`, `UBlackboardComponent`) | `UObject`, `UClass`, `UWorld`, `ULevel`, `UActorComponent`, `UCharacterMovementComponent`, `UUserWidget`, `UGameEngine`, `UTexture2D` |
 | `F` | Every other class or struct | `FEngineLoop`, `FTicker`, `FPaths`, `FSceneRenderer`, `FPhysScene`, `FHitResult`, `FPS2RHI` |
 | `T` | Class templates | `TArray`, `TMap`, `TSharedPtr`, `TDelegate`, `TOptional` |
 | `E` | Enums (prefer `enum class`, sized when stored) | `EKeys`, `EPhysicsBackend`, `EPostProcessQuality`, `ENetMsg` |
@@ -80,10 +80,9 @@ All identifiers are English (U.S. spelling), **PascalCase**, with no underscores
 
 ```cpp
 template <typename T, typename... ArgsType>
-T* CreateDefaultSubobject(ArgsType&&... Args)
+TUniquePtr<T> MakeUnique(ArgsType&&... Args)
 {
-	TUniquePtr<T> Owned = MakeUnique<T>(Forward<ArgsType>(Args)...);
-	…
+	return TUniquePtr<T>(new T(Forward<ArgsType>(Args)...));
 }
 ```
 
@@ -172,6 +171,13 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
   (`-Wall -Wextra -Wpedantic`) do not include it yet, so verify on Win64 or PS2. Resolve shadowing with the
   `In` / `Local` prefixes (§1.2), never by disabling the diagnostic.
 - Fix warnings (`/W4`, `-Wall -Wextra`); suppressing one is a last resort.
+- **No RTTI and no C++ exceptions** (plan decision D17, UE's `bUseRTTI` / `bEnableExceptions` defaults). LeonBuildTool
+  compiles Leon code with `/GR-`, no `/EH` flag and `_HAS_EXCEPTIONS=0` on MSVC, `-fno-rtti -fno-exceptions` on GCC /
+  Clang (the PS2 toolchain passes them to everything). No `dynamic_cast` or `typeid`: test `UObject` types with
+  `Cast<T>` / `IsA<T>()`, and give a plain class hierarchy a virtual query instead. No `try` / `catch` / `throw`:
+  report failures with return values, `check` / `ensure` and `UE_LOG`. Third-party libraries keep their own flags
+  (`leon_third_party_cxx_defaults` restores exceptions and RTTI for one that needs them), and `LeonHeaderTool`, a
+  std-only host program like UE's UnrealHeaderTool, uses exceptions for its parse aborts.
 - `nullptr`, `override` + `virtual` on overrides (`virtual void StartupModule() override;`), `final` on
   classes not designed for derivation, `static_assert` for compile-time checks, `enum class` for new enums.
 - `auto` only where Epic allows it: lambdas, verbose iterator / `std::chrono` types, template code.
@@ -249,7 +255,18 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
     derives from `FGCObject` (reporting them in `AddReferencedObjects`) or holds a `TStrongObjectPtr`. Use
     `TWeakObjectPtr` (or a `UPROPERTY` `TWeakObjectPtr`) for references that must not keep the object alive, and
     check it before use. A local `UObject*` is only safe until the next `CollectGarbage`, which runs at safe points
-    only (`LoadMap`, the round restart, the engine's timer), never inside a constructor.
+    only: the world teardown (`UGameEngine::Shutdown`, a test's `FScopedTestWorld`), a level (re)load, the engine's
+    timer after the world tick (`UGameEngine::ConditionalCollectGarbage`), later `LoadMap` and the round restart;
+    never inside a constructor or a tick.
+  - **Gameplay objects** (P12). Spawn actors with `UWorld::SpawnActor<T>(…)` (never `NewObject` or a local
+    `AActor`), destroy them with `Destroy()`: the actor ends play and leaves its level at once and the next collection
+    frees it, clearing every `UPROPERTY` that points at it (check actor pointers with `IsValid` or
+    `IsPendingKillPending` when a destroy may have happened this frame). Give actors their components in the
+    constructor: `CreateDefaultSubobject<T>(TEXT("Name"))`, `SetupAttachment(Parent, Socket)`, the root through
+    `RootComponent` (a subclass with its own root skips `AActor::DefaultSceneRootName` with
+    `ObjectInitializer.DoNotCreateDefaultSubobject`). A component added later is `NewObject<T>(Actor)` followed by
+    `RegisterComponent()`. Overrides call `Super`: first in `BeginPlay`, `PostInitializeComponents`, `OnRegister`,
+    last in `EndPlay` and `Destroyed`.
   - Config values of a class are `UPROPERTY(Config)` members of a `UCLASS(Config=<File>)` (read automatically into the
     class default object; section `/Script/<Module>.<Class>`), not hand-written `GConfig` reads, once the class is a
     `UObject`.
@@ -355,6 +372,10 @@ File formats: [ASSET_FORMATS.md](ASSET_FORMATS.md).
   CoreUObject, Json and Projects tests on every platform, including PS2.
 - Reflected test types (`UCLASS` / `USTRUCT` fixtures) go in `<Module>/Private/Tests/*.h`; LeonHeaderTool compiles them
   into the test targets only (the `<Module>.Tests` unit).
+- A test that needs actors creates its world with `FScopedTestWorld` (`Engine/Public/Tests/ScopedTestWorld.h`):
+  `FScopedTestWorld TestWorld; UWorld& World = *TestWorld;`. At the end of the scope the world ends play, is destroyed
+  and the garbage is collected, so no test leaves objects behind. Other objects come from `NewObject<T>()`; a
+  `UObject` is never a local by value.
 
 ```cpp
 #include "CoreMinimal.h"

@@ -9,7 +9,7 @@ Also: [ASSET_FORMATS.md](ASSET_FORMATS.md) (`.lmat` / `.lmesh` referenced by act
 
 | Type | Header | Role |
 | --- | --- | --- |
-| `ULevel` | `Classes/Engine/Level.h` | Live level: `UStaticMeshComponent`s, `FPlayerStart`, `FTriggerVolume`, `FPainCausingVolume`, `FAISpawnPoint`, `FDirectionalLight`, `FPointLight`, name, game mode |
+| `ULevel` | `Classes/Engine/Level.h` | Live level, a UObject: the game world's persistent level (`UGameEngine::GetLevel`). Besides the world's actors (`Actors`) it carries the `.llev` content until P13 turns it into actors: `FLevelStaticMesh`es, `FPlayerStart`, `FTriggerVolume`, `FPainCausingVolume`, `FAISpawnPoint`, `FDirectionalLight`, `FPointLight`, level name (`GetLevelName`), game mode |
 | `FLevelDocument` | `Public/Level/LeonLevelFormat.h` | In-memory mirror of a `.llev`: plain data, no GPU resources (`FLevelActorRecord`, `FLevelLightRecord`, `FLevelCameraRecord`) |
 
 ## Load pipeline
@@ -18,9 +18,11 @@ Also: [ASSET_FORMATS.md](ASSET_FORMATS.md) (`.lmat` / `.lmesh` referenced by act
 LoadLevelFile(UGameEngine&, Path)
   ├─ extension must be .llev
   ├─ LoadLeonLevelFile            .llev bytes -> FLevelDocument (DeserializeLeonLevel)
-  └─ ApplyLevelDocument           builds a staging ULevel; commits only on full success
+  └─ ApplyLevelDocument           builds a transient staging ULevel; commits only on full success
         ├─ actors, lights
-        └─ camera (UGameEngine::GetCamera)
+        ├─ commit: GetLevel().MoveLevelContentFrom(Staged)
+        ├─ camera (UGameEngine::GetCamera)
+        └─ CollectGarbage               a level load is a safe point (D11): the staging level goes
 ```
 
 There is no separate validation pass: magic, version, class values and limits are enforced by the reader, and resource failures by `ApplyLevelDocument`. A failed load leaves the previous level and camera untouched. If any `StaticMesh` actor's mesh fails to load, the whole level is rejected (no partial loads). A level with no actors and no lights is rejected; blank or lights-only levels are valid.
@@ -127,7 +129,7 @@ The writer always sets `hasInteractCost` for `TriggerVolume` and `hasPainData` f
 | Value | Class | Applied as |
 | --- | --- | --- |
 | 0 | `PlayerStart` | `FPlayerStart` (spawn transform) |
-| 1 | `Cube` | Procedural `UStaticMeshComponent` (`FBasicShape`) |
+| 1 | `Cube` | Procedural `FLevelStaticMesh` (`FBasicShape`) |
 | 2 | `Sphere` | Procedural, uses `sphereSegments` / `sphereRings` |
 | 3 | `Plane` | Procedural |
 | 4 | `BlockingVolume` | Procedural cube whose materials never cast shadows |
@@ -150,7 +152,7 @@ Always stored. The orbit fields (`target`, `distance`, `yaw`, `pitch`) are the b
 
 ### Level animation
 
-Spins (`spinYaw` degrees per second), bobs (`bobBaseY`, `bobAmplitude`, `bobSpeed`) and point-light orbits are copied into the live level (`UStaticMeshComponent::SpinYaw` / `bHasBob`, `FPointLight::bHasOrbit`) and preserved on save, but nothing animates them at runtime: the level animation player was removed in 0.12.0.
+Spins (`spinYaw` degrees per second), bobs (`bobBaseY`, `bobAmplitude`, `bobSpeed`) and point-light orbits are copied into the live level (`FLevelStaticMesh::SpinYaw` / `bHasBob`, `FPointLight::bHasOrbit`) and preserved on save, but nothing animates them at runtime: the level animation player was removed in 0.12.0.
 
 ## Running a level
 

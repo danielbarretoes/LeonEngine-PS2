@@ -7,6 +7,74 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Twelfth step of the Core / CoreUObject plan (P12): the gameplay framework becomes UObjects, owned through the world
+and the game instance and freed by the garbage collector at safe points; Leon code builds without RTTI or C++
+exceptions. Behaviour, the golden tests, the Win64 frames and the PS2 ELFs are unchanged.
+
+### Added
+
+- **Gameplay framework as UObjects** (Engine, AIModule, UMG, AnimationCore; plan decisions D11, D12).
+  - `UCLASS` types with `UPROPERTY` members: `AActor`, `AInfo`, `UActorComponent`, `USceneComponent`, `APawn`,
+    `ACharacter`, `AController`, `APlayerController`, `AAIController`, `AGameModeBase`, `AGameStateBase`,
+    `APlayerState`, `AHUD`, `ADefaultCameraActor`, `ADefaultGameMode`, `ADefaultPlayerController`, `UGameInstance`,
+    `UWorld`, `ULevel` (`UPROPERTY() TArray<AActor*> Actors`), `UPlayerInput`, `USkeletalMeshComponent`,
+    `UCameraComponent` (now a scene component), `USpringArmComponent`, `UUserWidget` and the UMG widgets,
+    `UAnimInstance` / `UCharacterAnimInstance`.
+  - New components: `UPrimitiveComponent` (render state in the world's primitive list, `GetCollisionShape`),
+    `UShapeComponent`, `UCapsuleComponent`, `UBoxComponent`, `USphereComponent`, `UMeshComponent`,
+    `UStaticMeshComponent` (a mesh and its materials; attached to a bone socket it replaces
+    `FSkelMeshAttachment`), `UMovementComponent`, `UPawnMovementComponent`; `UCharacterMovementComponent` is a
+    component holding the tunables.
+  - `ACharacter`'s default subobjects: the root `UCapsuleComponent` (`CollisionCylinder`), the movement
+    (`CharMoveComp`) and the mesh (`CharacterMesh0`); `GetCapsuleComponent`.
+  - `AGameMode` with UE's `MatchState` (`MatchState::EnteringMap` … `Aborted`, `StartPlay`, `StartMatch`,
+    `EndMatch`, `AbortMatch`, `OnMatchStateSet` and the `Handle*` hooks) and `AGameState` (`MatchState`,
+    `PreviousMatchState`, `ElapsedTime`); `AGameModeBase` gains `GameStateClass`, `PlayerControllerClass`,
+    `PlayerStateClass`, `DefaultPawnClass`, `HUDClass` and spawns its game state; controllers spawn their player
+    state (`InitPlayerState`).
+  - `UWorld::CreateWorld` / `DestroyWorld` (transient `/Temp/Untitled_<N>` package, root set), `SpawnActor(Class,
+    Location, Rotation, FActorSpawnParameters)` and the `SpawnActor<T>` / `SpawnActorDeferred` templates with UE's
+    spawn sequence (components registered, `PreInitializeComponents`, `InitializeComponents`,
+    `PostInitializeComponents`, `BeginPlay`), `DestroyActor` (`Destroyed`, `EndPlay(EEndPlayReason)`, components
+    unregistered, removed from the level, pending kill), `SetGameMode`, `GetGameState`, `EWorldType`,
+    `ESpawnActorCollisionHandlingMethod`; `FWorldContext` owned by `UGameInstance` (`InitializeStandalone`).
+  - Scene components: `SetupAttachment`, `AttachToComponent(Parent, FAttachmentTransformRules, SocketName)`,
+    `DetachFromComponent(FDetachmentTransformRules)`, `GetSocketTransform` / `DoesSocketExist` (a skeletal mesh's
+    bones are sockets), `GetComponentToWorld`, world-space setters, visibility (`Engine/EngineTypes.h`: attachment
+    rules, `EEndPlayReason`, `EWorldType`).
+  - Garbage collection at safe points (D11): after the world teardown (`UGameEngine::Shutdown`), after a level load,
+    and `UGameEngine::ConditionalCollectGarbage` after the world tick through `FGarbageCollectionTimer`
+    (`gc.TimeBetweenPurgingPendingKillObjects`); `LogSpawn`, `LogWorld`.
+  - `FScopedTestWorld` for tests; reflected test fixtures in `Engine/Private/Tests/EngineTestTypes.h` and
+    `AIModule/Private/Tests/GameplayTestTypes.h`; 15 new tests (`System.Engine.World.*`, `.Components.*`,
+    `.GameFramework.*`): 308 in total.
+
+### Changed
+
+- The level POD `UStaticMeshComponent` is renamed `FLevelStaticMesh`; `ULevel::GetName` / `SetName` became
+  `GetLevelName` / `SetLevelName` (the object name is `PersistentLevel`).
+- Ownership: the game world belongs to the game instance's world context instead of `AGameModeBase`; the world spawns
+  the game mode (`UWorld::SetGameMode`), which `FGameApplication` drives through the same `OnEnter` / `Tick` /
+  `OnExit` hooks; `UGameEngine::GetLevel()` is the world's persistent level; `UGameEngine` keeps its game instance,
+  camera, HUD and player input as an `FGCObject`.
+- Actors: the actor transform is the root component's; components are default subobjects or `NewObject` +
+  `RegisterComponent` (the actor-level `CreateDefaultSubobject<T>(Args...)` and `RegisterComponent(Component)` are
+  gone); `Destroy` goes through `UWorld::DestroyActor` and `Destroyed()` replaces the virtual `Destroy()`;
+  `EndPlay` takes an `EEndPlayReason`; `GetRootComponent()` returns a pointer.
+- `Cast<>` replaces every `dynamic_cast`; `AHUD::AddWidget<T>()` and `USkeletalMeshComponent::SetAnimInstance<T>()`
+  create UObjects (no constructor arguments).
+- **No RTTI and no C++ exceptions** in Leon code on every platform (D17): MSVC `/GR-`, no `/EH`, `_HAS_EXCEPTIONS=0`;
+  GCC / Clang `-fno-rtti -fno-exceptions`. CMake's MSVC defaults are stripped from `CMAKE_CXX_FLAGS`; third-party C++
+  that needs them gets them back with `leon_third_party_cxx_defaults` (tinyobjloader); Jolt keeps its own flags.
+- LeonBuildTool: every reflected module also has a `LeonHeaderTool.<Module>` target, which modules with a circular
+  dependency on it wait for (the Renderer includes Engine's reflected `Level.h`).
+
+### Removed
+
+- `FSkelMeshAttachment` and `USkeletalMeshComponent::AddAttachment` / `GetAttachments` / `GetAttachmentWorldMatrix`
+  (unused; attach a `UStaticMeshComponent` to a bone socket instead); `ACharacter::SetCharacterMovement` (the
+  movement is a component: edit `GetCharacterMovement()`); `UWorld::SubmitSkeletalDraws` (`SubmitPrimitiveDraws`).
+
 ## [0.15.0] - 2026-09-25
 
 Eighth to eleventh steps of the Core / CoreUObject plan (P8–P11): LeonHeaderTool, the UnrealHeaderTool counterpart,

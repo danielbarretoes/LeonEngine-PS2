@@ -19,6 +19,18 @@ a collection in one test never touches another test's objects. The config tests 
 (`FConfigFile::CombineFromBuffer`) and remove them afterwards; the SaveConfig test (desktop only) writes its user
 layer under `<Project>/Intermediate/Tests/CoreUObjectConfig/` and deletes it.
 
+The gameplay tests (Engine, AIModule, JoltPhysics) work on UObjects since P12. A test that spawns actors creates its
+world with `FScopedTestWorld` (`Engine/Public/Tests/ScopedTestWorld.h`): `UWorld::CreateWorld` at the start of the
+scope, and at its end `DestroyWorld` (every actor ends play) and a full garbage collection, so the next test starts
+without them. Components, cameras, levels, HUDs and game states made outside a world come from `NewObject`; nothing is
+declared by value. Such a free object is collected by the next safe point, so a test that ends a test world early
+declares the objects it still needs before that world, or holds them in `TStrongObjectPtr`. Reflected fixtures (an
+actor that spawns during its tick, test pawns, controllers and a component that counts its calls) live in
+`Engine/Private/Tests/EngineTestTypes.h` and `AIModule/Private/Tests/GameplayTestTypes.h`. `System.Engine.World.*`,
+`System.Engine.Components.*` and `System.Engine.GameFramework.*` cover the spawn and destroy sequence, ownership and
+collection, attachment rules and sockets, the primitive render state, the game mode, game state and match states, the
+HUD widgets and anim instances as objects, and the engine's collection timer.
+
 The package tests (`System.CoreUObject.Package.*`) name their packages `/PackageTest/...`, a mount point they register
 for their duration, save them to memory (`UPackage::SaveToMemory` + `FLinkerLoad::RegisterInMemoryPackage`, so they
 run on the PS2 too), destroy them (pending kill and a full collection, as a new process would start) and load them
@@ -31,7 +43,9 @@ The golden tests (`System.Engine.Golden.*`, `System.AIModule.Golden.*`, `System.
 movement, traces, navigation, cameras, shadows and reflections against tables recorded before P7 moved the world to
 UE's axes, so any change of sign or unit fails them.
 
-`-Screenshot=<file.bmp>` saves frame `-ExitAfterFrames=N` (default 60) as a 24-bit BMP and exits. `-AxesGizmo` turns
+`-Screenshot=<file.bmp>` saves frame `-ExitAfterFrames=N` (default 60) as a 24-bit BMP and exits. A run of
+`LeonGame.exe -ExitAfterFrames=300` should log two `LogGarbage` lines and nothing else of note: one after the level
+load (the staging level) and one at exit (the world teardown), and no errors. `-AxesGizmo` turns
 the axes gizmo on from the start (see below); captures without it do not change.
 
 ## Axes gizmo

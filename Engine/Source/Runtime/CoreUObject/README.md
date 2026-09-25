@@ -6,8 +6,11 @@ then packages: saving and loading objects in `.lasset` / `.lmap` files (P11). Th
 for every platform (PS2 included) in C++17 without RTTI or exceptions, and is the runtime side of LeonHeaderTool's
 generated code ([LeonHeaderTool/README.md](../../Programs/LeonHeaderTool/README.md) is the contract).
 
-No engine module is reflected yet: `LeonAutomationTests` and `TestPAL` link CoreUObject for its tests; the gameplay
-classes become `UCLASS` types in P12.
+Since P12 the gameplay framework is built on it: `Engine` (actors, components, world, level, game instance, game mode
+and state, controllers, HUD, player input), `AIModule` (`AAIController`), `UMG` (`UUserWidget` and the widgets) and
+`AnimationCore` (`UAnimInstance`) are reflected modules ([ARCHITECTURE.md §10](../../../../Docs/ARCHITECTURE.md#10-gameplay-framework-engine-desktop)
+has the ownership, spawn and destroy flows). `LeonAutomationTests` and `TestPAL` link CoreUObject for its tests; the
+PS2 game does not use it until P13.
 
 ## Headers
 
@@ -93,13 +96,15 @@ Each collection logs `LogGarbage: Collected N of M objects in T ms (mark, purge)
 figures in `GetLastGarbageCollectionStats()`.
 
 **When it runs.** Only at safe points, never on its own: nothing may hold an unreported `UObject*` across it (the
-rule: a `UObject*` member is a `UPROPERTY`; a non-UObject holder is an `FGCObject` or uses `TStrongObjectPtr`). In
-this phase only the tests and TestPAL call it. P12 / P13 call it where UE does: `UEngine::LoadMap` after the old world
-is released (`CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS)`), the round restart of the game mode, and every frame's
-`UEngine::ConditionalCollectGarbage` through `FGarbageCollectionTimer::Tick` after the world tick; the interval comes
-from `[/Script/Engine.GarbageCollectionSettings] gc.TimeBetweenPurgingPendingKillObjects` in the engine config
-(`FGarbageCollectionSettings::LoadFromConfig`, 61.1 s by default). `AActor::Destroy` will mark the actor pending kill
-and the next collection frees it.
+rule: a `UObject*` member is a `UPROPERTY`; a non-UObject holder is an `FGCObject` or uses `TStrongObjectPtr`). The
+engine (P12) calls it where UE does: after the world is destroyed (`UGameEngine::Shutdown`, a replaced game instance,
+a test's `FScopedTestWorld`), after a level (re)load (`ApplyLevelDocument`), and every frame's
+`UGameEngine::ConditionalCollectGarbage` (UE: `UEngine::ConditionalCollectGarbage`) through
+`FGarbageCollectionTimer::Tick` after the world tick; the interval comes from
+`[/Script/Engine.GarbageCollectionSettings] gc.TimeBetweenPurgingPendingKillObjects` in the engine config
+(`FGarbageCollectionSettings::LoadFromConfig`, 61.1 s by default). P13 adds `UEngine::LoadMap` (after the old world is
+released) and the round restart. `AActor::Destroy` marks the actor and its components pending kill and the next
+collection frees them.
 
 **References.**
 
