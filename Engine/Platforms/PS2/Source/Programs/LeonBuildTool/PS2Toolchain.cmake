@@ -30,9 +30,11 @@ set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 
 # Match PS2SDK samples/Makefile.eeglobal; one section per function / object so the linker drops unused code
-# (-Wl,--gc-sections).
+# (-Wl,--gc-sections). Leon runs one EE thread, so function-local statics need no guard: libsupc++'s guard can throw,
+# which would link the unwinder and the terminate handler's demangler (-fno-threadsafe-statics).
 set(CMAKE_C_FLAGS_INIT   "-D_EE -G0 -O2 -Wall -ffunction-sections -fdata-sections")
-set(CMAKE_CXX_FLAGS_INIT "-D_EE -G0 -O2 -Wall -fno-exceptions -fno-rtti -ffunction-sections -fdata-sections")
+set(CMAKE_CXX_FLAGS_INIT
+    "-D_EE -G0 -O2 -Wall -fno-exceptions -fno-rtti -fno-threadsafe-statics -ffunction-sections -fdata-sections")
 set(CMAKE_EXE_LINKER_FLAGS_INIT
     "-T${PS2SDK}/ee/startup/linkfile -L${PS2SDK}/ee/lib -Wl,-zmax-page-size=128 -Wl,--gc-sections")
 
