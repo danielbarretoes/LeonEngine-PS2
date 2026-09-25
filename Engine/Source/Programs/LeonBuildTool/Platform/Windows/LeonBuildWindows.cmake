@@ -2,7 +2,7 @@
 leon_register_platform(Win64
 	GROUPS Windows Microsoft Desktop
 	HEADER_NAME Windows
-	CXX_STANDARD 20
+	CXX_STANDARD 17
 	EXECUTABLE_SUFFIX .exe
 	RHI_MODULE OpenGLDrv
 	HOST_SYSTEM Windows

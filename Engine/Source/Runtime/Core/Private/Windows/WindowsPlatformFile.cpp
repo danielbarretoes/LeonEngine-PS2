@@ -2,8 +2,7 @@
 #include "GenericPlatform/GenericPlatformFile.h"
 #include "Math/UnrealMathUtility.h"
 #include "Misc/DateTime.h"
-
-#include <Windows.h>
+#include "Windows/WindowsHWrapper.h"
 
 // Windows.h maps these names to their W / A variants; the IPlatformFile methods keep the UE names.
 #undef DeleteFile

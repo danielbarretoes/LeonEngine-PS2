@@ -1,8 +1,7 @@
 #include "Containers/StringConv.h"
 #include "Containers/UnrealString.h"
 #include "HAL/PlatformProcess.h"
-
-#include <Windows.h>
+#include "Windows/WindowsHWrapper.h"
 
 namespace
 {

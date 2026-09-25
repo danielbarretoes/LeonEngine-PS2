@@ -2,8 +2,8 @@
 #include "HAL/PlatformMisc.h"
 #include "Misc/AssertionMacros.h"
 #include "Misc/Guid.h"
+#include "Windows/WindowsHWrapper.h"
 
-#include <Windows.h>
 #include <combaseapi.h>
 #include <cstdio>
 #include <cstring>

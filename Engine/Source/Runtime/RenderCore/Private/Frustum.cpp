@@ -26,7 +26,7 @@ FBox TransformLocalBox(const FVector& LocalMin, const FVector& LocalMax, const F
 void FFrustum::ExtractFromViewProjection(const FMatrix& ViewProjection)
 {
 	// Gribb / Hartmann: combine the clip-matrix columns into frustum planes. M[C][R] is column C, row R of the
-	// column-vector clip transform (the memory layout glm uses; see GlmInterop.h).
+	// column-vector clip transform (the GL memory layout; see LegacyGLMath.h).
 	const float (&M)[4][4] = ViewProjection.M;
 	Planes[0] = MakeInsidePlane(M[0][3] + M[0][0], M[1][3] + M[1][0], M[2][3] + M[2][0], M[3][3] + M[3][0]); // left
 	Planes[1] = MakeInsidePlane(M[0][3] - M[0][0], M[1][3] - M[1][0], M[2][3] - M[2][0], M[3][3] - M[3][0]); // right

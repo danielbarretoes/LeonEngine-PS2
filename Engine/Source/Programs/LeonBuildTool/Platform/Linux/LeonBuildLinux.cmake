@@ -2,7 +2,7 @@
 leon_register_platform(Linux
 	GROUPS Unix Linux Desktop
 	HEADER_NAME Linux
-	CXX_STANDARD 20
+	CXX_STANDARD 17
 	EXECUTABLE_SUFFIX ""
 	RHI_MODULE OpenGLDrv
 	HOST_SYSTEM Linux

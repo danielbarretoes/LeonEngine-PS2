@@ -3,8 +3,7 @@
 #include "Containers/Ticker.h"
 #include "Logging/LogMacros.h"
 #include "Modules/ModuleInterface.h"
-
-#include <memory>
+#include "Templates/UniquePtr.h"
 
 class FThirdPersonGameMode;
 
@@ -23,6 +22,6 @@ public:
 	}
 
 private:
-	std::unique_ptr<FThirdPersonGameMode> GameMode;
+	TUniquePtr<FThirdPersonGameMode> GameMode;
 	FDelegateHandle TickHandle;
 };

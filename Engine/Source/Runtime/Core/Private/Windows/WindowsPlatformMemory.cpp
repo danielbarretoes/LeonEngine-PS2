@@ -1,6 +1,6 @@
 #include "HAL/PlatformMemory.h"
+#include "Windows/WindowsHWrapper.h"
 
-#include <Windows.h>
 #include <psapi.h>
 
 FPlatformMemoryStats FWindowsPlatformMemory::GetStats()

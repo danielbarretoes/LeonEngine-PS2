@@ -1,6 +1,5 @@
 #include "HAL/PlatformTime.h"
-
-#include <Windows.h>
+#include "Windows/WindowsHWrapper.h"
 
 namespace
 {

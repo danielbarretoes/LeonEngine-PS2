@@ -1,6 +1,6 @@
 #include "DynamicRHI.h"
+#include "Windows/WindowsHWrapper.h"
 
-#include <Windows.h>
 #include <dxgi1_4.h>
 
 bool GetOpenGLPlatformGPUMemoryStats(FRHIGPUMemoryStats& OutStats)

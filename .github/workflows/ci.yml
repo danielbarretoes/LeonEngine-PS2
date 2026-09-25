@@ -31,6 +31,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Banned APIs (G4)
+        shell: pwsh
+        run: ./Engine/Build/BatchFiles/CheckBannedApis.ps1
       - name: Setup (pinned third-party downloads)
         shell: cmd
         run: call Setup.bat

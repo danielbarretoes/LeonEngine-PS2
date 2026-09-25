@@ -1,9 +1,7 @@
 #include "CoreMinimal.h"
 #include "Frustum.h"
-#include "Migration/GlmInterop.h"
+#include "LegacyGLMath.h"
 #include "Misc/AutomationTest.h"
-
-#include <glm/gtc/matrix_transform.hpp>
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -13,7 +11,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTransformLocalBoxTest, "System.RenderCore.Frus
 bool FTransformLocalBoxTest::RunTest(const FString& Parameters)
 {
 	// A unit box turned 45 degrees about the vertical axis grows in X and keeps its height.
-	const FMatrix Model = FromGlm(glm::rotate(glm::mat4(1.0f), glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
+	const FMatrix Model = LegacyGL::Rotate(FMatrix::Identity, LegacyGL::Radians(45.0f), FVector(0.0f, 1.0f, 0.0f));
 	const FBox Box = TransformLocalBox(FVector(-0.5f), FVector(0.5f), Model);
 	TestTrue("Min X grows", Box.Min.X < -0.5f);
 	TestTrue("Max X grows", Box.Max.X > 0.5f);
@@ -47,12 +45,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFrustumIntersectsAabbTest, "System.RenderCore.
 
 bool FFrustumIntersectsAabbTest::RunTest(const FString& Parameters)
 {
-	// The renderer's clip transform (OpenGL conventions, built with glm until the renderer migrates).
-	const glm::mat4 View = glm::lookAt(glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-	const glm::mat4 Proj = glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 100.0f);
+	// The renderer's clip transform (OpenGL conventions, LegacyGLMath.h).
+	const FMatrix View = LegacyGL::LookAt(FVector(0.0f, 0.0f, 5.0f), FVector(0.0f), FVector(0.0f, 1.0f, 0.0f));
+	const FMatrix Proj = LegacyGL::Perspective(LegacyGL::Radians(60.0f), 1.0f, 0.1f, 100.0f);
 
 	FFrustum Frustum;
-	Frustum.ExtractFromViewProjection(FromGlm(Proj * View));
+	Frustum.ExtractFromViewProjection(LegacyGL::Mul(Proj, View));
 
 	TestTrue("Box at the origin", Frustum.IntersectsAabb(FBox(FVector(-0.5f), FVector(0.5f))));
 	TestFalse("Box far away", Frustum.IntersectsAabb(FBox(FVector(200.0f), FVector(201.0f))));

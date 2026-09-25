@@ -1,10 +1,12 @@
+#include "Containers/UnrealString.h"
 #include "CoreTypes.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformProperties.h"
+#include "Logging/LogMacros.h"
 #include "Misc/CommandLine.h"
 #include "Modules/ModuleManager.h"
 
-#include <cstdio>
+DEFINE_LOG_CATEGORY_STATIC(LogBlankProgram, Log, All);
 
 int main(int ArgC, char* ArgV[])
 {
@@ -14,13 +16,15 @@ int main(int ArgC, char* ArgV[])
 	FModuleManager& ModuleManager = FModuleManager::Get();
 	ModuleManager.StartupStaticallyLinkedModules();
 
-	std::printf("BlankProgram: platform %s, engine %d.%d.%d, %d module(s):", FPlatformProperties::PlatformName(),
-		ENGINE_MAJOR_VERSION, ENGINE_MINOR_VERSION, ENGINE_PATCH_VERSION, ModuleManager.GetModuleCount());
+	FString Modules;
 	for (int32 Index = 0; Index < ModuleManager.GetModuleCount(); ++Index)
 	{
-		std::printf(" %s", ModuleManager.GetModuleName(Index));
+		Modules += " ";
+		Modules += ModuleManager.GetModuleName(Index);
 	}
-	std::printf("\n");
+	UE_LOG(LogBlankProgram, Display, "BlankProgram: platform %s, engine %d.%d.%d, %d module(s):%s",
+		FPlatformProperties::PlatformName(), ENGINE_MAJOR_VERSION, ENGINE_MINOR_VERSION, ENGINE_PATCH_VERSION,
+		ModuleManager.GetModuleCount(), *Modules);
 
 	ModuleManager.ShutdownModules();
 	return 0;
