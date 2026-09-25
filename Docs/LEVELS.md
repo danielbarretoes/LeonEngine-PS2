@@ -17,12 +17,12 @@ Also: [ASSET_FORMATS.md](ASSET_FORMATS.md) (`.lmat` / `.lmesh` referenced by act
 ## Load pipeline
 
 ```text
-LoadLevelFile(UWorld&, FResourceCache&, Path)      (UEngine::LoadMap, into the new world)
+LoadLevelFile(UWorld&, Path)                       (UEngine::LoadMap, into the new world)
   ├─ extension must be .llev
   ├─ LoadLeonLevelFile            .llev bytes -> FLevelDocument (DeserializeLeonLevel)
   └─ ApplyLevelDocument
-        ├─ resolve every record first: transform, mesh (basic shape or .lmesh), material, fit height
-        │     (a failure here leaves the current level untouched)
+        ├─ resolve every record first: transform, mesh (/Engine/BasicShapes or .lmesh), material, fit height
+        │     (FLegacyAssetLoader; a failure here leaves the current level untouched)
         ├─ destroy the previous level content actors (the gameplay actors stay)
         ├─ spawn AWorldSettings (ULevel::WorldSettings; DefaultGameMode from the game mode string)
         ├─ spawn one actor per record, in file order (see Actor classes)
@@ -137,16 +137,16 @@ The writer always sets `hasInteractCost` for `TriggerVolume` and `hasPainData` f
 | Value | Class | Spawned as |
 | --- | --- | --- |
 | 0 | `PlayerStart` | `APlayerStart` (the spawn transform; `AGameModeBase::FindPlayerStart`) |
-| 1 | `Cube` | `AStaticMeshActor` with a procedural mesh (`FBasicShape`) |
-| 2 | `Sphere` | `AStaticMeshActor`, procedural, uses `sphereSegments` / `sphereRings` |
-| 3 | `Plane` | `AStaticMeshActor`, procedural |
+| 1 | `Cube` | `AStaticMeshActor` with `/Engine/BasicShapes/Cube` (`MeshForBasicShape`) |
+| 2 | `Sphere` | `AStaticMeshActor` with `/Engine/BasicShapes/Sphere` for 24 × 16 `sphereSegments` / `sphereRings`, else a transient sphere of that tessellation |
+| 3 | `Plane` | `AStaticMeshActor` with `/Engine/BasicShapes/Plane` |
 | 4 | `BlockingVolume` | `ABlockingVolume`: a 100 cm brush box (plan decision D16) sized by the scale, never drawn; its collision flags come from the record |
-| 5 | `StaticMesh` | `AStaticMeshActor` with `FResourceCache::LoadStaticMesh` on the resolved `.lmesh` path |
+| 5 | `StaticMesh` | `AStaticMeshActor` with `FLegacyAssetLoader::LoadStaticMesh` on the resolved `.lmesh` path (a transient `UStaticMesh`) |
 | 6 | `TriggerVolume` | `ATriggerVolume` (interact radius / cost, game-defined `payload`, `consumeOnUse` on its legacy data component) |
 | 7 | `PainCausingVolume` | `APainCausingVolume` (`DamagePerSec`, `PainInterval`) |
 | 8 | `AISpawnPoint` | `ATargetPoint` (transform + tag) |
 
-Only `StaticMesh` carries a mesh path. The record `tag` becomes the actor's first `Tags` entry (`UGameplayStatics::GetAllActorsWithTag`) and `hidden` its `bHidden`. Mesh actors take their material from `materialPath` (`.lmat`); without one, a mesh with no materials of its own gets the default material. `mobility`, `collisionEnabled`, `simulatePhysics` and `enableGravity` go to the mesh component or the volume's brush (`SetMobility`, `SetCollisionEnabled`, `SetSimulatePhysics`, `SetEnableGravity`); `collisionEnabled` is forced on when `simulatePhysics` is set. `fitHeight` scales the mesh (or the blocking volume's 100 cm cube) to that height and grounds it (`ApplyFitHeight`). The `TriggerVolume` payload string is interpreted by the game mode. Volumes test containment with the axis-aligned box around the actor (`AVolume::EncompassesPoint`), as before.
+Only `StaticMesh` carries a mesh path. The record `tag` becomes the actor's first `Tags` entry (`UGameplayStatics::GetAllActorsWithTag`) and `hidden` its `bHidden`. Mesh actors take their material from `materialPath` (`.lmat`, a transient `UMaterial` from `FLegacyAssetLoader::LoadMaterial`; the default material with a warning when it cannot be read); without one, a mesh with no materials of its own gets the default material (`UMaterial::GetDefaultMaterial`, `[/Script/Engine.Engine] DefaultMaterialName`). The assets are the components' `UPROPERTY`s and are collected with the level. `mobility`, `collisionEnabled`, `simulatePhysics` and `enableGravity` go to the mesh component or the volume's brush (`SetMobility`, `SetCollisionEnabled`, `SetSimulatePhysics`, `SetEnableGravity`); `collisionEnabled` is forced on when `simulatePhysics` is set. `fitHeight` scales the mesh (or the blocking volume's 100 cm cube) to that height and grounds it (`ApplyFitHeight`). The `TriggerVolume` payload string is interpreted by the game mode. Volumes test containment with the axis-aligned box around the actor (`AVolume::EncompassesPoint`), as before.
 
 Unknown actor or light classes fail the read.
 

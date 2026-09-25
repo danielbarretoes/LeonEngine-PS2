@@ -7,8 +7,8 @@ for every platform (PS2 included) in C++17 without RTTI or exceptions, and is th
 generated code ([LeonHeaderTool/README.md](../../Programs/LeonHeaderTool/README.md) is the contract).
 
 Since P12 the gameplay framework is built on it: `Engine` (actors, components, world, level, game instance, game mode
-and state, controllers, HUD, player input), `AIModule` (`AAIController`), `UMG` (`UUserWidget` and the widgets) and
-`AnimationCore` (`UAnimInstance`) are reflected modules ([ARCHITECTURE.md §10](../../../../Docs/ARCHITECTURE.md#10-gameplay-framework-engine-desktop)
+and state, controllers, HUD, player input, the anim instances; since P14 the asset classes), `AIModule`
+(`AAIController`) and `UMG` (`UUserWidget` and the widgets) are reflected modules ([ARCHITECTURE.md §10](../../../../Docs/ARCHITECTURE.md#10-gameplay-framework-engine-desktop)
 has the ownership, spawn and destroy flows); since P13 also the engine object (`UEngine` / `UGameEngine`), the viewport
 client, the players, `EngineSettings` (`UGameMapsSettings`) and the input (`UInputSettings`, `UPlayerInput`, and
 InputCore's reflected `FKey`). `LeonAutomationTests` and `TestPAL` link CoreUObject for its tests; the PS2 game links it

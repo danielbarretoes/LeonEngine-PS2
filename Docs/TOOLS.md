@@ -27,7 +27,7 @@ Both Developer modules and the LeonCook target are `PLATFORMS Desktop`: they nev
 LeonCook (Program)
   └─ Cooker (Developer)
        ├─ MeshUtilities  (FStaticMeshBuilder, ObjImport, FbxStaticMesh, GltfImport, FbxSkeletalImport)
-       │    ├─ AnimationCore (skeleton / animation types filled by the FBX skeletal import)
+       │    ├─ AnimationCore (the plain skeleton / clip data the FBX skeletal import fills)
        │    └─ RenderCore (LeonMaterialFormat: .lmat written by glTF import)
        └─ Json           (recipe parsing, native UE-style module)
 ```

@@ -146,7 +146,7 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 ([LeonMapping — P12](LeonMapping.md#p12--gameplay-framework-as-uobjects),
 [ARCHITECTURE §10](../ARCHITECTURE.md#10-gameplay-framework-engine-desktop)):
 
-- Engine, AIModule, UMG and AnimationCore are reflected. `AActor`, `UActorComponent`, `USceneComponent`, the new
+- Engine, AIModule, UMG and AnimationCore are reflected (AnimationCore's anim instances moved to Engine in P14). `AActor`, `UActorComponent`, `USceneComponent`, the new
   `UPrimitiveComponent` / `UShapeComponent` / `UCapsuleComponent` / `UBoxComponent` / `USphereComponent` /
   `UMeshComponent` / `UStaticMeshComponent`, `USkeletalMeshComponent`, `UCameraComponent`, `USpringArmComponent`,
   `UMovementComponent` / `UPawnMovementComponent` / `UCharacterMovementComponent`, `APawn`, `ACharacter`, `AController`,
@@ -201,14 +201,35 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 - 318 tests; the golden tables, the `.llev` bytes and the Win64 frames are unchanged; ThirdPerson runs at 60 FPS on
   PCSX2 with the same Draw3D numbers. Released as 0.16.0.
 
+### Done — Asset classes (P14, part 1)
+
+([LeonMapping — P14](LeonMapping.md#p14--asset-classes-part-1),
+[ASSET_FORMATS — Asset classes](../ASSET_FORMATS.md#asset-classes)):
+
+- The assets are UObjects in Engine with UE's names and headers: `UTexture` / `UTexture2D`, `UStaticMesh` (with a
+  `UBodySetup`), `UMaterialInterface` / `UMaterial` (fixed shading models, no node graph), `USkeleton` (with
+  `USkeletalMeshSocket`s), `USkeletalMesh`, `UAnimSequence`, `UBlendSpace1D`, `USoundWave`, `UDataAsset` and the
+  `UCommandlet` base. Their payloads (texels, geometry, tracks, samples) are `FByteBulkData` at the end of a package;
+  every class saves and loads back in the tests. The anim instances moved to Engine with them; AnimationCore keeps
+  the plain data the FBX import produces.
+- `FResourceCache` is gone: the components hold their meshes and materials through `UPROPERTY`s, the legacy files
+  become transient assets through `FLegacyAssetLoader` (the only reader of `.lmesh`, `.lmat`, images and `.wav` at run
+  time), and the engine's defaults come from `[/Script/Engine.Engine]` (`DefaultMaterialName`, `DefaultTextureName`,
+  `DefaultBumpNormalTextureName`), made at their `/Engine/...` paths until the packages exist.
+- The Renderer keeps its GPU copies keyed by asset; an asset frees its copy when its data changes and in
+  `BeginDestroy`, and the scene keeps its proxies' assets alive through the garbage collector.
+- 328 tests; the golden tables, the `.llev` bytes and the Win64 frames are unchanged; the PS2 ELFs are unchanged.
+
 ### Next
 
 - Later: move the character movement code from `ACharacter` into `UCharacterMovementComponent` (UE's
   `PerformMovement`, `MovementMode`, `Velocity`, `CurrentFloor`); a cached `ComponentToWorld`; tick functions.
-- **P14:** asset classes (`UStaticMesh`, `UTexture2D`, `USoundWave`, ...) keep their payloads in `FByteBulkData`
-  (saved at the end of the package) and create their render resources in `PostLoad` (replacing Engine's
-  `FResourceCache` and the Renderer's `FRenderResourceCache`); `UAssetImportData`; the editor module saves with
-  `UPackage::SavePackage` under `/Game/` and `/Engine/`.
+- **P14, part 2:** the editor module `LeonEd` (factories for textures, static and skeletal meshes, animations and
+  sounds; `UAssetImportData`; the `ImportAssets`, `ResavePackages`, `ValidateAssets` and `MigrateLegacyContent`
+  commandlets on `UCommandlet`; `UCookCommandlet` moves there and LeonCook runs `-run=<Commandlet>`), then the content
+  migration to `.lasset` packages at the paths the config already names (`/Engine/EngineMaterials/M_Default`, ...);
+  after it `FLegacyAssetLoader`, LeonMeshFormat, LeonMaterialFormat and the run-time PNG / WAV / STB loading go. The
+  UI sounds become `USoundWave` assets named by the config.
 - **P15:** `.lmap`: a package holding `UWorld`, `ULevel PersistentLevel`, `AWorldSettings` and the actors, saved to a
   `.lmap` file (which sets `PKG_ContainsMap`); `UEngine::LoadMap` loads it with `LoadPackage`.
 - **P16:** the cook follows `FLinker::ImportMap` and `SoftPackageReferenceList` (`FLinkerLoad::CreateLinker(nullptr,
@@ -234,9 +255,12 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 - **Game → Launch:** the PS2 game module reads `GEngineLoop.GetMainWindow()` through an include-only
   dependency on Launch; give games an engine-side accessor instead (UE: `GEngine->GameViewport`) once the gameplay
   framework runs on the PS2.
-- **Assets for P14:** `UEngine` owns `FResourceCache`, Engine's CPU loader of meshes, textures and materials, and the
-  Renderer keeps their GPU copies in `FRenderResourceCache`; the `UStaticMesh` / `UTexture2D` / ... assets replace
-  both. `LeonCook` still takes its own mode arguments (`staticmesh`, `recipe`) instead of UE's `-run=<Commandlet>`.
+- **Legacy content (P14 part 2):** the content is still `.lmesh`, `.lmat`, PNG and `.llev` files that
+  `FLegacyAssetLoader` turns into transient assets; the engine assets it makes in memory at `/Engine/...` paths shadow
+  no package yet. `LeonCook` still takes its own mode arguments (`staticmesh`, `recipe`) instead of UE's
+  `-run=<Commandlet>`, and `UCookCommandlet` is not a `UCommandlet` yet.
+- **Render resources:** the GPU copies live in the Renderer's cache keyed by asset, not on the asset (UE's `Resource`
+  / `RenderData`), and there is no render thread; a render thread would need UE's resource fences.
 - **Console:** commands only come from `-ExecCmds` and `DebugExecBindings`; there is no `UConsole` window or console
   variables (`IConsoleManager`), and `show Collision` / `show Navigation` only set their flags.
 - **Viewport:** no Slate; `UGameViewportClient` polls the window's keys and mouse each frame, and the desktop has no

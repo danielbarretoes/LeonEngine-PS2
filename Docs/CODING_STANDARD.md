@@ -29,7 +29,7 @@ All identifiers are English (U.S. spelling), **PascalCase**, with no underscores
 | Prefix | Use | Examples |
 | --- | --- | --- |
 | `A` | Classes derived from `AActor` — **only** those | `AActor`, `APawn`, `ACharacter`, `APlayerController`, `AGameModeBase`, `AHUD` |
-| `U` | Classes that are `UObject`s in UE (components, assets, subsystems, widgets, engine objects). CoreUObject's types, the gameplay framework (P12: `UWorld`, `ULevel`, `UGameInstance`, the components), the engine and its settings (P13: `UEngine`, `UGameEngine`, `UGameViewportClient`, `ULocalPlayer`, `UPlayerInput`, `UInputSettings`, `UGameMapsSettings`), `UUserWidget` and `UAnimInstance` derive from `UObject`. A few `U` types are still **naming only** until their phase: the render / animation resources `UStaticMesh`, `USkeletalMesh`, `USkeleton`, `UAnimSequence`, `UBlendSpace1D` and `UCookCommandlet` (P14), `UNavigationSystem` and the behavior tree lite (`UBehaviorTree`, `UBTNode`, `UBlackboardComponent`) | `UObject`, `UClass`, `UWorld`, `ULevel`, `UActorComponent`, `UCharacterMovementComponent`, `UUserWidget`, `UGameEngine`, `UTexture2D` |
+| `U` | Classes that are `UObject`s in UE (components, assets, subsystems, widgets, engine objects). CoreUObject's types, the gameplay framework (P12: `UWorld`, `ULevel`, `UGameInstance`, the components), the engine and its settings (P13: `UEngine`, `UGameEngine`, `UGameViewportClient`, `ULocalPlayer`, `UPlayerInput`, `UInputSettings`, `UGameMapsSettings`), the assets (P14: `UTexture2D`, `UStaticMesh`, `UMaterial`, `USkeleton`, `USkeletalMesh`, `UAnimSequence`, `UBlendSpace1D`, `USoundWave`, `UDataAsset`, `UCommandlet`), `UUserWidget` and `UAnimInstance` derive from `UObject`. A few `U` types are still **naming only** until their phase: `UCookCommandlet` (P14 part 2 makes it a `UCommandlet`), `UNavigationSystem` and the behavior tree lite (`UBehaviorTree`, `UBTNode`, `UBlackboardComponent`) | `UObject`, `UClass`, `UWorld`, `ULevel`, `UActorComponent`, `UCharacterMovementComponent`, `UUserWidget`, `UGameEngine`, `UTexture2D` |
 | `F` | Every other class or struct | `FEngineLoop`, `FTicker`, `FPaths`, `FSceneRenderer`, `FPhysScene`, `FHitResult`, `FPS2RHI` |
 | `T` | Class templates | `TArray`, `TMap`, `TSharedPtr`, `TDelegate`, `TOptional` |
 | `E` | Enums (prefer `enum class`, sized when stored) | `EKeys`, `EPhysicsBackend`, `EPostProcessQuality`, `ENetMsg` |
@@ -294,6 +294,14 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
   - Load objects with `LoadObject<T>(nullptr, TEXT("/Game/Path/Asset.Asset"))` or a `TSoftObjectPtr`
     (`LoadSynchronous`), name packages with long package names (`/Game/...`, `/Engine/...`) and convert to files
     only through `FPackageName`.
+  - **Assets** (P14). Code holds an asset through a `UPROPERTY` (`UStaticMeshComponent::StaticMesh`,
+    `UMeshComponent::OverrideMaterials`, a material's maps), never a copy of its data or a `TSharedPtr`; a default the
+    engine needs is a `UPROPERTY(Config)` / `GlobalConfig` `FSoftObjectPath` of its config class (`UEngine`'s
+    `DefaultMaterialName`), not a path in code. An asset's big arrays are bulk data in its native tail
+    (`FByteBulkData`; `SerializeBulkPayload` for arrays it keeps on the CPU). Its GPU copy is the Renderer's: call
+    `UpdateResource` / `InitResources` after changing its data, and release it in `BeginDestroy`. Until P14 part 2 the
+    legacy files (`.lmesh`, `.lmat`, images, `.wav`) are read only through `FLegacyAssetLoader`, and the engine
+    assets without a package come from its `LoadEngineObject`.
 
 ---
 

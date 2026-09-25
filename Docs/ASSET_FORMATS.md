@@ -3,7 +3,7 @@
 **Audience:** content authors and tool writers
 **Also:** [LEVELS.md](LEVELS.md) (`.llev` levels) · [TOOLS.md](TOOLS.md) (LeonCook) · [SETUP.md](SETUP.md)
 
-Runtime formats are Leon binaries plus a few small INI-style text files. DCC sources (OBJ, FBX, glTF) are cooked with LeonCook; the runtime never loads them. The desktop runtime (`Engine` and `RenderCore` modules; the `Renderer` only uploads what they read) reads these files; the PS2 runtime does not load any of them yet (see [PS2](#ps2)). Since 0.15.0 CoreUObject saves and loads UObjects as `.lasset` / `.lmap` [packages](#packages--lasset--lmap), the format every other asset moves to from P14 on.
+Runtime formats are Leon binaries plus a few small INI-style text files. DCC sources (OBJ, FBX, glTF) are cooked with LeonCook; the runtime never loads them. The desktop runtime (`Engine` and `RenderCore` modules; the `Renderer` only uploads what they read) reads these files; the PS2 runtime does not load any of them yet (see [PS2](#ps2)). Since 0.15.0 CoreUObject saves and loads UObjects as `.lasset` / `.lmap` [packages](#packages--lasset--lmap), and since P14 the engine's assets are [asset classes](#asset-classes) that save to them; the legacy files still on disk become asset objects through the transitional [legacy asset loader](#legacy-asset-loader-transitional).
 
 > Unreal `.uasset` / `.umap` are proprietary. Leon does not read or write them. Interchange with Blender / Unreal goes through FBX or glTF, cooked to Leon formats. The `.lasset` layout follows UE 4.27's package structure (summary, name / import / export tables, tagged properties) but is Leon's own binary format.
 
@@ -14,16 +14,108 @@ Runtime formats are Leon binaries plus a few small INI-style text files. DCC sou
 | Ext | Kind | Role | Reader / writer |
 | --- | --- | --- | --- |
 | `.lasset` / `.lmap` | Binary `LEON` | UObject package: an asset / a map (`PKG_ContainsMap`) | `UPackage::Save`, `LoadPackage` / `LoadObject` (CoreUObject), see [Packages](#packages--lasset--lmap) |
-| `.lmesh` | Binary `LMSH` | Cooked static mesh | `LeonMeshFormat` (RenderCore) |
-| `.lmat` | INI text | Material | `LeonMaterialFormat` (RenderCore), `LoadLeonMaterialFile` (Engine) |
+| `.lmesh` | Binary `LMSH` | Cooked static mesh | `LeonMeshFormat` (RenderCore), `FLegacyAssetLoader::LoadStaticMesh` (Engine) |
+| `.lmat` | INI text | Material | `LeonMaterialFormat` (RenderCore), `FLegacyAssetLoader::LoadMaterial` (Engine) |
 | `.llev` | Binary `LLEV` | Level | `LeonLevelFormat` (Engine), see [LEVELS.md](LEVELS.md) |
 | `.lproj` / `.lplugin` | JSON | Build descriptors | LeonBuildTool (CMake) |
-| `.png` (and other stb_image formats) | Image | Textures | `FResourceCache::LoadTexture` (Engine) |
+| `.png` (and other stb_image formats) | Image | Textures | `FLegacyAssetLoader::LoadTexture` (Engine) |
+| `.wav` | RIFF / WAVE, PCM16 | Sounds | `FLegacyAssetLoader::LoadSoundWave` (Engine); `FAudioDevice` plays files by path (AudioMixer) |
 | `.obj` / `.fbx` / `.gltf` / `.glb` | Source | Cook / import input only | MeshUtilities |
 
-No engine asset is a package yet: the asset classes (`UStaticMesh`, `UTexture2D`, `UMaterial`, …) arrive in P14 and the `.lmap` maps in P15; until then `.lmesh`, `.lmat`, `.llev` and PNG files stay the runtime formats. The cooked skeletal formats (`.lskel`, `.lskm`, `.lanim`, `.lchar`, `*.blendspace1d.json`), `.lm` lightmaps, `.hdr` environment maps and the `leon.game.json` pack marker were removed in 0.12.0; skeletal assets return as `USkeletalMesh` / `UAnimSequence` `.lasset` packages and static lighting as `<Map>_BuiltData.lasset`.
+No engine content is a package yet: the asset classes (`UStaticMesh`, `UTexture2D`, `UMaterial`, …) arrived in P14's first part, the content moves to `.lasset` packages in its second part and the `.lmap` maps come in P15; until then `.lmesh`, `.lmat`, `.llev`, PNG and WAV files stay the files on disk, loaded as asset objects. The cooked skeletal formats (`.lskel`, `.lskm`, `.lanim`, `.lchar`, `*.blendspace1d.json`), `.lm` lightmaps, `.hdr` environment maps and the `leon.game.json` pack marker were removed in 0.12.0; skeletal assets return as `USkeletalMesh` / `UAnimSequence` `.lasset` packages and static lighting as `<Map>_BuiltData.lasset`.
 
-Engine content lives in `Engine/Content` (`Materials/M_Default.lmat`, `Materials/M_WorldGrid.lmat`, `Materials/M_SolidMetal.lmat`, `Textures/T_Default_D.png`, `LevelTemplates/*.llev`) and GLSL shaders in `Engine/Shaders`. Paths inside assets are resolved with `FPaths::ResolveAssetPath`, which checks the executable folder and `Engine/Content` (or `Engine/Shaders` for `Shaders/...` keys).
+Engine content lives in `Engine/Content` (`Materials/M_Default.lmat`, `Materials/M_WorldGrid.lmat`, `Materials/M_SolidMetal.lmat`, `Textures/T_Default_D.png`, `LevelTemplates/*.llev`) and GLSL shaders in `Engine/Shaders`. Paths inside assets are resolved with `FPaths::ResolveLegacyContentPath`, which checks the path as given, `Engine/Shaders` for `Shaders/...` keys, the project content and the engine content.
+
+---
+
+## Asset classes
+
+Since P14 the engine's assets are UObjects in the Engine module, with UE 4.27's names and headers. Each saves to a
+`.lasset` [package](#packages--lasset--lmap) as its tagged properties (its `UPROPERTY`s, a delta against the class
+default object) followed by a native tail (`Serialize`), where the big payloads are `FByteBulkData` at the end of the
+file. Other assets are referenced through `UPROPERTY` object pointers: in another package they are imports, which
+load that package first. The tests save every class to memory and load it back
+(`System.Engine.Assets.*RoundTrip`).
+
+| Class (header, `Engine/Classes/`) | Tagged properties | Native tail |
+| --- | --- | --- |
+| `UTexture` (`Engine/Texture.h`), abstract | `SRGB` (recorded; the forward renderer uploads the texels as they are) | — |
+| `UTexture2D` (`Engine/Texture2D.h`) | — | `FTexturePlatformData`: `int32` SizeX, SizeY, `uint8` `EPixelFormat` (UE values: `PF_R8G8B8A8` = 37, `PF_B8G8R8A8` = 2), `int32` mip count, then per mip `int32` SizeX, SizeY and its texels as bulk data, bottom row first. Leon stores mip 0; the renderer builds the others when it uploads |
+| `UStaticMesh` (`Engine/StaticMesh.h`) | `StaticMaterials` (`FStaticMaterial`: `MaterialInterface`, `MaterialSlotName`), `BodySetup` (an inner object) | the local bounding box (`FBox`), then one bulk payload of `FStaticMeshLODResources` (one LOD): vertex count and each `FVertex` field by field (position, normal, UV, tangent), the `uint32` indices, section count and each section's index offset, index count and material slot |
+| `UBodySetup` (`PhysicsEngine/BodySetup.h`) | `AggGeom` (`FKAggregateGeom`: `BoxElems`, each `FKBoxElem` Center, Rotation, X, Y, Z in cm), `CollisionTraceFlag` (`ECollisionTraceFlag`) | — |
+| `UMaterialInterface` (`Materials/MaterialInterface.h`), abstract; `UMaterial` (`Materials/Material.h`) | `ShadingModel` (`MSM_Unlit`, `MSM_DefaultLit`), `BaseColor`, `Specular` (`FLinearColor`, linear RGB), `Metallic`, `Roughness`, `Opacity`, `Shininess`, `UVScale` (`FVector2D`), `bCastsShadows`, `bPlanarMirror`, `BaseColorMap`, `NormalMap` (`UTexture2D*`): the `.lmat` set | — |
+| `USkeleton` (`Animation/Skeleton.h`) | `Sockets` (`USkeletalMeshSocket` inner objects: `SocketName`, `BoneName`, `RelativeLocation`, `RelativeRotation`, `RelativeScale`) | `FReferenceSkeleton`: the bone names (`FName`s, in the name table), the parent indices and the inverse bind pose (`FMatrix` each) |
+| `USkeletalMesh` (`Engine/SkeletalMesh.h`) | `Skeleton`, `Materials` (`FSkeletalMaterial`) | the bounding box, then one bulk payload of the skinned vertices (`FSkeletalVertex`: position, normal, UV, tangent, 4 bone indices, 4 weights) and the indices |
+| `UAnimationAsset` → `UAnimSequenceBase` → `UAnimSequence` (`Animation/AnimSequence.h`) | `Skeleton`, `SequenceLength`, `RateScale`, `bLoop`, `NumFrames`, `FrameRate` | one bulk payload of the tracks, one per bone (`FRawAnimSequenceTrack`: one model-space `FMatrix` key per frame) |
+| `UBlendSpaceBase` → `UBlendSpace1D` (`Animation/BlendSpace1D.h`) | `Skeleton`, `BlendParameters[3]` (`FBlendParameter`: DisplayName, Min, Max, GridNum), `SampleData` (`FBlendSample`: `Animation`, `SampleValue`, `RateScale`) | — |
+| `USoundBase` → `USoundWave` (`Sound/SoundWave.h`) | `Duration`, `NumChannels`, `SampleRate` | `RawPCMData`: the interleaved 16-bit PCM samples as bulk data |
+| `UDataAsset` (`Engine/DataAsset.h`), abstract | the game subclass's `UPROPERTY`s | — |
+| `UCommandlet` (`Commandlets/Commandlet.h`), abstract, transient | `HelpDescription`, `HelpUsage`, `IsServer`, `IsClient`, `IsEditor`, `LogToConsole`, `ShowErrorCount`; `Main(Params)`, `ParseCommandLine` (never saved: the base of P14 part 2's commandlets) | — |
+
+**Bulk data.** A texture and a sound keep their payload in their `FByteBulkData` (as UE's mips and raw data do). The
+meshes and the clips keep CPU arrays (the renderer and the physics scene read them) and go through
+`SerializeBulkPayload` (`Engine/Private/AssetBulkData.h`): while saving, the arrays are written into a bulk data member
+of the asset, which the package saver appends after the exports (so the member must outlive `Serialize`); while
+loading, they are read back from it and the payload is freed. A payload that does not read back whole is reported
+(`LogEngine`) and the arrays are emptied.
+
+**GPU copies.** The renderer keeps one per texture and mesh, keyed by the asset, made the first time it is drawn. The
+asset frees it when its data changes (`UTexture::UpdateResource`, `UStaticMesh::InitResources`, called by
+`SetPlatformData`, `BuildFromMeshData` and `PostLoad`) and in `BeginDestroy` (`ReleaseResource` /
+`ReleaseResources`), through `IRendererModule::ReleaseAssetResources` ([ARCHITECTURE.md §12](ARCHITECTURE.md#12-rendering-desktop)).
+
+**Deviations from UE 4.27.** No texture source, compression, LOD groups or streaming; one static mesh LOD, no
+mesh description or nanite; materials are fixed parameters, not an expression graph compiled to shaders; the
+animation keys are model-space matrices (UE: compressed local position, rotation and scale keys) and the reference
+skeleton keeps the inverse bind pose; a sound keeps PCM16 (UE: the imported `.wav` and the cooked compressed data);
+no asset registry, primary data assets or import data (`UAssetImportData` comes with the editor module).
+
+### Legacy asset loader (transitional)
+
+Until P14 part 2 migrates the content to `.lasset` packages (and deletes it), `FLegacyAssetLoader`
+(`Engine/Public/LegacyAssetLoader.h`) turns the legacy files into asset UObjects. It is the only reader of `.lmesh`,
+`.lmat`, image and `.wav` files at run time:
+
+| Entry point | Source | Result |
+| --- | --- | --- |
+| `LoadStaticMesh(Filename)` | `.lmesh` ([below](#static-mesh--lmesh)) | a transient `UStaticMesh`, with one transient `UMaterial` per material slot (the slot string's diffuse map as its `BaseColorMap`) |
+| `LoadTexture(Filename)` | PNG, JPEG, TGA, ... (stb_image) | a transient `UTexture2D`, RGBA8 |
+| `LoadMaterial(Filename)` | `.lmat` ([below](#material--lmat)) | a transient `UMaterial` with its maps loaded (`checker` / `bump` are the engine's `DefaultTexture` / `T_Default_Bump_N`) |
+| `LoadSoundWave(Filename)` | RIFF / WAVE, 16-bit PCM (plain or extensible); anything else is an error | a transient `USoundWave` |
+| `LoadEngineObject(Class, ObjectPath)` | the object in memory, else its `.lasset` package, else the table below | the engine asset, made once at its final path and rooted |
+| `GetSphereMesh(Segments, Rings)` | procedural | `/Engine/BasicShapes/Sphere` for 24 × 16, else a transient sphere per tessellation |
+
+A legacy file's asset lives in a transient package named after the file, `/Temp/LegacyAssets/<Root>/<folders>/<File>_<ext>`
+(`Engine` for the engine content, `Game` for the project content, `External/<drive and folders>` otherwise; characters
+a name cannot hold become `_`), named after the file's base name (`GetLegacyPackageName`). The package is the cache:
+loading the same file returns the living object. Nothing else keeps it alive, so the garbage collector frees it with
+its last user (a level's assets go with its world) and the next load reads the file again. Transient objects are never
+saved: a package referencing one saves a null reference.
+
+The engine assets, made in memory at the paths part 2 will save them to:
+
+| Object path | Made from |
+| --- | --- |
+| `/Engine/EngineMaterials/<Name>` | `Materials/<Name>.lmat`, else `Textures/<Name>.png` (`FPaths::ResolveLegacyContentPath`: the project content first, then the engine content) |
+| `/Engine/EngineMaterials/M_Default` | as above; without the file, the grey checker material (white, 8 shininess, `DefaultTexture`) |
+| `/Engine/EngineResources/DefaultTexture` | the procedural grey checker, 64 × 64 (UE: DefaultTexture) |
+| `/Engine/EngineMaterials/T_Default_Bump_N` | the procedural bump normal map, 256 × 256, not sRGB |
+| `/Engine/BasicShapes/Cube`, `Plane`, `Sphere` | the procedural 100 cm cube, plane (Z up, UVs 0-1) and 24 × 16 UV sphere, without material slots |
+
+The config names the defaults, as UE's `BaseEngine.ini` does, and `UEngine` reads them (`UPROPERTY(GlobalConfig)`
+`FSoftObjectPath`s); `UEngine::InitializeObjectReferences` loads `DefaultTexture` and `DefaultBumpNormalTexture`, and
+`UMaterial::GetDefaultMaterial` the default material (what a mesh slot without a material draws with):
+
+```ini
+[/Script/Engine.Engine]
+DefaultMaterialName=/Engine/EngineMaterials/M_Default.M_Default
+DefaultTextureName=/Engine/EngineResources/DefaultTexture.DefaultTexture
+DefaultBumpNormalTextureName=/Engine/EngineMaterials/T_Default_Bump_N.T_Default_Bump_N
+```
+
+Once made, the engine assets are found like loaded ones (`LoadObject`, `FindObject`, `TSoftObjectPtr`). The UI sounds
+are not assets yet: `FAudioDevice::PlayUiSound` (AudioMixer, below Engine) looks for `Audio/UI/UI_*.wav` files, none
+of which exist, and plays procedural tones.
 
 ---
 
@@ -175,13 +267,13 @@ Material slot strings carry the source's diffuse texture path per slot (from the
 
 **Cook:** `FStaticMeshBuilder::CookFromObj` / `CookFromFbx` / `CookFromGltf` (`Engine/Source/Developer/MeshUtilities/Public/StaticMeshBuilder.h`), driven by `LeonCook staticmesh` or a recipe step. glTF / GLB import (vendored cgltf) merges every primitive of the first mesh and, with a materials directory, writes one `M_<Name>.lmat` per material plus copied textures. Each importer's last step is `FImportCoordinateConversion` (`MeshUtilities/Public/ImportCoordinateConversion.h`): OBJ and glTF sources are read as right-handed Y up in metres ((X, Z, Y) × 100, UE's glTF importer); FBX files are resolved by ufbx to right-handed Z up and converted with UE's `FFbxDataConverter` basis (X, −Y, Z) times the file's unit in centimetres (an FBX without declared axes is taken as right-handed Y up). Tangents are computed after the conversion.
 
-**Runtime:** `FResourceCache::LoadStaticMesh` accepts `.lmesh` only and logs an error for any other extension. In a `.llev`, a `StaticMesh` actor stores its mesh and material as content-relative paths.
+**Runtime:** `FLegacyAssetLoader::LoadStaticMesh` accepts `.lmesh` only and logs an error for any other extension; it makes a transient `UStaticMesh` with a `UMaterial` per slot. In a `.llev`, a `StaticMesh` actor stores its mesh and material as content-relative paths.
 
 ---
 
 ## Material — `.lmat`
 
-Header: `Engine/Source/Runtime/RenderCore/Public/LeonMaterialFormat.h` (the document, the reader and the writer); Engine's `MaterialAsset.h` loads a file into an `FMaterial` with its textures. INI-style text, similar to an Unreal Material Instance's parameters.
+Header: `Engine/Source/Runtime/RenderCore/Public/LeonMaterialFormat.h` (the document, the reader and the writer); Engine's `FLegacyAssetLoader::LoadMaterial` makes a `UMaterial` of a file and loads its textures. INI-style text, similar to an Unreal Material Instance's parameters.
 
 ```ini
 # Leon Material (.lmat)
@@ -226,7 +318,7 @@ NormalMap=
 
 Section and key names are case-insensitive. `#` and `;` start comments. Unknown keys are reported as `LogLeonMaterial` warnings and ignored. Texture paths are resolved with `FPaths::ResolveLegacyContentPath` (content-relative, not relative to the `.lmat` file: the project content first, then the engine content).
 
-**API:** `LoadLeonMaterialDocument` (parse only, paths kept as strings in `FLeonMaterialDocument`), `LoadLeonMaterialFile` (parse and load textures into an `FMaterial`), `SaveLeonMaterialFile`, `MakeDefaultLeonMaterialText`. Runtime cache: `FResourceCache::LoadMaterial` / `InvalidateMaterial`.
+**API:** `LoadLeonMaterialDocument` (parse only, paths kept as strings in `FLeonMaterialDocument`), `SaveLeonMaterialFile`, `MakeDefaultLeonMaterialText`. Runtime: `FLegacyAssetLoader::LoadMaterial` (a transient `UMaterial`, cached by path while it is used); a material the `.llev` reader cannot load is replaced by the default material with a warning.
 
 ---
 
@@ -307,8 +399,9 @@ Vertex upload is not implemented yet: a valid blob draws a placeholder triangle.
 | --- | --- |
 | `.lasset` / `.lmap` packages | `Engine/Source/Runtime/CoreUObject` — `UPackage::Save` (`Private/UObject/SavePackage.cpp`), `FLinkerLoad`, `FLinkerSave`, `FPackageFileSummary`, `FObjectImport` / `FObjectExport`, `FPropertyTag`, `FByteBulkData`, `FPackageName` |
 | `.lmesh` I/O | `Engine/Source/Runtime/RenderCore` — `LeonMeshFormat`, `FMeshData`, `FVertex` |
-| `.lmat` I/O | `Engine/Source/Runtime/RenderCore` — `LeonMaterialFormat`, `FMaterial` (`Public/Material.h`); `Engine` — `MaterialAsset` (`LoadLeonMaterialFile`) |
-| Resource cache | `Engine/Source/Runtime/Engine` — `FResourceCache` (CPU `UStaticMesh`, `USkeletalMesh`, `UTexture2D`, materials); the GPU copies in the Renderer's private `FRenderResourceCache` |
+| `.lmat` I/O | `Engine/Source/Runtime/RenderCore` — `LeonMaterialFormat`, `FMaterial` (`Public/MaterialShared.h`) |
+| Asset classes | `Engine/Source/Runtime/Engine` — `Classes/Engine` (`UTexture`, `UTexture2D`, `UStaticMesh`, `USkeletalMesh`, `USkeletalMeshSocket`, `UDataAsset`), `Classes/Materials`, `Classes/Animation`, `Classes/PhysicsEngine` (`UBodySetup`), `Classes/Sound`, `Classes/Commandlets`; `Public/StaticMeshResources.h`, `Private/AssetBulkData.h`; the plain skeletal data in `AnimationCore`; the GPU copies in the Renderer's private `FRenderResourceCache` |
+| Legacy asset loader | `Engine/Source/Runtime/Engine` — `FLegacyAssetLoader` (`Public/LegacyAssetLoader.h`), until P14 part 2 |
 | `.llev` I/O and apply | `Engine/Source/Runtime/Engine` — `LeonLevelFormat`, `LevelLoader` |
 | Skeletal FBX import | `Engine/Source/Developer/MeshUtilities` — `FbxSkeletalImport` |
 | Content paths | `Engine/Source/Runtime/Core` — `FPaths` |

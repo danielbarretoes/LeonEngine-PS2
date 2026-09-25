@@ -7,6 +7,56 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+First part of the fourteenth step of the Core / CoreUObject plan (P14): the engine's assets become UObjects that save
+to and load from `.lasset` packages, with their payloads as bulk data, and `FResourceCache` gives way to a transitional
+legacy asset loader and to engine defaults named by the config. Behaviour, the golden tests, the `.llev` bytes and the
+Win64 frames are unchanged; the PS2 ELFs are unchanged.
+
+### Added
+
+- **Asset classes** (P14, Engine, UE 4.27 names and headers; [ASSET_FORMATS.md](Docs/ASSET_FORMATS.md#asset-classes)).
+  - `UTexture` (`SRGB`, `UpdateResource`, `ReleaseResource`) and `UTexture2D` (`CreateTransient`, `FTexturePlatformData`
+    with mip 0's texels as `FByteBulkData`, `EPixelFormat`).
+  - `UStaticMesh`: one LOD of geometry (`FStaticMeshLODResources`, saved as bulk data), the bounds, `StaticMaterials`
+    (`FStaticMaterial`) and a `UBodySetup` inner object (`FKAggregateGeom` boxes, `ECollisionTraceFlag`), which the
+    physics scene follows.
+  - `UMaterialInterface` / `UMaterial`: the `.lmat` parameters and maps as `UPROPERTY`s with fixed shading models
+    (`EMaterialShadingModel`: `MSM_DefaultLit`, `MSM_Unlit`), `GetRenderProxy`, `UMaterial::GetDefaultMaterial`.
+  - `USkeleton` (`FReferenceSkeleton`, `USkeletalMeshSocket` sockets), `USkeletalMesh`, `UAnimationAsset` /
+    `UAnimSequenceBase` / `UAnimSequence` (per-bone tracks as bulk data), `UBlendSpaceBase` / `UBlendSpace1D`.
+  - `USoundBase` / `USoundWave` (PCM16 bulk data, channels, rate, duration), `UDataAsset` and the `UCommandlet` base
+    (`Main`, `ParseCommandLine`).
+- **`FLegacyAssetLoader`** (transitional, deleted by P14's second part): `.lmesh`, `.lmat`, image and `.wav` files become
+  transient assets in `/Temp/LegacyAssets/...` packages, cached by path while they are used; the engine assets without
+  a package (the default material and textures, the `/Engine/BasicShapes` meshes) are made once at their final paths.
+- **Engine defaults from the config**: `[/Script/Engine.Engine] DefaultMaterialName`, `DefaultTextureName` and
+  `DefaultBumpNormalTextureName` (`UEngine` `GlobalConfig` soft paths), loaded by `UEngine::InitializeObjectReferences`.
+- `IRendererModule::ReleaseAssetResources`: the assets free the renderer's GPU copy when their data changes and in
+  `BeginDestroy`.
+- 11 new tests (328 in all): every asset class saved to a package and loaded back (bulk data, references between packages), the
+  commandlet's command line, the legacy files, the collection of unused legacy assets, the config defaults and the
+  scene keeping its proxies' assets.
+
+### Changed
+
+- The components hold their assets through `UPROPERTY`s: `UStaticMeshComponent::StaticMesh`,
+  `USkeletalMeshComponent::SkeletalMesh`, `UMeshComponent::OverrideMaterials` (`UMaterialInterface*`; `GetMaterial`
+  returns one). A slot without a material draws with the default material.
+- The Renderer's `FRenderResourceCache` is keyed by asset instead of pinning shared pointers, and `FScene` is an
+  `FGCObject` that keeps its proxies' assets alive.
+- `UAnimInstance` and `UCharacterAnimInstance` moved from AnimationCore to Engine (`Classes/Animation`); AnimationCore
+  keeps the plain skeletal data (`FReferenceSkeleton`, `FRawAnimSequence`, `FSkeletalMeshData`) and is no longer
+  reflected; the animation tests are `System.Engine.Animation.*`.
+- RenderCore's `Material.h` is `MaterialShared.h` and its lighting enum `EMaterialLightingModel` (UE's
+  `EMaterialShadingModel` is Engine's); its texture maps are `UTexture2D*`.
+- `LoadLevelFile`, `ApplyLevelDocument`, `FBasicShape` and `MeshForBasicShape` lose their resource cache parameter.
+- Headless runs (`-nullrhi`, tests) load textures too.
+
+### Removed
+
+- `FResourceCache` (and `UEngine::GetResources`), `MaterialAsset.h` with the JSON material fields
+  (`PatchMaterialFromJson`, `HasMaterialSurfaceFields`) and its test; Engine's dependency on Json.
+
 ## [0.16.0] - 2026-09-25
 
 Twelfth and thirteenth steps of the Core / CoreUObject plan (P12, P13): the gameplay framework becomes UObjects, owned

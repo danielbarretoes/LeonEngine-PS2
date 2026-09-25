@@ -376,8 +376,8 @@ fails to link, which enforces the rule. `IMPLEMENT_GAME_MODULE` and `IMPLEMENT_P
 
 `Configuration/ReflectionRules.cmake` treats a module as reflected when one of its `Public/`, `Classes/` or `Private/`
 headers has `#include "<Name>.generated.h"`. CoreUObject runs the generated code (P9); the reflected modules are
-CoreUObject (its `NoExportTypes.h`), Engine, AIModule, UMG and AnimationCore (P12), plus their test fixtures in test
-targets. For a reflected module:
+CoreUObject (its `NoExportTypes.h`), Engine, AIModule and UMG (P12; AnimationCore was until P14), EngineSettings and
+InputCore (P13), plus their test fixtures in test targets. For a reflected module:
 
 - LeonBuildTool writes `<tree>/Inc/<Module>/<Module>.lhtmanifest`.
 - A custom command runs LeonHeaderTool. It writes `<Header>.generated.h`, `<Header>.gen.cpp`,

@@ -57,14 +57,25 @@ back. Only `System.CoreUObject.Package.Files` (desktop) writes real `.lasset` / 
 compares the MD5 of a saved package (its engine version cleared) with a stored hash on every platform: update the hash
 when the package format or its fixture changes on purpose.
 
+Since P14 the asset classes are tested the same way: `System.Engine.Assets.*RoundTrip` save every class (a texture; a
+static mesh with its body setup, whose slot's material and the material's texture are in two more packages; a
+skeleton, a skeletal mesh, a clip and a blend space in four packages; a sound; a game's data asset) to memory under
+the `/AssetTest/` mount point, destroy the packages and load them back, checking the bulk data (texels, geometry,
+tracks, samples) and the references between the packages. `System.Engine.LegacyAssets.*` write legacy files under
+`<Project>/Intermediate/Tests/LegacyAssets/` (deleted at the end) and check the transient assets `FLegacyAssetLoader`
+makes of them, their collection once unused, the engine defaults of `BaseEngine.ini` and that the scene keeps the
+assets its proxies draw alive. The engine assets the loader makes (`/Engine/...`) are in the root set and shared by
+every test of the run; the level tests load textures too since P14. The animation tests
+(`System.Engine.Animation.*`) build their skeletons and clips as UObjects.
+
 The golden tests (`System.Engine.Golden.*`, `System.AIModule.Golden.*`, `System.JoltPhysics.Golden.*`) replay
 movement, traces, navigation, cameras, shadows and reflections against tables recorded before P7 moved the world to
 UE's axes, so any change of sign or unit fails them.
 
 `-Screenshot=<file.bmp>` saves frame `-ExitAfterFrames=N` (default 60) as a 24-bit BMP and exits. A run of
 `LeonGame.exe -ExitAfterFrames=300` should log `RequestEngineExit: ExitAfterFrames`, the `LogGarbage` lines of the
-level load and of the exit (the world teardown in `PreExit`, then the engine itself) and no errors; it exits with code
-0. The same holds headless (`-nullrhi`). `-AxesGizmo` turns
+level load and of the exit (the world teardown in `PreExit`, which also frees the level's legacy assets, then the
+engine itself) and no errors; it exits with code 0. The same holds headless (`-nullrhi`). `-AxesGizmo` turns
 the axes gizmo on from the start (see below); captures without it do not change.
 
 ## Axes gizmo
