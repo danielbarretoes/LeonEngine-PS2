@@ -77,8 +77,9 @@ them. 22 golden tests recorded before the switch pass unchanged; 231 tests in to
 
 ### Next
 
-- The plan continues with CoreUObject (below; P8 and P9 are done). What P7 left: the legacy `.llev` data and
-  `FLegacyCoordinateConversion` go away with the `.lmap` maps (P15; the `.lmesh` files went in P14); the deviations it kept (vertical field of view,
+- The plan continues with CoreUObject (below; P8 and P9 are done). What P7 left: the legacy `.llev` data went with
+  the `.lmap` maps (P15; the `.lmesh` files in P14), and `FLegacyCoordinateConversion` lives in the tests only (the
+  golden tables); the deviations it kept (vertical field of view,
   no reversed Z, the GL clip adapter, legacy content facing +Y, the doubled mouse look (applied once since P13),
   the spring arm's socket offset) are listed in [LeonMapping — Deviations](LeonMapping.md#deviations-from-ue-427-intentional).
 
@@ -245,20 +246,46 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
   with `MigrateLegacyContent`) are unchanged; the PS2 ThirdPerson ELF grows by 8 bytes of alignment (the window icon
   API), BlankProgram and TestPAL are unchanged.
 
+### Done — Maps and the glTF map importer (P15)
+
+([LeonMapping — P15](LeonMapping.md#p15--maps-and-the-gltf-map-importer), [LEVELS.md](../LEVELS.md),
+[ASSET_FORMATS — Maps](../ASSET_FORMATS.md#maps--lmap)):
+
+- A world saves as a `.lmap` package (`PKG_ContainsMap`): the `UWorld`, its persistent level, `AWorldSettings` and
+  the actors with their components; `UEngine::LoadMap` loads `/Game/Maps/X` and `/Engine/Maps/X` (or a `.lmap` file,
+  mounting its content folder), then `InitWorld` and `InitializeActorsForPlay` register and initialize the actors. The
+  collision and mobility are properties, and a scene component saves its relative quaternion, so transforms load
+  bit-exact.
+- The legacy level data has homes: `URotatingMovementComponent` (spin), Leon's `UBobbingMovementComponent`,
+  `UOrbitMovementComponent` and `UInteractableComponent` (bob, light orbit, trigger data), `DefaultGameMode`, and an
+  `ACameraActor` for the camera framing plus an `APlayerStart` at the view it opened with.
+- `UGLTFMapFactory` (`-run=ImportAssets -type=Map`) imports glTF scenes: one actor per node by the naming rules of
+  `[/Script/LeonEd.MapImportSettings]` (`UCX_`, `COL_`, `Clip_`, `PlayerStart`, `NavWaypoint` in `BaseEditor.ini`; a
+  project's own, and its `RequiredTags` check), the shared meshes and PBR materials next to the map,
+  KHR_lights_punctual lights, `ANavigationWaypoint` with the extras' links and flags. A reimport rebuilds the map in
+  place and saves the same bytes (G5 covers maps). `/Engine/Maps/AxisTest` (from a `.glb` a stdlib Python script
+  writes) checks the axes.
+- `Blank.llev` and `Starter.llev` became `/Engine/Maps/Entry` and `/Engine/Maps/Template_Default` (the default map);
+  then the `.llev` reader and saver, `FLegacyAssetKeys`, `ULegacyLevelDataComponent`, `APlayerStartPIE`,
+  `FPaths::ResolveLegacyContentPath`, `Engine/Content/LevelTemplates`, the legacy factories and `MigrateLegacyContent`
+  were deleted, and `FLegacyCoordinateConversion` moved to the tests.
+- 339 tests; the golden tables and the Win64 frames (Starter by default and by name, the render test map migrated to
+  a `.lmap`) are unchanged; the PS2 ELFs are unchanged.
+
 ### Next
 
 - Later: move the character movement code from `ACharacter` into `UCharacterMovementComponent` (UE's
   `PerformMovement`, `MovementMode`, `Velocity`, `CurrentFloor`); a cached `ComponentToWorld`; tick functions.
-- **P15:** `.lmap`: a package holding `UWorld`, `ULevel PersistentLevel`, `AWorldSettings` and the actors, saved to a
-  `.lmap` file (which sets `PKG_ContainsMap`); `UEngine::LoadMap` loads it with `LoadPackage`. The glTF map importer
-  (`UGLTFMapFactory`, `-run=ImportAssets -type=Map`) is a LeonEd factory; the two templates migrate from `.llev`
-  (their material and mesh keys already resolve to packages through `FLegacyAssetKeys`, which goes with the `.llev`
-  reader, `LevelLoader`, `FLegacyCoordinateConversion` and `FPaths::ResolveLegacyContentPath`). `MigrateLegacyContent`
-  and the legacy `.lmat` / `.lmesh` factories can go once no content needs them.
 - **P16:** the cook (`UCookCommandlet`, LeonEd) follows `FLinker::ImportMap` and `SoftPackageReferenceList`
-  (`FLinkerLoad::CreateLinker(nullptr, ...)` reads the tables without loading) from the maps and
-  `DirectoriesToAlwaysCook` instead of cooking every package, uses `Developer/TargetPlatform` for `-TargetPlatform=`,
-  stages the config and shaders, and packs the files into `.lpak`.
+  (`FLinkerLoad::CreateLinker(nullptr, ...)` reads the tables without loading) from the maps (`GameDefaultMap`, a
+  project's maps in `/Game/Maps`: a map's imports are its meshes, materials and textures in `<Map>/Meshes` and
+  `<Map>/Materials`, and the engine's basic shapes and default material) and `DirectoriesToAlwaysCook` instead of
+  cooking every package, drops the maps' editor-only `AssetImportData`, uses `Developer/TargetPlatform` for
+  `-TargetPlatform=`, stages the config (the Editor config is not staged) and the shaders (`Engine/Shaders`), and packs
+  the files into `.lpak`.
+- **P17:** ShooterGame's `Config/DefaultEditor.ini` gives the map importer its rules (`BombSite`, `BuyZone`) and
+  `RequiredTags`; `de_leon` is built in Blender, exported to `SourceArt/Maps/de_leon.glb` and imported with
+  `-type=Map -dest=/Game/Maps/de_leon` (its `ImportList.ini`); `GameDefaultMap=/Game/Maps/de_leon`.
 - Replication: the ENet networking was removed in 0.12.0 (local tag `archive/net-enet-0.11`); it returns as
   UObject replication (`UNetDriver`, replicated properties) — `Runtime/Engine/Classes/Engine/NetDriver.h`.
 
@@ -279,9 +306,10 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 - **Game → Launch:** the PS2 game module reads `GEngineLoop.GetMainWindow()` through an include-only
   dependency on Launch; give games an engine-side accessor instead (UE: `GEngine->GameViewport`) once the gameplay
   framework runs on the PS2.
-- **Legacy content (P15):** the levels are still `.llev` files whose material and mesh keys resolve to packages
-  through `FLegacyAssetKeys` (with a mount point named after a content folder outside the mount points);
-  `MigrateLegacyContent` and its `.lmat` / `.lmesh` factories stay until no content needs them.
+- **Map import (P15):** a `UCX_` piece is its bounding box (no convex hulls in the physics scene) and several merge
+  into one box; the importer reads external images only (not those embedded in a `.glb`); light intensities are
+  glTF's values as they are; spot lights become point lights. Waypoint links are authored by hand until P20's
+  auto-linking.
 - **Editor settings:** the factories take their options as properties set from text (ImportList.ini, switches) and the
   import data keeps them as a string map; UE's typed import data classes (`UFbxAssetImportData`, ...) and an import UI
   come with an editor.

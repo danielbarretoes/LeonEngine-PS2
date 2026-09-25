@@ -81,10 +81,10 @@ Engine\Binaries\Win64\LeonGame.exe [<map>[?game=<class>]] [-map=<map>] [-nullrhi
 ```
 
 The map is the first argument (UE's form) or `-map=` (Leon's alias, which the scripts use); without one it is
-`[/Script/EngineSettings.GameMapsSettings] GameDefaultMap`, `/Engine/LevelTemplates/Starter`. A map is a long package
-name whose `.llev` sits under a mount point (`/Engine/LevelTemplates/Blank` is
-`Engine/Content/LevelTemplates/Blank.llev`), a `.llev` path (absolute or relative to the working directory) or a
-content key (`LevelTemplates/Blank.llev`). URL options follow the map: `?game=/Script/Engine.GameMode` picks the game
+`[/Script/EngineSettings.GameMapsSettings] GameDefaultMap`, `/Engine/Maps/Template_Default`. A map is the long package
+name of a `.lmap` package (`/Engine/Maps/Entry` is `Engine/Content/Maps/Entry.lmap`) or a `.lmap` path (absolute or
+relative to the working directory; one outside the mount points mounts the folder above its `Maps/` folder, as
+[LEVELS.md](LEVELS.md#running-a-map) explains). URL options follow the map: `?game=/Script/Engine.GameMode` picks the game
 mode, which otherwise comes from the level (its world settings), then `GlobalDefaultGameMode` (`AGameModeBase`, whose
 default pawn is `ADefaultPawn`). A map that cannot be opened logs `Failed to enter <map>` and exits with code 1.
 
@@ -92,7 +92,7 @@ default pawn is `ADefaultPawn`). A map that cannot be opened logs `Failed to ent
 `-AxesGizmo` starts with the axes gizmo on; `-ExecCmds=` runs console commands (separated by `;` or `,`) on the first
 frame, for example `-ExecCmds="stat unit;FOV 75"`; `-Screenshot=` saves frame `-ExitAfterFrames=` (default 60) as a
 24-bit BMP and exits, and `-ExitAfterFrames=N` alone exits after frame N (headless too). In PowerShell quote an
-argument that has a dot after `=` (`"-map=LevelTemplates/Blank.llev"`), or PowerShell splits it at the dot.
+argument that has a dot after `=` (`"-map=D:\Work\Maps\Arena.lmap"`), or PowerShell splits it at the dot.
 
 In the window (`Engine/Config/BaseInput.ini`): mouse look (the cursor is captured), **WASD** or the arrows fly along
 the view, **E** / **Q** up / down; the function keys run console commands: **F1** `show Bounds` (mesh AABBs and the
@@ -114,8 +114,8 @@ Engine\Build\BatchFiles\Cook.bat -run=ImportAssets -reimport -all
 ```
 
 `Cook.bat` builds `LeonCook` and passes the arguments through: `LeonCook [<Project>.lproj] -run=<Commandlet>` runs one
-of the editor module's commandlets (`ImportAssets`, `ResavePackages`, `ValidateAssets`, `MigrateLegacyContent`,
-`Cook`; `Cook.bat -help` lists them). Formats and the import pipeline: [ASSET_FORMATS.md](ASSET_FORMATS.md). Tool
+of the editor module's commandlets (`ImportAssets`, maps included, `ResavePackages`, `ValidateAssets`, `Cook`;
+`Cook.bat -help` lists them). Formats and the import pipeline: [ASSET_FORMATS.md](ASSET_FORMATS.md). Tool
 reference: [TOOLS.md](TOOLS.md).
 
 ## PS2
@@ -223,7 +223,7 @@ Engine\Build\BatchFiles\Lint.bat                  :: format check + banned APIs 
 style: tabs, Allman braces) on `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game`, skipping `ThirdParty`,
 `Intermediate` and `Binaries`. `Lint.bat` then runs `Engine\Build\BatchFiles\CheckBannedApis.ps1`, which fails on glm,
 nlohmann, `std::` containers / strings / smart pointers, iostream, `printf`, the removed legacy math bridges and
-`FLegacyCoordinateConversion` outside the legacy readers in engine or game code. Coding rules:
+`FLegacyCoordinateConversion` outside the tests in engine or game code. Coding rules:
 [CODING_STANDARD.md](CODING_STANDARD.md).
 
 ## Continuous integration

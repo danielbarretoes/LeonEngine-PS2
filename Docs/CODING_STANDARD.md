@@ -201,8 +201,8 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
   file that calls it (Jolt, tinyobjloader, ufbx, cgltf). Do not add aliases that pretend to be UE types
   (`using FVector = glm::vec3` is not allowed). G4 also rejects the legacy math bridges removed in P7 (`LegacyGL`,
   `FLegacyTransform`, `LegacyAxes`, tests included) and `FLegacyCoordinateConversion` /
-  `LegacyCoordinateConversion.h` outside the legacy bridge (its own files, the `.llev` reader and saver,
-  `Private/Tests` and `Engine/Public/Tests/LegacyGolden.h`). A violation prints
+  `LegacyCoordinateConversion.h` outside the tests (`Public/Tests` and `Private/Tests` folders: the converter itself,
+  the golden adapters and the tests; since P15 no runtime or editor code holds legacy data). A violation prints
   `<file>:<line>: G4 <rule>: <code> -> <what to use>`.
 - **Math is float.** No `double` arithmetic in engine code (the EE FPU is single precision); PS2 builds fail on an
   implicit float to double promotion (`-Werror=double-promotion`), so cast explicitly where a `double` is really
@@ -219,9 +219,10 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
     / `FOrthoMatrix`. OpenGL code applies `ToGLClipSpace` (`RenderCore/Public/GLClipSpace.h`) once, after the
     projection, and uploads with `FShader::SetMat4(Name, const FMatrix&)`.
   - Data from outside the world is converted where it enters: importers end with `FImportCoordinateConversion`
-    (MeshUtilities); legacy `.llev` data goes through `FLegacyCoordinateConversion` in its reader and saver only (G4
-    enforces it); the Jolt and miniaudio boundaries swap Y and Z and scale by 0.01 inside their own files.
-    Engine code never holds legacy (Y-up, metre) values.
+    (MeshUtilities; the map importer converts node transforms and light directions with it too); the Jolt and
+    miniaudio boundaries swap Y and Z and scale by 0.01 inside their own files. Engine code never holds legacy (Y-up,
+    metre) values: only the golden tests convert their legacy tables, with the test-only `FLegacyCoordinateConversion`
+    (G4 enforces it).
   - Keep a triangle's index order when converting data (every basis change has determinant −1 and keeps the winding
     on screen); a tangent's `w` flips with the basis.
 - **Logging.** Log through `UE_LOG(<Category>, <Verbosity>, TEXT("..."), ...)` with a category
@@ -351,11 +352,12 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 
 | Asset | Convention | Example |
 | --- | --- | --- |
-| Content folders | PascalCase, UE's where one exists | `Engine/Content/EngineMaterials`, `EngineResources`, `BasicShapes`, `LevelTemplates` |
+| Content folders | PascalCase, UE's where one exists | `Engine/Content/EngineMaterials`, `EngineResources`, `BasicShapes`, `Maps` |
 | Assets (packages) | `<Prefix>_<Name>.lasset` with UE's prefixes: `SM_` static mesh, `SK_` skeletal mesh, `SKEL_` skeleton, `A_` animation, `BS_` blend space, `T_` texture, `M_` material, `S_` sound wave; maps `<Name>.lmap`; long package name = content path without extension | `/Engine/EngineMaterials/M_Default` → `Engine/Content/EngineMaterials/M_Default.lasset` |
 | Textures | `T_<Name>_<Suffix>` (`_D` diffuse, `_N` normal: imported linear) | `T_Default_D`, `T_Default_Bump_N` |
-| Source art | outside `Content`: `<Engine or Project>/SourceArt/`, folders mirroring the package paths, plus `ImportList.ini` | `Engine/SourceArt/EngineMaterials/T_Default_D.png` |
-| Level templates / levels | PascalCase `.llev` (until P15) | `Blank.llev`, `Starter.llev` |
+| Source art | outside `Content`: `<Engine or Project>/SourceArt/`, folders mirroring the package paths, plus `ImportList.ini` | `Engine/SourceArt/EngineMaterials/T_Default_D.png`, `Engine/SourceArt/Maps/AxisTest.glb` |
+| Maps | `<Name>.lmap` in `Content/Maps` (UE's `Maps` folder), no prefix; an imported map's meshes and materials in `Maps/<Name>/Meshes` and `Maps/<Name>/Materials` | `/Engine/Maps/Template_Default`, `/Engine/Maps/AxisTest/Meshes/SM_RedCube` |
+| Map source nodes (Blender objects) | the map importer's prefixes ([LEVELS.md](LEVELS.md#naming-conventions)): `UCX_<Mesh>_<NN>`, `COL_`, `Clip_`, `PlayerStart_<Tag>`, `NavWaypoint`, a project's own | `UCX_Crate_01`, `PlayerStart_CT` |
 | GLSL shaders (`Engine/Shaders`) | snake_case | `blinn_phong.vert`, `post_composite.frag` |
 
 File formats: [ASSET_FORMATS.md](ASSET_FORMATS.md).

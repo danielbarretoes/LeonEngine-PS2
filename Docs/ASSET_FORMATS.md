@@ -1,9 +1,9 @@
 # Leon asset formats
 
 **Audience:** content authors and tool writers
-**Also:** [LEVELS.md](LEVELS.md) (`.llev` levels) · [TOOLS.md](TOOLS.md) (LeonCook and its commandlets) · [SETUP.md](SETUP.md)
+**Also:** [LEVELS.md](LEVELS.md) (`.lmap` maps, the glTF map import) · [TOOLS.md](TOOLS.md) (LeonCook and its commandlets) · [SETUP.md](SETUP.md)
 
-Every asset is a UObject saved in a `.lasset` [package](#packages--lasset--lmap) (a map will be a `.lmap`, P15): the runtime loads packages and nothing else (no image, `.wav` or mesh source file). Source files (images, `.wav`, OBJ, FBX, glTF) are [imported](#importing-assets) by the editor module, LeonEd, through LeonCook's commandlets; each imported asset records its source in its `UAssetImportData`, so it can be reimported. The only other runtime files are the `.llev` levels (until P15), the GLSL shaders and the INI config. The PS2 runtime loads no asset file yet (see [PS2](#ps2)).
+Every asset is a UObject saved in a `.lasset` [package](#packages--lasset--lmap), and every map a world saved in a `.lmap` package ([Maps](#maps--lmap)): the runtime loads packages and nothing else (no image, `.wav`, mesh or scene source file). Source files (images, `.wav`, OBJ, FBX, glTF) are [imported](#importing-assets) by the editor module, LeonEd, through LeonCook's commandlets; each imported asset (and each imported map) records its source in its `UAssetImportData`, so it can be reimported. The only other runtime files are the GLSL shaders (`Engine/Shaders`) and the INI config. The PS2 runtime loads no asset file yet (see [PS2](#ps2)).
 
 > Unreal `.uasset` / `.umap` are proprietary. Leon does not read or write them. Interchange with Blender / Unreal goes through FBX or glTF, imported to Leon packages. The `.lasset` layout follows UE 4.27's package structure (summary, name / import / export tables, tagged properties) but is Leon's own binary format.
 
@@ -14,15 +14,13 @@ Every asset is a UObject saved in a `.lasset` [package](#packages--lasset--lmap)
 | Ext | Kind | Role | Reader / writer |
 | --- | --- | --- | --- |
 | `.lasset` / `.lmap` | Binary `LEON` | UObject package: an asset / a map (`PKG_ContainsMap`) | `UPackage::Save`, `LoadPackage` / `LoadObject` (CoreUObject), see [Packages](#packages--lasset--lmap) |
-| `.llev` | Binary `LLEV` | Level (until the `.lmap` maps of P15) | `LeonLevelFormat` (Engine), see [LEVELS.md](LEVELS.md) |
 | `.lproj` / `.lplugin` | JSON | Build descriptors | LeonBuildTool (CMake) |
 | `.png`, `.jpg`, `.tga`, `.bmp` | Image | Texture source | `UTextureFactory` (LeonEd, stb_image): import only |
 | `.wav` | RIFF / WAVE, PCM16 | Sound source | `USoundFactory` (LeonEd): import only |
-| `.obj` / `.fbx` / `.gltf` / `.glb` | DCC source | Mesh and animation source | `UFbxFactory`, `UGLTFImportFactory` (LeonEd, through MeshUtilities): import only |
+| `.obj` / `.fbx` / `.gltf` / `.glb` | DCC source | Mesh and animation source; a glTF scene is also a map's source | `UFbxFactory`, `UGLTFImportFactory`, `UGLTFMapFactory` (LeonEd, through MeshUtilities): import only |
 | `ImportList.ini` | INI text | The imports of a folder of source art | `UImportAssetsCommandlet` (`-importlist=`), see [TOOLS.md](TOOLS.md#importlistini) |
-| `.lmat` / `.lmesh` | Legacy | The pre-P14 material and cooked mesh files | read only by `MigrateLegacyContent` (LeonEd, temporary): see [Legacy content](#legacy-content-migration) |
 
-The cooked skeletal formats (`.lskel`, `.lskm`, `.lanim`, `.lchar`, `*.blendspace1d.json`), `.lm` lightmaps, `.hdr` environment maps and the `leon.game.json` pack marker were removed in 0.12.0; the `.lmesh` / `.lmat` files and runtime PNG / WAV loading in P14. Skeletal assets are `USkeletalMesh` / `UAnimSequence` packages, and static lighting returns as `<Map>_BuiltData.lasset`.
+The cooked skeletal formats (`.lskel`, `.lskm`, `.lanim`, `.lchar`, `*.blendspace1d.json`), `.lm` lightmaps, `.hdr` environment maps and the `leon.game.json` pack marker were removed in 0.12.0; the `.lmesh` / `.lmat` files and runtime PNG / WAV loading in P14; the `.llev` levels, their reader and the legacy content tools in P15 ([Legacy content](#legacy-content-migration)). Skeletal assets are `USkeletalMesh` / `UAnimSequence` packages, maps are `.lmap` packages, and static lighting returns as `<Map>_BuiltData.lasset`.
 
 Engine content lives in `Engine/Content` as `/Engine` packages ([below](#engine-content)), the source files of the imported ones in `Engine/SourceArt`, and the GLSL shaders in `Engine/Shaders`.
 
@@ -91,9 +89,11 @@ The engine's assets are `/Engine` packages in `Engine/Content`, migrated from th
 | `/Engine/EngineResources/DefaultTexture` | `UTexture2D` (64 × 64 grey checker, sRGB) | saved once from the procedural generator (UE: DefaultTexture) |
 | `/Engine/EngineMaterials/T_Default_Bump_N` | `UTexture2D` (256 × 256 bump normal map, linear) | saved once from the procedural generator |
 | `/Engine/BasicShapes/Cube`, `Plane`, `Sphere` | `UStaticMesh` (100 cm; the sphere 24 × 16; no material slots) | saved once from `MakeCube` / `MakePlane` / `MakeSphere` (RenderCore) |
+| `/Engine/Maps/Entry`, `/Engine/Maps/Template_Default` | map (`.lmap`) | migrated once (P15) from the legacy `Blank.llev` and `Starter.llev` templates ([LEVELS.md](LEVELS.md#engine-maps)); the packages are the source of truth |
+| `/Engine/Maps/AxisTest` (with its `Meshes/SM_*` and `Materials/M_*`) | map (`.lmap`) | imported: `Engine/SourceArt/Maps/AxisTest.glb`, written by `MakeAxisTest.py` (`Engine/SourceArt/ImportList.ini`) |
 
-A sphere of another tessellation (a `.llev` record may ask for one) is not a package: `GetSphereMesh` builds it at run
-time from `MakeSphere`, once per tessellation (`/Temp/BasicShapes/Sphere_<Segments>x<Rings>`, transient).
+A sphere of another tessellation (`FBasicShape::Sphere` may ask for one) is not a package: `GetSphereMesh` builds it
+at run time from `MakeSphere`, once per tessellation (`/Temp/BasicShapes/Sphere_<Segments>x<Rings>`, transient).
 
 The config names the defaults, as UE's `BaseEngine.ini` does, and `UEngine` reads them (`UPROPERTY(GlobalConfig)`
 `FSoftObjectPath`s); `UEngine::InitializeObjectReferences` loads them with `LoadObject`, and `UMaterial::GetDefaultMaterial`
@@ -225,6 +225,26 @@ Desktop builds outside Shipping have `WITH_EDITORONLY_DATA`: they save editor-on
 
 `UPackage::SaveToMemory` returns the same bytes `Save` writes; `FLinkerLoad::RegisterInMemoryPackage` makes `LoadPackage` and `FPackageName::DoesPackageExist` use registered bytes instead of a file. The tests use it on every platform (the PS2 platform file is read-only); the tables of a package can be read without loading it with `FLinkerLoad::CreateLinker(nullptr, ...)` (the cooker's dependency walk).
 
+<a id="maps--lmap"></a>
+
+### Maps — `.lmap`
+
+A map is a package like any other, saved with a `.lmap` file name, which sets `PKG_ContainsMap` (UE's `.umap`). It
+holds the world and everything in it, each an export:
+
+| Export | Class | What it saves |
+| --- | --- | --- |
+| `<Map>` | `UWorld` (`Engine/World.h`), public and standalone: the map's asset | `PersistentLevel`; editor-only `AssetImportData` for an imported map |
+| `<Map>:PersistentLevel` | `ULevel` (`Engine/Level.h`) | `Actors` (the spawn order; the world settings first), `WorldSettings` |
+| `<Map>:PersistentLevel.<Actor>` | `AWorldSettings`, `AStaticMeshActor`, `APlayerStart`, `ATargetPoint`, `ABlockingVolume`, `ATriggerVolume`, `APainCausingVolume`, `ADirectionalLight`, `APointLight`, `ACameraActor`, `ANavigationWaypoint`, ... | the actor's `UPROPERTY`s: `Tags`, `bHidden`, `RootComponent`, the class's own (`DefaultGameMode`, `KillZ`, `PlayerStartTag`, `DamagePerSec`, `Links`, `Flags`, ...) |
+| `<Map>:PersistentLevel.<Actor>.<Component>` | the actor's default subobjects and the components added to it (`URotatingMovementComponent`, `UBobbingMovementComponent`, `UOrbitMovementComponent`, `UInteractableComponent`, ...) | the transform (`RelativeLocation`, `RelativeRotation`, `RelativeScale3D`), `Mobility`, the collision (`CollisionEnabled`, `bSimulatePhysics`, `bEnableGravity`), `StaticMesh`, `OverrideMaterials`, the light and camera values, ...; a scene component's native tail is the `FQuat` of its relative transform, so a loaded transform is the saved one bit for bit (Leon; UE rebuilds it from the rotator) |
+
+The meshes, materials and textures a map shows are imports of their own packages (an imported map's in
+`<Map>/Meshes` and `<Map>/Materials`), and the class references (`DefaultGameMode`) imports of `/Script` classes.
+Transient actors (the game mode, the players' controllers and pawns) are never saved. `UEngine::LoadMap` loads the
+package, finds the world (`UWorld::FindWorldInPackage`), initializes it (`InitWorld`), and registers and initializes
+its actors (`InitializeActorsForPlay`): [LEVELS.md](LEVELS.md).
+
 ---
 
 ## Importing assets
@@ -239,9 +259,9 @@ UE's prefix for its class:
 | `UTextureFactory` | PNG, JPEG, TGA, BMP (stb_image) | `UTexture2D` (`T_`): RGBA8, bottom row first; sRGB unless `ColorSpaceMode=Linear` or a `_N` / `_Normal` name |
 | `UFbxFactory` | FBX (ufbx), OBJ (tinyobjloader) | `UStaticMesh` (`SM_`), or with `MeshTypeToImport` `USkeletalMesh` (`SK_`, on `Skeleton` or a new `SKEL_` skeleton) and `UAnimSequence` (`A_`, on `Skeleton`) |
 | `UGLTFImportFactory` | glTF / GLB (cgltf) | `UStaticMesh` (`SM_`) |
+| `UGLTFMapFactory` (`-type=Map`) | glTF / GLB scene (cgltf) | a map (`UWorld`, `.lmap`, no prefix) with its `SM_` meshes and `M_` materials: [LEVELS.md](LEVELS.md#importing-a-map-from-gltf) |
 | `USoundFactory` | `.wav`, 16-bit PCM | `USoundWave` (`S_`) |
 | `UMaterialFactoryNew` | — (new) | `UMaterial` (`M_`) |
-| `ULegacyMaterialFactory`, `ULegacyStaticMeshFactory` | `.lmat`, `.lmesh` (temporary) | `UMaterial`, `UStaticMesh` ([Legacy content](#legacy-content-migration)) |
 
 - **Meshes** are read into mesh data with their material slots and converted to the engine world by MeshUtilities
   (`FStaticMeshBuilder::BuildFromFile`; every importer ends with `FImportCoordinateConversion`: OBJ and glTF are right-handed
@@ -270,31 +290,17 @@ it or reimported; the engine version, `0.16.0`, is in the package summary: a rel
 
 ## Legacy content (migration)
 
-The pre-P14 files, `.lmat` materials (INI text: `[Info]` `Name` / `ShadingModel`, parameters, `[Textures]` maps) and
-`.lmesh` cooked meshes (binary `LMSH`: a 52-byte header, 48-byte `FVertex` records, `uint32` indices, sections and
-slot strings), are read only by `LeonCook -run=MigrateLegacyContent -source=<ContentDir>` (temporary), which
-converts every legacy file of a folder into the package its content key names:
+The pre-P14 files were converted once and deleted, with the tools that read them (the history keeps both):
 
-- the key is the file's path under the folder; it loses its extension, gains the class prefix of its extension unless
-  its name has it (`.lmat` `M_`, `.lmesh` `SM_`, images `T_`, `.wav` `S_`), and under `/Engine` the legacy
-  `Materials/` and `Textures/` folders are `EngineMaterials/` (`FLegacyAssetKeys::GetMigratedPackageName`);
-- the folder's package path is that of the mount point containing it, or a mount point registered for it and named
-  after it (`FLegacyAssetKeys::MountContentDirectory`: `.../RenderTest` is `/RenderTest`);
-- images and sounds are imported (their import data names the file, which stays as their source), then `.lmesh`
-  (version 2 only: a version 1 file, Y up in metres, must be imported again from its source) and `.lmat` files are
-  converted without import data: a `.lmat` map is a content key resolved to the texture package (`checker` / `bump`:
-  the engine's `DefaultTexture` / `T_Default_Bump_N`), and each `.lmesh` slot gets `M_<Mesh>_Slot<N>` with the
-  runtime's default parameters and the slot's diffuse map.
-
-`-engine` also saves the engine's procedural assets ([above](#engine-content)). The engine content was migrated with
-`LeonCook -run=ImportAssets -importlist=Engine/SourceArt/ImportList.ini` then
-`LeonCook -run=MigrateLegacyContent -engine -source=Engine/Content`, and the `.lmat` files were deleted.
-
----
-
-## Level — `.llev`
-
-Binary container (`LLEV`, little-endian, string table + meta + camera + actors + lights). Writers emit version 2; readers accept versions 1 and 2. Actors reference their material and mesh by a content key (the old `.lmat` / `.lmesh` path), which resolves to the package the migration made of it (`ResolveLevelAssetObjectPath`, [LEVELS.md](LEVELS.md)); there are no inline materials. Full layout and loading pipeline: **[LEVELS.md](LEVELS.md)**.
+- **P14:** the `.lmat` materials (INI text) and `.lmesh` cooked meshes (binary `LMSH`) became `M_` / `SM_` packages,
+  and the runtime images and sounds `T_` / `S_` imports, through `LeonCook -run=MigrateLegacyContent` and LeonEd's
+  legacy material and mesh factories; a content key (the file's path) named the package it became.
+- **P15:** the `.llev` levels (binary `LLEV`: a string table, a camera framing, actor and light records in the legacy
+  Y-up metre space) became maps through the same commandlet (`-level=<file.llev> -dest=<MapPackage>`), while the
+  level reader still existed: `Blank.llev` is `/Engine/Maps/Entry` and `Starter.llev` `/Engine/Maps/Template_Default`
+  ([LEVELS.md](LEVELS.md#engine-maps)). Then the reader and saver, the content keys (`FLegacyAssetKeys`), the legacy
+  factories and `MigrateLegacyContent` were deleted. The legacy coordinate conversion survives in the tests only, for
+  the golden tables recorded before P7.
 
 ---
 
@@ -334,7 +340,7 @@ Examples: `Game/ThirdPerson/ThirdPerson.lproj`, `Engine/Plugins/Runtime/JoltPhys
 
 ## PS2
 
-The PS2 runtime (`Engine/Platforms/PS2/Source/Runtime/PS2RHI`) draws with the Graphics Synthesizer directly and loads no `.lasset` package or `.llev` file yet (the cook for the PS2 comes later). The ThirdPerson demo builds its textures, materials and level in code.
+The PS2 runtime (`Engine/Platforms/PS2/Source/Runtime/PS2RHI`) draws with the Graphics Synthesizer directly and loads no `.lasset` or `.lmap` package yet (the cook for the PS2 comes later). The ThirdPerson demo builds its textures, materials and level in code.
 
 ### Cooked mesh blob — `LPS2`
 
@@ -370,7 +376,8 @@ Vertex upload is not implemented yet: a valid blob draws a placeholder triangle.
 | `.lasset` / `.lmap` packages | `Engine/Source/Runtime/CoreUObject` — `UPackage::Save` (`Private/UObject/SavePackage.cpp`), `FLinkerLoad`, `FLinkerSave`, `FPackageFileSummary`, `FObjectImport` / `FObjectExport`, `FPropertyTag`, `FByteBulkData`, `FPackageName` |
 | Mesh data, material values | `Engine/Source/Runtime/RenderCore` — `FMeshData`, `FVertex`, `FMaterial` (`Public/MaterialShared.h`) |
 | Asset classes | `Engine/Source/Runtime/Engine` — `Classes/Engine` (`UTexture`, `UTexture2D`, `UStaticMesh`, `USkeletalMesh`, `USkeletalMeshSocket`, `UDataAsset`), `Classes/Materials`, `Classes/Animation`, `Classes/PhysicsEngine` (`UBodySetup`), `Classes/Sound`, `Classes/Commandlets`, `Classes/EditorFramework` (`UAssetImportData`); `Public/StaticMeshResources.h`, `Private/AssetBulkData.h`; the plain skeletal data in `AnimationCore`; the GPU copies in the Renderer's private `FRenderResourceCache` |
-| `.llev` I/O and apply, content keys | `Engine/Source/Runtime/Engine` — `LeonLevelFormat`, `LevelLoader`, `FLegacyAssetKeys` (`Public/Level/LegacyAssetKeys.h`), until P15 |
+| Maps: the world's save and load, `LoadMap` | `Engine/Source/Runtime/Engine` — `UWorld` (`FindWorldInPackage`, `InitWorld`, `UpdateWorldComponents`, `InitializeActorsForPlay`), `ULevel`, `UEngine::LoadMap` (`Private/UnrealEngine.cpp`) |
+| Map import (glTF) | `Engine/Source/Editor/LeonEd` — `UGLTFMapFactory`, `UMapImportSettings`; `Engine/Source/Developer/MeshUtilities` — `LoadGltfScene` (`Public/GltfScene.h`) |
 | Skeletal FBX import | `Engine/Source/Developer/MeshUtilities` — `FbxSkeletalImport` |
 | Content paths | `Engine/Source/Runtime/Core` — `FPaths` |
 | DCC → mesh data | `Engine/Source/Developer/MeshUtilities` — `FStaticMeshBuilder`, `ObjImport`, `FbxStaticMesh`, `GltfImport` |

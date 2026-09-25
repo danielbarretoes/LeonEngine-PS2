@@ -11,9 +11,9 @@ What runs automatically and what a person still has to check by hand. Build and 
 | LeonHeaderTool golden tests (run by `RunTests.bat` too) | `Engine\Intermediate\Build\HostTools\Win64\LeonHeaderTool.exe -Test` | `LeonHeaderTool -Test: N of N golden cases passed` |
 | Core, CoreUObject, Json and Projects on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (106 test(s), 0 failed)` in the EE log (112 on Win64) |
 | Format, banned APIs (G4), Win64 build | `Engine\Build\BatchFiles\Lint.bat` | `Lint OK` |
-| Reproducible reimport (G5; CI, on a clean checkout) | `Engine\Build\BatchFiles\CheckReimport.bat [<Project>.lproj ...]` | `CheckReimport OK`: `LeonCook -run=ImportAssets -reimport -all` leaves `Engine/Content` and `Game/*/Content` unchanged (`git diff --exit-code`, no new file) |
+| Reproducible reimport (G5; CI, on a clean checkout) | `Engine\Build\BatchFiles\CheckReimport.bat [<Project>.lproj ...]` | `CheckReimport OK`: `LeonCook -run=ImportAssets -reimport -all` leaves `Engine/Content` and `Game/*/Content` unchanged, the imported maps included (`git diff --exit-code`, no new file) |
 | Content loads | `Engine\Binaries\Win64\LeonCook.exe -run=ValidateAssets` | `ValidateAssets: N packages, N valid, 0 problem(s)` |
-| Frame capture | `LeonGame.exe "-map=<map>" "-Screenshot=<file.bmp>" "-ExitAfterFrames=N"` | the BMP matches a reference capture byte for byte |
+| Frame capture | `LeonGame.exe [<map>] "-Screenshot=<file.bmp>" "-ExitAfterFrames=N"` | the BMP matches a reference capture byte for byte (the cursor is captured: a live mouse turns the view, so retry a capture whose camera moved) |
 | Console commands | `LeonGame.exe "-ExecCmds=obj gc;stat fps,stat fps" "-Screenshot=<file.bmp>" "-ExitAfterFrames=30"` | a `Cmd:` line per command, the capture unchanged |
 
 The CoreUObject tests collect garbage (`CollectGarbage`) between their steps; they only keep objects through
@@ -34,17 +34,23 @@ actor that spawns during its tick, test pawns, controllers and a component that 
 collection, attachment rules and sockets, the primitive render state, the game mode, game state and match states, the
 HUD widgets and anim instances as objects, and the engine's collection timer.
 
-Since P13 the level content is actors. The level tests load `.llev` documents into a test world and check the
-spawned actors (`GetAllActorsOfClass`), their physics bodies and, with
-`System.Engine.LevelFormat.SaveWritesTheSameBytes`, that saving a loaded level gives the bytes the saver wrote before
-P13 (stored MD5 hashes: update them only when the format changes on purpose). `LeonAutomationTests` links the Renderer, so test worlds have the Renderer's `FScene` (it
-needs no GPU: the GPU copies are made only when a frame is drawn), and
-`System.Engine.Components.SceneProxiesFollowTheComponents` checks that the proxies follow their components.
+Since P13 the level content is actors, and since P15 a map is a `.lmap` package.
+`System.Engine.MapPackage.SaveLoadRoundTripsEveryActor` saves a world with one actor of every class a map holds (world
+settings, a mesh with collision, a spin and a bob, the three volumes, a tagged player start and target point, both
+lights, an orbit, a trigger's interaction data, a camera actor) under a `/MapTest/` mount point and loads it back,
+value by value and transform by transform; `LoadMapOpensMapPackages` opens it with `UEngine::LoadMap` by name and by
+file (the content folder mount); `MovementComponentsMove` ticks the movement components.
+`System.AIModule.LevelAndAISmoke.EditorStyleMapResaveHeadless` resaves the engine's maps and compares the bytes with
+their files, and `System.Engine.AxisTestMap.NoMirroring` checks the axes map ([LEVELS.md](LEVELS.md#axistest)).
+`LeonAutomationTests` links the Renderer, so test worlds have the Renderer's `FScene` (it needs no GPU: the GPU copies
+are made only when a frame is drawn), and `System.Engine.Components.SceneProxiesFollowTheComponents` checks that the
+proxies follow their components.
 
 Since P13's second part the engine is a UObject and the game starts through `UEngine::LoadMap`. The tests make their
 own `UGameEngine` (`TStrongObjectPtr`, `Init(nullptr)` runs it headless) when they need one:
-`System.Engine.LoadMap.StarterLogsInThePlayer` opens the Starter map and checks the login (the controller, the default
-pawn at the Play From Here start, the HUD and the begun play), `System.Engine.LoadMap.GameModePrecedence` the game mode
+`System.Engine.LoadMap.StarterLogsInThePlayer` opens `/Engine/Maps/Template_Default` and checks the login (the
+controller, the default pawn at the map's first player start, the view the legacy framing opened with, the HUD and the
+begun play), `System.Engine.LoadMap.GameModePrecedence` the game mode
 choice (D18), `System.Engine.URL.*` and `System.Engine.EngineSettings.*` the URL and the map settings.
 `System.Engine.Input.*` feed keys and mouse deltas to a player controller and check the mappings of `BaseInput.ini`,
 the mouse look and the default pawn's flight; `System.Engine.Console.ExecChain` walks the console chain (`show`,
@@ -68,25 +74,29 @@ their skeletons and clips as UObjects.
 
 Since P14's second part the engine content is packages: `System.Engine.EngineContent.*` load them (the defaults
 `BaseEngine.ini` names, the basic shapes and the runtime spheres of other tessellations, the migrated materials with
-their `.lmat` parameters, the `.llev` key of the Starter's material, `T_Default_D`'s import data and its source's
+their `.lmat` parameters, the template map's plane with `M_WorldGrid`, `T_Default_D`'s import data and its source's
 MD5) and check that the scene keeps the assets its proxies draw alive. They only read `Engine/Content`: no test writes
 there (tests write under `<Project>/Intermediate/Tests/`, the program's `Engine/Programs/LeonAutomationTests/`, which
-git ignores). `System.Engine.LegacyAssetKeys.*` cover the content keys of the `.llev` levels (migrated names, candidate
-packages, mount points named after folders), and `System.Engine.LevelFormat.SaveWritesTheSameBytes` loads its mesh
-record from a package saved next to its level.
+git ignores).
 
 The editor module's tests (`System.LeonEd.*`) run the factories and the commandlets as LeonCook does, under a
 `/LeonEdTest/` mount point over `<Project>/Intermediate/Tests/LeonEd/` (a fresh folder per test, deleted with its
 packages at the end), from source files they write themselves (BMP, WAV, OBJ with an MTL, an ASCII FBX, a glTF with
-an external buffer, `.lmat` and `.lmesh` files): each factory's asset and import data, the materials and textures a
-mesh import makes, import lists and settings, importing over an asset in place, `ReimportIsReproducible` (the bytes of
-a reimport from an unchanged source equal the first import's, gate G5 in small; a changed source changes the asset and
-its MD5; a missing source is skipped), resave, validation (an import whose package is gone), the minimal cook (no
-import data in a cooked package) and the legacy content migration.
+an external buffer): each factory's asset and import data, the materials and textures a mesh import makes, import
+lists and settings, importing over an asset in place, `ReimportIsReproducible` (the bytes of a reimport from an
+unchanged source equal the first import's, gate G5 in small; a changed source changes the asset and its MD5; a missing
+source is skipped), resave, validation (an import whose package is gone) and the minimal cook (no import data in a
+cooked package). `System.LeonEd.MapFactory.*` import `MapFixture.gltf`
+(`Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/`, written by `MakeMapFixture.py` next to it: a node of
+every naming convention, lights, a textured material, waypoint extras) with a project's rules, check every actor, mesh,
+collision box, material and light, that importing over the map and `-reimport` save the same bytes, and that a
+missing required tag fails the import.
 
 The golden tests (`System.Engine.Golden.*`, `System.AIModule.Golden.*`, `System.JoltPhysics.Golden.*`) replay
 movement, traces, navigation, cameras, shadows and reflections against tables recorded before P7 moved the world to
-UE's axes, so any change of sign or unit fails them.
+UE's axes, so any change of sign or unit fails them. They convert the tables with `FLegacyCoordinateConversion`, which
+lives in the tests only since P15 (RenderCore's `Public/Tests` and `Private/Tests`); `System.Engine.Golden.StarterLevel`
+reads the Starter's meshes, light and camera framing from `/Engine/Maps/Template_Default`.
 
 `-Screenshot=<file.bmp>` saves frame `-ExitAfterFrames=N` (default 60) as a 24-bit BMP and exits. A run of
 `LeonGame.exe -ExitAfterFrames=300` should log `RequestEngineExit: ExitAfterFrames`, the `LogGarbage` lines of the
@@ -110,8 +120,10 @@ blue as in UE:
 
 ## Manual checklist: axes and units (P7)
 
-Run `Engine\Binaries\Win64\LeonGame.exe -AxesGizmo` (the Starter level, free-look camera; the cursor is captured,
-close the window to quit). The world is X forward, Y right, Z up, left-handed, 1 unit = 1 cm.
+Run `Engine\Binaries\Win64\LeonGame.exe -AxesGizmo` (the default template map, free-look camera; the cursor is
+captured, close the window to quit), or `LeonGame.exe /Engine/Maps/AxisTest -AxesGizmo` ([LEVELS.md](LEVELS.md#axistest):
+the red cube ahead on +X, the green one on the right on +Y, the blue one up on +Z). The world is X forward, Y right, Z
+up, left-handed, 1 unit = 1 cm.
 
 - [ ] **Gizmo colours**: red, green and blue lines leave the world origin; blue points straight up. In the corner
   gizmo blue points up the screen whenever the view is level.

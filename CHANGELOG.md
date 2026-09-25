@@ -7,11 +7,14 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-The fourteenth step of the Core / CoreUObject plan (P14): the engine's assets become UObjects saved in `.lasset`
-packages, an editor module (LeonEd) imports source files into them through LeonCook's commandlets, and the engine
-content is migrated to `/Engine` packages; the legacy `.lmesh` / `.lmat` formats and run-time image and WAV loading
-are gone. Behaviour, the golden tests, the `.llev` bytes and the Win64 frames are unchanged; the PS2 ThirdPerson ELF
-grows by 8 bytes of alignment, BlankProgram and TestPAL are unchanged.
+The fourteenth and fifteenth steps of the Core / CoreUObject plan (P14, P15): the engine's assets become UObjects
+saved in `.lasset` packages, an editor module (LeonEd) imports source files into them through LeonCook's commandlets,
+and the engine content is migrated to `/Engine` packages; the legacy `.lmesh` / `.lmat` formats and run-time image and
+WAV loading are gone. Then the levels become `.lmap` map packages that `UEngine::LoadMap` opens, LeonEd imports glTF
+scenes exported from Blender as maps, the level templates become `/Engine/Maps/Entry` and
+`/Engine/Maps/Template_Default`, and the `.llev` levels, their reader and the legacy content tools are deleted.
+Behaviour, the golden tests and the Win64 frames are unchanged; the PS2 ThirdPerson ELF grows by 8 bytes of alignment
+(P14), BlankProgram and TestPAL are unchanged.
 
 ### Added
 
@@ -33,11 +36,11 @@ grows by 8 bytes of alignment, BlankProgram and TestPAL are unchanged.
   rejected in game targets; [TOOLS.md](Docs/TOOLS.md#leoncook)).
   - Factories: `UFactory`, `UTextureFactory` (PNG, JPEG, TGA, BMP), `UFbxFactory` (FBX and OBJ static meshes, FBX
     skeletal meshes and animations), `UGLTFImportFactory`, `USoundFactory` (PCM16 `.wav`), `UMaterialFactoryNew`, and
-    the temporary `.lmat` / `.lmesh` factories of the migration. A mesh import makes `M_` materials and `T_` textures
+    the temporary `.lmat` / `.lmesh` factories of the migration (removed in P15). A mesh import makes `M_` materials and `T_` textures
     for the named slots of its source; importing over an asset reimports it in place.
   - Reimport: `FReimportHandler`, `FReimportManager`.
   - Commandlets: `ImportAssets` (`-source` / `-dest`, `-importlist=ImportList.ini`, `-reimport -all`),
-    `ResavePackages`, `ValidateAssets`, `MigrateLegacyContent` (temporary) and a minimal `Cook` (saves without the
+    `ResavePackages`, `ValidateAssets`, `MigrateLegacyContent` (temporary, removed in P15) and a minimal `Cook` (saves without the
     editor-only data into `Saved/Cooked/<Platform>/`; the dependency walk, target platforms and paks come in P16).
 - **LeonCook `-run=`**: `LeonCook [<Project>.lproj] -run=<Commandlet> [arguments]` (UE: `UE4Editor-Cmd`) finds the
   `U<Name>Commandlet` class through reflection; engine-only without a project; an error / warning summary at the end.
@@ -49,8 +52,6 @@ grows by 8 bytes of alignment, BlankProgram and TestPAL are unchanged.
   `UIErrorSoundName` (empty: the procedural tones), loaded by `UEngine::InitializeObjectReferences`.
 - `UGameplayStatics::PlaySound2D` / `PlaySoundAtLocation` for sound waves; `FAudioDevice` plays PCM16 samples from
   memory (`FSoundWavePCM`, `SetUiSound`).
-- `FLegacyAssetKeys` (until P15): the `.llev` material and mesh keys resolve to the migrated packages
-  (`ResolveLevelAssetObjectPath`), with a mount point named after a level's content folder outside the mount points.
 - **Gate G5**: `Engine/Build/BatchFiles/CheckReimport.bat` reimports the content and fails when git sees a change;
   CI runs it.
 - `IRendererModule::ReleaseAssetResources`: the assets free the renderer's GPU copy when their data changes and in
@@ -58,14 +59,37 @@ grows by 8 bytes of alignment, BlankProgram and TestPAL are unchanged.
 - 23 new tests (340 in all): every asset class saved to a package and loaded back, the factories, the commandlets
   (import lists, reproducible reimport, resave, validation, cook, migration), the engine content, the content keys and
   the scene keeping its proxies' assets.
+- **Maps** (P15; [LEVELS.md](Docs/LEVELS.md), [ASSET_FORMATS.md](Docs/ASSET_FORMATS.md#maps--lmap)): a world saves
+  as a `.lmap` package (`PKG_ContainsMap`) with its persistent level, `AWorldSettings` and the actors with their
+  components, and loads back through `LoadPackage` and `UWorld::FindWorldInPackage`; `UWorld::InitWorld` (public, with
+  `InitializationValues::InitializeScenes`), `UpdateWorldComponents` and `InitializeActorsForPlay` register and
+  initialize a loaded map's actors. `UEngine::LoadMap` opens `/Game/Maps/X` and `/Engine/Maps/X`, or a `.lmap` file
+  (a file outside the mount points mounts the folder above its `Maps/` folder).
+- **The glTF map importer** (P15): `UGLTFMapFactory` (`LeonCook -run=ImportAssets -type=Map -source=<file.glb>
+  -dest=/Game/Maps/<Map>`) with its naming rules in `[/Script/LeonEd.MapImportSettings]` (`UMapImportSettings`; the
+  new `Engine/Config/BaseEditor.ini`: `UCX_` convex collision as body setup boxes, `COL_` invisible collision, `Clip_`
+  blocking volumes, `PlayerStart` with its `PlayerStartTag`, `NavWaypoint` with the extras' links and flags; a
+  project's own rules and its `RequiredTags` check), the shared meshes and PBR materials next to the map,
+  KHR_lights_punctual lights, deterministic reimport (gate G5 covers maps). MeshUtilities' `LoadGltfScene` reads the
+  scene.
+- `ACameraActor`, `ANavigationWaypoint`, `URotatingMovementComponent` (UE's), and Leon's `UBobbingMovementComponent`,
+  `UOrbitMovementComponent` and `UInteractableComponent`: the homes of the legacy levels' camera framing, spin, bob,
+  light orbit and trigger data (P15).
+- `/Engine/Maps/Entry`, `/Engine/Maps/Template_Default` (migrated from the `.llev` templates) and `/Engine/Maps/AxisTest`
+  (imported from `Engine/SourceArt/Maps/AxisTest.glb`, which `MakeAxisTest.py` writes with standard-library Python),
+  the axes map (P15).
+- `UObject::Rename` (UE's, without flags); the map world's editor-only `AssetImportData`.
+- 8 new tests and 9 removed with the `.llev` format in P15 (339 in all): a map with every actor class saved and loaded
+  back, `LoadMap` of packages and files, the movement components, the engine maps resaved byte for byte, the axes map,
+  and the map importer (every convention, reproducible reimport, required tags, the config rules).
 
 ### Changed
 
 - The components hold their assets through `UPROPERTY`s: `UStaticMeshComponent::StaticMesh`,
   `USkeletalMeshComponent::SkeletalMesh`, `UMeshComponent::OverrideMaterials` (`UMaterialInterface*`; `GetMaterial`
   returns one). A slot without a material draws with the default material.
-- The runtime loads the engine's assets from their packages (`LoadObject`); a `.llev` sphere of another tessellation
-  is built at run time (`GetSphereMesh`).
+- The runtime loads the engine's assets from their packages (`LoadObject`); a sphere of another tessellation is built
+  at run time (`GetSphereMesh`).
 - MeshUtilities returns mesh data with its material slots (`FStaticMeshBuilder::BuildFromFile`) instead of writing
   `.lmesh` and `.lmat` files.
 - `FGenericWindow::SetIconFromFile(PngPath)` is `SetIcon(Width, Height, RGBA)`: texels, not a file.
@@ -76,9 +100,21 @@ grows by 8 bytes of alignment, BlankProgram and TestPAL are unchanged.
   reflected; the animation tests are `System.Engine.Animation.*`.
 - RenderCore's `Material.h` is `MaterialShared.h` and its lighting enum `EMaterialLightingModel` (UE's
   `EMaterialShadingModel` is Engine's); its texture maps are `UTexture2D*`.
-- `LoadLevelFile`, `ApplyLevelDocument`, `FBasicShape` and `MeshForBasicShape` lose their resource cache parameter.
+- `FBasicShape` and `MeshForBasicShape` lose their resource cache parameter.
 - Headless runs (`-nullrhi`, tests) load textures too.
-- `.gitattributes` marks `.lpak` files binary.
+- `.gitattributes` marks `.lpak` and `.glb` files binary and no longer lists `.llev` and `.lmesh`.
+- `GameDefaultMap` is `/Engine/Maps/Template_Default` and `ServerDefaultMap` `/Engine/Maps/Entry` (P15).
+- `EComponentMobility` and `ECollisionEnabled` are reflected enum classes (`ECollisionEnabled::Type` is
+  `ECollisionEnabled`); a scene component's `Mobility` and a primitive's `CollisionEnabled`, `bSimulatePhysics` and
+  `bEnableGravity` are `UPROPERTY`s, and a scene component saves the quaternion of its relative transform (P15).
+- `UWorld::PersistentLevel` and `ULevel::WorldSettings` are saved; `ULevel::PostLoad` reconnects the level to its
+  world (P15).
+- `AGameModeBase::ChoosePlayerStart` takes the level's first player start (P15).
+- The renderer loads its shaders from `Engine/Shaders` (`FPaths::EngineDir()`), UE's `/Engine/Shaders` (P15).
+- `FLegacyCoordinateConversion` is test only (RenderCore's `Public/Tests` / `Private/Tests`), and `CheckBannedApis.ps1`
+  (G4) allows it in test folders only (P15).
+- `ImportAssets` takes `-type=Map` (the destination is the map's package) and no longer `-type=Material`;
+  `FAssetImportUtils::SavePackage` saves a package that holds a world as `.lmap` (P15).
 
 ### Removed
 
@@ -92,6 +128,10 @@ grows by 8 bytes of alignment, BlankProgram and TestPAL are unchanged.
   test; Engine's dependency on Json.
 - `FAudioDevice`'s file-path playback (`PlaySound2D` / `PlaySoundAtLocation` / `PlayMusic` by path, the UI `.wav`
   lookup).
+- The `.llev` levels (P15): `LeonLevelFormat` (reader and saver), `LevelLoader`, `ULegacyLevelDataComponent`,
+  `FLegacyAssetKeys` / `ResolveLevelAssetObjectPath`, `APlayerStartPIE`, `Engine/Content/LevelTemplates/` and
+  `FPaths::ResolveLegacyContentPath`; LeonEd's `ULegacyMaterialFactory`, `ULegacyStaticMeshFactory` and
+  `MigrateLegacyContent`; the `.llev` format, content key and migration tests.
 
 ## [0.16.0] - 2026-09-25
 

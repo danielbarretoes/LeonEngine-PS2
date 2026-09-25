@@ -1,213 +1,237 @@
-# Levels (`.llev`)
+# Maps (`.lmap`)
 
-A level is a binary Leon Level file (`.llev`) loaded into a `ULevel` by the desktop runtime (`Engine` module). Since P13 its content is actors, as in UE: the reader spawns them into the game world and the saver writes them back. There is no JSON level format: `LoadLevelFile` rejects any path whose extension is not `.llev`. The PS2 runtime does not load levels yet; the ThirdPerson demo builds its level in code (`FThirdPersonLevel`).
+A map is a `.lmap` package that holds a world: its `UWorld` (the map's asset, named after the package), the world's
+persistent level, the level's `AWorldSettings` and the actors with their components (plan decision D13,
+`PKG_ContainsMap`), as UE's `.umap`. `UEngine::LoadMap` opens one; a map is made by importing a glTF scene exported from
+Blender (LeonEd's `UGLTFMapFactory`, [below](#importing-a-map-from-gltf)) or by code that builds a world and saves it.
+The PS2 runtime loads no map yet: the ThirdPerson demo builds its level in code (`FThirdPersonLevel`).
 
-Code: `Engine/Source/Runtime/Engine/Classes/Engine/Level.h`, `Engine/Source/Runtime/Engine/Public/Level/` (`LeonLevelFormat.h`, `LevelLoader.h`, `LegacyLevelDataComponent.h`), the actor classes in `Engine/Source/Runtime/Engine/Classes/{Engine,GameFramework}/`, `Engine/Source/Runtime/Engine/Private/UnrealEngine.cpp` (`UEngine::LoadMap`, the startup map).
-Also: [ASSET_FORMATS.md](ASSET_FORMATS.md) (the `.lasset` packages the actors' keys name) · [ARCHITECTURE.md](ARCHITECTURE.md) · [SETUP.md](SETUP.md).
+Code: `Engine/Source/Runtime/Engine/Classes/Engine/World.h`, `Level.h`, the actor and component classes in
+`Engine/Source/Runtime/Engine/Classes/{Engine,GameFramework,Camera,Components,AI}/`,
+`Engine/Source/Runtime/Engine/Private/UnrealEngine.cpp` (`UEngine::LoadMap`), `Engine/Source/Editor/LeonEd`
+(`UGLTFMapFactory`, `UMapImportSettings`), `Engine/Source/Developer/MeshUtilities/Public/GltfScene.h`.
+Also: [ASSET_FORMATS.md](ASSET_FORMATS.md#maps--lmap) (what a map package saves) · [TOOLS.md](TOOLS.md) (LeonCook)
+· [ARCHITECTURE.md](ARCHITECTURE.md) · [SETUP.md](SETUP.md#leongame).
 
 ## Types
 
 | Type | Header | Role |
 | --- | --- | --- |
-| `ULevel` | `Classes/Engine/Level.h` | Live level, a UObject: the game world's persistent level (`UWorld::PersistentLevel`). It holds the world's actors (`Actors`: the level content and the gameplay actors) and its `AWorldSettings` (`GetWorldSettings`) |
-| `AWorldSettings` | `Classes/GameFramework/WorldSettings.h` | The level's settings actor, spawned first (`DefaultGameMode`, from the level's game mode string; `KillZ`); its legacy data component keeps the level name, the game mode string, the environment fields and the camera framing |
-| `ULegacyLevelDataComponent` | `Public/Level/LegacyLevelDataComponent.h` | The record fields with no UE counterpart yet, on the actor spawned from the record (class, mesh and material keys, sphere tessellation, spin, bob, trigger data, light orbit), so the saver can write them back; it goes away with the format (P15) |
-| `FLevelDocument` | `Public/Level/LeonLevelFormat.h` | In-memory mirror of a `.llev`: plain data, no GPU resources (`FLevelActorRecord`, `FLevelLightRecord`, `FLevelCameraRecord`) |
+| `UWorld` | `Classes/Engine/World.h` | The map's asset: its persistent level, the physics scene and the navigation system; `FindWorldInPackage`, `InitWorld`, `UpdateWorldComponents`, `InitializeActorsForPlay`; an imported map's editor-only `AssetImportData` |
+| `ULevel` | `Classes/Engine/Level.h` | The world's persistent level (`UWorld::PersistentLevel`): `Actors` in spawn order, the world settings first; `PostLoad` reconnects it to its world |
+| `AWorldSettings` | `Classes/GameFramework/WorldSettings.h` | The level's settings actor: `DefaultGameMode` (plan decision D18), `KillZ` |
+| `AStaticMeshActor` | `Classes/Engine/StaticMeshActor.h` | A placed mesh: its `UStaticMeshComponent` root (mesh, override materials, mobility, collision) |
+| `APlayerStart` | `Classes/GameFramework/PlayerStart.h` | Where players spawn; `PlayerStartTag` carries the game's meaning (`CT`, `T`) |
+| `ATargetPoint` | `Classes/Engine/TargetPoint.h` | A named point: a transform and `Tags` |
+| `ABlockingVolume`, `ATriggerVolume`, `APainCausingVolume` | `Classes/Engine/`, `Classes/GameFramework/` | Boxes (plan decision D16): an invisible wall, a region gameplay code tests (`Tags`: `BombSite` + `A`), a damaging region |
+| `ADirectionalLight`, `APointLight` | `Classes/Engine/` | The lights (colour, intensity, shadows, source angle / attenuation radius) |
+| `ACameraActor` | `Classes/Camera/CameraActor.h` | A placed camera: its `UCameraComponent` keeps an orbit or free-look view (the legacy levels' framing, P15) |
+| `ANavigationWaypoint` | `Classes/AI/Navigation/NavigationWaypoint.h` | A point of the map's waypoint graph: `Links` (one way) and `Flags`; the navigation that uses them comes in P20 |
+| `URotatingMovementComponent` | `Classes/GameFramework/RotatingMovementComponent.h` | UE's: turns its component at `RotationRate` (degrees per second), optionally about `PivotTranslation` |
+| `UBobbingMovementComponent` | `Classes/GameFramework/BobbingMovementComponent.h` | Leon: sets the component's height to `BaseZ + Amplitude * (0.5 + 0.5 * sin(Speed * t))` |
+| `UOrbitMovementComponent` | `Classes/GameFramework/OrbitMovementComponent.h` | Leon: moves the component on a circle around the world's vertical axis (`Radius`, `Height`, `HeightAmplitude`, `Speed`) |
+| `UInteractableComponent` | `Classes/Components/InteractableComponent.h` | Leon: what a player can do at a trigger volume (`InteractRadius`, `InteractCost`, the game-defined `Payload`, `bConsumeOnUse`), read by `VolumeHelpers` |
 
-## Load pipeline
+The movement components tick with their actor: a map's spinning, bobbing or orbiting actor moves as the world ticks.
+The last three have no UE counterpart; they hold what the legacy levels stored ([Engine maps](#engine-maps)).
 
-```text
-LoadLevelFile(UWorld&, Path)                       (UEngine::LoadMap, into the new world)
-  ├─ extension must be .llev
-  ├─ LoadLeonLevelFile            .llev bytes -> FLevelDocument (DeserializeLeonLevel)
-  └─ ApplyLevelDocument
-        ├─ resolve every record first: transform, mesh (/Engine/BasicShapes or the mesh key's package), material
-        │     (the material key's package), fit height (LoadObject; a failure leaves the current level untouched)
-        ├─ destroy the previous level content actors (the gameplay actors stay)
-        ├─ spawn AWorldSettings (ULevel::WorldSettings; DefaultGameMode from the game mode string)
-        ├─ spawn one actor per record, in file order (see Actor classes)
-        ├─ spawn the lights (see Lights)
-        ├─ camera: kept on the world settings (LoadMap spawns the APlayerStartPIE the player starts at)
-        └─ CollectGarbage               a level load is a safe point (D11): the replaced actors go
-```
-
-Spawning an actor registers its components: a primitive with collision adds its body to the world's physics scene (`CreatePhysicsState`) and, when the world renders, its scene proxy to the world's scene (`CreateRenderState_Concurrent`), so there is no separate physics or render step after the load.
-
-There is no separate validation pass: magic, version, class values and limits are enforced by the reader, and resource failures by `ApplyLevelDocument`. A failed load leaves the level untouched (`LoadMap` checks that the file exists before it releases the old world). If any `StaticMesh` actor's mesh fails to load, the whole level is rejected (no partial loads). Blank or lights-only levels are valid (a level always gets at least the default sun).
-
-Saving: `BuildLevelDocument(const ULevel&, const UCameraComponent&)` builds a document from the level's actors, then `SaveLeonLevelFile` (atomic write) or `SerializeLeonLevel` (bytes). The records go out grouped by class, as the format always wrote them (player starts, AI spawn points, trigger volumes, pain-causing volumes, then the meshes and blocking volumes; directional, then point lights), each group in spawn order, so loading a file and saving it gives the same bytes (`System.Engine.LevelFormat.SaveWritesTheSameBytes` checks the templates and a document with every record class against the hashes the pre-P13 saver gave). Only the automation tests save levels today: "Editor-style level save load apply headless" (AIModule) round-trips `Engine/Content/LevelTemplates/Blank.llev`, and the `.llev` format tests (`Engine/Private/Tests/LevelFormatTests.cpp`) round-trip a document through bytes.
-
-### Asset paths inside a level
-
-Material, mesh and environment paths are strings in the level's string table: content keys, the paths the legacy
-`.lmat` / `.lmesh` files had (`materials/M_WorldGrid.lmat`). Since P14 the files are `.lasset` packages, and
-`ResolveLevelAssetObjectPath(LevelPath, Key)` resolves a key to the object path of the package the migration made of
-its file (`FLegacyAssetKeys`, `Public/Level/LegacyAssetKeys.h`), which the reader loads with `LoadObject`:
-
-1. the key's content root is the folder above the level's folder (`Content/` for `Content/Levels/X.llev`). A root under
-   a mount point uses that mount point's path (`Engine/Content` is `/Engine`); any other folder gets a mount point
-   named after it for the rest of the run (`.../RenderTest/Levels/RenderTest.llev` mounts `.../RenderTest` as
-   `/RenderTest`, with a `_2` suffix when the name maps elsewhere); an absolute key's folder is its root;
-2. the key loses its extension and its leaf gains the class prefix of the extension unless it has it (`.lmat` `M_`,
-   `.lmesh` `SM_`, images `T_`, `.wav` `S_`); under `/Engine` the legacy `Materials/` and `Textures/` folders are
-   `EngineMaterials/`;
-3. that migrated name, then the key as it is, are tried under the content root, then under `/Game`, then under
-   `/Engine`; the first package that exists wins (`materials/M_WorldGrid.lmat` in the Starter template is
-   `/Engine/EngineMaterials/M_WorldGrid.M_WorldGrid`);
-4. a legacy key with a `Materials/` folder deeper in it is retried from that folder.
-
-A key that names no package gives the default material with a warning (a material) or rejects the level (a mesh). The
-`.lasset` files of a level outside the mount points sit next to it: `LeonCook -run=MigrateLegacyContent
--source=<ContentRoot>` converts its legacy files in place ([TOOLS.md](TOOLS.md)).
-
-The environment path is read and written but ignored (HDR environment maps were removed in 0.12.0).
-
-## File layout (version 2)
-
-All values are little-endian. Strings live in one deduplicated table; fields reference them by index, and index `0` is always the empty string (also "unset"). Out-of-range indices read as the empty string.
-
-Writers emit `version = 2` (`LeonLevelVersion`); readers accept 1 and 2 and parse both the same way. Magic `LeonLevelMagic` = `0x56454C4C` ("LLEV" on disk).
+## Opening a map
 
 ```text
-u32 magic   = 'LLEV'
-u32 version = 2            // reader also accepts 1
-u32 flags   = 0            // reserved
-
-string table:
-  u32 count                                    // <= 65536
-  count × (u32 byteLen + UTF-8 bytes, no terminator)   // <= 1 MiB each
-
-meta:
-  u32 nameIdx, gameModeIdx, environmentIdx
-  f32 environmentExposure                      // environment fields: kept for compatibility, ignored
-
-camera (always present):
-  u8  mode (0 = Orbit, 1 = FreeLook)
-  u8  pad[3]
-  f32 target[3], eye[3], distance, yaw, pitch
-
-actors:
-  u32 count                                    // <= 100000
-  each:
-    u8  class     (ELevelActorClass)
-    u8  mobility  (0 Static, 1 Movable)
-    u16 pad
-    u32 flags     (see below)
-    f32 position[3], rotationDegrees[3], scale[3]
-    u32 tagIdx           if hasTag
-    u32 materialIdx      if hasMaterial
-    u32 meshIdx          if hasMesh
-    u32 lightmapIdIdx    if hasLightmapId        // lightmap fields: kept for compatibility, ignored
-    u32 lightmapPathIdx  if hasLightmapPath
-    u32 lightmapResolution                       // always
-    i32 sphereSegments, sphereRings              // class == Sphere
-    f32 spinYaw                                  if hasSpinYaw
-    f32 bobBaseY, bobAmplitude, bobSpeed         if hasBob
-    f32 fitHeight                                if hasFitHeight
-    i32 interactCost     if hasInteractCost
-    f32 interactRadius   if hasInteractCost
-    f32 damagePerSecond  if hasPainData
-    f32 damageInterval   if hasPainData
-    u32 payloadIdx       if hasPayload
-
-lights:
-  u32 count                                    // <= 16384
-  each:
-    u8  class (0 DirectionalLight, 1 PointLight)
-    u8  pad[3]
-    u32 flags (bit 0 castShadows, bit 1 hasOrbit)
-    f32 position[3], rotationDegrees[3], lightColor[3]
-    f32 intensity, range, sourceAngle
-    f32 radius, height, heightAmp, speed         if hasOrbit
+UEngine::LoadMap(URL)                                     (UEngine::Browse; the startup map; `open <map>`)
+  ├─ the map: a long package name (/Game/Maps/X, /Engine/Maps/X) whose .lmap exists, or a .lmap file
+  │     a file outside every mount point mounts its content folder, the folder above its Maps/ folder
+  │     (<Root>/Maps/X.lmap mounts <Root> as /<Root name>/); a missing map fails and keeps the current world
+  ├─ the players leave their controllers; the old world ends play (LevelTransition), is destroyed, garbage collected
+  ├─ LoadPackage, UWorld::FindWorldInPackage: the map's world, rooted
+  ├─ UWorld::InitWorld              the level knows its world, the actors get their IDs in their saved order
+  │                                 (the renderer's draw order), the renderer's scene unless -nullrhi
+  ├─ UWorld::SetGameMode            ?game= in the URL, AWorldSettings::DefaultGameMode, GlobalDefaultGameMode (D18)
+  ├─ UWorld::InitializeActorsForPlay
+  │     ├─ UpdateWorldComponents    every component registers: bodies in the physics scene, proxies in the scene
+  │     ├─ AGameModeBase::InitGame
+  │     └─ each actor initializes   (UE: ULevel::RouteActorInitialize)
+  ├─ every local player logs in     the game mode spawns its controller and its default pawn at a player start:
+  │                                 the one whose PlayerStartTag the URL's #portal names, else the level's first
+  └─ UWorld::BeginPlay, UGameInstance::LoadComplete
 ```
 
-### Coordinates in the file
+`AGameModeBase::ChoosePlayerStart` takes the level's first player start (UE picks a random free one; Leon is
+deterministic). The engine's template maps have the view their legacy level opened with as their first start, so the
+default pawn (`ADefaultPawn`, a free-flying camera) starts where it always did.
 
-Every value in a `.llev` is in the **legacy space**: Y up, right-handed, metres, rotations as XYZ Euler degrees
-(applied Z, then Y, then X). `FLevelDocument` keeps them as stored. `ApplyLevelDocument` converts them to the engine
-world (UE: X forward, Y right, Z up, left-handed, centimetres) with `FLegacyCoordinateConversion`
-(`RenderCore/Public/LegacyCoordinateConversion.h`), and `BuildLevelDocument` converts back, so saved files stay in the
-legacy space:
+## Saving a map
 
-| Field | Conversion |
+A tool makes the world in the map's package and saves it with a `.lmap` file name:
+
+```cpp
+UPackage* Package = CreatePackage(TEXT("/Game/Maps/Arena"));
+// Built and saved, never drawn: no renderer's scene.
+const UWorld::InitializationValues IVS = UWorld::InitializationValues().InitializeScenes(false);
+UWorld* World = UWorld::CreateWorld(EWorldType::Editor, false, TEXT("Arena"), Package, true, &IVS);
+World->PersistentLevel->SetWorldSettings(World->SpawnActor<AWorldSettings>()); // the first actor, as in UE
+World->SpawnActor<APlayerStart>(FVector(0.0f, 0.0f, 92.0f), FRotator::ZeroRotator);
+UPackage::SavePackage(Package, World, RF_Public | RF_Standalone,
+	*FPackageName::LongPackageNameToFilename(TEXT("/Game/Maps/Arena"), FPackageName::GetMapPackageExtension()));
+```
+
+LeonEd's `FAssetImportUtils::SavePackage` picks `.lmap` for a package that holds a world. The save is deterministic
+(the same world saves the same bytes; a loaded map resaves byte for byte), transient actors are left out, and every
+transform comes back bit for bit (a scene component saves its relative quaternion).
+
+<a id="importing-a-map-from-gltf"></a>
+
+## Importing a map from glTF
+
+Maps are built in Blender, exported to glTF 2.0 and imported as maps by LeonCook:
+
+```bat
+Engine\Binaries\Win64\LeonCook.exe Game\MyGame\MyGame.lproj -run=ImportAssets -type=Map ^
+    "-source=Game/MyGame/SourceArt/Maps/de_leon.glb" -dest=/Game/Maps/de_leon
+```
+
+or as a section of the project's `SourceArt/ImportList.ini` (`Source=Maps/de_leon.glb`, `Dest=/Game/Maps/de_leon`,
+`Type=Map`). `-dest` is the map's package (UE's map path): the map is `Content/Maps/de_leon.lmap`, each glTF mesh a node
+shows one `SM_<Mesh>` in `/Game/Maps/de_leon/Meshes` (a mesh several nodes show is one asset), each PBR material an
+`M_<Material>` in `/Game/Maps/de_leon/Materials` with its external base colour and normal images as `T_` textures there.
+
+### From Blender
+
+- Model in metres with Blender's axes. Blender and the engine are both Z up with the same +X; Blender is right-handed
+  and the engine left-handed, so Blender's +Y is the engine's −Y (the exporter and the importer do this for you:
+  glTF is +Y up, and `FImportCoordinateConversion` turns glTF (x, y, z) m into the engine's (x, z, y) × 100 cm).
+- Export **glTF 2.0**: *glTF Binary (.glb)*, or *glTF Separate* when materials have textures (the importer reads
+  external images only, not images embedded in a `.glb`); *+Y Up* on (the default); *Include › Custom Properties* on
+  for the waypoints' `links` / `flags`; *Include › Punctual Lights* on; apply the modifiers.
+- Name the objects after the conventions below; Blender's copy numbers (`BuyZone_T.001`) are fine.
+- The glTF source goes to the project's `SourceArt/Maps/` next to the `.blend`, both under version control; the
+  imported map records it (its world's `AssetImportData`), so `-reimport` rebuilds the map from it.
+
+| Engine (cm) | glTF / Blender |
 | --- | --- |
-| `position`, camera `target` / `eye` | (X, Z, Y) × 100 |
-| `rotationDegrees` of meshes and volumes | `ConvertEulerXYZ`: the legacy rotation with the axes swapped, as an `FQuat` |
-| `rotationDegrees` of `PlayerStart` / `AISpawnPoint` | `ConvertActorEulerXYZ`: a pure legacy yaw ψ becomes the world yaw 90 − ψ |
-| `scale` | (X, Z, Y); a component closer to zero than 1e-4 becomes ±1e-4 |
-| lengths: camera `distance`, `fitHeight`, `bobBaseY`, `bobAmplitude`, `interactRadius`, light `range`, orbit `radius` / `height` / `heightAmp` | × 100 (`bobBaseY` becomes the live `BobBaseZ`) |
-| `spinYaw` (degrees / s) | sign flipped |
-| camera `yaw` / `pitch` | orbit: `FRotator(−pitch, yaw + 180, 0)`; free look: `FRotator(pitch, yaw, 0)` |
-| light `rotationDegrees` (x = pitch, y = yaw) | `FRotator(−pitch, 90 − yaw, 0)`; the light shines along its forward axis |
+| +X forward | glTF +X, Blender +X |
+| +Y right | glTF +Z, Blender −Y |
+| +Z up | glTF +Y, Blender +Z |
+| 100 | 1 m |
 
-Only the level reader, the saver and tests may use `FLegacyCoordinateConversion` (`CheckBannedApis.ps1`, gate G4).
+### Naming conventions
 
-Actor `flags` bits (`LevelActorFlag*` constants): `0` collisionEnabled, `1` simulatePhysics, `2` enableGravity, `3` hidden, `4` hasBob, `5` hasSpinYaw, `6` hasFitHeight, `7` hasMaterial, `8` hasMesh, `9` hasLightmapId, `10` hasLightmapPath, `11` hasTag, `12` hasInteractCost, `13` hasPainData, `14` hasPayload, `15` consumeOnUse.
+A node takes the rule of `[/Script/LeonEd.MapImportSettings]` (the Editor config) with the longest prefix its name
+starts with; the engine's rules are in `Engine/Config/BaseEditor.ini`, a project's own in its `Config/DefaultEditor.ini`:
 
-The writer always sets `hasInteractCost` for `TriggerVolume` and `hasPainData` for `PainCausingVolume`, and for any other actor whose values differ from the defaults (cost 0, radius 2 m in the file, 200 cm in the world; 12 damage per second, 0.35 s interval).
-
-### Actor classes (`ELevelActorClass`)
-
-| Value | Class | Spawned as |
+| Node | Becomes | Rule |
 | --- | --- | --- |
-| 0 | `PlayerStart` | `APlayerStart` (the spawn transform; `AGameModeBase::FindPlayerStart`) |
-| 1 | `Cube` | `AStaticMeshActor` with `/Engine/BasicShapes/Cube` (`MeshForBasicShape`) |
-| 2 | `Sphere` | `AStaticMeshActor` with `/Engine/BasicShapes/Sphere` for 24 × 16 `sphereSegments` / `sphereRings`, else a transient sphere of that tessellation |
-| 3 | `Plane` | `AStaticMeshActor` with `/Engine/BasicShapes/Plane` |
-| 4 | `BlockingVolume` | `ABlockingVolume`: a 100 cm brush box (plan decision D16) sized by the scale, never drawn; its collision flags come from the record |
-| 5 | `StaticMesh` | `AStaticMeshActor` with the `UStaticMesh` package its mesh key names (`ResolveLevelAssetObjectPath`) |
-| 6 | `TriggerVolume` | `ATriggerVolume` (interact radius / cost, game-defined `payload`, `consumeOnUse` on its legacy data component) |
-| 7 | `PainCausingVolume` | `APainCausingVolume` (`DamagePerSec`, `PainInterval`) |
-| 8 | `AISpawnPoint` | `ATargetPoint` (transform + tag) |
+| a mesh no rule matches | `AStaticMeshActor` at the node's transform, static and colliding (the triangles) | — |
+| `UCX_<MeshNode>_<NN>` | convex collision of the mesh node named `<MeshNode>`: the bounding box of the UCX mesh, in the render mesh's space, becomes a box of that mesh's simple collision (`UBodySetup` box elements, `CTF_UseSimpleAsComplex`); no actor | engine, `Kind=ConvexCollision` |
+| `COL_*` | `AStaticMeshActor`, hidden in game, colliding | engine, `Kind=CollisionOnly` |
+| `Clip_*` | `ABlockingVolume` | engine |
+| `PlayerStart*` | `APlayerStart` upright, facing the node's +X; the name's suffix is its `PlayerStartTag` (`PlayerStart_CT`: `CT`) | engine, `bSuffixAsTag` |
+| `NavWaypoint*` | `ANavigationWaypoint` at the node; the extras `links` (waypoint node names) and `flags` (names), each a JSON array of strings or one comma-separated string (Blender custom properties are strings) | engine |
+| `BombSite_A` / `_B`, `BuyZone_CT` / `_T` | `ATriggerVolume`, `Tags` [`BombSite`, `A`] / [`BuyZone`, `CT`] | a project's (ShooterGame, P17), below |
+| a KHR_lights_punctual light | `ADirectionalLight`, or `APointLight` for a point or spot light (Leon has no spot light: a warning): the colour, the glTF intensity as `Intensity`, `range` as `AttenuationRadius` (8 m without one); the directional light casts shadows (the renderer shadows the first one) | always, whatever its name |
+| a node with no mesh and no rule | nothing (a group; its children are placed with its transform) | — |
 
-Only `StaticMesh` carries a mesh path. The record `tag` becomes the actor's first `Tags` entry (`UGameplayStatics::GetAllActorsWithTag`) and `hidden` its `bHidden`. Mesh actors take their material from `materialPath` (the `UMaterial` package the key names; the default material with a warning when there is none); without one, a mesh with no materials of its own gets the default material (`UMaterial::GetDefaultMaterial`, `[/Script/Engine.Engine] DefaultMaterialName`). The assets are the components' `UPROPERTY`s and are collected with the level. `mobility`, `collisionEnabled`, `simulatePhysics` and `enableGravity` go to the mesh component or the volume's brush (`SetMobility`, `SetCollisionEnabled`, `SetSimulatePhysics`, `SetEnableGravity`); `collisionEnabled` is forced on when `simulatePhysics` is set. `fitHeight` scales the mesh (or the blocking volume's 100 cm cube) to that height and grounds it (`ApplyFitHeight`). The `TriggerVolume` payload string is interpreted by the game mode. Volumes test containment with the axis-aligned box around the actor (`AVolume::EncompassesPoint`), as before.
+A volume is the box of the node's mesh (its bounds in the mesh's space, placed and sized by the node's transform; a
+node without a mesh is a 2 m cube, Blender's default cube or cube empty); a volume is axis-aligned whatever its
+rotation (D16). Actors are named after their nodes (`.` becomes `_`), the world settings first, then the nodes in the
+file's order; a rule may map a prefix to any engine actor class (`ATargetPoint`, `APainCausingVolume`, ...), which
+takes the node's transform.
 
-Unknown actor or light classes fail the read.
+A rule is `(Prefix="...",Kind=Actor|CollisionOnly|ConvexCollision|Ignore,ActorClass=<class path>,Tags=(...),
+bSuffixAsTag=True)`. The engine knows no game (plan decision D15): the game's meaning is a project's rules and tags.
+ShooterGame's `Config/DefaultEditor.ini` (P17) will read:
 
-### Lights
+```ini
+[/Script/LeonEd.MapImportSettings]
++NodeRules=(Prefix="BombSite",ActorClass=/Script/Engine.TriggerVolume,Tags=("BombSite"),bSuffixAsTag=True)
++NodeRules=(Prefix="BuyZone",ActorClass=/Script/Engine.TriggerVolume,Tags=("BuyZone"),bSuffixAsTag=True)
++RequiredTags=BombSite+A
++RequiredTags=BombSite+B
++RequiredTags=TriggerVolume:BuyZone+CT
++RequiredTags=TriggerVolume:BuyZone+T
++RequiredTags=PlayerStart:CT
++RequiredTags=PlayerStart:T
+```
 
-`DirectionalLight` and `PointLight` records become `ADirectionalLight` / `APointLight` actors (`UDirectionalLightComponent`: `LightColor`, `Intensity`, `CastShadows`, `LightSourceAngle`; `UPointLightComponent`: `AttenuationRadius` from `range`). If a level has no directional light, the default sun is spawned. Only the first `MaxDirectionalLights` (2) and `MaxPointLights` (4) of each kind are spawned (`Level/Light.h`), with a warning for the rest.
+### Required tags
 
-### Camera
+`RequiredTags` is the project's check of its maps: each entry, `[<Class>:]<Tag>[+<Tag>...]`, must be met by some actor
+of the map (of that class or a subclass, named without its prefix) that carries every tag, a player start's
+`PlayerStartTag` counting as one of its tags. When an entry is not met the import fails, nothing is saved and the log
+names it: `GLTFMapFactory: '<file>' has nothing with the required tags 'BombSite+B' (RequiredTags of
+[/Script/LeonEd.MapImportSettings])`.
 
-Always stored. The orbit fields (`target`, `distance`, `yaw`, `pitch`) are the baseline; `eye` is stored for both modes so FreeLook restores exactly.
+### Collision
 
-### Level animation
+A static mesh actor collides with its mesh's triangles (the physics scene's static triangle bodies), unless its mesh
+has `UCX_` boxes, which then answer traces and physics. Leon's physics scene has boxes and triangle meshes, no convex
+hulls, and gives a body the bounds of its boxes: a `UCX_` piece is its bounding box, and several pieces merge into one
+box (a documented deviation). `COL_` meshes collide with their triangles and are never drawn; `Clip_` volumes are
+boxes.
 
-Spins (`spinYaw` degrees per second), bobs (`bobBaseY`, `bobAmplitude`, `bobSpeed`) and point-light orbits are kept on the actors' legacy data components (`SpinYaw`, `bHasBob`, `bHasOrbit`) and preserved on save, but nothing animates them at runtime: the level animation player was removed in 0.12.0.
+### Reimport
 
-## Running a level
+Importing over the map, or `-reimport`, rebuilds its level in place from the source: the old actors leave the package,
+the new ones take the node names, the meshes are rebuilt in their packages (their materials are kept, as for any mesh
+reimport), and the same file saves the same bytes: gate G5 (`CheckReimport.bat`) covers maps.
 
-The Win64 `LeonGame` target opens one map with `UEngine::LoadMap` ([SETUP.md](SETUP.md#leongame) has the command
-line):
+### AxisTest
+
+`/Engine/Maps/AxisTest` is the engine's check for mirrored or swapped axes. Its source, `Engine/SourceArt/Maps/AxisTest.glb`,
+is written by `Engine/SourceArt/Maps/MakeAxisTest.py` (standard-library Python: no Blender needed, the same bytes on
+every run); `Engine/SourceArt/ImportList.ini` imports it:
+
+| Node | glTF (m) | Engine (cm) |
+| --- | --- | --- |
+| `AxisX_Red`, a red 1 m cube | (3, 0.5, 0) | (300, 0, 50) |
+| `AxisY_Green`, a green 1 m cube | (0, 0.5, 2) | (0, 200, 50) |
+| `AxisZ_Blue`, a blue 1 m cube | (0, 2.5, 0) | (0, 0, 250) |
+| `Marker_1m`, a yellow 20 cm cube | (1, 0, 0) | (100, 0, 0) |
+| `Origin_White`, a white 40 cm cube, on a grey 12 m floor | (0, 0.2, 0) | (0, 0, 20) |
+| `PlayerStart`, facing +X | (−6, 1.7, 0) | (−600, 0, 170) |
+| `Sun`, a directional light shining along +X, +Y and down | | |
+
+`LeonGame /Engine/Maps/AxisTest -AxesGizmo` shows the red cube straight ahead, the green one on the right and the blue
+one above, in the colours of the gizmo's X, Y and Z; `System.Engine.AxisTestMap.NoMirroring` checks the positions and
+that, in the start's view, +Y is on the right.
+
+## Engine maps
+
+| Map | Contents |
+| --- | --- |
+| `/Engine/Maps/Entry` | The empty map (UE's `Entry`): world settings, a directional light, the framing camera actor and a player start at its view; the server default map |
+| `/Engine/Maps/Template_Default` | The default template (UE's `Template_Default`), `GameDefaultMap`: a 20 m plane with `M_WorldGrid`, a player start, a directional light, the framing camera actor and the first player start at its view |
+| `/Engine/Maps/AxisTest` | [Above](#axistest) |
+
+`Entry` and `Template_Default` were migrated in P15 from the legacy `.llev` templates (`Blank.llev`, `Starter.llev`)
+while the level reader still existed, and the packages are now their source of truth. What a legacy level stored
+became: the actors (the same classes), the spin / bob / point-light orbit a `URotatingMovementComponent` /
+`UBobbingMovementComponent` / `UOrbitMovementComponent`, a trigger's interaction data a `UInteractableComponent`, the
+game mode string the world settings' `DefaultGameMode` ("Default": none), the camera framing an `ACameraActor` that
+keeps it and an `APlayerStart` at the view it opened with (the level's first start), the level name the map's name,
+and a sphere of another tessellation an `SM_` asset of the map. The frames of the migrated maps are the same pixels as
+the levels'.
+
+## Running a map
 
 ```text
-Engine\Binaries\Win64\LeonGame.exe [<map>[?game=<class>]] [-map=<map>] [-nullrhi] [-tick=<Hz>] [-showstats]
+Engine\Binaries\Win64\LeonGame.exe [<map>[?game=<class>][#<portal>]] [-map=<map>] [-nullrhi] [-tick=<Hz>] [-showstats]
                                    [-AxesGizmo] [-ExecCmds="<command>;<command>"] [-Screenshot=<file.bmp>] [-ExitAfterFrames=N]
 ```
 
-The map is a long package name (`/Engine/LevelTemplates/Blank`: the `.llev` under the `/Engine/` mount point, until
-the `.lmap` packages of P15), a `.llev` path or a content key; without one it is `GameDefaultMap` from
-`[/Script/EngineSettings.GameMapsSettings]` (`BaseEngine.ini`: `/Engine/LevelTemplates/Starter`). `LoadMap` destroys
-the previous world, creates one named after the map, loads the file into it, spawns an `APlayerStartPIE` at the
-level's camera framing (the view the level opens with: UE's Play From Here start), picks the game mode (plan decision
-D18: `?game=`, the level's game mode string, `GameModeMapPrefixes`, `GlobalDefaultGameMode`), logs the local player in
-(the game mode spawns its controller and its default pawn at the start) and begins play. The game mode string
-`Default` (both templates) means the project's default. `open <map>` loads another map at the next frame. There is no
-level catalog, level browser or project pack (all removed in 0.12.0), and `Game/ThirdPerson` is a build project
-(`.lproj`), not a runtime pack.
+The map is a long package name (`/Engine/Maps/Entry`, `/Game/Maps/X`) or a `.lmap` file; without one it is
+`GameDefaultMap` of `[/Script/EngineSettings.GameMapsSettings]` (`BaseEngine.ini`: `/Engine/Maps/Template_Default`). A
+map file outside the mount points brings its content with it: `LeonGame.exe D:\Work\RenderTest\Maps\RenderTest.lmap`
+mounts `D:\Work\RenderTest` as `/RenderTest/`, where the map's own meshes and materials are. `open <map>` loads another
+map at the next frame. [SETUP.md](SETUP.md#leongame) has the options.
 
-## Level templates
+## Deviations from UE 4.27
 
-`Engine/Content/LevelTemplates/` holds seed levels:
-
-| File | Contents |
-| --- | --- |
-| `Blank.llev` | Version 1, name `Untitled`, game mode `Default`, no actors, one directional light |
-| `Starter.llev` | Version 1, name `Starter`, game mode `Default`: a `Plane` with `materials/M_WorldGrid.lmat`, a `PlayerStart`, one directional light, environment `hdr/autumn_field_puresky_1k.hdr` (ignored) |
-
-`Starter.llev` still uses pre-rename lowercase paths.
-
-## Lightmaps
-
-Lightmaps (`LightmapIO`, `.lm` files) were removed in 0.12.0. The per-actor `lightmapId`, `lightmapPath` and `lightmapResolution` fields are still read and written for binary compatibility but ignored. Static lighting returns as `<Map>_BuiltData.lasset`.
+- Volumes are boxes, not BSP brushes (D16); `UCX_` convex hulls are boxes.
+- A scene component saves its relative quaternion after its properties, so a loaded transform is bit-exact.
+- The map importer is a LeonEd factory with naming rules in the config (UE: Datasmith or the glTF importer's level
+  import, with metadata); light intensities are the glTF values as they are (no photometric units).
+- `ChoosePlayerStart` takes the first player start; there is no Play From Here start (no editor).
+- `UBobbingMovementComponent`, `UOrbitMovementComponent`, `UInteractableComponent` and `ANavigationWaypoint` are Leon's.
+- An imported map keeps its source in its world's editor-only `AssetImportData` (UE keeps it on the Datasmith scene).
+- No streaming levels, world composition, level blueprints or built lighting data yet (`<Map>_BuiltData` later).

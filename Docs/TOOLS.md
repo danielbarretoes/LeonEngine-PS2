@@ -8,8 +8,8 @@ The layout mirrors Unreal Engine 4.27: edit-time code is in **Developer** and **
 
 | Path | Kind | Role |
 | --- | --- | --- |
-| `Engine/Source/Developer/MeshUtilities/` | Developer module | OBJ / FBX / glTF import to mesh data (`FStaticMeshBuilder`); FBX skeletal import (`FbxSkeletalImport.h`) |
-| `Engine/Source/Editor/LeonEd/` | Editor module | The editor module (UE: UnrealEd): the factories (`UFactory` and its subclasses), reimport (`FReimportHandler`, `FReimportManager`), `FAssetImportUtils` and the commandlets (`ImportAssets`, `ResavePackages`, `ValidateAssets`, `MigrateLegacyContent`, `Cook`). [README](../Engine/Source/Editor/LeonEd/README.md) |
+| `Engine/Source/Developer/MeshUtilities/` | Developer module | OBJ / FBX / glTF import to mesh data (`FStaticMeshBuilder`); glTF scenes (`LoadGltfScene`, `GltfScene.h`); FBX skeletal import (`FbxSkeletalImport.h`) |
+| `Engine/Source/Editor/LeonEd/` | Editor module | The editor module (UE: UnrealEd): the factories (`UFactory` and its subclasses, the map importer `UGLTFMapFactory` with `UMapImportSettings`), reimport (`FReimportHandler`, `FReimportManager`), `FAssetImportUtils` and the commandlets (`ImportAssets`, `ResavePackages`, `ValidateAssets`, `Cook`). [README](../Engine/Source/Editor/LeonEd/README.md) |
 | `Engine/Source/Programs/LeonCook/` | Program target | `LeonCook` executable: the engine with LeonEd and no renderer, running one commandlet (UE: `UE4Editor-Cmd`) |
 | `Engine/Source/Programs/LeonBuildTool/` | Build tool (CMake script) | Builds every target (UnrealBuildTool equivalent) |
 | `Engine/Source/Programs/LeonHeaderTool/` | Host program (std-only C++17, its own `CMakeLists.txt`) | Reflection code generator (UnrealHeaderTool equivalent). LeonBuildTool builds it into `Engine/Intermediate/Build/HostTools/<Host>/` and runs it for reflected modules; `LeonHeaderTool -Test` runs its golden tests. Contract: its [README](../Engine/Source/Programs/LeonHeaderTool/README.md) |
@@ -27,9 +27,10 @@ The Developer and Editor modules and the LeonCook target never build for PS2 (`P
 LeonCook (Program)
   ├─ Engine, CoreUObject, Projects (the .lproj)
   └─ LeonEd (Editor)
-       ├─ Engine (the asset classes, UAssetImportData, UCommandlet, FLegacyAssetKeys)
-       ├─ MeshUtilities (Developer: FStaticMeshBuilder, FbxSkeletalImport)
+       ├─ Engine (the asset classes, the world and the map actors, UAssetImportData, UCommandlet)
+       ├─ MeshUtilities (Developer: FStaticMeshBuilder, LoadGltfScene, FbxSkeletalImport)
        │    └─ RenderCore, AnimationCore (the mesh and skeletal data)
+       ├─ Json (the map nodes' extras)
        └─ STB (stb_image: the texture factory)
 ```
 
@@ -59,12 +60,12 @@ Engine\Build\BatchFiles\Cook.bat -run=ImportAssets -reimport -all
 
 | `-run=` | Class (LeonEd) | Arguments | Does |
 | --- | --- | --- | --- |
-| `ImportAssets` | `UImportAssetsCommandlet` | `-source=<file> -dest=<LongPackagePath> [-name=<Asset>] [-type=<Type>] [-<Setting>=<Value>...]` | Imports one file into the folder `-dest` (`/Game/Meshes`); the asset is named after the file with its class prefix (`Cube.obj` → `SM_Cube`) unless `-name`; `-type` is `Texture`, `StaticMesh`, `SkeletalMesh`, `Animation`, `Sound` or `Material` (default: by extension); the other switches set the factory's properties (`-ColorSpaceMode=Linear`, `-Skeleton=/Game/Hero/SKEL_Hero.SKEL_Hero`, `-bImportMaterials=False`) |
+| `ImportAssets` | `UImportAssetsCommandlet` | `-source=<file> -dest=<LongPackagePath> [-name=<Asset>] [-type=<Type>] [-<Setting>=<Value>...]` | Imports one file into the folder `-dest` (`/Game/Meshes`); the asset is named after the file with its class prefix (`Cube.obj` → `SM_Cube`) unless `-name`; `-type` is `Texture`, `StaticMesh`, `SkeletalMesh`, `Animation`, `Sound` or `Map` (default: by extension); the other switches set the factory's properties (`-ColorSpaceMode=Linear`, `-Skeleton=/Game/Hero/SKEL_Hero.SKEL_Hero`, `-bImportMaterials=False`) |
+| | | `-type=Map -source=<file.glb> -dest=/Game/Maps/<Map>` | Imports a glTF scene as the map `-dest` names (its package, UE's map path), with its meshes in `<Map>/Meshes` and materials in `<Map>/Materials`, by the naming rules of `[/Script/LeonEd.MapImportSettings]` ([LEVELS.md](LEVELS.md#importing-a-map-from-gltf)); fails when the project's `RequiredTags` are not met |
 | | | `-importlist=<ImportList.ini>` | Imports every section of the list ([below](#importlistini)) |
 | | | `-reimport -all` / `-reimport -package=<LongPackageName>[,...]` | Reimports every asset under the mount points (`/Engine`, and `/Game` with a project), or of those packages, whose import data names a source file that exists (the others are skipped), and saves them |
 | `ResavePackages` | `UResavePackagesCommandlet` | `[-package=<LongPackageName>[,...]] [-packagefolder=<LongPackagePath>]` | Loads and saves packages in the current format (every package under the mount points by default) |
 | `ValidateAssets` | `UValidateAssetsCommandlet` | same as ResavePackages | Reads each package's tables and loads it: every import must resolve (its package exists, the object is in it) and every export must be made with a valid, non-abstract class |
-| `MigrateLegacyContent` | `UMigrateLegacyContentCommandlet` (temporary) | `-source=<ContentDir> [-engine]` | Converts the legacy `.lmat` / `.lmesh` / image / `.wav` files of a folder into `.lasset` packages next to them ([ASSET_FORMATS.md](ASSET_FORMATS.md#legacy-content-migration)); `-engine` saves the engine's procedural assets |
 | `Cook` | `UCookCommandlet` | `[-TargetPlatform=<Name>] [-package=...] [-packagefolder=...]` | Minimal before P16: saves every package with `PKG_FilterEditorOnly` and `PKG_Cooked` (no import data) into `<Project>/Saved/Cooked/<Platform>/<Engine or Project>/Content/` |
 
 An import over an existing asset reimports it in place (the same object, so its references hold). Every package an import makes or changes is saved, deterministically: the same source gives the same bytes (gate G5).
@@ -76,7 +77,7 @@ A folder of source art lists its imports in an `ImportList.ini` (`Engine/SourceA
 | Key | Required | Value |
 | --- | --- | --- |
 | `Source` | yes | the source file, relative to the ini's folder |
-| `Dest` | yes | the long package path of the asset's folder (`/Engine/EngineMaterials`) |
+| `Dest` | yes | the long package path of the asset's folder (`/Engine/EngineMaterials`); for a map, its package (`/Engine/Maps/AxisTest`) |
 | `Name` | no | the asset name; default: the file name with its class prefix |
 | `Type` | no | as `-type` |
 | any other | no | an import setting: a property of the factory, set from its text (`ColorSpaceMode=Linear`, `MeshTypeToImport=FBXIT_SkeletalMesh`, `Skeleton=<object path>`, `bImportMaterials=False`) |
@@ -85,9 +86,14 @@ A folder of source art lists its imports in an `ImportList.ini` (`Engine/SourceA
 [T_Default_D]
 Source=EngineMaterials/T_Default_D.png
 Dest=/Engine/EngineMaterials
+
+[AxisTest]
+Source=Maps/AxisTest.glb
+Dest=/Engine/Maps/AxisTest
+Type=Map
 ```
 
-The settings an import applied are kept in the asset's `UAssetImportData` with its source (relative to the engine or project folder) and MD5, so a reimport applies them again.
+The settings an import applied are kept in the asset's `UAssetImportData` with its source (relative to the engine or project folder) and MD5, so a reimport applies them again. A map keeps them in its world's; the meshes and materials a map import makes have no import data of their own (the map's reimport rebuilds them).
 
 ### Examples
 
@@ -96,8 +102,9 @@ Engine\Binaries\Win64\LeonCook.exe -run=ImportAssets -importlist=Engine/SourceAr
 Engine\Binaries\Win64\LeonCook.exe -run=ImportAssets -reimport -all
 Engine\Binaries\Win64\LeonCook.exe Game\MyGame\MyGame.lproj -run=ImportAssets -source=Game/MyGame/SourceArt/Crate.fbx -dest=/Game/Props
 Engine\Binaries\Win64\LeonCook.exe Game\MyGame\MyGame.lproj -run=ImportAssets -source=Game/MyGame/SourceArt/Hero.fbx -dest=/Game/Hero -type=SkeletalMesh
+Engine\Binaries\Win64\LeonCook.exe Game\MyGame\MyGame.lproj -run=ImportAssets -type=Map -source=Game/MyGame/SourceArt/Maps/de_leon.glb -dest=/Game/Maps/de_leon
+Engine\Binaries\Win64\LeonCook.exe -run=ImportAssets -type=Map -source=Engine/SourceArt/Maps/AxisTest.glb -dest=/Engine/Maps/AxisTest
 Engine\Binaries\Win64\LeonCook.exe -run=ValidateAssets
-Engine\Binaries\Win64\LeonCook.exe -run=MigrateLegacyContent -source=D:\OldPack\Content
 ```
 
 The import identity: the `Cube.obj` fixture imported into a scratch project in the ignored `Engine/Saved`
@@ -108,7 +115,7 @@ The import identity: the `Cube.obj` fixture imported into a scratch project in t
 
 ### Reproducible reimport (gate G5)
 
-`Engine\Build\BatchFiles\CheckReimport.bat [<Project>.lproj ...]` builds LeonCook, reimports the engine content (and each project's) with `-reimport -all`, and fails when `git diff --exit-code -- Engine/Content Game/*/Content/*` finds a change or a new file appears there. It needs a clean checkout of the content (CI runs it after the build, with `Game\ThirdPerson\ThirdPerson.lproj`). A release that bumps the engine version changes every saved package's summary: resave the content (`-run=ResavePackages`) in that release.
+`Engine\Build\BatchFiles\CheckReimport.bat [<Project>.lproj ...]` builds LeonCook, reimports the engine content (and each project's) with `-reimport -all`, maps included (`/Engine/Maps/AxisTest` from its `.glb`), and fails when `git diff --exit-code -- Engine/Content Game/*/Content/*` finds a change or a new file appears there. It needs a clean checkout of the content (CI runs it after the build, with `Game\ThirdPerson\ThirdPerson.lproj`). A release that bumps the engine version changes every saved package's summary: resave the content (`-run=ResavePackages`) in that release.
 
 ### C++ API
 
@@ -132,10 +139,10 @@ All scripts forward to LeonBuildTool (`cmake -P Engine/Source/Programs/LeonBuild
 | `Engine\Build\BatchFiles\Rebuild.bat` | same arguments as Build | `-Mode=Rebuild` |
 | `Engine\Build\BatchFiles\Cook.bat` | `<LeonCook arguments>` | Builds LeonCook (Win64 Development) and runs it |
 | `Engine\Build\BatchFiles\CheckReimport.bat` | `[<Project>.lproj ...]` | Gate G5: reimports the engine content (and the projects') and fails when git sees a change under a `Content` folder |
-| `Engine\Build\BatchFiles\RunTests.bat` | `[-automation=<filter>]` | Builds LeonAutomationTests (Win64 Development) and runs it from the repo root: every automation test (340), or those whose name contains `<filter>`; fails if any fails |
+| `Engine\Build\BatchFiles\RunTests.bat` | `[-automation=<filter>]` | Builds LeonAutomationTests (Win64 Development) and runs it from the repo root: every automation test (339), or those whose name contains `<filter>`; fails if any fails |
 | `Engine\Build\BatchFiles\FormatCode.bat` | `[--check]` | clang-format on every `.cpp` / `.h` / `.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game` (skips `ThirdParty`, `Intermediate`, `Binaries`); `--check` is a dry run that fails on unformatted files |
 | `Engine\Build\BatchFiles\Lint.bat` | | `FormatCode.bat --check`, then `CheckBannedApis.ps1`, then builds LeonAutomationTests, LeonCook, LeonGame and BlankProgram for Win64 Development |
-| `Engine\Build\BatchFiles\CheckBannedApis.ps1` | | Gate G4: fails when engine or game code (`Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game`; comments ignored) uses glm, nlohmann, `std::vector` / `string` / `map` / `unordered_map` / `function` / `shared_ptr` / `unique_ptr`, iostream, the `printf` family, `LegacyGL` / `FLegacyTransform` / `LegacyAxes`, or `FLegacyCoordinateConversion` outside the `.llev` reader and saver and the tests; the allowed places are listed in [CODING_STANDARD.md §4](CODING_STANDARD.md#4-language). Violations print `<file>:<line>: G4 <rule>: <code> -> <replacement>`; `-Root <dir>` scans another tree. CI runs it with `pwsh` |
+| `Engine\Build\BatchFiles\CheckBannedApis.ps1` | | Gate G4: fails when engine or game code (`Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game`; comments ignored) uses glm, nlohmann, `std::vector` / `string` / `map` / `unordered_map` / `function` / `shared_ptr` / `unique_ptr`, iostream, the `printf` family, `LegacyGL` / `FLegacyTransform` / `LegacyAxes`, or `FLegacyCoordinateConversion` outside the tests (`Public/Tests`, `Private/Tests`); the allowed places are listed in [CODING_STANDARD.md §4](CODING_STANDARD.md#4-language). Violations print `<file>:<line>: G4 <rule>: <code> -> <replacement>`; `-Root <dir>` scans another tree. CI runs it with `pwsh` |
 | `GenerateProjectFiles.bat` (root) → `Engine\Build\BatchFiles\GenerateProjectFiles.bat` | `[-Project=<file.lproj>]` | Visual Studio solution in `<Engine or Project>\Intermediate\ProjectFiles` plus the root `compile_commands.json` for clangd; builds keep using Build.bat |
 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1` | `[-Project <dir or .lproj> \| -Program <Name>] [-Configuration Debug\|Development\|Shipping] [-Build]` | Optionally builds the project (or engine program) for PS2, then starts PCSX2 on `<Project>\Binaries\PS2\<Name>.elf` (`Engine\Binaries\PS2\<Name>.elf` with `-Program`) |
 

@@ -78,7 +78,7 @@ and run in `LeonAutomationTests`.
 | [Docs/LIBRARIES.md](Docs/LIBRARIES.md) | Third-party libraries |
 | [Docs/UnrealEngine427/](Docs/UnrealEngine427/README.md) | UE 4.27 knowledge base and the Leon ↔ UE mapping |
 | [Engine/Platforms/PS2/README.md](Engine/Platforms/PS2/README.md) | PS2 platform extension, frame order, debug overlay |
-| [Docs/ASSET_FORMATS.md](Docs/ASSET_FORMATS.md), [Docs/LEVELS.md](Docs/LEVELS.md), [Docs/TOOLS.md](Docs/TOOLS.md) | Asset formats, levels, cook tools |
+| [Docs/ASSET_FORMATS.md](Docs/ASSET_FORMATS.md), [Docs/LEVELS.md](Docs/LEVELS.md), [Docs/TOOLS.md](Docs/TOOLS.md) | Asset formats, maps (`.lmap`, the glTF map import), cook tools |
 | [Docs/TESTING.md](Docs/TESTING.md) | Automated gates, frame captures, the axes gizmo and the manual checklist |
 | [Docs/PS2OFFICIAL/](Docs/PS2OFFICIAL/README.md) | PS2 hardware manuals |
 
