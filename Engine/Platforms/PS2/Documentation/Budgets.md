@@ -75,6 +75,9 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | P14 | ThirdPerson | 668 008 | 6 984 | 33 880 | 676 072 | ApplicationCore's window icon takes texels (`FGenericWindow::SetIcon(int32, int32, const uint8*)`) instead of a PNG path (`SetIconFromFile`): the base's 8-byte `return false` body is the same, but under its new name it lands elsewhere among the ApplicationCore functions (right after `SetCursorCaptured`) and the alignment padding of the text grows by 8 bytes (+8 bytes of text, no new code) |
 | P14 | BlankProgram | 179 628 | 6 136 | 27 097 | 186 804 | unchanged |
 | P14 | TestPAL | 1 373 348 | 6 376 | 39 136 | 1 380 840 | unchanged |
+| P16 | ThirdPerson | 668 048 | 6 984 | 33 880 | 676 200 | `UObject::IsEditorOnly` (the cook's editor-only objects): its 8-byte `return false` body and one more slot in each of the 8 CoreUObject vtables the game links (`UObject`, `UField`, `UStruct`, `UScriptStruct`, `UClass`, `UEnum`, `UFunction`, `UPackage`) (+40 bytes of text). The PS2 launch does not link PakFile yet |
+| P16 | BlankProgram | 179 628 | 6 136 | 27 097 | 186 804 | unchanged |
+| P16 | TestPAL | 1 449 588 | 6 384 | 39 600 | 1 457 128 | the PakFile module (`FPakFile`, `FPakPlatformFile`, `FPakWriter`), `FSHA1` and their tests, which run on paks in memory (+76 240 bytes of text; about 65 KB of it in the `FPak*` and `FSHA1*` symbols, the runtime and the pak tests), and `UObject::IsEditorOnly` with its test fixture |
 
 **P9 reflection in TestPAL** (`nm -S` over the ELF, bytes):
 
@@ -112,6 +115,8 @@ costs its generated code and tables plus its `UClass` / `UScriptStruct` and `FPr
 | P11 | TestPAL (106 tests) | 849 KB | 2 260 KB | 446 names, 10 KB used of 32 KB allocated | `Reflection: 29 classes, 21 structs, 6 enums, 14 functions, 279 properties, 2 packages; construction heap 40 KB` (the package fixtures); 105 objects after registration, 107 after the tests, 105 after a final collection (0.34 ms). The peak is still the GC budget test; GMalloc ends at 241 KB |
 | P11 | ThirdPerson | | 0.6 MB | | 60 FPS, same Draw3D numbers (`boxes=343 ... tris=278 ... emit=254` every 30 frames) |
 | P13 | TestPAL (106 tests) | 849 KB | 2 260 KB | 446 names, 10 KB used of 32 KB allocated | unchanged: `TestPAL: PASSED (106 test(s), 0 failed)`, 105 objects after a final collection (0.339 ms) |
+| P16 | TestPAL (112 tests) | 1 157 KB | 2 328 KB | 450 names, 10 KB used of 32 KB allocated | `TestPAL: PASSED (112 test(s), 0 failed)`: the SHA-1 test and the 5 PakFile tests join; `Reflection: 30 classes, 21 structs, 6 enums, 14 functions, 280 properties, 2 packages; construction heap 41 KB` (the editor-only test class); 107 objects after a final collection (0.340 ms). The peak grows from 849 KB with the pak tests' buffers (a 70 000-byte entry, several copies of the test pak) |
+| P16 | ThirdPerson | | 0.9 MB | | 60 FPS, same Draw3D numbers (`boxes=343 culled=291 backfaces=173 tris=278 keep=254 drop=24 clip=0 emit=254` every 30 frames) |
 | P13 | ThirdPerson | | 0.9 MB | | the object system starts (`UObject array: 8192 objects, 98304 bytes`, `Object system started: 8192 object slots, transient package /Engine/Transient`); 60 FPS, same Draw3D numbers (`boxes=343 culled=291 backfaces=173 tris=278 keep=254 drop=24 clip=0 emit=254` every 30 frames). The overlay rounds to 0.1 MB: with the 692 KB image, the heap high-water is about 180 to 280 KB (P11: about 90 to 190 KB), 96 KB of it the object array |
 
 **P10 garbage collection** (TestPAL, `System.CoreUObject.GarbageCollection.Budget`: a chain of 2 000 objects from one

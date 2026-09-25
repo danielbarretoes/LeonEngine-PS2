@@ -272,20 +272,53 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 - 339 tests; the golden tables and the Win64 frames (Starter by default and by name, the render test map migrated to
   a `.lmap`) are unchanged; the PS2 ELFs are unchanged.
 
+### Done — Cook, `.lpak` and staging (P16, 0.17.0)
+
+([LeonMapping — P16](LeonMapping.md#p16--cook-lpak-and-staging), [ASSET_FORMATS — Paks](../ASSET_FORMATS.md#paks--lpak),
+[TOOLS — The cook](../TOOLS.md#the-cook), [BUILD — Staging and Shipping](../BUILD.md#staging-and-shipping)):
+
+- **PakFile** (Runtime, every platform): `.lpak` files (raw entries, an index sorted by the CRC-32 of the lowercased
+  path with a SHA-1 per entry, a 44-byte `FPakInfo` footer with the magic `'LPAK'`), `FPakFile`, and
+  `FPakPlatformFile` on top of the physical platform file: the desktop `FEngineLoop::PreInit` mounts
+  `<Project>/Content/Paks/*.lpak` (and the engine's) before the config loads; Shipping reads only from its paks.
+  `FPakWriter` and `Programs/LeonPak` (UnrealPak: `-create`, `-list`, `-test`, `-extract`, `-align=2048`) write them
+  deterministically. Core has `FSHA1`.
+- **TargetPlatform** (Developer): `ITargetPlatform` / `ITargetPlatformManagerModule` with Win64 (identity) and a PS2
+  stub.
+- **The cook** (`-run=Cook -TargetPlatform=Win64|PS2`): seeds from the maps (`MapsToCook`, else every map under
+  `/Game/Maps`), `DirectoriesToAlwaysCook` (`BaseGame.ini` cooks `/Engine/BasicShapes`) and every path the config
+  names; the closure over the packages' tables (hard imports and soft references); cooked packages without the
+  editor-only data (`UObject::IsEditorOnly`: the assets' and the worlds' import data stay out) and with the target's
+  name; the config (no Editor ini), the shaders and the `.lproj` staged beside them; two cooks give the same bytes.
+- **Staging**: `BuildCookRun.bat -project= -platform=Win64 -build -cook -stage -pak [-run]` builds the game (Shipping by
+  default), cooks, paks the cooked folder into `<Project>/Content/Paks/<Project>-Win64.lpak` under the mount point
+  `../../../` and stages it in `<Project>/Saved/StagedBuilds/Win64/` (UE's layout); the staged game finds its folders
+  (`FPaths::IsStaged`) and reads everything from the pak. The staged Shipping build of the engine's content renders the
+  Development frame byte for byte; CI runs a Development staged build headless.
+- Captures are unattended: `-Screenshot` / `-ExitAfterFrames` runs ignore the mouse and the keyboard
+  (`UGameViewportClient::SetIgnoreInput`), so a capture no longer depends on the mouse.
+- 350 tests; the golden tables and the Win64 frames are unchanged; the engine content was resaved for 0.17.0 (the
+  package summary records the engine version).
+
 ### Next
 
 - Later: move the character movement code from `ACharacter` into `UCharacterMovementComponent` (UE's
   `PerformMovement`, `MovementMode`, `Velocity`, `CurrentFloor`); a cached `ComponentToWorld`; tick functions.
-- **P16:** the cook (`UCookCommandlet`, LeonEd) follows `FLinker::ImportMap` and `SoftPackageReferenceList`
-  (`FLinkerLoad::CreateLinker(nullptr, ...)` reads the tables without loading) from the maps (`GameDefaultMap`, a
-  project's maps in `/Game/Maps`: a map's imports are its meshes, materials and textures in `<Map>/Meshes` and
-  `<Map>/Materials`, and the engine's basic shapes and default material) and `DirectoriesToAlwaysCook` instead of
-  cooking every package, drops the maps' editor-only `AssetImportData`, uses `Developer/TargetPlatform` for
-  `-TargetPlatform=`, stages the config (the Editor config is not staged) and the shaders (`Engine/Shaders`), and packs
-  the files into `.lpak`.
 - **P17:** ShooterGame's `Config/DefaultEditor.ini` gives the map importer its rules (`BombSite`, `BuyZone`) and
   `RequiredTags`; `de_leon` is built in Blender, exported to `SourceArt/Maps/de_leon.glb` and imported with
   `-type=Map -dest=/Game/Maps/de_leon` (its `ImportList.ini`); `GameDefaultMap=/Game/Maps/de_leon`.
+- **P17 and the cook / staging:** ShooterGame is a code project, so BuildCookRun builds its own `Game` target
+  (`Source/ShooterGame.Target.cmake`, `-Project=` passed to Build.bat) instead of LeonGame and stages
+  `ShooterGame/Binaries/Win64/ShooterGame-Win64-Shipping.exe`; its `Config/DefaultGame.ini` lists what no map
+  references (`+DirectoriesToAlwaysCook=(Path="/Game/...")` for the weapons, sounds, UI and anything loaded by path,
+  or `+MapsToCook` when not every map under `/Game/Maps` ships), and its `Config/DefaultEditor.ini` is never staged. A
+  compiled-in project finds its staged folder through `FPaths::IsStaged` like LeonGame (the project name comes from
+  `LEON_PROJECT_NAME`). Soft references in its classes' defaults (a `TSoftObjectPtr` in a CDO) are not seen by the
+  closure, which reads packages: list those folders in `DirectoriesToAlwaysCook`. The G6 smoke can run the staged
+  build (`BuildCookRun -run "-addcmdline=-nullrhi ..."`).
+- Cook follow-ups: `-iterate` (cook only what changed), an asset registry, compressed paks, the PS2 target's formats
+  (PSMT8 / PSMT4 textures, `LPS2` v2 meshes, ADPCM) with a pak aligned to 2048 on `cdrom0:` mounted by the PS2
+  launch.
 - Replication: the ENet networking was removed in 0.12.0 (local tag `archive/net-enet-0.11`); it returns as
   UObject replication (`UNetDriver`, replicated properties) — `Runtime/Engine/Classes/Engine/NetDriver.h`.
 
@@ -297,7 +330,8 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 - Renderer through RHI command lists instead of direct GL calls (the Engine ↔ Renderer cycle is gone since P13); a
   render thread (the scene proxies are the seam).
 - `UNavigationSystemBase` seam so NavigationSystem can move to its own module.
-- `PS2TargetPlatform` Developer module (cook formats for PS2: textures, LPS2 meshes).
+- The PS2 target platform's formats (the TargetPlatform module's PS2 stub: textures, LPS2 meshes, ADPCM) and a pak on
+  `cdrom0:` mounted by the PS2 launch.
 - Texture mipmaps on PS2 (GS MIPTBP registers) — fixes floor moiré in ThirdPerson.
 - AutomationTool homologue (`RunLAT`: build → cook → stage).
 

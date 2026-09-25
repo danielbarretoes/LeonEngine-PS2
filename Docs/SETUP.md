@@ -58,7 +58,7 @@ Engine\Build\BatchFiles\RunTests.bat -automation=System.Core.Containers
 Engine\Build\BatchFiles\RunTests.bat -automation=System.JoltPhysics
 ```
 
-`TestPAL` runs the Core, CoreUObject, Json and Projects automation tests on any platform, and ends with
+`TestPAL` runs the Core, CoreUObject, Json, Projects and PakFile automation tests on any platform, and ends with
 `TestPAL: PASSED (N test(s), 0 failed)` plus memory and name-pool numbers:
 
 ```bat
@@ -156,10 +156,11 @@ engine program instead (`Engine\Binaries\PS2\<Name>.elf`, built with `Build.bat 
 Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build
 ```
 
-TestPAL runs the Core, CoreUObject, Json and Projects automation tests on the EE (73 on PS2: Core 43, CoreUObject 27,
-Json 2, Projects 1; the platform-file, config-cache, log-file and real-descriptor tests are desktop-only) and
-logs to the EE console. With the EE console enabled (see [PCSX2 notes](#pcsx2-notes)), read
-`%USERPROFILE%\Documents\PCSX2\logs\emulog.txt` for the `TestPAL: PASSED (73 test(s), 0 failed)` line and the
+TestPAL runs the Core, CoreUObject, Json, Projects and PakFile automation tests on the EE (112 on PS2: Core 44,
+CoreUObject 60, Json 2, Projects 1, PakFile 5; the platform-file, config-cache, log-file, real-descriptor, file-package
+and SaveConfig tests are desktop-only) and logs to the EE console. With the EE console enabled (see
+[PCSX2 notes](#pcsx2-notes)), read `%USERPROFILE%\Documents\PCSX2\logs\emulog.txt` for the
+`TestPAL: PASSED (112 test(s), 0 failed)` line and the
 `LogTestPAL` reflection / object-array / memory / name-pool lines; their numbers are tracked in
 [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md).
 

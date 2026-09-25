@@ -13,12 +13,12 @@ makes).
 | --- | --- | --- |
 | Factories | `UFactory` (`SupportedClass`, `Formats`, `FactoryCreateNew` / `FactoryCreateBinary` / `FactoryCreateFile`, `StaticImportObject`, `ApplyImportSettings`, `CreateOrOverwriteAsset`), `UTextureFactory` (stb_image: the engine's only image decoder), `UFbxFactory` (FBX, OBJ: static / skeletal meshes, animations), `UGLTFImportFactory`, `UGLTFMapFactory` (glTF scenes as `.lmap` maps, with its rules in `UMapImportSettings`), `USoundFactory`, `UMaterialFactoryNew` | `Classes/Factories/` |
 | Reimport | `FReimportHandler` (the import factories implement it), `FReimportManager`, `EReimportResult` | `Public/EditorReimportHandler.h` |
-| Commandlets | `UImportAssetsCommandlet`, `UResavePackagesCommandlet`, `UValidateAssetsCommandlet`, `UCookCommandlet` (minimal before P16) | `Classes/Commandlets/` |
+| Commandlets | `UImportAssetsCommandlet`, `UResavePackagesCommandlet`, `UValidateAssetsCommandlet`, `UCookCommandlet` (cook by the book for a target platform since P16: seeds from the maps and the config, the dependency closure, cooked packages without editor-only data, the config and shaders staged; [TOOLS.md](../../../../Docs/TOOLS.md#the-cook)) | `Classes/Commandlets/` |
 | Helpers | `FAssetImportUtils` (UE prefixes, package files and saves, content scans), `CommandletHelpers` (the `-run=` lookup) | `Public/` |
 
 Imported assets keep their source in their `UAssetImportData` (Engine, editor-only): the file relative to the engine or
 project folder, its MD5 and the import settings, never a timestamp, so a reimport saves the same bytes.
 
-Dependencies (`LeonEd.Build.cmake`): public `Core`, `CoreUObject`, `Engine`; private `RenderCore`, `AnimationCore`,
+Dependencies (`LeonEd.Build.cmake`): public `Core`, `CoreUObject`, `Engine`, `TargetPlatform` (the cook's platforms); private `RenderCore`, `AnimationCore`,
 `MeshUtilities`, `Json` (the map nodes' extras), `STB`. Log category: `LogLeonEd` (the cook logs to `LogCook`). Tests: `Private/Tests`
 (`System.LeonEd.*`), writing under the program's `Intermediate/Tests/LeonEd` through a `/LeonEdTest/` mount point.

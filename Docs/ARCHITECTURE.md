@@ -16,15 +16,16 @@ source layout, module architecture and Epic naming, and is built with CMake thro
 ```text
 LeonEngine-PS2/
 ├── Engine/
-│   ├── Build/                 # BatchFiles (Build, Clean, Rebuild, RunTests, Cook, FormatCode, Lint, …), Build.version
-│   ├── Config/                # BaseEngine.ini, BaseInput.ini, BaseEditor.ini (first config layer)
+│   ├── Build/                 # BatchFiles (Build, Clean, Rebuild, RunTests, Cook, BuildCookRun, FormatCode, Lint, …),
+│   │                          #   Build.version
+│   ├── Config/                # BaseEngine.ini, BaseGame.ini, BaseInput.ini, BaseEditor.ini (first config layer)
 │   ├── Content/               # engine content: .lasset packages (EngineMaterials, EngineResources, BasicShapes),
 │   │                          #   .lmap maps (Maps: Entry, Template_Default, AxisTest)
 │   ├── SourceArt/             # source files of the imported engine assets + ImportList.ini (outside Content, as UE)
 │   ├── Shaders/               # GLSL (desktop renderer)
 │   ├── Source/
 │   │   ├── Runtime/           # modules that ship in games
-│   │   ├── Developer/         # tool-only modules (import)
+│   │   ├── Developer/         # tool-only modules (import, the cook's target platforms)
 │   │   ├── Editor/            # editor modules: LeonEd (factories, commandlets)
 │   │   ├── Programs/          # standalone programs + LeonBuildTool
 │   │   ├── ThirdParty/        # external modules (<Lib>/<Lib>.Build.cmake)
@@ -49,9 +50,9 @@ module style) — `Game/ThirdPerson/Source/ThirdPerson` is flat.
 | Layer | Folder | Contents | May depend on |
 | --- | --- | --- | --- |
 | **Runtime** | `Engine/Source/Runtime` | Core, HAL, application, RHI, rendering, gameplay framework, … | Runtime, ThirdParty |
-| **Developer** | `Engine/Source/Developer` | `MeshUtilities` (DCC import to mesh data) | Runtime, Developer, ThirdParty |
+| **Developer** | `Engine/Source/Developer` | `MeshUtilities` (DCC import to mesh data), `TargetPlatform` (the cook's platforms) | Runtime, Developer, ThirdParty |
 | **Editor** | `Engine/Source/Editor` | `LeonEd` (factories, reimport, commandlets; UE: UnrealEd): `TYPE Editor`, desktop only, linked by programs and never by a game target (LeonBuildTool rejects it) | Runtime, Developer, Editor, ThirdParty |
-| **Programs** | `Engine/Source/Programs` | `LeonCook`, `LeonAutomationTests`, `TestPAL`, `BlankProgram`, `LeonBuildTool` (CMake scripts, not a module) | anything |
+| **Programs** | `Engine/Source/Programs` | `LeonCook`, `LeonPak`, `LeonAutomationTests`, `TestPAL`, `BlankProgram`, `LeonBuildTool` (CMake scripts, not a module) | anything |
 | **ThirdParty** | `Engine/Source/ThirdParty` | External modules (`TYPE External`): GLFW, Glad, STB, MiniAudio, UFBX, CGLTF, TinyObjLoader | — |
 | **Platform extension** | `Engine/Platforms/PS2` | PS2 halves of `Core`, `ApplicationCore`, `Launch` + the `PS2RHI` module; toolchain, Docker image, `PS2Engine.ini` | same as the module it extends |
 | **Plugins** | `Engine/Plugins/Runtime/JoltPhysics` | `JoltPhysics` module + its third-party `JoltLib` (Win64 only) | Runtime |
@@ -99,18 +100,19 @@ Full reference: [BUILD.md](BUILD.md).
 | --- | --- | --- | --- | --- | --- |
 | `LeonGame` | `Engine/Source/LeonGame.Target.cmake` | Game | Win64 | `Launch` | `Engine AIModule`; `WITH_ENGINE=1`; creates `GEngine` and opens a map (`LeonGame [<map>]`, `-map=<map>`) |
 | `ThirdPerson` | `Game/ThirdPerson/Source/ThirdPerson.Target.cmake` | Game | PS2 | `Launch` | project module `ThirdPerson`; `COMPILE_AGAINST_ENGINE OFF` → `WITH_ENGINE=0` |
-| `LeonCook` | `Engine/Source/Programs/LeonCook/` | Program | Desktop | `LeonCook` | `Engine`, `LeonEd`, no renderer or RHI; `LeonCook [<Project>.lproj] -run=<Commandlet>` makes the `U<Name>Commandlet` class and calls `Main` (UE: `UE4Editor-Cmd`) |
+| `LeonCook` | `Engine/Source/Programs/LeonCook/` | Program | Desktop | `LeonCook` | `Engine`, `LeonEd` (→ `TargetPlatform`), no renderer or RHI; `LeonCook [<Project>.lproj] -run=<Commandlet>` makes the `U<Name>Commandlet` class and calls `Main` (UE: `UE4Editor-Cmd`) |
+| `LeonPak` | `Engine/Source/Programs/LeonPak/` | Program | Desktop | `LeonPak` | `PakFile`; creates, lists, tests and extracts `.lpak` files (UE: UnrealPak) |
 | `LeonAutomationTests` | `Engine/Source/Programs/LeonAutomationTests/` | Program | Desktop | `LeonAutomationTests` | every desktop Runtime / Developer / Editor module except `Launch`, + `JoltPhysics` plugin; `COLLECT_AUTOMATION_TESTS` |
-| `TestPAL` | `Engine/Source/Programs/TestPAL/` | Program | all | `TestPAL` | `Core`, `CoreUObject`, `Projects` (→ `Json`); `COLLECT_AUTOMATION_TESTS`; runs their automation tests (PS2 included) and logs the reflection budget |
+| `TestPAL` | `Engine/Source/Programs/TestPAL/` | Program | all | `TestPAL` | `Core`, `CoreUObject`, `Projects` (→ `Json`), `PakFile`; `COLLECT_AUTOMATION_TESTS`; runs their automation tests (PS2 included) and logs the reflection budget |
 | `BlankProgram` | `Engine/Source/Programs/BlankProgram/` | Program | all | `BlankProgram` | starts the module table and prints the platform (CI builds it for PS2) |
 
 Module closures in practice:
 
 - **PS2 `ThirdPerson`**: `Core`, `CoreUObject` (through InputCore, P13), `Launch`, `ThirdPerson`, `InputCore`,
   `ApplicationCore`, `RHI`, `PS2RHI`, `Projects`, `Json`.
-- **Win64 `LeonGame`**: everything reachable from `Launch` (desktop private dep `Engine`) +
-  `AIModule` — every desktop Runtime module (`CoreUObject`, `Json` and `Projects` included), no Developer modules;
-  plugins are disabled by default, so `JoltPhysics` is not linked.
+- **Win64 `LeonGame`**: everything reachable from `Launch` (desktop private deps `Engine` and `PakFile`) +
+  `AIModule` — every desktop Runtime module (`CoreUObject`, `Json`, `Projects` and `PakFile` included), no Developer
+  modules; plugins are disabled by default, so `JoltPhysics` is not linked.
 
 ---
 
@@ -130,6 +132,7 @@ flowchart BT
     Launch
     Projects
     Json
+    PakFile
     EngineSettings
     PhysicsCore
     AnimationCore
@@ -143,12 +146,14 @@ flowchart BT
   end
   subgraph Developer [Engine/Source/Developer]
     MeshUtilities
+    TargetPlatform
   end
   subgraph Editor [Engine/Source/Editor]
     LeonEd
   end
   subgraph Programs [Engine/Source/Programs]
     LeonCook
+    LeonPak
     LeonAutomationTests
     TestPAL
     BlankProgram
@@ -205,6 +210,7 @@ flowchart BT
   MeshUtilities --> AnimationCore
   LeonEd --> CoreUObject
   LeonEd --> Engine
+  LeonEd --> TargetPlatform
   LeonEd -.-> RenderCore
   LeonEd -.-> AnimationCore
   LeonEd -.-> MeshUtilities
@@ -215,6 +221,9 @@ flowchart BT
   JoltPhysics -.-> Engine
   Projects --> Json
   Launch -.-> Projects
+  Launch -. "Desktop" .-> PakFile
+  LeonPak -.-> PakFile
+  TestPAL -.-> PakFile
   ThirdPerson --> InputCore
   ThirdPerson --> ApplicationCore
   ThirdPerson -. "include-only" .-> Launch
@@ -227,7 +236,10 @@ thick = `CIRCULAR_DEPENDENCIES`. `Projects` (→ `Json`) is a private dependency
 `.lproj` in `PreInit`; every game target therefore links both, on every platform. `LeonAutomationTests` and
 `BlankProgram` depend on Core only, `TestPAL`
 on Core, CoreUObject and Projects; `LeonAutomationTests` links `CoreUObject` through its target's module list.
-`CoreUObject` depends on Core only; since P12 the gameplay modules are reflected and depend on it: `Engine` and
+`PakFile` (P16) depends on Core only and builds for every platform; the desktop `Launch` links it to mount the paks
+before the config loads, and `TestPAL` links it for its tests (the PS2 game does not yet). `TargetPlatform` (Developer)
+depends on Core; `LeonEd` links it for the cook. `CoreUObject` depends on Core only; since P12 the gameplay modules are
+reflected and depend on it: `Engine` and
 `AIModule`, and `UMG` (`UUserWidget`); since P13 also `EngineSettings` (the config classes) and `InputCore` (the
 reflected `FKey`), so every game target links it, the PS2 one included. `AnimationCore` is plain data again since P14:
 the anim instances moved to Engine with the animation assets. `Launch` links
@@ -265,7 +277,7 @@ paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable 
 
 | Module | Role | Key types | Platforms |
 | --- | --- | --- | --- |
-| **Core** | HAL, memory, assertions, templates, containers, strings / names / text, logging, delegates, automation tests, math, platform file layer, archives, paths, config, command line, misc types (GUID, MD5, date / time), module manager, ticker, engine exit flag, stats-overlay state | `FPlatformMemory`, `FPlatformTime`, `FPlatformMath`, `FPlatformMisc`, `FPlatformProcess`, `FPlatformProperties`, `FMemory`, `TArray`, `TMap`, `TSet`, `FString`, `FName`, `FText`, `TDelegate`, `UE_LOG`, `GLog`, `FAutomationTestFramework`, `FMath`, `FVector`, `FRotator`, `FQuat`, `FMatrix`, `FTransform`, `IPlatformFile`, `FPlatformFileManager`, `IFileManager`, `FArchive`, `FMemoryReader`, `FMemoryWriter`, `FPaths`, `FFileHelper`, `FConfigCacheIni` / `GConfig`, `FCommandLine`, `FParse`, `FApp`, `FGuid`, `FMD5`, `FDateTime`, `FOutputDeviceFile`, `FModuleManager`, `FTicker`, `FStatsOverlay` | all |
+| **Core** | HAL, memory, assertions, templates, containers, strings / names / text, logging, delegates, automation tests, math, platform file layer, archives, paths, config, command line, misc types (GUID, MD5, date / time), module manager, ticker, engine exit flag, stats-overlay state | `FPlatformMemory`, `FPlatformTime`, `FPlatformMath`, `FPlatformMisc`, `FPlatformProcess`, `FPlatformProperties`, `FMemory`, `TArray`, `TMap`, `TSet`, `FString`, `FName`, `FText`, `TDelegate`, `UE_LOG`, `GLog`, `FAutomationTestFramework`, `FMath`, `FVector`, `FRotator`, `FQuat`, `FMatrix`, `FTransform`, `IPlatformFile`, `FPlatformFileManager`, `IFileManager`, `FArchive`, `FMemoryReader`, `FMemoryWriter`, `FPaths`, `FFileHelper`, `FConfigCacheIni` / `GConfig`, `FCommandLine`, `FParse`, `FApp`, `FGuid`, `FMD5`, `FSHA1`, `FDateTime`, `FOutputDeviceFile`, `FModuleManager`, `FTicker`, `FStatsOverlay` | all |
 | **CoreUObject** | `UObject` and its reflection: object model, classes / structs / enums / functions, properties, object creation and lookup, the object array, casts, the runtime side of LeonHeaderTool's generated code; garbage collection, weak / strong / soft references, `UPROPERTY(Config)`, `UFUNCTION(Exec)`; packages: `.lasset` / `.lmap` saving and synchronous loading with tagged properties, bulk data and long package names ([README](../Engine/Source/Runtime/CoreUObject/README.md), [ASSET_FORMATS](ASSET_FORMATS.md#packages--lasset--lmap)) | `UObject`, `UClass`, `UScriptStruct`, `UEnum`, `UFunction`, `UPackage`, `FProperty` (+ every property type), `FObjectInitializer`, `NewObject`, `FindObject`, `GUObjectArray`, `TObjectIterator`, `Cast`, `TSubclassOf`, `CollectGarbage`, `FGCObject`, `FReferenceCollector`, `TWeakObjectPtr`, `TStrongObjectPtr`, `FSoftObjectPath`, `TSoftObjectPtr`, `LoadConfig` / `SaveConfig`, `CallFunctionByNameWithArguments`, `UPackage::SavePackage`, `LoadPackage`, `LoadObject`, `FLinkerLoad` / `FLinkerSave`, `FPropertyTag`, `FByteBulkData`, `FPackageName` | all |
 | **InputCore** | Keys: the reflected `FKey` (named by an `FName`, config text `Key=SpaceBar`) and their details | `FKey`, `EKeys`, `FKeyDetails`, `FInputCoreModule` | all |
 | **EngineSettings** | The project's map, game mode and general settings as config classes | `UGameMapsSettings`, `FGameModeName`, `UGeneralProjectSettings` | all |
@@ -275,6 +287,7 @@ paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable 
 | **PS2RHI** | Graphics Synthesizer immediate-mode API (platform extension module) | `FPS2RHI`, `FPS2Texture`, `FPS2Material`, `FPS2ViewTarget`, `FPS2DirectionalLight` | PS2 |
 | **Launch** | Entry points and engine loop | `GuardedMain`, `FEngineLoop` (an `IEngineLoop` with the engine), `GEngineLoop`, `FPlatformEngineLoopHooks` | all |
 | **Projects** | `.lproj` / `.lplugin` descriptors (UE `.uproject` / `.uplugin` fields), current project, plugin discovery | `FProjectDescriptor`, `FPluginDescriptor`, `FModuleDescriptor`, `FPluginReferenceDescriptor`, `IProjectManager`, `IPluginManager`, `IPlugin` | all |
+| **PakFile** | `.lpak` files (P16; UE: PakFile): the format, the reader, the platform file that mounts them in the chain, and the writer LeonPak uses ([ASSET_FORMATS.md](ASSET_FORMATS.md#paks--lpak)) | `FPakInfo`, `FPakEntry`, `FPakIndexEntry`, `FPakFile`, `FPakPlatformFile`, `FPakWriter`, `FPakInputPair`, `LogPakFile` | all |
 | **Json** | Native JSON DOM, streaming reader / writer, serializer (UE API, no exceptions) | `FJsonObject`, `FJsonValue`, `TJsonReader`, `TJsonWriter`, `FJsonSerializer` | all |
 | **PhysicsCore** | Physics types and backend seam | `IPhysicsBackend`, `EPhysicsBackend`, `FHitResult`, `FBodyInstance`, `EBodyCollisionShape`, `FCollisionQueryParams`, `FCollisionShape`, `FTriangleMeshCollision` | Desktop |
 | **AnimationCore** | The plain skeletal data under Engine's animation assets, which the FBX import produces (P14; UE's AnimationCore holds the low-level animation types) | `FSkeletalVertex`, `FReferenceSkeleton`, `FRawAnimSequenceTrack`, `FRawAnimSequence`, `FSkeletalMeshData` | Desktop |
@@ -286,7 +299,8 @@ paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable 
 | **Engine** | The engine object and maps (`.lmap`, P15), gameplay framework as UObjects (P12), world, levels as actors (P13), input, the viewport client and the console (P13), physics scene, the asset classes and their import data (P14), the render interfaces (P13) | `UEngine` / `GEngine`, `UGameEngine`, `IEngineLoop`, `FURL`, `UGameViewportClient`, `FViewport`, `UPlayer`, `ULocalPlayer`, `UGameInstance` / `FWorldContext`, `UWorld`, `ULevel`, `FActorSpawnParameters`, `AActor`, `AInfo`, `UActorComponent`, `USceneComponent`, `UPrimitiveComponent`, `UShapeComponent`, `UCapsuleComponent`, `UBoxComponent`, `USphereComponent`, `UMeshComponent`, `UStaticMeshComponent`, `USkeletalMeshComponent`, `UCameraComponent`, `USpringArmComponent`, `UMovementComponent`, `UPawnMovementComponent`, `UCharacterMovementComponent`, `APawn`, `ACharacter`, `AController`, `APlayerController`, `AGameModeBase`, `AGameMode` (`MatchState`), `AGameStateBase`, `AGameState`, `APlayerState`, `AHUD`, `APlayerCameraManager`, `ADefaultPawn`, `UFloatingPawnMovement`, `URotatingMovementComponent`, `UBobbingMovementComponent`, `UOrbitMovementComponent`, `UInputSettings`, `UPlayerInput`, `UInputComponent`, `UGameplayStatics`, `FPhysScene`, `UNavigationSystem`; `AStaticMeshActor`, `APlayerStart`, `ATargetPoint`, `AVolume`, `ATriggerVolume`, `ABlockingVolume`, `APainCausingVolume`, `ALight`, `ADirectionalLight`, `APointLight`, `ULightComponent` (+ base, local, directional, point), `AWorldSettings`, `ACameraActor`, `ANavigationWaypoint`, `UInteractableComponent`; `UTexture` / `UTexture2D`, `UStaticMesh` (`FStaticMeshLODResources`, `FStaticMaterial`), `UBodySetup` (`FKAggregateGeom`, `FKBoxElem`, `ECollisionTraceFlag`), `UMaterialInterface` / `UMaterial` (`EMaterialShadingModel`), `USkeleton`, `USkeletalMeshSocket`, `USkeletalMesh`, `UAnimationAsset`, `UAnimSequenceBase`, `UAnimSequence`, `UBlendSpaceBase`, `UBlendSpace1D`, `UAnimInstance`, `UCharacterAnimInstance`, `USoundBase` / `USoundWave`, `UDataAsset`, `UCommandlet`, `UAssetImportData` (`FAssetImportInfo`); `FDebugDraw`, `FDebugOverlay`; `FSceneInterface`, `FPrimitiveSceneProxy`, `FLightSceneProxy`, `IRendererModule`, `FSceneViewFamily`, `FSceneView`, `FCanvas`; `LogEngine`, `LogLevel`, `LogPath`, `LogPhysics`, `LogSpawn`, `LogWorld` (`EngineLogs.h`) | Desktop |
 | **AIModule** | AI controller (a UObject actor) and behavior trees | `AAIController`, `UBehaviorTree`, `UBTComposite_Sequence`, `UBTComposite_Selector`, `UBTDecorator_Bool`, `UBTTask_Action`, `UBlackboardComponent`, `FAIChaseBehavior` | Desktop |
 | **MeshUtilities** | Static mesh import to mesh data, glTF scenes, skeletal FBX import (Developer) | `FStaticMeshBuilder`, `LoadObj`, `LoadStaticMeshFromFbx`, `LoadStaticMeshFromGltf`, `LoadGltfScene` (`FGltfScene`), `LoadSkeletalMeshFromFbx`, `LoadAnimSequenceFromFbx`, `FImportCoordinateConversion` | Desktop |
-| **LeonEd** | The editor module (Editor; UE: UnrealEd): asset factories, the map importer, reimport, the commandlets LeonCook runs | `UFactory`, `UTextureFactory`, `UFbxFactory`, `UGLTFImportFactory`, `UGLTFMapFactory`, `UMapImportSettings`, `USoundFactory`, `UMaterialFactoryNew`, `FReimportHandler`, `FReimportManager`, `UImportAssetsCommandlet`, `UResavePackagesCommandlet`, `UValidateAssetsCommandlet`, `UCookCommandlet`, `FAssetImportUtils`, `LogLeonEd` | Desktop |
+| **TargetPlatform** | The platforms the cook targets (Developer, P16; UE: TargetPlatform): Win64 (identity) and PS2 (a stub with the Win64 formats) | `ITargetPlatform`, `ITargetPlatformManagerModule`, `GetTargetPlatformManager` / `GetTargetPlatformManagerRef` | Desktop |
+| **LeonEd** | The editor module (Editor; UE: UnrealEd): asset factories, the map importer, reimport, the commandlets LeonCook runs (the cook by the book, P16) | `UFactory`, `UTextureFactory`, `UFbxFactory`, `UGLTFImportFactory`, `UGLTFMapFactory`, `UMapImportSettings`, `USoundFactory`, `UMaterialFactoryNew`, `FReimportHandler`, `FReimportManager`, `UImportAssetsCommandlet`, `UResavePackagesCommandlet`, `UValidateAssetsCommandlet`, `UCookCommandlet`, `FAssetImportUtils`, `LogLeonEd` | Desktop |
 | **JoltPhysics** (plugin) | Jolt rigid-body backend | `CreateJoltPhysicsBackend` | Win64 |
 | **ThirdPerson** (game) | PS2 third-person game | `FThirdPersonModule`, `FThirdPersonGameMode`, `FThirdPersonCharacter`, `FThirdPersonCameraBoom`, `FThirdPersonLevel` | PS2 (target) |
 
@@ -343,12 +357,12 @@ Core/Public/HAL/PlatformMemory.h                      #include COMPILED_PLATFORM
 | Console commands | `Misc/Exec.h`, `Misc/CoreMisc.h` | `FExec` (`Exec(UWorld*, Cmd, Ar)`), `FSelfRegisteringExec` / `FStaticSelfRegisteringExec` (`StaticExec` offers a command to every live handler); UObjects answer through `UObject::ProcessConsoleExec` |
 | Automation tests | `Misc/AutomationTest.h` | `IMPLEMENT_SIMPLE_AUTOMATION_TEST`, `FAutomationTestBase`, `FAutomationTestFramework::RunTests(Filter, ExcludeFlags)`; an unexpected error logged during a test fails it |
 | Math | `Math/UnrealMath.h` (from `CoreMinimal.h`) | UE 4.27's float math: `FMath` (constants, interpolation, `VRand`, line / box / plane helpers), `FVector`, `FVector2D`, `FVector4`, `FIntPoint`, `FIntVector`, `FRotator`, `FQuat`, `FMatrix` (row vectors, `V * M`) and the derived matrices (`FRotationMatrix`, `FTranslationMatrix`, `FScaleMatrix`, `FPerspectiveMatrix`, `FLookAtMatrix`, …), `FPlane`, `FBox`, `FBox2D`, `FSphere`, `FBoxSphereBounds`, `FTransform` (scalar), `FColor` / `FLinearColor`, `FRandomStream`. No `double` math; PS2 builds reject implicit float to double promotion |
-| Files | `GenericPlatform/GenericPlatformFile.h`, `HAL/PlatformFilemanager.h`, `HAL/FileManager.h`, `Misc/FileHelper.h` | `IPlatformFile` (UE's layered chain; `FPlatformFileManager::Get().GetPlatformFile()`), backends Windows (Win32), Linux (POSIX) and PS2 (read-only newlib POSIX on `host:`); `IFileManager::Get()` opens buffered `FArchive` readers / writers and walks directories; `FFileHelper::LoadFileToString` / `LoadFileToArray` / `SaveStringToFile` (writes a temporary file, then moves it) |
+| Files | `GenericPlatform/GenericPlatformFile.h`, `HAL/PlatformFilemanager.h`, `HAL/FileManager.h`, `Misc/FileHelper.h` | `IPlatformFile` (UE's layered chain; `FPlatformFileManager::Get().GetPlatformFile()` is the topmost, `FindPlatformFile(Name)` finds one), backends Windows (Win32), Linux (POSIX) and PS2 (read-only newlib POSIX on `host:`), and PakFile's `FPakPlatformFile` on top of them when a build has paks (§13); `IFileManager::Get()` opens buffered `FArchive` readers / writers and walks directories; `FFileHelper::LoadFileToString` / `LoadFileToArray` / `SaveStringToFile` (writes a temporary file, then moves it) |
 | Archives | `Serialization/Archive.h`, `MemoryReader.h`, `MemoryWriter.h`, `BufferArchive.h`, `UObject/ObjectVersion.h`, `Misc/EngineVersion.h` | `FArchive` with `<<` for the scalars, `FString` (UTF-8, length + 1), `FName` / `FText` (as strings), `TArray` / `TSet` / `TMap` and the math types, and virtual `UObject*` / `GetLinker()` hooks that do nothing in a plain archive (CoreUObject's package linkers write `FName` as a name table index and `UObject*` as an `FPackageIndex`); `UEVer()` is the package format version (`ELeonPackageVersion`); `FMemoryReader`, `FMemoryWriter`, `FBufferArchive`; `FEngineVersion` |
-| Paths | `Misc/Paths.h` | UE's `FPaths` over `FString` (`EngineDir`, `ProjectDir`, `ProjectContentDir`, `ProjectSavedDir`, `ProjectLogDir`, `Combine`, `/` operator, `NormalizeFilename`, `ConvertRelativePathToFull`, `MakePathRelativeTo`, …). Desktop directories are absolute and come from the generated module-init globals (`GLeonEngineDirFromBaseDir`, `GLeonProjectDirFromBaseDir`); PS2 uses the staged layout under the ELF folder (`<Base>/Engine/`, `<Base>/<Project>/`). (The legacy `ResolveLegacyContentPath` went in P15: the renderer takes its shaders from `EngineDir()` / `Shaders`.) |
+| Paths | `Misc/Paths.h` | UE's `FPaths` over `FString` (`EngineDir`, `ProjectDir`, `ProjectContentDir`, `ProjectSavedDir`, `ProjectLogDir`, `Combine`, `/` operator, `NormalizeFilename`, `ConvertRelativePathToFull`, `MakePathRelativeTo`, …). Desktop directories are absolute and come from the generated module-init globals (`GLeonEngineDirFromBaseDir`, `GLeonProjectDirFromBaseDir`), except in a staged build (`IsStaged`, P16: UE's `../../../Engine/` and the project folder above `Binaries/`); PS2 uses the staged layout under the ELF folder (`<Base>/Engine/`, `<Base>/<Project>/`). (The legacy `ResolveLegacyContentPath` went in P15: the renderer takes its shaders from `EngineDir()` / `Shaders`.) |
 | Command line | `Misc/CommandLine.h`, `Misc/Parse.h`, `Misc/App.h`, `HAL/PlatformProcess.h` | `FCommandLine::Set` / `Get` (built from `argv` in every `main`), `FParse::Param` / `Value` / `Token` / `Command` with UE's rules (`-` or `/` switches, quoted values, word boundaries), `FApp` (project name, build configuration), `FPlatformProcess::BaseDir()` (from `argv[0]` on PS2) |
 | Config | `Misc/ConfigCacheIni.h` | `FConfigCacheIni` / `GConfig` with `GEngineIni`, `GGameIni`, `GInputIni`, `GEditorIni`. Layers (D8): `Engine/Config/Base.ini` → `Base<T>.ini` → `Engine/Platforms/<P>/Config/<P><T>.ini` → `<Project>/Config/Default<T>.ini` → `<Project>/Platforms/<P>/Config/<P><T>.ini` → `<Project>/Saved/Config/<Plat>/<T>.ini` (desktop only; `Flush` writes the user changes there). `+ - . !` array operators, quoted values, `-ini:Engine:[Section]:Key=Value` overrides |
-| Misc types | `Misc/Guid.h`, `Misc/SecureHash.h`, `Misc/Crc.h`, `Misc/DateTime.h`, `Misc/Timespan.h` | `FGuid` (`NewGuid`, `NewDeterministicGuid` from MD5), `FMD5` / `FMD5Hash`, `FCrc`, `FDateTime` / `FTimespan` (integer ticks, no double) |
+| Misc types | `Misc/Guid.h`, `Misc/SecureHash.h`, `Misc/Crc.h`, `Misc/DateTime.h`, `Misc/Timespan.h` | `FGuid` (`NewGuid`, `NewDeterministicGuid` from MD5), `FMD5` / `FMD5Hash`, `FSHA1` / `FSHAHash` (the paks' hashes), `FCrc`, `FDateTime` / `FTimespan` (integer ticks, no double) |
 
 ### Coordinates
 
@@ -475,13 +489,15 @@ GuardedMain: GEngineLoop.PreInit → (exit if requested) → Init → while !IsE
 ### `WITH_ENGINE=1` — desktop (`LeonGame`)
 
 - `PreInit` (every platform, UE's order): `FPlatformProcess::SetArgV0` + `FCommandLine::Set` → the project
-  (`-project=<.lproj>`, a first argument ending in `.lproj`, or the target's own `LEON_PROJECT_NAME`) →
-  `FConfigCacheIni::InitializeConfigSystem()` → log file (desktop) and `[Core.Log]` / `-LogCmds` verbosity →
+  (`-project=<.lproj>`, a first argument ending in `.lproj`, the target's own `LEON_PROJECT_NAME`, or a staged build's
+  folder) → the platform file chain (desktop, UE's `LaunchCheckForFileOverride`: `FPakPlatformFile` goes on top and
+  mounts the paks when the build has some, always in Shipping, §13) → `FConfigCacheIni::InitializeConfigSystem()` → log file (desktop) and `[Core.Log]` / `-LogCmds` verbosity →
   `IProjectManager::LoadProjectFile` → the platform application, the main window
   (`[/Script/Engine.GameViewportClient] DefaultResolutionX/Y`, 1280 × 720) and the RHI on its context (`RHIInit`; none
   with `-nullrhi`, when `FApp::CanEverRender()` is false) → the statically linked modules.
 - `Init` (UE's `FEngineLoop::Init`): reads Leon's capture switches (`-Screenshot=<file.bmp>`, `-ExitAfterFrames=N`,
-  `-tick=<Hz>`), creates `GEngine` of the class `[/Script/Engine.Engine] GameEngine=` names (`UGameEngine`, in the
+  `-tick=<Hz>`; a capture is an unattended run, `FApp::IsUnattended`, so the viewport client ignores the OS input and
+  the mouse cannot move the view), creates `GEngine` of the class `[/Script/Engine.Engine] GameEngine=` names (`UGameEngine`, in the
   root set), queues `-ExecCmds="Cmd1;Cmd2"` (`;` or `,` separate them) in `GEngine->DeferredCommands`, then calls
   `GEngine->Init(this)` and `GEngine->Start()`. `UGameEngine::Init` starts the renderer on the window, creates the
   game instance (`GameInstanceClass`) and its world context, the viewport client (`GameViewportClientClassName`) on the
@@ -496,7 +512,7 @@ GuardedMain: GEngineLoop.PreInit → (exit if requested) → Init → while !IsE
   (`UGameViewportClient::Draw`, screenshots, present). Headless, it flushes `GLog` instead of drawing.
 - `Exit`: `GEngine->PreExit()` (the game instance shuts down, the world is destroyed and collected, the renderer
   stops while the context exists), `GEngine` leaves the root set and a last collection frees it, then module shutdown,
-  `RHIExit`, the window and the application.
+  `RHIExit`, the window and the application; the pak platform file leaves the chain last.
 - `LaunchEngineLoop.cpp` refuses `WITH_ENGINE` on non-desktop platforms (`#error`).
 
 ### `WITH_ENGINE=0` — PS2 (`ThirdPerson`)
@@ -764,8 +780,28 @@ UWorld::LineBatcher (FDebugDraw) -----------------------------------------------
 ## 13. Content and paths
 
 - File access goes through `IPlatformFile` (§6). On desktop `FPaths` points at the source tree (`Engine/`,
-  `Game/<Project>/`); on PS2 the ELF folder holds a staged copy (`RunPCSX2.ps1` copies `Engine/Config`, the PS2
-  platform config, the project's `Config/` and its `.lproj` beside the ELF).
+  `Game/<Project>/`), or at a staged build's folders; on PS2 the ELF folder holds a staged copy (`RunPCSX2.ps1` copies
+  `Engine/Config`, the PS2 platform config, the project's `Config/` and its `.lproj` beside the ELF).
+- **The platform file chain** (P16, D9, UE's): the physical platform file at the bottom and `FPakPlatformFile` on top
+  when the build has paks:
+
+  ```text
+  IFileManager / FFileHelper / FPaths::FileExists --> FPlatformFileManager::GetPlatformFile()
+    FPakPlatformFile ("PakFile")   mounted .lpak files, highest order first; a hit is served from the pak (read-only)
+      | a miss, when loose files are allowed (never in Shipping, except under Saved/), and every write
+    physical ("PhysicalFile")      Win32 / POSIX / PS2 newlib
+  ```
+
+  `FEngineLoop::PreInit` pushes it before the config loads, when `<Project>/Content/Paks/` or `Engine/Content/Paks/`
+  holds a `.lpak` (or with `-pak`; `-NoPak` never, outside Shipping), and always in Shipping, which stops without a
+  pak. Each pak mounts at
+  its mount point, a relative one taken from the executable's folder (`../../../` = the staged build's root); a lookup
+  normalizes the path and searches the index by its hash ([ASSET_FORMATS.md](ASSET_FORMATS.md#paks--lpak)).
+- **Cook and staging** (P16): LeonEd's cook (`-run=Cook -TargetPlatform=Win64|PS2`) saves the packages a game needs
+  (the maps, what they import or refer to softly, `DirectoriesToAlwaysCook`, the defaults the config names) without
+  editor-only data into `<Project>/Saved/Cooked/<Platform>/`, with the config and the shaders; `BuildCookRun.bat` paks
+  that folder and stages the game beside it (`<Project>/Saved/StagedBuilds/Win64/`), where it runs from the pak alone
+  ([TOOLS.md](TOOLS.md#buildcookrun), [BUILD.md](BUILD.md#staging-and-shipping)).
 - Assets are `.lasset` packages and maps `.lmap` packages under mount points (`/Engine/` → `Engine/Content/`,
   `/Game/` → the project's `Content/`), loaded with `LoadObject` / `LoadPackage`; the runtime reads no other asset file
   (no image, `.wav` or scene decoding: LeonEd's factories import them). `[/Script/Engine.Engine]` names the defaults
@@ -792,15 +828,19 @@ UWorld::LineBatcher (FDebugDraw) -----------------------------------------------
   through `LogLeonEd` and `LogCook`.
 - **Programs/LeonCook**: `LeonCook [<Project>.lproj] -run=<Commandlet> [arguments]` (UE: `UE4Editor-Cmd`); wrapper
   `Engine\Build\BatchFiles\Cook.bat`. Details: [TOOLS.md](TOOLS.md).
+- **Programs/LeonPak** (UE: UnrealPak): `LeonPak <out.lpak> -create=<list> [-align=N]`, `LeonPak <in.lpak> -list |
+  -test | -extract=<dir>`; **BuildCookRun** (`Engine\Build\BatchFiles\BuildCookRun.bat`, UE: `RunUAT BuildCookRun`)
+  builds, cooks, stages, paks and runs a project ([TOOLS.md](TOOLS.md#buildcookrun)).
 - **Reproducible reimport (gate G5)**: `Engine\Build\BatchFiles\CheckReimport.bat [<Project>.lproj ...]` reimports
   the content from its sources and fails when git sees a change under a `Content` folder; CI runs it.
 - **Tests**: each module keeps its tests in `<Module>/Private/Tests/`, excluded from the module library and compiled
   only into targets with `COLLECT_AUTOMATION_TESTS`. Every test is a UE automation test
-  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, named `System.<Module>.<Area>.<Name>`): 340 on Win64 — Core 46, CoreUObject 62,
-  Json 2, Projects 2, PhysicsCore 8, RenderCore 23, AnimationCore 1, Engine 129, Renderer 8, AIModule 31, MeshUtilities 8,
-  LeonEd 11, JoltPhysics 9 (a tenth, `System.JoltPhysics.Backend.DisabledFallsBack`, compiles only without the plugin). On PS2,
-  Core runs 43 (the platform-file, config-cache and log-file tests are desktop-only), CoreUObject 60 (its SaveConfig
-  and package file tests are desktop-only; the other package tests save to memory) and Projects 1.
+  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, named `System.<Module>.<Area>.<Name>`): 350 on Win64 — Core 47, CoreUObject 62,
+  Json 2, Projects 2, PakFile 5, PhysicsCore 8, RenderCore 23, AnimationCore 1, Engine 129, Renderer 8, AIModule 30,
+  MeshUtilities 8, LeonEd 16, JoltPhysics 9 (a tenth, `System.JoltPhysics.Backend.DisabledFallsBack`, compiles only
+  without the plugin). On PS2, Core runs 44 (the platform-file, config-cache and log-file tests are desktop-only),
+  CoreUObject 60 (its SaveConfig and package file tests are desktop-only; the other package tests save to memory),
+  Json 2, Projects 1 and PakFile 5 (on paks in memory).
   Reflected test fixtures live in `<Module>/Private/Tests/*.h` (LeonHeaderTool's Tests unit: CoreUObject's,
   `Engine/Private/Tests/EngineTestTypes.h`, `AIModule/Private/Tests/GameplayTestTypes.h`); tests that spawn actors
   create their world with `FScopedTestWorld`, which destroys it and collects the garbage at the end of the scope. An
@@ -810,7 +850,7 @@ UWorld::LineBatcher (FDebugDraw) -----------------------------------------------
   - `LeonAutomationTests` (Desktop) starts the module table, runs the automation tests through
     `FAutomationTestFramework` and fails if any fails. Run with `Engine\Build\BatchFiles\RunTests.bat`
     (`-automation=<filter>` runs the tests whose name contains `<filter>`).
-  - `TestPAL` (every platform; Core, CoreUObject, Json and Projects: 112 tests on Win64, 106 on PS2) runs the
+  - `TestPAL` (every platform; Core, CoreUObject, Json, Projects and PakFile: 118 tests on Win64, 112 on PS2) runs the
     automation tests and prints `TestPAL: PASSED (N test(s), 0 failed)` plus the reflection (types, construction
     heap), object array, garbage collection (`GC budget`, a final collection), package round trip (`Package budget`),
     GMalloc and name-pool numbers. On PS2 it runs in PCSX2
@@ -822,7 +862,9 @@ UWorld::LineBatcher (FDebugDraw) -----------------------------------------------
   outside the tests ([CODING_STANDARD.md §4](CODING_STANDARD.md#4-language)); `Lint.bat` and CI
   run it.
 - **CI** (`.github/workflows/ci.yml`): PS2 `ThirdPerson` + `BlankProgram` in the ps2dev image (ELF artifact);
-  Win64 `CheckBannedApis.ps1`, `Setup.bat`, `RunTests.bat`, `LeonGame` and `LeonCook`, then `CheckReimport.bat` (G5).
+  Win64 `CheckBannedApis.ps1`, `Setup.bat`, `RunTests.bat`, `LeonGame` and `LeonCook`, then `CheckReimport.bat` (G5),
+  then a staged build smoke: `BuildCookRun.bat` cooks, stages, paks and runs a content-only project headless
+  (Development).
 
 ---
 
@@ -847,4 +889,5 @@ roadmap is [NextSteps.md](UnrealEngine427/NextSteps.md).
 | Window / RHI ownership | UE's since P13: `FEngineLoop::PreInit` creates the main window and the RHI (`RHIInit`) on every platform, and the viewport client draws into it through `FViewport` (no Slate `SViewport` / `SWindow`). The PS2 window still sets up the GS display itself. |
 | Platform checks | `Core/Private/HAL/MallocAnsi.cpp` and `Misc/OutputDeviceRedirector.cpp` use `#if PLATFORM_WINDOWS` outside a platform folder. |
 | Linking | Always static (`IS_MONOLITHIC=1`), generated module table; no DLL modules or hot reload. |
+| Cook and paks (P16) | Cook by the book only (no cook on the fly, no `-iterate`, no asset registry); the PS2 target platform cooks the Win64 formats and the PS2 game mounts no pak yet; paks without compression, encryption or signatures; only Win64 stages (`BuildCookRun.bat`, a PowerShell script instead of AutomationTool). |
 | Build tool | CMake scripts instead of C# UBT; Linux is registered but not verified. Leon code builds without RTTI or C++ exceptions everywhere (D17: MSVC `/GR-`, no `/EH`, `_HAS_EXCEPTIONS=0`; GCC / Clang `-fno-rtti -fno-exceptions`); third-party libraries keep their own flags. |

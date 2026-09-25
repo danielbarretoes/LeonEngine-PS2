@@ -189,14 +189,15 @@ Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson
 `-Program <Name>` it runs an engine program instead (`Engine\Binaries\PS2\<Name>.elf`, built with
 `Build.bat <Name> PS2 <Configuration>`). PCSX2 setup notes: [Docs/SETUP.md](../../../Docs/SETUP.md#pcsx2-notes).
 
-The Core, CoreUObject, Json and Projects automation tests run on the EE through the `TestPAL` program:
+The Core, CoreUObject, Json, Projects and PakFile automation tests run on the EE through the `TestPAL` program (the
+pak tests on paks in memory):
 
 ```powershell
 Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build
 ```
 
 `UE_LOG` output goes to the EE console; read `%USERPROFILE%\Documents\PCSX2\logs\emulog.txt` for
-`TestPAL: PASSED (73 test(s), 0 failed)` and the `LogTestPAL` reflection / object-array / memory / name-pool
+`TestPAL: PASSED (112 test(s), 0 failed)` and the `LogTestPAL` reflection / object-array / memory / name-pool
 lines.
 
 ## Reference

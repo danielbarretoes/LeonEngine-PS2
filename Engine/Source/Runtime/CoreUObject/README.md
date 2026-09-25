@@ -221,7 +221,10 @@ later. Older than `VER_LEON_OLDEST_LOADABLE_PACKAGE` or newer than `VER_LEON_LAT
 **Editor-only data (D14).** A build with `WITH_EDITORONLY_DATA` saves editor-only properties unless the package has
 `PKG_FilterEditorOnly`; a build without it (PS2, Shipping) marks every package it saves `PKG_FilterEditorOnly`, and
 when it loads a package without that flag (uncooked) it logs it once and skips the editor-only tags as unknown
-names (their properties do not exist there).
+names (their properties do not exist there). A filtered package also leaves out the editor-only objects (P16, UE's
+`IsEditorOnlyObject`): an object whose `UObject::IsEditorOnly()` is true (`UAssetImportData`), or one inside it, is not
+exported, and references to it are saved as null. A `PKG_Cooked` package records the cook's target platform, the
+`CookedPlatformName` argument of `Save` / `SavePackage` / `SaveToMemory`, in the summary.
 
 ## UObject delegates
 

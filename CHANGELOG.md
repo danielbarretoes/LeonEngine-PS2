@@ -7,14 +7,21 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-The fourteenth and fifteenth steps of the Core / CoreUObject plan (P14, P15): the engine's assets become UObjects
+## [0.17.0] - 2026-09-26
+
+The fourteenth to sixteenth steps of the Core / CoreUObject plan (P14, P15, P16): the engine's assets become UObjects
 saved in `.lasset` packages, an editor module (LeonEd) imports source files into them through LeonCook's commandlets,
 and the engine content is migrated to `/Engine` packages; the legacy `.lmesh` / `.lmat` formats and run-time image and
 WAV loading are gone. Then the levels become `.lmap` map packages that `UEngine::LoadMap` opens, LeonEd imports glTF
 scenes exported from Blender as maps, the level templates become `/Engine/Maps/Entry` and
-`/Engine/Maps/Template_Default`, and the `.llev` levels, their reader and the legacy content tools are deleted.
-Behaviour, the golden tests and the Win64 frames are unchanged; the PS2 ThirdPerson ELF grows by 8 bytes of alignment
-(P14), BlankProgram and TestPAL are unchanged.
+`/Engine/Maps/Template_Default`, and the `.llev` levels, their reader and the legacy content tools are deleted. Last,
+the cook targets a platform and cooks what the maps use, `.lpak` files hold a staged build's content and mount in the
+platform file chain, and `BuildCookRun.bat` stages a Shipping game that reads nothing but its pak. Behaviour, the
+golden tests and the Win64 frames are unchanged, and the staged Shipping build renders the same frame; the engine
+content is resaved for 0.17.0 (a package records the engine version). The PS2 ThirdPerson ELF grows by 8 bytes of
+alignment (P14) and 40 bytes of text (P16: `UObject::IsEditorOnly` and its slot in the 8 CoreUObject vtables it
+links); BlankProgram is unchanged; TestPAL grows with PakFile, SHA-1 and their tests (+76 240 bytes of text; 112 tests
+on the PS2).
 
 ### Added
 
@@ -82,6 +89,44 @@ Behaviour, the golden tests and the Win64 frames are unchanged; the PS2 ThirdPer
 - 8 new tests and 9 removed with the `.llev` format in P15 (339 in all): a map with every actor class saved and loaded
   back, `LoadMap` of packages and files, the movement components, the engine maps resaved byte for byte, the axes map,
   and the map importer (every convention, reproducible reimport, required tags, the config rules).
+- **PakFile** (P16, a Runtime module for every platform; UE: PakFile;
+  [ASSET_FORMATS.md](Docs/ASSET_FORMATS.md#paks--lpak)).
+  - `.lpak` files: the entries' raw bytes, an index sorted by the CRC-32 of each lowercased path (with the path, offset,
+    size and SHA-1 of every entry, and the mount point), and a 44-byte `FPakInfo` footer (magic `'LPAK'` 0x4B41504C,
+    version, index offset and size, the index's SHA-1). No compression or encryption; an optional alignment for CD
+    sectors.
+  - `FPakFile` (opens a pak through the lower-level platform file or from memory, checks the footer and the index's
+    hash, binary search on the path hash, `Check` of every entry's SHA-1) and `FPakPlatformFile` (UE's platform file
+    wrapper: `ShouldBeUsed`, `Initialize`, `Mount` / `Unmount`, `GetPakFolders`, `FindFileInPakFiles`,
+    `IsNonPakFilenameAllowed`; reads from the paks first, the highest order winning, files in a pak read-only,
+    directories and stat data from the paks too).
+  - `FPakWriter` / `FPakInputPair`: deterministic paks (data in path order, the mount point as the folder every path
+    shares, no time recorded) and response files.
+- **LeonPak** (P16; UE: UnrealPak): `LeonPak <out.lpak> -create=<response file> [-align=<bytes>]`, `LeonPak <in.lpak>
+  -list | -test | -extract=<dir>`; Lint builds it.
+- **TargetPlatform** (P16, a Developer module; UE: TargetPlatform): `ITargetPlatform` (`PlatformName`, `DisplayName`,
+  `IniPlatformName`, `CookedPlatformName`, `HasEditorOnlyData`, `IsLittleEndian`, `RequiresCookedData`,
+  `GetAllTextureFormats`, `GetAllWaveFormats`, `GetCookNote`) and `ITargetPlatformManagerModule`
+  (`GetTargetPlatformManagerRef`) with Win64, the identity target, and PS2, a stub that cooks the Win64 formats and
+  says the PS2 conversion (PSMT8 / PSMT4, `LPS2` v2, ADPCM) comes later.
+- **BuildCookRun** (P16; UE: `RunUAT BuildCookRun`): `Engine/Build/BatchFiles/BuildCookRun.bat -project=<.lproj>
+  -platform=Win64 [-configuration=Shipping|Development] -build -cook -stage -pak [-run] [-addcmdline="..."]` builds the
+  game (a content-only project's is LeonGame), cooks, paks the cooked folder under the mount point `../../../` and
+  stages `<Project>/Saved/StagedBuilds/Win64/` in UE's layout (`<Project>/Binaries/Win64/<Project>-Win64-Shipping.exe`,
+  `<Project>/Content/Paks/<Project>-Win64.lpak`); `-run` starts the staged game. CI runs a Development staged build
+  headless.
+- `FPaths::IsStaged` (P16): a staged executable (paks beside its binaries, no engine sources in its build tree's engine
+  folder) uses UE's `../../../Engine/` and the project folder above `Binaries/`, and reads its `.lproj` from the pak.
+- `FSHA1` / `FSHAHash` (P16, Core; UE's `Misc/SecureHash.h`).
+- `UObject::IsEditorOnly` (P16, UE's): `UAssetImportData` is editor-only, and a package that filters editor-only data
+  leaves such objects (and what they own) out, saving the references to them as null.
+- `Engine/Config/BaseGame.ini` (P16): `[/Script/UnrealEd.ProjectPackagingSettings] +DirectoriesToAlwaysCook` of
+  `/Engine/BasicShapes`, which the engine loads by path.
+- `UGameViewportClient::SetIgnoreInput` / `IgnoreInput` (P16, UE's).
+- 11 new tests in P16 (350 in all): the pak round trip, deterministic paks, alignment, `-test` finding corruption, the
+  pak platform file in the chain (and loose files refused), an engine asset loaded from a pak, the target platforms and
+  the cook's seeds, the dependency closure, an imported map cooked twice to the same bytes without import data, SHA-1,
+  and a viewport client ignoring the input. TestPAL runs the PakFile tests too, on the PS2 included.
 
 ### Changed
 
@@ -115,6 +160,28 @@ Behaviour, the golden tests and the Win64 frames are unchanged; the PS2 ThirdPer
   (G4) allows it in test folders only (P15).
 - `ImportAssets` takes `-type=Map` (the destination is the map's package) and no longer `-type=Material`;
   `FAssetImportUtils::SavePackage` saves a package that holds a world as `.lmap` (P15).
+- **The cook** (P16, `-run=Cook -TargetPlatform=Win64|PS2`; [TOOLS.md](Docs/TOOLS.md#the-cook)) cooks by the book
+  instead of every package: seeds from the maps (`-map=`, `+MapsToCook`, else every map under `/Game/Maps`),
+  `+DirectoriesToAlwaysCook` of `[/Script/UnrealEd.ProjectPackagingSettings]` and every package the target platform's
+  Engine and Game config name by path (`GameDefaultMap`, `ServerDefaultMap`, `DefaultMaterialName`, ...); the
+  dependency closure over the packages' tables (hard imports and soft package references, nothing loaded); cooked
+  packages with `PKG_FilterEditorOnly | PKG_Cooked` and the target's name in `<Project>/Saved/Cooked/<Platform>/`
+  (`Engine/Content/...`, `<Project>/Content/...`), without the assets' and the worlds' import data; the config (not the
+  Editor ini), the shaders and the `.lproj` staged beside them; an emptied output folder and the same bytes every time.
+- `UPackage::Save` / `SavePackage` / `SaveToMemory` take the cooked platform's name (P16): a cooked package records the
+  cook's target platform instead of the running one.
+- `FEngineLoop::PreInit` puts `FPakPlatformFile` on top of the platform file chain before the config loads, when the
+  build has paks in `<Project>/Content/Paks/` or `Engine/Content/Paks/` (or with `-pak`; outside Shipping `-NoPak`
+  never), and always in Shipping (P16, UE's `LaunchCheckForFileOverride`). A Shipping build refuses loose files (except
+  under `Saved/`) and stops without a pak; the desktop Launch links PakFile, the PS2 one does not yet.
+- The engine content is resaved with engine version 0.17.0 (P16).
+
+### Fixed
+
+- A frame capture no longer depends on the mouse (P16): a `-Screenshot=` or `-ExitAfterFrames=` run is unattended
+  (`FApp::IsUnattended`, like `-unattended`), and `UGameEngine::Init` makes the viewport client ignore the OS input
+  (`SetIgnoreInput`), so the keys and the mouse cannot move the view during a capture (one P15 capture differed by 441k
+  pixels).
 
 ### Removed
 

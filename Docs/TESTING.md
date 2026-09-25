@@ -9,11 +9,13 @@ What runs automatically and what a person still has to check by hand. Build and 
 | --- | --- | --- |
 | Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` |
 | LeonHeaderTool golden tests (run by `RunTests.bat` too) | `Engine\Intermediate\Build\HostTools\Win64\LeonHeaderTool.exe -Test` | `LeonHeaderTool -Test: N of N golden cases passed` |
-| Core, CoreUObject, Json and Projects on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (106 test(s), 0 failed)` in the EE log (112 on Win64) |
+| Core, CoreUObject, Json, Projects and PakFile on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (112 test(s), 0 failed)` in the EE log (118 on Win64) |
 | Format, banned APIs (G4), Win64 build | `Engine\Build\BatchFiles\Lint.bat` | `Lint OK` |
 | Reproducible reimport (G5; CI, on a clean checkout) | `Engine\Build\BatchFiles\CheckReimport.bat [<Project>.lproj ...]` | `CheckReimport OK`: `LeonCook -run=ImportAssets -reimport -all` leaves `Engine/Content` and `Game/*/Content` unchanged, the imported maps included (`git diff --exit-code`, no new file) |
 | Content loads | `Engine\Binaries\Win64\LeonCook.exe -run=ValidateAssets` | `ValidateAssets: N packages, N valid, 0 problem(s)` |
-| Frame capture | `LeonGame.exe [<map>] "-Screenshot=<file.bmp>" "-ExitAfterFrames=N"` | the BMP matches a reference capture byte for byte (the cursor is captured: a live mouse turns the view, so retry a capture whose camera moved) |
+| Frame capture | `LeonGame.exe [<map>] "-Screenshot=<file.bmp>" "-ExitAfterFrames=N"` | the BMP matches a reference capture byte for byte; a capture is unattended (`FApp::IsUnattended`) and ignores the mouse and the keyboard, so moving the mouse during it changes nothing |
+| Staged build (Win64) | `BuildCookRun.bat -project=<.lproj> -platform=Win64 -build -cook -stage -pak -run "-addcmdline=-Screenshot=<file.bmp> -ExitAfterFrames=30"` | the staged Shipping game's capture matches the Development build's byte for byte; two `-cook -stage -pak` runs give the same `.lpak` (SHA-256); CI runs it in Development, headless (`-nullrhi -ExitAfterFrames=60`, exit code 0) |
+| Pak tool | `LeonPak <in.lpak> -test` / `-list` | `N file(s) checked, every SHA-1 matches` |
 | Console commands | `LeonGame.exe "-ExecCmds=obj gc;stat fps,stat fps" "-Screenshot=<file.bmp>" "-ExitAfterFrames=30"` | a `Cmd:` line per command, the capture unchanged |
 
 The CoreUObject tests collect garbage (`CollectGarbage`) between their steps; they only keep objects through
@@ -85,12 +87,27 @@ packages at the end), from source files they write themselves (BMP, WAV, OBJ wit
 an external buffer): each factory's asset and import data, the materials and textures a mesh import makes, import
 lists and settings, importing over an asset in place, `ReimportIsReproducible` (the bytes of a reimport from an
 unchanged source equal the first import's, gate G5 in small; a changed source changes the asset and its MD5; a missing
-source is skipped), resave, validation (an import whose package is gone) and the minimal cook (no import data in a
-cooked package). `System.LeonEd.MapFactory.*` import `MapFixture.gltf`
+source is skipped), resave, validation (an import whose package is gone) and the cook of a folder for PS2 (no import
+data in a cooked package, its platform recorded, an unknown platform refused). `System.LeonEd.MapFactory.*` import `MapFixture.gltf`
 (`Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/`, written by `MakeMapFixture.py` next to it: a node of
 every naming convention, lights, a textured material, waypoint extras) with a project's rules, check every actor, mesh,
 collision box, material and light, that importing over the map and `-reimport` save the same bytes, and that a
 missing required tag fails the import.
+
+Since P16 the cook and the paks are tested too. `System.PakFile.*` (5, in `LeonAutomationTests` and in TestPAL on every
+platform, the PS2 included) build paks in memory with `FPakWriter`: the round trip (every entry's bytes, an empty file,
+lookups that ignore case, the footer's magic, the index sorted by hash), deterministic output whatever the order the
+files come in, `-align=2048`, `Check` finding a changed byte (and a changed index, a wrong magic or a truncated file
+refusing to open), and `FPakPlatformFile` mounted at a folder that does not exist on disk: files that exist, read,
+seek, list and stat there, read-only, reached through `IFileManager` and `FFileHelper` once it is the topmost platform
+file, a patch pak with a higher order winning, loose files refused (desktop), and `../../../` taken from the executable's
+folder. `System.Engine.PakFile.LoadsAssetFromPak` loads an engine static mesh from a pak through `LoadPackage`.
+`System.LeonEd.Cook.*` check the target platforms and the default seeds (the maps the config names, the default assets,
+`BaseGame.ini`'s basic shapes, not a map nothing opens), the dependency closure (hard imports, soft references, what
+nothing references, a dangling soft reference, a missing import), and an imported map cooked twice for PS2: the same
+bytes, no import data in the map or its textures, `CookedPlatform` "PS2", the config staged without the Editor ini, the
+shaders. `System.CoreUObject.Package.EditorOnlyData` checks that a filtered package leaves an editor-only object out.
+`System.Engine.Viewport.IgnoreInput` checks that an ignored mouse sample leaves the view as the map put it.
 
 The golden tests (`System.Engine.Golden.*`, `System.AIModule.Golden.*`, `System.JoltPhysics.Golden.*`) replay
 movement, traces, navigation, cameras, shadows and reflections against tables recorded before P7 moved the world to

@@ -38,6 +38,7 @@ Requires CMake 3.24 or later and Ninja. Host setup is in [SETUP.md](SETUP.md).
 | `EnablePlugins` / `DisablePlugins` | `ENABLE_PLUGINS` / `DISABLE_PLUGINS` |
 | `bCompileAgainstEngine` → `WITH_ENGINE` | `COMPILE_AGAINST_ENGINE` → `WITH_ENGINE` |
 | `UE4Game.Target.cs` | `Engine/Source/LeonGame.Target.cmake` |
+| `RunUAT BuildCookRun` (AutomationTool) | `Engine/Build/BatchFiles/BuildCookRun.bat` ([Staging and Shipping](#staging-and-shipping)) |
 | `.uproject` / `.uplugin` | `.lproj` / `.lplugin` (JSON, same field names) |
 | `UBT_COMPILED_PLATFORM` | `LBT_COMPILED_PLATFORM` |
 | `UEBuildPlatform` / `UnrealTargetPlatform` | `leon_register_platform()` (platform registry) |
@@ -57,7 +58,7 @@ The `--` is required: without it CMake would parse `-Project=...` as its own `-P
 
 | Argument | Values |
 | --- | --- |
-| `<Target>` | a target from a `*.Target.cmake` (`LeonGame`, `LeonCook`, `LeonAutomationTests`, `TestPAL`, `BlankProgram`, or a project's target such as `ThirdPerson`) |
+| `<Target>` | a target from a `*.Target.cmake` (`LeonGame`, `LeonCook`, `LeonPak`, `LeonAutomationTests`, `TestPAL`, `BlankProgram`, or a project's target such as `ThirdPerson`) |
 | `<Platform>` | a registered platform: `Win64`, `Linux`, `PS2` |
 | `<Configuration>` | `Debug`, `Development`, `Shipping` |
 | `-Project=<file.lproj>` | build a project's target instead of an engine target. Relative paths are resolved from the current directory |
@@ -124,11 +125,12 @@ Windows batch files live in `Engine/Build/BatchFiles/` (UE layout); run them fro
 | `Build.bat` | `Build.bat <Target> <Platform> <Config> [-Project=<file>] [-Mode=...] [-NoDocker] [-KeepGoing]` | Loads the MSVC environment (`GetVSEnv.bat vcvars quiet need-ninja`) unless the platform is `PS2`, then runs LeonBuildTool with all arguments |
 | `Clean.bat` | `Clean.bat <Target> <Platform> <Config> [-Project=<file>]` | `Build.bat ... -Mode=Clean` |
 | `Rebuild.bat` | `Rebuild.bat <Target> <Platform> <Config> [-Project=<file>]` | `Build.bat ... -Mode=Rebuild` |
-| `RunTests.bat` | `RunTests.bat [-automation=<filter>]` | Builds `LeonAutomationTests Win64 Development` and runs `Engine\Binaries\Win64\LeonAutomationTests.exe` from the repo root: every automation test (340), or only those whose name contains `<filter>`. It then runs the LeonHeaderTool golden tests (`LeonHeaderTool -Test`) |
+| `RunTests.bat` | `RunTests.bat [-automation=<filter>]` | Builds `LeonAutomationTests Win64 Development` and runs `Engine\Binaries\Win64\LeonAutomationTests.exe` from the repo root: every automation test (350), or only those whose name contains `<filter>`. It then runs the LeonHeaderTool golden tests (`LeonHeaderTool -Test`) |
 | `Cook.bat` | `Cook.bat <LeonCook arguments>` | Builds `LeonCook Win64 Development` and runs `Engine\Binaries\Win64\LeonCook.exe` (`Cook.bat -run=ImportAssets -reimport -all`) |
 | `CheckReimport.bat` | `CheckReimport.bat [<Project>.lproj ...]` | Gate G5: builds LeonCook, reimports the engine content (and each project's) with `-run=ImportAssets -reimport -all`, then fails when `git diff --exit-code` sees a change, or a new file appears, under `Engine/Content` or `Game/*/Content` (CI runs it on a clean checkout) |
 | `FormatCode.bat` | `FormatCode.bat [--check]` | clang-format on every `.cpp/.h/.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game` (skips paths containing `ThirdParty`, `Intermediate`, `Binaries`). `--check` is a dry run that fails if a file needs formatting |
-| `Lint.bat` | `Lint.bat` | `FormatCode.bat --check`, then `CheckBannedApis.ps1`, then builds `LeonAutomationTests`, `LeonCook`, `LeonGame` and `BlankProgram` for Win64 Development |
+| `Lint.bat` | `Lint.bat` | `FormatCode.bat --check`, then `CheckBannedApis.ps1`, then builds `LeonAutomationTests`, `LeonCook`, `LeonPak`, `LeonGame` and `BlankProgram` for Win64 Development |
+| `BuildCookRun.bat` | `BuildCookRun.bat -project=<file> -platform=Win64 [-configuration=Shipping\|Development] [-build] [-cook] [-stage] [-pak] [-run] [-addcmdline="..."] [-align=<bytes>]` | Builds the project's game, cooks it, stages it into `<Project>\Saved\StagedBuilds\Win64\` with its content in one `.lpak`, and runs it (`BuildCookRun.ps1` has the steps; [below](#staging-and-shipping), [TOOLS.md](TOOLS.md#buildcookrun)) |
 | `CheckBannedApis.ps1` | `powershell -File CheckBannedApis.ps1` (or `pwsh`) | Gate G4: scans `.h/.cpp/.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game` (comments ignored) and fails on glm, nlohmann, `std::vector/string/map/unordered_map/function/shared_ptr/unique_ptr`, `<iostream>` / `std::cout/cerr/clog`, the `printf` family, `LegacyGL` / `FLegacyTransform` / `LegacyAxes`, or `FLegacyCoordinateConversion` outside the tests (`Public/Tests`, `Private/Tests`); `-Root <dir>` scans another tree; exceptions in [CODING_STANDARD.md §4](CODING_STANDARD.md#4-language) |
 | `GenerateProjectFiles.bat` | `GenerateProjectFiles.bat [-Project=<file>]` | `-Mode=GenerateProjectFiles`, then `LeonAutomationTests Win64 Development -Mode=GenerateClangDatabase` (root `compile_commands.json`) |
 | `GetVSEnv.bat` | `call GetVSEnv.bat vcvars [quiet] [optional] [need-ninja] [need-git]` (or `vsdev`) | Helper for the other scripts: finds Visual Studio `18` then `2022` (Community, Professional, Enterprise), runs `vcvars64.bat` or `VsDevCmd.bat`, prepends `C:\Program Files\CMake\bin` to `PATH` and checks the required tools |
@@ -327,8 +329,9 @@ Targets in the repository:
 | --- | --- | --- | --- | --- |
 | `LeonGame` | `Engine/Source/LeonGame.Target.cmake` | Game | Win64 | `EXTRA_MODULE_NAMES Engine AIModule`; creates `GEngine` and opens a map (`LeonGame [<map>]`, `-map=`; UE4Game) |
 | `LeonCook` | `Engine/Source/Programs/LeonCook/LeonCook.Target.cmake` | Program | Desktop | the command-line editor: `LeonCook [<Project>.lproj] -run=<Commandlet>` (UE4Editor-Cmd), links LeonEd ([TOOLS.md](TOOLS.md#leoncook)) |
+| `LeonPak` | `Engine/Source/Programs/LeonPak/LeonPak.Target.cmake` | Program | Desktop | the pak tool (UnrealPak): `LeonPak <pak> -create=<list> \| -list \| -test \| -extract=<dir>` ([TOOLS.md](TOOLS.md#leonpak)) |
 | `LeonAutomationTests` | `Engine/Source/Programs/LeonAutomationTests/LeonAutomationTests.Target.cmake` | Program | Desktop | `COLLECT_AUTOMATION_TESTS`, `ENABLE_PLUGINS JoltPhysics` |
-| `TestPAL` | `Engine/Source/Programs/TestPAL/TestPAL.Target.cmake` | Program | all | `COLLECT_AUTOMATION_TESTS`; runs the Core, CoreUObject, Json and Projects automation tests (`-filter=<text>`), prints `TestPAL: PASSED (N test(s), 0 failed)`; on PS2 run it with `RunPCSX2.ps1 -Program TestPAL` |
+| `TestPAL` | `Engine/Source/Programs/TestPAL/TestPAL.Target.cmake` | Program | all | `COLLECT_AUTOMATION_TESTS`; runs the Core, CoreUObject, Json, Projects and PakFile automation tests (`-filter=<text>`), prints `TestPAL: PASSED (N test(s), 0 failed)`; on PS2 run it with `RunPCSX2.ps1 -Program TestPAL` |
 | `BlankProgram` | `Engine/Source/Programs/BlankProgram/BlankProgram.Target.cmake` | Program | all | starts the linked modules and prints the platform |
 | `ThirdPerson` | `Game/ThirdPerson/Source/ThirdPerson.Target.cmake` | Game | PS2 | `COMPILE_AGAINST_ENGINE OFF` |
 
@@ -583,6 +586,40 @@ docker build -t leon/ps2dev Engine/Platforms/PS2/Build/Docker
 To use it, point `DOCKER_IMAGE` in `LeonBuildPS2.cmake` at `leon/ps2dev`. With a local ps2dev install instead, export
 `PS2DEV` / `PS2SDK` and LeonBuildTool builds on the host. More on the platform: [Engine/Platforms/PS2/README.md](../Engine/Platforms/PS2/README.md).
 
+## Staging and Shipping
+
+**Shipping.** `Build.bat <Target> Win64 Shipping` compiles with `LEON_BUILD_SHIPPING=1` (CMake `Release`): `Misc/Build.h`
+turns it into `UE_BUILD_SHIPPING`, no `check` / `ensure` (`DO_CHECK`, `DO_ENSURE` 0), no `UE_LOG` (`NO_LOGGING`: the
+console shows only the `RequestEngineExit:` lines) and no editor-only data (`WITH_EDITORONLY_DATA` 0, D14), and names
+the executable `<Target>-Win64-Shipping.exe`. The Shipping build tree (`Engine/Intermediate/Build/Win64/Shipping`) is
+separate from Development's. A Shipping game reads only cooked content from its pak: `FEngineLoop::PreInit` always
+puts the pak platform file on the chain in Shipping, it refuses loose files (except under the `Saved` folders, where
+the logs, the user config layer and screenshots go), and without a `.lpak` in `<Project>/Content/Paks/` the game stops
+at once (`RequestEngineExit: No pak file: ...`, exit code 1). The capture switches (`-Screenshot=`, `-ExitAfterFrames=`,
+`-nullrhi`) work in Shipping.
+
+**Staging** (`BuildCookRun.bat`, UE's `BuildCookRun`; [TOOLS.md](TOOLS.md#buildcookrun)): `-build -cook -stage -pak`
+builds the game (Shipping by default), cooks the project for Win64, and makes UE's staged layout in
+`<Project>/Saved/StagedBuilds/Win64/`:
+
+```text
+<Project>/Binaries/Win64/<Project>-Win64-Shipping.exe   the game (a content-only project's is LeonGame, renamed)
+<Project>/Content/Paks/<Project>-Win64.lpak             every cooked file, under the mount point ../../../
+```
+
+A staged executable finds its folders itself (`FPaths::IsStaged`): when `<Project>/Content/Paks/` sits two levels
+above it and the engine folder its build tree recorded (`GLeonEngineDirFromBaseDir`) has no `Source/`, the engine is
+`<Stage>/Engine/` (UE's `../../../Engine/`) and the project `<Stage>/<Project>/`; without `-project=` or a project of
+its own, the game takes the project's name from that folder and reads its `.lproj` from the pak. The staged folder
+holds nothing else: the engine's content, config and shaders and the project's are all in the pak. `-run` starts it
+(`-addcmdline="-Screenshot=<file.bmp> -ExitAfterFrames=30"` for a capture).
+
+Checks: the staged Shipping build of the engine's content as a content-only project (`Engine/Saved/StagingTest`,
+GameDefaultMap `/Engine/Maps/Template_Default`) renders the same frame as the Development build, byte for byte; two runs
+of `-cook -stage -pak` give the same `.lpak`; CI runs the Development staged build headless (`-configuration=Development
+-build -cook -stage -pak -run "-addcmdline=-nullrhi -ExitAfterFrames=60"`), which reuses the Development build the job
+already made (a Shipping build tree would double its build time).
+
 ## Adding things
 
 **A new engine module**: create `Engine/Source/Runtime/<Name>/<Name>.Build.cmake` with `leon_module(<Name> ...)`,
@@ -591,8 +628,8 @@ dependency of the module that uses it (or to a target's `EXTRA_MODULE_NAMES`).
 
 **Tests**: put test files in `<Module>/Private/Tests/` — automation tests (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`;
 [CODING_STANDARD.md §10](CODING_STANDARD.md#10-tests)). They are built into `LeonAutomationTests` if the module is in
-its closure (add it to `EXTRA_MODULE_NAMES` in `LeonAutomationTests.Target.cmake` otherwise); `TestPAL` links Core and
-Projects (→ Json), so it runs only their tests.
+its closure (add it to `EXTRA_MODULE_NAMES` in `LeonAutomationTests.Target.cmake` otherwise); `TestPAL` links Core,
+CoreUObject, Projects (→ Json) and PakFile, so it runs only their tests.
 
 **A new game project**: create `<Dir>/<Name>.lproj`, `<Dir>/Source/<Name>.Target.cmake` with
 `leon_target(<Name> TYPE Game ...)`, and a module in `<Dir>/Source/<Name>/` using `IMPLEMENT_PRIMARY_GAME_MODULE`. Build

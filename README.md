@@ -4,7 +4,9 @@ A C++ game engine that follows the **Unreal Engine 4.27** source layout, module 
 conventions, built with CMake through **LeonBuildTool** (our UnrealBuildTool).
 
 - **Win64 host runtime**: the engine modules (`Core`, `Engine`, `Renderer` on OpenGL 3.3, `UMG`, `AIModule`, ...),
-  the `LeonGame` game executable, the `LeonCook` command-line editor (import, reimport, cook commandlets) and the `LeonAutomationTests` test runner. The world uses
+  the `LeonGame` game executable, the `LeonCook` command-line editor (import, reimport, cook commandlets), the `LeonPak`
+  pak tool, `BuildCookRun.bat` (a Shipping build staged with its content in one `.lpak`) and the `LeonAutomationTests`
+  test runner. The world uses
   UE's space: X forward, Y right, Z up, left-handed, 1 unit = 1 cm.
 - **PS2 platform extension** (`Engine/Platforms/PS2`): PlayStation 2 HAL, DualShock input, engine loop hooks with a
   debug overlay, and `PS2RHI` for the Graphics Synthesizer. PS2 builds run in a pinned ps2dev Docker image.
@@ -47,14 +49,14 @@ root `compile_commands.json`.
 ```
 Setup.bat / .sh, GenerateProjectFiles.bat / .sh
 Engine/
-  Build/                 Build.version, BatchFiles/ (Build, Clean, Rebuild, RunTests, Cook, FormatCode, Lint, ...)
+  Build/                 Build.version, BatchFiles/ (Build, Clean, Rebuild, RunTests, Cook, BuildCookRun, Lint, ...)
   Config/                Base*.ini
   Content/, Shaders/     engine content and GLSL shaders
   Source/
     Runtime/             Core, ApplicationCore, InputCore, RHI, OpenGLDrv, RenderCore, Renderer, Engine, Launch, ...
-    Developer/           MeshUtilities
+    Developer/           MeshUtilities, TargetPlatform
     Editor/              LeonEd (factories, commandlets)
-    Programs/            LeonBuildTool, LeonAutomationTests, LeonCook, BlankProgram
+    Programs/            LeonBuildTool, LeonAutomationTests, LeonCook, LeonPak, TestPAL, BlankProgram
     ThirdParty/          GLFW, Glad, STB, ... (one External module per library)
     LeonGame.Target.cmake
   Plugins/Runtime/JoltPhysics/   Jolt rigid-body backend (Win64, disabled by default)

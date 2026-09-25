@@ -3,7 +3,7 @@
 **Audience:** content authors and tool writers
 **Also:** [LEVELS.md](LEVELS.md) (`.lmap` maps, the glTF map import) · [TOOLS.md](TOOLS.md) (LeonCook and its commandlets) · [SETUP.md](SETUP.md)
 
-Every asset is a UObject saved in a `.lasset` [package](#packages--lasset--lmap), and every map a world saved in a `.lmap` package ([Maps](#maps--lmap)): the runtime loads packages and nothing else (no image, `.wav`, mesh or scene source file). Source files (images, `.wav`, OBJ, FBX, glTF) are [imported](#importing-assets) by the editor module, LeonEd, through LeonCook's commandlets; each imported asset (and each imported map) records its source in its `UAssetImportData`, so it can be reimported. The only other runtime files are the GLSL shaders (`Engine/Shaders`) and the INI config. The PS2 runtime loads no asset file yet (see [PS2](#ps2)).
+Every asset is a UObject saved in a `.lasset` [package](#packages--lasset--lmap), and every map a world saved in a `.lmap` package ([Maps](#maps--lmap)): the runtime loads packages and nothing else (no image, `.wav`, mesh or scene source file). Source files (images, `.wav`, OBJ, FBX, glTF) are [imported](#importing-assets) by the editor module, LeonEd, through LeonCook's commandlets; each imported asset (and each imported map) records its source in its `UAssetImportData`, so it can be reimported. The only other runtime files are the GLSL shaders (`Engine/Shaders`) and the INI config. Since P16 the cook saves the packages a game needs without their editor-only data ([Cooked packages](#cooked-packages)), and a staged build reads them, with its config and shaders, from one [`.lpak`](#paks--lpak) file. The PS2 runtime loads no asset file yet (see [PS2](#ps2)).
 
 > Unreal `.uasset` / `.umap` are proprietary. Leon does not read or write them. Interchange with Blender / Unreal goes through FBX or glTF, imported to Leon packages. The `.lasset` layout follows UE 4.27's package structure (summary, name / import / export tables, tagged properties) but is Leon's own binary format.
 
@@ -14,6 +14,7 @@ Every asset is a UObject saved in a `.lasset` [package](#packages--lasset--lmap)
 | Ext | Kind | Role | Reader / writer |
 | --- | --- | --- | --- |
 | `.lasset` / `.lmap` | Binary `LEON` | UObject package: an asset / a map (`PKG_ContainsMap`) | `UPackage::Save`, `LoadPackage` / `LoadObject` (CoreUObject), see [Packages](#packages--lasset--lmap) |
+| `.lpak` | Binary, footer `LPAK` | A staged build's content, config and shaders in one file, mounted as a platform file | `FPakWriter` / LeonPak (writing), `FPakFile` / `FPakPlatformFile` (PakFile module), see [Paks](#paks--lpak) |
 | `.lproj` / `.lplugin` | JSON | Build descriptors | LeonBuildTool (CMake) |
 | `.png`, `.jpg`, `.tga`, `.bmp` | Image | Texture source | `UTextureFactory` (LeonEd, stb_image): import only |
 | `.wav` | RIFF / WAVE, PCM16 | Sound source | `USoundFactory` (LeonEd): import only |
@@ -219,7 +220,9 @@ Saving the same objects gives the same bytes on every run and platform (D13): th
 
 ### Editor-only data (D14)
 
-Desktop builds outside Shipping have `WITH_EDITORONLY_DATA`: they save editor-only properties unless the package has `PKG_FilterEditorOnly` (the cook, P16, sets it). The PS2 and Shipping builds have no editor-only properties: every package they save is marked `PKG_FilterEditorOnly`, and when they load a package without it (an uncooked package) they log it once and skip the editor-only tags as unknown names.
+Desktop builds outside Shipping have `WITH_EDITORONLY_DATA`: they save editor-only properties unless the package has `PKG_FilterEditorOnly` (the cook sets it). The PS2 and Shipping builds have no editor-only properties: every package they save is marked `PKG_FilterEditorOnly`, and when they load a package without it (an uncooked package) they log it once and skip the editor-only tags as unknown names.
+
+A filtered package also leaves out the editor-only objects (P16, UE's `IsEditorOnlyObject`): an object whose `UObject::IsEditorOnly` is true, or one inside such an object, is not exported, and every reference to it is saved as null. `UAssetImportData` is editor-only, so a cooked asset or map has no import data, and its `AssetImportData` property (itself editor-only) is not saved either.
 
 ### In memory
 
@@ -244,6 +247,63 @@ The meshes, materials and textures a map shows are imports of their own packages
 Transient actors (the game mode, the players' controllers and pawns) are never saved. `UEngine::LoadMap` loads the
 package, finds the world (`UWorld::FindWorldInPackage`), initializes it (`InitWorld`), and registers and initializes
 its actors (`InitializeActorsForPlay`): [LEVELS.md](LEVELS.md).
+
+<a id="cooked-packages"></a>
+
+### Cooked packages
+
+The cook (`LeonCook <Project>.lproj -run=Cook -TargetPlatform=Win64|PS2`, [TOOLS.md](TOOLS.md#the-cook)) loads each
+package the game needs and saves it again with `PKG_FilterEditorOnly | PKG_Cooked` into
+`<Project>/Saved/Cooked/<Platform>/`: the same layout as any package, without the editor-only properties and objects
+(the import data), and with the target platform's name in the summary's `CookedPlatform` (`Win64`, `PS2`). A `/Engine`
+package goes to `Engine/Content/`, a `/Game` package to `<Project>/Content/`, keeping its path and extension (UE's
+cooked layout); beside them the cook stages the config (`Engine/Config/Base*.ini`, the platform's layers, the
+project's `Config/Default*.ini`, never an Editor ini), the shaders (`Engine/Shaders/`) and the `.lproj`. The PS2 target
+cooks the same formats as Win64 for now. Two cooks of the same content give the same bytes.
+
+<a id="paks--lpak"></a>
+
+## Paks — `.lpak`
+
+A pak holds files under one folder, its mount point, as UE's `.pak` does (PakFile module, `IPlatformFilePak.h`; plan
+decision D9). LeonPak writes it ([TOOLS.md](TOOLS.md#leonpak)), and at run time `FPakPlatformFile`, a platform file in
+the `IPlatformFile` chain, serves its files to everything that opens a file ([ARCHITECTURE.md](ARCHITECTURE.md#13-content-and-paths)).
+No compression, no encryption; the bytes are little-endian and written the way `FArchive` writes them (an `FString` is
+its `int32` length including the terminator, then that many UTF-8 bytes).
+
+```text
+entry data     each file's bytes, raw, one after the other in path order (lowercased); with LeonPak -align=N each
+               starts at a multiple of N (zeros in between): 2048 puts every file on a CD sector
+index          at IndexOffset, IndexSize bytes:
+  FString  MountPoint      the folder every entry is under, ending in '/': "../../../" for a staged build
+  int32    NumEntries
+  NumEntries x, sorted by PathHash, then by the lowercased Filename:
+    uint32   PathHash       FCrc::MemCrc32 of Filename, lowercased, with '/'
+    FString  Filename       relative to the mount point: "Engine/Content/Maps/Entry.lmap"
+    int64    Offset         where the bytes start, from the start of the file
+    int64    Size
+    uint8    Hash[20]       the SHA-1 of the bytes (FSHA1)
+FPakInfo       the last 44 bytes of the file:
+  uint32   Magic          0x4B41504C: the bytes "LPAK"
+  int32    Version        1 (FPakInfo::PakFile_Version_Initial, 0.17.0)
+  int64    IndexOffset    right after the last entry's data
+  int64    IndexSize
+  uint8    IndexHash[20]  the SHA-1 of the index
+```
+
+- **Lookup.** A path is looked up by the binary search of its hash in the index, then compared (ignoring case, as UE
+  does) with the entries of that hash, so a hash collision costs a string compare. `FPakFile` checks the footer, the
+  index's size and SHA-1, the order of the index and every entry's range when it opens a pak; `FPakFile::Check`
+  (`LeonPak -test`) reads every entry and compares its SHA-1.
+- **Mount point.** LeonPak takes the mount point from the paths it is given: the longest folder they all start with
+  (UnrealPak's rule). A relative mount point is taken from the executable's folder, so `../../../` is the folder above
+  `<Project>/Binaries/<Platform>/`: the staged build's root, where `Engine/` and `<Project>/` are. Mounting can place a
+  pak elsewhere (`FPakPlatformFile::Mount(File, Order, Path)`).
+- **Determinism.** The output depends only on the files: the data is in path order and the index in hash order,
+  whatever order the response file lists them in, and nothing records a time. Two paks of the same cooked folder are
+  the same bytes.
+- **Differences from UE's `.pak`**: no per-entry header before the data, no compression blocks or encryption, no
+  signature file, the path hash only in the index (UE 4.27 splits a path-hash index from a full directory index).
 
 ---
 
@@ -281,8 +341,9 @@ UE's prefix for its class:
 **Identity.** The `Cube.obj` test fixture (`Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/Cube.obj`) imported with
 `LeonCook Engine/Saved/CookIdentity/CookIdentity.lproj -run=ImportAssets -source=Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/Cube.obj -dest=/Game/Identity`
 (a scratch project in the ignored `Engine/Saved`) saves `SM_Cube.lasset` with SHA-256
-`2EAE6C7DE3B209D7E77A0257D2E94D996A4013BF8C25F681A1AF1A7976AA149C` (2 692 bytes; the same when imported again over
-it or reimported; the engine version, `0.16.0`, is in the package summary: a release changes it).
+`D74B95FEBE0C84509B2DA318660E0726A8762FF35C43C12233D09E88EC258115` (2 692 bytes; the same when imported again over
+it or reimported; the engine version, `0.17.0`, is in the package summary: a release changes it; 0.16.0 gave
+`2EAE6C7DE3B209D7E77A0257D2E94D996A4013BF8C25F681A1AF1A7976AA149C`).
 
 ---
 
@@ -340,7 +401,7 @@ Examples: `Game/ThirdPerson/ThirdPerson.lproj`, `Engine/Plugins/Runtime/JoltPhys
 
 ## PS2
 
-The PS2 runtime (`Engine/Platforms/PS2/Source/Runtime/PS2RHI`) draws with the Graphics Synthesizer directly and loads no `.lasset` or `.lmap` package yet (the cook for the PS2 comes later). The ThirdPerson demo builds its textures, materials and level in code.
+The PS2 runtime (`Engine/Platforms/PS2/Source/Runtime/PS2RHI`) draws with the Graphics Synthesizer directly and loads no `.lasset` or `.lmap` package yet. The cook has a PS2 target platform since P16, a stub that cooks the Win64 formats; the PS2 conversions (PSMT8 / PSMT4 textures, `LPS2` v2 meshes, ADPCM sounds) and a pak on `cdrom0:` come with the Engine port. The PakFile module builds for the PS2, and TestPAL runs its tests there on paks in memory. The ThirdPerson demo builds its textures, materials and level in code.
 
 ### Cooked mesh blob — `LPS2`
 
@@ -353,7 +414,7 @@ The PS2 runtime (`Engine/Platforms/PS2/Source/Runtime/PS2RHI`) draws with the Gr
 | `vertexCount` | `u32` | Must be > 0 |
 | `indexCount` | `u32` | |
 
-Vertex upload is not implemented yet: a valid blob draws a placeholder triangle. No tool produces `LPS2` blobs; the cook has no PS2 target platform yet.
+Vertex upload is not implemented yet: a valid blob draws a placeholder triangle. No tool produces `LPS2` blobs; the PS2 target platform of the cook does not convert meshes yet.
 
 ### Materials and textures
 
@@ -374,6 +435,8 @@ Vertex upload is not implemented yet: a valid blob draws a placeholder triangle.
 | Concern | Location |
 | --- | --- |
 | `.lasset` / `.lmap` packages | `Engine/Source/Runtime/CoreUObject` — `UPackage::Save` (`Private/UObject/SavePackage.cpp`), `FLinkerLoad`, `FLinkerSave`, `FPackageFileSummary`, `FObjectImport` / `FObjectExport`, `FPropertyTag`, `FByteBulkData`, `FPackageName` |
+| `.lpak` paks | `Engine/Source/Runtime/PakFile` — `FPakInfo`, `FPakEntry`, `FPakFile`, `FPakPlatformFile` (`Public/IPlatformFilePak.h`), `FPakWriter` (`Public/PakWriter.h`); `Engine/Source/Programs/LeonPak` |
+| The cook | `Engine/Source/Editor/LeonEd` — `UCookCommandlet`; `Engine/Source/Developer/TargetPlatform` — `ITargetPlatform`, `ITargetPlatformManagerModule` |
 | Mesh data, material values | `Engine/Source/Runtime/RenderCore` — `FMeshData`, `FVertex`, `FMaterial` (`Public/MaterialShared.h`) |
 | Asset classes | `Engine/Source/Runtime/Engine` — `Classes/Engine` (`UTexture`, `UTexture2D`, `UStaticMesh`, `USkeletalMesh`, `USkeletalMeshSocket`, `UDataAsset`), `Classes/Materials`, `Classes/Animation`, `Classes/PhysicsEngine` (`UBodySetup`), `Classes/Sound`, `Classes/Commandlets`, `Classes/EditorFramework` (`UAssetImportData`); `Public/StaticMeshResources.h`, `Private/AssetBulkData.h`; the plain skeletal data in `AnimationCore`; the GPU copies in the Renderer's private `FRenderResourceCache` |
 | Maps: the world's save and load, `LoadMap` | `Engine/Source/Runtime/Engine` — `UWorld` (`FindWorldInPackage`, `InitWorld`, `UpdateWorldComponents`, `InitializeActorsForPlay`), `ULevel`, `UEngine::LoadMap` (`Private/UnrealEngine.cpp`) |
