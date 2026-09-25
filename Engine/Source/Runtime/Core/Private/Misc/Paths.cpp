@@ -79,6 +79,25 @@ namespace
 	{
 		return WithTrailingSlash(FPaths::ConvertRelativePathToFull(FString(FPlatformProcess::BaseDir()) + Relative));
 	}
+
+	/**
+	 * The project folder of a staged build, empty otherwise. A staged build (BuildCookRun -stage, UE's layout) has its
+	 * executable in <Stage>/<Project>/Binaries/<Platform>/ beside <Stage>/<Project>/Content/Paks/, and no engine
+	 * sources where the build tree's engine folder would be; its engine is <Stage>/Engine/ (UE: "../../../Engine/"),
+	 * whose files are in the pak. Asked of the physical platform file: the paks are not mounted yet.
+	 */
+	const FString& GetStagedProjectDir()
+	{
+		static const FString Dir = []
+		{
+			IPlatformFile& Physical = IPlatformFile::GetPlatformPhysical();
+			const FString Candidate = FromBaseDir("../../");
+			const bool bHasPaks = Physical.DirectoryExists(*(Candidate + "Content/Paks"));
+			const bool bInSourceTree = Physical.DirectoryExists(*(FromBaseDir(GLeonEngineDirFromBaseDir) + "Source"));
+			return bHasPaks && !bInSourceTree ? Candidate : FString();
+		}();
+		return Dir;
+	}
 #endif
 } // namespace
 
@@ -88,10 +107,19 @@ FString FPaths::LaunchDir()
 	return Dir;
 }
 
+bool FPaths::IsStaged()
+{
+#if PLATFORM_DESKTOP
+	return !GetStagedProjectDir().IsEmpty();
+#else
+	return false;
+#endif
+}
+
 FString FPaths::EngineDir()
 {
 #if PLATFORM_DESKTOP
-	static const FString Dir = FromBaseDir(GLeonEngineDirFromBaseDir);
+	static const FString Dir = IsStaged() ? FromBaseDir("../../../Engine/") : FromBaseDir(GLeonEngineDirFromBaseDir);
 #else
 	static const FString Dir = FString(FPlatformProcess::BaseDir()) + "Engine/";
 #endif
@@ -149,6 +177,13 @@ FString FPaths::ProjectDir()
 	{
 		return WithTrailingSlash(GetPath(GetProjectFilePath()));
 	}
+
+#if PLATFORM_DESKTOP
+	if (IsStaged())
+	{
+		return GetStagedProjectDir();
+	}
+#endif
 
 	if (GLeonProjectDirFromBaseDir[0] != 0)
 	{

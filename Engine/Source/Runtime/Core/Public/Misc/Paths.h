@@ -7,8 +7,8 @@
  * Engine / project directories and path string helpers (UE: FPaths). Directories end with '/' and use '/'.
  *
  * Desktop: the engine and project folders are found relative to the executable (LeonBuildTool records the
- * relative paths of each target), so the directories are absolute. PS2: a staged layout under the executable's
- * device folder: <Base>/Engine/..., <Base>/<Project>/....
+ * relative paths of each target), so the directories are absolute; a staged build (IsStaged) uses UE's layout instead.
+ * PS2: a staged layout under the executable's device folder: <Base>/Engine/..., <Base>/<Project>/....
  */
 class CORE_API FPaths
 {
@@ -18,6 +18,13 @@ public:
 
 	/** Folder holding Engine/ (and the Game/ projects on desktop) (UE: RootDir). */
 	static FString RootDir();
+
+	/**
+	 * True for a staged desktop build (BuildCookRun -stage): the executable in <Stage>/<Project>/Binaries/<Platform>/
+	 * beside <Stage>/<Project>/Content/Paks/ and no engine sources in its build tree's engine folder. Its engine is
+	 * then <Stage>/Engine/ (UE's "../../../Engine/") and its project <Stage>/<Project>/, both served by the pak (Leon).
+	 */
+	static bool IsStaged();
 
 	static FString EngineDir();
 	static FString EngineContentDir();

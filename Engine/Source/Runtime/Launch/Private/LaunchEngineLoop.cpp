@@ -99,7 +99,8 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 	FPlatformProcess::SetArgV0(ArgV[0]);
 	FCommandLine::Set(*FCommandLine::BuildFromArgV(nullptr, ArgC, ArgV, nullptr));
 
-	// The project: -project=<path>.lproj (or a first argument ending in .lproj), else the target's own project.
+	// The project: -project=<path>.lproj (or a first argument ending in .lproj), else the target's own project, else a
+	// staged build's.
 	FString ProjectFile;
 	if (!FParse::Value(FCommandLine::Get(), "project=", ProjectFile))
 	{
@@ -119,6 +120,16 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 	{
 		FApp::SetProjectName(LEON_PROJECT_NAME);
 		FPaths::SetProjectFilePath(FPaths::ProjectDir() + LEON_PROJECT_NAME + ".lproj");
+	}
+	else if (FPaths::IsStaged())
+	{
+		// A staged content-only project runs the engine's game target renamed after it (UE: UE4Game): the project is
+		// the folder above Binaries/, and its .lproj comes from the pak.
+		FString ProjectDir = FPaths::ProjectDir();
+		ProjectDir.LeftChopInline(1);
+		const FString ProjectName = FPaths::GetCleanFilename(ProjectDir);
+		FApp::SetProjectName(*ProjectName);
+		FPaths::SetProjectFilePath(FPaths::ProjectDir() + ProjectName + ".lproj");
 	}
 
 	// The paks mount before anything reads a file: the config, the .lproj and the content may all be in them.

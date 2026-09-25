@@ -48,3 +48,11 @@ jobs:
       - name: Reproducible reimport (G5)
         shell: cmd
         run: call Engine\Build\BatchFiles\CheckReimport.bat Game\ThirdPerson\ThirdPerson.lproj
+      # A content-only project cooked, staged into a pak and run headless from the staged folder (Development: it
+      # reuses the build above; the Shipping staged build is checked locally, Docs/BUILD.md "Staging").
+      - name: Staged build smoke (BuildCookRun)
+        shell: cmd
+        run: |
+          if not exist Engine\Saved\StagingTest mkdir Engine\Saved\StagingTest
+          > Engine\Saved\StagingTest\StagingTest.lproj echo { "FileVersion": 3, "EngineAssociation": "", "Modules": [] }
+          call Engine\Build\BatchFiles\BuildCookRun.bat -project=Engine\Saved\StagingTest\StagingTest.lproj -platform=Win64 -configuration=Development -build -cook -stage -pak -run "-addcmdline=-nullrhi -ExitAfterFrames=60"
