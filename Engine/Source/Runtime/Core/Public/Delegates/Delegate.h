@@ -12,8 +12,9 @@
 #include <type_traits>
 
 // Delegates (UE: Delegates/Delegate.h). A TDelegate holds at most one binding; a TMulticastDelegate holds many.
-// Bindings: static functions, lambdas, raw object pointers and shared pointers, each with optional payload values
-// passed after the call parameters. UObject and dynamic delegates come with CoreUObject.
+// Bindings: static functions, lambdas, raw object pointers, shared pointers and UObjects (held by a TWeakObjectPtr,
+// which the binding code gets from CoreUObject's UObject/WeakObjectPtrTemplates.h), each with optional payload values
+// passed after the call parameters. Dynamic delegates (DECLARE_DYNAMIC_*) and BindUFunction are not supported.
 
 template <typename FuncType>
 class TDelegate;
@@ -148,6 +149,26 @@ public:
 		return Result;
 	}
 
+	template <typename UserClass, typename... VarTypes>
+	[[nodiscard]] static TDelegate CreateUObject(UserClass* InUserObject,
+		typename TMemFunPtrType<false, UserClass, InRetValType(ParamTypes..., VarTypes...)>::Type InFunc,
+		VarTypes... Vars)
+	{
+		TDelegate Result;
+		Result.BindUObject(InUserObject, InFunc, MoveTemp(Vars)...);
+		return Result;
+	}
+
+	template <typename UserClass, typename... VarTypes>
+	[[nodiscard]] static TDelegate CreateUObject(const UserClass* InUserObject,
+		typename TMemFunPtrType<true, UserClass, InRetValType(ParamTypes..., VarTypes...)>::Type InFunc,
+		VarTypes... Vars)
+	{
+		TDelegate Result;
+		Result.BindUObject(InUserObject, InFunc, MoveTemp(Vars)...);
+		return Result;
+	}
+
 	// Binding --------------------------------------------------------------------------------------------------------
 
 	template <typename... VarTypes>
@@ -216,6 +237,37 @@ public:
 		BindSP(StaticCastSharedRef<UserClass>(InUserObject->AsShared()), InFunc, MoveTemp(Vars)...);
 	}
 
+	/**
+	 * Binds a member function of a UObject through a weak pointer: the binding goes inert (IsBound() false) once the
+	 * object is garbage collected or pending kill, and it does not keep the object alive (UE: BindUObject). The caller
+	 * includes CoreUObject's UObject/WeakObjectPtrTemplates.h.
+	 */
+	template <typename UserClass, typename... VarTypes>
+	void BindUObject(UserClass* InUserObject,
+		typename TMemFunPtrType<false, UserClass, InRetValType(ParamTypes..., VarTypes...)>::Type InFunc,
+		VarTypes... Vars)
+	{
+		check(InUserObject != nullptr);
+		using FCaller = UE::Core::Private::Delegates::TSPMethodCaller<decltype(InFunc), VarTypes...>;
+		using FUObjectInstance = TUObjectDelegateInstance<UserClass, FCaller, InRetValType, ParamTypes...>;
+		Unbind();
+		Instance = new FUObjectInstance(FDelegateHandle(FDelegateHandle::GenerateNewHandle), InUserObject,
+			FCaller{InFunc, TTuple<VarTypes...>(MoveTemp(Vars)...)});
+	}
+
+	template <typename UserClass, typename... VarTypes>
+	void BindUObject(const UserClass* InUserObject,
+		typename TMemFunPtrType<true, UserClass, InRetValType(ParamTypes..., VarTypes...)>::Type InFunc,
+		VarTypes... Vars)
+	{
+		check(InUserObject != nullptr);
+		using FCaller = UE::Core::Private::Delegates::TSPMethodCaller<decltype(InFunc), VarTypes...>;
+		using FUObjectInstance = TUObjectDelegateInstance<const UserClass, FCaller, InRetValType, ParamTypes...>;
+		Unbind();
+		Instance = new FUObjectInstance(FDelegateHandle(FDelegateHandle::GenerateNewHandle), InUserObject,
+			FCaller{InFunc, TTuple<VarTypes...>(MoveTemp(Vars)...)});
+	}
+
 	// State ----------------------------------------------------------------------------------------------------------
 
 	/** True when bound and the bound object (if any) is alive (UE: IsBound). */
@@ -282,12 +334,19 @@ public:
 
 	TMulticastDelegate() = default;
 
-	/** Adds a binding; returns its handle for Remove. */
+	/**
+	 * Adds a binding; returns its handle for Remove. Bindings whose object is gone (a destroyed shared object or
+	 * UObject) are dropped first, so the list does not grow with dead entries (UE: CompactInvocationList).
+	 */
 	FDelegateHandle Add(FDelegate&& InNewDelegate)
 	{
 		FDelegateHandle Result;
 		if (InNewDelegate.Instance)
 		{
+			if (BroadcastDepth == 0)
+			{
+				InvocationList.RemoveAll([](const FDelegate& Delegate) { return !Delegate.IsBound(); });
+			}
 			Result = InNewDelegate.GetHandle();
 			InvocationList.Add(MoveTemp(InNewDelegate));
 		}
@@ -358,6 +417,21 @@ public:
 		typename TMemFunPtrType<false, UserClass, void(ParamTypes..., VarTypes...)>::Type InFunc, VarTypes... Vars)
 	{
 		return Add(FDelegate::CreateSP(InUserObject, InFunc, MoveTemp(Vars)...));
+	}
+
+	/** Adds a member function of a UObject held weakly; Broadcast skips it once the object is gone (UE: AddUObject). */
+	template <typename UserClass, typename... VarTypes>
+	FDelegateHandle AddUObject(UserClass* InUserObject,
+		typename TMemFunPtrType<false, UserClass, void(ParamTypes..., VarTypes...)>::Type InFunc, VarTypes... Vars)
+	{
+		return Add(FDelegate::CreateUObject(InUserObject, InFunc, MoveTemp(Vars)...));
+	}
+
+	template <typename UserClass, typename... VarTypes>
+	FDelegateHandle AddUObject(const UserClass* InUserObject,
+		typename TMemFunPtrType<true, UserClass, void(ParamTypes..., VarTypes...)>::Type InFunc, VarTypes... Vars)
+	{
+		return Add(FDelegate::CreateUObject(InUserObject, InFunc, MoveTemp(Vars)...));
 	}
 
 	/** Removes the binding with the handle; true when found. Safe during Broadcast. */

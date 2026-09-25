@@ -7,6 +7,7 @@
 #include "Templates/SharedPointer.h"
 #include "Templates/Tuple.h"
 #include "Templates/UnrealTemplate.h"
+#include "UObject/WeakObjectPtrTemplatesFwd.h"
 
 #include <type_traits>
 
@@ -149,6 +150,57 @@ private:
 	mutable FunctorType Functor;
 };
 
+/**
+ * Binding to a member function of a UObject, held through a TWeakObjectPtr: not safe to execute (IsBound() false,
+ * skipped by Broadcast) once the object is garbage collected or pending kill (UE: TBaseUObjectMethodDelegateInstance).
+ * Core only names TWeakObjectPtr; the code that binds includes CoreUObject's UObject/WeakObjectPtrTemplates.h.
+ */
+template <typename UserClass, typename FunctorType, typename RetValType, typename... ParamTypes>
+class TUObjectDelegateInstance final : public TDelegateInstanceBase<RetValType, ParamTypes...>
+{
+	typedef TDelegateInstanceBase<RetValType, ParamTypes...> Super;
+
+public:
+	template <typename InFunctorType>
+	TUObjectDelegateInstance(FDelegateHandle InHandle, UserClass* InUserObject, InFunctorType&& InFunctor)
+		: Super(InHandle)
+		, UserObject(InUserObject)
+		, Functor(Forward<InFunctorType>(InFunctor))
+	{
+	}
+
+	virtual RetValType Execute(ParamTypes... Params) const override
+	{
+		UserClass* Object = UserObject.Get();
+		checkf(Object != nullptr, "Executing a delegate whose UObject was destroyed");
+		return ::Invoke(Functor, Object, Forward<ParamTypes>(Params)...);
+	}
+
+	virtual Super* Clone() const override
+	{
+		return new TUObjectDelegateInstance(*this);
+	}
+
+	virtual bool IsSafeToExecute() const override
+	{
+		return UserObject.Get() != nullptr;
+	}
+
+	virtual bool HasSameObject(const void* InUserObject) const override
+	{
+		return InUserObject != nullptr && (const void*)UserObject.Get() == InUserObject;
+	}
+
+	virtual const void* GetObjectForTimerManager() const override
+	{
+		return UserObject.Get();
+	}
+
+private:
+	TWeakObjectPtr<UserClass> UserObject;
+	mutable FunctorType Functor;
+};
+
 namespace UE::Core::Private::Delegates
 {
 	/** Calls Func(Params..., Payload...) (UE: payload variables follow the delegate parameters). */
@@ -180,7 +232,8 @@ namespace UE::Core::Private::Delegates
 		}
 	};
 
-	/** Calls (Object->*Method)(Params..., Payload...) on an object passed at call time (shared-pointer bindings). */
+	/** Calls (Object->*Method)(Params..., Payload...) on an object passed at call time (shared-pointer and UObject
+	 * bindings). */
 	template <typename MethodType, typename... VarTypes>
 	struct TSPMethodCaller
 	{
