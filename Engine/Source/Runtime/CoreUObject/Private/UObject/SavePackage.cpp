@@ -21,6 +21,8 @@ namespace
 	struct FSaveContext
 	{
 		UPackage* Package = nullptr;
+		/** PKG_FilterEditorOnly: editor-only properties and objects are left out. */
+		bool bFilterEditorOnly = false;
 		TArray<UObject*> Exports;
 		TSet<UObject*> ExportSet;
 		/** Exports whose references are not collected yet. */
@@ -53,6 +55,27 @@ namespace
 		return Object->GetClass()->HasAnyClassFlags(CLASS_Transient);
 	}
 
+	/**
+	 * An object only the editor needs (UE: IsEditorOnlyObject): it or one of its outers says so (UObject::IsEditorOnly,
+	 * the assets' import data). A package that filters editor-only data leaves it out and saves references to it as
+	 * null.
+	 */
+	bool IsEditorOnlyForSave(const FSaveContext& Context, const UObject* Object)
+	{
+		if (!Context.bFilterEditorOnly)
+		{
+			return false;
+		}
+		for (const UObject* Current = Object; Current && Current != Context.Package; Current = Current->GetOuter())
+		{
+			if (Current->IsEditorOnly())
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	void AddName(FSaveContext& Context, FName Name)
 	{
 		const FNameEntryId Entry = Name.GetComparisonIndex();
@@ -70,7 +93,8 @@ namespace
 	void MarkExport(FSaveContext& Context, UObject* Object)
 	{
 		if (!Object || Object == Context.Package || Context.ExportSet.Contains(Object) ||
-			!Object->IsIn(Context.Package) || Object->HasAnyFlags(RF_ClassDefaultObject) || IsTransientForSave(Object))
+			!Object->IsIn(Context.Package) || Object->HasAnyFlags(RF_ClassDefaultObject) ||
+			IsTransientForSave(Object) || IsEditorOnlyForSave(Context, Object))
 		{
 			return;
 		}
@@ -105,9 +129,10 @@ namespace
 	void AddReference(FSaveContext& Context, UObject* Object)
 	{
 		if (!Object || Context.ExportSet.Contains(Object) || Object == Context.Package ||
-			Object->IsIn(Context.Package) || IsTransientForSave(Object))
+			Object->IsIn(Context.Package) || IsTransientForSave(Object) || IsEditorOnlyForSave(Context, Object))
 		{
-			// An export, or something saved as null: an object of the package that is not saved, a transient one.
+			// An export, or something saved as null: an object of the package that is not saved, a transient one, an
+			// editor-only one in a filtered package.
 			return;
 		}
 		AddImport(Context, Object);
@@ -269,7 +294,8 @@ namespace
 
 	/** Collects the exports, imports and names of InOuter and writes the package into OutBytes. */
 	FSavePackageResultStruct SavePackageToBytes(UPackage* InOuter, UObject* Base, EObjectFlags TopLevelFlags,
-		const TCHAR* Filename, FOutputDevice* Error, uint32 SaveFlags, TArray<uint8>& OutBytes)
+		const TCHAR* Filename, FOutputDevice* Error, uint32 SaveFlags, const TCHAR* CookedPlatformName,
+		TArray<uint8>& OutBytes)
 	{
 		if (!InOuter)
 		{
@@ -304,6 +330,7 @@ namespace
 		// Exports: Base, the package's objects with TopLevelFlags, and what they reference inside the package.
 		FSaveContext Context;
 		Context.Package = InOuter;
+		Context.bFilterEditorOnly = bFilterEditorOnly;
 		MarkExport(Context, Base);
 		if (TopLevelFlags != RF_NoFlags)
 		{
@@ -400,8 +427,14 @@ namespace
 			? InOuter->GetGuid()
 			: FGuid::NewDeterministicGuid(PackageName);
 		Summary.SavedByEngineVersion = FEngineVersion::Current();
-		Summary.CookedPlatform =
-			InOuter->HasAnyPackageFlags(PKG_Cooked) ? FString(FPlatformProperties::PlatformName()) : FString();
+		// A cooked package records its target platform (the cook's), else the platform that saved it.
+		Summary.CookedPlatform = FString();
+		if (InOuter->HasAnyPackageFlags(PKG_Cooked))
+		{
+			Summary.CookedPlatform = CookedPlatformName != nullptr && *CookedPlatformName != 0
+				? FString(CookedPlatformName)
+				: FString(FPlatformProperties::PlatformName());
+		}
 		Summary.NameCount = Linker.NameMap.Num();
 		Summary.ImportCount = Linker.ImportMap.Num();
 		Summary.ExportCount = Linker.ExportMap.Num();
@@ -482,7 +515,7 @@ namespace
 } // namespace
 
 FSavePackageResultStruct UPackage::Save(UPackage* InOuter, UObject* Base, EObjectFlags TopLevelFlags,
-	const TCHAR* Filename, FOutputDevice* Error, uint32 SaveFlags)
+	const TCHAR* Filename, FOutputDevice* Error, uint32 SaveFlags, const TCHAR* CookedPlatformName)
 {
 	if (!Filename || !*Filename)
 	{
@@ -490,7 +523,7 @@ FSavePackageResultStruct UPackage::Save(UPackage* InOuter, UObject* Base, EObjec
 	}
 	TArray<uint8> Bytes;
 	FSavePackageResultStruct Result =
-		SavePackageToBytes(InOuter, Base, TopLevelFlags, Filename, Error, SaveFlags, Bytes);
+		SavePackageToBytes(InOuter, Base, TopLevelFlags, Filename, Error, SaveFlags, CookedPlatformName, Bytes);
 	if (!Result.IsSuccessful())
 	{
 		return Result;
@@ -505,13 +538,14 @@ FSavePackageResultStruct UPackage::Save(UPackage* InOuter, UObject* Base, EObjec
 }
 
 bool UPackage::SavePackage(UPackage* InOuter, UObject* Base, EObjectFlags TopLevelFlags, const TCHAR* Filename,
-	FOutputDevice* Error, uint32 SaveFlags)
+	FOutputDevice* Error, uint32 SaveFlags, const TCHAR* CookedPlatformName)
 {
-	return Save(InOuter, Base, TopLevelFlags, Filename, Error, SaveFlags).IsSuccessful();
+	return Save(InOuter, Base, TopLevelFlags, Filename, Error, SaveFlags, CookedPlatformName).IsSuccessful();
 }
 
 FSavePackageResultStruct UPackage::SaveToMemory(UPackage* InOuter, UObject* Base, EObjectFlags TopLevelFlags,
-	TArray<uint8>& OutPackageData, FOutputDevice* Error, uint32 SaveFlags)
+	TArray<uint8>& OutPackageData, FOutputDevice* Error, uint32 SaveFlags, const TCHAR* CookedPlatformName)
 {
-	return SavePackageToBytes(InOuter, Base, TopLevelFlags, nullptr, Error, SaveFlags, OutPackageData);
+	return SavePackageToBytes(
+		InOuter, Base, TopLevelFlags, nullptr, Error, SaveFlags, CookedPlatformName, OutPackageData);
 }

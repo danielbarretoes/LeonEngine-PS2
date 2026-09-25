@@ -832,6 +832,9 @@ bool FPackageEditorOnlyTest::RunTest(const FString& Parameters)
 	UPackageTestObject* WithoutEditorData = NewObject<UPackageTestObject>(Filtered, TEXT("Asset"), RF_Public);
 	WithEditorData->AfterEditorOnly = 21;
 	WithoutEditorData->AfterEditorOnly = 22;
+	// An editor-only object each asset owns and references: a filtered package leaves it out.
+	WithEditorData->ObjectRef = NewObject<UPackageTestEditorOnlyObject>(WithEditorData, TEXT("ImportData"));
+	WithoutEditorData->ObjectRef = NewObject<UPackageTestEditorOnlyObject>(WithoutEditorData, TEXT("ImportData"));
 	#if WITH_EDITORONLY_DATA
 	WithEditorData->EditorNote = TEXT("Kept");
 	WithEditorData->EditorCount = 30;
@@ -854,7 +857,10 @@ bool FPackageEditorOnlyTest::RunTest(const FString& Parameters)
 		(FilteredTables->Summary.GetPackageFlags() & uint32(PKG_FilterEditorOnly)) != 0);
 	TestFalse(TEXT("filtered: no editor-only property"),
 		NameTableHas(*FilteredTables, TEXT("EditorNote")) || NameTableHas(*FilteredTables, TEXT("EditorCount")));
+	TestEqual(TEXT("filtered: no editor-only object"), FilteredTables->ExportMap.Num(), 1);
+	TestFalse(TEXT("filtered: not even its name"), NameTableHas(*FilteredTables, TEXT("ImportData")));
 	#if WITH_EDITORONLY_DATA
+	TestEqual(TEXT("unfiltered: the editor-only object is saved"), UnfilteredTables->ExportMap.Num(), 2);
 	TestFalse(TEXT("an editor build saves editor-only data unless filtered"),
 		(UnfilteredTables->Summary.GetPackageFlags() & uint32(PKG_FilterEditorOnly)) != 0);
 	TestTrue(TEXT("unfiltered: the editor-only properties"), NameTableHas(*UnfilteredTables, TEXT("EditorNote")));
@@ -874,7 +880,10 @@ bool FPackageEditorOnlyTest::RunTest(const FString& Parameters)
 	}
 	TestEqual(TEXT("unfiltered: the rest loads"), LoadedWith->AfterEditorOnly, 21);
 	TestEqual(TEXT("filtered: the rest loads"), LoadedWithout->AfterEditorOnly, 22);
+	TestNull(TEXT("filtered: the reference to the editor-only object is null"), LoadedWithout->ObjectRef);
 	#if WITH_EDITORONLY_DATA
+	TestTrue(TEXT("unfiltered: the editor-only object loads"),
+		LoadedWith->ObjectRef != nullptr && LoadedWith->ObjectRef->IsA<UPackageTestEditorOnlyObject>());
 	TestEqual(TEXT("unfiltered: editor-only values loaded"), LoadedWith->EditorNote, TEXT("Kept"));
 	TestEqual(TEXT("unfiltered: editor-only count"), LoadedWith->EditorCount, 30);
 	TestEqual(TEXT("filtered: editor-only values keep their defaults"), LoadedWithout->EditorNote, TEXT("Editor"));

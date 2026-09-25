@@ -99,24 +99,28 @@ public:
 	 * NAME_None, followed by its native UObject::Serialize data; bulk data goes at the end of the file. The output only
 	 * depends on the objects (D13): names, imports and exports are sorted, the GUID is derived from the package name
 	 * and there are no timestamps. A package with PKG_FilterEditorOnly (and every package on a platform without
-	 * editor-only data) drops the editor-only properties. A ".lmap" file sets PKG_ContainsMap. Errors are logged
-	 * (warnings with SAVE_NoError) and also sent to Error when given. UE's Conform, bForceByteSwapping,
-	 * bWarnOfLongFilename, TargetPlatform, FinalTimeStamp, bSlowTask, DiffMap and SavePackageContext parameters are
-	 * not supported.
+	 * editor-only data) drops the editor-only properties and the editor-only objects (UObject::IsEditorOnly, and what
+	 * they own), whose references become null. A ".lmap" file sets PKG_ContainsMap. A PKG_Cooked package records
+	 * CookedPlatformName (the cook's target platform; this platform's name when null) in its summary. Errors are
+	 * logged (warnings with SAVE_NoError) and also sent to Error when given. UE's Conform, bForceByteSwapping,
+	 * bWarnOfLongFilename, FinalTimeStamp, bSlowTask, DiffMap and SavePackageContext parameters are not supported,
+	 * and the target platform is its name (UE: a const ITargetPlatform*, a Developer interface).
 	 */
 	static FSavePackageResultStruct Save(UPackage* InOuter, UObject* Base, EObjectFlags TopLevelFlags,
-		const TCHAR* Filename, FOutputDevice* Error = nullptr, uint32 SaveFlags = SAVE_None);
+		const TCHAR* Filename, FOutputDevice* Error = nullptr, uint32 SaveFlags = SAVE_None,
+		const TCHAR* CookedPlatformName = nullptr);
 
 	/** Save, returning whether it succeeded (UE: SavePackage). */
 	static bool SavePackage(UPackage* InOuter, UObject* Base, EObjectFlags TopLevelFlags, const TCHAR* Filename,
-		FOutputDevice* Error = nullptr, uint32 SaveFlags = SAVE_None);
+		FOutputDevice* Error = nullptr, uint32 SaveFlags = SAVE_None, const TCHAR* CookedPlatformName = nullptr);
 
 	/**
 	 * Save into OutPackageData instead of a file (Leon; the same bytes Save writes). Register them with
 	 * FLinkerLoad::RegisterInMemoryPackage to load them back.
 	 */
 	static FSavePackageResultStruct SaveToMemory(UPackage* InOuter, UObject* Base, EObjectFlags TopLevelFlags,
-		TArray<uint8>& OutPackageData, FOutputDevice* Error = nullptr, uint32 SaveFlags = SAVE_None);
+		TArray<uint8>& OutPackageData, FOutputDevice* Error = nullptr, uint32 SaveFlags = SAVE_None,
+		const TCHAR* CookedPlatformName = nullptr);
 
 private:
 	uint32 PackageFlagsPrivate;

@@ -63,6 +63,12 @@ class ENGINE_API UAssetImportData : public UObject
 public:
 	UAssetImportData(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
+	/** Only the editor needs it: a cooked package leaves it out, with its asset's reference to it (UE). */
+	virtual bool IsEditorOnly() const override
+	{
+		return true;
+	}
+
 #if WITH_EDITORONLY_DATA
 	/** The source files (UE: SourceData). */
 	UPROPERTY()

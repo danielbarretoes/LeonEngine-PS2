@@ -239,6 +239,23 @@ public:
 	int32 NumPostLoads = 0;
 };
 
+/** An object only the editor needs, like an asset's import data: a filtered package leaves it out (UE: IsEditorOnly).
+ */
+UCLASS()
+class UPackageTestEditorOnlyObject : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	virtual bool IsEditorOnly() const override
+	{
+		return true;
+	}
+
+	UPROPERTY()
+	int32 Value = 0;
+};
+
 /** A default subobject (and a runtime inner object) of UPackageTestOwner. */
 UCLASS()
 class UPackageTestSubobject : public UObject

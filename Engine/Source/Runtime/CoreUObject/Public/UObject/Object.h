@@ -187,6 +187,15 @@ class COREUOBJECT_API UObject : public UObjectBaseUtility
 	 */
 	virtual bool IsAsset() const;
 
+	/**
+	 * True for an object only the editor needs (UE: IsEditorOnly): a package that filters editor-only data (a cooked
+	 * one, D14) leaves it and everything it owns out, and saves references to it as null. False by default.
+	 */
+	virtual bool IsEditorOnly() const
+	{
+		return false;
+	}
+
 	/** True for an object created by CreateDefaultSubobject (UE). */
 	bool IsDefaultSubobject() const;
 

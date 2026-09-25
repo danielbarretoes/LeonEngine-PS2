@@ -20,7 +20,8 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 // The LeonEd commandlets, called as LeonCook calls them (Main with the command line after -run=): import, import
-// lists, reimport (gate G5: the same source saves the same bytes), resave, validation and the minimal cook.
+// lists, reimport (gate G5: the same source saves the same bytes), resave, validation and the cook (CookTests.cpp has
+// its closure and its output).
 
 namespace
 {
@@ -194,16 +195,21 @@ bool FLeonEdResaveValidateCookTest::RunTest(const FString& Parameters)
 	LeonEdTest::DestroyPackagesUnder(LeonEdTest::Root);
 	TestEqual("Valid", RunCommandlet(TEXT("ValidateAssets"), TEXT("-packagefolder=/LeonEdTest")), 0);
 
-	TestEqual("Cook", RunCommandlet(TEXT("Cook"), TEXT("-packagefolder=/LeonEdTest -TargetPlatform=Test")), 0);
-	const FString Cooked = UCookCommandlet::GetCookedFilename(TEXT("/LeonEdTest/T_Rock"), TEXT("Test"));
+	AddExpectedError(TEXT("unknown -TargetPlatform=Test"));
+	TestEqual(
+		"An unknown platform", RunCommandlet(TEXT("Cook"), TEXT("-packagefolder=/LeonEdTest -TargetPlatform=Test")), 1);
+	TestEqual("Cook", RunCommandlet(TEXT("Cook"), TEXT("-packagefolder=/LeonEdTest -TargetPlatform=PS2")), 0);
+	const FString Cooked =
+		UCookCommandlet::GetCookedFilename(TEXT("/LeonEdTest/T_Rock"), UCookCommandlet::GetCookedDir(TEXT("PS2")));
 	TestTrue("In Saved/Cooked/<Platform>/<Mount>/Content",
-		Cooked.EndsWith(TEXT("Saved/Cooked/Test/LeonEdTest/Content/T_Rock.lasset")));
+		Cooked.EndsWith(TEXT("Saved/Cooked/PS2/LeonEdTest/Content/T_Rock.lasset")));
 	const TUniquePtr<FLinkerLoad> Tables(FLinkerLoad::CreateLinker(nullptr, *Cooked, LOAD_None));
 	if (TestTrue("The cooked package reads", Tables.IsValid()))
 	{
 		TestTrue("Cooked, editor-only data filtered",
 			(Tables->Summary.GetPackageFlags() & (PKG_Cooked | PKG_FilterEditorOnly)) ==
 				static_cast<uint32>(PKG_Cooked | PKG_FilterEditorOnly));
+		TestEqual("Cooked for the target platform", Tables->Summary.CookedPlatform, FString(TEXT("PS2")));
 		bool bHasImportData = false;
 		for (int32 Index = 0; Index < Tables->ExportMap.Num(); ++Index)
 		{
@@ -212,7 +218,7 @@ bool FLeonEdResaveValidateCookTest::RunTest(const FString& Parameters)
 		TestFalse("No import data", bHasImportData);
 		TestEqual("Just the texture", Tables->ExportMap.Num(), 1);
 	}
-	IFileManager::Get().DeleteDirectory(*(FPaths::ProjectSavedDir() + TEXT("Cooked/Test")), false, true);
+	IFileManager::Get().DeleteDirectory(*UCookCommandlet::GetCookedDir(TEXT("PS2")), false, true);
 	LeonEdTest::DestroyPackagesUnder(LeonEdTest::Root);
 
 	IFileManager::Get().Delete(*PackageFile(TEXT("/LeonEdTest/T_Rock")));
