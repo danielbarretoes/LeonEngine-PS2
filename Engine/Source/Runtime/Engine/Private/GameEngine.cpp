@@ -9,6 +9,7 @@
 #include "HAL/PlatformTime.h"
 #include "InputCoreTypes.h"
 #include "Misc/CString.h"
+#include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 
 UGameEngine::UGameEngine()
@@ -251,6 +252,7 @@ bool UGameEngine::Tick(float DeltaTime, const FUpdateCallback& OnUpdate, const F
 	TickPlayHud(DeltaTime);
 	PendingScrollY = 0.0f; // discard unused wheel (modes that do not ConsumeScrollY)
 	Render(OnPostRender);
+	WritePendingScreenshot();
 	Window->SwapBuffers();
 	return bRunning && !Window->ShouldClose();
 }
@@ -543,5 +545,74 @@ void UGameEngine::Render(const FPostRenderCallback& OnPostRender)
 	if (OnPostRender)
 	{
 		OnPostRender(FbWidth, FbHeight);
+	}
+}
+
+void UGameEngine::WritePendingScreenshot()
+{
+	if (PendingScreenshotPath.IsEmpty())
+	{
+		return;
+	}
+	const FString Path = MoveTemp(PendingScreenshotPath);
+	PendingScreenshotPath.Empty();
+
+	int32 Width = 0;
+	int32 Height = 0;
+	Window->GetFramebufferSize(Width, Height);
+	TArray<uint8> Bgr;
+	Renderer.ReadFramebufferBgr(Width, Height, Bgr);
+	if (Bgr.Num() == 0)
+	{
+		UE_LOG(LogEngine, Warning, "Screenshot skipped: empty framebuffer");
+		return;
+	}
+
+	// BITMAPFILEHEADER + BITMAPINFOHEADER, rows bottom-up (as glReadPixels returns them), padded to 4 bytes.
+	const int32 RowBytes = Width * 3;
+	const int32 Stride = (RowBytes + 3) & ~3;
+	const uint32 PixelBytes = static_cast<uint32>(Stride * Height);
+	TArray<uint8> File;
+	File.Reserve(static_cast<int32>(54 + PixelBytes));
+	auto Put16 = [&File](uint32 Value)
+	{
+		File.Add(static_cast<uint8>(Value & 0xFFu));
+		File.Add(static_cast<uint8>((Value >> 8) & 0xFFu));
+	};
+	auto Put32 = [&Put16](uint32 Value)
+	{
+		Put16(Value & 0xFFFFu);
+		Put16(Value >> 16);
+	};
+	Put16(0x4D42u); // "BM"
+	Put32(54u + PixelBytes);
+	Put32(0u);
+	Put32(54u);
+	Put32(40u);
+	Put32(static_cast<uint32>(Width));
+	Put32(static_cast<uint32>(Height));
+	Put16(1u);
+	Put16(24u);
+	Put32(0u);
+	Put32(PixelBytes);
+	Put32(2835u);
+	Put32(2835u);
+	Put32(0u);
+	Put32(0u);
+	for (int32 Row = 0; Row < Height; ++Row)
+	{
+		File.Append(Bgr.GetData() + Row * RowBytes, RowBytes);
+		for (int32 Pad = RowBytes; Pad < Stride; ++Pad)
+		{
+			File.Add(0);
+		}
+	}
+	if (FFileHelper::SaveArrayToFile(File, *Path))
+	{
+		UE_LOG(LogEngine, Log, "Screenshot saved: %s (%dx%d)", *Path, Width, Height);
+	}
+	else
+	{
+		UE_LOG(LogEngine, Error, "Screenshot could not be written: %s", *Path);
 	}
 }

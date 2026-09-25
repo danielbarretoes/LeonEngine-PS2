@@ -57,6 +57,11 @@ public:
 	void TickPlayHud(float DeltaTime);
 	/** Editor PIE / custom loops: paint HUD widgets + FDebugOverlay (call after DrawScene). */
 	void PaintHudAndOverlay(int32 FramebufferWidth, int32 FramebufferHeight);
+	/** Saves the next rendered frame as a 24-bit .bmp (UE: FScreenshotRequest). */
+	void RequestScreenshot(const FString& Path)
+	{
+		PendingScreenshotPath = Path;
+	}
 
 	void RequestQuit()
 	{
@@ -286,6 +291,7 @@ private:
 	[[nodiscard]] EShaderReloadResult ReloadAllShaders(bool bForce);
 	void HandleInput(float DeltaTime);
 	void Render(const FPostRenderCallback& OnPostRender);
+	void WritePendingScreenshot();
 	void UpdateHudStats(float DeltaTime);
 
 	TUniquePtr<GenericApplication> Application;
@@ -309,6 +315,7 @@ private:
 	bool bOrbitMouseEnabled = true;
 	float PendingScrollY = 0.0f;
 	FString CenterHudText;
+	FString PendingScreenshotPath;
 
 	bool bMouseLookSampleValid = false;
 	bool bDebugKeyWasDown = false;

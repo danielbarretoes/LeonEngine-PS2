@@ -59,6 +59,9 @@ public:
 	static constexpr float PlanarReflectionScale = 0.5f;
 	static constexpr int32 MaxAoSamples = 64;
 
+	/** Mirror about the horizontal plane y = PlaneY (GL memory layout, LegacyGLMath.h), as the planar pass uses. */
+	[[nodiscard]] static FMatrix MakeReflectMatrix(float PlaneY);
+
 	bool Initialize(const FString& InShaderDirectory);
 	void Shutdown();
 
@@ -77,6 +80,8 @@ public:
 
 	void BeginFrame(int32 FramebufferWidth, int32 FramebufferHeight);
 	void DrawScene(const ULevel& Level, const UCameraComponent& Camera);
+	/** Reads the draw framebuffer as bottom-up BGR rows with no padding (screenshots). */
+	void ReadFramebufferBgr(int32 Width, int32 Height, TArray<uint8>& OutBgr) const;
 
 	/** Queues a skinned mesh draw for the next DrawScene (cleared after DrawScene). */
 	void SubmitSkeletalDraw(const USkeletalMesh& InMesh, const FMatrix& InModel, const TArray<FMatrix>& InBoneMatrices);

@@ -30,6 +30,10 @@ private:
 	TUniquePtr<AGameModeBase> GameMode;
 	bool bHeadless = false;
 	float TickHz = 60.0f;
+	/** -Screenshot=<file.bmp> saves frame -ExitAfterFrames=N (default 60), then the game exits. */
+	FString ScreenshotPath;
+	int32 ExitAfterFrames = 0;
+	int32 FrameCount = 0;
 	/** FPlatformTime::Seconds of the previous frame / the next headless step. */
 	double LastFrameTime = 0.0;
 	double NextHeadlessTick = 0.0;

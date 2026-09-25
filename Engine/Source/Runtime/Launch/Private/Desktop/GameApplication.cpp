@@ -57,6 +57,12 @@ bool FGameApplication::Init()
 	bShowStats |= FParse::Param(CmdLine, "showstats");
 
 	float Hz = 60.0f;
+	(void)FParse::Value(CmdLine, "ExitAfterFrames=", ExitAfterFrames);
+	if (FParse::Value(CmdLine, "Screenshot=", ScreenshotPath) && ExitAfterFrames <= 0)
+	{
+		ExitAfterFrames = 60;
+	}
+
 	if (FParse::Value(CmdLine, "tick=", Hz) && Hz >= 1.0f && Hz <= 240.0f)
 	{
 		TickHz = Hz;
@@ -158,6 +164,15 @@ bool FGameApplication::Tick()
 	const double Now = FPlatformTime::Seconds();
 	const float DeltaTime = FMath::Min(static_cast<float>(Now - LastFrameTime), 0.1f);
 	LastFrameTime = Now;
+	++FrameCount;
+	if (ExitAfterFrames > 0 && FrameCount > ExitAfterFrames)
+	{
+		return false;
+	}
+	if (!ScreenshotPath.IsEmpty() && FrameCount == ExitAfterFrames)
+	{
+		Engine->RequestScreenshot(ScreenshotPath);
+	}
 	return Engine->Tick(DeltaTime, [this](float Dt) { GameMode->Tick(*Engine, Dt); });
 }
 

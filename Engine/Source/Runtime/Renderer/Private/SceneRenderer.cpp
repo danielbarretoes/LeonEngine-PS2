@@ -102,15 +102,6 @@ namespace
 		return bAny;
 	}
 
-	/** Mirror about the horizontal plane y = PlaneY (GL memory layout). */
-	FMatrix MakeReflectMatrix(float PlaneY)
-	{
-		FMatrix ReflectMat = FMatrix::Identity;
-		ReflectMat.M[1][1] = -1.0f;
-		ReflectMat.M[3][1] = 2.0f * PlaneY;
-		return ReflectMat;
-	}
-
 	// std::mt19937 + uniform_real_distribution keep the SSAO kernel and noise identical to earlier releases.
 	void BuildAoKernel(FVector (&Kernel)[FSceneRenderer::MaxAoSamples])
 	{
@@ -610,6 +601,14 @@ void FSceneRenderer::RenderShadowPass(const ULevel& Level, const FMatrix& LightS
 	PassTimers.End(FGPUPassTimer::EPass::Shadow);
 }
 
+FMatrix FSceneRenderer::MakeReflectMatrix(float PlaneY)
+{
+	FMatrix ReflectMat = FMatrix::Identity;
+	ReflectMat.M[1][1] = -1.0f;
+	ReflectMat.M[3][1] = 2.0f * PlaneY;
+	return ReflectMat;
+}
+
 void FSceneRenderer::RenderPlanarReflectionPass(const ULevel& Level, const UCameraComponent& Camera, float PlaneY)
 {
 	const int32 ReflW = FMath::Max(1, FMath::RoundToInt(static_cast<float>(FbWidth) * PlanarReflectionScale));
@@ -1104,6 +1103,18 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 	OverlayDebugDraw.Clear();
 	SkeletalDraws.Reset();
 	StaticDraws.Reset();
+}
+
+void FSceneRenderer::ReadFramebufferBgr(int32 Width, int32 Height, TArray<uint8>& OutBgr) const
+{
+	OutBgr.SetNumUninitialized(FMath::Max(0, Width * Height * 3));
+	if (OutBgr.Num() == 0)
+	{
+		return;
+	}
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, DrawTargetFbo);
+	glPixelStorei(GL_PACK_ALIGNMENT, 1);
+	glReadPixels(0, 0, Width, Height, GL_BGR, GL_UNSIGNED_BYTE, OutBgr.GetData());
 }
 
 void FSceneRenderer::RenderPostStack(const UCameraComponent& Camera)
