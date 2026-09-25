@@ -130,7 +130,7 @@ FMatrix FShadowMap::FitLightSpaceMatrix(
 	}
 
 	// Eye-space Z is negative in front of the light camera.
-	const float ZNear = FMath::Max(0.05f, -MaxLs.Z + Padding);
+	const float ZNear = FMath::Max(0.05f, -MaxLs.Z - Padding);
 	const float ZFar = FMath::Max(ZNear + 0.1f, -MinLs.Z + Padding);
 
 	const FMatrix LightProj =
