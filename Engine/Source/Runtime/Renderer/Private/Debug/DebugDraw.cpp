@@ -1,6 +1,5 @@
 #include "Debug/DebugDraw.h"
 
-#include "LegacyGLMath.h"
 #include "Misc/Paths.h"
 #include "OpenGLVertexAttrib.h"
 #include "RendererLog.h"
@@ -99,7 +98,7 @@ void FDebugDraw::AddArrow(
 	{
 		Side = Dir ^ FVector(1.0f, 0.0f, 0.0f);
 	}
-	Side = LegacyGL::Normalize(Side) * HeadWidth;
+	Side = Side.GetUnsafeNormal() * HeadWidth;
 	const FVector Back = To - (Dir * HeadLength);
 	AddLine(To, Back + Side, InColor);
 	AddLine(To, Back - Side, InColor);
@@ -149,7 +148,7 @@ void FDebugDraw::AddLightFrustum(const FMatrix& LightSpace, const FLinearColor& 
 	FVector World[8];
 	for (int32 I = 0; I < 8; ++I)
 	{
-		FVector4 P = LegacyGL::Transform(Inv, FVector4(Ndc[I], 1.0f));
+		FVector4 P = Inv.TransformFVector4(FVector4(Ndc[I], 1.0f));
 		if (FMath::Abs(P.W) > 1e-6f)
 		{
 			P = P / P.W;
@@ -180,7 +179,7 @@ void FDebugDraw::Flush(const FMatrix& ViewProjection) const
 	glDepthFunc(GL_LEQUAL);
 
 	Shader.Bind();
-	Shader.SetMat4("uViewProjection", LegacyGL::ValuePtr(ViewProjection));
+	Shader.SetMat4("uViewProjection", ViewProjection);
 	glBindVertexArray(Vao);
 	glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(Vertices.Num()));
 	glBindVertexArray(0);

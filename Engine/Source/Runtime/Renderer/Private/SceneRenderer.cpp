@@ -113,7 +113,7 @@ namespace
 			const float X = Unit(Rng) * 2.0f - 1.0f;
 			const float Y = Unit(Rng) * 2.0f - 1.0f;
 			const float Z = Unit(Rng);
-			FVector Sample = LegacyGL::Normalize(FVector(X, Y, Z));
+			FVector Sample = FVector(X, Y, Z).GetUnsafeNormal();
 			Sample *= Unit(Rng);
 			float Scale = static_cast<float>(I) / static_cast<float>(FSceneRenderer::MaxAoSamples);
 			Scale = 0.1f + 0.9f * (Scale * Scale);
@@ -453,7 +453,7 @@ void FSceneRenderer::UpdateCameraUbo(
 	FCameraBlock Block;
 	Block.View = InView;
 	Block.Projection = InProjection;
-	Block.ViewProjection = LegacyGL::Mul(InProjection, InView);
+	Block.ViewProjection = InView * InProjection;
 	Block.CameraPos = FVector4(InCameraPos, 1.0f);
 	CameraUbo.Update(&Block, sizeof(Block));
 }
@@ -506,7 +506,7 @@ void FSceneRenderer::BindPlanarReflection(bool bEnabled, const FMatrix& Reflecti
 {
 	LitShader.SetInt("uHasPlanarReflection", bEnabled ? 1 : 0);
 	LitShader.SetInt("uPlanarReflection", 5);
-	LitShader.SetMat4("uReflectionViewProj", LegacyGL::ValuePtr(ReflectionViewProj));
+	LitShader.SetMat4("uReflectionViewProj", ReflectionViewProj);
 	if (bEnabled && PlanarReflection.Valid())
 	{
 		PlanarReflection.BindColorTexture(5);
@@ -555,8 +555,8 @@ void FSceneRenderer::RenderShadowPass(const ULevel& Level, const FMatrix& LightS
 			{
 				continue;
 			}
-			const FMatrix LightMvp = LegacyGL::Mul(LightSpace, Object.EffectiveModelMatrix());
-			ShadowShader.SetMat4("uLightMVP", LegacyGL::ValuePtr(LightMvp));
+			const FMatrix LightMvp = Object.EffectiveModelMatrix() * LightSpace;
+			ShadowShader.SetMat4("uLightMVP", LightMvp);
 
 			const int32 SubCount = Object.SubMeshCount();
 			for (int32 S = 0; S < SubCount; ++S)
@@ -587,8 +587,8 @@ void FSceneRenderer::RenderShadowPass(const ULevel& Level, const FMatrix& LightS
 			{
 				continue;
 			}
-			const FMatrix LightMvp = LegacyGL::Mul(LightSpace, Item.Model);
-			SkinnedShadowShader.SetMat4("uLightMVP", LegacyGL::ValuePtr(LightMvp));
+			const FMatrix LightMvp = Item.Model * LightSpace;
+			SkinnedShadowShader.SetMat4("uLightMVP", LightMvp);
 			if (Item.BoneMatrices.Num() > 0)
 			{
 				SkinnedShadowShader.SetMat4Array("uBones", &Item.BoneMatrices[0].M[0][0], Item.BoneMatrices.Num());
@@ -621,9 +621,9 @@ void FSceneRenderer::RenderPlanarReflectionPass(const ULevel& Level, const UCame
 	PassTimers.Begin(FGPUPassTimer::EPass::Planar);
 
 	const FMatrix ReflectMat = MakeReflectMatrix(PlaneY);
-	const FMatrix LocalView = LegacyGL::Mul(Camera.ViewMatrix(), ReflectMat);
+	const FMatrix LocalView = ReflectMat * Camera.ViewMatrix();
 	const FMatrix LocalProjection = Camera.ProjectionMatrix();
-	const FMatrix LocalViewProjection = LegacyGL::Mul(LocalProjection, LocalView);
+	const FMatrix LocalViewProjection = LocalView * LocalProjection;
 	const FVector Eye = Camera.GetCameraLocation();
 	const FVector ReflectedEye(Eye.X, (2.0f * PlaneY) - Eye.Y, Eye.Z);
 
@@ -723,10 +723,10 @@ void FSceneRenderer::DrawSubMesh(const FShader& Shader, const UStaticMeshCompone
 	}
 
 	const FMatrix LocalModel = Object.EffectiveModelMatrix();
-	const FMatrix Mvp = LegacyGL::Mul(InProjection, InView, LocalModel);
+	const FMatrix Mvp = LocalModel * InView * InProjection;
 
-	Shader.SetMat4("uMVP", LegacyGL::ValuePtr(Mvp));
-	Shader.SetMat4("uModel", LegacyGL::ValuePtr(LocalModel));
+	Shader.SetMat4("uMVP", Mvp);
+	Shader.SetMat4("uModel", LocalModel);
 	Shader.SetVec3("uAlbedo", InMaterial.Albedo.X, InMaterial.Albedo.Y, InMaterial.Albedo.Z);
 	Shader.SetFloat("uAlpha", InMaterial.Alpha);
 	Shader.SetVec2("uUvScale", InMaterial.UvScale.X, InMaterial.UvScale.Y);
@@ -741,7 +741,7 @@ void FSceneRenderer::DrawSubMesh(const FShader& Shader, const UStaticMeshCompone
 		Shader.SetFloat("uRoughness", InMaterial.Roughness);
 		Shader.SetVec3("uSpecular", InMaterial.Specular.X, InMaterial.Specular.Y, InMaterial.Specular.Z);
 		Shader.SetFloat("uMetallic", InMaterial.Metallic);
-		Shader.SetMat4("uLightSpaceMatrix", LegacyGL::ValuePtr(LightSpace));
+		Shader.SetMat4("uLightSpaceMatrix", LightSpace);
 		Shader.SetInt("uNormalMap", 2);
 		if (Options.bBindSharedLitTextures)
 		{
@@ -799,7 +799,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 		{
 			glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
 			glViewport(0, 0, FbWidth, FbHeight);
-			OverlayDebugDraw.Flush(LegacyGL::Mul(Camera.ProjectionMatrix(), Camera.ViewMatrix()));
+			OverlayDebugDraw.Flush(Camera.ViewMatrix() * Camera.ProjectionMatrix());
 		}
 		OverlayDebugDraw.Clear();
 		SkeletalDraws.Reset();
@@ -811,7 +811,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 
 	const FMatrix LocalView = Camera.ViewMatrix();
 	const FMatrix LocalProjection = Camera.ProjectionMatrix();
-	const FMatrix LocalViewProjection = LegacyGL::Mul(LocalProjection, LocalView);
+	const FMatrix LocalViewProjection = LocalView * LocalProjection;
 	const FVector LocalCameraPos = Camera.GetCameraLocation();
 
 	FFrustum CameraFrustum;
@@ -868,7 +868,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 	if (bHasPlanarMirror)
 	{
 		RenderPlanarReflectionPass(Level, Camera, MirrorPlaneY);
-		ReflectionViewProj = LegacyGL::Mul(LocalProjection, Camera.ViewMatrix(), MakeReflectMatrix(MirrorPlaneY));
+		ReflectionViewProj = MakeReflectMatrix(MirrorPlaneY) * Camera.ViewMatrix() * LocalProjection;
 	}
 	else
 	{
@@ -960,9 +960,9 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 				continue;
 			}
 			const FMatrix LocalModel = Object.EffectiveModelMatrix();
-			const FMatrix Mvp = LegacyGL::Mul(LocalProjection, LocalView, LocalModel);
-			UnlitShader.SetMat4("uMVP", LegacyGL::ValuePtr(Mvp));
-			UnlitShader.SetMat4("uModel", LegacyGL::ValuePtr(LocalModel));
+			const FMatrix Mvp = LocalModel * LocalView * LocalProjection;
+			UnlitShader.SetMat4("uMVP", Mvp);
+			UnlitShader.SetMat4("uModel", LocalModel);
 			UnlitShader.SetVec3("uAlbedo", 1.0f, 1.0f, 1.0f);
 			Object.Mesh->DrawSubMesh(Item.SubMeshIndex);
 		}
@@ -1098,7 +1098,7 @@ void FSceneRenderer::DrawScene(const ULevel& Level, const UCameraComponent& Came
 	{
 		glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
 		glViewport(0, 0, FbWidth, FbHeight);
-		OverlayDebugDraw.Flush(LegacyGL::Mul(Camera.ProjectionMatrix(), Camera.ViewMatrix()));
+		OverlayDebugDraw.Flush(Camera.ViewMatrix() * Camera.ProjectionMatrix());
 	}
 	OverlayDebugDraw.Clear();
 	SkeletalDraws.Reset();
@@ -1143,8 +1143,8 @@ void FSceneRenderer::RenderPostStack(const UCameraComponent& Camera)
 		SsaoShader.SetInt("uDepth", 0);
 		SsaoShader.SetInt("uNoise", 1);
 		SsaoShader.SetInt("uSampleCount", SampleCount);
-		SsaoShader.SetMat4("uProjection", LegacyGL::ValuePtr(LocalProjection));
-		SsaoShader.SetMat4("uInvProjection", LegacyGL::ValuePtr(InvProjection));
+		SsaoShader.SetMat4("uProjection", LocalProjection);
+		SsaoShader.SetMat4("uInvProjection", InvProjection);
 		SsaoShader.SetFloat("uRadius", Post.AoRadius);
 		SsaoShader.SetFloat("uBias", Post.AoBias);
 		const float NoiseScaleX = static_cast<float>(SsaoTarget.GetWidth()) / 4.0f;
@@ -1287,14 +1287,14 @@ void FSceneRenderer::DrawQueuedSkeletal(const FMatrix& InView, const FMatrix& In
 
 		const FMaterial& LocalMaterial = Item.Mesh->GetMaterial();
 		const FMatrix& LocalModel = Item.Model;
-		const FMatrix Mvp = LegacyGL::Mul(InProjection, InView, LocalModel);
+		const FMatrix Mvp = LocalModel * InView * InProjection;
 		float Normal[9];
 		LegacyGL::NormalMatrix3x3(LocalModel, Normal);
 
-		SkinnedLitShader.SetMat4("uMVP", LegacyGL::ValuePtr(Mvp));
-		SkinnedLitShader.SetMat4("uModel", LegacyGL::ValuePtr(LocalModel));
+		SkinnedLitShader.SetMat4("uMVP", Mvp);
+		SkinnedLitShader.SetMat4("uModel", LocalModel);
 		SkinnedLitShader.SetMat3("uNormalMatrix", Normal);
-		SkinnedLitShader.SetMat4("uLightSpaceMatrix", LegacyGL::ValuePtr(LightSpace));
+		SkinnedLitShader.SetMat4("uLightSpaceMatrix", LightSpace);
 		SkinnedLitShader.SetVec3("uAlbedo", LocalMaterial.Albedo.X, LocalMaterial.Albedo.Y, LocalMaterial.Albedo.Z);
 		SkinnedLitShader.SetFloat("uAlpha", LocalMaterial.Alpha);
 		SkinnedLitShader.SetVec2("uUvScale", LocalMaterial.UvScale.X, LocalMaterial.UvScale.Y);
@@ -1363,10 +1363,10 @@ void FSceneRenderer::DrawQueuedStatic(const ULevel& Level, const FMatrix& InView
 
 		const FMaterial& LocalMaterial = Item.Material;
 		const FMatrix& LocalModel = Item.Model;
-		const FMatrix Mvp = LegacyGL::Mul(InProjection, InView, LocalModel);
+		const FMatrix Mvp = LocalModel * InView * InProjection;
 
-		UnlitShader.SetMat4("uMVP", LegacyGL::ValuePtr(Mvp));
-		UnlitShader.SetMat4("uModel", LegacyGL::ValuePtr(LocalModel));
+		UnlitShader.SetMat4("uMVP", Mvp);
+		UnlitShader.SetMat4("uModel", LocalModel);
 		UnlitShader.SetVec3("uAlbedo", LocalMaterial.Albedo.X, LocalMaterial.Albedo.Y, LocalMaterial.Albedo.Z);
 
 		// Pass 1: establish closest depth (both windings compete).
@@ -1421,5 +1421,5 @@ void FSceneRenderer::DrawDebug(
 		DebugDraw.AddLightFrustum(LightSpace, FrustumColor);
 	}
 
-	DebugDraw.Flush(LegacyGL::Mul(Camera.ProjectionMatrix(), Camera.ViewMatrix()));
+	DebugDraw.Flush(Camera.ViewMatrix() * Camera.ProjectionMatrix());
 }

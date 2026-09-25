@@ -3,65 +3,15 @@
 #include "CoreMinimal.h"
 
 /**
- * The renderer's OpenGL conventions on Core math, until P7 switches the world to UE's axes.
+ * The renderer's OpenGL matrix builders, until P7 switches the world to UE's axes.
  *
- * Matrices here are FMatrix values holding what glm held: column-vector transforms (M * v), stored with glm's memory
- * layout, a right-handed view and clip Z in [-1, 1]. Because the memory is the same, they are uploaded to GLSL as they
- * are (ValuePtr). In FMatrix's own row-vector product order the same composition reads backwards, so code composes
- * them with Mul(A, B), which means what glm's A * B meant. The builders reproduce glm's formulas (perspective, ortho,
- * lookAt, translate / rotate / scale), so the results match what glm produced.
+ * They reproduce glm's formulas (perspective, ortho, lookAt, translate / rotate / scale, mat4_cast) term by term, so
+ * the results match what glm produced: a right-handed view and clip Z in [-1, 1]. glm stored column-vector matrices;
+ * the same 16 floats read as an FMatrix are the row-vector matrix of the same transform, so the results compose with
+ * FMatrix's own operators (A * B applies A first) and upload to GLSL as they are.
  */
 namespace LegacyGL
 {
-	/** glm's A * B (apply B, then A). */
-	FORCEINLINE FMatrix Mul(const FMatrix& A, const FMatrix& B)
-	{
-		return B * A;
-	}
-
-	FORCEINLINE FMatrix Mul(const FMatrix& A, const FMatrix& B, const FMatrix& C)
-	{
-		return Mul(Mul(A, B), C);
-	}
-
-	/** glm's M * V. */
-	FORCEINLINE FVector4 Transform(const FMatrix& M, const FVector4& V)
-	{
-		return M.TransformFVector4(V);
-	}
-
-	/** glm's vec3(M * vec4(P, 1)). */
-	FORCEINLINE FVector TransformPoint(const FMatrix& M, const FVector& P)
-	{
-		const FVector4 R = M.TransformFVector4(FVector4(P, 1.0f));
-		return FVector(R.X, R.Y, R.Z);
-	}
-
-	/** glm's vec3(M * vec4(V, 0)). */
-	FORCEINLINE FVector TransformDirection(const FMatrix& M, const FVector& V)
-	{
-		const FVector4 R = M.TransformFVector4(FVector4(V, 0.0f));
-		return FVector(R.X, R.Y, R.Z);
-	}
-
-	/** The 16 floats in upload order (glm::value_ptr). */
-	FORCEINLINE const float* ValuePtr(const FMatrix& M)
-	{
-		return &M.M[0][0];
-	}
-
-	/** glm::radians (glm's constant, which can differ from PI / 180 in the last bit). */
-	FORCEINLINE constexpr float Radians(float Degrees)
-	{
-		return Degrees * 0.01745329251994329576923690768489f;
-	}
-
-	/** glm::normalize: V / |V| with no tolerance. */
-	FORCEINLINE FVector Normalize(const FVector& V)
-	{
-		return V * (1.0f / FMath::Sqrt(V | V));
-	}
-
 	/** glm::perspective (right-handed, clip Z in [-1, 1]). */
 	RENDERCORE_API FMatrix Perspective(float FovYRadians, float Aspect, float ZNear, float ZFar);
 

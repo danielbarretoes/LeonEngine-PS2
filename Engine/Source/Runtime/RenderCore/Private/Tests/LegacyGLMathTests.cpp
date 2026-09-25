@@ -27,9 +27,9 @@ namespace
 	FMatrix MakeTrs()
 	{
 		FMatrix M = LegacyGL::Translate(FMatrix::Identity, FVector(1.0f, -2.0f, 3.5f));
-		M = LegacyGL::Rotate(M, LegacyGL::Radians(30.0f), FVector(1.0f, 0.0f, 0.0f));
-		M = LegacyGL::Rotate(M, LegacyGL::Radians(-45.0f), FVector(0.0f, 1.0f, 0.0f));
-		M = LegacyGL::Rotate(M, LegacyGL::Radians(60.0f), FVector(0.0f, 0.0f, 1.0f));
+		M = LegacyGL::Rotate(M, FMath::DegreesToRadians(30.0f), FVector(1.0f, 0.0f, 0.0f));
+		M = LegacyGL::Rotate(M, FMath::DegreesToRadians(-45.0f), FVector(0.0f, 1.0f, 0.0f));
+		M = LegacyGL::Rotate(M, FMath::DegreesToRadians(60.0f), FVector(0.0f, 0.0f, 1.0f));
 		return LegacyGL::Scale(M, FVector(2.0f, 0.5f, 1.5f));
 	}
 
@@ -47,8 +47,8 @@ bool FLegacyGLMathBuildersTest::RunTest(const FString& Parameters)
 	// Perspective, Ortho, LookAt, Translate / Rotate / Scale and QuatToMatrix build glm's matrices.
 	const float Perspective[16] = {
 		0.974278629f, 0, 0, 0, 0, 1.7320509f, 0, 0, 0, 0, -1.002002f, -1, 0, 0, -0.2002002f, 0};
-	MatrixMatches(
-		*this, "Perspective", LegacyGL::Perspective(LegacyGL::Radians(60.0f), 16.0f / 9.0f, 0.1f, 100.0f), Perspective);
+	MatrixMatches(*this, "Perspective",
+		LegacyGL::Perspective(FMath::DegreesToRadians(60.0f), 16.0f / 9.0f, 0.1f, 100.0f), Perspective);
 
 	const float Ortho[16] = {0.200000003f, 0, 0, 0, 0, 0.400000006f, 0, 0, 0, 0, -0.0404040404f, 0, -0.200000003f,
 		-0.200000003f, -1.02020204f, 1};
@@ -73,13 +73,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLegacyGLMathCompositionTest, "System.RenderCor
 
 bool FLegacyGLMathCompositionTest::RunTest(const FString& Parameters)
 {
-	// Mul, TransformPoint, NormalMatrix3x3, Normalize and Radians give what glm's operators gave.
+	// FMatrix products, TransformPosition, NormalMatrix3x3, GetUnsafeNormal and DegreesToRadians give what glm's
+	// operators gave.
 	const FMatrix A = MakeTrs();
 	const float Mul[16] = {0.373644024f, 0.867726088f, 1.69640374f, 0, -0.680905581f, 0.144250408f, 0.213810876f, 0,
 		-1.05617595f, -0.978997886f, 0.354337931f, 0, 7.88356924f, -0.285190463f, -4.21614361f, 1};
-	MatrixMatches(*this, "Mul (glm A * B)", LegacyGL::Mul(A, MakeLookAt()), Mul);
+	// glm's A * B is FMatrix's B * A: the same 16 floats, read as row vectors.
+	MatrixMatches(*this, "Product (glm A * B)", MakeLookAt() * A, Mul);
 
-	const FVector Point = LegacyGL::TransformPoint(A, FVector(1.0f, 2.0f, 3.0f));
+	const FVector Point = A.TransformPosition(FVector(1.0f, 2.0f, 3.0f));
 	TestTrue("TransformPoint", Point.Equals(FVector(-2.08724618f, -1.70534444f, 7.45374346f), 1.0e-5f));
 
 	float Normal[9];
@@ -92,9 +94,10 @@ bool FLegacyGLMathCompositionTest::RunTest(const FString& Parameters)
 	}
 
 	TestTrue("Normalize",
-		LegacyGL::Normalize(FVector(3.0f, -4.0f, 12.0f))
+		FVector(3.0f, -4.0f, 12.0f)
+			.GetUnsafeNormal()
 			.Equals(FVector(0.230769247f, -0.307692319f, 0.923076987f), 1.0e-7f));
-	TestEqual("Radians", LegacyGL::Radians(37.5f), 0.654498458f, 1.0e-7f);
+	TestEqual("DegreesToRadians", FMath::DegreesToRadians(37.5f), 0.654498458f, 1.0e-7f);
 	return true;
 }
 

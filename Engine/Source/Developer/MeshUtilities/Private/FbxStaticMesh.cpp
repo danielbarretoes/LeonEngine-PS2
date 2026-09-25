@@ -1,7 +1,6 @@
 #include "FbxStaticMesh.h"
 
 #include "Containers/StringConv.h"
-#include "LegacyGLMath.h"
 #include "MeshData.h"
 #include "MeshUtilitiesLog.h"
 
@@ -75,8 +74,8 @@ bool LoadStaticMeshFromFbx(const FString& Path, FMeshData& Out)
 					if (Mesh->vertex_normal.exists)
 					{
 						const ufbx_vec3 N = ufbx_get_vertex_vec3(&Mesh->vertex_normal, Corner);
-						V.Normal = LegacyGL::Normalize(
-							FVector(static_cast<float>(N.x), static_cast<float>(N.y), static_cast<float>(N.z)));
+						V.Normal = FVector(static_cast<float>(N.x), static_cast<float>(N.y), static_cast<float>(N.z))
+									   .GetUnsafeNormal();
 					}
 					else
 					{

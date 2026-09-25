@@ -72,7 +72,7 @@ namespace
 		for (int32 Index = Chain.Num() - 1; Index >= 0; --Index)
 		{
 			// child.node_to_world = parent.node_to_world * child.node_to_parent
-			World = LegacyGL::Mul(World, ToMatrix(ufbx_evaluate_transform(Anim, Chain[Index], InTime)));
+			World = ToMatrix(ufbx_evaluate_transform(Anim, Chain[Index], InTime)) * World;
 		}
 		return World;
 	}
@@ -266,8 +266,8 @@ bool LoadSkeletalMeshFromFbx(const FString& Path, FSkeletalMeshData& Out)
 				if (Mesh->vertex_normal.exists)
 				{
 					const ufbx_vec3 N = ufbx_get_vertex_vec3(&Mesh->vertex_normal, Index);
-					V.Normal = LegacyGL::Normalize(
-						FVector(static_cast<float>(N.x), static_cast<float>(N.y), static_cast<float>(N.z)));
+					V.Normal = FVector(static_cast<float>(N.x), static_cast<float>(N.y), static_cast<float>(N.z))
+								   .GetUnsafeNormal();
 				}
 				if (Mesh->vertex_uv.exists)
 				{

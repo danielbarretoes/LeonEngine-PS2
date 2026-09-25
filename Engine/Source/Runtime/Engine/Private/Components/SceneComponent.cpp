@@ -1,7 +1,6 @@
 #include "Components/SceneComponent.h"
 
 #include "GameFramework/Actor.h"
-#include "LegacyGLMath.h"
 
 namespace
 {
@@ -96,7 +95,7 @@ bool USceneComponent::AttachToComponent(USceneComponent* InParent, bool bKeepWor
 	{
 		const FMatrix ParentWorld = Parent->GetComponentTransform();
 		const FMatrix ParentInv = ParentWorld.Inverse();
-		const FLegacyTransform Relative = DecomposeApprox(LegacyGL::Mul(ParentInv, WorldBefore));
+		const FLegacyTransform Relative = DecomposeApprox(WorldBefore * ParentInv);
 		RelativeLocation = Relative.Position;
 		RelativeRotation = Relative.RotationDegrees;
 		RelativeScale = Relative.Scale;
@@ -139,7 +138,7 @@ FMatrix USceneComponent::GetComponentTransform() const
 	const FLegacyTransform Relative = GetRelativeTransform();
 	if (Parent != nullptr)
 	{
-		return LegacyGL::Mul(Parent->GetComponentTransform(), Relative.ModelMatrix());
+		return Relative.ModelMatrix() * Parent->GetComponentTransform();
 	}
 	if (Owner != nullptr)
 	{

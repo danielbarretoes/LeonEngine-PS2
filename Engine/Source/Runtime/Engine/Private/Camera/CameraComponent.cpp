@@ -7,10 +7,11 @@ namespace
 
 	[[nodiscard]] FVector FreeLookForward(float InYawDegrees, float InPitchDegrees)
 	{
-		const float YawRad = LegacyGL::Radians(InYawDegrees);
-		const float PitchRad = LegacyGL::Radians(InPitchDegrees);
-		return LegacyGL::Normalize(FVector(FMath::Cos(PitchRad) * FMath::Cos(YawRad), FMath::Sin(PitchRad),
-			FMath::Cos(PitchRad) * FMath::Sin(YawRad)));
+		const float YawRad = FMath::DegreesToRadians(InYawDegrees);
+		const float PitchRad = FMath::DegreesToRadians(InPitchDegrees);
+		return FVector(
+			FMath::Cos(PitchRad) * FMath::Cos(YawRad), FMath::Sin(PitchRad), FMath::Cos(PitchRad) * FMath::Sin(YawRad))
+			.GetUnsafeNormal();
 	}
 
 	/** Stable up for lookAt when looking nearly straight up/down (ortho Top). */
@@ -18,13 +19,13 @@ namespace
 	{
 		if (InPitchDegrees < -80.0f)
 		{
-			const float YawRad = LegacyGL::Radians(InYawDegrees);
-			return LegacyGL::Normalize(FVector(FMath::Cos(YawRad), 0.0f, FMath::Sin(YawRad)));
+			const float YawRad = FMath::DegreesToRadians(InYawDegrees);
+			return FVector(FMath::Cos(YawRad), 0.0f, FMath::Sin(YawRad)).GetUnsafeNormal();
 		}
 		if (InPitchDegrees > 80.0f)
 		{
-			const float YawRad = LegacyGL::Radians(InYawDegrees);
-			return LegacyGL::Normalize(FVector(-FMath::Cos(YawRad), 0.0f, -FMath::Sin(YawRad)));
+			const float YawRad = FMath::DegreesToRadians(InYawDegrees);
+			return FVector(-FMath::Cos(YawRad), 0.0f, -FMath::Sin(YawRad)).GetUnsafeNormal();
 		}
 		return FVector(0.0f, 1.0f, 0.0f);
 	}
@@ -38,7 +39,7 @@ void UCameraComponent::SetPerspective(float InFovDegrees, float InAspect, float 
 	NearPlane = InNearPlane;
 	FarPlane = InFarPlane;
 	bOrthographic = false;
-	Projection = LegacyGL::Perspective(LegacyGL::Radians(FovDegrees), Aspect, NearPlane, FarPlane);
+	Projection = LegacyGL::Perspective(FMath::DegreesToRadians(FovDegrees), Aspect, NearPlane, FarPlane);
 }
 
 void UCameraComponent::SetOrthographic(float Height, float InAspect, float InNearPlane, float InFarPlane)
@@ -156,8 +157,8 @@ void UCameraComponent::UpdateCachedPosition() const
 		return;
 	}
 
-	const float YawRad = LegacyGL::Radians(YawDegrees);
-	const float PitchRad = LegacyGL::Radians(PitchDegrees);
+	const float YawRad = FMath::DegreesToRadians(YawDegrees);
+	const float PitchRad = FMath::DegreesToRadians(PitchDegrees);
 
 	CachedPosition = Target +
 		FVector(Distance * FMath::Cos(PitchRad) * FMath::Cos(YawRad), Distance * FMath::Sin(PitchRad),

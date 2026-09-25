@@ -3,7 +3,6 @@
 #include "Frustum.h"
 #include "GameFramework/Input.h"
 #include "GameFramework/SpringArmComponent.h"
-#include "LegacyGLMath.h"
 #include "Misc/AutomationTest.h"
 #include "Physics/PhysScene.h"
 #include "SceneRenderer.h"
@@ -25,7 +24,7 @@ namespace
 	/** Clip-space NDC (x / w, y / w, z / w) of a world point through a view-projection, as the renderer applies it. */
 	FVector GoldenNdc(const FMatrix& ViewProjection, const FVector& WorldPoint)
 	{
-		const FVector4 Clip = LegacyGL::Transform(ViewProjection, FVector4(WorldPoint, 1.0f));
+		const FVector4 Clip = ViewProjection.TransformFVector4(FVector4(WorldPoint, 1.0f));
 		return FVector(Clip.X / Clip.W, Clip.Y / Clip.W, Clip.Z / Clip.W);
 	}
 
@@ -58,7 +57,7 @@ namespace
 	/** The renderer's view-projection of a camera (projection after view). */
 	FMatrix GoldenViewProjection(const UCameraComponent& Camera)
 	{
-		return LegacyGL::Mul(Camera.ProjectionMatrix(), Camera.ViewMatrix());
+		return Camera.ViewMatrix() * Camera.ProjectionMatrix();
 	}
 
 	/** Appends the NDC of every point through a view-projection. */
@@ -313,14 +312,14 @@ bool FGoldenPlanarReflectionTest::RunTest(const FString& Parameters)
 
 	UCameraComponent Camera;
 	SetGoldenOrbit(Camera, FVector(0.0f, 0.5f, 0.0f), 30.0f, 20.0f, 6.0f);
-	const FMatrix ReflectionViewProjection = LegacyGL::Mul(Camera.ProjectionMatrix(), Camera.ViewMatrix(), Reflect);
+	const FMatrix ReflectionViewProjection = Reflect * Camera.ViewMatrix() * Camera.ProjectionMatrix();
 
 	TArray<FVector> Mirrored;
 	TArray<FVector> Ndc;
 	for (const FVector& Legacy : LegacyPoints)
 	{
 		const FVector Point = LegacyGolden::ToWorldPosition(Legacy);
-		Mirrored.Add(LegacyGL::TransformPoint(Reflect, Point));
+		Mirrored.Add(FVector(Reflect.TransformPosition(Point)));
 		Ndc.Add(GoldenNdc(ReflectionViewProjection, Point));
 	}
 

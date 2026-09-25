@@ -538,7 +538,7 @@ void FDebugOverlay::Draw(int32 FramebufferWidth, int32 FramebufferHeight)
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	Shader.Bind();
-	Shader.SetMat4("uProjection", LegacyGL::ValuePtr(Projection));
+	Shader.SetMat4("uProjection", Projection);
 	glBindVertexArray(Vao);
 	glDrawArrays(GL_TRIANGLES, 0, VertexCount);
 	glBindVertexArray(0);

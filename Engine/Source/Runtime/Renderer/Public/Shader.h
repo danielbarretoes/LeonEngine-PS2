@@ -47,6 +47,8 @@ public:
 
 	void Bind() const;
 	void SetMat4(const ANSICHAR* Name, const float* Value16) const;
+	/** Uploads the 16 floats as they are: GLSL sees the transpose, so its M * v is the row-vector v * M. */
+	void SetMat4(const ANSICHAR* Name, const FMatrix& Value) const;
 	void SetMat4Array(const ANSICHAR* Name, const float* Values, int32 Count) const;
 	void SetMat3(const ANSICHAR* Name, const float* Value9) const;
 	void SetVec3(const ANSICHAR* Name, float X, float Y, float Z) const;

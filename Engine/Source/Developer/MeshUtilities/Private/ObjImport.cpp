@@ -1,7 +1,6 @@
 #include "ObjImport.h"
 
 #include "Containers/StringConv.h"
-#include "LegacyGLMath.h"
 #include "MeshUtilitiesLog.h"
 #include "Misc/Paths.h"
 
@@ -51,7 +50,7 @@ namespace
 				continue;
 			}
 
-			const FVector N = LegacyGL::Normalize(FaceNormal);
+			const FVector N = FaceNormal.GetUnsafeNormal();
 			Data.Vertices[I0].Normal += N;
 			Data.Vertices[I1].Normal += N;
 			Data.Vertices[I2].Normal += N;
@@ -61,7 +60,7 @@ namespace
 		{
 			if (FVector::DotProduct(Vertex.Normal, Vertex.Normal) > 0.0f)
 			{
-				Vertex.Normal = LegacyGL::Normalize(Vertex.Normal);
+				Vertex.Normal = Vertex.Normal.GetUnsafeNormal();
 			}
 			else
 			{
@@ -116,7 +115,7 @@ namespace
 		{
 			const size_t Ni = static_cast<size_t>(Index.normal_index) * 3u;
 			const FVector N(Attrib.normals[Ni + 0], Attrib.normals[Ni + 1], Attrib.normals[Ni + 2]);
-			Vertex.Normal = (FVector::DotProduct(N, N) > 0.0f) ? LegacyGL::Normalize(N) : FVector(0.0f, 1.0f, 0.0f);
+			Vertex.Normal = (FVector::DotProduct(N, N) > 0.0f) ? N.GetUnsafeNormal() : FVector(0.0f, 1.0f, 0.0f);
 		}
 		else
 		{

@@ -93,7 +93,7 @@ FMatrix FShadowMap::FitLightSpaceMatrix(
 	{
 		Dir = FVector(0.35f, -1.0f, -0.45f);
 	}
-	Dir = LegacyGL::Normalize(Dir);
+	Dir = Dir.GetUnsafeNormal();
 
 	const FVector Center = (WorldMin + WorldMax) * 0.5f;
 	const FVector Extents = (WorldMax - WorldMin) * 0.5f + FVector(Padding);
@@ -124,7 +124,7 @@ FMatrix FShadowMap::FitLightSpaceMatrix(
 
 	for (const FVector& Corner : Corners)
 	{
-		const FVector Ls = LegacyGL::TransformPoint(LightView, Corner);
+		const FVector Ls = FVector(LightView.TransformPosition(Corner));
 		MinLs = MinLs.ComponentMin(Ls);
 		MaxLs = MaxLs.ComponentMax(Ls);
 	}
@@ -135,5 +135,5 @@ FMatrix FShadowMap::FitLightSpaceMatrix(
 
 	const FMatrix LightProj =
 		LegacyGL::Ortho(MinLs.X - Padding, MaxLs.X + Padding, MinLs.Y - Padding, MaxLs.Y + Padding, ZNear, ZFar);
-	return LegacyGL::Mul(LightProj, LightView);
+	return LightView * LightProj;
 }

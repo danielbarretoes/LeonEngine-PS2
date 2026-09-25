@@ -226,6 +226,11 @@ void FShader::SetMat4(const ANSICHAR* Name, const float* Value16) const
 	glUniformMatrix4fv(UniformLocation(Name), 1, GL_FALSE, Value16);
 }
 
+void FShader::SetMat4(const ANSICHAR* Name, const FMatrix& Value) const
+{
+	SetMat4(Name, &Value.M[0][0]);
+}
+
 void FShader::SetMat4Array(const ANSICHAR* Name, const float* Values, int32 Count) const
 {
 	if (Count <= 0 || Values == nullptr)

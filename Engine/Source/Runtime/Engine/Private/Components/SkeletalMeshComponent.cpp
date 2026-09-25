@@ -1,7 +1,6 @@
 #include "Components/SkeletalMeshComponent.h"
 
 #include "Engine/GameEngine.h"
-#include "LegacyGLMath.h"
 #include "SceneRenderer.h"
 #include "StaticMesh.h"
 
@@ -144,7 +143,7 @@ bool USkeletalMeshComponent::GetAttachmentWorldMatrix(int32 AttachmentIndex, FMa
 	{
 		return false;
 	}
-	OutWorld = LegacyGL::Mul(GetComponentTransform(), BoneModel, Att.Relative.ModelMatrix());
+	OutWorld = Att.Relative.ModelMatrix() * BoneModel * GetComponentTransform();
 	return true;
 }
 

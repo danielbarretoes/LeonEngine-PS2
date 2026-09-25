@@ -3,7 +3,6 @@
 #include "Debug/DebugDraw.h"
 #include "Frustum.h"
 #include "IPhysicsBackend.h"
-#include "LegacyGLMath.h"
 #include "MeshData.h"
 #include "StaticMesh.h"
 #include "TriangleCollision.h"
@@ -188,7 +187,7 @@ void FPhysScene::SyncFromLevel(const ULevel& Level)
 				TriMesh.Positions.SetNum(Cpu.Vertices.Num());
 				for (int32 Vi = 0; Vi < TriMesh.Positions.Num(); ++Vi)
 				{
-					TriMesh.Positions[Vi] = LegacyGL::TransformPoint(Model, Cpu.Vertices[Vi].Position);
+					TriMesh.Positions[Vi] = FVector(Model.TransformPosition(Cpu.Vertices[Vi].Position));
 				}
 				TriMesh.Indices = Cpu.Indices;
 				if (TriMesh.IsValid())
@@ -657,9 +656,9 @@ void FPhysScene::AppendBodiesCollisionDebug(FDebugDraw& Draw, SIZE_T InSkipLevel
 			const FTriangleMeshCollision& Mesh = TriangleMeshes[Bi];
 			for (int32 I = 0; I + 2 < Mesh.Indices.Num(); I += 3)
 			{
-				const FVector V0 = (Mesh.Positions[static_cast<int32>(Mesh.Indices[I])]);
-				const FVector V1 = (Mesh.Positions[static_cast<int32>(Mesh.Indices[I + 1])]);
-				const FVector V2 = (Mesh.Positions[static_cast<int32>(Mesh.Indices[I + 2])]);
+				const FVector V0 = Mesh.Positions[static_cast<int32>(Mesh.Indices[I])];
+				const FVector V1 = Mesh.Positions[static_cast<int32>(Mesh.Indices[I + 1])];
+				const FVector V2 = Mesh.Positions[static_cast<int32>(Mesh.Indices[I + 2])];
 				Draw.AddLine(V0, V1, TriMeshColor);
 				Draw.AddLine(V1, V2, TriMeshColor);
 				Draw.AddLine(V2, V0, TriMeshColor);

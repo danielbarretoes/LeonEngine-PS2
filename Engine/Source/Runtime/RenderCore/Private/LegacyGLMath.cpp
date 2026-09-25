@@ -41,8 +41,8 @@ namespace LegacyGL
 
 	FMatrix LookAt(const FVector& Eye, const FVector& Center, const FVector& Up)
 	{
-		const FVector F = Normalize(Center - Eye);
-		const FVector S = Normalize(F ^ Up);
+		const FVector F = (Center - Eye).GetUnsafeNormal();
+		const FVector S = (F ^ Up).GetUnsafeNormal();
 		const FVector U = S ^ F;
 
 		FMatrix Result = FMatrix::Identity;
@@ -75,7 +75,7 @@ namespace LegacyGL
 	{
 		const float C = FMath::Cos(Radians);
 		const float S = FMath::Sin(Radians);
-		const FVector A = Normalize(Axis);
+		const FVector A = Axis.GetUnsafeNormal();
 		const FVector Temp = A * (1.0f - C);
 
 		float Rot[3][3];

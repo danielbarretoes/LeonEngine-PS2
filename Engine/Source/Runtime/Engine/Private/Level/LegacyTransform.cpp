@@ -23,9 +23,9 @@ FMatrix FLegacyTransform::ModelMatrix() const
 		SanitizeScaleComponent(Scale.X), SanitizeScaleComponent(Scale.Y), SanitizeScaleComponent(Scale.Z));
 	FMatrix Model = FMatrix::Identity;
 	Model = LegacyGL::Translate(Model, Position);
-	Model = LegacyGL::Rotate(Model, LegacyGL::Radians(RotationDegrees.X), FVector(1.0f, 0.0f, 0.0f));
-	Model = LegacyGL::Rotate(Model, LegacyGL::Radians(RotationDegrees.Y), FVector(0.0f, 1.0f, 0.0f));
-	Model = LegacyGL::Rotate(Model, LegacyGL::Radians(RotationDegrees.Z), FVector(0.0f, 0.0f, 1.0f));
+	Model = LegacyGL::Rotate(Model, FMath::DegreesToRadians(RotationDegrees.X), FVector(1.0f, 0.0f, 0.0f));
+	Model = LegacyGL::Rotate(Model, FMath::DegreesToRadians(RotationDegrees.Y), FVector(0.0f, 1.0f, 0.0f));
+	Model = LegacyGL::Rotate(Model, FMath::DegreesToRadians(RotationDegrees.Z), FVector(0.0f, 0.0f, 1.0f));
 	Model = LegacyGL::Scale(Model, SafeScale);
 	return Model;
 }
