@@ -24,7 +24,7 @@ From the repository root (Windows):
 Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.lproj
 ```
 
-The PS2 build runs inside the pinned ps2dev Docker image (Docker must be running) unless `PS2DEV` is set on the host. Output: `Game/ThirdPerson/Binaries/PS2/ThirdPerson.elf` (Debug and Shipping add `-PS2-<Configuration>` to the name). From Git Bash or WSL use `Engine/Build/BatchFiles/Linux/Build.sh` with the same arguments (CI's `ps2` job builds this way inside the ps2dev container).
+The PS2 build runs inside the pinned ps2dev Docker image (Docker must be running) unless `PS2DEV` is set on the host. Output: `Game/ThirdPerson/Binaries/PS2/ThirdPerson.elf` (Debug and Shipping add `-PS2-<Configuration>` to the name). From Git Bash or WSL use `Engine/Build/BatchFiles/Linux/Build.sh` with the same arguments (it also builds this way inside the ps2dev container).
 
 Run in PCSX2 (optionally building first):
 

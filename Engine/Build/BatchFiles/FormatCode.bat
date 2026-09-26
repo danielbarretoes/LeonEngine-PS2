@@ -2,9 +2,10 @@
 REM Engine\Build\BatchFiles\FormatCode.bat [--check]
 REM clang-format every C++ file under Engine\Source, Engine\Platforms, Engine\Plugins and Game\*\Source.
 REM Skips ThirdParty, Intermediate and Binaries. GLSL shaders are never touched.
-REM --check: dry run, exit 1 if any file needs formatting (used by Lint.bat and CI).
-REM The repository is formatted with clang-format 20 (CI: pip install clang-format==20.1.8); LEON_CLANG_FORMAT names the
-REM binary to use, else Visual Studio's, else the one on PATH. Another major version formats a few constructs differently.
+REM --check: dry run, exit 1 if any file needs formatting (used by Lint.bat).
+REM The repository is formatted with clang-format 20 (20.1.8 is the reference: pip install clang-format==20.1.8);
+REM LEON_CLANG_FORMAT names the binary to use, else Visual Studio's, else the one on PATH. Another major version
+REM formats a few constructs differently.
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0..\..\.."
 

@@ -191,7 +191,7 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
   `TFunction` and delegates. `TCHAR` is UTF-8 `char` on every platform, so write literals with `TEXT("...")`. Element
   types stored in UE containers must be relocatable with `memmove` (no pointers into themselves).
 - **Banned APIs (gate G4).** Every module uses the UE types and Core math (`FVector`, `FRotator`, `FQuat`, `FMatrix`,
-  `FTransform`, `FMath`, …) since P6. `Engine\Build\BatchFiles\CheckBannedApis.ps1` (run by `Lint.bat` and CI) scans
+  `FTransform`, `FMath`, …) since P6. `Engine\Build\BatchFiles\CheckBannedApis.ps1` (run by `Lint.bat`) scans
   `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game`, ignoring comments, and rejects: glm and nlohmann
   (use Core math and the `Json` module); every `std::` container, string, `string_view`, stream, function and smart
   pointer (`std::vector`, `std::string`, `std::map`, `std::set`, `std::list`, `std::array`, `std::stringstream`,

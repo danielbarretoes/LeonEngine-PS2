@@ -5,7 +5,7 @@ side, on `de_leon`, a blockout map built in Blender. P17 boots it: the first-per
 spawns, bots that join the teams, a crosshair. P18 brings the weapons (a pistol, a rifle, an AWP and an HE grenade),
 damage, armor, death and spectating. P19 brings Counter-Strike's defusal rules: rounds, money, the buy menu, the bomb
 and the HUD. P20 gives the bots their brains: they buy, walk de_leon's waypoint graph, see and hear their enemies,
-fight, plant and defuse ([Bots](#bots)). P21 plays whole bot matches headless in CI ([Bot match](#bot-match)). In
+fight, plant and defuse ([Bots](#bots)). P21 plays whole bot matches headless ([Bot match](#bot-match)). In
 0.20.1 the bots follow the waypoints' `Jump` and `Crouch` flags, escort the bomb carrier, hunt when they outnumber the
 enemy and rotate between the sites, and the buy menu is a UMG widget tree.
 
@@ -230,9 +230,10 @@ happen).
   [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md)).
 - `-benchmark` (the engine's): the fixed 60 Hz steps run without waiting for the clock; ten rounds take a second or
   two. The bots' choices, the weapons' spread and the rounds come from seeded streams and the steps are fixed, so a
-  seed replays the same match: `BotMatch.bat` plays it twice and fails when the summaries differ. CI runs
-  `BotMatch.bat 10 7`, and a staged Shipping build plays three rounds (Shipping logs nothing, so only the exit code
-  tells). CI's match logs `Botmatch OK: 10 round(s), CT 6 - T 4, 72 kill(s), seed 7, reasons [3,3,4,4,4,4,3,4,3,4]`.
+  seed replays the same match: `BotMatch.bat` (10 rounds, seed 7 by default) plays it twice and fails when the
+  summaries differ, and a staged Shipping build (`BuildCookRun.bat`) plays three rounds (Shipping logs nothing, so only
+  the exit code tells). The match of the CI (since removed) logged `Botmatch OK: 10 round(s), CT 6 - T 4, 72 kill(s),
+  seed 7, reasons [3,3,4,4,4,4,3,4,3,4]`.
 
 ## de_leon
 

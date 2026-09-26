@@ -134,7 +134,7 @@ Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game
 → `Game\ThirdPerson\Binaries\PS2\ThirdPerson.elf`. The first build pulls the ps2dev image. PS2 builds do not need Visual
 Studio. When `PS2DEV` is not set, LeonBuildTool runs itself inside the container; with a local ps2dev install (`PS2DEV`,
 `PS2SDK`, and `$PS2DEV/ee/bin` on `PATH`) it builds on the host. From Git Bash or WSL use
-`Engine/Build/BatchFiles/Linux/Build.sh` with the same arguments (CI's `ps2` job runs it in the ps2dev container).
+`Engine/Build/BatchFiles/Linux/Build.sh` with the same arguments (inside the ps2dev container it builds directly).
 Details: [BUILD.md — PS2 builds in Docker](BUILD.md#ps2-builds-in-docker) and the platform extension
 [Engine/Platforms/PS2/README.md](../Engine/Platforms/PS2/README.md).
 
@@ -204,14 +204,15 @@ This writes a Visual Studio solution to `Engine\Intermediate\ProjectFiles\` (for
 with `Build.bat`) and the root `compile_commands.json` from the `LeonAutomationTests Win64 Development` Ninja tree,
 which covers the Win64 engine modules and their tests.
 
-VS Code / Cursor with clangd work out of the box with the committed settings:
+clangd (VS Code, Cursor, or any editor) reads the root `compile_commands.json` through the committed settings:
 
 | File | Role |
 | --- | --- |
 | `.clangd` | `CompilationDatabase: .` (root `compile_commands.json`); no diagnostics under `ThirdParty/` |
-| `.vscode/settings.json` | clangd `--compile-commands-dir=${workspaceFolder}`, `--query-driver` for MSVC `cl.exe` (system headers), MS C++ IntelliSense off, tabs of width 4, ruler at 120 |
-| `.vscode/c_cpp_properties.json` | `Win64` configuration on the root `compile_commands.json` |
 | `.clang-tidy` | clang-tidy checks used by clangd |
+
+`.vscode/` is git-ignored: each developer keeps their own editor settings (for clangd on Win64, `--query-driver` for
+MSVC `cl.exe` gives it the system headers; tabs of width 4 and a ruler at 120 match the style).
 
 Re-run `GenerateProjectFiles.bat` after adding modules or files, then **Developer: Restart Language Server**.
 The database is Win64 only; PS2-only files (`Engine/Platforms/PS2/`, `Game/ThirdPerson/`) are not in it.
@@ -227,8 +228,8 @@ Engine\Build\BatchFiles\Lint.bat                  :: format check + banned APIs 
 `FormatCode.bat` runs the `clang-format` that `LEON_CLANG_FORMAT` names, else Visual Studio's LLVM one, else one on
 `PATH`, with the repo's `.clang-format` (Epic style: tabs, Allman braces) on `Engine\Source`, `Engine\Platforms`,
 `Engine\Plugins` and `Game`, skipping `ThirdParty`, `Intermediate` and `Binaries`. The repository is formatted with
-clang-format 20 (CI installs 20.1.8 with `pip install clang-format==20.1.8`); another major version formats a few
-constructs differently, and the script warns when the one it found is not version 20. `Lint.bat` then runs
+clang-format 20 (20.1.8 is the reference version: `pip install clang-format==20.1.8`); another major version formats a
+few constructs differently, and the script warns when the one it found is not version 20. `Lint.bat` then runs
 `Engine\Build\BatchFiles\CheckBannedApis.ps1` (gate G4), which fails on glm, nlohmann, the `std::` containers,
 strings, `string_view`, streams, functions and smart pointers and their headers (D2), iostream, the `printf` family
 (`vfprintf`, `_snprintf`, ...), the removed legacy math bridges and `FLegacyCoordinateConversion` outside the tests in
@@ -236,20 +237,24 @@ engine or game code; only ThirdParty, Core's platform HAL sources, the `printf` 
 LeonHeaderTool and the test program mains are exempt. Last it builds every Win64 engine target and ShooterGame's. Coding
 rules: [CODING_STANDARD.md](CODING_STANDARD.md).
 
-## Continuous integration
+## Checks before a push
 
-`.github/workflows/ci.yml` runs three jobs on every push (any branch) and on pull requests:
+The gates run locally, from `Engine\Build\BatchFiles\` on Win64:
 
-- **ps2** (an ubuntu runner, inside the pinned ps2dev image): builds `ThirdPerson`, `BlankProgram` and `TestPAL` for
-  PS2 with `Engine/Build/BatchFiles/Linux/Build.sh`, prints their sections (`ELF sizes (G3)`, in the log and the run
-  summary) and uploads the three ELFs. TestPAL runs in PCSX2, which CI does not have.
-- **win64**: `CheckBannedApis.ps1` (G4, with `pwsh`), the format check (G1: `FormatCode.bat --check` with
-  clang-format 20.1.8 from pip), `Setup.bat`, `RunTests.bat` (the engine's, ShooterGame's and TestPAL's tests), builds
-  `LeonGame` and `LeonCook`, `SmokeTest.bat` (G6), `BotMatch.bat 10 7` (ten rounds, played twice), `CheckReimport.bat`
-  (G5: reimporting the content leaves it unchanged), then the staged build smokes (`BuildCookRun.bat`: a content-only
-  project and ShooterGame, Development, headless).
-- **win64-shipping**: ShooterGame staged in Shipping by `BuildCookRun.bat`, playing a three-round bot match from its
-  pak.
+- `Lint.bat`: the format check (G1, `FormatCode.bat --check`), `CheckBannedApis.ps1` (G4) and the Win64 Development
+  build of every engine target and ShooterGame's.
+- `RunTests.bat`: `LeonAutomationTests`, the LeonHeaderTool golden tests, `ShooterGameTests` and TestPAL, on Win64.
+- `CheckReimport.bat Game\ThirdPerson\ThirdPerson.lproj Game\ShooterGame\ShooterGame.lproj` (G5, on a clean
+  checkout of the content): reimporting the content leaves it unchanged.
+- `SmokeTest.bat` (G6): ShooterGame headless with `bot_fill`, ten pawns, exit code 0.
+- `BotMatch.bat` (10 rounds, seed 7): the headless bot match, played twice with the same result.
+- `BuildCookRun.bat`: the staged builds ([BUILD.md — Staging and Shipping](BUILD.md#staging-and-shipping)).
+- The root `Package.bat` builds and packages ShooterGame Win64 Shipping into `Packages\Win64\` and ThirdPerson and
+  TestPAL PS2 Development (in Docker) into `Packages\PS2\`; `-NoWin64` / `-NoPS2` skip a platform.
+
+The PS2 ELF sizes (G3) are measured with the toolchain's `mips64r5900el-ps2-elf-size` in the ps2dev image when a phase
+is recorded ([Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md)). TestPAL on PS2 runs in PCSX2
+([Run TestPAL in PCSX2](#run-testpal-in-pcsx2)).
 
 ## Troubleshooting
 

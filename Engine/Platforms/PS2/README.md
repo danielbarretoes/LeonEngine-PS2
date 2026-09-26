@@ -183,11 +183,12 @@ Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game
 Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson
 ```
 
-`RunPCSX2.ps1 [-Project <dir|file.lproj>] [-Configuration Debug|Development|Shipping] [-Build]` resolves
+`RunPCSX2.ps1 [-Project <dir|file.lproj>] [-Configuration Debug|Development|Shipping] [-Build] [-StageOnly]` resolves
 `<Project>\Binaries\PS2\<Name>.elf` (`<Name>-PS2-<Configuration>.elf` outside Development), finds PCSX2 through
 `$env:LEON_PCSX2`, `PATH` or the default install folders, and starts it with `-fastboot -elf`. With
 `-Program <Name>` it runs an engine program instead (`Engine\Binaries\PS2\<Name>.elf`, built with
-`Build.bat <Name> PS2 <Configuration>`). PCSX2 setup notes: [Docs/SETUP.md](../../../Docs/SETUP.md#pcsx2-notes).
+`Build.bat <Name> PS2 <Configuration>`). With `-StageOnly` it stages the config next to the ELF and returns
+without starting PCSX2 (the root `Package.bat` uses it). PCSX2 setup notes: [Docs/SETUP.md](../../../Docs/SETUP.md#pcsx2-notes).
 
 The Core, CoreUObject, Json, Projects and PakFile automation tests run on the EE through the `TestPAL` program (the
 pak tests on paks in memory):
@@ -198,8 +199,9 @@ Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build
 
 `UE_LOG` output goes to the EE console; read `%USERPROFILE%\Documents\PCSX2\logs\emulog.txt` for
 `TestPAL: PASSED (113 test(s), 0 failed)` and the `LogTestPAL` reflection / object-array / memory / name-pool
-lines. CI's `ps2` job builds `ThirdPerson`, `BlankProgram` and `TestPAL` for PS2 and prints their ELF sections (gate
-G3) but cannot run them (no PCSX2).
+lines. The root `Package.bat` builds and packages `ThirdPerson` and `TestPAL` for PS2 (Development, in Docker, into
+`Packages\PS2\`); the ELF sizes (gate G3) are measured with the toolchain's `mips64r5900el-ps2-elf-size` in the ps2dev
+image when a phase is recorded ([Budgets.md](Documentation/Budgets.md)).
 
 ## Reference
 

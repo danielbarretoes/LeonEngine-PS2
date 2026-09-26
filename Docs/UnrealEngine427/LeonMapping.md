@@ -634,7 +634,7 @@ navmesh, which Leon does not have), and ShooterGame's bots get their brains. Det
 
 ### P21 — Bot matches, budgets and release 0.20.0
 
-Hardening: whole matches of bots in CI. Details:
+Hardening: whole matches of bots, then run by the CI (since removed). Details:
 [ShooterGame README — Bot match](../../Game/ShooterGame/README.md#bot-match).
 
 | Leon (before) | UE name (now) | Where |
@@ -642,7 +642,7 @@ Hardening: whole matches of bots in CI. Details:
 | headless steps always paced to the clock | `FApp::IsBenchmarking` (UE's `-benchmark`): unpaced fixed steps | `Core/Public/Misc/App.h`, `Launch/Private/LaunchEngineLoop.cpp` |
 | `FPlatformMisc::RequestExitWithStatus`: the code only when forced | + a non-forced exit records its code (`GetRequestedEngineExitCode`), which `FEngineLoop::GetExitCode` returns | `Core/Public/CoreGlobals.h`, `Launch/Public/LaunchEngineLoop.h` |
 | — | `AShooterGameMode`'s `-botmatch` / `-rounds=` / `-seed=`, `FShooterMatchChecker` (Leon's; UE ShooterGame has no bot match) | `Game/ShooterGame/Source/ShooterGame/` |
-| — | `BotMatch.bat`; CI's bot match and staged Shipping bot match | `Engine/Build/BatchFiles/`, `.github/workflows/ci.yml` |
+| — | `BotMatch.bat`; the staged Shipping bot match (`BuildCookRun.bat`; both were run by the CI of 0.20.0, since removed) | `Engine/Build/BatchFiles/` |
 | — | `ShooterGame.Bots.MatchCheckerFlagsViolations` (34 ShooterGame tests) | `*/Private/Tests/` |
 
 ### 0.20.1 — the audit fixes
@@ -695,7 +695,7 @@ the converters' allowed places: [ARCHITECTURE.md — Coordinates](../ARCHITECTUR
 | Navigation | a Recast navmesh (`UNavigationSystemV1`, `ARecastNavMesh`) built from the level's geometry | a graph of `ANavigationWaypoint` actors (UE3's path nodes), linked by the map import (`bAutoLinkWaypoints`, P20). There is no `UWaypointNavigationData` (the plan's name): the graph lives in `UNavigationSystem`, a plain class the world owns by value, not a UObject (UE's navigation data, `ANavigationData`, is an actor). The agent is the Engine config's `[/Script/Engine.NavigationSystem]` (`AgentRadius`, `AgentHeight`, `AgentMaxStepHeight`, `AgentMaxJumpHeight`, `AgentMaxDropHeight`, `MaxLinkDistance`; `FWaypointLinkParams::FromConfig`) instead of `SupportedAgents`; `AAIController` reads the waypoint flags `Jump` and `Crouch` (the character needs `NavAgentProps.bCanCrouch`) instead of nav link and area classes | a Counter-Strike map needs a few dozen nodes; no navmesh build or Recast dependency, and a graph fits the PS2 budget |
 | Process exit code | `GuardedMain` returns its own error level | `FEngineLoop::GetExitCode`: the loop's failure, else the code a non-forced `FPlatformMisc::RequestExitWithStatus` recorded (P21) | a game (the bot match) fails its process after a clean shutdown |
 | Startup map failure | `StartGameInstance` falls back to the default map (or asks) | the error is logged and the game exits with code 1 | a script with a wrong map must stop |
-| Map on the command line | the first token | the first token (a leading `.lproj` is skipped), or `-map=<map>` | the scripts and CI already use `-map=` |
+| Map on the command line | the first token | the first token (a leading `.lproj` is skipped), or `-map=<map>` | the scripts already use `-map=` |
 | `FURL` | parses protocol, host, port, map, options, portal; the default constructor fills the default map | map, options and portal only; `FURL()` leaves the map empty (the parsing constructor fills `GameDefaultMap`); the map keeps a file path (a `.lmap`) as given | no networking; keeps struct defaults free of config reads |
 | Player start choice | `ChoosePlayerStart` prefers a Play From Here start (`APlayerStartPIE`, editor play sessions only), then picks a random unoccupied start | the first player start in level order; there is no `APlayerStartPIE` (the maps migrated from the `.llev` templates have the view their framing opened with as their first start); ShooterGame takes the first free start tagged with the team, in level order | deterministic; no editor |
 | Login | `Login(UPlayer*, ENetRole, Portal, Options, FUniqueNetIdRepl, ErrorMessage)`, `PreLogin` | `Login(UPlayer*, Portal, Options, ErrorMessage)`; no `PreLogin`, net roles or unique ids | no networking |

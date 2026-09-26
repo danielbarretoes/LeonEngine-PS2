@@ -233,8 +233,8 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
   `-reimport -all`), `ResavePackages`, `ValidateAssets`, `MigrateLegacyContent` (temporary) and a minimal `Cook`
   (`Developer/Cooker` and its recipes are gone). LeonCook is `LeonCook [<Project>.lproj] -run=<Commandlet>`.
 - Imported assets keep an editor-only, instanced `UAssetImportData`: the source relative to the engine or project,
-  its MD5 and the import settings, never a timestamp. Gate G5 starts: `CheckReimport.bat` (CI) reimports the content
-  and fails when git sees a change.
+  its MD5 and the import settings, never a timestamp. Gate G5 starts: `CheckReimport.bat` (then run by the CI, since
+  removed) reimports the content and fails when git sees a change.
 - The engine content is `/Engine` packages: `T_Default_D` imported from `Engine/SourceArt` (`ImportList.ini`), the
   three materials migrated from their `.lmat` files (deleted), `DefaultTexture`, `T_Default_Bump_N` and the
   BasicShapes saved once from their generators. The runtime loads them with `LoadObject`; the `.llev` keys resolve to
@@ -295,7 +295,8 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
   default), cooks, paks the cooked folder into `<Project>/Content/Paks/<Project>-Win64.lpak` under the mount point
   `../../../` and stages it in `<Project>/Saved/StagedBuilds/Win64/` (UE's layout); the staged game finds its folders
   (`FPaths::IsStaged`) and reads everything from the pak. The staged Shipping build of the engine's content renders the
-  Development frame byte for byte; CI runs a Development staged build headless.
+  Development frame byte for byte; the CI of the time (since removed) ran a Development staged build
+  headless.
 - Captures are unattended: `-Screenshot` / `-ExitAfterFrames` runs ignore the mouse and the keyboard
   (`UGameViewportClient::SetIgnoreInput`), so a capture no longer depends on the mouse.
 - 350 tests; the golden tables and the Win64 frames are unchanged; the engine content was resaved for 0.17.0 (the
@@ -323,7 +324,8 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 - **de_leon**: a Blender-scripted blockout (two sites, three lanes, mid doors, crates, a clip, buy zones, five starts a
   team, 18 linked waypoints) imported with the project's rules and required tags; the engine's maps skip a project's
   required tags. Team bodies as placeholders.
-- **G6**: `SmokeTest.bat` (ShooterGame headless, `bot_fill`, ten pawns, exit 0) in CI, with the staged ShooterGame.
+- **G6**: `SmokeTest.bat` (ShooterGame headless, `bot_fill`, ten pawns, exit 0), run then by the CI (since
+  removed), with the staged ShooterGame.
 - 371 engine tests and 10 ShooterGame tests; the golden tables and the Win64 frames are unchanged.
 
 ### Done — Weapons and damage (P18)
@@ -371,8 +373,9 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 ([LeonMapping — P21](LeonMapping.md#p21--bot-matches-budgets-and-release-0200), [ShooterGame README — Bot match](../../Game/ShooterGame/README.md#bot-match)):
 
 - `ShooterGame -nullrhi -benchmark -botmatch -rounds=N -seed=N`: a headless bot match at unpaced fixed steps, the
-  rules' invariants checked every frame (`FShooterMatchChecker`), exit code 1 when one breaks. CI plays ten rounds
-  twice and requires the same result (a seed replays the match), and a staged Shipping build plays three.
+  rules' invariants checked every frame (`FShooterMatchChecker`), exit code 1 when one breaks. The CI of the time (since
+  removed) played ten rounds twice and required the same result (a seed replays the match), and a staged Shipping
+  build three.
 - **Fix**: `AAIController` read a freed path after a stuck repath; it made seeded matches diverge.
 - ShooterGame's numbers as the PS2 port's targets in Budgets.md (reflection, UObjects, names, heap).
 - 386 engine tests and 34 ShooterGame tests; release 0.20.0 (the content resaved with the new version).
@@ -394,8 +397,8 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 - The bots follow the waypoints' `Jump` and `Crouch` flags; terrorists escort the bomb carrier, a team that outnumbers
   the other hunts it, and a counter-terrorist rotates between the sites. UMG is UE's widget tree (no input), and the
   buy menu is built on it.
-- CI runs on every push: the format check (G1, clang-format 20.1.8), TestPAL (run on Win64, built for PS2) and the
-  PS2 ELF sizes (G3).
+- CI ran on every push (since removed; the gates are now local batch files): the format check (G1, clang-format
+  20.1.8), TestPAL (run on Win64, built for PS2) and the PS2 ELF sizes (G3).
 - 386 engine tests and 42 ShooterGame tests; release 0.20.1 (the content resaved with the new
   version).
 

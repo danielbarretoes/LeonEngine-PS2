@@ -78,7 +78,7 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | P16 | ThirdPerson | 668 048 | 6 984 | 33 880 | 676 200 | `UObject::IsEditorOnly` (the cook's editor-only objects): its 8-byte `return false` body and one more slot in each of the 8 CoreUObject vtables the game links (`UObject`, `UField`, `UStruct`, `UScriptStruct`, `UClass`, `UEnum`, `UFunction`, `UPackage`) (+40 bytes of text). The PS2 launch does not link PakFile yet |
 | P16 | BlankProgram | 179 628 | 6 136 | 27 097 | 186 804 | unchanged |
 | P16 | TestPAL | 1 449 588 | 6 384 | 39 600 | 1 457 128 | the PakFile module (`FPakFile`, `FPakPlatformFile`, `FPakWriter`), `FSHA1` and their tests, which run on paks in memory (+76 240 bytes of text; about 65 KB of it in the `FPak*` and `FSHA1*` symbols, the runtime and the pak tests), and `UObject::IsEditorOnly` with its test fixture |
-| 0.20.1 | ThirdPerson | 674 384 | 6 984 | 34 008 | — | measured by CI's "ELF sizes (G3)" step (`size`, not stripped): P17 to P21 and the audit's Core, CoreUObject and Launch changes (+6 336 bytes of text since P16) |
+| 0.20.1 | ThirdPerson | 674 384 | 6 984 | 34 008 | — | measured by the CI of 0.20.1, since removed (its "ELF sizes (G3)" step: `size`, not stripped): P17 to P21 and the audit's Core, CoreUObject and Launch changes (+6 336 bytes of text since P16) |
 | 0.20.1 | BlankProgram | 180 156 | 6 136 | 27 225 | — | +528 bytes of text (Core) |
 | 0.20.1 | TestPAL | 1 458 584 | 6 384 | 39 808 | — | +8 996 bytes of text: the audit's config, archive, linker and pak fixes and their tests (120 tests) |
 
@@ -190,10 +190,10 @@ archives, config), which section GC dropped while nothing referenced them. The g
 each class it reflects later adds its generated code, its `UClass` and its `FProperty` objects. The reflection budget
 (400 KB) now also holds for ThirdPerson: about 179 KB of code and tables, the object array and the construction heap.
 
-**P21 ShooterGame as the port's target** (Win64 Development in CI, headless: `ShooterGame -nullrhi -benchmark
--botmatch -rounds=10 -seed=7`, de_leon, ten bots; the game logs `Botmatch budget:` at the end, the same counters
-TestPAL logs on the PS2; the values below are 0.20.1's). The gameplay framework does not run on the PS2 yet, so these are the numbers a PS2
-ShooterGame would have to fit, measured where it runs:
+**P21 ShooterGame as the port's target** (Win64 Development, headless, measured by the CI of 0.20.1, since removed:
+`ShooterGame -nullrhi -benchmark -botmatch -rounds=10 -seed=7`, de_leon, ten bots; the game logs `Botmatch budget:` at
+the end, the same counters TestPAL logs on the PS2; the values below are 0.20.1's). The gameplay framework does not run
+on the PS2 yet, so these are the numbers a PS2 ShooterGame would have to fit, measured where it runs:
 
 | Item | ShooterGame (desktop) | PS2 limit | Notes |
 |---|---:|---:|---|
@@ -203,6 +203,6 @@ ShooterGame would have to fit, measured where it runs:
 | Names | 1 572, 44 KB used | 256 KB of blocks | desktop blocks: 320 KB |
 | GMalloc peak | 3 902 KB (current 3 676 KB at the end) | 31 MB of RAM for everything | includes the desktop object array (131 072 slots × 16 bytes = 2 MB; the PS2's is 96 KB); about 1.9 MB is the world, the map's assets, the actors and the reflection |
 
-Since 0.20.1 CI measures the PS2 ELFs on every push (the ps2 job's "ELF sizes (G3)" step prints `size` for
-ThirdPerson, BlankProgram and TestPAL; the table above records 0.20.1). TestPAL has not run in PCSX2 since P16: its
-GMalloc and name pool numbers wait for the next run on the emulator.
+The PS2 ELF sizes are measured with the toolchain's `mips64r5900el-ps2-elf-size` in the ps2dev image when a phase is
+recorded (the table above records 0.20.1, measured by the CI of that release, since removed). TestPAL has not run in
+PCSX2 since P16: its GMalloc and name pool numbers wait for the next run on the emulator.

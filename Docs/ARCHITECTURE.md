@@ -108,7 +108,7 @@ Full reference: [BUILD.md](BUILD.md).
 | `LeonPak` | `Engine/Source/Programs/LeonPak/` | Program | Desktop | `LeonPak` | `PakFile`; creates, lists, tests and extracts `.lpak` files (UE: UnrealPak) |
 | `LeonAutomationTests` | `Engine/Source/Programs/LeonAutomationTests/` | Program | Desktop | `LeonAutomationTests` | every desktop Runtime / Developer / Editor module except `Launch`, + `JoltPhysics` plugin; `COLLECT_AUTOMATION_TESTS` |
 | `TestPAL` | `Engine/Source/Programs/TestPAL/` | Program | all | `TestPAL` | `Core`, `CoreUObject`, `Projects` (→ `Json`), `PakFile`; `COLLECT_AUTOMATION_TESTS`; runs their automation tests (PS2 included) and logs the reflection budget |
-| `BlankProgram` | `Engine/Source/Programs/BlankProgram/` | Program | all | `BlankProgram` | starts the module table and prints the platform (CI builds it for PS2) |
+| `BlankProgram` | `Engine/Source/Programs/BlankProgram/` | Program | all | `BlankProgram` | starts the module table and prints the platform (`Lint.bat` builds it for Win64) |
 
 Module closures in practice:
 
@@ -882,7 +882,7 @@ UWorld::LineBatcher (FDebugDraw) -----------------------------------------------
   -test | -extract=<dir>`; **BuildCookRun** (`Engine\Build\BatchFiles\BuildCookRun.bat`, UE: `RunUAT BuildCookRun`)
   builds, cooks, stages, paks and runs a project ([TOOLS.md](TOOLS.md#buildcookrun)).
 - **Reproducible reimport (gate G5)**: `Engine\Build\BatchFiles\CheckReimport.bat [<Project>.lproj ...]` reimports
-  the content from its sources and fails when git sees a change under a `Content` folder; CI runs it.
+  the content from its sources and fails when git sees a change under a `Content` folder.
 - **Tests**: each module keeps its tests in `<Module>/Private/Tests/`, excluded from the module library and compiled
   only into targets with `COLLECT_AUTOMATION_TESTS`. Every test is a UE automation test
   (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, named `System.<Module>.<Area>.<Name>`): 386 on Win64 — Core
@@ -912,21 +912,18 @@ UWorld::LineBatcher (FDebugDraw) -----------------------------------------------
 - **Banned APIs (gate G4)**: `Engine\Build\BatchFiles\CheckBannedApis.ps1` fails when engine or game code uses glm,
   nlohmann, the `std::` containers / strings / functions / smart pointers, iostream or the `printf` family, the
   removed legacy math bridges (`LegacyGL`, `FLegacyTransform`, `LegacyAxes`), or `FLegacyCoordinateConversion`
-  outside the tests ([CODING_STANDARD.md §4](CODING_STANDARD.md#4-language)); `Lint.bat` and CI
-  run it.
+  outside the tests ([CODING_STANDARD.md §4](CODING_STANDARD.md#4-language)); `Lint.bat` runs it.
 - **ShooterGame smoke (gate G6)**: `Engine\Build\BatchFiles\SmokeTest.bat` builds ShooterGame, runs it headless on
   de_leon with `-ExecCmds=bot_fill` and fails unless it exits with 0 and reports ten pawns, five a team.
 - **Bot match (P21)**: `Engine\Build\BatchFiles\BotMatch.bat` plays ten rounds of bots headless and unpaced
   (`-nullrhi -benchmark -botmatch`), twice with the same seed; ShooterGame's `FShooterMatchChecker` checks the rules'
   invariants every frame and the game exits 1 when one breaks (`FPlatformMisc::RequestExitWithStatus`, which
   `FEngineLoop::GetExitCode` returns); the two runs must log the same summary.
-- **CI** (`.github/workflows/ci.yml`, every push and pull request): `ps2` builds `ThirdPerson`, `BlankProgram` and
-  `TestPAL` in the ps2dev image, prints their ELF sections (G3) and uploads the ELFs; `win64` runs `CheckBannedApis.ps1`
-  (G4), the format check (G1, clang-format 20.1.8), `Setup.bat`, `RunTests.bat` (the engine's, ShooterGame's and
-  TestPAL's tests), builds `LeonGame` and `LeonCook`, then `SmokeTest.bat` (G6), `BotMatch.bat 10 7`,
-  `CheckReimport.bat` (G5: the engine, ThirdPerson and ShooterGame) and the staged build smokes: `BuildCookRun.bat`
-  cooks, stages, paks and runs a content-only project and ShooterGame headless (Development); `win64-shipping`, in
-  parallel, stages ShooterGame in Shipping and plays three rounds of a bot match from its pak.
+- **Local gates** (run before a push, [SETUP.md](SETUP.md#checks-before-a-push)): `Lint.bat` (G1 format check, G4,
+  Win64 builds), `RunTests.bat` (the engine's, ShooterGame's and TestPAL's tests on Win64), `CheckReimport.bat` (G5),
+  `SmokeTest.bat` (G6), `BotMatch.bat` (the bot match, twice) and `BuildCookRun.bat` (the staged builds); the root
+  `Package.bat` packages ShooterGame Win64 Shipping and ThirdPerson and TestPAL PS2 Development (Docker). The PS2 ELF
+  sizes (G3) are measured with `mips64r5900el-ps2-elf-size` in the ps2dev image when a phase is recorded.
 
 ---
 
