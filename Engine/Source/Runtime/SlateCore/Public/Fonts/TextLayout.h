@@ -2,7 +2,7 @@
 
 #include "CoreTypes.h"
 
-/** Horizontal justification for HUD / UUserWidget text (UE-like ETextJustify lite). */
+/** Horizontal justification of text (UE: ETextJustify). */
 enum class ETextJustify : uint8
 {
 	Left = 0,

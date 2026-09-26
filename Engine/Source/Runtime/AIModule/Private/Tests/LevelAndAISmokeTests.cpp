@@ -1,7 +1,6 @@
 #include "CoreMinimal.h"
 #include "Engine/World.h"
 #include "GameFramework/WorldSettings.h"
-#include "GameplayMinimal.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/FileHelper.h"
 #include "Misc/PackageName.h"

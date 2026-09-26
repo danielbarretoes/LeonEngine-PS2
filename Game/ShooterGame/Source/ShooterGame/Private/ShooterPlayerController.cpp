@@ -47,9 +47,14 @@ void AShooterPlayerController::SetBuyMenuOpen(bool bOpen)
 	}
 }
 
-void AShooterPlayerController::OnBuyMenuPressed()
+void AShooterPlayerController::BuyMenu()
 {
 	SetBuyMenuOpen(!bBuyMenuOpen);
+}
+
+void AShooterPlayerController::OnBuyMenuPressed()
+{
+	BuyMenu();
 }
 
 void AShooterPlayerController::OnBuyMenuItem(int32 Number)

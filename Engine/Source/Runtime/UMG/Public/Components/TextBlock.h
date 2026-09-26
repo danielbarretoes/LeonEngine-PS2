@@ -1,19 +1,20 @@
 #pragma once
 
-#include "Blueprint/UserWidget.h"
+#include "Components/Widget.h"
 #include "CoreMinimal.h"
 #include "Fonts/TextLayout.h"
 #include "TextBlock.generated.h"
 
-/** UE-like UTextBlock: simple screen text (status lines, titles). */
+/** Text in Leon's HUD font, justified in its rectangle (UE: UTextBlock). */
 UCLASS()
-class UMG_API UTextBlock : public UUserWidget
+class UMG_API UTextBlock : public UWidget
 {
 	GENERATED_BODY()
 
 public:
 	UTextBlock(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
+	/** UE: SetText / GetText. */
 	void SetText(const FText& InText)
 	{
 		Text = InText;
@@ -22,41 +23,27 @@ public:
 	{
 		return Text;
 	}
-
-	void SetColor(const FLinearColor& InColor)
+	/** UE: SetColorAndOpacity (an FSlateColor there; the alpha is not used). */
+	void SetColorAndOpacity(const FLinearColor& InColor)
 	{
-		Color = InColor;
+		ColorAndOpacity = InColor;
 	}
-	void SetScale(float InScale)
+	[[nodiscard]] const FLinearColor& GetColorAndOpacity() const
 	{
-		Scale = InScale;
+		return ColorAndOpacity;
 	}
-	void SetJustify(ETextJustify InJustify)
+	/** UE: SetJustification. */
+	void SetJustification(ETextJustify InJustification)
 	{
-		Justify = InJustify;
-	}
-
-	/** Anchor in pixels (top-left origin). For Center justify, X is the screen center of each line. */
-	void SetPosition(float InX, float InY)
-	{
-		X = InX;
-		Y = InY;
+		Justification = InJustification;
 	}
 
-	/** Places the block in the middle of the viewport (updated each paint from the context size). */
-	void SetCenteredOnScreen(bool bEnabled)
-	{
-		bCenteredOnScreen = bEnabled;
-	}
-
-	void NativePaint(FPaintContext& Ctx) override;
+protected:
+	FVector2D ComputeDesiredSize() const override;
+	void OnPaint(FPaintContext& Ctx, const FVector2D& Position, const FVector2D& Size) const override;
 
 private:
 	FText Text;
-	FLinearColor Color = FLinearColor(1.0f, 0.82f, 0.35f);
-	float Scale = HudFontScale;
-	ETextJustify Justify = ETextJustify::Center;
-	float X = 0.0f;
-	float Y = 0.0f;
-	bool bCenteredOnScreen = true;
+	FLinearColor ColorAndOpacity = FLinearColor::White;
+	ETextJustify Justification = ETextJustify::Left;
 };

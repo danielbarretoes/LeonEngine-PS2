@@ -1,82 +1,42 @@
 #pragma once
 
-#include "Blueprint/UserWidget.h"
+#include "Components/Widget.h"
 #include "CoreMinimal.h"
 #include "Image.generated.h"
 
-/**
- * UE-like UImage (lite): solid tinted rect (no texture brush yet; HUD DrawRect only).
- * Useful as panel chrome, health backdrop, letterbox bars.
- */
+/** A tinted rectangle (UE: UImage; Leon's brush has no texture, so the image is its colour). */
 UCLASS()
-class UMG_API UImage : public UUserWidget
+class UMG_API UImage : public UWidget
 {
 	GENERATED_BODY()
 
 public:
 	UImage(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	void SetPosition(float InX, float InY)
+	/** UE: SetColorAndOpacity (the alpha is not used). */
+	void SetColorAndOpacity(const FLinearColor& InColor)
 	{
-		X = InX;
-		Y = InY;
+		ColorAndOpacity = InColor;
 	}
-	void SetSize(float InW, float InH)
+	[[nodiscard]] const FLinearColor& GetColorAndOpacity() const
 	{
-		W = InW;
-		H = InH;
+		return ColorAndOpacity;
 	}
-
-	[[nodiscard]] float GetX() const
+	/** The size the image asks for (UE: SetDesiredSizeOverride; the brush's image size otherwise). */
+	void SetDesiredSizeOverride(const FVector2D& InSize)
 	{
-		return X;
-	}
-	[[nodiscard]] float GetY() const
-	{
-		return Y;
-	}
-	[[nodiscard]] float GetWidth() const
-	{
-		return W;
-	}
-	[[nodiscard]] float GetHeight() const
-	{
-		return H;
+		DesiredSizeOverride = InSize;
 	}
 
-	void SetColor(const FLinearColor& InColor)
+protected:
+	FVector2D ComputeDesiredSize() const override
 	{
-		Color = InColor;
+		return DesiredSizeOverride;
 	}
-	[[nodiscard]] const FLinearColor& GetColor() const
-	{
-		return Color;
-	}
-
-	void SetBorderColor(const FLinearColor& InColor)
-	{
-		BorderColor = InColor;
-	}
-	void SetDrawBorder(bool bEnabled)
-	{
-		bDrawBorder = bEnabled;
-	}
-
-	/** Stretches to the full framebuffer each paint (dim overlay / letterbox). */
-	void SetFillScreen(bool bEnabled)
-	{
-		bFillScreen = bEnabled;
-	}
-
-	void NativePaint(FPaintContext& Ctx) override;
+	void OnPaint(FPaintContext& Ctx, const FVector2D& Position, const FVector2D& Size) const override;
 
 private:
-	float X = 0.0f;
-	float Y = 0.0f;
-	float W = 64.0f;
-	float H = 64.0f;
-	bool bDrawBorder = false;
-	bool bFillScreen = false;
-	FLinearColor Color = FLinearColor(0.08f, 0.08f, 0.10f);
-	FLinearColor BorderColor = FLinearColor(0.45f, 0.38f, 0.22f);
+	FLinearColor ColorAndOpacity = FLinearColor::White;
+	/** UE's default brush: 32 by 32. */
+	FVector2D DesiredSizeOverride = FVector2D(32.0f, 32.0f);
 };

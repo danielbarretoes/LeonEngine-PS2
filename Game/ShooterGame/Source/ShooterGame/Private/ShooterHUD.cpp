@@ -1,7 +1,14 @@
 #include "ShooterHUD.h"
 
+#include "Blueprint/WidgetTree.h"
 #include "Camera/CameraComponent.h"
 #include "CanvasTypes.h"
+#include "Components/Border.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Components/TextBlock.h"
+#include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
 #include "Engine/World.h"
 #include "GameFramework/GameModeBase.h"
 #include "ShooterBomb.h"
@@ -440,11 +447,47 @@ UShooterBuyMenuWidget::UShooterBuyMenuWidget(const FObjectInitializer& ObjectIni
 {
 }
 
-void UShooterBuyMenuWidget::NativePaint(FPaintContext& Ctx)
+UTextBlock* UShooterBuyMenuWidget::AddLine(UVerticalBox& Box, float TopPadding)
+{
+	UTextBlock* Line = WidgetTree->ConstructWidget<UTextBlock>();
+	Box.AddChildToVerticalBox(Line)->SetPadding(FMargin(0.0f, TopPadding, 0.0f, 0.0f));
+	return Line;
+}
+
+void UShooterBuyMenuWidget::NativeOnInitialized()
+{
+	// Canvas > Border (the panel) > VerticalBox > the lines.
+	UCanvasPanel* Root = WidgetTree->ConstructWidget<UCanvasPanel>();
+	WidgetTree->RootWidget = Root;
+	Panel = WidgetTree->ConstructWidget<UBorder>();
+	Panel->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f));
+	Panel->SetPadding(FMargin(20.0f));
+	UCanvasPanelSlot* PanelSlot = Root->AddChildToCanvas(Panel);
+	PanelSlot->SetPosition(FVector2D(40.0f, 100.0f));
+	PanelSlot->SetAutoSize(true);
+	UVerticalBox* Box = WidgetTree->ConstructWidget<UVerticalBox>();
+	Panel->SetContent(Box);
+	constexpr float LineGap = 6.0f;
+	MoneyText = AddLine(*Box, 0.0f);
+	MoneyText->SetColorAndOpacity(FLinearColor(1.0f, 0.75f, 0.2f));
+	RefusalText = AddLine(*Box, LineGap);
+	RefusalText->SetColorAndOpacity(FLinearColor(1.0f, 0.3f, 0.2f));
+	for (int32 Index = 0; Index < AShooterPlayerController::GetBuyMenuItems().Num(); ++Index)
+	{
+		ItemTexts.Add(AddLine(*Box, LineGap));
+	}
+	LastBuyText = AddLine(*Box, LineGap * 2.0f);
+	LastBuyText->SetColorAndOpacity(FLinearColor(0.7f, 0.9f, 0.7f));
+	Panel->SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void UShooterBuyMenuWidget::NativeTick(float /*DeltaTime*/)
 {
 	const AShooterHUD* HUD = Cast<AShooterHUD>(GetOwningHUD());
 	const AShooterPlayerController* Controller = HUD != nullptr ? HUD->GetShooterPlayerController() : nullptr;
-	if (Controller == nullptr || !Controller->IsBuyMenuOpen())
+	const bool bOpen = Controller != nullptr && Controller->IsBuyMenuOpen();
+	Panel->SetVisibility(bOpen ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	if (!bOpen)
 	{
 		return;
 	}
@@ -452,35 +495,22 @@ void UShooterBuyMenuWidget::NativePaint(FPaintContext& Ctx)
 	const AShooterGameMode* GameMode = World != nullptr ? World->GetAuthGameMode<AShooterGameMode>() : nullptr;
 	const AShooterCharacter* Pawn = HUD->GetViewedPawn();
 	const AShooterPlayerState* State = Controller->GetPlayerState<AShooterPlayerState>();
-	const float X = 60.0f;
-	float Y = 120.0f;
-	const float LineHeight = HudLineHeight + 6.0f;
-	const int32 NumItems = AShooterPlayerController::GetBuyMenuItems().Num();
-	Ctx.DrawRect(X - 20.0f, Y - 20.0f, 420.0f, (LineHeight * static_cast<float>(NumItems + 4)) + 30.0f,
-		FLinearColor(0.0f, 0.0f, 0.0f));
+	const int32 Money = State != nullptr ? State->GetMoney() : 0;
+	MoneyText->SetText(FText::FromString(FString::Printf(TEXT("Buy   $ %d"), Money)));
 	FString Refusal;
 	const bool bCanBuy = GameMode != nullptr && Pawn != nullptr && GameMode->CanBuy(*Pawn, &Refusal);
-	Ctx.DrawText(FString::Printf(TEXT("Buy   $ %d"), State != nullptr ? State->GetMoney() : 0), X, Y,
-		FLinearColor(1.0f, 0.75f, 0.2f));
-	Y += LineHeight;
-	if (!bCanBuy)
-	{
-		Ctx.DrawText(
-			Refusal.IsEmpty() ? FString(TEXT("You cannot buy now")) : Refusal, X, Y, FLinearColor(1.0f, 0.3f, 0.2f));
-	}
-	Y += LineHeight;
-	for (int32 Index = 0; Index < NumItems; ++Index)
+	RefusalText->SetText(
+		FText::FromString(bCanBuy ? FString() : (Refusal.IsEmpty() ? FString(TEXT("You cannot buy now")) : Refusal)));
+	for (int32 Index = 0; Index < ItemTexts.Num(); ++Index)
 	{
 		const FString& Item = AShooterPlayerController::GetBuyMenuItems()[Index];
 		const int32 Price = GameMode != nullptr && Pawn != nullptr ? GameMode->GetPrice(*Pawn, Item) : -1;
-		const bool bAffordable = bCanBuy && Price >= 0 && State != nullptr && State->GetMoney() >= Price;
-		const FString Line = Price >= 0 ? FString::Printf(TEXT("%d  %-10s $%d"), Index + 1, *Item, Price)
-										: FString::Printf(TEXT("%d  %-10s  -"), Index + 1, *Item);
-		Ctx.DrawText(Line, X, Y, bAffordable ? FLinearColor(1.0f, 1.0f, 1.0f) : FLinearColor(0.45f, 0.45f, 0.45f));
-		Y += LineHeight;
+		const bool bAffordable = bCanBuy && Price >= 0 && Money >= Price;
+		ItemTexts[Index]->SetText(
+			FText::FromString(Price >= 0 ? FString::Printf(TEXT("%d  %-10s $%d"), Index + 1, *Item, Price)
+										 : FString::Printf(TEXT("%d  %-10s  -"), Index + 1, *Item)));
+		ItemTexts[Index]->SetColorAndOpacity(
+			bAffordable ? FLinearColor(1.0f, 1.0f, 1.0f) : FLinearColor(0.45f, 0.45f, 0.45f));
 	}
-	if (!Controller->GetLastBuyMessage().IsEmpty())
-	{
-		Ctx.DrawText(Controller->GetLastBuyMessage(), X, Y + 6.0f, FLinearColor(0.7f, 0.9f, 0.7f));
-	}
+	LastBuyText->SetText(FText::FromString(Controller->GetLastBuyMessage()));
 }

@@ -59,7 +59,7 @@ void AHUD::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 	for (UUserWidget* Widget : Widgets)
 	{
-		if (Widget != nullptr && Widget->bIsVisible)
+		if (Widget != nullptr && Widget->IsVisible())
 		{
 			Widget->NativeTick(DeltaTime);
 		}
@@ -83,7 +83,7 @@ void AHUD::Paint(FCanvas& InCanvas)
 	FPaintContext Ctx(InCanvas);
 	for (UUserWidget* Widget : Widgets)
 	{
-		if (Widget != nullptr && Widget->bIsVisible)
+		if (Widget != nullptr && Widget->IsVisible())
 		{
 			Widget->NativePaint(Ctx);
 		}

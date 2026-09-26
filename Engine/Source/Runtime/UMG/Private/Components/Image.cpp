@@ -5,31 +5,7 @@ UImage::UImage(const FObjectInitializer& ObjectInitializer)
 {
 }
 
-void UImage::NativePaint(FPaintContext& Ctx)
+void UImage::OnPaint(FPaintContext& Ctx, const FVector2D& Position, const FVector2D& Size) const
 {
-	if (!IsVisible())
-	{
-		return;
-	}
-
-	float LocalX = X;
-	float LocalY = Y;
-	float LocalW = W;
-	float LocalH = H;
-	if (bFillScreen)
-	{
-		LocalX = 0.0f;
-		LocalY = 0.0f;
-		LocalW = static_cast<float>(Ctx.GetWidth());
-		LocalH = static_cast<float>(Ctx.GetHeight());
-	}
-
-	Ctx.DrawRect(LocalX, LocalY, LocalW, LocalH, Color);
-	if (bDrawBorder && !bFillScreen)
-	{
-		Ctx.DrawRect(LocalX, LocalY, LocalW, 2.0f, BorderColor);
-		Ctx.DrawRect(LocalX, LocalY + LocalH - 2.0f, LocalW, 2.0f, BorderColor);
-		Ctx.DrawRect(LocalX, LocalY, 2.0f, LocalH, BorderColor);
-		Ctx.DrawRect(LocalX + LocalW - 2.0f, LocalY, 2.0f, LocalH, BorderColor);
-	}
+	Ctx.DrawRect(Position.X, Position.Y, Size.X, Size.Y, ColorAndOpacity);
 }

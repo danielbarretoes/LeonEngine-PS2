@@ -6,7 +6,7 @@
 class FCanvas;
 
 /**
- * Immediate screen-space draw for UUserWidget::NativePaint (pixel coords, top-left origin), into the frame's FCanvas
+ * Screen-space drawing for the widgets' paint (pixel coords, top-left origin), into the frame's FCanvas
  * (Engine's CanvasTypes.h). UE analogy: FPaintContext / Slate draw elements (lite). Colors are linear RGB (alpha
  * unused).
  */

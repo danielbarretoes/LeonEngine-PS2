@@ -11,8 +11,9 @@ class ACameraActor;
  * (B; its items on the number keys while it is open, Esc closes it), the hit marker's state, CS's console commands and
  * a debug view for captures.
  *
- * Console (Exec): `Buy <item>` (usp, ak47, awp, hegrenade, vest, vesthelm, defuser: AShooterGameMode::Buy), and the
- * cheats `give <weapon>` (a weapon by name, free, anywhere), `god` (no damage, toggles) and `kill` (suicide).
+ * Console (Exec): `Buy <item>` (usp, ak47, awp, hegrenade, vest, vesthelm, defuser: AShooterGameMode::Buy), `buymenu`
+ * (opens or closes the menu, as B), and the cheats `give <weapon>` (a weapon by name, free, anywhere), `god` (no
+ * damage, toggles) and `kill` (suicide).
  */
 UCLASS()
 class SHOOTERGAME_API AShooterPlayerController : public APlayerController
@@ -43,6 +44,10 @@ public:
 	/** Buys an item for the pawn (AShooterGameMode::Buy). */
 	UFUNCTION(Exec)
 	void Buy(FString Item);
+
+	/** Opens or closes the buy menu (CS: buymenu). */
+	UFUNCTION(Exec)
+	void BuyMenu();
 
 	/** Cheat: a weapon by name, free (CS: give weapon_ak47). */
 	UFUNCTION(Exec)

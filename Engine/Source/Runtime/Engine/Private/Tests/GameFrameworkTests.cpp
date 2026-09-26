@@ -1,5 +1,6 @@
 #include "Animation/CharacterAnimInstance.h"
-#include "Components/ProgressBar.h"
+#include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetTree.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/TextBlock.h"
 #include "CoreMinimal.h"
@@ -134,21 +135,31 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameFrameworkHUDWidgetsAreObjectsTest,
 
 bool FGameFrameworkHUDWidgetsAreObjectsTest::RunTest(const FString& Parameters)
 {
-	// HUD widgets are UObjects inside their HUD, found by class with Cast; a removed widget is collected.
+	// HUD widgets are UObjects inside their HUD, found by class with Cast, with their widget tree (and its widgets)
+	// inside them; a removed widget is collected with its tree.
 	AHUD* Hud = NewObject<AHUD>();
 	Hud->AddToRoot();
-	UTextBlock* Text = Hud->AddWidget<UTextBlock>();
-	TestTrue("Widget inside the HUD", Text->GetOuter() == Hud);
-	TestTrue("Owning HUD", Text->GetOwningHUD() == Hud);
-	TestTrue("Found by class", Hud->GetWidgetOfClass<UTextBlock>() == Text);
-	TestNull("Other classes are not", Hud->GetWidgetOfClass<UProgressBar>());
+	UUserWidget* Widget = Hud->AddWidget<UUserWidget>();
+	TestTrue("Widget inside the HUD", Widget->GetOuter() == Hud);
+	TestTrue("Owning HUD", Widget->GetOwningHUD() == Hud);
+	TestTrue("Found by class", Hud->GetWidgetOfClass<UUserWidget>() == Widget);
+	if (!TestTrue("Its tree", Widget->WidgetTree != nullptr && Widget->WidgetTree->GetOuter() == Widget))
+	{
+		return false;
+	}
+	TestFalse("Initialized once", Widget->Initialize());
+	UTextBlock* Text = Widget->WidgetTree->ConstructWidget<UTextBlock>();
+	Widget->WidgetTree->RootWidget = Text;
+	TestTrue("A tree widget inside the tree", Text->GetOuter() == Widget->WidgetTree);
 
 	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
-	TestTrue("Kept by the HUD", Hud->GetWidgetOfClass<UTextBlock>() == Text);
+	TestTrue(
+		"Kept by the HUD", Hud->GetWidgetOfClass<UUserWidget>() == Widget && Widget->WidgetTree->RootWidget == Text);
+	TWeakObjectPtr<UUserWidget> WeakWidget = Widget;
 	TWeakObjectPtr<UTextBlock> WeakText = Text;
-	TestTrue("Removed by class", Hud->RemoveWidget<UTextBlock>());
+	TestTrue("Removed by class", Hud->RemoveWidget<UUserWidget>());
 	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
-	TestFalse("Collected once removed", WeakText.IsValid());
+	TestFalse("Collected once removed", WeakWidget.IsValid() || WeakText.IsValid());
 	Hud->RemoveFromRoot();
 	return true;
 }

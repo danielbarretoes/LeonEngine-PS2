@@ -1,10 +1,11 @@
 #include "AI/Navigation/NavigationSystem.h"
+#include "AIController.h"
 #include "AudioDevice.h"
-#include "Components/TextBlock.h"
+#include "BehaviorTree/BehaviorTree.h"
 #include "CoreMinimal.h"
 #include "Engine/GameEngine.h"
 #include "GameFramework/HUD.h"
-#include "GameplayMinimal.h"
+#include "GameFramework/Character.h"
 #include "Misc/AutomationTest.h"
 #include "Physics/PhysScene.h"
 #include "Tests/ScopedTestWorld.h"
@@ -99,27 +100,6 @@ bool FFrameworkHardeningAudioDeviceSilentModeTest::RunTest(const FString& Parame
 	Audio.StopMusic();
 	Audio.Tick();
 	Audio.Shutdown();
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFrameworkHardeningHUDAddWidgetTextBlockAndRemoveTest,
-	"System.AIModule.FrameworkHardening.HUDAddWidgetTextBlockAndRemove",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
-
-bool FFrameworkHardeningHUDAddWidgetTextBlockAndRemoveTest::RunTest(const FString& Parameters)
-{
-	// The HUD finds an added TextBlock by class and forgets it once removed.
-	AHUD& Hud = *NewObject<AHUD>();
-	UTextBlock* Text = Hud.AddWidget<UTextBlock>();
-	if (!TestNotNull("Added TextBlock", Text))
-	{
-		return false;
-	}
-	Text->SetText(FText::FromString("Hello"));
-	TestTrue("Found by class", Hud.GetWidgetOfClass<UTextBlock>() == Text);
-	Hud.Tick(0.016f);
-	Hud.RemoveWidget(Text);
-	TestNull("Gone after remove", Hud.GetWidgetOfClass<UTextBlock>());
 	return true;
 }
 

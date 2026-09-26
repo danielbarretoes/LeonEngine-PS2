@@ -31,8 +31,8 @@ public:
 	void PostInitializeComponents() override;
 
 	/**
-	 * Unreal CreateWidget + AddToViewport (lite): NewObject with the HUD as outer, NativeConstruct, retain (the HUD's
-	 * Widgets keep it alive).
+	 * Unreal CreateWidget + AddToViewport (lite): NewObject with the HUD as outer, Initialize (its widget tree),
+	 * NativeConstruct, retain (the HUD's Widgets keep it alive).
 	 */
 	template <typename T>
 	T* AddWidget()
@@ -40,6 +40,7 @@ public:
 		static_assert(TIsDerivedFrom<T, UUserWidget>::Value, "T must derive from UserWidget");
 		T* Widget = NewObject<T>(this);
 		Widget->OwningHud = this;
+		(void)Widget->Initialize();
 		Widget->NativeConstruct();
 		Widgets.Add(Widget);
 		return Widget;

@@ -8,6 +8,9 @@
 class AShooterCharacter;
 class AShooterGameState;
 class AShooterPlayerController;
+class UBorder;
+class UTextBlock;
+class UVerticalBox;
 
 /**
  * ShooterGame's HUD (UE ShooterGame: AShooterHUD), Counter-Strike's layout:
@@ -99,9 +102,10 @@ private:
 };
 
 /**
- * The buy menu (CS's, flattened into one list): each item of AShooterPlayerController::GetBuyMenuItems on its number
- * key, with its price; items the player cannot buy now are grey. The money and why buying is refused (outside a buy
- * zone, after the buy time) head it, and the last buy's result follows it. Drawn while the owner's menu is open.
+ * The buy menu (CS's, flattened into one list), a tree of UMG widgets: a bordered vertical box at the top-left with the
+ * money, why buying is refused (outside a buy zone, after the buy time), each item of
+ * AShooterPlayerController::GetBuyMenuItems on its number key with its price (grey when it cannot be bought now) and
+ * the last buy's result. NativeTick refreshes it from the game, and collapses it while the owner's menu is closed.
  */
 UCLASS()
 class SHOOTERGAME_API UShooterBuyMenuWidget : public UUserWidget
@@ -111,5 +115,32 @@ class SHOOTERGAME_API UShooterBuyMenuWidget : public UUserWidget
 public:
 	UShooterBuyMenuWidget(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	void NativePaint(FPaintContext& Ctx) override;
+	void NativeOnInitialized() override;
+	void NativeTick(float DeltaTime) override;
+
+	/** The panel (collapsed while the menu is closed). */
+	[[nodiscard]] UBorder* GetPanel() const
+	{
+		return Panel;
+	}
+	/** The line of the item at Index of GetBuyMenuItems, or null. */
+	[[nodiscard]] UTextBlock* GetItemText(int32 Index) const
+	{
+		return ItemTexts.IsValidIndex(Index) ? ItemTexts[Index] : nullptr;
+	}
+
+private:
+	/** Adds a text line to the box. */
+	UTextBlock* AddLine(UVerticalBox& Box, float TopPadding);
+
+	UPROPERTY()
+	UBorder* Panel = nullptr;
+	UPROPERTY()
+	UTextBlock* MoneyText = nullptr;
+	UPROPERTY()
+	UTextBlock* RefusalText = nullptr;
+	UPROPERTY()
+	TArray<UTextBlock*> ItemTexts;
+	UPROPERTY()
+	UTextBlock* LastBuyText = nullptr;
 };
