@@ -21,6 +21,10 @@ conventions, built with CMake through **LeonBuildTool** (our UnrealBuildTool).
 Requirements: Visual Studio 2026 or 2022 with C++, CMake tools and Clang tools; CMake 3.24+; Ninja; Docker Desktop
 for PS2; PCSX2 to run the PS2 build. Details: [Docs/SETUP.md](Docs/SETUP.md).
 
+The shortest path: double-click **`Package.bat`** at the root. It downloads the pinned libraries, builds and packages
+ShooterGame for Win64 (Shipping, with its pak) into `Packages\Win64\`, and ThirdPerson and TestPAL for PS2 (in Docker)
+into `Packages\PS2\` (`Package.bat -NoPS2` / `-NoWin64` skip a platform). Step by step:
+
 ```bat
 :: 1. Download the pinned third-party libraries
 Setup.bat

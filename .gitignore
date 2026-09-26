@@ -48,3 +48,5 @@ __pycache__/
 Thumbs.db
 
 !Engine/Source/**/Tests/Fixtures/*.obj
+Packages/
+.vscode/

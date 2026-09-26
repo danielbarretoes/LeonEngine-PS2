@@ -32,7 +32,7 @@ que no hay nada con qué comparar.
 | D3 | La vista previa carga los **formatos cocinados para PS2** (texturas `PSMT8`/`PSMT4` con CLUT, potencias de dos, mips limitados; mallas `LPS2` v2 cuantizadas), cocinados en memoria o en una caché `Saved/Cooked/PS2` | Los colores y el detalle que se ven son los que tendrá la PS2 (la cuantización a paleta es la mayor diferencia visual) | Seguir con RGBA8 en Win64: los colores no coincidirían |
 | D4 | Framebuffer emulado a **640x448** (`PS2Engine.ini`), con el formato de color y de z del GS; se presenta escalado por un entero con filtro nearest. No se emula el entrelazado ni el filtro de parpadeo | Mismos píxeles que el GS. El entrelazado es cosa del CRT, no del render | Renderizar a la resolución de la ventana |
 | D5 | Features: solo las que el GS puede hacer (ver tabla siguiente). Lo demás se borra del GL, como se hizo con el post-proceso en 0.20.1 | La regla del proyecto: "si no es válido en PS2, no se necesita" | Conservar features de PC bajo un toggle |
-| D6 | Oráculo de CI: un **rasterizador de referencia del GS por software** (`FGSReferenceRasterizer`, C++ determinista, en un módulo Developer) implementado según `Docs/PS2OFFICIAL/GS_Users_Manual.pdf`: reglas de rasterizado, subpíxel 12.4, muestreo, CLUT, mezcla, test de alfa y de z, dithering. El GL se compara contra él con tolerancia; la referencia se valida a mano contra capturas de PCSX2 | PCSX2 no puede correr en CI (necesita BIOS) y comparar GL contra GL no demuestra nada | Incluir código del GS de PCSX2: GPL-3.0, incompatible con incluirlo en el motor |
+| D6 | Oráculo automático: un **rasterizador de referencia del GS por software** (`FGSReferenceRasterizer`, C++ determinista, en un módulo Developer) implementado según `Docs/PS2OFFICIAL/GS_Users_Manual.pdf`: reglas de rasterizado, subpíxel 12.4, muestreo, CLUT, mezcla, test de alfa y de z, dithering. El GL se compara contra él con tolerancia; la referencia se valida a mano contra capturas de PCSX2 | PCSX2 no puede correr desatendido (necesita BIOS, que no se distribuye) y comparar GL contra GL no demuestra nada | Incluir código del GS de PCSX2: GPL-3.0, incompatible con incluirlo en el motor |
 
 ### Qué se conserva, qué cambia y qué se borra en la vista previa
 
@@ -40,8 +40,8 @@ que no hay nada con qué comparar.
 |---|---|---|
 | Iluminación por píxel (Blinn-Phong), especular | No hay etapa de píxel programable | Iluminación **por vértice** (un sol, ambiente y hasta N luces puntuales por objeto) calculada en C++ (D2); el GS la interpola con Gouraud y la modula con la textura (regla de modulado: 0x80 = 1.0) |
 | Mapas de normales | Solo con trucos multipasada (`Docs/PS2OFFICIAL/ps2_normalmapping.pdf`), demasiado caros para un FPS | Se borra |
-| Shadow map con PCF | No hay comparación de profundidad en texturas | Se borra. Se sustituye por iluminación estática horneada en color de vértice para el mapa (importador) y sombra proyectada o blob para personajes (decisión pendiente P0) |
-| Espejo planar | Posible (renderizar a textura en VRAM), pero duplica la escena | Se borra (decisión pendiente P0) |
+| Shadow map con PCF | No hay comparación de profundidad en texturas | Se borra. Se sustituye por iluminación estática horneada en color de vértice para el mapa (importador) y una sombra blob para personajes (P0-1) |
+| Espejo planar | Posible (renderizar a textura en VRAM), pero duplica la escena | Se borra (P0-2) |
 | Reflejo del cielo | Sin mapas de entorno por píxel | Se borra |
 | MSAA | El GS no tiene MSAA (solo AA1 en líneas) | Se borra |
 | Mipmaps trilineales | El GS elige el LOD con `TEX1` (K, L, MXL) y filtra bilineal o trilineal limitado | Se emula la fórmula de LOD del GS |
@@ -58,20 +58,25 @@ que no hay nada con qué comparar.
   - Con doble buffer y z de 32 bits: 3,28 MB, y quedan 0,72 MB para texturas.
 - Con color de 16 bits (`PSMCT16S`, con dithering) y z de 24 bits: 2,29 MB, y quedan 1,7 MB para texturas.
 
-La recomendación es la segunda configuración, porque un FPS con mapa texturizado necesita la VRAM. Es la decisión P0-3
-y se aplica igual en los dos backends.
+Se elige la segunda configuración (P0-3), porque un FPS con mapa texturizado necesita la VRAM; se aplica igual en los
+dos backends.
 
 ## Fases
 
 Los tamaños siguen la convención del plan anterior (S, M, L, XL).
 
-### P0 · Decisiones abiertas (S)
+### P0 · Decisiones (S) — tomadas
 
-1. Sombras de personajes: proyectada (un render de la silueta a textura, recomendada) o blob.
-2. Espejo planar: borrar (recomendado) o conservar como render a textura.
-3. Formato del framebuffer: 16 bits con dithering y z de 24 (recomendado) o 32 bits.
+1. **Sombras de personajes: blob.** Un quad texturizado bajo cada personaje, proyectado sobre el suelo que encuentra
+   una traza hacia abajo, con mezcla alfa estándar. Es lo más simple y seguro: una primitiva por personaje, sin render
+   a textura, y encaja en el subconjunto de mezclas soportado.
+2. **Espejo planar: se borra** (del renderer GL, sus shaders y su configuración `r.PlanarReflectionScale`).
+3. **Framebuffer: color de 16 bits (`PSMCT16S`) con dithering (`DTHE`) y z de 24 bits (`PSMZ24`), doble buffer.**
+   Ocupa 2,29 MB de VRAM y deja 1,7 MB para texturas, contra 0,72 MB con 32 bits; es la configuración habitual en
+   PS2 y la más segura para un mapa texturizado.
 
-Hecho cuando: las tres respuestas quedan escritas en este plan.
+La tabla de features de D5 y los riesgos se leen con estas decisiones: la fila de sombras pasa a ser la sombra blob y
+la del espejo planar queda en "se borra".
 
 ### P1 · Contrato del GS (M)
 
@@ -89,8 +94,8 @@ Gate: un test por registro.
   swizzle de páginas: basta con tener direcciones lógicas.
 - Tests de reglas: cobertura top-left, subpíxel, perspectiva con STQ, CLUT de 4 y 8 bits, LOD, las mezclas del
   subconjunto, `ATST`/`AFAIL`, z-test y z-write, dithering 4x4 (`DIMX`) y `COLCLAMP`.
-- Programa PS2 `GSConformance`: dibuja las mismas listas de comandos que los tests (escenas de conformidad) y CI lo
-  compila.
+- Programa PS2 `GSConformance`: dibuja las mismas listas de comandos que los tests (escenas de conformidad);
+  `Package.bat` lo compila y empaqueta junto a ThirdPerson y TestPAL.
 - Validación manual: capturas de PCSX2 de esas escenas, guardadas como PNG de 640x448 en fixtures, que la referencia
   debe reproducir dentro de la tolerancia.
 
@@ -111,10 +116,8 @@ Gate: el ELF de ThirdPerson entra en su presupuesto (G3) y las escenas de confor
 - Presentación escalada por un entero con filtro nearest.
 - **Primera prueba de extremo a extremo:** ThirdPerson compila también para Win64 sobre este backend, y su frame debe
   coincidir con la captura del mismo frame en PCSX2.
-- CI:
-  - GL contra la referencia en el job `win64`, con un GL por software fijado (Mesa llvmpipe para Windows, descargado
-    y verificado en el paso Setup), porque los runners no tienen GPU.
-  - Tolerancia medida por píxel, más una cota del número de píxeles distintos.
+- Test automático (en `RunTests.bat`, con la GPU del equipo de desarrollo): GL contra la referencia, con una
+  tolerancia medida por píxel más una cota del número de píxeles distintos.
 
 Gate: GL contra la referencia dentro de la tolerancia en todas las escenas de conformidad.
 
@@ -142,7 +145,7 @@ Gate: el cook es reproducible byte a byte, y el informe de VRAM de de_leon cabe 
 
 ### P7 · Validación, documentación y release (M)
 
-- Nuevo gate G8, **paridad GS**: GL contra la referencia en CI, más un procedimiento manual de captura en PCSX2
+- Nuevo gate G8, **paridad GS**: GL contra la referencia en `RunTests.bat`, más un procedimiento manual de captura en PCSX2
   documentado en `Docs/TESTING.md` con fixtures versionados.
 - Documentación: ARCHITECTURE (el nivel GS), LeonMapping (`FGSCommandList` frente a `FRHICommandList`), Budgets
   (VRAM y paquetes) y CHANGELOG.
@@ -157,11 +160,11 @@ ya se validó en Win64.
 |---|---|
 | P1 | Tests de codificación de registros (TestPAL en Win64 y PS2) |
 | P2 | Tests de reglas contra la referencia; comparación manual con PCSX2 |
-| P3 | CI compila `GSConformance` y ThirdPerson para PS2; G3 |
-| P4 | CI compara el GL con la referencia (llvmpipe); ThirdPerson en Win64 frente a la captura de PCSX2 |
+| P3 | `Package.bat` compila `GSConformance` y ThirdPerson para PS2; G3 (tamaños con `mips64r5900el-ps2-elf-size`) |
+| P4 | `RunTests.bat` compara el GL con la referencia; ThirdPerson en Win64 frente a la captura de PCSX2 |
 | P5 | Tests del motor y de ShooterGame, de_leon contra la referencia, botmatch (sin cambios) |
 | P6 | Cook reproducible (G5) e informe de VRAM |
-| P7 | Todo lo anterior en CI verde y release |
+| P7 | Todo lo anterior en verde en local (`Lint.bat`, `RunTests.bat`, `Package.bat`) y release |
 
 ## Riesgos
 
@@ -170,6 +173,5 @@ ya se validó en Win64.
 | GL no expresa algunas mezclas del GS (las que usan Cd como factor o As > 1.0) | Un subconjunto soportado, validado por el command list; ampliarlo exige un camino de framebuffer fetch o ping-pong, y se decide con datos |
 | El LOD de mip del GS no coincide con el de GL | Emular la fórmula del GS en el shader y seleccionar el nivel a mano |
 | Los floats del EE no son IEEE (sin denormales ni infinitos) | Tolerancia de subpíxel en las comparaciones; la referencia usa la aritmética de 12.4 del GS después de la transformación |
-| Capturas de PCSX2 solo manuales (BIOS) | Son fixtures versionados; el oráculo de CI es la referencia por software |
-| Mesa llvmpipe en el runner de Windows | Versión fijada con hash en el paso Setup (como el resto de descargas de terceros) |
+| Capturas de PCSX2 solo manuales (BIOS) | Son fixtures versionados; el oráculo automático es la referencia por software |
 | El rendimiento del EE al transformar en C++ | Fuera del alcance de la paridad; la VU1 llega después y debe coincidir con la referencia C++ de D2 |

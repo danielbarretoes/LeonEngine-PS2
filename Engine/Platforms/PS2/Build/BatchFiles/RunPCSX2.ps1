@@ -1,6 +1,7 @@
 # Launch a project's (or an engine program's) PS2 build in PCSX2, optionally building it first with LeonBuildTool.
-# Usage: Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 [-Project <dir|file.lproj>] [-Configuration Development] [-Build] [-NoStage]
-#        Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL [-Build] [-NoStage]
+# Usage: Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 [-Project <dir|file.lproj>] [-Configuration Development] [-Build] [-NoStage] [-StageOnly]
+#        Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL [-Build] [-NoStage] [-StageOnly]
+# -StageOnly stages the config next to the ELF and returns without looking for or starting PCSX2 (Package.bat).
 # Program output (printf / UE_LOG) goes to the EE console: PCSX2 log, %USERPROFILE%\Documents\PCSX2\logs\emulog.txt.
 # PCSX2 path: $env:LEON_PCSX2, else PATH, else default install locations.
 #
@@ -16,7 +17,8 @@ param(
     [ValidateSet("Debug", "Development", "Shipping")]
     [string]$Configuration = "Development",
     [switch]$Build,
-    [switch]$NoStage
+    [switch]$NoStage,
+    [switch]$StageOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -53,22 +55,6 @@ if (-not (Test-Path $Elf)) {
     Write-Error "ELF not found: $Elf (run with -Build)"
 }
 
-$Pcsx2 = $env:LEON_PCSX2
-if (-not $Pcsx2) {
-    $cmd = Get-Command pcsx2-qt.exe -ErrorAction SilentlyContinue
-    if ($cmd) { $Pcsx2 = $cmd.Source }
-}
-if (-not $Pcsx2) {
-    $Pcsx2 = @(
-        "$env:ProgramFiles\PCSX2\pcsx2-qt.exe",
-        "${env:ProgramFiles(x86)}\PCSX2\pcsx2-qt.exe",
-        "$env:LOCALAPPDATA\Programs\PCSX2\pcsx2-qt.exe"
-    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
-}
-if (-not $Pcsx2) {
-    Write-Error "PCSX2 not found. Install it (winget install PCSX2Team.PCSX2) or set LEON_PCSX2."
-}
-
 function Copy-Config([string]$From, [string]$To) {
     if (Test-Path $From) {
         New-Item -ItemType Directory -Force -Path $To | Out-Null
@@ -92,6 +78,26 @@ if (-not $NoStage) {
         Copy-Item -Path $ProjectFile -Destination (Join-Path $StagedProject (Split-Path $ProjectFile -Leaf)) -Force
     }
     Write-Host "Staged config under $StageDir"
+}
+
+if ($StageOnly) {
+    exit 0
+}
+
+$Pcsx2 = $env:LEON_PCSX2
+if (-not $Pcsx2) {
+    $cmd = Get-Command pcsx2-qt.exe -ErrorAction SilentlyContinue
+    if ($cmd) { $Pcsx2 = $cmd.Source }
+}
+if (-not $Pcsx2) {
+    $Pcsx2 = @(
+        "$env:ProgramFiles\PCSX2\pcsx2-qt.exe",
+        "${env:ProgramFiles(x86)}\PCSX2\pcsx2-qt.exe",
+        "$env:LOCALAPPDATA\Programs\PCSX2\pcsx2-qt.exe"
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+if (-not $Pcsx2) {
+    Write-Error "PCSX2 not found. Install it (winget install PCSX2Team.PCSX2) or set LEON_PCSX2."
 }
 
 Write-Host "PCSX2: $Pcsx2"
