@@ -78,6 +78,9 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | P16 | ThirdPerson | 668 048 | 6 984 | 33 880 | 676 200 | `UObject::IsEditorOnly` (the cook's editor-only objects): its 8-byte `return false` body and one more slot in each of the 8 CoreUObject vtables the game links (`UObject`, `UField`, `UStruct`, `UScriptStruct`, `UClass`, `UEnum`, `UFunction`, `UPackage`) (+40 bytes of text). The PS2 launch does not link PakFile yet |
 | P16 | BlankProgram | 179 628 | 6 136 | 27 097 | 186 804 | unchanged |
 | P16 | TestPAL | 1 449 588 | 6 384 | 39 600 | 1 457 128 | the PakFile module (`FPakFile`, `FPakPlatformFile`, `FPakWriter`), `FSHA1` and their tests, which run on paks in memory (+76 240 bytes of text; about 65 KB of it in the `FPak*` and `FSHA1*` symbols, the runtime and the pak tests), and `UObject::IsEditorOnly` with its test fixture |
+| 0.20.1 | ThirdPerson | 674 384 | 6 984 | 34 008 | — | measured by CI's "ELF sizes (G3)" step (`size`, not stripped): P17 to P21 and the audit's Core, CoreUObject and Launch changes (+6 336 bytes of text since P16) |
+| 0.20.1 | BlankProgram | 180 156 | 6 136 | 27 225 | — | +528 bytes of text (Core) |
+| 0.20.1 | TestPAL | 1 458 584 | 6 384 | 39 808 | — | +8 996 bytes of text: the audit's config, archive, linker and pak fixes and their tests (120 tests) |
 
 **P9 reflection in TestPAL** (`nm -S` over the ELF, bytes):
 
@@ -201,7 +204,6 @@ ShooterGame would have to fit, measured where it runs:
 | GMalloc peak | 3 933 KB (current 3 621 KB at the end) | 31 MB of RAM for everything | includes the desktop object array (131 072 slots × 16 bytes = 2 MB; the PS2's is 96 KB); about 1.9 MB is the world, the map's assets, the actors and the reflection |
 | Process peak (max RSS) | 10.2 MB | — | the program image and the C++ runtime included |
 
-The PS2 ELF sizes and the TestPAL run in PCSX2 are not measured since P16: the phases after it were done where the
-ps2dev image could not be pulled. The PS2 modules changed since then are CoreUObject (P18: a native class's defaults)
-and Core and Launch (P21: `FApp::IsBenchmarking`, the requested exit code of `FPlatformMisc::RequestExitWithStatus`);
-the next measurement records them. CI still builds both PS2 ELFs on every push.
+Since 0.20.1 CI measures the PS2 ELFs on every push (the ps2 job's "ELF sizes (G3)" step prints `size` for
+ThirdPerson, BlankProgram and TestPAL; the table above records 0.20.1). TestPAL has not run in PCSX2 since P16: its
+GMalloc and name pool numbers wait for the next run on the emulator.
