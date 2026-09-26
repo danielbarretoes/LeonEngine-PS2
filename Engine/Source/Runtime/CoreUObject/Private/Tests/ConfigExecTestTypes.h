@@ -121,6 +121,19 @@ public:
 	int32 ChildValue = 0;
 };
 
+/**
+ * A subclass whose constructor changes inherited config members: its class default object keeps them (a native
+ * class's defaults come from its constructor chain, then from the config; UE).
+ */
+UCLASS()
+class UConfigTestConstructedChild : public UConfigTestObject
+{
+	GENERATED_BODY()
+
+public:
+	UConfigTestConstructedChild(const FObjectInitializer& ObjectInitializer);
+};
+
 /** One section per object: "<Name> ConfigTestPerObject". */
 UCLASS(Config = Game, PerObjectConfig)
 class UConfigTestPerObject : public UObject

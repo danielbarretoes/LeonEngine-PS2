@@ -693,7 +693,13 @@ UObject* UClass::CreateDefaultObject()
 		// Set before the constructor runs, so code in it that asks for the defaults gets this object (UE).
 		ClassDefaultObject = StaticAllocateObject(
 			this, GetOuter(), GetDefaultObjectName(), RF_Public | RF_ClassDefaultObject | RF_ArchetypeObject);
-		FObjectInitializer ObjectInitializer(ClassDefaultObject, ParentDefaultObject, false, true);
+		// A native class's constructor chain sets every property, its own config defaults included, so its CDO does not
+		// start from the parent's (UE: bShouldInitializeProperties is false for CLASS_Native | CLASS_Intrinsic);
+		// copying the parent's config members would undo a subclass constructor's values. LoadConfig then reads the
+		// parents' sections and the class's own.
+		const bool bShouldInitializeProperties = !HasAnyClassFlags(CLASS_Native | CLASS_Intrinsic);
+		FObjectInitializer ObjectInitializer(
+			ClassDefaultObject, ParentDefaultObject, false, bShouldInitializeProperties);
 		(*ClassConstructor)(ObjectInitializer);
 	}
 	return ClassDefaultObject;

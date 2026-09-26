@@ -236,6 +236,23 @@ bool FConfigDefaultsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FConfigSubclassConstructorTest,
+	"System.CoreUObject.Config.SubclassConstructorDefaults",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+
+bool FConfigSubclassConstructorTest::RunTest(const FString& Parameters)
+{
+	// A subclass constructor's values for inherited config members are its class defaults (UE): the parent's class
+	// defaults are not copied over them, and a new instance copies them. No config section names these classes.
+	const UConfigTestConstructedChild* ChildCDO = GetDefault<UConfigTestConstructedChild>();
+	TestEqual(TEXT("The subclass constructor's int"), ChildCDO->IntValue, 7);
+	TestEqual(TEXT("The subclass constructor's string"), ChildCDO->StringValue, FString(TEXT("Constructed")));
+	TestEqual(TEXT("The parent's own"), GetDefault<UConfigTestObject>()->StringValue, FString(TEXT("Default")));
+	const UConfigTestConstructedChild* Child = NewObject<UConfigTestConstructedChild>();
+	TestTrue(TEXT("An instance"), Child->IntValue == 7 && Child->StringValue == TEXT("Constructed"));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FConfigPerObjectTest, "System.CoreUObject.Config.PerObjectConfig",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::EngineFilter)
 

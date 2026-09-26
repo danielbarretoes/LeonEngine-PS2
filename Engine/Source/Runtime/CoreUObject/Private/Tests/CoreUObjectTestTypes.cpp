@@ -172,6 +172,13 @@ UConfigTestObject::UConfigTestObject(const FObjectInitializer& ObjectInitializer
 	Fixed[2] = 30;
 }
 
+UConfigTestConstructedChild::UConfigTestConstructedChild(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	IntValue = 7;
+	StringValue = TEXT("Constructed");
+}
+
 void UConfigTestObject::PostReloadConfig(FProperty* PropertyThatWasLoaded)
 {
 	Super::PostReloadConfig(PropertyThatWasLoaded);
