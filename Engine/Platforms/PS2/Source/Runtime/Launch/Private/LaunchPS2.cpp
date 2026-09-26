@@ -3,6 +3,7 @@
 #include "HAL/PlatformProcess.h"
 #include "LaunchEngineLoop.h"
 #include "Misc/FileHelper.h"
+#include "PS2ErrorScreen.h"
 
 namespace
 {
@@ -55,15 +56,13 @@ namespace
 
 } // namespace
 
-// PS2 entry point (UE: Launch<Platform>.cpp in the platform extension): argv, then LeonCommandLine.txt's arguments.
+// PS2 entry point (UE: Launch<Platform>.cpp in the platform extension): argv, then LeonCommandLine.txt's arguments. A
+// game that stops with an error shows it on the TV (FPS2ErrorScreen) instead of a black screen.
 int main(int ArgC, char* ArgV[])
 {
-	FPlatformProcess::SetArgV0(ArgV[0]);
+	FPS2ErrorScreen::Install();
+	FPlatformProcess::SetArgV0(ArgC > 0 ? ArgV[0] : nullptr);
 	const TArray<FString> FileArguments = ReadCommandLineFile();
-	if (FileArguments.Num() == 0)
-	{
-		return GuardedMain(ArgC, ArgV);
-	}
 	TArray<char*> Arguments;
 	for (int32 Index = 0; Index < ArgC; ++Index)
 	{
@@ -74,5 +73,10 @@ int main(int ArgC, char* ArgV[])
 		Arguments.Add(const_cast<char*>(*Argument));
 	}
 	Arguments.Add(nullptr);
-	return GuardedMain(Arguments.Num() - 1, Arguments.GetData());
+	const int32 ExitCode = GuardedMain(Arguments.Num() - 1, Arguments.GetData());
+	if (ExitCode != 0)
+	{
+		FPS2ErrorScreen::Show(ExitCode);
+	}
+	return ExitCode;
 }

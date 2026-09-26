@@ -15,9 +15,11 @@ namespace
 
 void FPS2PlatformProcess::SetArgV0(const TCHAR* ArgV0)
 {
-	if (ArgV0 == nullptr)
+	if (ArgV0 == nullptr || *ArgV0 == 0)
 	{
-		return;
+		// A loader that passes no argv[0]: PCSX2's host filesystem is the likeliest place the game was staged.
+		FPlatformMisc::LowLevelOutputDebugString("FPS2PlatformProcess: no argv[0]; the base dir is host:\n");
+		ArgV0 = "host:";
 	}
 
 	// The directory ends at the last separator; the device prefix ("host:", "cdrom0:") counts as one.

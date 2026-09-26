@@ -20,6 +20,15 @@ The PC plays under the PS2's conditions ([ps2-preview](Docs/PLANS/ps2-preview.md
   `System.ApplicationCore.Desktop.GamepadAsDualShock`, `System.AudioMixer.Device.QueuesTheMix` (414 engine tests on
   Linux, 423 on Win64).
 
+### Fixed
+
+- A PS2 game that cannot read its config (PCSX2 without its host filesystem, or an ELF booted without its pak) stopped
+  on a black screen: the window asked for the desktop's 1280x896, which does not fit the GS's VRAM. The PS2 window
+  now keeps to the TV's modes (640x448 otherwise), PreInit stops with an error that names the folder it read when a
+  console build has no Engine config, and `FPS2ErrorScreen` shows the log's last errors and what to check on the TV
+  (on a failed start and on a fatal error, through `FPS2PlatformMisc::SetFatalExitHandler`). The debug font gains the
+  punctuation of paths and log lines; an empty argv[0] resolves to `host:`.
+
 ### Changed
 
 - The view projects at the display's aspect ratio (4:3), so the PS2's scene is no longer squashed on the TV, and the

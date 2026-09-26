@@ -79,6 +79,11 @@ bool FPS2RHI::InitDisplay(int Width, int Height, EGSPixelFormat ColorFormat, uin
 	check(ColorFormat == EGSPixelFormat::PSMCT32 || ColorFormat == EGSPixelFormat::PSMCT16S);
 	Gs.Width = Width > 0 ? Width : 640;
 	Gs.Height = Height > 0 ? Height : 448;
+	// From an empty VRAM each time: a second call (the boot error screen after a failed one) starts over.
+	graph_vram_clear();
+	Gs.VramEndWords = 0;
+	Gs.bReady = false;
+	Gs.FrameList.Reset();
 
 	dma_channel_initialize(DMA_CHANNEL_GIF, nullptr, 0);
 	dma_channel_fast_waits(DMA_CHANNEL_GIF);

@@ -27,8 +27,15 @@ bool FPS2Window::Create(int32 InWidth, int32 InHeight, const TCHAR* Title)
 		return true;
 	}
 	(void)Title;
-	const int32 DisplayWidth = InWidth > 0 ? InWidth : 640;
-	const int32 DisplayHeight = InHeight > 0 ? InHeight : 448;
+	// The CRTC's modes are 640 wide at most, 448 (NTSC) or 512 (PAL) lines: a desktop size (the base Engine config's,
+	// when the PS2 one was not read) would not even fit two frame buffers in the GS's 4 MB.
+	const bool bPS2Mode = InWidth > 0 && InWidth <= 640 && InHeight > 0 && InHeight <= 512;
+	if (!bPS2Mode)
+	{
+		UE_LOG(LogApplicationCore, Warning, "FPS2Window: %dx%d is not a PS2 display mode; 640x448", InWidth, InHeight);
+	}
+	const int32 DisplayWidth = bPS2Mode ? InWidth : 640;
+	const int32 DisplayHeight = bPS2Mode ? InHeight : 448;
 
 	if (!FPS2RHI::InitDisplay(DisplayWidth, DisplayHeight))
 	{

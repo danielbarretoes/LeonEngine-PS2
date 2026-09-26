@@ -168,6 +168,10 @@ bool FPakDeviceRootMountTest::RunTest(const FString& Parameters)
 		TestTrue(*(Name + TEXT(": a folder")),
 			PakFile.DirectoryExists(FPakFile::NormalizePath(*(Device + TEXT("MyGame/Content")))));
 	}
+	// PCSX2 may name the ELF by its full Windows path under host: (argv[0] "host:C:\...\Game.elf").
+	PakFile.SetMountPoint(TEXT("host:C:\\Packages\\PS2\\Game\\"));
+	TestNotNull("host: with a Windows folder",
+		PakFile.Find(FPakFile::NormalizePath(TEXT("host:C:\\Packages\\PS2\\Game\\Engine/Config/BaseEngine.ini"))));
 	TestEqual(
 		"A drive letter is left alone", FPakFile::NormalizePath(TEXT("C:/Game/A.txt")), FString(TEXT("C:/Game/A.txt")));
 	return true;

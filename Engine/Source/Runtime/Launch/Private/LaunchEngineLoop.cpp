@@ -142,6 +142,18 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 
 	// Config, then the log file and the verbosity it asks for.
 	FConfigCacheIni::InitializeConfigSystem();
+#if !PLATFORM_DESKTOP
+	// A console build has no defaults to fall back on: without its staged Engine config (the pak or the loose files
+	// beside the executable) nothing below sizes itself right, so say where it looked and stop (UE: a fatal error).
+	const FConfigFile* EngineConfig = GConfig->FindConfigFile(GEngineIni);
+	if (EngineConfig == nullptr || EngineConfig->Num() == 0)
+	{
+		UE_LOG(LogInit, Error,
+			"No Engine config in %s (nor a pak in %sContent/Paks/): the base directory '%s' is not readable",
+			*FPaths::EngineConfigDir(), *FPaths::ProjectDir(), FPlatformProcess::BaseDir());
+		return 1;
+	}
+#endif
 #if PLATFORM_DESKTOP
 	GLogFile = MakeUnique<FOutputDeviceFile>();
 	GLog->AddOutputDevice(GLogFile.Get());

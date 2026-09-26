@@ -11,6 +11,12 @@ struct CORE_API FPS2PlatformMisc : public FGenericPlatformMisc
 	{
 		RequestExitWithStatus(bForce, 3);
 	}
+
+	/**
+	 * Called once by a forced exit before the EE halts: the launcher shows the error on the TV with it (a player has
+	 * no EE console). The handler may not return.
+	 */
+	static void SetFatalExitHandler(void (*Handler)(uint8 ReturnCode));
 };
 
 typedef FPS2PlatformMisc FPlatformMisc;

@@ -191,6 +191,9 @@ The overlay (FPS, RAM, VRAM, resolution, plus the DualShock widget) is described
   `FStatsOverlay` visibility changes). Enable the EE console in PCSX2's
   logging settings (`EnableEEConsole = true` under `[Logging]` in `PCSX2.ini`) and read the PCSX2 log window or
   `logs/emulog.txt` in the PCSX2 user folder. Edit `PCSX2.ini` only while PCSX2 is closed; it rewrites the file on exit.
+- **Host filesystem**: a game reads its config and pak from `host:` (the ELF's folder), so enable **Settings >
+  Advanced > Enable Host Filesystem** and boot the staged ELF. When it cannot, the game shows the log's errors on a
+  red screen (`FPS2ErrorScreen`) instead of starting; GSConformance reads nothing and runs either way.
 - PCSX2 ignores synthetic keyboard input, so button handling has to be tested with a real pad (or keyboard bindings
   on Pad 1).
 
@@ -270,6 +273,7 @@ is recorded ([Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md)). Te
 | `PS2DEV is not set` | Only with `-NoDocker` or inside a custom container: export `PS2DEV` / `PS2SDK` |
 | `ELF not found` in `RunPCSX2.ps1` | Build first (`-Build`) or check `-Configuration` |
 | `PCSX2 not found` | Install it or set `$env:LEON_PCSX2` to `pcsx2-qt.exe` |
+| A PS2 game shows a red "THE GAME STOPPED" screen (earlier builds: a black screen) | It could not read its config and pak through `host:`: enable **Settings > Advanced > Enable Host Filesystem** in PCSX2 and boot the staged ELF (`Packages\PS2\<Game>\<Game>.elf`, beside its `<Game>\Content\Paks\` folder), not the one in `Binaries\PS2\` |
 | Pad does nothing in PCSX2 | Bind it in the global Controller Port 1 settings (see [PCSX2 notes](#pcsx2-notes)) |
 | clangd reports missing includes | Run `GenerateProjectFiles.bat`, then restart the language server |
 | A third-party download fails the hash check | Delete the archive in `Engine\Intermediate\ThirdPartyDownloads\` and run `Setup.bat` again |

@@ -64,7 +64,7 @@ public:
 	static bool DrawUnlitRectAlpha(float X0, float Y0, float X1, float Y1, float R, float G, float B, float Alpha);
 
 	/**
-	 * 5x7 debug glyphs drawn with rects (ASCII A-Z, 0-9, a few symbols).
+	 * 5x7 debug glyphs drawn with rects (ASCII A-Z, 0-9, "ms" and the punctuation of paths and log lines).
 	 * scale 1 = 2 px cells (12 px advance, 14 px tall); 0.5 = 1 px cells (6 px advance, 7 px tall).
 	 */
 	static void DrawDebugText(
