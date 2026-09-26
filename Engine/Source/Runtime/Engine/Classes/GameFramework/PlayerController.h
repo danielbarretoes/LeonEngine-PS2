@@ -11,6 +11,7 @@
 class ACharacter;
 class AHUD;
 class APlayerCameraManager;
+class ASpectatorPawn;
 class UInputComponent;
 class UPlayer;
 class UPlayerInput;
@@ -137,6 +138,38 @@ public:
 	/** The pawn restarts with a local player: its input (UE: ClientRestart; no RPC in Leon). */
 	virtual void ClientRestart(APawn* NewPawn);
 
+	/**
+	 * Ends the old state and begins the new one (UE): leaving NAME_Spectating destroys the spectator pawn, entering it
+	 * begins spectating (BeginSpectatingState). Possessing a pawn other than the spectator enters NAME_Playing.
+	 */
+	void ChangeState(FName NewState) override;
+
+	/**
+	 * Enters the spectating state (UE: BeginSpectatingState): releases the pawn and flies a new spectator pawn
+	 * (SpawnSpectatorPawn) from where the player looked.
+	 */
+	virtual void BeginSpectatingState();
+	/** Leaves it: the spectator pawn goes (UE: EndSpectatingState). */
+	virtual void EndSpectatingState();
+
+	/**
+	 * Spawns the game mode's SpectatorClass (ASpectatorPawn without a game mode) at the player's view point, facing the
+	 * control rotation (UE: SpawnSpectatorPawn). Transient; null outside a world.
+	 */
+	virtual ASpectatorPawn* SpawnSpectatorPawn();
+	/** Destroys the spectator pawn (UE: DestroySpectatorPawn). */
+	virtual void DestroySpectatorPawn();
+	/**
+	 * Takes the pawn to spectate with while spectating (UE: SetSpectatorPawn); Leon possesses it (the class comment of
+	 * ASpectatorPawn).
+	 */
+	void SetSpectatorPawn(ASpectatorPawn* NewSpectatorPawn);
+	/** The spectator pawn while spectating, else null (UE: GetSpectatorPawn). */
+	[[nodiscard]] ASpectatorPawn* GetSpectatorPawn() const
+	{
+		return SpectatorPawn;
+	}
+
 	/** Sets the camera's field of view, 0 to unlock it (UE: `FOV <degrees>`, vertical in Leon). */
 	UFUNCTION(Exec)
 	virtual void FOV(float NewFOV);
@@ -162,4 +195,8 @@ private:
 	/** Components pushed on the input stack (UE: CurrentInputStack). */
 	UPROPERTY(Transient)
 	TArray<UInputComponent*> CurrentInputStack;
+
+	/** The pawn of the spectating state (UE: SpectatorPawn). */
+	UPROPERTY(Transient)
+	ASpectatorPawn* SpectatorPawn = nullptr;
 };

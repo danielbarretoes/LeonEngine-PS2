@@ -241,6 +241,18 @@ public:
 		const FCollisionObjectQueryParams& ObjectQueryParams, const FCollisionQueryParams& Params = {}) const;
 
 	/**
+	 * UE-like UWorld::OverlapMultiByObjectType: every query-enabled body of the object types that the shape at Pos
+	 * touches, in body order. A sphere tests the bodies' boxes and upright capsules exactly (a triangle mesh body by
+	 * its box); a box or a capsule tests the boxes around both. The rotation is ignored (Leon's shapes stay upright).
+	 */
+	bool OverlapMultiByObjectType(TArray<FOverlapResult>& OutOverlaps, const FVector& Pos, const FQuat& Rot,
+		const FCollisionObjectQueryParams& ObjectQueryParams, const FCollisionShape& CollisionShape,
+		const FCollisionQueryParams& Params = {}) const;
+
+	/** The world box of a body (UE: the component's Bounds, which Leon's components do not keep). */
+	[[nodiscard]] FBox GetBodyBounds(int32 BodyIndex) const;
+
+	/**
 	 * Pushes a capsule standing on Feet out of the bodies it overlaps (the character's side contacts), for the bodies
 	 * that block TraceChannel with the given responses to their object types.
 	 */

@@ -25,7 +25,8 @@ UCameraComponent::UCameraComponent(const FObjectInitializer& ObjectInitializer)
 
 void UCameraComponent::SetPerspective(float InFovDegrees, float InAspect, float InNearPlane, float InFarPlane)
 {
-	FovDegrees = FMath::Clamp(InFovDegrees, 20.0f, 120.0f);
+	// From a sniper scope's zoom to a wide view.
+	FovDegrees = FMath::Clamp(InFovDegrees, 5.0f, 120.0f);
 	Aspect = InAspect > 1.0e-4f ? InAspect : (16.0f / 9.0f);
 	NearPlane = InNearPlane;
 	FarPlane = InFarPlane;
@@ -122,13 +123,20 @@ void UCameraComponent::GetCameraView(float /*DeltaTime*/, FMinimalViewInfo& Desi
 		if (const APawn* OwningPawn = Cast<APawn>(GetOwner()))
 		{
 			SetMode(ECameraMode::FreeLook);
-			SetViewRotation(OwningPawn->GetViewRotation());
+			const FRotator PawnViewRotation = OwningPawn->GetViewRotation();
+			SetViewRotation(PawnViewRotation);
 			SetEyeLocation(GetComponentLocation());
+			// UE: the component turns with the view, and what is attached to it (a first-person weapon) with it.
+			if (!PawnViewRotation.Equals(GetComponentRotation()))
+			{
+				SetWorldRotation(PawnViewRotation);
+			}
 		}
 	}
 	DesiredView.Location = GetCameraLocation();
 	DesiredView.Rotation = GetViewRotation();
 	DesiredView.FOV = FieldOfView();
+	DesiredView.ViewModelFOV = ViewModelFOV;
 }
 
 void UCameraComponent::SetViewRotation(const FRotator& InRotation)

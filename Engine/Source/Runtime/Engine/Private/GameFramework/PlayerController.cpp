@@ -5,9 +5,11 @@
 #include "Engine/Player.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/GameModeBase.h"
 #include "GameFramework/HUD.h"
 #include "GameFramework/InputSettings.h"
 #include "GameFramework/PlayerInput.h"
+#include "GameFramework/SpectatorPawn.h"
 
 APlayerController::APlayerController(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -242,9 +244,108 @@ void APlayerController::ClientRestart(APawn* NewPawn)
 void APlayerController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
+	// A pawn of its own ends the spectating (UE: OnPossess → ChangeState(NAME_Playing)).
+	if (InPawn != nullptr && InPawn != SpectatorPawn && !IsInState(NAME_Playing))
+	{
+		ChangeState(NAME_Playing);
+	}
 	if (IsLocalController())
 	{
 		ClientRestart(InPawn);
+	}
+}
+
+void APlayerController::ChangeState(FName NewState)
+{
+	if (NewState == StateName)
+	{
+		return;
+	}
+	if (StateName == NAME_Spectating)
+	{
+		EndSpectatingState();
+	}
+	Super::ChangeState(NewState);
+	if (StateName == NAME_Spectating)
+	{
+		BeginSpectatingState();
+	}
+}
+
+void APlayerController::BeginSpectatingState()
+{
+	// The view point before the pawn goes (UE: GetSpawnLocation, the last view): the camera's, else the pawn's eyes.
+	FVector ViewLocation;
+	FRotator ViewRotation;
+	if (PlayerCameraManager == nullptr && GetPawn() != nullptr)
+	{
+		GetPawn()->GetActorEyesViewPoint(ViewLocation, ViewRotation);
+	}
+	else
+	{
+		GetPlayerViewPoint(ViewLocation, ViewRotation);
+	}
+	if (GetPawn() != nullptr)
+	{
+		UnPossess();
+	}
+	if (PlayerCameraManager != nullptr)
+	{
+		PlayerCameraManager->SetViewTarget(nullptr);
+	}
+	DestroySpectatorPawn();
+	SetActorLocation(ViewLocation);
+	SetSpectatorPawn(SpawnSpectatorPawn());
+}
+
+void APlayerController::EndSpectatingState()
+{
+	DestroySpectatorPawn();
+}
+
+ASpectatorPawn* APlayerController::SpawnSpectatorPawn()
+{
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return nullptr;
+	}
+	const AGameModeBase* GameMode = World->GetAuthGameMode();
+	UClass* SpectatorClass = GameMode != nullptr && GameMode->SpectatorClass != nullptr ? GameMode->SpectatorClass.Get()
+																						: ASpectatorPawn::StaticClass();
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.Owner = this;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	const FRotator Rotation = GetControlRotation();
+	return World->SpawnActor<ASpectatorPawn>(SpectatorClass, GetActorLocation(), Rotation, SpawnParams);
+}
+
+void APlayerController::DestroySpectatorPawn()
+{
+	if (SpectatorPawn == nullptr)
+	{
+		return;
+	}
+	ASpectatorPawn* OldSpectator = SpectatorPawn;
+	SpectatorPawn = nullptr;
+	if (GetPawn() == OldSpectator)
+	{
+		UnPossess();
+	}
+	OldSpectator->Destroy();
+}
+
+void APlayerController::SetSpectatorPawn(ASpectatorPawn* NewSpectatorPawn)
+{
+	if (!IsInState(NAME_Spectating))
+	{
+		return;
+	}
+	SpectatorPawn = NewSpectatorPawn;
+	if (NewSpectatorPawn != nullptr)
+	{
+		// Leon: the player flies the spectator as its pawn (UE views it and routes the input to it).
+		Possess(NewSpectatorPawn);
 	}
 }
 

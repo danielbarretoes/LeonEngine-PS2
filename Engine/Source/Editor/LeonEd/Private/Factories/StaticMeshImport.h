@@ -16,7 +16,8 @@ namespace StaticMeshImport
 	 * Mesh is reimported and the slot's name is unchanged (UE); else, with bImportMaterials, a named slot gets the
 	 * material asset `M_<Name>` next to the mesh (in the folder MaterialPackagePath when given), made from the source's
 	 * values (and its maps imported as `T_` textures next to it) unless it exists already, which is reused as it is.
-	 * New assets go to OutNewAssets.
+	 * The source's sockets become the mesh's UStaticMeshSocket objects (`StaticMeshSocket_<Name>`, reused on a
+	 * reimport). New assets go to OutNewAssets.
 	 */
 	void BuildStaticMesh(UStaticMesh& Mesh, const FMeshData& Data, bool bImportMaterials,
 		TArray<UObject*>& OutNewAssets, const FString& MaterialPackagePath = FString());

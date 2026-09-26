@@ -2,7 +2,9 @@
 
 #include "CoreMinimal.h"
 
+class AActor;
 class FReferenceCollector;
+class FSceneView;
 class UPrimitiveComponent;
 
 /** Which proxy class a FPrimitiveSceneProxy is (Leon: no RTTI, so the renderer asks instead of casting blind). */
@@ -53,6 +55,16 @@ public:
 	{
 		return bShown;
 	}
+	/**
+	 * Drawn in View (UE: IsShown(View)): shown, and for bOnlyOwnerSee the view's actor owns it, for bOwnerNoSee it
+	 * does not (the owners are the component's owner and that actor's owners).
+	 */
+	[[nodiscard]] bool IsShown(const FSceneView* View) const;
+	/** Drawn in the view model pass (UPrimitiveComponent::bRenderAsViewModel). */
+	[[nodiscard]] bool IsViewModel() const
+	{
+		return bRenderAsViewModel;
+	}
 	/** The component casts shadows (UE: CastsDynamicShadow; the materials decide per section). */
 	[[nodiscard]] bool CastsDynamicShadow() const
 	{
@@ -67,7 +79,12 @@ public:
 
 private:
 	FMatrix LocalToWorld = FMatrix::Identity;
+	/** The actors that own the component, directly or through their owners, when an owner flag is set (UE: Owners). */
+	TArray<const AActor*> Owners;
 	EPrimitiveSceneProxyType ProxyType;
 	bool bShown = true;
 	bool bCastDynamicShadow = true;
+	bool bOnlyOwnerSee = false;
+	bool bOwnerNoSee = false;
+	bool bRenderAsViewModel = false;
 };

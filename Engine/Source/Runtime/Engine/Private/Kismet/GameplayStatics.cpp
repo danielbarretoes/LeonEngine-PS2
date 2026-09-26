@@ -1,10 +1,12 @@
 #include "Kismet/GameplayStatics.h"
 
+#include "Components/PointLightComponent.h"
 #include "Engine/Engine.h"
+#include "Engine/PointLight.h"
 #include "Sound/SoundWave.h"
 
-// The sound and URL option helpers of UGameplayStatics (UE: GameplayStatics.cpp); the traces and the damage have
-// files of their own.
+// The sound, effect and URL option helpers of UGameplayStatics (UE: GameplayStatics.cpp); the traces and the damage
+// have files of their own.
 
 namespace
 {
@@ -76,4 +78,64 @@ void UGameplayStatics::PlaySoundAtLocation(
 	}
 	TArray<int16> Samples;
 	GEngine->GetAudioDevice().PlaySoundAtLocation(Wave->GetPCMView(Samples), Location, VolumeMultiplier);
+}
+
+int32 UGameplayStatics::SpawnImpactMark(const UObject* WorldContextObject, const FVector& Location,
+	const FVector& Normal, float Size, const FLinearColor& Color, float LifeSpan)
+{
+	UWorld* World = GetWorldFromContextObject(WorldContextObject);
+	if (World == nullptr)
+	{
+		return INDEX_NONE;
+	}
+	FImpactMark Mark;
+	Mark.Location = Location;
+	Mark.Normal = Normal;
+	Mark.Size = Size;
+	Mark.Color = Color;
+	Mark.LifeSpan = LifeSpan;
+	return World->ImpactMarks.AddMark(Mark);
+}
+
+void UGameplayStatics::SpawnTracer(const UObject* WorldContextObject, const FVector& Start, const FVector& End,
+	const FLinearColor& Color, float Width, float LifeSpan)
+{
+	UWorld* World = GetWorldFromContextObject(WorldContextObject);
+	if (World == nullptr || LifeSpan <= 0.0f)
+	{
+		return;
+	}
+	FTracer Tracer;
+	Tracer.Start = Start;
+	Tracer.End = End;
+	Tracer.Color = Color;
+	Tracer.Width = Width;
+	Tracer.LifeSpan = LifeSpan;
+	World->Tracers.AddTracer(Tracer);
+}
+
+APointLight* UGameplayStatics::SpawnPointLightAtLocation(const UObject* WorldContextObject, const FVector& Location,
+	const FLinearColor& Color, float Intensity, float AttenuationRadius, float LifeSpan)
+{
+	UWorld* World = GetWorldFromContextObject(WorldContextObject);
+	if (World == nullptr)
+	{
+		return nullptr;
+	}
+	FActorSpawnParameters SpawnInfo;
+	SpawnInfo.ObjectFlags |= RF_Transient;
+	APointLight* Light = World->SpawnActor<APointLight>(Location, FRotator::ZeroRotator, SpawnInfo);
+	if (Light == nullptr)
+	{
+		return nullptr;
+	}
+	// The light's proxy takes the new values (the render state is a snapshot).
+	UPointLightComponent* LightComponent = Light->GetPointLightComponent();
+	LightComponent->LightColor = Color;
+	LightComponent->Intensity = Intensity;
+	LightComponent->AttenuationRadius = AttenuationRadius;
+	LightComponent->CastShadows = false;
+	LightComponent->MarkRenderStateDirty();
+	Light->SetLifeSpan(LifeSpan);
+	return Light;
 }

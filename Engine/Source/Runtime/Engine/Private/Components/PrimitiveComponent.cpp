@@ -9,6 +9,9 @@ UPrimitiveComponent::UPrimitiveComponent(const FObjectInitializer& ObjectInitial
 {
 	CastShadow = true;
 	bGenerateOverlapEvents = true;
+	bOnlyOwnerSee = false;
+	bOwnerNoSee = false;
+	bRenderAsViewModel = false;
 	// UE: the body instance's responses start from the default container (the config's channel defaults).
 	CollisionResponses = FCollisionResponseContainer::GetDefaultResponseContainer();
 }
@@ -21,6 +24,49 @@ FCollisionShape UPrimitiveComponent::GetCollisionShape(float /*Inflation*/) cons
 FPrimitiveSceneProxy* UPrimitiveComponent::CreateSceneProxy()
 {
 	return nullptr;
+}
+
+void UPrimitiveComponent::SetOnlyOwnerSee(bool bNewOnlyOwnerSee)
+{
+	if (bOnlyOwnerSee != bNewOnlyOwnerSee)
+	{
+		bOnlyOwnerSee = bNewOnlyOwnerSee;
+		MarkRenderStateDirty();
+	}
+}
+
+void UPrimitiveComponent::SetOwnerNoSee(bool bNewOwnerNoSee)
+{
+	if (bOwnerNoSee != bNewOwnerNoSee)
+	{
+		bOwnerNoSee = bNewOwnerNoSee;
+		MarkRenderStateDirty();
+	}
+}
+
+void UPrimitiveComponent::SetRenderAsViewModel(bool bNewRenderAsViewModel)
+{
+	if (bRenderAsViewModel != bNewRenderAsViewModel)
+	{
+		bRenderAsViewModel = bNewRenderAsViewModel;
+		MarkRenderStateDirty();
+	}
+}
+
+void UPrimitiveComponent::IgnoreActorWhenMoving(AActor* Actor, bool bShouldIgnore)
+{
+	if (Actor == nullptr)
+	{
+		return;
+	}
+	if (bShouldIgnore)
+	{
+		MoveIgnoreActors.AddUnique(Actor);
+	}
+	else
+	{
+		MoveIgnoreActors.Remove(Actor);
+	}
 }
 
 bool UPrimitiveComponent::ShouldRender() const

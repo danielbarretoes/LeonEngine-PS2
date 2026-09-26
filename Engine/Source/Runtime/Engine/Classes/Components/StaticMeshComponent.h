@@ -57,4 +57,9 @@ public:
 
 	/** A FStaticMeshSceneProxy for a valid mesh (UE: CreateSceneProxy). */
 	[[nodiscard]] FPrimitiveSceneProxy* CreateSceneProxy() override;
+
+	/** The world transform of a socket of the mesh; the component's for NAME_None or a missing socket (UE). */
+	[[nodiscard]] FTransform GetSocketTransform(FName InSocketName) const override;
+	/** True when the mesh has the socket (UE: DoesSocketExist). */
+	[[nodiscard]] bool DoesSocketExist(FName InSocketName) const override;
 };

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 
+class AActor;
 class FSceneInterface;
 class UCameraComponent;
 
@@ -75,6 +76,10 @@ struct ENGINE_API FSceneViewInitOptions
 	FMatrix ProjectionMatrix = FMatrix::Identity;
 	/** Vertical field of view, degrees (Leon's camera keeps a vertical one; UE's FOV is horizontal). */
 	float FOV = 90.0f;
+	/** The view model primitives' projection (Leon, FSceneView::ViewModelProjectionMatrix); the view's by default. */
+	FMatrix ViewModelProjectionMatrix = FMatrix::Identity;
+	/** The actor the view belongs to, for bOnlyOwnerSee / bOwnerNoSee (UE: ViewActor): the player's view target. */
+	const AActor* ViewActor = nullptr;
 	/** The view rectangle in the render target (UE: SetViewRectangle); the whole target in Leon. */
 	FIntPoint ViewRectMin = FIntPoint(0, 0);
 	FIntPoint ViewRectMax = FIntPoint(0, 0);
@@ -90,7 +95,10 @@ class ENGINE_API FSceneView
 public:
 	explicit FSceneView(const FSceneViewInitOptions& InitOptions);
 
-	/** The init options of a view through a camera covering the whole family target. */
+	/**
+	 * The init options of a view through a camera covering the whole family target; the view model projection has the
+	 * camera's ViewModelFOV (its FOV without one) and a near plane of ViewModelNearPlane.
+	 */
 	[[nodiscard]] static FSceneViewInitOptions FromCamera(
 		const FSceneViewFamily& ViewFamily, const UCameraComponent& Camera);
 
@@ -100,6 +108,13 @@ public:
 	FMatrix ViewMatrix = FMatrix::Identity;
 	/** UE's projection (UE: ViewMatrices.GetProjectionMatrix()). */
 	FMatrix ProjectionMatrix = FMatrix::Identity;
+	/**
+	 * The projection of the view model primitives (Leon's view model pass, UPrimitiveComponent::bRenderAsViewModel):
+	 * drawn after the scene over a cleared depth buffer, with their own field of view and a near plane of 1 cm.
+	 */
+	FMatrix ViewModelProjectionMatrix = FMatrix::Identity;
+	/** The view's actor (UE: ViewActor): primitives with bOnlyOwnerSee / bOwnerNoSee are shown by their owners. */
+	const AActor* ViewActor = nullptr;
 	float FOV = 90.0f;
 	/** UE: UnscaledViewRect (min, max). */
 	FIntPoint ViewRectMin = FIntPoint(0, 0);

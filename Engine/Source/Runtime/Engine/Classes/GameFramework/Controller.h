@@ -10,6 +10,14 @@ class ACharacter;
 class APlayerState;
 
 /**
+ * The states of a controller (UE: NAME_Inactive, NAME_Playing, NAME_Spectating, hard-coded names of Core there; Leon
+ * keeps them as Engine's names, so Core's name table does not change).
+ */
+ENGINE_API extern const FName NAME_Inactive;
+ENGINE_API extern const FName NAME_Playing;
+ENGINE_API extern const FName NAME_Spectating;
+
+/**
  * Drives a possessed Pawn (UE: AController), an actor the world spawns. A controller that wants one (the player
  * controllers) spawns its APlayerState in PostInitializeComponents; the game mode's PlayerStateClass picks the class.
  */
@@ -56,6 +64,21 @@ public:
 	/** Turns the control rotation, and the pawn when it follows it (UE: ClientSetRotation; no RPC in Leon). */
 	virtual void ClientSetRotation(const FRotator& NewRotation, bool bResetCamera = false);
 
+	/**
+	 * The controller's state (UE: GetStateName / IsInState / ChangeState): NAME_None until the first possession,
+	 * NAME_Playing with a pawn, NAME_Spectating while a player watches (APlayerController). ChangeState ends the old
+	 * state and begins the new one.
+	 */
+	[[nodiscard]] FName GetStateName() const
+	{
+		return StateName;
+	}
+	[[nodiscard]] bool IsInState(FName InStateName) const
+	{
+		return StateName == InStateName;
+	}
+	virtual void ChangeState(FName NewState);
+
 	/** Where the controller started, chosen by the game mode when it logged in (UE: StartSpot). */
 	UPROPERTY()
 	TWeakObjectPtr<AActor> StartSpot;
@@ -88,6 +111,9 @@ protected:
 	/** The player state (UE: PlayerState). */
 	UPROPERTY()
 	APlayerState* PlayerState = nullptr;
+
+	/** UE: StateName. */
+	FName StateName;
 
 private:
 	/** The possessed pawn (UE: Pawn). */

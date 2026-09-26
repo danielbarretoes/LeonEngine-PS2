@@ -55,6 +55,7 @@ void APlayerCameraManager::UpdateCamera(float DeltaTime)
 	{
 		ViewCamera->SetFieldOfView(POV.FOV);
 	}
+	ViewCamera->ViewModelFOV = POV.ViewModelFOV;
 }
 
 float APlayerCameraManager::GetFOVAngle() const

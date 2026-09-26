@@ -96,48 +96,6 @@ void ACharacter::RecalculateBaseEyeHeight()
 	}
 }
 
-void ACharacter::SetHealth(float InHealth)
-{
-	Health = FMath::Clamp(InHealth, 0.0f, MaxHealth);
-	bAlive = Health > 0.0f;
-}
-
-void ACharacter::SetMaxHealth(float InMaxHealth)
-{
-	MaxHealth = FMath::Max(0.0f, InMaxHealth);
-	if (Health > MaxHealth)
-	{
-		Health = MaxHealth;
-	}
-}
-
-float ACharacter::TakeDamage(float DamageAmount)
-{
-	if (!bAlive || DamageAmount <= 0.0f)
-	{
-		return 0.0f;
-	}
-	const float Applied = FMath::Min(Health, DamageAmount);
-	Health = FMath::Max(0.0f, Health - DamageAmount);
-	if (Health <= 0.0f)
-	{
-		Die();
-	}
-	return Applied;
-}
-
-void ACharacter::Die()
-{
-	Health = 0.0f;
-	bAlive = false;
-}
-
-void ACharacter::Revive(float NewHealth)
-{
-	Health = FMath::Clamp(NewHealth, 0.0f, MaxHealth);
-	bAlive = true;
-}
-
 void ACharacter::Reset(const FVector& InLocation, const FRotator& InRotation)
 {
 	SetActorLocationAndRotation(InLocation, InRotation);
@@ -161,8 +119,6 @@ void ACharacter::Reset(const FVector& InLocation, const FRotator& InRotation)
 	}
 	JumpsRemaining = FMath::Max(0, CharacterMovement->MaxJumpCount - 1);
 	CurrentFloor = {};
-	Health = MaxHealth;
-	bAlive = true;
 	CapsuleComponent->SendPhysicsTransform();
 }
 

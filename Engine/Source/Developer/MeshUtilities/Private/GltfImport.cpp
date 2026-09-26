@@ -199,6 +199,44 @@ namespace
 		return Matrix;
 	}
 
+	/** The prefix of a socket node (UE's FBX static mesh sockets). */
+	constexpr const ANSICHAR* SocketPrefix = "SOCKET_";
+
+	/**
+	 * The sockets of the file: each `SOCKET_<Name>` node, relative to its nearest ancestor with a mesh (whose vertices
+	 * are the mesh's space: the static import ignores the mesh nodes' transforms), in the engine's axes and units.
+	 */
+	void ReadSockets(
+		const cgltf_data& Data, const FImportCoordinateConversion& Conversion, TArray<FMeshSocketData>& Out)
+	{
+		const int32 PrefixLength = FCStringAnsi::Strlen(SocketPrefix);
+		for (cgltf_size Ni = 0; Ni < Data.nodes_count; ++Ni)
+		{
+			const cgltf_node& Node = Data.nodes[Ni];
+			if (Node.name == nullptr || FCStringAnsi::Strncmp(Node.name, SocketPrefix, PrefixLength) != 0)
+			{
+				continue;
+			}
+			cgltf_float World[16];
+			cgltf_node_transform_world(&Node, World);
+			FMatrix SocketMatrix = ToMatrix(World);
+			const cgltf_node* MeshNode = Node.parent;
+			while (MeshNode != nullptr && MeshNode->mesh == nullptr)
+			{
+				MeshNode = MeshNode->parent;
+			}
+			if (MeshNode != nullptr)
+			{
+				cgltf_float MeshWorld[16];
+				cgltf_node_transform_world(MeshNode, MeshWorld);
+				SocketMatrix = SocketMatrix * ToMatrix(MeshWorld).Inverse();
+			}
+			FMeshSocketData& Socket = Out.AddDefaulted_GetRef();
+			Socket.Name = FString(Node.name + PrefixLength);
+			Socket.Transform = FTransform(Conversion.ConvertMatrix(SocketMatrix));
+		}
+	}
+
 } // namespace
 
 bool LoadStaticMeshFromGltf(const FString& Path, FMeshData& Out, FString& OutError)
@@ -220,6 +258,7 @@ bool LoadStaticMeshFromGltf(const FString& Path, FMeshData& Out, FString& OutErr
 	{
 		AppendMeshPrimitives(Data->meshes[Mi], GltfDir, Mesh, BaseVertex);
 	}
+	ReadSockets(*Data, GltfConversion(), Mesh.Sockets);
 
 	cgltf_free(Data);
 

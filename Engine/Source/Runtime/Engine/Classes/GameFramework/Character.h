@@ -143,26 +143,6 @@ public:
 	UPROPERTY()
 	bool bOrientRotationToMovement = true;
 
-	/** Unreal-like health (ACharacter lite). */
-	[[nodiscard]] float GetHealth() const
-	{
-		return Health;
-	}
-	[[nodiscard]] float GetMaxHealth() const
-	{
-		return MaxHealth;
-	}
-	void SetHealth(float InHealth);
-	void SetMaxHealth(float InMaxHealth);
-	/** Returns applied damage; calls Die when health hits 0. */
-	virtual float TakeDamage(float DamageAmount);
-	virtual void Die();
-	void Revive(float NewHealth);
-	[[nodiscard]] bool IsAlive() const
-	{
-		return bAlive;
-	}
-
 	void Reset(const FVector& Location, const FRotator& Rotation = FRotator::ZeroRotator);
 	void AddMovementInput(const FVector& WishDirXY);
 	void Jump();
@@ -264,15 +244,6 @@ private:
 	USkeletalMeshComponent* Mesh = nullptr;
 
 	float AnimBlendInput = 0.0f;
-
-	UPROPERTY()
-	float Health = 100.0f;
-
-	UPROPERTY()
-	float MaxHealth = 100.0f;
-
-	UPROPERTY()
-	bool bAlive = true;
 
 	FVector WishDir = FVector::ZeroVector;
 	float VelocityZ = 0.0f;

@@ -41,6 +41,8 @@ FSceneView::FSceneView(const FSceneViewInitOptions& InitOptions)
 	, ViewLocation(InitOptions.ViewOrigin)
 	, ViewMatrix(InitOptions.ViewMatrix)
 	, ProjectionMatrix(InitOptions.ProjectionMatrix)
+	, ViewModelProjectionMatrix(InitOptions.ViewModelProjectionMatrix)
+	, ViewActor(InitOptions.ViewActor)
 	, FOV(InitOptions.FOV)
 	, ViewRectMin(InitOptions.ViewRectMin)
 	, ViewRectMax(InitOptions.ViewRectMax)
@@ -56,5 +58,12 @@ FSceneViewInitOptions FSceneView::FromCamera(const FSceneViewFamily& ViewFamily,
 	InitOptions.ProjectionMatrix = Camera.ProjectionMatrix();
 	InitOptions.FOV = Camera.FieldOfView();
 	InitOptions.ViewRectMax = FIntPoint(ViewFamily.RenderTargetSizeX, ViewFamily.RenderTargetSizeY);
+	// The view model pass: its own vertical field of view, the camera's aspect, a near plane at the weapon.
+	const float ViewModelFOV = Camera.ViewModelFOV > 0.0f ? Camera.ViewModelFOV : Camera.FieldOfView();
+	const float HalfFov = FMath::DegreesToRadians(FMath::Clamp(ViewModelFOV, 5.0f, 120.0f)) / 2.0f;
+	InitOptions.ViewModelProjectionMatrix = Camera.IsOrthographic()
+		? Camera.ProjectionMatrix()
+		: FMatrix(FPerspectiveMatrix(
+			  HalfFov, HalfFov, 1.0f / Camera.GetAspect(), 1.0f, ViewModelNearPlane, Camera.GetFarPlane()));
 	return InitOptions;
 }

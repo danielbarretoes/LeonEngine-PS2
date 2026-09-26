@@ -10,6 +10,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerStart.h"
 #include "GameFramework/PlayerState.h"
+#include "GameFramework/SpectatorPawn.h"
 #include "GameFramework/WorldSettings.h"
 
 AGameModeBase::AGameModeBase(const FObjectInitializer& ObjectInitializer)
@@ -22,6 +23,7 @@ AGameModeBase::AGameModeBase(const FObjectInitializer& ObjectInitializer)
 	PlayerStateClass = APlayerState::StaticClass();
 	DefaultPawnClass = ADefaultPawn::StaticClass();
 	HUDClass = AHUD::StaticClass();
+	SpectatorClass = ASpectatorPawn::StaticClass();
 	DefaultPlayerName = TEXT("Player");
 }
 

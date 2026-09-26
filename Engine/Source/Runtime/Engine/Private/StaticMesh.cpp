@@ -1,6 +1,8 @@
 #include "Engine/StaticMesh.h"
 
 #include "AssetBulkData.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMeshSocket.h"
 #include "EngineLogs.h"
 #include "Materials/MaterialInterface.h"
 #include "PhysicsEngine/BodySetup.h"
@@ -131,6 +133,37 @@ void UStaticMesh::CreateBodySetup()
 UMaterialInterface* UStaticMesh::GetMaterial(int32 MaterialIndex) const
 {
 	return StaticMaterials.IsValidIndex(MaterialIndex) ? StaticMaterials[MaterialIndex].MaterialInterface : nullptr;
+}
+
+UStaticMeshSocket* UStaticMesh::FindSocket(FName InSocketName) const
+{
+	if (InSocketName.IsNone())
+	{
+		return nullptr;
+	}
+	for (UStaticMeshSocket* Socket : Sockets)
+	{
+		if (Socket != nullptr && Socket->SocketName == InSocketName)
+		{
+			return Socket;
+		}
+	}
+	return nullptr;
+}
+
+UStaticMeshSocket::UStaticMeshSocket(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
+bool UStaticMeshSocket::GetSocketTransform(FTransform& OutTransform, const UStaticMeshComponent* MeshComp) const
+{
+	if (MeshComp == nullptr)
+	{
+		return false;
+	}
+	OutTransform = GetSocketLocalTransform() * MeshComp->GetComponentTransform();
+	return true;
 }
 
 void UStaticMesh::Serialize(FArchive& Ar)

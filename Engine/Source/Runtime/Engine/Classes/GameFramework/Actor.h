@@ -9,10 +9,31 @@
 #include "UObject/Object.h"
 #include "Actor.generated.h"
 
+class AController;
 class APawn;
+class UDamageType;
 class UInputComponent;
+class UPrimitiveComponent;
 class UWorld;
+struct FDamageEvent;
+struct FHitResult;
 struct FMinimalViewInfo;
+struct FPointDamageEvent;
+struct FRadialDamageEvent;
+
+/**
+ * The damage delegates of an actor (UE: FTakeAnyDamageSignature, FTakePointDamageSignature,
+ * FTakeRadialDamageSignature, dynamic multicast delegates there; Leon's are native multicast delegates with UE's
+ * parameters).
+ */
+using FTakeAnyDamageSignature = TMulticastDelegate<void(AActor* /*DamagedActor*/, float /*Damage*/,
+	const UDamageType* /*DamageType*/, AController* /*InstigatedBy*/, AActor* /*DamageCauser*/)>;
+using FTakePointDamageSignature = TMulticastDelegate<void(AActor* /*DamagedActor*/, float /*Damage*/,
+	AController* /*InstigatedBy*/, FVector /*HitLocation*/, UPrimitiveComponent* /*FHitComponent*/, FName /*BoneName*/,
+	FVector /*ShotFromDirection*/, const UDamageType* /*DamageType*/, AActor* /*DamageCauser*/)>;
+using FTakeRadialDamageSignature =
+	TMulticastDelegate<void(AActor* /*DamagedActor*/, float /*Damage*/, const UDamageType* /*DamageType*/,
+		FVector /*Origin*/, const FHitResult& /*HitInfo*/, AController* /*InstigatedBy*/, AActor* /*DamageCauser*/)>;
 
 /**
  * Yaw in degrees that makes content converted from the legacy formats face an actor's forward. Legacy content faces the
@@ -38,6 +59,16 @@ inline constexpr float LegacyContentYaw = -90.0f;
  * ## Components
  * Components are default subobjects (CreateDefaultSubobject in a constructor) or NewObject<T>(Actor) followed by
  * RegisterComponent. The actor keeps them in OwnedComponents; SpawnActor registers them (RegisterAllComponents).
+ *
+ * ## Damage
+ * TakeDamage (UE's signature) receives a hit: UGameplayStatics::ApplyDamage / ApplyPointDamage / ApplyRadialDamage call
+ * it with an FDamageEvent. The base scales radial damage by its falloff and broadcasts OnTakeAnyDamage and
+ * OnTakePointDamage / OnTakeRadialDamage; a game's pawn overrides it to apply the damage to its health. An actor with
+ * bCanBeDamaged false takes none.
+ *
+ * ## Life span
+ * SetLifeSpan (or InitialLifeSpan, applied at BeginPlay) destroys the actor after that many seconds of world ticks
+ * (UE: a timer; Leon counts in TickActor).
  */
 UCLASS()
 class ENGINE_API AActor : public UObject
@@ -61,6 +92,21 @@ public:
 	/** Whether Tick runs each world tick (UE: PrimaryActorTick.bCanEverTick; Leon ticks every actor by default). */
 	UPROPERTY()
 	uint8 bCanEverTick : 1;
+
+	/** Whether the actor takes damage at all (UE: bCanBeDamaged); TakeDamage and the Apply*Damage helpers check it. */
+	UPROPERTY()
+	uint8 bCanBeDamaged : 1;
+
+	/** Seconds the actor lives after BeginPlay; 0 lives until destroyed (UE: InitialLifeSpan). */
+	UPROPERTY()
+	float InitialLifeSpan = 0.0f;
+
+	/** Any damage taken (UE: OnTakeAnyDamage), after OnTakePointDamage / OnTakeRadialDamage. */
+	FTakeAnyDamageSignature OnTakeAnyDamage;
+	/** Point damage taken (UE: OnTakePointDamage). */
+	FTakePointDamageSignature OnTakePointDamage;
+	/** Radial damage taken (UE: OnTakeRadialDamage). */
+	FTakeRadialDamageSignature OnTakeRadialDamage;
 
 	/** The world of the actor's level, or null for an actor outside any world (UE: GetWorld). */
 	[[nodiscard]] UWorld* GetWorld() const;
@@ -239,11 +285,50 @@ public:
 	/** Where the actor looks from: its location and rotation (UE: GetActorEyesViewPoint). */
 	virtual void GetActorEyesViewPoint(FVector& OutLocation, FRotator& OutRotation) const;
 
+	/**
+	 * Receives damage and returns the amount taken (UE: TakeDamage). The base takes nothing when bCanBeDamaged is
+	 * false; else a point event goes through InternalTakePointDamage and a radial one through InternalTakeRadialDamage
+	 * (the falloff for the closest component hit), then, for a non-zero amount, OnTakePointDamage / OnTakeRadialDamage
+	 * and OnTakeAnyDamage are broadcast. Overrides call Super first and apply what it returns (UE ShooterGame).
+	 */
+	virtual float TakeDamage(
+		float DamageAmount, const FDamageEvent& DamageEvent, AController* EventInstigator, AActor* DamageCauser);
+
+	/** UE: CanBeDamaged / SetCanBeDamaged. */
+	[[nodiscard]] bool CanBeDamaged() const
+	{
+		return bCanBeDamaged;
+	}
+	void SetCanBeDamaged(bool bInCanBeDamaged)
+	{
+		bCanBeDamaged = bInCanBeDamaged;
+	}
+
+	/** Destroys the actor after InLifespan seconds; 0 cancels (UE: SetLifeSpan). */
+	virtual void SetLifeSpan(float InLifespan);
+	/** Seconds left before the actor is destroyed, 0 without a life span (UE: GetLifeSpan). */
+	[[nodiscard]] float GetLifeSpan() const
+	{
+		return LifeSpanRemaining;
+	}
+	/** The life span ran out: destroys the actor (UE: LifeSpanExpired). */
+	virtual void LifeSpanExpired();
+
 	/** The actor's input bindings (UE: InputComponent): a player controller's or a possessed pawn's. */
 	UPROPERTY(Transient)
 	UInputComponent* InputComponent = nullptr;
 
 protected:
+	/** The point damage an actor takes from a point event: the amount as it is (UE: InternalTakePointDamage). */
+	virtual float InternalTakePointDamage(
+		float Damage, const FPointDamageEvent& PointDamageEvent, AController* EventInstigator, AActor* DamageCauser);
+	/**
+	 * The radial damage an actor takes: the event's falloff at the closest component hit, between MinimumDamage and
+	 * Damage (UE: InternalTakeRadialDamage).
+	 */
+	virtual float InternalTakeRadialDamage(
+		float Damage, const FRadialDamageEvent& RadialDamageEvent, AController* EventInstigator, AActor* DamageCauser);
+
 	/**
 	 * The root component's relative location / rotation, which are the actor's while the root is not attached (Leon:
 	 * the kinematic character movement edits them in place).
@@ -277,6 +362,8 @@ private:
 	APawn* Instigator = nullptr;
 
 	uint64 UniqueID = 0;
+	/** Seconds until LifeSpanExpired; 0 without a life span (UE: the TimerHandle_LifeSpanExpired timer). */
+	float LifeSpanRemaining = 0.0f;
 	bool bActorIsBeingDestroyed = false;
 	bool bActorInitialized = false;
 	bool bActorHasBegunPlay = false;

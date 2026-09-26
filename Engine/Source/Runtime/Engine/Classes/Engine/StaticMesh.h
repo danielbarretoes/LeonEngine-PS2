@@ -10,6 +10,7 @@
 class UAssetImportData;
 class UBodySetup;
 class UMaterialInterface;
+class UStaticMeshSocket;
 
 /** A material slot of a static mesh (UE: FStaticMaterial): the material its sections draw with, and the slot's name. */
 USTRUCT()
@@ -39,8 +40,9 @@ struct ENGINE_API FStaticMaterial
  * bodies.
  *
  * In a package: the tagged properties (the slots, the body setup, an inner object), then the bounds and the geometry
- * as bulk data (at the end of the file, plan decision D13). Leon has no source models, LODs, nanite, sockets, UV
- * channel data or distance fields; BuildFromMeshData takes the place of UE's build from the mesh description.
+ * as bulk data (at the end of the file, plan decision D13). Leon has no source models, LODs, nanite, UV channel data or
+ * distance fields; BuildFromMeshData takes the place of UE's build from the mesh description. Its sockets (inner
+ * UStaticMeshSocket objects) are named points a component attaches to or asks for (a weapon's muzzle).
  */
 UCLASS()
 class ENGINE_API UStaticMesh : public UObject
@@ -57,6 +59,13 @@ public:
 	/** The collision (UE: BodySetup): made by BuildFromMeshData, an inner object of the mesh. */
 	UPROPERTY()
 	UBodySetup* BodySetup = nullptr;
+
+	/** The mesh's sockets, inner objects of the mesh (UE: Sockets). */
+	UPROPERTY()
+	TArray<UStaticMeshSocket*> Sockets;
+
+	/** The socket called InSocketName, or null (UE: FindSocket). */
+	[[nodiscard]] UStaticMeshSocket* FindSocket(FName InSocketName) const;
 
 #if WITH_EDITORONLY_DATA
 	/** Where the mesh was imported from: made by the factory that imported it, dropped by the cook (UE:

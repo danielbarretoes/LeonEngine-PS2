@@ -15,6 +15,8 @@ enum class ECameraMode : uint8
 /** Default perspective clip planes of the engine camera (world units, cm). */
 inline constexpr float DefaultCameraNearPlane = 10.0f;
 inline constexpr float DefaultCameraFarPlane = 10000.0f;
+/** The near plane of the view model pass: a first-person weapon sits a few centimetres from the eye (cm). */
+inline constexpr float ViewModelNearPlane = 1.0f;
 
 /**
  * View camera (UE: UCameraComponent, a scene component): orbit (default) or free-look. Both modes look along a UE view
@@ -135,10 +137,19 @@ public:
 
 	/**
 	 * The view follows the owning pawn's control rotation and the eye is the component's location (UE:
-	 * bUsePawnControlRotation, the first-person camera). Off by default.
+	 * bUsePawnControlRotation, the first-person camera): GetCameraView also turns the component to the view rotation,
+	 * so what is attached to it (a first-person weapon) follows the aim. Off by default.
 	 */
 	UPROPERTY()
 	bool bUsePawnControlRotation = false;
+
+	/**
+	 * The vertical field of view of the view model primitives this camera shows (UPrimitiveComponent::
+	 * bRenderAsViewModel), degrees; 0 uses the camera's. Leon: UE 4.27 has no view model pass (games scale the weapon
+	 * in a material or capture it), so the renderer draws them last, after a depth clear, with this projection.
+	 */
+	UPROPERTY()
+	float ViewModelFOV = 0.0f;
 
 private:
 	void InvalidateCache();

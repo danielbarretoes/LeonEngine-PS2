@@ -5,7 +5,9 @@
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "Frustum.h"
+#include "GameFramework/Actor.h"
 #include "Materials/Material.h"
+#include "SceneView.h"
 #include "SkeletalMeshSceneProxy.h"
 #include "StaticMeshSceneProxy.h"
 #include "UObject/UObjectGlobals.h"
@@ -14,8 +16,36 @@ FPrimitiveSceneProxy::FPrimitiveSceneProxy(const UPrimitiveComponent* InComponen
 	: LocalToWorld(InComponent->GetComponentTransform().ToMatrixWithScale())
 	, ProxyType(InProxyType)
 	, bShown(InComponent->ShouldRender())
-	, bCastDynamicShadow(InComponent->CastShadow)
+	, bCastDynamicShadow(InComponent->CastShadow && !InComponent->bRenderAsViewModel)
+	, bOnlyOwnerSee(InComponent->bOnlyOwnerSee)
+	, bOwnerNoSee(InComponent->bOwnerNoSee)
+	, bRenderAsViewModel(InComponent->bRenderAsViewModel)
 {
+	if (bOnlyOwnerSee || bOwnerNoSee)
+	{
+		// UE: the actors which directly or indirectly own the component.
+		for (const AActor* Owner = InComponent->GetOwner(); Owner != nullptr; Owner = Owner->GetOwner())
+		{
+			Owners.Add(Owner);
+		}
+	}
+}
+
+bool FPrimitiveSceneProxy::IsShown(const FSceneView* View) const
+{
+	if (!bShown)
+	{
+		return false;
+	}
+	if (View != nullptr && (bOnlyOwnerSee || bOwnerNoSee))
+	{
+		const bool bOwnedByViewer = View->ViewActor != nullptr && Owners.Contains(View->ViewActor);
+		if ((bOnlyOwnerSee && !bOwnedByViewer) || (bOwnerNoSee && bOwnedByViewer))
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
 FStaticMeshSceneProxy::FStaticMeshSceneProxy(const UStaticMeshComponent* InComponent)

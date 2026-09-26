@@ -2,7 +2,11 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Volume.h"
+#include "Templates/SubclassOf.h"
 #include "PainCausingVolume.generated.h"
+
+class AController;
+class UDamageType;
 
 /**
  * A volume that damages the characters inside it (UE: APainCausingVolume, an APhysicsVolume there; Leon has no physics
@@ -28,4 +32,12 @@ public:
 	/** Seconds between two pain ticks (UE: PainInterval). */
 	UPROPERTY()
 	float PainInterval = 1.0f;
+
+	/** The kind of damage (UE: DamageType); null is UDamageType. */
+	UPROPERTY()
+	TSubclassOf<UDamageType> DamageType;
+
+	/** The controller the damage is credited to (UE: DamageInstigator), none by default. */
+	UPROPERTY(Transient)
+	AController* DamageInstigator = nullptr;
 };

@@ -32,9 +32,43 @@ public:
 	UPROPERTY()
 	uint8 CastShadow : 1;
 
+	/**
+	 * Drawn only in the views of its owner or its owner's owners (UE: bOnlyOwnerSee): a player's first-person weapon.
+	 * The view's actor is the player's view target (FSceneView::ViewActor).
+	 */
+	UPROPERTY()
+	uint8 bOnlyOwnerSee : 1;
+
+	/** Drawn in every view but its owners' (UE: bOwnerNoSee): a player's own body. */
+	UPROPERTY()
+	uint8 bOwnerNoSee : 1;
+
+	/**
+	 * Drawn in the view model pass (Leon; UE 4.27 has none): after the scene, over a cleared depth buffer, with the
+	 * camera's ViewModelFOV (FSceneView::ViewModelProjectionMatrix), so a first-person weapon never goes into a wall
+	 * and keeps its own field of view. It casts no shadow and is left out of the scene's other passes.
+	 */
+	UPROPERTY()
+	uint8 bRenderAsViewModel : 1;
+
+	/** UE: SetOnlyOwnerSee / SetOwnerNoSee; Leon: SetRenderAsViewModel. Each recreates the render state. */
+	void SetOnlyOwnerSee(bool bNewOnlyOwnerSee);
+	void SetOwnerNoSee(bool bNewOwnerNoSee);
+	void SetRenderAsViewModel(bool bNewRenderAsViewModel);
+
 	/** Reports overlaps (UE: bGenerateOverlapEvents; kept for the UE shape, nothing queries overlaps yet). */
 	UPROPERTY()
 	uint8 bGenerateOverlapEvents : 1;
+
+	/**
+	 * Actors this component's sweeps ignore when it moves (UE: MoveIgnoreActors): a projectile ignores the pawn that
+	 * fired it (UProjectileMovementComponent).
+	 */
+	UPROPERTY(Transient)
+	TArray<AActor*> MoveIgnoreActors;
+
+	/** Adds or removes an actor MoveIgnoreActors holds (UE: IgnoreActorWhenMoving). */
+	void IgnoreActorWhenMoving(AActor* Actor, bool bShouldIgnore);
 
 	/**
 	 * What the collision takes part in (UE: BodyInstance.CollisionEnabled). Leon's default is NoCollision: the physics

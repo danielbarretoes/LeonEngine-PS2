@@ -298,6 +298,12 @@ AWorldSettings* UWorld::GetWorldSettings() const
 	return PersistentLevel != nullptr ? PersistentLevel->GetWorldSettings() : nullptr;
 }
 
+float UWorld::GetGravityZ() const
+{
+	const AWorldSettings* Settings = GetWorldSettings();
+	return Settings != nullptr && Settings->GlobalGravityZ != 0.0f ? Settings->GlobalGravityZ : DefaultGravityZ;
+}
+
 APlayerController* UWorld::GetFirstPlayerController() const
 {
 	return FindFirst<APlayerController>();
@@ -464,6 +470,7 @@ bool UWorld::DestroyActor(AActor* Actor, bool /*bNetForce*/, bool /*bShouldModif
 void UWorld::Tick(float InDeltaTime)
 {
 	DeltaTimeSeconds = InDeltaTime;
+	TimeSeconds += InDeltaTime;
 	bTicking = true;
 	if (PersistentLevel != nullptr)
 	{
@@ -521,6 +528,10 @@ void UWorld::Tick(float InDeltaTime)
 	// The cameras last, after every actor moved (UE).
 	ForEach<APlayerController>(
 		[InDeltaTime](APlayerController& PlayerController) { PlayerController.UpdateCameraManager(InDeltaTime); });
+
+	// The effects age with the world's time.
+	ImpactMarks.Tick(InDeltaTime);
+	Tracers.Tick(InDeltaTime);
 }
 
 void UWorld::FlushPendingSpawns()

@@ -2,6 +2,7 @@
 #include "CoreMinimal.h"
 #include "EditorFramework/AssetImportData.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshSocket.h"
 #include "Engine/Texture2D.h"
 #include "Engine/World.h"
 #include "Factories/FbxFactory.h"
@@ -273,6 +274,47 @@ bool FLeonEdStaticMeshFactoryTest::RunTest(const FString& Parameters)
 	Animation.Add(TEXT("MeshTypeToImport"), TEXT("FBXIT_Animation"));
 	AddExpectedError(TEXT("needs a Skeleton"), 1);
 	TestNull("No skeleton", ImportWith(UFbxFactory::StaticClass(), Fbx, TEXT("A_Tri"), Animation));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLeonEdGltfSocketsTest, "System.LeonEd.Factories.GltfSockets",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FLeonEdGltfSocketsTest::RunTest(const FString& Parameters)
+{
+	// A glTF node named SOCKET_<Name> under the mesh's node becomes a socket of the static mesh (UE's FBX convention),
+	// placed in the mesh's space in the engine's axes and centimetres; a reimport keeps the socket object.
+	LeonEdTest::FScopedTestContent Content;
+	TArray<uint8> Buffer;
+	const float Positions[9] = {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
+	Buffer.Append(reinterpret_cast<const uint8*>(Positions), sizeof(Positions));
+	(void)LeonEdTest::WriteSource(TEXT("Meshes/Gun.bin"), Buffer);
+	const FString Gltf = LeonEdTest::WriteSource(TEXT("Meshes/Gun.gltf"),
+		FString(TEXT("{\"asset\":{\"version\":\"2.0\"},\"buffers\":[{\"uri\":\"Gun.bin\",\"byteLength\":36}],"
+					 "\"bufferViews\":[{\"buffer\":0,\"byteLength\":36}],"
+					 "\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":3,\"type\":\"VEC3\","
+					 "\"min\":[0,0,0],\"max\":[1,1,0]}],"
+					 "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0}}]}],"
+					 "\"nodes\":[{\"name\":\"Gun\",\"mesh\":0,\"children\":[1]},"
+					 "{\"name\":\"SOCKET_Muzzle\",\"translation\":[0.5,0.1,0.0]}],"
+					 "\"scenes\":[{\"nodes\":[0]}],\"scene\":0}")));
+	UStaticMesh* Gun = Cast<UStaticMesh>(ImportWith(UGLTFImportFactory::StaticClass(), Gltf, TEXT("SM_Gun")));
+	if (!TestNotNull("glTF", Gun))
+	{
+		return false;
+	}
+	TestEqual("One socket", Gun->Sockets.Num(), 1);
+	UStaticMeshSocket* Muzzle = Gun->FindSocket(TEXT("Muzzle"));
+	if (!TestNotNull("Muzzle", Muzzle))
+	{
+		return false;
+	}
+	// glTF (x, y, z) in metres is the engine's (x, z, y) in centimetres.
+	TestTrue("Its place", Muzzle->RelativeLocation.Equals(FVector(50.0f, 0.0f, 10.0f), 1.0e-3f));
+	TestTrue("An inner object", Muzzle->GetOuter() == Gun);
+	UObject* Reimported = ImportWith(UGLTFImportFactory::StaticClass(), Gltf, TEXT("SM_Gun"));
+	TestTrue("In place", Reimported == Gun);
+	TestTrue("The same socket", Gun->Sockets.Num() == 1 && Gun->Sockets[0] == Muzzle);
 	return true;
 }
 

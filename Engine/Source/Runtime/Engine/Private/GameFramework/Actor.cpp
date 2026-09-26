@@ -3,7 +3,9 @@
 #include "Camera/CameraComponent.h"
 #include "Camera/CameraTypes.h"
 #include "Components/ActorComponent.h"
+#include "Engine/DamageEvents.h"
 #include "Engine/World.h"
+#include "GameFramework/DamageType.h"
 
 const FName AActor::DefaultSceneRootName(TEXT("DefaultSceneRoot"));
 
@@ -12,6 +14,7 @@ AActor::AActor(const FObjectInitializer& ObjectInitializer)
 {
 	bHidden = false;
 	bCanEverTick = true;
+	bCanBeDamaged = true;
 	// UE actors have no root by default; Leon gives every actor one so it always has a transform. A subclass with its
 	// own root (ACharacter's capsule) skips it through DoNotCreateDefaultSubobject(DefaultSceneRootName).
 	RootComponent = ObjectInitializer.CreateOptionalDefaultSubobject<USceneComponent>(this, DefaultSceneRootName);
@@ -267,6 +270,11 @@ void AActor::BeginPlay()
 	// Components begin before the rest of the actor's BeginPlay (overrides call Super first). A component registered
 	// during the loop begins through its registration.
 	bActorHasBegunPlay = true;
+	// UE: the initial life span starts with play.
+	if (InitialLifeSpan > 0.0f)
+	{
+		SetLifeSpan(InitialLifeSpan);
+	}
 	const TArray<UActorComponent*> Components = OwnedComponents;
 	for (UActorComponent* Component : Components)
 	{
@@ -322,6 +330,88 @@ void AActor::TickActor(float DeltaSeconds)
 	{
 		Tick(DeltaSeconds);
 	}
+	// The life span counts world ticks (UE: a timer of the world's timer manager).
+	if (LifeSpanRemaining > 0.0f && !IsPendingKillPending())
+	{
+		LifeSpanRemaining -= DeltaSeconds;
+		if (LifeSpanRemaining <= 0.0f)
+		{
+			LifeSpanRemaining = 0.0f;
+			LifeSpanExpired();
+		}
+	}
+}
+
+void AActor::SetLifeSpan(float InLifespan)
+{
+	LifeSpanRemaining = FMath::Max(0.0f, InLifespan);
+}
+
+void AActor::LifeSpanExpired()
+{
+	Destroy();
+}
+
+float AActor::TakeDamage(
+	float DamageAmount, const FDamageEvent& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
+{
+	if (!bCanBeDamaged)
+	{
+		return 0.0f;
+	}
+	const UDamageType* const DamageTypeCDO = DamageEvent.DamageTypeClass != nullptr
+		? DamageEvent.DamageTypeClass->GetDefaultObject<UDamageType>()
+		: GetDefault<UDamageType>();
+	float ActualDamage = DamageAmount;
+	if (DamageEvent.IsOfType(FPointDamageEvent::ClassID))
+	{
+		const FPointDamageEvent& PointDamageEvent = static_cast<const FPointDamageEvent&>(DamageEvent);
+		ActualDamage = InternalTakePointDamage(ActualDamage, PointDamageEvent, EventInstigator, DamageCauser);
+		if (ActualDamage != 0.0f)
+		{
+			const FHitResult& Hit = PointDamageEvent.HitInfo;
+			OnTakePointDamage.Broadcast(this, ActualDamage, EventInstigator, Hit.ImpactPoint, Hit.GetComponent(),
+				NAME_None, PointDamageEvent.ShotDirection, DamageTypeCDO, DamageCauser);
+		}
+	}
+	else if (DamageEvent.IsOfType(FRadialDamageEvent::ClassID))
+	{
+		const FRadialDamageEvent& RadialDamageEvent = static_cast<const FRadialDamageEvent&>(DamageEvent);
+		ActualDamage = InternalTakeRadialDamage(ActualDamage, RadialDamageEvent, EventInstigator, DamageCauser);
+		if (ActualDamage != 0.0f)
+		{
+			const FHitResult Hit =
+				RadialDamageEvent.ComponentHits.Num() > 0 ? RadialDamageEvent.ComponentHits[0] : FHitResult();
+			OnTakeRadialDamage.Broadcast(
+				this, ActualDamage, DamageTypeCDO, RadialDamageEvent.Origin, Hit, EventInstigator, DamageCauser);
+		}
+	}
+	if (ActualDamage != 0.0f)
+	{
+		OnTakeAnyDamage.Broadcast(this, ActualDamage, DamageTypeCDO, EventInstigator, DamageCauser);
+	}
+	return ActualDamage;
+}
+
+float AActor::InternalTakePointDamage(float Damage, const FPointDamageEvent& /*PointDamageEvent*/,
+	AController* /*EventInstigator*/, AActor* /*DamageCauser*/)
+{
+	return Damage;
+}
+
+float AActor::InternalTakeRadialDamage(float Damage, const FRadialDamageEvent& RadialDamageEvent,
+	AController* /*EventInstigator*/, AActor* /*DamageCauser*/)
+{
+	// UE: the falloff at the component hit closest to the origin.
+	float ClosestHitDistSq = TNumericLimits<float>::Max();
+	for (const FHitResult& Hit : RadialDamageEvent.ComponentHits)
+	{
+		ClosestHitDistSq = FMath::Min(ClosestHitDistSq, (Hit.ImpactPoint - RadialDamageEvent.Origin).SizeSquared());
+	}
+	const float RadialDamageScale = RadialDamageEvent.ComponentHits.Num() > 0
+		? RadialDamageEvent.Params.GetDamageScale(FMath::Sqrt(ClosestHitDistSq))
+		: 0.0f;
+	return FMath::Lerp(RadialDamageEvent.Params.MinimumDamage, Damage, FMath::Max(0.0f, RadialDamageScale));
 }
 
 void AActor::AddReferencedObjects(UObject* InThis, FReferenceCollector& Collector)

@@ -29,4 +29,8 @@ public:
 	/** Height below which actors are killed, cm (UE: KillZ; the default is UE's, -HALF_WORLD_MAX1). */
 	UPROPERTY()
 	float KillZ = -1048575.0f;
+
+	/** The world's gravity, cm/s^2; 0 takes UWorld::DefaultGravityZ (UE: GlobalGravityZ with bGlobalGravitySet). */
+	UPROPERTY()
+	float GlobalGravityZ = 0.0f;
 };

@@ -925,3 +925,73 @@ bool FPhysScene::LineTraceSingleByObjectType(FHitResult& OutHit, const FVector& 
 	(void)LineTraceMultiByObjectType(Hits, Start, End, ObjectQueryParams, Params);
 	return TakeNearestHit(Hits, OutHit, Start, End);
 }
+
+FBox FPhysScene::GetBodyBounds(int32 BodyIndex) const
+{
+	if (!Bodies.IsValidIndex(BodyIndex))
+	{
+		return FBox(FVector::ZeroVector, FVector::ZeroVector);
+	}
+	const FBodyInstance& Body = Bodies[BodyIndex];
+	return FBox(Body.Position - Body.HalfExtents, Body.Position + Body.HalfExtents);
+}
+
+bool FPhysScene::OverlapMultiByObjectType(TArray<FOverlapResult>& OutOverlaps, const FVector& Pos, const FQuat& /*Rot*/,
+	const FCollisionObjectQueryParams& ObjectQueryParams, const FCollisionShape& CollisionShape,
+	const FCollisionQueryParams& Params) const
+{
+	OutOverlaps.Reset();
+	const bool bSphere = CollisionShape.IsSphere();
+	const float SphereRadius = bSphere ? CollisionShape.GetSphereRadius() : 0.0f;
+	const FVector QueryExtent = CollisionShape.IsBox() ? CollisionShape.GetBox()
+		: CollisionShape.IsCapsule() ? FVector(CollisionShape.GetCapsuleRadius(), CollisionShape.GetCapsuleRadius(),
+										   CollisionShape.GetCapsuleHalfHeight())
+									 : FVector(SphereRadius);
+	for (int32 Bi = 0; Bi < Bodies.Num(); ++Bi)
+	{
+		const FBodyInstance& Body = Bodies[Bi];
+		if (!Body.bQueryEnabled || Params.IsIgnored(Body.ComponentID, Body.OwnerID) ||
+			!ObjectQueryParams.Contains(Body.ObjectType.GetValue()))
+		{
+			continue;
+		}
+		bool bOverlaps = false;
+		if (bSphere && Body.CollisionShape == EBodyCollisionShape::Capsule)
+		{
+			// The distance from the centre to the capsule's segment against the two radii.
+			float CapsuleRadius = 0.0f;
+			float CapsuleCylinder = 0.0f;
+			GetBodyCapsule(Body, CapsuleRadius, CapsuleCylinder);
+			const float SegmentZ =
+				FMath::Clamp(Pos.Z, Body.Position.Z - CapsuleCylinder, Body.Position.Z + CapsuleCylinder);
+			const FVector Closest(Body.Position.X, Body.Position.Y, SegmentZ);
+			bOverlaps = FVector::DistSquared(Pos, Closest) <= FMath::Square(SphereRadius + CapsuleRadius);
+		}
+		else if (bSphere)
+		{
+			// The distance from the centre to the box.
+			const FVector Mn = Body.Position - Body.HalfExtents;
+			const FVector Mx = Body.Position + Body.HalfExtents;
+			const FVector Closest(
+				FMath::Clamp(Pos.X, Mn.X, Mx.X), FMath::Clamp(Pos.Y, Mn.Y, Mx.Y), FMath::Clamp(Pos.Z, Mn.Z, Mx.Z));
+			bOverlaps = FVector::DistSquared(Pos, Closest) <= FMath::Square(SphereRadius);
+		}
+		else
+		{
+			const FVector Delta = (Pos - Body.Position).GetAbs();
+			const FVector Reach = QueryExtent + Body.HalfExtents;
+			bOverlaps = Delta.X <= Reach.X && Delta.Y <= Reach.Y && Delta.Z <= Reach.Z;
+		}
+		if (!bOverlaps)
+		{
+			continue;
+		}
+		FOverlapResult& Overlap = OutOverlaps.AddDefaulted_GetRef();
+		Overlap.ItemIndex = Bi;
+		Overlap.bBlockingHit = true;
+		UPrimitiveComponent* Owner = GetBodyOwner(Bi);
+		Overlap.Component = Owner;
+		Overlap.Actor = Owner != nullptr ? Owner->GetOwner() : nullptr;
+	}
+	return OutOverlaps.Num() > 0;
+}

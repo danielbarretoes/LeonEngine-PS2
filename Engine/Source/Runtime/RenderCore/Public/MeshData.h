@@ -12,6 +12,15 @@ struct RENDERCORE_API FMeshSection
 	int32 MaterialIndex = 0;
 };
 
+/** A named point of a mesh from its source (a glTF `SOCKET_<Name>` node): UStaticMesh's UStaticMeshSocket. */
+struct RENDERCORE_API FMeshSocketData
+{
+	/** The socket's name, without the source's prefix. */
+	FString Name;
+	/** The socket in the mesh's space, in the engine's axes and centimetres. */
+	FTransform Transform;
+};
+
 /**
  * CPU-side mesh data (no OpenGL handles): what the importers (MeshUtilities) read from a source file and UStaticMesh
  * builds from. Materials and the arrays after it are parallel, one entry per material slot; the static mesh factories
@@ -30,6 +39,8 @@ struct RENDERCORE_API FMeshData
 	TArray<FString> AlbedoMapPaths;
 	/** Each slot's normal map: the image file the source names (absolute), or empty. */
 	TArray<FString> NormalMapPaths;
+	/** The mesh's sockets, in the source's order (UE: the FBX importer's SOCKET_ nodes). */
+	TArray<FMeshSocketData> Sockets;
 
 	[[nodiscard]] bool IsEmpty() const
 	{

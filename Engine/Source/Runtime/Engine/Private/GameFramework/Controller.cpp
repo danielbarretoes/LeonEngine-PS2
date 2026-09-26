@@ -5,6 +5,10 @@
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/PlayerState.h"
 
+const FName NAME_Inactive(TEXT("Inactive"));
+const FName NAME_Playing(TEXT("Playing"));
+const FName NAME_Spectating(TEXT("Spectating"));
+
 AController::AController(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
@@ -49,6 +53,11 @@ void AController::UnPossess()
 
 void AController::OnPossess(APawn* /*InPawn*/)
 {
+}
+
+void AController::ChangeState(FName NewState)
+{
+	StateName = NewState;
 }
 
 void AController::OnUnPossess()

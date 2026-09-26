@@ -231,6 +231,10 @@ bool FSceneRenderer::Initialize(const FString& InShaderDirectory)
 	{
 		return false;
 	}
+	if (!WorldEffects.Initialize(InShaderDirectory))
+	{
+		return false;
+	}
 	ApplyPostProcessQuality(Post, EPostProcessQuality::Low);
 	if (!ShadowMap.Create(Post.ShadowMapSize))
 	{
@@ -296,6 +300,7 @@ void FSceneRenderer::Shutdown()
 	LightsUbo.Destroy();
 	CameraUbo.Destroy();
 	LineBatch.Shutdown();
+	WorldEffects.Shutdown();
 	DebugDraw.Clear();
 	FlatNormalTexture.Reset();
 	WhiteTexture.Reset();
@@ -327,6 +332,7 @@ void FSceneRenderer::Shutdown()
 	LitShader.Destroy();
 	SkeletalDraws.Empty();
 	FrameMeshes.Empty();
+	ViewModelMeshes.Empty();
 	FrameDirectionalLights.Empty();
 	FramePointLights.Empty();
 	ShaderDirectory.Empty();
@@ -352,6 +358,7 @@ EShaderReloadResult FSceneRenderer::ReloadShaders(bool bForce)
 		return EShaderReloadResult::Failed;
 	}
 	Result = MergeShaderReload(Result, LineBatch.ReloadShader(bForce));
+	Result = MergeShaderReload(Result, WorldEffects.ReloadShader(bForce));
 	return Result;
 }
 
@@ -734,9 +741,40 @@ void FSceneRenderer::DrawSubMesh(const FShader& Shader, const FStaticMeshScenePr
 	Resources.GetStaticMesh(Object.GetStaticMesh()).DrawSubMesh(InSubMeshIndex);
 }
 
-void FSceneRenderer::GatherScene(FSceneInterface* InScene)
+void FSceneRenderer::GatherStaticMeshes(const FScene& Scene, const FSceneView& View,
+	TArray<const FStaticMeshSceneProxy*>& OutWorldMeshes, TArray<const FStaticMeshSceneProxy*>& OutViewModelMeshes)
+{
+	OutWorldMeshes.Reset();
+	OutViewModelMeshes.Reset();
+	for (const FPrimitiveSceneInfo& Info : Scene.GetPrimitives())
+	{
+		const FPrimitiveSceneProxy* Proxy = Info.Proxy.Get();
+		if (Proxy->GetProxyType() != EPrimitiveSceneProxyType::StaticMesh)
+		{
+			continue;
+		}
+		const FStaticMeshSceneProxy* Mesh = static_cast<const FStaticMeshSceneProxy*>(Proxy);
+		if (Proxy->IsViewModel())
+		{
+			if (Proxy->IsShown(&View))
+			{
+				OutViewModelMeshes.Add(Mesh);
+			}
+			continue;
+		}
+		// A shown proxy the view's actor may not see (owner-only, owner-hidden) leaves the frame.
+		if (Proxy->IsShown() && !Proxy->IsShown(&View))
+		{
+			continue;
+		}
+		OutWorldMeshes.Add(Mesh);
+	}
+}
+
+void FSceneRenderer::GatherScene(FSceneInterface* InScene, const FSceneView& View)
 {
 	FrameMeshes.Reset();
+	ViewModelMeshes.Reset();
 	FrameDirectionalLights.Reset();
 	FramePointLights.Reset();
 	SkeletalDraws.Reset();
@@ -746,16 +784,16 @@ void FSceneRenderer::GatherScene(FSceneInterface* InScene)
 		return;
 	}
 	// The scene's order is the level's: static meshes, skinned meshes and lights keep it.
+	GatherStaticMeshes(*Scene, View, FrameMeshes, ViewModelMeshes);
 	for (const FPrimitiveSceneInfo& Info : Scene->GetPrimitives())
 	{
 		const FPrimitiveSceneProxy* Proxy = Info.Proxy.Get();
 		if (Proxy->GetProxyType() == EPrimitiveSceneProxyType::StaticMesh)
 		{
-			FrameMeshes.Add(static_cast<const FStaticMeshSceneProxy*>(Proxy));
 			continue;
 		}
 		const FSkeletalMeshSceneProxy* Skeletal = static_cast<const FSkeletalMeshSceneProxy*>(Proxy);
-		if (!Skeletal->IsShown() || !Skeletal->GetSkeletalMesh().HasValidRenderData())
+		if (!Skeletal->IsShown(&View) || !Skeletal->GetSkeletalMesh().HasValidRenderData())
 		{
 			continue;
 		}
@@ -792,7 +830,7 @@ void FSceneRenderer::Render(const FSceneViewFamily& ViewFamily)
 	}
 	const FSceneView& View = *ViewFamily.Views[0];
 	ShowFlags = ViewFamily.EngineShowFlags;
-	GatherScene(ViewFamily.Scene);
+	GatherScene(ViewFamily.Scene, View);
 	// The world's debug lines of this frame (UE: the world's line batch components).
 	FDebugDraw* WorldLines = nullptr;
 	if (ViewFamily.Scene != nullptr && ViewFamily.Scene->GetWorld() != nullptr)
@@ -1080,6 +1118,12 @@ void FSceneRenderer::Render(const FSceneViewFamily& ViewFamily)
 
 	DrawList(Opaque, false);
 	DrawQueuedSkeletal(LocalView, LocalProjection, LightSpace, bCastDirShadows, ShadowSourceAngle, &CameraFrustum);
+	// The impact marks lie on the opaque geometry (nothing without marks).
+	UWorld* EffectsWorld = ViewFamily.Scene != nullptr ? ViewFamily.Scene->GetWorld() : nullptr;
+	if (EffectsWorld != nullptr)
+	{
+		WorldEffects.DrawImpactMarks(EffectsWorld->ImpactMarks, LocalViewProjection, Post.bEarlyZ);
+	}
 	if (LitShader.Valid())
 	{
 		LitShader.Bind();
@@ -1091,6 +1135,11 @@ void FSceneRenderer::Render(const FSceneViewFamily& ViewFamily)
 		BindPlanarReflection(false, ReflectionViewProj);
 	}
 	DrawList(Transparent, true);
+	// The tracers glow over everything drawn so far (nothing without tracers).
+	if (EffectsWorld != nullptr)
+	{
+		WorldEffects.DrawTracers(EffectsWorld->Tracers, LocalViewProjection, LocalCameraPos, Post.bEarlyZ);
+	}
 
 	if (Post.bEarlyZ)
 	{
@@ -1104,10 +1153,11 @@ void FSceneRenderer::Render(const FSceneViewFamily& ViewFamily)
 
 	if (bPostOn)
 	{
-		RenderPostStack(View);
+		RenderPostStack(View, LightSpace, bCastDirShadows, ShadowSourceAngle);
 	}
 	else
 	{
+		RenderViewModelPass(View, LightSpace, bCastDirShadows, ShadowSourceAngle, DrawTargetFbo);
 		PassTimers.Begin(FGPUPassTimer::EPass::Ssao);
 		PassTimers.End(FGPUPassTimer::EPass::Ssao);
 		PassTimers.Begin(FGPUPassTimer::EPass::Post);
@@ -1148,7 +1198,80 @@ void FSceneRenderer::ReadFramebufferBgr(int32 Width, int32 Height, TArray<uint8>
 	glReadPixels(0, 0, Width, Height, GL_BGR, GL_UNSIGNED_BYTE, OutBgr.GetData());
 }
 
-void FSceneRenderer::RenderPostStack(const FSceneView& View)
+void FSceneRenderer::RenderViewModelPass(const FSceneView& View, const FMatrix& LightSpace, bool bCastDirShadows,
+	float ShadowSourceAngle, FRHIFramebufferId Target)
+{
+	if (ViewModelMeshes.Num() == 0 || !LitShader.Valid())
+	{
+		return;
+	}
+	glBindFramebuffer(GL_FRAMEBUFFER, Target);
+	glViewport(0, 0, FbWidth, FbHeight);
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_CULL_FACE);
+	glDepthFunc(GL_LESS);
+	glDepthMask(GL_TRUE);
+	glDisable(GL_BLEND);
+	// Over everything: the world's depth goes (the ambient occlusion already read it).
+	glClear(GL_DEPTH_BUFFER_BIT);
+
+	const FMatrix ViewModelProjection = ToGLClipSpace(View.ViewModelProjectionMatrix);
+	UpdateCameraUbo(View.ViewMatrix, ViewModelProjection, View.ViewLocation);
+	UpdateLightsUbo();
+	LitShader.Bind();
+	BindShadowResources(bCastDirShadows, ShadowSourceAngle);
+	BindPlanarReflection(false, FMatrix::Identity);
+	SetClipPlane(false, FVector4(0.0f, 0.0f, 1.0f, 0.0f));
+
+	FDrawOptions LitOpts{};
+	LitOpts.bLitPass = true;
+	LitOpts.bReceiveShadows = bCastDirShadows;
+	LitOpts.bBindSharedLitTextures = false;
+	FDrawOptions UnlitOpts{};
+	UnlitOpts.bLitPass = false;
+	UnlitOpts.bBindSharedLitTextures = false;
+	for (const bool bTransparentPass : {false, true})
+	{
+		for (const FStaticMeshSceneProxy* ObjectProxy : ViewModelMeshes)
+		{
+			const FStaticMeshSceneProxy& Object = *ObjectProxy;
+			if (!Object.GetStaticMesh().HasValidRenderData())
+			{
+				continue;
+			}
+			for (int32 S = 0; S < Object.GetNumSections(); ++S)
+			{
+				const FMaterial& Mat = Object.GetSectionMaterial(S);
+				if (Mat.IsTransparent() != bTransparentPass)
+				{
+					continue;
+				}
+				const bool bLit = Mat.Shading == EMaterialLightingModel::BlinnPhong;
+				FShader& Shader = bLit ? LitShader : UnlitShader;
+				if (!Shader.Valid())
+				{
+					continue;
+				}
+				if (bTransparentPass)
+				{
+					glEnable(GL_BLEND);
+					glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+				}
+				Shader.Bind();
+				if (bLit)
+				{
+					BindShadowResources(bCastDirShadows, ShadowSourceAngle);
+				}
+				DrawSubMesh(Shader, Object, S, Mat, View.ViewMatrix, ViewModelProjection, LightSpace,
+					bLit ? LitOpts : UnlitOpts);
+			}
+		}
+	}
+	glDisable(GL_BLEND);
+}
+
+void FSceneRenderer::RenderPostStack(
+	const FSceneView& View, const FMatrix& LightSpace, bool bCastDirShadows, float ShadowSourceAngle)
 {
 	// Flow: SceneColor(+Depth) → SSAO → bilateral blur → composite+tonemap → FXAA → present
 	glDisable(GL_DEPTH_TEST);
@@ -1212,6 +1335,16 @@ void FSceneRenderer::RenderPostStack(const FSceneView& View)
 		AoReadIndex = 0;
 	}
 	PassTimers.End(FGPUPassTimer::EPass::Ssao);
+
+	// The view model pass, into the scene colour: after the ambient occlusion, before the tone mapping.
+	if (ViewModelMeshes.Num() > 0)
+	{
+		RenderViewModelPass(View, LightSpace, bCastDirShadows, ShadowSourceAngle, SceneColor.Framebuffer());
+		glDisable(GL_DEPTH_TEST);
+		glDisable(GL_BLEND);
+		glDisable(GL_CULL_FACE);
+		glDepthMask(GL_FALSE);
+	}
 
 	PassTimers.Begin(FGPUPassTimer::EPass::Post);
 	const float Exposure = FMath::Max(0.01f, Post.Exposure);

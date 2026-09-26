@@ -18,8 +18,10 @@
 #include "ShadowMap.h"
 #include "Texture2DResource.h"
 #include "UniformBuffer.h"
+#include "WorldEffectsRenderer.h"
 
 class FLightSceneProxy;
+class FScene;
 class FSceneInterface;
 class FStaticMeshSceneProxy;
 class UObject;
@@ -38,6 +40,12 @@ struct FDrawOptions
 /**
  * Forward renderer: directional shadow map (light 0), optional half-res planar mirror,
  * opaque / transparent, then optional post (SSAO → tonemap → FXAA).
+ *
+ * Leon's additions for a first-person game: the world's impact marks over the opaque geometry and its tracers after
+ * the translucent one (FWorldEffectsRenderer), and the view model pass: the static meshes flagged bRenderAsViewModel
+ * leave the scene's passes and are drawn last, after a depth clear, with the view's ViewModelProjectionMatrix (with
+ * post processing: after the ambient occlusion, which keeps the world's depth, and before the tone mapping). Owner-only
+ * and owner-hidden primitives follow the view's actor. None of it changes a frame whose scene has none.
  *
  * It draws a view family's scene (FScene's proxies, in the scene's order) through its view (UE: the scene renderer of
  * a view family). Views are in UE view space (x right, y up, z forward; ViewMatrices.h). Projections passed between
@@ -174,10 +182,22 @@ private:
 	void EnsureShadowMapSize();
 	[[nodiscard]] FRHIFramebufferId ColorRestoreFbo() const;
 	void DrawFullscreenTriangle() const;
-	void RenderPostStack(const FSceneView& View);
+	/**
+	 * SSAO → blur → composite and tone map → FXAA. The view model pass runs after the ambient occlusion (which reads
+	 * the scene's depth) and before the composite (bCastDirShadows, ShadowSourceAngle and LightSpace are its lighting).
+	 */
+	void RenderPostStack(
+		const FSceneView& View, const FMatrix& LightSpace, bool bCastDirShadows, float ShadowSourceAngle);
 	void RenderShadowPass(const FMatrix& LightSpace);
 	void RenderPlanarReflectionPass(const FSceneView& View, float PlaneZ);
 	void DrawDebug(const FSceneView& View, const FMatrix& LightSpace, bool bHasLightSpace);
+	/**
+	 * The view model pass into the bound target (SceneColor with post processing, else the draw framebuffer): clears
+	 * the depth, then draws ViewModelMeshes with the view model projection, opaque sections first. Nothing without
+	 * view model meshes.
+	 */
+	void RenderViewModelPass(const FSceneView& View, const FMatrix& LightSpace, bool bCastDirShadows,
+		float ShadowSourceAngle, FRHIFramebufferId Target);
 	/** Draws and empties the world's debug line batch (UWorld::LineBatcher). */
 	void FlushWorldLines(const FSceneView& View, FDebugDraw* WorldLines);
 	/**
@@ -190,8 +210,20 @@ private:
 	void DrawSubMesh(const FShader& Shader, const FStaticMeshSceneProxy& Object, int32 InSubMeshIndex,
 		const FMaterial& InMaterial, const FMatrix& InView, const FMatrix& InProjection, const FMatrix& LightSpace,
 		const FDrawOptions& Options);
-	/** Fills FrameMeshes, SkeletalDraws and the light lists from the scene. */
-	void GatherScene(FSceneInterface* InScene);
+	/** Fills FrameMeshes, ViewModelMeshes, SkeletalDraws and the light lists from the scene, for View. */
+	void GatherScene(FSceneInterface* InScene, const FSceneView& View);
+
+public:
+	/**
+	 * The static meshes of the scene for a view, in the scene's order (GatherScene's split; no GPU needed): the view
+	 * model ones shown to the view go to OutViewModelMeshes, the owner-only and owner-hidden ones the view's actor may
+	 * not see are left out, and every other one (hidden ones included, which the bounds view shows) goes to
+	 * OutWorldMeshes.
+	 */
+	static void GatherStaticMeshes(const FScene& Scene, const FSceneView& View,
+		TArray<const FStaticMeshSceneProxy*>& OutWorldMeshes, TArray<const FStaticMeshSceneProxy*>& OutViewModelMeshes);
+
+private:
 	void DrawQueuedSkeletal(const FMatrix& InView, const FMatrix& InProjection, const FMatrix& LightSpace,
 		bool bInReceiveShadows, float ShadowSourceAngle, const FFrustum* CameraFrustum,
 		bool bUseWorldClipPlane = false);
@@ -225,6 +257,8 @@ private:
 	/** The renderer's own lines: the bounds view and the axes gizmo. */
 	FDebugDraw DebugDraw;
 	FLineBatchRenderer LineBatch;
+	/** The world's impact marks and tracers. */
+	FWorldEffectsRenderer WorldEffects;
 	FUniformBuffer CameraUbo;
 	FUniformBuffer LightsUbo;
 	TUniquePtr<FTexture2DResource> WhiteTexture;
@@ -234,6 +268,8 @@ private:
 	/** The scene's proxies, gathered in its order at the start of Render. */
 	TArray<FSkeletalDrawItem> SkeletalDraws;
 	TArray<const FStaticMeshSceneProxy*> FrameMeshes;
+	/** The view model meshes of the frame (UPrimitiveComponent::bRenderAsViewModel), drawn by RenderViewModelPass. */
+	TArray<const FStaticMeshSceneProxy*> ViewModelMeshes;
 	TArray<const FLightSceneProxy*> FrameDirectionalLights;
 	TArray<const FLightSceneProxy*> FramePointLights;
 	FFrameStats FrameStats{};

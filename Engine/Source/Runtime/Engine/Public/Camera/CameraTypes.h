@@ -14,4 +14,9 @@ struct ENGINE_API FMinimalViewInfo
 	FRotator Rotation = FRotator::ZeroRotator;
 	/** Vertical field of view, degrees (UE: FOV, horizontal there). */
 	float FOV = 60.0f;
+	/**
+	 * The vertical field of view of the view model primitives, degrees; 0 draws them with FOV (Leon: UE 4.27 has no
+	 * view model pass, UCameraComponent::ViewModelFOV).
+	 */
+	float ViewModelFOV = 0.0f;
 };

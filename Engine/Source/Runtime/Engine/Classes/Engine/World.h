@@ -3,6 +3,7 @@
 #include "AI/Navigation/NavigationSystem.h"
 #include "CoreMinimal.h"
 #include "Debug/DebugDraw.h"
+#include "Effects/WorldEffects.h"
 #include "Engine/EngineBaseTypes.h"
 #include "Engine/Level.h"
 #include "GameFramework/Actor.h"
@@ -145,6 +146,15 @@ public:
 	 * the renderer draws them after the scene and empties the batch.
 	 */
 	FDebugDraw LineBatcher;
+
+	/**
+	 * The world's impact marks (Leon; UE spawns decals): a pool of 64 the renderer lays over the opaque geometry, the
+	 * oldest recycled first (UGameplayStatics::SpawnImpactMark). Aged by Tick.
+	 */
+	FImpactMarkPool ImpactMarks;
+
+	/** The shots' streaks of the moment (Leon; UE uses beam emitters): UGameplayStatics::SpawnTracer. Aged by Tick. */
+	FTracerBatch Tracers;
 
 	/** What InitWorld sets up (UE: UWorld::InitializationValues, the part Leon has). */
 	struct InitializationValues
@@ -403,6 +413,21 @@ public:
 		return DeltaTimeSeconds;
 	}
 
+	/** Seconds of world ticks since the world was created: the sum of the ticks' delta times (UE: GetTimeSeconds). */
+	[[nodiscard]] float GetTimeSeconds() const
+	{
+		return TimeSeconds;
+	}
+
+	/** The gravity when the world settings set none, cm/s^2 (UE: UPhysicsSettings::DefaultGravityZ). */
+	static constexpr float DefaultGravityZ = -980.0f;
+
+	/**
+	 * The world's gravity along Z, cm/s^2 (UE: GetGravityZ): the world settings' GlobalGravityZ when set, else
+	 * DefaultGravityZ. The projectiles fall with it; Leon's characters keep their movement component's Gravity.
+	 */
+	[[nodiscard]] float GetGravityZ() const;
+
 	/**
 	 * The game's frame (UGameEngine::Tick): Tick (the controllers' input, then the pawns: the characters move, the
 	 * camera managers last) → the pawns separate → FPhysScene::Step → the characters leave the bodies they overlap
@@ -496,6 +521,8 @@ private:
 	uint64 NextUniqueID = 0;
 	/** UE: DeltaTimeSeconds. */
 	float DeltaTimeSeconds = 0.0f;
+	/** UE: TimeSeconds. */
+	float TimeSeconds = 0.0f;
 	bool bBegunPlay = false;
 	bool bTicking = false;
 	bool bIsTearingDown = false;

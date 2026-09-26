@@ -1,6 +1,7 @@
 #include "Components/StaticMeshComponent.h"
 
 #include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshSocket.h"
 #include "Materials/Material.h"
 #include "StaticMeshSceneProxy.h"
 
@@ -90,4 +91,20 @@ bool UStaticMeshComponent::HasShadowCastingMaterial() const
 FPrimitiveSceneProxy* UStaticMeshComponent::CreateSceneProxy()
 {
 	return HasValidMesh() ? new FStaticMeshSceneProxy(this) : nullptr;
+}
+
+FTransform UStaticMeshComponent::GetSocketTransform(FName InSocketName) const
+{
+	const UStaticMeshSocket* Socket = StaticMesh != nullptr ? StaticMesh->FindSocket(InSocketName) : nullptr;
+	FTransform SocketTransform;
+	if (Socket != nullptr && Socket->GetSocketTransform(SocketTransform, this))
+	{
+		return SocketTransform;
+	}
+	return Super::GetSocketTransform(InSocketName);
+}
+
+bool UStaticMeshComponent::DoesSocketExist(FName InSocketName) const
+{
+	return StaticMesh != nullptr && StaticMesh->FindSocket(InSocketName) != nullptr;
 }

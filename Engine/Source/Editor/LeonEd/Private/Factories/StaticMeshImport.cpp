@@ -2,6 +2,7 @@
 
 #include "AssetImportUtils.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshSocket.h"
 #include "Engine/Texture2D.h"
 #include "Factories/TextureFactory.h"
 #include "Materials/Material.h"
@@ -88,6 +89,40 @@ void StaticMeshImport::BuildStaticMesh(UStaticMesh& Mesh, const FMeshData& Data,
 			Material = FindOrCreateMaterial(SourceName, Data, Slot, MeshPackageName, MaterialPackagePath, OutNewAssets);
 		}
 		Mesh.StaticMaterials.Add(FStaticMaterial(Material, SlotName));
+	}
+
+	// The source's sockets, each an inner object named after it (a reimport reuses the objects by name and drops the
+	// sockets the source no longer has; UE keeps sockets added in the editor, which Leon has not).
+	const TArray<UStaticMeshSocket*> OldSockets = Mesh.Sockets;
+	Mesh.Sockets.Reset();
+	for (const FMeshSocketData& Source : Data.Sockets)
+	{
+		const FName SocketName(*FAssetImportUtils::SanitizeName(Source.Name));
+		const FName ObjectName(*(FString(TEXT("StaticMeshSocket_")) + SocketName.ToString()));
+		UStaticMeshSocket* Socket = nullptr;
+		for (UStaticMeshSocket* Old : OldSockets)
+		{
+			if (Old != nullptr && Old->GetFName() == ObjectName)
+			{
+				Socket = Old;
+			}
+		}
+		if (Socket == nullptr)
+		{
+			Socket = NewObject<UStaticMeshSocket>(&Mesh, ObjectName);
+		}
+		Socket->SocketName = SocketName;
+		Socket->RelativeLocation = Source.Transform.GetLocation();
+		Socket->RelativeRotation = Source.Transform.GetRotation().Rotator();
+		Socket->RelativeScale = Source.Transform.GetScale3D();
+		Mesh.Sockets.Add(Socket);
+	}
+	for (UStaticMeshSocket* Old : OldSockets)
+	{
+		if (Old != nullptr && !Mesh.Sockets.Contains(Old))
+		{
+			Old->MarkPendingKill();
+		}
 	}
 }
 

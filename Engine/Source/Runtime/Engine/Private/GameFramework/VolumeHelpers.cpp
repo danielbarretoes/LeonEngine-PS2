@@ -3,6 +3,7 @@
 #include "Components/InteractableComponent.h"
 #include "Engine/TriggerVolume.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/DamageType.h"
 #include "GameFramework/PainCausingVolume.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -46,7 +47,9 @@ void ApplyPainVolumeDamage(ACharacter& Ch, const APainCausingVolume& Vol)
 	{
 		return;
 	}
-	(void)UGameplayStatics::ApplyPointDamage(&Ch, Amount, FVector(0.0f, 0.0f, -1.0f));
+	// UE: APainCausingVolume::CausePainTo, TakeDamage with a plain event of the volume's damage type.
+	(void)UGameplayStatics::ApplyDamage(
+		&Ch, Amount, Vol.DamageInstigator, const_cast<APainCausingVolume*>(&Vol), Vol.DamageType);
 }
 
 void TickPainCausingVolumes(TArrayView<APainCausingVolume* const> Volumes, TArrayView<ACharacter*> Characters,
@@ -71,7 +74,7 @@ void TickPainCausingVolumes(TArrayView<APainCausingVolume* const> Volumes, TArra
 
 	for (ACharacter* Ch : Characters)
 	{
-		if (Ch == nullptr || !Ch->IsAlive())
+		if (Ch == nullptr || !Ch->CanBeDamaged())
 		{
 			continue;
 		}

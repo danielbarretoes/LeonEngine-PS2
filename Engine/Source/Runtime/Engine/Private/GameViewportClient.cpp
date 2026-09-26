@@ -302,7 +302,14 @@ void UGameViewportClient::Draw(FViewport* InViewport, FCanvas* SceneCanvas)
 	// then the HUD and the engine's text go through the frame's canvas (UE).
 	World->SendAllEndOfFrameUpdates();
 	FSceneViewFamily ViewFamily(FSceneViewFamily::ConstructionValues(Size.X, Size.Y, World->Scene, EngineShowFlags));
-	const FSceneView View(FSceneView::FromCamera(ViewFamily, Camera));
+	FSceneViewInitOptions ViewInitOptions = FSceneView::FromCamera(ViewFamily, Camera);
+	// The player's view target owns the view (UE: ViewActor), for the owner-only and owner-hidden primitives.
+	const APlayerController* ViewingController = GetFirstLocalPlayerController();
+	if (ViewingController != nullptr && ViewingController->PlayerCameraManager != nullptr)
+	{
+		ViewInitOptions.ViewActor = ViewingController->PlayerCameraManager->GetViewTarget();
+	}
+	const FSceneView View(ViewInitOptions);
 	ViewFamily.Views.Add(&View);
 	GetRendererModule().BeginRenderingViewFamily(SceneCanvas, &ViewFamily);
 

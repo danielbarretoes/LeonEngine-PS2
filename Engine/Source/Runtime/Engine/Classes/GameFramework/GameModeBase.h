@@ -14,6 +14,7 @@ class AHUD;
 class APawn;
 class APlayerController;
 class APlayerState;
+class ASpectatorPawn;
 class UPlayer;
 
 /**
@@ -59,6 +60,10 @@ public:
 	/** The HUD class each player gets (UE: HUDClass). */
 	UPROPERTY()
 	TSubclassOf<AHUD> HUDClass;
+
+	/** The pawn a spectating player flies (UE: SpectatorClass): APlayerController::SpawnSpectatorPawn spawns it. */
+	UPROPERTY()
+	TSubclassOf<ASpectatorPawn> SpectatorClass;
 
 	/** The name a player without one gets, followed by its player id (UE: DefaultPlayerName). */
 	UPROPERTY()

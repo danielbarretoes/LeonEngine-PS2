@@ -57,6 +57,29 @@ struct PHYSICSCORE_API FHitResult
 	}
 };
 
+/** A body an overlap query found (UE: FOverlapResult). */
+struct PHYSICSCORE_API FOverlapResult
+{
+	/** The actor that owns the component (UE: Actor / OverlapObjectHandle); unset for a body without a component. */
+	TWeakObjectPtr<AActor> Actor;
+	/** The component whose body overlaps (UE: Component). */
+	TWeakObjectPtr<UPrimitiveComponent> Component;
+	/** Leon: the body's index in FPhysScene::GetBodies (UE: ItemIndex, the body of a multi-body component). */
+	int32 ItemIndex = INDEX_NONE;
+	/** The body blocks the query (UE: bBlockingHit; an object type query blocks on every body it finds). */
+	bool bBlockingHit = false;
+
+	/** UE: GetActor / GetComponent. */
+	[[nodiscard]] AActor* GetActor() const
+	{
+		return Actor.Get();
+	}
+	[[nodiscard]] UPrimitiveComponent* GetComponent() const
+	{
+		return Component.Get();
+	}
+};
+
 /**
  * What a query leaves out and how it runs (UE: FCollisionQueryParams): the components and actors it ignores, and
  * Leon's infinite floor plane and debug drawing.
@@ -151,10 +174,37 @@ struct PHYSICSCORE_API FCollisionObjectQueryParams
 	/** One bit per channel (UE: ObjectTypesToQuery, ECC_TO_BITFIELD). */
 	int32 ObjectTypesToQuery = 0;
 
+	/** Every object type, the static ones (WorldStatic) or the rest (UE: InitType). */
+	enum InitType
+	{
+		AllObjects,
+		AllStaticObjects,
+		AllDynamicObjects,
+	};
+
 	FCollisionObjectQueryParams() = default;
 	explicit FCollisionObjectQueryParams(ECollisionChannel QueryChannel)
 	{
 		AddObjectTypesToQuery(QueryChannel);
+	}
+	/**
+	 * UE's preset groups: AllStaticObjects is WorldStatic, AllDynamicObjects WorldDynamic, Pawn, PhysicsBody, Vehicle
+	 * and Destructible, AllObjects both (UE also counts a game's object channels; Leon's game channels are traces).
+	 */
+	explicit FCollisionObjectQueryParams(InitType QueryType)
+	{
+		if (QueryType != AllDynamicObjects)
+		{
+			AddObjectTypesToQuery(ECC_WorldStatic);
+		}
+		if (QueryType != AllStaticObjects)
+		{
+			AddObjectTypesToQuery(ECC_WorldDynamic);
+			AddObjectTypesToQuery(ECC_Pawn);
+			AddObjectTypesToQuery(ECC_PhysicsBody);
+			AddObjectTypesToQuery(ECC_Vehicle);
+			AddObjectTypesToQuery(ECC_Destructible);
+		}
 	}
 
 	void AddObjectTypesToQuery(ECollisionChannel QueryChannel)

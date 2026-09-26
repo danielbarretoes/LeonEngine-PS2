@@ -2,12 +2,14 @@
 #pragma once
 
 #include "Commandlets/Commandlet.h"
+#include "Components/SphereComponent.h"
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/ProjectileMovementComponent.h"
 #include "EngineTestTypes.generated.h"
 
 class UTexture2D;
@@ -147,4 +149,38 @@ public:
 	{
 		GetCharacterMovement().NavAgentProps.bCanCrouch = true;
 	}
+};
+
+/**
+ * A projectile for the movement tests (UE ShooterGame's AShooterProjectile in small): a 5 cm query-only WorldDynamic
+ * sphere as the root, moved by a bouncing UProjectileMovementComponent at 1000 cm/s.
+ */
+UCLASS()
+class AEngineTestProjectile : public AActor
+{
+	GENERATED_BODY()
+
+public:
+	AEngineTestProjectile(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get())
+		: Super(ObjectInitializer.DoNotCreateDefaultSubobject(AActor::DefaultSceneRootName))
+	{
+		CollisionComp = CreateDefaultSubobject<USphereComponent>(TEXT("SphereComp"));
+		CollisionComp->InitSphereRadius(5.0f);
+		CollisionComp->SetCollisionObjectType(ECC_WorldDynamic);
+		CollisionComp->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		CollisionComp->SetCanEverAffectNavigation(false);
+		CollisionComp->SetMobility(EComponentMobility::Movable);
+		RootComponent = CollisionComp;
+
+		MovementComp = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("ProjectileComp"));
+		MovementComp->UpdatedComponent = CollisionComp;
+		MovementComp->InitialSpeed = 1000.0f;
+		MovementComp->bShouldBounce = true;
+	}
+
+	UPROPERTY()
+	USphereComponent* CollisionComp = nullptr;
+
+	UPROPERTY()
+	UProjectileMovementComponent* MovementComp = nullptr;
 };
