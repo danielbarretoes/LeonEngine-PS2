@@ -91,6 +91,10 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | E2 | ThirdPerson | 688 354 | 7 056 | 33 984 | — | `FGSDrawEnvironment` (GSCore) sets up the PS2 frame and `FPS2RHI::AllocateTextureArena` (+464 bytes of text) |
 | E2 | GSConformance | 221 967 | 6 300 | 27 488 | — | `FGSDrawEnvironment` (+456 bytes of text) |
 | E2 | TestPAL | 1 506 608 | 6 380 | 40 384 | — | unchanged but for the toolchain's alignment (+8 bytes) |
+| E3 | ShooterGame | 1 688 830 | 7 016 | 43 280 | — | paletted textures in the texture cache (PSMT8 / PSMT4 with a CLUT, `FGSTextureLayout`) and the pak's device-root paths (+5 024 bytes of text) |
+| E3 | ThirdPerson | 688 354 | 7 056 | 33 984 | — | unchanged |
+| E3 | GSConformance | 221 967 | 6 300 | 27 488 | — | unchanged |
+| E3 | TestPAL | 1 514 864 | 6 380 | 40 592 | — | `FGSTextureLayout`, the pak's device-root paths and their 2 tests (+8 256 bytes of text) |
 
 **P9 reflection in TestPAL** (`nm -S` over the ELF, bytes):
 
@@ -217,3 +221,15 @@ The PS2 ELF sizes are measured with the toolchain's `mips64r5900el-ps2-elf-size`
 recorded (the table above records 0.20.1, measured by the CI of that release, since removed, and GS P3, measured
 with a toolchain built from source). TestPAL has not run in
 PCSX2 since P16: its GMalloc and name pool numbers wait for the next run on the emulator.
+
+**Texture VRAM** ([ps2-engine](../../../../Docs/PLANS/ps2-engine.md) E3; the cook's
+`<Project>/Saved/Cooked/PS2-VramReport.txt`). The GS texture arena is the 232 pages after the two PSMCT16S frames and
+the PSMZ24 buffer: 1856 KB. ShooterGame, cooked for PS2:
+
+| Map | Textures | VRAM |
+|---|---|---:|
+| Common (the config's defaults) | `T_Default_Bump_N` 256x256 PSMT8 (65 KB), `T_Default_D` 128x128 PSMT4 (8 KB), `DefaultTexture` 64x64 PSMT4 (8 KB) | 81 KB |
+| `/Game/Maps/de_leon` | none of its own (flat materials) | 81 KB of 1856 KB |
+
+The cooked content is 492 KB (63 files); its pak, aligned to 2048 bytes, 568 KB.
+

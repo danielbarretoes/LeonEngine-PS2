@@ -204,7 +204,7 @@ Engine\Build\BatchFiles\BuildCookRun.bat -project=<Project>.lproj -platform=Win6
 ```
 
 The game finds its engine and project from the layout ([BUILD.md](BUILD.md#staging-and-shipping)); a Shipping build
-reads nothing but its pak. `-platform=PS2` (Development only, [ps2-engine](PLANS/ps2-engine.md) E1) has no pak yet: `-stage` copies the ELF to `<Project>/Saved/StagedBuilds/PS2/<Project>.elf` with the cooked folder loose beside it (PCSX2's `host:` is that folder) and writes `-addcmdline` into `LeonCommandLine.txt` there, which the PS2 launch reads (UE: `UECommandLine.txt`); `-run` starts it in PCSX2 without waiting (`RunPCSX2.ps1 -StagedElf`), so the result is read from the EE log. Example, the
+reads nothing but its pak. `-platform=PS2` (Development only, [ps2-engine](PLANS/ps2-engine.md) E1 and E3) cooks the textures paletted and writes `<Project>/Saved/Cooked/PS2-VramReport.txt`; `-stage` copies the ELF to `<Project>/Saved/StagedBuilds/PS2/<Project>.elf` with the cooked folder loose beside it (PCSX2's `host:` is that folder), or with `-pak` the pak `<Project>/Content/Paks/<Project>-PS2.lpak` (paths from the ELF's folder, `Engine/...` and `<Project>/...`, entries aligned to 2048 bytes unless `-align=` says otherwise) and writes `-addcmdline` into `LeonCommandLine.txt` there, which the PS2 launch reads (UE: `UECommandLine.txt`); `-run` starts it in PCSX2 without waiting (`RunPCSX2.ps1 -StagedElf`), so the result is read from the EE log. Example, the
 engine's own content staged as a content-only project (GameDefaultMap `/Engine/Maps/Template_Default`):
 
 ```bat

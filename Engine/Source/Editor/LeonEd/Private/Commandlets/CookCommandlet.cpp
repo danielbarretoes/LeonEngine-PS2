@@ -2,6 +2,9 @@
 
 #include "AssetImportUtils.h"
 #include "Commandlets/ResavePackagesCommandlet.h"
+#include "Engine/Texture2D.h"
+#include "GSDrawEnvironment.h"
+#include "GSTextureLayout.h"
 #include "HAL/FileManager.h"
 #include "Interfaces/ITargetPlatform.h"
 #include "Interfaces/ITargetPlatformManagerModule.h"
@@ -12,15 +15,88 @@
 #include "Misc/PackageName.h"
 #include "Misc/Parse.h"
 #include "Misc/Paths.h"
+#include "PalettedTexture.h"
 #include "Templates/UniquePtr.h"
 #include "UObject/GarbageCollection.h"
 #include "UObject/LinkerLoad.h"
 #include "UObject/Package.h"
+#include "UObject/UObjectHash.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogCook, Log, All);
 
 namespace
 {
+	/** A texture's data as loaded, put back after its package is saved converted. */
+	struct FTextureBackup
+	{
+		UTexture2D* Texture = nullptr;
+		int32 SizeX = 0;
+		int32 SizeY = 0;
+		EPixelFormat Format = PF_Unknown;
+		TArray<uint8> Data;
+	};
+
+	/** Whether the platform's textures are paletted (the PS2). */
+	[[nodiscard]] bool WantsPalettedTextures(const ITargetPlatform& TargetPlatform)
+	{
+		TArray<FName> Formats;
+		TargetPlatform.GetAllTextureFormats(Formats);
+		return Formats.Contains(FName(TEXT("Paletted")));
+	}
+
+	/**
+	 * Converts an RGBA8 texture to PF_P8 / PF_P4 in place, keeping what it was in OutBackup; false (and unchanged)
+	 * for a texture without RGBA8 texels.
+	 */
+	bool MakePaletted(UTexture2D& Texture, FTextureBackup& OutBackup, FCookedTexture& OutInfo)
+	{
+		const FTexturePlatformData& Data = Texture.GetPlatformData();
+		if (!Texture.HasValidPlatformData() || GetPixelFormatBytes(Data.PixelFormat) != 4)
+		{
+			return false;
+		}
+		const int64 NumBytes = GetPixelFormatDataSize(Data.PixelFormat, Data.SizeX, Data.SizeY);
+		OutBackup.Texture = &Texture;
+		OutBackup.SizeX = Data.SizeX;
+		OutBackup.SizeY = Data.SizeY;
+		OutBackup.Format = Data.PixelFormat;
+		OutBackup.Data.SetNumUninitialized(int32(NumBytes));
+		const FByteBulkData& BulkData = Data.Mips[0].BulkData;
+		FMemory::Memcpy(OutBackup.Data.GetData(), BulkData.LockReadOnly(), SIZE_T(NumBytes));
+		BulkData.Unlock();
+
+		TArray<uint8> Rgba = OutBackup.Data;
+		if (Data.PixelFormat == PF_B8G8R8A8)
+		{
+			for (int32 Index = 0; Index < Rgba.Num(); Index += 4)
+			{
+				Swap(Rgba[Index], Rgba[Index + 2]);
+			}
+		}
+		FPalettedTexture Paletted;
+		if (!FPalettedTextureBuilder::Build(Rgba.GetData(), Data.SizeX, Data.SizeY, Paletted))
+		{
+			return false;
+		}
+		OutInfo.Name = Texture.GetPathName();
+		OutInfo.SourceSizeX = Data.SizeX;
+		OutInfo.SourceSizeY = Data.SizeY;
+		OutInfo.SizeX = Paletted.SizeX;
+		OutInfo.SizeY = Paletted.SizeY;
+		OutInfo.Format = Paletted.Format;
+		OutInfo.SourceColors = Paletted.NumSourceColors;
+		const EGSPixelFormat GSFormat = Paletted.Format == PF_P4 ? EGSPixelFormat::PSMT4 : EGSPixelFormat::PSMT8;
+		OutInfo.Blocks = FGSTextureLayout::GetNumBlocks(GSFormat, uint32(Paletted.SizeX), uint32(Paletted.SizeY)) +
+			FGSTextureLayout::GetClutBlocks(GSFormat);
+		return Texture.SetPlatformData(Paletted.SizeX, Paletted.SizeY, Paletted.Format, Paletted.Data.GetData());
+	}
+
+	/** KB of a block count (a block is 256 bytes). */
+	[[nodiscard]] FString BlocksToKB(uint32 Blocks)
+	{
+		return FString::Printf("%u KB", (Blocks * FGSTextureLayout::BytesPerBlock) / 1024);
+	}
+
 	/** The packaging settings' section (UE: UProjectPackagingSettings in UnrealEd, Config=Game). */
 	const TCHAR* const PackagingSettingsSection = TEXT("/Script/UnrealEd.ProjectPackagingSettings");
 
@@ -366,8 +442,8 @@ bool UCookCommandlet::CollectDependencies(const TArray<FString>& Seeds, TArray<F
 	return bSuccess;
 }
 
-bool UCookCommandlet::CookPackage(
-	const FString& PackageName, const ITargetPlatform& TargetPlatform, const FString& CookedDir)
+bool UCookCommandlet::CookPackage(const FString& PackageName, const ITargetPlatform& TargetPlatform,
+	const FString& CookedDir, TArray<FCookedTexture>* OutTextures)
 {
 	FString SourceFile;
 	UPackage* Package = FPackageName::DoesPackageExist(PackageName, nullptr, &SourceFile)
@@ -382,15 +458,118 @@ bool UCookCommandlet::CookPackage(
 	// Without editor-only data: the editor-only properties are filtered, and the editor-only objects (the assets' and
 	// the worlds' import data) are left out with the references to them (SavePackage, UObject::IsEditorOnly).
 	Package->SetPackageFlags(PKG_FilterEditorOnly | PKG_Cooked);
+
+	// The platform's texture format, for the save only: the loaded textures get their data back after it, since
+	// another platform's cook or a later package may use them.
+	TArray<FTextureBackup> Backups;
+	if (WantsPalettedTextures(TargetPlatform))
+	{
+		TArray<UObject*> Objects;
+		GetObjectsWithOuter(Package, Objects);
+		Objects.Sort([](const UObject& A, const UObject& B) { return A.GetPathName() < B.GetPathName(); });
+		for (UObject* Object : Objects)
+		{
+			UTexture2D* Texture = Cast<UTexture2D>(Object);
+			FTextureBackup Backup;
+			FCookedTexture Info;
+			if (Texture != nullptr && MakePaletted(*Texture, Backup, Info))
+			{
+				UE_LOG(LogCook, Display, "Cook: %s %dx%d -> %dx%d %s (%d colours), %s", *Info.Name, Info.SourceSizeX,
+					Info.SourceSizeY, Info.SizeX, Info.SizeY, Info.Format == PF_P4 ? TEXT("PSMT4") : TEXT("PSMT8"),
+					Info.SourceColors, *BlocksToKB(Info.Blocks));
+				Backups.Add(MoveTemp(Backup));
+				if (OutTextures != nullptr)
+				{
+					OutTextures->Add(Info);
+				}
+			}
+		}
+	}
+
 	IFileManager::Get().MakeDirectory(*FPaths::GetPath(CookedFile), true);
-	if (!UPackage::SavePackage(Package, nullptr, RF_Public | RF_Standalone, *CookedFile, nullptr, SAVE_None,
-			*TargetPlatform.CookedPlatformName()))
+	const bool bSaved = UPackage::SavePackage(Package, nullptr, RF_Public | RF_Standalone, *CookedFile, nullptr,
+		SAVE_None, *TargetPlatform.CookedPlatformName());
+	for (FTextureBackup& Backup : Backups)
+	{
+		(void)Backup.Texture->SetPlatformData(Backup.SizeX, Backup.SizeY, Backup.Format, Backup.Data.GetData());
+	}
+	if (!bSaved)
 	{
 		UE_LOG(LogCook, Error, "Cook: saving %s to '%s' failed", *PackageName, *CookedFile);
 		return false;
 	}
 	UE_LOG(LogCook, Display, "Cooked %s -> %s", *PackageName, *CookedFile);
 	return true;
+}
+
+FString UCookCommandlet::MakeVramReport(const TArray<FString>& Maps, const TArray<FString>& Common,
+	const TMap<FString, TArray<FCookedTexture>>& TexturesByPackage, uint32 ArenaBlocks, TArray<FString>& OutOverBudget)
+{
+	// The textures of Seeds' closure that are not in Exclude, sorted by name, and their blocks.
+	const auto GatherTextures = [&TexturesByPackage](const TArray<FString>& Seeds, const TSet<FString>& Exclude,
+									TArray<FCookedTexture>& OutTextures, TSet<FString>& OutNames)
+	{
+		TArray<FString> Closure;
+		if (Seeds.Num() > 0)
+		{
+			(void)CollectDependencies(Seeds, Closure);
+		}
+		uint32 Blocks = 0;
+		for (const FString& Package : Closure)
+		{
+			if (const TArray<FCookedTexture>* Found = TexturesByPackage.Find(Package))
+			{
+				for (const FCookedTexture& Texture : *Found)
+				{
+					if (!Exclude.Contains(Texture.Name) && !OutNames.Contains(Texture.Name))
+					{
+						OutNames.Add(Texture.Name);
+						OutTextures.Add(Texture);
+						Blocks += Texture.Blocks;
+					}
+				}
+			}
+		}
+		OutTextures.Sort([](const FCookedTexture& A, const FCookedTexture& B) { return A.Name < B.Name; });
+		return Blocks;
+	};
+	const auto ListTextures = [](const TArray<FCookedTexture>& Textures, FString& Out)
+	{
+		for (const FCookedTexture& Texture : Textures)
+		{
+			Out += FString::Printf("  %s %dx%d -> %dx%d %s, %d colours, %s\n", *Texture.Name, Texture.SourceSizeX,
+				Texture.SourceSizeY, Texture.SizeX, Texture.SizeY,
+				Texture.Format == PF_P4 ? TEXT("PSMT4") : TEXT("PSMT8"), Texture.SourceColors,
+				*BlocksToKB(Texture.Blocks));
+		}
+	};
+
+	FString Report = FString::Printf(
+		"VRAM report: the textures of each map against the GS texture arena (%s)\n", *BlocksToKB(ArenaBlocks));
+	TArray<FCookedTexture> CommonTextures;
+	TSet<FString> CommonNames;
+	const uint32 CommonBlocks = GatherTextures(Common, TSet<FString>(), CommonTextures, CommonNames);
+	Report += FString::Printf("\nCommon (the config's default assets, the directories always cooked): %d texture(s), "
+							  "%s\n",
+		CommonTextures.Num(), *BlocksToKB(CommonBlocks));
+	ListTextures(CommonTextures, Report);
+	for (const FString& Map : Maps)
+	{
+		TArray<FCookedTexture> Textures;
+		TSet<FString> Names;
+		const uint32 Blocks = GatherTextures({Map}, CommonNames, Textures, Names);
+		const uint32 Total = Blocks + CommonBlocks;
+		const bool bFits = Total <= ArenaBlocks;
+		if (!bFits)
+		{
+			OutOverBudget.Add(Map);
+		}
+		Report += FString::Printf("\n%s: %d texture(s) of its own, %s; with the common ones %s of %s%s\n", *Map,
+			Textures.Num(), *BlocksToKB(Blocks), *BlocksToKB(Total), *BlocksToKB(ArenaBlocks),
+			bFits ? TEXT("") : TEXT(" (over: the cache uploads them again as it fills)"));
+		ListTextures(Textures, Report);
+	}
+	return Report;
 }
 
 int32 UCookCommandlet::StageNonPackageFiles(const ITargetPlatform& TargetPlatform, const FString& CookedDir)
@@ -503,11 +682,17 @@ int32 UCookCommandlet::Main(const FString& Params)
 			*TargetPlatform->PlatformName(), Seeds.Num(), Packages.Num());
 
 		int32 Cooked = 0;
+		TMap<FString, TArray<FCookedTexture>> TexturesByPackage;
 		for (const FString& PackageName : Packages)
 		{
-			if (CookPackage(PackageName, *TargetPlatform, CookedDir))
+			TArray<FCookedTexture> Textures;
+			if (CookPackage(PackageName, *TargetPlatform, CookedDir, &Textures))
 			{
 				++Cooked;
+				if (Textures.Num() > 0)
+				{
+					TexturesByPackage.Add(PackageName, MoveTemp(Textures));
+				}
 			}
 			else
 			{
@@ -519,6 +704,35 @@ int32 UCookCommandlet::Main(const FString& Params)
 		if (Staged < 0)
 		{
 			++Failures;
+		}
+		if (WantsPalettedTextures(*TargetPlatform))
+		{
+			TArray<FString> Maps;
+			TArray<FString> Common;
+			for (const FString& Seed : Seeds)
+			{
+				FString Filename;
+				const bool bMap = FPackageName::DoesPackageExist(Seed, nullptr, &Filename) &&
+					FPaths::GetExtension(Filename, true) == FPackageName::GetMapPackageExtension();
+				(bMap ? Maps : Common).Add(Seed);
+			}
+			TArray<FString> OverBudget;
+			const FString Report =
+				MakeVramReport(Maps, Common, TexturesByPackage, FGSDrawEnvironment::TextureArenaBlocks, OverBudget);
+			const FString ReportFile =
+				FPaths::ProjectSavedDir() + TEXT("Cooked/") + TargetPlatform->PlatformName() + TEXT("-VramReport.txt");
+			if (!FFileHelper::SaveStringToFile(Report, *ReportFile))
+			{
+				UE_LOG(LogCook, Error, "Cook: cannot write '%s'", *ReportFile);
+				++Failures;
+			}
+			for (const FString& Map : OverBudget)
+			{
+				UE_LOG(LogCook, Warning, "Cook: the textures of %s do not fit the GS texture arena (%s)", *Map,
+					*ReportFile);
+			}
+			UE_LOG(LogCook, Display, "Cook (%s): VRAM report of %d map(s) in %s", *TargetPlatform->PlatformName(),
+				Maps.Num(), *ReportFile);
 		}
 		UE_LOG(LogCook, Display,
 			"Cook (%s): %d of %d packages cooked, %d config / shader / project file(s) staged, in %s",

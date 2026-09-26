@@ -2,6 +2,7 @@
 #include "GSCommandList.h"
 #include "GSConformanceScenes.h"
 #include "GSGifPacket.h"
+#include "GSTextureLayout.h"
 #include "GSTypes.h"
 #include "Misc/AutomationTest.h"
 
@@ -489,6 +490,49 @@ bool FGSCoreConformanceScenesTest::RunTest(const FString& Parameters)
 		}
 		TestTrue(*FString::Printf(TEXT("%s sets its frame buffer"), Scene.Name), bSetsFrame);
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSCoreTextureLayoutTest, "System.GSCore.TextureLayout",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGSCoreTextureLayoutTest::RunTest(const FString& Parameters)
+{
+	// Pages by format (manual 8.2), whole pages per texture, TBW over whole pages (even for the indexed formats).
+	uint32 Width = 0;
+	uint32 Height = 0;
+	FGSTextureLayout::GetPageSize(EGSPixelFormat::PSMT8, Width, Height);
+	TestTrue("PSMT8 page 128 x 64", Width == 128 && Height == 64);
+	FGSTextureLayout::GetPageSize(EGSPixelFormat::PSMT4, Width, Height);
+	TestTrue("PSMT4 page 128 x 128", Width == 128 && Height == 128);
+	TestEqual("PSMCT32 8 wide: TBW 1", int32(FGSTextureLayout::GetBufferWidth(EGSPixelFormat::PSMCT32, 8)), 1);
+	TestEqual("PSMCT32 256 wide: TBW 4", int32(FGSTextureLayout::GetBufferWidth(EGSPixelFormat::PSMCT32, 256)), 4);
+	TestEqual("PSMT8 16 wide: TBW 2", int32(FGSTextureLayout::GetBufferWidth(EGSPixelFormat::PSMT8, 16)), 2);
+	TestEqual("PSMT4 256 wide: TBW 4", int32(FGSTextureLayout::GetBufferWidth(EGSPixelFormat::PSMT4, 256)), 4);
+	TestEqual("PSMCT32 64 x 64: 2 pages", FGSTextureLayout::GetNumBlocks(EGSPixelFormat::PSMCT32, 64, 64), 64u);
+	TestEqual("PSMT8 256 x 256: 8 pages", FGSTextureLayout::GetNumBlocks(EGSPixelFormat::PSMT8, 256, 256), 256u);
+	TestEqual("PSMT4 8 x 8: 1 page", FGSTextureLayout::GetNumBlocks(EGSPixelFormat::PSMT4, 8, 8), 32u);
+	TestEqual("PSMT8 CLUT: 4 blocks", FGSTextureLayout::GetClutBlocks(EGSPixelFormat::PSMT8), 4u);
+	TestEqual("PSMT4 CLUT: 1 block", FGSTextureLayout::GetClutBlocks(EGSPixelFormat::PSMT4), 1u);
+	TestEqual("No CLUT", FGSTextureLayout::GetClutBlocks(EGSPixelFormat::PSMCT32), 0u);
+
+	// CSM1: entries 8..15 and 16..23 of each 32 trade places in the 16 x 16 rectangle; alpha 255 is the GS's 0x80.
+	TArray<uint32> Palette;
+	for (uint32 Index = 0; Index < 256; ++Index)
+	{
+		Palette.Add(Index | 0xff000000u);
+	}
+	TArray<uint8> Image;
+	uint16 ClutWidth = 0;
+	uint16 ClutHeight = 0;
+	FGSTextureLayout::MakeClutImage(Palette, Image, ClutWidth, ClutHeight);
+	TestTrue("16 x 16", ClutWidth == 16 && ClutHeight == 16 && Image.Num() == 16 * 16 * 4);
+	TestEqual("Entry 8 at (0, 1)", int32(Image[(16 * 1 + 0) * 4]), 8);
+	TestEqual("Entry 16 at (8, 0)", int32(Image[(0 * 16 + 8) * 4]), 16);
+	TestEqual("Entry 48 at (8, 2)", int32(Image[(16 * 2 + 8) * 4]), 48);
+	TestEqual("Alpha 0x80", int32(Image[3]), 0x80);
+	FGSTextureLayout::MakeClutImage(TArrayView<const uint32>(Palette.GetData(), 16), Image, ClutWidth, ClutHeight);
+	TestTrue("16 entries: 8 x 2, in order", ClutWidth == 8 && ClutHeight == 2 && Image[9 * 4] == 9);
 	return true;
 }
 

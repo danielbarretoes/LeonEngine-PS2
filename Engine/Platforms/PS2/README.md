@@ -213,7 +213,7 @@ without Jolt, AudioMixer with a silent device) and the Renderer, whose GS scene 
 model and the HUD into `FPS2RHI`'s frame (`Renderer_PS2.Build.cmake`; [ps2-engine](../../../Docs/PLANS/ps2-engine.md)
 E1 and E2): the same code the desktop runs on its OpenGL GS emulator. `-nullrhi` keeps it headless (no scene).
 BuildCookRun stages it for PCSX2: the ELF
-with the cooked folder loose beside it (`host:` is that folder; the pak is E3) and the arguments in
+with the cooked folder loose beside it (`host:` is that folder), or with `-pak` in one pak (E3), and the arguments in
 `LeonCommandLine.txt`, which the PS2 launch appends to `argv` (UE: `UECommandLine.txt`), since PCSX2 passes the ELF
 none:
 
@@ -224,6 +224,14 @@ Engine\Build\BatchFiles\BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.l
 With PCSX2's host filesystem on, the EE log ends with `Botmatch OK: 10 round(s), ...` and the `Botmatch budget:` line
 (objects, names, GMalloc). The result does not have to match Win64's (the EE's floats are not IEEE); two runs must
 match each other.
+
+Without `-nullrhi` the game draws de_leon through the GS scene renderer (E2), from its pak (E3) with `-pak`:
+
+```bat
+Engine\Build\BatchFiles\BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.lproj -platform=PS2 -build -cook -stage -pak -run "-addcmdline=-ExecCmds=bot_fill"
+```
+
+The EE log shows `Mounted ... ShooterGame-PS2.lpak` and `PS2 renderer: GS scene renderer, 1856 KB of texture VRAM`.
 
 The root `Package.bat` builds and packages `ThirdPerson`, `TestPAL`, `GSConformance` and ShooterGame (the botmatch) for PS2 (Development, in Docker, into
 `Packages\PS2\`); the ELF sizes (gate G3) are measured with the toolchain's `mips64r5900el-ps2-elf-size` in the ps2dev

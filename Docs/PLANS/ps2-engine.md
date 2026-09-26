@@ -119,7 +119,7 @@ Estado:
   - `System.Renderer.GSEmulator.SceneFrame` compara el frame del renderer con la referencia.
 - Pendiente (manual): ver de_leon en PCSX2 (`BuildCookRun ... -platform=PS2 ... -run` sin `-nullrhi`).
 
-### E3 · Cook y datos de PS2 (L) — es GS P6
+### E3 · Cook y datos de PS2 (L) — es GS P6; hecha (falta verla en PCSX2)
 
 - Texturas `PSMT8`/`PSMT4` con CLUT, en potencias de dos y con mips limitados; mallas `LPS2` v2; cook reproducible
   (G5).
@@ -129,6 +129,40 @@ Estado:
 
 Gate: el cook de PS2 es reproducible, el informe de VRAM está en Budgets.md, y de_leon con las texturas cocinadas
 para PS2 se ve igual que la referencia.
+
+Estado:
+
+- `TextureCompressor` (Developer, el homólogo del módulo de UE) convierte RGBA8 a `PF_P8` / `PF_P4` (la paleta y luego
+  los índices; `EPixelFormat` gana los dos formatos).
+  - Lados en potencias de dos entre 8 y 256, promediando los texels que cubren.
+  - Hasta 16 colores da `PSMT4` exacto, hasta 256 `PSMT8` exacto; con más, median cut determinista.
+- El cook de PS2 (el formato de textura "Paletted" de `FPS2TargetPlatform`) guarda así las texturas y deja las
+  cargadas como estaban. Escribe `<Project>/Saved/Cooked/PS2-VramReport.txt`: las texturas comunes (los assets por
+  defecto de la config) y las de cada mapa contra la arena de 1856 KB. El layout sale de `FGSTextureLayout` (GSCore,
+  el mismo que usa la caché).
+- `FGSTextureCache` sube `PF_P8` / `PF_P4` tal cual: índices `PSMT8` / `PSMT4` y una CLUT `PSMCT32` en CSM1 al final
+  de la arena, que TEX0 carga (CLD 1). Las RGBA8 siguen subiendo como `PSMCT32`.
+- de_leon: sus materiales no tienen texturas. Las comunes (`T_Default_D`, `DefaultTexture`, `T_Default_Bump_N`) suman
+  81 KB de 1856 KB (Budgets.md). El cook de ShooterGame para PS2 es igual byte a byte dos veces seguidas. El juego de
+  Linux arrancado desde un pak de ese cook dibuja de_leon como con el contenido de escritorio (12 píxeles distintos,
+  los del texto del tiempo).
+- Pak: `BuildCookRun -platform=PS2 -stage -pak` mete el cook en `<Project>/Content/Paks/<Project>-PS2.lpak`.
+  - Rutas relativas a la carpeta del ELF y entradas alineadas a 2048 bytes (sectores de CD).
+  - La raíz de dispositivo (`host:`, `cdrom0:\`) se compara igual con o sin `/` (`FPakFile::NormalizePath`).
+  - Si el dispositivo no lista carpetas, el pak se busca por su nombre.
+- Tests nuevos:
+  - `System.TextureCompressor.Paletted.*` (3).
+  - `System.GSCore.TextureLayout`.
+  - `System.Renderer.GS.TextureCache.Paletted`.
+  - `System.LeonEd.Cook.PalettedTextures`.
+  - `System.PakFile.Format.DeviceRootMountPoint`.
+- Desviaciones:
+  - Mallas `LPS2` v2 no: el renderer lee los datos de malla del motor, y la memoria de de_leon no lo pide. Queda para
+    cuando un mapa lo necesite.
+  - Sin mips: la caché muestrea el nivel 0.
+  - La imagen de disco (`cdrom0:`) no se genera. El pak ya está alineado y se encuentra por nombre, pero una ISO
+    necesita nombres ISO 9660 y una herramienta de imagen.
+- Pendiente (manual): ShooterGame en PCSX2 con `-pak`.
 
 ### E4 · Jugable (M)
 

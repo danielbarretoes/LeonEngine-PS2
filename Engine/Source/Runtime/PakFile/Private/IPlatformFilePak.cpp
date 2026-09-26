@@ -2,6 +2,8 @@
 
 #include "Containers/Set.h"
 #include "HAL/PlatformProcess.h"
+#include "HAL/PlatformProperties.h"
+#include "Misc/App.h"
 #include "Misc/Crc.h"
 #include "Misc/Parse.h"
 #include "Misc/Paths.h"
@@ -104,6 +106,21 @@ namespace
 		return Result;
 	}
 
+	/**
+	 * A device root followed by '/' ("host:Engine/X" is "host:/Engine/X"), so that paths and mount points compare
+	 * the same however a platform spells its device (the PS2's host: and cdrom0:\). A drive letter is left alone.
+	 */
+	FString WithDeviceRootSlash(FString Path)
+	{
+		const int32 Colon = Path.Find(":", ESearchCase::CaseSensitive);
+		if (Colon > 1 && Path.Left(Colon).Find("/", ESearchCase::CaseSensitive) == INDEX_NONE &&
+			(Colon + 1 == Path.Len() || Path[Colon + 1] != '/'))
+		{
+			Path.InsertAt(Colon + 1, "/");
+		}
+		return Path;
+	}
+
 	/** A relative mount point is taken from the executable's folder, as UE's "../../../". */
 	FString ResolveMountPoint(const FString& InMountPoint)
 	{
@@ -117,7 +134,7 @@ namespace
 		{
 			FPaths::CollapseRelativeDirectories(Result);
 		}
-		return WithTrailingSlash(Result);
+		return WithTrailingSlash(WithDeviceRootSlash(Result));
 	}
 } // namespace
 
@@ -289,7 +306,7 @@ bool FPakFile::IndexLess(const FPakIndexEntry& A, const FPakIndexEntry& B)
 
 FString FPakFile::NormalizePath(const TCHAR* Filename)
 {
-	return FPaths::ConvertRelativePathToFull(FString(Filename));
+	return WithDeviceRootSlash(FPaths::ConvertRelativePathToFull(FString(Filename)));
 }
 
 const FPakIndexEntry* FPakFile::FindRelative(const FString& RelativeFilename) const
@@ -399,6 +416,17 @@ void FPakPlatformFile::FindAllPakFiles(IPlatformFile* LowerLevelFile, TArray<FSt
 	{
 		TArray<FString> Found;
 		LowerLevelFile->FindFiles(Found, *Folder, ".lpak");
+		if (Found.Num() == 0 && FCString::Strlen(FApp::GetProjectName()) > 0)
+		{
+			// A device that cannot list its folders (a PS2 disc drive) still opens the pak BuildCookRun names
+			// <Project>-<Platform>.lpak.
+			const FString Named =
+				Folder + FApp::GetProjectName() + "-" + FString(FPlatformProperties::PlatformName()) + ".lpak";
+			if (LowerLevelFile->FileExists(*Named))
+			{
+				Found.Add(Named);
+			}
+		}
 		Found.Sort([](const FString& A, const FString& B)
 			{ return A.ToLower().Compare(B.ToLower(), ESearchCase::CaseSensitive) < 0; });
 		OutPakFiles.Append(Found);

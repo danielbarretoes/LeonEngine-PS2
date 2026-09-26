@@ -191,8 +191,8 @@ FGSDrawEnvironment FGSOpenGLEmulator::GetDrawEnvironment()
 void FGSOpenGLEmulator::GetTextureArena(uint32& OutFirstBlock, uint32& OutNumBlocks)
 {
 	// After the Z buffer (pages 140 to 279), as on the PS2: pages 280 to 511.
-	OutFirstBlock = 280 * 32;
-	OutNumBlocks = (512 - 280) * 32;
+	OutFirstBlock = FGSDrawEnvironment::TextureArenaFirstBlock;
+	OutNumBlocks = FGSDrawEnvironment::TextureArenaBlocks;
 }
 
 void FGSOpenGLEmulator::Execute(const FGSCommandList& List)

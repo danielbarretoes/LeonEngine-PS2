@@ -6,8 +6,8 @@
 
 /**
  * A 2D texture asset (UE: UTexture2D): its texels in the platform data, mip 0 as bulk data, bottom row first (as
- * OpenGL reads them). The renderer uploads it with mipmaps, trilinear filtering and repeat wrapping, and keeps the GPU
- * copy.
+ * OpenGL reads them): RGBA8 as imported, or paletted (PF_P8 / PF_P4) as the PS2 cook stores it. The renderer's GS
+ * texture cache uploads it and keeps the GS copy.
  *
  * Made by CreateTransient (UE) or NewObject followed by SetPlatformData, and saved and loaded in `.lasset` packages.
  */
@@ -28,7 +28,8 @@ public:
 		int32 InSizeX, int32 InSizeY, EPixelFormat InFormat = PF_R8G8B8A8, FName InName = NAME_None);
 
 	/**
-	 * Replaces the texels with InSizeX x InSizeY texels of InFormat copied from TexelData (bottom row first); a null
+	 * Replaces the texels with InSizeX x InSizeY texels of InFormat copied from TexelData (bottom row first; a paletted
+	 * format's palette first, GetPixelFormatDataSize bytes in all); a null
 	 * TexelData leaves them zeroed. False (and nothing changed) for an empty size or an unknown format (Leon; UE
 	 * fills PlatformData->Mips[0].BulkData by hand).
 	 */

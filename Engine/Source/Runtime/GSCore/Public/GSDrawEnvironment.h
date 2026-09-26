@@ -21,6 +21,12 @@ struct GSCORE_API FGSDrawEnvironment
 	static constexpr float PrimitiveCenter = 2048.0f;
 	/** The largest Z of a PSMZ24 buffer, the nearest depth. */
 	static constexpr uint32 MaxDepth24 = 0xffffffu;
+	/**
+	 * The texture arena of the 640 x 448 layout (two PSMCT16S frames of 70 pages, the PSMZ24 buffer's 140 pages): the
+	 * pages from 280 to the end of the 4 MB local memory, in 64-word blocks (1856 KB).
+	 */
+	static constexpr uint32 TextureArenaFirstBlock = 280 * 32;
+	static constexpr uint32 TextureArenaBlocks = (512 - 280) * 32;
 
 	FGSFrame Frame;
 	FGSZBuf ZBuf;

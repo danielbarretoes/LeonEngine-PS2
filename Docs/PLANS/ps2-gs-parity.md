@@ -190,7 +190,7 @@ Estado:
   captura GL anterior (la misma geometría, sin sombras ni especular). La iluminación horneada en color de vértice
   queda fuera (el importador de mapas no la produce).
 
-### P6 · El cook de PS2 de verdad (L)
+### P6 · El cook de PS2 de verdad (L) — hecha para texturas ([ps2-engine](ps2-engine.md) E3)
 
 - Texturas: `PSMT8` y `PSMT4` con CLUT, con cuantización determinista (median cut con orden fijo), redimensionado a
   potencias de dos, cadena de mips limitada e informe de VRAM por mapa.
@@ -200,6 +200,13 @@ Estado:
 - G5 (reimportación estable) cubre también la salida de PS2.
 
 Gate: el cook es reproducible byte a byte, y el informe de VRAM de de_leon cabe en el presupuesto de P0-3.
+
+Estado: se cumple el gate.
+- El cook de ShooterGame para PS2 es igual byte a byte en dos pasadas.
+- de_leon usa 81 KB de 1856 KB de VRAM de texturas.
+- La vista previa dibuja el cook de PS2 desde su pak.
+
+El detalle y las desviaciones (mallas `LPS2` v2, mips, G5 sobre la salida de PS2) están en E3 del plan del motor.
 
 ### P7 · Validación, documentación y release (M)
 

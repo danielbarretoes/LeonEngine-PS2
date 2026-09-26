@@ -14,10 +14,15 @@
 # The game is the project's own Game target (<Project>\Source\*.Target.cmake), or LeonGame for a content-only project
 # (UE stages UE4Game renamed after the project).
 #
-# PS2 (Docs/PLANS/ps2-engine.md, E1): Development only, and no pak yet (it comes with the PS2 cook, E3). -build builds
-# the ELF in Docker; -stage lays out what PCSX2's host: device serves, the cooked folder loose beside the ELF:
+# PS2 (Docs/PLANS/ps2-engine.md, E1 and E3): Development only. -build builds the ELF in Docker; the cook makes the
+# textures paletted (PSMT8 / PSMT4) and writes <Project>\Saved\Cooked\PS2-VramReport.txt; -stage lays out what
+# PCSX2's host: device serves:
 #   <Project>\Saved\StagedBuilds\PS2\<Project>.elf
-#   <Project>\Saved\StagedBuilds\PS2\Engine\..., <Project>\...   (the cooked folder, whole)
+#   <Project>\Saved\StagedBuilds\PS2\Engine\..., <Project>\...   (without -pak: the cooked folder, loose)
+#   <Project>\Saved\StagedBuilds\PS2\<Project>\Content\Paks\<Project>-PS2.lpak
+#                                                             (-pak: the cooked folder with the paths Engine/... and
+#                                                              <Project>/..., mounted at the ELF's folder, entries
+#                                                              aligned to 2048 bytes unless -align says otherwise)
 #   <Project>\Saved\StagedBuilds\PS2\LeonCommandLine.txt         (-addcmdline: PCSX2 passes the ELF no arguments)
 # and -run starts it in PCSX2 (RunPCSX2.ps1 -StagedElf) without waiting: the result is in the EE log.
 $ErrorActionPreference = "Stop"
@@ -77,10 +82,11 @@ if (-not ($Do.build -or $Do.cook -or $Do.stage -or $Do.pak -or $Do.run)) { Fail 
 $IsPS2 = $Platform -eq "PS2"
 if ($IsPS2)
 {
-	# A Shipping game reads nothing but its paks, and the PS2 has none yet.
+	# Development only: the PS2 Shipping game is not built yet (ps2-engine E6). Without -pak, -stage copies the cooked
+	# folder loose beside the ELF; with it, the content goes in one pak aligned to the disc's 2048-byte sectors.
 	if (-not ($args -match '^[-/](configuration|clientconfig)=')) { $Configuration = "Development" }
-	if ($Configuration -ne "Development") { Fail "-platform=PS2 stages Development only until the PS2 pak (ps2-engine E3)" }
-	if ($Do.pak) { Fail "-platform=PS2 has no pak yet (ps2-engine E3): -stage copies the cooked folder loose" }
+	if ($Configuration -ne "Development") { Fail "-platform=PS2 stages Development only" }
+	if ($Do.pak -and $Align -eq "") { $Align = "2048" }
 }
 elseif ($Do.stage -and -not $Do.pak) { Fail "-stage needs -pak: a staged build reads its content from its pak" }
 
@@ -146,8 +152,8 @@ if ($Do.stage)
 	Copy-Item -LiteralPath $GameExe -Destination $StagedExe
 	if ($IsPS2)
 	{
-		# host: is the ELF's folder: the PS2 FPaths finds Engine\ and <Project>\ there, loose.
-		Copy-Item -Recurse -Force -Path (Join-Path $CookedDir "*") -Destination $StageDir
+		# host: is the ELF's folder: the PS2 FPaths finds Engine\ and <Project>\ there, loose unless they are paked.
+		if (-not $Do.pak) { Copy-Item -Recurse -Force -Path (Join-Path $CookedDir "*") -Destination $StageDir }
 		if ($AddCmdLine -ne "")
 		{
 			Set-Content -Path (Join-Path $StageDir "LeonCommandLine.txt") -Value $AddCmdLine -Encoding ascii
@@ -158,13 +164,14 @@ if ($Do.stage)
 if ($Do.pak)
 {
 	# One file per line, "<source>" "<path in the pak>", sorted: the pak paths start at the stage's root, which is
-	# ../../../ from <Project>\Binaries\<Platform>\ (UE's mount point).
+	# ../../../ from <Project>\Binaries\<Platform>\ (UE's mount point), and the PS2 ELF's own folder.
 	if (-not (Test-Path $CookedDir)) { Fail "no cooked content in '$CookedDir' (run with -cook)" }
 	$CookedRoot = (Resolve-Path $CookedDir).Path
+	$PakPrefix = if ($IsPS2) { "" } else { "../../../" }
 	$Lines = Get-ChildItem -Recurse -File -LiteralPath $CookedRoot | ForEach-Object {
 		$Relative = $_.FullName.Substring($CookedRoot.Length + 1).Replace([char]92, [char]47)
 		$Source = $_.FullName.Replace([char]92, [char]47)
-		"`"$Source`" `"../../../$Relative`""
+		"`"$Source`" `"$PakPrefix$Relative`""
 	} | Sort-Object -Culture ([Globalization.CultureInfo]::InvariantCulture)
 	$ResponseFile = Join-Path $ProjectDir "Saved\Cooked\PakList_$ProjectName-$Platform.txt"
 	Set-Content -Path $ResponseFile -Value $Lines -Encoding ascii

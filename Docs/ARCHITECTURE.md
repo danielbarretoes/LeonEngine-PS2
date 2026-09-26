@@ -152,6 +152,7 @@ flowchart BT
   subgraph Developer [Engine/Source/Developer]
     MeshUtilities
     TargetPlatform
+    TextureCompressor
   end
   subgraph Editor [Engine/Source/Editor]
     LeonEd
@@ -219,9 +220,12 @@ flowchart BT
   LeonEd --> CoreUObject
   LeonEd --> Engine
   LeonEd --> TargetPlatform
-  LeonEd -.-> RenderCore
+  LeonEd --> RenderCore
   LeonEd -.-> AnimationCore
   LeonEd -.-> MeshUtilities
+  LeonEd -.-> TextureCompressor
+  LeonEd -.-> GSCore
+  TextureCompressor --> RenderCore
   LeonCook -.-> Engine
   LeonCook -.-> LeonEd
   LeonCook -.-> Projects
@@ -291,8 +295,9 @@ paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable 
 | **EngineSettings** | The project's map, game mode and general settings as config classes | `UGameMapsSettings`, `FGameModeName`, `UGeneralProjectSettings` | all |
 | **ApplicationCore** | Platform application, windows, gamepad input | `GenericApplication`, `FGenericWindow`, `IInputInterface`, `FPlatformApplicationMisc`; desktop `FGLFWApplication`, `FGLFWWindow`; PS2 ext `FPS2Application`, `FPS2Window`, `FPS2InputInterface` | all |
 | **RHI** | Graphics backend interface + opaque GPU handle ids | `RHIInit` / `RHIExit`, `FDynamicRHI`, `GDynamicRHI`, `FRHIGPUMemoryStats`, `FRHITextureId` … | all |
-| **GSCore** | The Graphics Synthesizer's contract (Leon; [plan](PLANS/ps2-gs-parity.md)): its registers and formats as in the GS User's Manual (chapter 7), encoded and decoded, and the command list the renderer fills and every backend consumes (register writes in order, image uploads), limited to what every backend reproduces; the list as a GIF PATH3 packet (PACKED A+D writes, IMAGE transfers); the GS conformance scenes the reference's tests check and GSConformance draws on the PS2; the drawing environment every backend shares (buffers, size, pixel mapping, depth test); the 4 MB local memory with its swizzled formats and transfers, and the texel decoder (formats, CLUTs, wrap modes) the reference and the emulator share | `EGSRegister`, `EGSPixelFormat`, `FGSPrim`, `FGSRGBAQ`, `FGSXYZ`, `FGSTex0`, `FGSTex1`, `FGSAlpha`, `FGSTest`, `FGSFrame`, `FGSZBuf`, `FGSDimx`, `GSToFixed4`, `FGSCommandList`, `FGSGifPacket`, `GSConformance::GetScenes`, `FGSDrawEnvironment`, `FGSLocalMemory`, `FGSTexelDecoder`, `FGSClutBuffer` | all |
+| **GSCore** | The Graphics Synthesizer's contract (Leon; [plan](PLANS/ps2-gs-parity.md)): its registers and formats as in the GS User's Manual (chapter 7), encoded and decoded, and the command list the renderer fills and every backend consumes (register writes in order, image uploads), limited to what every backend reproduces; the list as a GIF PATH3 packet (PACKED A+D writes, IMAGE transfers); the GS conformance scenes the reference's tests check and GSConformance draws on the PS2; the drawing environment every backend shares (buffers, size, pixel mapping, depth test); the 4 MB local memory with its swizzled formats and transfers, and the texel decoder (formats, CLUTs, wrap modes) the reference and the emulator share | `EGSRegister`, `EGSPixelFormat`, `FGSPrim`, `FGSRGBAQ`, `FGSXYZ`, `FGSTex0`, `FGSTex1`, `FGSAlpha`, `FGSTest`, `FGSFrame`, `FGSZBuf`, `FGSDimx`, `GSToFixed4`, `FGSCommandList`, `FGSGifPacket`, `GSConformance::GetScenes`, `FGSDrawEnvironment`, `FGSLocalMemory`, `FGSTexelDecoder`, `FGSClutBuffer`, `FGSTextureLayout` | all |
 | **GSReference** (Developer) | A software Graphics Synthesizer ([plan](PLANS/ps2-gs-parity.md), P2): executes an `FGSCommandList` into a 4 MB local memory by the GS User's Manual's rules (drawing rules, texture sampling, CLUTs, fog, pixel tests, blending, dithering, frame buffer writes, transfers); the oracle the desktop GS emulator and the PS2 backend are compared with | `FGSReferenceRasterizer` | Desktop |
+| **TextureCompressor** (Developer) | A texture's platform data for a cook (UE: TextureCompressor and the TextureFormat modules): the PS2's paletted textures, powers of two up to 256, PSMT4 / PSMT8 with a deterministic median cut ([ps2-engine](PLANS/ps2-engine.md) E3) | `FPalettedTextureBuilder`, `FPalettedTexture` | Desktop |
 | **OpenGLDrv** | OpenGL 3.3 RHI device (the GS emulator's context) | `FOpenGLDynamicRHI` | Desktop |
 | **PS2RHI** | Graphics Synthesizer immediate-mode API (platform extension module) | `FPS2RHI`, `FPS2Texture`, `FPS2Material`, `FPS2ViewTarget`, `FPS2DirectionalLight` | PS2 |
 | **Launch** | Entry points and engine loop | `GuardedMain`, `FEngineLoop` (an `IEngineLoop` with the engine), `GEngineLoop`, `FPlatformEngineLoopHooks` | all |
@@ -884,7 +889,9 @@ UWorld::LineBatcher (FDebugDraw), impact marks, tracers ------------------------
   (the maps, what they import or refer to softly, `DirectoriesToAlwaysCook`, the defaults the config names) without
   editor-only data into `<Project>/Saved/Cooked/<Platform>/`, with the config and the shaders; `BuildCookRun.bat` paks
   that folder and stages the game beside it (`<Project>/Saved/StagedBuilds/Win64/`), where it runs from the pak alone
-  ([TOOLS.md](TOOLS.md#buildcookrun), [BUILD.md](BUILD.md#staging-and-shipping)).
+  ([TOOLS.md](TOOLS.md#buildcookrun), [BUILD.md](BUILD.md#staging-and-shipping)). The PS2 cook makes the textures
+  paletted (TextureCompressor) and reports each map's texture VRAM; the PS2 stage puts the ELF at its root, the pak
+  mounted there (a device root, `host:`, matches with or without its `/`).
 - Assets are `.lasset` packages and maps `.lmap` packages under mount points (`/Engine/` → `Engine/Content/`,
   `/Game/` → the project's `Content/`), loaded with `LoadObject` / `LoadPackage`; the runtime reads no other asset file
   (no image, `.wav` or scene decoding: LeonEd's factories import them). `[/Script/Engine.Engine]` names the defaults
@@ -918,13 +925,13 @@ UWorld::LineBatcher (FDebugDraw), impact marks, tracers ------------------------
   the content from its sources and fails when git sees a change under a `Content` folder.
 - **Tests**: each module keeps its tests in `<Module>/Private/Tests/`, excluded from the module library and compiled
   only into targets with `COLLECT_AUTOMATION_TESTS`. Every test is a UE automation test
-  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, named `System.<Module>.<Area>.<Name>`): 405 on Win64 — Core
-  48, CoreUObject 63, Json 2, Projects 2, PakFile 5, PhysicsCore 8, RenderCore 23, AnimationCore 1, Engine 154, UMG 1,
-  GSCore 8, GSReference 10, Renderer 13, AIModule 31, MeshUtilities 8, LeonEd 19, JoltPhysics 9 (396 on Linux, without
-  the Jolt plugin; a tenth Jolt test, `System.JoltPhysics.Backend.DisabledFallsBack`,
+  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, named `System.<Module>.<Area>.<Name>`): 413 on Win64 — Core
+  48, CoreUObject 63, Json 2, Projects 2, PakFile 6, PhysicsCore 8, RenderCore 23, AnimationCore 1, Engine 154, UMG 1,
+  GSCore 9, GSReference 10, Renderer 14, AIModule 31, MeshUtilities 8, TextureCompressor 3, LeonEd 20, JoltPhysics 9
+  (404 on Linux, without the Jolt plugin; a tenth Jolt test, `System.JoltPhysics.Backend.DisabledFallsBack`,
   compiles only without the plugin). On PS2, Core runs 44 (the platform-file, config-cache and log-file tests are
   desktop-only), CoreUObject 61 (its SaveConfig and package file tests are desktop-only; the other package tests save to
-  memory), Json 2, Projects 1 and PakFile 5 (on paks in memory). Reflected test fixtures live in
+  memory), Json 2, Projects 1, PakFile 6 (on paks in memory) and GSCore 9: 123 in TestPAL. Reflected test fixtures live in
   `<Module>/Private/Tests/*.h` (LeonHeaderTool's Tests unit: CoreUObject's, `Engine/Private/Tests/EngineTestTypes.h`,
   `AIModule/Private/Tests/GameplayTestTypes.h`); tests that spawn actors create their world with `FScopedTestWorld`,
   which destroys it and collects the garbage at the end of the scope. An error logged during a test fails it unless the
@@ -983,6 +990,6 @@ roadmap is [NextSteps.md](UnrealEngine427/NextSteps.md).
 | Window / RHI ownership | UE's since P13: `FEngineLoop::PreInit` creates the main window and the RHI (`RHIInit`) on every platform, and the viewport client draws into it through `FViewport` (no Slate `SViewport` / `SWindow`). The PS2 window still sets up the GS display itself. |
 | Platform checks | `Core/Private/HAL/MallocAnsi.cpp` and `Misc/OutputDeviceRedirector.cpp` use `#if PLATFORM_WINDOWS` outside a platform folder. |
 | Linking | Always static (`IS_MONOLITHIC=1`), generated module table; no DLL modules or hot reload. |
-| Cook and paks (P16) | Cook by the book only (no cook on the fly, no `-iterate`, no asset registry); the PS2 target platform cooks the Win64 formats and the PS2 game mounts no pak yet; paks without compression, encryption or signatures; only Win64 stages (`BuildCookRun.bat`, a PowerShell script instead of AutomationTool). |
+| Cook and paks (P16) | Cook by the book only (no cook on the fly, no `-iterate`, no asset registry); the PS2 target platform converts only the textures (paletted, E3; meshes and sounds keep the Win64 formats); paks without compression, encryption or signatures; Win64 and PS2 stage (`BuildCookRun.bat`, a PowerShell script instead of AutomationTool), the PS2 on `host:` (no disc image yet). |
 | Collision | UE's channels and responses (P17), without named profiles; the arcade scene's shapes are boxes, triangle meshes and upright capsules (the characters); `*Multi*` queries keep every hit rather than stopping at the first block. |
 | Build tool | CMake scripts instead of C# UBT; the Linux platform LeonBuildTool registers is not an official platform (Win64 and PS2 are). Leon code builds without RTTI or C++ exceptions everywhere (D17: MSVC `/GR-`, no `/EH`, `_HAS_EXCEPTIONS=0`; GCC / Clang `-fno-rtti -fno-exceptions`); third-party libraries keep their own flags. |

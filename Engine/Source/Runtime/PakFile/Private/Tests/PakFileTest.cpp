@@ -142,6 +142,37 @@ bool FPakFormatRoundTripTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPakDeviceRootMountTest, "System.PakFile.Format.DeviceRootMountPoint",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FPakDeviceRootMountTest::RunTest(const FString& Parameters)
+{
+	// A pak mounted at a PS2 device's root (the ELF's folder is host: in PCSX2, cdrom0:\ on a disc) finds the files
+	// however the device is spelled: FPaths builds "host:Engine/...", a mount point resolves to "host:/".
+	FPakFile PakFile(TEXT("Device.lpak"), MakeTestPak());
+	if (!TestTrue("Valid", PakFile.IsValid()))
+	{
+		return false;
+	}
+	for (const TCHAR* Root : {TEXT("host:"), TEXT("host:/"), TEXT("cdrom0:\\")})
+	{
+		PakFile.SetMountPoint(Root);
+		const FString Name(Root);
+		const FString Device = Name.Left(Name.Find(TEXT(":")) + 1);
+		TestNotNull(*(Name + TEXT(": the mount point's spelling")),
+			PakFile.Find(FPakFile::NormalizePath(*(Name + TEXT("Engine/Config/BaseEngine.ini")))));
+		TestNotNull(*(Name + TEXT(": without a slash")),
+			PakFile.Find(FPakFile::NormalizePath(*(Device + TEXT("MyGame/Content/Data/Sub/Deep.bin")))));
+		TestNotNull(*(Name + TEXT(": with a slash")),
+			PakFile.Find(FPakFile::NormalizePath(*(Device + TEXT("/MyGame/Content/Data/Sub/Deep.bin")))));
+		TestTrue(*(Name + TEXT(": a folder")),
+			PakFile.DirectoryExists(FPakFile::NormalizePath(*(Device + TEXT("MyGame/Content")))));
+	}
+	TestEqual(
+		"A drive letter is left alone", FPakFile::NormalizePath(TEXT("C:/Game/A.txt")), FString(TEXT("C:/Game/A.txt")));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPakFormatDeterministicTest, "System.PakFile.Format.Deterministic",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 

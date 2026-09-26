@@ -10,7 +10,7 @@ UTexture2D::UTexture2D(const FObjectInitializer& ObjectInitializer)
 
 UTexture2D* UTexture2D::CreateTransient(int32 InSizeX, int32 InSizeY, EPixelFormat InFormat, FName InName)
 {
-	if (InSizeX <= 0 || InSizeY <= 0 || GetPixelFormatBytes(InFormat) == 0)
+	if (GetPixelFormatDataSize(InFormat, InSizeX, InSizeY) == 0)
 	{
 		UE_LOG(LogEngine, Warning, "UTexture2D::CreateTransient: invalid size %dx%d or format %d", InSizeX, InSizeY,
 			static_cast<int32>(InFormat));
@@ -23,8 +23,8 @@ UTexture2D* UTexture2D::CreateTransient(int32 InSizeX, int32 InSizeY, EPixelForm
 
 bool UTexture2D::SetPlatformData(int32 InSizeX, int32 InSizeY, EPixelFormat InFormat, const void* TexelData)
 {
-	const int32 TexelBytes = GetPixelFormatBytes(InFormat);
-	if (InSizeX <= 0 || InSizeY <= 0 || TexelBytes == 0)
+	const int64 NumBytes = GetPixelFormatDataSize(InFormat, InSizeX, InSizeY);
+	if (NumBytes == 0)
 	{
 		return false;
 	}
@@ -35,7 +35,6 @@ bool UTexture2D::SetPlatformData(int32 InSizeX, int32 InSizeY, EPixelFormat InFo
 	FTexture2DMipMap& Mip = PlatformData.Mips.AddDefaulted_GetRef();
 	Mip.SizeX = InSizeX;
 	Mip.SizeY = InSizeY;
-	const int64 NumBytes = static_cast<int64>(InSizeX) * InSizeY * TexelBytes;
 	(void)Mip.BulkData.Lock(LOCK_READ_WRITE);
 	void* Data = Mip.BulkData.Realloc(NumBytes);
 	if (TexelData != nullptr)
@@ -53,14 +52,14 @@ bool UTexture2D::SetPlatformData(int32 InSizeX, int32 InSizeY, EPixelFormat InFo
 
 bool UTexture2D::HasValidPlatformData() const
 {
-	const int32 TexelBytes = GetPixelFormatBytes(PlatformData.PixelFormat);
-	if (PlatformData.SizeX <= 0 || PlatformData.SizeY <= 0 || TexelBytes == 0 || PlatformData.Mips.Num() == 0)
+	const int64 NumBytes = GetPixelFormatDataSize(PlatformData.PixelFormat, PlatformData.SizeX, PlatformData.SizeY);
+	if (NumBytes == 0 || PlatformData.Mips.Num() == 0)
 	{
 		return false;
 	}
 	const FTexture2DMipMap& Mip = PlatformData.Mips[0];
 	return Mip.SizeX == PlatformData.SizeX && Mip.SizeY == PlatformData.SizeY &&
-		Mip.BulkData.GetBulkDataSize() == static_cast<int64>(Mip.SizeX) * Mip.SizeY * TexelBytes;
+		Mip.BulkData.GetBulkDataSize() == NumBytes;
 }
 
 void UTexture2D::Serialize(FArchive& Ar)

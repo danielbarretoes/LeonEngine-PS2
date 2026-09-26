@@ -11,6 +11,7 @@
 #include "GS/GSSceneRenderer.h"
 #include "GS/GSTextureCache.h"
 #include "GSReferenceRasterizer.h"
+#include "GSTexelDecoder.h"
 #include "Materials/Material.h"
 #include "Misc/AutomationTest.h"
 #include "Primitives.h"
@@ -181,6 +182,74 @@ bool FGSTextureCacheTest::RunTest(const FString& Parameters)
 	TestTrue("A third starts over", Cache.BindTexels(&KeyC, 5, 3, Texels, false, List, Tex0));
 	TestEqual("At the arena again", int32(Tex0.TBP0), int32(ArenaFirstBlock));
 	TestEqual("One resident", Cache.GetNumResident(), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTextureCachePalettedTest, "System.Renderer.GS.TextureCache.Paletted",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGSTextureCachePalettedTest::RunTest(const FString& Parameters)
+{
+	// The PS2 cook's formats upload as they are: the indices and a CLUT at the arena's end, which TEX0 loads. The GS
+	// reads every texel back as its palette colour (alpha to the GS's 0..0x80).
+	for (const EPixelFormat Format : {PF_P8, PF_P4})
+	{
+		const bool bIndex4 = Format == PF_P4;
+		constexpr int32 Size = 16;
+		const int32 PaletteSize = GetPixelFormatPaletteSize(Format);
+		TArray<uint8> Data;
+		Data.SetNumZeroed(int32(GetPixelFormatDataSize(Format, Size, Size)));
+		for (int32 Entry = 0; Entry < PaletteSize; ++Entry)
+		{
+			Data[(Entry * 4) + 0] = uint8(Entry);
+			Data[(Entry * 4) + 1] = uint8(255 - Entry);
+			Data[(Entry * 4) + 2] = uint8(Entry * 5);
+			Data[(Entry * 4) + 3] = 255;
+		}
+		const auto IndexOf = [PaletteSize](int32 X, int32 Y) { return ((X * 3) + (Y * 7)) % PaletteSize; };
+		for (int32 Y = 0; Y < Size; ++Y)
+		{
+			for (int32 X = 0; X < Size; ++X)
+			{
+				const int32 Texel = (Y * Size) + X;
+				uint8& Byte = Data[(PaletteSize * 4) + (bIndex4 ? Texel / 2 : Texel)];
+				Byte |= uint8(bIndex4 && (Texel % 2) != 0 ? IndexOf(X, Y) << 4 : IndexOf(X, Y));
+			}
+		}
+		UTexture2D* Texture = NewObject<UTexture2D>();
+		if (!TestTrue("A paletted texture", Texture->SetPlatformData(Size, Size, Format, Data.GetData())))
+		{
+			return false;
+		}
+
+		FGSTextureCache Cache;
+		Cache.SetArena(ArenaFirstBlock, ArenaBlocks);
+		FGSCommandList List;
+		FGSTex0 Tex0;
+		if (!TestTrue("Bound", Cache.BindTexture(*Texture, List, Tex0)))
+		{
+			return false;
+		}
+		TestEqual("Its format", int32(Tex0.PSM), int32(bIndex4 ? EGSPixelFormat::PSMT4 : EGSPixelFormat::PSMT8));
+		TestTrue("The CLUT at the arena's end", Tex0.CBP >= ArenaFirstBlock + ArenaBlocks - 4 && Tex0.CLD == 1);
+		FGSReferenceRasterizer Rasterizer;
+		Rasterizer.Execute(List);
+		FGSClutBuffer Clut;
+		Clut.Load(Rasterizer.GetMemory(), Tex0);
+		bool bMatches = true;
+		for (int32 Y = 0; Y < Size; ++Y)
+		{
+			for (int32 X = 0; X < Size; ++X)
+			{
+				const FColor Color = FGSTexelDecoder::Decode(
+					Rasterizer.GetMemory(), Tex0, Tex0.TBP0, Tex0.TBW, FGSTexA(), Clut, uint32(X), uint32(Y));
+				const int32 Entry = IndexOf(X, Y);
+				bMatches &= Color.R == uint8(Entry) && Color.G == uint8(255 - Entry) && Color.B == uint8(Entry * 5) &&
+					Color.A == 0x80;
+			}
+		}
+		TestTrue(bIndex4 ? TEXT("PSMT4 texels") : TEXT("PSMT8 texels"), bMatches);
+	}
 	return true;
 }
 

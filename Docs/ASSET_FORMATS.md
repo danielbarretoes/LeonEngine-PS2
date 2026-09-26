@@ -3,7 +3,7 @@
 **Audience:** content authors and tool writers
 **Also:** [LEVELS.md](LEVELS.md) (`.lmap` maps, the glTF map import) · [TOOLS.md](TOOLS.md) (LeonCook and its commandlets) · [SETUP.md](SETUP.md)
 
-Every asset is a UObject saved in a `.lasset` [package](#packages--lasset--lmap), and every map a world saved in a `.lmap` package ([Maps](#maps--lmap)): the runtime loads packages and nothing else (no image, `.wav`, mesh or scene source file). Source files (images, `.wav`, OBJ, FBX, glTF) are [imported](#importing-assets) by the editor module, LeonEd, through LeonCook's commandlets; each imported asset (and each imported map) records its source in its `UAssetImportData`, so it can be reimported. The only other runtime files are the GLSL shaders (`Engine/Shaders`) and the INI config. Since P16 the cook saves the packages a game needs without their editor-only data ([Cooked packages](#cooked-packages)), and a staged build reads them, with its config and shaders, from one [`.lpak`](#paks--lpak) file. The PS2 runtime loads no asset file yet (see [PS2](#ps2)).
+Every asset is a UObject saved in a `.lasset` [package](#packages--lasset--lmap), and every map a world saved in a `.lmap` package ([Maps](#maps--lmap)): the runtime loads packages and nothing else (no image, `.wav`, mesh or scene source file). Source files (images, `.wav`, OBJ, FBX, glTF) are [imported](#importing-assets) by the editor module, LeonEd, through LeonCook's commandlets; each imported asset (and each imported map) records its source in its `UAssetImportData`, so it can be reimported. The only other runtime files are the GLSL shaders (`Engine/Shaders`) and the INI config. Since P16 the cook saves the packages a game needs without their editor-only data ([Cooked packages](#cooked-packages)), and a staged build reads them, with its config and shaders, from one [`.lpak`](#paks--lpak) file. The PS2 runtime loads the same packages, cooked for it (paletted textures), loose or from a pak (see [PS2](#ps2)).
 
 > Unreal `.uasset` / `.umap` are proprietary. Leon does not read or write them. Interchange with Blender / Unreal goes through FBX or glTF, imported to Leon packages. The `.lasset` layout follows UE 4.27's package structure (summary, name / import / export tables, tagged properties) but is Leon's own binary format.
 
@@ -39,7 +39,7 @@ load that package first. The tests save every class to memory and load it back
 | Class (header, `Engine/Classes/`) | Tagged properties | Native tail |
 | --- | --- | --- |
 | `UTexture` (`Engine/Texture.h`), abstract | `SRGB` (recorded; the forward renderer uploads the texels as they are) | — |
-| `UTexture2D` (`Engine/Texture2D.h`) | — | `FTexturePlatformData`: `int32` SizeX, SizeY, `uint8` `EPixelFormat` (UE values: `PF_R8G8B8A8` = 37, `PF_B8G8R8A8` = 2), `int32` mip count, then per mip `int32` SizeX, SizeY and its texels as bulk data, bottom row first. Leon stores mip 0; the renderer builds the others when it uploads |
+| `UTexture2D` (`Engine/Texture2D.h`) | — | `FTexturePlatformData`: `int32` SizeX, SizeY, `uint8` `EPixelFormat` (UE values: `PF_R8G8B8A8` = 37, `PF_B8G8R8A8` = 2; Leon's paletted formats of the PS2 cook: `PF_P8` = 200, 256 RGBA8 palette entries then an index a texel, and `PF_P4` = 201, 16 entries then two texels a byte, the first in the low nibble), `int32` mip count, then per mip `int32` SizeX, SizeY and its data as bulk data (`GetPixelFormatDataSize` bytes), bottom row first. Leon stores mip 0 |
 | `UStaticMesh` (`Engine/StaticMesh.h`) | `StaticMaterials` (`FStaticMaterial`: `MaterialInterface`, `MaterialSlotName`), `BodySetup` (an inner object) | the local bounding box (`FBox`), then one bulk payload of `FStaticMeshLODResources` (one LOD): vertex count and each `FVertex` field by field (position, normal, UV, tangent), the `uint32` indices, section count and each section's index offset, index count and material slot |
 | `UBodySetup` (`PhysicsEngine/BodySetup.h`) | `AggGeom` (`FKAggregateGeom`: `BoxElems`, each `FKBoxElem` Center, Rotation, X, Y, Z in cm), `CollisionTraceFlag` (`ECollisionTraceFlag`) | — |
 | `UMaterialInterface` (`Materials/MaterialInterface.h`), abstract; `UMaterial` (`Materials/Material.h`) | `ShadingModel` (`MSM_Unlit`, `MSM_DefaultLit`), `BaseColor`, `Specular` (`FLinearColor`, linear RGB), `Metallic`, `Roughness`, `Opacity`, `Shininess`, `UVScale` (`FVector2D`), `bCastsShadows`, `bPlanarMirror`, `BaseColorMap`, `NormalMap` (`UTexture2D*`): the parameters the legacy `.lmat` files had | — |
@@ -256,7 +256,7 @@ package the game needs and saves it again with `PKG_FilterEditorOnly | PKG_Cooke
 package goes to `Engine/Content/`, a `/Game` package to `<Project>/Content/`, keeping its path and extension (UE's
 cooked layout); beside them the cook stages the config (`Engine/Config/Base*.ini`, the platform's layers, the
 project's `Config/Default*.ini`, never an Editor ini), the shaders (`Engine/Shaders/`) and the `.lproj`. The PS2 target
-cooks the same formats as Win64 for now. Two cooks of the same content give the same bytes.
+cooks its textures paletted ([PS2](#ps2)); the rest keeps the Win64 formats. Two cooks of the same content give the same bytes.
 
 <a id="paks--lpak"></a>
 
@@ -398,12 +398,14 @@ Examples: `Game/ThirdPerson/ThirdPerson.lproj`, `Engine/Plugins/Runtime/JoltPhys
 
 ## PS2
 
-The PS2 runtime (`Engine/Platforms/PS2/Source/Runtime/PS2RHI`) draws with the Graphics Synthesizer. ShooterGame on the EE ([ps2-engine](PLANS/ps2-engine.md) E1) loads its `.lasset` and `.lmap` packages loose through `host:`, cooked by the PS2 target platform, a stub since P16 that cooks the Win64 formats; the PS2 conversions (PSMT8 / PSMT4 textures, `LPS2` v2 meshes, ADPCM sounds) and a pak on `cdrom0:` are E3. The PakFile module builds for the PS2, and TestPAL runs its tests there on paks in memory. The ThirdPerson demo builds its textures, materials and level in code.
+The PS2 runtime draws with the Graphics Synthesizer through the Renderer's GS scene renderer. ShooterGame on the EE ([ps2-engine](PLANS/ps2-engine.md) E1 to E3) loads its `.lasset` and `.lmap` packages cooked by the PS2 target platform, loose through `host:` or from `<Project>/Content/Paks/<Project>-PS2.lpak` (paths from the ELF's folder, entries aligned to 2048 bytes; `BuildCookRun -platform=PS2 -pak`). The ThirdPerson demo builds its textures, materials and level in code.
+
+**Textures** (E3). The PS2 cook (the "Paletted" texture format, `FPalettedTextureBuilder` in TextureCompressor) makes every RGBA8 texture `PF_P4` (up to 16 colours, exact) or `PF_P8` (up to 256 exact, more by a deterministic median cut), its sides the nearest powers of two between 8 and 256 (each texel the mean of what it covers). The renderer's texture cache uploads them as `PSMT4` / `PSMT8` with a `PSMCT32` CLUT (CSM1). The cook writes `<Project>/Saved/Cooked/PS2-VramReport.txt`: the textures every map may draw (the config's defaults) and each map's own, in GS pages and CLUT blocks (`FGSTextureLayout`), against the 1856 KB texture arena. Meshes and sounds keep the Win64 formats (PCM16 until the SPU2 backend).
 
 ### Cooked mesh blob — `LPS2`
 
-The header of the blob (the PS2 runtime reads none yet; the scene renderer on the GS command list will, see
-[ps2-gs-parity](PLANS/ps2-gs-parity.md), P5 and P6):
+The header of the blob (nothing reads it: the scene renderer draws the engine's own mesh data, see
+[ps2-engine](PLANS/ps2-engine.md) E3):
 
 | Field | Type | Notes |
 | --- | --- | --- |

@@ -2,9 +2,26 @@
 
 #include "Commandlets/Commandlet.h"
 #include "CoreMinimal.h"
+#include "PixelFormat.h"
 #include "CookCommandlet.generated.h"
 
 class ITargetPlatform;
+
+/** A texture the cook converted for its platform, and what it costs there (the VRAM report). */
+struct FCookedTexture
+{
+	/** The texture's object path. */
+	FString Name;
+	int32 SourceSizeX = 0;
+	int32 SourceSizeY = 0;
+	int32 SizeX = 0;
+	int32 SizeY = 0;
+	EPixelFormat Format = PF_Unknown;
+	/** The distinct colours before the palette (more than 256: approximated). */
+	int32 SourceColors = 0;
+	/** GS local memory: the texels' whole pages and the CLUT, in 256-byte blocks. */
+	uint32 Blocks = 0;
+};
 
 /**
  * Cooks the game's content for a target platform (UE: UCookCommandlet, `-run=Cook`, cook by the book):
@@ -24,6 +41,11 @@ class ITargetPlatform;
  *    worlds (UAssetImportData::IsEditorOnly).
  * 4. The rest of the build's files (StageNonPackageFiles): the config (the Base, Default and platform ini files, not
  *    the Editor ones), the engine's shaders and the .lproj.
+ *
+ * A platform whose texture formats include "Paletted" (the PS2) gets its textures as PF_P8 / PF_P4
+ * (FPalettedTextureBuilder: powers of two up to 256, a CLUT of 256 or 16 colours), and a VRAM report of each map's
+ * textures against the GS's texture arena in <Project>/Saved/Cooked/<Platform>-VramReport.txt
+ * (Docs/PLANS/ps2-engine.md E3).
  *
  * The output folder is emptied first, and the output depends only on the content: two cooks give the same bytes.
  * Returns 0 when everything cooked.
@@ -49,11 +71,23 @@ public:
 	static bool CollectDependencies(const TArray<FString>& Seeds, TArray<FString>& OutPackages);
 
 	/**
-	 * Loads a package and saves it cooked for TargetPlatform under CookedDir (step 3 above); false (logged) when it
-	 * cannot be loaded or saved. The loaded package is left for the caller's next garbage collection.
+	 * Loads a package and saves it cooked for TargetPlatform under CookedDir (step 3 above), its textures converted to
+	 * the platform's format (added to OutTextures when given); false (logged) when it cannot be loaded or saved. The
+	 * loaded package is left for the caller's next garbage collection, its textures as they were loaded.
 	 */
-	static bool CookPackage(
-		const FString& PackageName, const ITargetPlatform& TargetPlatform, const FString& CookedDir);
+	static bool CookPackage(const FString& PackageName, const ITargetPlatform& TargetPlatform, const FString& CookedDir,
+		TArray<FCookedTexture>* OutTextures = nullptr);
+
+	/**
+	 * The VRAM report of a paletted cook (Docs/PLANS/ps2-engine.md E3): the textures of the Common packages' closure
+	 * (the config's default assets and the directories always cooked, which any map may draw), then per map the other
+	 * textures of its closure, and each map's total with the common ones against ArenaBlocks (TexturesByPackage: the
+	 * cooked textures by package name). Sorted, so the same cook gives the same text. OutOverBudget gets the maps whose
+	 * textures do not fit; the texture cache then uploads them again as it fills.
+	 */
+	static FString MakeVramReport(const TArray<FString>& Maps, const TArray<FString>& Common,
+		const TMap<FString, TArray<FCookedTexture>>& TexturesByPackage, uint32 ArenaBlocks,
+		TArray<FString>& OutOverBudget);
 
 	/** Copies the config, the shaders and the .lproj into CookedDir (step 4 above); the file count, -1 on failure. */
 	static int32 StageNonPackageFiles(const ITargetPlatform& TargetPlatform, const FString& CookedDir);

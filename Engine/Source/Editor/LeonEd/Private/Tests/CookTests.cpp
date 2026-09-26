@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "Engine/Texture2D.h"
 #include "Engine/World.h"
+#include "HAL/FileManager.h"
 #include "Interfaces/ITargetPlatform.h"
 #include "Interfaces/ITargetPlatformManagerModule.h"
 #include "Materials/Material.h"
@@ -89,7 +90,7 @@ bool FLeonEdCookTargetPlatformsTest::RunTest(const FString& Parameters)
 	TestFalse("No editor-only data (PS2)", PS2->HasEditorOnlyData());
 	TestTrue("Little-endian", Win64->IsLittleEndian() && PS2->IsLittleEndian());
 	TestTrue("Win64 cooks what it runs", Win64->GetCookNote().IsEmpty());
-	TestTrue("PS2 says what is missing", PS2->GetCookNote().Contains(TEXT("PSMT8")));
+	TestTrue("PS2 says what it converts", PS2->GetCookNote().Contains(TEXT("PSMT8")));
 
 	TArray<FString> Seeds;
 	UCookCommandlet::GatherCookSeeds(*Win64, TMap<FString, FString>(), Seeds);
@@ -243,6 +244,68 @@ bool FLeonEdCookedPackagesTest::RunTest(const FString& Parameters)
 	TestFalse("Not the editor's", FPaths::FileExists(DirA + TEXT("Engine/Config/BaseEditor.ini")));
 	TestTrue("The platform's layer", FPaths::FileExists(DirA + TEXT("Engine/Platforms/PS2/Config/PS2Engine.ini")));
 	TestTrue("The shaders", FPaths::FileExists(DirA + TEXT("Engine/Shaders/gs_emulator.frag")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLeonEdCookPalettedTexturesTest, "System.LeonEd.Cook.PalettedTextures",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+
+bool FLeonEdCookPalettedTexturesTest::RunTest(const FString& Parameters)
+{
+	// The PS2 cook saves a texture paletted (4 colours: PSMT4, 8 x 8) and leaves the loaded one as it was; the cooked
+	// package loads as PF_P4, and the VRAM report counts its page and its CLUT block for the map that uses it.
+	LeonEdTest::FScopedTestContent Content;
+	UTexture2D* Rock = ImportTexture(TEXT("T_Rock"));
+	const ITargetPlatform* PS2 = FindPlatform(TEXT("PS2"));
+	const ITargetPlatform* Win64 = FindPlatform(TEXT("Win64"));
+	if (!TestNotNull("T_Rock", Rock) || !TestNotNull("PS2", PS2) || !TestNotNull("Win64", Win64))
+	{
+		return false;
+	}
+	const FString Dir = LeonEdTest::GetTestDir() + TEXT("CookedPaletted/");
+	TArray<FCookedTexture> Textures;
+	TestTrue("Cooked", UCookCommandlet::CookPackage(TEXT("/LeonEdTest/T_Rock"), *PS2, Dir, &Textures));
+	if (!TestEqual("One texture converted", Textures.Num(), 1))
+	{
+		return false;
+	}
+	const FCookedTexture& Cooked = Textures[0];
+	TestEqual("PSMT4", int32(Cooked.Format), int32(PF_P4));
+	TestTrue("8 x 8 from 2 x 2", Cooked.SizeX == 8 && Cooked.SizeY == 8 && Cooked.SourceSizeX == 2);
+	TestEqual("4 colours", Cooked.SourceColors, 4);
+	TestEqual("A page and a CLUT block", Cooked.Blocks, 33u);
+	TestEqual("The loaded texture is untouched", int32(Rock->GetPixelFormat()), int32(PF_R8G8B8A8));
+	TestEqual("its size too", Rock->GetSizeX(), 2);
+	TArray<FCookedTexture> Win64Textures;
+	TestTrue("Cooked for Win64",
+		UCookCommandlet::CookPackage(
+			TEXT("/LeonEdTest/T_Rock"), *Win64, LeonEdTest::GetTestDir() + TEXT("CookedWin64/"), &Win64Textures));
+	TestEqual("Win64 keeps RGBA8", Win64Textures.Num(), 0);
+
+	// The cooked package in the source's place loads paletted.
+	LeonEdTest::DestroyPackagesUnder(LeonEdTest::Root);
+	const FString Source = FAssetImportUtils::GetPackageFilename(TEXT("/LeonEdTest/T_Rock"));
+	TestTrue("Swapped in",
+		IFileManager::Get().Copy(*Source, *UCookCommandlet::GetCookedFilename(TEXT("/LeonEdTest/T_Rock"), Dir)));
+	const UTexture2D* Loaded = LoadObject<UTexture2D>(nullptr, TEXT("/LeonEdTest/T_Rock.T_Rock"));
+	if (TestNotNull("The cooked texture loads", Loaded))
+	{
+		TestEqual("As PF_P4", int32(Loaded->GetPixelFormat()), int32(PF_P4));
+		TestTrue("Valid", Loaded->HasValidPlatformData());
+	}
+
+	TMap<FString, TArray<FCookedTexture>> ByPackage;
+	ByPackage.Add(TEXT("/LeonEdTest/T_Rock"), Textures);
+	TArray<FString> OverBudget;
+	const FString Report = UCookCommandlet::MakeVramReport({TEXT("/LeonEdTest/T_Rock")}, {}, ByPackage, 32, OverBudget);
+	TestTrue("The report lists the texture", Report.Contains(TEXT("/LeonEdTest/T_Rock.T_Rock 2x2 -> 8x8 PSMT4")));
+	TestTrue("33 blocks do not fit in 32", OverBudget.Num() == 1);
+	OverBudget.Reset();
+	const FString CommonReport =
+		UCookCommandlet::MakeVramReport({}, {TEXT("/LeonEdTest/T_Rock")}, ByPackage, 64, OverBudget);
+	TestTrue("A common texture",
+		CommonReport.Contains(TEXT("Common (the config's default assets, the directories "
+								   "always cooked): 1 texture(s), 8 KB")));
 	return true;
 }
 

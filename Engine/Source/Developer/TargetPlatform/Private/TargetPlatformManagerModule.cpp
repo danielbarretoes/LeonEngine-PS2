@@ -48,9 +48,9 @@ namespace
 	};
 
 	/**
-	 * PS2 (Leon; UE's console platforms live in platform extensions): a stub until the PS2 cook
-	 * (Docs/PLANS/ps2-engine.md, E3). It cooks the same formats as Win64, and the cook says so: the PS2 conversions
-	 * (PSMT8 / PSMT4 textures with a CLUT, LPS2 v2 meshes, ADPCM sounds, a pak aligned for cdrom0:) come there.
+	 * PS2 (Leon; UE's console platforms live in platform extensions; Docs/PLANS/ps2-engine.md E3): the textures cook
+	 * to the GS's indexed formats (PSMT8 / PSMT4 with a CLUT, the "Paletted" format), with a VRAM report per map. The
+	 * meshes and the sounds keep the Win64 formats, and the cook says so.
 	 */
 	class FPS2TargetPlatform final : public ITargetPlatform
 	{
@@ -78,7 +78,7 @@ namespace
 		}
 		virtual void GetAllTextureFormats(TArray<FName>& OutFormats) const override
 		{
-			OutFormats.AddUnique(FName(TEXT("BGRA8")));
+			OutFormats.AddUnique(FName(TEXT("Paletted")));
 		}
 		virtual void GetAllWaveFormats(TArray<FName>& OutFormats) const override
 		{
@@ -86,8 +86,8 @@ namespace
 		}
 		virtual FString GetCookNote() const override
 		{
-			return TEXT("PS2 is a stub target: its content keeps the Win64 formats; the PS2 conversion (PSMT8/PSMT4 "
-						"textures, LPS2 v2 meshes, ADPCM audio) is a later milestone");
+			return TEXT("PS2: paletted textures (PSMT8 / PSMT4, at most 256 x 256); the meshes and the sounds keep the "
+						"Win64 formats (PCM sounds until the SPU2 backend)");
 		}
 	};
 
