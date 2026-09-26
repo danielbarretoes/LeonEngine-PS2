@@ -93,6 +93,10 @@ public:
 	UPROPERTY(Config)
 	float SpeedModifier = 1.0f;
 
+	/** How loud a shot is to the bots (AActor::MakeNoise's loudness). */
+	UPROPERTY(Config)
+	float FireNoiseLoudness = 1.0f;
+
 	/** What the weapon costs in the buy menu (P19). */
 	UPROPERTY(Config)
 	int32 Price = 0;

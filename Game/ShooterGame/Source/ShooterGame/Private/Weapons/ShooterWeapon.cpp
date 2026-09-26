@@ -346,6 +346,8 @@ void AShooterWeapon::HandleFiring()
 
 void AShooterWeapon::SimulateWeaponFire()
 {
+	// The bots hear shots (AActor::MakeNoise, UPawnSensingComponent).
+	MakeNoise(FireNoiseLoudness, MyPawn, GetActorLocation());
 	PlayWeaponSound(FireSound);
 	(void)UGameplayStatics::SpawnPointLightAtLocation(this, GetMuzzleLocation(), FLinearColor(1.0f, 0.72f, 0.35f),
 		MuzzleFlashIntensity, MuzzleFlashRadius, MuzzleFlashLifeSpan);

@@ -51,11 +51,13 @@ namespace
 			ABlockingVolume::StaticClass(), FTransform(FQuat::Identity, Center, Scale));
 	}
 
-	/** A character on the floor at Feet facing Yaw, possessed by a bot controller of Team (None: no team). */
+	/** A character on the floor at Feet facing Yaw, possessed by a brainless bot controller of Team (None: no team). */
 	AShooterCharacter* SpawnShooter(UWorld& World, const FVector& Feet, float Yaw, EShooterTeam Team)
 	{
 		AShooterCharacter* Character = World.SpawnActor<AShooterCharacter>(Feet, FRotator(0.0f, Yaw, 0.0f));
 		AShooterAIController* Controller = World.SpawnActor<AShooterAIController>();
+		// The test drives the pawn: the bot's brain stays off.
+		Controller->bCanEverTick = false;
 		if (AShooterPlayerState* State = Controller->GetPlayerState<AShooterPlayerState>())
 		{
 			State->SetTeam(Team);

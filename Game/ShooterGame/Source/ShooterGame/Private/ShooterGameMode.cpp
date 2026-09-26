@@ -637,6 +637,9 @@ void AShooterGameMode::StartRound()
 			Bomb->GiveTo(Carrier);
 		}
 	}
+	// The terrorists' plan: one of the sites, from the round stream.
+	const TArray<FName> Sites = GetBombSiteNames();
+	TerroristTargetSite = Sites.Num() > 0 ? Sites[RoundRandom.RandRange(0, Sites.Num() - 1)] : NAME_None;
 	int32 NumCT = 0;
 	int32 NumT = 0;
 	CountPawns(NumCT, NumT);
@@ -824,6 +827,51 @@ void AShooterGameMode::Tick(float DeltaSeconds)
 }
 
 // The bomb
+
+TArray<FName> AShooterGameMode::GetBombSiteNames() const
+{
+	TArray<FName> Names;
+	const UWorld* World = GetWorld();
+	if (World == nullptr || World->PersistentLevel == nullptr)
+	{
+		return Names;
+	}
+	for (const AActor* Actor : World->PersistentLevel->Actors)
+	{
+		const ATriggerVolume* Zone = Cast<ATriggerVolume>(Actor);
+		if (Zone != nullptr && !Zone->IsPendingKillPending() && Zone->ActorHasTag(BombSiteTag))
+		{
+			const FName Name = GetZoneName(*Zone, BombSiteTag);
+			if (Name != NAME_None)
+			{
+				Names.AddUnique(Name);
+			}
+		}
+	}
+	Names.Sort([](const FName& A, const FName& B) { return A.ToString() < B.ToString(); });
+	return Names;
+}
+
+bool AShooterGameMode::GetBombSiteLocation(FName Site, FVector& OutLocation) const
+{
+	const UWorld* World = GetWorld();
+	if (World == nullptr || World->PersistentLevel == nullptr)
+	{
+		return false;
+	}
+	for (const AActor* Actor : World->PersistentLevel->Actors)
+	{
+		const ATriggerVolume* Zone = Cast<ATriggerVolume>(Actor);
+		if (Zone != nullptr && !Zone->IsPendingKillPending() && Zone->ActorHasTag(BombSiteTag) &&
+			Zone->ActorHasTag(Site))
+		{
+			const FBox Bounds = Zone->GetBrushBounds();
+			OutLocation = FVector(Bounds.GetCenter().X, Bounds.GetCenter().Y, Bounds.Min.Z);
+			return true;
+		}
+	}
+	return false;
+}
 
 void AShooterGameMode::OnBombStateChanged(AShooterBomb* InBomb)
 {
@@ -1026,6 +1074,13 @@ bool AShooterGameMode::ProcessConsoleExec(const TCHAR* Cmd, FOutputDevice& Ar, U
 		FString Name;
 		(void)FParse::Token(Str, Name, false);
 		Ar.Logf(TEXT("%d bot(s) kicked"), KickBots(Name));
+		return true;
+	}
+	if (FParse::Command(&Str, TEXT("bot_stop")))
+	{
+		FString Value;
+		bBotStop = FParse::Token(Str, Value, false) ? FCString::Atoi(*Value) != 0 : !bBotStop;
+		Ar.Logf(TEXT("bot_stop %d"), bBotStop ? 1 : 0);
 		return true;
 	}
 	if (FParse::Command(&Str, TEXT("mp_restartgame")))

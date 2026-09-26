@@ -2,9 +2,10 @@
 
 An offline Counter-Strike-style shooter, modelled on UE's ShooterGame sample: two teams (CT and T), five players a
 side, on `de_leon`, a blockout map built in Blender. P17 boots it: the first-person character with CS movement, team
-spawns, bots that join the teams (they stand still until P20), a crosshair. P18 brings the weapons (a pistol, a rifle,
-an AWP and an HE grenade), damage, armor, death and spectating. P19 brings Counter-Strike's defusal rules: rounds,
-money, the buy menu, the bomb and the HUD. The bots' brains come in P20.
+spawns, bots that join the teams, a crosshair. P18 brings the weapons (a pistol, a rifle, an AWP and an HE grenade),
+damage, armor, death and spectating. P19 brings Counter-Strike's defusal rules: rounds, money, the buy menu, the bomb
+and the HUD. P20 gives the bots their brains: they buy, walk de_leon's waypoint graph, see and hear their enemies,
+fight, plant and defuse ([Bots](#bots)).
 
 ## Build and run
 
@@ -50,7 +51,7 @@ A map URL picks the team and the seed of the rounds (the bomb's carrier): `Shoot
 | Tab (held) | The scoreboard |
 
 Console commands (`-ExecCmds="cmd1;cmd2"`): `bot_add_ct [N]`, `bot_add_t [N]`, `bot_add [N]` (the smaller team),
-`bot_fill` (both teams to five), `bot_kick [name|all]`, `mp_restartgame [seconds]`, `Buy <item>` (usp, ak47, awp,
+`bot_fill` (both teams to five), `bot_kick [name|all]`, `bot_stop [0|1]` (the bots stand still), `mp_restartgame [seconds]`, `Buy <item>` (usp, ak47, awp,
 hegrenade, vest, vesthelm, defuser), the cheats `give <weapon>`, `god` and `kill`, `ViewFrom X Y Z Pitch Yaw` (a fixed
 view, for captures), `ViewPawn` (back to the pawn), `exit`.
 
@@ -62,7 +63,7 @@ view, for captures), `ViewPawn` (back to the pawn), `exit`.
 | `AShooterCharacter` (`ACharacter`) | `AShooterCharacter` | First-person camera at the eyes (`UCameraComponent`, `bUsePawnControlRotation`, 74° vertical FOV), capsule 40 × 91.5 cm, eyes 163 cm (76 crouched, eased with `FInterpTo`), the team body the other players see (`CTBodyMeshName` / `TBodyMeshName`, `bOwnerNoSee`); health, armor and helmet, the damage rules and death ([Weapons](#weapons)); the inventory (one weapon a slot, `DefaultWeapons`) |
 | `UShooterCharacterMovement` (`UCharacterMovementComponent`) | `UShooterCharacterMovement` | CS 1.6 movement in centimetres (below), and the walk key through `GetMaxSpeed` |
 | `AShooterPlayerController` | `AShooterPlayerController` | The player's input, the hit marker's state (`NotifyHitConfirmed`) and the `ViewFrom` / `ViewPawn` commands; spectates when its pawn dies (`NAME_Spectating`) |
-| `AShooterAIController` (`AAIController`) | `AShooterAIController` | The bots' controller; it has a player state (a team); no behaviour yet |
+| `AShooterAIController` (`AAIController`) | `AShooterAIController` | The bots' brain: a behavior tree over a typed blackboard, `UPawnSensingComponent` senses, the waypoint navigation ([Bots](#bots)) |
 | `AShooterGameState` (`AGameState`) | `AShooterGameState` | The round's phase and number, the phase's end, the score, the bomb's state and the kill feed |
 | `AShooterPlayerState` | `AShooterPlayerState` | The team (`EShooterTeam`: None, CT, T), the money, the kills and the deaths |
 | `AShooterBomb` (`AActor`) | CS's C4 | Carried, dropped, planted (beeping), defused or exploded |
@@ -168,6 +169,37 @@ Counter-Strike's defusal rules (`AShooterGameMode`, all in `DefaultGame.ini`'s `
   500 damage falling to nothing at 17.5 m, through walls. A counter-terrorist within 1.2 m defuses it by holding E for
   10 s (5 with a kit); walking off or dying stops the defuse. A dead carrier drops the bomb, and the first live
   terrorist to walk over it takes it.
+
+## Bots
+
+`AShooterAIController` is Counter-Strike's bot on Leon's AIModule: a behavior tree (`UBTComposite_Selector` of
+decorated `UBTTask_Action`s) over a typed blackboard, refreshed each tick from its senses and the game. The branches,
+most urgent first:
+
+| Branch | When | What |
+| --- | --- | --- |
+| Idle | frozen, dead or `bot_stop` | stands; in the freeze it buys once (below) |
+| Engage | an enemy in sight (or seen less than `EnemyMemory` s ago) | stops, turns at `AimTurnRate`, fires once `ReactionTime` has passed since it came into sight; the aim error starts at `AimError` and settles toward `MinAimError`; automatic weapons fire bursts, the AWP zooms first |
+| Defuse | a CT and the bomb planted | walks to the bomb and holds use |
+| Plant | the bomb's carrier | walks to the round's site (`AShooterGameMode::GetTerroristTargetSite`, drawn each round from the seeded stream) and plants inside it |
+| FetchBomb | a T and the bomb dropped | walks over it |
+| Investigate | an enemy's shot heard (`AActor::MakeNoise`) | walks to where it came from |
+| Objective | otherwise | T: to the round's site (guarding the planted bomb); CT: A for the even, B for the odd of the team |
+
+- **Buying** (`BuyForRound`): a rifle with kevlar and helmet when it can afford them (the AWP with `AwpChance`), else
+  armor; a CT with money left buys the kit.
+- **Senses**: `UPawnSensingComponent` (UE's): sight in a cone with a line of sight on the Visibility channel, hearing
+  of the noises `AActor::MakeNoise` reports within a loudness-scaled range (a weapon's shot: `FireNoiseLoudness`).
+- **Navigation**: `AAIController::MoveToLocation` on `UNavigationSystem`'s waypoint graph (A* over de_leon's waypoints,
+  linked at import); a bot jumps when the next path point rises more than 50 cm within 1.5 m, and repaths when it
+  moves less than 30 cm in 1.5 s.
+- **Skill** (`[/Script/ShooterGame.ShooterAIController]`): `Difficulty` scales the reaction and the aim error down and
+  the turn rate up. Every random choice comes from the bot's stream, seeded from the game mode's `RandomSeed` and the
+  bot's name: a match with `?seed=N` replays.
+
+Tests: `ShooterGame.Bots.Buy`, `EngageKillsAnEnemy` (no shot before the reaction time), `CarrierPlants`, `CTDefuses`
+and `MatchOnDeLeon` (ten bots, three rounds, seed 5: every round ends with a reason, the scores add up, the money stays
+within [0, 16000], nobody falls through the floor, kills happen).
 
 ## de_leon
 

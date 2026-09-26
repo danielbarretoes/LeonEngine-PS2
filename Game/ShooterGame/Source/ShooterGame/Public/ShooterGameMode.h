@@ -58,7 +58,8 @@ class ATriggerVolume;
  *
  * Console (the Exec chain reaches the game mode): `bot_add_ct [N]`, `bot_add_t [N]`, `bot_add [N]` (the smaller team),
  * `bot_fill` (both teams to MaxPlayersPerTeam; the G6 smoke: `ShooterGame -nullrhi -ExecCmds=bot_fill`),
- * `bot_kick [name|all]`, `mp_restartgame [seconds]` (a new match after that many seconds, 1 by default).
+ * `bot_kick [name|all]`, `bot_stop [0|1]` (the bots freeze), `mp_restartgame [seconds]` (a new match after that
+ * many seconds, 1 by default).
  */
 UCLASS(Config = Game)
 class SHOOTERGAME_API AShooterGameMode : public AGameMode
@@ -79,6 +80,10 @@ public:
 	/** Teammates hurt each other (CS: mp_friendlyfire). */
 	UPROPERTY(Config)
 	bool bFriendlyFire = false;
+
+	/** The bots stand still and do nothing (CS: bot_stop 1; the `bot_stop [0|1]` command). */
+	UPROPERTY(Config)
+	bool bBotStop = false;
 
 	/** Bots fill both teams as soon as a human player is in (CS: bot_quota with bot_quota_mode fill). */
 	UPROPERTY(Config)
@@ -231,6 +236,19 @@ public:
 	{
 		return Bomb;
 	}
+	/**
+	 * The bomb site the terrorists go for this round ("A" or "B"), drawn from the round stream at the round's start
+	 * (the bots' plan); NAME_None without sites.
+	 */
+	[[nodiscard]] FName GetTerroristTargetSite() const
+	{
+		return TerroristTargetSite;
+	}
+	/** The map's bomb sites' names, sorted ("A", "B"). */
+	[[nodiscard]] TArray<FName> GetBombSiteNames() const;
+	/** The centre of a bomb site's volume on its floor (the volume's bottom), false without it. */
+	bool GetBombSiteLocation(FName Site, FVector& OutLocation) const;
+
 	/** The loss streak of a team (the loss bonus's count). */
 	[[nodiscard]] int32 GetLossStreak(EShooterTeam Team) const;
 	/** The money the next loss would pay Team (with its current streak). */
@@ -292,6 +310,9 @@ private:
 
 	/** Consecutive round losses of each team (EShooterTeam as the index). */
 	int32 LossStreak[3] = {0, 0, 0};
+
+	/** The terrorists' site this round (GetTerroristTargetSite). */
+	FName TerroristTargetSite;
 
 	/** The bomb was planted this round (the losing terrorists' bonus). */
 	bool bBombPlantedThisRound = false;
