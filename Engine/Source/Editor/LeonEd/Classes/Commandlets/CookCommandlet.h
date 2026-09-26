@@ -89,6 +89,16 @@ public:
 		const TMap<FString, TArray<FCookedTexture>>& TexturesByPackage, uint32 ArenaBlocks,
 		TArray<FString>& OutOverBudget);
 
+	/**
+	 * The RAM report of a cook (Docs/PLANS/ps2-preview.md V2): the cooked bytes of the Common packages' closure, then
+	 * per map the other packages of its closure, largest first, and each map's total with the common ones
+	 * (BytesByPackage: the cooked file sizes by package name). The serialized size, which the loader reads: the heap
+	 * the objects take once loaded is GMalloc's, measured on the EE (Budgets.md). Sorted, so the same cook gives the
+	 * same text.
+	 */
+	static FString MakeRamReport(
+		const TArray<FString>& Maps, const TArray<FString>& Common, const TMap<FString, int64>& BytesByPackage);
+
 	/** Copies the config, the shaders and the .lproj into CookedDir (step 4 above); the file count, -1 on failure. */
 	static int32 StageNonPackageFiles(const ITargetPlatform& TargetPlatform, const FString& CookedDir);
 

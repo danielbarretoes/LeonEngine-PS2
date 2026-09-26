@@ -1,6 +1,9 @@
 #include "UObject/UObjectBase.h"
 
 #include "HAL/PlatformProperties.h"
+#include "Misc/CommandLine.h"
+#include "Misc/ConfigCacheIni.h"
+#include "Misc/Parse.h"
 #include "UObject/Class.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectArray.h"
@@ -219,13 +222,32 @@ bool UObjectInitialized()
 	return GObjectSystemInitialized;
 }
 
+int32 GetMaxObjectsInGame()
+{
+	// UE: gc.MaxObjectsInGame of [/Script/Engine.GarbageCollectionSettings]. BaseEngine.ini gives the PS2's capacity
+	// to every platform, so a game that outgrows the console fails the same way on the PC (Docs/PLANS/ps2-preview.md,
+	// V2); the platform's array is the ceiling, and -NoMemoryLimit (or no config: tools, tests) takes it.
+	int32 MaxObjects = FPlatformProperties::MaxObjectsInGame;
+	if (GConfig != nullptr && !FParse::Param(FCommandLine::Get(), TEXT("NoMemoryLimit")))
+	{
+		int32 Configured = 0;
+		if (GConfig->GetInt(TEXT("/Script/Engine.GarbageCollectionSettings"), TEXT("gc.MaxObjectsInGame"), Configured,
+				GEngineIni) &&
+			Configured > 0)
+		{
+			MaxObjects = FMath::Min(Configured, MaxObjects);
+		}
+	}
+	return MaxObjects;
+}
+
 void UObjectBaseInit()
 {
 	if (GObjectSystemInitialized)
 	{
 		return;
 	}
-	GUObjectArray.AllocateObjectPool(FPlatformProperties::MaxObjectsInGame);
+	GUObjectArray.AllocateObjectPool(GetMaxObjectsInGame());
 	GObjectSystemInitialized = true;
 	// The intrinsic classes and the first packages count as reflection data too (the object array does not).
 	const SIZE_T HeapBefore = FMemory::GetUsage().CurrentBytes;

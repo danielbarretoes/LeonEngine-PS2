@@ -112,6 +112,8 @@ int main(int ArgC, char* ArgV[])
 {
 	FPlatformProcess::SetArgV0(ArgV[0]);
 	FCommandLine::Set(*FCommandLine::BuildFromArgV(nullptr, ArgC, ArgV, nullptr));
+	// A tool holds the source assets of whole projects: the game's UObject limit (gc.MaxObjectsInGame) is not its own.
+	FCommandLine::Append(TEXT(" -NoMemoryLimit"));
 	const TCHAR* CmdLine = FCommandLine::Get();
 
 	// The project: -project=<path>.lproj or a first argument ending in .lproj; none runs engine-only.

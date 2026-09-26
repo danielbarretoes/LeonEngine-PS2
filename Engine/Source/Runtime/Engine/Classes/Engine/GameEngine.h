@@ -68,4 +68,9 @@ private:
 	float FrameLogWorst = 0.0f;
 	double FrameLogGameSeconds = 0.0;
 	double FrameLogDrawSeconds = 0.0;
+	/** The renderer's work over the window (FFrameStats), the same on every platform: the PS2's frame cost's inputs. */
+	int64 FrameLogTriangles = 0;
+	int64 FrameLogRegisterWrites = 0;
+	int64 FrameLogTextureUploads = 0;
+	int32 FrameLogPeakTriangles = 0;
 };

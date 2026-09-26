@@ -154,6 +154,12 @@ COREUOBJECT_API void RegisterCompiledInInfo(const TCHAR* PackageName, const FCla
 COREUOBJECT_API void ProcessNewlyLoadedUObjects(
 	const TCHAR* ModuleName = nullptr, bool bCanProcessNewlyLoadedObjects = true);
 
+/**
+ * The UObject array's capacity: gc.MaxObjectsInGame of the Engine config (the PS2's 8192 in BaseEngine.ini) within the
+ * platform's FPlatformProperties::MaxObjectsInGame; the platform's with -NoMemoryLimit or without a config.
+ */
+COREUOBJECT_API int32 GetMaxObjectsInGame();
+
 /** Starts the object system: GUObjectArray, the intrinsic classes and the transient package (UE: UObjectBaseInit). */
 COREUOBJECT_API void UObjectBaseInit();
 

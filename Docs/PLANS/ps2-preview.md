@@ -109,6 +109,21 @@ Estado:
 Gate: el pico de memoria de una partida en el PC coincide con el de la PS2 (Budgets.md); la estimación de coste está
 dentro de un 20 % de lo medido en PCSX2 en de_leon.
 
+**Estado (hecho, con desviación):**
+
+- **Memoria, desviación medida:** la misma partida (botmatch de 2 rondas, semilla 7) pica en 1 100 KB de GMalloc en el
+  EE y en 7 324 KB en el PC (punteros de 64 bits, contenido sin cocinar, módulos de escritorio). Una arena del tamaño
+  de la PS2 en el PC no fallaría donde falla la consola, así que no se implementa. En su lugar:
+  - el PC comparte los límites del propio motor: `gc.MaxObjectsInGame=8192` en BaseEngine.ini (como en UE), el techo
+    de la plataforma y `-NoMemoryLimit` para herramientas (LeonCook lo añade);
+  - el heap de la PS2 se mide en el EE con `leonrun` (Play! headless), sin consola ni BIOS.
+- **Informe de RAM por mapa** en el cook: `<Project>/Saved/Cooked/<Platform>-RamReport.txt` (`MakeRamReport`), bytes
+  cocinados del cierre de cada mapa; de_leon 466 KB con los comunes.
+- **Modelo de coste, primera mitad:** `-LogFrameTimes` añade `Frame work over N frames:` (triángulos, escrituras al
+  GS, subidas de textura). Coincide en el PC y en el EE: 411/451 frente a 421/446 triángulos. La conversión a
+  milisegundos (D6) espera a la calibración en PCSX2: los tiempos de Play! no son los del EE.
+- **Gate:** memoria sustituida por los límites compartidos y la medida en el EE (arriba). Coste: pendiente de PCSX2.
+
 ### V3 · Fidelidad fina (M)
 
 - **Carga**: una capa de `IPlatformFile` que simula el lector de DVD (búsqueda y ancho de banda, calibrados) en el PC.

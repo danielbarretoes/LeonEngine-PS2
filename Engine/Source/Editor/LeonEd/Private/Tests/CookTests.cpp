@@ -308,6 +308,14 @@ bool FLeonEdCookPalettedTexturesTest::RunTest(const FString& Parameters)
 	TestTrue("A common texture",
 		CommonReport.Contains(TEXT("Common (the config's default assets, the directories "
 								   "always cooked): 1 texture(s), 8 KB")));
+
+	// The RAM report: the same closure, in cooked bytes (rounded up to KB).
+	TMap<FString, int64> BytesByPackage;
+	BytesByPackage.Add(TEXT("/LeonEdTest/T_Rock"), 3000);
+	const FString RamReport = UCookCommandlet::MakeRamReport({TEXT("/LeonEdTest/T_Rock")}, {}, BytesByPackage);
+	TestTrue("The RAM report lists the package", RamReport.Contains(TEXT("  /LeonEdTest/T_Rock 3 KB")));
+	TestTrue("The map's total",
+		RamReport.Contains(TEXT("/LeonEdTest/T_Rock: 1 package(s) of its own, 3 KB; with the common ones 3 KB")));
 	return true;
 }
 

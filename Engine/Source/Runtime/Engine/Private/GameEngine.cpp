@@ -264,6 +264,11 @@ void UGameEngine::AccumulateFrameTimes(float DeltaSeconds, double GameSeconds, d
 	FrameLogWorst = FMath::Max(FrameLogWorst, DeltaSeconds);
 	FrameLogGameSeconds += GameSeconds;
 	FrameLogDrawSeconds += DrawSeconds;
+	const FFrameStats& Stats = GetRendererModule().GetFrameStats();
+	FrameLogTriangles += Stats.TrianglesSubmitted;
+	FrameLogRegisterWrites += Stats.RegisterWrites;
+	FrameLogTextureUploads += Stats.TextureUploads;
+	FrameLogPeakTriangles = FMath::Max(FrameLogPeakTriangles, Stats.TrianglesSubmitted);
 	if (FrameLogTime < FrameLogSeconds)
 	{
 		return;
@@ -274,6 +279,16 @@ void UGameEngine::AccumulateFrameTimes(float DeltaSeconds, double GameSeconds, d
 		"draw and present %.1f ms",
 		FrameLogFrames, double(FrameLogTime) * 1000.0 / Frames, Frames / double(FrameLogTime),
 		double(FrameLogWorst) * 1000.0, FrameLogGameSeconds * 1000.0 / Frames, FrameLogDrawSeconds * 1000.0 / Frames);
+	// The GS work a frame records, identical on the PC and the PS2 (the same scene renderer): what the PS2's frame
+	// costs follows from it (Docs/PLANS/ps2-preview.md V2; the milliseconds once calibrated in PCSX2).
+	UE_LOG(LogEngine, Display,
+		"Frame work over %d frames: %.0f triangles average (%d peak), %.0f GS register writes, %.2f texture uploads",
+		FrameLogFrames, double(FrameLogTriangles) / Frames, FrameLogPeakTriangles,
+		double(FrameLogRegisterWrites) / Frames, double(FrameLogTextureUploads) / Frames);
+	FrameLogTriangles = 0;
+	FrameLogRegisterWrites = 0;
+	FrameLogTextureUploads = 0;
+	FrameLogPeakTriangles = 0;
 	FrameLogFrames = 0;
 	FrameLogTime = 0.0f;
 	FrameLogWorst = 0.0f;

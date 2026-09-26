@@ -572,6 +572,69 @@ FString UCookCommandlet::MakeVramReport(const TArray<FString>& Maps, const TArra
 	return Report;
 }
 
+FString UCookCommandlet::MakeRamReport(
+	const TArray<FString>& Maps, const TArray<FString>& Common, const TMap<FString, int64>& BytesByPackage)
+{
+	struct FPackageBytes
+	{
+		FString Name;
+		int64 Bytes;
+	};
+	// The packages of Seeds' closure that are not in Exclude, largest first (then by name), and their bytes.
+	const auto GatherPackages = [&BytesByPackage](const TArray<FString>& Seeds, const TSet<FString>& Exclude,
+									TArray<FPackageBytes>& OutPackages, TSet<FString>& OutNames)
+	{
+		TArray<FString> Closure;
+		if (Seeds.Num() > 0)
+		{
+			(void)CollectDependencies(Seeds, Closure);
+		}
+		int64 Total = 0;
+		for (const FString& Package : Closure)
+		{
+			const int64* Found = BytesByPackage.Find(Package);
+			if (Found != nullptr && !Exclude.Contains(Package) && !OutNames.Contains(Package))
+			{
+				OutNames.Add(Package);
+				OutPackages.Add({Package, *Found});
+				Total += *Found;
+			}
+		}
+		OutPackages.Sort([](const FPackageBytes& A, const FPackageBytes& B)
+			{ return A.Bytes != B.Bytes ? A.Bytes > B.Bytes : A.Name < B.Name; });
+		return Total;
+	};
+	const auto ToKB = [](int64 Bytes)
+	{ return FString::Printf("%lld KB", static_cast<long long>((Bytes + 1023) / 1024)); };
+	const auto ListPackages = [&ToKB](const TArray<FPackageBytes>& Packages, FString& Out)
+	{
+		for (const FPackageBytes& Package : Packages)
+		{
+			Out += FString::Printf("  %s %s\n", *Package.Name, *ToKB(Package.Bytes));
+		}
+	};
+
+	FString Report = TEXT("RAM report: the cooked packages each map loads (their serialized size; the heap they take "
+						  "once loaded is GMalloc's, measured on the EE)\n");
+	TArray<FPackageBytes> CommonPackages;
+	TSet<FString> CommonNames;
+	const int64 CommonBytes = GatherPackages(Common, TSet<FString>(), CommonPackages, CommonNames);
+	Report += FString::Printf("\nCommon (the config's default assets, the directories always cooked): %d package(s), "
+							  "%s\n",
+		CommonPackages.Num(), *ToKB(CommonBytes));
+	ListPackages(CommonPackages, Report);
+	for (const FString& Map : Maps)
+	{
+		TArray<FPackageBytes> Packages;
+		TSet<FString> Names;
+		const int64 Bytes = GatherPackages({Map}, CommonNames, Packages, Names);
+		Report += FString::Printf("\n%s: %d package(s) of its own, %s; with the common ones %s\n", *Map, Packages.Num(),
+			*ToKB(Bytes), *ToKB(Bytes + CommonBytes));
+		ListPackages(Packages, Report);
+	}
+	return Report;
+}
+
 int32 UCookCommandlet::StageNonPackageFiles(const ITargetPlatform& TargetPlatform, const FString& CookedDir)
 {
 	const FString IniPlatform = TargetPlatform.IniPlatformName();
@@ -683,12 +746,20 @@ int32 UCookCommandlet::Main(const FString& Params)
 
 		int32 Cooked = 0;
 		TMap<FString, TArray<FCookedTexture>> TexturesByPackage;
+		TMap<FString, int64> BytesByPackage;
 		for (const FString& PackageName : Packages)
 		{
 			TArray<FCookedTexture> Textures;
 			if (CookPackage(PackageName, *TargetPlatform, CookedDir, &Textures))
 			{
 				++Cooked;
+				FString SourceFile;
+				if (FPackageName::DoesPackageExist(PackageName, nullptr, &SourceFile))
+				{
+					BytesByPackage.Add(PackageName,
+						IFileManager::Get().FileSize(
+							*GetCookedFilename(PackageName, CookedDir, FPaths::GetExtension(SourceFile, true))));
+				}
 				if (Textures.Num() > 0)
 				{
 					TexturesByPackage.Add(PackageName, MoveTemp(Textures));
@@ -705,17 +776,26 @@ int32 UCookCommandlet::Main(const FString& Params)
 		{
 			++Failures;
 		}
+		TArray<FString> Maps;
+		TArray<FString> Common;
+		for (const FString& Seed : Seeds)
+		{
+			FString Filename;
+			const bool bMap = FPackageName::DoesPackageExist(Seed, nullptr, &Filename) &&
+				FPaths::GetExtension(Filename, true) == FPackageName::GetMapPackageExtension();
+			(bMap ? Maps : Common).Add(Seed);
+		}
+		const FString RamReportFile =
+			FPaths::ProjectSavedDir() + TEXT("Cooked/") + TargetPlatform->PlatformName() + TEXT("-RamReport.txt");
+		if (!FFileHelper::SaveStringToFile(MakeRamReport(Maps, Common, BytesByPackage), *RamReportFile))
+		{
+			UE_LOG(LogCook, Error, "Cook: cannot write '%s'", *RamReportFile);
+			++Failures;
+		}
+		UE_LOG(LogCook, Display, "Cook (%s): RAM report of %d map(s) in %s", *TargetPlatform->PlatformName(),
+			Maps.Num(), *RamReportFile);
 		if (WantsPalettedTextures(*TargetPlatform))
 		{
-			TArray<FString> Maps;
-			TArray<FString> Common;
-			for (const FString& Seed : Seeds)
-			{
-				FString Filename;
-				const bool bMap = FPackageName::DoesPackageExist(Seed, nullptr, &Filename) &&
-					FPaths::GetExtension(Filename, true) == FPackageName::GetMapPackageExtension();
-				(bMap ? Maps : Common).Add(Seed);
-			}
 			TArray<FString> OverBudget;
 			const FString Report =
 				MakeVramReport(Maps, Common, TexturesByPackage, FGSDrawEnvironment::TextureArenaBlocks, OverBudget);

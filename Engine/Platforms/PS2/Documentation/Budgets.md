@@ -243,7 +243,36 @@ the PSMZ24 buffer: 1856 KB. ShooterGame, cooked for PS2:
 
 The cooked content is 492 KB (63 files); its pak, aligned to 2048 bytes, 568 KB.
 
+**Cooked RAM per map** (V2; the cook's `<Project>/Saved/Cooked/PS2-RamReport.txt`, serialized sizes): the common
+packages (the default assets, the weapons, the characters, the sounds) 416 KB, 34 packages; `/Engine/Maps/Entry` 3 KB
+of its own; `/Game/Maps/de_leon` 51 KB of its own (16 packages: the map 27 KB, its meshes and materials), 466 KB with
+the common ones. The sounds weigh most (16-bit PCM: `S_Explosion` 70 KB); the SPU2's ADPCM is about 3.5 times smaller
+([PS2SDK.md](PS2SDK.md), finding 8).
 
+
+
+**ShooterGame on the EE** ([ps2-preview](../../../../Docs/PLANS/ps2-preview.md) V2; ShooterGame Development, its PS2
+pak, run headless on Play!'s HLE BIOS with `leonrun`, 2026-09-26: `-nullrhi -benchmark -botmatch -rounds=2 -seed=7`).
+The first numbers measured on the EE rather than on the desktop:
+
+| Item | EE (Play!) | Desktop (Linux, same botmatch, uncooked) | PS2 limit |
+|---|---:|---:|---:|
+| GMalloc peak | 1 100 KB (current 1 045 KB) | 7 324 KB | the heap: 32 MB less the kernel, the ELF (1.8 MB) and the 128 KB stack |
+| UObjects | peak 1 518 | peak 1 279 | 8 192 slots (`gc.MaxObjectsInGame`, the PC's too) |
+| Names | 1 574, 43 KB used | 1 580, 44 KB used | 256 KB of blocks |
+| Reflection construction heap | 174 KB | 200 KB | 400 KB with the code and tables |
+
+The desktop's GMalloc is no measure of the PS2's: 64-bit pointers, the uncooked content and the desktop's modules
+make it about seven times the EE's. So the PC does not emulate the PS2's heap with an arena (V2's first idea): it
+shares the engine's own limits (the UObject array's `gc.MaxObjectsInGame`), and the heap is measured on the EE.
+The results of the two botmatches differ (CT 0 - T 2 on the EE, CT 2 - T 0 on the desktop): the EE's floats round
+differently (V3).
+
+**Frame work** (`-LogFrameTimes`' `Frame work over N frames:` line, V2): the GS work of a frame of de_leon at the
+start of a match, the same on both platforms since it is the same scene renderer: about 410 to 450 triangles (peak
+491), 1 500 to 1 800 GS register writes, no texture uploads once the textures are resident (EE: 421 / 446 triangles,
+1 529 / 1 776 writes; desktop: 411 / 451, 1 494 / 1 818). Play!'s milliseconds are not the EE's (its timing is not
+cycle accurate): the cost of that work is PCSX2's to measure.
 
 **Frame time** ([ps2-engine](../../../../Docs/PLANS/ps2-engine.md) E4, D6: a steady 30 fps, `SyncInterval=2`): to be
 measured in PCSX2 with `-LogFrameTimes` (`Frame times over N frames: ... ms average (... fps), ... ms worst; world ...

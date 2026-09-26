@@ -108,13 +108,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FObjectArrayTest, "System.CoreUObject.Object.Ob
 
 bool FObjectArrayTest::RunTest(const FString& Parameters)
 {
-	TestEqual(TEXT("Capacity is the platform constant"), GUObjectArray.GetObjectArrayCapacity(),
-		FPlatformProperties::MaxObjectsInGame);
+	TestEqual(TEXT("Capacity is gc.MaxObjectsInGame"), GUObjectArray.GetObjectArrayCapacity(), GetMaxObjectsInGame());
+	TestTrue(TEXT("Within the platform's array"), GetMaxObjectsInGame() <= FPlatformProperties::MaxObjectsInGame);
 	TestTrue(TEXT("Capacity is a known platform value"),
 		FPlatformProperties::MaxObjectsInGame == 8192 || FPlatformProperties::MaxObjectsInGame == 131072);
 	TestEqual(TEXT("Slot size"), int32(sizeof(FUObjectItem)), int32(sizeof(void*) == 4 ? 12 : 16));
 	TestTrue(TEXT("Bytes"),
-		GUObjectArray.GetAllocatedSize() == SIZE_T(FPlatformProperties::MaxObjectsInGame) * sizeof(FUObjectItem));
+		GUObjectArray.GetAllocatedSize() == SIZE_T(GUObjectArray.GetObjectArrayCapacity()) * sizeof(FUObjectItem));
 
 	const int32 Before = GUObjectArray.GetObjectArrayNumMinusAvailable();
 	UReflectionTestObject* Object = NewObject<UReflectionTestObject>();

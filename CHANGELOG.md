@@ -11,6 +11,11 @@ The PC plays under the PS2's conditions ([ps2-preview](Docs/PLANS/ps2-preview.md
 
 ### Added
 
+- PS2 budgets on the PC ([ps2-preview](Docs/PLANS/ps2-preview.md) V2): `gc.MaxObjectsInGame=8192` (UE's setting, the
+  PS2's capacity) caps the UObject array on every platform (`-NoMemoryLimit` lifts it; LeonCook does); the cook
+  writes `<Project>/Saved/Cooked/<Platform>-RamReport.txt` (each map's cooked packages); `-LogFrameTimes` adds the
+  frame's GS work (`Frame work over N frames:` triangles, register writes, texture uploads), the same on the PC and
+  the PS2.
 - `leonrun` (`Engine/Platforms/PS2/Build/PlayRunner/`): boots a PS2 ELF headless on Play!'s HLE BIOS, without a
   console BIOS; the first botmatch on the EE outside PCSX2.
 - `[/Script/Engine.RendererSettings]` `DisplayAspectRatio` (4:3, the TV's) and `SyncInterval` (2: 30 fps), the PS2's
