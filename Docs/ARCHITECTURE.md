@@ -500,7 +500,7 @@ GuardedMain: GEngineLoop.PreInit → (exit if requested) → Init → while !IsE
   (`[/Script/Engine.GameViewportClient] DefaultResolutionX/Y`, 1280 × 720) and the RHI on its context (`RHIInit`; none
   with `-nullrhi`, when `FApp::CanEverRender()` is false) → the statically linked modules.
 - `Init` (UE's `FEngineLoop::Init`): reads Leon's capture switches (`-Screenshot=<file.bmp>`, `-ExitAfterFrames=N`,
-  `-tick=<Hz>`; a capture is an unattended run, `FApp::IsUnattended`, so the viewport client ignores the OS input and
+  `-tick=<Hz>`, `-benchmark`: the headless steps do not wait for the clock, `FApp::IsBenchmarking`; a capture is an unattended run, `FApp::IsUnattended`, so the viewport client ignores the OS input and
   the mouse cannot move the view), creates `GEngine` of the class `[/Script/Engine.Engine] GameEngine=` names (`UGameEngine`, in the
   root set), queues `-ExecCmds="Cmd1;Cmd2"` (`;` or `,` separate them) in `GEngine->DeferredCommands`, then calls
   `GEngine->Init(this)` and `GEngine->Start()`. `UGameEngine::Init` starts the renderer on the window, creates the
@@ -911,11 +911,16 @@ UWorld::LineBatcher (FDebugDraw) -----------------------------------------------
   run it.
 - **ShooterGame smoke (gate G6)**: `Engine\Build\BatchFiles\SmokeTest.bat` builds ShooterGame, runs it headless on
   de_leon with `-ExecCmds=bot_fill` and fails unless it exits with 0 and reports ten pawns, five a team.
+- **Bot match (P21)**: `Engine\Build\BatchFiles\BotMatch.bat` plays ten rounds of bots headless and unpaced
+  (`-nullrhi -benchmark -botmatch`), twice with the same seed; ShooterGame's `FShooterMatchChecker` checks the rules'
+  invariants every frame and the game exits 1 when one breaks (`FPlatformMisc::RequestExitWithStatus`, which
+  `FEngineLoop::GetExitCode` returns); the two runs must log the same summary.
 - **CI** (`.github/workflows/ci.yml`): PS2 `ThirdPerson` + `BlankProgram` in the ps2dev image (ELF artifact);
   Win64 `CheckBannedApis.ps1`, `Setup.bat`, `RunTests.bat` (the engine's and ShooterGame's tests), `LeonGame` and
-  `LeonCook`, `SmokeTest.bat` (G6), `CheckReimport.bat` (G5, engine, ThirdPerson and ShooterGame), then the staged
-  build smokes: `BuildCookRun.bat` cooks, stages, paks and runs a content-only project and ShooterGame headless
-  (Development).
+  `LeonCook`, `SmokeTest.bat` (G6), `BotMatch.bat 10 7`, `CheckReimport.bat` (G5, engine, ThirdPerson and
+  ShooterGame), then the staged build smokes: `BuildCookRun.bat` cooks, stages, paks and runs a content-only project
+  and ShooterGame headless (Development); a parallel Win64 job stages ShooterGame in Shipping and plays three rounds
+  of a bot match from its pak.
 
 ---
 

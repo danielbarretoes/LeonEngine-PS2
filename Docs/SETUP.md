@@ -88,7 +88,8 @@ relative to the working directory; one outside the mount points mounts the folde
 mode, which otherwise comes from the level (its world settings), then `GlobalDefaultGameMode` (`AGameModeBase`, whose
 default pawn is `ADefaultPawn`). A map that cannot be opened logs `Failed to enter <map>` and exits with code 1.
 
-`-nullrhi` runs headless (no window, silent audio) at `-tick=` Hz (default 60); `-showstats` shows the HUD stats;
+`-nullrhi` runs headless (no window, silent audio) at `-tick=` Hz (default 60), paced to the clock unless `-benchmark`
+(the steps then run as fast as they can); `-showstats` shows the HUD stats;
 `-AxesGizmo` starts with the axes gizmo on; `-ExecCmds=` runs console commands (separated by `;` or `,`) on the first
 frame, for example `-ExecCmds="stat unit;FOV 75"`; `-Screenshot=` saves frame `-ExitAfterFrames=` (default 60) as a
 24-bit BMP and exits, and `-ExitAfterFrames=N` alone exits after frame N (headless too). In PowerShell quote an

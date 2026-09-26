@@ -5,7 +5,7 @@ side, on `de_leon`, a blockout map built in Blender. P17 boots it: the first-per
 spawns, bots that join the teams, a crosshair. P18 brings the weapons (a pistol, a rifle, an AWP and an HE grenade),
 damage, armor, death and spectating. P19 brings Counter-Strike's defusal rules: rounds, money, the buy menu, the bomb
 and the HUD. P20 gives the bots their brains: they buy, walk de_leon's waypoint graph, see and hear their enemies,
-fight, plant and defuse ([Bots](#bots)).
+fight, plant and defuse ([Bots](#bots)). P21 plays whole bot matches headless in CI ([Bot match](#bot-match)).
 
 ## Build and run
 
@@ -20,6 +20,9 @@ Game\ShooterGame\Binaries\Win64\ShooterGame.exe
 
 :: The smoke test (gate G6): headless, ten pawns, exit code 0
 Engine\Build\BatchFiles\SmokeTest.bat
+
+:: A bot match (P21): ten bots, 10 rounds, seed 7, headless and unpaced, the invariants checked, played twice
+Engine\Build\BatchFiles\BotMatch.bat 10 7
 
 :: The project's tests (ShooterGameTests.exe; RunTests.bat runs them after the engine's)
 Engine\Build\BatchFiles\Build.bat ShooterGameTests Win64 Development -Project=%CD%\Game\ShooterGame\ShooterGame.lproj
@@ -197,9 +200,30 @@ most urgent first:
   the turn rate up. Every random choice comes from the bot's stream, seeded from the game mode's `RandomSeed` and the
   bot's name: a match with `?seed=N` replays.
 
-Tests: `ShooterGame.Bots.Buy`, `EngageKillsAnEnemy` (no shot before the reaction time), `CarrierPlants`, `CTDefuses`
-and `MatchOnDeLeon` (ten bots, three rounds, seed 5: every round ends with a reason, the scores add up, the money stays
-within [0, 16000], nobody falls through the floor, kills happen).
+Tests: `ShooterGame.Bots.Buy`, `EngageKillsAnEnemy` (no shot before the reaction time), `CarrierPlants`, `CTDefuses`,
+`MatchCheckerFlagsViolations` and `MatchOnDeLeon` (ten bots, three rounds, seed 5, under `FShooterMatchChecker`; kills
+happen).
+
+## Bot match
+
+`ShooterGame -nullrhi -benchmark -botmatch [-rounds=N] [-seed=N]` plays a match of bots and exits (P21):
+
+- `-botmatch`: the local player spectates (no team), the bots fill both teams, and after `-rounds=` rounds (10; at
+  most `MaxRounds`, and the match's end stops it sooner) the game exits. `-seed=` sets `RandomSeed` (as `?seed=`).
+- Every frame `FShooterMatchChecker` checks the invariants: each round that ends has a reason and gives its winner one
+  point (the scores add up to the rounds with a winner), the money stays within [0, `MaxMoney`], no team has more
+  than `MaxPlayersPerTeam`, a live pawn's health is within (0, its max] and its feet are not below the waypoints'
+  lowest floor. A broken one is logged as an error; the rounds not ending within their longest time (the freeze, the
+  round, the bomb's timer and the result, each) fail the match too.
+- The end: `Botmatch OK: <rounds> round(s), CT <n> - T <n>, <kills> kill(s), seed <n>, reasons [...]` and exit code 0,
+  or `Botmatch FAILED` and exit code 1 (`FPlatformMisc::RequestExitWithStatus`); then `Botmatch budget:` with the
+  reflected types, the UObjects' peak, the names and the heap (the PS2 port's targets:
+  [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md)).
+- `-benchmark` (the engine's): the fixed 60 Hz steps run without waiting for the clock; ten rounds take a second or
+  two. The bots' choices, the weapons' spread and the rounds come from seeded streams and the steps are fixed, so a
+  seed replays the same match: `BotMatch.bat` plays it twice and fails when the summaries differ. CI runs
+  `BotMatch.bat 10 7`, and a staged Shipping build plays three rounds (Shipping logs nothing, so only the exit code
+  tells).
 
 ## de_leon
 

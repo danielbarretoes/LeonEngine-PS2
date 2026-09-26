@@ -7,15 +7,16 @@ What runs automatically and what a person still has to check by hand. Build and 
 
 | Check | Command | Passes when |
 | --- | --- | --- |
-| Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` twice: the engine's (`LeonAutomationTests`, 386) and ShooterGame's (`ShooterGameTests`, 33) |
+| Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` twice: the engine's (`LeonAutomationTests`, 386) and ShooterGame's (`ShooterGameTests`, 34) |
 | LeonHeaderTool golden tests (run by `RunTests.bat` too) | `Engine\Intermediate\Build\HostTools\Win64\LeonHeaderTool.exe -Test` | `LeonHeaderTool -Test: N of N golden cases passed` |
 | Core, CoreUObject, Json, Projects and PakFile on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (113 test(s), 0 failed)` in the EE log (119 on Win64) |
 | Format, banned APIs (G4), Win64 build | `Engine\Build\BatchFiles\Lint.bat` | `Lint OK` |
 | Reproducible reimport (G5; CI, on a clean checkout) | `Engine\Build\BatchFiles\CheckReimport.bat [<Project>.lproj ...]` | `CheckReimport OK`: `LeonCook -run=ImportAssets -reimport -all` leaves `Engine/Content` and `Game/*/Content` unchanged, the imported maps included (`git diff --exit-code`, no new file) |
 | ShooterGame smoke (G6; CI) | `Engine\Build\BatchFiles\SmokeTest.bat` | `SmokeTest OK: 10 pawns, CT 5, T 5, exit code 0`: ShooterGame boots de_leon headless, `bot_fill` adds nine bots to the local player, and the game mode's end-of-match line counts ten pawns in their teams |
+| ShooterGame bot match (P21; CI) | `Engine\Build\BatchFiles\BotMatch.bat [Rounds] [Seed]` (10, 7) | `BotMatch OK: 10 round(s), seed 7, exit code 0, replayed identically`: ten bots play de_leon headless and unpaced (`ShooterGame -nullrhi -benchmark -botmatch -rounds=10 -seed=7`), `FShooterMatchChecker` finds no broken invariant, and a second run logs the same `Botmatch OK` line ([ShooterGame README — Bot match](../Game/ShooterGame/README.md#bot-match)) |
 | Content loads | `Engine\Binaries\Win64\LeonCook.exe -run=ValidateAssets` | `ValidateAssets: N packages, N valid, 0 problem(s)` |
 | Frame capture | `LeonGame.exe [<map>] "-Screenshot=<file.bmp>" "-ExitAfterFrames=N"` | the BMP matches a reference capture byte for byte; a capture is unattended (`FApp::IsUnattended`) and ignores the mouse and the keyboard, so moving the mouse during it changes nothing |
-| Staged build (Win64) | `BuildCookRun.bat -project=<.lproj> -platform=Win64 -build -cook -stage -pak -run "-addcmdline=-Screenshot=<file.bmp> -ExitAfterFrames=30"` | the staged Shipping game's capture matches the Development build's byte for byte; two `-cook -stage -pak` runs give the same `.lpak` (SHA-256); CI runs it in Development, headless (`-nullrhi -ExitAfterFrames=60`, exit code 0), for a content-only project and for ShooterGame (`-ExecCmds=bot_fill`) |
+| Staged build (Win64) | `BuildCookRun.bat -project=<.lproj> -platform=Win64 -build -cook -stage -pak -run "-addcmdline=-Screenshot=<file.bmp> -ExitAfterFrames=30"` | the staged Shipping game's capture matches the Development build's byte for byte; two `-cook -stage -pak` runs give the same `.lpak` (SHA-256); CI runs it in Development, headless (`-nullrhi -ExitAfterFrames=60`, exit code 0), for a content-only project and for ShooterGame (`-ExecCmds=bot_fill`), and in Shipping for ShooterGame playing three rounds of a bot match (`-nullrhi -benchmark -botmatch -rounds=3 -seed=7`, exit code 0) |
 | Pak tool | `LeonPak <in.lpak> -test` / `-list` | `N file(s) checked, every SHA-1 matches` |
 | Console commands | `LeonGame.exe "-ExecCmds=obj gc;stat fps,stat fps" "-Screenshot=<file.bmp>" "-ExitAfterFrames=30"` | a `Cmd:` line per command, the capture unchanged |
 
@@ -133,10 +134,13 @@ Since P20 the bots are tested. The waypoint navigation (`System.AIModule.Gamepla
 around walls, and links steps, jumps and drops (`AutoLinkWaypoints`); `System.LeonEd.MapFactory.AutoLinksWaypoints`
 imports a map with the auto-linking; `System.AIModule.Blackboard.TypedKeys` and `System.AIModule.PawnSensing.*` (sight
 in a cone behind a line of sight, hearing within the loudness' range) test the AI's pieces. ShooterGame's
-`ShooterGame.Bots.*` (5, `ShooterBotTests.cpp`) test the bots on a small open map (buying, engaging with the reaction
+`ShooterGame.Bots.*` (6, `ShooterBotTests.cpp`) test the bots on a small open map (buying, engaging with the reaction
 time respected, the carrier planting, a CT defusing) and play three rounds of de_leon headless with ten bots and
-`?seed=5`: each round ends with a reason, the scores add up, the money stays within [0, 16000], no pawn falls through
-the floor and kills happen. The round and weapon tests keep the bots still (`bot_stop`, or a controller that does not
+`?seed=5` under `FShooterMatchChecker` (each round ends with a reason, the scores add up, the money stays within
+[0, 16000], no pawn falls through the floor) and kills happen; `MatchCheckerFlagsViolations` shows the checker catches
+a score the rules did not give. The bot match (P21, `BotMatch.bat`) runs the same checker over ten rounds and plays
+them twice: a seed must replay the same match, which caught a read of a freed path in `AAIController`'s repath
+(the bots then diverged between runs; valgrind reports no error since the fix). The round and weapon tests keep the bots still (`bot_stop`, or a controller that does not
 tick) so they test the rules alone.
 
 The golden tests (`System.Engine.Golden.*`, `System.JoltPhysics.Golden.*`) replay movement, traces, cameras, shadows

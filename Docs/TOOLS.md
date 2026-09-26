@@ -113,8 +113,8 @@ Engine\Binaries\Win64\LeonCook.exe -run=ValidateAssets
 The import identity: the `Cube.obj` fixture imported into a scratch project in the ignored `Engine/Saved`
 (`LeonCook Engine/Saved/CookIdentity/CookIdentity.lproj -run=ImportAssets
 -source=Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/Cube.obj -dest=/Game/Identity`, any minimal
-`.lproj`) saves `SM_Cube.lasset` with SHA-256 `D74B95FEBE0C84509B2DA318660E0726A8762FF35C43C12233D09E88EC258115`
-(engine version 0.17.0; `2EAE6C7DE3B209D7E77A0257D2E94D996A4013BF8C25F681A1AF1A7976AA149C` with 0.16.0: the summary
+`.lproj`) saves `SM_Cube.lasset` with SHA-256 `441931A1181977A8EF810C7FEF26D1EA2DA42D3E04AD1AE33AD6B0C31EBFD373`
+(engine version 0.20.0; `D74B95FEBE0C84509B2DA318660E0726A8762FF35C43C12233D09E88EC258115` with 0.17.0: the summary
 records the engine version), run after run.
 
 ### The cook
@@ -247,8 +247,9 @@ All scripts forward to LeonBuildTool (`cmake -P Engine/Source/Programs/LeonBuild
 | `Engine\Build\BatchFiles\Cook.bat` | `<LeonCook arguments>` | Builds LeonCook (Win64 Development) and runs it |
 | `Engine\Build\BatchFiles\CheckReimport.bat` | `[<Project>.lproj ...]` | Gate G5: reimports the engine content (and the projects') and fails when git sees a change under a `Content` folder |
 | `Engine\Build\BatchFiles\BuildCookRun.bat` | `-project=<.lproj> -platform=Win64 [-configuration=...] [-build] [-cook] [-stage] [-pak] [-run] [-addcmdline="..."]` | Builds, cooks, stages and paks a project into `<Project>\Saved\StagedBuilds\Win64\`, and runs it ([above](#buildcookrun)) |
-| `Engine\Build\BatchFiles\RunTests.bat` | `[-automation=<filter>]` | Builds LeonAutomationTests (Win64 Development) and runs it from the repo root: every automation test (386), or those whose name contains `<filter>`; then the LeonHeaderTool golden tests, then ShooterGame's test program (`ShooterGameTests`, 33 tests, the same filter); fails if any fails |
+| `Engine\Build\BatchFiles\RunTests.bat` | `[-automation=<filter>]` | Builds LeonAutomationTests (Win64 Development) and runs it from the repo root: every automation test (386), or those whose name contains `<filter>`; then the LeonHeaderTool golden tests, then ShooterGame's test program (`ShooterGameTests`, 34 tests, the same filter); fails if any fails |
 | `Engine\Build\BatchFiles\SmokeTest.bat` | | Gate G6: builds ShooterGame, runs it headless on de_leon with `-ExecCmds=bot_fill -ExitAfterFrames=120` and fails unless it exits with 0 and logs ten pawns, five a team (`SmokeTest OK: 10 pawns, CT 5, T 5, exit code 0`) |
+| `Engine\Build\BatchFiles\BotMatch.bat` | `[Rounds] [Seed]` | Builds ShooterGame, plays a headless bot match twice (`-nullrhi -benchmark -botmatch -rounds=<Rounds> -seed=<Seed>`, 10 and 7) and fails unless both exit with 0 and log the same `Botmatch OK` line (P21) |
 | `Engine\Build\BatchFiles\FormatCode.bat` | `[--check]` | clang-format on every `.cpp` / `.h` / `.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game` (skips `ThirdParty`, `Intermediate`, `Binaries`); `--check` is a dry run that fails on unformatted files |
 | `Engine\Build\BatchFiles\Lint.bat` | | `FormatCode.bat --check`, then `CheckBannedApis.ps1`, then builds LeonAutomationTests, LeonCook, LeonPak, LeonGame and BlankProgram, and ShooterGame and ShooterGameTests, for Win64 Development |
 | `Engine\Build\BatchFiles\CheckBannedApis.ps1` | | Gate G4: fails when engine or game code (`Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game`; comments ignored) uses glm, nlohmann, `std::vector` / `string` / `map` / `unordered_map` / `function` / `shared_ptr` / `unique_ptr`, iostream, the `printf` family, `LegacyGL` / `FLegacyTransform` / `LegacyAxes`, or `FLegacyCoordinateConversion` outside the tests (`Public/Tests`, `Private/Tests`); the allowed places are listed in [CODING_STANDARD.md §4](CODING_STANDARD.md#4-language). Violations print `<file>:<line>: G4 <rule>: <code> -> <replacement>`; `-Root <dir>` scans another tree. CI runs it with `pwsh` |

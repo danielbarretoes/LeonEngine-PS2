@@ -11,7 +11,7 @@ makes).
 
 | Area | Types | Headers |
 | --- | --- | --- |
-| Factories | `UFactory` (`SupportedClass`, `Formats`, `FactoryCreateNew` / `FactoryCreateBinary` / `FactoryCreateFile`, `StaticImportObject`, `ApplyImportSettings`, `CreateOrOverwriteAsset`), `UTextureFactory` (stb_image: the engine's only image decoder), `UFbxFactory` (FBX, OBJ: static / skeletal meshes, animations), `UGLTFImportFactory`, `UGLTFMapFactory` (glTF scenes as `.lmap` maps, with its rules in `UMapImportSettings`), `USoundFactory`, `UMaterialFactoryNew` | `Classes/Factories/` |
+| Factories | `UFactory` (`SupportedClass`, `Formats`, `FactoryCreateNew` / `FactoryCreateBinary` / `FactoryCreateFile`, `StaticImportObject`, `ApplyImportSettings`, `CreateOrOverwriteAsset`), `UTextureFactory` (stb_image: the engine's only image decoder), `UFbxFactory` (FBX, OBJ: static / skeletal meshes, animations), `UGLTFImportFactory`, `UGLTFMapFactory` (glTF scenes as `.lmap` maps, with its rules and the waypoint auto-linking, `bAutoLinkWaypoints`, in `UMapImportSettings`), `USoundFactory`, `UMaterialFactoryNew` | `Classes/Factories/` |
 | Reimport | `FReimportHandler` (the import factories implement it), `FReimportManager`, `EReimportResult` | `Public/EditorReimportHandler.h` |
 | Commandlets | `UImportAssetsCommandlet`, `UResavePackagesCommandlet`, `UValidateAssetsCommandlet`, `UCookCommandlet` (cook by the book for a target platform since P16: seeds from the maps and the config, the dependency closure, cooked packages without editor-only data, the config and shaders staged; [TOOLS.md](../../../../Docs/TOOLS.md#the-cook)) | `Classes/Commandlets/` |
 | Helpers | `FAssetImportUtils` (UE prefixes, package files and saves, content scans), `CommandletHelpers` (the `-run=` lookup) | `Public/` |

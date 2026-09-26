@@ -366,10 +366,23 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
   bomb, investigating shots, holding the sites; `Difficulty`; seeded, so a match with `?seed=N` replays.
 - 386 engine tests and 33 ShooterGame tests.
 
+### Done — Bot matches, budgets and release 0.20.0 (P21)
+
+([LeonMapping — P21](LeonMapping.md#p21--bot-matches-budgets-and-release-0200), [ShooterGame README — Bot match](../../Game/ShooterGame/README.md#bot-match)):
+
+- `ShooterGame -nullrhi -benchmark -botmatch -rounds=N -seed=N`: a headless bot match at unpaced fixed steps, the
+  rules' invariants checked every frame (`FShooterMatchChecker`), exit code 1 when one breaks. CI plays ten rounds
+  twice and requires the same result (a seed replays the match), and a staged Shipping build plays three.
+- **Fix**: `AAIController` read a freed path after a stuck repath; it made seeded matches diverge.
+- ShooterGame's numbers as the PS2 port's targets in Budgets.md (reflection, UObjects, names, heap).
+- 386 engine tests and 34 ShooterGame tests; release 0.20.0 (the content resaved with the new version).
+
 ### Next
 
-- **P21 (hardening):** a headless bot match in CI (`-botmatch -rounds=N -seed=N`, a fixed step, invariants), the
-  budgets, a docs sweep and release 0.20.0.
+- Measure the PS2 ELFs and TestPAL in PCSX2 again (not measured since P16) and record them in Budgets.md.
+- The bots' balance: in eight full matches on de_leon (seeds 1 to 8) the counter-terrorists won seven, and no round
+  ended with the bomb exploding (the terrorists die or the bomb is defused first). Terrorists that wait for each other
+  before a site, grenades, and rotations between the sites are the next steps.
 - Later: move the character movement code from `ACharacter` into `UCharacterMovementComponent` (UE's
   `PerformMovement`, `MovementMode`, `Velocity`, `CurrentFloor`); a cached `ComponentToWorld`; tick functions.
 - Cook follow-ups: `-iterate` (cook only what changed), an asset registry, compressed paks, the PS2 target's formats

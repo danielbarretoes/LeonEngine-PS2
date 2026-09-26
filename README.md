@@ -12,8 +12,8 @@ conventions, built with CMake through **LeonBuildTool** (our UnrealBuildTool).
   debug overlay, and `PS2RHI` for the Graphics Synthesizer. PS2 builds run in a pinned ps2dev Docker image.
 - **Two games**, isolated from the engine and built with `-Project=`: `Game/ThirdPerson`, a PS2 third-person starter
   (orbit camera, character move / jump, primitive level), and `Game/ShooterGame`, a Win64 Counter-Strike-style shooter
-  (first-person CS movement, two teams of five with bots, the `de_leon` blockout built in Blender;
-  [README](Game/ShooterGame/README.md)).
+  (first-person CS movement, CS's weapons, rounds, money and the bomb, two teams of five with bots that fight, plant
+  and defuse on a waypoint graph, the `de_leon` blockout built in Blender; [README](Game/ShooterGame/README.md)).
 
 ## Quick start (Windows)
 
@@ -35,12 +35,14 @@ Engine\Build\BatchFiles\Build.bat LeonCook Win64 Development
 Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.lproj
 ```
 
-ShooterGame (Win64): build it, play `de_leon` with both teams filled by bots, and run its smoke test (gate G6):
+ShooterGame (Win64): build it, play `de_leon` with both teams filled by bots, and run its smoke test (gate G6) and a
+headless bot match (ten rounds, seed 7, the rules' invariants checked):
 
 ```bat
 Engine\Build\BatchFiles\Build.bat ShooterGame Win64 Development -Project=%CD%\Game\ShooterGame\ShooterGame.lproj
 Game\ShooterGame\Binaries\Win64\ShooterGame.exe -ExecCmds=bot_fill
 Engine\Build\BatchFiles\SmokeTest.bat
+Engine\Build\BatchFiles\BotMatch.bat 10 7
 ```
 
 Run the PS2 game in PCSX2 (add `-Build` to build first):
@@ -93,7 +95,7 @@ and run in `LeonAutomationTests`.
 | [Engine/Platforms/PS2/README.md](Engine/Platforms/PS2/README.md) | PS2 platform extension, frame order, debug overlay |
 | [Docs/ASSET_FORMATS.md](Docs/ASSET_FORMATS.md), [Docs/LEVELS.md](Docs/LEVELS.md), [Docs/TOOLS.md](Docs/TOOLS.md) | Asset formats, maps (`.lmap`, the glTF map import), cook tools |
 | [Docs/TESTING.md](Docs/TESTING.md) | Automated gates, frame captures, the axes gizmo and the manual checklist |
-| [Game/ShooterGame/README.md](Game/ShooterGame/README.md) | ShooterGame: build, run, controls, classes, CS movement values, de_leon |
+| [Game/ShooterGame/README.md](Game/ShooterGame/README.md) | ShooterGame: build, run, controls, classes, CS movement values, weapons, rounds, bots, the bot match, de_leon |
 | [Docs/PS2OFFICIAL/](Docs/PS2OFFICIAL/README.md) | PS2 hardware manuals |
 
 ## Changelog

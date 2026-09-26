@@ -182,6 +182,9 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
   classes not designed for derivation, `static_assert` for compile-time checks, `enum class` for new enums.
 - `auto` only where Epic allows it: lambdas, verbose iterator / `std::chrono` types, template code.
 - Const-correctness: const methods, const references for input parameters, `const` locals that do not change.
+- A reference or pointer into a container (`const FVector& Point = Path[Index]`) does not outlive a call that may
+  add to, remove from or replace the container; copy the element first. (P21: `AAIController` kept a path point
+  across the repath that replaced the path, and seeded bot matches stopped replaying.)
 - Default member initializers are fine (`int32 ExitCode = 0;`).
 - Interfaces (`I*`) have no data members.
 - **Containers and strings.** New code that depends on Core (including PS2 code) uses the UE types from

@@ -632,6 +632,19 @@ navmesh, which Leon does not have), and ShooterGame's bots get their brains. Det
 | — | `AShooterGameMode::GetTerroristTargetSite`, `bot_stop`; `AShooterWeapon::FireNoiseLoudness` | same |
 | `System.AIModule.Golden.AIControllerArrives`, `System.Engine.Golden.NavigationFindPath` (the grid's tables) | removed; `System.AIModule.Gameplay.NavigationAutoLinkStepsJumpsAndDrops`, `System.AIModule.Blackboard.TypedKeys`, `System.AIModule.PawnSensing.*`, `System.LeonEd.MapFactory.AutoLinksWaypoints` (386 tests), `ShooterGame.Bots.*` (33) | `*/Private/Tests/` |
 
+### P21 — Bot matches, budgets and release 0.20.0
+
+Hardening: whole matches of bots in CI. Details:
+[ShooterGame README — Bot match](../../Game/ShooterGame/README.md#bot-match).
+
+| Leon (before) | UE name (now) | Where |
+| --- | --- | --- |
+| headless steps always paced to the clock | `FApp::IsBenchmarking` (UE's `-benchmark`): unpaced fixed steps | `Core/Public/Misc/App.h`, `Launch/Private/LaunchEngineLoop.cpp` |
+| `FPlatformMisc::RequestExitWithStatus`: the code only when forced | + a non-forced exit records its code (`GetRequestedEngineExitCode`), which `FEngineLoop::GetExitCode` returns | `Core/Public/CoreGlobals.h`, `Launch/Public/LaunchEngineLoop.h` |
+| — | `AShooterGameMode`'s `-botmatch` / `-rounds=` / `-seed=`, `FShooterMatchChecker` (Leon's; UE ShooterGame has no bot match) | `Game/ShooterGame/Source/ShooterGame/` |
+| — | `BotMatch.bat`; CI's bot match and staged Shipping bot match | `Engine/Build/BatchFiles/`, `.github/workflows/ci.yml` |
+| — | `ShooterGame.Bots.MatchCheckerFlagsViolations` (34 ShooterGame tests) | `*/Private/Tests/` |
+
 ## Coordinates
 
 | Topic | UE 4.27 | LeonEngine |
@@ -657,6 +670,8 @@ the converters' allowed places: [ARCHITECTURE.md — Coordinates](../ARCHITECTUR
 | Reflection | `UCLASS`, `UObject`, UHT | LeonHeaderTool generates UE 4.27-shaped `.generated.h` / `.gen.cpp` (no metadata, no hot-reload CRCs, explicit `RegisterReflection_<Module>` instead of static `FCompiledInDefer` objects) and CoreUObject runs it (P9); the gameplay framework, the widgets and the anim instances are reflected since P12, the level content actors, the engine, the viewport client, the players and the settings since P13, the assets since P14; `UNavigationSystem` and the behavior tree lite are still plain C++ with U names | [LeonHeaderTool/README.md](../../Engine/Source/Programs/LeonHeaderTool/README.md), [CoreUObject/README.md](../../Engine/Source/Runtime/CoreUObject/README.md) |
 | World contexts | `UEngine::WorldList` holds the `FWorldContext`s | each `UGameInstance` owns its `FWorldContext` (P12); `UEngine::GetWorldContexts` collects them | one game instance per engine; no editor or PIE contexts |
 | World package | `LoadMap` loads the world from its `.umap` package | the same since P15: `LoadPackage` of the `.lmap`, `UWorld::FindWorldInPackage`, `InitWorld`, then `InitializeActorsForPlay` registers and initializes the actors; a map file outside the mount points mounts the folder above its `Maps/` folder; `BeginPlay` comes after the login, as in UE | scratch content opens from the command line |
+| Navigation | a Recast navmesh (`UNavigationSystemV1`, `ARecastNavMesh`) built from the level's geometry | a graph of `ANavigationWaypoint` actors (UE3's path nodes), linked by the map import (`bAutoLinkWaypoints`, P20) | a Counter-Strike map needs a few dozen nodes; no navmesh build or Recast dependency, and a graph fits the PS2 budget |
+| Process exit code | `GuardedMain` returns its own error level | `FEngineLoop::GetExitCode`: the loop's failure, else the code a non-forced `FPlatformMisc::RequestExitWithStatus` recorded (P21) | a game (the bot match) fails its process after a clean shutdown |
 | Startup map failure | `StartGameInstance` falls back to the default map (or asks) | the error is logged and the game exits with code 1 | a script with a wrong map must stop |
 | Map on the command line | the first token | the first token (a leading `.lproj` is skipped), or `-map=<map>` | the scripts and CI already use `-map=` |
 | `FURL` | parses protocol, host, port, map, options, portal; the default constructor fills the default map | map, options and portal only; `FURL()` leaves the map empty (the parsing constructor fills `GameDefaultMap`); the map keeps a file path (a `.lmap`) as given | no networking; keeps struct defaults free of config reads |
