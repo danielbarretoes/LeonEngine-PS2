@@ -35,7 +35,7 @@ end_of_line = crlf
 end_of_line = lf
 
 # Third-party code keeps its upstream style.
-[Engine/Source/ThirdParty/**]
+[{Engine/Source/ThirdParty/**,Engine/Plugins/**/ThirdParty/**}]
 indent_style = unset
 indent_size = unset
 trim_trailing_whitespace = unset

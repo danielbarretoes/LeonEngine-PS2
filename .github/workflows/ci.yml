@@ -1,8 +1,8 @@
 name: ci
 
 on:
+  # Every push (the gates run on each commit, the plan's G1 and G2), and pull requests.
   push:
-    branches: [main, master]
   pull_request:
 
 jobs:
@@ -19,14 +19,30 @@ jobs:
             "-Project=$PWD/Game/ThirdPerson/ThirdPerson.lproj"
       - name: Build BlankProgram (PS2)
         run: sh Engine/Build/BatchFiles/Linux/Build.sh BlankProgram PS2 Development
-      - name: Upload ELF
+      # TestPAL (Core, CoreUObject, Json, Projects and PakFile tests) for the EE; it runs in PCSX2
+      # (RunPCSX2.ps1 -Program TestPAL), which CI does not have.
+      - name: Build TestPAL (PS2)
+        run: sh Engine/Build/BatchFiles/Linux/Build.sh TestPAL PS2 Development
+      # G3: the ELF sections of every PS2 program, in the log and the run's summary (Budgets.md records them).
+      - name: ELF sizes (G3)
+        run: |
+          export PATH="${PS2DEV:-/usr/local/ps2dev}/ee/bin:$PATH"
+          {
+            echo '### PS2 ELF sizes (bytes)'
+            echo '```'
+            mips64r5900el-ps2-elf-size Game/ThirdPerson/Binaries/PS2/ThirdPerson.elf \
+              Engine/Binaries/PS2/BlankProgram.elf Engine/Binaries/PS2/TestPAL.elf
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Upload ELFs
         uses: actions/upload-artifact@v4
         with:
-          name: ThirdPerson-PS2-elf
-          path: Game/ThirdPerson/Binaries/PS2/ThirdPerson.elf
+          name: PS2-elfs
+          path: |
+            Game/ThirdPerson/Binaries/PS2/ThirdPerson.elf
+            Engine/Binaries/PS2/BlankProgram.elf
+            Engine/Binaries/PS2/TestPAL.elf
 
-  # Formatting is checked locally with Engine\Build\BatchFiles\Lint.bat (clang-format output is
-  # version-specific; the runner's LLVM may differ from Visual Studio's).
   win64:
     runs-on: windows-latest
     steps:
@@ -34,6 +50,13 @@ jobs:
       - name: Banned APIs (G4)
         shell: pwsh
         run: ./Engine/Build/BatchFiles/CheckBannedApis.ps1
+      # G1's format check with the pinned clang-format (the runner's Visual Studio one may be another version).
+      - name: Format (G1)
+        shell: cmd
+        run: |
+          python -m pip install --quiet clang-format==20.1.8 || exit /b 1
+          set "LEON_CLANG_FORMAT=clang-format"
+          call Engine\Build\BatchFiles\FormatCode.bat --check
       - name: Setup (pinned third-party downloads)
         shell: cmd
         run: call Setup.bat

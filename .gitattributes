@@ -25,5 +25,9 @@ Engine/Source/Programs/LeonHeaderTool/Tests/** text eol=lf
 *.blend binary
 *.wav binary
 *.lpak binary
-*.hdr binary
 *.png binary
+*.pdf binary
+
+# Mesh sources whose bytes are hashed at import (UAssetImportData's MD5, the import identity): no line-ending conversion
+*.obj -text
+*.gltf -text

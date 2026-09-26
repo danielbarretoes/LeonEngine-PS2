@@ -7,7 +7,7 @@ setlocal EnableExtensions
 set "LEON_ROOT=%~dp0..\..\.."
 
 if /I not "%~2"=="PS2" (
-  call "%~dp0GetVSEnv.bat" vcvars quiet need-ninja
+  call "%~dp0GetVSEnv.bat"
   if errorlevel 1 exit /b 1
 )
 

@@ -2,14 +2,16 @@
 REM Engine\Build\BatchFiles\FormatCode.bat [--check]
 REM clang-format every C++ file under Engine\Source, Engine\Platforms, Engine\Plugins and Game\*\Source.
 REM Skips ThirdParty, Intermediate and Binaries. GLSL shaders are never touched.
-REM --check: dry run, exit 1 if any file needs formatting (used by Lint.bat).
+REM --check: dry run, exit 1 if any file needs formatting (used by Lint.bat and CI).
+REM The repository is formatted with clang-format 20 (CI: pip install clang-format==20.1.8); LEON_CLANG_FORMAT names the
+REM binary to use, else Visual Studio's, else the one on PATH. Another major version formats a few constructs differently.
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0..\..\.."
 
 set "MODE=-i"
 if /I "%~1"=="--check" set "MODE=--dry-run --Werror"
 
-set "CLANG_FORMAT="
+set "CLANG_FORMAT=%LEON_CLANG_FORMAT%"
 for %%V in (18 2022) do for %%E in (Community Professional Enterprise) do (
   if not defined CLANG_FORMAT if exist "%ProgramFiles%\Microsoft Visual Studio\%%V\%%E\VC\Tools\Llvm\x64\bin\clang-format.exe" (
     set "CLANG_FORMAT=%ProgramFiles%\Microsoft Visual Studio\%%V\%%E\VC\Tools\Llvm\x64\bin\clang-format.exe"
@@ -22,6 +24,8 @@ if not defined CLANG_FORMAT (
   echo ERROR: clang-format not found. See Docs/SETUP.md
   exit /b 1
 )
+"%CLANG_FORMAT%" --version | findstr /C:"version 20." >nul
+if errorlevel 1 echo WARNING: the repository is formatted with clang-format 20; this one may disagree.
 
 REM File list (FOR /R cannot take a loop variable as its root, so use DIR /S /B).
 set "LIST=%TEMP%\leon-format-files.txt"

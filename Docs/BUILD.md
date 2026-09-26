@@ -122,7 +122,7 @@ Windows batch files live in `Engine/Build/BatchFiles/` (UE layout); run them fro
 
 | File | Usage | What it does |
 | --- | --- | --- |
-| `Build.bat` | `Build.bat <Target> <Platform> <Config> [-Project=<file>] [-Mode=...] [-NoDocker] [-KeepGoing]` | Loads the MSVC environment (`GetVSEnv.bat vcvars quiet need-ninja`) unless the platform is `PS2`, then runs LeonBuildTool with all arguments |
+| `Build.bat` | `Build.bat <Target> <Platform> <Config> [-Project=<file>] [-Mode=...] [-NoDocker] [-KeepGoing]` | Loads the MSVC environment (`GetVSEnv.bat`) unless the platform is `PS2`, then runs LeonBuildTool with all arguments |
 | `Clean.bat` | `Clean.bat <Target> <Platform> <Config> [-Project=<file>]` | `Build.bat ... -Mode=Clean` |
 | `Rebuild.bat` | `Rebuild.bat <Target> <Platform> <Config> [-Project=<file>]` | `Build.bat ... -Mode=Rebuild` |
 | `RunTests.bat` | `RunTests.bat [-automation=<filter>]` | Builds `LeonAutomationTests Win64 Development` and runs `Engine\Binaries\Win64\LeonAutomationTests.exe` from the repo root: every automation test (386), or only those whose name contains `<filter>`. It then runs the LeonHeaderTool golden tests (`LeonHeaderTool -Test`), then builds `ShooterGameTests` (`-Project=Game\ShooterGame\ShooterGame.lproj`) and runs `Game\ShooterGame\Binaries\Win64\ShooterGameTests.exe` with the same arguments (ShooterGame's tests, 34) |
@@ -135,7 +135,7 @@ Windows batch files live in `Engine/Build/BatchFiles/` (UE layout); run them fro
 | `BuildCookRun.bat` | `BuildCookRun.bat -project=<file> -platform=Win64 [-configuration=Shipping\|Development] [-build] [-cook] [-stage] [-pak] [-run] [-addcmdline="..."] [-align=<bytes>]` | Builds the project's game, cooks it, stages it into `<Project>\Saved\StagedBuilds\Win64\` with its content in one `.lpak`, and runs it (`BuildCookRun.ps1` has the steps; [below](#staging-and-shipping), [TOOLS.md](TOOLS.md#buildcookrun)) |
 | `CheckBannedApis.ps1` | `powershell -File CheckBannedApis.ps1` (or `pwsh`) | Gate G4: scans `.h/.cpp/.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game` (comments ignored) and fails on glm, nlohmann, `std::vector/string/map/unordered_map/function/shared_ptr/unique_ptr`, `<iostream>` / `std::cout/cerr/clog`, the `printf` family, `LegacyGL` / `FLegacyTransform` / `LegacyAxes`, or `FLegacyCoordinateConversion` outside the tests (`Public/Tests`, `Private/Tests`); `-Root <dir>` scans another tree; exceptions in [CODING_STANDARD.md §4](CODING_STANDARD.md#4-language) |
 | `GenerateProjectFiles.bat` | `GenerateProjectFiles.bat [-Project=<file>]` | `-Mode=GenerateProjectFiles`, then `LeonAutomationTests Win64 Development -Mode=GenerateClangDatabase` (root `compile_commands.json`) |
-| `GetVSEnv.bat` | `call GetVSEnv.bat vcvars [quiet] [optional] [need-ninja] [need-git]` (or `vsdev`) | Helper for the other scripts: finds Visual Studio `18` then `2022` (Community, Professional, Enterprise), runs `vcvars64.bat` or `VsDevCmd.bat`, prepends `C:\Program Files\CMake\bin` to `PATH` and checks the required tools |
+| `GetVSEnv.bat` | `call GetVSEnv.bat` | Helper for `Build.bat` and `GenerateProjectFiles.bat`: finds Visual Studio `18` then `2022` (Community, Professional, Enterprise), runs its `vcvars64.bat` quietly, prepends `C:\Program Files\CMake\bin` to `PATH` and checks that CMake and Ninja are there |
 | `Linux/Build.sh` | `Build.sh <Target> <Platform> <Config> [-Project=<file>] [-Mode=...]` | LeonBuildTool with all arguments (no environment setup; used by CI for PS2) |
 | `Linux/GenerateProjectFiles.sh` | `GenerateProjectFiles.sh [-Project=<file>]` | `-Mode=GenerateProjectFiles` |
 
@@ -573,7 +573,8 @@ docker run --rm -v <repo root>:/leon -w /leon <image> sh /leon/Engine/Platforms/
 ```
 
 - A project outside the repo root is mounted as `/project` and passed as `-Project=/project/<file>`.
-- On Unix hosts the container runs as the calling user (`--user uid:gid`) so outputs are not owned by root.
+- On Unix hosts the container runs as root (`DockerEntry.sh` may install CMake, Ninja and g++ with `apk`) and hands
+  the build outputs back to the calling user (`LEON_HOST_UID` / `LEON_HOST_GID`, `chown` when the build ends).
 - `DockerEntry.sh` exports `PS2DEV` (default `/usr/local/ps2dev`), `PS2SDK` and `PATH`. When they are missing it
   installs `cmake`, `ninja`, `make`, and `g++` / `musl-dev` (the host compiler for LeonHeaderTool, built into
   `Engine/Intermediate/Build/HostTools/LinuxMusl`) with `apk`. Then it re-runs `LeonBuildTool.cmake` inside the

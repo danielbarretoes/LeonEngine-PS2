@@ -14,32 +14,15 @@ Engine/Plugins/**/ThirdParty/*/*-[0-9]*/
 .vs/
 out/
 # No bare "build/" rule: on Windows (case-insensitive) it would also ignore the Unreal-style
-# Engine/Build and Engine/Platforms/*/Build folders. Legacy build trees are listed explicitly.
-build-ninja/
-build-linux/
+# Engine/Build and Engine/Platforms/*/Build folders.
 cmake-build-*/
-compile_commands.json
-Engine/build-ninja/
-Engine/build-vs/
-Tools/build/
-Tools/build-fast/
-Tools/build-ninja/
-Projects/*/build/
-Projects/*/build-fast/
-Projects/*/build-ninja/
-Projects/*/build-linux/
-Projects/*/build-ps2/
-Projects/*/Shipping/
-Samples/*/build-ps2/
 *.elf
-dist/
-Dist/
 
 # FetchContent source trees (any build dir)
 **/_deps/
 
 
-# Binaries / objects (keep mesh assets)
+# Binaries / objects (the test fixtures' OBJ meshes are kept below)
 *.exe
 *.pdb
 *.ilk
@@ -49,8 +32,6 @@ Dist/
 *.o
 *.a
 *.obj
-!assets/**/*.obj
-!Engine/Content/**/*.obj
 
 # DCC source (not needed at runtime)
 *.max
@@ -66,7 +47,4 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Keep Engine/Build (case-insensitive filesystems also match build/ rules above).
-!/Engine/Build/
-!/Engine/Build/**
 !Engine/Source/**/Tests/Fixtures/*.obj

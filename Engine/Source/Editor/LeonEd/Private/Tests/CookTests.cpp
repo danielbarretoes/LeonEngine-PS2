@@ -78,7 +78,10 @@ bool FLeonEdCookTargetPlatformsTest::RunTest(const FString& Parameters)
 		return false;
 	}
 	TestNull("An unknown platform", FindPlatform(TEXT("Switch")));
+	#if PLATFORM_WINDOWS
+	// The development platform is Win64 (a Linux build runs the tests too, but Linux is no target platform).
 	TestTrue("The running platform", GetTargetPlatformManagerRef().GetRunningTargetPlatform() == Win64);
+	#endif
 	TestEqual("Win64 config platform", Win64->IniPlatformName(), FString(TEXT("Windows")));
 	TestEqual("PS2 config platform", PS2->IniPlatformName(), FString(TEXT("PS2")));
 	TestEqual("Win64 records its name", Win64->CookedPlatformName(), FString(TEXT("Win64")));

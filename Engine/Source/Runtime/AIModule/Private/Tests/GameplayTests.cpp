@@ -390,7 +390,7 @@ bool FGameplayAIControllerPathFollowDoesNotShortcutTest::RunTest(const FString& 
 	TestTrue("Moving", Wish.Size() > 0.5f);
 	TestTrue("Steering around the wall", Wish.Y > 0.9f);
 	for (int32 Frame = 0;
-		 Frame < 600 && FVector::Dist2D(Character->GetActorLocation(), FVector(500.0f, 0.0f, 0.0f)) > 130.0f; ++Frame)
+		Frame < 600 && FVector::Dist2D(Character->GetActorLocation(), FVector(500.0f, 0.0f, 0.0f)) > 130.0f; ++Frame)
 	{
 		(void)Ai.TickAI(1.0f / 60.0f);
 		World.Tick(1.0f / 60.0f);

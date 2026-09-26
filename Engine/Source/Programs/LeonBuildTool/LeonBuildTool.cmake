@@ -209,9 +209,11 @@ if(_NeedDocker)
 		endif()
 	endif()
 	if(CMAKE_HOST_UNIX)
+		# The container runs as root (DockerEntry.sh may install the build tools) and gives the outputs back to the host
+		# user when the build ends.
 		execute_process(COMMAND id -u OUTPUT_VARIABLE _Uid OUTPUT_STRIP_TRAILING_WHITESPACE)
 		execute_process(COMMAND id -g OUTPUT_VARIABLE _Gid OUTPUT_STRIP_TRAILING_WHITESPACE)
-		list(APPEND _DockerArgs --user "${_Uid}:${_Gid}")
+		list(APPEND _DockerArgs -e "LEON_HOST_UID=${_Uid}" -e "LEON_HOST_GID=${_Gid}")
 	endif()
 	set(_Inner ${_Target} ${_Platform} ${_Configuration} -Mode=${_Mode} -NoDocker)
 	if(_KeepGoing)

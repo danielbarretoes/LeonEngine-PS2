@@ -2,7 +2,7 @@
 #
 # leon_thirdparty_ensure(<Name> <Url> <Sha256> <Dir>)
 #   Downloads <Url> once (checked against <Sha256>) into Engine/Intermediate/ThirdPartyDownloads and
-#   extracts it next to <Dir>; <Dir> must be the archive's top-level folder (e.g. glm-1.0.1).
+#   extracts it next to <Dir>; <Dir> must be the archive's top-level folder (e.g. glfw-3.4).
 #   An empty <Sha256> downloads without verification and prints the hash to pin.
 
 function(leon_thirdparty_ensure Name Url Sha256 Dir)

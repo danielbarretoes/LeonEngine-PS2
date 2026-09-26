@@ -2,8 +2,8 @@
 #
 # Banned (comments are ignored; names are case-sensitive):
 #   glm and nlohmann                         -> Core math, the Json module
-#   std::vector / string / map / unordered_map / function / shared_ptr / unique_ptr
-#                                            -> TArray, FString, TMap, TFunction, TSharedPtr, TUniquePtr
+#   the std containers, strings, streams, functions and smart pointers, and their headers (D2: <string>, <functional>,
+#   <memory>, <sstream>, <vector>, ...)       -> TArray, TSet, TMap, FString, TFunction, TSharedPtr, TUniquePtr
 #   <iostream>, std::cout, std::cerr          -> UE_LOG
 #   printf and its variants                  -> UE_LOG / FString::Printf / FCString
 #   LegacyGL, FLegacyTransform, LegacyAxes   -> removed in P7 (UE view and projection, FTransform, UE axes); tests too
@@ -11,8 +11,8 @@
 #                                            -> UE-space data; only tests convert legacy (Y up, metres) data, the
 #                                               golden tables: see $TestsOnly
 #
-# Allowed where Core wraps the C and C++ libraries (D2): ThirdParty, the platform HAL sources (Private/Windows,
-# Private/Linux, the PS2 Core), the printf family inside Core/Private, LeonHeaderTool (a std-only host tool) and the
+# Allowed where Core wraps the C and C++ libraries (D2): ThirdParty, Core's platform HAL sources (Core/Private/Windows,
+# Core/Private/Linux, the PS2 Core), the printf family inside Core/Private, LeonHeaderTool (a std-only host tool) and the
 # test program mains.
 #
 # A violation prints "<file>:<line>: G4 <rule>: <code> -> <what to use>". -Root checks another tree (default: the repo).
@@ -32,10 +32,13 @@ $Rules = @(
 	@{ Name = "glm"; Pattern = 'glm::|<glm/'; Use = "Core math" },
 	@{ Name = "nlohmann"; Pattern = 'nlohmann'; Use = "the Json module" },
 	@{ Name = "std container / string / function / smart pointer"
-		Pattern = 'std::(vector|string|map|unordered_map|function|shared_ptr|unique_ptr)\b'
-		Use = "TArray, FString, TMap, TFunction, TSharedPtr, TUniquePtr" },
+		Pattern = 'std::(vector|string|map|unordered_map|set|unordered_set|list|deque|array|function|shared_ptr|unique_ptr|string_view|stringstream|istringstream|ostringstream)\b'
+		Use = "TArray, TSet, TMap, FString, TFunction, TSharedPtr, TUniquePtr" },
+	@{ Name = "std header (D2)"
+		Pattern = '#\s*include\s*<(string|functional|memory|sstream|vector|map|unordered_map|set|unordered_set|list|deque|array|string_view)>'
+		Use = "the Core headers (Containers/, Templates/); Core wraps the few C++ headers it needs" },
 	@{ Name = "iostream"; Pattern = '<iostream>|std::(cout|cerr|clog)\b'; Use = "UE_LOG" },
-	@{ Name = "printf"; Pattern = '(?<![A-Za-z_])(f|s|sn|v|vs|vsn)?printf\s*\('; AllowedIn = '[\\/]Runtime[\\/]Core[\\/]Private[\\/]'
+	@{ Name = "printf"; Pattern = '(?<![A-Za-z_])(f|s|sn|v|vs|vsn|vf|_sn|_vsn)?printf\s*\('; AllowedIn = '[\\/]Runtime[\\/]Core[\\/]Private[\\/]'
 		Use = "UE_LOG, FString::Printf or FCString" },
 	@{ Name = "legacy GL / transform / axes"; Pattern = 'LegacyGL|FLegacyTransform|LegacyAxes'
 		Use = "UE view and projection matrices (ToGLClipSpace last), FTransform, UE axes" },
@@ -43,7 +46,7 @@ $Rules = @(
 		Pattern = 'FLegacyCoordinateConversion|LegacyCoordinateConversion\.h'; AllowedIn = $TestsOnly
 		Use = "UE-space data; only tests convert legacy data (allowlist: `$TestsOnly in CheckBannedApis.ps1)" }
 )
-$Excluded = '[\\/](ThirdParty|Intermediate|Binaries|Saved)[\\/]|[\\/]Private[\\/](Windows|Linux)[\\/]|' +
+$Excluded = '[\\/](ThirdParty|Intermediate|Binaries|Saved)[\\/]|[\\/]Runtime[\\/]Core[\\/]Private[\\/](Windows|Linux)[\\/]|' +
 	'[\\/]Platforms[\\/]PS2[\\/]Source[\\/]Runtime[\\/]Core[\\/]|[\\/]LeonHeaderTool[\\/]|' +
 	'LeonAutomationTestsMain\.cpp$|[\\/]TestPAL[\\/]Private[\\/]'
 

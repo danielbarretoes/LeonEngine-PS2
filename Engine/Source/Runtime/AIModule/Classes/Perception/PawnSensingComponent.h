@@ -87,7 +87,8 @@ public:
 
 	/** Whether Other can be seen now: range, cone and line of sight (UE: CouldSeePawn). */
 	[[nodiscard]] bool CouldSeePawn(const APawn* Other, bool bMaySkipChecks = false) const;
-	/** A line on the Visibility channel from the sensor to Other's eyes or centre meets nothing (UE: HasLineOfSightTo). */
+	/** A line on the Visibility channel from the sensor to Other's eyes or centre meets nothing (UE: HasLineOfSightTo).
+	 */
 	[[nodiscard]] bool HasLineOfSightTo(const AActor* Other) const;
 
 	/** Looks at every pawn now and broadcasts OnSeePawn for those seen (UE: UpdateAISensing, sight part). */
