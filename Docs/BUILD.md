@@ -59,7 +59,7 @@ The `--` is required: without it CMake would parse `-Project=...` as its own `-P
 | Argument | Values |
 | --- | --- |
 | `<Target>` | a target from a `*.Target.cmake` (`LeonGame`, `LeonCook`, `LeonPak`, `LeonAutomationTests`, `TestPAL`, `BlankProgram`, or a project's target such as `ThirdPerson`) |
-| `<Platform>` | a registered platform: `Win64`, `Linux`, `PS2` |
+| `<Platform>` | a registered platform: `Win64` (development and editor) or `PS2` (the target); `Linux` is registered too but is not an official platform |
 | `<Configuration>` | `Debug`, `Development`, `Shipping` |
 | `-Project=<file.lproj>` | build a project's target instead of an engine target. Relative paths are resolved from the current directory |
 | `-Mode=Build` | default: configure if needed, then build the target |
@@ -125,17 +125,17 @@ Windows batch files live in `Engine/Build/BatchFiles/` (UE layout); run them fro
 | `Build.bat` | `Build.bat <Target> <Platform> <Config> [-Project=<file>] [-Mode=...] [-NoDocker] [-KeepGoing]` | Loads the MSVC environment (`GetVSEnv.bat`) unless the platform is `PS2`, then runs LeonBuildTool with all arguments |
 | `Clean.bat` | `Clean.bat <Target> <Platform> <Config> [-Project=<file>]` | `Build.bat ... -Mode=Clean` |
 | `Rebuild.bat` | `Rebuild.bat <Target> <Platform> <Config> [-Project=<file>]` | `Build.bat ... -Mode=Rebuild` |
-| `RunTests.bat` | `RunTests.bat [-automation=<filter>]` | Builds `LeonAutomationTests Win64 Development` and runs `Engine\Binaries\Win64\LeonAutomationTests.exe` from the repo root: every automation test (386), or only those whose name contains `<filter>`. It then runs the LeonHeaderTool golden tests (`LeonHeaderTool -Test`), then builds `ShooterGameTests` (`-Project=Game\ShooterGame\ShooterGame.lproj`) and runs `Game\ShooterGame\Binaries\Win64\ShooterGameTests.exe` with the same arguments (ShooterGame's tests, 34) |
+| `RunTests.bat` | `RunTests.bat [-automation=<filter>]` | Builds `LeonAutomationTests Win64 Development` and runs `Engine\Binaries\Win64\LeonAutomationTests.exe` from the repo root: every automation test (386), or only those whose name contains `<filter>`. It then runs the LeonHeaderTool golden tests (`LeonHeaderTool -Test`), then builds `ShooterGameTests` (`-Project=Game\ShooterGame\ShooterGame.lproj`) and runs `Game\ShooterGame\Binaries\Win64\ShooterGameTests.exe` with the same arguments (ShooterGame's tests, 42), then builds `TestPAL Win64 Development` and runs `Engine\Binaries\Win64\TestPAL.exe` (120 tests, no filter); fails if any of them fails |
 | `Cook.bat` | `Cook.bat <LeonCook arguments>` | Builds `LeonCook Win64 Development` and runs `Engine\Binaries\Win64\LeonCook.exe` (`Cook.bat -run=ImportAssets -reimport -all`) |
 | `CheckReimport.bat` | `CheckReimport.bat [<Project>.lproj ...]` | Gate G5: builds LeonCook, reimports the engine content (and each project's) with `-run=ImportAssets -reimport -all`, then fails when `git diff --exit-code` sees a change, or a new file appears, under `Engine/Content` or `Game/*/Content` (CI runs it on a clean checkout) |
-| `FormatCode.bat` | `FormatCode.bat [--check]` | clang-format on every `.cpp/.h/.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game` (skips paths containing `ThirdParty`, `Intermediate`, `Binaries`). `--check` is a dry run that fails if a file needs formatting |
+| `FormatCode.bat` | `FormatCode.bat [--check]` | clang-format on every `.cpp/.h/.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game` (skips paths containing `ThirdParty`, `Intermediate`, `Binaries`). `--check` is a dry run that fails if a file needs formatting. The binary is `LEON_CLANG_FORMAT`, else Visual Studio's LLVM `clang-format`, else the one on `PATH`; the repository is formatted with clang-format 20 (CI: `pip install clang-format==20.1.8`), and the script warns when the version is another |
 | `Lint.bat` | `Lint.bat` | `FormatCode.bat --check`, then `CheckBannedApis.ps1`, then builds `LeonAutomationTests`, `LeonCook`, `LeonPak`, `LeonGame` and `BlankProgram`, and ShooterGame's `ShooterGame` and `ShooterGameTests`, for Win64 Development |
 | `SmokeTest.bat` | `SmokeTest.bat` | Gate G6: builds `ShooterGame Win64 Development`, runs `ShooterGame.exe -nullrhi -ExecCmds=bot_fill -ExitAfterFrames=120` (its log in `Game\ShooterGame\Saved\Logs\SmokeTest.log`) and fails unless the game exits with 0 and logs `ShooterGameMode: 10 pawn(s) at the end of the match, CT 5, T 5` |
 | `BotMatch.bat` | `BotMatch.bat [Rounds] [Seed]` | Builds `ShooterGame Win64 Development`, plays `ShooterGame.exe -nullrhi -benchmark -botmatch -rounds=<Rounds> -seed=<Seed>` (10, 7; its log in `Game\ShooterGame\Saved\Logs\BotMatch.log`) twice, and fails unless both exit with 0, log `Botmatch OK` and the two lines match (P21) |
 | `BuildCookRun.bat` | `BuildCookRun.bat -project=<file> -platform=Win64 [-configuration=Shipping\|Development] [-build] [-cook] [-stage] [-pak] [-run] [-addcmdline="..."] [-align=<bytes>]` | Builds the project's game, cooks it, stages it into `<Project>\Saved\StagedBuilds\Win64\` with its content in one `.lpak`, and runs it (`BuildCookRun.ps1` has the steps; [below](#staging-and-shipping), [TOOLS.md](TOOLS.md#buildcookrun)) |
-| `CheckBannedApis.ps1` | `powershell -File CheckBannedApis.ps1` (or `pwsh`) | Gate G4: scans `.h/.cpp/.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game` (comments ignored) and fails on glm, nlohmann, `std::vector/string/map/unordered_map/function/shared_ptr/unique_ptr`, `<iostream>` / `std::cout/cerr/clog`, the `printf` family, `LegacyGL` / `FLegacyTransform` / `LegacyAxes`, or `FLegacyCoordinateConversion` outside the tests (`Public/Tests`, `Private/Tests`); `-Root <dir>` scans another tree; exceptions in [CODING_STANDARD.md §4](CODING_STANDARD.md#4-language) |
+| `CheckBannedApis.ps1` | `powershell -File CheckBannedApis.ps1` (or `pwsh`) | Gate G4: scans `.h/.cpp/.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game` (comments ignored) and fails on glm, nlohmann, every `std::` container, string, `string_view`, stream, function and smart pointer and their headers (D2: `<string>`, `<functional>`, `<memory>`, `<sstream>`, `<vector>`, ...), `<iostream>` / `std::cout/cerr/clog`, the `printf` family (`vfprintf`, `_snprintf`, ...; allowed inside `Core/Private`), `LegacyGL` / `FLegacyTransform` / `LegacyAxes`, or `FLegacyCoordinateConversion` outside the tests (`Public/Tests`, `Private/Tests`); ThirdParty, Core's platform HAL sources (`Core/Private/Windows`, `Core/Private/Linux`, the PS2 Core), LeonHeaderTool and the test program mains are not scanned; `-Root <dir>` scans another tree; exceptions in [CODING_STANDARD.md §4](CODING_STANDARD.md#4-language) |
 | `GenerateProjectFiles.bat` | `GenerateProjectFiles.bat [-Project=<file>]` | `-Mode=GenerateProjectFiles`, then `LeonAutomationTests Win64 Development -Mode=GenerateClangDatabase` (root `compile_commands.json`) |
-| `GetVSEnv.bat` | `call GetVSEnv.bat` | Helper for `Build.bat` and `GenerateProjectFiles.bat`: finds Visual Studio `18` then `2022` (Community, Professional, Enterprise), runs its `vcvars64.bat` quietly, prepends `C:\Program Files\CMake\bin` to `PATH` and checks that CMake and Ninja are there |
+| `GetVSEnv.bat` | `call GetVSEnv.bat` (no arguments) | Helper for `Build.bat` and `GenerateProjectFiles.bat`: finds Visual Studio `18` then `2022` (Community, Professional, Enterprise), runs its `vcvars64.bat` quietly, prepends `C:\Program Files\CMake\bin` to `PATH` and checks that CMake and Ninja are there |
 | `Linux/Build.sh` | `Build.sh <Target> <Platform> <Config> [-Project=<file>] [-Mode=...]` | LeonBuildTool with all arguments (no environment setup; used by CI for PS2) |
 | `Linux/GenerateProjectFiles.sh` | `GenerateProjectFiles.sh [-Project=<file>]` | `-Mode=GenerateProjectFiles` |
 
@@ -476,8 +476,8 @@ touching the build tool.
 | Toolchain | host MSVC (via `GetVSEnv.bat`) | host compiler | `PS2Toolchain.cmake` (ps2dev EE GCC) |
 | Docker | — | — | `ghcr.io/ps2dev/ps2dev@sha256:79c24d37...` (pinned by digest), `SDK_ENV PS2DEV` |
 
-Win64 and PS2 are the verified platforms (CI builds both). Linux is registered and folder-filtered but is not a
-verification gate.
+Win64 (the development and editor platform) and PS2 (the target) are the official platforms; CI builds both. Linux is
+registered and folder-filtered only: it is not an official platform, and nothing builds or tests it.
 
 ## Compile environment
 
@@ -511,8 +511,8 @@ Compiler settings:
 | | Win64 (MSVC) | PS2 (EE GCC) | Linux |
 | --- | --- | --- | --- |
 | Standard | C++17 | C++17 | C++17 |
-| Warnings | `/W4 /permissive- /Zc:__cplusplus /utf-8 /MP` | `-Wall -Wextra` | `-Wall -Wextra -Wpedantic` |
-| Shadowing is an error (UE `ShadowVariableWarningLevel = Error`) | `/we4456 /we4457 /we4458 /we4459` | `-Werror=shadow` | — |
+| Warnings | `/W4 /permissive- /Zc:__cplusplus /utf-8 /MP` | `-Wall -Wextra`, `-Werror=double-promotion` | `-Wall -Wextra` |
+| Shadowing is an error (UE `ShadowVariableWarningLevel = Error`) | `/we4456 /we4457 /we4458 /we4459` | `-Werror=shadow` | `-Werror=shadow` |
 | No RTTI, no C++ exceptions (D17) | `/GR-`, no `/EH` flag, `_HAS_EXCEPTIONS=0`, `/wd4577` (CMake's `/EHsc` / `/GR` defaults are stripped from `CMAKE_CXX_FLAGS`; `leon_third_party_cxx_defaults(<target>)` gives them back to third-party C++ that needs them) | `-fno-rtti -fno-exceptions` (toolchain file, below) | `-fno-rtti -fno-exceptions` on Leon targets |
 | Other | `/wd4324` (padding added for `alignas`, disabled as in UE); `/FS` in Debug and RelWithDebInfo | toolchain: `-D_EE -G0 -O2 -fno-exceptions -fno-rtti -fno-threadsafe-statics -ffunction-sections -fdata-sections`, linked with `$PS2SDK/ee/startup/linkfile` and `-Wl,--gc-sections` (unused functions / data are dropped; sizes in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md)). Leon runs one EE thread, so function-local statics need no guard; together with `PS2PlatformRuntime.cpp` (global `operator new` / `delete` through `FMemory`, `__cxa_pure_virtual`) this keeps libstdc++'s unwinder and demangler out of the ELF | |
 

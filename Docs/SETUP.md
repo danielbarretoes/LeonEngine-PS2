@@ -7,7 +7,7 @@ the PS2 game in PCSX2. The build system itself is documented in [BUILD.md](BUILD
 
 | Need | Required for | Notes |
 | --- | --- | --- |
-| Visual Studio 2026 (folder `18`) or 2022, any edition | Win64 builds | Workloads/components: **Desktop development with C++**, **C++ CMake tools for Windows**, **C++ Clang tools for Windows** (LLVM: `clang-format`, `clangd`). The scripts look in `%ProgramFiles%\Microsoft Visual Studio\18\` then `...\2022\`, editions Community, Professional, Enterprise |
+| Visual Studio 2026 (folder `18`) or 2022, any edition | Win64 builds | Workloads/components: **Desktop development with C++**, **C++ CMake tools for Windows**, **C++ Clang tools for Windows** (LLVM: `clang-format`, `clangd`; the repository is formatted with clang-format 20, see [Formatting and lint](#formatting-and-lint)). The scripts look in `%ProgramFiles%\Microsoft Visual Studio\18\` then `...\2022\`, editions Community, Professional, Enterprise |
 | CMake 3.24 or later on `PATH` | everything | `Setup.bat` calls `cmake` directly. The build scripts also prepend `C:\Program Files\CMake\bin` |
 | [Ninja](https://ninja-build.org/) on `PATH` | Win64 builds | `Build.bat` fails with `Ninja not on PATH` otherwise: `winget install Ninja-build.Ninja`, then open a new terminal |
 | GPU / driver with OpenGL 3.3 | running `LeonGame` | |
@@ -49,17 +49,19 @@ Engine\Build\BatchFiles\RunTests.bat
 ```
 
 This builds `LeonAutomationTests` (Win64 Development) and runs it from the repo root. The executable contains the
-tests of every module in its closure (`<Module>/Private/Tests/`), all UE automation tests (258, named
-`System.<Module>.<Area>.<Name>`). The exit code is non-zero if any test fails. `-automation=<filter>` runs only the
-tests whose name contains `<filter>`:
+tests of every module in its closure (`<Module>/Private/Tests/`), all UE automation tests (386, named
+`System.<Module>.<Area>.<Name>`). Then it runs the LeonHeaderTool golden tests, builds and runs ShooterGame's test
+program (`ShooterGameTests`, 42 tests) and last builds and runs `TestPAL` (120 tests on Win64). The exit code is
+non-zero if any test fails. `-automation=<filter>` runs only the tests whose name contains `<filter>` (the engine's and
+ShooterGame's):
 
 ```bat
 Engine\Build\BatchFiles\RunTests.bat -automation=System.Core.Containers
 Engine\Build\BatchFiles\RunTests.bat -automation=System.JoltPhysics
 ```
 
-`TestPAL` runs the Core, CoreUObject, Json, Projects and PakFile automation tests on any platform, and ends with
-`TestPAL: PASSED (N test(s), 0 failed)` plus memory and name-pool numbers:
+`TestPAL` runs the Core, CoreUObject, Json, Projects and PakFile automation tests on Win64 and PS2, and ends with
+`TestPAL: PASSED (N test(s), 0 failed)` plus memory and name-pool numbers; to run it alone:
 
 ```bat
 Engine\Build\BatchFiles\Build.bat TestPAL Win64 Development
@@ -95,11 +97,12 @@ frame, for example `-ExecCmds="stat unit;FOV 75"`; `-Screenshot=` saves frame `-
 24-bit BMP and exits, and `-ExitAfterFrames=N` alone exits after frame N (headless too). In PowerShell quote an
 argument that has a dot after `=` (`"-map=D:\Work\Maps\Arena.lmap"`), or PowerShell splits it at the dot.
 
-In the window (`Engine/Config/BaseInput.ini`): mouse look (the cursor is captured), **WASD** or the arrows fly along
-the view, **E** / **Q** up / down; the function keys run console commands: **F1** `show Bounds` (mesh AABBs and the
-shadow volume), **F2** `show Collision`, **F3** `show Navigation` (flags only, not drawn yet), **F4** `stat unit`
-(stats), **F5** `RecompileShaders all`, **F6** `show AxesGizmo` (X red, Y green, Z blue). The world is UE's: X forward,
-Y right, Z up, centimetres. Manual checks: [TESTING.md](TESTING.md). Levels: [LEVELS.md](LEVELS.md).
+In the window (`Engine/Config/BaseInput.ini`): mouse look (the cursor is captured), **WASD** or the arrows fly along the
+view, **E** / **Q** up / down; the function keys run console commands: **F1** `show Bounds` (mesh AABBs and the shadow
+volume), **F2** `show Collision` (the characters' capsules and the physics bodies), **F3** `show Navigation` (the
+waypoint graph), **F4** `stat unit` (stats), **F5** `RecompileShaders all`, **F6** `show AxesGizmo` (X red, Y green, Z
+blue). The world is UE's: X forward, Y right, Z up, centimetres. Manual checks: [TESTING.md](TESTING.md). Levels:
+[LEVELS.md](LEVELS.md).
 
 Every run writes a log file, `Engine/Programs/LeonGame/Saved/Logs/LeonGame.log` (a project target writes to
 `<Project>/Saved/Logs/`), keeping the previous run as `-backup-<date>.log`. Config comes from `Engine/Config/Base*.ini` and the project's `Config/Default*.ini`;
@@ -128,11 +131,11 @@ Desktop running:
 Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.lproj
 ```
 
-→ `Game\ThirdPerson\Binaries\PS2\ThirdPerson.elf`. The first build pulls the ps2dev image. PS2 builds do not need
-Visual Studio. When `PS2DEV` is not set, LeonBuildTool runs itself inside the container; with a local ps2dev install
-(`PS2DEV`, `PS2SDK`, and `$PS2DEV/ee/bin` on `PATH`) it builds on the host. From Git Bash, WSL or Linux use
-`Engine/Build/BatchFiles/Linux/Build.sh` with the same arguments. Details:
-[BUILD.md — PS2 builds in Docker](BUILD.md#ps2-builds-in-docker) and the platform extension
+→ `Game\ThirdPerson\Binaries\PS2\ThirdPerson.elf`. The first build pulls the ps2dev image. PS2 builds do not need Visual
+Studio. When `PS2DEV` is not set, LeonBuildTool runs itself inside the container; with a local ps2dev install (`PS2DEV`,
+`PS2SDK`, and `$PS2DEV/ee/bin` on `PATH`) it builds on the host. From Git Bash or WSL use
+`Engine/Build/BatchFiles/Linux/Build.sh` with the same arguments (CI's `ps2` job runs it in the ps2dev container).
+Details: [BUILD.md — PS2 builds in Docker](BUILD.md#ps2-builds-in-docker) and the platform extension
 [Engine/Platforms/PS2/README.md](../Engine/Platforms/PS2/README.md).
 
 The engine-only `BlankProgram` also builds for PS2 (`Build.bat BlankProgram PS2 Development` →
@@ -221,23 +224,32 @@ Engine\Build\BatchFiles\FormatCode.bat --check    :: dry run, fails if a file ne
 Engine\Build\BatchFiles\Lint.bat                  :: format check + banned APIs (G4) + Win64 build of every engine target
 ```
 
-`FormatCode.bat` uses Visual Studio's LLVM `clang-format` (or one on `PATH`) with the repo's `.clang-format` (Epic
-style: tabs, Allman braces) on `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game`, skipping `ThirdParty`,
-`Intermediate` and `Binaries`. `Lint.bat` then runs `Engine\Build\BatchFiles\CheckBannedApis.ps1`, which fails on glm,
-nlohmann, `std::` containers / strings / smart pointers, iostream, `printf`, the removed legacy math bridges and
-`FLegacyCoordinateConversion` outside the tests in engine or game code. Coding rules:
-[CODING_STANDARD.md](CODING_STANDARD.md).
+`FormatCode.bat` runs the `clang-format` that `LEON_CLANG_FORMAT` names, else Visual Studio's LLVM one, else one on
+`PATH`, with the repo's `.clang-format` (Epic style: tabs, Allman braces) on `Engine\Source`, `Engine\Platforms`,
+`Engine\Plugins` and `Game`, skipping `ThirdParty`, `Intermediate` and `Binaries`. The repository is formatted with
+clang-format 20 (CI installs 20.1.8 with `pip install clang-format==20.1.8`); another major version formats a few
+constructs differently, and the script warns when the one it found is not version 20. `Lint.bat` then runs
+`Engine\Build\BatchFiles\CheckBannedApis.ps1` (gate G4), which fails on glm, nlohmann, the `std::` containers,
+strings, `string_view`, streams, functions and smart pointers and their headers (D2), iostream, the `printf` family
+(`vfprintf`, `_snprintf`, ...), the removed legacy math bridges and `FLegacyCoordinateConversion` outside the tests in
+engine or game code; only ThirdParty, Core's platform HAL sources, the `printf` family inside `Core/Private`,
+LeonHeaderTool and the test program mains are exempt. Last it builds every Win64 engine target and ShooterGame's. Coding
+rules: [CODING_STANDARD.md](CODING_STANDARD.md).
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs two jobs on every push to `main` / `master` and on pull requests:
+`.github/workflows/ci.yml` runs three jobs on every push (any branch) and on pull requests:
 
-- **ps2**: inside the pinned ps2dev image, builds `ThirdPerson` and `BlankProgram` for PS2 with
-  `Engine/Build/BatchFiles/Linux/Build.sh` and uploads `ThirdPerson.elf`.
-- **win64**: `CheckBannedApis.ps1` (with `pwsh`), `Setup.bat`, `RunTests.bat`, then builds `LeonGame` and `LeonCook`,
-  then `CheckReimport.bat` (gate G5: reimporting the content leaves it unchanged).
-
-Formatting is checked locally with `Lint.bat` (the runner's clang-format version may differ from Visual Studio's).
+- **ps2** (an ubuntu runner, inside the pinned ps2dev image): builds `ThirdPerson`, `BlankProgram` and `TestPAL` for
+  PS2 with `Engine/Build/BatchFiles/Linux/Build.sh`, prints their sections (`ELF sizes (G3)`, in the log and the run
+  summary) and uploads the three ELFs. TestPAL runs in PCSX2, which CI does not have.
+- **win64**: `CheckBannedApis.ps1` (G4, with `pwsh`), the format check (G1: `FormatCode.bat --check` with
+  clang-format 20.1.8 from pip), `Setup.bat`, `RunTests.bat` (the engine's, ShooterGame's and TestPAL's tests), builds
+  `LeonGame` and `LeonCook`, `SmokeTest.bat` (G6), `BotMatch.bat 10 7` (ten rounds, played twice), `CheckReimport.bat`
+  (G5: reimporting the content leaves it unchanged), then the staged build smokes (`BuildCookRun.bat`: a content-only
+  project and ShooterGame, Development, headless).
+- **win64-shipping**: ShooterGame staged in Shipping by `BuildCookRun.bat`, playing a three-round bot match from its
+  pak.
 
 ## Troubleshooting
 
@@ -246,7 +258,7 @@ Formatting is checked locally with `Lint.bat` (the runner's clang-format version
 | `vcvars64.bat not found` | Install Visual Studio 18 (2026) or 2022 with the C++ workload |
 | `Ninja not on PATH` | `winget install Ninja-build.Ninja` and open a new terminal |
 | `cmake` is not recognized (`Setup.bat`) | Install CMake 3.24+ and add it to `PATH` |
-| `LeonBuildTool: unknown platform` / `configuration must be ...` | Platforms: `Win64`, `Linux`, `PS2`; configurations: `Debug`, `Development`, `Shipping` |
+| `LeonBuildTool: unknown platform` / `configuration must be ...` | Platforms: `Win64`, `PS2` (LeonBuildTool also registers `Linux`, which is not an official platform); configurations: `Debug`, `Development`, `Shipping` |
 | `LeonBuildTool: unknown module 'X' (required by ...)` | A dependency name is misspelled or its `.Build.cmake` is missing |
 | `module 'X' is not available on PS2` | A module used on PS2 depends on a Desktop-only module; move the dependency under a `_Desktop` suffix |
 | `LeonBuildTool: Docker build failed` | Start Docker Desktop; check that `docker run hello-world` works |

@@ -256,9 +256,10 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
   mounting its content folder), then `InitWorld` and `InitializeActorsForPlay` register and initialize the actors. The
   collision and mobility are properties, and a scene component saves its relative quaternion, so transforms load
   bit-exact.
-- The legacy level data has homes: `URotatingMovementComponent` (spin), Leon's `UBobbingMovementComponent`,
-  `UOrbitMovementComponent` and `UInteractableComponent` (bob, light orbit, trigger data), `DefaultGameMode`, and an
-  `ACameraActor` for the camera framing plus an `APlayerStart` at the view it opened with.
+- The legacy level data has homes: `URotatingMovementComponent` (spin), `DefaultGameMode`, and an `ACameraActor` for
+  the camera framing plus an `APlayerStart` at the view it opened with. (Leon's `UBobbingMovementComponent`,
+  `UOrbitMovementComponent` and `UInteractableComponent` held the bob, light orbit and trigger data until they were
+  removed in 0.20.1: no UE class, and no map used them.)
 - `UGLTFMapFactory` (`-run=ImportAssets -type=Map`) imports glTF scenes: one actor per node by the naming rules of
   `[/Script/LeonEd.MapImportSettings]` (`UCX_`, `COL_`, `Clip_`, `PlayerStart`, `NavWaypoint` in `BaseEditor.ini`; a
   project's own, and its `RequiredTags` check), the shared meshes and PBR materials next to the map,
@@ -339,8 +340,7 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
   drops the best weapon, which the next pawn without one picks up; a dead player spectates. Meshes and sounds made
   by scripts here (CC0).
 - **Fix**: a native CDO keeps its constructor's values for inherited config members.
-- 383 engine tests and 19 ShooterGame tests; the engine builds and its tests run on Linux (the Win64 platform test
-  aside).
+- 383 engine tests and 19 ShooterGame tests.
 
 ### Done — Rounds, money, buying and the bomb (P19)
 
@@ -377,12 +377,34 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 - ShooterGame's numbers as the PS2 port's targets in Budgets.md (reflection, UObjects, names, heap).
 - 386 engine tests and 34 ShooterGame tests; release 0.20.0 (the content resaved with the new version).
 
+### Done — The audit fixes (0.20.1)
+
+([LeonMapping — 0.20.1](LeonMapping.md#0201--the-audit-fixes)):
+
+- Engine and ShooterGame bugs the audit found (actors destroyed during a visit, zero-length steps, the chase repath,
+  the path's goal node, the bomb carrier after a round, plants outside a live round, grenade kill credit, the AWP's
+  reward); Core, CoreUObject, PakFile and LeonPak hardening (config arrays and removals saved in the user layer,
+  corrupt package counts, pak handles after unmount, `-extract` outside the destination).
+- The code without a UE counterpart is gone (the bobbing, orbit and interactable components, `VolumeHelpers`, the
+  interaction prompt and menu list widgets, `FAIChaseBehavior`, the basic shape and light helpers, the logic state and
+  wish direction of `AAIController`, now UE's `GetMoveStatus`); `APainCausingVolume` hurts the pawns inside it.
+- The post-process stack is gone (SSAO, FXAA, the tonemap, the HDR and LDR targets, early-Z, the quality presets):
+  the PS2 GS has no programmable pixel stage. `r.ShadowMapResolution` / `r.PlanarReflectionScale` are read from the
+  config; F2 and F3 draw the collision and the waypoint graph.
+- The bots follow the waypoints' `Jump` and `Crouch` flags; terrorists escort the bomb carrier, a team that outnumbers
+  the other hunts it, and a counter-terrorist rotates between the sites. UMG is UE's widget tree (no input), and the
+  buy menu is built on it.
+- CI runs on every push: the format check (G1, clang-format 20.1.8), TestPAL (run on Win64, built for PS2) and the
+  PS2 ELF sizes (G3).
+- 386 engine tests and 42 ShooterGame tests; release 0.20.1 (the content resaved with the new
+  version).
+
 ### Next
 
 - Measure the PS2 ELFs and TestPAL in PCSX2 again (not measured since P16) and record them in Budgets.md.
 - The bots' balance: in eight full matches on de_leon (seeds 1 to 8) the counter-terrorists won seven, and no round
-  ended with the bomb exploding (the terrorists die or the bomb is defused first). Terrorists that wait for each other
-  before a site, grenades, and rotations between the sites are the next steps.
+  ended with the bomb exploding (the terrorists die or the bomb is defused first); measured before the escort, the
+  hunt and the CT rotation. Grenades are the next step.
 - Later: move the character movement code from `ACharacter` into `UCharacterMovementComponent` (UE's
   `PerformMovement`, `MovementMode`, `Velocity`, `CurrentFloor`); a cached `ComponentToWorld`; tick functions.
 - Cook follow-ups: `-iterate` (cook only what changed), an asset registry, compressed paks, the PS2 target's formats
@@ -419,10 +441,10 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 - **Render resources:** the GPU copies live in the Renderer's cache keyed by asset, not on the asset (UE's `Resource`
   / `RenderData`), and there is no render thread; a render thread would need UE's resource fences.
 - **Console:** commands only come from `-ExecCmds` and `DebugExecBindings`; there is no `UConsole` window or console
-  variables (`IConsoleManager`), and `show Collision` / `show Navigation` only set their flags.
+  variables (`IConsoleManager`).
 - **Viewport:** no Slate; `UGameViewportClient` polls the window's keys and mouse each frame, and the desktop has no
   gamepad mappings.
 - **Platform checks in shared code:** the `PLATFORM_WINDOWS` tests in `Core/Private/HAL/MallocAnsi.cpp` and
   `Core/Private/Misc/OutputDeviceRedirector.cpp` should become HAL functions or move under `Private/Windows`.
-- **Linux:** registered in LeonBuildTool but not built or tested; enable `-Werror=shadow` on the Linux host
-  flags when it becomes a gate.
+- **Linux:** not an official platform (Win64 is the development and editor platform, PS2 the target); LeonBuildTool
+  registers it, but nothing builds or tests it.

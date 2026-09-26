@@ -173,7 +173,7 @@ LeonPak <in.lpak> -extract=<dir>
 | `-align=<bytes>` | With `-create`: every entry's data starts at a multiple of it (`2048`: CD sectors, for a PS2 pak on `cdrom0:`) |
 | `-list` | The mount point, then every entry sorted by path: `"<path>" offset: N, size: N bytes, sha1: <hex>`, and the totals |
 | `-test` | Reads every entry and checks its SHA-1 against the index; exit code 1 and an error per corrupt entry otherwise (the index's own SHA-1 is checked when the pak opens) |
-| `-extract=<dir>` | Writes every entry under `<dir>`, at its path relative to the mount point |
+| `-extract=<dir>` | Writes every entry under `<dir>`, at its path relative to the mount point; an entry whose path is absolute or leads out of `<dir>` (`..`) is refused with an error and not written |
 
 Exit code 0 on success, 1 on any error (a malformed response line, an unreadable source, two files with the same path,
 a pak that does not open). Lint builds it with the other Win64 targets.
@@ -247,16 +247,17 @@ All scripts forward to LeonBuildTool (`cmake -P Engine/Source/Programs/LeonBuild
 | `Engine\Build\BatchFiles\Cook.bat` | `<LeonCook arguments>` | Builds LeonCook (Win64 Development) and runs it |
 | `Engine\Build\BatchFiles\CheckReimport.bat` | `[<Project>.lproj ...]` | Gate G5: reimports the engine content (and the projects') and fails when git sees a change under a `Content` folder |
 | `Engine\Build\BatchFiles\BuildCookRun.bat` | `-project=<.lproj> -platform=Win64 [-configuration=...] [-build] [-cook] [-stage] [-pak] [-run] [-addcmdline="..."]` | Builds, cooks, stages and paks a project into `<Project>\Saved\StagedBuilds\Win64\`, and runs it ([above](#buildcookrun)) |
-| `Engine\Build\BatchFiles\RunTests.bat` | `[-automation=<filter>]` | Builds LeonAutomationTests (Win64 Development) and runs it from the repo root: every automation test (386), or those whose name contains `<filter>`; then the LeonHeaderTool golden tests, then ShooterGame's test program (`ShooterGameTests`, 34 tests, the same filter); fails if any fails |
+| `Engine\Build\BatchFiles\RunTests.bat` | `[-automation=<filter>]` | Builds LeonAutomationTests (Win64 Development) and runs it from the repo root: every automation test (386), or those whose name contains `<filter>`; then the LeonHeaderTool golden tests, then ShooterGame's test program (`ShooterGameTests`, 42 tests, the same filter), then `TestPAL` (built for Win64 Development, 120 tests); fails if any fails |
 | `Engine\Build\BatchFiles\SmokeTest.bat` | | Gate G6: builds ShooterGame, runs it headless on de_leon with `-ExecCmds=bot_fill -ExitAfterFrames=120` and fails unless it exits with 0 and logs ten pawns, five a team (`SmokeTest OK: 10 pawns, CT 5, T 5, exit code 0`) |
 | `Engine\Build\BatchFiles\BotMatch.bat` | `[Rounds] [Seed]` | Builds ShooterGame, plays a headless bot match twice (`-nullrhi -benchmark -botmatch -rounds=<Rounds> -seed=<Seed>`, 10 and 7) and fails unless both exit with 0 and log the same `Botmatch OK` line (P21) |
-| `Engine\Build\BatchFiles\FormatCode.bat` | `[--check]` | clang-format on every `.cpp` / `.h` / `.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game` (skips `ThirdParty`, `Intermediate`, `Binaries`); `--check` is a dry run that fails on unformatted files |
+| `Engine\Build\BatchFiles\FormatCode.bat` | `[--check]` | clang-format on every `.cpp` / `.h` / `.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game` (skips `ThirdParty`, `Intermediate`, `Binaries`); `--check` is a dry run that fails on unformatted files. It runs `LEON_CLANG_FORMAT`, else Visual Studio's LLVM `clang-format`, else the one on `PATH`, and warns when its major version is not 20 (the repository's; CI pins 20.1.8) |
 | `Engine\Build\BatchFiles\Lint.bat` | | `FormatCode.bat --check`, then `CheckBannedApis.ps1`, then builds LeonAutomationTests, LeonCook, LeonPak, LeonGame and BlankProgram, and ShooterGame and ShooterGameTests, for Win64 Development |
-| `Engine\Build\BatchFiles\CheckBannedApis.ps1` | | Gate G4: fails when engine or game code (`Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game`; comments ignored) uses glm, nlohmann, `std::vector` / `string` / `map` / `unordered_map` / `function` / `shared_ptr` / `unique_ptr`, iostream, the `printf` family, `LegacyGL` / `FLegacyTransform` / `LegacyAxes`, or `FLegacyCoordinateConversion` outside the tests (`Public/Tests`, `Private/Tests`); the allowed places are listed in [CODING_STANDARD.md §4](CODING_STANDARD.md#4-language). Violations print `<file>:<line>: G4 <rule>: <code> -> <replacement>`; `-Root <dir>` scans another tree. CI runs it with `pwsh` |
+| `Engine\Build\BatchFiles\CheckBannedApis.ps1` | | Gate G4: fails when engine or game code (`Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game`; comments ignored) uses glm, nlohmann, a `std::` container, string, `string_view`, stream, function or smart pointer or its header (D2), iostream, the `printf` family (`vfprintf`, `_snprintf`, ...), `LegacyGL` / `FLegacyTransform` / `LegacyAxes`, or `FLegacyCoordinateConversion` outside the tests (`Public/Tests`, `Private/Tests`); the allowed places are listed in [CODING_STANDARD.md §4](CODING_STANDARD.md#4-language). Violations print `<file>:<line>: G4 <rule>: <code> -> <replacement>`; `-Root <dir>` scans another tree. CI runs it with `pwsh` |
+| `Engine\Build\BatchFiles\GetVSEnv.bat` | (no arguments) | Called by `Build.bat` and `GenerateProjectFiles.bat`: runs Visual Studio's `vcvars64.bat` (18, then 2022) and checks that CMake and Ninja are on `PATH` |
 | `GenerateProjectFiles.bat` (root) → `Engine\Build\BatchFiles\GenerateProjectFiles.bat` | `[-Project=<file.lproj>]` | Visual Studio solution in `<Engine or Project>\Intermediate\ProjectFiles` plus the root `compile_commands.json` for clangd; builds keep using Build.bat |
 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1` | `[-Project <dir or .lproj> \| -Program <Name>] [-Configuration Debug\|Development\|Shipping] [-Build]` | Optionally builds the project (or engine program) for PS2, then starts PCSX2 on `<Project>\Binaries\PS2\<Name>.elf` (`Engine\Binaries\PS2\<Name>.elf` with `-Program`) |
 
-Linux equivalents: `Engine/Build/BatchFiles/Linux/Build.sh`, `Engine/Build/BatchFiles/Linux/GenerateProjectFiles.sh`, root `GenerateProjectFiles.sh` and `Setup.sh`.
+Shell equivalents: `Engine/Build/BatchFiles/Linux/Build.sh` (CI's `ps2` job builds with it inside the ps2dev container), `Engine/Build/BatchFiles/Linux/GenerateProjectFiles.sh`, root `GenerateProjectFiles.sh` and `Setup.sh`. Linux is not an official platform: Win64 is the development and editor platform, PS2 the target. A PS2 Docker build started from a Unix host runs the container as root and gives the outputs back to the calling user (`LEON_HOST_UID` / `LEON_HOST_GID`, [BUILD.md](BUILD.md#ps2-builds-in-docker)).
 
 LeonBuildTool options accepted after the positional arguments: `-Project=<file>`, `-Mode=Build|Clean|Rebuild|GenerateClangDatabase|GenerateProjectFiles|Setup`, `-NoDocker`, `-KeepGoing`.
 
@@ -272,7 +273,7 @@ Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson -Bu
 
 ## TestPAL
 
-Runs the automation tests linked into it (the `Private/Tests` of Core, CoreUObject, Json, Projects and PakFile, `COLLECT_AUTOMATION_TESTS`) on any platform, then logs GMalloc usage and the `FName` pool size. Before the tests it logs the reflected types, the heap their construction used and the `GUObjectArray` capacity; after them, the live object count. Exit code `0` when every test passes, `1` otherwise. `-filter=<text>` runs only the tests whose name contains `<text>`.
+Runs the automation tests linked into it (the `Private/Tests` of Core, CoreUObject, Json, Projects and PakFile, `COLLECT_AUTOMATION_TESTS`) on Win64 and PS2, then logs GMalloc usage and the `FName` pool size. Before the tests it logs the reflected types, the heap their construction used and the `GUObjectArray` capacity; after them, the live object count. Exit code `0` when every test passes, `1` otherwise. `-filter=<text>` runs only the tests whose name contains `<text>`.
 
 ```bat
 Engine\Build\BatchFiles\Build.bat TestPAL Win64 Development
@@ -283,7 +284,7 @@ Engine\Binaries\Win64\TestPAL.exe [-filter=System.Core.Containers]
 Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build
 ```
 
-On PS2 the verdict (`TestPAL: PASSED (73 test(s), 0 failed)`) and the `LogTestPAL` numbers are read from the PCSX2 log; the numbers are recorded in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md).
+`RunTests.bat` and CI build and run it on Win64 (120 tests). On PS2 (113 tests; CI builds the ELF but has no PCSX2) the verdict (`TestPAL: PASSED (113 test(s), 0 failed)`) and the `LogTestPAL` numbers are read from the PCSX2 log; the numbers are recorded in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md).
 
 ## Related docs
 

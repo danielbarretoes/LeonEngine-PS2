@@ -49,7 +49,7 @@ Engine/Platforms/PS2/
 with `-D_EE -G0 -O2 -Wall -ffunction-sections -fdata-sections` (C++: `-fno-exceptions -fno-rtti`) and links with
 `$PS2SDK/ee/startup/linkfile` and `-Wl,--gc-sections`, so unused functions and data are dropped (ThirdPerson text
 430 KB → 362 KB; see [Documentation/Budgets.md](Documentation/Budgets.md)). The engine adds
-`-Wall -Wextra -Werror=shadow` to every Leon module on PS2.
+`-Wall -Wextra -Werror=shadow -Werror=double-promotion` to every Leon module on PS2.
 
 ## Module extensions
 
@@ -198,7 +198,8 @@ Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build
 
 `UE_LOG` output goes to the EE console; read `%USERPROFILE%\Documents\PCSX2\logs\emulog.txt` for
 `TestPAL: PASSED (113 test(s), 0 failed)` and the `LogTestPAL` reflection / object-array / memory / name-pool
-lines.
+lines. CI's `ps2` job builds `ThirdPerson`, `BlankProgram` and `TestPAL` for PS2 and prints their ELF sections (gate
+G3) but cannot run them (no PCSX2).
 
 ## Reference
 

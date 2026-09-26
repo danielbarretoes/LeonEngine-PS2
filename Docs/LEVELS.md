@@ -23,17 +23,14 @@ Also: [ASSET_FORMATS.md](ASSET_FORMATS.md#maps--lmap) (what a map package saves)
 | `AStaticMeshActor` | `Classes/Engine/StaticMeshActor.h` | A placed mesh: its `UStaticMeshComponent` root (mesh, override materials, mobility, collision) |
 | `APlayerStart` | `Classes/GameFramework/PlayerStart.h` | Where players spawn; `PlayerStartTag` carries the game's meaning (`CT`, `T`) |
 | `ATargetPoint` | `Classes/Engine/TargetPoint.h` | A named point: a transform and `Tags` |
-| `ABlockingVolume`, `ATriggerVolume`, `APainCausingVolume` | `Classes/Engine/`, `Classes/GameFramework/` | Boxes (plan decision D16): an invisible wall, a region gameplay code tests (`Tags`: `BombSite` + `A`), a damaging region |
+| `ABlockingVolume`, `ATriggerVolume`, `APainCausingVolume` | `Classes/Engine/`, `Classes/GameFramework/` | Boxes (plan decision D16): an invisible wall, a region gameplay code tests (`Tags`: `BombSite` + `A`), a damaging region (every `PainInterval` it deals `DamagePerSec` × `PainInterval` to each pawn it encompasses: `CausePainTo`) |
 | `ADirectionalLight`, `APointLight` | `Classes/Engine/` | The lights (colour, intensity, shadows, source angle / attenuation radius) |
 | `ACameraActor` | `Classes/Camera/CameraActor.h` | A placed camera: its `UCameraComponent` keeps an orbit or free-look view (the legacy levels' framing, P15) |
-| `ANavigationWaypoint` | `Classes/AI/Navigation/NavigationWaypoint.h` | A point of the map's waypoint graph: `Links` (one way) and `Flags`; `UNavigationSystem` builds its graph from them when the world begins play (P20) |
+| `ANavigationWaypoint` | `Classes/AI/Navigation/NavigationWaypoint.h` | A point of the map's waypoint graph: `Links` (one way) and `Flags`; `UNavigationSystem` builds its graph from them when the world begins play (P20). `AAIController` reads two flags on its path: `Jump` (it jumps near that point) and `Crouch` (it crouches along the links on both sides of that point and stands up past them; the character must be able to crouch, `NavAgentProps.bCanCrouch`) |
 | `URotatingMovementComponent` | `Classes/GameFramework/RotatingMovementComponent.h` | UE's: turns its component at `RotationRate` (degrees per second), optionally about `PivotTranslation` |
-| `UBobbingMovementComponent` | `Classes/GameFramework/BobbingMovementComponent.h` | Leon: sets the component's height to `BaseZ + Amplitude * (0.5 + 0.5 * sin(Speed * t))` |
-| `UOrbitMovementComponent` | `Classes/GameFramework/OrbitMovementComponent.h` | Leon: moves the component on a circle around the world's vertical axis (`Radius`, `Height`, `HeightAmplitude`, `Speed`) |
-| `UInteractableComponent` | `Classes/Components/InteractableComponent.h` | Leon: what a player can do at a trigger volume (`InteractRadius`, `InteractCost`, the game-defined `Payload`, `bConsumeOnUse`), read by `VolumeHelpers` |
 
-The movement components tick with their actor: a map's spinning, bobbing or orbiting actor moves as the world ticks.
-The last three have no UE counterpart; they hold what the legacy levels stored ([Engine maps](#engine-maps)).
+The rotating movement component ticks with its actor: a map's spinning actor turns as the world ticks. The glTF map
+importer adds no movement component; a map saved by code can hold one.
 
 ## Opening a map
 
@@ -295,8 +292,8 @@ same way (`Body_CT.glb`, `Body_T.glb`, imported as static meshes).
 
 `Entry` and `Template_Default` were migrated in P15 from the legacy `.llev` templates (`Blank.llev`, `Starter.llev`)
 while the level reader still existed, and the packages are now their source of truth. What a legacy level stored
-became: the actors (the same classes), the spin / bob / point-light orbit a `URotatingMovementComponent` /
-`UBobbingMovementComponent` / `UOrbitMovementComponent`, a trigger's interaction data a `UInteractableComponent`, the
+became: the actors (the same classes), the spin a `URotatingMovementComponent` (the bob, the point-light orbit and a
+trigger's interaction data had Leon-only components with no UE class, which no engine map used; they were removed), the
 game mode string the world settings' `DefaultGameMode` ("Default": none), the camera framing an `ACameraActor` that
 keeps it and an `APlayerStart` at the view it opened with (the level's first start), the level name the map's name,
 and a sphere of another tessellation an `SM_` asset of the map. The frames of the migrated maps are the same pixels as
@@ -322,6 +319,6 @@ map at the next frame. [SETUP.md](SETUP.md#leongame) has the options.
 - The map importer is a LeonEd factory with naming rules in the config (UE: Datasmith or the glTF importer's level
   import, with metadata); light intensities are the glTF values as they are (no photometric units).
 - `ChoosePlayerStart` takes the first player start; there is no Play From Here start (no editor).
-- `UBobbingMovementComponent`, `UOrbitMovementComponent`, `UInteractableComponent` and `ANavigationWaypoint` are Leon's.
+- `ANavigationWaypoint` is Leon's (UE navigates a Recast navmesh; Leon a waypoint graph that `UNavigationSystem` builds).
 - An imported map keeps its source in its world's editor-only `AssetImportData` (UE keeps it on the Datasmith scene).
 - No streaming levels, world composition, level blueprints or built lighting data yet (`<Map>_BuiltData` later).

@@ -32,7 +32,7 @@ All identifiers are English (U.S. spelling), **PascalCase**, with no underscores
 | `U` | Classes that are `UObject`s in UE (components, assets, subsystems, widgets, engine objects). CoreUObject's types, the gameplay framework (P12: `UWorld`, `ULevel`, `UGameInstance`, the components), the engine and its settings (P13: `UEngine`, `UGameEngine`, `UGameViewportClient`, `ULocalPlayer`, `UPlayerInput`, `UInputSettings`, `UGameMapsSettings`), the assets (P14: `UTexture2D`, `UStaticMesh`, `UMaterial`, `USkeleton`, `USkeletalMesh`, `UAnimSequence`, `UBlendSpace1D`, `USoundWave`, `UDataAsset`, `UCommandlet`, `UAssetImportData`), the editor module's factories and commandlets (P14: `UFactory`, `UTextureFactory`, `UImportAssetsCommandlet`, `UCookCommandlet`, ...), `UUserWidget` and `UAnimInstance` derive from `UObject`. A few `U` types are still **naming only** until their phase: `UNavigationSystem` and the behavior tree lite (`UBehaviorTree`, `UBTNode`, `UBlackboardComponent`) | `UObject`, `UClass`, `UWorld`, `ULevel`, `UActorComponent`, `UCharacterMovementComponent`, `UUserWidget`, `UGameEngine`, `UTexture2D` |
 | `F` | Every other class or struct | `FEngineLoop`, `FTicker`, `FPaths`, `FSceneRenderer`, `FPhysScene`, `FHitResult`, `FPS2RHI` |
 | `T` | Class templates | `TArray`, `TMap`, `TSharedPtr`, `TDelegate`, `TOptional` |
-| `E` | Enums (prefer `enum class`, sized when stored) | `EKeys`, `EPhysicsBackend`, `EPostProcessQuality`, `ENetMsg` |
+| `E` | Enums (prefer `enum class`, sized when stored) | `EKeys`, `EPhysicsBackend`, `EMovementMode`, `ECollisionChannel` |
 | `I` | Abstract interfaces (no data members) | `IModuleInterface`, `IInputInterface`, `IPhysicsBackend` |
 | `G` | Global variables | `GEngineLoop`, `GDynamicRHI`, `GPrimaryGameModuleName` |
 
@@ -61,7 +61,7 @@ All identifiers are English (U.S. spelling), **PascalCase**, with no underscores
 - Bool-returning functions ask a question: `Is…`, `Has…`, `Should…`, `Can…`
   (`IsEngineExitRequested()`, `IsGamepadConnected()`, `ShouldClose()`, `HasPath()`).
 - An accessor whose natural name would collide with a member becomes `GetX()`
-  (`UButton::GetId()` returns member `Id`; `FEngineLoop::GetExitCode()` returns `ExitCode`).
+  (`FFieldClass::GetId()` returns member `Id`; `FEngineLoop::GetExitCode()` returns `ExitCode`).
 
 **`In` / `Out` parameters**
 
@@ -164,12 +164,11 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 
 ## 4. Language
 
-- **C++ standard.** All engine and game code is **C++17** on every platform (Win64, Linux, PS2), as in UE 4.27 and
+- **C++ standard.** All engine and game code is **C++17** on every platform (Win64 and PS2), as in UE 4.27 and
   the EE toolchain; LeonBuildTool registers C++17 for each platform. Do not use C++20 features.
-- **Shadowing is a compile error** (UE: `ShadowVariableWarningLevel = Error`): MSVC (Win64)
-  `/we4456 /we4457 /we4458 /we4459`, PS2 GCC `-Werror=shadow`. The Linux host flags
-  (`-Wall -Wextra -Wpedantic`) do not include it yet, so verify on Win64 or PS2. Resolve shadowing with the
-  `In` / `Local` prefixes (§1.2), never by disabling the diagnostic.
+- **Shadowing is a compile error** (UE: `ShadowVariableWarningLevel = Error`): MSVC (Win64) `/we4456 /we4457 /we4458
+  /we4459`, PS2 GCC `-Werror=shadow` (a GCC / Clang host gets the same `-Wall -Wextra -Werror=shadow`). Resolve
+  shadowing with the `In` / `Local` prefixes (§1.2), never by disabling the diagnostic.
 - Fix warnings (`/W4`, `-Wall -Wextra`); suppressing one is a last resort.
 - **No RTTI and no C++ exceptions** (plan decision D17, UE's `bUseRTTI` / `bEnableExceptions` defaults). LeonBuildTool
   compiles Leon code with `/GR-`, no `/EH` flag and `_HAS_EXCEPTIONS=0` on MSVC, `-fno-rtti -fno-exceptions` on GCC /
@@ -191,22 +190,23 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
   `CoreMinimal.h`: `TArray`, `TMap`, `TSet`, `FString`, `FName`, `FText`, `TUniquePtr` / `TSharedPtr`,
   `TFunction` and delegates. `TCHAR` is UTF-8 `char` on every platform, so write literals with `TEXT("...")`. Element
   types stored in UE containers must be relocatable with `memmove` (no pointers into themselves).
-- **Banned APIs (gate G4).** Every module uses the UE types and Core math (`FVector`, `FRotator`, `FQuat`,
-  `FMatrix`, `FTransform`, `FMath`, …) since P6. `Engine\Build\BatchFiles\CheckBannedApis.ps1` (run by `Lint.bat` and
-  CI) scans `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game`, ignoring comments, and rejects: glm and
-  nlohmann (use Core math and the `Json` module); `std::vector`, `std::string`, `std::map`, `std::unordered_map`,
-  `std::function`, `std::shared_ptr`, `std::unique_ptr` (use `TArray`, `FString`, `TMap`, `TFunction`,
-  `TSharedPtr`, `TUniquePtr`); `<iostream>`, `std::cout`, `std::cerr`, `std::clog` and the `printf` family (use
-  `UE_LOG`, `FString::Printf`, `FCString`). They are allowed only where Core wraps the C and C++ libraries (D2):
-  ThirdParty folders, the platform HAL sources (`Private/Windows`, `Private/Linux`, the PS2 Core extension), the
-  `printf` family inside `Runtime/Core/Private`, `LeonHeaderTool` (a std-only host program) and the test
-  program mains (`LeonAutomationTestsMain.cpp`, `TestPAL/Private`). A third-party library's own types stay in the
-  file that calls it (Jolt, tinyobjloader, ufbx, cgltf). Do not add aliases that pretend to be UE types
-  (`using FVector = glm::vec3` is not allowed). G4 also rejects the legacy math bridges removed in P7 (`LegacyGL`,
-  `FLegacyTransform`, `LegacyAxes`, tests included) and `FLegacyCoordinateConversion` /
-  `LegacyCoordinateConversion.h` outside the tests (`Public/Tests` and `Private/Tests` folders: the converter itself,
-  the golden adapters and the tests; since P15 no runtime or editor code holds legacy data). A violation prints
-  `<file>:<line>: G4 <rule>: <code> -> <what to use>`.
+- **Banned APIs (gate G4).** Every module uses the UE types and Core math (`FVector`, `FRotator`, `FQuat`, `FMatrix`,
+  `FTransform`, `FMath`, …) since P6. `Engine\Build\BatchFiles\CheckBannedApis.ps1` (run by `Lint.bat` and CI) scans
+  `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game`, ignoring comments, and rejects: glm and nlohmann
+  (use Core math and the `Json` module); every `std::` container, string, `string_view`, stream, function and smart
+  pointer (`std::vector`, `std::string`, `std::map`, `std::set`, `std::list`, `std::array`, `std::stringstream`,
+  `std::function`, `std::shared_ptr`, `std::unique_ptr`, ...) and their headers (D2: `<string>`, `<functional>`,
+  `<memory>`, `<sstream>`, `<vector>`, ...; use `TArray`, `FString`, `TMap`, `TSet`, `TFunction`, `TSharedPtr`,
+  `TUniquePtr`); `<iostream>`, `std::cout`, `std::cerr`, `std::clog` and the `printf` family, `vfprintf` and `_snprintf`
+  included (use `UE_LOG`, `FString::Printf`, `FCString`). They are allowed only where Core wraps the C and C++ libraries
+  (D2): ThirdParty folders, Core's platform HAL sources (`Core/Private/Windows`, `Core/Private/Linux`, the PS2 Core
+  extension), the `printf` family inside `Runtime/Core/Private`, `LeonHeaderTool` (a std-only host program) and the test
+  program mains (`LeonAutomationTestsMain.cpp`, `TestPAL/Private`). A third-party library's own types stay in the file
+  that calls it (Jolt, tinyobjloader, ufbx, cgltf). Do not add aliases that pretend to be UE types (`using FVector =
+  glm::vec3` is not allowed). G4 also rejects the legacy math bridges removed in P7 (`LegacyGL`, `FLegacyTransform`,
+  `LegacyAxes`, tests included) and `FLegacyCoordinateConversion` / `LegacyCoordinateConversion.h` outside the tests
+  (`Public/Tests` and `Private/Tests` folders: the converter itself, the golden adapters and the tests; since P15 no
+  runtime or editor code holds legacy data). A violation prints `<file>:<line>: G4 <rule>: <code> -> <what to use>`.
 - **Math is float.** No `double` arithmetic in engine code (the EE FPU is single precision); PS2 builds fail on an
   implicit float to double promotion (`-Werror=double-promotion`), so cast explicitly where a `double` is really
   meant (`Printf` arguments, `FTicker`'s clock).
@@ -363,7 +363,7 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 | Map source nodes (Blender objects) | the map importer's prefixes ([LEVELS.md](LEVELS.md#naming-conventions)): `UCX_<Mesh>_<NN>`, `COL_`, `Clip_`, `PlayerStart_<Tag>`, `NavWaypoint`, a project's own (ShooterGame: `BombSite_<A\|B>`, `BuyZone_<CT\|T>`) | `UCX_CrateStack_01`, `PlayerStart_CT`, `BombSite_A` |
 | Source art scripts | a script that builds source art in Blender sits next to its output, `snake_case.py`, Blender's modules only, run headless (`blender --background --factory-startup --python <script>`); it saves the `.blend` and exports the `.glb` | `Game/ShooterGame/SourceArt/Maps/make_de_leon.py` |
 | Source art licenses | a project's `SourceArt/LICENSES.md` lists every file with its origin and license (ShooterGame: CC0 only) | `Game/ShooterGame/SourceArt/LICENSES.md` |
-| GLSL shaders (`Engine/Shaders`) | snake_case | `blinn_phong.vert`, `post_composite.frag` |
+| GLSL shaders (`Engine/Shaders`) | snake_case | `blinn_phong.vert`, `shadow_depth.frag` |
 
 File formats: [ASSET_FORMATS.md](ASSET_FORMATS.md).
 
@@ -391,10 +391,10 @@ File formats: [ASSET_FORMATS.md](ASSET_FORMATS.md).
   in `<Module>/Private/Tests/<Area>Test.cpp` (`<Area>Tests.cpp` in the modules migrated in P5 / P6), with
   `bool F<Name>Test::RunTest(const FString& Parameters)` using `TestEqual` / `TestTrue` / `TestNotNull` / …; wrap the
   file in `#if WITH_DEV_AUTOMATION_TESTS`. An error logged during a test fails it unless the test declares it with
-  `AddExpectedError` (the two tests that feed `DeserializeLeonLevel` a bad buffer do). Every test follows this form
+  `AddExpectedError` (the package tests that load a damaged package do). Every test follows this form
   (`System.Core.Containers.Array`, `System.Engine.PhysScene.…`, `System.JoltPhysics.Step.…`); Catch2 is gone.
 - `RunTests.bat` runs all of them (`LeonAutomationTests`, `-automation=<filter>`); `TestPAL` runs the Core,
-  CoreUObject, Json and Projects tests on every platform, including PS2.
+  CoreUObject, Json, Projects and PakFile tests on Win64 (`RunTests.bat` runs it too) and on the PS2.
 - A game project's tests are named `<Project>.<Area>.<Name>` (`ShooterGame.Spawn.BotFill`), live in its module's
   `Private/Tests/` and run in the project's test program (`<Project>Tests.Target.cmake`: `LAUNCH_MODULE
   LeonAutomationTests`, `COLLECT_AUTOMATION_TESTS`, `AUTOMATION_TEST_MODULES <Project>`), which `RunTests.bat` builds

@@ -24,7 +24,7 @@ From the repository root (Windows):
 Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.lproj
 ```
 
-The PS2 build runs inside the pinned ps2dev Docker image (Docker must be running) unless `PS2DEV` is set on the host. Output: `Game/ThirdPerson/Binaries/PS2/ThirdPerson.elf` (Debug and Shipping add `-PS2-<Configuration>` to the name). On Linux use `Engine/Build/BatchFiles/Linux/Build.sh` with the same arguments.
+The PS2 build runs inside the pinned ps2dev Docker image (Docker must be running) unless `PS2DEV` is set on the host. Output: `Game/ThirdPerson/Binaries/PS2/ThirdPerson.elf` (Debug and Shipping add `-PS2-<Configuration>` to the name). From Git Bash or WSL use `Engine/Build/BatchFiles/Linux/Build.sh` with the same arguments (CI's `ps2` job builds this way inside the ps2dev container).
 
 Run in PCSX2 (optionally building first):
 
@@ -87,7 +87,7 @@ LeonBuildTool generates the target's module table and marks ThirdPerson as the p
 
 ## Config
 
-`Config/DefaultEngine.ini`, `DefaultGame.ini` and `DefaultInput.ini` follow Unreal's layout and are loaded by `GConfig` at startup, on top of `Engine/Config/Base*.ini` and `Engine/Platforms/PS2/Config/PS2Engine.ini`. `FThirdPersonCharacter::LoadConfig` reads `MoveSpeed`, `Gravity` and `JumpSpeed` from `[/Script/ThirdPerson.ThirdPersonCharacter]` in `DefaultGame.ini` and logs where they came from (`Character tuning from DefaultGame.ini` or `... compiled defaults`). `DefaultInput.ini` only documents the pad bindings that `FThirdPersonGameMode::Tick` hard-codes (input from config arrives in P13).
+`Config/DefaultEngine.ini`, `DefaultGame.ini` and `DefaultInput.ini` follow Unreal's layout and are loaded by `GConfig` at startup, on top of `Engine/Config/Base*.ini` and `Engine/Platforms/PS2/Config/PS2Engine.ini`. `FThirdPersonCharacter::LoadConfig` reads `MoveSpeed`, `Gravity` and `JumpSpeed` from `[/Script/ThirdPerson.ThirdPersonCharacter]` in `DefaultGame.ini` and logs where they came from (`Character tuning from DefaultGame.ini` or `... compiled defaults`). `DefaultInput.ini` only documents the pad bindings that `FThirdPersonGameMode::Tick` hard-codes: it is loaded as `GInputIni` but not read, because the config-driven input (`UInputSettings`, `UPlayerInput`, P13) belongs to the desktop gameplay framework and the PS2 game has no player controller.
 
 On the PS2 the files are read through PCSX2's `host:` device, which is the ELF's folder. `RunPCSX2.ps1` stages the ini files and `ThirdPerson.lproj` there before launching (`-NoStage` skips it). PCSX2 only opens them with **Settings > Advanced > Enable Host Filesystem** (`[EmuCore] HostFs = true` in `PCSX2.ini`); without it the game runs with the compiled defaults, which are the same values.
 

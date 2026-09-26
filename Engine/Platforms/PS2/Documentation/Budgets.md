@@ -190,19 +190,18 @@ archives, config), which section GC dropped while nothing referenced them. The g
 each class it reflects later adds its generated code, its `UClass` and its `FProperty` objects. The reflection budget
 (400 KB) now also holds for ThirdPerson: about 179 KB of code and tables, the object array and the construction heap.
 
-**P21 ShooterGame as the port's target** (Linux x86-64 Development, headless: `ShooterGame -nullrhi -benchmark
+**P21 ShooterGame as the port's target** (Win64 Development in CI, headless: `ShooterGame -nullrhi -benchmark
 -botmatch -rounds=10 -seed=7`, de_leon, ten bots; the game logs `Botmatch budget:` at the end, the same counters
-TestPAL logs on the PS2). The gameplay framework does not run on the PS2 yet, so these are the numbers a PS2
+TestPAL logs on the PS2; the values below are 0.20.1's). The gameplay framework does not run on the PS2 yet, so these are the numbers a PS2
 ShooterGame would have to fit, measured where it runs:
 
 | Item | ShooterGame (desktop) | PS2 limit | Notes |
 |---|---:|---:|---|
-| Reflected types | 129 classes, 37 structs, 17 enums, 8 functions, 751 properties | — | TestPAL on the PS2: 30 classes, 280 properties |
-| Reflection construction heap | 199 KB | 400 KB (with the reflection code and tables) | 64-bit pointers: the `FProperty` and `UClass` objects shrink on the EE's 32-bit pointers, but the code and tables of Engine, AIModule, UMG and the game come on top; the reflection budget is the first to watch |
-| UObjects alive | peak 2 188 in a frame, 1 377 at the end | 8 192 slots | the peak counts objects pending the next garbage collection too |
-| Names | 1 584, 44 KB used | 256 KB of blocks | desktop blocks: 320 KB |
-| GMalloc peak | 3 933 KB (current 3 621 KB at the end) | 31 MB of RAM for everything | includes the desktop object array (131 072 slots × 16 bytes = 2 MB; the PS2's is 96 KB); about 1.9 MB is the world, the map's assets, the actors and the reflection |
-| Process peak (max RSS) | 10.2 MB | — | the program image and the C++ runtime included |
+| Reflected types | 132 classes, 37 structs, 16 enums, 9 functions, 752 properties | — | TestPAL on the PS2: 30 classes, 280 properties |
+| Reflection construction heap | 194 KB | 400 KB (with the reflection code and tables) | 64-bit pointers: the `FProperty` and `UClass` objects shrink on the EE's 32-bit pointers, but the code and tables of Engine, AIModule, UMG and the game come on top; the reflection budget is the first to watch |
+| UObjects alive | peak 2 283 in a frame, 1 628 at the end | 8 192 slots | the peak counts objects pending the next garbage collection too |
+| Names | 1 572, 44 KB used | 256 KB of blocks | desktop blocks: 320 KB |
+| GMalloc peak | 3 902 KB (current 3 676 KB at the end) | 31 MB of RAM for everything | includes the desktop object array (131 072 slots × 16 bytes = 2 MB; the PS2's is 96 KB); about 1.9 MB is the world, the map's assets, the actors and the reflection |
 
 Since 0.20.1 CI measures the PS2 ELFs on every push (the ps2 job's "ELF sizes (G3)" step prints `size` for
 ThirdPerson, BlankProgram and TestPAL; the table above records 0.20.1). TestPAL has not run in PCSX2 since P16: its

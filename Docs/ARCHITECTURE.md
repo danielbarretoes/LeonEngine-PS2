@@ -83,9 +83,9 @@ Full reference: [BUILD.md](BUILD.md).
 - `leon_module(<Name> …)` in `<Module>.Build.cmake` declares `PUBLIC_DEPENDENCIES`, `PRIVATE_DEPENDENCIES`,
   `CIRCULAR_DEPENDENCIES` (UE `CircularlyReferencedDependentModules`, propagated like public ones),
   `PLATFORMS` allow-list and `_<Platform|Group>` suffixed variants (`PRIVATE_DEPENDENCIES_Desktop`).
-- Platforms: **Win64** (groups `Windows Microsoft Desktop`, C++17), **Linux** (`Unix Linux Desktop`, C++17,
-  registered but not a verification gate), **PS2** (`PS2 Console`, C++17, extension, built in the pinned
-  ps2dev Docker image).
+- Platforms: **Win64** (groups `Windows Microsoft Desktop`, C++17; the development and editor platform) and **PS2**
+  (`PS2 Console`, C++17, extension, built in the pinned ps2dev Docker image; the target platform). LeonBuildTool also
+  registers `Linux` (`Unix Linux Desktop`), which is not an official platform: nothing builds or tests it.
 - A module library's C++ standard is the **lowest** standard among the platforms it is allowed on, and the launch
   module compiled into an executable uses the platform's standard. Every platform registers C++17 (like UE 4.27), so
   every module and executable compiles as C++17.
@@ -298,10 +298,10 @@ paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable 
 | **AudioMixer** | Audio device (miniaudio): PCM16 samples played from memory, the UI cues | `FAudioDevice`, `FSoundWavePCM`, `EUISound` | Desktop |
 | **RenderCore** | CPU-side render data, UE view matrices, the GL clip-space adapter; the tests' legacy data converter | `FMeshData`, `FMeshSection`, `FVertex`, `FFrustum` (over Core's `FBox` / `FPlane`), `FMaterial` (`MaterialShared.h`: the values a material gives the renderer), `EMaterialLightingModel`, `EPixelFormat` (`PixelFormat.h`), `MakeViewMatrix` / `MakeLookAtView` / `MakeReflectMatrix` / `FitLightSpaceMatrix` (`ViewMatrices.h`), `ToGLClipSpace` (`GLClipSpace.h`), `EShaderReloadResult` (`ShaderCore.h`); for the tests only, `FLegacyCoordinateConversion` (`Public/Tests`) | Desktop |
 | **Renderer** | The renderer module: the scene (`FScene`), the forward scene renderer, the canvas and line passes, the GPU copies of the assets. Only its module interface is public (Engine's `IRendererModule`) | `FRendererModule`, `FScene`, `FSceneRenderer`, `FRenderResourceCache`, `FCanvasRenderer`, `FLineBatchRenderer`, `FShader`, `FShadowMap`, `FGPUPassTimer`, `LogRenderer` | Desktop |
-| **SlateCore** | Text layout primitives | `ETextJustify`, HUD font metrics | Desktop |
-| **UMG** | Widgets (UObjects since P12) | `UUserWidget`, `UButton`, `UTextBlock`, `UImage`, `UProgressBar`, `UVerticalBox`, `UMenuListWidget`, `UInteractionPromptWidget`, `FPaintContext` | Desktop |
-| **Engine** | The engine object and maps (`.lmap`, P15), gameplay framework as UObjects (P12), world, levels as actors (P13), input, the viewport client and the console (P13), physics scene, the asset classes and their import data (P14), the render interfaces (P13) | `UEngine` / `GEngine`, `UGameEngine`, `IEngineLoop`, `FURL`, `UGameViewportClient`, `FViewport`, `UPlayer`, `ULocalPlayer`, `UGameInstance` / `FWorldContext`, `UWorld`, `ULevel`, `FActorSpawnParameters`, `AActor`, `AInfo`, `UActorComponent`, `USceneComponent`, `UPrimitiveComponent`, `UShapeComponent`, `UCapsuleComponent`, `UBoxComponent`, `USphereComponent`, `UMeshComponent`, `UStaticMeshComponent`, `USkeletalMeshComponent`, `UCameraComponent`, `USpringArmComponent`, `UMovementComponent`, `UPawnMovementComponent`, `UCharacterMovementComponent`, `APawn`, `ACharacter`, `AController`, `APlayerController`, `AGameModeBase`, `AGameMode` (`MatchState`), `AGameStateBase`, `AGameState`, `APlayerState`, `AHUD`, `APlayerCameraManager`, `ADefaultPawn`, `UFloatingPawnMovement`, `URotatingMovementComponent`, `UBobbingMovementComponent`, `UOrbitMovementComponent`, `UInputSettings`, `UPlayerInput`, `UInputComponent`, `UGameplayStatics`, `FPhysScene`, `UNavigationSystem`; `AStaticMeshActor`, `APlayerStart`, `ATargetPoint`, `AVolume`, `ATriggerVolume`, `ABlockingVolume`, `APainCausingVolume`, `ALight`, `ADirectionalLight`, `APointLight`, `ULightComponent` (+ base, local, directional, point), `AWorldSettings`, `ACameraActor`, `ANavigationWaypoint`, `UInteractableComponent`; `UTexture` / `UTexture2D`, `UStaticMesh` (`FStaticMeshLODResources`, `FStaticMaterial`), `UBodySetup` (`FKAggregateGeom`, `FKBoxElem`, `ECollisionTraceFlag`), `UMaterialInterface` / `UMaterial` (`EMaterialShadingModel`), `USkeleton`, `USkeletalMeshSocket`, `USkeletalMesh`, `UAnimationAsset`, `UAnimSequenceBase`, `UAnimSequence`, `UBlendSpaceBase`, `UBlendSpace1D`, `UAnimInstance`, `UCharacterAnimInstance`, `USoundBase` / `USoundWave`, `UDataAsset`, `UCommandlet`, `UAssetImportData` (`FAssetImportInfo`); `FDebugDraw`, `FDebugOverlay`; `FSceneInterface`, `FPrimitiveSceneProxy`, `FLightSceneProxy`, `IRendererModule`, `FSceneViewFamily`, `FSceneView`, `FCanvas`; `LogEngine`, `LogLevel`, `LogPath`, `LogPhysics`, `LogSpawn`, `LogWorld` (`EngineLogs.h`) | Desktop |
-| **AIModule** | AI controller (a UObject actor), behavior trees over a typed blackboard, and senses | `AAIController`, `UBehaviorTree`, `UBTComposite_Sequence`, `UBTComposite_Selector`, `UBTDecorator_Bool`, `UBTTask_Action`, `UBlackboardComponent`, `FAIChaseBehavior`, `UPawnSensingComponent` (P20) | Desktop |
+| **SlateCore** | Text layout primitives and the layout types UMG uses | `ETextJustify`, HUD font metrics, `FMargin` (`Layout/Margin.h`), `EHorizontalAlignment` (`Types/SlateEnums.h`) | Desktop |
+| **UMG** | Widgets (UObjects since P12) as UE's widget tree; no Slate behind them and no input | `UWidget` (`ESlateVisibility`, `Slot`, `GetDesiredSize`, `Paint`), `UPanelWidget` / `UPanelSlot`, `UContentWidget`, `UBorder`, `UVerticalBox` / `UVerticalBoxSlot`, `UCanvasPanel` / `UCanvasPanelSlot`, `UTextBlock`, `UImage`, `UProgressBar`, `UUserWidget`, `UWidgetTree`, `FPaintContext` | Desktop |
+| **Engine** | The engine object and maps (`.lmap`, P15), gameplay framework as UObjects (P12), world, levels as actors (P13), input, the viewport client and the console (P13), physics scene, the asset classes and their import data (P14), the render interfaces (P13) | `UEngine` / `GEngine`, `UGameEngine`, `IEngineLoop`, `FURL`, `UGameViewportClient`, `FViewport`, `UPlayer`, `ULocalPlayer`, `UGameInstance` / `FWorldContext`, `UWorld`, `ULevel`, `FActorSpawnParameters`, `AActor`, `AInfo`, `UActorComponent`, `USceneComponent`, `UPrimitiveComponent`, `UShapeComponent`, `UCapsuleComponent`, `UBoxComponent`, `USphereComponent`, `UMeshComponent`, `UStaticMeshComponent`, `USkeletalMeshComponent`, `UCameraComponent`, `USpringArmComponent`, `UMovementComponent`, `UPawnMovementComponent`, `UCharacterMovementComponent`, `APawn`, `ACharacter`, `AController`, `APlayerController`, `AGameModeBase`, `AGameMode` (`MatchState`), `AGameStateBase`, `AGameState`, `APlayerState`, `AHUD`, `APlayerCameraManager`, `ADefaultPawn`, `UFloatingPawnMovement`, `URotatingMovementComponent`, `UInputSettings`, `UPlayerInput`, `UInputComponent`, `UGameplayStatics`, `FPhysScene`, `UNavigationSystem`; `AStaticMeshActor`, `APlayerStart`, `ATargetPoint`, `AVolume`, `ATriggerVolume`, `ABlockingVolume`, `APainCausingVolume`, `ALight`, `ADirectionalLight`, `APointLight`, `ULightComponent` (+ base, local, directional, point), `AWorldSettings`, `ACameraActor`, `ANavigationWaypoint`; `UTexture` / `UTexture2D`, `UStaticMesh` (`FStaticMeshLODResources`, `FStaticMaterial`), `UBodySetup` (`FKAggregateGeom`, `FKBoxElem`, `ECollisionTraceFlag`), `UMaterialInterface` / `UMaterial` (`EMaterialShadingModel`), `USkeleton`, `USkeletalMeshSocket`, `USkeletalMesh`, `UAnimationAsset`, `UAnimSequenceBase`, `UAnimSequence`, `UBlendSpaceBase`, `UBlendSpace1D`, `UAnimInstance`, `UCharacterAnimInstance`, `USoundBase` / `USoundWave`, `UDataAsset`, `UCommandlet`, `UAssetImportData` (`FAssetImportInfo`); `FDebugDraw`, `FDebugOverlay`; `FSceneInterface`, `FPrimitiveSceneProxy`, `FLightSceneProxy`, `IRendererModule`, `FSceneViewFamily`, `FSceneView`, `FCanvas`; `LogEngine`, `LogLevel`, `LogPath`, `LogPhysics`, `LogSpawn`, `LogWorld` (`EngineLogs.h`) | Desktop |
+| **AIModule** | AI controller (a UObject actor), behavior trees over a typed blackboard, and senses | `AAIController`, `UBehaviorTree`, `UBTComposite_Sequence`, `UBTComposite_Selector`, `UBTDecorator_Bool`, `UBTTask_Action`, `UBlackboardComponent`, `UPawnSensingComponent` (P20), `EPathFollowingStatus` | Desktop |
 | **MeshUtilities** | Static mesh import to mesh data, glTF scenes, skeletal FBX import (Developer) | `FStaticMeshBuilder`, `LoadObj`, `LoadStaticMeshFromFbx`, `LoadStaticMeshFromGltf`, `LoadGltfScene` (`FGltfScene`), `LoadSkeletalMeshFromFbx`, `LoadAnimSequenceFromFbx`, `FImportCoordinateConversion` | Desktop |
 | **TargetPlatform** | The platforms the cook targets (Developer, P16; UE: TargetPlatform): Win64 (identity) and PS2 (a stub with the Win64 formats) | `ITargetPlatform`, `ITargetPlatformManagerModule`, `GetTargetPlatformManager` / `GetTargetPlatformManagerRef` | Desktop |
 | **LeonEd** | The editor module (Editor; UE: UnrealEd): asset factories, the map importer, reimport, the commandlets LeonCook runs (the cook by the book, P16) | `UFactory`, `UTextureFactory`, `UFbxFactory`, `UGLTFImportFactory`, `UGLTFMapFactory`, `UMapImportSettings`, `USoundFactory`, `UMaterialFactoryNew`, `FReimportHandler`, `FReimportManager`, `UImportAssetsCommandlet`, `UResavePackagesCommandlet`, `UValidateAssetsCommandlet`, `UCookCommandlet`, `FAssetImportUtils`, `LogLeonEd` | Desktop |
@@ -365,7 +365,7 @@ Core/Public/HAL/PlatformMemory.h                      #include COMPILED_PLATFORM
 | Archives | `Serialization/Archive.h`, `MemoryReader.h`, `MemoryWriter.h`, `BufferArchive.h`, `UObject/ObjectVersion.h`, `Misc/EngineVersion.h` | `FArchive` with `<<` for the scalars, `FString` (UTF-8, length + 1), `FName` / `FText` (as strings), `TArray` / `TSet` / `TMap` and the math types, and virtual `UObject*` / `GetLinker()` hooks that do nothing in a plain archive (CoreUObject's package linkers write `FName` as a name table index and `UObject*` as an `FPackageIndex`); `UEVer()` is the package format version (`ELeonPackageVersion`); `FMemoryReader`, `FMemoryWriter`, `FBufferArchive`; `FEngineVersion` |
 | Paths | `Misc/Paths.h` | UE's `FPaths` over `FString` (`EngineDir`, `ProjectDir`, `ProjectContentDir`, `ProjectSavedDir`, `ProjectLogDir`, `Combine`, `/` operator, `NormalizeFilename`, `ConvertRelativePathToFull`, `MakePathRelativeTo`, …). Desktop directories are absolute and come from the generated module-init globals (`GLeonEngineDirFromBaseDir`, `GLeonProjectDirFromBaseDir`), except in a staged build (`IsStaged`, P16: UE's `../../../Engine/` and the project folder above `Binaries/`); PS2 uses the staged layout under the ELF folder (`<Base>/Engine/`, `<Base>/<Project>/`). (The legacy `ResolveLegacyContentPath` went in P15: the renderer takes its shaders from `EngineDir()` / `Shaders`.) |
 | Command line | `Misc/CommandLine.h`, `Misc/Parse.h`, `Misc/App.h`, `HAL/PlatformProcess.h` | `FCommandLine::Set` / `Get` (built from `argv` in every `main`), `FParse::Param` / `Value` / `Token` / `Command` with UE's rules (`-` or `/` switches, quoted values, word boundaries), `FApp` (project name, build configuration), `FPlatformProcess::BaseDir()` (from `argv[0]` on PS2) |
-| Config | `Misc/ConfigCacheIni.h` | `FConfigCacheIni` / `GConfig` with `GEngineIni`, `GGameIni`, `GInputIni`, `GEditorIni`. Layers (D8): `Engine/Config/Base.ini` → `Base<T>.ini` → `Engine/Platforms/<P>/Config/<P><T>.ini` → `<Project>/Config/Default<T>.ini` → `<Project>/Platforms/<P>/Config/<P><T>.ini` → `<Project>/Saved/Config/<Plat>/<T>.ini` (desktop only; `Flush` writes the user changes there). `+ - . !` array operators, quoted values, `-ini:Engine:[Section]:Key=Value` overrides |
+| Config | `Misc/ConfigCacheIni.h` | `FConfigCacheIni` / `GConfig` with `GEngineIni`, `GGameIni`, `GInputIni`, `GEditorIni`. Layers (D8): `Engine/Config/Base.ini` → `Base<T>.ini` → `Engine/Platforms/<P>/Config/<P><T>.ini` → `<Project>/Config/Default<T>.ini` → `<Project>/Platforms/<P>/Config/<P><T>.ini` → `<Project>/Saved/Config/<Plat>/<T>.ini` (desktop only; `Flush` writes the user changes there: an array key as `!Key=ClearArray` plus one `.Key=Value` line a value, so the saved layer replaces the lower layers' array; `RemoveKey` / `EmptySection` are saved too; `Flush(true)` reloads a global file from its whole hierarchy). `+ - . !` array operators, quoted values, `-ini:Engine:[Section]:Key=Value` overrides |
 | Misc types | `Misc/Guid.h`, `Misc/SecureHash.h`, `Misc/Crc.h`, `Misc/DateTime.h`, `Misc/Timespan.h` | `FGuid` (`NewGuid`, `NewDeterministicGuid` from MD5), `FMD5` / `FMD5Hash`, `FSHA1` / `FSHAHash` (the paks' hashes), `FCrc`, `FDateTime` / `FTimespan` (integer ticks, no double) |
 
 ### Coordinates
@@ -381,7 +381,7 @@ Since P7 the desktop world uses UE 4.27's space, the same one the math types ass
 | Matrices | `FMatrix` row vectors (`V * M`); `A * B` applies A first, so an MVP is `Model * View * Projection` |
 | View space | x right, y up, z forward, left-handed (UE's `FViewMatrices`): `MakeViewMatrix(Origin, FRotator)` / `MakeLookAtView` in `RenderCore/Public/ViewMatrices.h` |
 | Projection | `FPerspectiveMatrix` with the vertical field of view, or `FOrthoMatrix`; depth z / w in [0, 1], 0 at the near plane; no reversed Z |
-| GL clip space | `ToGLClipSpace` (`RenderCore/Public/GLClipSpace.h`) keeps x, y, w and writes z_gl = 2z − w, applied last. Frustum planes, the shadow lookup, SSAO depth and the debug light frustum read the GL result |
+| GL clip space | `ToGLClipSpace` (`RenderCore/Public/GLClipSpace.h`) keeps x, y, w and writes z_gl = 2z − w, applied last. Frustum planes, the shadow lookup and the debug light frustum read the GL result |
 | Winding | triangles keep their index order through every conversion; front faces are counter-clockwise on screen (`glFrontFace(GL_CCW)`, set explicitly) |
 
 **Converters.** Every basis change below swaps or flips one axis (determinant −1): the physical scene is kept (what was
@@ -619,12 +619,12 @@ replaced game instance) after destroying the world, and `FEngineLoop::Exit` afte
 | Engine | `GEngine` (`UGameEngine`) starts the renderer on the main window (`IRendererModule::InitRenderer`), creates the `UGameInstance` (`GameInstanceClass`; it creates the world context), the `UGameViewportClient` and the first `ULocalPlayer`, loads its default assets from their packages (`InitializeObjectReferences`: `DefaultTexture`, `DefaultBumpNormalTexture`, the default material, the UI sounds) and owns `FAudioDevice` and `FDebugOverlay`. Frame (`UGameEngine::Tick`, §9): shader hot reload → the viewport client's input → audio → pending travel → world tick → `ConditionalCollectGarbage` → the viewport client's tick and draw |
 | Startup | `UGameInstance::StartGameInstance`: the map is the first command-line token, `-map=` (Leon's alias) or `GameDefaultMap` (`/Engine/Maps/Template_Default`), with its URL options → `UEngine::Browse` → `UEngine::LoadMap`: find the `.lmap` (a long package name, or a file; a file outside the mount points mounts its content folder) → the local players leave their controllers, the old world's actors end play (`LevelTransition`), the world is destroyed and collected → `LoadPackage` → `UWorld::FindWorldInPackage`, rooted → `UWorld::InitWorld` → `UWorld::SetGameMode(FURL)` (`UGameInstance::CreateGameModeForURL`, D18: `?game=`, `AWorldSettings::DefaultGameMode`, `GameModeMapPrefixes`, `GlobalDefaultGameMode`, `AGameModeBase`) → `InitializeActorsForPlay` (`UpdateWorldComponents`, `InitGame`, the actors initialize) → every local player's `SpawnPlayActor` (`AGameModeBase::Login` spawns the `PlayerControllerClass`, `PostLogin` gives it its HUD and restarts it: `FindPlayerStart` → `SpawnDefaultPawnFor` → possess) → `UWorld::BeginPlay` (`StartPlay`, then every actor) → `UGameInstance::LoadComplete`. `open <map>` travels the same way at the next frame (`SetClientTravel`, `TickWorldTravel`) |
 | World | `UWorld` owns its `ULevel` (actors and `AWorldSettings`), the `FPhysScene`, the render scene (`Scene`, allocated in `InitWorld` through `IRendererModule::AllocateScene` when `FApp::CanEverRender()`), the `LineBatcher` (`FDebugDraw`) and the navigation; `SpawnActor` during a tick joins the level after it; `TickGameplayFrame` (what `UGameEngine::Tick` runs since P17): actor tick (`UWorld::Tick`: the controllers' input, the components that enabled their tick, then `Tick`; a character moves in its movement component's tick, the camera managers update last) → pawn separation → `FPhysScene::Step` → the characters leave the bodies they overlap and separate again → `FPhysScene::SyncComponentsToBodies` (simulated bodies move their components). `SendAllEndOfFrameUpdates` (before each frame) sends the moved transforms and the skeletal poses to the scene proxies |
-| Levels | Actors (P13) in `.lmap` maps (P15, [LEVELS.md](LEVELS.md)): the world, its persistent level, `AWorldSettings` first, then `AStaticMeshActor`, `APlayerStart`, `ATargetPoint`, `ATriggerVolume`, `ABlockingVolume`, `APainCausingVolume`, `ADirectionalLight`, `APointLight`, `ACameraActor`, `ANavigationWaypoint`, with their components (the movement components, `UInteractableComponent`); a map is saved with `UPackage::SavePackage` and imported from glTF by LeonEd's `UGLTFMapFactory`. Gameplay finds them with `UGameplayStatics::GetAllActorsOfClass` / `GetAllActorsWithTag` |
+| Levels | Actors (P13) in `.lmap` maps (P15, [LEVELS.md](LEVELS.md)): the world, its persistent level, `AWorldSettings` first, then `AStaticMeshActor`, `APlayerStart`, `ATargetPoint`, `ATriggerVolume`, `ABlockingVolume`, `APainCausingVolume`, `ADirectionalLight`, `APointLight`, `ACameraActor`, `ANavigationWaypoint`, with their components (a `URotatingMovementComponent` among them); a map is saved with `UPackage::SavePackage` and imported from glTF by LeonEd's `UGLTFMapFactory`. Gameplay finds them with `UGameplayStatics::GetAllActorsOfClass` / `GetAllActorsWithTag` |
 | Actors | `AActor` (root component = actor transform; `DefaultSceneRoot` unless a subclass skips it; `Tags`, `bHidden`, `Owner`, `Instigator`, `GetUniqueID()` = spawn serial) → `AInfo` (hidden, does not tick in the world) and `APawn` → `ACharacter` (root `UCapsuleComponent`, `UCharacterMovementComponent`, `USkeletalMeshComponent`, `TakeDamage`) |
 | Components | `UActorComponent` (render state, physics state, `MarkRenderStateDirty`) → `USceneComponent` (relative transform, `Mobility`, `AttachToComponent` with rules and a socket, `SetupAttachment`) → `UPrimitiveComponent` (`CreateSceneProxy`, `SetCollisionEnabled` / `SetSimulatePhysics`, `GetCollisionShape`) → `UShapeComponent` (`UCapsuleComponent`, `UBoxComponent`, `USphereComponent`) and `UMeshComponent` (`UStaticMeshComponent`, `USkeletalMeshComponent`, whose bones are sockets); `UCameraComponent`, `USpringArmComponent`; `UMovementComponent` → `UPawnMovementComponent` → `UCharacterMovementComponent`; `ULightComponentBase` → `ULightComponent` → `UDirectionalLightComponent`, `ULocalLightComponent` → `UPointLightComponent` |
 | Controllers / rules | `AController` (an actor: `ControlRotation`, possession, `InitPlayerState`) → `APlayerController`, `AAIController` (AIModule); `AGameModeBase` (an `AInfo`: `GameStateClass`, `PlayerControllerClass`, `PlayerStateClass`, `DefaultPawnClass` (`ADefaultPawn`), `HUDClass`; `InitGame`, `InitGameState`, `StartPlay`, UE's login and restart flow: `Login`, `PostLogin`, `HandleStartingNewPlayer`, `RestartPlayer`, `FindPlayerStart`, `SpawnDefaultPawnFor`; it ticks its game state's clock) → `AGameMode` (`MatchState`: EnteringMap → WaitingToStart → InProgress → WaitingPostMatch, or Aborted); `AGameStateBase` (`PlayerArray`, match clock) → `AGameState` (`MatchState`, `ElapsedTime`); `APlayerState`; `UGameInstance` (`Init`, `Shutdown`, `InitializeStandalone`, `StartGameInstance`, `CreateGameModeForURL`, `LocalPlayers`, `NotifyLevelOpened`); `UPlayer` / `ULocalPlayer` (`SpawnPlayActor`, `Exec`) |
-| Helpers | `UGameplayStatics` (traces over `FPhysScene`, `ApplyPointDamage`, `GetAllActorsOfClass`, ...), `VolumeHelpers` (over the volume actors), `UNavigationSystem` (P20: the level's `ANavigationWaypoint` graph, A*, capsule-sweep reachability, `AutoLinkWaypoints`; `UNavigationPath`), `AActor::MakeNoise` |
-| UI / audio | `AHUD::AddWidget<T>()` (a `UUserWidget` with the HUD as its outer) + `Paint(FCanvas&)` (UMG's `FPaintContext` wraps the canvas); `FAudioDevice` plays PCM16 samples from memory (`UGameplayStatics::PlaySound2D` / `PlaySoundAtLocation` with a `USoundWave`; `PlayUiSound` with the sound waves `[/Script/Engine.Engine] UI*SoundName` names, else procedural tones; `PlayMusic`/`StopMusic`; `SetListener` from the camera each frame); headless (`-nullrhi`) initialises silent |
+| Helpers | `UGameplayStatics` (traces over `FPhysScene`, `ApplyPointDamage`, `GetAllActorsOfClass`, ...), `UNavigationSystem` (P20: the level's `ANavigationWaypoint` graph, A*, capsule-sweep reachability, `AutoLinkWaypoints`, the agent of `[/Script/Engine.NavigationSystem]` through `FWaypointLinkParams::FromConfig`; `FindPath` can return each point's node, so `AAIController` follows the `Jump` and `Crouch` waypoint flags; `UNavigationPath`; a plain class the world owns by value, not a UObject), `AActor::MakeNoise` |
+| UI / audio | `AHUD::AddWidget<T>()` (a `UUserWidget` with the HUD as its outer: `Initialize` makes its `UWidgetTree` and calls `NativeOnInitialized`, which builds the tree, then `NativeConstruct`; the HUD ticks and paints the visible ones) + `Paint(FCanvas&)` (UMG's `FPaintContext` wraps the canvas); `FAudioDevice` plays PCM16 samples from memory (`UGameplayStatics::PlaySound2D` / `PlaySoundAtLocation` with a `USoundWave`; `PlayUiSound` with the sound waves `[/Script/Engine.Engine] UI*SoundName` names, else procedural tones; `PlayMusic`/`StopMusic`; `SetListener` from the camera each frame); headless (`-nullrhi`) initialises silent |
 
 ### Input
 
@@ -793,26 +793,31 @@ UWorld::LineBatcher (FDebugDraw) -----------------------------------------------
 - The module also starts and stops the renderer on the window's context (`InitRenderer`, `ShutdownRenderer`), reloads
   the shaders (`ReloadShaders`), reports the frame statistics (`GetFrameStats`) and reads the frame back for
   screenshots (`ReadFramebufferBgr`).
-- `FSceneRenderer` (Renderer-private) is a forward renderer: directional shadow map (light 0), optional half-res
-  planar reflection (`PlanarReflectionScale = 0.5`), opaque / transparent (the sky is the
-  procedural gradient in `blinn_phong.frag`). With post enabled the
-  color pass renders into an HDR `FSceneColorTarget` (RGB16F + depth), then SSAO (`FSSAOTarget`) → blur →
-  tonemap + exposure (`post_composite.frag`) → optional FXAA.
-- Matrices are UE's (§6, Coordinates): the camera's view (`UCameraComponent::ViewMatrix`, UE view space) and
-  projection (`FPerspectiveMatrix` / `FOrthoMatrix`, depth [0, 1]) go through `ToGLClipSpace` once, so every MVP the
-  passes hand around is `Model * View * ProjectionGL`, uploaded as is with `FShader::SetMat4(Name, const FMatrix&)`.
-  The shadow fit measures near / far along +Z of a left-handed light view; the planar mirror reflects about the
-  horizontal plane z = PlaneZ (`MakeReflectMatrix`, RenderCore); the normal matrix and the 2D overlay projection are
-  renderer-private helpers (`Private/RenderMatrices.h`).
-- Scalability: `SetPostProcessQuality(EPostProcessQuality::Off|Low|Medium|High)` (default **Low**: light SSAO,
-  no FXAA, 1024 shadow map); optional early-Z (`SetEarlyZEnabled`).
-- `FGPUPassTimer` measures `Shadow / Planar / Color / Ssao / Post` with `GL_QUERY_RESULT_AVAILABLE` (no stall).
+- `FSceneRenderer` (Renderer-private) is a forward renderer: directional shadow map (light 0), optional planar
+  reflection, opaque / transparent (the sky is the procedural gradient in `blinn_phong.frag`), drawn straight into the
+  window's back buffer. There is no post processing (no SSAO, FXAA, tonemapping or HDR scene color, no early-Z pass):
+  the PS2 GS has no programmable pixel stage, so the Win64 preview does not fake one.
+- Matrices are UE's (§6, Coordinates): the camera's view (`UCameraComponent::ViewMatrix`, UE view space) and projection
+  (`FPerspectiveMatrix` / `FOrthoMatrix`, depth [0, 1]) go through `ToGLClipSpace` once, so every MVP the passes hand
+  around is `Model * View * ProjectionGL`, uploaded as is with `FShader::SetMat4(Name, const FMatrix&)`. The shadow fit
+  measures near / far along +Z of a left-handed light view (the casters' box, padded 75 cm; without casters a 6 m square
+  box 2 m tall above the origin, Z up); the planar mirror reflects about the horizontal plane z = PlaneZ
+  (`MakeReflectMatrix`, RenderCore); the normal matrix and the 2D overlay projection are renderer-private helpers
+  (`Private/RenderMatrices.h`).
+- Settings: `FSceneRenderer::ReadRendererSettings` reads `r.ShadowMapResolution` (1024, clamped to 512..4096) and
+  `r.PlanarReflectionScale` (0.5 of the framebuffer, clamped to 0.1..1) from `[/Script/Engine.RendererSettings]` of the
+  engine config when the renderer starts (UE's scalability variables; not console variables in Leon).
+- `FGPUPassTimer` measures `Shadow / Planar / Color` with `GL_QUERY_RESULT_AVAILABLE` (no stall); the stats show them
+  as `GPU Sh / Pl / Col`.
 - Resources: `FShader` (GLSL from `Engine/Shaders`, hot reload), `FUniformBuffer` (Renderer); materials are `UMaterial`
   assets loaded from `.lasset` packages.
-- Debug (Engine): `FDebugDraw` (lines, boxes, arrows, axes, collision / nav-mesh debug; the world's `LineBatcher`)
+- Debug (Engine): `FDebugDraw` (lines, boxes, arrows, axes, collision / navigation debug; the world's `LineBatcher`)
   and `FDebugOverlay` (the on-screen text, drawn into the canvas). In `LeonGame` the keys run console commands
-  (`DebugExecBindings`): F1 `show Bounds` (mesh AABBs and the shadow volume), F2 `show Collision` and F3
-  `show Navigation` (flags only: nothing draws them yet), F4 `stat unit` (stats), F5 `RecompileShaders all` and F6
+  (`DebugExecBindings`): F1 `show Bounds` (mesh AABBs and the shadow volume), F2 `show Collision` (the characters'
+  capsules and the physics bodies) and F3 `show Navigation` (the waypoint graph's nodes and links), which
+  `UGameEngine::Tick` passes to the world's frame (`FWorldGameplayFrameParams::CollisionDebugDraw` /
+  `NavigationDebugDraw`) to draw into `UWorld::LineBatcher` in windowed runs, F4 `stat unit` (stats), F5
+  `RecompileShaders all` and F6
   `show AxesGizmo` (1 m world axes at the origin and a view-orientation gizmo in the bottom-left corner, X red, Y green,
   Z blue; `-AxesGizmo` turns it on at start).
 - Maps load from `.lmap` packages (`UEngine::LoadMap`) — see [LEVELS.md](LEVELS.md) and
@@ -880,25 +885,25 @@ UWorld::LineBatcher (FDebugDraw) -----------------------------------------------
   the content from its sources and fails when git sees a change under a `Content` folder; CI runs it.
 - **Tests**: each module keeps its tests in `<Module>/Private/Tests/`, excluded from the module library and compiled
   only into targets with `COLLECT_AUTOMATION_TESTS`. Every test is a UE automation test
-  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, named `System.<Module>.<Area>.<Name>`): 386 on Win64 — Core 47, CoreUObject 63,
-  Json 2, Projects 2, PakFile 5, PhysicsCore 8, RenderCore 23, AnimationCore 1, Engine 157, Renderer 10, AIModule 32,
-  MeshUtilities 8, LeonEd 19, JoltPhysics 9 (a tenth, `System.JoltPhysics.Backend.DisabledFallsBack`, compiles only
-  without the plugin). On PS2, Core runs 44 (the platform-file, config-cache and log-file tests are desktop-only),
-  CoreUObject 61 (its SaveConfig and package file tests are desktop-only; the other package tests save to memory),
-  Json 2, Projects 1 and PakFile 5 (on paks in memory).
-  Reflected test fixtures live in `<Module>/Private/Tests/*.h` (LeonHeaderTool's Tests unit: CoreUObject's,
-  `Engine/Private/Tests/EngineTestTypes.h`, `AIModule/Private/Tests/GameplayTestTypes.h`); tests that spawn actors
-  create their world with `FScopedTestWorld`, which destroys it and collects the garbage at the end of the scope. An
-  error logged during a test fails it unless the test declares it with `AddExpectedError`. The golden tests
-  (`System.*.Golden.*`) replay movement, traces, cameras, shadows and reflections against tables recorded in the
-  legacy world before P7 (the navigation's and the AI's went with the grid navigation in P20); manual checks are in [TESTING.md](TESTING.md).
+  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, named `System.<Module>.<Area>.<Name>`): 386 on Win64 — Core
+  48, CoreUObject 63, Json 2, Projects 2, PakFile 5, PhysicsCore 8, RenderCore 23, AnimationCore 1, Engine 157, Renderer
+  10, AIModule 31, MeshUtilities 8, LeonEd 19, JoltPhysics 9 (a tenth, `System.JoltPhysics.Backend.DisabledFallsBack`,
+  compiles only without the plugin). On PS2, Core runs 44 (the platform-file, config-cache and log-file tests are
+  desktop-only), CoreUObject 61 (its SaveConfig and package file tests are desktop-only; the other package tests save to
+  memory), Json 2, Projects 1 and PakFile 5 (on paks in memory). Reflected test fixtures live in
+  `<Module>/Private/Tests/*.h` (LeonHeaderTool's Tests unit: CoreUObject's, `Engine/Private/Tests/EngineTestTypes.h`,
+  `AIModule/Private/Tests/GameplayTestTypes.h`); tests that spawn actors create their world with `FScopedTestWorld`,
+  which destroys it and collects the garbage at the end of the scope. An error logged during a test fails it unless the
+  test declares it with `AddExpectedError`. The golden tests (`System.*.Golden.*`) replay movement, traces, cameras,
+  shadows and reflections against tables recorded in the legacy world before P7 (the navigation's and the AI's went with
+  the grid navigation in P20); manual checks are in [TESTING.md](TESTING.md).
   - `LeonAutomationTests` (Desktop) starts the module table, runs the automation tests through
     `FAutomationTestFramework` and fails if any fails. Run with `Engine\Build\BatchFiles\RunTests.bat`
     (`-automation=<filter>` runs the tests whose name contains `<filter>`).
-  - A project's tests (`ShooterGame.*`, 10) live in its module's `Private/Tests/` and run in the project's own test
+  - A project's tests (`ShooterGame.*`, 42) live in its module's `Private/Tests/` and run in the project's own test
     program (`ShooterGameTests`: the engine's runner with `AUTOMATION_TEST_MODULES ShooterGame`, so only the
     project's tests, with the project's config); `RunTests.bat` builds and runs it after the engine's.
-  - `TestPAL` (every platform; Core, CoreUObject, Json, Projects and PakFile: 118 tests on Win64, 112 on PS2) runs the
+  - `TestPAL` (every platform; Core, CoreUObject, Json, Projects and PakFile: 120 tests on Win64, 113 on PS2) runs the
     automation tests and prints `TestPAL: PASSED (N test(s), 0 failed)` plus the reflection (types, construction
     heap), object array, garbage collection (`GC budget`, a final collection), package round trip (`Package budget`),
     GMalloc and name-pool numbers. On PS2 it runs in PCSX2
@@ -915,12 +920,13 @@ UWorld::LineBatcher (FDebugDraw) -----------------------------------------------
   (`-nullrhi -benchmark -botmatch`), twice with the same seed; ShooterGame's `FShooterMatchChecker` checks the rules'
   invariants every frame and the game exits 1 when one breaks (`FPlatformMisc::RequestExitWithStatus`, which
   `FEngineLoop::GetExitCode` returns); the two runs must log the same summary.
-- **CI** (`.github/workflows/ci.yml`): PS2 `ThirdPerson` + `BlankProgram` in the ps2dev image (ELF artifact);
-  Win64 `CheckBannedApis.ps1`, `Setup.bat`, `RunTests.bat` (the engine's and ShooterGame's tests), `LeonGame` and
-  `LeonCook`, `SmokeTest.bat` (G6), `BotMatch.bat 10 7`, `CheckReimport.bat` (G5, engine, ThirdPerson and
-  ShooterGame), then the staged build smokes: `BuildCookRun.bat` cooks, stages, paks and runs a content-only project
-  and ShooterGame headless (Development); a parallel Win64 job stages ShooterGame in Shipping and plays three rounds
-  of a bot match from its pak.
+- **CI** (`.github/workflows/ci.yml`, every push and pull request): `ps2` builds `ThirdPerson`, `BlankProgram` and
+  `TestPAL` in the ps2dev image, prints their ELF sections (G3) and uploads the ELFs; `win64` runs `CheckBannedApis.ps1`
+  (G4), the format check (G1, clang-format 20.1.8), `Setup.bat`, `RunTests.bat` (the engine's, ShooterGame's and
+  TestPAL's tests), builds `LeonGame` and `LeonCook`, then `SmokeTest.bat` (G6), `BotMatch.bat 10 7`,
+  `CheckReimport.bat` (G5: the engine, ThirdPerson and ShooterGame) and the staged build smokes: `BuildCookRun.bat`
+  cooks, stages, paks and runs a content-only project and ShooterGame headless (Development); `win64-shipping`, in
+  parallel, stages ShooterGame in Shipping and plays three rounds of a bot match from its pak.
 
 ---
 
@@ -947,4 +953,4 @@ roadmap is [NextSteps.md](UnrealEngine427/NextSteps.md).
 | Linking | Always static (`IS_MONOLITHIC=1`), generated module table; no DLL modules or hot reload. |
 | Cook and paks (P16) | Cook by the book only (no cook on the fly, no `-iterate`, no asset registry); the PS2 target platform cooks the Win64 formats and the PS2 game mounts no pak yet; paks without compression, encryption or signatures; only Win64 stages (`BuildCookRun.bat`, a PowerShell script instead of AutomationTool). |
 | Collision | UE's channels and responses (P17), without named profiles; the arcade scene's shapes are boxes, triangle meshes and upright capsules (the characters); `*Multi*` queries keep every hit rather than stopping at the first block. |
-| Build tool | CMake scripts instead of C# UBT; Linux is registered but not verified. Leon code builds without RTTI or C++ exceptions everywhere (D17: MSVC `/GR-`, no `/EH`, `_HAS_EXCEPTIONS=0`; GCC / Clang `-fno-rtti -fno-exceptions`); third-party libraries keep their own flags. |
+| Build tool | CMake scripts instead of C# UBT; the Linux platform LeonBuildTool registers is not an official platform (Win64 and PS2 are). Leon code builds without RTTI or C++ exceptions everywhere (D17: MSVC `/GR-`, no `/EH`, `_HAS_EXCEPTIONS=0`; GCC / Clang `-fno-rtti -fno-exceptions`); third-party libraries keep their own flags. |

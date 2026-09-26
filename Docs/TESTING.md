@@ -7,10 +7,11 @@ What runs automatically and what a person still has to check by hand. Build and 
 
 | Check | Command | Passes when |
 | --- | --- | --- |
-| Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` twice: the engine's (`LeonAutomationTests`, 386) and ShooterGame's (`ShooterGameTests`, 34) |
+| Automation tests (Win64; CI) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` twice, the engine's (`LeonAutomationTests`, 386) and ShooterGame's (`ShooterGameTests`, 42), then `TestPAL: PASSED (120 test(s), 0 failed)` (TestPAL on Win64) |
 | LeonHeaderTool golden tests (run by `RunTests.bat` too) | `Engine\Intermediate\Build\HostTools\Win64\LeonHeaderTool.exe -Test` | `LeonHeaderTool -Test: N of N golden cases passed` |
-| Core, CoreUObject, Json, Projects and PakFile on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (113 test(s), 0 failed)` in the EE log (119 on Win64) |
-| Format, banned APIs (G4), Win64 build | `Engine\Build\BatchFiles\Lint.bat` | `Lint OK` |
+| Core, CoreUObject, Json, Projects and PakFile on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (113 test(s), 0 failed)` in the EE log (120 on Win64) |
+| Format (G1), banned APIs (G4), Win64 build | `Engine\Build\BatchFiles\Lint.bat` | `Lint OK` (CI runs the format check with clang-format 20.1.8 and `CheckBannedApis.ps1` on their own) |
+| PS2 builds and ELF sizes (G3; CI) | the `ps2` job: `Engine/Build/BatchFiles/Linux/Build.sh <Target> PS2 Development` in the ps2dev image | `ThirdPerson`, `BlankProgram` and `TestPAL` build, and the `ELF sizes (G3)` step prints their sections (`mips64r5900el-ps2-elf-size`) to the log and the run summary |
 | Reproducible reimport (G5; CI, on a clean checkout) | `Engine\Build\BatchFiles\CheckReimport.bat [<Project>.lproj ...]` | `CheckReimport OK`: `LeonCook -run=ImportAssets -reimport -all` leaves `Engine/Content` and `Game/*/Content` unchanged, the imported maps included (`git diff --exit-code`, no new file) |
 | ShooterGame smoke (G6; CI) | `Engine\Build\BatchFiles\SmokeTest.bat` | `SmokeTest OK: 10 pawns, CT 5, T 5, exit code 0`: ShooterGame boots de_leon headless, `bot_fill` adds nine bots to the local player, and the game mode's end-of-match line counts ten pawns in their teams |
 | ShooterGame bot match (P21; CI) | `Engine\Build\BatchFiles\BotMatch.bat [Rounds] [Seed]` (10, 7) | `BotMatch OK: 10 round(s), seed 7, exit code 0, replayed identically`: ten bots play de_leon headless and unpaced (`ShooterGame -nullrhi -benchmark -botmatch -rounds=10 -seed=7`), `FShooterMatchChecker` finds no broken invariant, and a second run logs the same `Botmatch OK` line ([ShooterGame README — Bot match](../Game/ShooterGame/README.md#bot-match)) |
@@ -24,26 +25,32 @@ The CoreUObject tests collect garbage (`CollectGarbage`) between their steps; th
 `UPROPERTY` members, the root set, `FGCObject` and `TStrongObjectPtr`, and read the others through weak pointers, so
 a collection in one test never touches another test's objects. The config tests build their ini layers in memory
 (`FConfigFile::CombineFromBuffer`) and remove them afterwards; the SaveConfig test (desktop only) writes its user
-layer under `<Project>/Intermediate/Tests/CoreUObjectConfig/` and deletes it.
+layer under `<Project>/Intermediate/Tests/CoreUObjectConfig/` and deletes it, and
+`System.Core.Config.UserLayerArraysAndRemovals` (desktop only) saves a user layer under
+`<Project>/Intermediate/Tests/ConfigArrays/` and checks that it gives back the arrays (a one-value array replaces the
+whole array, duplicates stay) and the removed keys.
 
 The gameplay tests (Engine, AIModule, JoltPhysics) work on UObjects since P12. A test that spawns actors creates its
 world with `FScopedTestWorld` (`Engine/Public/Tests/ScopedTestWorld.h`): `UWorld::CreateWorld` at the start of the
 scope, and at its end `DestroyWorld` (every actor ends play) and a full garbage collection, so the next test starts
 without them. Components, cameras, levels, HUDs and game states made outside a world come from `NewObject`; nothing is
 declared by value. Such a free object is collected by the next safe point, so a test that ends a test world early
-declares the objects it still needs before that world, or holds them in `TStrongObjectPtr`. Reflected fixtures (an
-actor that spawns during its tick, test pawns, controllers and a component that counts its calls) live in
+declares the objects it still needs before that world, or holds them in `TStrongObjectPtr`. Reflected fixtures (an actor
+that spawns during its tick, test pawns, controllers and a component that counts its calls) live in
 `Engine/Private/Tests/EngineTestTypes.h` and `AIModule/Private/Tests/GameplayTestTypes.h`. `System.Engine.World.*`,
 `System.Engine.Components.*` and `System.Engine.GameFramework.*` cover the spawn and destroy sequence, ownership and
 collection, attachment rules and sockets, the primitive render state, the game mode, game state and match states, the
-HUD widgets and anim instances as objects, and the engine's collection timer.
+HUD widgets and anim instances as objects, and the engine's collection timer. `System.UMG.WidgetTree.LayoutAndPaint`
+lays out and paints a widget tree (a canvas panel holding a border around a vertical box of a text and images, one of
+them collapsed): the desired sizes add up as UE's and every widget paints in the rectangle its slot gives it.
 
 Since P13 the level content is actors, and since P15 a map is a `.lmap` package.
 `System.Engine.MapPackage.SaveLoadRoundTripsEveryActor` saves a world with one actor of every class a map holds (world
-settings, a mesh with collision, a spin and a bob, the three volumes, a tagged player start and target point, both
-lights, an orbit, a trigger's interaction data, a camera actor) under a `/MapTest/` mount point and loads it back,
-value by value and transform by transform; `LoadMapOpensMapPackages` opens it with `UEngine::LoadMap` by name and by
-file (the content folder mount); `MovementComponentsMove` ticks the movement components.
+settings, a mesh with collision and a spin, the three volumes, a tagged player start and target point, both lights, a
+camera actor) under a `/MapTest/` mount point and loads it back, value by value and transform by transform;
+`LoadMapOpensMapPackages` opens it with `UEngine::LoadMap` by name and by file (the content folder mount);
+`RotatingMovementTurns` ticks the rotating movement component. `System.Engine.Damage.PainCausingVolume` checks that a
+pain-causing volume hurts the pawns inside it every `PainInterval`.
 `System.AIModule.LevelAndAISmoke.EditorStyleMapResaveHeadless` resaves the engine's maps and compares the bytes with
 their files, and `System.Engine.AxisTestMap.NoMirroring` checks the axes map ([LEVELS.md](LEVELS.md#axistest)).
 `LeonAutomationTests` links the Renderer, so test worlds have the Renderer's `FScene` (it needs no GPU: the GPU copies
@@ -77,7 +84,7 @@ tracks, samples) and the references between the packages. The animation tests (`
 their skeletons and clips as UObjects.
 
 Since P14's second part the engine content is packages: `System.Engine.EngineContent.*` load them (the defaults
-`BaseEngine.ini` names, the basic shapes and the runtime spheres of other tessellations, the migrated materials with
+`BaseEngine.ini` names, the basic shapes with their generators' geometry, the migrated materials with
 their `.lmat` parameters, the template map's plane with `M_WorldGrid`, `T_Default_D`'s import data and its source's
 MD5) and check that the scene keeps the assets its proxies draw alive. They only read `Engine/Content`: no test writes
 there (tests write under `<Project>/Intermediate/Tests/`, the program's `Engine/Programs/LeonAutomationTests/`, which
@@ -114,19 +121,20 @@ shaders. `System.CoreUObject.Package.EditorOnlyData` checks that a filtered pack
 Since P17 the collision channels and UE's movement model are tested. `System.Engine.CollisionChannel.*` (8) check the
 response container, the raw bodies' defaults (the old channel filter), traces following the responses (the smaller of
 the body's and the query's), object-type queries, a component's settings, traces hitting a pawn's capsule while
-characters walk past each other's, and the config's named channels. The new `System.Engine.CharacterMovement.*`
-tests (12, `CharacterMovementModelTests.cpp`) run UE's model on a test character (`AEngineTestCharacter`): acceleration
-to the speed, braking to a stop, ground friction turning the velocity, air control keeping the momentum, crouching
-(the capsule, the speed, the agent flag, in the air) and standing up only with room under a ceiling, the
-`GetMaxSpeed` hook, the pawn's input vector, the first-person camera following the control rotation and the mouse
-sensitivity. The default (instant) model keeps every golden table as it was.
+characters walk past each other's, and the config's named channels. The new `System.Engine.CharacterMovement.*` tests
+(12, `CharacterMovementModelTests.cpp`; 14 with the later `LongFramesKeepTheFloor` and `ZeroStepKeepsTheVelocity`) run
+UE's model on a test character (`AEngineTestCharacter`): acceleration to the speed, braking to a stop, ground friction
+turning the velocity, air control keeping the momentum, crouching (the capsule, the speed, the agent flag, in the air)
+and standing up only with room under a ceiling, the `GetMaxSpeed` hook, the pawn's input vector, the first-person camera
+following the control rotation and the mouse sensitivity. The default (instant) model keeps every golden table as it
+was.
 
-ShooterGame's tests (`ShooterGame.*`, 10, in `ShooterGameTests.exe` with the project's config) cover the team choice,
-ten bots on ten team starts and a sixth refused, a pawn standing on its start, `bot_fill`, the character's CS movement
-(UE's model, the run and walk speeds, crouching, the capsule, the first-person camera), the crosshair the HUD draws,
-the project's input and channel config, and the map: `ShooterGame.Map.DeLeonHoldsTheGame` loads `/Game/Maps/de_leon`
-and checks its sites, buy zones, team starts, waypoint links, player clip and sun; `RequiredTags` imports
-`de_leon.glb` under the project's rules and refuses the AxisTest source; `TenPawnsOnDeLeon` opens the map in a
+ShooterGame's tests (`ShooterGame.*`, 42 now, in `ShooterGameTests.exe` with the project's config) cover, since P17, the
+team choice, ten bots on ten team starts and a sixth refused, a pawn standing on its start, `bot_fill`, the character's
+CS movement (UE's model, the run and walk speeds, crouching, the capsule, the first-person camera), the crosshair the
+HUD draws, the project's input and channel config, and the map: `ShooterGame.Map.DeLeonHoldsTheGame` loads
+`/Game/Maps/de_leon` and checks its sites, buy zones, team starts, waypoint links, player clip and sun; `RequiredTags`
+imports `de_leon.glb` under the project's rules and refuses the AxisTest source; `TenPawnsOnDeLeon` opens the map in a
 headless `UGameEngine`, adds nine bots and ticks 60 frames: ten pawns standing on distinct starts, on the spawn pads.
 
 Since P20 the bots are tested. The waypoint navigation (`System.AIModule.Gameplay.Navigation*`,
@@ -134,14 +142,17 @@ Since P20 the bots are tested. The waypoint navigation (`System.AIModule.Gamepla
 around walls, and links steps, jumps and drops (`AutoLinkWaypoints`); `System.LeonEd.MapFactory.AutoLinksWaypoints`
 imports a map with the auto-linking; `System.AIModule.Blackboard.TypedKeys` and `System.AIModule.PawnSensing.*` (sight
 in a cone behind a line of sight, hearing within the loudness' range) test the AI's pieces. ShooterGame's
-`ShooterGame.Bots.*` (6, `ShooterBotTests.cpp`) test the bots on a small open map (buying, engaging with the reaction
-time respected, the carrier planting, a CT defusing) and play three rounds of de_leon headless with ten bots and
-`?seed=5` under `FShooterMatchChecker` (each round ends with a reason, the scores add up, the money stays within
-[0, 16000], no pawn falls through the floor) and kills happen; `MatchCheckerFlagsViolations` shows the checker catches
-a score the rules did not give. The bot match (P21, `BotMatch.bat`) runs the same checker over ten rounds and plays
-them twice: a seed must replay the same match, which caught a read of a freed path in `AAIController`'s repath
-(the bots then diverged between runs; valgrind reports no error since the fix). The round and weapon tests keep the bots still (`bot_stop`, or a controller that does not
-tick) so they test the rules alone.
+`ShooterGame.Bots.*` (10, `ShooterBotTests.cpp`) test the bots on a small open map (buying, engaging with the reaction
+time respected, the carrier planting, a CT defusing, the terrorists escorting the carrier, an outnumbering team hunting,
+a CT rotating between the sites), the agent read from the config (`AgentFromConfig`), and play three rounds of de_leon
+headless with ten bots and `?seed=5` under `FShooterMatchChecker` (each round ends with a reason, the scores add up, the
+money stays within [0, 16000], no pawn falls through the floor) and kills happen; `MatchCheckerFlagsViolations` shows
+the checker catches a score the rules did not give. The bot match (P21, `BotMatch.bat`) runs the same checker over ten
+rounds and plays them twice: a seed must replay the same match, which caught a read of a freed path in `AAIController`'s
+repath (the bots then diverged between runs; valgrind reports no error since the fix).
+`System.AIModule.Gameplay.AIControllerPathFollowReadsWaypointFlags` checks that a controller jumps at a `Jump` waypoint
+and crouches along a `Crouch` one. The round and weapon tests keep the bots still (`bot_stop`, or a controller that does
+not tick) so they test the rules alone.
 
 The golden tests (`System.Engine.Golden.*`, `System.JoltPhysics.Golden.*`) replay movement, traces, cameras, shadows
 and reflections against tables recorded before P7 moved the world to UE's axes (the navigation's and the AI's went

@@ -3,13 +3,14 @@
 A C++ game engine that follows the **Unreal Engine 4.27** source layout, module architecture and Epic naming
 conventions, built with CMake through **LeonBuildTool** (our UnrealBuildTool).
 
-- **Win64 host runtime**: the engine modules (`Core`, `Engine`, `Renderer` on OpenGL 3.3, `UMG`, `AIModule`, ...),
-  the `LeonGame` game executable, the `LeonCook` command-line editor (import, reimport, cook commandlets), the `LeonPak`
-  pak tool, `BuildCookRun.bat` (a Shipping build staged with its content in one `.lpak`) and the `LeonAutomationTests`
-  test runner. The world uses
-  UE's space: X forward, Y right, Z up, left-handed, 1 unit = 1 cm.
-- **PS2 platform extension** (`Engine/Platforms/PS2`): PlayStation 2 HAL, DualShock input, engine loop hooks with a
-  debug overlay, and `PS2RHI` for the Graphics Synthesizer. PS2 builds run in a pinned ps2dev Docker image.
+- **Win64, the development and editor platform**: the engine modules (`Core`, `Engine`, `Renderer` on OpenGL 3.3, `UMG`,
+  `AIModule`, ...), the `LeonGame` game executable, the `LeonCook` command-line editor (import, reimport, cook
+  commandlets), the `LeonPak` pak tool, `BuildCookRun.bat` (a Shipping build staged with its content in one `.lpak`) and
+  the `LeonAutomationTests` test runner. The world uses UE's space: X forward, Y right, Z up, left-handed,
+  1 unit = 1 cm.
+- **PS2, the target platform** (the platform extension `Engine/Platforms/PS2`): PlayStation 2 HAL, DualShock input,
+  engine loop hooks with a debug overlay, and `PS2RHI` for the Graphics Synthesizer. PS2 builds run in a pinned ps2dev
+  Docker image.
 - **Two games**, isolated from the engine and built with `-Project=`: `Game/ThirdPerson`, a PS2 third-person starter
   (orbit camera, character move / jump, primitive level), and `Game/ShooterGame`, a Win64 Counter-Strike-style shooter
   (first-person CS movement, CS's weapons, rounds, money and the bomb, two teams of five with bots that fight, plant
@@ -24,7 +25,7 @@ for PS2; PCSX2 to run the PS2 build. Details: [Docs/SETUP.md](Docs/SETUP.md).
 :: 1. Download the pinned third-party libraries
 Setup.bat
 
-:: 2. Build and run the automation tests (LeonAutomationTests, Win64)
+:: 2. Build and run the automation tests (LeonAutomationTests, ShooterGameTests and TestPAL, Win64)
 Engine\Build\BatchFiles\RunTests.bat
 
 :: 3. Build the engine game executable and the cooker -> Engine\Binaries\Win64\

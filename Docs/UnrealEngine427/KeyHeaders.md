@@ -97,8 +97,10 @@ location; read the real file only when you need its exact API.
 
 | Header | Declares |
 | --- | --- |
-| `Runtime/UMG/Public/Blueprint/UserWidget.h` | `UUserWidget` |
-| `Runtime/UMG/Public/Components/TextBlock.h`, `Button.h`, `VerticalBox.h`, `ProgressBar.h`, `Image.h` | widgets |
+| `Runtime/UMG/Public/Blueprint/UserWidget.h`, `Blueprint/WidgetTree.h` | `UUserWidget`, `UWidgetTree` |
+| `Runtime/UMG/Public/Components/Widget.h`, `PanelWidget.h`, `PanelSlot.h`, `ContentWidget.h`, `SlateWrapperTypes.h` | the widget tree's base classes, `ESlateVisibility` |
+| `Runtime/UMG/Public/Components/Border.h`, `VerticalBox.h`, `VerticalBoxSlot.h`, `CanvasPanel.h`, `CanvasPanelSlot.h`, `TextBlock.h`, `ProgressBar.h`, `Image.h` | widgets (Leon mirrors no `Button.h`: its widgets take no input) |
+| `Runtime/SlateCore/Public/Layout/Margin.h`, `Types/SlateEnums.h` | `FMargin`, `EHorizontalAlignment` |
 | `Runtime/AIModule/Classes/AIController.h` | `AAIController` |
 | `Runtime/AIModule/Classes/BehaviorTree/BehaviorTree.h`, `BlackboardComponent.h`, `BTNode.h`, `Composites/BTComposite_Sequence.h` | behavior trees |
 | `Runtime/NavigationSystem/Public/NavigationSystem.h` | `UNavigationSystemV1` |

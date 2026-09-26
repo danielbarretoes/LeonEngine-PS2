@@ -93,9 +93,6 @@ The engine's assets are `/Engine` packages in `Engine/Content`, migrated from th
 | `/Engine/Maps/Entry`, `/Engine/Maps/Template_Default` | map (`.lmap`) | migrated once (P15) from the legacy `Blank.llev` and `Starter.llev` templates ([LEVELS.md](LEVELS.md#engine-maps)); the packages are the source of truth |
 | `/Engine/Maps/AxisTest` (with its `Meshes/SM_*` and `Materials/M_*`) | map (`.lmap`) | imported: `Engine/SourceArt/Maps/AxisTest.glb`, written by `MakeAxisTest.py` (`Engine/SourceArt/ImportList.ini`) |
 
-A sphere of another tessellation (`FBasicShape::Sphere` may ask for one) is not a package: `GetSphereMesh` builds it
-at run time from `MakeSphere`, once per tessellation (`/Temp/BasicShapes/Sphere_<Segments>x<Rings>`, transient).
-
 The config names the defaults, as UE's `BaseEngine.ini` does, and `UEngine` reads them (`UPROPERTY(GlobalConfig)`
 `FSoftObjectPath`s); `UEngine::InitializeObjectReferences` loads them with `LoadObject`, and `UMaterial::GetDefaultMaterial`
 loads the default material (what a mesh slot without a material draws with) and roots it:
@@ -240,7 +237,7 @@ holds the world and everything in it, each an export:
 | `<Map>` | `UWorld` (`Engine/World.h`), public and standalone: the map's asset | `PersistentLevel`; editor-only `AssetImportData` for an imported map |
 | `<Map>:PersistentLevel` | `ULevel` (`Engine/Level.h`) | `Actors` (the spawn order; the world settings first), `WorldSettings` |
 | `<Map>:PersistentLevel.<Actor>` | `AWorldSettings`, `AStaticMeshActor`, `APlayerStart`, `ATargetPoint`, `ABlockingVolume`, `ATriggerVolume`, `APainCausingVolume`, `ADirectionalLight`, `APointLight`, `ACameraActor`, `ANavigationWaypoint`, ... | the actor's `UPROPERTY`s: `Tags`, `bHidden`, `RootComponent`, the class's own (`DefaultGameMode`, `KillZ`, `PlayerStartTag`, `DamagePerSec`, `Links`, `Flags`, ...) |
-| `<Map>:PersistentLevel.<Actor>.<Component>` | the actor's default subobjects and the components added to it (`URotatingMovementComponent`, `UBobbingMovementComponent`, `UOrbitMovementComponent`, `UInteractableComponent`, ...) | the transform (`RelativeLocation`, `RelativeRotation`, `RelativeScale3D`), `Mobility`, the collision (`CollisionEnabled`, `bSimulatePhysics`, `bEnableGravity`), `StaticMesh`, `OverrideMaterials`, the light and camera values, ...; a scene component's native tail is the `FQuat` of its relative transform, so a loaded transform is the saved one bit for bit (Leon; UE rebuilds it from the rotator) |
+| `<Map>:PersistentLevel.<Actor>.<Component>` | the actor's default subobjects and the components added to it (`URotatingMovementComponent`, ...) | the transform (`RelativeLocation`, `RelativeRotation`, `RelativeScale3D`), `Mobility`, the collision (`CollisionEnabled`, `bSimulatePhysics`, `bEnableGravity`), `StaticMesh`, `OverrideMaterials`, the light and camera values, ...; a scene component's native tail is the `FQuat` of its relative transform, so a loaded transform is the saved one bit for bit (Leon; UE rebuilds it from the rotator) |
 
 The meshes, materials and textures a map shows are imports of their own packages (an imported map's in
 `<Map>/Meshes` and `<Map>/Materials`), and the class references (`DefaultGameMode`) imports of `/Script` classes.
@@ -342,8 +339,8 @@ UE's prefix for its class:
 `LeonCook Engine/Saved/CookIdentity/CookIdentity.lproj -run=ImportAssets -source=Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/Cube.obj -dest=/Game/Identity`
 (a scratch project in the ignored `Engine/Saved`) saves `SM_Cube.lasset` with SHA-256
 `441931A1181977A8EF810C7FEF26D1EA2DA42D3E04AD1AE33AD6B0C31EBFD373` (2 692 bytes; the same when imported again over
-it or reimported, on Win64 and Linux; the engine version, `0.20.0`, is in the package summary, at byte 70: a release
-changes it; 0.17.0 gave `D74B95FEBE0C84509B2DA318660E0726A8762FF35C43C12233D09E88EC258115`).
+it or reimported, on Win64; measured with 0.20.0: the engine version is in the package summary, at byte 70, so a
+release changes the hash; 0.17.0 gave `D74B95FEBE0C84509B2DA318660E0726A8762FF35C43C12233D09E88EC258115`).
 
 ---
 

@@ -5,7 +5,9 @@ side, on `de_leon`, a blockout map built in Blender. P17 boots it: the first-per
 spawns, bots that join the teams, a crosshair. P18 brings the weapons (a pistol, a rifle, an AWP and an HE grenade),
 damage, armor, death and spectating. P19 brings Counter-Strike's defusal rules: rounds, money, the buy menu, the bomb
 and the HUD. P20 gives the bots their brains: they buy, walk de_leon's waypoint graph, see and hear their enemies,
-fight, plant and defuse ([Bots](#bots)). P21 plays whole bot matches headless in CI ([Bot match](#bot-match)).
+fight, plant and defuse ([Bots](#bots)). P21 plays whole bot matches headless in CI ([Bot match](#bot-match)). In
+0.20.1 the bots follow the waypoints' `Jump` and `Crouch` flags, escort the bomb carrier, hunt when they outnumber the
+enemy and rotate between the sites, and the buy menu is a UMG widget tree.
 
 ## Build and run
 
@@ -50,13 +52,14 @@ A map URL picks the team and the seed of the rounds (the bomb's carrier): `Shoot
 | 1 / 2 / 4 | Primary (rifle, AWP) / pistol / grenade |
 | G | Drop the weapon in hand (a pawn without one in that slot picks it up by walking over it) |
 | E (held) | Plant the bomb (its carrier, standing still in a bomb site, 3 s) or defuse it (a CT at the planted bomb, 10 s, 5 with a kit) |
-| B | The buy menu; 1 to 7 buy its items while it is open, B or Escape close it |
+| B | The buy menu (the console's `buymenu` toggles it too); 1 to 7 buy its items while it is open, B or Escape close it |
 | Tab (held) | The scoreboard |
 
 Console commands (`-ExecCmds="cmd1;cmd2"`): `bot_add_ct [N]`, `bot_add_t [N]`, `bot_add [N]` (the smaller team),
-`bot_fill` (both teams to five), `bot_kick [name|all]`, `bot_stop [0|1]` (the bots stand still), `mp_restartgame [seconds]`, `Buy <item>` (usp, ak47, awp,
-hegrenade, vest, vesthelm, defuser), the cheats `give <weapon>`, `god` and `kill`, `ViewFrom X Y Z Pitch Yaw` (a fixed
-view, for captures), `ViewPawn` (back to the pawn), `exit`.
+`bot_fill` (both teams to five), `bot_kick [name|all]`, `bot_stop [0|1]` (the bots stand still), `mp_restartgame
+[seconds]`, `Buy <item>` (usp, ak47, awp, hegrenade, vest, vesthelm, defuser), `buymenu` (opens or closes the buy menu,
+as CS), the cheats `give <weapon>`, `god` and `kill`, `ViewFrom X Y Z Pitch Yaw` (a fixed view, for captures),
+`ViewPawn` (back to the pawn), `exit`.
 
 ## Classes
 
@@ -70,7 +73,7 @@ view, for captures), `ViewPawn` (back to the pawn), `exit`.
 | `AShooterGameState` (`AGameState`) | `AShooterGameState` | The round's phase and number, the phase's end, the score, the bomb's state and the kill feed |
 | `AShooterPlayerState` | `AShooterPlayerState` | The team (`EShooterTeam`: None, CT, T), the money, the kills and the deaths |
 | `AShooterBomb` (`AActor`) | CS's C4 | Carried, dropped, planted (beeping), defused or exploded |
-| `AShooterHUD` (`AHUD`) | `AShooterHUD` | CS's crosshair (green, 4 px gap growing with the spread, 7 px arms, 2 px thick; config), health, armor and money, the weapon and its ammunition, the bomb and the kit, the round's clock and the score, the kill feed, the round's messages, the plant and defuse bar, the hit marker, the AWP's scope and the scoreboard; `UShooterBuyMenuWidget` (UMG) draws the buy menu |
+| `AShooterHUD` (`AHUD`) | `AShooterHUD` | CS's crosshair (green, 4 px gap growing with the spread, 7 px arms, 2 px thick; config), health, armor and money, the weapon and its ammunition, the bomb and the kit, the round's clock (`C4` instead once the bomb is planted: no countdown, as in CS) and the score, the kill feed, the round's messages (the terrorists read `The bomb has been dropped` while it lies on the floor), the plant and defuse bar, the hit marker, the AWP's scope and the scoreboard; `UShooterBuyMenuWidget` (a `UUserWidget`) is the buy menu: a widget tree (a `UCanvasPanel` holding a `UBorder` around a `UVerticalBox` of `UTextBlock`s: the money, why buying is refused, the items with their prices, the last buy) built in `NativeOnInitialized` and refreshed in `NativeTick`, collapsed while the menu is closed |
 | `AShooterWeapon` (`AActor`) and its classes | `AShooterWeapon`, `_Instant`, `_Projectile`; `AShooterProjectile` | The weapons ([Weapons](#weapons)) |
 
 The CS movement values, at 1 unit = 2.54 cm (CS's player is 72 units tall and 183 cm here):
@@ -186,8 +189,10 @@ most urgent first:
 | Defuse | a CT and the bomb planted | walks to the bomb and holds use |
 | Plant | the bomb's carrier | walks to the round's site (`AShooterGameMode::GetTerroristTargetSite`, drawn each round from the seeded stream) and plants inside it |
 | FetchBomb | a T and the bomb dropped | walks over it |
+| Escort | a T without the bomb while a live teammate carries it | stays within `EscortDistance` (350 cm) of the carrier |
 | Investigate | an enemy's shot heard (`AActor::MakeNoise`) | walks to where it came from |
-| Objective | otherwise | T: to the round's site (guarding the planted bomb); CT: A for the even, B for the odd of the team |
+| Hunt | its team's living players outnumber the enemy's by `HuntAdvantage` (2; 0 never hunts) and no bomb is planted | walks to the enemy's first spawn (`AShooterGameMode::GetTeamSpawnLocation`) until contact |
+| Objective | otherwise | T: to the round's site (guarding the planted bomb); CT: A for the even, B for the odd of the team, and a CT that has held its site `RotateTime` (25 s) with no contact rotates to the next site |
 
 - **Buying** (`BuyForRound`, once a round): without a primary, the AWP (with `AwpChance`, when the money covers it and
   kevlar with a helmet) or else the rifle when affordable; then kevlar with a helmet, or kevlar alone; a CT with money
@@ -195,13 +200,16 @@ most urgent first:
 - **Senses**: `UPawnSensingComponent` (UE's): sight in a cone with a line of sight on the Visibility channel, hearing
   of the noises `AActor::MakeNoise` reports within a loudness-scaled range (a weapon's shot: `FireNoiseLoudness`).
 - **Navigation**: `AAIController::MoveToLocation` on `UNavigationSystem`'s waypoint graph (A* over de_leon's waypoints,
-  linked at import); a bot jumps when the next path point rises more than 50 cm within 1.5 m, and repaths when it
-  moves less than 30 cm in 1.5 s.
+  linked at import); a bot jumps when the next path point rises more than 50 cm within 1.5 m or is a waypoint flagged
+  `Jump`, crouches along the links on both sides of a waypoint flagged `Crouch` and stands up past them, and repaths
+  when it moves less than 30 cm in 1.5 s.
 - **Skill** (`[/Script/ShooterGame.ShooterAIController]`): `Difficulty` scales the reaction and the aim error down and
-  the turn rate up. Every random choice comes from the bot's stream, seeded from the game mode's `RandomSeed` and the
-  bot's name: a match with `?seed=N` replays.
+  the turn rate up; `EscortDistance`, `HuntAdvantage` and `RotateTime` tune the branches above. Every random choice
+  comes from the bot's stream, seeded from the game mode's `RandomSeed` and the bot's name: a match with `?seed=N`
+  replays.
 
 Tests: `ShooterGame.Bots.Buy`, `EngageKillsAnEnemy` (no shot before the reaction time), `CarrierPlants`, `CTDefuses`,
+`TerroristsEscortTheCarrier`, `OutnumberingTeamHunts`, `CTRotatesBetweenSites`, `AgentFromConfig`,
 `MatchCheckerFlagsViolations` and `MatchOnDeLeon` (ten bots, three rounds, seed 5, under `FShooterMatchChecker`; kills
 happen).
 
@@ -224,7 +232,7 @@ happen).
   two. The bots' choices, the weapons' spread and the rounds come from seeded streams and the steps are fixed, so a
   seed replays the same match: `BotMatch.bat` plays it twice and fails when the summaries differ. CI runs
   `BotMatch.bat 10 7`, and a staged Shipping build plays three rounds (Shipping logs nothing, so only the exit code
-  tells).
+  tells). CI's match logs `Botmatch OK: 10 round(s), CT 6 - T 4, 72 kill(s), seed 7, reasons [3,3,4,4,4,4,3,4,3,4]`.
 
 ## de_leon
 

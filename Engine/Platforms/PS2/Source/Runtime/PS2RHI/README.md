@@ -42,7 +42,7 @@ games do not reset the Draw3D counters themselves.
 | 3D | `DrawBox(LocationX, LocationY, LocationZ, Yaw256, Pitch256, ScaleX, ScaleY, ScaleZ)`: lit / textured box, rotation in 1/256 turns, scale as half-extents; overload with one uniform `Scale` |
 | 2D (screen space, origin at the screen centre) | `DrawUnlitTriangle()`, `DrawUnlitTriangleAt(CenterX, CenterY, Size, Angle256, R, G, B)`, `DrawUnlitRect(X0, Y0, X1, Y1, R, G, B)`, `DrawUnlitRectAlpha(X0, Y0, X1, Y1, R, G, B, Alpha)` (blend `(src - dst) * alpha + dst`) |
 | Debug text | `DrawDebugText(X, Y, Text, R, G, B, Scale)`: 5x7 glyphs drawn with rects (A-Z, 0-9, a few symbols). `Scale` 1 = 2 px cells (12 px advance, 14 px tall), 0.5 = 1 px cells |
-| Cooked mesh | `DrawCookedMesh(const void* Data, unsigned Size)`: validates an `LPS2` blob (version 1, see [ASSET_FORMATS — PS2](../../../../../../Docs/ASSET_FORMATS.md#ps2-cooked--lps2)). Vertex upload is not wired yet: a valid blob draws a placeholder triangle |
+| Cooked mesh | `DrawCookedMesh(const void* Data, unsigned Size)`: validates an `LPS2` blob (version 1, see [ASSET_FORMATS — PS2](../../../../../../Docs/ASSET_FORMATS.md#cooked-mesh-blob--lps2)). Vertex upload is not wired yet: a valid blob draws a placeholder triangle |
 | Draw3D counters | `BeginDraw3DStatsFrame()`, `GetDraw3DStats(FPS2Draw3DStats&)`, `PrintDraw3DStats(const FPS2Draw3DStats&)` (printf to the PCSX2 EE console) |
 
 `DrawBox` pipeline: whole-box frustum cull → per-face backface cull → per-face lighting → per-triangle trivial
