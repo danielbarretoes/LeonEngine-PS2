@@ -74,8 +74,9 @@ public:
 
 	/**
 	 * Uploads Width x Height pixels of Destination's format (DBP, DBW, DPSM) to (X, Y) of that buffer. Pixels holds
-	 * them row by row, packed at the format's bits per pixel; the GIF moves quadwords, so their size is a multiple
-	 * of 16.
+	 * them row by row, packed as the manual's transfer format (4.3: 24-bit pixels in 3 bytes, the first 4-bit pixel in
+	 * the low nibble); the GIF moves quadwords, so their size is a multiple of 16. The start and width follow
+	 * IsSupportedUpload.
 	 */
 	void UploadImage(const FGSBitBltBuf& Destination, uint16 X, uint16 Y, uint16 Width, uint16 Height,
 		TArrayView<const uint8> Pixels);
@@ -96,9 +97,18 @@ public:
 	[[nodiscard]] static bool IsSupported(const FGSPrim& Prim);
 	/** (Cs - Cd) * C + Cd, (Cs - 0) * C + Cd and (Cs - 0) * C + 0, with C the source alpha or FIX. */
 	[[nodiscard]] static bool IsSupported(const FGSAlpha& Alpha);
-	/** PSMCT32, PSMCT24, PSMCT16 or a CLUT format (PSMT8, PSMT4) with a PSMCT32 or PSMCT16 CLUT in CSM1; TW, TH <= 10.
+	/**
+	 * PSMCT32, PSMCT24, PSMCT16 or a CLUT format (PSMT8, PSMT4) with a PSMCT32 or PSMCT16 CLUT in CSM1; TW, TH <= 10;
+	 * CLD 0 or 1 (the loads that compare CBP0 / CBP1 are a cache the renderer does not need).
 	 */
 	[[nodiscard]] static bool IsSupported(const FGSTex0& Tex0);
+	/** The MIP levels' base pointers set by MIPTBP1 / MIPTBP2 (not MTBA's automatic ones). */
+	[[nodiscard]] static bool IsSupported(const FGSTex1& Tex1);
+	/**
+	 * A host to local upload the GS accepts (manual 4.1.5): the width a multiple of 2 (32 bits), 8 (24 bits, 8 and 4
+	 * bits) or 4 (16 bits), and the start X a multiple of 2 (8 bits) or 4 (4 bits).
+	 */
+	[[nodiscard]] static bool IsSupportedUpload(EGSPixelFormat Format, uint16 X, uint16 Width);
 	/** The depth test on (the manual forbids it off). */
 	[[nodiscard]] static bool IsSupported(const FGSTest& Test);
 	/** A color format (PSMCT32, PSMCT24, PSMCT16, PSMCT16S). */

@@ -94,8 +94,8 @@ Gate: un test por registro.
   swizzle de páginas: basta con tener direcciones lógicas.
 - Tests de reglas: cobertura top-left, subpíxel, perspectiva con STQ, CLUT de 4 y 8 bits, LOD, las mezclas del
   subconjunto, `ATST`/`AFAIL`, z-test y z-write, dithering 4x4 (`DIMX`) y `COLCLAMP`.
-- Programa PS2 `GSConformance`: dibuja las mismas listas de comandos que los tests (escenas de conformidad);
-  `Package.bat` lo compila y empaqueta junto a ThirdPerson y TestPAL.
+- Las escenas de conformidad salen de los tests de la referencia; el programa PS2 que las dibuja (`GSConformance`)
+  necesita el backend de P3 para ejecutar listas y se hace allí.
 - Validación manual: capturas de PCSX2 de esas escenas, guardadas como PNG de 640x448 en fixtures, que la referencia
   debe reproducir dentro de la tolerancia.
 
@@ -104,6 +104,8 @@ Gate: la referencia coincide con las capturas de PCSX2.
 ### P3 · Backend PS2 (M)
 
 - `FPS2RHI` ejecuta un `FGSCommandList` en paquetes GIF por PATH3 (con `packet` y `dma` de PS2SDK).
+- Programa PS2 `GSConformance`: dibuja las escenas de conformidad de P2; `Package.bat` lo compila y empaqueta junto a
+  ThirdPerson y TestPAL.
 - `DrawBox` y ThirdPerson se reescriben sobre él, y la API inmediata que queda sin uso se borra.
 
 Gate: el ELF de ThirdPerson entra en su presupuesto (G3) y las escenas de conformidad se ven igual que en P2.

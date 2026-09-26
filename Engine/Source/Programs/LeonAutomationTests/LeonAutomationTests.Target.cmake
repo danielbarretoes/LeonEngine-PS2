@@ -4,7 +4,7 @@
 leon_target(LeonAutomationTests TYPE Program
 	PLATFORMS Desktop
 	EXTRA_MODULE_NAMES Core CoreUObject Json Projects PakFile GSCore RenderCore Renderer UMG PhysicsCore AnimationCore
-		AudioMixer Engine AIModule MeshUtilities LeonEd
+		AudioMixer Engine AIModule MeshUtilities GSReference LeonEd
 	ENABLE_PLUGINS JoltPhysics
 	COLLECT_AUTOMATION_TESTS
 )

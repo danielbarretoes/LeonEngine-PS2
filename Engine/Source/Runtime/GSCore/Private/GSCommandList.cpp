@@ -60,6 +60,7 @@ void FGSCommandList::SetTex0(uint8 Context, const FGSTex0& Tex0)
 
 void FGSCommandList::SetTex1(uint8 Context, const FGSTex1& Tex1)
 {
+	check(IsSupported(Tex1));
 	Write(ContextRegister(EGSRegister::TEX1_1, Context), Tex1.Encode());
 }
 
@@ -168,6 +169,7 @@ void FGSCommandList::UploadImage(
 {
 	const uint64 Bytes = (uint64(Width) * Height * GSBitsPerPixel(Destination.DPSM)) / 8;
 	check(Width > 0 && Height > 0 && uint64(Pixels.Num()) == Bytes && Bytes % 16 == 0);
+	check(IsSupportedUpload(Destination.DPSM, X, Width));
 	Write(EGSRegister::BITBLTBUF, Destination.Encode());
 	FGSTrxPos Position;
 	Position.DSAX = X;
@@ -211,7 +213,7 @@ bool FGSCommandList::IsSupported(const FGSAlpha& Alpha)
 
 bool FGSCommandList::IsSupported(const FGSTex0& Tex0)
 {
-	if (Tex0.TW > 10 || Tex0.TH > 10)
+	if (Tex0.TW > 10 || Tex0.TH > 10 || Tex0.CLD > 1)
 	{
 		return false;
 	}
@@ -224,6 +226,30 @@ bool FGSCommandList::IsSupported(const FGSTex0& Tex0)
 		case EGSPixelFormat::PSMT8:
 		case EGSPixelFormat::PSMT4:
 			return !Tex0.bCSM2 && (Tex0.CPSM == EGSPixelFormat::PSMCT32 || Tex0.CPSM == EGSPixelFormat::PSMCT16);
+		default:
+			return false;
+	}
+}
+
+bool FGSCommandList::IsSupported(const FGSTex1& Tex1)
+{
+	return !Tex1.bAutoMipBase;
+}
+
+bool FGSCommandList::IsSupportedUpload(EGSPixelFormat Format, uint16 X, uint16 Width)
+{
+	switch (GSBitsPerPixel(Format))
+	{
+		case 32:
+			return Width % 2 == 0;
+		case 24:
+			return Width % 8 == 0;
+		case 16:
+			return Width % 4 == 0;
+		case 8:
+			return Width % 8 == 0 && X % 2 == 0;
+		case 4:
+			return Width % 8 == 0 && X % 4 == 0;
 		default:
 			return false;
 	}

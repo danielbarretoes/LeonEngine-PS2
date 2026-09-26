@@ -336,6 +336,23 @@ bool FGSCoreSupportedSubsetTest::RunTest(const FString& Parameters)
 	Tex0.TW = 11;
 	TestFalse("Wider than 1024", FGSCommandList::IsSupported(Tex0));
 
+	Tex0.TW = 8;
+	Tex0.CLD = 4;
+	TestFalse("CLD comparing CBP0", FGSCommandList::IsSupported(Tex0));
+	FGSTex1 Tex1;
+	TestTrue("MIPTBP base pointers", FGSCommandList::IsSupported(Tex1));
+	Tex1.bAutoMipBase = true;
+	TestFalse("MTBA", FGSCommandList::IsSupported(Tex1));
+
+	// The manual's transfer limits (4.1.5).
+	TestTrue("32 bits, even width", FGSCommandList::IsSupportedUpload(EGSPixelFormat::PSMCT32, 1, 2));
+	TestFalse("32 bits, odd width", FGSCommandList::IsSupportedUpload(EGSPixelFormat::PSMCT32, 0, 3));
+	TestFalse("16 bits, width 6", FGSCommandList::IsSupportedUpload(EGSPixelFormat::PSMCT16, 0, 6));
+	TestTrue("8 bits at an even X", FGSCommandList::IsSupportedUpload(EGSPixelFormat::PSMT8, 2, 8));
+	TestFalse("8 bits at an odd X", FGSCommandList::IsSupportedUpload(EGSPixelFormat::PSMT8, 1, 8));
+	TestFalse("4 bits at X 2", FGSCommandList::IsSupportedUpload(EGSPixelFormat::PSMT4, 2, 8));
+	TestFalse("24 bits, width 4", FGSCommandList::IsSupportedUpload(EGSPixelFormat::PSMCT24, 0, 4));
+
 	FGSTest Test;
 	TestTrue("Depth test on", FGSCommandList::IsSupported(Test));
 	Test.bDepthTest = false;
