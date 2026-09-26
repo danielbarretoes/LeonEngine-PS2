@@ -2,8 +2,8 @@
 
 An offline Counter-Strike-style shooter, modelled on UE's ShooterGame sample: two teams (CT and T), five players a
 side, on `de_leon`, a blockout map built in Blender. P17 boots it: the first-person character with CS movement, team
-spawns, bots that join the teams (they stand still until P20), a crosshair. Weapons come in P18, the round rules in
-P19, the bots' brains in P20.
+spawns, bots that join the teams (they stand still until P20), a crosshair. P18 brings the weapons (a pistol, a rifle,
+an AWP and an HE grenade), damage, armor, death and spectating. The round rules come in P19, the bots' brains in P20.
 
 ## Build and run
 
@@ -38,7 +38,11 @@ A map URL picks the team: `ShooterGame.exe /Game/Maps/de_leon?team=T` (else the 
 | Space | Jump |
 | Left Ctrl or C (held) | Crouch (it stays crouched under a ceiling until there is room) |
 | Left Shift (held) | Walk (52 % of the speed) |
-| Left mouse button | Fire (logs "no weapon until P18") |
+| Left mouse button | Fire (held: automatic weapons keep firing) |
+| Right mouse button | The AWP's zoom (two levels, then off) |
+| R | Reload |
+| 1 / 2 / 4 | Primary (rifle, AWP) / pistol / grenade |
+| G | Drop the weapon in hand (a pawn without one in that slot picks it up by walking over it) |
 | Tab / Escape | Scoreboard / menu (placeholders) |
 
 Console commands (`-ExecCmds="cmd1;cmd2"`): `bot_add_ct [N]`, `bot_add_t [N]`, `bot_add [N]` (the smaller team),
@@ -49,13 +53,14 @@ pawn), `exit`.
 
 | Class | UE ShooterGame / CS counterpart | What it does |
 | --- | --- | --- |
-| `AShooterGameMode` (`AGameMode`) | `AShooterGame_TeamDeathMatch` | `GlobalDefaultGameMode` of the project. Teams (`ChooseTeam`: `?team=`, else the smaller team), team spawns (`ChoosePlayerStart`: the first free start tagged with the team, level order), the bot commands (`AddBots`, `FillTeamsWithBots`), `MaxPlayersPerTeam` 5; logs where each player joined and the pawn count at the end (the smoke reads it) |
-| `AShooterCharacter` (`ACharacter`) | `AShooterCharacter` | First-person camera at the eyes (`UCameraComponent`, `bUsePawnControlRotation`, 74° vertical FOV), capsule 40 × 91.5 cm, eyes 163 cm (76 crouched, eased with `FInterpTo`), the team body the other players see (`CTBodyMeshName` / `TBodyMeshName`) |
+| `AShooterGameMode` (`AGameMode`) | `AShooterGame_TeamDeathMatch` | `GlobalDefaultGameMode` of the project. Who may hurt whom (`CanDealDamage`: no friendly fire, `bFriendlyFire`) and the kills (`Killed`, logged). Teams (`ChooseTeam`: `?team=`, else the smaller team), team spawns (`ChoosePlayerStart`: the first free start tagged with the team, level order), the bot commands (`AddBots`, `FillTeamsWithBots`), `MaxPlayersPerTeam` 5; logs where each player joined and the pawn count at the end (the smoke reads it) |
+| `AShooterCharacter` (`ACharacter`) | `AShooterCharacter` | First-person camera at the eyes (`UCameraComponent`, `bUsePawnControlRotation`, 74° vertical FOV), capsule 40 × 91.5 cm, eyes 163 cm (76 crouched, eased with `FInterpTo`), the team body the other players see (`CTBodyMeshName` / `TBodyMeshName`, `bOwnerNoSee`); health, armor and helmet, the damage rules and death ([Weapons](#weapons)); the inventory (one weapon a slot, `DefaultWeapons`) |
 | `UShooterCharacterMovement` (`UCharacterMovementComponent`) | `UShooterCharacterMovement` | CS 1.6 movement in centimetres (below), and the walk key through `GetMaxSpeed` |
-| `AShooterPlayerController` | `AShooterPlayerController` | The player's input and the `ViewFrom` / `ViewPawn` commands |
+| `AShooterPlayerController` | `AShooterPlayerController` | The player's input, the hit marker's state (`NotifyHitConfirmed`) and the `ViewFrom` / `ViewPawn` commands; spectates when its pawn dies (`NAME_Spectating`) |
 | `AShooterAIController` (`AAIController`) | `AShooterAIController` | The bots' controller; it has a player state (a team); no behaviour yet |
 | `AShooterPlayerState` | `AShooterPlayerState` | The team (`EShooterTeam`: None, CT, T) |
-| `AShooterHUD` (`AHUD`) | `AShooterHUD` | CS's crosshair (green, 4 px gap, 7 px arms, 2 px thick; config) and the scoreboard placeholder |
+| `AShooterHUD` (`AHUD`) | `AShooterHUD` | CS's crosshair (green, 4 px gap, 7 px arms, 2 px thick; config), health and armor, the weapon and its ammunition, the hit marker, the AWP's scope, and the scoreboard placeholder |
+| `AShooterWeapon` (`AActor`) and its classes | `AShooterWeapon`, `_Instant`, `_Projectile`; `AShooterProjectile` | The weapons ([Weapons](#weapons)) |
 
 The CS movement values, at 1 unit = 2.54 cm (CS's player is 72 units tall and 183 cm here):
 
@@ -72,6 +77,56 @@ The CS movement values, at 1 unit = 2.54 cm (CS's player is 72 units tall and 18
 | Walkable floor | 0.7 | `WalkableFloorZ` 0.7 |
 | Air control | `sv_airaccelerate` 10 | `AirControl` 0.3 |
 | Crouched height | 36 units | `CrouchedHalfHeight` 46 cm |
+
+## Weapons
+
+Each weapon is an actor the pawn carries (UE ShooterGame's `AShooterWeapon`): one per slot (primary, pistol, grenade).
+A pawn spawns with `DefaultWeapons` (the pistol) and draws the best it has. The first-person mesh is a view model (drawn
+after the scene with its own depth, only in its owner's view), the other players see the same mesh on the body; the
+shot's tracer and the muzzle flash start at the mesh's `Muzzle` socket.
+
+| Weapon | Class | Slot | Clip / reserve | Rate | Damage | Armor ratio | Speed | Price |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `usp` | `AShooterWeapon_Pistol` | pistol | 12 / 100, semi-automatic | 0.15 s | 34, range modifier 0.79 | 1.0 | 100 % | 500 |
+| `ak47` | `AShooterWeapon_Rifle` | primary | 30 / 90, automatic | 0.1 s | 36, 0.98 | 1.55 | 88 % | 2500 |
+| `awp` | `AShooterWeapon_Sniper` | primary | 10 / 30, semi-automatic | 1.45 s | 115, 0.99 | 1.95 | 84 %, 60 % scoped | 4750 |
+| `hegrenade` | `AShooterWeapon_Grenade` | grenade | 1 | — | 98 within 889 cm | 1.0 | 100 % | 300 |
+
+The constructors hold Counter-Strike's values and `DefaultGame.ini`'s `[/Script/ShooterGame.ShooterWeapon_<Class>]`
+sections their meshes, sounds and seeds; any `UPROPERTY(Config)` of the classes can be tuned there.
+
+- **Hitscan** (`AShooterWeapon_Instant`): a line on the `Weapon` channel from the eyes within the spread cone. The
+  damage falls off as CS's range modifier per 1270 cm (500 units). The spread is `WeaponSpread`, plus `MovingSpread`
+  in proportion to the speed, plus `JumpingSpread` in the air, plus the firing spread (grows each shot, recovers once
+  the trigger is released), times `CrouchingSpreadMod` crouched. Each shot kicks the aim up (and sideways at random);
+  the kick comes back down. The spread's direction and the recoil come from an `FRandomStream` seeded with
+  `RandomSeed`: a weapon fires the same sequence every time (the tests replay it). A hit on a surface leaves a mark
+  (the pool of 64), a hit on a player shows the shooter's hit marker.
+- **AWP** (`AShooterWeapon_Sniper`): the right button steps through two zoom levels (30.5° and 7.5° high: CS's 40°
+  and 10° wide at 4:3) and off; the HUD draws the scope and hides the view model. Unscoped it adds `UnscopedSpread`;
+  scoped the carrier walks at 60 %. A shot leaves the scope for the bolt, which brings it back.
+- **HE grenade** (`AShooterWeapon_Grenade`): the press throws `AShooterProjectile` along the aim tilted up 8° at
+  1500 cm/s plus the thrower's velocity; it bounces and explodes after 1.5 s: 98 damage at the centre falling linearly
+  to nothing at 889 cm, blocked by walls (`ApplyRadialDamageWithFalloff` on the Visibility channel), the thrower
+  included. The grenade leaves the inventory with its throw.
+- **Reloads**: `R`, or firing with an empty clip; `ReloadDuration` later the rounds move from the reserve. An empty
+  weapon clicks.
+
+Damage (`AShooterCharacter::TakeDamage`, after `AActor::TakeDamage`):
+
+- `AShooterGameMode::CanDealDamage` refuses a teammate's damage (CS's `mp_friendlyfire 0`; oneself is hurt).
+- A hit in the capsule's top `HeadHeight` (28 cm) is a headshot: × `HeadshotMultiplier` (4).
+- Armor (CS): with armor, on the body or with a helmet, the health takes `ArmorRatio / 2` of the damage (at most all
+  of it) and the armor half the rest; when the armor runs out the rest goes to the health. Damage that is not a
+  weapon's or a grenade's ignores armor.
+- At 0 health the pawn dies: the game mode hears of the kill (`Killed`), the rifle (else the pistol) falls to the
+  floor ahead of it with its rounds and the rest is lost, the corpse stops colliding and lies down (until the round's
+  restart, P19), a player spectates (a free-flying `ASpectatorPawn`) and a bot lets go of the pawn.
+- A weapon on the floor is picked up after 1 s by the first live pawn within 60 cm that has its slot free.
+
+The meshes are boxes made by `SourceArt/Weapons/make_weapons.py` (with their `SOCKET_Muzzle` nodes) and the sounds are
+synthesized by `SourceArt/Sounds/make_sounds.py`; both need only Python's standard library, write the same bytes on
+every run and are CC0 ([SourceArt/LICENSES.md](SourceArt/LICENSES.md)).
 
 ## de_leon
 
@@ -117,9 +172,12 @@ both sites, both buy zones and both teams' starts. Only CC0 art enters the proje
 Game/ShooterGame/
 ├── ShooterGame.lproj                  module ShooterGame, TargetPlatforms Win64
 ├── Config/                            DefaultEngine.ini (map, game mode, Weapon channel), DefaultGame.ini (tuning,
-│                                      cook), DefaultInput.ini (CS keys, mouse), DefaultEditor.ini (map import rules)
-├── Content/                           Maps/de_leon.lmap (+ de_leon/Meshes, Materials), Characters/ (team bodies)
-├── SourceArt/                         Blender scripts, .blend and .glb sources, ImportList.ini, LICENSES.md
+│                                      weapons, cook), DefaultInput.ini (CS keys, mouse), DefaultEditor.ini (map
+│                                      import rules)
+├── Content/                           Maps/de_leon.lmap (+ de_leon/Meshes, Materials), Characters/ (team bodies),
+│                                      Weapons/ (meshes, materials), Sounds/
+├── SourceArt/                         Blender and Python scripts, .blend, .glb and .wav sources, ImportList.ini,
+│                                      LICENSES.md
 └── Source/
     ├── ShooterGame.Target.cmake       the game (Win64)
     ├── ShooterGameTests.Target.cmake  the project's test program (LeonAutomationTests + ShooterGame's tests)

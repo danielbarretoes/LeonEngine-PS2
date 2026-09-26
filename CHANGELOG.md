@@ -15,6 +15,15 @@ imported with the project's rules, a first-person character with CS 1.6 movement
 crosshair, and a smoke test (gate G6) in CI. The PS2 ELFs are unchanged (ThirdPerson, BlankProgram and TestPAL link
 none of the changed modules).
 
+The eighteenth step (P18): weapons and damage. The engine gets UE's damage API (`TakeDamage` with damage events and
+damage types, `ApplyDamage` / `ApplyPointDamage` / `ApplyRadialDamageWithFalloff` with a line of sight), the projectile
+movement, the spectator pawn and state, actor life spans, static mesh sockets imported from glTF, a view model pass and
+world effects (impact marks, tracers, short-lived lights). ShooterGame gets Counter-Strike's weapons on them: a pistol,
+a rifle, an AWP with its scope and an HE grenade, with deterministic spread and recoil, reloads, headshots, armor,
+friendly fire, death with a dropped weapon that others pick up, and spectating; the weapons' meshes and sounds are made
+by scripts in this repository (CC0). A native class's defaults now keep what its constructor sets for inherited config
+members (a CoreUObject fix the weapon classes need).
+
 ### Added
 
 - **Collision channels** (P17, PhysicsCore and Engine; [ARCHITECTURE.md §11](Docs/ARCHITECTURE.md#11-physics)).
@@ -62,6 +71,44 @@ none of the changed modules).
 - Tests: `System.Engine.CollisionChannel.*` (8), `System.Engine.CharacterMovement.*` for UE's model (12),
   `System.LeonEd.MapFactory.EngineMapsSkipRequiredTags` (371 tests), and `ShooterGame.*` (10).
 
+- **Damage** (P18, Engine; UE's API): `FDamageEvent`, `FPointDamageEvent`, `FRadialDamageEvent` and
+  `FRadialDamageParams` (`Engine/DamageEvents.h`, UE's ids and `IsOfType`), `UDamageType`; `AActor::TakeDamage` (UE's
+  signature, `InternalTakePointDamage` / `InternalTakeRadialDamage`, `bCanBeDamaged`) and the `OnTakeAnyDamage` /
+  `OnTakePointDamage` / `OnTakeRadialDamage` delegates; `UGameplayStatics::ApplyDamage`, `ApplyPointDamage`,
+  `ApplyRadialDamage` and `ApplyRadialDamageWithFalloff` (the dynamic bodies in reach, a line of sight on a channel,
+  one hit per actor at its closest component); `APainCausingVolume` damages through `ApplyDamage` with its damage type.
+- `UProjectileMovementComponent` (UE's: initial speed in local space, gravity scale, sweeps on the component's object
+  type, bounces with bounciness and friction, `OnProjectileBounce` / `OnProjectileStop`, `MoveIgnoreActors`).
+- `ASpectatorPawn`, `USpectatorPawnMovement`, `AGameModeBase::SpectatorClass`, the controller states
+  (`NAME_Playing`, `NAME_Spectating`, `ChangeState`) and `APlayerController::BeginSpectatingState` /
+  `SpawnSpectatorPawn`.
+- `AActor::SetLifeSpan` / `InitialLifeSpan`; `UGameplayStatics::GetWorldFromContextObject`.
+- Static mesh sockets (`UStaticMeshSocket`, `UStaticMesh::FindSocket`, `UStaticMeshComponent::GetSocketTransform`):
+  the glTF import makes one of each `SOCKET_<Name>` node.
+- The view model pass (`UPrimitiveComponent::bRenderAsViewModel`, `UCameraComponent::ViewModelFOV`: drawn after the
+  scene over a cleared depth buffer with its own field of view), `bOnlyOwnerSee` / `bOwnerNoSee` against the view's
+  actor, and world effects: `UGameplayStatics::SpawnImpactMark` (a pool of 64 marks), `SpawnTracer` and
+  `SpawnPointLightAtLocation` (a light that destroys itself).
+- **ShooterGame's weapons** (P18; [README](Game/ShooterGame/README.md#weapons)): `AShooterWeapon` (slots,
+  ammunition, fire rate, reloads, equipping, the view model and the body's mesh, the `Muzzle` socket, dropping and
+  picking up), `AShooterWeapon_Instant` (hitscan on the `Weapon` channel, Counter-Strike's range falloff, spread from
+  the movement, the jump, the crouch and the firing, recoil, all from a seeded `FRandomStream`), the pistol (`usp`),
+  the rifle (`ak47`), the sniper (`awp`: two zoom levels, the scope, the bolt) and `AShooterWeapon_Grenade`
+  (`hegrenade`: `AShooterProjectile`, a 1.5 s fuse, radial damage behind cover).
+- `AShooterCharacter`: health, armor and helmet (Counter-Strike's armor ratio), head and body hits, death (the best
+  weapon dropped, the corpse, spectating for a player), an inventory with one weapon a slot and `DefaultWeapons`, and
+  the keys Fire, Targeting, Reload, 1 / 2 / 4 and G; `UShooterCharacterMovement` applies the weapon's speed.
+  `AShooterGameMode::CanDealDamage` (`bFriendlyFire`) and `Killed`; `AShooterPlayerController::NotifyHitConfirmed`;
+  the HUD's health, armor, ammunition, hit marker and scope.
+- ShooterGame's art: `SourceArt/Weapons/make_weapons.py` (four weapon meshes as glTF, with their muzzle sockets) and
+  `SourceArt/Sounds/make_sounds.py` (eight synthesized sounds), imported to `/Game/Weapons` and `/Game/Sounds`; both
+  use only Python's standard library and write the same bytes on every run.
+- Tests: `System.Engine.Damage.*`, `System.Engine.ProjectileMovement.*`, `System.Engine.SpectatorPawn.*`,
+  `System.Engine.Sockets.*` and `System.Engine.Actor.LifeSpan` (8), `System.Renderer.ViewModel.OnlyWhenFlagged` and
+  `System.Renderer.Effects.ImpactMarkPoolRecycles`, `System.LeonEd.Factories.GltfSockets`,
+  `System.CoreUObject.Config.SubclassConstructorDefaults` (383 tests; TestPAL 119, 113 on the PS2), and
+  `ShooterGame.Damage.*`, `ShooterGame.Weapons.*`, `ShooterGame.Character.DeathDropsWeapon` (19).
+
 ### Changed
 
 - `UGameEngine::Tick` runs `UWorld::TickGameplayFrame`, and a character moves in its movement component's tick
@@ -77,6 +124,18 @@ none of the changed modules).
 - `RunTests.bat` also builds and runs ShooterGame's tests, `Lint.bat` builds ShooterGame's targets, and CI runs G6, G5
   with ShooterGame and a staged ShooterGame (BuildCookRun).
 - The navigation ignores pawns' capsules and components that do not affect navigation (`CanEverAffectNavigation`).
+- `ACharacter` no longer has a health of its own (`Health`, `TakeDamage(float)`, `Die`, `Revive`, `IsAlive`): damage
+  goes through `AActor::TakeDamage`, and a game's pawn keeps its health (UE; `AShooterCharacter`).
+- ShooterGame's bodies no longer hide from their own player by visibility: they are `bOwnerNoSee`, so a player sees
+  its own corpse.
+
+### Fixed
+
+- A native class's default object no longer copies its parent's config members over the values its own constructor
+  set (UE: a native class's defaults are not initialized from its parent's); the config then applies the parents'
+  sections and the class's own as before.
+- The Renderer's includes of `GPUPassTimer.h` and `LDRColorTarget.h` match the files' case, and the Linux platform
+  file includes `<stdio.h>` for `rename`, so the engine builds on Linux.
 
 ## [0.17.0] - 2026-09-26
 

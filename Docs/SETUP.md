@@ -156,11 +156,11 @@ engine program instead (`Engine\Binaries\PS2\<Name>.elf`, built with `Build.bat 
 Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build
 ```
 
-TestPAL runs the Core, CoreUObject, Json, Projects and PakFile automation tests on the EE (112 on PS2: Core 44,
-CoreUObject 60, Json 2, Projects 1, PakFile 5; the platform-file, config-cache, log-file, real-descriptor, file-package
+TestPAL runs the Core, CoreUObject, Json, Projects and PakFile automation tests on the EE (113 on PS2: Core 44,
+CoreUObject 61, Json 2, Projects 1, PakFile 5; the platform-file, config-cache, log-file, real-descriptor, file-package
 and SaveConfig tests are desktop-only) and logs to the EE console. With the EE console enabled (see
 [PCSX2 notes](#pcsx2-notes)), read `%USERPROFILE%\Documents\PCSX2\logs\emulog.txt` for the
-`TestPAL: PASSED (112 test(s), 0 failed)` line and the
+`TestPAL: PASSED (113 test(s), 0 failed)` line and the
 `LogTestPAL` reflection / object-array / memory / name-pool lines; their numbers are tracked in
 [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md).
 

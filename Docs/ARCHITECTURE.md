@@ -880,11 +880,11 @@ UWorld::LineBatcher (FDebugDraw) -----------------------------------------------
   the content from its sources and fails when git sees a change under a `Content` folder; CI runs it.
 - **Tests**: each module keeps its tests in `<Module>/Private/Tests/`, excluded from the module library and compiled
   only into targets with `COLLECT_AUTOMATION_TESTS`. Every test is a UE automation test
-  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, named `System.<Module>.<Area>.<Name>`): 371 on Win64 — Core 47, CoreUObject 62,
-  Json 2, Projects 2, PakFile 5, PhysicsCore 8, RenderCore 23, AnimationCore 1, Engine 149, Renderer 8, AIModule 30,
-  MeshUtilities 8, LeonEd 17, JoltPhysics 9 (a tenth, `System.JoltPhysics.Backend.DisabledFallsBack`, compiles only
+  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, named `System.<Module>.<Area>.<Name>`): 383 on Win64 — Core 47, CoreUObject 63,
+  Json 2, Projects 2, PakFile 5, PhysicsCore 8, RenderCore 23, AnimationCore 1, Engine 157, Renderer 10, AIModule 30,
+  MeshUtilities 8, LeonEd 18, JoltPhysics 9 (a tenth, `System.JoltPhysics.Backend.DisabledFallsBack`, compiles only
   without the plugin). On PS2, Core runs 44 (the platform-file, config-cache and log-file tests are desktop-only),
-  CoreUObject 60 (its SaveConfig and package file tests are desktop-only; the other package tests save to memory),
+  CoreUObject 61 (its SaveConfig and package file tests are desktop-only; the other package tests save to memory),
   Json 2, Projects 1 and PakFile 5 (on paks in memory).
   Reflected test fixtures live in `<Module>/Private/Tests/*.h` (LeonHeaderTool's Tests unit: CoreUObject's,
   `Engine/Private/Tests/EngineTestTypes.h`, `AIModule/Private/Tests/GameplayTestTypes.h`); tests that spawn actors

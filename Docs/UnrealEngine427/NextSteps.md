@@ -325,15 +325,25 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 - **G6**: `SmokeTest.bat` (ShooterGame headless, `bot_fill`, ten pawns, exit 0) in CI, with the staged ShooterGame.
 - 371 engine tests and 10 ShooterGame tests; the golden tables and the Win64 frames are unchanged.
 
+### Done — Weapons and damage (P18)
+
+([LeonMapping — P18](LeonMapping.md#p18--weapons-and-damage), [ShooterGame README — Weapons](../../Game/ShooterGame/README.md#weapons)):
+
+- **Damage** (Engine): UE's `TakeDamage` with `FDamageEvent` / `FPointDamageEvent` / `FRadialDamageEvent` and
+  `UDamageType`, the `Apply*Damage` helpers with a line of sight, the damage delegates; `ACharacter` has no health of
+  its own any more.
+- `UProjectileMovementComponent`, `ASpectatorPawn` and the controller states, actor life spans, static mesh sockets
+  from glTF, the view model pass and owner visibility, impact marks, tracers and short-lived lights.
+- **ShooterGame's weapons**: a pistol, a rifle, an AWP (zoom, scope, bolt) and an HE grenade; CS's spread, recoil and
+  range falloff from a seeded stream (deterministic); reloads; headshots, CS's armor ratio, friendly fire; death
+  drops the best weapon, which the next pawn without one picks up; a dead player spectates. Meshes and sounds made
+  by scripts here (CC0).
+- **Fix**: a native CDO keeps its constructor's values for inherited config members.
+- 383 engine tests and 19 ShooterGame tests; the engine builds and its tests run on Linux (the Win64 platform test
+  aside).
+
 ### Next
 
-- **P18 (weapons):** a weapon actor attached to the first-person camera (the character has no arms mesh or sockets
-  yet: attach to `FirstPersonCameraComponent` with an offset, or add a `USkeletalMeshComponent` with a muzzle socket)
-  and to the body for the others; hitscan on the `Weapon` channel (`ECC_GameTraceChannel1`, already named and blocked
-  by every body, the capsules included) with `LineTraceSingleByChannel`, the shooter in `FCollisionQueryParams`'s
-  ignored actors; damage through `UGameplayStatics::ApplyPointDamage` / `AActor::TakeDamage` (UE's signature with
-  `FDamageEvent` still to come) and a health on `AShooterCharacter`; the `Fire` action is bound
-  (`AShooterCharacter::OnFirePressed` logs today); models, weapons and sounds CC0 only (`SourceArt/LICENSES.md`).
 - **P19 (rounds):** round states on `AShooterGameMode` / a `AShooterGameState`, buy zones (the tagged trigger volumes),
   the bomb sites, the scoreboard (`Tab`, a placeholder in `AShooterHUD`) and the menu.
 - **P20 (bots):** the bots' brains on `AShooterAIController` with the de_leon waypoint graph (`ANavigationWaypoint`

@@ -197,7 +197,7 @@ Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build
 ```
 
 `UE_LOG` output goes to the EE console; read `%USERPROFILE%\Documents\PCSX2\logs\emulog.txt` for
-`TestPAL: PASSED (112 test(s), 0 failed)` and the `LogTestPAL` reflection / object-array / memory / name-pool
+`TestPAL: PASSED (113 test(s), 0 failed)` and the `LogTestPAL` reflection / object-array / memory / name-pool
 lines.
 
 ## Reference

@@ -579,6 +579,27 @@ bots that join, a first-person character with CS movement, the de_leon blockout 
 | — | ShooterGame (UE's sample names): `AShooterGameMode`, `AShooterCharacter`, `UShooterCharacterMovement`, `AShooterPlayerController`, `AShooterAIController`, `AShooterPlayerState`, `AShooterHUD`, `EShooterTeam`; `COLLISION_WEAPON` is the config's `Weapon` channel (`ECC_GameTraceChannel1`) | `Game/ShooterGame/Source/ShooterGame/` |
 | — | `SmokeTest.bat` (gate G6), `System.Engine.CollisionChannel.*`, `System.Engine.CharacterMovement.*` (the model), `System.LeonEd.MapFactory.EngineMapsSkipRequiredTags` (371 tests), `ShooterGame.*` (10) | `Engine/Build/BatchFiles/`, `Engine/Private/Tests/`, `Game/ShooterGame/Source/ShooterGame/Private/Tests/` |
 
+### P18 — Weapons and damage
+
+UE's damage API, projectile movement, spectating, life spans, sockets, a view model pass and world effects in the
+engine; ShooterGame's weapons, health, armor, death and pickups on them. Details:
+[ShooterGame README — Weapons](../../Game/ShooterGame/README.md#weapons).
+
+| Leon (before) | UE name (now) | Where |
+| --- | --- | --- |
+| `ACharacter::TakeDamage(float)`, `Health`, `Die`, `Revive`, `IsAlive` | `AActor::TakeDamage(Damage, FDamageEvent, EventInstigator, DamageCauser)`, `InternalTakePointDamage`, `InternalTakeRadialDamage`, `bCanBeDamaged`, `OnTakeAnyDamage` / `OnTakePointDamage` / `OnTakeRadialDamage` (native multicast delegates); the health is the game's pawn's (UE ShooterGame) | `Engine/Classes/GameFramework/Actor.h` |
+| — | `FDamageEvent`, `FPointDamageEvent`, `FRadialDamageEvent`, `FRadialDamageParams` (plain structs, UE's ids), `UDamageType` | `Engine/Public/Engine/DamageEvents.h`, `Engine/Classes/GameFramework/DamageType.h` |
+| `UGameplayStatics::ApplyPointDamage(ACharacter*, …)`, `ApplyRadialDamage(TArray<ACharacter*>, …)` | UE's `ApplyDamage`, `ApplyPointDamage`, `ApplyRadialDamage`, `ApplyRadialDamageWithFalloff` (line of sight on a channel), `GetWorldFromContextObject` | `Engine/Classes/Kismet/GameplayStatics.h` |
+| — | `UProjectileMovementComponent` (no homing, no sliding, no interpolated component) | `Engine/Classes/GameFramework/ProjectileMovementComponent.h` |
+| — | `ASpectatorPawn`, `USpectatorPawnMovement`, `AGameModeBase::SpectatorClass`, `AController::ChangeState` / `GetStateName` / `IsInState`, `NAME_Playing` / `NAME_Spectating` / `NAME_Inactive` (Engine's names), `APlayerController::BeginSpectatingState` / `SpawnSpectatorPawn` (Leon: the controller possesses its spectator pawn) | `Engine/Classes/GameFramework/SpectatorPawn.h`, `Controller.h`, `PlayerController.h` |
+| — | `AActor::SetLifeSpan`, `InitialLifeSpan`, `LifeSpanExpired` (counted in the actor's tick) | `Engine/Classes/GameFramework/Actor.h` |
+| — | `UStaticMeshSocket`, `UStaticMesh::Sockets` / `FindSocket`, `USceneComponent::GetSocketTransform` / `DoesSocketExist` (the static mesh component's sockets); glTF `SOCKET_<Name>` nodes (UE's FBX socket prefix) | `Engine/Classes/Engine/StaticMeshSocket.h`, `MeshUtilities/Private/GltfImport.cpp` |
+| — | `bOnlyOwnerSee`, `bOwnerNoSee` (against `FSceneView::ViewActor`), Leon's `bRenderAsViewModel` and `UCameraComponent::ViewModelFOV` (UE has neither: a game draws its first-person mesh with its own FOV) | `Engine/Classes/Components/PrimitiveComponent.h`, `Renderer/Private/SceneRenderer.cpp` |
+| — | Leon's world effects: `UGameplayStatics::SpawnImpactMark` (UE: `SpawnDecalAtLocation`), `SpawnTracer` (UE: a beam emitter), `SpawnPointLightAtLocation` | `Engine/Public/Effects/WorldEffects.h`, `Renderer/Private/WorldEffectsRenderer.cpp` |
+| a native CDO copied its parent's config members after its constructor | UE: a native class's defaults are its constructor chain's (`bShouldInitializeProperties` false for `CLASS_Native`), then the config | `CoreUObject/Private/UObject/Class.cpp` |
+| — | ShooterGame (UE's sample names): `AShooterWeapon`, `AShooterWeapon_Instant`, `AShooterWeapon_Projectile`, `AShooterProjectile`, `AShooterCharacter` health / inventory / `Die`, `AShooterGameMode::CanDealDamage` / `Killed`; CS's weapons `AShooterWeapon_Pistol`, `_Rifle`, `_Sniper`, `_Grenade` | `Game/ShooterGame/Source/ShooterGame/` |
+| — | `System.Engine.Damage.*`, `ProjectileMovement.*`, `SpectatorPawn.*`, `Sockets.*`, `Actor.LifeSpan`, `System.Renderer.ViewModel.*` / `Effects.*`, `System.LeonEd.Factories.GltfSockets`, `System.CoreUObject.Config.SubclassConstructorDefaults` (383 tests), `ShooterGame.*` (19) | `*/Private/Tests/` |
+
 ## Coordinates
 
 | Topic | UE 4.27 | LeonEngine |

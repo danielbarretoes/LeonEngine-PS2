@@ -7,9 +7,9 @@ What runs automatically and what a person still has to check by hand. Build and 
 
 | Check | Command | Passes when |
 | --- | --- | --- |
-| Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` twice: the engine's (`LeonAutomationTests`, 371) and ShooterGame's (`ShooterGameTests`, 10) |
+| Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` twice: the engine's (`LeonAutomationTests`, 383) and ShooterGame's (`ShooterGameTests`, 19) |
 | LeonHeaderTool golden tests (run by `RunTests.bat` too) | `Engine\Intermediate\Build\HostTools\Win64\LeonHeaderTool.exe -Test` | `LeonHeaderTool -Test: N of N golden cases passed` |
-| Core, CoreUObject, Json, Projects and PakFile on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (112 test(s), 0 failed)` in the EE log (118 on Win64) |
+| Core, CoreUObject, Json, Projects and PakFile on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (113 test(s), 0 failed)` in the EE log (119 on Win64) |
 | Format, banned APIs (G4), Win64 build | `Engine\Build\BatchFiles\Lint.bat` | `Lint OK` |
 | Reproducible reimport (G5; CI, on a clean checkout) | `Engine\Build\BatchFiles\CheckReimport.bat [<Project>.lproj ...]` | `CheckReimport OK`: `LeonCook -run=ImportAssets -reimport -all` leaves `Engine/Content` and `Game/*/Content` unchanged, the imported maps included (`git diff --exit-code`, no new file) |
 | ShooterGame smoke (G6; CI) | `Engine\Build\BatchFiles\SmokeTest.bat` | `SmokeTest OK: 10 pawns, CT 5, T 5, exit code 0`: ShooterGame boots de_leon headless, `bot_fill` adds nine bots to the local player, and the game mode's end-of-match line counts ten pawns in their teams |
