@@ -109,8 +109,12 @@ public:
 		const FVector& Location, bool bRequireWalk = true, bool bFromNode = false) const;
 	/** The nearest node's point (UE: ProjectPointToNavigation); false without navigation data. */
 	[[nodiscard]] bool ProjectPointToNavigation(const FVector& Point, FVector& OutProjected) const;
-	/** A path from Start to End (see the class comment): its points, the end last; false without one (cleared). */
-	[[nodiscard]] bool FindPath(const FVector& Start, const FVector& End, TArray<FVector>& OutPath) const;
+	/**
+	 * A path from Start to End (see the class comment): its points, the end last; false without one (cleared).
+	 * OutNodes, when given, gets each point's node (INDEX_NONE for the end), so a follower can read its flags.
+	 */
+	[[nodiscard]] bool FindPath(
+		const FVector& Start, const FVector& End, TArray<FVector>& OutPath, TArray<int32>* OutNodes = nullptr) const;
 
 	/** A* over the nodes' links from From to To (the node indices, both included); false when To is unreachable. */
 	[[nodiscard]] static bool FindNodePath(const TArray<FNode>& InNodes, int32 From, int32 To, TArray<int32>& OutPath);

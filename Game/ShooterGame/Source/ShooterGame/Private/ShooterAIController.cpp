@@ -57,6 +57,8 @@ const FName AShooterAIController::CarriesBombKey(TEXT("CarriesBomb"));
 const FName AShooterAIController::BombDroppedKey(TEXT("BombDropped"));
 const FName AShooterAIController::HeardEnemyKey(TEXT("HeardEnemy"));
 const FName AShooterAIController::NoiseLocationKey(TEXT("NoiseLocation"));
+const FName AShooterAIController::ShouldEscortKey(TEXT("ShouldEscort"));
+const FName AShooterAIController::ShouldHuntKey(TEXT("ShouldHunt"));
 
 AShooterAIController::AShooterAIController(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -99,11 +101,15 @@ void AShooterAIController::BuildTree()
 		Sequence({Decorator(CarriesBombKey), Action([this](UBlackboardComponent&, float) { return TaskPlant(); })});
 	UBTNode* Fetch =
 		Sequence({Decorator(BombDroppedKey), Action([this](UBlackboardComponent&, float) { return TaskFetchBomb(); })});
+	UBTNode* Escort = Sequence({Decorator(ShouldEscortKey),
+		Action([this](UBlackboardComponent&, float DeltaTime) { return TaskEscort(DeltaTime); })});
 	UBTNode* Investigate = Sequence(
 		{Decorator(HeardEnemyKey), Action([this](UBlackboardComponent&, float) { return TaskInvestigate(); })});
+	UBTNode* Hunt = Sequence({Decorator(ShouldHuntKey),
+		Action([this](UBlackboardComponent&, float DeltaTime) { return TaskHunt(DeltaTime); })});
 	UBTNode* Objective = Action([this](UBlackboardComponent&, float DeltaTime) { return TaskObjective(DeltaTime); });
 	TreeNodes.Add(MakeUnique<UBTComposite_Selector>(
-		TArray<UBTNode*>{Idle, Engage, Defuse, Plant, Fetch, Investigate, Objective}));
+		TArray<UBTNode*>{Idle, Engage, Defuse, Plant, Fetch, Escort, Investigate, Hunt, Objective}));
 	Tree.SetRoot(TreeNodes.Last().Get());
 }
 
@@ -252,6 +258,8 @@ void AShooterAIController::UpdateBlackboard()
 		NoiseHeardTime = -1.0f;
 		Board.ClearValue(NoiseLocationKey);
 		bHasGoal = false;
+		SiteRotation = 0;
+		HoldingSinceTime = -1.0f;
 	}
 
 	// The enemy: alive and seen within EnemyMemory (its last place is searched afterwards).
@@ -275,6 +283,19 @@ void AShooterAIController::UpdateBlackboard()
 	Board.SetValueAsBool(CarriesBombKey, Self != nullptr && Self->GetCarriedBomb() != nullptr);
 	Board.SetValueAsBool(BombDroppedKey, Team == EShooterTeam::T && BombState == EShooterBombState::Dropped);
 	Board.SetValueAsBool(HeardEnemyKey, NoiseHeardTime >= 0.0f && Now - NoiseHeardTime <= NoiseMemory);
+
+	// Escort: a terrorist without the bomb stays with the teammate carrying it.
+	const AShooterBomb* Bomb = GameMode != nullptr ? GameMode->GetBomb() : nullptr;
+	const AShooterCharacter* Carrier = Bomb != nullptr ? Bomb->GetCarrier() : nullptr;
+	Board.SetValueAsBool(ShouldEscortKey,
+		Team == EShooterTeam::T && Carrier != nullptr && Carrier != Self && Carrier->IsAlive() &&
+			BombState == EShooterBombState::Carried);
+	// Hunt: outnumbering the enemy (by HuntAdvantage) with no bomb to go for, the bot goes after them.
+	const EShooterTeam EnemyTeam = Team == EShooterTeam::CT ? EShooterTeam::T : EShooterTeam::CT;
+	const int32 EnemiesAlive = GameMode != nullptr ? GameMode->CountAlive(EnemyTeam) : 0;
+	Board.SetValueAsBool(ShouldHuntKey,
+		HuntAdvantage > 0 && Team != EShooterTeam::None && EnemiesAlive > 0 &&
+			BombState != EShooterBombState::Planted && GameMode->CountAlive(Team) >= EnemiesAlive + HuntAdvantage);
 }
 
 // The tasks
@@ -502,6 +523,27 @@ EBTNodeResult AShooterAIController::TaskFetchBomb()
 	return EBTNodeResult::Running;
 }
 
+EBTNodeResult AShooterAIController::TaskEscort(float DeltaTime)
+{
+	const AShooterGameMode* GameMode = GetShooterGameMode();
+	const AShooterBomb* Bomb = GameMode != nullptr ? GameMode->GetBomb() : nullptr;
+	const AShooterCharacter* Carrier = Bomb != nullptr ? Bomb->GetCarrier() : nullptr;
+	const AShooterCharacter* Self = GetShooterPawn();
+	if (Self == nullptr || Carrier == nullptr)
+	{
+		return EBTNodeResult::Failed;
+	}
+	CurrentTask = TaskName(TEXT("Escort"));
+	ReleaseTrigger();
+	if (FVector::DistSquared2D(Self->GetActorLocation(), Carrier->GetActorLocation()) <= FMath::Square(EscortDistance))
+	{
+		HoldAndLookAround(DeltaTime);
+		return EBTNodeResult::Running;
+	}
+	MoveToGoal(Carrier->GetActorLocation());
+	return EBTNodeResult::Running;
+}
+
 EBTNodeResult AShooterAIController::TaskInvestigate()
 {
 	const AShooterCharacter* Self = GetShooterPawn();
@@ -521,6 +563,29 @@ EBTNodeResult AShooterAIController::TaskInvestigate()
 	CurrentTask = TaskName(TEXT("Investigate"));
 	ReleaseTrigger();
 	MoveToGoal(Noise);
+	return EBTNodeResult::Running;
+}
+
+EBTNodeResult AShooterAIController::TaskHunt(float DeltaTime)
+{
+	const AShooterCharacter* Self = GetShooterPawn();
+	const AShooterGameMode* GameMode = GetShooterGameMode();
+	FVector Goal = FVector::ZeroVector;
+	const EShooterTeam EnemyTeam =
+		Self != nullptr && Self->GetTeam() == EShooterTeam::CT ? EShooterTeam::T : EShooterTeam::CT;
+	if (Self == nullptr || GameMode == nullptr || !GameMode->GetTeamSpawnLocation(EnemyTeam, Goal))
+	{
+		return EBTNodeResult::Failed;
+	}
+	CurrentTask = TaskName(TEXT("Hunt"));
+	ReleaseTrigger();
+	// Toward the enemy's spawn: the senses turn the first contact into an engagement or an investigation.
+	if (FVector::DistSquared2D(Self->GetActorLocation(), Goal) <= FMath::Square(GoalReachedDistance))
+	{
+		HoldAndLookAround(DeltaTime);
+		return EBTNodeResult::Succeeded;
+	}
+	MoveToGoal(Goal);
 	return EBTNodeResult::Running;
 }
 
@@ -544,10 +609,11 @@ EBTNodeResult AShooterAIController::TaskObjective(float DeltaTime)
 	}
 	else
 	{
+		// The terrorists go for the round's site; the CT split over the sites and rotate (SiteRotation).
 		const TArray<FName> Sites = GameMode->GetBombSiteNames();
 		const FName Site = Self->GetTeam() == EShooterTeam::T
 			? GameMode->GetTerroristTargetSite()
-			: (Sites.Num() > 0 ? Sites[GetTeamIndex() % Sites.Num()] : NAME_None);
+			: (Sites.Num() > 0 ? Sites[(GetTeamIndex() + SiteRotation) % Sites.Num()] : NAME_None);
 		if (!GameMode->GetBombSiteLocation(Site, Goal))
 		{
 			StandStill();
@@ -556,15 +622,22 @@ EBTNodeResult AShooterAIController::TaskObjective(float DeltaTime)
 	}
 	if (FVector::DistSquared2D(Self->GetActorLocation(), Goal) <= FMath::Square(GoalReachedDistance))
 	{
-		// There: hold, looking around slowly.
-		StandStill();
-		FRotator Look = GetControlRotation();
-		constexpr float LookAroundRate = 30.0f;
-		Look.Yaw += LookAroundRate * DeltaTime;
-		Look.Pitch = 0.0f;
-		SetControlRotation(Look);
+		HoldAndLookAround(DeltaTime);
+		// A CT that held its site RotateTime with no contact moves on to the next one.
+		const float Now = GetWorldTime();
+		if (HoldingSinceTime < 0.0f)
+		{
+			HoldingSinceTime = Now;
+		}
+		else if (Self->GetTeam() == EShooterTeam::CT && State->GetBombState() != EShooterBombState::Planted &&
+			RotateTime > 0.0f && Now - HoldingSinceTime >= RotateTime)
+		{
+			++SiteRotation;
+			HoldingSinceTime = -1.0f;
+		}
 		return EBTNodeResult::Succeeded;
 	}
+	HoldingSinceTime = -1.0f;
 	MoveToGoal(Goal);
 	return EBTNodeResult::Running;
 }
@@ -589,6 +662,16 @@ void AShooterAIController::StandStill()
 		StopMovement();
 	}
 	bHasGoal = false;
+}
+
+void AShooterAIController::HoldAndLookAround(float DeltaTime)
+{
+	StandStill();
+	FRotator Look = GetControlRotation();
+	constexpr float LookAroundRate = 30.0f;
+	Look.Yaw += LookAroundRate * DeltaTime;
+	Look.Pitch = 0.0f;
+	SetControlRotation(Look);
 }
 
 void AShooterAIController::ReleaseTrigger()

@@ -400,6 +400,59 @@ bool FGameplayAIControllerPathFollowDoesNotShortcutTest::RunTest(const FString& 
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayAIControllerPathFollowReadsWaypointFlagsTest,
+	"System.AIModule.Gameplay.AIControllerPathFollowReadsWaypointFlags",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplayAIControllerPathFollowReadsWaypointFlagsTest::RunTest(const FString& Parameters)
+{
+	// Around the wall with the detour's first waypoint flagged Crouch and the second Jump: the pawn crouches on the
+	// way to and past the first, jumps near the second, stands up past it and still gets to the goal.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	TArray<ANavigationWaypoint*> Waypoints;
+	SpawnWallScene(World, Waypoints);
+	Waypoints[1]->Flags.Add(TEXT("Crouch"));
+	Waypoints[2]->Flags.Add(TEXT("Jump"));
+	World.GetNavigationSystem().Build(World);
+	TArray<FVector> Path;
+	TArray<int32> PathNodes;
+	TestTrue("Path found",
+		World.GetNavigationSystem().FindPath(
+			FVector(-500.0f, 0.0f, 0.0f), FVector(500.0f, 0.0f, 0.0f), Path, &PathNodes));
+	TestEqual("A node per point", PathNodes.Num(), Path.Num());
+	TestEqual("The end has no node", PathNodes.Num() > 0 ? PathNodes.Last() : 0, int32(INDEX_NONE));
+
+	ACharacter* Character = World.SpawnActor<ACharacter>();
+	Character->Reset(FVector(-500.0f, 0.0f, 0.0f));
+	Character->GetCharacterMovement().WalkBounds = 100000.0f;
+	Character->GetCharacterMovement().NavAgentProps.bCanCrouch = true;
+	AAIController& Ai = *World.SpawnActor<AAIController>();
+	Ai.Possess(Character);
+	Ai.MoveToLocation(FVector(500.0f, 0.0f, 0.0f));
+	(void)Ai.TickAI(1.0f / 60.0f);
+	World.Tick(1.0f / 60.0f);
+	TestTrue("Crouched for the Crouch waypoint", Ai.IsCrouchedForPath() && Character->bIsCrouched);
+
+	bool bJumped = false;
+	bool bStoodUp = false;
+	for (int32 Frame = 0;
+		Frame < 1200 && FVector::Dist2D(Character->GetActorLocation(), FVector(500.0f, 0.0f, 0.0f)) > 60.0f; ++Frame)
+	{
+		(void)Ai.TickAI(1.0f / 60.0f);
+		World.Tick(1.0f / 60.0f);
+		bJumped |= !Character->IsMovingOnGround();
+		bStoodUp |= !Ai.IsCrouchedForPath() && !Character->bIsCrouched;
+	}
+	TestTrue("Jumped at the Jump waypoint", bJumped);
+	TestTrue("Stood up past the Crouch waypoint", bStoodUp);
+	TestTrue("Arrived", FVector::Dist2D(Character->GetActorLocation(), FVector(500.0f, 0.0f, 0.0f)) <= 60.0f);
+	Ai.StopMovement();
+	(void)Ai.TickAI(1.0f / 60.0f);
+	TestFalse("Not crouched once stopped", Ai.IsCrouchedForPath());
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayNavFindPathRoutesAroundStaticBlockerTest,
 	"System.AIModule.Gameplay.NavigationSystemFindPathRoutesAroundStaticBlocker",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)

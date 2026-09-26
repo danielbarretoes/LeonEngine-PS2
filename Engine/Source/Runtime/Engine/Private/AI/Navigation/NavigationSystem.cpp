@@ -303,13 +303,22 @@ bool UNavigationSystem::FindNodePath(const TArray<FNode>& InNodes, int32 From, i
 	return false;
 }
 
-bool UNavigationSystem::FindPath(const FVector& Start, const FVector& End, TArray<FVector>& OutPath) const
+bool UNavigationSystem::FindPath(
+	const FVector& Start, const FVector& End, TArray<FVector>& OutPath, TArray<int32>* OutNodes) const
 {
 	OutPath.Reset();
+	if (OutNodes != nullptr)
+	{
+		OutNodes->Reset();
+	}
 	if (Physics != nullptr && FVector::Dist(Start, End) <= Params.MaxLinkDistance &&
 		CanWalkBetween(*Physics, Start, End, Params))
 	{
 		OutPath.Add(End);
+		if (OutNodes != nullptr)
+		{
+			OutNodes->Add(INDEX_NONE);
+		}
 		return true;
 	}
 	const int32 From = FindNearestNode(Start);
@@ -336,8 +345,16 @@ bool UNavigationSystem::FindPath(const FVector& Start, const FVector& End, TArra
 	for (int32 Index = First; Index <= Last; ++Index)
 	{
 		OutPath.Add(Nodes[NodePath[Index]].Location);
+		if (OutNodes != nullptr)
+		{
+			OutNodes->Add(NodePath[Index]);
+		}
 	}
 	OutPath.Add(End);
+	if (OutNodes != nullptr)
+	{
+		OutNodes->Add(INDEX_NONE);
+	}
 	return true;
 }
 

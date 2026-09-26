@@ -300,6 +300,17 @@ TArray<AActor*> AShooterGameMode::GetTeamStarts(EShooterTeam Team) const
 	return Starts;
 }
 
+bool AShooterGameMode::GetTeamSpawnLocation(EShooterTeam Team, FVector& OutLocation) const
+{
+	const TArray<AActor*> Starts = GetTeamStarts(Team);
+	if (Starts.Num() == 0)
+	{
+		return false;
+	}
+	OutLocation = Starts[0]->GetActorLocation();
+	return true;
+}
+
 APawn* AShooterGameMode::SpawnDefaultPawnFor(AController* NewPlayer, AActor* StartSpot)
 {
 	if (StartSpot == nullptr)

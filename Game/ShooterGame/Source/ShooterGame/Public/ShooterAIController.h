@@ -50,6 +50,8 @@ public:
 	static const FName BombDroppedKey;
 	static const FName HeardEnemyKey;
 	static const FName NoiseLocationKey;
+	static const FName ShouldEscortKey;
+	static const FName ShouldHuntKey;
 
 	/** Scales the skill (see the class comment): 0.5 easy, 1 normal, 2 hard. */
 	UPROPERTY(Config)
@@ -92,6 +94,18 @@ public:
 	UPROPERTY(Config)
 	float GoalReachedDistance = 200.0f;
 
+	/** How near the bomb carrier an escorting terrorist stays, cm. */
+	UPROPERTY(Config)
+	float EscortDistance = 350.0f;
+
+	/** Seconds a CT holds its site without contact before it rotates to the next one. */
+	UPROPERTY(Config)
+	float RotateTime = 25.0f;
+
+	/** The living players a team needs over the enemy's to hunt them (no bomb planted); 0 never hunts. */
+	UPROPERTY(Config)
+	int32 HuntAdvantage = 2;
+
 	/** The bot's pawn, as the game's class. */
 	[[nodiscard]] AShooterCharacter* GetShooterPawn() const;
 	[[nodiscard]] const UBlackboardComponent& GetBlackboard() const
@@ -100,7 +114,10 @@ public:
 	}
 	/** The enemy engaged, or null. */
 	[[nodiscard]] AShooterCharacter* GetEnemy() const;
-	/** The name of the tree's branch that ran last (Idle, Engage, Defuse, Plant, FetchBomb, Investigate, Objective). */
+	/**
+	 * The name of the tree's branch that ran last (Idle, Engage, Defuse, Plant, FetchBomb, Escort, Investigate, Hunt,
+	 * Objective).
+	 */
 	[[nodiscard]] FName GetCurrentTask() const
 	{
 		return CurrentTask;
@@ -131,18 +148,22 @@ private:
 	EBTNodeResult TaskDefuse();
 	EBTNodeResult TaskPlant();
 	EBTNodeResult TaskFetchBomb();
+	EBTNodeResult TaskEscort(float DeltaTime);
 	EBTNodeResult TaskInvestigate();
+	EBTNodeResult TaskHunt(float DeltaTime);
 	EBTNodeResult TaskObjective(float DeltaTime);
 
 	/** Moves to Goal unless already moving there (a new path only when the goal moves). */
 	void MoveToGoal(const FVector& Goal);
 	/** Stands still: no path, no wish. */
 	void StandStill();
+	/** Stands still at a goal, looking around slowly. */
+	void HoldAndLookAround(float DeltaTime);
 	/** The trigger up. */
 	void ReleaseTrigger();
 	/** Turns the control rotation toward AimTarget at the turn rate; the angle left, degrees. */
 	float TurnToward(const FVector& AimTarget, float DeltaTime);
-	/** The bot's index in its team (the player states' order), for the CT's site split. */
+	/** The bot's index in its team (the player states' order), for the CT's site split and rotation. */
 	[[nodiscard]] int32 GetTeamIndex() const;
 	[[nodiscard]] AShooterGameMode* GetShooterGameMode() const;
 	[[nodiscard]] float GetWorldTime() const;
@@ -178,4 +199,8 @@ private:
 	FVector CurrentGoal = FVector::ZeroVector;
 	bool bHasGoal = false;
 	float NoiseHeardTime = -1.0f;
+
+	/** The CT's rotation: sites moved on this round, and since when it holds its site (-1: not there). */
+	int32 SiteRotation = 0;
+	float HoldingSinceTime = -1.0f;
 };

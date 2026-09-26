@@ -258,6 +258,10 @@ public:
 	[[nodiscard]] TArray<FName> GetBombSiteNames() const;
 	/** The centre of a bomb site's volume on its floor (the volume's bottom), false without it. */
 	bool GetBombSiteLocation(FName Site, FVector& OutLocation) const;
+	/** Where a team spawns: its first start (level order), false without one (the bots' hunt goal). */
+	bool GetTeamSpawnLocation(EShooterTeam Team, FVector& OutLocation) const;
+	/** The live pawns of a team. */
+	[[nodiscard]] int32 CountAlive(EShooterTeam Team) const;
 
 	/** The loss streak of a team (the loss bonus's count). */
 	[[nodiscard]] int32 GetLossStreak(EShooterTeam Team) const;
@@ -307,8 +311,6 @@ private:
 	[[nodiscard]] TArray<AActor*> GetTeamStarts(EShooterTeam Team) const;
 	/** Pays a team (every player state of it), clamped to MaxMoney. */
 	void PayTeam(EShooterTeam Team, int32 Amount);
-	/** The live pawns of a team. */
-	[[nodiscard]] int32 CountAlive(EShooterTeam Team) const;
 	/** Whether a round is under way (Live, or its result shown): a player joining now waits for the next. */
 	[[nodiscard]] bool IsRoundLive() const;
 	[[nodiscard]] float GetWorldTime() const;

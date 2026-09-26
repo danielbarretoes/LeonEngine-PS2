@@ -263,6 +263,16 @@ void AShooterHUD::DrawMessages()
 				Message = FString::Printf(TEXT("The bomb has been planted at %s"), *State->GetBombSite().ToString());
 				Color = BombColor;
 			}
+			else if (State->GetBombState() == EShooterBombState::Dropped)
+			{
+				// Only the terrorists are told (CS: their radar shows the dropped bomb).
+				const AShooterCharacter* Viewed = GetViewedPawn();
+				if (Viewed != nullptr && Viewed->GetTeam() == EShooterTeam::T)
+				{
+					Message = TEXT("The bomb has been dropped");
+					Color = BombColor;
+				}
+			}
 			break;
 	}
 	if (!Message.IsEmpty())

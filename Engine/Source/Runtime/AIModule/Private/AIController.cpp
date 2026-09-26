@@ -23,6 +23,20 @@ namespace
 	constexpr float StuckDistance = 30.0f;
 	constexpr float StuckSeconds = 1.5f;
 
+	/** What a path point's waypoint asks of the follower (ANavigationWaypoint::Flags). */
+	namespace EPathPointFlags
+	{
+		enum Type : uint8
+		{
+			None = 0,
+			Jump = 1 << 0,
+			Crouch = 1 << 1,
+		};
+	} // namespace EPathPointFlags
+
+	const FName JumpFlag(TEXT("Jump"));
+	const FName CrouchFlag(TEXT("Crouch"));
+
 } // namespace
 
 const UNavigationSystem* AAIController::GetEffectiveNavigation() const
@@ -43,6 +57,7 @@ AAIController::AAIController(const FObjectInitializer& ObjectInitializer)
 void AAIController::ClearPath()
 {
 	Path.Reset();
+	PathPointFlags.Reset();
 	PathIndex = 0;
 	bUsePath = false;
 	PathRebuildCooldown = 0.0f;
@@ -58,13 +73,44 @@ void AAIController::RebuildPath()
 		return;
 	}
 	TArray<FVector> Found;
-	if (!Nav->FindPath(Character->GetActorLocation(), Target, Found) || Found.Num() == 0)
+	TArray<int32> FoundNodes;
+	if (!Nav->FindPath(Character->GetActorLocation(), Target, Found, &FoundNodes) || Found.Num() == 0)
 	{
 		return;
 	}
 	Path = MoveTemp(Found);
+	PathPointFlags.SetNumZeroed(Path.Num());
+	const TArray<UNavigationSystem::FNode>& Nodes = Nav->GetNodes();
+	for (int32 Index = 0; Index < FoundNodes.Num(); ++Index)
+	{
+		if (FoundNodes[Index] == INDEX_NONE)
+		{
+			continue;
+		}
+		const TArray<FName>& Flags = Nodes[FoundNodes[Index]].Flags;
+		PathPointFlags[Index] = uint8((Flags.Contains(JumpFlag) ? EPathPointFlags::Jump : EPathPointFlags::None) |
+			(Flags.Contains(CrouchFlag) ? EPathPointFlags::Crouch : EPathPointFlags::None));
+	}
 	PathIndex = 0;
 	bUsePath = true;
+}
+
+void AAIController::UpdatePathCrouch(ACharacter& Character)
+{
+	// The links on both sides of a Crouch point are low: crouched from the point before it to the point after it.
+	const auto IsCrouchPoint = [this](int32 Index)
+	{ return PathPointFlags.IsValidIndex(Index) && (PathPointFlags[Index] & EPathPointFlags::Crouch) != 0; };
+	const bool bWantsCrouch = bHasTarget && bUsePath && (IsCrouchPoint(PathIndex) || IsCrouchPoint(PathIndex - 1));
+	if (bWantsCrouch && !bCrouchedForPath && Character.CanCrouch())
+	{
+		Character.Crouch();
+		bCrouchedForPath = true;
+	}
+	else if (!bWantsCrouch && bCrouchedForPath)
+	{
+		Character.UnCrouch();
+		bCrouchedForPath = false;
+	}
 }
 
 void AAIController::ResetStuckCheck()
@@ -203,9 +249,11 @@ FVector AAIController::TickAI(float DeltaTime)
 			bool bOnFinalSegment = PathIndex + 1 >= Path.Num();
 			// A copy: a repath below replaces Path.
 			FVector Wp = Path[FMath::Min(PathIndex, Path.Num() - 1)];
-			// A point above a step, close: jump onto it (a crate, a ledge; the waypoint graph's jump links).
-			if (Wp.Z - From.Z > JumpRise && FVector::DistSquared2D(Wp, From) <= FMath::Square(JumpTriggerDistance) &&
-				Character->IsMovingOnGround())
+			// A point above a step or flagged Jump, close: jump onto it (a crate, a ledge, a gap).
+			const bool bJumpPoint =
+				PathPointFlags.IsValidIndex(PathIndex) && (PathPointFlags[PathIndex] & EPathPointFlags::Jump) != 0;
+			if ((bJumpPoint || Wp.Z - From.Z > JumpRise) &&
+				FVector::DistSquared2D(Wp, From) <= FMath::Square(JumpTriggerDistance) && Character->IsMovingOnGround())
 			{
 				Character->Jump();
 			}
@@ -223,6 +271,7 @@ FVector AAIController::TickAI(float DeltaTime)
 				RebuildPath();
 				if (!bUsePath || Path.Num() == 0)
 				{
+					UpdatePathCrouch(*Character);
 					Character->AddMovementInput(Wish);
 					return Wish;
 				}
@@ -244,6 +293,7 @@ FVector AAIController::TickAI(float DeltaTime)
 		}
 	}
 
+	UpdatePathCrouch(*Character);
 	Character->AddMovementInput(Wish);
 	return Wish;
 }

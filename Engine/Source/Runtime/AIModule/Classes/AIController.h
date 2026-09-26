@@ -27,7 +27,8 @@ namespace EPathFollowingStatus
  * Drives a possessed Pawn with simple steering (Unreal-style AAIController), an actor the world spawns.
  * MoveTo* follows a path of the navigation (SetNavigationSystem's, else the world's waypoint graph) when it has
  * navigation data, else a straight line on XY (PathFollowing-lite): the path's points one by one, a jump onto a point
- * above a step, and a new path when the pawn has not moved for a while (stuck).
+ * above a step or flagged `Jump`, a crouch along the links of a point flagged `Crouch`, and a new path when the pawn
+ * has not moved for a while (stuck).
  */
 UCLASS()
 class AIMODULE_API AAIController : public AController
@@ -89,6 +90,11 @@ public:
 	{
 		return Path;
 	}
+	/** The path crouched the pawn (a `Crouch` waypoint); it stands up again past it. */
+	[[nodiscard]] bool IsCrouchedForPath() const
+	{
+		return bCrouchedForPath;
+	}
 
 	/**
 	 * Goal arrive radius (final target). Waypoint arrive stays tight so large values
@@ -111,6 +117,8 @@ private:
 	/** Starts the stuck clock over from where the pawn stands (a new goal). */
 	void ResetStuckCheck();
 	void ClearPath();
+	/** Crouches the pawn along a `Crouch` waypoint's links and stands it up past them. */
+	void UpdatePathCrouch(ACharacter& Character);
 	[[nodiscard]] FVector SteerToward(const FVector& From, const FVector& To, float InArriveRadius) const;
 	[[nodiscard]] FVector SteerWithNavFallback(const FVector& From) const;
 
@@ -123,6 +131,8 @@ private:
 	/** Not a UObject (UNavigationSystem lite): the caller keeps it alive. */
 	UNavigationSystem* Navigation = nullptr;
 	TArray<FVector> Path;
+	/** Per path point: its waypoint's `Jump` and `Crouch` flags (EPathPointFlags in AIController.cpp). */
+	TArray<uint8> PathPointFlags;
 	int32 PathIndex = 0;
 	float PathRebuildCooldown = 0.0f;
 	/** Where the pawn was when the stuck clock started, and for how long it has not moved away. */
@@ -131,6 +141,7 @@ private:
 	int32 NumRepathsWhenStuck = 0;
 	bool bHasTarget = false;
 	bool bUsePath = false;
+	bool bCrouchedForPath = false;
 	/** cm */
 	UPROPERTY()
 	float ArriveRadius = 35.0f;

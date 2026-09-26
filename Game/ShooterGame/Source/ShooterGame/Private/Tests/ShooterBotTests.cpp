@@ -286,6 +286,106 @@ bool FShooterGameBotsDefuseTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBotsEscortTest, "ShooterGame.Bots.TerroristsEscortTheCarrier",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameBotsEscortTest::RunTest(const FString& Parameters)
+{
+	// The terrorist without the bomb follows the carrier (held away from the site) and stays near it.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpBotMatch(World, 1, 2);
+	SpawnWall(World, -2600.0f, 0.0f, FVector(100.0f, 1000.0f, 400.0f));
+	TickUntilLive(World, *GameMode);
+	AShooterCharacter* CT = GetAlive(World, EShooterTeam::CT)[0];
+	Freeze(*CT);
+	CT->Reset(FVector(-3000.0f, 0.0f, 0.0f));
+	AShooterCharacter* Carrier = GameMode->GetBomb()->GetCarrier();
+	if (!TestNotNull("A carrier", Carrier))
+	{
+		return false;
+	}
+	Freeze(*Carrier);
+	Carrier->Reset(FVector(1500.0f, 2500.0f, 0.0f));
+	AShooterCharacter* Escort = GetAlive(World, EShooterTeam::T)[0] == Carrier ? GetAlive(World, EShooterTeam::T)[1]
+																			   : GetAlive(World, EShooterTeam::T)[0];
+	const AShooterAIController* Bot = Cast<AShooterAIController>(Escort->GetController());
+	TickFrames(World, 60 * 8);
+	TestEqual("Escorting", Bot->GetCurrentTask().ToString(), FString(TEXT("Escort")));
+	TestTrue("Near the carrier",
+		FVector::Dist2D(Escort->GetActorLocation(), Carrier->GetActorLocation()) <= Bot->EscortDistance + 50.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBotsHuntTest, "ShooterGame.Bots.OutnumberingTeamHunts",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameBotsHuntTest::RunTest(const FString& Parameters)
+{
+	// Three CT against one terrorist (HuntAdvantage 2, the terrorist behind a wall) and no bomb planted: the CT leave
+	// the site for the terrorists' spawn; with HuntAdvantage 0 they keep to the objective.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpBotMatch(World, 3, 1);
+	SpawnWall(World, 2700.0f, 0.0f, FVector(100.0f, 3000.0f, 400.0f));
+	TickUntilLive(World, *GameMode);
+	AShooterCharacter* T = GetAlive(World, EShooterTeam::T)[0];
+	Freeze(*T);
+	T->Reset(FVector(3200.0f, 0.0f, 0.0f));
+	TickFrames(World, 30);
+	const TArray<AShooterCharacter*> CTs = GetAlive(World, EShooterTeam::CT);
+	const AShooterAIController* Bot = Cast<AShooterAIController>(CTs[0]->GetController());
+	TestEqual("Hunting", Bot->GetCurrentTask().ToString(), FString(TEXT("Hunt")));
+	TestTrue("Toward the terrorists' spawn", Bot->HasMoveTarget() && Bot->MoveTarget().X > 1000.0f);
+
+	for (AShooterCharacter* Pawn : CTs)
+	{
+		Cast<AShooterAIController>(Pawn->GetController())->HuntAdvantage = 0;
+	}
+	TickFrames(World, 30);
+	TestTrue("Back to the objective", Bot->GetCurrentTask() == FName(TEXT("Objective")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBotsRotateTest, "ShooterGame.Bots.CTRotatesBetweenSites",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameBotsRotateTest::RunTest(const FString& Parameters)
+{
+	// A CT holding site A with no contact (the terrorist behind a wall) for RotateTime moves on to site B.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	ATriggerVolume* SiteB = World.SpawnActor<ATriggerVolume>(ATriggerVolume::StaticClass(),
+		FTransform(FQuat::Identity, FVector(0.0f, 2500.0f, 150.0f), FVector(6.0f, 6.0f, 3.0f)));
+	SiteB->Tags.Add(FName(TEXT("BombSite")));
+	SiteB->Tags.Add(FName(TEXT("B")));
+	AShooterGameMode* GameMode = SetUpBotMatch(World, 1, 1);
+	GameMode->RoundTime = 120.0f;
+	SpawnWall(World, 2700.0f, 0.0f, FVector(100.0f, 3000.0f, 400.0f));
+	TickUntilLive(World, *GameMode);
+	AShooterCharacter* T = GetAlive(World, EShooterTeam::T)[0];
+	Freeze(*T);
+	T->Reset(FVector(3200.0f, 0.0f, 0.0f));
+	AShooterCharacter* CT = GetAlive(World, EShooterTeam::CT)[0];
+	AShooterAIController* Bot = Cast<AShooterAIController>(CT->GetController());
+	Bot->HuntAdvantage = 0;
+	Bot->RotateTime = 3.0f;
+	FVector SiteA = FVector::ZeroVector;
+	FVector SiteBLocation = FVector::ZeroVector;
+	TestTrue("Sites",
+		GameMode->GetBombSiteLocation(TEXT("A"), SiteA) && GameMode->GetBombSiteLocation(TEXT("B"), SiteBLocation));
+	bool bHeldA = false;
+	for (int32 Frame = 0;
+		Frame < 60 * 30 && FVector::Dist2D(CT->GetActorLocation(), SiteBLocation) > Bot->GoalReachedDistance; ++Frame)
+	{
+		World.Tick(FrameTime);
+		bHeldA |= FVector::Dist2D(CT->GetActorLocation(), SiteA) <= Bot->GoalReachedDistance;
+	}
+	TestTrue("Held A first", bHeldA);
+	TestTrue("Rotated to B", FVector::Dist2D(CT->GetActorLocation(), SiteBLocation) <= Bot->GoalReachedDistance);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBotsMatchCheckerTest, "ShooterGame.Bots.MatchCheckerFlagsViolations",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
