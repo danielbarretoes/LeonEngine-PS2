@@ -84,6 +84,31 @@ bool FCharacterMovementAccelerationReachesMaxSpeedTest::RunTest(const FString& P
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterMovementZeroStepKeepsTheVelocityTest,
+	"System.Engine.CharacterMovement.ZeroStepKeepsTheVelocity",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FCharacterMovementZeroStepKeepsTheVelocityTest::RunTest(const FString& Parameters)
+{
+	// A step of 0 s (a paused or repeated frame) moves nothing and keeps the velocity: no 0 / 0 in the velocity the
+	// move leaves (UE: MIN_TICK_TIME).
+	FScopedTestWorld TestWorld;
+	FPhysScene Scene;
+	ACharacter& Character = SpawnModelCharacter(*TestWorld);
+	const UCharacterMovementComponent& Move = Character.GetCharacterMovement();
+	RunModelFrames(Character, Scene, FVector(1.0f, 0.0f, 0.0f), 10);
+	const FVector Velocity = Move.Velocity;
+	const FVector Location = Character.GetActorLocation();
+	Character.AddMovementInput(FVector(1.0f, 0.0f, 0.0f));
+	Character.PerformMovement(Scene, 0.0f);
+	TestFalse("No NaN", Move.Velocity.ContainsNaN());
+	TestTrue("The velocity kept", Move.Velocity.Equals(Velocity, 1.0e-3f));
+	TestTrue("Not moved", Character.GetActorLocation().Equals(Location, 1.0e-3f));
+	RunModelFrames(Character, Scene, FVector(1.0f, 0.0f, 0.0f), 1);
+	TestFalse("Still no NaN", Move.Velocity.ContainsNaN());
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterMovementBrakingStopsTheCharacterTest,
 	"System.Engine.CharacterMovement.BrakingStopsTheCharacter",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)

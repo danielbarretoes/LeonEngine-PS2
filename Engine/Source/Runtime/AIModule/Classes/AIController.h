@@ -113,6 +113,8 @@ public:
 
 private:
 	void RebuildPath();
+	/** Starts the stuck clock over from where the pawn stands (a new goal). */
+	void ResetStuckCheck();
 	void ClearPath();
 	[[nodiscard]] FVector SteerToward(const FVector& From, const FVector& To, float InArriveRadius) const;
 	[[nodiscard]] FVector SteerWithNavFallback(const FVector& From) const;

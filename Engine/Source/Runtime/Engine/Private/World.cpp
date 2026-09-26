@@ -436,9 +436,9 @@ bool UWorld::DestroyActor(AActor* Actor, bool /*bNetForce*/, bool /*bShouldModif
 		const int32 Index = Level->Actors.Find(Actor);
 		if (Index != INDEX_NONE)
 		{
-			if (bTicking)
+			if (bTicking || ActorIterationDepth > 0)
 			{
-				// The tick loop walks the array by index: keep its size until the tick ends.
+				// The tick loop and ForEach walk the array by index: keep its size until they end.
 				Level->Actors[Index] = nullptr;
 				bHasNullActorSlots = true;
 			}
@@ -733,4 +733,5 @@ void UWorld::Clear()
 		PersistentLevel->Actors.RemoveAll([](const AActor* Actor) { return Actor == nullptr; });
 	}
 	Physics.Clear();
+	Navigation.Clear();
 }

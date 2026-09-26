@@ -367,6 +367,8 @@ void APlayerController::FOV(float NewFOV)
 
 void APlayerController::Destroyed()
 {
+	// UE: the spectator goes with its controller.
+	DestroySpectatorPawn();
 	if (MyHUD != nullptr)
 	{
 		MyHUD->Destroy();

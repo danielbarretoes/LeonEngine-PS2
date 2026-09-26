@@ -123,15 +123,26 @@ void UPawnSensingComponent::UpdateAISensing()
 			Seen.Add(Pawn);
 		}
 	}
+	// A listener may destroy actors (its own owner included): the ones gone meanwhile are not reported.
+	const AActor* Owner = GetOwner();
 	for (APawn* Pawn : Seen)
 	{
-		OnSeePawn.Broadcast(Pawn);
+		if (Owner == nullptr || Owner->IsPendingKillPending())
+		{
+			return;
+		}
+		if (!Pawn->IsPendingKillPending())
+		{
+			OnSeePawn.Broadcast(Pawn);
+		}
 	}
 }
 
 void UPawnSensingComponent::HandleNoise(APawn* Instigator, const FVector& Location, float Loudness)
 {
-	if (!bEnableSensingUpdates || !bHearNoises || Instigator == GetSensingPawn(*this) || Loudness <= 0.0f)
+	const AActor* Owner = GetOwner();
+	if (!bEnableSensingUpdates || !bHearNoises || Owner == nullptr || Owner->IsPendingKillPending() ||
+		Instigator == GetSensingPawn(*this) || Loudness <= 0.0f)
 	{
 		return;
 	}

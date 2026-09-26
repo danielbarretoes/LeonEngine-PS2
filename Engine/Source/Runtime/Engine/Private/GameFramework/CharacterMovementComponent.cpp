@@ -8,8 +8,6 @@
 namespace
 {
 
-	/** UE: MIN_TICK_TIME, the smallest braking sub-step. */
-	constexpr float MinTickTime = 1.0e-6f;
 	/** UE: BRAKE_TO_STOP_VELOCITY, cm/s: below it braking stops the character. */
 	constexpr float BrakeToStopVelocity = 10.0f;
 	/** UE: BrakingSubStepTime (1 / 33 s), clamped to [1 / 75, 1 / 20]. */
@@ -52,7 +50,7 @@ float UCharacterMovementComponent::GetMaxSpeed() const
 void UCharacterMovementComponent::CalcVelocity(
 	float DeltaTime, float Friction, bool /*bFluid*/, float BrakingDeceleration)
 {
-	if (DeltaTime < MinTickTime)
+	if (DeltaTime < MIN_TICK_TIME)
 	{
 		return;
 	}
@@ -98,7 +96,7 @@ void UCharacterMovementComponent::CalcVelocity(
 
 void UCharacterMovementComponent::ApplyVelocityBraking(float DeltaTime, float Friction, float BrakingDeceleration)
 {
-	if (Velocity.IsZero() || DeltaTime < MinTickTime)
+	if (Velocity.IsZero() || DeltaTime < MIN_TICK_TIME)
 	{
 		return;
 	}
@@ -121,7 +119,7 @@ void UCharacterMovementComponent::ApplyVelocityBraking(float DeltaTime, float Fr
 
 	// Decelerate against the velocity's direction.
 	const FVector RevAccel = bZeroBraking ? FVector::ZeroVector : (-BrakingDeceleration * Velocity.GetSafeNormal());
-	while (RemainingTime >= MinTickTime)
+	while (RemainingTime >= MIN_TICK_TIME)
 	{
 		// Zero friction uses a constant deceleration, so no need for iteration.
 		const float Dt = (RemainingTime > MaxTimeStep && !bZeroFriction) ? FMath::Min(MaxTimeStep, RemainingTime * 0.5f)

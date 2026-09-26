@@ -517,6 +517,11 @@ void ACharacter::MoveHorizontalWithVelocity(FPhysScene& PhysScene, float DeltaTi
 	ResolveSides(PhysScene, true);
 
 	// UE: the velocity becomes what the move did (a wall stops it), never faster than it was.
+	// UE: a step shorter than MinTickTime moves nothing and keeps the velocity (no division by a zero step).
+	if (DeltaTime < UCharacterMovementComponent::MIN_TICK_TIME)
+	{
+		return;
+	}
 	FVector Moved = GetActorLocation() - Before;
 	Moved.Z = 0.0f;
 	FVector NewVelocity = Moved / DeltaTime;

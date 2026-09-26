@@ -7,6 +7,7 @@
 #include "Engine/Level.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Physics/PhysScene.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogNavigation, Log, All);
@@ -56,9 +57,31 @@ void UNavigationSystem::Clear()
 	Physics = nullptr;
 }
 
+FWaypointLinkParams FWaypointLinkParams::FromConfig()
+{
+	FWaypointLinkParams Result;
+	if (GConfig == nullptr)
+	{
+		return Result;
+	}
+	const TCHAR* Section = TEXT("/Script/Engine.NavigationSystem");
+	float AgentHeight = Result.AgentHalfHeight * 2.0f;
+	(void)GConfig->GetFloat(Section, TEXT("AgentRadius"), Result.AgentRadius, GEngineIni);
+	if (GConfig->GetFloat(Section, TEXT("AgentHeight"), AgentHeight, GEngineIni))
+	{
+		Result.AgentHalfHeight = AgentHeight * 0.5f;
+	}
+	(void)GConfig->GetFloat(Section, TEXT("AgentMaxStepHeight"), Result.MaxStepHeight, GEngineIni);
+	(void)GConfig->GetFloat(Section, TEXT("AgentMaxJumpHeight"), Result.MaxJumpHeight, GEngineIni);
+	(void)GConfig->GetFloat(Section, TEXT("AgentMaxDropHeight"), Result.MaxDropHeight, GEngineIni);
+	(void)GConfig->GetFloat(Section, TEXT("MaxLinkDistance"), Result.MaxLinkDistance, GEngineIni);
+	return Result;
+}
+
 void UNavigationSystem::Build(const UWorld& World)
 {
 	Clear();
+	Params = FWaypointLinkParams::FromConfig();
 	Physics = &World.GetPhysicsScene();
 	if (World.PersistentLevel == nullptr)
 	{
@@ -181,7 +204,7 @@ bool UNavigationSystem::CanWalkBetween(const FPhysScene& InPhysics, const FVecto
 	return true;
 }
 
-int32 UNavigationSystem::FindNearestNode(const FVector& Location, bool bRequireWalk) const
+int32 UNavigationSystem::FindNearestNode(const FVector& Location, bool bRequireWalk, bool bFromNode) const
 {
 	if (Nodes.Num() == 0)
 	{
@@ -195,7 +218,9 @@ int32 UNavigationSystem::FindNearestNode(const FVector& Location, bool bRequireW
 	const int32 NumCandidates = FMath::Min(MaxWalkCandidates, Order.Num());
 	for (int32 Candidate = 0; Candidate < NumCandidates; ++Candidate)
 	{
-		if (CanWalkBetween(*Physics, Location, Nodes[Order[Candidate]].Location, Params))
+		const FVector& NodeLocation = Nodes[Order[Candidate]].Location;
+		if (bFromNode ? CanWalkBetween(*Physics, NodeLocation, Location, Params)
+					  : CanWalkBetween(*Physics, Location, NodeLocation, Params))
 		{
 			return Order[Candidate];
 		}
@@ -288,7 +313,7 @@ bool UNavigationSystem::FindPath(const FVector& Start, const FVector& End, TArra
 		return true;
 	}
 	const int32 From = FindNearestNode(Start);
-	const int32 To = FindNearestNode(End);
+	const int32 To = FindNearestNode(End, true, true);
 	TArray<int32> NodePath;
 	if (From == INDEX_NONE || To == INDEX_NONE || !FindNodePath(Nodes, From, To, NodePath))
 	{

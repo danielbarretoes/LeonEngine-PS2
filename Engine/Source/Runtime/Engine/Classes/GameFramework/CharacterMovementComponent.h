@@ -48,6 +48,9 @@ class ENGINE_API UCharacterMovementComponent : public UPawnMovementComponent
 public:
 	UCharacterMovementComponent(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
+	/** UE: MIN_TICK_TIME, the shortest step that moves the character (s). */
+	static constexpr float MIN_TICK_TIME = 1.0e-6f;
+
 	/** Unreal MaxWalkSpeed (cm/s). */
 	UPROPERTY()
 	float MaxWalkSpeed = 450.0f;

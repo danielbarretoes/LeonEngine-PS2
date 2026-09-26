@@ -14,11 +14,16 @@ class UWorld;
 /**
  * What a walk between two waypoints must allow (UNavigationSystem::CanWalkBetween, AutoLinkWaypoints): the agent's
  * standing capsule, the step it takes without jumping, the height it can jump onto, the drop it survives, and how
- * far apart two waypoints may be to be linked. The defaults are ShooterGame's character (CS's hull, a 45 cm step, a
- * jump onto a 1.1 m crate).
+ * far apart two waypoints may be to be linked. The project's agent is in [/Script/Engine.NavigationSystem] of the
+ * Engine config (UE: the navigation system's SupportedAgents), which the map import's auto-linking and the world's
+ * graph both read (FromConfig); a key the config lacks keeps the default below.
  */
 struct ENGINE_API FWaypointLinkParams
 {
+	/** The Engine config's agent: AgentRadius, AgentHeight (the whole capsule), AgentMaxStepHeight,
+	 * AgentMaxJumpHeight, AgentMaxDropHeight and MaxLinkDistance; a key it lacks keeps the default. */
+	[[nodiscard]] static FWaypointLinkParams FromConfig();
+
 	/** The standing agent's capsule (radius, half height with the caps), cm. */
 	float AgentRadius = 40.0f;
 	float AgentHalfHeight = 91.5f;
@@ -84,7 +89,7 @@ public:
 	/** The node of a waypoint, INDEX_NONE when it is not in the graph. */
 	[[nodiscard]] int32 FindNode(const ANavigationWaypoint* Waypoint) const;
 
-	/** The link parameters of the reachability tests (the defaults: FWaypointLinkParams). */
+	/** The link parameters of the reachability tests (Build reads them from the config: FromConfig). */
 	void SetLinkParams(const FWaypointLinkParams& InParams)
 	{
 		Params = InParams;
@@ -95,10 +100,11 @@ public:
 	}
 
 	/**
-	 * The nearest node an agent at Location can walk to (bRequireWalk; any nearest otherwise), INDEX_NONE without one.
-	 * Ties go to the lower index.
+	 * The nearest node an agent at Location can walk to (bRequireWalk; any nearest otherwise; bFromNode: that can walk
+	 * from the node to Location, for a path's goal), INDEX_NONE without one. Ties go to the lower index.
 	 */
-	[[nodiscard]] int32 FindNearestNode(const FVector& Location, bool bRequireWalk = true) const;
+	[[nodiscard]] int32 FindNearestNode(
+		const FVector& Location, bool bRequireWalk = true, bool bFromNode = false) const;
 	/** The nearest node's point (UE: ProjectPointToNavigation); false without navigation data. */
 	[[nodiscard]] bool ProjectPointToNavigation(const FVector& Point, FVector& OutProjected) const;
 	/** A path from Start to End (see the class comment): its points, the end last; false without one (cleared). */

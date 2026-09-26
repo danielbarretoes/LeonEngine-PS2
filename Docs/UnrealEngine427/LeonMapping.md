@@ -624,7 +624,7 @@ navmesh, which Leon does not have), and ShooterGame's bots get their brains. Det
 | --- | --- | --- |
 | `UNavigationSystem` over `FNavMesh` (a grid baked from the static bodies' boxes) | `UNavigationSystem` over the level's `ANavigationWaypoint` graph: `Build`, `FindPath` (A*), `ProjectPointToNavigation`, `FindPathToLocationSynchronously` (UE's, returning a `UNavigationPath`), `CanWalkBetween` (a capsule sweep and a floor probe), `AutoLinkWaypoints`, `FWaypointLinkParams` | `Engine/Public/AI/Navigation/NavigationSystem.h`, `Engine/Classes/AI/Navigation/NavigationPath.h` |
 | `FNavMesh` | removed | — |
-| — | `UMapImportSettings::bAutoLinkWaypoints` and `Waypoint*` (the import links the waypoints) | `LeonEd/Classes/Factories/MapImportSettings.h` |
+| — | `UMapImportSettings::bAutoLinkWaypoints` (the import links the waypoints; the agent: `FWaypointLinkParams::FromConfig`, `[/Script/Engine.NavigationSystem]`) | `LeonEd/Classes/Factories/MapImportSettings.h` |
 | `UBlackboardComponent`: booleans | UE's typed keys: `SetValueAsBool` / `Int` / `Float` / `Vector` / `Object` / `Name`, `GetValueAs*`, `IsValueSet`, `ClearValue` | `AIModule/Classes/BehaviorTree/BehaviorTree.h` |
 | — | `UPawnSensingComponent` (UE's: `SightRadius`, `SetPeripheralVisionAngle`, `HearingThreshold`, `LOSHearingThreshold`, `OnSeePawn`, `OnHearNoise`), `AActor::MakeNoise` | `AIModule/Classes/Perception/PawnSensingComponent.h`, `Engine/Classes/GameFramework/Actor.h` |
 | `AAIController`: path following | + jumping up a path's rise, repathing when stuck | `AIModule/Private/AIController.cpp` |

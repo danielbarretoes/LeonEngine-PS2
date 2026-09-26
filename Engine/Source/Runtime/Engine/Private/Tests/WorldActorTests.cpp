@@ -90,6 +90,37 @@ bool FWorldSpawnActorParametersTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWorldForEachVisitsEveryActorWhenOneIsDestroyedTest,
+	"System.Engine.World.ForEachVisitsEveryActorWhenOneIsDestroyed",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FWorldForEachVisitsEveryActorWhenOneIsDestroyedTest::RunTest(const FString& Parameters)
+{
+	// Outside the tick (BeginPlay walks the actors with ForEach): an actor destroyed during the visit leaves its slot
+	// null until the visit ends, so the actor after it is still visited, and the level is compacted afterwards.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AActor* First = World.SpawnActor<AActor>(FVector::ZeroVector, FRotator::ZeroRotator);
+	AActor* Second = World.SpawnActor<AActor>(FVector::ZeroVector, FRotator::ZeroRotator);
+	AActor* Third = World.SpawnActor<AActor>(FVector::ZeroVector, FRotator::ZeroRotator);
+	TArray<AActor*> Visited;
+	World.ForEach<AActor>(
+		[&Visited, First](AActor& Actor)
+		{
+			Visited.Add(&Actor);
+			if (&Actor == First)
+			{
+				(void)Actor.Destroy();
+			}
+		});
+	TestTrue("The first", Visited.Contains(First));
+	TestTrue("The one after the destroyed one", Visited.Contains(Second));
+	TestTrue("The last", Visited.Contains(Third));
+	TestFalse("Compacted", World.PersistentLevel->Actors.Contains(nullptr));
+	TestFalse("The destroyed one left", World.PersistentLevel->Actors.Contains(First));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWorldSpawnDuringTickJoinsAfterTheTickTest,
 	"System.Engine.World.SpawnDuringTickJoinsAfterTheTick",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)

@@ -603,14 +603,8 @@ UObject* UGLTFMapFactory::FactoryCreateFile(UClass* InClass, UObject* InParent, 
 	// 6. The waypoints an agent can walk between, linked (the project's setting; the links are saved in the map).
 	if (Settings.bAutoLinkWaypoints)
 	{
-		FWaypointLinkParams LinkParams;
-		LinkParams.AgentRadius = Settings.WaypointAgentRadius;
-		LinkParams.AgentHalfHeight = Settings.WaypointAgentHalfHeight;
-		LinkParams.MaxStepHeight = Settings.WaypointMaxStepHeight;
-		LinkParams.MaxJumpHeight = Settings.WaypointMaxJumpHeight;
-		LinkParams.MaxDropHeight = Settings.WaypointMaxDropHeight;
-		LinkParams.MaxLinkDistance = Settings.WaypointMaxLinkDistance;
-		const int32 Added = UNavigationSystem::AutoLinkWaypoints(*World, LinkParams);
+		// The project's agent, the same the game's graph uses (the Engine config's NavigationSystem section).
+		const int32 Added = UNavigationSystem::AutoLinkWaypoints(*World, FWaypointLinkParams::FromConfig());
 		UE_LOG(LogLeonEd, Log, "GLTFMapFactory: %d waypoint link(s) added by the auto-linking", Added);
 	}
 

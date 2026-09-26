@@ -65,7 +65,12 @@ void AAIController::RebuildPath()
 	Path = MoveTemp(Found);
 	PathIndex = 0;
 	bUsePath = true;
-	StuckCheckLocation = Character->GetActorLocation();
+}
+
+void AAIController::ResetStuckCheck()
+{
+	const ACharacter* Character = GetCharacter();
+	StuckCheckLocation = Character != nullptr ? Character->GetActorLocation() : FVector::ZeroVector;
 	StuckTime = 0.0f;
 }
 
@@ -85,7 +90,7 @@ FVector AAIController::SteerToward(const FVector& From, const FVector& To, float
 
 FVector AAIController::SteerWithNavFallback(const FVector& From) const
 {
-	// Nav is authoritative: never charge the goal in a straight line through blockers.
+	// No path: toward the nearest waypoint first (the graph has no surface to project on), then the goal's nearest.
 	const UNavigationSystem* Nav = GetEffectiveNavigation();
 	if (Nav == nullptr || !Nav->HasNavigationData())
 	{
@@ -115,6 +120,7 @@ void AAIController::MoveToLocation(const FVector& WorldPosition)
 	Target = WorldPosition;
 	bHasTarget = true;
 	LogicState = EAILogicState::MoveTo;
+	ResetStuckCheck();
 	RebuildPath();
 }
 
@@ -130,9 +136,10 @@ void AAIController::MoveToActor(AActor* Actor)
 	bHasTarget = true;
 	LogicState = EAILogicState::Chase;
 	Target = Actor->GetActorLocation();
-	// Repath on acquire / when not following; TickAI refreshes on an interval while chasing.
-	if (!bSameActor || !bUsePath)
+	// Repath on acquire; TickAI refreshes on an interval while chasing (a failed path is retried at that pace too).
+	if (!bSameActor)
 	{
+		ResetStuckCheck();
 		RebuildPath();
 	}
 }
@@ -166,7 +173,7 @@ FVector AAIController::TickAI(float DeltaTime)
 			Target = MoveActor->GetActorLocation();
 			bHasTarget = true;
 			PathRebuildCooldown += DeltaTime;
-			if (!bUsePath || PathRebuildCooldown >= PathRebuildIntervalSeconds)
+			if (PathRebuildCooldown >= PathRebuildIntervalSeconds)
 			{
 				PathRebuildCooldown = 0.0f;
 				RebuildPath();

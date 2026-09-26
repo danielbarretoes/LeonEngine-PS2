@@ -166,13 +166,15 @@ reimports the engine content too, passes with a project that requires tags.
 ### Waypoint links
 
 With `bAutoLinkWaypoints` (P20; off by default), the import links, after placing the actors, every pair of waypoints
-up to `WaypointMaxLinkDistance` apart that an agent can walk between both ways (`UNavigationSystem::AutoLinkWaypoints`:
-the standing capsule, `WaypointAgentRadius` × `WaypointAgentHalfHeight`, swept between them on the Pawn channel, the
-floor probed under the way for gaps; a rise up to `WaypointMaxStepHeight` is a step, up to `WaypointMaxJumpHeight` a
-jump), and one way down a drop higher than a jump and up to `WaypointMaxDropHeight`. The links the nodes name are kept;
-the added ones are saved in the map, so the game only reads them. ShooterGame's `DefaultEditor.ini` turns it on with
-CS's hull (40 × 91.5 cm, a 45 cm step, a 115 cm jump, a 3 m drop, 20 m); de_leon's import adds 26 links to the 18
-waypoints' hand-authored ones, the same on every import (the map's bytes do not change: gate G5).
+up to `MaxLinkDistance` apart that the project's agent can walk between both ways (`UNavigationSystem::AutoLinkWaypoints`:
+the standing capsule, `AgentRadius` × `AgentHeight`, swept between them on the Pawn channel, the floor probed under the
+way for gaps; a rise up to `AgentMaxStepHeight` is a step, up to `AgentMaxJumpHeight` a jump), and one way down a drop
+higher than a jump and up to `AgentMaxDropHeight`. The agent is the Engine config's `[/Script/Engine.NavigationSystem]`
+(`FWaypointLinkParams::FromConfig`), which the world's graph reads too, so the game walks the links the import made.
+The links the nodes name are kept; the added ones are saved in the map. ShooterGame's `DefaultEditor.ini` turns it on
+and its `DefaultEngine.ini` gives CS's hull (40 cm × 183 cm, a 45 cm step, a 112 cm jump: the character jumps 114 cm,
+a 3 m drop, 20 m); de_leon's import adds 26 links to the 18 waypoints' hand-authored ones, the same on every import
+(the map's bytes do not change: gate G5).
 
 ### Collision
 

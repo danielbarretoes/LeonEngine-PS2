@@ -479,7 +479,10 @@ public:
 		{
 			return;
 		}
-		// Index loop: Fn may destroy actors (their slots become null) but the array does not shrink meanwhile.
+		// Index loop: Fn may destroy actors; while a visit runs their slots become null (DestroyActor), so the array
+		// does not shrink under the loop, and the outermost visit compacts it afterwards (outside the tick, which
+		// compacts at its end).
+		++ActorIterationDepth;
 		for (int32 Index = 0; Index < PersistentLevel->Actors.Num(); ++Index)
 		{
 			AActor* Actor = PersistentLevel->Actors[Index];
@@ -490,6 +493,10 @@ public:
 					Fn(*Typed);
 				}
 			}
+		}
+		if (--ActorIterationDepth == 0 && !bTicking && bHasNullActorSlots)
+		{
+			const_cast<UWorld*>(this)->CompactActors();
 		}
 	}
 
@@ -527,6 +534,8 @@ private:
 	bool bTicking = false;
 	bool bIsTearingDown = false;
 	bool bIsWorldInitialized = false;
-	/** A DestroyActor during the tick left null slots in the level. */
+	/** A DestroyActor during the tick or a ForEach visit left null slots in the level. */
 	bool bHasNullActorSlots = false;
+	/** ForEach visits under way (nested ones included): DestroyActor keeps the array's size meanwhile. */
+	mutable int32 ActorIterationDepth = 0;
 };
