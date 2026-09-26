@@ -28,6 +28,7 @@ Requires CMake 3.24 or later and Ninja. Host setup is in [SETUP.md](SETUP.md).
 | `PublicDependencyModuleNames` / `PrivateDependencyModuleNames` | `PUBLIC_DEPENDENCIES` / `PRIVATE_DEPENDENCIES` |
 | `CircularlyReferencedDependentModules` | `CIRCULAR_DEPENDENCIES` |
 | `PublicDefinitions`, `PublicIncludePaths`, `PublicSystemLibraries` | `PUBLIC_DEFINITIONS`, `PUBLIC_INCLUDE_PATHS`, `PUBLIC_SYSTEM_LIBRARIES` |
+| `RuntimeDependencies` | `RUNTIME_DEPENDENCIES` (copied beside the executable) |
 | `if (Target.Platform == ...)` inside a `Build.cs` | `_<Platform>` or `_<Group>` keyword suffix (`PUBLIC_DEPENDENCIES_Desktop`) |
 | `Type = ModuleType.External` (ThirdParty) | `TYPE External` (default under `Source/ThirdParty/`) |
 | Editor modules (`Engine/Source/Editor`, descriptor module type `Editor`) | `TYPE Editor` (default under `Source/Editor/`): desktop only, rejected in a `Game` target |
@@ -203,6 +204,7 @@ leon_module(<Name>
   [PUBLIC_INCLUDE_PATHS ...] [PRIVATE_INCLUDE_PATHS ...]
   [PUBLIC_SYSTEM_LIBRARIES ...]
   [EXCLUDE_SOURCES <glob relative to the module>...]
+  [RUNTIME_DEPENDENCIES <file>...]
   [COMPILE_OPTIONS ...]
   [EXTERNAL_TARGETS <cmake-target>...]
   [DOWNLOAD_URL <url> DOWNLOAD_SHA256 <hash> DOWNLOAD_DIR <dir>])
@@ -221,6 +223,7 @@ leon_module(<Name>
 | `PUBLIC_INCLUDE_PATHS` / `PRIVATE_INCLUDE_PATHS` | Extra include paths, relative to the module folder (External modules: relative to the third-party folder) |
 | `PUBLIC_SYSTEM_LIBRARIES` | System libraries to link (`psapi`, `dxgi`, PS2SDK `kernel`, `pad`, ...) |
 | `EXCLUDE_SOURCES` | Globs relative to the module folder removed from the sources |
+| `RUNTIME_DEPENDENCIES` | Files every executable linking the module gets beside it after its link (UE: `RuntimeDependencies`); a file missing at configure time is a warning and the executable is built without it. The PS2 AudioMixer's `$ENV{PS2SDK}/iop/irx/audsrv.irx` (the IOP module its audio loads), which `BuildCookRun` stages with the ELF |
 | `COMPILE_OPTIONS` | Extra private compiler options |
 | `EXTERNAL_TARGETS` | External modules: CMake targets created by `LeonExternal_<Name>()` |
 | `DOWNLOAD_URL`, `DOWNLOAD_SHA256`, `DOWNLOAD_DIR` | External modules: pinned archive (see [ThirdParty modules](#thirdparty-modules)) |

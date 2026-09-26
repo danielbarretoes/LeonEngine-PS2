@@ -33,7 +33,8 @@ struct FSoundWavePCM
 };
 
 /**
- * UE-like audio subsystem (FAudioDevice / UGameplayStatics PlaySound lite), backed by miniaudio.
+ * UE-like audio subsystem (FAudioDevice / UGameplayStatics PlaySound lite), backed by miniaudio on the desktop and by
+ * the SPU2 on the PS2 (FSoftwareAudioMixer's mix streamed through audsrv).
  * Safe no-op when Initialize fails or in headless silent mode. It plays PCM16 samples from memory (FSoundWavePCM, what
  * Engine's USoundWave assets hold: UGameplayStatics::PlaySound2D / PlaySoundAtLocation), and the UI cues.
  */

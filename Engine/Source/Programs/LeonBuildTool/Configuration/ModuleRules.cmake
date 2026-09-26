@@ -9,6 +9,8 @@
 #     [PUBLIC_DEFINITIONS ...] [PRIVATE_DEFINITIONS ...]
 #     [PUBLIC_INCLUDE_PATHS ...] [PRIVATE_INCLUDE_PATHS ...]
 #     [PUBLIC_SYSTEM_LIBRARIES ...] [EXCLUDE_SOURCES <glob relative to the module>...]
+#     [RUNTIME_DEPENDENCIES <file>...]              # copied beside the executables that link the module (UE:
+#                                                   # RuntimeDependencies); a file missing at configure is a warning
 #     [EXTERNAL_TARGETS <cmake-target>...]          # External modules: targets made by LeonExternal_<Name>()
 #     [DOWNLOAD_URL <url> DOWNLOAD_SHA256 <hash> DOWNLOAD_DIR <dir>])
 #
@@ -33,6 +35,7 @@ set(LEON_MODULE_LIST_KEYS
 	EXCLUDE_SOURCES
 	EXTERNAL_TARGETS
 	COMPILE_OPTIONS
+	RUNTIME_DEPENDENCIES
 )
 set(LEON_MODULE_ONE_VALUE_KEYS TYPE CXX_STANDARD DOWNLOAD_URL DOWNLOAD_SHA256 DOWNLOAD_DIR)
 

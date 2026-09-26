@@ -18,6 +18,7 @@
 # textures paletted (PSMT8 / PSMT4) and writes <Project>\Saved\Cooked\PS2-VramReport.txt; -stage lays out what
 # PCSX2's host: device serves:
 #   <Project>\Saved\StagedBuilds\PS2\<Project>.elf
+#   <Project>\Saved\StagedBuilds\PS2\audsrv.irx                  (the IOP module the audio loads; from the ps2dev SDK)
 #   <Project>\Saved\StagedBuilds\PS2\Engine\..., <Project>\...   (without -pak: the cooked folder, loose)
 #   <Project>\Saved\StagedBuilds\PS2\<Project>\Content\Paks\<Project>-PS2.lpak
 #                                                             (-pak: the cooked folder with the paths Engine/... and
@@ -152,6 +153,9 @@ if ($Do.stage)
 	Copy-Item -LiteralPath $GameExe -Destination $StagedExe
 	if ($IsPS2)
 	{
+		# The IOP modules the build put beside the ELF (the modules' RUNTIME_DEPENDENCIES: audsrv.irx) go with it.
+		Get-ChildItem -Path (Split-Path $GameExe -Parent) -Filter "*.irx" -File -ErrorAction SilentlyContinue |
+			ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $StageDir }
 		# host: is the ELF's folder: the PS2 FPaths finds Engine\ and <Project>\ there, loose unless they are paked.
 		if (-not $Do.pak) { Copy-Item -Recurse -Force -Path (Join-Path $CookedDir "*") -Destination $StageDir }
 		if ($AddCmdLine -ne "")

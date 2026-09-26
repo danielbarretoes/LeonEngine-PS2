@@ -202,13 +202,38 @@ Estado:
 - Pendiente (manual): una partida en PCSX2 con el mando, con `-LogFrameTimes`, y sus tiempos en Budgets.md. Si no
   llega a 30 fps, el perfil dirá qué recortar (D6): la transformación en C++ del renderer, la IA o la física.
 
-### E5 · Audio (M)
+### E5 · Audio (M) — hecha en el código; falta oírla en PCSX2
 
 - Backend de AudioMixer sobre la SPU2 con `audsrv` (módulos del IOP cargados desde el ELF). Necesita el toolchain del
   IOP, que tiene la imagen de ps2dev.
 - Cook de sonidos a ADPCM.
 
 Gate: disparos, pasos y avisos de la bomba suenan en PCSX2 sin cortes y sin bajar de 30 fps.
+
+Estado:
+
+- `FSoftwareAudioMixer` (AudioMixer, todas las plataformas) mezcla en la CPU:
+  - Voces PCM16 copiadas, remuestreo lineal a la frecuencia de salida y estéreo de 16 bits.
+  - Voces 2D al volumen dado.
+  - Voces espaciales con los valores por defecto de miniaudio en escritorio: 1 / distancia en metros pasado 1 m, y
+    paneo sobre la derecha del oyente.
+  - Tiene tests en el host.
+- El `FAudioDevice` de PS2 mezcla a 48 kHz (la frecuencia de la SPU2) y lo envía con `audsrv_play_audio`.
+  - Cada `Tick` pone en cola lo que la SPU2 tocó desde el anterior, con 66 ms de adelanto inicial y como mucho 0,1 s
+    por tick.
+  - Carga `rom0:LIBSD` y `audsrv.irx` desde la carpeta del ELF (`SifExecModuleBuffer`, con el parche LMB de
+    libpatches).
+  - Si algo falla, avisa en el log y sigue en silencio.
+- LeonBuildTool añade `RUNTIME_DEPENDENCIES` (el `RuntimeDependencies` de UE). La extensión de AudioMixer declara
+  `$PS2SDK/iop/irx/audsrv.irx`, que el build de Docker copia junto al ELF y BuildCookRun lleva al staging.
+- El tono de los avisos de UI (`BuildUiTone`) se comparte entre escritorio y PS2.
+- Desviación: sin cook a ADPCM ni voces hardware de la SPU2. Los sonidos de ShooterGame son 242 KB de PCM16, pocos
+  para los 32 MB; la mezcla en el EE es un solo camino, probado en el host. ADPCM queda para cuando la memoria lo
+  pida.
+- Desviación: aquí no se pudo enlazar con `audsrv.irx`, porque el toolchain local no tiene el del IOP. Se comprobó
+  que el ELF compila y enlaza con `libaudsrv`, y el build avisa de la IRX que falta.
+- Pendiente (manual): oír la partida en PCSX2, comprobar el log (`PS2 audio: audsrv, 48000 Hz stereo mixed on the
+  EE`) y que `-LogFrameTimes` sigue en 30 fps.
 
 ### E6 · Cierre (S)
 

@@ -87,7 +87,7 @@ namespace
 		virtual FString GetCookNote() const override
 		{
 			return TEXT("PS2: paletted textures (PSMT8 / PSMT4, at most 256 x 256); the meshes and the sounds keep the "
-						"Win64 formats (PCM sounds until the SPU2 backend)");
+						"Win64 formats (PCM16 sounds, which the PS2 mixes on the EE)");
 		}
 	};
 

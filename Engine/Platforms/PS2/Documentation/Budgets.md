@@ -99,6 +99,9 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | E4 | ThirdPerson | 688 482 | 7 072 | 33 984 | — | `FPS2RHI::SetSyncInterval` in the RHI it links (+128 bytes of text) |
 | E4 | GSConformance | 222 287 | 6 316 | 27 488 | — | the same (+320 bytes of text) |
 | E4 | TestPAL | 1 514 864 | 6 380 | 40 592 | — | unchanged |
+| E5 | ShooterGame | 1 710 670 | 7 036 | 67 488 | — | the SPU2 audio: `FSoftwareAudioMixer`, the PS2 `FAudioDevice`, libaudsrv and libpatches (+16 128 bytes of text; +24 208 of bss, libaudsrv's buffers). The sounds stay PCM16: 242 KB cooked |
+| E5 | ThirdPerson | 688 482 | 7 072 | 33 984 | — | unchanged (no engine, no audio) |
+| E5 | TestPAL | 1 514 864 | 6 380 | 40 592 | — | unchanged |
 
 **P9 reflection in TestPAL** (`nm -S` over the ELF, bytes):
 

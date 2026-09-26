@@ -209,7 +209,7 @@ needs no staged config.
 ### ShooterGame on the EE
 
 ShooterGame builds for PS2 with the whole gameplay framework (`WITH_ENGINE=1`: Engine, UMG, AIModule, PhysicsCore
-without Jolt, AudioMixer with a silent device) and the Renderer, whose GS scene renderer draws the world, the view
+without Jolt, AudioMixer, mixed on the EE and streamed to the SPU2 through audsrv, E5) and the Renderer, whose GS scene renderer draws the world, the view
 model and the HUD into `FPS2RHI`'s frame (`Renderer_PS2.Build.cmake`; [ps2-engine](../../../Docs/PLANS/ps2-engine.md)
 E1 and E2): the same code the desktop runs on its OpenGL GS emulator. `-nullrhi` keeps it headless (no scene).
 BuildCookRun stages it for PCSX2: the ELF
@@ -231,8 +231,9 @@ Without `-nullrhi` the game draws de_leon through the GS scene renderer (E2), fr
 Engine\Build\BatchFiles\BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.lproj -platform=PS2 -build -cook -stage -pak -run "-addcmdline=-ExecCmds=bot_fill"
 ```
 
-The EE log shows `Mounted ... ShooterGame-PS2.lpak` and `PS2 renderer: GS scene renderer, 1856 KB of texture VRAM,
-a frame every 2 vertical blank(s)`. The game is played with the DualShock (E4, the controls in the
+The EE log shows `Mounted ... ShooterGame-PS2.lpak`, `PS2 renderer: GS scene renderer, 1856 KB of texture VRAM, a frame
+every 2 vertical blank(s)` and `PS2 audio: audsrv, 48000 Hz stereo mixed on the EE` (E5: `audsrv.irx`, which the build
+copies from the SDK and BuildCookRun stages beside the ELF; without it the game runs silent and says why). The game is played with the DualShock (E4, the controls in the
 [ShooterGame README](../../../Game/ShooterGame/README.md#controls)) at a steady 30 fps: `SyncInterval=2` in
 `[/Script/PS2RHI.PS2Settings]` of `Config/PS2Engine.ini` (UE: `rhi.SyncInterval`; 1 for 60 Hz). With `-LogFrameTimes`
 the EE log gets `Frame times over N frames: ... ms average (... fps), ... ms worst; world ... ms, draw and present ...

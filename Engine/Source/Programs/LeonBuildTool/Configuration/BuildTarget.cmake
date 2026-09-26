@@ -656,5 +656,20 @@ function(leon_build_target TargetName)
 		RUNTIME_OUTPUT_DIRECTORY "${OutputDir}"
 		OUTPUT_NAME "${OutputName}"
 		SUFFIX "${Suffix}")
+
+	# The modules' runtime dependencies go beside the executable (UE: RuntimeDependencies staged with the binaries).
+	foreach(Module IN LISTS Closure)
+		leon_module_effective(${Module} RUNTIME_DEPENDENCIES RuntimeFiles)
+		foreach(RuntimeFile IN LISTS RuntimeFiles)
+			if(EXISTS "${RuntimeFile}")
+				add_custom_command(TARGET ${TargetName} POST_BUILD
+					COMMAND ${CMAKE_COMMAND} -E copy_if_different "${RuntimeFile}" "${OutputDir}/"
+					VERBATIM)
+			else()
+				message(WARNING "LeonBuildTool: ${Module}'s runtime dependency '${RuntimeFile}' does not exist; "
+					"${TargetName} is built without it")
+			endif()
+		endforeach()
+	endforeach()
 	message(STATUS "LeonBuildTool: ${TargetName} (${Type}, ${LEON_PLATFORM} ${LEON_CONFIGURATION}) modules: ${Closure}")
 endfunction()
