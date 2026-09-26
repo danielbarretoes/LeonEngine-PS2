@@ -7,6 +7,70 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-09-26
+
+The PS2's Graphics Synthesizer becomes the one renderer, and ShooterGame runs on the PS2. The frame is recorded as the
+GS's register writes (a command list every backend consumes): the PS2 sends it to the GIF, the desktop executes it on
+an OpenGL emulation of the GS that a software GS written from the manual checks. The gameplay framework and the
+Renderer build for the Emotion Engine, and ShooterGame plays there from its PS2 cook, with the DualShock at 30 fps and
+with sound on the SPU2 ([ps2-gs-parity](Docs/PLANS/ps2-gs-parity.md), [ps2-engine](Docs/PLANS/ps2-engine.md)). The
+engine and ShooterGame content is resaved for 0.21.0. What needs the console's emulator (the captures, the frame
+times, the sound) is a manual checklist in [TESTING.md](Docs/TESTING.md#ps2-validation-in-pcsx2-ps2-engine).
+
+### Added
+
+- **GSCore**: the GS registers and formats of the GS User's Manual, `FGSCommandList` (register writes and image
+  uploads, limited to what every backend reproduces), `FGSGifPacket` (PATH3 packets), `FGSDrawEnvironment`,
+  `FGSLocalMemory`, `FGSTexelDecoder`, `FGSTextureLayout` and the conformance scenes; every platform.
+- **GSReference** (Developer): a software GS executing a command list by the manual's rules, the oracle of the
+  emulator and of the PS2 backend. **GSConformance** (PS2 program) draws the conformance scenes on the console.
+- **The GS scene renderer** (`FGSSceneRenderer`): the transform, clipping (near, far, a guard band), back face culling,
+  skinning and Lambert lighting on the CPU; opaque and translucent meshes, impact marks, tracers, debug lines, the view
+  model and the canvas; `FGSTextureCache` in a VRAM arena.
+- **The OpenGL GS emulator** (`FGSOpenGLEmulator`): the desktop's renderer, 640x448 shown at a whole-number scale; its
+  conformance and scene frame tests against the reference (`System.Renderer.GSEmulator.*`, NonNullRHI;
+  `LeonAutomationTests -nodisplay` skips them).
+- **PS2 renderer module** (`FPS2RendererModule`), `FPS2RHI::Submit`, `AllocateTextureArena` and `SetSyncInterval`
+  (UE: `rhi.SyncInterval`; `SyncInterval=2` in PS2Engine.ini: 30 fps).
+- **The engine on the EE**: Engine, UMG, SlateCore, AnimationCore, AIModule, PhysicsCore (without Jolt), RenderCore,
+  the Renderer and ShooterGame build for PS2; `LeonCommandLine.txt` beside the ELF gives it its arguments.
+- **The PS2 cook**: textures as `PF_P8` / `PF_P4` (TextureCompressor's `FPalettedTextureBuilder`: powers of two up to
+  256, deterministic median cut), `<Project>/Saved/Cooked/PS2-VramReport.txt`; `BuildCookRun -platform=PS2 -pak`
+  stages one pak aligned to 2048 bytes.
+- **Pad input**: `UGameViewportClient::SetInputInterface` sends the application's gamepad to the player; ShooterGame
+  maps the DualShock (`TurnRate` / `LookUpRate`, `BaseTurnRate` / `BaseLookUpRate`) and its buy menu takes the D-pad,
+  Cross and Circle while it is open.
+- **PS2 audio**: `FSoftwareAudioMixer` (every platform) and the PS2 `FAudioDevice` streaming it to the SPU2 through
+  audsrv; LeonBuildTool's `RUNTIME_DEPENDENCIES` (UE: `RuntimeDependencies`) puts `audsrv.irx` beside the ELF.
+- `-LogFrameTimes` logs the frame times every 5 seconds; `Package.bat` packages ThirdPerson, TestPAL, GSConformance
+  and the playable PS2 ShooterGame.
+- Tests: `System.GSCore.*`, `System.GSReference.*`, `System.Renderer.GS.*`, `System.Renderer.GSEmulator.*`,
+  `System.TextureCompressor.Paletted.*`, `System.LeonEd.Cook.PalettedTextures`,
+  `System.PakFile.Format.DeviceRootMountPoint`, `System.Engine.Viewport.Gamepad`, `System.AudioMixer.SoftwareMixer.*`,
+  `ShooterGame.Input.Pad`, `ShooterGame.Input.BuyMenuTakesItsKeys` (407 engine tests on Linux, 416 on Win64; 44
+  ShooterGame tests; TestPAL 130).
+
+### Changed
+
+- Every platform draws the GS frame: the desktop window defaults to 1280x896 (the frame at scale 2), and the stats
+  report the GS register writes and texture uploads. `IRendererModule` gains `GetRenderTargetSize` and
+  `EndDrawingViewport`.
+- The PS2 frame is PSMCT16S with dithering and a PSMZ24 Z buffer; ThirdPerson draws through the command list.
+- `UTexture2D` stores any format `GetPixelFormatDataSize` knows; the pak matches a device root (`host:`, `cdrom0:`)
+  with or without its `/` and finds `<Project>-<Platform>.lpak` by name where a device cannot list folders.
+- The buy menu's number keys live in the menu's own input component, pushed only while it is open.
+
+### Removed
+
+- The OpenGL scene renderer and what the GS cannot do: the shadow map, the planar mirror, Blinn-Phong specular and
+  normal maps, `FGPUPassTimer`, the GPU resource cache, their shaders, `MakeReflectMatrix`, `FitLightSpaceMatrix` and
+  the `r.ShadowMapResolution` / `r.PlanarReflectionScale` settings.
+- `ACharacter::FaceRotation` (unused; it hid `APawn`'s).
+
+### Fixed
+
+- The number keys 1, 2 and 4 drew no weapon: the buy menu's bindings consumed them even with the menu closed.
+
 ## [0.20.1] - 2026-09-26
 
 An audit of the plan's implementation (P17 to P21), and its corrections: gameplay and robustness bugs, the plan's gaps

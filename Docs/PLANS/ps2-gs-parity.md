@@ -208,12 +208,22 @@ Estado: se cumple el gate.
 
 El detalle y las desviaciones (mallas `LPS2` v2, mips, G5 sobre la salida de PS2) están en E3 del plan del motor.
 
-### P7 · Validación, documentación y release (M)
+### P7 · Validación, documentación y release (M) — hecha (0.21.0; las capturas de PCSX2 son manuales)
 
 - Nuevo gate G8, **paridad GS**: GL contra la referencia en `RunTests.bat`, más un procedimiento manual de captura en PCSX2
   documentado en `Docs/TESTING.md` con fixtures versionados.
 - Documentación: ARCHITECTURE (el nivel GS), LeonMapping (`FGSCommandList` frente a `FRHICommandList`), Budgets
   (VRAM y paquetes) y CHANGELOG.
+
+Estado:
+
+- G8 en TESTING. La parte automática son los tests del emulador contra la referencia, que `RunTests.bat` corre con
+  pantalla. La parte manual es el procedimiento de captura de `GSConformance` en PCSX2, con renderer software.
+  - La carpeta de fixtures es `Engine/Platforms/PS2/Documentation/Captures/`. Está vacía hasta la primera captura.
+- ARCHITECTURE §12 describe el camino GS.
+- LeonMapping tiene la sección 0.21.0 (`FGSCommandList` frente a `FRHICommandList`).
+- Budgets tiene la VRAM de texturas y los tamaños por fase.
+- CHANGELOG [0.21.0].
 
 Orden de las fases: **P5 antes que P4**, porque P5 es lo que necesita la PS2 para dibujar ShooterGame y P4 solo
 mejora la vista previa ([ps2-engine](ps2-engine.md), D4). Las dos se cerraron juntas.

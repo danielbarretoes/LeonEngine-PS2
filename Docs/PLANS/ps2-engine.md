@@ -235,9 +235,17 @@ Estado:
 - Pendiente (manual): oír la partida en PCSX2, comprobar el log (`PS2 audio: audsrv, 48000 Hz stereo mixed on the
   EE`) y que `-LogFrameTimes` sigue en 30 fps.
 
-### E6 · Cierre (S)
+### E6 · Cierre (S) — hecha (0.21.0)
 
 - Docs (ARCHITECTURE, BUILD, SETUP, TESTING, el README de PS2), recuentos de tests, CHANGELOG y release.
+
+Estado: docs al día.
+- ARCHITECTURE, BUILD, TOOLS, TESTING, ASSET_FORMATS, LeonMapping, NextSteps, los README de PS2 y ShooterGame, y
+  Budgets.
+- TESTING tiene la validación en PCSX2 fase a fase (qué ejecutar, cuándo pasa, qué anotar).
+- Recuentos de tests: 407 del motor en Linux (416 en Win64), 44 de ShooterGame, TestPAL 130 (123 en PS2).
+- CHANGELOG [0.21.0], `Build.version` 0.21.0 y el contenido del motor y de ShooterGame reguardado.
+- Lo que queda es manual: la tabla de validación en PCSX2 de TESTING.
 
 ## Verificación por fase
 

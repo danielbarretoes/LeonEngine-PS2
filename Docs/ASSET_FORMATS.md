@@ -338,9 +338,9 @@ UE's prefix for its class:
 **Identity.** The `Cube.obj` test fixture (`Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/Cube.obj`) imported with
 `LeonCook Engine/Saved/CookIdentity/CookIdentity.lproj -run=ImportAssets -source=Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/Cube.obj -dest=/Game/Identity`
 (a scratch project in the ignored `Engine/Saved`) saves `SM_Cube.lasset` with SHA-256
-`441931A1181977A8EF810C7FEF26D1EA2DA42D3E04AD1AE33AD6B0C31EBFD373` (2 692 bytes; the same when imported again over
-it or reimported, on Win64; measured with 0.20.0: the engine version is in the package summary, at byte 70, so a
-release changes the hash; 0.17.0 gave `D74B95FEBE0C84509B2DA318660E0726A8762FF35C43C12233D09E88EC258115`).
+`7569649B8B75DABE928AC56A4C238897B010ACE91C87720BC83A0E31E4144BF8` (2 692 bytes; the same when imported again over
+it or reimported, on Win64 and on Linux; measured with 0.21.0: the engine version is in the package summary, at byte
+70, so a release changes the hash; 0.20.0 gave `441931A1181977A8EF810C7FEF26D1EA2DA42D3E04AD1AE33AD6B0C31EBFD373`).
 
 ---
 

@@ -113,9 +113,9 @@ Engine\Binaries\Win64\LeonCook.exe -run=ValidateAssets
 The import identity: the `Cube.obj` fixture imported into a scratch project in the ignored `Engine/Saved`
 (`LeonCook Engine/Saved/CookIdentity/CookIdentity.lproj -run=ImportAssets
 -source=Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/Cube.obj -dest=/Game/Identity`, any minimal
-`.lproj`) saves `SM_Cube.lasset` with SHA-256 `441931A1181977A8EF810C7FEF26D1EA2DA42D3E04AD1AE33AD6B0C31EBFD373`
-(engine version 0.20.0; `D74B95FEBE0C84509B2DA318660E0726A8762FF35C43C12233D09E88EC258115` with 0.17.0: the summary
-records the engine version), run after run.
+`.lproj`) saves `SM_Cube.lasset` with SHA-256 `7569649B8B75DABE928AC56A4C238897B010ACE91C87720BC83A0E31E4144BF8`
+(engine version 0.21.0, on Win64 and on Linux; `441931A1181977A8EF810C7FEF26D1EA2DA42D3E04AD1AE33AD6B0C31EBFD373`
+with 0.20.0: the summary records the engine version), run after run.
 
 ### The cook
 

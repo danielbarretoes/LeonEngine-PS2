@@ -27,7 +27,7 @@ Update this page whenever a module or type is added, moved or renamed.
 | `Engine/Platform/Host` (GLFW window, memory stats) | `ApplicationCore` (`Private/Desktop`), `Core` HAL (`Private/Windows`) | |
 | `Engine/Platform/Ps2` | `Engine/Platforms/PS2/Source/Runtime/{Core,ApplicationCore,Launch}` | platform extension |
 | `leon_rhi` (`IRHIDevice`) | `RHI` (`FDynamicRHI`) | |
-| `Plugins/RHI/OpenGL` | `OpenGLDrv` (device) + `Renderer` (GL renderer behind Engine's `IRendererModule` since P13) | debt: Renderer calls GL directly |
+| `Plugins/RHI/OpenGL` | `OpenGLDrv` (device) + `Renderer` (behind Engine's `IRendererModule` since P13; since 0.21.0 the GS scene renderer, the desktop drawing it on the OpenGL GS emulator) | the emulator calls GL directly |
 | `Plugins/RHI/PS2` | `Engine/Platforms/PS2/Source/Runtime/PS2RHI` | `FPS2RHI` static API |
 | `Engine/Renderer` CPU side | `RenderCore` | |
 | `Engine/Serialization` | `Json` | native since P4 (`FJsonObject`, `TJsonReader`, `TJsonWriter`, `FJsonSerializer`); `FJsonUtils` removed; served the cook recipes (P6 to P14) and `MaterialAsset` (until P14) |
@@ -53,7 +53,10 @@ Update this page whenever a module or type is added, moved or renamed.
 | `Tests/` (Catch2) | `<Module>/Private/Tests/` + `Programs/LeonAutomationTests` | UE automation tests for Core (P2), Json, Projects (P4), PhysicsCore, RenderCore and AnimationCore (P5), and every other module (P6); Catch2 removed in P6 |
 | — | `Programs/TestPAL` | UE `Programs/TestPAL`: runs the Core, CoreUObject, Json, Projects and PakFile automation tests on every platform (PS2 in PCSX2) |
 | — | `PakFile` (P16) | UE `Runtime/PakFile`: `.lpak` files, `FPakPlatformFile` in the platform file chain; every platform |
-| — | `Developer/TargetPlatform` (P16) | UE `Developer/TargetPlatform` with the `<Platform>TargetPlatform` modules folded in: Win64 and a PS2 stub |
+| — | `Developer/TargetPlatform` (P16) | UE `Developer/TargetPlatform` with the `<Platform>TargetPlatform` modules folded in: Win64 and the PS2 (paletted textures since 0.21.0) |
+| — | `GSCore` (0.21.0) | Leon's: the Graphics Synthesizer's registers and `FGSCommandList`, which every backend consumes (UE's counterpart is the RHI command list); every platform |
+| — | `Developer/GSReference` (0.21.0) | Leon's: a software GS by the manual, the oracle of the emulator and the PS2 backend |
+| — | `Developer/TextureCompressor` (0.21.0) | UE `Developer/TextureCompressor` and the `TextureFormat*` modules: the PS2's paletted textures |
 | — | `Programs/LeonPak` (P16) | UE `Programs/UnrealPak` |
 | — | `Engine/Build/BatchFiles/BuildCookRun.bat` (P16) | UE `RunUAT BuildCookRun` (AutomationTool): build, cook, stage, pak, run |
 | — | `CoreUObject` (P9–P11) | UE `Runtime/CoreUObject`: `UObject`, reflection, `NewObject`, the object array, garbage collection, references, config and Exec, packages (`.lasset` / `.lmap`, linkers, `LoadObject`); every platform; since P12 Engine, AIModule and UMG are reflected on it (AnimationCore was from P12 to P14) |
@@ -666,6 +669,23 @@ UMG takes UE's widget tree. Details: [ARCHITECTURE.md](../ARCHITECTURE.md),
 | — | `FMargin`, `EHorizontalAlignment` | `SlateCore/Public/Layout/Margin.h`, `Types/SlateEnums.h` |
 | `AShooterAIController`'s tree | + Escort, Hunt and the CT's site rotation (`EscortDistance`, `HuntAdvantage`, `RotateTime`); `AShooterGameMode::CountAlive`, `GetTeamSpawnLocation`; the buy menu on the widget tree, `buymenu` | `Game/ShooterGame/Source/ShooterGame/` |
 | — | `System.Engine.Damage.PainCausingVolume`, `System.AIModule.Gameplay.AIControllerPathFollowReadsWaypointFlags`, `System.UMG.WidgetTree.LayoutAndPaint`, `System.Core.Config.UserLayerArraysAndRemovals` (386 tests), `ShooterGame.Bots.TerroristsEscortTheCarrier`, `OutnumberingTeamHunts`, `CTRotatesBetweenSites` (42 ShooterGame tests) | `*/Private/Tests/` |
+
+### 0.21.0 — the GS path and the engine on PS2
+
+Every platform draws the PS2's Graphics Synthesizer frame, and ShooterGame runs on the EE
+([ps2-gs-parity](../PLANS/ps2-gs-parity.md), [ps2-engine](../PLANS/ps2-engine.md)).
+
+| Leon (before) | UE name (now) | Where |
+| --- | --- | --- |
+| `FPS2RHI`'s immediate draws into libdraw packets | `FGSCommandList` (UE: `FRHICommandList`, but the GS's register writes and image uploads), `FGSGifPacket`, `FGSDrawEnvironment` | `GSCore/Public/` |
+| — | `FGSReferenceRasterizer` (a software GS), `FGSLocalMemory`, `FGSTexelDecoder` | `Developer/GSReference`, `GSCore` |
+| `FSceneRenderer` (forward OpenGL: shadow map, planar mirror, Blinn-Phong) | `FGSSceneRenderer` (UE: `FSceneRenderer` / `FMobileSceneRenderer`): the transform, clipping, skinning and Lambert lighting on the CPU, recorded as GS writes; `FGSTextureCache` | `Renderer/Private/GS/` |
+| the GL renderer's passes | `FGSOpenGLEmulator`: the desktop executes the GS list | `Renderer/Private/GSEmulator/` |
+| — | `FPS2RendererModule` (UE: the platform's renderer), `FPS2RHI::Submit`, `AllocateTextureArena`, `SetSyncInterval` (UE: `rhi.SyncInterval`) | `Engine/Platforms/PS2/Source/Runtime/{Renderer,PS2RHI}` |
+| RGBA8 only | `PF_P8` / `PF_P4` (Leon's paletted formats), `FPalettedTextureBuilder` (UE: the texture format modules), the cook's VRAM report | `RenderCore/Public/PixelFormat.h`, `Developer/TextureCompressor`, `LeonEd` |
+| the PS2 silent `FAudioDevice` | the SPU2 through audsrv, mixed by `FSoftwareAudioMixer` (UE: `FMixerDevice`) | `AudioMixer/Private/SoftwareAudioMixer.h`, `Engine/Platforms/PS2/Source/Runtime/AudioMixer` |
+| the pad read by ThirdPerson only | `UGameViewportClient::SetInputInterface`: gamepad keys and axes for every engine game (UE: Slate's controller events) | `Engine/Classes/Engine/GameViewportClient.h` |
+| — | `RUNTIME_DEPENDENCIES` (UE: `RuntimeDependencies`) | LeonBuildTool's module rules |
 
 ## Coordinates
 

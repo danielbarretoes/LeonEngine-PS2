@@ -207,11 +207,8 @@ up, left-handed, 1 unit = 1 cm.
   +X (the origin axes come closer if you are behind them), **S** away, **D** to the right (+Y), **A** to the left.
   The movement follows the view, including its pitch.
 - [ ] **Q / E**: **E** moves up (+Z, the floor drops away), **Q** down.
-- [ ] **Shadows**: shadows fall away from the sun and stay attached to the objects that cast them; **F1** draws the
-  shadow volume (yellow) around the level, not beside it.
-- [ ] **Mirror**: on a level with a `PlanarMirror=true` material ([ASSET_FORMATS.md](ASSET_FORMATS.md)), objects above
-  the mirror appear upside down under them, with left and right kept (a red object on the left of a blue one stays on
-  the left in the reflection).
+- [ ] **Bounds**: **F1** draws each mesh's box around it, not beside it (nothing casts shadows since
+  [ps2-gs-parity](PLANS/ps2-gs-parity.md) P4: the GS path has no shadow map and no mirror).
 - [ ] **Free-look camera**: the view never rolls while turning or looking up and down, and the Starter level opens
   with the same view as before P7 (the frame captures match).
 - [ ] **Orbit camera**: `LeonGame`'s default pawn flies with a free-look camera, so the orbit camera cannot be
@@ -220,6 +217,43 @@ up, left-handed, 1 unit = 1 cm.
   own frame and did not change in P7.
 - [ ] **Jump**: `LeonGame` has no character. The jump (+Z at `JumpZVelocity`, 700 cm/s) is covered by
   `System.Engine.Golden.JumpArc`. On PS2, Cross still jumps up in ThirdPerson.
-- [ ] **Sound panning**: the audio device converts the listener and sound positions (Y and Z swap, ×0.01 to metres),
-  but no level or game mode plays a positioned sound yet, so there is nothing to listen to. When one does, a sound on
-  +Y of a listener looking along +X must come from the **right** speaker.
+- [ ] **Sound panning**: the audio device converts the listener and sound positions (Y and Z swap, ×0.01 to metres). In
+  ShooterGame a shot on +Y of a listener looking along +X comes from the **right** speaker, on the desktop and on the
+  PS2 (`System.AudioMixer.SoftwareMixer.Spatialized` checks the PS2's mixer).
+
+## GS parity (G8)
+
+Gate G8 ([ps2-gs-parity](PLANS/ps2-gs-parity.md) P7): the desktop draws what the PS2 draws. `RunTests.bat` runs it
+with the engine's tests (a window is needed: `-nodisplay` skips it):
+
+- `System.Renderer.GSEmulator.Conformance`: the OpenGL GS emulator against the reference rasterizer on the GS
+  conformance scenes, within 2 levels per channel (the colour-clamp-off scene keeps its 2 wrapped pixels);
+- `System.Renderer.GSEmulator.SceneFrame`: a frame of the GS scene renderer, within one 5-bit step but for 64 pixels;
+- `System.Renderer.GS.*`: the scene renderer's lists drawn by the reference (the emitter, the texture cache with the
+  PS2 cook's paletted textures, a lit cube, the canvas).
+
+The PS2 side is manual (PCSX2 needs a BIOS): the same scenes captured on the console's emulator.
+
+1. `Package.bat` (or `Engine\Build\BatchFiles\Build.bat GSConformance PS2 Development`).
+2. Boot `Packages\PS2\GSConformance\GSConformance.elf` in PCSX2 (`pcsx2-qt -fastboot -elf <file>`), with the
+   software renderer (Settings > Graphics > Renderer: Software) for a faithful GS.
+3. Take a screenshot (F8, `snaps\` in PCSX2's folder) and compare it with the reference's scenes: nine cells in a
+   grid, each with its name. A difference is a bug in the reference, the emulator or the PS2 backend; report it with
+   the cell's name.
+4. Keep the screenshot in `Engine/Platforms/PS2/Documentation/Captures/GSConformance.png` as the fixture the next
+   captures are compared with.
+
+## PS2 validation in PCSX2 (ps2-engine)
+
+The checks of [ps2-engine](PLANS/ps2-engine.md) that need the console's emulator, in order. PCSX2: enable Settings >
+Advanced > Enable Host Filesystem (the ELF's folder is `host:`), and keep the EE log open (Tools > Show Console, or
+`emuLog.txt`). Each check says what to keep and record.
+
+| Phase | Run | Passes when | Record |
+| --- | --- | --- | --- |
+| E0 | `Package.bat`, then `ThirdPerson.elf`, `GSConformance.elf` and `TestPAL.elf` from `Packages\PS2\` | ThirdPerson draws its level and moves with the pad; GSConformance matches the reference (above); `TestPAL: PASSED (123 test(s), 0 failed)` | a screenshot of each, TestPAL's `LogTestPAL` lines in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md) |
+| E1 | `BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.lproj -platform=PS2 -build -cook -stage -run "-addcmdline=-nullrhi -benchmark -botmatch -rounds=10 -seed=7"`, twice | `Botmatch OK: 10 round(s), ...` both times, the same result | the `Botmatch OK` and `Botmatch budget:` lines in Budgets.md |
+| E2, E3 | `BuildCookRun.bat ... -platform=PS2 -build -cook -stage -pak -run "-addcmdline=-ExecCmds=bot_fill"` | de_leon draws with the player, the bots, the tracers and the HUD, from the pak (`Mounted ... ShooterGame-PS2.lpak`) | a screenshot beside the desktop's (`ShooterGame -Screenshot=`) |
+| E4 | the packaged `Packages\PS2\ShooterGame\ShooterGame.elf` (it passes `-LogFrameTimes`) | a full match against nine bots with the pad (move, look, fire, buy, plant); `Frame times over ...` lines near 33.4 ms average | the frame time lines in Budgets.md; if they miss 30 fps, which part (world or draw) is over |
+| E5 | the same | shots, steps, the bomb's beeps and the explosion sound, panned, without drops; `PS2 audio: audsrv, 48000 Hz stereo mixed on the EE` in the log | whether the frame times changed with the sound |
+

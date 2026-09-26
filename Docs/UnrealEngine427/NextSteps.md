@@ -402,27 +402,43 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 - 386 engine tests and 42 ShooterGame tests; release 0.20.1 (the content resaved with the new
   version).
 
+### Done — The GS path and the engine on PS2 (0.21.0)
+
+([ps2-gs-parity](../PLANS/ps2-gs-parity.md), [ps2-engine](../PLANS/ps2-engine.md),
+[LeonMapping — 0.21.0](LeonMapping.md#0210--the-gs-path-and-the-engine-on-ps2)):
+
+- The GS contract (`GSCore`), a software GS by the manual (`GSReference`), the PS2 backend on GIF packets and the
+  conformance scenes (`GSConformance`).
+- One scene renderer for every platform (`FGSSceneRenderer`): the desktop executes its GS list on an OpenGL emulation
+  of the GS; the GL-only features (shadows, the planar mirror, specular, normal maps) are gone.
+- The gameplay framework and the Renderer build for the EE: ShooterGame runs there, drawn by the same renderer, from
+  its PS2 cook (paletted textures, a pak aligned to 2048 bytes), played with the DualShock at 30 fps, with sound on the
+  SPU2.
+- 407 engine tests on Linux (416 on Win64), 44 ShooterGame tests, TestPAL 130; release 0.21.0 (the content resaved).
+
 ### Next
 
-- Measure the PS2 ELFs and TestPAL in PCSX2 again (not measured since P16) and record them in Budgets.md.
+- The PCSX2 checks of [TESTING.md](../TESTING.md#ps2-validation-in-pcsx2-ps2-engine): the captures, the botmatch, a
+  match at 30 fps with sound, and their numbers in Budgets.md. If the EE misses 30 fps, profile the frame (world or
+  draw) before optimizing (VU1 transform, AI tick rate).
 - The bots' balance: in eight full matches on de_leon (seeds 1 to 8) the counter-terrorists won seven, and no round
   ended with the bomb exploding (the terrorists die or the bomb is defused first); measured before the escort, the
   hunt and the CT rotation. Grenades are the next step.
 - Later: move the character movement code from `ACharacter` into `UCharacterMovementComponent` (UE's
   `PerformMovement`, `MovementMode`, `Velocity`, `CurrentFloor`); a cached `ComponentToWorld`; tick functions.
-- Cook follow-ups: `-iterate` (cook only what changed), an asset registry, compressed paks, the PS2 target's formats
-  (PSMT8 / PSMT4 textures, `LPS2` v2 meshes, ADPCM) with a pak aligned to 2048 on `cdrom0:` mounted by the PS2
-  launch.
+- Cook follow-ups: `-iterate` (cook only what changed), an asset registry, compressed paks; for the PS2, a disc image
+  (`cdrom0:`: ISO 9660 names and an image tool; the pak is already aligned and found by name), ADPCM sounds on the
+  SPU2's voices and `LPS2` v2 meshes when the memory needs them.
 - Replication: the ENet networking was removed in 0.12.0 (local tag `archive/net-enet-0.11`); it returns as
   UObject replication (`UNetDriver`, replicated properties) — `Runtime/Engine/Classes/Engine/NetDriver.h`.
 
 ## Engine / platform
 
-- Gameplay framework on PS2: it builds and runs headless since [ps2-engine](../PLANS/ps2-engine.md) E1; the GS scene
-  renderer (E2), the PS2 cook (E3), input and performance (E4) and audio (E5) follow. Then `Game/ThirdPerson` can use
-  `AThirdPersonCharacter : ACharacter` like TP_ThirdPerson.
-- Renderer through RHI command lists instead of direct GL calls (the Engine ↔ Renderer cycle is gone since P13); a
-  render thread (the scene proxies are the seam).
+- Gameplay framework on PS2: ShooterGame runs, draws, plays and sounds on the EE since
+  [ps2-engine](../PLANS/ps2-engine.md) E1 to E5. `Game/ThirdPerson` can now use `AThirdPersonCharacter : ACharacter`
+  like TP_ThirdPerson.
+- The renderer records GS command lists (0.21.0) instead of calling GL; a render thread later (the scene proxies are
+  the seam).
 - `UNavigationSystemBase` seam so NavigationSystem can move to its own module; a navmesh (Recast) if a map ever
   needs more than a waypoint graph (the graph ignores dynamic obstacles; a bot blocked by one repaths).
 - The PS2 target platform's formats (the TargetPlatform module's PS2 stub: textures, LPS2 meshes, ADPCM) and a pak on
