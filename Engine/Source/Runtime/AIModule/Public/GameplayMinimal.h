@@ -3,7 +3,6 @@
 #include "CoreMinimal.h"
 
 /** Gameplay framework: UGameInstance, World, Actors, Controllers, GameState/PlayerState, GameMode. */
-#include "AI/Navigation/NavMesh.h"
 #include "AI/Navigation/NavigationSystem.h"
 #include "AIChaseBehavior.h"
 #include "AIController.h"

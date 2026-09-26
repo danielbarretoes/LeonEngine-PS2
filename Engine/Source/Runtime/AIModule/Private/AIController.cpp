@@ -1,6 +1,7 @@
 #include "AIController.h"
 
 #include "AI/Navigation/NavigationSystem.h"
+#include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/Character.h"
 
@@ -14,7 +15,25 @@ namespace
 	 */
 	constexpr float WaypointArriveRadius = 45.0f;
 
+	/** A path point this much above the feet, this near, is jumped onto (above a step), cm. */
+	constexpr float JumpRise = 50.0f;
+	constexpr float JumpTriggerDistance = 150.0f;
+
+	/** Moving less than this in StuckSeconds while following a path repaths, cm. */
+	constexpr float StuckDistance = 30.0f;
+	constexpr float StuckSeconds = 1.5f;
+
 } // namespace
+
+const UNavigationSystem* AAIController::GetEffectiveNavigation() const
+{
+	if (Navigation != nullptr)
+	{
+		return Navigation;
+	}
+	const UWorld* World = GetWorld();
+	return World != nullptr ? &World->GetNavigationSystem() : nullptr;
+}
 
 AAIController::AAIController(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -33,18 +52,21 @@ void AAIController::RebuildPath()
 {
 	ClearPath();
 	ACharacter* Character = GetCharacter();
-	if (Character == nullptr || Navigation == nullptr || !Navigation->HasNavMesh() || !bHasTarget)
+	const UNavigationSystem* Nav = GetEffectiveNavigation();
+	if (Character == nullptr || Nav == nullptr || !Nav->HasNavigationData() || !bHasTarget)
 	{
 		return;
 	}
 	TArray<FVector> Found;
-	if (!Navigation->FindPath(Character->GetActorLocation(), Target, Found) || Found.Num() == 0)
+	if (!Nav->FindPath(Character->GetActorLocation(), Target, Found) || Found.Num() == 0)
 	{
 		return;
 	}
 	Path = MoveTemp(Found);
 	PathIndex = 0;
 	bUsePath = true;
+	StuckCheckLocation = Character->GetActorLocation();
+	StuckTime = 0.0f;
 }
 
 FVector AAIController::SteerToward(const FVector& From, const FVector& To, float InArriveRadius) const
@@ -64,12 +86,13 @@ FVector AAIController::SteerToward(const FVector& From, const FVector& To, float
 FVector AAIController::SteerWithNavFallback(const FVector& From) const
 {
 	// Nav is authoritative: never charge the goal in a straight line through blockers.
-	if (Navigation == nullptr || !Navigation->HasNavMesh())
+	const UNavigationSystem* Nav = GetEffectiveNavigation();
+	if (Nav == nullptr || !Nav->HasNavigationData())
 	{
 		return SteerToward(From, Target, ArriveRadius);
 	}
 	FVector OnMesh = FVector::ZeroVector;
-	if (!Navigation->ProjectPointToNavigation(From, OnMesh))
+	if (!Nav->ProjectPointToNavigation(From, OnMesh))
 	{
 		return {};
 	}
@@ -79,7 +102,7 @@ FVector AAIController::SteerWithNavFallback(const FVector& From) const
 		return ToMesh;
 	}
 	FVector GoalNav = FVector::ZeroVector;
-	if (!Navigation->ProjectPointToNavigation(Target, GoalNav))
+	if (!Nav->ProjectPointToNavigation(Target, GoalNav))
 	{
 		return {};
 	}
@@ -175,6 +198,30 @@ FVector AAIController::TickAI(float DeltaTime)
 			}
 			const bool bOnFinalSegment = PathIndex + 1 >= Path.Num();
 			const FVector& Wp = Path[FMath::Min(PathIndex, Path.Num() - 1)];
+			// A point above a step, close: jump onto it (a crate, a ledge; the waypoint graph's jump links).
+			if (Wp.Z - From.Z > JumpRise && FVector::DistSquared2D(Wp, From) <= FMath::Square(JumpTriggerDistance) &&
+				Character->IsMovingOnGround())
+			{
+				Character->Jump();
+			}
+			// No progress for a while (a pawn in the way, a corner): find the path again.
+			StuckTime += DeltaTime;
+			if (FVector::DistSquared2D(From, StuckCheckLocation) > FMath::Square(StuckDistance))
+			{
+				StuckCheckLocation = From;
+				StuckTime = 0.0f;
+			}
+			else if (StuckTime >= StuckSeconds)
+			{
+				StuckTime = 0.0f;
+				++NumRepathsWhenStuck;
+				RebuildPath();
+				if (!bUsePath || Path.Num() == 0)
+				{
+					Character->AddMovementInput(Wish);
+					return Wish;
+				}
+			}
 			if (bOnFinalSegment)
 			{
 				Wish = SteerToward(From, Target, ArriveRadius);

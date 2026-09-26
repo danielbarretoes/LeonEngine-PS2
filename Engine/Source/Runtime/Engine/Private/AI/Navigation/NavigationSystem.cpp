@@ -1,343 +1,277 @@
 #include "AI/Navigation/NavigationSystem.h"
 
-#include "BodyInstance.h"
-#include "Components/PrimitiveComponent.h"
-#include "Components/StaticMeshComponent.h"
+#include "AI/Navigation/NavigationPath.h"
+#include "AI/Navigation/NavigationWaypoint.h"
+#include "CollisionShape.h"
 #include "Debug/DebugDraw.h"
 #include "Engine/Level.h"
-#include "Engine/StaticMesh.h"
-#include "GameFramework/Actor.h"
+#include "Engine/World.h"
+#include "Kismet/GameplayStatics.h"
 #include "Physics/PhysScene.h"
-#include "TriangleCollision.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogNavigation, Log, All);
 
 namespace
 {
 
-	[[nodiscard]] bool IsFloorLikeBody(const FBodyInstance& InBody, float InCellSize)
-	{
-		const float Hz = FMath::Max(InBody.HalfExtents.Z, 0.1f);
-		const float Horiz = FMath::Max(InBody.HalfExtents.X, InBody.HalfExtents.Y);
-		// Unit plane scaled ~40x40x1 → hz=0.5 still floor-like by aspect (was wrongly a full-arena
-		// blocker).
-		if (Horiz / Hz >= 6.0f)
-		{
-			return true;
-		}
-		/** Half heights up to this (cm) are floor-like: a character steps over them. */
-		constexpr float MaxFloorHalfHeight = 35.0f;
-		if (InBody.HalfExtents.Z <= FMath::Max(MaxFloorHalfHeight, InCellSize * 0.75f))
-		{
-			return true;
-		}
-		return false;
-	}
+	/** How far above a point its floor trace starts (a point on its floor, or a hair inside it), cm. */
+	constexpr float FloorTraceLift = 10.0f;
 
-	/** True when the body's component belongs to an actor tagged Tag (plan decision D15: meaning lives in Tags). */
-	[[nodiscard]] bool OwnerHasTag(const UPrimitiveComponent* Component, const TCHAR* Tag)
-	{
-		const AActor* Owner = Component != nullptr ? Component->GetOwner() : nullptr;
-		return Owner != nullptr && Owner->ActorHasTag(FName(Tag));
-	}
+	/** A floor's normal must face up this much (UE's walkable floor angle, about 45 degrees). */
+	constexpr float WalkableFloorNormalZ = 0.7f;
 
-	/** The arena floor: a mesh component showing the engine's basic plane (/Engine/BasicShapes/Plane). */
-	[[nodiscard]] bool IsLevelFloorPlane(const UPrimitiveComponent* Component)
-	{
-		const UStaticMeshComponent* MeshComponent = Cast<UStaticMeshComponent>(Component);
-		const UStaticMesh* Mesh = MeshComponent != nullptr ? MeshComponent->GetStaticMesh() : nullptr;
-		return Mesh != nullptr && Mesh->GetPathName() == TEXT("/Engine/BasicShapes/Plane.Plane");
-	}
+	/** The clearance above the step the walk's capsule sweeps at, cm. */
+	constexpr float SweepClearance = 2.0f;
 
-	/** Component is the body's owner (null for a body without one, or without a level). */
-	[[nodiscard]] bool BodyBlocksNavigation(
-		const FBodyInstance& InBody, float FloorZ, float InCellSize, const UPrimitiveComponent* Component)
-	{
-		if (InBody.Type != EBodyType::Static)
-		{
-			return false;
-		}
-		// Pawns (a character's capsule, P17) and components kept out of the navigation data (UE:
-		// CanEverAffectNavigation) never block it.
-		if (InBody.ObjectType == ECC_Pawn || (Component != nullptr && !Component->CanEverAffectNavigation()))
-		{
-			return false;
-		}
-		if (IsLevelFloorPlane(Component))
-		{
-			return false;
-		}
-		// NavWalkable (ramps): path across footprint; UCharacterMovementComponent climbs the mesh.
-		if (OwnerHasTag(Component, NavTags::Walkable))
-		{
-			return false;
-		}
-		const float Bottom = InBody.Position.Z - InBody.HalfExtents.Z;
-		const float Top = InBody.Position.Z + InBody.HalfExtents.Z;
-		// Bodies overlapping the band a walking agent occupies above the floor (cm).
-		constexpr float BandBottom = 5.0f;
-		constexpr float BandTop = 220.0f;
-		const bool bInHeightBand = Top > FloorZ + BandBottom && Bottom < FloorZ + BandTop;
-		if (!bInHeightBand)
-		{
-			return false;
-		}
-		// FNavBlocker: thin slab may look floor-like by aspect but must block paths.
-		if (OwnerHasTag(Component, NavTags::Blocker))
-		{
-			return true;
-		}
-		if (IsFloorLikeBody(InBody, InCellSize))
-		{
-			return false;
-		}
-		return true;
-	}
+	/** How many of the nearest nodes FindNearestNode tries to walk to before settling for the nearest. */
+	constexpr int32 MaxWalkCandidates = 8;
 
-	[[nodiscard]] bool AabbXYOverlapsPoint(
-		float Cx, float Cy, float Inflate, float MinX, float MaxX, float MinY, float MaxY)
+	/** The indices of Nodes sorted by the distance of their location to Point (ties by index). */
+	TArray<int32> SortByDistance(const TArray<UNavigationSystem::FNode>& Nodes, const FVector& Point)
 	{
-		return Cx >= (MinX - Inflate) && Cx <= (MaxX + Inflate) && Cy >= (MinY - Inflate) && Cy <= (MaxY + Inflate);
-	}
-
-	[[nodiscard]] bool CellBlockedByBody(
-		float Cx, float Cy, float CellHalf, float InAgentRadius, const FBodyInstance& InBody)
-	{
-		const float Inflate = InAgentRadius + CellHalf;
-		return AabbXYOverlapsPoint(Cx, Cy, Inflate, InBody.Position.X - InBody.HalfExtents.X,
-			InBody.Position.X + InBody.HalfExtents.X, InBody.Position.Y - InBody.HalfExtents.Y,
-			InBody.Position.Y + InBody.HalfExtents.Y);
-	}
-
-	/** Tighter XY footprint from baked tris (rotated ramp) vs fat world AABB. */
-	[[nodiscard]] bool CellBlockedByTriangleMesh(
-		float Cx, float Cy, float CellHalf, float InAgentRadius, const FTriangleMeshCollision& InMesh)
-	{
-		const float Inflate = InAgentRadius + CellHalf;
-		for (int32 I = 0; I + 2 < InMesh.Indices.Num(); I += 3)
+		TArray<int32> Order;
+		Order.Reserve(Nodes.Num());
+		for (int32 Index = 0; Index < Nodes.Num(); ++Index)
 		{
-			const FVector& V0 = InMesh.Positions[static_cast<int32>(InMesh.Indices[I])];
-			const FVector& V1 = InMesh.Positions[static_cast<int32>(InMesh.Indices[I + 1])];
-			const FVector& V2 = InMesh.Positions[static_cast<int32>(InMesh.Indices[I + 2])];
-			const float MinX = FMath::Min3(V0.X, V1.X, V2.X);
-			const float MaxX = FMath::Max3(V0.X, V1.X, V2.X);
-			const float MinY = FMath::Min3(V0.Y, V1.Y, V2.Y);
-			const float MaxY = FMath::Max3(V0.Y, V1.Y, V2.Y);
-			if (AabbXYOverlapsPoint(Cx, Cy, Inflate, MinX, MaxX, MinY, MaxY))
+			Order.Add(Index);
+		}
+		Order.Sort(
+			[&Nodes, &Point](int32 A, int32 B)
 			{
-				return true;
-			}
-		}
-		return false;
-	}
-
-	struct AStarNode
-	{
-		int Ix = 0;
-		int Iy = 0;
-		float F = 0.0f;
-	};
-
-	/** Heap order for the open set: the lowest F on top. */
-	struct AStarNodeLess
-	{
-		bool operator()(const AStarNode& A, const AStarNode& B) const
-		{
-			return A.F < B.F;
-		}
-	};
-
-	[[nodiscard]] float Heuristic(int Ax, int Ay, int Bx, int By)
-	{
-		const float Dx = static_cast<float>(Ax - Bx);
-		const float Dy = static_cast<float>(Ay - By);
-		return FMath::Sqrt(Dx * Dx + Dy * Dy);
-	}
-
-	[[nodiscard]] int CellIndex(int InIx, int InIy, int Width)
-	{
-		return InIy * Width + InIx;
+				const float DistA = FVector::DistSquared(Nodes[A].Location, Point);
+				const float DistB = FVector::DistSquared(Nodes[B].Location, Point);
+				return DistA < DistB || (DistA == DistB && A < B);
+			});
+		return Order;
 	}
 
 } // namespace
 
+// Build
+
 void UNavigationSystem::Clear()
 {
-	Mesh = {};
-	BlockerCount = 0;
-	WalkableCellCount = 0;
+	Nodes.Reset();
+	Waypoints.Reset();
+	Physics = nullptr;
 }
 
-void UNavigationSystem::BakeGrid(const FPhysScene& Physics, float FloorZ, float WalkBounds, const ULevel* Level)
+void UNavigationSystem::Build(const UWorld& World)
 {
 	Clear();
-	/** At least 1 m (cm). */
-	const float Bounds = WalkBounds > 100.0f ? WalkBounds : 100.0f;
-	const float Cell = CellSize;
-	const int Dim = FMath::Max(4, static_cast<int>(FMath::CeilToFloat((Bounds * 2.0f) / Cell)));
-
-	Mesh.OriginX = -Bounds;
-	Mesh.OriginY = -Bounds;
-	Mesh.CellSize = Cell;
-	Mesh.FloorZ = FloorZ;
-	Mesh.Width = Dim;
-	Mesh.Depth = Dim;
-	Mesh.Walkable.Init(1, Dim * Dim);
-
-	const float CellHalf = Cell * 0.5f;
-	struct FNavBlocker
+	Physics = &World.GetPhysicsScene();
+	if (World.PersistentLevel == nullptr)
 	{
-		const FBodyInstance* Body = nullptr;
-		const FTriangleMeshCollision* TriMesh = nullptr;
-	};
-	TArray<FNavBlocker> Blockers;
-	Blockers.Reserve(static_cast<SIZE_T>(Physics.GetBodies().Num()));
-	const auto& TriMeshes = Physics.GetTriangleMeshes();
-	for (int32 Bi = 0; Bi < Physics.GetBodies().Num(); ++Bi)
+		return;
+	}
+	TMap<const ANavigationWaypoint*, int32> IndexOf;
+	for (const AActor* Actor : World.PersistentLevel->Actors)
 	{
-		const FBodyInstance& LocalBody = Physics.GetBodies()[Bi];
-		// With a level, a body's component tells what it is (its actor's tags, the basic floor plane).
-		const UPrimitiveComponent* Component = Level != nullptr ? Physics.GetBodyOwner(Bi) : nullptr;
-		if (!BodyBlocksNavigation(LocalBody, FloorZ, Cell, Component))
+		const ANavigationWaypoint* Waypoint = Cast<ANavigationWaypoint>(Actor);
+		if (Waypoint == nullptr || Waypoint->IsPendingKillPending())
 		{
 			continue;
 		}
-		FNavBlocker Blocker{};
-		Blocker.Body = &LocalBody;
-		if (LocalBody.CollisionShape == EBodyCollisionShape::TriangleMesh && Bi < TriMeshes.Num() &&
-			TriMeshes[Bi].IsValid())
-		{
-			Blocker.TriMesh = &TriMeshes[Bi];
-		}
-		Blockers.Add(Blocker);
+		FNode& Node = Nodes.AddDefaulted_GetRef();
+		FVector Floor;
+		Node.Location = FindFloorBelow(*Physics, Waypoint->GetActorLocation(), Params, Floor)
+			? Floor
+			: Waypoint->GetActorLocation();
+		Node.Flags = Waypoint->Flags;
+		IndexOf.Add(Waypoint, Waypoints.Num());
+		Waypoints.Add(Waypoint);
 	}
-	BlockerCount = static_cast<int>(Blockers.Num());
-
-	int Walkable = 0;
-	for (int LocalIy = 0; LocalIy < Dim; ++LocalIy)
+	for (int32 Index = 0; Index < Waypoints.Num(); ++Index)
 	{
-		for (int LocalIx = 0; LocalIx < Dim; ++LocalIx)
+		for (const ANavigationWaypoint* Linked : Waypoints[Index]->Links)
 		{
-			const FVector Center = Mesh.CellCenter(LocalIx, LocalIy);
-			bool bBlocked = false;
-			for (const FNavBlocker& Blocker : Blockers)
+			if (const int32* LinkedIndex = IndexOf.Find(Linked))
 			{
-				if (Blocker.TriMesh != nullptr)
-				{
-					if (CellBlockedByTriangleMesh(Center.X, Center.Y, CellHalf, AgentRadius, *Blocker.TriMesh))
-					{
-						bBlocked = true;
-						break;
-					}
-				}
-				else if (CellBlockedByBody(Center.X, Center.Y, CellHalf, AgentRadius, *Blocker.Body))
-				{
-					bBlocked = true;
-					break;
-				}
-			}
-			if (bBlocked)
-			{
-				Mesh.Walkable[CellIndex(LocalIx, LocalIy, Dim)] = 0;
-			}
-			else
-			{
-				++Walkable;
+				Nodes[Index].Links.AddUnique(*LinkedIndex);
 			}
 		}
 	}
+	UE_LOG(LogNavigation, Log, TEXT("Navigation: %d waypoint(s), %d link(s)"), Nodes.Num(), GetNumLinks());
+}
 
-	// Extra clearance dilation beyond per-sample inflate (agents larger than one cell).
-	const int DilateRings = FMath::Max(0, static_cast<int>(FMath::CeilToFloat(AgentRadius / Cell)) - 1);
-	if (DilateRings > 0)
+int32 UNavigationSystem::GetNumLinks() const
+{
+	int32 Count = 0;
+	for (const FNode& Node : Nodes)
 	{
-		TArray<uint8> Dilated = Mesh.Walkable;
-		for (int LocalIy = 0; LocalIy < Dim; ++LocalIy)
-		{
-			for (int LocalIx = 0; LocalIx < Dim; ++LocalIx)
-			{
-				if (Mesh.Walkable[CellIndex(LocalIx, LocalIy, Dim)] == 0)
-				{
-					continue;
-				}
-				bool bNearBlocked = false;
-				for (int Dy = -DilateRings; Dy <= DilateRings && !bNearBlocked; ++Dy)
-				{
-					for (int Dx = -DilateRings; Dx <= DilateRings; ++Dx)
-					{
-						const int Nx = LocalIx + Dx;
-						const int Ny = LocalIy + Dy;
-						if (Nx < 0 || Ny < 0 || Nx >= Dim || Ny >= Dim)
-						{
-							continue;
-						}
-						if (Mesh.Walkable[CellIndex(Nx, Ny, Dim)] == 0)
-						{
-							bNearBlocked = true;
-							break;
-						}
-					}
-				}
-				if (bNearBlocked)
-				{
-					Dilated[CellIndex(LocalIx, LocalIy, Dim)] = 0;
-				}
-			}
-		}
-		Mesh.Walkable = MoveTemp(Dilated);
-		Walkable = 0;
-		for (uint8 W : Mesh.Walkable)
-		{
-			Walkable += W != 0 ? 1 : 0;
-		}
+		Count += Node.Links.Num();
 	}
-	WalkableCellCount = Walkable;
+	return Count;
 }
 
-void UNavigationSystem::BuildFromPhysScene(const FPhysScene& Physics, float FloorZ, float WalkBounds)
+int32 UNavigationSystem::FindNode(const ANavigationWaypoint* Waypoint) const
 {
-	BakeGrid(Physics, FloorZ, WalkBounds, nullptr);
+	return Waypoints.Find(Waypoint);
 }
 
-void UNavigationSystem::BuildFromLevel(const ULevel& Level, const FPhysScene& Physics, float FloorZ, float WalkBounds)
-{
-	BakeGrid(Physics, FloorZ, WalkBounds, &Level);
-}
+// Queries
 
-bool UNavigationSystem::ProjectPointToNavigation(const FVector& World, FVector& OutProjected) const
+bool UNavigationSystem::FindFloorBelow(
+	const FPhysScene& InPhysics, const FVector& Point, const FWaypointLinkParams& InParams, FVector& OutFloor)
 {
-	if (!Mesh.IsValid())
+	const FCollisionQueryParams Query(FName(TEXT("NavigationFloor")));
+	FHitResult Hit;
+	const FVector Start = Point + FVector(0.0f, 0.0f, FloorTraceLift);
+	const FVector End = Point - FVector(0.0f, 0.0f, InParams.FloorSearchDistance);
+	if (!InPhysics.LineTraceSingleByChannel(Hit, Start, End, InParams.Channel, Query) ||
+		Hit.ImpactNormal.Z < WalkableFloorNormalZ)
 	{
 		return false;
 	}
-	int LocalIx = 0;
-	int LocalIy = 0;
-	if (!Mesh.WorldToCell(World.X, World.Y, LocalIx, LocalIy))
+	OutFloor = Hit.ImpactPoint;
+	return true;
+}
+
+bool UNavigationSystem::CanWalkBetween(const FPhysScene& InPhysics, const FVector& From, const FVector& To,
+	const FWaypointLinkParams& InParams, const TArray<const AActor*>& Ignore)
+{
+	FVector FloorFrom;
+	FVector FloorTo;
+	if (!FindFloorBelow(InPhysics, From, InParams, FloorFrom) || !FindFloorBelow(InPhysics, To, InParams, FloorTo))
 	{
 		return false;
 	}
-	if (Mesh.IsWalkable(LocalIx, LocalIy))
+	const float Rise = FloorTo.Z - FloorFrom.Z;
+	if (Rise > InParams.MaxJumpHeight || -Rise > InParams.MaxDropHeight)
 	{
-		OutProjected = Mesh.CellCenter(LocalIx, LocalIy);
-		return true;
+		return false;
 	}
-	// Spiral search for nearest walkable cell.
-	const int MaxR = FMath::Max(Mesh.Width, Mesh.Depth);
-	for (int R = 1; R <= MaxR; ++R)
+
+	// The standing capsule, its feet a step above the higher floor, swept from one end to the other.
+	FCollisionQueryParams Query(FName(TEXT("NavigationWalk")));
+	for (const AActor* Actor : Ignore)
 	{
-		for (int Dy = -R; Dy <= R; ++Dy)
+		Query.AddIgnoredActor(Actor);
+	}
+	const float HighFloor = FMath::Max(FloorFrom.Z, FloorTo.Z);
+	const float CenterZ = HighFloor + InParams.MaxStepHeight + SweepClearance + InParams.AgentHalfHeight;
+	const FVector SweepStart(FloorFrom.X, FloorFrom.Y, CenterZ);
+	const FVector SweepEnd(FloorTo.X, FloorTo.Y, CenterZ);
+	if (!SweepStart.Equals(SweepEnd, 0.1f))
+	{
+		FHitResult Hit;
+		if (InPhysics.SweepSingleByChannel(Hit, SweepStart, SweepEnd, FQuat::Identity, InParams.Channel,
+				FCollisionShape::MakeCapsule(InParams.AgentRadius, InParams.AgentHalfHeight), Query))
 		{
-			for (int Dx = -R; Dx <= R; ++Dx)
+			return false;
+		}
+	}
+
+	// No gap: the floor under the way stays within a step below the lower end.
+	const float LowestFloor = FMath::Min(FloorFrom.Z, FloorTo.Z) - InParams.MaxStepHeight;
+	const float Distance2D = FVector::Dist2D(FloorFrom, FloorTo);
+	const int32 NumProbes =
+		FMath::Max(0, FMath::CeilToInt(Distance2D / FMath::Max(1.0f, InParams.FloorProbeSpacing)) - 1);
+	for (int32 Probe = 1; Probe <= NumProbes; ++Probe)
+	{
+		const float Alpha = static_cast<float>(Probe) / static_cast<float>(NumProbes + 1);
+		const FVector Point(FMath::Lerp(FloorFrom.X, FloorTo.X, Alpha), FMath::Lerp(FloorFrom.Y, FloorTo.Y, Alpha),
+			CenterZ - InParams.AgentHalfHeight);
+		FVector Floor;
+		if (!FindFloorBelow(InPhysics, Point, InParams, Floor) || Floor.Z < LowestFloor)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+int32 UNavigationSystem::FindNearestNode(const FVector& Location, bool bRequireWalk) const
+{
+	if (Nodes.Num() == 0)
+	{
+		return INDEX_NONE;
+	}
+	const TArray<int32> Order = SortByDistance(Nodes, Location);
+	if (!bRequireWalk || Physics == nullptr)
+	{
+		return Order[0];
+	}
+	const int32 NumCandidates = FMath::Min(MaxWalkCandidates, Order.Num());
+	for (int32 Candidate = 0; Candidate < NumCandidates; ++Candidate)
+	{
+		if (CanWalkBetween(*Physics, Location, Nodes[Order[Candidate]].Location, Params))
+		{
+			return Order[Candidate];
+		}
+	}
+	// Nothing walkable near: the nearest anyway (the path follower's straight line may still get there).
+	return Order[0];
+}
+
+bool UNavigationSystem::ProjectPointToNavigation(const FVector& Point, FVector& OutProjected) const
+{
+	const int32 Node = FindNearestNode(Point, false);
+	if (Node == INDEX_NONE)
+	{
+		return false;
+	}
+	OutProjected = Nodes[Node].Location;
+	return true;
+}
+
+bool UNavigationSystem::FindNodePath(const TArray<FNode>& InNodes, int32 From, int32 To, TArray<int32>& OutPath)
+{
+	OutPath.Reset();
+	if (!InNodes.IsValidIndex(From) || !InNodes.IsValidIndex(To))
+	{
+		return false;
+	}
+	const int32 Num = InNodes.Num();
+	TArray<float> Cost;
+	TArray<float> Estimate;
+	TArray<int32> CameFrom;
+	TArray<uint8> Closed;
+	Cost.Init(TNumericLimits<float>::Max(), Num);
+	Estimate.Init(TNumericLimits<float>::Max(), Num);
+	CameFrom.Init(INDEX_NONE, Num);
+	Closed.Init(0, Num);
+	TArray<int32> Open;
+	Cost[From] = 0.0f;
+	Estimate[From] = FVector::Dist(InNodes[From].Location, InNodes[To].Location);
+	Open.Add(From);
+	while (Open.Num() > 0)
+	{
+		// The open node with the lowest estimate (ties: the lower index), for a deterministic order.
+		int32 BestSlot = 0;
+		for (int32 Slot = 1; Slot < Open.Num(); ++Slot)
+		{
+			const int32 Candidate = Open[Slot];
+			const int32 Best = Open[BestSlot];
+			if (Estimate[Candidate] < Estimate[Best] || (Estimate[Candidate] == Estimate[Best] && Candidate < Best))
 			{
-				if (FMath::Abs(Dx) != R && FMath::Abs(Dy) != R)
-				{
-					continue;
-				}
-				const int Nx = LocalIx + Dx;
-				const int Ny = LocalIy + Dy;
-				if (Mesh.IsWalkable(Nx, Ny))
-				{
-					OutProjected = Mesh.CellCenter(Nx, Ny);
-					return true;
-				}
+				BestSlot = Slot;
+			}
+		}
+		const int32 Current = Open[BestSlot];
+		Open.RemoveAtSwap(BestSlot);
+		if (Current == To)
+		{
+			for (int32 Node = To; Node != INDEX_NONE; Node = CameFrom[Node])
+			{
+				OutPath.Insert(Node, 0);
+			}
+			return true;
+		}
+		Closed[Current] = 1;
+		for (const int32 Next : InNodes[Current].Links)
+		{
+			if (!InNodes.IsValidIndex(Next) || Closed[Next] != 0)
+			{
+				continue;
+			}
+			const float NewCost = Cost[Current] + FVector::Dist(InNodes[Current].Location, InNodes[Next].Location);
+			if (NewCost < Cost[Next])
+			{
+				Cost[Next] = NewCost;
+				Estimate[Next] = NewCost + FVector::Dist(InNodes[Next].Location, InNodes[To].Location);
+				CameFrom[Next] = Current;
+				Open.AddUnique(Next);
 			}
 		}
 	}
@@ -347,161 +281,121 @@ bool UNavigationSystem::ProjectPointToNavigation(const FVector& World, FVector& 
 bool UNavigationSystem::FindPath(const FVector& Start, const FVector& End, TArray<FVector>& OutPath) const
 {
 	OutPath.Reset();
-	if (!Mesh.IsValid() || WalkableCellCount <= 0)
+	if (Physics != nullptr && FVector::Dist(Start, End) <= Params.MaxLinkDistance &&
+		CanWalkBetween(*Physics, Start, End, Params))
 	{
-		return false;
-	}
-
-	FVector StartNav = FVector::ZeroVector;
-	FVector EndNav = FVector::ZeroVector;
-	if (!ProjectPointToNavigation(Start, StartNav) || !ProjectPointToNavigation(End, EndNav))
-	{
-		return false;
-	}
-
-	int Sx = 0;
-	int Sy = 0;
-	int Ex = 0;
-	int Ey = 0;
-	if (!Mesh.WorldToCell(StartNav.X, StartNav.Y, Sx, Sy) || !Mesh.WorldToCell(EndNav.X, EndNav.Y, Ex, Ey))
-	{
-		return false;
-	}
-	if (!Mesh.IsWalkable(Sx, Sy) || !Mesh.IsWalkable(Ex, Ey))
-	{
-		return false;
-	}
-	if (Sx == Ex && Sy == Ey)
-	{
-		OutPath.Add(EndNav);
+		OutPath.Add(End);
 		return true;
 	}
-
-	const int Width = Mesh.Width;
-	const int Depth = Mesh.Depth;
-	const int CellCount = Width * Depth;
-	TArray<float> GScore;
-	GScore.Init(TNumericLimits<float>::Max(), CellCount);
-	TArray<int32> CameFrom;
-	CameFrom.Init(-1, CellCount);
-	TArray<uint8> Closed;
-	Closed.Init(0, CellCount);
-
-	TArray<AStarNode> Open;
-	const int StartIdx = CellIndex(Sx, Sy, Width);
-	GScore[StartIdx] = 0.0f;
-	Open.HeapPush(AStarNode{Sx, Sy, Heuristic(Sx, Sy, Ex, Ey)}, AStarNodeLess());
-
-	static constexpr int Dx[8] = {-1, 0, 1, -1, 1, -1, 0, 1};
-	static constexpr int Dy[8] = {-1, -1, -1, 0, 0, 1, 1, 1};
-	static constexpr float Cost[8] = {1.4142f, 1.0f, 1.4142f, 1.0f, 1.0f, 1.4142f, 1.0f, 1.4142f};
-
-	bool bFound = false;
-	while (Open.Num() > 0)
-	{
-		AStarNode Cur;
-		Open.HeapPop(Cur, AStarNodeLess(), false);
-		const int CurIdx = CellIndex(Cur.Ix, Cur.Iy, Width);
-		if (Closed[CurIdx] != 0)
-		{
-			continue;
-		}
-		Closed[CurIdx] = 1;
-		if (Cur.Ix == Ex && Cur.Iy == Ey)
-		{
-			bFound = true;
-			break;
-		}
-
-		for (int I = 0; I < 8; ++I)
-		{
-			const int Nx = Cur.Ix + Dx[I];
-			const int Ny = Cur.Iy + Dy[I];
-			if (!Mesh.IsWalkable(Nx, Ny))
-			{
-				continue;
-			}
-			// No corner-cutting through blocked diagonals.
-			if (Dx[I] != 0 && Dy[I] != 0)
-			{
-				if (!Mesh.IsWalkable(Cur.Ix + Dx[I], Cur.Iy) || !Mesh.IsWalkable(Cur.Ix, Cur.Iy + Dy[I]))
-				{
-					continue;
-				}
-			}
-			const int NIdx = CellIndex(Nx, Ny, Width);
-			if (Closed[NIdx] != 0)
-			{
-				continue;
-			}
-			const float Tentative = GScore[CurIdx] + Cost[I];
-			if (Tentative >= GScore[NIdx])
-			{
-				continue;
-			}
-			CameFrom[NIdx] = CurIdx;
-			GScore[NIdx] = Tentative;
-			Open.HeapPush(AStarNode{Nx, Ny, Tentative + Heuristic(Nx, Ny, Ex, Ey)}, AStarNodeLess());
-		}
-	}
-
-	if (!bFound)
+	const int32 From = FindNearestNode(Start);
+	const int32 To = FindNearestNode(End);
+	TArray<int32> NodePath;
+	if (From == INDEX_NONE || To == INDEX_NONE || !FindNodePath(Nodes, From, To, NodePath))
 	{
 		return false;
 	}
+	// The start between the first two waypoints goes straight to the second; the end between the last two is reached
+	// from the one before the last.
+	int32 First = 0;
+	int32 Last = NodePath.Num() - 1;
+	if (Physics != nullptr && NodePath.Num() >= 2 &&
+		CanWalkBetween(*Physics, Start, Nodes[NodePath[1]].Location, Params))
+	{
+		First = 1;
+	}
+	if (Physics != nullptr && Last - First >= 1 &&
+		CanWalkBetween(*Physics, Nodes[NodePath[Last - 1]].Location, End, Params))
+	{
+		--Last;
+	}
+	for (int32 Index = First; Index <= Last; ++Index)
+	{
+		OutPath.Add(Nodes[NodePath[Index]].Location);
+	}
+	OutPath.Add(End);
+	return true;
+}
 
-	TArray<FVector> Reverse;
-	int Idx = CellIndex(Ex, Ey, Width);
-	while (Idx >= 0)
+UNavigationPath* UNavigationSystem::FindPathToLocationSynchronously(
+	UObject* WorldContextObject, const FVector& PathStart, const FVector& PathEnd)
+{
+	UWorld* World = UGameplayStatics::GetWorldFromContextObject(WorldContextObject);
+	if (World == nullptr)
 	{
-		const int LocalIx = Idx % Width;
-		const int LocalIy = Idx / Width;
-		Reverse.Add(Mesh.CellCenter(LocalIx, LocalIy));
-		Idx = CameFrom[Idx];
+		return nullptr;
 	}
-	OutPath.Reset(Reverse.Num());
-	for (int32 I = Reverse.Num() - 1; I >= 0; --I)
+	UNavigationPath* Path = NewObject<UNavigationPath>(World);
+	TArray<FVector> Points;
+	if (World->GetNavigationSystem().FindPath(PathStart, PathEnd, Points))
 	{
-		OutPath.Add(Reverse[I]);
+		Path->PathPoints.Add(PathStart);
+		Path->PathPoints.Append(Points);
 	}
-	if (OutPath.Num() > 0)
+	return Path;
+}
+
+int32 UNavigationSystem::AutoLinkWaypoints(UWorld& World, const FWaypointLinkParams& InParams)
+{
+	if (World.PersistentLevel == nullptr)
 	{
-		OutPath.Last() = EndNav;
+		return 0;
 	}
-	return OutPath.Num() > 0;
+	TArray<ANavigationWaypoint*> Found;
+	for (AActor* Actor : World.PersistentLevel->Actors)
+	{
+		if (ANavigationWaypoint* Waypoint = Cast<ANavigationWaypoint>(Actor))
+		{
+			Found.Add(Waypoint);
+		}
+	}
+	const FPhysScene& Scene = World.GetPhysicsScene();
+	int32 Added = 0;
+	for (ANavigationWaypoint* From : Found)
+	{
+		for (ANavigationWaypoint* To : Found)
+		{
+			if (From == To || From->Links.Contains(To) ||
+				FVector::Dist(From->GetActorLocation(), To->GetActorLocation()) > InParams.MaxLinkDistance)
+			{
+				continue;
+			}
+			if (!CanWalkBetween(Scene, From->GetActorLocation(), To->GetActorLocation(), InParams))
+			{
+				continue;
+			}
+			// A walk or a jump must also be walkable back (a capsule that starts against a wall sees it, one that
+			// ends against it may not: the link would be one way by accident); only a drop too high to climb back
+			// stays one way.
+			FVector FloorFrom;
+			FVector FloorTo;
+			const bool bFloors = FindFloorBelow(Scene, From->GetActorLocation(), InParams, FloorFrom) &&
+				FindFloorBelow(Scene, To->GetActorLocation(), InParams, FloorTo);
+			const bool bDropOnly = bFloors && FloorFrom.Z - FloorTo.Z > InParams.MaxJumpHeight;
+			if (bDropOnly || CanWalkBetween(Scene, To->GetActorLocation(), From->GetActorLocation(), InParams))
+			{
+				From->Links.Add(To);
+				++Added;
+			}
+		}
+	}
+	UE_LOG(LogNavigation, Log, TEXT("AutoLinkWaypoints: %d waypoint(s), %d link(s) added"), Found.Num(), Added);
+	return Added;
 }
 
 void UNavigationSystem::AppendDebugDraw(FDebugDraw& Draw) const
 {
-	if (!Mesh.IsValid())
+	const FLinearColor NodeColor(0.2f, 1.0f, 0.3f);
+	const FLinearColor LinkColor(0.2f, 0.7f, 1.0f);
+	const FVector Lift(0.0f, 0.0f, 20.0f);
+	const FVector Extent(15.0f, 15.0f, 15.0f);
+	for (const FNode& Node : Nodes)
 	{
-		return;
-	}
-
-	/** cm above the floor, against z-fighting. */
-	const float Z = Mesh.FloorZ + 4.0f;
-	const float Half = Mesh.CellSize * 0.5f;
-	constexpr FLinearColor Walkable(0.15f, 0.85f, 0.35f);
-	constexpr FLinearColor Blocked(0.95f, 0.2f, 0.15f);
-
-	for (int LocalIy = 0; LocalIy < Mesh.Depth; ++LocalIy)
-	{
-		for (int LocalIx = 0; LocalIx < Mesh.Width; ++LocalIx)
+		Draw.AddAabb(Node.Location + Lift - Extent, Node.Location + Lift + Extent, NodeColor);
+		for (const int32 Link : Node.Links)
 		{
-			const FVector Center = Mesh.CellCenter(LocalIx, LocalIy);
-			const float X0 = Center.X - Half;
-			const float X1 = Center.X + Half;
-			const float Y0 = Center.Y - Half;
-			const float Y1 = Center.Y + Half;
-			const FLinearColor& Color = Mesh.IsWalkable(LocalIx, LocalIy) ? Walkable : Blocked;
-			Draw.AddLine(FVector(X0, Y0, Z), FVector(X1, Y0, Z), Color);
-			Draw.AddLine(FVector(X1, Y0, Z), FVector(X1, Y1, Z), Color);
-			Draw.AddLine(FVector(X1, Y1, Z), FVector(X0, Y1, Z), Color);
-			Draw.AddLine(FVector(X0, Y1, Z), FVector(X0, Y0, Z), Color);
-			if (!Mesh.IsWalkable(LocalIx, LocalIy))
+			if (Nodes.IsValidIndex(Link))
 			{
-				Draw.AddLine(FVector(X0, Y0, Z), FVector(X1, Y1, Z), Color);
-				Draw.AddLine(FVector(X1, Y0, Z), FVector(X0, Y1, Z), Color);
+				Draw.AddArrow(Node.Location + Lift, Nodes[Link].Location + Lift, LinkColor);
 			}
 		}
 	}

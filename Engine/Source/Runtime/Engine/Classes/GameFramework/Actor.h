@@ -31,6 +31,12 @@ using FTakeAnyDamageSignature = TMulticastDelegate<void(AActor* /*DamagedActor*/
 using FTakePointDamageSignature = TMulticastDelegate<void(AActor* /*DamagedActor*/, float /*Damage*/,
 	AController* /*InstigatedBy*/, FVector /*HitLocation*/, UPrimitiveComponent* /*FHitComponent*/, FName /*BoneName*/,
 	FVector /*ShotFromDirection*/, const UDamageType* /*DamageType*/, AActor* /*DamageCauser*/)>;
+/**
+ * Who hears a noise (UE: FMakeNoiseDelegate): AActor::MakeNoise calls it; the AI module sets it
+ * (UPawnSensingComponent's hearing).
+ */
+using FMakeNoiseDelegate = TFunction<void(
+	AActor* /*NoiseMaker*/, float /*Loudness*/, APawn* /*NoiseInstigator*/, const FVector& /*NoiseLocation*/)>;
 using FTakeRadialDamageSignature =
 	TMulticastDelegate<void(AActor* /*DamagedActor*/, float /*Damage*/, const UDamageType* /*DamageType*/,
 		FVector /*Origin*/, const FHitResult& /*HitInfo*/, AController* /*InstigatedBy*/, AActor* /*DamageCauser*/)>;
@@ -303,6 +309,16 @@ public:
 	{
 		bCanBeDamaged = bInCanBeDamaged;
 	}
+
+	/**
+	 * Makes a noise the AI can hear (UE: MakeNoise): Loudness scales how far it carries, NoiseInstigator is the pawn
+	 * credited (this actor's instigator, or itself when a pawn, by default), NoiseLocation where it is (this actor's
+	 * location by default: FVector::ZeroVector). Nothing hears it until a module sets the noise delegate.
+	 */
+	void MakeNoise(
+		float Loudness = 1.0f, APawn* NoiseInstigator = nullptr, FVector NoiseLocation = FVector::ZeroVector);
+	/** Who hears noises (UE: SetMakeNoiseDelegate); an empty function silences them. */
+	static void SetMakeNoiseDelegate(const FMakeNoiseDelegate& NewDelegate);
 
 	/** Destroys the actor after InLifespan seconds; 0 cancels (UE: SetLifeSpan). */
 	virtual void SetLifeSpan(float InLifespan);

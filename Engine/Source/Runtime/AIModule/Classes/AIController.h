@@ -18,7 +18,9 @@ enum class EAILogicState : uint8
 
 /**
  * Drives a possessed Pawn with simple steering (Unreal-style AAIController), an actor the world spawns.
- * When a UNavigationSystem is set, MoveTo* follows a NavMesh path; otherwise line-of-sight XY.
+ * MoveTo* follows a path of the navigation (SetNavigationSystem's, else the world's waypoint graph) when it has
+ * navigation data, else a straight line on XY (PathFollowing-lite): the path's points one by one, a jump onto a point
+ * above a step, and a new path when the pawn has not moved for a while (stuck).
  */
 UCLASS()
 class AIMODULE_API AAIController : public AController
@@ -46,7 +48,7 @@ public:
 		return LogicState;
 	}
 
-	/** Optional; enables FindPath for MoveToLocation / MoveToActor. */
+	/** Optional: a navigation to path on instead of the world's (tests, a second graph). */
 	void SetNavigationSystem(UNavigationSystem* InNavigation)
 	{
 		Navigation = InNavigation;
@@ -54,6 +56,13 @@ public:
 	[[nodiscard]] UNavigationSystem* GetNavigationSystem() const
 	{
 		return Navigation;
+	}
+	/** The navigation MoveTo* paths on: SetNavigationSystem's, else the world's. */
+	[[nodiscard]] const UNavigationSystem* GetEffectiveNavigation() const;
+	/** How many times a stuck pawn found its path again. */
+	[[nodiscard]] int32 GetNumRepathsWhenStuck() const
+	{
+		return NumRepathsWhenStuck;
 	}
 
 	void MoveToLocation(const FVector& WorldPosition);
@@ -120,6 +129,10 @@ private:
 	TArray<FVector> Path;
 	int32 PathIndex = 0;
 	float PathRebuildCooldown = 0.0f;
+	/** Where the pawn was when the stuck clock started, and for how long it has not moved away. */
+	FVector StuckCheckLocation = FVector::ZeroVector;
+	float StuckTime = 0.0f;
+	int32 NumRepathsWhenStuck = 0;
 	bool bHasTarget = false;
 	bool bUsePath = false;
 	/** cm */

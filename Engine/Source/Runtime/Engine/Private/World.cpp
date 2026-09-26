@@ -286,6 +286,8 @@ APlayerController* UWorld::SpawnPlayActor(UPlayer* NewPlayer, const FURL& InURL,
 void UWorld::BeginPlay()
 {
 	bBegunPlay = true;
+	// The waypoint graph of the level (the map's ANavigationWaypoint actors).
+	Navigation.Build(*this);
 	if (AuthorityGameMode != nullptr)
 	{
 		AuthorityGameMode->StartPlay();

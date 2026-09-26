@@ -125,7 +125,10 @@ public:
 	 */
 	void SendPhysicsTransform();
 
-	/** Whether the component's body is part of the navigation data (UE: CanEverAffectNavigation). */
+	/**
+	 * Whether the component's body is part of the navigation data (UE: CanEverAffectNavigation). The waypoint
+	 * navigation (P20) builds no data from the bodies, so nothing reads it now; UE's components keep setting it.
+	 */
 	[[nodiscard]] bool CanEverAffectNavigation() const
 	{
 		return bCanEverAffectNavigation;

@@ -44,7 +44,7 @@ public:
 	{
 		Ai = &InAi;
 		Target = InTarget;
-		Tree.GetBlackboard().SetBool("HasTarget", InTarget != nullptr);
+		Tree.GetBlackboard().SetValueAsBool(TEXT("HasTarget"), InTarget != nullptr);
 		(void)Tree.Tick(DeltaTime);
 		return InAi.TickAI(DeltaTime);
 	}

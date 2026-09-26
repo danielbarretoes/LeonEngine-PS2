@@ -25,16 +25,16 @@ bool FFrameworkHardeningBehaviorTreeSequenceAndSelectorTest::RunTest(const FStri
 		[&Ran](UBlackboardComponent& InBoard, float)
 		{
 			++Ran;
-			InBoard.SetBool("DidAct", true);
+			InBoard.SetValueAsBool(TEXT("DidAct"), true);
 			return EBTNodeResult::Succeeded;
 		});
 	UBTComposite_Sequence Seq(TArray<UBTNode*>{&HasTarget, &Act});
 
 	TestTrue("Sequence fails without target", Seq.Tick(Board, 0.016f) == EBTNodeResult::Failed);
-	Board.SetBool("HasTarget", true);
+	Board.SetValueAsBool(TEXT("HasTarget"), true);
 	TestTrue("Sequence succeeds with target", Seq.Tick(Board, 0.016f) == EBTNodeResult::Succeeded);
 	TestEqual("Action ran once", Ran, 1);
-	TestTrue("Action wrote the blackboard", Board.GetBool("DidAct"));
+	TestTrue("Action wrote the blackboard", Board.GetValueAsBool(TEXT("DidAct")));
 
 	UBTDecorator_Bool Never("Never", true);
 	UBTComposite_Selector Sel(TArray<UBTNode*>{&Never, &Act});
@@ -123,36 +123,34 @@ bool FFrameworkHardeningHUDAddWidgetTextBlockAndRemoveTest::RunTest(const FStrin
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFrameworkHardeningNavAgentRadiusDilationTest,
-	"System.AIModule.FrameworkHardening.NavigationSystemAgentRadiusDilationShrinksWalkableRing",
+	"System.AIModule.FrameworkHardening.NavigationAgentRadiusKeepsWideAgentsOutOfGaps",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
 bool FFrameworkHardeningNavAgentRadiusDilationTest::RunTest(const FString& Parameters)
 {
-	// A wider agent radius dilates the pillar more, leaving fewer walkable cells.
+	// Two pillars 1 m apart: an agent 40 cm wide walks between them, one 60 cm wide does not.
 	FPhysScene Physics;
 	FBodyInstance Floor{};
 	Floor.Type = EBodyType::Static;
-	Floor.Position = FVector(0.0f, 0.0f, 0.0f);
+	Floor.Position = FVector(0.0f, 0.0f, -50.0f);
 	Floor.HalfExtents = FVector(2000.0f, 2000.0f, 50.0f);
 	Physics.GetBodies().Add(Floor);
-
-	FBodyInstance Pillar{};
-	Pillar.Type = EBodyType::Static;
-	Pillar.Position = FVector(0.0f, 0.0f, 100.0f);
-	Pillar.HalfExtents = FVector(40.0f, 40.0f, 150.0f);
-	Physics.GetBodies().Add(Pillar);
-
-	UNavigationSystem Narrow;
-	Narrow.SetCellSize(50.0f);
-	Narrow.SetAgentRadius(35.0f);
-	Narrow.BuildFromPhysScene(Physics, 0.0f, 1000.0f);
-
-	UNavigationSystem Wide;
-	Wide.SetCellSize(50.0f);
-	Wide.SetAgentRadius(150.0f);
-	Wide.BuildFromPhysScene(Physics, 0.0f, 1000.0f);
-
-	TestTrue("Wide agent has fewer walkable cells", Wide.GetWalkableCellCount() < Narrow.GetWalkableCellCount());
+	for (const float Y : {-120.0f, 120.0f})
+	{
+		FBodyInstance Pillar{};
+		Pillar.Type = EBodyType::Static;
+		Pillar.Position = FVector(0.0f, Y, 150.0f);
+		Pillar.HalfExtents = FVector(40.0f, 70.0f, 150.0f);
+		Physics.GetBodies().Add(Pillar);
+	}
+	FWaypointLinkParams Narrow;
+	Narrow.AgentRadius = 40.0f;
+	FWaypointLinkParams Wide = Narrow;
+	Wide.AgentRadius = 60.0f;
+	const FVector From(-300.0f, 0.0f, 50.0f);
+	const FVector To(300.0f, 0.0f, 50.0f);
+	TestTrue("A narrow agent passes", UNavigationSystem::CanWalkBetween(Physics, From, To, Narrow));
+	TestFalse("A wide agent does not", UNavigationSystem::CanWalkBetween(Physics, From, To, Wide));
 	return true;
 }
 

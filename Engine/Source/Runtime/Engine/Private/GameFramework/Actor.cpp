@@ -6,6 +6,7 @@
 #include "Engine/DamageEvents.h"
 #include "Engine/World.h"
 #include "GameFramework/DamageType.h"
+#include "GameFramework/Pawn.h"
 
 const FName AActor::DefaultSceneRootName(TEXT("DefaultSceneRoot"));
 
@@ -339,6 +340,39 @@ void AActor::TickActor(float DeltaSeconds)
 			LifeSpanRemaining = 0.0f;
 			LifeSpanExpired();
 		}
+	}
+}
+
+namespace
+{
+
+	/** Who hears noises (AActor::SetMakeNoiseDelegate). */
+	FMakeNoiseDelegate& GetMakeNoiseDelegate()
+	{
+		static FMakeNoiseDelegate Delegate;
+		return Delegate;
+	}
+
+} // namespace
+
+void AActor::SetMakeNoiseDelegate(const FMakeNoiseDelegate& NewDelegate)
+{
+	GetMakeNoiseDelegate() = NewDelegate;
+}
+
+void AActor::MakeNoise(float Loudness, APawn* NoiseInstigator, FVector NoiseLocation)
+{
+	if (NoiseInstigator == nullptr)
+	{
+		NoiseInstigator = GetInstigator() != nullptr ? GetInstigator() : Cast<APawn>(this);
+	}
+	if (NoiseLocation.IsZero())
+	{
+		NoiseLocation = GetActorLocation();
+	}
+	if (GetMakeNoiseDelegate())
+	{
+		GetMakeNoiseDelegate()(this, Loudness, NoiseInstigator, NoiseLocation);
 	}
 }
 

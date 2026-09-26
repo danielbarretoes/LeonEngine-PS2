@@ -1,4 +1,6 @@
+#include "AI/Navigation/NavigationPath.h"
 #include "AI/Navigation/NavigationSystem.h"
+#include "AI/Navigation/NavigationWaypoint.h"
 #include "AIController.h"
 #include "BodyInstance.h"
 #include "Components/SceneComponent.h"
@@ -319,38 +321,63 @@ bool FGameplayAIControllerMoveToActorTracksMovingTargetTest::RunTest(const FStri
 	return true;
 }
 
+namespace
+{
+
+	/** A floor slab 40 m square with its top at Z = 0 (a blocking box). */
+	void SpawnNavFloor(UWorld& World)
+	{
+		(void)World.SpawnActor<ABlockingVolume>(ABlockingVolume::StaticClass(),
+			FTransform(FQuat::Identity, FVector(0.0f, 0.0f, -10.0f), FVector(40.0f, 40.0f, 0.2f)));
+	}
+
+	/** A blocking box of Size cm with its bottom on the floor, centred on X / Y. */
+	void SpawnNavBox(UWorld& World, float X, float Y, const FVector& Size)
+	{
+		(void)World.SpawnActor<ABlockingVolume>(
+			ABlockingVolume::StaticClass(), FTransform(FQuat::Identity, FVector(X, Y, Size.Z * 0.5f), Size / 100.0f));
+	}
+
+	/** A waypoint 50 cm above Floor (as the maps place them). */
+	ANavigationWaypoint* SpawnWaypoint(UWorld& World, const FVector& Floor)
+	{
+		return World.SpawnActor<ANavigationWaypoint>(Floor + FVector(0.0f, 0.0f, 50.0f), FRotator::ZeroRotator);
+	}
+
+	/** The wall scene: a 3 m tall wall 10 m long across X = 0, waypoints west, north of the wall's end and east. */
+	void SpawnWallScene(UWorld& World, TArray<ANavigationWaypoint*>& OutWaypoints)
+	{
+		SpawnNavFloor(World);
+		SpawnNavBox(World, 0.0f, 0.0f, FVector(120.0f, 1000.0f, 300.0f));
+		OutWaypoints.Add(SpawnWaypoint(World, FVector(-500.0f, 0.0f, 0.0f)));
+		OutWaypoints.Add(SpawnWaypoint(World, FVector(-500.0f, 700.0f, 0.0f)));
+		OutWaypoints.Add(SpawnWaypoint(World, FVector(500.0f, 700.0f, 0.0f)));
+		OutWaypoints.Add(SpawnWaypoint(World, FVector(500.0f, 0.0f, 0.0f)));
+		(void)UNavigationSystem::AutoLinkWaypoints(World);
+		World.GetNavigationSystem().Build(World);
+	}
+
+} // namespace
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayAIControllerPathFollowDoesNotShortcutTest,
 	"System.AIModule.Gameplay.AIControllerPathFollowDoesNotShortcutThroughBlocker",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
 bool FGameplayAIControllerPathFollowDoesNotShortcutTest::RunTest(const FString& Parameters)
 {
-	// With a NavMesh and a wall in the way, the first steering step follows the detour instead of charging the wall.
-	FPhysScene Physics;
-	FBodyInstance Wall{};
-	Wall.Type = EBodyType::Static;
-	Wall.Position = FVector(0.0f, 0.0f, 100.0f);
-	Wall.HalfExtents = FVector(60.0f, 400.0f, 150.0f);
-	Physics.GetBodies().Add(Wall);
-
-	UNavigationSystem Nav;
-	Nav.SetCellSize(50.0f);
-	Nav.SetAgentRadius(45.0f);
-	Nav.BuildFromPhysScene(Physics, 0.0f, 1200.0f);
-	if (!TestTrue("Nav mesh built", Nav.HasNavMesh()))
-	{
-		return false;
-	}
-
+	// With the world's waypoint graph and a wall in the way, the controller follows the detour around the wall's end
+	// instead of charging the wall, and gets to the goal.
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
+	TArray<ANavigationWaypoint*> Waypoints;
+	SpawnWallScene(World, Waypoints);
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	Character->Reset(FVector(-500.0f, 0.0f, 0.0f));
+	Character->GetCharacterMovement().WalkBounds = 100000.0f;
 
 	AAIController& Ai = *World.SpawnActor<AAIController>();
 	Ai.Possess(Character);
-	Ai.SetNavigationSystem(&Nav);
-	// CoopTp-like large goal arrive: must not skip detour waypoints through the wall.
+	// A large goal arrive radius must not skip the detour's points through the wall.
 	Ai.SetArriveRadius(125.0f);
 	Ai.MoveToLocation(FVector(500.0f, 0.0f, 0.0f));
 	if (!TestTrue("Following a path", Ai.IsFollowingPath()))
@@ -361,8 +388,15 @@ bool FGameplayAIControllerPathFollowDoesNotShortcutTest::RunTest(const FString& 
 
 	const FVector Wish = Ai.TickAI(0.016f);
 	TestTrue("Moving", Wish.Size() > 0.5f);
-	// Detour is off the X axis (around the wall), not a pure +X charge through it.
-	TestTrue("Steering around the wall", FMath::Abs(Wish.Y) > 0.35f);
+	TestTrue("Steering around the wall", Wish.Y > 0.9f);
+	for (int32 Frame = 0;
+		 Frame < 600 && FVector::Dist2D(Character->GetActorLocation(), FVector(500.0f, 0.0f, 0.0f)) > 130.0f; ++Frame)
+	{
+		(void)Ai.TickAI(1.0f / 60.0f);
+		World.Tick(1.0f / 60.0f);
+	}
+	TestTrue("Arrived around the wall",
+		FVector::Dist2D(Character->GetActorLocation(), FVector(500.0f, 0.0f, 0.0f)) <= 130.0f);
 	return true;
 }
 
@@ -372,50 +406,35 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayNavFindPathRoutesAroundStaticBlockerTe
 
 bool FGameplayNavFindPathRoutesAroundStaticBlockerTest::RunTest(const FString& Parameters)
 {
-	// A floor slab stays walkable, a wall blocks, FindPath detours around the wall and projection snaps to the floor.
-	FPhysScene Physics;
-
-	// Floor plane-like slab (wide aspect) must NOT wipe the whole grid.
-	FBodyInstance Floor{};
-	Floor.Type = EBodyType::Static;
-	Floor.Position = FVector(0.0f, 0.0f, 0.0f);
-	Floor.HalfExtents = FVector(2000.0f, 2000.0f, 50.0f);
-	Physics.GetBodies().Add(Floor);
-
-	FBodyInstance Wall{};
-	Wall.Type = EBodyType::Static;
-	Wall.Position = FVector(0.0f, 0.0f, 100.0f);
-	Wall.HalfExtents = FVector(60.0f, 500.0f, 150.0f);
-	Physics.GetBodies().Add(Wall);
-
-	UNavigationSystem Nav;
-	Nav.SetCellSize(50.0f);
-	Nav.SetAgentRadius(35.0f);
-	Nav.BuildFromPhysScene(Physics, 0.0f, 1200.0f);
-	if (!TestTrue("Nav mesh built", Nav.HasNavMesh()))
-	{
-		return false;
-	}
-	TestTrue("Floor walkable", Nav.GetWalkableCellCount() > 100);
-	TestEqual("One blocker", Nav.GetBlockerCount(), 1);
+	// The auto-linked graph goes around the wall (no link through it), FindPath follows it, a point in the open goes
+	// straight, FindPathToLocationSynchronously gives the same path from the start, and a point projects onto the
+	// nearest waypoint's floor.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	TArray<ANavigationWaypoint*> Waypoints;
+	SpawnWallScene(World, Waypoints);
+	const UNavigationSystem& Nav = World.GetNavigationSystem();
+	TestEqual("Four waypoints", Nav.GetNodes().Num(), 4);
+	TestFalse("No link through the wall", Waypoints[0]->Links.Contains(Waypoints[3]));
+	TestTrue("West to north", Waypoints[0]->Links.Contains(Waypoints[1]) && Waypoints[1]->Links.Contains(Waypoints[0]));
+	TestTrue("Past the wall's end", Waypoints[1]->Links.Contains(Waypoints[2]));
 
 	TArray<FVector> Path;
 	if (!TestTrue("Path found", Nav.FindPath(FVector(-600.0f, 0.0f, 0.0f), FVector(600.0f, 0.0f, 0.0f), Path)))
 	{
 		return false;
 	}
-	TestTrue("Path has a detour", Path.Num() >= 3);
+	TestTrue("Around the wall", Path.Num() >= 3 && Path[0].Y > 600.0f);
+	TestTrue("The end last", Path.Last().Equals(FVector(600.0f, 0.0f, 0.0f)));
+	TArray<FVector> Straight;
+	TestTrue("In the open", Nav.FindPath(FVector(-800.0f, 0.0f, 0.0f), FVector(-800.0f, 600.0f, 0.0f), Straight));
+	TestEqual("Straight to the end", Straight.Num(), 1);
 
-	bool bDetoured = false;
-	for (const FVector& Point : Path)
-	{
-		if (FMath::Abs(Point.Y) > 125.0f)
-		{
-			bDetoured = true;
-			break;
-		}
-	}
-	TestTrue("Path leaves the X axis", bDetoured);
+	const UNavigationPath* NavPath = UNavigationSystem::FindPathToLocationSynchronously(
+		&World, FVector(-600.0f, 0.0f, 0.0f), FVector(600.0f, 0.0f, 0.0f));
+	TestTrue(
+		"A UNavigationPath", NavPath != nullptr && NavPath->IsValid() && NavPath->PathPoints.Num() == Path.Num() + 1);
+	TestTrue("Longer than the straight line", NavPath != nullptr && NavPath->GetPathLength() > 1400.0f);
 
 	FVector Projected = FVector::ZeroVector;
 	if (!TestTrue("Point projected", Nav.ProjectPointToNavigation(FVector(-600.0f, 0.0f, 200.0f), Projected)))
@@ -426,81 +445,53 @@ bool FGameplayNavFindPathRoutesAroundStaticBlockerTest::RunTest(const FString& P
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayNavBlocksNavBlockerKeepsNavWalkableTest,
-	"System.AIModule.Gameplay.NavigationSystemBlocksNavBlockerButKeepsNavWalkableWalkable",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayNavAutoLinkStepsJumpsAndDropsTest,
+	"System.AIModule.Gameplay.NavigationAutoLinkStepsJumpsAndDrops",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-bool FGameplayNavBlocksNavBlockerKeepsNavWalkableTest::RunTest(const FString& Parameters)
+bool FGameplayNavAutoLinkStepsJumpsAndDropsTest::RunTest(const FString& Parameters)
 {
-	// A NavBlocker-tagged plate blocks its cells and forces a detour; a NavWalkable ramp mesh stays walkable.
+	// AutoLinkWaypoints: a 30 cm step links both ways, a 1.1 m crate is a jump up and a drop down, a 2.5 m ledge is a
+	// drop only, a gap in the floor breaks a link, and waypoints beyond MaxLinkDistance stay apart.
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
-	const ULevel& Level = *World.PersistentLevel;
-	const FPhysScene& Physics = World.GetPhysicsScene();
+	// Two floors with a 2 m gap between them (X from -100 to 100).
+	(void)World.SpawnActor<ABlockingVolume>(ABlockingVolume::StaticClass(),
+		FTransform(FQuat::Identity, FVector(-1100.0f, 0.0f, -10.0f), FVector(20.0f, 40.0f, 0.2f)));
+	(void)World.SpawnActor<ABlockingVolume>(ABlockingVolume::StaticClass(),
+		FTransform(FQuat::Identity, FVector(1100.0f, 0.0f, -10.0f), FVector(20.0f, 40.0f, 0.2f)));
+	SpawnNavBox(World, -1000.0f, 0.0f, FVector(200.0f, 200.0f, 30.0f));
+	SpawnNavBox(World, -1000.0f, 600.0f, FVector(200.0f, 200.0f, 110.0f));
+	SpawnNavBox(World, -1000.0f, -600.0f, FVector(200.0f, 200.0f, 250.0f));
+	ANavigationWaypoint* Ground = SpawnWaypoint(World, FVector(-1400.0f, 0.0f, 0.0f));
+	ANavigationWaypoint* Step = SpawnWaypoint(World, FVector(-1000.0f, 0.0f, 30.0f));
+	ANavigationWaypoint* Crate = SpawnWaypoint(World, FVector(-1000.0f, 600.0f, 110.0f));
+	ANavigationWaypoint* Crate2 = SpawnWaypoint(World, FVector(-1400.0f, 600.0f, 0.0f));
+	ANavigationWaypoint* Ledge = SpawnWaypoint(World, FVector(-1000.0f, -600.0f, 250.0f));
+	ANavigationWaypoint* Below = SpawnWaypoint(World, FVector(-1400.0f, -600.0f, 0.0f));
+	ANavigationWaypoint* AcrossGap = SpawnWaypoint(World, FVector(300.0f, 0.0f, 0.0f));
+	ANavigationWaypoint* Far = SpawnWaypoint(World, FVector(1700.0f, 0.0f, 0.0f));
+	FWaypointLinkParams Params;
+	Params.MaxLinkDistance = 1500.0f;
+	TestTrue("Links added", UNavigationSystem::AutoLinkWaypoints(World, Params) > 0);
+	TestTrue("A step: both ways", Ground->Links.Contains(Step) && Step->Links.Contains(Ground));
+	TestTrue("A crate: jump up and drop down", Crate2->Links.Contains(Crate) && Crate->Links.Contains(Crate2));
+	TestTrue("A ledge: drop only", Ledge->Links.Contains(Below) && !Below->Links.Contains(Ledge));
+	TestFalse("A gap breaks the way", Step->Links.Contains(AcrossGap) || AcrossGap->Links.Contains(Step));
+	TestTrue("Within reach on the far floor", AcrossGap->Links.Contains(Far) && Far->Links.Contains(AcrossGap));
+	TestFalse("Beyond MaxLinkDistance", Ground->Links.Contains(Far) || Far->Links.Contains(Ground));
 
-	// The plate: a 180 x 180 x 20 cm box (the 100 cm brush scaled) centred 12 cm up.
-	ABlockingVolume* Plate = World.SpawnActor<ABlockingVolume>(ABlockingVolume::StaticClass(),
-		FTransform(FQuat::Identity, FVector(0.0f, 0.0f, 12.0f), FVector(1.8f, 1.8f, 0.2f)));
-	Plate->Tags.Add(FName(NavTags::Blocker));
-
-	// The ramp: two tris covering a 4 x 2 m footprint around (400, 0) cm, rising 1 m.
-	FMeshData RampData;
-	const FVector Up(0.0f, 0.0f, 1.0f);
-	const FVector4 Tangent(1.0f, 0.0f, 0.0f, 1.0f);
-	RampData.Vertices.Add(FVertex(FVector(200.0f, -100.0f, 50.0f), Up, FVector2D(0.0f, 0.0f), Tangent));
-	RampData.Vertices.Add(FVertex(FVector(600.0f, -100.0f, 150.0f), Up, FVector2D(1.0f, 0.0f), Tangent));
-	RampData.Vertices.Add(FVertex(FVector(600.0f, 100.0f, 150.0f), Up, FVector2D(1.0f, 1.0f), Tangent));
-	RampData.Vertices.Add(FVertex(FVector(200.0f, 100.0f, 50.0f), Up, FVector2D(0.0f, 1.0f), Tangent));
-	RampData.Indices = {0, 1, 2, 0, 2, 3};
-	AStaticMeshActor* Ramp = World.SpawnActor<AStaticMeshActor>();
-	Ramp->Tags.Add(FName(NavTags::Walkable));
-	UStaticMesh* RampMesh = NewObject<UStaticMesh>();
-	(void)RampMesh->BuildFromMeshData(RampData);
-	(void)Ramp->GetStaticMeshComponent()->SetStaticMesh(RampMesh);
-	Ramp->GetStaticMeshComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-	TestTrue("Ramp is a triangle mesh body",
-		Physics.GetBodies().Num() == 2 && Physics.GetBodies()[1].CollisionShape == EBodyCollisionShape::TriangleMesh);
-
-	UNavigationSystem Nav;
-	Nav.SetCellSize(50.0f);
-	Nav.SetAgentRadius(35.0f);
-	Nav.BuildFromLevel(Level, Physics, 0.0f, 1200.0f);
-	if (!TestTrue("Nav mesh built", Nav.HasNavMesh()))
-	{
-		return false;
-	}
-	TestEqual("One blocker", Nav.GetBlockerCount(), 1);
-
-	// Cell under plate center must be blocked.
-	int Pix = 0;
-	int Piy = 0;
-	TestTrue("Plate cell found", Nav.GetNavMesh().WorldToCell(0.0f, 0.0f, Pix, Piy));
-	TestFalse("Plate cell blocked", Nav.GetNavMesh().IsWalkable(Pix, Piy));
-
-	// Path across the plate must detour.
-	TArray<FVector> Path;
-	if (!TestTrue(
-			"Path across the plate", Nav.FindPath(FVector(-300.0f, 0.0f, 0.0f), FVector(300.0f, 0.0f, 0.0f), Path)))
-	{
-		return false;
-	}
-	bool bDetouredPlate = false;
-	for (const FVector& Point : Path)
-	{
-		if (FMath::Abs(Point.Y) > 80.0f)
-		{
-			bDetouredPlate = true;
-			break;
-		}
-	}
-	TestTrue("Path detours around the plate", bDetouredPlate);
-
-	// Climbable ramp footprint stays walkable (CMC handles the slope).
-	int Rix = 0;
-	int Riy = 0;
-	TestTrue("Ramp cell found", Nav.GetNavMesh().WorldToCell(400.0f, 0.0f, Rix, Riy));
-	TestTrue("Ramp cell walkable", Nav.GetNavMesh().IsWalkable(Rix, Riy));
-	TestTrue("Path over the ramp", Nav.FindPath(FVector(200.0f, 0.0f, 0.0f), FVector(600.0f, 0.0f, 0.0f), Path));
+	// A* over the links: shortest, and nothing across the gap.
+	World.GetNavigationSystem().Build(World);
+	const UNavigationSystem& Nav = World.GetNavigationSystem();
+	TArray<int32> NodePath;
+	TestTrue("Crate to below the ledge",
+		UNavigationSystem::FindNodePath(Nav.GetNodes(), Nav.FindNode(Crate), Nav.FindNode(Below), NodePath));
+	TestTrue("Through the ground",
+		NodePath.Num() >= 2 && NodePath[0] == Nav.FindNode(Crate) && NodePath.Last() == Nav.FindNode(Below));
+	TestFalse("No way over the gap",
+		UNavigationSystem::FindNodePath(Nav.GetNodes(), Nav.FindNode(Ground), Nav.FindNode(AcrossGap), NodePath));
+	TestTrue("Cleared on failure", NodePath.Num() == 0);
 	return true;
 }
 
@@ -510,25 +501,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayNavAppendDebugDrawFillsOverlayTest,
 
 bool FGameplayNavAppendDebugDrawFillsOverlayTest::RunTest(const FString& Parameters)
 {
-	// Drawing a baked NavMesh adds lines to an empty debug draw batch.
-	FPhysScene Physics;
-	FBodyInstance Wall{};
-	Wall.Type = EBodyType::Static;
-	Wall.Position = FVector(0.0f, 0.0f, 100.0f);
-	Wall.HalfExtents = FVector(50.0f, 50.0f, 100.0f);
-	Physics.GetBodies().Add(Wall);
-
-	UNavigationSystem Nav;
-	Nav.SetCellSize(100.0f);
-	Nav.BuildFromPhysScene(Physics, 0.0f, 400.0f);
-	if (!TestTrue("Nav mesh built", Nav.HasNavMesh()))
-	{
-		return false;
-	}
-
+	// Drawing the waypoint graph adds its boxes and arrows to an empty debug draw batch.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	TArray<ANavigationWaypoint*> Waypoints;
+	SpawnWallScene(World, Waypoints);
 	FDebugDraw Draw;
 	TestTrue("Starts empty", Draw.IsEmpty());
-	Nav.AppendDebugDraw(Draw);
+	World.GetNavigationSystem().AppendDebugDraw(Draw);
 	TestFalse("Filled", Draw.IsEmpty());
 	return true;
 }

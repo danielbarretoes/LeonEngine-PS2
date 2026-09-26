@@ -311,7 +311,7 @@ public:
 		return Physics;
 	}
 
-	/** Unreal-like UNavigationSystem lite (grid NavMesh for AI pathfinding). */
+	/** The navigation (UE: UNavigationSystemV1): the level's waypoint graph, built when play begins. */
 	[[nodiscard]] UNavigationSystem& GetNavigationSystem()
 	{
 		return Navigation;

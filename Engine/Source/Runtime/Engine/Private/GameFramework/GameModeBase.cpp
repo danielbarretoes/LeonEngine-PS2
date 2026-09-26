@@ -451,7 +451,7 @@ float AGameModeBase::EstimateWalkBounds(const ULevel& Level)
 // Flow: Match enter — bodies + nav bake
 // 1. Physics backend (the level's components get their bodies again, from their current transforms)
 // 2. Estimate floor Z / walk bounds from level
-// 3. UNavigationSystem bake (cell 50 cm, agent 45 cm)
+// 3. UNavigationSystem: the level's waypoint graph
 void AGameModeBase::PrepareMatchWorld(float& OutFloorZ, float& OutWalkBounds, EPhysicsBackend Backend)
 {
 	SetPhysicsBackend(Backend);
@@ -459,20 +459,13 @@ void AGameModeBase::PrepareMatchWorld(float& OutFloorZ, float& OutWalkBounds, EP
 	OutFloorZ = EstimateFloorZ(Level);
 	OutWalkBounds = EstimateWalkBounds(Level);
 
-	UNavigationSystem& Nav = GetWorld()->GetNavigationSystem();
-	Nav.SetCellSize(50.0f);
-	Nav.SetAgentRadius(45.0f);
-	Nav.BuildFromLevel(Level, GetWorld()->GetPhysicsScene(), OutFloorZ, OutWalkBounds);
-	UE_LOG(LogPath, Log, "GameMode: NavMesh bake blockers=%d walkable=%d/%d cell=%g", Nav.GetBlockerCount(),
-		Nav.GetWalkableCellCount(), Nav.GetNavMesh().Width * Nav.GetNavMesh().Depth,
-		static_cast<double>(Nav.GetCellSize()));
+	GetWorld()->GetNavigationSystem().Build(*GetWorld());
 }
 
-void AGameModeBase::RebuildNavigation(float FloorZ, float WalkBounds)
+void AGameModeBase::RebuildNavigation(float /*FloorZ*/, float /*WalkBounds*/)
 {
 	GetWorld()->RecreatePhysicsBodies();
-	UNavigationSystem& Nav = GetWorld()->GetNavigationSystem();
-	Nav.BuildFromLevel(*GetWorld()->PersistentLevel, GetWorld()->GetPhysicsScene(), FloorZ, WalkBounds);
+	GetWorld()->GetNavigationSystem().Build(*GetWorld());
 }
 
 void AGameModeBase::SnapCharacterToFloor(ACharacter& Character, FVector& InOutFeet, float FloorZ) const
