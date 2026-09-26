@@ -131,6 +131,8 @@ void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	// Look first, then move: a frame moves along the view the mouse just turned.
 	PlayerInputComponent->BindAxis(TEXT("Turn"), this, &AShooterCharacter::AddControllerYawInput);
 	PlayerInputComponent->BindAxis(TEXT("LookUp"), this, &AShooterCharacter::AddControllerPitchInput);
+	PlayerInputComponent->BindAxis(TEXT("TurnRate"), this, &AShooterCharacter::TurnAtRate);
+	PlayerInputComponent->BindAxis(TEXT("LookUpRate"), this, &AShooterCharacter::LookUpAtRate);
 	PlayerInputComponent->BindAxis(TEXT("MoveForward"), this, &AShooterCharacter::MoveForward);
 	PlayerInputComponent->BindAxis(TEXT("MoveRight"), this, &AShooterCharacter::MoveRight);
 	PlayerInputComponent->BindAction(TEXT("Jump"), IE_Pressed, this, &AShooterCharacter::OnJumpPressed);
@@ -182,6 +184,24 @@ void AShooterCharacter::MoveRight(float Value)
 	{
 		const FRotator YawRotation(0.0f, GetControlRotation().Yaw + 90.0f, 0.0f);
 		APawn::AddMovementInput(YawRotation.Vector(), Value);
+	}
+}
+
+void AShooterCharacter::TurnAtRate(float Rate)
+{
+	const UWorld* World = GetWorld();
+	if (Rate != 0.0f && World != nullptr)
+	{
+		AddControllerYawInput(Rate * BaseTurnRate * World->GetDeltaSeconds());
+	}
+}
+
+void AShooterCharacter::LookUpAtRate(float Rate)
+{
+	const UWorld* World = GetWorld();
+	if (Rate != 0.0f && World != nullptr)
+	{
+		AddControllerPitchInput(Rate * BaseLookUpRate * World->GetDeltaSeconds());
 	}
 }
 

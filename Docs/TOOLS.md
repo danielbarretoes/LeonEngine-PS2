@@ -247,7 +247,7 @@ All scripts forward to LeonBuildTool (`cmake -P Engine/Source/Programs/LeonBuild
 | `Engine\Build\BatchFiles\Cook.bat` | `<LeonCook arguments>` | Builds LeonCook (Win64 Development) and runs it |
 | `Engine\Build\BatchFiles\CheckReimport.bat` | `[<Project>.lproj ...]` | Gate G5: reimports the engine content (and the projects') and fails when git sees a change under a `Content` folder |
 | `Engine\Build\BatchFiles\BuildCookRun.bat` | `-project=<.lproj> -platform=Win64 [-configuration=...] [-build] [-cook] [-stage] [-pak] [-run] [-addcmdline="..."]` | Builds, cooks, stages and paks a project into `<Project>\Saved\StagedBuilds\Win64\`, and runs it ([above](#buildcookrun)) |
-| `Engine\Build\BatchFiles\RunTests.bat` | `[-automation=<filter>]` | Builds LeonAutomationTests (Win64 Development) and runs it from the repo root: every automation test, or those whose name contains `<filter>`; then the LeonHeaderTool golden tests, then ShooterGame's test program (`ShooterGameTests`, 42 tests, the same filter), then `TestPAL` (built for Win64 Development, 120 tests); fails if any fails |
+| `Engine\Build\BatchFiles\RunTests.bat` | `[-automation=<filter>]` | Builds LeonAutomationTests (Win64 Development) and runs it from the repo root: every automation test, or those whose name contains `<filter>`; then the LeonHeaderTool golden tests, then ShooterGame's test program (`ShooterGameTests`, 44 tests, the same filter), then `TestPAL` (built for Win64 Development, 130 tests); fails if any fails |
 | `Engine\Build\BatchFiles\SmokeTest.bat` | | Gate G6: builds ShooterGame, runs it headless on de_leon with `-ExecCmds=bot_fill -ExitAfterFrames=120` and fails unless it exits with 0 and logs ten pawns, five a team (`SmokeTest OK: 10 pawns, CT 5, T 5, exit code 0`) |
 | `Engine\Build\BatchFiles\BotMatch.bat` | `[Rounds] [Seed]` | Builds ShooterGame, plays a headless bot match twice (`-nullrhi -benchmark -botmatch -rounds=<Rounds> -seed=<Seed>`, 10 and 7) and fails unless both exit with 0 and log the same `Botmatch OK` line (P21) |
 | `Engine\Build\BatchFiles\FormatCode.bat` | `[--check]` | clang-format on every `.cpp` / `.h` / `.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game` (skips `ThirdParty`, `Intermediate`, `Binaries`); `--check` is a dry run that fails on unformatted files. It runs `LEON_CLANG_FORMAT`, else Visual Studio's LLVM `clang-format`, else the one on `PATH`, and warns when its major version is not 20 (the repository's; 20.1.8 is the reference, `pip install clang-format==20.1.8`) |
@@ -284,7 +284,7 @@ Engine\Binaries\Win64\TestPAL.exe [-filter=System.Core.Containers]
 Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build
 ```
 
-`RunTests.bat` builds and runs it on Win64 (120 tests). On PS2 (113 tests) the verdict (`TestPAL: PASSED (113 test(s), 0 failed)`) and the `LogTestPAL` numbers are read from the PCSX2 log; the numbers are recorded in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md).
+`RunTests.bat` builds and runs it on Win64 (130 tests). On PS2 (123 tests) the verdict (`TestPAL: PASSED (123 test(s), 0 failed)`) and the `LogTestPAL` numbers are read from the PCSX2 log; the numbers are recorded in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md).
 
 ## Related docs
 

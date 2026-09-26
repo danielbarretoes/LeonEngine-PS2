@@ -5,11 +5,15 @@
 #include "ShooterPlayerController.generated.h"
 
 class ACameraActor;
+class UInputComponent;
 
 /**
- * The human player's controller (UE ShooterGame: AShooterPlayerController): the scoreboard (Tab, held), the buy menu
- * (B; its items on the number keys while it is open, Esc closes it), the hit marker's state, CS's console commands and
- * a debug view for captures.
+ * The human player's controller (UE ShooterGame: AShooterPlayerController): the scoreboard (Tab, held; Select), the
+ * buy menu (B; Start), the hit marker's state, CS's console commands and a debug view for captures.
+ *
+ * While the buy menu is open its own input component is on top of the input stack (UE: PushInputComponent), so its
+ * keys are not the pawn's then: the items on the number keys (MenuItem1..7), the D-pad's up and down moving the
+ * highlighted item (MenuUp / MenuDown) and Cross buying it (MenuSelect), Esc or Circle closing it (Menu).
  *
  * Console (Exec): `Buy <item>` (usp, ak47, awp, hegrenade, vest, vesthelm, defuser: AShooterGameMode::Buy), `buymenu`
  * (opens or closes the menu, as B), and the cheats `give <weapon>` (a weapon by name, free, anywhere), `god` (no
@@ -23,7 +27,10 @@ class SHOOTERGAME_API AShooterPlayerController : public APlayerController
 public:
 	AShooterPlayerController(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	/** Binds Scoreboard (Tab) and Menu (Esc) on the controller's input component (UE: SetupInputComponent). */
+	/**
+	 * Binds Scoreboard and BuyMenu on the controller's input component, and the buy menu's actions on its own
+	 * (UE: SetupInputComponent).
+	 */
 	void SetupInputComponent() override;
 
 	/** The buy menu's items, in the order of their number keys (CS's buy menu, flattened). */
@@ -35,6 +42,11 @@ public:
 		return bBuyMenuOpen;
 	}
 	void SetBuyMenuOpen(bool bOpen);
+	/** The item the D-pad highlights in the buy menu (an index of GetBuyMenuItems). */
+	[[nodiscard]] int32 GetBuyMenuSelection() const
+	{
+		return BuyMenuSelection;
+	}
 	/** The last buy's result, for the HUD ("bought ak47", "not enough money"). */
 	[[nodiscard]] const FString& GetLastBuyMessage() const
 	{
@@ -112,10 +124,19 @@ private:
 	void OnBuyMenuItem7();
 	/** Esc: closes the buy menu. */
 	void OnMenuPressed();
+	/** The D-pad in the buy menu: the item above or below (wrapping), and Cross buys it. */
+	void OnBuyMenuUp();
+	void OnBuyMenuDown();
+	void OnBuyMenuSelect();
 
 	bool bShowScoreboard = false;
 	bool bBuyMenuOpen = false;
+	int32 BuyMenuSelection = 0;
 	FString LastBuyMessage;
+
+	/** The buy menu's keys, on the input stack while it is open. */
+	UPROPERTY(Transient)
+	UInputComponent* BuyMenuInputComponent = nullptr;
 
 	float LastHitTime = -1.0f;
 	bool bLastHitHeadshot = false;

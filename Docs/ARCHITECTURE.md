@@ -925,10 +925,10 @@ UWorld::LineBatcher (FDebugDraw), impact marks, tracers ------------------------
   the content from its sources and fails when git sees a change under a `Content` folder.
 - **Tests**: each module keeps its tests in `<Module>/Private/Tests/`, excluded from the module library and compiled
   only into targets with `COLLECT_AUTOMATION_TESTS`. Every test is a UE automation test
-  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, named `System.<Module>.<Area>.<Name>`): 413 on Win64 — Core
-  48, CoreUObject 63, Json 2, Projects 2, PakFile 6, PhysicsCore 8, RenderCore 23, AnimationCore 1, Engine 154, UMG 1,
+  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, named `System.<Module>.<Area>.<Name>`): 414 on Win64 — Core
+  48, CoreUObject 63, Json 2, Projects 2, PakFile 6, PhysicsCore 8, RenderCore 23, AnimationCore 1, Engine 155, UMG 1,
   GSCore 9, GSReference 10, Renderer 14, AIModule 31, MeshUtilities 8, TextureCompressor 3, LeonEd 20, JoltPhysics 9
-  (404 on Linux, without the Jolt plugin; a tenth Jolt test, `System.JoltPhysics.Backend.DisabledFallsBack`,
+  (405 on Linux, without the Jolt plugin; a tenth Jolt test, `System.JoltPhysics.Backend.DisabledFallsBack`,
   compiles only without the plugin). On PS2, Core runs 44 (the platform-file, config-cache and log-file tests are
   desktop-only), CoreUObject 61 (its SaveConfig and package file tests are desktop-only; the other package tests save to
   memory), Json 2, Projects 1, PakFile 6 (on paks in memory) and GSCore 9: 123 in TestPAL. Reflected test fixtures live in
@@ -941,10 +941,10 @@ UWorld::LineBatcher (FDebugDraw), impact marks, tracers ------------------------
   - `LeonAutomationTests` (Desktop) starts the module table, runs the automation tests through
     `FAutomationTestFramework` and fails if any fails. Run with `Engine\Build\BatchFiles\RunTests.bat`
     (`-automation=<filter>` runs the tests whose name contains `<filter>`).
-  - A project's tests (`ShooterGame.*`, 42) live in its module's `Private/Tests/` and run in the project's own test
+  - A project's tests (`ShooterGame.*`, 44) live in its module's `Private/Tests/` and run in the project's own test
     program (`ShooterGameTests`: the engine's runner with `AUTOMATION_TEST_MODULES ShooterGame`, so only the
     project's tests, with the project's config); `RunTests.bat` builds and runs it after the engine's.
-  - `TestPAL` (every platform; Core, CoreUObject, Json, Projects and PakFile: 120 tests on Win64, 113 on PS2) runs the
+  - `TestPAL` (every platform; Core, CoreUObject, Json, Projects, PakFile and GSCore: 130 tests on Win64, 123 on PS2) runs the
     automation tests and prints `TestPAL: PASSED (N test(s), 0 failed)` plus the reflection (types, construction
     heap), object array, garbage collection (`GC budget`, a final collection), package round trip (`Package budget`),
     GMalloc and name-pool numbers. On PS2 it runs in PCSX2

@@ -20,6 +20,8 @@ class UWorld;
  *   viewport draws and presents the frame.
  * - PreExit: the game instance shuts down, the world goes (a garbage collection safe point, plan decision D11), then
  *   the renderer; FEngineLoop destroys the window after.
+ * - `-LogFrameTimes` logs, every 5 seconds, the frames' average and worst time and the average spent in the world's
+ *   tick and in the viewport's draw and present (Docs/PLANS/ps2-engine.md E4: the PS2's frame in its EE log).
  *
  * It draws through the Renderer module's interface (IRendererModule, found by name); Engine never includes a Renderer
  * header.
@@ -56,4 +58,14 @@ private:
 	[[nodiscard]] EShaderReloadResult ReloadAllShaders(bool bForce);
 	/** The audio listener follows the view camera. */
 	void TickPlayAudio();
+	/** -LogFrameTimes: adds a frame and logs the window's figures every FrameLogSeconds. */
+	void AccumulateFrameTimes(float DeltaSeconds, double GameSeconds, double DrawSeconds);
+
+	static constexpr float FrameLogSeconds = 5.0f;
+	bool bLogFrameTimes = false;
+	int32 FrameLogFrames = 0;
+	float FrameLogTime = 0.0f;
+	float FrameLogWorst = 0.0f;
+	double FrameLogGameSeconds = 0.0;
+	double FrameLogDrawSeconds = 0.0;
 };

@@ -9,7 +9,9 @@
 #include "Engine/World.h"
 #include "EngineLogs.h"
 #include "GameMapsSettings.h"
+#include "GenericPlatform/GenericApplication.h"
 #include "GenericPlatform/GenericWindow.h"
+#include "HAL/PlatformTime.h"
 #include "Misc/App.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
@@ -50,6 +52,7 @@ void UGameEngine::Init(IEngineLoop* InEngineLoop)
 			bIsInitialized = false;
 			return;
 		}
+		bLogFrameTimes = FParse::Param(FCommandLine::Get(), "LogFrameTimes");
 		// Stats off unless the config or -showstats asks for them.
 		Overlay.SetRightText(FString());
 		Overlay.SetBottomLeftText(FString());
@@ -89,6 +92,10 @@ void UGameEngine::Init(IEngineLoop* InEngineLoop)
 	if (Window != nullptr)
 	{
 		GameViewport->SetViewportWindow(Window);
+		// The application's gamepad (the PS2's DualShock; the desktop has none), read with the window (UE: Slate's
+		// controller events).
+		GenericApplication* Application = InEngineLoop->GetApplication();
+		GameViewport->SetInputInterface(Application != nullptr ? Application->GetInputInterface() : nullptr);
 		if (FParse::Param(FCommandLine::Get(), "AxesGizmo"))
 		{
 			GameViewport->EngineShowFlags.AxesGizmo = true;
@@ -205,6 +212,7 @@ void UGameEngine::Tick(float DeltaSeconds, bool /*bIdleMode*/)
 		TickPlayAudio();
 	}
 
+	const double GameStart = FPlatformTime::Seconds();
 	FWorldContext& Context = *GameInstance->GetWorldContext();
 	TickWorldTravel(Context, DeltaSeconds);
 	if (UWorld* World = Context.World())
@@ -228,9 +236,15 @@ void UGameEngine::Tick(float DeltaSeconds, bool /*bIdleMode*/)
 
 	if (Window != nullptr)
 	{
+		const double DrawStart = FPlatformTime::Seconds();
 		GameViewport->Tick(DeltaSeconds);
 		// UE: RedrawViewports.
 		GameViewport->GetGameViewport()->Draw(true);
+		if (bLogFrameTimes)
+		{
+			const double DrawEnd = FPlatformTime::Seconds();
+			AccumulateFrameTimes(DeltaSeconds, DrawStart - GameStart, DrawEnd - DrawStart);
+		}
 		if (Window->ShouldClose())
 		{
 			RequestEngineExit("Main window closed");
@@ -241,6 +255,30 @@ void UGameEngine::Tick(float DeltaSeconds, bool /*bIdleMode*/)
 		// Keep the console current when stdout is redirected (CI smoke, servers stopped with Ctrl+C).
 		GLog->Flush();
 	}
+}
+
+void UGameEngine::AccumulateFrameTimes(float DeltaSeconds, double GameSeconds, double DrawSeconds)
+{
+	++FrameLogFrames;
+	FrameLogTime += DeltaSeconds;
+	FrameLogWorst = FMath::Max(FrameLogWorst, DeltaSeconds);
+	FrameLogGameSeconds += GameSeconds;
+	FrameLogDrawSeconds += DrawSeconds;
+	if (FrameLogTime < FrameLogSeconds)
+	{
+		return;
+	}
+	const double Frames = double(FrameLogFrames);
+	UE_LOG(LogEngine, Display,
+		"Frame times over %d frames: %.1f ms average (%.1f fps), %.1f ms worst; world %.1f ms, "
+		"draw and present %.1f ms",
+		FrameLogFrames, double(FrameLogTime) * 1000.0 / Frames, Frames / double(FrameLogTime),
+		double(FrameLogWorst) * 1000.0, FrameLogGameSeconds * 1000.0 / Frames, FrameLogDrawSeconds * 1000.0 / Frames);
+	FrameLogFrames = 0;
+	FrameLogTime = 0.0f;
+	FrameLogWorst = 0.0f;
+	FrameLogGameSeconds = 0.0;
+	FrameLogDrawSeconds = 0.0;
 }
 
 void UGameEngine::TickPlayAudio()

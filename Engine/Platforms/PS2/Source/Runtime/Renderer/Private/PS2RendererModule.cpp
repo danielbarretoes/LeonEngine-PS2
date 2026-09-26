@@ -1,5 +1,6 @@
 #include "CanvasTypes.h"
 #include "GS/GSSceneRenderer.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Modules/ModuleManager.h"
 #include "PS2RHI.h"
 #include "RendererInterface.h"
@@ -35,8 +36,18 @@ namespace
 				return false;
 			}
 			SceneRenderer.GetTextureCache().SetArena(FirstBlock, NumBlocks);
+			// The frame rate (Docs/PLANS/ps2-engine.md D6: a steady 30 fps): PS2Engine.ini's SyncInterval.
+			int32 SyncInterval = 1;
+			if (GConfig != nullptr)
+			{
+				GConfig->GetInt(TEXT("/Script/PS2RHI.PS2Settings"), TEXT("SyncInterval"), SyncInterval, GEngineIni);
+			}
+			FPS2RHI::SetSyncInterval(SyncInterval);
 			bInitialized = true;
-			UE_LOG(LogRenderer, Log, "PS2 renderer: GS scene renderer, %u KB of texture VRAM", NumBlocks / 4);
+			UE_LOG(LogRenderer, Log,
+				"PS2 renderer: GS scene renderer, %u KB of texture VRAM, a frame every %d vertical "
+				"blank(s)",
+				NumBlocks / 4, SyncInterval);
 			return true;
 		}
 

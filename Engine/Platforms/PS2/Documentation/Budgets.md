@@ -95,6 +95,10 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | E3 | ThirdPerson | 688 354 | 7 056 | 33 984 | — | unchanged |
 | E3 | GSConformance | 221 967 | 6 300 | 27 488 | — | unchanged |
 | E3 | TestPAL | 1 514 864 | 6 380 | 40 592 | — | `FGSTextureLayout`, the pak's device-root paths and their 2 tests (+8 256 bytes of text) |
+| E4 | ShooterGame | 1 694 542 | 7 032 | 43 280 | — | the pad through the viewport client, the buy menu's input component, the stick's turn rates, the sync interval and `-LogFrameTimes` (+5 712 bytes of text) |
+| E4 | ThirdPerson | 688 482 | 7 072 | 33 984 | — | `FPS2RHI::SetSyncInterval` in the RHI it links (+128 bytes of text) |
+| E4 | GSConformance | 222 287 | 6 316 | 27 488 | — | the same (+320 bytes of text) |
+| E4 | TestPAL | 1 514 864 | 6 380 | 40 592 | — | unchanged |
 
 **P9 reflection in TestPAL** (`nm -S` over the ELF, bytes):
 
@@ -233,3 +237,8 @@ the PSMZ24 buffer: 1856 KB. ShooterGame, cooked for PS2:
 
 The cooked content is 492 KB (63 files); its pak, aligned to 2048 bytes, 568 KB.
 
+
+
+**Frame time** ([ps2-engine](../../../../Docs/PLANS/ps2-engine.md) E4, D6: a steady 30 fps, `SyncInterval=2`): to be
+measured in PCSX2 with `-LogFrameTimes` (`Frame times over N frames: ... ms average (... fps), ... ms worst; world ...
+ms, draw and present ... ms`) during a match of de_leon against nine bots.

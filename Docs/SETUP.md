@@ -51,7 +51,7 @@ Engine\Build\BatchFiles\RunTests.bat
 This builds `LeonAutomationTests` (Win64 Development) and runs it from the repo root. The executable contains the
 tests of every module in its closure (`<Module>/Private/Tests/`), all UE automation tests (386, named
 `System.<Module>.<Area>.<Name>`). Then it runs the LeonHeaderTool golden tests, builds and runs ShooterGame's test
-program (`ShooterGameTests`, 42 tests) and last builds and runs `TestPAL` (120 tests on Win64). The exit code is
+program (`ShooterGameTests`, 44 tests) and last builds and runs `TestPAL` (130 tests on Win64). The exit code is
 non-zero if any test fails. `-automation=<filter>` runs only the tests whose name contains `<filter>` (the engine's and
 ShooterGame's):
 

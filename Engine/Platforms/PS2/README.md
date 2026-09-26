@@ -231,9 +231,14 @@ Without `-nullrhi` the game draws de_leon through the GS scene renderer (E2), fr
 Engine\Build\BatchFiles\BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.lproj -platform=PS2 -build -cook -stage -pak -run "-addcmdline=-ExecCmds=bot_fill"
 ```
 
-The EE log shows `Mounted ... ShooterGame-PS2.lpak` and `PS2 renderer: GS scene renderer, 1856 KB of texture VRAM`.
+The EE log shows `Mounted ... ShooterGame-PS2.lpak` and `PS2 renderer: GS scene renderer, 1856 KB of texture VRAM,
+a frame every 2 vertical blank(s)`. The game is played with the DualShock (E4, the controls in the
+[ShooterGame README](../../../Game/ShooterGame/README.md#controls)) at a steady 30 fps: `SyncInterval=2` in
+`[/Script/PS2RHI.PS2Settings]` of `Config/PS2Engine.ini` (UE: `rhi.SyncInterval`; 1 for 60 Hz). With `-LogFrameTimes`
+the EE log gets `Frame times over N frames: ... ms average (... fps), ... ms worst; world ... ms, draw and present ...
+ms` every 5 seconds.
 
-The root `Package.bat` builds and packages `ThirdPerson`, `TestPAL`, `GSConformance` and ShooterGame (the botmatch) for PS2 (Development, in Docker, into
+The root `Package.bat` builds and packages `ThirdPerson`, `TestPAL`, `GSConformance` and ShooterGame (the game with its pak and `-LogFrameTimes`) for PS2 (Development, in Docker, into
 `Packages\PS2\`); the ELF sizes (gate G3) are measured with the toolchain's `mips64r5900el-ps2-elf-size` in the ps2dev
 image when a phase is recorded ([Budgets.md](Documentation/Budgets.md)).
 

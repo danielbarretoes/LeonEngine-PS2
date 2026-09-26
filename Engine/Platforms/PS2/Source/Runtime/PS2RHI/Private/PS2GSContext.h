@@ -32,6 +32,9 @@ namespace Leon::PS2
 		int32 VramEndWords = 0;
 		/** The largest frame packet so far, in quadwords. */
 		uint32 PacketQuadwordsPeak = 0;
+		/** FPS2RHI::SetSyncInterval, and when the last frame was shown (FPlatformTime::Seconds). */
+		int32 SyncInterval = 1;
+		double LastFlipSeconds = 0.0;
 	};
 
 	[[nodiscard]] FPS2GSContext& GetGSContext();

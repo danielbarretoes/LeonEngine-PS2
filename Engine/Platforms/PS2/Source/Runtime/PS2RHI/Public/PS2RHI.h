@@ -27,8 +27,16 @@ public:
 	static bool InitDisplay(
 		int Width, int Height, EGSPixelFormat ColorFormat = EGSPixelFormat::PSMCT16S, uint32 ReservedVramBytes = 0);
 	static void ClearColor(float R, float G, float B);
-	/** Sends the frame, waits for the vertical blank and shows what was drawn. */
+	/**
+	 * Sends the frame, waits for the vertical blank and shows what was drawn; with a sync interval of N it shows it no
+	 * sooner than N vertical blanks after the last one.
+	 */
 	static void WaitVSync();
+	/**
+	 * The vertical blanks a frame is shown for at least (UE: rhi.SyncInterval): 1 is the display's 59.94 Hz, 2 a steady
+	 * 30 fps (a frame late for the second blank waits for the third).
+	 */
+	static void SetSyncInterval(int32 Interval);
 
 	/** Appends a recorded list to the frame; the drawing environment is restored after it. */
 	static void Submit(const FGSCommandList& List);

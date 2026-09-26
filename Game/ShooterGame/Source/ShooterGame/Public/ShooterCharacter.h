@@ -48,10 +48,12 @@ struct FDamageEvent;
  * kit). Neither moves while planting or defusing (CS). The freeze time at a round's start holds every pawn still and
  * its weapons silent; it can still look around.
  *
- * Input (Config/DefaultInput.ini): MoveForward / MoveRight (W A S D), Turn / LookUp (the mouse), Jump (Space), Crouch
- * (Left Ctrl, C: held), Walk (Left Shift: held), Fire (the left button), Targeting (the right button: a sniper's zoom),
- * Reload (R), PrimaryWeapon / SecondaryWeapon / Grenade (1, 2, 4), DropWeapon (G), Use (E: held). A dead pawn ignores
- * them, and the slot keys are the buy menu's while it is open.
+ * Input (Config/DefaultInput.ini): MoveForward / MoveRight (W A S D; the left stick), Turn / LookUp (the mouse),
+ * TurnRate / LookUpRate (the right stick: BaseTurnRate / BaseLookUpRate degrees a second at full tilt), Jump (Space;
+ * Cross), Crouch (Left Ctrl, C: held; Circle), Walk (Left Shift: held; L3), Fire (the left button; R2), Targeting (the
+ * right button: a sniper's zoom; L2), Reload (R; Square), PrimaryWeapon / SecondaryWeapon / Grenade (1, 2, 4; R1, L1,
+ * D-pad left), DropWeapon (G; D-pad right), Use (E: held; Triangle). A dead pawn ignores them, and the buy menu takes
+ * its keys while it is open (AShooterPlayerController).
  */
 UCLASS(Config = Game)
 class SHOOTERGAME_API AShooterCharacter : public ACharacter
@@ -108,6 +110,9 @@ public:
 	/** The axes (UE FPS template: MoveForward / MoveRight along the view's yaw). */
 	void MoveForward(float Value);
 	void MoveRight(float Value);
+	/** A stick's rate, -1..1, turned into degrees this frame (UE templates: TurnAtRate / LookUpAtRate). */
+	void TurnAtRate(float Rate);
+	void LookUpAtRate(float Rate);
 
 	// Health and armor
 
@@ -280,6 +285,14 @@ public:
 	/** Seconds a corpse stays; 0 until the round restarts removes it. */
 	UPROPERTY(Config)
 	float CorpseLifeSpan = 0.0f;
+
+	/** Degrees a second the view turns with the right stick at full tilt (UE templates: BaseTurnRate). */
+	UPROPERTY(Config)
+	float BaseTurnRate = 150.0f;
+
+	/** Degrees a second the view pitches with the right stick at full tilt (UE templates: BaseLookUpRate). */
+	UPROPERTY(Config)
+	float BaseLookUpRate = 100.0f;
 
 private:
 	void OnJumpPressed();

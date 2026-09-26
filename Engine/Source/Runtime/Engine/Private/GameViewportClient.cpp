@@ -13,6 +13,7 @@
 #include "GameFramework/InputSettings.h"
 #include "GameFramework/PlayerController.h"
 #include "GenericPlatform/GenericWindow.h"
+#include "GenericPlatform/IInputInterface.h"
 #include "HAL/PlatformMemory.h"
 #include "Misc/CString.h"
 #include "Misc/FileHelper.h"
@@ -204,6 +205,42 @@ void UGameViewportClient::ProcessInput(float DeltaTime)
 	}
 	LastMouseX = MouseX;
 	LastMouseY = MouseY;
+
+	ProcessGamepadInput(AllKeys, DeltaTime);
+}
+
+void UGameViewportClient::ProcessGamepadInput(const TArray<FKey>& AllKeys, float DeltaTime)
+{
+	const bool bConnected = InputInterface != nullptr && InputInterface->IsGamepadConnected();
+	for (const FKey& Key : AllKeys)
+	{
+		if (!Key.IsGamepadKey())
+		{
+			continue;
+		}
+		if (Key.IsAxis1D())
+		{
+			// A sample every frame: an axis without samples keeps its last value (UPlayerInput).
+			const float Value = bConnected ? InputInterface->GetGamepadAnalog(Key) : 0.0f;
+			(void)InputAxis(Viewport.Get(), 0, Key, Value, DeltaTime, 1, true);
+			continue;
+		}
+		// A pad that goes away releases its buttons.
+		const bool bDown = bConnected && InputInterface->IsGamepadKeyDown(Key);
+		if (bDown == DownKeys.Contains(Key))
+		{
+			continue;
+		}
+		if (bDown)
+		{
+			DownKeys.Add(Key);
+		}
+		else
+		{
+			DownKeys.Remove(Key);
+		}
+		(void)InputKey(Viewport.Get(), 0, Key, bDown ? IE_Pressed : IE_Released, bDown ? 1.0f : 0.0f, true);
+	}
 }
 
 void UGameViewportClient::Tick(float DeltaTime)

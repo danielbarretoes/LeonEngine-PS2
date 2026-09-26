@@ -164,7 +164,7 @@ Estado:
     necesita nombres ISO 9660 y una herramienta de imagen.
 - Pendiente (manual): ShooterGame en PCSX2 con `-pak`.
 
-### E4 · Jugable (M)
+### E4 · Jugable (M) — hecha en el código; falta medirla en PCSX2
 
 - Mando: el mapeo de ShooterGame (mover, mirar, disparar, recargar, comprar, plantar/desactivar) sobre
   `PS2InputInterface`, con la sensibilidad y la zona muerta en la configuración.
@@ -173,6 +173,34 @@ Estado:
 
 Gate: una partida completa de de_leon contra bots en PCSX2 a 30 fps estables, con los tiempos del frame anotados en
 Budgets.md.
+
+Estado:
+
+- Mando:
+  - `UGameViewportClient` lee el `IInputInterface` de la aplicación (`SetInputInterface`, desde `UGameEngine::Init`),
+    como los eventos de mando de Slate en UE. Los cambios de botón llegan como `InputKey` con `bGamepad`, y los sticks
+    como una muestra de `InputAxis` por frame (0 incluido, para que el eje se pare).
+  - `DefaultInput.ini` de ShooterGame mapea el DualShock: sticks para mover y mirar, R2 dispara, L2 hace zoom,
+    Cruz/Círculo/Cuadrado/Triángulo saltan, agachan, recargan y usan, R1/L1/cruceta eligen arma, L3 camina, Select
+    muestra la tabla y Start abre el menú de compra.
+  - Mirar con el stick va por `TurnRate` / `LookUpRate` a `BaseTurnRate` / `BaseLookUpRate` grados por segundo (150 y
+    100, como las plantillas de UE).
+- Menú de compra con el mando: mientras está abierto, su propio `UInputComponent` va arriba de la pila
+  (`PushInputComponent`). La cruceta mueve la selección (`>` en el HUD), Cruz compra y Círculo cierra, sin que el
+  personaje salte ni se agache.
+  - Esto arregla un bug previo: `MenuItem1..7` estaba en el componente del controlador y consumía 1, 2 y 4 siempre,
+    así que con el menú cerrado esas teclas no elegían arma.
+- 30 fps: `SyncInterval=2` en `[/Script/PS2RHI.PS2Settings]` de PS2Engine.ini (el `rhi.SyncInterval` de UE).
+  `FPS2RHI::WaitVSync` muestra cada frame como pronto en el segundo blanco vertical desde el anterior.
+- Medida: `-LogFrameTimes` escribe cada 5 s la media y el peor frame, y la parte del mundo y la de dibujo y
+  presentación. En escritorio (llvmpipe): 12,9 ms de media con diez bots.
+- HUD a 640x448: se comprobó en la captura del emulador; el menú de compra y la tabla caben.
+- Tests nuevos:
+  - `System.Engine.Viewport.Gamepad`.
+  - `ShooterGame.Input.Pad`.
+  - `ShooterGame.Input.BuyMenuTakesItsKeys`.
+- Pendiente (manual): una partida en PCSX2 con el mando, con `-LogFrameTimes`, y sus tiempos en Budgets.md. Si no
+  llega a 30 fps, el perfil dirá qué recortar (D6): la transformación en C++ del renderer, la IA o la física.
 
 ### E5 · Audio (M)
 

@@ -255,14 +255,19 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameConfigTest, "ShooterGame.Config.Inp
 
 bool FShooterGameConfigTest::RunTest(const FString& Parameters)
 {
-	// The project's config: the key mappings, the mouse sensitivity and the Weapon channel.
+	// The project's config: the key mappings (the keyboard's and the PS2 pad's), the mouse sensitivity and the Weapon
+	// channel.
 	const UInputSettings* Settings = GetDefault<UInputSettings>();
 	TArray<FInputActionKeyMapping> Crouch;
 	Settings->GetActionMappingByName(TEXT("Crouch"), Crouch);
-	TestEqual("Crouch keys", Crouch.Num(), 2);
+	TestEqual("Crouch keys (Left Ctrl, C, Circle)", Crouch.Num(), 3);
 	TArray<FInputActionKeyMapping> Walk;
 	Settings->GetActionMappingByName(TEXT("Walk"), Walk);
-	TestTrue("Walk: Left Shift", Walk.Num() == 1 && Walk[0].Key == EKeys::LeftShift);
+	TestTrue("Walk: Left Shift, L3",
+		Walk.Num() == 2 && Walk[0].Key == EKeys::LeftShift && Walk[1].Key == EKeys::Gamepad_LeftThumbstick);
+	TArray<FInputAxisKeyMapping> TurnRate;
+	Settings->GetAxisMappingByName(TEXT("TurnRate"), TurnRate);
+	TestTrue("TurnRate: the right stick", TurnRate.Num() == 1 && TurnRate[0].Key == EKeys::Gamepad_RightX);
 	TArray<FInputAxisKeyMapping> MoveUp;
 	Settings->GetAxisMappingByName(TEXT("MoveUp"), MoveUp);
 	TestEqual("No flying", MoveUp.Num(), 0);

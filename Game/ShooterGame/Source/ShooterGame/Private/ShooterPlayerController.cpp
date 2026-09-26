@@ -20,15 +20,26 @@ void AShooterPlayerController::SetupInputComponent()
 	Super::SetupInputComponent();
 	InputComponent->BindAction(TEXT("Scoreboard"), IE_Pressed, this, &AShooterPlayerController::OnScoreboardPressed);
 	InputComponent->BindAction(TEXT("Scoreboard"), IE_Released, this, &AShooterPlayerController::OnScoreboardReleased);
-	InputComponent->BindAction(TEXT("Menu"), IE_Pressed, this, &AShooterPlayerController::OnMenuPressed);
 	InputComponent->BindAction(TEXT("BuyMenu"), IE_Pressed, this, &AShooterPlayerController::OnBuyMenuPressed);
-	InputComponent->BindAction(TEXT("MenuItem1"), IE_Pressed, this, &AShooterPlayerController::OnBuyMenuItem1);
-	InputComponent->BindAction(TEXT("MenuItem2"), IE_Pressed, this, &AShooterPlayerController::OnBuyMenuItem2);
-	InputComponent->BindAction(TEXT("MenuItem3"), IE_Pressed, this, &AShooterPlayerController::OnBuyMenuItem3);
-	InputComponent->BindAction(TEXT("MenuItem4"), IE_Pressed, this, &AShooterPlayerController::OnBuyMenuItem4);
-	InputComponent->BindAction(TEXT("MenuItem5"), IE_Pressed, this, &AShooterPlayerController::OnBuyMenuItem5);
-	InputComponent->BindAction(TEXT("MenuItem6"), IE_Pressed, this, &AShooterPlayerController::OnBuyMenuItem6);
-	InputComponent->BindAction(TEXT("MenuItem7"), IE_Pressed, this, &AShooterPlayerController::OnBuyMenuItem7);
+
+	// The buy menu's keys take precedence over the pawn's only while it is open (SetBuyMenuOpen pushes them): the
+	// number keys select weapons and Cross jumps otherwise.
+	if (BuyMenuInputComponent == nullptr)
+	{
+		BuyMenuInputComponent = NewObject<UInputComponent>(this, TEXT("BuyMenuInput"));
+		UInputComponent& Menu = *BuyMenuInputComponent;
+		Menu.BindAction(TEXT("Menu"), IE_Pressed, this, &AShooterPlayerController::OnMenuPressed);
+		Menu.BindAction(TEXT("MenuItem1"), IE_Pressed, this, &AShooterPlayerController::OnBuyMenuItem1);
+		Menu.BindAction(TEXT("MenuItem2"), IE_Pressed, this, &AShooterPlayerController::OnBuyMenuItem2);
+		Menu.BindAction(TEXT("MenuItem3"), IE_Pressed, this, &AShooterPlayerController::OnBuyMenuItem3);
+		Menu.BindAction(TEXT("MenuItem4"), IE_Pressed, this, &AShooterPlayerController::OnBuyMenuItem4);
+		Menu.BindAction(TEXT("MenuItem5"), IE_Pressed, this, &AShooterPlayerController::OnBuyMenuItem5);
+		Menu.BindAction(TEXT("MenuItem6"), IE_Pressed, this, &AShooterPlayerController::OnBuyMenuItem6);
+		Menu.BindAction(TEXT("MenuItem7"), IE_Pressed, this, &AShooterPlayerController::OnBuyMenuItem7);
+		Menu.BindAction(TEXT("MenuUp"), IE_Pressed, this, &AShooterPlayerController::OnBuyMenuUp);
+		Menu.BindAction(TEXT("MenuDown"), IE_Pressed, this, &AShooterPlayerController::OnBuyMenuDown);
+		Menu.BindAction(TEXT("MenuSelect"), IE_Pressed, this, &AShooterPlayerController::OnBuyMenuSelect);
+	}
 }
 
 const TArray<FString>& AShooterPlayerController::GetBuyMenuItems()
@@ -40,6 +51,17 @@ const TArray<FString>& AShooterPlayerController::GetBuyMenuItems()
 
 void AShooterPlayerController::SetBuyMenuOpen(bool bOpen)
 {
+	if (bOpen != bBuyMenuOpen && BuyMenuInputComponent != nullptr)
+	{
+		if (bOpen)
+		{
+			PushInputComponent(BuyMenuInputComponent);
+		}
+		else
+		{
+			(void)PopInputComponent(BuyMenuInputComponent);
+		}
+	}
 	bBuyMenuOpen = bOpen;
 	if (bOpen)
 	{
@@ -63,6 +85,22 @@ void AShooterPlayerController::OnBuyMenuItem(int32 Number)
 	{
 		Buy(GetBuyMenuItems()[Number - 1]);
 	}
+}
+
+void AShooterPlayerController::OnBuyMenuUp()
+{
+	const int32 NumItems = GetBuyMenuItems().Num();
+	BuyMenuSelection = (BuyMenuSelection + NumItems - 1) % NumItems;
+}
+
+void AShooterPlayerController::OnBuyMenuDown()
+{
+	BuyMenuSelection = (BuyMenuSelection + 1) % GetBuyMenuItems().Num();
+}
+
+void AShooterPlayerController::OnBuyMenuSelect()
+{
+	OnBuyMenuItem(BuyMenuSelection + 1);
 }
 
 void AShooterPlayerController::OnBuyMenuItem1()

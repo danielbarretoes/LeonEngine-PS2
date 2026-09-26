@@ -13,6 +13,7 @@
 class APlayerController;
 class FCanvas;
 class FGenericWindow;
+class IInputInterface;
 class UCameraComponent;
 class UGameInstance;
 class ULocalPlayer;
@@ -24,9 +25,11 @@ struct FWorldContext;
  * GameViewportClientClassName=`) for the game instance's world context.
  *
  * - Input: each frame (ProcessInput, Leon's stand-in for Slate's input events) the window's key changes become
- *   InputKey events and the mouse's motion MouseX / MouseY InputAxis samples, routed to the first local player's
- *   controller. An unattended run (FApp::IsUnattended: -unattended, or Leon's -Screenshot= / -ExitAfterFrames=
- *   captures) ignores the input (SetIgnoreInput), so what it shows does not depend on the mouse or the keyboard.
+ *   InputKey events and the mouse's motion MouseX / MouseY InputAxis samples, and the gamepad's (SetInputInterface: the
+ *   PS2's DualShock) button changes InputKey events and its sticks Gamepad_LeftX ... Gamepad_RightY samples every
+ *   frame, routed to the first local player's controller. An unattended run (FApp::IsUnattended: -unattended, or Leon's
+ * -Screenshot= / -ExitAfterFrames= captures) ignores the input (SetIgnoreInput), so what it shows does not depend on
+ * the mouse or the keyboard.
  * - Draw: the player's camera view of the world's scene (FSceneViewFamily, IRendererModule::BeginRenderingViewFamily),
  *   then the player's HUD and the engine's on-screen text into the frame's canvas.
  * - Exec: `show <Flag>` toggles EngineShowFlags, then the game instance, then the engine (UE's chain). The console
@@ -64,9 +67,27 @@ public:
 	virtual bool InputAxis(FViewport* InViewport, int32 ControllerId, FKey Key, float Delta, float DeltaTime,
 		int32 NumSamples = 1, bool bGamepad = false);
 
-	/** Polls the window's keys and mouse into InputKey / InputAxis (Leon: Slate delivers these in UE). */
+	/**
+	 * Polls the window's keys and mouse, and the gamepad, into InputKey / InputAxis (Leon: Slate delivers these in
+	 * UE).
+	 */
 	virtual void ProcessInput(float DeltaTime);
 
+	/**
+	 * The gamepad ProcessInput polls (the application's, UGameEngine::Init; null for none). Its buttons send InputKey
+	 * events with bGamepad when they change, its sticks one InputAxis sample each per frame, 0 included, so a released
+	 * stick stops the axis.
+	 */
+	void SetInputInterface(IInputInterface* InInputInterface)
+	{
+		InputInterface = InInputInterface;
+	}
+
+protected:
+	/** The gamepad's part of ProcessInput. */
+	void ProcessGamepadInput(const TArray<FKey>& AllKeys, float DeltaTime);
+
+public:
 	/**
 	 * Drops every key and axis event while set: ProcessInput stops polling the window and InputKey / InputAxis
 	 * return false (UE: SetIgnoreInput). UGameEngine::Init sets it for an unattended run.
@@ -132,8 +153,9 @@ private:
 	UCameraComponent* DefaultViewCamera = nullptr;
 
 	TUniquePtr<FViewport> Viewport;
-	/** The keys the window reported down last frame. */
+	/** The keys the window and the gamepad reported down last frame. */
 	TSet<FKey> DownKeys;
+	IInputInterface* InputInterface = nullptr;
 	bool bMouseLookSampleValid = false;
 	/** SetIgnoreInput (UE: bIgnoreInput). */
 	bool bIgnoreInput = false;

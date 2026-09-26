@@ -7,13 +7,14 @@ What runs automatically and what a person still has to check by hand. Build and 
 
 | Check | Command | Passes when |
 | --- | --- | --- |
-| Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` twice, the engine's (`LeonAutomationTests`; `-nodisplay` skips the `NonNullRHI` tests, which need an OpenGL window) and ShooterGame's (`ShooterGameTests`, 42), then `TestPAL: PASSED (130 test(s), 0 failed)` (TestPAL on Win64) |
+| Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` twice, the engine's (`LeonAutomationTests`; `-nodisplay` skips the `NonNullRHI` tests, which need an OpenGL window) and ShooterGame's (`ShooterGameTests`, 44), then `TestPAL: PASSED (130 test(s), 0 failed)` (TestPAL on Win64) |
 | GS emulator conformance ([ps2-gs-parity](PLANS/ps2-gs-parity.md) P4, [ps2-engine](PLANS/ps2-engine.md) E2) | `LeonAutomationTests -automation=GSEmulator` (a window: on Linux CI `xvfb-run`) | `System.Renderer.GSEmulator.Conformance`: the OpenGL GS emulator draws the GS conformance scenes within 2 levels per channel of the reference rasterizer (the colour-clamp-off scene is allowed its wrapped pixels); `System.Renderer.GSEmulator.SceneFrame`: a frame of the GS scene renderer (textured, flat and translucent meshes, two lights, a floor through the near plane) within one 5-bit step of the reference, but for at most 64 pixels |
 | LeonHeaderTool golden tests (run by `RunTests.bat` too) | `Engine\Intermediate\Build\HostTools\Win64\LeonHeaderTool.exe -Test` | `LeonHeaderTool -Test: N of N golden cases passed` |
 | Core, CoreUObject, Json, Projects and PakFile on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (123 test(s), 0 failed)` in the EE log (130 on Win64: the platform-file, config-cache, log-file, SaveConfig and package-file tests are desktop-only) |
 | Format (G1), banned APIs (G4), Win64 build | `Engine\Build\BatchFiles\Lint.bat` | `Lint OK` (the format check expects clang-format 20; 20.1.8 is the reference version) |
 | PS2 builds and ELF sizes (G3) | `Engine\Build\BatchFiles\Build.bat <Target> PS2 Development` (Docker; `Linux/Build.sh` in the ps2dev image), or the root `Package.bat` for ThirdPerson, TestPAL and GSConformance | `ThirdPerson`, `BlankProgram`, `TestPAL` and `GSConformance` build; when a phase is recorded, their sections are measured with the toolchain's `mips64r5900el-ps2-elf-size` in the ps2dev image ([Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md)) |
 | ShooterGame headless on PS2 ([ps2-engine](PLANS/ps2-engine.md) E1) | `Engine\Build\BatchFiles\BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.lproj -platform=PS2 -build -cook -stage -run "-addcmdline=-nullrhi -benchmark -botmatch -rounds=10 -seed=7"` (Docker and PCSX2 with its host filesystem) | `Botmatch OK: 10 round(s), ...` in the EE log, the same result on two runs; the `Botmatch budget:` line recorded in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md) |
+| ShooterGame on PS2 ([ps2-engine](PLANS/ps2-engine.md) E2 to E4) | `Engine\Build\BatchFiles\BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.lproj -platform=PS2 -build -cook -stage -pak -run "-addcmdline=-LogFrameTimes"` (Docker and PCSX2 with its host filesystem) | de_leon draws with the player, the bots, the tracers and the HUD; the DualShock plays it (the buy menu too); the EE log's `Frame times over ...` lines stay at 33.4 ms average (30 fps) |
 | Reproducible reimport (G5; on a clean checkout) | `Engine\Build\BatchFiles\CheckReimport.bat [<Project>.lproj ...]` | `CheckReimport OK`: `LeonCook -run=ImportAssets -reimport -all` leaves `Engine/Content` and `Game/*/Content` unchanged, the imported maps included (`git diff --exit-code`, no new file) |
 | ShooterGame smoke (G6) | `Engine\Build\BatchFiles\SmokeTest.bat` | `SmokeTest OK: 10 pawns, CT 5, T 5, exit code 0`: ShooterGame boots de_leon headless, `bot_fill` adds nine bots to the local player, and the game mode's end-of-match line counts ten pawns in their teams |
 | ShooterGame bot match (P21) | `Engine\Build\BatchFiles\BotMatch.bat [Rounds] [Seed]` (10, 7) | `BotMatch OK: 10 round(s), seed 7, exit code 0, replayed identically`: ten bots play de_leon headless and unpaced (`ShooterGame -nullrhi -benchmark -botmatch -rounds=10 -seed=7`), `FShooterMatchChecker` finds no broken invariant, and a second run logs the same `Botmatch OK` line ([ShooterGame README — Bot match](../Game/ShooterGame/README.md#bot-match)) |
@@ -131,13 +132,17 @@ and standing up only with room under a ceiling, the `GetMaxSpeed` hook, the pawn
 following the control rotation and the mouse sensitivity. The default (instant) model keeps every golden table as it
 was.
 
-ShooterGame's tests (`ShooterGame.*`, 42 now, in `ShooterGameTests.exe` with the project's config) cover, since P17, the
+ShooterGame's tests (`ShooterGame.*`, 44 now, in `ShooterGameTests.exe` with the project's config) cover, since P17, the
 team choice, ten bots on ten team starts and a sixth refused, a pawn standing on its start, `bot_fill`, the character's
 CS movement (UE's model, the run and walk speeds, crouching, the capsule, the first-person camera), the crosshair the
 HUD draws, the project's input and channel config, and the map: `ShooterGame.Map.DeLeonHoldsTheGame` loads
 `/Game/Maps/de_leon` and checks its sites, buy zones, team starts, waypoint links, player clip and sun; `RequiredTags`
 imports `de_leon.glb` under the project's rules and refuses the AxisTest source; `TenPawnsOnDeLeon` opens the map in a
 headless `UGameEngine`, adds nine bots and ticks 60 frames: ten pawns standing on distinct starts, on the spawn pads.
+`ShooterGame.Input.Pad` and `ShooterGame.Input.BuyMenuTakesItsKeys` (E4) drive a player with the PS2 pad's keys: the
+right stick turns at `BaseTurnRate`, the left one walks, the shoulders draw the slots, and the buy menu takes the
+D-pad, Cross, Circle and the number keys only while it is open (closed, 1 draws the rifle); `System.Engine.Viewport.Gamepad`
+feeds a fake pad through the viewport client.
 
 Since P20 the bots are tested. The waypoint navigation (`System.AIModule.Gameplay.Navigation*`,
 `System.AIModule.FrameworkHardening.NavigationAgentRadiusKeepsWideAgentsOutOfGaps`) finds paths over a small graph,

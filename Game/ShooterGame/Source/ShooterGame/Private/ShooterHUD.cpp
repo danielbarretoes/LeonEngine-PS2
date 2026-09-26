@@ -506,9 +506,11 @@ void UShooterBuyMenuWidget::NativeTick(float /*DeltaTime*/)
 		const FString& Item = AShooterPlayerController::GetBuyMenuItems()[Index];
 		const int32 Price = GameMode != nullptr && Pawn != nullptr ? GameMode->GetPrice(*Pawn, Item) : -1;
 		const bool bAffordable = bCanBuy && Price >= 0 && Money >= Price;
+		// The pad's highlighted item is marked.
+		const TCHAR* Marker = Index == Controller->GetBuyMenuSelection() ? TEXT(">") : TEXT(" ");
 		ItemTexts[Index]->SetText(
-			FText::FromString(Price >= 0 ? FString::Printf(TEXT("%d  %-10s $%d"), Index + 1, *Item, Price)
-										 : FString::Printf(TEXT("%d  %-10s  -"), Index + 1, *Item)));
+			FText::FromString(Price >= 0 ? FString::Printf(TEXT("%s%d  %-10s $%d"), Marker, Index + 1, *Item, Price)
+										 : FString::Printf(TEXT("%s%d  %-10s  -"), Marker, Index + 1, *Item)));
 		ItemTexts[Index]->SetColorAndOpacity(
 			bAffordable ? FLinearColor(1.0f, 1.0f, 1.0f) : FLinearColor(0.45f, 0.45f, 0.45f));
 	}

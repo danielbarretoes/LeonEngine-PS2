@@ -1,4 +1,5 @@
 #include "DynamicRHI.h"
+#include "HAL/PlatformTime.h"
 #include "PS2GSContext.h"
 #include "PS2RHI.h"
 #include "PS2SceneState.h"
@@ -186,10 +187,24 @@ void FPS2RHI::WaitVSync()
 	}
 	Leon::PS2::FlushFrame(Gs);
 	graph_wait_vsync();
+	// With an interval of N, the blanks before the N-th since the last flip pass too: the clock tells which blank this
+	// is (half a field of margin), since libgraph counts none.
+	constexpr double FieldSeconds = 1.0 / 59.94;
+	while (Gs.SyncInterval > 1 &&
+		FPlatformTime::Seconds() - Gs.LastFlipSeconds < (double(Gs.SyncInterval) - 0.5) * FieldSeconds)
+	{
+		graph_wait_vsync();
+	}
+	Gs.LastFlipSeconds = FPlatformTime::Seconds();
 	const FGSFrame& Drawn = Gs.Frames[Gs.BackBuffer];
 	graph_set_framebuffer_filtered(Drawn.FBP * 2048, Gs.Width, GraphPsm(Drawn.PSM), 0, 0);
 	Gs.BackBuffer ^= 1;
 	Leon::PS2::AppendDrawEnvironment(Gs);
+}
+
+void FPS2RHI::SetSyncInterval(int32 Interval)
+{
+	Leon::PS2::GetGSContext().SyncInterval = FMath::Clamp(Interval, 1, 4);
 }
 
 FDynamicRHI* PlatformCreateDynamicRHI()

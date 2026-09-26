@@ -104,8 +104,9 @@ private:
 /**
  * The buy menu (CS's, flattened into one list), a tree of UMG widgets: a bordered vertical box at the top-left with the
  * money, why buying is refused (outside a buy zone, after the buy time), each item of
- * AShooterPlayerController::GetBuyMenuItems on its number key with its price (grey when it cannot be bought now) and
- * the last buy's result. NativeTick refreshes it from the game, and collapses it while the owner's menu is closed.
+ * AShooterPlayerController::GetBuyMenuItems on its number key with its price (grey when it cannot be bought now; '>'
+ * marks the pad's highlighted item) and the last buy's result. NativeTick refreshes it from the game, and collapses it
+ * while the owner's menu is closed.
  */
 UCLASS()
 class SHOOTERGAME_API UShooterBuyMenuWidget : public UUserWidget

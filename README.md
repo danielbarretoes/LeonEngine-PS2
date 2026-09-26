@@ -12,7 +12,7 @@ conventions, built with CMake through **LeonBuildTool** (our UnrealBuildTool).
   engine loop hooks with a debug overlay, and `PS2RHI` for the Graphics Synthesizer. PS2 builds run in a pinned ps2dev
   Docker image.
 - **Two games**, isolated from the engine and built with `-Project=`: `Game/ThirdPerson`, a PS2 third-person starter
-  (orbit camera, character move / jump, primitive level), and `Game/ShooterGame`, a Win64 Counter-Strike-style shooter
+  (orbit camera, character move / jump, primitive level), and `Game/ShooterGame`, a Counter-Strike-style shooter for Win64 and the PS2 (the same engine and renderer on the EE, played with the DualShock)
   (first-person CS movement, CS's weapons, rounds, money and the bomb, two teams of five with bots that fight, plant
   and defuse on a waypoint graph, the `de_leon` blockout built in Blender; [README](Game/ShooterGame/README.md)).
 

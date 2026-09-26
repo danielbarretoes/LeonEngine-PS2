@@ -32,6 +32,10 @@ Game\ShooterGame\Binaries\Win64\ShooterGameTests.exe
 
 :: A staged build: cook, stage, pak and run (Docs/TOOLS.md, "BuildCookRun")
 Engine\Build\BatchFiles\BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.lproj -platform=Win64 -configuration=Shipping -build -cook -stage -pak -run
+
+:: On the PS2 in PCSX2 (Docs/PLANS/ps2-engine.md): built in Docker, cooked for the PS2 (paletted textures), its pak
+:: beside the ELF, played with the pad at 30 fps; -LogFrameTimes puts the frame times in the EE log every 5 s
+Engine\Build\BatchFiles\BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.lproj -platform=PS2 -build -cook -stage -pak -run "-addcmdline=-LogFrameTimes"
 ```
 
 A map URL picks the team and the seed of the rounds (the bomb's carrier): `ShooterGame.exe /Game/Maps/de_leon?team=T?seed=42`
@@ -39,21 +43,21 @@ A map URL picks the team and the seed of the rounds (the bomb's carrier): `Shoot
 
 ## Controls
 
-| Input | Action |
-| --- | --- |
-| Mouse | Look (0.07° per pixel, `SetMouseSensitivity <degrees per pixel>` changes it) |
-| W / S, D / A | Move forward / back, right / left |
-| Space | Jump |
-| Left Ctrl or C (held) | Crouch (it stays crouched under a ceiling until there is room) |
-| Left Shift (held) | Walk (52 % of the speed) |
-| Left mouse button | Fire (held: automatic weapons keep firing) |
-| Right mouse button | The AWP's zoom (two levels, then off) |
-| R | Reload |
-| 1 / 2 / 4 | Primary (rifle, AWP) / pistol / grenade |
-| G | Drop the weapon in hand (a pawn without one in that slot picks it up by walking over it) |
-| E (held) | Plant the bomb (its carrier, standing still in a bomb site, 3 s) or defuse it (a CT at the planted bomb, 10 s, 5 with a kit) |
-| B | The buy menu (the console's `buymenu` toggles it too); 1 to 7 buy its items while it is open, B or Escape close it |
-| Tab (held) | The scoreboard |
+| Keyboard and mouse | PS2 DualShock | Action |
+| --- | --- | --- |
+| Mouse | Right stick | Look (the mouse 0.07° per pixel, `SetMouseSensitivity <degrees per pixel>` changes it; the stick up to 150° a second across, 100° up and down: `BaseTurnRate` / `BaseLookUpRate`) |
+| W / S, D / A | Left stick | Move forward / back, right / left (the stick walks slower when tilted less) |
+| Space | Cross | Jump |
+| Left Ctrl or C (held) | Circle (held) | Crouch (it stays crouched under a ceiling until there is room) |
+| Left Shift (held) | L3 (held) | Walk (52 % of the speed) |
+| Left mouse button | R2 | Fire (held: automatic weapons keep firing) |
+| Right mouse button | L2 | The AWP's zoom (two levels, then off) |
+| R | Square | Reload |
+| 1 / 2 / 4 | R1 / L1 / D-pad left | Primary (rifle, AWP) / pistol / grenade |
+| G | D-pad right | Drop the weapon in hand (a pawn without one in that slot picks it up by walking over it) |
+| E (held) | Triangle (held) | Plant the bomb (its carrier, standing still in a bomb site, 3 s) or defuse it (a CT at the planted bomb, 10 s, 5 with a kit) |
+| B | Start | The buy menu (the console's `buymenu` toggles it too). While it is open: 1 to 7 buy its items; the D-pad's up and down move the highlight (`>`) and Cross buys it; B, Start, Escape or Circle close it. It takes these keys only while it is open |
+| Tab (held) | Select (held) | The scoreboard |
 
 Console commands (`-ExecCmds="cmd1;cmd2"`): `bot_add_ct [N]`, `bot_add_t [N]`, `bot_add [N]` (the smaller team),
 `bot_fill` (both teams to five), `bot_kick [name|all]`, `bot_stop [0|1]` (the bots stand still), `mp_restartgame
