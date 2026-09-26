@@ -106,8 +106,11 @@ function(leon_apply_compile_environment Target CxxStandard)
 		# an implicit float to double promotion goes through soft-float, so it is an error too.
 		target_compile_options(${Target} PRIVATE -Wall -Wextra -Werror=shadow -Werror=double-promotion)
 	else()
-		# No RTTI and no C++ exceptions (D17), as the PS2 toolchain does for every target.
-		target_compile_options(${Target} PRIVATE -Wall -Wextra -Wpedantic $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti -fno-exceptions>)
+		# A GCC / Clang host (Linux, a development convenience): the PS2's warnings (shadowing is an error, as on MSVC),
+		# no RTTI and no C++ exceptions (D17). No -Wpedantic: UE's checkf / UE_LOG style macros pass an empty
+		# __VA_ARGS__, which C++17 pedantic mode reports on every use.
+		target_compile_options(${Target} PRIVATE -Wall -Wextra -Werror=shadow
+			$<$<COMPILE_LANGUAGE:CXX>:-fno-rtti -fno-exceptions>)
 	endif()
 endfunction()
 

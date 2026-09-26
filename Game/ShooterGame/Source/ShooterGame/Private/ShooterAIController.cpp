@@ -52,13 +52,11 @@ namespace
 
 const FName AShooterAIController::EnemyKey(TEXT("Enemy"));
 const FName AShooterAIController::HasEnemyKey(TEXT("HasEnemy"));
-const FName AShooterAIController::EnemyLocationKey(TEXT("EnemyLocation"));
 const FName AShooterAIController::ShouldDefuseKey(TEXT("ShouldDefuse"));
 const FName AShooterAIController::CarriesBombKey(TEXT("CarriesBomb"));
 const FName AShooterAIController::BombDroppedKey(TEXT("BombDropped"));
 const FName AShooterAIController::HeardEnemyKey(TEXT("HeardEnemy"));
 const FName AShooterAIController::NoiseLocationKey(TEXT("NoiseLocation"));
-const FName AShooterAIController::GoalKey(TEXT("Goal"));
 
 AShooterAIController::AShooterAIController(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -147,7 +145,8 @@ AShooterCharacter* AShooterAIController::GetShooterPawn() const
 
 AShooterCharacter* AShooterAIController::GetEnemy() const
 {
-	return Enemy;
+	// UE ShooterGame: the blackboard's Enemy key (the engaged enemy the tree sees).
+	return Cast<AShooterCharacter>(Tree.GetBlackboard().GetValueAsObject(EnemyKey));
 }
 
 AShooterGameMode* AShooterAIController::GetShooterGameMode() const
@@ -193,9 +192,9 @@ float AShooterAIController::GetCurrentAimError() const
 
 // The senses
 
-void AShooterAIController::OnSeePawn(APawn* Pawn)
+void AShooterAIController::OnSeePawn(APawn* SeenPawn)
 {
-	AShooterCharacter* Seen = Cast<AShooterCharacter>(Pawn);
+	AShooterCharacter* Seen = Cast<AShooterCharacter>(SeenPawn);
 	const AShooterCharacter* Self = GetShooterPawn();
 	if (Seen == nullptr || Self == nullptr || !Seen->IsAlive() || Seen->GetTeam() == Self->GetTeam() ||
 		Seen->GetTeam() == EShooterTeam::None)
@@ -225,9 +224,9 @@ void AShooterAIController::OnSeePawn(APawn* Pawn)
 	AimOffset = FRotator(BotRandom.FRandRange(-Error, Error), BotRandom.FRandRange(-Error, Error), 0.0f);
 }
 
-void AShooterAIController::OnHearNoise(APawn* Instigator, const FVector& Location, float /*Volume*/)
+void AShooterAIController::OnHearNoise(APawn* NoiseInstigator, const FVector& Location, float /*Volume*/)
 {
-	const AShooterCharacter* Heard = Cast<AShooterCharacter>(Instigator);
+	const AShooterCharacter* Heard = Cast<AShooterCharacter>(NoiseInstigator);
 	const AShooterCharacter* Self = GetShooterPawn();
 	if (Heard == nullptr || Self == nullptr || Heard->GetTeam() == Self->GetTeam())
 	{
@@ -269,10 +268,6 @@ void AShooterAIController::UpdateBlackboard()
 	const bool bEnemyInSight = Enemy != nullptr && Now - EnemyLastSeenTime <= BotSensingInterval * 3.0f;
 	Board.SetValueAsObject(EnemyKey, Enemy);
 	Board.SetValueAsBool(HasEnemyKey, bEnemyInSight);
-	if (Enemy != nullptr)
-	{
-		Board.SetValueAsVector(EnemyLocationKey, Enemy->GetActorLocation());
-	}
 
 	const EShooterTeam Team = Self != nullptr ? Self->GetTeam() : EShooterTeam::None;
 	const EShooterBombState BombState = State != nullptr ? State->GetBombState() : EShooterBombState::None;
@@ -309,14 +304,13 @@ TArray<FString> AShooterAIController::BuyForRound()
 	AShooterCharacter* Self = GetShooterPawn();
 	AShooterGameMode* GameMode = GetShooterGameMode();
 	const AShooterGameState* State = GameMode != nullptr ? GameMode->GetShooterGameState() : nullptr;
-	const AShooterPlayerState* PlayerState = GetPlayerState<AShooterPlayerState>();
-	if (Self == nullptr || GameMode == nullptr || State == nullptr || PlayerState == nullptr ||
+	const AShooterPlayerState* BotState = GetPlayerState<AShooterPlayerState>();
+	if (Self == nullptr || GameMode == nullptr || State == nullptr || BotState == nullptr ||
 		BoughtInRound == State->GetRoundSerial() || !GameMode->CanBuy(*Self))
 	{
 		return Bought;
 	}
 	BoughtInRound = State->GetRoundSerial();
-	RoundPurchases.Reset();
 	auto TryBuy = [&](const TCHAR* Item)
 	{
 		if (GameMode->Buy(Self, Item))
@@ -329,31 +323,30 @@ TArray<FString> AShooterAIController::BuyForRound()
 	{
 		const int32 AwpPrice = GameMode->GetPrice(*Self, TEXT("awp"));
 		const int32 RiflePrice = GameMode->GetPrice(*Self, TEXT("ak47"));
-		const bool bAwp = AwpPrice >= 0 && PlayerState->GetMoney() >= AwpPrice + GameMode->VestHelmetPrice &&
+		const bool bAwp = AwpPrice >= 0 && BotState->GetMoney() >= AwpPrice + GameMode->VestHelmetPrice &&
 			BotRandom.FRand() < AwpChance;
 		if (bAwp)
 		{
 			TryBuy(TEXT("awp"));
 		}
-		else if (RiflePrice >= 0 && PlayerState->GetMoney() >= RiflePrice)
+		else if (RiflePrice >= 0 && BotState->GetMoney() >= RiflePrice)
 		{
 			TryBuy(TEXT("ak47"));
 		}
 	}
-	if (PlayerState->GetMoney() >= GameMode->VestHelmetPrice)
+	if (BotState->GetMoney() >= GameMode->VestHelmetPrice)
 	{
 		TryBuy(TEXT("vesthelm"));
 	}
-	else if (PlayerState->GetMoney() >= GameMode->VestPrice)
+	else if (BotState->GetMoney() >= GameMode->VestPrice)
 	{
 		TryBuy(TEXT("vest"));
 	}
-	if (Self->GetTeam() == EShooterTeam::CT && PlayerState->GetMoney() >= GameMode->DefuserPrice)
+	if (Self->GetTeam() == EShooterTeam::CT && BotState->GetMoney() >= GameMode->DefuserPrice)
 	{
 		TryBuy(TEXT("defuser"));
 	}
 	Self->EquipBestWeapon();
-	RoundPurchases = Bought;
 	return Bought;
 }
 
@@ -561,7 +554,6 @@ EBTNodeResult AShooterAIController::TaskObjective(float DeltaTime)
 			return EBTNodeResult::Succeeded;
 		}
 	}
-	Tree.GetBlackboard().SetValueAsVector(GoalKey, Goal);
 	if (FVector::DistSquared2D(Self->GetActorLocation(), Goal) <= FMath::Square(GoalReachedDistance))
 	{
 		// There: hold, looking around slowly.
@@ -597,7 +589,6 @@ void AShooterAIController::StandStill()
 		StopMovement();
 	}
 	bHasGoal = false;
-	ClearWishDirection();
 }
 
 void AShooterAIController::ReleaseTrigger()
@@ -612,7 +603,7 @@ void AShooterAIController::ReleaseTrigger()
 	}
 }
 
-float AShooterAIController::TurnToward(const FVector& Target, float DeltaTime)
+float AShooterAIController::TurnToward(const FVector& AimTarget, float DeltaTime)
 {
 	const AShooterCharacter* Self = GetShooterPawn();
 	if (Self == nullptr)
@@ -620,7 +611,7 @@ float AShooterAIController::TurnToward(const FVector& Target, float DeltaTime)
 		return 180.0f;
 	}
 	const FVector Eyes = Self->GetFirstPersonCameraComponent()->GetComponentLocation();
-	const FRotator Wanted = (Target - Eyes).Rotation();
+	const FRotator Wanted = (AimTarget - Eyes).Rotation();
 	FRotator Current = GetControlRotation();
 	const float MaxStep = AimTurnRate * FMath::Max(0.1f, Difficulty) * DeltaTime;
 	const float YawDelta = FRotator::NormalizeAxis(Wanted.Yaw - Current.Yaw);

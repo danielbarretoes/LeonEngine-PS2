@@ -93,7 +93,7 @@ FString& FString::AppendChar(TCHAR InChar)
 void FString::AppendChars(const TCHAR* Array, int32 Count)
 {
 	check(Count >= 0);
-	if (!Count)
+	if (Count <= 0)
 	{
 		return;
 	}

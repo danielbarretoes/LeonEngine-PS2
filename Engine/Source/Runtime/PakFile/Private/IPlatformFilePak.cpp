@@ -431,6 +431,7 @@ bool FPakPlatformFile::Initialize(IPlatformFile* Inner, const TCHAR* CmdLine)
 {
 	LowerLevel = Inner;
 #if UE_BUILD_SHIPPING
+	(void)CmdLine;
 	bAllowLooseFiles = false;
 #else
 	bAllowLooseFiles = !FParse::Param(CmdLine, "NoLooseFiles");

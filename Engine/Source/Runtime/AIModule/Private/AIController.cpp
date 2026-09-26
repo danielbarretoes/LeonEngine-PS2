@@ -119,7 +119,6 @@ void AAIController::MoveToLocation(const FVector& WorldPosition)
 	MoveActor = nullptr;
 	Target = WorldPosition;
 	bHasTarget = true;
-	LogicState = EAILogicState::MoveTo;
 	ResetStuckCheck();
 	RebuildPath();
 }
@@ -134,7 +133,6 @@ void AAIController::MoveToActor(AActor* Actor)
 	const bool bSameActor = (MoveActor == Actor);
 	MoveActor = Actor;
 	bHasTarget = true;
-	LogicState = EAILogicState::Chase;
 	Target = Actor->GetActorLocation();
 	// Repath on acquire; TickAI refreshes on an interval while chasing (a failed path is retried at that pace too).
 	if (!bSameActor)
@@ -148,7 +146,6 @@ void AAIController::StopMovement()
 {
 	bHasTarget = false;
 	MoveActor = nullptr;
-	LogicState = EAILogicState::Idle;
 	ClearPath();
 }
 
@@ -181,7 +178,7 @@ FVector AAIController::TickAI(float DeltaTime)
 		}
 	}
 
-	FVector Wish = WishDir;
+	FVector Wish = FVector::ZeroVector;
 	if (bHasTarget)
 	{
 		const FVector From = Character->GetActorLocation();

@@ -46,27 +46,4 @@ bool FLevelAndAISmokeEditorStyleMapResaveTest::RunTest(const FString& Parameters
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelAndAISmokeAIChaseBehaviorMoveToWhenTargetPresentTest,
-	"System.AIModule.LevelAndAISmoke.AIChaseBehaviorMoveToWhenTargetPresent",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
-
-bool FLevelAndAISmokeAIChaseBehaviorMoveToWhenTargetPresentTest::RunTest(const FString& Parameters)
-{
-	// The chase behavior tree chases while a target exists and returns the controller to idle without one.
-	FScopedTestWorld TestWorld;
-	UWorld& World = *TestWorld;
-	ACharacter* Character = World.SpawnActor<ACharacter>();
-	ACharacter* Target = World.SpawnActor<ACharacter>();
-	Target->SetActorLocationAndRotation(FVector(500.0f, 0.0f, 0.0f), FRotator::ZeroRotator);
-
-	AAIController& Ai = *World.SpawnActor<AAIController>();
-	Ai.Possess(Character);
-	FAIChaseBehavior Chase;
-	(void)Chase.Tick(Ai, Target, 0.016f);
-	TestTrue("Chasing the target", Ai.GetLogicState() == EAILogicState::Chase);
-	(void)Chase.Tick(Ai, nullptr, 0.016f);
-	TestTrue("Idle without a target", Ai.GetLogicState() == EAILogicState::Idle);
-	return true;
-}
-
 #endif // WITH_DEV_AUTOMATION_TESTS

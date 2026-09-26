@@ -43,7 +43,7 @@ bool FStaticMeshBuilder::BuildFromObj(const FString& ObjPath, FMeshData& OutData
 		OutError = "Failed to load OBJ: " + ObjPath;
 		return false;
 	}
-	ComputeTangents(OutData, EMeshDataBasis::Engine);
+	ComputeTangents(OutData);
 	OutError.Empty();
 	return true;
 }

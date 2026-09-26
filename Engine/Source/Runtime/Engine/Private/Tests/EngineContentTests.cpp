@@ -5,7 +5,6 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/Texture2D.h"
-#include "Level/BasicShape.h"
 #include "Materials/Material.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/PackageName.h"
@@ -93,10 +92,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEngineContentBasicShapesTest, "System.Engine.E
 
 bool FEngineContentBasicShapesTest::RunTest(const FString& Parameters)
 {
-	// The basic shapes load from /Engine/BasicShapes with the procedural generator's geometry and no material slots;
-	// a sphere of another tessellation is built at run time, once per tessellation.
-	const UStaticMesh* Cube = MeshForBasicShape(EBasicShape::Cube);
-	const UStaticMesh* Plane = MeshForBasicShape(EBasicShape::Plane);
+	// The basic shapes load from /Engine/BasicShapes with the procedural generator's geometry and no material slots.
+	const UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	const UStaticMesh* Plane = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane"));
 	if (TestNotNull("Cube", Cube) && TestNotNull("Plane", Plane))
 	{
 		TestEqual("Cube path", Cube->GetPathName(), FString("/Engine/BasicShapes/Cube.Cube"));
@@ -110,16 +108,11 @@ bool FEngineContentBasicShapesTest::RunTest(const FString& Parameters)
 				Cube->GetLODResources().Vertices[5].Position == Generated.Vertices[5].Position &&
 				Cube->GetLODResources().Vertices[5].Tangent == Generated.Vertices[5].Tangent);
 	}
-	UStaticMesh* Sphere = GetSphereMesh(24, 16);
-	UStaticMesh* CoarseSphere = GetSphereMesh(8, 6);
-	if (TestNotNull("Sphere", Sphere) && TestNotNull("Coarse sphere", CoarseSphere))
+	const UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	if (TestNotNull("Sphere", Sphere))
 	{
-		TestEqual("The default sphere", Sphere->GetPathName(), FString("/Engine/BasicShapes/Sphere.Sphere"));
-		TestTrue(
-			"Another tessellation is another mesh", CoarseSphere != Sphere && CoarseSphere->HasAnyFlags(RF_Transient));
-		TestTrue("Coarser", CoarseSphere->GetNumTriangles() < Sphere->GetNumTriangles());
-		TestTrue("Cached per tessellation", GetSphereMesh(8, 6) == CoarseSphere);
-		TestEqual("The generator's triangles", Sphere->GetNumTriangles(), MakeSphere(24, 16).Indices.Num() / 3);
+		TestEqual(
+			"The generator's triangles (24 x 16)", Sphere->GetNumTriangles(), MakeSphere(24, 16).Indices.Num() / 3);
 	}
 	return true;
 }

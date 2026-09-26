@@ -22,14 +22,12 @@ class ENGINE_API AGameStateBase : public AInfo
 public:
 	AGameStateBase(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	/** Resets match clock / flags / map — not PlayerArray (Unreal: logout removes players). */
+	/** Resets the match clock and flags, not PlayerArray (UE: logout removes players). */
 	virtual void Reset()
 	{
 		ElapsedSeconds = 0.0f;
 		bMatchInProgress = false;
 		bMatchHasEnded = false;
-		ReplicatedWorldTimeFrames = 0;
-		MapName.Empty();
 	}
 
 	void Tick(float DeltaTime) override
@@ -127,30 +125,6 @@ public:
 		bMatchHasEnded = true;
 	}
 
-	/** Current map identity (Level document name / travel key). Unreal: map package name. */
-	[[nodiscard]] const FString& GetMapName() const
-	{
-		return MapName;
-	}
-	void SetMapName(FString Name)
-	{
-		MapName = MoveTemp(Name);
-	}
-
-	/** Replicated simulation frame (host advances; clients apply from Snapshot). */
-	[[nodiscard]] uint32 GetReplicatedWorldTimeFrames() const
-	{
-		return ReplicatedWorldTimeFrames;
-	}
-	void SetReplicatedWorldTimeFrames(uint32 InTick)
-	{
-		ReplicatedWorldTimeFrames = InTick;
-	}
-	void IncrementReplicatedWorldTimeFrames()
-	{
-		++ReplicatedWorldTimeFrames;
-	}
-
 protected:
 	/** Records that the world began play, without starting the clock (AGameState). */
 	void MarkHasBegunPlay()
@@ -172,12 +146,6 @@ private:
 
 	UPROPERTY()
 	bool bMatchHasEnded = false;
-
-	UPROPERTY()
-	uint32 ReplicatedWorldTimeFrames = 0;
-
-	UPROPERTY()
-	FString MapName;
 
 	/** The players' states (UE: PlayerArray). */
 	UPROPERTY()

@@ -87,11 +87,6 @@ public:
 	{
 		return bLastHitKill;
 	}
-	/** How many hits have been confirmed. */
-	[[nodiscard]] int32 GetNumHitsConfirmed() const
-	{
-		return NumHitsConfirmed;
-	}
 
 	/** Debug: back to the pawn's view. */
 	UFUNCTION(Exec)
@@ -110,7 +105,7 @@ private:
 	void OnBuyMenuItem5();
 	void OnBuyMenuItem6();
 	void OnBuyMenuItem7();
-	/** Esc: closes the buy menu; the game menu otherwise (logs: no game menu yet). */
+	/** Esc: closes the buy menu. */
 	void OnMenuPressed();
 
 	bool bShowScoreboard = false;
@@ -120,7 +115,6 @@ private:
 	float LastHitTime = -1.0f;
 	bool bLastHitHeadshot = false;
 	bool bLastHitKill = false;
-	int32 NumHitsConfirmed = 0;
 
 	/** The camera of ViewFrom. */
 	UPROPERTY(Transient)

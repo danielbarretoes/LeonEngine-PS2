@@ -44,9 +44,10 @@ struct ENGINE_API FWaypointLinkParams
 };
 
 /**
- * Leon's navigation (UE: UNavigationSystemV1 over a navmesh; plan P20 replaces the grid navmesh of the legacy engine
- * with a waypoint graph, the UE3 path node model). The graph is the level's ANavigationWaypoint actors and their Links,
- * built when the world begins play (Build): each waypoint is a node standing on the floor below it.
+ * Leon's navigation (UE: UNavigationSystemV1 over a Recast navmesh; Leon navigates a waypoint graph, UE3's path node
+ * model). The graph is the level's ANavigationWaypoint actors and their Links, built when the world begins play
+ * (Build): each waypoint is a node standing on the floor below it, the start's and the goal's nodes found in the
+ * direction of the walk (a node the goal can be dropped onto).
  *
  * - FindPath: the start's and the end's nearest waypoints that can be walked to (CanWalkBetween: a capsule sweep and a
  *   floor probe), A* between them over the links (costs and heuristic: the distance), then the end; a start that can
@@ -57,7 +58,8 @@ struct ENGINE_API FWaypointLinkParams
  *   (a step or a jump up and back down), and one way down a drop too high to climb; the map importer runs it, so
  *   the links are saved in the map.
  *
- * Not a UObject (as the grid navigation was): the world owns it by value and the waypoints own nothing.
+ * Not a UObject: the world owns it by value and the waypoints own nothing (a documented deviation: UE's navigation
+ * data is an actor, ANavigationData).
  */
 class ENGINE_API UNavigationSystem
 {

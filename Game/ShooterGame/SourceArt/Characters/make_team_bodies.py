@@ -4,7 +4,8 @@
 
 Writes team_bodies.blend and Body_CT.glb / Body_T.glb next to this script; Game/ShooterGame/SourceArt/ImportList.ini
 imports them as /Game/Characters/SM_Body_CT and SM_Body_T with their materials. AShooterCharacter shows them on the
-other players' pawns ([/Script/ShooterGame.ShooterCharacter] CTBodyMeshName / TBodyMeshName) until P18's models.
+other players' pawns ([/Script/ShooterGame.ShooterCharacter] CTBodyMeshName / TBodyMeshName) until rigged T and CT
+models, made in Blender, replace them.
 
 A body stands on its origin (the character's feet), faces +X (a dark visor on the head shows the facing) and fits the
 capsule (radius 40 cm, 183 cm tall): legs, a torso and a head, in the team's colour. Blender's axes, metres: X forward,

@@ -182,15 +182,16 @@ most urgent first:
 | Branch | When | What |
 | --- | --- | --- |
 | Idle | frozen, dead or `bot_stop` | stands; in the freeze it buys once (below) |
-| Engage | an enemy in sight (or seen less than `EnemyMemory` s ago) | stops, turns at `AimTurnRate`, fires once `ReactionTime` has passed since it came into sight; the aim error starts at `AimError` and settles toward `MinAimError`; automatic weapons fire bursts, the AWP zooms first |
+| Engage | an enemy in sight (seen in the last three sensing updates; one lost for `EnemyMemory` s is searched for, as a noise) | stops, turns at `AimTurnRate`, fires once `ReactionTime` has passed since it came into sight; the aim error starts at `AimError` and settles toward `MinAimError`; automatic weapons fire bursts, the AWP zooms first |
 | Defuse | a CT and the bomb planted | walks to the bomb and holds use |
 | Plant | the bomb's carrier | walks to the round's site (`AShooterGameMode::GetTerroristTargetSite`, drawn each round from the seeded stream) and plants inside it |
 | FetchBomb | a T and the bomb dropped | walks over it |
 | Investigate | an enemy's shot heard (`AActor::MakeNoise`) | walks to where it came from |
 | Objective | otherwise | T: to the round's site (guarding the planted bomb); CT: A for the even, B for the odd of the team |
 
-- **Buying** (`BuyForRound`): a rifle with kevlar and helmet when it can afford them (the AWP with `AwpChance`), else
-  armor; a CT with money left buys the kit.
+- **Buying** (`BuyForRound`, once a round): without a primary, the AWP (with `AwpChance`, when the money covers it and
+  kevlar with a helmet) or else the rifle when affordable; then kevlar with a helmet, or kevlar alone; a CT with money
+  left buys the kit.
 - **Senses**: `UPawnSensingComponent` (UE's): sight in a cone with a line of sight on the Visibility channel, hearing
   of the noises `AActor::MakeNoise` reports within a loudness-scaled range (a weapon's shot: `FireNoiseLoudness`).
 - **Navigation**: `AAIController::MoveToLocation` on `UNavigationSystem`'s waypoint graph (A* over de_leon's waypoints,

@@ -159,12 +159,6 @@ public:
 		return GetGameState().GetNumPlayers();
 	}
 
-	/** Recreate World FPhysScene backend; the registered components' bodies come back (UWorld::SetPhysicsBackend). */
-	void SetPhysicsBackend(EPhysicsBackend Backend)
-	{
-		GetWorld()->SetPhysicsBackend(Backend);
-	}
-
 	/**
 	 * The game state. A reference (UE's GameState member is a pointer): the mode spawns it before anything can ask.
 	 */
@@ -200,11 +194,6 @@ public:
 	 */
 	void Tick(float DeltaSeconds) override;
 
-	/** Min APlayerStart Z, or 0 if none. */
-	[[nodiscard]] static float EstimateFloorZ(const ULevel& Level);
-	/** Soft XY walk clamp from the scale of the static collision primitives (cm, clamped 2000–12000). */
-	[[nodiscard]] static float EstimateWalkBounds(const ULevel& Level);
-
 protected:
 	/** Spawns the player's controller (UE: SpawnPlayerController): PlayerControllerClass, transient. */
 	virtual APlayerController* SpawnPlayerController(const FString& Options);
@@ -230,11 +219,6 @@ protected:
 
 	/** Gives a player its HUDClass HUD (UE: InitializeHUDForPlayer). */
 	virtual void InitializeHUDForPlayer(APlayerController* NewPlayer);
-
-	// Flow: Match enter — bodies + nav bake
-	void PrepareMatchWorld(float& OutFloorZ, float& OutWalkBounds, EPhysicsBackend Backend = EPhysicsBackend::Jolt);
-	void RebuildNavigation(float FloorZ, float WalkBounds);
-	void SnapCharacterToFloor(ACharacter& Character, FVector& InOutFeet, float FloorZ) const;
 
 	/** Spawns a GameStateClass game state, destroying the current one, then InitGameState (UE). */
 	void SpawnGameState();

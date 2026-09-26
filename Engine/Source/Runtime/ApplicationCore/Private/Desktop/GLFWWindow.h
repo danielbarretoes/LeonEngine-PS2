@@ -9,8 +9,6 @@ public:
 	virtual ~FGLFWWindow() override;
 
 	virtual bool Create(int32 InWidth, int32 InHeight, const TCHAR* Title) override;
-	virtual bool CreateShared(
-		const FGenericWindow& ShareWith, int32 InWidth, int32 InHeight, const TCHAR* Title) override;
 	virtual void Destroy() override;
 
 	virtual void MakeContextCurrent() override;

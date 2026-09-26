@@ -48,17 +48,9 @@ struct RENDERCORE_API FMeshData
 	}
 };
 
-/** The world a mesh's data is in: it picks the fallback tangent of vertices without a UV gradient. */
-enum class EMeshDataBasis : uint8
-{
-	/** The engine world (UE: Z up, left-handed). */
-	Engine,
-	/** The legacy Y-up, right-handed world of the old cooked meshes (tests compare against it). */
-	LegacyYUp,
-};
-
 /**
  * Orthonormalizes tangents from triangle UVs (needed for normal mapping). A vertex without a UV gradient gets a tangent
- * across the world up of Basis; in the engine basis it is the converted legacy fallback.
+ * across the world up (UE: Z up, left-handed): the tangents the legacy Y-up meshes had, converted (the golden tests
+ * compare with FLegacyCoordinateConversion::ComputeLegacyTangents).
  */
-void ComputeTangents(FMeshData& Data, EMeshDataBasis Basis = EMeshDataBasis::Engine);
+void ComputeTangents(FMeshData& Data);

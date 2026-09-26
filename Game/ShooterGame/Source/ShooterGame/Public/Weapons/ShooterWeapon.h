@@ -206,7 +206,7 @@ public:
 	}
 	/** Adds rounds to the reserve, up to MaxAmmo; returns how many it took (UE ShooterGame: GiveAmmo). */
 	int32 GiveAmmo(int32 AddAmount);
-	/** Fills the clip and the reserve (a new weapon, a round's restart). */
+	/** Fills the clip and the reserve (a new weapon). */
 	void RefillAmmo();
 	/** The carrier's speed modifier now (SpeedModifier; a scoped sniper is slower). */
 	[[nodiscard]] virtual float GetSpeedModifier() const

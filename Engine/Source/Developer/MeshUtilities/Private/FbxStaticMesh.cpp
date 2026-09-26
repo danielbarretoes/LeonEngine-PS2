@@ -99,6 +99,6 @@ bool LoadStaticMeshFromFbx(const FString& Path, FMeshData& Out)
 	}
 
 	Conversion.ConvertMeshData(Out);
-	ComputeTangents(Out, EMeshDataBasis::Engine);
+	ComputeTangents(Out);
 	return true;
 }

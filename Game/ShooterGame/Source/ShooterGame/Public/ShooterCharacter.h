@@ -133,9 +133,9 @@ public:
 	{
 		return bHasHelmet;
 	}
-	/** Sets the armor (clamped to MaxArmor) and the helmet (the buy menu, a round's restart). */
+	/** Sets the armor (clamped to MaxArmor) and the helmet (buying kevlar). */
 	void SetArmor(float NewArmor, bool bNewHasHelmet);
-	/** Back to full health, no armor (a round's restart). */
+	/** Full health, no armor (a new pawn). */
 	void ResetHealth();
 	/** Takes no damage while on (the `god` command). */
 	void SetGodMode(bool bEnabled)
@@ -157,7 +157,7 @@ public:
 	static void ComputeArmorDamage(float Damage, float ArmorRatio, bool bHeadshot, bool bHelmet, float Armor,
 		float& OutHealthDamage, float& OutArmorDamage);
 
-	/** Kills the pawn at once (the round's end, `kill`); the killer is the pawn's own controller. */
+	/** Kills the pawn at once (`kill`, bot_kick); the killer is the pawn's own controller. */
 	void Suicide();
 
 	/**

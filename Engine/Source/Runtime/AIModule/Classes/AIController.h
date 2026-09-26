@@ -7,14 +7,21 @@
 class AActor;
 class UNavigationSystem;
 
-/** High-level AAIController mode for games that do not run a UBehaviorTree. */
-UENUM()
-enum class EAILogicState : uint8
+/** Where a move request stands (UE: EPathFollowingStatus, Navigation/PathFollowingComponent.h). */
+namespace EPathFollowingStatus
 {
-	Idle = 0,
-	MoveTo = 1,
-	Chase = 2,
-};
+	enum Type
+	{
+		/** No move request. */
+		Idle,
+		/** A request waiting for its path (UE's asynchronous paths; Leon's are synchronous). */
+		Waiting,
+		/** A request paused (UE: PauseMove). */
+		Paused,
+		/** Following the request. */
+		Moving,
+	};
+} // namespace EPathFollowingStatus
 
 /**
  * Drives a possessed Pawn with simple steering (Unreal-style AAIController), an actor the world spawns.
@@ -30,22 +37,10 @@ class AIMODULE_API AAIController : public AController
 public:
 	AAIController(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	void SetWishDirection(const FVector& WishDirXY)
+	/** Moving while a MoveTo request stands, Idle otherwise (UE: GetMoveStatus). */
+	[[nodiscard]] EPathFollowingStatus::Type GetMoveStatus() const
 	{
-		WishDir = WishDirXY;
-	}
-	void ClearWishDirection()
-	{
-		WishDir = {};
-	}
-
-	void SetLogicState(EAILogicState State)
-	{
-		LogicState = State;
-	}
-	[[nodiscard]] EAILogicState GetLogicState() const
-	{
-		return LogicState;
+		return bHasTarget ? EPathFollowingStatus::Moving : EPathFollowingStatus::Idle;
 	}
 
 	/** Optional: a navigation to path on instead of the world's (tests, a second graph). */
@@ -119,7 +114,6 @@ private:
 	[[nodiscard]] FVector SteerToward(const FVector& From, const FVector& To, float InArriveRadius) const;
 	[[nodiscard]] FVector SteerWithNavFallback(const FVector& From) const;
 
-	FVector WishDir = FVector::ZeroVector;
 	FVector Target = FVector::ZeroVector;
 
 	/** The actor MoveToActor chases; cleared by the collector when it is destroyed. */
@@ -140,7 +134,4 @@ private:
 	/** cm */
 	UPROPERTY()
 	float ArriveRadius = 35.0f;
-
-	UPROPERTY()
-	EAILogicState LogicState = EAILogicState::Idle;
 };

@@ -9,7 +9,7 @@ class FGenericWindow;
 
 /**
  * UE-like UVerticalBox (lite): title + stacked buttons + hint.
- * Add through AHUD::AddWidget; call TickInput each frame from the game mode (same as UMenuListWidget).
+ * Add through AHUD::AddWidget; call TickInput each frame from the game mode.
  */
 UCLASS()
 class UMG_API UVerticalBox : public UUserWidget

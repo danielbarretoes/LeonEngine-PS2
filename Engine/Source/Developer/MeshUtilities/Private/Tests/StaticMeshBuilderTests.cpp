@@ -122,7 +122,7 @@ bool FStaticMeshBuilderImportMatchesLegacyTest::RunTest(const FString& Parameter
 			continue;
 		}
 		FMeshData Legacy = LoadObjSourceSpace(Source);
-		ComputeTangents(Legacy, EMeshDataBasis::LegacyYUp);
+		FLegacyCoordinateConversion::ComputeLegacyTangents(Legacy);
 		FLegacyCoordinateConversion::ConvertMeshData(Legacy);
 		CheckSameMesh(*this, Name, Built, Legacy, 1.0e-4f);
 		TestEqual(*(Name + ": submeshes"), Built.Submeshes.Num(), Legacy.Submeshes.Num());

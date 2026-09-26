@@ -43,25 +43,26 @@ bool FFrameworkHardeningBehaviorTreeSequenceAndSelectorTest::RunTest(const FStri
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFrameworkHardeningAIControllerLogicStateTest,
-	"System.AIModule.FrameworkHardening.AIControllerLogicStateTracksMoveToChaseIdle",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFrameworkHardeningAIControllerMoveStatusTest,
+	"System.AIModule.FrameworkHardening.AIControllerMoveStatus",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-bool FFrameworkHardeningAIControllerLogicStateTest::RunTest(const FString& Parameters)
+bool FFrameworkHardeningAIControllerMoveStatusTest::RunTest(const FString& Parameters)
 {
-	// The AI logic state follows MoveToLocation (MoveTo), MoveToActor (Chase) and StopMovement (Idle).
+	// UE's move status: Moving after MoveToLocation or MoveToActor, Idle after StopMovement.
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	ACharacter* Character = World.SpawnActor<ACharacter>();
 	AAIController& Ai = *World.SpawnActor<AAIController>();
 	Ai.Possess(Character);
-	TestTrue("Starts idle", Ai.GetLogicState() == EAILogicState::Idle);
+	TestTrue("Starts idle", Ai.GetMoveStatus() == EPathFollowingStatus::Idle);
 	Ai.MoveToLocation(FVector(300.0f, 0.0f, 0.0f));
-	TestTrue("MoveTo after MoveToLocation", Ai.GetLogicState() == EAILogicState::MoveTo);
-	Ai.MoveToActor(Character);
-	TestTrue("Chase after MoveToActor", Ai.GetLogicState() == EAILogicState::Chase);
+	TestTrue("Moving after MoveToLocation", Ai.GetMoveStatus() == EPathFollowingStatus::Moving);
 	Ai.StopMovement();
-	TestTrue("Idle after StopMovement", Ai.GetLogicState() == EAILogicState::Idle);
+	Ai.MoveToActor(Character);
+	TestTrue("Moving after MoveToActor", Ai.GetMoveStatus() == EPathFollowingStatus::Moving);
+	Ai.StopMovement();
+	TestTrue("Idle after StopMovement", Ai.GetMoveStatus() == EPathFollowingStatus::Idle);
 	return true;
 }
 

@@ -47,14 +47,6 @@ public:
 			OutHit, Start, End, Radius, HalfHeight, Channel, Params, Debug);
 	}
 
-	/** Melee / sweep helper: capsule along a segment (forwards to CapsuleTraceSingleByChannel). */
-	[[nodiscard]] static bool SweepCapsuleAlongSegment(UWorld& World, FHitResult& OutHit, const FVector& Start,
-		const FVector& End, float Radius, float HalfHeight, ECollisionChannel Channel,
-		const FCollisionQueryParams& Params = {}, FDebugDraw* Debug = nullptr)
-	{
-		return CapsuleTraceSingleByChannel(World, OutHit, Start, End, Radius, HalfHeight, Channel, Params, Debug);
-	}
-
 	/**
 	 * The world of a context object: a world, an actor's or a component's world, else the world the object is in
 	 * (UE: GEngine->GetWorldFromContextObject). Null without one.

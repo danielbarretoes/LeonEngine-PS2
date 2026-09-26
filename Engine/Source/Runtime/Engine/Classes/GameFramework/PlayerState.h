@@ -19,11 +19,10 @@ public:
 	/** Leaves the game state's PlayerArray (UE). */
 	void Destroyed() override;
 
-	/** Clears the score, the lives and the name (UE: Reset). */
+	/** Clears the score and the name (UE: Reset). */
 	virtual void Reset()
 	{
 		Score = 0.0f;
-		Lives = 0;
 		PlayerName.Empty();
 	}
 
@@ -61,26 +60,6 @@ public:
 		Score += Delta;
 	}
 
-	/** Stocks / lives (Leon). Default 0: games call SetLives at match start. */
-	[[nodiscard]] int32 GetLives() const
-	{
-		return Lives;
-	}
-	void SetLives(int32 InLives)
-	{
-		Lives = InLives;
-	}
-	/** Decrements one life if any remain. Returns true if a life was consumed. */
-	[[nodiscard]] bool ConsumeLife()
-	{
-		if (Lives <= 0)
-		{
-			return false;
-		}
-		--Lives;
-		return true;
-	}
-
 private:
 	/** UE: PlayerId. */
 	UPROPERTY()
@@ -89,9 +68,6 @@ private:
 	/** UE: Score. */
 	UPROPERTY()
 	float Score = 0.0f;
-
-	UPROPERTY()
-	int32 Lives = 0;
 
 	/** UE: PlayerNamePrivate. */
 	UPROPERTY()

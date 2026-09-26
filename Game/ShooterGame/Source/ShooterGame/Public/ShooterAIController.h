@@ -45,13 +45,11 @@ public:
 	/** The blackboard's keys. */
 	static const FName EnemyKey;
 	static const FName HasEnemyKey;
-	static const FName EnemyLocationKey;
 	static const FName ShouldDefuseKey;
 	static const FName CarriesBombKey;
 	static const FName BombDroppedKey;
 	static const FName HeardEnemyKey;
 	static const FName NoiseLocationKey;
-	static const FName GoalKey;
 
 	/** Scales the skill (see the class comment): 0.5 easy, 1 normal, 2 hard. */
 	UPROPERTY(Config)
@@ -96,10 +94,6 @@ public:
 
 	/** The bot's pawn, as the game's class. */
 	[[nodiscard]] AShooterCharacter* GetShooterPawn() const;
-	[[nodiscard]] UPawnSensingComponent* GetPawnSensing() const
-	{
-		return PawnSensing;
-	}
 	[[nodiscard]] const UBlackboardComponent& GetBlackboard() const
 	{
 		return Tree.GetBlackboard();
@@ -110,11 +104,6 @@ public:
 	[[nodiscard]] FName GetCurrentTask() const
 	{
 		return CurrentTask;
-	}
-	/** Items bought this round. */
-	[[nodiscard]] const TArray<FString>& GetRoundPurchases() const
-	{
-		return RoundPurchases;
 	}
 	/** The aim error now, degrees (after the difficulty and the time on target). */
 	[[nodiscard]] float GetCurrentAimError() const;
@@ -133,8 +122,8 @@ private:
 	void BuildTree();
 	/** Refreshes the blackboard from the senses and the game (the tree's decorators read it). */
 	void UpdateBlackboard();
-	void OnSeePawn(APawn* Pawn);
-	void OnHearNoise(APawn* Instigator, const FVector& Location, float Volume);
+	void OnSeePawn(APawn* SeenPawn);
+	void OnHearNoise(APawn* NoiseInstigator, const FVector& Location, float Volume);
 
 	// The tree's tasks
 	EBTNodeResult TaskIdle();
@@ -151,8 +140,8 @@ private:
 	void StandStill();
 	/** The trigger up. */
 	void ReleaseTrigger();
-	/** Turns the control rotation toward Target at the turn rate; the angle left, degrees. */
-	float TurnToward(const FVector& Target, float DeltaTime);
+	/** Turns the control rotation toward AimTarget at the turn rate; the angle left, degrees. */
+	float TurnToward(const FVector& AimTarget, float DeltaTime);
 	/** The bot's index in its team (the player states' order), for the CT's site split. */
 	[[nodiscard]] int32 GetTeamIndex() const;
 	[[nodiscard]] AShooterGameMode* GetShooterGameMode() const;
@@ -172,7 +161,6 @@ private:
 	FRandomStream BotRandom;
 	bool bRandomSeeded = false;
 	FName CurrentTask;
-	TArray<FString> RoundPurchases;
 	/** The round serial (AShooterGameState::GetRoundSerial) of the last purchase, and of the round being played. */
 	int32 BoughtInRound = -1;
 	int32 ObservedRoundSerial = -1;

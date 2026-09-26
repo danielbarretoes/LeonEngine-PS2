@@ -104,7 +104,7 @@ bool FImportCoordinateConversionMatchesLegacyTest::RunTest(const FString& Parame
 
 	// Mesh data: every vertex, bit for bit; the index order is kept.
 	FMeshData Import = LoadCubeFixtureSourceSpace();
-	ComputeTangents(Import, EMeshDataBasis::LegacyYUp);
+	FLegacyCoordinateConversion::ComputeLegacyTangents(Import);
 	for (FVertex& Vertex : Import.Vertices)
 	{
 		Vertex.TexCoord = FVector2D(Random.FRandRange(0.0f, 1.0f), Random.FRandRange(0.0f, 1.0f));

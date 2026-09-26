@@ -52,7 +52,7 @@ COREUOBJECT_API int32 GetNumGCObjects();
 
 /**
  * When the engine collects: [/Script/Engine.GarbageCollectionSettings] of the engine config (UE: the gc.* console
- * variables that section sets). Only the interval is read for now.
+ * variables that section sets). Leon reads the interval between collections, TimeBetweenPurgingPendingKillObjects.
  */
 struct COREUOBJECT_API FGarbageCollectionSettings
 {

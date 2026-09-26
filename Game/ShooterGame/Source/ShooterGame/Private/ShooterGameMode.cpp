@@ -434,13 +434,13 @@ int32 AShooterGameMode::KickBots(const FString& Name)
 
 // Damage and kills
 
-bool AShooterGameMode::CanDealDamage(AController* Instigator, AController* Victim) const
+bool AShooterGameMode::CanDealDamage(AController* DamageInstigator, AController* Victim) const
 {
-	if (Instigator == nullptr || Victim == nullptr || Instigator == Victim || bFriendlyFire)
+	if (DamageInstigator == nullptr || Victim == nullptr || DamageInstigator == Victim || bFriendlyFire)
 	{
 		return true;
 	}
-	const AShooterPlayerState* InstigatorState = Instigator->GetPlayerState<AShooterPlayerState>();
+	const AShooterPlayerState* InstigatorState = DamageInstigator->GetPlayerState<AShooterPlayerState>();
 	const AShooterPlayerState* VictimState = Victim->GetPlayerState<AShooterPlayerState>();
 	return InstigatorState == nullptr || VictimState == nullptr || InstigatorState->GetTeam() == EShooterTeam::None ||
 		InstigatorState->GetTeam() != VictimState->GetTeam();

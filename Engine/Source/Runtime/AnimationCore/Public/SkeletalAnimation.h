@@ -17,7 +17,7 @@ constexpr int32 MaxBoneInfluences = 4;
 struct ANIMATIONCORE_API FSkeletalVertex
 {
 	FVector Position = FVector::ZeroVector;
-	FVector Normal = FVector(0.0f, 1.0f, 0.0f);
+	FVector Normal = FVector(0.0f, 0.0f, 1.0f);
 	FVector2D TexCoord = FVector2D::ZeroVector;
 	FVector4 Tangent = FVector4(1.0f, 0.0f, 0.0f, 1.0f);
 	FIntVector4 BoneIndices = FIntVector4(0);

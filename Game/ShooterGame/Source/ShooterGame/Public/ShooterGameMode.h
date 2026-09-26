@@ -175,12 +175,6 @@ public:
 	bool bBotMatch = false;
 	int32 BotMatchRounds = 10;
 
-	/** The match's invariants, checked every frame of a bot match. */
-	[[nodiscard]] const FShooterMatchChecker& GetMatchChecker() const
-	{
-		return MatchChecker;
-	}
-
 	void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
 	void Tick(float DeltaSeconds) override;
 	/** The team's first free start in level order (see the class comment). */
@@ -212,10 +206,10 @@ public:
 	[[nodiscard]] int32 GetTeamSize(EShooterTeam Team) const;
 
 	/**
-	 * Whether Instigator's damage reaches Victim (UE ShooterGame: CanDealDamage): always without both players, from
-	 * oneself, or across teams; within a team only with bFriendlyFire.
+	 * Whether DamageInstigator's damage reaches Victim (UE ShooterGame: CanDealDamage): always without both players,
+	 * from oneself, or across teams; within a team only with bFriendlyFire.
 	 */
-	[[nodiscard]] virtual bool CanDealDamage(AController* Instigator, AController* Victim) const;
+	[[nodiscard]] virtual bool CanDealDamage(AController* DamageInstigator, AController* Victim) const;
 
 	/**
 	 * A pawn died (UE ShooterGame: Killed): Killer is credited (the victim itself for a suicide or the world), Causer

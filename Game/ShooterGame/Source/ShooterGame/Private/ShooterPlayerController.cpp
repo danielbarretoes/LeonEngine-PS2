@@ -99,44 +99,44 @@ void AShooterPlayerController::Buy(FString Item)
 {
 	UWorld* World = GetWorld();
 	AShooterGameMode* GameMode = World != nullptr ? World->GetAuthGameMode<AShooterGameMode>() : nullptr;
-	AShooterCharacter* Pawn = Cast<AShooterCharacter>(GetPawn());
-	if (GameMode == nullptr || Pawn == nullptr)
+	AShooterCharacter* ShooterPawn = Cast<AShooterCharacter>(GetPawn());
+	if (GameMode == nullptr || ShooterPawn == nullptr)
 	{
 		LastBuyMessage = TEXT("You cannot buy now");
 		return;
 	}
 	FString Reason;
-	LastBuyMessage = GameMode->Buy(Pawn, Item, &Reason) ? FString::Printf(TEXT("Bought %s"), *Item)
-														: FString::Printf(TEXT("%s: %s"), *Item, *Reason);
+	LastBuyMessage = GameMode->Buy(ShooterPawn, Item, &Reason) ? FString::Printf(TEXT("Bought %s"), *Item)
+															   : FString::Printf(TEXT("%s: %s"), *Item, *Reason);
 	UE_LOG(LogShooter, Log, TEXT("Buy %s: %s"), *Item, *LastBuyMessage);
 }
 
 void AShooterPlayerController::Give(FString WeaponName)
 {
-	AShooterCharacter* Pawn = Cast<AShooterCharacter>(GetPawn());
+	AShooterCharacter* ShooterPawn = Cast<AShooterCharacter>(GetPawn());
 	UClass* WeaponClass = AShooterWeapon::FindWeaponClass(WeaponName);
-	if (Pawn == nullptr || WeaponClass == nullptr)
+	if (ShooterPawn == nullptr || WeaponClass == nullptr)
 	{
 		UE_LOG(LogShooter, Warning, TEXT("give: no weapon '%s'"), *WeaponName);
 		return;
 	}
-	Pawn->EquipWeapon(Pawn->GiveWeapon(WeaponClass));
+	ShooterPawn->EquipWeapon(ShooterPawn->GiveWeapon(WeaponClass));
 }
 
 void AShooterPlayerController::God()
 {
-	if (AShooterCharacter* Pawn = Cast<AShooterCharacter>(GetPawn()))
+	if (AShooterCharacter* ShooterPawn = Cast<AShooterCharacter>(GetPawn()))
 	{
-		Pawn->SetGodMode(!Pawn->IsGodMode());
-		UE_LOG(LogShooter, Log, TEXT("god mode %s"), Pawn->IsGodMode() ? TEXT("ON") : TEXT("OFF"));
+		ShooterPawn->SetGodMode(!ShooterPawn->IsGodMode());
+		UE_LOG(LogShooter, Log, TEXT("god mode %s"), ShooterPawn->IsGodMode() ? TEXT("ON") : TEXT("OFF"));
 	}
 }
 
 void AShooterPlayerController::Kill()
 {
-	if (AShooterCharacter* Pawn = Cast<AShooterCharacter>(GetPawn()))
+	if (AShooterCharacter* ShooterPawn = Cast<AShooterCharacter>(GetPawn()))
 	{
-		Pawn->Suicide();
+		ShooterPawn->Suicide();
 	}
 }
 
@@ -152,12 +152,11 @@ void AShooterPlayerController::OnScoreboardReleased()
 
 void AShooterPlayerController::OnMenuPressed()
 {
+	// Escape closes the buy menu (ShooterGame has no pause menu).
 	if (bBuyMenuOpen)
 	{
 		SetBuyMenuOpen(false);
-		return;
 	}
-	UE_LOG(LogShooter, Log, TEXT("Menu: no game menu yet"));
 }
 
 void AShooterPlayerController::NotifyHitConfirmed(bool bHeadshot, bool bKilled)
@@ -166,7 +165,6 @@ void AShooterPlayerController::NotifyHitConfirmed(bool bHeadshot, bool bKilled)
 	LastHitTime = World != nullptr ? World->GetTimeSeconds() : 0.0f;
 	bLastHitHeadshot = bHeadshot;
 	bLastHitKill = bKilled;
-	++NumHitsConfirmed;
 }
 
 void AShooterPlayerController::ViewFrom(float X, float Y, float Z, float Pitch, float Yaw)

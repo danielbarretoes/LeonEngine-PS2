@@ -5,8 +5,6 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerStart.h"
 #include "Kismet/GameplayStatics.h"
-#include "Level/BasicLight.h"
-#include "Level/BasicShape.h"
 #include "Level/Light.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/LegacyCoordinateConversion.h"
@@ -47,82 +45,6 @@ bool FLevelDirectionalLightGetDirectionMatchesTransformTest::RunTest(const FStri
 	TestTrue("Default sun",
 		FDirectionalLight().GetDirection().Equals(
 			FLegacyCoordinateConversion::ConvertLightRotation(60.3f, 142.1f).GetForwardVector(), 1.0e-5f));
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelTryParseBasicShapeNameIsCaseInsensitiveTest,
-	"System.Engine.Level.TryParseBasicShapeNameIsCaseInsensitive",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
-
-bool FLevelTryParseBasicShapeNameIsCaseInsensitiveTest::RunTest(const FString& Parameters)
-{
-	EBasicShape Shape{};
-	TestTrue("Cube parsed", TryParseBasicShapeName("Cube", Shape));
-	TestTrue("Cube type", Shape == EBasicShape::Cube);
-	TestTrue("sphere parsed", TryParseBasicShapeName("sphere", Shape));
-	TestTrue("Sphere type", Shape == EBasicShape::Sphere);
-	TestTrue("PLANE parsed", TryParseBasicShapeName("PLANE", Shape));
-	TestTrue("Plane type", Shape == EBasicShape::Plane);
-	TestFalse("Unknown shape rejected", TryParseBasicShapeName("Octahedron", Shape));
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelBlockingVolumeAndPlayerStartNameHelpersTest,
-	"System.Engine.Level.BlockingVolumeAndPlayerStartNameHelpers",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
-
-bool FLevelBlockingVolumeAndPlayerStartNameHelpersTest::RunTest(const FString& Parameters)
-{
-	// The BlockingVolume name matches in any case; PlayerStart only matches its own name.
-	TestTrue("BlockingVolume", IsBlockingVolumeName("BlockingVolume"));
-	TestTrue("blockingvolume", IsBlockingVolumeName("blockingvolume"));
-	TestTrue("PlayerStart", IsPlayerStartName("PlayerStart"));
-	TestFalse("Cube is not a PlayerStart", IsPlayerStartName("Cube"));
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelBasicShapeFactoriesSetTypeAndPlaneScaleTest,
-	"System.Engine.Level.BasicShapeFactoriesSetTypeAndPlaneScale",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
-
-bool FLevelBasicShapeFactoriesSetTypeAndPlaneScaleTest::RunTest(const FString& Parameters)
-{
-	// The factories set the shape type, and the plane size becomes its XY scale.
-	const FBasicShape Cube = FBasicShape::Cube();
-	TestTrue("Cube type", Cube.Type == EBasicShape::Cube);
-	const FBasicShape Plane = FBasicShape::Plane(4.0f);
-	TestTrue("Plane type", Plane.Type == EBasicShape::Plane);
-	TestEqual("Plane scale X", Plane.Transform.GetScale3D().X, 4.0f, 1.0e-5f);
-	TestEqual("Plane scale Y", Plane.Transform.GetScale3D().Y, 4.0f, 1.0e-5f);
-	TestEqual("Plane scale Z", Plane.Transform.GetScale3D().Z, 1.0f, 1.0e-5f);
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLevelBasicLightParseAndAddToLevelTest,
-	"System.Engine.Level.BasicLightParseAndAddToLevel",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
-
-bool FLevelBasicLightParseAndAddToLevelTest::RunTest(const FString& Parameters)
-{
-	// Light names parse to their type, and SpawnIn spawns the matching light actor.
-	EBasicLight Type{};
-	TestTrue("DirectionalLight parsed", TryParseBasicLightName("DirectionalLight", Type));
-	TestTrue("Directional type", Type == EBasicLight::Directional);
-	TestTrue("PointLight parsed", TryParseBasicLightName("PointLight", Type));
-	TestTrue("Point type", Type == EBasicLight::Point);
-
-	FScopedTestWorld TestWorld;
-	UWorld& World = *TestWorld;
-	TArray<AActor*> Lights;
-	UGameplayStatics::GetAllActorsOfClass(World, ADirectionalLight::StaticClass(), Lights);
-	TestEqual("No directional lights", Lights.Num(), 0);
-
-	FBasicLight::Directional().SpawnIn(World);
-	FBasicLight::Point().SpawnIn(World);
-	UGameplayStatics::GetAllActorsOfClass(World, ADirectionalLight::StaticClass(), Lights);
-	TestEqual("One directional light", Lights.Num(), 1);
-	UGameplayStatics::GetAllActorsOfClass(World, APointLight::StaticClass(), Lights);
-	TestEqual("One point light", Lights.Num(), 1);
 	return true;
 }
 

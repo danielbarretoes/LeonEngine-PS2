@@ -12,7 +12,7 @@ namespace
 bool* FEngineShowFlags::FindFlag(const FString& Name)
 {
 	bool* const Flags[] = {&Bounds, &Collision, &Navigation, &AxesGizmo};
-	for (int32 Index = 0; Index < UE_ARRAY_COUNT(ShowFlagNames); ++Index)
+	for (int32 Index = 0; Index < int32(UE_ARRAY_COUNT(ShowFlagNames)); ++Index)
 	{
 		if (Name.Equals(ShowFlagNames[Index], ESearchCase::IgnoreCase))
 		{

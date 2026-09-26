@@ -1,5 +1,4 @@
 #include "Camera/CameraActor.h"
-#include "Components/InteractableComponent.h"
 #include "CoreMinimal.h"
 #include "Engine/BlockingVolume.h"
 #include "Engine/DirectionalLight.h"
@@ -12,9 +11,7 @@
 #include "Engine/TargetPoint.h"
 #include "Engine/TriggerVolume.h"
 #include "Engine/World.h"
-#include "GameFramework/BobbingMovementComponent.h"
 #include "GameFramework/GameMode.h"
-#include "GameFramework/OrbitMovementComponent.h"
 #include "GameFramework/PainCausingVolume.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerStart.h"
@@ -22,7 +19,6 @@
 #include "GameFramework/WorldSettings.h"
 #include "HAL/FileManager.h"
 #include "Kismet/GameplayStatics.h"
-#include "Level/BasicShape.h"
 #include "Materials/Material.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/PackageName.h"
@@ -76,8 +72,10 @@ namespace
 		Settings->DefaultGameMode = AGameMode::StaticClass();
 		Settings->KillZ = -5000.0f;
 
-		AStaticMeshActor* Mesh =
-			FBasicShape::Cube(MeshTransform, UMaterial::GetDefaultMaterial(MD_Surface)).SpawnIn(World);
+		AStaticMeshActor* Mesh = World.SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), MeshTransform);
+		(void)Mesh->GetStaticMeshComponent()->SetStaticMesh(
+			LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")));
+		Mesh->GetStaticMeshComponent()->SetMaterial(0, UMaterial::GetDefaultMaterial(MD_Surface));
 		Mesh->Tags.Add(FName(TEXT("Crate")));
 		Mesh->SetActorHiddenInGame(true);
 		UStaticMeshComponent& MeshComponent = *Mesh->GetStaticMeshComponent();
@@ -89,11 +87,6 @@ namespace
 		Spin->RotationRate = FRotator(0.0f, 45.0f, 0.0f);
 		Spin->bRotationInLocalSpace = false;
 		Spin->RegisterComponent();
-		UBobbingMovementComponent* Bob = NewObject<UBobbingMovementComponent>(Mesh, TEXT("BobbingMovement"));
-		Bob->BaseZ = 30.0f;
-		Bob->Amplitude = 25.0f;
-		Bob->Speed = 2.0f;
-		Bob->RegisterComponent();
 
 		ABlockingVolume* Clip = World.SpawnActor<ABlockingVolume>(ABlockingVolume::StaticClass(),
 			FTransform(FRotator::ZeroRotator, FVector(-300.0f, 0.0f, 100.0f), FVector(1.0f, 4.0f, 2.0f)));
@@ -103,12 +96,6 @@ namespace
 			World.SpawnActor<ATriggerVolume>(ATriggerVolume::StaticClass(), FTransform(FVector(400.0f, 200.0f, 50.0f)));
 		Trigger->Tags.Add(FName(TEXT("BombSite")));
 		Trigger->Tags.Add(FName(TEXT("A")));
-		UInteractableComponent* Interactable = NewObject<UInteractableComponent>(Trigger, TEXT("Interactable"));
-		Interactable->InteractRadius = 150.0f;
-		Interactable->InteractCost = 500;
-		Interactable->Payload = TEXT("WallBuy:M14");
-		Interactable->bConsumeOnUse = true;
-		Interactable->RegisterComponent();
 
 		APainCausingVolume* Pain = World.SpawnActor<APainCausingVolume>(
 			APainCausingVolume::StaticClass(), FTransform(FVector(-100.0f, -400.0f, 0.0f)));
@@ -120,7 +107,7 @@ namespace
 
 		ATargetPoint* Point =
 			World.SpawnActor<ATargetPoint>(FVector(-600.0f, 600.0f, 0.0f), FRotator(0.0f, -90.0f, 0.0f));
-		Point->Tags.Add(FName(TEXT("Zombie")));
+		Point->Tags.Add(FName(TEXT("BotSpawn")));
 
 		ADirectionalLight* Sun =
 			World.SpawnActor<ADirectionalLight>(FVector::ZeroVector, FRotator(-50.0f, 30.0f, 0.0f));
@@ -134,12 +121,6 @@ namespace
 		UPointLightComponent& BulbComponent = *Bulb->GetPointLightComponent();
 		BulbComponent.SetLightColor(FLinearColor(0.3f, 0.5f, 1.0f));
 		BulbComponent.SetAttenuationRadius(650.0f);
-		UOrbitMovementComponent* Orbit = NewObject<UOrbitMovementComponent>(Bulb, TEXT("OrbitMovement"));
-		Orbit->Radius = 200.0f;
-		Orbit->Height = 150.0f;
-		Orbit->HeightAmplitude = 25.0f;
-		Orbit->Speed = 0.5f;
-		Orbit->RegisterComponent();
 
 		ACameraActor* Camera = World.SpawnActor<ACameraActor>();
 		UCameraComponent& CameraComponent = *Camera->GetCameraComponent();
@@ -230,7 +211,8 @@ bool FMapPackageSaveLoadRoundTripsEveryActorTest::RunTest(const FString& Paramet
 	if (TestNotNull("The mesh actor", Mesh))
 	{
 		const UStaticMeshComponent& Component = *Mesh->GetStaticMeshComponent();
-		TestTrue("The basic cube", Component.GetStaticMesh() == MeshForBasicShape(EBasicShape::Cube));
+		TestTrue("The basic cube",
+			Component.GetStaticMesh() == LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")));
 		TestTrue("The material", Component.GetMaterial(0) == UMaterial::GetDefaultMaterial(MD_Surface));
 		TestTrue("Location", Mesh->GetActorLocation().Equals(MeshTransform.GetLocation(), 0.0f));
 		TestTrue("Rotation", Mesh->GetActorQuat().Equals(MeshTransform.GetRotation(), 1.0e-6f));
@@ -244,9 +226,7 @@ bool FMapPackageSaveLoadRoundTripsEveryActorTest::RunTest(const FString& Paramet
 		const URotatingMovementComponent* Spin = Mesh->FindComponentByClass<URotatingMovementComponent>();
 		TestTrue("Spin",
 			Spin != nullptr && Spin->RotationRate == FRotator(0.0f, 45.0f, 0.0f) && !Spin->bRotationInLocalSpace);
-		const UBobbingMovementComponent* Bob = Mesh->FindComponentByClass<UBobbingMovementComponent>();
-		TestTrue("Bob", Bob != nullptr && Bob->BaseZ == 30.0f && Bob->Amplitude == 25.0f && Bob->Speed == 2.0f);
-		TestEqual("Components (root, spin, bob)", Mesh->GetComponents().Num(), 3);
+		TestEqual("Components (root, spin)", Mesh->GetComponents().Num(), 2);
 	}
 	const ABlockingVolume* Clip = FindOnly<ABlockingVolume>(*World);
 	if (TestNotNull("The blocking volume", Clip))
@@ -261,10 +241,6 @@ bool FMapPackageSaveLoadRoundTripsEveryActorTest::RunTest(const FString& Paramet
 		TestTrue("Trigger tags",
 			Trigger->Tags.Num() == 2 && Trigger->Tags[0] == FName(TEXT("BombSite")) &&
 				Trigger->Tags[1] == FName(TEXT("A")));
-		const UInteractableComponent* Interactable = Trigger->FindComponentByClass<UInteractableComponent>();
-		TestTrue("Interaction",
-			Interactable != nullptr && Interactable->InteractRadius == 150.0f && Interactable->InteractCost == 500 &&
-				Interactable->Payload == TEXT("WallBuy:M14") && Interactable->bConsumeOnUse);
 	}
 	const APainCausingVolume* Pain = FindOnly<APainCausingVolume>(*World);
 	TestTrue("Pain", Pain != nullptr && Pain->DamagePerSec == 20.0f && Pain->PainInterval == 0.5f);
@@ -277,7 +253,7 @@ bool FMapPackageSaveLoadRoundTripsEveryActorTest::RunTest(const FString& Paramet
 	}
 	const ATargetPoint* Point = FindOnly<ATargetPoint>(*World);
 	TestTrue("Target point",
-		Point != nullptr && Point->ActorHasTag(FName(TEXT("Zombie"))) &&
+		Point != nullptr && Point->ActorHasTag(FName(TEXT("BotSpawn"))) &&
 			Point->GetActorRotation().Equals(FRotator(0.0f, -90.0f, 0.0f), 0.0f));
 	const ADirectionalLight* Sun = FindOnly<ADirectionalLight>(*World);
 	if (TestNotNull("The sun", Sun))
@@ -294,10 +270,6 @@ bool FMapPackageSaveLoadRoundTripsEveryActorTest::RunTest(const FString& Paramet
 	if (TestNotNull("The point light", Bulb))
 	{
 		TestEqual("Bulb radius", Bulb->GetPointLightComponent()->AttenuationRadius, 650.0f);
-		const UOrbitMovementComponent* Orbit = Bulb->FindComponentByClass<UOrbitMovementComponent>();
-		TestTrue("Orbit",
-			Orbit != nullptr && Orbit->Radius == 200.0f && Orbit->Height == 150.0f && Orbit->HeightAmplitude == 25.0f &&
-				Orbit->Speed == 0.5f);
 	}
 	const ACameraActor* Camera = FindOnly<ACameraActor>(*World);
 	if (TestNotNull("The camera actor", Camera))
@@ -392,33 +364,18 @@ bool FMapPackageLoadMapOpensMapPackagesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMapPackageMovementComponentsMoveTest,
-	"System.Engine.MapPackage.MovementComponentsMove",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMapPackageRotatingMovementTurnsTest, "System.Engine.MapPackage.RotatingMovementTurns",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-bool FMapPackageMovementComponentsMoveTest::RunTest(const FString& Parameters)
+bool FMapPackageRotatingMovementTurnsTest::RunTest(const FString& Parameters)
 {
-	// The components that hold the legacy levels' animations move their actor's root as the world ticks: a rotating
-	// movement turns it, a bobbing movement lifts it on a sine, an orbit movement circles the world's vertical axis.
+	// A map's rotating movement turns its actor's root as the world ticks (UE: URotatingMovementComponent).
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	ATargetPoint* Spinner = World.SpawnActor<ATargetPoint>(FVector(100.0f, 0.0f, 0.0f), FRotator::ZeroRotator);
 	URotatingMovementComponent* Spin = NewObject<URotatingMovementComponent>(Spinner, TEXT("RotatingMovement"));
 	Spin->RotationRate = FRotator(0.0f, 90.0f, 0.0f);
 	Spin->RegisterComponent();
-	ATargetPoint* Bobber = World.SpawnActor<ATargetPoint>(FVector(0.0f, 50.0f, 0.0f), FRotator::ZeroRotator);
-	UBobbingMovementComponent* Bob = NewObject<UBobbingMovementComponent>(Bobber, TEXT("BobbingMovement"));
-	Bob->BaseZ = 100.0f;
-	Bob->Amplitude = 50.0f;
-	Bob->Speed = PI;
-	Bob->RegisterComponent();
-	ATargetPoint* Orbiter = World.SpawnActor<ATargetPoint>();
-	UOrbitMovementComponent* Orbit = NewObject<UOrbitMovementComponent>(Orbiter, TEXT("OrbitMovement"));
-	Orbit->Radius = 200.0f;
-	Orbit->Height = 100.0f;
-	Orbit->HeightAmplitude = 0.0f;
-	Orbit->Speed = HALF_PI;
-	Orbit->RegisterComponent();
 
 	for (int32 Step = 0; Step < 4; ++Step)
 	{
@@ -426,11 +383,6 @@ bool FMapPackageMovementComponentsMoveTest::RunTest(const FString& Parameters)
 	}
 	TestEqual("Spun 45 degrees in half a second", Spinner->GetActorRotation().Yaw, 45.0f, 1.0e-3f);
 	TestTrue("The spin keeps the location", Spinner->GetActorLocation().Equals(FVector(100.0f, 0.0f, 0.0f), 1.0e-3f));
-	TestEqual("The bob is at its top after half a second", Bobber->GetActorLocation().Z, 150.0f, 1.0e-3f);
-	TestEqual("The bob keeps X and Y", Bobber->GetActorLocation().Y, 50.0f, 0.0f);
-	TestTrue("A quarter of the way to +Y after half a second",
-		Orbiter->GetActorLocation().Equals(
-			FVector(200.0f * FMath::Cos(PI / 4.0f), 200.0f * FMath::Sin(PI / 4.0f), 100.0f), 1.0e-2f));
 	return true;
 }
 

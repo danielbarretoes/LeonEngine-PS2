@@ -40,7 +40,7 @@ struct ENGINE_API FActorSpawnParameters
 {
 	FActorSpawnParameters();
 
-	/** The actor's name; NAME_None makes a unique one. An existing actor of that name in the level is a fatal error. */
+	/** The actor's name; NAME_None makes a unique one. An existing actor of that name: an error, and no actor. */
 	FName Name;
 	/** An actor whose properties are copied into the new one instead of the class defaults. */
 	AActor* Template = nullptr;
@@ -513,9 +513,9 @@ private:
 	AActor* SpawnActorInternal(UClass* Class, const FVector* Location, const FRotator* Rotation,
 		const FTransform* Transform, const FActorSpawnParameters& SpawnParameters);
 	void FlushPendingSpawns();
-	/** Removes the null slots destroyed actors left in the level while the world ticked. */
+	/** Removes the null slots destroyed actors left in the level while the world ticked or a ForEach ran. */
 	void CompactActors();
-	/** Pairwise Character capsule depenetration (players / AI are not FPhysScene bodies). */
+	/** Pairwise character capsule depenetration (the capsules ignore the Pawn channel, so the world separates them). */
 	void ResolveCharacterOverlaps();
 
 	/** Actors spawned during a tick: they join the level when it ends (UE adds them at once). */

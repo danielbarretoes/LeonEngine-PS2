@@ -131,6 +131,12 @@ struct RENDERCORE_API FLegacyCoordinateConversion
 	 * screen, do not change.
 	 */
 	static void ConvertMeshData(FMeshData& Data);
+
+	/**
+	 * The tangents the legacy Y-up, right-handed world computed (the golden reference of ComputeTangents): the same UV
+	 * gradients, and a vertex without one gets a tangent across legacy +Y (X when the normal is vertical), w = 1.
+	 */
+	static void ComputeLegacyTangents(FMeshData& Data);
 };
 
 #endif // WITH_DEV_AUTOMATION_TESTS

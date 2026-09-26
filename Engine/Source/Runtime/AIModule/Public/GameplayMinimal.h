@@ -4,7 +4,6 @@
 
 /** Gameplay framework: UGameInstance, World, Actors, Controllers, GameState/PlayerState, GameMode. */
 #include "AI/Navigation/NavigationSystem.h"
-#include "AIChaseBehavior.h"
 #include "AIController.h"
 #include "BehaviorTree/BehaviorTree.h"
 #include "Blueprint/PaintContext.h"
@@ -12,8 +11,6 @@
 #include "Components/ActorComponent.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
-#include "Components/InteractionPromptWidget.h"
-#include "Components/MenuListWidget.h"
 #include "Components/ProgressBar.h"
 #include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -34,6 +31,5 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/SpringArmComponent.h"
-#include "GameFramework/VolumeHelpers.h"
 #include "Kismet/GameplayStatics.h"
 #include "Physics/PhysicsMinimal.h"

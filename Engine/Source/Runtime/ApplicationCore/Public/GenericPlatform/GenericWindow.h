@@ -29,9 +29,6 @@ public:
 
 	virtual bool Create(int32 InWidth, int32 InHeight, const TCHAR* Title) = 0;
 
-	/** Secondary window sharing the graphics context of ShareWith (desktop only). */
-	virtual bool CreateShared(const FGenericWindow& ShareWith, int32 InWidth, int32 InHeight, const TCHAR* Title);
-
 	virtual void Destroy() = 0;
 
 	virtual void MakeContextCurrent()

@@ -9,6 +9,7 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/DamageType.h"
 #include "GameFramework/DefaultPawn.h"
+#include "GameFramework/PainCausingVolume.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "GameFramework/SpectatorPawn.h"
@@ -414,6 +415,43 @@ bool FActorLifeSpanTest::RunTest(const FString& Parameters)
 	TestTrue("Expired", Short->IsPendingKillPending());
 	TestFalse("Cancelled", Cancelled->IsPendingKillPending());
 	TestEqual("World time", World.GetTimeSeconds(), 31.0f / 60.0f, 1.0e-4f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDamagePainCausingVolumeTest, "System.Engine.Damage.PainCausingVolume",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FDamagePainCausingVolumeTest::RunTest(const FString& Parameters)
+{
+	// UE's pain volume: every PainInterval each pawn inside takes DamagePerSec * PainInterval of the volume's damage
+	// type, the volume the causer; a pawn outside takes nothing, and bPainCausing off stops it.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	APainCausingVolume* Volume = World.SpawnActor<APainCausingVolume>(
+		APainCausingVolume::StaticClass(), FTransform(FQuat::Identity, FVector(0.0f, 0.0f, 100.0f), FVector(4.0f)));
+	Volume->DamagePerSec = 20.0f;
+	Volume->PainInterval = 0.5f;
+	ACharacter* Inside = SpawnStandingCharacter(World, FVector::ZeroVector);
+	ACharacter* Outside = SpawnStandingCharacter(World, FVector(1000.0f, 0.0f, 0.0f));
+	FDamageLog InsideLog;
+	InsideLog.Watch(*Inside);
+	FDamageLog OutsideLog;
+	OutsideLog.Watch(*Outside);
+
+	TickFrames(World, 1);
+	TestEqual("The first pain tick", InsideLog.AnyCount, 1);
+	TestEqual("DamagePerSec * PainInterval", InsideLog.AnyDamage, 10.0f);
+	TestTrue("The volume is the causer", InsideLog.Causer == Volume);
+	TestTrue("UDamageType by default", InsideLog.DamageType == GetDefault<UDamageType>());
+	TickFrames(World, 20);
+	TestEqual("Nothing before the interval", InsideLog.AnyCount, 1);
+	TickFrames(World, 20);
+	TestEqual("The second pain tick", InsideLog.AnyCount, 2);
+	TestEqual("Nothing outside", OutsideLog.AnyCount, 0);
+
+	Volume->bPainCausing = false;
+	TickFrames(World, 60);
+	TestEqual("bPainCausing off", InsideLog.AnyCount, 2);
 	return true;
 }
 

@@ -268,7 +268,7 @@ bool LoadStaticMeshFromGltf(const FString& Path, FMeshData& Out, FString& OutErr
 		return false;
 	}
 	GltfConversion().ConvertMeshData(Mesh);
-	ComputeTangents(Mesh, EMeshDataBasis::Engine);
+	ComputeTangents(Mesh);
 	Out = MoveTemp(Mesh);
 	return true;
 }
@@ -296,7 +296,7 @@ bool LoadGltfScene(const FString& Path, FGltfScene& Out, FString& OutError)
 		if (!Mesh.Data.IsEmpty())
 		{
 			Conversion.ConvertMeshData(Mesh.Data);
-			ComputeTangents(Mesh.Data, EMeshDataBasis::Engine);
+			ComputeTangents(Mesh.Data);
 		}
 	}
 

@@ -201,42 +201,6 @@ FRHIProcAddressLoader FGLFWWindow::GetRHIProcAddressLoader() const
 	return reinterpret_cast<FRHIProcAddressLoader>(glfwGetProcAddress);
 }
 
-bool FGLFWWindow::CreateShared(const FGenericWindow& ShareWith, int32 InWidth, int32 InHeight, const TCHAR* Title)
-{
-	if (Handle != nullptr)
-	{
-		return true;
-	}
-	GLFWwindow* ShareWindow = AsGLFW(ShareWith.NativeHandle());
-	if (ShareWindow == nullptr || GGLFWInitCount == 0)
-	{
-		UE_LOG(LogApplicationCore, Error, "FGLFWWindow::CreateShared requires an initialised share context");
-		return false;
-	}
-
-	SetContextHints();
-	glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
-	GLFWwindow* Window =
-		glfwCreateWindow(InWidth, InHeight, Title != nullptr ? Title : "Leon Play", nullptr, ShareWindow);
-	Handle = Window;
-	if (Handle == nullptr)
-	{
-		UE_LOG(LogApplicationCore, Error, "Failed to create shared GLFW window");
-		return false;
-	}
-
-	++GGLFWInitCount;
-	bBackendOwned = true;
-	InstallCallbacks();
-	SyncSizesFromBackend();
-	MakeContextCurrent();
-	glfwSwapInterval(1);
-	glfwMakeContextCurrent(ShareWindow);
-	Show();
-	Focus();
-	return true;
-}
-
 void FGLFWWindow::Destroy()
 {
 	if (GLFWwindow* Window = AsGLFW(Handle))

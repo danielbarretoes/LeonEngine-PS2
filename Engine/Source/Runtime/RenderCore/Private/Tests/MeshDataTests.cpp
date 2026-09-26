@@ -47,7 +47,7 @@ bool FComputeTangentsFallbackMatchesLegacyTest::RunTest(const FString& Parameter
 		FMeshData Engine = Legacy;
 		FLegacyCoordinateConversion::ConvertMeshData(Engine);
 
-		ComputeTangents(Legacy, EMeshDataBasis::LegacyYUp);
+		FLegacyCoordinateConversion::ComputeLegacyTangents(Legacy);
 		ComputeTangents(Engine);
 		const FVector4 Expected = FLegacyCoordinateConversion::ConvertTangent(Legacy.Vertices[0].Tangent);
 		const FVector4 Actual = Engine.Vertices[0].Tangent;
