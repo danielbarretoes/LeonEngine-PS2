@@ -45,6 +45,10 @@ jobs:
         run: |
           call Engine\Build\BatchFiles\Build.bat LeonGame Win64 Development || exit /b 1
           call Engine\Build\BatchFiles\Build.bat LeonCook Win64 Development
+      # ShooterGame boots headless on de_leon, bot_fill makes five a side, and it exits 0 reporting the ten pawns.
+      - name: ShooterGame smoke (G6)
+        shell: cmd
+        run: call Engine\Build\BatchFiles\SmokeTest.bat
       - name: Reproducible reimport (G5)
         shell: cmd
         run: call Engine\Build\BatchFiles\CheckReimport.bat Game\ThirdPerson\ThirdPerson.lproj Game\ShooterGame\ShooterGame.lproj
@@ -56,3 +60,8 @@ jobs:
           if not exist Engine\Saved\StagingTest mkdir Engine\Saved\StagingTest
           > Engine\Saved\StagingTest\StagingTest.lproj echo { "FileVersion": 3, "EngineAssociation": "", "Modules": [] }
           call Engine\Build\BatchFiles\BuildCookRun.bat -project=Engine\Saved\StagingTest\StagingTest.lproj -platform=Win64 -configuration=Development -build -cook -stage -pak -run "-addcmdline=-nullrhi -ExitAfterFrames=60"
+      # The code project cooked (de_leon, the team bodies), staged into a pak and run from the staged folder with the
+      # G6 command line.
+      - name: ShooterGame staged build smoke (BuildCookRun)
+        shell: cmd
+        run: call Engine\Build\BatchFiles\BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.lproj -platform=Win64 -configuration=Development -build -cook -stage -pak -run "-addcmdline=-nullrhi -ExecCmds=bot_fill -ExitAfterFrames=120"

@@ -239,9 +239,21 @@ int32 AShooterGameMode::AddBots(EShooterTeam Team, int32 Count)
 	return Added;
 }
 
+int32 AShooterGameMode::FillTeamsWithBots()
+{
+	const int32 AddedCT = AddBots(EShooterTeam::CT, FMath::Max(0, MaxPlayersPerTeam - GetTeamSize(EShooterTeam::CT)));
+	const int32 AddedT = AddBots(EShooterTeam::T, FMath::Max(0, MaxPlayersPerTeam - GetTeamSize(EShooterTeam::T)));
+	return AddedCT + AddedT;
+}
+
 bool AShooterGameMode::ProcessConsoleExec(const TCHAR* Cmd, FOutputDevice& Ar, UObject* Executor)
 {
 	const TCHAR* Str = Cmd;
+	if (FParse::Command(&Str, TEXT("bot_fill")))
+	{
+		Ar.Logf(TEXT("%d bot(s) added"), FillTeamsWithBots());
+		return true;
+	}
 	EShooterTeam Team = EShooterTeam::None;
 	bool bBotCommand = true;
 	if (FParse::Command(&Str, TEXT("bot_add_ct")))

@@ -164,6 +164,30 @@ bool FShooterGameSpawnStandsOnTheStartTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameSpawnBotFillTest, "ShooterGame.Spawn.BotFill",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameSpawnBotFillTest::RunTest(const FString& Parameters)
+{
+	// bot_fill (the G6 smoke's command) tops both teams up to MaxPlayersPerTeam around the players already in, and a
+	// second bot_fill adds nobody.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	TArray<APlayerStart*> CTStarts;
+	TArray<APlayerStart*> TStarts;
+	SpawnTeamStarts(World, CTStarts, TStarts);
+	AShooterGameMode* GameMode = SetShooterGameMode(World);
+	TestEqual("Five a side", GameMode->MaxPlayersPerTeam, 5);
+	TestEqual("Two T first", GameMode->AddBots(EShooterTeam::T, 2), 2);
+
+	TestTrue("bot_fill", GameMode->ProcessConsoleExec(TEXT("bot_fill"), *GLog, nullptr));
+	TestEqual("CT full", GameMode->GetTeamSize(EShooterTeam::CT), 5);
+	TestEqual("T full", GameMode->GetTeamSize(EShooterTeam::T), 5);
+	TestEqual("Ten pawns", GetShooterCharacters(World).Num(), 10);
+	TestEqual("Full teams take no more", GameMode->FillTeamsWithBots(), 0);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameCharacterMovementTest, "ShooterGame.Character.Movement",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 

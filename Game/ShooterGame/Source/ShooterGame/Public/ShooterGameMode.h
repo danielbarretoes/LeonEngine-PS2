@@ -21,7 +21,8 @@ class AShooterPlayerState;
  *   so SpawnDefaultPawnFor lowers it by the start capsule's half height.
  *
  * Console (the Exec chain reaches the game mode): `bot_add_ct [N]`, `bot_add_t [N]`, `bot_add [N]` (the smaller team)
- * add bots, CS's commands (plan P19); the bots have no brain until P20.
+ * add bots, CS's commands (plan P19), and `bot_fill` fills both teams to MaxPlayersPerTeam (the G6 smoke:
+ * `ShooterGame -nullrhi -ExecCmds=bot_fill`); the bots have no brain until P20.
  */
 UCLASS(Config = Game)
 class SHOOTERGAME_API AShooterGameMode : public AGameMode
@@ -43,7 +44,7 @@ public:
 	[[nodiscard]] AActor* ChoosePlayerStart(AController* Player) override;
 	/** Spawns the pawn standing on the start (see the class comment). */
 	APawn* SpawnDefaultPawnFor(AController* NewPlayer, AActor* StartSpot) override;
-	/** bot_add_ct / bot_add_t / bot_add [Count]; the rest goes to the reflected Exec functions. */
+	/** bot_add_ct / bot_add_t / bot_add [Count], bot_fill; the rest goes to the reflected Exec functions. */
 	bool ProcessConsoleExec(const TCHAR* Cmd, FOutputDevice& Ar, UObject* Executor) override;
 	/** Logs how many pawns each team has when the match leaves (the G6 smoke reads it). */
 	void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -53,6 +54,9 @@ public:
 	 * many joined (a full team refuses the rest).
 	 */
 	int32 AddBots(EShooterTeam Team, int32 Count);
+
+	/** Adds bots until both teams have MaxPlayersPerTeam (CS: bot_quota; plan P19's 5v5 fill); how many joined. */
+	int32 FillTeamsWithBots();
 
 	/** The team a new player joins: `?team=` of Options, else the smaller team, CT on a tie. */
 	[[nodiscard]] EShooterTeam ChooseTeam(const FString& Options) const;
