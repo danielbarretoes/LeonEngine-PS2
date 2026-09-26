@@ -6,6 +6,8 @@
 #include "SceneInterface.h"
 #include "UObject/GCObject.h"
 
+class FSceneView;
+class FStaticMeshSceneProxy;
 class UActorComponent;
 
 /** A primitive of the scene (UE: FPrimitiveSceneInfo): the component and the proxy the scene owns. */
@@ -74,6 +76,13 @@ public:
 	{
 		return Lights;
 	}
+
+	/**
+	 * The static meshes View draws, in the scene's order: the world's (shown, and seen by the view's actor) and the
+	 * view model pass's (bRenderAsViewModel, shown in View).
+	 */
+	void GatherStaticMeshes(const FSceneView& View, TArray<const FStaticMeshSceneProxy*>& OutWorldMeshes,
+		TArray<const FStaticMeshSceneProxy*>& OutViewModelMeshes) const;
 
 	/** The component's place: its owner's spawn serial (AActor::GetUniqueID), then its index among the owner's. */
 	[[nodiscard]] static uint64 GetOrderKey(const UActorComponent* Component);

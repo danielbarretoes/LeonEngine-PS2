@@ -2,6 +2,8 @@
 #include "Components/PrimitiveComponent.h"
 #include "GameFramework/Actor.h"
 #include "ScenePrivate.h"
+#include "SceneView.h"
+#include "StaticMeshSceneProxy.h"
 
 namespace
 {
@@ -164,5 +166,35 @@ void FScene::UpdateLightTransform(ULightComponent* Light)
 	if (Light != nullptr && Light->SceneProxy != nullptr)
 	{
 		Light->SceneProxy->SetTransform(Light->GetComponentTransform());
+	}
+}
+
+void FScene::GatherStaticMeshes(const FSceneView& View, TArray<const FStaticMeshSceneProxy*>& OutWorldMeshes,
+	TArray<const FStaticMeshSceneProxy*>& OutViewModelMeshes) const
+{
+	OutWorldMeshes.Reset();
+	OutViewModelMeshes.Reset();
+	for (const FPrimitiveSceneInfo& Info : Primitives)
+	{
+		const FPrimitiveSceneProxy* Proxy = Info.Proxy.Get();
+		if (Proxy->GetProxyType() != EPrimitiveSceneProxyType::StaticMesh)
+		{
+			continue;
+		}
+		const FStaticMeshSceneProxy* Mesh = static_cast<const FStaticMeshSceneProxy*>(Proxy);
+		if (Proxy->IsViewModel())
+		{
+			if (Proxy->IsShown(&View))
+			{
+				OutViewModelMeshes.Add(Mesh);
+			}
+			continue;
+		}
+		// A shown proxy the view's actor may not see (owner-only, owner-hidden) leaves the frame.
+		if (Proxy->IsShown() && !Proxy->IsShown(&View))
+		{
+			continue;
+		}
+		OutWorldMeshes.Add(Mesh);
 	}
 }

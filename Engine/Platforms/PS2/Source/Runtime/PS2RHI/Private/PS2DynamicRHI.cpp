@@ -153,6 +153,30 @@ FGSXYZ FPS2RHI::ScreenVertex(float X, float Y, uint32 Z)
 	return Leon::PS2::ScreenVertex(X, Y, Z);
 }
 
+FGSDrawEnvironment FPS2RHI::GetDrawEnvironment()
+{
+	return Leon::PS2::GetDrawEnvironment(Leon::PS2::GetGSContext());
+}
+
+bool FPS2RHI::AllocateTextureArena(uint32& OutFirstBlock, uint32& OutNumBlocks)
+{
+	// The VRAM is 1 M words; the arena is every page after the allocator's end, taken as one 64-texel-wide buffer.
+	constexpr int32 VramWords = 1024 * 1024;
+	constexpr int32 PageWords = 2048;
+	auto& Gs = Leon::PS2::GetGSContext();
+	const int32 FirstWord = ((Gs.VramEndWords + PageWords - 1) / PageWords) * PageWords;
+	const int32 NumWords = VramWords - FirstWord;
+	if (!Gs.bReady || NumWords < PageWords ||
+		Leon::PS2::AllocateVram(64, NumWords / 64, GS_PSM_32, GRAPH_ALIGN_PAGE) != FirstWord)
+	{
+		return false;
+	}
+	OutFirstBlock = uint32(FirstWord / 64);
+	OutNumBlocks = uint32(NumWords / 64);
+	UE_LOG(LogRHI, Log, "FPS2RHI: texture arena of %d KB", NumWords * 4 / 1024);
+	return true;
+}
+
 void FPS2RHI::WaitVSync()
 {
 	auto& Gs = Leon::PS2::GetGSContext();

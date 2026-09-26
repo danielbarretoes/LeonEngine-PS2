@@ -3,6 +3,7 @@
 // Private GS state for the PS2 RHI plugin (not a public Engine header).
 
 #include "GSCommandList.h"
+#include "GSDrawEnvironment.h"
 #include "GSTypes.h"
 
 #include <packet.h>
@@ -35,14 +36,13 @@ namespace Leon::PS2
 
 	[[nodiscard]] FPS2GSContext& GetGSContext();
 
+	/** The drawing environment of the frame being drawn (the back buffer). */
+	[[nodiscard]] FGSDrawEnvironment GetDrawEnvironment(const FPS2GSContext& Gs);
+
 	/** graph_vram_allocate plus the VRAM bookkeeping: a word address, or < 0 when the VRAM is full. */
 	[[nodiscard]] int32 AllocateVram(int32 Width, int32 Height, int32 Psm, int32 Alignment);
 
-	/**
-	 * Appends the drawing environment to the frame list: the back buffer, the Z buffer, the window offset that centers
-	 * screen coordinates, the whole screen as scissor, the depth test GEQUAL, standard blending, and dithering on a
-	 * 16-bit frame buffer.
-	 */
+	/** Appends the drawing environment (FGSDrawEnvironment, on the back buffer) to the frame list. */
 	void AppendDrawEnvironment(FPS2GSContext& Gs);
 
 	/** Appends a TEST_1 write: the 3D depth test (GEQUAL) or none (ALWAYS, for 2D overlays). */

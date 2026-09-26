@@ -633,31 +633,7 @@ void FSceneRenderer::DrawSubMesh(const FShader& Shader, const FStaticMeshScenePr
 void FSceneRenderer::GatherStaticMeshes(const FScene& Scene, const FSceneView& View,
 	TArray<const FStaticMeshSceneProxy*>& OutWorldMeshes, TArray<const FStaticMeshSceneProxy*>& OutViewModelMeshes)
 {
-	OutWorldMeshes.Reset();
-	OutViewModelMeshes.Reset();
-	for (const FPrimitiveSceneInfo& Info : Scene.GetPrimitives())
-	{
-		const FPrimitiveSceneProxy* Proxy = Info.Proxy.Get();
-		if (Proxy->GetProxyType() != EPrimitiveSceneProxyType::StaticMesh)
-		{
-			continue;
-		}
-		const FStaticMeshSceneProxy* Mesh = static_cast<const FStaticMeshSceneProxy*>(Proxy);
-		if (Proxy->IsViewModel())
-		{
-			if (Proxy->IsShown(&View))
-			{
-				OutViewModelMeshes.Add(Mesh);
-			}
-			continue;
-		}
-		// A shown proxy the view's actor may not see (owner-only, owner-hidden) leaves the frame.
-		if (Proxy->IsShown() && !Proxy->IsShown(&View))
-		{
-			continue;
-		}
-		OutWorldMeshes.Add(Mesh);
-	}
+	Scene.GatherStaticMeshes(View, OutWorldMeshes, OutViewModelMeshes);
 }
 
 void FSceneRenderer::GatherScene(FSceneInterface* InScene, const FSceneView& View)

@@ -499,11 +499,12 @@ function(leon_build_target TargetName)
 		set(ExtraModules ${LEON_PROJECT_MODULES})
 	endif()
 	_leon_plugin_root_modules(${TargetName} PluginModules)
-	# A target compiled against the engine (WITH_ENGINE=1) links it and the pak platform file its content comes from,
-	# whatever the platform (UE: bCompileAgainstEngine adds Engine to the launch module's dependencies).
+	# A target compiled against the engine (WITH_ENGINE=1) links it, the Renderer it reaches by name and the pak platform
+	# file its content comes from, whatever the platform (UE: bCompileAgainstEngine adds Engine and Renderer to the
+	# launch module's dependencies).
 	set(EngineModules)
 	if(CompileAgainstEngine)
-		set(EngineModules Engine PakFile)
+		set(EngineModules Engine Renderer PakFile)
 	endif()
 	set(Roots Core ${LaunchModule} ${EngineModules} ${ExtraModules} ${PluginModules})
 	list(REMOVE_DUPLICATES Roots)

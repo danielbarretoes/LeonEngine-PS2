@@ -44,6 +44,9 @@ public:
 		return Shader.Valid() && Vao != 0 && Mask != nullptr;
 	}
 
+	/** The side of the mask texture, texels. */
+	static constexpr int32 MaskSize = 32;
+
 	/** The vertex the effects are made of (position, the mask's UV, the colour with the strength in A). */
 	struct FEffectVertex
 	{
@@ -57,6 +60,9 @@ public:
 	 * GPU).
 	 */
 	static void BuildImpactMarkVertices(const FImpactMarkPool& Marks, TArray<FEffectVertex>& OutVertices);
+	/** The mask: MaskSize x MaskSize RGBA8 texels of a soft round spot (1 inside a quarter of the side, 0 at the rim).
+	 */
+	static void BuildMaskTexels(TArray<uint8>& OutTexels);
 	/** The two triangles of each tracer, facing CameraLocation. */
 	static void BuildTracerVertices(
 		const FTracerBatch& Tracers, const FVector& CameraLocation, TArray<FEffectVertex>& OutVertices);

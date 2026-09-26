@@ -14,8 +14,6 @@ namespace Leon::PS2
 	namespace
 	{
 
-		/** The GS's primitive coordinate of the screen's center (the window offset is set so). */
-		constexpr float PrimitiveCenter = 2048.0f;
 		/** The most quadwords one normal-mode DMA transfer moves (D_QWC is 16 bits). */
 		constexpr int32 MaxDmaQuadwords = 0xffff;
 
@@ -59,45 +57,30 @@ namespace Leon::PS2
 		return Address;
 	}
 
+	FGSDrawEnvironment GetDrawEnvironment(const FPS2GSContext& Gs)
+	{
+		FGSDrawEnvironment Environment;
+		Environment.Frame = Gs.Frames[Gs.BackBuffer];
+		Environment.ZBuf = Gs.ZBuf;
+		Environment.Width = uint16(Gs.Width);
+		Environment.Height = uint16(Gs.Height);
+		return Environment;
+	}
+
 	void AppendDrawEnvironment(FPS2GSContext& Gs)
 	{
-		FGSCommandList& List = Gs.FrameList;
-		List.SetPrimModeFromPrim();
-		List.SetFrame(0, Gs.Frames[Gs.BackBuffer]);
-		List.SetZBuf(0, Gs.ZBuf);
-		FGSXYOffset Offset;
-		Offset.OFX = GSToFixed4(PrimitiveCenter - (float(Gs.Width) * 0.5f), 16);
-		Offset.OFY = GSToFixed4(PrimitiveCenter - (float(Gs.Height) * 0.5f), 16);
-		List.SetXYOffset(0, Offset);
-		FGSScissor Scissor;
-		Scissor.SCAX1 = uint16(Gs.Width - 1);
-		Scissor.SCAY1 = uint16(Gs.Height - 1);
-		List.SetScissor(0, Scissor);
-		List.SetAlpha(0, FGSAlpha::Translucent());
-		List.SetFba(0, false);
-		List.SetColorClamp(true);
-		List.SetPixelAlphaBlend(false);
-		List.SetTexA(FGSTexA());
-		List.SetDimx(FGSDimx::Default());
-		const EGSPixelFormat Format = Gs.Frames[Gs.BackBuffer].PSM;
-		List.SetDither(Format == EGSPixelFormat::PSMCT16 || Format == EGSPixelFormat::PSMCT16S);
-		AppendDepthTest(Gs, true);
+		GetDrawEnvironment(Gs).Append(Gs.FrameList);
 	}
 
 	void AppendDepthTest(FPS2GSContext& Gs, bool bDepthTest)
 	{
-		FGSTest Test;
-		Test.ZTST = bDepthTest ? EGSDepthTest::GreaterEqual : EGSDepthTest::Always;
-		Gs.FrameList.SetTest(0, Test);
+		Gs.FrameList.SetTest(0, FGSDrawEnvironment::DepthTest(bDepthTest));
 	}
 
 	FGSXYZ ScreenVertex(float X, float Y, uint32 Z)
 	{
-		FGSXYZ Vertex;
-		Vertex.X = GSToFixed4(PrimitiveCenter + X, 16);
-		Vertex.Y = GSToFixed4(PrimitiveCenter + Y, 16);
-		Vertex.Z = Z;
-		return Vertex;
+		const FPS2GSContext& Gs = GetGSContext();
+		return GetDrawEnvironment(Gs).PixelVertex(X + (float(Gs.Width) * 0.5f), Y + (float(Gs.Height) * 0.5f), Z);
 	}
 
 	FGSRGBAQ UnitColor(float R, float G, float B, uint8 A)

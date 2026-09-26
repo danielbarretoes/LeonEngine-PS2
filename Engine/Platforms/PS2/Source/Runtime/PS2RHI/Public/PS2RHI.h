@@ -2,6 +2,7 @@
 
 #include "CoreTypes.h"
 #include "GSCommandList.h"
+#include "GSDrawEnvironment.h"
 #include "GSTypes.h"
 #include "PS2RHITypes.h"
 #include "PS2Texture.h"
@@ -33,6 +34,13 @@ public:
 	static void Submit(const FGSCommandList& List);
 	/** A vertex at screen coordinates (pixels, origin at the screen centre) for a list drawn in that environment. */
 	static FGSXYZ ScreenVertex(float X, float Y, uint32 Z = 0);
+	/** The drawing environment of the frame being drawn, which a Submit list is recorded against. */
+	static FGSDrawEnvironment GetDrawEnvironment();
+	/**
+	 * Hands the caller the VRAM left after the display (and whatever was allocated before), for its textures: the
+	 * first 64-word block and the number of blocks, page aligned. Once only; false when nothing is left.
+	 */
+	static bool AllocateTextureArena(uint32& OutFirstBlock, uint32& OutNumBlocks);
 
 	// --- View / lights ---
 	static void SetViewTarget(const FPS2ViewTarget& ViewTarget);
