@@ -19,6 +19,7 @@
 #include "Misc/Paths.h"
 #include "RendererInterface.h"
 #include "Sound/SoundWave.h"
+#include "Stats/StatsOverlay.h"
 #include "UObject/GarbageCollection.h"
 #include "UObject/Package.h"
 
@@ -211,8 +212,8 @@ bool UEngine::Exec(UWorld* InWorld, const TCHAR* Cmd, FOutputDevice& Ar)
 		// Leon's stats overlay stands for both (frame time, memory, triangles, GPU passes).
 		if (FParse::Command(&Str, TEXT("UNIT")) || FParse::Command(&Str, TEXT("FPS")))
 		{
-			SetHudStatsVisible(!bShowHudStats);
-			UE_LOG(LogEngine, Log, TEXT("HUD stats: %s"), bShowHudStats ? TEXT("on") : TEXT("off"));
+			SetHudStatsVisible(!IsHudStatsVisible());
+			UE_LOG(LogEngine, Log, TEXT("HUD stats: %s"), IsHudStatsVisible() ? TEXT("on") : TEXT("off"));
 			return true;
 		}
 		return false;
@@ -420,10 +421,15 @@ void UEngine::AddOnScreenDebugMessage(
 	Overlay.AddOnScreenDebugMessage(DebugMessage, TimeToDisplay, DisplayColor);
 }
 
+bool UEngine::IsHudStatsVisible() const
+{
+	return FStatsOverlay::IsStatsVisible();
+}
+
 void UEngine::SetHudStatsVisible(bool bVisible)
 {
-	bShowHudStats = bVisible;
-	if (!bShowHudStats)
+	FStatsOverlay::SetStatsVisible(bVisible);
+	if (!bVisible)
 	{
 		Overlay.SetRightText(FString());
 		Overlay.SetBottomLeftText(FString());

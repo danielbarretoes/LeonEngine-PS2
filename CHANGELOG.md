@@ -29,6 +29,15 @@ The PC plays under the PS2's conditions ([ps2-preview](Docs/PLANS/ps2-preview.md
 
 ### Fixed
 
+- The HUD's text was twice the size it was designed at: `HudFontScale` (and the debug overlay's) was 2 for the old
+  1280x896 canvas, and every platform draws the canvas into the GS's 640x448 frame since 0.21.0. It is 1, the font's
+  own pixels; ShooterGame's HUD lays out from `HudLineHeight` (the scoreboard's box fits its lines, the kill feed
+  starts below the stats).
+- The stats on the PS2: Select cycled the PS2 overlay, and ShooterGame's scoreboard is Select, so looking at the scores
+  hid them; L3 + R3 cycle it now. The engine's `stat unit` panel (FPS, MS, RAM, VRAM, TRIS, OBJ) and the PS2's panel
+  share `FStatsOverlay`'s visibility, on from the start on the PS2 (`bShowStatsByDefault=True` in PS2Engine.ini, which
+  had an unread `[/Script/Engine.StatsOverlay]` section); the PS2's panel keeps what the engine's cannot show (the
+  EE's work per frame) and the gamepad widget, at the top left. The F-key help is the desktop's only, under the stats.
 - The PS2 resets its IOP to the ROM's modules before loading its own (`FPS2PlatformMisc::InitializeIop`; `-NoIopReset`
   for ps2link), as the ps2sdk samples do: a launcher's pad modules no longer clash with PADMAN. A pad module that does
   not load no longer hangs `padInit`. Review of the SDK's use and what to use next:

@@ -23,6 +23,8 @@ public:
 	void SetRightText(const FString& InText);
 	/** Vertical origin for SetRightText (default top margin). */
 	void SetRightTextOriginY(float OriginY);
+	/** The Y below the right-aligned block, or its origin when it is empty: where a HUD's top-right lines may start. */
+	[[nodiscard]] float GetRightTextBottom() const;
 
 	/**
 	 * Queues a temporary message (top-left console). Newest stays at the top; older

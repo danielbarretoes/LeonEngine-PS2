@@ -3,11 +3,10 @@
 #include "CoreTypes.h"
 
 /**
- * Engine debug overlay state (UE: stat unit/fps + GEngine->AddOnScreenDebugMessage, reduced).
- * The platform draws it at the end of each frame (PS2: Launch's PS2StatsOverlay):
- *   - stats panel (top-left): FPS + work ms, RAM, VRAM, RES, then the on-screen debug messages;
- *   - gamepad widget (top-right).
- * Gamepad Special Left (Select) cycles: both -> stats only -> gamepad only -> none -> both.
+ * Engine debug overlay state (UE: stat unit/fps + GEngine->AddOnScreenDebugMessage, reduced). The stats' visibility is
+ * the engine's `stat unit` panel's (UEngine::SetHudStatsVisible, F4 on the desktop) and the platform's own panel's
+ * (PS2: Launch's PS2StatsOverlay, the EE's work and the gamepad widget, cycled with L3 + R3: both -> stats only ->
+ * gamepad only -> none -> both).
  */
 class CORE_API FStatsOverlay
 {
@@ -21,7 +20,7 @@ public:
 	static void SetGamepadWidgetVisible(bool bVisible);
 	static bool IsGamepadWidgetVisible();
 
-	/** Advances the Select cycle (both -> stats -> gamepad -> none). */
+	/** Advances the cycle (both -> stats -> gamepad -> none). */
 	static void CycleVisibility();
 
 	/** Sets the text of an on-screen debug message slot (copied); nullptr or "" clears it. */

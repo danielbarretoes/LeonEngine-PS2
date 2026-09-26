@@ -9,6 +9,7 @@
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/GameModeBase.h"
 #include "ShooterBomb.h"
@@ -28,6 +29,10 @@ namespace
 	const FColor TColor(255, 190, 90);
 	const FLinearColor MessageColor(1.0f, 1.0f, 1.0f);
 	const FLinearColor BombColor(1.0f, 0.25f, 0.2f);
+
+	/** The HUD's layout on the 640 x 448 canvas, in lines of the HUD font (HudLineHeight). */
+	constexpr float EdgeMargin = 12.0f;
+	constexpr float LineStep = HudLineHeight + 4.0f;
 
 	FColor GetTeamColor(EShooterTeam Team)
 	{
@@ -116,10 +121,10 @@ void AShooterHUD::DrawStatus()
 	const AShooterPlayerState* State =
 		PlayerOwner != nullptr ? PlayerOwner->GetPlayerState<AShooterPlayerState>() : nullptr;
 	const float Width = static_cast<float>(Canvas->GetSizeX());
-	const float Bottom = static_cast<float>(Canvas->GetSizeY()) - 40.0f;
+	const float Bottom = static_cast<float>(Canvas->GetSizeY()) - EdgeMargin - HudLineHeight;
 	if (State != nullptr && GetShooterGameState() != nullptr)
 	{
-		Canvas->DrawText(FString::Printf(TEXT("$ %d"), State->GetMoney()), 24.0f, Bottom - 36.0f, StatusColor);
+		Canvas->DrawText(FString::Printf(TEXT("$ %d"), State->GetMoney()), EdgeMargin, Bottom - LineStep, StatusColor);
 	}
 	if (Pawn == nullptr)
 	{
@@ -131,7 +136,7 @@ void AShooterHUD::DrawStatus()
 		Status += FString::Printf(
 			TEXT("   [] %d%s"), FMath::CeilToInt(Pawn->GetArmor()), Pawn->HasHelmet() ? TEXT(" H") : TEXT(""));
 	}
-	Canvas->DrawText(Status, 24.0f, Bottom, StatusColor);
+	Canvas->DrawText(Status, EdgeMargin, Bottom, StatusColor);
 	FString Right;
 	if (const AShooterWeapon* Weapon = Pawn->GetWeapon())
 	{
@@ -154,7 +159,7 @@ void AShooterHUD::DrawStatus()
 		float TextWidth = 0.0f;
 		float TextHeight = 0.0f;
 		FCanvas::MeasureText(Line, HudFontScale, TextWidth, TextHeight);
-		Canvas->DrawText(Line, Width - TextWidth - 24.0f, Y, Color);
+		Canvas->DrawText(Line, Width - TextWidth - EdgeMargin, Y, Color);
 	};
 	if (!Right.IsEmpty())
 	{
@@ -162,7 +167,7 @@ void AShooterHUD::DrawStatus()
 	}
 	if (!Items.IsEmpty())
 	{
-		DrawRight(Items, Bottom - 36.0f, BombColor);
+		DrawRight(Items, Bottom - LineStep, BombColor);
 	}
 }
 
@@ -188,13 +193,18 @@ void AShooterHUD::DrawRoundInfo()
 	}
 	if (!Clock.IsEmpty())
 	{
-		DrawCentredText(*Canvas, Clock, CenterX, 16.0f, ClockColor);
+		DrawCentredText(*Canvas, Clock, CenterX, EdgeMargin, ClockColor);
 	}
+	// The scores either side of the clock, CT's ending and T's starting a clock's width away from the centre.
+	const FString CTScore = FString::Printf(TEXT("CT %d"), State->GetTeamScore(EShooterTeam::CT));
+	float CTWidth = 0.0f;
+	float ScoreHeight = 0.0f;
+	FCanvas::MeasureText(CTScore, HudFontScale, CTWidth, ScoreHeight);
+	constexpr float ScoreGap = 40.0f;
+	Canvas->DrawText(CTScore, CenterX - ScoreGap - CTWidth, EdgeMargin, CTColor);
 	Canvas->DrawText(
-		FString::Printf(TEXT("CT %d"), State->GetTeamScore(EShooterTeam::CT)), CenterX - 150.0f, 16.0f, CTColor);
-	Canvas->DrawText(
-		FString::Printf(TEXT("%d T"), State->GetTeamScore(EShooterTeam::T)), CenterX + 90.0f, 16.0f, TColor);
-	DrawCentredText(*Canvas, FString::Printf(TEXT("Round %d"), State->GetRoundNumber()), CenterX, 44.0f,
+		FString::Printf(TEXT("%d T"), State->GetTeamScore(EShooterTeam::T)), CenterX + ScoreGap, EdgeMargin, TColor);
+	DrawCentredText(*Canvas, FString::Printf(TEXT("Round %d"), State->GetRoundNumber()), CenterX, EdgeMargin + LineStep,
 		FLinearColor(0.7f, 0.7f, 0.7f));
 }
 
@@ -207,7 +217,12 @@ void AShooterHUD::DrawKillFeed()
 	}
 	const float Width = static_cast<float>(Canvas->GetSizeX());
 	const float Now = GetWorldTime();
-	float Y = 16.0f;
+	// Below the engine's stats (top right) when they show.
+	float Y = EdgeMargin;
+	if (GEngine != nullptr && GEngine->IsHudStatsVisible())
+	{
+		Y = FMath::Max(Y, GEngine->GetDebugOverlay().GetRightTextBottom() + 4.0f);
+	}
 	for (const FShooterKillFeedEntry& Entry : State->GetKillFeed())
 	{
 		if (Now - Entry.Time > KillFeedDuration)
@@ -223,7 +238,7 @@ void AShooterHUD::DrawKillFeed()
 		FCanvas::MeasureText(Entry.KillerName, HudFontScale, KillerWidth, Height);
 		FCanvas::MeasureText(Middle, HudFontScale, MiddleWidth, Height);
 		FCanvas::MeasureText(Entry.VictimName, HudFontScale, VictimWidth, Height);
-		float X = Width - 24.0f - KillerWidth - MiddleWidth - VictimWidth;
+		float X = Width - EdgeMargin - KillerWidth - MiddleWidth - VictimWidth;
 		if (!Entry.KillerName.IsEmpty())
 		{
 			Canvas->DrawText(Entry.KillerName, X, Y, GetTeamColor(Entry.KillerTeam));
@@ -322,7 +337,7 @@ void AShooterHUD::DrawProgress()
 	const float Y = static_cast<float>(Canvas->GetSizeY()) * 0.62f;
 	constexpr float BarWidth = 300.0f;
 	constexpr float BarHeight = 12.0f;
-	DrawCentredText(*Canvas, Label, CenterX, Y - 32.0f, MessageColor);
+	DrawCentredText(*Canvas, Label, CenterX, Y - LineStep, MessageColor);
 	Canvas->DrawTile(CenterX - (BarWidth * 0.5f), Y, BarWidth, BarHeight, FLinearColor(0.1f, 0.1f, 0.1f, 0.8f));
 	Canvas->DrawTile(CenterX - (BarWidth * 0.5f), Y, BarWidth * Fraction, BarHeight, StatusColor);
 }
@@ -433,11 +448,21 @@ void AShooterHUD::DrawScoreboard()
 	const AShooterGameState* ShooterGameState = GetShooterGameState();
 	const int32 ScoreCT = ShooterGameState != nullptr ? ShooterGameState->GetTeamScore(EShooterTeam::CT) : 0;
 	const int32 ScoreT = ShooterGameState != nullptr ? ShooterGameState->GetTeamScore(EShooterTeam::T) : 0;
-	Canvas->DrawTile(Width * 0.1f, 100.0f, Width * 0.8f, 340.0f, FLinearColor(0.0f, 0.0f, 0.0f, 0.6f));
-	Canvas->DrawText(FString::Printf(TEXT("Counter-Terrorists  %d\nName            K   D  Money\n"), ScoreCT) + CTLines,
-		Width * 0.12f, 120.0f, CTColor);
-	Canvas->DrawText(FString::Printf(TEXT("Terrorists  %d\nName            K   D  Money\n"), ScoreT) + TLines,
-		Width * 0.54f, 120.0f, TColor);
+	// A box around the longer team's lines (the two headers and one line per player).
+	const FString CTText =
+		FString::Printf(TEXT("Counter-Terrorists  %d\nName            K   D  Money\n"), ScoreCT) + CTLines;
+	const FString TText = FString::Printf(TEXT("Terrorists  %d\nName            K   D  Money\n"), ScoreT) + TLines;
+	float TextWidth = 0.0f;
+	float CTHeight = 0.0f;
+	float THeight = 0.0f;
+	FCanvas::MeasureText(CTText, HudFontScale, TextWidth, CTHeight);
+	FCanvas::MeasureText(TText, HudFontScale, TextWidth, THeight);
+	constexpr float Top = 80.0f;
+	constexpr float Padding = 12.0f;
+	Canvas->DrawTile(Width * 0.1f, Top, Width * 0.8f, FMath::Max(CTHeight, THeight) + (2.0f * Padding),
+		FLinearColor(0.0f, 0.0f, 0.0f, 0.6f));
+	Canvas->DrawText(CTText, Width * 0.12f, Top + Padding, CTColor);
+	Canvas->DrawText(TText, Width * 0.54f, Top + Padding, TColor);
 }
 
 // The buy menu
@@ -461,13 +486,13 @@ void UShooterBuyMenuWidget::NativeOnInitialized()
 	WidgetTree->RootWidget = Root;
 	Panel = WidgetTree->ConstructWidget<UBorder>();
 	Panel->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f));
-	Panel->SetPadding(FMargin(20.0f));
+	Panel->SetPadding(FMargin(12.0f));
 	UCanvasPanelSlot* PanelSlot = Root->AddChildToCanvas(Panel);
-	PanelSlot->SetPosition(FVector2D(40.0f, 100.0f));
+	PanelSlot->SetPosition(FVector2D(EdgeMargin * 2.0f, 80.0f));
 	PanelSlot->SetAutoSize(true);
 	UVerticalBox* Box = WidgetTree->ConstructWidget<UVerticalBox>();
 	Panel->SetContent(Box);
-	constexpr float LineGap = 6.0f;
+	constexpr float LineGap = 4.0f;
 	MoneyText = AddLine(*Box, 0.0f);
 	MoneyText->SetColorAndOpacity(FLinearColor(1.0f, 0.75f, 0.2f));
 	RefusalText = AddLine(*Box, LineGap);

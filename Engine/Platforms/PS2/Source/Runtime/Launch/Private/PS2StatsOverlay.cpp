@@ -1,7 +1,5 @@
 #include "PS2StatsOverlay.h"
 
-#include "DynamicRHI.h"
-#include "HAL/PlatformMemory.h"
 #include "HAL/PlatformTime.h"
 #include "InputCoreTypes.h"
 #include "Misc/CString.h"
@@ -12,17 +10,14 @@
 namespace
 {
 	uint64 FrameStartCycles = 0;
-	uint64 PrevDrawCycles = 0;
 	uint64 AccumMicroseconds = 0;
+	uint64 PrevDrawCycles = 0;
 	uint32 AccumFrames = 0;
 	float WorkSumMs = 0.0f;
-	bool bPrevSelect = false;
+	bool bPrevChord = false;
 
 	constexpr uint32 LineChars = 32;
-	char LineFps[LineChars] = "FPS --";
-	char LineRam[LineChars] = "RAM --";
-	char LineVram[LineChars] = "VRAM --";
-	char LineRes[LineChars] = "RES --";
+	char LineWork[LineChars] = "EE --";
 
 	// Gamepad widget: 150 x 78 units, 4 units of padding on every side, drawn at 0.75 scale.
 	constexpr float GamepadWidgetWidth = 150.0f;
@@ -36,22 +31,17 @@ namespace
 	constexpr float GlyphWidth = 6.0f * TextScale * 2.0f; // advance: 6 cells x 1 px
 	constexpr float GlyphHeight = 7.0f * TextScale * 2.0f; // 7 cells x 1 px
 	constexpr float LineGap = 2.0f;
-	constexpr float StatsMinChars = 16.0f;
+	constexpr float StatsMinChars = 12.0f;
 	constexpr float PanelAlpha = 0.5f;
 	constexpr float IdleAlpha = 0.5f;
 	constexpr float LitAlpha = 0.9f;
 	constexpr uint64 StatsPeriodMicroseconds = 250000u;
 
-	/** Integer tenths: the EE has no hardware double, keep Snprintf off the float path. */
-	void FormatMegabytes(char* Out, uint32 OutSize, const char* Label, uint64 Used, uint64 Total)
-	{
-		const uint32 UsedTenths = static_cast<uint32>((Used * 10u + 512u * 1024u) / (1024u * 1024u));
-		const uint32 TotalTenths = static_cast<uint32>((Total * 10u + 512u * 1024u) / (1024u * 1024u));
-		FCString::Snprintf(Out, static_cast<int32>(OutSize), "%s %u.%u/%u.%u MB", Label, UsedTenths / 10u,
-			UsedTenths % 10u, TotalTenths / 10u, TotalTenths % 10u);
-	}
-
-	void RefreshStats(int32 ScreenWidth, int32 ScreenHeight, float WorkMs)
+	/**
+	 * The EE's work per frame, before the wait for the vertical blank: what the engine's `stat unit` panel (FPS, MS,
+	 * RAM, VRAM, TRIS, OBJ, drawn by the canvas on every platform) cannot see, since its MS is the whole paced frame.
+	 */
+	void RefreshStats(float WorkMs)
 	{
 		const uint64 NowCycles = FPlatformTime::Cycles64();
 		if (PrevDrawCycles != 0)
@@ -65,28 +55,10 @@ namespace
 		{
 			return;
 		}
-
-		const float Seconds = static_cast<float>(AccumMicroseconds) / 1000000.0f;
-		const int32 Fps = static_cast<int32>(static_cast<float>(AccumFrames) / Seconds + 0.5f);
+		// Integer tenths: the EE has no hardware double, keep Snprintf off the float path.
 		int32 Tenths = static_cast<int32>(WorkSumMs / static_cast<float>(AccumFrames) * 10.0f + 0.5f);
-		if (Tenths < 0)
-		{
-			Tenths = 0;
-		}
-		FCString::Sprintf(LineFps, "FPS %d  %d.%d ms", Fps, Tenths / 10, Tenths % 10);
-
-		const FPlatformMemoryStats MemoryStats = FPlatformMemory::GetStats();
-		FormatMegabytes(LineRam, sizeof(LineRam), "RAM", MemoryStats.UsedPhysical, MemoryStats.TotalPhysical);
-		if (GDynamicRHI != nullptr)
-		{
-			const FRHIGPUMemoryStats GPUStats = GDynamicRHI->GetGPUMemoryStats();
-			if (GPUStats.bValid && GPUStats.bReportsUsage)
-			{
-				FormatMegabytes(LineVram, sizeof(LineVram), "VRAM", GPUStats.UsedBytes, GPUStats.BudgetBytes);
-			}
-		}
-		FCString::Sprintf(LineRes, "RES %dX%d", ScreenWidth, ScreenHeight);
-
+		Tenths = Tenths < 0 ? 0 : Tenths;
+		FCString::Sprintf(LineWork, "EE %d.%d ms", Tenths / 10, Tenths % 10);
 		AccumMicroseconds = 0;
 		AccumFrames = 0;
 		WorkSumMs = 0.0f;
@@ -100,15 +72,13 @@ namespace
 		float B;
 	};
 
-	void DrawStatsPanel(int32 ScreenWidth, int32 ScreenHeight)
+	/** Draws the panel at the top left; returns the Y below it. */
+	float DrawStatsPanel(int32 ScreenWidth, int32 ScreenHeight)
 	{
-		FHudLine Lines[4 + FStatsOverlay::MaxOnScreenMessages] = {
-			{LineFps, 0.95f, 0.95f, 0.75f},
-			{LineRam, 0.75f, 0.95f, 0.80f},
-			{LineVram, 0.95f, 0.80f, 0.90f},
-			{LineRes, 0.80f, 0.90f, 0.95f},
+		FHudLine Lines[1 + FStatsOverlay::MaxOnScreenMessages] = {
+			{LineWork, 0.95f, 0.95f, 0.75f},
 		};
-		uint32 Count = 4;
+		uint32 Count = 1;
 		for (int32 Key = 0; Key < FStatsOverlay::MaxOnScreenMessages; ++Key)
 		{
 			const char* Message = FStatsOverlay::GetOnScreenDebugMessage(Key);
@@ -139,6 +109,7 @@ namespace
 				Left + Padding, Y, Lines[Index].Text, Lines[Index].R, Lines[Index].G, Lines[Index].B, TextScale);
 			Y += GlyphHeight + LineGap;
 		}
+		return Top + Height;
 	}
 
 	/** DualShock widget: buttons light while held, sticks from raw bytes (no dead zone). */
@@ -248,22 +219,25 @@ void FPS2StatsOverlay::Draw(int32 ScreenWidth, int32 ScreenHeight, IInputInterfa
 		? static_cast<float>(FPlatformTime::CyclesToMicroseconds(NowCycles - FrameStartCycles)) / 1000.0f
 		: 0.0f;
 
-	const bool bSelect = InputInterface != nullptr && InputInterface->IsGamepadKeyDown(EKeys::Gamepad_Special_Left);
-	if (bSelect && !bPrevSelect)
+	// L3 + R3 (both sticks pressed): a chord no game binds on its own, unlike Select (ShooterGame's scoreboard).
+	const bool bChord = InputInterface != nullptr && InputInterface->IsGamepadKeyDown(EKeys::Gamepad_LeftThumbstick) &&
+		InputInterface->IsGamepadKeyDown(EKeys::Gamepad_RightThumbstick);
+	if (bChord && !bPrevChord)
 	{
 		FStatsOverlay::CycleVisibility();
 	}
-	bPrevSelect = bSelect;
+	bPrevChord = bChord;
 
-	RefreshStats(ScreenWidth, ScreenHeight, WorkMs);
+	RefreshStats(WorkMs);
+	// Both on the left: the engine's stats panel and a game's HUD take the top right.
+	float Y = -static_cast<float>(ScreenHeight) * 0.5f + Margin;
 	if (FStatsOverlay::IsStatsVisible())
 	{
-		DrawStatsPanel(ScreenWidth, ScreenHeight);
+		Y = DrawStatsPanel(ScreenWidth, ScreenHeight) + Margin;
 	}
 	if (FStatsOverlay::IsGamepadWidgetVisible())
 	{
-		const float X = static_cast<float>(ScreenWidth) * 0.5f - Margin - GamepadWidgetWidth * GamepadWidgetScale;
-		const float Y = -static_cast<float>(ScreenHeight) * 0.5f + Margin;
+		const float X = -static_cast<float>(ScreenWidth) * 0.5f + Margin;
 		DrawGamepadWidget(X, Y, GamepadWidgetScale, FPS2InputInterface::Get());
 	}
 }

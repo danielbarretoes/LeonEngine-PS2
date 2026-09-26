@@ -5,8 +5,9 @@
 namespace
 {
 
-	constexpr float HudPixelScale = 2.0f;
-	constexpr float MessagePixelScale = 1.15f;
+	/** The font's own pixels on the 640 x 448 canvas (HudFontScale). */
+	constexpr float HudPixelScale = 1.0f;
+	constexpr float MessagePixelScale = 1.0f;
 	constexpr float MarginX = 10.0f;
 	constexpr float MarginY = 10.0f;
 	constexpr float MessageLineStepY = 14.0f * MessagePixelScale;
@@ -85,6 +86,18 @@ void FDebugOverlay::Clear()
 	RightText.Empty();
 	RightTextOriginY = MarginY;
 	OnScreenMessages.Empty();
+}
+
+float FDebugOverlay::GetRightTextBottom() const
+{
+	if (RightText.IsEmpty())
+	{
+		return RightTextOriginY;
+	}
+	float Width = 0.0f;
+	float Height = 0.0f;
+	FCanvas::MeasureText(RightText, HudPixelScale, Width, Height);
+	return RightTextOriginY + Height;
 }
 
 void FDebugOverlay::Draw(FCanvas& Canvas) const

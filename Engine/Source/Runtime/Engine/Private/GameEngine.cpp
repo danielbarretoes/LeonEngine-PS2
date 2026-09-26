@@ -56,10 +56,8 @@ void UGameEngine::Init(IEngineLoop* InEngineLoop)
 		// Stats off unless the config or -showstats asks for them.
 		Overlay.SetRightText(FString());
 		Overlay.SetBottomLeftText(FString());
-		if (bShowStatsByDefault || FParse::Param(FCommandLine::Get(), "showstats"))
-		{
-			SetHudStatsVisible(true);
-		}
+		SetHudStatsVisible(bShowStatsByDefault || FParse::Param(FCommandLine::Get(), "showstats"));
+		UE_LOG(LogEngine, Log, "HUD stats: %s", IsHudStatsVisible() ? "on" : "off");
 	}
 	else
 	{

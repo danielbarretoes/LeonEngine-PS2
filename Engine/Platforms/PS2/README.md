@@ -124,7 +124,7 @@ Each `FEngineLoop::Tick()`:
 1. `Application->PollGameDeviceState()` — read the DualShock (`FPS2InputInterface::SendControllerEvents()`).
 2. `MainWindow->PollEvents()` — no-op on PS2.
 3. `FTicker::GetCoreTicker().Tick(DeltaTime)` — game work (the game mode clears, draws the scene, sets debug messages).
-4. `FPlatformEngineLoopHooks::EndFrame()` — `FPS2StatsOverlay::Draw()`: handles Select and draws the overlay on top.
+4. `FPlatformEngineLoopHooks::EndFrame()` — `FPS2StatsOverlay::Draw()`: handles L3 + R3 and draws the overlay on top.
 5. `MainWindow->SwapBuffers()` — `FPS2RHI::WaitVSync()`.
 6. `FPlatformEngineLoopHooks::PostPresent()` — `FPS2StatsOverlay::MarkFrameStart()`: starts timing the next frame's
    work and resets the Draw3D counters (`FPS2RHI::BeginDraw3DStatsFrame()`).
@@ -134,24 +134,24 @@ The loop ends when `RequestEngineExit()` is called (the ThirdPerson game does it
 
 ## Debug overlay
 
-Every PS2 game gets the engine debug overlay (UE: `stat fps` / `stat unit` + `AddOnScreenDebugMessage`, reduced).
-State lives in `FStatsOverlay` (`Engine/Source/Runtime/Core/Public/Stats/StatsOverlay.h`); the PS2 Launch extension
-draws it with the GS as two 50% translucent panels:
+Every PS2 game gets the engine debug overlay (UE: `stat unit` + `AddOnScreenDebugMessage`, reduced). One visibility
+state, `FStatsOverlay` (`Engine/Source/Runtime/Core/Public/Stats/StatsOverlay.h`), drives two parts:
 
-- **Stats** (top-left), refreshed every 0.25 s:
-  - `FPS <n>  <ms> ms` — frames per second and the game work per frame (from `PostPresent` to `EndFrame`, before the
-    overlay's own draws);
-  - `RAM <used>/<total> MB` — `FPlatformMemory::GetStats()` (32 MB EE RAM);
-  - `VRAM <used>/<total> MB` — `GDynamicRHI->GetGPUMemoryStats()` (GS allocations of 4 MB);
-  - `RES <w>X<h>`;
-  - up to `FStatsOverlay::MaxOnScreenMessages` (4) game lines set with
-    `FStatsOverlay::AddOnScreenDebugMessage(Key, Text)` (ThirdPerson shows its box and triangle counters there).
-- **Gamepad widget** (top-right): status LED (green = reading, orange = port open without data, red = port closed),
-  buttons light while held, stick dots follow the raw axes (no dead zone).
+- **The engine's stats** (top-right, drawn by the canvas on every platform, `UGameViewportClient::UpdateHudStats`):
+  `FPS` and `MS` (the paced frame), `RAM` (`FPlatformMemory::GetStats()`, 32 MB of EE RAM), `VRAM` (the GS's 4 MB),
+  `TRIS` and `OBJ <visible>/<total>` (after culling), `RES`, and the frame's GS register writes and texture uploads.
+  On the PS2 they show from the start (`bShowStatsByDefault=True` in `Config/PS2Engine.ini`).
+- **The PS2's panel** (top-left, `FPS2StatsOverlay`, drawn with the GS):
+  - `EE <ms> ms`: the EE's work per frame, from `PostPresent` to `EndFrame`, before the wait for the vertical blank
+    (what the engine's `MS` cannot show);
+  - up to `FStatsOverlay::MaxOnScreenMessages` (4) game lines set with `FStatsOverlay::AddOnScreenDebugMessage(Key,
+    Text)` (ThirdPerson shows its box and triangle counters there);
+  - below it, the **gamepad widget**: status LED (green = reading, orange = port open without data, red = port
+    closed), buttons light while held, stick dots follow the raw axes (no dead zone).
 
-**Select** (`EKeys::Gamepad_Special_Left`) cycles the visibility: both → stats only → gamepad only → none → both.
-Both panels are visible at start. Games can also call `FStatsOverlay::SetStatsVisible()` /
-`SetGamepadWidgetVisible()`.
+**L3 + R3** (both sticks pressed together) cycle the visibility: both → stats only → gamepad only → none → both. Not
+Select: games bind it (ShooterGame's scoreboard), and the scoreboard hid the stats. Games can also call
+`FStatsOverlay::SetStatsVisible()` / `SetGamepadWidgetVisible()`, or `stat unit` from the console.
 
 ## Targeting PS2 from a game
 

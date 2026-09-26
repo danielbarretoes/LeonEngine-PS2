@@ -58,6 +58,7 @@ A map URL picks the team and the seed of the rounds (the bomb's carrier): `Shoot
 | E (held) | Triangle (held) | Plant the bomb (its carrier, standing still in a bomb site, 3 s) or defuse it (a CT at the planted bomb, 10 s, 5 with a kit) |
 | B | Start | The buy menu (the console's `buymenu` toggles it too). While it is open: 1 to 7 buy its items; the D-pad's up and down move the highlight (`>`) and Cross buys it; B, Start, Escape or Circle close it. It takes these keys only while it is open |
 | Tab (held) | Select (held) | The scoreboard |
+| F4 (`stat unit`) | L3 + R3 (together) | The engine's stats (FPS, MS, RAM, VRAM, TRIS, OBJ; on from the start on the PS2) and, on the PS2, the EE's work and the gamepad widget: both → stats → gamepad → none |
 
 Console commands (`-ExecCmds="cmd1;cmd2"`): `bot_add_ct [N]`, `bot_add_t [N]`, `bot_add [N]` (the smaller team),
 `bot_fill` (both teams to five), `bot_kick [name|all]`, `bot_stop [0|1]` (the bots stand still), `mp_restartgame

@@ -5,9 +5,10 @@
 class IInputInterface;
 
 /**
- * Draws the engine debug overlay (FStatsOverlay state) with the GS at the end of each frame:
- * stats panel top-left (FPS + work ms, RAM, VRAM, RES, on-screen debug messages) and the
- * DualShock widget top-right. Gamepad Special Left (Select) cycles the visibility.
+ * Draws the PS2's part of the debug overlay (FStatsOverlay state) with the GS at the end of each frame, at the top
+ * left: the EE's work per frame and the on-screen debug messages, then the DualShock widget below them. The engine's
+ * `stat unit` panel (FPS, MS, RAM, VRAM, TRIS, OBJ) is the canvas's, at the top right, and shares the stats'
+ * visibility. L3 + R3 together cycle it: both -> stats -> gamepad -> none.
  */
 struct FPS2StatsOverlay
 {

@@ -6,7 +6,8 @@ namespace
 {
 	constexpr int32 MessageChars = 32;
 
-	bool bStatsVisible = true;
+	// Off until the engine applies bShowStatsByDefault (or -showstats) at start.
+	bool bStatsVisible = false;
 	bool bGamepadWidgetVisible = true;
 	char Messages[FStatsOverlay::MaxOnScreenMessages][MessageChars] = {};
 } // namespace

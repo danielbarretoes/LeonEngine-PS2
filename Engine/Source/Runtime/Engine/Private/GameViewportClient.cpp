@@ -300,22 +300,25 @@ void UGameViewportClient::UpdateHudStats(float DeltaTime)
 		}
 	}
 
-	// Compact two-column stats (top-right).
+	// Compact two-column stats (top-right), out of the way of a game's HUD at the bottom.
 	FDebugOverlay& Overlay = GEngine->GetDebugOverlay();
-	const FString Text = FString::Printf("FPS %5.0f   MS %5.2f\n"
-										 "RAM %4.0fM  %s\n"
-										 "TRIS %5d  OBJ %d/%d\n"
-										 "RES %dx%d\n"
-										 "GS %d writes, %d tex",
+	FString Text = FString::Printf("FPS %5.0f   MS %5.2f\n"
+								   "RAM %4.0fM  %s\n"
+								   "TRIS %5d  OBJ %d/%d\n"
+								   "RES %dx%d\n"
+								   "GS %d writes, %d tex",
 		static_cast<double>(DisplayFps), static_cast<double>(DisplayMs), RamMb, Vram, Stats.TrianglesSubmitted,
 		Stats.ObjectsVisible, Stats.ObjectsTotal, Size.X, Size.Y, Stats.RegisterWrites, Stats.TextureUploads);
+#if PLATFORM_DESKTOP
+	// The keyboard's debug views; a console has no F keys.
+	Text += FString::Printf("\nF1 AABB %s  F2 COLL %s\nF3 NAV %s  F6 AXES %s", EngineShowFlags.Bounds ? "ON" : "OFF",
+		EngineShowFlags.Collision ? "ON" : "OFF", EngineShowFlags.Navigation ? "ON" : "OFF",
+		EngineShowFlags.AxesGizmo ? "ON" : "OFF");
+#endif
 	Overlay.SetRightText(Text);
 	Overlay.SetText(FString());
 	Overlay.SetCenterText(FString());
-
-	Overlay.SetBottomLeftText(FString::Printf("F1 AABB %s\nF2 Coll+Trace %s\nF3 Navigation %s\nF6 Axes %s",
-		EngineShowFlags.Bounds ? "ON" : "OFF", EngineShowFlags.Collision ? "ON" : "OFF",
-		EngineShowFlags.Navigation ? "ON" : "OFF", EngineShowFlags.AxesGizmo ? "ON" : "OFF"));
+	Overlay.SetBottomLeftText(FString());
 }
 
 void UGameViewportClient::Draw(FViewport* InViewport, FCanvas* SceneCanvas)

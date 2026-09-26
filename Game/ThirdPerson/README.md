@@ -12,7 +12,7 @@ Collision is box-based: the character stands on the highest prop top under its f
 | Right stick | Orbit the camera (yaw / pitch) |
 | Cross | Jump |
 | Start | Quit (requests engine exit) |
-| Select | Cycle the engine debug overlay: stats + pad → stats → pad → none |
+| L3 + R3 (together) | Cycle the engine debug overlay: stats + pad → stats → pad → none |
 
 The overlay belongs to the engine (`FStatsOverlay`, drawn on PS2 by Launch's `PS2StatsOverlay`). The game adds two lines to it, `BOXES <drawn>/<total>` and `TRIS <emitted> CLIP <clipped>`, and prints the Draw3D counters to the PCSX2 EE console every 30 frames.
 

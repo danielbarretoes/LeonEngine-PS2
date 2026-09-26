@@ -181,9 +181,9 @@ ThirdPerson controls:
 | Right stick | orbit the camera |
 | Cross | jump |
 | Start | quit |
-| Select | cycle the engine debug overlay: both panels → stats → gamepad → none |
+| L3 + R3 (together) | cycle the engine debug overlay: both panels → stats → gamepad → none |
 
-The overlay (FPS, RAM, VRAM, resolution, plus the DualShock widget) is described in the
+The overlay (FPS, MS, RAM, VRAM, TRIS, OBJ, the EE's work, plus the DualShock widget) is described in the
 [PS2 platform README](../Engine/Platforms/PS2/README.md#debug-overlay).
 
 ### PCSX2 notes

@@ -204,12 +204,12 @@ public:
 		return bHeadless;
 	}
 
-	/** The frames-per-second / RAM / triangles overlay (UE: `stat unit`); off unless bShowStatsByDefault. */
+	/**
+	 * The frames-per-second / RAM / triangles overlay (UE: `stat unit`); off unless bShowStatsByDefault. The state is
+	 * FStatsOverlay's, which the platform's own toggle changes too (PS2: L3 + R3).
+	 */
 	void SetHudStatsVisible(bool bVisible);
-	[[nodiscard]] bool IsHudStatsVisible() const
-	{
-		return bShowHudStats;
-	}
+	[[nodiscard]] bool IsHudStatsVisible() const;
 
 protected:
 	/** The on-screen debug text. */
@@ -220,7 +220,6 @@ protected:
 
 	bool bIsInitialized = false;
 	bool bHeadless = false;
-	bool bShowHudStats = false;
 };
 
 /** The engine (UE: GEngine); FEngineLoop::Init creates it from the Engine config. */
