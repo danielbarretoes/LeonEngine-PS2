@@ -7,6 +7,92 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-09-26
+
+An audit of the plan's implementation (P17 to P21), and its corrections: gameplay and robustness bugs, the plan's gaps
+(the bots' escort, hunt and site rotation, the waypoints' flags, a UMG widget tree for the buy menu), the gates enforced
+in CI, and no legacy or dead code left. Win64 is the development and editor platform and the PS2 the target: the Win64
+preview renderer loses its post processing (SSAO, FXAA, tone mapping), which the PS2's Graphics Synthesizer cannot do,
+and classes with no UE counterpart are removed. The engine and ShooterGame content is resaved for 0.20.1.
+
+### Added
+
+- **Bots** (ShooterGame; [README](Game/ShooterGame/README.md)): the behavior tree gains `Escort` (a terrorist without
+  the bomb stays within `EscortDistance` of the carrier), `Hunt` (a team outnumbering the enemy by `HuntAdvantage`
+  with no bomb planted goes to the enemy's spawn) and the CT's site rotation after `RotateTime` without contact; the
+  three are `[/Script/ShooterGame.ShooterAIController]` config values. `AShooterGameMode` exposes `CountAlive` and
+  `GetTeamSpawnLocation`.
+- **Waypoint flags**: `UNavigationSystem::FindPath` can return each point's node, and `AAIController` jumps near a
+  point flagged `Jump` and crouches along the links of a point flagged `Crouch` (standing up past them).
+- **UMG widget tree** (UE's shape): `UWidget` (`ESlateVisibility`, `Slot`, `GetDesiredSize`, painted in its slot's
+  rectangle), `UPanelWidget` / `UPanelSlot`, `UContentWidget`, `UBorder`, `UVerticalBox` / `UVerticalBoxSlot`,
+  `UCanvasPanel` / `UCanvasPanelSlot`, and `UTextBlock`, `UImage` and `UProgressBar` as widgets; `UUserWidget` is a
+  `UWidget` with a `UWidgetTree` (`ConstructWidget`, `RootWidget`, `Initialize` / `NativeOnInitialized`). SlateCore
+  gains `FMargin` and `EHorizontalAlignment`.
+- ShooterGame's buy menu is a widget tree (canvas, border, vertical box of text blocks); `buymenu` opens it from the
+  console (CS). The HUD tells the terrorists when the bomb is dropped.
+- F2 (`show Collision`) and F3 (`show Navigation`) draw the capsules, the bodies and the waypoint graph into the
+  world's line batch in a windowed run.
+- `r.ShadowMapResolution` and `r.PlanarReflectionScale` are read from `[/Script/Engine.RendererSettings]`.
+- `APainCausingVolume` hurts the pawns it holds (`CausePainTo`, `DamagePerSec` × `PainInterval` every
+  `PainInterval`).
+- `AShooterGameState` counts round and match serials (`GetRoundSerial`, `GetMatchSerial`).
+- CI runs on every push; the PS2 job builds TestPAL and prints every ELF's sections (G3); the Win64 job checks the
+  format with clang-format 20.1.8 (G1); `RunTests.bat` builds and runs TestPAL on Win64.
+- Tests: `System.Engine.World.ForEachVisitsEveryActorWhenOneIsDestroyed`,
+  `System.Engine.CharacterMovement.ZeroStepKeepsTheVelocity`, `System.Core.Config.UserLayerArraysAndRemovals`,
+  `System.Engine.Damage.PainCausingVolume`, `System.AIModule.Gameplay.AIControllerPathFollowReadsWaypointFlags`,
+  `System.UMG.WidgetTree.LayoutAndPaint`, and ShooterGame's `Bomb.SurvivingCarrierLetsGo`, `Bomb.NoPlantAfterTheRound`,
+  `Rounds.RestartInTheFirstRound`, `Economy.ProjectileKillCredit`, `Bots.AgentFromConfig`,
+  `Bots.TerroristsEscortTheCarrier`, `Bots.OutnumberingTeamHunts` and `Bots.CTRotatesBetweenSites`.
+
+### Changed
+
+- The waypoint agent comes from `[/Script/Engine.NavigationSystem]` (`FWaypointLinkParams::FromConfig`) for both the
+  map import and the world's graph; ShooterGame's agent jumps 112 cm, within the character's 114 cm jump.
+- `AAIController` reports UE's `EPathFollowingStatus` (`GetMoveStatus`) instead of Leon's logic state and wish
+  direction.
+- The config saves a user layer's array keys as `!Key=ClearArray` plus `.Key=` lines, saves `RemoveKey` /
+  `EmptySection`, and `Flush(true)` reloads a global file from its hierarchy.
+- The pak file's handles share their pak (valid after `Unmount`); `FTicker` passes the frame's delta time to delayed
+  tickers too (UE).
+- The AWP pays $300 a kill, as every CS 1.6 weapon; grenade kills are credited from the projectile.
+- The banned-API check (G4) bans the D2 headers and every std container, stream and `string_view`.
+- PS2 Docker builds from a Unix host run as root and hand the outputs back to the host user.
+- MSVC's shadowing warnings are errors on the other compilers too (`-Werror=shadow`).
+- Build.version 0.20.1; the engine and ShooterGame content resaved with it.
+
+### Removed
+
+- The Win64 renderer's post processing: SSAO, FXAA, the ACES composite, the HDR and LDR colour targets, early-Z and
+  the quality presets (`FPostProcessSettings`, `EPostProcessQuality`), and their shaders; the GPU timers keep the
+  shadow, planar and colour passes.
+- Classes and helpers with no UE counterpart: `UBobbingMovementComponent`, `UOrbitMovementComponent`,
+  `UInteractableComponent`, `VolumeHelpers`, `FBasicShape` / `FBasicLight`, the UMG interaction prompt and menu list
+  widgets, `UButton` (Leon's widgets take no input), `AIChaseBehavior`, and the `GameplayMinimal.h` and
+  `PhysicsMinimal.h` umbrella headers.
+- Unused API: `AGameModeBase` world preparation helpers, `AGameStateBase::MapName` and
+  `ReplicatedWorldTimeFrames`, `APlayerState::Lives`, `CreateShared` windows, `SweepCapsuleAlongSegment`,
+  `EMeshDataBasis`, the renderer's editor hooks, the unread `DefaultPhysicsBackend` key, and ShooterGame's unused
+  blackboard keys and accessors.
+
+### Fixed
+
+- `UWorld::ForEach` no longer skips an actor when the one before it is destroyed during the visit.
+- A zero-length character step keeps the velocity instead of dividing by zero.
+- `AAIController`'s chase repath no longer resets the stuck clock, and a failed path is retried at the repath
+  interval; a path's goal must be walkable from its node.
+- `APlayerController::Destroyed` destroys its spectator pawn; `UWorld::Clear` clears the navigation; pawn sensing
+  skips actors destroyed during its update.
+- ShooterGame: a carrier alive at the round's clean-up lets go of the bomb; planting needs a live round; bots buy
+  again after `mp_restartgame` in the first round; `mp_restartgame 0` at time 0 fires; the scoreboard leaves the bot
+  match's spectator out.
+- `APainCausingVolume` ticks (an `AVolume` does not by default).
+- `LinkerLoad` refuses table counts the file cannot hold; `SerializeIntPacked` checks its byte count before
+  shifting; `LeonPak -extract` refuses entries outside the destination.
+- Win64 builds of ShooterGame no longer stop on MSVC's C4458 (locals hiding inherited members).
+- The shadow box used without casters is Z-up.
+
 ## [0.20.0] - 2026-09-26
 
 The seventeenth step of the plan (P17): ShooterGame boots with a basic FPS. The engine gets UE's collision channels
