@@ -367,7 +367,10 @@ UObject* UGLTFMapFactory::FactoryCreateFile(UClass* InClass, UObject* InParent, 
 	{
 		return nullptr;
 	}
-	const TArray<FString> Missing = FindMissingRequiredTags(Settings.RequiredTags, Plans);
+	// The project's check of its maps; the engine's maps are not the project's (UMapImportSettings).
+	const TArray<FString> Missing = UMapImportSettings::AppliesRequiredTags(MapPackageName)
+		? FindMissingRequiredTags(Settings.RequiredTags, Plans)
+		: TArray<FString>();
 	if (Missing.Num() > 0)
 	{
 		for (const FString& Entry : Missing)

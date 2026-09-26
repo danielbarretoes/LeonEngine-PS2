@@ -392,7 +392,8 @@ public:
 
 	/**
 	 * Ticks the actors, then updates the player controllers' camera managers (UE: UWorld::Tick updates the cameras
-	 * last). Prefer TickGameplayFrame for Character worlds.
+	 * last). A character moves in its tick (UCharacterMovementComponent::TickComponent); TickGameplayFrame adds the
+	 * physics step and the pawn separation, and is what the game engine runs.
 	 */
 	void Tick(float InDeltaTime);
 
@@ -403,8 +404,10 @@ public:
 	}
 
 	/**
-	 * Unreal-like frame: Character move → FPhysScene::Step → overlaps → Actor Tick → the simulated bodies move their
-	 * components (FPhysScene::SyncComponentsToBodies) → debug draws.
+	 * The game's frame (UGameEngine::Tick): Tick (the controllers' input, then the pawns: the characters move, the
+	 * camera managers last) → the pawns separate → FPhysScene::Step → the characters leave the bodies they overlap
+	 * and separate again → the simulated bodies move their components (FPhysScene::SyncComponentsToBodies) → debug
+	 * draws.
 	 */
 	void TickGameplayFrame(const FWorldGameplayFrameParams& Params);
 

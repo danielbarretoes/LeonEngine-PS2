@@ -378,4 +378,18 @@ bool FLeonEdMapFactoryRequiredTagsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLeonEdMapFactoryEngineMapsSkipRequiredTagsTest,
+	"System.LeonEd.MapFactory.EngineMapsSkipRequiredTags",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FLeonEdMapFactoryEngineMapsSkipRequiredTagsTest::RunTest(const FString& Parameters)
+{
+	// RequiredTags are a project's check of its maps: a reimport of everything with a project (gate G5) does not check
+	// the engine's maps (AxisTest has no bomb site) against the project's rules.
+	TestTrue("A project's map", UMapImportSettings::AppliesRequiredTags(TEXT("/Game/Maps/de_leon")));
+	TestTrue("A test mount's map", UMapImportSettings::AppliesRequiredTags(TEXT("/LeonEdTest/Maps/MapFixture")));
+	TestFalse("An engine map", UMapImportSettings::AppliesRequiredTags(TEXT("/Engine/Maps/AxisTest")));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

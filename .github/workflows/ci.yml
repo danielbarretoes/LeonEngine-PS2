@@ -47,7 +47,7 @@ jobs:
           call Engine\Build\BatchFiles\Build.bat LeonCook Win64 Development
       - name: Reproducible reimport (G5)
         shell: cmd
-        run: call Engine\Build\BatchFiles\CheckReimport.bat Game\ThirdPerson\ThirdPerson.lproj
+        run: call Engine\Build\BatchFiles\CheckReimport.bat Game\ThirdPerson\ThirdPerson.lproj Game\ShooterGame\ShooterGame.lproj
       # A content-only project cooked, staged into a pak and run headless from the staged folder (Development: it
       # reuses the build above; the Shipping staged build is checked locally, Docs/BUILD.md "Staging").
       - name: Staged build smoke (BuildCookRun)

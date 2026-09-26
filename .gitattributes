@@ -17,10 +17,12 @@ CMakeLists.txt text eol=lf
 # LeonHeaderTool golden tests compare generated files byte for byte: keep their inputs and outputs LF everywhere
 Engine/Source/Programs/LeonHeaderTool/Tests/** text eol=lf
 
-# Binary content: packages (.lasset / .lmap), paks (.lpak, P16) and binary glTF source art (.glb)
+# Binary content: packages (.lasset / .lmap), paks (.lpak, P16), binary glTF source art (.glb) and Blender sources (.blend,
+# P17)
 *.lasset binary
 *.lmap binary
 *.glb binary
+*.blend binary
 *.lpak binary
 *.hdr binary
 *.png binary

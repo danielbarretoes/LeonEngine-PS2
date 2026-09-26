@@ -226,6 +226,12 @@ public:
 	 */
 	virtual void UpdateCharacterStateBeforeMovement(FPhysScene& PhysScene);
 
+	/**
+	 * Moves the owning character in its world (UE: TickComponent runs PerformMovement): the component ticks with its
+	 * character, after the character's controller processed its input.
+	 */
+	void TickComponent(float DeltaTime) override;
+
 	void PostInitProperties() override;
 
 protected:

@@ -628,8 +628,10 @@ void UWorld::ResolveCharacterOverlaps()
 
 void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& Params)
 {
-	ForEach<ACharacter>(
-		[&](ACharacter& Character) { Character.TickCharacterMovement(Params.DeltaTime, Params.CollisionDebugDraw); });
+	// The actors tick first: the controllers process their input and their pawns tick after them, so a character's
+	// movement component moves it with this frame's input (UE's order: UCharacterMovementComponent::TickComponent), and
+	// the camera managers update last.
+	Tick(Params.DeltaTime);
 	ResolveCharacterOverlaps();
 
 	FPhysSceneStepParams Step{};
@@ -655,8 +657,6 @@ void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& Params)
 
 	ForEach<ACharacter>([](ACharacter& Character) { Character.ResolveOverlaps(); });
 	ResolveCharacterOverlaps();
-
-	Tick(Params.DeltaTime);
 
 	Physics.SyncComponentsToBodies();
 

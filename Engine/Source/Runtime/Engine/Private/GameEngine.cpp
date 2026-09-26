@@ -209,8 +209,11 @@ void UGameEngine::Tick(float DeltaSeconds, bool /*bIdleMode*/)
 	TickWorldTravel(Context, DeltaSeconds);
 	if (UWorld* World = Context.World())
 	{
-		// The player controllers process their input as they tick, then the world updates their cameras.
-		World->Tick(DeltaSeconds);
+		// The player controllers process their input as they tick, the characters move after their controllers, the
+		// world updates the cameras, then the physics steps (UWorld::TickGameplayFrame).
+		FWorldGameplayFrameParams Frame;
+		Frame.DeltaTime = DeltaSeconds;
+		World->TickGameplayFrame(Frame);
 	}
 	// After the world ticked, like UE's UGameEngine::Tick (a safe point, D11).
 	(void)ConditionalCollectGarbage(DeltaSeconds);

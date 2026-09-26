@@ -69,7 +69,9 @@ struct LEONED_API FMapImportNodeRule
  *   light whatever its name.
  * - RequiredTags is the project's check of a map: each entry is `[<Class>:]<Tag>[+<Tag>...]`, and some actor (of that
  *   class, named without its prefix: `PlayerStart`) must carry every tag, a player start's PlayerStartTag counting as
- *   one of its tags; the import fails, naming the missing entries, when one is not met.
+ *   one of its tags; the import fails, naming the missing entries, when one is not met. The engine's maps
+ *   (/Engine/...) are not a project's: a reimport of every asset with a project (CheckReimport, gate G5) does not
+ *   check them against it.
  */
 UCLASS(Config = Editor)
 class LEONED_API UMapImportSettings : public UObject
@@ -95,4 +97,7 @@ public:
 	 * `PlayerStart_CT.001` after `PlayerStart` is `CT`.
 	 */
 	[[nodiscard]] static FString GetSuffix(const FString& NodeName, const FString& Prefix);
+
+	/** Whether RequiredTags apply to the map of a package: every map but the engine's (/Engine/...). */
+	[[nodiscard]] static bool AppliesRequiredTags(const FString& MapPackageName);
 };

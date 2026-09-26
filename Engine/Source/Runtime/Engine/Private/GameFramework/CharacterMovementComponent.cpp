@@ -21,6 +21,17 @@ UCharacterMovementComponent::UCharacterMovementComponent(const FObjectInitialize
 	: Super(ObjectInitializer)
 {
 	bWantsToCrouch = false;
+	// UE: the character movement ticks (PrimaryComponentTick), after the character's controller.
+	SetComponentTickEnabled(true);
+}
+
+void UCharacterMovementComponent::TickComponent(float DeltaTime)
+{
+	Super::TickComponent(DeltaTime);
+	if (CharacterOwner != nullptr)
+	{
+		CharacterOwner->TickCharacterMovement(DeltaTime);
+	}
 }
 
 void UCharacterMovementComponent::PostInitProperties()

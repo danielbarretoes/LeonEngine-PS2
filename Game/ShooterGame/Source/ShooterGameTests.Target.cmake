@@ -4,8 +4,9 @@
 leon_target(ShooterGameTests TYPE Program
 	PLATFORMS Win64
 	LAUNCH_MODULE LeonAutomationTests
-	# The Renderer gives the test worlds their scene, as in LeonAutomationTests.
-	EXTRA_MODULE_NAMES ShooterGame Renderer
+	# The Renderer gives the test worlds their scene, as in LeonAutomationTests; LeonEd (the map importer) lets the tests
+	# check the project's map rules (a program may link an editor module, a game never does).
+	EXTRA_MODULE_NAMES ShooterGame Renderer LeonEd
 	COLLECT_AUTOMATION_TESTS
 	AUTOMATION_TEST_MODULES ShooterGame
 )

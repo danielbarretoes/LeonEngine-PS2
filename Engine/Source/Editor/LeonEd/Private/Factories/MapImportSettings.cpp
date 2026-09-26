@@ -19,6 +19,11 @@ const FMapImportNodeRule* UMapImportSettings::FindRule(const FString& NodeName) 
 	return Best;
 }
 
+bool UMapImportSettings::AppliesRequiredTags(const FString& MapPackageName)
+{
+	return !MapPackageName.StartsWith(TEXT("/Engine/"), ESearchCase::IgnoreCase);
+}
+
 FString UMapImportSettings::GetSuffix(const FString& NodeName, const FString& Prefix)
 {
 	FString Suffix = NodeName.StartsWith(Prefix, ESearchCase::IgnoreCase) ? NodeName.Mid(Prefix.Len()) : NodeName;
