@@ -26,7 +26,7 @@ Also: [ASSET_FORMATS.md](ASSET_FORMATS.md#maps--lmap) (what a map package saves)
 | `ABlockingVolume`, `ATriggerVolume`, `APainCausingVolume` | `Classes/Engine/`, `Classes/GameFramework/` | Boxes (plan decision D16): an invisible wall, a region gameplay code tests (`Tags`: `BombSite` + `A`), a damaging region |
 | `ADirectionalLight`, `APointLight` | `Classes/Engine/` | The lights (colour, intensity, shadows, source angle / attenuation radius) |
 | `ACameraActor` | `Classes/Camera/CameraActor.h` | A placed camera: its `UCameraComponent` keeps an orbit or free-look view (the legacy levels' framing, P15) |
-| `ANavigationWaypoint` | `Classes/AI/Navigation/NavigationWaypoint.h` | A point of the map's waypoint graph: `Links` (one way) and `Flags`; the navigation that uses them comes in P20 |
+| `ANavigationWaypoint` | `Classes/AI/Navigation/NavigationWaypoint.h` | A point of the map's waypoint graph: `Links` (one way) and `Flags`; `UNavigationSystem` builds its graph from them when the world begins play (P20) |
 | `URotatingMovementComponent` | `Classes/GameFramework/RotatingMovementComponent.h` | UE's: turns its component at `RotationRate` (degrees per second), optionally about `PivotTranslation` |
 | `UBobbingMovementComponent` | `Classes/GameFramework/BobbingMovementComponent.h` | Leon: sets the component's height to `BaseZ + Amplitude * (0.5 + 0.5 * sin(Speed * t))` |
 | `UOrbitMovementComponent` | `Classes/GameFramework/OrbitMovementComponent.h` | Leon: moves the component on a circle around the world's vertical axis (`Radius`, `Height`, `HeightAmplitude`, `Speed`) |
@@ -163,6 +163,17 @@ names it: `GLTFMapFactory: '<file>' has nothing with the required tags 'BombSite
 check (`UMapImportSettings::AppliesRequiredTags`), so `LeonCook <Project>.lproj -run=ImportAssets -reimport -all`, which
 reimports the engine content too, passes with a project that requires tags.
 
+### Waypoint links
+
+With `bAutoLinkWaypoints` (P20; off by default), the import links, after placing the actors, every pair of waypoints
+up to `WaypointMaxLinkDistance` apart that an agent can walk between both ways (`UNavigationSystem::AutoLinkWaypoints`:
+the standing capsule, `WaypointAgentRadius` × `WaypointAgentHalfHeight`, swept between them on the Pawn channel, the
+floor probed under the way for gaps; a rise up to `WaypointMaxStepHeight` is a step, up to `WaypointMaxJumpHeight` a
+jump), and one way down a drop higher than a jump and up to `WaypointMaxDropHeight`. The links the nodes name are kept;
+the added ones are saved in the map, so the game only reads them. ShooterGame's `DefaultEditor.ini` turns it on with
+CS's hull (40 × 91.5 cm, a 45 cm step, a 115 cm jump, a 3 m drop, 20 m); de_leon's import adds 26 links to the 18
+waypoints' hand-authored ones, the same on every import (the map's bytes do not change: gate G5).
+
 ### Collision
 
 A static mesh actor collides with its mesh's triangles (the physics scene's static triangle bodies), unless its mesh
@@ -264,7 +275,7 @@ import makes one `SM_` per material (`SM_Wall`, `SM_Crate`, `SM_Floor`, the four
 | `Clip_BLowWall` | a blocking volume: nobody jumps over the low wall at B |
 | `BombSite_A` / `_B` (14 × 10 × 3 m), `BuyZone_CT` (7 × 12 m) / `_T` (7 × 16 m) | trigger volumes tagged [`BombSite`, `A`], [`BuyZone`, `CT`], ... (ShooterGame's rules) |
 | `PlayerStart_CT` … `.004`, `PlayerStart_T` … `.004` | ten player starts, 2 m apart, 0.92 m up (UE's start: the capsule's centre), the CTs facing south, the Ts north; `PlayerStartTag` `CT` / `T` |
-| `NavWaypoint_*` (18: `TSpawn`, `TMid`, `TPlazaA` / `B`, `Mid`, `ShortA` / `B`, `LongA` / `B`, `MidDoors`, `CTMid`, `AConnector` / `BConnector`, `SiteA` / `B`, `CTSpawn`, `CTA` / `CTB`) | navigation waypoints, each linked both ways by its `links` custom property (P20 uses the graph) |
+| `NavWaypoint_*` (18: `TSpawn`, `TMid`, `TPlazaA` / `B`, `Mid`, `ShortA` / `B`, `LongA` / `B`, `MidDoors`, `CTMid`, `AConnector` / `BConnector`, `SiteA` / `B`, `CTSpawn`, `CTA` / `CTB`) | navigation waypoints, each linked both ways by its `links` custom property, plus the links the import adds (above) |
 | `Sun` | the directional light, shining down toward the south-east |
 
 The project's `RequiredTags` hold (both sites, both buy zones, both teams' starts). ShooterGame's tests

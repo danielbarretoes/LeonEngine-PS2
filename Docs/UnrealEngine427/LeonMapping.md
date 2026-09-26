@@ -135,7 +135,7 @@ the pinned ps2dev image headers).
 | 4.5 UMG | `ButtonWidget`, `ImageWidget`, `ProgressBarWidget`, `TextBlockWidget`, `VerticalBoxWidget`, `WidgetPaintContext` | `UButton`, `UImage`, `UProgressBar`, `UTextBlock`, `UVerticalBox` (files renamed to match), `FPaintContext` |
 | 4.6 Engine | `Engine`, `World`, `Level`, `Actor`, `Character`, `Camera`, `GameMode`, `GameState` | `UGameEngine`, `UWorld`, `ULevel`, `AActor`, `ACharacter`, `UCameraComponent` (`Camera/CameraComponent.h`), `AGameModeBase`, `AGameStateBase` |
 | | `LineTraceSingleByChannel(...)`, `ApplyPointDamage(...)` (Damage.h) | `UGameplayStatics::*` (`Kismet/GameplayStatics.h`) |
-| | `NavigationSystem`, `NavMesh`, `InputMappingContext`, `PlayerInput` | `UNavigationSystem`, `FNavMesh`, `UInputMappingContext`, `UPlayerInput` |
+| | `NavigationSystem`, `NavMesh`, `InputMappingContext`, `PlayerInput` | `UNavigationSystem` (a waypoint graph since P20; `FNavMesh` removed), `UInputMappingContext`, `UPlayerInput` |
 | 4.7 AI | `AIController`, `BTSequence`, `BTSelector`, `BTConditionBool`, `BTAction`, `Blackboard` | `AAIController`, `UBTComposite_Sequence`, `UBTComposite_Selector`, `UBTDecorator_Bool`, `UBTTask_Action`, `UBlackboardComponent` |
 | 4.8 Tools | LeonCook `main`, `RunCookRecipeFile`, `ResolveBeside`, `CookStaticMeshFrom*` | `UCookCommandlet::Main` (`Commandlets/CookCommandlet.h`), `FCookRecipe::RunFile`, `FCookPaths::ResolveBeside`, `FStaticMeshBuilder::CookFrom*` |
 | 4.9 Launch | `RunLeonGame` + `GameApplication::Run` loop | `FEngineLoop::Init/Tick/Exit` driving `FGameApplication::Init/Tick/Exit` -> `UGameEngine::Start/Tick` |
@@ -520,7 +520,7 @@ engine templates are maps, and the `.llev` levels, their reader and the legacy c
 | `UMigrateLegacyContentCommandlet`, `ULegacyMaterialFactory`, `ULegacyStaticMeshFactory` | removed once the content was migrated | — |
 | — | `UGLTFMapFactory` (`-run=ImportAssets -type=Map -source=<file.glb> -dest=/Game/Maps/<Map>`), `UMapImportSettings` (`[/Script/LeonEd.MapImportSettings]`: `NodeRules` of `FMapImportNodeRule` with `EMapImportNodeKind`, `RequiredTags`), `Engine/Config/BaseEditor.ini` | `LeonEd/Classes/Factories/GLTFMapFactory.h`, `MapImportSettings.h` |
 | — | `LoadGltfScene` (`FGltfScene`: nodes with world transforms and extras, meshes, KHR_lights_punctual lights) | `MeshUtilities/Public/GltfScene.h` |
-| — | `ANavigationWaypoint` (`Links`, `Flags`; the navigation that uses it comes in P20) | `Engine/Classes/AI/Navigation/NavigationWaypoint.h` |
+| — | `ANavigationWaypoint` (`Links`, `Flags`; P20's `UNavigationSystem` builds its graph from them) | `Engine/Classes/AI/Navigation/NavigationWaypoint.h` |
 | — | `UObject::Rename` (UE's, without flags or redirectors); `UWorld::AssetImportData` (editor only, an imported map's source) | `CoreUObject/Public/UObject/Object.h`, `Engine/Classes/Engine/World.h` |
 | `EComponentMobility`, `ECollisionEnabled` (plain enums), the collision settings as plain members | reflected enum classes (`UENUM()`; UE's are namespaced); `Mobility`, `CollisionEnabled`, `bSimulatePhysics`, `bEnableGravity` are `UPROPERTY`s (UE keeps the last three in `FBodyInstance`) | `Engine/Classes/Engine/EngineTypes.h`, `Components/PrimitiveComponent.h` |
 | — | `/Engine/Maps/AxisTest` from `Engine/SourceArt/Maps/AxisTest.glb` (`MakeAxisTest.py`); `System.Engine.MapPackage.*`, `System.Engine.AxisTestMap.NoMirroring`, `System.LeonEd.MapFactory.*`, `System.AIModule.LevelAndAISmoke.EditorStyleMapResaveHeadless` (339 tests) | `Engine/Private/Tests/`, `LeonEd/Private/Tests/`, `MeshUtilities/Private/Tests/Fixtures/MapFixture.gltf` |
@@ -613,6 +613,24 @@ Counter-Strike's defusal rules on UE's match states. Details:
 | — | `AShooterBomb` (CS's C4; UE ShooterGame has no bomb), `UShooterBuyMenuWidget` (a UMG `UUserWidget`), `AShooterPlayerController::Buy` / `Give` / `God` / `Kill` (UE: the cheat manager's `God`) | same |
 | `ACharacter::IntegrateVertical` traced the floor from the moved feet | from where the feet began the step (UE sweeps the move) | `Engine/Private/GameFramework/Character.cpp` |
 | — | `System.Engine.CharacterMovement.LongFramesKeepTheFloor` (384 tests), `ShooterGame.*` (28) | `*/Private/Tests/` |
+
+### P20 — Bots and the waypoint navigation
+
+The grid navmesh of the legacy engine gives way to a waypoint graph (UE3's path nodes; UE 4.27 navigates on a Recast
+navmesh, which Leon does not have), and ShooterGame's bots get their brains. Details:
+[ShooterGame README — Bots](../../Game/ShooterGame/README.md#bots), [LEVELS — Waypoint links](../LEVELS.md#waypoint-links).
+
+| Leon (before) | UE name (now) | Where |
+| --- | --- | --- |
+| `UNavigationSystem` over `FNavMesh` (a grid baked from the static bodies' boxes) | `UNavigationSystem` over the level's `ANavigationWaypoint` graph: `Build`, `FindPath` (A*), `ProjectPointToNavigation`, `FindPathToLocationSynchronously` (UE's, returning a `UNavigationPath`), `CanWalkBetween` (a capsule sweep and a floor probe), `AutoLinkWaypoints`, `FWaypointLinkParams` | `Engine/Public/AI/Navigation/NavigationSystem.h`, `Engine/Classes/AI/Navigation/NavigationPath.h` |
+| `FNavMesh` | removed | — |
+| — | `UMapImportSettings::bAutoLinkWaypoints` and `Waypoint*` (the import links the waypoints) | `LeonEd/Classes/Factories/MapImportSettings.h` |
+| `UBlackboardComponent`: booleans | UE's typed keys: `SetValueAsBool` / `Int` / `Float` / `Vector` / `Object` / `Name`, `GetValueAs*`, `IsValueSet`, `ClearValue` | `AIModule/Classes/BehaviorTree/BehaviorTree.h` |
+| — | `UPawnSensingComponent` (UE's: `SightRadius`, `SetPeripheralVisionAngle`, `HearingThreshold`, `LOSHearingThreshold`, `OnSeePawn`, `OnHearNoise`), `AActor::MakeNoise` | `AIModule/Classes/Perception/PawnSensingComponent.h`, `Engine/Classes/GameFramework/Actor.h` |
+| `AAIController`: path following | + jumping up a path's rise, repathing when stuck | `AIModule/Private/AIController.cpp` |
+| `AShooterAIController`: a team, no behaviour | CS's bot: a behavior tree (buy, engage, defuse, plant, fetch the bomb, investigate, the objective), the aim model, `Difficulty` | `Game/ShooterGame/Source/ShooterGame/` |
+| — | `AShooterGameMode::GetTerroristTargetSite`, `bot_stop`; `AShooterWeapon::FireNoiseLoudness` | same |
+| `System.AIModule.Golden.AIControllerArrives`, `System.Engine.Golden.NavigationFindPath` (the grid's tables) | removed; `System.AIModule.Gameplay.NavigationAutoLinkStepsJumpsAndDrops`, `System.AIModule.Blackboard.TypedKeys`, `System.AIModule.PawnSensing.*`, `System.LeonEd.MapFactory.AutoLinksWaypoints` (386 tests), `ShooterGame.Bots.*` (33) | `*/Private/Tests/` |
 
 ## Coordinates
 

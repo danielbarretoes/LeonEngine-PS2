@@ -7,7 +7,7 @@ What runs automatically and what a person still has to check by hand. Build and 
 
 | Check | Command | Passes when |
 | --- | --- | --- |
-| Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` twice: the engine's (`LeonAutomationTests`, 384) and ShooterGame's (`ShooterGameTests`, 28) |
+| Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` twice: the engine's (`LeonAutomationTests`, 386) and ShooterGame's (`ShooterGameTests`, 33) |
 | LeonHeaderTool golden tests (run by `RunTests.bat` too) | `Engine\Intermediate\Build\HostTools\Win64\LeonHeaderTool.exe -Test` | `LeonHeaderTool -Test: N of N golden cases passed` |
 | Core, CoreUObject, Json, Projects and PakFile on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (113 test(s), 0 failed)` in the EE log (119 on Win64) |
 | Format, banned APIs (G4), Win64 build | `Engine\Build\BatchFiles\Lint.bat` | `Lint OK` |
@@ -128,9 +128,20 @@ and checks its sites, buy zones, team starts, waypoint links, player clip and su
 `de_leon.glb` under the project's rules and refuses the AxisTest source; `TenPawnsOnDeLeon` opens the map in a
 headless `UGameEngine`, adds nine bots and ticks 60 frames: ten pawns standing on distinct starts, on the spawn pads.
 
-The golden tests (`System.Engine.Golden.*`, `System.AIModule.Golden.*`, `System.JoltPhysics.Golden.*`) replay
-movement, traces, navigation, cameras, shadows and reflections against tables recorded before P7 moved the world to
-UE's axes, so any change of sign or unit fails them. They convert the tables with `FLegacyCoordinateConversion`, which
+Since P20 the bots are tested. The waypoint navigation (`System.AIModule.Gameplay.Navigation*`,
+`System.AIModule.FrameworkHardening.NavigationAgentRadiusKeepsWideAgentsOutOfGaps`) finds paths over a small graph,
+around walls, and links steps, jumps and drops (`AutoLinkWaypoints`); `System.LeonEd.MapFactory.AutoLinksWaypoints`
+imports a map with the auto-linking; `System.AIModule.Blackboard.TypedKeys` and `System.AIModule.PawnSensing.*` (sight
+in a cone behind a line of sight, hearing within the loudness' range) test the AI's pieces. ShooterGame's
+`ShooterGame.Bots.*` (5, `ShooterBotTests.cpp`) test the bots on a small open map (buying, engaging with the reaction
+time respected, the carrier planting, a CT defusing) and play three rounds of de_leon headless with ten bots and
+`?seed=5`: each round ends with a reason, the scores add up, the money stays within [0, 16000], no pawn falls through
+the floor and kills happen. The round and weapon tests keep the bots still (`bot_stop`, or a controller that does not
+tick) so they test the rules alone.
+
+The golden tests (`System.Engine.Golden.*`, `System.JoltPhysics.Golden.*`) replay movement, traces, cameras, shadows
+and reflections against tables recorded before P7 moved the world to UE's axes (the navigation's and the AI's went
+with the grid navigation in P20), so any change of sign or unit fails them. They convert the tables with `FLegacyCoordinateConversion`, which
 lives in the tests only since P15 (RenderCore's `Public/Tests` and `Private/Tests`); `System.Engine.Golden.StarterLevel`
 reads the Starter's meshes, light and camera framing from `/Engine/Maps/Template_Default`.
 

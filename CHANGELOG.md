@@ -30,6 +30,11 @@ the buy zones with a UMG buy menu, the bomb (carried, dropped, planted in a site
 clock, the score, the money and the kill feed, and CS's console commands. The engine keeps characters on the floor
 through long frames (a slow frame sank them into de_leon's floor).
 
+The twentieth step (P20): bots. The grid navmesh gives way to a waypoint graph (UE3's path nodes) that the map import
+links by itself, the AIModule gets a typed blackboard and UE's pawn sensing, and ShooterGame's bots play: they buy,
+walk de_leon, see and hear their enemies, fight with a human-like aim, plant, defuse and hold the sites, all from
+seeded streams so a match replays.
+
 ### Added
 
 - **Collision channels** (P17, PhysicsCore and Engine; [ARCHITECTURE.md §11](Docs/ARCHITECTURE.md#11-physics)).
@@ -135,6 +140,26 @@ through long frames (a slow frame sank them into de_leon's floor).
   and 1 to 7 (its items).
 - Tests: `System.Engine.CharacterMovement.LongFramesKeepTheFloor` (384 tests), and `ShooterGame.Rounds.*`,
   `ShooterGame.Economy.*`, `ShooterGame.Bomb.*`, `ShooterGame.Buy.Rules`, `ShooterGame.HUD.RoundInfo` (28).
+- **Waypoint navigation** (P20, Engine; [LEVELS.md — Waypoint links](Docs/LEVELS.md#waypoint-links)):
+  `UNavigationSystem` builds a graph from the level's `ANavigationWaypoint` actors when the world begins play (each
+  node on the floor below its waypoint) and finds paths with A* between the start's and the end's nearest reachable
+  waypoints; `CanWalkBetween` (the agent's capsule swept between two points, the floor probed for gaps; steps, jumps
+  and drops by `FWaypointLinkParams`), `FindFloorBelow`, `AutoLinkWaypoints`, UE's
+  `FindPathToLocationSynchronously` and `UNavigationPath`; F3 draws the nodes and links.
+- The map import's `bAutoLinkWaypoints` and `Waypoint*` settings (`UMapImportSettings`): the links an agent can walk
+  are added and saved in the map; ShooterGame turns it on with CS's hull, and de_leon gets 26 links.
+- AIModule: UE's typed blackboard (`SetValueAs*` / `GetValueAs*` for bool, int, float, vector, name and object keys,
+  `IsValueSet`, `ClearValue`); `UPawnSensingComponent` (sight in a cone with a line of sight, hearing within a
+  loudness-scaled range; `OnSeePawn`, `OnHearNoise`) and `AActor::MakeNoise`; `AAIController`'s path following jumps
+  up a rise and repaths when stuck.
+- **ShooterGame's bots** (P20; [README](Game/ShooterGame/README.md#bots)): `AShooterAIController` runs a behavior tree
+  (buy, engage, defuse, plant, fetch the bomb, investigate a shot, the objective) with CS's aim model (reaction time,
+  an aim error that settles, bursts, the AWP's zoom), `Difficulty` and the rest in
+  `[/Script/ShooterGame.ShooterAIController]`; the terrorists' site is drawn each round from the seeded stream
+  (`AShooterGameMode::GetTerroristTargetSite`); weapons make noise when they fire (`FireNoiseLoudness`); `bot_stop`.
+- Tests: `System.AIModule.Gameplay.NavigationAutoLinkStepsJumpsAndDrops`, `System.AIModule.Blackboard.TypedKeys`,
+  `System.AIModule.PawnSensing.*`, `System.LeonEd.MapFactory.AutoLinksWaypoints` (386 tests), and `ShooterGame.Bots.*`
+  (33), among them a three-round match of ten bots on de_leon with its invariants.
 
 ### Changed
 
@@ -150,13 +175,22 @@ through long frames (a slow frame sank them into de_leon's floor).
   reimports the engine content too.
 - `RunTests.bat` also builds and runs ShooterGame's tests, `Lint.bat` builds ShooterGame's targets, and CI runs G6, G5
   with ShooterGame and a staged ShooterGame (BuildCookRun).
-- The navigation ignores pawns' capsules and components that do not affect navigation (`CanEverAffectNavigation`).
+- Characters' capsules and components that do not affect navigation (`CanEverAffectNavigation`) stay out of the
+  navigation data (P17's grid; P20's waypoint queries run on the Pawn channel, which characters ignore).
 - `ACharacter` no longer has a health of its own (`Health`, `TakeDamage(float)`, `Die`, `Revive`, `IsAlive`): damage
   goes through `AActor::TakeDamage`, and a game's pawn keeps its health (UE; `AShooterCharacter`).
 - ShooterGame's pawns spawn with their health (`PostInitializeComponents`), and `AShooterGameMode::CountPawns` counts
   the players' pawns (a pawn spawned during a world tick joins the level's list when the tick ends).
+- The blackboard's keys are typed (UE): `SetBool` / `GetBool` became `SetValueAsBool` / `GetValueAsBool`.
+- The navigation tests use waypoint graphs; the round and weapon tests keep the bots still.
 - ShooterGame's bodies no longer hide from their own player by visibility: they are `bOwnerNoSee`, so a player sees
   its own corpse.
+
+### Removed
+
+- The grid navmesh (`FNavMesh`, `NavMesh.h`) and the golden tables of its paths
+  (`System.Engine.Golden.NavigationFindPath`, `System.AIModule.Golden.AIControllerArrives`): the waypoint graph replaces
+  it.
 
 ### Fixed
 

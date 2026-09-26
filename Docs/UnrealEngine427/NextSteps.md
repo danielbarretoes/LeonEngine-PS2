@@ -353,10 +353,23 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 - **Fix**: characters stay on the floor through long frames.
 - 384 engine tests and 28 ShooterGame tests.
 
+### Done — Bots and the waypoint navigation (P20)
+
+([LeonMapping — P20](LeonMapping.md#p20--bots-and-the-waypoint-navigation), [ShooterGame README — Bots](../../Game/ShooterGame/README.md#bots)):
+
+- `UNavigationSystem` on the level's waypoint graph (A*, a capsule sweep and a floor probe for reachability, UE's
+  `FindPathToLocationSynchronously`); the grid `FNavMesh` is gone. The map import links the waypoints an agent can
+  walk (`bAutoLinkWaypoints`: steps, jumps, drops); de_leon gets 26 links more.
+- AIModule: a typed blackboard (UE's `SetValueAs*` / `GetValueAs*`), `UPawnSensingComponent` (sight, hearing of
+  `AActor::MakeNoise`), path following that jumps and repaths when stuck.
+- ShooterGame's bots: buying, engaging with a reaction time and a settling aim error, planting, defusing, fetching the
+  bomb, investigating shots, holding the sites; `Difficulty`; seeded, so a match with `?seed=N` replays.
+- 386 engine tests and 33 ShooterGame tests.
+
 ### Next
 
-- **P20 (bots):** the bots' brains on `AShooterAIController` with the de_leon waypoint graph (`ANavigationWaypoint`
-  links).
+- **P21 (hardening):** a headless bot match in CI (`-botmatch -rounds=N -seed=N`, a fixed step, invariants), the
+  budgets, a docs sweep and release 0.20.0.
 - Later: move the character movement code from `ACharacter` into `UCharacterMovementComponent` (UE's
   `PerformMovement`, `MovementMode`, `Velocity`, `CurrentFloor`); a cached `ComponentToWorld`; tick functions.
 - Cook follow-ups: `-iterate` (cook only what changed), an asset registry, compressed paks, the PS2 target's formats
@@ -372,7 +385,8 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
   like TP_ThirdPerson.
 - Renderer through RHI command lists instead of direct GL calls (the Engine ↔ Renderer cycle is gone since P13); a
   render thread (the scene proxies are the seam).
-- `UNavigationSystemBase` seam so NavigationSystem can move to its own module.
+- `UNavigationSystemBase` seam so NavigationSystem can move to its own module; a navmesh (Recast) if a map ever
+  needs more than a waypoint graph (the graph ignores dynamic obstacles; a bot blocked by one repaths).
 - The PS2 target platform's formats (the TargetPlatform module's PS2 stub: textures, LPS2 meshes, ADPCM) and a pak on
   `cdrom0:` mounted by the PS2 launch.
 - Texture mipmaps on PS2 (GS MIPTBP registers) — fixes floor moiré in ThirdPerson.
@@ -385,8 +399,7 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
   framework runs on the PS2.
 - **Map import (P15):** a `UCX_` piece is its bounding box (no convex hulls in the physics scene) and several merge
   into one box; the importer reads external images only (not those embedded in a `.glb`); light intensities are
-  glTF's values as they are; spot lights become point lights. Waypoint links are authored by hand until P20's
-  auto-linking.
+  glTF's values as they are; spot lights become point lights.
 - **Editor settings:** the factories take their options as properties set from text (ImportList.ini, switches) and the
   import data keeps them as a string map; UE's typed import data classes (`UFbxAssetImportData`, ...) and an import UI
   come with an editor.
