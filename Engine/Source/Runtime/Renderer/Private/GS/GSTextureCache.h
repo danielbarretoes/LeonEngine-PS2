@@ -17,8 +17,9 @@ class UTexture2D;
  * - PF_P8 / PF_P4 textures (the PS2 cook's, Docs/PLANS/ps2-engine.md E3) upload as they are: PSMT8 / PSMT4 indices
  *   and a PSMCT32 CLUT in CSM1, which TEX0 loads (CLD 1). Their sides must be powers of two between MinTextureSize and
  *   MaxTextureSize, as the cook makes them.
- * - RGBA8 textures (the desktop's content, the renderer's own texels) upload as PSMCT32, resampled nearest to powers of
- *   two in that range.
+ * - RGBA8 textures (the renderer's own texels, and the assets of uncooked content) upload as PSMCT32, resampled nearest
+ *   to powers of two in that range, unless a texture converter is set: the desktop's turns an uncooked asset's texels
+ *   into what the PS2 cook makes (Docs/PLANS/ps2-preview.md V1), once, and uploads that.
  *
  * Texels keep the engine's order (bottom row first, as OpenGL reads them), so a UV samples the same texel as on the
  * desktop renderer.
@@ -28,6 +29,16 @@ class FGSTextureCache
 public:
 	static constexpr int32 MinTextureSize = 8;
 	static constexpr int32 MaxTextureSize = 256;
+
+	/**
+	 * Turns Width x Height RGBA8 texels (bottom row first) into a texture's platform data (its size, format and data:
+	 * GetPixelFormatDataSize bytes); false leaves them RGBA8.
+	 */
+	using FTextureConverter = bool (*)(const uint8* Rgba, int32 Width, int32 Height, int32& OutSizeX, int32& OutSizeY,
+		EPixelFormat& OutFormat, TArray<uint8>& OutData);
+
+	/** The converter of the assets' RGBA8 textures (null: none). Empties the cache. */
+	void SetTextureConverter(FTextureConverter InConverter);
 
 	/** The arena: NumBlocks 64-word blocks from FirstBlock (page aligned). Empties the cache. */
 	void SetArena(uint32 FirstBlock, uint32 NumBlocks);
@@ -75,6 +86,15 @@ private:
 		FGSTex0 Tex0;
 	};
 
+	/** An asset's texels as the converter made them (kept across the arena's resets). */
+	struct FConverted
+	{
+		int32 SizeX = 0;
+		int32 SizeY = 0;
+		EPixelFormat Format = PF_Unknown;
+		TArray<uint8> Data;
+	};
+
 	/** Resamples and uploads; OutTex0 gets the buffer, size and format. */
 	bool Upload(const void* Key, int32 Width, int32 Height, TArrayView<const uint8> Rgba, bool bAlpha,
 		FGSCommandList& List, FGSTex0& OutTex0);
@@ -88,6 +108,8 @@ private:
 	bool Allocate(uint32 NumBlocks, uint32 NumClutBlocks, uint32& OutBlock, uint32& OutClutBlock);
 
 	TMap<const void*, FEntry> Entries;
+	FTextureConverter Converter = nullptr;
+	TMap<const void*, FConverted> Converted;
 	uint32 ArenaFirst = 0;
 	uint32 ArenaBlocks = 0;
 	/** The next free block for texels, relative to ArenaFirst. */

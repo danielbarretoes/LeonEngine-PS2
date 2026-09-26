@@ -1,183 +1,96 @@
 #include "AudioDevice.h"
 
+#include "AudioOutput.h"
+#include "HAL/PlatformTime.h"
+#include "SoftwareAudioMixer.h"
 #include "UiTone.h"
 
-#include <miniaudio.h>
-
 DEFINE_LOG_CATEGORY_STATIC(LogAudioMixer, Log, All);
+
+// FAudioDevice on every platform (Docs/PLANS/ps2-preview.md V1): the sounds mix on the game thread
+// (FSoftwareAudioMixer, 48 kHz stereo, the SPU2's rate) and each tick queues what the platform's output (FAudioOutput:
+// the SPU2 through audsrv, or a desktop device) played since the last one, so the desktop hears what the PS2 plays.
 
 namespace
 {
 
-	[[nodiscard]] float Clamp01(float V)
-	{
-		return FMath::Clamp(V, 0.0f, 1.0f);
-	}
+	constexpr int32 OutputRate = 48000;
+	/** The audio queued ahead of the output when the device starts: two frames at 30 fps. */
+	constexpr double LeadSeconds = 2.0 / 30.0;
+	/** The most a tick mixes: a hitch longer than this skips audio rather than queueing it. */
+	constexpr double MaxTickSeconds = 0.1;
 
-	/**
-	 * miniaudio works in a right-handed, Y-up space and its distance attenuation is tuned for metres; the engine world
-	 * is left-handed, Z up, in centimetres. At this boundary Y and Z swap (which keeps the physical scene, so left and
-	 * right stay where they are) and locations scale by 0.01 (directions only swap).
-	 */
-	constexpr float AudioMetresPerUnit = 0.01f;
-
-	[[nodiscard]] FVector ToAudioDirection(const FVector& WorldDirection)
-	{
-		return FVector(WorldDirection.X, WorldDirection.Z, WorldDirection.Y);
-	}
-
-	[[nodiscard]] FVector ToAudioMetres(const FVector& WorldLocation)
-	{
-		return ToAudioDirection(WorldLocation) * AudioMetresPerUnit;
-	}
+	FAudioOutputFactory GAudioOutputFactory = nullptr;
 
 } // namespace
 
+void SetAudioOutputFactory(FAudioOutputFactory Factory)
+{
+	GAudioOutputFactory = Factory;
+}
+
 struct FAudioDevice::FImpl
 {
-	static constexpr int32 MaxVoices = 24;
-
-	struct FVoice
-	{
-		ma_sound Sound{};
-		ma_audio_buffer Buffer{};
-		TArray<float> Pcm; // keeps the buffer memory alive for UI tones
-		TArray<int16> Pcm16; // keeps the buffer memory alive for sound waves
-		bool bInUse = false;
-		bool bOwnsBuffer = false;
-	};
-
-	/** The samples of a UI cue (SetUiSound); empty: its procedural tone. */
+	/** A UI cue's samples (SetUiSound), or its procedural tone. */
 	struct FUiSound
 	{
 		TArray<int16> Samples;
-		int32 NumChannels = 0;
+		int32 NumChannels = 1;
 		int32 SampleRate = 0;
+		/** The samples came from SetUiSound (HasUiSound). */
+		bool bOwnSamples = false;
 	};
 
-	ma_engine Engine{};
-	bool bEngineOk = false;
-	FVoice Voices[MaxVoices]{};
-	ma_sound Music{};
-	ma_audio_buffer MusicBuffer{};
-	TArray<int16> MusicPcm;
-	bool bMusicInUse = false;
+	FSoftwareAudioMixer Mixer{OutputRate};
+	/** Null when silent. */
+	TUniquePtr<FAudioOutput> Output;
+	TArray<int16> Chunk;
 	FUiSound UiSounds[NumUISounds];
+	int32 MusicVoice = INDEX_NONE;
+	double LastTickSeconds = 0.0;
+	/** Output frames owed but not yet mixed (the fraction a tick leaves). */
+	double PendingFrames = 0.0;
 
-	[[nodiscard]] FVoice* AcquireVoice()
+	[[nodiscard]] static FSoundWavePCM View(const FUiSound& Sound)
 	{
-		for (FVoice& Voice : Voices)
-		{
-			if (!Voice.bInUse)
-			{
-				return &Voice;
-			}
-		}
-		// Steal oldest finished or first slot.
-		for (FVoice& Voice : Voices)
-		{
-			if (Voice.bInUse && !ma_sound_is_playing(&Voice.Sound))
-			{
-				ReleaseVoice(Voice);
-				return &Voice;
-			}
-		}
-		ReleaseVoice(Voices[0]);
-		return &Voices[0];
+		FSoundWavePCM View;
+		View.Samples = Sound.Samples.GetData();
+		View.NumChannels = Sound.NumChannels;
+		View.NumFrames = Sound.NumChannels > 0 ? Sound.Samples.Num() / Sound.NumChannels : 0;
+		View.SampleRate = Sound.SampleRate;
+		return View;
 	}
 
-	void ReleaseVoice(FVoice& Voice)
+	/** The procedural tone of a cue, as 16-bit samples. */
+	static void MakeTone(EUISound InSound, FUiSound& Out)
 	{
-		if (!Voice.bInUse)
+		TArray<float> Tone;
+		int32 SampleRate = 0;
+		BuildUiTone(InSound, Tone, SampleRate);
+		Out.Samples.SetNumUninitialized(Tone.Num());
+		for (int32 Index = 0; Index < Tone.Num(); ++Index)
+		{
+			Out.Samples[Index] = int16(FMath::Clamp(FMath::RoundToInt(Tone[Index] * 32767.0f), -32768, 32767));
+		}
+		Out.NumChannels = 1;
+		Out.SampleRate = SampleRate;
+		Out.bOwnSamples = false;
+	}
+
+	/** Mixes Frames stereo frames and queues them on the output. */
+	void Stream(int32 Frames)
+	{
+		if (Frames <= 0 || !Output)
 		{
 			return;
 		}
-		ma_sound_uninit(&Voice.Sound);
-		if (Voice.bOwnsBuffer)
-		{
-			ma_audio_buffer_uninit(&Voice.Buffer);
-			Voice.bOwnsBuffer = false;
-		}
-		Voice.Pcm.Empty();
-		Voice.Pcm16.Empty();
-		Voice.bInUse = false;
-		FMemory::Memzero(&Voice.Sound, sizeof(Voice.Sound));
-		FMemory::Memzero(&Voice.Buffer, sizeof(Voice.Buffer));
-	}
-
-	void ReleaseMusic()
-	{
-		if (!bMusicInUse)
-		{
-			return;
-		}
-		ma_sound_uninit(&Music);
-		ma_audio_buffer_uninit(&MusicBuffer);
-		FMemory::Memzero(&Music, sizeof(Music));
-		FMemory::Memzero(&MusicBuffer, sizeof(MusicBuffer));
-		MusicPcm.Empty();
-		bMusicInUse = false;
-	}
-
-	void ReapFinished()
-	{
-		for (FVoice& Voice : Voices)
-		{
-			if (Voice.bInUse && !ma_sound_is_playing(&Voice.Sound))
-			{
-				ReleaseVoice(Voice);
-			}
-		}
-	}
-
-	void ReleaseAll()
-	{
-		ReleaseMusic();
-		for (FVoice& Voice : Voices)
-		{
-			ReleaseVoice(Voice);
-		}
-	}
-
-	/**
-	 * Starts a one-shot voice over PCM16 samples it copies; Flags are the ma_sound flags (spatialization). Returns the
-	 * voice, or null when the device is off or the samples are invalid.
-	 */
-	FVoice* PlayPcm16(const int16* Samples, int32 NumFrames, int32 NumChannels, int32 SampleRate, ma_uint32 Flags,
-		float VolumeMultiplier)
-	{
-		if (!bEngineOk || Samples == nullptr || NumFrames <= 0 || NumChannels <= 0 || SampleRate <= 0)
-		{
-			return nullptr;
-		}
-		ReapFinished();
-		FVoice* Voice = AcquireVoice();
-		Voice->Pcm16.Append(Samples, NumFrames * NumChannels);
-		ma_audio_buffer_config BufferConfig = ma_audio_buffer_config_init(ma_format_s16,
-			static_cast<ma_uint32>(NumChannels), static_cast<ma_uint64>(NumFrames), Voice->Pcm16.GetData(), nullptr);
-		BufferConfig.sampleRate = static_cast<ma_uint32>(SampleRate);
-		if (ma_audio_buffer_init(&BufferConfig, &Voice->Buffer) != MA_SUCCESS)
-		{
-			Voice->Pcm16.Empty();
-			return nullptr;
-		}
-		if (ma_sound_init_from_data_source(&Engine, &Voice->Buffer, Flags, nullptr, &Voice->Sound) != MA_SUCCESS)
-		{
-			ma_audio_buffer_uninit(&Voice->Buffer);
-			Voice->Pcm16.Empty();
-			return nullptr;
-		}
-		Voice->bInUse = true;
-		Voice->bOwnsBuffer = true;
-		ma_sound_set_volume(&Voice->Sound, Clamp01(VolumeMultiplier));
-		return Voice;
+		Chunk.SetNumUninitialized(Frames * 2);
+		Mixer.Mix(Chunk.GetData(), Frames);
+		Output->Queue(Chunk.GetData(), Frames);
 	}
 };
 
-FAudioDevice::FAudioDevice()
-	: Impl(MakeUnique<FImpl>())
-{
-}
+FAudioDevice::FAudioDevice() = default;
 
 FAudioDevice::~FAudioDevice()
 {
@@ -187,217 +100,141 @@ FAudioDevice::~FAudioDevice()
 bool FAudioDevice::Initialize(bool bInSilent)
 {
 	Shutdown();
-	bSilent = bInSilent;
+	Impl = MakeUnique<FImpl>();
+	for (int32 Index = 0; Index < NumUISounds; ++Index)
+	{
+		FImpl::MakeTone(EUISound(Index), Impl->UiSounds[Index]);
+	}
 	MasterVolume = 1.0f;
+	Impl->Mixer.SetMasterVolume(MasterVolume);
+	bInitialized = true;
+	bSilent = true;
 	if (bInSilent)
 	{
-		bInitialized = true;
 		return true;
 	}
-
-	ma_engine_config Config = ma_engine_config_init();
-	const ma_result Result = ma_engine_init(&Config, &Impl->Engine);
-	if (Result != MA_SUCCESS)
+	TUniquePtr<FAudioOutput> Output =
+		GAudioOutputFactory != nullptr ? GAudioOutputFactory() : CreatePlatformAudioOutput();
+	if (!Output || !Output->Start(OutputRate))
 	{
-		UE_LOG(LogAudioMixer, Warning, "ma_engine_init failed (%d); audio disabled", static_cast<int32>(Result));
-		bSilent = true;
-		bInitialized = true;
+		UE_LOG(LogAudioMixer, Warning, "Audio: no output; silent");
 		return false;
 	}
-	Impl->bEngineOk = true;
-	ma_engine_set_volume(&Impl->Engine, MasterVolume);
-	bInitialized = true;
-	UE_LOG(LogAudioMixer, Log, "miniaudio engine ready");
+	Impl->Output = MoveTemp(Output);
+	Impl->Stream(int32(LeadSeconds * OutputRate));
+	Impl->LastTickSeconds = FPlatformTime::Seconds();
+	bSilent = false;
+	UE_LOG(LogAudioMixer, Log, "Audio: %d Hz stereo, mixed on the game thread", OutputRate);
 	return true;
 }
 
 void FAudioDevice::Shutdown()
 {
-	if (Impl)
-	{
-		Impl->ReleaseAll();
-		if (Impl->bEngineOk)
-		{
-			ma_engine_uninit(&Impl->Engine);
-			Impl->bEngineOk = false;
-			FMemory::Memzero(&Impl->Engine, sizeof(Impl->Engine));
-		}
-	}
-	bInitialized = false;
+	Impl.Reset();
 	bSilent = true;
+	bInitialized = false;
 }
 
 void FAudioDevice::Tick()
 {
-	if (Impl && Impl->bEngineOk)
+	if (!Impl || !Impl->Output)
 	{
-		Impl->ReapFinished();
+		return;
 	}
+	// The output plays at the output rate: a tick queues what it played since the last one.
+	const double Now = FPlatformTime::Seconds();
+	const double Elapsed = FMath::Min(Now - Impl->LastTickSeconds, MaxTickSeconds);
+	Impl->LastTickSeconds = Now;
+	Impl->PendingFrames += Elapsed * double(OutputRate);
+	const int32 Frames = int32(Impl->PendingFrames);
+	Impl->PendingFrames -= double(Frames);
+	Impl->Stream(Frames);
 }
 
 void FAudioDevice::SetMasterVolume(float Volume01)
 {
-	MasterVolume = Clamp01(Volume01);
-	if (Impl && Impl->bEngineOk)
+	MasterVolume = FMath::Clamp(Volume01, 0.0f, 1.0f);
+	if (Impl)
 	{
-		ma_engine_set_volume(&Impl->Engine, MasterVolume);
+		Impl->Mixer.SetMasterVolume(MasterVolume);
 	}
 }
 
 void FAudioDevice::SetListener(const FVector& Location, const FVector& Forward, const FVector& Up)
 {
-	if (!Impl || !Impl->bEngineOk)
+	if (Impl)
 	{
-		return;
+		Impl->Mixer.SetListener(Location, Forward, Up);
 	}
-	const FVector Metres = ToAudioMetres(Location);
-	const FVector AudioForward = ToAudioDirection(Forward);
-	const FVector AudioUp = ToAudioDirection(Up);
-	ma_engine_listener_set_position(&Impl->Engine, 0, Metres.X, Metres.Y, Metres.Z);
-	ma_engine_listener_set_direction(&Impl->Engine, 0, AudioForward.X, AudioForward.Y, AudioForward.Z);
-	ma_engine_listener_set_world_up(&Impl->Engine, 0, AudioUp.X, AudioUp.Y, AudioUp.Z);
 }
 
 void FAudioDevice::PlaySound2D(const FSoundWavePCM& Sound, float VolumeMultiplier)
 {
-	if (!Impl || !Sound.IsValid())
+	if (Impl && Impl->Output)
 	{
-		return;
-	}
-	if (FImpl::FVoice* Voice = Impl->PlayPcm16(Sound.Samples, Sound.NumFrames, Sound.NumChannels, Sound.SampleRate,
-			MA_SOUND_FLAG_NO_SPATIALIZATION, VolumeMultiplier))
-	{
-		ma_sound_start(&Voice->Sound);
+		(void)Impl->Mixer.Play(Sound, VolumeMultiplier, false);
 	}
 }
 
 void FAudioDevice::PlaySoundAtLocation(const FSoundWavePCM& Sound, const FVector& Location, float VolumeMultiplier)
 {
-	if (!Impl || !Sound.IsValid())
+	if (Impl && Impl->Output)
 	{
-		return;
-	}
-	if (FImpl::FVoice* Voice =
-			Impl->PlayPcm16(Sound.Samples, Sound.NumFrames, Sound.NumChannels, Sound.SampleRate, 0, VolumeMultiplier))
-	{
-		ma_sound_set_spatialization_enabled(&Voice->Sound, MA_TRUE);
-		const FVector Metres = ToAudioMetres(Location);
-		ma_sound_set_position(&Voice->Sound, Metres.X, Metres.Y, Metres.Z);
-		ma_sound_start(&Voice->Sound);
+		(void)Impl->Mixer.Play(Sound, VolumeMultiplier, false, true, Location);
 	}
 }
 
 void FAudioDevice::SetUiSound(EUISound InSound, const FSoundWavePCM& Sound)
 {
-	FImpl::FUiSound& Ui = Impl->UiSounds[static_cast<int32>(InSound)];
-	Ui.Samples.Reset();
-	Ui.NumChannels = 0;
-	Ui.SampleRate = 0;
-	if (Sound.IsValid())
+	if (!Impl)
 	{
-		Ui.Samples.Append(Sound.Samples, Sound.NumFrames * Sound.NumChannels);
-		Ui.NumChannels = Sound.NumChannels;
-		Ui.SampleRate = Sound.SampleRate;
+		return;
 	}
+	FImpl::FUiSound& Cue = Impl->UiSounds[int32(InSound)];
+	if (!Sound.IsValid())
+	{
+		FImpl::MakeTone(InSound, Cue);
+		return;
+	}
+	Cue.Samples.SetNumUninitialized(Sound.NumFrames * Sound.NumChannels);
+	FMemory::Memcpy(Cue.Samples.GetData(), Sound.Samples, SIZE_T(Cue.Samples.Num()) * sizeof(int16));
+	Cue.NumChannels = Sound.NumChannels;
+	Cue.SampleRate = Sound.SampleRate;
+	Cue.bOwnSamples = true;
 }
 
 bool FAudioDevice::HasUiSound(EUISound InSound) const
 {
-	return Impl->UiSounds[static_cast<int32>(InSound)].Samples.Num() > 0;
+	return Impl && Impl->UiSounds[int32(InSound)].bOwnSamples;
 }
 
 void FAudioDevice::PlayUiSound(EUISound InSound, float VolumeMultiplier)
 {
-	if (!Impl || !Impl->bEngineOk)
+	if (Impl && Impl->Output)
 	{
-		return;
+		(void)Impl->Mixer.Play(FImpl::View(Impl->UiSounds[int32(InSound)]), VolumeMultiplier, false);
 	}
-
-	const FImpl::FUiSound& Ui = Impl->UiSounds[static_cast<int32>(InSound)];
-	if (Ui.Samples.Num() > 0)
-	{
-		FSoundWavePCM Sound;
-		Sound.Samples = Ui.Samples.GetData();
-		Sound.NumChannels = Ui.NumChannels;
-		Sound.NumFrames = Ui.Samples.Num() / Ui.NumChannels;
-		Sound.SampleRate = Ui.SampleRate;
-		PlaySound2D(Sound, VolumeMultiplier);
-		return;
-	}
-
-	Impl->ReapFinished();
-	TArray<float> Samples;
-	int32 SampleRate = 44100;
-	BuildUiTone(InSound, Samples, SampleRate);
-	if (Samples.Num() == 0)
-	{
-		return;
-	}
-
-	FImpl::FVoice* Voice = Impl->AcquireVoice();
-	Voice->Pcm = MoveTemp(Samples);
-
-	ma_audio_buffer_config BufferConfig = ma_audio_buffer_config_init(
-		ma_format_f32, 1, static_cast<ma_uint64>(Voice->Pcm.Num()), Voice->Pcm.GetData(), nullptr);
-	BufferConfig.sampleRate = static_cast<ma_uint32>(SampleRate);
-
-	if (ma_audio_buffer_init(&BufferConfig, &Voice->Buffer) != MA_SUCCESS)
-	{
-		Voice->Pcm.Empty();
-		return;
-	}
-	if (ma_sound_init_from_data_source(&Impl->Engine, &Voice->Buffer,
-			MA_SOUND_FLAG_ASYNC | MA_SOUND_FLAG_NO_SPATIALIZATION, nullptr, &Voice->Sound) != MA_SUCCESS)
-	{
-		ma_audio_buffer_uninit(&Voice->Buffer);
-		Voice->Pcm.Empty();
-		return;
-	}
-	Voice->bInUse = true;
-	Voice->bOwnsBuffer = true;
-	ma_sound_set_volume(&Voice->Sound, Clamp01(VolumeMultiplier));
-	ma_sound_start(&Voice->Sound);
 }
 
 void FAudioDevice::PlayMusic(const FSoundWavePCM& Sound, float VolumeMultiplier)
 {
-	if (!Impl || !Impl->bEngineOk || !Sound.IsValid())
+	if (Impl && Impl->Output)
 	{
-		return;
+		StopMusic();
+		Impl->MusicVoice = Impl->Mixer.Play(Sound, VolumeMultiplier, true);
 	}
-	Impl->ReleaseMusic();
-	Impl->MusicPcm.Append(Sound.Samples, Sound.NumFrames * Sound.NumChannels);
-	ma_audio_buffer_config BufferConfig =
-		ma_audio_buffer_config_init(ma_format_s16, static_cast<ma_uint32>(Sound.NumChannels),
-			static_cast<ma_uint64>(Sound.NumFrames), Impl->MusicPcm.GetData(), nullptr);
-	BufferConfig.sampleRate = static_cast<ma_uint32>(Sound.SampleRate);
-	if (ma_audio_buffer_init(&BufferConfig, &Impl->MusicBuffer) != MA_SUCCESS)
-	{
-		Impl->MusicPcm.Empty();
-		return;
-	}
-	if (ma_sound_init_from_data_source(
-			&Impl->Engine, &Impl->MusicBuffer, MA_SOUND_FLAG_NO_SPATIALIZATION, nullptr, &Impl->Music) != MA_SUCCESS)
-	{
-		ma_audio_buffer_uninit(&Impl->MusicBuffer);
-		Impl->MusicPcm.Empty();
-		return;
-	}
-	Impl->bMusicInUse = true;
-	ma_sound_set_looping(&Impl->Music, MA_TRUE);
-	ma_sound_set_volume(&Impl->Music, Clamp01(VolumeMultiplier));
-	ma_sound_start(&Impl->Music);
 }
 
 void FAudioDevice::StopMusic()
 {
-	if (Impl)
+	if (Impl && Impl->MusicVoice != INDEX_NONE)
 	{
-		Impl->ReleaseMusic();
+		Impl->Mixer.Stop(Impl->MusicVoice);
+		Impl->MusicVoice = INDEX_NONE;
 	}
 }
 
 bool FAudioDevice::IsMusicPlaying() const
 {
-	return Impl != nullptr && Impl->bMusicInUse && ma_sound_is_playing(&Impl->Music);
+	return Impl && Impl->Mixer.IsPlaying(Impl->MusicVoice);
 }

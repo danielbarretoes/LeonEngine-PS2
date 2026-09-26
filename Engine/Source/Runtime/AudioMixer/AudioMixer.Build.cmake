@@ -1,8 +1,7 @@
-# AudioMixer: Audio device (Unreal: Runtime/AudioMixer). Desktop plays through miniaudio (Private/AudioDevice.cpp); the
-# PS2 extension mixes on the EE with FSoftwareAudioMixer (Private, every platform) and streams to the SPU2
-# (Docs/PLANS/ps2-engine.md, E5).
+# AudioMixer: Audio device (Unreal: Runtime/AudioMixer). FAudioDevice mixes on the game thread with
+# FSoftwareAudioMixer on every platform and queues the mix on the platform's FAudioOutput: a device of miniaudio on the
+# desktop (Private/Desktop), the SPU2 through audsrv in the PS2 extension (Docs/PLANS/ps2-preview.md V1).
 leon_module(AudioMixer
 	PUBLIC_DEPENDENCIES Core
 	PRIVATE_DEPENDENCIES_Desktop MiniAudio
-	EXCLUDE_SOURCES_PS2 Private/AudioDevice.cpp
 )

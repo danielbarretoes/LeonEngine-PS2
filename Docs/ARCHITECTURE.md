@@ -293,7 +293,7 @@ paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable 
 | **CoreUObject** | `UObject` and its reflection: object model, classes / structs / enums / functions, properties, object creation and lookup, the object array, casts, the runtime side of LeonHeaderTool's generated code; garbage collection, weak / strong / soft references, `UPROPERTY(Config)`, `UFUNCTION(Exec)`; packages: `.lasset` / `.lmap` saving and synchronous loading with tagged properties, bulk data and long package names ([README](../Engine/Source/Runtime/CoreUObject/README.md), [ASSET_FORMATS](ASSET_FORMATS.md#packages--lasset--lmap)) | `UObject`, `UClass`, `UScriptStruct`, `UEnum`, `UFunction`, `UPackage`, `FProperty` (+ every property type), `FObjectInitializer`, `NewObject`, `FindObject`, `GUObjectArray`, `TObjectIterator`, `Cast`, `TSubclassOf`, `CollectGarbage`, `FGCObject`, `FReferenceCollector`, `TWeakObjectPtr`, `TStrongObjectPtr`, `FSoftObjectPath`, `TSoftObjectPtr`, `LoadConfig` / `SaveConfig`, `CallFunctionByNameWithArguments`, `UPackage::SavePackage`, `LoadPackage`, `LoadObject`, `FLinkerLoad` / `FLinkerSave`, `FPropertyTag`, `FByteBulkData`, `FPackageName` | all |
 | **InputCore** | Keys: the reflected `FKey` (named by an `FName`, config text `Key=SpaceBar`) and their details | `FKey`, `EKeys`, `FKeyDetails`, `FInputCoreModule` | all |
 | **EngineSettings** | The project's map, game mode and general settings as config classes | `UGameMapsSettings`, `FGameModeName`, `UGeneralProjectSettings` | all |
-| **ApplicationCore** | Platform application, windows, gamepad input | `GenericApplication`, `FGenericWindow`, `IInputInterface`, `FPlatformApplicationMisc`; desktop `FGLFWApplication`, `FGLFWWindow`; PS2 ext `FPS2Application`, `FPS2Window`, `FPS2InputInterface` | all |
+| **ApplicationCore** | Platform application, windows, gamepad input (the DualShock on every platform: a desktop gamepad reads as one, through libpad's bytes and dead zone) | `GenericApplication`, `FGenericWindow`, `IInputInterface`, `FDualShockAnalog`, `FPlatformApplicationMisc`; desktop `FGLFWApplication`, `FGLFWWindow`, `FGLFWInputInterface`; PS2 ext `FPS2Application`, `FPS2Window`, `FPS2InputInterface` | all |
 | **RHI** | Graphics backend interface + opaque GPU handle ids | `RHIInit` / `RHIExit`, `FDynamicRHI`, `GDynamicRHI`, `FRHIGPUMemoryStats`, `FRHITextureId` … | all |
 | **GSCore** | The Graphics Synthesizer's contract (Leon; [plan](PLANS/ps2-gs-parity.md)): its registers and formats as in the GS User's Manual (chapter 7), encoded and decoded, and the command list the renderer fills and every backend consumes (register writes in order, image uploads), limited to what every backend reproduces; the list as a GIF PATH3 packet (PACKED A+D writes, IMAGE transfers); the GS conformance scenes the reference's tests check and GSConformance draws on the PS2; the drawing environment every backend shares (buffers, size, pixel mapping, depth test); the 4 MB local memory with its swizzled formats and transfers, and the texel decoder (formats, CLUTs, wrap modes) the reference and the emulator share | `EGSRegister`, `EGSPixelFormat`, `FGSPrim`, `FGSRGBAQ`, `FGSXYZ`, `FGSTex0`, `FGSTex1`, `FGSAlpha`, `FGSTest`, `FGSFrame`, `FGSZBuf`, `FGSDimx`, `GSToFixed4`, `FGSCommandList`, `FGSGifPacket`, `GSConformance::GetScenes`, `FGSDrawEnvironment`, `FGSLocalMemory`, `FGSTexelDecoder`, `FGSClutBuffer`, `FGSTextureLayout` | all |
 | **GSReference** (Developer) | A software Graphics Synthesizer ([plan](PLANS/ps2-gs-parity.md), P2): executes an `FGSCommandList` into a 4 MB local memory by the GS User's Manual's rules (drawing rules, texture sampling, CLUTs, fog, pixel tests, blending, dithering, frame buffer writes, transfers); the oracle the desktop GS emulator and the PS2 backend are compared with | `FGSReferenceRasterizer` | Desktop |
@@ -306,7 +306,7 @@ paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable 
 | **Json** | Native JSON DOM, streaming reader / writer, serializer (UE API, no exceptions) | `FJsonObject`, `FJsonValue`, `TJsonReader`, `TJsonWriter`, `FJsonSerializer` | all |
 | **PhysicsCore** | Physics types and backend seam | `IPhysicsBackend`, `EPhysicsBackend`, `FHitResult`, `FBodyInstance`, `EBodyCollisionShape`, `FCollisionQueryParams`, `FCollisionShape`, `FTriangleMeshCollision` | Desktop |
 | **AnimationCore** | The plain skeletal data under Engine's animation assets, which the FBX import produces (P14; UE's AnimationCore holds the low-level animation types) | `FSkeletalVertex`, `FReferenceSkeleton`, `FRawAnimSequenceTrack`, `FRawAnimSequence`, `FSkeletalMeshData` | Desktop |
-| **AudioMixer** | Audio device: PCM16 samples played from memory, the UI cues; desktop through miniaudio, PS2 mixed on the EE (`FSoftwareAudioMixer`) and streamed to the SPU2 through audsrv ([ps2-engine](PLANS/ps2-engine.md) E5) | `FAudioDevice`, `FSoundWavePCM`, `EUISound`, `FSoftwareAudioMixer` | all |
+| **AudioMixer** | Audio device: PCM16 samples played from memory, the UI cues, mixed on the game thread by `FSoftwareAudioMixer` on every platform and queued on the platform's `FAudioOutput` (a device of miniaudio on the desktop, the SPU2 through audsrv on the PS2: [ps2-engine](PLANS/ps2-engine.md) E5, [ps2-preview](PLANS/ps2-preview.md) V1) | `FAudioDevice`, `FSoundWavePCM`, `EUISound`, `FSoftwareAudioMixer`, `FAudioOutput` | all |
 | **RenderCore** | CPU-side render data, UE view matrices, the GL clip-space adapter; the tests' legacy data converter | `FMeshData`, `FMeshSection`, `FVertex`, `FFrustum` (over Core's `FBox` / `FPlane`), `FMaterial` (`MaterialShared.h`: the values a material gives the renderer), `EMaterialLightingModel`, `EPixelFormat` (`PixelFormat.h`), `MakeViewMatrix` / `MakeLookAtView` (`ViewMatrices.h`), `ToGLClipSpace` (`GLClipSpace.h`), `EShaderReloadResult` (`ShaderCore.h`); for the tests only, `FLegacyCoordinateConversion` (`Public/Tests`) | all |
 | **Renderer** | The renderer module (§12): the scene (`FScene`) and the GS scene renderer, which records every frame as GS register writes; on PS2 they go to the GIF (`Renderer_PS2.Build.cmake`), on the desktop to the OpenGL GS emulator. Only its module interface is public (Engine's `IRendererModule`) | `FScene`, `FGSSceneRenderer`, `FGSPrimitiveEmitter`, `FGSTextureCache`, `FWorldEffectsGeometry`; desktop `FRendererModule`, `FGSOpenGLEmulator`, `FShader`; PS2 `FPS2RendererModule`; `LogRenderer` | all |
 | **SlateCore** | Text layout primitives and the layout types UMG uses | `ETextJustify`, HUD font metrics, `FMargin` (`Layout/Margin.h`), `EHorizontalAlignment` (`Types/SlateEnums.h`) | Desktop |
@@ -406,7 +406,7 @@ rotations.
 | `FImportCoordinateConversion` (`MeshUtilities/Public/ImportCoordinateConversion.h`) | imported files → world: `RightHandedYUp` (OBJ, glTF, FBX without axes) (X, Z, Y) × 100; `RightHandedZUp` (FBX after ufbx resolves the file axes) (X, −Y, Z) × the file unit in cm (UE's `FFbxDataConverter`) | the importers' last step, after normals and winding are final; matrices convert as B⁻¹ M B (a glTF map's node transforms too) |
 | `ToGLClipSpace` | UE clip space → GL clip space | the GL renderer, after the projection |
 | Jolt boundary (`JoltPhysicsBackend.cpp`) | world ↔ Jolt (right-handed, Y up, metres): Y and Z swap, lengths × 0.01; Jolt-side constants stay in metres | the JoltPhysics plugin |
-| Audio boundary (`AudioDevice.cpp`) | world ↔ miniaudio (right-handed, Y up, metres): Y and Z swap, positions × 0.01 | AudioMixer |
+| Audio listener (`FSoftwareAudioMixer`) | the world's centimetres to the metres of the attenuation (1 / distance past 1 m), the pan across the listener's right (`Up ^ Forward`) | AudioMixer |
 
 **Angle map** (legacy values → world), which the `.llev` level reader applied until P15 and the golden tests still use:
 
@@ -798,7 +798,9 @@ UWorld::LineBatcher (FDebugDraw), impact marks, tracers ------------------------
   client's show flags: `Bounds` F1, `AxesGizmo` F6) with one `FSceneView` from the player's view camera
   (`FSceneView::FromCamera`: the eye, the view and projection matrices and the vertical field of view) and calls
   `IRendererModule::BeginRenderingViewFamily`. The target is the GS frame (640x448), whatever the window's size
-  (`IRendererModule::GetRenderTargetSize`, `FViewport::GetSizeXY`).
+  (`IRendererModule::GetRenderTargetSize`, `FViewport::GetSizeXY`), and the projection's aspect ratio is the display's
+  (`IRendererModule::GetDisplayAspectRatio`: 4:3, the TV the frame's non-square pixels fill; `[/Script/Engine.RendererSettings]
+  DisplayAspectRatio`, with `SyncInterval`, the PS2's values on every platform: [ps2-preview](PLANS/ps2-preview.md)).
 - **Canvas.** The HUD's widgets and the debug text draw into a frame `FCanvas` (tiles, lines and text in the HUD font,
   batched by depth sort key; the debug text uses key 1, so it goes under the HUD), which `Flush_GameThread` hands to
   `IRendererModule::DrawCanvas`: blended triangles without the depth test, after the scene.
@@ -831,8 +833,11 @@ UWorld::LineBatcher (FDebugDraw), impact marks, tracers ------------------------
   (`Engine/Shaders/gs_emulator.vert` / `.frag`) into a 640x448 target with the same VRAM layout: the pixel centre plus
   1/256 (the top-left rule), `gl_FragDepth` exact, the textures decoded by `FGSTexelDecoder` (GSCore, shared with the
   reference) and sampled in the shader, dual-source blending for the GS's `(A - B) * C + D`, the alpha test's AFAIL as a
-  second pass, the 16-bit frame's dither and truncation. `EndDrawingViewport` shows the target scaled by a whole number
-  (nearest, `gs_present.*`); `ReadFramebufferBgr` returns it for screenshots. The conformance test
+  second pass, the 16-bit frame's dither and truncation. `EndDrawingViewport` holds the frame for `SyncInterval` fields
+  (`FFramePacer`, the PS2's 30 fps) and shows it at the TV's aspect ratio (`gs_present.*`: its lines at a whole scale,
+  each stretched linearly to the 4:3 width); `ReadFramebufferBgr` returns the 640x448 frame for screenshots. Uncooked
+  RGBA8 textures go through the PS2 cook's conversion (`ConvertTextureAsPS2Cook`, TextureCompressor) the first time
+  they draw ([ps2-preview](PLANS/ps2-preview.md) V1). The conformance test
   (`System.Renderer.GSEmulator.Conformance`, NonNullRHI) compares it with the reference: 8 of 9 scenes within 2 levels
   per channel on every pixel; the colour clamp off (a wrap) is not emulated. `System.Renderer.GSEmulator.SceneFrame`
   does the same with a frame of the scene renderer: within one 5-bit step but for 28 pixels (blended pixels are not
@@ -925,10 +930,10 @@ UWorld::LineBatcher (FDebugDraw), impact marks, tracers ------------------------
   the content from its sources and fails when git sees a change under a `Content` folder.
 - **Tests**: each module keeps its tests in `<Module>/Private/Tests/`, excluded from the module library and compiled
   only into targets with `COLLECT_AUTOMATION_TESTS`. Every test is a UE automation test
-  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, named `System.<Module>.<Area>.<Name>`): 416 on Win64 — Core
-  48, CoreUObject 63, Json 2, Projects 2, PakFile 6, PhysicsCore 8, RenderCore 23, AnimationCore 1, Engine 155, UMG 1,
-  GSCore 9, GSReference 10, Renderer 14, AudioMixer 2, AIModule 31, MeshUtilities 8, TextureCompressor 3, LeonEd 20, JoltPhysics 9
-  (407 on Linux, without the Jolt plugin; a tenth Jolt test, `System.JoltPhysics.Backend.DisabledFallsBack`,
+  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, named `System.<Module>.<Area>.<Name>`): 423 on Win64 — Core
+  48, CoreUObject 63, Json 2, Projects 2, PakFile 6, PhysicsCore 8, RenderCore 23, AnimationCore 1, ApplicationCore 2,
+  Engine 155, UMG 1, GSCore 9, GSReference 10, Renderer 19, AudioMixer 3, AIModule 31, MeshUtilities 8,
+  TextureCompressor 3, LeonEd 20, JoltPhysics 9 (414 on Linux, without the Jolt plugin; a tenth Jolt test, `System.JoltPhysics.Backend.DisabledFallsBack`,
   compiles only without the plugin). On PS2, Core runs 44 (the platform-file, config-cache and log-file tests are
   desktop-only), CoreUObject 61 (its SaveConfig and package file tests are desktop-only; the other package tests save to
   memory), Json 2, Projects 1, PakFile 6 (on paks in memory) and GSCore 9: 123 in TestPAL. Reflected test fixtures live in

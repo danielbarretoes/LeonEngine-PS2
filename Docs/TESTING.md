@@ -217,9 +217,12 @@ up, left-handed, 1 unit = 1 cm.
   own frame and did not change in P7.
 - [ ] **Jump**: `LeonGame` has no character. The jump (+Z at `JumpZVelocity`, 700 cm/s) is covered by
   `System.Engine.Golden.JumpArc`. On PS2, Cross still jumps up in ThirdPerson.
-- [ ] **Sound panning**: the audio device converts the listener and sound positions (Y and Z swap, ×0.01 to metres). In
-  ShooterGame a shot on +Y of a listener looking along +X comes from the **right** speaker, on the desktop and on the
-  PS2 (`System.AudioMixer.SoftwareMixer.Spatialized` checks the PS2's mixer).
+- [ ] **Sound panning**: every platform mixes with `FSoftwareAudioMixer` (positions in metres, the pan across the
+  listener's right). In ShooterGame a shot on +Y of a listener looking along +X comes from the **right** speaker
+  (`System.AudioMixer.SoftwareMixer.Spatialized` checks it).
+- [ ] **PS2 conditions on the PC** ([ps2-preview](PLANS/ps2-preview.md) V1): the frame fills a 4:3 area of the window
+  (black bars at the sides of a 1280x896 window), the game runs at 30 fps (`-LogFrameTimes`: 33.4 ms), a gamepad
+  plays it as the DualShock (a small tilt of a stick does nothing: the dead zone), and the sound is the PS2's mix.
 
 ## GS parity (G8)
 

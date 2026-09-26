@@ -86,8 +86,19 @@ public:
 	}
 
 	/**
-	 * The frame is complete (UE: RHIEndDrawingViewport): the desktop shows its GS frame in the WindowSize window
-	 * (scaled by a whole number, nearest); the PS2 sends it when the window swaps.
+	 * The aspect ratio a TargetSize frame is shown at, which the view's projection uses: the GS renderers' is the TV's
+	 * (`[/Script/Engine.RendererSettings] DisplayAspectRatio`, 4:3), since the 640 x 448 frame's pixels are not square
+	 * on it; without a display of its own, the frame's.
+	 */
+	[[nodiscard]] virtual float GetDisplayAspectRatio(const FIntPoint& TargetSize) const
+	{
+		return TargetSize.Y > 0 ? float(TargetSize.X) / float(TargetSize.Y) : 1.0f;
+	}
+
+	/**
+	 * The frame is complete (UE: RHIEndDrawingViewport): the desktop shows its GS frame in the WindowSize window at the
+	 * display's aspect ratio, and holds it for the settings' SyncInterval (the PS2's frame rate); the PS2 sends it when
+	 * the window swaps.
 	 */
 	virtual void EndDrawingViewport(const FIntPoint& WindowSize)
 	{

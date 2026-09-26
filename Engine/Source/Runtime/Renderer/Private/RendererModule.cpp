@@ -1,9 +1,12 @@
 #include "CanvasTypes.h"
+#include "FramePacer.h"
 #include "GS/GSSceneRenderer.h"
 #include "GSEmulator/GSOpenGLEmulator.h"
+#include "GSEmulator/PS2TexturePreview.h"
 #include "Modules/ModuleManager.h"
 #include "RendererInterface.h"
 #include "RendererLog.h"
+#include "RendererSettings.h"
 #include "ScenePrivate.h"
 #include "SceneView.h"
 
@@ -15,7 +18,8 @@ namespace
 	/**
 	 * The Renderer module on the desktop (UE: FRendererModule): the GS scene renderer records the view family and the
 	 * canvas as GS lists, as on the PS2, and the OpenGL emulation of the GS draws them into its 640 x 448 frame, shown
-	 * in the window at EndDrawingViewport (Docs/PLANS/ps2-gs-parity.md P4 and P5).
+	 * in the window at EndDrawingViewport (Docs/PLANS/ps2-gs-parity.md P4 and P5) at the TV's aspect ratio and the
+	 * PS2's frame rate (Docs/PLANS/ps2-preview.md V1).
 	 */
 	class FRendererModule final : public IRendererModule
 	{
@@ -34,9 +38,15 @@ namespace
 			uint32 NumBlocks = 0;
 			FGSOpenGLEmulator::GetTextureArena(FirstBlock, NumBlocks);
 			SceneRenderer.GetTextureCache().SetArena(FirstBlock, NumBlocks);
+			// Uncooked textures draw as the PS2 cook makes them (cooked ones already are).
+			SceneRenderer.GetTextureCache().SetTextureConverter(&ConvertTextureAsPS2Cook);
+			Settings = FRendererSettings::Load();
 			bInitialized = true;
-			UE_LOG(LogRenderer, Log, "Renderer: the GS scene renderer on the OpenGL GS emulator (%dx%d)",
-				FGSOpenGLEmulator::FrameWidth, FGSOpenGLEmulator::FrameHeight);
+			UE_LOG(LogRenderer, Log,
+				"Renderer: the GS scene renderer on the OpenGL GS emulator (%dx%d shown at %.3f, a frame every %d "
+				"field(s))",
+				FGSOpenGLEmulator::FrameWidth, FGSOpenGLEmulator::FrameHeight, double(Settings.DisplayAspectRatio),
+				Settings.SyncInterval);
 			return true;
 		}
 
@@ -107,11 +117,19 @@ namespace
 			return FIntPoint(FGSOpenGLEmulator::FrameWidth, FGSOpenGLEmulator::FrameHeight);
 		}
 
+		[[nodiscard]] float GetDisplayAspectRatio(const FIntPoint& TargetSize) const override
+		{
+			return Settings.GetDisplayAspectRatio(TargetSize);
+		}
+
 		void EndDrawingViewport(const FIntPoint& WindowSize) override
 		{
 			if (bInitialized)
 			{
-				Emulator.Present(WindowSize.X, WindowSize.Y);
+				FramePacer.Wait(Settings.SyncInterval);
+				Emulator.Present(WindowSize.X, WindowSize.Y,
+					Settings.GetDisplayAspectRatio(
+						FIntPoint(FGSOpenGLEmulator::FrameWidth, FGSOpenGLEmulator::FrameHeight)));
 			}
 		}
 
@@ -168,6 +186,8 @@ namespace
 		mutable FGSOpenGLEmulator Emulator;
 		/** The list each call records into (kept, so its capacity is reused frame after frame). */
 		FGSCommandList List;
+		FRendererSettings Settings;
+		FFramePacer FramePacer;
 		bool bInitialized = false;
 		bool bEnvironmentSet = false;
 	};

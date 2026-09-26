@@ -1,5 +1,6 @@
 #include "PS2InputInterface.h"
 
+#include "GenericPlatform/DualShockAnalog.h"
 #include "GenericPlatform/GenericApplication.h"
 
 #include <libpad.h>
@@ -18,8 +19,6 @@ namespace
 	int32 LastPadState = -1;
 	uint16 LastLoggedButtons = 0;
 
-	constexpr float StickDeadZone = 0.18f;
-
 	void LoadPadModules()
 	{
 		SifInitRpc(0);
@@ -36,15 +35,7 @@ namespace
 	/** DualShock axis byte (0..255, centre ~128) to [-1, 1] with a rescaled dead zone. */
 	float AxisFromByte(uint8 Raw)
 	{
-		float Value = (static_cast<float>(Raw) - 128.0f) / 128.0f;
-		Value = Value < -1.0f ? -1.0f : (Value > 1.0f ? 1.0f : Value);
-		if (Value > -StickDeadZone && Value < StickDeadZone)
-		{
-			return 0.0f;
-		}
-		const float Sign = Value < 0.0f ? -1.0f : 1.0f;
-		const float Magnitude = (Value < 0.0f ? -Value : Value) - StickDeadZone;
-		return Sign * (Magnitude / (1.0f - StickDeadZone));
+		return FDualShockAnalog::FromByte(Raw);
 	}
 
 	bool IsPadStateReadable(int32 State)

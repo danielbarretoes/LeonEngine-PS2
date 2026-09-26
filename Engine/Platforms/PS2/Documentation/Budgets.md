@@ -102,6 +102,9 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | E5 | ShooterGame | 1 710 670 | 7 036 | 67 488 | — | the SPU2 audio: `FSoftwareAudioMixer`, the PS2 `FAudioDevice`, libaudsrv and libpatches (+16 128 bytes of text; +24 208 of bss, libaudsrv's buffers). The sounds stay PCM16: 242 KB cooked |
 | E5 | ThirdPerson | 688 482 | 7 072 | 33 984 | — | unchanged (no engine, no audio) |
 | E5 | TestPAL | 1 514 864 | 6 380 | 40 592 | — | unchanged |
+| V1 | ShooterGame | 1 716 718 | 7 040 | 67 512 | — | [ps2-preview](../../../../Docs/PLANS/ps2-preview.md) V1: the renderer settings (the TV's aspect), the shared audio device and its output, `FDualShockAnalog` (+6 048 bytes of text) |
+| V1 | ThirdPerson | 688 466 | 7 072 | 33 984 | — | `FDualShockAnalog` inlined (-16 bytes of text) |
+| V1 | TestPAL | 1 514 856 | 6 380 | 40 592 | — | the toolchain's alignment (-8 bytes) |
 
 **P9 reflection in TestPAL** (`nm -S` over the ELF, bytes):
 

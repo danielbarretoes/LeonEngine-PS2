@@ -11,8 +11,8 @@ DEFINE_LOG_CATEGORY_STATIC(LogTargetPlatformManager, Log, All);
 namespace
 {
 	/**
-	 * Win64 (UE: TGenericWindowsTargetPlatform, the WindowsNoEditor flavor): the identity target. Its content has
-	 * the formats the desktop runtime loads today (BGRA8 textures, PCM16 sounds, the Leon mesh and package formats).
+	 * Win64 (UE: TGenericWindowsTargetPlatform, the WindowsNoEditor flavor): the Windows game, cooked with the PS2's
+	 * formats (Docs/PLANS/ps2-preview.md D1): paletted textures, PCM16 sounds, the Leon mesh and package formats.
 	 */
 	class FWin64TargetPlatform final : public ITargetPlatform
 	{
@@ -39,7 +39,9 @@ namespace
 		}
 		virtual void GetAllTextureFormats(TArray<FName>& OutFormats) const override
 		{
-			OutFormats.AddUnique(FName(TEXT("BGRA8")));
+			// The PS2's paletted textures: the Windows game shows and holds what the console does
+			// (Docs/PLANS/ps2-preview.md V1).
+			OutFormats.AddUnique(FName(TEXT("Paletted")));
 		}
 		virtual void GetAllWaveFormats(TArray<FName>& OutFormats) const override
 		{

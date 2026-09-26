@@ -733,14 +733,28 @@ void FGSOpenGLEmulator::ClearTextures()
 	Textures.Reset();
 }
 
-void FGSOpenGLEmulator::Present(int32 WindowWidth, int32 WindowHeight)
+void FGSOpenGLEmulator::GetPresentRect(int32 WindowWidth, int32 WindowHeight, float DisplayAspectRatio, int32& OutX,
+	int32& OutY, int32& OutWidth, int32& OutHeight)
+{
+	const float Aspect = DisplayAspectRatio > 0.0f ? DisplayAspectRatio : float(FrameWidth) / float(FrameHeight);
+	// The largest whole number of window lines per frame line that fits the width at the aspect.
+	const int32 ByHeight = WindowHeight / FrameHeight;
+	const int32 ByWidth = int32(float(WindowWidth) / (float(FrameHeight) * Aspect));
+	const int32 Scale = FMath::Max(1, FMath::Min(ByHeight, ByWidth));
+	OutHeight = FrameHeight * Scale;
+	OutWidth = FMath::RoundToInt(float(OutHeight) * Aspect);
+	OutX = (WindowWidth - OutWidth) / 2;
+	OutY = (WindowHeight - OutHeight) / 2;
+}
+
+void FGSOpenGLEmulator::Present(int32 WindowWidth, int32 WindowHeight, float DisplayAspectRatio)
 {
 	Flush();
-	const int32 Scale = FMath::Max(1, FMath::Min(WindowWidth / FrameWidth, WindowHeight / FrameHeight));
-	const int32 Width = FrameWidth * Scale;
-	const int32 Height = FrameHeight * Scale;
-	const int32 OffsetX = (WindowWidth - Width) / 2;
-	const int32 OffsetY = (WindowHeight - Height) / 2;
+	int32 OffsetX = 0;
+	int32 OffsetY = 0;
+	int32 Width = 0;
+	int32 Height = 0;
+	GetPresentRect(WindowWidth, WindowHeight, DisplayAspectRatio, OffsetX, OffsetY, Width, Height);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_BLEND);
@@ -754,7 +768,7 @@ void FGSOpenGLEmulator::Present(int32 WindowWidth, int32 WindowHeight)
 	glBindTexture(GL_TEXTURE_2D, ColorTexture);
 	PresentProgram.SetInt("uFrame", 0);
 	PresentProgram.SetIVec2("uOffset", OffsetX, OffsetY);
-	PresentProgram.SetInt("uScale", Scale);
+	PresentProgram.SetIVec2("uSize", Width, Height);
 	PresentProgram.SetInt("uFrame16", IsColor16(FrameFormat) ? 1 : 0);
 	glBindVertexArray(PresentVertexArray);
 	glDrawArrays(GL_TRIANGLES, 0, 3);

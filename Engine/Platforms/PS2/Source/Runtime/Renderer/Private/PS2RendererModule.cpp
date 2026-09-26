@@ -1,10 +1,10 @@
 #include "CanvasTypes.h"
 #include "GS/GSSceneRenderer.h"
-#include "Misc/ConfigCacheIni.h"
 #include "Modules/ModuleManager.h"
 #include "PS2RHI.h"
 #include "RendererInterface.h"
 #include "RendererLog.h"
+#include "RendererSettings.h"
 #include "ScenePrivate.h"
 #include "SceneView.h"
 
@@ -36,19 +36,21 @@ namespace
 				return false;
 			}
 			SceneRenderer.GetTextureCache().SetArena(FirstBlock, NumBlocks);
-			// The frame rate (Docs/PLANS/ps2-engine.md D6: a steady 30 fps): PS2Engine.ini's SyncInterval.
-			int32 SyncInterval = 1;
-			if (GConfig != nullptr)
-			{
-				GConfig->GetInt(TEXT("/Script/PS2RHI.PS2Settings"), TEXT("SyncInterval"), SyncInterval, GEngineIni);
-			}
-			FPS2RHI::SetSyncInterval(SyncInterval);
+			// The frame rate (Docs/PLANS/ps2-engine.md D6: a steady 30 fps) and the TV's aspect ratio, as on the
+			// desktop.
+			Settings = FRendererSettings::Load();
+			FPS2RHI::SetSyncInterval(Settings.SyncInterval);
 			bInitialized = true;
 			UE_LOG(LogRenderer, Log,
 				"PS2 renderer: GS scene renderer, %u KB of texture VRAM, a frame every %d vertical "
 				"blank(s)",
-				NumBlocks / 4, SyncInterval);
+				NumBlocks / 4, Settings.SyncInterval);
 			return true;
+		}
+
+		[[nodiscard]] float GetDisplayAspectRatio(const FIntPoint& TargetSize) const override
+		{
+			return Settings.GetDisplayAspectRatio(TargetSize);
 		}
 
 		void ShutdownRenderer() override
@@ -138,6 +140,7 @@ namespace
 		FGSSceneRenderer SceneRenderer;
 		/** The list each call records into (kept, so its capacity is reused frame after frame). */
 		FGSCommandList List;
+		FRendererSettings Settings;
 		bool bInitialized = false;
 	};
 

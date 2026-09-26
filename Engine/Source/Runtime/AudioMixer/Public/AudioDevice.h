@@ -33,8 +33,9 @@ struct FSoundWavePCM
 };
 
 /**
- * UE-like audio subsystem (FAudioDevice / UGameplayStatics PlaySound lite), backed by miniaudio on the desktop and by
- * the SPU2 on the PS2 (FSoftwareAudioMixer's mix streamed through audsrv).
+ * UE-like audio subsystem (FAudioDevice / UGameplayStatics PlaySound lite): the sounds mix on the game thread
+ * (FSoftwareAudioMixer, 48 kHz stereo) and go to the platform's output, the SPU2 through audsrv on the PS2 and a device
+ * of miniaudio on the desktop, so both play the same mix (Docs/PLANS/ps2-preview.md V1).
  * Safe no-op when Initialize fails or in headless silent mode. It plays PCM16 samples from memory (FSoundWavePCM, what
  * Engine's USoundWave assets hold: UGameplayStatics::PlaySound2D / PlaySoundAtLocation), and the UI cues.
  */
@@ -53,7 +54,7 @@ public:
 	 */
 	bool Initialize(bool bInSilent = false);
 	void Shutdown();
-	/** Reaps finished one-shots (called once per frame by the engine). */
+	/** Mixes what the output played since the last tick and queues it (called once per frame by the engine). */
 	void Tick();
 	[[nodiscard]] bool IsInitialized() const
 	{

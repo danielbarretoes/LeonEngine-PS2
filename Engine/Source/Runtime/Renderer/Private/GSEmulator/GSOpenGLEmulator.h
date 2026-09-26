@@ -70,8 +70,15 @@ public:
 	/** Executes the list's writes in order: draws into the frame, uploads into the emulated local memory. */
 	void Execute(const FGSCommandList& List);
 
-	/** Shows the frame in the bound window's framebuffer, scaled by the largest whole number that fits, centered. */
-	void Present(int32 WindowWidth, int32 WindowHeight);
+	/**
+	 * Shows the frame in the window's back buffer at DisplayAspectRatio (the TV's; 0: square pixels): its lines
+	 * scaled by a whole number, nearest, and each line stretched to the width that aspect gives, linearly, as a TV
+	 * draws the analog line; black around it. A 16-bit frame's texels are truncated to 5 bits first.
+	 */
+	void Present(int32 WindowWidth, int32 WindowHeight, float DisplayAspectRatio);
+	/** Where Present puts the frame in a window: its bottom-left corner and size, in window pixels. */
+	static void GetPresentRect(int32 WindowWidth, int32 WindowHeight, float DisplayAspectRatio, int32& OutX,
+		int32& OutY, int32& OutWidth, int32& OutHeight);
 
 	/**
 	 * Width x Height pixels of the frame from its top-left corner as the GS would hold them in the last FRAME's format

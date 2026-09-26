@@ -327,10 +327,13 @@ void UGameViewportClient::Draw(FViewport* InViewport, FCanvas* SceneCanvas)
 	}
 	const FIntPoint Size = InViewport->GetSizeXY();
 
-	// The view camera's projection follows the framebuffer (a new player camera starts with its own).
+	// The view camera's projection follows the frame as the display shows it (a new player camera starts with its own):
+	// the GS frame's 640 x 448 pixels fill a 4:3 TV (Docs/PLANS/ps2-preview.md V1).
 	UCameraComponent& Camera = *GetViewCamera();
-	Camera.SetPerspective(Camera.FieldOfView(), static_cast<float>(Size.X) / static_cast<float>(Size.Y),
-		DefaultCameraNearPlane, DefaultCameraFarPlane);
+	const IRendererModule* Renderer = GetRendererModulePtr();
+	const float Aspect = Renderer != nullptr ? Renderer->GetDisplayAspectRatio(Size)
+											 : static_cast<float>(Size.X) / static_cast<float>(Size.Y);
+	Camera.SetPerspective(Camera.FieldOfView(), Aspect, DefaultCameraNearPlane, DefaultCameraFarPlane);
 
 	// The world's components send their moved transforms and poses to the scene, then the view family is rendered,
 	// then the HUD and the engine's text go through the frame's canvas (UE).

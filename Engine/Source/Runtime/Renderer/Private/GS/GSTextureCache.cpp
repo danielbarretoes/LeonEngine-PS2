@@ -69,6 +69,14 @@ bool FGSTextureCache::Allocate(uint32 NumBlocks, uint32 NumClutBlocks, uint32& O
 void FGSTextureCache::Release(const void* Key)
 {
 	Entries.Remove(Key);
+	Converted.Remove(Key);
+}
+
+void FGSTextureCache::SetTextureConverter(FTextureConverter InConverter)
+{
+	Converter = InConverter;
+	Converted.Reset();
+	Reset();
 }
 
 bool FGSTextureCache::BindTexture(const UTexture2D& Texture, FGSCommandList& List, FGSTex0& OutTex0)
@@ -95,6 +103,10 @@ bool FGSTextureCache::BindTexture(const UTexture2D& Texture, FGSCommandList& Lis
 	{
 		return false;
 	}
+	if (const FConverted* Done = Converted.Find(&Texture))
+	{
+		return UploadPaletted(&Texture, Done->SizeX, Done->SizeY, Done->Format, Done->Data.GetData(), List, OutTex0);
+	}
 	const uint8* Texels = static_cast<const uint8*>(BulkData.LockReadOnly());
 	const int32 NumBytes = Data.SizeX * Data.SizeY * 4;
 	TArray<uint8> Rgba;
@@ -108,6 +120,14 @@ bool FGSTextureCache::BindTexture(const UTexture2D& Texture, FGSCommandList& Lis
 		Rgba[Index + 3] = Texels[Index + 3];
 	}
 	BulkData.Unlock();
+	FConverted Result;
+	if (Converter != nullptr &&
+		Converter(Rgba.GetData(), Data.SizeX, Data.SizeY, Result.SizeX, Result.SizeY, Result.Format, Result.Data) &&
+		(Result.Format == PF_P8 || Result.Format == PF_P4))
+	{
+		const FConverted& Done = Converted.Add(&Texture, MoveTemp(Result));
+		return UploadPaletted(&Texture, Done.SizeX, Done.SizeY, Done.Format, Done.Data.GetData(), List, OutTex0);
+	}
 	return Upload(&Texture, Data.SizeX, Data.SizeY, Rgba, false, List, OutTex0);
 }
 

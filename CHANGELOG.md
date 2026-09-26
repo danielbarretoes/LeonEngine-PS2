@@ -7,6 +7,29 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+The PC plays under the PS2's conditions ([ps2-preview](Docs/PLANS/ps2-preview.md) V1).
+
+### Added
+
+- `[/Script/Engine.RendererSettings]` `DisplayAspectRatio` (4:3, the TV's) and `SyncInterval` (2: 30 fps), the PS2's
+  values on every platform (`FRendererSettings`); `IRendererModule::GetDisplayAspectRatio`.
+- The desktop's gamepad as the DualShock (`FGLFWInputInterface`), and `FDualShockAnalog` (libpad's bytes and dead zone)
+  shared with the PS2.
+- `FAudioOutput`: the desktop's device of miniaudio (fed through its lock-free ring buffer) and the PS2's audsrv.
+- Tests: `System.Renderer.PS2Preview.*`, `System.ApplicationCore.DualShock.Analog`,
+  `System.ApplicationCore.Desktop.GamepadAsDualShock`, `System.AudioMixer.Device.QueuesTheMix` (414 engine tests on
+  Linux, 423 on Win64).
+
+### Changed
+
+- The view projects at the display's aspect ratio (4:3), so the PS2's scene is no longer squashed on the TV, and the
+  desktop shows the frame the TV's way (the lines at a whole scale, each stretched linearly).
+- The desktop keeps the PS2's frame rate (`FFramePacer`; `-benchmark` does not wait); the PS2 reads `SyncInterval` from
+  the renderer settings instead of `PS2Settings`.
+- One `FAudioDevice` on every platform, mixing with `FSoftwareAudioMixer`: the desktop hears the PS2's mix.
+- The Win64 cook makes the textures paletted, as the PS2's; the desktop draws uncooked RGBA8 textures through the same
+  conversion.
+
 ## [0.21.0] - 2026-09-26
 
 The PS2's Graphics Synthesizer becomes the one renderer, and ShooterGame runs on the PS2. The frame is recorded as the

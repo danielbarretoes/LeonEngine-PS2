@@ -252,8 +252,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLeonEdCookPalettedTexturesTest, "System.LeonEd
 
 bool FLeonEdCookPalettedTexturesTest::RunTest(const FString& Parameters)
 {
-	// The PS2 cook saves a texture paletted (4 colours: PSMT4, 8 x 8) and leaves the loaded one as it was; the cooked
-	// package loads as PF_P4, and the VRAM report counts its page and its CLUT block for the map that uses it.
+	// The PS2 cook (and the Win64 one, which cooks the PS2's formats) saves a texture paletted (4 colours: PSMT4,
+	// 8 x 8) and leaves the loaded one as it was; the cooked package loads as PF_P4, and the VRAM report counts its
+	// page and its CLUT block for the map that uses it.
 	LeonEdTest::FScopedTestContent Content;
 	UTexture2D* Rock = ImportTexture(TEXT("T_Rock"));
 	const ITargetPlatform* PS2 = FindPlatform(TEXT("PS2"));
@@ -280,7 +281,8 @@ bool FLeonEdCookPalettedTexturesTest::RunTest(const FString& Parameters)
 	TestTrue("Cooked for Win64",
 		UCookCommandlet::CookPackage(
 			TEXT("/LeonEdTest/T_Rock"), *Win64, LeonEdTest::GetTestDir() + TEXT("CookedWin64/"), &Win64Textures));
-	TestEqual("Win64 keeps RGBA8", Win64Textures.Num(), 0);
+	TestTrue("Win64 cooks the PS2's texture (Docs/PLANS/ps2-preview.md V1)",
+		Win64Textures.Num() == 1 && Win64Textures[0].Format == PF_P4);
 
 	// The cooked package in the source's place loads paletted.
 	LeonEdTest::DestroyPackagesUnder(LeonEdTest::Root);

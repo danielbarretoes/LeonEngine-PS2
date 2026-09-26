@@ -43,7 +43,7 @@ A map URL picks the team and the seed of the rounds (the bomb's carrier): `Shoot
 
 ## Controls
 
-| Keyboard and mouse | PS2 DualShock | Action |
+| Keyboard and mouse | DualShock (PS2), or a gamepad on the PC (Cross = A, Circle = B, Square = X, Triangle = Y) | Action |
 | --- | --- | --- |
 | Mouse | Right stick | Look (the mouse 0.07° per pixel, `SetMouseSensitivity <degrees per pixel>` changes it; the stick up to 150° a second across, 100° up and down: `BaseTurnRate` / `BaseLookUpRate`) |
 | W / S, D / A | Left stick | Move forward / back, right / left (the stick walks slower when tilted less) |

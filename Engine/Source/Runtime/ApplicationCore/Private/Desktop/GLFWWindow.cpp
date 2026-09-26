@@ -129,6 +129,11 @@ namespace
 	}
 } // namespace
 
+bool IsGLFWInitialized()
+{
+	return GGLFWInitCount > 0;
+}
+
 FGLFWWindow::~FGLFWWindow()
 {
 	Destroy();

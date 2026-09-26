@@ -6,7 +6,8 @@
 leon_module(Renderer
 	PUBLIC_DEPENDENCIES Core RHI RenderCore Engine
 	PRIVATE_DEPENDENCIES GSCore
-	PRIVATE_DEPENDENCIES_Desktop OpenGLDrv Glad
+	# TextureCompressor: the desktop draws uncooked textures as the PS2 cook makes them (Docs/PLANS/ps2-preview.md V1).
+	PRIVATE_DEPENDENCIES_Desktop OpenGLDrv Glad TextureCompressor
 	EXCLUDE_SOURCES_PS2
 		Private/RendererModule.cpp
 		Private/Shader.cpp

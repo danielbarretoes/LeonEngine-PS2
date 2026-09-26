@@ -235,7 +235,7 @@ The EE log shows `Mounted ... ShooterGame-PS2.lpak`, `PS2 renderer: GS scene ren
 every 2 vertical blank(s)` and `PS2 audio: audsrv, 48000 Hz stereo mixed on the EE` (E5: `audsrv.irx`, which the build
 copies from the SDK and BuildCookRun stages beside the ELF; without it the game runs silent and says why). The game is played with the DualShock (E4, the controls in the
 [ShooterGame README](../../../Game/ShooterGame/README.md#controls)) at a steady 30 fps: `SyncInterval=2` in
-`[/Script/PS2RHI.PS2Settings]` of `Config/PS2Engine.ini` (UE: `rhi.SyncInterval`; 1 for 60 Hz). With `-LogFrameTimes`
+`[/Script/Engine.RendererSettings]` of `BaseEngine.ini`, as on the desktop (UE: `rhi.SyncInterval`; 1 for 60 Hz). With `-LogFrameTimes`
 the EE log gets `Frame times over N frames: ... ms average (... fps), ... ms worst; world ... ms, draw and present ...
 ms` every 5 seconds.
 
