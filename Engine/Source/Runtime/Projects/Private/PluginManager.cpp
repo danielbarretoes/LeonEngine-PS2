@@ -109,6 +109,8 @@ namespace
 
 		virtual TArray<TSharedRef<IPlugin>> GetEnabledPluginsWithContent() const override
 		{
+			// Const in UE's interface; the first call scans like the other getters (a lazy cache).
+			const_cast<FPluginManager*>(this)->ScanOnce();
 			TArray<TSharedRef<IPlugin>> Result;
 			for (const TSharedRef<FPlugin>& Plugin : Plugins)
 			{

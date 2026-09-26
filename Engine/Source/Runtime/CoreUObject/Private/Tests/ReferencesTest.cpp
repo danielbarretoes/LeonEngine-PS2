@@ -83,7 +83,7 @@ bool FSoftObjectPathTest::RunTest(const FString& Parameters)
 		Asset == FSoftObjectPath(TEXT("/Game/Maps/Arena.Arena")) &&
 			GetTypeHash(Asset) == GetTypeHash(FSoftObjectPath(Asset)));
 
-	// Objects in memory resolve; TryLoad only finds those until packages load (P11).
+	// Objects in memory resolve, and TryLoad finds them without loading (the package tests load from disk).
 	UPackage* Package = CreatePackage(TEXT("/Game/LeonSoftPathTest"));
 	UGCTestObject* Object = NewObject<UGCTestObject>(Package, TEXT("SoftTarget"));
 	const FSoftObjectPath ObjectPath(Object);

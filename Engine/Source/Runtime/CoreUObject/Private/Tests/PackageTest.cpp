@@ -1137,6 +1137,18 @@ bool FPackageErrorsTest::RunTest(const FString& Parameters)
 	TestNull(TEXT("newer version"), LoadPackage(nullptr, TEXT("/PackageTest/Damaged"), LOAD_None));
 	DestroyPackage(TEXT("/PackageTest/Damaged"));
 
+	// A name count the file cannot hold (the summary's NameCount, after the tag, the two versions, the header size and
+	// the flags) is refused before anything is reserved for it.
+	TArray<uint8> HugeCount = Bytes;
+	HugeCount[20] = 0xFF;
+	HugeCount[21] = 0xFF;
+	HugeCount[22] = 0xFF;
+	HugeCount[23] = 0x7F;
+	Scope.Register(TEXT("/PackageTest/Damaged"), HugeCount);
+	AddExpectedError(TEXT("has invalid tables"));
+	TestNull(TEXT("a corrupt count"), LoadPackage(nullptr, TEXT("/PackageTest/Damaged"), LOAD_None));
+	DestroyPackage(TEXT("/PackageTest/Damaged"));
+
 	// The intact bytes still load.
 	Scope.Register(TEXT("/PackageTest/Damaged"), Bytes);
 	UPackageTestObject* Asset = LoadObject<UPackageTestObject>(nullptr, TEXT("/PackageTest/Damaged.Asset"));

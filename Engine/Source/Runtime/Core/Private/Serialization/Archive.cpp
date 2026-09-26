@@ -23,15 +23,15 @@ void FArchive::SerializeIntPacked(uint32& Value)
 		{
 			uint8 NextByte = 0;
 			Serialize(&NextByte, 1); // Read next byte
-			More = NextByte & 1; // Check 1 bit to see if there's more after this
-			NextByte = uint8(NextByte >> 1); // Shift to get actual 7 bit value
-			Value += uint32(NextByte) << (7 * Count++); // Add to total value
-
-			if (IsError() || Count > 5)
+			// Five bytes hold 32 bits: a sixth is corrupt data (checked before its shift, 35 bits, would overflow).
+			if (IsError() || Count >= 5)
 			{
 				SetError();
 				return;
 			}
+			More = NextByte & 1; // Check 1 bit to see if there's more after this
+			NextByte = uint8(NextByte >> 1); // Shift to get actual 7 bit value
+			Value += uint32(NextByte) << (7 * Count++); // Add to total value
 		}
 	}
 	else

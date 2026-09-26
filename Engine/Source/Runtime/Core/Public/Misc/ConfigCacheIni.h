@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Containers/Map.h"
+#include "Containers/Set.h"
 #include "Containers/UnrealString.h"
 #include "CoreTypes.h"
 #include "UObject/NameTypes.h"
@@ -70,6 +71,13 @@ public:
 	/** +Key=Value (unique) or .Key=Value (bAppendValueIfNotArrayOfStructsKeyUsed: always added) (UE: HandleAddCommand).
 	 */
 	void HandleAddCommand(FName Key, FString&& Value, bool bAppendValueIfNotArrayOfStructsKeyUsed);
+
+	/**
+	 * The keys this section holds as a whole array (SetArray, RemoveKey, or a +, ., - or ! line): they are written as
+	 * "!Key=ClearArray" and one ".Key=Value" a value, so a saved layer replaces the lower layers' array, whatever its
+	 * size (one value or none). A plain "Key=Value" key is a single value (Leon: UE tracks this per config value).
+	 */
+	TSet<FName> ArrayKeys;
 };
 
 /**
@@ -150,7 +158,10 @@ public:
 	/** The file, loaded (or created empty with CreateIfNotFound) when missing (UE: Find). */
 	FConfigFile* Find(const FString& InFilename, bool bCreateIfNotFound = false);
 
-	/** Writes the user layer of dirty files (UE: Flush). bRead drops them from the cache afterwards. */
+	/**
+	 * Writes the user layer of dirty files (UE: Flush). bRead drops them from the cache afterwards; a global file
+	 * (GEngineIni and friends) is loaded again from its whole hierarchy, the user layer just written included.
+	 */
 	void Flush(bool bRead, const FString& Filename = FString());
 
 	bool GetString(const TCHAR* Section, const TCHAR* Key, FString& Value, const FString& Filename);
@@ -175,6 +186,7 @@ public:
 	void SetBool(const TCHAR* Section, const TCHAR* Key, bool Value, const FString& Filename);
 	void SetArray(const TCHAR* Section, const TCHAR* Key, const TArray<FString>& Value, const FString& Filename);
 
+	/** Removes a key (every value) or every key of a section; Flush saves the removal in the user layer. */
 	bool RemoveKey(const TCHAR* Section, const TCHAR* Key, const FString& Filename);
 	bool EmptySection(const TCHAR* Section, const FString& Filename);
 
@@ -208,6 +220,9 @@ private:
 
 	/** Values set on a writable file since load, per file: the user layer that Flush merges into the saved file. */
 	TMap<FString, FConfigFile> PendingUserChanges;
+
+	/** A key removed from a file: dirty, and an empty array in the pending user layer (saved as "!Key=ClearArray"). */
+	void RecordRemoval(const TCHAR* Section, const TCHAR* Key, const FString& Filename);
 };
 
 /** The global config (UE: GConfig). Null until FEngineLoop::PreInit (or a program) calls InitializeConfigSystem. */

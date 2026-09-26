@@ -287,6 +287,11 @@ bool FPakPlatformFileMountTest::RunTest(const FString& Parameters)
 	TestFalse("Cannot be deleted", PakPlatformFile.DeleteFile(*Deep));
 	const FFileStatData Stat = PakPlatformFile.GetStatData(*Deep);
 	TestTrue("Stat", Stat.bIsValid && !Stat.bIsDirectory && Stat.FileSize == 70000 && Stat.bIsReadOnly);
+	TestTrue("Stat and time stamp agree", Stat.ModificationTime == PakPlatformFile.GetTimeStamp(*Deep));
+	PakPlatformFile.SetAllowLooseFiles(false);
+	TestTrue("... with loose files refused too",
+		PakPlatformFile.GetStatData(*Deep).ModificationTime == PakPlatformFile.GetTimeStamp(*Deep));
+	PakPlatformFile.SetAllowLooseFiles(true);
 
 	TestTrue("Its folder exists", PakPlatformFile.DirectoryExists(*(Root + "MyGame/Content/Data")));
 	TestTrue("The mount point exists", PakPlatformFile.DirectoryExists(*Root));
@@ -325,7 +330,13 @@ bool FPakPlatformFileMountTest::RunTest(const FString& Parameters)
 		PakPlatformFile.MountFromMemory(
 			TEXT("Patch.lpak"), MoveTemp(PatchPak), 1, *(Root + "MyGame/Content/Data/Sub/")));
 	TestTrue("The patch wins", ReadAll(PakPlatformFile, Deep, Data) && Data == MakeData(7, 100));
+	TUniquePtr<IFileHandle> PatchHandle(PakPlatformFile.OpenRead(*Deep));
 	TestTrue("Unmounted", PakPlatformFile.Unmount(TEXT("Patch.lpak")));
+	// A handle opened before the unmount keeps its pak.
+	uint8 PatchByte = 0;
+	TestTrue("A handle outlives its pak's unmount",
+		PatchHandle && PatchHandle->Read(&PatchByte, 1) && PatchByte == MakeData(7, 100)[0]);
+	PatchHandle.Reset();
 	TestTrue("The first pak again", ReadAll(PakPlatformFile, Deep, Data) && Data == MakeData(4, 70000));
 
 	#if PLATFORM_DESKTOP

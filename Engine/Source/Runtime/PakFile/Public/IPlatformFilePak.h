@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GenericPlatform/GenericPlatformFile.h"
 #include "Misc/SecureHash.h"
+#include "Templates/SharedPointer.h"
 #include "Templates/UniquePtr.h"
 
 PAKFILE_API DECLARE_LOG_CATEGORY_EXTERN(LogPakFile, Log, All);
@@ -270,11 +271,15 @@ private:
 	struct FPakListEntry
 	{
 		uint32 ReadOrder = 0;
-		TUniquePtr<FPakFile> PakFile;
+		/** Shared with the open handles, so a handle outlives its pak's Unmount (UE: TRefCountPtr<FPakFile>). */
+		TSharedPtr<FPakFile> PakFile;
 	};
 
 	/** Adds an opened pak, keeping the list sorted by order (the highest first). */
 	bool AddPak(TUniquePtr<FPakFile>&& PakFile, uint32 PakOrder, const TCHAR* InPath);
+
+	/** The time stamp of a mounted pak's files: the .lpak's on the lower level (UE). */
+	[[nodiscard]] FDateTime GetPakTimeStamp(const FPakFile& PakFile) const;
 
 	/** Whether a (normalized) directory exists in a pak. */
 	bool DirectoryExistsInPakFiles(const FString& NormalizedDirectory) const;

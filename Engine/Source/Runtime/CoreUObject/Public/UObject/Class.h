@@ -752,7 +752,10 @@ enum class EGetByNameFlags
 	None = 0,
 	/** Report an error when the name is not found. */
 	ErrorIfNotFound = 0x01,
-	/** Compare case-sensitively (FName comparison ignores case otherwise). */
+	/**
+	 * Compare case-sensitively: GetValueByNameString compares the strings; GetIndexByName cannot, an FName keeping one
+	 * casing per name (UE without WITH_CASE_PRESERVING_NAME, as its game builds).
+	 */
 	CaseSensitive = 0x02,
 };
 ENUM_CLASS_FLAGS(EGetByNameFlags)

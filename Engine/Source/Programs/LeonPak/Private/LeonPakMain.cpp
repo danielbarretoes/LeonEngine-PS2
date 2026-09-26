@@ -95,13 +95,22 @@ namespace
 		return 0;
 	}
 
-	int32 ExtractPak(FPakFile& PakFile, const FString& Destination)
+	int32 ExtractPak(FPakFile& PakFile, const FString& InDestination)
 	{
+		const FString Destination = FPaths::ConvertRelativePathToFull(InDestination);
 		int32 Errors = 0;
 		TArray<uint8> Data;
 		for (const FPakIndexEntry* Entry : SortedEntries(PakFile))
 		{
-			const FString Filename = FPaths::Combine(Destination, Entry->Filename);
+			// An entry must land inside the destination: no absolute path, no ".." out of it (a crafted pak).
+			FString Filename = FPaths::Combine(Destination, Entry->Filename);
+			if (!FPaths::IsRelative(Entry->Filename) || !FPaths::CollapseRelativeDirectories(Filename) ||
+				!FPaths::IsUnderDirectory(Filename, Destination))
+			{
+				UE_LOG(LogPakFile, Error, "\"%s\" is outside the destination: not extracted", *Entry->Filename);
+				++Errors;
+				continue;
+			}
 			IFileManager::Get().MakeDirectory(*FPaths::GetPath(Filename), true);
 			if (!PakFile.ReadEntry(Entry->Entry, Data) || !FFileHelper::SaveArrayToFile(Data, *Filename))
 			{

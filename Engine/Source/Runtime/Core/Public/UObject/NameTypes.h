@@ -238,6 +238,8 @@ public:
 		return !(*this == Other);
 	}
 
+	/** Leon keeps one casing per name (UE without WITH_CASE_PRESERVING_NAME): CaseSensitive compares like IgnoreCase.
+	 */
 	bool IsEqual(const FName& Other, const ENameCase CompareMethod = ENameCase::IgnoreCase,
 		const bool bCompareNumber = true) const;
 

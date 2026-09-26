@@ -58,8 +58,8 @@ void FTicker::Tick(float DeltaTime)
 
 		// Copy: the delegate may add tickers (reallocating Elements) while it runs.
 		const FTickerDelegate Delegate = Elements[Index].Delegate;
-		const bool bKeep = Delegate.IsBound() &&
-			Delegate.Execute(Elements[Index].DelayTime > 0.0f ? Elements[Index].DelayTime : DeltaTime);
+		// UE: the delegate gets the frame's DeltaTime, a delayed one too.
+		const bool bKeep = Delegate.IsBound() && Delegate.Execute(DeltaTime);
 		if (!bKeep)
 		{
 			Elements[Index].bRemoved = true;

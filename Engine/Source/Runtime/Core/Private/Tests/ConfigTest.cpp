@@ -161,6 +161,54 @@ bool FConfigCacheTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FConfigUserLayerArraysAndRemovalsTest, "System.Core.Config.UserLayerArraysAndRemovals",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+
+bool FConfigUserLayerArraysAndRemovalsTest::RunTest(const FString& Parameters)
+{
+	// The saved user layer, applied over the lower layers, gives back what was set: a one-value array replaces the
+	// whole array, duplicates stay, and a removed key is gone from the lower layers too.
+	const FString Dir = FPaths::ProjectIntermediateDir() + "Tests/ConfigArrays/";
+	IFileManager::Get().DeleteDirectory(*Dir, false, true);
+	const FString UserFile = Dir + "User.ini";
+	const FString LowerText = "[Section]\n+List=a\n+List=b\nGone=1\n+GoneList=g\nKeep=2\n";
+
+	FConfigCacheIni Cache;
+	Cache.Add(UserFile).ProcessInputFileContents(LowerText);
+	Cache.SetArray("Section", "List", {TEXT("c")}, UserFile);
+	Cache.SetArray("Section", "Dups", {TEXT("x"), TEXT("x")}, UserFile);
+	TestTrue("Removed", Cache.RemoveKey("Section", "Gone", UserFile));
+	TestTrue("Removed too", Cache.RemoveKey("Section", "GoneList", UserFile));
+	Cache.Flush(false);
+
+	FString SavedText;
+	TestTrue("Saved", FFileHelper::LoadFileToString(SavedText, *UserFile));
+	FConfigFile Loaded;
+	Loaded.ProcessInputFileContents(LowerText);
+	Loaded.CombineFromBuffer(SavedText);
+	TArray<FString> Values;
+	TestEqual("A one-value array replaces the array", Loaded.GetArray("Section", "List", Values), 1);
+	TestTrue("Its value", Values.Num() == 1 && Values[0] == TEXT("c"));
+	TestEqual("Duplicates kept", Loaded.GetArray("Section", "Dups", Values), 2);
+	FString Value;
+	TestFalse("A removed key is gone", Loaded.GetString("Section", "Gone", Value));
+	TestEqual("A removed array is gone", Loaded.GetArray("Section", "GoneList", Values), 0);
+	TestTrue("The rest kept", Loaded.GetString("Section", "Keep", Value) && Value == TEXT("2"));
+
+	// Saving the user layer again (a second flush merges into the file on disk) keeps the same meaning.
+	Cache.SetString("Section", "Other", "1", UserFile);
+	Cache.Flush(false);
+	TestTrue("Saved again", FFileHelper::LoadFileToString(SavedText, *UserFile));
+	FConfigFile Again;
+	Again.ProcessInputFileContents(LowerText);
+	Again.CombineFromBuffer(SavedText);
+	TestEqual("Still one value", Again.GetArray("Section", "List", Values), 1);
+	TestFalse("Still gone", Again.GetString("Section", "Gone", Value));
+
+	IFileManager::Get().DeleteDirectory(*Dir, false, true);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLogFileAndVerbosityTest, "System.Core.Logging.FileAndVerbosity",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::EngineFilter)
 

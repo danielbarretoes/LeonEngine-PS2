@@ -214,8 +214,14 @@ bool FLinkerLoad::ReadTables()
 	SetLicenseeUEVer(Summary.GetFileVersionLicenseeUE());
 	SetFilterEditorOnly((Summary.GetPackageFlags() & uint32(PKG_FilterEditorOnly)) != 0);
 
+	// Every table entry takes at least one int32, so a count the bytes after its offset cannot hold is corrupt (and is
+	// refused before anything reserves room for it).
 	auto IsValidTable = [FileSize](int32 Count, int32 Offset)
-	{ return Count >= 0 && Offset >= 0 && Offset <= FileSize && (Count == 0 || Offset < FileSize); };
+	{
+		constexpr int64 MinEntryBytes = sizeof(int32);
+		return Count >= 0 && Offset >= 0 && Offset <= FileSize &&
+			(Count == 0 || (Offset < FileSize && int64(Count) <= (int64(FileSize) - Offset) / MinEntryBytes));
+	};
 	if (!IsValidTable(Summary.NameCount, Summary.NameOffset) ||
 		!IsValidTable(Summary.ImportCount, Summary.ImportOffset) ||
 		!IsValidTable(Summary.ExportCount, Summary.ExportOffset) ||
@@ -223,7 +229,7 @@ bool FLinkerLoad::ReadTables()
 		Summary.TotalHeaderSize < 0 || Summary.TotalHeaderSize > FileSize || Summary.BulkDataStartOffset < 0 ||
 		Summary.BulkDataStartOffset > FileSize)
 	{
-		UE_LOG(LogLinker, Error, TEXT("%s: the package summary has invalid table offsets"), *Filename);
+		UE_LOG(LogLinker, Error, TEXT("%s: the package summary has invalid tables (offsets or counts)"), *Filename);
 		return false;
 	}
 
@@ -324,7 +330,7 @@ UObject* FLinkerLoad::GetExportOuter(int32 Index)
 	{
 		return LinkerRoot;
 	}
-	// ReadTables only lets exports have exports as outers... or imports, which Leon does not save (UE: forced exports).
+	// Leon saves exports with exports as outers; an import outer (UE's forced exports, never saved here) has none.
 	return OuterIndex.IsExport() ? CreateExport(OuterIndex.ToExport()) : nullptr;
 }
 

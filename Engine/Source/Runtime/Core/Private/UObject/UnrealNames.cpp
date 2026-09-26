@@ -312,11 +312,9 @@ bool FName::IsEqual(const FName& Other, const ENameCase CompareMethod, const boo
 	{
 		return false;
 	}
-	if (CompareMethod == ENameCase::IgnoreCase)
-	{
-		return ComparisonIndex == Other.ComparisonIndex;
-	}
-	// The pool keeps one casing per entry, so the display strings are equal exactly when the entries are.
+	// UE without WITH_CASE_PRESERVING_NAME (its game builds): the pool keeps one entry, with the first casing seen, per
+	// name ignoring case, so "Foo" and "foo" are the same name and CompareMethod cannot tell them apart.
+	(void)CompareMethod;
 	return ComparisonIndex == Other.ComparisonIndex;
 }
 

@@ -877,12 +877,10 @@ int32 UEnum::GetIndexByName(FName InName, EGetByNameFlags Flags) const
 			FullName = FName(*GenerateFullEnumName(*NameString), FNAME_Find);
 		}
 	}
-	const bool bCaseSensitive = EnumHasAnyFlags(Flags, EGetByNameFlags::CaseSensitive);
+	// An FName keeps one casing per name (EGetByNameFlags::CaseSensitive): the names compare as FNames.
 	for (int32 Index = 0; Index < Names.Num(); ++Index)
 	{
-		const FName& Name = Names[Index].Key;
-		if (Name == FullName &&
-			(!bCaseSensitive || Name.ToString().Equals(FullName.ToString(), ESearchCase::CaseSensitive)))
+		if (Names[Index].Key == FullName)
 		{
 			return Index;
 		}

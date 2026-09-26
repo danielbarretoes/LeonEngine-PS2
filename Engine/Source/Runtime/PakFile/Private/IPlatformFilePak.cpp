@@ -16,7 +16,7 @@ namespace
 	class FPakFileHandle final : public IFileHandle
 	{
 	public:
-		FPakFileHandle(FPakFile& InPakFile, const FPakEntry& InEntry)
+		FPakFileHandle(const TSharedPtr<FPakFile>& InPakFile, const FPakEntry& InEntry)
 			: PakFile(InPakFile)
 			, Entry(InEntry)
 		{
@@ -48,7 +48,7 @@ namespace
 			{
 				return false;
 			}
-			if (BytesToRead > 0 && !PakFile.Read(Entry.Offset + Position, Destination, BytesToRead))
+			if (BytesToRead > 0 && !PakFile->Read(Entry.Offset + Position, Destination, BytesToRead))
 			{
 				return false;
 			}
@@ -77,7 +77,7 @@ namespace
 		}
 
 	private:
-		FPakFile& PakFile;
+		TSharedPtr<FPakFile> PakFile;
 		FPakEntry Entry;
 		int64 Position = 0;
 	};
@@ -472,7 +472,7 @@ bool FPakPlatformFile::AddPak(TUniquePtr<FPakFile>&& PakFile, uint32 PakOrder, c
 	}
 	FPakListEntry Entry;
 	Entry.ReadOrder = PakOrder;
-	Entry.PakFile = MoveTemp(PakFile);
+	Entry.PakFile = TSharedPtr<FPakFile>(MakeShareable(PakFile.Release()));
 	PakFiles.Insert(MoveTemp(Entry), InsertIndex);
 	return true;
 }
@@ -614,13 +614,19 @@ bool FPakPlatformFile::SetReadOnly(const TCHAR* Filename, bool bNewReadOnlyValue
 	return LowerLevel->SetReadOnly(Filename, bNewReadOnlyValue);
 }
 
+FDateTime FPakPlatformFile::GetPakTimeStamp(const FPakFile& PakFile) const
+{
+	// The .lpak on the lower level (a pak lives outside Saved, so the loose-file rule does not apply to it).
+	const FDateTime PakTime = LowerLevel->GetTimeStamp(*PakFile.GetFilename());
+	return PakTime == FDateTime::MinValue() ? FDateTime(2000, 1, 1) : PakTime;
+}
+
 FDateTime FPakPlatformFile::GetTimeStamp(const TCHAR* Filename)
 {
 	// A file in a pak has the pak's time stamp (UE), so it never looks changed (the shader hot reload).
-	if (FPakFile* PakFile = FindFileInPakFiles(Filename))
+	if (const FPakFile* PakFile = FindFileInPakFiles(Filename))
 	{
-		const FDateTime PakTime = LowerLevel->GetTimeStamp(*PakFile->GetFilename());
-		return PakTime == FDateTime::MinValue() ? FDateTime(2000, 1, 1) : PakTime;
+		return GetPakTimeStamp(*PakFile);
 	}
 	return IsNonPakFilenameAllowed(Filename) ? LowerLevel->GetTimeStamp(Filename) : FDateTime::MinValue();
 }
@@ -630,7 +636,13 @@ IFileHandle* FPakPlatformFile::OpenRead(const TCHAR* Filename, bool bAllowWrite)
 	const FPakIndexEntry* Entry = nullptr;
 	if (FPakFile* PakFile = FindFileInPakFiles(Filename, &Entry))
 	{
-		return new FPakFileHandle(*PakFile, Entry->Entry);
+		for (const FPakListEntry& Listed : PakFiles)
+		{
+			if (Listed.PakFile.Get() == PakFile)
+			{
+				return new FPakFileHandle(Listed.PakFile, Entry->Entry);
+			}
+		}
 	}
 	return IsNonPakFilenameAllowed(Filename) ? LowerLevel->OpenRead(Filename, bAllowWrite) : nullptr;
 }
@@ -674,7 +686,7 @@ FFileStatData FPakPlatformFile::GetStatData(const TCHAR* FilenameOrDirectory)
 	const FPakIndexEntry* Entry = nullptr;
 	if (FPakFile* PakFile = FindFileInPakFiles(FilenameOrDirectory, &Entry))
 	{
-		const FDateTime PakTime = GetTimeStamp(*PakFile->GetFilename());
+		const FDateTime PakTime = GetPakTimeStamp(*PakFile);
 		return FFileStatData(PakTime, PakTime, PakTime, Entry->Entry.Size, false, true);
 	}
 	if (DirectoryExistsInPakFiles(FPakFile::NormalizePath(FilenameOrDirectory)))

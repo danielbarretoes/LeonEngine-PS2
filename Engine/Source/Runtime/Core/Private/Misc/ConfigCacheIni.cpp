@@ -59,6 +59,24 @@ namespace
 		return Result;
 	}
 
+	/** A section's keys with values, then its array keys without any (sorted, so a file is written the same way). */
+	TArray<FName> GetSectionKeys(const FConfigSection& Section)
+	{
+		TArray<FName> Keys;
+		Section.GetKeys(Keys);
+		TArray<FName> EmptyArrays;
+		for (const FName& Key : Section.ArrayKeys)
+		{
+			if (!Keys.Contains(Key))
+			{
+				EmptyArrays.Add(Key);
+			}
+		}
+		EmptyArrays.Sort([](const FName& A, const FName& B) { return A.ToString() < B.ToString(); });
+		Keys.Append(EmptyArrays);
+		return Keys;
+	}
+
 	/** Applies one "Key=Value" line (with its command character) to a section (UE: CombineFromBuffer). */
 	void ApplyLine(FConfigSection& Section, const FString& Line)
 	{
@@ -99,6 +117,14 @@ namespace
 		}
 
 		const FName KeyName(*Key);
+		if (Cmd == ' ')
+		{
+			Section.ArrayKeys.Remove(KeyName);
+		}
+		else
+		{
+			Section.ArrayKeys.Add(KeyName);
+		}
 		switch (Cmd)
 		{
 			case '+':
@@ -234,25 +260,23 @@ FString FConfigFile::ToIniString() const
 		const FConfigSection& Section = SectionPair.Value;
 		Text += FString::Printf("[%s]" LINE_TERMINATOR, *SectionPair.Key);
 
-		TArray<FName> Keys;
-		Section.GetKeys(Keys);
-		for (const FName& Key : Keys)
+		for (const FName& Key : GetSectionKeys(Section))
 		{
 			TArray<FConfigValue> Values;
 			Section.MultiFind(Key, Values, true);
 			const FString KeyString = Key.ToString();
-			if (Values.Num() == 1)
+			if (Values.Num() == 1 && !Section.ArrayKeys.Contains(Key))
 			{
 				Text += FString::Printf("%s=%s" LINE_TERMINATOR, *KeyString, *QuoteIfNeeded(Values[0].GetSavedValue()));
 			}
 			else
 			{
-				// Arrays replace whatever the lower layers had.
+				// Arrays replace whatever the lower layers had, duplicates and all ('.' adds even when present).
 				Text += FString::Printf("!%s=ClearArray" LINE_TERMINATOR, *KeyString);
 				for (const FConfigValue& Value : Values)
 				{
 					Text +=
-						FString::Printf("+%s=%s" LINE_TERMINATOR, *KeyString, *QuoteIfNeeded(Value.GetSavedValue()));
+						FString::Printf(".%s=%s" LINE_TERMINATOR, *KeyString, *QuoteIfNeeded(Value.GetSavedValue()));
 				}
 			}
 		}
@@ -360,6 +384,7 @@ void FConfigFile::SetString(const TCHAR* Section, const TCHAR* Key, const TCHAR*
 		Sec = &Add(Section);
 	}
 
+	Sec->ArrayKeys.Remove(Key);
 	FConfigValue* ConfigValue = Sec->Find(Key);
 	if (ConfigValue == nullptr)
 	{
@@ -387,6 +412,7 @@ void FConfigFile::SetArray(const TCHAR* Section, const TCHAR* Key, const TArray<
 	}
 
 	Sec->Remove(Key);
+	Sec->ArrayKeys.Add(Key);
 	for (const FString& Entry : Value)
 	{
 		Sec->Add(Key, FConfigValue(Entry));
@@ -486,9 +512,7 @@ void FConfigCacheIni::Flush(bool bRead, const FString& Filename)
 			{
 				Target = &UserLayer.Add(SectionPair.Key);
 			}
-			TArray<FName> Keys;
-			SectionPair.Value.GetKeys(Keys);
-			for (const FName& Key : Keys)
+			for (const FName& Key : GetSectionKeys(SectionPair.Value))
 			{
 				TArray<FConfigValue> Values;
 				SectionPair.Value.MultiFind(Key, Values, true);
@@ -496,6 +520,14 @@ void FConfigCacheIni::Flush(bool bRead, const FString& Filename)
 				for (const FConfigValue& Value : Values)
 				{
 					Target->Add(Key, Value);
+				}
+				if (SectionPair.Value.ArrayKeys.Contains(Key))
+				{
+					Target->ArrayKeys.Add(Key);
+				}
+				else
+				{
+					Target->ArrayKeys.Remove(Key);
 				}
 			}
 		}
@@ -514,8 +546,16 @@ void FConfigCacheIni::Flush(bool bRead, const FString& Filename)
 	{
 		for (const FString& File : Filenames)
 		{
+			// A global file is loaded again from its layers (the user layer just written on top); another one goes.
+			const FConfigFile* Combined = FindConfigFile(File);
+			const FString BaseName = Combined != nullptr ? Combined->Name.ToString() : FString();
 			Remove(File);
 			PendingUserChanges.Remove(File);
+			if (!BaseName.IsEmpty() && GetDestIniFilename(*BaseName, nullptr) == File)
+			{
+				FString Reloaded;
+				(void)LoadGlobalIniFile(Reloaded, *BaseName, nullptr, true, this);
+			}
 		}
 	}
 }
@@ -661,10 +701,8 @@ bool FConfigCacheIni::RemoveKey(const TCHAR* Section, const TCHAR* Key, const FS
 	{
 		return false;
 	}
-	if (FConfigFile* File = FindConfigFile(Filename))
-	{
-		File->Dirty = true;
-	}
+	Sec->ArrayKeys.Remove(Key);
+	RecordRemoval(Section, Key, Filename);
 	return true;
 }
 
@@ -675,12 +713,30 @@ bool FConfigCacheIni::EmptySection(const TCHAR* Section, const FString& Filename
 	{
 		return false;
 	}
+	TArray<FName> Keys;
+	Sec->GetKeys(Keys);
 	Sec->Empty();
-	if (FConfigFile* File = FindConfigFile(Filename))
+	Sec->ArrayKeys.Empty();
+	for (const FName& Key : Keys)
 	{
-		File->Dirty = true;
+		RecordRemoval(Section, *Key.ToString(), Filename);
 	}
 	return true;
+}
+
+void FConfigCacheIni::RecordRemoval(const TCHAR* Section, const TCHAR* Key, const FString& Filename)
+{
+	FConfigFile* File = FindConfigFile(Filename);
+	if (File == nullptr)
+	{
+		return;
+	}
+	File->Dirty = true;
+	if (!File->NoSave)
+	{
+		// An empty array in the user layer ("!Key=ClearArray") takes the key away from the lower layers too.
+		PendingUserChanges.FindOrAdd(Filename).SetArray(Section, Key, TArray<FString>());
+	}
 }
 
 void FConfigCacheIni::GetConfigFilenames(TArray<FString>& ConfigFilenames) const

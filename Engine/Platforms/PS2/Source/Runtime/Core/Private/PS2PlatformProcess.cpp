@@ -1,11 +1,12 @@
 #include "Containers/UnrealString.h"
+#include "HAL/PlatformMisc.h"
 #include "HAL/PlatformProcess.h"
 #include "Misc/CString.h"
 
 namespace
 {
 	// Fixed buffers: BaseDir is asked for before the heap-backed Core types are worth using, and argv[0] is short.
-	TCHAR GBaseDir[128] = "";
+	TCHAR GBaseDir[256] = "";
 	TCHAR GExecutableName[64] = "";
 	TCHAR GExecutableNameNoExtension[64] = "";
 } // namespace
@@ -31,6 +32,13 @@ void FPS2PlatformProcess::SetArgV0(const TCHAR* ArgV0)
 	if (DirLength < int32(sizeof(GBaseDir)))
 	{
 		FCString::Strncpy(GBaseDir, ArgV0, SIZE_T(DirLength + 1));
+	}
+	else
+	{
+		// Said on the EE console: every path would otherwise resolve from "" without a word.
+		FPlatformMisc::LowLevelOutputDebugString(
+			"FPS2PlatformProcess: the executable's folder is too long for the base dir"
+			" (255 characters at most); paths resolve from the current folder\n");
 	}
 	FCString::Strncpy(GExecutableName, NameStart, sizeof(GExecutableName));
 
