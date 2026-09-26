@@ -170,7 +170,11 @@ Gate: el cook es reproducible byte a byte, y el informe de VRAM de de_leon cabe 
 - Documentación: ARCHITECTURE (el nivel GS), LeonMapping (`FGSCommandList` frente a `FRHICommandList`), Budgets
   (VRAM y paquetes) y CHANGELOG.
 
-Fuera de este plan (siguiente plan): **el motor en PS2** (`WITH_ENGINE=1` en el EE: `UWorld`, `FScene` y ShooterGame
+Orden de las fases que quedan: **P5 antes que P4**, porque P5 es lo que necesita la PS2 para dibujar ShooterGame y P4
+solo mejora la vista previa ([ps2-engine](ps2-engine.md), D4). Mientras P4 no llegue, el GL actual sigue dibujando en
+Win64 y la lista de P5 se valida con la referencia.
+
+Fuera de este plan: **el motor en PS2**, en [ps2-engine](ps2-engine.md) (`WITH_ENGINE=1` en el EE: `UWorld`, `FScene` y ShooterGame
 sobre este renderer). Este plan deja listo el contrato para que, cuando el motor llegue al EE, lo que dibuje sea lo que
 ya se validó en Win64.
 
