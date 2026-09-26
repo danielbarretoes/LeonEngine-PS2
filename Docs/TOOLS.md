@@ -153,7 +153,7 @@ Engine\Binaries\Win64\LeonCook.exe Game\MyGame\MyGame.lproj -run=Cook -TargetPla
 
 ### Reproducible reimport (gate G5)
 
-`Engine\Build\BatchFiles\CheckReimport.bat [<Project>.lproj ...]` builds LeonCook, reimports the engine content (and each project's) with `-reimport -all`, maps included (`/Engine/Maps/AxisTest` from its `.glb`), and fails when `git diff --exit-code -- Engine/Content Game/*/Content/*` finds a change or a new file appears there. It needs a clean checkout of the content (CI runs it after the build, with `Game\ThirdPerson\ThirdPerson.lproj`). A release that bumps the engine version changes every saved package's summary: resave the content (`-run=ResavePackages`) in that release.
+`Engine\Build\BatchFiles\CheckReimport.bat [<Project>.lproj ...]` builds LeonCook, reimports the engine content (and each project's) with `-reimport -all`, maps included (`/Engine/Maps/AxisTest` from its `.glb`), and fails when `git diff --exit-code -- Engine/Content Game/*/Content/*` finds a change or a new file appears there. It needs a clean checkout of the content (CI runs it after the build, with `Game\ThirdPerson\ThirdPerson.lproj` and `Game\ShooterGame\ShooterGame.lproj`). The engine's maps skip a project's `RequiredTags` ([LEVELS.md](LEVELS.md#required-tags)), so a project that requires tags reimports the engine content too. A release that bumps the engine version changes every saved package's summary: resave the content (`-run=ResavePackages`) in that release.
 
 ## LeonPak
 
@@ -213,6 +213,14 @@ mkdir Engine\Saved\StagingTest
 Engine\Build\BatchFiles\BuildCookRun.bat -project=Engine\Saved\StagingTest\StagingTest.lproj -platform=Win64 -build -cook -stage -pak -run "-addcmdline=-Screenshot=C:\Temp\staged.bmp -ExitAfterFrames=30"
 ```
 
+A code project stages its own game target the same way. ShooterGame (P17) cooks de_leon with its meshes and
+materials, the team bodies (`DirectoriesToAlwaysCook=/Game/Characters`: they are loaded by path) and the engine's
+defaults, 53 files in its pak, and runs the G6 command line from the staged folder:
+
+```bat
+Engine\Build\BatchFiles\BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.lproj -platform=Win64 -configuration=Development -build -cook -stage -pak -run "-addcmdline=-nullrhi -ExecCmds=bot_fill -ExitAfterFrames=120"
+```
+
 ### C++ API
 
 | API | Header | Role |
@@ -239,9 +247,10 @@ All scripts forward to LeonBuildTool (`cmake -P Engine/Source/Programs/LeonBuild
 | `Engine\Build\BatchFiles\Cook.bat` | `<LeonCook arguments>` | Builds LeonCook (Win64 Development) and runs it |
 | `Engine\Build\BatchFiles\CheckReimport.bat` | `[<Project>.lproj ...]` | Gate G5: reimports the engine content (and the projects') and fails when git sees a change under a `Content` folder |
 | `Engine\Build\BatchFiles\BuildCookRun.bat` | `-project=<.lproj> -platform=Win64 [-configuration=...] [-build] [-cook] [-stage] [-pak] [-run] [-addcmdline="..."]` | Builds, cooks, stages and paks a project into `<Project>\Saved\StagedBuilds\Win64\`, and runs it ([above](#buildcookrun)) |
-| `Engine\Build\BatchFiles\RunTests.bat` | `[-automation=<filter>]` | Builds LeonAutomationTests (Win64 Development) and runs it from the repo root: every automation test (350), or those whose name contains `<filter>`; fails if any fails |
+| `Engine\Build\BatchFiles\RunTests.bat` | `[-automation=<filter>]` | Builds LeonAutomationTests (Win64 Development) and runs it from the repo root: every automation test (371), or those whose name contains `<filter>`; then the LeonHeaderTool golden tests, then ShooterGame's test program (`ShooterGameTests`, 10 tests, the same filter); fails if any fails |
+| `Engine\Build\BatchFiles\SmokeTest.bat` | | Gate G6: builds ShooterGame, runs it headless on de_leon with `-ExecCmds=bot_fill -ExitAfterFrames=120` and fails unless it exits with 0 and logs ten pawns, five a team (`SmokeTest OK: 10 pawns, CT 5, T 5, exit code 0`) |
 | `Engine\Build\BatchFiles\FormatCode.bat` | `[--check]` | clang-format on every `.cpp` / `.h` / `.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game` (skips `ThirdParty`, `Intermediate`, `Binaries`); `--check` is a dry run that fails on unformatted files |
-| `Engine\Build\BatchFiles\Lint.bat` | | `FormatCode.bat --check`, then `CheckBannedApis.ps1`, then builds LeonAutomationTests, LeonCook, LeonPak, LeonGame and BlankProgram for Win64 Development |
+| `Engine\Build\BatchFiles\Lint.bat` | | `FormatCode.bat --check`, then `CheckBannedApis.ps1`, then builds LeonAutomationTests, LeonCook, LeonPak, LeonGame and BlankProgram, and ShooterGame and ShooterGameTests, for Win64 Development |
 | `Engine\Build\BatchFiles\CheckBannedApis.ps1` | | Gate G4: fails when engine or game code (`Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game`; comments ignored) uses glm, nlohmann, `std::vector` / `string` / `map` / `unordered_map` / `function` / `shared_ptr` / `unique_ptr`, iostream, the `printf` family, `LegacyGL` / `FLegacyTransform` / `LegacyAxes`, or `FLegacyCoordinateConversion` outside the tests (`Public/Tests`, `Private/Tests`); the allowed places are listed in [CODING_STANDARD.md §4](CODING_STANDARD.md#4-language). Violations print `<file>:<line>: G4 <rule>: <code> -> <replacement>`; `-Root <dir>` scans another tree. CI runs it with `pwsh` |
 | `GenerateProjectFiles.bat` (root) → `Engine\Build\BatchFiles\GenerateProjectFiles.bat` | `[-Project=<file.lproj>]` | Visual Studio solution in `<Engine or Project>\Intermediate\ProjectFiles` plus the root `compile_commands.json` for clangd; builds keep using Build.bat |
 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1` | `[-Project <dir or .lproj> \| -Program <Name>] [-Configuration Debug\|Development\|Shipping] [-Build]` | Optionally builds the project (or engine program) for PS2, then starts PCSX2 on `<Project>\Binaries\PS2\<Name>.elf` (`Engine\Binaries\PS2\<Name>.elf` with `-Program`) |

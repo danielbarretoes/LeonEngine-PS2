@@ -357,7 +357,9 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 | Textures | `T_<Name>_<Suffix>` (`_D` diffuse, `_N` normal: imported linear) | `T_Default_D`, `T_Default_Bump_N` |
 | Source art | outside `Content`: `<Engine or Project>/SourceArt/`, folders mirroring the package paths, plus `ImportList.ini` | `Engine/SourceArt/EngineMaterials/T_Default_D.png`, `Engine/SourceArt/Maps/AxisTest.glb` |
 | Maps | `<Name>.lmap` in `Content/Maps` (UE's `Maps` folder), no prefix; an imported map's meshes and materials in `Maps/<Name>/Meshes` and `Maps/<Name>/Materials` | `/Engine/Maps/Template_Default`, `/Engine/Maps/AxisTest/Meshes/SM_RedCube` |
-| Map source nodes (Blender objects) | the map importer's prefixes ([LEVELS.md](LEVELS.md#naming-conventions)): `UCX_<Mesh>_<NN>`, `COL_`, `Clip_`, `PlayerStart_<Tag>`, `NavWaypoint`, a project's own | `UCX_Crate_01`, `PlayerStart_CT` |
+| Map source nodes (Blender objects) | the map importer's prefixes ([LEVELS.md](LEVELS.md#naming-conventions)): `UCX_<Mesh>_<NN>`, `COL_`, `Clip_`, `PlayerStart_<Tag>`, `NavWaypoint`, a project's own (ShooterGame: `BombSite_<A\|B>`, `BuyZone_<CT\|T>`) | `UCX_CrateStack_01`, `PlayerStart_CT`, `BombSite_A` |
+| Source art scripts | a script that builds source art in Blender sits next to its output, `snake_case.py`, Blender's modules only, run headless (`blender --background --factory-startup --python <script>`); it saves the `.blend` and exports the `.glb` | `Game/ShooterGame/SourceArt/Maps/make_de_leon.py` |
+| Source art licenses | a project's `SourceArt/LICENSES.md` lists every file with its origin and license (ShooterGame: CC0 only) | `Game/ShooterGame/SourceArt/LICENSES.md` |
 | GLSL shaders (`Engine/Shaders`) | snake_case | `blinn_phong.vert`, `post_composite.frag` |
 
 File formats: [ASSET_FORMATS.md](ASSET_FORMATS.md).
@@ -390,6 +392,10 @@ File formats: [ASSET_FORMATS.md](ASSET_FORMATS.md).
   (`System.Core.Containers.Array`, `System.Engine.PhysScene.…`, `System.JoltPhysics.Step.…`); Catch2 is gone.
 - `RunTests.bat` runs all of them (`LeonAutomationTests`, `-automation=<filter>`); `TestPAL` runs the Core,
   CoreUObject, Json and Projects tests on every platform, including PS2.
+- A game project's tests are named `<Project>.<Area>.<Name>` (`ShooterGame.Spawn.BotFill`), live in its module's
+  `Private/Tests/` and run in the project's test program (`<Project>Tests.Target.cmake`: `LAUNCH_MODULE
+  LeonAutomationTests`, `COLLECT_AUTOMATION_TESTS`, `AUTOMATION_TEST_MODULES <Project>`), which `RunTests.bat` builds
+  and runs after the engine's.
 - Reflected test types (`UCLASS` / `USTRUCT` fixtures) go in `<Module>/Private/Tests/*.h`; LeonHeaderTool compiles them
   into the test targets only (the `<Module>.Tests` unit).
 - A test that needs actors creates its world with `FScopedTestWorld` (`Engine/Public/Tests/ScopedTestWorld.h`):

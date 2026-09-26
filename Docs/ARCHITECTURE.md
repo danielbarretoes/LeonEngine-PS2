@@ -32,7 +32,8 @@ LeonEngine-PS2/
 │   │   └── LeonGame.Target.cmake
 │   ├── Platforms/PS2/         # PS2 platform extension (Source, Build, Config, Documentation)
 │   └── Plugins/Runtime/JoltPhysics/
-├── Game/ThirdPerson/          # the only game project (isolated; .lproj)
+├── Game/ThirdPerson/          # the PS2 game project (isolated; .lproj)
+├── Game/ShooterGame/          # the Win64 shooter (P17: its own tests target, de_leon; README.md)
 ├── Docs/
 ├── Setup.bat / Setup.sh       # pinned third-party downloads
 └── GenerateProjectFiles.bat / .sh
@@ -41,7 +42,8 @@ LeonEngine-PS2/
 Every C++ module follows the UE anatomy: `<Module>/<Module>.Build.cmake`, `Public/` (headers other
 modules may include), `Classes/` (public gameplay-class headers, UE convention), `Private/` (sources,
 private headers, platform subfolders and `Tests/`). A module without those folders is *flat* (UE game
-module style) — `Game/ThirdPerson/Source/ThirdPerson` is flat.
+module style) — `Game/ThirdPerson/Source/ThirdPerson` is flat; `Game/ShooterGame/Source/ShooterGame` has
+`Public/` and `Private/` (UE ShooterGame's layout).
 
 ---
 
@@ -56,13 +58,13 @@ module style) — `Game/ThirdPerson/Source/ThirdPerson` is flat.
 | **ThirdParty** | `Engine/Source/ThirdParty` | External modules (`TYPE External`): GLFW, Glad, STB, MiniAudio, UFBX, CGLTF, TinyObjLoader | — |
 | **Platform extension** | `Engine/Platforms/PS2` | PS2 halves of `Core`, `ApplicationCore`, `Launch` + the `PS2RHI` module; toolchain, Docker image, `PS2Engine.ini` | same as the module it extends |
 | **Plugins** | `Engine/Plugins/Runtime/JoltPhysics` | `JoltPhysics` module + its third-party `JoltLib` (Win64 only) | Runtime |
-| **Game** | `Game/ThirdPerson` | `ThirdPerson` primary game module + `ThirdPerson.Target.cmake` | Runtime (never the other way) |
+| **Game** | `Game/ThirdPerson`, `Game/ShooterGame` | `ThirdPerson` (PS2) and `ShooterGame` (Win64) primary game modules + their `.Target.cmake` files | Runtime (never the other way) |
 
 Rules:
 
-- **No engine module references the game.** `Game/ThirdPerson` is only discovered when a build passes
-  `-Project=…/ThirdPerson.lproj`; engine sources never include its headers (the name appears only
-  as a default in `Build.bat` / `RunPCSX2.ps1` usage lines).
+- **No engine module references the game.** A project under `Game/` is only discovered when a build passes
+  `-Project=…/<Project>.lproj`; engine sources never include its headers (the names appear only in usage lines and in
+  the batch files that build the projects: `RunTests.bat`, `Lint.bat`, `SmokeTest.bat`).
 - **Platform code lives in platform folders only**: `Private/Windows`, `Private/Linux`, `Private/Desktop`
   inside a module, or the extension under `Engine/Platforms/PS2`. LeonBuildTool drops source folders named
   after a platform or group that does not apply (a `Windows/` folder never compiles on PS2), and only
@@ -100,6 +102,8 @@ Full reference: [BUILD.md](BUILD.md).
 | --- | --- | --- | --- | --- | --- |
 | `LeonGame` | `Engine/Source/LeonGame.Target.cmake` | Game | Win64 | `Launch` | `Engine AIModule`; `WITH_ENGINE=1`; creates `GEngine` and opens a map (`LeonGame [<map>]`, `-map=<map>`) |
 | `ThirdPerson` | `Game/ThirdPerson/Source/ThirdPerson.Target.cmake` | Game | PS2 | `Launch` | project module `ThirdPerson`; `COMPILE_AGAINST_ENGINE OFF` → `WITH_ENGINE=0` |
+| `ShooterGame` | `Game/ShooterGame/Source/ShooterGame.Target.cmake` | Game | Win64 | `Launch` | project module `ShooterGame` (→ `Engine`, `AIModule`); `WITH_ENGINE=1`; opens `/Game/Maps/de_leon` |
+| `ShooterGameTests` | `Game/ShooterGame/Source/ShooterGameTests.Target.cmake` | Program | Win64 | `LeonAutomationTests` | the engine's test runner + `ShooterGame`, `Renderer`, `LeonEd`; `COLLECT_AUTOMATION_TESTS` with `AUTOMATION_TEST_MODULES ShooterGame`: only the project's tests, run with the project's config |
 | `LeonCook` | `Engine/Source/Programs/LeonCook/` | Program | Desktop | `LeonCook` | `Engine`, `LeonEd` (→ `TargetPlatform`), no renderer or RHI; `LeonCook [<Project>.lproj] -run=<Commandlet>` makes the `U<Name>Commandlet` class and calls `Main` (UE: `UE4Editor-Cmd`) |
 | `LeonPak` | `Engine/Source/Programs/LeonPak/` | Program | Desktop | `LeonPak` | `PakFile`; creates, lists, tests and extracts `.lpak` files (UE: UnrealPak) |
 | `LeonAutomationTests` | `Engine/Source/Programs/LeonAutomationTests/` | Program | Desktop | `LeonAutomationTests` | every desktop Runtime / Developer / Editor module except `Launch`, + `JoltPhysics` plugin; `COLLECT_AUTOMATION_TESTS` |
@@ -614,7 +618,7 @@ replaced game instance) after destroying the world, and `FEngineLoop::Exit` afte
 | --- | --- |
 | Engine | `GEngine` (`UGameEngine`) starts the renderer on the main window (`IRendererModule::InitRenderer`), creates the `UGameInstance` (`GameInstanceClass`; it creates the world context), the `UGameViewportClient` and the first `ULocalPlayer`, loads its default assets from their packages (`InitializeObjectReferences`: `DefaultTexture`, `DefaultBumpNormalTexture`, the default material, the UI sounds) and owns `FAudioDevice` and `FDebugOverlay`. Frame (`UGameEngine::Tick`, §9): shader hot reload → the viewport client's input → audio → pending travel → world tick → `ConditionalCollectGarbage` → the viewport client's tick and draw |
 | Startup | `UGameInstance::StartGameInstance`: the map is the first command-line token, `-map=` (Leon's alias) or `GameDefaultMap` (`/Engine/Maps/Template_Default`), with its URL options → `UEngine::Browse` → `UEngine::LoadMap`: find the `.lmap` (a long package name, or a file; a file outside the mount points mounts its content folder) → the local players leave their controllers, the old world's actors end play (`LevelTransition`), the world is destroyed and collected → `LoadPackage` → `UWorld::FindWorldInPackage`, rooted → `UWorld::InitWorld` → `UWorld::SetGameMode(FURL)` (`UGameInstance::CreateGameModeForURL`, D18: `?game=`, `AWorldSettings::DefaultGameMode`, `GameModeMapPrefixes`, `GlobalDefaultGameMode`, `AGameModeBase`) → `InitializeActorsForPlay` (`UpdateWorldComponents`, `InitGame`, the actors initialize) → every local player's `SpawnPlayActor` (`AGameModeBase::Login` spawns the `PlayerControllerClass`, `PostLogin` gives it its HUD and restarts it: `FindPlayerStart` → `SpawnDefaultPawnFor` → possess) → `UWorld::BeginPlay` (`StartPlay`, then every actor) → `UGameInstance::LoadComplete`. `open <map>` travels the same way at the next frame (`SetClientTravel`, `TickWorldTravel`) |
-| World | `UWorld` owns its `ULevel` (actors and `AWorldSettings`), the `FPhysScene`, the render scene (`Scene`, allocated in `InitWorld` through `IRendererModule::AllocateScene` when `FApp::CanEverRender()`), the `LineBatcher` (`FDebugDraw`) and the navigation; `SpawnActor` during a tick joins the level after it; `TickGameplayFrame`: character move → `FPhysScene::Step` → overlaps → actor tick (components that enabled their tick, then `Tick`) → `FPhysScene::SyncComponentsToBodies` (simulated bodies move their components). `SendAllEndOfFrameUpdates` (before each frame) sends the moved transforms and the skeletal poses to the scene proxies |
+| World | `UWorld` owns its `ULevel` (actors and `AWorldSettings`), the `FPhysScene`, the render scene (`Scene`, allocated in `InitWorld` through `IRendererModule::AllocateScene` when `FApp::CanEverRender()`), the `LineBatcher` (`FDebugDraw`) and the navigation; `SpawnActor` during a tick joins the level after it; `TickGameplayFrame` (what `UGameEngine::Tick` runs since P17): actor tick (`UWorld::Tick`: the controllers' input, the components that enabled their tick, then `Tick`; a character moves in its movement component's tick, the camera managers update last) → pawn separation → `FPhysScene::Step` → the characters leave the bodies they overlap and separate again → `FPhysScene::SyncComponentsToBodies` (simulated bodies move their components). `SendAllEndOfFrameUpdates` (before each frame) sends the moved transforms and the skeletal poses to the scene proxies |
 | Levels | Actors (P13) in `.lmap` maps (P15, [LEVELS.md](LEVELS.md)): the world, its persistent level, `AWorldSettings` first, then `AStaticMeshActor`, `APlayerStart`, `ATargetPoint`, `ATriggerVolume`, `ABlockingVolume`, `APainCausingVolume`, `ADirectionalLight`, `APointLight`, `ACameraActor`, `ANavigationWaypoint`, with their components (the movement components, `UInteractableComponent`); a map is saved with `UPackage::SavePackage` and imported from glTF by LeonEd's `UGLTFMapFactory`. Gameplay finds them with `UGameplayStatics::GetAllActorsOfClass` / `GetAllActorsWithTag` |
 | Actors | `AActor` (root component = actor transform; `DefaultSceneRoot` unless a subclass skips it; `Tags`, `bHidden`, `Owner`, `Instigator`, `GetUniqueID()` = spawn serial) → `AInfo` (hidden, does not tick in the world) and `APawn` → `ACharacter` (root `UCapsuleComponent`, `UCharacterMovementComponent`, `USkeletalMeshComponent`, `TakeDamage`) |
 | Components | `UActorComponent` (render state, physics state, `MarkRenderStateDirty`) → `USceneComponent` (relative transform, `Mobility`, `AttachToComponent` with rules and a socket, `SetupAttachment`) → `UPrimitiveComponent` (`CreateSceneProxy`, `SetCollisionEnabled` / `SetSimulatePhysics`, `GetCollisionShape`) → `UShapeComponent` (`UCapsuleComponent`, `UBoxComponent`, `USphereComponent`) and `UMeshComponent` (`UStaticMeshComponent`, `USkeletalMeshComponent`, whose bones are sockets); `UCameraComponent`, `USpringArmComponent`; `UMovementComponent` → `UPawnMovementComponent` → `UCharacterMovementComponent`; `ULightComponentBase` → `ULightComponent` → `UDirectionalLightComponent`, `ULocalLightComponent` → `UPointLightComponent` |
@@ -666,18 +670,42 @@ ULocalPlayer::Exec --> UGameViewportClient::Exec: show <Flag>
                        the world settings (their UFUNCTION(Exec)s through ProcessConsoleExec)
 ```
 
-### Character movement (CMC lite)
+### Character movement
 
 - Kinematic capsule pawn: actor location = feet; the root `UCapsuleComponent` (radius, half height; it stands on the
-  feet, so its top is at feet + 2 × half height; `GetCapsule()` is its `FCollisionShape`); not an `FBodyInstance`.
+  feet, so its top is at feet + 2 × half height; `GetCapsule()` is its `FCollisionShape`). Since P17 the capsule is a
+  query-only body of object type `ECC_Pawn` (UE's Pawn profile, §11), so traces hit characters; the movement sweeps
+  ignore it (`IgnoreComponentID`) and `SendPhysicsTransform` moves it after each move.
 - Modes `EMovementMode` Walking / Falling (`IsMovingOnGround`, `IsFalling`); floor via `FindFloor` /
   `FFindFloorResult`; walkable test against `WalkableFloorZ` (UE ~0.71).
 - Tunables with UE names on the `UCharacterMovementComponent` default subobject (`UPROPERTY`s): `MaxWalkSpeed`,
-  `JumpZVelocity`, `MaxStepHeight`, `WalkableFloorZ`, `AirControl`, `MaxJumpCount`. `ACharacter` still runs the
-  movement itself with them (UE runs it in the component).
-- Per frame: horizontal capsule sweep (× `AirControl` when falling) → step-up (walking, ≤ `MaxStepHeight`) →
-  slide → `ResolveCapsuleSides` → gravity → `FindFloor` → mode snap. Blocking sweeps push dynamic bodies
+  `MaxWalkSpeedCrouched`, `JumpZVelocity`, `MaxStepHeight`, `WalkableFloorZ`, `AirControl`, `MaxJumpCount`,
+  `CrouchedHalfHeight`, and UE's velocity model's `MaxAcceleration`, `GroundFriction`, `BrakingDecelerationWalking` /
+  `Falling`, `BrakingFrictionFactor`, `BrakingFriction` + `bUseSeparateBrakingFriction`, `FallingLateralFriction`,
+  `AirControlBoostMultiplier` / `VelocityThreshold`. `ACharacter` still runs the movement itself with them (UE runs it
+  in the component); the component ticks (`TickComponent`, after the controller's input) and calls it.
+- Two horizontal models. `bInstantVelocity` (the default, Leon's CMC lite the golden tables pin): the character moves
+  at `GetMaxSpeed()` along its input at once, `AirControl` × that speed in the air. UE's model (`bInstantVelocity =
+  false`, P17): the input is an acceleration of `MaxAcceleration`; walking, `CalcVelocity` turns the velocity toward
+  it (`V = V - (V - |V| × dir(A)) × min(dt × GroundFriction, 1)`), adds `A × dt` and clamps to the speed; without
+  input or above the speed, `ApplyVelocityBraking` brakes in sub-steps of at most 1/33 s with
+  `Friction × BrakingFrictionFactor` and `BrakingDecelerationWalking` (`V -= (Friction × V + Decel × dir(V)) × dt`,
+  never reversing, stopping below 10 cm/s); falling, the velocity is kept and the input accelerates it by
+  `AirControl` (boosted × `AirControlBoostMultiplier` below `AirControlBoostVelocityThreshold`). The velocity after a
+  move is its real displacement over the time (a wall stops it), capped at the speed it had.
+- `GetMaxSpeed()` is virtual (walking: `MaxWalkSpeedCrouched` crouched, else `MaxWalkSpeed`); a game overrides it for
+  its speed modifiers (ShooterGame's walk key).
+- Crouch (`ACharacter::Crouch` / `UnCrouch` → `bWantsToCrouch`, applied before the next move when `CanCrouch`): the
+  capsule's half height becomes `CrouchedHalfHeight`; on the ground the feet stay, in the air the capsule shrinks
+  around its centre (the feet come up, as UE's). Standing up sweeps the full capsule up first and stays crouched while
+  a ceiling is in the way. `BaseEyeHeight` follows (`CrouchedEyeHeight`), `OnStartCrouch` / `OnEndCrouch` tell the
+  character.
+- Per frame: horizontal capsule sweep (the model above) → step-up (walking, ≤ `MaxStepHeight`) → slide →
+  `ResolveCapsuleSides` → gravity → `FindFloor` → mode snap. Blocking sweeps push dynamic bodies
   (`ApplyCapsuleSweepPush`); `UWorld::TickGameplayFrame` separates overlapping pawns (`ResolvePawnOverlap`).
+- First-person view: `UCameraComponent::bUsePawnControlRotation` makes the camera take the owning pawn's view rotation
+  (UE's `GetCameraView`); `AActor::CalcCamera` asks the actor's active camera component. `UPlayerInput::SetMouseSensitivity`
+  (an Exec command) sets the degrees a pixel of mouse turns.
 
 ---
 
@@ -695,6 +723,23 @@ ULocalPlayer::Exec --> UGameViewportClient::Exec: show <Flag>
   resolve stay Arcade. Asking for Jolt without the plugin logs and falls back to Arcade. The plugin is
   `EnabledByDefault: false` and currently enabled only by `LeonAutomationTests`. Jolt keeps its own space (Y up,
   metres): the backend swaps Y and Z and scales by 0.01 at the boundary (§6, Coordinates).
+- **Collision channels** (P17, UE's model): every body has an object type (`ECollisionChannel`: `ECC_WorldStatic`,
+  `ECC_WorldDynamic`, `ECC_Pawn`, `ECC_Visibility`, `ECC_Camera`, `ECC_PhysicsBody`, …, `ECC_GameTraceChannel1..18`)
+  and a response to every channel (`FCollisionResponseContainer`: `ECR_Ignore` / `ECR_Overlap` / `ECR_Block`,
+  PhysicsCore). A query traces on a channel with `FCollisionQueryParams` (ignored components and actors, `AddIgnoredActor`)
+  and `FCollisionResponseParams` (the query's own response to each object type); a body answers with the smaller of its
+  response to the trace channel and the query's response to its object type. `*Single*` returns the first blocking hit,
+  `*Multi*` every blocking and overlapping hit, nearest first (`FHitResult::bBlockingHit`, `GetActor`,
+  `GetComponent`). `ByObjectType` queries (`FCollisionObjectQueryParams`) hit the bodies of the given types.
+  `UPrimitiveComponent::SetCollisionObjectType` / `SetCollisionResponseToChannel(s)` / `SetCollisionResponseToAllChannels`
+  set a component's; `UCollisionProfile` (`[/Script/Engine.CollisionProfile] DefaultChannelResponses`) names the game
+  channels and their default response (ShooterGame: `ECC_GameTraceChannel1` "Weapon", blocked by default). The
+  defaults keep the older behaviour: a component is `ECC_WorldStatic` blocking everything, a raw body added without a
+  component ignores the other mobility's channel (a static body ignores `ECC_WorldDynamic` traces, a dynamic one
+  `ECC_WorldStatic` traces: the old channel filter), and the character's capsule is UE's Pawn profile (`ECC_Pawn`,
+  query only, blocking everything but `ECC_Visibility`, and in Leon `ECC_Pawn`, since pawns separate by
+  `ResolvePawnOverlap`). Named profiles (`BlockAll`, `Pawn`, …) are not implemented; the classes set UE's profile values
+  in their constructors.
 - Bodies come from the components (P13, UE's physics state): registering a `UPrimitiveComponent` whose collision is
   enabled adds a body keyed by the component (`FPhysScene::AddComponentBody`; `FBodyInstance::ComponentID` is the
   component's `GetUniqueID()`, and hits and query parameters carry it: `IgnoreComponentID`), and unregistering it
@@ -835,9 +880,9 @@ UWorld::LineBatcher (FDebugDraw) -----------------------------------------------
   the content from its sources and fails when git sees a change under a `Content` folder; CI runs it.
 - **Tests**: each module keeps its tests in `<Module>/Private/Tests/`, excluded from the module library and compiled
   only into targets with `COLLECT_AUTOMATION_TESTS`. Every test is a UE automation test
-  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, named `System.<Module>.<Area>.<Name>`): 350 on Win64 — Core 47, CoreUObject 62,
-  Json 2, Projects 2, PakFile 5, PhysicsCore 8, RenderCore 23, AnimationCore 1, Engine 129, Renderer 8, AIModule 30,
-  MeshUtilities 8, LeonEd 16, JoltPhysics 9 (a tenth, `System.JoltPhysics.Backend.DisabledFallsBack`, compiles only
+  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, named `System.<Module>.<Area>.<Name>`): 371 on Win64 — Core 47, CoreUObject 62,
+  Json 2, Projects 2, PakFile 5, PhysicsCore 8, RenderCore 23, AnimationCore 1, Engine 149, Renderer 8, AIModule 30,
+  MeshUtilities 8, LeonEd 17, JoltPhysics 9 (a tenth, `System.JoltPhysics.Backend.DisabledFallsBack`, compiles only
   without the plugin). On PS2, Core runs 44 (the platform-file, config-cache and log-file tests are desktop-only),
   CoreUObject 60 (its SaveConfig and package file tests are desktop-only; the other package tests save to memory),
   Json 2, Projects 1 and PakFile 5 (on paks in memory).
@@ -850,6 +895,9 @@ UWorld::LineBatcher (FDebugDraw) -----------------------------------------------
   - `LeonAutomationTests` (Desktop) starts the module table, runs the automation tests through
     `FAutomationTestFramework` and fails if any fails. Run with `Engine\Build\BatchFiles\RunTests.bat`
     (`-automation=<filter>` runs the tests whose name contains `<filter>`).
+  - A project's tests (`ShooterGame.*`, 10) live in its module's `Private/Tests/` and run in the project's own test
+    program (`ShooterGameTests`: the engine's runner with `AUTOMATION_TEST_MODULES ShooterGame`, so only the
+    project's tests, with the project's config); `RunTests.bat` builds and runs it after the engine's.
   - `TestPAL` (every platform; Core, CoreUObject, Json, Projects and PakFile: 118 tests on Win64, 112 on PS2) runs the
     automation tests and prints `TestPAL: PASSED (N test(s), 0 failed)` plus the reflection (types, construction
     heap), object array, garbage collection (`GC budget`, a final collection), package round trip (`Package budget`),
@@ -861,9 +909,12 @@ UWorld::LineBatcher (FDebugDraw) -----------------------------------------------
   removed legacy math bridges (`LegacyGL`, `FLegacyTransform`, `LegacyAxes`), or `FLegacyCoordinateConversion`
   outside the tests ([CODING_STANDARD.md §4](CODING_STANDARD.md#4-language)); `Lint.bat` and CI
   run it.
+- **ShooterGame smoke (gate G6)**: `Engine\Build\BatchFiles\SmokeTest.bat` builds ShooterGame, runs it headless on
+  de_leon with `-ExecCmds=bot_fill` and fails unless it exits with 0 and reports ten pawns, five a team.
 - **CI** (`.github/workflows/ci.yml`): PS2 `ThirdPerson` + `BlankProgram` in the ps2dev image (ELF artifact);
-  Win64 `CheckBannedApis.ps1`, `Setup.bat`, `RunTests.bat`, `LeonGame` and `LeonCook`, then `CheckReimport.bat` (G5),
-  then a staged build smoke: `BuildCookRun.bat` cooks, stages, paks and runs a content-only project headless
+  Win64 `CheckBannedApis.ps1`, `Setup.bat`, `RunTests.bat` (the engine's and ShooterGame's tests), `LeonGame` and
+  `LeonCook`, `SmokeTest.bat` (G6), `CheckReimport.bat` (G5, engine, ThirdPerson and ShooterGame), then the staged
+  build smokes: `BuildCookRun.bat` cooks, stages, paks and runs a content-only project and ShooterGame headless
   (Development).
 
 ---
@@ -890,4 +941,5 @@ roadmap is [NextSteps.md](UnrealEngine427/NextSteps.md).
 | Platform checks | `Core/Private/HAL/MallocAnsi.cpp` and `Misc/OutputDeviceRedirector.cpp` use `#if PLATFORM_WINDOWS` outside a platform folder. |
 | Linking | Always static (`IS_MONOLITHIC=1`), generated module table; no DLL modules or hot reload. |
 | Cook and paks (P16) | Cook by the book only (no cook on the fly, no `-iterate`, no asset registry); the PS2 target platform cooks the Win64 formats and the PS2 game mounts no pak yet; paks without compression, encryption or signatures; only Win64 stages (`BuildCookRun.bat`, a PowerShell script instead of AutomationTool). |
+| Collision | UE's channels and responses (P17), without named profiles; the arcade scene's shapes are boxes, triangle meshes and upright capsules (the characters); `*Multi*` queries keep every hit rather than stopping at the first block. |
 | Build tool | CMake scripts instead of C# UBT; Linux is registered but not verified. Leon code builds without RTTI or C++ exceptions everywhere (D17: MSVC `/GR-`, no `/EH`, `_HAS_EXCEPTIONS=0`; GCC / Clang `-fno-rtti -fno-exceptions`); third-party libraries keep their own flags. |

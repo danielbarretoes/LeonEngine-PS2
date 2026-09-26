@@ -300,22 +300,46 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 - 350 tests; the golden tables and the Win64 frames are unchanged; the engine content was resaved for 0.17.0 (the
   package summary records the engine version).
 
+### Done — ShooterGame boot and a basic FPS (P17)
+
+([LeonMapping — P17](LeonMapping.md#p17--shootergame-boot-and-a-basic-fps), [ShooterGame README](../../Game/ShooterGame/README.md),
+[LEVELS — de_leon](../LEVELS.md#worked-example-de_leon)):
+
+- **Collision channels** (PhysicsCore, Engine): `ECollisionChannel`, `ECollisionResponse`, `FCollisionResponseContainer`,
+  `FCollisionResponseParams`, `FCollisionObjectQueryParams`, ignored actors in `FCollisionQueryParams`, traces and
+  sweeps by channel and by object type (`Single` / `Multi`), `FHitResult::GetActor` / `GetComponent`,
+  `UPrimitiveComponent`'s object type and responses, `UCollisionProfile` (`DefaultChannelResponses`: a game's named
+  channels); the character's capsule is a query-only Pawn body that traces hit. The defaults keep every golden table.
+- **UE's movement model** in `UCharacterMovementComponent` (`bInstantVelocity = false`): `MaxAcceleration`,
+  `GroundFriction`, `BrakingDecelerationWalking`, `BrakingFrictionFactor`, `bUseSeparateBrakingFriction`, `AirControl`
+  and its boost (`CalcVelocity`, `ApplyVelocityBraking`), crouching with the room check (`Crouch`, `UnCrouch`,
+  `CrouchedHalfHeight`), the virtual `GetMaxSpeed`; the component ticks the movement. First person:
+  `UCameraComponent::bUsePawnControlRotation`, `UPlayerInput::SetMouseSensitivity`.
+- **ShooterGame** (`Game/ShooterGame`, Win64): `AShooterGameMode` (teams, team starts, `bot_add_ct` / `bot_add_t` /
+  `bot_add` / `bot_fill`), `AShooterCharacter` (first-person camera, CS movement in `UShooterCharacterMovement`, the
+  walk key, crouch), `AShooterPlayerController`, `AShooterAIController`, `AShooterPlayerState` (team), `AShooterHUD`
+  (CS crosshair); its tests program `ShooterGameTests` (LeonBuildTool's `AUTOMATION_TEST_MODULES`).
+- **de_leon**: a Blender-scripted blockout (two sites, three lanes, mid doors, crates, a clip, buy zones, five starts a
+  team, 18 linked waypoints) imported with the project's rules and required tags; the engine's maps skip a project's
+  required tags. Team bodies as placeholders.
+- **G6**: `SmokeTest.bat` (ShooterGame headless, `bot_fill`, ten pawns, exit 0) in CI, with the staged ShooterGame.
+- 371 engine tests and 10 ShooterGame tests; the golden tables and the Win64 frames are unchanged.
+
 ### Next
 
+- **P18 (weapons):** a weapon actor attached to the first-person camera (the character has no arms mesh or sockets
+  yet: attach to `FirstPersonCameraComponent` with an offset, or add a `USkeletalMeshComponent` with a muzzle socket)
+  and to the body for the others; hitscan on the `Weapon` channel (`ECC_GameTraceChannel1`, already named and blocked
+  by every body, the capsules included) with `LineTraceSingleByChannel`, the shooter in `FCollisionQueryParams`'s
+  ignored actors; damage through `UGameplayStatics::ApplyPointDamage` / `AActor::TakeDamage` (UE's signature with
+  `FDamageEvent` still to come) and a health on `AShooterCharacter`; the `Fire` action is bound
+  (`AShooterCharacter::OnFirePressed` logs today); models, weapons and sounds CC0 only (`SourceArt/LICENSES.md`).
+- **P19 (rounds):** round states on `AShooterGameMode` / a `AShooterGameState`, buy zones (the tagged trigger volumes),
+  the bomb sites, the scoreboard (`Tab`, a placeholder in `AShooterHUD`) and the menu.
+- **P20 (bots):** the bots' brains on `AShooterAIController` with the de_leon waypoint graph (`ANavigationWaypoint`
+  links).
 - Later: move the character movement code from `ACharacter` into `UCharacterMovementComponent` (UE's
   `PerformMovement`, `MovementMode`, `Velocity`, `CurrentFloor`); a cached `ComponentToWorld`; tick functions.
-- **P17:** ShooterGame's `Config/DefaultEditor.ini` gives the map importer its rules (`BombSite`, `BuyZone`) and
-  `RequiredTags`; `de_leon` is built in Blender, exported to `SourceArt/Maps/de_leon.glb` and imported with
-  `-type=Map -dest=/Game/Maps/de_leon` (its `ImportList.ini`); `GameDefaultMap=/Game/Maps/de_leon`.
-- **P17 and the cook / staging:** ShooterGame is a code project, so BuildCookRun builds its own `Game` target
-  (`Source/ShooterGame.Target.cmake`, `-Project=` passed to Build.bat) instead of LeonGame and stages
-  `ShooterGame/Binaries/Win64/ShooterGame-Win64-Shipping.exe`; its `Config/DefaultGame.ini` lists what no map
-  references (`+DirectoriesToAlwaysCook=(Path="/Game/...")` for the weapons, sounds, UI and anything loaded by path,
-  or `+MapsToCook` when not every map under `/Game/Maps` ships), and its `Config/DefaultEditor.ini` is never staged. A
-  compiled-in project finds its staged folder through `FPaths::IsStaged` like LeonGame (the project name comes from
-  `LEON_PROJECT_NAME`). Soft references in its classes' defaults (a `TSoftObjectPtr` in a CDO) are not seen by the
-  closure, which reads packages: list those folders in `DirectoriesToAlwaysCook`. The G6 smoke can run the staged
-  build (`BuildCookRun -run "-addcmdline=-nullrhi ..."`).
 - Cook follow-ups: `-iterate` (cook only what changed), an asset registry, compressed paks, the PS2 target's formats
   (PSMT8 / PSMT4 textures, `LPS2` v2 meshes, ADPCM) with a pak aligned to 2048 on `cdrom0:` mounted by the PS2
   launch.

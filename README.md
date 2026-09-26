@@ -10,8 +10,10 @@ conventions, built with CMake through **LeonBuildTool** (our UnrealBuildTool).
   UE's space: X forward, Y right, Z up, left-handed, 1 unit = 1 cm.
 - **PS2 platform extension** (`Engine/Platforms/PS2`): PlayStation 2 HAL, DualShock input, engine loop hooks with a
   debug overlay, and `PS2RHI` for the Graphics Synthesizer. PS2 builds run in a pinned ps2dev Docker image.
-- **One game**, `Game/ThirdPerson`: a PS2 third-person starter (orbit camera, character move / jump, primitive level),
-  isolated from the engine and built with `-Project=`.
+- **Two games**, isolated from the engine and built with `-Project=`: `Game/ThirdPerson`, a PS2 third-person starter
+  (orbit camera, character move / jump, primitive level), and `Game/ShooterGame`, a Win64 Counter-Strike-style shooter
+  (first-person CS movement, two teams of five with bots, the `de_leon` blockout built in Blender;
+  [README](Game/ShooterGame/README.md)).
 
 ## Quick start (Windows)
 
@@ -33,7 +35,15 @@ Engine\Build\BatchFiles\Build.bat LeonCook Win64 Development
 Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.lproj
 ```
 
-Run it in PCSX2 (add `-Build` to build first):
+ShooterGame (Win64): build it, play `de_leon` with both teams filled by bots, and run its smoke test (gate G6):
+
+```bat
+Engine\Build\BatchFiles\Build.bat ShooterGame Win64 Development -Project=%CD%\Game\ShooterGame\ShooterGame.lproj
+Game\ShooterGame\Binaries\Win64\ShooterGame.exe -ExecCmds=bot_fill
+Engine\Build\BatchFiles\SmokeTest.bat
+```
+
+Run the PS2 game in PCSX2 (add `-Build` to build first):
 
 ```powershell
 Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson
@@ -63,6 +73,7 @@ Engine/
   Platforms/PS2/         PS2 platform extension
   Binaries/, Intermediate/       generated
 Game/ThirdPerson/        ThirdPerson.lproj, Source/, Config/, Content/ (PS2 game)
+Game/ShooterGame/        ShooterGame.lproj, Source/ (game + tests targets), Config/, Content/, SourceArt/ (Win64 game)
 Docs/
 ```
 
@@ -82,6 +93,7 @@ and run in `LeonAutomationTests`.
 | [Engine/Platforms/PS2/README.md](Engine/Platforms/PS2/README.md) | PS2 platform extension, frame order, debug overlay |
 | [Docs/ASSET_FORMATS.md](Docs/ASSET_FORMATS.md), [Docs/LEVELS.md](Docs/LEVELS.md), [Docs/TOOLS.md](Docs/TOOLS.md) | Asset formats, maps (`.lmap`, the glTF map import), cook tools |
 | [Docs/TESTING.md](Docs/TESTING.md) | Automated gates, frame captures, the axes gizmo and the manual checklist |
+| [Game/ShooterGame/README.md](Game/ShooterGame/README.md) | ShooterGame: build, run, controls, classes, CS movement values, de_leon |
 | [Docs/PS2OFFICIAL/](Docs/PS2OFFICIAL/README.md) | PS2 hardware manuals |
 
 ## Changelog

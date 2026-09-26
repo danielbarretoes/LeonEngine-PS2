@@ -125,11 +125,12 @@ Windows batch files live in `Engine/Build/BatchFiles/` (UE layout); run them fro
 | `Build.bat` | `Build.bat <Target> <Platform> <Config> [-Project=<file>] [-Mode=...] [-NoDocker] [-KeepGoing]` | Loads the MSVC environment (`GetVSEnv.bat vcvars quiet need-ninja`) unless the platform is `PS2`, then runs LeonBuildTool with all arguments |
 | `Clean.bat` | `Clean.bat <Target> <Platform> <Config> [-Project=<file>]` | `Build.bat ... -Mode=Clean` |
 | `Rebuild.bat` | `Rebuild.bat <Target> <Platform> <Config> [-Project=<file>]` | `Build.bat ... -Mode=Rebuild` |
-| `RunTests.bat` | `RunTests.bat [-automation=<filter>]` | Builds `LeonAutomationTests Win64 Development` and runs `Engine\Binaries\Win64\LeonAutomationTests.exe` from the repo root: every automation test (350), or only those whose name contains `<filter>`. It then runs the LeonHeaderTool golden tests (`LeonHeaderTool -Test`) |
+| `RunTests.bat` | `RunTests.bat [-automation=<filter>]` | Builds `LeonAutomationTests Win64 Development` and runs `Engine\Binaries\Win64\LeonAutomationTests.exe` from the repo root: every automation test (371), or only those whose name contains `<filter>`. It then runs the LeonHeaderTool golden tests (`LeonHeaderTool -Test`), then builds `ShooterGameTests` (`-Project=Game\ShooterGame\ShooterGame.lproj`) and runs `Game\ShooterGame\Binaries\Win64\ShooterGameTests.exe` with the same arguments (ShooterGame's tests, 10) |
 | `Cook.bat` | `Cook.bat <LeonCook arguments>` | Builds `LeonCook Win64 Development` and runs `Engine\Binaries\Win64\LeonCook.exe` (`Cook.bat -run=ImportAssets -reimport -all`) |
 | `CheckReimport.bat` | `CheckReimport.bat [<Project>.lproj ...]` | Gate G5: builds LeonCook, reimports the engine content (and each project's) with `-run=ImportAssets -reimport -all`, then fails when `git diff --exit-code` sees a change, or a new file appears, under `Engine/Content` or `Game/*/Content` (CI runs it on a clean checkout) |
 | `FormatCode.bat` | `FormatCode.bat [--check]` | clang-format on every `.cpp/.h/.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game` (skips paths containing `ThirdParty`, `Intermediate`, `Binaries`). `--check` is a dry run that fails if a file needs formatting |
-| `Lint.bat` | `Lint.bat` | `FormatCode.bat --check`, then `CheckBannedApis.ps1`, then builds `LeonAutomationTests`, `LeonCook`, `LeonPak`, `LeonGame` and `BlankProgram` for Win64 Development |
+| `Lint.bat` | `Lint.bat` | `FormatCode.bat --check`, then `CheckBannedApis.ps1`, then builds `LeonAutomationTests`, `LeonCook`, `LeonPak`, `LeonGame` and `BlankProgram`, and ShooterGame's `ShooterGame` and `ShooterGameTests`, for Win64 Development |
+| `SmokeTest.bat` | `SmokeTest.bat` | Gate G6: builds `ShooterGame Win64 Development`, runs `ShooterGame.exe -nullrhi -ExecCmds=bot_fill -ExitAfterFrames=120` (its log in `Game\ShooterGame\Saved\Logs\SmokeTest.log`) and fails unless the game exits with 0 and logs `ShooterGameMode: 10 pawn(s) at the end of the match, CT 5, T 5` |
 | `BuildCookRun.bat` | `BuildCookRun.bat -project=<file> -platform=Win64 [-configuration=Shipping\|Development] [-build] [-cook] [-stage] [-pak] [-run] [-addcmdline="..."] [-align=<bytes>]` | Builds the project's game, cooks it, stages it into `<Project>\Saved\StagedBuilds\Win64\` with its content in one `.lpak`, and runs it (`BuildCookRun.ps1` has the steps; [below](#staging-and-shipping), [TOOLS.md](TOOLS.md#buildcookrun)) |
 | `CheckBannedApis.ps1` | `powershell -File CheckBannedApis.ps1` (or `pwsh`) | Gate G4: scans `.h/.cpp/.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game` (comments ignored) and fails on glm, nlohmann, `std::vector/string/map/unordered_map/function/shared_ptr/unique_ptr`, `<iostream>` / `std::cout/cerr/clog`, the `printf` family, `LegacyGL` / `FLegacyTransform` / `LegacyAxes`, or `FLegacyCoordinateConversion` outside the tests (`Public/Tests`, `Private/Tests`); `-Root <dir>` scans another tree; exceptions in [CODING_STANDARD.md §4](CODING_STANDARD.md#4-language) |
 | `GenerateProjectFiles.bat` | `GenerateProjectFiles.bat [-Project=<file>]` | `-Mode=GenerateProjectFiles`, then `LeonAutomationTests Win64 Development -Mode=GenerateClangDatabase` (root `compile_commands.json`) |
@@ -152,6 +153,7 @@ Setup.bat
 Engine\Build\BatchFiles\Build.bat LeonGame Win64 Development
 Engine\Build\BatchFiles\Build.bat BlankProgram PS2 Development
 Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.lproj
+Engine\Build\BatchFiles\Build.bat ShooterGame Win64 Development -Project=%CD%\Game\ShooterGame\ShooterGame.lproj
 Engine\Build\BatchFiles\Rebuild.bat LeonAutomationTests Win64 Debug -KeepGoing
 Engine\Build\BatchFiles\RunTests.bat -automation=System.Engine.PhysScene
 Engine\Build\BatchFiles\RunTests.bat -automation=System.Core
@@ -302,7 +304,7 @@ leon_target(<Name> TYPE Game|Program
   [EXTRA_MODULE_NAMES <Module>...]
   [ENABLE_PLUGINS <Plugin>...] [DISABLE_PLUGINS <Plugin>...]
   [COMPILE_AGAINST_ENGINE ON|OFF]
-  [COLLECT_AUTOMATION_TESTS]
+  [COLLECT_AUTOMATION_TESTS [AUTOMATION_TEST_MODULES <Module>...]]
   [OUTPUT_NAME <name>])
 ```
 
@@ -315,6 +317,7 @@ leon_target(<Name> TYPE Game|Program
 | `ENABLE_PLUGINS` / `DISABLE_PLUGINS` | Override plugin enablement for this target |
 | `COMPILE_AGAINST_ENGINE` | Sets `WITH_ENGINE` for the launch module. Default `ON` for games, `OFF` for programs |
 | `COLLECT_AUTOMATION_TESTS` | Compile every closure module's `Private/Tests/**` into the executable (`WITH_DEV_AUTOMATION_TESTS=1`) |
+| `AUTOMATION_TEST_MODULES` | Leon (P17), with `COLLECT_AUTOMATION_TESTS`: compile only these modules' tests (each must be in the closure). A project's test program links the engine's runner and collects its own modules' tests, which run with the project's config; the engine's tests stay in `LeonAutomationTests` |
 | `OUTPUT_NAME` | Executable base name (default: the target name) |
 
 Where targets are found:
@@ -334,6 +337,8 @@ Targets in the repository:
 | `TestPAL` | `Engine/Source/Programs/TestPAL/TestPAL.Target.cmake` | Program | all | `COLLECT_AUTOMATION_TESTS`; runs the Core, CoreUObject, Json, Projects and PakFile automation tests (`-filter=<text>`), prints `TestPAL: PASSED (N test(s), 0 failed)`; on PS2 run it with `RunPCSX2.ps1 -Program TestPAL` |
 | `BlankProgram` | `Engine/Source/Programs/BlankProgram/BlankProgram.Target.cmake` | Program | all | starts the linked modules and prints the platform |
 | `ThirdPerson` | `Game/ThirdPerson/Source/ThirdPerson.Target.cmake` | Game | PS2 | `COMPILE_AGAINST_ENGINE OFF` |
+| `ShooterGame` | `Game/ShooterGame/Source/ShooterGame.Target.cmake` | Game | Win64 | the `.lproj`'s module `ShooterGame` (`PLATFORMS Desktop`; `Engine`, `AIModule`); opens `/Game/Maps/de_leon` ([README](../Game/ShooterGame/README.md)) |
+| `ShooterGameTests` | `Game/ShooterGame/Source/ShooterGameTests.Target.cmake` | Program | Win64 | `LAUNCH_MODULE LeonAutomationTests` (the engine's runner), `EXTRA_MODULE_NAMES ShooterGame Renderer LeonEd`, `COLLECT_AUTOMATION_TESTS`, `AUTOMATION_TEST_MODULES ShooterGame` |
 
 ### How a target is assembled
 

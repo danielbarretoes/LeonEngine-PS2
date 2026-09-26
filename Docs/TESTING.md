@@ -7,14 +7,15 @@ What runs automatically and what a person still has to check by hand. Build and 
 
 | Check | Command | Passes when |
 | --- | --- | --- |
-| Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` |
+| Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` twice: the engine's (`LeonAutomationTests`, 371) and ShooterGame's (`ShooterGameTests`, 10) |
 | LeonHeaderTool golden tests (run by `RunTests.bat` too) | `Engine\Intermediate\Build\HostTools\Win64\LeonHeaderTool.exe -Test` | `LeonHeaderTool -Test: N of N golden cases passed` |
 | Core, CoreUObject, Json, Projects and PakFile on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (112 test(s), 0 failed)` in the EE log (118 on Win64) |
 | Format, banned APIs (G4), Win64 build | `Engine\Build\BatchFiles\Lint.bat` | `Lint OK` |
 | Reproducible reimport (G5; CI, on a clean checkout) | `Engine\Build\BatchFiles\CheckReimport.bat [<Project>.lproj ...]` | `CheckReimport OK`: `LeonCook -run=ImportAssets -reimport -all` leaves `Engine/Content` and `Game/*/Content` unchanged, the imported maps included (`git diff --exit-code`, no new file) |
+| ShooterGame smoke (G6; CI) | `Engine\Build\BatchFiles\SmokeTest.bat` | `SmokeTest OK: 10 pawns, CT 5, T 5, exit code 0`: ShooterGame boots de_leon headless, `bot_fill` adds nine bots to the local player, and the game mode's end-of-match line counts ten pawns in their teams |
 | Content loads | `Engine\Binaries\Win64\LeonCook.exe -run=ValidateAssets` | `ValidateAssets: N packages, N valid, 0 problem(s)` |
 | Frame capture | `LeonGame.exe [<map>] "-Screenshot=<file.bmp>" "-ExitAfterFrames=N"` | the BMP matches a reference capture byte for byte; a capture is unattended (`FApp::IsUnattended`) and ignores the mouse and the keyboard, so moving the mouse during it changes nothing |
-| Staged build (Win64) | `BuildCookRun.bat -project=<.lproj> -platform=Win64 -build -cook -stage -pak -run "-addcmdline=-Screenshot=<file.bmp> -ExitAfterFrames=30"` | the staged Shipping game's capture matches the Development build's byte for byte; two `-cook -stage -pak` runs give the same `.lpak` (SHA-256); CI runs it in Development, headless (`-nullrhi -ExitAfterFrames=60`, exit code 0) |
+| Staged build (Win64) | `BuildCookRun.bat -project=<.lproj> -platform=Win64 -build -cook -stage -pak -run "-addcmdline=-Screenshot=<file.bmp> -ExitAfterFrames=30"` | the staged Shipping game's capture matches the Development build's byte for byte; two `-cook -stage -pak` runs give the same `.lpak` (SHA-256); CI runs it in Development, headless (`-nullrhi -ExitAfterFrames=60`, exit code 0), for a content-only project and for ShooterGame (`-ExecCmds=bot_fill`) |
 | Pak tool | `LeonPak <in.lpak> -test` / `-list` | `N file(s) checked, every SHA-1 matches` |
 | Console commands | `LeonGame.exe "-ExecCmds=obj gc;stat fps,stat fps" "-Screenshot=<file.bmp>" "-ExitAfterFrames=30"` | a `Cmd:` line per command, the capture unchanged |
 
@@ -109,6 +110,24 @@ bytes, no import data in the map or its textures, `CookedPlatform` "PS2", the co
 shaders. `System.CoreUObject.Package.EditorOnlyData` checks that a filtered package leaves an editor-only object out.
 `System.Engine.Viewport.IgnoreInput` checks that an ignored mouse sample leaves the view as the map put it.
 
+Since P17 the collision channels and UE's movement model are tested. `System.Engine.CollisionChannel.*` (8) check the
+response container, the raw bodies' defaults (the old channel filter), traces following the responses (the smaller of
+the body's and the query's), object-type queries, a component's settings, traces hitting a pawn's capsule while
+characters walk past each other's, and the config's named channels. The new `System.Engine.CharacterMovement.*`
+tests (12, `CharacterMovementModelTests.cpp`) run UE's model on a test character (`AEngineTestCharacter`): acceleration
+to the speed, braking to a stop, ground friction turning the velocity, air control keeping the momentum, crouching
+(the capsule, the speed, the agent flag, in the air) and standing up only with room under a ceiling, the
+`GetMaxSpeed` hook, the pawn's input vector, the first-person camera following the control rotation and the mouse
+sensitivity. The default (instant) model keeps every golden table as it was.
+
+ShooterGame's tests (`ShooterGame.*`, 10, in `ShooterGameTests.exe` with the project's config) cover the team choice,
+ten bots on ten team starts and a sixth refused, a pawn standing on its start, `bot_fill`, the character's CS movement
+(UE's model, the run and walk speeds, crouching, the capsule, the first-person camera), the crosshair the HUD draws,
+the project's input and channel config, and the map: `ShooterGame.Map.DeLeonHoldsTheGame` loads `/Game/Maps/de_leon`
+and checks its sites, buy zones, team starts, waypoint links, player clip and sun; `RequiredTags` imports
+`de_leon.glb` under the project's rules and refuses the AxisTest source; `TenPawnsOnDeLeon` opens the map in a
+headless `UGameEngine`, adds nine bots and ticks 60 frames: ten pawns standing on distinct starts, on the spawn pads.
+
 The golden tests (`System.Engine.Golden.*`, `System.AIModule.Golden.*`, `System.JoltPhysics.Golden.*`) replay
 movement, traces, navigation, cameras, shadows and reflections against tables recorded before P7 moved the world to
 UE's axes, so any change of sign or unit fails them. They convert the tables with `FLegacyCoordinateConversion`, which
@@ -118,7 +137,9 @@ reads the Starter's meshes, light and camera framing from `/Engine/Maps/Template
 `-Screenshot=<file.bmp>` saves frame `-ExitAfterFrames=N` (default 60) as a 24-bit BMP and exits. A run of
 `LeonGame.exe -ExitAfterFrames=300` should log `RequestEngineExit: ExitAfterFrames`, the `LogGarbage` lines of the
 level load and of the exit (the world teardown in `PreExit`, which also frees the level's assets, then the
-engine itself) and no errors; it exits with code 0. The same holds headless (`-nullrhi`). `-AxesGizmo` turns
+engine itself) and no errors; it exits with code 0. The same holds headless (`-nullrhi`). ShooterGame's captures
+use its view commands: `ShooterGame.exe "-ExecCmds=bot_fill;ViewFrom 0 0 5600 -89 0" "-Screenshot=<file.bmp>"
+"-ExitAfterFrames=30"` shows the whole of de_leon from above (north up) with the teams on their spawns. `-AxesGizmo` turns
 the axes gizmo on from the start (see below); captures without it do not change.
 
 ## Axes gizmo

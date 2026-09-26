@@ -139,14 +139,14 @@ takes the node's transform.
 
 A rule is `(Prefix="...",Kind=Actor|CollisionOnly|ConvexCollision|Ignore,ActorClass=<class path>,Tags=(...),
 bSuffixAsTag=True)`. The engine knows no game (plan decision D15): the game's meaning is a project's rules and tags.
-ShooterGame's `Config/DefaultEditor.ini` (P17) will read:
+ShooterGame's `Config/DefaultEditor.ini` (P17) reads:
 
 ```ini
 [/Script/LeonEd.MapImportSettings]
 +NodeRules=(Prefix="BombSite",ActorClass=/Script/Engine.TriggerVolume,Tags=("BombSite"),bSuffixAsTag=True)
 +NodeRules=(Prefix="BuyZone",ActorClass=/Script/Engine.TriggerVolume,Tags=("BuyZone"),bSuffixAsTag=True)
-+RequiredTags=BombSite+A
-+RequiredTags=BombSite+B
++RequiredTags=TriggerVolume:BombSite+A
++RequiredTags=TriggerVolume:BombSite+B
 +RequiredTags=TriggerVolume:BuyZone+CT
 +RequiredTags=TriggerVolume:BuyZone+T
 +RequiredTags=PlayerStart:CT
@@ -159,7 +159,9 @@ ShooterGame's `Config/DefaultEditor.ini` (P17) will read:
 of the map (of that class or a subclass, named without its prefix) that carries every tag, a player start's
 `PlayerStartTag` counting as one of its tags. When an entry is not met the import fails, nothing is saved and the log
 names it: `GLTFMapFactory: '<file>' has nothing with the required tags 'BombSite+B' (RequiredTags of
-[/Script/LeonEd.MapImportSettings])`.
+[/Script/LeonEd.MapImportSettings])`. The engine's own maps (under `/Engine/`) are not the project's and skip the
+check (`UMapImportSettings::AppliesRequiredTags`), so `LeonCook <Project>.lproj -run=ImportAssets -reimport -all`, which
+reimports the engine content too, passes with a project that requires tags.
 
 ### Collision
 
@@ -194,6 +196,81 @@ every run); `Engine/SourceArt/ImportList.ini` imports it:
 `LeonGame /Engine/Maps/AxisTest -AxesGizmo` shows the red cube straight ahead, the green one on the right and the blue
 one above, in the colours of the gizmo's X, Y and Z; `System.Engine.AxisTestMap.NoMirroring` checks the positions and
 that, in the start's view, +Y is on the right.
+
+## Worked example: de_leon
+
+ShooterGame's map (P17), a 60 × 48 m blockout in the style of a CS defuse map, is built by a script, so the map is
+reproducible and its layout reviewable as code:
+
+```bat
+:: 1. Build the map in Blender (headless) -> de_leon.blend + de_leon.glb next to the script
+"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe" --background --factory-startup ^
+    --python Game\ShooterGame\SourceArt\Maps\make_de_leon.py
+
+:: 2. Import it (with the other ShooterGame source art) -> Content\Maps\de_leon.lmap, de_leon\Meshes, de_leon\Materials
+Engine\Binaries\Win64\LeonCook.exe Game\ShooterGame\ShooterGame.lproj -run=ImportAssets ^
+    -importlist=Game/ShooterGame/SourceArt/ImportList.ini
+
+:: 3. Play it (GameDefaultMap of the project)
+Game\ShooterGame\Binaries\Win64\ShooterGame.exe -ExecCmds=bot_fill
+```
+
+`make_de_leon.py` uses only Blender's modules (`bpy`, `bmesh`): it writes the layout in the engine's axes (metres, X
+north, Y east) and places every object at Blender's (x, −y, z); it saves the `.blend` (to edit by hand afterwards:
+re-export with the same options, or change the script) and exports the `.glb` with *+Y Up*, *Apply Modifiers*,
+*Custom Properties* (the waypoint links), *Punctual Lights* and the *Raw* lighting mode (the sun's intensity 1.0 goes
+to the engine as it is). Every mesh is a 1 m cube shared by the objects of one material and scaled into place, so the
+import makes one `SM_` per material (`SM_Wall`, `SM_Crate`, `SM_Floor`, the four pads) and a `M_` per colour.
+
+```text
+       W (-Y)                   Y=0                  E (+Y)          (X north up; 1 character = 1 m across, 2 m down)
+  30 #################################################
+  28 #                 .............                 #      .  spawn pads      C / T  team starts (5 each)
+  26 #                 ..C.C.C.C.C..                 #      a  bomb site A     b      bomb site B
+  24 # bbbbbbbbbbb     .............     aaaaaaaacaa #      c  crates (1.1 m)  S      crate stack (UCX_ box)
+  22 # bbccbbbbbbb ### ...........c. ### aaaaaaaaaaa #      #  walls (3.5 m, the edge 4 m)
+  20 # bbbbbbbbbbb ###            c  ### aaacaaaaaaa #      =  the low wall at B (1 m) and its player clip
+  18 # bbbbbbbcbbb ###               ### aaacaaaaaaa #
+  16 # bbbbbbbcbbb ###               ### aaaaaaaaaaa #      ### beside a site: the site wall toward the CT spawn
+  14 # =====       ###         S     ###             #
+  12 #                                               #
+  10 #                 #####   #####                 #      mid doors (a 3 m doorway)
+   8 #####       #######           #######       #####
+   6 #####       #######           #######       #####
+   4 #####       #######           #######       #####
+   2 #####       #######           #######       #####
+   0 #####                cc                     #####      the short connectors (X -2 .. 2) cross the blocks
+  -2 #####       #######           #######       #####
+  -4 #####   c   #######           #######  c    #####      B long | short B | mid | short A | A long
+  -6 #####       #######        c  #######       #####
+  -8 #####       #######           #######       #####
+ -10 #####       #######           #######       #####
+ -12 #####       #######           #######       #####
+ -14 #####       #######           #######       #####
+ -16 #                                               #      the T plaza
+ -18 #                                               #
+ -20 #             c                   c             #
+ -22 #               .................               #
+ -24 #               .................               #
+ -26 #               ....T.T.T.T.T....               #
+ -28 #               .................               #
+ -30 #################################################
+```
+
+| Nodes | Become (the rules above) |
+| --- | --- |
+| `Floor`, `Wall_*`, `Block*`, `SiteWall_A` / `_B`, `MidDoor_*`, `BLowWall`, `Crate_NN`, `Pad_*` | static mesh actors colliding with their triangles |
+| `CrateStack` + `UCX_CrateStack_01` | a static mesh actor whose collision is one box |
+| `Clip_BLowWall` | a blocking volume: nobody jumps over the low wall at B |
+| `BombSite_A` / `_B` (14 × 10 × 3 m), `BuyZone_CT` (7 × 12 m) / `_T` (7 × 16 m) | trigger volumes tagged [`BombSite`, `A`], [`BuyZone`, `CT`], ... (ShooterGame's rules) |
+| `PlayerStart_CT` … `.004`, `PlayerStart_T` … `.004` | ten player starts, 2 m apart, 0.92 m up (UE's start: the capsule's centre), the CTs facing south, the Ts north; `PlayerStartTag` `CT` / `T` |
+| `NavWaypoint_*` (18: `TSpawn`, `TMid`, `TPlazaA` / `B`, `Mid`, `ShortA` / `B`, `LongA` / `B`, `MidDoors`, `CTMid`, `AConnector` / `BConnector`, `SiteA` / `B`, `CTSpawn`, `CTA` / `CTB`) | navigation waypoints, each linked both ways by its `links` custom property (P20 uses the graph) |
+| `Sun` | the directional light, shining down toward the south-east |
+
+The project's `RequiredTags` hold (both sites, both buy zones, both teams' starts). ShooterGame's tests
+(`ShooterGame.Map.*`) check the imported map, import `de_leon.glb` and the AxisTest source under the project's rules
+(the second is refused: no sites, buy zones or team starts) and spawn ten pawns on the map. `Characters/make_team_bodies.py` makes the teams' placeholder bodies the
+same way (`Body_CT.glb`, `Body_T.glb`, imported as static meshes).
 
 ## Engine maps
 

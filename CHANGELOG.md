@@ -7,6 +7,77 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+The seventeenth step of the plan (P17): ShooterGame boots with a basic FPS. The engine gets UE's collision channels
+and responses and UE's character movement model (acceleration, friction, braking, air control, crouching), both
+opt-in or default-preserving, so the golden tests and the Win64 frames are unchanged. On them, `Game/ShooterGame` is a
+Win64 code project with its own test program: two teams on `de_leon`, a blockout map built by a Blender script and
+imported with the project's rules, a first-person character with CS 1.6 movement, bots that join the teams, a
+crosshair, and a smoke test (gate G6) in CI. The PS2 ELFs are unchanged (ThirdPerson, BlankProgram and TestPAL link
+none of the changed modules).
+
+### Added
+
+- **Collision channels** (P17, PhysicsCore and Engine; [ARCHITECTURE.md §11](Docs/ARCHITECTURE.md#11-physics)).
+  - UE's `ECollisionChannel` (`ECC_WorldStatic` … `ECC_GameTraceChannel18`) and `ECollisionResponse`,
+    `FCollisionResponseContainer`, `FCollisionResponseParams`, `FCollisionObjectQueryParams`; `FCollisionQueryParams`
+    ignores actors and components (`AddIgnoredActor`, `AddIgnoredComponent`); `FHitResult::GetActor` /
+    `GetComponent`.
+  - Every body has an object type and responses (`FBodyInstance::ObjectType`, `CollisionResponses`); a query's hit is
+    the smaller of the body's response to the trace channel and the query's response to the body's type. `FPhysScene`
+    traces and sweeps by channel (`Single`: the first block; `Multi`: every block and overlap, nearest first) and by
+    object type (`LineTraceSingleByObjectType` / `Multi`).
+  - `UPrimitiveComponent::SetCollisionObjectType`, `SetCollisionResponseToChannel` / `ToChannels` / `ToAllChannels`,
+    `SendPhysicsTransform`; `UCollisionProfile` reads a game's named channels (`[/Script/Engine.CollisionProfile]
+    +DefaultChannelResponses`).
+  - The character's capsule is a query-only `ECC_Pawn` body (UE's Pawn profile), an upright capsule the traces hit
+    exactly; the character's own sweeps ignore it.
+- **UE's movement model** in `UCharacterMovementComponent` (`bInstantVelocity = false`): `MaxAcceleration`,
+  `GroundFriction`, `BrakingDecelerationWalking` / `Falling`, `BrakingFrictionFactor`, `BrakingFriction` +
+  `bUseSeparateBrakingFriction`, `FallingLateralFriction`, `AirControl` with its boost (`CalcVelocity`,
+  `ApplyVelocityBraking`); `MaxWalkSpeedCrouched`, `CrouchedHalfHeight`, `Crouch` / `UnCrouch` (standing up needs room
+  above), `ACharacter::Crouch` / `UnCrouch` / `OnStartCrouch` / `OnEndCrouch`, `CrouchedEyeHeight`,
+  `FNavAgentProperties::bCanCrouch`; a virtual `GetMaxSpeed` for a game's speed modifiers; `APawn::AddMovementInput`
+  (UE's signature) and the pawn's input vector ([ARCHITECTURE.md — Character movement](Docs/ARCHITECTURE.md#character-movement)).
+- First person: `UCameraComponent::bUsePawnControlRotation` (`GetCameraView`, `AActor::CalcCamera`) and
+  `UPlayerInput::SetMouseSensitivity` (an Exec command).
+- `AHUD::DrawHUD` (virtual) and `Canvas`; `UGameplayStatics::ParseOption` / `HasOption` / `GetIntOption`.
+- **ShooterGame** (`Game/ShooterGame`, Win64; [README](Game/ShooterGame/README.md)): `AShooterGameMode` (teams:
+  `?team=` or the smaller team; the first free start tagged with the team; `bot_add_ct`, `bot_add_t`, `bot_add`,
+  `bot_fill`; five a side), `AShooterCharacter` (a first-person camera at 163 cm, 76 crouched, a 40 × 91.5 cm capsule,
+  the teams' placeholder bodies for the others), `UShooterCharacterMovement` (CS 1.6 at 1 unit = 2.54 cm: 635 cm/s,
+  crouched 212, the walk key at 52 %, acceleration 3175 cm/s², friction 4, gravity 2032 cm/s², jump 682 cm/s),
+  `AShooterPlayerController` (`ViewFrom`, `ViewPawn`), `AShooterAIController`, `AShooterPlayerState` (the team),
+  `AShooterHUD` (CS's crosshair). Its config maps CS's keys (Ctrl / C crouch, Shift walk, 0.07° a pixel) and names the
+  `Weapon` channel (`ECC_GameTraceChannel1`) for P18.
+- **de_leon** ([LEVELS.md](Docs/LEVELS.md#worked-example-de_leon)): `SourceArt/Maps/make_de_leon.py` builds a 60 × 48
+  m blockout in Blender (headless): the T and CT spawns, bomb sites A and B, three lanes, mid doors, crates, a crate
+  stack with a `UCX_` box, a player clip, the buy zones, five tagged starts a team and 18 linked waypoints, lit by one
+  sun; it is imported to `/Game/Maps/de_leon` with the project's rules (`BombSite`, `BuyZone`) and `RequiredTags`, and
+  is the project's `GameDefaultMap`. `make_team_bodies.py` makes the teams' placeholder bodies; `SourceArt/LICENSES.md`
+  lists the art (CC0, all made here).
+- `ShooterGameTests` (the project's test program) and LeonBuildTool's `AUTOMATION_TEST_MODULES`: a program collects
+  only the named modules' tests.
+- **Gate G6**: `Engine\Build\BatchFiles\SmokeTest.bat` runs ShooterGame headless with `-ExecCmds=bot_fill` and checks
+  the exit code and the ten pawns, five a team.
+- Tests: `System.Engine.CollisionChannel.*` (8), `System.Engine.CharacterMovement.*` for UE's model (12),
+  `System.LeonEd.MapFactory.EngineMapsSkipRequiredTags` (371 tests), and `ShooterGame.*` (10).
+
+### Changed
+
+- `UGameEngine::Tick` runs `UWorld::TickGameplayFrame`, and a character moves in its movement component's tick
+  (`UCharacterMovementComponent::TickComponent`, after the controller's input): the frame is the actor tick, the pawn
+  separation, the physics step, the overlaps and the sync. The engine's maps have no characters, so their frames are
+  unchanged.
+- `ECollisionChannel` is UE's enum (the old `enum class` values `WorldStatic`, `WorldDynamic`, `Pawn`, `Visibility`
+  are `ECC_WorldStatic` & co.); a body added without a component keeps the old filter (a static body answered static
+  and pawn / visibility queries, a dynamic one dynamic and pawn / visibility queries) through its default responses.
+- `AHUD::Paint` calls `DrawHUD` before painting the widgets (UE's order).
+- A project's `RequiredTags` no longer apply to the engine's `/Engine/` maps, so `-reimport -all` with a project
+  reimports the engine content too.
+- `RunTests.bat` also builds and runs ShooterGame's tests, `Lint.bat` builds ShooterGame's targets, and CI runs G6, G5
+  with ShooterGame and a staged ShooterGame (BuildCookRun).
+- The navigation ignores pawns' capsules and components that do not affect navigation (`CanEverAffectNavigation`).
+
 ## [0.17.0] - 2026-09-26
 
 The fourteenth to sixteenth steps of the Core / CoreUObject plan (P14, P15, P16): the engine's assets become UObjects
