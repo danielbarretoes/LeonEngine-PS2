@@ -269,17 +269,15 @@ void UGameViewportClient::UpdateHudStats(float DeltaTime)
 										 "RAM %4.0fM  %s\n"
 										 "TRIS %5d  OBJ %d/%d\n"
 										 "RES %dx%d\n"
-										 "GPU Sh %.2f Pl %.2f Col %.2f\n"
-										 "    AO %.2f Pst %.2f",
+										 "GPU Sh %.2f Pl %.2f Col %.2f",
 		static_cast<double>(DisplayFps), static_cast<double>(DisplayMs), RamMb, Vram, Stats.TrianglesSubmitted,
 		Stats.ObjectsVisible, Stats.ObjectsTotal, Size.X, Size.Y, static_cast<double>(Stats.ShadowMs),
-		static_cast<double>(Stats.PlanarMs), static_cast<double>(Stats.ColorMs), static_cast<double>(Stats.SsaoMs),
-		static_cast<double>(Stats.PostMs));
+		static_cast<double>(Stats.PlanarMs), static_cast<double>(Stats.ColorMs));
 	Overlay.SetRightText(Text);
 	Overlay.SetText(FString());
 	Overlay.SetCenterText(FString());
 
-	Overlay.SetBottomLeftText(FString::Printf("F1 AABB %s\nF2 Coll+Trace %s\nF3 NavMesh %s\nF6 Axes %s",
+	Overlay.SetBottomLeftText(FString::Printf("F1 AABB %s\nF2 Coll+Trace %s\nF3 Navigation %s\nF6 Axes %s",
 		EngineShowFlags.Bounds ? "ON" : "OFF", EngineShowFlags.Collision ? "ON" : "OFF",
 		EngineShowFlags.Navigation ? "ON" : "OFF", EngineShowFlags.AxesGizmo ? "ON" : "OFF"));
 }

@@ -10,8 +10,7 @@ namespace
 	bool IsTimedPass(FGPUPassTimer::EPass Pass)
 	{
 		return Pass == FGPUPassTimer::EPass::Shadow || Pass == FGPUPassTimer::EPass::Planar ||
-			Pass == FGPUPassTimer::EPass::Color || Pass == FGPUPassTimer::EPass::Ssao ||
-			Pass == FGPUPassTimer::EPass::Post;
+			Pass == FGPUPassTimer::EPass::Color;
 	}
 
 	int PassIndex(FGPUPassTimer::EPass Pass)
@@ -24,10 +23,6 @@ namespace
 				return 1;
 			case FGPUPassTimer::EPass::Color:
 				return 2;
-			case FGPUPassTimer::EPass::Ssao:
-				return 3;
-			case FGPUPassTimer::EPass::Post:
-				return 4;
 			case FGPUPassTimer::EPass::Count:
 				break;
 		}

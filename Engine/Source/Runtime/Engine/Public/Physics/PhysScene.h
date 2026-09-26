@@ -272,13 +272,13 @@ public:
 	/** Integrates dynamic velocities and resolves body-body overlaps; bodies without physics take no part. */
 	void Step(const FPhysSceneStepParams& Params);
 
+	/** The capsule at Feet, then every body but InIgnoreComponentID's (show Collision). */
 	void AppendCollisionDebug(
 		FDebugDraw& Draw, const FCollisionShape& Capsule, const FVector& Feet, SIZE_T InIgnoreComponentID) const;
 
-	/** Body / triangle-mesh / slope wireframes only (editor Player Collision view mode). */
-	void AppendBodiesCollisionDebug(FDebugDraw& Draw, SIZE_T InIgnoreComponentID = NoComponentID) const;
-
 private:
+	/** The bodies' wireframes (boxes, triangle meshes, slopes), all but InIgnoreComponentID's. */
+	void AppendBodiesCollisionDebug(FDebugDraw& Draw, SIZE_T InIgnoreComponentID) const;
 	/** Fills the hit's body index and owner (the actor and component weak pointers) from a body. */
 	void SetHitBody(FHitResult& Hit, int32 BodyIndex) const;
 	/**

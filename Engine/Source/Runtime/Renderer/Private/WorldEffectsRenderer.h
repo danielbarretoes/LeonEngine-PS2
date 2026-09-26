@@ -34,14 +34,10 @@ public:
 	/** Reloads the shader from disk if its timestamps changed (or when forced). */
 	[[nodiscard]] EShaderReloadResult ReloadShader(bool bForce = false);
 
-	/**
-	 * Draws the active marks with a world to GL clip space view-projection. bEarlyZ: the pass's depth function is
-	 * LEQUAL (restored after), else LESS.
-	 */
-	void DrawImpactMarks(const FImpactMarkPool& Marks, const FMatrix& ViewProjection, bool bEarlyZ);
+	/** Draws the active marks with a world to GL clip space view-projection. */
+	void DrawImpactMarks(const FImpactMarkPool& Marks, const FMatrix& ViewProjection);
 	/** Draws the tracers as ribbons facing CameraLocation. */
-	void DrawTracers(
-		const FTracerBatch& Tracers, const FMatrix& ViewProjection, const FVector& CameraLocation, bool bEarlyZ);
+	void DrawTracers(const FTracerBatch& Tracers, const FMatrix& ViewProjection, const FVector& CameraLocation);
 
 	[[nodiscard]] bool IsValid() const
 	{

@@ -46,8 +46,12 @@ namespace
 	{
 		TArray<uint8> Texels;
 		const FByteBulkData& BulkData = Texture.GetPlatformData().Mips[0].BulkData;
-		Texels.Append(
-			static_cast<const uint8*>(BulkData.LockReadOnly()), static_cast<int32>(BulkData.GetBulkDataSize()));
+		const int32 Size = static_cast<int32>(BulkData.GetBulkDataSize());
+		const uint8* const Data = static_cast<const uint8*>(BulkData.LockReadOnly());
+		if (Size > 0)
+		{
+			Texels.Append(Data, Size);
+		}
 		BulkData.Unlock();
 		return Texels;
 	}

@@ -196,7 +196,7 @@ void FWorldEffectsRenderer::Draw(int32 NumVertices, int32 Mode, const FMatrix& V
 	glBindVertexArray(0);
 }
 
-void FWorldEffectsRenderer::DrawImpactMarks(const FImpactMarkPool& Marks, const FMatrix& ViewProjection, bool bEarlyZ)
+void FWorldEffectsRenderer::DrawImpactMarks(const FImpactMarkPool& Marks, const FMatrix& ViewProjection)
 {
 	if (!IsValid() || Marks.IsEmpty())
 	{
@@ -220,13 +220,13 @@ void FWorldEffectsRenderer::DrawImpactMarks(const FImpactMarkPool& Marks, const 
 	Draw(Vertices.Num(), MarkMode, ViewProjection);
 	glEnable(GL_CULL_FACE);
 	glDisable(GL_POLYGON_OFFSET_FILL);
-	glDepthFunc(bEarlyZ ? GL_LEQUAL : GL_LESS);
+	glDepthFunc(GL_LESS);
 	glDepthMask(GL_TRUE);
 	glDisable(GL_BLEND);
 }
 
 void FWorldEffectsRenderer::DrawTracers(
-	const FTracerBatch& Tracers, const FMatrix& ViewProjection, const FVector& CameraLocation, bool bEarlyZ)
+	const FTracerBatch& Tracers, const FMatrix& ViewProjection, const FVector& CameraLocation)
 {
 	if (!IsValid() || Tracers.IsEmpty())
 	{
@@ -247,7 +247,7 @@ void FWorldEffectsRenderer::DrawTracers(
 	glDisable(GL_CULL_FACE);
 	Draw(Vertices.Num(), TracerMode, ViewProjection);
 	glEnable(GL_CULL_FACE);
-	glDepthFunc(bEarlyZ ? GL_LEQUAL : GL_LESS);
+	glDepthFunc(GL_LESS);
 	glDepthMask(GL_TRUE);
 	glDisable(GL_BLEND);
 }

@@ -4,15 +4,12 @@
 #include "Debug/DebugDraw.h"
 #include "Frustum.h"
 #include "GPUPassTimer.h"
-#include "LDRColorTarget.h"
 #include "Level/Light.h"
 #include "LineBatchRenderer.h"
 #include "PlanarReflection.h"
-#include "PostProcess.h"
 #include "RHIHandles.h"
 #include "RenderResourceCache.h"
 #include "RendererInterface.h"
-#include "SceneColorTarget.h"
 #include "SceneView.h"
 #include "Shader.h"
 #include "ShadowMap.h"
@@ -34,18 +31,18 @@ struct FDrawOptions
 	bool bLitPass = true;
 	bool bReceiveShadows = true;
 	bool bUseNormalMaps = true;
-	bool bBindSharedLitTextures = true; // shadow map unit; env is bound once per pass
+	/** Binds the shadow map unit; false when the pass already bound it. */
+	bool bBindSharedLitTextures = true;
 };
 
 /**
- * Forward renderer: directional shadow map (light 0), optional half-res planar mirror,
- * opaque / transparent, then optional post (SSAO → tonemap → FXAA).
+ * Forward renderer: directional shadow map (light 0), optional planar mirror, opaque / transparent. No post processing:
+ * the PS2 target has none (its GS has no programmable pixel stage), so the development preview does not fake it.
  *
  * Leon's additions for a first-person game: the world's impact marks over the opaque geometry and its tracers after
  * the translucent one (FWorldEffectsRenderer), and the view model pass: the static meshes flagged bRenderAsViewModel
- * leave the scene's passes and are drawn last, after a depth clear, with the view's ViewModelProjectionMatrix (with
- * post processing: after the ambient occlusion, which keeps the world's depth, and before the tone mapping). Owner-only
- * and owner-hidden primitives follow the view's actor. None of it changes a frame whose scene has none.
+ * leave the scene's passes and are drawn last, after a depth clear, with the view's ViewModelProjectionMatrix.
+ * Owner-only and owner-hidden primitives follow the view's actor. None of it changes a frame whose scene has none.
  *
  * It draws a view family's scene (FScene's proxies, in the scene's order) through its view (UE: the scene renderer of
  * a view family). Views are in UE view space (x right, y up, z forward; ViewMatrices.h). Projections passed between
@@ -57,25 +54,14 @@ class FSceneRenderer
 public:
 	static constexpr uint32 CameraUboBinding = 0;
 	static constexpr uint32 LightsUboBinding = 1;
-	/** Planar mirror FBO scale vs framebuffer (0.5 = half-res). */
-	static constexpr float PlanarReflectionScale = 0.5f;
-	static constexpr int32 MaxAoSamples = 64;
+	static constexpr int32 MinShadowMapResolution = 512;
+	static constexpr int32 MaxShadowMapResolution = 4096;
 
 	bool Initialize(const FString& InShaderDirectory);
 	void Shutdown();
 
 	/** Reloads shaders from disk if file timestamps changed (or when forced). Rebinds lit UBOs. */
 	[[nodiscard]] EShaderReloadResult ReloadShaders(bool bForce = false);
-
-	/** When non-zero, BeginFrame / shadow / planar restore bind this FBO (editor viewport). */
-	void SetDrawFramebuffer(FRHIFramebufferId Fbo)
-	{
-		DrawTargetFbo = Fbo;
-	}
-	[[nodiscard]] FRHIFramebufferId GetDrawFramebuffer() const
-	{
-		return DrawTargetFbo;
-	}
 
 	/** Frees the GPU copy of an asset, if the resource cache has one (IRendererModule::ReleaseAssetResources). */
 	void ReleaseAssetResources(const UObject* Asset)
@@ -86,81 +72,12 @@ public:
 	void BeginFrame(int32 FramebufferWidth, int32 FramebufferHeight);
 	/**
 	 * Draws the family's first view of its scene: shadows, the planar mirror, the opaque meshes, the skinned meshes,
-	 * the translucent meshes, the bounds debug, post processing, the world's debug lines and the axes gizmo (the show
-	 * flags decide the debug parts). A family without a scene draws only the background.
+	 * the translucent meshes, the bounds debug, the view model meshes, the world's debug lines and the axes gizmo (the
+	 * show flags decide the debug parts). A family without a scene draws only the background.
 	 */
 	void Render(const FSceneViewFamily& ViewFamily);
 	/** Reads the draw framebuffer as bottom-up BGR rows with no padding (screenshots). */
 	void ReadFramebufferBgr(int32 Width, int32 Height, TArray<uint8>& OutBgr) const;
-
-	/** When false, Render skips lit geometry / shadows / post (debug overlay still flushes). */
-	void SetSceneGeometryEnabled(bool bEnabled)
-	{
-		bSceneGeometryEnabled = bEnabled;
-	}
-	[[nodiscard]] bool IsSceneGeometryEnabled() const
-	{
-		return bSceneGeometryEnabled;
-	}
-
-	// --- Post-process API (Unreal-like PascalCase) ---
-	void SetPostProcessEnabled(bool bEnabled)
-	{
-		Post.bEnabled = bEnabled;
-	}
-	[[nodiscard]] bool IsPostProcessEnabled() const
-	{
-		return Post.bEnabled;
-	}
-
-	void SetAmbientOcclusionEnabled(bool bEnabled)
-	{
-		Post.bAmbientOcclusion = bEnabled;
-	}
-	[[nodiscard]] bool IsAmbientOcclusionEnabled() const
-	{
-		return Post.bAmbientOcclusion;
-	}
-
-	void SetFxaaEnabled(bool bEnabled)
-	{
-		Post.bFxaa = bEnabled;
-	}
-	[[nodiscard]] bool IsFxaaEnabled() const
-	{
-		return Post.bFxaa;
-	}
-
-	void SetEarlyZEnabled(bool bEnabled)
-	{
-		Post.bEarlyZ = bEnabled;
-	}
-	[[nodiscard]] bool IsEarlyZEnabled() const
-	{
-		return Post.bEarlyZ;
-	}
-
-	void SetPostProcessQuality(EPostProcessQuality Quality)
-	{
-		ApplyPostProcessQuality(Post, Quality);
-	}
-	[[nodiscard]] EPostProcessQuality GetPostProcessQuality() const
-	{
-		return Post.Quality;
-	}
-
-	void SetPostProcessSettings(const FPostProcessSettings& Settings)
-	{
-		Post = Settings;
-	}
-	[[nodiscard]] const FPostProcessSettings& GetPostProcessSettings() const
-	{
-		return Post;
-	}
-	[[nodiscard]] FPostProcessSettings& GetPostProcessSettings()
-	{
-		return Post;
-	}
 
 	[[nodiscard]] const FFrameStats& GetFrameStats() const
 	{
@@ -179,25 +96,17 @@ private:
 	void BindShadowResources(bool bInReceiveShadows, float SourceAngleDegrees = DefaultLightSourceAngleDegrees) const;
 	void BindPlanarReflection(bool bEnabled, const FMatrix& ReflectionViewProj) const;
 	void SetClipPlane(bool bEnabled, const FVector4& Plane) const;
-	void EnsureShadowMapSize();
-	[[nodiscard]] FRHIFramebufferId ColorRestoreFbo() const;
-	void DrawFullscreenTriangle() const;
-	/**
-	 * SSAO → blur → composite and tone map → FXAA. The view model pass runs after the ambient occlusion (which reads
-	 * the scene's depth) and before the composite (bCastDirShadows, ShadowSourceAngle and LightSpace are its lighting).
-	 */
-	void RenderPostStack(
-		const FSceneView& View, const FMatrix& LightSpace, bool bCastDirShadows, float ShadowSourceAngle);
+	/** Reads r.ShadowMapResolution and r.PlanarReflectionScale from [/Script/Engine.RendererSettings] (engine ini). */
+	void ReadRendererSettings();
 	void RenderShadowPass(const FMatrix& LightSpace);
 	void RenderPlanarReflectionPass(const FSceneView& View, float PlaneZ);
 	void DrawDebug(const FSceneView& View, const FMatrix& LightSpace, bool bHasLightSpace);
 	/**
-	 * The view model pass into the bound target (SceneColor with post processing, else the draw framebuffer): clears
-	 * the depth, then draws ViewModelMeshes with the view model projection, opaque sections first. Nothing without
-	 * view model meshes.
+	 * The view model pass into the draw framebuffer: clears the depth, then draws ViewModelMeshes with the view model
+	 * projection, opaque sections first. Nothing without view model meshes.
 	 */
-	void RenderViewModelPass(const FSceneView& View, const FMatrix& LightSpace, bool bCastDirShadows,
-		float ShadowSourceAngle, FRHIFramebufferId Target);
+	void RenderViewModelPass(
+		const FSceneView& View, const FMatrix& LightSpace, bool bCastDirShadows, float ShadowSourceAngle);
 	/** Draws and empties the world's debug line batch (UWorld::LineBatcher). */
 	void FlushWorldLines(const FSceneView& View, FDebugDraw* WorldLines);
 	/**
@@ -244,15 +153,8 @@ private:
 	FShader UnlitShader;
 	FShader ShadowShader;
 	FShader SkinnedShadowShader;
-	FShader SsaoShader;
-	FShader SsaoBlurShader;
-	FShader PostCompositeShader;
-	FShader FxaaShader;
 	FShadowMap ShadowMap;
 	FPlanarReflection PlanarReflection;
-	FSceneColorTarget SceneColor;
-	FSSAOTarget SsaoTarget;
-	FLDRColorTarget LdrColor;
 	FGPUPassTimer PassTimers;
 	/** The renderer's own lines: the bounds view and the axes gizmo. */
 	FDebugDraw DebugDraw;
@@ -273,16 +175,15 @@ private:
 	TArray<const FLightSceneProxy*> FrameDirectionalLights;
 	TArray<const FLightSceneProxy*> FramePointLights;
 	FFrameStats FrameStats{};
-	FPostProcessSettings Post{};
-
-	FRHIVertexArrayId FullscreenVao = InvalidVertexArray;
-	FRHITextureId AoNoiseTexture = InvalidTexture;
-	FVector AoKernel[MaxAoSamples];
+	/** Shadow map size (texels, r.ShadowMapResolution). */
+	int32 ShadowMapResolution = 1024;
+	/** Planar mirror target scale vs the framebuffer (r.PlanarReflectionScale; 0.5 = half-res). */
+	float PlanarReflectionScale = 0.5f;
 
 	int32 FbWidth = 0;
 	int32 FbHeight = 0;
-	FRHIFramebufferId DrawTargetFbo = InvalidFramebuffer;
+	/** Every pass ends in the window's default framebuffer (GL name 0). */
+	static constexpr FRHIFramebufferId DrawTargetFbo = 0;
 	/** The show flags of the family being rendered. */
 	FEngineShowFlags ShowFlags;
-	bool bSceneGeometryEnabled = true;
 };

@@ -12,9 +12,7 @@ public:
 		Shadow = 0,
 		Planar = 1,
 		Color = 2,
-		Ssao = 3,
-		Post = 4,
-		Count = 5,
+		Count = 3,
 	};
 
 	FGPUPassTimer() = default;

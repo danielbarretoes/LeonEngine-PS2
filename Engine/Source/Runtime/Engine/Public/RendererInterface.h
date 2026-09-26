@@ -22,8 +22,6 @@ struct ENGINE_API FFrameStats
 	float ShadowMs = 0.0f;
 	float PlanarMs = 0.0f;
 	float ColorMs = 0.0f;
-	float SsaoMs = 0.0f;
-	float PostMs = 0.0f;
 };
 
 /**

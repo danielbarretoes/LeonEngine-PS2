@@ -63,17 +63,13 @@ float shadowFactor(vec4 lightSpacePos, vec3 N, vec3 L) {
     return shadow / 9.0;
 }
 
-// Procedural gradient sky (no HDR environment maps; static lighting comes later). World up is +Z.
-vec3 fakeEnvironment(vec3 dir) {
+// Procedural gradient sky the reflections sample (Leon has no environment maps). World up is +Z.
+vec3 skyEnvironment(vec3 dir) {
     float t = clamp(dir.z * 0.5 + 0.5, 0.0, 1.0);
     vec3 ground = vec3(0.12, 0.11, 0.10);
     vec3 horizon = vec3(0.35, 0.38, 0.42);
     vec3 zenith = vec3(0.55, 0.62, 0.75);
     return mix(ground, mix(horizon, zenith, t), smoothstep(0.0, 1.0, t + 0.15));
-}
-
-vec3 sampleEnvironment(vec3 dir, float roughness) {
-    return fakeEnvironment(dir);
 }
 
 vec3 shadeDirectional(vec3 N, vec3 V, vec3 diffuseColor, vec3 specularColor, vec3 direction,
@@ -144,17 +140,12 @@ void main() {
         }
     }
 
-    // Environment reflection — LOD rises with roughness; metals pick up more of the sky.
-    // Anti-flicker only when R is nearly constant across the pixel (flat faces locking one texel).
-    // Large floors have high fwidth(R) — that must NOT force max LOD or mirrors vanish.
+    // Sky reflection: metals and grazing angles pick up more of it, rough surfaces less.
     vec3 R = reflect(-V, N);
-    float rDeriv = length(fwidth(R));
-    float lockRisk = 1.0 - smoothstep(0.0015, 0.03, rDeriv);
-    float envRough = max(roughness, lockRisk * 0.20);
     float fresnel = pow(1.0 - max(dot(N, V), 0.0), 5.0);
     float envStrength = mix(0.08, 0.78, metallic) + fresnel * mix(0.25, 0.5, metallic);
-    envStrength *= mix(1.0, 0.4, envRough);
-    lit += sampleEnvironment(R, envRough) * specularColor * envStrength;
+    envStrength *= mix(1.0, 0.4, roughness);
+    lit += skyEnvironment(R) * specularColor * envStrength;
 
     // Planar scene mirror (objects + sky), projective sample from the reflection pass.
     if (uHasPlanarReflection != 0) {

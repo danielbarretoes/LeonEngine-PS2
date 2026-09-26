@@ -8,6 +8,7 @@
 #include "GLClipSpace.h"
 #include "Level/Light.h"
 #include "LightSceneProxy.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Misc/Paths.h"
 #include "Primitives.h"
 #include "RenderMatrices.h"
@@ -19,8 +20,6 @@
 #include "ViewMatrices.h"
 
 #include <glad/glad.h>
-
-#include <random>
 
 namespace
 {
@@ -119,47 +118,6 @@ namespace
 		return bAny;
 	}
 
-	// std::mt19937 + uniform_real_distribution keep the SSAO kernel and noise identical to earlier releases.
-	void BuildAoKernel(FVector (&Kernel)[FSceneRenderer::MaxAoSamples])
-	{
-		std::mt19937 Rng(1337u);
-		std::uniform_real_distribution<float> Unit(0.0f, 1.0f);
-		for (int32 I = 0; I < FSceneRenderer::MaxAoSamples; ++I)
-		{
-			// Separate statements keep the draw order of the three components fixed.
-			const float X = Unit(Rng) * 2.0f - 1.0f;
-			const float Y = Unit(Rng) * 2.0f - 1.0f;
-			const float Z = Unit(Rng);
-			FVector Sample = FVector(X, Y, Z).GetUnsafeNormal();
-			Sample *= Unit(Rng);
-			float Scale = static_cast<float>(I) / static_cast<float>(FSceneRenderer::MaxAoSamples);
-			Scale = 0.1f + 0.9f * (Scale * Scale);
-			Kernel[I] = Sample * Scale;
-		}
-	}
-
-	uint32 CreateAoNoiseTexture()
-	{
-		std::mt19937 Rng(42u);
-		std::uniform_real_distribution<float> Unit(0.0f, 1.0f);
-		FVector Noise[16];
-		for (FVector& N : Noise)
-		{
-			const float X = Unit(Rng) * 2.0f - 1.0f;
-			const float Y = Unit(Rng) * 2.0f - 1.0f;
-			N = FVector(X, Y, 0.0f);
-		}
-		uint32 Tex = 0;
-		glGenTextures(1, &Tex);
-		glBindTexture(GL_TEXTURE_2D, Tex);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, 4, 4, 0, GL_RGB, GL_FLOAT, Noise);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-		return Tex;
-	}
-
 } // namespace
 
 bool FSceneRenderer::BindLitUbos() const
@@ -207,26 +165,6 @@ bool FSceneRenderer::Initialize(const FString& InShaderDirectory)
 		UE_LOG(LogRenderer, Error, "Failed to load skinned shadow shaders from %s", *InShaderDirectory);
 		return false;
 	}
-	if (!SsaoShader.LoadFromFiles(ShaderFile("fullscreen.vert"), ShaderFile("ssao.frag")))
-	{
-		UE_LOG(LogRenderer, Error, "Failed to load SSAO shaders from %s", *InShaderDirectory);
-		return false;
-	}
-	if (!SsaoBlurShader.LoadFromFiles(ShaderFile("fullscreen.vert"), ShaderFile("ssao_blur.frag")))
-	{
-		UE_LOG(LogRenderer, Error, "Failed to load SSAO blur shaders from %s", *InShaderDirectory);
-		return false;
-	}
-	if (!PostCompositeShader.LoadFromFiles(ShaderFile("fullscreen.vert"), ShaderFile("post_composite.frag")))
-	{
-		UE_LOG(LogRenderer, Error, "Failed to load post composite shaders from %s", *InShaderDirectory);
-		return false;
-	}
-	if (!FxaaShader.LoadFromFiles(ShaderFile("fullscreen.vert"), ShaderFile("fxaa.frag")))
-	{
-		UE_LOG(LogRenderer, Error, "Failed to load FXAA shaders from %s", *InShaderDirectory);
-		return false;
-	}
 	if (!LineBatch.Initialize())
 	{
 		return false;
@@ -235,8 +173,8 @@ bool FSceneRenderer::Initialize(const FString& InShaderDirectory)
 	{
 		return false;
 	}
-	ApplyPostProcessQuality(Post, EPostProcessQuality::Low);
-	if (!ShadowMap.Create(Post.ShadowMapSize))
+	ReadRendererSettings();
+	if (!ShadowMap.Create(ShadowMapResolution))
 	{
 		return false;
 	}
@@ -276,22 +214,12 @@ bool FSceneRenderer::Initialize(const FString& InShaderDirectory)
 		return false;
 	}
 
-	glGenVertexArrays(1, &FullscreenVao);
-	BuildAoKernel(AoKernel);
-	AoNoiseTexture = CreateAoNoiseTexture();
-	if (FullscreenVao == 0 || AoNoiseTexture == 0)
-	{
-		UE_LOG(LogRenderer, Error, "Failed to create post-process GPU resources");
-		return false;
-	}
-
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
 	// Front faces wind counter-clockwise in GL window space (GL's default, made explicit).
 	glFrontFace(GL_CCW);
 	glCullFace(GL_BACK);
 	glEnable(GL_MULTISAMPLE);
-	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 	return true;
 }
 
@@ -306,25 +234,8 @@ void FSceneRenderer::Shutdown()
 	WhiteTexture.Reset();
 	Resources.ReleaseResources();
 	PassTimers.Destroy();
-	LdrColor.Destroy();
-	SsaoTarget.Destroy();
-	SceneColor.Destroy();
 	PlanarReflection.Destroy();
 	ShadowMap.Destroy();
-	if (AoNoiseTexture != 0)
-	{
-		glDeleteTextures(1, &AoNoiseTexture);
-		AoNoiseTexture = 0;
-	}
-	if (FullscreenVao != 0)
-	{
-		glDeleteVertexArrays(1, &FullscreenVao);
-		FullscreenVao = 0;
-	}
-	FxaaShader.Destroy();
-	PostCompositeShader.Destroy();
-	SsaoBlurShader.Destroy();
-	SsaoShader.Destroy();
 	SkinnedShadowShader.Destroy();
 	ShadowShader.Destroy();
 	UnlitShader.Destroy();
@@ -352,8 +263,7 @@ EShaderReloadResult FSceneRenderer::ReloadShaders(bool bForce)
 	};
 
 	if (!TryReload(LitShader, LitAccept) || !TryReload(SkinnedLitShader, LitAccept) || !TryReload(UnlitShader) ||
-		!TryReload(ShadowShader) || !TryReload(SkinnedShadowShader) || !TryReload(SsaoShader) ||
-		!TryReload(SsaoBlurShader) || !TryReload(PostCompositeShader) || !TryReload(FxaaShader))
+		!TryReload(ShadowShader) || !TryReload(SkinnedShadowShader))
 	{
 		return EShaderReloadResult::Failed;
 	}
@@ -366,48 +276,27 @@ void FSceneRenderer::BeginFrame(int32 FramebufferWidth, int32 FramebufferHeight)
 {
 	FbWidth = FramebufferWidth;
 	FbHeight = FramebufferHeight;
-	EnsureShadowMapSize();
-
-	const bool bPostOn = Post.bEnabled && FbWidth > 0 && FbHeight > 0;
-	if (bPostOn)
-	{
-		(void)SceneColor.EnsureSize(FbWidth, FbHeight);
-		(void)LdrColor.EnsureSize(FbWidth, FbHeight);
-		// Full-res SSAO: half-res undersamples 24-bit depth into visible parallel bands.
-		(void)SsaoTarget.EnsureSize(FbWidth, FbHeight);
-	}
-
 	glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
 	glViewport(0, 0, FramebufferWidth, FramebufferHeight);
 	glClearColor(0.08f, 0.09f, 0.11f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
-void FSceneRenderer::EnsureShadowMapSize()
+void FSceneRenderer::ReadRendererSettings()
 {
-	const int32 Size = FMath::Clamp(Post.ShadowMapSize, 512, 4096);
-	if (ShadowMap.Valid() && ShadowMap.GetSize() == Size)
+	// UE's scalability console variables, read once from [/Script/Engine.RendererSettings] (they are not console
+	// variables in Leon).
+	const TCHAR* const Section = TEXT("/Script/Engine.RendererSettings");
+	int32 Resolution = ShadowMapResolution;
+	if (GConfig->GetInt(Section, TEXT("r.ShadowMapResolution"), Resolution, GEngineIni))
 	{
-		return;
+		ShadowMapResolution = FMath::Clamp(Resolution, MinShadowMapResolution, MaxShadowMapResolution);
 	}
-	ShadowMap.Destroy();
-	(void)ShadowMap.Create(Size);
-}
-
-FRHIFramebufferId FSceneRenderer::ColorRestoreFbo() const
-{
-	if (Post.bEnabled && SceneColor.Valid())
+	float Scale = PlanarReflectionScale;
+	if (GConfig->GetFloat(Section, TEXT("r.PlanarReflectionScale"), Scale, GEngineIni))
 	{
-		return SceneColor.Framebuffer();
+		PlanarReflectionScale = FMath::Clamp(Scale, 0.1f, 1.0f);
 	}
-	return DrawTargetFbo;
-}
-
-void FSceneRenderer::DrawFullscreenTriangle() const
-{
-	glBindVertexArray(FullscreenVao);
-	glDrawArrays(GL_TRIANGLES, 0, 3);
-	glBindVertexArray(0);
 }
 
 void FSceneRenderer::UpdateCameraUbo(const FSceneView& View) const
@@ -566,7 +455,7 @@ void FSceneRenderer::RenderShadowPass(const FMatrix& LightSpace)
 		}
 	}
 
-	ShadowMap.End(FbWidth, FbHeight, ColorRestoreFbo());
+	ShadowMap.End(FbWidth, FbHeight, DrawTargetFbo);
 	PassTimers.End(FGPUPassTimer::EPass::Shadow);
 }
 
@@ -672,7 +561,7 @@ void FSceneRenderer::RenderPlanarReflectionPass(const FSceneView& View, float Pl
 
 	SetClipPlane(false, FVector4(0.0f, 0.0f, 1.0f, 0.0f));
 	glDisable(GL_CLIP_DISTANCE0);
-	PlanarReflection.End(FbWidth, FbHeight, ColorRestoreFbo());
+	PlanarReflection.End(FbWidth, FbHeight, DrawTargetFbo);
 	PassTimers.End(FGPUPassTimer::EPass::Planar);
 }
 
@@ -842,30 +731,6 @@ void FSceneRenderer::Render(const FSceneViewFamily& ViewFamily)
 	FrameStats.ShadowMs = PassTimers.Milliseconds(FGPUPassTimer::EPass::Shadow);
 	FrameStats.PlanarMs = PassTimers.Milliseconds(FGPUPassTimer::EPass::Planar);
 	FrameStats.ColorMs = PassTimers.Milliseconds(FGPUPassTimer::EPass::Color);
-	FrameStats.SsaoMs = PassTimers.Milliseconds(FGPUPassTimer::EPass::Ssao);
-	FrameStats.PostMs = PassTimers.Milliseconds(FGPUPassTimer::EPass::Post);
-
-	// Editor Player Collision / similar: clear + overlay only (keep timer pairs intact).
-	if (!bSceneGeometryEnabled)
-	{
-		PassTimers.Begin(FGPUPassTimer::EPass::Shadow);
-		PassTimers.End(FGPUPassTimer::EPass::Shadow);
-		PassTimers.Begin(FGPUPassTimer::EPass::Planar);
-		PassTimers.End(FGPUPassTimer::EPass::Planar);
-		PassTimers.Begin(FGPUPassTimer::EPass::Color);
-		PassTimers.End(FGPUPassTimer::EPass::Color);
-		PassTimers.Begin(FGPUPassTimer::EPass::Ssao);
-		PassTimers.End(FGPUPassTimer::EPass::Ssao);
-		PassTimers.Begin(FGPUPassTimer::EPass::Post);
-		PassTimers.End(FGPUPassTimer::EPass::Post);
-
-		FlushWorldLines(View, WorldLines);
-		DrawAxesGizmo(View);
-		SkeletalDraws.Reset();
-		return;
-	}
-
-	const bool bPostOn = Post.bEnabled && SceneColor.Valid();
 
 	const FMatrix LocalView = View.ViewMatrix;
 	const FMatrix LocalProjection = GetProjectionGL(View);
@@ -883,7 +748,7 @@ void FSceneRenderer::Render(const FSceneViewFamily& ViewFamily)
 		const FVector LightDir = FrameDirectionalLights[0]->GetDirection();
 		FVector WorldMin;
 		FVector WorldMax;
-		/** Shadow box padding and the box used without casters (cm). */
+		/** Shadow box padding (cm); without casters the box is 6 m square and 2 m tall above the origin (Z up). */
 		constexpr float ShadowPadding = 75.0f;
 		if (ComputeCasterAabb(FrameMeshes, WorldMin, WorldMax))
 		{
@@ -892,7 +757,7 @@ void FSceneRenderer::Render(const FSceneViewFamily& ViewFamily)
 		else
 		{
 			LightSpace = FitLightSpaceMatrix(
-				LightDir, FVector(-300.0f, 0.0f, -300.0f), FVector(300.0f, 200.0f, 300.0f), ShadowPadding);
+				LightDir, FVector(-300.0f, -300.0f, 0.0f), FVector(300.0f, 300.0f, 200.0f), ShadowPadding);
 		}
 		RenderShadowPass(LightSpace);
 	}
@@ -985,51 +850,11 @@ void FSceneRenderer::Render(const FSceneViewFamily& ViewFamily)
 
 	PassTimers.Begin(FGPUPassTimer::EPass::Color);
 
-	if (bPostOn)
-	{
-		SceneColor.Begin();
-	}
-	else
-	{
-		glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
-		glViewport(0, 0, FbWidth, FbHeight);
-	}
+	glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
+	glViewport(0, 0, FbWidth, FbHeight);
 
 	const float ShadowSourceAngle =
 		bCastDirShadows ? FrameDirectionalLights[0]->GetSourceAngle() : DefaultLightSourceAngleDegrees;
-
-	// Optional early-Z: write opaque depth before expensive lit shading.
-	if (Post.bEarlyZ && UnlitShader.Valid() && Opaque.Num() > 0)
-	{
-		glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-		glDepthMask(GL_TRUE);
-		glDepthFunc(GL_LESS);
-		glDisable(GL_BLEND);
-		UnlitShader.Bind();
-		UnlitShader.SetInt("uUseClipPlane", 0);
-		UnlitShader.SetVec4("uClipPlane", 0.0f, 0.0f, 1.0f, 0.0f);
-		UnlitShader.SetInt("uAlbedoMap", 0);
-		UnlitShader.SetVec2("uUvScale", 1.0f, 1.0f);
-		UnlitShader.SetFloat("uAlpha", 1.0f);
-		WhiteTexture->Bind(0);
-		for (const FDrawItem& Item : Opaque)
-		{
-			const FStaticMeshSceneProxy& Object = *FrameMeshes[Item.ObjectIndex];
-			const FMaterial& Mat = Object.GetSectionMaterial(Item.SubMeshIndex);
-			if (Mat.Shading == EMaterialLightingModel::Unlit)
-			{
-				continue;
-			}
-			const FMatrix LocalModel = Object.GetLocalToWorld();
-			const FMatrix Mvp = LocalModel * LocalView * LocalProjection;
-			UnlitShader.SetMat4("uMVP", Mvp);
-			UnlitShader.SetMat4("uModel", LocalModel);
-			UnlitShader.SetVec3("uAlbedo", 1.0f, 1.0f, 1.0f);
-			Resources.GetStaticMesh(Object.GetStaticMesh()).DrawSubMesh(Item.SubMeshIndex);
-		}
-		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-		glDepthFunc(GL_LEQUAL);
-	}
 
 	if (LitShader.Valid())
 	{
@@ -1122,7 +947,7 @@ void FSceneRenderer::Render(const FSceneViewFamily& ViewFamily)
 	UWorld* EffectsWorld = ViewFamily.Scene != nullptr ? ViewFamily.Scene->GetWorld() : nullptr;
 	if (EffectsWorld != nullptr)
 	{
-		WorldEffects.DrawImpactMarks(EffectsWorld->ImpactMarks, LocalViewProjection, Post.bEarlyZ);
+		WorldEffects.DrawImpactMarks(EffectsWorld->ImpactMarks, LocalViewProjection);
 	}
 	if (LitShader.Valid())
 	{
@@ -1138,33 +963,17 @@ void FSceneRenderer::Render(const FSceneViewFamily& ViewFamily)
 	// The tracers glow over everything drawn so far (nothing without tracers).
 	if (EffectsWorld != nullptr)
 	{
-		WorldEffects.DrawTracers(EffectsWorld->Tracers, LocalViewProjection, LocalCameraPos, Post.bEarlyZ);
-	}
-
-	if (Post.bEarlyZ)
-	{
-		glDepthFunc(GL_LESS);
+		WorldEffects.DrawTracers(EffectsWorld->Tracers, LocalViewProjection, LocalCameraPos);
 	}
 
 	PassTimers.End(FGPUPassTimer::EPass::Color);
 
-	// Debug into the color target (scene HDR or backbuffer) so depth occlusion stays correct.
+	// Debug before the view model pass, which clears the depth, so the scene still occludes it.
 	DrawDebug(View, LightSpace, bCastDirShadows);
 
-	if (bPostOn)
-	{
-		RenderPostStack(View, LightSpace, bCastDirShadows, ShadowSourceAngle);
-	}
-	else
-	{
-		RenderViewModelPass(View, LightSpace, bCastDirShadows, ShadowSourceAngle, DrawTargetFbo);
-		PassTimers.Begin(FGPUPassTimer::EPass::Ssao);
-		PassTimers.End(FGPUPassTimer::EPass::Ssao);
-		PassTimers.Begin(FGPUPassTimer::EPass::Post);
-		PassTimers.End(FGPUPassTimer::EPass::Post);
-		glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
-		glViewport(0, 0, FbWidth, FbHeight);
-	}
+	RenderViewModelPass(View, LightSpace, bCastDirShadows, ShadowSourceAngle);
+	glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
+	glViewport(0, 0, FbWidth, FbHeight);
 
 	FlushWorldLines(View, WorldLines);
 	DrawAxesGizmo(View);
@@ -1198,21 +1007,21 @@ void FSceneRenderer::ReadFramebufferBgr(int32 Width, int32 Height, TArray<uint8>
 	glReadPixels(0, 0, Width, Height, GL_BGR, GL_UNSIGNED_BYTE, OutBgr.GetData());
 }
 
-void FSceneRenderer::RenderViewModelPass(const FSceneView& View, const FMatrix& LightSpace, bool bCastDirShadows,
-	float ShadowSourceAngle, FRHIFramebufferId Target)
+void FSceneRenderer::RenderViewModelPass(
+	const FSceneView& View, const FMatrix& LightSpace, bool bCastDirShadows, float ShadowSourceAngle)
 {
 	if (ViewModelMeshes.Num() == 0 || !LitShader.Valid())
 	{
 		return;
 	}
-	glBindFramebuffer(GL_FRAMEBUFFER, Target);
+	glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
 	glViewport(0, 0, FbWidth, FbHeight);
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
 	glDepthFunc(GL_LESS);
 	glDepthMask(GL_TRUE);
 	glDisable(GL_BLEND);
-	// Over everything: the world's depth goes (the ambient occlusion already read it).
+	// Over everything: the world's depth goes.
 	glClear(GL_DEPTH_BUFFER_BIT);
 
 	const FMatrix ViewModelProjection = ToGLClipSpace(View.ViewModelProjectionMatrix);
@@ -1268,136 +1077,6 @@ void FSceneRenderer::RenderViewModelPass(const FSceneView& View, const FMatrix& 
 		}
 	}
 	glDisable(GL_BLEND);
-}
-
-void FSceneRenderer::RenderPostStack(
-	const FSceneView& View, const FMatrix& LightSpace, bool bCastDirShadows, float ShadowSourceAngle)
-{
-	// Flow: SceneColor(+Depth) → SSAO → bilateral blur → composite+tonemap → FXAA → present
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_BLEND);
-	glDisable(GL_CULL_FACE);
-	glDepthMask(GL_FALSE);
-
-	const bool bWantAo = Post.bAmbientOcclusion && SsaoShader.Valid() && SsaoBlurShader.Valid() && SsaoTarget.Valid() &&
-		Post.AoSampleCount > 0;
-	int32 AoReadIndex = 1;
-
-	PassTimers.Begin(FGPUPassTimer::EPass::Ssao);
-	if (bWantAo)
-	{
-		// GL clip space: ssao.frag reads GL depth and reconstructs UE view-space positions (+Z forward).
-		const FMatrix LocalProjection = GetProjectionGL(View);
-		const FMatrix InvProjection = LocalProjection.Inverse();
-		const int32 SampleCount = FMath::Clamp(Post.AoSampleCount, 1, MaxAoSamples);
-
-		SsaoTarget.BindWrite(0);
-		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
-		SsaoShader.Bind();
-		SsaoShader.SetInt("uDepth", 0);
-		SsaoShader.SetInt("uNoise", 1);
-		SsaoShader.SetInt("uSampleCount", SampleCount);
-		SsaoShader.SetMat4("uProjection", LocalProjection);
-		SsaoShader.SetMat4("uInvProjection", InvProjection);
-		SsaoShader.SetFloat("uRadius", Post.AoRadius);
-		SsaoShader.SetFloat("uBias", Post.AoBias);
-		const float NoiseScaleX = static_cast<float>(SsaoTarget.GetWidth()) / 4.0f;
-		const float NoiseScaleY = static_cast<float>(SsaoTarget.GetHeight()) / 4.0f;
-		SsaoShader.SetVec2("uNoiseScale", NoiseScaleX, NoiseScaleY);
-		for (int32 I = 0; I < SampleCount; ++I)
-		{
-			const FVector& S = AoKernel[I];
-			ANSICHAR Name[32];
-			FCStringAnsi::Snprintf(Name, static_cast<int32>(sizeof(Name)), "uSamples[%d]", I);
-			SsaoShader.SetVec3(Name, S.X, S.Y, S.Z);
-		}
-		SceneColor.BindDepthTexture(0);
-		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, AoNoiseTexture);
-		DrawFullscreenTriangle();
-
-		// Horizontal then vertical spatial blur (dissolves noise without keeping depth bands).
-		const float TexelX = 1.0f / static_cast<float>(SsaoTarget.GetWidth());
-		const float TexelY = 1.0f / static_cast<float>(SsaoTarget.GetHeight());
-		SsaoBlurShader.Bind();
-		SsaoBlurShader.SetInt("uAo", 0);
-		SsaoBlurShader.SetVec2("uDirection", TexelX, 0.0f);
-
-		SsaoTarget.BindWrite(1);
-		SsaoTarget.BindColorTexture(0, 0);
-		DrawFullscreenTriangle();
-
-		SsaoTarget.BindWrite(0);
-		SsaoBlurShader.SetVec2("uDirection", 0.0f, TexelY);
-		SsaoTarget.BindColorTexture(1, 0);
-		DrawFullscreenTriangle();
-		AoReadIndex = 0;
-	}
-	PassTimers.End(FGPUPassTimer::EPass::Ssao);
-
-	// The view model pass, into the scene colour: after the ambient occlusion, before the tone mapping.
-	if (ViewModelMeshes.Num() > 0)
-	{
-		RenderViewModelPass(View, LightSpace, bCastDirShadows, ShadowSourceAngle, SceneColor.Framebuffer());
-		glDisable(GL_DEPTH_TEST);
-		glDisable(GL_BLEND);
-		glDisable(GL_CULL_FACE);
-		glDepthMask(GL_FALSE);
-	}
-
-	PassTimers.Begin(FGPUPassTimer::EPass::Post);
-	const float Exposure = FMath::Max(0.01f, Post.Exposure);
-	const bool bWantFxaa = Post.bFxaa && FxaaShader.Valid() && LdrColor.Valid();
-
-	if (bWantFxaa)
-	{
-		LdrColor.BindWrite();
-	}
-	else
-	{
-		glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
-		glViewport(0, 0, FbWidth, FbHeight);
-	}
-
-	if (PostCompositeShader.Valid())
-	{
-		PostCompositeShader.Bind();
-		PostCompositeShader.SetInt("uSceneColor", 0);
-		PostCompositeShader.SetInt("uAo", 1);
-		PostCompositeShader.SetInt("uUseAo", bWantAo ? 1 : 0);
-		PostCompositeShader.SetFloat("uAoIntensity", Post.AoIntensity);
-		PostCompositeShader.SetFloat("uAoPower", Post.AoPower);
-		PostCompositeShader.SetFloat("uExposure", Exposure);
-		SceneColor.BindColorTexture(0);
-		if (bWantAo)
-		{
-			SsaoTarget.BindColorTexture(AoReadIndex, 1);
-		}
-		else if (WhiteTexture != nullptr)
-		{
-			WhiteTexture->Bind(1);
-		}
-		DrawFullscreenTriangle();
-	}
-
-	if (bWantFxaa)
-	{
-		glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
-		glViewport(0, 0, FbWidth, FbHeight);
-		FxaaShader.Bind();
-		FxaaShader.SetInt("uColor", 0);
-		FxaaShader.SetVec2("uInvResolution", 1.0f / static_cast<float>(FbWidth), 1.0f / static_cast<float>(FbHeight));
-		LdrColor.BindColorTexture(0);
-		DrawFullscreenTriangle();
-	}
-	PassTimers.End(FGPUPassTimer::EPass::Post);
-
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_CULL_FACE);
-	glDepthMask(GL_TRUE);
-	glBindFramebuffer(GL_FRAMEBUFFER, DrawTargetFbo);
-	glViewport(0, 0, FbWidth, FbHeight);
 }
 
 void FSceneRenderer::DrawQueuedSkeletal(const FMatrix& InView, const FMatrix& InProjection, const FMatrix& LightSpace,

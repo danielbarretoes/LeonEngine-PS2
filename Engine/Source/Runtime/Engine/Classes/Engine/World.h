@@ -63,8 +63,10 @@ struct ENGINE_API FActorSpawnParameters
 struct ENGINE_API FWorldGameplayFrameParams
 {
 	float DeltaTime = 0.0f;
+	/** When set, the characters' capsules draw into it after the physics step (show Collision, F2). */
 	FDebugDraw* CollisionDebugDraw = nullptr;
-	FDebugDraw* NavMeshDebugDraw = nullptr;
+	/** When set, the waypoint graph draws into it (show Navigation, F3). */
+	FDebugDraw* NavigationDebugDraw = nullptr;
 	/** When true, FPhysScene::Step uses these values instead of the first Character's movement. */
 	bool bOverridePhysicsStep = false;
 	float PhysicsDamping = 6.0f;

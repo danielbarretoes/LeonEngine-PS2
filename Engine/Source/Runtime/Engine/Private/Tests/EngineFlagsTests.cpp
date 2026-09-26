@@ -20,11 +20,11 @@ bool FEngineFlagsWorkBeforeInitializeTest::RunTest(const FString& Parameters)
 	TestTrue("show collision again", Viewport.Exec(nullptr, TEXT("show collision"), *GLog));
 	TestFalse("Collision debug toggled off", Viewport.EngineShowFlags.Collision);
 
-	TestFalse("NavMesh debug off by default", Viewport.EngineShowFlags.Navigation);
+	TestFalse("Navigation debug off by default", Viewport.EngineShowFlags.Navigation);
 	TestTrue("show Navigation", Viewport.Exec(nullptr, TEXT("show Navigation"), *GLog));
-	TestTrue("NavMesh debug toggled on", Viewport.EngineShowFlags.Navigation);
+	TestTrue("Navigation debug toggled on", Viewport.EngineShowFlags.Navigation);
 	TestTrue("show Navigation again", Viewport.Exec(nullptr, TEXT("show Navigation"), *GLog));
-	TestFalse("NavMesh debug set off", Viewport.EngineShowFlags.Navigation);
+	TestFalse("Navigation debug set off", Viewport.EngineShowFlags.Navigation);
 
 	UGameInstance& GameInstance = *NewObject<UGameInstance>();
 	TestEqual("No levels opened", GameInstance.GetLevelsOpened(), 0);

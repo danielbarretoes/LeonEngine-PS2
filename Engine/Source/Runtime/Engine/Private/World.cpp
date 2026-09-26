@@ -683,9 +683,9 @@ void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& Params)
 			});
 	}
 
-	if (Params.NavMeshDebugDraw != nullptr)
+	if (Params.NavigationDebugDraw != nullptr)
 	{
-		Navigation.AppendDebugDraw(*Params.NavMeshDebugDraw);
+		Navigation.AppendDebugDraw(*Params.NavigationDebugDraw);
 	}
 }
 

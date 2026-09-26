@@ -213,6 +213,14 @@ void UGameEngine::Tick(float DeltaSeconds, bool /*bIdleMode*/)
 		// world updates the cameras, then the physics steps (UWorld::TickGameplayFrame).
 		FWorldGameplayFrameParams Frame;
 		Frame.DeltaTime = DeltaSeconds;
+		// The viewport's show flags draw into the world's line batch, which the scene renderer flushes (UE); without a
+		// window nothing would empty it.
+		if (Window != nullptr && GameViewport != nullptr)
+		{
+			const FEngineShowFlags& ShowFlags = GameViewport->EngineShowFlags;
+			Frame.CollisionDebugDraw = ShowFlags.Collision ? &World->LineBatcher : nullptr;
+			Frame.NavigationDebugDraw = ShowFlags.Navigation ? &World->LineBatcher : nullptr;
+		}
 		World->TickGameplayFrame(Frame);
 	}
 	// After the world ticked, like UE's UGameEngine::Tick (a safe point, D11).
