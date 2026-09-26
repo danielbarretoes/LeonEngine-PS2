@@ -128,10 +128,11 @@ void FPS2ErrorScreen::Show(int32 ExitCode)
 	{
 		std::snprintf(Hint, sizeof(Hint),
 			"The game reads its config and content from '%s' (the ELF's folder).\n"
-			"PCSX2: Settings > Advanced > Enable Host Filesystem, then boot the staged ELF:\n"
-			"Packages/PS2/%s/%s.elf, beside its %s folder (Content/Paks/%s-PS2.lpak).\n"
+			"PCSX2: Settings > Advanced > Enable Host Filesystem, then boot the staged ELF, not Binaries/PS2's:\n"
+			"Game/%s/Packages/PS2/%s.elf (Package.bat) or Game/%s/Saved/StagedBuilds/PS2/%s.elf (BuildCookRun\n"
+			"-stage -pak), beside its %s/Content/Paks/%s-PS2.lpak.\n"
 			"The EE log has the whole log.",
-			BaseDir, Project, Project, Project, Project);
+			BaseDir, Project, Project, Project, Project, Project, Project);
 	}
 	else
 	{

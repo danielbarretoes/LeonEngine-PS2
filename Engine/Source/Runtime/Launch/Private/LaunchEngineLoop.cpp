@@ -148,9 +148,23 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 	const FConfigFile* EngineConfig = GConfig->FindConfigFile(GEngineIni);
 	if (EngineConfig == nullptr || EngineConfig->Num() == 0)
 	{
-		UE_LOG(LogInit, Error,
-			"No Engine config in %s (nor a pak in %sContent/Paks/): the base directory '%s' is not readable",
-			*FPaths::EngineConfigDir(), *FPaths::ProjectDir(), FPlatformProcess::BaseDir());
+		// The executable itself tells a folder that cannot be read (PCSX2 without its host filesystem) from one that
+		// holds no cooked content (the build's output, Binaries/<Platform>/, instead of the staged game).
+		const FString Executable = FString(FPlatformProcess::BaseDir()) + FPlatformProcess::ExecutableName(false);
+		if (FPlatformFileManager::Get().GetPlatformFile().FileExists(*Executable))
+		{
+			UE_LOG(LogInit, Error,
+				"No Engine config in %s (nor a pak in %sContent/Paks/): '%s' holds the executable but no cooked "
+				"content; "
+				"this is a build output, boot the staged game (BuildCookRun -stage -pak, or Package.bat)",
+				*FPaths::EngineConfigDir(), *FPaths::ProjectDir(), FPlatformProcess::BaseDir());
+		}
+		else
+		{
+			UE_LOG(LogInit, Error,
+				"No Engine config in %s (nor a pak in %sContent/Paks/): the base directory '%s' is not readable",
+				*FPaths::EngineConfigDir(), *FPaths::ProjectDir(), FPlatformProcess::BaseDir());
+		}
 		return 1;
 	}
 #endif

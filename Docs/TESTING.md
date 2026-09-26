@@ -225,7 +225,7 @@ up, left-handed, 1 unit = 1 cm.
   (black bars at the sides of a 1280x896 window), the game runs at 30 fps (`-LogFrameTimes`: 33.4 ms), a gamepad
   plays it as the DualShock (a small tilt of a stick does nothing: the dead zone), and the sound is the PS2's mix.
 - [ ] **PS2 boot in PCSX2** ([PS2SDK.md](../Engine/Platforms/PS2/Documentation/PS2SDK.md), findings 1 to 3): with Host
-  Filesystem on, `Packages\PS2\ShooterGame\ShooterGame.elf` logs `FPS2PlatformMisc: IOP reset, ...` then plays, the pad
+  Filesystem on, `Game\ShooterGame\Packages\PS2\ShooterGame.elf` logs `FPS2PlatformMisc: IOP reset, ...` then plays, the pad
   answers and the sound plays (the IOP reset kept `host:` and the pad); with Host Filesystem off, the red
   "THE GAME STOPPED" screen names `host:` and the setting. The same from uLaunchELF on a console, when one is at hand.
 

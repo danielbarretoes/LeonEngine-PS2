@@ -279,7 +279,7 @@ is recorded ([Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md)). Te
 | `PS2DEV is not set` | Only with `-NoDocker` or inside a custom container: export `PS2DEV` / `PS2SDK` |
 | `ELF not found` in `RunPCSX2.ps1` | Build first (`-Build`) or check `-Configuration` |
 | `PCSX2 not found` | Install it or set `$env:LEON_PCSX2` to `pcsx2-qt.exe` |
-| A PS2 game shows a red "THE GAME STOPPED" screen (earlier builds: a black screen) | It could not read its config and pak through `host:`: enable **Settings > Advanced > Enable Host Filesystem** in PCSX2 and boot the staged ELF (`Game\<Game>\Packages\PS2\<Game>.elf`, beside its `<Game>\Content\Paks\` folder), not the one in `Binaries\PS2\` |
+| A PS2 game shows a red "THE GAME STOPPED" screen (earlier builds: a black screen) | It found no config nor pak through `host:`. The ELF in `Binaries\PS2\` is the build's output, with no content beside it (the screen says "holds the executable but no cooked content"): boot the staged one. If the screen says `host:` "is not readable", enable **Settings > Advanced > Enable Host Filesystem** in PCSX2 and boot the staged ELF (`Game\<Game>\Packages\PS2\<Game>.elf`, beside its `<Game>\Content\Paks\` folder), not the one in `Binaries\PS2\` |
 | Pad does nothing in PCSX2 | Bind it in the global Controller Port 1 settings (see [PCSX2 notes](#pcsx2-notes)) |
 | clangd reports missing includes | Run `GenerateProjectFiles.bat`, then restart the language server |
 | A third-party download fails the hash check | Delete the archive in `Engine\Intermediate\ThirdPartyDownloads\` and run `Setup.bat` again |
