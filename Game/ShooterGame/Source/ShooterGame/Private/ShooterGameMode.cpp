@@ -5,7 +5,10 @@
 #include "Engine/TriggerVolume.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerStart.h"
+#include "HAL/PlatformMisc.h"
+#include "HAL/UnrealMemory.h"
 #include "Kismet/GameplayStatics.h"
+#include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "ShooterAIController.h"
 #include "ShooterBomb.h"
@@ -15,6 +18,8 @@
 #include "ShooterHUD.h"
 #include "ShooterPlayerController.h"
 #include "ShooterPlayerState.h"
+#include "UObject/UObjectArray.h"
+#include "UObject/UObjectBase.h"
 #include "Weapons/ShooterProjectile.h"
 #include "Weapons/ShooterWeapon.h"
 
@@ -127,6 +132,16 @@ void AShooterGameMode::InitGame(const FString& MapName, const FString& Options, 
 {
 	Super::InitGame(MapName, Options, ErrorMessage);
 	RandomSeed = UGameplayStatics::GetIntOption(Options, TEXT("seed"), RandomSeed);
+	const TCHAR* CmdLine = FCommandLine::Get();
+	(void)FParse::Value(CmdLine, TEXT("seed="), RandomSeed);
+	if (FParse::Param(CmdLine, TEXT("botmatch")))
+	{
+		bBotMatch = true;
+		bFillTeamsWithBots = true;
+		(void)FParse::Value(CmdLine, TEXT("rounds="), BotMatchRounds);
+		BotMatchRounds = FMath::Clamp(BotMatchRounds, 1, MaxRounds);
+		UE_LOG(LogShooter, Display, TEXT("Botmatch: %d round(s), seed %d"), BotMatchRounds, RandomSeed);
+	}
 }
 
 float AShooterGameMode::GetWorldTime() const
@@ -202,7 +217,8 @@ FString AShooterGameMode::InitNewPlayer(
 	if (AShooterPlayerState* State =
 			NewPlayerController != nullptr ? NewPlayerController->GetPlayerState<AShooterPlayerState>() : nullptr)
 	{
-		State->SetTeam(ChooseTeam(Options));
+		// A bot match's player only watches (no team: RestartPlayer makes it a spectator).
+		State->SetTeam(bBotMatch ? EShooterTeam::None : ChooseTeam(Options));
 		State->SetMoney(StartMoney, MaxMoney);
 	}
 	return Super::InitNewPlayer(NewPlayerController, Options, Portal);
@@ -286,8 +302,10 @@ bool AShooterGameMode::IsRoundLive() const
 
 void AShooterGameMode::RestartPlayer(AController* NewPlayer)
 {
-	// CS: a player who joins while a round is being fought waits for the next one.
-	if (IsRoundLive())
+	// CS: a player who joins while a round is being fought waits for the next one; one without a team watches.
+	const AShooterPlayerState* JoiningState =
+		NewPlayer != nullptr ? NewPlayer->GetPlayerState<AShooterPlayerState>() : nullptr;
+	if (IsRoundLive() || (JoiningState != nullptr && JoiningState->GetTeam() == EShooterTeam::None))
 	{
 		if (APlayerController* PlayerController = Cast<APlayerController>(NewPlayer))
 		{
@@ -752,6 +770,10 @@ void AShooterGameMode::Tick(float DeltaSeconds)
 	{
 		return;
 	}
+	if (bBotMatch)
+	{
+		TickBotMatch();
+	}
 	const float Now = GetWorldTime();
 	if (RestartGameTime > 0.0f && Now >= RestartGameTime)
 	{
@@ -780,7 +802,7 @@ void AShooterGameMode::Tick(float DeltaSeconds)
 			const AShooterPlayerState* ShooterState = Cast<AShooterPlayerState>(PlayerState);
 			bHasHuman |= ShooterState != nullptr && !ShooterState->bIsABot;
 		}
-		if (bFillTeamsWithBots && bHasHuman)
+		if (bFillTeamsWithBots && (bHasHuman || bBotMatch))
 		{
 			(void)FillTeamsWithBots();
 		}
@@ -824,6 +846,67 @@ void AShooterGameMode::Tick(float DeltaSeconds)
 		case EShooterRoundState::MatchEnd:
 			break;
 	}
+}
+
+void AShooterGameMode::TickBotMatch()
+{
+	const AShooterGameState* State = GetShooterGameState();
+	if (bBotMatchOver || State == nullptr)
+	{
+		return;
+	}
+	MatchChecker.Tick(*this);
+	BotMatchPeakObjects = FMath::Max(BotMatchPeakObjects, GUObjectArray.GetObjectArrayNumMinusAvailable());
+	const int32 RoundsPlayed = MatchChecker.GetRoundsPlayed();
+	// A round lasts at most the freeze, the round, a bomb planted at its last second and the result.
+	const AShooterBomb* BombDefaults = BombClass != nullptr ? BombClass->GetDefaultObject<AShooterBomb>() : nullptr;
+	const float BombTimer = BombDefaults != nullptr ? BombDefaults->BombTimer : 0.0f;
+	const float RoundDeadline = FreezeTime + RoundTime + BombTimer + RoundRestartDelay;
+	const bool bTimedOut = GetWorldTime() > (static_cast<float>(BotMatchRounds) * RoundDeadline) + 30.0f;
+	const bool bDone = RoundsPlayed >= BotMatchRounds || GetMatchState() == MatchState::WaitingPostMatch;
+	if (!bDone && !bTimedOut)
+	{
+		return;
+	}
+	bBotMatchOver = true;
+	for (const FString& Violation : MatchChecker.GetViolations())
+	{
+		UE_LOG(LogShooter, Error, TEXT("Botmatch: %s"), *Violation);
+	}
+	if (bTimedOut && !bDone)
+	{
+		UE_LOG(LogShooter, Error, TEXT("Botmatch: %d of %d round(s) ended in %.0f s of game time"), RoundsPlayed,
+			BotMatchRounds, static_cast<double>(GetWorldTime()));
+	}
+	const bool bPassed = bDone && !MatchChecker.HasViolations();
+	FString ReasonList;
+	for (const EShooterRoundEndReason Reason : MatchChecker.GetRoundEndReasons())
+	{
+		ReasonList +=
+			FString::Printf(TEXT("%s%d"), ReasonList.IsEmpty() ? TEXT("") : TEXT(","), static_cast<int32>(Reason));
+	}
+	UE_LOG(LogShooter, Display, TEXT("Botmatch %s: %d round(s), CT %d - T %d, %d kill(s), seed %d, reasons [%s]"),
+		bPassed ? TEXT("OK") : TEXT("FAILED"), RoundsPlayed, State->GetTeamScore(EShooterTeam::CT),
+		State->GetTeamScore(EShooterTeam::T), NumKills, RandomSeed, *ReasonList);
+	LogBotMatchBudget();
+	FPlatformMisc::RequestExitWithStatus(false, bPassed ? 0 : 1);
+}
+
+void AShooterGameMode::LogBotMatchBudget() const
+{
+	// The numbers TestPAL logs on the PS2 (Engine/Platforms/PS2/Documentation/Budgets.md), for a whole game.
+	const FUObjectReflectionStats Reflection = GetUObjectReflectionStats();
+	const FMallocUsage Usage = FMemory::GetUsage();
+	UE_LOG(LogShooter, Display,
+		TEXT("Botmatch budget: %d classes, %d structs, %d enums, %d functions, %d properties, construction heap %d KB; "
+			 "UObjects peak %d, now %d of %d slots; names %d, %d KB used of %d KB; GMalloc peak %llu KB, current %llu "
+			 "KB"),
+		Reflection.NumClasses, Reflection.NumStructs, Reflection.NumEnums, Reflection.NumFunctions,
+		Reflection.NumProperties, static_cast<int32>(Reflection.ConstructionHeapBytes / 1024), BotMatchPeakObjects,
+		GUObjectArray.GetObjectArrayNumMinusAvailable(), GUObjectArray.GetObjectArrayCapacity(), FName::GetNumNames(),
+		FName::GetNameEntryMemorySize() / 1024, FName::GetNameTableMemorySize() / 1024,
+		static_cast<unsigned long long>(Usage.PeakBytes / 1024),
+		static_cast<unsigned long long>(Usage.CurrentBytes / 1024));
 }
 
 // The bomb

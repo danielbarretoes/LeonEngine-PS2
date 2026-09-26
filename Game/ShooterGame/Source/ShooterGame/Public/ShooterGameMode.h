@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameMode.h"
 #include "Math/RandomStream.h"
+#include "ShooterMatchChecker.h"
 #include "ShooterTypes.h"
 #include "ShooterGameMode.generated.h"
 
@@ -153,7 +154,7 @@ public:
 	UPROPERTY(Config)
 	int32 DefuserPrice = 200;
 
-	/** The seed of the round stream (the bomb's carrier); `?seed=N` in the URL overrides it. */
+	/** The seed of the round stream (the bomb's carrier); `?seed=N` in the URL or `-seed=N` overrides it. */
 	UPROPERTY(Config)
 	int32 RandomSeed = 1;
 
@@ -164,6 +165,21 @@ public:
 	/** The class of the bomb (AShooterBomb). */
 	UPROPERTY()
 	TSubclassOf<AShooterBomb> BombClass;
+
+	/**
+	 * A headless bot match (plan P21; `-botmatch [-rounds=N] [-seed=N]` on the command line): the local player
+	 * spectates, bots fill both teams, FShooterMatchChecker checks every frame, and after BotMatchRounds rounds (or
+	 * the match's end, or a deadline for them) the game exits with 0, or 1 when an invariant broke. Run it with
+	 * -nullrhi -benchmark to play faster than real time.
+	 */
+	bool bBotMatch = false;
+	int32 BotMatchRounds = 10;
+
+	/** The match's invariants, checked every frame of a bot match. */
+	[[nodiscard]] const FShooterMatchChecker& GetMatchChecker() const
+	{
+		return MatchChecker;
+	}
 
 	void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
 	void Tick(float DeltaSeconds) override;
@@ -322,6 +338,15 @@ private:
 
 	/** The round stream: the bomb's carrier. */
 	FRandomStream RoundRandom;
+
+	/** A bot match's frame: the checks, the end (see bBotMatch). */
+	void TickBotMatch();
+	/** Logs the match's budget numbers (the PS2 port's targets: Budgets.md). */
+	void LogBotMatchBudget() const;
+	FShooterMatchChecker MatchChecker;
+	bool bBotMatchOver = false;
+	/** The most UObjects alive in a frame of the bot match. */
+	int32 BotMatchPeakObjects = 0;
 
 	UPROPERTY(Transient)
 	AShooterBomb* Bomb = nullptr;

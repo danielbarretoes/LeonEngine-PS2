@@ -49,6 +49,11 @@ jobs:
       - name: ShooterGame smoke (G6)
         shell: cmd
         run: call Engine\Build\BatchFiles\SmokeTest.bat
+      # Ten bots play ten rounds of de_leon headless and unpaced (-benchmark), seed 7; the game checks the match's
+      # invariants every frame and exits 1 when one breaks.
+      - name: ShooterGame bot match (P21)
+        shell: cmd
+        run: call Engine\Build\BatchFiles\BotMatch.bat 10 7
       - name: Reproducible reimport (G5)
         shell: cmd
         run: call Engine\Build\BatchFiles\CheckReimport.bat Game\ThirdPerson\ThirdPerson.lproj Game\ShooterGame\ShooterGame.lproj
@@ -65,3 +70,17 @@ jobs:
       - name: ShooterGame staged build smoke (BuildCookRun)
         shell: cmd
         run: call Engine\Build\BatchFiles\BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.lproj -platform=Win64 -configuration=Development -build -cook -stage -pak -run "-addcmdline=-nullrhi -ExecCmds=bot_fill -ExitAfterFrames=120"
+
+  # The staged Shipping game (BuildCookRun; the Shipping build tree is separate from Development's, so it runs as a job
+  # of its own, in parallel) plays a short bot match from its pak. Shipping logs nothing, so the game's exit code
+  # carries the match's invariants.
+  win64-shipping:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup (pinned third-party downloads)
+        shell: cmd
+        run: call Setup.bat
+      - name: ShooterGame staged Shipping bot match (BuildCookRun)
+        shell: cmd
+        run: call Engine\Build\BatchFiles\BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.lproj -platform=Win64 -configuration=Shipping -build -cook -stage -pak -run "-addcmdline=-nullrhi -benchmark -botmatch -rounds=3 -seed=7"

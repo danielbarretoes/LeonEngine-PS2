@@ -15,6 +15,7 @@
 #include "ShooterCharacter.h"
 #include "ShooterGameMode.h"
 #include "ShooterGameState.h"
+#include "ShooterMatchChecker.h"
 #include "ShooterPlayerState.h"
 #include "Tests/ScopedTestWorld.h"
 #include "UObject/StrongObjectPtr.h"
@@ -267,14 +268,41 @@ bool FShooterGameBotsDefuseTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBotsMatchCheckerTest, "ShooterGame.Bots.MatchCheckerFlagsViolations",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameBotsMatchCheckerTest::RunTest(const FString& Parameters)
+{
+	// A round ended by the rules keeps the invariants; a score the rules did not give is flagged.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpBotMatch(World, 1, 1);
+	GameMode->bBotStop = true;
+	TickUntilLive(World, *GameMode);
+	FShooterMatchChecker Checker;
+	Checker.Tick(*GameMode);
+	GameMode->EndRound(EShooterRoundEndReason::TargetSaved);
+	Checker.Tick(*GameMode);
+	TestEqual("One round", Checker.GetRoundsPlayed(), 1);
+	TestFalse("Kept", Checker.HasViolations());
+	TickFrames(World, 40);
+	TickUntilLive(World, *GameMode);
+	GameMode->EndRound(EShooterRoundEndReason::CTsEliminated);
+	GameMode->GetShooterGameState()->AddTeamScore(EShooterTeam::CT);
+	Checker.Tick(*GameMode);
+	TestEqual("Two rounds", Checker.GetRoundsPlayed(), 2);
+	TestTrue("The extra point is flagged", Checker.HasViolations());
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBotsMatchOnDeLeonTest, "ShooterGame.Bots.MatchOnDeLeon",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
 bool FShooterGameBotsMatchOnDeLeonTest::RunTest(const FString& Parameters)
 {
-	// Ten bots play three rounds of de_leon, headless, seed 5, at 60 Hz: every round ends with a reason and a winner
-	// that matches it, the scores add up, the money stays within [0, 16000], no pawn falls through the floor, the
-	// waypoint graph is there, and the bots fight (kills happen).
+	// Ten bots play three rounds of de_leon, headless, seed 5, at 60 Hz, under FShooterMatchChecker (every round ends
+	// with a reason and a winner that matches it, the scores add up, the money stays within [0, 16000], nobody falls
+	// through the floor); the waypoint graph is there, and the bots fight (kills happen).
 	TStrongObjectPtr<UGameEngine> Engine(NewObject<UGameEngine>());
 	Engine->Init(nullptr);
 	FWorldContext& Context = *Engine->GameInstance->GetWorldContext();
@@ -304,51 +332,24 @@ bool FShooterGameBotsMatchOnDeLeonTest::RunTest(const FString& Parameters)
 	const int32 MaxFrames = RoundsToPlay *
 		static_cast<int32>(
 			(GameMode->FreezeTime + GameMode->RoundTime + 45.0f + GameMode->RoundRestartDelay + 2.0f) * 60.0f);
-	TArray<EShooterRoundEndReason> Reasons;
-	int32 LastRound = 0;
-	bool bMoneyInRange = true;
-	bool bAboveFloor = true;
-	for (int32 Frame = 0; Frame < MaxFrames && Reasons.Num() < RoundsToPlay; ++Frame)
+	FShooterMatchChecker Checker;
+	for (int32 Frame = 0; Frame < MaxFrames && Checker.GetRoundsPlayed() < RoundsToPlay; ++Frame)
 	{
 		Engine->Tick(FrameTime, false);
-		if (State->GetRoundState() == EShooterRoundState::RoundEnd && Reasons.Num() < State->GetRoundNumber() &&
-			LastRound != State->GetRoundNumber())
+		const int32 RoundsBefore = Checker.GetRoundsPlayed();
+		Checker.Tick(*GameMode);
+		if (Checker.GetRoundsPlayed() > RoundsBefore)
 		{
-			LastRound = State->GetRoundNumber();
-			Reasons.Add(State->GetLastRoundEndReason());
-			UE_LOG(LogTemp, Display, TEXT("MatchOnDeLeon: round %d: %s (CT %d - T %d), %d kill(s)"), LastRound,
-				GetRoundEndMessage(State->GetLastRoundEndReason()), State->GetTeamScore(EShooterTeam::CT),
-				State->GetTeamScore(EShooterTeam::T), GameMode->GetNumKills());
-		}
-		if (Frame % 30 == 0)
-		{
-			for (const APlayerState* PlayerState : GameMode->GetGameState().GetPlayerArray())
-			{
-				const AShooterPlayerState* ShooterState = Cast<AShooterPlayerState>(PlayerState);
-				bMoneyInRange &= ShooterState == nullptr ||
-					(ShooterState->GetMoney() >= 0 && ShooterState->GetMoney() <= GameMode->MaxMoney);
-			}
-			for (const AShooterCharacter* Pawn : GetAlive(*World, EShooterTeam::CT))
-			{
-				bAboveFloor &= Pawn->GetActorLocation().Z > -20.0f;
-			}
-			for (const AShooterCharacter* Pawn : GetAlive(*World, EShooterTeam::T))
-			{
-				bAboveFloor &= Pawn->GetActorLocation().Z > -20.0f;
-			}
+			UE_LOG(LogTemp, Display, TEXT("MatchOnDeLeon: round %d: %s (CT %d - T %d), %d kill(s)"),
+				State->GetRoundNumber(), GetRoundEndMessage(State->GetLastRoundEndReason()),
+				State->GetTeamScore(EShooterTeam::CT), State->GetTeamScore(EShooterTeam::T), GameMode->GetNumKills());
 		}
 	}
-	TestEqual("Three rounds played", Reasons.Num(), RoundsToPlay);
-	int32 Decided = 0;
-	for (const EShooterRoundEndReason Reason : Reasons)
+	TestEqual("Three rounds played", Checker.GetRoundsPlayed(), RoundsToPlay);
+	for (const FString& Violation : Checker.GetViolations())
 	{
-		TestTrue("A reason", Reason != EShooterRoundEndReason::None);
-		Decided += GetRoundEndWinner(Reason) != EShooterTeam::None ? 1 : 0;
+		AddError(Violation);
 	}
-	TestEqual(
-		"The scores add up", State->GetTeamScore(EShooterTeam::CT) + State->GetTeamScore(EShooterTeam::T), Decided);
-	TestTrue("The money in range", bMoneyInRange);
-	TestTrue("Nobody fell through the floor", bAboveFloor);
 	TestTrue("The bots fought", GameMode->GetNumKills() > 0);
 	Engine->PreExit();
 	return true;
