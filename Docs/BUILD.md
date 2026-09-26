@@ -97,10 +97,20 @@ Anything else starting with `-` is rejected (`unknown option`).
 
 | | Engine targets (no `-Project`) | Project targets (`-Project=`) |
 | --- | --- | --- |
-| Build tree | `Engine/Intermediate/Build/<Platform>/<Configuration>/` | `<Project>/Intermediate/Build/<Platform>/<Configuration>/` |
+| Build tree | `Engine/Intermediate/Build/<Platform>/<Configuration>/`, one for every target (below) | the same tree |
 | Executable | `Engine/Binaries/<Platform>/` | `<Project>/Binaries/<Platform>/` |
-| Targets in the tree | every engine target allowed on the platform | only the project's targets |
+| Targets configured | every engine target allowed on the platform | only the project's targets |
 | CMake project / solution name | `LeonEngine` | the `.lproj` file name |
+
+**One tree per platform and configuration** (UE: the shared build environment, where the engine's intermediates are
+the same for every game). The engine modules compile to the same commands whatever the project, so every target of a
+platform and configuration builds in `Engine/Intermediate/Build/<Platform>/<Configuration>/`: building another project
+or an engine program reconfigures the tree (LeonBuildTool compares the configure arguments, the project included) and
+compiles only what that target adds (its game modules, its `Launch` with the project's macros). Measured on PS2
+Development, the four targets `Package.bat` builds compiled 705 units in three trees and compile 475 in one. The
+per-project trees of older builds (`<Project>/Intermediate/Build/`) are no longer used and can be deleted. Two builds
+of the same platform and configuration must not run at the same time (they share the tree); `Clean` and `Rebuild`
+remove the whole tree.
 
 The executable is named `<OutputName><Suffix>` in `Development` and `<OutputName>-<Platform>-<Configuration><Suffix>` in
 other configurations. Suffix: `.exe` on Win64, `.elf` on PS2, none on Linux. Examples:
@@ -123,7 +133,7 @@ Other generated folders:
 | Folder | Role | Who writes it |
 | --- | --- | --- |
 | `<Engine\|Project>/Binaries/<Platform>/` | Executables / ELFs | LeonBuildTool |
-| `<Engine\|Project>/Intermediate/Build/<Platform>/<Config>/` | CMake/Ninja tree, reflection, module init | LeonBuildTool |
+| `Engine/Intermediate/Build/<Platform>/<Config>/` | CMake/Ninja tree (every target), reflection, module init | LeonBuildTool |
 | `Engine/Intermediate/Build/HostTools/<Host>/` | LeonHeaderTool | HostTools.cmake |
 | `<Project>/Saved/Logs/` | Desktop log file (`FOutputDeviceFile`) | Launch / LeonCook |
 | `<Project>/Saved/Cooked/<Platform>/` | Cook output | LeonCook |

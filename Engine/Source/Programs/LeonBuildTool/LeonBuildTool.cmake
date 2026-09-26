@@ -10,8 +10,9 @@
 #   -NoDocker                     never re-launch inside the platform's Docker image
 #   -KeepGoing                    keep compiling after errors (ninja -k 0), to see every error at once
 #
-# Build trees: <Project>/Intermediate/Build/<Platform>/<Configuration> for games,
-#              Engine/Intermediate/Build/<Platform>/<Configuration> for engine targets.
+# Build tree: Engine/Intermediate/Build/<Platform>/<Configuration> for every target, games included (UE's shared build
+# environment): the engine modules compile the same whatever the project, so another project or program reconfigures
+# the tree and compiles only what it adds.
 # Platforms with a DOCKER_IMAGE (PS2) re-run this script inside the container when their SDK
 # environment variable (SDK_ENV, e.g. PS2DEV) is not set on the host.
 cmake_minimum_required(VERSION 3.24)
@@ -195,6 +196,28 @@ if(_DockerImage AND NOT _NoDocker)
 	endif()
 endif()
 if(_NeedDocker)
+	# The platform's build image, derived once from the pinned one (DOCKER_FILE: the build tools preinstalled) and
+	# reused by every build after; offline or on failure, the pinned image (DockerEntry.sh installs the tools itself).
+	leon_platform_get(${_Platform} DOCKER_FILE _DockerFile)
+	if(_DockerFile AND EXISTS "${LEON_ROOT_DIR}/${_DockerFile}")
+		file(SHA256 "${LEON_ROOT_DIR}/${_DockerFile}" _DockerFileHash)
+		string(SHA256 _DerivedHash "${_DockerFileHash}${_DockerImage}")
+		string(SUBSTRING "${_DerivedHash}" 0 12 _DerivedHash)
+		string(TOLOWER "leon/${_Platform}-build:${_DerivedHash}" _DerivedImage)
+		execute_process(COMMAND docker image inspect "${_DerivedImage}" RESULT_VARIABLE _InspectResult OUTPUT_QUIET
+			ERROR_QUIET)
+		if(NOT _InspectResult EQUAL 0)
+			message(STATUS "LeonBuildTool: building the ${_Platform} build image ${_DerivedImage} (once)")
+			get_filename_component(_DockerContext "${LEON_ROOT_DIR}/${_DockerFile}" DIRECTORY)
+			execute_process(COMMAND docker build -t "${_DerivedImage}" --build-arg "BASE_IMAGE=${_DockerImage}"
+				-f "${LEON_ROOT_DIR}/${_DockerFile}" "${_DockerContext}" RESULT_VARIABLE _InspectResult)
+		endif()
+		if(_InspectResult EQUAL 0)
+			set(_DockerImage "${_DerivedImage}")
+		else()
+			message(WARNING "LeonBuildTool: the ${_Platform} build image could not be built; using ${_DockerImage}")
+		endif()
+	endif()
 	set(_DockerArgs run --rm -v "${LEON_ROOT_DIR}:/leon" -w /leon)
 	set(_ContainerProject "")
 	if(_ProjectFile)
@@ -232,12 +255,7 @@ if(_NeedDocker)
 endif()
 
 # --- Local build ---
-if(_ProjectFile)
-	get_filename_component(_ProjectDir "${_ProjectFile}" DIRECTORY)
-	set(_BinaryDir "${_ProjectDir}/Intermediate/Build/${_Platform}/${_Configuration}")
-else()
-	set(_BinaryDir "${LEON_ENGINE_DIR}/Intermediate/Build/${_Platform}/${_Configuration}")
-endif()
+set(_BinaryDir "${LEON_ENGINE_DIR}/Intermediate/Build/${_Platform}/${_Configuration}")
 
 if(_Mode STREQUAL "Clean" OR _Mode STREQUAL "Rebuild")
 	message(STATUS "LeonBuildTool: removing ${_BinaryDir}")
@@ -268,9 +286,8 @@ set(_ConfigureArgs
 	"-DLEON_CONFIGURATION=${_Configuration}"
 	"-DCMAKE_BUILD_TYPE=${_BuildType}"
 	"-DLEON_HEADER_TOOL=${_LeonHeaderTool}")
-if(_ProjectFile)
-	list(APPEND _ConfigureArgs "-DLEON_PROJECT_FILE=${_ProjectFile}")
-endif()
+# Always given, empty for an engine target: the tree is shared, and CMake's cache would keep the last project's.
+list(APPEND _ConfigureArgs "-DLEON_PROJECT_FILE=${_ProjectFile}")
 
 set(_Stamp "${_BinaryDir}/LeonBuildTool.args")
 set(_NeedConfigure TRUE)

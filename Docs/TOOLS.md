@@ -265,7 +265,7 @@ Shell equivalents: `Engine/Build/BatchFiles/Linux/Build.sh` (it also builds insi
 
 LeonBuildTool options accepted after the positional arguments: `-Project=<file>`, `-Mode=Build|Clean|Rebuild|GenerateClangDatabase|GenerateProjectFiles|Setup`, `-NoDocker`, `-KeepGoing`.
 
-Outputs go to `<Project or Engine>/Binaries/<Platform>/<Target><suffix>` for Development and `<Target>-<Platform>-<Configuration><suffix>` for other configurations; build trees go to `<Project or Engine>/Intermediate/Build/<Platform>/<Configuration>`.
+Outputs go to `<Project or Engine>/Binaries/<Platform>/<Target><suffix>` for Development and `<Target>-<Platform>-<Configuration><suffix>` for other configurations; every target builds in the one tree of its platform and configuration, `Engine/Intermediate/Build/<Platform>/<Configuration>` ([BUILD.md](BUILD.md#build-trees-and-outputs)).
 
 ### RunPCSX2.ps1
 

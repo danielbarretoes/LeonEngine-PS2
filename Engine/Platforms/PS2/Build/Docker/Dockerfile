@@ -1,8 +1,8 @@
-# Optional local PS2 build image: the pinned ps2dev image plus CMake, Ninja and the host g++ (LeonHeaderTool)
-# preinstalled, so LeonBuildTool does not run `apk add` on every build.
-#   docker build -t leon/ps2dev Engine/Platforms/PS2/Build/Docker
-# Then point LeonBuildPS2.cmake's DOCKER_IMAGE at leon/ps2dev (or keep the default image).
-FROM ghcr.io/ps2dev/ps2dev@sha256:79c24d3762f5cfeee0beabeacc94480fe580d379d3e48a0bfbac681a8895daf6
+# The PS2 build image: the pinned ps2dev image (BASE_IMAGE, LeonBuildPS2.cmake's DOCKER_IMAGE) plus CMake, Ninja and the
+# host g++ (LeonHeaderTool), so a build does not run `apk add` each time. LeonBuildTool builds it on first use and
+# tags it leon/ps2-build:<hash of this file and the base image>; nothing to do by hand.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
 RUN apk add --no-cache cmake ninja make g++ musl-dev
 WORKDIR /leon
 ENV PS2DEV=/usr/local/ps2dev
