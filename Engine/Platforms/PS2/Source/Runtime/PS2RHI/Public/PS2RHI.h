@@ -1,24 +1,38 @@
 #pragma once
 
 #include "CoreTypes.h"
+#include "GSCommandList.h"
+#include "GSTypes.h"
 #include "PS2RHITypes.h"
 #include "PS2Texture.h"
 
 /**
- * PlayStation 2 Graphics Synthesizer immediate-mode API (platform extension RHI).
+ * PlayStation 2 Graphics Synthesizer API (platform extension RHI). Every draw appends to the frame's FGSCommandList,
+ * which WaitVSync sends to the GIF as one packet (Docs/PLANS/ps2-gs-parity.md, P3).
  *
  * Frame flow:
- *   1. InitDisplay — VRAM + CRTC + z-buffer + draw environment (done by FPS2Window)
+ *   1. InitDisplay: VRAM, CRTC and the drawing environment (done by FPS2Window)
  *   2. SetViewTarget / SetDirectionalLight / SetAmbientLightColor
- *   3. ClearColor -> BindMaterial -> DrawBox... -> DrawDebugText
- *   4. WaitVSync — present (FPS2Window::SwapBuffers)
+ *   3. ClearColor -> BindMaterial -> DrawBox... -> DrawDebugText, or Submit for a recorded list
+ *   4. WaitVSync: send the frame, wait for the vertical blank and show it (FPS2Window::SwapBuffers)
  */
 class PS2RHI_API FPS2RHI
 {
 public:
-	static bool InitDisplay(int Width, int Height);
+	/**
+	 * Width x Height, double buffered, with a Z24 buffer. ColorFormat is PSMCT16S (dithered, the engine's) or PSMCT32;
+	 * ReservedVramBytes at the start of the VRAM are left to the caller.
+	 */
+	static bool InitDisplay(
+		int Width, int Height, EGSPixelFormat ColorFormat = EGSPixelFormat::PSMCT16S, uint32 ReservedVramBytes = 0);
 	static void ClearColor(float R, float G, float B);
+	/** Sends the frame, waits for the vertical blank and shows what was drawn. */
 	static void WaitVSync();
+
+	/** Appends a recorded list to the frame; the drawing environment is restored after it. */
+	static void Submit(const FGSCommandList& List);
+	/** A vertex at screen coordinates (pixels, origin at the screen centre) for a list drawn in that environment. */
+	static FGSXYZ ScreenVertex(float X, float Y, uint32 Z = 0);
 
 	// --- View / lights ---
 	static void SetViewTarget(const FPS2ViewTarget& ViewTarget);
@@ -28,11 +42,7 @@ public:
 	// --- Material ---
 	static void BindMaterial(const FPS2Material& Material);
 
-	// --- 2D unlit (screen space, origin at the screen centre) ---
-	static bool DrawUnlitTriangle();
-	static bool DrawUnlitTriangleAt(
-		float CenterX, float CenterY, float Size, unsigned Angle256, float R, float G, float B);
-	static bool DrawUnlitRect(float X0, float Y0, float X1, float Y1, float R, float G, float B);
+	// --- 2D overlays (screen space, origin at the screen centre, no depth test) ---
 
 	/** Alpha-blended overlay rect: color = (src - dst) * alpha + dst, alpha in [0, 1]. */
 	static bool DrawUnlitRectAlpha(float X0, float Y0, float X1, float Y1, float R, float G, float B, float Alpha);
@@ -43,9 +53,6 @@ public:
 	 */
 	static void DrawDebugText(
 		float X, float Y, const char* Text, float R = 0.95f, float G = 0.95f, float B = 0.85f, float Scale = 1.0f);
-
-	/** Validates and draws a cooked LPS2 blob (see Docs/ASSET_FORMATS.md, PS2). */
-	static bool DrawCookedMesh(const void* Data, unsigned Size);
 
 	/** Lit / textured box: Location, rotation (1/256 turn), Scale as half-extents. */
 	static bool DrawBox(float LocationX, float LocationY, float LocationZ, unsigned Yaw256, unsigned Pitch256,

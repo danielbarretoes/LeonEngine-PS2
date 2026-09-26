@@ -1,6 +1,7 @@
 #include "DynamicRHI.h"
 #include "PS2GSContext.h"
 #include "PS2RHI.h"
+#include "PS2SceneState.h"
 
 #include <dma.h>
 #include <graph.h>
@@ -9,51 +10,25 @@
 namespace
 {
 
-	// Textured box (~60 qwords) + batched HUD rects share this packet.
-	constexpr int PacketQwords = 2048;
-
-	bool SetupDrawingEnvironment(Leon::PS2::FPS2GSContext& Gs)
+	/** libgraph's pixel format for an allocation (the Z formats have their own codes). */
+	[[nodiscard]] int GraphPsm(EGSPixelFormat Format)
 	{
-		if (Gs.Packet == nullptr)
-		{
-			Gs.Packet = packet_init(PacketQwords, PACKET_NORMAL);
-			if (Gs.Packet == nullptr)
-			{
-				return false;
-			}
-		}
-
-		qword_t* Q = Gs.Packet->data;
-		Q = draw_setup_environment(Q, 0, &Gs.Frame, &Gs.Z);
-		// draw_setup_environment already programs SCISSOR in window space (0..w/h).
-		// Do not override with a second scissor — wrong coords blank the screen.
-		Q = draw_primitive_xyoffset(Q, 0, Gs.OriginX(), Gs.OriginY());
-		Q = draw_finish(Q);
-
-		dma_channel_send_normal(DMA_CHANNEL_GIF, Gs.Packet->data, Q - Gs.Packet->data, 0, 0);
-		dma_wait_fast();
-		draw_wait_finish();
-		return true;
+		return int(Format);
 	}
 
-	void ClearFramebuffer(Leon::PS2::FPS2GSContext& Gs, int R, int G, int B)
+	/** A full-screen sprite of Color that writes Z 0 (the farthest), whatever the depth test. */
+	void AppendClear(Leon::PS2::FPS2GSContext& Gs, const FGSRGBAQ& Color)
 	{
-		if (Gs.Packet == nullptr)
-		{
-			return;
-		}
-
-		// Disable z-test while clearing so the color fill always lands; z writes 0.
-		qword_t* Q = Gs.Packet->data;
-		Q = draw_disable_tests(Q, 0, &Gs.Z);
-		Q = draw_clear(Q, 0, Gs.OriginX(), Gs.OriginY(), static_cast<float>(Gs.Frame.width),
-			static_cast<float>(Gs.Frame.height), R, G, B);
-		Q = draw_enable_tests(Q, 0, &Gs.Z);
-		Q = draw_finish(Q);
-
-		dma_channel_send_normal(DMA_CHANNEL_GIF, Gs.Packet->data, Q - Gs.Packet->data, 0, 0);
-		dma_wait_fast();
-		draw_wait_finish();
+		const float HalfWidth = float(Gs.Width) * 0.5f;
+		const float HalfHeight = float(Gs.Height) * 0.5f;
+		Leon::PS2::AppendDepthTest(Gs, false);
+		FGSPrim Sprite;
+		Sprite.Type = EGSPrimitive::Sprite;
+		Gs.FrameList.SetPrim(Sprite);
+		Gs.FrameList.SetRGBAQ(Color);
+		Gs.FrameList.AddVertex(Leon::PS2::ScreenVertex(-HalfWidth, -HalfHeight));
+		Gs.FrameList.AddVertex(Leon::PS2::ScreenVertex(HalfWidth, HalfHeight));
+		Leon::PS2::AppendDepthTest(Gs, true);
 	}
 
 	/** PS2 Graphics Synthesizer backend (UE: F<Platform>DynamicRHI). */
@@ -62,18 +37,15 @@ namespace
 	public:
 		virtual bool Init(void* (*)(const char*)) override
 		{
-			Version = "GS";
-			UE_LOG(LogRHI, Log, "PS2 %s", Version);
+			UE_LOG(LogRHI, Log, "PS2 GS");
 			return true;
 		}
 
 		virtual void SetViewport(int32, int32, int32 Width, int32 Height) override
 		{
-			ScreenWidth = Width > 0 ? Width : 640;
-			ScreenHeight = Height > 0 ? Height : 448;
 			if (Leon::PS2::GetGSContext().bReady)
 			{
-				graph_set_screen(0, 0, ScreenWidth, ScreenHeight);
+				graph_set_screen(0, 0, Width > 0 ? Width : 640, Height > 0 ? Height : 448);
 			}
 		}
 
@@ -94,115 +66,109 @@ namespace
 
 		virtual const char* GetAPIVersionString() const override
 		{
-			return Version;
+			return "GS";
 		}
-
-		void Clear(float R, float G, float B)
-		{
-			auto& Gs = Leon::PS2::GetGSContext();
-			const int Rr = static_cast<int>(R * 255.0f) & 0xFF;
-			const int Gg = static_cast<int>(G * 255.0f) & 0xFF;
-			const int Bb = static_cast<int>(B * 255.0f) & 0xFF;
-			graph_set_bgcolor(
-				static_cast<unsigned char>(Rr), static_cast<unsigned char>(Gg), static_cast<unsigned char>(Bb));
-			ClearFramebuffer(Gs, Rr, Gg, Bb);
-		}
-
-	private:
-		const char* Version = "unknown";
-		int32 ScreenWidth = 640;
-		int32 ScreenHeight = 448;
 	};
-
-	FPS2DynamicRHI* GPS2DynamicRHI = nullptr;
 
 } // namespace
 
-bool FPS2RHI::InitDisplay(int Width, int Height)
+bool FPS2RHI::InitDisplay(int Width, int Height, EGSPixelFormat ColorFormat, uint32 ReservedVramBytes)
 {
 	auto& Gs = Leon::PS2::GetGSContext();
-	const int W = Width > 0 ? Width : 640;
-	const int H = Height > 0 ? Height : 448;
+	check(ColorFormat == EGSPixelFormat::PSMCT32 || ColorFormat == EGSPixelFormat::PSMCT16S);
+	Gs.Width = Width > 0 ? Width : 640;
+	Gs.Height = Height > 0 ? Height : 448;
 
 	dma_channel_initialize(DMA_CHANNEL_GIF, nullptr, 0);
 	dma_channel_fast_waits(DMA_CHANNEL_GIF);
 
-	Gs.Frame.width = W;
-	Gs.Frame.height = H;
-	Gs.Frame.mask = 0;
-	Gs.Frame.psm = GS_PSM_32;
-	const int FrameVram = Leon::PS2::AllocateVram(W, H, GS_PSM_32, GRAPH_ALIGN_PAGE);
-	if (FrameVram < 0)
+	// The caller's region first (GSConformance: its scenes' local memory), then two frame buffers and the Z buffer.
+	if (ReservedVramBytes > 0 &&
+		Leon::PS2::AllocateVram(64, int32(ReservedVramBytes / 256), GS_PSM_32, GRAPH_ALIGN_PAGE) < 0)
 	{
-		UE_LOG(LogRHI, Error, "FPS2RHI::InitDisplay: frame VRAM allocate failed");
+		UE_LOG(LogRHI, Error, "FPS2RHI::InitDisplay: cannot reserve %u bytes of VRAM", ReservedVramBytes);
 		return false;
 	}
-	Gs.Frame.address = static_cast<unsigned int>(FrameVram);
-
-	const int ZVram = Leon::PS2::AllocateVram(W, H, GS_ZBUF_32, GRAPH_ALIGN_PAGE);
-	if (ZVram < 0)
+	for (FGSFrame& Frame : Gs.Frames)
 	{
-		UE_LOG(LogRHI, Error, "FPS2RHI::InitDisplay: z-buffer VRAM allocate failed");
+		const int32 Address = Leon::PS2::AllocateVram(Gs.Width, Gs.Height, GraphPsm(ColorFormat), GRAPH_ALIGN_PAGE);
+		if (Address < 0)
+		{
+			UE_LOG(LogRHI, Error, "FPS2RHI::InitDisplay: frame buffer VRAM allocation failed");
+			return false;
+		}
+		Frame.FBP = uint16(Address / 2048);
+		Frame.FBW = uint8((Gs.Width + 63) / 64);
+		Frame.PSM = ColorFormat;
+	}
+	const int32 ZAddress =
+		Leon::PS2::AllocateVram(Gs.Width, Gs.Height, GraphPsm(EGSPixelFormat::PSMZ24), GRAPH_ALIGN_PAGE);
+	if (ZAddress < 0)
+	{
+		UE_LOG(LogRHI, Error, "FPS2RHI::InitDisplay: Z buffer VRAM allocation failed");
 		return false;
 	}
-	Gs.Z.enable = DRAW_ENABLE;
-	Gs.Z.mask = 0;
-	Gs.Z.method = ZTEST_METHOD_GREATER_EQUAL;
-	Gs.Z.zsm = GS_ZBUF_32;
-	Gs.Z.address = static_cast<unsigned int>(ZVram);
+	Gs.ZBuf.ZBP = uint16(ZAddress / 2048);
+	Gs.ZBuf.PSM = EGSPixelFormat::PSMZ24;
 
-	if (graph_initialize(Gs.Frame.address, W, H, GS_PSM_32, 0, 0) < 0)
+	// The CRTC shows Frames[1] while the GS draws Frames[0].
+	Gs.BackBuffer = 0;
+	if (graph_initialize(Gs.Frames[1].FBP * 2048, Gs.Width, Gs.Height, GraphPsm(ColorFormat), 0, 0) < 0)
 	{
 		UE_LOG(LogRHI, Error, "FPS2RHI::InitDisplay: graph_initialize failed");
 		return false;
 	}
-
-	if (!SetupDrawingEnvironment(Gs))
-	{
-		UE_LOG(LogRHI, Error, "FPS2RHI::InitDisplay: draw environment failed");
-		return false;
-	}
-
-	graph_set_bgcolor(0x20, 0x50, 0xC0);
-	ClearFramebuffer(Gs, 0x20, 0x50, 0xC0);
-	graph_enable_output();
-	graph_wait_vsync();
-
 	Gs.bReady = true;
-	UE_LOG(LogRHI, Log, "FPS2RHI::InitDisplay: %dx%d GS + z-buffer ready", W, H);
+	Leon::PS2::AppendDrawEnvironment(Gs);
+	ClearColor(0.125f, 0.3125f, 0.75f);
+	WaitVSync();
+	UE_LOG(LogRHI, Log, "FPS2RHI::InitDisplay: %dx%d, %s color, Z24, double buffered", Gs.Width, Gs.Height,
+		ColorFormat == EGSPixelFormat::PSMCT32 ? "32-bit" : "16-bit dithered");
 	return true;
-}
-
-void FPS2RHI::WaitVSync()
-{
-	if (Leon::PS2::GetGSContext().bReady)
-	{
-		graph_wait_vsync();
-	}
-}
-
-FDynamicRHI* PlatformCreateDynamicRHI()
-{
-	FPS2DynamicRHI* Device = new FPS2DynamicRHI();
-	GPS2DynamicRHI = Device;
-	return Device;
 }
 
 void FPS2RHI::ClearColor(float R, float G, float B)
 {
-	if (GPS2DynamicRHI != nullptr)
+	auto& Gs = Leon::PS2::GetGSContext();
+	if (Gs.bReady)
 	{
-		GPS2DynamicRHI->Clear(R, G, B);
+		AppendClear(Gs, Leon::PS2::UnitColor(R, G, B));
+	}
+}
+
+void FPS2RHI::Submit(const FGSCommandList& List)
+{
+	auto& Gs = Leon::PS2::GetGSContext();
+	if (!Gs.bReady)
+	{
 		return;
 	}
+	Gs.FrameList.Append(List);
+	Leon::PS2::AppendDrawEnvironment(Gs);
+	Leon::PS2::InvalidateBoundTexture();
+}
+
+FGSXYZ FPS2RHI::ScreenVertex(float X, float Y, uint32 Z)
+{
+	return Leon::PS2::ScreenVertex(X, Y, Z);
+}
+
+void FPS2RHI::WaitVSync()
+{
 	auto& Gs = Leon::PS2::GetGSContext();
-	if (Gs.Packet != nullptr)
+	if (!Gs.bReady)
 	{
-		const int Rr = static_cast<int>(R * 255.0f) & 0xFF;
-		const int Gg = static_cast<int>(G * 255.0f) & 0xFF;
-		const int Bb = static_cast<int>(B * 255.0f) & 0xFF;
-		graph_set_bgcolor(
-			static_cast<unsigned char>(Rr), static_cast<unsigned char>(Gg), static_cast<unsigned char>(Bb));
-		ClearFramebuffer(Gs, Rr, Gg, Bb);
+		return;
 	}
+	Leon::PS2::FlushFrame(Gs);
+	graph_wait_vsync();
+	const FGSFrame& Drawn = Gs.Frames[Gs.BackBuffer];
+	graph_set_framebuffer_filtered(Drawn.FBP * 2048, Gs.Width, GraphPsm(Drawn.PSM), 0, 0);
+	Gs.BackBuffer ^= 1;
+	Leon::PS2::AppendDrawEnvironment(Gs);
+}
+
+FDynamicRHI* PlatformCreateDynamicRHI()
+{
+	return new FPS2DynamicRHI();
 }

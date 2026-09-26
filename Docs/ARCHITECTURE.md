@@ -287,7 +287,7 @@ paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable 
 | **EngineSettings** | The project's map, game mode and general settings as config classes | `UGameMapsSettings`, `FGameModeName`, `UGeneralProjectSettings` | all |
 | **ApplicationCore** | Platform application, windows, gamepad input | `GenericApplication`, `FGenericWindow`, `IInputInterface`, `FPlatformApplicationMisc`; desktop `FGLFWApplication`, `FGLFWWindow`; PS2 ext `FPS2Application`, `FPS2Window`, `FPS2InputInterface` | all |
 | **RHI** | Graphics backend interface + opaque GPU handle ids | `RHIInit` / `RHIExit`, `FDynamicRHI`, `GDynamicRHI`, `FRHIGPUMemoryStats`, `FRHITextureId` … | all |
-| **GSCore** | The Graphics Synthesizer's contract (Leon; [plan](PLANS/ps2-gs-parity.md)): its registers and formats as in the GS User's Manual (chapter 7), encoded and decoded, and the command list the renderer fills and every backend consumes (register writes in order, image uploads), limited to what every backend reproduces | `EGSRegister`, `EGSPixelFormat`, `FGSPrim`, `FGSRGBAQ`, `FGSXYZ`, `FGSTex0`, `FGSTex1`, `FGSAlpha`, `FGSTest`, `FGSFrame`, `FGSZBuf`, `FGSDimx`, `GSToFixed4`, `FGSCommandList` | all |
+| **GSCore** | The Graphics Synthesizer's contract (Leon; [plan](PLANS/ps2-gs-parity.md)): its registers and formats as in the GS User's Manual (chapter 7), encoded and decoded, and the command list the renderer fills and every backend consumes (register writes in order, image uploads), limited to what every backend reproduces; the list as a GIF PATH3 packet (PACKED A+D writes, IMAGE transfers); the GS conformance scenes the reference's tests check and GSConformance draws on the PS2 | `EGSRegister`, `EGSPixelFormat`, `FGSPrim`, `FGSRGBAQ`, `FGSXYZ`, `FGSTex0`, `FGSTex1`, `FGSAlpha`, `FGSTest`, `FGSFrame`, `FGSZBuf`, `FGSDimx`, `GSToFixed4`, `FGSCommandList`, `FGSGifPacket`, `GSConformance::GetScenes` | all |
 | **GSReference** (Developer) | A software Graphics Synthesizer ([plan](PLANS/ps2-gs-parity.md), P2): executes an `FGSCommandList` into a 4 MB local memory by the GS User's Manual's rules (drawing rules, texture sampling, CLUTs, fog, pixel tests, blending, dithering, frame buffer writes, transfers); the oracle the Win64 GS emulator and the PS2 backend are compared with | `FGSReferenceRasterizer`, `FGSLocalMemory` | Desktop |
 | **OpenGLDrv** | OpenGL 3.3 RHI device | `FOpenGLDynamicRHI` | Desktop |
 | **PS2RHI** | Graphics Synthesizer immediate-mode API (platform extension module) | `FPS2RHI`, `FPS2Texture`, `FPS2Material`, `FPS2ViewTarget`, `FPS2DirectionalLight` | PS2 |
@@ -447,7 +447,8 @@ calls `RHIExit` before the window goes. The desktop window depends on no RHI mod
 - **PS2RHI**: implements `PlatformCreateDynamicRHI()` and exposes the **static** `FPS2RHI` API used directly
   by PS2 code. Frame contract: `InitDisplay` (done by `FPS2Window`) → `SetViewTarget` /
   `SetDirectionalLight` / `SetAmbientLightColor` → `ClearColor` → `BindMaterial` → `DrawBox` /
-  `DrawCookedMesh` / `DrawUnlit*` → `DrawDebugText` → `WaitVSync` (`FPS2Window::SwapBuffers`). Internals
+  `DrawUnlitRectAlpha` / `Submit` → `DrawDebugText` → `WaitVSync` (`FPS2Window::SwapBuffers`). Every call appends to
+  the frame's `FGSCommandList` (GSCore), which `WaitVSync` sends to the GIF as one packet. Internals
   (`PS2GSContext`, `PS2SceneState`, `PS2Draw3D`, `PS2DrawPrimitives`, `PS2Texture`, `PS2DebugText`) live in
   `Private/`; the private helper namespace is `Leon::PS2`.
 
@@ -924,7 +925,8 @@ UWorld::LineBatcher (FDebugDraw) -----------------------------------------------
 - **Local gates** (run before a push, [SETUP.md](SETUP.md#checks-before-a-push)): `Lint.bat` (G1 format check, G4,
   Win64 builds), `RunTests.bat` (the engine's, ShooterGame's and TestPAL's tests on Win64), `CheckReimport.bat` (G5),
   `SmokeTest.bat` (G6), `BotMatch.bat` (the bot match, twice) and `BuildCookRun.bat` (the staged builds); the root
-  `Package.bat` packages ShooterGame Win64 Shipping and ThirdPerson and TestPAL PS2 Development (Docker). The PS2 ELF
+  `Package.bat` packages ShooterGame Win64 Shipping and ThirdPerson, TestPAL and GSConformance PS2 Development
+  (Docker). The PS2 ELF
   sizes (G3) are measured with `mips64r5900el-ps2-elf-size` in the ps2dev image when a phase is recorded.
 
 ---

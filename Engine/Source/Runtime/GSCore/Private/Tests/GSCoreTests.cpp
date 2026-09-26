@@ -1,5 +1,7 @@
 #include "CoreMinimal.h"
 #include "GSCommandList.h"
+#include "GSConformanceScenes.h"
+#include "GSGifPacket.h"
 #include "GSTypes.h"
 #include "Misc/AutomationTest.h"
 
@@ -332,6 +334,8 @@ bool FGSCoreSupportedSubsetTest::RunTest(const FString& Parameters)
 	TestFalse("A PSMCT16S CLUT", FGSCommandList::IsSupported(Tex0));
 	Tex0.PSM = EGSPixelFormat::PSMT8H;
 	TestFalse("PSMT8H (in a frame buffer's alpha)", FGSCommandList::IsSupported(Tex0));
+	Tex0.PSM = EGSPixelFormat::PSMCT16S;
+	TestTrue("PSMCT16S", FGSCommandList::IsSupported(Tex0));
 	Tex0.PSM = EGSPixelFormat::PSMCT32;
 	Tex0.TW = 11;
 	TestFalse("Wider than 1024", FGSCommandList::IsSupported(Tex0));
@@ -367,6 +371,124 @@ bool FGSCoreSupportedSubsetTest::RunTest(const FString& Parameters)
 	TestTrue("PSMZ24", FGSCommandList::IsSupported(ZBuf));
 	ZBuf.PSM = EGSPixelFormat::PSMCT32;
 	TestFalse("A color format as the Z buffer", FGSCommandList::IsSupported(ZBuf));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSCoreGifPacketTest, "System.GSCore.GifPacket.Layout",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGSCoreGifPacketTest::RunTest(const FString& Parameters)
+{
+	// The GIFtag of the EE User's Manual (7.2): NLOOP bits 0-14, EOP bit 15, FLG bits 58-59, NREG bits 60-63, REGS in
+	// the high 64 bits (A+D = 0xe).
+	TestEqual("PACKED, 3 loops, EOP, 1 register", FGSGifPacket::MakeTag(3, true, EGSGifFormat::Packed, 1),
+		uint64(0x1000000000008003ull));
+	TestEqual("IMAGE, 2 loops", FGSGifPacket::MakeTag(2, false, EGSGifFormat::Image, 0), uint64(0x0800000000000002ull));
+
+	// PRIM and a 4 x 2 PSMCT32 upload (BITBLTBUF, TRXPOS, TRXREG, TRXDIR in PACKED, the pixels in IMAGE), then
+	// TEXFLUSH: three tags, EOP on the last.
+	FGSCommandList List;
+	FGSPrim Prim;
+	Prim.Type = EGSPrimitive::Sprite;
+	List.SetPrim(Prim);
+	TArray<uint8> Pixels;
+	for (uint32 Index = 0; Index < 32; ++Index)
+	{
+		Pixels.Add(uint8(Index));
+	}
+	List.UploadImage(FGSBitBltBuf(), 0, 0, 4, 2, Pixels);
+	List.TexFlush();
+	TArray<uint64> Packet;
+	FGSGifPacket::Build(List, false, Packet);
+	TestEqual("11 quadwords", Packet.Num(), 22);
+	if (Packet.Num() != 22)
+	{
+		return false;
+	}
+	TestEqual("PACKED tag, 5 writes", Packet[0], FGSGifPacket::MakeTag(5, false, EGSGifFormat::Packed, 1));
+	TestEqual("A+D", Packet[1], uint64(0xe));
+	TestEqual("PRIM's value", Packet[2], Prim.Encode());
+	TestEqual("PRIM's address", Packet[3], uint64(EGSRegister::PRIM));
+	TestEqual("TRXDIR last", Packet[11], uint64(EGSRegister::TRXDIR));
+	TestEqual("IMAGE tag, 2 quadwords", Packet[12], FGSGifPacket::MakeTag(2, false, EGSGifFormat::Image, 0));
+	TestEqual("The first pixels, little endian", Packet[14], uint64(0x0706050403020100ull));
+	TestEqual("The last pixels", Packet[17], uint64(0x1f1e1d1c1b1a1918ull));
+	TestEqual("TEXFLUSH's tag has EOP", Packet[18], FGSGifPacket::MakeTag(1, true, EGSGifFormat::Packed, 1));
+	TestEqual("TEXFLUSH", Packet[21], uint64(EGSRegister::TEXFLUSH));
+
+	// FINISH ends the packet and takes EOP; an empty list without it is no packet at all.
+	TArray<uint64> Finished;
+	FGSGifPacket::Build(List, true, Finished);
+	TestEqual("One more tag and write", Finished.Num(), 26);
+	TestEqual("TEXFLUSH's tag without EOP", Finished[18], FGSGifPacket::MakeTag(1, false, EGSGifFormat::Packed, 1));
+	TestEqual("FINISH", Finished[25], uint64(EGSRegister::FINISH));
+	TestEqual("With EOP", Finished[22], FGSGifPacket::MakeTag(1, true, EGSGifFormat::Packed, 1));
+	TArray<uint64> Empty;
+	FGSGifPacket::Build(FGSCommandList(), false, Empty);
+	TestEqual("Empty", Empty.Num(), 0);
+
+	// NLOOP holds 0x7fff: a longer run takes a second tag.
+	FGSCommandList Long;
+	for (uint32 Index = 0; Index < FGSGifPacket::MaxLoops + 1; ++Index)
+	{
+		Long.SetRGBAQ(FGSRGBAQ());
+	}
+	TArray<uint64> LongPacket;
+	FGSGifPacket::Build(Long, false, LongPacket);
+	TestEqual(
+		"First tag full", LongPacket[0], FGSGifPacket::MakeTag(FGSGifPacket::MaxLoops, false, EGSGifFormat::Packed, 1));
+	TestEqual("Second tag", LongPacket[2 + (FGSGifPacket::MaxLoops * 2)],
+		FGSGifPacket::MakeTag(1, true, EGSGifFormat::Packed, 1));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSCoreCommandListAppendTest, "System.GSCore.CommandList.Append",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGSCoreCommandListAppendTest::RunTest(const FString& Parameters)
+{
+	// Appending keeps the order and points the appended HWREG writes at their own image data.
+	TArray<uint8> First;
+	First.Init(1, 16);
+	TArray<uint8> Second;
+	Second.Init(2, 16);
+	FGSCommandList List;
+	List.UploadImage(FGSBitBltBuf(), 0, 0, 2, 2, First);
+	FGSCommandList Other;
+	Other.TexFlush();
+	Other.UploadImage(FGSBitBltBuf(), 0, 0, 2, 2, Second);
+	List.Append(Other);
+	TestEqual("Writes", List.GetWrites().Num(), 11);
+	TestEqual("TEXFLUSH after the first upload", List.GetWrites()[5].Register, EGSRegister::TEXFLUSH);
+	TestEqual("The appended HWREG", List.GetWrites()[10].Value, uint64(1));
+	TestEqual("Its data", List.GetImageData()[1][0], uint8(2));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSCoreConformanceScenesTest, "System.GSCore.ConformanceScenes.Record",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGSCoreConformanceScenesTest::RunTest(const FString& Parameters)
+{
+	// Every scene records within the supported subset (the setters check it) and starts by pointing FRAME_1 at its
+	// frame buffer; the reference rasterizer's tests check what they draw.
+	const TArrayView<const FGSConformanceScene> Scenes = GSConformance::GetScenes();
+	TestEqual("Nine scenes", Scenes.Num(), 9);
+	for (const FGSConformanceScene& Scene : Scenes)
+	{
+		FGSCommandList List;
+		Scene.Build(List);
+		bool bSetsFrame = false;
+		for (const FGSRegisterWrite& Write : List.GetWrites())
+		{
+			if (Write.Register == EGSRegister::FRAME_1)
+			{
+				bSetsFrame = FGSFrame::Decode(Write.Value).PSM == Scene.FrameFormat;
+				break;
+			}
+		}
+		TestTrue(*FString::Printf(TEXT("%s sets its frame buffer"), Scene.Name), bSetsFrame);
+	}
 	return true;
 }
 

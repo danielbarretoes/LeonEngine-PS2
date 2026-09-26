@@ -52,8 +52,8 @@ private:
 	{
 	}
 
-	/** `rgba` must be 16-byte aligned. Uploads to VRAM; does not free `rgba`. */
-	static FPS2Texture CreateFromAlignedRgba(int InWidth, int InHeight, unsigned char* Rgba);
+	/** Allocates the VRAM and appends the upload to the frame's command list (Rgba is copied). */
+	static FPS2Texture CreateFromRgba(int InWidth, int InHeight, const unsigned char* Rgba);
 
 	int Width = 0;
 	int Height = 0;

@@ -1,16 +1,12 @@
 #include "DynamicRHI.h"
 #include "HAL/PlatformMath.h"
+#include "Math/UnrealMathUtility.h"
 #include "PS2GSContext.h"
 #include "PS2RHI.h"
 #include "PS2SceneState.h"
 
-#include <dma.h>
-#include <draw.h>
-#include <draw3d.h>
-#include <draw_tests.h>
 #include <graph.h>
 #include <math3d.h>
-#include <packet.h>
 
 namespace
 {
@@ -103,18 +99,6 @@ namespace
 		return (static_cast<float>(Angle256 & 255u) * TwoPi) / 256.0f;
 	}
 
-	[[nodiscard]] bool Submit(Leon::PS2::FPS2GSContext& Gs, qword_t* End)
-	{
-		if (Gs.Packet == nullptr || End <= Gs.Packet->data)
-		{
-			return false;
-		}
-		dma_channel_send_normal(DMA_CHANNEL_GIF, Gs.Packet->data, End - Gs.Packet->data, 0, 0);
-		dma_wait_fast();
-		draw_wait_finish();
-		return true;
-	}
-
 	void RefreshViewMatrices(const FPS2ViewTarget& Vt)
 	{
 		auto& LocalCache = CachedView();
@@ -142,16 +126,16 @@ namespace
 	}
 
 	// --- Homogeneous clipping -------------------------------------------------------------------
-	// The GS has no clipper and math3d gives W = -Z_eye. draw_convert_xyz maps NDC ±1 onto the
-	// whole 0..4096 GS coordinate range, while the 640×448 screen only spans ~±0.16 × ±0.11 NDC.
+	// The GS has no clipper and math3d gives W = -Z_eye. NDC ±1 maps onto the whole 0..4096 GS
+	// coordinate range (TriangleWriter), while the 640×448 screen only spans ~±0.16 × ±0.11 NDC.
 	// So: clip against the near plane and a ±Guard band (keeps XYZ2 in range), trivially reject
 	// against the visible frustum, and let the GS scissor trim the rest. No triangle is dropped
 	// just because one vertex is off-screen or behind the camera.
 	constexpr float NearW = 1.0f; // = create_view_screen near
 	constexpr float Guard = 0.95f;
 	constexpr float VisibleSlack = 1.05f;
-	// draw_convert_xyz z-bits: max_z = 1<<(bits-1); near (NDC z = 1) → 1<<bits fits ZBUF_32.
-	constexpr int DepthBits = 24;
+	// NDC z in [-1, 1] (near at 1) onto the Z24 buffer's range; the depth test is GEQUAL.
+	constexpr float MaxDepth = 16777215.0f;
 	constexpr int MaxPolyVerts = 3 + 5; // each of the 5 clip planes adds at most one vertex
 
 	enum : unsigned
@@ -182,7 +166,7 @@ namespace
 		float T = 0.0f;
 	};
 
-	/// Visible frustum half-extents in NDC (screen px / 2048, see draw_convert_xyz).
+	/// Visible frustum half-extents in NDC (screen px / 2048, see TriangleWriter).
 	struct VisibleExtents
 	{
 		float X = 0.16f;
@@ -312,32 +296,37 @@ namespace
 		return Count;
 	}
 
-	/// Writes one GIF REGLIST vertex group (RGBAQ [+ ST] + XYZ2) after the perspective divide.
+	/// Appends one vertex (RGBAQ [+ ST] + XYZ2) after the perspective divide.
 	struct TriangleWriter
 	{
-		uint64* Dw = nullptr;
+		FGSCommandList* List = nullptr;
 		bool bTextured = false;
 		int Count = 0;
 
 		void Vertex(const ClipVertex& V)
 		{
 			const float InvW = 1.0f / V.W;
-			VECTOR Ndc __attribute__((aligned(16))) = {V.X * InvW, V.Y * InvW, V.Z * InvW, V.W};
-			VECTOR Col __attribute__((aligned(16))) = {V.R, V.G, V.B, 1.0f};
-			xyz_t Xyz{};
-			color_t Rgb{};
-			draw_convert_xyz(&Xyz, 2048, 2048, DepthBits, 1, reinterpret_cast<vertex_f_t*>(&Ndc));
-			// Alpha 0x80 = 1.0 for GS modulate; never 0 (ATEST discards A==0). Q = 1/W.
-			draw_convert_rgbq(&Rgb, 1, reinterpret_cast<vertex_f_t*>(&Ndc), reinterpret_cast<color_f_t*>(&Col), 0x80);
-			*Dw++ = Rgb.rgbaq;
+			// Modulate treats 0x80 as 1.0: the lit color's 1.0 is 0x80, which leaves headroom for over-bright light.
+			FGSRGBAQ Color;
+			Color.R = uint8(FMath::Clamp(int32(V.R * 128.0f), 0, 255));
+			Color.G = uint8(FMath::Clamp(int32(V.G * 128.0f), 0, 255));
+			Color.B = uint8(FMath::Clamp(int32(V.B * 128.0f), 0, 255));
+			Color.A = 0x80;
+			Color.Q = InvW;
+			List->SetRGBAQ(Color);
 			if (bTextured)
 			{
-				VECTOR St __attribute__((aligned(16))) = {V.S, V.T, 0.0f, 1.0f};
-				texel_t Tex{};
-				draw_convert_st(&Tex, 1, reinterpret_cast<vertex_f_t*>(&Ndc), reinterpret_cast<texel_f_t*>(&St));
-				*Dw++ = Tex.uv;
+				FGSST St;
+				St.S = V.S * InvW;
+				St.T = V.T * InvW;
+				List->SetST(St);
 			}
-			*Dw++ = Xyz.xyz;
+			// NDC ±1 onto the primitive coordinates 0..4096 around the window's 2048 center, Y down.
+			FGSXYZ Xyz;
+			Xyz.X = GSToFixed4(2048.0f + (V.X * InvW * 2048.0f), 16);
+			Xyz.Y = GSToFixed4(2048.0f - (V.Y * InvW * 2048.0f), 16);
+			Xyz.Z = uint32(FMath::Clamp(((V.Z * InvW) + 1.0f) * 0.5f * MaxDepth, 0.0f, MaxDepth));
+			List->AddVertex(Xyz);
 		}
 
 		void Triangle(const ClipVertex& A, const ClipVertex& B, const ClipVertex& C)
@@ -388,7 +377,7 @@ bool FPS2RHI::DrawBox(float LocationX, float LocationY, float LocationZ, unsigne
 	float ScaleX, float ScaleY, float ScaleZ)
 {
 	auto& Gs = Leon::PS2::GetGSContext();
-	if (!Gs.bReady || Gs.Packet == nullptr || ScaleX <= 0.0f || ScaleY <= 0.0f || ScaleZ <= 0.0f)
+	if (!Gs.bReady || ScaleX <= 0.0f || ScaleY <= 0.0f || ScaleZ <= 0.0f)
 	{
 		return false;
 	}
@@ -421,8 +410,8 @@ bool FPS2RHI::DrawBox(float LocationX, float LocationY, float LocationZ, unsigne
 	create_local_screen(LocalScreen, LocalWorld, View.WorldView, View.ViewScreen);
 
 	VisibleExtents Vis{};
-	Vis.X = static_cast<float>(Gs.Frame.width) * 0.5f / 2048.0f * VisibleSlack;
-	Vis.Y = static_cast<float>(Gs.Frame.height) * 0.5f / 2048.0f * VisibleSlack;
+	Vis.X = static_cast<float>(Gs.Width) * 0.5f / 2048.0f * VisibleSlack;
+	Vis.Y = static_cast<float>(Gs.Height) * 0.5f / 2048.0f * VisibleSlack;
 
 	// Clip-space corners; reject the whole box when every corner is outside one plane.
 	VECTOR ClipVerts[CubeVertexCount] __attribute__((aligned(16)));
@@ -522,7 +511,7 @@ bool FPS2RHI::DrawBox(float LocationX, float LocationY, float LocationZ, unsigne
 			vector_copy(Shaded[F], Albedos[F]);
 		}
 	}
-	// GS MODULATE treats 0x80 as 1.0 — scale so convert maps 1.0 → ~128.
+	// Textured faces: TriangleWriter sends 1.0 as 0x80 (MODULATE's 1.0); halved, the texture shows at half brightness.
 	if (bTextured)
 	{
 		for (int F = 0; F < FaceCount; ++F)
@@ -533,32 +522,17 @@ bool FPS2RHI::DrawBox(float LocationX, float LocationY, float LocationZ, unsigne
 		}
 	}
 
-	prim_t Prim{};
-	Prim.type = PRIM_TRIANGLE;
-	// Gouraud so per-vertex Q interpolates (flat flattens Q → texture swim).
-	Prim.shading = PRIM_SHADE_GOURAUD;
-	Prim.mapping = bTextured ? DRAW_ENABLE : DRAW_DISABLE;
-	Prim.fogging = DRAW_DISABLE;
-	Prim.blending = DRAW_DISABLE;
-	// AA edges look like screen-door / flicker when many tris overlap.
-	Prim.antialiasing = DRAW_DISABLE;
-	Prim.mapping_type = PRIM_MAP_ST;
-	Prim.colorfix = PRIM_UNFIXED;
-
-	color_t BaseColor{};
-	BaseColor.r = 0x80;
-	BaseColor.g = 0x80;
-	BaseColor.b = 0x80;
-	BaseColor.a = 0x80;
-	BaseColor.q = 1.0f;
-
-	qword_t* Q = Gs.Packet->data;
-	// HUD / clear may leave TEST in ALLPASS — restore z before 3D.
-	Q = draw_enable_tests(Q, 0, &Gs.Z);
+	// Gouraud so Q interpolates per vertex (flat would take one Q and make the texture swim).
+	FGSPrim Prim;
+	Prim.Type = EGSPrimitive::Triangle;
+	Prim.bGouraud = true;
+	Prim.bTextured = bTextured;
+	Leon::PS2::AppendDepthTest(Gs, true);
+	Gs.FrameList.SetPrim(Prim);
 
 	TriangleWriter Writer{};
+	Writer.List = &Gs.FrameList;
 	Writer.bTextured = bTextured;
-	Writer.Dw = reinterpret_cast<uint64*>(draw_prim_start(Q, 0, &Prim, &BaseColor));
 
 	for (int F = 0; F < FaceCount; ++F)
 	{
@@ -588,23 +562,7 @@ bool FPS2RHI::DrawBox(float LocationX, float LocationY, float LocationZ, unsigne
 	}
 
 	GDraw3DDebug.Emitted += static_cast<unsigned>(Writer.Count);
-	if (Writer.Count == 0)
-	{
-		return true;
-	}
-	if ((reinterpret_cast<UPTRINT>(Writer.Dw) % 16u) != 0u)
-	{
-		*Writer.Dw++ = 0;
-	}
-	Q = draw_prim_end(
-		reinterpret_cast<qword_t*>(Writer.Dw), bTextured ? 3 : 2, bTextured ? DRAW_STQ_REGLIST : DRAW_RGBAQ_REGLIST);
-	Q = draw_finish(Q);
-	const unsigned Used = static_cast<unsigned>(Q - Gs.Packet->data);
-	if (Used > GDraw3DDebug.PacketQwordsPeak)
-	{
-		GDraw3DDebug.PacketQwordsPeak = Used;
-	}
-	return Submit(Gs, Q);
+	return true;
 }
 
 void FPS2RHI::BeginDraw3DStatsFrame()
@@ -615,6 +573,7 @@ void FPS2RHI::BeginDraw3DStatsFrame()
 void FPS2RHI::GetDraw3DStats(FPS2Draw3DStats& Out)
 {
 	Out = GDraw3DDebug;
+	Out.PacketQwordsPeak = Leon::PS2::GetGSContext().PacketQuadwordsPeak;
 }
 
 void FPS2RHI::PrintDraw3DStats(const FPS2Draw3DStats& S)

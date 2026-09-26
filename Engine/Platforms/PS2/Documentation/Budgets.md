@@ -81,6 +81,10 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | 0.20.1 | ThirdPerson | 674 384 | 6 984 | 34 008 | — | measured by the CI of 0.20.1, since removed (its "ELF sizes (G3)" step: `size`, not stripped): P17 to P21 and the audit's Core, CoreUObject and Launch changes (+6 336 bytes of text since P16) |
 | 0.20.1 | BlankProgram | 180 156 | 6 136 | 27 225 | — | +528 bytes of text (Core) |
 | 0.20.1 | TestPAL | 1 458 584 | 6 384 | 39 808 | — | +8 996 bytes of text: the audit's config, archive, linker and pak fixes and their tests (120 tests) |
+| GS P3 | ThirdPerson | 685 842 | 7 056 | 33 984 | 693 992 | measured with an EE toolchain built from ps2toolchain-ee (GCC 15.2.0) and ps2sdk sources, not the pinned image (BlankProgram, unchanged in code, measures 24 bytes less than in 0.20.1). The PS2 RHI draws through `FGSCommandList`: GSCore's register encoders and the GIF packet builder replace libdraw's helpers (+11 458 bytes of text) |
+| GS P3 | GSConformance | 221 511 | 6 300 | 27 488 | 228 788 | new: the GS conformance scenes on the PS2 |
+| GS P3 | BlankProgram | 180 132 | 6 136 | 27 225 | 187 316 | no code change: the toolchain difference |
+| GS P3 | TestPAL | 1 506 600 | 6 380 | 40 384 | 1 514 088 | GSCore and its 8 tests (+48 016 bytes of text) |
 
 **P9 reflection in TestPAL** (`nm -S` over the ELF, bytes):
 
@@ -204,5 +208,6 @@ on the PS2 yet, so these are the numbers a PS2 ShooterGame would have to fit, me
 | GMalloc peak | 3 902 KB (current 3 676 KB at the end) | 31 MB of RAM for everything | includes the desktop object array (131 072 slots × 16 bytes = 2 MB; the PS2's is 96 KB); about 1.9 MB is the world, the map's assets, the actors and the reflection |
 
 The PS2 ELF sizes are measured with the toolchain's `mips64r5900el-ps2-elf-size` in the ps2dev image when a phase is
-recorded (the table above records 0.20.1, measured by the CI of that release, since removed). TestPAL has not run in
+recorded (the table above records 0.20.1, measured by the CI of that release, since removed, and GS P3, measured
+with a toolchain built from source). TestPAL has not run in
 PCSX2 since P16: its GMalloc and name pool numbers wait for the next run on the emulator.

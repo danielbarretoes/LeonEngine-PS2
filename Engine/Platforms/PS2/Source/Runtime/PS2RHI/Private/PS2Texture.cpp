@@ -1,14 +1,10 @@
-#include "HAL/UnrealMemory.h"
+#include "Containers/Array.h"
 #include "PS2GSContext.h"
 #include "PS2RHI.h"
 #include "PS2SceneState.h"
 
-#include <dma.h>
-#include <draw.h>
 #include <graph.h>
 #include <gs_psm.h>
-#include <malloc.h>
-#include <packet.h>
 
 namespace
 {
@@ -21,6 +17,17 @@ namespace
 			P <<= 1;
 		}
 		return P;
+	}
+
+	/** TEX0's TW / TH: the log2 of the power of two that holds Size texels. */
+	[[nodiscard]] uint8 SizeLog2(int Size)
+	{
+		uint8 Log = 0;
+		while ((1 << Log) < Size)
+		{
+			++Log;
+		}
+		return Log;
 	}
 
 	void FillChecker(unsigned char* Rgba, int Size)
@@ -56,46 +63,31 @@ namespace
 		}
 	}
 
-	[[nodiscard]] bool UploadRgba(int InVramAddress, int InBufferWidth, int InWidth, int InHeight, void* RgbaAligned)
-	{
-		packet_t* LocalPacket = packet_init(80, PACKET_NORMAL);
-		if (LocalPacket == nullptr)
-		{
-			return false;
-		}
-		qword_t* Q = LocalPacket->data;
-		Q = draw_texture_transfer(Q, RgbaAligned, InWidth, InHeight, GS_PSM_32, InVramAddress, InBufferWidth);
-		Q = draw_texture_flush(Q);
-		dma_channel_send_chain(DMA_CHANNEL_GIF, LocalPacket->data, Q - LocalPacket->data, 0, 0);
-		dma_wait_fast();
-		packet_free(LocalPacket);
-		return true;
-	}
-
-	packet_t*& BindPacketSlot()
-	{
-		static packet_t* Packet = nullptr;
-		return Packet;
-	}
-
 } // namespace
 
-FPS2Texture FPS2Texture::CreateFromAlignedRgba(int InWidth, int InHeight, unsigned char* Rgba)
+FPS2Texture FPS2Texture::CreateFromRgba(int InWidth, int InHeight, const unsigned char* Rgba)
 {
-	if (!Leon::PS2::GetGSContext().bReady || InWidth <= 0 || InHeight <= 0 || Rgba == nullptr)
+	auto& Gs = Leon::PS2::GetGSContext();
+	const int32 NumBytes = InWidth * InHeight * 4;
+	if (!Gs.bReady || Rgba == nullptr || InWidth <= 0 || InHeight <= 0 || NumBytes % 16 != 0 ||
+		!FGSCommandList::IsSupportedUpload(EGSPixelFormat::PSMCT32, 0, uint16(InWidth)))
 	{
 		return {};
 	}
-	const int BufW = NextPow2(InWidth);
+	// The buffer width is TBW's unit, 64 texels.
+	const int BufW = NextPow2(InWidth < 64 ? 64 : InWidth);
 	const int Addr = Leon::PS2::AllocateVram(BufW, InHeight, GS_PSM_32, GRAPH_ALIGN_BLOCK);
 	if (Addr < 0)
 	{
 		return {};
 	}
-	if (!UploadRgba(Addr, BufW, InWidth, InHeight, Rgba))
-	{
-		return {};
-	}
+	// The upload goes out with the frame, before any draw that samples it.
+	FGSBitBltBuf Destination;
+	Destination.DBP = uint16(Addr / 64);
+	Destination.DBW = uint8(BufW / 64);
+	Destination.DPSM = EGSPixelFormat::PSMCT32;
+	Gs.FrameList.UploadImage(Destination, 0, 0, uint16(InWidth), uint16(InHeight), MakeArrayView(Rgba, NumBytes));
+	Gs.FrameList.TexFlush();
 	return FPS2Texture(InWidth, InHeight, Addr, BufW);
 }
 
@@ -152,106 +144,54 @@ bool FPS2Texture::Valid() const
 
 FPS2Texture FPS2Texture::Create(int InWidth, int InHeight, const unsigned char* Rgba)
 {
-	if (Rgba == nullptr || InWidth <= 0 || InHeight <= 0)
-	{
-		return {};
-	}
-	auto* Aligned = static_cast<unsigned char*>(memalign(16, static_cast<size_t>(InWidth * InHeight * 4)));
-	if (Aligned == nullptr)
-	{
-		return {};
-	}
-	FMemory::Memcpy(Aligned, Rgba, static_cast<SIZE_T>(InWidth * InHeight * 4));
-	FPS2Texture Tex = CreateFromAlignedRgba(InWidth, InHeight, Aligned);
-	free(Aligned);
-	return Tex;
+	return CreateFromRgba(InWidth, InHeight, Rgba);
 }
 
 FPS2Texture FPS2Texture::CreateChecker(int Size)
 {
-	if (Size < 8)
-	{
-		Size = 8;
-	}
-	auto* Rgba = static_cast<unsigned char*>(memalign(16, static_cast<size_t>(Size * Size * 4)));
-	if (Rgba == nullptr)
-	{
-		return {};
-	}
-	FillChecker(Rgba, Size);
-	FPS2Texture Tex = CreateFromAlignedRgba(Size, Size, Rgba);
-	free(Rgba);
-	return Tex;
+	Size = Size < 8 ? 8 : Size;
+	TArray<unsigned char> Rgba;
+	Rgba.SetNumUninitialized(Size * Size * 4);
+	FillChecker(Rgba.GetData(), Size);
+	return CreateFromRgba(Size, Size, Rgba.GetData());
 }
 
 FPS2Texture FPS2Texture::CreateGrid(int Size)
 {
-	if (Size < 8)
-	{
-		Size = 8;
-	}
-	auto* Rgba = static_cast<unsigned char*>(memalign(16, static_cast<size_t>(Size * Size * 4)));
-	if (Rgba == nullptr)
-	{
-		return {};
-	}
-	FillGrid(Rgba, Size);
-	FPS2Texture Tex = CreateFromAlignedRgba(Size, Size, Rgba);
-	free(Rgba);
-	return Tex;
+	Size = Size < 8 ? 8 : Size;
+	TArray<unsigned char> Rgba;
+	Rgba.SetNumUninitialized(Size * Size * 4);
+	FillGrid(Rgba.GetData(), Size);
+	return CreateFromRgba(Size, Size, Rgba.GetData());
 }
 
 void FPS2Texture::Bind() const
 {
-	if (!Valid() || !Leon::PS2::GetGSContext().bReady)
+	auto& Gs = Leon::PS2::GetGSContext();
+	if (!Valid() || !Gs.bReady)
 	{
 		return;
 	}
-
 	auto& Scene = Leon::PS2::GetSceneState();
 	if (Scene.BoundTextureVram == VramAddress)
 	{
 		return;
 	}
 
-	texbuffer_t Texbuf{};
-	Texbuf.width = BufferWidth;
-	Texbuf.psm = GS_PSM_32;
-	Texbuf.address = VramAddress;
-	Texbuf.info.width = draw_log2(Width);
-	Texbuf.info.height = draw_log2(Height);
-	// RGB: ignore texel alpha (ATEST NOTEQUAL 0 can punch holes with bad A).
-	Texbuf.info.components = TEXTURE_COMPONENTS_RGB;
-	Texbuf.info.function = TEXTURE_FUNCTION_MODULATE;
-
-	lod_t Lod{};
-	Lod.calculation = LOD_USE_K;
-	Lod.max_level = 0;
-	Lod.mag_filter = LOD_MAG_LINEAR;
-	Lod.min_filter = LOD_MIN_LINEAR;
-	Lod.l = 0;
-	Lod.k = 0;
-
-	clutbuffer_t Clut{};
-	Clut.storage_mode = CLUT_STORAGE_MODE1;
-	Clut.start = 0;
-	Clut.psm = 0;
-	Clut.load_method = CLUT_NO_LOAD;
-	Clut.address = 0;
-
-	packet_t*& LocalPacket = BindPacketSlot();
-	if (LocalPacket == nullptr)
-	{
-		LocalPacket = packet_init(16, PACKET_NORMAL);
-		if (LocalPacket == nullptr)
-		{
-			return;
-		}
-	}
-	qword_t* Q = LocalPacket->data;
-	Q = draw_texture_sampling(Q, 0, &Lod);
-	Q = draw_texturebuffer(Q, 0, &Texbuf, &Clut);
-	dma_channel_send_normal(DMA_CHANNEL_GIF, LocalPacket->data, Q - LocalPacket->data, 0, 0);
-	dma_wait_fast();
+	FGSTex0 Tex0;
+	Tex0.TBP0 = uint16(VramAddress / 64);
+	Tex0.TBW = uint8(BufferWidth / 64);
+	Tex0.PSM = EGSPixelFormat::PSMCT32;
+	Tex0.TW = SizeLog2(Width);
+	Tex0.TH = SizeLog2(Height);
+	// RGB: the texel alpha is ignored (a bad A would otherwise punch holes).
+	Tex0.bRGBA = false;
+	Tex0.TFX = EGSTextureFunction::Modulate;
+	FGSTex1 Tex1;
+	Tex1.bFixedLOD = true;
+	Tex1.MMAG = EGSFilter::Linear;
+	Tex1.MMIN = EGSFilter::Linear;
+	Gs.FrameList.SetTex1(0, Tex1);
+	Gs.FrameList.SetTex0(0, Tex0);
 	Scene.BoundTextureVram = VramAddress;
 }

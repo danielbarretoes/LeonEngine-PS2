@@ -101,7 +101,7 @@ Gate: un test por registro.
 
 Gate: la referencia coincide con las capturas de PCSX2.
 
-### P3 · Backend PS2 (M)
+### P3 · Backend PS2 (M) — hecha (compilada; falta verla en PCSX2)
 
 - `FPS2RHI` ejecuta un `FGSCommandList` en paquetes GIF por PATH3 (con `packet` y `dma` de PS2SDK).
 - Programa PS2 `GSConformance`: dibuja las escenas de conformidad de P2; `Package.bat` lo compila y empaqueta junto a
@@ -109,6 +109,23 @@ Gate: la referencia coincide con las capturas de PCSX2.
 - `DrawBox` y ThirdPerson se reescriben sobre él, y la API inmediata que queda sin uso se borra.
 
 Gate: el ELF de ThirdPerson entra en su presupuesto (G3) y las escenas de conformidad se ven igual que en P2.
+
+Estado:
+
+- `FGSGifPacket` (GSCore) convierte la lista en un paquete GIF de PATH3: escrituras en PACKED A+D y transferencias en
+  IMAGE, con tags de hasta 0x7fff vueltas, EOP en el último y un `FINISH` final. Tiene tests en el host.
+- `FPS2RHI` acumula el frame en un `FGSCommandList` y `WaitVSync` lo envía por DMA en un solo paquete. `DrawBox`, el
+  rectángulo con alfa, el texto de depuración, el clear y las texturas escriben en esa lista; libdraw ya no se usa
+  para dibujar. `Submit` añade una lista grabada y restaura el entorno de dibujo.
+- El framebuffer es el de P0-3: dos `PSMCT16S` con dithering y `PSMZ24` (2,2 MB a 640x448), con doble buffer.
+- Se borraron `DrawUnlitTriangle`, `DrawUnlitTriangleAt`, `DrawUnlitRect` y `DrawCookedMesh`.
+- Las escenas de conformidad viven en GSCore (`GSConformance::GetScenes`): los tests de la referencia las comprueban y
+  el programa `GSConformance` las dibuja en la PS2 sobre una pantalla de 32 bits. Cada escena configura y limpia su
+  frame y su z, porque en el GS la memoria no empieza a cero.
+- G3: ThirdPerson, TestPAL, BlankProgram y GSConformance compilan para PS2 sin warnings; los tamaños están en
+  [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md) (medidos con un toolchain compilado desde las
+  fuentes de ps2dev, no con la imagen fijada).
+- Pendiente (manual): ver ThirdPerson y `GSConformance` en PCSX2 y guardar las capturas de las escenas como fixtures.
 
 ### P4 · Backend GL, el emulador del GS (L)
 
@@ -139,7 +156,8 @@ Gate: de_leon en la vista previa y en la referencia coinciden, y los tests del m
 
 - Texturas: `PSMT8` y `PSMT4` con CLUT, con cuantización determinista (median cut con orden fijo), redimensionado a
   potencias de dos, cadena de mips limitada e informe de VRAM por mapa.
-- Mallas: `LPS2` v2 (tiras, posiciones cuantizadas, color de vértice), y `DrawCookedMesh` las dibuja de verdad.
+- Mallas: `LPS2` v2 (tiras, posiciones cuantizadas, color de vértice), que el renderer de escena de P5 dibuja en la PS2
+  (`DrawCookedMesh`, que solo validaba la cabecera, se borró en P3).
 - La vista previa de Win64 carga el cook de PS2 (D3).
 - G5 (reimportación estable) cubre también la salida de PS2.
 

@@ -2,11 +2,6 @@
 #include "PS2GSContext.h"
 #include "PS2RHI.h"
 
-#include <dma.h>
-#include <draw2d.h>
-#include <draw_tests.h>
-#include <timer.h>
-
 namespace
 {
 
@@ -240,60 +235,13 @@ namespace
 		}
 	}
 
-	void FillColor(color_t& Out, float InR, float G, float B)
-	{
-		Out.r = static_cast<unsigned char>(static_cast<int>(InR * 255.0f) & 0xFF);
-		Out.g = static_cast<unsigned char>(static_cast<int>(G * 255.0f) & 0xFF);
-		Out.b = static_cast<unsigned char>(static_cast<int>(B * 255.0f) & 0xFF);
-		Out.a = 0x80;
-		Out.q = 1.0f;
-	}
-
-	void FlushRects(Leon::PS2::FPS2GSContext& Gs, qword_t* End)
-	{
-		if (End <= Gs.Packet->data)
-		{
-			return;
-		}
-		dma_channel_send_normal(DMA_CHANNEL_GIF, Gs.Packet->data, End - Gs.Packet->data, 0, 0);
-		dma_wait_fast();
-		draw_wait_finish();
-	}
-
-	/// Append one filled rect; flush when the shared packet is getting full.
-	qword_t* AppendRect(
-		Leon::PS2::FPS2GSContext& Gs, qword_t* Q, float X0, float Y0, float X1, float Y1, const color_t& Color)
-	{
-		// ~8 qwords per rect + finish headroom.
-		constexpr int QwordsPerRect = 10;
-		constexpr int PacketBudget = 2000; // matches enlarged GIF packet
-		if ((Q - Gs.Packet->data) + QwordsPerRect >= PacketBudget)
-		{
-			Q = draw_enable_tests(Q, 0, &Gs.Z);
-			Q = draw_finish(Q);
-			FlushRects(Gs, Q);
-			Q = Gs.Packet->data;
-			Q = draw_disable_tests(Q, 0, &Gs.Z);
-		}
-
-		rect_t Rect{};
-		Rect.color = Color;
-		Rect.v0.x = X0;
-		Rect.v0.y = Y0;
-		Rect.v0.z = 0;
-		Rect.v1.x = X1;
-		Rect.v1.y = Y1;
-		Rect.v1.z = 0;
-		return draw_rect_filled(Q, 0, &Rect);
-	}
-
-	qword_t* AppendGlyphRuns(
-		Leon::PS2::FPS2GSContext& Gs, qword_t* Q, float X, float Y, char Ch, float InCell, const color_t& Color)
+	/** Appends one glyph as a sprite per run of set pixels in each row (the color and PRIM are already set). */
+	void AppendGlyphRuns(FGSCommandList& List, float X, float Y, char Ch, float InCell)
 	{
 		const unsigned char* Rows = GlyphRows(Ch);
 		if (Rows == nullptr)
 		{
-			return Q;
+			return;
 		}
 		for (int Row = 0; Row < 7; ++Row)
 		{
@@ -317,33 +265,29 @@ namespace
 				const float X0 = X + static_cast<float>(RunStart) * InCell;
 				const float X1 = X + static_cast<float>(Col) * InCell;
 				const float Y0 = Y + static_cast<float>(Row) * InCell;
-				Q = AppendRect(Gs, Q, X0, Y0, X1, Y0 + InCell, Color);
+				List.AddVertex(Leon::PS2::ScreenVertex(X0, Y0));
+				List.AddVertex(Leon::PS2::ScreenVertex(X1, Y0 + InCell));
 			}
 		}
-		return Q;
 	}
 
 } // namespace
 
 void FPS2RHI::DrawDebugText(float X, float Y, const char* Text, float InR, float G, float B, float Scale)
 {
-	if (Text == nullptr)
-	{
-		return;
-	}
 	auto& Gs = Leon::PS2::GetGSContext();
-	if (!Gs.bReady || Gs.Packet == nullptr)
+	if (Text == nullptr || !Gs.bReady)
 	{
 		return;
 	}
-
-	color_t Color{};
-	FillColor(Color, InR, G, B);
 	const float LocalCell = Cell * (Scale > 0.0f ? Scale : 1.0f);
 
-	qword_t* Q = Gs.Packet->data;
-	// Overlay: disable z so 3D near-plane wallpaper cannot cover FPS text.
-	Q = draw_disable_tests(Q, 0, &Gs.Z);
+	// Overlay: no depth test, so 3D geometry near the camera cannot cover the text.
+	FGSPrim Sprite;
+	Sprite.Type = EGSPrimitive::Sprite;
+	Leon::PS2::AppendDepthTest(Gs, false);
+	Gs.FrameList.SetPrim(Sprite);
+	Gs.FrameList.SetRGBAQ(Leon::PS2::UnitColor(InR, G, B));
 	float Cx = X;
 	for (const char* P = Text; *P != '\0'; ++P)
 	{
@@ -352,10 +296,8 @@ void FPS2RHI::DrawDebugText(float X, float Y, const char* Text, float InR, float
 		{
 			Ch = FChar::ToUpper(Ch);
 		}
-		Q = AppendGlyphRuns(Gs, Q, Cx, Y, Ch, LocalCell, Color);
+		AppendGlyphRuns(Gs.FrameList, Cx, Y, Ch, LocalCell);
 		Cx += GlyphAdvanceCells * LocalCell;
 	}
-	Q = draw_enable_tests(Q, 0, &Gs.Z);
-	Q = draw_finish(Q);
-	FlushRects(Gs, Q);
+	Leon::PS2::AppendDepthTest(Gs, true);
 }

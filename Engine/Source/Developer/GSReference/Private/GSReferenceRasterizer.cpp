@@ -640,6 +640,7 @@ FColor FGSReferenceRasterizer::FetchTexel(const FContext& Context, uint32 Level,
 		case EGSPixelFormat::PSMCT24:
 			return ExpandColor(Raw & 0xffffffu, EGSPixelFormat::PSMCT24);
 		case EGSPixelFormat::PSMCT16:
+		case EGSPixelFormat::PSMCT16S:
 			return ExpandColor(Raw, EGSPixelFormat::PSMCT16);
 		default:
 		{

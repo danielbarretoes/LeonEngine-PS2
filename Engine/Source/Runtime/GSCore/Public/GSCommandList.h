@@ -81,6 +81,9 @@ public:
 	void UploadImage(const FGSBitBltBuf& Destination, uint16 X, uint16 Y, uint16 Width, uint16 Height,
 		TArrayView<const uint8> Pixels);
 
+	/** Appends Other's writes and image data after this list's. */
+	void Append(const FGSCommandList& Other);
+
 	[[nodiscard]] const TArray<FGSRegisterWrite>& GetWrites() const
 	{
 		return Writes;
@@ -98,8 +101,9 @@ public:
 	/** (Cs - Cd) * C + Cd, (Cs - 0) * C + Cd and (Cs - 0) * C + 0, with C the source alpha or FIX. */
 	[[nodiscard]] static bool IsSupported(const FGSAlpha& Alpha);
 	/**
-	 * PSMCT32, PSMCT24, PSMCT16 or a CLUT format (PSMT8, PSMT4) with a PSMCT32 or PSMCT16 CLUT in CSM1; TW, TH <= 10;
-	 * CLD 0 or 1 (the loads that compare CBP0 / CBP1 are a cache the renderer does not need).
+	 * PSMCT32, PSMCT24, PSMCT16, PSMCT16S (a 16-bit frame buffer read back) or a CLUT format (PSMT8, PSMT4) with a
+	 * PSMCT32 or PSMCT16 CLUT in CSM1; TW, TH <= 10; CLD 0 or 1 (the loads that compare CBP0 / CBP1 are a cache the
+	 * renderer does not need).
 	 */
 	[[nodiscard]] static bool IsSupported(const FGSTex0& Tex0);
 	/** The MIP levels' base pointers set by MIPTBP1 / MIPTBP2 (not MTBA's automatic ones). */

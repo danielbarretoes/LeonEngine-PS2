@@ -58,5 +58,5 @@ struct PS2RHI_API FPS2Draw3DStats
 	uint32 Drop0 = 0; // fully outside the visible frustum
 	uint32 Clipped = 0; // split against near / guard band
 	uint32 Emitted = 0; // triangles sent to the GS
-	uint32 PacketQwordsPeak = 0;
+	uint32 PacketQwordsPeak = 0; // largest frame packet sent to the GIF so far
 };

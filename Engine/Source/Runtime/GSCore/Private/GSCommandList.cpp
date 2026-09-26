@@ -184,6 +184,18 @@ void FGSCommandList::UploadImage(
 	ImageData.Emplace(Pixels.GetData(), Pixels.Num());
 }
 
+void FGSCommandList::Append(const FGSCommandList& Other)
+{
+	const uint64 FirstImage = uint64(ImageData.Num());
+	Writes.Reserve(Writes.Num() + Other.Writes.Num());
+	for (const FGSRegisterWrite& OtherWrite : Other.Writes)
+	{
+		const bool bImage = OtherWrite.Register == EGSRegister::HWREG;
+		Writes.Add({OtherWrite.Register, bImage ? FirstImage + OtherWrite.Value : OtherWrite.Value});
+	}
+	ImageData.Append(Other.ImageData);
+}
+
 void FGSCommandList::Reset()
 {
 	Writes.Reset();
@@ -222,6 +234,7 @@ bool FGSCommandList::IsSupported(const FGSTex0& Tex0)
 		case EGSPixelFormat::PSMCT32:
 		case EGSPixelFormat::PSMCT24:
 		case EGSPixelFormat::PSMCT16:
+		case EGSPixelFormat::PSMCT16S:
 			return true;
 		case EGSPixelFormat::PSMT8:
 		case EGSPixelFormat::PSMT4:

@@ -110,7 +110,7 @@ owns the application and the main window itself.
 Startup (`GuardedMain` → `FEngineLoop::PreInit`):
 
 1. `FPlatformApplicationMisc::CreateApplication()` → `FPS2Application` (initializes the pad).
-2. `MakeWindow()` + `Create(640, 448, LEON_TARGET_NAME)` → GS display, z-buffer.
+2. `MakeWindow()` + `Create(640, 448, LEON_TARGET_NAME)` → GS display (double buffered `PSMCT16S`, `PSMZ24`).
 3. `RHIInit()` → `FPS2DynamicRHI` in `GDynamicRHI`.
 4. `FModuleManager::StartupStaticallyLinkedModules()` — CoreUObject starts the object system (8 192 object slots; the
    game links it through InputCore's reflected `FKey`), InputCore fills `EKeys`, and the game module's
@@ -190,8 +190,8 @@ Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson
 `Build.bat <Name> PS2 <Configuration>`). With `-StageOnly` it stages the config next to the ELF and returns
 without starting PCSX2 (the root `Package.bat` uses it). PCSX2 setup notes: [Docs/SETUP.md](../../../Docs/SETUP.md#pcsx2-notes).
 
-The Core, CoreUObject, Json, Projects and PakFile automation tests run on the EE through the `TestPAL` program (the
-pak tests on paks in memory):
+The Core, CoreUObject, Json, Projects, PakFile and GSCore automation tests run on the EE through the `TestPAL` program
+(the pak tests on paks in memory):
 
 ```powershell
 Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build
@@ -199,7 +199,14 @@ Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build
 
 `UE_LOG` output goes to the EE console; read `%USERPROFILE%\Documents\PCSX2\logs\emulog.txt` for
 `TestPAL: PASSED (113 test(s), 0 failed)` and the `LogTestPAL` reflection / object-array / memory / name-pool
-lines. The root `Package.bat` builds and packages `ThirdPerson` and `TestPAL` for PS2 (Development, in Docker, into
+lines.
+
+The `GSConformance` program (`Source/Programs/GSConformance`) draws GSCore's GS conformance scenes on the GS, three
+times their size in a grid with their names, on a 32-bit screen: what the reference rasterizer's tests check pixel by
+pixel, to compare with and capture in PCSX2 ([ps2-gs-parity](../../../Docs/PLANS/ps2-gs-parity.md), P2 and P3). It
+needs no staged config.
+
+The root `Package.bat` builds and packages `ThirdPerson`, `TestPAL` and `GSConformance` for PS2 (Development, in Docker, into
 `Packages\PS2\`); the ELF sizes (gate G3) are measured with the toolchain's `mips64r5900el-ps2-elf-size` in the ps2dev
 image when a phase is recorded ([Budgets.md](Documentation/Budgets.md)).
 

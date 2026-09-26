@@ -63,6 +63,8 @@ enum class EGSRegister : uint8
 	TRXREG = 0x52,
 	TRXDIR = 0x53,
 	HWREG = 0x54,
+	/** Sets CSR.FINISH once every drawing before it is done (the backend's end-of-list marker, not a setter). */
+	FINISH = 0x61,
 };
 
 /** Pixel storage formats (TEX0.PSM, FRAME.PSM, BITBLTBUF.SPSM / DPSM; the Z formats' low 4 bits are ZBUF.PSM). */

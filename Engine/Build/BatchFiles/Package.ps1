@@ -1,7 +1,7 @@
 # Builds and packages the project for its platforms (UE: RunUAT BuildCookRun -archive), called by the root Package.bat.
 #   Win64: ShooterGame Shipping, built, cooked, staged and paked by BuildCookRun.ps1, copied to Packages\Win64\.
-#   PS2:   ThirdPerson and TestPAL Development ELFs built in the pinned ps2dev image (Docker), with the config that
-#          RunPCSX2.ps1 -StageOnly stages next to them, copied to Packages\PS2\<Name>\.
+#   PS2:   ThirdPerson, TestPAL and GSConformance Development ELFs built in the pinned ps2dev image (Docker), with the
+#          config that RunPCSX2.ps1 -StageOnly stages next to them, copied to Packages\PS2\<Name>\.
 # -NoWin64 / -NoPS2 skip a platform. Packages\ is emptied for the platforms that are packaged and is git-ignored.
 param(
 	[switch]$NoWin64,
@@ -82,6 +82,11 @@ if (-not $NoPS2)
 	& $RunPCSX2 -Program TestPAL -StageOnly
 	if ($LASTEXITCODE -ne 0) { Fail "staging TestPAL's config failed" }
 	Copy-Package (Join-Path $Root "Engine\Binaries\PS2") @("TestPAL.elf", "Engine") (Join-Path $Packages "PS2\TestPAL")
+
+	# The GS conformance scenes (Docs/PLANS/ps2-gs-parity.md): no config to stage.
+	Step "PS2: GSConformance Development"
+	Invoke-Batch (Join-Path $BatchFiles "Build.bat") "GSConformance PS2 Development"
+	Copy-Package (Join-Path $Root "Engine\Binaries\PS2") @("GSConformance.elf") (Join-Path $Packages "PS2\GSConformance")
 }
 
 Step "done: $Packages"
@@ -91,7 +96,8 @@ if (-not $NoWin64)
 }
 if (-not $NoPS2)
 {
-	Write-Host "  PS2:   Packages\PS2\ThirdPerson\ThirdPerson.elf and Packages\PS2\TestPAL\TestPAL.elf"
+	Write-Host "  PS2:   Packages\PS2\ThirdPerson\ThirdPerson.elf, Packages\PS2\TestPAL\TestPAL.elf and"
+	Write-Host "         Packages\PS2\GSConformance\GSConformance.elf"
 	Write-Host "         PCSX2: enable Settings > Advanced > Enable Host Filesystem (the staged config is read through host:),"
 	Write-Host "         then boot the ELF (pcsx2-qt -fastboot -elf <file>). TestPAL prints its result to the EE log."
 }

@@ -402,7 +402,8 @@ The PS2 runtime (`Engine/Platforms/PS2/Source/Runtime/PS2RHI`) draws with the Gr
 
 ### Cooked mesh blob — `LPS2`
 
-`FPS2RHI::DrawCookedMesh(Data, Size)` validates this header:
+The header of the blob (the PS2 runtime reads none yet; the scene renderer on the GS command list will, see
+[ps2-gs-parity](PLANS/ps2-gs-parity.md), P5 and P6):
 
 | Field | Type | Notes |
 | --- | --- | --- |
@@ -411,7 +412,7 @@ The PS2 runtime (`Engine/Platforms/PS2/Source/Runtime/PS2RHI`) draws with the Gr
 | `vertexCount` | `u32` | Must be > 0 |
 | `indexCount` | `u32` | |
 
-Vertex upload is not implemented yet: a valid blob draws a placeholder triangle. No tool produces `LPS2` blobs; the PS2 target platform of the cook does not convert meshes yet.
+No tool produces `LPS2` blobs; the PS2 target platform of the cook does not convert meshes yet.
 
 ### Materials and textures
 

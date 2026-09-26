@@ -187,7 +187,7 @@ The overlay (FPS, RAM, VRAM, resolution, plus the DualShock widget) is described
   profile do not reach games unless that profile is the one in use. An Xbox controller shows up as an SDL device
   (`SDL-0`).
 - **EE console log**: `UE_LOG` output (stdout) and the remaining `printf` diagnostics go to the EE console (for
-  example the `LogThirdPerson` banner, `FPS2RHI::InitDisplay: 640x448 GS + z-buffer ready`, `PS2InputInterface: ...`,
+  example the `LogThirdPerson` banner, `FPS2RHI::InitDisplay: 640x448, 16-bit dithered color, Z24, double buffered`, `PS2InputInterface: ...`,
   `FStatsOverlay` visibility changes). Enable the EE console in PCSX2's
   logging settings (`EnableEEConsole = true` under `[Logging]` in `PCSX2.ini`) and read the PCSX2 log window or
   `logs/emulog.txt` in the PCSX2 user folder. Edit `PCSX2.ini` only while PCSX2 is closed; it rewrites the file on exit.
@@ -249,8 +249,8 @@ The gates run locally, from `Engine\Build\BatchFiles\` on Win64:
 - `SmokeTest.bat` (G6): ShooterGame headless with `bot_fill`, ten pawns, exit code 0.
 - `BotMatch.bat` (10 rounds, seed 7): the headless bot match, played twice with the same result.
 - `BuildCookRun.bat`: the staged builds ([BUILD.md — Staging and Shipping](BUILD.md#staging-and-shipping)).
-- The root `Package.bat` builds and packages ShooterGame Win64 Shipping into `Packages\Win64\` and ThirdPerson and
-  TestPAL PS2 Development (in Docker) into `Packages\PS2\`; `-NoWin64` / `-NoPS2` skip a platform.
+- The root `Package.bat` builds and packages ShooterGame Win64 Shipping into `Packages\Win64\` and ThirdPerson,
+  TestPAL and GSConformance PS2 Development (in Docker) into `Packages\PS2\`; `-NoWin64` / `-NoPS2` skip a platform.
 
 The PS2 ELF sizes (G3) are measured with the toolchain's `mips64r5900el-ps2-elf-size` in the ps2dev image when a phase
 is recorded ([Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md)). TestPAL on PS2 runs in PCSX2

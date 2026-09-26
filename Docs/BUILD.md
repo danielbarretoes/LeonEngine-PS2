@@ -121,9 +121,9 @@ Other generated folders:
 Windows batch files live in `Engine/Build/BatchFiles/` (UE layout); run them from any directory. At the root,
 `Package.bat [-NoWin64] [-NoPS2]` (steps in `Engine/Build/BatchFiles/Package.ps1`) runs `Setup.bat`, then
 `BuildCookRun.bat` for ShooterGame Win64 Shipping (build, cook, stage, pak) and copies the staged build to
-`Packages\Win64\`, then builds ThirdPerson and TestPAL for PS2 Development (Docker Desktop must be running; it checks
-before the Win64 build), stages their config with `RunPCSX2.ps1 -StageOnly` and copies each ELF with it to
-`Packages\PS2\<Name>\`. Double-clicked it pauses at the end (not when `CI` is set, for an unattended run);
+`Packages\Win64\`, then builds ThirdPerson, TestPAL and GSConformance for PS2 Development (Docker Desktop must be running; it
+checks before the Win64 build), stages their config with `RunPCSX2.ps1 -StageOnly` (GSConformance needs none) and
+copies each ELF with it to `Packages\PS2\<Name>\`. Double-clicked it pauses at the end (not when `CI` is set, for an unattended run);
 `Packages\` is git-ignored.
 
 | File | Usage | What it does |
