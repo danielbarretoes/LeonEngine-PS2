@@ -8,11 +8,10 @@
 #include "Misc/AutomationTest.h"
 #include "Primitives.h"
 #include "ScenePrivate.h"
-#include "SceneRenderer.h"
 #include "SceneView.h"
 #include "StaticMeshSceneProxy.h"
 #include "Tests/ScopedTestWorld.h"
-#include "WorldEffectsRenderer.h"
+#include "WorldEffectsGeometry.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -40,7 +39,7 @@ namespace
 		FSceneViewInitOptions Options;
 		Options.ViewActor = ViewActor;
 		const FSceneView View(Options);
-		FSceneRenderer::GatherStaticMeshes(*World.Scene->GetRenderScene(), View, OutWorld, OutViewModel);
+		World.Scene->GetRenderScene()->GatherStaticMeshes(View, OutWorld, OutViewModel);
 	}
 
 	/** True when List holds Component's proxy. */
@@ -138,8 +137,8 @@ bool FRendererImpactMarkPoolRecyclesTest::RunTest(const FString& Parameters)
 	FImpactMark Next;
 	TestEqual("A free slot first", Pool.AddMark(Next), ShortSlot);
 
-	TArray<FWorldEffectsRenderer::FEffectVertex> Vertices;
-	FWorldEffectsRenderer::BuildImpactMarkVertices(Pool, Vertices);
+	TArray<FWorldEffectVertex> Vertices;
+	FWorldEffectsGeometry::BuildImpactMarkVertices(Pool, Vertices);
 	TestEqual("Two triangles a mark", Vertices.Num(), 6 * FImpactMarkPool::MaxMarks);
 	TestEqual("Lifted off the surface", Vertices[0].Position.Z, 0.1f, 1.0e-5f);
 
@@ -148,10 +147,10 @@ bool FRendererImpactMarkPoolRecyclesTest::RunTest(const FString& Parameters)
 	Tracer.Start = FVector(0.0f, 0.0f, 100.0f);
 	Tracer.End = FVector(1000.0f, 0.0f, 100.0f);
 	Tracers.AddTracer(Tracer);
-	FWorldEffectsRenderer::BuildTracerVertices(Tracers, FVector(500.0f, 0.0f, 300.0f), Vertices);
+	FWorldEffectsGeometry::BuildTracerVertices(Tracers, FVector(500.0f, 0.0f, 300.0f), Vertices);
 	TestEqual("A ribbon", Vertices.Num(), 6);
 	float MaxY = 0.0f;
-	for (const FWorldEffectsRenderer::FEffectVertex& Vertex : Vertices)
+	for (const FWorldEffectVertex& Vertex : Vertices)
 	{
 		MaxY = FMath::Max(MaxY, FMath::Abs(Vertex.Position.Y));
 	}

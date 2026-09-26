@@ -419,7 +419,7 @@ int32 UCookCommandlet::StageNonPackageFiles(const ITargetPlatform& TargetPlatfor
 		Add(StageFile(ProjectFile, ProjectOut / FPaths::GetCleanFilename(ProjectFile)) ? 1 : -1);
 	}
 
-	// The shaders the desktop renderer compiles at run time (UE: the /Engine/Shaders virtual folder).
+	// The shaders the desktop GS emulator compiles at run time (UE: the /Engine/Shaders virtual folder).
 	const FString ShaderDir = FPaths::EngineDir() / TEXT("Shaders");
 	TArray<FString> Shaders;
 	IFileManager::Get().FindFilesRecursive(Shaders, *ShaderDir, TEXT("*"), true, false);

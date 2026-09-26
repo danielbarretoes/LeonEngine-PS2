@@ -3,6 +3,7 @@
 #include "CanvasTypes.h"
 #include "Engine/GameViewportClient.h"
 #include "GenericPlatform/GenericWindow.h"
+#include "RendererInterface.h"
 
 namespace
 {
@@ -22,7 +23,7 @@ FViewport::FViewport(UGameViewportClient* InViewportClient, FGenericWindow* InWi
 {
 }
 
-FIntPoint FViewport::GetSizeXY() const
+FIntPoint FViewport::GetWindowSize() const
 {
 	int32 Width = 0;
 	int32 Height = 0;
@@ -31,6 +32,15 @@ FIntPoint FViewport::GetSizeXY() const
 		Window->GetFramebufferSize(Width, Height);
 	}
 	return FIntPoint(Width, Height);
+}
+
+FIntPoint FViewport::GetSizeXY() const
+{
+	const FIntPoint WindowSize = GetWindowSize();
+	const IRendererModule* RendererModule = GetRendererModulePtr();
+	return RendererModule != nullptr && WindowSize.X > 0 && WindowSize.Y > 0
+		? RendererModule->GetRenderTargetSize(WindowSize)
+		: WindowSize;
 }
 
 void FViewport::Draw(bool bShouldPresent)
@@ -49,6 +59,10 @@ void FViewport::Draw(bool bShouldPresent)
 	}
 	if (bShouldPresent)
 	{
+		if (IRendererModule* RendererModule = GetRendererModulePtr())
+		{
+			RendererModule->EndDrawingViewport(GetWindowSize());
+		}
 		Window->SwapBuffers();
 	}
 }

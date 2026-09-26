@@ -1,6 +1,7 @@
 #include "GSSceneRenderer.h"
 
 #include "CanvasTypes.h"
+#include "Debug/DebugDraw.h"
 #include "Effects/WorldEffects.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
@@ -16,14 +17,14 @@
 #include "SkeletalMeshSceneProxy.h"
 #include "StaticMeshResources.h"
 #include "StaticMeshSceneProxy.h"
-#include "WorldEffectsRenderer.h"
+#include "WorldEffectsGeometry.h"
 
 const FLinearColor FGSSceneRenderer::ClearColor(0.08f, 0.09f, 0.11f, 1.0f);
 
 namespace
 {
 
-	/** The ambient share of the albedo (the desktop shader's 0.10 * diffuseColor). */
+	/** The ambient share of the albedo. */
 	constexpr float AmbientShare = 0.10f;
 
 	/** The world effects' mask as the GS samples it: white, the spot in the alpha. */
@@ -159,7 +160,7 @@ void FGSSceneRenderer::TransformSkeletalMesh(const FSkeletalMeshSceneProxy& Prox
 	for (int32 Index = 0; Index < NumVertices; ++Index)
 	{
 		const FSkeletalVertex& Vertex = Vertices[Index];
-		// Linear blend skinning, as the desktop's skinned_lit.vert: the weighted sum of the bones' transforms.
+		// Linear blend skinning: the weighted sum of the bones' transforms.
 		FVector Position = FVector::ZeroVector;
 		FVector Normal = FVector::ZeroVector;
 		float TotalWeight = 0.0f;
@@ -368,6 +369,7 @@ void FGSSceneRenderer::Render(
 	DrawTracers(ViewFamily, View, ViewProjection, Emitter, List, Environment);
 
 	DrawWorldLines(ViewFamily, ViewProjection, Emitter, List);
+	DrawShowFlags(ViewFamily, View, ViewProjection, Emitter, List);
 
 	// The view model pass: Z cleared (the frame buffer masked), then the view model meshes with their projection.
 	if (ViewModelMeshes.Num() > 0)
@@ -396,6 +398,73 @@ void FGSSceneRenderer::Render(
 		}
 	}
 	FrameStats.TrianglesSubmitted = Emitter.GetNumTriangles();
+	FrameStats.RegisterWrites = List.GetWrites().Num();
+	FrameStats.TextureUploads = TextureCache.GetNumUploads();
+}
+
+void FGSSceneRenderer::DrawShowFlags(const FSceneViewFamily& ViewFamily, const FSceneView& View,
+	const FMatrix& ViewProjection, FGSPrimitiveEmitter& Emitter, FGSCommandList& List)
+{
+	const FEngineShowFlags& ShowFlags = ViewFamily.EngineShowFlags;
+	FDebugDraw Lines;
+	// F1: the static meshes' world boxes, depth tested (hidden ones, as blocking volumes, in magenta).
+	if (ShowFlags.Bounds)
+	{
+		constexpr FLinearColor BoxColor(0.2f, 0.95f, 0.35f);
+		constexpr FLinearColor HiddenBoxColor(0.95f, 0.35f, 0.85f);
+		for (const FStaticMeshSceneProxy* Proxy : WorldMeshes)
+		{
+			if (Proxy->GetStaticMesh().HasValidRenderData())
+			{
+				const FBox Box = Proxy->GetWorldBounds();
+				Lines.AddAabb(Box.Min, Box.Max, Proxy->IsShown() ? BoxColor : HiddenBoxColor);
+			}
+		}
+		DrawDebugLines(Lines, ViewProjection, Emitter);
+	}
+	if (!ShowFlags.AxesGizmo)
+	{
+		return;
+	}
+	// F6: 1 m world axes at the origin over everything, and the view's orientation in a square in the bottom-left
+	// corner (the view's axes in its own normalized coordinates, moved into the square).
+	List.SetTest(0, FGSDrawEnvironment::DepthTest(false));
+	Lines.Clear();
+	Lines.AddAxes(FVector::ZeroVector);
+	DrawDebugLines(Lines, ViewProjection, Emitter);
+	constexpr float GizmoSize = 48.0f;
+	constexpr float GizmoMargin = 6.0f;
+	const float Width = float(ViewFamily.RenderTargetSizeX > 0 ? ViewFamily.RenderTargetSizeX : 640);
+	const float Height = float(ViewFamily.RenderTargetSizeY > 0 ? ViewFamily.RenderTargetSizeY : 448);
+	const float CenterX = (((GizmoMargin + (GizmoSize * 0.5f)) / Width) * 2.0f) - 1.0f;
+	const float CenterY = (((GizmoMargin + (GizmoSize * 0.5f)) / Height) * 2.0f) - 1.0f;
+	const FMatrix ToGizmo(FPlane(GizmoSize / Width, 0.0f, 0.0f, 0.0f), FPlane(0.0f, GizmoSize / Height, 0.0f, 0.0f),
+		FPlane(0.0f, 0.0f, 1.0f, 0.0f), FPlane(CenterX, CenterY, 0.5f, 1.0f));
+	Lines.Clear();
+	Lines.AddViewAxes(View.ViewMatrix);
+	DrawDebugLines(Lines, ToGizmo, Emitter);
+	List.SetTest(0, FGSDrawEnvironment::DepthTest(true));
+}
+
+void FGSSceneRenderer::DrawDebugLines(const FDebugDraw& Lines, const FMatrix& ToClip, FGSPrimitiveEmitter& Emitter)
+{
+	const TArray<FDebugDraw::FLineVertex>& Vertices = Lines.GetVertices();
+	if (Vertices.Num() < 2)
+	{
+		return;
+	}
+	Emitter.BeginLines(false);
+	for (int32 Index = 0; Index + 1 < Vertices.Num(); Index += 2)
+	{
+		FGSClipVertex Ends[2];
+		for (int32 End = 0; End < 2; ++End)
+		{
+			const FDebugDraw::FLineVertex& Line = Vertices[Index + End];
+			Ends[End].Clip = ToClip.TransformPosition(Line.Position);
+			Ends[End].Color = FLinearColor(Line.Color.X, Line.Color.Y, Line.Color.Z, 1.0f);
+		}
+		Emitter.AddLine(Ends[0], Ends[1]);
+	}
 }
 
 void FGSSceneRenderer::DrawImpactMarks(const FSceneViewFamily& ViewFamily, const FMatrix& ViewProjection,
@@ -406,8 +475,8 @@ void FGSSceneRenderer::DrawImpactMarks(const FSceneViewFamily& ViewFamily, const
 	{
 		return;
 	}
-	TArray<FWorldEffectsRenderer::FEffectVertex> Vertices;
-	FWorldEffectsRenderer::BuildImpactMarkVertices(World->ImpactMarks, Vertices);
+	TArray<FWorldEffectVertex> Vertices;
+	FWorldEffectsGeometry::BuildImpactMarkVertices(World->ImpactMarks, Vertices);
 	if (Vertices.Num() == 0)
 	{
 		return;
@@ -434,8 +503,8 @@ void FGSSceneRenderer::DrawTracers(const FSceneViewFamily& ViewFamily, const FSc
 	{
 		return;
 	}
-	TArray<FWorldEffectsRenderer::FEffectVertex> Vertices;
-	FWorldEffectsRenderer::BuildTracerVertices(World->Tracers, View.ViewLocation, Vertices);
+	TArray<FWorldEffectVertex> Vertices;
+	FWorldEffectsGeometry::BuildTracerVertices(World->Tracers, View.ViewLocation, Vertices);
 	if (Vertices.Num() == 0)
 	{
 		return;
@@ -451,9 +520,9 @@ void FGSSceneRenderer::DrawTracers(const FSceneViewFamily& ViewFamily, const FSc
 
 bool FGSSceneRenderer::BindEffectsMask(FGSCommandList& List)
 {
-	// The desktop's mask with the spot moved to the alpha (MODULATE takes the colour from the vertex).
+	// The effects' mask with the spot moved to the alpha (MODULATE takes the colour from the vertex).
 	TArray<uint8> Texels;
-	FWorldEffectsRenderer::BuildMaskTexels(Texels);
+	FWorldEffectsGeometry::BuildMaskTexels(Texels);
 	for (int32 Index = 0; Index < Texels.Num(); Index += 4)
 	{
 		Texels[Index + 3] = Texels[Index];
@@ -462,7 +531,7 @@ bool FGSSceneRenderer::BindEffectsMask(FGSCommandList& List)
 		Texels[Index + 2] = 255;
 	}
 	FGSTex0 Mask;
-	if (!TextureCache.BindTexels(&GEffectsMaskKey, FWorldEffectsRenderer::MaskSize, FWorldEffectsRenderer::MaskSize,
+	if (!TextureCache.BindTexels(&GEffectsMaskKey, FWorldEffectsGeometry::MaskSize, FWorldEffectsGeometry::MaskSize,
 			Texels, true, List, Mask))
 	{
 		return false;
@@ -476,8 +545,8 @@ bool FGSSceneRenderer::BindEffectsMask(FGSCommandList& List)
 	return true;
 }
 
-void FGSSceneRenderer::DrawEffectVertices(FGSPrimitiveEmitter& Emitter,
-	const TArray<FWorldEffectsRenderer::FEffectVertex>& Vertices, const FMatrix& ViewProjection, bool bTextured)
+void FGSSceneRenderer::DrawEffectVertices(FGSPrimitiveEmitter& Emitter, const TArray<FWorldEffectVertex>& Vertices,
+	const FMatrix& ViewProjection, bool bTextured)
 {
 	Emitter.BeginTriangles(bTextured, true, false);
 	for (int32 Index = 0; Index + 2 < Vertices.Num(); Index += 3)
@@ -485,7 +554,7 @@ void FGSSceneRenderer::DrawEffectVertices(FGSPrimitiveEmitter& Emitter,
 		FGSClipVertex Corners[3];
 		for (int32 Corner = 0; Corner < 3; ++Corner)
 		{
-			const FWorldEffectsRenderer::FEffectVertex& Effect = Vertices[Index + Corner];
+			const FWorldEffectVertex& Effect = Vertices[Index + Corner];
 			Corners[Corner].Clip = ViewProjection.TransformPosition(Effect.Position);
 			Corners[Corner].Color = Effect.Color;
 			Corners[Corner].U = Effect.TexCoord.X;
@@ -504,23 +573,9 @@ void FGSSceneRenderer::DrawWorldLines(const FSceneViewFamily& ViewFamily, const 
 	{
 		return;
 	}
-	// The frame's debug lines, depth tested; the list is emptied as the desktop renderer does after drawing it.
-	const TArray<FDebugDraw::FLineVertex>& Vertices = World->LineBatcher.GetVertices();
-	if (Vertices.Num() >= 2)
-	{
-		Emitter.BeginLines(false);
-		for (int32 Index = 0; Index + 1 < Vertices.Num(); Index += 2)
-		{
-			FGSClipVertex Ends[2];
-			for (int32 End = 0; End < 2; ++End)
-			{
-				const FDebugDraw::FLineVertex& Line = Vertices[Index + End];
-				Ends[End].Clip = ViewProjection.TransformPosition(Line.Position);
-				Ends[End].Color = FLinearColor(Line.Color.X, Line.Color.Y, Line.Color.Z, 1.0f);
-			}
-			Emitter.AddLine(Ends[0], Ends[1]);
-		}
-	}
+	// The frame's debug lines, depth tested; the batch is emptied once drawn (UE: the line batcher's lines last a
+	// frame).
+	DrawDebugLines(World->LineBatcher, ViewProjection, Emitter);
 	World->LineBatcher.Clear();
 }
 

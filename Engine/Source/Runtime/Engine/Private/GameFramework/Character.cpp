@@ -165,11 +165,6 @@ void ACharacter::Jump()
 	bJumpRequested = true;
 }
 
-void ACharacter::FaceRotation(const FRotator& NewRotation, float DeltaTime)
-{
-	ApplyYaw(NewRotation.Yaw, DeltaTime);
-}
-
 bool ACharacter::IsWalkable(const FHitResult& Hit) const
 {
 	if (!Hit.bBlockingHit)

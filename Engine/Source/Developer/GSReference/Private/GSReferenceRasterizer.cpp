@@ -1,5 +1,7 @@
 #include "GSReferenceRasterizer.h"
 
+#include "GSTexelDecoder.h"
+
 #include <cmath>
 
 namespace
@@ -82,13 +84,6 @@ namespace
 	}
 
 	/** Where CLUT entry Index of an IDTEX8 CSM1 CLUT is in its 16 x 16 rectangle: bits 3 and 4 swapped (2.7.3). */
-	void ClutPosition8(uint32 Index, uint32& OutX, uint32& OutY)
-	{
-		const uint32 Position = (Index & ~0x18u) | ((Index & 0x08u) << 1) | ((Index & 0x10u) >> 1);
-		OutX = Position % 16;
-		OutY = Position / 16;
-	}
-
 	/** The frame buffer's 32-bit pre-conversion write mask as the 16-bit pixel's bits (3.9.5). */
 	uint32 Mask16(uint32 Mask32)
 	{
@@ -182,7 +177,7 @@ void FGSReferenceRasterizer::WriteRegister(const FGSRegisterWrite& Write, const 
 			Contexts[uint8(Write.Register) - uint8(EGSRegister::TEX0_1)].Tex0 = Tex0;
 			if (Tex0.CLD == 1 && IsClutFormat(Tex0.PSM))
 			{
-				LoadClut(Tex0);
+				Clut.Load(Memory, Tex0);
 			}
 			break;
 		}
@@ -269,7 +264,7 @@ void FGSReferenceRasterizer::WriteRegister(const FGSRegisterWrite& Write, const 
 			check(EGSTransferDirection(Value & 3) == EGSTransferDirection::HostToLocal);
 			break;
 		case EGSRegister::HWREG:
-			Transfer(List.GetImageData()[int32(Value)]);
+			Memory.Transfer(BitBltBuf, TrxPos, TrxReg, List.GetImageData()[int32(Value)]);
 			break;
 		default:
 			checkNoEntry();
@@ -359,54 +354,6 @@ void FGSReferenceRasterizer::AddVertex(uint16 X, uint16 Y, uint32 Z, uint8 F, bo
 				Queue.RemoveAt(0);
 			}
 			break;
-	}
-}
-
-void FGSReferenceRasterizer::Transfer(const TArray<uint8>& Data)
-{
-	const uint32 Bits = GSBitsPerPixel(BitBltBuf.DPSM);
-	const uint32 Base = uint32(BitBltBuf.DBP) * 64;
-	const uint32 Width = uint32(BitBltBuf.DBW) * 64;
-	uint64 BitCursor = 0;
-	for (uint32 Y = 0; Y < TrxReg.RRH; ++Y)
-	{
-		for (uint32 X = 0; X < TrxReg.RRW; ++X)
-		{
-			// Little endian, the first 4-bit pixel in the low nibble (manual 4.3).
-			uint32 Value = 0;
-			for (uint32 Bit = 0; Bit < Bits; ++Bit)
-			{
-				const uint64 Source = BitCursor + Bit;
-				Value |= uint32((Data[int32(Source / 8)] >> (Source % 8)) & 1) << Bit;
-			}
-			BitCursor += Bits;
-			const uint32 PixelX = TrxPos.DSAX + X;
-			const uint32 PixelY = TrxPos.DSAY + Y;
-			if (Bits == 24)
-			{
-				// A 24-bit pixel keeps its unused high byte.
-				Value |= Memory.ReadPixel(Base, Width, BitBltBuf.DPSM, PixelX, PixelY) & 0xff000000u;
-			}
-			Memory.WritePixel(Base, Width, BitBltBuf.DPSM, PixelX, PixelY, Value);
-		}
-	}
-}
-
-void FGSReferenceRasterizer::LoadClut(const FGSTex0& Tex0)
-{
-	const bool bIndex8 = Tex0.PSM == EGSPixelFormat::PSMT8;
-	const uint32 NumEntries = bIndex8 ? 256 : 16;
-	const uint32 Base = uint32(Tex0.CBP) * 64;
-	for (uint32 Index = 0; Index < NumEntries; ++Index)
-	{
-		uint32 X = Index % 8;
-		uint32 Y = Index / 8;
-		if (bIndex8)
-		{
-			ClutPosition8(Index, X, Y);
-		}
-		// The temporary buffer takes the entries at CSA * 16 (manual 3.4.7).
-		ClutBuffer[((uint32(Tex0.CSA) * 16) + Index) % 512] = Memory.ReadPixel(Base, 64, Tex0.CPSM, X, Y);
 	}
 }
 
@@ -574,51 +521,14 @@ void FGSReferenceRasterizer::DrawSprite(const FVertex& V0, const FVertex& V1)
 	}
 }
 
-FColor FGSReferenceRasterizer::ExpandColor(uint32 Value, EGSPixelFormat Format) const
-{
-	// 5-bit colors shifted left 3; the alpha from TEXA (manual 3.4.6).
-	if (IsColor16(Format))
-	{
-		const uint8 R = uint8((Value & 0x1f) << 3);
-		const uint8 G = uint8(((Value >> 5) & 0x1f) << 3);
-		const uint8 B = uint8(((Value >> 10) & 0x1f) << 3);
-		const bool bAlphaBit = ((Value >> 15) & 1) != 0;
-		const bool bBlack = (R | G | B) == 0;
-		const uint8 A = bAlphaBit ? TexA.TA1 : (TexA.bAlphaExpandBlack && bBlack ? 0 : TexA.TA0);
-		return FColor(R, G, B, A);
-	}
-	const uint8 R = uint8(Value);
-	const uint8 G = uint8(Value >> 8);
-	const uint8 B = uint8(Value >> 16);
-	const uint8 A = TexA.bAlphaExpandBlack && (R | G | B) == 0 ? 0 : TexA.TA0;
-	return FColor(R, G, B, A);
-}
-
-int32 FGSReferenceRasterizer::Wrap(EGSWrapMode Mode, int32 Coordinate, int32 Size, uint32 Level, uint16 Min, uint16 Max)
-{
-	switch (Mode)
-	{
-		case EGSWrapMode::Repeat:
-			return ((Coordinate % Size) + Size) % Size;
-		case EGSWrapMode::Clamp:
-			return FMath::Clamp(Coordinate, 0, Size - 1);
-		case EGSWrapMode::RegionClamp:
-			return FMath::Clamp(Coordinate, int32(Min >> Level), int32(Max >> Level));
-		case EGSWrapMode::RegionRepeat:
-			// MINU / MINV are the masks, MAXU / MAXV the fixed bits.
-			return (Coordinate & int32(Min)) | int32(Max);
-	}
-	return Coordinate;
-}
-
 FColor FGSReferenceRasterizer::FetchTexel(const FContext& Context, uint32 Level, int32 U, int32 V) const
 {
 	const FGSTex0& Tex0 = Context.Tex0;
 	const int32 Width = FMath::Max(1, (1 << Tex0.TW) >> Level);
 	const int32 Height = FMath::Max(1, (1 << Tex0.TH) >> Level);
 	const FGSClamp& Clamp = Context.Clamp;
-	const int32 WrappedU = Wrap(Clamp.WMS, U, Width, Level, Clamp.MINU, Clamp.MAXU);
-	const int32 WrappedV = Wrap(Clamp.WMT, V, Height, Level, Clamp.MINV, Clamp.MAXV);
+	const int32 WrappedU = FGSTexelDecoder::Wrap(Clamp.WMS, U, Width, Level, Clamp.MINU, Clamp.MAXU);
+	const int32 WrappedV = FGSTexelDecoder::Wrap(Clamp.WMT, V, Height, Level, Clamp.MINV, Clamp.MAXV);
 	uint32 BasePointer = Tex0.TBP0;
 	uint32 BufferWidth = Tex0.TBW;
 	if (Level >= 1 && Level <= 3)
@@ -631,29 +541,8 @@ FColor FGSReferenceRasterizer::FetchTexel(const FContext& Context, uint32 Level,
 		BasePointer = Context.MipTbp2.TBP[Level - 4];
 		BufferWidth = Context.MipTbp2.TBW[Level - 4];
 	}
-	const uint32 Raw = Memory.ReadPixel(
-		BasePointer * 64, BufferWidth * 64, Tex0.PSM, uint32(WrappedU & 0x7ff), uint32(WrappedV & 0x7ff));
-	switch (Tex0.PSM)
-	{
-		case EGSPixelFormat::PSMCT32:
-			return FColor(uint8(Raw), uint8(Raw >> 8), uint8(Raw >> 16), uint8(Raw >> 24));
-		case EGSPixelFormat::PSMCT24:
-			return ExpandColor(Raw & 0xffffffu, EGSPixelFormat::PSMCT24);
-		case EGSPixelFormat::PSMCT16:
-		case EGSPixelFormat::PSMCT16S:
-			return ExpandColor(Raw, EGSPixelFormat::PSMCT16);
-		default:
-		{
-			// Through the CLUT's temporary buffer: IDTEX8 from entry 0, IDTEX4 from CSA * 16 (manual 3.4.7).
-			const uint32 Entry = Tex0.PSM == EGSPixelFormat::PSMT8 ? Raw : (uint32(Tex0.CSA) * 16) + Raw;
-			const uint32 Color = ClutBuffer[Entry % 512];
-			if (Tex0.CPSM == EGSPixelFormat::PSMCT32)
-			{
-				return FColor(uint8(Color), uint8(Color >> 8), uint8(Color >> 16), uint8(Color >> 24));
-			}
-			return ExpandColor(Color, EGSPixelFormat::PSMCT16);
-		}
-	}
+	return FGSTexelDecoder::Decode(
+		Memory, Tex0, BasePointer, BufferWidth, TexA, Clut, uint32(WrappedU), uint32(WrappedV));
 }
 
 FColor FGSReferenceRasterizer::FilterLevel(

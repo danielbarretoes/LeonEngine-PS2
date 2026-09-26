@@ -71,3 +71,34 @@ void FGSLocalMemory::WritePixel(
 			break;
 	}
 }
+
+void FGSLocalMemory::Transfer(
+	const FGSBitBltBuf& BitBltBuf, const FGSTrxPos& TrxPos, const FGSTrxReg& TrxReg, TArrayView<const uint8> Data)
+{
+	const uint32 Bits = GSBitsPerPixel(BitBltBuf.DPSM);
+	const uint32 Base = uint32(BitBltBuf.DBP) * 64;
+	const uint32 Width = uint32(BitBltBuf.DBW) * 64;
+	uint64 BitCursor = 0;
+	for (uint32 Y = 0; Y < TrxReg.RRH; ++Y)
+	{
+		for (uint32 X = 0; X < TrxReg.RRW; ++X)
+		{
+			// Little endian, the first 4-bit pixel in the low nibble (manual 4.3).
+			uint32 Value = 0;
+			for (uint32 Bit = 0; Bit < Bits; ++Bit)
+			{
+				const uint64 Source = BitCursor + Bit;
+				Value |= uint32((Data[int32(Source / 8)] >> (Source % 8)) & 1) << Bit;
+			}
+			BitCursor += Bits;
+			const uint32 PixelX = TrxPos.DSAX + X;
+			const uint32 PixelY = TrxPos.DSAY + Y;
+			if (Bits == 24)
+			{
+				// A 24-bit pixel keeps its unused high byte.
+				Value |= ReadPixel(Base, Width, BitBltBuf.DPSM, PixelX, PixelY) & 0xff000000u;
+			}
+			WritePixel(Base, Width, BitBltBuf.DPSM, PixelX, PixelY, Value);
+		}
+	}
+}

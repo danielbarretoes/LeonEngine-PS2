@@ -87,6 +87,10 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | GS P3 | TestPAL | 1 506 600 | 6 380 | 40 384 | 1 514 088 | GSCore and its 8 tests (+48 016 bytes of text) |
 | E1 | ShooterGame | 1 615 998 | 6 452 | 43 184 | — | new ([ps2-engine](../../../../Docs/PLANS/ps2-engine.md) E1): the gameplay framework (Engine, UMG, SlateCore, AIModule, AnimationCore, PhysicsCore without Jolt, AudioMixer silent, PakFile) and the game, headless. About 85 KB of it is generated reflection code and tables (`Z_Construct_*`, `StaticClass`, `exec*`, `RegisterReflection_*`, `_Statics`); the construction heap and the runtime numbers wait for the botmatch in PCSX2 |
 | E1 | ThirdPerson | 687 890 | 7 056 | 33 984 | — | +2 048 bytes of text: the PS2 launch reads `LeonCommandLine.txt` (`FFileHelper`) |
+| E2 | ShooterGame | 1 683 806 | 7 016 | 43 280 | — | the Renderer on the PS2 ([ps2-engine](../../../../Docs/PLANS/ps2-engine.md) E2, [ps2-gs-parity](../../../../Docs/PLANS/ps2-gs-parity.md) P5): the scene, the GS scene renderer (transform, clipping, skinning and lighting on the EE, the texture cache, the world effects) and `FPS2RendererModule` (+67 808 bytes of text) |
+| E2 | ThirdPerson | 688 354 | 7 056 | 33 984 | — | `FGSDrawEnvironment` (GSCore) sets up the PS2 frame and `FPS2RHI::AllocateTextureArena` (+464 bytes of text) |
+| E2 | GSConformance | 221 967 | 6 300 | 27 488 | — | `FGSDrawEnvironment` (+456 bytes of text) |
+| E2 | TestPAL | 1 506 608 | 6 380 | 40 384 | — | unchanged but for the toolchain's alignment (+8 bytes) |
 
 **P9 reflection in TestPAL** (`nm -S` over the ELF, bytes):
 

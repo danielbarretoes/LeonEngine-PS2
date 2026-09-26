@@ -30,7 +30,7 @@ All identifiers are English (U.S. spelling), **PascalCase**, with no underscores
 | --- | --- | --- |
 | `A` | Classes derived from `AActor` — **only** those | `AActor`, `APawn`, `ACharacter`, `APlayerController`, `AGameModeBase`, `AHUD` |
 | `U` | Classes that are `UObject`s in UE (components, assets, subsystems, widgets, engine objects). CoreUObject's types, the gameplay framework (P12: `UWorld`, `ULevel`, `UGameInstance`, the components), the engine and its settings (P13: `UEngine`, `UGameEngine`, `UGameViewportClient`, `ULocalPlayer`, `UPlayerInput`, `UInputSettings`, `UGameMapsSettings`), the assets (P14: `UTexture2D`, `UStaticMesh`, `UMaterial`, `USkeleton`, `USkeletalMesh`, `UAnimSequence`, `UBlendSpace1D`, `USoundWave`, `UDataAsset`, `UCommandlet`, `UAssetImportData`), the editor module's factories and commandlets (P14: `UFactory`, `UTextureFactory`, `UImportAssetsCommandlet`, `UCookCommandlet`, ...), `UUserWidget` and `UAnimInstance` derive from `UObject`. A few `U` types are still **naming only** until their phase: `UNavigationSystem` and the behavior tree lite (`UBehaviorTree`, `UBTNode`, `UBlackboardComponent`) | `UObject`, `UClass`, `UWorld`, `ULevel`, `UActorComponent`, `UCharacterMovementComponent`, `UUserWidget`, `UGameEngine`, `UTexture2D` |
-| `F` | Every other class or struct | `FEngineLoop`, `FTicker`, `FPaths`, `FSceneRenderer`, `FPhysScene`, `FHitResult`, `FPS2RHI` |
+| `F` | Every other class or struct | `FEngineLoop`, `FTicker`, `FPaths`, `FGSSceneRenderer`, `FPhysScene`, `FHitResult`, `FPS2RHI` |
 | `T` | Class templates | `TArray`, `TMap`, `TSharedPtr`, `TDelegate`, `TOptional` |
 | `E` | Enums (prefer `enum class`, sized when stored) | `EKeys`, `EPhysicsBackend`, `EMovementMode`, `ECollisionChannel` |
 | `I` | Abstract interfaces (no data members) | `IModuleInterface`, `IInputInterface`, `IPhysicsBackend` |
@@ -363,7 +363,7 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 | Map source nodes (Blender objects) | the map importer's prefixes ([LEVELS.md](LEVELS.md#naming-conventions)): `UCX_<Mesh>_<NN>`, `COL_`, `Clip_`, `PlayerStart_<Tag>`, `NavWaypoint`, a project's own (ShooterGame: `BombSite_<A\|B>`, `BuyZone_<CT\|T>`) | `UCX_CrateStack_01`, `PlayerStart_CT`, `BombSite_A` |
 | Source art scripts | a script that builds source art in Blender sits next to its output, `snake_case.py`, Blender's modules only, run headless (`blender --background --factory-startup --python <script>`); it saves the `.blend` and exports the `.glb` | `Game/ShooterGame/SourceArt/Maps/make_de_leon.py` |
 | Source art licenses | a project's `SourceArt/LICENSES.md` lists every file with its origin and license (ShooterGame: CC0 only) | `Game/ShooterGame/SourceArt/LICENSES.md` |
-| GLSL shaders (`Engine/Shaders`) | snake_case | `blinn_phong.vert`, `shadow_depth.frag` |
+| GLSL shaders (`Engine/Shaders`) | snake_case | `gs_emulator.vert`, `gs_present.frag` |
 
 File formats: [ASSET_FORMATS.md](ASSET_FORMATS.md).
 

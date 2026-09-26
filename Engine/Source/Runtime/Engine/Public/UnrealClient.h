@@ -16,8 +16,10 @@ class ENGINE_API FViewport
 public:
 	FViewport(UGameViewportClient* InViewportClient, FGenericWindow* InWindow);
 
-	/** The framebuffer size in pixels (UE: GetSizeXY). */
+	/** The size the renderer draws at, in pixels (UE: GetSizeXY, the render target's): the GS frame, 640 x 448. */
 	[[nodiscard]] FIntPoint GetSizeXY() const;
+	/** The window's framebuffer size in pixels, where the frame is shown. */
+	[[nodiscard]] FIntPoint GetWindowSize() const;
 
 	/** The window (Leon). */
 	[[nodiscard]] FGenericWindow* GetWindow() const

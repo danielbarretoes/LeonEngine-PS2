@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GSCommandList.h"
 #include "GSLocalMemory.h"
+#include "GSTexelDecoder.h"
 #include "GSTypes.h"
 
 /**
@@ -102,9 +103,6 @@ private:
 
 	void WriteRegister(const FGSRegisterWrite& Write, const FGSCommandList& List);
 	void AddVertex(uint16 X, uint16 Y, uint32 Z, uint8 F, bool bKick);
-	void Transfer(const TArray<uint8>& Data);
-	/** Loads the CLUT into the temporary buffer (CLD = 1). */
-	void LoadClut(const FGSTex0& Tex0);
 
 	void DrawPoint(const FVertex& Vertex);
 	void DrawLine(const FVertex& From, const FVertex& To);
@@ -118,11 +116,6 @@ private:
 	/** One level's texel at integer texel coordinates, wrapped, converted to RGBA. */
 	[[nodiscard]] FColor FetchTexel(const FContext& Context, uint32 Level, int32 U, int32 V) const;
 	[[nodiscard]] FColor FilterLevel(const FContext& Context, uint32 Level, double U, double V, bool bBilinear) const;
-	/** Wraps one texel coordinate of a level of Size texels by the wrap mode (region parameters shifted by Level). */
-	[[nodiscard]] static int32 Wrap(
-		EGSWrapMode Mode, int32 Coordinate, int32 Size, uint32 Level, uint16 Min, uint16 Max);
-	/** A 16-bit or 24-bit color with TEXA's alpha. */
-	[[nodiscard]] FColor ExpandColor(uint32 Value, EGSPixelFormat Format) const;
 
 	[[nodiscard]] const FContext& GetContext() const
 	{
@@ -148,8 +141,8 @@ private:
 	FGSTrxPos TrxPos;
 	FGSTrxReg TrxReg;
 
-	/** The CLUT temporary buffer: 256 32-bit or 512 16-bit entries (manual 3.4.7). */
-	uint32 ClutBuffer[512] = {};
+	/** The CLUT temporary buffer (FGSTexelDecoder decodes through it). */
+	FGSClutBuffer Clut;
 
 	/** The vertex queue of the current primitive, and the fan's first vertex. */
 	TArray<FVertex> Queue;

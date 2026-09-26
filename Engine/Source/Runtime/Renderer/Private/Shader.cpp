@@ -270,6 +270,21 @@ void FShader::SetInt(const ANSICHAR* Name, int32 Value) const
 	glUniform1i(UniformLocation(Name), Value);
 }
 
+void FShader::SetIVec2(const ANSICHAR* Name, int32 X, int32 Y) const
+{
+	glUniform2i(UniformLocation(Name), X, Y);
+}
+
+void FShader::SetIVec3(const ANSICHAR* Name, int32 X, int32 Y, int32 Z) const
+{
+	glUniform3i(UniformLocation(Name), X, Y, Z);
+}
+
+void FShader::SetIVec4(const ANSICHAR* Name, int32 X, int32 Y, int32 Z, int32 W) const
+{
+	glUniform4i(UniformLocation(Name), X, Y, Z, W);
+}
+
 bool FShader::BindUniformBlock(const ANSICHAR* BlockName, uint32 BindingPoint) const
 {
 	if (!Valid() || BlockName == nullptr)

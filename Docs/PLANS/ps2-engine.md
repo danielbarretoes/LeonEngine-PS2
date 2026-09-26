@@ -88,7 +88,7 @@ Estado:
   unwinder de libgcc), pero la recursión solo se ve en ejecución.
 - Pendiente (manual): el botmatch en PCSX2 dos veces, y los números de `Botmatch budget:` en Budgets.md.
 
-### E2 · Renderer de escena en PS2 (L) — es GS P5
+### E2 · Renderer de escena en PS2 (L) — es GS P5; compila, falta verla en PCSX2
 
 - Lo que describe P5 del plan de paridad (transformación, clipping, skinning e iluminación por vértice en C++ que
   generan un `FGSCommandList`), con el Renderer ya compilando en todas las plataformas (D3).
@@ -100,6 +100,24 @@ Estado:
 
 Gate: de_leon se ve en PCSX2 con el jugador, los bots, los tracers y el HUD. La lista de un frame fijo coincide con
 la referencia dentro de la tolerancia de GS P2. El botmatch headless no cambia.
+
+Estado:
+
+- El Renderer compila en todas las plataformas. El `FGSSceneRenderer` es común. En PS2, `Renderer_PS2.Build.cmake`
+  añade `FPS2RendererModule`, que graba el view family y el canvas contra `FPS2RHI::GetDrawEnvironment()` y los añade
+  al frame con `FPS2RHI::Submit`. Las texturas van a la arena de VRAM que deja la pantalla
+  (`FPS2RHI::AllocateTextureArena`: desde la página 280, 1,8 MB).
+- LeonBuildTool añade el Renderer, igual que Engine y PakFile, a todo target compilado contra el motor.
+- Se adelantó GS P4: el escritorio ya no tiene renderer GL propio, así que la vista previa es lo que dibuja la PS2.
+- Texturas: se suben como `PSMCT32` con la caché de GS P5 hasta el cook de E3.
+- Verificado aquí: ShooterGame, ThirdPerson, TestPAL y GSConformance compilan para PS2 sin warnings.
+  - ShooterGame.elf: 1,68 MB de código.
+  - Tests del motor: 396 en Linux; 395 con `-nodisplay`.
+  - Tests de ShooterGame: 42.
+  - TestPAL: 128.
+  - Botmatch en Linux: CT 6 - T 4, 72 bajas, igual que antes.
+  - `System.Renderer.GSEmulator.SceneFrame` compara el frame del renderer con la referencia.
+- Pendiente (manual): ver de_leon en PCSX2 (`BuildCookRun ... -platform=PS2 ... -run` sin `-nullrhi`).
 
 ### E3 · Cook y datos de PS2 (L) — es GS P6
 

@@ -3,7 +3,7 @@
 A C++ game engine that follows the **Unreal Engine 4.27** source layout, module architecture and Epic naming
 conventions, built with CMake through **LeonBuildTool** (our UnrealBuildTool).
 
-- **Win64, the development and editor platform**: the engine modules (`Core`, `Engine`, `Renderer` on OpenGL 3.3, `UMG`,
+- **Win64, the development and editor platform**: the engine modules (`Core`, `Engine`, `Renderer`: the PS2 GS's frame, emulated on OpenGL 3.3, `UMG`,
   `AIModule`, ...), the `LeonGame` game executable, the `LeonCook` command-line editor (import, reimport, cook
   commandlets), the `LeonPak` pak tool, `BuildCookRun.bat` (a Shipping build staged with its content in one `.lpak`) and
   the `LeonAutomationTests` test runner. The world uses UE's space: X forward, Y right, Z up, left-handed,

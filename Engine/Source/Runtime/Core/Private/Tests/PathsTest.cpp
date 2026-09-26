@@ -85,7 +85,7 @@ bool FPathsDirectoriesTest::RunTest(const FString& Parameters)
 	TestFalse("Engine dir is absolute", FPaths::IsRelative(FPaths::EngineDir()));
 
 	// The renderer's shaders sit under Engine/Shaders (UE: the /Engine/Shaders virtual folder).
-	TestTrue("Engine shaders", FPaths::FileExists(FPaths::Combine(FPaths::EngineDir(), "Shaders/blinn_phong.vert")));
+	TestTrue("Engine shaders", FPaths::FileExists(FPaths::Combine(FPaths::EngineDir(), "Shaders/gs_emulator.vert")));
 	#endif
 	return true;
 }

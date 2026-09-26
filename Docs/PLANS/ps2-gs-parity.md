@@ -127,7 +127,7 @@ Estado:
   fuentes de ps2dev, no con la imagen fijada).
 - Pendiente (manual): ver ThirdPerson y `GSConformance` en PCSX2 y guardar las capturas de las escenas como fixtures.
 
-### P4 · Backend GL, el emulador del GS (L)
+### P4 · Backend GL, el emulador del GS (L) — hecha
 
 - Un FBO de 640x448 con el formato de P0-3. Texturas de índices (`R8UI`) más una textura de paleta, con el muestreo y
   el bilineal sobre colores hechos en el shader.
@@ -140,7 +140,27 @@ Estado:
 
 Gate: GL contra la referencia dentro de la tolerancia en todas las escenas de conformidad.
 
-### P5 · Renderer de escena sobre el command list (L)
+Estado:
+
+- `FGSOpenGLEmulator` (Renderer, `Private/GSEmulator`) ejecuta el `FGSCommandList` en un FBO de 640x448 con la
+  disposición de VRAM de la PS2. Monta las primitivas en la CPU como la referencia, cubre los píxeles con la regla
+  top-left (muestra en el centro más 1/256) y escribe `gl_FragDepth` exacto. Las funciones de textura, TCC, la niebla,
+  el alfa test (AFAIL en una segunda pasada), el dithering y la truncación a 16 bits van en el shader, y el blend por
+  la función fija con dual-source.
+- Desviación: las texturas no son `R8UI` más paleta. `FGSTexelDecoder` (GSCore, compartido con la referencia) las
+  decodifica de la memoria local emulada, y el shader las muestrea texel a texel (wrap, región, point y bilineal
+  del GS). El resultado es el mismo y hay un solo decodificador para la referencia y el emulador.
+- Test `System.Renderer.GSEmulator.Conformance` (NonNullRHI; `LeonAutomationTests -nodisplay` lo salta): 8 de 9
+  escenas sin ningún píxel a más de 2 niveles. `BlendAndWrite` tiene 2 píxeles distintos, los de `COLCLAMP` apagado,
+  que no se emula.
+- El escritorio dibuja solo por este camino. Se borraron el renderer GL (shadow map, espejo planar, `FGPUPassTimer`,
+  la caché de recursos de GPU, los shaders `blinn_phong`/`shadow_depth`/...), `MakeReflectMatrix`,
+  `FitLightSpaceMatrix` y la configuración `r.ShadowMapResolution` / `r.PlanarReflectionScale`. La ventana por defecto
+  es de 1280x896, el frame a escala 2.
+- Desviación: ThirdPerson no se porta a Win64. Sigue siendo un juego de PS2 sin motor (`WITH_ENGINE=0`), y la prueba
+  de extremo a extremo es ShooterGame, que dibuja con el mismo renderer en los dos lados (E2).
+
+### P5 · Renderer de escena sobre el command list (L) — hecha (falta verla en PCSX2)
 
 - `FSceneRenderer` pasa a generar un `FGSCommandList`:
   - Culling por frustum y la transformación, el clipping, el skinning y la iluminación de D2.
@@ -151,6 +171,24 @@ Gate: GL contra la referencia dentro de la tolerancia en todas las escenas de co
 - La iluminación horneada en color de vértice llega con el importador de mapas (LeonEd).
 
 Gate: de_leon en la vista previa y en la referencia coinciden, y los tests del motor pasan.
+
+Estado:
+
+- `FGSSceneRenderer` (Renderer, `Private/GS`) reemplaza a `FSceneRenderer` en todas las plataformas. Hace en la CPU
+  la transformación, el clipping (near, far y una guard band de 2000 píxeles), el culling de caras traseras, el
+  skinning y la iluminación Lambert por vértice. Dibuja los opacos, los translúcidos de atrás adelante sin escribir Z,
+  las marcas de impacto (lerp con un sesgo de Z), los tracers (aditivos), las líneas de depuración, el view model
+  sobre un Z limpio (FBMSK) y el canvas.
+- `FGSTextureCache` sube las texturas en potencias de dos (8..256) a páginas enteras de la arena de VRAM, y la
+  reinicia cuando se llena.
+- `FGSDrawEnvironment` (GSCore) es el entorno común: los buffers, el tamaño, el mapeo de píxeles y el test de Z.
+- Tests: el emisor (mapeo y culling), la caché, un cubo iluminado y el canvas contra la referencia, y
+  `System.Renderer.GSEmulator.SceneFrame`: un frame del renderer (mallas texturizadas, planas y translúcidas, dos
+  luces, un suelo que cruza el plano near) igual en el emulador y en la referencia dentro de un paso de 5 bits, salvo
+  28 píxeles.
+- Desviaciones: no hay tests de golden view contra la referencia para de_leon; de_leon se comprobó a ojo contra la
+  captura GL anterior (la misma geometría, sin sombras ni especular). La iluminación horneada en color de vértice
+  queda fuera (el importador de mapas no la produce).
 
 ### P6 · El cook de PS2 de verdad (L)
 
@@ -170,9 +208,8 @@ Gate: el cook es reproducible byte a byte, y el informe de VRAM de de_leon cabe 
 - Documentación: ARCHITECTURE (el nivel GS), LeonMapping (`FGSCommandList` frente a `FRHICommandList`), Budgets
   (VRAM y paquetes) y CHANGELOG.
 
-Orden de las fases que quedan: **P5 antes que P4**, porque P5 es lo que necesita la PS2 para dibujar ShooterGame y P4
-solo mejora la vista previa ([ps2-engine](ps2-engine.md), D4). Mientras P4 no llegue, el GL actual sigue dibujando en
-Win64 y la lista de P5 se valida con la referencia.
+Orden de las fases: **P5 antes que P4**, porque P5 es lo que necesita la PS2 para dibujar ShooterGame y P4 solo
+mejora la vista previa ([ps2-engine](ps2-engine.md), D4). Las dos se cerraron juntas.
 
 Fuera de este plan: **el motor en PS2**, en [ps2-engine](ps2-engine.md) (`WITH_ENGINE=1` en el EE: `UWorld`, `FScene` y ShooterGame
 sobre este renderer). Este plan deja listo el contrato para que, cuando el motor llegue al EE, lo que dibuje sea lo que

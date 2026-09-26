@@ -1,102 +1,177 @@
-#include "RendererModule.h"
-
+#include "CanvasTypes.h"
+#include "GS/GSSceneRenderer.h"
+#include "GSEmulator/GSOpenGLEmulator.h"
 #include "Modules/ModuleManager.h"
+#include "RendererInterface.h"
 #include "RendererLog.h"
 #include "ScenePrivate.h"
 #include "SceneView.h"
 
 DEFINE_LOG_CATEGORY(LogRenderer);
 
+namespace
+{
+
+	/**
+	 * The Renderer module on the desktop (UE: FRendererModule): the GS scene renderer records the view family and the
+	 * canvas as GS lists, as on the PS2, and the OpenGL emulation of the GS draws them into its 640 x 448 frame, shown
+	 * in the window at EndDrawingViewport (Docs/PLANS/ps2-gs-parity.md P4 and P5).
+	 */
+	class FRendererModule final : public IRendererModule
+	{
+	public:
+		bool InitRenderer(const FString& ShaderDirectory) override
+		{
+			if (bInitialized)
+			{
+				return true;
+			}
+			if (!Emulator.Initialize(ShaderDirectory))
+			{
+				return false;
+			}
+			uint32 FirstBlock = 0;
+			uint32 NumBlocks = 0;
+			FGSOpenGLEmulator::GetTextureArena(FirstBlock, NumBlocks);
+			SceneRenderer.GetTextureCache().SetArena(FirstBlock, NumBlocks);
+			bInitialized = true;
+			UE_LOG(LogRenderer, Log, "Renderer: the GS scene renderer on the OpenGL GS emulator (%dx%d)",
+				FGSOpenGLEmulator::FrameWidth, FGSOpenGLEmulator::FrameHeight);
+			return true;
+		}
+
+		void ShutdownRenderer() override
+		{
+			SceneRenderer.GetTextureCache().Reset();
+			Emulator.Shutdown();
+			bInitialized = false;
+		}
+
+		void ReleaseAssetResources(const UObject* Asset) override
+		{
+			SceneRenderer.ReleaseAssetResources(Asset);
+		}
+
+		[[nodiscard]] bool IsRendererInitialized() const override
+		{
+			return bInitialized;
+		}
+
+		[[nodiscard]] FSceneInterface* AllocateScene(UWorld* World) override
+		{
+			FScene* Scene = new FScene(World);
+			Scenes.Add(Scene);
+			return Scene;
+		}
+
+		void RemoveScene(FSceneInterface* Scene) override
+		{
+			if (Scene != nullptr && Scenes.Remove(Scene) > 0)
+			{
+				delete Scene;
+			}
+		}
+
+		void BeginRenderingViewFamily(FCanvas* Canvas, FSceneViewFamily* ViewFamily) override
+		{
+			(void)Canvas;
+			if (!bInitialized || ViewFamily == nullptr)
+			{
+				return;
+			}
+			List.Reset();
+			if (!bEnvironmentSet)
+			{
+				// The emulator starts without registers: the environment once, as the PS2 RHI sets it at start.
+				FGSOpenGLEmulator::GetDrawEnvironment().Append(List);
+				bEnvironmentSet = true;
+			}
+			SceneRenderer.Render(*ViewFamily, FGSOpenGLEmulator::GetDrawEnvironment(), List);
+			Emulator.Execute(List);
+		}
+
+		void DrawCanvas(const FCanvas& Canvas) override
+		{
+			if (!bInitialized)
+			{
+				return;
+			}
+			List.Reset();
+			SceneRenderer.DrawCanvas(Canvas, FGSOpenGLEmulator::GetDrawEnvironment(), List);
+			Emulator.Execute(List);
+		}
+
+		[[nodiscard]] FIntPoint GetRenderTargetSize(const FIntPoint& WindowSize) const override
+		{
+			(void)WindowSize;
+			return FIntPoint(FGSOpenGLEmulator::FrameWidth, FGSOpenGLEmulator::FrameHeight);
+		}
+
+		void EndDrawingViewport(const FIntPoint& WindowSize) override
+		{
+			if (bInitialized)
+			{
+				Emulator.Present(WindowSize.X, WindowSize.Y);
+			}
+		}
+
+		EShaderReloadResult ReloadShaders(bool bForce) override
+		{
+			return bInitialized ? Emulator.ReloadShaders(bForce) : EShaderReloadResult::Unchanged;
+		}
+
+		[[nodiscard]] const FFrameStats& GetFrameStats() const override
+		{
+			return SceneRenderer.GetFrameStats();
+		}
+
+		void ReadFramebufferBgr(int32 Width, int32 Height, TArray<uint8>& OutBgr) const override
+		{
+			OutBgr.Reset();
+			if (!bInitialized)
+			{
+				return;
+			}
+			// The emulated frame, bottom row first.
+			const TArray<FColor> Pixels = Emulator.ReadFrame(Width, Height);
+			if (Pixels.Num() != Width * Height)
+			{
+				return;
+			}
+			OutBgr.SetNumUninitialized(Width * Height * 3);
+			for (int32 Row = 0; Row < Height; ++Row)
+			{
+				const FColor* Source = &Pixels[(Height - 1 - Row) * Width];
+				uint8* Target = &OutBgr[Row * Width * 3];
+				for (int32 X = 0; X < Width; ++X)
+				{
+					Target[(X * 3) + 0] = Source[X].B;
+					Target[(X * 3) + 1] = Source[X].G;
+					Target[(X * 3) + 2] = Source[X].R;
+				}
+			}
+		}
+
+		void ShutdownModule() override
+		{
+			for (FSceneInterface* Scene : Scenes)
+			{
+				delete Scene;
+			}
+			Scenes.Empty();
+		}
+
+	private:
+		TArray<FSceneInterface*> Scenes;
+		FGSSceneRenderer SceneRenderer;
+		/** Mutable: reading the frame back flushes the emulator's pending draws. */
+		mutable FGSOpenGLEmulator Emulator;
+		/** The list each call records into (kept, so its capacity is reused frame after frame). */
+		FGSCommandList List;
+		bool bInitialized = false;
+		bool bEnvironmentSet = false;
+	};
+
+} // namespace
+
 IMPLEMENT_MODULE(FRendererModule, Renderer)
-
-bool FRendererModule::InitRenderer(const FString& ShaderDirectory)
-{
-	if (bRendererInitialized)
-	{
-		return true;
-	}
-	if (!SceneRenderer.Initialize(ShaderDirectory))
-	{
-		return false;
-	}
-	if (!CanvasRenderer.Initialize())
-	{
-		SceneRenderer.Shutdown();
-		return false;
-	}
-	bRendererInitialized = true;
-	return true;
-}
-
-void FRendererModule::ShutdownRenderer()
-{
-	if (!bRendererInitialized)
-	{
-		return;
-	}
-	CanvasRenderer.Shutdown();
-	SceneRenderer.Shutdown();
-	bRendererInitialized = false;
-}
-
-void FRendererModule::ReleaseAssetResources(const UObject* Asset)
-{
-	SceneRenderer.ReleaseAssetResources(Asset);
-}
-
-FSceneInterface* FRendererModule::AllocateScene(UWorld* World)
-{
-	FScene* Scene = new FScene(World);
-	Scenes.Add(Scene);
-	return Scene;
-}
-
-void FRendererModule::RemoveScene(FSceneInterface* Scene)
-{
-	if (Scene != nullptr && Scenes.Remove(Scene) > 0)
-	{
-		delete Scene;
-	}
-}
-
-void FRendererModule::BeginRenderingViewFamily(FCanvas* /*Canvas*/, FSceneViewFamily* ViewFamily)
-{
-	if (!bRendererInitialized || ViewFamily == nullptr)
-	{
-		return;
-	}
-	SceneRenderer.BeginFrame(ViewFamily->RenderTargetSizeX, ViewFamily->RenderTargetSizeY);
-	SceneRenderer.Render(*ViewFamily);
-}
-
-void FRendererModule::DrawCanvas(const FCanvas& Canvas)
-{
-	if (bRendererInitialized)
-	{
-		CanvasRenderer.Draw(Canvas);
-	}
-}
-
-EShaderReloadResult FRendererModule::ReloadShaders(bool bForce)
-{
-	if (!bRendererInitialized)
-	{
-		return EShaderReloadResult::Unchanged;
-	}
-	const EShaderReloadResult Result = SceneRenderer.ReloadShaders(bForce);
-	return MergeShaderReload(Result, CanvasRenderer.ReloadShader(bForce));
-}
-
-void FRendererModule::ReadFramebufferBgr(int32 Width, int32 Height, TArray<uint8>& OutBgr) const
-{
-	SceneRenderer.ReadFramebufferBgr(Width, Height, OutBgr);
-}
-
-void FRendererModule::ShutdownModule()
-{
-	for (FSceneInterface* Scene : Scenes)
-	{
-		delete Scene;
-	}
-	Scenes.Empty();
-}

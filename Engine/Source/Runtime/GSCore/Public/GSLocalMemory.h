@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Containers/ArrayView.h"
 #include "CoreMinimal.h"
 #include "GSTypes.h"
 
@@ -10,7 +11,7 @@
  * placed on page boundaries (then a buffer's linear span stays inside the pages the GS gives it). Addresses wrap at
  * 4 MB like the GS's.
  */
-class GSREFERENCE_API FGSLocalMemory
+class GSCORE_API FGSLocalMemory
 {
 public:
 	static constexpr uint32 SizeInBytes = 4 * 1024 * 1024;
@@ -24,6 +25,14 @@ public:
 	[[nodiscard]] uint32 ReadPixel(
 		uint32 BaseWords, uint32 WidthPixels, EGSPixelFormat Format, uint32 X, uint32 Y) const;
 	void WritePixel(uint32 BaseWords, uint32 WidthPixels, EGSPixelFormat Format, uint32 X, uint32 Y, uint32 Value);
+
+	/**
+	 * A host to local transfer (manual 4.3): TrxReg's RRW x RRH pixels of BitBltBuf's destination format from TrxPos,
+	 * packed in Data as the transfer format (24-bit pixels in 3 bytes keeping the pixel's high byte, the first 4-bit
+	 * pixel in the low nibble).
+	 */
+	void Transfer(
+		const FGSBitBltBuf& BitBltBuf, const FGSTrxPos& TrxPos, const FGSTrxReg& TrxReg, TArrayView<const uint8> Data);
 
 	/** The bits a pixel of Format takes in memory (a 24-bit pixel takes 32). */
 	[[nodiscard]] static uint32 StorageBits(EGSPixelFormat Format);

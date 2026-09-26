@@ -37,6 +37,9 @@ public:
 	void SetVec4(const ANSICHAR* Name, float X, float Y, float Z, float W) const;
 	void SetFloat(const ANSICHAR* Name, float Value) const;
 	void SetInt(const ANSICHAR* Name, int32 Value) const;
+	void SetIVec2(const ANSICHAR* Name, int32 X, int32 Y) const;
+	void SetIVec3(const ANSICHAR* Name, int32 X, int32 Y, int32 Z) const;
+	void SetIVec4(const ANSICHAR* Name, int32 X, int32 Y, int32 Z, int32 W) const;
 
 	/** Binds a named uniform block to a binding point (matches FUniformBuffer::Create). */
 	bool BindUniformBlock(const ANSICHAR* BlockName, uint32 BindingPoint) const;

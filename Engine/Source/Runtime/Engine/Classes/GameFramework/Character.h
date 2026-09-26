@@ -139,19 +139,14 @@ public:
 		return AnimBlendInput;
 	}
 
-	/** When true (default), yaw follows wish movement. When false, call FaceRotation / SetActorRotation. */
+	/** When true (default), yaw follows wish movement. When false, the controller's FaceRotation or SetActorRotation
+	 * turns it. */
 	UPROPERTY()
 	bool bOrientRotationToMovement = true;
 
 	void Reset(const FVector& Location, const FRotator& Rotation = FRotator::ZeroRotator);
 	void AddMovementInput(const FVector& WishDirXY);
 	void Jump();
-
-	/**
-	 * Smoothly turn to the yaw of NewRotation when bOrientRotationToMovement is false (UE: FaceRotation; games may
-	 * snap via SetActorRotation).
-	 */
-	void FaceRotation(const FRotator& NewRotation, float DeltaTime);
 
 	/** Move capsule against an explicit FPhysScene (unit tests / tools). Games may override. */
 	virtual void PerformMovement(FPhysScene& PhysScene, float DeltaTime, FDebugDraw* DebugDraw = nullptr);

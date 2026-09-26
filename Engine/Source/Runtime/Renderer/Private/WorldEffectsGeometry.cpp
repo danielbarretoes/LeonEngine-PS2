@@ -1,12 +1,9 @@
-#include "Effects/WorldEffects.h"
-#include "WorldEffectsRenderer.h"
+#include "WorldEffectsGeometry.h"
 
-// The world effects' geometry and mask, shared by the OpenGL renderer and the GS scene renderer (no GPU calls).
+#include "Effects/WorldEffects.h"
 
 namespace
 {
-
-	static_assert(sizeof(FWorldEffectsRenderer::FEffectVertex) == 9 * sizeof(float), "Tightly packed effect vertex");
 
 	/** How far a mark sits off its surface, cm (with the polygon offset, against z-fighting). */
 	constexpr float MarkLift = 0.1f;
@@ -15,8 +12,8 @@ namespace
 	constexpr float GoldenAngle = 2.39996323f;
 
 	/** Two triangles over the quad Centre +- AxisU +- AxisV. */
-	void AddQuad(TArray<FWorldEffectsRenderer::FEffectVertex>& Out, const FVector& Centre, const FVector& AxisU,
-		const FVector& AxisV, const FLinearColor& Color)
+	void AddQuad(TArray<FWorldEffectVertex>& Out, const FVector& Centre, const FVector& AxisU, const FVector& AxisV,
+		const FLinearColor& Color)
 	{
 		const FVector Corners[4] = {
 			Centre - AxisU - AxisV, Centre + AxisU - AxisV, Centre + AxisU + AxisV, Centre - AxisU + AxisV};
@@ -31,7 +28,7 @@ namespace
 
 } // namespace
 
-void FWorldEffectsRenderer::BuildMaskTexels(TArray<uint8>& OutTexels)
+void FWorldEffectsGeometry::BuildMaskTexels(TArray<uint8>& OutTexels)
 {
 	// A soft round spot: 1 inside a quarter of the side, down to 0 at the rim (smoothstep).
 	OutTexels.SetNumZeroed(MaskSize * MaskSize * 4);
@@ -54,7 +51,8 @@ void FWorldEffectsRenderer::BuildMaskTexels(TArray<uint8>& OutTexels)
 	}
 }
 
-void FWorldEffectsRenderer::BuildImpactMarkVertices(const FImpactMarkPool& Marks, TArray<FEffectVertex>& OutVertices)
+void FWorldEffectsGeometry::BuildImpactMarkVertices(
+	const FImpactMarkPool& Marks, TArray<FWorldEffectVertex>& OutVertices)
 {
 	OutVertices.Reset();
 	for (const FImpactMark& Mark : Marks.GetMarks())
@@ -84,8 +82,8 @@ void FWorldEffectsRenderer::BuildImpactMarkVertices(const FImpactMarkPool& Marks
 	}
 }
 
-void FWorldEffectsRenderer::BuildTracerVertices(
-	const FTracerBatch& Tracers, const FVector& CameraLocation, TArray<FEffectVertex>& OutVertices)
+void FWorldEffectsGeometry::BuildTracerVertices(
+	const FTracerBatch& Tracers, const FVector& CameraLocation, TArray<FWorldEffectVertex>& OutVertices)
 {
 	OutVertices.Reset();
 	for (const FTracer& Tracer : Tracers.GetTracers())

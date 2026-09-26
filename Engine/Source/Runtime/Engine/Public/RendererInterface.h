@@ -10,7 +10,7 @@ class FSceneViewFamily;
 class UObject;
 class UWorld;
 
-/** Per-frame counters of the scene pass (color pass after frustum culling) and the GPU time of each pass. */
+/** Per-frame counters of the scene pass (after frustum culling) and of the GS work it recorded. */
 struct ENGINE_API FFrameStats
 {
 	int32 ObjectsTotal = 0;
@@ -18,10 +18,10 @@ struct ENGINE_API FFrameStats
 	int32 ObjectsCulled = 0;
 	int32 DrawsSubmitted = 0;
 	int32 TrianglesSubmitted = 0;
-	int32 PlanarCulled = 0;
-	float ShadowMs = 0.0f;
-	float PlanarMs = 0.0f;
-	float ColorMs = 0.0f;
+	/** The GS register writes of the frame's scene list (the GIF packet's size in quadwords, about). */
+	int32 RegisterWrites = 0;
+	/** Textures uploaded to the GS local memory this frame. */
+	int32 TextureUploads = 0;
 };
 
 /**
@@ -32,15 +32,20 @@ struct ENGINE_API FFrameStats
  *
  * A frame (UGameEngine::Render): the world sends its changes (UWorld::SendAllEndOfFrameUpdates), the engine renders the
  * view family (BeginRenderingViewFamily), then its HUD and debug text draw into the frame's canvas, which it flushes
- * (FCanvas::Flush_GameThread → DrawCanvas).
+ * (FCanvas::Flush_GameThread → DrawCanvas), and the viewport ends the frame (EndDrawingViewport) before the window
+ * swaps.
+ *
+ * Every platform draws the same way (Docs/PLANS/ps2-gs-parity.md): the scene renderer records the frame as GS register
+ * writes (FGSCommandList), which the PS2 sends to its GS and the desktop executes on its OpenGL emulation of the GS,
+ * a 640 x 448 frame shown scaled in the window.
  */
 class IRendererModule : public IModuleInterface
 {
 public:
 	/**
-	 * Creates the renderer's GPU objects (shaders, targets, the canvas and line batch renderers) once the window has
-	 * its OpenGL context (Leon; UE's render resources are created on the render thread). False when a shader or a
-	 * target cannot be made.
+	 * Creates the renderer's GPU objects once the window has its graphics context (the desktop's GS emulation: its
+	 * shaders from ShaderDirectory and its frame; the PS2: the texture VRAM). False when they cannot be made (Leon;
+	 * UE's render resources are created on the render thread).
 	 */
 	virtual bool InitRenderer(const FString& ShaderDirectory) = 0;
 	/** Frees every GPU object, the cached copies of the engine's assets included, before the context goes. */
@@ -62,14 +67,32 @@ public:
 	virtual void RemoveScene(FSceneInterface* Scene) = 0;
 
 	/**
-	 * Clears the family's render target and draws its view of the scene (UE: BeginRenderingViewFamily): shadows, the
-	 * planar mirror, the opaque and translucent meshes, the world's debug lines, post processing and the show flags'
-	 * overlays. Canvas is the frame's canvas (unused by the scene pass; UE takes it for the view's debug text).
+	 * Clears the family's render target and draws its view of the scene (UE: BeginRenderingViewFamily): the opaque,
+	 * skinned and translucent meshes, the world's effects and debug lines, the show flags' overlays and the view model
+	 * pass. Canvas is the frame's canvas (unused by the scene pass; UE takes it for the view's debug text).
 	 */
 	virtual void BeginRenderingViewFamily(FCanvas* Canvas, FSceneViewFamily* ViewFamily) = 0;
 
 	/** Draws a canvas's 2D items over the frame (Leon: FCanvas::Flush_GameThread calls it). */
 	virtual void DrawCanvas(const FCanvas& Canvas) = 0;
+
+	/**
+	 * The size the renderer draws a viewport of a WindowSize window at (UE: the render target's size): the GS frame,
+	 * 640 x 448, on every platform.
+	 */
+	[[nodiscard]] virtual FIntPoint GetRenderTargetSize(const FIntPoint& WindowSize) const
+	{
+		return WindowSize;
+	}
+
+	/**
+	 * The frame is complete (UE: RHIEndDrawingViewport): the desktop shows its GS frame in the WindowSize window
+	 * (scaled by a whole number, nearest); the PS2 sends it when the window swaps.
+	 */
+	virtual void EndDrawingViewport(const FIntPoint& WindowSize)
+	{
+		(void)WindowSize;
+	}
 
 	/** Hot reload: the shaders whose files changed, or all of them when forced (Leon; UE: RecompileShaders). */
 	virtual EShaderReloadResult ReloadShaders(bool bForce) = 0;
@@ -77,7 +100,10 @@ public:
 	/** The last frame's counters and pass times. */
 	[[nodiscard]] virtual const FFrameStats& GetFrameStats() const = 0;
 
-	/** Reads the draw framebuffer as bottom-up BGR rows with no padding (UE: FViewport::ReadPixels for screenshots). */
+	/**
+	 * Reads the frame (GetRenderTargetSize) as bottom-up BGR rows with no padding (UE: FViewport::ReadPixels for
+	 * screenshots); nothing where the frame cannot be read back (the PS2).
+	 */
 	virtual void ReadFramebufferBgr(int32 Width, int32 Height, TArray<uint8>& OutBgr) const = 0;
 };
 

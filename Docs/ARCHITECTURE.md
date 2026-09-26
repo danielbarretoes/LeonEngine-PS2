@@ -131,6 +131,7 @@ flowchart BT
     CoreUObject
     InputCore
     RHI
+    GSCore
     ApplicationCore
     OpenGLDrv
     Launch
@@ -183,13 +184,16 @@ flowchart BT
   Launch --> ApplicationCore
   Launch --> RHI
   Launch -. "Desktop" .-> Engine
-  Launch -. "Desktop" .-> Renderer
+  Launch -.-> Renderer
   Launch -. "Desktop" .-> OpenGLDrv
   Launch -. "PS2 ext" .-> PS2RHI
   Renderer --> RHI
   Renderer --> RenderCore
   Renderer --> Engine
-  Renderer -.-> OpenGLDrv
+  Renderer -.-> GSCore
+  Renderer -. "Desktop" .-> OpenGLDrv
+  Renderer -. "PS2 ext" .-> PS2RHI
+  PS2RHI --> GSCore
   UMG --> CoreUObject
   UMG --> SlateCore
   UMG -.-> ApplicationCore
@@ -255,8 +259,8 @@ circular edge does not order the build.
 on it: it declares the interfaces in its own headers (`SceneInterface.h`, `PrimitiveSceneProxy.h`,
 `LightSceneProxy.h`, `RendererInterface.h`, `SceneView.h`, `CanvasTypes.h`) and reaches the implementation by module
 name (`GetRendererModule()`, `FModuleManager::LoadModuleChecked<IRendererModule>("Renderer")`). The Renderer depends on
-Engine and implements them; the launch module (and `LeonAutomationTests`) links it. In a target without the Renderer,
-worlds get no scene and Engine runs without drawing.
+Engine and implements them; every engine target links it (LeonBuildTool adds it with `Engine` and `PakFile`), and so
+does `LeonAutomationTests`. In a target without the Renderer, worlds get no scene and Engine runs without drawing.
 
 **Include-only dependency on Launch:** the launch module is compiled into the executable, not into a
 library, so a module that depends on it (`ThirdPerson` → `Launch`) only receives Launch's public include
@@ -287,9 +291,9 @@ paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable 
 | **EngineSettings** | The project's map, game mode and general settings as config classes | `UGameMapsSettings`, `FGameModeName`, `UGeneralProjectSettings` | all |
 | **ApplicationCore** | Platform application, windows, gamepad input | `GenericApplication`, `FGenericWindow`, `IInputInterface`, `FPlatformApplicationMisc`; desktop `FGLFWApplication`, `FGLFWWindow`; PS2 ext `FPS2Application`, `FPS2Window`, `FPS2InputInterface` | all |
 | **RHI** | Graphics backend interface + opaque GPU handle ids | `RHIInit` / `RHIExit`, `FDynamicRHI`, `GDynamicRHI`, `FRHIGPUMemoryStats`, `FRHITextureId` … | all |
-| **GSCore** | The Graphics Synthesizer's contract (Leon; [plan](PLANS/ps2-gs-parity.md)): its registers and formats as in the GS User's Manual (chapter 7), encoded and decoded, and the command list the renderer fills and every backend consumes (register writes in order, image uploads), limited to what every backend reproduces; the list as a GIF PATH3 packet (PACKED A+D writes, IMAGE transfers); the GS conformance scenes the reference's tests check and GSConformance draws on the PS2 | `EGSRegister`, `EGSPixelFormat`, `FGSPrim`, `FGSRGBAQ`, `FGSXYZ`, `FGSTex0`, `FGSTex1`, `FGSAlpha`, `FGSTest`, `FGSFrame`, `FGSZBuf`, `FGSDimx`, `GSToFixed4`, `FGSCommandList`, `FGSGifPacket`, `GSConformance::GetScenes` | all |
-| **GSReference** (Developer) | A software Graphics Synthesizer ([plan](PLANS/ps2-gs-parity.md), P2): executes an `FGSCommandList` into a 4 MB local memory by the GS User's Manual's rules (drawing rules, texture sampling, CLUTs, fog, pixel tests, blending, dithering, frame buffer writes, transfers); the oracle the Win64 GS emulator and the PS2 backend are compared with | `FGSReferenceRasterizer`, `FGSLocalMemory` | Desktop |
-| **OpenGLDrv** | OpenGL 3.3 RHI device | `FOpenGLDynamicRHI` | Desktop |
+| **GSCore** | The Graphics Synthesizer's contract (Leon; [plan](PLANS/ps2-gs-parity.md)): its registers and formats as in the GS User's Manual (chapter 7), encoded and decoded, and the command list the renderer fills and every backend consumes (register writes in order, image uploads), limited to what every backend reproduces; the list as a GIF PATH3 packet (PACKED A+D writes, IMAGE transfers); the GS conformance scenes the reference's tests check and GSConformance draws on the PS2; the drawing environment every backend shares (buffers, size, pixel mapping, depth test); the 4 MB local memory with its swizzled formats and transfers, and the texel decoder (formats, CLUTs, wrap modes) the reference and the emulator share | `EGSRegister`, `EGSPixelFormat`, `FGSPrim`, `FGSRGBAQ`, `FGSXYZ`, `FGSTex0`, `FGSTex1`, `FGSAlpha`, `FGSTest`, `FGSFrame`, `FGSZBuf`, `FGSDimx`, `GSToFixed4`, `FGSCommandList`, `FGSGifPacket`, `GSConformance::GetScenes`, `FGSDrawEnvironment`, `FGSLocalMemory`, `FGSTexelDecoder`, `FGSClutBuffer` | all |
+| **GSReference** (Developer) | A software Graphics Synthesizer ([plan](PLANS/ps2-gs-parity.md), P2): executes an `FGSCommandList` into a 4 MB local memory by the GS User's Manual's rules (drawing rules, texture sampling, CLUTs, fog, pixel tests, blending, dithering, frame buffer writes, transfers); the oracle the desktop GS emulator and the PS2 backend are compared with | `FGSReferenceRasterizer` | Desktop |
+| **OpenGLDrv** | OpenGL 3.3 RHI device (the GS emulator's context) | `FOpenGLDynamicRHI` | Desktop |
 | **PS2RHI** | Graphics Synthesizer immediate-mode API (platform extension module) | `FPS2RHI`, `FPS2Texture`, `FPS2Material`, `FPS2ViewTarget`, `FPS2DirectionalLight` | PS2 |
 | **Launch** | Entry points and engine loop | `GuardedMain`, `FEngineLoop` (an `IEngineLoop` with the engine), `GEngineLoop`, `FPlatformEngineLoopHooks` | all |
 | **Projects** | `.lproj` / `.lplugin` descriptors (UE `.uproject` / `.uplugin` fields), current project, plugin discovery | `FProjectDescriptor`, `FPluginDescriptor`, `FModuleDescriptor`, `FPluginReferenceDescriptor`, `IProjectManager`, `IPluginManager`, `IPlugin` | all |
@@ -298,8 +302,8 @@ paths and `LAUNCH_API`; the symbols (`GEngineLoop`) resolve when the executable 
 | **PhysicsCore** | Physics types and backend seam | `IPhysicsBackend`, `EPhysicsBackend`, `FHitResult`, `FBodyInstance`, `EBodyCollisionShape`, `FCollisionQueryParams`, `FCollisionShape`, `FTriangleMeshCollision` | Desktop |
 | **AnimationCore** | The plain skeletal data under Engine's animation assets, which the FBX import produces (P14; UE's AnimationCore holds the low-level animation types) | `FSkeletalVertex`, `FReferenceSkeleton`, `FRawAnimSequenceTrack`, `FRawAnimSequence`, `FSkeletalMeshData` | Desktop |
 | **AudioMixer** | Audio device (miniaudio): PCM16 samples played from memory, the UI cues | `FAudioDevice`, `FSoundWavePCM`, `EUISound` | Desktop |
-| **RenderCore** | CPU-side render data, UE view matrices, the GL clip-space adapter; the tests' legacy data converter | `FMeshData`, `FMeshSection`, `FVertex`, `FFrustum` (over Core's `FBox` / `FPlane`), `FMaterial` (`MaterialShared.h`: the values a material gives the renderer), `EMaterialLightingModel`, `EPixelFormat` (`PixelFormat.h`), `MakeViewMatrix` / `MakeLookAtView` / `MakeReflectMatrix` / `FitLightSpaceMatrix` (`ViewMatrices.h`), `ToGLClipSpace` (`GLClipSpace.h`), `EShaderReloadResult` (`ShaderCore.h`); for the tests only, `FLegacyCoordinateConversion` (`Public/Tests`) | Desktop |
-| **Renderer** | The renderer module: the scene (`FScene`), the forward scene renderer, the canvas and line passes, the GPU copies of the assets. Only its module interface is public (Engine's `IRendererModule`) | `FRendererModule`, `FScene`, `FSceneRenderer`, `FRenderResourceCache`, `FCanvasRenderer`, `FLineBatchRenderer`, `FShader`, `FShadowMap`, `FGPUPassTimer`, `LogRenderer` | Desktop |
+| **RenderCore** | CPU-side render data, UE view matrices, the GL clip-space adapter; the tests' legacy data converter | `FMeshData`, `FMeshSection`, `FVertex`, `FFrustum` (over Core's `FBox` / `FPlane`), `FMaterial` (`MaterialShared.h`: the values a material gives the renderer), `EMaterialLightingModel`, `EPixelFormat` (`PixelFormat.h`), `MakeViewMatrix` / `MakeLookAtView` (`ViewMatrices.h`), `ToGLClipSpace` (`GLClipSpace.h`), `EShaderReloadResult` (`ShaderCore.h`); for the tests only, `FLegacyCoordinateConversion` (`Public/Tests`) | all |
+| **Renderer** | The renderer module (§12): the scene (`FScene`) and the GS scene renderer, which records every frame as GS register writes; on PS2 they go to the GIF (`Renderer_PS2.Build.cmake`), on the desktop to the OpenGL GS emulator. Only its module interface is public (Engine's `IRendererModule`) | `FScene`, `FGSSceneRenderer`, `FGSPrimitiveEmitter`, `FGSTextureCache`, `FWorldEffectsGeometry`; desktop `FRendererModule`, `FGSOpenGLEmulator`, `FShader`; PS2 `FPS2RendererModule`; `LogRenderer` | all |
 | **SlateCore** | Text layout primitives and the layout types UMG uses | `ETextJustify`, HUD font metrics, `FMargin` (`Layout/Margin.h`), `EHorizontalAlignment` (`Types/SlateEnums.h`) | Desktop |
 | **UMG** | Widgets (UObjects since P12) as UE's widget tree; no Slate behind them and no input | `UWidget` (`ESlateVisibility`, `Slot`, `GetDesiredSize`, `Paint`), `UPanelWidget` / `UPanelSlot`, `UContentWidget`, `UBorder`, `UVerticalBox` / `UVerticalBoxSlot`, `UCanvasPanel` / `UCanvasPanelSlot`, `UTextBlock`, `UImage`, `UProgressBar`, `UUserWidget`, `UWidgetTree`, `FPaintContext` | Desktop |
 | **Engine** | The engine object and maps (`.lmap`, P15), gameplay framework as UObjects (P12), world, levels as actors (P13), input, the viewport client and the console (P13), physics scene, the asset classes and their import data (P14), the render interfaces (P13) | `UEngine` / `GEngine`, `UGameEngine`, `IEngineLoop`, `FURL`, `UGameViewportClient`, `FViewport`, `UPlayer`, `ULocalPlayer`, `UGameInstance` / `FWorldContext`, `UWorld`, `ULevel`, `FActorSpawnParameters`, `AActor`, `AInfo`, `UActorComponent`, `USceneComponent`, `UPrimitiveComponent`, `UShapeComponent`, `UCapsuleComponent`, `UBoxComponent`, `USphereComponent`, `UMeshComponent`, `UStaticMeshComponent`, `USkeletalMeshComponent`, `UCameraComponent`, `USpringArmComponent`, `UMovementComponent`, `UPawnMovementComponent`, `UCharacterMovementComponent`, `APawn`, `ACharacter`, `AController`, `APlayerController`, `AGameModeBase`, `AGameMode` (`MatchState`), `AGameStateBase`, `AGameState`, `APlayerState`, `AHUD`, `APlayerCameraManager`, `ADefaultPawn`, `UFloatingPawnMovement`, `URotatingMovementComponent`, `UInputSettings`, `UPlayerInput`, `UInputComponent`, `UGameplayStatics`, `FPhysScene`, `UNavigationSystem`; `AStaticMeshActor`, `APlayerStart`, `ATargetPoint`, `AVolume`, `ATriggerVolume`, `ABlockingVolume`, `APainCausingVolume`, `ALight`, `ADirectionalLight`, `APointLight`, `ULightComponent` (+ base, local, directional, point), `AWorldSettings`, `ACameraActor`, `ANavigationWaypoint`; `UTexture` / `UTexture2D`, `UStaticMesh` (`FStaticMeshLODResources`, `FStaticMaterial`), `UBodySetup` (`FKAggregateGeom`, `FKBoxElem`, `ECollisionTraceFlag`), `UMaterialInterface` / `UMaterial` (`EMaterialShadingModel`), `USkeleton`, `USkeletalMeshSocket`, `USkeletalMesh`, `UAnimationAsset`, `UAnimSequenceBase`, `UAnimSequence`, `UBlendSpaceBase`, `UBlendSpace1D`, `UAnimInstance`, `UCharacterAnimInstance`, `USoundBase` / `USoundWave`, `UDataAsset`, `UCommandlet`, `UAssetImportData` (`FAssetImportInfo`); `FDebugDraw`, `FDebugOverlay`; `FSceneInterface`, `FPrimitiveSceneProxy`, `FLightSceneProxy`, `IRendererModule`, `FSceneViewFamily`, `FSceneView`, `FCanvas`; `LogEngine`, `LogLevel`, `LogPath`, `LogPhysics`, `LogSpawn`, `LogWorld` (`EngineLogs.h`) | Desktop |
@@ -754,9 +758,12 @@ ULocalPlayer::Exec --> UGameViewportClient::Exec: show <Flag>
 
 ---
 
-## 12. Rendering (desktop)
+## 12. Rendering (the GS path)
 
-The Engine / Renderer boundary is UE's (P13):
+The Engine / Renderer boundary is UE's (P13). Behind it there is one scene renderer for every platform
+([ps2-gs-parity](PLANS/ps2-gs-parity.md) P4 / P5, [ps2-engine](PLANS/ps2-engine.md) E2): the frame is recorded as the
+PS2 Graphics Synthesizer's register writes (`FGSCommandList`, GSCore), which the PS2 sends to the GIF and the desktop
+executes on an OpenGL emulation of the GS.
 
 ```text
 Engine (game thread)                                  Renderer (behind IRendererModule)
@@ -765,68 +772,91 @@ UPrimitiveComponent::CreateRenderState_Concurrent --> FSceneInterface::AddPrimit
   FSkeletalMeshSceneProxy                                                                           |   in level order
 ULightComponent --> AddLight(FLightSceneProxy)                                                      +-- FLightSceneInfo per light
 UWorld::SendAllEndOfFrameUpdates --> UpdatePrimitiveTransform, skin matrices, UpdateLightTransform
-UGameViewportClient::Draw: FSceneViewFamily + FSceneView --> BeginRenderingViewFamily(Canvas, ViewFamily) FSceneRenderer
-  AHUD::Paint / FDebugOverlay::Draw --> FCanvas --> Flush_GameThread --> DrawCanvas(Canvas)         FCanvasRenderer
-UWorld::LineBatcher (FDebugDraw) ----------------------------------------------------------------> FLineBatchRenderer
+UGameViewportClient::Draw: FSceneViewFamily + FSceneView --> BeginRenderingViewFamily ----------> FGSSceneRenderer::Render
+  AHUD::Paint / FDebugOverlay::Draw --> FCanvas --> Flush_GameThread --> DrawCanvas(Canvas) -----> FGSSceneRenderer::DrawCanvas
+UWorld::LineBatcher (FDebugDraw), impact marks, tracers -----------------------------------------> (the same frame)
+                                                                                                        |
+                                                                        FGSCommandList (GS registers)   |
+                                            PS2: FPS2RHI::Submit -> GIF (PATH3)  <----------------------+
+                                            Desktop: FGSOpenGLEmulator::Execute -> 640x448 target -> Present
 ```
 
 - **Scene.** `UWorld::Scene` is the Renderer's `FScene`, allocated by `IRendererModule::AllocateScene` in
   `UWorld::InitWorld` and removed in `DestroyWorld`; worlds that can never render (`-nullrhi`, `FApp::CanEverRender`)
-  have none, and their components create no proxies. A proxy is the render thread's copy of a component (the mesh, the section
-  materials, the transform, visibility and shadow casting; a skeletal proxy also holds the skin matrices).
-  `MarkRenderStateDirty` recreates it at once (there is no render thread yet); moved components and poses reach it
-  through `SendAllEndOfFrameUpdates` before each frame. The scene keeps its primitives and lights in level order (the
-  owner's spawn serial, then the component), so the draw order is the level's.
+  have none, and their components create no proxies. A proxy is the render thread's copy of a component (the mesh, the
+  section materials, the transform and visibility; a skeletal proxy also holds the skin matrices).
+  `MarkRenderStateDirty` recreates it at once (there is no render thread); moved components and poses reach it through
+  `SendAllEndOfFrameUpdates` before each frame. The scene keeps its primitives and lights in level order (the owner's
+  spawn serial, then the component), so the draw order is the level's. `FScene::GatherStaticMeshes` splits the visible
+  meshes into the world's and the view model's.
 - **Views.** `UGameViewportClient::Draw` builds a `FSceneViewFamily` (the target size, the scene and the viewport
   client's show flags: `Bounds` F1, `AxesGizmo` F6) with one `FSceneView` from the player's view camera
   (`FSceneView::FromCamera`: the eye, the view and projection matrices and the vertical field of view) and calls
-  `IRendererModule::BeginRenderingViewFamily`.
+  `IRendererModule::BeginRenderingViewFamily`. The target is the GS frame (640x448), whatever the window's size
+  (`IRendererModule::GetRenderTargetSize`, `FViewport::GetSizeXY`).
 - **Canvas.** The HUD's widgets and the debug text draw into a frame `FCanvas` (tiles, lines and text in the HUD font,
   batched by depth sort key; the debug text uses key 1, so it goes under the HUD), which `Flush_GameThread` hands to
-  `IRendererModule::DrawCanvas`: one alpha-blended pass over the frame.
+  `IRendererModule::DrawCanvas`: blended triangles without the depth test, after the scene.
+- **`FGSSceneRenderer`** (`Renderer/Private/GS`, built for every platform). What the GS cannot do per pixel happens per
+  vertex, on the CPU:
+  - the transform (UE's view and projection, `ToGLClipSpace`), clipping against the near and far planes and a guard
+    band, back face culling and the pixel mapping of the drawing environment (`FGSPrimitiveEmitter`);
+  - skinning with the pose's skin matrices;
+  - Lambert lighting: 0.10 of the albedo as ambient, then the directional and point lights (range attenuation
+    squared);
+  - materials: the albedo times the light (unlit: the albedo), the albedo map through `FGSTextureCache` (power-of-two
+    textures of 8..256 texels, whole pages of a VRAM arena, reset when full), translucent sections (`Alpha < 1`) blended
+    back to front without writing Z.
+
+  The frame: the clear, the opaque meshes, the skinned meshes, the impact marks (a lerp toward their colour nearer than
+  the surface by `DecalDepthBias`: the GS cannot multiply by the destination), the translucent meshes, the tracers
+  (added), the world's debug lines and the show flags' overlays, then the view model over a cleared Z buffer
+  (FBMSK keeps the colour), then the canvas. Nothing casts shadows, and there is no specular, normal map, planar mirror
+  or post processing: the GS has no programmable pixel stage, so no platform draws them (the materials keep the values;
+  [ps2-gs-parity](PLANS/ps2-gs-parity.md) P0).
+- **The drawing environment** (`FGSDrawEnvironment`, GSCore): the frame and Z buffers (PSMCT16S with dithering,
+  PSMZ24; two 70-page frames, Z at page 140, the texture arena from page 280), the 640x448 size, the primitive
+  coordinate of pixel (0, 0) (2048 - W/2) and the depth test (GEQUAL, larger Z is nearer; the clear writes Z = 0). The
+  environment's registers are written once per frame; a list restores what it changes.
+- **PS2** (`Renderer_PS2.Build.cmake`, `FPS2RendererModule`): the module records into `FPS2RHI`'s frame list
+  (`FPS2RHI::GetDrawEnvironment`, `AllocateTextureArena`, `Submit`); `FPS2Window::SwapBuffers` sends it and waits for
+  the vertical blank.
+- **Desktop** (`FRendererModule`, `FGSOpenGLEmulator` in `Private/GSEmulator`): the emulator assembles the GS
+  primitives on the CPU exactly as the reference rasterizer (GSReference) does, and draws them with one shader pair
+  (`Engine/Shaders/gs_emulator.vert` / `.frag`) into a 640x448 target with the same VRAM layout: the pixel centre plus
+  1/256 (the top-left rule), `gl_FragDepth` exact, the textures decoded by `FGSTexelDecoder` (GSCore, shared with the
+  reference) and sampled in the shader, dual-source blending for the GS's `(A - B) * C + D`, the alpha test's AFAIL as a
+  second pass, the 16-bit frame's dither and truncation. `EndDrawingViewport` shows the target scaled by a whole number
+  (nearest, `gs_present.*`); `ReadFramebufferBgr` returns it for screenshots. The conformance test
+  (`System.Renderer.GSEmulator.Conformance`, NonNullRHI) compares it with the reference: 8 of 9 scenes within 2 levels
+  per channel on every pixel; the colour clamp off (a wrap) is not emulated. `System.Renderer.GSEmulator.SceneFrame`
+  does the same with a frame of the scene renderer: within one 5-bit step but for 28 pixels (blended pixels are not
+  dithered, bilinear weights and shared edges' Z round in floating point).
+- The module also starts and stops the renderer on the window's context (`InitRenderer`, `ShutdownRenderer`), reloads
+  the shaders (`ReloadShaders`), reports the frame statistics (`GetFrameStats`: triangles, draws, the GS register
+  writes and the texture uploads; the stats show `GS n writes, n tex`).
 - **Assets** (P14, [ASSET_FORMATS.md](ASSET_FORMATS.md#asset-classes)). `UStaticMesh`, `USkeletalMesh`, `UTexture2D`
   and `UMaterial` are asset UObjects in Engine holding CPU data. A proxy keeps the mesh and, per section, the material's
   values (`UMaterialInterface::GetRenderProxy`, RenderCore's `FMaterial`); a slot without a material draws with
-  `UMaterial::GetDefaultMaterial`. The Renderer's `FRenderResourceCache` keeps the GPU copies keyed by asset: it makes
-  one the first time a proxy or a material uses the asset, and the asset frees it when its data changes and in
-  `BeginDestroy` (`IRendererModule::ReleaseAssetResources`, through `UTexture::UpdateResource` / `ReleaseResource`,
-  `UStaticMesh::InitResources` / `ReleaseResources`). UE's assets own their render resources instead (a deviation).
-  There is no render thread: all of it happens on the game thread. `FScene` is an `FGCObject` that reports its
-  proxies' assets, pending kill or not, so no asset is collected while a proxy draws it.
-- The module also starts and stops the renderer on the window's context (`InitRenderer`, `ShutdownRenderer`), reloads
-  the shaders (`ReloadShaders`), reports the frame statistics (`GetFrameStats`) and reads the frame back for
-  screenshots (`ReadFramebufferBgr`).
-- `FSceneRenderer` (Renderer-private) is a forward renderer: directional shadow map (light 0), optional planar
-  reflection, opaque / transparent (the sky is the procedural gradient in `blinn_phong.frag`), drawn straight into the
-  window's back buffer. There is no post processing (no SSAO, FXAA, tonemapping or HDR scene color, no early-Z pass):
-  the PS2 GS has no programmable pixel stage, so the Win64 preview does not fake one.
+  `UMaterial::GetDefaultMaterial`. The texture cache keeps the GS copies keyed by asset, and the asset forgets them when
+  its data changes and in `BeginDestroy` (`IRendererModule::ReleaseAssetResources`). There is no render thread: all of
+  it happens on the game thread. `FScene` is an `FGCObject` that reports its proxies' assets, pending kill or not, so
+  no asset is collected while a proxy draws it.
 - Matrices are UE's (§6, Coordinates): the camera's view (`UCameraComponent::ViewMatrix`, UE view space) and projection
-  (`FPerspectiveMatrix` / `FOrthoMatrix`, depth [0, 1]) go through `ToGLClipSpace` once, so every MVP the passes hand
-  around is `Model * View * ProjectionGL`, uploaded as is with `FShader::SetMat4(Name, const FMatrix&)`. The shadow fit
-  measures near / far along +Z of a left-handed light view (the casters' box, padded 75 cm; without casters a 6 m square
-  box 2 m tall above the origin, Z up); the planar mirror reflects about the horizontal plane z = PlaneZ
-  (`MakeReflectMatrix`, RenderCore); the normal matrix and the 2D overlay projection are renderer-private helpers
-  (`Private/RenderMatrices.h`).
-- Settings: `FSceneRenderer::ReadRendererSettings` reads `r.ShadowMapResolution` (1024, clamped to 512..4096) and
-  `r.PlanarReflectionScale` (0.5 of the framebuffer, clamped to 0.1..1) from `[/Script/Engine.RendererSettings]` of the
-  engine config when the renderer starts (UE's scalability variables; not console variables in Leon).
-- `FGPUPassTimer` measures `Shadow / Planar / Color` with `GL_QUERY_RESULT_AVAILABLE` (no stall); the stats show them
-  as `GPU Sh / Pl / Col`.
-- Resources: `FShader` (GLSL from `Engine/Shaders`, hot reload), `FUniformBuffer` (Renderer); materials are `UMaterial`
-  assets loaded from `.lasset` packages.
+  (`FPerspectiveMatrix` / `FOrthoMatrix`, depth [0, 1]) go through `ToGLClipSpace` once; the emitter clips in that
+  space and maps it to the GS's pixels and PSMZ24 depth.
 - Debug (Engine): `FDebugDraw` (lines, boxes, arrows, axes, collision / navigation debug; the world's `LineBatcher`)
   and `FDebugOverlay` (the on-screen text, drawn into the canvas). In `LeonGame` the keys run console commands
-  (`DebugExecBindings`): F1 `show Bounds` (mesh AABBs and the shadow volume), F2 `show Collision` (the characters'
-  capsules and the physics bodies) and F3 `show Navigation` (the waypoint graph's nodes and links), which
-  `UGameEngine::Tick` passes to the world's frame (`FWorldGameplayFrameParams::CollisionDebugDraw` /
-  `NavigationDebugDraw`) to draw into `UWorld::LineBatcher` in windowed runs, F4 `stat unit` (stats), F5
-  `RecompileShaders all` and F6
-  `show AxesGizmo` (1 m world axes at the origin and a view-orientation gizmo in the bottom-left corner, X red, Y green,
-  Z blue; `-AxesGizmo` turns it on at start).
+  (`DebugExecBindings`): F1 `show Bounds` (mesh AABBs), F2 `show Collision` (the characters' capsules and the physics
+  bodies) and F3 `show Navigation` (the waypoint graph's nodes and links), which `UGameEngine::Tick` passes to the
+  world's frame (`FWorldGameplayFrameParams::CollisionDebugDraw` / `NavigationDebugDraw`) to draw into
+  `UWorld::LineBatcher` in windowed runs, F4 `stat unit` (stats), F5 `RecompileShaders all` (the emulator's shaders)
+  and F6 `show AxesGizmo` (1 m world axes at the origin and a view-orientation gizmo in the bottom-left corner, X red,
+  Y green, Z blue; `-AxesGizmo` turns it on at start).
 - Maps load from `.lmap` packages (`UEngine::LoadMap`) — see [LEVELS.md](LEVELS.md) and
-  [ASSET_FORMATS.md](ASSET_FORMATS.md#maps--lmap). There are no lightmaps; static lighting returns later as
-  `<Map>_BuiltData.lasset`. The shaders are the engine's `Engine/Shaders` (UE: the `/Engine/Shaders` virtual folder).
-- **PS2** does not use Renderer: games draw immediately through `FPS2RHI` (§7).
+  [ASSET_FORMATS.md](ASSET_FORMATS.md#maps--lmap). There are no lightmaps. The shaders are the engine's
+  `Engine/Shaders` (UE: the `/Engine/Shaders` virtual folder); only the emulator's are left.
+- **ThirdPerson** still draws immediately through `FPS2RHI`'s calls (§7), without the Renderer.
 
 ---
 
@@ -888,9 +918,10 @@ UWorld::LineBatcher (FDebugDraw) -----------------------------------------------
   the content from its sources and fails when git sees a change under a `Content` folder.
 - **Tests**: each module keeps its tests in `<Module>/Private/Tests/`, excluded from the module library and compiled
   only into targets with `COLLECT_AUTOMATION_TESTS`. Every test is a UE automation test
-  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, named `System.<Module>.<Area>.<Name>`): 386 on Win64 — Core
-  48, CoreUObject 63, Json 2, Projects 2, PakFile 5, PhysicsCore 8, RenderCore 23, AnimationCore 1, Engine 157, Renderer
-  10, AIModule 31, MeshUtilities 8, LeonEd 19, JoltPhysics 9 (a tenth, `System.JoltPhysics.Backend.DisabledFallsBack`,
+  (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, named `System.<Module>.<Area>.<Name>`): 405 on Win64 — Core
+  48, CoreUObject 63, Json 2, Projects 2, PakFile 5, PhysicsCore 8, RenderCore 23, AnimationCore 1, Engine 154, UMG 1,
+  GSCore 8, GSReference 10, Renderer 13, AIModule 31, MeshUtilities 8, LeonEd 19, JoltPhysics 9 (396 on Linux, without
+  the Jolt plugin; a tenth Jolt test, `System.JoltPhysics.Backend.DisabledFallsBack`,
   compiles only without the plugin). On PS2, Core runs 44 (the platform-file, config-cache and log-file tests are
   desktop-only), CoreUObject 61 (its SaveConfig and package file tests are desktop-only; the other package tests save to
   memory), Json 2, Projects 1 and PakFile 5 (on paks in memory). Reflected test fixtures live in
@@ -942,9 +973,9 @@ roadmap is [NextSteps.md](UnrealEngine427/NextSteps.md).
 | Reflection | LeonHeaderTool (the UHT counterpart) generates the code and CoreUObject (P9, [README](../Engine/Source/Runtime/CoreUObject/README.md)) runs it: `UObject`, `UClass`, `FProperty`, `NewObject`, CDOs, default subobjects (rebuilt per instance, D12), `ProcessEvent`, NoExport Core structs. Since P12 the gameplay framework (Engine, AIModule), UMG's widgets and the anim instances are UObjects owned through the world and the game instance (§10) and collected at safe points (world teardown, level load, the engine's timer). Since P13 the level content is actors (§10), and `UEngine` / `UGameEngine`, the viewport client, the players and the input and map settings are UObjects. Since P14 the assets are too (§12, [ASSET_FORMATS.md](ASSET_FORMATS.md#asset-classes)), and the engine content is `.lasset` packages imported and migrated by the editor module (LeonEd, LeonCook's commandlets). Since P15 a world with its actors saves and loads as a `.lmap` package. Still plain C++: `UNavigationSystem` and the behavior tree lite. |
 | Containers / strings | Every engine module, the JoltPhysics plugin and the game use Core's `TArray`, `TMap`, `FString`, `FName`, `FText` (minimal), `TFunction`, `TUniquePtr` / `TSharedPtr`, delegates and `UE_LOG` (P5, P6); `CheckBannedApis.ps1` (G4) keeps the `std::` equivalents out. Third-party containers stay at the library seams (Jolt, tinyobjloader, ufbx, cgltf). `TCHAR` is UTF-8 `char` everywhere. |
 | Math and coordinates | Every engine module uses Core math (P5, P6) in UE's space since P7 (§6, Coordinates). No legacy (Y-up, metre) data is left since P15; only the golden tests convert their tables with the test-only `FLegacyCoordinateConversion`. OpenGL still gets GL clip space through `ToGLClipSpace`; bone poses are `FMatrix` values rather than `FTransform`s (the `UAnimSequence` tracks keep model-space matrices, a deviation). |
-| Renderer | Calls OpenGL directly (Glad) instead of going through RHI command lists; `FDynamicRHI` only covers device init, viewport and memory stats. |
-| Engine ↔ Renderer | UE's boundary since P13 (§4, §12): the Renderer depends on Engine, Engine includes no Renderer header. Deviations: there is no render thread (proxies are created and updated on the game thread, `MarkRenderStateDirty` recreates at once); the GPU copies of the assets live in the Renderer's cache keyed by asset instead of on the asset (`FStaticMeshRenderData`), and the assets free them through `IRendererModule::ReleaseAssetResources`; `FScene` keeps its proxies' assets alive through the garbage collector instead of render-thread fences. |
-| PS2 gameplay | The gameplay framework (Engine, UMG, AIModule, PhysicsCore without Jolt, AudioMixer with a silent device) builds for PS2 since [ps2-engine](PLANS/ps2-engine.md) E1, and a game compiled against the engine (ShooterGame) runs on the EE headless: the Renderer is still OpenGL and desktop-only (the GS scene renderer is E2). ThirdPerson keeps its own `F*` types (`FThirdPersonCharacter`, …) and `FPS2RHI`, with no `AActor` / `ACharacter` (`WITH_ENGINE=0`). |
+| Renderer | Records GS register writes (`FGSCommandList`) instead of RHI command lists: the GS is the one target, and the desktop emulates it on OpenGL (Glad, called directly by the emulator). `FDynamicRHI` only covers device init, viewport and memory stats. The GS path drops UE's pixel-stage features (shadows, specular, normal maps, reflections, post processing) on every platform. |
+| Engine ↔ Renderer | UE's boundary since P13 (§4, §12): the Renderer depends on Engine, Engine includes no Renderer header. Deviations: there is no render thread (proxies are created and updated on the game thread, `MarkRenderStateDirty` recreates at once); the GS copies of the textures live in the Renderer's texture cache keyed by asset instead of on the asset, and the assets free them through `IRendererModule::ReleaseAssetResources`; `FScene` keeps its proxies' assets alive through the garbage collector instead of render-thread fences. |
+| PS2 gameplay | The gameplay framework (Engine, UMG, AIModule, PhysicsCore without Jolt, AudioMixer with a silent device) and the Renderer build for PS2 since [ps2-engine](PLANS/ps2-engine.md) E1 / E2, so a game compiled against the engine (ShooterGame) runs and draws on the EE through the same GS scene renderer as the desktop. ThirdPerson keeps its own `F*` types (`FThirdPersonCharacter`, …) and `FPS2RHI`'s immediate calls, with no `AActor` / `ACharacter` (`WITH_ENGINE=0`). |
 | Game → Launch | The PS2 game module reads `GEngineLoop.GetMainWindow()` / `GetApplication()` through an include-only dependency on the launch module (UE game modules never see `FEngineLoop`); there is no `GEngine` / viewport on PS2 to hand them out. |
 | Input routing | No Slate: on desktop `UGameViewportClient::ProcessInput` polls the window's keys and mouse each frame and feeds the player controller; the PS2 game polls `IInputInterface` directly. No gamepad mappings on desktop. |
 | Config | `GConfig` loads the layers; since P13 the engine classes read theirs through `UPROPERTY(Config)` (`UEngine`, `UGameMapsSettings`, `UInputSettings`, `UPlayerInput`), and `BaseInput.ini` drives the input. A few keys are still read by hand (the window size, the garbage collection interval, ThirdPerson tuning). PCSX2 needs its host filesystem enabled for the PS2 build to read them. |

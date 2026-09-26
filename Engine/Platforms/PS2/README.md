@@ -209,8 +209,10 @@ needs no staged config.
 ### ShooterGame on the EE
 
 ShooterGame builds for PS2 with the whole gameplay framework (`WITH_ENGINE=1`: Engine, UMG, AIModule, PhysicsCore
-without Jolt, AudioMixer with a silent device) and runs headless until the GS scene renderer
-([ps2-engine](../../../Docs/PLANS/ps2-engine.md), E1; the renderer is E2). BuildCookRun stages it for PCSX2: the ELF
+without Jolt, AudioMixer with a silent device) and the Renderer, whose GS scene renderer draws the world, the view
+model and the HUD into `FPS2RHI`'s frame (`Renderer_PS2.Build.cmake`; [ps2-engine](../../../Docs/PLANS/ps2-engine.md)
+E1 and E2): the same code the desktop runs on its OpenGL GS emulator. `-nullrhi` keeps it headless (no scene).
+BuildCookRun stages it for PCSX2: the ELF
 with the cooked folder loose beside it (`host:` is that folder; the pak is E3) and the arguments in
 `LeonCommandLine.txt`, which the PS2 launch appends to `argv` (UE: `UECommandLine.txt`), since PCSX2 passes the ELF
 none:

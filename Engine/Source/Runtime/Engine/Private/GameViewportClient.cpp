@@ -269,10 +269,9 @@ void UGameViewportClient::UpdateHudStats(float DeltaTime)
 										 "RAM %4.0fM  %s\n"
 										 "TRIS %5d  OBJ %d/%d\n"
 										 "RES %dx%d\n"
-										 "GPU Sh %.2f Pl %.2f Col %.2f",
+										 "GS %d writes, %d tex",
 		static_cast<double>(DisplayFps), static_cast<double>(DisplayMs), RamMb, Vram, Stats.TrianglesSubmitted,
-		Stats.ObjectsVisible, Stats.ObjectsTotal, Size.X, Size.Y, static_cast<double>(Stats.ShadowMs),
-		static_cast<double>(Stats.PlanarMs), static_cast<double>(Stats.ColorMs));
+		Stats.ObjectsVisible, Stats.ObjectsTotal, Size.X, Size.Y, Stats.RegisterWrites, Stats.TextureUploads);
 	Overlay.SetRightText(Text);
 	Overlay.SetText(FString());
 	Overlay.SetCenterText(FString());

@@ -165,7 +165,7 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 #if WITH_ENGINE
 	const bool bCreateMainWindow = FApp::CanEverRender();
 	const int32 WindowWidth = GetEngineInt("/Script/Engine.GameViewportClient", "DefaultResolutionX", 1280);
-	const int32 WindowHeight = GetEngineInt("/Script/Engine.GameViewportClient", "DefaultResolutionY", 720);
+	const int32 WindowHeight = GetEngineInt("/Script/Engine.GameViewportClient", "DefaultResolutionY", 896);
 	const FString WindowTitle = FApp::HasProjectName() ? FString("Leon - ") + FApp::GetProjectName() : FString("Leon");
 #else
 	const bool bCreateMainWindow = true;

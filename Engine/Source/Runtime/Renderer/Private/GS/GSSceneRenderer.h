@@ -6,9 +6,10 @@
 #include "GSPrimitiveEmitter.h"
 #include "GSTextureCache.h"
 #include "RendererInterface.h"
-#include "WorldEffectsRenderer.h"
+#include "WorldEffectsGeometry.h"
 
 class FCanvas;
+class FDebugDraw;
 class FLightSceneProxy;
 class FSceneView;
 class FSceneViewFamily;
@@ -18,27 +19,27 @@ struct FMaterial;
 
 /**
  * The scene renderer of the GS (Docs/PLANS/ps2-gs-parity.md P5, Docs/PLANS/ps2-engine.md E2): a view family of the
- * scene becomes an FGSCommandList recorded against a drawing environment, which the PS2 sends to the GIF (and the
- * desktop preview will emulate, P4). Everything the GS cannot do per pixel happens here per vertex, in C++ that runs on
- * the EE and on the PC alike (D2):
+ * scene becomes an FGSCommandList recorded against a drawing environment, which the PS2 sends to the GIF and the
+ * desktop executes on its OpenGL emulation of the GS (P4). Everything the GS cannot do per pixel happens here per
+ * vertex, in C++ that runs on the EE and on the PC alike (D2):
  *
  * - The transform (UE's view and projection), clipping and back face culling (FGSPrimitiveEmitter), skinning on the
  *   CPU with the pose's skin matrices.
- * - Lambert lighting per vertex, the desktop's diffuse terms: 0.10 of the albedo as ambient, then up to
- *   MaxDirectionalLights directional and MaxPointLights point lights (range attenuation squared). No specular, sky
- *   reflection, normal maps, shadows or planar mirror: the GS has no pixel stage.
+ * - Lambert lighting per vertex: 0.10 of the albedo as ambient, then up to MaxDirectionalLights directional and
+ *   MaxPointLights point lights (range attenuation squared). The materials' specular, metallic, roughness, normal
+ *   map and planar mirror are not drawn, and nothing casts shadows: the GS has no pixel stage.
  * - Materials: the albedo times the light (unlit: the albedo), the albedo map through the texture cache with UvScale,
  *   translucent (Alpha < 1) sections blended back to front without writing Z.
  *
  * The frame: the clear, the opaque meshes, the skinned meshes, the impact marks (a lerp toward the mark's colour: the
- * GS cannot multiply by the destination as the desktop does), the translucent meshes, the tracers (added), the world's
- * debug lines, then the view model meshes over a cleared Z buffer with their own projection. The canvas (HUD, text)
- * draws after, with DrawCanvas.
+ * GS cannot multiply by the destination), the translucent meshes, the tracers (added), the world's debug lines and the
+ * show flags' (F1 boxes, F6 axes), then the view model meshes over a cleared Z buffer with their own projection. The
+ * canvas (HUD, text) draws after, with DrawCanvas.
  */
 class FGSSceneRenderer
 {
 public:
-	/** The background (the desktop renderer's clear colour). */
+	/** The background. */
 	static const FLinearColor ClearColor;
 	/** How much nearer, in PSMZ24 units, the impact marks are drawn than the surface under them. */
 	static constexpr uint32 DecalDepthBias = 256;
@@ -113,10 +114,16 @@ private:
 	/** Binds the effects' mask (the spot in the alpha); false without a texture arena. */
 	bool BindEffectsMask(FGSCommandList& List);
 	/** Blended triangles of the effects' vertices, not culled. */
-	void DrawEffectVertices(FGSPrimitiveEmitter& Emitter, const TArray<FWorldEffectsRenderer::FEffectVertex>& Vertices,
+	void DrawEffectVertices(FGSPrimitiveEmitter& Emitter, const TArray<FWorldEffectVertex>& Vertices,
 		const FMatrix& ViewProjection, bool bTextured);
 	void DrawWorldLines(const FSceneViewFamily& ViewFamily, const FMatrix& ViewProjection, FGSPrimitiveEmitter& Emitter,
 		FGSCommandList& List);
+
+	/** The show flags' overlays: F1's world boxes, F6's world axes and view gizmo. */
+	void DrawShowFlags(const FSceneViewFamily& ViewFamily, const FSceneView& View, const FMatrix& ViewProjection,
+		FGSPrimitiveEmitter& Emitter, FGSCommandList& List);
+	/** Lines of a debug draw through ToClip, depth tested as the environment's test says. */
+	static void DrawDebugLines(const FDebugDraw& Lines, const FMatrix& ToClip, FGSPrimitiveEmitter& Emitter);
 
 	/** Sets ZBUF_1 with or without Z writes. */
 	static void SetDepthWrite(FGSCommandList& List, const FGSDrawEnvironment& Environment, bool bWrite);

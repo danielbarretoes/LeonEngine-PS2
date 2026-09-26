@@ -242,7 +242,7 @@ bool FLeonEdCookedPackagesTest::RunTest(const FString& Parameters)
 	TestTrue("The packaging settings", FPaths::FileExists(DirA + TEXT("Engine/Config/BaseGame.ini")));
 	TestFalse("Not the editor's", FPaths::FileExists(DirA + TEXT("Engine/Config/BaseEditor.ini")));
 	TestTrue("The platform's layer", FPaths::FileExists(DirA + TEXT("Engine/Platforms/PS2/Config/PS2Engine.ini")));
-	TestTrue("The shaders", FPaths::FileExists(DirA + TEXT("Engine/Shaders/blinn_phong.frag")));
+	TestTrue("The shaders", FPaths::FileExists(DirA + TEXT("Engine/Shaders/gs_emulator.frag")));
 	return true;
 }
 

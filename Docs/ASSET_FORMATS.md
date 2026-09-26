@@ -70,7 +70,7 @@ loading, they are read back from it and the payload is freed. A payload that doe
 **GPU copies.** The renderer keeps one per texture and mesh, keyed by the asset, made the first time it is drawn. The
 asset frees it when its data changes (`UTexture::UpdateResource`, `UStaticMesh::InitResources`, called by
 `SetPlatformData`, `BuildFromMeshData` and `PostLoad`) and in `BeginDestroy` (`ReleaseResource` /
-`ReleaseResources`), through `IRendererModule::ReleaseAssetResources` ([ARCHITECTURE.md §12](ARCHITECTURE.md#12-rendering-desktop)).
+`ReleaseResources`), through `IRendererModule::ReleaseAssetResources` ([ARCHITECTURE.md §12](ARCHITECTURE.md#12-rendering-the-gs-path)).
 
 **Deviations from UE 4.27.** No texture source, compression, LOD groups or streaming; one static mesh LOD, no
 mesh description or nanite; materials are fixed parameters, not an expression graph compiled to shaders; the
@@ -436,7 +436,7 @@ No tool produces `LPS2` blobs; the PS2 target platform of the cook does not conv
 | `.lpak` paks | `Engine/Source/Runtime/PakFile` — `FPakInfo`, `FPakEntry`, `FPakFile`, `FPakPlatformFile` (`Public/IPlatformFilePak.h`), `FPakWriter` (`Public/PakWriter.h`); `Engine/Source/Programs/LeonPak` |
 | The cook | `Engine/Source/Editor/LeonEd` — `UCookCommandlet`; `Engine/Source/Developer/TargetPlatform` — `ITargetPlatform`, `ITargetPlatformManagerModule` |
 | Mesh data, material values | `Engine/Source/Runtime/RenderCore` — `FMeshData`, `FVertex`, `FMaterial` (`Public/MaterialShared.h`) |
-| Asset classes | `Engine/Source/Runtime/Engine` — `Classes/Engine` (`UTexture`, `UTexture2D`, `UStaticMesh`, `USkeletalMesh`, `USkeletalMeshSocket`, `UDataAsset`), `Classes/Materials`, `Classes/Animation`, `Classes/PhysicsEngine` (`UBodySetup`), `Classes/Sound`, `Classes/Commandlets`, `Classes/EditorFramework` (`UAssetImportData`); `Public/StaticMeshResources.h`, `Private/AssetBulkData.h`; the plain skeletal data in `AnimationCore`; the GPU copies in the Renderer's private `FRenderResourceCache` |
+| Asset classes | `Engine/Source/Runtime/Engine` — `Classes/Engine` (`UTexture`, `UTexture2D`, `UStaticMesh`, `USkeletalMesh`, `USkeletalMeshSocket`, `UDataAsset`), `Classes/Materials`, `Classes/Animation`, `Classes/PhysicsEngine` (`UBodySetup`), `Classes/Sound`, `Classes/Commandlets`, `Classes/EditorFramework` (`UAssetImportData`); `Public/StaticMeshResources.h`, `Private/AssetBulkData.h`; the plain skeletal data in `AnimationCore`; the GS copies of the textures in the Renderer's private `FGSTextureCache` |
 | Maps: the world's save and load, `LoadMap` | `Engine/Source/Runtime/Engine` — `UWorld` (`FindWorldInPackage`, `InitWorld`, `UpdateWorldComponents`, `InitializeActorsForPlay`), `ULevel`, `UEngine::LoadMap` (`Private/UnrealEngine.cpp`) |
 | Map import (glTF) | `Engine/Source/Editor/LeonEd` — `UGLTFMapFactory`, `UMapImportSettings`; `Engine/Source/Developer/MeshUtilities` — `LoadGltfScene` (`Public/GltfScene.h`) |
 | Skeletal FBX import | `Engine/Source/Developer/MeshUtilities` — `FbxSkeletalImport` |
