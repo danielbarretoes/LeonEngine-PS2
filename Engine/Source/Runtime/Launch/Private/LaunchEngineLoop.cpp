@@ -155,6 +155,7 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 	}
 #endif
 #if PLATFORM_DESKTOP
+	FPaths::ApplyLogDirectoryOverrides();
 	GLogFile = MakeUnique<FOutputDeviceFile>();
 	GLog->AddOutputDevice(GLogFile.Get());
 #endif

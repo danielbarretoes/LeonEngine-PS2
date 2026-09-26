@@ -10,7 +10,8 @@ class FArchive;
 /**
  * Writes log lines to a file (UE: FOutputDeviceFile). The default file is <Project>/Saved/Logs/<Project or
  * program>.log; an existing log is renamed to "<Name>-backup-<date>.log" first. Lines carry a UTC time stamp:
- * "[2026.09.25-14.03.07:042]LogInit: Display: ...".
+ * "[2026.09.25-14.03.07:042]LogInit: Display: ...". Desktop: FPaths::ApplyLogDirectoryOverrides (-LogDir= /
+ * LEON_LOG_DIR) may redirect ProjectLogDir before constructing this device.
  */
 class CORE_API FOutputDeviceFile : public FOutputDevice
 {

@@ -86,6 +86,14 @@ bool FPathsDirectoriesTest::RunTest(const FString& Parameters)
 
 	// The renderer's shaders sit under Engine/Shaders (UE: the /Engine/Shaders virtual folder).
 	TestTrue("Engine shaders", FPaths::FileExists(FPaths::Combine(FPaths::EngineDir(), "Shaders/gs_emulator.vert")));
+
+	const FString DefaultLogDir = FPaths::ProjectSavedDir() + "Logs/";
+	FPaths::SetProjectLogDirOverride(FString());
+	TestEqual("ProjectLogDir default", FPaths::ProjectLogDir(), DefaultLogDir);
+	FPaths::SetProjectLogDirOverride("C:/Temp/LeonLogs");
+	TestEqual("ProjectLogDir override", FPaths::ProjectLogDir(), TEXT("C:/Temp/LeonLogs/"));
+	FPaths::SetProjectLogDirOverride(FString());
+	TestEqual("ProjectLogDir cleared", FPaths::ProjectLogDir(), DefaultLogDir);
 	#endif
 	return true;
 }

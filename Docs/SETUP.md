@@ -105,7 +105,9 @@ blue). The world is UE's: X forward, Y right, Z up, centimetres. Manual checks: 
 [LEVELS.md](LEVELS.md).
 
 Every run writes a log file, `Engine/Programs/LeonGame/Saved/Logs/LeonGame.log` (a project target writes to
-`<Project>/Saved/Logs/`), keeping the previous run as `-backup-<date>.log`. Config comes from `Engine/Config/Base*.ini` and the project's `Config/Default*.ini`;
+`<Project>/Saved/Logs/`), keeping the previous run as `-backup-<date>.log`. That `Engine/Programs/<App>/Saved/` tree is
+runtime output (UE's fallback when there is no `.lproj`), not source, and is gitignored — redirect with `-LogDir=` or
+`LEON_LOG_DIR` if needed. Config comes from `Engine/Config/Base*.ini` and the project's `Config/Default*.ini`;
 a single key can be overridden from the command line with `-ini:Engine:[Section]:Key=Value`, and log verbosity with
 `-LogCmds="LogInit Verbose"`.
 
@@ -152,7 +154,10 @@ Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson -Bu
 engine program instead (`Engine\Binaries\PS2\<Name>.elf`, built with `Build.bat <Name> PS2 <Configuration>`);
 `-Configuration` is `Debug`, `Development` (default) or `Shipping`. The script finds PCSX2 through
 `$env:LEON_PCSX2`, then `pcsx2-qt.exe` on `PATH`, then the default install folders, and starts it with
-`-fastboot -elf <file>`. You can also use PCSX2's **File → Run ELF** directly.
+`-fastboot -elf <file>`. You can also use PCSX2's **File → Run ELF** directly. Dev-loop staging puts config
+next to the ELF under `Binaries\PS2\`; full cook/stage packages use `Saved\StagedBuilds\PS2\` — see
+[BUILD.md — PS2 staging matrix](BUILD.md#ps2-staging-matrix). Put PS2 BIOS dumps in PCSX2's user folder
+(`%USERPROFILE%\Documents\PCSX2\bios\`), never in this repository.
 
 ### Run TestPAL in PCSX2
 

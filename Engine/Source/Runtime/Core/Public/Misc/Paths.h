@@ -47,11 +47,24 @@ public:
 	static FString ProjectSavedDir();
 	static FString ProjectIntermediateDir();
 	static FString ProjectPluginsDir();
+	/**
+	 * <Project>/Saved/Logs/ by default. Desktop only: -LogDir=<path> or LEON_LOG_DIR redirects here (CI / custom
+	 * machines) without changing the UE layout. Call ApplyLogDirectoryOverrides before opening the log file.
+	 */
 	static FString ProjectLogDir();
 	static FString ProjectPlatformExtensionsDir();
 
 	/** Saved/Config/: the user's config layer (UE: GeneratedConfigDir). */
 	static FString GeneratedConfigDir();
+
+	/**
+	 * Desktop: applies -LogDir= (wins) or LEON_LOG_DIR to ProjectLogDir. Empty / missing leaves the default.
+	 * No-op on consoles (no log file). Safe to call more than once; clears when neither source is set.
+	 */
+	static void ApplyLogDirectoryOverrides();
+
+	/** Overrides ProjectLogDir; empty clears the override. Absolute or relative to LaunchDir. */
+	static void SetProjectLogDirOverride(const FString& Directory);
 
 	/** Path of the .lproj, empty when none is set (UE: GetProjectFilePath). */
 	static const FString& GetProjectFilePath();
