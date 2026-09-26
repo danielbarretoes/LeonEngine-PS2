@@ -7,6 +7,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-09-26
+
 The seventeenth step of the plan (P17): ShooterGame boots with a basic FPS. The engine gets UE's collision channels
 and responses and UE's character movement model (acceleration, friction, braking, air control, crouching), both
 opt-in or default-preserving, so the golden tests and the Win64 frames are unchanged. On them, `Game/ShooterGame` is a
@@ -34,6 +36,12 @@ The twentieth step (P20): bots. The grid navmesh gives way to a waypoint graph (
 links by itself, the AIModule gets a typed blackboard and UE's pawn sensing, and ShooterGame's bots play: they buy,
 walk de_leon, see and hear their enemies, fight with a human-like aim, plant, defuse and hold the sites, all from
 seeded streams so a match replays.
+
+The twenty-first step (P21) hardens it: `ShooterGame -botmatch` plays a headless match of bots at unpaced fixed steps
+and fails the process when a rule's invariant breaks; CI plays ten rounds twice and requires the same result, and a
+staged Shipping build plays three. The replay check found a read of freed memory in the AI's path following. The
+game's reflection, object, name and heap numbers go to the PS2 budgets as the port's targets. The engine and project
+content is resaved for 0.20.0 (a package records the engine version); the PS2 ELFs were not measured in these phases.
 
 ### Added
 
@@ -157,6 +165,18 @@ seeded streams so a match replays.
   an aim error that settles, bursts, the AWP's zoom), `Difficulty` and the rest in
   `[/Script/ShooterGame.ShooterAIController]`; the terrorists' site is drawn each round from the seeded stream
   (`AShooterGameMode::GetTerroristTargetSite`); weapons make noise when they fire (`FireNoiseLoudness`); `bot_stop`.
+- **Bot match** (P21; [README](Game/ShooterGame/README.md#bot-match)): `ShooterGame -botmatch [-rounds=N] [-seed=N]`
+  (the local player spectates, bots fill the teams, the game exits after N rounds with 0, or 1 when an invariant
+  broke or the rounds did not end in time) and `FShooterMatchChecker` (the round ends and the scores, the money, the
+  team sizes, the pawns' health and floor); `Botmatch budget:` logs the reflected types, the UObjects' peak, the names
+  and the heap. `BotMatch.bat [Rounds] [Seed]` plays it twice and compares the summaries; CI runs `BotMatch.bat 10 7`
+  and, in a parallel job, the staged Shipping ShooterGame's bot match (`BuildCookRun.bat -configuration=Shipping ...
+  -run`).
+- `-benchmark` (`FApp::IsBenchmarking`): a headless game's fixed steps do not wait for the clock.
+- `FPlatformMisc::RequestExitWithStatus` without `bForce` records its code (`GetRequestedEngineExitCode`), and
+  `FEngineLoop::GetExitCode` returns it after a clean shutdown.
+- Budgets.md: ShooterGame's reflection, UObjects, names and heap in a bot match, as the PS2 port's targets.
+- Tests: `ShooterGame.Bots.MatchCheckerFlagsViolations` (34); `MatchOnDeLeon` runs under `FShooterMatchChecker`.
 - Tests: `System.AIModule.Gameplay.NavigationAutoLinkStepsJumpsAndDrops`, `System.AIModule.Blackboard.TypedKeys`,
   `System.AIModule.PawnSensing.*`, `System.LeonEd.MapFactory.AutoLinksWaypoints` (386 tests), and `ShooterGame.Bots.*`
   (33), among them a three-round match of ten bots on de_leon with its invariants.
@@ -183,6 +203,9 @@ seeded streams so a match replays.
   the players' pawns (a pawn spawned during a world tick joins the level's list when the tick ends).
 - The blackboard's keys are typed (UE): `SetBool` / `GetBool` became `SetValueAsBool` / `GetValueAsBool`.
 - The navigation tests use waypoint graphs; the round and weapon tests keep the bots still.
+- `AShooterGameMode::RestartPlayer` makes a player without a team a spectator; `-seed=N` sets `RandomSeed` too.
+- Build.version 0.20.0; the engine, ThirdPerson and ShooterGame content resaved with it (the package summary records
+  the engine version).
 - ShooterGame's bodies no longer hide from their own player by visibility: they are `bOwnerNoSee`, so a player sees
   its own corpse.
 
@@ -194,6 +217,8 @@ seeded streams so a match replays.
 
 ### Fixed
 
+- `AAIController` no longer steers toward a freed path point in the frame it repaths when stuck (a reference into the
+  path outlived `RebuildPath`); the read made seeded bot matches diverge between runs.
 - A native class's default object no longer copies its parent's config members over the values its own constructor
   set (UE: a native class's defaults are not initialized from its parent's); the config then applies the parents'
   sections and the class's own as before.
