@@ -600,6 +600,20 @@ engine; ShooterGame's weapons, health, armor, death and pickups on them. Details
 | — | ShooterGame (UE's sample names): `AShooterWeapon`, `AShooterWeapon_Instant`, `AShooterWeapon_Projectile`, `AShooterProjectile`, `AShooterCharacter` health / inventory / `Die`, `AShooterGameMode::CanDealDamage` / `Killed`; CS's weapons `AShooterWeapon_Pistol`, `_Rifle`, `_Sniper`, `_Grenade` | `Game/ShooterGame/Source/ShooterGame/` |
 | — | `System.Engine.Damage.*`, `ProjectileMovement.*`, `SpectatorPawn.*`, `Sockets.*`, `Actor.LifeSpan`, `System.Renderer.ViewModel.*` / `Effects.*`, `System.LeonEd.Factories.GltfSockets`, `System.CoreUObject.Config.SubclassConstructorDefaults` (383 tests), `ShooterGame.*` (19) | `*/Private/Tests/` |
 
+### P19 — Rounds, money, buying and the bomb
+
+Counter-Strike's defusal rules on UE's match states. Details:
+[ShooterGame README — Rounds](../../Game/ShooterGame/README.md#rounds-money-and-the-bomb).
+
+| Leon (before) | UE name (now) | Where |
+| --- | --- | --- |
+| `AShooterGameMode`: teams and spawns | + UE's `ReadyToStartMatch` / `HandleMatchHasStarted` / `HandleMatchHasEnded` drive CS's rounds (`StartRound`, `EndRound`, `CheckRoundEnd`), `InitGame`'s `?seed=`, the money, `Buy`, the bomb's events, `bot_kick`, `mp_restartgame` | `Game/ShooterGame/Source/ShooterGame/` |
+| `AGameState` | `AShooterGameState` (UE ShooterGame's): the round, the score, the bomb, the kill feed | same |
+| `AShooterPlayerState`: the team | + the money, `ScoreKill` / `ScoreDeath` (UE ShooterGame's `NumKills`, `NumDeaths`) | same |
+| — | `AShooterBomb` (CS's C4; UE ShooterGame has no bomb), `UShooterBuyMenuWidget` (a UMG `UUserWidget`), `AShooterPlayerController::Buy` / `Give` / `God` / `Kill` (UE: the cheat manager's `God`) | same |
+| `ACharacter::IntegrateVertical` traced the floor from the moved feet | from where the feet began the step (UE sweeps the move) | `Engine/Private/GameFramework/Character.cpp` |
+| — | `System.Engine.CharacterMovement.LongFramesKeepTheFloor` (384 tests), `ShooterGame.*` (28) | `*/Private/Tests/` |
+
 ## Coordinates
 
 | Topic | UE 4.27 | LeonEngine |

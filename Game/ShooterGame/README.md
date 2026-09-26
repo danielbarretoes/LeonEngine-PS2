@@ -3,7 +3,8 @@
 An offline Counter-Strike-style shooter, modelled on UE's ShooterGame sample: two teams (CT and T), five players a
 side, on `de_leon`, a blockout map built in Blender. P17 boots it: the first-person character with CS movement, team
 spawns, bots that join the teams (they stand still until P20), a crosshair. P18 brings the weapons (a pistol, a rifle,
-an AWP and an HE grenade), damage, armor, death and spectating. The round rules come in P19, the bots' brains in P20.
+an AWP and an HE grenade), damage, armor, death and spectating. P19 brings Counter-Strike's defusal rules: rounds,
+money, the buy menu, the bomb and the HUD. The bots' brains come in P20.
 
 ## Build and run
 
@@ -13,8 +14,8 @@ From the repository root (Windows):
 :: The game -> Game\ShooterGame\Binaries\Win64\ShooterGame.exe
 Engine\Build\BatchFiles\Build.bat ShooterGame Win64 Development -Project=%CD%\Game\ShooterGame\ShooterGame.lproj
 
-:: Play de_leon (GameDefaultMap); fill both teams with bots on the first frame
-Game\ShooterGame\Binaries\Win64\ShooterGame.exe -ExecCmds=bot_fill
+:: Play de_leon (GameDefaultMap): bots fill both teams to five a side (bFillTeamsWithBots) and the match starts
+Game\ShooterGame\Binaries\Win64\ShooterGame.exe
 
 :: The smoke test (gate G6): headless, ten pawns, exit code 0
 Engine\Build\BatchFiles\SmokeTest.bat
@@ -27,7 +28,8 @@ Game\ShooterGame\Binaries\Win64\ShooterGameTests.exe
 Engine\Build\BatchFiles\BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.lproj -platform=Win64 -configuration=Shipping -build -cook -stage -pak -run
 ```
 
-A map URL picks the team: `ShooterGame.exe /Game/Maps/de_leon?team=T` (else the smaller team, CT on a tie).
+A map URL picks the team and the seed of the rounds (the bomb's carrier): `ShooterGame.exe /Game/Maps/de_leon?team=T?seed=42`
+(else the smaller team, CT on a tie, and `RandomSeed`).
 
 ## Controls
 
@@ -43,23 +45,28 @@ A map URL picks the team: `ShooterGame.exe /Game/Maps/de_leon?team=T` (else the 
 | R | Reload |
 | 1 / 2 / 4 | Primary (rifle, AWP) / pistol / grenade |
 | G | Drop the weapon in hand (a pawn without one in that slot picks it up by walking over it) |
-| Tab / Escape | Scoreboard / menu (placeholders) |
+| E (held) | Plant the bomb (its carrier, standing still in a bomb site, 3 s) or defuse it (a CT at the planted bomb, 10 s, 5 with a kit) |
+| B | The buy menu; 1 to 7 buy its items while it is open, B or Escape close it |
+| Tab (held) | The scoreboard |
 
 Console commands (`-ExecCmds="cmd1;cmd2"`): `bot_add_ct [N]`, `bot_add_t [N]`, `bot_add [N]` (the smaller team),
-`bot_fill` (both teams to five), `ViewFrom X Y Z Pitch Yaw` (a fixed view, for captures), `ViewPawn` (back to the
-pawn), `exit`.
+`bot_fill` (both teams to five), `bot_kick [name|all]`, `mp_restartgame [seconds]`, `Buy <item>` (usp, ak47, awp,
+hegrenade, vest, vesthelm, defuser), the cheats `give <weapon>`, `god` and `kill`, `ViewFrom X Y Z Pitch Yaw` (a fixed
+view, for captures), `ViewPawn` (back to the pawn), `exit`.
 
 ## Classes
 
 | Class | UE ShooterGame / CS counterpart | What it does |
 | --- | --- | --- |
-| `AShooterGameMode` (`AGameMode`) | `AShooterGame_TeamDeathMatch` | `GlobalDefaultGameMode` of the project. Who may hurt whom (`CanDealDamage`: no friendly fire, `bFriendlyFire`) and the kills (`Killed`, logged). Teams (`ChooseTeam`: `?team=`, else the smaller team), team spawns (`ChoosePlayerStart`: the first free start tagged with the team, level order), the bot commands (`AddBots`, `FillTeamsWithBots`), `MaxPlayersPerTeam` 5; logs where each player joined and the pawn count at the end (the smoke reads it) |
+| `AShooterGameMode` (`AGameMode`) | `AShooterGame_TeamDeathMatch` | `GlobalDefaultGameMode` of the project: the match and its rounds, the money, buying and the bomb's events ([Rounds](#rounds-money-and-the-bomb)). Who may hurt whom (`CanDealDamage`: no friendly fire, `bFriendlyFire`) and the kills (`Killed`: the feed, the money, the stats). Teams (`ChooseTeam`: `?team=`, else the smaller team), team spawns (`ChoosePlayerStart`: the first free start tagged with the team, level order), the bot commands (`AddBots`, `FillTeamsWithBots`), `MaxPlayersPerTeam` 5; logs where each player joined and the pawn count at the end (the smoke reads it) |
 | `AShooterCharacter` (`ACharacter`) | `AShooterCharacter` | First-person camera at the eyes (`UCameraComponent`, `bUsePawnControlRotation`, 74° vertical FOV), capsule 40 × 91.5 cm, eyes 163 cm (76 crouched, eased with `FInterpTo`), the team body the other players see (`CTBodyMeshName` / `TBodyMeshName`, `bOwnerNoSee`); health, armor and helmet, the damage rules and death ([Weapons](#weapons)); the inventory (one weapon a slot, `DefaultWeapons`) |
 | `UShooterCharacterMovement` (`UCharacterMovementComponent`) | `UShooterCharacterMovement` | CS 1.6 movement in centimetres (below), and the walk key through `GetMaxSpeed` |
 | `AShooterPlayerController` | `AShooterPlayerController` | The player's input, the hit marker's state (`NotifyHitConfirmed`) and the `ViewFrom` / `ViewPawn` commands; spectates when its pawn dies (`NAME_Spectating`) |
 | `AShooterAIController` (`AAIController`) | `AShooterAIController` | The bots' controller; it has a player state (a team); no behaviour yet |
-| `AShooterPlayerState` | `AShooterPlayerState` | The team (`EShooterTeam`: None, CT, T) |
-| `AShooterHUD` (`AHUD`) | `AShooterHUD` | CS's crosshair (green, 4 px gap, 7 px arms, 2 px thick; config), health and armor, the weapon and its ammunition, the hit marker, the AWP's scope, and the scoreboard placeholder |
+| `AShooterGameState` (`AGameState`) | `AShooterGameState` | The round's phase and number, the phase's end, the score, the bomb's state and the kill feed |
+| `AShooterPlayerState` | `AShooterPlayerState` | The team (`EShooterTeam`: None, CT, T), the money, the kills and the deaths |
+| `AShooterBomb` (`AActor`) | CS's C4 | Carried, dropped, planted (beeping), defused or exploded |
+| `AShooterHUD` (`AHUD`) | `AShooterHUD` | CS's crosshair (green, 4 px gap growing with the spread, 7 px arms, 2 px thick; config), health, armor and money, the weapon and its ammunition, the bomb and the kit, the round's clock and the score, the kill feed, the round's messages, the plant and defuse bar, the hit marker, the AWP's scope and the scoreboard; `UShooterBuyMenuWidget` (UMG) draws the buy menu |
 | `AShooterWeapon` (`AActor`) and its classes | `AShooterWeapon`, `_Instant`, `_Projectile`; `AShooterProjectile` | The weapons ([Weapons](#weapons)) |
 
 The CS movement values, at 1 unit = 2.54 cm (CS's player is 72 units tall and 183 cm here):
@@ -120,13 +127,47 @@ Damage (`AShooterCharacter::TakeDamage`, after `AActor::TakeDamage`):
   of it) and the armor half the rest; when the armor runs out the rest goes to the health. Damage that is not a
   weapon's or a grenade's ignores armor.
 - At 0 health the pawn dies: the game mode hears of the kill (`Killed`), the rifle (else the pistol) falls to the
-  floor ahead of it with its rounds and the rest is lost, the corpse stops colliding and lies down (until the round's
-  restart, P19), a player spectates (a free-flying `ASpectatorPawn`) and a bot lets go of the pawn.
+  floor ahead of it with its rounds and the rest is lost, the corpse stops colliding and lies down (until the next
+  round), a player spectates (a free-flying `ASpectatorPawn`) and a bot lets go of the pawn.
 - A weapon on the floor is picked up after 1 s by the first live pawn within 60 cm that has its slot free.
 
 The meshes are boxes made by `SourceArt/Weapons/make_weapons.py` (with their `SOCKET_Muzzle` nodes) and the sounds are
 synthesized by `SourceArt/Sounds/make_sounds.py`; both need only Python's standard library, write the same bytes on
 every run and are CC0 ([SourceArt/LICENSES.md](SourceArt/LICENSES.md)).
+
+## Rounds, money and the bomb
+
+Counter-Strike's defusal rules (`AShooterGameMode`, all in `DefaultGame.ini`'s `[/Script/ShooterGame.ShooterGameMode]`):
+
+- **The match**: a warmup until both teams have a player (bots fill the teams as soon as the player is in), then up to
+  `MaxRounds` (30) rounds; a team wins at 16. `mp_restartgame` starts over.
+- **A round**: the freeze (6 s: nobody moves or shoots, the buy menu opens), the round (1:55), the result (5 s), then
+  the next. Its start cleans the map (dropped weapons, grenades, corpses, the bomb), gives the survivors their health
+  back (they keep their weapons and armor), respawns the dead with the pistol, and gives the bomb to a random
+  terrorist. A player who joins during a round waits for the next one.
+- **Who wins** (the round's end, checked each tick so deaths of the same moment count together):
+
+  | What happened | Winner | Message |
+  | --- | --- | --- |
+  | Every terrorist dead, no bomb planted | CT | Counter-Terrorists Win! |
+  | Every counter-terrorist dead (planted or not) | T | Terrorists Win! |
+  | Both teams dead at once, no bomb planted | nobody | Round Draw! |
+  | The time runs out, no bomb planted | CT | Target has been saved! |
+  | The planted bomb explodes (the clock stops at the plant) | T | Target Successfully Bombed! |
+  | The planted bomb is defused | CT | The bomb has been defused! |
+
+- **Money** (CS 1.6): $800 to start, $16000 at most. A kill pays the weapon's `KillReward` ($300, the AWP $100); a
+  team kill costs $3300. The winners get $3250 ($3500 by the bomb or a defuse); the losers $1400, $500 more for each
+  consecutive loss up to $3400, and terrorists who lose with the bomb planted $800 more. The planter and the defuser
+  get $300.
+- **Buying**: in the team's buy zone, within 45 s of the round's start (any time in the warmup): the weapons at their
+  `Price`, kevlar ($650), kevlar and helmet ($1000; the helmet alone $350 with full kevlar), the defuse kit ($200, CT
+  only). A second weapon in a slot drops the first; the same weapon twice is refused.
+- **The bomb** (`AShooterBomb`, `[/Script/ShooterGame.ShooterBomb]`): the carrier plants it by holding E for 3 s,
+  standing still in a bomb site (the map's `BombSite` volumes); it beeps faster and faster and explodes after 40 s,
+  500 damage falling to nothing at 17.5 m, through walls. A counter-terrorist within 1.2 m defuses it by holding E for
+  10 s (5 with a kit); walking off or dying stops the defuse. A dead carrier drops the bomb, and the first live
+  terrorist to walk over it takes it.
 
 ## de_leon
 

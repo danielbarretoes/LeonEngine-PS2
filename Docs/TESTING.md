@@ -7,7 +7,7 @@ What runs automatically and what a person still has to check by hand. Build and 
 
 | Check | Command | Passes when |
 | --- | --- | --- |
-| Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` twice: the engine's (`LeonAutomationTests`, 383) and ShooterGame's (`ShooterGameTests`, 19) |
+| Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` twice: the engine's (`LeonAutomationTests`, 384) and ShooterGame's (`ShooterGameTests`, 28) |
 | LeonHeaderTool golden tests (run by `RunTests.bat` too) | `Engine\Intermediate\Build\HostTools\Win64\LeonHeaderTool.exe -Test` | `LeonHeaderTool -Test: N of N golden cases passed` |
 | Core, CoreUObject, Json, Projects and PakFile on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (113 test(s), 0 failed)` in the EE log (119 on Win64) |
 | Format, banned APIs (G4), Win64 build | `Engine\Build\BatchFiles\Lint.bat` | `Lint OK` |

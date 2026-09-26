@@ -24,6 +24,12 @@ friendly fire, death with a dropped weapon that others pick up, and spectating; 
 by scripts in this repository (CC0). A native class's defaults now keep what its constructor sets for inherited config
 members (a CoreUObject fix the weapon classes need).
 
+The nineteenth step (P19): Counter-Strike's defusal rules. A match of rounds (a warmup until both teams have a
+player, then the freeze, the round, the result), CS 1.6's money (rewards, the loss bonus, the plant bonus), buying in
+the buy zones with a UMG buy menu, the bomb (carried, dropped, planted in a site, defused or exploding), a HUD with the
+clock, the score, the money and the kill feed, and CS's console commands. The engine keeps characters on the floor
+through long frames (a slow frame sank them into de_leon's floor).
+
 ### Added
 
 - **Collision channels** (P17, PhysicsCore and Engine; [ARCHITECTURE.md §11](Docs/ARCHITECTURE.md#11-physics)).
@@ -109,6 +115,27 @@ members (a CoreUObject fix the weapon classes need).
   `System.CoreUObject.Config.SubclassConstructorDefaults` (383 tests; TestPAL 119, 113 on the PS2), and
   `ShooterGame.Damage.*`, `ShooterGame.Weapons.*`, `ShooterGame.Character.DeathDropsWeapon` (19).
 
+- **ShooterGame's rounds** (P19; [README](Game/ShooterGame/README.md#rounds-money-and-the-bomb)):
+  `AShooterGameMode` runs the match (the warmup, `ReadyToStartMatch`, `StartRound`, `EndRound`, `CheckRoundEnd`, the
+  match's end at more than half of `MaxRounds`), fills the teams with bots (`bFillTeamsWithBots`), cleans the map and
+  respawns the dead each round, and gives the bomb to a random terrorist from a seeded stream (`RandomSeed`, `?seed=`);
+  `AShooterGameState` (the round's phase, number and end, the score, the bomb, the kill feed; `EShooterRoundState`,
+  `EShooterBombState`, `EShooterRoundEndReason` and CS's messages).
+- The money (CS 1.6, config): kill rewards, the team kill penalty, the win rewards, the loss bonus and its streak, the
+  plant bonus, the planter's and the defuser's rewards; `AShooterPlayerState`'s money, kills and deaths.
+- Buying (`AShooterGameMode::Buy`, `CanBuy`, `GetPrice`): the team's `BuyZone` volumes, the buy time, the weapons,
+  kevlar, kevlar and helmet, the defuse kit; `AShooterPlayerController::Buy` and the buy menu (B, 1 to 7:
+  `UShooterBuyMenuWidget`, a UMG widget).
+- `AShooterBomb`: carried, dropped and picked up, planted by holding E in a `BombSite` for 3 s, beeping, exploding
+  after 40 s (500 damage within 17.5 m, through walls), defused in 10 s (5 with a kit); the C4's mesh and its sounds
+  (`make_weapons.py`, `make_sounds.py`).
+- The HUD: the round's clock and the score, the money, the bomb and the kit, the kill feed, the round's messages, the
+  plant and defuse bar, the scoreboard (kills, deaths, money) and a crosshair that opens with the spread.
+- Console: `bot_kick`, `mp_restartgame`, `Buy`, and the cheats `give`, `god` and `kill`; the keys E (use), B (buy menu)
+  and 1 to 7 (its items).
+- Tests: `System.Engine.CharacterMovement.LongFramesKeepTheFloor` (384 tests), and `ShooterGame.Rounds.*`,
+  `ShooterGame.Economy.*`, `ShooterGame.Bomb.*`, `ShooterGame.Buy.Rules`, `ShooterGame.HUD.RoundInfo` (28).
+
 ### Changed
 
 - `UGameEngine::Tick` runs `UWorld::TickGameplayFrame`, and a character moves in its movement component's tick
@@ -126,6 +153,8 @@ members (a CoreUObject fix the weapon classes need).
 - The navigation ignores pawns' capsules and components that do not affect navigation (`CanEverAffectNavigation`).
 - `ACharacter` no longer has a health of its own (`Health`, `TakeDamage(float)`, `Die`, `Revive`, `IsAlive`): damage
   goes through `AActor::TakeDamage`, and a game's pawn keeps its health (UE; `AShooterCharacter`).
+- ShooterGame's pawns spawn with their health (`PostInitializeComponents`), and `AShooterGameMode::CountPawns` counts
+  the players' pawns (a pawn spawned during a world tick joins the level's list when the tick ends).
 - ShooterGame's bodies no longer hide from their own player by visibility: they are `bOwnerNoSee`, so a player sees
   its own corpse.
 
@@ -134,6 +163,8 @@ members (a CoreUObject fix the weapon classes need).
 - A native class's default object no longer copies its parent's config members over the values its own constructor
   set (UE: a native class's defaults are not initialized from its parent's); the config then applies the parents'
   sections and the class's own as before.
+- A character stays on the floor through a long frame: the floor's trace starts where the feet began the frame's
+  vertical step, not inside the floor (a 0.1 s frame sank characters into de_leon's 20 cm floor and 1 cm pads).
 - The Renderer's includes of `GPUPassTimer.h` and `LDRColorTarget.h` match the files' case, and the Linux platform
   file includes `<stdio.h>` for `rename`, so the engine builds on Linux.
 

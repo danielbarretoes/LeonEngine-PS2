@@ -342,10 +342,19 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 - 383 engine tests and 19 ShooterGame tests; the engine builds and its tests run on Linux (the Win64 platform test
   aside).
 
+### Done — Rounds, money, buying and the bomb (P19)
+
+([LeonMapping — P19](LeonMapping.md#p19--rounds-money-buying-and-the-bomb), [ShooterGame README — Rounds](../../Game/ShooterGame/README.md#rounds-money-and-the-bomb)):
+
+- The match on UE's match states: a warmup, then CS's rounds (freeze, round, result), the win conditions (the
+  eliminations, the time, the bomb), the match's end and `mp_restartgame`; bots fill the teams; a seeded round stream.
+- CS 1.6's money, buying in the buy zones (a UMG buy menu), the bomb (plant, beeps, defuse with or without a kit,
+  explosion), the HUD's clock, score, money, kill feed, messages and scoreboard.
+- **Fix**: characters stay on the floor through long frames.
+- 384 engine tests and 28 ShooterGame tests.
+
 ### Next
 
-- **P19 (rounds):** round states on `AShooterGameMode` / a `AShooterGameState`, buy zones (the tagged trigger volumes),
-  the bomb sites, the scoreboard (`Tab`, a placeholder in `AShooterHUD`) and the menu.
 - **P20 (bots):** the bots' brains on `AShooterAIController` with the de_leon waypoint graph (`ANavigationWaypoint`
   links).
 - Later: move the character movement code from `ACharacter` into `UCharacterMovementComponent` (UE's
