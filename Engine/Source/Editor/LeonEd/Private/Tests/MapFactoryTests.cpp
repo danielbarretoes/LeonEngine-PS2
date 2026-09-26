@@ -1,3 +1,4 @@
+#include "AI/Navigation/NavigationSystem.h"
 #include "AI/Navigation/NavigationWaypoint.h"
 #include "Commandlets/ImportAssetsCommandlet.h"
 #include "CoreMinimal.h"
@@ -355,6 +356,62 @@ bool FLeonEdMapFactoryReimportTest::RunTest(const FString& Parameters)
 	TestEqual("Reimport", UImportAssetsCommandlet::ReimportPackages(Packages, &Reimported), 0);
 	TestEqual("The map reimported", Reimported, 1);
 	TestTrue("The same bytes after a load", SameFiles(First, ReadContentFiles()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLeonEdMapFactoryAutoLinksWaypointsTest, "System.LeonEd.MapFactory.AutoLinksWaypoints",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FLeonEdMapFactoryAutoLinksWaypointsTest::RunTest(const FString& Parameters)
+{
+	// bAutoLinkWaypoints (plan P20): the import adds the links an agent can walk to the ones the nodes name,
+	// NavWaypoint_03 (which names none) gets some, every added link but a drop goes both ways, A* finds a way over
+	// the imported graph, and the import stays reproducible.
+	LeonEdTest::FScopedTestContent Content;
+	FScopedProjectMapRules Rules;
+	UMapImportSettings& Settings = *GetMutableDefault<UMapImportSettings>();
+	const bool bSaved = Settings.bAutoLinkWaypoints;
+	Settings.bAutoLinkWaypoints = false;
+	UWorld* Plain = ImportFixtureMap();
+	int32 PlainLinks = 0;
+	for (const TCHAR* Name : {TEXT("NavWaypoint_01"), TEXT("NavWaypoint_02"), TEXT("NavWaypoint_03")})
+	{
+		const ANavigationWaypoint* Waypoint = Plain != nullptr ? FindActor<ANavigationWaypoint>(*Plain, Name) : nullptr;
+		PlainLinks += Waypoint != nullptr ? Waypoint->Links.Num() : 0;
+	}
+	Settings.bAutoLinkWaypoints = true;
+	UWorld* World = ImportFixtureMap();
+	const TMap<FString, TArray<uint8>> First = ReadContentFiles();
+	const bool bReproducible = ImportFixtureMap() != nullptr && SameFiles(First, ReadContentFiles());
+	Settings.bAutoLinkWaypoints = bSaved;
+	if (!TestNotNull("Imported", World))
+	{
+		return false;
+	}
+	const ANavigationWaypoint* W1 = FindActor<ANavigationWaypoint>(*World, TEXT("NavWaypoint_01"));
+	const ANavigationWaypoint* W3 = FindActor<ANavigationWaypoint>(*World, TEXT("NavWaypoint_03"));
+	if (!TestNotNull("NavWaypoint_01", W1) || !TestNotNull("NavWaypoint_03", W3))
+	{
+		return false;
+	}
+	int32 Links = 0;
+	for (const TCHAR* Name : {TEXT("NavWaypoint_01"), TEXT("NavWaypoint_02"), TEXT("NavWaypoint_03")})
+	{
+		const ANavigationWaypoint* Waypoint = FindActor<ANavigationWaypoint>(*World, Name);
+		Links += Waypoint != nullptr ? Waypoint->Links.Num() : 0;
+	}
+	TestTrue("Links were added", Links > PlainLinks);
+	TestTrue("NavWaypoint_03 is linked now", W3->Links.Num() > 0);
+	TestTrue("Both ways", W3->Links.Num() == 0 || W3->Links[0]->Links.Contains(W3));
+	TestTrue("Reproducible", bReproducible);
+
+	UNavigationSystem Navigation;
+	Navigation.Build(*World);
+	TArray<int32> NodePath;
+	TestTrue("A* from NavWaypoint_03 to NavWaypoint_01",
+		UNavigationSystem::FindNodePath(
+			Navigation.GetNodes(), Navigation.FindNode(W3), Navigation.FindNode(W1), NodePath) &&
+			NodePath.Num() >= 2);
 	return true;
 }
 

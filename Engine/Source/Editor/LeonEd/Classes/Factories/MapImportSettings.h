@@ -72,6 +72,9 @@ struct LEONED_API FMapImportNodeRule
  *   one of its tags; the import fails, naming the missing entries, when one is not met. The engine's maps
  *   (/Engine/...) are not a project's: a reimport of every asset with a project (CheckReimport, gate G5) does not
  *   check them against it.
+ * - With bAutoLinkWaypoints the import links the map's waypoints the way an agent of the Waypoint* sizes can walk
+ *   (UNavigationSystem::AutoLinkWaypoints: a capsule sweep, steps, jumps, drops), besides the links the nodes name;
+ *   the links are saved in the map (plan P20).
  */
 UCLASS(Config = Editor)
 class LEONED_API UMapImportSettings : public UObject
@@ -88,6 +91,29 @@ public:
 	/** What every map of the project must hold (see the class comment). */
 	UPROPERTY(Config)
 	TArray<FString> RequiredTags;
+
+	/** Links the waypoints an agent can walk between (see the class comment); off in the engine's config. */
+	UPROPERTY(Config)
+	bool bAutoLinkWaypoints = false;
+
+	/** The walking agent of the auto-linking (FWaypointLinkParams), cm. */
+	UPROPERTY(Config)
+	float WaypointAgentRadius = 40.0f;
+
+	UPROPERTY(Config)
+	float WaypointAgentHalfHeight = 91.5f;
+
+	UPROPERTY(Config)
+	float WaypointMaxStepHeight = 45.0f;
+
+	UPROPERTY(Config)
+	float WaypointMaxJumpHeight = 115.0f;
+
+	UPROPERTY(Config)
+	float WaypointMaxDropHeight = 300.0f;
+
+	UPROPERTY(Config)
+	float WaypointMaxLinkDistance = 2000.0f;
 
 	/** The rule of a node name: the longest matching Prefix (the first of equal ones), or null. */
 	[[nodiscard]] const FMapImportNodeRule* FindRule(const FString& NodeName) const;

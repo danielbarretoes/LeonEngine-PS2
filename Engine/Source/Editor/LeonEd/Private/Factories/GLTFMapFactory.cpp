@@ -1,5 +1,6 @@
 #include "Factories/GLTFMapFactory.h"
 
+#include "AI/Navigation/NavigationSystem.h"
 #include "AI/Navigation/NavigationWaypoint.h"
 #include "AssetImportUtils.h"
 #include "Components/StaticMeshComponent.h"
@@ -597,6 +598,20 @@ UObject* UGLTFMapFactory::FactoryCreateFile(UClass* InClass, UObject* InParent, 
 		{
 			Entry.Key->Flags.AddUnique(FName(*Flag));
 		}
+	}
+
+	// 6. The waypoints an agent can walk between, linked (the project's setting; the links are saved in the map).
+	if (Settings.bAutoLinkWaypoints)
+	{
+		FWaypointLinkParams LinkParams;
+		LinkParams.AgentRadius = Settings.WaypointAgentRadius;
+		LinkParams.AgentHalfHeight = Settings.WaypointAgentHalfHeight;
+		LinkParams.MaxStepHeight = Settings.WaypointMaxStepHeight;
+		LinkParams.MaxJumpHeight = Settings.WaypointMaxJumpHeight;
+		LinkParams.MaxDropHeight = Settings.WaypointMaxDropHeight;
+		LinkParams.MaxLinkDistance = Settings.WaypointMaxLinkDistance;
+		const int32 Added = UNavigationSystem::AutoLinkWaypoints(*World, LinkParams);
+		UE_LOG(LogLeonEd, Log, "GLTFMapFactory: %d waypoint link(s) added by the auto-linking", Added);
 	}
 
 	UpdateAssetImportData(World, Filename);

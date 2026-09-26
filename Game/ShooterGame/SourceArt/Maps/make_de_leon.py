@@ -187,7 +187,8 @@ def build():
         add_empty(gameplay, "PlayerStart_CT" + suffix, (26.5, y, START_HEIGHT), "ARROWS", yaw=180.0)
         add_empty(gameplay, "PlayerStart_T" + suffix, (-26.5, y, START_HEIGHT), "ARROWS", yaw=0.0)
 
-    # The waypoint graph (links authored by hand until P20's auto-linking; each link both ways).
+    # The waypoint graph: the main routes, linked by hand both ways; the import adds the links a player can walk
+    # (bAutoLinkWaypoints in Config/DefaultEditor.ini).
     waypoints = {
         "TSpawn": (-24.0, 0.0), "TMid": (-17.0, 0.0), "TPlazaA": (-18.0, 16.0), "TPlazaB": (-18.0, -16.0),
         "Mid": (-4.0, 0.0), "ShortA": (0.0, 9.0), "ShortB": (0.0, -9.0), "LongA": (0.0, 16.0), "LongB": (0.0, -16.0),
