@@ -65,7 +65,7 @@ leon_target(ThirdPerson TYPE Game
 )
 ```
 
-The gameplay framework (`Engine` module) is desktop-only, so the target compiles its launch module with `WITH_ENGINE=0`. The executable's `main` comes from the engine's `Launch` module (the default launch module of a Game target): on PS2, `LaunchPS2.cpp` calls `GuardedMain`, which runs `FEngineLoop`:
+The target keeps its own `F*` gameplay types and compiles its launch module with `WITH_ENGINE=0` (the gameplay framework runs on PS2 headless since [ps2-engine](../../Docs/PLANS/ps2-engine.md) E1, but draws nothing until its GS renderer, E2). The executable's `main` comes from the engine's `Launch` module (the default launch module of a Game target): on PS2, `LaunchPS2.cpp` calls `GuardedMain`, which runs `FEngineLoop`:
 
 1. `FEngineLoop::PreInit` creates the platform application, the main window and the RHI on it (`RHIInit`), then starts the statically linked modules: CoreUObject (the object array of 8 192 slots and the transient package, logged as `LogUObjectBase: Object system started`), InputCore (`EKeys`, the reflected `FKey`) and ThirdPerson.
 2. `FEngineLoop::Tick` polls the pad, ticks `FTicker::GetCoreTicker()`, lets the platform hooks draw the stats overlay, and presents.

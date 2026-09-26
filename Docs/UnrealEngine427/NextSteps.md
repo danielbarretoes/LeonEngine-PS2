@@ -418,9 +418,9 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 
 ## Engine / platform
 
-- Gameplay framework on PS2 (the modules use UE containers and Core math since P6, but Engine still depends on the
-  desktop-only Renderer, UMG and AudioMixer); then `Game/ThirdPerson` can use `AThirdPersonCharacter : ACharacter`
-  like TP_ThirdPerson.
+- Gameplay framework on PS2: it builds and runs headless since [ps2-engine](../PLANS/ps2-engine.md) E1; the GS scene
+  renderer (E2), the PS2 cook (E3), input and performance (E4) and audio (E5) follow. Then `Game/ThirdPerson` can use
+  `AThirdPersonCharacter : ACharacter` like TP_ThirdPerson.
 - Renderer through RHI command lists instead of direct GL calls (the Engine ↔ Renderer cycle is gone since P13); a
   render thread (the scene proxies are the seam).
 - `UNavigationSystemBase` seam so NavigationSystem can move to its own module; a navmesh (Recast) if a map ever

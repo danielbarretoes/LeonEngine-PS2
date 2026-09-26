@@ -103,9 +103,9 @@ immediate-mode drawing API used by the game and the overlay. See [its README](So
 
 ## Frame order
 
-The PS2 game target is built with `COMPILE_AGAINST_ENGINE OFF` (`WITH_ENGINE=0`): the desktop gameplay framework
-(`Engine` module) does not run on PS2, and `FEngineLoop` (`Engine/Source/Runtime/Launch/Private/LaunchEngineLoop.cpp`)
-owns the application and the main window itself.
+ThirdPerson is built with `COMPILE_AGAINST_ENGINE OFF` (`WITH_ENGINE=0`): it keeps its own gameplay types, and
+`FEngineLoop` (`Engine/Source/Runtime/Launch/Private/LaunchEngineLoop.cpp`) owns the application and the main window
+itself. ShooterGame is the engine game on PS2 (`WITH_ENGINE=1`, see "ShooterGame on the EE" below).
 
 Startup (`GuardedMain` → `FEngineLoop::PreInit`):
 
@@ -206,7 +206,24 @@ times their size in a grid with their names, on a 32-bit screen: what the refere
 pixel, to compare with and capture in PCSX2 ([ps2-gs-parity](../../../Docs/PLANS/ps2-gs-parity.md), P2 and P3). It
 needs no staged config.
 
-The root `Package.bat` builds and packages `ThirdPerson`, `TestPAL` and `GSConformance` for PS2 (Development, in Docker, into
+### ShooterGame on the EE
+
+ShooterGame builds for PS2 with the whole gameplay framework (`WITH_ENGINE=1`: Engine, UMG, AIModule, PhysicsCore
+without Jolt, AudioMixer with a silent device) and runs headless until the GS scene renderer
+([ps2-engine](../../../Docs/PLANS/ps2-engine.md), E1; the renderer is E2). BuildCookRun stages it for PCSX2: the ELF
+with the cooked folder loose beside it (`host:` is that folder; the pak is E3) and the arguments in
+`LeonCommandLine.txt`, which the PS2 launch appends to `argv` (UE: `UECommandLine.txt`), since PCSX2 passes the ELF
+none:
+
+```bat
+Engine\Build\BatchFiles\BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.lproj -platform=PS2 -build -cook -stage -run "-addcmdline=-nullrhi -benchmark -botmatch -rounds=10 -seed=7"
+```
+
+With PCSX2's host filesystem on, the EE log ends with `Botmatch OK: 10 round(s), ...` and the `Botmatch budget:` line
+(objects, names, GMalloc). The result does not have to match Win64's (the EE's floats are not IEEE); two runs must
+match each other.
+
+The root `Package.bat` builds and packages `ThirdPerson`, `TestPAL`, `GSConformance` and ShooterGame (the botmatch) for PS2 (Development, in Docker, into
 `Packages\PS2\`); the ELF sizes (gate G3) are measured with the toolchain's `mips64r5900el-ps2-elf-size` in the ps2dev
 image when a phase is recorded ([Budgets.md](Documentation/Budgets.md)).
 

@@ -344,7 +344,7 @@ Targets in the repository:
 | `TestPAL` | `Engine/Source/Programs/TestPAL/TestPAL.Target.cmake` | Program | all | `COLLECT_AUTOMATION_TESTS`; runs the Core, CoreUObject, Json, Projects and PakFile automation tests (`-filter=<text>`), prints `TestPAL: PASSED (N test(s), 0 failed)`; on PS2 run it with `RunPCSX2.ps1 -Program TestPAL` |
 | `BlankProgram` | `Engine/Source/Programs/BlankProgram/BlankProgram.Target.cmake` | Program | all | starts the linked modules and prints the platform |
 | `ThirdPerson` | `Game/ThirdPerson/Source/ThirdPerson.Target.cmake` | Game | PS2 | `COMPILE_AGAINST_ENGINE OFF` |
-| `ShooterGame` | `Game/ShooterGame/Source/ShooterGame.Target.cmake` | Game | Win64 | the `.lproj`'s module `ShooterGame` (`PLATFORMS Desktop`; `Engine`, `AIModule`); opens `/Game/Maps/de_leon` ([README](../Game/ShooterGame/README.md)) |
+| `ShooterGame` | `Game/ShooterGame/Source/ShooterGame.Target.cmake` | Game | Win64, PS2 | the `.lproj`'s module `ShooterGame` (`Engine`, `AIModule`; on PS2 headless until the renderer, [ps2-engine](PLANS/ps2-engine.md)); opens `/Game/Maps/de_leon` ([README](../Game/ShooterGame/README.md)) |
 | `ShooterGameTests` | `Game/ShooterGame/Source/ShooterGameTests.Target.cmake` | Program | Win64 | `LAUNCH_MODULE LeonAutomationTests` (the engine's runner), `EXTRA_MODULE_NAMES ShooterGame Renderer LeonEd`, `COLLECT_AUTOMATION_TESTS`, `AUTOMATION_TEST_MODULES ShooterGame` |
 
 ### How a target is assembled

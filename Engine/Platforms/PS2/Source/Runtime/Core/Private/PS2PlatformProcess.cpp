@@ -3,6 +3,8 @@
 #include "HAL/PlatformProcess.h"
 #include "Misc/CString.h"
 
+#include <time.h>
+
 namespace
 {
 	// Fixed buffers: BaseDir is asked for before the heap-backed Core types are worth using, and argv[0] is short.
@@ -73,4 +75,17 @@ FString FPS2PlatformProcess::GetCurrentWorkingDirectory()
 		Result.LeftChopInline(1);
 	}
 	return Result;
+}
+
+void FPS2PlatformProcess::Sleep(float Seconds)
+{
+	if (Seconds <= 0.0f)
+	{
+		return;
+	}
+	const long long Nanoseconds = static_cast<long long>(static_cast<double>(Seconds) * 1000000000.0);
+	timespec Request{};
+	Request.tv_sec = static_cast<time_t>(Nanoseconds / 1000000000LL);
+	Request.tv_nsec = static_cast<long>(Nanoseconds % 1000000000LL);
+	nanosleep(&Request, nullptr);
 }

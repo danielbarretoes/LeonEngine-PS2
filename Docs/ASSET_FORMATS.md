@@ -398,7 +398,7 @@ Examples: `Game/ThirdPerson/ThirdPerson.lproj`, `Engine/Plugins/Runtime/JoltPhys
 
 ## PS2
 
-The PS2 runtime (`Engine/Platforms/PS2/Source/Runtime/PS2RHI`) draws with the Graphics Synthesizer directly and loads no `.lasset` or `.lmap` package yet. The cook has a PS2 target platform since P16, a stub that cooks the Win64 formats; the PS2 conversions (PSMT8 / PSMT4 textures, `LPS2` v2 meshes, ADPCM sounds) and a pak on `cdrom0:` come with the Engine port. The PakFile module builds for the PS2, and TestPAL runs its tests there on paks in memory. The ThirdPerson demo builds its textures, materials and level in code.
+The PS2 runtime (`Engine/Platforms/PS2/Source/Runtime/PS2RHI`) draws with the Graphics Synthesizer. ShooterGame on the EE ([ps2-engine](PLANS/ps2-engine.md) E1) loads its `.lasset` and `.lmap` packages loose through `host:`, cooked by the PS2 target platform, a stub since P16 that cooks the Win64 formats; the PS2 conversions (PSMT8 / PSMT4 textures, `LPS2` v2 meshes, ADPCM sounds) and a pak on `cdrom0:` are E3. The PakFile module builds for the PS2, and TestPAL runs its tests there on paks in memory. The ThirdPerson demo builds its textures, materials and level in code.
 
 ### Cooked mesh blob — `LPS2`
 

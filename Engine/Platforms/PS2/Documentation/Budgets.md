@@ -85,6 +85,8 @@ All builds are Development (`-O2`). `text` / `data` / `bss` are bytes.
 | GS P3 | GSConformance | 221 511 | 6 300 | 27 488 | 228 788 | new: the GS conformance scenes on the PS2 |
 | GS P3 | BlankProgram | 180 132 | 6 136 | 27 225 | 187 316 | no code change: the toolchain difference |
 | GS P3 | TestPAL | 1 506 600 | 6 380 | 40 384 | 1 514 088 | GSCore and its 8 tests (+48 016 bytes of text) |
+| E1 | ShooterGame | 1 615 998 | 6 452 | 43 184 | — | new ([ps2-engine](../../../../Docs/PLANS/ps2-engine.md) E1): the gameplay framework (Engine, UMG, SlateCore, AIModule, AnimationCore, PhysicsCore without Jolt, AudioMixer silent, PakFile) and the game, headless. About 85 KB of it is generated reflection code and tables (`Z_Construct_*`, `StaticClass`, `exec*`, `RegisterReflection_*`, `_Statics`); the construction heap and the runtime numbers wait for the botmatch in PCSX2 |
+| E1 | ThirdPerson | 687 890 | 7 056 | 33 984 | — | +2 048 bytes of text: the PS2 launch reads `LeonCommandLine.txt` (`FFileHelper`) |
 
 **P9 reflection in TestPAL** (`nm -S` over the ELF, bytes):
 

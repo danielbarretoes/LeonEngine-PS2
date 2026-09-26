@@ -43,7 +43,7 @@ Tamaños: S, M, L, XL, como en los planes anteriores.
 
 Gate: capturas de PCSX2 de ThirdPerson y de `GSConformance`, y el log de TestPAL.
 
-### E1 · El motor compila y corre headless en el EE (L)
+### E1 · El motor compila y corre headless en el EE (L) — compila; falta el botmatch en PCSX2
 
 - Quitar `PLATFORMS Desktop` de Engine, UMG, SlateCore, AnimationCore, AIModule, PhysicsCore y ShooterGame. Lo que
   no compile se resuelve en su módulo de plataforma o detrás de una interfaz, nunca con `#if` en la lógica (D1).
@@ -63,6 +63,30 @@ Gate:
   del botmatch se cumplen) y da el mismo resultado dos veces seguidas. No tiene por qué coincidir con Win64: los
   floats del EE no son IEEE.
 - Memoria, objetos, nombres, reflexión y tamaño del ELF medidos y anotados en Budgets.md, dentro de sus límites.
+
+Estado:
+
+- Engine, UMG, SlateCore, AnimationCore, AIModule, PhysicsCore, RenderCore, ShooterGame y stb (header-only, lo usa
+  el `FCanvas` para el texto) compilan para PS2. AudioMixer excluye miniaudio en PS2 y la extensión de plataforma pone
+  un `FAudioDevice` silencioso.
+- Un target compilado contra el motor (`COMPILE_AGAINST_ENGINE`) añade Engine y PakFile a su clausura en cualquier
+  plataforma (UE: `bCompileAgainstEngine`). Así Launch no depende de Engine en PS2 y ThirdPerson sigue sin motor.
+- Launch ya no exige escritorio con `WITH_ENGINE=1`. `FPS2PlatformProcess::Sleep` (con `nanosleep`) para el bucle
+  headless con pausa.
+- Argumentos: PCSX2 y el arranque desde disco solo pasan `argv[0]`. El launch de PS2 añade los de
+  `LeonCommandLine.txt`, junto al ELF (UE: `UECommandLine.txt`).
+- Staging: `BuildCookRun -platform=PS2` (solo Development) copia el ELF y la carpeta cocinada **suelta** junto a él
+  y escribe `-addcmdline` en `LeonCommandLine.txt`. `-run` lo abre en PCSX2 (`RunPCSX2.ps1 -StagedElf`).
+  `Package.bat` lo empaqueta.
+- ShooterGame.elf: 1,6 MB de código (unos 85 KB de reflexión generada), sin warnings. ThirdPerson crece 2 KB (el
+  lector del fichero de argumentos). Win64 y Linux sin cambios: 395 tests del motor, 42 de ShooterGame y el botmatch
+  en Linux (CT 6 - T 4, 72 bajas).
+- Desviaciones del plan: el pak queda para E3 (en E1 bastan los ficheros sueltos por `host:`, el camino que ya usa la
+  config de ThirdPerson). `GLClipSpace.h` se queda en RenderCore porque es solo matemática (una matriz) y Engine la
+  usa.
+- Riesgo pendiente: la pila del EE es de 128 KB (`linkfile` de ps2sdk). El marco más grande del ELF es de 4 KB (el
+  unwinder de libgcc), pero la recursión solo se ve en ejecución.
+- Pendiente (manual): el botmatch en PCSX2 dos veces, y los números de `Botmatch budget:` en Budgets.md.
 
 ### E2 · Renderer de escena en PS2 (L) — es GS P5
 

@@ -5,11 +5,10 @@ leon_module(Launch
 	PUBLIC_DEPENDENCIES Core InputCore ApplicationCore RHI
 	# The .lproj descriptor is loaded in PreInit (IProjectManager).
 	PRIVATE_DEPENDENCIES Projects
-	# Desktop games tick GEngine (UGameEngine) from FEngineLoop; Engine reaches the Renderer module only by name
-	# (IRendererModule), so the launch module links it (UE: Launch's Renderer dependency), and PreInit's RHIInit needs
-	# the platform RHI (OpenGLDrv; the PS2 extension links PS2RHI).
-	PRIVATE_DEPENDENCIES_Desktop Engine Renderer OpenGLDrv
-	# PreInit puts the pak platform file on the chain when the build has paks (UE: Launch's PakFile dependency). The
-	# PS2 mounts none yet: its pak on cdrom0: comes with the Engine port.
-	PRIVATE_DEPENDENCIES_Desktop PakFile
+	# Games compiled against the engine tick GEngine (UGameEngine) from FEngineLoop and mount their paks: the target
+	# adds Engine and PakFile (LeonBuildTool, COMPILE_AGAINST_ENGINE). Desktop links them for every target, with the
+	# Renderer (Engine reaches it only by name, IRendererModule; UE: Launch's Renderer dependency) and the platform RHI
+	# PreInit's RHIInit needs (OpenGLDrv; the PS2 extension links PS2RHI). The PS2 has no Renderer yet
+	# (Docs/PLANS/ps2-engine.md, E2): its engine games run headless.
+	PRIVATE_DEPENDENCIES_Desktop Engine Renderer OpenGLDrv PakFile
 )

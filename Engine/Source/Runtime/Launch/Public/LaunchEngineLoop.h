@@ -17,11 +17,12 @@ class GenericApplication;
  *
  * - PreInit: the command line, the project, the config and the log, then the platform application, the main window
  *   and the RHI on its context (RHIInit; none for a desktop game with -nullrhi), then the statically linked modules.
- * - With the engine (WITH_ENGINE=1, LeonGame): Init creates GEngine of `[/Script/Engine.Engine] GameEngine=`, queues
+ * - With the engine (WITH_ENGINE=1: LeonGame, ShooterGame, on every platform): Init creates GEngine of
+ * `[/Script/Engine.Engine] GameEngine=`, queues
  *   `-ExecCmds=`, calls GEngine->Init and Start (the first map); Tick pumps the window's events, runs the deferred
  *   commands and GEngine->Tick; Exit calls GEngine->PreExit.
- * - Without it (WITH_ENGINE=0, the PS2 game) Tick ticks FTicker::GetCoreTicker(), where game modules register their
- *   per-frame work, and presents.
+ * - Without it (WITH_ENGINE=0: ThirdPerson on PS2) Tick ticks FTicker::GetCoreTicker(), where game modules register
+ * their per-frame work, and presents.
  */
 class LAUNCH_API FEngineLoop
 #if WITH_ENGINE

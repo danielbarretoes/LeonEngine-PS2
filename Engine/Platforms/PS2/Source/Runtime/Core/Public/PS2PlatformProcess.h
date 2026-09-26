@@ -12,6 +12,8 @@ struct CORE_API FPS2PlatformProcess : public FGenericPlatformProcess
 	static const TCHAR* ExecutableName(bool bRemoveExtension = true);
 	static FString GetCurrentWorkingDirectory();
 	static void SetArgV0(const TCHAR* ArgV0);
+	/** Blocks the calling thread for Seconds (UE: Sleep): libcglue's nanosleep, a timer alarm and a semaphore. */
+	static void Sleep(float Seconds);
 };
 
 typedef FPS2PlatformProcess FPlatformProcess;

@@ -1,7 +1,8 @@
 # Builds and packages the project for its platforms (UE: RunUAT BuildCookRun -archive), called by the root Package.bat.
 #   Win64: ShooterGame Shipping, built, cooked, staged and paked by BuildCookRun.ps1, copied to Packages\Win64\.
 #   PS2:   ThirdPerson, TestPAL and GSConformance Development ELFs built in the pinned ps2dev image (Docker), with the
-#          config that RunPCSX2.ps1 -StageOnly stages next to them, copied to Packages\PS2\<Name>\.
+#          config that RunPCSX2.ps1 -StageOnly stages next to them, and ShooterGame staged by BuildCookRun with its
+#          cooked content (the headless botmatch), copied to Packages\PS2\<Name>\.
 # -NoWin64 / -NoPS2 skip a platform. Packages\ is emptied for the platforms that are packaged and is git-ignored.
 param(
 	[switch]$NoWin64,
@@ -83,6 +84,13 @@ if (-not $NoPS2)
 	if ($LASTEXITCODE -ne 0) { Fail "staging TestPAL's config failed" }
 	Copy-Package (Join-Path $Root "Engine\Binaries\PS2") @("TestPAL.elf", "Engine") (Join-Path $Packages "PS2\TestPAL")
 
+	# ShooterGame on the EE, headless (Docs/PLANS/ps2-engine.md, E1): the botmatch, until the renderer comes (E2).
+	# BuildCookRun stages the cooked folder loose beside the ELF and the arguments in LeonCommandLine.txt.
+	$ShooterGame = Join-Path $Root "Game\ShooterGame\ShooterGame.lproj"
+	Step "PS2: ShooterGame Development (headless botmatch)"
+	Invoke-Batch (Join-Path $BatchFiles "BuildCookRun.bat") "`"-project=$ShooterGame`" -platform=PS2 -build -cook -stage `"-addcmdline=-nullrhi -benchmark -botmatch -rounds=10 -seed=7`""
+	Copy-Package (Join-Path $Root "Game\ShooterGame\Saved\StagedBuilds\PS2") @("*") (Join-Path $Packages "PS2\ShooterGame")
+
 	# The GS conformance scenes (Docs/PLANS/ps2-gs-parity.md): no config to stage.
 	Step "PS2: GSConformance Development"
 	Invoke-Batch (Join-Path $BatchFiles "Build.bat") "GSConformance PS2 Development"
@@ -96,8 +104,9 @@ if (-not $NoWin64)
 }
 if (-not $NoPS2)
 {
-	Write-Host "  PS2:   Packages\PS2\ThirdPerson\ThirdPerson.elf, Packages\PS2\TestPAL\TestPAL.elf and"
-	Write-Host "         Packages\PS2\GSConformance\GSConformance.elf"
+	Write-Host "  PS2:   Packages\PS2\ThirdPerson\ThirdPerson.elf, Packages\PS2\TestPAL\TestPAL.elf,"
+	Write-Host "         Packages\PS2\GSConformance\GSConformance.elf and Packages\PS2\ShooterGame\ShooterGame.elf"
+	Write-Host "         (the headless botmatch: its result, 'Botmatch OK', is in the EE log)"
 	Write-Host "         PCSX2: enable Settings > Advanced > Enable Host Filesystem (the staged config is read through host:),"
 	Write-Host "         then boot the ELF (pcsx2-qt -fastboot -elf <file>). TestPAL prints its result to the EE log."
 }

@@ -1,6 +1,5 @@
-# stb (stb_image, stb_easy_font) — vendored header-only image/font helpers.
+# stb (stb_image, stb_easy_font) — vendored header-only image/font helpers, portable C on every platform.
 leon_module(STB
-	PLATFORMS Desktop
 	EXTERNAL_TARGETS LeonThirdParty_STB
 )
 

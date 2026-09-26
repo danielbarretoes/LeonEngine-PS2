@@ -22,14 +22,15 @@
 #include "Modules/ModuleManager.h"
 #include "PlatformEngineLoopHooks.h"
 
-#if PLATFORM_DESKTOP
+// The pak platform file: every desktop target, and the engine games of the other platforms (the target links PakFile
+// when it is compiled against the engine).
+#define LEON_LAUNCH_WITH_PAK (PLATFORM_DESKTOP || WITH_ENGINE)
+
+#if LEON_LAUNCH_WITH_PAK
 	#include "IPlatformFilePak.h"
 #endif
 
 #if WITH_ENGINE
-	#if !PLATFORM_DESKTOP
-		#error "WITH_ENGINE targets currently require a desktop platform (the gameplay framework is host-only)"
-	#endif
 	#include "Engine/Engine.h"
 	#include "Engine/GameEngine.h"
 	#include "UObject/GarbageCollection.h"
@@ -46,7 +47,7 @@ namespace
 	/** The log file (desktop): <Project>/Saved/Logs/<Name>.log. */
 	TUniquePtr<FOutputDeviceFile> GLogFile;
 
-#if PLATFORM_DESKTOP
+#if LEON_LAUNCH_WITH_PAK
 	/** The pak platform file PreInit put on top of the chain, if any. */
 	TUniquePtr<FPakPlatformFile> GPakPlatformFile;
 #endif
@@ -59,7 +60,7 @@ namespace
 	 */
 	bool LaunchCheckForFileOverride()
 	{
-#if PLATFORM_DESKTOP
+#if LEON_LAUNCH_WITH_PAK
 		IPlatformFile& CurrentPlatformFile = FPlatformFileManager::Get().GetPlatformFile();
 		TUniquePtr<FPakPlatformFile> PakPlatformFile = MakeUnique<FPakPlatformFile>();
 		if (PakPlatformFile->ShouldBeUsed(&CurrentPlatformFile, FCommandLine::Get()))
@@ -392,7 +393,7 @@ void FEngineLoop::Exit()
 		GLog->RemoveOutputDevice(GLogFile.Get());
 		GLogFile.Reset();
 	}
-#if PLATFORM_DESKTOP
+#if LEON_LAUNCH_WITH_PAK
 	// The paks go last: nothing reads a file after this.
 	if (GPakPlatformFile)
 	{

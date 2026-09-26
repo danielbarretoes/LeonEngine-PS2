@@ -48,9 +48,9 @@ namespace
 	};
 
 	/**
-	 * PS2 (Leon; UE's console platforms live in platform extensions): a stub until the Engine port. It cooks the same
-	 * formats as Win64, and the cook says so: the PS2 conversions (PSMT8 / PSMT4 textures with a CLUT, LPS2 v2
-	 * meshes, ADPCM sounds, a pak aligned for cdrom0:) are a later milestone.
+	 * PS2 (Leon; UE's console platforms live in platform extensions): a stub until the PS2 cook
+	 * (Docs/PLANS/ps2-engine.md, E3). It cooks the same formats as Win64, and the cook says so: the PS2 conversions
+	 * (PSMT8 / PSMT4 textures with a CLUT, LPS2 v2 meshes, ADPCM sounds, a pak aligned for cdrom0:) come there.
 	 */
 	class FPS2TargetPlatform final : public ITargetPlatform
 	{

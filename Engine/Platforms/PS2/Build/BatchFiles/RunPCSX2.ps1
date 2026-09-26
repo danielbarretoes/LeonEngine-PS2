@@ -1,6 +1,8 @@
 # Launch a project's (or an engine program's) PS2 build in PCSX2, optionally building it first with LeonBuildTool.
 # Usage: Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 [-Project <dir|file.lproj>] [-Configuration Development] [-Build] [-NoStage] [-StageOnly]
 #        Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL [-Build] [-NoStage] [-StageOnly]
+#        Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -StagedElf <file.elf>
+# -StagedElf starts an ELF that is already staged with its content (BuildCookRun -platform=PS2 -stage -run) as is.
 # -StageOnly stages the config next to the ELF and returns without looking for or starting PCSX2 (Package.bat).
 # Program output (printf / UE_LOG) goes to the EE console: PCSX2 log, %USERPROFILE%\Documents\PCSX2\logs\emulog.txt.
 # PCSX2 path: $env:LEON_PCSX2, else PATH, else default install locations.
@@ -18,13 +20,16 @@ param(
     [string]$Configuration = "Development",
     [switch]$Build,
     [switch]$NoStage,
-    [switch]$StageOnly
+    [switch]$StageOnly,
+    [string]$StagedElf = ""
 )
 
 $ErrorActionPreference = "Stop"
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..\..\..")).Path
 
-if ($Program) {
+if ($StagedElf) {
+    $Elf = (Resolve-Path $StagedElf).Path
+} elseif ($Program) {
     if ($Build) {
         & cmd /c "`"$Root\Engine\Build\BatchFiles\Build.bat`" $Program PS2 $Configuration"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -64,12 +69,14 @@ function Copy-Config([string]$From, [string]$To) {
 
 $StageDir = Split-Path $Elf -Parent
 $StagedEngine = Join-Path $StageDir "Engine"
-if (Test-Path $StagedEngine) { Remove-Item -Recurse -Force $StagedEngine }
-if (-not $Program) {
-    $StagedProject = Join-Path $StageDir $ProjectName
-    if (Test-Path $StagedProject) { Remove-Item -Recurse -Force $StagedProject }
+if (-not $StagedElf) {
+    if (Test-Path $StagedEngine) { Remove-Item -Recurse -Force $StagedEngine }
+    if (-not $Program) {
+        $StagedProject = Join-Path $StageDir $ProjectName
+        if (Test-Path $StagedProject) { Remove-Item -Recurse -Force $StagedProject }
+    }
 }
-if (-not $NoStage) {
+if (-not $NoStage -and -not $StagedElf) {
     Copy-Config (Join-Path $Root "Engine\Config") (Join-Path $StagedEngine "Config")
     Copy-Config (Join-Path $Root "Engine\Platforms\PS2\Config") (Join-Path $StagedEngine "Platforms\PS2\Config")
     if (-not $Program) {
