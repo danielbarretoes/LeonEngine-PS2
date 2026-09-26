@@ -1,10 +1,17 @@
 #include "Misc/Paths.h"
 
+#include "HAL/Platform.h"
 #include "HAL/PlatformFilemanager.h"
 #include "HAL/PlatformProcess.h"
 #include "Misc/App.h"
 #include "Misc/Char.h"
+#include "Misc/CommandLine.h"
 #include "Misc/Guid.h"
+#include "Misc/Parse.h"
+
+#if PLATFORM_DESKTOP
+#include <cstdlib>
+#endif
 
 // Written by LeonBuildTool into each executable's module table: the engine and project folders relative to the
 // executable's folder ("../../" for Engine/Binaries/Win64), and the target's project name ("" when it has none).
@@ -18,6 +25,12 @@ namespace
 	{
 		static FString ProjectFilePath;
 		return ProjectFilePath;
+	}
+
+	FString& GetProjectLogDirOverrideStorage()
+	{
+		static FString Override;
+		return Override;
 	}
 
 	bool IsSlashOrBackslash(TCHAR C)
@@ -225,6 +238,11 @@ FString FPaths::ProjectPluginsDir()
 
 FString FPaths::ProjectLogDir()
 {
+	const FString& Override = GetProjectLogDirOverrideStorage();
+	if (!Override.IsEmpty())
+	{
+		return Override;
+	}
 	return ProjectSavedDir() + "Logs/";
 }
 
@@ -236,6 +254,50 @@ FString FPaths::ProjectPlatformExtensionsDir()
 FString FPaths::GeneratedConfigDir()
 {
 	return ProjectSavedDir() + "Config/";
+}
+
+void FPaths::SetProjectLogDirOverride(const FString& Directory)
+{
+	FString& Storage = GetProjectLogDirOverrideStorage();
+	if (Directory.IsEmpty())
+	{
+		Storage.Empty();
+		return;
+	}
+	Storage = WithTrailingSlash(ConvertRelativePathToFull(Directory));
+}
+
+void FPaths::ApplyLogDirectoryOverrides()
+{
+#if PLATFORM_DESKTOP
+	FString LogDir;
+	if (FCommandLine::IsInitialized() && FParse::Value(FCommandLine::Get(), "LogDir=", LogDir) && !LogDir.IsEmpty())
+	{
+		SetProjectLogDirOverride(LogDir);
+		return;
+	}
+#if PLATFORM_WINDOWS
+	char* Env = nullptr;
+	size_t EnvLen = 0;
+	if (_dupenv_s(&Env, &EnvLen, "LEON_LOG_DIR") == 0 && Env != nullptr && Env[0] != '\0')
+	{
+		SetProjectLogDirOverride(FString(Env));
+		free(Env);
+		return;
+	}
+	free(Env);
+#else
+	if (const char* Env = getenv("LEON_LOG_DIR"))
+	{
+		if (Env[0] != '\0')
+		{
+			SetProjectLogDirOverride(FString(Env));
+			return;
+		}
+	}
+#endif
+	SetProjectLogDirOverride(FString());
+#endif
 }
 
 const FString& FPaths::GetProjectFilePath()

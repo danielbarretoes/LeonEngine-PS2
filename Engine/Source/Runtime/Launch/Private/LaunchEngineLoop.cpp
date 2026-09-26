@@ -143,6 +143,7 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 	// Config, then the log file and the verbosity it asks for.
 	FConfigCacheIni::InitializeConfigSystem();
 #if PLATFORM_DESKTOP
+	FPaths::ApplyLogDirectoryOverrides();
 	GLogFile = MakeUnique<FOutputDeviceFile>();
 	GLog->AddOutputDevice(GLogFile.Get());
 #endif

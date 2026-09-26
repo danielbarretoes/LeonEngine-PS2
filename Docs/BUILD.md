@@ -115,17 +115,45 @@ Other generated folders:
 - `Engine/Intermediate/Build/HostTools/<Host>/`: LeonHeaderTool.
 - `<tree>/Generated/<Target>.ModuleInit.gen.cpp`.
 - `<tree>/Inc/<Module>/`: reflection code for reflected modules.
-`Binaries/`, `Intermediate/`, `Saved/` and the root `compile_commands.json` are ignored by git.
+`Binaries/`, `Intermediate/`, `Saved/`, `Packages/` and the root `compile_commands.json` are ignored by git.
+`DerivedDataCache/` is reserved (UE layout) and also ignored; Leon has no DDC pipeline yet — do not create or commit one.
+
+### Generated folders (what belongs where)
+
+| Folder | Role | Who writes it |
+| --- | --- | --- |
+| `<Engine\|Project>/Binaries/<Platform>/` | Executables / ELFs | LeonBuildTool |
+| `<Engine\|Project>/Intermediate/Build/<Platform>/<Config>/` | CMake/Ninja tree, reflection, module init | LeonBuildTool |
+| `Engine/Intermediate/Build/HostTools/<Host>/` | LeonHeaderTool | HostTools.cmake |
+| `<Project>/Saved/Logs/` | Desktop log file (`FOutputDeviceFile`) | Launch / LeonCook |
+| `<Project>/Saved/Cooked/<Platform>/` | Cook output | LeonCook |
+| `<Project>/Saved/StagedBuilds/<Platform>/` | BuildCookRun stage (release layout) | BuildCookRun.ps1 |
+| `<Project>/Saved/Config/` | User ini layer (desktop) | `GConfig::Flush` |
+| `Packages/Win64\|PS2/` | Distributable archive (`Package.bat`) | Package.ps1 |
+| `Engine/Programs/<App>/Saved/` | Runtime only when a program runs **without** a `.lproj` (UE fallback: `ProjectDir` = `Engine/Programs/<App>/`). Not source — gitignored like any `Saved/` | Launch / LeonCook |
+
+Desktop log override (default layout unchanged): `-LogDir=<path>` or environment `LEON_LOG_DIR` (command line wins). Useful in CI so logs do not land under `Engine/Programs/*/Saved/`. Applied by `FPaths::ApplyLogDirectoryOverrides` before the log file opens.
+
+### PS2 staging matrix
+
+Two staging paths exist on purpose; `Package.ps1` publishes every PS2 artifact through `Publish-PS2Package` (one copy step into `Packages\PS2\<Name>\`):
+
+| Use | Writer | Layout on disk | Artifacts |
+| --- | --- | --- | --- |
+| **Dev loop** | `RunPCSX2.ps1` (`-StageOnly` or before launch) | Config next to the build ELF: `<…>/Binaries/PS2/Engine/…`, `<…>/Binaries/PS2/<Project>/…` (`host:` = that folder) | ThirdPerson, TestPAL (and any game you run with RunPCSX2). GSConformance: ELF only, no config |
+| **Release stage** | `BuildCookRun.bat -platform=PS2 -stage` | `<Project>/Saved/StagedBuilds/PS2/`: ELF at the **root**, cooked loose or `.lpak`, optional `LeonCommandLine.txt` | ShooterGame (Package.bat), any full cook/stage/pak |
+
+Win64 `-stage` always needs `-pak`. PS2 may stage loose (HostFS) or with `-pak`. PCSX2 BIOS and user files stay outside the repo (`%USERPROFILE%\Documents\PCSX2\bios\`).
 
 ## Batch files
 
 Windows batch files live in `Engine/Build/BatchFiles/` (UE layout); run them from any directory. At the root,
 `Package.bat [-NoWin64] [-NoPS2]` (steps in `Engine/Build/BatchFiles/Package.ps1`) runs `Setup.bat`, then
 `BuildCookRun.bat` for ShooterGame Win64 Shipping (build, cook, stage, pak) and copies the staged build to
-`Packages\Win64\`, then builds ThirdPerson, TestPAL and GSConformance for PS2 Development (Docker Desktop must be running; it
-checks before the Win64 build), stages their config with `RunPCSX2.ps1 -StageOnly` (GSConformance needs none) and
-copies each ELF with it to `Packages\PS2\<Name>\`. Double-clicked it pauses at the end (not when `CI` is set, for an unattended run);
-`Packages\` is git-ignored.
+`Packages\Win64\`, then for PS2 builds ThirdPerson, TestPAL, GSConformance (dev-loop staging via
+`RunPCSX2.ps1 -StageOnly` where needed) and ShooterGame (BuildCookRun stage+pak), publishing each through
+`Publish-PS2Package` into `Packages\PS2\<Name>\` (Docker Desktop must be running; it checks before the Win64
+build). Double-clicked it pauses at the end (not when `CI` is set, for an unattended run); `Packages\` is git-ignored.
 
 | File | Usage | What it does |
 | --- | --- | --- |

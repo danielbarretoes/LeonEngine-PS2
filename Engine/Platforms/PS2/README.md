@@ -188,7 +188,9 @@ Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson
 `$env:LEON_PCSX2`, `PATH` or the default install folders, and starts it with `-fastboot -elf`. With
 `-Program <Name>` it runs an engine program instead (`Engine\Binaries\PS2\<Name>.elf`, built with
 `Build.bat <Name> PS2 <Configuration>`). With `-StageOnly` it stages the config next to the ELF and returns
-without starting PCSX2 (the root `Package.bat` uses it). PCSX2 setup notes: [Docs/SETUP.md](../../../Docs/SETUP.md#pcsx2-notes).
+without starting PCSX2 (the root `Package.bat` uses it for the PS2 **dev-loop** artifacts). Full cook/stage packages
+use `Saved\StagedBuilds\PS2\` instead — [BUILD.md — PS2 staging matrix](../../../Docs/BUILD.md#ps2-staging-matrix).
+PCSX2 setup notes: [Docs/SETUP.md](../../../Docs/SETUP.md#pcsx2-notes).
 
 The Core, CoreUObject, Json, Projects, PakFile and GSCore automation tests run on the EE through the `TestPAL` program
 (the pak tests on paks in memory):

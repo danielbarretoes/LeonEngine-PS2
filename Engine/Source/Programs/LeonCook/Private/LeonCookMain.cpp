@@ -134,6 +134,7 @@ int main(int ArgC, char* ArgV[])
 	}
 
 	FConfigCacheIni::InitializeConfigSystem();
+	FPaths::ApplyLogDirectoryOverrides();
 	TUniquePtr<FOutputDeviceFile> LogFile = MakeUnique<FOutputDeviceFile>();
 	GLog->AddOutputDevice(LogFile.Get());
 	FLogSuppressionInterface::Get().ProcessConfigAndCommandLine();

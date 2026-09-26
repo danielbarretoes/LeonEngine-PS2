@@ -2,6 +2,7 @@
 Binaries/
 Intermediate/
 Saved/
+# Reserved UE-style DDC root: unused until a Derived Data Cache pipeline exists; keep ignored so a local folder cannot be committed by mistake.
 DerivedDataCache/
 /compile_commands.json
 !/Engine/Build/

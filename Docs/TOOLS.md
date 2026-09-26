@@ -49,7 +49,7 @@ Engine\Binaries\Win64\LeonCook.exe [<Project>.lproj | -project=<Project>.lproj] 
 Engine\Binaries\Win64\LeonCook.exe -help
 ```
 
-It is UE's `UE4Editor-Cmd.exe <Project>.uproject -run=<Commandlet>`: it reads the command line and the project (the first argument ending in `.lproj`, or `-project=`; without one it runs engine-only and `/Game` is its program folder `Engine/Programs/LeonCook/Content`), loads the config, starts the modules, finds the commandlet class by name through reflection (`-run=ImportAssets` makes a `UImportAssetsCommandlet`; `U<Name>` and `U<Name>Commandlet` both match, ignoring case) and calls its `Main` with the rest of the command line. The exit code is `Main`'s (0: success). Without `-run=` it lists the commandlets (`-help`: with exit code 0). The log goes to the console and to `<Project>/Saved/Logs/<Project>.log` (engine-only: `Engine/Programs/LeonCook/Saved/Logs/LeonCook.log`), and ends with `Success - N error(s), M warning(s)` (or `Failure`).
+It is UE's `UE4Editor-Cmd.exe <Project>.uproject -run=<Commandlet>`: it reads the command line and the project (the first argument ending in `.lproj`, or `-project=`; without one it runs engine-only and `/Game` is its program folder `Engine/Programs/LeonCook/Content`), loads the config, starts the modules, finds the commandlet class by name through reflection (`-run=ImportAssets` makes a `UImportAssetsCommandlet`; `U<Name>` and `U<Name>Commandlet` both match, ignoring case) and calls its `Main` with the rest of the command line. The exit code is `Main`'s (0: success). Without `-run=` it lists the commandlets (`-help`: with exit code 0). The log goes to the console and to `<Project>/Saved/Logs/<Project>.log` (engine-only: `Engine/Programs/LeonCook/Saved/Logs/LeonCook.log` — that `Saved/` tree is runtime output, not source, and is gitignored; use `-LogDir=` or `LEON_LOG_DIR` to redirect), and ends with `Success - N error(s), M warning(s)` (or `Failure`).
 
 The wrapper builds LeonCook first and forwards every argument:
 
@@ -204,7 +204,11 @@ Engine\Build\BatchFiles\BuildCookRun.bat -project=<Project>.lproj -platform=Win6
 ```
 
 The game finds its engine and project from the layout ([BUILD.md](BUILD.md#staging-and-shipping)); a Shipping build
-reads nothing but its pak. `-platform=PS2` (Development only, [ps2-engine](PLANS/ps2-engine.md) E1 and E3) cooks the textures paletted and writes `<Project>/Saved/Cooked/PS2-VramReport.txt`; `-stage` copies the ELF to `<Project>/Saved/StagedBuilds/PS2/<Project>.elf` with the cooked folder loose beside it (PCSX2's `host:` is that folder), or with `-pak` the pak `<Project>/Content/Paks/<Project>-PS2.lpak` (paths from the ELF's folder, `Engine/...` and `<Project>/...`, entries aligned to 2048 bytes unless `-align=` says otherwise) and writes `-addcmdline` into `LeonCommandLine.txt` there, which the PS2 launch reads (UE: `UECommandLine.txt`); `-run` starts it in PCSX2 without waiting (`RunPCSX2.ps1 -StagedElf`), so the result is read from the EE log. Example, the
+reads nothing but its pak. `-platform=PS2` (Development only, [ps2-engine](PLANS/ps2-engine.md) E1 and E3) cooks the textures paletted and writes `<Project>/Saved/Cooked/PS2-VramReport.txt`; `-stage` copies the ELF to `<Project>/Saved/StagedBuilds/PS2/<Project>.elf` with the cooked folder loose beside it (PCSX2's `host:` is that folder), or with `-pak` the pak `<Project>/Content/Paks/<Project>-PS2.lpak` (paths from the ELF's folder, `Engine/...` and `<Project>/...`, entries aligned to 2048 bytes unless `-align=` says otherwise) and writes `-addcmdline` into `LeonCommandLine.txt` there, which the PS2 launch reads (UE: `UECommandLine.txt`); `-run` starts it in PCSX2 without waiting (`RunPCSX2.ps1 -StagedElf`), so the result is read from the EE log.
+
+That BuildCookRun stage is the **release** PS2 layout. Day-to-day iteration uses a second path: `RunPCSX2.ps1` stages config beside `<…>/Binaries/PS2/` without cooking. Both end in `Packages\PS2\<Name>\` via `Publish-PS2Package` (`Package.bat`). Full matrix: [BUILD.md — PS2 staging matrix](BUILD.md#ps2-staging-matrix).
+
+Example, the
 engine's own content staged as a content-only project (GameDefaultMap `/Engine/Maps/Template_Default`):
 
 ```bat
