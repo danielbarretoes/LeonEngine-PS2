@@ -18,6 +18,8 @@ Engine/Platforms/PS2/
   Config/PS2Engine.ini        platform config layer (resolution, stats)
   Documentation/CookNotes.md
   Documentation/Budgets.md    ELF size, heap and FName pool numbers per phase
+  Documentation/PS2SDK.md     what the engine uses of ps2sdk, the review of it, what to use next
+  Build/PlayRunner/           leonrun: a PS2 ELF headless on Play!'s HLE BIOS (no console BIOS)
   Source/
     Programs/LeonBuildTool/
       LeonBuildPS2.cmake      leon_register_platform(PS2 ...)

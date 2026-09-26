@@ -11,6 +11,8 @@ The PC plays under the PS2's conditions ([ps2-preview](Docs/PLANS/ps2-preview.md
 
 ### Added
 
+- `leonrun` (`Engine/Platforms/PS2/Build/PlayRunner/`): boots a PS2 ELF headless on Play!'s HLE BIOS, without a
+  console BIOS; the first botmatch on the EE outside PCSX2.
 - `[/Script/Engine.RendererSettings]` `DisplayAspectRatio` (4:3, the TV's) and `SyncInterval` (2: 30 fps), the PS2's
   values on every platform (`FRendererSettings`); `IRendererModule::GetDisplayAspectRatio`.
 - The desktop's gamepad as the DualShock (`FGLFWInputInterface`), and `FDualShockAnalog` (libpad's bytes and dead zone)
@@ -22,6 +24,10 @@ The PC plays under the PS2's conditions ([ps2-preview](Docs/PLANS/ps2-preview.md
 
 ### Fixed
 
+- The PS2 resets its IOP to the ROM's modules before loading its own (`FPS2PlatformMisc::InitializeIop`; `-NoIopReset`
+  for ps2link), as the ps2sdk samples do: a launcher's pad modules no longer clash with PADMAN. A pad module that does
+  not load no longer hangs `padInit`. Review of the SDK's use and what to use next:
+  [PS2SDK.md](Engine/Platforms/PS2/Documentation/PS2SDK.md).
 - A PS2 game that cannot read its config (PCSX2 without its host filesystem, or an ELF booted without its pak) stopped
   on a black screen: the window asked for the desktop's 1280x896, which does not fit the GS's VRAM. The PS2 window
   now keeps to the TV's modes (640x448 otherwise), PreInit stops with an error that names the folder it read when a

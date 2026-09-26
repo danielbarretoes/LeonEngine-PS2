@@ -2,10 +2,10 @@
 
 #include "GenericPlatform/DualShockAnalog.h"
 #include "GenericPlatform/GenericApplication.h"
+#include "HAL/PlatformMisc.h"
 
 #include <libpad.h>
 #include <loadfile.h>
-#include <sifrpc.h>
 
 namespace
 {
@@ -19,17 +19,21 @@ namespace
 	int32 LastPadState = -1;
 	uint16 LastLoggedButtons = 0;
 
-	void LoadPadModules()
+	/** SIO2MAN and PADMAN from the ROM; false if either did not load (libpad's padInit would wait for it forever). */
+	[[nodiscard]] bool LoadPadModules()
 	{
-		SifInitRpc(0);
+		FPlatformMisc::InitializeIop(false);
 		if (SifLoadModule("rom0:SIO2MAN", 0, nullptr) < 0)
 		{
 			UE_LOG(LogApplicationCore, Error, "PS2InputInterface: SIO2MAN load failed");
+			return false;
 		}
 		if (SifLoadModule("rom0:PADMAN", 0, nullptr) < 0)
 		{
 			UE_LOG(LogApplicationCore, Error, "PS2InputInterface: PADMAN load failed");
+			return false;
 		}
+		return true;
 	}
 
 	/** DualShock axis byte (0..255, centre ~128) to [-1, 1] with a rescaled dead zone. */
@@ -111,9 +115,12 @@ FPS2InputInterface::~FPS2InputInterface()
 
 bool FPS2InputInterface::Initialize()
 {
-	LoadPadModules();
-	padInit(0);
-	bPortOpen = padPortOpen(0, 0, GPadBuffer) != 0;
+	bPortOpen = false;
+	if (LoadPadModules())
+	{
+		padInit(0);
+		bPortOpen = padPortOpen(0, 0, GPadBuffer) != 0;
+	}
 	bAnalogRequested = false;
 	bSampleValid = false;
 	UE_LOG(LogApplicationCore, Log, "PS2InputInterface: pad port 0 %s", bPortOpen ? "open" : "failed");

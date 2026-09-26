@@ -13,6 +13,7 @@ What runs automatically and what a person still has to check by hand. Build and 
 | Core, CoreUObject, Json, Projects and PakFile on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (123 test(s), 0 failed)` in the EE log (130 on Win64: the platform-file, config-cache, log-file, SaveConfig and package-file tests are desktop-only) |
 | Format (G1), banned APIs (G4), Win64 build | `Engine\Build\BatchFiles\Lint.bat` | `Lint OK` (the format check expects clang-format 20; 20.1.8 is the reference version) |
 | PS2 builds and ELF sizes (G3) | `Engine\Build\BatchFiles\Build.bat <Target> PS2 Development` (Docker; `Linux/Build.sh` in the ps2dev image), or the root `Package.bat` for ThirdPerson, TestPAL and GSConformance | `ThirdPerson`, `BlankProgram`, `TestPAL` and `GSConformance` build; when a phase is recorded, their sections are measured with the toolchain's `mips64r5900el-ps2-elf-size` in the ps2dev image ([Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md)) |
+| PS2 boot without a console BIOS (Linux; [PS2SDK.md](../Engine/Platforms/PS2/Documentation/PS2SDK.md)) | `sh Engine/Platforms/PS2/Build/PlayRunner/BuildPlayRunner.sh` (prints the runner), then `leonrun <Stage>/ShooterGame.elf 300` with `-nullrhi -benchmark -botmatch -rounds=2 -seed=7` in the stage's `LeonCommandLine.txt` | `Botmatch OK: 2 round(s), ...` on the terminal; an ELF alone in its folder logs `No Engine config in host:Engine/Config/` (the error screen) instead of hanging |
 | ShooterGame headless on PS2 ([ps2-engine](PLANS/ps2-engine.md) E1) | `Engine\Build\BatchFiles\BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.lproj -platform=PS2 -build -cook -stage -run "-addcmdline=-nullrhi -benchmark -botmatch -rounds=10 -seed=7"` (Docker and PCSX2 with its host filesystem) | `Botmatch OK: 10 round(s), ...` in the EE log, the same result on two runs; the `Botmatch budget:` line recorded in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md) |
 | ShooterGame on PS2 ([ps2-engine](PLANS/ps2-engine.md) E2 to E4) | `Engine\Build\BatchFiles\BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.lproj -platform=PS2 -build -cook -stage -pak -run "-addcmdline=-LogFrameTimes"` (Docker and PCSX2 with its host filesystem) | de_leon draws with the player, the bots, the tracers and the HUD; the DualShock plays it (the buy menu too); the EE log's `Frame times over ...` lines stay at 33.4 ms average (30 fps) |
 | Reproducible reimport (G5; on a clean checkout) | `Engine\Build\BatchFiles\CheckReimport.bat [<Project>.lproj ...]` | `CheckReimport OK`: `LeonCook -run=ImportAssets -reimport -all` leaves `Engine/Content` and `Game/*/Content` unchanged, the imported maps included (`git diff --exit-code`, no new file) |
@@ -223,6 +224,10 @@ up, left-handed, 1 unit = 1 cm.
 - [ ] **PS2 conditions on the PC** ([ps2-preview](PLANS/ps2-preview.md) V1): the frame fills a 4:3 area of the window
   (black bars at the sides of a 1280x896 window), the game runs at 30 fps (`-LogFrameTimes`: 33.4 ms), a gamepad
   plays it as the DualShock (a small tilt of a stick does nothing: the dead zone), and the sound is the PS2's mix.
+- [ ] **PS2 boot in PCSX2** ([PS2SDK.md](../Engine/Platforms/PS2/Documentation/PS2SDK.md), findings 1 to 3): with Host
+  Filesystem on, `Packages\PS2\ShooterGame\ShooterGame.elf` logs `FPS2PlatformMisc: IOP reset, ...` then plays, the pad
+  answers and the sound plays (the IOP reset kept `host:` and the pad); with Host Filesystem off, the red
+  "THE GAME STOPPED" screen names `host:` and the setting. The same from uLaunchELF on a console, when one is at hand.
 
 ## GS parity (G8)
 

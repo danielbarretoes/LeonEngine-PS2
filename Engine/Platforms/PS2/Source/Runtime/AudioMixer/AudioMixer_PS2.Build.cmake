@@ -1,7 +1,7 @@
 # PS2 extension of AudioMixer (Docs/PLANS/ps2-engine.md, E5): the output (FAudioOutput) is the SPU2 through audsrv
-# (libaudsrv, and libpatches for loading its IOP module from EE memory). The IOP module comes from the SDK and goes
+# (libaudsrv; Core readies the IOP to load its module from EE memory). The IOP module comes from the SDK and goes
 # beside the executable, which loads it at start.
 leon_module_extend(AudioMixer
-	PUBLIC_SYSTEM_LIBRARIES audsrv patches
+	PUBLIC_SYSTEM_LIBRARIES audsrv
 	RUNTIME_DEPENDENCIES "$ENV{PS2SDK}/iop/irx/audsrv.irx"
 )

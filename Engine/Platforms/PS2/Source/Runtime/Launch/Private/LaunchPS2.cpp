@@ -1,5 +1,6 @@
 #include "Containers/Array.h"
 #include "Containers/UnrealString.h"
+#include "HAL/PlatformMisc.h"
 #include "HAL/PlatformProcess.h"
 #include "LaunchEngineLoop.h"
 #include "Misc/FileHelper.h"
@@ -61,6 +62,13 @@ namespace
 int main(int ArgC, char* ArgV[])
 {
 	FPS2ErrorScreen::Install();
+	// The IOP first, before a file is opened (a reboot closes them); -NoIopReset keeps a debugger's host: (ps2link).
+	bool bResetIop = true;
+	for (int32 Index = 1; Index < ArgC; ++Index)
+	{
+		bResetIop = bResetIop && FCString::Stricmp(ArgV[Index], "-NoIopReset") != 0;
+	}
+	FPlatformMisc::InitializeIop(bResetIop);
 	FPlatformProcess::SetArgV0(ArgC > 0 ? ArgV[0] : nullptr);
 	const TArray<FString> FileArguments = ReadCommandLineFile();
 	TArray<char*> Arguments;

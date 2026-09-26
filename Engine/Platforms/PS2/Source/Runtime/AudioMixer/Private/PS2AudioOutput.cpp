@@ -1,11 +1,10 @@
 #include "AudioOutput.h"
+#include "HAL/PlatformMisc.h"
 #include "HAL/PlatformProcess.h"
 #include "Misc/FileHelper.h"
 
 #include <audsrv.h>
 #include <loadfile.h>
-#include <sbv_patches.h>
-#include <sifrpc.h>
 
 DEFINE_LOG_CATEGORY_STATIC(LogAudioOutput, Log, All);
 
@@ -31,9 +30,8 @@ namespace
 
 		bool Start(int32 SampleRate) override
 		{
-			SifInitRpc(0);
-			// The ROM's LOADFILE cannot load a module from EE memory without this patch (older consoles).
-			sbv_patch_enable_lmb();
+			// The SIF RPC and the patch that loads a module from EE memory (a no-op when the launcher did it).
+			FPlatformMisc::InitializeIop(false);
 			if (SifLoadModule("rom0:LIBSD", 0, nullptr) < 0)
 			{
 				UE_LOG(LogAudioOutput, Warning, "PS2 audio: rom0:LIBSD did not load");

@@ -2,12 +2,40 @@
 #include "HAL/PlatformMisc.h"
 
 #include <cstdio>
+#include <iopcontrol.h>
 #include <kernel.h>
+#include <sbv_patches.h>
+#include <sifrpc.h>
 
 namespace
 {
 	void (*GFatalExitHandler)(uint8 ReturnCode) = nullptr;
+	bool GIopInitialized = false;
 } // namespace
+
+void FPS2PlatformMisc::InitializeIop(bool bReset)
+{
+	if (GIopInitialized)
+	{
+		return;
+	}
+	GIopInitialized = true;
+	SifInitRpc(0);
+	if (bReset)
+	{
+		while (!SifIopReset("", 0))
+		{
+		}
+		while (!SifIopSync())
+		{
+		}
+		SifInitRpc(0);
+	}
+	// Older consoles' LOADFILE cannot load a module from EE memory (audsrv.irx) without the first patch.
+	sbv_patch_enable_lmb();
+	sbv_patch_disable_prefix_check();
+	std::printf("FPS2PlatformMisc: IOP %s, SIF RPC and LOADFILE patches ready\n", bReset ? "reset" : "kept");
+}
 
 void FPS2PlatformMisc::SetFatalExitHandler(void (*Handler)(uint8 ReturnCode))
 {
