@@ -42,6 +42,7 @@ void FGenericPlatformMisc::RequestExitWithStatus(bool bForce, uint8 ReturnCode)
 		std::fflush(stderr);
 		std::_Exit(ReturnCode);
 	}
+	SetRequestedEngineExitCode(ReturnCode);
 	RequestEngineExit("FPlatformMisc::RequestExit");
 }
 

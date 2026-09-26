@@ -5,6 +5,17 @@
 namespace
 {
 	bool GIsRequestingExit = false;
+	uint8 GRequestedExitCode = 0;
+} // namespace
+
+uint8 GetRequestedEngineExitCode()
+{
+	return GRequestedExitCode;
+}
+
+void SetRequestedEngineExitCode(uint8 ReturnCode)
+{
+	GRequestedExitCode = ReturnCode;
 }
 
 bool IsEngineExitRequested()

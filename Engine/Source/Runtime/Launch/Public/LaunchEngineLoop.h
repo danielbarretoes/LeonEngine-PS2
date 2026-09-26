@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Containers/UnrealString.h"
+#include "CoreGlobals.h"
 #include "CoreTypes.h"
 #include "Templates/SharedPointer.h"
 #include "Templates/UniquePtr.h"
@@ -42,9 +43,10 @@ public:
 	/** Module shutdown, window + application teardown. */
 	void Exit();
 
+	/** The process return code: the loop's own failure, else the one a requested exit asked for (0 by default). */
 	int32 GetExitCode() const
 	{
-		return ExitCode;
+		return ExitCode != 0 ? ExitCode : static_cast<int32>(GetRequestedEngineExitCode());
 	}
 
 	/** The platform application (nullptr before PreInit). */

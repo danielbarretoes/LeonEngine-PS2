@@ -27,6 +27,7 @@ void FWindowsPlatformMisc::RequestExitWithStatus(bool bForce, uint8 ReturnCode)
 		std::fflush(stderr);
 		TerminateProcess(GetCurrentProcess(), ReturnCode);
 	}
+	SetRequestedEngineExitCode(ReturnCode);
 	RequestEngineExit("FPlatformMisc::RequestExit");
 }
 

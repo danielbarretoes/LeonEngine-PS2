@@ -40,6 +40,12 @@ public:
 	 */
 	static bool IsUnattended();
 
+	/**
+	 * -benchmark (UE: IsBenchmarking): the run goes as fast as it can at fixed steps. A headless game ticks steps of
+	 * 1 / -tick= Hz without waiting for the wall clock, so a bot match plays faster than real time.
+	 */
+	static bool IsBenchmarking();
+
 	/** Whether a renderer may ever be created: false with -nullrhi (UE: CanEverRender). */
 	static bool CanEverRender();
 

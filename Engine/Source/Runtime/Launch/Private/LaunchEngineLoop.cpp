@@ -202,7 +202,7 @@ int32 FEngineLoop::Init()
 	const TCHAR* CmdLine = FCommandLine::Get();
 
 	// Leon's capture and pacing switches: -Screenshot=<file.bmp> saves frame -ExitAfterFrames=N (60 by default), then
-	// the game exits; -tick=<Hz> paces a headless run.
+	// the game exits; -tick=<Hz> paces a headless run (-benchmark: its steps do not wait for the clock).
 	(void)FParse::Value(CmdLine, "ExitAfterFrames=", ExitAfterFrames);
 	if (FParse::Value(CmdLine, "Screenshot=", ScreenshotPath) && ExitAfterFrames <= 0)
 	{
@@ -268,7 +268,8 @@ int32 FEngineLoop::Init()
 	}
 	if (MainWindow == nullptr)
 	{
-		UE_LOG(LogLaunch, Log, "Running headless @ %g Hz (Ctrl+C to stop)", static_cast<double>(TickHz));
+		UE_LOG(LogLaunch, Log, "Running headless @ %g Hz%s (Ctrl+C to stop)", static_cast<double>(TickHz),
+			FApp::IsBenchmarking() ? " steps, unpaced (-benchmark)" : "");
 		NextHeadlessTick = FPlatformTime::Seconds();
 	}
 	LastFrameTime = FPlatformTime::Seconds();
@@ -323,9 +324,13 @@ void FEngineLoop::Tick()
 	}
 	else
 	{
-		// Headless: fixed steps paced to -tick=<Hz> (no render, no present).
+		// Headless: fixed steps paced to -tick=<Hz> (no render, no present); -benchmark does not wait.
 		const float StepSeconds = 1.0f / (TickHz < 1.0f ? 1.0f : TickHz);
 		GEngine->Tick(StepSeconds, false);
+		if (FApp::IsBenchmarking())
+		{
+			return;
+		}
 		NextHeadlessTick += static_cast<double>(StepSeconds);
 		const double Now = FPlatformTime::Seconds();
 		if (NextHeadlessTick < Now)

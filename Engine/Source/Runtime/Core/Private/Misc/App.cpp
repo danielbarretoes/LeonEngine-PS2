@@ -86,6 +86,12 @@ bool FApp::IsUnattended()
 	return bIsUnattended;
 }
 
+bool FApp::IsBenchmarking()
+{
+	static const bool bIsBenchmarking = FParse::Param(FCommandLine::Get(), "benchmark");
+	return bIsBenchmarking;
+}
+
 bool FApp::CanEverRender()
 {
 	return !FParse::Param(FCommandLine::Get(), "nullrhi");

@@ -31,7 +31,10 @@ struct CORE_API FGenericPlatformMisc
 	 */
 	static void RequestExit(bool bForce);
 
-	/** RequestExit with the process return code used when the exit is forced. */
+	/**
+	 * RequestExit with the process return code: the forced exit's, or the one the engine loop returns after the
+	 * frame (GetRequestedEngineExitCode).
+	 */
 	static void RequestExitWithStatus(bool bForce, uint8 ReturnCode);
 
 	/**
