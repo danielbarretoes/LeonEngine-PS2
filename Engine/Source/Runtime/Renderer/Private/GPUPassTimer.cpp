@@ -1,4 +1,4 @@
-#include "GpuPassTimer.h"
+#include "GPUPassTimer.h"
 
 #include "HAL/UnrealMemory.h"
 
