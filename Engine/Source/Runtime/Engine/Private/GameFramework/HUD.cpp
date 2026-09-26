@@ -66,14 +66,21 @@ void AHUD::Tick(float DeltaTime)
 	}
 }
 
-void AHUD::Paint(FCanvas& Canvas)
+void AHUD::Paint(FCanvas& InCanvas)
 {
-	if (Canvas.GetSizeX() <= 0 || Canvas.GetSizeY() <= 0 || Widgets.Num() == 0)
+	if (InCanvas.GetSizeX() <= 0 || InCanvas.GetSizeY() <= 0)
+	{
+		return;
+	}
+	Canvas = &InCanvas;
+	DrawHUD();
+	Canvas = nullptr;
+	if (Widgets.Num() == 0)
 	{
 		return;
 	}
 
-	FPaintContext Ctx(Canvas);
+	FPaintContext Ctx(InCanvas);
 	for (UUserWidget* Widget : Widgets)
 	{
 		if (Widget != nullptr && Widget->bIsVisible)

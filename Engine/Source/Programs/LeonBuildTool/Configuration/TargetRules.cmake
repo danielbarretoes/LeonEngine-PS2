@@ -8,6 +8,8 @@
 #     [ENABLE_PLUGINS <Plugin>...] [DISABLE_PLUGINS <Plugin>...]
 #     [COMPILE_AGAINST_ENGINE ON|OFF]            # WITH_ENGINE for the launch module (Game ON, Program OFF)
 #     [COLLECT_AUTOMATION_TESTS]                 # compile <Module>/Private/Tests/** of the closure in
+#     [AUTOMATION_TEST_MODULES <Module>...]      # with COLLECT_AUTOMATION_TESTS: only these modules' tests
+#                                                #   (a project's test program collects its own modules only)
 #     [OUTPUT_NAME <name>])
 
 set_property(GLOBAL PROPERTY LEON_TARGETS "")
@@ -15,12 +17,15 @@ set_property(GLOBAL PROPERTY LEON_TARGETS "")
 function(leon_target Name)
 	cmake_parse_arguments(T "COLLECT_AUTOMATION_TESTS"
 		"TYPE;LAUNCH_MODULE;COMPILE_AGAINST_ENGINE;OUTPUT_NAME"
-		"PLATFORMS;EXTRA_MODULE_NAMES;ENABLE_PLUGINS;DISABLE_PLUGINS" ${ARGN})
+		"PLATFORMS;EXTRA_MODULE_NAMES;ENABLE_PLUGINS;DISABLE_PLUGINS;AUTOMATION_TEST_MODULES" ${ARGN})
 	if(T_UNPARSED_ARGUMENTS)
 		message(FATAL_ERROR "leon_target(${Name}): unknown arguments: ${T_UNPARSED_ARGUMENTS}")
 	endif()
 	if(NOT T_TYPE MATCHES "^(Game|Program)$")
 		message(FATAL_ERROR "leon_target(${Name}): TYPE must be Game or Program")
+	endif()
+	if(T_AUTOMATION_TEST_MODULES AND NOT T_COLLECT_AUTOMATION_TESTS)
+		message(FATAL_ERROR "leon_target(${Name}): AUTOMATION_TEST_MODULES needs COLLECT_AUTOMATION_TESTS")
 	endif()
 	get_property(Existing GLOBAL PROPERTY LEON_TARGET_${Name}_FILE)
 	if(Existing)
@@ -49,7 +54,7 @@ function(leon_target Name)
 	set_property(GLOBAL PROPERTY LEON_TARGET_${Name}_FILE "${CMAKE_CURRENT_LIST_FILE}")
 	set_property(GLOBAL PROPERTY LEON_TARGET_${Name}_ORIGIN "${_LEON_TARGET_ORIGIN}")
 	foreach(Key TYPE LAUNCH_MODULE COMPILE_AGAINST_ENGINE OUTPUT_NAME PLATFORMS EXTRA_MODULE_NAMES
-			ENABLE_PLUGINS DISABLE_PLUGINS COLLECT_AUTOMATION_TESTS)
+			ENABLE_PLUGINS DISABLE_PLUGINS COLLECT_AUTOMATION_TESTS AUTOMATION_TEST_MODULES)
 		set_property(GLOBAL PROPERTY LEON_TARGET_${Name}_${Key} "${T_${Key}}")
 	endforeach()
 endfunction()

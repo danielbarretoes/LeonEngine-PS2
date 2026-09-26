@@ -65,6 +65,16 @@ public:
 	/** Every live actor with the tag, in spawn order (UE: GetAllActorsWithTag). */
 	static void GetAllActorsWithTag(const UWorld& World, FName Tag, TArray<AActor*>& OutActors);
 
+	/**
+	 * The value of Key in URL options (`?Key=Value?Other`), compared without case; empty when absent or valueless
+	 * (UE: ParseOption).
+	 */
+	[[nodiscard]] static FString ParseOption(const FString& Options, const FString& Key);
+	/** Key is in the options, with or without a value (UE: HasOption). */
+	[[nodiscard]] static bool HasOption(const FString& Options, const FString& Key);
+	/** Key's value as an integer, DefaultValue when absent (UE: GetIntOption). */
+	[[nodiscard]] static int32 GetIntOption(const FString& Options, const FString& Key, int32 DefaultValue);
+
 	/** Radial damage with linear falloff by distance; returns the total applied across all actors. */
 	static float ApplyRadialDamage(const TArray<ACharacter*>& Actors, float BaseDamage, const FVector& Origin,
 		float DamageRadius, ACharacter* DamageCauser = nullptr);

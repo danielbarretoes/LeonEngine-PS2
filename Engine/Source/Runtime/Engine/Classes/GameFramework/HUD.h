@@ -86,10 +86,21 @@ public:
 	void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	/**
-	 * Paints the visible widgets into the frame's canvas (UE: DrawHUD with the canvas; UMG widgets paint through
-	 * it).
+	 * Paints the HUD into the frame's canvas: DrawHUD with Canvas set, then the visible widgets (UMG widgets paint
+	 * through it).
 	 */
-	void Paint(FCanvas& Canvas);
+	void Paint(FCanvas& InCanvas);
+
+	/**
+	 * Draws the HUD's own items into Canvas, before the widgets (UE: DrawHUD); a game's HUD draws its crosshair here.
+	 * Nothing by default.
+	 */
+	virtual void DrawHUD()
+	{
+	}
+
+	/** The canvas of the frame being drawn, set during Paint only (UE: Canvas, a UCanvas there). */
+	FCanvas* Canvas = nullptr;
 
 	[[nodiscard]] const TArray<UUserWidget*>& GetWidgets() const
 	{

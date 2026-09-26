@@ -1,0 +1,17 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "",
+	"Category": "",
+	"Description": "ShooterGame: an offline Counter-Strike-style shooter on de_leon (first-person movement, two teams, bots).",
+	"Modules": [
+		{
+			"Name": "ShooterGame",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [],
+	"TargetPlatforms": [
+		"Win64"
+	]
+}
