@@ -10,7 +10,7 @@
 #include "Misc/Parse.h"
 
 #if PLATFORM_DESKTOP
-#include <cstdlib>
+	#include <cstdlib>
 #endif
 
 // Written by LeonBuildTool into each executable's module table: the engine and project folders relative to the
@@ -276,7 +276,7 @@ void FPaths::ApplyLogDirectoryOverrides()
 		SetProjectLogDirOverride(LogDir);
 		return;
 	}
-#if PLATFORM_WINDOWS
+	#if PLATFORM_WINDOWS
 	char* Env = nullptr;
 	size_t EnvLen = 0;
 	if (_dupenv_s(&Env, &EnvLen, "LEON_LOG_DIR") == 0 && Env != nullptr && Env[0] != '\0')
@@ -286,7 +286,7 @@ void FPaths::ApplyLogDirectoryOverrides()
 		return;
 	}
 	free(Env);
-#else
+	#else
 	if (const char* Env = getenv("LEON_LOG_DIR"))
 	{
 		if (Env[0] != '\0')
@@ -295,7 +295,7 @@ void FPaths::ApplyLogDirectoryOverrides()
 			return;
 		}
 	}
-#endif
+	#endif
 	SetProjectLogDirOverride(FString());
 #endif
 }
