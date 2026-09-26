@@ -1,6 +1,7 @@
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "CoreMinimal.h"
+#include "Engine/BlockingVolume.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
@@ -390,6 +391,55 @@ bool FCharacterMovementMouseSensitivityTest::RunTest(const FString& Parameters)
 	TestTrue("Exec", Input->CallFunctionByNameWithArguments(TEXT("SetMouseSensitivity 0.07"), *GLog, nullptr));
 	TestEqual("Exec X", Input->GetMouseSensitivityX(), 0.07f, 1.0e-6f);
 	TestEqual("Exec Y", Input->GetMouseSensitivityY(), 0.07f, 1.0e-6f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterMovementLongFramesKeepTheFloorTest,
+	"System.Engine.CharacterMovement.LongFramesKeepTheFloor",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FCharacterMovementLongFramesKeepTheFloorTest::RunTest(const FString& Parameters)
+{
+	// A slow frame (0.1 s, 0.25 s) steps gravity deeper than the floor's skin: the character stays on a 20 cm slab and
+	// on a 1 cm pad over it (de_leon's floor and spawn pads) instead of sinking through; a fall onto the slab from 3 m
+	// in 0.1 s frames lands on it.
+	for (const float DeltaTime : {1.0f / 60.0f, 0.1f, 0.25f})
+	{
+		for (const bool bPad : {false, true})
+		{
+			FScopedTestWorld TestWorld;
+			UWorld& World = *TestWorld;
+			(void)World.SpawnActor<ABlockingVolume>(ABlockingVolume::StaticClass(),
+				FTransform(FQuat::Identity, FVector(0.0f, 0.0f, -10.0f), FVector(80.0f, 80.0f, 0.2f)));
+			if (bPad)
+			{
+				(void)World.SpawnActor<ABlockingVolume>(ABlockingVolume::StaticClass(),
+					FTransform(FQuat::Identity, FVector(0.0f, 0.0f, 0.5f), FVector(7.0f, 12.0f, 0.01f)));
+			}
+			ACharacter* Character =
+				World.SpawnActor<ACharacter>(FVector(0.0f, 0.0f, bPad ? 1.0f : 0.0f), FRotator::ZeroRotator);
+			for (int32 Frame = 0; Frame < 12; ++Frame)
+			{
+				World.Tick(DeltaTime);
+			}
+			const FString Case = FString::Printf(
+				TEXT("%.3f s frames%s"), static_cast<double>(DeltaTime), bPad ? TEXT(" on the pad") : TEXT(""));
+			TestEqual(*(Case + TEXT(": on the floor")), Character->GetActorLocation().Z, bPad ? 1.0f : 0.0f, 0.01f);
+			TestTrue(*(Case + TEXT(": walking")), Character->IsMovingOnGround());
+		}
+	}
+
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	(void)World.SpawnActor<ABlockingVolume>(ABlockingVolume::StaticClass(),
+		FTransform(FQuat::Identity, FVector(0.0f, 0.0f, -10.0f), FVector(80.0f, 80.0f, 0.2f)));
+	ACharacter* Faller = World.SpawnActor<ACharacter>(FVector(0.0f, 0.0f, 300.0f), FRotator::ZeroRotator);
+	for (int32 Frame = 0; Frame < 20; ++Frame)
+	{
+		World.Tick(0.1f);
+	}
+	TestEqual("The fall lands on the slab", Faller->GetActorLocation().Z, 0.0f, 0.01f);
+	TestTrue("Landed", Faller->IsMovingOnGround());
 	return true;
 }
 

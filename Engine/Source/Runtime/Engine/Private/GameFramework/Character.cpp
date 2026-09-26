@@ -585,13 +585,32 @@ void ACharacter::IntegrateVertical(FPhysScene& PhysScene, float DeltaTime, FDebu
 	}
 	bJumpRequested = false;
 
+	const float StartZ = MutableLocation().Z;
 	VelocityZ -= CharacterMovement->Gravity * DeltaTime;
 	MutableLocation().Z += VelocityZ * DeltaTime;
 
 	// Flow: FindFloor → IsWalkable → snap Walking or reject steep (Falling, no tunnel)
 	const float LandWindow = FMath::Max(CharacterMovement->MaxStepHeight + CharacterMovement->Skin,
 		(FMath::Abs(VelocityZ) * DeltaTime) + (CharacterMovement->Skin * 4.0f));
-	FindFloor(PhysScene, CurrentFloor, LandWindow, DebugDraw);
+	// A step down (gravity on a long frame, a fast fall) can put the feet inside the floor, where the floor's trace
+	// would start past its top: the trace starts where the feet began the step, and reaches the same depth below the
+	// moved feet as before (UE sweeps the move itself).
+	const float MovedZ = MutableLocation().Z;
+	const float Drop = FMath::Max(0.0f, StartZ - MovedZ);
+	if (Drop > 0.0f)
+	{
+		MutableLocation().Z = StartZ;
+		FindFloor(PhysScene, CurrentFloor, LandWindow + Drop, DebugDraw);
+		MutableLocation().Z = MovedZ;
+		if (CurrentFloor.bBlockingHit)
+		{
+			CurrentFloor.FloorDist = FMath::Max(0.0f, MovedZ - CurrentFloor.Hit.ImpactPoint.Z);
+		}
+	}
+	else
+	{
+		FindFloor(PhysScene, CurrentFloor, LandWindow, DebugDraw);
+	}
 
 	if (VelocityZ <= 0.0f && CurrentFloor.bBlockingHit)
 	{
