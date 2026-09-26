@@ -243,7 +243,7 @@ with the engine's tests (a window is needed: `-nodisplay` skips it):
 The PS2 side is manual (PCSX2 needs a BIOS): the same scenes captured on the console's emulator.
 
 1. `Package.bat` (or `Engine\Build\BatchFiles\Build.bat GSConformance PS2 Development`).
-2. Boot `Packages\PS2\GSConformance\GSConformance.elf` in PCSX2 (`pcsx2-qt -fastboot -elf <file>`), with the
+2. Boot `Engine\Packages\PS2\GSConformance\GSConformance.elf` in PCSX2 (`pcsx2-qt -fastboot -elf <file>`), with the
    software renderer (Settings > Graphics > Renderer: Software) for a faithful GS.
 3. Take a screenshot (F8, `snaps\` in PCSX2's folder) and compare it with the reference's scenes: nine cells in a
    grid, each with its name. A difference is a bug in the reference, the emulator or the PS2 backend; report it with
@@ -259,9 +259,9 @@ Advanced > Enable Host Filesystem (the ELF's folder is `host:`), and keep the EE
 
 | Phase | Run | Passes when | Record |
 | --- | --- | --- | --- |
-| E0 | `Package.bat`, then `ThirdPerson.elf`, `GSConformance.elf` and `TestPAL.elf` from `Packages\PS2\` | ThirdPerson draws its level and moves with the pad; GSConformance matches the reference (above); `TestPAL: PASSED (123 test(s), 0 failed)` | a screenshot of each, TestPAL's `LogTestPAL` lines in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md) |
+| E0 | `Package.bat`, then `ThirdPerson.elf` from `Game\ThirdPerson\Packages\PS2\`, `GSConformance.elf` and `TestPAL.elf` from `Engine\Packages\PS2\` | ThirdPerson draws its level and moves with the pad; GSConformance matches the reference (above); `TestPAL: PASSED (123 test(s), 0 failed)` | a screenshot of each, TestPAL's `LogTestPAL` lines in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md) |
 | E1 | `BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.lproj -platform=PS2 -build -cook -stage -run "-addcmdline=-nullrhi -benchmark -botmatch -rounds=10 -seed=7"`, twice | `Botmatch OK: 10 round(s), ...` both times, the same result | the `Botmatch OK` and `Botmatch budget:` lines in Budgets.md |
 | E2, E3 | `BuildCookRun.bat ... -platform=PS2 -build -cook -stage -pak -run "-addcmdline=-ExecCmds=bot_fill"` | de_leon draws with the player, the bots, the tracers and the HUD, from the pak (`Mounted ... ShooterGame-PS2.lpak`) | a screenshot beside the desktop's (`ShooterGame -Screenshot=`) |
-| E4 | the packaged `Packages\PS2\ShooterGame\ShooterGame.elf` (it passes `-LogFrameTimes`) | a full match against nine bots with the pad (move, look, fire, buy, plant); `Frame times over ...` lines near 33.4 ms average | the frame time lines in Budgets.md; if they miss 30 fps, which part (world or draw) is over |
+| E4 | the packaged `Game\ShooterGame\Packages\PS2\ShooterGame.elf` (it passes `-LogFrameTimes`) | a full match against nine bots with the pad (move, look, fire, buy, plant); `Frame times over ...` lines near 33.4 ms average | the frame time lines in Budgets.md; if they miss 30 fps, which part (world or draw) is over |
 | E5 | the same | shots, steps, the bomb's beeps and the explosion sound, panned, without drops; `PS2 audio: audsrv, 48000 Hz stereo mixed on the EE` in the log | whether the frame times changed with the sound |
 

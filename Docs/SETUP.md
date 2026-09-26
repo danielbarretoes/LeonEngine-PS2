@@ -257,8 +257,9 @@ The gates run locally, from `Engine\Build\BatchFiles\` on Win64:
 - `SmokeTest.bat` (G6): ShooterGame headless with `bot_fill`, ten pawns, exit code 0.
 - `BotMatch.bat` (10 rounds, seed 7): the headless bot match, played twice with the same result.
 - `BuildCookRun.bat`: the staged builds ([BUILD.md — Staging and Shipping](BUILD.md#staging-and-shipping)).
-- The root `Package.bat` builds and packages ShooterGame Win64 Shipping into `Packages\Win64\` and ThirdPerson,
-  TestPAL and GSConformance PS2 Development (in Docker) into `Packages\PS2\`; `-NoWin64` / `-NoPS2` skip a platform.
+- The root `Package.bat` builds and packages ShooterGame Win64 Shipping into `Game\ShooterGame\Packages\Win64\` and
+  PS2 artifacts into `Game\<Name>\Packages\PS2\` (games) or `Engine\Packages\PS2\<Name>\` (TestPAL, GSConformance);
+  `-NoWin64` / `-NoPS2` skip a platform.
 
 The PS2 ELF sizes (G3) are measured with the toolchain's `mips64r5900el-ps2-elf-size` in the ps2dev image when a phase
 is recorded ([Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md)). TestPAL on PS2 runs in PCSX2
@@ -278,7 +279,7 @@ is recorded ([Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md)). Te
 | `PS2DEV is not set` | Only with `-NoDocker` or inside a custom container: export `PS2DEV` / `PS2SDK` |
 | `ELF not found` in `RunPCSX2.ps1` | Build first (`-Build`) or check `-Configuration` |
 | `PCSX2 not found` | Install it or set `$env:LEON_PCSX2` to `pcsx2-qt.exe` |
-| A PS2 game shows a red "THE GAME STOPPED" screen (earlier builds: a black screen) | It could not read its config and pak through `host:`: enable **Settings > Advanced > Enable Host Filesystem** in PCSX2 and boot the staged ELF (`Packages\PS2\<Game>\<Game>.elf`, beside its `<Game>\Content\Paks\` folder), not the one in `Binaries\PS2\` |
+| A PS2 game shows a red "THE GAME STOPPED" screen (earlier builds: a black screen) | It could not read its config and pak through `host:`: enable **Settings > Advanced > Enable Host Filesystem** in PCSX2 and boot the staged ELF (`Game\<Game>\Packages\PS2\<Game>.elf`, beside its `<Game>\Content\Paks\` folder), not the one in `Binaries\PS2\` |
 | Pad does nothing in PCSX2 | Bind it in the global Controller Port 1 settings (see [PCSX2 notes](#pcsx2-notes)) |
 | clangd reports missing includes | Run `GenerateProjectFiles.bat`, then restart the language server |
 | A third-party download fails the hash check | Delete the archive in `Engine\Intermediate\ThirdPartyDownloads\` and run `Setup.bat` again |

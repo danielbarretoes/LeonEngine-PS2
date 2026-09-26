@@ -243,8 +243,8 @@ copies from the SDK and BuildCookRun stages beside the ELF; without it the game 
 the EE log gets `Frame times over N frames: ... ms average (... fps), ... ms worst; world ... ms, draw and present ...
 ms` every 5 seconds.
 
-The root `Package.bat` builds and packages `ThirdPerson`, `TestPAL`, `GSConformance` and ShooterGame (the game with its pak and `-LogFrameTimes`) for PS2 (Development, in Docker, into
-`Packages\PS2\`); the ELF sizes (gate G3) are measured with the toolchain's `mips64r5900el-ps2-elf-size` in the ps2dev
+The root `Package.bat` builds and packages `ThirdPerson` and ShooterGame under `Game\<Name>\Packages\PS2\`, and
+`TestPAL` / `GSConformance` under `Engine\Packages\PS2\<Name>\` (Development, in Docker); the ELF sizes (gate G3) are measured with the toolchain's `mips64r5900el-ps2-elf-size` in the ps2dev
 image when a phase is recorded ([Budgets.md](Documentation/Budgets.md)).
 
 ## Reference
