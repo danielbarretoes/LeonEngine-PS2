@@ -196,8 +196,9 @@ FVector AAIController::TickAI(float DeltaTime)
 					break;
 				}
 			}
-			const bool bOnFinalSegment = PathIndex + 1 >= Path.Num();
-			const FVector& Wp = Path[FMath::Min(PathIndex, Path.Num() - 1)];
+			bool bOnFinalSegment = PathIndex + 1 >= Path.Num();
+			// A copy: a repath below replaces Path.
+			FVector Wp = Path[FMath::Min(PathIndex, Path.Num() - 1)];
 			// A point above a step, close: jump onto it (a crate, a ledge; the waypoint graph's jump links).
 			if (Wp.Z - From.Z > JumpRise && FVector::DistSquared2D(Wp, From) <= FMath::Square(JumpTriggerDistance) &&
 				Character->IsMovingOnGround())
@@ -221,6 +222,8 @@ FVector AAIController::TickAI(float DeltaTime)
 					Character->AddMovementInput(Wish);
 					return Wish;
 				}
+				bOnFinalSegment = PathIndex + 1 >= Path.Num();
+				Wp = Path[FMath::Min(PathIndex, Path.Num() - 1)];
 			}
 			if (bOnFinalSegment)
 			{
