@@ -24,7 +24,11 @@ class FDebugDraw;
  * - The capsule extends up (+Z) by twice its half height from the feet; XY radius = capsule radius.
  * - Actor yaw is a UE yaw (0 faces +X, 90 faces +Y); the mesh shows legacy content with a relative yaw of
  *   LegacyContentYaw.
- * - Not registered as a FPhysScene FBodyInstance; moves via PerformMovement queries.
+ * - The capsule is a query-only body of the physics scene (P17): a Pawn object that ignores the Visibility channel
+ *   (UE's Pawn profile) and the Pawn channel (Leon: the world separates pawns, ResolvePawnOverlap), so traces on the
+ *   other channels hit characters. The movement's queries run on the capsule's object type with its responses and
+ *   ignore the capsule itself; after moving, the character sends its capsule's body the new place.
+ * - Moves via PerformMovement queries.
  * - Modes: Walking / Falling via SetMovementMode; floor via FindFloor → IsWalkable.
  */
 UCLASS()
@@ -174,6 +178,17 @@ public:
 
 	/** Separate this capsule from another Character on XY (equal share). No-op if the Z ranges miss. */
 	void ResolvePawnOverlap(ACharacter& Other);
+
+	/**
+	 * The query parameters of the movement's traces (UE: UPrimitiveComponent::InitSweepCollisionParams): the capsule
+	 * ignored, the query's responses to the object types the capsule's own.
+	 */
+	void InitCollisionParams(FCollisionQueryParams& OutParams, FCollisionResponseParams& OutResponseParam) const;
+	/** The channel the movement traces on: the capsule's object type (UE: UpdatedComponent's). */
+	[[nodiscard]] ECollisionChannel GetMovementTraceChannel() const
+	{
+		return CapsuleComponent->GetCollisionObjectType();
+	}
 
 	/** Ticks Mesh UAnimInstance (Unreal: Character::Tick → Mesh component). */
 	void Tick(float DeltaTime) override;

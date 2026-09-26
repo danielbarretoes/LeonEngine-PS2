@@ -1,6 +1,7 @@
 #include "UnrealEngine.h"
 
 #include "CoreGlobals.h"
+#include "Engine/CollisionProfile.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/LocalPlayer.h"
@@ -114,6 +115,8 @@ void UEngine::Init(IEngineLoop* InEngineLoop)
 	}
 
 	GarbageCollectionTimer = FGarbageCollectionTimer(FGarbageCollectionSettings::LoadFromConfig());
+	// The collision channels of the config (UE: UCollisionProfile::Get()->LoadProfileConfig in UEngine::Init).
+	UCollisionProfile::Get()->LoadProfileConfig();
 	InitializeObjectReferences();
 	(void)AudioDevice.Initialize(/*silent=*/bHeadless);
 	// The UI cues with a sound wave in the config play it; the others keep their procedural tone.

@@ -1,10 +1,13 @@
 #include "Physics/PhysScene.h"
 
 #include "Components/BoxComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Debug/DebugDraw.h"
 #include "Engine/StaticMesh.h"
 #include "Frustum.h"
+#include "GameFramework/Actor.h"
 #include "IPhysicsBackend.h"
 #include "MeshData.h"
 #include "PhysicsEngine/BodySetup.h"
@@ -135,6 +138,7 @@ int32 FPhysScene::AddBody(const FBodyInstanceDesc& Desc)
 	Body.Type = Desc.Type;
 	Body.Mass = Desc.Mass > 0.0f ? Desc.Mass : 0.0f;
 	Body.bEnableGravity = Desc.bEnableGravity;
+	Body.SetDefaultCollision(Desc.Type);
 	Bodies.Add(Body);
 	TriangleMeshes.SetNum(Bodies.Num());
 	BodyOwners.SetNum(Bodies.Num());
@@ -149,9 +153,43 @@ int32 FPhysScene::AddComponentBody(UPrimitiveComponent& Component)
 	Desc.bEnableGravity = Component.IsGravityEnabled();
 	const int32 BodyIndex = AddBody(Desc);
 	BodyOwners[BodyIndex] = &Component;
+
+	// The component's collision settings (UE: FBodyInstance's ObjectType, CollisionResponses, CollisionEnabled).
+	FBodyInstance& Body = Bodies[BodyIndex];
+	const AActor* Owner = Component.GetOwner();
+	Body.OwnerID = Owner != nullptr ? static_cast<SIZE_T>(Owner->GetUniqueID()) : NoComponentID;
+	Body.ObjectType = Component.GetCollisionObjectType();
+	Body.CollisionResponses = Component.GetCollisionResponseToChannels();
+	const ECollisionEnabled CollisionEnabled = Component.GetCollisionEnabled();
+	Body.bQueryEnabled =
+		CollisionEnabled == ECollisionEnabled::QueryOnly || CollisionEnabled == ECollisionEnabled::QueryAndPhysics;
+	Body.bPhysicsEnabled =
+		CollisionEnabled == ECollisionEnabled::PhysicsOnly || CollisionEnabled == ECollisionEnabled::QueryAndPhysics;
+
 	UpdateBodyFromComponent(BodyIndex, Component);
 	RebuildRigidWorld();
 	return BodyIndex;
+}
+
+int32 FPhysScene::FindComponentBody(const UPrimitiveComponent& Component) const
+{
+	for (int32 BodyIndex = 0; BodyIndex < BodyOwners.Num(); ++BodyIndex)
+	{
+		if (BodyOwners[BodyIndex] == &Component)
+		{
+			return BodyIndex;
+		}
+	}
+	return INDEX_NONE;
+}
+
+void FPhysScene::UpdateComponentBodyTransform(const UPrimitiveComponent& Component)
+{
+	const int32 BodyIndex = FindComponentBody(Component);
+	if (BodyIndex != INDEX_NONE)
+	{
+		UpdateBodyFromComponent(BodyIndex, Component);
+	}
 }
 
 void FPhysScene::RemoveComponentBody(const UPrimitiveComponent& Component)
@@ -277,6 +315,25 @@ void FPhysScene::UpdateBodyFromComponent(int32 BodyIndex, const UPrimitiveCompon
 		Body.Position = Transform.GetLocation();
 		Body.HalfExtents = Box->GetScaledBoxExtent();
 	}
+	else if (const UCapsuleComponent* Capsule = Cast<UCapsuleComponent>(&Component))
+	{
+		// An upright capsule: centred on the component (UE), or standing on it (the character's, whose actor
+		// location is the feet).
+		const float Radius = Capsule->GetScaledCapsuleRadius();
+		const float HalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+		Body.CollisionShape = EBodyCollisionShape::Capsule;
+		Body.Position =
+			Transform.GetLocation() + FVector(0.0f, 0.0f, Capsule->bBaseAtComponentLocation ? HalfHeight : 0.0f);
+		Body.HalfExtents = FVector(Radius, Radius, HalfHeight);
+	}
+	else if (const USphereComponent* Sphere = Cast<USphereComponent>(&Component))
+	{
+		// A sphere is a capsule without a cylinder.
+		const float Radius = Sphere->GetScaledSphereRadius();
+		Body.CollisionShape = EBodyCollisionShape::Capsule;
+		Body.Position = Transform.GetLocation();
+		Body.HalfExtents = FVector(Radius);
+	}
 	else
 	{
 		Body.Position = Transform.GetLocation();
@@ -289,15 +346,18 @@ void FPhysScene::UpdateBodyFromComponent(int32 BodyIndex, const UPrimitiveCompon
 }
 
 float FPhysScene::QuerySupportZ(const FCollisionShape& Capsule, const FVector& Feet, float InFloorZ, float InStepUp,
-	float InSkin, SIZE_T InIgnoreComponentID) const
+	float InSkin, SIZE_T InIgnoreComponentID, ECollisionChannel TraceChannel,
+	const FCollisionResponseParams& ResponseParam) const
 {
 	float Support = InFloorZ;
 	const float R = Capsule.GetCapsuleRadius();
+	FCollisionQueryParams Query;
+	Query.IgnoreComponentID = InIgnoreComponentID;
 
 	for (int32 Bi = 0; Bi < Bodies.Num(); ++Bi)
 	{
 		const FBodyInstance& Body = Bodies[Bi];
-		if (Body.ComponentID == InIgnoreComponentID)
+		if (GetBodyQueryResponse(Body, TraceChannel, Query, ResponseParam) != ECR_Block)
 		{
 			continue;
 		}
@@ -364,17 +424,20 @@ float FPhysScene::QuerySupportZ(const FCollisionShape& Capsule, const FVector& F
 }
 
 void FPhysScene::ResolveCapsuleSides(const FCollisionShape& Capsule, FVector& Feet, const FVector2D& WishXY,
-	const FCapsuleContactParams& Params, SIZE_T InIgnoreComponentID, bool bApplyPush)
+	const FCapsuleContactParams& Params, SIZE_T InIgnoreComponentID, bool bApplyPush, ECollisionChannel TraceChannel,
+	const FCollisionResponseParams& ResponseParam)
 {
 	const float R = Capsule.GetCapsuleRadius();
 	const float FeetZ = Feet.Z;
 	const float Head = FeetZ + Capsule.GetCapsuleHalfHeight() * 2.0f;
 	const bool bHasWish = WishXY.Size() > 1.0e-4f;
 	const FVector2D WishN = bHasWish ? WishXY.GetSafeNormal() : FVector2D::ZeroVector;
+	FCollisionQueryParams Query;
+	Query.IgnoreComponentID = InIgnoreComponentID;
 
 	for (FBodyInstance& Body : Bodies)
 	{
-		if (Body.ComponentID == InIgnoreComponentID)
+		if (GetBodyQueryResponse(Body, TraceChannel, Query, ResponseParam) != ECR_Block)
 		{
 			continue;
 		}
@@ -513,7 +576,8 @@ void FPhysScene::Step(const FPhysSceneStepParams& Params)
 
 		for (const FBodyInstance& Other : Bodies)
 		{
-			if (Other.ComponentID == Body.ComponentID || Other.ComponentID == Params.IgnoreComponentID)
+			if (Other.ComponentID == Body.ComponentID || Other.ComponentID == Params.IgnoreComponentID ||
+				!Other.bPhysicsEnabled)
 			{
 				continue;
 			}
@@ -541,7 +605,7 @@ void FPhysScene::Step(const FPhysSceneStepParams& Params)
 	// 1) Integrate velocities (no floor snap yet).
 	for (FBodyInstance& Body : Bodies)
 	{
-		if (Body.Type != EBodyType::Dynamic)
+		if (Body.Type != EBodyType::Dynamic || !Body.bPhysicsEnabled)
 		{
 			Body.VelXY = FVector2D::ZeroVector;
 			Body.VelocityZ = 0.0f;
@@ -577,13 +641,13 @@ void FPhysScene::Step(const FPhysSceneStepParams& Params)
 	{
 		for (int32 I = 0; I < Bodies.Num(); ++I)
 		{
-			if (Bodies[I].ComponentID == Params.IgnoreComponentID)
+			if (Bodies[I].ComponentID == Params.IgnoreComponentID || !Bodies[I].bPhysicsEnabled)
 			{
 				continue;
 			}
 			for (int32 J = I + 1; J < Bodies.Num(); ++J)
 			{
-				if (Bodies[J].ComponentID == Params.IgnoreComponentID)
+				if (Bodies[J].ComponentID == Params.IgnoreComponentID || !Bodies[J].bPhysicsEnabled)
 				{
 					continue;
 				}
@@ -641,7 +705,7 @@ void FPhysScene::Step(const FPhysSceneStepParams& Params)
 	// 3) Floor / platform snap only when landing from above.
 	for (FBodyInstance& Body : Bodies)
 	{
-		if (Body.Type != EBodyType::Dynamic || !Body.bEnableGravity)
+		if (Body.Type != EBodyType::Dynamic || !Body.bEnableGravity || !Body.bPhysicsEnabled)
 		{
 			continue;
 		}
@@ -725,6 +789,25 @@ void FPhysScene::AppendBodiesCollisionDebug(FDebugDraw& Draw, SIZE_T InIgnoreCom
 				Draw.AddLine(V1, V2, TriMeshColor);
 				Draw.AddLine(V2, V0, TriMeshColor);
 			}
+			continue;
+		}
+
+		if (Body.CollisionShape == EBodyCollisionShape::Capsule)
+		{
+			// An upright capsule: rings at the ends of the cylinder and at the tips, four side lines.
+			const float Radius = Body.HalfExtents.X;
+			const float Cylinder = FMath::Max(0.0f, Body.HalfExtents.Z - Radius);
+			const FVector Top = Body.Position + FVector(0.0f, 0.0f, Cylinder);
+			const FVector Bottom = Body.Position - FVector(0.0f, 0.0f, Cylinder);
+			constexpr int32 CapsuleSegments = 12;
+			AppendCapsuleRing(Draw, Top, Radius, StaticColor, CapsuleSegments);
+			AppendCapsuleRing(Draw, Bottom, Radius, StaticColor, CapsuleSegments);
+			Draw.AddLine(Top + FVector(Radius, 0.0f, 0.0f), Bottom + FVector(Radius, 0.0f, 0.0f), StaticColor);
+			Draw.AddLine(Top - FVector(Radius, 0.0f, 0.0f), Bottom - FVector(Radius, 0.0f, 0.0f), StaticColor);
+			Draw.AddLine(Top + FVector(0.0f, Radius, 0.0f), Bottom + FVector(0.0f, Radius, 0.0f), StaticColor);
+			Draw.AddLine(Top - FVector(0.0f, Radius, 0.0f), Bottom - FVector(0.0f, Radius, 0.0f), StaticColor);
+			AppendCapsuleRing(Draw, Top + FVector(0.0f, 0.0f, Radius * 0.7f), Radius * 0.7f, StaticColor, 8);
+			AppendCapsuleRing(Draw, Bottom - FVector(0.0f, 0.0f, Radius * 0.7f), Radius * 0.7f, StaticColor, 8);
 			continue;
 		}
 

@@ -3,6 +3,7 @@
 UCapsuleComponent::UCapsuleComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+	bBaseAtComponentLocation = false;
 }
 
 void UCapsuleComponent::SetCapsuleSize(float InRadius, float InHalfHeight)

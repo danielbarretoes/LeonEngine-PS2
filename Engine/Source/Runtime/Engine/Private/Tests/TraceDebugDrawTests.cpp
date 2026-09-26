@@ -48,15 +48,15 @@ bool FTraceDebugDrawLineTraceForOneFrameDrawsViaPhysSceneTest::RunTest(const FSt
 	Params.DrawDebugType = EDrawDebugTrace::ForOneFrame;
 
 	FHitResult Hit{};
-	const bool bHit = Scene.LineTraceSingleByChannel(Hit, FVector(0.0f, -200.0f, 50.0f), FVector(0.0f, 200.0f, 50.0f),
-		ECollisionChannel::WorldStatic, Params, &Draw);
+	const bool bHit = Scene.LineTraceSingleByChannel(
+		Hit, FVector(0.0f, -200.0f, 50.0f), FVector(0.0f, 200.0f, 50.0f), ECC_WorldStatic, Params, &Draw);
 	TestTrue("Trace hit", bHit);
 	TestFalse("Hit drawn", Draw.IsEmpty());
 
 	Draw.Clear();
 	TArray<FHitResult> Misses;
-	const bool bMissHit = Scene.LineTraceMultiByChannel(Misses, FVector(1000.0f, -200.0f, 50.0f),
-		FVector(1000.0f, 200.0f, 50.0f), ECollisionChannel::WorldStatic, Params, &Draw);
+	const bool bMissHit = Scene.LineTraceMultiByChannel(
+		Misses, FVector(1000.0f, -200.0f, 50.0f), FVector(1000.0f, 200.0f, 50.0f), ECC_WorldStatic, Params, &Draw);
 	TestFalse("Trace missed", bMissHit);
 	TestFalse("Miss drawn", Draw.IsEmpty());
 	return true;

@@ -55,6 +55,12 @@ namespace
 		{
 			return false;
 		}
+		// Pawns (a character's capsule, P17) and components kept out of the navigation data (UE:
+		// CanEverAffectNavigation) never block it.
+		if (InBody.ObjectType == ECC_Pawn || (Component != nullptr && !Component->CanEverAffectNavigation()))
+		{
+			return false;
+		}
 		if (IsLevelFloorPlane(Component))
 		{
 			return false;

@@ -18,7 +18,7 @@ bool FCollisionQueryLineTraceSingleByChannelHitsStaticAabbTest::RunTest(const FS
 
 	FHitResult Hit{};
 	const bool bHit = Scene.LineTraceSingleByChannel(
-		Hit, FVector(0.0f, -200.0f, 50.0f), FVector(0.0f, 200.0f, 50.0f), ECollisionChannel::WorldStatic);
+		Hit, FVector(0.0f, -200.0f, 50.0f), FVector(0.0f, 200.0f, 50.0f), ECC_WorldStatic);
 	TestTrue("Trace hit", bHit);
 	TestTrue("Blocking hit", Hit.bBlockingHit);
 	TestTrue("Hit before the end", Hit.Time < 1.0f);
@@ -40,10 +40,10 @@ bool FCollisionQueryLineTraceSingleByChannelFiltersByChannelTest::RunTest(const 
 
 	FHitResult Hit{};
 	const bool bStaticHit = Scene.LineTraceSingleByChannel(
-		Hit, FVector(0.0f, -200.0f, 50.0f), FVector(0.0f, 200.0f, 50.0f), ECollisionChannel::WorldStatic);
+		Hit, FVector(0.0f, -200.0f, 50.0f), FVector(0.0f, 200.0f, 50.0f), ECC_WorldStatic);
 	TestFalse("WorldStatic misses", bStaticHit);
 	const bool bDynamicHit = Scene.LineTraceSingleByChannel(
-		Hit, FVector(0.0f, -200.0f, 50.0f), FVector(0.0f, 200.0f, 50.0f), ECollisionChannel::WorldDynamic);
+		Hit, FVector(0.0f, -200.0f, 50.0f), FVector(0.0f, 200.0f, 50.0f), ECC_WorldDynamic);
 	TestTrue("WorldDynamic hits", bDynamicHit);
 	return true;
 }
@@ -62,7 +62,7 @@ bool FCollisionQuerySphereTraceSingleByChannelHitsFloorPlaneTest::RunTest(const 
 
 	FHitResult Hit{};
 	const bool bHit = Scene.SphereTraceSingleByChannel(
-		Hit, FVector(0.0f, 0.0f, 100.0f), FVector(0.0f, 0.0f, -100.0f), 35.0f, ECollisionChannel::Visibility, Params);
+		Hit, FVector(0.0f, 0.0f, 100.0f), FVector(0.0f, 0.0f, -100.0f), 35.0f, ECC_Visibility, Params);
 	TestTrue("Trace hit", bHit);
 	TestTrue("Floor plane hit", Hit.bFloorPlane);
 	TestEqual("Impact Z", Hit.ImpactPoint.Z, 0.0f, 0.1f);
@@ -85,8 +85,8 @@ bool FCollisionQueryCapsuleTraceSingleByChannelFindsPlatformTopTest::RunTest(con
 	FHitResult Hit{};
 	const float Radius = 35.0f;
 	const float HalfHeight = 50.0f;
-	const bool bHit = Scene.CapsuleTraceSingleByChannel(Hit, FVector(0.0f, 0.0f, 300.0f), FVector(0.0f, 0.0f, 150.0f),
-		Radius, HalfHeight, ECollisionChannel::Visibility);
+	const bool bHit = Scene.CapsuleTraceSingleByChannel(
+		Hit, FVector(0.0f, 0.0f, 300.0f), FVector(0.0f, 0.0f, 150.0f), Radius, HalfHeight, ECC_Visibility);
 	TestTrue("Trace hit", bHit);
 	TestTrue("Blocking hit", Hit.bBlockingHit);
 	TestTrue("Impact at or below the top", Hit.ImpactPoint.Z <= 200.0f + 1.0f);
@@ -115,7 +115,7 @@ bool FCollisionQueryLineTraceMultiByChannelReturnsAllHitsSortedTest::RunTest(con
 
 	TArray<FHitResult> Hits;
 	const bool bMultiHit = Scene.LineTraceMultiByChannel(
-		Hits, FVector(0.0f, -200.0f, 50.0f), FVector(0.0f, 500.0f, 50.0f), ECollisionChannel::WorldStatic, Params);
+		Hits, FVector(0.0f, -200.0f, 50.0f), FVector(0.0f, 500.0f, 50.0f), ECC_WorldStatic, Params);
 	TestTrue("Multi trace hit", bMultiHit);
 	if (!TestEqual("Hit count", Hits.Num(), 2))
 	{
@@ -127,7 +127,7 @@ bool FCollisionQueryLineTraceMultiByChannelReturnsAllHitsSortedTest::RunTest(con
 
 	FHitResult Single{};
 	const bool bSingleHit = Scene.LineTraceSingleByChannel(
-		Single, FVector(0.0f, -200.0f, 50.0f), FVector(0.0f, 500.0f, 50.0f), ECollisionChannel::WorldStatic, Params);
+		Single, FVector(0.0f, -200.0f, 50.0f), FVector(0.0f, 500.0f, 50.0f), ECC_WorldStatic, Params);
 	TestTrue("Single trace hit", bSingleHit);
 	TestEqual("Single matches nearest", Single.Time, Hits[0].Time, 1.0e-5f);
 	return true;
@@ -151,7 +151,7 @@ bool FCollisionQuerySphereTraceMultiByChannelIncludesFloorAndBodiesTest::RunTest
 
 	TArray<FHitResult> Hits;
 	const bool bMultiHit = Scene.SphereTraceMultiByChannel(
-		Hits, FVector(0.0f, 0.0f, 400.0f), FVector(0.0f, 0.0f, -100.0f), 25.0f, ECollisionChannel::Visibility, Params);
+		Hits, FVector(0.0f, 0.0f, 400.0f), FVector(0.0f, 0.0f, -100.0f), 25.0f, ECC_Visibility, Params);
 	TestTrue("Multi trace hit", bMultiHit);
 	if (!TestTrue("At least two hits", Hits.Num() >= 2))
 	{
@@ -187,7 +187,7 @@ bool FCollisionQueryCapsuleTraceMultiByChannelReturnsMultipleBlockingHitsTest::R
 
 	TArray<FHitResult> Hits;
 	const bool bMultiHit = Scene.CapsuleTraceMultiByChannel(
-		Hits, FVector(0.0f, 0.0f, 500.0f), FVector::ZeroVector, 20.0f, 30.0f, ECollisionChannel::Visibility);
+		Hits, FVector(0.0f, 0.0f, 500.0f), FVector::ZeroVector, 20.0f, 30.0f, ECC_Visibility);
 	TestTrue("Multi trace hit", bMultiHit);
 	if (!TestEqual("Hit count", Hits.Num(), 2))
 	{

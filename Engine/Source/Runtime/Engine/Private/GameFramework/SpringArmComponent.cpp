@@ -110,7 +110,9 @@ float USpringArmComponent::ProbeArmLength(FPhysScene& PhysScene, const FVector& 
 	const FVector ArmDirection = -Rotation.Vector();
 	const FVector End = Origin + ArmDirection * Length;
 
+	// UE: FCollisionQueryParams(SCENE_QUERY_STAT(SpringArm), false, GetOwner()): the arm never hits its own actor.
 	FCollisionQueryParams Params{};
+	Params.AddIgnoredActor(GetOwner());
 	Params.bTraceFloorPlane = false;
 	if (DebugDraw != nullptr)
 	{

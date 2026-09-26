@@ -40,8 +40,8 @@ bool FTriangleMeshTraceLineTraceAndQuerySupportZUseTriangleMeshSurfaceTest::RunT
 	TestTrue("TriangleMesh body", Scene.GetBodies()[0].CollisionShape == EBodyCollisionShape::TriangleMesh);
 
 	FHitResult Hit{};
-	const bool bHit = Scene.LineTraceSingleByChannel(
-		Hit, FVector(0.0f, 0.0f, 300.0f), FVector(0.0f, 0.0f, -100.0f), ECollisionChannel::WorldStatic);
+	const bool bHit =
+		Scene.LineTraceSingleByChannel(Hit, FVector(0.0f, 0.0f, 300.0f), FVector(0.0f, 0.0f, -100.0f), ECC_WorldStatic);
 	TestTrue("Trace hit", bHit);
 	TestTrue("Blocking hit", Hit.bBlockingHit);
 	TestEqual("Impact Z", Hit.ImpactPoint.Z, 50.0f, 2.0f);

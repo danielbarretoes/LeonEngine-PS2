@@ -133,7 +133,7 @@ bool FGoldenLineTracesTest::RunTest(const FString& Parameters)
 	{
 		FHitResult Hit{};
 		const bool bHit = Scene.LineTraceSingleByChannel(Hit, LegacyGolden::ToWorldPosition(Segment.Start),
-			LegacyGolden::ToWorldPosition(Segment.End), ECollisionChannel::Visibility, GoldenTraceParams());
+			LegacyGolden::ToWorldPosition(Segment.End), ECC_Visibility, GoldenTraceParams());
 		Results.Add(bHit, Hit);
 	}
 
@@ -167,8 +167,8 @@ bool FGoldenSphereTracesTest::RunTest(const FString& Parameters)
 	{
 		FHitResult Hit{};
 		const bool bHit = Scene.SphereTraceSingleByChannel(Hit, LegacyGolden::ToWorldPosition(Segment.Start),
-			LegacyGolden::ToWorldPosition(Segment.End), LegacyGolden::ToWorldLength(0.3f),
-			ECollisionChannel::Visibility, GoldenTraceParams());
+			LegacyGolden::ToWorldPosition(Segment.End), LegacyGolden::ToWorldLength(0.3f), ECC_Visibility,
+			GoldenTraceParams());
 		Results.Add(bHit, Hit);
 	}
 
@@ -206,7 +206,7 @@ bool FGoldenCapsuleTracesTest::RunTest(const FString& Parameters)
 		FHitResult Hit{};
 		const bool bHit = Scene.CapsuleTraceSingleByChannel(Hit, LegacyGolden::ToWorldPosition(Segment.Start),
 			LegacyGolden::ToWorldPosition(Segment.End), LegacyGolden::ToWorldLength(0.25f),
-			LegacyGolden::ToWorldLength(0.5f), ECollisionChannel::Visibility, GoldenTraceParams());
+			LegacyGolden::ToWorldLength(0.5f), ECC_Visibility, GoldenTraceParams());
 		Results.Add(bHit, Hit);
 	}
 

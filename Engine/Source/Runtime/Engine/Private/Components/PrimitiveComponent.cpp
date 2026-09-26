@@ -9,6 +9,8 @@ UPrimitiveComponent::UPrimitiveComponent(const FObjectInitializer& ObjectInitial
 {
 	CastShadow = true;
 	bGenerateOverlapEvents = true;
+	// UE: the body instance's responses start from the default container (the config's channel defaults).
+	CollisionResponses = FCollisionResponseContainer::GetDefaultResponseContainer();
 }
 
 FCollisionShape UPrimitiveComponent::GetCollisionShape(float /*Inflation*/) const
@@ -85,6 +87,50 @@ void UPrimitiveComponent::SetEnableGravity(bool bGravityEnabled)
 	}
 	bEnableGravity = bGravityEnabled;
 	RecreatePhysicsState();
+}
+
+void UPrimitiveComponent::SetCollisionObjectType(ECollisionChannel Channel)
+{
+	if (ObjectType == Channel)
+	{
+		return;
+	}
+	ObjectType = Channel;
+	RecreatePhysicsState();
+}
+
+void UPrimitiveComponent::SetCollisionResponseToChannel(ECollisionChannel Channel, ECollisionResponse NewResponse)
+{
+	if (CollisionResponses.SetResponse(Channel, NewResponse))
+	{
+		RecreatePhysicsState();
+	}
+}
+
+void UPrimitiveComponent::SetCollisionResponseToAllChannels(ECollisionResponse NewResponse)
+{
+	if (CollisionResponses.SetAllChannels(NewResponse))
+	{
+		RecreatePhysicsState();
+	}
+}
+
+void UPrimitiveComponent::SetCollisionResponseToChannels(const FCollisionResponseContainer& NewResponses)
+{
+	if (CollisionResponses == NewResponses)
+	{
+		return;
+	}
+	CollisionResponses = NewResponses;
+	RecreatePhysicsState();
+}
+
+void UPrimitiveComponent::SendPhysicsTransform()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetPhysicsScene().UpdateComponentBodyTransform(*this);
+	}
 }
 
 void UPrimitiveComponent::CreatePhysicsState()

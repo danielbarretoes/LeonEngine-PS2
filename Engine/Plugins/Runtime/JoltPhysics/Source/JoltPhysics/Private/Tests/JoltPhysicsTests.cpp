@@ -194,7 +194,7 @@ bool FJoltLineTraceHitsStaticBoxTest::RunTest(const FString& Parameters)
 	Params.bTraceFloorPlane = false;
 	FHitResult Hit{};
 	const bool bHit = Scene.LineTraceSingleByChannel(
-		Hit, FVector(0.0f, -200.0f, 50.0f), FVector(0.0f, 200.0f, 50.0f), ECollisionChannel::WorldStatic, Params);
+		Hit, FVector(0.0f, -200.0f, 50.0f), FVector(0.0f, 200.0f, 50.0f), ECC_WorldStatic, Params);
 	if (!TestTrue("Trace hit", bHit))
 	{
 		return false;
@@ -222,8 +222,8 @@ bool FJoltSphereTraceHitsStaticBoxTest::RunTest(const FString& Parameters)
 	FCollisionQueryParams Params;
 	Params.bTraceFloorPlane = false;
 	FHitResult Hit{};
-	const bool bHit = Scene.SphereTraceSingleByChannel(Hit, FVector(0.0f, -300.0f, 50.0f), FVector(0.0f, 300.0f, 50.0f),
-		25.0f, ECollisionChannel::WorldStatic, Params);
+	const bool bHit = Scene.SphereTraceSingleByChannel(
+		Hit, FVector(0.0f, -300.0f, 50.0f), FVector(0.0f, 300.0f, 50.0f), 25.0f, ECC_WorldStatic, Params);
 	if (!TestTrue("Trace hit", bHit))
 	{
 		return false;
@@ -250,8 +250,8 @@ bool FJoltTracesKeepWorldAxesTest::RunTest(const FString& Parameters)
 	Params.bTraceFloorPlane = false;
 	FHitResult Hit{};
 	if (!TestTrue("Line hit",
-			Scene.LineTraceSingleByChannel(Hit, FVector(0.0f, 200.0f, 300.0f), FVector(0.0f, 200.0f, -100.0f),
-				ECollisionChannel::WorldStatic, Params)))
+			Scene.LineTraceSingleByChannel(
+				Hit, FVector(0.0f, 200.0f, 300.0f), FVector(0.0f, 200.0f, -100.0f), ECC_WorldStatic, Params)))
 	{
 		return false;
 	}
@@ -263,7 +263,7 @@ bool FJoltTracesKeepWorldAxesTest::RunTest(const FString& Parameters)
 	FHitResult CapsuleHit{};
 	if (!TestTrue("Capsule hit",
 			Scene.CapsuleTraceSingleByChannel(CapsuleHit, FVector(0.0f, 0.0f, 400.0f), FVector(0.0f, 0.0f, 0.0f), 20.0f,
-				60.0f, ECollisionChannel::WorldStatic, Params)))
+				60.0f, ECC_WorldStatic, Params)))
 	{
 		return false;
 	}

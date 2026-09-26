@@ -71,7 +71,11 @@ public:
 		(void)Bodies;
 	}
 
-	/** Appends body hits (not floor / slopes); sorting is the caller's job. Returns true if any hit. */
+	/**
+	 * Appends body hits (not floor / slopes) with their FHitResult::BodyIndex; sorting is the caller's job. The
+	 * backend holds the bodies with physics only, and does not filter by channel: FPhysScene applies the bodies'
+	 * responses to the hits and traces the query-only bodies itself. Returns true if any hit.
+	 */
 	virtual bool RigidLineTrace(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End,
 		ECollisionChannel Channel, SIZE_T IgnoreComponentID)
 	{

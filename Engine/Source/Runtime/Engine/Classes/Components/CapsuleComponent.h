@@ -4,7 +4,10 @@
 #include "CoreMinimal.h"
 #include "CapsuleComponent.generated.h"
 
-/** A capsule along Z (UE: UCapsuleComponent). The half height includes the hemispherical caps. */
+/**
+ * A capsule along Z (UE: UCapsuleComponent). The half height includes the hemispherical caps. Its body in the physics
+ * scene is an upright capsule, centred on the component as in UE, or standing on it with bBaseAtComponentLocation.
+ */
 UCLASS()
 class ENGINE_API UCapsuleComponent : public UShapeComponent
 {
@@ -46,6 +49,13 @@ public:
 	}
 
 	[[nodiscard]] FCollisionShape GetCollisionShape(float Inflation = 0.0f) const override;
+
+	/**
+	 * The capsule stands on the component's location instead of being centred on it (Leon: the character's capsule,
+	 * whose actor location is the feet).
+	 */
+	UPROPERTY()
+	uint8 bBaseAtComponentLocation : 1;
 
 private:
 	/** Half the capsule's height including the caps, cm (UE: CapsuleHalfHeight). */

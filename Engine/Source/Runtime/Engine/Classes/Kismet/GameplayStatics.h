@@ -20,6 +20,15 @@ public:
 		return World.GetPhysicsScene().LineTraceSingleByChannel(OutHit, Start, End, Channel, Params, Debug);
 	}
 
+	/** UE: UWorld::SweepSingleByChannel over the world's physics scene (FPhysScene::SweepSingleByChannel). */
+	[[nodiscard]] static bool SweepSingleByChannel(UWorld& World, FHitResult& OutHit, const FVector& Start,
+		const FVector& End, ECollisionChannel Channel, const FCollisionShape& CollisionShape,
+		const FCollisionQueryParams& Params = {})
+	{
+		return World.GetPhysicsScene().SweepSingleByChannel(
+			OutHit, Start, End, FQuat::Identity, Channel, CollisionShape, Params);
+	}
+
 	[[nodiscard]] static bool SphereTraceSingleByChannel(UWorld& World, FHitResult& OutHit, const FVector& Start,
 		const FVector& End, float Radius, ECollisionChannel Channel, const FCollisionQueryParams& Params = {},
 		FDebugDraw* Debug = nullptr)

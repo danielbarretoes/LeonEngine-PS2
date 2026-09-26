@@ -83,8 +83,12 @@ public:
 	UPROPERTY()
 	float CollisionProbeOffset = 5.0f;
 
-	/** The channel of the collision probe (ECollisionChannel is not reflected yet). */
-	ECollisionChannel ProbeChannel = ECollisionChannel::WorldStatic;
+	/**
+	 * The channel of the collision probe (UE: ProbeChannel, ECC_Camera there; Leon keeps WorldStatic, which only the
+	 * static bodies block by default). The probe ignores the arm's owner (UE).
+	 */
+	UPROPERTY()
+	TEnumAsByte<ECollisionChannel> ProbeChannel = ECC_WorldStatic;
 
 	/** Positive delta lengthens the boom (zoom out). Clamped to ArmLengthMin/Max. */
 	void AddArmLengthInput(float DeltaLength)

@@ -619,6 +619,11 @@ void UWorld::ResolveCharacterOverlaps()
 			}
 		}
 	}
+	// The capsules' bodies follow (P17: traces hit characters).
+	for (ACharacter* Character : Characters)
+	{
+		Character->GetCapsuleComponent()->SendPhysicsTransform();
+	}
 }
 
 void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& Params)
@@ -660,8 +665,8 @@ void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& Params)
 		ForEach<ACharacter>(
 			[&](ACharacter& Character)
 			{
-				Physics.AppendCollisionDebug(
-					*Params.CollisionDebugDraw, Character.GetCapsule(), Character.GetActorLocation(), NoComponentID);
+				Physics.AppendCollisionDebug(*Params.CollisionDebugDraw, Character.GetCapsule(),
+					Character.GetActorLocation(), static_cast<SIZE_T>(Character.GetCapsuleComponent()->GetUniqueID()));
 			});
 	}
 

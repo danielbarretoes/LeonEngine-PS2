@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CollisionResponseContainer.h"
 #include "CollisionShape.h"
 #include "Components/SceneComponent.h"
 #include "CoreMinimal.h"
@@ -16,7 +17,8 @@ class FPrimitiveSceneProxy;
  *
  * Its physics state is its body in the world's FPhysScene: CreatePhysicsState adds one when the collision is enabled
  * (FPhysScene::AddComponentBody) and DestroyPhysicsState removes it. Changing the collision settings of a registered
- * component recreates the body.
+ * component recreates the body. The body takes the component's object type and responses to the collision channels
+ * (UE's collision settings; Leon has no named profiles, see UCollisionProfile).
  */
 UCLASS(Abstract)
 class ENGINE_API UPrimitiveComponent : public USceneComponent
@@ -36,7 +38,7 @@ public:
 
 	/**
 	 * What the collision takes part in (UE: BodyInstance.CollisionEnabled). Leon's default is NoCollision: the physics
-	 * scene only holds level geometry, which a map enables per actor, and characters are swept capsules, never bodies.
+	 * scene holds the level geometry, which a map enables per actor, and the characters' capsules (query only, P17).
 	 */
 	void SetCollisionEnabled(ECollisionEnabled NewType);
 	[[nodiscard]] ECollisionEnabled GetCollisionEnabled() const
@@ -59,6 +61,44 @@ public:
 	[[nodiscard]] bool IsGravityEnabled() const
 	{
 		return bEnableGravity;
+	}
+
+	/** What the body is to queries on the collision channels (UE: SetCollisionObjectType / GetCollisionObjectType). */
+	void SetCollisionObjectType(ECollisionChannel Channel);
+	[[nodiscard]] ECollisionChannel GetCollisionObjectType() const
+	{
+		return ObjectType.GetValue();
+	}
+	/** How the body answers one channel (UE: SetCollisionResponseToChannel / GetCollisionResponseToChannel). */
+	void SetCollisionResponseToChannel(ECollisionChannel Channel, ECollisionResponse NewResponse);
+	[[nodiscard]] ECollisionResponse GetCollisionResponseToChannel(ECollisionChannel Channel) const
+	{
+		return CollisionResponses.GetResponse(Channel);
+	}
+	/** Every channel at once (UE: SetCollisionResponseToAllChannels). */
+	void SetCollisionResponseToAllChannels(ECollisionResponse NewResponse);
+	/** All the responses (UE: SetCollisionResponseToChannels / GetCollisionResponseToChannels). */
+	void SetCollisionResponseToChannels(const FCollisionResponseContainer& NewResponses);
+	[[nodiscard]] const FCollisionResponseContainer& GetCollisionResponseToChannels() const
+	{
+		return CollisionResponses;
+	}
+
+	/**
+	 * Sends the component's transform to its body (UE: SendPhysicsTransform, which moving a component calls). Leon's
+	 * components do not track their moves: the code that moves a colliding component calls it (the character does
+	 * after its movement).
+	 */
+	void SendPhysicsTransform();
+
+	/** Whether the component's body is part of the navigation data (UE: CanEverAffectNavigation). */
+	[[nodiscard]] bool CanEverAffectNavigation() const
+	{
+		return bCanEverAffectNavigation;
+	}
+	void SetCanEverAffectNavigation(bool bRelevant)
+	{
+		bCanEverAffectNavigation = bRelevant;
 	}
 
 	/** The collision shape in world units, grown by Inflation (UE: GetCollisionShape); a line by default. */
@@ -100,4 +140,16 @@ private:
 	/** UE: BodyInstance.bEnableGravity. */
 	UPROPERTY()
 	bool bEnableGravity = true;
+
+	/** UE: BodyInstance.ObjectType (WorldStatic by default, as UE's). */
+	UPROPERTY()
+	TEnumAsByte<ECollisionChannel> ObjectType = ECC_WorldStatic;
+
+	/** UE: BodyInstance.CollisionResponses (every channel blocks by default). */
+	UPROPERTY()
+	FCollisionResponseContainer CollisionResponses;
+
+	/** UE: UActorComponent::bCanEverAffectNavigation (true by default; a character's capsule is left out). */
+	UPROPERTY()
+	bool bCanEverAffectNavigation = true;
 };

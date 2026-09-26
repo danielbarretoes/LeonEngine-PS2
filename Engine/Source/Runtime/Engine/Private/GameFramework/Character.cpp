@@ -35,6 +35,14 @@ ACharacter::ACharacter(const FObjectInitializer& ObjectInitializer)
 	// The capsule is the root: its relative transform is the actor's (the feet, see the class comment).
 	CapsuleComponent = CreateDefaultSubobject<UCapsuleComponent>(CapsuleComponentName);
 	CapsuleComponent->InitCapsuleSize(35.0f, 92.5f);
+	CapsuleComponent->bBaseAtComponentLocation = true;
+	// UE's Pawn profile, query only (the capsule is swept, never simulated): traces hit characters, except on the
+	// Visibility channel (UE) and the Pawn channel (Leon: the world separates overlapping pawns itself).
+	CapsuleComponent->SetCollisionObjectType(ECC_Pawn);
+	CapsuleComponent->SetCollisionResponseToChannel(ECC_Visibility, ECR_Ignore);
+	CapsuleComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+	CapsuleComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	CapsuleComponent->SetCanEverAffectNavigation(false);
 	RootComponent = CapsuleComponent;
 
 	CharacterMovement = CreateDefaultSubobject<UCharacterMovementComponent>(CharacterMovementComponentName);
@@ -101,6 +109,7 @@ void ACharacter::Reset(const FVector& InLocation, const FRotator& InRotation)
 	CurrentFloor = {};
 	Health = MaxHealth;
 	bAlive = true;
+	CapsuleComponent->SendPhysicsTransform();
 }
 
 void ACharacter::ApplyReplicatedState(
@@ -160,6 +169,12 @@ bool ACharacter::IsWalkable(const FHitResult& Hit) const
 	return Hit.ImpactNormal.Z >= CharacterMovement->WalkableFloorZ;
 }
 
+void ACharacter::InitCollisionParams(FCollisionQueryParams& OutParams, FCollisionResponseParams& OutResponseParam) const
+{
+	OutParams.IgnoreComponentID = static_cast<SIZE_T>(CapsuleComponent->GetUniqueID());
+	OutResponseParam.CollisionResponse = CapsuleComponent->GetCollisionResponseToChannels();
+}
+
 void ACharacter::FindFloor(
 	FPhysScene& PhysScene, FFindFloorResult& OutFloor, float TraceDistance, FDebugDraw* DebugDraw) const
 {
@@ -172,13 +187,15 @@ void ACharacter::FindFloor(
 	const FVector TraceEnd = SphereCenter - FVector(0.0f, 0.0f, Distance);
 
 	FCollisionQueryParams Query{};
+	FCollisionResponseParams Response;
+	InitCollisionParams(Query, Response);
 	Query.bTraceFloorPlane = true;
 	Query.FloorZ = CharacterMovement->FloorZ;
 	Query.DrawDebugType = DebugDraw != nullptr ? EDrawDebugTrace::ForOneFrame : EDrawDebugTrace::None;
 
 	FHitResult Hit{};
-	const bool bHitFloor = PhysScene.SphereTraceSingleByChannel(
-		Hit, TraceStart, TraceEnd, GetCapsule().GetCapsuleRadius(), ECollisionChannel::Visibility, Query, DebugDraw);
+	const bool bHitFloor = PhysScene.SphereTraceSingleByChannel(Hit, TraceStart, TraceEnd,
+		GetCapsule().GetCapsuleRadius(), GetMovementTraceChannel(), Query, DebugDraw, Response);
 	if (!bHitFloor)
 	{
 		return;
@@ -256,12 +273,14 @@ bool ACharacter::SafeMoveUpdatedComponent(
 	const float HalfH = CapsuleHalfHeight();
 
 	FCollisionQueryParams Query{};
+	FCollisionResponseParams Response;
+	InitCollisionParams(Query, Response);
 	Query.bTraceFloorPlane = false;
 	Query.DrawDebugType = DebugDraw != nullptr ? EDrawDebugTrace::ForOneFrame : EDrawDebugTrace::None;
 
 	TArray<FHitResult> Hits;
 	(void)PhysScene.CapsuleTraceMultiByChannel(Hits, StartCenter, EndCenter, GetCapsule().GetCapsuleRadius(), HalfH,
-		ECollisionChannel::Visibility, Query, DebugDraw);
+		GetMovementTraceChannel(), Query, DebugDraw, Response);
 
 	const FHitResult* Block = nullptr;
 	for (const FHitResult& Hit : Hits)
@@ -313,9 +332,12 @@ void ACharacter::ResolveSides(FPhysScene& PhysScene, bool bApplyPush)
 	Params.StepUp = CharacterMovement->MaxStepHeight;
 	Params.Skin = CharacterMovement->Skin;
 	Params.WalkBounds = CharacterMovement->WalkBounds;
+	FCollisionQueryParams Query{};
+	FCollisionResponseParams Response;
+	InitCollisionParams(Query, Response);
 	FVector Feet = MutableLocation();
-	PhysScene.ResolveCapsuleSides(
-		GetCapsule(), Feet, FVector2D(WishDir.X, WishDir.Y), Params, NoComponentID, bApplyPush);
+	PhysScene.ResolveCapsuleSides(GetCapsule(), Feet, FVector2D(WishDir.X, WishDir.Y), Params, Query.IgnoreComponentID,
+		bApplyPush, GetMovementTraceChannel(), Response);
 	MutableLocation() = Feet;
 }
 
@@ -337,6 +359,8 @@ bool ACharacter::TryStepUp(FPhysScene& PhysScene, const FVector& ForwardDelta, F
 	const float HalfH = CapsuleHalfHeight();
 
 	FCollisionQueryParams Query{};
+	FCollisionResponseParams Response;
+	InitCollisionParams(Query, Response);
 	Query.bTraceFloorPlane = false;
 	Query.DrawDebugType = DebugDraw != nullptr ? EDrawDebugTrace::ForOneFrame : EDrawDebugTrace::None;
 
@@ -345,10 +369,10 @@ bool ACharacter::TryStepUp(FPhysScene& PhysScene, const FVector& ForwardDelta, F
 	const FVector UpEnd = UpStart + FVector(0.0f, 0.0f, CharacterMovement->MaxStepHeight);
 	TArray<FHitResult> UpHits;
 	(void)PhysScene.CapsuleTraceMultiByChannel(UpHits, UpStart, UpEnd, GetCapsule().GetCapsuleRadius(), HalfH,
-		ECollisionChannel::Visibility, Query, DebugDraw);
+		GetMovementTraceChannel(), Query, DebugDraw, Response);
 	for (const FHitResult& UpHit : UpHits)
 	{
-		if (UpHit.ImpactNormal.Z < -0.5f)
+		if (UpHit.bBlockingHit && UpHit.ImpactNormal.Z < -0.5f)
 		{
 			return false;
 		}
@@ -386,8 +410,9 @@ bool ACharacter::TryStepUp(FPhysScene& PhysScene, const FVector& ForwardDelta, F
 		return false;
 	}
 	// Sphere FindFloor can report a phantom shelf in front of an AABB; require real support.
-	const float Support = PhysScene.QuerySupportZ(GetCapsule(), Feet, CharacterMovement->FloorZ,
-		CharacterMovement->MaxStepHeight, CharacterMovement->Skin, NoComponentID);
+	const float Support =
+		PhysScene.QuerySupportZ(GetCapsule(), Feet, CharacterMovement->FloorZ, CharacterMovement->MaxStepHeight,
+			CharacterMovement->Skin, Query.IgnoreComponentID, GetMovementTraceChannel(), Response);
 	if (Support < StartFeet.Z + CharacterMovement->Skin)
 	{
 		Feet = StartFeet;
@@ -545,6 +570,7 @@ void ACharacter::TickCharacterMovement(float DeltaTime, FDebugDraw* DebugDraw)
 		return;
 	}
 	PerformMovement(LocalWorld->GetPhysicsScene(), DeltaTime, DebugDraw);
+	CapsuleComponent->SendPhysicsTransform();
 }
 
 void ACharacter::ResolveOverlaps(FPhysScene& PhysScene)
@@ -560,6 +586,7 @@ void ACharacter::ResolveOverlaps()
 		return;
 	}
 	ResolveOverlaps(LocalWorld->GetPhysicsScene());
+	CapsuleComponent->SendPhysicsTransform();
 }
 
 void ACharacter::ResolvePawnOverlap(ACharacter& Other)

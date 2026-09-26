@@ -290,7 +290,9 @@ namespace
 			JPH::BodyInterface& Iface = PhysicsSystem.GetBodyInterface();
 			for (int32 I = 0; I < Bodies.Num(); ++I)
 			{
-				if (Bodies[I].ComponentID == IgnoreComponentID)
+				// A body without physics (a character's query-only capsule) stays out of the rigid world; the scene
+				// traces its Arcade shape.
+				if (Bodies[I].ComponentID == IgnoreComponentID || !Bodies[I].bPhysicsEnabled)
 				{
 					continue;
 				}
@@ -316,7 +318,7 @@ namespace
 			for (int32 I = 0; I < BodyIds.Num(); ++I)
 			{
 				const FBodyInstance& Src = Bodies[I];
-				const bool bSkip = Src.ComponentID == IgnoreComponentID;
+				const bool bSkip = Src.ComponentID == IgnoreComponentID || !Src.bPhysicsEnabled;
 
 				if (bSkip)
 				{
@@ -429,6 +431,7 @@ namespace
 				Out.TraceEnd = End;
 				Out.ComponentID = static_cast<SIZE_T>(Body.GetUserData());
 				Out.bFloorPlane = false;
+				Out.BodyIndex = FindBodyIndex(Hit.mBodyID);
 				OutHits.Add(Out);
 			}
 			return OutHits.Num() > 0;
@@ -454,31 +457,34 @@ namespace
 		}
 
 	private:
+		/**
+		 * Every layer: the channel filter is the bodies' responses, which the scene applies to the hits
+		 * (FPhysScene::FilterBackendHits), so Jolt returns them all with their body index.
+		 */
 		class FChannelObjectLayerFilter final : public JPH::ObjectLayerFilter
 		{
 		public:
-			explicit FChannelObjectLayerFilter(ECollisionChannel InChannel)
-				: Channel(InChannel)
+			explicit FChannelObjectLayerFilter(ECollisionChannel /*InChannel*/)
 			{
 			}
-			[[nodiscard]] bool ShouldCollide(JPH::ObjectLayer Layer) const override
+			[[nodiscard]] bool ShouldCollide(JPH::ObjectLayer /*Layer*/) const override
 			{
-				switch (Channel)
-				{
-					case ECollisionChannel::WorldStatic:
-						return Layer == Layers::NonMoving;
-					case ECollisionChannel::WorldDynamic:
-						return Layer == Layers::MOVING;
-					case ECollisionChannel::Pawn:
-					case ECollisionChannel::Visibility:
-						return true;
-				}
 				return true;
 			}
-
-		private:
-			ECollisionChannel Channel;
 		};
+
+		/** The scene's index of a Jolt body (the index in BodyIds), INDEX_NONE for the floor slab. */
+		[[nodiscard]] int32 FindBodyIndex(const JPH::BodyID& Id) const
+		{
+			for (int32 Index = 0; Index < BodyIds.Num(); ++Index)
+			{
+				if (BodyIds[Index] == Id)
+				{
+					return Index;
+				}
+			}
+			return INDEX_NONE;
+		}
 
 		class FTraceBodyFilter final : public JPH::BodyFilter
 		{
@@ -571,6 +577,7 @@ namespace
 				Out.TraceEnd = End;
 				Out.ComponentID = static_cast<SIZE_T>(Body.GetUserData());
 				Out.bFloorPlane = false;
+				Out.BodyIndex = FindBodyIndex(Hit.mBodyID2);
 				(void)InflateHint;
 				OutHits.Add(Out);
 			}
