@@ -6,14 +6,18 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/DamageEvents.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/TriggerVolume.h"
 #include "Engine/World.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/PackageName.h"
+#include "ShooterBomb.h"
 #include "ShooterCharacterMovement.h"
 #include "ShooterGame.h"
 #include "ShooterGameMode.h"
+#include "ShooterGameState.h"
+#include "ShooterPlayerController.h"
 #include "ShooterPlayerState.h"
 #include "Weapons/ShooterProjectile.h"
 #include "Weapons/ShooterWeapon.h"
@@ -142,11 +146,23 @@ void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAction(TEXT("SecondaryWeapon"), IE_Pressed, this, &AShooterCharacter::OnSelectSecondary);
 	PlayerInputComponent->BindAction(TEXT("Grenade"), IE_Pressed, this, &AShooterCharacter::OnSelectGrenade);
 	PlayerInputComponent->BindAction(TEXT("DropWeapon"), IE_Pressed, this, &AShooterCharacter::OnDropWeapon);
+	PlayerInputComponent->BindAction(TEXT("Use"), IE_Pressed, this, &AShooterCharacter::OnUsePressed);
+	PlayerInputComponent->BindAction(TEXT("Use"), IE_Released, this, &AShooterCharacter::OnUseReleased);
+}
+
+bool AShooterCharacter::IsFrozen() const
+{
+	const UWorld* World = GetWorld();
+	const AShooterGameState* State = World != nullptr && World->GetAuthGameMode() != nullptr
+		? World->GetAuthGameMode()->GetGameState<AShooterGameState>()
+		: nullptr;
+	return State != nullptr && (State->IsFreezeTime() || State->GetRoundState() == EShooterRoundState::MatchEnd);
 }
 
 void AShooterCharacter::MoveForward(float Value)
 {
-	if (Value != 0.0f && IsAlive())
+	// Frozen, planting or defusing: no walking (CS).
+	if (Value != 0.0f && IsAlive() && !IsFrozen() && !bIsPlanting && !IsDefusing())
 	{
 		// Along the view's yaw, level (the pitch does not slow the walk). ACharacter's one-argument AddMovementInput
 		// is Leon's wish setter; the pawn's input vector is APawn's (UE's).
@@ -157,7 +173,7 @@ void AShooterCharacter::MoveForward(float Value)
 
 void AShooterCharacter::MoveRight(float Value)
 {
-	if (Value != 0.0f && IsAlive())
+	if (Value != 0.0f && IsAlive() && !IsFrozen() && !bIsPlanting && !IsDefusing())
 	{
 		const FRotator YawRotation(0.0f, GetControlRotation().Yaw + 90.0f, 0.0f);
 		APawn::AddMovementInput(YawRotation.Vector(), Value);
@@ -166,7 +182,7 @@ void AShooterCharacter::MoveRight(float Value)
 
 void AShooterCharacter::OnJumpPressed()
 {
-	if (IsAlive())
+	if (IsAlive() && !IsFrozen())
 	{
 		Jump();
 	}
@@ -203,19 +219,40 @@ void AShooterCharacter::SetWalking(bool bNewWalking)
 	}
 }
 
+namespace
+{
+
+	/** The number keys are the buy menu's while it is open. */
+	bool IsBuyMenuOpen(const AController* Controller)
+	{
+		const AShooterPlayerController* Player = Cast<AShooterPlayerController>(Controller);
+		return Player != nullptr && Player->IsBuyMenuOpen();
+	}
+
+} // namespace
+
 void AShooterCharacter::OnSelectPrimary()
 {
-	SelectSlot(EShooterWeaponSlot::Primary);
+	if (!IsBuyMenuOpen(GetController()))
+	{
+		SelectSlot(EShooterWeaponSlot::Primary);
+	}
 }
 
 void AShooterCharacter::OnSelectSecondary()
 {
-	SelectSlot(EShooterWeaponSlot::Secondary);
+	if (!IsBuyMenuOpen(GetController()))
+	{
+		SelectSlot(EShooterWeaponSlot::Secondary);
+	}
 }
 
 void AShooterCharacter::OnSelectGrenade()
 {
-	SelectSlot(EShooterWeaponSlot::Grenade);
+	if (!IsBuyMenuOpen(GetController()))
+	{
+		SelectSlot(EShooterWeaponSlot::Grenade);
+	}
 }
 
 void AShooterCharacter::OnDropWeapon()
@@ -229,7 +266,7 @@ void AShooterCharacter::OnDropWeapon()
 
 void AShooterCharacter::StartWeaponFire()
 {
-	if (CurrentWeapon != nullptr && IsAlive())
+	if (CurrentWeapon != nullptr && IsAlive() && !IsFrozen() && !bIsPlanting && !IsDefusing())
 	{
 		CurrentWeapon->StartFire();
 	}
@@ -265,11 +302,151 @@ void AShooterCharacter::Tick(float DeltaSeconds)
 	// The eyes follow the crouch smoothly (the capsule changes at once; CS lowers the view over a moment).
 	FVector& EyeLocation = FirstPersonCameraComponent->RelativeLocation;
 	EyeLocation.Z = FMath::FInterpTo(EyeLocation.Z, BaseEyeHeight, DeltaSeconds, EyeHeightInterpSpeed);
+	if (bIsPlanting)
+	{
+		TickPlanting();
+	}
+}
+
+// The bomb
+
+FName AShooterCharacter::GetBombSiteHere() const
+{
+	const UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return NAME_None;
+	}
+	const ATriggerVolume* Site =
+		AShooterGameMode::FindZone(*World, GetActorLocation(), AShooterGameMode::BombSiteTag, NAME_None);
+	return Site != nullptr ? AShooterGameMode::GetZoneName(*Site, AShooterGameMode::BombSiteTag) : NAME_None;
+}
+
+bool AShooterCharacter::CanPlant() const
+{
+	constexpr float StillSpeed = 20.0f;
+	return IsAlive() && !IsFrozen() && CarriedBomb != nullptr && IsMovingOnGround() &&
+		GetCharacterMovement().Velocity.Size2D() <= StillSpeed && GetBombSiteHere() != NAME_None;
+}
+
+bool AShooterCharacter::StartUse()
+{
+	if (!IsAlive() || IsFrozen() || bIsPlanting || IsDefusing())
+	{
+		return false;
+	}
+	if (CarriedBomb != nullptr)
+	{
+		if (!CanPlant())
+		{
+			return false;
+		}
+		bIsPlanting = true;
+		StopWeaponFire();
+		const UWorld* World = GetWorld();
+		PlantEndTime = (World != nullptr ? World->GetTimeSeconds() : 0.0f) + CarriedBomb->PlantDuration;
+		UE_LOG(LogShooter, Log, TEXT("%s is planting the bomb at %s"), *GetName(), *GetBombSiteHere().ToString());
+		return true;
+	}
+	if (GetTeam() != EShooterTeam::CT)
+	{
+		return false;
+	}
+	UWorld* World = GetWorld();
+	if (World == nullptr || World->PersistentLevel == nullptr)
+	{
+		return false;
+	}
+	for (AActor* Actor : World->PersistentLevel->Actors)
+	{
+		AShooterBomb* Bomb = Cast<AShooterBomb>(Actor);
+		if (Bomb != nullptr && !Bomb->IsPendingKillPending() && Bomb->StartDefuse(this))
+		{
+			DefusingBomb = Bomb;
+			StopWeaponFire();
+			return true;
+		}
+	}
+	return false;
+}
+
+void AShooterCharacter::StopUse()
+{
+	if (bIsPlanting)
+	{
+		bIsPlanting = false;
+		PlantEndTime = 0.0f;
+	}
+	if (DefusingBomb != nullptr)
+	{
+		DefusingBomb->StopDefuse(this);
+		DefusingBomb = nullptr;
+	}
+}
+
+void AShooterCharacter::OnUsePressed()
+{
+	(void)StartUse();
+}
+
+void AShooterCharacter::OnUseReleased()
+{
+	StopUse();
+}
+
+void AShooterCharacter::TickPlanting()
+{
+	if (!CanPlant())
+	{
+		UE_LOG(LogShooter, Log, TEXT("%s stopped planting"), *GetName());
+		StopUse();
+		return;
+	}
+	const UWorld* World = GetWorld();
+	if (World != nullptr && World->GetTimeSeconds() >= PlantEndTime)
+	{
+		AShooterBomb* Bomb = CarriedBomb;
+		const FName Site = GetBombSiteHere();
+		bIsPlanting = false;
+		PlantEndTime = 0.0f;
+		// On the floor at the feet, a little ahead (CS puts it down in front of the planter).
+		const FVector Ahead = FRotator(0.0f, GetActorRotation().Yaw, 0.0f).Vector() * 30.0f;
+		Bomb->Plant(GetActorLocation() + Ahead, Site, this);
+	}
+}
+
+void AShooterCharacter::ResetForNewRound(const FVector& Feet, float Yaw)
+{
+	StopUse();
+	StopWeaponFire();
+	UnCrouch();
+	SetWalking(false);
+	Health = MaxHealth;
+	GetCharacterMovement().Velocity = FVector::ZeroVector;
+	Reset(Feet, FRotator(0.0f, Yaw, 0.0f));
+	if (AController* OwningController = GetController())
+	{
+		OwningController->SetControlRotation(FRotator(0.0f, Yaw, 0.0f));
+	}
+	if (CurrentWeapon != nullptr)
+	{
+		// Put away and drawn again: the zoom, a reload and the recoil end.
+		AShooterWeapon* Weapon = CurrentWeapon;
+		Weapon->OnUnEquip();
+		Weapon->OnEquip();
+	}
+}
+
+void AShooterCharacter::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+	// UE ShooterGame: the health is set here, so a pawn is alive from its spawn (BeginPlay may come later in the
+	// frame).
+	ResetHealth();
 }
 
 void AShooterCharacter::BeginPlay()
 {
-	ResetHealth();
 	Super::BeginPlay();
 	SpawnDefaultInventory();
 }
@@ -421,8 +598,14 @@ void AShooterCharacter::Die(AController* Killer, AActor* DamageCauser, bool bHea
 		GameMode->Killed(Killer, Victim, this, DamageCauser, bHeadshot);
 	}
 
-	// CS: the best of the rifle and the pistol falls; the rest is lost.
+	// CS: the bomb and the best of the rifle and the pistol fall; the rest, and the kit, are lost.
+	StopUse();
 	StopWeaponFire();
+	if (CarriedBomb != nullptr)
+	{
+		CarriedBomb->Drop(GetActorLocation());
+	}
+	bHasDefuseKit = false;
 	AShooterWeapon* Dropped = GetWeaponInSlot(EShooterWeaponSlot::Primary);
 	if (Dropped == nullptr)
 	{

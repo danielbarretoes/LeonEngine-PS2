@@ -51,6 +51,65 @@ enum class EShooterHitGroup : uint8
 };
 
 /**
+ * The phase of a round (Counter-Strike's round flow; AShooterGameMode drives it, AShooterGameState holds it). Warmup
+ * lasts until both teams have a player; each round is Freeze (nobody moves, buying), Live (the round's time), then
+ * RoundEnd (the result shows) before the next Freeze; MatchEnd after the last round.
+ */
+UENUM()
+enum class EShooterRoundState : uint8
+{
+	Warmup,
+	Freeze,
+	Live,
+	RoundEnd,
+	MatchEnd,
+};
+
+/** Where the bomb is (AShooterBomb). */
+UENUM()
+enum class EShooterBombState : uint8
+{
+	/** Not in play (no round, or no terrorist to carry it). */
+	None,
+	/** A terrorist carries it. */
+	Carried,
+	/** On the floor, for a terrorist to pick up. */
+	Dropped,
+	/** Planted in a bomb site, ticking. */
+	Planted,
+	Defused,
+	Exploded,
+};
+
+/** Why a round ended (Counter-Strike's round end messages). */
+UENUM()
+enum class EShooterRoundEndReason : uint8
+{
+	None,
+	/** "Target Successfully Bombed!": the planted bomb exploded (T). */
+	TargetBombed,
+	/** "The bomb has been defused!" (CT). */
+	BombDefused,
+	/** "Terrorists Win!": every CT is dead (T). */
+	CTsEliminated,
+	/** "Counter-Terrorists Win!": every T is dead with no bomb planted (CT). */
+	TerroristsEliminated,
+	/** "Target has been saved!": the time ran out with no bomb planted (CT). */
+	TargetSaved,
+	/** "Round Draw!": both teams died at once (nobody scores). */
+	Draw,
+};
+
+/** The other team (CT for T, T for CT, None for None). */
+[[nodiscard]] SHOOTERGAME_API EShooterTeam GetOpposingTeam(EShooterTeam Team);
+
+/** Counter-Strike's message for a round's end ("Target Successfully Bombed!", ...). */
+[[nodiscard]] SHOOTERGAME_API const TCHAR* GetRoundEndMessage(EShooterRoundEndReason Reason);
+
+/** The team a round end reason gives the round to (None for a draw). */
+[[nodiscard]] SHOOTERGAME_API EShooterTeam GetRoundEndWinner(EShooterRoundEndReason Reason);
+
+/**
  * A team's tag: the PlayerStartTag of its starts and the tag of its buy zone in de_leon (plan decision D15: the map
  * carries the game's meaning as tags). NAME_None for None.
  */

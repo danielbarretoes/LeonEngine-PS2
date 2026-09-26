@@ -50,3 +50,57 @@ const TCHAR* GetShooterTeamName(EShooterTeam Team)
 	}
 	return TEXT("None");
 }
+
+EShooterTeam GetOpposingTeam(EShooterTeam Team)
+{
+	switch (Team)
+	{
+		case EShooterTeam::CT:
+			return EShooterTeam::T;
+		case EShooterTeam::T:
+			return EShooterTeam::CT;
+		case EShooterTeam::None:
+			break;
+	}
+	return EShooterTeam::None;
+}
+
+const TCHAR* GetRoundEndMessage(EShooterRoundEndReason Reason)
+{
+	switch (Reason)
+	{
+		case EShooterRoundEndReason::TargetBombed:
+			return TEXT("Target Successfully Bombed!");
+		case EShooterRoundEndReason::BombDefused:
+			return TEXT("The bomb has been defused!");
+		case EShooterRoundEndReason::CTsEliminated:
+			return TEXT("Terrorists Win!");
+		case EShooterRoundEndReason::TerroristsEliminated:
+			return TEXT("Counter-Terrorists Win!");
+		case EShooterRoundEndReason::TargetSaved:
+			return TEXT("Target has been saved!");
+		case EShooterRoundEndReason::Draw:
+			return TEXT("Round Draw!");
+		case EShooterRoundEndReason::None:
+			break;
+	}
+	return TEXT("");
+}
+
+EShooterTeam GetRoundEndWinner(EShooterRoundEndReason Reason)
+{
+	switch (Reason)
+	{
+		case EShooterRoundEndReason::TargetBombed:
+		case EShooterRoundEndReason::CTsEliminated:
+			return EShooterTeam::T;
+		case EShooterRoundEndReason::BombDefused:
+		case EShooterRoundEndReason::TerroristsEliminated:
+		case EShooterRoundEndReason::TargetSaved:
+			return EShooterTeam::CT;
+		case EShooterRoundEndReason::Draw:
+		case EShooterRoundEndReason::None:
+			break;
+	}
+	return EShooterTeam::None;
+}

@@ -6,6 +6,7 @@
 #include "UObject/SoftObjectPath.h"
 #include "ShooterCharacter.generated.h"
 
+class AShooterBomb;
 class AShooterWeapon;
 class UCameraComponent;
 class UInputComponent;
@@ -41,9 +42,15 @@ struct FDamageEvent;
  * and draws the best (primary, then secondary, then grenade). A weapon on the floor is picked up by walking over it
  * when its slot is free (AShooterWeapon's pickup).
  *
+ * The bomb (AShooterBomb): the terrorist carrying it plants it by holding Use (E) standing still in a bomb site for
+ * the bomb's PlantDuration; a counter-terrorist defuses a planted bomb by holding Use near it (quicker with a defuse
+ * kit). Neither moves while planting or defusing (CS). The freeze time at a round's start holds every pawn still and
+ * its weapons silent; it can still look around.
+ *
  * Input (Config/DefaultInput.ini): MoveForward / MoveRight (W A S D), Turn / LookUp (the mouse), Jump (Space), Crouch
  * (Left Ctrl, C: held), Walk (Left Shift: held), Fire (the left button), Targeting (the right button: a sniper's zoom),
- * Reload (R), PrimaryWeapon / SecondaryWeapon / Grenade (1, 2, 4), DropWeapon (G). A dead pawn ignores them.
+ * Reload (R), PrimaryWeapon / SecondaryWeapon / Grenade (1, 2, 4), DropWeapon (G), Use (E: held). A dead pawn ignores
+ * them, and the slot keys are the buy menu's while it is open.
  */
 UCLASS(Config = Game)
 class SHOOTERGAME_API AShooterCharacter : public ACharacter
@@ -60,7 +67,9 @@ public:
 
 	void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 	void Tick(float DeltaSeconds) override;
-	/** Spawns the default inventory (UE ShooterGame: SpawnDefaultInventory in PostInitializeComponents). */
+	/** Full health (UE ShooterGame: PostInitializeComponents). */
+	void PostInitializeComponents() override;
+	/** Spawns the default inventory (UE ShooterGame: SpawnDefaultInventory, in PostInitializeComponents there). */
 	void BeginPlay() override;
 	/** The inventory goes with the pawn (UE ShooterGame: DestroyInventory in Destroyed). */
 	void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -150,6 +159,58 @@ public:
 	/** Kills the pawn at once (the round's end, `kill`); the killer is the pawn's own controller. */
 	void Suicide();
 
+	/**
+	 * A survivor's new round (CS): full health, the armor and the weapons kept, standing still at Feet facing Yaw, the
+	 * trigger, the zoom, a plant or a defuse stopped.
+	 */
+	void ResetForNewRound(const FVector& Feet, float Yaw);
+
+	/** The round's freeze time holds the pawn (AShooterGameState::IsFreezeTime), or the match is over. */
+	[[nodiscard]] bool IsFrozen() const;
+
+	// The bomb
+
+	/** The bomb this pawn carries (AShooterBomb::GiveTo / Drop / Plant set it). */
+	[[nodiscard]] AShooterBomb* GetCarriedBomb() const
+	{
+		return CarriedBomb;
+	}
+	void SetCarriedBomb(AShooterBomb* Bomb)
+	{
+		CarriedBomb = Bomb;
+	}
+	/** A counter-terrorist's defuse kit (the buy menu; lost with the pawn). */
+	[[nodiscard]] bool HasDefuseKit() const
+	{
+		return bHasDefuseKit;
+	}
+	void SetDefuseKit(bool bNewHasKit)
+	{
+		bHasDefuseKit = bNewHasKit;
+	}
+	/**
+	 * The use key (E) pressed: a carrier in a bomb site starts planting, a counter-terrorist near the planted bomb
+	 * starts defusing. True when either started.
+	 */
+	bool StartUse();
+	/** The use key released: the plant or the defuse stops. */
+	void StopUse();
+	[[nodiscard]] bool IsPlanting() const
+	{
+		return bIsPlanting;
+	}
+	[[nodiscard]] bool IsDefusing() const
+	{
+		return DefusingBomb != nullptr;
+	}
+	/** The world time a plant in progress ends. */
+	[[nodiscard]] float GetPlantEndTime() const
+	{
+		return PlantEndTime;
+	}
+	/** The bomb site (its second tag, "A" or "B") the pawn stands in, NAME_None outside. */
+	[[nodiscard]] FName GetBombSiteHere() const;
+
 	// Inventory
 
 	/** Adds a spawned weapon to its slot: a weapon already there is dropped. Draws it when nothing is drawn. */
@@ -227,6 +288,12 @@ private:
 	void OnSelectSecondary();
 	void OnSelectGrenade();
 	void OnDropWeapon();
+	void OnUsePressed();
+	void OnUseReleased();
+	/** The plant in progress: cancelled when the conditions go, finished at PlantEndTime. */
+	void TickPlanting();
+	/** Whether the pawn may plant now: alive, carrying, in a site, on the floor, still. */
+	[[nodiscard]] bool CanPlant() const;
 
 	/** Sets the body's mesh for the team. */
 	void UpdateBody();
@@ -263,6 +330,16 @@ private:
 	UPROPERTY(Transient)
 	bool bHasHelmet = false;
 
+	/** The bomb carried, and the one being defused. */
+	UPROPERTY(Transient)
+	AShooterBomb* CarriedBomb = nullptr;
+
+	UPROPERTY(Transient)
+	AShooterBomb* DefusingBomb = nullptr;
+
+	bool bHasDefuseKit = false;
+	bool bIsPlanting = false;
+	float PlantEndTime = 0.0f;
 	bool bGodMode = false;
 	/** The team at death (the controller and its player state leave the corpse). */
 	EShooterTeam DeadTeam = EShooterTeam::None;
