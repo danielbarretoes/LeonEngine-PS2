@@ -173,7 +173,9 @@ private:
 	bool bRandomSeeded = false;
 	FName CurrentTask;
 	TArray<FString> RoundPurchases;
+	/** The round serial (AShooterGameState::GetRoundSerial) of the last purchase, and of the round being played. */
 	int32 BoughtInRound = -1;
+	int32 ObservedRoundSerial = -1;
 
 	/** The engagement: when the enemy was last seen and first seen, the aim's offset, the burst. */
 	float EnemyLastSeenTime = -1.0f;

@@ -50,6 +50,7 @@ void AShooterGameState::ResetMatch()
 	ScoreCT = 0;
 	ScoreT = 0;
 	RoundNumber = 0;
+	++MatchSerial;
 	BombState = EShooterBombState::None;
 	BombExplodeTime = 0.0f;
 	BombSite = NAME_None;

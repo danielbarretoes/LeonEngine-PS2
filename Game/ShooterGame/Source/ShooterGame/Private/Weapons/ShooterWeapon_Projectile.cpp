@@ -65,6 +65,8 @@ void AShooterWeapon_Projectile::FireWeapon()
 	Projectile->ExplosionRadius = ExplosionRadius;
 	Projectile->ArmorRatio = ArmorRatio;
 	Projectile->ExplodeSound = ExplodeSound;
+	Projectile->WeaponName = WeaponName;
+	Projectile->KillReward = KillReward;
 	Projectile->Launch(Velocity, GetInstigatorController(), GetWeaponMesh());
 	LastProjectile = Projectile;
 }

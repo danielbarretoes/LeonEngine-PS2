@@ -245,6 +245,16 @@ void AShooterAIController::UpdateBlackboard()
 	const AShooterGameState* State = GameMode != nullptr ? GameMode->GetShooterGameState() : nullptr;
 	const float Now = GetWorldTime();
 
+	// A new round: last round's enemy, noise and goal are forgotten (the survivors start over too).
+	if (State != nullptr && State->GetRoundSerial() != ObservedRoundSerial)
+	{
+		ObservedRoundSerial = State->GetRoundSerial();
+		Enemy = nullptr;
+		NoiseHeardTime = -1.0f;
+		Board.ClearValue(NoiseLocationKey);
+		bHasGoal = false;
+	}
+
 	// The enemy: alive and seen within EnemyMemory (its last place is searched afterwards).
 	if (Enemy != nullptr && (!Enemy->IsAlive() || Enemy->IsPendingKillPending()))
 	{
@@ -301,11 +311,11 @@ TArray<FString> AShooterAIController::BuyForRound()
 	const AShooterGameState* State = GameMode != nullptr ? GameMode->GetShooterGameState() : nullptr;
 	const AShooterPlayerState* PlayerState = GetPlayerState<AShooterPlayerState>();
 	if (Self == nullptr || GameMode == nullptr || State == nullptr || PlayerState == nullptr ||
-		BoughtInRound == State->GetRoundNumber() || !GameMode->CanBuy(*Self))
+		BoughtInRound == State->GetRoundSerial() || !GameMode->CanBuy(*Self))
 	{
 		return Bought;
 	}
-	BoughtInRound = State->GetRoundNumber();
+	BoughtInRound = State->GetRoundSerial();
 	RoundPurchases.Reset();
 	auto TryBuy = [&](const TCHAR* Item)
 	{

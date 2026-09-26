@@ -51,21 +51,20 @@ void FShooterMatchChecker::Tick(const AShooterGameMode& GameMode)
 		return;
 	}
 	const int32 RoundNumber = State->GetRoundNumber();
-	if (RoundNumber < LastRoundNumber)
+	if (State->GetMatchSerial() != LastMatchSerial)
 	{
-		// A new match (mp_restartgame): the score starts over, the rounds played are kept.
-		LastEndedRound = 0;
+		// A new match (mp_restartgame, at any round): the score starts over, the rounds played are kept.
+		LastMatchSerial = State->GetMatchSerial();
 		LastScoreCT = 0;
 		LastScoreT = 0;
 		DecidedRounds = 0;
 	}
-	LastRoundNumber = RoundNumber;
 
 	const EShooterRoundState RoundState = State->GetRoundState();
 	if ((RoundState == EShooterRoundState::RoundEnd || RoundState == EShooterRoundState::MatchEnd) &&
-		RoundNumber > LastEndedRound)
+		State->GetRoundSerial() != LastEndedRoundSerial)
 	{
-		LastEndedRound = RoundNumber;
+		LastEndedRoundSerial = State->GetRoundSerial();
 		CheckRoundEnd(RoundNumber, State->GetLastRoundEndReason(), State->GetTeamScore(EShooterTeam::CT),
 			State->GetTeamScore(EShooterTeam::T));
 	}

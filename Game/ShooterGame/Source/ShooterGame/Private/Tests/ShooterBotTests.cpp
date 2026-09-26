@@ -13,6 +13,7 @@
 #include "ShooterAIController.h"
 #include "ShooterBomb.h"
 #include "ShooterCharacter.h"
+#include "ShooterCharacterMovement.h"
 #include "ShooterGameMode.h"
 #include "ShooterGameState.h"
 #include "ShooterMatchChecker.h"
@@ -122,6 +123,23 @@ namespace
 	}
 
 } // namespace
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBotsAgentFromConfigTest, "ShooterGame.Bots.AgentFromConfig",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameBotsAgentFromConfigTest::RunTest(const FString& Parameters)
+{
+	// The bots' agent comes from DefaultEngine.ini's NavigationSystem section, the one the map import links with: CS's
+	// hull, and a jump no higher than the character's (114 cm with UShooterCharacterMovement's jump and gravity).
+	const FWaypointLinkParams Agent = FWaypointLinkParams::FromConfig();
+	TestEqual("The radius", Agent.AgentRadius, 40.0f);
+	TestEqual("The half height", Agent.AgentHalfHeight, 91.5f);
+	TestEqual("The step", Agent.MaxStepHeight, 45.0f);
+	const UShooterCharacterMovement* Movement = GetDefault<UShooterCharacterMovement>();
+	const float JumpApex = FMath::Square(Movement->JumpZVelocity) / (2.0f * Movement->Gravity);
+	TestTrue("A jump the character makes", Agent.MaxJumpHeight > 110.0f && Agent.MaxJumpHeight < JumpApex);
+	return true;
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBotsBuyTest, "ShooterGame.Bots.Buy",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)

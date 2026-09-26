@@ -402,6 +402,10 @@ void AShooterHUD::DrawScoreboard()
 		const AController* Controller = Cast<AController>(ShooterState->GetOwner());
 		const AShooterCharacter* Pawn =
 			Controller != nullptr ? Cast<AShooterCharacter>(Controller->GetPawn()) : nullptr;
+		if (ShooterState->GetTeam() == EShooterTeam::None)
+		{
+			continue; // a spectator (the bot match's player) plays for no team
+		}
 		const bool bDead = Pawn == nullptr || !Pawn->IsAlive();
 		FString& Lines = ShooterState->GetTeam() == EShooterTeam::T ? TLines : CTLines;
 		Lines +=

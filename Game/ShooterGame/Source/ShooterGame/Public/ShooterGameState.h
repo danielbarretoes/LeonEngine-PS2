@@ -42,6 +42,18 @@ public:
 	{
 		return RoundNumber;
 	}
+	/**
+	 * Counts every round started and every match begun, never going back (mp_restartgame starts the round number
+	 * over, not these): a new value tells an observer (a bot, the match checker) that a new round or match began.
+	 */
+	[[nodiscard]] int32 GetRoundSerial() const
+	{
+		return RoundSerial;
+	}
+	[[nodiscard]] int32 GetMatchSerial() const
+	{
+		return MatchSerial;
+	}
 	/** The world time the current phase ends (the freeze, the round's time, the result's display); 0 without one. */
 	[[nodiscard]] float GetPhaseEndTime() const
 	{
@@ -102,9 +114,11 @@ public:
 		RoundState = NewState;
 		PhaseEndTime = NewPhaseEndTime;
 	}
+	/** A round starts with this number (and a new round serial). */
 	void SetRoundNumber(int32 NewRoundNumber)
 	{
 		RoundNumber = NewRoundNumber;
+		++RoundSerial;
 	}
 	void SetBuyEndTime(float Time)
 	{
@@ -125,7 +139,7 @@ public:
 	{
 		MatchWinner = Team;
 	}
-	/** Back to a new match: scores, round number, the feed. */
+	/** Back to a new match: scores, round number, the feed (and a new match serial). */
 	void ResetMatch();
 
 private:
@@ -134,6 +148,12 @@ private:
 
 	UPROPERTY()
 	int32 RoundNumber = 0;
+
+	UPROPERTY()
+	int32 RoundSerial = 0;
+
+	UPROPERTY()
+	int32 MatchSerial = 0;
 
 	UPROPERTY()
 	float PhaseEndTime = 0.0f;

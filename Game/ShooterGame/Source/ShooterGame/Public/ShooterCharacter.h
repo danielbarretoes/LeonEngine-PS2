@@ -7,6 +7,7 @@
 #include "ShooterCharacter.generated.h"
 
 class AShooterBomb;
+class AShooterGameState;
 class AShooterWeapon;
 class UCameraComponent;
 class UInputComponent;
@@ -167,6 +168,8 @@ public:
 
 	/** The round's freeze time holds the pawn (AShooterGameState::IsFreezeTime), or the match is over. */
 	[[nodiscard]] bool IsFrozen() const;
+	/** The game mode's round state (null outside a ShooterGame match: tests, other game modes). */
+	[[nodiscard]] const AShooterGameState* GetShooterGameState() const;
 
 	// The bomb
 

@@ -14,7 +14,7 @@ class AShooterGameMode;
  * - Every player's money stays within [0, MaxMoney]; no team has more than MaxPlayersPerTeam players.
  * - A live pawn has health within (0, its max] and its feet no lower than the navigation's lowest floor less
  *   FloorTolerance (nobody falls through the map).
- * - The round number never goes back, except when a new match starts (mp_restartgame) and the checker starts over.
+ * - A new match (mp_restartgame; AShooterGameState's match serial) starts the score over.
  *
  * A broken invariant is kept as a line (GetViolations), once per kind and round.
  */
@@ -52,9 +52,9 @@ private:
 
 	TArray<EShooterRoundEndReason> Reasons;
 	TArray<FString> Violations;
-	/** The round whose end was recorded last (0: none). */
-	int32 LastEndedRound = 0;
-	int32 LastRoundNumber = 0;
+	/** The round serial whose end was recorded last, and the match serial observed (AShooterGameState). */
+	int32 LastEndedRoundSerial = -1;
+	int32 LastMatchSerial = -1;
 	int32 LastScoreCT = 0;
 	int32 LastScoreT = 0;
 	int32 DecidedRounds = 0;

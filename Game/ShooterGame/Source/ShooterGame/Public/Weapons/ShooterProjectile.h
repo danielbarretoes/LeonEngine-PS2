@@ -48,6 +48,16 @@ public:
 	UPROPERTY()
 	float ArmorRatio = 1.0f;
 
+	/**
+	 * The throwing weapon's name and kill reward, copied at the throw: the kill feed and the money credit them after
+	 * the weapon itself is gone (a thrown grenade leaves the inventory).
+	 */
+	UPROPERTY()
+	FString WeaponName;
+
+	UPROPERTY()
+	int32 KillReward = 300;
+
 	/** The explosion's sound (null: silent). */
 	UPROPERTY(Transient)
 	USoundWave* ExplodeSound = nullptr;

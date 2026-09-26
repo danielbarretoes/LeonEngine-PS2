@@ -160,8 +160,8 @@ Counter-Strike's defusal rules (`AShooterGameMode`, all in `DefaultGame.ini`'s `
   | The planted bomb explodes (the clock stops at the plant) | T | Target Successfully Bombed! |
   | The planted bomb is defused | CT | The bomb has been defused! |
 
-- **Money** (CS 1.6): $800 to start, $16000 at most. A kill pays the weapon's `KillReward` ($300, the AWP $100); a
-  team kill costs $3300. The winners get $3250 ($3500 by the bomb or a defuse); the losers $1400, $500 more for each
+- **Money** (CS 1.6): $800 to start, $16000 at most. A kill pays the weapon's `KillReward` ($300 with every weapon,
+  as in CS 1.6; per weapon in the config); a team kill costs $3300. The winners get $3250 ($3500 by the bomb or a defuse); the losers $1400, $500 more for each
   consecutive loss up to $3400, and terrorists who lose with the bomb planted $800 more. The planter and the defuser
   get $300.
 - **Buying**: in the team's buy zone, within 45 s of the round's start (any time in the warmup): the weapons at their

@@ -101,7 +101,7 @@ public:
 	UPROPERTY(Config)
 	int32 Price = 0;
 
-	/** The money a kill with it pays (P19; CS: 300, the AWP 100). */
+	/** The money a kill with it pays (CS 1.6: $300 with every weapon; per weapon here, config). */
 	UPROPERTY(Config)
 	int32 KillReward = 300;
 

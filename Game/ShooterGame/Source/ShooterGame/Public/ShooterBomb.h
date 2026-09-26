@@ -123,6 +123,8 @@ public:
 
 	void PostInitializeComponents() override;
 	void Tick(float DeltaSeconds) override;
+	/** Leaving the world (the round's clean-up) frees its carrier: nobody carries a destroyed bomb. */
+	void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
 	/** The planted bomb's beeps: every second, then faster over the last 10 seconds. */

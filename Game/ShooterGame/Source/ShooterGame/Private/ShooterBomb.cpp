@@ -216,6 +216,16 @@ void AShooterBomb::TickBeeps(float Now)
 	NextBeepTime = Now + FMath::Lerp(BeepSlowest, BeepFastest, Alpha);
 }
 
+void AShooterBomb::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (Carrier != nullptr && Carrier->GetCarriedBomb() == this)
+	{
+		Carrier->SetCarriedBomb(nullptr);
+	}
+	Carrier = nullptr;
+	Super::EndPlay(EndPlayReason);
+}
+
 void AShooterBomb::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);

@@ -315,7 +315,7 @@ private:
 	void PayTeam(EShooterTeam Team, int32 Amount);
 	/** The live pawns of a team. */
 	[[nodiscard]] int32 CountAlive(EShooterTeam Team) const;
-	/** Whether a round is running with players who can fight (Live, or planted). */
+	/** Whether a round is under way (Live, or its result shown): a player joining now waits for the next. */
 	[[nodiscard]] bool IsRoundLive() const;
 	[[nodiscard]] float GetWorldTime() const;
 
@@ -333,7 +333,8 @@ private:
 	/** The bomb was planted this round (the losing terrorists' bonus). */
 	bool bBombPlantedThisRound = false;
 
-	/** A pending mp_restartgame: the world time it happens (0: none). */
+	/** A pending mp_restartgame, and the world time it happens. */
+	bool bRestartPending = false;
 	float RestartGameTime = 0.0f;
 
 	/** The round stream: the bomb's carrier. */

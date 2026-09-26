@@ -89,14 +89,33 @@ namespace
 		return Pawn != nullptr ? Pawn->GetName() : FString(TEXT("?"));
 	}
 
-	/** The weapon behind a damage causer: the weapon itself, or the weapon that threw a projectile. */
-	const AShooterWeapon* GetCauserWeapon(const AActor* DamageCauser)
+	/** What a kill is credited to: the feed's weapon name and the killer's reward (CS: $300 without a weapon). */
+	struct FKillCredit
 	{
+		FString WeaponName;
+		int32 Reward = 300;
+	};
+
+	/** The credit of a damage causer: a weapon, a projectile (its thrower's, copied at the throw), the bomb. */
+	FKillCredit GetKillCredit(const AActor* DamageCauser)
+	{
+		FKillCredit Credit;
 		if (const AShooterWeapon* Weapon = Cast<AShooterWeapon>(DamageCauser))
 		{
-			return Weapon;
+			Credit.WeaponName = Weapon->WeaponName;
+			Credit.Reward = Weapon->KillReward;
 		}
-		return DamageCauser != nullptr ? Cast<AShooterWeapon>(DamageCauser->GetOwner()) : nullptr;
+		else if (const AShooterProjectile* Projectile = Cast<AShooterProjectile>(DamageCauser))
+		{
+			Credit.WeaponName = Projectile->WeaponName;
+			Credit.Reward = Projectile->KillReward;
+		}
+		else
+		{
+			Credit.WeaponName =
+				DamageCauser != nullptr && DamageCauser->IsA<AShooterBomb>() ? TEXT("c4") : TEXT("world");
+		}
+		return Credit;
 	}
 
 	/** The controller that owns a player state (AController::InitPlayerState spawns it with the controller as owner).
@@ -433,10 +452,8 @@ void AShooterGameMode::Killed(
 	++NumKills;
 	AShooterPlayerState* KillerState = Killer != nullptr ? Killer->GetPlayerState<AShooterPlayerState>() : nullptr;
 	AShooterPlayerState* VictimState = Victim != nullptr ? Victim->GetPlayerState<AShooterPlayerState>() : nullptr;
-	const AShooterWeapon* Weapon = GetCauserWeapon(DamageCauser);
-	const FString WeaponName = Weapon != nullptr                       ? Weapon->WeaponName
-		: DamageCauser != nullptr && DamageCauser->IsA<AShooterBomb>() ? FString(TEXT("c4"))
-																	   : FString(TEXT("world"));
+	const FKillCredit Credit = GetKillCredit(DamageCauser);
+	const FString& WeaponName = Credit.WeaponName;
 	const FString VictimName = GetDisplayName(Victim, VictimPawn);
 	const FString KillerName = GetDisplayName(Killer, nullptr);
 	const bool bSuicide = Killer == nullptr || Killer == Victim;
@@ -456,7 +473,7 @@ void AShooterGameMode::Killed(
 		else
 		{
 			KillerState->ScoreKill(1);
-			(void)KillerState->AddMoney(Weapon != nullptr ? Weapon->KillReward : 300, MaxMoney);
+			(void)KillerState->AddMoney(Credit.Reward, MaxMoney);
 		}
 	}
 
@@ -501,7 +518,7 @@ void AShooterGameMode::BeginNewMatch()
 {
 	RoundRandom.Initialize(RandomSeed);
 	LossStreak[0] = LossStreak[1] = LossStreak[2] = 0;
-	RestartGameTime = 0.0f;
+	bRestartPending = false;
 	if (AShooterGameState* State = GetShooterGameState())
 	{
 		State->ResetMatch();
@@ -759,6 +776,7 @@ void AShooterGameMode::CheckRoundEnd()
 void AShooterGameMode::RestartGame(float Delay)
 {
 	RestartGameTime = GetWorldTime() + FMath::Max(0.0f, Delay);
+	bRestartPending = true;
 	UE_LOG(LogShooter, Display, TEXT("The game will restart in %.0f second(s)"), static_cast<double>(Delay));
 }
 
@@ -775,9 +793,9 @@ void AShooterGameMode::Tick(float DeltaSeconds)
 		TickBotMatch();
 	}
 	const float Now = GetWorldTime();
-	if (RestartGameTime > 0.0f && Now >= RestartGameTime)
+	if (bRestartPending && Now >= RestartGameTime)
 	{
-		RestartGameTime = 0.0f;
+		bRestartPending = false;
 		if (IsMatchInProgress())
 		{
 			BeginNewMatch();
@@ -967,6 +985,13 @@ void AShooterGameMode::OnBombStateChanged(AShooterBomb* InBomb)
 
 void AShooterGameMode::OnBombPlanted(AShooterBomb* InBomb, AShooterCharacter* Planter)
 {
+	// Only this round's bomb, while the round is fought, counts (and pays).
+	const AShooterGameState* RoundState = GetShooterGameState();
+	if (InBomb == nullptr || InBomb != Bomb || RoundState == nullptr ||
+		RoundState->GetRoundState() != EShooterRoundState::Live)
+	{
+		return;
+	}
 	bBombPlantedThisRound = true;
 	OnBombStateChanged(InBomb);
 	AShooterPlayerState* PlanterState = Planter != nullptr && Planter->GetController() != nullptr

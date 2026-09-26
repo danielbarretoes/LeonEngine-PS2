@@ -22,7 +22,6 @@ AShooterWeapon_Sniper::AShooterWeapon_Sniper(const FObjectInitializer& ObjectIni
 	SpeedModifier = 0.84f;
 	WeaponSpread = 0.05f;
 	Price = 4750;
-	KillReward = 100;
 	// CS: 40 and 10 degrees wide at 4:3 are 30.5 and 7.5 degrees high.
 	ZoomFOVs.Add(30.5f);
 	ZoomFOVs.Add(7.5f);

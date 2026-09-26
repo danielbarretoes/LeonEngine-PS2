@@ -15,8 +15,10 @@
 #include "ShooterGameMode.h"
 #include "ShooterGameState.h"
 #include "ShooterHUD.h"
+#include "ShooterMatchChecker.h"
 #include "ShooterPlayerState.h"
 #include "Tests/ScopedTestWorld.h"
+#include "Weapons/ShooterProjectile.h"
 #include "Weapons/ShooterWeapon_Instant.h"
 #include "Weapons/ShooterWeapon_Sniper.h"
 
@@ -366,7 +368,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameEconomyTest, "ShooterGame.Economy.R
 bool FShooterGameEconomyTest::RunTest(const FString& Parameters)
 {
 	// CS 1.6's money: the losers' bonus climbs 1400, 1900, 2400, 2900, 3400 and stays; the winners get 3250; nobody
-	// passes 16000. A kill pays the weapon's reward (the AWP's 100), a team kill costs 3300.
+	// passes 16000. A kill pays the weapon's reward (CS 1.6: 300 with any), a team kill costs 3300.
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	AShooterGameMode* GameMode = SetUpMatch(World, 1, 1);
@@ -385,7 +387,7 @@ bool FShooterGameEconomyTest::RunTest(const FString& Parameters)
 	TestEqual("The streak", GameMode->GetLossStreak(EShooterTeam::T), 6);
 	TestEqual("The next loss pays the most", GameMode->GetLossBonus(EShooterTeam::T), 3400);
 
-	// Kills: the AWP pays 100.
+	// Kills: the AWP pays 300 too (CS 1.6).
 	TickUntilLive(World, *GameMode);
 	CTState->SetMoney(1000, GameMode->MaxMoney);
 	AShooterCharacter* CT = GetAlive(World, EShooterTeam::CT)[0];
@@ -393,7 +395,7 @@ bool FShooterGameEconomyTest::RunTest(const FString& Parameters)
 	AShooterWeapon* Awp = CT->GiveWeapon(AShooterWeapon_Sniper::StaticClass());
 	(void)UGameplayStatics::ApplyDamage(T, 500.0f, CT->GetController(), Awp, UDamageType::StaticClass());
 	TestFalse("Killed", T->IsAlive());
-	TestEqual("The AWP's kill reward", CTState->GetMoney(), 1100);
+	TestEqual("The AWP's kill reward", CTState->GetMoney(), 1300);
 	TestEqual("A kill", CTState->GetKills(), 1);
 
 	// A team kill (friendly fire on) costs 3300 and a kill.
@@ -480,6 +482,69 @@ bool FShooterGameBombPlantAndDefuseTest::RunTest(const FString& Parameters)
 	TestTrue("Defused", Bomb->GetBombState() == EShooterBombState::Defused);
 	TestTrue("CT win", State->GetLastRoundEndReason() == EShooterRoundEndReason::BombDefused);
 	TestEqual("The losing T's bonus with the plant", TState->GetMoney(), TBefore + 1400 + 800);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBombSurvivingCarrierTest, "ShooterGame.Bomb.SurvivingCarrierLetsGo",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameBombSurvivingCarrierTest::RunTest(const FString& Parameters)
+{
+	// A carrier alive at the round's end loses the round's bomb with the clean-up: in the next round exactly one
+	// terrorist carries, and it is the new round's bomb.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpMatch(World, 1, 3);
+	TickUntilLive(World, *GameMode);
+	GameMode->EndRound(EShooterRoundEndReason::TargetSaved);
+	TickSeconds(World, GameMode->RoundRestartDelay + 0.1f);
+	TickUntilLive(World, *GameMode);
+	int32 Carriers = 0;
+	for (const AShooterCharacter* T : GetAlive(World, EShooterTeam::T))
+	{
+		if (T->GetCarriedBomb() != nullptr)
+		{
+			++Carriers;
+			TestTrue("The round's bomb", T->GetCarriedBomb() == GameMode->GetBomb());
+			TestFalse("Not a destroyed one", T->GetCarriedBomb()->IsPendingKillPending());
+		}
+	}
+	TestEqual("One carrier", Carriers, 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBombNoPlantAfterTheRoundTest, "ShooterGame.Bomb.NoPlantAfterTheRound",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameBombNoPlantAfterTheRoundTest::RunTest(const FString& Parameters)
+{
+	// A plant under way when the round ends stops, pays nothing and leaves the bomb unplanted; a new one is refused
+	// while the result shows.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpMatch(World, 1, 1);
+	GameMode->RoundRestartDelay = 5.0f;
+	TickUntilLive(World, *GameMode);
+	AShooterBomb* Bomb = GameMode->GetBomb();
+	AShooterCharacter* T = Bomb != nullptr ? Bomb->GetCarrier() : nullptr;
+	if (!TestNotNull("A carrier", T))
+	{
+		return false;
+	}
+	T->Reset(FVector(100.0f, 0.0f, 0.0f), FRotator(0.0f, 180.0f, 0.0f));
+	TickFrames(World, 2);
+	AShooterPlayerState* TState = GetTeamStates(*GameMode, EShooterTeam::T)[0];
+	TestTrue("Planting", T->StartUse());
+	TickSeconds(World, 1.0f);
+	const int32 Money = TState->GetMoney();
+	GameMode->EndRound(EShooterRoundEndReason::CTsEliminated);
+	const int32 MoneyAfterWin = TState->GetMoney();
+	TickSeconds(World, 3.0f);
+	TestFalse("Not planted", Bomb->GetBombState() == EShooterBombState::Planted);
+	TestFalse("The state neither", GameMode->GetShooterGameState()->GetBombState() == EShooterBombState::Planted);
+	TestEqual("No plant reward", TState->GetMoney(), MoneyAfterWin);
+	TestTrue("The win paid", MoneyAfterWin > Money);
+	TestFalse("No new plant", T->StartUse());
 	return true;
 }
 
@@ -629,6 +694,78 @@ bool FShooterGameMatchEndAndRestartTest::RunTest(const FString& Parameters)
 	TestEqual("It plays the next round", GetAlive(World, EShooterTeam::T).Num(), 2);
 	TestTrue("bot_kick all", GameMode->ProcessConsoleExec(TEXT("bot_kick all"), *GLog, nullptr));
 	TestEqual("Nobody left", GameMode->GetTeamSize(EShooterTeam::T) + GameMode->GetTeamSize(EShooterTeam::CT), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameRestartInTheFirstRoundTest, "ShooterGame.Rounds.RestartInTheFirstRound",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameRestartInTheFirstRoundTest::RunTest(const FString& Parameters)
+{
+	// mp_restartgame while the first round's result shows starts round 1 again: the bots buy again in it, and the
+	// match checker starts the score over (no false violation in the rounds after).
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpMatch(World, 1, 1);
+	FShooterMatchChecker Checker;
+	TickUntilLive(World, *GameMode);
+	AShooterCharacter* T = GetAlive(World, EShooterTeam::T)[0];
+	AShooterAIController* Bot = Cast<AShooterAIController>(T->GetController());
+	if (!TestNotNull("A bot", Bot))
+	{
+		return false;
+	}
+	TestTrue("It buys in round 1", Bot->BuyForRound().Num() > 0);
+	GameMode->EndRound(EShooterRoundEndReason::TargetSaved);
+	Checker.Tick(*GameMode);
+	GameMode->RestartGame(0.0f);
+	for (int32 Frame = 0; Frame < 3; ++Frame)
+	{
+		World.Tick(FrameTime);
+		Checker.Tick(*GameMode);
+	}
+	TickUntilLive(World, *GameMode);
+	const AShooterGameState* State = GameMode->GetShooterGameState();
+	TestEqual("Round 1 again", State->GetRoundNumber(), 1);
+	TestTrue("It buys in the new round 1", Bot->BuyForRound().Num() > 0);
+	GameMode->EndRound(EShooterRoundEndReason::CTsEliminated);
+	Checker.Tick(*GameMode);
+	TickSeconds(World, GameMode->RoundRestartDelay + 0.1f);
+	TickUntilLive(World, *GameMode);
+	GameMode->EndRound(EShooterRoundEndReason::TargetSaved);
+	Checker.Tick(*GameMode);
+	TestEqual("Three rounds ended", Checker.GetRoundsPlayed(), 3);
+	for (const FString& Violation : Checker.GetViolations())
+	{
+		AddError(Violation);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameKillCreditOfAProjectileTest, "ShooterGame.Economy.ProjectileKillCredit",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameKillCreditOfAProjectileTest::RunTest(const FString& Parameters)
+{
+	// A grenade's kill is credited from the projectile (the throwing weapon is gone by then): its name in the feed, its
+	// reward to the thrower.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpMatch(World, 1, 1);
+	TickUntilLive(World, *GameMode);
+	AShooterCharacter* CT = GetAlive(World, EShooterTeam::CT)[0];
+	AShooterCharacter* T = GetAlive(World, EShooterTeam::T)[0];
+	AShooterProjectile* Grenade =
+		World.SpawnActor<AShooterProjectile>(FVector(0.0f, 0.0f, 500.0f), FRotator::ZeroRotator);
+	Grenade->WeaponName = TEXT("hegrenade");
+	Grenade->KillReward = 300;
+	AShooterPlayerState* CTState = GetTeamStates(*GameMode, EShooterTeam::CT)[0];
+	CTState->SetMoney(1000, GameMode->MaxMoney);
+	(void)UGameplayStatics::ApplyDamage(T, 500.0f, CT->GetController(), Grenade, UDamageType::StaticClass());
+	TestFalse("Killed", T->IsAlive());
+	TestEqual("The reward", CTState->GetMoney(), 1300);
+	const TArray<FShooterKillFeedEntry>& Feed = GameMode->GetShooterGameState()->GetKillFeed();
+	TestTrue("The feed names the grenade", Feed.Num() > 0 && Feed.Last().WeaponName == TEXT("hegrenade"));
 	return true;
 }
 

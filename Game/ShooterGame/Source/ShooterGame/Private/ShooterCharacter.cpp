@@ -150,12 +150,17 @@ void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAction(TEXT("Use"), IE_Released, this, &AShooterCharacter::OnUseReleased);
 }
 
-bool AShooterCharacter::IsFrozen() const
+const AShooterGameState* AShooterCharacter::GetShooterGameState() const
 {
 	const UWorld* World = GetWorld();
-	const AShooterGameState* State = World != nullptr && World->GetAuthGameMode() != nullptr
+	return World != nullptr && World->GetAuthGameMode() != nullptr
 		? World->GetAuthGameMode()->GetGameState<AShooterGameState>()
 		: nullptr;
+}
+
+bool AShooterCharacter::IsFrozen() const
+{
+	const AShooterGameState* State = GetShooterGameState();
 	return State != nullptr && (State->IsFreezeTime() || State->GetRoundState() == EShooterRoundState::MatchEnd);
 }
 
@@ -325,8 +330,11 @@ FName AShooterCharacter::GetBombSiteHere() const
 bool AShooterCharacter::CanPlant() const
 {
 	constexpr float StillSpeed = 20.0f;
-	return IsAlive() && !IsFrozen() && CarriedBomb != nullptr && IsMovingOnGround() &&
-		GetCharacterMovement().Velocity.Size2D() <= StillSpeed && GetBombSiteHere() != NAME_None;
+	// Only while the round is fought (CS: not in the freeze nor after the round's end).
+	const AShooterGameState* State = GetShooterGameState();
+	const bool bRoundLive = State == nullptr || State->GetRoundState() == EShooterRoundState::Live;
+	return IsAlive() && bRoundLive && CarriedBomb != nullptr && !CarriedBomb->IsPendingKillPending() &&
+		IsMovingOnGround() && GetCharacterMovement().Velocity.Size2D() <= StillSpeed && GetBombSiteHere() != NAME_None;
 }
 
 bool AShooterCharacter::StartUse()
