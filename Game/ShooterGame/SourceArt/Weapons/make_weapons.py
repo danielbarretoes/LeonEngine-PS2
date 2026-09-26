@@ -2,10 +2,11 @@
 
     python3 Game/ShooterGame/SourceArt/Weapons/make_weapons.py
 
-Writes Pistol.glb, Rifle.glb, Sniper.glb and Grenade.glb next to this script; Game/ShooterGame/SourceArt/ImportList.ini
-imports them as /Game/Weapons/SM_Pistol, SM_Rifle, SM_Sniper and SM_Grenade with their materials (M_WeaponMetal,
-M_WeaponWood, M_WeaponPolymer, M_WeaponOlive, M_WeaponGlass). AShooterWeapon shows them as the view model and on the
-bodies (DefaultGame.ini: MeshName of each weapon class).
+Writes Pistol.glb, Rifle.glb, Sniper.glb, Grenade.glb and C4.glb next to this script;
+Game/ShooterGame/SourceArt/ImportList.ini imports them as /Game/Weapons/SM_Pistol, SM_Rifle, SM_Sniper, SM_Grenade and
+SM_C4 with their materials (M_WeaponMetal, M_WeaponWood, M_WeaponPolymer, M_WeaponOlive, M_WeaponGlass, M_BombDisplay).
+AShooterWeapon shows the weapons as the view model and on the bodies, AShooterBomb the bomb on the floor
+(DefaultGame.ini: MeshName of each class).
 
 Each weapon is a few boxes, the grip at the origin, the barrel along +X (the engine's forward), +Z up, with a
 `SOCKET_Muzzle` node at the muzzle (the static mesh import makes it the mesh's `Muzzle` socket). Sizes are in
@@ -30,10 +31,20 @@ MATERIALS = {
     "WeaponPolymer": ((0.1, 0.1, 0.1), 0.8, 0.0),
     "WeaponOlive": ((0.17, 0.2, 0.08), 0.75, 0.0),
     "WeaponGlass": ((0.1, 0.25, 0.3), 0.1, 0.0),
+    "BombDisplay": ((0.1, 0.45, 0.12), 0.3, 0.0),
 }
 
 # Boxes: (material, (min x, min y, min z), (max x, max y, max z)) in engine centimetres; the muzzle in centimetres.
 WEAPONS = {
+    "C4": {
+        "boxes": [
+            ("WeaponOlive", (-12.0, -8.0, 0.0), (12.0, 8.0, 6.0)),  # the charge
+            ("WeaponPolymer", (-6.0, -5.0, 6.0), (6.0, 5.0, 8.0)),  # the keypad
+            ("BombDisplay", (-5.0, -2.0, 8.0), (1.0, 2.0, 8.5)),  # the display
+            ("WeaponMetal", (-12.5, -8.5, 2.0), (12.5, 8.5, 3.0)),  # the tape
+        ],
+        "muzzle": (0.0, 0.0, 8.5),
+    },
     "Pistol": {
         "boxes": [
             ("WeaponMetal", (-3.0, -1.4, 0.0), (17.0, 1.4, 3.6)),  # slide

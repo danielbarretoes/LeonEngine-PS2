@@ -2,9 +2,9 @@
 
     python3 Game/ShooterGame/SourceArt/Sounds/make_sounds.py
 
-Writes Pistol_Fire.wav, Rifle_Fire.wav, Sniper_Fire.wav, Reload.wav, Empty.wav, Equip.wav, Throw.wav and
-Explosion.wav next to this script; Game/ShooterGame/SourceArt/ImportList.ini imports them as /Game/Sounds/S_<Name>
-(DefaultGame.ini names them in each weapon's section).
+Writes Pistol_Fire.wav, Rifle_Fire.wav, Sniper_Fire.wav, Reload.wav, Empty.wav, Equip.wav, Throw.wav, Explosion.wav,
+Bomb_Beep.wav, Bomb_Plant.wav and Bomb_Defuse.wav next to this script; Game/ShooterGame/SourceArt/ImportList.ini imports them as /Game/Sounds/S_<Name>
+(DefaultGame.ini names them in each weapon's section and the bomb's).
 
 Every sound is made here from noise and sine waves (22050 Hz, mono): a shot is a burst of filtered noise over a low
 thump, decaying fast; the explosion a long low rumble; the mechanical sounds short clicks. The noise comes from a
@@ -76,6 +76,17 @@ def whoosh(seconds, seed, gain):
     return samples
 
 
+def beep(seconds, hz, gain):
+    """The bomb's beep: a pure tone with a short attack and release."""
+    samples = []
+    count = int(seconds * RATE)
+    for i in range(count):
+        t = i / RATE
+        envelope = min(1.0, i / 60.0, (count - i) / 60.0)
+        samples.append(gain * envelope * math.sin(2.0 * math.pi * hz * t))
+    return samples
+
+
 def explosion(seconds, seed, gain):
     """An explosion: a sharp noise crack over a long, very low rumble."""
     noise = Noise(seed)
@@ -104,6 +115,10 @@ SOUNDS = {
     "Equip": lambda: mix(click(0.08, 13, 1500.0, 50.0, 0.45), click(0.08, 17, 2100.0, 55.0, 0.4, 0.12)),
     "Throw": lambda: whoosh(0.35, 19, 0.6),
     "Explosion": lambda: explosion(1.6, 23, 0.9),
+    "Bomb_Beep": lambda: beep(0.08, 1760.0, 0.5),
+    "Bomb_Plant": lambda: mix(click(0.06, 29, 1300.0, 70.0, 0.5), click(0.06, 31, 1300.0, 70.0, 0.5, 0.15),
+                              beep(0.25, 880.0, 0.35)),
+    "Bomb_Defuse": lambda: mix(click(0.08, 37, 2200.0, 55.0, 0.5), beep(0.3, 660.0, 0.3)),
 }
 
 
