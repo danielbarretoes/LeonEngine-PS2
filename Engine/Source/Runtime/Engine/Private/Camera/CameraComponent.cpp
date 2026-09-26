@@ -1,5 +1,6 @@
 #include "Camera/CameraComponent.h"
 
+#include "GameFramework/Pawn.h"
 #include "ViewMatrices.h"
 
 namespace
@@ -111,6 +112,23 @@ void UCameraComponent::SetDistance(float InDistance)
 {
 	Distance = FMath::Clamp(InDistance, MinOrbitDistance, MaxOrbitDistance);
 	InvalidateCache();
+}
+
+void UCameraComponent::GetCameraView(float /*DeltaTime*/, FMinimalViewInfo& DesiredView)
+{
+	if (bUsePawnControlRotation)
+	{
+		// UE: the pawn's view rotation (its controller's control rotation) and the component's location.
+		if (const APawn* OwningPawn = Cast<APawn>(GetOwner()))
+		{
+			SetMode(ECameraMode::FreeLook);
+			SetViewRotation(OwningPawn->GetViewRotation());
+			SetEyeLocation(GetComponentLocation());
+		}
+	}
+	DesiredView.Location = GetCameraLocation();
+	DesiredView.Rotation = GetViewRotation();
+	DesiredView.FOV = FieldOfView();
 }
 
 void UCameraComponent::SetViewRotation(const FRotator& InRotation)

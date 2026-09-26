@@ -331,14 +331,13 @@ void AActor::AddReferencedObjects(UObject* InThis, FReferenceCollector& Collecto
 	Super::AddReferencedObjects(InThis, Collector);
 }
 
-void AActor::CalcCamera(float /*DeltaTime*/, FMinimalViewInfo& OutResult)
+void AActor::CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult)
 {
-	// Leon's camera component is not placed by its transform: its own eye and view rotation are the view.
-	if (const UCameraComponent* Camera = FindComponentByClass<UCameraComponent>())
+	// Leon's camera component is not placed by its transform (unless it follows the pawn's control rotation): its
+	// own eye and view rotation are the view (UE: UCameraComponent::GetCameraView).
+	if (UCameraComponent* Camera = FindComponentByClass<UCameraComponent>())
 	{
-		OutResult.Location = Camera->GetCameraLocation();
-		OutResult.Rotation = Camera->GetViewRotation();
-		OutResult.FOV = Camera->FieldOfView();
+		Camera->GetCameraView(DeltaTime, OutResult);
 		return;
 	}
 	GetActorEyesViewPoint(OutResult.Location, OutResult.Rotation);

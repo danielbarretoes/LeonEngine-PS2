@@ -274,6 +274,19 @@ public:
 	/** Rebuilds the key maps; with bRestoreDefaults the mappings are copied from the settings again (UE). */
 	void ForceRebuildingKeyMaps(const bool bRestoreDefaults = false);
 
+	/**
+	 * Sets the mouse axes' sensitivity for this player (UE: SetMouseSensitivity, an Exec command): the degrees a pixel
+	 * turns the view in Leon's input (the settings' AxisConfig holds the defaults, [/Script/Engine.InputSettings] of
+	 * the Input config).
+	 */
+	UFUNCTION(Exec)
+	void SetMouseSensitivity(float Sensitivity);
+	/** Different sensitivities for MouseX and MouseY (UE's two-value SetMouseSensitivity). */
+	void SetMouseSensitivity(float SensitivityX, float SensitivityY);
+	/** UE: GetMouseSensitivityX / GetMouseSensitivityY (1 when the axis has no config). */
+	[[nodiscard]] float GetMouseSensitivityX();
+	[[nodiscard]] float GetMouseSensitivityY();
+
 	/** The controller this input belongs to (its outer), or null (UE: GetOuterAPlayerController). */
 	[[nodiscard]] APlayerController* GetOuterAPlayerController() const;
 

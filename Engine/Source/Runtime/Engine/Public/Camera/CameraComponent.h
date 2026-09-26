@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Camera/CameraTypes.h"
 #include "Components/SceneComponent.h"
 #include "CoreMinimal.h"
 #include "CameraComponent.generated.h"
@@ -19,9 +20,12 @@ inline constexpr float DefaultCameraFarPlane = 10000.0f;
  * View camera (UE: UCameraComponent, a scene component): orbit (default) or free-look. Both modes look along a UE view
  * rotation (yaw about Z from +X toward +Y, pitch up from the horizontal; roll is always 0).
  *
- * Unlike UE's camera, the view does not come from the component transform: the eye comes from the orbit target /
- * distance or the free-look eye, and a spring arm pushes into it with ApplyToCamera. The player camera manager keeps
- * the player's view in one (APlayerCameraManager::GetViewCamera), in free look, and the renderer draws with it.
+ * Unlike UE's camera, the view does not come from the component transform by default: the eye comes from the orbit
+ * target / distance or the free-look eye, and a spring arm pushes into it with ApplyToCamera. With
+ * bUsePawnControlRotation (UE's first-person camera, P17) it does: the eye is the component's world location (attached
+ * to the pawn, e.g. at the eyes) and the view rotation is the owning pawn's control rotation. The player camera
+ * manager keeps the player's view in one (APlayerCameraManager::GetViewCamera), in free look, and the renderer draws
+ * with it.
  */
 UCLASS()
 class ENGINE_API UCameraComponent : public USceneComponent
@@ -121,6 +125,20 @@ public:
 	/** Unit look / strafe vectors of the view rotation (the strafe vector stays horizontal). */
 	[[nodiscard]] FVector ForwardVector() const;
 	[[nodiscard]] FVector RightVector() const;
+
+	/**
+	 * The camera's view for a player camera manager (UE: GetCameraView, from AActor::CalcCamera). With
+	 * bUsePawnControlRotation the view looks from the component's world location along the owning pawn's view
+	 * rotation (both kept as the free-look eye and rotation); otherwise it is the orbit / free-look view.
+	 */
+	virtual void GetCameraView(float DeltaTime, FMinimalViewInfo& DesiredView);
+
+	/**
+	 * The view follows the owning pawn's control rotation and the eye is the component's location (UE:
+	 * bUsePawnControlRotation, the first-person camera). Off by default.
+	 */
+	UPROPERTY()
+	bool bUsePawnControlRotation = false;
 
 private:
 	void InvalidateCache();

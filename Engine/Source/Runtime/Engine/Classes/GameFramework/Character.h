@@ -30,6 +30,11 @@ class FDebugDraw;
  *   ignore the capsule itself; after moving, the character sends its capsule's body the new place.
  * - Moves via PerformMovement queries.
  * - Modes: Walking / Falling via SetMovementMode; floor via FindFloor → IsWalkable.
+ * - Horizontal speed: the movement component's instant model by default, or UE's velocity model (acceleration,
+ *   friction, braking, air control; UCharacterMovementComponent::bInstantVelocity). Crouching (Crouch / UnCrouch,
+ *   NavAgentProps.bCanCrouch) shrinks the capsule to CrouchedHalfHeight before the next move.
+ * - Input: the legacy AddMovementInput(Wish) keeps a wish direction until changed; the pawn's input vector
+ *   (APawn::AddMovementInput, the player's axes) is consumed each world tick, as UE's movement does.
  */
 UCLASS()
 class ENGINE_API ACharacter : public APawn
@@ -179,6 +184,30 @@ public:
 	/** Separate this capsule from another Character on XY (equal share). No-op if the Z ranges miss. */
 	void ResolvePawnOverlap(ACharacter& Other);
 
+	/** Asks to crouch before the next move when the character can (UE: Crouch, CanCrouch). */
+	virtual void Crouch(bool bClientSimulation = false);
+	/** Asks to stand up before the next move, when there is room (UE: UnCrouch). */
+	virtual void UnCrouch(bool bClientSimulation = false);
+	/** The character may crouch: its movement can ever crouch and it is not crouched yet (UE: CanCrouch). */
+	[[nodiscard]] bool CanCrouch() const;
+	/**
+	 * The capsule shrank (UE: OnStartCrouch): HalfHeightAdjust is how much its half height lost. The eyes come down
+	 * (RecalculateBaseEyeHeight); UE also raises the mesh, which Leon's feet-based capsule does not need.
+	 */
+	virtual void OnStartCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust);
+	/** The capsule grew back (UE: OnEndCrouch). */
+	virtual void OnEndCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust);
+	/** The eyes: CrouchedEyeHeight while crouched, the class default otherwise (UE). */
+	void RecalculateBaseEyeHeight() override;
+
+	/** The character is crouched (UE: bIsCrouched; UCharacterMovementComponent::Crouch sets it). */
+	UPROPERTY(Transient)
+	uint8 bIsCrouched : 1;
+
+	/** The eyes above the actor location while crouched, cm (UE: CrouchedEyeHeight). */
+	UPROPERTY()
+	float CrouchedEyeHeight = 40.0f;
+
 	/**
 	 * The query parameters of the movement's traces (UE: UPrimitiveComponent::InitSweepCollisionParams): the capsule
 	 * ignored, the query's responses to the object types the capsule's own.
@@ -194,8 +223,15 @@ public:
 	void Tick(float DeltaTime) override;
 
 private:
+	/** The movement component changes the capsule, the crouch state and the feet (UE's is a friend too). */
+	friend class UCharacterMovementComponent;
+
 	void ApplyYaw(float TargetYaw, float DeltaTime);
 	void MoveHorizontal(FPhysScene& PhysScene, float DeltaTime, FDebugDraw* DebugDraw);
+	/** UE's velocity model (UCharacterMovementComponent::bInstantVelocity false): CalcVelocity, then the move. */
+	void MoveHorizontalWithVelocity(FPhysScene& PhysScene, float DeltaTime, FDebugDraw* DebugDraw);
+	/** Sweeps Remaining along the floor with the step-up and the slides (both horizontal models). */
+	void MoveAlongFloor(FPhysScene& PhysScene, FVector Remaining, float DeltaTime, FDebugDraw* DebugDraw);
 	void IntegrateVertical(FPhysScene& PhysScene, float DeltaTime, FDebugDraw* DebugDraw);
 	void ResolveSides(FPhysScene& PhysScene, bool bApplyPush);
 
@@ -242,6 +278,8 @@ private:
 	float VelocityZ = 0.0f;
 	EMovementMode MovementMode = EMovementMode::Walking;
 	bool bJumpRequested = false;
+	/** WishDir came from the pawn's input vector, which clears it when the input stops. */
+	bool bWishFromInputVector = false;
 	bool bJustLanded = false;
 	bool bYawInitialized = false;
 	int JumpsRemaining = 0;

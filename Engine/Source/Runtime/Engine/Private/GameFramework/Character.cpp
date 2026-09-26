@@ -52,6 +52,48 @@ ACharacter::ACharacter(const FObjectInitializer& ObjectInitializer)
 	Mesh->SetupAttachment(GetRootComponent());
 	// Legacy content faces +Y (UE: the mannequin mesh's relative yaw of -90).
 	Mesh->RelativeRotation = FRotator(0.0f, LegacyContentYaw, 0.0f);
+
+	bIsCrouched = false;
+}
+
+bool ACharacter::CanCrouch() const
+{
+	return !bIsCrouched && CharacterMovement->CanEverCrouch() && !CapsuleComponent->IsSimulatingPhysics();
+}
+
+void ACharacter::Crouch(bool /*bClientSimulation*/)
+{
+	if (CanCrouch())
+	{
+		CharacterMovement->bWantsToCrouch = true;
+	}
+}
+
+void ACharacter::UnCrouch(bool /*bClientSimulation*/)
+{
+	CharacterMovement->bWantsToCrouch = false;
+}
+
+void ACharacter::OnStartCrouch(float /*HalfHeightAdjust*/, float /*ScaledHalfHeightAdjust*/)
+{
+	RecalculateBaseEyeHeight();
+}
+
+void ACharacter::OnEndCrouch(float /*HalfHeightAdjust*/, float /*ScaledHalfHeightAdjust*/)
+{
+	RecalculateBaseEyeHeight();
+}
+
+void ACharacter::RecalculateBaseEyeHeight()
+{
+	if (!bIsCrouched)
+	{
+		Super::RecalculateBaseEyeHeight();
+	}
+	else
+	{
+		BaseEyeHeight = CrouchedEyeHeight;
+	}
 }
 
 void ACharacter::SetHealth(float InHealth)
@@ -100,11 +142,23 @@ void ACharacter::Reset(const FVector& InLocation, const FRotator& InRotation)
 {
 	SetActorLocationAndRotation(InLocation, InRotation);
 	WishDir = {};
+	bWishFromInputVector = false;
 	VelocityZ = 0.0f;
+	CharacterMovement->Velocity = FVector::ZeroVector;
 	SetMovementMode(EMovementMode::Walking);
 	bJumpRequested = false;
 	bJustLanded = false;
 	bYawInitialized = false;
+	// A reset character stands (a respawn needs no room check).
+	CharacterMovement->bWantsToCrouch = false;
+	if (bIsCrouched)
+	{
+		const ACharacter* DefaultCharacter = GetClass()->GetDefaultObject<ACharacter>();
+		CapsuleComponent->SetCapsuleSize(CapsuleComponent->GetUnscaledCapsuleRadius(),
+			DefaultCharacter->GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight());
+		bIsCrouched = false;
+		RecalculateBaseEyeHeight();
+	}
 	JumpsRemaining = FMath::Max(0, CharacterMovement->MaxJumpCount - 1);
 	CurrentFloor = {};
 	Health = MaxHealth;
@@ -434,6 +488,11 @@ bool ACharacter::TryStepUp(FPhysScene& PhysScene, const FVector& ForwardDelta, F
 
 void ACharacter::MoveHorizontal(FPhysScene& PhysScene, float DeltaTime, FDebugDraw* DebugDraw)
 {
+	if (!CharacterMovement->bInstantVelocity)
+	{
+		MoveHorizontalWithVelocity(PhysScene, DeltaTime, DebugDraw);
+		return;
+	}
 	const float Len = WishDir.Size();
 	if (Len <= 1.0e-4f)
 	{
@@ -448,14 +507,73 @@ void ACharacter::MoveHorizontal(FPhysScene& PhysScene, float DeltaTime, FDebugDr
 	}
 
 	// Flow: SafeMove → step-up (if Walking + blocked) → slide → ResolveCapsuleSides.
-	// Falling uses AirControl fraction of MaxWalkSpeed (Unreal AirControl lite).
+	// Falling uses AirControl fraction of the speed (Unreal AirControl lite).
 	float SpeedScale = 1.0f;
 	if (IsFalling())
 	{
 		SpeedScale = FMath::Clamp(CharacterMovement->AirControl, 0.0f, 1.0f);
 	}
-	FVector Remaining = Dir * (CharacterMovement->MaxWalkSpeed * SpeedScale * DeltaTime);
+	FVector Remaining = Dir * (CharacterMovement->GetMaxSpeed() * SpeedScale * DeltaTime);
 	Remaining.Z = 0.0f;
+	MoveAlongFloor(PhysScene, Remaining, DeltaTime, DebugDraw);
+	ResolveSides(PhysScene, true);
+}
+
+void ACharacter::MoveHorizontalWithVelocity(FPhysScene& PhysScene, float DeltaTime, FDebugDraw* DebugDraw)
+{
+	UCharacterMovementComponent& Move = *CharacterMovement;
+
+	// UE: the input vector, at most 1 long, is an acceleration of MaxAcceleration and scales the speed it reaches
+	// (ScaleInputAcceleration, ComputeAnalogInputModifier).
+	const FVector Input = FVector(WishDir.X, WishDir.Y, 0.0f).GetClampedToMaxSize(1.0f);
+	Move.Acceleration = Input * Move.MaxAcceleration;
+	Move.AnalogInputModifier = FMath::Clamp(Input.Size(), 0.0f, 1.0f);
+	if (bOrientRotationToMovement && !Input.IsNearlyZero())
+	{
+		ApplyYaw(YawFromMove(Input) + Move.ModelYawOffset, DeltaTime);
+	}
+
+	// UE: PhysWalking's CalcVelocity with the ground friction and braking; PhysFalling's with the air control on the
+	// acceleration, the lateral friction and the falling braking (the vertical velocity is Leon's VelocityZ).
+	Move.Velocity.Z = 0.0f;
+	if (IsFalling())
+	{
+		const FVector WalkAcceleration = Move.Acceleration;
+		if (!Move.Acceleration.IsZero())
+		{
+			Move.Acceleration = Move.GetAirControl(DeltaTime, Move.AirControl, Move.Acceleration);
+		}
+		Move.CalcVelocity(DeltaTime, Move.FallingLateralFriction, false, Move.BrakingDecelerationFalling);
+		Move.Acceleration = WalkAcceleration;
+	}
+	else
+	{
+		Move.CalcVelocity(DeltaTime, Move.GroundFriction, false, Move.BrakingDecelerationWalking);
+	}
+
+	const FVector Before = GetActorLocation();
+	FVector Remaining = Move.Velocity * DeltaTime;
+	Remaining.Z = 0.0f;
+	if (!Remaining.IsNearlyZero(1.0e-4f))
+	{
+		MoveAlongFloor(PhysScene, Remaining, DeltaTime, DebugDraw);
+	}
+	ResolveSides(PhysScene, true);
+
+	// UE: the velocity becomes what the move did (a wall stops it), never faster than it was.
+	FVector Moved = GetActorLocation() - Before;
+	Moved.Z = 0.0f;
+	FVector NewVelocity = Moved / DeltaTime;
+	const float OldSpeed = Move.Velocity.Size();
+	if (NewVelocity.SizeSquared() > FMath::Square(OldSpeed))
+	{
+		NewVelocity = NewVelocity.GetSafeNormal() * OldSpeed;
+	}
+	Move.Velocity = NewVelocity;
+}
+
+void ACharacter::MoveAlongFloor(FPhysScene& PhysScene, FVector Remaining, float /*DeltaTime*/, FDebugDraw* DebugDraw)
+{
 	constexpr int MaxSlideIterations = 2;
 	for (int I = 0; I < MaxSlideIterations; ++I)
 	{
@@ -482,8 +600,6 @@ void ACharacter::MoveHorizontal(FPhysScene& PhysScene, float DeltaTime, FDebugDr
 		}
 		Remaining = Leftover;
 	}
-
-	ResolveSides(PhysScene, true);
 }
 
 void ACharacter::IntegrateVertical(FPhysScene& PhysScene, float DeltaTime, FDebugDraw* DebugDraw)
@@ -557,9 +673,15 @@ void ACharacter::IntegrateVertical(FPhysScene& PhysScene, float DeltaTime, FDebu
 
 void ACharacter::PerformMovement(FPhysScene& PhysScene, float DeltaTime, FDebugDraw* DebugDraw)
 {
+	// UE: crouch or stand up as asked before moving.
+	CharacterMovement->UpdateCharacterStateBeforeMovement(PhysScene);
 	MoveHorizontal(PhysScene, DeltaTime, DebugDraw);
 	IntegrateVertical(PhysScene, DeltaTime, DebugDraw);
 	ResolveSides(PhysScene, false);
+	if (!CharacterMovement->bInstantVelocity)
+	{
+		CharacterMovement->Velocity.Z = VelocityZ;
+	}
 }
 
 void ACharacter::TickCharacterMovement(float DeltaTime, FDebugDraw* DebugDraw)
@@ -568,6 +690,19 @@ void ACharacter::TickCharacterMovement(float DeltaTime, FDebugDraw* DebugDraw)
 	if (LocalWorld == nullptr)
 	{
 		return;
+	}
+	// UE: the movement consumes the pawn's input vector each tick (the player's axes); a wish set with the legacy
+	// AddMovementInput(Wish) stays until it is changed.
+	const FVector PendingInput = ConsumeMovementInputVector();
+	if (!PendingInput.IsNearlyZero())
+	{
+		WishDir = FVector(PendingInput.X, PendingInput.Y, 0.0f);
+		bWishFromInputVector = true;
+	}
+	else if (bWishFromInputVector)
+	{
+		WishDir = FVector::ZeroVector;
+		bWishFromInputVector = false;
 	}
 	PerformMovement(LocalWorld->GetPhysicsScene(), DeltaTime, DebugDraw);
 	CapsuleComponent->SendPhysicsTransform();

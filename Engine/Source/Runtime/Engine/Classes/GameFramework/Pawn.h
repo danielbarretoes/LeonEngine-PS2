@@ -100,6 +100,9 @@ public:
 	 */
 	virtual void FaceRotation(FRotator NewControlRotation, float DeltaTime = 0.0f);
 
+	/** Resets BaseEyeHeight to the class default (UE: RecalculateBaseEyeHeight); a crouched character lowers it. */
+	virtual void RecalculateBaseEyeHeight();
+
 	/** The eyes: the actor location raised by BaseEyeHeight (UE: GetPawnViewLocation). */
 	[[nodiscard]] virtual FVector GetPawnViewLocation() const;
 

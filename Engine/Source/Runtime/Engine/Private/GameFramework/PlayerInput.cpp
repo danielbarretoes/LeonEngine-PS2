@@ -98,6 +98,32 @@ void UPlayerInput::ConditionalInitAxisProperties()
 	bAxisPropertiesInitialized = true;
 }
 
+void UPlayerInput::SetMouseSensitivity(float Sensitivity)
+{
+	SetMouseSensitivity(Sensitivity, Sensitivity);
+}
+
+void UPlayerInput::SetMouseSensitivity(float SensitivityX, float SensitivityY)
+{
+	ConditionalInitAxisProperties();
+	AxisProperties.FindOrAdd(EKeys::MouseX).Sensitivity = SensitivityX;
+	AxisProperties.FindOrAdd(EKeys::MouseY).Sensitivity = SensitivityY;
+}
+
+float UPlayerInput::GetMouseSensitivityX()
+{
+	ConditionalInitAxisProperties();
+	const FInputAxisProperties* Props = AxisProperties.Find(EKeys::MouseX);
+	return Props != nullptr ? Props->Sensitivity : 1.0f;
+}
+
+float UPlayerInput::GetMouseSensitivityY()
+{
+	ConditionalInitAxisProperties();
+	const FInputAxisProperties* Props = AxisProperties.Find(EKeys::MouseY);
+	return Props != nullptr ? Props->Sensitivity : 1.0f;
+}
+
 void UPlayerInput::AddActionMapping(const FInputActionKeyMapping& KeyMapping)
 {
 	ActionMappings.AddUnique(KeyMapping);

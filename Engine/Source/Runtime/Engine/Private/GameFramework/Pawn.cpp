@@ -114,6 +114,11 @@ void APawn::FaceRotation(FRotator NewControlRotation, float /*DeltaTime*/)
 	SetActorRotation(NewControlRotation);
 }
 
+void APawn::RecalculateBaseEyeHeight()
+{
+	BaseEyeHeight = GetClass()->GetDefaultObject<APawn>()->BaseEyeHeight;
+}
+
 FVector APawn::GetPawnViewLocation() const
 {
 	return GetActorLocation() + FVector(0.0f, 0.0f, BaseEyeHeight);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AI/Navigation/NavigationTypes.h"
 #include "CoreMinimal.h"
 #include "GameFramework/MovementComponent.h"
 #include "PawnMovementComponent.generated.h"
@@ -31,6 +32,23 @@ public:
 
 	/** Returns the pawn's input vector and clears it for the next frame (UE: ConsumeInputVector). */
 	virtual FVector ConsumeInputVector();
+
+	/**
+	 * What the pawn can do (UE: UNavMovementComponent::NavAgentProps; Leon has no UNavMovementComponent between the
+	 * two classes): the character movement reads bCanCrouch.
+	 */
+	UPROPERTY()
+	FNavAgentProperties NavAgentProps;
+
+	/** UE: GetNavAgentPropertiesRef. */
+	[[nodiscard]] FNavAgentProperties& GetNavAgentPropertiesRef()
+	{
+		return NavAgentProps;
+	}
+	[[nodiscard]] const FNavAgentProperties& GetNavAgentPropertiesRef() const
+	{
+		return NavAgentProps;
+	}
 
 protected:
 	/** The owning pawn (UE: PawnOwner). */

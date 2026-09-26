@@ -6,6 +6,8 @@
 #include "Engine/DataAsset.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "EngineTestTypes.generated.h"
 
 class UTexture2D;
@@ -112,5 +114,37 @@ public:
 		TArray<FString> Switches;
 		ParseCommandLine(*Params, Tokens, Switches);
 		return Tokens.Num();
+	}
+};
+
+/** A character movement whose speed a flag halves (the GetMaxSpeed hook, as a game's walk modifier). */
+UCLASS()
+class UEngineTestCharacterMovement : public UCharacterMovementComponent
+{
+	GENERATED_BODY()
+
+public:
+	/** Halves the speed. */
+	bool bTestWalking = false;
+
+	float GetMaxSpeed() const override
+	{
+		const float Speed = Super::GetMaxSpeed();
+		return bTestWalking ? Speed * 0.5f : Speed;
+	}
+};
+
+/** A character built with the test movement (UE: SetDefaultSubobjectClass on the movement's name). */
+UCLASS()
+class AEngineTestCharacter : public ACharacter
+{
+	GENERATED_BODY()
+
+public:
+	AEngineTestCharacter(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get())
+		: Super(ObjectInitializer.SetDefaultSubobjectClass<UEngineTestCharacterMovement>(
+			  ACharacter::CharacterMovementComponentName))
+	{
+		GetCharacterMovement().NavAgentProps.bCanCrouch = true;
 	}
 };
