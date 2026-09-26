@@ -13,6 +13,8 @@
 #include "ShooterHUD.h"
 #include "ShooterPlayerController.h"
 #include "ShooterPlayerState.h"
+#include "Weapons/ShooterProjectile.h"
+#include "Weapons/ShooterWeapon.h"
 
 namespace
 {
@@ -53,6 +55,21 @@ namespace
 			}
 		}
 		return false;
+	}
+
+	/** A player's name for the log: its player state's, else its controller's or its pawn's object name. */
+	FString GetDisplayName(const AController* Controller, const APawn* Pawn)
+	{
+		const APlayerState* State = Controller != nullptr ? Controller->GetPlayerState<APlayerState>() : nullptr;
+		if (State != nullptr && !State->GetPlayerName().IsEmpty())
+		{
+			return State->GetPlayerName();
+		}
+		if (Controller != nullptr)
+		{
+			return Controller->GetName();
+		}
+		return Pawn != nullptr ? Pawn->GetName() : FString(TEXT("?"));
 	}
 
 } // namespace
@@ -104,7 +121,7 @@ void AShooterGameMode::CountPawns(int32& OutCT, int32& OutT) const
 	for (const AActor* Actor : World->PersistentLevel->Actors)
 	{
 		const AShooterCharacter* Character = Cast<AShooterCharacter>(Actor);
-		if (Character == nullptr || Character->IsPendingKillPending())
+		if (Character == nullptr || Character->IsPendingKillPending() || !Character->IsAlive())
 		{
 			continue;
 		}
@@ -193,6 +210,45 @@ void AShooterGameMode::RestartPlayer(AController* NewPlayer)
 		State->bIsABot ? TEXT("Bot") : TEXT("Player"), *State->GetPlayerName(), GetShooterTeamName(State->GetTeam()),
 		static_cast<double>(Location.X), static_cast<double>(Location.Y), static_cast<double>(Location.Z), NumCT + NumT,
 		NumCT, NumT);
+}
+
+bool AShooterGameMode::CanDealDamage(AController* Instigator, AController* Victim) const
+{
+	if (Instigator == nullptr || Victim == nullptr || Instigator == Victim || bFriendlyFire)
+	{
+		return true;
+	}
+	const AShooterPlayerState* InstigatorState = Instigator->GetPlayerState<AShooterPlayerState>();
+	const AShooterPlayerState* VictimState = Victim->GetPlayerState<AShooterPlayerState>();
+	return InstigatorState == nullptr || VictimState == nullptr || InstigatorState->GetTeam() == EShooterTeam::None ||
+		InstigatorState->GetTeam() != VictimState->GetTeam();
+}
+
+void AShooterGameMode::Killed(
+	AController* Killer, AController* Victim, APawn* VictimPawn, AActor* DamageCauser, bool bHeadshot)
+{
+	++NumKills;
+	FString WeaponName = TEXT("world");
+	if (const AShooterWeapon* Weapon = Cast<AShooterWeapon>(DamageCauser))
+	{
+		WeaponName = Weapon->WeaponName;
+	}
+	else if (DamageCauser != nullptr && DamageCauser->GetOwner() != nullptr)
+	{
+		// A projectile's owner is the weapon that threw it.
+		if (const AShooterWeapon* Launcher = Cast<AShooterWeapon>(DamageCauser->GetOwner()))
+		{
+			WeaponName = Launcher->WeaponName;
+		}
+	}
+	const FString VictimName = GetDisplayName(Victim, VictimPawn);
+	if (Killer == nullptr || Killer == Victim)
+	{
+		UE_LOG(LogShooter, Log, TEXT("Kill: %s died (%s)"), *VictimName, *WeaponName);
+		return;
+	}
+	UE_LOG(LogShooter, Log, TEXT("Kill: %s killed %s with %s%s"), *GetDisplayName(Killer, nullptr), *VictimName,
+		*WeaponName, bHeadshot ? TEXT(" (headshot)") : TEXT(""));
 }
 
 int32 AShooterGameMode::AddBots(EShooterTeam Team, int32 Count)

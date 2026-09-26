@@ -41,6 +41,9 @@ public:
 	UPROPERTY(Transient)
 	bool bIsWalking = false;
 
-	/** Walking on the ground: the walk modifier on the running speed, not on the crouched one (UE ShooterGame). */
+	/**
+	 * The drawn weapon's speed modifier (AShooterWeapon::GetSpeedModifier), and walking on the ground the walk modifier
+	 * on the running speed, not on the crouched one (UE ShooterGame: the targeting and running modifiers).
+	 */
 	[[nodiscard]] float GetMaxSpeed() const override;
 };

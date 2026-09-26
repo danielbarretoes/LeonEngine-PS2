@@ -34,6 +34,30 @@ public:
 	UFUNCTION(Exec)
 	void ViewFrom(float X, float Y, float Z, float Pitch, float Yaw);
 
+	/**
+	 * A shot of this player hurt a character (UE ShooterGame: the HUD's hit notify; CS's hit sound): the HUD draws the
+	 * hit marker for HitMarkerDuration, red for a kill.
+	 */
+	void NotifyHitConfirmed(bool bHeadshot, bool bKilled);
+	/** The world time of the last confirmed hit (negative before the first), and what it was. */
+	[[nodiscard]] float GetLastHitTime() const
+	{
+		return LastHitTime;
+	}
+	[[nodiscard]] bool WasLastHitHeadshot() const
+	{
+		return bLastHitHeadshot;
+	}
+	[[nodiscard]] bool WasLastHitKill() const
+	{
+		return bLastHitKill;
+	}
+	/** How many hits have been confirmed. */
+	[[nodiscard]] int32 GetNumHitsConfirmed() const
+	{
+		return NumHitsConfirmed;
+	}
+
 	/** Debug: back to the pawn's view. */
 	UFUNCTION(Exec)
 	void ViewPawn();
@@ -45,6 +69,11 @@ private:
 	void OnMenuPressed();
 
 	bool bShowScoreboard = false;
+
+	float LastHitTime = -1.0f;
+	bool bLastHitHeadshot = false;
+	bool bLastHitKill = false;
+	int32 NumHitsConfirmed = 0;
 
 	/** The camera of ViewFrom. */
 	UPROPERTY(Transient)

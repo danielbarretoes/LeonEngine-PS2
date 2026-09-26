@@ -27,6 +27,10 @@ class UStaticMeshComponent;
  * body at ThirdPersonOffset. Only the equipped weapon shows. The muzzle is the mesh's `Muzzle` socket (MuzzleOffset
  * in the mesh's space without one).
  *
+ * On the floor (OnDropped): a weapon a pawn dropped or left when it died lies where it fell, Mesh3P shown, and is
+ * picked up (AShooterCharacter::AddWeapon) by the first live pawn that walks within PickupRadius and has its slot free,
+ * after PickupDelay (so the pawn that dropped it does not take it back at once). It keeps its ammunition.
+ *
  * Timing: Leon has no timer manager, so the weapon counts in its tick against the world's time: a shot every
  * TimeBetweenShots while the trigger is held (automatic) or once per press (semi-automatic), EquipDuration before the
  * first shot, ReloadDuration for a reload. Firing with an empty clip reloads when there is reserve ammo, else clicks.
@@ -97,6 +101,14 @@ public:
 	UPROPERTY(Config)
 	int32 KillReward = 300;
 
+	/** How near a pawn's feet a weapon on the floor must be to be picked up, cm (horizontally; 1 m vertically). */
+	UPROPERTY(Config)
+	float PickupRadius = 60.0f;
+
+	/** Seconds after a drop before the weapon can be picked up. */
+	UPROPERTY(Config)
+	float PickupDelay = 1.0f;
+
 	/** The weapon's mesh (both views and the pickup): a static mesh of /Game/Weapons. */
 	UPROPERTY(Config)
 	FSoftObjectPath MeshName;
@@ -141,6 +153,13 @@ public:
 	virtual void OnEnterInventory(AShooterCharacter* NewOwner);
 	/** Leaves it: unequipped, detached, no owner (UE ShooterGame: OnLeaveInventory). */
 	virtual void OnLeaveInventory();
+	/** Lies on the floor at Location (its feet), turned to Yaw, until picked up (see the class comment). */
+	virtual void OnDropped(const FVector& Location, float Yaw);
+	/** On the floor, waiting for a pawn. */
+	[[nodiscard]] bool IsDropped() const
+	{
+		return bDropped;
+	}
 	/** Drawn: shown on the pawn, ready after EquipDuration (UE ShooterGame: OnEquip). */
 	virtual void OnEquip();
 	/** Put away: the trigger, the reload and the zoom stop, the meshes hide (UE ShooterGame: OnUnEquip). */
@@ -248,6 +267,8 @@ protected:
 	void DetachMeshFromPawn();
 	/** Plays a sound at the weapon (UE ShooterGame: PlayWeaponSound). */
 	void PlayWeaponSound(USoundWave* Sound) const;
+	/** On the floor: the first live pawn near enough with the slot free takes the weapon. */
+	void TickPickup();
 	/** The world's time (UWorld::GetTimeSeconds). */
 	[[nodiscard]] float GetWorldTime() const;
 
@@ -279,6 +300,9 @@ protected:
 	int32 CurrentAmmoInClip = 0;
 	int32 ShotsFired = 0;
 	bool bIsEquipped = false;
+	/** On the floor (OnDropped), and from when it can be picked up. */
+	bool bDropped = false;
+	float PickupTime = 0.0f;
 	bool bWantsToFire = false;
 	/** A semi-automatic weapon fired for this press. */
 	bool bFiredThisPress = false;

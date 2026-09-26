@@ -185,5 +185,6 @@ AShooterWeapon_Rifle::AShooterWeapon_Rifle(const FObjectInitializer& ObjectIniti
 	HitDamage = 36.0f;
 	RangeModifier = 0.98f;
 	ArmorRatio = 1.55f;
+	SpeedModifier = 0.884f;
 	Price = 2500;
 }

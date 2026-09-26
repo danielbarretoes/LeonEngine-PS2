@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CollisionQuery.h"
 #include "CoreMinimal.h"
 #include "Math/RandomStream.h"
 #include "Weapons/ShooterWeapon.h"

@@ -2,6 +2,7 @@
 
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/Level.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "GameFramework/Controller.h"
@@ -10,6 +11,7 @@
 #include "ShooterCharacter.h"
 #include "ShooterGame.h"
 #include "Sound/SoundWave.h"
+#include "UObject/UObjectHash.h"
 
 namespace
 {
@@ -127,6 +129,7 @@ int32 AShooterWeapon::GiveAmmo(int32 AddAmount)
 
 void AShooterWeapon::OnEnterInventory(AShooterCharacter* NewOwner)
 {
+	bDropped = false;
 	MyPawn = NewOwner;
 	SetOwner(NewOwner);
 	SetInstigator(NewOwner);
@@ -148,6 +151,43 @@ void AShooterWeapon::OnLeaveInventory()
 	SetInstigator(nullptr);
 	Mesh1P->MarkRenderStateDirty();
 	Mesh3P->MarkRenderStateDirty();
+}
+
+void AShooterWeapon::OnDropped(const FVector& Location, float Yaw)
+{
+	bDropped = true;
+	PickupTime = GetWorldTime() + PickupDelay;
+	// Lying on its side on the floor (the mesh's forward along the drop's yaw).
+	(void)SetActorLocationAndRotation(Location, FRotator(0.0f, Yaw, 0.0f));
+	Mesh3P->SetRelativeLocationAndRotation(FVector(0.0f, 0.0f, 2.0f), FRotator(0.0f, 0.0f, 90.0f));
+	Mesh3P->SetVisibility(true);
+}
+
+void AShooterWeapon::TickPickup()
+{
+	const UWorld* World = GetWorld();
+	if (World == nullptr || World->PersistentLevel == nullptr || GetWorldTime() < PickupTime)
+	{
+		return;
+	}
+	constexpr float PickupReachZ = 100.0f;
+	const FVector Location = GetActorLocation();
+	for (AActor* Actor : World->PersistentLevel->Actors)
+	{
+		AShooterCharacter* Pawn = Cast<AShooterCharacter>(Actor);
+		if (Pawn == nullptr || Pawn->IsPendingKillPending() || !Pawn->IsAlive() ||
+			Pawn->GetWeaponInSlot(Slot) != nullptr)
+		{
+			continue;
+		}
+		const FVector Delta = Pawn->GetActorLocation() - Location;
+		if (Delta.SizeSquared2D() <= FMath::Square(PickupRadius) && FMath::Abs(Delta.Z) <= PickupReachZ)
+		{
+			UE_LOG(LogShooter, Log, TEXT("%s picked up %s"), *Pawn->GetName(), *WeaponName);
+			Pawn->AddWeapon(this);
+			return;
+		}
+	}
 }
 
 void AShooterWeapon::OnEquip()
@@ -179,7 +219,8 @@ void AShooterWeapon::AttachMeshToPawn()
 	USceneComponent* Root = GetRootComponent();
 	if (Root->GetAttachParent() != MyPawn->GetRootComponent())
 	{
-		(void)Root->AttachToComponent(MyPawn->GetRootComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+		(void)Root->AttachToComponent(
+			MyPawn->GetRootComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
 	}
 	if (Mesh1P->GetAttachParent() != MyPawn->GetFirstPersonCameraComponent())
 	{
@@ -333,7 +374,8 @@ void AShooterWeapon::GetAim(FVector& OutStart, FVector& OutDirection) const
 FVector AShooterWeapon::GetMuzzleLocation() const
 {
 	// The first-person muzzle for the player who sees it, the body's for the others (UE ShooterGame: GetWeaponMesh).
-	const UStaticMeshComponent* Mesh = Mesh1P->IsVisible() && MyPawn != nullptr && MyPawn->IsFirstPerson() ? Mesh1P : Mesh3P;
+	const UStaticMeshComponent* Mesh =
+		Mesh1P->IsVisible() && MyPawn != nullptr && MyPawn->IsFirstPerson() ? Mesh1P : Mesh3P;
 	if (Mesh->DoesSocketExist(MuzzleSocketName))
 	{
 		return Mesh->GetSocketTransform(MuzzleSocketName).GetLocation();
@@ -344,6 +386,11 @@ FVector AShooterWeapon::GetMuzzleLocation() const
 void AShooterWeapon::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (bDropped)
+	{
+		TickPickup();
+		return;
+	}
 	const float Now = GetWorldTime();
 	if (CurrentState == EShooterWeaponState::Equipping && Now + FireTimeTolerance >= EquipFinishTime)
 	{

@@ -1,6 +1,7 @@
 #include "ShooterCharacterMovement.h"
 
-#include "GameFramework/Character.h"
+#include "ShooterCharacter.h"
+#include "Weapons/ShooterWeapon.h"
 
 UShooterCharacterMovement::UShooterCharacterMovement(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -29,7 +30,13 @@ UShooterCharacterMovement::UShooterCharacterMovement(const FObjectInitializer& O
 
 float UShooterCharacterMovement::GetMaxSpeed() const
 {
-	const float Speed = Super::GetMaxSpeed();
+	float Speed = Super::GetMaxSpeed();
+	// The drawn weapon's weight (CS: 221 units a second with an AK-47, 150 scoped with an AWP).
+	const AShooterCharacter* Shooter = Cast<AShooterCharacter>(GetCharacterOwner());
+	if (const AShooterWeapon* Weapon = Shooter != nullptr ? Shooter->GetWeapon() : nullptr)
+	{
+		Speed *= Weapon->GetSpeedModifier();
+	}
 	if (bIsWalking && !IsCrouching() && GetCharacterOwner() != nullptr && GetCharacterOwner()->IsMovingOnGround())
 	{
 		return Speed * WalkSpeedModifier;

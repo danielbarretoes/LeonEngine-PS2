@@ -36,6 +36,15 @@ void AShooterPlayerController::OnMenuPressed()
 	UE_LOG(LogShooter, Log, TEXT("Menu (P19)"));
 }
 
+void AShooterPlayerController::NotifyHitConfirmed(bool bHeadshot, bool bKilled)
+{
+	const UWorld* World = GetWorld();
+	LastHitTime = World != nullptr ? World->GetTimeSeconds() : 0.0f;
+	bLastHitHeadshot = bHeadshot;
+	bLastHitKill = bKilled;
+	++NumHitsConfirmed;
+}
+
 void AShooterPlayerController::ViewFrom(float X, float Y, float Z, float Pitch, float Yaw)
 {
 	UWorld* World = GetWorld();
