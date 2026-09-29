@@ -36,19 +36,53 @@ void AShooterGameState::AddTeamScore(EShooterTeam Team)
 	}
 }
 
+void AShooterGameState::BeginSecondHalf()
+{
+	// The players of each side move to the other: their rounds go with them.
+	Swap(ScoreCT, ScoreT);
+	bSecondHalf = true;
+	HalftimeRound = RoundNumber;
+	++HalftimeSerial;
+}
+
 void AShooterGameState::AddKillFeedEntry(const FShooterKillFeedEntry& Entry)
 {
 	KillFeed.Add(Entry);
+	++KillFeedSerial;
 	while (KillFeed.Num() > MaxKillFeedEntries)
 	{
 		KillFeed.RemoveAt(0);
 	}
 }
 
+void AShooterGameState::AddRadioEntry(const FShooterRadioEntry& Entry)
+{
+	RadioLog.Add(Entry);
+	++RadioSerial;
+	while (RadioLog.Num() > MaxRadioEntries)
+	{
+		RadioLog.RemoveAt(0);
+	}
+}
+
+bool AShooterGameState::WasRadioSentSince(EShooterTeam Team, EShooterRadioMessage Message, float Since) const
+{
+	for (const FShooterRadioEntry& Entry : RadioLog)
+	{
+		if (Entry.Team == Team && Entry.Message == Message && Entry.Time >= Since)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void AShooterGameState::ResetMatch()
 {
 	ScoreCT = 0;
 	ScoreT = 0;
+	bSecondHalf = false;
+	HalftimeRound = 0;
 	RoundNumber = 0;
 	++MatchSerial;
 	BombState = EShooterBombState::None;
@@ -57,4 +91,7 @@ void AShooterGameState::ResetMatch()
 	LastRoundEndReason = EShooterRoundEndReason::None;
 	MatchWinner = EShooterTeam::None;
 	KillFeed.Reset();
+	++KillFeedSerial;
+	RadioLog.Reset();
+	++RadioSerial;
 }

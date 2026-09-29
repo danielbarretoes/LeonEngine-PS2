@@ -23,7 +23,7 @@ cmake-build-*/
 **/_deps/
 
 
-# Binaries / objects (the test fixtures' OBJ meshes are kept below)
+# Binaries / objects
 *.exe
 *.pdb
 *.ilk
@@ -48,6 +48,5 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-!Engine/Source/**/Tests/Fixtures/*.obj
 Packages/
 .vscode/

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/EngineBaseTypes.h"
 #include "Engine/EngineTypes.h"
 #include "UObject/Object.h"
 #include "ActorComponent.generated.h"
@@ -69,15 +70,28 @@ public:
 		return bIsBeingDestroyed;
 	}
 
-	/** Whether TickComponent runs each world tick (UE: IsComponentTickEnabled). Off by default. */
+	/**
+	 * The component's tick function (UE: PrimaryComponentTick). A class that overrides TickComponent sets
+	 * bCanEverTick (and TickGroup, TickInterval, bStartWithTickEnabled) in its constructor; the component's tick is
+	 * registered once it is registered and its owner plays, and ticks just before its owner's in the same group.
+	 */
+	FActorComponentTickFunction PrimaryComponentTick;
+
+	/** Whether TickComponent runs each world step (UE: IsComponentTickEnabled). */
 	[[nodiscard]] bool IsComponentTickEnabled() const
 	{
-		return bComponentTickEnabled;
+		return PrimaryComponentTick.IsTickFunctionEnabled();
 	}
-	void SetComponentTickEnabled(bool bEnabled)
+	/** Turns the tick on or off; nothing without PrimaryComponentTick.bCanEverTick (UE: SetComponentTickEnabled). */
+	void SetComponentTickEnabled(bool bEnabled);
+	/** Seconds between ticks, 0 every step (UE: SetComponentTickInterval / GetComponentTickInterval). */
+	void SetComponentTickInterval(float TickInterval);
+	[[nodiscard]] float GetComponentTickInterval() const
 	{
-		bComponentTickEnabled = bEnabled;
+		return PrimaryComponentTick.TickInterval;
 	}
+	/** Registers or unregisters the component's tick function with its owner's world (UE). */
+	void RegisterAllComponentTickFunctions(bool bRegister);
 
 	/** True when the component has a tag (UE: ComponentHasTag). */
 	[[nodiscard]] bool ComponentHasTag(FName Tag) const
@@ -132,7 +146,7 @@ public:
 	/** Overrides call Super::EndPlay(EndPlayReason) (UE). */
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason);
 
-	/** Only called while IsComponentTickEnabled() (UE: TickComponent without the tick function arguments). */
+	/** Its tick, while IsComponentTickEnabled() (UE: TickComponent without the tick function arguments). */
 	virtual void TickComponent(float DeltaTime);
 
 	// UObject
@@ -162,6 +176,9 @@ protected:
 		return bPhysicsStateCreated;
 	}
 
+	/** Registers or unregisters PrimaryComponentTick (UE: RegisterComponentTickFunctions). */
+	virtual void RegisterComponentTickFunctions(bool bRegister);
+
 private:
 	friend class AActor;
 
@@ -179,5 +196,4 @@ private:
 	bool bHasBeenInitialized = false;
 	bool bHasBegunPlay = false;
 	bool bIsBeingDestroyed = false;
-	bool bComponentTickEnabled = false;
 };

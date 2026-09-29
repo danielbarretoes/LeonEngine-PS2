@@ -432,6 +432,70 @@ bool FPaths::DirectoryExists(const FString& InPath)
 	return FPlatformFileManager::Get().GetPlatformFile().DirectoryExists(*InPath);
 }
 
+FString FPaths::ToIso9660Path(const FString& InPath, bool bFile)
+{
+	// d-characters (ECMA-119 7.4.1): A-Z, 0-9 and '_'.
+	const auto Identifier = [](const FString& Text, int32 MaxLength)
+	{
+		FString Result;
+		for (int32 Index = 0; Index < Text.Len() && Result.Len() < MaxLength; ++Index)
+		{
+			const TCHAR Char = FChar::ToUpper(Text[Index]);
+			Result.AppendChar((Char >= 'A' && Char <= 'Z') || (Char >= '0' && Char <= '9') ? Char : '_');
+		}
+		return Result;
+	};
+	const int32 Colon = InPath.Find(TEXT(":"), ESearchCase::CaseSensitive);
+	const FString Device = Colon != INDEX_NONE ? InPath.Left(Colon + 1) : FString();
+	FString Rest = InPath.Mid(Device.Len());
+	Rest.ReplaceCharInline('\\', '/');
+	TArray<FString> Parts;
+	Rest.ParseIntoArray(Parts, TEXT("/"), true);
+	TArray<FString> Names;
+	for (const FString& Part : Parts)
+	{
+		if (Part == TEXT("."))
+		{
+			continue;
+		}
+		if (Part == TEXT(".."))
+		{
+			if (Names.Num() > 0)
+			{
+				Names.Pop();
+			}
+			continue;
+		}
+		Names.Add(Part);
+	}
+	FString Result = Device + TEXT("\\");
+	for (int32 Index = 0; Index < Names.Num(); ++Index)
+	{
+		FString Name = Names[Index];
+		const int32 Version = Name.Find(TEXT(";"), ESearchCase::CaseSensitive);
+		if (Version != INDEX_NONE)
+		{
+			Name.LeftInline(Version);
+		}
+		const bool bLast = Index == Names.Num() - 1;
+		const int32 Dot = bFile && bLast ? Name.Find(TEXT("."), ESearchCase::CaseSensitive, ESearchDir::FromEnd) : -1;
+		Result += Index > 0 ? TEXT("\\") : TEXT("");
+		if (Dot != INDEX_NONE)
+		{
+			Result += Identifier(Name.Left(Dot), 8) + TEXT(".") + Identifier(Name.Mid(Dot + 1), 3);
+		}
+		else
+		{
+			Result += Identifier(Name, 8);
+		}
+	}
+	if (bFile && Names.Num() > 0)
+	{
+		Result += TEXT(";1");
+	}
+	return Result;
+}
+
 bool FPaths::IsDrive(const FString& InPath)
 {
 	FString ConvertedPathString = InPath;

@@ -1,0 +1,289 @@
+; Skinned.vsm: the VU1 microprograms that draw a skinned vertex batch (Docs/PLANS/ps2-shipping.md N14b, fog as N15's; dvp-as, one
+; upper and one lower instruction a line). StaticLit's and StaticUnlit's work (VU1Programs.vsm) after posing each vertex
+; with its two palette bones. FPS2VU1 (PS2VU1.cpp) uploads them after the static programs and starts them with MSCAL;
+; VU1SkinnedMemory (PS2VU1Encoder.h) lays out the buffer, and FGSPrimitiveEmitter::TransformVertexBatch (GSCore) is
+; the C++ reference.
+;
+; Data memory (quadwords). Shared: 0-2 as for the static programs. A batch's buffer at TOP (VIF1's double buffer):
+;   0      ints: x the vertices, y 1 to XGKICK the packet, z 0 unlit, 1 lit, 2 or 3 lit with one or two point lights
+;   1-4    the rows of the posed position's transform to clip space (LocalToClip: clip = r3 + x r0 + y r1 + z r2)
+;   5-8    the colour scale, the texture coordinates' offset and scale (7 zw: the fog's line in w), the GIFtag with
+;          XYZF2 (as the static programs')
+;   9-14   SkinnedLit: the normal's transform to the world, the light's direction reversed, its colour, the ambient
+;   15-18  SkinnedLit with point lights (N29): the rows of the posed position's transform to the world (LocalToWorld)
+;   19-22  the point lights: position (w: 1 / range) and colour, two at most
+;   23     the quantization's scale (xyz) and the weights' 1/255 (w); 24 its bias
+;   25     the palette: 3 quadwords a bone (FGSSkinMatrix: the skin matrix's rows, each W the translation's), at most 24
+;   97     the positions (V3-16), 145 the normals and strip flags (V4-8), 193 the colours (V4-8 unsigned), 241 the
+;          texture coordinates (V2-16), 289 the skin (V4-8 unsigned: two palette indices, two weights), at most 48
+;   337    the GIF packet: the GIFtag, then ST, RGBAQ and XYZF2 a vertex (ADC on the vertices that close no triangle)
+;
+; A vertex is posed by the blend of its bones' matrices, M = w0 M0 + w1 M1 (the weights over 255), its position being
+; the dequantized one through M, its normal through M's 3x3; the rest is the static programs' (the triangles, CLIP, the
+; area's sign, the fog, the XYZF2 packet). The batch is inside the guard band and between the near and far planes (the EE decided by
+; the sphere its pose keeps it in, plan D8): nothing is clipped.
+
+		.vu
+		.align 4
+		.global	VU1Skinned_CodeStart
+		.global	VU1Skinned_CodeEnd
+		.global	VU1Skinned_Lit
+		.global	VU1Skinned_Unlit
+VU1Skinned_CodeStart:
+VU1Skinned_Lit:
+		nop							b SkinnedCommon
+		nop							nop
+VU1Skinned_Unlit:
+		nop							nop
+SkinnedCommon:
+		; The shared constants, the batch's header (its z the lighting) and the pointers.
+		nop							xtop vi02
+		nop							nop
+		nop							ilw.z vi15, 0(vi02)
+		nop							lq vf09, 0(vi00)
+		nop							lq vf10, 1(vi00)
+		nop							lq vf11, 2(vi00)
+		nop							ilw.x vi03, 0(vi02)
+		nop							ilw.y vi07, 0(vi02)
+		nop							lq vf01, 1(vi02)
+		nop							lq vf02, 2(vi02)
+		nop							lq vf03, 3(vi02)
+		nop							lq vf04, 4(vi02)
+		nop							lq vf05, 5(vi02)
+		nop							lq vf06, 6(vi02)
+		nop							lq vf07, 7(vi02)
+		nop							lq vf08, 8(vi02)
+		nop							lq vf21, 9(vi02)
+		nop							lq vf22, 10(vi02)
+		nop							lq vf23, 11(vi02)
+		nop							lq vf24, 12(vi02)
+		nop							lq vf25, 13(vi02)
+		nop							lq vf26, 14(vi02)
+		nop							iaddiu vi04, vi02, 97
+		nop							iaddiu vi06, vi02, 337
+		nop							sq vf08, 0(vi06)
+		nop							iaddiu vi05, vi06, 1
+		; The strip flags' masks and the MAC flags of a Z sign and zero.
+		nop							iaddiu vi12, vi00, 0x80
+		nop							iaddiu vi13, vi00, 0x22
+		nop							iaddiu vi14, vi00, 1
+		nop							fcset 0
+		nop							move.xy vf16, vf00
+		nop							move.xy vf17, vf00
+
+Vertex:
+		; The skin: the two bones' palette indices (3 quadwords a bone from TOP), the weights; the position.
+		nop							ilw.x vi09, 192(vi04)
+		nop							ilw.y vi11, 192(vi04)
+		nop							lq vf13, 192(vi04)
+		nop							lq.xyz vf12, 0(vi04)
+		nop							lq vf27, 23(vi02)
+		nop							iadd vi10, vi09, vi09
+		nop							iadd vi01, vi11, vi11
+		nop							iadd vi09, vi09, vi10
+		nop							iadd vi11, vi11, vi01
+		itof0.zw vf13, vf13			iadd vi09, vi09, vi02
+		itof0.xyz vf12, vf12		iadd vi11, vi11, vi02
+		nop							lq vf28, 24(vi02)
+		; The weights over 255 and the dequantized position, while the bones' rows come in.
+		mulw.zw vf13, vf13, vf27w	lq vf29, 25(vi09)
+		mul.xyz vf12, vf12, vf27	lq vf30, 25(vi11)
+		add.xyz vf12, vf12, vf28	lq vf31, 26(vi09)
+		; M = w0 M0 + w1 M1, row by row.
+		mulaz.xyzw ACC, vf29, vf13z	lq vf27, 26(vi11)
+		maddw.xyzw vf18, vf30, vf13w	lq vf14, 27(vi09)
+		mulaz.xyzw ACC, vf31, vf13z	lq vf15, 27(vi11)
+		maddw.xyzw vf19, vf27, vf13w	nop
+		mulaz.xyzw ACC, vf14, vf13z	nop
+		maddw.xyzw vf20, vf15, vf13w	nop
+		; M's translation from its rows' W.
+		addw.x vf28, vf00, vf18w	nop
+		addw.y vf28, vf00, vf19w	nop
+		addw.z vf28, vf00, vf20w	nop
+		; The posed position (kept in vf31 for the point lights), then clip space; the colour, the texture coordinates
+		; and the strip flags come in.
+		mulax.xyz ACC, vf18, vf12x	nop
+		madday.xyz ACC, vf19, vf12y	nop
+		maddaz.xyz ACC, vf20, vf12z	nop
+		maddw.xyz vf31, vf28, vf00w	lq vf14, 96(vi04)
+		mulax.xyzw ACC, vf01, vf31x	lq.xy vf15, 144(vi04)
+		madday.xyzw ACC, vf02, vf31y	ilw.w vi08, 48(vi04)
+		maddaz.xyzw ACC, vf03, vf31z	nop
+		maddw.xyzw vf12, vf04, vf00w	nop
+		itof0.xyzw vf14, vf14		nop
+		; Its outcode (CLIP against |w|) and 1 / w, while the colour, the texture coordinates and the fog go on. The
+		; fog (in vf20's w: M's third row is read in xyz from here on, and the area below writes xyz only) is the
+		; draw's line in w, from 0 to 255.
+		itof12.xy vf15, vf15		nop
+		clipw.xyz vf12xyz, vf12w	div Q, vf00w, vf12w
+		mul.xyzw vf14, vf14, vf05	nop
+		mulz.w vf20, vf12, vf07z	nop
+		add.xy vf15, vf15, vf06		nop
+		addw.w vf20, vf20, vf07w	nop
+		mul.xy vf15, vf15, vf07		nop
+		maxx.w vf20, vf20, vf00x	nop
+		addw.z vf15, vf00, vf00w	nop
+		minix.w vf20, vf20, vf11x	nop
+		; SkinnedLit: the normal posed by M's 3x3, to the world, normalized; the colour times the ambient share plus
+		; the light's colour by N.L.
+		nop							ibeq vi15, vi00, Unlit
+		nop							nop
+		nop							lq.xyz vf27, 48(vi04)
+		itof0.xyz vf27, vf27		nop
+		mulax.xyz ACC, vf18, vf27x	nop
+		madday.xyz ACC, vf19, vf27y	nop
+		maddz.xyz vf27, vf20, vf27z	nop
+		mulax.xyz ACC, vf21, vf27x	nop
+		madday.xyz ACC, vf22, vf27y	nop
+		maddz.xyz vf28, vf23, vf27z	nop
+		mul.xyz vf29, vf28, vf28	nop
+		mul.xyz vf30, vf28, vf24	nop
+		addy.x vf29, vf29, vf29y	nop
+		addy.x vf30, vf30, vf30y	nop
+		addz.x vf29, vf29, vf29z	nop
+		addz.x vf30, vf30, vf30z	nop
+		nop							ersqrt P, vf29x
+		nop							waitp
+		nop							mfp.w vf29, P
+		mulw.x vf30, vf30, vf29w	nop
+		maxx.x vf30, vf30, vf00x	nop
+		mulaw.xyz ACC, vf26, vf00w	nop
+		maddx.xyz vf29, vf25, vf30x	nop
+		; Point lights (the header's z: 2 for one, 3 for two; N29): the world position, then each light's N.L times its
+		; attenuation (1 - d / r) squared, times its colour, added to the light.
+		nop							ibeq vi15, vi14, LitDone
+		nop							nop
+		nop							lq vf18, 15(vi02)
+		nop							lq vf19, 16(vi02)
+		nop							lq vf27, 17(vi02)
+		nop							lq vf30, 18(vi02)
+		mulax.xyz ACC, vf18, vf31x	nop
+		madday.xyz ACC, vf19, vf31y	nop
+		maddaz.xyz ACC, vf27, vf31z	nop
+		maddw.xyz vf13, vf30, vf00w	nop
+		nop							lq vf18, 19(vi02)
+		nop							lq vf19, 20(vi02)
+		sub.xyz vf27, vf18, vf13	nop
+		mul.xyz vf30, vf27, vf27	nop
+		mul.xyz vf27, vf27, vf28	nop
+		addy.x vf30, vf30, vf30y	nop
+		addy.x vf27, vf27, vf27y	nop
+		addz.x vf30, vf30, vf30z	nop
+		addz.x vf27, vf27, vf27z	nop
+		nop							ersqrt P, vf30x
+		nop							waitp
+		nop							mfp.w vf30, P
+		mulw.x vf30, vf30, vf30w	nop
+		mulw.x vf27, vf27, vf30w	nop
+		mulw.x vf27, vf27, vf29w	nop
+		maxx.x vf27, vf27, vf00x	nop
+		mulw.x vf30, vf30, vf18w	nop
+		subx.w vf30, vf00, vf30x	nop
+		maxx.w vf30, vf30, vf00x	nop
+		mulw.w vf30, vf30, vf30w	nop
+		mulw.x vf27, vf27, vf30w	nop
+		mulx.xyz vf19, vf19, vf27x	nop
+		add.xyz vf29, vf29, vf19	nop
+		nop							iaddiu vi01, vi00, 2
+		nop							nop
+		nop							ibeq vi15, vi01, LitDone
+		nop							nop
+		nop							lq vf18, 21(vi02)
+		nop							lq vf19, 22(vi02)
+		sub.xyz vf27, vf18, vf13	nop
+		mul.xyz vf30, vf27, vf27	nop
+		mul.xyz vf27, vf27, vf28	nop
+		addy.x vf30, vf30, vf30y	nop
+		addy.x vf27, vf27, vf27y	nop
+		addz.x vf30, vf30, vf30z	nop
+		addz.x vf27, vf27, vf27z	nop
+		nop							ersqrt P, vf30x
+		nop							waitp
+		nop							mfp.w vf30, P
+		mulw.x vf30, vf30, vf30w	nop
+		mulw.x vf27, vf27, vf30w	nop
+		mulw.x vf27, vf27, vf29w	nop
+		maxx.x vf27, vf27, vf00x	nop
+		mulw.x vf30, vf30, vf18w	nop
+		subx.w vf30, vf00, vf30x	nop
+		maxx.w vf30, vf30, vf00x	nop
+		mulw.w vf30, vf30, vf30w	nop
+		mulw.x vf27, vf27, vf30w	nop
+		mulx.xyz vf19, vf19, vf27x	nop
+		add.xyz vf29, vf29, vf19	nop
+LitDone:
+		mul.xyz vf14, vf14, vf29	nop
+Unlit:
+		; RGBAQ's bytes: rounded, at most 255.
+		addy.xyzw vf14, vf14, vf11y	nop
+		minix.xyzw vf14, vf14, vf11x	nop
+		ftoi0.xyzw vf14, vf14		waitq
+		; The screen: the pixel (12.4 after FTOI4, rounded) and Z; STQ.
+		mulq.xyz vf13, vf12, Q		nop
+		mulq.xyz vf15, vf15, Q		nop
+		mulaw.xyz ACC, vf10, vf00w	nop
+		madd.xyz vf13, vf13, vf09	nop
+		maxx.z vf13, vf13, vf00x	sq vf15, 0(vi05)
+		mini.z vf13, vf13, vf11		sq vf14, 1(vi05)
+		; XYZF2: Z times 16 (its field starts at bit 4), F rounded in w, and F with ADC (2048 more) in vf19's w (the
+		; area below writes its xy only).
+		mulw.z vf13, vf13, vf09w	nop
+		addy.w vf13, vf20, vf11y	nop
+		addw.w vf19, vf13, vf11w	nop
+		; The triangle's area on the screen with the two vertices before: its sign and zero in the MAC flags of z.
+		sub.xy vf18, vf17, vf16		nop
+		sub.xy vf19, vf13, vf16		nop
+		opmula.xyz ACC, vf18, vf19	nop
+		opmsub.xyz vf20, vf19, vf18	nop
+		; No flag-setting upper instruction until FMAND reads them (four instructions on).
+		nop							iand vi09, vi08, vi12
+		nop							fcor vi01, 0xffefbe
+		nop							ior vi09, vi09, vi01
+		nop							fcor vi01, 0xffdf7d
+		nop							ior vi09, vi09, vi01
+		nop							fcor vi01, 0xffbefb
+		nop							ior vi09, vi09, vi01
+		nop							fcor vi01, 0xff7df7
+		nop							ior vi09, vi09, vi01
+		nop							fmand vi11, vi13
+		nop							iand vi10, vi08, vi14
+		ftoi4.xyzw vf31, vf13		move.xy vf16, vf17
+		nop							move.xy vf17, vf13
+		; Drawn: a kick (not the strip's), inside the view, facing the camera (the screen's Y goes down: a front face
+		; has a negative area, positive when reversed).
+		nop							ibne vi09, vi00, NoKick
+		nop							nop
+		nop							ibeq vi10, vi00, Forward
+		nop							nop
+		nop							ibne vi11, vi00, NoKick
+		nop							nop
+		nop							b Store
+		nop							nop
+Forward:
+		nop							isubiu vi11, vi11, 0x20
+		nop							nop
+		nop							ibne vi11, vi00, NoKick
+		nop							nop
+		nop							b Store
+		nop							nop
+NoKick:
+		; ADC: F with 2048 more, 0x8000 after FTOI4.
+		ftoi4.w vf31, vf19			nop
+Store:
+		nop							sq.xyzw vf31, 2(vi05)
+		nop							iaddi vi04, vi04, 1
+		nop							iaddi vi05, vi05, 3
+		nop							iaddi vi03, vi03, -1
+		nop							nop
+		nop							ibne vi03, vi00, Vertex
+		nop							nop
+
+		; The packet to the GS (PATH1) unless the header says no (VU1Conformance reads it back instead).
+		nop							ibeq vi07, vi00, End
+		nop							nop
+		nop							xgkick vi06
+End:
+		nop[E]						nop
+		nop							nop
+		.align 4
+VU1Skinned_CodeEnd:

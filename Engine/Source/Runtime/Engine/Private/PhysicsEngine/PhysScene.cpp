@@ -5,28 +5,17 @@
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Debug/DebugDraw.h"
+#include "Engine/EngineTypes.h"
 #include "Engine/StaticMesh.h"
 #include "Frustum.h"
 #include "GameFramework/Actor.h"
-#include "IPhysicsBackend.h"
+#include "HAL/LowLevelMemTracker.h"
 #include "MeshData.h"
 #include "PhysicsEngine/BodySetup.h"
+#include "Stats/Stats.h"
 #include "TriangleCollision.h"
 
-FPhysScene::FPhysScene(EPhysicsBackend InBackend)
-	: Backend(InBackend)
-	, BackendIface(CreatePhysicsBackend(
-		  InBackend == EPhysicsBackend::Jolt ? EPhysicsBackendKind::Jolt : EPhysicsBackendKind::Arcade))
-{
-	if (BackendIface != nullptr && FCString::Strcmp(BackendIface->GetName(), "Jolt") == 0)
-	{
-		Backend = EPhysicsBackend::Jolt;
-	}
-	else
-	{
-		Backend = EPhysicsBackend::Arcade;
-	}
-}
+DECLARE_CYCLE_STAT(TEXT("Physics Step"), STAT_PhysSceneStep, STATGROUP_Physics);
 
 namespace
 {
@@ -69,6 +58,21 @@ namespace
 
 	/** Inset of the capsule disc against an AABB top it stands on (cm). */
 	constexpr float SupportDiscInset = -2.0f;
+	/** Height (cm) that stands for "any" in a broadphase box. */
+	constexpr float UnboundedZ = 1.0e30f;
+	/** How far (cm) ResolveCapsuleSides may push the feet before it looks the bodies around them up again. */
+	constexpr float ContactSlack = 32.0f;
+	/** How far (cm) the step may push a body before it looks its pairs up again. */
+	constexpr float PairSlack = 25.0f;
+
+	/** A pair of bodies of the step: the bodies' serials (the pair's order) and indices, the earlier body first. */
+	struct FStepPair
+	{
+		uint32 SerialA;
+		uint32 SerialB;
+		int32 IndexA;
+		int32 IndexB;
+	};
 
 	[[nodiscard]] float LandWindow(float VelocityZ, float InDeltaTime, float InSkin)
 	{
@@ -125,14 +129,17 @@ void FPhysScene::Clear()
 	TriangleMeshes.Reset();
 	SlopePlanes.Reset();
 	BodyOwners.Reset();
-	if (BackendIface != nullptr)
-	{
-		BackendIface->RigidClear();
-	}
+	BodySerials.Reset();
+	NextBodySerial = 0;
+	ComponentBodies.Reset();
+	Broadphase.Reset();
+	bBodiesEdited = false;
 }
 
-int32 FPhysScene::AddBody(const FBodyInstanceDesc& Desc)
+int32 FPhysScene::AddUnregisteredBody(const FBodyInstanceDesc& Desc)
 {
+	LLM_SCOPE(ELLMTag::Physics);
+	SyncEditedBodies();
 	FBodyInstance Body;
 	Body.ComponentID = Desc.ComponentID;
 	Body.Type = Desc.Type;
@@ -140,19 +147,32 @@ int32 FPhysScene::AddBody(const FBodyInstanceDesc& Desc)
 	Body.bEnableGravity = Desc.bEnableGravity;
 	Body.SetDefaultCollision(Desc.Type);
 	Bodies.Add(Body);
-	TriangleMeshes.SetNum(Bodies.Num());
-	BodyOwners.SetNum(Bodies.Num());
+	TriangleMeshes.AddDefaulted();
+	BodyOwners.Add(nullptr);
+	BodySerials.Add(NextBodySerial++);
 	return Bodies.Num() - 1;
+}
+
+int32 FPhysScene::AddBody(const FBodyInstanceDesc& Desc)
+{
+	const int32 BodyIndex = AddUnregisteredBody(Desc);
+	Broadphase.AddBody(Bodies[BodyIndex], GetBodyMesh(BodyIndex), Bodies[BodyIndex].Type == EBodyType::Dynamic);
+	return BodyIndex;
 }
 
 int32 FPhysScene::AddComponentBody(UPrimitiveComponent& Component)
 {
+	LLM_SCOPE(ELLMTag::Physics);
+	// One body per component (UE: the component's FBodyInstance).
+	RemoveComponentBody(Component);
+
 	FBodyInstanceDesc Desc{};
 	Desc.ComponentID = Component.GetUniqueID();
 	Desc.Type = Component.IsSimulatingPhysics() ? EBodyType::Dynamic : EBodyType::Static;
 	Desc.bEnableGravity = Component.IsGravityEnabled();
-	const int32 BodyIndex = AddBody(Desc);
+	const int32 BodyIndex = AddUnregisteredBody(Desc);
 	BodyOwners[BodyIndex] = &Component;
+	ComponentBodies.Add(Component.GetUniqueID(), BodyIndex);
 
 	// The component's collision settings (UE: FBodyInstance's ObjectType, CollisionResponses, CollisionEnabled).
 	FBodyInstance& Body = Bodies[BodyIndex];
@@ -166,21 +186,20 @@ int32 FPhysScene::AddComponentBody(UPrimitiveComponent& Component)
 	Body.bPhysicsEnabled =
 		CollisionEnabled == ECollisionEnabled::PhysicsOnly || CollisionEnabled == ECollisionEnabled::QueryAndPhysics;
 
-	UpdateBodyFromComponent(BodyIndex, Component);
-	RebuildRigidWorld();
+	ApplyComponentShape(BodyIndex, Component);
+	// A movable component's body goes to the broadphase's list at once; a static one to the tree (and to the list the
+	// first time it moves).
+	Broadphase.AddBody(Body, GetBodyMesh(BodyIndex),
+		Body.Type == EBodyType::Dynamic || Component.Mobility == EComponentMobility::Movable);
 	return BodyIndex;
 }
 
 int32 FPhysScene::FindComponentBody(const UPrimitiveComponent& Component) const
 {
-	for (int32 BodyIndex = 0; BodyIndex < BodyOwners.Num(); ++BodyIndex)
-	{
-		if (BodyOwners[BodyIndex] == &Component)
-		{
-			return BodyIndex;
-		}
-	}
-	return INDEX_NONE;
+	const int32* BodyIndex = ComponentBodies.Find(Component.GetUniqueID());
+	return BodyIndex != nullptr && BodyOwners.IsValidIndex(*BodyIndex) && BodyOwners[*BodyIndex] == &Component
+		? *BodyIndex
+		: INDEX_NONE;
 }
 
 void FPhysScene::UpdateComponentBodyTransform(const UPrimitiveComponent& Component)
@@ -194,19 +213,28 @@ void FPhysScene::UpdateComponentBodyTransform(const UPrimitiveComponent& Compone
 
 void FPhysScene::RemoveComponentBody(const UPrimitiveComponent& Component)
 {
-	for (int32 BodyIndex = BodyOwners.Num() - 1; BodyIndex >= 0; --BodyIndex)
+	const int32 BodyIndex = FindComponentBody(Component);
+	if (BodyIndex != INDEX_NONE)
 	{
-		if (BodyOwners[BodyIndex] != &Component)
-		{
-			continue;
-		}
-		Bodies.RemoveAt(BodyIndex);
-		if (TriangleMeshes.IsValidIndex(BodyIndex))
-		{
-			TriangleMeshes.RemoveAt(BodyIndex);
-		}
-		BodyOwners.RemoveAt(BodyIndex);
-		RebuildRigidWorld();
+		RemoveBodyAtSwap(BodyIndex);
+	}
+}
+
+void FPhysScene::RemoveBodyAtSwap(int32 BodyIndex)
+{
+	SyncEditedBodies();
+	if (const UPrimitiveComponent* Owner = BodyOwners[BodyIndex])
+	{
+		ComponentBodies.Remove(Owner->GetUniqueID());
+	}
+	Broadphase.RemoveBodyAtSwap(BodyIndex);
+	Bodies.RemoveAtSwap(BodyIndex, 1, false);
+	TriangleMeshes.RemoveAtSwap(BodyIndex, 1, false);
+	BodyOwners.RemoveAtSwap(BodyIndex, 1, false);
+	BodySerials.RemoveAtSwap(BodyIndex, 1, false);
+	if (BodyIndex < Bodies.Num() && BodyOwners[BodyIndex] != nullptr)
+	{
+		ComponentBodies.Add(BodyOwners[BodyIndex]->GetUniqueID(), BodyIndex);
 	}
 }
 
@@ -217,25 +245,68 @@ UPrimitiveComponent* FPhysScene::GetBodyOwner(int32 BodyIndex) const
 
 void FPhysScene::SyncComponentsToBodies() const
 {
-	for (int32 BodyIndex = 0; BodyIndex < Bodies.Num() && BodyIndex < BodyOwners.Num(); ++BodyIndex)
-	{
-		if (Bodies[BodyIndex].Type == EBodyType::Dynamic && BodyOwners[BodyIndex] != nullptr)
+	CatchUpEdits();
+	FBodyIndexArray Simulated;
+	Broadphase.ForEachMovable(
+		[&](int32 BodyIndex)
 		{
-			BodyOwners[BodyIndex]->SetWorldLocation(Bodies[BodyIndex].Position);
-		}
+			if (Bodies[BodyIndex].Type == EBodyType::Dynamic && GetBodyOwner(BodyIndex) != nullptr)
+			{
+				Simulated.Add(BodyIndex);
+			}
+		});
+	SortBodiesBySerial(Simulated);
+	for (const int32 BodyIndex : Simulated)
+	{
+		BodyOwners[BodyIndex]->SetWorldLocation(Bodies[BodyIndex].Position);
 	}
 }
 
-void FPhysScene::RebuildRigidWorld()
+void FPhysScene::SyncEditedBodies()
 {
-	if (TriangleMeshes.Num() != Bodies.Num())
+	// Bodies appended to GetBodies(): no mesh, no owner, the next serials.
+	if (BodySerials.Num() != Bodies.Num())
 	{
 		TriangleMeshes.SetNum(Bodies.Num());
+		BodyOwners.SetNum(Bodies.Num());
+		while (BodySerials.Num() < Bodies.Num())
+		{
+			BodySerials.Add(NextBodySerial++);
+		}
+		BodySerials.SetNum(Bodies.Num());
 	}
-	if (BackendIface != nullptr && BackendIface->HasRigidWorld())
+	CatchUpEdits();
+}
+
+void FPhysScene::CatchUpEdits() const
+{
+	if (bBodiesEdited)
 	{
-		BackendIface->RigidRebuild(Bodies, &TriangleMeshes);
+		Broadphase.Refresh(Bodies, TriangleMeshes);
+		bBodiesEdited = false;
 	}
+}
+
+void FPhysScene::UpdateBroadphase() const
+{
+	CatchUpEdits();
+	Broadphase.Flush();
+}
+
+void FPhysScene::NotifyBodyMoved(int32 BodyIndex)
+{
+	CatchUpEdits();
+	Broadphase.UpdateBody(BodyIndex, Bodies[BodyIndex], GetBodyMesh(BodyIndex));
+}
+
+void FPhysScene::SortBodiesBySerial(FBodyIndexArray& BodyIndices) const
+{
+	BodyIndices.Sort([this](const int32 A, const int32 B) { return GetBodySerial(A) < GetBodySerial(B); });
+}
+
+const FTriangleMeshCollision* FPhysScene::GetBodyMesh(int32 BodyIndex) const
+{
+	return FPhysSceneBroadphase::GetBodyMesh(Bodies[BodyIndex], BodyIndex, TriangleMeshes);
 }
 
 int32 FPhysScene::AddSlopeRamp(
@@ -267,6 +338,13 @@ int32 FPhysScene::AddSlopeRamp(
 
 void FPhysScene::UpdateBodyFromComponent(int32 BodyIndex, const UPrimitiveComponent& Component)
 {
+	SyncEditedBodies();
+	ApplyComponentShape(BodyIndex, Component);
+	NotifyBodyMoved(BodyIndex);
+}
+
+void FPhysScene::ApplyComponentShape(int32 BodyIndex, const UPrimitiveComponent& Component)
+{
 	FBodyInstance& Body = Bodies[BodyIndex];
 	FTriangleMeshCollision& TriMesh = TriangleMeshes[BodyIndex];
 	TriMesh.Clear();
@@ -288,20 +366,21 @@ void FPhysScene::UpdateBodyFromComponent(int32 BodyIndex, const UPrimitiveCompon
 		Body.Position = WorldAabb.GetCenter();
 		Body.HalfExtents = WorldAabb.GetExtent();
 
-		// UE ComplexAsSimple lite: static meshes with CPU triangles use triangle queries.
+		// UE ComplexAsSimple lite: static meshes with collision triangles use triangle queries.
 		const bool bComplexAsSimple = BodySetup == nullptr || BodySetup->UsesComplexAsSimpleForStaticBodies();
-		if (Body.Type == EBodyType::Static && bComplexAsSimple && Mesh->HasValidRenderData())
+		const FTriMeshCollisionData& Collision = Mesh->GetPhysicsTriMeshData();
+		if (Body.Type == EBodyType::Static && bComplexAsSimple && !Collision.IsEmpty())
 		{
-			const FStaticMeshLODResources& Cpu = Mesh->GetLODResources();
-			TriMesh.Positions.SetNum(Cpu.Vertices.Num());
+			TriMesh.Positions.SetNum(Collision.Vertices.Num());
 			for (int32 Vi = 0; Vi < TriMesh.Positions.Num(); ++Vi)
 			{
-				TriMesh.Positions[Vi] = FVector(Model.TransformPosition(Cpu.Vertices[Vi].Position));
+				TriMesh.Positions[Vi] = FVector(Model.TransformPosition(Collision.Vertices[Vi]));
 			}
-			TriMesh.Indices = Cpu.Indices;
+			TriMesh.Indices = Collision.Indices;
 			if (TriMesh.IsValid())
 			{
 				Body.CollisionShape = EBodyCollisionShape::TriangleMesh;
+				TriMesh.BuildTree();
 			}
 			else
 			{
@@ -349,55 +428,60 @@ float FPhysScene::QuerySupportZ(const FCollisionShape& Capsule, const FVector& F
 	float InSkin, SIZE_T InIgnoreComponentID, ECollisionChannel TraceChannel,
 	const FCollisionResponseParams& ResponseParam) const
 {
+	UpdateBroadphase();
 	float Support = InFloorZ;
 	const float R = Capsule.GetCapsuleRadius();
 	FCollisionQueryParams Query;
 	Query.IgnoreComponentID = InIgnoreComponentID;
 
-	for (int32 Bi = 0; Bi < Bodies.Num(); ++Bi)
-	{
-		const FBodyInstance& Body = Bodies[Bi];
-		if (GetBodyQueryResponse(Body, TraceChannel, Query, ResponseParam) != ECR_Block)
+	// The bodies under the capsule's disc, at any height (a support is the highest top below the step).
+	const float Reach = FMath::Abs(R) + (FMath::Abs(SupportDiscInset) * 2.0f);
+	const FBox Column(
+		FVector(Feet.X - Reach, Feet.Y - Reach, -UnboundedZ), FVector(Feet.X + Reach, Feet.Y + Reach, UnboundedZ));
+	Broadphase.ForEachOverlap(Column,
+		[&](int32 Bi)
 		{
-			continue;
-		}
-		if (!XYDiscOverlapsAabb(Feet.X, Feet.Y, R, Body.Position.X, Body.Position.Y, Body.HalfExtents.X,
-				Body.HalfExtents.Y, SupportDiscInset))
-		{
-			continue;
-		}
-
-		if (Body.CollisionShape == EBodyCollisionShape::TriangleMesh && Bi < TriangleMeshes.Num() &&
-			TriangleMeshes[Bi].IsValid())
-		{
-			// Vertical probe: walkable triangle tops under the capsule disc ComplexAsSimple (margins in cm).
-			constexpr float ProbeAbove = 50.0f;
-			constexpr float ProbeBelowFloor = 100.0f;
-			const float RayTop =
-				FMath::Max(Feet.Z + InStepUp + InSkin + ProbeAbove, Body.Position.Z + Body.HalfExtents.Z + ProbeAbove);
-			const FVector Start(Feet.X, Feet.Y, RayTop);
-			const FVector End(Feet.X, Feet.Y, InFloorZ - ProbeBelowFloor);
-			float T = 1.0f;
-			FVector LocalNormal = FVector::ZeroVector;
-			if (SegmentTriangleMesh(Start, End, TriangleMeshes[Bi], 0.0f, T, LocalNormal) && LocalNormal.Z > 0.15f)
+			const FBodyInstance& Body = Bodies[Bi];
+			if (GetBodyQueryResponse(Body, TraceChannel, Query, ResponseParam) != ECR_Block)
 			{
-				const float ZHit = Start.Z + ((End.Z - Start.Z) * T);
-				if (ZHit <= Feet.Z + InStepUp + InSkin)
-				{
-					Support = FMath::Max(Support, ZHit);
-				}
+				return;
 			}
-			continue;
-		}
+			if (!XYDiscOverlapsAabb(Feet.X, Feet.Y, R, Body.Position.X, Body.Position.Y, Body.HalfExtents.X,
+					Body.HalfExtents.Y, SupportDiscInset))
+			{
+				return;
+			}
 
-		const float Top = Body.Position.Z + Body.HalfExtents.Z;
-		// Skip tops too high to step onto (the side collision handles walls).
-		if (Feet.Z + InStepUp + InSkin < Top)
-		{
-			continue;
-		}
-		Support = FMath::Max(Support, Top);
-	}
+			if (const FTriangleMeshCollision* Mesh = GetBodyMesh(Bi))
+			{
+				// Vertical probe: walkable triangle tops under the capsule disc ComplexAsSimple (margins in cm).
+				constexpr float ProbeAbove = 50.0f;
+				constexpr float ProbeBelowFloor = 100.0f;
+				const float RayTop = FMath::Max(
+					Feet.Z + InStepUp + InSkin + ProbeAbove, Body.Position.Z + Body.HalfExtents.Z + ProbeAbove);
+				const FVector Start(Feet.X, Feet.Y, RayTop);
+				const FVector End(Feet.X, Feet.Y, InFloorZ - ProbeBelowFloor);
+				float T = 1.0f;
+				FVector LocalNormal = FVector::ZeroVector;
+				if (SegmentTriangleMesh(Start, End, *Mesh, 0.0f, T, LocalNormal) && LocalNormal.Z > 0.15f)
+				{
+					const float ZHit = Start.Z + ((End.Z - Start.Z) * T);
+					if (ZHit <= Feet.Z + InStepUp + InSkin)
+					{
+						Support = FMath::Max(Support, ZHit);
+					}
+				}
+				return;
+			}
+
+			const float Top = Body.Position.Z + Body.HalfExtents.Z;
+			// Skip tops too high to step onto (the side collision handles walls).
+			if (Feet.Z + InStepUp + InSkin < Top)
+			{
+				return;
+			}
+			Support = FMath::Max(Support, Top);
+		});
 
 	for (const FSlopePlane& Plane : SlopePlanes)
 	{
@@ -427,6 +511,8 @@ void FPhysScene::ResolveCapsuleSides(const FCollisionShape& Capsule, FVector& Fe
 	const FCapsuleContactParams& Params, SIZE_T InIgnoreComponentID, bool bApplyPush, ECollisionChannel TraceChannel,
 	const FCollisionResponseParams& ResponseParam)
 {
+	SyncEditedBodies();
+	UpdateBroadphase();
 	const float R = Capsule.GetCapsuleRadius();
 	const float FeetZ = Feet.Z;
 	const float Head = FeetZ + Capsule.GetCapsuleHalfHeight() * 2.0f;
@@ -435,16 +521,17 @@ void FPhysScene::ResolveCapsuleSides(const FCollisionShape& Capsule, FVector& Fe
 	FCollisionQueryParams Query;
 	Query.IgnoreComponentID = InIgnoreComponentID;
 
-	for (FBodyInstance& Body : Bodies)
+	auto ResolveSide = [&](int32 BodyIndex)
 	{
+		FBodyInstance& Body = Bodies[BodyIndex];
 		if (GetBodyQueryResponse(Body, TraceChannel, Query, ResponseParam) != ECR_Block)
 		{
-			continue;
+			return;
 		}
 		// ComplexAsSimple: the sides come from TriangleMesh traces; the world AABB is too fat for ramps.
 		if (Body.CollisionShape == EBodyCollisionShape::TriangleMesh)
 		{
-			continue;
+			return;
 		}
 		const float Hx = Body.HalfExtents.X;
 		const float Hy = Body.HalfExtents.Y;
@@ -454,28 +541,22 @@ void FPhysScene::ResolveCapsuleSides(const FCollisionShape& Capsule, FVector& Fe
 
 		if (Head < Bottom)
 		{
-			continue;
+			return;
 		}
 
-		const bool bXYOnTop =
-			XYDiscOverlapsAabb(Feet.X, Feet.Y, R, Body.Position.X, Body.Position.Y, Hx, Hy, SupportDiscInset);
-		// Standing on this top: no side push.
-		if (FeetZ >= Top - Params.Skin && bXYOnTop)
+		// A top at the feet (within the skin) is floor, not a wall (N29): the capsule's lowest point is the feet, so a
+		// box under them cannot push it sideways, however little of the disc is over it (a seam between two floor
+		// boxes whose tops meet, as UE's CharacterMovementComponent walks across).
+		if (FeetZ >= Top - Params.Skin)
 		{
-			continue;
-		}
-		// Airborne over the volume (jump / clearance): no side push.
-		// Still resolve when elevated beside a short ledge (step-up clearance).
-		if (FeetZ > Top && bXYOnTop)
-		{
-			continue;
+			return;
 		}
 
 		FVector2D LocalNormal = FVector2D::ZeroVector;
 		float Penetration = 0.0f;
 		if (!CapsuleAabbMtv(Feet.X, Feet.Y, R, Body.Position.X, Body.Position.Y, Hx, Hy, LocalNormal, Penetration))
 		{
-			continue;
+			return;
 		}
 
 		if (Body.Type == EBodyType::Static)
@@ -483,7 +564,7 @@ void FPhysScene::ResolveCapsuleSides(const FCollisionShape& Capsule, FVector& Fe
 			Feet.X += LocalNormal.X * Penetration;
 			Feet.Y += LocalNormal.Y * Penetration;
 			ClampPositionXY(Feet, Params.WalkBounds);
-			continue;
+			return;
 		}
 
 		// Dynamic: mass-weighted depenetration (the player has a fixed mass of 80 for the share).
@@ -502,12 +583,48 @@ void FPhysScene::ResolveCapsuleSides(const FCollisionShape& Capsule, FVector& Fe
 
 		CancelVelocityInto(Body.VelXY, -LocalNormal);
 
-		if (!bApplyPush || !bHasWish)
+		if (bApplyPush && bHasWish)
 		{
-			continue;
+			ApplyDynamicWishPush(Body, WishN, LocalNormal, Params.PushStrength, Params.WalkBounds, false);
 		}
+		NotifyBodyMoved(BodyIndex);
+	};
 
-		ApplyDynamicWishPush(Body, WishN, LocalNormal, Params.PushStrength, Params.WalkBounds, false);
+	// The bodies around the feet, in the order they were added; when a push takes the feet further than the slack,
+	// the bodies not seen yet are looked up again around the new feet.
+	const float Reach = FMath::Abs(R) + ContactSlack + (FMath::Abs(SupportDiscInset) * 2.0f);
+	bool bAnySeen = false;
+	uint32 LastSerial = 0;
+	for (;;)
+	{
+		const FVector Anchor = Feet;
+		FBodyIndexArray Candidates;
+		Broadphase.ForEachOverlap(FBox(FVector(Anchor.X - Reach, Anchor.Y - Reach, -UnboundedZ),
+									  FVector(Anchor.X + Reach, Anchor.Y + Reach, Head)),
+			[&](int32 BodyIndex)
+			{
+				if (!bAnySeen || GetBodySerial(BodyIndex) > LastSerial)
+				{
+					Candidates.Add(BodyIndex);
+				}
+			});
+		SortBodiesBySerial(Candidates);
+		bool bDrifted = false;
+		for (const int32 BodyIndex : Candidates)
+		{
+			bAnySeen = true;
+			LastSerial = GetBodySerial(BodyIndex);
+			ResolveSide(BodyIndex);
+			if (FMath::Abs(Feet.X - Anchor.X) > ContactSlack || FMath::Abs(Feet.Y - Anchor.Y) > ContactSlack)
+			{
+				bDrifted = true;
+				break;
+			}
+		}
+		if (!bDrifted)
+		{
+			return;
+		}
 	}
 }
 
@@ -528,42 +645,52 @@ bool FPhysScene::ApplyCapsuleSweepPush(
 	LocalNormal /= NLen;
 	const FVector2D WishN = WishXY.GetSafeNormal();
 
-	for (FBodyInstance& Body : Bodies)
+	// The first simulated body of the component (the simulated bodies are all in the broadphase's list).
+	SyncEditedBodies();
+	int32 Found = INDEX_NONE;
+	Broadphase.ForEachMovable(
+		[&](int32 BodyIndex)
+		{
+			const FBodyInstance& Body = Bodies[BodyIndex];
+			if (Body.ComponentID == ComponentID && Body.Type == EBodyType::Dynamic &&
+				(Found == INDEX_NONE || GetBodySerial(BodyIndex) < GetBodySerial(Found)))
+			{
+				Found = BodyIndex;
+			}
+		});
+	if (Found == INDEX_NONE)
 	{
-		if (Body.ComponentID != ComponentID || Body.Type != EBodyType::Dynamic)
-		{
-			continue;
-		}
-		const float Into = FMath::Max(0.0f, -FVector2D::DotProduct(WishN, LocalNormal));
-		if (Into <= 1.0e-4f)
-		{
-			return false;
-		}
-		ApplyDynamicWishPush(Body, WishN, LocalNormal, InPushStrength, InWalkBounds, true);
-		return true;
+		return false;
 	}
-	return false;
+	const float Into = FMath::Max(0.0f, -FVector2D::DotProduct(WishN, LocalNormal));
+	if (Into <= 1.0e-4f)
+	{
+		return false;
+	}
+	ApplyDynamicWishPush(Bodies[Found], WishN, LocalNormal, InPushStrength, InWalkBounds, true);
+	NotifyBodyMoved(Found);
+	return true;
 }
 
 void FPhysScene::Step(const FPhysSceneStepParams& Params)
 {
-	if (BackendIface != nullptr && BackendIface->HasRigidWorld())
-	{
-		BackendIface->RigidPrepareStep(Bodies, Params.IgnoreComponentID);
-		BackendIface->RigidStep(Params.DeltaTime, Params.Gravity, Params.FloorZ);
-		BackendIface->RigidReadBack(Bodies);
-		for (FBodyInstance& Body : Bodies)
-		{
-			if (Body.Type != EBodyType::Dynamic)
-			{
-				continue;
-			}
-			ClampPositionXY(Body.Position, Params.WalkBounds);
-		}
-		return;
-	}
-
+	SCOPE_CYCLE_COUNTER(STAT_PhysSceneStep);
+	LLM_SCOPE(ELLMTag::Physics);
+	SyncEditedBodies();
+	UpdateBroadphase();
 	const float Damp = FMath::Exp(-Params.Damping * Params.DeltaTime);
+
+	// The simulated bodies, in the order they were added: only they move, so static pairs are never tested.
+	FBodyIndexArray Simulated;
+	Broadphase.ForEachMovable(
+		[&](int32 BodyIndex)
+		{
+			if (Bodies[BodyIndex].Type == EBodyType::Dynamic)
+			{
+				Simulated.Add(BodyIndex);
+			}
+		});
+	SortBodiesBySerial(Simulated);
 
 	auto SupportUnderAabb = [&](const FBodyInstance& Body) -> float
 	{
@@ -574,38 +701,44 @@ void FPhysScene::Step(const FPhysSceneStepParams& Params)
 		const float By1 = Body.Position.Y + Body.HalfExtents.Y;
 		const float Bottom = Body.Position.Z - Body.HalfExtents.Z;
 
-		for (const FBodyInstance& Other : Bodies)
-		{
-			if (Other.ComponentID == Body.ComponentID || Other.ComponentID == Params.IgnoreComponentID ||
-				!Other.bPhysicsEnabled)
+		// The bodies over the box's footprint, at any height.
+		const FBox Column(FVector(FMath::Min(Bx0, Bx1), FMath::Min(By0, By1), -UnboundedZ),
+			FVector(FMath::Max(Bx0, Bx1), FMath::Max(By0, By1), UnboundedZ));
+		Broadphase.ForEachOverlap(Column,
+			[&](int32 OtherIndex)
 			{
-				continue;
-			}
-			const float Ox0 = Other.Position.X - Other.HalfExtents.X;
-			const float Ox1 = Other.Position.X + Other.HalfExtents.X;
-			const float Oy0 = Other.Position.Y - Other.HalfExtents.Y;
-			const float Oy1 = Other.Position.Y + Other.HalfExtents.Y;
-			if (Bx1 < Ox0 || Bx0 > Ox1 || By1 < Oy0 || By0 > Oy1)
-			{
-				continue;
-			}
+				const FBodyInstance& Other = Bodies[OtherIndex];
+				if (Other.ComponentID == Body.ComponentID || Other.ComponentID == Params.IgnoreComponentID ||
+					!Other.bPhysicsEnabled)
+				{
+					return;
+				}
+				const float Ox0 = Other.Position.X - Other.HalfExtents.X;
+				const float Ox1 = Other.Position.X + Other.HalfExtents.X;
+				const float Oy0 = Other.Position.Y - Other.HalfExtents.Y;
+				const float Oy1 = Other.Position.Y + Other.HalfExtents.Y;
+				if (Bx1 < Ox0 || Bx0 > Ox1 || By1 < Oy0 || By0 > Oy1)
+				{
+					return;
+				}
 
-			const float Top = Other.Position.Z + Other.HalfExtents.Z;
-			// Dynamic support only when this body is clearly above the other stacking.
-			if (Other.Type == EBodyType::Dynamic && Bottom + Params.Skin < Top - 2.0f &&
-				Body.Position.Z <= Other.Position.Z)
-			{
-				continue;
-			}
-			Support = FMath::Max(Support, Top);
-		}
+				const float Top = Other.Position.Z + Other.HalfExtents.Z;
+				// Dynamic support only when this body is clearly above the other stacking.
+				if (Other.Type == EBodyType::Dynamic && Bottom + Params.Skin < Top - 2.0f &&
+					Body.Position.Z <= Other.Position.Z)
+				{
+					return;
+				}
+				Support = FMath::Max(Support, Top);
+			});
 		return Support;
 	};
 
 	// 1) Integrate velocities (no floor snap yet).
-	for (FBodyInstance& Body : Bodies)
+	for (const int32 BodyIndex : Simulated)
 	{
-		if (Body.Type != EBodyType::Dynamic || !Body.bPhysicsEnabled)
+		FBodyInstance& Body = Bodies[BodyIndex];
+		if (!Body.bPhysicsEnabled)
 		{
 			Body.VelXY = FVector2D::ZeroVector;
 			Body.VelocityZ = 0.0f;
@@ -633,34 +766,86 @@ void FPhysScene::Step(const FPhysSceneStepParams& Params)
 		{
 			Body.VelXY = FVector2D::ZeroVector;
 		}
+		NotifyBodyMoved(BodyIndex);
 	}
 
-	// 2) Resolve overlaps on the min-penetration axis (XY sides vs Z stacking).
-	constexpr int32 Iterations = 6;
-	for (int32 Iter = 0; Iter < Iterations; ++Iter)
+	// 2) Resolve overlaps on the min-penetration axis (XY sides vs Z stacking), pair by pair in the order of the
+	// bodies (the first's serial, then the second's). The pairs come from the broadphase around each simulated body;
+	// when a push takes a body further than the slack, the pairs not resolved yet are looked up again.
+	auto IsStepping = [&](const FBodyInstance& Body)
+	{ return Body.ComponentID != Params.IgnoreComponentID && Body.bPhysicsEnabled; };
+	auto FindSimulated = [&](int32 BodyIndex)
 	{
-		for (int32 I = 0; I < Bodies.Num(); ++I)
+		for (int32 Slot = 0; Slot < Simulated.Num(); ++Slot)
 		{
-			if (Bodies[I].ComponentID == Params.IgnoreComponentID || !Bodies[I].bPhysicsEnabled)
+			if (Simulated[Slot] == BodyIndex)
 			{
-				continue;
+				return Slot;
 			}
-			for (int32 J = I + 1; J < Bodies.Num(); ++J)
+		}
+		return static_cast<int32>(INDEX_NONE);
+	};
+	auto SeparatePairs = [&]()
+	{
+		bool bAnyDone = false;
+		uint32 LastA = 0;
+		uint32 LastB = 0;
+		for (;;)
+		{
+			TArray<FStepPair, TInlineAllocator<64>> Pairs;
+			TArray<FVector, TInlineAllocator<16>> Anchors;
+			for (const int32 BodyIndex : Simulated)
 			{
-				if (Bodies[J].ComponentID == Params.IgnoreComponentID || !Bodies[J].bPhysicsEnabled)
+				const FBodyInstance& Body = Bodies[BodyIndex];
+				Anchors.Add(Body.Position);
+				if (!IsStepping(Body))
 				{
 					continue;
 				}
+				const FVector Reach = Body.HalfExtents.GetAbs() + FVector(2.0f * PairSlack);
+				const uint32 Serial = GetBodySerial(BodyIndex);
+				Broadphase.ForEachOverlap(FBox(Body.Position - Reach, Body.Position + Reach),
+					[&](int32 OtherIndex)
+					{
+						if (OtherIndex == BodyIndex || !IsStepping(Bodies[OtherIndex]))
+						{
+							return;
+						}
+						const uint32 OtherSerial = GetBodySerial(OtherIndex);
+						const FStepPair Pair = Serial < OtherSerial
+							? FStepPair{Serial, OtherSerial, BodyIndex, OtherIndex}
+							: FStepPair{OtherSerial, Serial, OtherIndex, BodyIndex};
+						if (bAnyDone && (Pair.SerialA < LastA || (Pair.SerialA == LastA && Pair.SerialB <= LastB)))
+						{
+							return;
+						}
+						Pairs.Add(Pair);
+					});
+			}
+			Pairs.Sort([](const FStepPair& L, const FStepPair& R)
+				{ return L.SerialA < R.SerialA || (L.SerialA == R.SerialA && L.SerialB < R.SerialB); });
 
-				FBodyInstance& A = Bodies[I];
-				FBodyInstance& B = Bodies[J];
+			bool bDrifted = false;
+			for (int32 PairIndex = 0; PairIndex < Pairs.Num(); ++PairIndex)
+			{
+				const FStepPair& Pair = Pairs[PairIndex];
+				// A pair of simulated bodies is found from both.
+				if (PairIndex > 0 && Pairs[PairIndex - 1].SerialA == Pair.SerialA &&
+					Pairs[PairIndex - 1].SerialB == Pair.SerialB)
+				{
+					continue;
+				}
+				bAnyDone = true;
+				LastA = Pair.SerialA;
+				LastB = Pair.SerialB;
+
+				FBodyInstance& A = Bodies[Pair.IndexA];
+				FBodyInstance& B = Bodies[Pair.IndexB];
+				const FVector StartA = A.Position;
+				const FVector StartB = B.Position;
 
 				const bool bADyn = A.Type == EBodyType::Dynamic;
 				const bool bDyn = B.Type == EBodyType::Dynamic;
-				if (!bADyn && !bDyn)
-				{
-					continue;
-				}
 
 				float MoveA = 0.0f;
 				float MoveB = 0.0f;
@@ -698,14 +883,43 @@ void FPhysScene::Step(const FPhysSceneStepParams& Params)
 					CancelVelocityInto(B.VelXY, FVector2D(-LocalNormal.X, -LocalNormal.Y));
 					CancelVelocityZInto(B.VelocityZ, -LocalNormal.Z);
 				}
+				NotifyBodyMoved(Pair.IndexA);
+				NotifyBodyMoved(Pair.IndexB);
+
+				// A static body only moves when it is clamped into the walk bounds.
+				auto HasDrifted = [&](int32 BodyIndex, const FVector& Before)
+				{
+					const int32 Slot = FindSimulated(BodyIndex);
+					if (Slot == INDEX_NONE)
+					{
+						return Bodies[BodyIndex].Position != Before;
+					}
+					const FVector Moved = (Bodies[BodyIndex].Position - Anchors[Slot]).GetAbs();
+					return Moved.GetMax() > PairSlack;
+				};
+				if (HasDrifted(Pair.IndexA, StartA) || HasDrifted(Pair.IndexB, StartB))
+				{
+					bDrifted = true;
+					break;
+				}
+			}
+			if (!bDrifted)
+			{
+				return;
 			}
 		}
+	};
+	constexpr int32 Iterations = 6;
+	for (int32 Iter = 0; Iter < Iterations; ++Iter)
+	{
+		SeparatePairs();
 	}
 
 	// 3) Floor / platform snap only when landing from above.
-	for (FBodyInstance& Body : Bodies)
+	for (const int32 BodyIndex : Simulated)
 	{
-		if (Body.Type != EBodyType::Dynamic || !Body.bEnableGravity || !Body.bPhysicsEnabled)
+		FBodyInstance& Body = Bodies[BodyIndex];
+		if (!Body.bEnableGravity || !Body.bPhysicsEnabled)
 		{
 			continue;
 		}
@@ -722,6 +936,7 @@ void FPhysScene::Step(const FPhysSceneStepParams& Params)
 			{
 				Body.VelXY = FVector2D::ZeroVector;
 			}
+			NotifyBodyMoved(BodyIndex);
 		}
 	}
 }

@@ -1,4 +1,5 @@
 #include "AI/Navigation/NavigationSystem.h"
+#include "Camera/CameraComponent.h"
 #include "CoreMinimal.h"
 #include "Engine/BlockingVolume.h"
 #include "Engine/GameEngine.h"
@@ -118,7 +119,7 @@ namespace
 	{
 		if (AShooterAIController* Bot = Cast<AShooterAIController>(Pawn.GetController()))
 		{
-			Bot->bCanEverTick = false;
+			Bot->SetActorTickEnabled(false);
 		}
 	}
 
@@ -146,8 +147,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBotsBuyTest, "ShooterGame.Bots.Buy"
 
 bool FShooterGameBotsBuyTest::RunTest(const FString& Parameters)
 {
-	// A bot buys by its money: $800 a vest; $3500 a rifle and kevlar with a helmet; a CT with $1400 kevlar, a
-	// helmet and a kit; once a round.
+	// A bot buys by its money: $800 a vest (the pistol round); a T with $3500 the AK-47, its three boxes of ammunition
+	// (it comes with one clip, CS 1.6) and a helmet for the kevlar it kept; a CT with $1400 on a force-buy (its team
+	// drew the last round) a Desert Eagle and kevlar; once a round.
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	AShooterGameMode* GameMode = SetUpBotMatch(World, 1, 1);
@@ -165,18 +167,31 @@ bool FShooterGameBotsBuyTest::RunTest(const FString& Parameters)
 	TestTrue("$800: a vest", Bought.Num() == 1 && Bought[0] == TEXT("vest"));
 	TestEqual("Once a round", TBot->BuyForRound().Num(), 0);
 
-	GameMode->EndRound(EShooterRoundEndReason::Draw);
-	TickFrames(World, 40);
+	// The money before the next round starts: the teams' plans are decided then (the T's full, the CT's a force-buy).
 	AShooterPlayerState* TState = TBot->GetPlayerState<AShooterPlayerState>();
 	TState->SetMoney(3500, GameMode->MaxMoney);
 	CTBot->GetPlayerState<AShooterPlayerState>()->SetMoney(1400, GameMode->MaxMoney);
+	GameMode->EndRound(EShooterRoundEndReason::Draw);
+	TickFrames(World, 40);
+	TestTrue("The T's plan", GameMode->GetTeamBuyPlan(EShooterTeam::T) == EShooterBuyPlan::Full);
+	TestTrue("The CT's plan", GameMode->GetTeamBuyPlan(EShooterTeam::CT) == EShooterBuyPlan::Force);
 	Bought = TBot->BuyForRound();
-	TestTrue("$3500: a rifle", Bought.Contains(TEXT("ak47")) || Bought.Contains(TEXT("awp")));
-	TestTrue("$3500: the helmet too", Bought.Contains(TEXT("vesthelm")) || T->HasHelmet());
+	TestTrue("$3500: the terrorists' rifle", Bought.Contains(TEXT("ak47")));
+	const AShooterWeapon* Rifle = T->GetWeaponInSlot(EShooterWeaponSlot::Primary);
+	int32 AmmoBoxes = 0;
+	for (const FString& Item : Bought)
+	{
+		AmmoBoxes += Item == TEXT("primammo") ? 1 : 0;
+	}
+	TestTrue("Its ammunition, full", Rifle != nullptr && Rifle->GetCurrentAmmo() == Rifle->MaxAmmo && AmmoBoxes == 3);
+	TestTrue("$3500: a helmet on the kevlar it kept with what is left",
+		Bought.Contains(TEXT("vesthelm")) && T->HasHelmet() && T->GetArmor() > 0.0f);
 	Bought = CTBot->BuyForRound();
-	TestTrue(
-		"A CT with $1400: kevlar, helmet, kit", Bought.Contains(TEXT("vesthelm")) && Bought.Contains(TEXT("defuser")));
-	TestTrue("The kit", CT->HasDefuseKit());
+	TestTrue("A CT with $1400 on a force-buy: a Desert Eagle and kevlar",
+		Bought.Contains(TEXT("deagle")) && Bought.Contains(TEXT("vest")));
+	TestTrue("Drawn",
+		CT->GetWeapon() == CT->GetWeaponInSlot(EShooterWeaponSlot::Secondary) &&
+			CT->GetWeapon()->WeaponName == TEXT("deagle"));
 	return true;
 }
 
@@ -271,7 +286,7 @@ bool FShooterGameBotsDefuseTest::RunTest(const FString& Parameters)
 	T->Suicide();
 	CT->SetDefuseKit(true);
 	AShooterAIController* Bot = Cast<AShooterAIController>(CT->GetController());
-	Bot->bCanEverTick = true;
+	Bot->SetActorTickEnabled(true);
 	bool bDefusing = false;
 	for (int32 Frame = 0; Frame < 60 * 30 && Bomb->GetBombState() == EShooterBombState::Planted; ++Frame)
 	{
@@ -443,8 +458,10 @@ bool FShooterGameBotsMatchOnDeLeonTest::RunTest(const FString& Parameters)
 	}
 	TestTrue("The waypoint graph", World->GetNavigationSystem().GetNodes().Num() >= 10);
 	TestEqual("The seed", GameMode->RandomSeed, 5);
-	// The player joined CT; the bots fill both teams (the player's pawn stands still).
+	// The player joined CT; the bots fill both teams (the player's pawn stands still). A match of four rounds: the
+	// teams switch sides after the second, so the three rounds cross the halftime (checked too).
 	(void)GameMode->FillTeamsWithBots();
+	GameMode->MaxRounds = 4;
 	AShooterGameState* State = GameMode->GetShooterGameState();
 	constexpr int32 RoundsToPlay = 3;
 	const int32 MaxFrames = RoundsToPlay *
@@ -464,12 +481,72 @@ bool FShooterGameBotsMatchOnDeLeonTest::RunTest(const FString& Parameters)
 		}
 	}
 	TestEqual("Three rounds played", Checker.GetRoundsPlayed(), RoundsToPlay);
+	TestEqual("The teams switched sides once", Checker.GetNumHalftimes(), 1);
 	for (const FString& Violation : Checker.GetViolations())
 	{
 		AddError(Violation);
 	}
 	TestTrue("The bots fought", GameMode->GetNumKills() > 0);
 	Engine->PreExit();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBotsRecoilKicksTheAimTest, "ShooterGame.Bots.RecoilKicksTheAim",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameBotsRecoilKicksTheAimTest::RunTest(const FString& Parameters)
+{
+	// ps2-shipping N6: a bot's spray climbs with the rifle's recoil as a player's does. A CT bot with no aim error
+	// fires long bursts at a still terrorist (who takes no damage): without compensation its aim rises well above the
+	// line to the target; with full compensation it pulls each kick back down (the turn toward the target erased the
+	// kick every tick, so the bots' sprays were laser-straight).
+	auto MaxRise = [this](float Compensation)
+	{
+		FScopedTestWorld TestWorld;
+		UWorld& World = *TestWorld;
+		AShooterGameMode* GameMode = SetUpBotMatch(World, 1, 1);
+		// The bot's skill before the round goes live: it may see the terrorist (and draw its aim error) at once.
+		TickFrames(World, 1);
+		AShooterCharacter* T = GetAlive(World, EShooterTeam::T)[0];
+		AShooterCharacter* CT = GetAlive(World, EShooterTeam::CT)[0];
+		AShooterAIController* Bot = Cast<AShooterAIController>(CT->GetController());
+		const AShooterWeapon* Rifle = CT->GiveWeapon(AShooterWeapon::FindWeaponClass(TEXT("ak47")));
+		if (!TestNotNull("A bot", Bot) || !TestNotNull("A rifle", Rifle))
+		{
+			return 0.0f;
+		}
+		Bot->AimError = 0.0f;
+		Bot->MinAimError = 0.0f;
+		Bot->BurstShots = 10;
+		Bot->Difficulty = 1.0f;
+		Bot->RecoilCompensation = Compensation;
+		TickUntilLive(World, *GameMode);
+		Freeze(*T);
+		T->SetGodMode(true);
+		T->Reset(FVector(-700.0f, 0.0f, 0.0f), FRotator(0.0f, 180.0f, 0.0f));
+		float Rise = 0.0f;
+		for (int32 Frame = 0; Frame < 60 * 4; ++Frame)
+		{
+			World.Tick(FrameTime);
+			if (Rifle->GetShotsFired() == 0)
+			{
+				continue;
+			}
+			const FVector Eyes = CT->GetFirstPersonCameraComponent()->GetComponentLocation();
+			const FVector Chest = T->GetActorLocation() + FVector(0.0f, 0.0f, 130.0f);
+			const float TargetPitch = (Chest - Eyes).Rotation().Pitch;
+			Rise = FMath::Max(Rise, FRotator::NormalizeAxis(Bot->GetControlRotation().Pitch - TargetPitch));
+		}
+		TestTrue("It sprayed", Rifle->GetShotsFired() >= 10);
+		return Rise;
+	};
+	const float Uncompensated = MaxRise(0.0f);
+	const float Compensated = MaxRise(1.0f);
+	TestTrue(
+		*FString::Printf(TEXT("No compensation: the aim climbs (%.2f degrees)"), static_cast<double>(Uncompensated)),
+		Uncompensated > 3.0f);
+	TestTrue(*FString::Printf(TEXT("Full compensation: held down (%.2f degrees)"), static_cast<double>(Compensated)),
+		Compensated < 1.5f);
 	return true;
 }
 

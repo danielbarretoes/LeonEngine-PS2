@@ -96,6 +96,20 @@ public:
 		return LockStatus != LOCK_NONE;
 	}
 
+	/**
+	 * The payload's memory alignment in bytes (Leon; 0: FMemory's default). Not saved: the owner sets it before a
+	 * Serialize or a Realloc that allocates the payload. A paletted texture's levels take 128, so the PS2's DMA reads
+	 * them in place, whole cache lines (Docs/PLANS/ps2-shipping.md N23).
+	 */
+	FORCEINLINE void SetPayloadAlignment(uint32 InAlignment)
+	{
+		PayloadAlignment = InAlignment;
+	}
+	FORCEINLINE uint32 GetPayloadAlignment() const
+	{
+		return PayloadAlignment;
+	}
+
 	/** Locks the payload for LockFlags access and returns it (nullptr when empty); must not be locked (UE). */
 	void* Lock(uint32 LockFlags);
 
@@ -125,9 +139,16 @@ public:
 	void Serialize(FArchive& Ar, UObject* Owner, int32 Index = INDEX_NONE);
 
 private:
+	/** The alignment FMemory allocates the payload with. */
+	[[nodiscard]] uint32 GetAllocAlignment() const
+	{
+		return PayloadAlignment != 0 ? PayloadAlignment : uint32(DEFAULT_ALIGNMENT);
+	}
+
 	void* Data = nullptr;
 	int64 ElementCount = 0;
 	uint32 BulkDataFlags = BULKDATA_None;
 	mutable uint32 LockStatus = LOCK_NONE;
 	int64 BulkDataOffsetInFile = INDEX_NONE;
+	uint32 PayloadAlignment = 0;
 };

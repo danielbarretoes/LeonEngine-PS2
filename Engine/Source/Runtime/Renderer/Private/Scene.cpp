@@ -1,6 +1,11 @@
 #include "Components/LightComponent.h"
 #include "Components/PrimitiveComponent.h"
+#include "Engine/Level.h"
+#include "Engine/VisibilityCellVolume.h"
+#include "Engine/VisibilityPortal.h"
+#include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "RendererLog.h"
 #include "ScenePrivate.h"
 #include "SceneView.h"
 #include "StaticMeshSceneProxy.h"
@@ -100,6 +105,7 @@ void FScene::AddPrimitive(UPrimitiveComponent* Primitive)
 	Info.Component = Primitive;
 	Info.Proxy.Reset(Proxy);
 	Info.OrderKey = GetOrderKey(Primitive);
+	Info.CellMask = GetCellMask(*Proxy);
 	const int32 Index = InsertionIndex(Primitives, Info.OrderKey);
 	Primitives.Insert(MoveTemp(Info), Index);
 	Primitive->SceneProxy = Proxy;
@@ -123,7 +129,19 @@ void FScene::UpdatePrimitiveTransform(UPrimitiveComponent* Primitive)
 {
 	if (Primitive != nullptr && Primitive->SceneProxy != nullptr)
 	{
-		Primitive->SceneProxy->SetTransform(Primitive->GetComponentTransform().ToMatrixWithScale());
+		Primitive->SceneProxy->SetStepTransform(
+			Primitive->GetComponentTransform(), World != nullptr ? World->GetStepCount() : 0);
+	}
+}
+
+void FScene::InterpolateTransforms(float Alpha)
+{
+	for (FPrimitiveSceneInfo& Info : Primitives)
+	{
+		if (Info.Proxy != nullptr && Info.Proxy->IsInterpolated())
+		{
+			Info.Proxy->InterpolateTransform(Alpha);
+		}
 	}
 }
 
@@ -169,32 +187,122 @@ void FScene::UpdateLightTransform(ULightComponent* Light)
 	}
 }
 
-void FScene::GatherStaticMeshes(const FSceneView& View, TArray<const FStaticMeshSceneProxy*>& OutWorldMeshes,
-	TArray<const FStaticMeshSceneProxy*>& OutViewModelMeshes) const
+uint64 FScene::GetCellMask(const FPrimitiveSceneProxy& Proxy) const
+{
+	return VisibilityCells.IsEmpty() || Proxy.IsViewModel() ? 0 : VisibilityCells.GetCellMask(Proxy.GetWorldBounds());
+}
+
+const FVisibilityCellGraph& FScene::GetVisibilityCells()
+{
+	if (!bVisibilityCellsDirty)
+	{
+		return VisibilityCells;
+	}
+	bVisibilityCellsDirty = false;
+	VisibilityCells.Reset();
+	const ULevel* Level = World != nullptr ? World->PersistentLevel : nullptr;
+	if (Level != nullptr)
+	{
+		// The cells first (the portals name them), in the level's order; then the portals.
+		for (const AActor* Actor : Level->Actors)
+		{
+			const AVisibilityCellVolume* Cell = Cast<AVisibilityCellVolume>(Actor);
+			if (Cell != nullptr && !Cell->IsPendingKillPending() &&
+				VisibilityCells.AddCell(Cell->CellName, Cell->GetBrushBounds()) == INDEX_NONE)
+			{
+				UE_LOG(LogRenderer, Warning, "Scene: the cell '%s' of %s is left out (a name twice, or more than %d)",
+					*Cell->CellName.ToString(), *Cell->GetName(), FVisibilityCellGraph::MaxCells);
+			}
+		}
+		for (const AActor* Actor : Level->Actors)
+		{
+			const AVisibilityPortal* Portal = Cast<AVisibilityPortal>(Actor);
+			if (Portal == nullptr || Portal->IsPendingKillPending())
+			{
+				continue;
+			}
+			FVector Corners[4];
+			for (int32 Corner = 0; Corner < 4; ++Corner)
+			{
+				Corners[Corner] = Portal->Corners.IsValidIndex(Corner) ? Portal->Corners[Corner] : FVector::ZeroVector;
+			}
+			if (Portal->Corners.Num() != 4 ||
+				!VisibilityCells.AddPortal(
+					VisibilityCells.FindCell(Portal->CellA), VisibilityCells.FindCell(Portal->CellB), Corners))
+			{
+				UE_LOG(LogRenderer, Warning, "Scene: the portal %s joins no two cells of the map ('%s', '%s')",
+					*Portal->GetName(), *Portal->CellA.ToString(), *Portal->CellB.ToString());
+			}
+		}
+	}
+	// Every primitive to the cells its bounds touch.
+	for (FPrimitiveSceneInfo& Info : Primitives)
+	{
+		Info.CellMask = GetCellMask(*Info.Proxy);
+	}
+	return VisibilityCells;
+}
+
+int32 FScene::GatherPrimitives(const FSceneView& View, const FVisibilityCellGraph::FVisibleCells& VisibleCells,
+	FSceneRenderList<const FStaticMeshSceneProxy*>& OutWorldMeshes,
+	FSceneRenderList<const FStaticMeshSceneProxy*>& OutViewModelMeshes,
+	FSceneRenderList<const FPrimitiveSceneInfo*>& OutWorldSkeletalMeshes,
+	FSceneRenderList<const FPrimitiveSceneInfo*>& OutViewModelSkeletalMeshes)
 {
 	OutWorldMeshes.Reset();
 	OutViewModelMeshes.Reset();
-	for (const FPrimitiveSceneInfo& Info : Primitives)
+	OutWorldSkeletalMeshes.Reset();
+	OutViewModelSkeletalMeshes.Reset();
+	OutWorldMeshes.Reserve(Primitives.Num());
+	const bool bCells = !VisibilityCells.IsEmpty();
+	int32 NumCulledByCells = 0;
+	for (FPrimitiveSceneInfo& Info : Primitives)
 	{
 		const FPrimitiveSceneProxy* Proxy = Info.Proxy.Get();
-		if (Proxy->GetProxyType() != EPrimitiveSceneProxyType::StaticMesh)
-		{
-			continue;
-		}
-		const FStaticMeshSceneProxy* Mesh = static_cast<const FStaticMeshSceneProxy*>(Proxy);
+		const bool bSkeletal = Proxy->GetProxyType() == EPrimitiveSceneProxyType::SkeletalMesh;
 		if (Proxy->IsViewModel())
 		{
-			if (Proxy->IsShown(&View))
+			if (!Proxy->IsShown(&View))
 			{
-				OutViewModelMeshes.Add(Mesh);
+				continue;
+			}
+			if (bSkeletal)
+			{
+				OutViewModelSkeletalMeshes.Add(&Info);
+			}
+			else
+			{
+				OutViewModelMeshes.Add(static_cast<const FStaticMeshSceneProxy*>(Proxy));
 			}
 			continue;
 		}
-		// A shown proxy the view's actor may not see (owner-only, owner-hidden) leaves the frame.
-		if (Proxy->IsShown() && !Proxy->IsShown(&View))
+		// A shown proxy the view's actor may not see (owner-only, owner-hidden) leaves the frame; a hidden static mesh
+		// stays (the F1 bounds show it).
+		if ((bSkeletal || Proxy->IsShown()) && !Proxy->IsShown(&View))
 		{
 			continue;
 		}
-		OutWorldMeshes.Add(Mesh);
+		// The cells and portals (N15): what moves is assigned again as it moves.
+		if (bCells)
+		{
+			if (!Proxy->HasStaticLighting())
+			{
+				Info.CellMask = GetCellMask(*Proxy);
+			}
+			if (!FVisibilityCellGraph::IsVisible(Info.CellMask, VisibleCells))
+			{
+				++NumCulledByCells;
+				continue;
+			}
+		}
+		if (bSkeletal)
+		{
+			OutWorldSkeletalMeshes.Add(&Info);
+		}
+		else
+		{
+			OutWorldMeshes.Add(static_cast<const FStaticMeshSceneProxy*>(Proxy));
+		}
 	}
+	return NumCulledByCells;
 }

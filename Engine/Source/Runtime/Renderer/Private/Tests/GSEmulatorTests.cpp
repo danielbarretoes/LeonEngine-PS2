@@ -12,10 +12,12 @@
 #include "GSCommandList.h"
 #include "GSConformanceScenes.h"
 #include "GSEmulator/GSOpenGLEmulator.h"
+#include "GSEmulator/PS2TexturePreview.h"
 #include "GSReferenceRasterizer.h"
 #include "GenericPlatform/GenericApplication.h"
 #include "GenericPlatform/GenericWindow.h"
 #include "HAL/PlatformApplicationMisc.h"
+#include "LPS2Mesh.h"
 #include "Materials/Material.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/Paths.h"
@@ -32,16 +34,19 @@
 namespace
 {
 
-	/** How far a channel may be from the reference, and how many pixels may be further (the emulator's documented
-	 * differences: floating-point blending, COLCLAMP off, OpenGL's lines and points). */
+	/**
+	 * How far a channel may be from the reference, and how many pixels of a scene may be further: OpenGL covers a pixel
+	 * by a sample 1/256 right of and below its center, so a center exactly on a shallow side or on a vertex may go the
+	 * other way (StripsAndSprites' fan has 3 such pixels); a minified bilinear weight interpolated in floating point
+	 * may land a level or three away (MipmapLod has 3 such pixels).
+	 */
 	constexpr int32 ChannelTolerance = 2;
 	constexpr int32 MaxDifferentPixels = 8;
 
 	/**
-	 * A scene frame's tolerance: one step of the 16-bit frame's 5-bit channels, and a few pixels beyond it. The GS
-	 * dithers after blending, which OpenGL's fixed blending cannot; the emulator interpolates the texture coordinates
-	 * and Z in floating point, so a bilinear weight can round to the next step and the faces that share an edge can
-	 * trade a pixel there.
+	 * A scene frame's tolerance: one step of the 16-bit frame's 5-bit channels, and a few pixels beyond it. The
+	 * emulator interpolates the texture coordinates and Z in floating point, so a far texel or a bilinear weight can
+	 * round to the next step and the faces that share an edge can trade a pixel there.
 	 */
 	constexpr int32 SceneChannelTolerance = 8;
 	constexpr int32 SceneMaxDifferentPixels = 64;
@@ -171,8 +176,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSEmulatorSceneFrameTest, "System.Renderer.GSE
 bool FGSEmulatorSceneFrameTest::RunTest(const FString& Parameters)
 {
 	// A frame of the GS scene renderer in the desktop's environment (16-bit dithered colour, 24-bit Z, the texture
-	// arena): textured and flat cubes under a sun and a point light, a translucent one in front, a floor clipped by the
-	// near plane. The emulator must draw what the reference draws from the same list.
+	// arena, the PS2 cook's textures: PSMT8 / PSMT4 with their mip chain, sampled trilinear with the LOD from Q):
+	// textured and flat cubes under a sun and a point light, a translucent one in front, a floor clipped by the near
+	// plane. The floor is Static with baked vertex colours (a gradient, N22); the cubes are Movable, lit per frame. The
+	// emulator must draw what the reference draws from the same list.
 	FScopedGLContext Context;
 	if (!Context.IsValid())
 	{
@@ -204,14 +211,27 @@ bool FGSEmulatorSceneFrameTest::RunTest(const FString& Parameters)
 	const auto SpawnCube = [&World, Cube](const FVector& Location, const FVector& Scale, UMaterial* Material)
 	{
 		AStaticMeshActor* Actor = World.SpawnActor<AStaticMeshActor>(Location, FRotator(0.0f, 30.0f, 0.0f));
+		Actor->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
 		(void)Actor->GetStaticMeshComponent()->SetStaticMesh(Cube);
 		Actor->GetStaticMeshComponent()->SetMaterial(0, Material);
 		Actor->SetActorScale3D(Scale);
+		return Actor->GetStaticMeshComponent();
 	};
-	SpawnCube(FVector(0.0f, 0.0f, -100.0f), FVector(20.0f, 20.0f, 0.2f), Textured);
+	UStaticMeshComponent* Floor = SpawnCube(FVector(0.0f, 0.0f, -100.0f), FVector(20.0f, 20.0f, 0.2f), Textured);
 	SpawnCube(FVector(200.0f, -120.0f, 0.0f), FVector(1.0f), Textured);
 	SpawnCube(FVector(300.0f, 150.0f, 20.0f), FVector(1.5f), Flat);
 	SpawnCube(FVector(100.0f, 20.0f, 0.0f), FVector(0.8f), Glass);
+	// The floor's baked light: a gradient over its vertices, as a bake would give it.
+	Floor->SetMobility(EComponentMobility::Static);
+	FLPS2ColorStreams FloorColors;
+	FloorColors.Init(Cube->GetLODResources().RenderData);
+	for (int32 Offset = 0; Offset + 3 < FloorColors.Data.Num(); Offset += 4)
+	{
+		FloorColors.Data[Offset] = uint8(96 + ((Offset * 7) % 160));
+		FloorColors.Data[Offset + 1] = uint8(80 + ((Offset * 11) % 170));
+		FloorColors.Data[Offset + 2] = uint8(128 + ((Offset * 5) % 120));
+	}
+	Floor->SetBakedVertexColors(MoveTemp(FloorColors));
 	(void)World.SpawnActor<ADirectionalLight>(FVector::ZeroVector, FRotator(-50.0f, 40.0f, 0.0f));
 	(void)World.SpawnActor<APointLight>(FVector(150.0f, 0.0f, 80.0f), FRotator(0.0f, 0.0f, 0.0f));
 	// The scaled transforms reach the proxies before the frame, as in the engine's frame.
@@ -234,11 +254,20 @@ bool FGSEmulatorSceneFrameTest::RunTest(const FString& Parameters)
 	FGSOpenGLEmulator::GetTextureArena(ArenaFirstBlock, ArenaBlocks);
 	FGSSceneRenderer Renderer;
 	Renderer.GetTextureCache().SetArena(ArenaFirstBlock, ArenaBlocks);
+	Renderer.GetTextureCache().SetTextureConverter(&ConvertTextureAsPS2Cook);
 	FGSCommandList List;
 	Environment.Append(List);
 	Renderer.Render(Family, Environment, List);
 	TestTrue("The frame draws triangles", Renderer.GetFrameStats().TrianglesSubmitted > 12);
 	TestTrue("The texture was uploaded", Renderer.GetFrameStats().TextureUploads > 0);
+	bool bTrilinear = false;
+	for (const FGSRegisterWrite& Write : List.GetWrites())
+	{
+		const bool bTex1 = Write.Register == EGSRegister::TEX1_1;
+		bTrilinear |= bTex1 && FGSTex1::Decode(Write.Value).MMIN == EGSFilter::LinearMipmapLinear &&
+			FGSTex1::Decode(Write.Value).MXL > 0;
+	}
+	TestTrue("The texture is sampled through its mips", bTrilinear);
 
 	Emulator.Execute(List);
 	const TArray<FColor> Emulated = Emulator.ReadFrame(FGSOpenGLEmulator::FrameWidth, FGSOpenGLEmulator::FrameHeight);

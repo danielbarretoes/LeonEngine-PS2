@@ -1,8 +1,9 @@
 #include "UObject/LinkerLoad.h"
 
 #include "HAL/FileManager.h"
-#include "Misc/FileHelper.h"
+#include "Misc/MemStack.h"
 #include "Misc/PackageName.h"
+#include "Serialization/AsyncLoadingPrivate.h"
 #include "Templates/Casts.h"
 #include "UObject/Class.h"
 #include "UObject/Package.h"
@@ -36,7 +37,16 @@ namespace
 		static FLoadContext Context;
 		return Context;
 	}
+
+	/** The load arena's chunks: most packages fit one; a larger one gets a chunk of its size. */
+	constexpr int32 LoadArenaChunkSize = 64 * 1024;
 } // namespace
+
+FMemStackBase& FLinkerLoad::GetLoadArena()
+{
+	static FMemStackBase Arena(LoadArenaChunkSize, ELLMTag::LoadMapMisc);
+	return Arena;
+}
 
 // Load context
 
@@ -82,6 +92,12 @@ void EndLoad()
 		delete Linker;
 	}
 	Context.LoadDepth = 0;
+	// Every package of the load is serialized and its bytes popped: the arena's chunks go back as a block.
+	FMemStackBase& Arena = FLinkerLoad::GetLoadArena();
+	if (Arena.GetNumMarks() == 0)
+	{
+		Arena.Flush();
+	}
 	// Soft pointers that did not find their object look again (UE).
 	FSoftObjectPath::InvalidateTag();
 }
@@ -111,34 +127,70 @@ FLinkerLoad::~FLinkerLoad()
 
 FLinkerLoad* FLinkerLoad::CreateLinker(UPackage* Parent, const TCHAR* Filename, uint32 LoadFlags)
 {
-	TArray<uint8> Bytes;
-	if (!FFileHelper::LoadFileToArray(Bytes, Filename, FILEREAD_Silent))
+	if (Parent == nullptr)
+	{
+		// The tables only: the bytes go back before this returns.
+		FMemMark TablesMark(GetLoadArena());
+		FLinkerLoad* Linker = CreateLinkerFromFile(nullptr, Filename, LoadFlags);
+		if (Linker != nullptr)
+		{
+			Linker->ReleasePackageData();
+		}
+		return Linker;
+	}
+	return CreateLinkerFromFile(Parent, Filename, LoadFlags);
+}
+
+FLinkerLoad* FLinkerLoad::CreateLinkerFromFile(UPackage* Parent, const TCHAR* Filename, uint32 LoadFlags)
+{
+	// The bytes an asynchronous load read, or is reading (waited for): the file is not read twice (UE: the flush of an
+	// async package a synchronous load asks for).
+	uint8* AsyncBytes = nullptr;
+	int64 AsyncSize = 0;
+	if (TakeAsyncPackageBytes(Filename, AsyncBytes, AsyncSize))
+	{
+		uint8* Bytes = GetLoadArena().PushBytes(SIZE_T(AsyncSize), 16);
+		FMemory::Memcpy(Bytes, AsyncBytes, SIZE_T(AsyncSize));
+		FMemory::Free(AsyncBytes);
+		return CreateLinkerFromBytes(Parent, Filename, LoadFlags, Bytes, AsyncSize);
+	}
+	const TUniquePtr<FArchive> Reader(IFileManager::Get().CreateFileReader(Filename, FILEREAD_Silent));
+	const int64 Size = Reader ? Reader->TotalSize() : -1;
+	if (Size < 0 || Size >= MAX_int32)
 	{
 		UE_LOG(LogLinker, Error, TEXT("Cannot read the package file %s"), Filename);
 		return nullptr;
 	}
-	return CreateLinkerFromBytes(Parent, Filename, LoadFlags, MoveTemp(Bytes));
+	uint8* Bytes = GetLoadArena().PushBytes(SIZE_T(Size), 16);
+	Reader->Serialize(Bytes, Size);
+	if (!Reader->Close())
+	{
+		UE_LOG(LogLinker, Error, TEXT("Cannot read the package file %s"), Filename);
+		return nullptr;
+	}
+	return CreateLinkerFromBytes(Parent, Filename, LoadFlags, Bytes, Size);
 }
 
 FLinkerLoad* FLinkerLoad::CreateLinkerFromMemory(
 	UPackage* Parent, const TCHAR* Filename, uint32 LoadFlags, const TArray<uint8>& InPackageData)
 {
-	TArray<uint8> Bytes = InPackageData;
-	return CreateLinkerFromBytes(Parent, Filename, LoadFlags, MoveTemp(Bytes));
+	uint8* Bytes = GetLoadArena().PushBytes(SIZE_T(InPackageData.Num()), 16);
+	FMemory::Memcpy(Bytes, InPackageData.GetData(), SIZE_T(InPackageData.Num()));
+	return CreateLinkerFromBytes(Parent, Filename, LoadFlags, Bytes, InPackageData.Num());
 }
 
 FLinkerLoad* FLinkerLoad::CreateLinkerFromBytes(
-	UPackage* Parent, const TCHAR* Filename, uint32 LoadFlags, TArray<uint8>&& InPackageData)
+	UPackage* Parent, const TCHAR* Filename, uint32 LoadFlags, const uint8* Bytes, int64 Size)
 {
 	checkf(!Parent || !Parent->LinkerLoad, "Package %s is already being loaded", *Parent->GetName());
 	FLinkerLoad* Linker = new FLinkerLoad(Parent, Filename, LoadFlags);
-	Linker->PackageData = MoveTemp(InPackageData);
+	Linker->PackageBytes = Bytes;
+	Linker->PackageSize = Size;
 	if (!Linker->ReadTables())
 	{
 		delete Linker;
 		return nullptr;
 	}
-	Linker->PackageData.Shrink();
 	if (Parent)
 	{
 		Parent->LinkerLoad = Linker;
@@ -157,6 +209,27 @@ FLinkerLoad* FLinkerLoad::CreateLinkerFromBytes(
 #endif
 	}
 	return Linker;
+}
+
+bool FLinkerLoad::GetImportedPackageNames(
+	const TCHAR* Filename, const uint8* Bytes, int64 Size, TArray<FName>& OutPackageNames)
+{
+	OutPackageNames.Reset();
+	FLinkerLoad* Linker = CreateLinkerFromBytes(nullptr, Filename, LOAD_None, Bytes, Size);
+	if (Linker == nullptr)
+	{
+		return false;
+	}
+	for (const FObjectImport& Import : Linker->ImportMap)
+	{
+		if (Import.OuterIndex.IsNull() && !FPackageName::IsScriptPackage(Import.ObjectName.ToString()))
+		{
+			OutPackageNames.AddUnique(Import.ObjectName);
+		}
+	}
+	Linker->ReleasePackageData();
+	delete Linker;
+	return true;
 }
 
 FLinkerLoad* FLinkerLoad::FindExistingLinkerForPackage(const UPackage* Package)
@@ -182,7 +255,7 @@ bool FLinkerLoad::ReadTables()
 		return false;
 	}
 	// Saving ends the file with the tag again: a shorter file was cut (UE).
-	const int64 FileSize = PackageData.Num();
+	const int64 FileSize = PackageSize;
 	uint32 EndTag = 0;
 	if (!IsError() && FileSize >= int64(sizeof(EndTag)))
 	{
@@ -561,7 +634,13 @@ void FLinkerLoad::Detach()
 		LinkerRoot->LinkerLoad = nullptr;
 	}
 	LinkerRoot = nullptr;
-	PackageData.Empty();
+	ReleasePackageData();
+}
+
+void FLinkerLoad::ReleasePackageData()
+{
+	PackageBytes = nullptr;
+	PackageSize = 0;
 	Pos = 0;
 }
 
@@ -573,13 +652,13 @@ void FLinkerLoad::Serialize(void* V, int64 Length)
 	{
 		return;
 	}
-	if (IsError() || Pos < 0 || Pos + Length > PackageData.Num())
+	if (IsError() || Pos < 0 || Pos + Length > PackageSize)
 	{
 		FMemory::Memzero(V, SIZE_T(Length));
 		SetError();
 		return;
 	}
-	FMemory::Memcpy(V, PackageData.GetData() + Pos, SIZE_T(Length));
+	FMemory::Memcpy(V, PackageBytes + Pos, SIZE_T(Length));
 	Pos += Length;
 }
 
@@ -590,7 +669,7 @@ int64 FLinkerLoad::Tell()
 
 int64 FLinkerLoad::TotalSize()
 {
-	return PackageData.Num();
+	return PackageSize;
 }
 
 void FLinkerLoad::Seek(int64 InPos)

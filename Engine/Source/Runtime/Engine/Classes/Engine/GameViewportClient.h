@@ -2,9 +2,11 @@
 
 #include "CoreMinimal.h"
 #include "Engine/EngineBaseTypes.h"
+#include "HAL/LowLevelMemTracker.h"
 #include "InputCoreTypes.h"
 #include "Misc/Exec.h"
 #include "SceneView.h"
+#include "Stats/Stats.h"
 #include "Templates/UniquePtr.h"
 #include "UObject/Object.h"
 #include "UnrealClient.h"
@@ -19,6 +21,13 @@ class UGameInstance;
 class ULocalPlayer;
 class UWorld;
 struct FWorldContext;
+
+/** What UGameViewportClient last sent of a controller: its buttons down and its pressures (FDualShockPressure). */
+struct FViewportGamepadState
+{
+	TSet<FKey> DownKeys;
+	float Pressures[12] = {};
+};
 
 /**
  * The game's view (UE: UGameViewportClient), created by UGameEngine::Init (`[/Script/Engine.Engine]
@@ -103,7 +112,11 @@ public:
 	/** After the world ticked: the on-screen messages and the stats text (UE: Tick). */
 	virtual void Tick(float DeltaTime);
 
-	/** Draws the view and the HUD into the frame's canvas (UE: Draw). */
+	/**
+	 * Draws the view and the HUD into the frame's canvas (UE: Draw). Its parts are cycle stats (EngineStats.h): the
+	 * world's end of frame updates to the scene, the scene's rendering, the player's HUD and the engine's debug
+	 * overlay.
+	 */
 	virtual void Draw(FViewport* InViewport, FCanvas* SceneCanvas);
 
 	/** Saves the frame when a screenshot was requested (UE: ProcessScreenShots; Leon writes a 24-bit .bmp). */
@@ -133,8 +146,24 @@ public:
 	/** The camera the view is drawn with: the first local player's camera, else a default one. */
 	[[nodiscard]] UCameraComponent* GetViewCamera() const;
 
+	/**
+	 * The camera the frame is drawn with: the player camera manager's view Alpha of the way between its last two
+	 * updates (APlayerCameraManager::GetInterpolatedView; ps2-shipping D4) in a camera of the viewport's own, with
+	 * ViewCamera's lens; ViewCamera itself without a player camera.
+	 */
+	[[nodiscard]] UCameraComponent& GetRenderCamera(UCameraComponent& ViewCamera, float Alpha);
+
 	/** The first local player's controller in the world, or null. */
 	[[nodiscard]] APlayerController* GetFirstLocalPlayerController() const;
+
+	/** The local player a controller id drives, or null (UE: GEngine->GetLocalPlayerFromControllerId). */
+	[[nodiscard]] ULocalPlayer* FindLocalPlayerFromControllerId(int32 ControllerId) const;
+
+	/** The gamepads' interface (SetInputInterface), or null: the force feedback goes there. */
+	[[nodiscard]] IInputInterface* GetInputInterface() const
+	{
+		return InputInterface;
+	}
 
 protected:
 	/** `show [Flag]` (UE: HandleShowCommand). */
@@ -143,6 +172,10 @@ protected:
 private:
 	/** Refreshes the stats text a few times a second while it is visible. */
 	void UpdateHudStats(float DeltaTime);
+	/** Refreshes the `stat cycles` page (the overlay's top-left block) a few times a second while it is visible. */
+	void UpdateCycleStatsPage(float DeltaTime);
+	/** Refreshes the `stat memory` page (the same block) a few times a second while it is visible. */
+	void UpdateMemoryStatsPage(float DeltaTime);
 
 	/** The game instance the view belongs to (UE: GameInstance). */
 	UPROPERTY(Transient)
@@ -152,9 +185,15 @@ private:
 	UPROPERTY(Transient)
 	UCameraComponent* DefaultViewCamera = nullptr;
 
+	/** The camera the frame is drawn with, the player's view interpolated (GetRenderCamera). */
+	UPROPERTY(Transient)
+	UCameraComponent* RenderCamera = nullptr;
+
 	TUniquePtr<FViewport> Viewport;
-	/** The keys the window and the gamepad reported down last frame. */
+	/** The keys the window reported down last frame. */
 	TSet<FKey> DownKeys;
+	/** Each controller's buttons down last frame and the pressures it sent (ps2-shipping N24: two controllers). */
+	FViewportGamepadState GamepadStates[2];
 	IInputInterface* InputInterface = nullptr;
 	bool bMouseLookSampleValid = false;
 	/** SetIgnoreInput (UE: bIgnoreInput). */
@@ -167,4 +206,16 @@ private:
 	int32 FpsAccumFrames = 0;
 	float DisplayFps = 0.0f;
 	float DisplayMs = 0.0f;
+
+	bool bCycleStatsVisibleLastTick = false;
+	float CycleStatsAccumTime = 0.0f;
+	/** The cycle stats since the page's last refresh. */
+	FCycleStatsWindow CycleStatsWindow;
+
+	bool bMemoryStatsVisibleLastTick = false;
+	float MemoryStatsAccumTime = 0.0f;
+	int32 MemoryStatsFrames = 0;
+	/** GMalloc's allocations, and each tag's then the total's, at the page's last refresh. */
+	uint64 MemoryStatsAllocations = 0;
+	uint64 MemoryStatsTagAllocations[FLowLevelMemTracker::NumTags + 1] = {};
 };

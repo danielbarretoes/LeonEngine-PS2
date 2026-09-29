@@ -9,6 +9,9 @@ namespace
 	constexpr float MinTriangleNormalLength = 1.0e-4f;
 	/** Segment parallel to the plane: |Normal | Dir| below this (cm). */
 	constexpr float MinSegmentAlongNormal = 1.0e-6f;
+	/** Growth of a triangle's box in the tree for rounding (cm, and a share of its largest coordinate). */
+	constexpr float TriangleBoxMargin = 0.25f;
+	constexpr float TriangleBoxRelativeMargin = 1.0e-5f;
 
 	[[nodiscard]] bool PointInTriangle(
 		const FVector& P, const FVector& A, const FVector& B, const FVector& C, const FVector& Normal)
@@ -109,46 +112,93 @@ bool SegmentTriangleInflated(const FVector& Start, const FVector& End, const FVe
 	return true;
 }
 
+void FTriangleMeshCollision::BuildTree() const
+{
+	TArray<FBox> Bounds;
+	TArray<int32> Triangles;
+	const int32 TriCount = IsValid() ? Indices.Num() / 3 : 0;
+	const uint32 VertexCount = static_cast<uint32>(Positions.Num());
+	Bounds.Reserve(TriCount);
+	Triangles.Reserve(TriCount);
+	for (int32 Tri = 0; Tri < TriCount; ++Tri)
+	{
+		const uint32 I0 = Indices[Tri * 3 + 0];
+		const uint32 I1 = Indices[Tri * 3 + 1];
+		const uint32 I2 = Indices[Tri * 3 + 2];
+		if (I0 >= VertexCount || I1 >= VertexCount || I2 >= VertexCount)
+		{
+			continue;
+		}
+		const FVector& V0 = Positions[I0];
+		const FVector& V1 = Positions[I1];
+		const FVector& V2 = Positions[I2];
+		// The same test as SegmentTriangle / SegmentTriangleInflated: they never hit a degenerate triangle.
+		const float NLen = ((V1 - V0) ^ (V2 - V0)).Size();
+		if (NLen < MinTriangleNormalLength)
+		{
+			continue;
+		}
+		// PointInTriangle accepts barycentric coordinates down to -Tolerance / NLen: the triangle scaled about its
+		// centroid by 1 + 3 * Tolerance / NLen. The margin covers the rounding of the tests.
+		const FVector Centroid = (V0 + V1 + V2) / 3.0f;
+		const float Scale = 1.0f + (3.0f * PointInTriangleTolerance / NLen);
+		FBox Box(ForceInit);
+		Box += Centroid + ((V0 - Centroid) * Scale);
+		Box += Centroid + ((V1 - Centroid) * Scale);
+		Box += Centroid + ((V2 - Centroid) * Scale);
+		const float Largest = FMath::Max(Box.Min.GetAbsMax(), Box.Max.GetAbsMax());
+		const FVector Margin(TriangleBoxMargin + (Largest * TriangleBoxRelativeMargin));
+		Bounds.Add(FBox(Box.Min - Margin, Box.Max + Margin));
+		Triangles.Add(Tri);
+	}
+	Tree.Build(Bounds.GetData(), Triangles.GetData(), Triangles.Num());
+}
+
 bool SegmentTriangleMesh(const FVector& Start, const FVector& End, const FTriangleMeshCollision& Mesh, float Inflate,
-	float& OutT, FVector& OutNormal)
+	float& OutT, FVector& OutNormal, float MaxT, int32* OutFaceIndex)
 {
 	if (!Mesh.IsValid())
 	{
 		return false;
 	}
-	bool bAny = false;
-	float BestT = 1.0f;
-	FVector BestN(0.0f, 0.0f, 1.0f);
-	const int32 TriCount = Mesh.Indices.Num() / 3;
-	const uint32 VertexCount = static_cast<uint32>(Mesh.Positions.Num());
-	for (int32 Tri = 0; Tri < TriCount; ++Tri)
+	if (!Mesh.Tree.IsBuilt())
 	{
-		const uint32 I0 = Mesh.Indices[Tri * 3 + 0];
-		const uint32 I1 = Mesh.Indices[Tri * 3 + 1];
-		const uint32 I2 = Mesh.Indices[Tri * 3 + 2];
-		if (I0 >= VertexCount || I1 >= VertexCount || I2 >= VertexCount)
-		{
-			continue;
-		}
-		float HitT = 1.0f;
-		FVector HitN = FVector::ZeroVector;
-		const bool bOk = (Inflate > 1.0e-4f)
-			? SegmentTriangleInflated(
-				  Start, End, Mesh.Positions[I0], Mesh.Positions[I1], Mesh.Positions[I2], Inflate, HitT, HitN)
-			: SegmentTriangle(Start, End, Mesh.Positions[I0], Mesh.Positions[I1], Mesh.Positions[I2], HitT, HitN);
-		if (!bOk || HitT > BestT)
-		{
-			continue;
-		}
-		BestT = HitT;
-		BestN = HitN;
-		bAny = true;
+		Mesh.BuildTree();
 	}
-	if (!bAny)
+	// The nearest hit; of hits at the same time, the last triangle (the order the triangles were once tested in).
+	int32 BestTri = INDEX_NONE;
+	float BestT = MaxT;
+	FVector BestN(0.0f, 0.0f, 1.0f);
+	const bool bInflated = Inflate > 1.0e-4f;
+	const FAabbTreeSegment Segment(Start, End);
+	Mesh.Tree.ForEachSegmentHit(Segment, FVector(bInflated ? Inflate : 0.0f), MaxT,
+		[&](int32 Tri, float CurrentMaxT)
+		{
+			const FVector& V0 = Mesh.Positions[static_cast<int32>(Mesh.Indices[Tri * 3 + 0])];
+			const FVector& V1 = Mesh.Positions[static_cast<int32>(Mesh.Indices[Tri * 3 + 1])];
+			const FVector& V2 = Mesh.Positions[static_cast<int32>(Mesh.Indices[Tri * 3 + 2])];
+			float HitT = 1.0f;
+			FVector HitN = FVector::ZeroVector;
+			const bool bOk = bInflated ? SegmentTriangleInflated(Start, End, V0, V1, V2, Inflate, HitT, HitN)
+									   : SegmentTriangle(Start, End, V0, V1, V2, HitT, HitN);
+			if (bOk && (HitT < BestT || (HitT == BestT && Tri > BestTri)))
+			{
+				BestT = HitT;
+				BestN = HitN;
+				BestTri = Tri;
+				return HitT;
+			}
+			return CurrentMaxT;
+		});
+	if (BestTri == INDEX_NONE)
 	{
 		return false;
 	}
 	OutT = BestT;
 	OutNormal = BestN;
+	if (OutFaceIndex != nullptr)
+	{
+		*OutFaceIndex = BestTri;
+	}
 	return true;
 }

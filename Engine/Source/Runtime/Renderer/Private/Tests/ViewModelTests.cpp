@@ -32,14 +32,32 @@ namespace
 		return Component;
 	}
 
-	/** GatherStaticMeshes' split for a view whose actor is ViewActor. */
+	/** GatherPrimitives' split of the static meshes for a view whose actor is ViewActor. */
 	void Split(const UWorld& World, const AActor* ViewActor, TArray<const FStaticMeshSceneProxy*>& OutWorld,
 		TArray<const FStaticMeshSceneProxy*>& OutViewModel)
 	{
 		FSceneViewInitOptions Options;
 		Options.ViewActor = ViewActor;
 		const FSceneView View(Options);
-		World.Scene->GetRenderScene()->GatherStaticMeshes(View, OutWorld, OutViewModel);
+		FMemMark Mark(FMemStack::Get());
+		FScratchpadMark ScratchpadMark;
+		FSceneRenderList<const FStaticMeshSceneProxy*> WorldMeshes;
+		FSceneRenderList<const FStaticMeshSceneProxy*> ViewModelMeshes;
+		FSceneRenderList<const FPrimitiveSceneInfo*> WorldSkeletalMeshes;
+		FSceneRenderList<const FPrimitiveSceneInfo*> ViewModelSkeletalMeshes;
+		FVisibilityCellGraph::FVisibleCells Everything;
+		(void)World.Scene->GetRenderScene()->GatherPrimitives(
+			View, Everything, WorldMeshes, ViewModelMeshes, WorldSkeletalMeshes, ViewModelSkeletalMeshes);
+		OutWorld.Reset();
+		OutViewModel.Reset();
+		for (const FStaticMeshSceneProxy* Proxy : WorldMeshes)
+		{
+			OutWorld.Add(Proxy);
+		}
+		for (const FStaticMeshSceneProxy* Proxy : ViewModelMeshes)
+		{
+			OutViewModel.Add(Proxy);
+		}
 	}
 
 	/** True when List holds Component's proxy. */
@@ -157,6 +175,69 @@ bool FRendererImpactMarkPoolRecyclesTest::RunTest(const FString& Parameters)
 	TestEqual("Facing the camera above it: across Y", MaxY, Tracer.Width * 0.5f, 1.0e-4f);
 	Tracers.Tick(Tracer.LifeSpan);
 	TestTrue("Gone after its life span", Tracers.IsEmpty());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRendererEffectSpritesTest, "System.Renderer.Effects.EffectSprites",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FRendererEffectSpritesTest::RunTest(const FString& Parameters)
+{
+	// The world's effect sprites (a smoke grenade's puffs): they fade in and out, a pool of MaxSprites recycles the
+	// oldest and forgets a removed one; each is two triangles square to the view, the farthest drawn first.
+	FEffectSpritePool Pool;
+	FEffectSprite Sprite;
+	Sprite.Size = 200.0f;
+	Sprite.Color = FLinearColor(0.6f, 0.6f, 0.6f, 0.8f);
+	Sprite.LifeSpan = 10.0f;
+	Sprite.FadeInTime = 1.0f;
+	Sprite.FadeOutTime = 2.0f;
+	(void)Pool.AddSprite(Sprite);
+	TestEqual("Fading in", Pool.GetSprites()[0].GetOpacity(), 0.0f);
+	Pool.Tick(0.5f);
+	TestEqual("Half in", Pool.GetSprites()[0].GetOpacity(), 0.4f, 1.0e-4f);
+	Pool.Tick(8.5f);
+	TestEqual("Half out", Pool.GetSprites()[0].GetOpacity(), 0.4f, 1.0e-4f);
+	Pool.Tick(1.1f);
+	TestTrue("Gone after its life span", Pool.IsEmpty());
+
+	TArray<uint32> Serials;
+	for (int32 Index = 0; Index < FEffectSpritePool::MaxSprites + 8; ++Index)
+	{
+		Serials.Add(Pool.AddSprite(Sprite));
+	}
+	TestEqual("Full", Pool.Num(), FEffectSpritePool::MaxSprites);
+	TestEqual("Never grows", Pool.GetSprites().Num(), FEffectSpritePool::MaxSprites);
+	Pool.RemoveSprite(Serials[0]);
+	TestEqual("The oldest was recycled: removing it changes nothing", Pool.Num(), FEffectSpritePool::MaxSprites);
+	Pool.RemoveSprite(Serials.Last());
+	TestEqual("A removed one", Pool.Num(), FEffectSpritePool::MaxSprites - 1);
+
+	// A view at the origin looking along +X (UE view space: x right, y up, z forward).
+	Pool.Clear();
+	Sprite.FadeInTime = 0.0f;
+	Sprite.Location = FVector(500.0f, 0.0f, 100.0f);
+	(void)Pool.AddSprite(Sprite);
+	Sprite.Location = FVector(1000.0f, 0.0f, 100.0f);
+	(void)Pool.AddSprite(Sprite);
+	const FMatrix ViewMatrix(FPlane(0.0f, 0.0f, 1.0f, 0.0f), FPlane(1.0f, 0.0f, 0.0f, 0.0f),
+		FPlane(0.0f, 1.0f, 0.0f, 0.0f), FPlane(0.0f, 0.0f, 0.0f, 1.0f));
+	TArray<FWorldEffectVertex> Vertices;
+	FWorldEffectsGeometry::BuildEffectSpriteVertices(Pool, ViewMatrix, FVector::ZeroVector, Vertices);
+	if (!TestEqual("Two triangles a sprite", Vertices.Num(), 12))
+	{
+		return false;
+	}
+	bool bSquareToTheView = true;
+	for (int32 Index = 0; Index < 6; ++Index)
+	{
+		const FVector& Corner = Vertices[Index].Position;
+		bSquareToTheView &= FMath::IsNearlyEqual(Corner.X, 1000.0f) &&
+			FMath::IsNearlyEqual(FMath::Abs(Corner.Y), 100.0f) &&
+			FMath::IsNearlyEqual(FMath::Abs(Corner.Z - 100.0f), 100.0f);
+	}
+	TestTrue("The farthest first, square to the view", bSquareToTheView);
+	TestEqual("Its opacity", Vertices[0].Color.A, 0.8f, 1.0e-4f);
 	return true;
 }
 

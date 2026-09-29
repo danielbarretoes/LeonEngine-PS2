@@ -64,25 +64,39 @@ bool FPakWriter::Finalize(TArray<uint8>& OutPak) const
 	}
 	const FString MountPoint = ComputeMountPoint(Dests);
 
-	// The data in path order, so the same files give the same bytes whatever order they were added in.
+	// The data in the open order, then the rest in path order, so the same files give the same bytes whatever order
+	// they were added in.
 	TArray<int32> Order;
+	TArray<int64> Ranks;
 	for (int32 Index = 0; Index < Files.Num(); ++Index)
 	{
 		Order.Add(Index);
+		const int64* Rank = OpenOrder.Find(Files[Index].Dest.RightChop(MountPoint.Len()).ToLower());
+		Ranks.Add(Rank != nullptr ? *Rank : MAX_int64);
 	}
-	Order.Sort([this](int32 A, int32 B)
-		{ return Files[A].Dest.ToLower().Compare(Files[B].Dest.ToLower(), ESearchCase::CaseSensitive) < 0; });
+	Order.Sort(
+		[this, &Ranks](int32 A, int32 B)
+		{
+			if (Ranks[A] != Ranks[B])
+			{
+				return Ranks[A] < Ranks[B];
+			}
+			return Files[A].Dest.ToLower().Compare(Files[B].Dest.ToLower(), ESearchCase::CaseSensitive) < 0;
+		});
 
 	TArray<FPakIndexEntry> Index;
 	FMemoryWriter Writer(OutPak);
+	TSet<FString> Seen;
 	for (int32 Position = 0; Position < Order.Num(); ++Position)
 	{
 		const FFile& File = Files[Order[Position]];
-		if (Position > 0 && File.Dest.Equals(Files[Order[Position - 1]].Dest, ESearchCase::IgnoreCase))
+		const FString Lower = File.Dest.ToLower();
+		if (Seen.Contains(Lower))
 		{
 			UE_LOG(LogPakFile, Error, "\"%s\" is in the pak twice", *File.Dest);
 			return false;
 		}
+		Seen.Add(Lower);
 		// Zeros up to the alignment (the CD sector size), then the bytes as they are.
 		const int64 Padding = (Alignment - Writer.Tell() % Alignment) % Alignment;
 		for (int64 Pad = 0; Pad < Padding; ++Pad)
@@ -137,6 +151,43 @@ bool FPakWriter::WriteToFile(const TCHAR* Filename) const
 	{
 		UE_LOG(LogPakFile, Error, "'%s' cannot be written", Filename);
 		return false;
+	}
+	return true;
+}
+
+bool FPakWriter::ReadOrderFile(const TCHAR* OrderFile, TMap<FString, int64>& OutOpenOrder)
+{
+	OutOpenOrder.Reset();
+	FString Text;
+	if (!FFileHelper::LoadFileToString(Text, OrderFile))
+	{
+		UE_LOG(LogPakFile, Error, "The order file '%s' cannot be read", OrderFile);
+		return false;
+	}
+	TArray<FString> Lines;
+	Text.ParseIntoArrayLines(Lines, true);
+	for (const FString& Line : Lines)
+	{
+		// The first quoted path, then the rank after it.
+		const int32 Open = Line.Find("\"", ESearchCase::CaseSensitive);
+		const int32 Close = Open == INDEX_NONE
+			? INDEX_NONE
+			: Line.Find("\"", ESearchCase::CaseSensitive, ESearchDir::FromStart, Open + 1);
+		if (Close == INDEX_NONE)
+		{
+			continue;
+		}
+		const FString Rank = Line.Mid(Close + 1).TrimStartAndEnd();
+		if (Rank.IsEmpty() || !FChar::IsDigit(Rank[0]))
+		{
+			continue;
+		}
+		FString Path = Line.Mid(Open + 1, Close - Open - 1).ToLower();
+		Path.ReplaceCharInline('\\', '/');
+		if (!Path.IsEmpty() && !OutOpenOrder.Contains(Path))
+		{
+			OutOpenOrder.Add(Path, FCString::Atoi64(*Rank));
+		}
 	}
 	return true;
 }

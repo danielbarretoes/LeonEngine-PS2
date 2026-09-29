@@ -9,29 +9,30 @@
 #include "Shader.h"
 
 /**
- * The GS on OpenGL (Docs/PLANS/ps2-gs-parity.md P4): the desktop preview executes the same FGSCommandList the PS2 sends
- * to its GIF, into a 640 x 448 frame it then shows scaled by a whole number, nearest (D4). Parity comes from following
- * the reference rasterizer (the oracle) rule by rule:
+ * The GS on OpenGL (Docs/PLANS/ps2-gs-parity.md P4, Docs/PLANS/ps2-shipping.md N8): the desktop preview executes the
+ * same FGSCommandList the PS2 sends to its GIF, into a 640 x 448 frame it then shows scaled by a whole number, nearest
+ * (D4). Parity comes from following the reference rasterizer (the oracle) rule by rule:
  *
- * - Primitives are assembled on the CPU as the GS does (the vertex queue of each type, XYZ3 without a kick, flat colour
- *   from the kicking vertex, a sprite's Z, fog and colour from its second vertex) and drawn in window coordinates,
- *   interpolated linearly in screen space; a pixel is covered as by the GS's top-left rule (samples at the pixel
- *   center plus 1/256).
- * - Textures are decoded from an emulated local memory (FGSLocalMemory, FGSTexelDecoder: the formats, TEXA and the
- *   CLUTs) level by level, and the shader samples them as the GS does (the wrap and region modes, point or bilinear
- *   around texel centers at .5, rounded per channel); a MIPMAP level is picked on the CPU for a fixed LOD (LCM = 1),
- *   level 0 otherwise.
- * - The texture functions, TCC, fog, the alpha test with every AFAIL (a second pass draws what fails), Z (exact, from
- *   the fragment) with its four tests, FBA, and blending by dual-source blend factors for the subset FGSCommandList
- *   accepts (C = As or FIX).
- * - A 16-bit frame is dithered (DIMX) and truncated to 5 bits per channel in the shader when a draw does not blend;
- *   blended pixels are truncated when the frame is read or shown.
+ * - Primitives are assembled on the CPU as the GS does (the vertex queue of each type, XYZ3 / XYZF3 advancing it
+ *   without a drawing kick, flat colour from the kicking vertex, a sprite's Z, fog, colour and Q from its second
+ *   vertex). Triangles and sprites are drawn in window coordinates, interpolated linearly in screen space; a pixel is
+ *   covered as by the GS's top-left rule (samples at the pixel center plus 1/256). Lines and points are stepped on the
+ *   CPU exactly as the reference steps them and drawn as one-pixel points.
+ * - Textures are decoded from an emulated local memory (FGSLocalMemory, with the GS's page, block and column layout;
+ *   FGSTexelDecoder: the formats, TEXA and the CLUTs with CLD's load control) into one layer per MIPMAP level
+ *   (MIPTBP1 / MIPTBP2), covering what the wrap and region modes reach. The shader computes the GS's LOD per pixel from
+ *   the interpolated Q (LOD = (log2(1/|Q|) << L) + K, or K), picks MMAG or MMIN, the level (rounded, or the two around
+ *   the LOD blended by its fraction) and samples each level as the GS does (the wrap and region modes, point or
+ *   bilinear around texel centers at .5, rounded per channel).
+ * - The texture functions, TCC, fog, the alpha test, Z (exact, from the fragment) with its four tests, dithering,
+ *   COLCLAMP, FBA and the 16-bit packing in the shader. Draws that read the frame buffer (blending with the whole
+ *   (A - B) * C >> 7 + D, the destination alpha test, a FBMSK that splits a channel) or whose alpha test's AFAIL still
+ *   writes go primitive group by primitive group: a group's primitives cover no pixel twice, its rectangle of the frame
+ *   is copied and the shader reads the destination there, so each pixel sees the one its earlier primitives left, as
+ *   on the GS; what fails the alpha test draws in a second pass of the same group.
  *
- * Known differences (the tests' tolerance): blending rounds in floating point instead of (A - B) * C >> 7 and clamps
- * the factor at 1.0 (As above 0x80), blended pixels of a 16-bit frame are not dithered (one 5-bit step), COLCLAMP off
- * (wrapping) is not emulated, PABE with additive blending blends, lines and points follow OpenGL's rules, and the
- * texture coordinates and Z are interpolated in floating point (a bilinear weight or a shared edge's Z may round the
- * other way).
+ * Known differences (the tests' tolerance): the texture coordinates, Q, fog and Z are interpolated in floating point
+ * by OpenGL, so a bilinear weight, a LOD at a level's border or a shared edge's Z may round the other way.
  */
 class FGSOpenGLEmulator
 {
@@ -134,13 +135,42 @@ private:
 		float U, V;
 	};
 
-	/** A decoded texture level the shader samples. */
+	/** One primitive of the pending batch: its vertices and what it may cover, for the groups of Flush. */
+	struct FBatchPrimitive
+	{
+		int32 FirstVertex = 0;
+		int32 NumVertices = 0;
+		/** The pixels it may cover, both corners included. */
+		int32 MinX = 0;
+		int32 MinY = 0;
+		int32 MaxX = -1;
+		int32 MaxY = -1;
+		/** A triangle's or sprite's corners in sixteenths of a pixel (0 for lines and points: their pixels only). */
+		int32 NumCorners = 0;
+		int32 CornerX[4] = {};
+		int32 CornerY[4] = {};
+	};
+
+	/** The local memory blocks [FirstBlock, EndBlock) a texture was decoded from (EndBlock may pass the end). */
+	struct FBlockRange
+	{
+		uint32 FirstBlock = 0;
+		uint32 EndBlock = 0;
+	};
+
+	/** A decoded texture: a layer per MIPMAP level, for invalidation by uploads. */
 	struct FTextureEntry
 	{
 		uint32 Texture = 0;
-		/** The local memory words it was decoded from, for invalidation by uploads. */
-		uint32 FirstWord = 0;
-		uint32 EndWord = 0;
+		TArray<FBlockRange> Ranges;
+	};
+
+	/** The levels a draw samples: how many, and each one's size (the wrap modes' size, not the decoded layer's). */
+	struct FTextureLevels
+	{
+		int32 NumLevels = 1;
+		int32 Width[7] = {};
+		int32 Height[7] = {};
 	};
 
 	void WriteRegister(const FGSRegisterWrite& Write, const FGSCommandList& List);
@@ -149,14 +179,21 @@ private:
 	void AddSprite(const FGSVertex& V0, const FGSVertex& V1);
 	void AddLine(const FGSVertex& From, const FGSVertex& To);
 	void AddPoint(const FGSVertex& Vertex);
+	/** A one-pixel fragment the CPU stepped (lines and points), as a point of the batch's current primitive. */
+	void AddPixel(int32 X, int32 Y, double Z, double F, double R, double G, double B, double A, double S, double T,
+		double Q, double U, double V);
+	/** Starts a primitive of the batch in Mode; its vertices follow. */
+	FBatchPrimitive& BeginPrimitive(uint32 Mode);
 	[[nodiscard]] FBatchVertex ToBatchVertex(const FGSVertex& Vertex) const;
 
 	/** Draws the pending batch with the current state. */
 	void Flush();
-	/** The texture level the current draw samples (decoded and cached), or 0; OutLevel and OutLevelSize describe it. */
-	[[nodiscard]] uint32 BindTexture(const FContext& Context, uint32& OutLevel, int32& OutWidth, int32& OutHeight);
-	/** Forgets the decoded textures that read the words [FirstWord, EndWord). */
-	void InvalidateTextures(uint32 FirstWord, uint32 EndWord);
+	/** Whether Primitive may cover a pixel one of Batch primitives [First, End) covers. */
+	[[nodiscard]] bool Overlaps(int32 First, int32 End, const FBatchPrimitive& Primitive) const;
+	/** The texture the current draw samples (decoded and cached), or 0; OutLevels describes its levels. */
+	[[nodiscard]] uint32 BindTexture(const FContext& Context, FTextureLevels& OutLevels);
+	/** Forgets the decoded textures that read the blocks [FirstBlock, EndBlock) (wrapping at the end of memory). */
+	void InvalidateTextures(uint32 FirstBlock, uint32 EndBlock);
 	/** Drops the texture cache. */
 	void ClearTextures();
 
@@ -170,6 +207,8 @@ private:
 	uint32 Framebuffer = 0;
 	uint32 ColorTexture = 0;
 	uint32 DepthTexture = 0;
+	/** A copy of the frame's colour, which the shader reads as the destination. */
+	uint32 DestinationTexture = 0;
 	uint32 VertexArray = 0;
 	uint32 VertexBuffer = 0;
 	uint32 PresentVertexArray = 0;
@@ -198,8 +237,9 @@ private:
 	FGSVertex FanFirst;
 	int32 NumVertices = 0;
 
-	/** The pending batch: triangles, lines or points, drawn with the state at Flush. */
+	/** The pending batch: triangles or points, drawn with the state at Flush. */
 	TArray<FBatchVertex> Batch;
+	TArray<FBatchPrimitive> BatchPrimitives;
 	uint32 BatchMode = 0;
 
 	TMap<FString, FTextureEntry> Textures;

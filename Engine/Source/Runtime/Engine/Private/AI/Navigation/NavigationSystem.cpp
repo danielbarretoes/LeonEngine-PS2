@@ -6,8 +6,10 @@
 #include "Debug/DebugDraw.h"
 #include "Engine/Level.h"
 #include "Engine/World.h"
+#include "HAL/LowLevelMemTracker.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/ConfigCacheIni.h"
+#include "Misc/MemStack.h"
 #include "Physics/PhysScene.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogNavigation, Log, All);
@@ -80,6 +82,7 @@ FWaypointLinkParams FWaypointLinkParams::FromConfig()
 
 void UNavigationSystem::Build(const UWorld& World)
 {
+	LLM_SCOPE(ELLMTag::AI);
 	Clear();
 	Params = FWaypointLinkParams::FromConfig();
 	Physics = &World.GetPhysicsScene();
@@ -248,15 +251,18 @@ bool UNavigationSystem::FindNodePath(const TArray<FNode>& InNodes, int32 From, i
 		return false;
 	}
 	const int32 Num = InNodes.Num();
-	TArray<float> Cost;
-	TArray<float> Estimate;
-	TArray<int32> CameFrom;
-	TArray<uint8> Closed;
+	// The search's state lives on the frame's stack: a bot's repath allocates nothing from the heap for it.
+	FMemMark Mark(FMemStack::Get());
+	TArray<float, TMemStackAllocator<>> Cost;
+	TArray<float, TMemStackAllocator<>> Estimate;
+	TArray<int32, TMemStackAllocator<>> CameFrom;
+	TArray<uint8, TMemStackAllocator<>> Closed;
 	Cost.Init(TNumericLimits<float>::Max(), Num);
 	Estimate.Init(TNumericLimits<float>::Max(), Num);
 	CameFrom.Init(INDEX_NONE, Num);
 	Closed.Init(0, Num);
-	TArray<int32> Open;
+	TArray<int32, TMemStackAllocator<>> Open;
+	Open.Reserve(Num);
 	Cost[From] = 0.0f;
 	Estimate[From] = FVector::Dist(InNodes[From].Location, InNodes[To].Location);
 	Open.Add(From);

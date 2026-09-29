@@ -11,7 +11,10 @@
 #include "PakWriter.h"
 
 // The pak tool (UE: UnrealPak):
-//   LeonPak <out.lpak> -create=<response file> [-align=<bytes>]   one "<source path>" "<path in the pak>" per line
+//   LeonPak <out.lpak> -create=<response file> [-align=<bytes>] [-order=<order file>]
+//                                                                  one "<source path>" "<path in the pak>" per line;
+//                                                                  -order: the entries' data in the order the file
+//                                                                  gives ("<path>" <rank> lines), the rest after
 //   LeonPak <in.lpak> -list                                        the mount point and every entry
 //   LeonPak <in.lpak> -test                                        checks every entry's SHA-1
 //   LeonPak <in.lpak> -extract=<dir>                               writes every entry under <dir>
@@ -22,14 +25,15 @@ namespace
 	int32 Usage()
 	{
 		UE_LOG(LogPakFile, Display, "Usage:");
-		UE_LOG(LogPakFile, Display, "  LeonPak <out.lpak> -create=<response file> [-align=<bytes>]");
+		UE_LOG(
+			LogPakFile, Display, "  LeonPak <out.lpak> -create=<response file> [-align=<bytes>] [-order=<order file>]");
 		UE_LOG(LogPakFile, Display, "  LeonPak <in.lpak> -list | -test | -extract=<dir>");
 		UE_LOG(
 			LogPakFile, Display, "A response file lists one file per line: \"<source path>\" \"<path in the pak>\".");
 		return 1;
 	}
 
-	int32 CreatePak(const FString& PakFilename, const FString& ResponseFile, int64 Alignment)
+	int32 CreatePak(const FString& PakFilename, const FString& ResponseFile, int64 Alignment, const FString& OrderFile)
 	{
 		TArray<FPakInputPair> Pairs;
 		if (!FPakWriter::ReadResponseFile(*ResponseFile, Pairs))
@@ -37,6 +41,16 @@ namespace
 			return 1;
 		}
 		FPakWriter Writer(Alignment);
+		if (!OrderFile.IsEmpty())
+		{
+			TMap<FString, int64> OpenOrder;
+			if (!FPakWriter::ReadOrderFile(*OrderFile, OpenOrder))
+			{
+				return 1;
+			}
+			Writer.SetOpenOrder(OpenOrder);
+			UE_LOG(LogPakFile, Display, "Open order: %d path(s) from %s", OpenOrder.Num(), *OrderFile);
+		}
 		for (const FPakInputPair& Pair : Pairs)
 		{
 			if (!Writer.AddFileFromDisk(Pair))
@@ -146,7 +160,9 @@ namespace
 					return 1;
 				}
 			}
-			return CreatePak(PakFilename, ResponseFile, Alignment);
+			FString OrderFile;
+			(void)FParse::Value(CmdLine, "order=", OrderFile);
+			return CreatePak(PakFilename, ResponseFile, Alignment, OrderFile);
 		}
 
 		FPakFile PakFile(&FPlatformFileManager::Get().GetPlatformFile(), *PakFilename);

@@ -12,6 +12,11 @@ class AShooterProjectile;
  * ThrowSpeed plus the thrower's velocity. The projectile takes the weapon's fuse, damage, radius, armor ratio, mesh and
  * explosion sound. When the last round is thrown the weapon leaves the inventory and is destroyed (a grenade), and the
  * pawn draws its best weapon.
+ *
+ * The grenades (CS 1.6): the HE, the flashbang and the smoke grenade share the grenade slot, one weapon of each; a
+ * weapon holds up to AmmoPerClip of its grenades (the flashbang two, the others one), one to start with, and a
+ * purchase of one already carried adds a grenade (AddGrenade). The grenade key cycles them in GrenadeOrder (the HE,
+ * the flashbang, the smoke grenade).
  */
 UCLASS(Abstract, Config = Game)
 class SHOOTERGAME_API AShooterWeapon_Projectile : public AShooterWeapon
@@ -47,12 +52,20 @@ public:
 	UPROPERTY(Config)
 	FSoftObjectPath ExplodeSoundName;
 
+	/** Where the grenade key's cycle puts it (the HE 0, the flashbang 1, the smoke grenade 2). */
+	UPROPERTY()
+	int32 GrenadeOrder = 0;
+
+	/** One more grenade of the kind, up to AmmoPerClip; false when the weapon holds as many as it may. */
+	bool AddGrenade();
+
 	/** The last projectile thrown, while it flies. */
 	[[nodiscard]] AShooterProjectile* GetLastProjectile() const
 	{
 		return LastProjectile;
 	}
 
+	/** A new grenade weapon holds one grenade. */
 	void PostInitializeComponents() override;
 
 protected:
@@ -70,12 +83,32 @@ protected:
 	USoundWave* ExplodeSound = nullptr;
 };
 
-/** Counter-Strike's HE grenade: one throw, 98 damage within 889 cm after 1.5 s (CS: hegrenade). */
+/** Counter-Strike's HE grenade: one, 98 damage within 889 cm after 1.5 s, $300 (CS: hegrenade). */
 UCLASS(Config = Game)
-class SHOOTERGAME_API AShooterWeapon_Grenade : public AShooterWeapon_Projectile
+class SHOOTERGAME_API AShooterWeapon_HEGrenade : public AShooterWeapon_Projectile
 {
 	GENERATED_BODY()
 
 public:
-	AShooterWeapon_Grenade(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+	AShooterWeapon_HEGrenade(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+};
+
+/** Counter-Strike's flashbang: two, a flash after 1.5 s (AShooterProjectile_Flashbang), $200 (CS: flashbang). */
+UCLASS(Config = Game)
+class SHOOTERGAME_API AShooterWeapon_Flashbang : public AShooterWeapon_Projectile
+{
+	GENERATED_BODY()
+
+public:
+	AShooterWeapon_Flashbang(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+};
+
+/** Counter-Strike's smoke grenade: one, a cloud after 1.5 s (AShooterProjectile_Smoke), $300 (CS: smokegrenade). */
+UCLASS(Config = Game)
+class SHOOTERGAME_API AShooterWeapon_SmokeGrenade : public AShooterWeapon_Projectile
+{
+	GENERATED_BODY()
+
+public:
+	AShooterWeapon_SmokeGrenade(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 };

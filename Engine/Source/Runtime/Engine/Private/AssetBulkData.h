@@ -19,6 +19,8 @@ bool SerializeBulkPayload(FArchive& Ar, UObject* Owner, FByteBulkData& BulkData,
 	{
 		TArray<uint8> Bytes;
 		FMemoryWriter Writer(Bytes, /*bIsPersistent =*/true);
+		// The payload is written and read with the package's version (UE: the bulk data's archive carries it).
+		Writer.SetUEVer(Ar.UEVer());
 		SerializePayload(Writer);
 		(void)BulkData.Lock(LOCK_READ_WRITE);
 		void* Data = BulkData.Realloc(Bytes.Num());
@@ -46,6 +48,7 @@ bool SerializeBulkPayload(FArchive& Ar, UObject* Owner, FByteBulkData& BulkData,
 	}
 	BulkData.RemoveBulkData();
 	FMemoryReader Reader(Bytes, /*bIsPersistent =*/true);
+	Reader.SetUEVer(Ar.UEVer());
 	SerializePayload(Reader);
 	if (Reader.IsError() || Reader.Tell() != Bytes.Num())
 	{

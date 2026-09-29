@@ -8,54 +8,41 @@
 class UTexture2D;
 
 /**
- * How the forward pass lights a surface: the render side of a UMaterial's shading model (MSM_DefaultLit draws with
- * BlinnPhong, MSM_Unlit with Unlit). Leon keeps UE3's name for it so it does not clash with Engine's
- * EMaterialShadingModel.
+ * How the scene renderer lights a surface: the render side of a UMaterial's shading model (MSM_DefaultLit draws Lit,
+ * MSM_Unlit Unlit). Leon keeps UE3's name for it so it does not clash with Engine's EMaterialShadingModel.
  */
 enum class EMaterialLightingModel
 {
-	BlinnPhong,
+	/** Per-vertex diffuse light: the ambient share plus the directional and point lights. */
+	Lit,
+	/** The albedo as it is. */
 	Unlit,
 };
 
-/** Roughness from Blinn shininess (high Ns gives sharp reflections). */
-[[nodiscard]] inline float RoughnessFromShininess(float InShininess)
-{
-	const float S = FMath::Max(InShininess, 1.0f);
-	return FMath::Clamp(FMath::Sqrt(2.0f / (S + 2.0f)), 0.04f, 1.0f);
-}
-
 /**
- * Per-object surface for the forward lit pass: the values a material gives the shaders (UE: what a
- * FMaterialRenderProxy passes; a UMaterial makes one with GetRenderProxy, and a scene proxy keeps one per section).
- * Specular / Metallic + Roughness drive the Blinn highlights.
- * UvScale tiles the albedo / normal maps (UE-like material instance tiling).
+ * The values a material draws a section with (UE: what a FMaterialRenderProxy passes; a UMaterial makes one with
+ * GetRenderProxy, and a scene proxy keeps one per section). The GS scene renderer reads all of them.
  * Colors are linear RGB triples.
  *
- * The maps are texture assets (UObjects) these values do not own: whoever made the values keeps the textures alive.
+ * The albedo map is a texture asset (a UObject) these values do not own: whoever made the values keeps it alive.
  */
 struct RENDERCORE_API FMaterial
 {
-	EMaterialLightingModel Shading = EMaterialLightingModel::BlinnPhong;
+	EMaterialLightingModel Shading = EMaterialLightingModel::Lit;
 	FVector Albedo = FVector(0.55f, 0.72f, 0.85f);
-	FVector Specular = FVector(0.04f, 0.04f, 0.04f); // F0 / MTL Ks (dielectric default ~4%)
-	float Metallic = 0.0f; // 0 = dielectric, 1 = metal (tints specular, kills diffuse)
-	float Alpha = 1.0f; // < 1: transparent queue (back to front)
-	float Shininess = 32.0f;
-	float Roughness = RoughnessFromShininess(32.0f); // 0 = mirror, 1 = fully blurred
-	FVector2D UvScale = FVector2D(1.0f, 1.0f); // multiplies mesh UVs when sampling maps
-	bool bCastsShadows = true;
-	bool bPlanarMirror = false; // horizontal ground mirror (scene planar reflection pass)
-	UTexture2D* AlbedoMap = nullptr; // optional; white if null
-	UTexture2D* NormalMap = nullptr; // optional; flat (+Z) if null
+	/** Below 1 the section is drawn translucent, back to front. */
+	float Alpha = 1.0f;
+	/** Multiplies the mesh UVs when sampling the albedo map (UE-like material instance tiling). */
+	FVector2D UvScale = FVector2D(1.0f, 1.0f);
+	/** Optional; the albedo alone when null. */
+	UTexture2D* AlbedoMap = nullptr;
+	/** The albedo map samples its MIPMAP levels (trilinear); off: level 0 only, bilinear. */
+	bool bMipmaps = true;
+	/** Added to the albedo map's level of detail (in levels: +1 is half the texels, blurrier; -1 sharper). */
+	float LodBias = 0.0f;
 
 	[[nodiscard]] bool IsTransparent() const
 	{
 		return Alpha < 0.999f;
-	}
-
-	void SyncRoughnessFromShininess()
-	{
-		Roughness = RoughnessFromShininess(Shininess);
 	}
 };

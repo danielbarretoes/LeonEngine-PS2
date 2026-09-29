@@ -1,24 +1,37 @@
 #include "Engine/World.h"
 
 #include "BodyInstance.h"
+#include "Components/PointLightComponent.h"
 #include "Components/PrimitiveComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/Level.h"
 #include "Engine/Player.h"
+#include "Engine/PointLight.h"
 #include "EngineLogs.h"
+#include "EngineStats.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/WorldSettings.h"
+#include "HAL/LowLevelMemTracker.h"
 #include "Misc/App.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "RendererInterface.h"
 #include "SceneInterface.h"
+#include "Stats/Stats.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectHash.h"
+
+DECLARE_CYCLE_STAT(TEXT("Tick Actors"), STAT_TickActors, STATGROUP_Engine);
+DECLARE_CYCLE_STAT(TEXT("Timers"), STAT_TickTimers, STATGROUP_Engine);
+DECLARE_CYCLE_STAT(TEXT("Physics Step"), STAT_WorldPhysicsStep, STATGROUP_Physics);
+DECLARE_CYCLE_STAT(TEXT("Character Overlaps"), STAT_CharacterOverlaps, STATGROUP_Physics);
+DECLARE_CYCLE_STAT(TEXT("Spawn Actor"), STAT_SpawnActor, STATGROUP_Engine);
+DECLARE_CYCLE_STAT(TEXT("Construct Actor"), STAT_ConstructActor, STATGROUP_Engine);
+DECLARE_CYCLE_STAT(TEXT("Post Actor Construction"), STAT_PostActorConstruction, STATGROUP_Engine);
 
 FActorSpawnParameters::FActorSpawnParameters()
 	: bDeferConstruction(false)
@@ -92,12 +105,17 @@ void UWorld::InitWorld(const InitializationValues IVS)
 		PersistentLevel = NewObject<ULevel>(this, TEXT("PersistentLevel"));
 	}
 	PersistentLevel->OwningWorld = this;
-	// A loaded map's actors were saved in spawn order: they take their IDs in that order, before anything spawns.
+	// A loaded map's actors were saved in spawn order: they take their IDs in that order, before anything spawns, and
+	// their places in the level (the tick order).
 	for (AActor* Actor : PersistentLevel->Actors)
 	{
 		if (Actor != nullptr && Actor->GetUniqueID() == 0)
 		{
 			Actor->SetUniqueID(++NextUniqueID);
+		}
+		if (Actor != nullptr && Actor->LevelOrder == 0)
+		{
+			Actor->LevelOrder = ++NextLevelOrder;
 		}
 	}
 	// UE: InitWorld allocates the scene unless the engine never renders (-nullrhi, a dedicated server).
@@ -181,6 +199,8 @@ void UWorld::DestroyWorld(bool /*bInformEngineOfWorld*/)
 	{
 		PersistentLevel->Actors.Empty();
 	}
+	TimerManager.ClearAllTimers();
+	TickTaskManager.UnregisterAll();
 	Physics.Clear();
 	Navigation.Clear();
 
@@ -325,6 +345,7 @@ AActor* UWorld::SpawnActor(
 AActor* UWorld::SpawnActorInternal(UClass* Class, const FVector* Location, const FRotator* Rotation,
 	const FTransform* Transform, const FActorSpawnParameters& SpawnParameters)
 {
+	SCOPE_CYCLE_COUNTER(STAT_SpawnActor);
 	if (Class == nullptr)
 	{
 		UE_LOG(LogSpawn, Warning, TEXT("SpawnActor failed because no class was specified"));
@@ -354,8 +375,12 @@ AActor* UWorld::SpawnActorInternal(UClass* Class, const FVector* Location, const
 		return nullptr;
 	}
 
-	AActor* Actor = NewObject<AActor>(
-		LevelToSpawnIn, Class, SpawnParameters.Name, SpawnParameters.ObjectFlags, SpawnParameters.Template);
+	AActor* Actor = nullptr;
+	{
+		SCOPE_CYCLE_COUNTER(STAT_ConstructActor);
+		Actor = NewObject<AActor>(
+			LevelToSpawnIn, Class, SpawnParameters.Name, SpawnParameters.ObjectFlags, SpawnParameters.Template);
+	}
 	Actor->SetUniqueID(++NextUniqueID);
 	Actor->SetOwner(SpawnParameters.Owner);
 	Actor->SetInstigator(SpawnParameters.Instigator);
@@ -385,14 +410,95 @@ AActor* UWorld::SpawnActorInternal(UClass* Class, const FVector* Location, const
 	else
 	{
 		LevelToSpawnIn->Actors.Add(Actor);
+		Actor->LevelOrder = ++NextLevelOrder;
 	}
 
 	Actor->RegisterAllComponents();
 	if (!SpawnParameters.bDeferConstruction)
 	{
+		SCOPE_CYCLE_COUNTER(STAT_PostActorConstruction);
 		PostActorConstruction(Actor);
 	}
+	if (!Actor->IsPendingKillPending())
+	{
+		OnActorSpawned.Broadcast(Actor);
+	}
 	return Actor;
+}
+
+FDelegateHandle UWorld::AddOnActorSpawnedHandler(const FOnActorSpawned::FDelegate& InHandler)
+{
+	return OnActorSpawned.Add(InHandler);
+}
+
+void UWorld::RemoveOnActorSpawnedHandler(FDelegateHandle InHandle)
+{
+	(void)OnActorSpawned.Remove(InHandle);
+}
+
+APointLight* UWorld::AcquirePooledPointLight(const FVector& Location, float LifeSpan)
+{
+	if (bIsTearingDown || PersistentLevel == nullptr)
+	{
+		return nullptr;
+	}
+	// A light destroyed by someone else (a level cleared) leaves the pool, with its timer.
+	for (int32 Index = PooledPointLights.Num() - 1; Index >= 0; --Index)
+	{
+		if (PooledPointLights[Index] == nullptr || PooledPointLights[Index]->IsPendingKillPending())
+		{
+			TimerManager.ClearTimer(PooledPointLightTimers[Index]);
+			PooledPointLights.RemoveAt(Index);
+			PooledPointLightTimers.RemoveAt(Index);
+		}
+	}
+	int32 Slot = PooledPointLightTimers.IndexOfByPredicate(
+		[this](const FTimerHandle& Handle) { return !TimerManager.IsTimerActive(Handle); });
+	if (Slot == INDEX_NONE && PooledPointLights.Num() < MaxPooledPointLights)
+	{
+		FActorSpawnParameters SpawnInfo;
+		SpawnInfo.ObjectFlags |= RF_Transient;
+		APointLight* Light = SpawnActor<APointLight>(Location, FRotator::ZeroRotator, SpawnInfo);
+		if (Light == nullptr)
+		{
+			return nullptr;
+		}
+		// Out until the caller shows it with its values.
+		Light->GetPointLightComponent()->SetVisibility(false);
+		Slot = PooledPointLights.Add(Light);
+		PooledPointLightTimers.AddDefaulted();
+	}
+	if (Slot == INDEX_NONE)
+	{
+		// Every light is on: the one that goes out first is taken.
+		Slot = 0;
+		for (int32 Index = 1; Index < PooledPointLightTimers.Num(); ++Index)
+		{
+			if (TimerManager.GetTimerRemaining(PooledPointLightTimers[Index]) <
+				TimerManager.GetTimerRemaining(PooledPointLightTimers[Slot]))
+			{
+				Slot = Index;
+			}
+		}
+	}
+	APointLight* Light = PooledPointLights[Slot];
+	(void)Light->SetActorLocation(Location);
+	// A timer without a delegate (nothing to allocate): the step hides the light once it is no longer active.
+	TimerManager.SetTimer(PooledPointLightTimers[Slot], FMath::Max(LifeSpan, KINDA_SMALL_NUMBER), false);
+	return Light;
+}
+
+void UWorld::HideExpiredPooledPointLights()
+{
+	for (int32 Index = 0; Index < PooledPointLights.Num(); ++Index)
+	{
+		APointLight* Light = PooledPointLights[Index];
+		if (Light != nullptr && !Light->IsPendingKillPending() &&
+			!TimerManager.IsTimerActive(PooledPointLightTimers[Index]) && Light->GetPointLightComponent()->IsVisible())
+		{
+			Light->GetPointLightComponent()->SetVisibility(false);
+		}
+	}
 }
 
 AActor* UWorld::SpawnActor(UClass* Class, const FTransform* Transform, const FActorSpawnParameters& SpawnParameters)
@@ -471,69 +577,93 @@ bool UWorld::DestroyActor(AActor* Actor, bool /*bNetForce*/, bool /*bShouldModif
 
 void UWorld::Tick(float InDeltaTime)
 {
-	DeltaTimeSeconds = InDeltaTime;
-	TimeSeconds += InDeltaTime;
+	RunTick(InDeltaTime, nullptr);
+}
+
+void UWorld::RunTickGroup(ETickingGroup Group, float InDeltaTime)
+{
+	// Spawns wait in PendingSpawnActors and destroys null their slot while a group runs: the level keeps its size
+	// until the group ends, then the spawned actors join it and begin play.
 	bTicking = true;
-	if (PersistentLevel != nullptr)
-	{
-		// Spawns wait in PendingSpawnActors and destroys null their slot: the array keeps its size during the loop. A
-		// possessed pawn ticks after its controller, so its movement consumes the input the controller processed this
-		// frame (UE: AController::AddPawnTickDependency); a pawn met before its controller waits for it.
-		const int32 NumActors = PersistentLevel->Actors.Num();
-		TArray<APawn*> WaitingPawns;
-		const auto TickWaitingPawn = [&WaitingPawns, InDeltaTime](const AController& Controller)
-		{
-			APawn* Pawn = Controller.GetPawn();
-			if (Pawn != nullptr && WaitingPawns.Remove(Pawn) > 0 && !Pawn->IsPendingKillPending())
-			{
-				Pawn->TickActor(InDeltaTime);
-			}
-		};
-		for (int32 Index = 0; Index < NumActors; ++Index)
-		{
-			AActor* Actor = PersistentLevel->Actors[Index];
-			if (Actor == nullptr || Actor->IsPendingKillPending())
-			{
-				continue;
-			}
-			if (APawn* Pawn = Cast<APawn>(Actor))
-			{
-				const AController* Controller = Pawn->GetController();
-				const int32 ControllerIndex = Controller != nullptr
-					? PersistentLevel->Actors.Find(const_cast<AController*>(Controller))
-					: INDEX_NONE;
-				if (ControllerIndex > Index)
-				{
-					WaitingPawns.Add(Pawn);
-					continue;
-				}
-			}
-			Actor->TickActor(InDeltaTime);
-			if (const AController* Controller = Cast<AController>(Actor))
-			{
-				TickWaitingPawn(*Controller);
-			}
-		}
-		// A pawn whose controller went away during the tick still ticks.
-		for (APawn* Pawn : WaitingPawns)
-		{
-			if (Pawn != nullptr && !Pawn->IsPendingKillPending())
-			{
-				Pawn->TickActor(InDeltaTime);
-			}
-		}
-	}
+	TickTaskManager.RunTickGroup(Group, InDeltaTime);
 	bTicking = false;
 	FlushPendingSpawns();
 	CompactActors();
+}
+
+void UWorld::RunTick(float InDeltaTime, const FWorldGameplayFrameParams* Params)
+{
+	LLM_SCOPE(ELLMTag::GameMisc);
+	DeltaTimeSeconds = InDeltaTime;
+	// The time is counted in the timers' integer units and read as seconds from them: no float sum drifts (D4).
+	TimeUnits += FTimerManager::SecondsToTimeUnits(InDeltaTime);
+	TimeSeconds = FTimerManager::TimeUnitsToSeconds(TimeUnits);
+	TickTaskManager.StartFrame();
+	{
+		// The timers first: what a timer due now changes (a reload done, a round gone live) is what this step's actors
+		// see, as if each of them had polled its deadline in its own tick (Leon; UE ticks them after TG_PostPhysics).
+		SCOPE_CYCLE_COUNTER(STAT_TickTimers);
+		bTicking = true;
+		TimerManager.Tick(InDeltaTime);
+		HideExpiredPooledPointLights();
+		bTicking = false;
+		FlushPendingSpawns();
+		CompactActors();
+	}
+	{
+		// The controllers process their input and their pawns tick after them (AController::AddPawnTickDependency),
+		// so a character's movement component moves it with this step's input.
+		SCOPE_CYCLE_COUNTER(STAT_TickActors);
+		RunTickGroup(TG_PrePhysics, InDeltaTime);
+	}
+	if (Params != nullptr)
+	{
+		SCOPE_CYCLE_COUNTER(STAT_WorldPhysicsStep);
+		StepPhysics(*Params);
+	}
+	{
+		SCOPE_CYCLE_COUNTER(STAT_TickActors);
+		RunTickGroup(TG_DuringPhysics, InDeltaTime);
+		RunTickGroup(TG_PostPhysics, InDeltaTime);
+	}
 
 	// The cameras last, after every actor moved (UE).
 	ForEach<APlayerController>(
 		[InDeltaTime](APlayerController& PlayerController) { PlayerController.UpdateCameraManager(InDeltaTime); });
+	{
+		SCOPE_CYCLE_COUNTER(STAT_TickActors);
+		RunTickGroup(TG_PostUpdateWork, InDeltaTime);
+	}
 
 	// The effects age with the world's time.
 	ImpactMarks.Tick(InDeltaTime);
 	Tracers.Tick(InDeltaTime);
+	EffectSprites.Tick(InDeltaTime);
+
+	if (Params != nullptr)
+	{
+		if (Params->CollisionDebugDraw != nullptr)
+		{
+			ForEach<ACharacter>(
+				[&](ACharacter& Character)
+				{
+					Physics.AppendCollisionDebug(*Params->CollisionDebugDraw, Character.GetCapsule(),
+						Character.GetActorLocation(),
+						static_cast<SIZE_T>(Character.GetCapsuleComponent()->GetUniqueID()));
+				});
+		}
+		if (Params->NavigationDebugDraw != nullptr)
+		{
+			Navigation.AppendDebugDraw(*Params->NavigationDebugDraw);
+		}
+	}
+
+	// The step's state goes to the scene: the render draws between the last two steps (D4).
+	if (Scene != nullptr)
+	{
+		SCOPE_CYCLE_COUNTER(STAT_EndOfFrameUpdates);
+		SendAllEndOfFrameUpdates();
+	}
 }
 
 void UWorld::FlushPendingSpawns()
@@ -553,6 +683,7 @@ void UWorld::FlushPendingSpawns()
 			continue;
 		}
 		Level->Actors.Add(Actor);
+		Actor->LevelOrder = ++NextLevelOrder;
 		if (bBegunPlay && Actor->IsActorInitialized())
 		{
 			Actor->DispatchBeginPlay();
@@ -581,12 +712,6 @@ SIZE_T UWorld::ActorCount() const
 	return Count;
 }
 
-void UWorld::SetPhysicsBackend(EPhysicsBackend PhysicsBackend)
-{
-	Physics = FPhysScene(PhysicsBackend);
-	RecreatePhysicsBodies();
-}
-
 void UWorld::RecreatePhysicsBodies()
 {
 	Physics.Clear();
@@ -611,26 +736,115 @@ void UWorld::RecreatePhysicsBodies()
 	}
 }
 
+namespace
+{
+
+	/** The characters a world separates: a match's worth without an allocation. */
+	using FCharacterArray = TArray<ACharacter*, TInlineAllocator<32>>;
+
+	/** How far (cm) a push may move a character before its pairs are looked up again. */
+	constexpr float CharacterPairSlack = 16.0f;
+
+	/** Two characters by their place in the list, First before Second. */
+	struct FCharacterPair
+	{
+		int32 First;
+		int32 Second;
+	};
+
+	/**
+	 * One pass of ACharacter::ResolvePawnOverlap over the pairs of characters in list order ((0, 1), (0, 2), ...,
+	 * (1, 2), ...), without the pairs too far apart to touch: a sort and sweep on X finds the others, and when a push
+	 * moves a character further than the slack the pairs not resolved yet are found again.
+	 */
+	void ResolveCharacterPairs(const FCharacterArray& Characters)
+	{
+		const int32 Num = Characters.Num();
+		bool bAnyDone = false;
+		FCharacterPair Last{0, 0};
+		for (;;)
+		{
+			// A character's location is its root's (ResolvePawnOverlap moves it there).
+			TArray<FVector, TInlineAllocator<32>> Anchors;
+			TArray<int32, TInlineAllocator<32>> ByX;
+			float MaxRadius = 0.0f;
+			for (int32 Index = 0; Index < Num; ++Index)
+			{
+				Anchors.Add(Characters[Index]->GetRootComponent()->GetRelativeLocation());
+				ByX.Add(Index);
+				MaxRadius = FMath::Max(MaxRadius, FMath::Abs(Characters[Index]->GetCapsule().GetCapsuleRadius()));
+			}
+			ByX.Sort([&Anchors](const int32 A, const int32 B)
+				{ return Anchors[A].X < Anchors[B].X || (Anchors[A].X == Anchors[B].X && A < B); });
+
+			const float Reach = 2.0f * (MaxRadius + CharacterPairSlack);
+			TArray<FCharacterPair, TInlineAllocator<64>> Pairs;
+			for (int32 SortedA = 0; SortedA < Num; ++SortedA)
+			{
+				const int32 A = ByX[SortedA];
+				for (int32 SortedB = SortedA + 1; SortedB < Num && Anchors[ByX[SortedB]].X - Anchors[A].X <= Reach;
+					++SortedB)
+				{
+					const int32 B = ByX[SortedB];
+					if (FMath::Abs(Anchors[B].Y - Anchors[A].Y) > Reach)
+					{
+						continue;
+					}
+					const FCharacterPair Pair{FMath::Min(A, B), FMath::Max(A, B)};
+					if (bAnyDone &&
+						(Pair.First < Last.First || (Pair.First == Last.First && Pair.Second <= Last.Second)))
+					{
+						continue;
+					}
+					Pairs.Add(Pair);
+				}
+			}
+			Pairs.Sort([](const FCharacterPair& L, const FCharacterPair& R)
+				{ return L.First < R.First || (L.First == R.First && L.Second < R.Second); });
+
+			auto HasDrifted = [&](int32 Index)
+			{
+				const FVector Location = Characters[Index]->GetRootComponent()->GetRelativeLocation();
+				return FMath::Abs(Location.X - Anchors[Index].X) > CharacterPairSlack ||
+					FMath::Abs(Location.Y - Anchors[Index].Y) > CharacterPairSlack;
+			};
+			bool bDrifted = false;
+			for (const FCharacterPair& Pair : Pairs)
+			{
+				bAnyDone = true;
+				Last = Pair;
+				Characters[Pair.First]->ResolvePawnOverlap(*Characters[Pair.Second]);
+				if (HasDrifted(Pair.First) || HasDrifted(Pair.Second))
+				{
+					bDrifted = true;
+					break;
+				}
+			}
+			if (!bDrifted)
+			{
+				return;
+			}
+		}
+	}
+
+} // namespace
+
 void UWorld::ResolveCharacterOverlaps()
 {
-	TArray<ACharacter*> Characters;
+	SCOPE_CYCLE_COUNTER(STAT_CharacterOverlaps);
+	// Inline storage: called twice a frame, it allocates nothing for a match's characters.
+	FCharacterArray Characters;
 	ForEach<ACharacter>([&](ACharacter& Character) { Characters.Add(&Character); });
 	if (Characters.Num() < 2)
 	{
 		return;
 	}
 
-	// Flow: collect live Characters → iterate pairs → equal XY depenetration (2–3 passes).
-	constexpr int Iterations = 3;
-	for (int Iter = 0; Iter < Iterations; ++Iter)
+	// Flow: collect live Characters → the pairs close enough to touch → equal XY depenetration (3 passes).
+	constexpr int32 Iterations = 3;
+	for (int32 Iter = 0; Iter < Iterations; ++Iter)
 	{
-		for (int32 I = 0; I < Characters.Num(); ++I)
-		{
-			for (int32 J = I + 1; J < Characters.Num(); ++J)
-			{
-				Characters[I]->ResolvePawnOverlap(*Characters[J]);
-			}
-		}
+		ResolveCharacterPairs(Characters);
 	}
 	// The capsules' bodies follow (P17: traces hit characters).
 	for (ACharacter* Character : Characters)
@@ -641,10 +855,13 @@ void UWorld::ResolveCharacterOverlaps()
 
 void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& Params)
 {
-	// The actors tick first: the controllers process their input and their pawns tick after them, so a character's
-	// movement component moves it with this frame's input (UE's order: UCharacterMovementComponent::TickComponent), and
-	// the camera managers update last.
-	Tick(Params.DeltaTime);
+	RunTick(Params.DeltaTime, &Params);
+}
+
+void UWorld::StepPhysics(const FWorldGameplayFrameParams& Params)
+{
+	// The pawns separate, the bodies step, the characters leave what they overlap and separate again, then the
+	// simulated bodies move their components.
 	ResolveCharacterOverlaps();
 
 	FPhysSceneStepParams Step{};
@@ -672,21 +889,6 @@ void UWorld::TickGameplayFrame(const FWorldGameplayFrameParams& Params)
 	ResolveCharacterOverlaps();
 
 	Physics.SyncComponentsToBodies();
-
-	if (Params.CollisionDebugDraw != nullptr)
-	{
-		ForEach<ACharacter>(
-			[&](ACharacter& Character)
-			{
-				Physics.AppendCollisionDebug(*Params.CollisionDebugDraw, Character.GetCapsule(),
-					Character.GetActorLocation(), static_cast<SIZE_T>(Character.GetCapsuleComponent()->GetUniqueID()));
-			});
-	}
-
-	if (Params.NavigationDebugDraw != nullptr)
-	{
-		Navigation.AppendDebugDraw(*Params.NavigationDebugDraw);
-	}
 }
 
 void UWorld::SendAllEndOfFrameUpdates()

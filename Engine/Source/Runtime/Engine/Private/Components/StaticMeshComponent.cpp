@@ -2,6 +2,7 @@
 
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshSocket.h"
+#include "EngineLogs.h"
 #include "Materials/Material.h"
 #include "StaticMeshSceneProxy.h"
 
@@ -37,6 +38,27 @@ bool UStaticMeshComponent::SetStaticMesh(UStaticMesh* NewMesh)
 	return true;
 }
 
+bool UStaticMeshComponent::HasValidBakedVertexColors() const
+{
+	return StaticMesh != nullptr && BakedVertexColors.Matches(StaticMesh->GetLODResources().RenderData);
+}
+
+void UStaticMeshComponent::SetBakedVertexColors(FLPS2ColorStreams&& InColors)
+{
+	BakedVertexColors = MoveTemp(InColors);
+	MarkRenderStateDirty();
+}
+
+void UStaticMeshComponent::Serialize(FArchive& Ar)
+{
+	Super::Serialize(Ar);
+	BakedVertexColors.Serialize(Ar);
+	if (Ar.IsLoading() && Ar.IsError())
+	{
+		UE_LOG(LogEngine, Error, "UStaticMeshComponent %s: damaged baked vertex colours", *GetPathName());
+	}
+}
+
 bool UStaticMeshComponent::HasValidMesh() const
 {
 	return StaticMesh != nullptr && StaticMesh->HasValidRenderData();
@@ -49,6 +71,20 @@ UMaterialInterface* UStaticMeshComponent::GetMaterial(int32 ElementIndex) const
 		return OverrideMaterials[ElementIndex];
 	}
 	return StaticMesh != nullptr ? StaticMesh->GetMaterial(ElementIndex) : nullptr;
+}
+
+UMaterialInterface* UStaticMeshComponent::GetMaterialFromCollisionFaceIndex(int32 FaceIndex, int32& SectionIndex) const
+{
+	SectionIndex = INDEX_NONE;
+	const TArray<uint16>* Slots =
+		StaticMesh != nullptr ? &StaticMesh->GetPhysicsTriMeshData().MaterialIndices : nullptr;
+	if (Slots == nullptr || !Slots->IsValidIndex(FaceIndex))
+	{
+		return nullptr;
+	}
+	// Leon's sections are the material slots (UE maps the face to a render section, then its material).
+	SectionIndex = (*Slots)[FaceIndex];
+	return GetMaterial(SectionIndex);
 }
 
 int32 UStaticMeshComponent::GetNumMaterials() const
@@ -64,28 +100,13 @@ void UStaticMeshComponent::GetSectionMaterials(TArray<FMaterial>& OutMaterials) 
 	{
 		return;
 	}
-	const TArray<FMeshSection>& Sections = StaticMesh->GetLODResources().Sections;
-	const int32 NumSections = Sections.Num() == 0 ? 1 : Sections.Num();
+	const FStaticMeshLODResources& Resources = StaticMesh->GetLODResources();
+	const int32 NumSections = FMath::Max(Resources.GetNumSections(), 1);
 	OutMaterials.Reserve(NumSections);
 	for (int32 SectionIndex = 0; SectionIndex < NumSections; ++SectionIndex)
 	{
-		const int32 Slot = Sections.IsValidIndex(SectionIndex) ? Sections[SectionIndex].MaterialIndex : 0;
-		OutMaterials.Add(GetSlotRenderProxy(GetMaterial(Slot)));
+		OutMaterials.Add(GetSlotRenderProxy(GetMaterial(Resources.GetSectionMaterialIndex(SectionIndex))));
 	}
-}
-
-bool UStaticMeshComponent::HasShadowCastingMaterial() const
-{
-	const int32 NumSlots = FMath::Max(GetNumMaterials(), 1);
-	for (int32 Slot = 0; Slot < NumSlots; ++Slot)
-	{
-		const FMaterial Material = GetSlotRenderProxy(GetMaterial(Slot));
-		if (Material.bCastsShadows && !Material.IsTransparent() && Material.Shading != EMaterialLightingModel::Unlit)
-		{
-			return true;
-		}
-	}
-	return false;
 }
 
 FPrimitiveSceneProxy* UStaticMeshComponent::CreateSceneProxy()

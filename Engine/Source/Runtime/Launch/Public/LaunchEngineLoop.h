@@ -5,9 +5,7 @@
 #include "CoreTypes.h"
 #include "Templates/SharedPointer.h"
 #include "Templates/UniquePtr.h"
-#if WITH_ENGINE
-	#include "UnrealEngine.h"
-#endif
+#include "UnrealEngine.h"
 
 class FGenericWindow;
 class GenericApplication;
@@ -17,17 +15,11 @@ class GenericApplication;
  *
  * - PreInit: the command line, the project, the config and the log, then the platform application, the main window
  *   and the RHI on its context (RHIInit; none for a desktop game with -nullrhi), then the statically linked modules.
- * - With the engine (WITH_ENGINE=1: LeonGame, ShooterGame, on every platform): Init creates GEngine of
- * `[/Script/Engine.Engine] GameEngine=`, queues
- *   `-ExecCmds=`, calls GEngine->Init and Start (the first map); Tick pumps the window's events, runs the deferred
- *   commands and GEngine->Tick; Exit calls GEngine->PreExit.
- * - Without it (WITH_ENGINE=0: ThirdPerson on PS2) Tick ticks FTicker::GetCoreTicker(), where game modules register
- * their per-frame work, and presents.
+ * - Init creates GEngine of `[/Script/Engine.Engine] GameEngine=`, queues `-ExecCmds=`, calls GEngine->Init and Start
+ *   (the first map); Tick pumps the window's events, runs the deferred commands and GEngine->Tick; Exit calls
+ *   GEngine->PreExit. Every game target is compiled against the engine (LeonGame, ShooterGame, on every platform).
  */
-class LAUNCH_API FEngineLoop
-#if WITH_ENGINE
-	: public IEngineLoop
-#endif
+class LAUNCH_API FEngineLoop : public IEngineLoop
 {
 public:
 	FEngineLoop();
@@ -65,19 +57,21 @@ public:
 private:
 	TUniquePtr<GenericApplication> Application;
 	TSharedPtr<FGenericWindow> MainWindow;
-	uint64 LastFrameCycles = 0;
 	int32 ExitCode = 0;
 
 	/** -Screenshot=<file.bmp>: frame ExitAfterFrames is saved (Leon). */
 	FString ScreenshotPath;
 	/** -ExitAfterFrames=N: the game exits after frame N (Leon). */
 	int32 ExitAfterFrames = 0;
+	/**
+	 * -ExitAfterSeconds=N: the game exits once N seconds passed since Init (Leon; a measured run's bound, MeasurePS2),
+	 * and when Init ended (FPlatformTime::Cycles64).
+	 */
+	uint32 ExitAfterSeconds = 0;
+	uint64 InitEndCycles = 0;
+	/** When PreInit started (FPlatformTime::Cycles64): the load time to the first frame is logged from it. */
+	uint64 PreInitCycles = 0;
 	int32 FrameCount = 0;
-	/** -tick=<Hz>: the fixed step of a headless run (Leon). */
-	float TickHz = 60.0f;
-	/** FPlatformTime::Seconds of the last frame / the next headless step. */
-	double LastFrameTime = 0.0;
-	double NextHeadlessTick = 0.0;
 };
 
 /** The process' engine loop (UE: GEngineLoop). */

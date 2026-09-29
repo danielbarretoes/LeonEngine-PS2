@@ -307,6 +307,21 @@ struct INPUTCORE_API EKeys
 	static const FKey Gamepad_Special_Left;
 	static const FKey Gamepad_Special_Right;
 
+	// The buttons' pressures, 0 to 1 (ps2-shipping N24; FDualShockPressure): UE's trigger axes (L2 / R2) and Leon's
+	// axes of the DualShock 2's other pressure-sensitive buttons.
+	static const FKey Gamepad_LeftTriggerAxis;
+	static const FKey Gamepad_RightTriggerAxis;
+	static const FKey Gamepad_FaceButton_BottomAxis;
+	static const FKey Gamepad_FaceButton_RightAxis;
+	static const FKey Gamepad_FaceButton_LeftAxis;
+	static const FKey Gamepad_FaceButton_TopAxis;
+	static const FKey Gamepad_LeftShoulderAxis;
+	static const FKey Gamepad_RightShoulderAxis;
+	static const FKey Gamepad_DPad_UpAxis;
+	static const FKey Gamepad_DPad_DownAxis;
+	static const FKey Gamepad_DPad_RightAxis;
+	static const FKey Gamepad_DPad_LeftAxis;
+
 	/** No key (UE: EKeys::Invalid, named None). */
 	static const FKey Invalid;
 

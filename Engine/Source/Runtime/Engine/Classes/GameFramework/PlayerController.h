@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Engine/EngineBaseTypes.h"
 #include "GameFramework/Controller.h"
+#include "GameFramework/ForceFeedbackEffect.h"
 #include "GameFramework/PlayerState.h"
 #include "InputCoreTypes.h"
 #include "Templates/SubclassOf.h"
@@ -180,6 +181,35 @@ public:
 	/** The HUD and the camera go with the controller (UE: Destroyed). */
 	void Destroyed() override;
 
+	/**
+	 * Plays a force feedback effect on the player's controller (UE; Docs/PLANS/ps2-shipping.md N24): the effects that
+	 * play add up (the stronger on each motor) each tick (ProcessForceFeedbackAndHaptics) and go to the local player's
+	 * controller id, the DualShock's motors on the PS2. A controller without a local player (a bot's) plays nothing.
+	 */
+	virtual void ClientPlayForceFeedback(
+		UForceFeedbackEffect* ForceFeedbackEffect, FForceFeedbackParameters Params = FForceFeedbackParameters());
+
+	/** Stops an effect, the ones with a tag, or everything with null and NAME_None (UE). */
+	virtual void ClientStopForceFeedback(UForceFeedbackEffect* ForceFeedbackEffect, FName Tag);
+
+	/** Advances the effects and sends their motors to the controller (UE); PlayerTick calls it. */
+	virtual void ProcessForceFeedbackAndHaptics(const float DeltaTime, const bool bGamePaused);
+
+	/** Whether the controller vibrates at all (UE). */
+	UPROPERTY()
+	bool bForceFeedbackEnabled = true;
+
+	/** The effects' strength, 0 to 1 (UE). */
+	UPROPERTY()
+	float ForceFeedbackScale = 1.0f;
+
+	/** The motors as the last tick sent them (UE). */
+	FForceFeedbackValues ForceFeedbackValues;
+
+	/** The effects playing (UE). */
+	UPROPERTY(Transient)
+	TArray<FActiveForceFeedbackEffect> ActiveForceFeedbackEffects;
+
 	/** Pitch limits of the control rotation in degrees (UE: APlayerCameraManager::ViewPitchMin / ViewPitchMax). */
 	UPROPERTY()
 	float ViewPitchMin = -89.0f;
@@ -192,6 +222,9 @@ protected:
 	void OnPossess(APawn* InPawn) override;
 
 private:
+	/** Gives the local player's controller its motors. */
+	void SendForceFeedback(const FForceFeedbackValues& Values) const;
+
 	/** Components pushed on the input stack (UE: CurrentInputStack). */
 	UPROPERTY(Transient)
 	TArray<UInputComponent*> CurrentInputStack;

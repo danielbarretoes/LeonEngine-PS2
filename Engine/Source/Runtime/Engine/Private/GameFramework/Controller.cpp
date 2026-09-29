@@ -4,6 +4,9 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/PlayerState.h"
+#include "Stats/Stats.h"
+
+DECLARE_CYCLE_STAT(TEXT("Possess"), STAT_Possess, STATGROUP_Engine);
 
 const FName NAME_Inactive(TEXT("Inactive"));
 const FName NAME_Playing(TEXT("Playing"));
@@ -17,6 +20,7 @@ AController::AController(const FObjectInitializer& ObjectInitializer)
 
 void AController::Possess(APawn* InPawn)
 {
+	SCOPE_CYCLE_COUNTER(STAT_Possess);
 	if (Pawn == InPawn)
 	{
 		return;
@@ -33,8 +37,27 @@ void AController::Possess(APawn* InPawn)
 	if (Pawn != nullptr)
 	{
 		Pawn->BindController(this);
+		AddPawnTickDependency(Pawn);
 		Pawn->PossessedBy(this);
 		OnPossess(Pawn);
+	}
+}
+
+void AController::AddPawnTickDependency(APawn* NewPawn)
+{
+	// UE: the pawn (and, through it, its components: FActorComponentTickFunction) ticks after its controller, so its
+	// movement uses the input the controller processed in the same step.
+	if (NewPawn != nullptr)
+	{
+		NewPawn->PrimaryActorTick.AddPrerequisite(this, PrimaryActorTick);
+	}
+}
+
+void AController::RemovePawnTickDependency(APawn* InOldPawn)
+{
+	if (InOldPawn != nullptr)
+	{
+		InOldPawn->PrimaryActorTick.RemovePrerequisite(this, PrimaryActorTick);
 	}
 }
 
@@ -45,6 +68,7 @@ void AController::UnPossess()
 		return;
 	}
 	APawn* OldPawn = Pawn;
+	RemovePawnTickDependency(OldPawn);
 	OldPawn->BindController(nullptr);
 	Pawn = nullptr;
 	OldPawn->UnPossessed();

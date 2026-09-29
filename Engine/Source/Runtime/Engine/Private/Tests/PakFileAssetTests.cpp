@@ -56,7 +56,7 @@ bool FPakFileLoadsAssetTest::RunTest(const FString& Parameters)
 		const UStaticMesh* Mesh = FindObject<UStaticMesh>(Package, TEXT("Cube"));
 		if (TestNotNull(TEXT("The static mesh"), Mesh))
 		{
-			TestTrue(TEXT("Its vertices"), Mesh->GetLODResources().Vertices.Num() > 0);
+			TestTrue(TEXT("Its vertices"), Mesh->GetLODResources().GetNumVertices() > 0);
 		}
 		TestTrue(TEXT("The file is the pak's"), FPaths::IsUnderDirectory(Package->FileName.ToString(), Root));
 		TArray<UObject*> Objects;

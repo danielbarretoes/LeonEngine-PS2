@@ -52,15 +52,15 @@ enum class EComponentMobility : uint8
 };
 
 /**
- * How a material is lit (UE: EMaterialShadingModel). Leon's forward renderer has two: Blinn-Phong lighting for
+ * How a material is lit (UE: EMaterialShadingModel). Leon's scene renderer has two: per-vertex diffuse light for
  * MSM_DefaultLit (UE: its default lit PBR model) and none for MSM_Unlit.
  */
 UENUM()
 enum EMaterialShadingModel
 {
-	/** The base colour as it is, with no lighting or shadows. */
+	/** The base colour as it is, with no lighting. */
 	MSM_Unlit,
-	/** Lit by the scene's lights, with shadows, specular and the normal map. */
+	/** Lit per vertex by the scene's ambient, directional and point lights. */
 	MSM_DefaultLit,
 };
 
@@ -201,4 +201,45 @@ struct ENGINE_API FDetachmentTransformRules
 	EDetachmentRule ScaleRule;
 	/** Kept for the UE signature: Leon has no transaction buffer. */
 	bool bCallModify;
+};
+
+/**
+ * Names a timer of an FTimerManager (UE: FTimerHandle): zero is no timer. The manager gives it a new value each
+ * SetTimer, so a stale handle never names a later timer.
+ */
+struct ENGINE_API FTimerHandle
+{
+	FTimerHandle() = default;
+
+	/** True once SetTimer gave it a timer (the timer may have run out since: FTimerManager::TimerExists). */
+	[[nodiscard]] bool IsValid() const
+	{
+		return Handle != 0;
+	}
+
+	/** Forgets the timer, without clearing it (UE). */
+	void Invalidate()
+	{
+		Handle = 0;
+	}
+
+	bool operator==(const FTimerHandle& Other) const
+	{
+		return Handle == Other.Handle;
+	}
+	bool operator!=(const FTimerHandle& Other) const
+	{
+		return Handle != Other.Handle;
+	}
+
+	[[nodiscard]] FString ToString() const
+	{
+		return FString::Printf(TEXT("%llu"), static_cast<unsigned long long>(Handle));
+	}
+
+private:
+	friend class FTimerManager;
+
+	/** The timer's slot in the low 32 bits, its serial number (never 0) in the high ones. */
+	uint64 Handle = 0;
 };

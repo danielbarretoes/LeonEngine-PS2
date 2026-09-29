@@ -45,6 +45,11 @@ uint16 GSToFixed4(float Value, uint32 FieldBits)
 	return uint16(FMath::Clamp(FMath::RoundToInt(Value * 16.0f), 0, Max));
 }
 
+float GSTruncateTexCoord(float Value)
+{
+	return BitsFloat(FloatBits(Value) & 0xffffff00u);
+}
+
 uint64 FGSPrim::Encode() const
 {
 	return Put(uint64(Type), 0, 3) | Put(bGouraud, 3, 1) | Put(bTextured, 4, 1) | Put(bFog, 5, 1) |

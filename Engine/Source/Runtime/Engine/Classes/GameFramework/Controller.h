@@ -100,6 +100,10 @@ public:
 	void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 protected:
+	/** The pawn's tick waits for the controller's (UE: AddPawnTickDependency / RemovePawnTickDependency). */
+	virtual void AddPawnTickDependency(APawn* NewPawn);
+	virtual void RemovePawnTickDependency(APawn* InOldPawn);
+
 	/** Called after the pawn changed (UE: OnPossess / OnUnPossess). */
 	virtual void OnPossess(APawn* InPawn);
 	virtual void OnUnPossess();

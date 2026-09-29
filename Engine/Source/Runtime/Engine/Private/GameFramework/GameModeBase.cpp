@@ -13,11 +13,26 @@
 #include "GameFramework/SpectatorPawn.h"
 #include "GameFramework/WorldSettings.h"
 
+namespace
+{
+
+	/**
+	 * The pawn a restart keeps: the controller's, but never its spectator pawn (UE: a spectating player has no pawn;
+	 * Leon's possesses the spectator, which a restart replaces with a new pawn).
+	 */
+	APawn* GetPawnToKeep(const AController& Controller)
+	{
+		APawn* Pawn = Controller.GetPawn();
+		const APlayerController* PlayerController = Cast<APlayerController>(&Controller);
+		return PlayerController != nullptr && Pawn != nullptr && Pawn == PlayerController->GetSpectatorPawn() ? nullptr
+																											  : Pawn;
+	}
+
+} // namespace
+
 AGameModeBase::AGameModeBase(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	// The game mode ticks its game state's clock (Leon: AInfo actors do not tick; UE's game mode ticks).
-	bCanEverTick = true;
 	GameStateClass = AGameStateBase::StaticClass();
 	PlayerControllerClass = APlayerController::StaticClass();
 	PlayerStateClass = APlayerState::StaticClass();
@@ -63,15 +78,6 @@ void AGameModeBase::InitGame(const FString& /*MapName*/, const FString& Options,
 void AGameModeBase::StartPlay()
 {
 	GetGameState().HandleBeginPlay();
-}
-
-void AGameModeBase::Tick(float DeltaSeconds)
-{
-	Super::Tick(DeltaSeconds);
-	if (GameState != nullptr && !GameState->IsPendingKillPending())
-	{
-		GameState->Tick(DeltaSeconds);
-	}
 }
 
 APlayerController* AGameModeBase::Login(
@@ -231,7 +237,7 @@ void AGameModeBase::RestartPlayerAtPlayerStart(AController* NewPlayer, AActor* S
 		return;
 	}
 	FRotator SpawnRotation = StartSpot->GetActorRotation();
-	if (APawn* ExistingPawn = NewPlayer->GetPawn())
+	if (APawn* ExistingPawn = GetPawnToKeep(*NewPlayer))
 	{
 		// An existing pawn keeps its rotation (UE).
 		SpawnRotation = ExistingPawn->GetActorRotation();
@@ -245,7 +251,8 @@ void AGameModeBase::RestartPlayerAtPlayerStart(AController* NewPlayer, AActor* S
 			NewPlayer->Possess(NewPawn);
 		}
 	}
-	if (!IsValid(NewPlayer->GetPawn()))
+	// A spectator left in place is no restart (the spawn failed).
+	if (!IsValid(GetPawnToKeep(*NewPlayer)))
 	{
 		FailedToRestartPlayer(NewPlayer);
 	}
@@ -262,7 +269,7 @@ void AGameModeBase::RestartPlayerAtTransform(AController* NewPlayer, const FTran
 		return;
 	}
 	FRotator SpawnRotation = SpawnTransform.Rotator();
-	if (APawn* ExistingPawn = NewPlayer->GetPawn())
+	if (APawn* ExistingPawn = GetPawnToKeep(*NewPlayer))
 	{
 		SpawnRotation = ExistingPawn->GetActorRotation();
 	}
@@ -274,7 +281,8 @@ void AGameModeBase::RestartPlayerAtTransform(AController* NewPlayer, const FTran
 			NewPlayer->Possess(NewPawn);
 		}
 	}
-	if (!IsValid(NewPlayer->GetPawn()))
+	// A spectator left in place is no restart (the spawn failed).
+	if (!IsValid(GetPawnToKeep(*NewPlayer)))
 	{
 		FailedToRestartPlayer(NewPlayer);
 	}

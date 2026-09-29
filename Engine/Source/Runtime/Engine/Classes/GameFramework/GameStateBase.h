@@ -10,9 +10,9 @@ class APlayerState;
  * Shared match/session state (UE: AGameStateBase), an AInfo the game mode spawns (GameStateClass) and the world
  * points at (UWorld::GetGameState).
  *
- * Leon keeps a simple match clock here: HandleMatchHasStarted / HandleMatchHasEnded and a clock that Tick advances
- * while the match is in progress (the game mode ticks its game state; AInfo actors do not tick in the world). Begin
- * play starts it (HandleBeginPlay). AGameState adds UE's MatchState.
+ * Leon keeps a simple match clock here: HandleMatchHasStarted / HandleMatchHasEnded record the world's time, and
+ * GetServerWorldTimeSeconds gives the seconds in between (it does not tick: AInfo actors do not). Begin play starts it
+ * (HandleBeginPlay). AGameState adds UE's MatchState.
  */
 UCLASS()
 class ENGINE_API AGameStateBase : public AInfo
@@ -25,18 +25,10 @@ public:
 	/** Resets the match clock and flags, not PlayerArray (UE: logout removes players). */
 	virtual void Reset()
 	{
-		ElapsedSeconds = 0.0f;
+		MatchStartSeconds = 0.0f;
+		MatchEndSeconds = 0.0f;
 		bMatchInProgress = false;
 		bMatchHasEnded = false;
-	}
-
-	void Tick(float DeltaTime) override
-	{
-		Super::Tick(DeltaTime);
-		if (bMatchInProgress && !bMatchHasEnded)
-		{
-			ElapsedSeconds += DeltaTime;
-		}
 	}
 
 	/** Unreal HasMatchStarted. */
@@ -49,11 +41,11 @@ public:
 	{
 		return bMatchHasEnded;
 	}
-	/** Unreal GetServerWorldTimeSeconds (local elapsed while match is in progress). */
-	[[nodiscard]] float GetServerWorldTimeSeconds() const
-	{
-		return ElapsedSeconds;
-	}
+	/**
+	 * Seconds the match has been in progress (Leon's GetServerWorldTimeSeconds: from HandleMatchHasStarted to now, or
+	 * to HandleMatchHasEnded).
+	 */
+	[[nodiscard]] float GetServerWorldTimeSeconds() const;
 
 	/** Unreal PlayerArray — PlayerStates registered via PostLogin / Logout. */
 	[[nodiscard]] const TArray<APlayerState*>& GetPlayerArray() const
@@ -113,17 +105,9 @@ public:
 	}
 
 	/** Authority: mark match in progress (pairs with GameMode::StartMatch). */
-	virtual void HandleMatchHasStarted()
-	{
-		bMatchInProgress = true;
-		bMatchHasEnded = false;
-	}
+	virtual void HandleMatchHasStarted();
 	/** Authority: mark match finished (pairs with GameMode::EndMatch). */
-	virtual void HandleMatchHasEnded()
-	{
-		bMatchInProgress = false;
-		bMatchHasEnded = true;
-	}
+	virtual void HandleMatchHasEnded();
 
 protected:
 	/** Records that the world began play, without starting the clock (AGameState). */
@@ -133,9 +117,12 @@ protected:
 	}
 
 private:
-	/** Seconds the match has been in progress (Leon; UE: GetServerWorldTimeSeconds of a replicated world time). */
+	/** The world's time the match started and ended at (Leon; UE: a replicated world time). */
 	UPROPERTY()
-	float ElapsedSeconds = 0.0f;
+	float MatchStartSeconds = 0.0f;
+
+	UPROPERTY()
+	float MatchEndSeconds = 0.0f;
 
 	UPROPERTY()
 	bool bMatchInProgress = false;

@@ -49,25 +49,29 @@ namespace
 		}
 	};
 
-	/** A pad whose buttons and sticks the test sets. */
+	/** Two pads whose buttons, sticks and pressures the test sets. */
 	class FTestPad final : public IInputInterface
 	{
 	public:
-		bool bConnected = true;
-		TSet<FKey> Down;
-		TMap<FKey, float> Axes;
+		bool bConnected[MaxControllers] = {true, true};
+		TSet<FKey> Down[MaxControllers];
+		TMap<FKey, float> Axes[MaxControllers];
 
-		bool IsGamepadConnected() const override
+		int32 GetNumControllers() const override
 		{
-			return bConnected;
+			return MaxControllers;
 		}
-		bool IsGamepadKeyDown(const FKey& Key) const override
+		bool IsGamepadConnected(int32 ControllerId) const override
 		{
-			return Down.Contains(Key);
+			return bConnected[ControllerId];
 		}
-		float GetGamepadAnalog(const FKey& Axis) const override
+		bool IsGamepadKeyDown(int32 ControllerId, const FKey& Key) const override
 		{
-			const float* Value = Axes.Find(Axis);
+			return Down[ControllerId].Contains(Key);
+		}
+		float GetGamepadAnalog(int32 ControllerId, const FKey& Axis) const override
+		{
+			const float* Value = Axes[ControllerId].Find(Axis);
 			return Value != nullptr ? *Value : 0.0f;
 		}
 	};
@@ -166,25 +170,40 @@ bool FGameViewportClientGamepadTest::RunTest(const FString& Parameters)
 		World->Tick(1.0f / 60.0f);
 	};
 
-	Pad.Down.Add(EKeys::Gamepad_FaceButton_Bottom);
-	Pad.Axes.Add(EKeys::Gamepad_RightX, 0.5f);
+	Pad.Down[0].Add(EKeys::Gamepad_FaceButton_Bottom);
+	Pad.Axes[0].Add(EKeys::Gamepad_RightX, 0.5f);
+	Pad.Axes[0].Add(EKeys::Gamepad_FaceButton_BottomAxis, 0.25f);
 	Frame();
 	TestTrue("Cross is down", Input.IsPressed(EKeys::Gamepad_FaceButton_Bottom));
 	TestEqual("The right stick", Input.GetRawKeyValue(EKeys::Gamepad_RightX), 0.5f);
+	TestEqual("Cross's pressure", Input.GetRawKeyValue(EKeys::Gamepad_FaceButton_BottomAxis), 0.25f);
 	Frame();
 	TestTrue("Still down", Input.IsPressed(EKeys::Gamepad_FaceButton_Bottom));
 	TestEqual("A held stick keeps its value", Input.GetRawKeyValue(EKeys::Gamepad_RightX), 0.5f);
+	TestEqual("A held pressure keeps its value", Input.GetRawKeyValue(EKeys::Gamepad_FaceButton_BottomAxis), 0.25f);
 
-	Pad.Axes.Reset();
-	Pad.Down.Reset();
+	Pad.Axes[0].Reset();
+	Pad.Down[0].Reset();
 	Frame();
 	TestFalse("Cross released", Input.IsPressed(EKeys::Gamepad_FaceButton_Bottom));
 	TestEqual("A released stick reads 0", Input.GetRawKeyValue(EKeys::Gamepad_RightX), 0.0f);
+	TestEqual("A released button's pressure reads 0", Input.GetRawKeyValue(EKeys::Gamepad_FaceButton_BottomAxis), 0.0f);
 
-	Pad.Down.Add(EKeys::Gamepad_RightTrigger);
+	// The second pad is controller 1: no local player uses it, so it moves no one (ps2-shipping N24).
+	Pad.Down[1].Add(EKeys::Gamepad_FaceButton_Bottom);
+	Pad.Axes[1].Add(EKeys::Gamepad_RightX, 1.0f);
+	Frame();
+	TestFalse("The second pad does not press Cross", Input.IsPressed(EKeys::Gamepad_FaceButton_Bottom));
+	TestEqual("Nor turn", Input.GetRawKeyValue(EKeys::Gamepad_RightX), 0.0f);
+	TestTrue("No player for it", Viewport.FindLocalPlayerFromControllerId(1) == nullptr);
+	TestTrue("Controller 0 is the player's", Viewport.FindLocalPlayerFromControllerId(0) != nullptr);
+	Pad.Down[1].Reset();
+	Pad.Axes[1].Reset();
+
+	Pad.Down[0].Add(EKeys::Gamepad_RightTrigger);
 	Frame();
 	TestTrue("R2 is down", Input.IsPressed(EKeys::Gamepad_RightTrigger));
-	Pad.bConnected = false;
+	Pad.bConnected[0] = false;
 	Frame();
 	TestFalse("A pad that goes away lets go", Input.IsPressed(EKeys::Gamepad_RightTrigger));
 

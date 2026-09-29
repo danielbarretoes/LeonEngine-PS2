@@ -287,10 +287,13 @@ bool FGSCoreCommandListTest::RunTest(const FString& Parameters)
 	TestTrue("TRXREG", Writes[8].Register == EGSRegister::TRXREG && Region.RRW == 16 && Region.RRH == 2);
 	TestTrue("TRXDIR host to local", Writes[9].Register == EGSRegister::TRXDIR && Writes[9].Value == 0);
 	TestTrue("HWREG names the data", Writes[10].Register == EGSRegister::HWREG && Writes[10].Value == 0);
-	TestTrue("The pixels", List.GetImageData().Num() == 1 && List.GetImageData()[0] == Texels);
+	TestTrue("The pixels, copied",
+		List.GetNumImages() == 1 && List.GetImage(0).Num() == Texels.Num() &&
+			FMemory::Memcmp(List.GetImage(0).GetData(), Texels.GetData(), Texels.Num()) == 0 &&
+			List.GetImage(0).GetData() != Texels.GetData() && !List.IsImageInPlace(0));
 
 	List.Reset();
-	TestTrue("Reset", List.GetWrites().Num() == 0 && List.GetImageData().Num() == 0);
+	TestTrue("Reset", List.GetWrites().Num() == 0 && List.GetNumImages() == 0);
 	return true;
 }
 
@@ -299,31 +302,34 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSCoreSupportedSubsetTest, "System.GSCore.Comm
 
 bool FGSCoreSupportedSubsetTest::RunTest(const FString& Parameters)
 {
-	// What every backend reproduces exactly (the plan's D5): the blends a GL blend equation expresses, the texture
-	// formats the preview samples, and the rest refused.
+	// What the desktop's emulator reproduces and a GSConformance scene checks (Docs/PLANS/ps2-shipping.md D7): the
+	// whole blend equation, every primitive but AA1, the CLUT loads, the MIPMAP filters, the wrap modes; the rest
+	// refused.
 	TestTrue("Translucent", FGSCommandList::IsSupported(FGSAlpha::Translucent()));
 	TestTrue("Additive", FGSCommandList::IsSupported(FGSAlpha::Additive()));
-	FGSAlpha Fixed = FGSAlpha::Translucent();
-	Fixed.C = EGSBlendAlpha::Fixed;
-	TestTrue("Constant alpha", FGSCommandList::IsSupported(Fixed));
-	FGSAlpha Scaled = FGSAlpha::Additive();
-	Scaled.D = EGSBlendColor::Zero;
-	TestTrue("Source scaled", FGSCommandList::IsSupported(Scaled));
 	FGSAlpha Subtract;
 	Subtract.A = EGSBlendColor::Destination;
 	Subtract.B = EGSBlendColor::Source;
-	TestFalse("Subtractive", FGSCommandList::IsSupported(Subtract));
+	TestTrue("Subtractive", FGSCommandList::IsSupported(Subtract));
 	FGSAlpha DestinationAlpha = FGSAlpha::Translucent();
 	DestinationAlpha.C = EGSBlendAlpha::Destination;
-	TestFalse("Destination alpha as the factor", FGSCommandList::IsSupported(DestinationAlpha));
-	FGSAlpha LerpToZero = FGSAlpha::Translucent();
-	LerpToZero.D = EGSBlendColor::Zero;
-	TestFalse("(Cs - Cd) * As + 0", FGSCommandList::IsSupported(LerpToZero));
+	TestTrue("Destination alpha as the factor", FGSCommandList::IsSupported(DestinationAlpha));
+	FGSAlpha Reserved = FGSAlpha::Translucent();
+	Reserved.C = EGSBlendAlpha(3);
+	TestFalse("C = 3 (reserved)", FGSCommandList::IsSupported(Reserved));
 
 	FGSPrim Prim;
 	TestTrue("A triangle", FGSCommandList::IsSupported(Prim));
+	Prim.Type = EGSPrimitive::LineStrip;
+	TestTrue("A line strip", FGSCommandList::IsSupported(Prim));
 	Prim.bAntialias = true;
 	TestFalse("AA1", FGSCommandList::IsSupported(Prim));
+	Prim.bAntialias = false;
+	Prim.bFixFragment = true;
+	TestFalse("FIX", FGSCommandList::IsSupported(Prim));
+	Prim.bFixFragment = false;
+	Prim.Type = EGSPrimitive(7);
+	TestFalse("PRIM 7 (reserved)", FGSCommandList::IsSupported(Prim));
 
 	FGSTex0 Tex0;
 	Tex0.PSM = EGSPixelFormat::PSMT4;
@@ -342,12 +348,28 @@ bool FGSCoreSupportedSubsetTest::RunTest(const FString& Parameters)
 	TestFalse("Wider than 1024", FGSCommandList::IsSupported(Tex0));
 
 	Tex0.TW = 8;
-	Tex0.CLD = 4;
-	TestFalse("CLD comparing CBP0", FGSCommandList::IsSupported(Tex0));
+	Tex0.CLD = 5;
+	TestTrue("CLD comparing CBP1", FGSCommandList::IsSupported(Tex0));
+	Tex0.CLD = 6;
+	TestFalse("CLD 6 (reserved)", FGSCommandList::IsSupported(Tex0));
 	FGSTex1 Tex1;
-	TestTrue("MIPTBP base pointers", FGSCommandList::IsSupported(Tex1));
+	Tex1.MMIN = EGSFilter::LinearMipmapLinear;
+	Tex1.MXL = 6;
+	TestTrue("Trilinear up to level 6", FGSCommandList::IsSupported(Tex1));
+	Tex1.MXL = 7;
+	TestFalse("MXL 7", FGSCommandList::IsSupported(Tex1));
+	Tex1.MXL = 6;
 	Tex1.bAutoMipBase = true;
 	TestFalse("MTBA", FGSCommandList::IsSupported(Tex1));
+
+	FGSClamp Clamp;
+	Clamp.WMS = EGSWrapMode::RegionRepeat;
+	Clamp.MINU = 0x3f0;
+	TestTrue("REGION_REPEAT", FGSCommandList::IsSupported(Clamp));
+	Clamp.WMS = EGSWrapMode::RegionClamp;
+	TestFalse("REGION_CLAMP with MINU above MAXU", FGSCommandList::IsSupported(Clamp));
+	Clamp.MAXU = 0x3ff;
+	TestTrue("REGION_CLAMP", FGSCommandList::IsSupported(Clamp));
 
 	// The manual's transfer limits (4.1.5).
 	TestTrue("32 bits, even width", FGSCommandList::IsSupportedUpload(EGSPixelFormat::PSMCT32, 1, 2));
@@ -360,6 +382,10 @@ bool FGSCoreSupportedSubsetTest::RunTest(const FString& Parameters)
 
 	FGSTest Test;
 	TestTrue("Depth test on", FGSCommandList::IsSupported(Test));
+	Test.bAlphaTest = true;
+	Test.AFAIL = EGSAlphaFail::RGBOnly;
+	Test.bDestinationAlphaTest = true;
+	TestTrue("The alpha tests", FGSCommandList::IsSupported(Test));
 	Test.bDepthTest = false;
 	TestFalse("Depth test off", FGSCommandList::IsSupported(Test));
 
@@ -443,6 +469,311 @@ bool FGSCoreGifPacketTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+namespace
+{
+
+	/** A DMAtag's fields by the manual's bit positions (EE User's Manual 5.6). */
+	[[nodiscard]] uint32 DmaTagQuadwords(uint64 Tag)
+	{
+		return uint32(Tag & 0xffff);
+	}
+
+	[[nodiscard]] uint32 DmaTagId(uint64 Tag)
+	{
+		return uint32((Tag >> 28) & 7);
+	}
+
+	[[nodiscard]] uint32 DmaTagAddress(uint64 Tag)
+	{
+		return uint32((Tag >> 32) & 0x7fffffff);
+	}
+
+	/**
+	 * Whether a DMAtag's VIFcodes (its high 64 bits, TTE on) are a NOP or a FLUSH, then a DIRECT of the tag's
+	 * quadwords (a NOP for none); bOutFlush says which the first was.
+	 */
+	[[nodiscard]] bool IsDirectTag(uint64 Codes, uint32 Quadwords, bool& bOutFlush)
+	{
+		const uint32 First = uint32(Codes);
+		const uint32 Second = uint32(Codes >> 32);
+		bOutFlush = First == FGSGifPacket::MakeVifCode(EGSVifCommand::Flush);
+		const bool bFirst = bOutFlush || First == FGSGifPacket::MakeVifCode(EGSVifCommand::Nop);
+		const uint32 Expected = Quadwords > 0 ? FGSGifPacket::MakeVifCode(EGSVifCommand::Direct, 0, Quadwords)
+											  : FGSGifPacket::MakeVifCode(EGSVifCommand::Nop);
+		return bFirst && Second == Expected;
+	}
+
+	/**
+	 * What the DMAC and VIF1 send the GIF by PATH2 for Chain (CNT, REF and END tags, TTE on, each with a DIRECT of its
+	 * quadwords), the REF'd data found among List's images by address; false on a tag or VIFcode it does not expect or
+	 * an address of none of them. OutFlushes counts the tags with a FLUSH.
+	 */
+	[[nodiscard]] bool FollowChain(const FGSCommandList& List, const uint64* Chain, uint32 NumQuadwords,
+		TArray<uint64>& OutSent, int32* OutFlushes = nullptr)
+	{
+		uint32 Index = 0;
+		while (Index < NumQuadwords)
+		{
+			const uint64 Tag = Chain[Index * 2];
+			const uint32 Quadwords = DmaTagQuadwords(Tag);
+			const uint32 Id = DmaTagId(Tag);
+			bool bFlush = false;
+			if (!IsDirectTag(Chain[(Index * 2) + 1], Quadwords, bFlush))
+			{
+				return false;
+			}
+			if (OutFlushes != nullptr)
+			{
+				*OutFlushes += bFlush ? 1 : 0;
+			}
+			if (Id == uint32(EGSDmaTag::Ref))
+			{
+				const uint32 Address = DmaTagAddress(Tag);
+				const uint8* Data = nullptr;
+				for (int32 ImageIndex = 0; ImageIndex < List.GetNumImages(); ++ImageIndex)
+				{
+					const TArrayView<const uint8> Image = List.GetImage(ImageIndex);
+					const uint32 First = FGSGifPacket::GetDmaAddress(Image.GetData());
+					if (Address >= First && Address + (Quadwords * 16) <= First + uint32(Image.Num()))
+					{
+						Data = Image.GetData() + (Address - First);
+					}
+				}
+				if (Data == nullptr)
+				{
+					return false;
+				}
+				const int32 Start = OutSent.Num();
+				OutSent.AddUninitialized(int32(Quadwords) * 2);
+				FMemory::Memcpy(&OutSent[Start], Data, SIZE_T(Quadwords) * 16);
+				++Index;
+				continue;
+			}
+			if (Id != uint32(EGSDmaTag::Cnt) && Id != uint32(EGSDmaTag::End))
+			{
+				return false;
+			}
+			for (uint32 Quadword = Index + 1; Quadword <= Index + Quadwords; ++Quadword)
+			{
+				OutSent.Add(Chain[Quadword * 2]);
+				OutSent.Add(Chain[(Quadword * 2) + 1]);
+			}
+			Index += 1 + Quadwords;
+			if (Id == uint32(EGSDmaTag::End))
+			{
+				return Index == NumQuadwords;
+			}
+		}
+		return false;
+	}
+
+} // namespace
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSCoreGifChainTest, "System.GSCore.GifPacket.Chain",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGSCoreGifChainTest::RunTest(const FString& Parameters)
+{
+	// A DMAtag (EE User's Manual 5.6): QWC bits 0-15, ID bits 28-30, ADDR bits 32-62.
+	TestEqual("CNT, 7 quadwords", FGSGifPacket::MakeDmaTag(7, EGSDmaTag::Cnt), uint64(0x0000000010000007ull));
+	TestEqual("REF, 2 quadwords at 0x123450", FGSGifPacket::MakeDmaTag(2, EGSDmaTag::Ref, 0x123450u),
+		uint64(0x0012345030000002ull));
+	TestEqual("END, 4 quadwords", FGSGifPacket::MakeDmaTag(4, EGSDmaTag::End), uint64(0x0000000070000004ull));
+	TestEqual("The segment bits cleared",
+		FGSGifPacket::GetDmaAddress(reinterpret_cast<const void*>(UPTRINT(0x30123450u))), 0x00123450u);
+
+	// Build's packet for PRIM, a 4 x 2 PSMCT32 upload and TEXFLUSH, with FINISH: PACKED(5), IMAGE(2), PACKED(1),
+	// PACKED(1), 13 quadwords. As a chain: CNT with the first tag, the 5 writes and the IMAGE tag; a REF to the list's
+	// own pixels; END with the last two tags and writes.
+	FGSCommandList List;
+	FGSPrim Prim;
+	Prim.Type = EGSPrimitive::Sprite;
+	List.SetPrim(Prim);
+	TArray<uint8> Pixels;
+	for (uint32 Index = 0; Index < 32; ++Index)
+	{
+		Pixels.Add(uint8(Index));
+	}
+	List.UploadImage(FGSBitBltBuf(), 0, 0, 4, 2, Pixels);
+	List.TexFlush();
+	TArray<uint64> Packet;
+	FGSGifPacket::Build(List, true, Packet);
+	const uint32 Capacity = FGSGifPacket::GetChainCapacity(List, true);
+	TArray<uint64> Chain;
+	Chain.SetNumZeroed(int32(Capacity) * 2);
+	const uint32 Written = FGSGifPacket::BuildChain(List, true, Chain.GetData(), Capacity);
+	TestEqual("14 quadwords", Written, 14u);
+	TestTrue("Within the capacity", Written <= Capacity);
+	if (Packet.Num() != 26 || Written != 14)
+	{
+		return false;
+	}
+	TestEqual("CNT tag", Chain[0], FGSGifPacket::MakeDmaTag(7, EGSDmaTag::Cnt));
+	TestEqual("CNT tag's VIFcodes: NOP, DIRECT 7", Chain[1],
+		FGSGifPacket::MakeVifCodes(0, FGSGifPacket::MakeVifCode(EGSVifCommand::Direct, 0, 7)));
+	TestEqual("DIRECT", FGSGifPacket::MakeVifCode(EGSVifCommand::Direct, 0, 7), 0x50000007u);
+	bool bSame = true;
+	for (int32 Index = 0; Index < 14; ++Index)
+	{
+		bSame &= Chain[2 + Index] == Packet[Index];
+	}
+	TestTrue("The CNT carries the packet's first 7 quadwords", bSame);
+	const TArrayView<const uint8> Uploaded = List.GetImage(0);
+	TestEqual("REF tag", Chain[16],
+		FGSGifPacket::MakeDmaTag(2, EGSDmaTag::Ref, FGSGifPacket::GetDmaAddress(Uploaded.GetData())));
+	TestEqual("REF's quadwords", DmaTagQuadwords(Chain[16]), 2u);
+	TestEqual("REF's ID", DmaTagId(Chain[16]), 3u);
+	TestTrue("The pixels are quadword aligned: the DMA reads them in place", (UPTRINT(Uploaded.GetData()) & 15) == 0);
+	TestTrue("The REF'd pixels are the packet's IMAGE data", FMemory::Memcmp(Uploaded.GetData(), &Packet[14], 32) == 0);
+	TestEqual("END tag", Chain[18], FGSGifPacket::MakeDmaTag(4, EGSDmaTag::End));
+	bSame = true;
+	for (int32 Index = 0; Index < 8; ++Index)
+	{
+		bSame &= Chain[20 + Index] == Packet[18 + Index];
+	}
+	TestTrue("The END carries the last 4 quadwords, FINISH's tag with EOP", bSame);
+	TArray<uint64> Sent;
+	TestTrue("The DMAC follows the chain", FollowChain(List, Chain.GetData(), Written, Sent));
+	TestTrue("The GIF receives Build's packet", Sent == Packet);
+
+	// An empty list is an END of nothing; an upload last ends with an empty END.
+	uint64 Empty[4] = {1, 1, 1, 1};
+	TestEqual("Empty: one quadword", FGSGifPacket::BuildChain(FGSCommandList(), false, Empty, 4), 1u);
+	TestEqual("Empty: END of 0", Empty[0], FGSGifPacket::MakeDmaTag(0, EGSDmaTag::End));
+	TestEqual("Empty: two NOPs", Empty[1], uint64(0));
+	FGSCommandList UploadLast;
+	UploadLast.UploadImage(FGSBitBltBuf(), 0, 0, 4, 2, Pixels);
+	TArray<uint64> UploadChain;
+	UploadChain.SetNumZeroed(int32(FGSGifPacket::GetChainCapacity(UploadLast, false)) * 2);
+	const uint32 UploadWritten = FGSGifPacket::BuildChain(
+		UploadLast, false, UploadChain.GetData(), FGSGifPacket::GetChainCapacity(UploadLast, false));
+	TestEqual("CNT, REF, END", UploadWritten, 9u);
+	TestEqual("The empty END", UploadChain[16], FGSGifPacket::MakeDmaTag(0, EGSDmaTag::End));
+	TArray<uint64> UploadPacket;
+	FGSGifPacket::Build(UploadLast, false, UploadPacket);
+	TArray<uint64> UploadSent;
+	TestTrue(
+		"The upload's chain is followed", FollowChain(UploadLast, UploadChain.GetData(), UploadWritten, UploadSent));
+	TestTrue("The upload's packet, EOP on its IMAGE tag", UploadSent == UploadPacket);
+
+	// QWC holds 0xffff: a longer section goes on in a second CNT (0x10000 writes, 3 PACKED tags, FINISH: 0x10005
+	// quadwords of GIF data).
+	FGSCommandList Long;
+	for (uint32 Index = 0; Index < 0x10000; ++Index)
+	{
+		Long.SetRGBAQ(FGSRGBAQ());
+	}
+	const uint32 LongCapacity = FGSGifPacket::GetChainCapacity(Long, true);
+	TArray<uint64> LongChain;
+	LongChain.SetNumZeroed(int32(LongCapacity) * 2);
+	const uint32 LongWritten = FGSGifPacket::BuildChain(Long, true, LongChain.GetData(), LongCapacity);
+	TestEqual("Two sections", LongWritten, 0x10005u + 2u);
+	TestEqual("A full CNT", LongChain[0], FGSGifPacket::MakeDmaTag(0xffff, EGSDmaTag::Cnt));
+	TestEqual("The END after it", LongChain[2 * 0x10000], FGSGifPacket::MakeDmaTag(6, EGSDmaTag::End));
+	TestEqual("FINISH last", LongChain[(2 * (LongWritten - 1)) + 1], uint64(EGSRegister::FINISH));
+	return true;
+}
+
+namespace
+{
+
+	/** A stand-in for VU1's encoder: a CNT of nothing with an STCYCL first, and a CNT of nothing with MSCAL a batch. */
+	class FTestBatchEncoder final : public IGSVertexBatchEncoder
+	{
+	public:
+		[[nodiscard]] uint32 GetPrologueQuadwords() const override
+		{
+			return 1;
+		}
+		[[nodiscard]] uint32 GetMaxBatchQuadwords() const override
+		{
+			return 1;
+		}
+		uint64* WritePrologue(uint64* Out) override
+		{
+			Out[0] = FGSGifPacket::MakeDmaTag(0, EGSDmaTag::Cnt);
+			Out[1] = FGSGifPacket::MakeVifCodes(FGSGifPacket::MakeVifCode(EGSVifCommand::StCycl, 0, 0x0101), 0);
+			return Out + 2;
+		}
+		uint64* WriteBatch(const FGSCommandList& List, const FGSVertexBatch& Batch, uint64* Out) override
+		{
+			(void)List;
+			Out[0] = FGSGifPacket::MakeDmaTag(0, EGSDmaTag::Cnt);
+			Out[1] =
+				FGSGifPacket::MakeVifCodes(0, FGSGifPacket::MakeVifCode(EGSVifCommand::MsCal, 0, Batch.NumVertices));
+			return Out + 2;
+		}
+	};
+
+} // namespace
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSCoreGifChainBatchesTest, "System.GSCore.GifPacket.ChainBatches",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGSCoreGifChainBatchesTest::RunTest(const FString& Parameters)
+{
+	// PRIM, two vertex batches, TEXFLUSH and FINISH (Docs/PLANS/ps2-shipping.md N14): the encoder's prologue first,
+	// PRIM's packet ends (EOP) before the batches, the empty section between the batches is dropped, and the section
+	// after them flushes (VU1's packets reach the GS before the writes that follow them).
+	alignas(16) int16 Positions[16] = {};
+	alignas(16) int8 Normals[16] = {};
+	alignas(16) uint8 Colors[16] = {};
+	alignas(16) int16 TexCoords[8] = {};
+	FGSCommandList List;
+	FGSPrim Prim;
+	Prim.Type = EGSPrimitive::TriangleStrip;
+	List.SetPrim(Prim);
+	FGSVertexBatch Batch;
+	Batch.Draw = List.AddVertexDraw(FGSVertexDraw());
+	Batch.Positions = Positions;
+	Batch.Normals = Normals;
+	Batch.Colors = Colors;
+	Batch.TexCoords = TexCoords;
+	Batch.NumVertices = 3;
+	List.DrawVertexBatch(Batch);
+	Batch.NumVertices = 4;
+	List.DrawVertexBatch(Batch);
+	List.TexFlush();
+	TestEqual("Two batch commands", List.GetVertexBatches().Num(), 2);
+	TestTrue("A write each", List.GetWrites()[1].Register == EGSRegister::VertexBatch);
+
+	FTestBatchEncoder Encoder;
+	const uint32 Capacity = FGSGifPacket::GetChainCapacity(List, true, &Encoder);
+	TArray<uint64> Chain;
+	Chain.SetNumZeroed(int32(Capacity) * 2);
+	const uint32 NumQuadwords = FGSGifPacket::BuildChain(List, true, Chain.GetData(), Capacity, &Encoder);
+	TestEqual("Prologue, CNT of PRIM, two batches, END", NumQuadwords, 11u);
+	TestTrue("Within the capacity", NumQuadwords <= Capacity);
+	if (NumQuadwords != 11)
+	{
+		return false;
+	}
+	TestEqual("The prologue first", Chain[1], FGSGifPacket::MakeVifCodes(0x01000101u, 0));
+	TestEqual("PRIM's CNT", Chain[2], FGSGifPacket::MakeDmaTag(2, EGSDmaTag::Cnt));
+	TestEqual("PRIM's GIFtag ends its packet", Chain[4], FGSGifPacket::MakeTag(1, true, EGSGifFormat::Packed, 1));
+	TestEqual("The first batch", Chain[9],
+		FGSGifPacket::MakeVifCodes(0, FGSGifPacket::MakeVifCode(EGSVifCommand::MsCal, 0, 3)));
+	TestEqual("The second, right after", Chain[11],
+		FGSGifPacket::MakeVifCodes(0, FGSGifPacket::MakeVifCode(EGSVifCommand::MsCal, 0, 4)));
+	TestEqual("The END", Chain[12], FGSGifPacket::MakeDmaTag(4, EGSDmaTag::End));
+	TestEqual("It flushes, then DIRECT", Chain[13],
+		FGSGifPacket::MakeVifCodes(
+			FGSGifPacket::MakeVifCode(EGSVifCommand::Flush), FGSGifPacket::MakeVifCode(EGSVifCommand::Direct, 0, 4)));
+	TestEqual("TEXFLUSH's GIFtag", Chain[14], FGSGifPacket::MakeTag(1, false, EGSGifFormat::Packed, 1));
+	TestEqual("FINISH's ends the packet", Chain[18], FGSGifPacket::MakeTag(1, true, EGSGifFormat::Packed, 1));
+
+	// Appended, the batches name their draws and are named by their writes in the new list.
+	FGSCommandList Frame;
+	Batch.Draw = Frame.AddVertexDraw(FGSVertexDraw());
+	Frame.DrawVertexBatch(Batch);
+	Frame.Append(List);
+	TestEqual("Three batches", Frame.GetVertexBatches().Num(), 3);
+	TestEqual("Two draws", Frame.GetVertexDraws().Num(), 2);
+	TestEqual("The appended batch's draw", Frame.GetVertexBatches()[2].Draw, 1);
+	TestEqual("The appended batch's write", Frame.GetWrites()[3].Value, uint64(2));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSCoreCommandListAppendTest, "System.GSCore.CommandList.Append",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
@@ -462,7 +793,21 @@ bool FGSCoreCommandListAppendTest::RunTest(const FString& Parameters)
 	TestEqual("Writes", List.GetWrites().Num(), 11);
 	TestEqual("TEXFLUSH after the first upload", List.GetWrites()[5].Register, EGSRegister::TEXFLUSH);
 	TestEqual("The appended HWREG", List.GetWrites()[10].Value, uint64(1));
-	TestEqual("Its data", List.GetImageData()[1][0], uint8(2));
+	TestEqual("Its data", List.GetImage(1)[0], uint8(2));
+
+	// An image held in place stays in place through Append (the PS2's chain REFs the cooked texture itself), until
+	// CopyInPlaceImages copies it (its texture is going away while a list still holds it).
+	alignas(16) static const uint8 Cooked[16] = {7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7};
+	FGSCommandList InPlace;
+	InPlace.UploadImageInPlace(FGSBitBltBuf(), 0, 0, 2, 2, TArrayView<const uint8>(Cooked, 16));
+	TestTrue("Held in place", InPlace.IsImageInPlace(0) && InPlace.GetImage(0).GetData() == Cooked);
+	List.Append(InPlace);
+	TestTrue("Still in place once appended", List.IsImageInPlace(2) && List.GetImage(2).GetData() == Cooked);
+	TestTrue("The copies copied again",
+		!List.IsImageInPlace(0) && List.GetImage(1).GetData() != Other.GetImage(0).GetData());
+	List.CopyInPlaceImages();
+	TestTrue("Copied on request",
+		!List.IsImageInPlace(2) && List.GetImage(2).GetData() != Cooked && List.GetImage(2)[5] == 7);
 	return true;
 }
 
@@ -474,7 +819,7 @@ bool FGSCoreConformanceScenesTest::RunTest(const FString& Parameters)
 	// Every scene records within the supported subset (the setters check it) and starts by pointing FRAME_1 at its
 	// frame buffer; the reference rasterizer's tests check what they draw.
 	const TArrayView<const FGSConformanceScene> Scenes = GSConformance::GetScenes();
-	TestEqual("Nine scenes", Scenes.Num(), 9);
+	TestEqual("Twenty scenes", Scenes.Num(), 20);
 	for (const FGSConformanceScene& Scene : Scenes)
 	{
 		FGSCommandList List;
@@ -498,7 +843,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSCoreTextureLayoutTest, "System.GSCore.Textur
 
 bool FGSCoreTextureLayoutTest::RunTest(const FString& Parameters)
 {
-	// Pages by format (manual 8.2), whole pages per texture, TBW over whole pages (even for the indexed formats).
+	// Pages by format (manual 8.1), TBW over whole pages (even for the indexed formats), and the blocks a texture takes
+	// in the GS's layout (8.3, 8.4): a texture inside a page takes the blocks it reaches, a larger one whole pages.
 	uint32 Width = 0;
 	uint32 Height = 0;
 	FGSTextureLayout::GetPageSize(EGSPixelFormat::PSMT8, Width, Height);
@@ -511,7 +857,17 @@ bool FGSCoreTextureLayoutTest::RunTest(const FString& Parameters)
 	TestEqual("PSMT4 256 wide: TBW 4", int32(FGSTextureLayout::GetBufferWidth(EGSPixelFormat::PSMT4, 256)), 4);
 	TestEqual("PSMCT32 64 x 64: 2 pages", FGSTextureLayout::GetNumBlocks(EGSPixelFormat::PSMCT32, 64, 64), 64u);
 	TestEqual("PSMT8 256 x 256: 8 pages", FGSTextureLayout::GetNumBlocks(EGSPixelFormat::PSMT8, 256, 256), 256u);
-	TestEqual("PSMT4 8 x 8: 1 page", FGSTextureLayout::GetNumBlocks(EGSPixelFormat::PSMT4, 8, 8), 32u);
+	TestEqual("PSMT4 8 x 8: 1 block", FGSTextureLayout::GetNumBlocks(EGSPixelFormat::PSMT4, 8, 8), 1u);
+	TestEqual("PSMT4 32 x 32: blocks 0 and 1", FGSTextureLayout::GetNumBlocks(EGSPixelFormat::PSMT4, 32, 32), 2u);
+	TestEqual("PSMT4 64 x 64: blocks 0 to 7", FGSTextureLayout::GetNumBlocks(EGSPixelFormat::PSMT4, 64, 64), 8u);
+	TestEqual("PSMT8 16 x 16: 1 block", FGSTextureLayout::GetNumBlocks(EGSPixelFormat::PSMT8, 16, 16), 1u);
+	TestEqual("PSMT8 64 x 64: half a page", FGSTextureLayout::GetNumBlocks(EGSPixelFormat::PSMT8, 64, 64), 16u);
+	TestEqual("PSMCT32 16 x 16: 4 blocks", FGSTextureLayout::GetNumBlocks(EGSPixelFormat::PSMCT32, 16, 16), 4u);
+	TestEqual("PSMCT32 8 x 8 at any block", FGSTextureLayout::GetBaseAlignment(EGSPixelFormat::PSMCT32, 8, 8), 1u);
+	TestEqual("PSMCT32 64 x 32 (a page) at any block",
+		FGSTextureLayout::GetBaseAlignment(EGSPixelFormat::PSMCT32, 64, 32), 1u);
+	TestEqual("PSMCT32 64 x 64 on a page", FGSTextureLayout::GetBaseAlignment(EGSPixelFormat::PSMCT32, 64, 64), 32u);
+	TestEqual("PSMT4 256 x 256 on a page", FGSTextureLayout::GetBaseAlignment(EGSPixelFormat::PSMT4, 256, 256), 32u);
 	TestEqual("PSMT8 CLUT: 4 blocks", FGSTextureLayout::GetClutBlocks(EGSPixelFormat::PSMT8), 4u);
 	TestEqual("PSMT4 CLUT: 1 block", FGSTextureLayout::GetClutBlocks(EGSPixelFormat::PSMT4), 1u);
 	TestEqual("No CLUT", FGSTextureLayout::GetClutBlocks(EGSPixelFormat::PSMCT32), 0u);

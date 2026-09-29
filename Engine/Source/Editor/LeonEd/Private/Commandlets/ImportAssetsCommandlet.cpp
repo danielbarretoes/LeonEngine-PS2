@@ -4,10 +4,14 @@
 #include "EditorFramework/AssetImportData.h"
 #include "EditorReimportHandler.h"
 #include "Engine/World.h"
+#include "Factories/AimOffsetBlendSpaceFactory1D.h"
+#include "Factories/AnimMontageFactory.h"
+#include "Factories/BlendSpaceFactory1D.h"
+#include "Factories/BlendSpaceFactoryNew.h"
 #include "Factories/Factory.h"
-#include "Factories/FbxFactory.h"
 #include "Factories/GLTFImportFactory.h"
 #include "Factories/GLTFMapFactory.h"
+#include "Factories/PhysicalMaterialFactoryNew.h"
 #include "Factories/SoundFactory.h"
 #include "Factories/TextureFactory.h"
 #include "LeonEdLog.h"
@@ -38,8 +42,8 @@ namespace
 	}
 
 	/**
-	 * The factory class of an import: the one Type names (adding the FBX mesh type to Settings), else the best one for
-	 * the file's extension. Null (logged) when none.
+	 * The factory class of an import: the one Type names (adding the glTF import type to Settings), else the best one
+	 * for the file's extension. Null (logged) when none.
 	 */
 	UClass* ResolveFactoryClass(const FString& Type, const FString& SourceFile, TMap<FString, FString>& Settings)
 	{
@@ -52,25 +56,15 @@ namespace
 			}
 			return FactoryClass;
 		}
-		const FString Extension = FPaths::GetExtension(SourceFile);
 		if (Type == TEXT("Texture"))
 		{
 			return UTextureFactory::StaticClass();
 		}
-		if (Type == TEXT("StaticMesh"))
+		if (Type == TEXT("StaticMesh") || Type == TEXT("SkeletalMesh") || Type == TEXT("Animation"))
 		{
-			return Extension == TEXT("gltf") || Extension == TEXT("glb") ? UGLTFImportFactory::StaticClass()
-																		 : UFbxFactory::StaticClass();
-		}
-		if (Type == TEXT("SkeletalMesh"))
-		{
-			Settings.Add(TEXT("MeshTypeToImport"), TEXT("FBXIT_SkeletalMesh"));
-			return UFbxFactory::StaticClass();
-		}
-		if (Type == TEXT("Animation"))
-		{
-			Settings.Add(TEXT("MeshTypeToImport"), TEXT("FBXIT_Animation"));
-			return UFbxFactory::StaticClass();
+			// glTF is the only mesh and animation format (ps2-shipping D11).
+			Settings.Add(TEXT("ImportType"), Type);
+			return UGLTFImportFactory::StaticClass();
 		}
 		if (Type == TEXT("Sound"))
 		{
@@ -81,7 +75,9 @@ namespace
 			return UGLTFMapFactory::StaticClass();
 		}
 		UE_LOG(LogLeonEd, Error,
-			"ImportAssets: unknown type '%s' (Texture, StaticMesh, SkeletalMesh, Animation, Sound, Map)", *Type);
+			"ImportAssets: unknown type '%s' (Texture, StaticMesh, SkeletalMesh, Animation, Sound, Map; without a "
+			"source: BlendSpace, BlendSpace1D, AimOffsetBlendSpace1D, AnimMontage, PhysicalMaterial)",
+			*Type);
 		return nullptr;
 	}
 
@@ -124,6 +120,9 @@ UImportAssetsCommandlet::UImportAssetsCommandlet(const FObjectInitializer& Objec
 	HelpDescription = TEXT("Imports source files as assets, or reimports assets from their sources");
 	HelpUsage = TEXT("-run=ImportAssets -source=<File> -dest=<LongPackagePath> [-name=<Asset>] [-type=<Type>] "
 					 "[-<Setting>=<Value>...] | -type=Map -source=<File.glb> -dest=<MapPackage> | "
+					 "-type=<BlendSpace|BlendSpace1D|AimOffsetBlendSpace1D|AnimMontage|PhysicalMaterial> "
+					 "-dest=<LongPackagePath> "
+					 "-name=<Asset> [-<Setting>=<Value>...] | "
 					 "-importlist=<ImportList.ini> | -reimport -all | -reimport -package=<LongPackageName>[,...]");
 	LogToConsole = 1;
 }
@@ -183,6 +182,77 @@ UObject* UImportAssetsCommandlet::ImportAsset(const FString& SourceFile, const F
 	return Asset;
 }
 
+UClass* UImportAssetsCommandlet::FindCreateFactoryClass(const FString& Type)
+{
+	if (Type == TEXT("BlendSpace"))
+	{
+		return UBlendSpaceFactoryNew::StaticClass();
+	}
+	if (Type == TEXT("BlendSpace1D"))
+	{
+		return UBlendSpaceFactory1D::StaticClass();
+	}
+	if (Type == TEXT("AimOffsetBlendSpace1D"))
+	{
+		return UAimOffsetBlendSpaceFactory1D::StaticClass();
+	}
+	if (Type == TEXT("AnimMontage"))
+	{
+		return UAnimMontageFactory::StaticClass();
+	}
+	if (Type == TEXT("PhysicalMaterial"))
+	{
+		return UPhysicalMaterialFactoryNew::StaticClass();
+	}
+	return nullptr;
+}
+
+UObject* UImportAssetsCommandlet::CreateAsset(
+	const FString& DestPath, const FString& AssetName, const FString& Type, const TMap<FString, FString>& Settings)
+{
+	UClass* FactoryClass = FindCreateFactoryClass(Type);
+	if (FactoryClass == nullptr)
+	{
+		UE_LOG(LogLeonEd, Error,
+			"ImportAssets: '%s' is not made from a description (BlendSpace, BlendSpace1D, "
+			"AimOffsetBlendSpace1D, AnimMontage, PhysicalMaterial)",
+			*Type);
+		return nullptr;
+	}
+	UFactory* Factory = NewObject<UFactory>(GetTransientPackage(), FactoryClass);
+	TArray<FString> Unknown;
+	if (!Factory->ApplyImportSettings(Settings, &Unknown) || Unknown.Num() > 0)
+	{
+		UE_LOG(LogLeonEd, Error, "ImportAssets: bad settings for %s", *AssetName);
+		return nullptr;
+	}
+	FString Path = DestPath;
+	Path.RemoveFromEnd(TEXT("/"));
+	const FString PackageName = Path + TEXT("/") + AssetName;
+	if (AssetName.IsEmpty() || !FPackageName::IsValidLongPackageName(PackageName))
+	{
+		UE_LOG(LogLeonEd, Error, "ImportAssets: '%s' is not a package under a mount point (-dest=%s)", *PackageName,
+			*DestPath);
+		return nullptr;
+	}
+	UPackage* Package = FindOrLoadPackage(PackageName);
+	UObject* Asset = Factory->FactoryCreateNew(
+		Factory->ResolveSupportedClass(), Package, FName(*AssetName), RF_Public | RF_Standalone, nullptr);
+	if (Asset == nullptr)
+	{
+		UE_LOG(LogLeonEd, Error, "ImportAssets: making %s failed", *PackageName);
+		return nullptr;
+	}
+	TArray<UObject*> Assets;
+	Assets.Add(Asset);
+	if (!SaveAssetPackages(Assets))
+	{
+		return nullptr;
+	}
+	UE_LOG(LogLeonEd, Display, "Made %s (%s)", *Asset->GetPathName(), *Type);
+	return Asset;
+}
+
 int32 UImportAssetsCommandlet::ImportList(const FString& ImportListFile)
 {
 	const FString ListFile = FPaths::ConvertRelativePathToFull(ImportListFile);
@@ -223,10 +293,25 @@ int32 UImportAssetsCommandlet::ImportList(const FString& ImportListFile)
 			{
 				Type = Value;
 			}
+			else if (FString* Existing = Settings.Find(Key))
+			{
+				// A key given again (`+Sample=`) keeps every value.
+				*Existing += TEXT(";") + Value;
+			}
 			else
 			{
 				Settings.Add(Key, Value);
 			}
+		}
+		if (Source.IsEmpty() && !Dest.IsEmpty() && FindCreateFactoryClass(Type) != nullptr)
+		{
+			if (CreateAsset(Dest, Name.IsEmpty() ? Section.Key : Name, Type, Settings) == nullptr)
+			{
+				++Failures;
+				continue;
+			}
+			++Imported;
+			continue;
 		}
 		if (Source.IsEmpty() || Dest.IsEmpty())
 		{
@@ -334,11 +419,8 @@ int32 UImportAssetsCommandlet::Main(const FString& Params)
 	}
 	const FString* Source = ParamsMap.Find(TEXT("source"));
 	const FString* Dest = ParamsMap.Find(TEXT("dest"));
-	if (Source == nullptr || Dest == nullptr)
-	{
-		UE_LOG(LogLeonEd, Error, "ImportAssets: usage: %s", *HelpUsage);
-		return 1;
-	}
+	const FString* Name = ParamsMap.Find(TEXT("name"));
+	const FString* Type = ParamsMap.Find(TEXT("type"));
 	TMap<FString, FString> Settings;
 	for (const TPair<FString, FString>& Param : ParamsMap)
 	{
@@ -347,8 +429,16 @@ int32 UImportAssetsCommandlet::Main(const FString& Params)
 			Settings.Add(Param.Key, Param.Value);
 		}
 	}
-	const FString* Name = ParamsMap.Find(TEXT("name"));
-	const FString* Type = ParamsMap.Find(TEXT("type"));
+	if (Source == nullptr && Dest != nullptr && Name != nullptr && Type != nullptr &&
+		FindCreateFactoryClass(*Type) != nullptr)
+	{
+		return CreateAsset(*Dest, *Name, *Type, Settings) != nullptr ? 0 : 1;
+	}
+	if (Source == nullptr || Dest == nullptr)
+	{
+		UE_LOG(LogLeonEd, Error, "ImportAssets: usage: %s", *HelpUsage);
+		return 1;
+	}
 	return ImportAsset(*Source, *Dest, Name != nullptr ? *Name : FString(), Type != nullptr ? *Type : FString(),
 			   Settings) != nullptr
 		? 0

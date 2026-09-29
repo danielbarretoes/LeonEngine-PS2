@@ -7,6 +7,20 @@
 #include "Engine/World.h"
 #include "GameFramework/DamageType.h"
 #include "GameFramework/Pawn.h"
+#include "Stats/Stats.h"
+#include "TimerManager.h"
+
+DECLARE_CYCLE_STAT(TEXT("Register Components"), STAT_RegisterAllComponents, STATGROUP_Engine);
+DECLARE_CYCLE_STAT(TEXT("Begin Play"), STAT_ActorBeginPlay, STATGROUP_Engine);
+
+namespace
+{
+	/**
+	 * A copy of an actor's components to iterate while they may add or remove others (registration, a tick spawning a
+	 * component): inline storage for the usual handful, so the per-frame TickActor allocates nothing.
+	 */
+	using FComponentSnapshot = TArray<UActorComponent*, TInlineAllocator<16>>;
+} // namespace
 
 const FName AActor::DefaultSceneRootName(TEXT("DefaultSceneRoot"));
 
@@ -14,8 +28,11 @@ AActor::AActor(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 	bHidden = false;
-	bCanEverTick = true;
 	bCanBeDamaged = true;
+	// UE: an actor does not tick unless its class says so (PrimaryActorTick.bCanEverTick), in the PrePhysics group.
+	PrimaryActorTick.TickGroup = TG_PrePhysics;
+	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bStartWithTickEnabled = true;
 	// UE actors have no root by default; Leon gives every actor one so it always has a transform. A subclass with its
 	// own root (ACharacter's capsule) skips it through DoNotCreateDefaultSubobject(DefaultSceneRootName).
 	RootComponent = ObjectInitializer.CreateOptionalDefaultSubobject<USceneComponent>(this, DefaultSceneRootName);
@@ -57,6 +74,7 @@ void AActor::RemoveOwnedComponent(UActorComponent* Component)
 
 void AActor::RegisterAllComponents()
 {
+	SCOPE_CYCLE_COUNTER(STAT_RegisterAllComponents);
 	UWorld* World = GetWorld();
 	// The root first, so its children find it registered (UE).
 	if (RootComponent != nullptr && RootComponent->bAutoRegister)
@@ -64,7 +82,7 @@ void AActor::RegisterAllComponents()
 		RootComponent->RegisterComponentWithWorld(World);
 	}
 	// Registration may add components (a component creating another): iterate over a copy.
-	const TArray<UActorComponent*> Components = OwnedComponents;
+	const FComponentSnapshot Components(OwnedComponents);
 	for (UActorComponent* Component : Components)
 	{
 		if (Component != nullptr && Component->bAutoRegister && !Component->IsPendingKill())
@@ -76,7 +94,7 @@ void AActor::RegisterAllComponents()
 
 void AActor::UnregisterAllComponents()
 {
-	const TArray<UActorComponent*> Components = OwnedComponents;
+	const FComponentSnapshot Components(OwnedComponents);
 	for (UActorComponent* Component : Components)
 	{
 		if (Component != nullptr && Component->IsRegistered())
@@ -225,7 +243,7 @@ void AActor::PreInitializeComponents()
 
 void AActor::InitializeComponents()
 {
-	const TArray<UActorComponent*> Components = OwnedComponents;
+	const FComponentSnapshot Components(OwnedComponents);
 	for (UActorComponent* Component : Components)
 	{
 		if (Component != nullptr && Component->IsRegistered() && Component->bWantsInitializeComponent &&
@@ -261,7 +279,10 @@ void AActor::DispatchBeginPlay()
 		return;
 	}
 	bActorBeginningPlay = true;
-	BeginPlay();
+	{
+		SCOPE_CYCLE_COUNTER(STAT_ActorBeginPlay);
+		BeginPlay();
+	}
 	bActorBeginningPlay = false;
 	bActorHasBegunPlay = true;
 }
@@ -276,11 +297,14 @@ void AActor::BeginPlay()
 	{
 		SetLifeSpan(InitialLifeSpan);
 	}
-	const TArray<UActorComponent*> Components = OwnedComponents;
+	// UE: the actor's tick function, then each component's before it begins play.
+	RegisterAllActorTickFunctions(true, false);
+	const FComponentSnapshot Components(OwnedComponents);
 	for (UActorComponent* Component : Components)
 	{
 		if (Component != nullptr && Component->IsRegistered() && !Component->HasBegunPlay())
 		{
+			Component->RegisterAllComponentTickFunctions(true);
 			Component->BeginPlay();
 		}
 	}
@@ -288,7 +312,7 @@ void AActor::BeginPlay()
 
 void AActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	const TArray<UActorComponent*> Components = OwnedComponents;
+	const FComponentSnapshot Components(OwnedComponents);
 	for (UActorComponent* Component : Components)
 	{
 		if (Component != nullptr && Component->HasBegunPlay())
@@ -310,37 +334,113 @@ void AActor::RouteEndPlay(const EEndPlayReason::Type EndPlayReason)
 		EndPlay(EndPlayReason);
 	}
 	bActorHasBegunPlay = false;
+	// UE: nothing of the actor ticks or waits on a timer once it stops playing.
+	RegisterAllActorTickFunctions(false, true);
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearAllTimersForObject(this);
+	}
 }
 
 void AActor::Tick(float /*DeltaSeconds*/)
 {
 }
 
-void AActor::TickActor(float DeltaSeconds)
+void AActor::TickActor(float DeltaSeconds, ELevelTick /*TickType*/, FActorTickFunction& /*ThisTickFunction*/)
 {
-	const TArray<UActorComponent*> Components = OwnedComponents;
+	Tick(DeltaSeconds);
+}
+
+void AActor::RegisterActorTickFunctions(bool bRegister)
+{
+	if (bRegister)
+	{
+		if (PrimaryActorTick.bCanEverTick)
+		{
+			PrimaryActorTick.Target = this;
+			PrimaryActorTick.RegisterTickFunction(GetLevel());
+		}
+	}
+	else
+	{
+		PrimaryActorTick.UnRegisterTickFunction();
+	}
+}
+
+void AActor::RegisterAllActorTickFunctions(bool bRegister, bool bDoComponents)
+{
+	RegisterActorTickFunctions(bRegister);
+	if (!bDoComponents)
+	{
+		return;
+	}
+	const FComponentSnapshot Components(OwnedComponents);
 	for (UActorComponent* Component : Components)
 	{
-		if (Component != nullptr && Component->IsRegistered() && Component->IsComponentTickEnabled() &&
-			!Component->IsPendingKill())
+		if (Component != nullptr)
 		{
-			Component->TickComponent(DeltaSeconds);
+			Component->RegisterAllComponentTickFunctions(bRegister);
 		}
 	}
-	if (bCanEverTick)
+}
+
+void AActor::SetActorTickEnabled(bool bEnabled)
+{
+	if (PrimaryActorTick.bCanEverTick && !IsTemplate())
 	{
-		Tick(DeltaSeconds);
+		PrimaryActorTick.SetTickFunctionEnable(bEnabled);
 	}
-	// The life span counts world ticks (UE: a timer of the world's timer manager).
-	if (LifeSpanRemaining > 0.0f && !IsPendingKillPending())
+}
+
+void AActor::SetActorTickInterval(float TickInterval)
+{
+	PrimaryActorTick.UpdateTickIntervalAndCoolDown(TickInterval);
+}
+
+void AActor::AddTickPrerequisiteActor(AActor* PrerequisiteActor)
+{
+	if (PrerequisiteActor != nullptr && PrerequisiteActor != this)
 	{
-		LifeSpanRemaining -= DeltaSeconds;
-		if (LifeSpanRemaining <= 0.0f)
-		{
-			LifeSpanRemaining = 0.0f;
-			LifeSpanExpired();
-		}
+		PrimaryActorTick.AddPrerequisite(PrerequisiteActor, PrerequisiteActor->PrimaryActorTick);
 	}
+}
+
+void AActor::RemoveTickPrerequisiteActor(AActor* PrerequisiteActor)
+{
+	if (PrerequisiteActor != nullptr)
+	{
+		PrimaryActorTick.RemovePrerequisite(PrerequisiteActor, PrerequisiteActor->PrimaryActorTick);
+	}
+}
+
+void AActor::AddTickPrerequisiteComponent(UActorComponent* PrerequisiteComponent)
+{
+	if (PrerequisiteComponent != nullptr)
+	{
+		PrimaryActorTick.AddPrerequisite(PrerequisiteComponent, PrerequisiteComponent->PrimaryComponentTick);
+	}
+}
+
+void AActor::RemoveTickPrerequisiteComponent(UActorComponent* PrerequisiteComponent)
+{
+	if (PrerequisiteComponent != nullptr)
+	{
+		PrimaryActorTick.RemovePrerequisite(PrerequisiteComponent, PrerequisiteComponent->PrimaryComponentTick);
+	}
+}
+
+FTimerManager& AActor::GetWorldTimerManager() const
+{
+	UWorld* World = GetWorld();
+	check(World != nullptr);
+	return World->GetTimerManager();
+}
+
+void AActor::BeginDestroy()
+{
+	// An actor collected without ending play (a world torn down around it) leaves its world's tick lists.
+	RegisterActorTickFunctions(false);
+	Super::BeginDestroy();
 }
 
 namespace
@@ -378,7 +478,28 @@ void AActor::MakeNoise(float Loudness, APawn* NoiseInstigator, FVector NoiseLoca
 
 void AActor::SetLifeSpan(float InLifespan)
 {
-	LifeSpanRemaining = FMath::Max(0.0f, InLifespan);
+	// UE: a timer of the world's timer manager; 0 cancels it.
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return;
+	}
+	if (InLifespan > 0.0f)
+	{
+		World->GetTimerManager().SetTimer(TimerHandle_LifeSpanExpired, this, &AActor::LifeSpanExpired, InLifespan);
+	}
+	else
+	{
+		World->GetTimerManager().ClearTimer(TimerHandle_LifeSpanExpired);
+	}
+}
+
+float AActor::GetLifeSpan() const
+{
+	const UWorld* World = GetWorld();
+	const float Remaining =
+		World != nullptr ? World->GetTimerManager().GetTimerRemaining(TimerHandle_LifeSpanExpired) : -1.0f;
+	return Remaining >= 0.0f ? Remaining : 0.0f;
 }
 
 void AActor::LifeSpanExpired()

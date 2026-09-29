@@ -36,12 +36,7 @@ namespace
 	/** The GS drops the lower 8 bits of S, T and Q's mantissas (manual 3.4.4). */
 	double TruncateMantissa(float Value)
 	{
-		uint32 Bits = 0;
-		FMemory::Memcpy(&Bits, &Value, sizeof(Bits));
-		Bits &= 0xffffff00u;
-		float Truncated = 0.0f;
-		FMemory::Memcpy(&Truncated, &Bits, sizeof(Truncated));
-		return double(Truncated);
+		return double(GSTruncateTexCoord(Value));
 	}
 
 	int32 FloorDiv16(int32 Value)
@@ -78,12 +73,6 @@ namespace
 		return Format == EGSPixelFormat::PSMCT16 || Format == EGSPixelFormat::PSMCT16S;
 	}
 
-	bool IsClutFormat(EGSPixelFormat Format)
-	{
-		return Format == EGSPixelFormat::PSMT8 || Format == EGSPixelFormat::PSMT4;
-	}
-
-	/** Where CLUT entry Index of an IDTEX8 CSM1 CLUT is in its 16 x 16 rectangle: bits 3 and 4 swapped (2.7.3). */
 	/** The frame buffer's 32-bit pre-conversion write mask as the 16-bit pixel's bits (3.9.5). */
 	uint32 Mask16(uint32 Mask32)
 	{
@@ -175,10 +164,8 @@ void FGSReferenceRasterizer::WriteRegister(const FGSRegisterWrite& Write, const 
 		{
 			const FGSTex0 Tex0 = FGSTex0::Decode(Value);
 			Contexts[uint8(Write.Register) - uint8(EGSRegister::TEX0_1)].Tex0 = Tex0;
-			if (Tex0.CLD == 1 && IsClutFormat(Tex0.PSM))
-			{
-				Clut.Load(Memory, Tex0);
-			}
+			// The CLUT's load control (CLD, CBP0 / CBP1: manual 3.4.7).
+			(void)Clut.Update(Memory, Tex0);
 			break;
 		}
 		case EGSRegister::TEX1_1:
@@ -264,7 +251,7 @@ void FGSReferenceRasterizer::WriteRegister(const FGSRegisterWrite& Write, const 
 			check(EGSTransferDirection(Value & 3) == EGSTransferDirection::HostToLocal);
 			break;
 		case EGSRegister::HWREG:
-			Memory.Transfer(BitBltBuf, TrxPos, TrxReg, List.GetImageData()[int32(Value)]);
+			Memory.Transfer(BitBltBuf, TrxPos, TrxReg, List.GetImage(int32(Value)));
 			break;
 		default:
 			checkNoEntry();
@@ -378,42 +365,28 @@ void FGSReferenceRasterizer::DrawPoint(const FVertex& Vertex)
 
 void FGSReferenceRasterizer::DrawLine(const FVertex& From, const FVertex& To)
 {
-	const int32 DeltaX = To.X - From.X;
-	const int32 DeltaY = To.Y - From.Y;
-	const bool bMajorX = FMath::Abs(DeltaX) >= FMath::Abs(DeltaY);
-	const int32 MajorFrom = FloorDiv16((bMajorX ? From.X : From.Y) + 8);
-	const int32 MajorTo = FloorDiv16((bMajorX ? To.X : To.Y) + 8);
-	const int32 MajorDelta = bMajorX ? DeltaX : DeltaY;
-	if (MajorFrom == MajorTo || MajorDelta == 0)
-	{
-		return;
-	}
-	const int32 Step = MajorTo > MajorFrom ? 1 : -1;
-	// The end point is not drawn (manual 3.2.9).
-	for (int32 Major = MajorFrom; Major != MajorTo; Major += Step)
-	{
-		const double T =
-			FMath::Clamp(double((Major * 16) - (bMajorX ? From.X : From.Y)) / double(MajorDelta), 0.0, 1.0);
-		const double Minor = (bMajorX ? From.Y : From.X) + (T * double(bMajorX ? DeltaY : DeltaX));
-		FFragment Fragment;
-		const int32 MinorPixel = int32(FloorDouble((Minor + 8.0) / 16.0));
-		Fragment.X = bMajorX ? Major : MinorPixel;
-		Fragment.Y = bMajorX ? MinorPixel : Major;
-		const FGSRGBAQ& Flat = To.Color;
-		const auto Lerp = [T](double A, double B) { return A + ((B - A) * T); };
-		Fragment.Z = Lerp(From.Z, To.Z);
-		Fragment.F = Lerp(From.F, To.F);
-		Fragment.R = Prim.bGouraud ? Lerp(From.Color.R, To.Color.R) : Flat.R;
-		Fragment.G = Prim.bGouraud ? Lerp(From.Color.G, To.Color.G) : Flat.G;
-		Fragment.B = Prim.bGouraud ? Lerp(From.Color.B, To.Color.B) : Flat.B;
-		Fragment.A = Prim.bGouraud ? Lerp(From.Color.A, To.Color.A) : Flat.A;
-		Fragment.S = Lerp(TruncateMantissa(From.ST.S), TruncateMantissa(To.ST.S));
-		Fragment.T = Lerp(TruncateMantissa(From.ST.T), TruncateMantissa(To.ST.T));
-		Fragment.Q = Lerp(TruncateMantissa(From.Color.Q), TruncateMantissa(To.Color.Q));
-		Fragment.U = Lerp(From.UV.U, To.UV.U);
-		Fragment.V = Lerp(From.UV.V, To.UV.V);
-		ShadePixel(Fragment);
-	}
+	// Stepped by GSStepLine (the end point is not drawn, manual 3.2.9); flat shading takes the kicking vertex's colour.
+	const FGSRGBAQ& Flat = To.Color;
+	GSStepLine(From.X, From.Y, To.X, To.Y,
+		[this, &From, &To, &Flat](int32 X, int32 Y, int64 Step, int64 Steps)
+		{
+			const auto Lerp = [Step, Steps](double A, double B) { return GSLerpExact(A, B, Step, Steps); };
+			FFragment Fragment;
+			Fragment.X = X;
+			Fragment.Y = Y;
+			Fragment.Z = Lerp(From.Z, To.Z);
+			Fragment.F = Lerp(From.F, To.F);
+			Fragment.R = Prim.bGouraud ? Lerp(From.Color.R, To.Color.R) : Flat.R;
+			Fragment.G = Prim.bGouraud ? Lerp(From.Color.G, To.Color.G) : Flat.G;
+			Fragment.B = Prim.bGouraud ? Lerp(From.Color.B, To.Color.B) : Flat.B;
+			Fragment.A = Prim.bGouraud ? Lerp(From.Color.A, To.Color.A) : Flat.A;
+			Fragment.S = Lerp(TruncateMantissa(From.ST.S), TruncateMantissa(To.ST.S));
+			Fragment.T = Lerp(TruncateMantissa(From.ST.T), TruncateMantissa(To.ST.T));
+			Fragment.Q = Lerp(TruncateMantissa(From.Color.Q), TruncateMantissa(To.Color.Q));
+			Fragment.U = Lerp(From.UV.U, To.UV.U);
+			Fragment.V = Lerp(From.UV.V, To.UV.V);
+			ShadePixel(Fragment);
+		});
 }
 
 void FGSReferenceRasterizer::DrawTriangle(const FVertex& V0, const FVertex& V1, const FVertex& V2)
@@ -443,7 +416,8 @@ void FGSReferenceRasterizer::DrawTriangle(const FVertex& V0, const FVertex& V1, 
 	const int32 MaxX = FMath::Min(FloorDiv16(FMath::Max3(V0.X, V1.X, V2.X)), int32(Context.Scissor.SCAX1));
 	const int32 MinY = FMath::Max(CeilDiv16(FMath::Min3(V0.Y, V1.Y, V2.Y)), int32(Context.Scissor.SCAY0));
 	const int32 MaxY = FMath::Min(FloorDiv16(FMath::Max3(V0.Y, V1.Y, V2.Y)), int32(Context.Scissor.SCAY1));
-	const double InvArea = 1.0 / double(Area * Sign);
+	// The attributes with one rounding: (A0 W0 + A1 W1 + A2 W2) / area, exact where the result is a whole value.
+	const double Denominator = double(Area * Sign);
 	// Flat shading takes the color set before the kick: the last vertex's (manual 3.2.8).
 	const FGSRGBAQ& Flat = V2.Color;
 	for (int32 Y = MinY; Y <= MaxY; ++Y)
@@ -458,10 +432,11 @@ void FGSReferenceRasterizer::DrawTriangle(const FVertex& V0, const FVertex& V1, 
 			{
 				continue;
 			}
-			const double L0 = double(W0) * InvArea;
-			const double L1 = double(W1) * InvArea;
-			const double L2 = double(W2) * InvArea;
-			const auto Mix = [L0, L1, L2](double A, double B, double C) { return (A * L0) + (B * L1) + (C * L2); };
+			const double L0 = double(W0);
+			const double L1 = double(W1);
+			const double L2 = double(W2);
+			const auto Mix = [L0, L1, L2, Denominator](double A, double B, double C)
+			{ return ((A * L0) + (B * L1) + (C * L2)) / Denominator; };
 			FFragment Fragment;
 			Fragment.X = X;
 			Fragment.Y = Y;
@@ -493,14 +468,17 @@ void FGSReferenceRasterizer::DrawSprite(const FVertex& V0, const FVertex& V1)
 	const int32 MaxX = FMath::Min(CeilDiv16(Right) - 1, int32(Context.Scissor.SCAX1));
 	const int32 MinY = FMath::Max(CeilDiv16(Top), int32(Context.Scissor.SCAY0));
 	const int32 MaxY = FMath::Min(CeilDiv16(Bottom) - 1, int32(Context.Scissor.SCAY1));
+	// The texture coordinates at a pixel center, from V0's to V1's by the center's place between them (exact).
+	const int64 StepsX = V1.X != V0.X ? int64(V1.X - V0.X) : 1;
+	const int64 StepsY = V1.Y != V0.Y ? int64(V1.Y - V0.Y) : 1;
 	for (int32 Y = MinY; Y <= MaxY; ++Y)
 	{
-		const double TY = V1.Y != V0.Y ? double((Y * 16) - V0.Y) / double(V1.Y - V0.Y) : 0.0;
+		const int64 StepY = V1.Y != V0.Y ? (int64(Y) * 16) - V0.Y : 0;
 		for (int32 X = MinX; X <= MaxX; ++X)
 		{
-			const double TX = V1.X != V0.X ? double((X * 16) - V0.X) / double(V1.X - V0.X) : 0.0;
-			const auto LerpX = [TX](double A, double B) { return A + ((B - A) * TX); };
-			const auto LerpY = [TY](double A, double B) { return A + ((B - A) * TY); };
+			const int64 StepX = V1.X != V0.X ? (int64(X) * 16) - V0.X : 0;
+			const auto LerpX = [StepX, StepsX](double A, double B) { return GSLerpExact(A, B, StepX, StepsX); };
+			const auto LerpY = [StepY, StepsY](double A, double B) { return GSLerpExact(A, B, StepY, StepsY); };
 			// Z, fog and color are the second vertex's (manual 3.2.8); the texture spans the rectangle.
 			FFragment Fragment;
 			Fragment.X = X;
@@ -698,8 +676,9 @@ void FGSReferenceRasterizer::ShadePixel(const FFragment& Fragment)
 	// The pixel tests (manual 3.7): what the pixel may still write.
 	const FGSFrame& Frame = Context.Frame;
 	const FGSTest& Test = Context.Test;
-	const uint32 FrameBase = uint32(Frame.FBP) * 2048;
-	const uint32 FrameWidth = uint32(Frame.FBW) * 64;
+	// FBP and ZBP are pages; FGSLocalMemory addresses buffers by block.
+	const uint32 FrameBase = uint32(Frame.FBP) * FGSLocalMemory::BlocksPerPage;
+	const uint32 FrameWidth = Frame.FBW;
 	const uint32 PixelX = uint32(Fragment.X);
 	const uint32 PixelY = uint32(Fragment.Y);
 	bool bWriteRGB = true;
@@ -745,7 +724,7 @@ void FGSReferenceRasterizer::ShadePixel(const FFragment& Fragment)
 	const FGSZBuf& ZBuf = Context.ZBuf;
 	const uint32 ZMax = MaxZ(ZBuf.PSM);
 	const uint32 Z = uint32(FMath::Clamp(FloorDouble(Fragment.Z + 0.5), 0.0, double(ZMax)));
-	const uint32 ZBase = uint32(ZBuf.ZBP) * 2048;
+	const uint32 ZBase = uint32(ZBuf.ZBP) * FGSLocalMemory::BlocksPerPage;
 	switch (Test.ZTST)
 	{
 		case EGSDepthTest::Never:
@@ -855,8 +834,8 @@ TArray<FColor> FGSReferenceRasterizer::ReadFrame(const FGSFrame& Frame, uint32 W
 {
 	TArray<FColor> Pixels;
 	Pixels.Reserve(int32(Width * Height));
-	const uint32 Base = uint32(Frame.FBP) * 2048;
-	const uint32 BufferWidth = uint32(Frame.FBW) * 64;
+	const uint32 Base = uint32(Frame.FBP) * FGSLocalMemory::BlocksPerPage;
+	const uint32 BufferWidth = Frame.FBW;
 	for (uint32 Y = 0; Y < Height; ++Y)
 	{
 		for (uint32 X = 0; X < Width; ++X)
@@ -879,5 +858,6 @@ TArray<FColor> FGSReferenceRasterizer::ReadFrame(const FGSFrame& Frame, uint32 W
 
 uint32 FGSReferenceRasterizer::ReadZ(const FGSZBuf& ZBuf, uint32 WidthPixels, uint32 X, uint32 Y) const
 {
-	return Memory.ReadPixel(uint32(ZBuf.ZBP) * 2048, WidthPixels, ZBuf.PSM, X, Y) & MaxZ(ZBuf.PSM);
+	return Memory.ReadPixel(uint32(ZBuf.ZBP) * FGSLocalMemory::BlocksPerPage, WidthPixels / 64, ZBuf.PSM, X, Y) &
+		MaxZ(ZBuf.PSM);
 }

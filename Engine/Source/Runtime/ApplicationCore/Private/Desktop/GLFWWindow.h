@@ -5,7 +5,7 @@
 /** GLFW is running: a window created it (the gamepad is read only then). */
 [[nodiscard]] bool IsGLFWInitialized();
 
-/** Desktop window + OpenGL 3.3 core context through GLFW (Win64 / Linux). */
+/** Desktop window + OpenGL 3.3 core context through GLFW (Win64). */
 class FGLFWWindow final : public FGenericWindow
 {
 public:

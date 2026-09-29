@@ -15,7 +15,10 @@
 #include "Misc/AutomationTest.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
+#include "PhysicalMaterials/PhysicalMaterial.h"
+#include "Physics/PhysScene.h"
 #include "ShooterCharacter.h"
+#include "ShooterGame.h"
 #include "ShooterGameMode.h"
 #include "ShooterPlayerState.h"
 #include "UObject/GarbageCollection.h"
@@ -127,8 +130,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterMapDeLeonHoldsTheGameTest, "ShooterGame
 
 bool FShooterMapDeLeonHoldsTheGameTest::RunTest(const FString& Parameters)
 {
-	// The imported blockout is the game's default map and holds two bomb sites, the teams' buy zones and five starts a
-	// team, the waypoint graph with its links, a player clip and the sun.
+	// The imported map is the game's default map and holds two bomb sites, the teams' buy zones and five starts a
+	// team, the waypoint graph with its links, a player clip, two ladders and the sun.
 	TestEqual("The default map", UGameMapsSettings::GetGameDefaultMap(), FString(DeLeon));
 	TestEqual("The game mode", UGameMapsSettings::GetGlobalDefaultGameMode(),
 		FString(TEXT("/Script/ShooterGame.ShooterGameMode")));
@@ -171,6 +174,7 @@ bool FShooterMapDeLeonHoldsTheGameTest::RunTest(const FString& Parameters)
 	}
 	TestTrue("Linked", NumLinks >= 2 * Waypoints.Num() - 2);
 	TestEqual("A player clip", FindActors<ABlockingVolume>(*World).Num(), 1);
+	TestEqual("Two ladders", FindActors<ATriggerVolume>(*World, FName(TEXT("Ladder"))).Num(), 2);
 	TestEqual("The sun", FindActors<ADirectionalLight>(*World).Num(), 1);
 	return true;
 }
@@ -209,7 +213,9 @@ bool FShooterMapTenPawnsOnDeLeonTest::RunTest(const FString& Parameters)
 {
 	// A headless engine opens the default map as the game does: the player joins CT at a CT start, bot_add_ct 4 and
 	// bot_add_t 5 fill both teams, and after a second of play the ten pawns stand on ten different starts of their
-	// teams (the G6 smoke, in a test).
+	// teams (the G6 smoke, in a test). The surfaces are de_leon's physical materials (N30f): everybody walks on the
+	// floor slabs (N29), the T spawn's sand (dirt) and the CT spawn's paving (tile); a crate is wood and a wall
+	// concrete to a bullet.
 	TStrongObjectPtr<UGameEngine> Engine(NewObject<UGameEngine>());
 	Engine->Init(nullptr);
 	FWorldContext& Context = *Engine->GameInstance->GetWorldContext();
@@ -261,15 +267,35 @@ bool FShooterMapTenPawnsOnDeLeonTest::RunTest(const FString& Parameters)
 			}
 		}
 		TestNotNull("Standing on a start of its team", Nearest);
-		TestEqual("On the floor (the 1 cm spawn pad)", Character->GetActorLocation().Z, 1.0f, 0.5f);
+		TestEqual("On the ground", Character->GetActorLocation().Z, 0.0f, 0.5f);
 		TestTrue("Walking", Character->IsMovingOnGround());
 		if (Nearest != nullptr)
 		{
 			TestFalse("Alone on its start", Used.Contains(Nearest));
 			Used.Add(Nearest);
 		}
+		// The CT spawn (X from 9 m) is paved, the T spawn is sand.
+		const bool bOnPaving = Character->GetActorLocation().X > 900.0f;
+		TestEqual(
+			bOnPaving ? TEXT("The CT spawn's floor: the paving's tile") : TEXT("The T spawn's floor: the sand's dirt"),
+			Character->GetFloorSurface(), bOnPaving ? SHOOTER_SURFACE_Tile : SHOOTER_SURFACE_Dirt);
 	}
 	TestEqual("Ten different starts", Used.Num(), 10);
+	FCollisionQueryParams Params;
+	Params.bReturnPhysicalMaterial = true;
+	auto SurfaceAlong = [World, &Params](const FVector& Start, const FVector& End)
+	{
+		FHitResult Hit;
+		return World->GetPhysicsScene().LineTraceSingleByChannel(Hit, Start, End, COLLISION_WEAPON, Params)
+			? UPhysicalMaterial::DetermineSurfaceType(Hit.PhysMaterial.Get())
+			: SurfaceType_Max;
+	};
+	TestEqual("A T spawn crate: wood",
+		SurfaceAlong(FVector(-2150.0f, 1100.0f, 300.0f), FVector(-2150.0f, 1100.0f, 0.0f)), SHOOTER_SURFACE_Wood);
+	TestEqual("The T spawn's south wall: concrete",
+		SurfaceAlong(FVector(-2900.0f, 0.0f, 200.0f), FVector(-3100.0f, 0.0f, 200.0f)), SHOOTER_SURFACE_Concrete);
+	TestEqual("A lamp of the tunnel: metal",
+		SurfaceAlong(FVector(-1200.0f, -1500.0f, 250.0f), FVector(-1200.0f, -1400.0f, 250.0f)), SHOOTER_SURFACE_Metal);
 	Engine->PreExit();
 	return true;
 }

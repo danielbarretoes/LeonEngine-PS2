@@ -36,6 +36,14 @@ class UCountingComponent : public UActorComponent
 	GENERATED_BODY()
 
 public:
+	/** It may tick, off until a test turns it on (SetComponentTickEnabled). */
+	UCountingComponent(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get())
+		: Super(ObjectInitializer)
+	{
+		PrimaryComponentTick.bCanEverTick = true;
+		PrimaryComponentTick.bStartWithTickEnabled = false;
+	}
+
 	int32 Ticks = 0;
 	int32 Begins = 0;
 

@@ -26,6 +26,9 @@ struct CORE_API FPS2PlatformProperties : public FGenericPlatformProperties
 
 	/** UObject array: 8192 objects of 12 bytes (96 KB). */
 	static constexpr int32 MaxObjectsInGame = 8192;
+
+	/** GMalloc's small-block arena on the EE (Budgets.md). */
+	static constexpr uint32 SmallBlockArenaSize = 2 * 1024 * 1024;
 };
 
 typedef FPS2PlatformProperties FPlatformProperties;

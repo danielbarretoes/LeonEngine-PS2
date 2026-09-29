@@ -1,6 +1,7 @@
 #include "ShooterGameMode.h"
 
 #include "Components/CapsuleComponent.h"
+#include "Engine/Engine.h"
 #include "Engine/Level.h"
 #include "Engine/TriggerVolume.h"
 #include "Engine/World.h"
@@ -9,6 +10,7 @@
 #include "HAL/UnrealMemory.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/CommandLine.h"
+#include "Misc/PackageName.h"
 #include "Misc/Parse.h"
 #include "ShooterAIController.h"
 #include "ShooterBomb.h"
@@ -16,12 +18,18 @@
 #include "ShooterGame.h"
 #include "ShooterGameState.h"
 #include "ShooterHUD.h"
+#include "ShooterPawnSensingComponent.h"
 #include "ShooterPlayerController.h"
 #include "ShooterPlayerState.h"
+#include "TimerManager.h"
 #include "UObject/UObjectArray.h"
 #include "UObject/UObjectBase.h"
+#include "UObject/UObjectHash.h"
+#include "UObject/UnrealType.h"
 #include "Weapons/ShooterProjectile.h"
+#include "Weapons/ShooterSmokeCloud.h"
 #include "Weapons/ShooterWeapon.h"
+#include "Weapons/ShooterWeapon_Projectile.h"
 
 namespace
 {
@@ -40,29 +48,22 @@ namespace
 		return Capsule != nullptr ? Capsule->GetScaledCapsuleHalfHeight() : 0.0f;
 	}
 
-	/** A pawn that stands somewhere: not being destroyed, and alive when it is a shooter. */
-	bool IsStandingPawn(const APawn& Pawn)
-	{
-		const AShooterCharacter* Shooter = Cast<AShooterCharacter>(&Pawn);
-		return !Pawn.IsPendingKillPending() && (Shooter == nullptr || Shooter->IsAlive());
-	}
-
-	/** True when a live pawn stands on the start: within two capsule radii horizontally and 2 m vertically. */
-	bool IsStartOccupied(const UWorld& World, const APlayerStart& Start)
+	/**
+	 * True when a live pawn stands on the start: within two capsule radii horizontally and 2 m vertically (the
+	 * registered shooter pawns: the spectators fly and the dead lie down).
+	 */
+	bool IsStartOccupied(const TArray<AShooterCharacter*>& Pawns, const APlayerStart& Start)
 	{
 		const FVector StartLocation = Start.GetActorLocation();
 		const UCapsuleComponent* StartCapsule = Start.GetCapsuleComponent();
 		const float StartRadius = StartCapsule != nullptr ? StartCapsule->GetScaledCapsuleRadius() : DefaultStartRadius;
-		for (const AActor* Actor : World.PersistentLevel->Actors)
+		for (const AShooterCharacter* Pawn : Pawns)
 		{
-			const APawn* Pawn = Cast<APawn>(Actor);
-			if (Pawn == nullptr || !IsStandingPawn(*Pawn))
+			if (Pawn->IsPendingKillPending() || !Pawn->IsAlive())
 			{
 				continue;
 			}
-			const ACharacter* Character = Cast<ACharacter>(Pawn);
-			const float PawnRadius =
-				Character != nullptr ? Character->GetCapsule().GetCapsuleRadius() : DefaultStartRadius;
+			const float PawnRadius = Pawn->GetCapsule().GetCapsuleRadius();
 			const FVector Delta = Pawn->GetActorLocation() - StartLocation;
 			const float MinDistance = StartRadius + PawnRadius;
 			constexpr float VerticalReach = 200.0f;
@@ -125,19 +126,56 @@ namespace
 		return State != nullptr ? Cast<AController>(State->GetOwner()) : nullptr;
 	}
 
-	/** The equipment names Buy takes besides the weapons'. */
+	/** Removes Actor from a registry, keeping the order of the rest (the level's). */
+	template <typename T>
+	void RemoveFromRegistry(TArray<T*>& Registry, const AActor* Actor)
+	{
+		const int32 Index = Registry.IndexOfByKey(Actor);
+		if (Index != INDEX_NONE)
+		{
+			Registry.RemoveAt(Index);
+		}
+	}
+
+	/** The equipment names Buy takes besides the weapons' (CS's buy commands). */
 	const TCHAR* const VestItem = TEXT("vest");
 	const TCHAR* const VestHelmetItem = TEXT("vesthelm");
 	const TCHAR* const DefuserItem = TEXT("defuser");
+	const TCHAR* const PrimaryAmmoItem = TEXT("primammo");
+	const TCHAR* const SecondaryAmmoItem = TEXT("secammo");
+
+	/** The weapon a box of ammunition is for: the primary for primammo, the pistol for secammo, else null. */
+	AShooterWeapon* GetAmmoWeapon(const AShooterCharacter& Buyer, const FString& Item)
+	{
+		if (Item.Equals(PrimaryAmmoItem, ESearchCase::IgnoreCase))
+		{
+			return Buyer.GetWeaponInSlot(EShooterWeaponSlot::Primary);
+		}
+		if (Item.Equals(SecondaryAmmoItem, ESearchCase::IgnoreCase))
+		{
+			return Buyer.GetWeaponInSlot(EShooterWeaponSlot::Secondary);
+		}
+		return nullptr;
+	}
+
+	/** The ammunition items. */
+	bool IsAmmoItem(const FString& Item)
+	{
+		return Item.Equals(PrimaryAmmoItem, ESearchCase::IgnoreCase) ||
+			Item.Equals(SecondaryAmmoItem, ESearchCase::IgnoreCase);
+	}
 
 } // namespace
 
 const FName AShooterGameMode::BombSiteTag(TEXT("BombSite"));
 const FName AShooterGameMode::BuyZoneTag(TEXT("BuyZone"));
+const FName AShooterGameMode::LadderTag(TEXT("Ladder"));
 
 AShooterGameMode::AShooterGameMode(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+	// The warmup's fill and start, the eliminations and the bot match's checks run in the game mode's tick.
+	PrimaryActorTick.bCanEverTick = true;
 	DefaultPawnClass = AShooterCharacter::StaticClass();
 	PlayerControllerClass = AShooterPlayerController::StaticClass();
 	PlayerStateClass = AShooterPlayerState::StaticClass();
@@ -158,8 +196,144 @@ void AShooterGameMode::InitGame(const FString& MapName, const FString& Options, 
 		bBotMatch = true;
 		bFillTeamsWithBots = true;
 		(void)FParse::Value(CmdLine, TEXT("rounds="), BotMatchRounds);
-		BotMatchRounds = FMath::Clamp(BotMatchRounds, 1, MaxRounds);
+		// The match is that long (mp_maxrounds): its halftime and its majority come from it.
+		BotMatchRounds = FMath::Max(BotMatchRounds, 1);
+		MaxRounds = BotMatchRounds;
 		UE_LOG(LogShooter, Display, TEXT("Botmatch: %d round(s), seed %d"), BotMatchRounds, RandomSeed);
+	}
+	RequestGameplayAssets();
+}
+
+namespace
+{
+	/**
+	 * The soft object paths in a property's value: an FSoftObjectPath, and those inside a struct (a surface's sounds,
+	 * FShooterSurfaceSounds) or an array (sound variants).
+	 */
+	void GatherValuePaths(const FProperty* Property, const void* Value, TArray<FSoftObjectPath>& OutPaths)
+	{
+		static const FName SoftObjectPathName(TEXT("SoftObjectPath"));
+		if (const FStructProperty* StructProperty = CastField<FStructProperty>(Property))
+		{
+			if (StructProperty->Struct == nullptr)
+			{
+				return;
+			}
+			if (StructProperty->Struct->GetFName() == SoftObjectPathName)
+			{
+				const FSoftObjectPath& Path = *static_cast<const FSoftObjectPath*>(Value);
+				if (!Path.IsNull())
+				{
+					OutPaths.AddUnique(Path);
+				}
+				return;
+			}
+			for (TFieldIterator<FProperty> It(StructProperty->Struct); It; ++It)
+			{
+				for (int32 Index = 0; Index < It->ArrayDim; ++Index)
+				{
+					GatherValuePaths(*It, It->ContainerPtrToValuePtr<void>(Value, Index), OutPaths);
+				}
+			}
+		}
+		else if (const FArrayProperty* ArrayProperty = CastField<FArrayProperty>(Property))
+		{
+			FScriptArrayHelper Helper(ArrayProperty, Value);
+			for (int32 Index = 0; Index < Helper.Num(); ++Index)
+			{
+				GatherValuePaths(ArrayProperty->Inner, Helper.GetRawPtr(Index), OutPaths);
+			}
+		}
+	}
+
+	/**
+	 * The soft object paths a class default names (its FSoftObjectPath properties, also in structs and arrays), and
+	 * those of the actor classes it names (TSubclassOf: a weapon's projectile), once each class.
+	 */
+	void GatherSoftObjectPaths(UClass* Class, TArray<UClass*>& Visited, TArray<FSoftObjectPath>& OutPaths)
+	{
+		if (Class == nullptr || Visited.Contains(Class) || Class->HasAnyClassFlags(CLASS_Abstract))
+		{
+			return;
+		}
+		Visited.Add(Class);
+		const UObject* Defaults = Class->GetDefaultObject();
+		for (TFieldIterator<FProperty> It(Class); It; ++It)
+		{
+			if (CastField<FStructProperty>(*It) != nullptr || CastField<FArrayProperty>(*It) != nullptr)
+			{
+				for (int32 Index = 0; Index < It->ArrayDim; ++Index)
+				{
+					GatherValuePaths(*It, It->ContainerPtrToValuePtr<void>(Defaults, Index), OutPaths);
+				}
+			}
+			else if (const FClassProperty* ClassProperty = CastField<FClassProperty>(*It))
+			{
+				UClass* Named = Cast<UClass>(ClassProperty->GetObjectPropertyValue_InContainer(Defaults));
+				if (Named != nullptr && Named->IsChildOf(AActor::StaticClass()))
+				{
+					GatherSoftObjectPaths(Named, Visited, OutPaths);
+				}
+			}
+		}
+	}
+} // namespace
+
+void AShooterGameMode::RequestGameplayAssets()
+{
+	TArray<UClass*> Classes;
+	GetDerivedClasses(AShooterWeapon::StaticClass(), Classes, /*bRecursive=*/true);
+	Classes.Add(DefaultPawnClass);
+	Classes.Add(BombClass);
+	Classes.Add(PlayerControllerClass); // the radio's sounds
+	TArray<UClass*> Visited;
+	TArray<FSoftObjectPath> Paths;
+	for (UClass* Class : Classes)
+	{
+		GatherSoftObjectPaths(Class, Visited, Paths);
+	}
+	PreloadPaths.Reset();
+	PreloadRequestIds.Reset();
+	int32 NumRequested = 0;
+	for (const FSoftObjectPath& Path : Paths)
+	{
+		NumRequested += RequestPreloadPath(Path) ? 1 : 0;
+	}
+	UE_LOG(LogShooter, Log, TEXT("Preloading %d package(s) for %d asset path(s)"), NumRequested, Paths.Num());
+}
+bool AShooterGameMode::RequestPreloadPath(const FSoftObjectPath& Path)
+{
+	const FString PackageName = Path.GetLongPackageName();
+	const FName PackageFName(*PackageName);
+	if (TArray<FSoftObjectPath>* Known = PreloadPaths.Find(PackageFName))
+	{
+		Known->AddUnique(Path);
+		return false;
+	}
+	if (!FPackageName::DoesPackageExist(PackageName))
+	{
+		return false; // a name for art that is not there yet (N27): nothing to load
+	}
+	PreloadPaths.Add(PackageFName).Add(Path);
+	PreloadRequestIds.Add(LoadPackageAsync(
+		PackageName, FLoadPackageAsyncDelegate::CreateUObject(this, &AShooterGameMode::OnGameplayPackageLoaded)));
+	return true;
+}
+
+void AShooterGameMode::OnGameplayPackageLoaded(
+	const FName& PackageName, UPackage* /*Package*/, EAsyncLoadingResult::Type Result)
+{
+	const TArray<FSoftObjectPath>* Paths = PreloadPaths.Find(PackageName);
+	if (Paths == nullptr || Result != EAsyncLoadingResult::Succeeded)
+	{
+		return;
+	}
+	for (const FSoftObjectPath& Path : *Paths)
+	{
+		if (UObject* Asset = Path.ResolveObject())
+		{
+			PreloadedAssets.AddUnique(Asset);
+		}
 	}
 }
 
@@ -223,10 +397,257 @@ void AShooterGameMode::CountPawns(int32& OutCT, int32& OutT) const
 
 int32 AShooterGameMode::CountAlive(EShooterTeam Team) const
 {
-	int32 NumCT = 0;
-	int32 NumT = 0;
-	CountPawns(NumCT, NumT);
-	return Team == EShooterTeam::CT ? NumCT : Team == EShooterTeam::T ? NumT : 0;
+	// Every bot asks for both teams every frame: they are counted once until the time moves on or a pawn changes.
+	const float Now = GetWorldTime();
+	if (Now != AliveCountTime || PawnsSerial != AliveCountSerial)
+	{
+		CountPawns(AliveCount[static_cast<int32>(EShooterTeam::CT)], AliveCount[static_cast<int32>(EShooterTeam::T)]);
+		AliveCountTime = Now;
+		AliveCountSerial = PawnsSerial;
+	}
+	return Team == EShooterTeam::None ? 0 : AliveCount[static_cast<int32>(Team)];
+}
+
+bool AShooterGameMode::ClaimSensingUpdate(UShooterPawnSensingComponent* Sensor)
+{
+	const float Now = GetWorldTime();
+	if (Now != SensingFrameTime)
+	{
+		SensingFrameTime = Now;
+		SensingUpdatesThisFrame = 0;
+	}
+	if (MaxSensingUpdatesPerFrame > 0)
+	{
+		// In turn: the frame's looks left go to the head of the queue, whichever of them asks first this frame.
+		int32 Place = SensingQueue.Find(Sensor);
+		if (Place == INDEX_NONE)
+		{
+			Place = SensingQueue.Add(Sensor);
+		}
+		if (Place >= MaxSensingUpdatesPerFrame - SensingUpdatesThisFrame)
+		{
+			return false;
+		}
+		// Keeps its capacity: the queue changes every frame.
+		SensingQueue.RemoveAt(Place, 1, false);
+	}
+	++SensingUpdatesThisFrame;
+	return true;
+}
+
+void AShooterGameMode::CancelSensingUpdate(UShooterPawnSensingComponent* Sensor)
+{
+	SensingQueue.Remove(Sensor);
+}
+
+int32 AShooterGameMode::GetSensingUpdatesThisFrame() const
+{
+	return GetWorldTime() == SensingFrameTime ? SensingUpdatesThisFrame : 0;
+}
+
+// Registries
+
+void AShooterGameMode::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+	UWorld* World = GetWorld();
+	if (World == nullptr || World->PersistentLevel == nullptr)
+	{
+		return;
+	}
+	// The map's volumes and starts are in the level already (a loaded map, or a test's spawns); later ones join as
+	// they spawn.
+	for (AActor* Actor : World->PersistentLevel->Actors)
+	{
+		RegisterMapActor(Actor);
+	}
+	ActorSpawnedHandle = World->AddOnActorSpawnedHandler(
+		UWorld::FOnActorSpawned::FDelegate::CreateUObject(this, &AShooterGameMode::OnActorSpawned));
+}
+
+void AShooterGameMode::OnActorSpawned(AActor* Actor)
+{
+	RegisterMapActor(Actor);
+}
+
+void AShooterGameMode::RegisterMapActor(AActor* Actor)
+{
+	if (ATriggerVolume* Zone = Cast<ATriggerVolume>(Actor))
+	{
+		if (!Zones.Contains(Zone))
+		{
+			Zones.Add(Zone);
+			bMapCachesDirty = true;
+		}
+	}
+	else if (APlayerStart* Start = Cast<APlayerStart>(Actor))
+	{
+		if (!PlayerStarts.Contains(Start))
+		{
+			PlayerStarts.Add(Start);
+			bMapCachesDirty = true;
+		}
+	}
+}
+
+void AShooterGameMode::UpdateMapCaches() const
+{
+	// A volume or a start destroyed since (a test's; a map keeps them) is dropped from the caches too.
+	for (const ATriggerVolume* Zone : BombSiteZones)
+	{
+		bMapCachesDirty |= Zone == nullptr || Zone->IsPendingKillPending();
+	}
+	for (const TArray<APlayerStart*>& Starts : TeamStarts)
+	{
+		for (const APlayerStart* Start : Starts)
+		{
+			bMapCachesDirty |= Start == nullptr || Start->IsPendingKillPending();
+		}
+	}
+	if (!bMapCachesDirty)
+	{
+		return;
+	}
+	bMapCachesDirty = false;
+	// The sites by name ("A", "B"), compared as text once here (not in every bot's frame).
+	struct FSite
+	{
+		FString SortKey;
+		FName Name;
+		ATriggerVolume* Zone = nullptr;
+	};
+	TArray<FSite> Sites;
+	for (ATriggerVolume* Zone : Zones)
+	{
+		if (Zone == nullptr || Zone->IsPendingKillPending() || !Zone->ActorHasTag(BombSiteTag))
+		{
+			continue;
+		}
+		const FName Name = GetZoneName(*Zone, BombSiteTag);
+		if (Name != NAME_None && !Sites.ContainsByPredicate([Name](const FSite& Site) { return Site.Name == Name; }))
+		{
+			Sites.Add(FSite{Name.ToString(), Name, Zone});
+		}
+	}
+	Sites.Sort([](const FSite& A, const FSite& B) { return A.SortKey < B.SortKey; });
+	BombSiteNames.Reset();
+	BombSiteLocations.Reset();
+	BombSiteZones.Reset();
+	for (const FSite& Site : Sites)
+	{
+		// The first volume with the site's tags in level order (GetBombSiteLocation's).
+		const ATriggerVolume* Zone = nullptr;
+		for (const ATriggerVolume* Candidate : Zones)
+		{
+			if (Candidate != nullptr && !Candidate->IsPendingKillPending() && Candidate->ActorHasTag(BombSiteTag) &&
+				Candidate->ActorHasTag(Site.Name))
+			{
+				Zone = Candidate;
+				break;
+			}
+		}
+		const FBox Bounds = Zone != nullptr ? Zone->GetBrushBounds() : Site.Zone->GetBrushBounds();
+		BombSiteNames.Add(Site.Name);
+		BombSiteLocations.Add(FVector(Bounds.GetCenter().X, Bounds.GetCenter().Y, Bounds.Min.Z));
+		BombSiteZones.Add(Site.Zone);
+	}
+	for (TArray<APlayerStart*>& Starts : TeamStarts)
+	{
+		Starts.Reset();
+	}
+	for (APlayerStart* Start : PlayerStarts)
+	{
+		if (Start == nullptr || Start->IsPendingKillPending())
+		{
+			continue;
+		}
+		for (const EShooterTeam Team : {EShooterTeam::CT, EShooterTeam::T})
+		{
+			if (Start->PlayerStartTag == GetShooterTeamTag(Team))
+			{
+				TeamStarts[static_cast<int32>(Team)].Add(Start);
+			}
+		}
+	}
+}
+
+void AShooterGameMode::RegisterPawn(AShooterCharacter* Pawn)
+{
+	if (Pawn != nullptr && !Pawns.Contains(Pawn))
+	{
+		Pawns.Add(Pawn);
+		NotifyPawnsChanged();
+	}
+}
+
+void AShooterGameMode::UnregisterPawn(AShooterCharacter* Pawn)
+{
+	RemoveFromRegistry(Pawns, Pawn);
+	NotifyPawnsChanged();
+}
+
+void AShooterGameMode::RegisterPickup(AActor* Pickup)
+{
+	if (Pickup != nullptr && !Pickups.Contains(Pickup))
+	{
+		Pickups.Add(Pickup);
+	}
+}
+
+void AShooterGameMode::UnregisterPickup(AActor* Pickup)
+{
+	RemoveFromRegistry(Pickups, Pickup);
+}
+
+void AShooterGameMode::RegisterBomb(AShooterBomb* InBomb)
+{
+	if (InBomb != nullptr && !Bombs.Contains(InBomb))
+	{
+		Bombs.Add(InBomb);
+	}
+}
+
+void AShooterGameMode::UnregisterBomb(AShooterBomb* InBomb)
+{
+	RemoveFromRegistry(Bombs, InBomb);
+}
+
+void AShooterGameMode::RegisterProjectile(AShooterProjectile* Projectile)
+{
+	if (Projectile != nullptr && !Projectiles.Contains(Projectile))
+	{
+		Projectiles.Add(Projectile);
+	}
+}
+
+void AShooterGameMode::UnregisterProjectile(AShooterProjectile* Projectile)
+{
+	RemoveFromRegistry(Projectiles, Projectile);
+}
+
+void AShooterGameMode::RegisterSmokeCloud(AShooterSmokeCloud* Cloud)
+{
+	if (Cloud != nullptr && !SmokeClouds.Contains(Cloud))
+	{
+		SmokeClouds.Add(Cloud);
+	}
+}
+
+void AShooterGameMode::UnregisterSmokeCloud(AShooterSmokeCloud* Cloud)
+{
+	RemoveFromRegistry(SmokeClouds, Cloud);
+}
+
+bool AShooterGameMode::IsSightBlockedBySmoke(const FVector& Start, const FVector& End) const
+{
+	for (const AShooterSmokeCloud* Cloud : SmokeClouds)
+	{
+		if (Cloud != nullptr && Cloud->BlocksLine(Start, End))
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 FString AShooterGameMode::InitNewPlayer(
@@ -254,18 +675,13 @@ AActor* AShooterGameMode::ChoosePlayerStart(AController* Player)
 	}
 
 	APlayerStart* FirstTeamStart = nullptr;
-	for (AActor* Actor : World->PersistentLevel->Actors)
+	for (APlayerStart* Start : GetTeamStarts(State->GetTeam()))
 	{
-		APlayerStart* Start = Cast<APlayerStart>(Actor);
-		if (Start == nullptr || Start->IsPendingKillPending() || Start->PlayerStartTag != TeamTag)
-		{
-			continue;
-		}
 		if (FirstTeamStart == nullptr)
 		{
 			FirstTeamStart = Start;
 		}
-		if (!IsStartOccupied(*World, *Start))
+		if (!IsStartOccupied(Pawns, *Start))
 		{
 			return Start;
 		}
@@ -280,29 +696,15 @@ AActor* AShooterGameMode::ChoosePlayerStart(AController* Player)
 	return Super::ChoosePlayerStart(Player);
 }
 
-TArray<AActor*> AShooterGameMode::GetTeamStarts(EShooterTeam Team) const
+const TArray<APlayerStart*>& AShooterGameMode::GetTeamStarts(EShooterTeam Team) const
 {
-	TArray<AActor*> Starts;
-	const UWorld* World = GetWorld();
-	const FName TeamTag = GetShooterTeamTag(Team);
-	if (World == nullptr || World->PersistentLevel == nullptr || TeamTag == NAME_None)
-	{
-		return Starts;
-	}
-	for (AActor* Actor : World->PersistentLevel->Actors)
-	{
-		const APlayerStart* Start = Cast<APlayerStart>(Actor);
-		if (Start != nullptr && !Start->IsPendingKillPending() && Start->PlayerStartTag == TeamTag)
-		{
-			Starts.Add(Actor);
-		}
-	}
-	return Starts;
+	UpdateMapCaches();
+	return TeamStarts[static_cast<int32>(Team)];
 }
 
 bool AShooterGameMode::GetTeamSpawnLocation(EShooterTeam Team, FVector& OutLocation) const
 {
-	const TArray<AActor*> Starts = GetTeamStarts(Team);
+	const TArray<APlayerStart*>& Starts = GetTeamStarts(Team);
 	if (Starts.Num() == 0)
 	{
 		return false;
@@ -394,16 +796,33 @@ int32 AShooterGameMode::AddBots(EShooterTeam Team, int32 Count)
 			continue;
 		}
 		const int32 TeamIndex = static_cast<int32>(BotTeam);
+		// The teams' looks interleaved over the interval: CT 0, T 1, CT 2, ...
+		BotController->SetSensingSlot(
+			(2 * NumBotsAddedToTeam[TeamIndex]++) + (BotTeam == EShooterTeam::T ? 1 : 0), 2 * MaxPlayersPerTeam);
+		// The bot's index seeds its stream (its name does not: a name never changes the match) and picks its name.
+		const int32 BotIndex = NumBotsCreated++;
+		BotController->SetBotIndex(BotIndex);
 		State->SetTeam(BotTeam);
 		State->bIsABot = true;
 		State->SetMoney(StartMoney, MaxMoney);
-		State->SetPlayerName(
-			FString::Printf(TEXT("Bot_%s_%d"), GetShooterTeamName(BotTeam), NextBotNumber[TeamIndex]++));
+		State->SetPlayerName(GetBotName(BotIndex));
 		GetGameState().AddPlayerState(State);
 		RestartPlayer(BotController);
 		++Added;
 	}
 	return Added;
+}
+
+FString AShooterGameMode::GetBotName(int32 BotIndex) const
+{
+	const int32 Index = FMath::Max(0, BotIndex);
+	if (BotNames.Num() == 0)
+	{
+		return FString::Printf(TEXT("Bot %d"), Index + 1);
+	}
+	const FString& Name = BotNames[Index % BotNames.Num()];
+	const int32 Round = Index / BotNames.Num();
+	return Round == 0 ? Name : FString::Printf(TEXT("%s (%d)"), *Name, Round + 1);
 }
 
 int32 AShooterGameMode::FillTeamsWithBots()
@@ -529,7 +948,7 @@ void AShooterGameMode::BeginNewMatch()
 {
 	RoundRandom.Initialize(RandomSeed);
 	LossStreak[0] = LossStreak[1] = LossStreak[2] = 0;
-	bRestartPending = false;
+	GetWorldTimerManager().ClearTimer(TimerHandle_RestartGame);
 	if (AShooterGameState* State = GetShooterGameState())
 	{
 		State->ResetMatch();
@@ -546,27 +965,47 @@ void AShooterGameMode::BeginNewMatch()
 		GetTeamSize(EShooterTeam::T), MaxRounds, RandomSeed);
 	// A new match starts clean (CS's "Game Commencing"): every pawn goes, and the round respawns everyone with the
 	// default inventory.
-	const UWorld* World = GetWorld();
-	if (World != nullptr && World->PersistentLevel != nullptr)
-	{
-		TArray<AShooterCharacter*> Pawns;
-		for (AActor* Actor : World->PersistentLevel->Actors)
-		{
-			if (AShooterCharacter* Shooter = Cast<AShooterCharacter>(Actor))
-			{
-				Pawns.Add(Shooter);
-			}
-		}
-		for (AShooterCharacter* Shooter : Pawns)
-		{
-			if (AController* Controller = Shooter->GetController())
-			{
-				Controller->UnPossess();
-			}
-			(void)Shooter->Destroy();
-		}
-	}
+	DestroyAllPawns();
 	StartRound();
+}
+
+void AShooterGameMode::DestroyAllPawns()
+{
+	// A copy: each pawn leaves the registry as it goes.
+	const TArray<AShooterCharacter*> MatchPawns = Pawns;
+	for (AShooterCharacter* Shooter : MatchPawns)
+	{
+		if (AController* Controller = Shooter->GetController())
+		{
+			Controller->UnPossess();
+		}
+		(void)Shooter->Destroy();
+	}
+}
+
+void AShooterGameMode::HandleHalftime()
+{
+	AShooterGameState* State = GetShooterGameState();
+	if (State == nullptr)
+	{
+		return;
+	}
+	State->BeginSecondHalf();
+	LossStreak[0] = LossStreak[1] = LossStreak[2] = 0;
+	for (APlayerState* PlayerState : GetGameState().GetPlayerArray())
+	{
+		AShooterPlayerState* ShooterState = Cast<AShooterPlayerState>(PlayerState);
+		if (ShooterState == nullptr || ShooterState->GetTeam() == EShooterTeam::None)
+		{
+			continue; // a spectator (the bot match's player) stays one
+		}
+		ShooterState->SetTeam(GetOpposingTeam(ShooterState->GetTeam()));
+		ShooterState->SetMoney(StartMoney, MaxMoney);
+	}
+	// The second half starts as the first: everyone on the new side's starts with the default inventory.
+	DestroyAllPawns();
+	UE_LOG(LogShooter, Display, TEXT("Halftime after round %d: the teams switch sides, CT %d - T %d"),
+		State->GetRoundNumber(), State->GetTeamScore(EShooterTeam::CT), State->GetTeamScore(EShooterTeam::T));
 }
 
 void AShooterGameMode::HandleMatchHasEnded()
@@ -583,6 +1022,8 @@ void AShooterGameMode::HandleMatchHasEnded()
 			: ScoreT > ScoreCT             ? EShooterTeam::T
 										   : EShooterTeam::None);
 	State->SetRoundState(EShooterRoundState::MatchEnd, 0.0f);
+	GetWorldTimerManager().ClearTimer(TimerHandle_Phase);
+	GetWorldTimerManager().ClearTimer(TimerHandle_BuyTime);
 	UE_LOG(LogShooter, Display, TEXT("Match over after %d round(s): CT %d - T %d, %s"), State->GetRoundNumber(),
 		ScoreCT, ScoreT,
 		State->GetMatchWinner() == EShooterTeam::None     ? TEXT("a draw")
@@ -592,24 +1033,33 @@ void AShooterGameMode::HandleMatchHasEnded()
 
 void AShooterGameMode::CleanUpMap()
 {
-	UWorld* World = GetWorld();
-	if (World == nullptr || World->PersistentLevel == nullptr)
-	{
-		return;
-	}
+	// From the registries (each actor leaves its registry as it is destroyed, so they are copied first).
 	TArray<AActor*> ToDestroy;
-	for (AActor* Actor : World->PersistentLevel->Actors)
+	for (AActor* Pickup : Pickups)
 	{
-		if (Actor == nullptr || Actor->IsPendingKillPending())
+		const AShooterWeapon* Weapon = Cast<AShooterWeapon>(Pickup);
+		if (Weapon != nullptr && Weapon->IsDropped())
 		{
-			continue;
+			ToDestroy.AddUnique(Pickup);
 		}
-		const AShooterWeapon* Weapon = Cast<AShooterWeapon>(Actor);
-		const AShooterCharacter* Shooter = Cast<AShooterCharacter>(Actor);
-		if ((Weapon != nullptr && Weapon->IsDropped()) || Actor->IsA<AShooterProjectile>() ||
-			Actor->IsA<AShooterBomb>() || (Shooter != nullptr && !Shooter->IsAlive()))
+	}
+	for (AShooterProjectile* Projectile : Projectiles)
+	{
+		ToDestroy.AddUnique(Projectile);
+	}
+	for (AShooterSmokeCloud* Cloud : SmokeClouds)
+	{
+		ToDestroy.AddUnique(Cloud);
+	}
+	for (AShooterBomb* RoundBomb : Bombs)
+	{
+		ToDestroy.AddUnique(RoundBomb);
+	}
+	for (AShooterCharacter* Shooter : Pawns)
+	{
+		if (!Shooter->IsAlive())
 		{
-			ToDestroy.Add(Actor);
+			ToDestroy.AddUnique(Shooter);
 		}
 	}
 	for (AActor* Actor : ToDestroy)
@@ -628,19 +1078,29 @@ void AShooterGameMode::StartRound()
 		return;
 	}
 	CleanUpMap();
+	// The last round's weapons, grenades, corpses and bomb go in a full collection at the next safe point (the steps'
+	// incremental ones collect in between).
+	if (GEngine != nullptr)
+	{
+		GEngine->ForceGarbageCollection(true);
+	}
 	bBombPlantedThisRound = false;
 	const float Now = GetWorldTime();
 	State->SetRoundNumber(State->GetRoundNumber() + 1);
 	// Freeze first: RestartPlayer spawns during the freeze.
 	State->SetRoundState(EShooterRoundState::Freeze, Now + FreezeTime);
-	State->SetBuyEndTime(Now + BuyTime);
+	SetPhaseTimer(FreezeTime);
+	// CS: mp_buytime counts from the freeze's end, so the whole freeze and BuyTime of the live round are for buying
+	// (the Live transition sets it again from the moment the freeze really ends).
+	State->SetBuyEndTime(Now + FreezeTime + BuyTime);
+	GetWorldTimerManager().SetTimer(TimerHandle_BuyTime, FreezeTime + BuyTime, false);
 	State->SetBombState(EShooterBombState::None);
 
 	// Each team on its starts, in the order its players joined; the survivors keep their weapons.
 	TArray<AShooterCharacter*> Terrorists;
 	for (const EShooterTeam Team : {EShooterTeam::CT, EShooterTeam::T})
 	{
-		const TArray<AActor*> Starts = GetTeamStarts(Team);
+		const TArray<APlayerStart*> Starts = GetTeamStarts(Team);
 		int32 StartIndex = 0;
 		for (APlayerState* PlayerState : GetGameState().GetPlayerArray())
 		{
@@ -684,8 +1144,10 @@ void AShooterGameMode::StartRound()
 		}
 	}
 	// The terrorists' plan: one of the sites, from the round stream.
-	const TArray<FName> Sites = GetBombSiteNames();
+	const TArray<FName>& Sites = GetBombSiteNames();
 	TerroristTargetSite = Sites.Num() > 0 ? Sites[RoundRandom.RandRange(0, Sites.Num() - 1)] : NAME_None;
+	// Each team's purchases for the round, from what its players have now (CS's economy).
+	DecideTeamBuyPlans();
 	int32 NumCT = 0;
 	int32 NumT = 0;
 	CountPawns(NumCT, NumT);
@@ -705,6 +1167,7 @@ void AShooterGameMode::EndRound(EShooterRoundEndReason Reason)
 	const EShooterTeam Winner = GetRoundEndWinner(Reason);
 	const EShooterTeam Loser = GetOpposingTeam(Winner);
 	State->SetRoundState(EShooterRoundState::RoundEnd, GetWorldTime() + RoundRestartDelay);
+	SetPhaseTimer(RoundRestartDelay);
 	State->SetLastRoundEndReason(Reason);
 	if (Winner != EShooterTeam::None)
 	{
@@ -737,6 +1200,151 @@ int32 AShooterGameMode::GetLossBonus(EShooterTeam Team) const
 	return FMath::Min(LossBonusBase + (GetLossStreak(Team) * LossBonusIncrement), LossBonusMax);
 }
 
+EShooterBuyPlan AShooterGameMode::ChooseBuyPlan(bool bPistolRound, bool bLastRoundOfHalf, int32 LossStreak,
+	int32 NumEquipped, int32 TeamSize, int32 InForceBuyLossStreak)
+{
+	if (bPistolRound)
+	{
+		return EShooterBuyPlan::Pistol;
+	}
+	// Half of the team or more can have the rifle and armor: all buy.
+	if (TeamSize > 0 && NumEquipped * 2 >= TeamSize)
+	{
+		return EShooterBuyPlan::Full;
+	}
+	// Short of it: spend anyway at the half's end, after a win, or when the losses pile up; else save for the next.
+	const bool bLongLossStreak = InForceBuyLossStreak > 0 && LossStreak >= InForceBuyLossStreak;
+	return bLastRoundOfHalf || LossStreak == 0 || bLongLossStreak ? EShooterBuyPlan::Force : EShooterBuyPlan::Eco;
+}
+
+int32 AShooterGameMode::GetFullBuyCost(const AShooterCharacter& Buyer) const
+{
+	const UClass* RifleClass =
+		AShooterWeapon::FindWeaponClass(Buyer.GetTeam() == EShooterTeam::T ? TEXT("ak47") : TEXT("m4a1"));
+	const int32 RiflePrice = RifleClass != nullptr ? RifleClass->GetDefaultObject<AShooterWeapon>()->Price : 0;
+	return RiflePrice + VestHelmetPrice;
+}
+
+bool AShooterGameMode::IsEquippedOrCanFullBuy(const AShooterCharacter& Buyer, int32 Money) const
+{
+	return Buyer.GetWeaponInSlot(EShooterWeaponSlot::Primary) != nullptr || Money >= GetFullBuyCost(Buyer);
+}
+
+void AShooterGameMode::DecideTeamBuyPlans()
+{
+	const AShooterGameState* State = GetShooterGameState();
+	if (State == nullptr)
+	{
+		return;
+	}
+	// The first round of each half is the pistol round; the last of each half forces the buy.
+	const int32 Round = State->GetRoundNumber();
+	const bool bPistolRound = Round == 1 || (State->IsSecondHalf() && Round == State->GetHalftimeRound() + 1);
+	const int32 Halftime = GetHalftimeRound();
+	const bool bLastRoundOfHalf = Round == MaxRounds || (Halftime > 0 && !State->IsSecondHalf() && Round == Halftime);
+	for (const EShooterTeam Team : {EShooterTeam::CT, EShooterTeam::T})
+	{
+		int32 TeamSize = 0;
+		int32 NumEquipped = 0;
+		for (APlayerState* PlayerState : GetGameState().GetPlayerArray())
+		{
+			const AShooterPlayerState* ShooterState = Cast<AShooterPlayerState>(PlayerState);
+			const AController* Controller = GetStateController(ShooterState);
+			const AShooterCharacter* Pawn =
+				Controller != nullptr ? Cast<AShooterCharacter>(Controller->GetPawn()) : nullptr;
+			if (ShooterState == nullptr || ShooterState->GetTeam() != Team || Pawn == nullptr || !Pawn->IsAlive())
+			{
+				continue;
+			}
+			++TeamSize;
+			NumEquipped += IsEquippedOrCanFullBuy(*Pawn, ShooterState->GetMoney()) ? 1 : 0;
+		}
+		const int32 Index = static_cast<int32>(Team);
+		TeamBuyPlan[Index] =
+			ChooseBuyPlan(bPistolRound, bLastRoundOfHalf, LossStreak[Index], NumEquipped, TeamSize, ForceBuyLossStreak);
+	}
+	UE_LOG(LogShooter, Log, TEXT("Round %d buys: CT %s, T %s"), Round, GetBuyPlanName(GetTeamBuyPlan(EShooterTeam::CT)),
+		GetBuyPlanName(GetTeamBuyPlan(EShooterTeam::T)));
+}
+
+bool AShooterGameMode::SendRadioMessage(AController* Sender, EShooterRadioMessage Message, const FVector* Location)
+{
+	AShooterGameState* State = GetShooterGameState();
+	AShooterPlayerState* SenderState = Sender != nullptr ? Sender->GetPlayerState<AShooterPlayerState>() : nullptr;
+	const AShooterCharacter* SenderPawn = Sender != nullptr ? Cast<AShooterCharacter>(Sender->GetPawn()) : nullptr;
+	if (State == nullptr || SenderState == nullptr || SenderPawn == nullptr || !SenderPawn->IsAlive() ||
+		Message == EShooterRadioMessage::None || SenderState->GetTeam() == EShooterTeam::None)
+	{
+		return false;
+	}
+	// CS 1.6: a message every 1.5 s and 60 a round; the grenade's call and the bomb's news go out regardless.
+	const float Now = GetWorldTime();
+	if (SenderState->RadioRoundSerial != State->GetRoundSerial())
+	{
+		SenderState->RadioRoundSerial = State->GetRoundSerial();
+		SenderState->RadioMessagesInRound = 0;
+	}
+	const bool bAutomatic =
+		Message == EShooterRadioMessage::FireInTheHole || Message == EShooterRadioMessage::BombPlanted;
+	if (!bAutomatic &&
+		(Now - SenderState->LastRadioTime < RadioCooldown ||
+			SenderState->RadioMessagesInRound >= MaxRadioMessagesPerRound))
+	{
+		return false;
+	}
+	SenderState->LastRadioTime = Now;
+	++SenderState->RadioMessagesInRound;
+
+	FShooterRadioEntry Entry;
+	Entry.SenderName = GetDisplayName(Sender, SenderPawn);
+	Entry.Team = SenderState->GetTeam();
+	Entry.Message = Message;
+	Entry.Location = Location != nullptr ? *Location : SenderPawn->GetActorLocation();
+	Entry.Time = Now;
+	State->AddRadioEntry(Entry);
+	UE_LOG(LogShooter, Log, TEXT("Radio: %s (%s): %s"), *Entry.SenderName, GetShooterTeamName(Entry.Team),
+		GetRadioMessageText(Message));
+
+	// The team's local players hear it (its sound).
+	for (APlayerState* PlayerState : GetGameState().GetPlayerArray())
+	{
+		const AShooterPlayerState* ShooterState = Cast<AShooterPlayerState>(PlayerState);
+		AShooterPlayerController* Player = Cast<AShooterPlayerController>(GetStateController(PlayerState));
+		if (Player != nullptr && ShooterState != nullptr && Player->IsLocalController() &&
+			ShooterState->GetTeam() == Entry.Team)
+		{
+			Player->HearRadio(Entry);
+		}
+	}
+
+	// The team's bots hear it; a request is answered by the living bot nearest the sender (the first in the players'
+	// order on a tie).
+	AShooterAIController* Responder = nullptr;
+	float ResponderDistSq = 0.0f;
+	for (APlayerState* PlayerState : GetGameState().GetPlayerArray())
+	{
+		AShooterAIController* Bot = Cast<AShooterAIController>(GetStateController(PlayerState));
+		const AShooterCharacter* BotPawn = Bot != nullptr ? Bot->GetShooterPawn() : nullptr;
+		if (Bot == nullptr || Bot == Sender || BotPawn == nullptr || !BotPawn->IsAlive() ||
+			BotPawn->GetTeam() != Entry.Team)
+		{
+			continue;
+		}
+		Bot->OnRadioMessage(Entry);
+		const float DistSq = FVector::DistSquared(BotPawn->GetActorLocation(), SenderPawn->GetActorLocation());
+		if (IsRadioRequest(Message) && (Responder == nullptr || DistSq < ResponderDistSq))
+		{
+			Responder = Bot;
+			ResponderDistSq = DistSq;
+		}
+	}
+	if (Responder != nullptr)
+	{
+		Responder->AnswerRadioRequest(Entry);
+	}
+	return true;
+}
+
 void AShooterGameMode::PayTeam(EShooterTeam Team, int32 Amount)
 {
 	for (APlayerState* PlayerState : GetGameState().GetPlayerArray())
@@ -759,6 +1367,7 @@ void AShooterGameMode::CheckRoundEnd()
 	const bool bPlanted = State->GetBombState() == EShooterBombState::Planted;
 	if (GetTeamSize(EShooterTeam::CT) > 0 && GetTeamSize(EShooterTeam::T) > 0)
 	{
+		// The deaths of the last step end the round first, then its time (OnPhaseTimer).
 		const int32 AliveCT = CountAlive(EShooterTeam::CT);
 		const int32 AliveT = CountAlive(EShooterTeam::T);
 		if (AliveCT == 0 && AliveT == 0 && !bPlanted)
@@ -777,24 +1386,101 @@ void AShooterGameMode::CheckRoundEnd()
 			return;
 		}
 	}
-	// The clock only runs out before a plant; after it the bomb decides.
-	if (!bPlanted && GetWorldTime() >= State->GetPhaseEndTime())
+}
+
+void AShooterGameMode::SetPhaseTimer(float Seconds)
+{
+	GetWorldTimerManager().SetTimer(TimerHandle_Phase, this, &AShooterGameMode::OnPhaseTimer, Seconds);
+}
+
+void AShooterGameMode::OnPhaseTimer()
+{
+	AShooterGameState* State = GetShooterGameState();
+	if (State == nullptr || !IsMatchInProgress())
 	{
-		EndRound(EShooterRoundEndReason::TargetSaved);
+		return;
+	}
+	const float Now = GetWorldTime();
+	switch (State->GetRoundState())
+	{
+		case EShooterRoundState::Freeze:
+			State->SetRoundState(EShooterRoundState::Live, Now + RoundTime);
+			SetPhaseTimer(RoundTime);
+			State->SetBuyEndTime(Now + BuyTime);
+			GetWorldTimerManager().SetTimer(TimerHandle_BuyTime, BuyTime, false);
+			break;
+		case EShooterRoundState::Live:
+			// The eliminations of the last step come first; the clock only runs out before a plant (after it the bomb
+			// decides).
+			CheckRoundEnd();
+			if (State->GetRoundState() == EShooterRoundState::Live &&
+				State->GetBombState() != EShooterBombState::Planted)
+			{
+				EndRound(EShooterRoundEndReason::TargetSaved);
+			}
+			break;
+		case EShooterRoundState::RoundEnd:
+		{
+			const int32 RoundsToWin = (MaxRounds / 2) + 1;
+			if (State->GetTeamScore(EShooterTeam::CT) >= RoundsToWin ||
+				State->GetTeamScore(EShooterTeam::T) >= RoundsToWin || State->GetRoundNumber() >= MaxRounds)
+			{
+				EndMatch();
+			}
+			else
+			{
+				if (State->GetRoundNumber() == GetHalftimeRound() && !State->IsSecondHalf())
+				{
+					HandleHalftime();
+				}
+				StartRound();
+			}
+			break;
+		}
+		case EShooterRoundState::Warmup:
+		case EShooterRoundState::MatchEnd:
+			break;
 	}
 }
 
 void AShooterGameMode::RestartGame(float Delay)
 {
-	RestartGameTime = GetWorldTime() + FMath::Max(0.0f, Delay);
-	bRestartPending = true;
+	// A delay of 0 restarts at the next step.
+	GetWorldTimerManager().SetTimer(
+		TimerHandle_RestartGame, this, &AShooterGameMode::OnRestartGameTimer, FMath::Max(Delay, KINDA_SMALL_NUMBER));
 	UE_LOG(LogShooter, Display, TEXT("The game will restart in %.0f second(s)"), static_cast<double>(Delay));
+}
+
+void AShooterGameMode::OnRestartGameTimer()
+{
+	if (IsMatchInProgress())
+	{
+		BeginNewMatch();
+	}
+	else if (!HasMatchStarted())
+	{
+		// From the warmup only with both teams in: an empty team would lose every round on time.
+		if (ReadyToStartMatch())
+		{
+			StartMatch();
+		}
+		else
+		{
+			UE_LOG(LogShooter, Warning, TEXT("mp_restartgame: both teams need a player (CT %d, T %d)"),
+				GetTeamSize(EShooterTeam::CT), GetTeamSize(EShooterTeam::T));
+		}
+	}
+	else
+	{
+		// After the match's end: UE's states only go forward, so the match goes on in progress again.
+		SetMatchState(MatchState::InProgress);
+	}
 }
 
 void AShooterGameMode::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	AShooterGameState* State = GetShooterGameState();
+	const AShooterGameState* State = GetShooterGameState();
 	if (State == nullptr)
 	{
 		return;
@@ -803,26 +1489,6 @@ void AShooterGameMode::Tick(float DeltaSeconds)
 	{
 		TickBotMatch();
 	}
-	const float Now = GetWorldTime();
-	if (bRestartPending && Now >= RestartGameTime)
-	{
-		bRestartPending = false;
-		if (IsMatchInProgress())
-		{
-			BeginNewMatch();
-		}
-		else if (!HasMatchStarted())
-		{
-			StartMatch();
-		}
-		else
-		{
-			// After the match's end: UE's states only go forward, so the match goes on in progress again.
-			SetMatchState(MatchState::InProgress);
-		}
-		return;
-	}
-
 	if (GetMatchState() == MatchState::WaitingToStart)
 	{
 		bool bHasHuman = false;
@@ -841,39 +1507,10 @@ void AShooterGameMode::Tick(float DeltaSeconds)
 		}
 		return;
 	}
-	if (!IsMatchInProgress())
+	// The phases end with their timer (OnPhaseTimer); a live round also ends with its eliminations.
+	if (IsMatchInProgress() && State->GetRoundState() == EShooterRoundState::Live)
 	{
-		return;
-	}
-	switch (State->GetRoundState())
-	{
-		case EShooterRoundState::Freeze:
-			if (Now >= State->GetPhaseEndTime())
-			{
-				State->SetRoundState(EShooterRoundState::Live, Now + RoundTime);
-			}
-			break;
-		case EShooterRoundState::Live:
-			CheckRoundEnd();
-			break;
-		case EShooterRoundState::RoundEnd:
-			if (Now >= State->GetPhaseEndTime())
-			{
-				const int32 RoundsToWin = (MaxRounds / 2) + 1;
-				if (State->GetTeamScore(EShooterTeam::CT) >= RoundsToWin ||
-					State->GetTeamScore(EShooterTeam::T) >= RoundsToWin || State->GetRoundNumber() >= MaxRounds)
-				{
-					EndMatch();
-				}
-				else
-				{
-					StartRound();
-				}
-			}
-			break;
-		case EShooterRoundState::Warmup:
-		case EShooterRoundState::MatchEnd:
-			break;
+		CheckRoundEnd();
 	}
 }
 
@@ -914,9 +1551,13 @@ void AShooterGameMode::TickBotMatch()
 		ReasonList +=
 			FString::Printf(TEXT("%s%d"), ReasonList.IsEmpty() ? TEXT("") : TEXT(","), static_cast<int32>(Reason));
 	}
-	UE_LOG(LogShooter, Display, TEXT("Botmatch %s: %d round(s), CT %d - T %d, %d kill(s), seed %d, reasons [%s]"),
+	// The scores are the sides': the teams that end the match on them (they switched at halftime).
+	const FString Halftime = State->IsSecondHalf()
+		? FString::Printf(TEXT("sides switched after round %d"), State->GetHalftimeRound())
+		: FString(TEXT("no halftime"));
+	UE_LOG(LogShooter, Display, TEXT("Botmatch %s: %d round(s), CT %d - T %d, %d kill(s), seed %d, %s, reasons [%s]"),
 		bPassed ? TEXT("OK") : TEXT("FAILED"), RoundsPlayed, State->GetTeamScore(EShooterTeam::CT),
-		State->GetTeamScore(EShooterTeam::T), NumKills, RandomSeed, *ReasonList);
+		State->GetTeamScore(EShooterTeam::T), NumKills, RandomSeed, *Halftime, *ReasonList);
 	LogBotMatchBudget();
 	FPlatformMisc::RequestExitWithStatus(false, bPassed ? 0 : 1);
 }
@@ -940,49 +1581,22 @@ void AShooterGameMode::LogBotMatchBudget() const
 
 // The bomb
 
-TArray<FName> AShooterGameMode::GetBombSiteNames() const
+const TArray<FName>& AShooterGameMode::GetBombSiteNames() const
 {
-	TArray<FName> Names;
-	const UWorld* World = GetWorld();
-	if (World == nullptr || World->PersistentLevel == nullptr)
-	{
-		return Names;
-	}
-	for (const AActor* Actor : World->PersistentLevel->Actors)
-	{
-		const ATriggerVolume* Zone = Cast<ATriggerVolume>(Actor);
-		if (Zone != nullptr && !Zone->IsPendingKillPending() && Zone->ActorHasTag(BombSiteTag))
-		{
-			const FName Name = GetZoneName(*Zone, BombSiteTag);
-			if (Name != NAME_None)
-			{
-				Names.AddUnique(Name);
-			}
-		}
-	}
-	Names.Sort([](const FName& A, const FName& B) { return A.ToString() < B.ToString(); });
-	return Names;
+	UpdateMapCaches();
+	return BombSiteNames;
 }
 
 bool AShooterGameMode::GetBombSiteLocation(FName Site, FVector& OutLocation) const
 {
-	const UWorld* World = GetWorld();
-	if (World == nullptr || World->PersistentLevel == nullptr)
+	UpdateMapCaches();
+	const int32 Index = BombSiteNames.IndexOfByKey(Site);
+	if (Index == INDEX_NONE)
 	{
 		return false;
 	}
-	for (const AActor* Actor : World->PersistentLevel->Actors)
-	{
-		const ATriggerVolume* Zone = Cast<ATriggerVolume>(Actor);
-		if (Zone != nullptr && !Zone->IsPendingKillPending() && Zone->ActorHasTag(BombSiteTag) &&
-			Zone->ActorHasTag(Site))
-		{
-			const FBox Bounds = Zone->GetBrushBounds();
-			OutLocation = FVector(Bounds.GetCenter().X, Bounds.GetCenter().Y, Bounds.Min.Z);
-			return true;
-		}
-	}
-	return false;
+	OutLocation = BombSiteLocations[Index];
+	return true;
 }
 
 void AShooterGameMode::OnBombStateChanged(AShooterBomb* InBomb)
@@ -1014,6 +1628,12 @@ void AShooterGameMode::OnBombPlanted(AShooterBomb* InBomb, AShooterCharacter* Pl
 	}
 	UE_LOG(LogShooter, Display, TEXT("The bomb has been planted at %s by %s"), *InBomb->GetSite().ToString(),
 		Planter != nullptr ? *GetDisplayName(Planter->GetController(), Planter) : TEXT("?"));
+	// A bot tells its team (CS's bots).
+	if (AShooterAIController* Bot = Planter != nullptr ? Cast<AShooterAIController>(Planter->GetController()) : nullptr)
+	{
+		const FVector Site = InBomb->GetActorLocation();
+		(void)SendRadioMessage(Bot, EShooterRadioMessage::BombPlanted, &Site);
+	}
 }
 
 void AShooterGameMode::OnBombDefused(AShooterBomb* InBomb, AShooterCharacter* Defuser)
@@ -1037,18 +1657,31 @@ void AShooterGameMode::OnBombExploded(AShooterBomb* InBomb)
 
 // Buying
 
-ATriggerVolume* AShooterGameMode::FindZone(const UWorld& World, const FVector& Feet, FName Kind, FName SecondTag)
+ATriggerVolume* AShooterGameMode::FindZone(const FVector& Feet, FName Kind, FName SecondTag) const
 {
-	if (World.PersistentLevel == nullptr)
-	{
-		return nullptr;
-	}
 	const FVector Point = Feet + FVector(0.0f, 0.0f, ZoneTestHeight);
-	for (AActor* Actor : World.PersistentLevel->Actors)
+	for (ATriggerVolume* Zone : Zones)
 	{
-		ATriggerVolume* Zone = Cast<ATriggerVolume>(Actor);
 		if (Zone != nullptr && !Zone->IsPendingKillPending() && Zone->ActorHasTag(Kind) &&
 			(SecondTag == NAME_None || Zone->ActorHasTag(SecondTag)) && Zone->EncompassesPoint(Point))
+		{
+			return Zone;
+		}
+	}
+	return nullptr;
+}
+
+ATriggerVolume* AShooterGameMode::FindLadder(const FVector& Feet, float Radius, float Height) const
+{
+	for (ATriggerVolume* Zone : Zones)
+	{
+		if (Zone == nullptr || Zone->IsPendingKillPending() || !Zone->ActorHasTag(LadderTag))
+		{
+			continue;
+		}
+		const FBox Box = Zone->GetBrushBounds();
+		if (Feet.X + Radius > Box.Min.X && Feet.X - Radius < Box.Max.X && Feet.Y + Radius > Box.Min.Y &&
+			Feet.Y - Radius < Box.Max.Y && Feet.Z < Box.Max.Z && Feet.Z + Height > Box.Min.Z)
 		{
 			return Zone;
 		}
@@ -1079,18 +1712,17 @@ bool AShooterGameMode::CanBuy(const AShooterCharacter& Buyer, FString* OutReason
 		return false;
 	};
 	const AShooterGameState* State = GetShooterGameState();
-	const UWorld* World = GetWorld();
-	if (!Buyer.IsAlive() || World == nullptr || State == nullptr)
+	if (!Buyer.IsAlive() || State == nullptr)
 	{
 		return Refuse(TEXT("dead"));
 	}
 	const EShooterRoundState RoundState = State->GetRoundState();
 	if (RoundState == EShooterRoundState::MatchEnd || RoundState == EShooterRoundState::RoundEnd ||
-		(RoundState != EShooterRoundState::Warmup && GetWorldTime() > State->GetBuyEndTime()))
+		(RoundState != EShooterRoundState::Warmup && !GetWorldTimerManager().IsTimerActive(TimerHandle_BuyTime)))
 	{
 		return Refuse(TEXT("the buy time is over"));
 	}
-	if (FindZone(*World, Buyer.GetActorLocation(), BuyZoneTag, GetShooterTeamTag(Buyer.GetTeam())) == nullptr)
+	if (FindZone(Buyer.GetActorLocation(), BuyZoneTag, GetShooterTeamTag(Buyer.GetTeam())) == nullptr)
 	{
 		return Refuse(TEXT("not in a buy zone"));
 	}
@@ -1115,12 +1747,29 @@ int32 AShooterGameMode::GetPrice(const AShooterCharacter& Buyer, const FString& 
 	{
 		return Buyer.GetTeam() == EShooterTeam::CT && !Buyer.HasDefuseKit() ? DefuserPrice : -1;
 	}
+	if (IsAmmoItem(Item))
+	{
+		// A box of the weapon's calibre, while its reserve has room (CS: buyammo1 / buyammo2).
+		const AShooterWeapon* Weapon = GetAmmoWeapon(Buyer, Item);
+		return Weapon != nullptr && Weapon->NeedsAmmo() && Weapon->AmmoBoxPrice > 0 ? Weapon->AmmoBoxPrice : -1;
+	}
 	UClass* WeaponClass = AShooterWeapon::FindWeaponClass(Item);
 	if (WeaponClass == nullptr)
 	{
 		return -1;
 	}
+	// Not for sale (the knife) or not for the buyer's team (CS: the AK-47 for the T, the M4A1 for the CT).
 	const AShooterWeapon* Defaults = WeaponClass->GetDefaultObject<AShooterWeapon>();
+	if (!Defaults->CanBeBoughtBy(Buyer.GetTeam()))
+	{
+		return -1;
+	}
+	// A grenade already carried: one more up to its limit (CS: two flashbangs, one HE, one smoke grenade).
+	if (Defaults->Slot == EShooterWeaponSlot::Grenade)
+	{
+		const AShooterWeapon* Carried = Buyer.FindWeaponOfClass(WeaponClass);
+		return Carried != nullptr && Carried->GetCurrentAmmoInClip() >= Carried->AmmoPerClip ? -1 : Defaults->Price;
+	}
 	const AShooterWeapon* Owned = Buyer.GetWeaponInSlot(Defaults->Slot);
 	return Owned != nullptr && Owned->GetClass() == WeaponClass ? -1 : Defaults->Price;
 }
@@ -1139,7 +1788,27 @@ bool AShooterGameMode::Buy(AShooterCharacter* Buyer, const FString& Item, FStrin
 	{
 		if (OutReason != nullptr)
 		{
-			*OutReason = FString::Printf(TEXT("cannot buy '%s'"), *Item);
+			const UClass* WeaponClass = AShooterWeapon::FindWeaponClass(Item);
+			const AShooterWeapon* Defaults =
+				WeaponClass != nullptr ? WeaponClass->GetDefaultObject<AShooterWeapon>() : nullptr;
+			if (Defaults != nullptr && Defaults->Price > 0 && !Defaults->CanBeBoughtBy(Buyer->GetTeam()))
+			{
+				*OutReason =
+					FString::Printf(TEXT("only the %s can buy '%s'"), GetShooterTeamName(Defaults->BuyTeam), *Item);
+			}
+			else if (IsAmmoItem(Item))
+			{
+				*OutReason = GetAmmoWeapon(*Buyer, Item) == nullptr ? FString(TEXT("no weapon for that ammunition"))
+																	: FString(TEXT("the ammunition is full"));
+			}
+			else if (Defaults != nullptr && Defaults->Slot == EShooterWeaponSlot::Grenade)
+			{
+				*OutReason = FString::Printf(TEXT("cannot carry more of '%s'"), *Item);
+			}
+			else
+			{
+				*OutReason = FString::Printf(TEXT("cannot buy '%s'"), *Item);
+			}
 		}
 		return false;
 	}
@@ -1163,14 +1832,33 @@ bool AShooterGameMode::Buy(AShooterCharacter* Buyer, const FString& Item, FStrin
 	{
 		Buyer->SetDefuseKit(true);
 	}
+	else if (IsAmmoItem(Item))
+	{
+		AShooterWeapon* Weapon = GetAmmoWeapon(*Buyer, Item);
+		(void)Weapon->GiveAmmo(Weapon->AmmoBoxRounds);
+	}
 	else
 	{
-		AShooterWeapon* Weapon = Buyer->GiveWeapon(AShooterWeapon::FindWeaponClass(Item));
-		if (Weapon == nullptr)
+		UClass* WeaponClass = AShooterWeapon::FindWeaponClass(Item);
+		AShooterWeapon_Projectile* Carried = Cast<AShooterWeapon_Projectile>(Buyer->FindWeaponOfClass(WeaponClass));
+		if (Carried != nullptr)
 		{
-			return false;
+			// One more of a grenade carried (GetPrice has checked the limit).
+			(void)Carried->AddGrenade();
 		}
-		Buyer->EquipWeapon(Weapon);
+		else
+		{
+			AShooterWeapon* Weapon = Buyer->GiveWeapon(WeaponClass);
+			if (Weapon == nullptr)
+			{
+				return false;
+			}
+			// A gun is drawn; a grenade waits in its slot (CS).
+			if (Weapon->Slot != EShooterWeaponSlot::Grenade)
+			{
+				Buyer->EquipWeapon(Weapon);
+			}
+		}
 	}
 	(void)State->AddMoney(-Price, MaxMoney);
 	UE_LOG(LogShooter, Log, TEXT("%s bought %s for $%d ($%d left)"), *GetDisplayName(Buyer->GetController(), Buyer),
@@ -1210,6 +1898,23 @@ bool AShooterGameMode::ProcessConsoleExec(const TCHAR* Cmd, FOutputDevice& Ar, U
 		RestartGame(Delay);
 		return true;
 	}
+	if (FParse::Command(&Str, TEXT("mp_maxrounds")))
+	{
+		FString Value;
+		if (FParse::Token(Str, Value, false))
+		{
+			MaxRounds = FMath::Max(1, FCString::Atoi(*Value));
+		}
+		Ar.Logf(TEXT("mp_maxrounds %d (halftime after round %d)"), MaxRounds, GetHalftimeRound());
+		return true;
+	}
+	if (FParse::Command(&Str, TEXT("mp_halftime")))
+	{
+		FString Value;
+		bHalftime = FParse::Token(Str, Value, false) ? FCString::Atoi(*Value) != 0 : !bHalftime;
+		Ar.Logf(TEXT("mp_halftime %d"), bHalftime ? 1 : 0);
+		return true;
+	}
 	EShooterTeam Team = EShooterTeam::None;
 	bool bBotCommand = true;
 	if (FParse::Command(&Str, TEXT("bot_add_ct")))
@@ -1242,5 +1947,15 @@ void AShooterGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	CountPawns(NumCT, NumT);
 	UE_LOG(LogShooter, Display, TEXT("ShooterGameMode: %d pawn(s) at the end of the match, CT %d, T %d"), NumCT + NumT,
 		NumCT, NumT);
+	if (UWorld* World = GetWorld())
+	{
+		World->RemoveOnActorSpawnedHandler(ActorSpawnedHandle);
+	}
+	// A world that never went through LoadMap (the tests' worlds) does not leave its preloads in flight.
+	for (const int32 RequestId : PreloadRequestIds)
+	{
+		FlushAsyncLoading(RequestId);
+	}
+	PreloadRequestIds.Reset();
 	Super::EndPlay(EndPlayReason);
 }

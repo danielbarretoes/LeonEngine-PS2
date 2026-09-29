@@ -58,26 +58,25 @@ int32 UGameplayStatics::GetIntOption(const FString& Options, const FString& Key,
 void UGameplayStatics::PlaySound2D(const UObject* WorldContextObject, USoundBase* Sound, float VolumeMultiplier)
 {
 	(void)WorldContextObject;
-	const USoundWave* Wave = Cast<USoundWave>(Sound);
+	USoundWave* Wave = Cast<USoundWave>(Sound);
 	if (Wave == nullptr || GEngine == nullptr)
 	{
 		return;
 	}
-	TArray<int16> Samples;
-	GEngine->GetAudioDevice().PlaySound2D(Wave->GetPCMView(Samples), VolumeMultiplier);
+	// The sound's buffer is resident since its load (FAudioDevice's sound buffers): the play is a voice.
+	GEngine->GetAudioDevice().PlaySound2D(Wave->GetSoundBuffer(), VolumeMultiplier, Wave->Priority);
 }
 
 void UGameplayStatics::PlaySoundAtLocation(
 	const UObject* WorldContextObject, USoundBase* Sound, const FVector& Location, float VolumeMultiplier)
 {
 	(void)WorldContextObject;
-	const USoundWave* Wave = Cast<USoundWave>(Sound);
+	USoundWave* Wave = Cast<USoundWave>(Sound);
 	if (Wave == nullptr || GEngine == nullptr)
 	{
 		return;
 	}
-	TArray<int16> Samples;
-	GEngine->GetAudioDevice().PlaySoundAtLocation(Wave->GetPCMView(Samples), Location, VolumeMultiplier);
+	GEngine->GetAudioDevice().PlaySoundAtLocation(Wave->GetSoundBuffer(), Location, VolumeMultiplier, Wave->Priority);
 }
 
 int32 UGameplayStatics::SpawnImpactMark(const UObject* WorldContextObject, const FVector& Location,
@@ -114,28 +113,47 @@ void UGameplayStatics::SpawnTracer(const UObject* WorldContextObject, const FVec
 	World->Tracers.AddTracer(Tracer);
 }
 
-APointLight* UGameplayStatics::SpawnPointLightAtLocation(const UObject* WorldContextObject, const FVector& Location,
-	const FLinearColor& Color, float Intensity, float AttenuationRadius, float LifeSpan)
+uint32 UGameplayStatics::SpawnEffectSprite(const UObject* WorldContextObject, const FVector& Location, float Size,
+	const FLinearColor& Color, float LifeSpan, float FadeInTime, float FadeOutTime)
 {
 	UWorld* World = GetWorldFromContextObject(WorldContextObject);
 	if (World == nullptr)
 	{
-		return nullptr;
+		return 0;
 	}
-	FActorSpawnParameters SpawnInfo;
-	SpawnInfo.ObjectFlags |= RF_Transient;
-	APointLight* Light = World->SpawnActor<APointLight>(Location, FRotator::ZeroRotator, SpawnInfo);
+	FEffectSprite Sprite;
+	Sprite.Location = Location;
+	Sprite.Size = Size;
+	Sprite.Color = Color;
+	Sprite.LifeSpan = LifeSpan;
+	Sprite.FadeInTime = FadeInTime;
+	Sprite.FadeOutTime = FadeOutTime;
+	return World->EffectSprites.AddSprite(Sprite);
+}
+
+APointLight* UGameplayStatics::SpawnPointLightAtLocation(const UObject* WorldContextObject, const FVector& Location,
+	const FLinearColor& Color, float Intensity, float AttenuationRadius, float LifeSpan)
+{
+	UWorld* World = GetWorldFromContextObject(WorldContextObject);
+	APointLight* Light = World != nullptr ? World->AcquirePooledPointLight(Location, LifeSpan) : nullptr;
 	if (Light == nullptr)
 	{
 		return nullptr;
 	}
-	// The light's proxy takes the new values (the render state is a snapshot).
+	// The light's proxy takes the new values (the render state is a snapshot): shown now, or made again when it was
+	// still lit.
 	UPointLightComponent* LightComponent = Light->GetPointLightComponent();
 	LightComponent->LightColor = Color;
 	LightComponent->Intensity = Intensity;
 	LightComponent->AttenuationRadius = AttenuationRadius;
 	LightComponent->CastShadows = false;
-	LightComponent->MarkRenderStateDirty();
-	Light->SetLifeSpan(LifeSpan);
+	if (LightComponent->IsVisible())
+	{
+		LightComponent->MarkRenderStateDirty();
+	}
+	else
+	{
+		LightComponent->SetVisibility(true);
+	}
 	return Light;
 }

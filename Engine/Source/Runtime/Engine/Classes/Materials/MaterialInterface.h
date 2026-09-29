@@ -6,6 +6,7 @@
 #include "MaterialInterface.generated.h"
 
 class UMaterial;
+class UPhysicalMaterial;
 class UTexture;
 
 /**
@@ -43,5 +44,14 @@ public:
 	virtual void GetUsedTextures(TArray<UTexture*>& OutTextures) const
 	{
 		OutTextures.Reset();
+	}
+
+	/**
+	 * What a surface drawn with it is made of, for the collision queries (UE: GetPhysicalMaterial, which falls back to
+	 * the engine's default physical material); null for none.
+	 */
+	[[nodiscard]] virtual UPhysicalMaterial* GetPhysicalMaterial() const
+	{
+		return nullptr;
 	}
 };

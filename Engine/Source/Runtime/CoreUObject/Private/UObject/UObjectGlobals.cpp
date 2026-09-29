@@ -1,7 +1,9 @@
 #include "UObject/UObjectGlobals.h"
 
 #include "Containers/StringConv.h"
+#include "HAL/LowLevelMemTracker.h"
 #include "Misc/CString.h"
+#include "Misc/MemStack.h"
 #include "Misc/PackageName.h"
 #include "Templates/Casts.h"
 #include "UObject/Class.h"
@@ -275,7 +277,11 @@ UObject* StaticAllocateObject(const UClass* InClass, UObject* InOuter, FName InN
 	const int32 Size = Class->GetPropertiesSize();
 	const int32 Alignment = FMath::Max(Class->GetMinAlignment(), int32(alignof(UObject)));
 	checkf(Size >= int32(sizeof(UObject)), "Class %s has an invalid size %d", *Class->GetName(), Size);
-	void* Memory = FMemory::Malloc(SIZE_T(Size), uint32(Alignment));
+	void* Memory = nullptr;
+	{
+		LLM_SCOPE(ELLMTag::UObject);
+		Memory = FMemory::Malloc(SIZE_T(Size), uint32(Alignment));
+	}
 	FMemory::Memzero(Memory, SIZE_T(Size));
 
 	FUObjectThreadContext::FPendingConstruction Pending;
@@ -484,12 +490,18 @@ UPackage* LoadPackage(UPackage* InOuter, const TCHAR* InLongPackageName, uint32 
 	{
 		Package = CreatePackage(*PackageName);
 	}
-	FLinkerLoad* Linker = PackageData
-		? FLinkerLoad::CreateLinkerFromMemory(Package, *PackageName, LoadFlags, *PackageData)
-		: FLinkerLoad::CreateLinker(Package, *Filename, LoadFlags);
-	if (Linker)
+	FLinkerLoad* Linker = nullptr;
 	{
-		Linker->LoadAllObjects();
+		// The package's bytes live in the load arena until its exports are serialized; the packages it imports load
+		// (and pop) above them.
+		FMemMark LoadMark(FLinkerLoad::GetLoadArena());
+		Linker = PackageData ? FLinkerLoad::CreateLinkerFromMemory(Package, *PackageName, LoadFlags, *PackageData)
+							 : FLinkerLoad::CreateLinker(Package, *Filename, LoadFlags);
+		if (Linker)
+		{
+			Linker->LoadAllObjects();
+			Linker->ReleasePackageData();
+		}
 	}
 	EndLoad();
 	return Linker ? Package : nullptr;

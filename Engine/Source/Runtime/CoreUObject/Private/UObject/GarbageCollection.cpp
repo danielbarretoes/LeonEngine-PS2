@@ -1,5 +1,6 @@
 // The garbage collector: mark from the roots, clear references to pending-kill objects, destroy the rest (UE:
-// GarbageCollection.cpp, reduced to one thread and no clusters). See UObject/GarbageCollection.h.
+// GarbageCollection.cpp, reduced to one thread and no clusters), at once or incrementally over the engine's steps.
+// See UObject/GarbageCollection.h.
 
 #include "UObject/GarbageCollection.h"
 
@@ -28,6 +29,82 @@ namespace
 	int32 GDestroyIndex = 0;
 
 	FGarbageCollectionStats GLastStats;
+
+	/** An incremental collection's mark of an object's slot (GIncremental.MarkStates). */
+	enum class EMarkState : uint8
+	{
+		/** Not reached yet: collected unless something reaches it by the end. */
+		White,
+		/** Reached, its references not visited yet (in the queue). */
+		Gray,
+		/** Reached and visited. */
+		Black,
+		/** The slot was empty when the collection started: an object in it now is new, and is kept. */
+		Empty,
+	};
+
+	/**
+	 * What a slice recorded of a visited object: a reference slot and its value, or a container's header (an array of
+	 * object pointers: its elements too) and a copy of its bytes. The end of the collection compares them with the
+	 * object's memory, exactly: an object whose references changed since it was visited is visited again.
+	 */
+	struct FGCSlotRecord
+	{
+		const void* Address;
+		/** The bytes themselves up to 8, else where their copy starts in the snapshot. */
+		uint64 Value;
+		uint32 Size;
+	};
+
+	/** A visited object and its records (GIncremental.Records). */
+	struct FGCVisitedObject
+	{
+		int32 ObjectIndex;
+		int32 FirstRecord;
+		int32 NumRecords;
+		/** Its outer when visited (the end marks a new one; its class is a root and never changes). */
+		UObject* Outer;
+		/**
+		 * Its class reports references itself (AddReferencedObjects), so the end asks it again; not for a native object
+		 * (a class, a function, a struct, an enum), whose reports are native objects and class defaults: roots.
+		 */
+		bool bReportsReferences;
+	};
+
+	/** Up to 8 bytes at Address as a value. */
+	FORCEINLINE uint64 ReadSmallSlot(const void* Address, uint32 Size)
+	{
+		uint64 Value = 0;
+		FMemory::Memcpy(&Value, Address, Size);
+		return Value;
+	}
+
+	/** What Address holds now: a record of its value, or of its bytes copied to the end of Snapshot. */
+	FORCEINLINE FGCSlotRecord CaptureSlot(const void* Address, uint32 Size, TArray<uint8>& Snapshot)
+	{
+		if (Size <= sizeof(uint64))
+		{
+			return FGCSlotRecord{Address, ReadSmallSlot(Address, Size), Size};
+		}
+		const int32 Offset = Snapshot.Num();
+		Snapshot.Append(static_cast<const uint8*>(Address), static_cast<int32>(Size));
+		return FGCSlotRecord{Address, static_cast<uint64>(Offset), Size};
+	}
+
+	/** Whether the memory of a record changed since it was taken. */
+	FORCEINLINE bool HasSlotChanged(const FGCSlotRecord& Record, const TArray<uint8>& Snapshot)
+	{
+		// Most records are object pointers: one load.
+		if (Record.Size == sizeof(UPTRINT))
+		{
+			return static_cast<uint64>(*static_cast<const UPTRINT*>(Record.Address)) != Record.Value;
+		}
+		if (Record.Size <= sizeof(uint64))
+		{
+			return ReadSmallSlot(Record.Address, Record.Size) != Record.Value;
+		}
+		return FMemory::Memcmp(Record.Address, &Snapshot[static_cast<int32>(Record.Value)], Record.Size) != 0;
+	}
 
 	/** The live FGCObjects (UE: UGCObjectReferencer::ReferencedObjects). */
 	TArray<FGCObject*>& GetGCObjects()
@@ -88,15 +165,89 @@ namespace
 		/** Visits the queue until every reachable object has been processed. */
 		void ProcessObjects()
 		{
-			for (int32 Index = 0; Index < ObjectsToSerialize.Num(); ++Index)
+			for (; ProcessedIndex < ObjectsToSerialize.Num(); ++ProcessedIndex)
 			{
-				ProcessObject(ObjectsToSerialize[Index]);
+				ProcessObject(ObjectsToSerialize[ProcessedIndex]);
 			}
+		}
+
+		/**
+		 * Incremental: the marks live in MarkStates (the objects' flags are left alone, so weak pointers, iterators and
+		 * finds see every object between the slices), and with InRecords each visit records what it read (the end of
+		 * the collection checks it).
+		 */
+		void SetIncremental(TArray<uint8>* InMarkStates, TArray<FGCSlotRecord>* InRecords, TArray<uint8>* InSnapshot,
+			TArray<FGCVisitedObject>* InVisited)
+		{
+			MarkStates = InMarkStates;
+			Records = InRecords;
+			Snapshot = InSnapshot;
+			Visited = InVisited;
+		}
+
+		/** Visits at most Budget queued objects; true when the queue is empty. */
+		bool ProcessObjects(int32 Budget)
+		{
+			for (int32 Count = 0; ProcessedIndex < ObjectsToSerialize.Num() && Count < Budget; ++Count)
+			{
+				ProcessObject(ObjectsToSerialize[ProcessedIndex++]);
+			}
+			return ProcessedIndex >= ObjectsToSerialize.Num();
+		}
+
+		/** Queues an object reached another way (a new object, a root found at the end), marked. */
+		void Enqueue(UObject* Object)
+		{
+			ObjectsToSerialize.Add(Object);
+		}
+
+		/** An object visited in a slice: its outer and class again, and its references if they changed. */
+		void Revisit(UObject* Object, const FGCVisitedObject& Entry, const TArray<FGCSlotRecord>& Log,
+			const TArray<uint8>& InSnapshot)
+		{
+			UObject* Outer = Object->GetOuter();
+			if (Outer != Entry.Outer)
+			{
+				MarkReference(Outer, false);
+			}
+			for (int32 Index = Entry.FirstRecord; Index < Entry.FirstRecord + Entry.NumRecords; ++Index)
+			{
+				// In order: a container's header comes before its elements, so a changed header stops the reads before
+				// they reach memory the container may have let go.
+				const FGCSlotRecord& Record = Log[Index];
+				if (HasSlotChanged(Record, InSnapshot))
+				{
+					++NumRevisited;
+					ProcessObject(Object);
+					return;
+				}
+			}
+			// What a class reports itself is not recorded: it reports again (its current references).
+			if (Entry.bReportsReferences)
+			{
+				Object->GetClass()->CallAddReferencedObjects(Object, *this);
+			}
+		}
+
+		/** Stops recording (the end of an incremental collection visits what is left at once). */
+		void StopRecording()
+		{
+			Records = nullptr;
+			Snapshot = nullptr;
+			Visited = nullptr;
 		}
 
 		int32 GetNumReferencesCleared() const
 		{
 			return NumReferencesCleared;
+		}
+		int32 GetNumRevisited() const
+		{
+			return NumRevisited;
+		}
+		int32 GetNumProcessed() const
+		{
+			return ProcessedIndex;
 		}
 
 		virtual bool IsIgnoringArchetypeRef() const override
@@ -127,6 +278,17 @@ namespace
 				++NumReferencesCleared;
 				return;
 			}
+			if (MarkStates != nullptr)
+			{
+				// A slot empty at the start (a new object) is kept and visited at the end.
+				const int32 Index = GUObjectArray.ObjectToIndex(Object);
+				if (Index < MarkStates->Num() && (*MarkStates)[Index] == static_cast<uint8>(EMarkState::White))
+				{
+					(*MarkStates)[Index] = static_cast<uint8>(EMarkState::Gray);
+					ObjectsToSerialize.Add(Object);
+				}
+				return;
+			}
 			if (Item->HasAnyFlags(EInternalObjectFlags::Unreachable))
 			{
 				Item->ClearFlags(EInternalObjectFlags::Unreachable);
@@ -140,6 +302,7 @@ namespace
 			if (CastField<FObjectProperty>(Property))
 			{
 				MarkReference(*(UObject**)Value, bAllowEliminatingReferences);
+				Record(Value, sizeof(UObject*));
 			}
 			else if (const FStructProperty* StructProperty = CastField<FStructProperty>(Property))
 			{
@@ -147,19 +310,41 @@ namespace
 			}
 			else if (const FArrayProperty* ArrayProperty = CastField<FArrayProperty>(Property))
 			{
+				// The header first (see Revisit), filled once the elements are visited.
+				const int32 Header = ReserveRecord();
 				FScriptArrayHelper ArrayHelper(ArrayProperty, Value);
+				const bool bObjects = CastField<FObjectProperty>(ArrayProperty->Inner) != nullptr;
 				for (int32 Index = 0; Index < ArrayHelper.Num(); ++Index)
 				{
-					VisitValue(ArrayProperty->Inner, ArrayHelper.GetRawPtr(Index));
+					if (bObjects)
+					{
+						MarkReference(*(UObject**)ArrayHelper.GetRawPtr(Index), bAllowEliminatingReferences);
+					}
+					else
+					{
+						VisitValue(ArrayProperty->Inner, ArrayHelper.GetRawPtr(Index));
+					}
+				}
+				FillRecord(Header, Value, static_cast<uint32>(ArrayProperty->ElementSize));
+				if (bObjects && ArrayHelper.Num() > 0)
+				{
+					// An array of object pointers: its elements as one hash.
+					Record(ArrayHelper.GetRawPtr(0),
+						static_cast<uint32>(ArrayHelper.Num()) *
+							static_cast<uint32>(ArrayProperty->Inner->ElementSize));
 				}
 			}
 			else if (const FSetProperty* SetProperty = CastField<FSetProperty>(Property))
 			{
+				const int32 Header = ReserveRecord();
 				VisitSet(SetProperty, Value);
+				FillRecord(Header, Value, static_cast<uint32>(SetProperty->ElementSize));
 			}
 			else if (const FMapProperty* MapProperty = CastField<FMapProperty>(Property))
 			{
+				const int32 Header = ReserveRecord();
 				VisitMap(MapProperty, Value);
+				FillRecord(Header, Value, static_cast<uint32>(MapProperty->ElementSize));
 			}
 		}
 
@@ -173,8 +358,56 @@ namespace
 		}
 
 	private:
+		/** Records what Address holds (a slice's visit). */
+		FORCEINLINE void Record(const void* Address, uint32 Size)
+		{
+			if (Records != nullptr)
+			{
+				Records->Add(CaptureSlot(Address, Size, *Snapshot));
+			}
+		}
+		/** A record whose value is known once its container is visited (FillRecord); INDEX_NONE when not recording. */
+		FORCEINLINE int32 ReserveRecord()
+		{
+			return Records != nullptr ? Records->Add(FGCSlotRecord{nullptr, 0, 0}) : INDEX_NONE;
+		}
+		FORCEINLINE void FillRecord(int32 Index, const void* Address, uint32 Size)
+		{
+			if (Index != INDEX_NONE)
+			{
+				(*Records)[Index] = CaptureSlot(Address, Size, *Snapshot);
+			}
+		}
+
 		/** The outer, the class, the class's strong reference properties and its AddReferencedObjects (UE). */
 		void ProcessObject(UObject* Object)
+		{
+			if (MarkStates != nullptr)
+			{
+				const int32 ObjectIndex = GUObjectArray.ObjectToIndex(Object);
+				if (ObjectIndex < MarkStates->Num())
+				{
+					(*MarkStates)[ObjectIndex] = static_cast<uint8>(EMarkState::Black);
+				}
+				if (Visited != nullptr)
+				{
+					const UClass* Class = Object->GetClass();
+					const bool bReportsReferences =
+						Class->ClassAddReferencedObjects != &UObject::AddReferencedObjects &&
+						!GUObjectArray.IndexToObject(ObjectIndex)->HasAnyFlags(EInternalObjectFlags::Native);
+					Visited->Add(
+						FGCVisitedObject{ObjectIndex, Records->Num(), 0, Object->GetOuter(), bReportsReferences});
+				}
+			}
+			ProcessObjectReferences(Object);
+			if (Visited != nullptr)
+			{
+				FGCVisitedObject& Entry = Visited->Last();
+				Entry.NumRecords = Records->Num() - Entry.FirstRecord;
+			}
+		}
+
+		void ProcessObjectReferences(UObject* Object)
 		{
 			// An object keeps its outer and its class alive; neither reference is ever cleared (UE: the persistent
 			// tokens of UObject's token stream).
@@ -283,13 +516,52 @@ namespace
 		}
 
 		TArray<UObject*> ObjectsToSerialize;
+		/** The queue's objects before this one are visited. */
+		int32 ProcessedIndex = 0;
 		int32 NumReferencesCleared = 0;
+		int32 NumRevisited = 0;
+		/** Incremental mode (SetIncremental), null for a full collection. */
+		TArray<uint8>* MarkStates = nullptr;
+		TArray<FGCSlotRecord>* Records = nullptr;
+		TArray<uint8>* Snapshot = nullptr;
+		TArray<FGCVisitedObject>* Visited = nullptr;
 	};
+
+	/** An incremental collection under way (StartIncrementalGarbageCollection). */
+	struct FIncrementalCollection
+	{
+		bool bPending = false;
+		EObjectFlags KeepFlags = RF_NoFlags;
+		/** Each slot's EMarkState, for the slots the array had when it started. */
+		TArray<uint8> MarkStates;
+		TArray<FGCSlotRecord> Records;
+		/** The copies of the recorded containers' bytes. */
+		TArray<uint8> Snapshot;
+		TArray<FGCVisitedObject> Visited;
+		TUniquePtr<FGarbageCollectionMarker> Marker;
+		FGarbageCollectionStats Stats;
+		double MarkSeconds = 0.0;
+		int32 NumSlices = 0;
+	};
+	FIncrementalCollection GIncremental;
 
 	/** Heap in use, for the statistics. */
 	SIZE_T GetHeapBytes()
 	{
 		return FMemory::GetUsage().CurrentBytes;
+	}
+
+	/** Forgets an incremental collection (its marks are its own: nothing to undo in the objects). */
+	void ResetIncrementalCollection()
+	{
+		GIncremental.bPending = false;
+		GIncremental.MarkStates.Reset();
+		GIncremental.Records.Reset();
+		GIncremental.Snapshot.Reset();
+		GIncremental.Visited.Reset();
+		GIncremental.Marker.Reset();
+		GIncremental.MarkSeconds = 0.0;
+		GIncremental.NumSlices = 0;
 	}
 
 	/** BeginDestroy on every unreachable object (UE: UnhashUnreachableObjects). */
@@ -496,7 +768,12 @@ void CollectGarbage(EObjectFlags KeepFlags, bool bPerformFullPurge)
 	{
 		return;
 	}
-	// What the last collection left for later is destroyed first (UE).
+	// A full collection replaces an incremental one under way; what the last collection left for later is destroyed
+	// first (UE).
+	if (GIncremental.bPending)
+	{
+		ResetIncrementalCollection();
+	}
 	IncrementalPurgeGarbage(false);
 
 	GIsGarbageCollecting = true;
@@ -576,6 +853,188 @@ void CollectGarbage(EObjectFlags KeepFlags, bool bPerformFullPurge)
 		Stats.NumObjectsAfter);
 }
 
+bool IsIncrementalReachabilityAnalysisPending()
+{
+	return GIncremental.bPending;
+}
+
+void StartIncrementalGarbageCollection(EObjectFlags KeepFlags)
+{
+	checkf(!GIsGarbageCollecting, "StartIncrementalGarbageCollection called while garbage is being collected");
+	if (!UObjectInitialized() || GIncremental.bPending)
+	{
+		return;
+	}
+	// The last collection's objects go first: no slot is freed while the marks are taken.
+	IncrementalPurgeGarbage(false);
+	GIsGarbageCollecting = true;
+	const double StartTime = FPlatformTime::Seconds();
+	FIncrementalCollection& Collection = GIncremental;
+	Collection.bPending = true;
+	Collection.KeepFlags = KeepFlags;
+	Collection.Stats = FGarbageCollectionStats();
+	Collection.Stats.HeapBytesBefore = GetHeapBytes();
+	Collection.Stats.NumObjectsBefore = GUObjectArray.GetObjectArrayNumMinusAvailable();
+	Collection.Marker = MakeUnique<FGarbageCollectionMarker>();
+	FGarbageCollectionMarker& Marker = *Collection.Marker;
+	Marker.SetIncremental(&Collection.MarkStates, &Collection.Records, &Collection.Snapshot, &Collection.Visited);
+
+	// Every object white but the roots, which are queued; an empty slot is marked so (a later object in it is new).
+	const int32 NumSlots = GUObjectArray.GetObjectArrayNum();
+	Collection.MarkStates.SetNumUninitialized(NumSlots);
+	for (int32 Index = 0; Index < NumSlots; ++Index)
+	{
+		FUObjectItem* Item = GUObjectArray.IndexToObject(Index);
+		if (Item->Object == nullptr)
+		{
+			Collection.MarkStates[Index] = static_cast<uint8>(EMarkState::Empty);
+			continue;
+		}
+		UObject* Object = (UObject*)Item->Object;
+		if (IsGarbageCollectionRoot(*Item, Object, KeepFlags))
+		{
+			Collection.MarkStates[Index] = static_cast<uint8>(EMarkState::Gray);
+			Marker.Enqueue(Object);
+		}
+		else
+		{
+			Collection.MarkStates[Index] = static_cast<uint8>(EMarkState::White);
+		}
+	}
+	// The references non-UObjects hold now (they report again at the end).
+	const TArray<FGCObject*> GCObjects = GetGCObjects();
+	for (FGCObject* GCObject : GCObjects)
+	{
+		GCObject->AddReferencedObjects(Marker);
+	}
+	Collection.MarkSeconds += FPlatformTime::Seconds() - StartTime;
+	GIsGarbageCollecting = false;
+}
+
+namespace
+{
+	/**
+	 * The end of an incremental collection, at once: what changed since the slices is marked (roots and new objects,
+	 * the non-UObjects' references, the visited objects whose references changed, what their classes report), the
+	 * rest of the queue is visited, then the white objects are swept and purged as in CollectGarbage.
+	 */
+	void FinishIncrementalGarbageCollection()
+	{
+		FIncrementalCollection& Collection = GIncremental;
+		FGarbageCollectionMarker& Marker = *Collection.Marker;
+		const double StartTime = FPlatformTime::Seconds();
+		const int32 NumMarked = Collection.MarkStates.Num();
+		const int32 NumSlots = GUObjectArray.GetObjectArrayNum();
+		// Recording stops: the visits of the end append nothing to the records it checks.
+		const TArray<FGCVisitedObject>& Visited = Collection.Visited;
+		Marker.StopRecording();
+
+		// The objects made during the collection are kept and visited, and so is an object rooted since.
+		Collection.MarkStates.SetNum(NumSlots);
+		for (int32 Index = 0; Index < NumSlots; ++Index)
+		{
+			FUObjectItem* Item = GUObjectArray.IndexToObject(Index);
+			if (Item->Object == nullptr)
+			{
+				continue;
+			}
+			UObject* Object = (UObject*)Item->Object;
+			const EMarkState State =
+				Index < NumMarked ? static_cast<EMarkState>(Collection.MarkStates[Index]) : EMarkState::Empty;
+			if (State == EMarkState::Empty ||
+				(State == EMarkState::White && IsGarbageCollectionRoot(*Item, Object, Collection.KeepFlags)))
+			{
+				Collection.MarkStates[Index] = static_cast<uint8>(EMarkState::Gray);
+				Marker.Enqueue(Object);
+			}
+		}
+		const TArray<FGCObject*> GCObjects = GetGCObjects();
+		for (FGCObject* GCObject : GCObjects)
+		{
+			GCObject->AddReferencedObjects(Marker);
+		}
+		// The objects visited in the slices whose references changed are visited again.
+		for (const FGCVisitedObject& Entry : Visited)
+		{
+			Marker.Revisit((UObject*)GUObjectArray.IndexToObject(Entry.ObjectIndex)->Object, Entry, Collection.Records,
+				Collection.Snapshot);
+		}
+		Marker.ProcessObjects();
+		const double MarkEndTime = FPlatformTime::Seconds();
+
+		// Sweep: the white objects are the unreachable ones (the flags are set now, as a full collection sets them).
+		for (int32 Index = 0; Index < NumSlots; ++Index)
+		{
+			FUObjectItem* Item = GUObjectArray.IndexToObject(Index);
+			if (Item->Object == nullptr)
+			{
+				continue;
+			}
+			if (Collection.MarkStates[Index] == static_cast<uint8>(EMarkState::White))
+			{
+				Item->SetFlags(EInternalObjectFlags::Unreachable);
+				GUnreachableObjects.Add((UObject*)Item->Object);
+			}
+			else
+			{
+				Item->ClearFlags(EInternalObjectFlags::Unreachable);
+			}
+		}
+		FGarbageCollectionStats Stats = Collection.Stats;
+		Stats.NumObjectsCollected = GUnreachableObjects.Num();
+		Stats.NumReferencesCleared = Marker.GetNumReferencesCleared();
+		Stats.NumObjectsRevisited = Marker.GetNumRevisited();
+		Stats.NumSlices = Collection.NumSlices;
+		const int32 NumProcessed = Marker.GetNumProcessed();
+		const double SliceSeconds = Collection.MarkSeconds;
+		BeginDestroyUnreachableObjects();
+		ResetIncrementalCollection();
+		GIsGarbageCollecting = false;
+
+		// Purged at this safe point.
+		IncrementalPurgeGarbage(false);
+		const double EndTime = FPlatformTime::Seconds();
+		Stats.MarkSeconds = SliceSeconds + (MarkEndTime - StartTime);
+		Stats.FinishSeconds = MarkEndTime - StartTime;
+		Stats.PurgeSeconds = EndTime - MarkEndTime;
+		Stats.bIncremental = true;
+		Stats.NumObjectsAfter = GUObjectArray.GetObjectArrayNumMinusAvailable();
+		Stats.HeapBytesAfter = GetHeapBytes();
+		GLastStats = Stats;
+		UE_LOG(LogGarbage, Log,
+			TEXT("Collected %d of %d objects incrementally: %d slice(s), %d visited, %d visited again at the end "
+				 "(end %.3f ms, purge %.3f ms), %d references cleared, %d objects left"),
+			Stats.NumObjectsCollected, Stats.NumObjectsBefore, Stats.NumSlices, NumProcessed, Stats.NumObjectsRevisited,
+			Stats.FinishSeconds * 1000.0, Stats.PurgeSeconds * 1000.0, Stats.NumReferencesCleared,
+			Stats.NumObjectsAfter);
+	}
+} // namespace
+
+bool IncrementalCollectGarbageStep(int32 ObjectBudget)
+{
+	checkf(!GIsGarbageCollecting, "IncrementalCollectGarbageStep called while garbage is being collected");
+	if (!GIncremental.bPending)
+	{
+		return false;
+	}
+	checkf(FUObjectThreadContext::Get().InitializerStack.Num() == 0 &&
+			FUObjectThreadContext::Get().PendingConstructions.Num() == 0,
+		"IncrementalCollectGarbageStep called while an object is being constructed");
+	GIsGarbageCollecting = true;
+	++GIncremental.NumSlices;
+	const double StartTime = FPlatformTime::Seconds();
+	const bool bQueueEmpty = GIncremental.Marker->ProcessObjects(FMath::Max(1, ObjectBudget));
+	GIncremental.MarkSeconds += FPlatformTime::Seconds() - StartTime;
+	if (!bQueueEmpty)
+	{
+		GIsGarbageCollecting = false;
+		return false;
+	}
+	// The queue is empty: the collection ends in this step.
+	FinishIncrementalGarbageCollection();
+	return true;
+}
+
 bool TryCollectGarbage(EObjectFlags KeepFlags, bool bPerformFullPurge)
 {
 	if (GIsGarbageCollecting)
@@ -594,8 +1053,10 @@ FGarbageCollectionSettings FGarbageCollectionSettings::LoadFromConfig(const FStr
 	const FString& Filename = IniFilename.IsEmpty() ? GEngineIni : IniFilename;
 	if (GConfig && !Filename.IsEmpty())
 	{
-		GConfig->GetFloat(TEXT("/Script/Engine.GarbageCollectionSettings"),
-			TEXT("gc.TimeBetweenPurgingPendingKillObjects"), Settings.TimeBetweenPurgingPendingKillObjects, Filename);
+		const TCHAR* Section = TEXT("/Script/Engine.GarbageCollectionSettings");
+		GConfig->GetFloat(Section, TEXT("gc.TimeBetweenPurgingPendingKillObjects"),
+			Settings.TimeBetweenPurgingPendingKillObjects, Filename);
+		GConfig->GetInt(Section, TEXT("gc.IncrementalObjectsPerStep"), Settings.IncrementalObjectsPerStep, Filename);
 	}
 	return Settings;
 }
@@ -607,15 +1068,26 @@ FGarbageCollectionTimer::FGarbageCollectionTimer(const FGarbageCollectionSetting
 
 bool FGarbageCollectionTimer::Tick(float DeltaSeconds, EObjectFlags KeepFlags)
 {
+	if (bForceCollection)
+	{
+		// A full collection (a level loaded, a round restarted): it replaces an incremental one under way.
+		CollectGarbage(KeepFlags);
+		TimeSinceLastCollection = 0.0f;
+		bForceCollection = false;
+		return true;
+	}
+	if (IsIncrementalReachabilityAnalysisPending())
+	{
+		return IncrementalCollectGarbageStep(Settings.IncrementalObjectsPerStep);
+	}
 	TimeSinceLastCollection += DeltaSeconds;
-	if (!bForceCollection && TimeSinceLastCollection < Settings.TimeBetweenPurgingPendingKillObjects)
+	if (TimeSinceLastCollection < Settings.TimeBetweenPurgingPendingKillObjects)
 	{
 		return false;
 	}
-	CollectGarbage(KeepFlags);
 	TimeSinceLastCollection = 0.0f;
-	bForceCollection = false;
-	return true;
+	StartIncrementalGarbageCollection(KeepFlags);
+	return IncrementalCollectGarbageStep(Settings.IncrementalObjectsPerStep);
 }
 
 void FGarbageCollectionTimer::ForceCollectOnNextTick()

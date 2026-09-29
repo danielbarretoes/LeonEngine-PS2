@@ -4,87 +4,61 @@
 #include "GSCommandList.h"
 #include "GSDrawEnvironment.h"
 #include "GSTypes.h"
-#include "PS2RHITypes.h"
-#include "PS2Texture.h"
 
 /**
- * PlayStation 2 Graphics Synthesizer API (platform extension RHI). Every draw appends to the frame's FGSCommandList,
- * which WaitVSync sends to the GIF as one packet (Docs/PLANS/ps2-gs-parity.md, P3).
+ * PlayStation 2 Graphics Synthesizer API (platform extension RHI). What is drawn is recorded in FGSCommandLists
+ * (the Renderer's scene and canvas, FGSDebugDraw's text and rectangles) and appended to the frame with Submit;
+ * WaitVSync sends the frame to the GIF as one packet (Docs/PLANS/ps2-gs-parity.md, P3).
  *
  * Frame flow:
  *   1. InitDisplay: VRAM, CRTC and the drawing environment (done by FPS2Window)
- *   2. SetViewTarget / SetDirectionalLight / SetAmbientLightColor
- *   3. ClearColor -> BindMaterial -> DrawBox... -> DrawDebugText, or Submit for a recorded list
- *   4. WaitVSync: send the frame, wait for the vertical blank and show it (FPS2Window::SwapBuffers)
+ *   2. ClearColor, then Submit the frame's lists (recorded against GetDrawEnvironment)
+ *   3. WaitVSync: send the frame, wait for the vertical blank and show it (FPS2Window::SwapBuffers)
  */
 class PS2RHI_API FPS2RHI
 {
 public:
 	/**
-	 * Width x Height, double buffered, with a Z24 buffer. ColorFormat is PSMCT16S (dithered, the engine's) or PSMCT32;
-	 * ReservedVramBytes at the start of the VRAM are left to the caller.
+	 * Width x Height, double buffered, with a Z24 buffer, in the console's television mode (NTSC, or PAL with the frame
+	 * centred in its 512 lines; -PAL / -NTSC choose). ColorFormat is PSMCT16S (dithered, the engine's) or PSMCT32;
+	 * ReservedVramBytes at the start of the VRAM are left to the caller. Installs the vertical blank interrupt handler
+	 * that counts the fields.
 	 */
 	static bool InitDisplay(
 		int Width, int Height, EGSPixelFormat ColorFormat = EGSPixelFormat::PSMCT16S, uint32 ReservedVramBytes = 0);
+	/** Turns the display off and removes the vertical blank handler (FPS2Window::Destroy). */
+	static void ShutdownDisplay();
 	static void ClearColor(float R, float G, float B);
 	/**
-	 * Sends the frame, waits for the vertical blank and shows what was drawn; with a sync interval of N it shows it no
-	 * sooner than N vertical blanks after the last one.
+	 * Sends the frame, sleeps until the vertical blank and shows what was drawn; with a sync interval of N it shows it
+	 * no sooner than N fields after the last one (FGSFieldPacer, on the count of the vertical blank interrupt).
 	 */
 	static void WaitVSync();
 	/**
-	 * The vertical blanks a frame is shown for at least (UE: rhi.SyncInterval): 1 is the display's 59.94 Hz, 2 a steady
-	 * 30 fps (a frame late for the second blank waits for the third).
+	 * The fields a frame is shown for at least (UE: rhi.SyncInterval): 1 is the display's rate (59.94 Hz NTSC, 50 Hz
+	 * PAL), 2 a steady 30 fps (25 on PAL; a frame late for the second blank waits for the third).
 	 */
 	static void SetSyncInterval(int32 Interval);
 
-	/** Appends a recorded list to the frame; the drawing environment is restored after it. */
+	/**
+	 * Appends a recorded list to the frame; the drawing environment is restored after it. The images the list holds in
+	 * place (FGSCommandList::UploadImageInPlace: a cooked texture's levels) stay in place: the frame's DMA chain reads
+	 * them where they are.
+	 */
 	static void Submit(const FGSCommandList& List);
-	/** A vertex at screen coordinates (pixels, origin at the screen centre) for a list drawn in that environment. */
-	static FGSXYZ ScreenVertex(float X, float Y, uint32 Z = 0);
-	/** The drawing environment of the frame being drawn, which a Submit list is recorded against. */
+	/**
+	 * Before data that lists hold in place changes or goes (a resident texture released): the frame being recorded
+	 * copies its in-place images, and the frame being sent is waited for until its DMA has read them.
+	 */
+	static void RetireInPlaceImages();
+	/**
+	 * The drawing environment of the frame being drawn, which a Submit list is recorded against (its PixelVertex takes
+	 * pixels from the frame's top left).
+	 */
 	static FGSDrawEnvironment GetDrawEnvironment();
 	/**
 	 * Hands the caller the VRAM left after the display (and whatever was allocated before), for its textures: the
 	 * first 64-word block and the number of blocks, page aligned. Once only; false when nothing is left.
 	 */
 	static bool AllocateTextureArena(uint32& OutFirstBlock, uint32& OutNumBlocks);
-
-	// --- View / lights ---
-	static void SetViewTarget(const FPS2ViewTarget& ViewTarget);
-	static void SetDirectionalLight(const FPS2DirectionalLight& Light);
-	static void SetAmbientLightColor(float R, float G, float B);
-
-	// --- Material ---
-	static void BindMaterial(const FPS2Material& Material);
-
-	// --- 2D overlays (screen space, origin at the screen centre, no depth test) ---
-
-	/** Alpha-blended overlay rect: color = (src - dst) * alpha + dst, alpha in [0, 1]. */
-	static bool DrawUnlitRectAlpha(float X0, float Y0, float X1, float Y1, float R, float G, float B, float Alpha);
-
-	/**
-	 * 5x7 debug glyphs drawn with rects (ASCII A-Z, 0-9, "ms" and the punctuation of paths and log lines).
-	 * scale 1 = 2 px cells (12 px advance, 14 px tall); 0.5 = 1 px cells (6 px advance, 7 px tall).
-	 */
-	static void DrawDebugText(
-		float X, float Y, const char* Text, float R = 0.95f, float G = 0.95f, float B = 0.85f, float Scale = 1.0f);
-
-	/** Lit / textured box: Location, rotation (1/256 turn), Scale as half-extents. */
-	static bool DrawBox(float LocationX, float LocationY, float LocationZ, unsigned Yaw256, unsigned Pitch256,
-		float ScaleX, float ScaleY, float ScaleZ);
-
-	/** Uniform half-extent convenience. */
-	static bool DrawBox(
-		float LocationX, float LocationY, float LocationZ, unsigned Yaw256, unsigned Pitch256, float Scale)
-	{
-		return DrawBox(LocationX, LocationY, LocationZ, Yaw256, Pitch256, Scale, Scale, Scale);
-	}
-
-	// --- Draw3D counters (reset every frame by the engine loop) ---
-	static void BeginDraw3DStatsFrame();
-	static void GetDraw3DStats(FPS2Draw3DStats& Out);
-
-	/** printf snapshot (PCSX2 EE console). */
-	static void PrintDraw3DStats(const FPS2Draw3DStats& Stats);
 };

@@ -4,6 +4,7 @@
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "Modules/ModuleManager.h"
+#include "SpuAdpcm.h"
 #include "Templates/UniquePtr.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogTargetPlatformManager, Log, All);
@@ -12,7 +13,8 @@ namespace
 {
 	/**
 	 * Win64 (UE: TGenericWindowsTargetPlatform, the WindowsNoEditor flavor): the Windows game, cooked with the PS2's
-	 * formats (Docs/PLANS/ps2-preview.md D1): paletted textures, PCM16 sounds, the Leon mesh and package formats.
+	 * formats (Docs/PLANS/ps2-preview.md D1): paletted textures, SPU2 ADPCM sounds (which the desktop decodes and
+	 * mixes: Docs/PLANS/ps2-shipping.md N19), the Leon mesh and package formats.
 	 */
 	class FWin64TargetPlatform final : public ITargetPlatform
 	{
@@ -45,14 +47,21 @@ namespace
 		}
 		virtual void GetAllWaveFormats(TArray<FName>& OutFormats) const override
 		{
-			OutFormats.AddUnique(FName(TEXT("PCM")));
+			// The SPU2's: the Windows game plays what the console plays.
+			OutFormats.AddUnique(FName(FSpuAdpcm::FormatName));
+		}
+		virtual void GetAllTargetedShaderFormats(TArray<FName>& OutFormats) const override
+		{
+			// The desktop GS emulator's GLSL (Engine/Shaders), compiled by the OpenGL driver.
+			OutFormats.AddUnique(FName(TEXT("GLSL_330")));
 		}
 	};
 
 	/**
 	 * PS2 (Leon; UE's console platforms live in platform extensions; Docs/PLANS/ps2-engine.md E3): the textures cook
-	 * to the GS's indexed formats (PSMT8 / PSMT4 with a CLUT, the "Paletted" format), with a VRAM report per map. The
-	 * meshes and the sounds keep the Win64 formats, and the cook says so.
+	 * to the GS's indexed formats (PSMT8 / PSMT4 with a CLUT, the "Paletted" format), with a VRAM report per map; the
+	 * sounds to the SPU2's ADPCM (Docs/PLANS/ps2-shipping.md N19), with an SPU2 RAM report; the meshes are LPS2 v2 on
+	 * every platform (ps2-shipping D1).
 	 */
 	class FPS2TargetPlatform final : public ITargetPlatform
 	{
@@ -84,12 +93,18 @@ namespace
 		}
 		virtual void GetAllWaveFormats(TArray<FName>& OutFormats) const override
 		{
-			OutFormats.AddUnique(FName(TEXT("PCM")));
+			OutFormats.AddUnique(FName(FSpuAdpcm::FormatName));
+		}
+		virtual void GetAllTargetedShaderFormats(TArray<FName>& OutFormats) const override
+		{
+			// The GS draws the renderer's command lists as they are: no shaders.
+			(void)OutFormats;
 		}
 		virtual FString GetCookNote() const override
 		{
-			return TEXT("PS2: paletted textures (PSMT8 / PSMT4, at most 256 x 256); the meshes and the sounds keep the "
-						"Win64 formats (PCM16 sounds, which the PS2 mixes on the EE)");
+			return TEXT(
+				"PS2: paletted textures (PSMT8 / PSMT4, at most 256 x 256) and SPU2 ADPCM sounds, as Win64's; the "
+				"meshes are LPS2 v2 on every platform");
 		}
 	};
 

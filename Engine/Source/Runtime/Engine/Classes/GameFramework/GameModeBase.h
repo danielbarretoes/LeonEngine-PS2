@@ -189,11 +189,6 @@ public:
 		return Cast<T>(GameState);
 	}
 
-	/**
-	 * Ticks the game state (Leon: AInfo actors do not tick in the world, and the game state keeps the match clock).
-	 */
-	void Tick(float DeltaSeconds) override;
-
 protected:
 	/** Spawns the player's controller (UE: SpawnPlayerController): PlayerControllerClass, transient. */
 	virtual APlayerController* SpawnPlayerController(const FString& Options);

@@ -131,3 +131,169 @@ bool SeparateAabb(FVector& A, const FVector& AHalfExtents, FVector& B, const FVe
 	}
 	return true;
 }
+
+bool SegmentAabb(
+	const FVector& Start, const FVector& End, const FVector& Mn, const FVector& Mx, float& OutT, FVector& OutNormal)
+{
+	const FVector Dir = End - Start;
+	float TEnter = 0.0f;
+	float TExit = 1.0f;
+	FVector EnterNormal(0.0f, 0.0f, 1.0f);
+	bool bHitFace = false;
+
+	// X, then the vertical Z, then Y: on equal entry times the earlier axis gives the normal (the order of the
+	// Y-up world: X, vertical, second horizontal).
+	constexpr int32 AxisOrder[3] = {0, 2, 1};
+	for (const int32 Axis : AxisOrder)
+	{
+		if (FMath::Abs(Dir[Axis]) < 1.0e-6f)
+		{
+			if (Start[Axis] < Mn[Axis] || Start[Axis] > Mx[Axis])
+			{
+				return false;
+			}
+			continue;
+		}
+
+		const float Inv = 1.0f / Dir[Axis];
+		float T0 = (Mn[Axis] - Start[Axis]) * Inv;
+		float T1 = (Mx[Axis] - Start[Axis]) * Inv;
+		float NormalSign = -1.0f;
+		if (Inv < 0.0f)
+		{
+			Swap(T0, T1);
+			NormalSign = 1.0f;
+		}
+
+		if (T0 > TEnter)
+		{
+			TEnter = T0;
+			EnterNormal = FVector::ZeroVector;
+			EnterNormal[Axis] = NormalSign;
+			bHitFace = true;
+		}
+		TExit = FMath::Min(TExit, T1);
+		if (TEnter > TExit)
+		{
+			return false;
+		}
+	}
+
+	if (TEnter < 0.0f || TEnter > 1.0f)
+	{
+		return false;
+	}
+
+	if (!bHitFace && TEnter <= 0.0f)
+	{
+		OutT = 0.0f;
+		OutNormal = FVector(0.0f, 0.0f, 1.0f);
+		return true;
+	}
+
+	OutT = TEnter;
+	OutNormal = EnterNormal;
+	const float Len = OutNormal.Size();
+	if (Len > 1.0e-6f)
+	{
+		OutNormal /= Len;
+	}
+	return true;
+}
+
+bool SegmentUprightCapsule(const FVector& Start, const FVector& End, const FVector& Center, float Radius,
+	float CylinderHalfHeight, float& OutT, FVector& OutNormal)
+{
+	const float R = FMath::Max(Radius, 0.0f);
+	const float Hc = FMath::Max(CylinderHalfHeight, 0.0f);
+	const FVector Bottom = Center - FVector(0.0f, 0.0f, Hc);
+	const FVector Top = Center + FVector(0.0f, 0.0f, Hc);
+
+	auto ClosestOnAxis = [&](const FVector& P)
+	{ return FVector(Center.X, Center.Y, FMath::Clamp(P.Z, Bottom.Z, Top.Z)); };
+	auto NormalFrom = [&](const FVector& P)
+	{
+		const FVector Away = P - ClosestOnAxis(P);
+		const float Len = Away.Size();
+		return Len > 1.0e-6f ? Away / Len : FVector(0.0f, 0.0f, 1.0f);
+	};
+
+	// Starting inside: an immediate hit, as the boxes do.
+	if ((Start - ClosestOnAxis(Start)).SizeSquared() <= R * R)
+	{
+		OutT = 0.0f;
+		OutNormal = NormalFrom(Start);
+		return true;
+	}
+
+	const FVector D = End - Start;
+	float BestT = 2.0f;
+
+	// The side of the infinite cylinder, kept where it is between the caps.
+	const float A = (D.X * D.X) + (D.Y * D.Y);
+	if (A > 1.0e-8f)
+	{
+		const float Sx = Start.X - Center.X;
+		const float Sy = Start.Y - Center.Y;
+		const float B = 2.0f * ((Sx * D.X) + (Sy * D.Y));
+		const float C = (Sx * Sx) + (Sy * Sy) - (R * R);
+		const float Disc = (B * B) - (4.0f * A * C);
+		if (Disc >= 0.0f)
+		{
+			const float T = (-B - FMath::Sqrt(Disc)) / (2.0f * A);
+			const float Z = Start.Z + (D.Z * T);
+			if (T >= 0.0f && T <= 1.0f && Z >= Bottom.Z && Z <= Top.Z)
+			{
+				BestT = T;
+			}
+		}
+	}
+
+	// The two hemispheres (whole spheres: their parts inside the cylinder are entered through its side first).
+	for (const FVector& SphereCenter : {Bottom, Top})
+	{
+		const FVector S = Start - SphereCenter;
+		const float Qa = D.SizeSquared();
+		if (Qa < 1.0e-8f)
+		{
+			continue;
+		}
+		const float Qb = 2.0f * (S | D);
+		const float Qc = S.SizeSquared() - (R * R);
+		const float Disc = (Qb * Qb) - (4.0f * Qa * Qc);
+		if (Disc < 0.0f)
+		{
+			continue;
+		}
+		const float T = (-Qb - FMath::Sqrt(Disc)) / (2.0f * Qa);
+		if (T >= 0.0f && T <= 1.0f && T < BestT)
+		{
+			BestT = T;
+		}
+	}
+
+	if (BestT > 1.0f)
+	{
+		return false;
+	}
+	OutT = BestT;
+	OutNormal = NormalFrom(Start + (D * BestT));
+	return true;
+}
+
+bool SegmentFloorZ(const FVector& Start, const FVector& End, float FloorZ, float& OutT, FVector& OutNormal)
+{
+	const float Dz = End.Z - Start.Z;
+	if (FMath::Abs(Dz) < 1.0e-6f)
+	{
+		return false;
+	}
+	const float T = (FloorZ - Start.Z) / Dz;
+	if (T < 0.0f || T > 1.0f)
+	{
+		return false;
+	}
+	OutT = T;
+	OutNormal = FVector(0.0f, 0.0f, Dz < 0.0f ? 1.0f : -1.0f);
+	return true;
+}

@@ -17,11 +17,11 @@
 namespace
 {
 
-	/** The bounds of the canvas's Index-th tile (its 6 vertices, tiles first in a batch). */
+	/** The bounds of the canvas's Index-th tile (a rectangle's two corners, tiles first in a batch). */
 	FBox2D GetTileBounds(const TArray<FCanvasVertex>& Vertices, int32 Index)
 	{
 		FBox2D Bounds(ForceInit);
-		for (int32 Vertex = Index * 6; Vertex < (Index + 1) * 6; ++Vertex)
+		for (int32 Vertex = Index * 2; Vertex < (Index + 1) * 2; ++Vertex)
 		{
 			Bounds += FVector2D(Vertices[Vertex].X, Vertices[Vertex].Y);
 		}
@@ -72,8 +72,10 @@ bool FWidgetTreeLayoutTest::RunTest(const FString& Parameters)
 	FPaintContext Ctx(Canvas);
 	Root->Paint(Ctx, FVector2D::ZeroVector, FVector2D(640.0f, 480.0f));
 	TArray<FCanvasVertex> Vertices;
-	Canvas.GetTriangles(Vertices);
-	if (!TestTrue("Two tiles and the text", Vertices.Num() > 12))
+	TArray<FCanvasPrimitiveRun> Runs;
+	Canvas.GetPrimitives(Vertices, Runs);
+	if (!TestTrue("Two tiles and the text, all rectangles",
+			Vertices.Num() > 4 && Runs.Num() == 1 && Runs[0].Type == ECanvasPrimitive::Rectangle))
 	{
 		return false;
 	}

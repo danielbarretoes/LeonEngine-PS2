@@ -1,5 +1,6 @@
 #include "CoreMinimal.h"
 #include "HAL/PlatformTime.h"
+#include "Math/RandomStream.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Tests/GarbageCollectionTestTypes.h"
@@ -422,30 +423,54 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGarbageCollectionTimerTest, "System.CoreUObjec
 
 bool FGarbageCollectionTimerTest::RunTest(const FString& Parameters)
 {
-	TestEqual(TEXT("UE default interval"), FGarbageCollectionSettings().TimeBetweenPurgingPendingKillObjects, 61.1f);
+	TestEqual(TEXT("Leon's interval"), FGarbageCollectionSettings().TimeBetweenPurgingPendingKillObjects, 10.0f);
 	if (GConfig)
 	{
 		// The interval comes from [/Script/Engine.GarbageCollectionSettings], in an in-memory engine file.
 		const FString TestIni = TEXT("LeonGarbageCollectionTest.ini");
 		GConfig->Add(TestIni, FConfigFile())
 			.CombineFromBuffer(
-				TEXT("[/Script/Engine.GarbageCollectionSettings]\ngc.TimeBetweenPurgingPendingKillObjects=30\n"));
-		TestEqual(TEXT("Interval from the config"),
-			FGarbageCollectionSettings::LoadFromConfig(TestIni).TimeBetweenPurgingPendingKillObjects, 30.0f);
+				TEXT("[/Script/Engine.GarbageCollectionSettings]\ngc.TimeBetweenPurgingPendingKillObjects="
+					 "30\ngc.IncrementalObjectsPerStep=7\n"));
+		const FGarbageCollectionSettings FromConfig = FGarbageCollectionSettings::LoadFromConfig(TestIni);
+		TestEqual(TEXT("Interval from the config"), FromConfig.TimeBetweenPurgingPendingKillObjects, 30.0f);
+		TestEqual(TEXT("Budget from the config"), FromConfig.IncrementalObjectsPerStep, 7);
 		GConfig->Remove(TestIni);
 	}
 
+	// The interval starts an incremental collection; each Tick then visits the budget until it ends.
+	Collect();
 	FGarbageCollectionSettings Settings;
 	Settings.TimeBetweenPurgingPendingKillObjects = 1.0f;
+	Settings.IncrementalObjectsPerStep = 16;
 	FGarbageCollectionTimer Timer(Settings);
 	TWeakObjectPtr<UGCTestObject> Weak = NewObject<UGCTestObject>();
 	TestFalse(TEXT("Not yet"), Timer.Tick(0.5f));
+	TestFalse(TEXT("No collection under way"), IsIncrementalReachabilityAnalysisPending());
 	TestTrue(TEXT("Still alive"), Weak.IsValid());
-	TestTrue(TEXT("Collects once the interval passed"), Timer.Tick(0.6f));
+	int32 NumTicks = 1;
+	bool bEnded = Timer.Tick(0.6f);
+	TestTrue(TEXT("Started once the interval passed"), bEnded || IsIncrementalReachabilityAnalysisPending());
+	while (!bEnded && NumTicks < 10000)
+	{
+		TestTrue(TEXT("Alive until the end"), Weak.IsValid());
+		bEnded = Timer.Tick(0.0f);
+		++NumTicks;
+	}
+	TestTrue(TEXT("The collection ended"), bEnded);
+	TestTrue(TEXT("In several slices"), NumTicks > 1 && GetLastGarbageCollectionStats().NumSlices == NumTicks);
+	TestTrue(TEXT("An incremental collection"), GetLastGarbageCollectionStats().bIncremental);
 	TestFalse(TEXT("Collected by the timer"), Weak.IsValid());
 	TestEqual(TEXT("Timer restarts"), Timer.GetTimeSinceLastCollection(), 0.0f);
+	// A forced collection is a full one, and replaces one under way.
+	TWeakObjectPtr<UGCTestObject> Forced = NewObject<UGCTestObject>();
+	TestFalse(TEXT("A new collection"), Timer.Tick(1.0f));
+	TestTrue(TEXT("Under way"), IsIncrementalReachabilityAnalysisPending());
 	Timer.ForceCollectOnNextTick();
 	TestTrue(TEXT("Forced collection"), Timer.Tick(0.0f));
+	TestFalse(TEXT("It replaced the incremental one"), IsIncrementalReachabilityAnalysisPending());
+	TestFalse(TEXT("Full"), GetLastGarbageCollectionStats().bIncremental);
+	TestFalse(TEXT("Collected at once"), Forced.IsValid());
 	return true;
 }
 
@@ -490,6 +515,395 @@ bool FGarbageCollectionBudgetTest::RunTest(const FString& Parameters)
 		(PurgeStats.MarkSeconds + PurgeStats.PurgeSeconds) * 1000.0, PurgeStats.MarkSeconds * 1000.0,
 		PurgeStats.PurgeSeconds * 1000.0, int32(HeapBefore / 1024), int32(HeapWithObjects / 1024),
 		int32(HeapAfter / 1024));
+	return true;
+}
+
+namespace
+{
+	/** A random graph of test objects, and what the test knows of it (Leon's incremental collection tests). */
+	struct FGCRandomGraph
+	{
+		TArray<UGCTestObject*> Objects;
+		TArray<TWeakObjectPtr<UGCTestObject>> Weak;
+		FRandomStream Random;
+
+		explicit FGCRandomGraph(int32 Seed)
+			: Random(Seed)
+		{
+		}
+
+		UGCTestObject* NewNode()
+		{
+			UGCTestObject* Object = NewObject<UGCTestObject>();
+			Objects.Add(Object);
+			Weak.Add(Object);
+			return Object;
+		}
+
+		/** A random live node, or null (a live node is reachable or not: the test picks from the reachable ones). */
+		UGCTestObject* Pick(const TArray<UGCTestObject*>& From)
+		{
+			return From.Num() > 0 ? From[Random.RandRange(0, From.Num() - 1)] : nullptr;
+		}
+
+		/** Every strong reference slot of a node the test uses: Ref, RefArray, RefMap values, the struct, NativeRef. */
+		static void GetTargets(UGCTestObject& Node, TArray<UObject*>& OutTargets)
+		{
+			OutTargets.Reset();
+			OutTargets.Add(Node.Ref);
+			OutTargets.Append(Node.RefArray);
+			for (const TPair<FName, UObject*>& Pair : Node.RefMap)
+			{
+				OutTargets.Add(Pair.Value);
+			}
+			OutTargets.Add(Node.Struct.Object);
+			OutTargets.Append(Node.Struct.Objects);
+			for (const FGCTestStruct& Element : Node.StructArray)
+			{
+				OutTargets.Add(Element.Object);
+			}
+			OutTargets.Add(Node.NativeRef);
+		}
+
+		/** The nodes reachable from the rooted ones through the slots above (the test's own reachability). */
+		TArray<UGCTestObject*> GetReachable() const
+		{
+			TArray<UGCTestObject*> Reachable;
+			for (const TWeakObjectPtr<UGCTestObject>& Node : Weak)
+			{
+				if (Node.IsValid() && Node->IsRooted())
+				{
+					Reachable.AddUnique(Node.Get());
+				}
+			}
+			TArray<UObject*> Targets;
+			for (int32 Index = 0; Index < Reachable.Num(); ++Index)
+			{
+				GetTargets(*Reachable[Index], Targets);
+				for (UObject* Target : Targets)
+				{
+					UGCTestObject* Node = Cast<UGCTestObject>(Target);
+					if (Node != nullptr && !Node->IsPendingKill())
+					{
+						Reachable.AddUnique(Node);
+					}
+				}
+			}
+			return Reachable;
+		}
+
+		/** A reference from Node to Target in one of its slots, at random. */
+		void Link(UGCTestObject& Node, UGCTestObject* Target)
+		{
+			switch (Random.RandRange(0, 5))
+			{
+				case 0:
+					Node.Ref = Target;
+					break;
+				case 1:
+					Node.RefArray.Add(Target);
+					break;
+				case 2:
+					Node.RefMap.Add(FName(TEXT("Key"), Random.RandRange(1, 4)), Target);
+					break;
+				case 3:
+					Node.Struct.Objects.Add(Target);
+					break;
+				case 4:
+					Node.StructArray.AddDefaulted_GetRef().Object = Target;
+					break;
+				default:
+					Node.NativeRef = Target;
+					break;
+			}
+		}
+
+		/** Takes one of Node's references away (the slot emptied), and gives the target, or null. */
+		UGCTestObject* Unlink(UGCTestObject& Node)
+		{
+			UObject* Taken = nullptr;
+			switch (Random.RandRange(0, 5))
+			{
+				case 0:
+					Swap(Taken, Node.Ref);
+					break;
+				case 1:
+					if (Node.RefArray.Num() > 0)
+					{
+						Taken = Node.RefArray.Pop(false);
+					}
+					break;
+				case 2:
+					for (TPair<FName, UObject*>& Pair : Node.RefMap)
+					{
+						Swap(Taken, Pair.Value);
+						break;
+					}
+					break;
+				case 3:
+					if (Node.Struct.Objects.Num() > 0)
+					{
+						Taken = Node.Struct.Objects[0];
+						Node.Struct.Objects.RemoveAt(0);
+					}
+					break;
+				case 4:
+					if (Node.StructArray.Num() > 0)
+					{
+						Taken = Node.StructArray.Last().Object;
+						Node.StructArray.Pop(false);
+					}
+					break;
+				default:
+					Swap(Taken, Node.NativeRef);
+					break;
+			}
+			return Cast<UGCTestObject>(Taken);
+		}
+
+		/** Count nodes, a few rooted, each with up to four random references. */
+		void Build(int32 Count)
+		{
+			for (int32 Index = 0; Index < Count; ++Index)
+			{
+				NewNode();
+			}
+			for (UGCTestObject* Node : Objects)
+			{
+				if (Random.FRand() < 0.05f)
+				{
+					Node->AddToRoot();
+				}
+				for (int32 Link0 = Random.RandRange(0, 4); Link0 > 0; --Link0)
+				{
+					Link(*Node, Objects[Random.RandRange(0, Objects.Num() - 1)]);
+				}
+			}
+			Objects[0]->AddToRoot();
+		}
+
+		/** Unroots every node (the test's end: everything goes). */
+		void UnrootAll()
+		{
+			for (const TWeakObjectPtr<UGCTestObject>& Node : Weak)
+			{
+				if (Node.IsValid() && Node->IsRooted())
+				{
+					Node->RemoveFromRoot();
+				}
+			}
+		}
+	};
+
+	/** Runs an incremental collection to its end, calling Between between its slices; how many slices it took. */
+	template <typename BetweenType>
+	int32 CollectIncrementally(int32 Budget, BetweenType&& Between)
+	{
+		StartIncrementalGarbageCollection(GARBAGE_COLLECTION_KEEPFLAGS);
+		int32 Slices = 1;
+		while (!IncrementalCollectGarbageStep(Budget))
+		{
+			Between();
+			++Slices;
+		}
+		return Slices;
+	}
+} // namespace
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGarbageCollectionIncrementalMatchesFullTest,
+	"System.CoreUObject.GarbageCollection.IncrementalMatchesFull",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+
+bool FGarbageCollectionIncrementalMatchesFullTest::RunTest(const FString& Parameters)
+{
+	// On random graphs left alone between the slices, an incremental collection keeps exactly what a full one keeps:
+	// the nodes the roots reach, and nothing else (the unreachable ones and the pending-kill ones go).
+	for (int32 Seed = 1; Seed <= 8; ++Seed)
+	{
+		Collect();
+		FGCRandomGraph Graph(Seed);
+		Graph.Build(200);
+		for (UGCTestObject* Node : Graph.Objects)
+		{
+			if (!Node->IsRooted() && Graph.Random.FRand() < 0.05f)
+			{
+				Node->MarkPendingKill();
+			}
+		}
+		const TArray<UGCTestObject*> Expected = Graph.GetReachable();
+		const int32 Slices = CollectIncrementally(Seed, [] {});
+		TestTrue(TEXT("In slices"), Slices > 1 && GetLastGarbageCollectionStats().bIncremental);
+		int32 Wrong = 0;
+		for (const TWeakObjectPtr<UGCTestObject>& Node : Graph.Weak)
+		{
+			const bool bAlive = Node.IsValid(true);
+			const bool bExpected = bAlive ? Expected.Contains(Node.Get(true)) : false;
+			Wrong += bAlive != bExpected ? 1 : 0;
+		}
+		int32 NumAlive = 0;
+		for (const TWeakObjectPtr<UGCTestObject>& Node : Graph.Weak)
+		{
+			NumAlive += Node.IsValid(true) ? 1 : 0;
+		}
+		TestEqual(TEXT("Survivors are the reachable nodes"), NumAlive, Expected.Num());
+		TestEqual(TEXT("No node kept or lost wrongly"), Wrong, 0);
+		// A full collection after it finds nothing more.
+		Collect();
+		int32 NumAliveAfterFull = 0;
+		for (const TWeakObjectPtr<UGCTestObject>& Node : Graph.Weak)
+		{
+			NumAliveAfterFull += Node.IsValid(true) ? 1 : 0;
+		}
+		TestEqual(TEXT("Same as a full collection"), NumAliveAfterFull, NumAlive);
+		Graph.UnrootAll();
+		Collect();
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGarbageCollectionIncrementalMutationsTest,
+	"System.CoreUObject.GarbageCollection.IncrementalMutations",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+
+bool FGarbageCollectionIncrementalMutationsTest::RunTest(const FString& Parameters)
+{
+	// Between the slices the "game" moves references between reachable nodes (a reference taken from one and stored
+	// in another that may have been visited already), makes new nodes, drops references and destroys nodes. No node
+	// reachable at the end may be collected, no reference may dangle, and a full collection after it leaves exactly
+	// the reachable nodes (what the incremental one kept for being reachable during it goes then).
+	int32 NumRevisited = 0;
+	for (int32 Seed = 11; Seed <= 18; ++Seed)
+	{
+		Collect();
+		FGCRandomGraph Graph(Seed);
+		Graph.Build(150);
+		int32 NumMutations = 0;
+		const auto Mutate = [&Graph, &NumMutations]()
+		{
+			for (int32 Count = 0; Count < 4; ++Count)
+			{
+				++NumMutations;
+				const TArray<UGCTestObject*> Reachable = Graph.GetReachable();
+				UGCTestObject* From = Graph.Pick(Reachable);
+				UGCTestObject* To = Graph.Pick(Reachable);
+				if (From == nullptr || To == nullptr)
+				{
+					return;
+				}
+				switch (Graph.Random.RandRange(0, 4))
+				{
+					case 0:
+					case 1:
+						// A move: the only path to the node may be the one taken away.
+						if (UGCTestObject* Moved = Graph.Unlink(*From))
+						{
+							if (!Moved->IsPendingKill())
+							{
+								Graph.Link(*To, Moved);
+							}
+						}
+						break;
+					case 2:
+						// A new node, linked from a reachable one, linking to another.
+						{
+							UGCTestObject* New = Graph.NewNode();
+							Graph.Link(*New, Graph.Pick(Reachable));
+							Graph.Link(*To, New);
+						}
+						break;
+					case 3:
+						(void)Graph.Unlink(*From);
+						break;
+					default:
+						if (!To->IsRooted())
+						{
+							To->MarkPendingKill();
+						}
+						break;
+				}
+			}
+		};
+		(void)CollectIncrementally(1 + (Seed % 3), Mutate);
+		TestTrue(TEXT("Mutations between the slices"), NumMutations > 0);
+		NumRevisited += GetLastGarbageCollectionStats().NumObjectsRevisited;
+
+		// Everything reachable now is alive, and every reference of theirs points at a live object.
+		const TArray<UGCTestObject*> Reachable = Graph.GetReachable();
+		int32 Lost = 0;
+		int32 Dangling = 0;
+		TArray<UObject*> Targets;
+		for (UGCTestObject* Node : Reachable)
+		{
+			Lost += GUObjectArray.IsValid(Node) ? 0 : 1;
+			if (!GUObjectArray.IsValid(Node))
+			{
+				continue;
+			}
+			FGCRandomGraph::GetTargets(*Node, Targets);
+			for (UObject* Target : Targets)
+			{
+				Dangling += Target != nullptr && !GUObjectArray.IsValid(Target) ? 1 : 0;
+			}
+		}
+		TestEqual(TEXT("No reachable node collected"), Lost, 0);
+		TestEqual(TEXT("No dangling reference"), Dangling, 0);
+
+		// A full collection then leaves exactly the reachable nodes.
+		Collect();
+		const TArray<UGCTestObject*> ReachableAfter = Graph.GetReachable();
+		int32 NumAlive = 0;
+		for (const TWeakObjectPtr<UGCTestObject>& Node : Graph.Weak)
+		{
+			NumAlive += Node.IsValid(true) ? 1 : 0;
+		}
+		TestEqual(TEXT("A full collection after it keeps the reachable nodes only"), NumAlive, ReachableAfter.Num());
+		Graph.UnrootAll();
+		Collect();
+	}
+	TestTrue(TEXT("The end visited changed objects again"), NumRevisited > 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGarbageCollectionIncrementalWeakPointersTest,
+	"System.CoreUObject.GarbageCollection.IncrementalWeakPointers",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+
+bool FGarbageCollectionIncrementalWeakPointersTest::RunTest(const FString& Parameters)
+{
+	// Between the slices nothing reads as collected: a weak pointer to an object the collection has not reached still
+	// resolves, and an object it reaches through it (stored into a visited object) is kept. Pending kill reads as gone
+	// at once, and its references are cleared by the end.
+	Collect();
+	UGCTestObject* Root = NewObject<UGCTestObject>();
+	Root->AddToRoot();
+	UGCTestObject* Holder = NewObject<UGCTestObject>();
+	Root->Ref = Holder;
+	UGCTestObject* Loose = NewObject<UGCTestObject>();
+	TWeakObjectPtr<UGCTestObject> WeakLoose = Loose;
+	UGCTestObject* Doomed = NewObject<UGCTestObject>();
+	Holder->RefArray.Add(Doomed);
+	TWeakObjectPtr<UGCTestObject> WeakDoomed = Doomed;
+	bool bStored = false;
+	(void)CollectIncrementally(1,
+		[&]()
+		{
+			TestTrue(TEXT("An unreached object still resolves"), WeakLoose.IsValid());
+			if (!bStored)
+			{
+				// The root was visited in the first slice: the new reference is found at the end.
+				Root->NativeRef = WeakLoose.Get();
+				Root->RefSet.Add(WeakLoose.Get());
+				bStored = true;
+				Doomed->MarkPendingKill();
+				TestFalse(TEXT("Pending kill reads as gone"), WeakDoomed.IsValid());
+			}
+		});
+	TestTrue(TEXT("The object the game stored is kept"), WeakLoose.IsValid());
+	TestFalse(TEXT("The pending-kill object is collected"), WeakDoomed.IsValid(true));
+	TestTrue(TEXT("Its reference is cleared"), Holder->RefArray.Num() == 0 || Holder->RefArray[0] == nullptr);
+	Root->RemoveFromRoot();
+	Collect();
+	TestFalse(TEXT("All gone"), WeakLoose.IsValid(true));
 	return true;
 }
 

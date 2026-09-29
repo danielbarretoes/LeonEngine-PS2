@@ -8,12 +8,15 @@
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/DefaultPawn.h"
 #include "GameFramework/GameMode.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/GameState.h"
 #include "GameFramework/HUD.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerStart.h"
 #include "GameFramework/PlayerState.h"
+#include "GameFramework/SpectatorPawn.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/ScopedTestWorld.h"
 #include "UObject/GarbageCollection.h"
@@ -91,8 +94,9 @@ bool FGameFrameworkGameModeMatchStateTest::RunTest(const FString& Parameters)
 	TestEqual("Mirrored", GameState->GetMatchState(), MatchState::InProgress);
 	TestEqual("Previous state", GameState->GetPreviousMatchState(), MatchState::WaitingToStart);
 	TestTrue("Base clock started", GameState->HasMatchStarted());
-	GameState->Tick(1.5f);
-	GameState->Tick(1.0f);
+	// The whole seconds are UE's one-second DefaultTimer; the base clock is the world's time since the start.
+	World.Tick(1.5f);
+	World.Tick(1.0f);
 	TestEqual("Whole seconds", GameState->ElapsedTime, 2);
 	TestEqual("Base clock", GameState->GetServerWorldTimeSeconds(), 2.5f, 1.0e-5f);
 
@@ -126,6 +130,41 @@ bool FGameFrameworkControllersAreActorsTest::RunTest(const FString& Parameters)
 	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
 	TestNull("Still released after the collection", Player->GetPawn());
 	TestEqual("Controller and its player state", World.ActorCount(), static_cast<SIZE_T>(2));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameFrameworkRestartReplacesTheSpectatorTest,
+	"System.Engine.GameFramework.RestartReplacesTheSpectator",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameFrameworkRestartReplacesTheSpectatorTest::RunTest(const FString& Parameters)
+{
+	// A spectating player flies its spectator pawn; a restart gives it a new default pawn at the start and it plays
+	// again (UE: a spectator is no pawn to keep). A player that plays keeps its pawn.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AGameModeBase* GameMode = World.SetGameMode(AGameModeBase::StaticClass());
+	(void)World.SpawnActor<APlayerStart>(FVector(300.0f, 0.0f, 100.0f), FRotator::ZeroRotator);
+	APlayerController* Player = World.SpawnActor<APlayerController>();
+	GameMode->RestartPlayer(Player);
+	APawn* FirstPawn = Player->GetPawn();
+	if (!TestNotNull("A pawn", FirstPawn))
+	{
+		return false;
+	}
+	GameMode->RestartPlayer(Player);
+	TestTrue("A player that plays keeps its pawn", Player->GetPawn() == FirstPawn);
+
+	Player->ChangeState(NAME_Spectating);
+	ASpectatorPawn* Spectator = Player->GetSpectatorPawn();
+	TestTrue("It flies the spectator", Spectator != nullptr && Player->GetPawn() == Spectator);
+	GameMode->RestartPlayer(Player);
+	APawn* NewPawn = Player->GetPawn();
+	TestTrue("A new pawn", NewPawn != nullptr && NewPawn != Spectator && NewPawn != FirstPawn);
+	TestTrue("A default pawn", NewPawn != nullptr && NewPawn->IsA<ADefaultPawn>());
+	TestTrue("Playing again", Player->IsInState(NAME_Playing));
+	TestNull("No spectator", Player->GetSpectatorPawn());
+	TestTrue("The spectator is gone", Spectator == nullptr || Spectator->IsPendingKillPending());
 	return true;
 }
 
@@ -190,15 +229,26 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameFrameworkEngineCollectsGarbageOnATimerTest
 
 bool FGameFrameworkEngineCollectsGarbageOnATimerTest::RunTest(const FString& Parameters)
 {
-	// The engine collects once gc.TimeBetweenPurgingPendingKillObjects (61.1 s by default) has passed, not before; the
-	// engine's own objects survive, an unreferenced one does not.
+	// The engine starts an incremental collection once gc.TimeBetweenPurgingPendingKillObjects (10 s by default) has
+	// passed and ends it over the next steps; the engine's own objects survive, an unreferenced one does not. A forced
+	// collection is a full one at the next step.
 	TStrongObjectPtr<UGameEngine> Engine(NewObject<UGameEngine>());
 	Engine->Init(nullptr);
 	TWeakObjectPtr<UObject> Garbage = NewObject<AActor>();
-	TestFalse("Not yet", Engine->ConditionalCollectGarbage(30.0f));
+	TestFalse("Not yet", Engine->ConditionalCollectGarbage(5.0f));
 	TestTrue("Garbage still there", Garbage.IsValid());
-	TestTrue("Interval reached", Engine->ConditionalCollectGarbage(31.2f));
+	bool bCollected = Engine->ConditionalCollectGarbage(5.1f);
+	for (int32 Step = 0; Step < 1000 && !bCollected; ++Step)
+	{
+		TestTrue("Alive while the collection runs", Garbage.IsValid());
+		bCollected = Engine->ConditionalCollectGarbage(1.0f / 30.0f);
+	}
+	TestTrue("Interval reached, the collection ended", bCollected);
 	TestFalse("Garbage collected", Garbage.IsValid());
+	TWeakObjectPtr<UObject> More = NewObject<AActor>();
+	Engine->ForceGarbageCollection(true);
+	TestTrue("A forced collection ends at once", Engine->ConditionalCollectGarbage(1.0f / 30.0f));
+	TestFalse("More garbage collected", More.IsValid());
 	TestNotNull("Engine world kept", Engine->GetGameWorld());
 	TestNotNull("Engine local player kept", Engine->GameInstance->GetFirstGamePlayer());
 	Engine->PreExit();

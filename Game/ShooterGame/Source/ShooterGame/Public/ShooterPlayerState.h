@@ -17,11 +17,8 @@ class SHOOTERGAME_API AShooterPlayerState : public APlayerState
 public:
 	AShooterPlayerState(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	/** The team (UE ShooterGame: SetTeamNum / GetTeamNum). */
-	void SetTeam(EShooterTeam NewTeam)
-	{
-		Team = NewTeam;
-	}
+	/** The team (UE ShooterGame: SetTeamNum / GetTeamNum); the game mode counts its live pawns again. */
+	void SetTeam(EShooterTeam NewTeam);
 	[[nodiscard]] EShooterTeam GetTeam() const
 	{
 		return Team;
@@ -54,6 +51,14 @@ public:
 	void ScoreDeath();
 	/** Back to a new match: no kills, no deaths (the money is the game mode's). */
 	void ResetStats();
+
+	/**
+	 * The radio's limits (CS 1.6: a message every 1.5 s, 60 a round; AShooterGameMode::SendRadioMessage): the world
+	 * time of the player's last message, and how many it sent in the round RadioRoundSerial.
+	 */
+	float LastRadioTime = -1.0e6f;
+	int32 RadioRoundSerial = -1;
+	int32 RadioMessagesInRound = 0;
 
 private:
 	/** UE ShooterGame: TeamNumber. */

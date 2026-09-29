@@ -2,6 +2,8 @@
 
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "Physics/PhysScene.h"
+#include "PrimitiveSceneProxy.h"
 #include "SceneInterface.h"
 
 UPrimitiveComponent::UPrimitiveComponent(const FObjectInitializer& ObjectInitializer)
@@ -12,6 +14,7 @@ UPrimitiveComponent::UPrimitiveComponent(const FObjectInitializer& ObjectInitial
 	bOnlyOwnerSee = false;
 	bOwnerNoSee = false;
 	bRenderAsViewModel = false;
+	bCastBlobShadow = false;
 	// UE: the body instance's responses start from the default container (the config's channel defaults).
 	CollisionResponses = FCollisionResponseContainer::GetDefaultResponseContainer();
 }
@@ -21,9 +24,22 @@ FCollisionShape UPrimitiveComponent::GetCollisionShape(float /*Inflation*/) cons
 	return FCollisionShape();
 }
 
+UMaterialInterface* UPrimitiveComponent::GetMaterialFromCollisionFaceIndex(
+	int32 /*FaceIndex*/, int32& SectionIndex) const
+{
+	SectionIndex = INDEX_NONE;
+	return nullptr;
+}
+
 FPrimitiveSceneProxy* UPrimitiveComponent::CreateSceneProxy()
 {
 	return nullptr;
+}
+
+bool UPrimitiveComponent::WasRecentlyRendered(float Tolerance) const
+{
+	const UWorld* World = GetWorld();
+	return World != nullptr && World->GetTimeSeconds() - LastRenderTime <= Tolerance;
 }
 
 void UPrimitiveComponent::SetOnlyOwnerSee(bool bNewOnlyOwnerSee)
@@ -51,6 +67,39 @@ void UPrimitiveComponent::SetRenderAsViewModel(bool bNewRenderAsViewModel)
 		bRenderAsViewModel = bNewRenderAsViewModel;
 		MarkRenderStateDirty();
 	}
+}
+
+void UPrimitiveComponent::SetCastBlobShadow(bool bNewCastBlobShadow)
+{
+	if (bCastBlobShadow != bNewCastBlobShadow)
+	{
+		bCastBlobShadow = bNewCastBlobShadow;
+		MarkRenderStateDirty();
+	}
+}
+
+void UPrimitiveComponent::UpdateBlobShadowFloor()
+{
+	UWorld* World = GetWorld();
+	if (SceneProxy == nullptr || World == nullptr || !SceneProxy->CastsBlobShadow())
+	{
+		return;
+	}
+	// From the middle of the bounds straight down, past their bottom, against the level's static geometry only (not
+	// the pawns' capsules nor the owner).
+	const FBox Bounds = SceneProxy->GetWorldBounds();
+	if (!Bounds.IsValid)
+	{
+		SceneProxy->SetBlobShadowFloor(false, FVector::ZeroVector, FVector::UpVector);
+		return;
+	}
+	const FVector Start = Bounds.GetCenter();
+	const FVector End(Start.X, Start.Y, Bounds.Min.Z - BlobShadowTraceDistance);
+	FCollisionQueryParams Params(FName(TEXT("BlobShadow")), false, GetOwner());
+	FHitResult Hit;
+	const bool bHit = World->GetPhysicsScene().LineTraceSingleByObjectType(
+		Hit, Start, End, FCollisionObjectQueryParams(ECC_WorldStatic), Params);
+	SceneProxy->SetBlobShadowFloor(bHit, Hit.ImpactPoint, Hit.ImpactNormal);
 }
 
 void UPrimitiveComponent::IgnoreActorWhenMoving(AActor* Actor, bool bShouldIgnore)
@@ -102,6 +151,10 @@ void UPrimitiveComponent::SendRenderTransform_Concurrent()
 	if (SceneProxy != nullptr && World != nullptr && World->Scene != nullptr)
 	{
 		World->Scene->UpdatePrimitiveTransform(this);
+		if (bCastBlobShadow)
+		{
+			UpdateBlobShadowFloor();
+		}
 	}
 }
 

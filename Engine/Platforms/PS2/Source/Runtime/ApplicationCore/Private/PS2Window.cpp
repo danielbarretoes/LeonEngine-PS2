@@ -3,8 +3,6 @@
 #include "GenericPlatform/GenericApplication.h"
 #include "PS2RHI.h"
 
-#include <graph.h>
-
 namespace
 {
 	struct FPS2DisplayState
@@ -57,7 +55,7 @@ void FPS2Window::Destroy()
 {
 	if (GPS2Display.bInitialized)
 	{
-		graph_shutdown();
+		FPS2RHI::ShutdownDisplay();
 		GPS2Display.bInitialized = false;
 	}
 	Handle = nullptr;

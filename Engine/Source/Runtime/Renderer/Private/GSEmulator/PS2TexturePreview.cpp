@@ -2,17 +2,18 @@
 
 #include "PalettedTexture.h"
 
-bool ConvertTextureAsPS2Cook(const uint8* Rgba, int32 Width, int32 Height, int32& OutSizeX, int32& OutSizeY,
-	EPixelFormat& OutFormat, TArray<uint8>& OutData)
+bool ConvertTextureAsPS2Cook(
+	const uint8* Rgba, int32 Width, int32 Height, bool bSRGB, FGSTextureCache::FConvertedTexture& Out)
 {
 	FPalettedTexture Texture;
-	if (!FPalettedTextureBuilder::Build(Rgba, Width, Height, Texture))
+	if (!FPalettedTextureBuilder::Build(Rgba, Width, Height, bSRGB, Texture))
 	{
 		return false;
 	}
-	OutSizeX = Texture.SizeX;
-	OutSizeY = Texture.SizeY;
-	OutFormat = Texture.Format;
-	OutData = MoveTemp(Texture.Data);
+	Out.SizeX = Texture.SizeX;
+	Out.SizeY = Texture.SizeY;
+	Out.Format = Texture.Format;
+	Out.Data = MoveTemp(Texture.Data);
+	Out.Mips = MoveTemp(Texture.Mips);
 	return true;
 }

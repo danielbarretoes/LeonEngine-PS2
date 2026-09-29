@@ -112,9 +112,6 @@ bool FLegacyCoordinateConversionIdentityTest::RunTest(const FString& Parameters)
 	TestTrue("Extent in cm, swapped",
 		FLegacyCoordinateConversion::ConvertExtent(FVector(0.25f, 1.0f, 4.0f))
 			.Equals(FVector(25.0f, 400.0f, 100.0f), 1.0e-4f));
-	const FVector4 Tangent = FLegacyCoordinateConversion::ConvertTangent(FVector4(0.6f, 0.8f, 0.0f, 1.0f));
-	TestTrue("Tangent swapped, bitangent sign flipped",
-		Tangent.X == 0.6f && Tangent.Y == 0.0f && Tangent.Z == 0.8f && Tangent.W == -1.0f);
 	const FMatrix M =
 		FLegacyCoordinateConversion::ConvertTransform(FVector::ZeroVector, FVector::ZeroVector, FVector::OneVector)
 			.ToMatrixWithScale();
@@ -135,12 +132,6 @@ bool FLegacyCoordinateConversionIdentityTest::RunTest(const FString& Parameters)
 	TestTrue("Extent",
 		FLegacyCoordinateConversion::ToLegacyExtent(FLegacyCoordinateConversion::ConvertExtent(Legacy))
 			.Equals(Legacy, 1.0e-6f));
-	const FVector4 LegacyTangent(0.0f, 0.6f, 0.8f, -1.0f);
-	const FVector4 TangentBack =
-		FLegacyCoordinateConversion::ToLegacyTangent(FLegacyCoordinateConversion::ConvertTangent(LegacyTangent));
-	TestTrue("Tangent",
-		TangentBack.X == LegacyTangent.X && TangentBack.Y == LegacyTangent.Y && TangentBack.Z == LegacyTangent.Z &&
-			TangentBack.W == LegacyTangent.W);
 	const FQuat LegacyRotation(FVector(0.6f, 0.0f, 0.8f), 0.7f);
 	TestTrue("Rotation",
 		FLegacyCoordinateConversion::ToLegacyRotation(FLegacyCoordinateConversion::ConvertRotation(LegacyRotation))
@@ -382,22 +373,18 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLegacyCoordinateConversionMeshDataTest,
 
 bool FLegacyCoordinateConversionMeshDataTest::RunTest(const FString& Parameters)
 {
-	// A converted legacy vertex keeps its tangent frame: the shader's bitangent cross(N, T) * w is the converted legacy
-	// bitangent, and the index order is kept.
+	// A converted legacy vertex: its position in centimetres and its normal with Y and Z swapped, the UV and the index
+	// order kept.
 	FMeshData Data;
 	const FVector Normal(0.0f, 0.6f, 0.8f);
-	const FVector Tangent(1.0f, 0.0f, 0.0f);
-	Data.Vertices.Add(FVertex(FVector(1.0f, 2.0f, 3.0f), Normal, FVector2D(0.25f, 0.5f), FVector4(Tangent, -1.0f)));
+	Data.Vertices.Add(FVertex(FVector(1.0f, 2.0f, 3.0f), Normal, FVector2D(0.25f, 0.5f)));
 	Data.Indices = {0, 0, 0};
-	const FVector LegacyBitangent = (Normal ^ Tangent) * -1.0f;
 
 	FLegacyCoordinateConversion::ConvertMeshData(Data);
 	const FVertex& Vertex = Data.Vertices[0];
 	TestTrue("Position", Vertex.Position.Equals(FVector(100.0f, 300.0f, 200.0f), 1.0e-4f));
 	TestTrue("Normal", Vertex.Normal.Equals(FVector(0.0f, 0.8f, 0.6f), 1.0e-6f));
 	TestTrue("UV kept", Vertex.TexCoord.X == 0.25f && Vertex.TexCoord.Y == 0.5f);
-	const FVector Bitangent = (Vertex.Normal ^ FVector(Vertex.Tangent)) * Vertex.Tangent.W;
-	TestTrue("Bitangent", Bitangent.Equals(FLegacyCoordinateConversion::ConvertDirection(LegacyBitangent), 1.0e-6f));
 	TestTrue("Indices kept", Data.Indices[0] == 0 && Data.Indices[2] == 0);
 	return true;
 }

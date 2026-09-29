@@ -1,7 +1,7 @@
 @echo off
 REM Engine\Build\BatchFiles\BotMatch.bat [Rounds] [Seed]
 REM The headless bot match (plan P21): builds ShooterGame (Win64 Development), plays de_leon with ten bots and the
-REM local player spectating (-botmatch), at fixed 60 Hz steps as fast as it can (-nullrhi -benchmark), for Rounds
+REM local player spectating (-botmatch), at the fixed 30 Hz steps as fast as it can (-nullrhi -benchmark), for Rounds
 REM rounds (10) with the round stream's Seed (7). Every frame the game checks the match's invariants
 REM (FShooterMatchChecker: the round ends and the scores, the money, the team sizes, the pawns' health and floor);
 REM it exits 1 when one broke or the rounds did not end in time. It fails when the exit code is not 0 or the game's

@@ -5,7 +5,7 @@
 UFloatingPawnMovement::UFloatingPawnMovement(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	SetComponentTickEnabled(true);
+	PrimaryComponentTick.bCanEverTick = true;
 }
 
 void UFloatingPawnMovement::TickComponent(float DeltaTime)

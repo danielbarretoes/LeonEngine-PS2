@@ -12,7 +12,7 @@ class UPackage;
  *
  * **Prefixes.** New assets are named with UE's prefixes: SM_ (UStaticMesh), SK_ (USkeletalMesh), SKEL_ (USkeleton),
  * A_ (UAnimSequence), BS_ (UBlendSpace1D), T_ (UTexture), M_ (UMaterialInterface), S_ (USoundWave). A source file
- * whose name already has the prefix keeps it (T_Default_D.png is T_Default_D, Cube.obj is SM_Cube).
+ * whose name already has the prefix keeps it (T_Default_D.png is T_Default_D, Cube.glb is SM_Cube).
  */
 class LEONED_API FAssetImportUtils
 {

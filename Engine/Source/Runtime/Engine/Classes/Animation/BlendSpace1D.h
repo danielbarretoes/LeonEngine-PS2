@@ -5,7 +5,7 @@
 #include "BlendSpace1D.generated.h"
 
 /**
- * A blend space on one axis (UE: UBlendSpace1D): an input such as the speed picks the two nearest clips and a weight
+ * A blend space on one axis (UE: UBlendSpace1D): an input such as the speed picks the two nearest samples and a weight
  * between them. The axis is BlendParameters[0], [0, 1] unless set; a sample's position is its SampleValue.X.
  */
 UCLASS()
@@ -25,9 +25,9 @@ public:
 	}
 
 	/**
-	 * The two clips around AxisValue (clamped to the axis) and the weight toward the second: OutA == OutB with a weight
-	 * of 0 at or past the ends and on a sample. Samples at the same position keep the order they were added in. Null
-	 * clips without samples (Leon; UE evaluates the samples' weights through its grid).
+	 * The samples around BlendInput.X (clamped to the axis): the nearest at or below it and the nearest at or above it,
+	 * weighted by the distance (one sample, weight 1, at or past the ends and on a sample). Samples at the same
+	 * position keep the order they were added in (the first below, the last above).
 	 */
-	void Evaluate(float AxisValue, const UAnimSequence*& OutA, const UAnimSequence*& OutB, float& OutAlpha) const;
+	void GetSamplesFromBlendInput(const FVector& BlendInput, FBlendSampleDataArray& OutSampleDataList) const override;
 };

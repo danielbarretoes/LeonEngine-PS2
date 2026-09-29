@@ -1,6 +1,8 @@
 #include "PS2ErrorScreen.h"
 
 #include "CoreGlobals.h"
+#include "GSCommandList.h"
+#include "GSDebugDraw.h"
 #include "HAL/PlatformMisc.h"
 #include "HAL/PlatformProcess.h"
 #include "Misc/App.h"
@@ -9,7 +11,6 @@
 #include "Misc/OutputDeviceRedirector.h"
 #include "PS2RHI.h"
 
-#include <cstdio>
 #include <kernel.h>
 
 namespace
@@ -32,7 +33,8 @@ namespace
 	{
 	public:
 		static constexpr int32 MaxLines = 8;
-		static constexpr int32 MaxLineChars = 2 * CharsPerLine;
+		// Three screen lines each: a boot error names the folder it read and what to boot instead.
+		static constexpr int32 MaxLineChars = 3 * CharsPerLine;
 
 		void Serialize(const TCHAR* V, ELogVerbosity::Type Verbosity, const FName& /*Category*/) override
 		{
@@ -68,10 +70,10 @@ namespace
 
 	FErrorLines GErrorLines;
 
-	/** Draws Text from Y on, wrapped at CharsPerLine; returns the Y below it. */
-	float DrawWrapped(float Y, const char* Text, float R, float G, float B)
+	/** Records Text from Y on (pixels from the top), wrapped at CharsPerLine; returns the Y below it. */
+	float DrawWrapped(
+		FGSCommandList& List, const FGSDrawEnvironment& Environment, float Y, const char* Text, const FGSRGBAQ& Color)
 	{
-		const float Left = -float(ScreenWidth) * 0.5f + Margin;
 		char Line[CharsPerLine + 1];
 		const char* Cursor = Text;
 		while (*Cursor != '\0')
@@ -83,7 +85,7 @@ namespace
 				++Length;
 			}
 			Line[Length] = '\0';
-			FPS2RHI::DrawDebugText(Left, Y, Line, R, G, B, BodyScale);
+			FGSDebugDraw::DrawString(List, Environment, Margin, Y, Line, Color, BodyScale);
 			Y += BodyLineHeight;
 			Cursor += Length;
 			if (*Cursor == '\n')
@@ -109,10 +111,10 @@ void FPS2ErrorScreen::Install()
 
 void FPS2ErrorScreen::Show(int32 ExitCode)
 {
-	std::printf("FPS2ErrorScreen: the game stopped (exit code %d)\n", int(ExitCode));
+	FPlatformMisc::LowLevelOutputDebugStringf("FPS2ErrorScreen: the game stopped (exit code %d)\n", int(ExitCode));
 	if (!FPS2RHI::InitDisplay(ScreenWidth, ScreenHeight))
 	{
-		std::printf("FPS2ErrorScreen: the display did not initialize; EE halted\n");
+		FPlatformMisc::LowLevelOutputDebugString("FPS2ErrorScreen: the display did not initialize; EE halted\n");
 		for (;;)
 		{
 			SleepThread();
@@ -120,13 +122,13 @@ void FPS2ErrorScreen::Show(int32 ExitCode)
 	}
 
 	char Title[64];
-	std::snprintf(Title, sizeof(Title), "THE GAME STOPPED (EXIT CODE %d)", int(ExitCode));
+	FCString::Snprintf(Title, int32(sizeof(Title)), "THE GAME STOPPED (EXIT CODE %d)", int(ExitCode));
 	const char* Project = FApp::HasProjectName() ? FApp::GetProjectName() : "<Project>";
 	const char* BaseDir = FPlatformProcess::BaseDir();
 	char Hint[512];
 	if (FCString::Strnicmp(BaseDir, "host", 4) == 0)
 	{
-		std::snprintf(Hint, sizeof(Hint),
+		FCString::Snprintf(Hint, int32(sizeof(Hint)),
 			"The game reads its config and content from '%s' (the ELF's folder).\n"
 			"PCSX2: Settings > Advanced > Enable Host Filesystem, then boot the staged ELF, not Binaries/PS2's:\n"
 			"Game/%s/Packages/PS2/%s.elf (Package.bat) or Game/%s/Saved/StagedBuilds/PS2/%s.elf (BuildCookRun\n"
@@ -136,20 +138,24 @@ void FPS2ErrorScreen::Show(int32 ExitCode)
 	}
 	else
 	{
-		std::snprintf(Hint, sizeof(Hint),
+		FCString::Snprintf(Hint, int32(sizeof(Hint)),
 			"The game reads its config and content from '%s' (the ELF's folder).\nThe EE log has the whole log.",
 			BaseDir);
 	}
 
-	const float Left = -float(ScreenWidth) * 0.5f + Margin;
-	const float Top = -float(ScreenHeight) * 0.5f + Margin;
+	// One list recorded once (the screen does not change) and submitted every frame.
+	const FGSDrawEnvironment Environment = FPS2RHI::GetDrawEnvironment();
+	FGSCommandList List;
+	FGSDebugDraw::DrawString(List, Environment, Margin, Margin, Title, FGSDebugDraw::UnitColor(1.0f, 0.9f, 0.6f));
+	float Y = Margin + 28.0f;
+	const FGSRGBAQ ErrorColor = FGSDebugDraw::UnitColor(1.0f, 0.75f, 0.75f);
+	GErrorLines.ForEach([&List, &Environment, &Y, &ErrorColor](const char* Line)
+		{ Y = DrawWrapped(List, Environment, Y, Line, ErrorColor) + 4.0f; });
+	DrawWrapped(List, Environment, Y + 16.0f, Hint, FGSDebugDraw::UnitColor(0.85f, 0.85f, 0.95f));
 	for (;;)
 	{
 		FPS2RHI::ClearColor(0.25f, 0.02f, 0.02f);
-		FPS2RHI::DrawDebugText(Left, Top, Title, 1.0f, 0.9f, 0.6f, 1.0f);
-		float Y = Top + 28.0f;
-		GErrorLines.ForEach([&Y](const char* Line) { Y = DrawWrapped(Y, Line, 1.0f, 0.75f, 0.75f) + 4.0f; });
-		DrawWrapped(Y + 16.0f, Hint, 0.85f, 0.85f, 0.95f);
+		FPS2RHI::Submit(List);
 		FPS2RHI::WaitVSync();
 	}
 }

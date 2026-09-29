@@ -11,7 +11,8 @@ class UDamageType;
 /**
  * A volume that damages the pawns inside it (UE: APainCausingVolume, an APhysicsVolume there; Leon has no physics
  * volumes). While bPainCausing, every PainInterval seconds each pawn whose location it encompasses takes
- * DamagePerSec * PainInterval of DamageType (CausePainTo; UE runs it from a looping PainTimer, Leon from Tick).
+ * DamagePerSec * PainInterval of DamageType (CausePainTo), from a looping timer that starts with play (UE's
+ * PainTimer; the first pain comes at the first step).
  */
 UCLASS()
 class ENGINE_API APainCausingVolume : public AVolume
@@ -44,9 +45,13 @@ public:
 	/** One pain tick to Other: DamagePerSec * PainInterval through TakeDamage (UE: CausePainTo). */
 	virtual void CausePainTo(AActor* Other);
 
-	void Tick(float DeltaSeconds) override;
+	/** Starts the pain timer (UE). */
+	void BeginPlay() override;
+
+	/** One pain tick to every pawn inside, while bPainCausing (UE: PainTimer). */
+	void PainTimer();
 
 private:
-	/** Seconds until the next pain tick (UE: the PainTimer). */
-	float TimeUntilPain = 0.0f;
+	/** The looping pain timer (UE: TimerHandle_PainTimer). */
+	FTimerHandle TimerHandle_PainTimer;
 };

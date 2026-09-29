@@ -6,6 +6,7 @@
 #include "Serialization/Archive.h"
 #include "UObject/Linker.h"
 
+class FMemStackBase;
 class UClass;
 class UObject;
 class UPackage;
@@ -18,6 +19,12 @@ class UPackage;
  * their package first. Loading is synchronous; UObject::PostLoad runs once every export of the outermost LoadPackage
  * call (dependencies included) is serialized. The linker is then detached and deleted (Leon: all data, bulk data
  * included, is loaded eagerly, so nothing needs it afterwards).
+ *
+ * The file's bytes live in the load arena (GetLoadArena; Docs/PLANS/ps2-shipping.md N17), not on the heap one by one:
+ * LoadPackage marks the arena before it creates the linker and pops it once the exports are serialized
+ * (ReleasePackageData), so a package's bytes go before its importer's, and a tables-only linker gives its bytes back
+ * before CreateLinker returns. When the outermost load ends, the arena returns its chunks to GMalloc: what a map's
+ * load read is freed as a block.
  */
 class COREUOBJECT_API FLinkerLoad
 	: public FLinker
@@ -40,6 +47,14 @@ public:
 	/** CreateLinker over package bytes already in memory (Leon: the in-memory packages below). */
 	static FLinkerLoad* CreateLinkerFromMemory(
 		UPackage* Parent, const TCHAR* Filename, uint32 LoadFlags, const TArray<uint8>& PackageData);
+
+	/**
+	 * The packages a package file's imports name, /Script ones left out, from its bytes (Leon: what an asynchronous
+	 * load reads next; UE's FAsyncPackage reads them from the summary too). False, logged, for bytes that are no
+	 * package.
+	 */
+	static bool GetImportedPackageNames(
+		const TCHAR* Filename, const uint8* Bytes, int64 Size, TArray<FName>& OutPackageNames);
 
 	/** The linker loading Package right now, or nullptr (UE: FindExistingLinkerForPackage). */
 	static FLinkerLoad* FindExistingLinkerForPackage(const UPackage* Package);
@@ -70,11 +85,17 @@ public:
 	/** Forgets the objects and releases the package (UE: Detach). */
 	void Detach();
 
-	/** The file bytes of the package (UE: the loader archive). */
-	FORCEINLINE const TArray<uint8>& GetPackageData() const
-	{
-		return PackageData;
-	}
+	/**
+	 * Forgets the package's bytes once every export is serialized (Leon): the load arena's mark that holds them pops
+	 * next. The tables stay.
+	 */
+	void ReleasePackageData();
+
+	/**
+	 * The arena of the package bytes being loaded (Leon): 64 KB chunks of GMalloc, charged to ELLMTag::LoadMapMisc,
+	 * given back when the outermost load ends.
+	 */
+	static FMemStackBase& GetLoadArena();
 
 	// FArchive
 	virtual void Serialize(void* V, int64 Length) override;
@@ -103,9 +124,12 @@ public:
 private:
 	FLinkerLoad(UPackage* InParent, const TCHAR* InFilename, uint32 InLoadFlags);
 
-	/** CreateLinker once the bytes are in memory. */
+	/** CreateLinker once the bytes are in the load arena. */
 	static FLinkerLoad* CreateLinkerFromBytes(
-		UPackage* Parent, const TCHAR* Filename, uint32 LoadFlags, TArray<uint8>&& InPackageData);
+		UPackage* Parent, const TCHAR* Filename, uint32 LoadFlags, const uint8* Bytes, int64 Size);
+
+	/** Reads the file into the load arena and creates the linker; nullptr (logged) when it cannot be read. */
+	static FLinkerLoad* CreateLinkerFromFile(UPackage* Parent, const TCHAR* Filename, uint32 LoadFlags);
 
 	/** Reads the summary and the tables from PackageData; false (logged) when the data is not a valid package. */
 	bool ReadTables();
@@ -125,7 +149,9 @@ private:
 	/** The class an import's ClassPackage / ClassName name, or nullptr. */
 	static UClass* FindImportClass(const FObjectImport& Import);
 
-	TArray<uint8> PackageData;
+	/** The file's bytes in the load arena (nullptr once released). */
+	const uint8* PackageBytes = nullptr;
+	int64 PackageSize = 0;
 	int64 Pos = 0;
 	/** The export of each created object, for Preload. */
 	TMap<UObject*, int32> ObjectToExportIndex;

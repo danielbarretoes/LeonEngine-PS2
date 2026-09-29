@@ -12,6 +12,10 @@ class AShooterBomb;
 class AShooterCharacter;
 class AShooterGameState;
 class AShooterPlayerState;
+class AShooterProjectile;
+class AShooterSmokeCloud;
+class UShooterPawnSensingComponent;
+class APlayerStart;
 class ATriggerVolume;
 
 /**
@@ -32,14 +36,20 @@ class ATriggerVolume;
  * - Warmup (WaitingToStart): players join and spawn at once. With bFillTeamsWithBots, bots fill both teams to
  *   MaxPlayersPerTeam as soon as a human is in. The match starts (StartMatch) when both teams have a player.
  * - Each round: Freeze (FreezeTime: pawns hold still, buying), Live (RoundTime), RoundEnd (RoundRestartDelay: the
- *   result shows), then the next round or, once a team has won more than half of MaxRounds or MaxRounds were played,
- *   MatchEnd (WaitingPostMatch). A round's start cleans the map (weapons on the floor, grenades, corpses, the last
- *   bomb), gives the survivors their health back with their weapons and armor, respawns the dead with the default
- *   inventory, and gives a new bomb to a random terrorist (RandomSeed's stream, or `?seed=` in the URL). A player who
- *   joins during Live or RoundEnd waits for the next round.
+ *   result shows), each ended by the phase timer of the world's timer manager (OnPhaseTimer), then the next round or,
+ * once a team has won more than half of MaxRounds or MaxRounds were played, MatchEnd (WaitingPostMatch). A round's
+ * start cleans the map (weapons on the floor, grenades, corpses, the last bomb), gives the survivors their health back
+ * with their weapons and armor, respawns the dead with the default inventory, and gives a new bomb to a random
+ * terrorist (RandomSeed's stream, or `?seed=` in the URL). A player who joins during Live or RoundEnd waits for the
+ * next round.
  * - The round ends (EndRound) when every terrorist is dead with no bomb planted, every counter-terrorist is dead, both
  *   teams die at once (a draw), the time runs out with no bomb planted (the CT win), or the planted bomb explodes (T)
  *   or is defused (CT). Planting stops the round's clock: the bomb's timer decides.
+ * - Halftime (bHalftime; CS's competitive halves, CS:GO's mp_halftime): after round MaxRounds / 2 the teams switch
+ * sides (HandleHalftime). Every player moves to the other team, the bots too; the scores follow the teams
+ *   (AShooterGameState::BeginSecondHalf), the money goes back to StartMoney and the loss streaks to none, and every
+ * pawn goes, so the second half starts as the first: everyone on the new side's starts with the default inventory. The
+ *   match still ends when a team has won more than half of MaxRounds, or after MaxRounds.
  *
  * Money (Counter-Strike 1.6's, all config): StartMoney at the match's start, at most MaxMoney; a kill pays the
  * weapon's KillReward (a team kill costs TeamKillPenalty); the winners get WinReward (BombWinReward for a bomb or a
@@ -47,20 +57,48 @@ class ATriggerVolume;
  * LossBonusMax, and the terrorists LosingTeamPlantBonus more when they lose with the bomb planted; the planter and the
  * defuser get PlantReward / DefuseReward.
  *
- * Buying (Buy): alive, in the team's buy zone (the map's `BuyZone` volumes tagged with the team), within BuyTime of the
- * round's start (any time in the warmup), with the money: a weapon by name (usp, ak47, awp, hegrenade: its Price;
- * the same weapon twice is refused, another one in the slot is dropped), `vest` (kevlar), `vesthelm` (kevlar and
- * helmet; the helmet alone with full kevlar) and `defuser` (CT only).
+ * Buying (Buy): alive, in the team's buy zone (the map's `BuyZone` volumes tagged with the team), during the freeze and
+ * BuyTime after it (CS: mp_buytime counts from the freeze's end; any time in the warmup), with the money: a weapon by
+ * name (glock, usp, deagle, mp5, ak47, m4a1, awp, flashbang, hegrenade, smokegrenade: its Price; a grenade already
+ * carried adds one up to CS's limits, two flashbangs, one HE and one smoke; the AK-47 only for the terrorists and the
+ * M4A1 only for the counter-terrorists, AShooterWeapon::BuyTeam; the same weapon twice is refused, another one in the
+ * slot is dropped; it comes with a full clip and an empty reserve), `primammo` / `secammo` (a box of the primary's or
+ * the pistol's ammunition, AShooterWeapon::AmmoBoxRounds for AmmoBoxPrice, while the reserve has room), `vest`
+ * (kevlar), `vesthelm` (kevlar and helmet; the helmet alone with full kevlar) and `defuser` (CT only).
+ *
+ * The teams' buy plans (ps2-shipping N30e; CS's economy, EShooterBuyPlan): when a round starts each team decides once
+ * (DecideTeamBuyPlans, ChooseBuyPlan): the pistol round (the first of each half), a full buy when half of its players
+ * carry a primary or can afford the full buy (GetFullBuyCost: the team's rifle and kevlar with a helmet), else a
+ * force-buy after ForceBuyLossStreak losses in a row, after a win and in a half's last round, and an eco otherwise. The
+ * bots buy by it (AShooterAIController::BuyForRound).
+ *
+ * The radio (ps2-shipping N30e; CS 1.6's): SendRadioMessage puts a player's message (EShooterRadioMessage) in the game
+ * state's radio log for its team's HUDs, at most every RadioCooldown and MaxRadioMessagesPerRound a round (a grenade's
+ * "Fire in the hole!" and a bot's "Bomb has been planted." regardless), and its team's bots hear it; the bot nearest
+ * the sender answers a request.
+ *
+ * Bots: named from BotNames (CS's BotProfile names, team-neutral) in the order they are created, and seeded by that
+ * order (AShooterAIController::SetBotIndex), not by their names.
  *
  * Damage: CanDealDamage refuses a teammate's (bFriendlyFire false, CS's mp_friendlyfire 0); a player may hurt itself
  * (its own grenade). Killed hears of each death from AShooterCharacter::Die: the kill feed, the money, the kills and
  * deaths. Whether the round is over is checked on the next tick, so the deaths of one moment (an explosion that kills
  * the last of both teams) end it together (a draw).
  *
+ * Registries (ps2-shipping N20: the EE cannot walk the level's actors for every bot every frame): the game mode keeps
+ * the map's trigger volumes (the bomb sites, the buy zones, the ladders) and player starts, found in the level when it
+ * is made and added as they spawn (UWorld::AddOnActorSpawnedHandler), and the game's actors, which join when they
+ * begin play and leave when they end it (the shooter pawns, the bombs, the projectiles) or while they lie on the floor
+ * (the pickups: dropped weapons, the dropped bomb). Each keeps the level's order, so what walked the level before finds
+ * the same actors in the same order. The bomb sites (by name, with their places) and each team's starts are sorted out
+ * once, when a volume or a start joins or goes. A world without a ShooterGameMode has no registries: nothing is picked
+ * up there.
+ *
  * Console (the Exec chain reaches the game mode): `bot_add_ct [N]`, `bot_add_t [N]`, `bot_add [N]` (the smaller team),
  * `bot_fill` (both teams to MaxPlayersPerTeam; the G6 smoke: `ShooterGame -nullrhi -ExecCmds=bot_fill`),
  * `bot_kick [name|all]`, `bot_stop [0|1]` (the bots freeze), `mp_restartgame [seconds]` (a new match after that
- * many seconds, 1 by default).
+ * many seconds, 1 by default), `mp_maxrounds [N]` (MaxRounds, from the next round's end on) and `mp_halftime [0|1]`
+ * (bHalftime).
  */
 UCLASS(Config = Game)
 class SHOOTERGAME_API AShooterGameMode : public AGameMode
@@ -73,6 +111,8 @@ public:
 	/** The tags of the map's zones (plan decision D15: the second tag names the site or the team). */
 	static const FName BombSiteTag;
 	static const FName BuyZoneTag;
+	/** A ladder's volume (UShooterCharacterMovement's ladders; a map's Ladder node). */
+	static const FName LadderTag;
 
 	/** The players a team takes (CS: 5 a side); more bots are refused. */
 	UPROPERTY(Config)
@@ -90,7 +130,17 @@ public:
 	UPROPERTY(Config)
 	bool bFillTeamsWithBots = false;
 
-	/** Seconds of each phase (CS: mp_freezetime, mp_roundtime, the round restart delay) and of buying (mp_buytime). */
+	/**
+	 * The most bots that look (their sight's traces) in one frame (ClaimSensingUpdate); the others wait for the next
+	 * frame. 0: no limit.
+	 */
+	UPROPERTY(Config)
+	int32 MaxSensingUpdatesPerFrame = 2;
+
+	/**
+	 * Seconds of each phase (CS: mp_freezetime, mp_roundtime, the round restart delay) and of buying after the freeze
+	 * (mp_buytime; the freeze itself is for buying too).
+	 */
 	UPROPERTY(Config)
 	float FreezeTime = 6.0f;
 
@@ -106,6 +156,10 @@ public:
 	/** Rounds in a match (CS: mp_maxrounds); a team wins at more than half. */
 	UPROPERTY(Config)
 	int32 MaxRounds = 30;
+
+	/** The teams switch sides after half of MaxRounds (CS:GO: mp_halftime; see the class comment). */
+	UPROPERTY(Config)
+	bool bHalftime = true;
 
 	/** Money (CS 1.6; see the class comment). */
 	UPROPERTY(Config)
@@ -154,9 +208,37 @@ public:
 	UPROPERTY(Config)
 	int32 DefuserPrice = 200;
 
+	/**
+	 * The team's buy plan (ps2-shipping N30e, GetTeamBuyPlan): the consecutive losses after which a team that cannot
+	 * afford the full buy spends what it has anyway (a force-buy) instead of saving.
+	 */
+	UPROPERTY(Config)
+	int32 ForceBuyLossStreak = 2;
+
+	/** The radio (CS 1.6): seconds between two messages of a player, and the most a player sends in a round. */
+	UPROPERTY(Config)
+	float RadioCooldown = 1.5f;
+
+	UPROPERTY(Config)
+	int32 MaxRadioMessagesPerRound = 60;
+
 	/** The seed of the round stream (the bomb's carrier); `?seed=N` in the URL or `-seed=N` overrides it. */
 	UPROPERTY(Config)
 	int32 RandomSeed = 1;
+
+	/**
+	 * The bots' names (ps2-shipping N30e: CS 1.6's BotProfile names, team-neutral, since a bot keeps its name when the
+	 * halftime moves it to the other side), given in the order the bots are created (GetBotName). DefaultGame.ini's
+	 * +BotNames.
+	 */
+	UPROPERTY(Config)
+	TArray<FString> BotNames;
+
+	/**
+	 * The name of the bot created BotIndex-th (0 the first): BotNames in order, and past the list's end its names again
+	 * with the round of the list ("Albert (2)"); "Bot <n>" without a list.
+	 */
+	[[nodiscard]] FString GetBotName(int32 BotIndex) const;
 
 	/** The class of the bots' controllers. */
 	UPROPERTY()
@@ -169,8 +251,9 @@ public:
 	/**
 	 * A headless bot match (plan P21; `-botmatch [-rounds=N] [-seed=N]` on the command line): the local player
 	 * spectates, bots fill both teams, FShooterMatchChecker checks every frame, and after BotMatchRounds rounds (or
-	 * the match's end, or a deadline for them) the game exits with 0, or 1 when an invariant broke. Run it with
-	 * -nullrhi -benchmark to play faster than real time.
+	 * the match's end, or a deadline for them) the game exits with 0, or 1 when an invariant broke. The match is
+	 * BotMatchRounds long (MaxRounds, so the teams switch sides at its half). Run it with -nullrhi -benchmark to play
+	 * faster than real time.
 	 */
 	bool bBotMatch = false;
 	int32 BotMatchRounds = 10;
@@ -184,12 +267,16 @@ public:
 	/** bot_add_ct / bot_add_t / bot_add [Count], bot_fill, bot_kick, mp_restartgame; the rest goes to Exec functions.
 	 */
 	bool ProcessConsoleExec(const TCHAR* Cmd, FOutputDevice& Ar, UObject* Executor) override;
+	/** Finds the level's trigger volumes and player starts, and listens for the ones spawned later (the registries). */
+	void PostInitializeComponents() override;
 	/** Logs how many pawns each team has when the match leaves (the G6 smoke reads it). */
 	void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	/**
 	 * Adds up to Count bots to Team (None: the smaller team each time); returns how many joined (a full team refuses
-	 * the rest). A bot spawns at once unless the round is live (it waits for the next one).
+	 * the rest). A bot spawns at once unless the round is live (it waits for the next one). Each bot takes a sensing
+	 * slot of 2 x MaxPlayersPerTeam (AShooterAIController::SetSensingSlot), the teams interleaved (CT 0, T 1, CT 2,
+	 * ...): the bots look in turn.
 	 */
 	int32 AddBots(EShooterTeam Team, int32 Count);
 
@@ -227,6 +314,74 @@ public:
 	/** How many live pawns the players of each team have. */
 	void CountPawns(int32& OutCT, int32& OutT) const;
 
+	// Registries (see the class comment)
+
+	/** The shooter pawns that began play and have not ended it, in the level's order. */
+	[[nodiscard]] const TArray<AShooterCharacter*>& GetPawns() const
+	{
+		return Pawns;
+	}
+	void RegisterPawn(AShooterCharacter* Pawn);
+	void UnregisterPawn(AShooterCharacter* Pawn);
+	/**
+	 * A bot asks to look now (UShooterPawnSensingComponent): the bots whose look is due queue in the order they asked,
+	 * and the first MaxSensingUpdatesPerFrame of the queue look in a frame; true when Sensor may look (it leaves the
+	 * queue), false when it waits for a later frame (its place kept, so nobody waits for ever).
+	 */
+	bool ClaimSensingUpdate(UShooterPawnSensingComponent* Sensor);
+	/** Sensor leaves the queue of looks (its bot died, froze or left). */
+	void CancelSensingUpdate(UShooterPawnSensingComponent* Sensor);
+	/** The looks taken in the current frame. */
+	[[nodiscard]] int32 GetSensingUpdatesThisFrame() const;
+
+	/** A pawn died, changed hands or teams: CountAlive counts again (else it keeps its count for the frame). */
+	void NotifyPawnsChanged()
+	{
+		++PawnsSerial;
+	}
+
+	/** What lies on the floor to be picked up (dropped weapons, the dropped bomb), in the order it fell. */
+	[[nodiscard]] const TArray<AActor*>& GetPickups() const
+	{
+		return Pickups;
+	}
+	void RegisterPickup(AActor* Pickup);
+	void UnregisterPickup(AActor* Pickup);
+
+	/** The bombs in play (carried, dropped or planted). */
+	[[nodiscard]] const TArray<AShooterBomb*>& GetBombs() const
+	{
+		return Bombs;
+	}
+	void RegisterBomb(AShooterBomb* InBomb);
+	void UnregisterBomb(AShooterBomb* InBomb);
+
+	/** The grenades in flight. */
+	void RegisterProjectile(AShooterProjectile* Projectile);
+	void UnregisterProjectile(AShooterProjectile* Projectile);
+
+	/** The smoke grenades' clouds (the round's clean-up removes them). */
+	[[nodiscard]] const TArray<AShooterSmokeCloud*>& GetSmokeClouds() const
+	{
+		return SmokeClouds;
+	}
+	void RegisterSmokeCloud(AShooterSmokeCloud* Cloud);
+	void UnregisterSmokeCloud(AShooterSmokeCloud* Cloud);
+	/** A thick smoke cloud lies across the line from Start to End (the bots' sight: AShooterSmokeCloud::BlocksLine). */
+	[[nodiscard]] bool IsSightBlockedBySmoke(const FVector& Start, const FVector& End) const;
+
+	/** The map's trigger volumes (any tag) and player starts, in the level's order. */
+	[[nodiscard]] const TArray<ATriggerVolume*>& GetZones() const
+	{
+		return Zones;
+	}
+	[[nodiscard]] const TArray<APlayerStart*>& GetPlayerStarts() const
+	{
+		return PlayerStarts;
+	}
+	/** A trigger volume or a player start joins its registry (once); any other actor is ignored. */
+	void RegisterMapActor(AActor* Actor);
+
 	// Rounds
 
 	/** The game state, as the game's class. */
@@ -237,10 +392,20 @@ public:
 	void StartRound();
 	/** The round is over: the score, the money, the message; the next round after RoundRestartDelay. */
 	void EndRound(EShooterRoundEndReason Reason);
-	/** Checks the eliminations and the time (each tick of a live round). */
+	/** Checks the eliminations (each tick of a live round, and when its time runs out). */
 	void CheckRoundEnd();
+	/**
+	 * The round's phase is over (its timer): the freeze goes live, a live round's time runs out (unless the bomb is
+	 * planted: then the bomb decides), the result gives way to the next round or the match's end.
+	 */
+	void OnPhaseTimer();
 	/** A new match from the first round after Delay seconds (mp_restartgame). */
 	void RestartGame(float Delay);
+	/** The round after which the teams switch sides: MaxRounds / 2 with bHalftime, else 0 (none). */
+	[[nodiscard]] int32 GetHalftimeRound() const
+	{
+		return bHalftime ? MaxRounds / 2 : 0;
+	}
 	/** The round's bomb, or null. */
 	[[nodiscard]] AShooterBomb* GetBomb() const
 	{
@@ -255,18 +420,54 @@ public:
 		return TerroristTargetSite;
 	}
 	/** The map's bomb sites' names, sorted ("A", "B"). */
-	[[nodiscard]] TArray<FName> GetBombSiteNames() const;
+	[[nodiscard]] const TArray<FName>& GetBombSiteNames() const;
 	/** The centre of a bomb site's volume on its floor (the volume's bottom), false without it. */
 	bool GetBombSiteLocation(FName Site, FVector& OutLocation) const;
 	/** Where a team spawns: its first start (level order), false without one (the bots' hunt goal). */
 	bool GetTeamSpawnLocation(EShooterTeam Team, FVector& OutLocation) const;
-	/** The live pawns of a team. */
+	/**
+	 * The live pawns of a team (CountPawns), counted once a frame: the count holds until the world's time moves on or
+	 * NotifyPawnsChanged.
+	 */
 	[[nodiscard]] int32 CountAlive(EShooterTeam Team) const;
 
 	/** The loss streak of a team (the loss bonus's count). */
 	[[nodiscard]] int32 GetLossStreak(EShooterTeam Team) const;
 	/** The money the next loss would pay Team (with its current streak). */
 	[[nodiscard]] int32 GetLossBonus(EShooterTeam Team) const;
+
+	// The economy's plan (ps2-shipping N30e)
+
+	/**
+	 * A team's buy plan (CS's economy, EShooterBuyPlan): the pistol round (the first of a half) buys armor; a team
+	 * with at least half of its players equipped or able to buy in full (the team's rifle and kevlar with a helmet)
+	 * buys in full; else it force-buys after ForceBuyLossStreak losses in a row, after a win (a winner keeps
+	 * spending) and in the last round of a half, and saves otherwise.
+	 */
+	[[nodiscard]] static EShooterBuyPlan ChooseBuyPlan(bool bPistolRound, bool bLastRoundOfHalf, int32 LossStreak,
+		int32 NumEquipped, int32 TeamSize, int32 InForceBuyLossStreak);
+	/** The plan Team decided when the round started (the freeze): its bots buy by it. */
+	[[nodiscard]] EShooterBuyPlan GetTeamBuyPlan(EShooterTeam Team) const
+	{
+		return TeamBuyPlan[static_cast<int32>(Team)];
+	}
+	/** What the full buy costs Buyer: its team's rifle and kevlar with a helmet (the AK-47's $3500, the M4A1's $4100).
+	 */
+	[[nodiscard]] int32 GetFullBuyCost(const AShooterCharacter& Buyer) const;
+	/** Buyer carries a primary or can afford the full buy with Money. */
+	[[nodiscard]] bool IsEquippedOrCanFullBuy(const AShooterCharacter& Buyer, int32 Money) const;
+
+	// The radio (ps2-shipping N30e)
+
+	/**
+	 * Sender radios Message to its team (CS 1.6's radio): a living player on a team, at most every RadioCooldown and
+	 * MaxRadioMessagesPerRound times a round (a grenade's "Fire in the hole!" and a bot's "Bomb has been planted." go
+	 * out regardless). Location is where it is about (the enemy spotted), else where the sender stands. The game state
+	 * keeps it for the HUD (the team's lines), and every bot of the team hears it
+	 * (AShooterAIController::OnRadioMessage); a request (IsRadioRequest) is answered by the living bot of the team
+	 * nearest the sender. True when sent.
+	 */
+	bool SendRadioMessage(AController* Sender, EShooterRadioMessage Message, const FVector* Location = nullptr);
 
 	// The bomb's events (AShooterBomb calls them)
 
@@ -286,11 +487,18 @@ public:
 
 	// Zones
 
-	/** The trigger volume with tag Kind (and SecondTag unless NAME_None) that holds a pawn standing at Feet. */
-	[[nodiscard]] static ATriggerVolume* FindZone(
-		const UWorld& World, const FVector& Feet, FName Kind, FName SecondTag);
+	/**
+	 * The registered trigger volume with tag Kind (and SecondTag unless NAME_None) that holds a pawn standing at Feet,
+	 * the first in level order.
+	 */
+	[[nodiscard]] ATriggerVolume* FindZone(const FVector& Feet, FName Kind, FName SecondTag) const;
 	/** A zone's name: its tag after Kind ("A", "CT"), NAME_None without one. */
 	[[nodiscard]] static FName GetZoneName(const ATriggerVolume& Zone, FName Kind);
+	/**
+	 * The registered ladder (a trigger volume tagged LadderTag) that a capsule of Radius and Height standing at Feet
+	 * touches, the first in level order: its box grown by the radius across, and the feet below its top.
+	 */
+	[[nodiscard]] ATriggerVolume* FindLadder(const FVector& Feet, float Radius, float Height) const;
 
 protected:
 	/** Places the player in a team before its start is chosen (UE: InitNewPlayer). */
@@ -305,23 +513,49 @@ protected:
 private:
 	/** Scores, money, stats and pawns reset, then the first round (the match's start, mp_restartgame). */
 	void BeginNewMatch();
+	/** The teams switch sides (see the class comment); the next round starts the second half. */
+	void HandleHalftime();
+	/** Every shooter pawn goes (its controller lets it go): the next round respawns everyone with the default
+	 * inventory. */
+	void DestroyAllPawns();
 	/** Destroys what a round leaves on the map: weapons on the floor, grenades, corpses, the bomb. */
 	void CleanUpMap();
 	/** The team's starts, level order. */
-	[[nodiscard]] TArray<AActor*> GetTeamStarts(EShooterTeam Team) const;
+	[[nodiscard]] const TArray<APlayerStart*>& GetTeamStarts(EShooterTeam Team) const;
+	/** Sorts out the bomb sites and the team starts again when a zone or a start joined or went. */
+	void UpdateMapCaches() const;
+	/** The world's spawn handler: a spawned trigger volume or player start joins its registry. */
+	void OnActorSpawned(AActor* Actor);
 	/** Pays a team (every player state of it), clamped to MaxMoney. */
 	void PayTeam(EShooterTeam Team, int32 Amount);
 	/** Whether a round is under way (Live, or its result shown): a player joining now waits for the next. */
 	[[nodiscard]] bool IsRoundLive() const;
 	[[nodiscard]] float GetWorldTime() const;
 
-	/** The number of the next bot of each team (their names: Bot_CT_1, Bot_T_1, ...). */
-	int32 NextBotNumber[3] = {1, 1, 1};
+	/**
+	 * How many bots the game mode has created (the next one's index: its name and its random stream), and how many
+	 * joined each team (their sensing slots; EShooterTeam as the index).
+	 */
+	int32 NumBotsCreated = 0;
+	int32 NumBotsAddedToTeam[3] = {0, 0, 0};
+
+	/** The world time of the frame whose looks are counted, and how many were taken (ClaimSensingUpdate). */
+	float SensingFrameTime = -1.0f;
+	int32 SensingUpdatesThisFrame = 0;
+
+	/** The bots waiting to look, in the order they asked (ClaimSensingUpdate). */
+	UPROPERTY(Transient)
+	TArray<UShooterPawnSensingComponent*> SensingQueue;
 
 	int32 NumKills = 0;
 
 	/** Consecutive round losses of each team (EShooterTeam as the index). */
 	int32 LossStreak[3] = {0, 0, 0};
+
+	/** Each team's buy plan for the round (EShooterTeam as the index), decided when it starts. */
+	EShooterBuyPlan TeamBuyPlan[3] = {EShooterBuyPlan::Pistol, EShooterBuyPlan::Pistol, EShooterBuyPlan::Pistol};
+	/** Decides both teams' buy plans (the round's start, once the players are placed). */
+	void DecideTeamBuyPlans();
 
 	/** The terrorists' site this round (GetTerroristTargetSite). */
 	FName TerroristTargetSite;
@@ -329,12 +563,39 @@ private:
 	/** The bomb was planted this round (the losing terrorists' bonus). */
 	bool bBombPlantedThisRound = false;
 
-	/** A pending mp_restartgame, and the world time it happens. */
-	bool bRestartPending = false;
-	float RestartGameTime = 0.0f;
+	/** The timer of the round's phase (OnPhaseTimer), of the buy time (CanBuy) and of a pending mp_restartgame. */
+	FTimerHandle TimerHandle_Phase;
+	FTimerHandle TimerHandle_BuyTime;
+	FTimerHandle TimerHandle_RestartGame;
+	/** A pending mp_restartgame comes (RestartGame's timer). */
+	void OnRestartGameTimer();
+	/** Sets the phase timer to Seconds. */
+	void SetPhaseTimer(float Seconds);
 
 	/** The round stream: the bomb's carrier. */
 	FRandomStream RoundRandom;
+
+	/**
+	 * Asks for the assets the game spawns later (Docs/PLANS/ps2-shipping.md N24): every soft object path of the
+	 * weapons', their projectiles', the pawn's, the bomb's and the player controller's class defaults (in structs and
+	 * arrays too), by LoadPackageAsync. The map's load ends with them (UEngine::LoadMap flushes), so no frame reads the
+	 * disc; PreloadedAssets keeps them loaded while the map plays (a round's collection would drop a weapon nobody
+	 * holds).
+	 */
+	void RequestGameplayAssets();
+	/** Asks for Path's package unless it was asked for or does not exist; true when it asked. */
+	bool RequestPreloadPath(const FSoftObjectPath& Path);
+	/** A preloaded package came in: its assets join PreloadedAssets. */
+	void OnGameplayPackageLoaded(const FName& PackageName, UPackage* Package, EAsyncLoadingResult::Type Result);
+
+	/** The soft object paths RequestGameplayAssets asked for, by package. */
+	TMap<FName, TArray<FSoftObjectPath>> PreloadPaths;
+	/** Their LoadPackageAsync requests (EndPlay flushes what is still in flight). */
+	TArray<int32> PreloadRequestIds;
+
+	/** The preloaded assets (RequestGameplayAssets). */
+	UPROPERTY(Transient)
+	TArray<UObject*> PreloadedAssets;
 
 	/** A bot match's frame: the checks, the end (see bBotMatch). */
 	void TickBotMatch();
@@ -347,4 +608,46 @@ private:
 
 	UPROPERTY(Transient)
 	AShooterBomb* Bomb = nullptr;
+
+	// The registries (see the class comment)
+
+	UPROPERTY(Transient)
+	TArray<AShooterCharacter*> Pawns;
+
+	UPROPERTY(Transient)
+	TArray<AActor*> Pickups;
+
+	UPROPERTY(Transient)
+	TArray<AShooterBomb*> Bombs;
+
+	UPROPERTY(Transient)
+	TArray<AShooterProjectile*> Projectiles;
+
+	UPROPERTY(Transient)
+	TArray<AShooterSmokeCloud*> SmokeClouds;
+
+	UPROPERTY(Transient)
+	TArray<ATriggerVolume*> Zones;
+
+	UPROPERTY(Transient)
+	TArray<APlayerStart*> PlayerStarts;
+
+	/** The world's spawn handler (OnActorSpawned). */
+	FDelegateHandle ActorSpawnedHandle;
+
+	/**
+	 * What UpdateMapCaches sorts out of Zones and PlayerStarts (which hold their actors): the bomb sites by name with
+	 * their places and volumes, and each team's starts in level order (EShooterTeam as the index).
+	 */
+	mutable TArray<FName> BombSiteNames;
+	mutable TArray<FVector> BombSiteLocations;
+	mutable TArray<ATriggerVolume*> BombSiteZones;
+	mutable TArray<APlayerStart*> TeamStarts[3];
+	mutable bool bMapCachesDirty = true;
+
+	/** CountAlive's count (EShooterTeam as the index), with the world time and the pawns' serial it was counted at. */
+	uint32 PawnsSerial = 0;
+	mutable uint32 AliveCountSerial = 0;
+	mutable float AliveCountTime = -1.0f;
+	mutable int32 AliveCount[3] = {0, 0, 0};
 };

@@ -5,7 +5,12 @@
 #include "GameFramework/Controller.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "HAL/LowLevelMemTracker.h"
 #include "Physics/PhysScene.h"
+#include "Stats/Stats.h"
+#include "TimerManager.h"
+
+DECLARE_CYCLE_STAT(TEXT("Pawn Sensing"), STAT_PawnSensing, STATGROUP_AI);
 
 namespace
 {
@@ -22,13 +27,36 @@ namespace
 		return Controller != nullptr ? Controller->GetPawn() : nullptr;
 	}
 
+	/**
+	 * The registered sensing components of every world, in the order they registered: the listeners BroadcastNoise
+	 * visits (a handful: one a bot). A component leaves it when it unregisters (its actor's destruction, its own
+	 * BeginDestroy).
+	 */
+	TArray<UPawnSensingComponent*>& GetListeners()
+	{
+		static TArray<UPawnSensingComponent*> Listeners;
+		return Listeners;
+	}
+
+	/** Room for a match's sensors and the pawns one sees without an allocation. */
+	constexpr int32 InlineSensingCount = 16;
+
 } // namespace
 
 UPawnSensingComponent::UPawnSensingComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 	SetPeripheralVisionAngle(PeripheralVisionAngle);
-	SetComponentTickEnabled(true);
+	// The tick only runs a look held back to the next step (RetryOnNextTick).
+	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bStartWithTickEnabled = false;
+}
+
+void UPawnSensingComponent::BeginPlay()
+{
+	Super::BeginPlay();
+	// A game that spreads its sensors sets their phase after this (SetTimer).
+	SetTimer(0.0f);
 }
 
 void UPawnSensingComponent::SetPeripheralVisionAngle(float NewPeripheralVisionAngle)
@@ -72,6 +100,7 @@ bool UPawnSensingComponent::HasLineOfSightTo(const AActor* Other) const
 		OtherPawn != nullptr ? OtherPawn->GetPawnViewLocation() : Other->GetActorLocation(), Other->GetActorLocation()};
 	for (const FVector& Target : Targets)
 	{
+		++NumSightTraces;
 		FHitResult Hit;
 		if (!World->GetPhysicsScene().LineTraceSingleByChannel(Hit, From, Target, ECC_Visibility, Query))
 		{
@@ -81,14 +110,21 @@ bool UPawnSensingComponent::HasLineOfSightTo(const AActor* Other) const
 	return false;
 }
 
+bool UPawnSensingComponent::ShouldCheckVisibilityOf(const APawn* Pawn) const
+{
+	return bSeePawns && Pawn != nullptr &&
+		(!bOnlySensePlayers || Cast<APlayerController>(Pawn->GetController()) != nullptr);
+}
+
+bool UPawnSensingComponent::ShouldCheckAudibilityOf(const APawn* /*NoiseInstigator*/) const
+{
+	return bHearNoises;
+}
+
 bool UPawnSensingComponent::CouldSeePawn(const APawn* Other, bool bMaySkipChecks) const
 {
 	const APawn* Self = GetSensingPawn(*this);
 	if (Other == nullptr || Other == Self || Other->IsPendingKillPending())
-	{
-		return false;
-	}
-	if (bOnlySensePlayers && Cast<APlayerController>(Other->GetController()) == nullptr)
 	{
 		return false;
 	}
@@ -108,17 +144,20 @@ bool UPawnSensingComponent::CouldSeePawn(const APawn* Other, bool bMaySkipChecks
 
 void UPawnSensingComponent::UpdateAISensing()
 {
+	SCOPE_CYCLE_COUNTER(STAT_PawnSensing);
+	LLM_SCOPE(ELLMTag::AI);
 	const UWorld* World = GetWorld();
 	if (World == nullptr || World->PersistentLevel == nullptr || !bEnableSensingUpdates || !bSeePawns)
 	{
 		return;
 	}
-	// The pawns first: a listener may destroy actors.
-	TArray<APawn*> Seen;
+	++NumSightUpdates;
+	// The pawns first: a listener may destroy actors. The filter comes before the range, the cone and the traces.
+	TArray<APawn*, TInlineAllocator<InlineSensingCount>> Seen;
 	for (AActor* Actor : World->PersistentLevel->Actors)
 	{
 		APawn* Pawn = Cast<APawn>(Actor);
-		if (Pawn != nullptr && CouldSeePawn(Pawn))
+		if (Pawn != nullptr && ShouldCheckVisibilityOf(Pawn) && CouldSeePawn(Pawn))
 		{
 			Seen.Add(Pawn);
 		}
@@ -141,8 +180,8 @@ void UPawnSensingComponent::UpdateAISensing()
 void UPawnSensingComponent::HandleNoise(APawn* Instigator, const FVector& Location, float Loudness)
 {
 	const AActor* Owner = GetOwner();
-	if (!bEnableSensingUpdates || !bHearNoises || Owner == nullptr || Owner->IsPendingKillPending() ||
-		Instigator == GetSensingPawn(*this) || Loudness <= 0.0f)
+	if (!bEnableSensingUpdates || Owner == nullptr || Owner->IsPendingKillPending() ||
+		Instigator == GetSensingPawn(*this) || Loudness <= 0.0f || !ShouldCheckAudibilityOf(Instigator))
 	{
 		return;
 	}
@@ -170,37 +209,65 @@ void UPawnSensingComponent::HandleNoise(APawn* Instigator, const FVector& Locati
 
 void UPawnSensingComponent::BroadcastNoise(UWorld& World, APawn* Instigator, const FVector& Location, float Loudness)
 {
-	if (World.PersistentLevel == nullptr)
+	// The world's listeners first: a listener may register or unregister others.
+	TArray<UPawnSensingComponent*, TInlineAllocator<InlineSensingCount>> Listeners;
+	for (UPawnSensingComponent* Listener : GetListeners())
 	{
-		return;
-	}
-	TArray<UPawnSensingComponent*> Listeners;
-	TArray<UPawnSensingComponent*> ActorListeners;
-	for (AActor* Actor : World.PersistentLevel->Actors)
-	{
-		if (Actor != nullptr && !Actor->IsPendingKillPending())
+		if (Listener->GetWorld() == &World)
 		{
-			Actor->GetComponents(ActorListeners);
-			Listeners.Append(ActorListeners);
+			Listeners.Add(Listener);
 		}
 	}
 	for (UPawnSensingComponent* Listener : Listeners)
 	{
-		Listener->HandleNoise(Instigator, Location, Loudness);
+		if (Listener->IsRegistered())
+		{
+			Listener->HandleNoise(Instigator, Location, Loudness);
+		}
 	}
+}
+
+void UPawnSensingComponent::OnRegister()
+{
+	Super::OnRegister();
+	GetListeners().AddUnique(this);
+}
+
+void UPawnSensingComponent::OnUnregister()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(TimerHandle_OnTimer);
+	}
+	GetListeners().Remove(this);
+	Super::OnUnregister();
+}
+
+void UPawnSensingComponent::SetTimer(float TimeInterval)
+{
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return;
+	}
+	// A looping timer keeps the interval's phase; a first delay of 0 is the next step.
+	World->GetTimerManager().SetTimer(TimerHandle_OnTimer, this, &UPawnSensingComponent::OnTimer,
+		FMath::Max(SensingInterval, 0.01f), true, FMath::Max(0.0f, TimeInterval));
+}
+
+void UPawnSensingComponent::RetryOnNextTick()
+{
+	SetComponentTickEnabled(true);
 }
 
 void UPawnSensingComponent::TickComponent(float DeltaTime)
 {
 	Super::TickComponent(DeltaTime);
-	TimeUntilNextUpdate -= DeltaTime;
-	if (TimeUntilNextUpdate <= 0.0f)
-	{
-		TimeUntilNextUpdate += FMath::Max(SensingInterval, 0.01f);
-		if (TimeUntilNextUpdate < 0.0f)
-		{
-			TimeUntilNextUpdate = SensingInterval;
-		}
-		UpdateAISensing();
-	}
+	SetComponentTickEnabled(false);
+	OnTimer();
+}
+
+void UPawnSensingComponent::OnTimer()
+{
+	UpdateAISensing();
 }

@@ -4,8 +4,8 @@
 #include "CollisionQuery.h"
 #include "CollisionShape.h"
 #include "CoreMinimal.h"
-#include "IPhysicsBackend.h"
-#include "PhysicsBackend.h"
+#include "Misc/MemStack.h"
+#include "Physics/PhysSceneBroadphase.h"
 #include "TriangleCollision.h"
 
 class FDebugDraw;
@@ -35,6 +35,13 @@ struct ENGINE_API FSlopePlane
 	FVector BoundsHalfExtents = FVector(100.0f, 100.0f, 100.0f);
 };
 
+/**
+ * Segment vs a slope plane. Inflate expands the plane along its normal (sphere / capsule radius). Hits when the
+ * offset-plane distance changes sign (approach from either side), inside the plane's bounds grown by Inflate.
+ */
+[[nodiscard]] ENGINE_API bool SegmentSlopePlane(
+	const FVector& Start, const FVector& End, const FSlopePlane& Plane, float Inflate, float& OutT, FVector& OutNormal);
+
 struct ENGINE_API FPhysSceneStepParams
 {
 	float DeltaTime = 0.0f;
@@ -52,13 +59,10 @@ struct ENGINE_API FPhysSceneStepParams
 };
 
 /**
- * Lightweight XY + arcade-Z physics scene (UE-style FPhysScene), in centimetres, Z up.
- * Arcade: AABB (+ TriangleMesh statics, upright capsules) traces / CMC queries / optional arcade Step.
- * Jolt (EPhysicsBackend::Jolt, the JoltPhysics plugin): rigid-body Step (incremental prepare; MeshShape statics on
- * rebuild) + Line / Sphere / Capsule narrow-phase traces; the floor plane, slope planes and the CMC side resolve
- * stay Arcade.
+ * Lightweight XY + arcade-Z physics scene (UE-style FPhysScene), in centimetres, Z up, the same on every platform:
+ * AABB (+ TriangleMesh statics, upright capsules) traces, the character movement's queries and an arcade Step.
  * A body owns position + AABB. Components add theirs (UPrimitiveComponent::CreatePhysicsState → AddComponentBody) and
- * simulated ones follow them back (SyncComponentsToBodies); IPhysicsBackend is the swap seam.
+ * simulated ones follow them back (SyncComponentsToBodies).
  *
  * Collision channels (UE's model, P17): every body has an object type and a response per channel
  * (FBodyInstance::ObjectType / CollisionResponses). A query on a trace channel meets a body with the weaker of the
@@ -66,21 +70,17 @@ struct ENGINE_API FPhysSceneStepParams
  * Ignore skips it, Overlap reports it without blocking (Multi queries only), Block stops a Single query. Bodies whose
  * collision is not query-enabled, and the components and actors FCollisionQueryParams ignores, are never hit. The
  * character contact queries (QuerySupportZ, ResolveCapsuleSides) take part only with the bodies that block them.
+ *
+ * Broadphase (ps2-shipping N16): queries and contacts test only the bodies FPhysSceneBroadphase finds (the static ones
+ * in an AABB tree, the moving ones in a list sorted on X), and a triangle mesh only the triangles its own tree finds,
+ * with the results a test of every body gives: the same hits in the same order. The bodies keep the order they were
+ * added in (their serial): hits at the same time, the pairs of the step and the side contacts go in that order,
+ * whatever the body indices, which a removal changes (the last body takes the removed one's index). A component's body
+ * is found by its unique id. The queries are for the game thread: they bring the broadphase up to date first.
  */
 class ENGINE_API FPhysScene
 {
 public:
-	explicit FPhysScene(EPhysicsBackend InBackend = DefaultPhysicsBackend());
-
-	[[nodiscard]] EPhysicsBackend GetBackend() const
-	{
-		return Backend;
-	}
-	[[nodiscard]] const IPhysicsBackend* GetBackendIface() const
-	{
-		return BackendIface.Get();
-	}
-
 	void Clear();
 	/**
 	 * Adds a body with no owning component (tests, gameplay probes), with the default collision of its type
@@ -92,7 +92,7 @@ public:
 	 * Adds the body of a primitive component (UE: FBodyInstance::InitBody from CreatePhysicsState): its ComponentID is
 	 * the component's unique id and its OwnerID its actor's, its type follows IsSimulatingPhysics / IsGravityEnabled,
 	 * its object type, responses and query / physics parts the component's collision settings, and its shape the
-	 * component (UpdateBodyFromComponent). A rigid-body backend is rebuilt. Returns its index.
+	 * component (UpdateBodyFromComponent). Returns its index.
 	 */
 	int32 AddComponentBody(UPrimitiveComponent& Component);
 	/**
@@ -102,7 +102,9 @@ public:
 	void UpdateComponentBodyTransform(const UPrimitiveComponent& Component);
 	/** The index of a component's body, or INDEX_NONE. */
 	[[nodiscard]] int32 FindComponentBody(const UPrimitiveComponent& Component) const;
-	/** Removes a component's body (UE: FBodyInstance::TermBody from DestroyPhysicsState). */
+	/**
+	 * Removes a component's body (UE: FBodyInstance::TermBody from DestroyPhysicsState): the last body takes its index.
+	 */
 	void RemoveComponentBody(const UPrimitiveComponent& Component);
 	/** The component that owns a body; null for AddBody bodies and indices past the owned ones. */
 	[[nodiscard]] UPrimitiveComponent* GetBodyOwner(int32 BodyIndex) const;
@@ -112,9 +114,6 @@ public:
 	 * FPhysScene::SyncComponentsToBodies).
 	 */
 	void SyncComponentsToBodies() const;
-
-	/** Rebuilds a rigid-body backend's world from the bodies and their triangle meshes (Jolt; nothing for Arcade). */
-	void RebuildRigidWorld();
 
 	/**
 	 * Adds an inclined plane clipped by a world AABB (for ramps / WalkableFloorZ tests).
@@ -144,19 +143,35 @@ public:
 	{
 		return Bodies;
 	}
+	/**
+	 * The bodies to edit in place (tests, gameplay probes): the next query takes every body's box again. Add bodies
+	 * with AddBody (one appended here counts after every other).
+	 */
 	[[nodiscard]] TArray<FBodyInstance>& GetBodies()
 	{
+		bBodiesEdited = true;
 		return Bodies;
 	}
 
-	/** Parallel to GetBodies(); empty / invalid when the body's collision shape is Box. */
+	/**
+	 * Parallel to GetBodies(); empty / invalid when the body's collision shape is Box. A mesh changed here after a
+	 * query rebuilds its tree (FTriangleMeshCollision::BuildTree).
+	 */
 	[[nodiscard]] const TArray<FTriangleMeshCollision>& GetTriangleMeshes() const
 	{
 		return TriangleMeshes;
 	}
 	[[nodiscard]] TArray<FTriangleMeshCollision>& GetTriangleMeshes()
 	{
+		bBodiesEdited = true;
 		return TriangleMeshes;
+	}
+
+	/** The broadphase, up to date (tests, stats). */
+	[[nodiscard]] const FPhysSceneBroadphase& GetBroadphase() const
+	{
+		UpdateBroadphase();
+		return Broadphase;
 	}
 
 	/**
@@ -211,6 +226,11 @@ public:
 	[[nodiscard]] bool CapsuleTraceMultiByChannel(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End,
 		float Radius, float HalfHeight, ECollisionChannel Channel, const FCollisionQueryParams& Params = {},
 		FDebugDraw* DebugDraw = nullptr,
+		const FCollisionResponseParams& ResponseParam = FCollisionResponseParams::DefaultResponseParam) const;
+	/** The same into an array on the frame's stack (FMemStack, inside an FMemMark): the character's moves. */
+	[[nodiscard]] bool CapsuleTraceMultiByChannel(TArray<FHitResult, TMemStackAllocator<>>& OutHits,
+		const FVector& Start, const FVector& End, float Radius, float HalfHeight, ECollisionChannel Channel,
+		const FCollisionQueryParams& Params = {}, FDebugDraw* DebugDraw = nullptr,
 		const FCollisionResponseParams& ResponseParam = FCollisionResponseParams::DefaultResponseParam) const;
 
 	/**
@@ -277,20 +297,47 @@ public:
 		FDebugDraw& Draw, const FCollisionShape& Capsule, const FVector& Feet, SIZE_T InIgnoreComponentID) const;
 
 private:
+	/** The queries (CollisionQuery.cpp). */
+	friend struct FPhysSceneQuery;
+
+	/** Body indices: most queries' worth without an allocation. */
+	using FBodyIndexArray = TArray<int32, TInlineAllocator<64>>;
+
 	/** The bodies' wireframes (boxes, triangle meshes, slopes), all but InIgnoreComponentID's. */
 	void AppendBodiesCollisionDebug(FDebugDraw& Draw, SIZE_T InIgnoreComponentID) const;
 	/** Fills the hit's body index and owner (the actor and component weak pointers) from a body. */
 	void SetHitBody(FHitResult& Hit, int32 BodyIndex) const;
 	/**
-	 * Applies the responses to the hits a narrow-phase backend returned (it knows no channels): drops the ignored ones,
-	 * marks the overlaps and fills the owners.
+	 * The physical material of a hit on Component (FHitResult::PhysMaterial): its triangle FaceIndex's material, or its
+	 * first material for a simple shape (INDEX_NONE); null for none.
 	 */
-	void FilterBackendHits(TArray<FHitResult>& Hits, ECollisionChannel TraceChannel,
-		const FCollisionQueryParams& Params, const FCollisionResponseParams& ResponseParam) const;
+	[[nodiscard]] static UPhysicalMaterial* GetHitPhysicalMaterial(
+		const UPrimitiveComponent* Component, int32 FaceIndex);
+	/** Adds a body without telling the broadphase (its shape comes next). */
+	int32 AddUnregisteredBody(const FBodyInstanceDesc& Desc);
+	/** UpdateBodyFromComponent without telling the broadphase. */
+	void ApplyComponentShape(int32 BodyIndex, const UPrimitiveComponent& Component);
+	/** Removes the body at BodyIndex; the last body takes its index. */
+	void RemoveBodyAtSwap(int32 BodyIndex);
+	/** Gives the bodies appended to GetBodies() their slots (mesh, owner, serial), and catches up with the edits. */
+	void SyncEditedBodies();
+	/** After an edit through GetBodies() / GetTriangleMeshes(), the broadphase takes every body again. */
+	void CatchUpEdits() const;
+	/** CatchUpEdits, then the static tree built if static bodies were added: before every query. */
+	void UpdateBroadphase() const;
+	/** The body at BodyIndex moved or changed its shape. */
+	void NotifyBodyMoved(int32 BodyIndex);
+	/** The order a body was added in (a body appended to GetBodies() comes after all). */
+	[[nodiscard]] uint32 GetBodySerial(int32 BodyIndex) const
+	{
+		return BodyIndex < BodySerials.Num() ? BodySerials[BodyIndex]
+											 : NextBodySerial + static_cast<uint32>(BodyIndex - BodySerials.Num());
+	}
+	/** Sorts body indices in the order the bodies were added. */
+	void SortBodiesBySerial(FBodyIndexArray& BodyIndices) const;
+	/** The triangles of a TriangleMesh body, or null (a box, a capsule, a mesh without valid triangles). */
+	[[nodiscard]] const FTriangleMeshCollision* GetBodyMesh(int32 BodyIndex) const;
 
-	EPhysicsBackend Backend = EPhysicsBackend::Arcade;
-	/** Mutable: const Line / Sphere / Capsule traces may RigidPrepareStep so Jolt matches the body instances. */
-	mutable TUniquePtr<IPhysicsBackend> BackendIface;
 	TArray<FBodyInstance> Bodies;
 	TArray<FTriangleMeshCollision> TriangleMeshes;
 	TArray<FSlopePlane> SlopePlanes;
@@ -299,4 +346,13 @@ private:
 	 * removes its body when it unregisters, so the pointers never outlive their components.
 	 */
 	TArray<UPrimitiveComponent*> BodyOwners;
+	/** Parallel to Bodies: the order the bodies were added in. */
+	TArray<uint32> BodySerials;
+	uint32 NextBodySerial = 0;
+	/** The body of each component, by its unique id (FindComponentBody). */
+	TMap<uint32, int32> ComponentBodies;
+	/** Follows the bodies; the const queries bring it up to date. */
+	mutable FPhysSceneBroadphase Broadphase;
+	/** The bodies or meshes were edited in place through GetBodies() / GetTriangleMeshes(). */
+	mutable bool bBodiesEdited = false;
 };

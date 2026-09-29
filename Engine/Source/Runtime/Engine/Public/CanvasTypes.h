@@ -2,8 +2,9 @@
 
 #include "CoreMinimal.h"
 #include "Fonts/TextLayout.h"
+#include "Misc/MemStack.h"
 
-/** A vertex of the canvas's triangles: pixel position (top-left origin, z = 0) and a linear RGBA colour. */
+/** A vertex of the canvas's primitives: pixel position (top-left origin, z = 0) and a linear RGBA colour. */
 struct FCanvasVertex
 {
 	float X, Y, Z;
@@ -11,14 +12,35 @@ struct FCanvasVertex
 };
 
 /**
+ * What a run of the canvas's vertices draws (Leon, Docs/PLANS/ps2-shipping.md N15): axis-aligned rectangles, two
+ * vertices each (the top-left and bottom-right corners, one colour: the GS's SPRITE), or triangles, three each.
+ */
+enum class ECanvasPrimitive : uint8
+{
+	Rectangle,
+	Triangle,
+};
+
+/** A run of the canvas's vertices of one primitive type (FCanvas::GetPrimitives). */
+struct FCanvasPrimitiveRun
+{
+	ECanvasPrimitive Type = ECanvasPrimitive::Rectangle;
+	int32 FirstVertex = 0;
+	int32 NumVertices = 0;
+};
+
+/**
  * Screen-space 2D drawing for one frame (UE: FCanvas): tiles (filled rectangles), thick lines and text in Leon's HUD
  * bitmap font (stb_easy_font). The engine makes one per frame, the HUD's widgets (UMG's FPaintContext) and the debug
  * overlay draw into it, and Flush_GameThread hands it to the renderer (IRendererModule::DrawCanvas), which draws its
- * triangles in one alpha-blended pass over the frame.
+ * rectangles as the GS's sprites and its triangles in one alpha-blended pass over the frame (GetPrimitives).
  *
  * Items are batched by depth sort key (PushDepthSortKey): batches with a higher key are drawn first, behind the lower
  * ones, as in UE. Inside a batch the tiles come first, then the lines, then the texts, each in the order they were
  * drawn (so a label is never hidden under a panel drawn after it).
+ *
+ * The items and a copy of each text live on the frame's stack (FMemStack) under the canvas's own mark: drawing a
+ * frame's HUD allocates nothing from the heap (Docs/PLANS/ps2-shipping.md N17).
  */
 class ENGINE_API FCanvas
 {
@@ -63,8 +85,12 @@ public:
 	static void MeasureText(const FString& Text, float Scale, float& OutWidth, float& OutHeight);
 
 	[[nodiscard]] bool IsEmpty() const;
-	/** Every item as triangles, batch by batch (higher depth sort keys first). */
-	void GetTriangles(TArray<FCanvasVertex>& OutVertices) const;
+	/**
+	 * Every item, batch by batch (higher depth sort keys first), as runs of primitives (N15): a tile, a line along an
+	 * axis and every quad of a text's glyphs (stb_easy_font's bars are axis aligned) a rectangle, a slanted line two
+	 * triangles. The runs are in the items' order.
+	 */
+	void GetPrimitives(TArray<FCanvasVertex>& OutVertices, TArray<FCanvasPrimitiveRun>& OutRuns) const;
 
 	/** Draws the canvas now through the renderer (UE: Flush_GameThread); nothing without a Renderer module. */
 	void Flush_GameThread();
@@ -91,7 +117,9 @@ private:
 
 	struct FTextItem
 	{
-		FString Text;
+		/** The text's copy on the frame's stack, null-terminated. */
+		const TCHAR* Text = nullptr;
+		int32 Len = 0;
 		float X = 0.0f;
 		float Y = 0.0f;
 		float Scale = HudFontScale;
@@ -104,16 +132,20 @@ private:
 	struct FBatch
 	{
 		int32 DepthSortKey = 0;
-		TArray<FTileItem> Tiles;
-		TArray<FLineItem> Lines;
-		TArray<FTextItem> Texts;
+		TArray<FTileItem, TMemStackAllocator<>> Tiles;
+		TArray<FLineItem, TMemStackAllocator<>> Lines;
+		TArray<FTextItem, TMemStackAllocator<>> Texts;
 	};
 
 	/** The batch of the current depth sort key. */
 	FBatch& GetBatch();
+	/** Text's characters copied onto the frame's stack. */
+	static const TCHAR* CopyText(const FString& Text);
 
+	/** Gives the canvas's items back when it goes: declared first, so it goes last. */
+	FMemMark MemMark;
 	int32 SizeX = 0;
 	int32 SizeY = 0;
-	TArray<FBatch> Batches;
-	TArray<int32> DepthSortKeyStack;
+	TArray<FBatch, TMemStackAllocator<>> Batches;
+	TArray<int32, TInlineAllocator<8>> DepthSortKeyStack;
 };

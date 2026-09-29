@@ -1,7 +1,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PhysicalMaterials/PhysicalMaterial.h"
+#include "UObject/SoftObjectPath.h"
 #include "ShooterTypes.generated.h"
+
+class UAnimMontage;
+class USoundWave;
 
 /**
  * The two sides of a match (Counter-Strike's counter-terrorists and terrorists; UE ShooterGame numbers its teams).
@@ -16,17 +21,18 @@ enum class EShooterTeam : uint8
 };
 
 /**
- * The inventory slot a weapon takes (Counter-Strike's slots 1, 2 and 4; the knife's slot 3 is deferred): a player
- * carries one weapon per slot. The number keys select them (DefaultInput.ini: PrimaryWeapon, SecondaryWeapon,
- * Grenade).
+ * The inventory slot a weapon takes (Counter-Strike's slots 1 to 4): a player carries one weapon per slot. The number
+ * keys select them (DefaultInput.ini: PrimaryWeapon, SecondaryWeapon, Knife, Grenade).
  */
 UENUM()
 enum class EShooterWeaponSlot : uint8
 {
-	/** Rifles and sniper rifles (CS slot 1). */
+	/** Rifles, sub-machine guns and sniper rifles (CS slot 1). */
 	Primary,
 	/** Pistols (CS slot 2). */
 	Secondary,
+	/** The knife (CS slot 3): every player's, never dropped. */
+	Knife,
 	/** Grenades (CS slot 4). */
 	Grenade,
 };
@@ -41,14 +47,108 @@ enum class EShooterWeaponState : uint8
 	Equipping,
 };
 
-/** Where a shot struck a character (CS: the hit groups; Leon's pawn is a capsule, so only the head is told apart). */
+/**
+ * Where a shot struck a character (Counter-Strike's hit groups, HITGROUP_*): AShooterCharacter::GetHitGroup tells them
+ * apart by height bands and sides of the capsule. The victim scales the damage by the group (the head x4, the stomach
+ * x1.25, the legs x0.75) and armor covers every group but the legs (the head only with a helmet).
+ */
 UENUM()
 enum class EShooterHitGroup : uint8
 {
-	Body,
-	/** The top of the capsule (AShooterCharacter::HeadshotHeight). */
+	/** Damage that struck no point (a blast, the world): armor covers it. */
+	Generic,
+	/** The top HeadHeight cm of the capsule. */
 	Head,
+	Chest,
+	Stomach,
+	LeftArm,
+	RightArm,
+	LeftLeg,
+	RightLeg,
 };
+
+/**
+ * A sound for each of the game's surfaces (UE ShooterGame: AShooterImpactEffect's DefaultSound, ConcreteSound, ...;
+ * ShooterGame.h's SHOOTER_SURFACE_*): each surface's variants, a surface without any takes Default's. The config
+ * writes it as `(Default=("/Game/Sounds/S_Step_Concrete_L.S_Step_Concrete_L"),Dirt=(...),...)`.
+ */
+USTRUCT()
+struct SHOOTERGAME_API FShooterSurfaceSounds
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TArray<FSoftObjectPath> Default;
+
+	UPROPERTY()
+	TArray<FSoftObjectPath> Concrete;
+
+	UPROPERTY()
+	TArray<FSoftObjectPath> Dirt;
+
+	UPROPERTY()
+	TArray<FSoftObjectPath> Metal;
+
+	UPROPERTY()
+	TArray<FSoftObjectPath> Wood;
+
+	UPROPERTY()
+	TArray<FSoftObjectPath> Tile;
+
+	UPROPERTY()
+	TArray<FSoftObjectPath> Glass;
+
+	UPROPERTY()
+	TArray<FSoftObjectPath> Computer;
+
+	UPROPERTY()
+	TArray<FSoftObjectPath> Flesh;
+
+	/** The variants of a surface, as the config names them (empty for a surface the game does not name). */
+	[[nodiscard]] const TArray<FSoftObjectPath>& GetPaths(EPhysicalSurface Surface) const;
+};
+
+/**
+ * The loaded sounds of an FShooterSurfaceSounds (Load), held for the garbage collector: Get picks a surface's variant
+ * (Default's when the surface has none).
+ */
+USTRUCT()
+struct SHOOTERGAME_API FShooterSurfaceSoundSet
+{
+	GENERATED_BODY()
+
+	/** The variants a surface keeps (Counter-Strike has up to four a surface). */
+	static constexpr int32 MaxVariants = 4;
+	/** The surfaces FShooterSurfaceSounds names: Default and SurfaceType1 to SurfaceType8. */
+	static constexpr int32 NumSurfaces = 9;
+
+	/** MaxVariants slots a surface, in surface order; null where the config names nothing or the sound is missing. */
+	UPROPERTY(Transient)
+	TArray<USoundWave*> Sounds;
+
+	/** Loads the sounds Paths names (those whose package does not exist are left out). */
+	void Load(const FShooterSurfaceSounds& Paths);
+	/** Variant (wrapped to the surface's count) of Surface's sounds, else of Default's; null when neither has one. */
+	[[nodiscard]] USoundWave* Get(EPhysicalSurface Surface, int32 Variant) const;
+	/** How many sounds Surface has (none: it plays Default's). */
+	[[nodiscard]] int32 GetNumVariants(EPhysicalSurface Surface) const;
+};
+
+/**
+ * The asset a config path names, or null when the path is empty or its package does not exist (no art yet). An asset in
+ * memory (the game mode's preload, ps2-shipping N24) is found by a lookup without asking the file system, so a spawn
+ * resolves its assets cheaply (N24b: ten pawns and their weapons asked it about 600 times at the round's start).
+ */
+[[nodiscard]] SHOOTERGAME_API UObject* LoadShooterObject(const FSoftObjectPath& Path);
+
+template <class T>
+[[nodiscard]] T* LoadShooterAsset(const FSoftObjectPath& Path)
+{
+	return Cast<T>(LoadShooterObject(Path));
+}
+
+/** The sound of an asset path (LoadShooterAsset). */
+[[nodiscard]] SHOOTERGAME_API USoundWave* LoadShooterSound(const FSoftObjectPath& Path);
 
 /**
  * The phase of a round (Counter-Strike's round flow; AShooterGameMode drives it, AShooterGameState holds it). Warmup
@@ -99,6 +199,122 @@ enum class EShooterRoundEndReason : uint8
 	/** "Round Draw!": both teams died at once (nobody scores). */
 	Draw,
 };
+
+/** What a dead or watching player sees (AShooterPlayerController; CS 1.6's spectator modes). */
+UENUM()
+enum class EShooterSpectatorMode : uint8
+{
+	/** Playing: not spectating. */
+	None,
+	/** From the corpse's eyes, looking at the killer, for a moment after death. */
+	DeathCam,
+	/** Through a living player's eyes. */
+	Player,
+	/** Flying free. */
+	FreeLook,
+};
+
+/**
+ * An animation of the pawn in both views (UE ShooterGame: FWeaponAnim): the montage of the first-person arms and the
+ * one of the body the others see (AShooterCharacter::PlayPawnMontages). A weapon's fire, reload and draw; the bomb's
+ * plant and defuse. Either may be null (no art yet: Docs/PLANS/ps2-shipping.md N27).
+ */
+USTRUCT()
+struct SHOOTERGAME_API FShooterWeaponAnim
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	UAnimMontage* Pawn1P = nullptr;
+
+	UPROPERTY()
+	UAnimMontage* Pawn3P = nullptr;
+};
+
+/**
+ * A team's purchases for a round (ps2-shipping N30e; AShooterGameMode decides it for each team when the round starts,
+ * and the bots buy by it: AShooterAIController::BuyForRound). CS's economy: the first round of each half is the pistol
+ * round, a team that can equip most of its players buys in full, one that cannot saves (eco) unless it has lost too
+ * many rounds in a row, it won the last one or the half ends, when it spends what it has (a force-buy).
+ */
+enum class EShooterBuyPlan : uint8
+{
+	/** The first round of a half: kevlar with the $800 (nothing else fits). */
+	Pistol,
+	/** Save: only a player who can afford the full buy (the team's rifle and kevlar with a helmet) buys. */
+	Eco,
+	/** The best each player can afford: the rifle, else an SMG with kevlar, else a Desert Eagle with kevlar. */
+	Force,
+	/** Most of the team can afford the rifle and armor: everyone buys. */
+	Full,
+};
+
+/** The plan's name for the log ("Pistol", "Eco", "Force", "Full"). */
+[[nodiscard]] SHOOTERGAME_API const TCHAR* GetBuyPlanName(EShooterBuyPlan Plan);
+
+/**
+ * Counter-Strike 1.6's radio messages (ps2-shipping N30e; AShooterGameMode::SendRadioMessage): the three menus of its
+ * radio keys (Z: radio1, X: radio2, C: radio3, in their order) and the two a player sends by itself (a grenade's
+ * throw, the bomb planted by a bot). Only the sender's team hears them.
+ */
+enum class EShooterRadioMessage : uint8
+{
+	None,
+	// radio1 (Z)
+	CoverMe,
+	YouTakeThePoint,
+	HoldThisPosition,
+	RegroupTeam,
+	FollowMe,
+	TakingFire,
+	// radio2 (X)
+	GoGoGo,
+	TeamFallBack,
+	StickTogether,
+	GetInPosition,
+	StormTheFront,
+	ReportIn,
+	// radio3 (C)
+	Affirmative,
+	EnemySpotted,
+	NeedBackup,
+	SectorClear,
+	InPosition,
+	ReportingIn,
+	GetOut,
+	Negative,
+	EnemyDown,
+	// Sent by themselves
+	FireInTheHole,
+	BombPlanted,
+};
+
+/** The most lines a radio menu has (radio3's nine). */
+constexpr int32 MaxRadioMenuMessages = 9;
+
+/** The radio menus (radio1, radio2, radio3). */
+constexpr int32 NumRadioMenus = 3;
+
+/** What a radio message says (CS 1.6's text: "Enemy spotted.", "Fire in the hole!"). */
+[[nodiscard]] SHOOTERGAME_API const TCHAR* GetRadioMessageText(EShooterRadioMessage Message);
+
+/** The messages of a radio menu (1 to 3), in their number keys' order; empty for another number. */
+[[nodiscard]] SHOOTERGAME_API TArrayView<const EShooterRadioMessage> GetRadioMenuMessages(int32 Menu);
+
+/**
+ * The radio menu a message is in (1 to 3), or 0 for the two a player sends by itself ("Fire in the hole!", "Bomb has
+ * been planted."): what the radio's sound tells apart (AShooterPlayerController::GetRadioSound).
+ */
+[[nodiscard]] SHOOTERGAME_API int32 GetRadioMessageMenu(EShooterRadioMessage Message);
+
+/** A radio menu's title ("Radio Commands", "Group Radio Commands", "Radio Responses/Reports"). */
+[[nodiscard]] SHOOTERGAME_API const TCHAR* GetRadioMenuTitle(int32 Menu);
+
+/**
+ * A message that asks the team for something (radio1's and radio2's, and "Need backup."): a bot of the team answers
+ * it ("Affirmative.", or "Reporting in." to "Report in, team.").
+ */
+[[nodiscard]] SHOOTERGAME_API bool IsRadioRequest(EShooterRadioMessage Message);
 
 /** The other team (CT for T, T for CT, None for None). */
 [[nodiscard]] SHOOTERGAME_API EShooterTeam GetOpposingTeam(EShooterTeam Team);

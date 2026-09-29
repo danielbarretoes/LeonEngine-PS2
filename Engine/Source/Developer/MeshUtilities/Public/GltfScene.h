@@ -28,7 +28,7 @@ struct MESHUTILITIES_API FGltfSceneLight
 struct MESHUTILITIES_API FGltfSceneMesh
 {
 	FString Name;
-	/** One section and material slot per primitive (as LoadStaticMeshFromGltf), with tangents. */
+	/** One section and material slot per primitive (as LoadStaticMeshFromGltf). */
 	FMeshData Data;
 };
 

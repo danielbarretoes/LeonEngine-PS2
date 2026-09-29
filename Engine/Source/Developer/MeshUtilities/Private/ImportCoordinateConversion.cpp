@@ -1,7 +1,6 @@
 #include "ImportCoordinateConversion.h"
 
 #include "MeshData.h"
-#include "SkeletalAnimation.h"
 
 namespace
 {
@@ -15,23 +14,11 @@ FImportCoordinateConversion::FImportCoordinateConversion(EImportAxes InSourceAxe
 	: SourceAxes(InSourceAxes)
 	, UnitsToCm(InUnitsToCm)
 {
-	if (SourceAxes == EImportAxes::RightHandedYUp)
-	{
-		// (X, Z, Y): Y and Z swap.
-		SourceAxisOf[0] = 0;
-		SourceAxisOf[1] = 2;
-		SourceAxisOf[2] = 1;
-		bNegateAxis[0] = bNegateAxis[1] = bNegateAxis[2] = false;
-	}
-	else
-	{
-		// (X, -Y, Z): Y flips.
-		SourceAxisOf[0] = 0;
-		SourceAxisOf[1] = 1;
-		SourceAxisOf[2] = 2;
-		bNegateAxis[0] = bNegateAxis[2] = false;
-		bNegateAxis[1] = true;
-	}
+	// RightHandedYUp, (X, Z, Y): Y and Z swap.
+	SourceAxisOf[0] = 0;
+	SourceAxisOf[1] = 2;
+	SourceAxisOf[2] = 1;
+	bNegateAxis[0] = bNegateAxis[1] = bNegateAxis[2] = false;
 
 	// The determinant: the sign of the axis permutation times one -1 per negated axis.
 	bool bOddPermutation = false;
@@ -53,7 +40,7 @@ float FImportCoordinateConversion::SignedAxis(const FVector& Source, int32 World
 
 FVector FImportCoordinateConversion::GetSourceUp() const
 {
-	return SourceAxes == EImportAxes::RightHandedYUp ? FVector(0.0f, 1.0f, 0.0f) : FVector(0.0f, 0.0f, 1.0f);
+	return FVector(0.0f, 1.0f, 0.0f);
 }
 
 FVector FImportCoordinateConversion::ConvertPosition(const FVector& Source) const
@@ -64,12 +51,6 @@ FVector FImportCoordinateConversion::ConvertPosition(const FVector& Source) cons
 FVector FImportCoordinateConversion::ConvertDirection(const FVector& Source) const
 {
 	return FVector(SignedAxis(Source, 0), SignedAxis(Source, 1), SignedAxis(Source, 2));
-}
-
-FVector4 FImportCoordinateConversion::ConvertTangent(const FVector4& Source) const
-{
-	const FVector Direction = ConvertDirection(FVector(Source.X, Source.Y, Source.Z));
-	return FVector4(Direction.X, Direction.Y, Direction.Z, bMirror ? -Source.W : Source.W);
 }
 
 FVector FImportCoordinateConversion::ConvertScale(const FVector& Source) const
@@ -88,6 +69,12 @@ FQuat FImportCoordinateConversion::ConvertRotation(const FQuat& Source) const
 		Axis[I] = (bNegateAxis[I] != bMirror) ? -Value : Value;
 	}
 	return FQuat(Axis[0], Axis[1], Axis[2], Source.W);
+}
+
+FTransform FImportCoordinateConversion::ConvertTransform(const FTransform& Source) const
+{
+	return FTransform(ConvertRotation(Source.GetRotation()), ConvertPosition(Source.GetTranslation()),
+		ConvertScale(Source.GetScale3D()));
 }
 
 FMatrix FImportCoordinateConversion::ConvertMatrix(const FMatrix& Source) const
@@ -129,37 +116,5 @@ void FImportCoordinateConversion::ConvertMeshData(FMeshData& Data) const
 	{
 		Vertex.Position = ConvertPosition(Vertex.Position);
 		Vertex.Normal = ConvertDirection(Vertex.Normal);
-		Vertex.Tangent = ConvertTangent(Vertex.Tangent);
-	}
-}
-
-void FImportCoordinateConversion::ConvertSkeletalMeshData(FSkeletalMeshData& Data) const
-{
-	for (FSkeletalVertex& Vertex : Data.Vertices)
-	{
-		Vertex.Position = ConvertPosition(Vertex.Position);
-		Vertex.Normal = ConvertDirection(Vertex.Normal);
-		Vertex.Tangent = ConvertTangent(Vertex.Tangent);
-	}
-	// A flipped axis swaps its minimum and maximum.
-	const FVector Min = ConvertPosition(Data.LocalMin);
-	const FVector Max = ConvertPosition(Data.LocalMax);
-	Data.LocalMin = Min.ComponentMin(Max);
-	Data.LocalMax = Min.ComponentMax(Max);
-	for (FMatrix& InverseBind : Data.RefSkeleton.InverseBindPose)
-	{
-		InverseBind = ConvertMatrix(InverseBind);
-	}
-	ConvertAnimSequence(Data.EmbeddedAnim);
-}
-
-void FImportCoordinateConversion::ConvertAnimSequence(FRawAnimSequence& Sequence) const
-{
-	for (FRawAnimSequenceTrack& Track : Sequence.Tracks)
-	{
-		for (FMatrix& BoneWorld : Track.Keys)
-		{
-			BoneWorld = ConvertMatrix(BoneWorld);
-		}
 	}
 }

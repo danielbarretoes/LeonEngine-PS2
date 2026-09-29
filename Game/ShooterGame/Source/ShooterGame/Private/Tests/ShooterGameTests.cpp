@@ -230,14 +230,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameHUDDrawsCrosshairTest, "ShooterGame
 
 bool FShooterGameHUDDrawsCrosshairTest::RunTest(const FString& Parameters)
 {
-	// The HUD draws the crosshair's four arms into the frame's canvas (two triangles each).
+	// The HUD draws the crosshair's four arms into the frame's canvas (a rectangle each: the GS's sprites, N15).
 	FScopedTestWorld TestWorld;
 	AShooterHUD* HUD = TestWorld->SpawnActor<AShooterHUD>();
 	FCanvas Canvas(1280, 720);
 	HUD->Paint(Canvas);
 	TArray<FCanvasVertex> Vertices;
-	Canvas.GetTriangles(Vertices);
-	TestEqual("Four arms", Vertices.Num(), 4 * 6);
+	TArray<FCanvasPrimitiveRun> Runs;
+	Canvas.GetPrimitives(Vertices, Runs);
+	TestEqual("Four arms", Vertices.Num(), 4 * 2);
+	TestTrue("Rectangles", Runs.Num() == 1 && Runs[0].Type == ECanvasPrimitive::Rectangle);
 	float MinX = 1.0e9f;
 	float MaxX = -1.0e9f;
 	for (const FCanvasVertex& Vertex : Vertices)
@@ -260,7 +262,16 @@ bool FShooterGameConfigTest::RunTest(const FString& Parameters)
 	const UInputSettings* Settings = GetDefault<UInputSettings>();
 	TArray<FInputActionKeyMapping> Crouch;
 	Settings->GetActionMappingByName(TEXT("Crouch"), Crouch);
-	TestEqual("Crouch keys (Left Ctrl, C, Circle)", Crouch.Num(), 3);
+	TestEqual("Crouch keys (Left Ctrl, Circle; C is CS's radio3)", Crouch.Num(), 2);
+	for (const TCHAR* Radio : {TEXT("Radio1"), TEXT("Radio2"), TEXT("Radio3")})
+	{
+		TArray<FInputActionKeyMapping> RadioKeys;
+		Settings->GetActionMappingByName(Radio, RadioKeys);
+		TestEqual(*FString::Printf(TEXT("%s: one key"), Radio), RadioKeys.Num(), 1);
+	}
+	TArray<FInputActionKeyMapping> Radio3;
+	Settings->GetActionMappingByName(TEXT("Radio3"), Radio3);
+	TestTrue("Radio3: C", Radio3.Num() == 1 && Radio3[0].Key == EKeys::C);
 	TArray<FInputActionKeyMapping> Walk;
 	Settings->GetActionMappingByName(TEXT("Walk"), Walk);
 	TestTrue("Walk: Left Shift, L3",

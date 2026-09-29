@@ -3,9 +3,7 @@
 #include "Math/RandomStream.h"
 #include "MeshData.h"
 #include "Misc/AutomationTest.h"
-#include "Misc/Paths.h"
-#include "ObjImportPrivate.h"
-#include "SkeletalAnimation.h"
+#include "Tests/GltfTestCube.h"
 #include "Tests/LegacyCoordinateConversion.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -39,11 +37,10 @@ namespace
 			FTranslationMatrix(RandomVector(Random, 5.0f));
 	}
 
-	/** The Cube fixture as the OBJ stores it (right-handed, Y up, metres). */
+	/** The Cube fixture as the glTF stores it (right-handed, Y up, metres). */
 	FMeshData LoadCubeFixtureSourceSpace()
 	{
-		return LoadObjSourceSpace(
-			FPaths::Combine(FPaths::EngineSourceDir(), "Developer/MeshUtilities/Private/Tests/Fixtures/Cube.obj"));
+		return MakeGltfTestCubeSourceSpace();
 	}
 
 	/** cross(E1, E2) of triangle Triangle. */
@@ -87,24 +84,19 @@ bool FImportCoordinateConversionMatchesLegacyTest::RunTest(const FString& Parame
 	int32 Mismatches = 0;
 	for (const FVector& V : Vectors)
 	{
-		const float W = Random.FRandRange(-1.0f, 1.0f) < 0.0f ? -1.0f : 1.0f;
-		const FVector4 Tangent(V.X, V.Y, V.Z, W);
 		const FQuat Rotation(V.X, V.Y, V.Z, Random.FRandRange(-1.0f, 1.0f));
 		Mismatches += SameBits(Conversion.ConvertPosition(V), FLegacyCoordinateConversion::ConvertPosition(V)) ? 0 : 1;
 		Mismatches +=
 			SameBits(Conversion.ConvertDirection(V), FLegacyCoordinateConversion::ConvertDirection(V)) ? 0 : 1;
-		Mismatches +=
-			SameBits(Conversion.ConvertTangent(Tangent), FLegacyCoordinateConversion::ConvertTangent(Tangent)) ? 0 : 1;
 		Mismatches += SameBits(Conversion.ConvertScale(V), FLegacyCoordinateConversion::ConvertScale(V)) ? 0 : 1;
 		Mismatches +=
 			SameBits(Conversion.ConvertRotation(Rotation), FLegacyCoordinateConversion::ConvertRotation(Rotation)) ? 0
 																												   : 1;
 	}
-	TestEqual("Position, direction, tangent, scale and rotation bits", Mismatches, 0);
+	TestEqual("Position, direction, scale and rotation bits", Mismatches, 0);
 
 	// Mesh data: every vertex, bit for bit; the index order is kept.
 	FMeshData Import = LoadCubeFixtureSourceSpace();
-	FLegacyCoordinateConversion::ComputeLegacyTangents(Import);
 	for (FVertex& Vertex : Import.Vertices)
 	{
 		Vertex.TexCoord = FVector2D(Random.FRandRange(0.0f, 1.0f), Random.FRandRange(0.0f, 1.0f));
@@ -135,71 +127,6 @@ bool FImportCoordinateConversionMatchesLegacyTest::RunTest(const FString& Parame
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FImportCoordinateConversionRightHandedZUpTest,
-	"System.MeshUtilities.ImportCoordinateConversion.RightHandedZUp",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
-
-bool FImportCoordinateConversionRightHandedZUpTest::RunTest(const FString& Parameters)
-{
-	// UE's FBX mapping (FFbxDataConverter): Y flips, the unit scales. Up stays up, front (-Y) becomes +Y, right stays
-	// +X.
-	const FImportCoordinateConversion Conversion(EImportAxes::RightHandedZUp, 2.54f);
-	TestTrue("Position",
-		Conversion.ConvertPosition(FVector(1.0f, 2.0f, 3.0f)).Equals(FVector(2.54f, -5.08f, 7.62f), 1.0e-5f));
-	TestTrue("Up", Conversion.ConvertDirection(FVector(0.0f, 0.0f, 1.0f)) == FVector(0.0f, 0.0f, 1.0f));
-	TestTrue("Front", Conversion.ConvertDirection(FVector(0.0f, -1.0f, 0.0f)) == FVector(0.0f, 1.0f, 0.0f));
-	TestTrue("Right", Conversion.ConvertDirection(FVector(1.0f, 0.0f, 0.0f)) == FVector(1.0f, 0.0f, 0.0f));
-	TestTrue("Source up", Conversion.GetSourceUp() == FVector(0.0f, 0.0f, 1.0f));
-	TestTrue("Scale", Conversion.ConvertScale(FVector(1.0f, 2.0f, 3.0f)) == FVector(1.0f, 2.0f, 3.0f));
-	const FVector4 Tangent = Conversion.ConvertTangent(FVector4(0.0f, 1.0f, 0.0f, 1.0f));
-	TestTrue("Tangent", FVector(Tangent) == FVector(0.0f, -1.0f, 0.0f) && Tangent.W == -1.0f);
-	// FFbxDataConverter::ConvertRotToQuat gives (X, -Y, Z, -W): the same rotation as (-X, Y, -Z, W).
-	const FQuat Rotation = Conversion.ConvertRotation(FQuat(0.1f, 0.2f, 0.3f, 0.9f));
-	TestTrue("Rotation", Rotation.X == -0.1f && Rotation.Y == 0.2f && Rotation.Z == -0.3f && Rotation.W == 0.9f);
-
-	// A right-handed Y-up point (x, y, z) is (x, -z, y) in this frame: both conversions put it in the same place.
-	const FImportCoordinateConversion YUp(EImportAxes::RightHandedYUp, 2.54f);
-	FRandomStream Random(0x2a);
-	for (int32 Index = 0; Index < 50; ++Index)
-	{
-		const FVector P = RandomVector(Random, 100.0f);
-		if (!SameBits(Conversion.ConvertPosition(FVector(P.X, -P.Z, P.Y)), YUp.ConvertPosition(P)))
-		{
-			AddError(FString::Printf("Point %d lands elsewhere through the Z-up frame", Index));
-			break;
-		}
-	}
-
-	// Rotations, tangent frames and matrices do to converted data what they did to the source.
-	const FMatrix Basis = Conversion.GetBasisMatrix();
-	for (int32 Index = 0; Index < 20; ++Index)
-	{
-		const FQuat Q = RandomRotation(Random);
-		const FVector V = RandomVector(Random, 1.0f);
-		TestTrue(*FString::Printf("Rotation %d", Index),
-			Conversion.ConvertRotation(Q)
-				.RotateVector(Conversion.ConvertDirection(V))
-				.Equals(Conversion.ConvertDirection(Q.RotateVector(V)), 1.0e-5f));
-
-		const FVector N = Random.GetUnitVector();
-		const FVector T = (N ^ Random.GetUnitVector()).GetSafeNormal();
-		const float W = (Index % 2 == 0) ? 1.0f : -1.0f;
-		const FVector4 Converted = Conversion.ConvertTangent(FVector4(T.X, T.Y, T.Z, W));
-		const FVector Bitangent = (Conversion.ConvertDirection(N) ^ FVector(Converted)) * Converted.W;
-		TestTrue(*FString::Printf("Bitangent %d", Index),
-			Bitangent.Equals(Conversion.ConvertDirection((N ^ T) * W), 1.0e-5f));
-
-		const FMatrix M = RandomAffine(Random);
-		const FVector P = RandomVector(Random, 3.0f);
-		TestTrue(*FString::Printf("Matrix %d on points", Index),
-			FVector(Conversion.ConvertMatrix(M).TransformPosition(Conversion.ConvertPosition(P)))
-				.Equals(Conversion.ConvertPosition(FVector(M.TransformPosition(P))), 1.0e-3f));
-		TestTrue(*FString::Printf("Matrix %d is B^-1 M B", Index),
-			Conversion.ConvertMatrix(M).Equals(Basis.Inverse() * M * Basis, 1.0e-4f));
-	}
-	return true;
-}
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FImportCoordinateConversionWindingTest,
 	"System.MeshUtilities.ImportCoordinateConversion.WindingAndNormals",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
@@ -208,7 +135,7 @@ bool FImportCoordinateConversionWindingTest::RunTest(const FString& Parameters)
 {
 	// The rule: the index order is kept, and since det B = -1, cross(E1, E2) . N changes sign. The cube's triangles
 	// are counter-clockwise around their outward normals in the source (cross along N); converted, cross(E1, E2) is
-	// -B(cross) * UnitsToCm^2, against the converted normal, for every triangle and for both bases.
+	// -B(cross) * UnitsToCm^2, against the converted normal, for every triangle and every unit.
 	const FMeshData Source = LoadCubeFixtureSourceSpace();
 	if (!TestEqual("Cube triangles", Source.Indices.Num(), 36))
 	{
@@ -225,10 +152,10 @@ bool FImportCoordinateConversionWindingTest::RunTest(const FString& Parameters)
 	}
 
 	const FImportCoordinateConversion Conversions[] = {FImportCoordinateConversion(EImportAxes::RightHandedYUp, 100.0f),
-		FImportCoordinateConversion(EImportAxes::RightHandedZUp, 1.0f)};
+		FImportCoordinateConversion(EImportAxes::RightHandedYUp, 1.0f)};
 	for (const FImportCoordinateConversion& Conversion : Conversions)
 	{
-		const TCHAR* Name = Conversion.GetSourceAxes() == EImportAxes::RightHandedYUp ? "Y up" : "Z up";
+		const TCHAR* Name = Conversion.GetUnitsToCm() > 1.0f ? "metres" : "centimetres";
 		FMeshData Converted = Source;
 		Conversion.ConvertMeshData(Converted);
 		TestTrue(*FString::Printf("%s: indices kept", Name), Converted.Indices == Source.Indices);
@@ -273,94 +200,33 @@ bool FImportCoordinateConversionWindingTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FImportCoordinateConversionSkeletalTest,
-	"System.MeshUtilities.ImportCoordinateConversion.SkeletalConjugation",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FImportCoordinateConversionTransformTest,
+	"System.MeshUtilities.ImportCoordinateConversion.TransformsAsMatrices",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-bool FImportCoordinateConversionSkeletalTest::RunTest(const FString& Parameters)
+bool FImportCoordinateConversionTransformTest::RunTest(const FString& Parameters)
 {
-	// Skinned in the engine world (vertex * InverseBind * BoneWorld), a converted mesh lands on the converted source
-	// skinning, for the bind pose and every frame of the clip; the bounds are the converted vertices' bounds.
+	// A bone's local transform converted component by component is its matrix converted (B^-1 M B), so a chain of
+	// converted transforms is the converted chain: a skinned vertex lands where the source's would, converted.
+	const FImportCoordinateConversion Conversion(EImportAxes::RightHandedYUp, FImportCoordinateConversion::CmPerMetre);
 	FRandomStream Random(99);
-	const FImportCoordinateConversion Conversions[] = {FImportCoordinateConversion(EImportAxes::RightHandedYUp, 100.0f),
-		FImportCoordinateConversion(EImportAxes::RightHandedZUp, 2.54f)};
-	for (const FImportCoordinateConversion& Conversion : Conversions)
+	for (int32 Index = 0; Index < 20; ++Index)
 	{
-		const TCHAR* Name = Conversion.GetSourceAxes() == EImportAxes::RightHandedYUp ? "Y up" : "Z up";
-		constexpr int32 Bones = 3;
-		constexpr int32 Frames = 4;
-		FSkeletalMeshData Source;
-		Source.RefSkeleton.BoneNames = {FName("Root"), FName("Spine"), FName("Head")};
-		Source.RefSkeleton.ParentIndices = {INDEX_NONE, 0, 1};
-		for (int32 Bone = 0; Bone < Bones; ++Bone)
-		{
-			Source.RefSkeleton.InverseBindPose.Add(RandomAffine(Random));
-		}
-		Source.EmbeddedAnim.Tracks.SetNum(Bones);
-		for (int32 Frame = 0; Frame < Frames; ++Frame)
-		{
-			for (int32 Bone = 0; Bone < Bones; ++Bone)
-			{
-				Source.EmbeddedAnim.Tracks[Bone].Keys.Add(RandomAffine(Random));
-			}
-		}
-		Source.LocalMin = FVector(TNumericLimits<float>::Max());
-		Source.LocalMax = FVector(TNumericLimits<float>::Lowest());
-		for (int32 Index = 0; Index < 8; ++Index)
-		{
-			FSkeletalVertex Vertex;
-			Vertex.Position = RandomVector(Random, 2.0f);
-			Vertex.Normal = Random.GetUnitVector();
-			Vertex.BoneIndices = FIntVector4(Index % Bones);
-			Vertex.BoneWeights = FVector4(1.0f, 0.0f, 0.0f, 0.0f);
-			Source.LocalMin = Source.LocalMin.ComponentMin(Vertex.Position);
-			Source.LocalMax = Source.LocalMax.ComponentMax(Vertex.Position);
-			Source.Vertices.Add(Vertex);
-			Source.Indices.Add(static_cast<uint32>(Index));
-		}
-
-		FSkeletalMeshData Converted = Source;
-		Conversion.ConvertSkeletalMeshData(Converted);
-
-		FVector Min(TNumericLimits<float>::Max());
-		FVector Max(TNumericLimits<float>::Lowest());
-		for (const FSkeletalVertex& Vertex : Converted.Vertices)
-		{
-			Min = Min.ComponentMin(Vertex.Position);
-			Max = Max.ComponentMax(Vertex.Position);
-		}
-		TestTrue(*FString::Printf("%s: bounds", Name),
-			Converted.LocalMin.Equals(Min, 1.0e-3f) && Converted.LocalMax.Equals(Max, 1.0e-3f));
-
-		const float Tolerance = 1.0e-4f * Conversion.GetUnitsToCm() * 100.0f;
-		for (int32 Index = 0; Index < Source.Vertices.Num(); ++Index)
-		{
-			const int32 Bone = Source.Vertices[Index].BoneIndices.X;
-			const FVector& SourcePosition = Source.Vertices[Index].Position;
-			const FVector& ConvertedPosition = Converted.Vertices[Index].Position;
-			for (int32 Frame = 0; Frame < Frames; ++Frame)
-			{
-				const FMatrix SourceSkin =
-					Source.RefSkeleton.InverseBindPose[Bone] * Source.EmbeddedAnim.Tracks[Bone].Keys[Frame];
-				const FMatrix ConvertedSkin =
-					Converted.RefSkeleton.InverseBindPose[Bone] * Converted.EmbeddedAnim.Tracks[Bone].Keys[Frame];
-				const FVector Expected =
-					Conversion.ConvertPosition(FVector(SourceSkin.TransformPosition(SourcePosition)));
-				const FVector Actual(ConvertedSkin.TransformPosition(ConvertedPosition));
-				if (!Actual.Equals(Expected, Tolerance))
-				{
-					AddError(FString::Printf("%s: vertex %d, frame %d skins elsewhere", Name, Index, Frame));
-					return false;
-				}
-			}
-		}
-
-		// A clip imported on its own converts the same way.
-		FRawAnimSequence Clip = Source.EmbeddedAnim;
-		Conversion.ConvertAnimSequence(Clip);
-		TestTrue(*FString::Printf("%s: clip", Name),
-			Clip.Tracks[Bones - 1].Keys[Frames - 1] == Converted.EmbeddedAnim.Tracks[Bones - 1].Keys[Frames - 1]);
+		const FTransform Parent(RandomRotation(Random), RandomVector(Random, 2.0f), FVector(1.0f));
+		const FTransform Child(RandomRotation(Random), RandomVector(Random, 2.0f), FVector(1.0f));
+		const FMatrix Converted = Conversion.ConvertTransform(Child).ToMatrixWithScale();
+		TestTrue(*FString::Printf("Transform %d as its matrix", Index),
+			Converted.Equals(Conversion.ConvertMatrix(Child.ToMatrixWithScale()), 1.0e-3f));
+		const FVector Point = RandomVector(Random, 1.0f);
+		const FVector Expected = Conversion.ConvertPosition((Child * Parent).TransformPosition(Point));
+		const FVector Actual = (Conversion.ConvertTransform(Child) * Conversion.ConvertTransform(Parent))
+								   .TransformPosition(Conversion.ConvertPosition(Point));
+		TestTrue(*FString::Printf("Chain %d", Index), Actual.Equals(Expected, 1.0e-2f));
 	}
+	const FTransform Scaled(FQuat::Identity, FVector(1.0f, 2.0f, 3.0f), FVector(1.0f, 2.0f, 3.0f));
+	const FTransform ScaledConverted = Conversion.ConvertTransform(Scaled);
+	TestTrue("Translation in cm, (x, z, y)", ScaledConverted.GetTranslation().Equals(FVector(100.0f, 300.0f, 200.0f)));
+	TestTrue("Scale reordered", ScaledConverted.GetScale3D().Equals(FVector(1.0f, 3.0f, 2.0f)));
 	return true;
 }
 

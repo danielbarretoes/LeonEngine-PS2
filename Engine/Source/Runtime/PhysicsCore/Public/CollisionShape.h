@@ -179,3 +179,24 @@ void ClampPositionXY(FVector& Pos, float Bounds);
  */
 [[nodiscard]] bool SeparateAabb(FVector& A, const FVector& AHalfExtents, FVector& B, const FVector& BHalfExtents,
 	float MoveA, float MoveB, FVector* OutNormal = nullptr);
+
+/**
+ * Segment [Start, End] vs the box [Mn, Mx]: OutT in [0, 1] where it enters and the entered face's normal; a segment
+ * that starts inside hits at 0 facing up. On equal entry times the earlier of X, Z, Y gives the normal.
+ */
+[[nodiscard]] bool SegmentAabb(
+	const FVector& Start, const FVector& End, const FVector& Mn, const FVector& Mx, float& OutT, FVector& OutNormal);
+
+/**
+ * Segment vs an upright capsule around Center: a cylinder of Radius from Center.Z - CylinderHalfHeight to
+ * Center.Z + CylinderHalfHeight, closed by two hemispheres. A swept sphere or upright capsule against it is the
+ * segment of its centre against the capsule grown by the swept radius and cylinder (the Minkowski sum of two
+ * upright capsules is one). The normal points from the capsule's axis to the entry point; a segment that starts
+ * inside hits at 0 with the normal from the axis toward the start.
+ */
+[[nodiscard]] bool SegmentUprightCapsule(const FVector& Start, const FVector& End, const FVector& Center, float Radius,
+	float CylinderHalfHeight, float& OutT, FVector& OutNormal);
+
+/** Segment vs the horizontal plane z = FloorZ; the normal faces the segment's start. */
+[[nodiscard]] bool SegmentFloorZ(
+	const FVector& Start, const FVector& End, float FloorZ, float& OutT, FVector& OutNormal);

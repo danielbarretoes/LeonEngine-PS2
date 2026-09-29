@@ -1,8 +1,12 @@
 #include "DynamicRHI.h"
-#include "HAL/PlatformTime.h"
+#include "GSDebugDraw.h"
+#include "GSFieldPacer.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "PS2GSContext.h"
 #include "PS2RHI.h"
-#include "PS2SceneState.h"
+#include "PS2VU1.h"
+#include "PS2VerticalBlank.h"
 
 #include <dma.h>
 #include <graph.h>
@@ -17,19 +21,47 @@ namespace
 		return int(Format);
 	}
 
+	/**
+	 * The console's television mode: PAL when ROMVER's region letter is E (libgraph's graph_get_region), NTSC otherwise
+	 * (J, A, C, H); -PAL or -NTSC on the command line chooses one.
+	 */
+	[[nodiscard]] EGSVideoMode GetVideoMode()
+	{
+		const TCHAR* CommandLine = FCommandLine::Get();
+		if (FParse::Param(CommandLine, TEXT("PAL")))
+		{
+			return EGSVideoMode::Pal;
+		}
+		if (FParse::Param(CommandLine, TEXT("NTSC")))
+		{
+			return EGSVideoMode::Ntsc;
+		}
+		return graph_get_region() == GRAPH_MODE_PAL ? EGSVideoMode::Pal : EGSVideoMode::Ntsc;
+	}
+
+	/**
+	 * The CRTC's display area: Width x Height pixels, centred vertically in the mode's visible lines (a 448-line frame
+	 * has 32 black lines above and below on PAL).
+	 */
+	void SetScreen(const Leon::PS2::FPS2GSContext& Gs, int32 Width, int32 Height)
+	{
+		const int32 Top = FMath::Max(0, (FGSFieldPacer::GetVisibleLines(Gs.VideoMode) - Height) / 2);
+		graph_set_screen(0, Top, Width, Height);
+	}
+
 	/** A full-screen sprite of Color that writes Z 0 (the farthest), whatever the depth test. */
 	void AppendClear(Leon::PS2::FPS2GSContext& Gs, const FGSRGBAQ& Color)
 	{
-		const float HalfWidth = float(Gs.Width) * 0.5f;
-		const float HalfHeight = float(Gs.Height) * 0.5f;
-		Leon::PS2::AppendDepthTest(Gs, false);
+		const FGSDrawEnvironment Environment = Leon::PS2::GetDrawEnvironment(Gs);
+		FGSCommandList& List = Gs.GetFrameList();
+		List.SetTest(0, FGSDrawEnvironment::DepthTest(false));
 		FGSPrim Sprite;
 		Sprite.Type = EGSPrimitive::Sprite;
-		Gs.FrameList.SetPrim(Sprite);
-		Gs.FrameList.SetRGBAQ(Color);
-		Gs.FrameList.AddVertex(Leon::PS2::ScreenVertex(-HalfWidth, -HalfHeight));
-		Gs.FrameList.AddVertex(Leon::PS2::ScreenVertex(HalfWidth, HalfHeight));
-		Leon::PS2::AppendDepthTest(Gs, true);
+		List.SetPrim(Sprite);
+		List.SetRGBAQ(Color);
+		List.AddVertex(Environment.PixelVertex(0.0f, 0.0f));
+		List.AddVertex(Environment.PixelVertex(float(Gs.Width), float(Gs.Height)));
+		List.SetTest(0, FGSDrawEnvironment::DepthTest(true));
 	}
 
 	/** PS2 Graphics Synthesizer backend (UE: F<Platform>DynamicRHI). */
@@ -44,9 +76,10 @@ namespace
 
 		virtual void SetViewport(int32, int32, int32 Width, int32 Height) override
 		{
-			if (Leon::PS2::GetGSContext().bReady)
+			const Leon::PS2::FPS2GSContext& Gs = Leon::PS2::GetGSContext();
+			if (Gs.bReady)
 			{
-				graph_set_screen(0, 0, Width > 0 ? Width : 640, Height > 0 ? Height : 448);
+				SetScreen(Gs, Width > 0 ? Width : 640, Height > 0 ? Height : 448);
 			}
 		}
 
@@ -79,14 +112,29 @@ bool FPS2RHI::InitDisplay(int Width, int Height, EGSPixelFormat ColorFormat, uin
 	check(ColorFormat == EGSPixelFormat::PSMCT32 || ColorFormat == EGSPixelFormat::PSMCT16S);
 	Gs.Width = Width > 0 ? Width : 640;
 	Gs.Height = Height > 0 ? Height : 448;
-	// From an empty VRAM each time: a second call (the boot error screen after a failed one) starts over.
+	// From an empty VRAM each time: a second call (the boot error screen after a failed one, or after a fatal error in
+	// the middle of a frame) waits for the frame in flight, then starts over.
+	Leon::PS2::DropPendingFrame(Gs);
+	Leon::PS2::BeginNextFrame(Gs);
 	graph_vram_clear();
 	Gs.VramEndWords = 0;
 	Gs.bReady = false;
-	Gs.FrameList.Reset();
+	for (FGSCommandList& List : Gs.FrameLists)
+	{
+		List.Reset();
+	}
+	Gs.FrameIndex = 0;
 
-	dma_channel_initialize(DMA_CHANNEL_GIF, nullptr, 0);
-	dma_channel_fast_waits(DMA_CHANNEL_GIF);
+	// The GIF from its reset (GIF_CTRL.RST): what ran before the ELF may leave a PATH3 packet open in it, which would
+	// hold the GIF (a path keeps it until its packet ends) and stall every DIRECT of the frames.
+	*reinterpret_cast<volatile uint32*>(UPTRINT(0x10003000)) = 1;
+	// The frame goes to VIF1 (its GS writes by PATH2, its vertex batches through VU1 and PATH1); the microprograms are
+	// in VU1's micro memory before the first frame.
+	dma_channel_initialize(DMA_CHANNEL_VIF1, nullptr, 0);
+	if (FPS2VU1::IsEnabled())
+	{
+		FPS2VU1::UploadPrograms();
+	}
 
 	// The caller's region first (GSConformance: its scenes' local memory), then two frame buffers and the Z buffer.
 	if (ReservedVramBytes > 0 &&
@@ -117,20 +165,53 @@ bool FPS2RHI::InitDisplay(int Width, int Height, EGSPixelFormat ColorFormat, uin
 	Gs.ZBuf.ZBP = uint16(ZAddress / 2048);
 	Gs.ZBuf.PSM = EGSPixelFormat::PSMZ24;
 
-	// The CRTC shows Frames[1] while the GS draws Frames[0].
-	Gs.BackBuffer = 0;
-	if (graph_initialize(Gs.Frames[1].FBP * 2048, Gs.Width, Gs.Height, GraphPsm(ColorFormat), 0, 0) < 0)
+	// The fields are counted from the vertical blank interrupt (once: a second call keeps the handler).
+	if (!Leon::PS2::FPS2VerticalBlank::Install())
 	{
-		UE_LOG(LogRHI, Error, "FPS2RHI::InitDisplay: graph_initialize failed");
+		UE_LOG(LogRHI, Error, "FPS2RHI::InitDisplay: cannot install the vertical blank handler");
 		return false;
 	}
+
+	// The CRTC in the console's mode, interlaced with the flicker filter (libgraph's graph_initialize, with the
+	// region's frame centred), showing Frames[1] while the GS draws Frames[0].
+	Gs.VideoMode = GetVideoMode();
+	graph_set_mode(GRAPH_MODE_INTERLACED, Gs.VideoMode == EGSVideoMode::Pal ? GRAPH_MODE_PAL : GRAPH_MODE_NTSC,
+		GRAPH_MODE_FIELD, GRAPH_ENABLE);
+	SetScreen(Gs, Gs.Width, Gs.Height);
+	graph_set_bgcolor(0, 0, 0);
+	Gs.BackBuffer = 0;
+	graph_set_framebuffer_filtered(Gs.Frames[1].FBP * 2048, Gs.Width, GraphPsm(ColorFormat), 0, 0);
+	graph_enable_output();
+	Gs.LastFlipField = Leon::PS2::FPS2VerticalBlank::GetFieldCount();
 	Gs.bReady = true;
 	Leon::PS2::AppendDrawEnvironment(Gs);
+	// The first frame, a clear, on screen at once: WaitVSync kicks it, ShowPendingFrame shows it when the GS is done.
 	ClearColor(0.125f, 0.3125f, 0.75f);
 	WaitVSync();
-	UE_LOG(LogRHI, Log, "FPS2RHI::InitDisplay: %dx%d, %s color, Z24, double buffered", Gs.Width, Gs.Height,
-		ColorFormat == EGSPixelFormat::PSMCT32 ? "32-bit" : "16-bit dithered");
+	Leon::PS2::ShowPendingFrame(Gs);
+	UE_LOG(LogRHI, Log, "FPS2RHI::InitDisplay: %dx%d, %s color, Z24, double buffered, %s (%.2f fields a second)",
+		Gs.Width, Gs.Height, ColorFormat == EGSPixelFormat::PSMCT32 ? "32-bit" : "16-bit dithered",
+		Gs.VideoMode == EGSVideoMode::Pal ? "PAL" : "NTSC", double(FGSFieldPacer::GetFieldsPerSecond(Gs.VideoMode)));
 	return true;
+}
+
+void FPS2RHI::ShutdownDisplay()
+{
+	auto& Gs = Leon::PS2::GetGSContext();
+	if (!Gs.bReady)
+	{
+		return;
+	}
+	Gs.bReady = false;
+	Leon::PS2::DropPendingFrame(Gs);
+	for (FGSCommandList& List : Gs.FrameLists)
+	{
+		List.Reset();
+	}
+	Leon::PS2::BeginNextFrame(Gs);
+	Leon::PS2::FreeFrameChains(Gs);
+	Leon::PS2::FPS2VerticalBlank::Remove();
+	graph_shutdown();
 }
 
 void FPS2RHI::ClearColor(float R, float G, float B)
@@ -138,7 +219,7 @@ void FPS2RHI::ClearColor(float R, float G, float B)
 	auto& Gs = Leon::PS2::GetGSContext();
 	if (Gs.bReady)
 	{
-		AppendClear(Gs, Leon::PS2::UnitColor(R, G, B));
+		AppendClear(Gs, FGSDebugDraw::UnitColor(R, G, B));
 	}
 }
 
@@ -149,14 +230,19 @@ void FPS2RHI::Submit(const FGSCommandList& List)
 	{
 		return;
 	}
-	Gs.FrameList.Append(List);
+	Gs.GetFrameList().Append(List);
 	Leon::PS2::AppendDrawEnvironment(Gs);
-	Leon::PS2::InvalidateBoundTexture();
 }
 
-FGSXYZ FPS2RHI::ScreenVertex(float X, float Y, uint32 Z)
+void FPS2RHI::RetireInPlaceImages()
 {
-	return Leon::PS2::ScreenVertex(X, Y, Z);
+	auto& Gs = Leon::PS2::GetGSContext();
+	if (!Gs.bReady)
+	{
+		return;
+	}
+	Gs.GetFrameList().CopyInPlaceImages();
+	Leon::PS2::WaitPendingFrameDma(Gs);
 }
 
 FGSDrawEnvironment FPS2RHI::GetDrawEnvironment()
@@ -190,20 +276,18 @@ void FPS2RHI::WaitVSync()
 	{
 		return;
 	}
-	Leon::PS2::FlushFrame(Gs);
-	graph_wait_vsync();
-	// With an interval of N, the blanks before the N-th since the last flip pass too: the clock tells which blank this
-	// is (half a field of margin), since libgraph counts none.
-	constexpr double FieldSeconds = 1.0 / 59.94;
-	while (Gs.SyncInterval > 1 &&
-		FPlatformTime::Seconds() - Gs.LastFlipSeconds < (double(Gs.SyncInterval) - 0.5) * FieldSeconds)
-	{
-		graph_wait_vsync();
-	}
-	Gs.LastFlipSeconds = FPlatformTime::Seconds();
-	const FGSFrame& Drawn = Gs.Frames[Gs.BackBuffer];
-	graph_set_framebuffer_filtered(Drawn.FBP * 2048, Gs.Width, GraphPsm(Drawn.PSM), 0, 0);
+	// Frame N's chain, while the DMA and the GS may still be on frame N - 1.
+	Leon::PS2::BuildFrameChain(Gs);
+	// Frame N - 1 on screen once the GS has finished it, at the field the sync interval asks for.
+	Leon::PS2::ShowPendingFrame(Gs);
+	// Frame N to the GIF without waiting: the GS draws it while the EE makes frame N + 1 into the other list, chain
+	// and frame buffer.
+	Leon::PS2::KickFrameChain(Gs);
+	Leon::PS2::BeginNextFrame(Gs);
 	Gs.BackBuffer ^= 1;
+	Gs.FrameIndex ^= 1;
+	// Frame N - 1's list: ShowPendingFrame retired its chain, so nothing reads its images any more.
+	Gs.GetFrameList().Reset();
 	Leon::PS2::AppendDrawEnvironment(Gs);
 }
 

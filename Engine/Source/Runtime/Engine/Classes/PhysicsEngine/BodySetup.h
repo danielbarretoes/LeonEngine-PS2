@@ -16,7 +16,8 @@
  * - every other body is a box: the bounds of the AggGeom boxes, or the mesh's bounding box when there are none (the
  *   default: a built mesh has no boxes; UE would give such a body no simple collision).
  *
- * Leon has no cooked physics data (UE: the PhysX / Chaos meshes), no physical material and no per-body settings.
+ * Leon has no cooked physics data (UE: the PhysX / Chaos meshes) and no per-body settings; a hit's physical material
+ * comes from the mesh's materials (FPhysScene::GetHitPhysicalMaterial), not from a body setup's PhysMaterial.
  */
 UCLASS()
 class ENGINE_API UBodySetup : public UObject

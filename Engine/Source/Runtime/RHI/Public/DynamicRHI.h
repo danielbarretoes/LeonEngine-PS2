@@ -40,7 +40,7 @@ public:
 /** The active RHI (UE: GDynamicRHI); RHIInit creates it, RHIExit frees it. */
 extern RHI_API FDynamicRHI* GDynamicRHI;
 
-/** Implemented by the platform's RHI module (Win64/Linux: OpenGLDrv, PS2: PS2RHI); the caller owns the result. */
+/** Implemented by the platform's RHI module (Win64: OpenGLDrv, PS2: PS2RHI); the caller owns the result. */
 FDynamicRHI* PlatformCreateDynamicRHI();
 
 /** How an RHI finds the graphics API's entry points (OpenGL: glfwGetProcAddress); null when it needs none (PS2). */

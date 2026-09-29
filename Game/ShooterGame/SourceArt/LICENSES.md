@@ -5,15 +5,18 @@ with its origin and license.
 
 | Files | Origin | License |
 | --- | --- | --- |
-| `Maps/de_leon.blend`, `Maps/de_leon.glb` | Made by `Maps/make_de_leon.py` (this repository) in Blender 5.2 from Blender's primitives: boxes, empties and a sun. No external model, texture or sound | CC0 1.0 |
-| `Characters/team_bodies.blend`, `Characters/Body_CT.glb`, `Characters/Body_T.glb` | Made by `Characters/make_team_bodies.py` (this repository) from boxes: the teams' bodies | CC0 1.0 |
-| `Weapons/Pistol.glb`, `Weapons/Rifle.glb`, `Weapons/Sniper.glb`, `Weapons/Grenade.glb` | Written by `Weapons/make_weapons.py` (this repository, Python's standard library) from boxes with plain colours | CC0 1.0 |
-| `Sounds/*.wav` | Synthesized by `Sounds/make_sounds.py` (this repository, Python's standard library) from seeded noise and sine waves; no recording | CC0 1.0 |
+| `Maps/de_leon.blend`, `Maps/de_leon.glb` | Made by `Maps/make_de_leon.py` (this repository) with `leon_art.py` in Blender 5.2: the map's boxes, empties and lights, and its textures (sandstone, trim, sand, paving, wood, the crate, the site letters) painted texel by texel by code. No external model, texture or sound | CC0 1.0 |
+| `Characters/characters.blend`, `Characters/Body_CT.glb`, `Characters/Body_T.glb`, `Characters/Body_Animations.glb` | Made by `Characters/make_characters.py` and `Characters/anim_body.py` (this repository) with `leon_art.py` in Blender 5.2: the teams' bodies modelled from lofted rings and boxes, their textures painted by code, the third-person clips posed by code | CC0 1.0 |
+| `Characters/arms.blend`, `Characters/Arms_CT.glb`, `Characters/Arms_T.glb`, `Characters/Arms_Animations.glb` | Made by `Characters/make_arms.py` and `Characters/anim_arms.py` (this repository) the same way: the first-person arms and every weapon's clips | CC0 1.0 |
+| `Weapons/<Weapon>.glb`, `Weapons/<Weapon>_1P.glb` (the knife, Glock, USP, Desert Eagle, AK-47, M4A1, MP5, AWP, HE, flash and smoke grenades, C4) | Made by `Weapons/make_weapons.py` (this repository) with `leon_art.py` in Blender 5.2 from chamfered boxes and cylinders, textures painted by code; the real weapons' shapes only as reference, no external model or texture | CC0 1.0 |
+| `Sounds/*.wav` | Synthesized by `Sounds/make_sounds.py` (this repository, Python's standard library) from seeded noise and sine waves, filtered: the weapons' and the bomb's, the footsteps and the bullets' impacts on each surface, the hits on a character and the radio's tones (ps2-shipping N30f); no recording and no speech | CC0 1.0 |
+| `Samples/ArtSample_Crate.glb`, `Samples/ArtSample_Mannequin.glb` | Made by `Samples/make_art_samples.py` (this repository) with `leon_art.py` in Blender 5.2 from boxes, a texture painted by code and keyed poses: the art pipeline's samples (`Docs/ART_PIPELINE.md`), not game content | CC0 1.0 |
 
-No file here comes from outside this repository: the materials are plain colours (glTF base colour factors), with no
-images, and the sounds are generated. Art from elsewhere enters only with a CC0 license and a row here naming its
+No file here comes from outside this repository: the materials are plain colours (glTF base colour factors) or
+textures painted by code, and the sounds are generated. Art from elsewhere enters only with a CC0 license and a row here naming its
 source URL.
 
 The plan named the Bot model of the removed ThirdPerson template (`ee1cdde^:Templates/ThirdPerson`) for the teams'
 bodies. Its FBX files (BreathingIdle, Running, JumpingUp, ...) appear to be Mixamo exports and no CC0 license is
-recorded for them, so they cannot enter this project; the teams keep the box bodies above until a CC0 model is found.
+recorded for them, so they cannot enter this project; the characters, arms and animations above are authored by code
+instead (ps2-shipping N27).

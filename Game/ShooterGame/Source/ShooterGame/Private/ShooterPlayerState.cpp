@@ -1,8 +1,21 @@
 #include "ShooterPlayerState.h"
 
+#include "Engine/World.h"
+#include "ShooterGameMode.h"
+
 AShooterPlayerState::AShooterPlayerState(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+}
+
+void AShooterPlayerState::SetTeam(EShooterTeam NewTeam)
+{
+	Team = NewTeam;
+	const UWorld* World = GetWorld();
+	if (AShooterGameMode* GameMode = World != nullptr ? World->GetAuthGameMode<AShooterGameMode>() : nullptr)
+	{
+		GameMode->NotifyPawnsChanged();
+	}
 }
 
 void AShooterPlayerState::SetMoney(int32 NewMoney, int32 MaxMoney)

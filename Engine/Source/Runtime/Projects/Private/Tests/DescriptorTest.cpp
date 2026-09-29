@@ -19,7 +19,7 @@ bool FProjectDescriptorTest::RunTest(const FString& Parameters)
 	const FString Text =
 		"{ \"FileVersion\": 1, \"Description\": \"Test\","
 		" \"Modules\": [ { \"Name\": \"Game\", \"Type\": \"Runtime\", \"LoadingPhase\": \"Default\" } ],"
-		" \"Plugins\": [ { \"Name\": \"JoltPhysics\", \"Enabled\": true, \"PlatformAllowList\": [ \"Win64\" ] } ],"
+		" \"Plugins\": [ { \"Name\": \"SamplePlugin\", \"Enabled\": true, \"PlatformAllowList\": [ \"Win64\" ] } ],"
 		" \"TargetPlatforms\": [ \"Win64\", \"PS2\" ] }";
 
 	TSharedPtr<FJsonObject> Object;
@@ -68,39 +68,45 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRealDescriptorsTest, "System.Engine.Projects.R
 bool FRealDescriptorsTest::RunTest(const FString& Parameters)
 {
 	// The files in the repository parse.
-	FProjectDescriptor ThirdPerson;
+	FProjectDescriptor ShooterGame;
 	FText FailReason;
 	TestTrue(
-		"ThirdPerson.lproj", ThirdPerson.Load(FPaths::RootDir() + "Game/ThirdPerson/ThirdPerson.lproj", FailReason));
-	TestTrue("ThirdPerson targets PS2", ThirdPerson.TargetPlatforms.Contains("PS2"));
+		"ShooterGame.lproj", ShooterGame.Load(FPaths::RootDir() + "Game/ShooterGame/ShooterGame.lproj", FailReason));
+	TestTrue("ShooterGame targets Win64 and PS2",
+		ShooterGame.TargetPlatforms.Contains("Win64") && ShooterGame.TargetPlatforms.Contains("PS2"));
 	TestTrue(
-		"ThirdPerson module", ThirdPerson.Modules.Num() == 1 && ThirdPerson.Modules[0].Name == FName("ThirdPerson"));
+		"ShooterGame module", ShooterGame.Modules.Num() == 1 && ShooterGame.Modules[0].Name == FName("ShooterGame"));
 
-	FPluginDescriptor Jolt;
-	TestTrue("JoltPhysics.lplugin",
-		Jolt.Load(FPaths::EnginePluginsDir() + "Runtime/JoltPhysics/JoltPhysics.lplugin", FailReason));
-	TestTrue("Jolt off by default", Jolt.EnabledByDefault == EPluginEnabledByDefault::Disabled);
-	TestTrue("Jolt module on Win64 only",
-		Jolt.Modules.Num() == 1 && Jolt.Modules[0].IsCompiledForPlatform("Win64") &&
-			!Jolt.Modules[0].IsCompiledForPlatform("PS2"));
+	// A plugin saved into the project's Plugins folder is discovered there, with its content's mount point, and stays
+	// off until a project enables it (the engine ships no plugin of its own).
+	FPluginDescriptor Sample;
+	TestTrue("A descriptor",
+		Sample.Read("{ \"FileVersion\": 3, \"FriendlyName\": \"Sample\", \"EnabledByDefault\": false,"
+					" \"CanContainContent\": true, \"Modules\": [ { \"Name\": \"SamplePlugin\", \"Type\": \"Runtime\","
+					" \"LoadingPhase\": \"Default\", \"PlatformAllowList\": [ \"Win64\" ] } ] }",
+			FailReason));
+	TestTrue("Off by default", Sample.EnabledByDefault == EPluginEnabledByDefault::Disabled);
+	TestTrue("Its module on Win64 only",
+		Sample.Modules.Num() == 1 && Sample.Modules[0].IsCompiledForPlatform("Win64") &&
+			!Sample.Modules[0].IsCompiledForPlatform("PS2"));
+	const FString PluginDir = FPaths::ProjectPluginsDir() + "SamplePlugin/";
+	TestTrue("Save", Sample.Save(PluginDir + "SamplePlugin.lplugin", FailReason));
+	FPluginDescriptor Reloaded;
+	TestTrue("Reload",
+		Reloaded.Load(PluginDir + "SamplePlugin.lplugin", FailReason) && Reloaded.FriendlyName == Sample.FriendlyName);
 
-	// Discovery.
 	IPluginManager::Get().RefreshPluginsList();
-	const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin("JoltPhysics");
-	TestTrue("JoltPhysics discovered", Plugin.IsValid());
+	const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin("SamplePlugin");
+	TestTrue("Discovered", Plugin.IsValid());
 	if (Plugin.IsValid())
 	{
-		TestEqual("Mount point", Plugin->GetMountedAssetPath(), TEXT("/JoltPhysics/"));
-		TestTrue("Engine plugin", Plugin->GetType() == EPluginType::Engine);
+		TestEqual("Mount point", Plugin->GetMountedAssetPath(), TEXT("/SamplePlugin/"));
+		TestTrue("A project plugin", Plugin->GetType() == EPluginType::Project);
 		TestFalse("Disabled without a project reference", Plugin->IsEnabled());
 	}
-
-	// A saved plugin descriptor loads back.
-	const FString Temp = FPaths::ProjectIntermediateDir() + "Tests/Projects/Test.lplugin";
-	TestTrue("Save", Jolt.Save(Temp, FailReason));
-	FPluginDescriptor Reloaded;
-	TestTrue("Reload", Reloaded.Load(Temp, FailReason) && Reloaded.FriendlyName == Jolt.FriendlyName);
-	IFileManager::Get().DeleteDirectory(*FPaths::GetPath(Temp), false, true);
+	IFileManager::Get().DeleteDirectory(*PluginDir, false, true);
+	IPluginManager::Get().RefreshPluginsList();
+	TestFalse("Gone with its folder", IPluginManager::Get().FindPlugin("SamplePlugin").IsValid());
 	return true;
 }
 

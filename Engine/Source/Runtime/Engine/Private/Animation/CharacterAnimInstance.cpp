@@ -2,6 +2,8 @@
 
 #include "Animation/AnimSequence.h"
 #include "Animation/Skeleton.h"
+#include "AnimationRuntime.h"
+#include "Misc/MemStack.h"
 
 UCharacterAnimInstance::UCharacterAnimInstance(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -40,19 +42,6 @@ float UCharacterAnimInstance::PlayRateForState(EAnimJumpState State) const
 		case EAnimJumpState::Locomotion:
 		default:
 			return 1.0f;
-	}
-}
-
-void UCharacterAnimInstance::AdvancePlayer(FAnimPosePlayer& Player, float DeltaTime, float PlayRate) const
-{
-	if (Player.Sequence == nullptr)
-	{
-		return;
-	}
-	Player.Time += DeltaTime * PlayRate;
-	if (!Player.Sequence->bLoop && Player.Sequence->SequenceLength > 1.0e-4f)
-	{
-		Player.Time = FMath::Min(Player.Time, Player.Sequence->SequenceLength);
 	}
 }
 
@@ -204,32 +193,51 @@ void UCharacterAnimInstance::UpdateJumpStateMachine()
 	bJustLanded = false;
 }
 
-void UCharacterAnimInstance::SamplePlayerBoneWorld(const FAnimPosePlayer& Player, TArray<FMatrix>& OutBoneWorld) const
+void UCharacterAnimInstance::SamplePlayerPose(const FAnimPosePlayer& Player, TArrayView<FTransform> OutPose) const
 {
-	OutBoneWorld.Reset();
-	if (GetSkeleton() == nullptr)
+	SampleSequencePose(Player.Sequence, Player.Time, OutPose);
+}
+
+void UCharacterAnimInstance::UpdateCrouch(float DeltaTime)
+{
+	// The standing space is whatever the owner set last (SetBlendSpace): anything but what this update set.
+	const UBlendSpaceBase* Current = GetBlendSpace();
+	if (!bAppliedBlendSpace || Current != AppliedBlendSpace)
 	{
-		return;
+		StandBlendSpace = Current;
 	}
-	if (Player.Sequence == nullptr || Player.Sequence->GetNumberOfFrames() <= 0)
-	{
-		OutBoneWorld.Init(FMatrix::Identity, GetNumBones());
-		return;
-	}
-	Player.Sequence->GetBonePose(Player.Time, OutBoneWorld);
+	bCrouchActive = bCrouched && CrouchBlendSpace != nullptr;
+	const float Target = bCrouchActive ? 1.0f : 0.0f;
+	const float Step = CrossfadeDuration > 1.0e-6f ? DeltaTime / CrossfadeDuration : 1.0f;
+	CrouchAlpha =
+		Target > CrouchAlpha ? FMath::Min(CrouchAlpha + Step, Target) : FMath::Max(CrouchAlpha - Step, Target);
+	AppliedBlendSpace = bCrouchActive ? CrouchBlendSpace : StandBlendSpace;
+	bAppliedBlendSpace = true;
+	SetBlendSpace(AppliedBlendSpace);
 }
 
 void UCharacterAnimInstance::NativeUpdateAnimation(float DeltaTime)
 {
+	UpdateCrouch(DeltaTime);
+	// The playing space advances the time and fires the notifies (the crouched walk is silent, as in CS); the one
+	// fading out follows the same input and time.
 	UpdateLocomotion(DeltaTime);
+	FadingSamples.Reset();
+	const UBlendSpaceBase* Fading = bCrouchActive ? StandBlendSpace : CrouchBlendSpace;
+	const float FadingWeight = bCrouchActive ? 1.0f - CrouchAlpha : CrouchAlpha;
+	if (Fading != nullptr && FadingWeight > 1.0e-3f)
+	{
+		Fading->GetSamplesFromBlendInput(GetBlendSpaceInput(), FadingSamples);
+	}
 
+	// The active state's clip fires its notifies; the one fading out does not.
 	if (JumpState != EAnimJumpState::Locomotion)
 	{
-		AdvancePlayer(Active, DeltaTime, PlayRateForState(JumpState));
+		AdvanceSequencePlayer(Active.Sequence, Active.Time, DeltaTime * PlayRateForState(JumpState), true);
 	}
 	if (CrossfadeAlpha < 1.0f && PreviousState != EAnimJumpState::Locomotion)
 	{
-		AdvancePlayer(Previous, DeltaTime, PlayRateForState(PreviousState));
+		AdvanceSequencePlayer(Previous.Sequence, Previous.Time, DeltaTime * PlayRateForState(PreviousState), false);
 	}
 
 	UpdateJumpStateMachine();
@@ -251,51 +259,47 @@ void UCharacterAnimInstance::NativeUpdateAnimation(float DeltaTime)
 	}
 }
 
-void UCharacterAnimInstance::GetBoneWorldMatrices(TArray<FMatrix>& OutBoneWorld) const
+void UCharacterAnimInstance::SampleCrouchedLocomotionPose(TArrayView<FTransform> OutPose) const
 {
-	const int32 BoneCount = GetNumBones();
-	if (BoneCount <= 0)
+	SampleLocomotionPose(OutPose);
+	if (FadingSamples.Num() == 0)
 	{
-		OutBoneWorld.Reset();
 		return;
 	}
+	const UBlendSpaceBase* Fading = bCrouchActive ? StandBlendSpace : CrouchBlendSpace;
+	const float FadingWeight = bCrouchActive ? 1.0f - CrouchAlpha : CrouchAlpha;
+	FMemMark Mark(FMemStack::Get());
+	TArray<FTransform, TMemStackAllocator<>> FadingPose;
+	FadingPose.SetNum(OutPose.Num());
+	SampleBlendSpacePose(Fading, FadingSamples, GetLocomotionNormalizedTime(), FadingPose);
+	FAnimationRuntime::BlendTwoPosesTogether(OutPose, FadingPose, FadingWeight, OutPose);
+}
 
-	TArray<FMatrix> WorldCurrent;
+void UCharacterAnimInstance::EvaluateBasePose(TArrayView<FTransform> OutPose) const
+{
 	if (JumpState == EAnimJumpState::Locomotion)
 	{
-		SampleLocomotionBoneWorld(WorldCurrent);
+		SampleCrouchedLocomotionPose(OutPose);
 	}
 	else
 	{
-		SamplePlayerBoneWorld(Active, WorldCurrent);
+		SamplePlayerPose(Active, OutPose);
 	}
-
-	OutBoneWorld = WorldCurrent;
-	if (CrossfadeAlpha < 0.999f)
+	if (CrossfadeAlpha >= 0.999f)
 	{
-		TArray<FMatrix> WorldPrev;
-		if (PreviousState == EAnimJumpState::Locomotion)
-		{
-			SampleLocomotionBoneWorld(WorldPrev);
-		}
-		else
-		{
-			SamplePlayerBoneWorld(Previous, WorldPrev);
-		}
-		if (WorldPrev.Num() == BoneCount && WorldCurrent.Num() == BoneCount)
-		{
-			OutBoneWorld.SetNum(BoneCount);
-			for (int32 I = 0; I < BoneCount; ++I)
-			{
-				OutBoneWorld[I] = WorldPrev[I] * (1.0f - CrossfadeAlpha) + WorldCurrent[I] * CrossfadeAlpha;
-			}
-		}
+		return;
 	}
-}
-
-void UCharacterAnimInstance::GetSkinMatrices(TArray<FMatrix>& OutSkin) const
-{
-	TArray<FMatrix> WorldBlended;
-	GetBoneWorldMatrices(WorldBlended);
-	SkinFromBoneWorld(WorldBlended, OutSkin);
+	// The previous state's pose on the frame's stack.
+	FMemMark Mark(FMemStack::Get());
+	TArray<FTransform, TMemStackAllocator<>> PreviousPose;
+	PreviousPose.SetNum(OutPose.Num());
+	if (PreviousState == EAnimJumpState::Locomotion)
+	{
+		SampleCrouchedLocomotionPose(PreviousPose);
+	}
+	else
+	{
+		SamplePlayerPose(Previous, PreviousPose);
+	}
+	FAnimationRuntime::BlendTwoPosesTogether(PreviousPose, OutPose, CrossfadeAlpha, OutPose);
 }

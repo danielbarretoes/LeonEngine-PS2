@@ -97,6 +97,10 @@ UObject* USoundFactory::FactoryCreateBinary(UClass* InClass, UObject* InParent, 
 	{
 		return nullptr;
 	}
+	Sound->CompressionSampleRate = CompressionSampleRate;
+	Sound->bLooping = bLooping;
+	Sound->LoopStartFrame = LoopStartFrame;
+	Sound->Priority = Priority;
 	(void)Sound->SetPCMData(Samples.GetData(), Samples.Num() / NumChannels, NumChannels, SampleRate);
 	UpdateAssetImportData(Sound, CurrentFilename);
 	Buffer = BufferEnd;

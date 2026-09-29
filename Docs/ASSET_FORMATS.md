@@ -3,9 +3,9 @@
 **Audience:** content authors and tool writers
 **Also:** [LEVELS.md](LEVELS.md) (`.lmap` maps, the glTF map import) · [TOOLS.md](TOOLS.md) (LeonCook and its commandlets) · [SETUP.md](SETUP.md)
 
-Every asset is a UObject saved in a `.lasset` [package](#packages--lasset--lmap), and every map a world saved in a `.lmap` package ([Maps](#maps--lmap)): the runtime loads packages and nothing else (no image, `.wav`, mesh or scene source file). Source files (images, `.wav`, OBJ, FBX, glTF) are [imported](#importing-assets) by the editor module, LeonEd, through LeonCook's commandlets; each imported asset (and each imported map) records its source in its `UAssetImportData`, so it can be reimported. The only other runtime files are the GLSL shaders (`Engine/Shaders`) and the INI config. Since P16 the cook saves the packages a game needs without their editor-only data ([Cooked packages](#cooked-packages)), and a staged build reads them, with its config and shaders, from one [`.lpak`](#paks--lpak) file. The PS2 runtime loads the same packages, cooked for it (paletted textures), loose or from a pak (see [PS2](#ps2)).
+Every asset is a UObject saved in a `.lasset` [package](#packages--lasset--lmap), and every map a world saved in a `.lmap` package ([Maps](#maps--lmap)): the runtime loads packages and nothing else (no image, `.wav`, mesh or scene source file). Source files (images, `.wav`, glTF) are [imported](#importing-assets) by the editor module, LeonEd, through LeonCook's commandlets; each imported asset (and each imported map) records its source in its `UAssetImportData`, so it can be reimported. The only other runtime files are the GLSL shaders (`Engine/Shaders`) and the INI config. Since P16 the cook saves the packages a game needs without their editor-only data ([Cooked packages](#cooked-packages)), and a staged build reads them, with its config and shaders, from one [`.lpak`](#paks--lpak) file. The PS2 runtime loads the same packages, cooked for it (paletted textures), loose or from a pak (see [PS2](#ps2)).
 
-> Unreal `.uasset` / `.umap` are proprietary. Leon does not read or write them. Interchange with Blender / Unreal goes through FBX or glTF, imported to Leon packages. The `.lasset` layout follows UE 4.27's package structure (summary, name / import / export tables, tagged properties) but is Leon's own binary format.
+> Unreal `.uasset` / `.umap` are proprietary. Leon does not read or write them. Interchange with Blender / Unreal goes through glTF, the only mesh, skeletal mesh and animation format since [ps2-shipping](PLANS/ps2-shipping.md) N21 (D11: FBX and OBJ were removed), imported to Leon packages. The `.lasset` layout follows UE 4.27's package structure (summary, name / import / export tables, tagged properties) but is Leon's own binary format.
 
 ---
 
@@ -18,10 +18,10 @@ Every asset is a UObject saved in a `.lasset` [package](#packages--lasset--lmap)
 | `.lproj` / `.lplugin` | JSON | Build descriptors | LeonBuildTool (CMake) |
 | `.png`, `.jpg`, `.tga`, `.bmp` | Image | Texture source | `UTextureFactory` (LeonEd, stb_image): import only |
 | `.wav` | RIFF / WAVE, PCM16 | Sound source | `USoundFactory` (LeonEd): import only |
-| `.obj` / `.fbx` / `.gltf` / `.glb` | DCC source | Mesh and animation source; a glTF scene is also a map's source | `UFbxFactory`, `UGLTFImportFactory`, `UGLTFMapFactory` (LeonEd, through MeshUtilities): import only |
+| `.gltf` / `.glb` | DCC source | Static mesh, skeletal mesh and animation source; a glTF scene is also a map's source | `UGLTFImportFactory`, `UGLTFMapFactory` (LeonEd, through MeshUtilities): import only |
 | `ImportList.ini` | INI text | The imports of a folder of source art | `UImportAssetsCommandlet` (`-importlist=`), see [TOOLS.md](TOOLS.md#importlistini) |
 
-The cooked skeletal formats (`.lskel`, `.lskm`, `.lanim`, `.lchar`, `*.blendspace1d.json`), `.lm` lightmaps, `.hdr` environment maps and the `leon.game.json` pack marker were removed in 0.12.0; the `.lmesh` / `.lmat` files and runtime PNG / WAV loading in P14; the `.llev` levels, their reader and the legacy content tools in P15 ([Legacy content](#legacy-content-migration)). Skeletal assets are `USkeletalMesh` / `UAnimSequence` packages, maps are `.lmap` packages, and static lighting returns as `<Map>_BuiltData.lasset`.
+The cooked skeletal formats (`.lskel`, `.lskm`, `.lanim`, `.lchar`, `*.blendspace1d.json`), `.lm` lightmaps, `.hdr` environment maps and the `leon.game.json` pack marker were removed in 0.12.0; the `.lmesh` / `.lmat` files and runtime PNG / WAV loading in P14; the `.llev` levels, their reader and the legacy content tools in P15 ([Legacy content](#legacy-content-migration)). Skeletal assets are `USkeletalMesh` / `UAnimSequence` packages, maps are `.lmap` packages, and static lighting is baked per vertex into the map's static mesh components ([instance colours](#lps2-instance-colors), N22).
 
 Engine content lives in `Engine/Content` as `/Engine` packages ([below](#engine-content)), the source files of the imported ones in `Engine/SourceArt`, and the GLSL shaders in `Engine/Shaders`.
 
@@ -39,15 +39,18 @@ load that package first. The tests save every class to memory and load it back
 | Class (header, `Engine/Classes/`) | Tagged properties | Native tail |
 | --- | --- | --- |
 | `UTexture` (`Engine/Texture.h`), abstract | `SRGB` (recorded; the forward renderer uploads the texels as they are) | — |
-| `UTexture2D` (`Engine/Texture2D.h`) | — | `FTexturePlatformData`: `int32` SizeX, SizeY, `uint8` `EPixelFormat` (UE values: `PF_R8G8B8A8` = 37, `PF_B8G8R8A8` = 2; Leon's paletted formats of the PS2 cook: `PF_P8` = 200, 256 RGBA8 palette entries then an index a texel, and `PF_P4` = 201, 16 entries then two texels a byte, the first in the low nibble), `int32` mip count, then per mip `int32` SizeX, SizeY and its data as bulk data (`GetPixelFormatDataSize` bytes), bottom row first. Leon stores mip 0 |
-| `UStaticMesh` (`Engine/StaticMesh.h`) | `StaticMaterials` (`FStaticMaterial`: `MaterialInterface`, `MaterialSlotName`), `BodySetup` (an inner object) | the local bounding box (`FBox`), then one bulk payload of `FStaticMeshLODResources` (one LOD): vertex count and each `FVertex` field by field (position, normal, UV, tangent), the `uint32` indices, section count and each section's index offset, index count and material slot |
+| `UTexture2D` (`Engine/Texture2D.h`) | — | `FTexturePlatformData`: `int32` SizeX, SizeY, `uint8` `EPixelFormat` (UE values: `PF_R8G8B8A8` = 37, `PF_B8G8R8A8` = 2; Leon's paletted formats of the PS2 cook: `PF_P8` = 200, 256 RGBA8 palette entries then an index a texel, and `PF_P4` = 201, 16 entries then two texels a byte, the first in the low nibble), `int32` mip count, then per mip `int32` SizeX, SizeY and its data as bulk data, bottom row first: mip 0 `GetPixelFormatDataSize` bytes, a later mip `GetPixelFormatMipDataSize` (a paletted mip is its indices only, through mip 0's palette). An imported texture has mip 0 only; the PS2 cook's paletted ones carry their mip chain ([PS2](#ps2)) |
+| `UStaticMesh` (`Engine/StaticMesh.h`) | `StaticMaterials` (`FStaticMaterial`: `MaterialInterface`, `MaterialSlotName`), `BodySetup` (an inner object), `SourceModels` ([LODs](#static-mesh-lods): `FStaticMeshSourceModel`, `ReductionSettings.PercentTriangles` and `ScreenSize`; empty for one LOD) | the local bounding box (`FBox`, of the source's positions), then one bulk payload: LOD 0's render data (`FStaticMeshLODResources`), an [LPS2 v2](#lps2-v2) blob as its `int32` size and its bytes, then the collision triangles (`FTriMeshCollisionData`: the source's positions as an array of `FVector`, its `uint32` indices, three a triangle, and each triangle's material slot as an array of `uint16`, `MaterialIndices`, [ps2-shipping](PLANS/ps2-shipping.md) N30f), then each later LOD's blob (as many as `SourceModels` has entries after the first) |
 | `UBodySetup` (`PhysicsEngine/BodySetup.h`) | `AggGeom` (`FKAggregateGeom`: `BoxElems`, each `FKBoxElem` Center, Rotation, X, Y, Z in cm), `CollisionTraceFlag` (`ECollisionTraceFlag`) | — |
-| `UMaterialInterface` (`Materials/MaterialInterface.h`), abstract; `UMaterial` (`Materials/Material.h`) | `ShadingModel` (`MSM_Unlit`, `MSM_DefaultLit`), `BaseColor`, `Specular` (`FLinearColor`, linear RGB), `Metallic`, `Roughness`, `Opacity`, `Shininess`, `UVScale` (`FVector2D`), `bCastsShadows`, `bPlanarMirror`, `BaseColorMap`, `NormalMap` (`UTexture2D*`): the parameters the legacy `.lmat` files had | — |
-| `USkeleton` (`Animation/Skeleton.h`) | `Sockets` (`USkeletalMeshSocket` inner objects: `SocketName`, `BoneName`, `RelativeLocation`, `RelativeRotation`, `RelativeScale`) | `FReferenceSkeleton`: the bone names (`FName`s, in the name table), the parent indices and the inverse bind pose (`FMatrix` each) |
-| `USkeletalMesh` (`Engine/SkeletalMesh.h`) | `Skeleton`, `Materials` (`FSkeletalMaterial`) | the bounding box, then one bulk payload of the skinned vertices (`FSkeletalVertex`: position, normal, UV, tangent, 4 bone indices, 4 weights) and the indices |
-| `UAnimationAsset` → `UAnimSequenceBase` → `UAnimSequence` (`Animation/AnimSequence.h`) | `Skeleton`, `SequenceLength`, `RateScale`, `bLoop`, `NumFrames`, `FrameRate` | one bulk payload of the tracks, one per bone (`FRawAnimSequenceTrack`: one model-space `FMatrix` key per frame) |
-| `UBlendSpaceBase` → `UBlendSpace1D` (`Animation/BlendSpace1D.h`) | `Skeleton`, `BlendParameters[3]` (`FBlendParameter`: DisplayName, Min, Max, GridNum), `SampleData` (`FBlendSample`: `Animation`, `SampleValue`, `RateScale`) | — |
-| `USoundBase` → `USoundWave` (`Sound/SoundWave.h`) | `Duration`, `NumChannels`, `SampleRate` | `RawPCMData`: the interleaved 16-bit PCM samples as bulk data |
+| `UMaterialInterface` (`Materials/MaterialInterface.h`), abstract; `UMaterial` (`Materials/Material.h`) | `ShadingModel` (`MSM_Unlit`, `MSM_DefaultLit`), `BaseColor` (`FLinearColor`, linear RGB), `Opacity`, `UVScale` (`FVector2D`), `BaseColorMap` (`UTexture2D*`), `bMipmaps` (true: the map's mips, trilinear), `LodBias` (levels added to its LOD): what the GS scene renderer draws with (`FMaterial`); `PhysMaterial` (`UPhysicalMaterial*`, [physical materials](#physical-materials)) | — |
+| `UPhysicalMaterial` (PhysicsCore, `PhysicalMaterials/PhysicalMaterial.h`, `PM_`) | `SurfaceType` (`EPhysicalSurface`, saved by its enumerator's name: `SurfaceType_Default`, `SurfaceType1` ... `SurfaceType62`) | — |
+| `USkeleton` (`Animation/Skeleton.h`) | `Sockets` (`USkeletalMeshSocket` inner objects: `SocketName`, `BoneName`, `RelativeLocation`, `RelativeRotation`, `RelativeScale`) | `FReferenceSkeleton`: the bone names (`FName`s, in the name table), the parent indices (a parent before its children), the reference pose (each bone's local `FTransform`) and the inverse bind pose (`FMatrix` each) |
+| `USkeletalMesh` (`Engine/SkeletalMesh.h`) | `Skeleton`, `Materials` (`FSkeletalMaterial`: a section draws with the slot its render data names) | the bind pose's bounding box, then one bulk payload: the render data, a [skinned LPS2 v2](#skinned-meshes) blob (`int32` size and its bytes), and each bone's bounds radius (`TArray<float>`: the farthest vertex it moves, from its origin; the pose's bounds are spheres of these around the posed bones) |
+| `UAnimationAsset` → `UAnimSequenceBase` → `UAnimSequence` (`Animation/AnimSequence.h`) | `Skeleton`, `SequenceLength`, `RateScale`, `bLoop`, `Notifies` (`FAnimNotifyEvent`: `TriggerTime`, `NotifyName`, `Notify`: [notifies](#animation-notifies)), `NumFrames`, `FrameRate` | one bulk payload: the [compressed keys](#animation-keys) (`FCompressedAnimSequence`: one local-space track per bone) |
+| `UAnimSequenceBase` → `UAnimMontage` (`Animation/AnimMontage.h`, `AM_`) | `SequenceLength`, `Notifies` (its own), `SlotName`, `Animation`, `BlendInTime`, `BlendOutTime`, `CompositeSections` (`FCompositeSection`: `SectionName`, `StartTime`, `NextSectionName`) | — |
+| `UBlendSpaceBase` → `UBlendSpace1D` (`Animation/BlendSpace1D.h`), → `UAimOffsetBlendSpace1D` (`Animation/AimOffsetBlendSpace1D.h`, `AO_`), `UBlendSpace` (2D, `Animation/BlendSpace.h`) (`BS_`) | `Skeleton`, `BlendParameters[3]` (`FBlendParameter`: DisplayName, Min, Max, GridNum), `SampleData` (`FBlendSample`: `Animation`, `SampleValue`, `RateScale`); an aim offset's `BasePose` | — (a 2D space's triangles are rebuilt from the samples when it loads) |
+| `UAnimNotify` (`Animation/AnimNotify.h`) | a game's own properties | — (an object on a timeline that handles its event: [notifies](#animation-notifies)) |
+| `USoundBase` → `USoundWave` (`Sound/SoundWave.h`) | `Duration`, `Priority` (1 by default), `bLooping`; editor-only: `NumChannels`, `SampleRate` (the source's), `CompressionSampleRate` (22 050 by default), `LoopStartFrame` | uncooked: `RawPCMData`, the source's interleaved 16-bit PCM samples as bulk data; cooked (`PKG_FilterEditorOnly`): the [SPU2 ADPCM](#sound-waves) (`FName` format `SPU2ADPCM`, `int32` rate, `int32` loop start frame or −1, the blocks as bulk data) |
 | `UDataAsset` (`Engine/DataAsset.h`), abstract | the game subclass's `UPROPERTY`s | — |
 | `UCommandlet` (`Commandlets/Commandlet.h`), abstract, transient | `HelpDescription`, `HelpUsage`, `IsServer`, `IsClient`, `IsEditor`, `LogToConsole`, `ShowErrorCount`; `Main(Params)`, `ParseCommandLine` (never saved: the base of LeonEd's commandlets) | — |
 | `UAssetImportData` (`EditorFramework/AssetImportData.h`), editor-only data | `SourceData` (`FAssetImportInfo`: `SourceFiles`, each `FAssetImportSourceFile` `RelativeFilename`, `FileHash`), `ImportSettings` (`TMap<FString, FString>`, sorted) | — |
@@ -72,10 +75,12 @@ asset frees it when its data changes (`UTexture::UpdateResource`, `UStaticMesh::
 `SetPlatformData`, `BuildFromMeshData` and `PostLoad`) and in `BeginDestroy` (`ReleaseResource` /
 `ReleaseResources`), through `IRendererModule::ReleaseAssetResources` ([ARCHITECTURE.md §12](ARCHITECTURE.md#12-rendering-the-gs-path)).
 
-**Deviations from UE 4.27.** No texture source, compression, LOD groups or streaming; one static mesh LOD, no
-mesh description or nanite; materials are fixed parameters, not an expression graph compiled to shaders; the
-animation keys are model-space matrices (UE: compressed local position, rotation and scale keys) and the reference
-skeleton keeps the inverse bind pose; a sound keeps PCM16 (UE: the imported `.wav` and the cooked compressed data);
+**Deviations from UE 4.27.** No texture source, compression, LOD groups or streaming; static mesh LODs from their
+source models' reduction only (no LOD groups, no imported LODs, `SourceModels` kept at run time for the screen sizes),
+one skeletal mesh LOD, no mesh description or nanite; materials are fixed parameters, not an expression graph compiled to shaders; the
+animation keys are compressed local position, rotation and scale keys as UE's, in Leon's own format (one codec, below)
+and the reference skeleton keeps the inverse bind pose (UE: the mesh); a sound keeps its PCM16 source where UE keeps the `.wav` (RawData), and cooks to
+one format for every platform, the SPU2's ADPCM, where UE cooks a format per platform;
 no asset registry or primary data assets; the import data keeps a generic settings map where UE has typed
 subclasses (`UFbxAssetImportData`, ...).
 
@@ -86,9 +91,8 @@ The engine's assets are `/Engine` packages in `Engine/Content`, migrated from th
 | Package | Class | Made from |
 | --- | --- | --- |
 | `/Engine/EngineMaterials/T_Default_D` | `UTexture2D` (128 × 128, sRGB) | imported: `Engine/SourceArt/EngineMaterials/T_Default_D.png` (`Engine/SourceArt/ImportList.ini`) |
-| `/Engine/EngineMaterials/M_Default`, `M_WorldGrid`, `M_SolidMetal` | `UMaterial` | converted once from `Materials/*.lmat` (same parameters; the maps are `T_Default_D`); the packages are the source of truth |
+| `/Engine/EngineMaterials/M_Default`, `M_WorldGrid` | `UMaterial` | converted once from `Materials/*.lmat` (their colour, UV scale and map, `T_Default_D`); the packages are the source of truth |
 | `/Engine/EngineResources/DefaultTexture` | `UTexture2D` (64 × 64 grey checker, sRGB) | saved once from the procedural generator (UE: DefaultTexture) |
-| `/Engine/EngineMaterials/T_Default_Bump_N` | `UTexture2D` (256 × 256 bump normal map, linear) | saved once from the procedural generator |
 | `/Engine/BasicShapes/Cube`, `Plane`, `Sphere` | `UStaticMesh` (100 cm; the sphere 24 × 16; no material slots) | saved once from `MakeCube` / `MakePlane` / `MakeSphere` (RenderCore) |
 | `/Engine/Maps/Entry`, `/Engine/Maps/Template_Default` | map (`.lmap`) | migrated once (P15) from the legacy `Blank.llev` and `Starter.llev` templates ([LEVELS.md](LEVELS.md#engine-maps)); the packages are the source of truth |
 | `/Engine/Maps/AxisTest` (with its `Meshes/SM_*` and `Materials/M_*`) | map (`.lmap`) | imported: `Engine/SourceArt/Maps/AxisTest.glb`, written by `MakeAxisTest.py` (`Engine/SourceArt/ImportList.ini`) |
@@ -101,7 +105,6 @@ loads the default material (what a mesh slot without a material draws with) and 
 [/Script/Engine.Engine]
 DefaultMaterialName=/Engine/EngineMaterials/M_Default.M_Default
 DefaultTextureName=/Engine/EngineResources/DefaultTexture.DefaultTexture
-DefaultBumpNormalTextureName=/Engine/EngineMaterials/T_Default_Bump_N.T_Default_Bump_N
 UIClickSoundName=
 UIConfirmSoundName=
 UIBackSoundName=
@@ -109,12 +112,13 @@ UIErrorSoundName=
 ```
 
 <a id="ui-sounds"></a>**UI sounds.** `FAudioDevice::PlayUiSound` (AudioMixer, below Engine) plays the `USoundWave` each
-`UI*SoundName` names (`UEngine::Init` hands its samples to `FAudioDevice::SetUiSound`), or the cue's procedural tone
-when the key is empty. The engine ships no UI sounds, so the keys are empty: the only candidates, the `UI_*.wav` files
+`UI*SoundName` names (`UEngine::Init` hands its buffer to `FAudioDevice::SetUiSound`); a cue whose key is empty is
+silent (the procedural tones went with the PCM path in [ps2-shipping](PLANS/ps2-shipping.md) N19). The engine ships no UI sounds, so the keys are empty: the only candidates, the `UI_*.wav` files
 of the project's first commit (`ad7e00e:Projects/Zombies/Content/assets/Audio/UI/`), carry no license, readme, credit
 or generator in any commit, so their origin cannot be shown to be CC0 or the project's own. A project sets the keys in
-its `DefaultEngine.ini` to sound waves it imported. Sounds play from memory: `UGameplayStatics::PlaySound2D` /
-`PlaySoundAtLocation` take a `USoundWave`, whose PCM16 samples the device copies (`FSoundWavePCM`).
+its `DefaultEngine.ini` to sound waves it imported. Sounds play from the audio device's buffers:
+`UGameplayStatics::PlaySound2D` / `PlaySoundAtLocation` take a `USoundWave`, whose SPU2 ADPCM the device keeps resident
+from the sound's load ([ARCHITECTURE.md](ARCHITECTURE.md#audio)).
 
 ---
 
@@ -133,7 +137,7 @@ Little-endian, as FArchive writes it: an `int32` is 4 bytes, `bool` is a `uint32
 ```text
 FPackageFileSummary                         (UObject/PackageFileSummary.h)
   int32   Tag                    0x4E4F454C: the file starts with the bytes "LEON"
-  int32   FileVersionUE          ELeonPackageVersion (Core UObject/ObjectVersion.h); 1 in 0.15.0
+  int32   FileVersionUE          ELeonPackageVersion (Core UObject/ObjectVersion.h); 6 in 0.24.0 (Versioning, below)
   int32   FileVersionLicenseeUE  0
   int32   TotalHeaderSize        summary + tables: where the export data starts
   uint32  PackageFlags           PKG_Cooked 0x200, PKG_ContainsMap 0x20000, PKG_FilterEditorOnly 0x80000000, ...
@@ -143,7 +147,7 @@ FPackageFileSummary                         (UObject/PackageFileSummary.h)
   int32   SoftPackageReferencesCount, SoftPackageReferencesOffset
   FGuid   Guid                   4 x uint32: FGuid::NewDeterministicGuid(long package name) (MD5)
   FEngineVersion SavedByEngineVersion
-          uint16 Major, Minor, Patch; uint32 Changelist; FString Branch   ("0.15.0-0+LeonEngine")
+          uint16 Major, Minor, Patch; uint32 Changelist; FString Branch   ("0.24.0-0+LeonEngine")
   FString CookedPlatform         empty unless PKG_Cooked
   int64   BulkDataStartOffset
 name table          NameCount x FString: every FName string of the package, number-less, sorted, no duplicates
@@ -215,6 +219,15 @@ Saving the same objects gives the same bytes on every run and platform (D13): th
 
 `FileVersionUE` is an `ELeonPackageVersion`. A format change adds a value before `VER_LEON_AUTOMATIC_VERSION_PLUS_ONE`; code that reads data added by it checks `Ar.UEVer() >= VER_LEON_<Change>` (the linker sets the archive's version from the summary). The loader rejects packages older than `VER_LEON_OLDEST_LOADABLE_PACKAGE` or newer than `VER_LEON_LATEST` with an error. A licensee version other than 0 is rejected too.
 
+| Version | Value | Change |
+| --- | --- | --- |
+| `VER_LEON_INITIAL_PACKAGE_FORMAT` | 1 | the first package layout (P11) |
+| `VER_LEON_REMOVE_VERTEX_TANGENT` | 2 | the mesh vertices lost their tangent ([ps2-shipping](PLANS/ps2-shipping.md) N4) |
+| `VER_LEON_LPS2_MESH` | 3 | a static mesh's render data is [LPS2 v2](#lps2-v2) and its collision triangles are saved beside it ([ps2-shipping](PLANS/ps2-shipping.md) N12) |
+| `VER_LEON_SKELETAL_LPS2_ANIM_TRACKS` | 4 | the glTF skeletal import ([ps2-shipping](PLANS/ps2-shipping.md) N21): a skeleton keeps its reference pose, a skeletal mesh's render data is [skinned LPS2 v2](#skinned-meshes) with its bones' bounds, an animation's keys are [compressed local tracks](#animation-keys); the oldest loadable version: the content was saved again (it had no skeletal assets), and an older package fails to load |
+| `VER_LEON_BAKED_VERTEX_COLORS` | 5 | a static mesh component saves its [baked vertex colours](#lps2-instance-colors) after its transform ([ps2-shipping](PLANS/ps2-shipping.md) N22); the content was saved again |
+| `VER_LEON_COLLISION_MATERIAL_INDICES` | 6 | a static mesh's collision triangles carry each one's material slot (`FTriMeshCollisionData::MaterialIndices`, after the indices), so a hit on a triangle has its material's [physical material](#physical-materials) ([ps2-shipping](PLANS/ps2-shipping.md) N30f); the oldest loadable version: the content was saved again (`ResavePackages`, reading the older payloads with the slots at 0, then every mesh reimported), and an older package fails to load |
+
 ### Editor-only data (D14)
 
 Desktop builds outside Shipping have `WITH_EDITORONLY_DATA`: they save editor-only properties unless the package has `PKG_FilterEditorOnly` (the cook sets it). The PS2 and Shipping builds have no editor-only properties: every package they save is marked `PKG_FilterEditorOnly`, and when they load a package without it (an uncooked package) they log it once and skip the editor-only tags as unknown names.
@@ -236,8 +249,17 @@ holds the world and everything in it, each an export:
 | --- | --- | --- |
 | `<Map>` | `UWorld` (`Engine/World.h`), public and standalone: the map's asset | `PersistentLevel`; editor-only `AssetImportData` for an imported map |
 | `<Map>:PersistentLevel` | `ULevel` (`Engine/Level.h`) | `Actors` (the spawn order; the world settings first), `WorldSettings` |
-| `<Map>:PersistentLevel.<Actor>` | `AWorldSettings`, `AStaticMeshActor`, `APlayerStart`, `ATargetPoint`, `ABlockingVolume`, `ATriggerVolume`, `APainCausingVolume`, `ADirectionalLight`, `APointLight`, `ACameraActor`, `ANavigationWaypoint`, ... | the actor's `UPROPERTY`s: `Tags`, `bHidden`, `RootComponent`, the class's own (`DefaultGameMode`, `KillZ`, `PlayerStartTag`, `DamagePerSec`, `Links`, `Flags`, ...) |
-| `<Map>:PersistentLevel.<Actor>.<Component>` | the actor's default subobjects and the components added to it (`URotatingMovementComponent`, ...) | the transform (`RelativeLocation`, `RelativeRotation`, `RelativeScale3D`), `Mobility`, the collision (`CollisionEnabled`, `bSimulatePhysics`, `bEnableGravity`), `StaticMesh`, `OverrideMaterials`, the light and camera values, ...; a scene component's native tail is the `FQuat` of its relative transform, so a loaded transform is the saved one bit for bit (Leon; UE rebuilds it from the rotator) |
+| `<Map>:PersistentLevel.<Actor>` | `AWorldSettings`, `AStaticMeshActor`, `APlayerStart`, `ATargetPoint`, `ABlockingVolume`, `ATriggerVolume`, `APainCausingVolume`, `ADirectionalLight`, `APointLight`, `ACameraActor`, `ANavigationWaypoint`, `AVisibilityCellVolume`, `AVisibilityPortal`, ... | the actor's `UPROPERTY`s: `Tags`, `bHidden`, `RootComponent`, the class's own (`DefaultGameMode`, `KillZ`, `FogSettings`, `PlayerStartTag`, `DamagePerSec`, `Links`, `Flags`, `CellName`, `CellA` / `CellB` / `Corners`, ...) |
+| `<Map>:PersistentLevel.<Actor>.<Component>` | the actor's default subobjects and the components added to it (`URotatingMovementComponent`, ...) | the transform (`RelativeLocation`, `RelativeRotation`, `RelativeScale3D`), `Mobility`, the collision (`CollisionEnabled`, `bSimulatePhysics`, `bEnableGravity`), `StaticMesh`, `OverrideMaterials`, the light and camera values, ...; a scene component's native tail is the `FQuat` of its relative transform, so a loaded transform is the saved one bit for bit (Leon; UE rebuilds it from the rotator); a static mesh component's then carries its [baked vertex colours](#lps2-instance-colors) (N22) |
+
+<a id="cells-and-portals"></a>**Cells and portals** ([ps2-shipping](PLANS/ps2-shipping.md) N15). A map's visibility
+cells and the portals between them are actors saved with it, from the glTF's `VIS_<Cell>` and `PORTAL_<CellA>_<CellB>`
+nodes (the engine's rules in `BaseEditor.ini`): an `AVisibilityCellVolume` is the box of its node's mesh with
+`CellName` the node's suffix; an `AVisibilityPortal` keeps `CellA`, `CellB` (split from the suffix where both sides
+are cells of the map, so a cell's name may hold an underscore) and `Corners`, the rectangle of its node's quad in the
+plane of its first triangle, in the world, in order around it. A portal whose suffix names no two cells is left out
+with a warning. Nothing about them is cooked apart: the renderer's scene gathers the actors when the map loads and
+assigns its primitives to the cells then ([ARCHITECTURE.md §12](ARCHITECTURE.md#12-rendering-the-gs-path)).
 
 The meshes, materials and textures a map shows are imports of their own packages (an imported map's in
 `<Map>/Meshes` and `<Map>/Materials`), and the class references (`DefaultGameMode`) imports of `/Script` classes.
@@ -258,6 +280,20 @@ cooked layout); beside them the cook stages the config (`Engine/Config/Base*.ini
 project's `Config/Default*.ini`, never an Editor ini), the shaders (`Engine/Shaders/`) and the `.lproj`. The PS2 target
 cooks its textures paletted ([PS2](#ps2)); the rest keeps the Win64 formats. Two cooks of the same content give the same bytes.
 
+What the target never reads stays out ([ps2-shipping](PLANS/ps2-shipping.md) N23): the staged ini files lose their
+comments, their blank lines and the sections only the editor and the cook read (`[/Script/UnrealEd.*]`, the
+packaging settings, and `[/Script/LeonEd.*]`, the cook's budgets; `UCookCommandlet::StripConfigForTarget`), and a
+static mesh whose body setup answers with its simple shapes everywhere (`CTF_UseSimpleAsComplex`) is saved without its
+collision triangles, which the physics scene would never read. ShooterGame's PS2 cook went from 245 409 to 232 480
+bytes (−12.9 KB: 12.1 KB of config, 0.9 KB of the blockout crates' triangles).
+
+**The cook cache** (N23). The cook is incremental by default (`-iterate`; `-full` cooks everything): each cooked
+package is kept in `<Project>/Intermediate/CookCache/<Platform>/` under a key, the SHA-1 of the package's bytes and of
+everything its hard imports reach, the cooker's version (`UCookCommandlet::CookerVersion`, raised by a change that
+alters the output) and the platform's settings. A package whose key has not changed is copied from the cache, byte for
+byte what a full cook makes ([TOOLS.md](TOOLS.md#the-cook)). A map's baked lighting is in the map and the meshes it was
+baked for are its imports, so changing a light or a mesh cooks the map again.
+
 <a id="paks--lpak"></a>
 
 ## Paks — `.lpak`
@@ -269,8 +305,9 @@ No compression, no encryption; the bytes are little-endian and written the way `
 its `int32` length including the terminator, then that many UTF-8 bytes).
 
 ```text
-entry data     each file's bytes, raw, one after the other in path order (lowercased); with LeonPak -align=N each
-               starts at a multiple of N (zeros in between): 2048 puts every file on a CD sector
+entry data     each file's bytes, raw, one after the other: first in the open order LeonPak -order= gives (the
+               order a -LogFileOpenOrder run opened them in), then the others in path order (lowercased); with
+               LeonPak -align=N each starts at a multiple of N (zeros in between): 2048 puts every file on a CD sector
 index          at IndexOffset, IndexSize bytes:
   FString  MountPoint      the folder every entry is under, ending in '/': "../../../" for a staged build
   int32    NumEntries
@@ -296,9 +333,15 @@ FPakInfo       the last 44 bytes of the file:
   (UnrealPak's rule). A relative mount point is taken from the executable's folder, so `../../../` is the folder above
   `<Project>/Binaries/<Platform>/`: the staged build's root, where `Engine/` and `<Project>/` are. Mounting can place a
   pak elsewhere (`FPakPlatformFile::Mount(File, Order, Path)`).
-- **Determinism.** The output depends only on the files: the data is in path order and the index in hash order,
-  whatever order the response file lists them in, and nothing records a time. Two paks of the same cooked folder are
-  the same bytes.
+- **Determinism.** The output depends only on the files and the open order: the data is in that order (then path
+  order) and the index in hash order, whatever order the response file lists them in, and nothing records a time. Two
+  paks of the same cooked folder and order are the same bytes.
+- **Open order** ([ps2-shipping](PLANS/ps2-shipping.md) N23). `-LogFileOpenOrder` on the game (Win64 and PS2) puts
+  `FPlatformFileOpenLog` on top of the platform file chain: each file the game opens, the first time, by its staged path
+  (`"ShooterGame/Content/Maps/de_leon.lmap" 12`), in the log (`LogFileOpenOrder:`) and at exit in
+  `<Project>/Saved/Logs/FileOpenOrder-<Platform>.txt` (not on the PS2, which writes no file: its EE log is the order).
+  `LeonPak -order=<file>` (`BuildCookRun -pakorder=`) reads either and puts those entries first, in that order, so a
+  load reads the disc forward; the index keeps its format.
 - **Differences from UE's `.pak`**: no per-entry header before the data, no compression blocks or encryption, no
   signature file, the path hash only in the index (UE 4.27 splits a path-hash index from a full directory index).
 
@@ -314,18 +357,22 @@ UE's prefix for its class:
 | Factory (UE name) | Sources | Asset (prefix) |
 | --- | --- | --- |
 | `UTextureFactory` | PNG, JPEG, TGA, BMP (stb_image) | `UTexture2D` (`T_`): RGBA8, bottom row first; sRGB unless `ColorSpaceMode=Linear` or a `_N` / `_Normal` name |
-| `UFbxFactory` | FBX (ufbx), OBJ (tinyobjloader) | `UStaticMesh` (`SM_`), or with `MeshTypeToImport` `USkeletalMesh` (`SK_`, on `Skeleton` or a new `SKEL_` skeleton) and `UAnimSequence` (`A_`, on `Skeleton`) |
-| `UGLTFImportFactory` | glTF / GLB (cgltf) | `UStaticMesh` (`SM_`) |
+| `UGLTFImportFactory` | glTF / GLB (cgltf) | `UStaticMesh` (`SM_`); with `ImportType=SkeletalMesh` (`-type=SkeletalMesh`) a `USkeletalMesh` (`SK_`) on `Skeleton` or a `SKEL_` skeleton next to it; with `ImportType=Animation` (`-type=Animation`) a `UAnimSequence` (`A_<Animation>`) per glTF animation on `Skeleton` ([below](#skeletal-meshes-and-animations--gltf-import)) |
 | `UGLTFMapFactory` (`-type=Map`) | glTF / GLB scene (cgltf) | a map (`UWorld`, `.lmap`, no prefix) with its `SM_` meshes and `M_` materials: [LEVELS.md](LEVELS.md#importing-a-map-from-gltf) |
-| `USoundFactory` | `.wav`, 16-bit PCM | `USoundWave` (`S_`) |
+| `USoundFactory` | `.wav`, 16-bit PCM | `USoundWave` (`S_`): the samples as they are, with `CompressionSampleRate`, `bLooping`, `LoopStartFrame` and `Priority` (import settings) |
 | `UMaterialFactoryNew` | — (new) | `UMaterial` (`M_`) |
+| `UPhysicalMaterialFactoryNew` | — (new: an ImportList `Type=PhysicalMaterial` section, `SurfaceType=`) | `UPhysicalMaterial` (`PM_`) |
 
 - **Meshes** are read into mesh data with their material slots and converted to the engine world by MeshUtilities
-  (`FStaticMeshBuilder::BuildFromFile`; every importer ends with `FImportCoordinateConversion`: OBJ and glTF are right-handed
-  Y up in metres, `(X, Z, Y) × 100` as UE's glTF importer; FBX is resolved by ufbx to right-handed Z up and converted
-  with UE's `FFbxDataConverter` basis `(X, −Y, Z)` times the file's unit in centimetres). Each named source material
-  gets an `M_<Name>` `UMaterial` next to the mesh (`bImportMaterials`, UE's default) with its values and its maps
-  imported as `T_` textures; an existing material of that name is reused as it is.
+  (`FStaticMeshBuilder::BuildFromFile`; the importer ends with `FImportCoordinateConversion`: glTF is right-handed Y up
+  in metres, `(X, Z, Y) × 100` as UE's glTF importer). Each named source material gets an `M_<Name>` `UMaterial` next
+  to the mesh (`bImportMaterials`, UE's default) with its values and its base colour image as a `T_` texture: an
+  external file is imported as its own asset (with its import data), an image embedded in a `.glb` (a buffer view) or
+  a `data:` URI becomes `T_<ImageName>` made from its bytes, without import data (the mesh's import makes it); an
+  existing material of that name is reused as it is, but for its physical material: the glTF material's extras
+  `{"physMaterial": "<a PM_'s long package name or object path>"}` set `PhysMaterial` on the material the import
+  makes or finds again ([physical materials](#physical-materials)). glTF is the only mesh format: FBX (ufbx) and OBJ (tinyobjloader)
+  were removed in [ps2-shipping](PLANS/ps2-shipping.md) N21, OBJ having no user left but the tests.
 - **Import over an asset.** Importing onto an existing asset reimports it in place (the factory fills the same object:
   every reference to it stays valid); a mesh slot whose name did not change keeps its material (UE).
 - **Reimport.** The import factories are `FReimportHandler`s (`FReimportManager`): an asset whose import data names a
@@ -335,14 +382,56 @@ UE's prefix for its class:
 - **Saving** writes the asset's package (and those of the materials, textures and skeletons the import made) to its
   file under the mount point, deterministically (D13).
 
-**Identity.** The `Cube.obj` test fixture (`Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/Cube.obj`) imported with
-`LeonCook Engine/Saved/CookIdentity/CookIdentity.lproj -run=ImportAssets -source=Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/Cube.obj -dest=/Game/Identity`
+**Identity.** The `Cube.glb` test fixture (`Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/Cube.glb`,
+written by `MakeSkinnedFixture.py` next to it) imported with
+`LeonCook Engine/Saved/CookIdentity/CookIdentity.lproj -run=ImportAssets -source=Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/Cube.glb -dest=/Game/Identity`
 (a scratch project in the ignored `Engine/Saved`) saves `SM_Cube.lasset` with SHA-256
-`7569649B8B75DABE928AC56A4C238897B010ACE91C87720BC83A0E31E4144BF8` (2 692 bytes; the same when imported again over
-it or reimported, on Win64 and on Linux; measured with 0.21.0: the engine version is in the package summary, at byte
-70, so a release changes the hash; 0.20.0 gave `441931A1181977A8EF810C7FEF26D1EA2DA42D3E04AD1AE33AD6B0C31EBFD373`).
+`A24A188795C94680A639E1BC18822206EA48DE8135B9625E97C9FAC9630ED1FC` (2 372 bytes: its 12 collision triangles' material
+slots; the same when imported again over it or reimported, on Win64; measured with engine version 0.24.0, package
+version 6, [ps2-shipping](PLANS/ps2-shipping.md) N31). The engine and package versions are in the package summary, so a
+release or a version bump changes the hash: 0.21.0 with package version 6 (N30f) gave
+`2D2B59B8A9804FF746C1B126501A2A2DF88E2040FAD6432650F525ECC9407C56`, package version 5 (N22)
+`F60454FC5600B82629A388B84599293F87E90A8FA9E4A58E34584F39ED8E29FF` and version 4 (N21)
+`50EEB3471A5CB963FCDFB4EED52744E42D087A78DB8BFEC3BAFCCBE4D3C3F087`; the same cube as `Cube.obj`, before N21,
+`93D5FB16E75F4FAD3436377D5A669CBD24B2FC9F6CB93A51B28E5018853D3C8E` (these three 2 344 bytes).
 
 ---
+
+## Physical materials
+
+[ps2-shipping](PLANS/ps2-shipping.md) N30f, UE's: a `UPhysicalMaterial` (`PM_`) says what a surface is made of, by its
+`SurfaceType` (`EPhysicalSurface`). The surface types are the default and `SurfaceType1` to `SurfaceType62`; a project
+names the ones it uses in its Engine config (`UPhysicsSettings`):
+
+```ini
+[/Script/Engine.PhysicsSettings]
++PhysicalSurfaces=(Type=SurfaceType1,Name=Concrete)
+```
+
+A `UMaterial`'s `PhysMaterial` names one. The collision queries report it when asked
+(`FCollisionQueryParams::bReturnPhysicalMaterial`, `FHitResult::PhysMaterial`): a triangle's material (its slot in the
+mesh's collision triangles, `MaterialIndices`, and the component's material of that slot), or the component's first
+material for a simple shape ([ARCHITECTURE.md §11](ARCHITECTURE.md#11-physics)). The assets are made from an
+ImportList section ([TOOLS.md](TOOLS.md#importlistini)):
+
+```ini
+[PM_Wood]
+Type=PhysicalMaterial
+Dest=/Game/PhysicalMaterials
+SurfaceType=Wood
+```
+
+and a glTF material names its physical material in its extras, which the mesh and map imports set on its `M_`
+material ([ART_PIPELINE.md](ART_PIPELINE.md#physical-materials)):
+
+```json
+"materials": [{"name": "Crate", "extras": {"physMaterial": "/Game/PhysicalMaterials/PM_Wood"}, ...}]
+```
+
+A `physMaterial` that is not a string, or extras that are not an object, are a warning; a physical material that does
+not exist is an error (the material keeps what it had). Deviations from UE 4.27: no friction, restitution or density
+(Leon's physics has none to use), no engine default physical material (none is the default surface), no body setup or
+component override of the physical material.
 
 <a id="legacy-content-migration"></a>
 
@@ -362,9 +451,126 @@ The pre-P14 files were converted once and deleted, with the tools that read them
 
 ---
 
-## Skeletal — FBX import
+<a id="skeletal-meshes-and-animations--gltf-import"></a>
 
-The cooked skeletal formats (`.lskel`, `.lskm`, `.lanim`, `.lchar`, `*.blendspace1d.json`) were removed in 0.12.0. Skinned meshes and animation sequences are imported from FBX (ufbx: `LoadSkeletalMeshFromFbx` / `LoadAnimSequenceFromFbx`, `Engine/Source/Developer/MeshUtilities/Public/FbxSkeletalImport.h`) by `UFbxFactory` (`-type=SkeletalMesh` / `-type=Animation`) into `USkeletalMesh`, `USkeleton` and `UAnimSequence` packages.
+## Skeletal meshes and animations — glTF import
+
+Since [ps2-shipping](PLANS/ps2-shipping.md) N21 skinned meshes and their animations come from glTF, as static meshes
+do: `UGLTFImportFactory` with `ImportType=SkeletalMesh` / `Animation` (the import commandlet's `-type=SkeletalMesh` /
+`-type=Animation`, an ImportList.ini's `Type=`), through MeshUtilities' `LoadSkeletalMeshFromGltf` and
+`LoadAnimSequencesFromGltf` (`Public/GltfImport.h`). FBX (ufbx) is gone (plan decision D11). The cooked skeletal
+formats of 0.11 (`.lskel`, `.lskm`, `.lanim`, `.lchar`, `*.blendspace1d.json`) were removed in 0.12.0.
+
+**Skinned mesh** (`USkeletalMesh`, `SK_<File>`):
+
+- The first skin a mesh node uses, and every mesh node skinned with it, merged: one section and material slot per
+  primitive (glTF skins in the skin's space and ignores the mesh nodes' transforms). The materials are made as a static
+  mesh's, embedded images included.
+- **Skeleton**: the skin's joints, reordered so that a parent comes before its children (a joint's parent is its
+  nearest ancestor joint), at most 96 (`MaxSkinBones`), each name once. A bone's reference pose is its joint node's
+  local transform, with the transforms of the nodes between it and its parent joint folded in at rest (for a root
+  joint, those above it: Blender's armature object); the inverse bind pose is the skin's `inverseBindMatrices`.
+- **Weights**: `JOINTS_n` / `WEIGHTS_n` of every set; a joint named twice adds up; normalized, the **two largest kept**
+  (the lower joint first on a tie) and renormalized, then quantized to 1/255 steps that add up to 255
+  (`FSkinWeightInfo`). Two is the PS2's budget: the skinned LPS2 layout (below) gives a vertex two palette indices and
+  two weights. An unused second weight is 0 and names the first bone.
+- **The skeleton asset**: `Skeleton=<object path>` (its bones must match the file's: names, order and parents), else
+  the mesh's own on a reimport, else `SKEL_<Name>` next to the mesh (`SK_Hero` → `SKEL_Hero`; `NewSkeletonName=`
+  names it otherwise, so that several meshes share one: `SK_Body_CT` makes `SKEL_Body`, N27), found or made. A skeleton
+  the import finds or makes takes the file's reference and inverse bind poses; one it is given keeps its own. Either
+  takes the file's sockets: each `SOCKET_<Name>` node under a joint is a `USkeletalMeshSocket` on its nearest ancestor
+  joint, placed relative to it at rest (an existing socket of that name is updated, the others are kept).
+- The render data is built by `USkeletalMesh::BuildFromMeshData` (Engine's `IMeshBuilderModule::BuildSkinnedMesh`:
+  MeshUtilities' `FLPS2MeshBuilder::BuildSkinned`), with the bind pose's box and each bone's bounds radius.
+
+**Animations** (`UAnimSequence`, `A_<Animation>`): every glTF animation of the file (or the one `AnimationName=`
+names) becomes a clip next to the asset the import was asked for, named after the animation (`Animation_<Index>`
+without a name), on `Skeleton=` (or the clip's own on a reimport; required). Each clip records its `AnimationName`, so a
+reimport reads that animation alone.
+
+- The file must have the skeleton's bones: a node named after each bone whose nearest ancestor bone is the bone's
+  parent, and, when the file has a skin, joints with the same names, order and parents (the mesh import's rule). A
+  mismatch fails the import with an error.
+- Channels: `translation`, `rotation` and `scale` with `LINEAR` (rotations slerped) or `STEP` interpolation. `CUBICSPLINE`
+  fails the import with an error that says so (Blender exports linear keys with "Always Sample Animations"); morph target
+  `weights` and channels of nodes that are not bones are ignored; the nodes between bones keep their rest.
+- A clip is sampled at **30 Hz** from its first key to its last, rounded to whole frames (`SequenceLength` is
+  `(frames − 1) / 30`), every bone's local transform in the engine's axes and centimetres. A `STEP` key lands on the
+  frame at or after its time: between the frames around it the clip moves in one frame (33 ms). A clip loops (`bLoop`)
+  unless its `extras` say `{"loop": 0}` (or `false`; N27, [below](#animation-notifies)): a one-shot holds its last
+  frame (a jump's start and landing, a montage's clip). A `loop` that is not 1, 0, true or false fails the import.
+- UVs: glTF's `TEXCOORD_0` starts at the image's top left and the engine's textures keep their bottom row first
+  (`UTextureFactory`, OpenGL's order), so the import turns v over (`1 - v`), for static and skinned meshes alike
+  (N27: the first painted textures showed the import had not since FBX's removal in N21).
+
+<a id="animation-keys"></a>**Keys** (`FCompressedAnimSequence`, AnimationCore: `UAnimSequence`'s bulk data). One
+local-space track per bone of the skeleton; each channel is a run of keys, a key being its frame number and its value:
+
+| Channel | Value | Bytes a key | Kept |
+| --- | --- | --- | --- |
+| Rotation | `FQuantizedQuat48`, "smallest three": the largest component dropped (made positive: −Q is the same rotation), the others (within ±1/√2) 15 bits each; bit 15 of words 0 and 1 is the dropped component's index | 6 + 2 (frame) | always (one key when constant); off by less than 0.006° |
+| Translation | `int16` × 3, `Quantized × TranslationScale + TranslationBias` per axis (the track's range over ±32 767) | 6 + 2 | when half a step is within a quarter of the tolerance (a range up to 16 m at 0.05 cm); else `float` × 3, 12 + 2 |
+| Scale | `float` × 3 | 12 + 2 | only for a bone whose scale is not 1 (within the scale tolerance) |
+
+The model-space `FMatrix` keys it replaces took 64 bytes a bone a frame. **Key reduction**: every channel is
+quantized first, then from the first frame the next kept key is the farthest frame whose interpolation from the kept
+one (the runtime's: lerp, and a normalized lerp along the shorter arc for rotations, from the quantized values) keeps
+every frame between them within the tolerance of the source; the first and last frames are kept, and a channel that
+never leaves its first key's tolerance keeps that key alone. The tolerances are settings of
+`[/Script/Engine.AnimationSettings]` (`BaseEngine.ini`; `FAnimCompressionSettings`): `RotationErrorToleranceDegrees`
+0.1, `TranslationErrorTolerance` 0.05 cm, `ScaleErrorTolerance` 0.001. So every 30 Hz frame of the source samples back
+within them (`System.AnimationCore.Compression.KeyReductionBound`: 3 bones over 90 frames, 2 094 bytes instead of
+17 280). The payload, in order: `int32` NumFrames, `float` FrameRate, the tracks (`int32` count; each `int32`
+FirstRotationKey, NumRotationKeys, FirstTranslationKey, NumTranslationKeys, FirstTranslationValue, FirstScaleKey,
+NumScaleKeys, `bool` bFloatTranslation, `FVector` TranslationScale, TranslationBias), then the `uint16` RotationFrames,
+`uint16` Rotations (3 a key), `uint16` TranslationFrames, `int16` Translations, `float` FloatTranslations, `uint16`
+ScaleFrames and `float` Scales, each an `int32` count and its elements. A load checks every run against its arrays.
+
+**At run time** (the EE): `UAnimSequence::GetBonePose` samples the keys around a time into local transforms; the anim
+instances blend poses in local space (`FAnimationRuntime`: translations and scales lerped, rotations by a normalized
+lerp, n-way for a blend space, per bone for a layer, additive for an aim offset); `USkeletalMeshComponent` evaluates
+the pose at most once per update into its component-space matrices (`FillUpComponentSpaceTransforms`), and the sockets
+(by bone index), the skin matrices and the pose's bounds the renderer culls with all read that cached pose
+([ARCHITECTURE.md](ARCHITECTURE.md#animation-runtime), [ps2-shipping](PLANS/ps2-shipping.md) N25).
+
+<a id="animation-notifies"></a>**Notifies** ([ps2-shipping](PLANS/ps2-shipping.md) N25). An animation's notifies are
+authored in its **glTF `extras`** (not a sidecar file: they travel with the clip and a reimport keeps them):
+
+```json
+{"name": "Walk_F", "extras": {"loop": 1, "notifies": [{"name": "Footstep_L", "time": 0.0}, {"name": "Footstep_R", "time": 0.333333}]},
+ "channels": [...], "samplers": [...]}
+```
+
+- `name` is the event (`Footstep_L`, `Footstep_R`, `Fire`, `MagOut`, `MagIn`, `PlantBeep`...), `time` its seconds on
+  the glTF timeline (the clip's first key is 0 in the asset; a time outside the clip is clamped to it). Anything else
+  in `extras` but `loop` is ignored; a notify without both, or `notifies` that is not a list (N26's first exporter
+  wrote a `Name@frame,...` string, which the import used to skip silently), fails the import with an error that
+  says so.
+- Blender: the exporter writes an action's custom properties as its animation's `extras` (Include → Custom
+  Properties); `leon_art.add_action` (D6) sets the action's `loop` and `notifies` properties, the latter a list of
+  `{"name", "time"}` from the clip's pose markers (the marker's name, its frame / 30): Blender's ID properties hold a
+  list of groups and the exporter writes it as that JSON ([ART_PIPELINE.md](ART_PIPELINE.md#animations)).
+- The import stores them as the `UAnimSequence`'s `Notifies` (`FAnimNotifyEvent` with the name and no `Notify`
+  object), sorted by time. A montage adds its own (`AnimMontageFactory`'s `Notify`); a game may place `UAnimNotify`
+  objects in code.
+- A player fires a notify once each time it crosses its time going forward (`TriggerTime` in `[previous, current)`,
+  split at a loop's wrap; the end included when a one-shot reaches it); an update of no time fires nothing.
+
+<a id="blend-spaces-and-montages"></a>**Blend spaces, aim offsets and montages** have no source file: an
+`ImportList.ini` section describes each one from the `A_` clips ([TOOLS.md](TOOLS.md#importlistini)), and the import
+commandlet makes it with `UBlendSpaceFactoryNew` (`Type=BlendSpace`, 2D), `UBlendSpaceFactory1D` (`BlendSpace1D`),
+`UAimOffsetBlendSpaceFactory1D` (`AimOffsetBlendSpace1D`) or `UAnimMontageFactory` (`AnimMontage`). Making one again
+from the same section writes the same bytes (G5), and it has no import data (a reimport of the list makes it again).
+
+- Blend space: `AxisX=Name,Min,Max` (and `AxisY` for 2D), `+Sample=<A_>,X[,Y]` per sample (a name in the same folder
+  or a long object path), `Skeleton=` (default: the first sample's). The 2D space triangulates its samples (Delaunay on
+  the axes normalized to their ranges); an input takes its triangle's barycentric weights, the nearest edge's outside
+  them. Locomotion: speed (cm/s) by direction (degrees, −180 to 180).
+- Aim offset: `+Sample=<A_>,<pitch>` for 3 to 5 poses from −90 to 90, `BasePose=<A_>` (default: the sample nearest 0):
+  the first frame of each clip, applied as the blend's difference from the base pose.
+- Montage: `Animation=<A_>`, `SlotName=` (`DefaultSlot`: the whole body; `UpperBody`: from the anim instance's branch
+  bone up), `BlendInTime=`, `BlendOutTime=` (seconds), `+Section=Name,StartTime[,NextSection]`, `+Notify=Name,Time`.
+  Naming: `BS_`, `AO_` (UE's aim offsets), `AM_` (UE's montages).
 
 ---
 
@@ -390,7 +596,8 @@ JSON read by LeonBuildTool in CMake (`Engine/Source/Programs/LeonBuildTool/Syste
 | `Modules[].PlatformAllowList[]` | Platforms (or platform groups) the module builds for |
 | `FileVersion`, `Version`, `VersionName`, `FriendlyName`, `Description`, `Category`, `Modules[].Type` / `LoadingPhase` | Informational |
 
-Examples: `Game/ThirdPerson/ThirdPerson.lproj`, `Engine/Plugins/Runtime/JoltPhysics/JoltPhysics.lplugin`.
+Examples: `Game/ShooterGame/ShooterGame.lproj`; a `.lplugin` example is in [BUILD.md](BUILD.md#lplugin-ue-uplugin)
+(the engine ships no plugin).
 
 ---
 
@@ -398,35 +605,182 @@ Examples: `Game/ThirdPerson/ThirdPerson.lproj`, `Engine/Plugins/Runtime/JoltPhys
 
 ## PS2
 
-The PS2 runtime draws with the Graphics Synthesizer through the Renderer's GS scene renderer. ShooterGame on the EE ([ps2-engine](PLANS/ps2-engine.md) E1 to E3) loads its `.lasset` and `.lmap` packages cooked by the PS2 target platform, loose through `host:` or from `<Project>/Content/Paks/<Project>-PS2.lpak` (paths from the ELF's folder, entries aligned to 2048 bytes; `BuildCookRun -platform=PS2 -pak`). The ThirdPerson demo builds its textures, materials and level in code.
+The PS2 runtime draws with the Graphics Synthesizer through the Renderer's GS scene renderer. ShooterGame on the EE ([ps2-engine](PLANS/ps2-engine.md) E1 to E3) loads its `.lasset` and `.lmap` packages cooked by the PS2 target platform, loose through `host:` or from `<Project>/Content/Paks/<Project>-PS2.lpak` (paths from the ELF's folder, entries aligned to 2048 bytes; `BuildCookRun -platform=PS2 -pak`), also from a bootable ISO (`-iso`, N23: the pak on `cdrom0:` behind the ELF), read asynchronously (N24).
 
-**Textures** (E3). The PS2 cook (the "Paletted" texture format, `FPalettedTextureBuilder` in TextureCompressor) makes every RGBA8 texture `PF_P4` (up to 16 colours, exact) or `PF_P8` (up to 256 exact, more by a deterministic median cut), its sides the nearest powers of two between 8 and 256 (each texel the mean of what it covers). The renderer's texture cache uploads them as `PSMT4` / `PSMT8` with a `PSMCT32` CLUT (CSM1). The cook writes `<Project>/Saved/Cooked/PS2-VramReport.txt`: the textures every map may draw (the config's defaults) and each map's own, in GS pages and CLUT blocks (`FGSTextureLayout`), against the 1856 KB texture arena. Meshes and sounds keep the Win64 formats (PCM16 sounds, mixed on the EE: E5).
+**Textures** (E3). The PS2 cook (the "Paletted" texture format, `FPalettedTextureBuilder` in TextureCompressor) makes every RGBA8 texture `PF_P4` (up to 16 colours, exact) or `PF_P8` (up to 256 exact, more by a deterministic median cut), its sides the nearest powers of two between 8 and 256 (each texel the mean of what it covers). Since [ps2-shipping](PLANS/ps2-shipping.md) N13 it also makes the mip chain, saved as the texture's mips 1 and on: each mip halves both sides, down to 8 texels on the shorter side (6 levels for 256 x 256, at most the GS's 7), each texel the box average of the four under it in linear space for an sRGB texture (its colour weighted by their alpha). Every level indexes mip 0's one palette, as the GS reads a texture's levels through one CLUT: mip 0 decides the format and stays exact (its colours are the first entries), the mips' other colours fill the free entries by median cut and each takes its nearest entry; with more than 256 colours in mip 0 all the levels' colours are reduced together. A mip is its indices only (`GetPixelFormatMipDataSize`). The package layout already carried the mips, so the version does not change: a paletted texture cooked before N13 has one mip and still loads (without mips). The renderer's texture cache uploads them as `PSMT4` / `PSMT8` levels (MIPTBP1 / MIPTBP2) with a `PSMCT32` CLUT (CSM1).
 
-### Cooked mesh blob — `LPS2`
+<a id="ps2-texture-blob"></a>**The texture blob** ([ps2-shipping](PLANS/ps2-shipping.md) N23): a cooked paletted texture is load-in-place. Its data is what the GIF uploads, so the runtime neither converts nor copies it:
 
-The header of the blob (nothing reads it: the scene renderer draws the engine's own mesh data, see
-[ps2-engine](PLANS/ps2-engine.md) E3):
+```text
+mip 0 bulk data   the CLUT image, then level 0's indices
+  CLUT            PSMCT32 words as the GS reads them in CSM1: 16 x 16 for PF_P8 (1 024 bytes, entries 8..15 and 16..23 of
+                  every 32 trading places), 8 x 2 for PF_P4 (64 bytes); R, G, B, then the alpha scaled from 0..255 to the
+                  GS's 0..0x80 ((a * 0x80 + 127) / 255, FGSTextureLayout::MakeClutImage)
+  indices         the IMAGE transfer payload of PSMT8 (a byte a texel) or PSMT4 (two a byte, the first in the low nibble),
+                  bottom row first
+mip N bulk data   level N's indices, the same way
+```
 
-| Field | Type | Notes |
+Every part is whole quadwords (the smallest level, 8 x 8 PSMT4, is 32 bytes; the CLUTs 64 and 1 024), and the mips'
+bulk data is allocated 128-byte aligned when the texture loads (`FByteBulkData::SetPayloadAlignment`,
+`GetPixelFormatDataAlignment`), so the CLUT and every level start on a cache line. The texture cache records each
+upload with `FGSCommandList::UploadImageInPlace`: the PS2's DMA chain (N11) refers to the texture's own bytes by a REF
+tag (the GS swizzles them into its memory as they arrive: pre-swizzling would only move work from the GS to the cook,
+the EE does none either way); a texture released while a list still holds its data is copied into the recording frame's
+list and the frame being sent is waited for (`FPS2RHI::RetireInPlaceImages`). The PS2 and Win64 cooks write the same
+bytes, and the desktop's converter of uncooked textures makes the same blob, which the GS emulator reads. The cook writes `<Project>/Saved/Cooked/PS2-VramReport.txt`: the textures every map may draw (the config's defaults) and each map's own, with their levels, in GS blocks with the levels' alignment and the CLUT (`FGSTextureLayout::GetFootprint`, what the cache allocates), against the 1856 KB texture arena. Sounds are the SPU2's ADPCM on every platform ([below](#sound-waves)), and a static or skeletal mesh's render data is [LPS2 v2](#lps2-v2) on every platform, so the cook keeps it as it is.
+
+<a id="sound-waves"></a>**Sounds** ([ps2-shipping](PLANS/ps2-shipping.md) N19). Both target platforms' wave format is
+`SPU2ADPCM` (`ITargetPlatform::GetAllWaveFormats`): the cook makes each `USoundWave`'s ADPCM from its PCM source
+(`USoundWave::CacheCompressedData`, AudioCompressor's `FSpuAdpcmEncoder`) and saves it instead of the PCM. The
+desktop's editor builds make the same bytes from an uncooked sound the first time it plays, so Win64 plays what the
+PS2 plays; the audio device uploads them to SPU2 RAM (PS2) or decodes them (desktop). The conversion:
+
+- The channels are averaged into one (an SPU2 voice is mono; a spatialized sound is a point).
+- The rate becomes `CompressionSampleRate` (22 050 Hz by default: effects) when the source is higher, never higher
+  (0 keeps the source's; at most 48 000, the SPU2's); a windowed sinc (Blackman, 16 zero crossings) cuts at the lower
+  Nyquist.
+- A looping sound (`bLooping`) returns to `LoopStartFrame`: silence ahead of the sound puts that frame on a block, and
+  the loop is resampled to whole blocks, so the voice jumps back seamlessly; the loop's first block uses filter 0.
+- The blocks are the SPU2's (`FSpuAdpcm`): 16 bytes each, a header byte (predictor filter 0 to 4 in the high nibble,
+  shift 0 to 12 in the low one), a flags byte (bit 0 loop end, bit 1 repeat, bit 2 loop start) and 28 4-bit samples,
+  the first in the low nibble; a sample decodes as `(Nibble << 12) >> Shift` plus `(Previous1 * F0 + Previous2 * F1 +
+  32) >> 6`, clamped to 16 bits, with (F0, F1) (0, 0), (60, 0), (115, −52), (98, −55), (122, −60). Each block keeps
+  the filter and shift whose decoded samples miss the source least (squared error, each sample closed-loop against
+  the decoder's arithmetic; the first pair on a tie), so the same samples give the same bytes. A one-shot's last block
+  has the loop end flag alone (the voice goes silent); a loop's first block has loop start and repeat, the blocks after
+  it repeat, and its last has loop end and repeat. The last block is padded with silence.
+- 16 bytes for 28 samples is 3.5 times smaller than PCM16; de_leon's 37 sounds (ShooterGame's `make_sounds.py`,
+  22 050 Hz mono: [ART_PIPELINE.md](ART_PIPELINE.md#sounds)) take 155 KB of the about 2 028 KB of SPU2 RAM audsrv leaves
+  the audio device (`FSpuAdpcm::SoundRamBytes`; the cook's `<Project>/Saved/Cooked/<Platform>-SoundReport.txt` lists
+  them per map and fails when a map's do not fit). A sound's `Priority` picks the voices it may take: below 1
+  (ShooterGame's steps and impacts, 0.5) it leaves the last `NumLowPriorityVoices` free, above 1 (the bomb, the radio)
+  it may take the last four (N19, N30f).
+
+The cooked tail: the tagged properties (`Duration`, `Priority`, `bLooping`; the editor-only ones filtered), then the
+format's `FName` (`SPU2ADPCM`; another fails the load with an error), the `int32` rate, the `int32` loop start frame
+(−1 for a one-shot) and the blocks as bulk data. On the PS2 the audio device prepends audsrv's 16-byte header when it
+uploads them (`APCM`, version 1, channels 1, the loop flag, the pitch `rate * 4096 / 48000` and the frame count).
+
+<a id="lps2-v2"></a>
+
+### Static mesh render data — `LPS2` v2
+
+A static mesh's render data (`FStaticMeshLODResources::RenderData`, `FLPS2Mesh` in RenderCore) is one blob, the same
+on every platform ([ps2-shipping](PLANS/ps2-shipping.md) D1): the PS2's VU1 microprograms read its batches as they
+are (N14), and on Win64, in the tests and for the batches the EE clips, the GS scene renderer's C++ emitter reads it
+(the reference). MeshUtilities builds it
+when a mesh is imported (`FLPS2MeshBuilder`, with meshoptimizer: [LIBRARIES.md](LIBRARIES.md)); nothing builds one at
+run time (`UStaticMesh::BuildFromMeshData` asks for Engine's `IMeshBuilderModule`, which only the editor and the test
+programs link). The collision triangles are saved beside it at full precision (the physics scene reads those).
+
+**Layout.** Little-endian; every record and every stream starts on a quadword (16 bytes), the unit of the DMA and of a
+VIF UNPACK, so a batch goes to VU1 by reference with an UNPACK a stream.
+
+| Part | Size | Fields |
 | --- | --- | --- |
-| `magic` | `char[4]` | `LPS2` |
-| `version` | `u32` | `1` |
-| `vertexCount` | `u32` | Must be > 0 |
-| `indexCount` | `u32` | |
+| Header | 48 bytes | `char[4]` `LPS2`; `u16` version 2; `u16` flags (bit 0: [skinned](#skinned-meshes)); `u32` sections; `u32` batches; `f32[3]` position scale; `u32` vertices (of every batch); `f32[3]` position bias; `u32` triangles |
+| Section table | 16 bytes a section | `u32` first batch, batches, material slot (`StaticMaterials`), triangles |
+| Batch table | 32 bytes a batch | `u32` data offset (from the blob's start, a multiple of 16); `u32` vertices (3 to 64); `f32[2]` texture coordinate offset (whole repeats); `f32[3]` bounding sphere centre and `f32` radius (the mesh's space, centimetres) |
+| Batch data | each batch's four streams, one after the other | below |
 
-No tool produces `LPS2` blobs; the PS2 target platform of the cook does not convert meshes yet.
+A batch of N vertices:
+
+| Stream | VIF UNPACK | Bytes (N = 64) | Value |
+| --- | --- | --- | --- |
+| Positions | V3-16, signed | 6 N, padded to 16 (384) | `int16` x 3: the position is `q × scale + bias` on each axis |
+| Normals and flags | V4-8, signed | 4 N (256) | `int8` x 3: the unit normal × 127; the fourth byte, the strip flags |
+| Colours | V4-8, unsigned | 4 N (256) | RGBA8, 255 = 1: the mesh's own colour, which scales the section's colour and alpha (white: the importers bring no vertex colour); an instance with [baked lighting](#lps2-instance-colors) brings its own stream in its place |
+| Texture coordinates | V2-16, signed | 4 N (256) | `int16` x 2, 4.12 fixed point: `q / 4096 + offset` (±8 repeats around the batch's offset) |
+
+18 bytes a vertex (the float `FVertex` it replaces was 32); 1 152 bytes and a 32-byte record for a full batch.
+
+**Strips.** A batch's vertices are triangle strips one after the other. Vertex i closes the triangle (i − 2, i − 1, i)
+unless its flags have `0x80` (no kick: the GS's ADC, drawn as XYZ3): a strip's first two vertices, and the degenerate
+triangle a strip swap makes. With `0x01` that triangle is the source's (i − 1, i − 2, i): an odd triangle of its strip
+(`meshopt_unstripify`'s parity), so back face culling sees the source's winding. A flags byte of `0x80` sign-extends to
+a word with bit 15 set, the PACKED XYZ2's ADC bit (bit 111 of the quadword), which the VU can pass on as it is. A batch
+starts a strip, so its first two vertices have `0x80`; a strip too long for a batch goes on in the next one from its
+last two vertices again.
+
+**Quantization.** Each axis of the mesh's bounding box is spread over −32767..32767 (`scale = half extent / 32767`,
+`bias = centre`), so a drawn position is at most half a step from the source's: 0.5 cm for a mesh 655 m long.
+`ShooterGame.Content.MeshQuantization` checks every vertex of the weapons, the characters and de_leon's meshes against
+0.5 cm, and de_leon's meshes again through the scale of the actors that place them (the error grows with it). A normal
+is within 1/254 a component, a texture coordinate within 1/8192 of a repeat; a batch ends before its texture
+coordinates span more than 14 repeats.
+
+**VU1's memory** (`VU1Memory` in `PS2VU1Encoder.h`, `VU1Programs.vsm`). VU1's data memory is 1024 quadwords: 3 shared
+constants (the screen's scale, offset and limits), and VIF1's double buffer, BASE 16 and OFFSET 504, so two buffers of
+504. A batch's buffer (quadwords from its TOP): its header (9 unlit; 23 lit since N29: the normal's transform, a sun,
+the ambient, the position's transform to the world and up to two point lights), the four streams unpacked a quadword a
+vertex at +24, +88, +152 and +216, and the GIF packet the program writes at +280 (a tag, then ST, RGBAQ and XYZF2 a
+vertex): 280 + 1 + 3 × 64 = 473 ≤ 504.
+
+<a id="skinned-meshes"></a>**Skinned meshes** ([ps2-shipping](PLANS/ps2-shipping.md) N21). A `USkeletalMesh`'s render
+data is the same blob with the header's skinned flag, its positions and normals the bind pose's. Each batch's data
+starts with its **palette** (32 bytes: `u8[24]` the skeleton's bones, `u32` how many are used, `u32` 0), and after the
+texture coordinates comes a fifth stream, the **skin** (V4-8 unsigned, 4 bytes a vertex, padded to 16): two palette
+indices, then their two weights in 1/255 steps that add up to 255. A batch holds at most 48 vertices and 24 bones: on
+VU1 (`VU1SkinnedMemory`, `Skinned.vsm`) its buffer takes a 25-quadword header (the static lit header's 23, then the
+quantization's scale and bias), the palette's matrices at +25 (3 quadwords a bone, 72), the five streams at +97,
++145, +193, +241 and +289, and the GIF packet at +337: 337 + 1 + 3 × 48 = 482 ≤ 504. `FLPS2MeshBuilder::BuildSkinned`
+welds the corners with their bones and weights and closes a batch before a strip would bring a 25th bone (the palette
+lists the bones in the order the batch first uses them), so a mesh of many bones splits into batches by palette. 22 bytes a vertex and 32 a batch. **Drawing**: the component sends
+the pose's skin matrices and bounds each frame; a mesh whose pose's bounds are outside the view is culled whole; the
+EE builds each batch's palette of the pose's skin matrices and places the batch by the sphere its pose keeps it in
+(its bind-pose sphere moved by each palette bone); VU1's Skinned programs (N14b), or the C++ emitter, pose each vertex
+with its two bones (linear blend).
+
+**The build** (`FLPS2MeshBuilder`, one section at a time): quantize every corner and weld those that became equal
+(`meshopt_generateVertexRemap`), drop the triangles left with two equal corners, order the rest for strips
+(`meshopt_optimizeVertexCacheStrip`), stripify with a restart index (`meshopt_stripify`), then fill the batches with
+whole strips, splitting only a strip longer than a batch. The output depends only on the source: the same source gives
+the same bytes (`System.MeshUtilities.LPS2.Deterministic`; gate G5 reimports the content).
+
+**Drawing** ([ARCHITECTURE.md §12](ARCHITECTURE.md#12-rendering-the-gs-path)): each batch's sphere against the view's
+planes (D8). Wholly outside one: skipped. Inside the guard band and the near and far planes: on the PS2, VU1
+(StaticUnlit / StaticLit, SkinnedUnlit / SkinnedLit) transforms, lights and culls it and XGKICKs its packet; elsewhere
+(or with `-novu1`) the C++ emitter draws its strips as a TRISTRIP, only the vertices the drawn triangles use, with XYZ3
+for those that close none. Otherwise: each of its triangles through the C++ clipper on the EE.
+
+<a id="static-mesh-lods"></a>**LODs** ([ps2-shipping](PLANS/ps2-shipping.md) N15; UE: `SourceModels` and
+`RenderData->ScreenSize`). A static mesh's `SourceModels` (a tagged property) lists its LODs, LOD 0 first; LOD *n*
+keeps about `ReductionSettings.PercentTriangles` of LOD 0's triangles: `UStaticMesh::BuildFromMeshData` has
+MeshUtilities simplify LOD 0's source section by section (`FLPS2MeshBuilder::Simplify`, `meshopt_simplify` with no
+bound on the error, as UE's `MaxDeviation` 0, the seams and borders kept) and builds each as its own LPS2 v2 blob,
+saved after the collision triangles (a mesh of one LOD saves no source models and its bytes are those of before). The
+import makes them from ImportList.ini's `LODs=<share>@<size>,...` (`UGLTFImportFactory::LODs`: `LODs=0.5@0.3,0.25@0.1`).
+The renderer draws LOD *n* while the bounds' sphere's projected diameter over the view's height is below its
+`ScreenSize` (and above the next one's): `ComputeStaticMeshLOD`, with `StaticMeshLODDistanceScale`. The skinned blob
+has one LOD.
+
+The first `LPS2` (version 1, a header that no tool wrote and nothing read) is gone.
+
+<a id="lps2-instance-colors"></a>
+
+**An instance's colours** ([ps2-shipping](PLANS/ps2-shipping.md) N22, `FLPS2ColorStreams`; UE: the
+`OverrideVertexColors` of a component's LOD data). The instances of a mesh share its batches, and the lighting LeonEd
+bakes into a map ([LEVELS.md](LEVELS.md#static-lighting)) differs for each, so a Static mesh component keeps its own
+colour streams (`UStaticMeshComponent::BakedVertexColors`) in the map:
+
+| Field | Size | Value |
+| --- | --- | --- |
+| Mesh CRC | `u32` | `FCrc::MemCrc32` of the LPS2 v2 blob the colours were made for (`FLPS2Mesh::GetDataCrc`) |
+| Streams | `int32` size, then the bytes | every batch's colour stream in batch order, each exactly as the mesh's (RGBA8 a vertex, 255 = 1, padded to a quadword: `FLPS2Mesh::GetColorStreamOffset`), so VU1 can UNPACK an instance's colours by reference in place of the mesh's; empty when never baked |
+
+The component saves it after its relative transform (`VER_LEON_BAKED_VERTEX_COLORS`), a few hundred bytes a placed
+cube (de_leon: 1 562 vertices, 6.3 KB). The streams apply only while their CRC and size match the mesh
+(`HasValidBakedVertexColors`): a mesh rebuilt since draws with its own colours until the map is baked again. The
+colour is the light times the mesh's own colour, clamped to 1, with the mesh's alpha; the renderer multiplies it by the
+section's albedo and draws it with no light computed per frame.
 
 ### Materials and textures
 
-`FPS2Material` (`PS2RHI/Public/PS2RHITypes.h`) mirrors a subset of `UMaterial`:
-
-| Field | Notes |
-| --- | --- |
-| `BaseColorR` / `BaseColorG` / `BaseColorB` | RGB tint |
-| `BaseColorMap` | Optional `const FPS2Texture*` |
-| `ShadingModel` | `EMaterialShadingModel::DefaultLit` or `Unlit` |
-
-`FPS2Texture` holds an RGBA8 texture in GS memory: `Create(Width, Height, Rgba)`, `CreateFromAlignedRgba`, and the procedural `CreateChecker(Size)` / `CreateGrid(Size)`. There is no image file loading on PS2. Lights and view: `FPS2DirectionalLight`, `FPS2ViewTarget`, `FPS2RHI::SetAmbientLightColor`.
+The PS2 draws the same `UMaterial` and `UTexture2D` assets as the desktop, through the GS scene renderer: the
+material's values (`FMaterial`), the cooked paletted textures uploaded by the Renderer's `FGSTextureCache` into the
+arena `FPS2RHI::AllocateTextureArena` leaves, and the world's lights. There is no image file loading on PS2. (The
+immediate `FPS2Material` / `FPS2Texture` path went in [ps2-shipping](PLANS/ps2-shipping.md) N2.)
 
 ---
 
@@ -437,12 +791,12 @@ No tool produces `LPS2` blobs; the PS2 target platform of the cook does not conv
 | `.lasset` / `.lmap` packages | `Engine/Source/Runtime/CoreUObject` — `UPackage::Save` (`Private/UObject/SavePackage.cpp`), `FLinkerLoad`, `FLinkerSave`, `FPackageFileSummary`, `FObjectImport` / `FObjectExport`, `FPropertyTag`, `FByteBulkData`, `FPackageName` |
 | `.lpak` paks | `Engine/Source/Runtime/PakFile` — `FPakInfo`, `FPakEntry`, `FPakFile`, `FPakPlatformFile` (`Public/IPlatformFilePak.h`), `FPakWriter` (`Public/PakWriter.h`); `Engine/Source/Programs/LeonPak` |
 | The cook | `Engine/Source/Editor/LeonEd` — `UCookCommandlet`; `Engine/Source/Developer/TargetPlatform` — `ITargetPlatform`, `ITargetPlatformManagerModule` |
-| Mesh data, material values | `Engine/Source/Runtime/RenderCore` — `FMeshData`, `FVertex`, `FMaterial` (`Public/MaterialShared.h`) |
+| Mesh data, material values | `Engine/Source/Runtime/RenderCore` — `FMeshData`, `FVertex`, `FMaterial` (`Public/MaterialShared.h`), `FLPS2Mesh` (`Public/LPS2Mesh.h`: LPS2 v2) |
 | Asset classes | `Engine/Source/Runtime/Engine` — `Classes/Engine` (`UTexture`, `UTexture2D`, `UStaticMesh`, `USkeletalMesh`, `USkeletalMeshSocket`, `UDataAsset`), `Classes/Materials`, `Classes/Animation`, `Classes/PhysicsEngine` (`UBodySetup`), `Classes/Sound`, `Classes/Commandlets`, `Classes/EditorFramework` (`UAssetImportData`); `Public/StaticMeshResources.h`, `Private/AssetBulkData.h`; the plain skeletal data in `AnimationCore`; the GS copies of the textures in the Renderer's private `FGSTextureCache` |
 | Maps: the world's save and load, `LoadMap` | `Engine/Source/Runtime/Engine` — `UWorld` (`FindWorldInPackage`, `InitWorld`, `UpdateWorldComponents`, `InitializeActorsForPlay`), `ULevel`, `UEngine::LoadMap` (`Private/UnrealEngine.cpp`) |
 | Map import (glTF) | `Engine/Source/Editor/LeonEd` — `UGLTFMapFactory`, `UMapImportSettings`; `Engine/Source/Developer/MeshUtilities` — `LoadGltfScene` (`Public/GltfScene.h`) |
-| Skeletal FBX import | `Engine/Source/Developer/MeshUtilities` — `FbxSkeletalImport` |
+| Skeletal and animation import (glTF) | `Engine/Source/Developer/MeshUtilities` — `LoadSkeletalMeshFromGltf`, `LoadAnimSequencesFromGltf` (`Public/GltfImport.h`); `Engine/Source/Runtime/AnimationCore` — `FSkinWeightInfo`, `FReferenceSkeleton`, `FCompressedAnimSequence` / `FAnimCompression` (`Public/AnimCompression.h`), `FAnimationRuntime` |
 | Content paths | `Engine/Source/Runtime/Core` — `FPaths` |
-| DCC → mesh data | `Engine/Source/Developer/MeshUtilities` — `FStaticMeshBuilder`, `ObjImport`, `FbxStaticMesh`, `GltfImport` |
+| DCC → mesh data | `Engine/Source/Developer/MeshUtilities` — `FStaticMeshBuilder`, `GltfImport`; `FLPS2MeshBuilder` (LPS2 v2, static and skinned, meshoptimizer), Engine's `IMeshBuilderModule` |
 | Factories, reimport, commandlets | `Engine/Source/Editor/LeonEd` + `Engine/Source/Programs/LeonCook` ([TOOLS.md](TOOLS.md)) |
-| PS2 drawing, materials, textures | `Engine/Platforms/PS2/Source/Runtime/PS2RHI` — `FPS2RHI`, `FPS2Material`, `FPS2Texture` |
+| PS2 drawing, materials, textures | `Engine/Source/Runtime/Renderer` — `FGSSceneRenderer`, `FGSTextureCache`; `Engine/Platforms/PS2/Source/Runtime/PS2RHI` — `FPS2RHI` |

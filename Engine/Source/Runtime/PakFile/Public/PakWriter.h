@@ -16,9 +16,10 @@ struct PAKFILE_API FPakInputPair
 
 /**
  * Builds a pak: the entries' bytes, then the index, then the FPakInfo footer (IPlatformFilePak.h). The output depends
- * only on the files (deterministic, like the packages): the data goes in path order, lowercased, the index is sorted by
- * path hash, and nothing records a time or the machine. The mount point is the longest folder every Dest starts with
- * (UnrealPak's rule), and each entry keeps the rest of its path.
+ * only on the files and the open order (deterministic, like the packages): the data goes in the order SetOpenOrder
+ * gives (the order the game opened them in, so a load reads the disc forward), the rest after it in path order,
+ * lowercased; the index is sorted by path hash, and nothing records a time or the machine. The mount point is the
+ * longest folder every Dest starts with (UnrealPak's rule), and each entry keeps the rest of its path.
  */
 class PAKFILE_API FPakWriter
 {
@@ -36,6 +37,23 @@ public:
 	{
 		return Files.Num();
 	}
+
+	/**
+	 * The order the entries' data goes in (Docs/PLANS/ps2-shipping.md N23): each path relative to the mount point
+	 * (lower case, as ReadOrderFile gives them) with its rank; an entry the order does not name goes after, in path
+	 * order. The index keeps its format either way.
+	 */
+	void SetOpenOrder(const TMap<FString, int64>& InOpenOrder)
+	{
+		OpenOrder = InOpenOrder;
+	}
+
+	/**
+	 * Reads an open order (UE: the -order= file of UnrealPak): every line that holds `"<path>" <rank>`, whatever comes
+	 * before it (FPlatformFileOpenLog's order file, or the log lines `LogFileOpenOrder: "<path>" <rank>` of a PS2 run);
+	 * a path met twice keeps its first rank. False (logged) when the file cannot be read.
+	 */
+	static bool ReadOrderFile(const TCHAR* OrderFile, TMap<FString, int64>& OutOpenOrder);
 
 	/** Writes the pak into OutPak; false (logged) for two files with the same path or no file at all. */
 	bool Finalize(TArray<uint8>& OutPak) const;
@@ -61,4 +79,5 @@ private:
 
 	int64 Alignment;
 	TArray<FFile> Files;
+	TMap<FString, int64> OpenOrder;
 };

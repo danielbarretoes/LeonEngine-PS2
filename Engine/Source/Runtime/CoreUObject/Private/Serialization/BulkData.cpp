@@ -19,9 +19,10 @@ FByteBulkData& FByteBulkData::operator=(const FByteBulkData& Other)
 		RemoveBulkData();
 		BulkDataFlags = Other.BulkDataFlags;
 		BulkDataOffsetInFile = Other.BulkDataOffsetInFile;
+		PayloadAlignment = Other.PayloadAlignment;
 		if (Other.ElementCount > 0)
 		{
-			Data = FMemory::Malloc(SIZE_T(Other.ElementCount));
+			Data = FMemory::Malloc(SIZE_T(Other.ElementCount), GetAllocAlignment());
 			FMemory::Memcpy(Data, Other.Data, SIZE_T(Other.ElementCount));
 			ElementCount = Other.ElementCount;
 		}
@@ -67,7 +68,7 @@ void* FByteBulkData::Realloc(int64 InElementCount)
 	}
 	else
 	{
-		Data = FMemory::Realloc(Data, SIZE_T(InElementCount));
+		Data = FMemory::Realloc(Data, SIZE_T(InElementCount), GetAllocAlignment());
 	}
 	ElementCount = InElementCount;
 	return Data;
@@ -183,7 +184,7 @@ void FByteBulkData::Serialize(FArchive& Ar, UObject* Owner, int32 Index)
 			return;
 		}
 		const int64 ReturnPos = Ar.Tell();
-		Data = FMemory::Malloc(SIZE_T(SavedCount));
+		Data = FMemory::Malloc(SIZE_T(SavedCount), GetAllocAlignment());
 		ElementCount = SavedCount;
 		Ar.Seek(PayloadOffset);
 		Ar.Serialize(Data, SavedCount);
@@ -196,7 +197,7 @@ void FByteBulkData::Serialize(FArchive& Ar, UObject* Owner, int32 Index)
 		Ar.SetCriticalError();
 		return;
 	}
-	Data = FMemory::Malloc(SIZE_T(SavedCount));
+	Data = FMemory::Malloc(SIZE_T(SavedCount), GetAllocAlignment());
 	ElementCount = SavedCount;
 	Ar.Serialize(Data, SavedCount);
 }

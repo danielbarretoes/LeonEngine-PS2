@@ -7,6 +7,7 @@
 #include "PrimitiveComponent.generated.h"
 
 class FPrimitiveSceneProxy;
+class UMaterialInterface;
 
 /**
  * A scene component with geometry: something drawn, collided with or both (UE: UPrimitiveComponent).
@@ -51,10 +52,24 @@ public:
 	UPROPERTY()
 	uint8 bRenderAsViewModel : 1;
 
-	/** UE: SetOnlyOwnerSee / SetOwnerNoSee; Leon: SetRenderAsViewModel. Each recreates the render state. */
+	/**
+	 * Casts a blob shadow (Leon, Docs/PLANS/ps2-shipping.md N15; UE casts shadow maps, which the GS cannot draw): a
+	 * soft dark spot on the floor under the primitive, as big as its bounds across and fading with its height above
+	 * the floor. The floor is found by a trace down against the world's static geometry each frame the transform is
+	 * sent (SendRenderTransform_Concurrent), only while the component is in a scene. Never for a view model.
+	 */
+	UPROPERTY()
+	uint8 bCastBlobShadow : 1;
+
+	/** UE: SetOnlyOwnerSee / SetOwnerNoSee; Leon: SetRenderAsViewModel, SetCastBlobShadow. Each recreates the render
+	 * state. */
 	void SetOnlyOwnerSee(bool bNewOnlyOwnerSee);
 	void SetOwnerNoSee(bool bNewOwnerNoSee);
 	void SetRenderAsViewModel(bool bNewRenderAsViewModel);
+	void SetCastBlobShadow(bool bNewCastBlobShadow);
+
+	/** How far below its bounds a blob shadow's floor is looked for, cm. */
+	static constexpr float BlobShadowTraceDistance = 300.0f;
 
 	/** Reports overlaps (UE: bGenerateOverlapEvents; kept for the UE shape, nothing queries overlaps yet). */
 	UPROPERTY()
@@ -142,6 +157,14 @@ public:
 	[[nodiscard]] virtual FCollisionShape GetCollisionShape(float Inflation = 0.0f) const;
 
 	/**
+	 * The material of a collision triangle (FHitResult::FaceIndex) and its section (UE:
+	 * GetMaterialFromCollisionFaceIndex); null, and SectionIndex INDEX_NONE, for a component without collision
+	 * triangles.
+	 */
+	[[nodiscard]] virtual UMaterialInterface* GetMaterialFromCollisionFaceIndex(
+		int32 FaceIndex, int32& SectionIndex) const;
+
+	/**
 	 * The renderer's snapshot of the component (UE: CreateSceneProxy), owned by the scene; null when there is nothing
 	 * to draw (no mesh, a collision shape).
 	 */
@@ -150,11 +173,29 @@ public:
 	/** True when the world should draw it: visible, and its owner is not hidden (UE: ShouldRender). */
 	[[nodiscard]] bool ShouldRender() const;
 
-	/** Sends the world transform to the proxy (FSceneInterface::UpdatePrimitiveTransform). */
+	/**
+	 * Sends the world transform to the proxy (FSceneInterface::UpdatePrimitiveTransform) and, with bCastBlobShadow,
+	 * the floor under it (UpdateBlobShadowFloor).
+	 */
 	void SendRenderTransform_Concurrent() override;
+
+	/**
+	 * Traces down from the proxy's bounds against the world's static geometry (WorldStatic bodies, the owner ignored)
+	 * and hands the floor it finds, or none, to the proxy (FPrimitiveSceneProxy::SetBlobShadowFloor).
+	 */
+	void UpdateBlobShadowFloor();
 
 	/** The proxy the scene made from the component, while it is in a scene (UE: SceneProxy). */
 	FPrimitiveSceneProxy* SceneProxy = nullptr;
+
+	/**
+	 * The world time the renderer last drew the component (UE: LastRenderTime, which the renderer sets); -1000 until
+	 * then. Only the skeletal meshes are stamped (their pose's throttling reads it).
+	 */
+	float LastRenderTime = -1000.0f;
+
+	/** Drawn within Tolerance seconds of the world's time (UE: WasRecentlyRendered). */
+	[[nodiscard]] bool WasRecentlyRendered(float Tolerance = 0.2f) const;
 
 protected:
 	void CreateRenderState_Concurrent() override;

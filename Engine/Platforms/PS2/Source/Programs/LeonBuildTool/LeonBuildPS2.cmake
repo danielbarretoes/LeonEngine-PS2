@@ -20,3 +20,36 @@ leon_register_platform(PS2
 	BUILD_TYPE_Shipping Release
 	DEFINITIONS PLATFORM_PS2=1
 )
+
+# VU microcode (Docs/PLANS/ps2-shipping.md N14): a module's Private/VU1/*.vsm (dvp-as syntax, one upper and one lower
+# instruction a line) is assembled by the ps2dev toolchain's dvp-as ($PS2DEV/dvp/bin) into an object archived with the
+# module. The ELF carries its .vutext as data, and its global labels are the EE's symbols of the code (MPG uploads it).
+# LeonBuildTool calls this for every module of a PS2 build (leon_instantiate_module).
+function(LeonPlatform_PS2_ModuleSources Name Target)
+	leon_module_get(${Name} DIR Dir)
+	_leon_module_ext_dirs(${Name} ExtDirs)
+	set(Sources)
+	foreach(Root IN ITEMS "${Dir}" ${ExtDirs})
+		if(IS_DIRECTORY "${Root}/Private/VU1")
+			file(GLOB Found CONFIGURE_DEPENDS "${Root}/Private/VU1/*.vsm")
+			list(APPEND Sources ${Found})
+		endif()
+	endforeach()
+	if(NOT Sources)
+		return()
+	endif()
+	find_program(LEON_DVP_AS dvp-as HINTS "$ENV{PS2DEV}/dvp/bin" REQUIRED)
+	foreach(Source IN LISTS Sources)
+		get_filename_component(Base "${Source}" NAME_WE)
+		set(ObjectDir "${CMAKE_CURRENT_BINARY_DIR}/VU1/${Name}")
+		set(Object "${ObjectDir}/${Base}.vu.o")
+		add_custom_command(OUTPUT "${Object}"
+			COMMAND "${CMAKE_COMMAND}" -E make_directory "${ObjectDir}"
+			COMMAND "${LEON_DVP_AS}" -o "${Object}" "${Source}"
+			DEPENDS "${Source}"
+			COMMENT "dvp-as ${Base}.vsm"
+			VERBATIM)
+		set_source_files_properties("${Object}" PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
+		target_sources(${Target} PRIVATE "${Object}")
+	endforeach()
+endfunction()

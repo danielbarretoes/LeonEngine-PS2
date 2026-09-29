@@ -4,9 +4,11 @@
 #include "CoreMinimal.h"
 #include "Engine/World.h"
 #include "Physics/PhysScene.h"
+#include "SaveGameSystem.h"
 #include "Templates/SubclassOf.h"
 
 class AController;
+class USaveGame;
 class APointLight;
 class FDebugDraw;
 class UDamageType;
@@ -135,10 +137,52 @@ public:
 		const FLinearColor& Color, float Width, float LifeSpan);
 
 	/**
-	 * Lights the world around Location for LifeSpan seconds: a transient APointLight that destroys itself (Leon's
-	 * dynamic light helper for muzzle flashes and explosions; UE games attach a light to their emitter). A lit scene
-	 * shades its first four point lights. Returns the light, null without a world.
+	 * Shows a soft round sprite facing the camera at Location (Leon; UE: SpawnEmitterAtLocation with a sprite
+	 * emitter): Size cm square, Color alpha blended (A: the thickest opacity), for LifeSpan seconds (0: until removed),
+	 * thickening in FadeInTime and thinning out over the last FadeOutTime; the world's pool of 32
+	 * (UWorld::EffectSprites) recycles the oldest. Returns its serial (FEffectSpritePool::RemoveSprite's), 0 without a
+	 * world.
+	 */
+	static uint32 SpawnEffectSprite(const UObject* WorldContextObject, const FVector& Location, float Size,
+		const FLinearColor& Color, float LifeSpan, float FadeInTime = 0.0f, float FadeOutTime = 0.0f);
+
+	/**
+	 * Lights the world around Location for LifeSpan seconds (Leon's dynamic light helper for muzzle flashes and
+	 * explosions; UE games attach a light to their emitter): a light of the world's flash light pool
+	 * (UWorld::AcquirePooledPointLight), which goes out when its time is up and is lit again by a later flash, so
+	 * repeated flashes spawn no actor. A lit scene shades its first four point lights. Returns the light (the pool's:
+	 * the caller does not keep or destroy it), null without a world.
 	 */
 	static APointLight* SpawnPointLightAtLocation(const UObject* WorldContextObject, const FVector& Location,
 		const FLinearColor& Color, float Intensity, float AttenuationRadius, float LifeSpan);
+
+	// Saves (UE; Docs/PLANS/ps2-shipping.md N24): a USaveGame's properties in a slot of the platform's save game system
+	// (IPlatformFeaturesModule): Saved/SaveGames/<Slot>.sav on the desktop, the memory card on the PS2.
+
+	/** A new save of SaveGameClass, in the transient package (UE). */
+	static USaveGame* CreateSaveGameObject(TSubclassOf<USaveGame> SaveGameClass);
+
+	/**
+	 * The save's bytes (UE): the header (the tag "GVAS", the save's version, the package version and the class's path)
+	 * and its tagged properties, what differs from its class's defaults.
+	 */
+	static bool SaveGameToMemory(USaveGame* SaveGameObject, TArray<uint8>& OutSaveData);
+
+	/** A save made from SaveGameToMemory's bytes; null when they are not a save, or of a class that is gone (UE). */
+	static USaveGame* LoadGameFromMemory(const TArray<uint8>& InSaveData);
+
+	/** Writes the save to a slot (UE); false, with GetLastSaveGameResult saying why, when it cannot. */
+	static bool SaveGameToSlot(USaveGame* SaveGameObject, const FString& SlotName, const int32 UserIndex);
+
+	/** The save in a slot, or null (none, the card's trouble or damaged bytes: GetLastSaveGameResult) (UE). */
+	static USaveGame* LoadGameFromSlot(const FString& SlotName, const int32 UserIndex);
+
+	/** Whether a slot holds a save (UE). */
+	static bool DoesSaveGameExist(const FString& SlotName, const int32 UserIndex);
+
+	/** Deletes a slot's save (UE). */
+	static bool DeleteGameInSlot(const FString& SlotName, const int32 UserIndex);
+
+	/** How the last of the save calls above ended (Leon: the memory card's cases for the game's messages). */
+	static ESaveGameResult GetLastSaveGameResult();
 };

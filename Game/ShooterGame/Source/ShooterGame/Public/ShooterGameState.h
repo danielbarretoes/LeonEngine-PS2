@@ -18,9 +18,22 @@ struct FShooterKillFeedEntry
 	float Time = 0.0f;
 };
 
+/** One radio message (CS 1.6's radio, AShooterGameMode::SendRadioMessage): its sender, the team that hears it, what. */
+struct FShooterRadioEntry
+{
+	FString SenderName;
+	EShooterTeam Team = EShooterTeam::None;
+	EShooterRadioMessage Message = EShooterRadioMessage::None;
+	/** Where it is about (the enemy spotted; else where the sender stood). */
+	FVector Location = FVector::ZeroVector;
+	/** The world time it was sent. */
+	float Time = 0.0f;
+};
+
 /**
  * What everyone sees of a ShooterGame match (UE ShooterGame: AShooterGameState): the round's phase and number, when the
- * phase ends, the teams' scores, the bomb's state and the kill feed. AShooterGameMode writes it; the HUD reads it.
+ * phase ends, the teams' scores, the bomb's state, the kill feed and the radio's last messages. AShooterGameMode writes
+ * it; the HUD reads it.
  */
 UCLASS()
 class SHOOTERGAME_API AShooterGameState : public AGameState
@@ -61,7 +74,7 @@ public:
 	}
 	/** Seconds left in the phase at world time Now (0 without a timed phase). */
 	[[nodiscard]] float GetPhaseTimeRemaining(float Now) const;
-	/** The world time the buy time ends. */
+	/** The world time the buy time ends: BuyTime after the freeze's end (CS's mp_buytime). */
 	[[nodiscard]] float GetBuyEndTime() const
 	{
 		return BuyEndTime;
@@ -72,8 +85,25 @@ public:
 		return RoundState == EShooterRoundState::Freeze;
 	}
 
-	/** Rounds a team has won. */
+	/** Rounds a team has won (the rounds of the players now on that side: the scores follow the teams at halftime). */
 	[[nodiscard]] int32 GetTeamScore(EShooterTeam Team) const;
+
+	/** The teams switched sides at halftime (AShooterGameMode::HandleHalftime) and play the second half. */
+	[[nodiscard]] bool IsSecondHalf() const
+	{
+		return bSecondHalf;
+	}
+	/** The round after which the teams switched sides (0 before the halftime). */
+	[[nodiscard]] int32 GetHalftimeRound() const
+	{
+		return bSecondHalf ? HalftimeRound : 0;
+	}
+	/** Counts every halftime, never going back (a new match does not): a new value tells an observer the sides swapped.
+	 */
+	[[nodiscard]] int32 GetHalftimeSerial() const
+	{
+		return HalftimeSerial;
+	}
 
 	[[nodiscard]] EShooterBombState GetBombState() const
 	{
@@ -105,7 +135,29 @@ public:
 	{
 		return KillFeed;
 	}
+	/** Changes whenever the kill feed does (an entry added, the match reset): the HUD formats the feed again. */
+	[[nodiscard]] int32 GetKillFeedSerial() const
+	{
+		return KillFeedSerial;
+	}
 	void AddKillFeedEntry(const FShooterKillFeedEntry& Entry);
+
+	/** How many radio messages are kept (the newest last), both teams'. */
+	static constexpr int32 MaxRadioEntries = 6;
+
+	/** The last radio messages, both teams' (the HUD shows its team's). */
+	[[nodiscard]] const TArray<FShooterRadioEntry>& GetRadioLog() const
+	{
+		return RadioLog;
+	}
+	/** Changes whenever the radio log does: the HUD formats its lines again. */
+	[[nodiscard]] int32 GetRadioSerial() const
+	{
+		return RadioSerial;
+	}
+	void AddRadioEntry(const FShooterRadioEntry& Entry);
+	/** Team heard Message at or after world time Since (the bots do not repeat what a teammate just said). */
+	[[nodiscard]] bool WasRadioSentSince(EShooterTeam Team, EShooterRadioMessage Message, float Since) const;
 
 	// Written by AShooterGameMode
 
@@ -131,6 +183,11 @@ public:
 		BombSite = Site;
 	}
 	void AddTeamScore(EShooterTeam Team);
+	/**
+	 * The halftime after the current round: the scores swap sides with the teams, the second half begins (and a new
+	 * halftime serial).
+	 */
+	void BeginSecondHalf();
 	void SetLastRoundEndReason(EShooterRoundEndReason Reason)
 	{
 		LastRoundEndReason = Reason;
@@ -139,7 +196,7 @@ public:
 	{
 		MatchWinner = Team;
 	}
-	/** Back to a new match: scores, round number, the feed (and a new match serial). */
+	/** Back to a new match: scores, round number, the first half, the feed (and a new match serial). */
 	void ResetMatch();
 
 private:
@@ -156,6 +213,9 @@ private:
 	int32 MatchSerial = 0;
 
 	UPROPERTY()
+	int32 KillFeedSerial = 0;
+
+	UPROPERTY()
 	float PhaseEndTime = 0.0f;
 
 	UPROPERTY()
@@ -166,6 +226,15 @@ private:
 
 	UPROPERTY()
 	int32 ScoreT = 0;
+
+	UPROPERTY()
+	bool bSecondHalf = false;
+
+	UPROPERTY()
+	int32 HalftimeRound = 0;
+
+	UPROPERTY()
+	int32 HalftimeSerial = 0;
 
 	UPROPERTY()
 	EShooterBombState BombState = EShooterBombState::None;
@@ -183,4 +252,7 @@ private:
 	EShooterTeam MatchWinner = EShooterTeam::None;
 
 	TArray<FShooterKillFeedEntry> KillFeed;
+
+	TArray<FShooterRadioEntry> RadioLog;
+	int32 RadioSerial = 0;
 };

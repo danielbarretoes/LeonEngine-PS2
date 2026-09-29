@@ -217,6 +217,50 @@ bool FCharacterMovementDoesNotWalkThroughStaticWallTest::RunTest(const FString& 
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterMovementWalksAcrossFloorSeamsTest,
+	"System.Engine.CharacterMovement.WalksAcrossFloorSeams",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FCharacterMovementWalksAcrossFloorSeamsTest::RunTest(const FString& Parameters)
+{
+	// A floor of boxes side by side whose tops meet at the feet (N29: de_leon's sand and paving): their tops a hair
+	// apart, as float leaves them, and the capsule's disc just over the next box's edge. The character walks across
+	// every seam, straight and at a slant, on the ground all the way: a box whose top is at the feet is floor, not a
+	// wall to push the capsule out of (UE's CharacterMovementComponent walks over it).
+	for (const float Slant : {0.0f, 0.35f})
+	{
+		FScopedTestWorld TestWorld;
+		UWorld& World = *TestWorld;
+		ACharacter* Character = World.SpawnActor<ACharacter>();
+		Character->Reset(FVector(-300.0f, 0.0f, 100.0f));
+		Character->GetCharacterMovement().FloorZ = -10000.0f;
+		Character->GetCharacterMovement().MaxWalkSpeed = 600.0f;
+		FPhysScene& Scene = World.GetPhysicsScene();
+		const float Tops[4] = {100.0f, 100.02f, 99.985f, 100.0f};
+		for (int32 Index = 0; Index < 4; ++Index)
+		{
+			const float Top = Tops[Index];
+			AddCharacterTestBox(
+				Scene, FVector(-200.0f + (400.0f * float(Index)), 0.0f, Top - 50.0f), FVector(200.0f, 600.0f, 50.0f));
+		}
+		bool bAlwaysOnGround = true;
+		for (int32 I = 0; I < 110; ++I)
+		{
+			Character->AddMovementInput(FVector(1.0f, Slant, 0.0f));
+			Character->PerformMovement(Scene, CharacterTestDeltaTime, nullptr);
+			bAlwaysOnGround &= Character->IsMovingOnGround();
+		}
+		const FVector Feet = Character->GetActorLocation();
+		UE_LOG(LogTemp, Display, "%s",
+			*FString::Printf(
+				"Floor seams: slant %.2f, at X %.1f, Z %.2f", double(Slant), double(Feet.X), double(Feet.Z)));
+		TestTrue("Crossed the seams", Feet.X > 650.0f && Feet.X < 1150.0f);
+		TestTrue("On the ground all the way", bAlwaysOnGround);
+		TestEqual("On the boxes' tops", Feet.Z, 100.0f, 1.0f);
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterMovementSlidesAlongWallWithDiagonalWishTest,
 	"System.Engine.CharacterMovement.SlidesAlongWallWithDiagonalWish",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)

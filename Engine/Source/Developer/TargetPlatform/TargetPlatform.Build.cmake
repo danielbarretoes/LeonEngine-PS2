@@ -3,4 +3,6 @@
 leon_module(TargetPlatform
 	PLATFORMS Desktop
 	PUBLIC_DEPENDENCIES Core
+	# AudioMixer: the name of the SPU2's ADPCM wave format (FSpuAdpcm::FormatName).
+	PRIVATE_DEPENDENCIES AudioMixer
 )

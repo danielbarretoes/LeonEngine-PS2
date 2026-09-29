@@ -5,7 +5,7 @@
 URotatingMovementComponent::URotatingMovementComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	SetComponentTickEnabled(true);
+	PrimaryComponentTick.bCanEverTick = true;
 }
 
 void URotatingMovementComponent::TickComponent(float DeltaTime)

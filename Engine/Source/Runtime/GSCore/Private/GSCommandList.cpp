@@ -1,7 +1,11 @@
 #include "GSCommandList.h"
 
+#include "GSPrimitiveEmitter.h"
+#include "HAL/LowLevelMemTracker.h"
+
 void FGSCommandList::Write(EGSRegister Register, uint64 Value)
 {
+	LLM_SCOPE(ELLMTag::RenderLists);
 	Writes.Add({Register, Value});
 }
 
@@ -52,6 +56,11 @@ void FGSCommandList::AddVertexNoKick(const FGSXYZ& Vertex)
 	Write(EGSRegister::XYZ3, Vertex.Encode());
 }
 
+void FGSCommandList::AddVertexNoKick(const FGSXYZF& Vertex)
+{
+	Write(EGSRegister::XYZF3, Vertex.Encode());
+}
+
 void FGSCommandList::SetTex0(uint8 Context, const FGSTex0& Tex0)
 {
 	check(IsSupported(Tex0));
@@ -66,6 +75,7 @@ void FGSCommandList::SetTex1(uint8 Context, const FGSTex1& Tex1)
 
 void FGSCommandList::SetClamp(uint8 Context, const FGSClamp& Clamp)
 {
+	check(IsSupported(Clamp));
 	Write(ContextRegister(EGSRegister::CLAMP_1, Context), Clamp.Encode());
 }
 
@@ -167,6 +177,21 @@ void FGSCommandList::TexFlush()
 void FGSCommandList::UploadImage(
 	const FGSBitBltBuf& Destination, uint16 X, uint16 Y, uint16 Width, uint16 Height, TArrayView<const uint8> Pixels)
 {
+	WriteUpload(Destination, X, Y, Width, Height, Pixels);
+	AddImage(Pixels, true);
+}
+
+void FGSCommandList::UploadImageInPlace(
+	const FGSBitBltBuf& Destination, uint16 X, uint16 Y, uint16 Width, uint16 Height, TArrayView<const uint8> Pixels)
+{
+	check((UPTRINT(Pixels.GetData()) & 15) == 0);
+	WriteUpload(Destination, X, Y, Width, Height, Pixels);
+	AddImage(Pixels, false);
+}
+
+void FGSCommandList::WriteUpload(
+	const FGSBitBltBuf& Destination, uint16 X, uint16 Y, uint16 Width, uint16 Height, TArrayView<const uint8> Pixels)
+{
 	const uint64 Bytes = (uint64(Width) * Height * GSBitsPerPixel(Destination.DPSM)) / 8;
 	check(Width > 0 && Height > 0 && uint64(Pixels.Num()) == Bytes && Bytes % 16 == 0);
 	check(IsSupportedUpload(Destination.DPSM, X, Width));
@@ -180,52 +205,187 @@ void FGSCommandList::UploadImage(
 	Region.RRH = Height;
 	Write(EGSRegister::TRXREG, Region.Encode());
 	Write(EGSRegister::TRXDIR, uint64(EGSTransferDirection::HostToLocal));
-	Write(EGSRegister::HWREG, uint64(ImageData.Num()));
-	ImageData.Emplace(Pixels.GetData(), Pixels.Num());
+	Write(EGSRegister::HWREG, uint64(Images.Num()));
+}
+
+void FGSCommandList::AddImage(TArrayView<const uint8> Pixels, bool bCopy)
+{
+	LLM_SCOPE(ELLMTag::RenderLists);
+	FImage& Image = Images.AddDefaulted_GetRef();
+	Image.NumBytes = Pixels.Num();
+	if (bCopy)
+	{
+		Image.CopyIndex = Copies.Num();
+		TArray<uint8>& Copy = Copies.Emplace_GetRef(Pixels.GetData(), Pixels.Num());
+		Image.Data = Copy.GetData();
+	}
+	else
+	{
+		Image.Data = Pixels.GetData();
+	}
+}
+
+int32 FGSCommandList::AddVertexDraw(const FGSVertexDraw& Draw)
+{
+	LLM_SCOPE(ELLMTag::RenderLists);
+	return VertexDraws.Add(Draw);
+}
+
+void FGSCommandList::DrawVertexBatch(const FGSVertexBatch& Batch)
+{
+	check(VertexDraws.IsValidIndex(Batch.Draw));
+	check(Batch.NumVertices >= 3 && Batch.NumVertices <= FGSVertexBatch::MaxVertices);
+	check(Batch.Positions != nullptr && Batch.Normals != nullptr && Batch.Colors != nullptr &&
+		Batch.TexCoords != nullptr);
+	check(Batch.IsSkinned() == VertexDraws[Batch.Draw].bSkinned);
+	check(!Batch.IsSkinned() ||
+		(Batch.NumVertices <= FGSVertexBatch::MaxSkinnedVertices && Batch.Palette != nullptr && Batch.NumBones > 0 &&
+			Batch.NumBones <= FGSVertexBatch::MaxBones));
+	EGSVertexProgram Program = EGSVertexProgram::StaticUnlit;
+	check(VertexDraws[Batch.Draw].GetProgram(Program));
+	(void)Program;
+	LLM_SCOPE(ELLMTag::RenderLists);
+	Write(EGSRegister::VertexBatch, uint64(VertexBatches.Add(Batch)));
+}
+
+FGSSkinMatrix* FGSCommandList::AllocateSkinPalette(uint32 NumBones)
+{
+	check(NumBones > 0 && NumBones <= FGSVertexBatch::MaxBones);
+	LLM_SCOPE(ELLMTag::RenderLists);
+	const uint32 NumBytes = NumBones * uint32(sizeof(FGSSkinMatrix));
+	if (NumPaletteBlocks == 0 || PaletteBlockUsed + NumBytes > PaletteBlockBytes)
+	{
+		if (NumPaletteBlocks == PaletteBlocks.Num())
+		{
+			// A quadword more, to align its start.
+			PaletteBlocks.AddDefaulted_GetRef().SetNumUninitialized(int32(PaletteBlockBytes + 15), false);
+		}
+		++NumPaletteBlocks;
+		PaletteBlockUsed = 0;
+	}
+	uint8* Block = PaletteBlocks[NumPaletteBlocks - 1].GetData();
+	uint8* Palette = reinterpret_cast<uint8*>((UPTRINT(Block) + 15) & ~UPTRINT(15)) + PaletteBlockUsed;
+	PaletteBlockUsed += NumBytes;
+	return reinterpret_cast<FGSSkinMatrix*>(Palette);
 }
 
 void FGSCommandList::Append(const FGSCommandList& Other)
 {
-	const uint64 FirstImage = uint64(ImageData.Num());
+	LLM_SCOPE(ELLMTag::RenderLists);
+	const uint64 FirstImage = uint64(Images.Num());
+	const uint64 FirstBatch = uint64(VertexBatches.Num());
 	Writes.Reserve(Writes.Num() + Other.Writes.Num());
 	for (const FGSRegisterWrite& OtherWrite : Other.Writes)
 	{
-		const bool bImage = OtherWrite.Register == EGSRegister::HWREG;
-		Writes.Add({OtherWrite.Register, bImage ? FirstImage + OtherWrite.Value : OtherWrite.Value});
+		uint64 Value = OtherWrite.Value;
+		if (OtherWrite.Register == EGSRegister::HWREG)
+		{
+			Value += FirstImage;
+		}
+		else if (OtherWrite.Register == EGSRegister::VertexBatch)
+		{
+			Value += FirstBatch;
+		}
+		Writes.Add({OtherWrite.Register, Value});
 	}
-	ImageData.Append(Other.ImageData);
+	Images.Reserve(Images.Num() + Other.Images.Num());
+	for (int32 Index = 0; Index < Other.Images.Num(); ++Index)
+	{
+		AddImage(Other.GetImage(Index), !Other.IsImageInPlace(Index));
+	}
+	const int32 FirstDraw = VertexDraws.Num();
+	VertexDraws.Append(Other.VertexDraws);
+	VertexBatches.Reserve(VertexBatches.Num() + Other.VertexBatches.Num());
+	// Other's palettes are reused with its next frame; this list's copies last until its own Reset (once each: the
+	// batches of a palette follow one another).
+	const FGSSkinMatrix* LastSource = nullptr;
+	const FGSSkinMatrix* LastCopy = nullptr;
+	for (const FGSVertexBatch& OtherBatch : Other.VertexBatches)
+	{
+		FGSVertexBatch& Batch = VertexBatches.Add_GetRef(OtherBatch);
+		Batch.Draw += FirstDraw;
+		if (Batch.IsSkinned())
+		{
+			if (Batch.Palette != LastSource)
+			{
+				FGSSkinMatrix* Copy = AllocateSkinPalette(Batch.NumBones);
+				FMemory::Memcpy(Copy, Batch.Palette, Batch.NumBones * sizeof(FGSSkinMatrix));
+				LastSource = Batch.Palette;
+				LastCopy = Copy;
+			}
+			Batch.Palette = LastCopy;
+		}
+	}
+}
+
+void FGSCommandList::AppendExpanded(const FGSCommandList& Other, const FGSDrawEnvironment& Environment)
+{
+	check(&Other != this);
+	// The emitter's scratch is on the scratchpad (the frame's stack what does not fit).
+	FMemMark Mark(FMemStack::Get());
+	FScratchpadMark ScratchpadMark;
+	FGSPrimitiveEmitter Emitter(Environment, *this);
+	const uint64 FirstImage = uint64(Images.Num());
+	for (const FGSRegisterWrite& OtherWrite : Other.Writes)
+	{
+		if (OtherWrite.Register == EGSRegister::VertexBatch)
+		{
+			const FGSVertexBatch& Batch = Other.VertexBatches[int32(OtherWrite.Value)];
+			const FGSVertexDraw& Draw = Other.VertexDraws[Batch.Draw];
+			Emitter.SetFog(Draw.Fog);
+			Emitter.BeginStrip(Draw.bTextured, Draw.bBlend, true);
+			Emitter.AddVertexBatch(Draw, Batch);
+			continue;
+		}
+		const bool bImage = OtherWrite.Register == EGSRegister::HWREG;
+		Write(OtherWrite.Register, bImage ? FirstImage + OtherWrite.Value : OtherWrite.Value);
+	}
+	Images.Reserve(Images.Num() + Other.Images.Num());
+	for (int32 Index = 0; Index < Other.Images.Num(); ++Index)
+	{
+		AddImage(Other.GetImage(Index), !Other.IsImageInPlace(Index));
+	}
+}
+
+void FGSCommandList::CopyInPlaceImages()
+{
+	LLM_SCOPE(ELLMTag::RenderLists);
+	for (FImage& Image : Images)
+	{
+		if (Image.CopyIndex == INDEX_NONE)
+		{
+			Image.CopyIndex = Copies.Num();
+			Image.Data = Copies.Emplace_GetRef(Image.Data, Image.NumBytes).GetData();
+		}
+	}
 }
 
 void FGSCommandList::Reset()
 {
 	Writes.Reset();
-	ImageData.Reset();
+	Images.Reset();
+	Copies.Reset();
+	VertexDraws.Reset();
+	VertexBatches.Reset();
+	NumPaletteBlocks = 0;
+	PaletteBlockUsed = 0;
 }
 
 bool FGSCommandList::IsSupported(const FGSPrim& Prim)
 {
-	return !Prim.bAntialias && uint8(Prim.Type) <= uint8(EGSPrimitive::Sprite) && Prim.Context <= 1;
+	return !Prim.bAntialias && !Prim.bFixFragment && uint8(Prim.Type) <= uint8(EGSPrimitive::Sprite) &&
+		Prim.Context <= 1;
 }
 
 bool FGSCommandList::IsSupported(const FGSAlpha& Alpha)
 {
-	const bool bAlphaInput = Alpha.C == EGSBlendAlpha::Source || Alpha.C == EGSBlendAlpha::Fixed;
-	if (Alpha.A != EGSBlendColor::Source || !bAlphaInput)
-	{
-		return false;
-	}
-	if (Alpha.B == EGSBlendColor::Destination)
-	{
-		// A lerp toward the destination.
-		return Alpha.D == EGSBlendColor::Destination;
-	}
-	// Added to the destination, or alone.
-	return Alpha.B == EGSBlendColor::Zero && (Alpha.D == EGSBlendColor::Destination || Alpha.D == EGSBlendColor::Zero);
+	const auto IsColor = [](EGSBlendColor Color) { return uint8(Color) <= uint8(EGSBlendColor::Zero); };
+	return IsColor(Alpha.A) && IsColor(Alpha.B) && IsColor(Alpha.D) && uint8(Alpha.C) <= uint8(EGSBlendAlpha::Fixed);
 }
 
 bool FGSCommandList::IsSupported(const FGSTex0& Tex0)
 {
-	if (Tex0.TW > 10 || Tex0.TH > 10 || Tex0.CLD > 1)
+	if (Tex0.TW > 10 || Tex0.TH > 10 || Tex0.CLD > 5 || uint8(Tex0.TFX) > uint8(EGSTextureFunction::Highlight2))
 	{
 		return false;
 	}
@@ -246,7 +406,16 @@ bool FGSCommandList::IsSupported(const FGSTex0& Tex0)
 
 bool FGSCommandList::IsSupported(const FGSTex1& Tex1)
 {
-	return !Tex1.bAutoMipBase;
+	return !Tex1.bAutoMipBase && Tex1.MXL <= 6 && uint8(Tex1.MMAG) <= uint8(EGSFilter::Linear) &&
+		uint8(Tex1.MMIN) <= uint8(EGSFilter::LinearMipmapLinear) && Tex1.L <= 3 && Tex1.K >= -2048 && Tex1.K <= 2047;
+}
+
+bool FGSCommandList::IsSupported(const FGSClamp& Clamp)
+{
+	// REGION_CLAMP's range must not be empty (the manual gives no result for MIN above MAX).
+	const bool bRangeU = Clamp.WMS != EGSWrapMode::RegionClamp || Clamp.MINU <= Clamp.MAXU;
+	const bool bRangeV = Clamp.WMT != EGSWrapMode::RegionClamp || Clamp.MINV <= Clamp.MAXV;
+	return Clamp.MINU < 1024 && Clamp.MAXU < 1024 && Clamp.MINV < 1024 && Clamp.MAXV < 1024 && bRangeU && bRangeV;
 }
 
 bool FGSCommandList::IsSupportedUpload(EGSPixelFormat Format, uint16 X, uint16 Width)
@@ -270,7 +439,8 @@ bool FGSCommandList::IsSupportedUpload(EGSPixelFormat Format, uint16 X, uint16 W
 
 bool FGSCommandList::IsSupported(const FGSTest& Test)
 {
-	return Test.bDepthTest;
+	return Test.bDepthTest && uint8(Test.ATST) <= uint8(EGSAlphaTest::NotEqual) &&
+		uint8(Test.AFAIL) <= uint8(EGSAlphaFail::RGBOnly) && uint8(Test.ZTST) <= uint8(EGSDepthTest::Greater);
 }
 
 bool FGSCommandList::IsSupported(const FGSFrame& Frame)

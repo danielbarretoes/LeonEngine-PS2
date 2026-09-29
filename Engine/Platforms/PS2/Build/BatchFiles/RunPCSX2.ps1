@@ -14,7 +14,7 @@
 # the ELF through host: with Settings > Advanced > "Enable Host Filesystem" ([EmuCore] HostFs = true in PCSX2.ini);
 # without it the staged files are not read and the compiled defaults apply.
 param(
-    [string]$Project = "Game\ThirdPerson",
+    [string]$Project = "Game\ShooterGame",
     [string]$Program = "",
     [ValidateSet("Debug", "Development", "Shipping")]
     [string]$Configuration = "Development",

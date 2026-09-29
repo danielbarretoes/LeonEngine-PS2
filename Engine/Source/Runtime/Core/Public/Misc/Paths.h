@@ -98,6 +98,15 @@ public:
 	/** "C:", "C:/", "host:" and the like (UE: IsDrive, extended to PS2 device names). */
 	static bool IsDrive(const FString& InPath);
 
+	/**
+	 * A path as a PS2 disc names it (Leon, Docs/PLANS/ps2-shipping.md N23): the device prefix as it is ("cdrom0:"),
+	 * then each folder and file as an ISO 9660 level 1 identifier, '\' between them: upper case, any character but A-Z,
+	 * 0-9 and '_' made '_', a name cut to 8 characters and an extension to 3 (a folder has no extension), and a file
+	 * ends in the ";1" version ("cdrom0:\ShooterGame/Content/Paks/ShooterGame-PS2.lpak" is
+	 * "cdrom0:\SHOOTERG\CONTENT\PAKS\SHOOTERG.LPA;1"). BuildCookRun -iso lays the disc out with the same rule.
+	 */
+	static FString ToIso9660Path(const FString& InPath, bool bFile);
+
 	/** Not rooted: no leading '/', no drive or device (UE: IsRelative). */
 	static bool IsRelative(const FString& InPath);
 

@@ -157,6 +157,19 @@ const FKey EKeys::Gamepad_RightThumbstick("Gamepad_RightThumbstick");
 const FKey EKeys::Gamepad_Special_Left("Gamepad_Special_Left");
 const FKey EKeys::Gamepad_Special_Right("Gamepad_Special_Right");
 
+const FKey EKeys::Gamepad_LeftTriggerAxis("Gamepad_LeftTriggerAxis");
+const FKey EKeys::Gamepad_RightTriggerAxis("Gamepad_RightTriggerAxis");
+const FKey EKeys::Gamepad_FaceButton_BottomAxis("Gamepad_FaceButton_BottomAxis");
+const FKey EKeys::Gamepad_FaceButton_RightAxis("Gamepad_FaceButton_RightAxis");
+const FKey EKeys::Gamepad_FaceButton_LeftAxis("Gamepad_FaceButton_LeftAxis");
+const FKey EKeys::Gamepad_FaceButton_TopAxis("Gamepad_FaceButton_TopAxis");
+const FKey EKeys::Gamepad_LeftShoulderAxis("Gamepad_LeftShoulderAxis");
+const FKey EKeys::Gamepad_RightShoulderAxis("Gamepad_RightShoulderAxis");
+const FKey EKeys::Gamepad_DPad_UpAxis("Gamepad_DPad_UpAxis");
+const FKey EKeys::Gamepad_DPad_DownAxis("Gamepad_DPad_DownAxis");
+const FKey EKeys::Gamepad_DPad_RightAxis("Gamepad_DPad_RightAxis");
+const FKey EKeys::Gamepad_DPad_LeftAxis("Gamepad_DPad_LeftAxis");
+
 const FKey EKeys::Invalid(NAME_None);
 
 namespace
@@ -326,6 +339,14 @@ void EKeys::Initialize()
 	}
 
 	for (const FKey* Key : {&Gamepad_LeftX, &Gamepad_LeftY, &Gamepad_RightX, &Gamepad_RightY})
+	{
+		AddKey(FKeyDetails(*Key, FKeyDetails::GamepadKey | FKeyDetails::Axis1D));
+	}
+	// The buttons' pressures (ps2-shipping N24): the triggers' as UE names them, the DualShock 2's other ten as Leon's.
+	for (const FKey* Key : {&Gamepad_LeftTriggerAxis, &Gamepad_RightTriggerAxis, &Gamepad_FaceButton_BottomAxis,
+			 &Gamepad_FaceButton_RightAxis, &Gamepad_FaceButton_LeftAxis, &Gamepad_FaceButton_TopAxis,
+			 &Gamepad_LeftShoulderAxis, &Gamepad_RightShoulderAxis, &Gamepad_DPad_UpAxis, &Gamepad_DPad_DownAxis,
+			 &Gamepad_DPad_RightAxis, &Gamepad_DPad_LeftAxis})
 	{
 		AddKey(FKeyDetails(*Key, FKeyDetails::GamepadKey | FKeyDetails::Axis1D));
 	}

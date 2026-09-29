@@ -10,6 +10,8 @@
 #include "Engine/PointLight.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
+#include "Engine/VisibilityCellVolume.h"
+#include "Engine/VisibilityPortal.h"
 #include "Engine/World.h"
 #include "Factories/MapImportSettings.h"
 #include "Factories/StaticMeshImport.h"
@@ -23,6 +25,7 @@
 #include "PhysicsEngine/BodySetup.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
+#include "StaticLightingSystem.h"
 #include "UObject/Package.h"
 
 namespace
@@ -234,6 +237,75 @@ namespace
 		return SpawnInfo;
 	}
 
+	/**
+	 * A portal node's quad in the world (N15): the rectangle in the plane of the node's mesh (its first triangle's)
+	 * that holds every vertex, its corners in order around it. False for a mesh without a triangle of area.
+	 */
+	bool MakePortalQuad(const FGltfSceneNode& Node, const FMeshData& Mesh, FVector (&OutCorners)[4])
+	{
+		if (Mesh.Indices.Num() < 3)
+		{
+			return false;
+		}
+		TArray<FVector> Points;
+		for (const FVertex& Vertex : Mesh.Vertices)
+		{
+			Points.Add(Node.WorldTransform.TransformPosition(Vertex.Position));
+		}
+		const FVector& A = Points[int32(Mesh.Indices[0])];
+		const FVector& B = Points[int32(Mesh.Indices[1])];
+		const FVector& C = Points[int32(Mesh.Indices[2])];
+		const FVector Normal = FVector::CrossProduct(B - A, C - A).GetSafeNormal();
+		const FVector AxisU = (B - A).GetSafeNormal();
+		if (Normal.IsNearlyZero() || AxisU.IsNearlyZero())
+		{
+			return false;
+		}
+		const FVector AxisV = FVector::CrossProduct(Normal, AxisU);
+		float MinU = TNumericLimits<float>::Max();
+		float MaxU = TNumericLimits<float>::Lowest();
+		float MinV = TNumericLimits<float>::Max();
+		float MaxV = TNumericLimits<float>::Lowest();
+		for (const FVector& Point : Points)
+		{
+			const float U = FVector::DotProduct(Point - A, AxisU);
+			const float V = FVector::DotProduct(Point - A, AxisV);
+			MinU = FMath::Min(MinU, U);
+			MaxU = FMath::Max(MaxU, U);
+			MinV = FMath::Min(MinV, V);
+			MaxV = FMath::Max(MaxV, V);
+		}
+		OutCorners[0] = A + (AxisU * MinU) + (AxisV * MinV);
+		OutCorners[1] = A + (AxisU * MaxU) + (AxisV * MinV);
+		OutCorners[2] = A + (AxisU * MaxU) + (AxisV * MaxV);
+		OutCorners[3] = A + (AxisU * MinU) + (AxisV * MaxV);
+		return true;
+	}
+
+	/**
+	 * The two cells a portal's suffix names (`<CellA>_<CellB>`), found among the map's cell names (either may hold an
+	 * underscore: the first split whose two sides are both cells); false when none is.
+	 */
+	bool SplitPortalCells(const FString& Suffix, const TSet<FString>& CellNames, FString& OutCellA, FString& OutCellB)
+	{
+		for (int32 Index = 1; Index + 1 < Suffix.Len(); ++Index)
+		{
+			if (Suffix[Index] != '_')
+			{
+				continue;
+			}
+			const FString Left = Suffix.Left(Index);
+			const FString Right = Suffix.Mid(Index + 1);
+			if (CellNames.Contains(Left) && CellNames.Contains(Right))
+			{
+				OutCellA = Left;
+				OutCellB = Right;
+				return true;
+			}
+		}
+		return false;
+	}
+
 } // namespace
 
 UGLTFMapFactory::UGLTFMapFactory(const FObjectInitializer& ObjectInitializer)
@@ -442,8 +514,13 @@ UObject* UGLTFMapFactory::FactoryCreateFile(UClass* InClass, UObject* InParent, 
 	for (TPair<int32, FMeshPlan>& Pair : Meshes)
 	{
 		UStaticMesh& Mesh = *Pair.Value.Mesh;
-		StaticMeshImport::BuildStaticMesh(
-			Mesh, Scene.Meshes[Pair.Key].Data, true, AdditionalImportedObjects, MaterialPath);
+		if (!StaticMeshImport::BuildStaticMesh(
+				Mesh, Scene.Meshes[Pair.Key].Data, true, AdditionalImportedObjects, MaterialPath))
+		{
+			UE_LOG(LogLeonEd, Error, "GLTFMapFactory: %s makes no static mesh; the map is not imported",
+				*Mesh.GetPathName());
+			return nullptr;
+		}
 		// UCX_: Leon has no convex hulls; each piece's bounding box is a box of the simple collision, and the body uses
 		// it for traces too (a static body would use the triangles otherwise).
 		UBodySetup& BodySetup = *Mesh.GetBodySetup();
@@ -478,7 +555,17 @@ UObject* UGLTFMapFactory::FactoryCreateFile(UClass* InClass, UObject* InParent, 
 	}
 	World->SetFlags(Flags);
 
-	// 4. The actors, the world settings first, then the nodes in file order.
+	// 4. The actors, the world settings first, then the nodes in file order. The cells' names first: the portals name
+	// two of them (N15).
+	TSet<FString> CellNames;
+	for (const FNodePlan& Plan : Plans)
+	{
+		if (Plan.ActorClass != nullptr && Plan.ActorClass->IsChildOf(AVisibilityCellVolume::StaticClass()))
+		{
+			const FGltfSceneNode& Node = Scene.Nodes[Plan.NodeIndex];
+			CellNames.Add(UMapImportSettings::GetSuffix(Node.Name, Settings.FindRule(Node.Name)->Prefix));
+		}
+	}
 	AWorldSettings* WorldSettings =
 		World->SpawnActor<AWorldSettings>(AWorldSettings::StaticClass(), NamedSpawn(FName(TEXT("WorldSettings"))));
 	World->PersistentLevel->SetWorldSettings(WorldSettings);
@@ -503,8 +590,8 @@ UObject* UGLTFMapFactory::FactoryCreateFile(UClass* InClass, UObject* InParent, 
 			ULightComponent& Component = *LightActor->GetLightComponent();
 			Component.SetLightColor(Light.Color);
 			Component.SetIntensity(Light.Intensity);
-			// Leon's renderer shadows the first directional light only.
-			Component.SetCastShadows(Light.Type == EGltfLightType::Directional);
+			// The static lighting shadows every light that casts shadows (N22).
+			Component.SetCastShadows(true);
 			if (UPointLightComponent* Point = Cast<UPointLightComponent>(&Component))
 			{
 				Point->SetAttenuationRadius(Light.Range > 0.0f ? Light.Range : DefaultPointLightRange);
@@ -538,6 +625,40 @@ UObject* UGLTFMapFactory::FactoryCreateFile(UClass* InClass, UObject* InParent, 
 				NodeTransform.TransformPosition(LocalBox.GetCenter()),
 				NodeTransform.GetScale3D() * (Extent / AVolume::BrushExtent));
 			Actor = World->SpawnActor<AActor>(Plan.ActorClass, VolumeTransform, SpawnInfo);
+			// VIS_<Cell>: the cell's name (N15).
+			if (AVisibilityCellVolume* Cell = Cast<AVisibilityCellVolume>(Actor))
+			{
+				Cell->CellName = FName(*UMapImportSettings::GetSuffix(Node.Name, Settings.FindRule(Node.Name)->Prefix));
+			}
+		}
+		else if (Plan.ActorClass->IsChildOf(AVisibilityPortal::StaticClass()))
+		{
+			// PORTAL_<CellA>_<CellB> (N15): the quad of its mesh, between two of the map's cells.
+			FVector Corners[4];
+			FString CellA;
+			FString CellB;
+			const FString Suffix = UMapImportSettings::GetSuffix(Node.Name, Settings.FindRule(Node.Name)->Prefix);
+			if (Node.Mesh == INDEX_NONE || !MakePortalQuad(Node, Scene.Meshes[Node.Mesh].Data, Corners) ||
+				!SplitPortalCells(Suffix, CellNames, CellA, CellB))
+			{
+				UE_LOG(LogLeonEd, Warning,
+					"GLTFMapFactory: '%s' is no portal between two cells (a quad mesh and PORTAL_<CellA>_<CellB>); "
+					"left "
+					"out",
+					*Node.Name);
+				continue;
+			}
+			const FVector Center = (Corners[0] + Corners[1] + Corners[2] + Corners[3]) * 0.25f;
+			AVisibilityPortal* Portal =
+				World->SpawnActor<AVisibilityPortal>(Plan.ActorClass, FTransform(Center), SpawnInfo);
+			if (Portal != nullptr)
+			{
+				Portal->CellA = FName(*CellA);
+				Portal->CellB = FName(*CellB);
+				Portal->Corners.Reset();
+				Portal->Corners.Append(Corners, 4);
+			}
+			Actor = Portal;
 		}
 		else if (Plan.ActorClass->IsChildOf(APlayerStart::StaticClass()))
 		{
@@ -607,6 +728,9 @@ UObject* UGLTFMapFactory::FactoryCreateFile(UClass* InClass, UObject* InParent, 
 		const int32 Added = UNavigationSystem::AutoLinkWaypoints(*World, FWaypointLinkParams::FromConfig());
 		UE_LOG(LogLeonEd, Log, "GLTFMapFactory: %d waypoint link(s) added by the auto-linking", Added);
 	}
+
+	// 7. The static lighting, baked into the static meshes (N22): the same map bakes the same bytes.
+	(void)FStaticLightingSystem::Build(*World);
 
 	UpdateAssetImportData(World, Filename);
 	UE_LOG(LogLeonEd, Log, "GLTFMapFactory: %s from '%s': %d actors, %d meshes", *World->GetPathName(), *Filename,

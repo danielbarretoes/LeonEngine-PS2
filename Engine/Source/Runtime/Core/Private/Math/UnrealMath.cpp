@@ -1,5 +1,6 @@
 #include "Math/UnrealMath.h"
 
+#include "Math/VectorMath.h"
 #include "Misc/Parse.h"
 
 #include <cstring>
@@ -891,21 +892,15 @@ void FMatrix::SetIdentity()
 
 FMatrix FMatrix::operator*(const FMatrix& Other) const
 {
+	// UE: VectorMatrixMultiply (the PS2's VU0, ps2-shipping N15).
 	FMatrix Result;
-	for (int32 Row = 0; Row < 4; ++Row)
-	{
-		for (int32 Col = 0; Col < 4; ++Col)
-		{
-			Result.M[Row][Col] = M[Row][0] * Other.M[0][Col] + M[Row][1] * Other.M[1][Col] +
-				M[Row][2] * Other.M[2][Col] + M[Row][3] * Other.M[3][Col];
-		}
-	}
+	FVectorMath::MatrixMultiply(Result, *this, Other);
 	return Result;
 }
 
 void FMatrix::operator*=(const FMatrix& Other)
 {
-	*this = *this * Other;
+	FVectorMath::MatrixMultiply(*this, *this, Other);
 }
 
 FMatrix FMatrix::operator+(const FMatrix& Other) const
@@ -976,11 +971,9 @@ bool FMatrix::Equals(const FMatrix& Other, float Tolerance) const
 
 FVector4 FMatrix::TransformFVector4(const FVector4& P) const
 {
+	// UE: VectorTransformVector (the PS2's VU0, ps2-shipping N15).
 	FVector4 Result;
-	Result.X = P.X * M[0][0] + P.Y * M[1][0] + P.Z * M[2][0] + P.W * M[3][0];
-	Result.Y = P.X * M[0][1] + P.Y * M[1][1] + P.Z * M[2][1] + P.W * M[3][1];
-	Result.Z = P.X * M[0][2] + P.Y * M[1][2] + P.Z * M[2][2] + P.W * M[3][2];
-	Result.W = P.X * M[0][3] + P.Y * M[1][3] + P.Z * M[2][3] + P.W * M[3][3];
+	FVectorMath::TransformVector4(Result, *this, P);
 	return Result;
 }
 

@@ -1,6 +1,7 @@
 @echo off
 REM Package.bat - build and package each project under its own Packages\ folder.
-REM     Package.bat [-NoWin64] [-NoPS2]
+REM     Package.bat [-NoWin64] [-NoPS2] [-Only <Name[,Name]>]
+REM     Package.bat -NoWin64 -Only ShooterGame   (only ShooterGame for the PS2)
 REM Win64: ShooterGame Shipping -> Game\ShooterGame\Packages\Win64\
 REM PS2:   Game\<Name>\Packages\PS2\ (games projects); Engine\Packages\PS2\<Name>\ (engine programs)
 REM        via Publish-Package (Docs/BUILD.md#ps2-staging-matrix).

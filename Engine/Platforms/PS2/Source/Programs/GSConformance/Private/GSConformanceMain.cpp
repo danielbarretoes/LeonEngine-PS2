@@ -1,6 +1,7 @@
 #include "CoreMinimal.h"
 #include "GSCommandList.h"
 #include "GSConformanceScenes.h"
+#include "GSDebugDraw.h"
 #include "HAL/PlatformProcess.h"
 #include "Misc/CommandLine.h"
 #include "PS2RHI.h"
@@ -12,20 +13,21 @@ namespace
 
 	constexpr int32 ScreenWidth = 640;
 	constexpr int32 ScreenHeight = 448;
-	/** Each scene's pixel as Scale x Scale screen pixels, in a grid of Columns. */
-	constexpr int32 Scale = 3;
-	constexpr int32 Columns = 3;
+	/** Each scene's pixel as Scale x Scale screen pixels, in a grid of Columns (4 x 5 cells on the screen). */
+	constexpr int32 Scale = 2;
+	constexpr int32 Columns = 4;
 	constexpr float CellWidth = float(GSConformance::FrameWidth * Scale);
 	constexpr float CellHeight = float(GSConformance::FrameHeight * Scale);
 	constexpr float Gap = 16.0f;
 	constexpr float LabelHeight = 10.0f;
-	constexpr float RowPitch = LabelHeight + CellHeight + 14.0f;
+	constexpr float RowPitch = LabelHeight + CellHeight + 10.0f;
 
 	/**
-	 * Shows the scene's frame buffer (FBP 0) at (Left, Top): a sprite that samples it as a texture, nearest, one texel
-	 * per Scale x Scale pixels.
+	 * Shows the scene's frame buffer (FBP 0) at (Left, Top), pixels from the screen's top left: a sprite that samples
+	 * it as a texture, nearest, one texel per Scale x Scale pixels.
 	 */
-	void AppendShowScene(FGSCommandList& List, EGSPixelFormat Format, float Left, float Top)
+	void AppendShowScene(
+		FGSCommandList& List, const FGSDrawEnvironment& Environment, EGSPixelFormat Format, float Left, float Top)
 	{
 		FGSTest NoDepth;
 		List.SetTest(0, NoDepth);
@@ -48,12 +50,12 @@ namespace
 		Sprite.bUseUV = true;
 		List.SetPrim(Sprite);
 		List.SetUV(FGSUV());
-		List.AddVertex(FPS2RHI::ScreenVertex(Left, Top));
+		List.AddVertex(Environment.PixelVertex(Left, Top));
 		FGSUV Corner;
 		Corner.U = GSToFixed4(float(GSConformance::FrameWidth), 14);
 		Corner.V = GSToFixed4(float(GSConformance::FrameHeight), 14);
 		List.SetUV(Corner);
-		List.AddVertex(FPS2RHI::ScreenVertex(Left + CellWidth, Top + CellHeight));
+		List.AddVertex(Environment.PixelVertex(Left + CellWidth, Top + CellHeight));
 	}
 
 } // namespace
@@ -74,8 +76,9 @@ int main(int ArgC, char* ArgV[])
 	const TArrayView<const FGSConformanceScene> Scenes = GSConformance::GetScenes();
 	UE_LOG(LogGSConformance, Display, TEXT("GSConformance: drawing %d scenes"), Scenes.Num());
 
-	const float GridLeft = -((CellWidth * Columns) + (Gap * (Columns - 1))) * 0.5f;
-	const float GridTop = -float(ScreenHeight) * 0.5f + 16.0f;
+	const float GridLeft = (float(ScreenWidth) - ((CellWidth * Columns) + (Gap * (Columns - 1)))) * 0.5f;
+	const float GridTop = 12.0f;
+	const FGSRGBAQ LabelColor = FGSDebugDraw::UnitColor(0.9f, 0.9f, 0.8f);
 	for (;;)
 	{
 		FPS2RHI::ClearColor(0.1f, 0.1f, 0.12f);
@@ -90,10 +93,11 @@ int main(int ArgC, char* ArgV[])
 			// The scene's frame buffer is read back as a texture.
 			List.TexFlush();
 			FPS2RHI::Submit(List);
+			const FGSDrawEnvironment Environment = FPS2RHI::GetDrawEnvironment();
 			FGSCommandList Show;
-			AppendShowScene(Show, Scene.FrameFormat, Left, Top + LabelHeight);
+			AppendShowScene(Show, Environment, Scene.FrameFormat, Left, Top + LabelHeight);
+			FGSDebugDraw::DrawString(Show, Environment, Left, Top, Scene.Name, LabelColor, 0.5f);
 			FPS2RHI::Submit(Show);
-			FPS2RHI::DrawDebugText(Left, Top, Scene.Name, 0.9f, 0.9f, 0.8f, 0.5f);
 		}
 		FPS2RHI::WaitVSync();
 	}

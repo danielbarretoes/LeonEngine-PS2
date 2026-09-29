@@ -29,6 +29,16 @@ double FWindowsPlatformTime::GetSecondsPerCycle64()
 	return 1.0 / static_cast<double>(CyclesPerSecond());
 }
 
+uint32 FWindowsPlatformTime::Cycles()
+{
+	return static_cast<uint32>(Cycles64());
+}
+
+double FWindowsPlatformTime::GetSecondsPerCycle()
+{
+	return GetSecondsPerCycle64();
+}
+
 uint64 FWindowsPlatformTime::CyclesToMicroseconds(uint64 Cycles)
 {
 	return (Cycles / CyclesPerSecond()) * 1000000ull + (Cycles % CyclesPerSecond()) * 1000000ull / CyclesPerSecond();

@@ -13,9 +13,9 @@
 #include "ShooterPlayerState.h"
 #include "Tests/ScopedTestWorld.h"
 #include "Weapons/ShooterProjectile.h"
+#include "Weapons/ShooterWeapon_AWP.h"
 #include "Weapons/ShooterWeapon_Instant.h"
 #include "Weapons/ShooterWeapon_Projectile.h"
-#include "Weapons/ShooterWeapon_Sniper.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -57,7 +57,7 @@ namespace
 		AShooterCharacter* Character = World.SpawnActor<AShooterCharacter>(Feet, FRotator(0.0f, Yaw, 0.0f));
 		AShooterAIController* Controller = World.SpawnActor<AShooterAIController>();
 		// The test drives the pawn: the bot's brain stays off.
-		Controller->bCanEverTick = false;
+		Controller->SetActorTickEnabled(false);
 		if (AShooterPlayerState* State = Controller->GetPlayerState<AShooterPlayerState>())
 		{
 			State->SetTeam(Team);
@@ -108,23 +108,27 @@ bool FShooterGameDamageArmorTest::RunTest(const FString& Parameters)
 	// lets the rest through; a head without a helmet and damage without a ratio ignore it.
 	float Health = 0.0f;
 	float Armor = 0.0f;
-	AShooterCharacter::ComputeArmorDamage(100.0f, 1.55f, false, false, 0.0f, Health, Armor);
+	constexpr EShooterHitGroup Chest = EShooterHitGroup::Chest;
+	constexpr EShooterHitGroup Head = EShooterHitGroup::Head;
+	AShooterCharacter::ComputeArmorDamage(100.0f, 1.55f, Chest, false, 0.0f, Health, Armor);
 	TestTrue("No armor: all to health", Health == 100.0f && Armor == 0.0f);
-	AShooterCharacter::ComputeArmorDamage(40.0f, 1.55f, false, false, 100.0f, Health, Armor);
+	AShooterCharacter::ComputeArmorDamage(40.0f, 1.55f, Chest, false, 100.0f, Health, Armor);
 	TestEqual("Rifle vs kevlar: health", Health, 31.0f, 1.0e-4f);
 	TestEqual("Rifle vs kevlar: armor", Armor, 4.5f, 1.0e-4f);
-	AShooterCharacter::ComputeArmorDamage(40.0f, 1.0f, false, false, 100.0f, Health, Armor);
+	AShooterCharacter::ComputeArmorDamage(40.0f, 1.0f, Chest, false, 100.0f, Health, Armor);
 	TestTrue("Pistol vs kevlar: halved", FMath::IsNearlyEqual(Health, 20.0f) && FMath::IsNearlyEqual(Armor, 10.0f));
-	AShooterCharacter::ComputeArmorDamage(40.0f, 1.0f, false, false, 4.0f, Health, Armor);
+	AShooterCharacter::ComputeArmorDamage(40.0f, 1.0f, Chest, false, 4.0f, Health, Armor);
 	TestTrue("Worn out: 4 armor stops 8", FMath::IsNearlyEqual(Health, 32.0f) && FMath::IsNearlyEqual(Armor, 4.0f));
-	AShooterCharacter::ComputeArmorDamage(144.0f, 1.55f, true, false, 100.0f, Health, Armor);
+	AShooterCharacter::ComputeArmorDamage(144.0f, 1.55f, Head, false, 100.0f, Health, Armor);
 	TestTrue("Head, no helmet", Health == 144.0f && Armor == 0.0f);
-	AShooterCharacter::ComputeArmorDamage(144.0f, 1.55f, true, true, 100.0f, Health, Armor);
+	AShooterCharacter::ComputeArmorDamage(144.0f, 1.55f, Head, true, 100.0f, Health, Armor);
 	TestEqual("Head with a helmet", Health, 111.6f, 1.0e-3f);
-	AShooterCharacter::ComputeArmorDamage(460.0f, 1.95f, false, false, 100.0f, Health, Armor);
+	AShooterCharacter::ComputeArmorDamage(460.0f, 1.95f, Chest, false, 100.0f, Health, Armor);
 	TestEqual("AWP: nearly all through", Health, 448.5f, 1.0e-3f);
-	AShooterCharacter::ComputeArmorDamage(30.0f, -1.0f, false, false, 100.0f, Health, Armor);
+	AShooterCharacter::ComputeArmorDamage(30.0f, -1.0f, Chest, false, 100.0f, Health, Armor);
 	TestTrue("The world ignores armor", Health == 30.0f && Armor == 0.0f);
+	AShooterCharacter::ComputeArmorDamage(40.0f, 1.0f, EShooterHitGroup::Generic, false, 100.0f, Health, Armor);
+	TestEqual("A blast: armored", Health, 20.0f, 1.0e-4f);
 	return true;
 }
 
@@ -141,7 +145,7 @@ bool FShooterGameDamageHeadshotTest::RunTest(const FString& Parameters)
 	(void)World.SetGameMode(AShooterGameMode::StaticClass());
 	AShooterCharacter* Shooter = SpawnShooter(World, FVector::ZeroVector, 0.0f, EShooterTeam::CT);
 	AShooterCharacter* Victim = SpawnShooter(World, FVector(1000.0f, 0.0f, 0.0f), 180.0f, EShooterTeam::T);
-	AShooterWeapon_Instant* Rifle = GiveAndDraw<AShooterWeapon_Rifle>(World, *Shooter);
+	AShooterWeapon_Instant* Rifle = GiveAndDraw<AShooterWeapon_AK47>(World, *Shooter);
 	if (!TestNotNull("A rifle", Rifle))
 	{
 		return false;
@@ -168,7 +172,7 @@ bool FShooterGameDamageHeadshotTest::RunTest(const FString& Parameters)
 	TickFrames(World, 12);
 	Shoot(World, *Shooter);
 	TestTrue("It hit the armored victim", Rifle->GetLastHit().GetActor() == Armored);
-	TestTrue("In the body", Armored->GetHitGroup(Rifle->GetLastHit().ImpactPoint) == EShooterHitGroup::Body);
+	TestTrue("In the chest", Armored->GetHitGroup(Rifle->GetLastHit().ImpactPoint) == EShooterHitGroup::Chest);
 	const float BodyDistance = FVector::Dist(Rifle->GetLastShotStart(), Rifle->GetLastHit().ImpactPoint);
 	const float BodyDamage = 36.0f * FMath::Pow(0.98f, BodyDistance / 1270.0f);
 	TestEqual("Health takes 77.5 %", Armored->GetHealth(), 100.0f - (BodyDamage * 0.775f), 1.0e-3f);
@@ -225,7 +229,7 @@ bool FShooterGameWeaponsDeterministicSpreadTest::RunTest(const FString& Paramete
 		UWorld& World = *TestWorld;
 		SpawnFloor(World);
 		AShooterCharacter* Shooter = SpawnShooter(World, FVector::ZeroVector, 0.0f, EShooterTeam::CT);
-		AShooterWeapon_Instant* Rifle = GiveAndDraw<AShooterWeapon_Rifle>(World, *Shooter);
+		AShooterWeapon_Instant* Rifle = GiveAndDraw<AShooterWeapon_AK47>(World, *Shooter);
 		// The first shot goes with the press, the next ones with the fire rate while the trigger is held.
 		Shooter->StartWeaponFire();
 		Directions[Run].Add(Rifle->GetLastShotDirection());
@@ -272,7 +276,7 @@ bool FShooterGameWeaponsSpreadModelTest::RunTest(const FString& Parameters)
 	UWorld& World = *TestWorld;
 	SpawnFloor(World);
 	AShooterCharacter* Shooter = SpawnShooter(World, FVector::ZeroVector, 0.0f, EShooterTeam::CT);
-	AShooterWeapon_Instant* Rifle = GiveAndDraw<AShooterWeapon_Rifle>(World, *Shooter);
+	AShooterWeapon_Instant* Rifle = GiveAndDraw<AShooterWeapon_AK47>(World, *Shooter);
 	const float Standing = Rifle->GetCurrentSpread();
 	TestEqual("Standing", Standing, Rifle->WeaponSpread, 1.0e-4f);
 	UCharacterMovementComponent& Movement = Shooter->GetCharacterMovement();
@@ -296,8 +300,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameWeaponsAmmoAndReloadTest, "ShooterG
 
 bool FShooterGameWeaponsAmmoAndReloadTest::RunTest(const FString& Parameters)
 {
-	// The pistol: semi-automatic (a held trigger fires once), 12 rounds, an empty clip reloads on the next press, the
-	// reload takes ReloadDuration and moves the rounds from the reserve; R reloads a partial clip.
+	// The USP: semi-automatic (a held trigger fires once), 12 rounds and two clips more in the reserve (CS), an empty
+	// clip reloads on the next press, the reload takes ReloadDuration and moves the rounds from the reserve; R reloads
+	// a partial clip.
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	SpawnFloor(World);
@@ -312,25 +317,27 @@ bool FShooterGameWeaponsAmmoAndReloadTest::RunTest(const FString& Parameters)
 	TickFrames(World, 60);
 	Shooter->StopWeaponFire();
 	TestEqual("Held: one shot", Pistol->GetShotsFired(), 1);
+	TestEqual("Two clips in the reserve", Pistol->GetCurrentAmmo(), 24);
+	const int32 FramesPerShot = FMath::CeilToInt(Pistol->TimeBetweenShots / FrameTime) + 1;
 	while (Pistol->GetCurrentAmmoInClip() > 0)
 	{
-		TickFrames(World, 10);
+		TickFrames(World, FramesPerShot);
 		Shoot(World, *Shooter);
 	}
 	TestEqual("Twelve shots", Pistol->GetShotsFired(), 12);
-	TickFrames(World, 10);
+	TickFrames(World, FramesPerShot);
 	Shoot(World, *Shooter);
 	TestTrue("Empty: reloading", Pistol->GetCurrentState() == EShooterWeaponState::Reloading);
 	TickFrames(World, FMath::CeilToInt(Pistol->ReloadDuration / FrameTime) + 1);
 	TestEqual("Full clip", Pistol->GetCurrentAmmoInClip(), 12);
-	TestEqual("Reserve", Pistol->GetCurrentAmmo(), Pistol->MaxAmmo - 12);
+	TestEqual("Reserve", Pistol->GetCurrentAmmo(), 12);
 
 	Shoot(World, *Shooter);
 	Shooter->ReloadWeapon();
 	TestTrue("R reloads", Pistol->GetCurrentState() == EShooterWeaponState::Reloading);
 	TickFrames(World, FMath::CeilToInt(Pistol->ReloadDuration / FrameTime) + 1);
 	TestEqual("Topped up", Pistol->GetCurrentAmmoInClip(), 12);
-	TestEqual("One more from the reserve", Pistol->GetCurrentAmmo(), Pistol->MaxAmmo - 13);
+	TestEqual("One more from the reserve", Pistol->GetCurrentAmmo(), 11);
 	return true;
 }
 
@@ -345,7 +352,9 @@ bool FShooterGameWeaponsSniperTest::RunTest(const FString& Parameters)
 	UWorld& World = *TestWorld;
 	SpawnFloor(World);
 	AShooterCharacter* Shooter = SpawnShooter(World, FVector::ZeroVector, 0.0f, EShooterTeam::CT);
-	AShooterWeapon_Sniper* Sniper = GiveAndDraw<AShooterWeapon_Sniper>(World, *Shooter);
+	AShooterWeapon_AWP* Sniper = GiveAndDraw<AShooterWeapon_AWP>(World, *Shooter);
+	// A reserve to reload from (a bought AWP comes with its clip only).
+	Sniper->RefillAmmo();
 	UCameraComponent* Camera = Shooter->GetFirstPersonCameraComponent();
 	UShooterCharacterMovement* Movement = Shooter->GetShooterCharacterMovement();
 	TestEqual("Unscoped spread", Sniper->GetCurrentSpread(), Sniper->WeaponSpread + Sniper->UnscopedSpread, 1.0e-4f);
@@ -366,6 +375,66 @@ bool FShooterGameWeaponsSniperTest::RunTest(const FString& Parameters)
 	TestEqual("Back to the zoom", Sniper->GetZoomLevel(), 2);
 	Shooter->StartSecondaryFire();
 	TestFalse("A third press: no zoom", Sniper->IsZoomed());
+
+	// A reload leaves the scope (CS), and the zoom works again once it is over.
+	Shooter->StartSecondaryFire();
+	TestTrue("Zoomed to reload", Sniper->IsZoomed());
+	Shooter->ReloadWeapon();
+	TestTrue("Reloading", Sniper->GetCurrentState() == EShooterWeaponState::Reloading);
+	TestFalse("The reload leaves the scope", Sniper->IsZoomed());
+	TestEqual("Default view reloading", Camera->FieldOfView(), AShooterCharacter::GetDefaultFieldOfView(), 1.0e-4f);
+	TickFrames(World, FMath::CeilToInt(Sniper->ReloadDuration / FrameTime) + 1);
+	TestFalse("Still no zoom after it", Sniper->IsZoomed());
+	Shooter->StartSecondaryFire();
+	TestTrue("The zoom works again", Sniper->IsZoomed());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameWeaponsCadenceAt30HzTest, "ShooterGame.Weapons.CadenceAt30Hz",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameWeaponsCadenceAt30HzTest::RunTest(const FString& Parameters)
+{
+	// At the PS2's 30 fps an automatic weapon keeps its fire rate: one shot every 0.15 s (4.5 frames) fires 10 times
+	// in 44 frames, not 9 (a frame's overshoot is carried to the next shot, not lost).
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	SpawnFloor(World);
+	AShooterCharacter* Shooter = SpawnShooter(World, FVector::ZeroVector, 0.0f, EShooterTeam::CT);
+	AShooterWeapon_Instant* Rifle = GiveAndDraw<AShooterWeapon_AK47>(World, *Shooter);
+	Rifle->TimeBetweenShots = 0.15f;
+	Shooter->StartWeaponFire();
+	TestEqual("The press fires", Rifle->GetShotsFired(), 1);
+	for (int32 Frame = 0; Frame < 44; ++Frame)
+	{
+		World.Tick(1.0f / 30.0f);
+	}
+	Shooter->StopWeaponFire();
+	TestEqual("Ten shots in 1.47 s", Rifle->GetShotsFired(), 10);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameWeaponsNewRoundResetsAimTest, "ShooterGame.Weapons.NewRoundResetsAim",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameWeaponsNewRoundResetsAimTest::RunTest(const FString& Parameters)
+{
+	// A spray until the round restarts: the new round's view is level and stays level (the recoil not recovered yet is
+	// forgotten, not pulled out of the reset view), and the accuracy is back.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	SpawnFloor(World);
+	AShooterCharacter* Shooter = SpawnShooter(World, FVector::ZeroVector, 0.0f, EShooterTeam::CT);
+	AShooterWeapon_Instant* Rifle = GiveAndDraw<AShooterWeapon_AK47>(World, *Shooter);
+	Shooter->StartWeaponFire();
+	TickFrames(World, 30);
+	TestTrue("The recoil climbed", Rifle->GetRecoilToRecover() > 0.0f && Rifle->GetCurrentFiringSpread() > 0.0f);
+
+	Shooter->ResetForNewRound(FVector(200.0f, 0.0f, 0.0f), 90.0f);
+	TestEqual("Nothing to recover", Rifle->GetRecoilToRecover(), 0.0f);
+	TestEqual("Accurate again", Rifle->GetCurrentFiringSpread(), 0.0f);
+	TickFrames(World, 120);
+	TestEqual("The view stays level", Shooter->GetController()->GetControlRotation().Pitch, 0.0f, 1.0e-4f);
 	return true;
 }
 
@@ -380,7 +449,7 @@ bool FShooterGameWeaponsGrenadeTest::RunTest(const FString& Parameters)
 	UWorld& World = *TestWorld;
 	SpawnFloor(World);
 	AShooterCharacter* Thrower = SpawnShooter(World, FVector::ZeroVector, 0.0f, EShooterTeam::CT);
-	AShooterWeapon_Projectile* Grenade = GiveAndDraw<AShooterWeapon_Grenade>(World, *Thrower);
+	AShooterWeapon_Projectile* Grenade = GiveAndDraw<AShooterWeapon_HEGrenade>(World, *Thrower);
 	if (!TestNotNull("A grenade", Grenade))
 	{
 		return false;
@@ -435,11 +504,11 @@ bool FShooterGameCharacterDeathDropsWeaponTest::RunTest(const FString& Parameter
 	SpawnFloor(World);
 	AShooterGameMode* GameMode = Cast<AShooterGameMode>(World.SetGameMode(AShooterGameMode::StaticClass()));
 	AShooterCharacter* Victim = SpawnShooter(World, FVector::ZeroVector, 0.0f, EShooterTeam::T);
-	AShooterWeapon* Rifle = GiveAndDraw<AShooterWeapon_Rifle>(World, *Victim);
+	AShooterWeapon* Rifle = GiveAndDraw<AShooterWeapon_AK47>(World, *Victim);
 	AShooterWeapon* Pistol = Victim->GetWeaponInSlot(EShooterWeaponSlot::Secondary);
 	Shoot(World, *Victim);
 	const int32 ClipLeft = Rifle->GetCurrentAmmoInClip();
-	TestEqual("Two weapons", Victim->GetInventory().Num(), 2);
+	TestEqual("The knife, the Glock and the rifle", Victim->GetInventory().Num(), 3);
 
 	AController* VictimController = Victim->GetController();
 	Victim->Suicide();
@@ -461,7 +530,7 @@ bool FShooterGameCharacterDeathDropsWeaponTest::RunTest(const FString& Parameter
 	const FVector RiflePlace = Rifle->GetActorLocation();
 	// Two pawns 50 cm to each side (clear of each other's capsule, within the pickup radius).
 	AShooterCharacter* Armed = SpawnShooter(World, RiflePlace + FVector(0.0f, 50.0f, 0.0f), 0.0f, EShooterTeam::CT);
-	AShooterWeapon* ArmedRifle = Armed->GiveWeapon(AShooterWeapon_Sniper::StaticClass());
+	AShooterWeapon* ArmedRifle = Armed->GiveWeapon(AShooterWeapon_AWP::StaticClass());
 	AShooterCharacter* Taker = SpawnShooter(World, RiflePlace + FVector(0.0f, -50.0f, 0.0f), 0.0f, EShooterTeam::CT);
 	TickFrames(World, 1);
 	TestTrue("Not before the delay", Rifle->IsDropped());
@@ -476,6 +545,49 @@ bool FShooterGameCharacterDeathDropsWeaponTest::RunTest(const FString& Parameter
 	TestTrue("Dropped by hand", Taker->DropWeapon(Rifle) && Rifle->IsDropped());
 	Taker->EquipBestWeapon();
 	TestTrue("The pistol again", Taker->GetWeapon() == Taker->GetWeaponInSlot(EShooterWeaponSlot::Secondary));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameWeaponsBestWeaponSkipsEmptyTest,
+	"ShooterGame.Weapons.BestWeaponSkipsEmpty",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameWeaponsBestWeaponSkipsEmptyTest::RunTest(const FString& Parameters)
+{
+	// ps2-shipping N6: the best weapon has ammunition. A rifle with rounds only in the reserve is still the best (it
+	// reloads); a spent one gives way to the pistol (the bots draw the best weapon every tick they engage, and kept
+	// clicking an empty rifle); with everything spent the weapon in hand stays.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	SpawnFloor(World);
+	(void)World.SetGameMode(AShooterGameMode::StaticClass());
+	AShooterCharacter* Pawn = SpawnShooter(World, FVector::ZeroVector, 0.0f, EShooterTeam::CT);
+	AShooterWeapon* Rifle = GiveAndDraw<AShooterWeapon_AK47>(World, *Pawn);
+	AShooterWeapon* Pistol = Pawn->GetWeaponInSlot(EShooterWeaponSlot::Secondary);
+	if (!TestNotNull("A rifle", Rifle) || !TestNotNull("The pistol", Pistol))
+	{
+		return false;
+	}
+	Rifle->SetAmmo(0, 30);
+	TestTrue("Rounds in the reserve: ammunition", Rifle->HasAmmo());
+	Pawn->EquipBestWeapon();
+	TestTrue("The rifle that can reload stays", Pawn->GetWeapon() == Rifle);
+
+	Rifle->SetAmmo(0, 0);
+	TestFalse("Spent", Rifle->HasAmmo());
+	Pawn->EquipBestWeapon();
+	TestTrue("The pistol instead", Pawn->GetWeapon() == Pistol);
+	Pawn->EquipBestWeapon();
+	TestTrue("And it stays", Pawn->GetWeapon() == Pistol);
+
+	Pistol->SetAmmo(0, 0);
+	Pawn->EquipWeapon(Rifle);
+	Pawn->EquipBestWeapon();
+	TestTrue("All spent: the knife (it never runs out)",
+		Pawn->GetWeapon() == Pawn->GetWeaponInSlot(EShooterWeaponSlot::Knife) && Pawn->GetWeapon() != nullptr);
+	Pistol->SetAmmo(3, 0);
+	Pawn->EquipBestWeapon();
+	TestTrue("The pistol with its last rounds", Pawn->GetWeapon() == Pistol);
 	return true;
 }
 

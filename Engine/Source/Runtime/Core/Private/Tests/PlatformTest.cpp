@@ -14,7 +14,7 @@ bool FPlatformTypesTest::RunTest(const FString& Parameters)
 	static_assert(sizeof(int8) == 1 && sizeof(int16) == 2 && sizeof(int32) == 4 && sizeof(int64) == 8, "sizes");
 	static_assert(sizeof(UPTRINT) == sizeof(void*), "pointer-sized integer");
 	static_assert(sizeof(TCHAR) == 1, "TCHAR is UTF-8");
-	TestEqual("Exactly one platform macro", PLATFORM_WINDOWS + PLATFORM_LINUX + PLATFORM_PS2, 1);
+	TestEqual("Exactly one platform macro", PLATFORM_WINDOWS + PLATFORM_PS2, 1);
 	TestEqual("Build configuration", UE_BUILD_DEBUG + UE_BUILD_DEVELOPMENT + UE_BUILD_SHIPPING, 1);
 	TestTrue("Platform name", FCString::Strlen(FPlatformProperties::PlatformName()) > 0);
 	TestEqual("INDEX_NONE", int32(INDEX_NONE), -1);

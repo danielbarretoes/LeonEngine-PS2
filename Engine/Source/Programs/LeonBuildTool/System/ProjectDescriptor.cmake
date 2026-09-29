@@ -2,7 +2,7 @@
 #
 #   { "FileVersion": 1, "EngineAssociation": "", "Description": "...",
 #     "Modules": [ { "Name": "MyGame", "Type": "Runtime", "LoadingPhase": "Default" } ],
-#     "Plugins": [ { "Name": "JoltPhysics", "Enabled": true } ],
+#     "Plugins": [ { "Name": "SamplePlugin", "Enabled": true } ],
 #     "TargetPlatforms": [ "PS2" ] }
 #
 # Sets in the caller's scope:

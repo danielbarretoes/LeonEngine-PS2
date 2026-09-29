@@ -14,7 +14,10 @@ struct ENGINE_API FTexture2DMipMap
 {
 	int32 SizeX = 0;
 	int32 SizeY = 0;
-	/** SizeX * SizeY texels of the platform data's pixel format, bottom row first (as OpenGL reads them). */
+	/**
+	 * SizeX * SizeY texels of the platform data's pixel format, bottom row first (as OpenGL reads them):
+	 * GetPixelFormatMipDataSize bytes.
+	 */
 	FByteBulkData BulkData;
 
 	/** The size, then the texels as bulk data (at the end of a package file, D13). */
@@ -23,8 +26,8 @@ struct ENGINE_API FTexture2DMipMap
 
 /**
  * The texels of a texture as the renderer uploads them (UE: FTexturePlatformData): the size, the pixel format and the
- * mips. Leon stores mip 0 only; the renderer makes the others when it uploads the texture (glGenerateMipmap), as it
- * did before textures were assets.
+ * mips. An imported texture has mip 0 only; the PS2 cook's paletted textures carry their mip chain, down to 8 texels
+ * on the shorter side, every mip through mip 0's palette (Docs/ASSET_FORMATS.md, PS2).
  */
 struct ENGINE_API FTexturePlatformData
 {

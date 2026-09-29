@@ -5,10 +5,12 @@
 #include "Engine/StaticMeshSocket.h"
 #include "Engine/Texture2D.h"
 #include "Factories/TextureFactory.h"
+#include "LeonEdLog.h"
 #include "Materials/Material.h"
 #include "MeshData.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
+#include "PhysicalMaterials/PhysicalMaterial.h"
 #include "UObject/Package.h"
 
 namespace
@@ -20,50 +22,79 @@ namespace
 		return FPackageName::GetLongPackagePath(AssetPackageName) + TEXT("/") + AssetName;
 	}
 
-	/**
-	 * The material asset `M_<Name>` in MaterialPackagePath (a folder), or next to the mesh without one: the existing
-	 * one, or a new one made from the source's values.
-	 */
-	UMaterialInterface* FindOrCreateMaterial(const FString& SlotName, const FMeshData& Data, int32 Slot,
-		const FString& MeshPackageName, const FString& MaterialPackagePath, TArray<UObject*>& OutNewAssets)
-	{
-		const FString AssetName = FAssetImportUtils::MakeAssetName(UMaterial::StaticClass(), SlotName);
-		const FString PackageName = MaterialPackagePath.IsEmpty() ? SiblingPackageName(MeshPackageName, AssetName)
-																  : MaterialPackagePath + TEXT("/") + AssetName;
-		if (UMaterial* Existing =
-				Cast<UMaterial>(FAssetImportUtils::FindOrLoadAsset(UMaterial::StaticClass(), PackageName, AssetName)))
-		{
-			return Existing;
-		}
-		FMaterial Values = Data.Materials.IsValidIndex(Slot) ? Data.Materials[Slot] : FMaterial();
-		if (Data.AlbedoMapPaths.IsValidIndex(Slot) && !Data.AlbedoMapPaths[Slot].IsEmpty())
-		{
-			Values.AlbedoMap =
-				StaticMeshImport::FindOrImportTexture(Data.AlbedoMapPaths[Slot], PackageName, true, OutNewAssets);
-		}
-		if (Data.NormalMapPaths.IsValidIndex(Slot) && !Data.NormalMapPaths[Slot].IsEmpty())
-		{
-			Values.NormalMap =
-				StaticMeshImport::FindOrImportTexture(Data.NormalMapPaths[Slot], PackageName, false, OutNewAssets);
-		}
-		UMaterial* Material =
-			NewObject<UMaterial>(CreatePackage(*PackageName), FName(*AssetName), RF_Public | RF_Standalone);
-		Material->SetFromRenderProxy(Values);
-		OutNewAssets.Add(Material);
-		return Material;
-	}
-
 } // namespace
 
-void StaticMeshImport::BuildStaticMesh(UStaticMesh& Mesh, const FMeshData& Data, bool bImportMaterials,
+UMaterialInterface* StaticMeshImport::FindOrCreateMaterial(const FString& SlotName, const FMeshData& Data, int32 Slot,
+	const FString& MeshPackageName, const FString& MaterialPackagePath, TArray<UObject*>& OutNewAssets)
+{
+	const FString AssetName = FAssetImportUtils::MakeAssetName(UMaterial::StaticClass(), SlotName);
+	const FString PackageName = MaterialPackagePath.IsEmpty() ? SiblingPackageName(MeshPackageName, AssetName)
+															  : MaterialPackagePath + TEXT("/") + AssetName;
+	if (UMaterial* Existing =
+			Cast<UMaterial>(FAssetImportUtils::FindOrLoadAsset(UMaterial::StaticClass(), PackageName, AssetName)))
+	{
+		return Existing;
+	}
+	FMaterial Values = Data.Materials.IsValidIndex(Slot) ? Data.Materials[Slot] : FMaterial();
+	if (Data.AlbedoMapPaths.IsValidIndex(Slot) && !Data.AlbedoMapPaths[Slot].IsEmpty())
+	{
+		Values.AlbedoMap = FindOrImportTexture(Data.AlbedoMapPaths[Slot], PackageName, OutNewAssets);
+	}
+	else if (Data.AlbedoMapImages.IsValidIndex(Slot) && Data.AlbedoMapImages[Slot].EncodedData.Num() > 0)
+	{
+		Values.AlbedoMap = FindOrCreateEmbeddedTexture(Data.AlbedoMapImages[Slot], PackageName, OutNewAssets);
+	}
+	UMaterial* Material =
+		NewObject<UMaterial>(CreatePackage(*PackageName), FName(*AssetName), RF_Public | RF_Standalone);
+	Material->SetFromRenderProxy(Values);
+	OutNewAssets.Add(Material);
+	return Material;
+}
+
+void StaticMeshImport::ApplyPhysicalMaterial(UMaterialInterface* Material, const FString& SlotName,
+	const FMeshData& Data, int32 Slot, TArray<UObject*>& OutChanged)
+{
+	UMaterial* Imported = Cast<UMaterial>(Material);
+	const FString Path = Data.PhysicalMaterialNames.IsValidIndex(Slot) ? Data.PhysicalMaterialNames[Slot] : FString();
+	if (Imported == nullptr || Path.IsEmpty() ||
+		Imported->GetName() != FAssetImportUtils::MakeAssetName(UMaterial::StaticClass(), SlotName))
+	{
+		return;
+	}
+	// A long package name (/Game/PhysicalMaterials/PM_Wood) or an object path (...PM_Wood.PM_Wood).
+	const FString ObjectPath = Path.Contains(TEXT(".")) ? Path : Path + TEXT(".") + FPackageName::GetShortName(Path);
+	UPhysicalMaterial* PhysMaterial = FindObject<UPhysicalMaterial>(nullptr, *ObjectPath);
+	if (PhysMaterial == nullptr && FPackageName::DoesPackageExist(FPackageName::ObjectPathToPackageName(ObjectPath)))
+	{
+		PhysMaterial = LoadObject<UPhysicalMaterial>(nullptr, *ObjectPath);
+	}
+	if (PhysMaterial == nullptr)
+	{
+		UE_LOG(LogLeonEd, Error, "The material %s names the physical material '%s', which does not exist",
+			*Imported->GetName(), *Path);
+		return;
+	}
+	if (Imported->PhysMaterial != PhysMaterial)
+	{
+		Imported->PhysMaterial = PhysMaterial;
+		OutChanged.AddUnique(Imported);
+	}
+}
+
+bool StaticMeshImport::BuildStaticMesh(UStaticMesh& Mesh, const FMeshData& Data, bool bImportMaterials,
 	TArray<UObject*>& OutNewAssets, const FString& MaterialPackagePath)
 {
-	(void)Mesh.BuildFromMeshData(Data);
+	// UStaticMesh logs why a build fails, with its name; nothing further is made of a mesh without render data.
+	if (!Mesh.BuildFromMeshData(Data))
+	{
+		return false;
+	}
 
 	int32 NumSlots = FMath::Max(Data.Materials.Num(), 1);
-	for (const FMeshSection& Section : Mesh.GetLODResources().Sections)
+	const FStaticMeshLODResources& Resources = Mesh.GetLODResources();
+	for (int32 Section = 0; Section < Resources.GetNumSections(); ++Section)
 	{
-		NumSlots = FMath::Max(NumSlots, Section.MaterialIndex + 1);
+		NumSlots = FMath::Max(NumSlots, Resources.GetSectionMaterialIndex(Section) + 1);
 	}
 	const TArray<FStaticMaterial> OldSlots = Mesh.StaticMaterials;
 	Mesh.StaticMaterials.Reset();
@@ -86,8 +117,10 @@ void StaticMeshImport::BuildStaticMesh(UStaticMesh& Mesh, const FMeshData& Data,
 		}
 		if (Material == nullptr && bImportMaterials && SlotName != NAME_None)
 		{
-			Material = FindOrCreateMaterial(SourceName, Data, Slot, MeshPackageName, MaterialPackagePath, OutNewAssets);
+			Material = StaticMeshImport::FindOrCreateMaterial(
+				SourceName, Data, Slot, MeshPackageName, MaterialPackagePath, OutNewAssets);
 		}
+		StaticMeshImport::ApplyPhysicalMaterial(Material, SourceName, Data, Slot, OutNewAssets);
 		Mesh.StaticMaterials.Add(FStaticMaterial(Material, SlotName));
 	}
 
@@ -124,10 +157,11 @@ void StaticMeshImport::BuildStaticMesh(UStaticMesh& Mesh, const FMeshData& Data,
 			Old->MarkPendingKill();
 		}
 	}
+	return true;
 }
 
 UTexture2D* StaticMeshImport::FindOrImportTexture(
-	const FString& ImageFile, const FString& AssetPackageName, bool bSRGB, TArray<UObject*>& OutNewAssets)
+	const FString& ImageFile, const FString& AssetPackageName, TArray<UObject*>& OutNewAssets)
 {
 	const FString AssetName =
 		FAssetImportUtils::MakeAssetName(UTexture2D::StaticClass(), FPaths::GetBaseFilename(ImageFile));
@@ -139,7 +173,7 @@ UTexture2D* StaticMeshImport::FindOrImportTexture(
 	}
 	UTextureFactory* Factory = NewObject<UTextureFactory>(GetTransientPackage());
 	TMap<FString, FString> Settings;
-	Settings.Add(TEXT("ColorSpaceMode"), bSRGB ? TEXT("SRGB") : TEXT("Linear"));
+	Settings.Add(TEXT("ColorSpaceMode"), TEXT("SRGB"));
 	(void)Factory->ApplyImportSettings(Settings);
 	UTexture2D* Texture = Cast<UTexture2D>(UFactory::StaticImportObject(UTexture2D::StaticClass(),
 		CreatePackage(*PackageName), FName(*AssetName), RF_Public | RF_Standalone, ImageFile, Factory));
@@ -147,5 +181,33 @@ UTexture2D* StaticMeshImport::FindOrImportTexture(
 	{
 		OutNewAssets.Add(Texture);
 	}
+	return Texture;
+}
+
+UTexture2D* StaticMeshImport::FindOrCreateEmbeddedTexture(
+	const FMeshEmbeddedImage& Image, const FString& AssetPackageName, TArray<UObject*>& OutNewAssets)
+{
+	const FString AssetName = FAssetImportUtils::MakeAssetName(UTexture2D::StaticClass(), Image.Name);
+	const FString PackageName = SiblingPackageName(AssetPackageName, AssetName);
+	if (UTexture2D* Existing =
+			Cast<UTexture2D>(FAssetImportUtils::FindOrLoadAsset(UTexture2D::StaticClass(), PackageName, AssetName)))
+	{
+		return Existing;
+	}
+	int32 Width = 0;
+	int32 Height = 0;
+	TArray<uint8> Texels;
+	FString Error;
+	if (!UTextureFactory::DecodeImage(
+			Image.EncodedData.GetData(), Image.EncodedData.Num(), Width, Height, Texels, Error))
+	{
+		UE_LOG(LogLeonEd, Error, "The embedded image '%s' cannot be decoded (%s)", *Image.Name, *Error);
+		return nullptr;
+	}
+	UTexture2D* Texture =
+		NewObject<UTexture2D>(CreatePackage(*PackageName), FName(*AssetName), RF_Public | RF_Standalone);
+	Texture->SRGB = 1;
+	(void)Texture->SetPlatformData(Width, Height, PF_R8G8B8A8, Texels.GetData());
+	OutNewAssets.Add(Texture);
 	return Texture;
 }

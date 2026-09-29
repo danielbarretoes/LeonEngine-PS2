@@ -427,10 +427,13 @@ bool FDamagePainCausingVolumeTest::RunTest(const FString& Parameters)
 	// type, the volume the causer; a pawn outside takes nothing, and bPainCausing off stops it.
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
-	APainCausingVolume* Volume = World.SpawnActor<APainCausingVolume>(
-		APainCausingVolume::StaticClass(), FTransform(FQuat::Identity, FVector(0.0f, 0.0f, 100.0f), FVector(4.0f)));
+	// The interval is set before the volume begins play, which starts its pain timer.
+	const FTransform VolumeTransform(FQuat::Identity, FVector(0.0f, 0.0f, 100.0f), FVector(4.0f));
+	APainCausingVolume* Volume =
+		World.SpawnActorDeferred<APainCausingVolume>(APainCausingVolume::StaticClass(), VolumeTransform);
 	Volume->DamagePerSec = 20.0f;
 	Volume->PainInterval = 0.5f;
+	Volume->FinishSpawning(VolumeTransform);
 	ACharacter* Inside = SpawnStandingCharacter(World, FVector::ZeroVector);
 	ACharacter* Outside = SpawnStandingCharacter(World, FVector(1000.0f, 0.0f, 0.0f));
 	FDamageLog InsideLog;

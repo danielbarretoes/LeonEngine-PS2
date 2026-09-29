@@ -69,7 +69,7 @@ struct PROJECTS_API FModuleDescriptor
 	EHostType::Type Type;
 	ELoadingPhase::Type LoadingPhase;
 
-	/** Platforms the module is built for; empty for all (LeonBuildTool names: Win64, Linux, PS2). */
+	/** Platforms the module is built for; empty for all (LeonBuildTool names: Win64, PS2). */
 	TArray<FString> PlatformAllowList;
 	TArray<FString> PlatformDenyList;
 

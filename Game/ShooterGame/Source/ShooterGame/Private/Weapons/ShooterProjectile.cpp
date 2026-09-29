@@ -1,5 +1,6 @@
 #include "Weapons/ShooterProjectile.h"
 
+#include "Camera/CameraComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
@@ -7,8 +8,13 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "ShooterCharacter.h"
 #include "ShooterGame.h"
+#include "ShooterGameMode.h"
+#include "ShooterPlayerController.h"
 #include "Sound/SoundWave.h"
+#include "TimerManager.h"
+#include "Weapons/ShooterSmokeCloud.h"
 
 namespace
 {
@@ -22,6 +28,14 @@ namespace
 
 	/** The explosion's centre above where the grenade rests, so its line-of-sight tests leave the floor (cm). */
 	constexpr float ExplosionLift = 10.0f;
+
+	/** The flashbang's flash: a white light for a moment. */
+	constexpr float FlashLightIntensity = 20.0f;
+	constexpr float FlashLightRadius = 1500.0f;
+	constexpr float FlashLightLifeSpan = 0.1f;
+
+	/** How far below the smoke grenade its cloud's floor is looked for, cm. */
+	constexpr float SmokeFloorSearch = 1000.0f;
 
 } // namespace
 
@@ -54,11 +68,25 @@ AShooterProjectile::AShooterProjectile(const FObjectInitializer& ObjectInitializ
 	MovementComp->ProjectileGravityScale = 1.0f;
 }
 
+void AShooterProjectile::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	const UWorld* World = GetWorld();
+	if (AShooterGameMode* GameMode = World != nullptr ? World->GetAuthGameMode<AShooterGameMode>() : nullptr)
+	{
+		GameMode->UnregisterProjectile(this);
+	}
+	Super::EndPlay(EndPlayReason);
+}
+
 void AShooterProjectile::BeginPlay()
 {
 	Super::BeginPlay();
 	const UWorld* World = GetWorld();
-	ExplodeTime = (World != nullptr ? World->GetTimeSeconds() : 0.0f) + FuseTime;
+	if (AShooterGameMode* GameMode = World != nullptr ? World->GetAuthGameMode<AShooterGameMode>() : nullptr)
+	{
+		GameMode->RegisterProjectile(this);
+	}
+	GetWorldTimerManager().SetTimer(TimerHandle_Fuse, this, &AShooterProjectile::Explode, FuseTime);
 }
 
 void AShooterProjectile::Launch(const FVector& Velocity, AController* InInstigatorController, UStaticMesh* Mesh)
@@ -73,18 +101,18 @@ void AShooterProjectile::Launch(const FVector& Velocity, AController* InInstigat
 	{
 		(void)MeshComp->SetStaticMesh(Mesh);
 	}
-	const UWorld* World = GetWorld();
-	ExplodeTime = (World != nullptr ? World->GetTimeSeconds() : 0.0f) + FuseTime;
+	// The fuse starts at the throw.
+	if (GetWorld() != nullptr)
+	{
+		GetWorldTimerManager().SetTimer(TimerHandle_Fuse, this, &AShooterProjectile::Explode, FuseTime);
+	}
 }
 
-void AShooterProjectile::Tick(float DeltaSeconds)
+float AShooterProjectile::GetExplodeTime() const
 {
-	Super::Tick(DeltaSeconds);
 	const UWorld* World = GetWorld();
-	if (!bExploded && World != nullptr && World->GetTimeSeconds() >= ExplodeTime)
-	{
-		Explode();
-	}
+	const float Remaining = World != nullptr ? World->GetTimerManager().GetTimerRemaining(TimerHandle_Fuse) : -1.0f;
+	return Remaining >= 0.0f ? World->GetTimeSeconds() + Remaining : 0.0f;
 }
 
 void AShooterProjectile::Explode()
@@ -94,7 +122,12 @@ void AShooterProjectile::Explode()
 		return;
 	}
 	bExploded = true;
-	const FVector Origin = GetActorLocation() + FVector(0.0f, 0.0f, ExplosionLift);
+	Detonate(GetActorLocation() + FVector(0.0f, 0.0f, ExplosionLift));
+	(void)Destroy();
+}
+
+void AShooterProjectile::Detonate(const FVector& Origin)
+{
 	const TArray<AActor*> IgnoreActors;
 	const bool bDamaged = UGameplayStatics::ApplyRadialDamageWithFalloff(this, ExplosionDamage, 0.0f, Origin, 0.0f,
 		ExplosionRadius, 1.0f, UDamageType::StaticClass(), IgnoreActors, this, InstigatorController, ECC_Visibility);
@@ -104,7 +137,125 @@ void AShooterProjectile::Explode()
 	{
 		UGameplayStatics::PlaySoundAtLocation(this, ExplodeSound, Origin);
 	}
+	AShooterPlayerController::PlayExplosionForceFeedback(GetWorld(), Origin, ExplosionRadius);
 	UE_LOG(LogShooter, Log, TEXT("%s exploded at (%.0f, %.0f, %.0f)%s"), *GetName(), static_cast<double>(Origin.X),
 		static_cast<double>(Origin.Y), static_cast<double>(Origin.Z), bDamaged ? TEXT(", damage done") : TEXT(""));
-	(void)Destroy();
+}
+
+// The flashbang
+
+AShooterProjectile_Flashbang::AShooterProjectile_Flashbang(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
+bool AShooterProjectile_Flashbang::ComputeFlash(const FVector& Origin, const FVector& EyeLocation,
+	const FVector& ViewDirection, float& OutHold, float& OutFade, float& OutAlpha) const
+{
+	OutHold = 0.0f;
+	OutFade = 0.0f;
+	OutAlpha = 0.0f;
+	const float Distance = FVector::Dist(Origin, EyeLocation);
+	const float Strength = FlashRadius > 0.0f ? FlashStrength * (1.0f - (Distance / FlashRadius)) : 0.0f;
+	if (Strength <= 0.0f)
+	{
+		return false;
+	}
+	// CS: the dot of the view's direction and the direction to the flash picks the band.
+	const float Dot = ViewDirection.GetSafeNormal() | (Origin - EyeLocation).GetSafeNormal();
+	const FVector& Band = Dot >= FacingDot ? FacingFlash : Dot >= AsideDot ? AsideFlash : BehindFlash;
+	OutHold = Strength * Band.X;
+	OutFade = Strength * Band.Y;
+	OutAlpha = FMath::Clamp(Band.Z, 0.0f, 1.0f);
+	return true;
+}
+
+void AShooterProjectile_Flashbang::Detonate(const FVector& Origin)
+{
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return;
+	}
+	// The living players, the game mode's registry (else the world's, in a test without one).
+	TArray<AShooterCharacter*, TInlineAllocator<16>> Players;
+	if (const AShooterGameMode* GameMode = World->GetAuthGameMode<AShooterGameMode>())
+	{
+		Players.Append(GameMode->GetPawns());
+	}
+	else
+	{
+		World->ForEach<AShooterCharacter>([&Players](AShooterCharacter& Pawn) { Players.Add(&Pawn); });
+	}
+	int32 NumFlashed = 0;
+	for (AShooterCharacter* Pawn : Players)
+	{
+		if (Pawn == nullptr || Pawn->IsPendingKillPending() || !Pawn->IsAlive())
+		{
+			continue;
+		}
+		const FVector Eyes = Pawn->GetFirstPersonCameraComponent()->GetComponentLocation();
+		float Hold = 0.0f;
+		float Fade = 0.0f;
+		float Alpha = 0.0f;
+		if (!ComputeFlash(Origin, Eyes, Pawn->GetViewRotation().Vector(), Hold, Fade, Alpha))
+		{
+			continue;
+		}
+		// The explosion must see the eyes: a wall hides them (the pawns do not block the Visibility channel).
+		FCollisionQueryParams Params(FName(TEXT("Flashbang")), false, this);
+		Params.AddIgnoredActor(Pawn);
+		FHitResult Hit;
+		if (UGameplayStatics::LineTraceSingleByChannel(*World, Hit, Origin, Eyes, ECC_Visibility, Params))
+		{
+			continue;
+		}
+		Pawn->Flash(Hold, Fade, Alpha, Fade * BotBlindFadeShare);
+		++NumFlashed;
+	}
+	(void)UGameplayStatics::SpawnPointLightAtLocation(
+		this, Origin, FLinearColor(1.0f, 1.0f, 1.0f), FlashLightIntensity, FlashLightRadius, FlashLightLifeSpan);
+	if (ExplodeSound != nullptr)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, ExplodeSound, Origin);
+	}
+	// The bang shakes the pads near it, as an HE's (ps2-shipping N24).
+	AShooterPlayerController::PlayExplosionForceFeedback(World, Origin, FlashRadius * 0.5f);
+	UE_LOG(LogShooter, Log, TEXT("%s flashed %d player(s)"), *GetName(), NumFlashed);
+}
+
+// The smoke grenade
+
+AShooterProjectile_Smoke::AShooterProjectile_Smoke(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	SmokeCloudClass = AShooterSmokeCloud::StaticClass();
+}
+
+void AShooterProjectile_Smoke::Detonate(const FVector& Origin)
+{
+	UWorld* World = GetWorld();
+	if (World == nullptr || SmokeCloudClass == nullptr)
+	{
+		return;
+	}
+	// The cloud stands on the floor under the grenade (CS's smoke rises from where it lies).
+	FVector Floor = Origin;
+	FCollisionQueryParams Params(FName(TEXT("SmokeFloor")), false, this);
+	FHitResult Hit;
+	if (UGameplayStatics::LineTraceSingleByChannel(
+			*World, Hit, Origin, Origin - FVector(0.0f, 0.0f, SmokeFloorSearch), ECC_Visibility, Params))
+	{
+		Floor = Hit.ImpactPoint;
+	}
+	FActorSpawnParameters SpawnInfo;
+	SpawnInfo.Instigator = GetInstigator();
+	SpawnInfo.ObjectFlags |= RF_Transient;
+	(void)World->SpawnActor<AShooterSmokeCloud>(SmokeCloudClass, Floor, FRotator::ZeroRotator, SpawnInfo);
+	if (ExplodeSound != nullptr)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, ExplodeSound, Origin);
+	}
+	UE_LOG(LogShooter, Log, TEXT("%s: smoke at (%.0f, %.0f, %.0f)"), *GetName(), static_cast<double>(Floor.X),
+		static_cast<double>(Floor.Y), static_cast<double>(Floor.Z));
 }

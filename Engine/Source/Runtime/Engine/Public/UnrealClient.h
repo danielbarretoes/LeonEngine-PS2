@@ -27,7 +27,12 @@ public:
 		return Window;
 	}
 
-	/** Draws a frame and, with bShouldPresent, shows it (UE: Draw). */
+	/**
+	 * Draws a frame and, with bShouldPresent, shows it (UE: Draw). Its parts are cycle stats (EngineStats.h): the
+	 * viewport client's draw (STAT_ViewportDraw), the canvas's flush (STAT_CanvasFlush: its 2D items to the renderer)
+	 * and the present (STAT_ViewportPresent: the renderer's end of the frame and the window's swap; on the PS2 the
+	 * frame's GIF packet, its DMA, the GS's drawing and the wait for the vertical blank).
+	 */
 	void Draw(bool bShouldPresent = true);
 
 private:

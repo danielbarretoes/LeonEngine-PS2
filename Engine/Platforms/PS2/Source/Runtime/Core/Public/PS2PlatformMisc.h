@@ -21,6 +21,20 @@ struct CORE_API FPS2PlatformMisc : public FGenericPlatformMisc
 	static void InitializeIop(bool bReset);
 
 	/**
+	 * Loads an IOP module from the ROM ("rom0:SIO2MAN") once: the pads and the memory card share SIO2MAN, and a second
+	 * load of a module would clash (Docs/PLANS/ps2-shipping.md N24). Readies the IOP first (InitializeIop(false)). True
+	 * when it is loaded, now or before.
+	 */
+	static bool LoadIopModule(const char* Path);
+
+	/**
+	 * The IOP's calls that must not overlap across the EE's threads (N24): the file reads (the IO thread's and the game
+	 * thread's), the module loads and the memory card's calls take this lock, one at a time. Not recursive.
+	 */
+	static void LockIop();
+	static void UnlockIop();
+
+	/**
 	 * Called once by a forced exit before the EE halts: the launcher shows the error on the TV with it (a player has
 	 * no EE console). The handler may not return.
 	 */

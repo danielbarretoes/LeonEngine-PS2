@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Animation/CharacterAnimInstance.h"
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "ShooterTypes.h"
@@ -7,12 +8,18 @@
 #include "ShooterCharacter.generated.h"
 
 class AShooterBomb;
+class AShooterGameMode;
 class AShooterGameState;
 class AShooterWeapon;
+class UAimOffsetBlendSpace1D;
+class UAnimMontage;
+class UAnimSequenceBase;
+class UBlendSpaceBase;
 class UCameraComponent;
 class UInputComponent;
+class USkeletalMesh;
+class USoundWave;
 class UShooterCharacterMovement;
-class UStaticMeshComponent;
 struct FDamageEvent;
 
 /**
@@ -27,33 +34,68 @@ struct FDamageEvent;
  *
  * Damage (TakeDamage, UE ShooterGame's order: the actor's TakeDamage first, then the game's rules):
  * - The game mode may refuse it (AShooterGameMode::CanDealDamage: friendly fire).
- * - A point hit in the head (GetHitGroup: the top HeadHeight cm of the capsule) is multiplied by the weapon's
- *   HeadshotMultiplier.
- * - Armor (Counter-Strike): with armor, and on the body or with a helmet, the victim's health takes ArmorRatio / 2 of
- *   the damage (at most all of it) and its armor half of the rest; when the armor runs out the rest goes to health.
- *   ArmorRatio is the weapon's or the projectile's (AShooterWeapon::ArmorRatio); damage from anything else (the
- *   world, a pain volume) ignores armor.
+ * - A point hit (a bullet, a knife) is scaled by its hit group (GetHitGroup, Counter-Strike's): the head by the
+ *   weapon's HeadshotMultiplier (4), the stomach by StomachDamageMultiplier (1.25), the legs by LegDamageMultiplier
+ *   (0.75), the chest and the arms by 1. Other damage (a blast, the world) is the generic group.
+ * - Armor (Counter-Strike): with armor, on every group but the legs (the head only with a helmet), the victim's health
+ *   takes ArmorRatio / 2 of the damage (at most all of it) and its armor half of the rest; when the armor runs out the
+ *   rest goes to health. ArmorRatio is the weapon's or the projectile's (AShooterWeapon::ArmorRatio); damage from
+ *   anything else (the world, a pain volume) ignores armor.
+ * - A player's controller hears where the damage came from (AShooterPlayerController::NotifyTakeDamage: the shooter, or
+ *   the grenade or the bomb that blew up), for the HUD's damage direction indicator.
+ * - A shot that hurts without killing tags the victim (UShooterCharacterMovement::ApplyTagging: CS's velocity
+ *   modifier, half the speed, back in a second).
+ * - A flashbang whitens the player's view (Flash: the HUD's white holds, then fades) and blinds a bot (IsBlind: its
+ *   sensing sees nobody) for part of the fade.
+ * - A hard landing hurts (Landed: UShooterCharacterMovement::GetFallDamage, CS's fall damage): the world's damage, with
+ *   no instigator or causer, so armor does not take it, nothing tags and a death is the world's in the kill feed.
  * - At 0 health the character dies (Die): the game mode hears of the kill, the pawn drops its best weapon (the primary,
- *   else the pistol), loses the rest, stops colliding and lies down; a player starts spectating
- *   (APlayerController::ChangeState(NAME_Spectating)), a bot lets the pawn go. The corpse stays CorpseLifeSpan
- *   seconds (0: until the round restarts).
+ *   else the pistol), loses the rest, stops colliding and falls (its death montage); a player starts spectating with
+ *   the death cam on its killer (AShooterPlayerController::StartDeathCam), a bot lets the pawn go. The corpse stays
+ *   CorpseLifeSpan seconds (0: until the round restarts).
  *
  * Inventory (UE ShooterGame: AddWeapon, RemoveWeapon, EquipWeapon, SpawnDefaultInventory): one weapon per slot
- * (EShooterWeaponSlot). The pawn spawns DefaultWeapons at BeginPlay (weapon names, AShooterWeapon::FindWeaponClass)
- * and draws the best (primary, then secondary, then grenade). A weapon on the floor is picked up by walking over it
- * when its slot is free (AShooterWeapon's pickup).
+ * (EShooterWeaponSlot). The pawn spawns DefaultWeapons at BeginPlay (weapon names, AShooterWeapon::FindWeaponClass:
+ * the knife) and its team's (DefaultWeaponsCT: the USP, DefaultWeaponsT: the Glock; a pawn without a team the CT's)
+ * when a controller first takes it, each with DefaultWeaponClips clips in the reserve (CS: 12/24, 20/40), and draws
+ * the best (primary, secondary, grenade, then the knife). A weapon on the floor is picked up by walking over it when
+ * its slot is free (AShooterWeapon's pickup). The grenade slot holds one weapon of each grenade (the HE, the
+ * flashbang, the smoke grenade), and its key cycles them (SelectSlot).
  *
  * The bomb (AShooterBomb): the terrorist carrying it plants it by holding Use (E) standing still in a bomb site for
  * the bomb's PlantDuration; a counter-terrorist defuses a planted bomb by holding Use near it (quicker with a defuse
  * kit). Neither moves while planting or defusing (CS). The freeze time at a round's start holds every pawn still and
  * its weapons silent; it can still look around.
  *
+ * Animation (Docs/PLANS/ps2-shipping.md N25, N27): the team's skinned body (CTBodyMeshName, TBodyMeshName, on
+ * ACharacter's skeletal mesh) plays a UCharacterAnimInstance: the locomotion blend space by speed and direction
+ * (LocomotionBlendSpaceName; CrouchBlendSpaceName while crouched), the jump states (JumpStartAnimName,
+ * JumpLoopAnimName, JumpLandAnimName), the upper body's montages from UpperBodyBranchBone and the aim offset by the
+ * view's pitch (the drawn weapon's stance, AShooterWeapon::AimOffsetName, else AimOffsetName; none while planting,
+ * defusing or dead). The team's first-person arms (CTArmsMeshName, TArmsMeshName: Mesh1P, a skinned view model only its
+ * player sees) idle with the drawn weapon's pose (AShooterWeapon::ArmsIdleName). The drawn weapon sits on
+ * WeaponSocketName of the arms and of the body (AShooterWeapon::AttachMeshToPawn); the weapons' fire, reload and draw
+ * montages and the bomb's plant and defuse ones play on both (PlayPawnMontages), and a death montage (DeathAnimBackName
+ * when shot from the front, DeathAnimFrontName from behind) lays the body down and holds it. The animations' notifies
+ * come back to OnBodyAnimNotify / OnArmsAnimNotify: footsteps (below), and the rest go to the drawn weapon (its
+ * magazine), from the arms in first person and from the body otherwise. The body evaluates its pose only when drawn,
+ * and less often far from the view; the arms only when drawn (USkeletalMeshComponent's throttling).
+ *
+ * Footsteps (CS): the body's locomotion notifies (Footstep_L, Footstep_R) are the steps. A step on the floor faster
+ * than CS's 150 units a second (381 cm/s) plays the floor's sound and makes a noise the bots hear (AActor::MakeNoise at
+ * FootstepNoiseLoudness); slower ones are silent, so walking (the walk key, 330 cm/s) and crouching (212 cm/s) make
+ * none. Without a skinned body there are no footsteps (no notifies). The floor is what a line down from the feet hits
+ * (its physical material's surface, GetFloorSurface: CS's texture under the player): FootstepSounds has each
+ * surface's left and right step (CS's pl_step, pl_dirt, pl_tile, pl_metal...). On a ladder (N30c) a climb faster than
+ * that plays LadderStepSoundNames' sounds in turn every LadderStepInterval (CS's pl_ladder) with the same noise.
+ *
  * Input (Config/DefaultInput.ini): MoveForward / MoveRight (W A S D; the left stick), Turn / LookUp (the mouse),
  * TurnRate / LookUpRate (the right stick: BaseTurnRate / BaseLookUpRate degrees a second at full tilt), Jump (Space;
- * Cross), Crouch (Left Ctrl, C: held; Circle), Walk (Left Shift: held; L3), Fire (the left button; R2), Targeting (the
- * right button: a sniper's zoom; L2), Reload (R; Square), PrimaryWeapon / SecondaryWeapon / Grenade (1, 2, 4; R1, L1,
- * D-pad left), DropWeapon (G; D-pad right), Use (E: held; Triangle). A dead pawn ignores them, and the buy menu takes
- * its keys while it is open (AShooterPlayerController).
+ * Cross), Crouch (Left Ctrl: held; Circle), Walk (Left Shift: held; L3), Fire (the left button; R2), Targeting (the
+ * right button: the AWP's zoom, a silencer, the Glock's burst, the knife's stab; L2), Reload (R; Square),
+ * PrimaryWeapon / SecondaryWeapon / Knife / Grenade (1, 2, 3, 4; R1, L1, D-pad up, D-pad left), DropWeapon (G; D-pad
+ * right), Use (E: held; Triangle). A dead pawn ignores them, and the buy menu takes its keys while it is open
+ * (AShooterPlayerController).
  */
 UCLASS(Config = Game)
 class SHOOTERGAME_API AShooterCharacter : public ACharacter
@@ -72,26 +114,87 @@ public:
 	void Tick(float DeltaSeconds) override;
 	/** Full health (UE ShooterGame: PostInitializeComponents). */
 	void PostInitializeComponents() override;
-	/** Spawns the default inventory (UE ShooterGame: SpawnDefaultInventory, in PostInitializeComponents there). */
+	/**
+	 * Joins the game mode's pawns (AShooterGameMode::RegisterPawn) and spawns the default inventory (UE ShooterGame:
+	 * SpawnDefaultInventory, in PostInitializeComponents there).
+	 */
 	void BeginPlay() override;
-	/** The inventory goes with the pawn (UE ShooterGame: DestroyInventory in Destroyed). */
+	/** Leaves the game mode's pawns; the inventory goes with the pawn (UE ShooterGame: DestroyInventory in Destroyed).
+	 */
 	void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	/** Takes the team's body when a controller with a player state takes the pawn. */
 	void PossessedBy(AController* NewController) override;
+	/** The game mode counts its live pawns again (a pawn changed hands). */
+	void UnPossessed() override;
 	/** The rules of the class comment; returns the health taken. */
 	float TakeDamage(
 		float Damage, const FDamageEvent& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
+	/** The movement's timers (the jump stamina, the tagging) run down, then the move (UShooterCharacterMovement). */
+	void PerformMovement(FPhysScene& PhysScene, float DeltaTime, FDebugDraw* DebugDraw = nullptr) override;
+	/** On a ladder a jump pushes off it (UShooterCharacterMovement::JumpOffLadder); else ACharacter's jump. */
+	void Jump() override;
+	/** A hard landing's fall damage (the class comment). */
+	void Landed(const FHitResult& Hit) override;
+	/** The jump costs its stamina (UShooterCharacterMovement::StartJumpStamina). */
+	void OnJumped() override;
+
+	/**
+	 * What the floor under the feet is made of: the physical material's surface of what a line from the feet 50 cm down
+	 * meets (the pawn left out; CS: the texture under the player), SHOOTER_SURFACE_Default when it meets nothing.
+	 */
+	[[nodiscard]] EPhysicalSurface GetFloorSurface() const;
+	/** The last step's sound (a footstep or a ladder's; null before any or without sounds) and floor (the tests). */
+	[[nodiscard]] USoundWave* GetLastFootstepSound() const
+	{
+		return LastFootstepSound;
+	}
+	[[nodiscard]] EPhysicalSurface GetLastFootstepSurface() const
+	{
+		return LastFootstepSurface.GetValue();
+	}
 
 	/** The first-person camera (UE FPS template: FirstPersonCameraComponent). */
 	[[nodiscard]] UCameraComponent* GetFirstPersonCameraComponent() const
 	{
 		return FirstPersonCameraComponent;
 	}
-	/** The body the other players see (bOwnerNoSee: not in its own player's view). */
-	[[nodiscard]] UStaticMeshComponent* GetBodyMesh() const
+	/** The first-person arms (UE ShooterGame: Mesh1P): a skinned view model on the camera, seen by its owner only. */
+	[[nodiscard]] USkeletalMeshComponent* GetMesh1P() const
 	{
-		return BodyMesh;
+		return Mesh1P;
 	}
+	/** The body has a mesh (ACharacter::GetMesh(), the body the other players see: bOwnerNoSee). */
+	[[nodiscard]] bool HasSkeletalBody() const;
+	/** The arms have a mesh. */
+	[[nodiscard]] bool HasArms() const;
+
+	/**
+	 * Shows InMesh as the body (null: none; the weapon then sits on the capsule at its ThirdPersonOffset): ACharacter's
+	 * mesh takes it with a UCharacterAnimInstance set up from the config (locomotion, crouch, jump, aim offset, upper
+	 * body branch), and the drawn weapon moves to its hand socket. UpdateBody calls it with the team's mesh; the tests
+	 * with theirs.
+	 */
+	void SetSkeletalBody(USkeletalMesh* InMesh);
+	/** Shows InMesh as the first-person arms (null: none; the weapon then sits at its FirstPersonOffset). */
+	void SetArmsMesh(USkeletalMesh* InMesh);
+	/** The arms' base pose while a weapon is drawn: its idle blend space (null: the reference pose). */
+	void SetArmsIdle(const UBlendSpaceBase* Idle);
+
+	/**
+	 * Plays an animation on the pawn (UE ShooterGame: PlayWeaponAnimation): Pawn1P on the arms and Pawn3P on the body,
+	 * each where the mesh is there. Returns the longer one's length at PlayRate, 0 when none played.
+	 */
+	float PlayPawnMontages(const FShooterWeaponAnim& Animation, float PlayRate = 1.0f);
+	/** Stops them (UE ShooterGame: StopWeaponAnimation). */
+	void StopPawnMontages(const FShooterWeaponAnim& Animation);
+
+	/**
+	 * Where the drawn weapon's first-person mesh goes: the arms and WeaponSocketName when the pawn has arms, else the
+	 * camera (OutSocketName NAME_None: the weapon's FirstPersonOffset places it).
+	 */
+	[[nodiscard]] USceneComponent* GetWeaponAttachParent1P(FName& OutSocketName) const;
+	/** The same for the body's weapon: the skinned body's socket, else the static body (ThirdPersonOffset). */
+	[[nodiscard]] USceneComponent* GetWeaponAttachParent3P(FName& OutSocketName) const;
 	/** The movement, as the game's class. */
 	[[nodiscard]] UShooterCharacterMovement* GetShooterCharacterMovement() const;
 
@@ -113,6 +216,8 @@ public:
 	/** A stick's rate, -1..1, turned into degrees this frame (UE templates: TurnAtRate / LookUpAtRate). */
 	void TurnAtRate(float Rate);
 	void LookUpAtRate(float Rate);
+	/** The scale of the stick's rates: the controlling player's aim sensitivity (UShooterPersistentUser), else 1. */
+	[[nodiscard]] float GetAimSensitivity() const;
 
 	// Health and armor
 
@@ -152,18 +257,49 @@ public:
 		return bGodMode;
 	}
 
-	/** Where a hit at Location struck: the head is the top HeadHeight cm of the capsule. */
+	/**
+	 * Where a hit at Location struck (Counter-Strike's hit groups on height bands of the capsule, which stands on its
+	 * feet): the head is the top HeadHeight cm; below it the body, its bottom LegsFraction the legs, up to
+	 * StomachFraction the stomach, the rest the chest, or an arm where the hit is farther than ArmFraction of the
+	 * radius to the pawn's side. Left and right are the pawn's.
+	 */
 	[[nodiscard]] EShooterHitGroup GetHitGroup(const FVector& Location) const;
+	/** A group's damage multiplier (the head's is the weapon's HeadshotMultiplier, HeadMultiplier here). */
+	[[nodiscard]] float GetHitGroupMultiplier(EShooterHitGroup HitGroup, float HeadMultiplier) const;
 
 	/**
-	 * The health and armor a hit of Damage takes with Armor points, ArmorRatio and a helmet, by the class comment's
-	 * rule (shared with the tests).
+	 * The health and armor a hit of Damage on HitGroup takes with Armor points, ArmorRatio and a helmet, by the class
+	 * comment's rule (shared with the tests).
 	 */
-	static void ComputeArmorDamage(float Damage, float ArmorRatio, bool bHeadshot, bool bHelmet, float Armor,
+	static void ComputeArmorDamage(float Damage, float ArmorRatio, EShooterHitGroup HitGroup, bool bHelmet, float Armor,
 		float& OutHealthDamage, float& OutArmorDamage);
 
 	/** Kills the pawn at once (`kill`, bot_kick); the killer is the pawn's own controller. */
 	void Suicide();
+
+	// Flashbangs
+
+	/**
+	 * A flashbang went off in view (AShooterProjectile_Flashbang): the view holds Alpha white for HoldTime seconds and
+	 * fades out in FadeTime; the pawn is blind for BlindTime (a bot sees nobody). A weaker flash while a stronger one
+	 * lasts changes nothing.
+	 */
+	void Flash(float HoldTime, float FadeTime, float Alpha, float BlindTime);
+	/** How white the view is now (0 to 1: the HUD's full-screen white). */
+	[[nodiscard]] float GetFlashAlpha() const;
+	/** The last flash's hold and fade, seconds. */
+	[[nodiscard]] float GetFlashHoldTime() const
+	{
+		return FlashHoldTime;
+	}
+	[[nodiscard]] float GetFlashFadeTime() const
+	{
+		return FlashFadeTime;
+	}
+	/** Blinded by a flashbang now. */
+	[[nodiscard]] bool IsBlind() const;
+	/** The flash is over (a new round). */
+	void ClearFlash();
 
 	/**
 	 * A survivor's new round (CS): full health, the armor and the weapons kept, standing still at Feet facing Yaw, the
@@ -175,6 +311,8 @@ public:
 	[[nodiscard]] bool IsFrozen() const;
 	/** The game mode's round state (null outside a ShooterGame match: tests, other game modes). */
 	[[nodiscard]] const AShooterGameState* GetShooterGameState() const;
+	/** The world's game mode, as the game's class (null in a world without one). */
+	[[nodiscard]] AShooterGameMode* GetShooterGameMode() const;
 
 	// The bomb
 
@@ -212,10 +350,7 @@ public:
 		return DefusingBomb != nullptr;
 	}
 	/** The world time a plant in progress ends. */
-	[[nodiscard]] float GetPlantEndTime() const
-	{
-		return PlantEndTime;
-	}
+	[[nodiscard]] float GetPlantEndTime() const;
 	/** The bomb site (its second tag, "A" or "B") the pawn stands in, NAME_None outside. */
 	[[nodiscard]] FName GetBombSiteHere() const;
 
@@ -229,9 +364,17 @@ public:
 	AShooterWeapon* GiveWeapon(UClass* WeaponClass);
 	/** Draws a weapon of the inventory (UE ShooterGame: EquipWeapon). */
 	void EquipWeapon(AShooterWeapon* Weapon);
-	/** Draws the weapon of a slot, if any. */
+	/**
+	 * Draws the weapon of a slot, if any; the grenade slot's next grenade (by GrenadeOrder, wrapping) when a grenade
+	 * is drawn (CS: the grenade key cycles the HE, the flashbang and the smoke grenade).
+	 */
 	void SelectSlot(EShooterWeaponSlot Slot);
-	/** Draws the best weapon: primary, secondary, grenade. */
+	/** The inventory's weapon of WeaponClass, or null. */
+	[[nodiscard]] AShooterWeapon* FindWeaponOfClass(const UClass* WeaponClass) const;
+	/**
+	 * Draws the best weapon with ammunition (AShooterWeapon::HasAmmo; one that can reload counts): primary, secondary,
+	 * grenade. When none has any, the weapon in hand stays (or, with none in hand, the first by that order).
+	 */
 	void EquipBestWeapon();
 	/** Drops a weapon of the inventory at the pawn's feet, ahead; returns true when dropped. */
 	bool DropWeapon(AShooterWeapon* Weapon);
@@ -259,12 +402,87 @@ public:
 	UPROPERTY(Config)
 	float EyeHeightInterpSpeed = 14.0f;
 
-	/** The bodies of the teams (boxes made in Blender, SourceArt/Characters): meshes of /Game/Characters. */
+	/** The teams' skinned bodies (SK_ of /Game/Characters, made in Blender: SourceArt/Characters); empty: none. */
 	UPROPERTY(Config)
 	FSoftObjectPath CTBodyMeshName;
 
 	UPROPERTY(Config)
 	FSoftObjectPath TBodyMeshName;
+
+	/** The teams' first-person arms (SK_ of /Game/Characters/Arms); empty: none. */
+	UPROPERTY(Config)
+	FSoftObjectPath CTArmsMeshName;
+
+	UPROPERTY(Config)
+	FSoftObjectPath TArmsMeshName;
+
+	/**
+	 * The body's anim graph: the locomotion blend space (speed in cm/s by direction in degrees) standing and crouched,
+	 * the default aim offset (a weapon's stance replaces it).
+	 */
+	UPROPERTY(Config)
+	FSoftObjectPath LocomotionBlendSpaceName;
+
+	UPROPERTY(Config)
+	FSoftObjectPath CrouchBlendSpaceName;
+
+	UPROPERTY(Config)
+	FSoftObjectPath AimOffsetName;
+
+	/** The jump's clips (UCharacterAnimInstance's jump states): the take-off, the fall's loop, the landing. */
+	UPROPERTY(Config)
+	FSoftObjectPath JumpStartAnimName;
+
+	UPROPERTY(Config)
+	FSoftObjectPath JumpLoopAnimName;
+
+	UPROPERTY(Config)
+	FSoftObjectPath JumpLandAnimName;
+
+	/** The death montages (the whole body, a last section looping on the pose lying down): shot from the front, the
+	 * body falls on its back; from behind, on its front. */
+	UPROPERTY(Config)
+	FSoftObjectPath DeathAnimBackName;
+
+	UPROPERTY(Config)
+	FSoftObjectPath DeathAnimFrontName;
+
+	/** The bomb's montages of the arms (1P) and the body (3P). */
+	UPROPERTY(Config)
+	FSoftObjectPath PlantAnim1PName;
+
+	UPROPERTY(Config)
+	FSoftObjectPath PlantAnim3PName;
+
+	UPROPERTY(Config)
+	FSoftObjectPath DefuseAnim1PName;
+
+	UPROPERTY(Config)
+	FSoftObjectPath DefuseAnim3PName;
+
+	/** Each surface's footsteps: the left foot's (Footstep_L) the first, the right foot's the second. */
+	UPROPERTY(Config)
+	FShooterSurfaceSounds FootstepSounds;
+
+	/** The steps on a ladder, played in turn (CS: pl_ladder). */
+	UPROPERTY(Config)
+	TArray<FSoftObjectPath> LadderStepSoundNames;
+
+	/** Seconds between two steps on a ladder (CS: 0.35 s). */
+	UPROPERTY(Config)
+	float LadderStepInterval = 0.35f;
+
+	/** How far the bots hear a footstep (AActor::MakeNoise's loudness; a shot is 1). */
+	UPROPERTY(Config)
+	float FootstepNoiseLoudness = 0.5f;
+
+	/** The socket of the hand the weapon sits on, on the arms and on the body. */
+	UPROPERTY(Config)
+	FName WeaponSocketName = TEXT("Weapon_R");
+
+	/** The bone the upper body starts at: the montages of the UpperBody slot and the aim offset move it and above. */
+	UPROPERTY(Config)
+	FName UpperBodyBranchBone = TEXT("spine_01");
 
 	/** Health at spawn (CS: 100). */
 	UPROPERTY(Config)
@@ -278,9 +496,41 @@ public:
 	UPROPERTY(Config)
 	float HeadHeight = 28.0f;
 
-	/** The weapons a pawn spawns with, by name (CS: the pistol; `+DefaultWeapons=usp`). */
+	/**
+	 * The body's bands below the head, fractions of its height from the feet: the legs up to LegsFraction, the stomach
+	 * up to StomachFraction, the chest above (CS's hit boxes: the legs to the hips, 36 of 61 units). An arm is a chest
+	 * hit farther than ArmFraction of the capsule's radius to the pawn's side.
+	 */
+	UPROPERTY(Config)
+	float LegsFraction = 0.59f;
+
+	UPROPERTY(Config)
+	float StomachFraction = 0.75f;
+
+	UPROPERTY(Config)
+	float ArmFraction = 0.6f;
+
+	/** The hit groups' damage multipliers (CS: the stomach 1.25, the legs 0.75; the chest and the arms 1). */
+	UPROPERTY(Config)
+	float StomachDamageMultiplier = 1.25f;
+
+	UPROPERTY(Config)
+	float LegDamageMultiplier = 0.75f;
+
+	/** The weapons every pawn spawns with, by name (CS: the knife; `+DefaultWeapons=knife`). */
 	UPROPERTY(Config)
 	TArray<FString> DefaultWeapons;
+
+	/** The team's weapons, given when a controller first takes the pawn (CS: the USP, the Glock). */
+	UPROPERTY(Config)
+	TArray<FString> DefaultWeaponsCT;
+
+	UPROPERTY(Config)
+	TArray<FString> DefaultWeaponsT;
+
+	/** The clips of ammunition a default weapon brings in its reserve (CS: two). */
+	UPROPERTY(Config)
+	int32 DefaultWeaponClips = 2;
 
 	/** Seconds a corpse stays; 0 until the round restarts removes it. */
 	UPROPERTY(Config)
@@ -302,19 +552,35 @@ private:
 	void OnWalkReleased();
 	void OnSelectPrimary();
 	void OnSelectSecondary();
+	void OnSelectKnife();
 	void OnSelectGrenade();
 	void OnDropWeapon();
 	void OnUsePressed();
 	void OnUseReleased();
-	/** The plant in progress: cancelled when the conditions go, finished at PlantEndTime. */
+	/** The plant in progress: cancelled when the conditions go, finished by its timer (OnPlantTimer). */
 	void TickPlanting();
 	/** Whether the pawn may plant now: alive, carrying, in a site, on the floor, still. */
 	[[nodiscard]] bool CanPlant() const;
 
 	/** Sets the body's mesh for the team. */
 	void UpdateBody();
+	/** The body's anim graph's inputs from the movement and the view: speed, direction, aim pitch, falling. */
+	void UpdateBodyAnimation();
+	/** The drawn weapon moves to the arms' or the body's socket (they changed). */
+	void ReattachWeapon();
+	/** The notifies of the body's and the arms' animations (bound to their anim instances' OnAnimNotify). */
+	void OnBodyAnimNotify(FName NotifyName, const UAnimSequenceBase* Animation);
+	void OnArmsAnimNotify(FName NotifyName, const UAnimSequenceBase* Animation);
+	/** A footstep notify: the sound and the noise when the step is heard (the class comment). */
+	void PlayFootstep(bool bLeftFoot);
+	/** A step on a ladder every LadderStepInterval while climbing (the class comment). */
+	void TickLadderSteps(float DeltaSeconds);
 	/** Spawns DefaultWeapons and draws the best (UE ShooterGame: SpawnDefaultInventory). */
 	void SpawnDefaultInventory();
+	/** Spawns the team's default weapons (once, when a controller first takes the pawn) and draws the best. */
+	void SpawnTeamInventory();
+	/** Gives the weapons Names name, each with DefaultWeaponClips clips in its reserve. */
+	void GiveDefaultWeapons(const TArray<FString>& Names);
 	/**
 	 * Death (UE ShooterGame: OnDeath): see the class comment. Killer is the controller credited with the kill (the
 	 * pawn's own for a suicide or the world).
@@ -325,9 +591,50 @@ private:
 	UPROPERTY()
 	UCameraComponent* FirstPersonCameraComponent = nullptr;
 
-	/** The team-coloured body, standing on the feet. */
+	/** UE ShooterGame: Mesh1P, the first-person arms. */
 	UPROPERTY()
-	UStaticMeshComponent* BodyMesh = nullptr;
+	USkeletalMeshComponent* Mesh1P = nullptr;
+
+	/** The loaded animation assets (null where the config names none). */
+	UPROPERTY(Transient)
+	UBlendSpaceBase* LocomotionBlendSpace = nullptr;
+
+	UPROPERTY(Transient)
+	UBlendSpaceBase* CrouchBlendSpace = nullptr;
+
+	UPROPERTY(Transient)
+	UAimOffsetBlendSpace1D* AimOffset = nullptr;
+
+	UPROPERTY(Transient)
+	FAnimJumpClips JumpClips;
+
+	UPROPERTY(Transient)
+	UAnimMontage* DeathAnimBack = nullptr;
+
+	UPROPERTY(Transient)
+	UAnimMontage* DeathAnimFront = nullptr;
+
+	UPROPERTY(Transient)
+	FShooterWeaponAnim PlantAnim;
+
+	UPROPERTY(Transient)
+	FShooterWeaponAnim DefuseAnim;
+
+	/** FootstepSounds and LadderStepSoundNames, loaded. */
+	UPROPERTY(Transient)
+	FShooterSurfaceSoundSet FootstepSoundSet;
+
+	UPROPERTY(Transient)
+	TArray<USoundWave*> LadderStepSounds;
+
+	/** The last step's sound and floor (the tests). */
+	UPROPERTY(Transient)
+	USoundWave* LastFootstepSound = nullptr;
+
+	TEnumAsByte<EPhysicalSurface> LastFootstepSurface = SurfaceType_Default;
+	/** Climbing time toward the next ladder step, and the ladder steps so far (the next one's sound). */
+	float LadderStepTime = 0.0f;
+	int32 NumLadderSteps = 0;
 
 	/** One weapon a slot (UE ShooterGame: Inventory). */
 	UPROPERTY(Transient)
@@ -355,7 +662,18 @@ private:
 
 	bool bHasDefuseKit = false;
 	bool bIsPlanting = false;
-	float PlantEndTime = 0.0f;
+	/** The team's default weapons were given (SpawnTeamInventory). */
+	bool bTeamInventoryGiven = false;
+	/** The last flash: when it began, its hold, fade and white, and when the blindness ends (world time). */
+	float FlashStartTime = -1.0e6f;
+	float FlashHoldTime = 0.0f;
+	float FlashFadeTime = 0.0f;
+	float FlashMaxAlpha = 0.0f;
+	float BlindEndTime = -1.0e6f;
+	/** The plant's timer (OnPlantTimer). */
+	FTimerHandle TimerHandle_Plant;
+	/** The plant's time is up: the bomb goes down if the planter still can. */
+	void OnPlantTimer();
 	bool bGodMode = false;
 	/** The team at death (the controller and its player state leave the corpse). */
 	EShooterTeam DeadTeam = EShooterTeam::None;

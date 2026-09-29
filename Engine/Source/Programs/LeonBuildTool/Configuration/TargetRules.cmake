@@ -6,7 +6,6 @@
 #                                                #   Game default: Launch; Program default: <Name>
 #     [EXTRA_MODULE_NAMES <Module>...]           # Game default: the project's modules
 #     [ENABLE_PLUGINS <Plugin>...] [DISABLE_PLUGINS <Plugin>...]
-#     [COMPILE_AGAINST_ENGINE ON|OFF]            # WITH_ENGINE for the launch module (Game ON, Program OFF)
 #     [COLLECT_AUTOMATION_TESTS]                 # compile <Module>/Private/Tests/** of the closure in
 #     [AUTOMATION_TEST_MODULES <Module>...]      # with COLLECT_AUTOMATION_TESTS: only these modules' tests
 #                                                #   (a project's test program collects its own modules only)
@@ -16,7 +15,7 @@ set_property(GLOBAL PROPERTY LEON_TARGETS "")
 
 function(leon_target Name)
 	cmake_parse_arguments(T "COLLECT_AUTOMATION_TESTS"
-		"TYPE;LAUNCH_MODULE;COMPILE_AGAINST_ENGINE;OUTPUT_NAME"
+		"TYPE;LAUNCH_MODULE;OUTPUT_NAME"
 		"PLATFORMS;EXTRA_MODULE_NAMES;ENABLE_PLUGINS;DISABLE_PLUGINS;AUTOMATION_TEST_MODULES" ${ARGN})
 	if(T_UNPARSED_ARGUMENTS)
 		message(FATAL_ERROR "leon_target(${Name}): unknown arguments: ${T_UNPARSED_ARGUMENTS}")
@@ -39,13 +38,6 @@ function(leon_target Name)
 			set(T_LAUNCH_MODULE ${Name})
 		endif()
 	endif()
-	if(NOT DEFINED T_COMPILE_AGAINST_ENGINE OR "${T_COMPILE_AGAINST_ENGINE}" STREQUAL "")
-		if(T_TYPE STREQUAL "Game")
-			set(T_COMPILE_AGAINST_ENGINE ON)
-		else()
-			set(T_COMPILE_AGAINST_ENGINE OFF)
-		endif()
-	endif()
 	if(NOT T_OUTPUT_NAME)
 		set(T_OUTPUT_NAME ${Name})
 	endif()
@@ -53,7 +45,7 @@ function(leon_target Name)
 	set_property(GLOBAL APPEND PROPERTY LEON_TARGETS ${Name})
 	set_property(GLOBAL PROPERTY LEON_TARGET_${Name}_FILE "${CMAKE_CURRENT_LIST_FILE}")
 	set_property(GLOBAL PROPERTY LEON_TARGET_${Name}_ORIGIN "${_LEON_TARGET_ORIGIN}")
-	foreach(Key TYPE LAUNCH_MODULE COMPILE_AGAINST_ENGINE OUTPUT_NAME PLATFORMS EXTRA_MODULE_NAMES
+	foreach(Key TYPE LAUNCH_MODULE OUTPUT_NAME PLATFORMS EXTRA_MODULE_NAMES
 			ENABLE_PLUGINS DISABLE_PLUGINS COLLECT_AUTOMATION_TESTS AUTOMATION_TEST_MODULES)
 		set_property(GLOBAL PROPERTY LEON_TARGET_${Name}_${Key} "${T_${Key}}")
 	endforeach()

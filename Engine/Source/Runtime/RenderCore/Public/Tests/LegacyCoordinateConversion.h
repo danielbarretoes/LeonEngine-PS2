@@ -16,8 +16,8 @@ struct FMeshData;
  * The basis is UE = UnitsPerMetre * (X, Z, Y): legacy Y and Z swap, as UE 4.27's glTF importer converts ({X, Z, Y})
  * and ufbx's left_handed_z_up. The swap has determinant -1, so it keeps the physical scene: what was on the right is
  * still on the right, triangles keep their index order and their winding on screen. What flips is everything built
- * with a handedness: world cross products (the right vector is Up ^ Forward), the tangent's bitangent sign, and the
- * sense of rotations (a legacy rotation by A about an axis is a rotation by -A about the swapped axis).
+ * with a handedness: world cross products (the right vector is Up ^ Forward) and the sense of rotations (a legacy
+ * rotation by A about an axis is a rotation by -A about the swapped axis).
  *
  * Legacy horizontal (X, Z) becomes UE (X, Y) in the same order, so a legacy yaw measured from +X toward +Z (the
  * cameras) keeps its value as a UE yaw; the actor yaw (0 = legacy +Z, toward +X) becomes 90 - yaw.
@@ -33,10 +33,6 @@ struct RENDERCORE_API FLegacyCoordinateConversion
 	/** Legacy direction or normal (unitless) to a world direction: (X, Z, Y). */
 	[[nodiscard]] static FVector ConvertDirection(const FVector& Legacy);
 
-	/** Legacy tangent (xyz, w = bitangent sign) to a world tangent: (X, Z, Y, -W), the bitangent flips with the basis.
-	 */
-	[[nodiscard]] static FVector4 ConvertTangent(const FVector4& Legacy);
-
 	/** Legacy per-axis scale to a world Scale3D: (X, Z, Y). */
 	[[nodiscard]] static FVector ConvertScale(const FVector& Legacy);
 
@@ -51,7 +47,6 @@ struct RENDERCORE_API FLegacyCoordinateConversion
 
 	[[nodiscard]] static FVector ToLegacyPosition(const FVector& World);
 	[[nodiscard]] static FVector ToLegacyDirection(const FVector& World);
-	[[nodiscard]] static FVector4 ToLegacyTangent(const FVector4& World);
 	[[nodiscard]] static FVector ToLegacyScale(const FVector& World);
 	[[nodiscard]] static float ToLegacyLength(float WorldLength);
 	[[nodiscard]] static FVector ToLegacyExtent(const FVector& World);
@@ -127,16 +122,10 @@ struct RENDERCORE_API FLegacyCoordinateConversion
 
 	/**
 	 * Legacy mesh data (Y up, metres: the old version 1 cooked meshes, which tests compare against) to the world in
-	 * place: positions, normals and tangents. The index order is kept: the physical triangles, and their winding on
+	 * place: positions and normals. The index order is kept: the physical triangles, and their winding on
 	 * screen, do not change.
 	 */
 	static void ConvertMeshData(FMeshData& Data);
-
-	/**
-	 * The tangents the legacy Y-up, right-handed world computed (the golden reference of ComputeTangents): the same UV
-	 * gradients, and a vertex without one gets a tangent across legacy +Y (X when the normal is vertical), w = 1.
-	 */
-	static void ComputeLegacyTangents(FMeshData& Data);
 };
 
 #endif // WITH_DEV_AUTOMATION_TESTS

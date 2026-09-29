@@ -65,6 +65,11 @@ enum class EGSRegister : uint8
 	HWREG = 0x54,
 	/** Sets CSR.FINISH once every drawing before it is done (the backend's end-of-list marker, not a setter). */
 	FINISH = 0x61,
+	/**
+	 * Not a GS register: FGSCommandList's command to draw a vertex batch (DrawVertexBatch; the value is the batch's
+	 * index), which the PS2 hands to VU1. No write of the GS has this address.
+	 */
+	VertexBatch = 0xff,
 };
 
 /** Pixel storage formats (TEX0.PSM, FRAME.PSM, BITBLTBUF.SPSM / DPSM; the Z formats' low 4 bits are ZBUF.PSM). */
@@ -184,6 +189,57 @@ enum class EGSTransferDirection : uint8
 
 /** Converts window or texel coordinates to the GS's 4-bit fraction fixed point, rounded, clamped to the field. */
 [[nodiscard]] GSCORE_API uint16 GSToFixed4(float Value, uint32 FieldBits);
+
+/** S, T or Q as the GS uses it: the lower 8 bits of the mantissa dropped (manual 3.4.4). */
+[[nodiscard]] GSCORE_API float GSTruncateTexCoord(float Value);
+
+/**
+ * A + (B - A) * Step / Steps with one rounding (Steps not 0): an attribute interpolated along a line or across a sprite
+ * lands exactly on a whole value where the GS's does, so a texel or a colour does not round the other way.
+ */
+[[nodiscard]] inline double GSLerpExact(double A, double B, int64 Step, int64 Steps)
+{
+	return ((A * double(Steps - Step)) + (B * double(Step))) / double(Steps);
+}
+
+/**
+ * The pixels of a line from (FromX, FromY) to (ToX, ToY), window coordinates in sixteenths, as the GS draws them
+ * (manual 3.2.9, which sketches the rule): stepped along the major axis from the start point's pixel, each pixel the
+ * one whose area the line crosses at that pixel's center, the end point's pixel left out. Visit(X, Y, Step, Steps) gets
+ * each pixel and how far along the line it is (Step / Steps, 0 at From; Steps > 0).
+ */
+template <typename FunctionType>
+void GSStepLine(int32 FromX, int32 FromY, int32 ToX, int32 ToY, FunctionType&& Visit)
+{
+	const auto FloorDiv = [](int64 Value, int64 Divisor)
+	{ return Value >= 0 ? Value / Divisor : -((-Value + Divisor - 1) / Divisor); };
+	const int32 DeltaX = ToX - FromX;
+	const int32 DeltaY = ToY - FromY;
+	const bool bMajorX = (DeltaX < 0 ? -DeltaX : DeltaX) >= (DeltaY < 0 ? -DeltaY : DeltaY);
+	const int32 MajorStart = bMajorX ? FromX : FromY;
+	const int32 MinorStart = bMajorX ? FromY : FromX;
+	const int32 MajorFrom = int32(FloorDiv(int64(MajorStart) + 8, 16));
+	const int32 MajorTo = int32(FloorDiv(int64(bMajorX ? ToX : ToY) + 8, 16));
+	int64 Steps = bMajorX ? DeltaX : DeltaY;
+	int64 MinorDelta = bMajorX ? DeltaY : DeltaX;
+	if (MajorFrom == MajorTo || Steps == 0)
+	{
+		return;
+	}
+	// Along the major axis with a positive step count.
+	const int64 Sign = Steps > 0 ? 1 : -1;
+	Steps *= Sign;
+	MinorDelta *= Sign;
+	const int32 Direction = MajorTo > MajorFrom ? 1 : -1;
+	for (int32 Major = MajorFrom; Major != MajorTo; Major += Direction)
+	{
+		int64 Step = ((int64(Major) * 16) - MajorStart) * Sign;
+		Step = Step < 0 ? 0 : (Step > Steps ? Steps : Step);
+		// The minor coordinate at that step, rounded to its nearest pixel: floor((Minor + 8) / 16).
+		const int32 MinorPixel = int32(FloorDiv(((int64(MinorStart) + 8) * Steps) + (MinorDelta * Step), Steps * 16));
+		Visit(bMajorX ? Major : MinorPixel, bMajorX ? MinorPixel : Major, Step, Steps);
+	}
+}
 
 /** PRIM (0x00): the primitive type and its attributes. */
 struct GSCORE_API FGSPrim

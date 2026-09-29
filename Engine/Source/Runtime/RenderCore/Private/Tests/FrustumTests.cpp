@@ -63,6 +63,10 @@ bool FFrustumIntersectsAabbTest::RunTest(const FString& Parameters)
 		Frustum.IntersectsAabb(FBox(FVector(-1.0f, 495.0f, -1.0f), FVector(1.0f, 496.0f, 1.0f))));
 	TestFalse("Box past the far plane",
 		Frustum.IntersectsAabb(FBox(FVector(-50.0f, -9700.0f, -50.0f), FVector(50.0f, -9600.0f, 50.0f))));
+	// Spheres (N15): the planes are normalized, so the radius is in centimetres.
+	TestTrue("Sphere at the origin", Frustum.IntersectsSphere(FVector::ZeroVector, 50.0f));
+	TestFalse("Sphere behind the camera", Frustum.IntersectsSphere(FVector(0.0f, 650.0f, 0.0f), 100.0f));
+	TestTrue("Sphere reaching past the camera", Frustum.IntersectsSphere(FVector(0.0f, 650.0f, 0.0f), 200.0f));
 	return true;
 }
 

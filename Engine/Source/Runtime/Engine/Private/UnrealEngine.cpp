@@ -10,6 +10,7 @@
 #include "EngineLogs.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/WorldSettings.h"
+#include "HAL/PlatformProcess.h"
 #include "HAL/PlatformTime.h"
 #include "Materials/Material.h"
 #include "Misc/App.h"
@@ -18,8 +19,9 @@
 #include "Misc/Parse.h"
 #include "Misc/Paths.h"
 #include "RendererInterface.h"
+#include "SaveGameSystem.h"
 #include "Sound/SoundWave.h"
-#include "Stats/StatsOverlay.h"
+#include "Stats/Stats.h"
 #include "UObject/GarbageCollection.h"
 #include "UObject/Package.h"
 
@@ -116,17 +118,24 @@ void UEngine::Init(IEngineLoop* InEngineLoop)
 	}
 
 	GarbageCollectionTimer = FGarbageCollectionTimer(FGarbageCollectionSettings::LoadFromConfig());
+	FixedStepClock = FFixedStepClock(static_cast<uint32>(FMath::Max(1, FixedStepsPerSecond)), MaxStepsPerFrame);
 	// The collision channels of the config (UE: UCollisionProfile::Get()->LoadProfileConfig in UEngine::Init).
 	UCollisionProfile::Get()->LoadProfileConfig();
 	InitializeObjectReferences();
 	(void)AudioDevice.Initialize(/*silent=*/bHeadless);
-	// The UI cues with a sound wave in the config play it; the others keep their procedural tone.
+	// The platform's save game system starts with a game at a screen (the PS2's memory card modules load now, before
+	// the IO thread's first read; Docs/PLANS/ps2-shipping.md N24).
+	if (!bHeadless)
+	{
+		(void)IPlatformFeaturesModule::Get().GetSaveGameSystem();
+	}
+	// The UI cues with a sound wave in the config play it (loaded before the device started: uploaded now); the others
+	// are silent.
 	for (int32 Cue = 0; Cue < UISounds.Num() && Cue < NumUISounds; ++Cue)
 	{
 		if (UISounds[Cue] != nullptr)
 		{
-			TArray<int16> Samples;
-			AudioDevice.SetUiSound(static_cast<EUISound>(Cue), UISounds[Cue]->GetPCMView(Samples));
+			AudioDevice.SetUiSound(static_cast<EUISound>(Cue), UISounds[Cue]->GetSoundBuffer());
 		}
 	}
 	bIsInitialized = true;
@@ -136,7 +145,6 @@ void UEngine::InitializeObjectReferences()
 {
 	// UE: LoadEngineTexture. A missing package is a warning (LoadObject) and a null texture.
 	DefaultTexture = LoadObject<UTexture2D>(nullptr, *DefaultTextureName.ToString());
-	DefaultBumpNormalTexture = LoadObject<UTexture2D>(nullptr, *DefaultBumpNormalTextureName.ToString());
 	(void)UMaterial::GetDefaultMaterial(MD_Surface);
 	UISounds.Reset();
 	for (const FSoftObjectPath* Name : {&UIClickSoundName, &UIConfirmSoundName, &UIBackSoundName, &UIErrorSoundName})
@@ -151,6 +159,8 @@ void UEngine::Start()
 
 void UEngine::PreExit()
 {
+	SetCycleStatsVisible(false);
+	SetMemoryStatsVisible(false);
 	AudioDevice.Shutdown();
 	Overlay.Clear();
 	bIsInitialized = false;
@@ -158,6 +168,53 @@ void UEngine::PreExit()
 
 void UEngine::Tick(float /*DeltaSeconds*/, bool /*bIdleMode*/)
 {
+}
+
+void UEngine::UpdateTimeAndHandleMaxTickRate()
+{
+	uint64 NowCycles = FPlatformTime::Cycles64();
+	if (LastFrameCycles == 0)
+	{
+		LastFrameCycles = NowCycles;
+	}
+	// A benchmark or a capture steps once a frame: its frames do not follow the clock.
+	const bool bOneStepPerFrame = FApp::IsBenchmarking() || FApp::IsUnattended();
+	if (bHeadless && !FApp::IsBenchmarking())
+	{
+		// Nothing to draw: wait for the next step instead of spinning (UE: the max tick rate).
+		const uint64 Elapsed = FPlatformTime::CyclesToMicroseconds(NowCycles - LastFrameCycles);
+		const uint64 Due =
+			bOneStepPerFrame ? FixedStepClock.GetStepMicroseconds() : FixedStepClock.GetMicrosecondsToNextStep();
+		if (Elapsed < Due)
+		{
+			FPlatformProcess::Sleep(static_cast<float>(Due - Elapsed) / 1000000.0f);
+			NowCycles = FPlatformTime::Cycles64();
+		}
+	}
+	const uint64 ElapsedMicroseconds = FPlatformTime::CyclesToMicroseconds(NowCycles - LastFrameCycles);
+	LastFrameCycles = NowCycles;
+	FApp::SetDeltaTime(static_cast<double>(static_cast<float>(ElapsedMicroseconds) / 1000000.0f));
+	bFrameTimeUpdated = true;
+	if (bOneStepPerFrame)
+	{
+		NumStepsThisFrame = 1;
+		RenderInterpolationAlpha = 1.0f;
+		return;
+	}
+	NumStepsThisFrame = FixedStepClock.Advance(ElapsedMicroseconds);
+	RenderInterpolationAlpha = FixedStepClock.GetAlpha();
+}
+
+int32 UEngine::ConsumeFrameSteps(float DeltaSeconds)
+{
+	if (!bFrameTimeUpdated)
+	{
+		NumStepsThisFrame =
+			FixedStepClock.Advance(static_cast<uint64>(FMath::Max(0.0f, DeltaSeconds) * 1000000.0f + 0.5f));
+		RenderInterpolationAlpha = FixedStepClock.GetAlpha();
+	}
+	bFrameTimeUpdated = false;
+	return NumStepsThisFrame;
 }
 
 void UEngine::TickDeferredCommands()
@@ -214,6 +271,18 @@ bool UEngine::Exec(UWorld* InWorld, const TCHAR* Cmd, FOutputDevice& Ar)
 		{
 			SetHudStatsVisible(!IsHudStatsVisible());
 			UE_LOG(LogEngine, Log, TEXT("HUD stats: %s"), IsHudStatsVisible() ? TEXT("on") : TEXT("off"));
+			return true;
+		}
+		if (FParse::Command(&Str, TEXT("CYCLES")))
+		{
+			SetCycleStatsVisible(!IsCycleStatsVisible());
+			UE_LOG(LogEngine, Log, TEXT("Cycle stats: %s"), IsCycleStatsVisible() ? TEXT("on") : TEXT("off"));
+			return true;
+		}
+		if (FParse::Command(&Str, TEXT("MEMORY")) || FParse::Command(&Str, TEXT("LLM")))
+		{
+			SetMemoryStatsVisible(!IsMemoryStatsVisible());
+			UE_LOG(LogEngine, Log, TEXT("Memory stats: %s"), IsMemoryStatsVisible() ? TEXT("on") : TEXT("off"));
 			return true;
 		}
 		return false;
@@ -316,8 +385,17 @@ bool UEngine::LoadMap(FWorldContext& WorldContext, FURL URL, UPendingNetGame* /*
 		CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
 	}
 
-	// The world of the map package, with its level and actors (UE).
-	UPackage* const WorldPackage = LoadPackage(nullptr, *MapPackageName, LOAD_None);
+	// The world of the map package, with its level and actors (UE). The package and what it imports come through the
+	// asynchronous loader and a flush (UE: LoadMap's load runs the async loader to its end), like what the game
+	// preloads later: one queue of reads that the IO thread sorts by offset and coalesces while the game thread
+	// serializes what came in (Docs/PLANS/ps2-shipping.md N24b). A map that did not load that way loads synchronously,
+	// for its error.
+	FlushAsyncLoading(LoadPackageAsync(MapPackageName));
+	UPackage* WorldPackage = FindPackage(nullptr, *MapPackageName);
+	if (WorldPackage == nullptr)
+	{
+		WorldPackage = LoadPackage(nullptr, *MapPackageName, LOAD_None);
+	}
 	UWorld* const NewWorld = UWorld::FindWorldInPackage(WorldPackage);
 	if (NewWorld == nullptr)
 	{
@@ -348,6 +426,15 @@ bool UEngine::LoadMap(FWorldContext& WorldContext, FURL URL, UPendingNetGame* /*
 	}
 
 	NewWorld->BeginPlay();
+
+	// What the game mode and the actors asked to preload (LoadPackageAsync in InitGame and BeginPlay: the assets the
+	// game spawns later, its sounds among them) comes in with the map: the IO thread read it while the map started, and
+	// no frame waits for the disc (Docs/PLANS/ps2-shipping.md N24).
+	FlushAsyncLoading();
+
+	// The load is no game time: the fixed step clock starts again from here.
+	FixedStepClock.Reset();
+	LastFrameCycles = FPlatformTime::Cycles64();
 
 	const double StopTime = FPlatformTime::Seconds();
 	UE_LOG(LogLoad, Log, TEXT("Took %f seconds to LoadMap(%s)"), StopTime - StartTime, *URL.Map);
@@ -393,6 +480,11 @@ bool UEngine::ConditionalCollectGarbage(float DeltaSeconds)
 	return GarbageCollectionTimer.Tick(DeltaSeconds, GARBAGE_COLLECTION_KEEPFLAGS);
 }
 
+void UEngine::ForceGarbageCollection(bool /*bFullPurge*/)
+{
+	GarbageCollectionTimer.ForceCollectOnNextTick();
+}
+
 FWorldContext* UEngine::GetWorldContextFromWorld(const UWorld* InWorld)
 {
 	for (FWorldContext* Context : GetWorldContexts())
@@ -423,12 +515,52 @@ void UEngine::AddOnScreenDebugMessage(
 
 bool UEngine::IsHudStatsVisible() const
 {
-	return FStatsOverlay::IsStatsVisible();
+	return bHudStatsVisible;
+}
+
+void UEngine::SetCycleStatsVisible(bool bVisible)
+{
+	if (bVisible == bCycleStatsVisible)
+	{
+		return;
+	}
+	if (bVisible)
+	{
+		// The two pages share the overlay's block.
+		SetMemoryStatsVisible(false);
+	}
+	bCycleStatsVisible = bVisible;
+	if (bVisible)
+	{
+		FThreadStats::MasterEnableAdd();
+	}
+	else
+	{
+		FThreadStats::MasterEnableSubtract();
+		Overlay.SetText(FString());
+	}
+}
+
+void UEngine::SetMemoryStatsVisible(bool bVisible)
+{
+	if (bVisible == bMemoryStatsVisible)
+	{
+		return;
+	}
+	if (bVisible)
+	{
+		SetCycleStatsVisible(false);
+	}
+	bMemoryStatsVisible = bVisible;
+	if (!bVisible)
+	{
+		Overlay.SetText(FString());
+	}
 }
 
 void UEngine::SetHudStatsVisible(bool bVisible)
 {
-	FStatsOverlay::SetStatsVisible(bVisible);
+	bHudStatsVisible = bVisible;
 	if (!bVisible)
 	{
 		Overlay.SetRightText(FString());

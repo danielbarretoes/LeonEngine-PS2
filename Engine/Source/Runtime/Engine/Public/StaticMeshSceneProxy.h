@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "LPS2Mesh.h"
 #include "MaterialShared.h"
 #include "PrimitiveSceneProxy.h"
 
@@ -30,14 +31,18 @@ public:
 	/** The material a section draws with (UStaticMeshComponent::GetMaterial of its slot). */
 	[[nodiscard]] const FMaterial& GetSectionMaterial(int32 SectionIndex) const;
 
-	/** Shown, casting shadows, and one of the component's materials is an opaque lit shadow caster. */
-	[[nodiscard]] bool IsShadowCaster() const
+	/**
+	 * The instance's baked vertex colours when it draws with static lighting (a Static component whose colours were
+	 * baked for its mesh as it is), else null: the renderer then lights it per frame (Movable) or draws the mesh's own
+	 * colours (Static, not baked).
+	 */
+	[[nodiscard]] const FLPS2ColorStreams* GetBakedVertexColors() const
 	{
-		return IsShown() && CastsDynamicShadow() && bHasShadowCastingMaterial;
+		return BakedVertexColors.IsEmpty() ? nullptr : &BakedVertexColors;
 	}
 
 	/** The mesh's local bounds through the transform. */
-	[[nodiscard]] FBox GetWorldBounds() const;
+	[[nodiscard]] FBox GetWorldBounds() const override;
 
 	/** The mesh and the maps of the section materials. */
 	void AddReferencedObjects(FReferenceCollector& Collector) override;
@@ -45,5 +50,6 @@ public:
 private:
 	UStaticMesh* StaticMesh = nullptr;
 	TArray<FMaterial> SectionMaterials;
-	bool bHasShadowCastingMaterial = false;
+	/** A copy of the component's baked colours when they apply (GetBakedVertexColors). */
+	FLPS2ColorStreams BakedVertexColors;
 };

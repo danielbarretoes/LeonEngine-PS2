@@ -4,6 +4,10 @@
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/Character.h"
+#include "HAL/LowLevelMemTracker.h"
+#include "Stats/Stats.h"
+
+DECLARE_CYCLE_STAT(TEXT("AI Tick"), STAT_AITick, STATGROUP_AI);
 
 namespace
 {
@@ -197,6 +201,8 @@ void AAIController::StopMovement()
 
 FVector AAIController::TickAI(float DeltaTime)
 {
+	SCOPE_CYCLE_COUNTER(STAT_AITick);
+	LLM_SCOPE(ELLMTag::AI);
 	ACharacter* Character = GetCharacter();
 	if (Character == nullptr)
 	{

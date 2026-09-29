@@ -20,6 +20,13 @@ public:
 	UPROPERTY()
 	float Duration = 0.0f;
 
+	/**
+	 * How much the sound matters when voices run out (UE: Priority): the default, 1, leaves the last free voices
+	 * (FAudioDevice::NumReservedVoices) to sounds above it.
+	 */
+	UPROPERTY()
+	float Priority = 1.0f;
+
 	/** UE: GetDuration. */
 	[[nodiscard]] virtual float GetDuration() const
 	{

@@ -73,32 +73,32 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFrameworkHardeningAudioDeviceSilentModeTest,
 
 bool FFrameworkHardeningAudioDeviceSilentModeTest::RunTest(const FString& Parameters)
 {
-	// A silent audio device accepts every Play call (even for empty samples) without failing; a UI cue keeps the
-	// samples it is given until they are cleared.
+	// A silent audio device makes no buffer and accepts every Play call (even for no buffer) without failing.
 	FAudioDevice Audio;
 	if (!TestTrue("Silent initialize", Audio.Initialize(/*bInSilent=*/true)))
 	{
 		return false;
 	}
-	const int16 Samples[4] = {0, 1000, -1000, 0};
-	FSoundWavePCM Sound;
-	Sound.Samples = Samples;
-	Sound.NumFrames = 4;
-	Sound.NumChannels = 1;
+	uint8 Block[FSpuAdpcm::BytesPerBlock] = {};
+	Block[1] = FSpuAdpcm::FlagLoopEnd;
+	FSpuAdpcmSound Sound;
+	Sound.Blocks = Block;
+	Sound.NumBlocks = 1;
 	Sound.SampleRate = 22050;
-	Audio.PlaySound2D(Sound);
-	Audio.PlaySound2D(FSoundWavePCM());
-	Audio.PlaySoundAtLocation(Sound, FVector(100.0f, 0.0f, 0.0f));
-	TestFalse("A procedural cue", Audio.HasUiSound(EUISound::Click));
-	Audio.SetUiSound(EUISound::Click, Sound);
-	TestTrue("A cue with samples", Audio.HasUiSound(EUISound::Click));
+	const int32 Buffer = Audio.AcquireSoundBuffer(FName(TEXT("/Test/S_Silent")), Sound);
+	TestEqual("No buffer when silent", Buffer, int32(INDEX_NONE));
+	Audio.PlaySound2D(Buffer);
+	Audio.PlaySound2D(1234);
+	Audio.PlaySoundAtLocation(Buffer, FVector(100.0f, 0.0f, 0.0f));
+	Audio.SetUiSound(EUISound::Click, Buffer);
+	TestFalse("A silent cue", Audio.HasUiSound(EUISound::Click));
 	Audio.PlayUiSound(EUISound::Click);
-	Audio.SetUiSound(EUISound::Click, FSoundWavePCM());
-	TestFalse("Back to the tone", Audio.HasUiSound(EUISound::Click));
-	Audio.PlayUiSound(EUISound::Click);
-	Audio.PlayMusic(Sound);
+	Audio.PlayMusic(Buffer);
+	TestFalse("No music", Audio.IsMusicPlaying());
 	Audio.StopMusic();
+	Audio.ReleaseSoundBuffer(Buffer);
 	Audio.Tick();
+	TestEqual("No voice", Audio.GetNumPlayingVoices(), 0);
 	Audio.Shutdown();
 	return true;
 }

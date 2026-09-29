@@ -14,12 +14,16 @@
 
 FPrimitiveSceneProxy::FPrimitiveSceneProxy(const UPrimitiveComponent* InComponent, EPrimitiveSceneProxyType InProxyType)
 	: LocalToWorld(InComponent->GetComponentTransform().ToMatrixWithScale())
+	, PreviousTransform(InComponent->GetComponentTransform())
+	, CurrentTransform(InComponent->GetComponentTransform())
 	, ProxyType(InProxyType)
 	, bShown(InComponent->ShouldRender())
 	, bCastDynamicShadow(InComponent->CastShadow && !InComponent->bRenderAsViewModel)
 	, bOnlyOwnerSee(InComponent->bOnlyOwnerSee)
 	, bOwnerNoSee(InComponent->bOwnerNoSee)
 	, bRenderAsViewModel(InComponent->bRenderAsViewModel)
+	, bStaticLighting(InComponent->Mobility == EComponentMobility::Static)
+	, bCastBlobShadow(InComponent->bCastBlobShadow && !InComponent->bRenderAsViewModel)
 {
 	if (bOnlyOwnerSee || bOwnerNoSee)
 	{
@@ -29,6 +33,35 @@ FPrimitiveSceneProxy::FPrimitiveSceneProxy(const UPrimitiveComponent* InComponen
 			Owners.Add(Owner);
 		}
 	}
+}
+
+void FPrimitiveSceneProxy::SetStepTransform(const FTransform& InTransform, uint32 Step)
+{
+	if (Step != CurrentStep)
+	{
+		PreviousTransform = CurrentTransform;
+		CurrentStep = Step;
+	}
+	CurrentTransform = InTransform;
+	// A jump (a respawn, a teleport) is drawn at once, not swept across the map.
+	const FVector Moved = CurrentTransform.GetLocation() - PreviousTransform.GetLocation();
+	if (Moved.SizeSquared() > FMath::Square(TeleportDistance))
+	{
+		PreviousTransform = CurrentTransform;
+	}
+	bInterpolate = !PreviousTransform.Equals(CurrentTransform, 0.0f);
+	LocalToWorld = CurrentTransform.ToMatrixWithScale();
+}
+
+void FPrimitiveSceneProxy::InterpolateTransform(float Alpha)
+{
+	if (!bInterpolate)
+	{
+		return;
+	}
+	FTransform Blended;
+	Blended.Blend(PreviousTransform, CurrentTransform, FMath::Clamp(Alpha, 0.0f, 1.0f));
+	LocalToWorld = Blended.ToMatrixWithScale();
 }
 
 bool FPrimitiveSceneProxy::IsShown(const FSceneView* View) const
@@ -51,9 +84,12 @@ bool FPrimitiveSceneProxy::IsShown(const FSceneView* View) const
 FStaticMeshSceneProxy::FStaticMeshSceneProxy(const UStaticMeshComponent* InComponent)
 	: FPrimitiveSceneProxy(InComponent, EPrimitiveSceneProxyType::StaticMesh)
 	, StaticMesh(InComponent->GetStaticMesh())
-	, bHasShadowCastingMaterial(InComponent->HasShadowCastingMaterial())
 {
 	InComponent->GetSectionMaterials(SectionMaterials);
+	if (HasStaticLighting() && InComponent->HasValidBakedVertexColors())
+	{
+		BakedVertexColors = InComponent->BakedVertexColors;
+	}
 }
 
 const FMaterial& FStaticMeshSceneProxy::GetSectionMaterial(int32 SectionIndex) const
@@ -68,7 +104,6 @@ void FStaticMeshSceneProxy::AddReferencedObjects(FReferenceCollector& Collector)
 	for (FMaterial& Material : SectionMaterials)
 	{
 		Collector.AddReferencedObject(Material.AlbedoMap);
-		Collector.AddReferencedObject(Material.NormalMap);
 	}
 }
 
@@ -82,17 +117,36 @@ FSkeletalMeshSceneProxy::FSkeletalMeshSceneProxy(const USkeletalMeshComponent* I
 	: FPrimitiveSceneProxy(InComponent, EPrimitiveSceneProxyType::SkeletalMesh)
 	, SkeletalMesh(InComponent->GetSkeletalMesh())
 {
-	const UMaterialInterface* SlotMaterial = SkeletalMesh->GetMaterial(0);
-	if (SlotMaterial == nullptr)
+	const FLPS2Mesh& RenderData = SkeletalMesh->GetRenderData();
+	for (int32 Section = 0; Section < RenderData.GetNumSections(); ++Section)
 	{
-		SlotMaterial = UMaterial::GetDefaultMaterial(MD_Surface);
+		const int32 Slot = int32(RenderData.GetSection(Section).MaterialIndex);
+		const UMaterialInterface* SlotMaterial = InComponent->GetMaterial(Slot);
+		if (SlotMaterial == nullptr)
+		{
+			SlotMaterial = UMaterial::GetDefaultMaterial(MD_Surface);
+		}
+		SectionMaterials.Add(SlotMaterial != nullptr ? SlotMaterial->GetRenderProxy() : FMaterial());
 	}
-	Material = SlotMaterial != nullptr ? SlotMaterial->GetRenderProxy() : FMaterial();
+}
+
+const FMaterial& FSkeletalMeshSceneProxy::GetSectionMaterial(int32 SectionIndex) const
+{
+	static const FMaterial MissingSectionMaterial;
+	return SectionMaterials.IsValidIndex(SectionIndex) ? SectionMaterials[SectionIndex] : MissingSectionMaterial;
+}
+
+FBox FSkeletalMeshSceneProxy::GetWorldBounds() const
+{
+	const FBox& LocalBox = LocalBounds.IsValid ? LocalBounds : SkeletalMesh->GetBoundingBox();
+	return TransformLocalBox(LocalBox.Min, LocalBox.Max, GetLocalToWorld());
 }
 
 void FSkeletalMeshSceneProxy::AddReferencedObjects(FReferenceCollector& Collector)
 {
 	Collector.AddReferencedObject(SkeletalMesh);
-	Collector.AddReferencedObject(Material.AlbedoMap);
-	Collector.AddReferencedObject(Material.NormalMap);
+	for (FMaterial& Material : SectionMaterials)
+	{
+		Collector.AddReferencedObject(Material.AlbedoMap);
+	}
 }

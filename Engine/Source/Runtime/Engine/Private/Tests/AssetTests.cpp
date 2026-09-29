@@ -156,16 +156,16 @@ namespace
 		return Data;
 	}
 
-	bool SameVertices(const TArray<FVertex>& A, const TArray<FVertex>& B)
+	/** The collision triangles are the source's: its positions and indices, as they are. */
+	bool SameTriangles(const FTriMeshCollisionData& Collision, const FMeshData& Source)
 	{
-		if (A.Num() != B.Num())
+		if (Collision.Vertices.Num() != Source.Vertices.Num() || Collision.Indices != Source.Indices)
 		{
 			return false;
 		}
-		for (int32 Index = 0; Index < A.Num(); ++Index)
+		for (int32 Index = 0; Index < Source.Vertices.Num(); ++Index)
 		{
-			if (A[Index].Position != B[Index].Position || A[Index].Normal != B[Index].Normal ||
-				A[Index].TexCoord != B[Index].TexCoord || A[Index].Tangent != B[Index].Tangent)
+			if (Collision.Vertices[Index] != Source.Vertices[Index].Position)
 			{
 				return false;
 			}
@@ -236,6 +236,7 @@ bool FAssetStaticMeshRoundTripTest::RunTest(const FString& Parameters)
 	const TArray<uint8> Texels = MakeTexels(2, 2, 40);
 	FMaterial SavedValues;
 	FBox SavedBounds;
+	TArray<uint8> SavedRenderData;
 	{
 		UPackage* TexturePackage = Scope.NewPackage(TEXT("T_Grid"));
 		UTexture2D* Texture = NewObject<UTexture2D>(TexturePackage, TEXT("T_Grid"), AssetFlags);
@@ -245,14 +246,8 @@ bool FAssetStaticMeshRoundTripTest::RunTest(const FString& Parameters)
 		UMaterial* Material = NewObject<UMaterial>(MaterialPackage, TEXT("M_Grid"), AssetFlags);
 		Material->ShadingModel = MSM_Unlit;
 		Material->BaseColor = FLinearColor(0.25f, 0.5f, 0.75f, 1.0f);
-		Material->Specular = FLinearColor(0.1f, 0.2f, 0.3f, 1.0f);
-		Material->Metallic = 0.5f;
-		Material->Roughness = 0.3f;
 		Material->Opacity = 0.75f;
-		Material->Shininess = 64.0f;
 		Material->UVScale = FVector2D(8.0f, 4.0f);
-		Material->bCastsShadows = false;
-		Material->bPlanarMirror = true;
 		Material->BaseColorMap = Texture;
 		SavedValues = Material->GetRenderProxy();
 
@@ -269,6 +264,7 @@ bool FAssetStaticMeshRoundTripTest::RunTest(const FString& Parameters)
 		Mesh->GetBodySetup()->CollisionTraceFlag = CTF_UseSimpleAsComplex;
 		Mesh->GetBodySetup()->AggGeom.BoxElems.Add(FKBoxElem(100.0f, 50.0f, 25.0f));
 		SavedBounds = Mesh->GetBoundingBox();
+		SavedRenderData = Mesh->GetLODResources().RenderData.GetData();
 
 		if (!Scope.Save(*this, TexturePackage) || !Scope.Save(*this, MaterialPackage) ||
 			!Scope.Save(*this, MeshPackage))
@@ -285,11 +281,11 @@ bool FAssetStaticMeshRoundTripTest::RunTest(const FString& Parameters)
 		return false;
 	}
 	const FStaticMeshLODResources& LOD = Mesh->GetLODResources();
-	TestTrue("Vertices", SameVertices(LOD.Vertices, Data.Vertices));
-	TestTrue("Indices", LOD.Indices == Data.Indices);
+	TestTrue("The render data (LPS2 v2), byte for byte", LOD.RenderData.GetData() == SavedRenderData);
+	TestTrue("The collision triangles", SameTriangles(Mesh->GetPhysicsTriMeshData(), Data));
 	TestEqual("Sections", Mesh->GetNumSections(), 2);
-	TestEqual("Section 0 slot", LOD.Sections[0].MaterialIndex, 1);
-	TestEqual("Section 1 range", LOD.Sections[1].IndexCount, Data.Indices.Num() - 6);
+	TestEqual("Section 0 slot", LOD.GetSectionMaterialIndex(0), 1);
+	TestEqual("Section 1 triangles", int32(LOD.RenderData.GetSection(1).NumTriangles), (Data.Indices.Num() - 6) / 3);
 	TestTrue("Bounds", Mesh->GetBoundingBox().Min == SavedBounds.Min && Mesh->GetBoundingBox().Max == SavedBounds.Max);
 	TestEqual("Triangles", Mesh->GetNumTriangles(), Data.Indices.Num() / 3);
 
@@ -314,19 +310,73 @@ bool FAssetStaticMeshRoundTripTest::RunTest(const FString& Parameters)
 	const FMaterial Values = Material->GetRenderProxy();
 	TestTrue("Unlit", Values.Shading == EMaterialLightingModel::Unlit);
 	TestTrue("Base colour", Values.Albedo == SavedValues.Albedo);
-	TestTrue("Specular", Values.Specular == SavedValues.Specular);
-	TestEqual("Metallic", Values.Metallic, SavedValues.Metallic);
-	TestEqual("Roughness", Values.Roughness, SavedValues.Roughness);
 	TestEqual("Opacity", Values.Alpha, SavedValues.Alpha);
-	TestEqual("Shininess", Values.Shininess, SavedValues.Shininess);
 	TestTrue("UV scale", Values.UvScale == SavedValues.UvScale);
-	TestFalse("Casts no shadows", Values.bCastsShadows);
-	TestTrue("Mirror", Values.bPlanarMirror);
-	TestNull("No normal map", Values.NormalMap);
 	if (TestNotNull("The base colour map resolved", Values.AlbedoMap))
 	{
 		TestTrue("Its texels", ReadTexels(*Values.AlbedoMap) == Texels);
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAssetStaticMeshLODsRoundTripTest, "System.Engine.Assets.StaticMeshLODsRoundTrip",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FAssetStaticMeshLODsRoundTripTest::RunTest(const FString& Parameters)
+{
+	// N15: a mesh's source models (a tagged property) say how many LODs follow LOD 0 and the collision triangles in its
+	// bulk data; each comes back byte for byte with its screen size. A mesh of one LOD saves no source models, so its
+	// bytes are those of before the LODs.
+	FAssetTestScope Scope;
+	TArray<TArray<uint8>> SavedLODs;
+	TArray<uint8> SavedPlain;
+	{
+		UPackage* Package = Scope.NewPackage(TEXT("SM_Sphere"));
+		UStaticMesh* Mesh = NewObject<UStaticMesh>(Package, TEXT("SM_Sphere"), AssetFlags);
+		Mesh->SourceModels.SetNum(3);
+		Mesh->SourceModels[1].ReductionSettings.PercentTriangles = 0.5f;
+		Mesh->SourceModels[1].ScreenSize = 0.4f;
+		Mesh->SourceModels[2].ReductionSettings.PercentTriangles = 0.2f;
+		Mesh->SourceModels[2].ScreenSize = 0.15f;
+		TestTrue("Built", Mesh->BuildFromMeshData(MakeSphere(16, 12)));
+		for (int32 LODIndex = 0; LODIndex < Mesh->GetNumLODs(); ++LODIndex)
+		{
+			SavedLODs.Add(Mesh->GetLODResources(LODIndex).RenderData.GetData());
+		}
+		UPackage* PlainPackage = Scope.NewPackage(TEXT("SM_Plain"));
+		UStaticMesh* Plain = NewObject<UStaticMesh>(PlainPackage, TEXT("SM_Plain"), AssetFlags);
+		TestTrue("Built with one LOD", Plain->BuildFromMeshData(MakeSphere(16, 12)));
+		SavedPlain = Plain->GetLODResources().RenderData.GetData();
+		if (!Scope.Save(*this, Package) || !Scope.Save(*this, PlainPackage))
+		{
+			return false;
+		}
+	}
+	Scope.DestroyAll();
+
+	const UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, TEXT("/AssetTest/SM_Sphere.SM_Sphere"));
+	const UStaticMesh* Plain = LoadObject<UStaticMesh>(nullptr, TEXT("/AssetTest/SM_Plain.SM_Plain"));
+	if (!TestNotNull("Loaded", Mesh) || !TestNotNull("The plain one loaded", Plain))
+	{
+		return false;
+	}
+	if (!TestEqual("Three LODs", Mesh->GetNumLODs(), 3))
+	{
+		return false;
+	}
+	for (int32 LODIndex = 0; LODIndex < 3; ++LODIndex)
+	{
+		TestTrue(*FString::Printf("LOD %d byte for byte", LODIndex),
+			Mesh->GetLODResources(LODIndex).RenderData.GetData() == SavedLODs[LODIndex]);
+	}
+	TestEqual("LOD 0's screen size", Mesh->GetLODScreenSize(0), 1.0f);
+	TestEqual("LOD 2's screen size", Mesh->GetLODScreenSize(2), 0.15f);
+	TestTrue("Fewer triangles down the LODs",
+		Mesh->GetLODResources(2).GetNumTriangles() < Mesh->GetLODResources(1).GetNumTriangles() &&
+			Mesh->GetLODResources(1).GetNumTriangles() < Mesh->GetNumTriangles());
+	TestEqual("One LOD", Plain->GetNumLODs(), 1);
+	TestTrue("Its render data", Plain->GetLODResources().RenderData.GetData() == SavedPlain);
+	TestTrue("A LOD past the last is the last", &Plain->GetLODResources(3) == &Plain->GetLODResources(0));
 	return true;
 }
 
@@ -342,27 +392,22 @@ bool FAssetMaterialDefaultsTest::RunTest(const FString& Parameters)
 	const FMaterial Values = Material.GetRenderProxy();
 	TestTrue("Lit", Values.Shading == Default.Shading);
 	TestTrue("Albedo", Values.Albedo == Default.Albedo);
-	TestTrue("Specular", Values.Specular == Default.Specular);
-	TestEqual("Metallic", Values.Metallic, Default.Metallic);
 	TestEqual("Alpha", Values.Alpha, Default.Alpha);
-	TestEqual("Shininess", Values.Shininess, Default.Shininess);
-	TestEqual("Roughness", Values.Roughness, Default.Roughness);
 	TestTrue("UV scale", Values.UvScale == Default.UvScale);
-	TestTrue("Shadows", Values.bCastsShadows == Default.bCastsShadows);
-	TestTrue("Mirror", Values.bPlanarMirror == Default.bPlanarMirror);
+	TestNull("No map", Values.AlbedoMap);
 
 	FMaterial Custom;
 	Custom.Shading = EMaterialLightingModel::Unlit;
 	Custom.Albedo = FVector(0.1f, 0.2f, 0.3f);
 	Custom.Alpha = 0.5f;
-	Custom.Roughness = 0.9f;
+	Custom.UvScale = FVector2D(2.0f, 3.0f);
 	UMaterial& Copy = *NewObject<UMaterial>();
 	Copy.SetFromRenderProxy(Custom);
 	const FMaterial Back = Copy.GetRenderProxy();
 	TestTrue("Unlit back", Back.Shading == EMaterialLightingModel::Unlit);
 	TestTrue("Albedo back", Back.Albedo == Custom.Albedo);
 	TestEqual("Alpha back", Back.Alpha, 0.5f);
-	TestEqual("Roughness back", Back.Roughness, 0.9f);
+	TestTrue("UV scale back", Back.UvScale == Custom.UvScale);
 	TestTrue("Translucent", Copy.IsTranslucent());
 	TArray<UTexture*> Used;
 	Copy.GetUsedTextures(Used);
@@ -378,21 +423,22 @@ bool FAssetSkeletalRoundTripTest::RunTest(const FString& Parameters)
 	// A skeleton (bones and a socket), a skinned mesh, a clip (tracks as bulk data) and a blend space, each in its own
 	// package, come back with their data and their references to each other.
 	FAssetTestScope Scope;
-	FSkeletalMeshData Data;
-	Data.RefSkeleton.BoneNames = {FName("root"), FName("hand")};
-	Data.RefSkeleton.ParentIndices = {INDEX_NONE, 0};
-	Data.RefSkeleton.InverseBindPose = {FMatrix::Identity, FTranslationMatrix(FVector(0.0f, -10.0f, 0.0f))};
+	FReferenceSkeleton Bones;
+	Bones.BoneNames = {FName("root"), FName("hand")};
+	Bones.ParentIndices = {INDEX_NONE, 0};
+	Bones.RefBonePose = {FTransform::Identity, FTransform(FVector(0.0f, 10.0f, 0.0f))};
+	Bones.InverseBindPose = {FMatrix::Identity, FTranslationMatrix(FVector(0.0f, -10.0f, 0.0f))};
+	// A triangle: two corners on the root, one on the hand.
+	FMeshData Geometry;
+	TArray<FSkinWeightInfo> Weights;
 	for (int32 Index = 0; Index < 3; ++Index)
 	{
-		FSkeletalVertex Vertex;
-		Vertex.Position = FVector(static_cast<float>(Index), 2.0f, 3.0f);
-		Vertex.BoneIndices = FIntVector4(Index % 2, 0, 0, 0);
-		Vertex.BoneWeights = FVector4(1.0f, 0.0f, 0.0f, 0.0f);
-		Data.Vertices.Add(Vertex);
-		Data.Indices.Add(static_cast<uint32>(Index));
+		Geometry.Vertices.Add(FVertex(FVector(static_cast<float>(Index), 2.0f + (Index == 2 ? 10.0f : 0.0f), 3.0f),
+			FVector(0.0f, 0.0f, 1.0f), FVector2D(static_cast<float>(Index), 0.0f)));
+		Geometry.Indices.Add(static_cast<uint32>(Index));
+		FSkinWeightInfo& Info = Weights.AddDefaulted_GetRef();
+		Info.InfluenceBones[0] = Info.InfluenceBones[1] = uint8(Index == 2 ? 1 : 0);
 	}
-	Data.LocalMin = FVector(0.0f, 2.0f, 3.0f);
-	Data.LocalMax = FVector(2.0f, 2.0f, 3.0f);
 	FRawAnimSequence Raw;
 	Raw.SequenceLength = 2.0f;
 	Raw.FrameRate = 1.0f;
@@ -400,21 +446,22 @@ bool FAssetSkeletalRoundTripTest::RunTest(const FString& Parameters)
 	Raw.Tracks.SetNum(2);
 	for (FRawAnimSequenceTrack& Track : Raw.Tracks)
 	{
-		Track.Keys = {FMatrix::Identity, FTranslationMatrix(FVector(4.0f, 0.0f, 0.0f))};
+		Track.PosKeys = {FVector::ZeroVector, FVector(4.0f, 0.0f, 0.0f), FVector(8.0f, 0.0f, 0.0f)};
+		Track.RotKeys = {FQuat::Identity};
 	}
 	{
 		UPackage* SkeletonPackage = Scope.NewPackage(TEXT("SKEL_Hand"));
 		USkeleton* Skeleton = NewObject<USkeleton>(SkeletonPackage, TEXT("SKEL_Hand"), AssetFlags);
-		Skeleton->SetReferenceSkeleton(Data.RefSkeleton);
+		Skeleton->SetReferenceSkeleton(Bones);
 		Skeleton->AddSocket(TEXT("Grip"), TEXT("hand"), FTransform(FVector(1.0f, 2.0f, 3.0f)));
 
 		UPackage* MeshPackage = Scope.NewPackage(TEXT("SK_Hand"));
 		USkeletalMesh* Mesh = NewObject<USkeletalMesh>(MeshPackage, TEXT("SK_Hand"), AssetFlags);
-		TestTrue("Mesh built", Mesh->BuildFromImportData(Data, Skeleton));
+		TestTrue("Mesh built", Mesh->BuildFromMeshData(Geometry, Weights, Skeleton));
 
 		UPackage* ClipPackage = Scope.NewPackage(TEXT("A_Wave"));
 		UAnimSequence* Clip = NewObject<UAnimSequence>(ClipPackage, TEXT("A_Wave"), AssetFlags);
-		Clip->SetFromRawAnimSequence(Raw);
+		TestTrue("Clip compressed", Clip->SetFromRawAnimSequence(Raw));
 		Clip->SetSkeleton(Skeleton);
 
 		UPackage* BlendPackage = Scope.NewPackage(TEXT("BS_Move"));
@@ -444,19 +491,25 @@ bool FAssetSkeletalRoundTripTest::RunTest(const FString& Parameters)
 	}
 	TestEqual("Bones", Skeleton->GetReferenceSkeleton().GetNum(), 2);
 	TestEqual("Bone name", Skeleton->GetReferenceSkeleton().FindBoneIndex(FName("hand")), 1);
-	TestTrue("Inverse bind pose",
-		Skeleton->GetReferenceSkeleton().InverseBindPose[1] == Data.RefSkeleton.InverseBindPose[1]);
+	TestTrue("Inverse bind pose", Skeleton->GetReferenceSkeleton().InverseBindPose[1] == Bones.InverseBindPose[1]);
+	TestTrue("Reference pose",
+		Skeleton->GetReferenceSkeleton().RefBonePose[1].GetTranslation().Equals(FVector(0.0f, 10.0f, 0.0f)));
 	const USkeletalMeshSocket* Socket = Skeleton->FindSocket(TEXT("Grip"));
 	if (TestNotNull("Socket", Socket))
 	{
 		TestTrue("Socket bone", Socket->BoneName == FName(TEXT("hand")));
 		TestTrue("Socket offset", Socket->RelativeLocation.Equals(FVector(1.0f, 2.0f, 3.0f)));
 	}
-	TestEqual("Skinned vertices", Mesh->GetVertices().Num(), 3);
-	TestEqual("Bone index", Mesh->GetVertices()[1].BoneIndices.X, 1);
-	TestTrue("Indices", Mesh->GetIndices() == Data.Indices);
-	TestTrue("Bounds", Mesh->GetBoundingBox().Max == Data.LocalMax);
+	const FLPS2Mesh& RenderData = Mesh->GetRenderData();
+	TestTrue("Skinned render data", RenderData.IsSkinned() && RenderData.GetNumTriangles() == 1);
+	if (TestEqual("One batch", RenderData.GetNumBatches(), 1))
+	{
+		const FLPS2SkinPalette& Palette = RenderData.GetPalette(RenderData.GetBatch(0));
+		TestTrue("Its palette: both bones", Palette.NumBones == 2);
+	}
+	TestTrue("Bounds", Mesh->GetBoundingBox().Max.Equals(FVector(2.0f, 12.0f, 3.0f)));
 	TestTrue("The mesh's bones are the skeleton's", Mesh->GetRefSkeleton().GetNum() == 2);
+	TestEqual("Bone bounds", Mesh->GetBoneBoundsRadii().Num(), 2);
 
 	TestEqual("Axis", BlendSpace->GetBlendParameter(0).Max, 600.0f);
 	TestTrue("The blend space's skeleton", BlendSpace->GetSkeleton() == Skeleton);
@@ -471,12 +524,13 @@ bool FAssetSkeletalRoundTripTest::RunTest(const FString& Parameters)
 	}
 	TestEqual("Sample position", BlendSpace->GetBlendSamples()[0].SampleValue.X, 300.0f);
 	TestEqual("Length", Clip->SequenceLength, 2.0f);
-	TestEqual("Frames", Clip->GetNumberOfFrames(), 2);
+	TestEqual("Frames", Clip->GetNumberOfFrames(), 3);
 	TestEqual("Tracks", Clip->GetNumberOfTracks(), 2);
 	TestFalse("One-shot", Clip->bLoop);
-	TArray<FMatrix> Pose;
+	TArray<FTransform> Pose;
 	Clip->GetBonePose(0.5f, Pose);
-	TestEqual("Sampled between the keys", Pose[1].M[3][0], 2.0f, 1.0e-4f);
+	TestEqual("Sampled between the keys", Pose[1].GetTranslation().X, 2.0f, 1.0e-2f);
+	TestEqual("A straight line keeps its ends", Clip->GetCompressedData().Tracks[1].NumTranslationKeys, 2);
 	return true;
 }
 
@@ -485,7 +539,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAssetSoundWaveRoundTripTest, "System.Engine.As
 
 bool FAssetSoundWaveRoundTripTest::RunTest(const FString& Parameters)
 {
-	// A sound keeps its PCM16 samples (bulk data), channels, rate and duration.
+	// An imported sound keeps its PCM16 source (bulk data), channels, rate, duration and settings, and no ADPCM; an
+	// editor build makes the ADPCM from them. Cooked (PKG_FilterEditorOnly), it keeps the ADPCM instead of the source
+	// (Docs/PLANS/ps2-shipping.md N19).
 	FAssetTestScope Scope;
 	TArray<int16> Samples;
 	for (int32 Index = 0; Index < 200; ++Index)
@@ -497,7 +553,19 @@ bool FAssetSoundWaveRoundTripTest::RunTest(const FString& Parameters)
 		USoundWave* Sound = NewObject<USoundWave>(Package, TEXT("S_Beep"), AssetFlags);
 		TestFalse("No rate is refused", Sound->SetPCMData(Samples.GetData(), 100, 2, 0));
 		TestTrue("Samples set", Sound->SetPCMData(Samples.GetData(), 100, 2, 22050));
+		Sound->Priority = 2.0f;
+		Sound->CompressionSampleRate = 11025;
 		if (!Scope.Save(*this, Package))
+		{
+			return false;
+		}
+		UPackage* CookedPackage = Scope.NewPackage(TEXT("S_Cooked"));
+		CookedPackage->SetPackageFlags(uint32(PKG_FilterEditorOnly));
+		USoundWave* Cooked = NewObject<USoundWave>(CookedPackage, TEXT("S_Cooked"), AssetFlags);
+		(void)Cooked->SetPCMData(Samples.GetData(), 100, 2, 22050);
+		Cooked->bLooping = true;
+		TestTrue("Its ADPCM", Cooked->CacheCompressedData());
+		if (!Scope.Save(*this, CookedPackage))
 		{
 			return false;
 		}
@@ -518,6 +586,26 @@ bool FAssetSoundWaveRoundTripTest::RunTest(const FString& Parameters)
 	TestTrue("Samples", Loaded == Samples);
 	TestTrue(
 		"The samples were bulk data at the end of the file", Sound->GetRawPCMData().GetBulkDataOffsetInFile() >= 0);
+	TestTrue("Its settings", Sound->Priority == 2.0f && Sound->CompressionSampleRate == 11025);
+	TestFalse("No ADPCM saved uncooked", Sound->HasCompressedData());
+	USoundWave* Mutable = const_cast<USoundWave*>(Sound);
+	// 100 frames at 22 050 Hz become 50 at 11 025 Hz, two blocks.
+	TestTrue("Made from the source",
+		Mutable->CacheCompressedData() && Sound->GetCompressedSampleRate() == 11025 &&
+			Sound->GetCompressedDataSize() == 2 * FSpuAdpcm::BytesPerBlock);
+
+	const USoundWave* Cooked = LoadObject<USoundWave>(nullptr, TEXT("/AssetTest/S_Cooked.S_Cooked"));
+	if (!TestNotNull("The cooked sound loads", Cooked))
+	{
+		return false;
+	}
+	TestTrue("Its ADPCM: 100 frames in 4 blocks, looping",
+		Cooked->HasCompressedData() && Cooked->GetCompressedDataSize() == 4 * FSpuAdpcm::BytesPerBlock &&
+			Cooked->GetCompressedSampleRate() == 22050 && Cooked->bLooping);
+	const FSpuAdpcmSound Compressed = Cooked->LockCompressedData();
+	TestTrue("Valid, looping", Compressed.IsValid() && Compressed.IsLooping());
+	Cooked->UnlockCompressedData();
+	TestEqual("No source samples cooked", Cooked->GetNumFrames(), 0);
 	return true;
 }
 

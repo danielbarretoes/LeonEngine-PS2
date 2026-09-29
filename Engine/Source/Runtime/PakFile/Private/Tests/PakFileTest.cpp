@@ -1,3 +1,4 @@
+#include "Async/AsyncFileHandle.h"
 #include "CoreMinimal.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformFilemanager.h"
@@ -211,6 +212,68 @@ bool FPakFormatDeterministicTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPakFormatOpenOrderTest, "System.PakFile.Format.OpenOrder",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FPakFormatOpenOrderTest::RunTest(const FString& Parameters)
+{
+	// -order= (Docs/PLANS/ps2-shipping.md N23): the entries' data in the order the game opened them (an order file or
+	// the log lines of a PS2 run), the others after in path order; the index keeps its format and every entry reads
+	// back; the same order gives the same bytes.
+	const FString OrderFile = FPaths::ProjectIntermediateDir() + "Tests/PakOpenOrder/Order.txt";
+	TMap<FString, int64> OpenOrder;
+	if (FFileHelper::SaveStringToFile("LogFileOpenOrder: \"MyGame/Content/Data/Empty.bin\" 1\n"
+									  "not an order line\n"
+									  "\"Engine/Content/Maps/Entry.lmap\" 2\n"
+									  "\"MyGame/Content/Data/Empty.bin\" 7\n",
+			*OrderFile))
+	{
+		TestTrue("Read", FPakWriter::ReadOrderFile(*OrderFile, OpenOrder));
+		TestTrue("Two paths, the first rank of each",
+			OpenOrder.Num() == 2 && OpenOrder.FindRef("mygame/content/data/empty.bin") == 1 &&
+				OpenOrder.FindRef("engine/content/maps/entry.lmap") == 2);
+		IFileManager::Get().DeleteDirectory(*FPaths::GetPath(OrderFile), false, true);
+	}
+	else
+	{
+		// A read-only device (the PS2's host: in TestPAL): the order as ReadOrderFile would give it.
+		OpenOrder.Add("mygame/content/data/empty.bin", 1);
+		OpenOrder.Add("engine/content/maps/entry.lmap", 2);
+	}
+
+	const auto MakePak = [&OpenOrder]()
+	{
+		FPakWriter Writer(16);
+		Writer.SetOpenOrder(OpenOrder);
+		Writer.AddFile("../../../Engine/Config/BaseEngine.ini", MakeData(2, 10));
+		Writer.AddFile("../../../Engine/Content/Maps/Entry.lmap", MakeData(1, 3000));
+		Writer.AddFile("../../../MyGame/Content/Data/Empty.bin", MakeData(3, 40));
+		Writer.AddFile("../../../Engine/Content/A.lasset", MakeData(5, 20));
+		TArray<uint8> Pak;
+		(void)Writer.Finalize(Pak);
+		return Pak;
+	};
+	TArray<uint8> Ordered = MakePak();
+	TestTrue("Deterministic", Ordered == MakePak());
+	FPakFile PakFile(TEXT("Ordered.lpak"), MoveTemp(Ordered));
+	if (!TestTrue("Valid", PakFile.IsValid()))
+	{
+		return false;
+	}
+	const auto OffsetOf = [&PakFile](const TCHAR* Path)
+	{
+		const FPakIndexEntry* Entry = PakFile.FindRelative(Path);
+		return Entry != nullptr ? Entry->Entry.Offset : int64(-1);
+	};
+	const int64 Empty = OffsetOf(TEXT("MyGame/Content/Data/Empty.bin"));
+	const int64 Entry = OffsetOf(TEXT("Engine/Content/Maps/Entry.lmap"));
+	const int64 Config = OffsetOf(TEXT("Engine/Config/BaseEngine.ini"));
+	const int64 Asset = OffsetOf(TEXT("Engine/Content/A.lasset"));
+	TestTrue("The open order first, then path order", Empty == 0 && Empty < Entry && Entry < Config && Config < Asset);
+	TestTrue("Every hash checks", PakFile.Check());
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPakFormatAlignmentTest, "System.PakFile.Format.Alignment",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
@@ -394,6 +457,81 @@ bool FPakPlatformFileMountTest::RunTest(const FString& Parameters)
 		Expected += "/";
 	}
 	TestEqual("../../../ from the executable's folder", Relative.GetMountPoint(), Expected);
+	#endif
+	return true;
+}
+
+namespace
+{
+	/** An entry's bytes read asynchronously through a platform file; false when the read failed. */
+	bool ReadAsync(IPlatformFile& PlatformFile, const FString& Filename, int64 Offset, int64 Size, TArray<uint8>& Out,
+		int64& OutFileSize)
+	{
+		TUniquePtr<IAsyncReadFileHandle> Handle(PlatformFile.OpenAsyncRead(*Filename));
+		TUniquePtr<IAsyncReadRequest> SizeRequest(Handle->SizeRequest());
+		TUniquePtr<IAsyncReadRequest> Read(Handle->ReadRequest(Offset, Size));
+		(void)SizeRequest->WaitCompletion();
+		(void)Read->WaitCompletion();
+		OutFileSize = SizeRequest->GetSizeResults();
+		uint8* Bytes = Read->GetReadResults();
+		if (Bytes == nullptr)
+		{
+			return false;
+		}
+		Out.Reset();
+		Out.Append(Bytes, int32(Size));
+		FMemory::Free(Bytes);
+		return true;
+	}
+} // namespace
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPakPlatformFileAsyncReadTest, "System.PakFile.PlatformFile.AsyncRead",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FPakPlatformFileAsyncReadTest::RunTest(const FString& Parameters)
+{
+	// A pak entry reads asynchronously at its offset in the pak (ps2-shipping N24): from a pak in memory everywhere,
+	// from a pak file on the desktop (the pak's own second handle: the IO thread never moves the game thread's).
+	const FString Root = FPaths::ProjectIntermediateDir() + "Tests/PakFileAsync/";
+	FPakPlatformFile PakPlatformFile;
+	(void)PakPlatformFile.Initialize(&IPlatformFile::GetPlatformPhysical(), "");
+	if (!TestTrue("Mounted", PakPlatformFile.MountFromMemory(TEXT("Async.lpak"), MakeTestPak(2048), 0, *Root)))
+	{
+		return false;
+	}
+	const FString Deep = Root + "MyGame/Content/Data/Sub/Deep.bin";
+	const TArray<uint8> Expected = MakeData(4, 70000);
+	TArray<uint8> Data;
+	int64 FileSize = 0;
+	TestTrue("An entry's bytes", ReadAsync(PakPlatformFile, Deep, 1000, 5000, Data, FileSize));
+	TestTrue("... at their offset",
+		Data.Num() == 5000 && FMemory::Memcmp(Data.GetData(), Expected.GetData() + 1000, 5000) == 0);
+	TestEqual("The entry's size", FileSize, int64(70000));
+	TestFalse("Not past the entry's end", ReadAsync(PakPlatformFile, Deep, 69990, 20, Data, FileSize));
+	TestFalse("A missing file fails", ReadAsync(PakPlatformFile, Root + "Missing.bin", 0, 1, Data, FileSize));
+	TestEqual("... and has no size", FileSize, int64(-1));
+
+	#if PLATFORM_DESKTOP
+	const FString PakFile = Root + "Disk.lpak";
+	TestTrue("Pak file written", FFileHelper::SaveArrayToFile(MakeTestPak(2048), *PakFile));
+	FPakPlatformFile DiskPak;
+	(void)DiskPak.Initialize(&IPlatformFile::GetPlatformPhysical(), "");
+	if (TestTrue("Mounted from disk", DiskPak.Mount(*PakFile, 0, *(Root + "Disk/"))))
+	{
+		const FString DiskDeep = Root + "Disk/MyGame/Content/Data/Sub/Deep.bin";
+		TUniquePtr<IFileHandle> GameThreadHandle(DiskPak.OpenRead(*DiskDeep));
+		uint8 Byte = 0;
+		TestTrue("The game thread reads",
+			GameThreadHandle && GameThreadHandle->Seek(10) && GameThreadHandle->Read(&Byte, 1));
+		TestTrue("An entry of a pak file", ReadAsync(DiskPak, DiskDeep, 65000, 5000, Data, FileSize));
+		TestTrue("... its bytes", FMemory::Memcmp(Data.GetData(), Expected.GetData() + 65000, 5000) == 0);
+		TestTrue("The game thread's handle did not move",
+			GameThreadHandle && GameThreadHandle->Tell() == 11 && GameThreadHandle->Read(&Byte, 1) &&
+				Byte == Expected[11]);
+		GameThreadHandle.Reset();
+		(void)DiskPak.Unmount(*PakFile);
+	}
+	IFileManager::Get().DeleteDirectory(*Root, false, true);
 	#endif
 	return true;
 }

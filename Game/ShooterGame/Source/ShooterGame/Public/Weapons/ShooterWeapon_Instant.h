@@ -3,6 +3,8 @@
 #include "CollisionQuery.h"
 #include "CoreMinimal.h"
 #include "Math/RandomStream.h"
+#include "PhysicalMaterials/PhysicalMaterial.h"
+#include "ShooterTypes.h"
 #include "Weapons/ShooterWeapon.h"
 #include "ShooterWeapon_Instant.generated.h"
 
@@ -11,19 +13,36 @@
  * owner's eyes, within the current spread, out to WeaponRange; what it hits takes point damage
  * (UGameplayStatics::ApplyPointDamage, this weapon the causer).
  *
- * Counter-Strike's model, in degrees and centimetres (1 CS unit = 2.54 cm):
+ * Counter-Strike 1.6's model, in degrees and centimetres (1 CS unit = 2.54 cm):
  * - Damage: HitDamage x RangeModifier^(distance / RangeModifierDistance) (CS: the range modifier per 500 units,
- *   1270 cm). The victim multiplies a head hit by HeadshotMultiplier and applies its armor with ArmorRatio
- *   (AShooterCharacter::TakeDamage).
+ *   1270 cm). The victim multiplies it by the hit group (AShooterCharacter::GetHitGroup: the head by
+ *   HeadshotMultiplier) and applies its armor with ArmorRatio (AShooterCharacter::TakeDamage).
+ * - Penetration (CS's FireBullets3): a shot goes through up to PenetrationCount - 1 things. A character lets it through
+ *   with 3/4 of the damage (it goes on 107 cm past the entry, CS's 42 units); a surface when the bullet leaves it
+ *   within the penetration power (PenetrationPower, cm, cut down by each material it meets for the rest of the shot:
+ *   GetSurfacePenetration), keeping the material's share of the damage; the range left halves. Beyond
+ *   PenetrationDistance from the shooter nothing is pierced. The surface is the hit's physical material's
+ *   (FHitResult::PhysMaterial: the hit mesh's material's, UMaterial::PhysMaterial; GetSurfaceType).
  * - Spread, a cone's half angle: WeaponSpread, plus MovingSpread times the owner's speed over its running speed, plus
- *   JumpingSpread in the air, plus the firing spread (FiringSpreadIncrement a shot, up to FiringSpreadMax, recovering
- *   at FiringSpreadRecovery a second once the trigger is released); times CrouchingSpreadMod crouched.
+ *   JumpingSpread off the floor (in the air, on a ladder), plus the firing spread (FiringSpreadIncrement a shot, up
+ *   to FiringSpreadMax, recovering at FiringSpreadRecovery a second once the trigger is released); times
+ *   CrouchingSpreadMod crouched.
  * - Recoil: each shot kicks the owner's aim up by RecoilPitch +- RecoilPitchRandom and sideways by +- RecoilYawRandom;
  *   the kick comes back down at RecoilRecovery a second once the trigger is released.
  * - The spread's direction and the recoil come from an FRandomStream seeded with RandomSeed when the weapon spawns,
  *   so a weapon's sequence of shots is the same every time (the tests replay it).
+ * - A silencer (bHasSilencer: the USP, the M4A1): the secondary button puts it on or takes it off in
+ *   SilencerDuration (no shot meanwhile). Silenced, a shot does SilencedHitDamage with SilencedRangeModifier, spreads
+ *   SilencedSpreadScale times as much, is SilencedFireNoiseLoudness loud to the bots and SilencedFireVolume loud.
+ * - A burst mode (bHasBurstMode: the Glock-18): the secondary button toggles it; a press then fires BurstShots shots
+ *   BurstShotInterval apart with BurstSpreadScale times the spread, and the next press waits BurstCycleTime from the
+ *   first.
  *
- * Effects: a tracer from the muzzle to the impact, an impact mark on what is not a character, the muzzle flash.
+ * Effects: a tracer from the muzzle to where the bullet stopped, an impact mark where it entered a surface (its tint
+ * and size by the surface, GetImpactMarkStyle), the muzzle flash. Sounds (CS's): a bullet that enters a surface plays
+ * that surface's impact sound there (ImpactSounds, a variant after another; `debris/` and the ricochets in CS), one
+ * that hits a character the body's (CS's `bhit_`): a helmet on the head (HelmetHitSoundName), armor where it covers
+ * (ArmorHitSoundName), else the flesh (ImpactSounds' Flesh).
  */
 UCLASS(Abstract, Config = Game)
 class SHOOTERGAME_API AShooterWeapon_Instant : public AShooterWeapon
@@ -39,7 +58,7 @@ public:
 
 	/** How far a shot reaches, cm (UE ShooterGame: WeaponRange; CS: 8192 units). */
 	UPROPERTY(Config)
-	float WeaponRange = 20000.0f;
+	float WeaponRange = 20808.0f;
 
 	/** The damage kept per RangeModifierDistance travelled (CS: the range modifier). */
 	UPROPERTY(Config)
@@ -49,6 +68,18 @@ public:
 	UPROPERTY(Config)
 	float RangeModifierDistance = 1270.0f;
 
+	/** How many things a shot may hit: 1 pierces nothing (CS: iPenetration, 2 for the rifles, 3 for the AWP). */
+	UPROPERTY(Config)
+	int32 PenetrationCount = 1;
+
+	/** How deep into a surface the bullet reaches to leave it, cm (CS: the bullet's penetration power in units). */
+	UPROPERTY(Config)
+	float PenetrationPower = 0.0f;
+
+	/** Beyond this from the shooter a bullet pierces nothing, cm (CS: the bullet's penetration distance). */
+	UPROPERTY(Config)
+	float PenetrationDistance = 0.0f;
+
 	/** The spread standing still, degrees (UE ShooterGame: WeaponSpread). */
 	UPROPERTY(Config)
 	float WeaponSpread = 0.3f;
@@ -57,7 +88,7 @@ public:
 	UPROPERTY(Config)
 	float MovingSpread = 3.0f;
 
-	/** Added in the air, degrees. */
+	/** Added off the floor (in the air, on a ladder), degrees. */
 	UPROPERTY(Config)
 	float JumpingSpread = 6.0f;
 
@@ -92,6 +123,44 @@ public:
 	UPROPERTY(Config)
 	float RecoilRecovery = 10.0f;
 
+	/** The silencer (see the class comment). */
+	UPROPERTY(Config)
+	bool bHasSilencer = false;
+
+	UPROPERTY(Config)
+	float SilencerDuration = 3.0f;
+
+	UPROPERTY(Config)
+	float SilencedHitDamage = 0.0f;
+
+	UPROPERTY(Config)
+	float SilencedRangeModifier = 0.0f;
+
+	UPROPERTY(Config)
+	float SilencedSpreadScale = 1.0f;
+
+	UPROPERTY(Config)
+	float SilencedFireNoiseLoudness = 0.2f;
+
+	UPROPERTY(Config)
+	float SilencedFireVolume = 0.35f;
+
+	/** The burst mode (see the class comment). */
+	UPROPERTY(Config)
+	bool bHasBurstMode = false;
+
+	UPROPERTY(Config)
+	int32 BurstShots = 3;
+
+	UPROPERTY(Config)
+	float BurstShotInterval = 0.1f;
+
+	UPROPERTY(Config)
+	float BurstCycleTime = 0.5f;
+
+	UPROPERTY(Config)
+	float BurstSpreadScale = 1.0f;
+
 	/** The seed of the weapon's spread and recoil stream. */
 	UPROPERTY(Config)
 	int32 RandomSeed = 1;
@@ -106,9 +175,50 @@ public:
 	UPROPERTY(Config)
 	float TracerLifeSpan = 0.05f;
 
-	/** The side of the mark a shot leaves on a surface, cm. */
+	/** The side of the mark a shot leaves on a surface, cm (GetImpactMarkStyle scales it by the surface). */
 	UPROPERTY(Config)
 	float ImpactMarkSize = 6.0f;
+
+	/**
+	 * Each surface's impact sounds (every hitscan weapon's: `ImpactSounds=(...)` in
+	 * `[/Script/ShooterGame.ShooterWeapon_Instant]`); Flesh is a character's hit without armor.
+	 */
+	UPROPERTY(GlobalConfig)
+	FShooterSurfaceSounds ImpactSounds;
+
+	/** A hit on armor (CS: `bhit_kevlar`) and on a helmet (CS: `bhit_helmet`). */
+	UPROPERTY(GlobalConfig)
+	FSoftObjectPath ArmorHitSoundName;
+
+	UPROPERTY(GlobalConfig)
+	FSoftObjectPath HelmetHitSoundName;
+
+	/**
+	 * What the surface a hit struck is made of: its physical material's surface (the trace asks for it,
+	 * FCollisionQueryParams::bReturnPhysicalMaterial); SHOOTER_SURFACE_Default without one.
+	 */
+	[[nodiscard]] static EPhysicalSurface GetSurfaceType(const FHitResult& Hit);
+	/**
+	 * Counter-Strike's penetration of a surface (FireBullets3's texture types): the share of the penetration power it
+	 * leaves (for the rest of the shot) and of the damage (concrete 0.25 and 0.5, wood 1 and 0.6, metal 0.15 and 0.2,
+	 * tile 0.65 and 0.2, computer 0.4 and 0.45; dirt, glass, flesh and the default 1 and 0.5).
+	 */
+	static void GetSurfacePenetration(EPhysicalSurface Surface, float& OutPowerScale, float& OutDamageScale);
+	/**
+	 * The mark a bullet leaves on a surface: its tint and its size's scale (dark on concrete and tile, brown and
+	 * larger in dirt, dark brown in wood, small and grey on metal, pale on glass).
+	 */
+	static void GetImpactMarkStyle(EPhysicalSurface Surface, FLinearColor& OutColor, float& OutSizeScale);
+	/**
+	 * The sound of a hit: on a character (the victim's armor and helmet before the hit decide), else the surface's
+	 * impact sound, variant Variant; null for none.
+	 */
+	[[nodiscard]] USoundWave* GetImpactSound(const FHitResult& Impact, int32 Variant) const;
+	/** The sound the last hit of a shot played (the tests). */
+	[[nodiscard]] USoundWave* GetLastImpactSound() const
+	{
+		return LastImpactSound;
+	}
 
 	/** The spread now, degrees (the cone's half angle; see the class comment). */
 	[[nodiscard]] virtual float GetCurrentSpread() const;
@@ -117,10 +227,27 @@ public:
 	{
 		return CurrentFiringSpread;
 	}
-	/** The damage a hit does at Distance cm (the range falloff). */
+	/** The damage a hit does at Distance cm (the range falloff; silenced, the silenced damage and falloff). */
 	[[nodiscard]] float GetDamageAtDistance(float Distance) const;
 
-	/** The last shot: its start, its direction (spread applied) and what it hit. */
+	/** The silencer is on. */
+	[[nodiscard]] bool IsSilenced() const
+	{
+		return bSilenced;
+	}
+	/** Puts the silencer on or takes it off at once (a weapon with one; the tests). */
+	void SetSilenced(bool bNewSilenced);
+	/** The burst mode is on. */
+	[[nodiscard]] bool IsBurstMode() const
+	{
+		return bBurstMode;
+	}
+	/** The secondary button: the silencer (in SilencerDuration) or the burst mode, when the weapon has one. */
+	void StartSecondaryFire() override;
+	[[nodiscard]] float GetTimeBetweenShots() const override;
+	[[nodiscard]] float GetFireNoiseLoudness() const override;
+
+	/** The last shot: its start, its direction (spread applied) and the first thing it hit. */
 	[[nodiscard]] const FVector& GetLastShotStart() const
 	{
 		return LastShotStart;
@@ -133,22 +260,68 @@ public:
 	{
 		return LastHit;
 	}
+	/** Where the last shot stopped (the tracer's end), and how many things it went through. */
+	[[nodiscard]] const FVector& GetLastShotEnd() const
+	{
+		return LastShotEnd;
+	}
+	[[nodiscard]] int32 GetLastShotPenetrations() const
+	{
+		return LastShotPenetrations;
+	}
 	/** The recoil kick not recovered yet, degrees up. */
 	[[nodiscard]] float GetRecoilToRecover() const
 	{
 		return RecoilPitchToRecover;
 	}
+	/**
+	 * The holder pulls the kick down by up to Degrees (a bot's recoil control): the owner's aim goes down that much and
+	 * no longer has it to recover.
+	 */
+	void CompensateRecoil(float Degrees);
 
+	/** The firing spread and the recoil to recover go back to 0. */
+	void ResetAim() override;
+	/** A burst stops with the weapon. */
+	void OnUnEquip() override;
 	void PostInitializeComponents() override;
 	void Tick(float DeltaSeconds) override;
 
 protected:
-	/** The trace, its damage and effects, then the recoil (UE ShooterGame: FireWeapon / ProcessInstantHit). */
+	/** The shot, its damage and effects, then the recoil (UE ShooterGame: FireWeapon / ProcessInstantHit). */
 	void FireWeapon() override;
-	/** What the shot struck: damage, the hit marker, the impact mark (UE ShooterGame: ProcessInstantHit). */
-	void ProcessInstantHit(const FHitResult& Impact, const FVector& Origin, const FVector& ShootDir);
+	/** A burst's first shot schedules the rest. */
+	void OnShotFired() override;
+	[[nodiscard]] float GetFireVolume() const override;
+	/**
+	 * What one segment of the shot struck (UE ShooterGame: ProcessInstantHit): Damage to an actor that can be damaged
+	 * (the hit marker for a player's hit on a character), a mark on a surface; returns the damage the actor took.
+	 */
+	float ProcessInstantHit(const FHitResult& Impact, const FVector& ShootDir, float Damage);
+	/**
+	 * Where a bullet that entered Entry's component along Direction leaves it within Depth cm (a line back from Depth
+	 * ahead finds the component's far side); false when it does not (thicker, or the end is still inside).
+	 */
+	bool FindPenetrationExit(const FHitResult& Entry, const FVector& Direction, float Depth,
+		const FCollisionQueryParams& Params, FVector& OutExit) const;
 	/** Kicks the owner's aim (see the class comment). */
 	void ApplyRecoil();
+
+	/** The impact sounds (ImpactSounds, ArmorHitSoundName, HelmetHitSoundName), loaded. */
+	UPROPERTY(Transient)
+	FShooterSurfaceSoundSet ImpactSoundSet;
+
+	UPROPERTY(Transient)
+	USoundWave* ArmorHitSound = nullptr;
+
+	UPROPERTY(Transient)
+	USoundWave* HelmetHitSound = nullptr;
+
+	UPROPERTY(Transient)
+	USoundWave* LastImpactSound = nullptr;
+
+	/** The impacts so far: the variant of the next impact sound. */
+	int32 NumImpacts = 0;
 
 	/** The spread and recoil stream (UE ShooterGame: a random seed per shot, WeaponRandomStream). */
 	FRandomStream WeaponRandomStream;
@@ -156,25 +329,72 @@ protected:
 	float RecoilPitchToRecover = 0.0f;
 	FVector LastShotStart = FVector::ZeroVector;
 	FVector LastShotDirection = FVector::ZeroVector;
+	FVector LastShotEnd = FVector::ZeroVector;
+	int32 LastShotPenetrations = 0;
 	FHitResult LastHit;
+	bool bSilenced = false;
+	bool bBurstMode = false;
+	/** The burst's shots still to come, and the world time of the next one. */
+	int32 BurstShotsLeft = 0;
+	float NextBurstShotTime = 0.0f;
 };
 
-/** A USP-like pistol: semi-automatic, 12 rounds, accurate standing (CS: USP; every player's first weapon). */
+/** Counter-Strike's Glock-18: the terrorists' first pistol, 20 rounds, a three-round burst mode. */
 UCLASS(Config = Game)
-class SHOOTERGAME_API AShooterWeapon_Pistol : public AShooterWeapon_Instant
+class SHOOTERGAME_API AShooterWeapon_Glock : public AShooterWeapon_Instant
 {
 	GENERATED_BODY()
 
 public:
-	AShooterWeapon_Pistol(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+	AShooterWeapon_Glock(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 };
 
-/** An AK-like rifle: automatic at 600 rounds a minute, 30 rounds, strong against armor (CS: AK-47 / M4A1). */
+/** Counter-Strike's USP: the counter-terrorists' first pistol, 12 rounds, a silencer. */
 UCLASS(Config = Game)
-class SHOOTERGAME_API AShooterWeapon_Rifle : public AShooterWeapon_Instant
+class SHOOTERGAME_API AShooterWeapon_USP : public AShooterWeapon_Instant
 {
 	GENERATED_BODY()
 
 public:
-	AShooterWeapon_Rifle(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+	AShooterWeapon_USP(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+};
+
+/** Counter-Strike's Desert Eagle: 7 heavy rounds that go through a wall. */
+UCLASS(Config = Game)
+class SHOOTERGAME_API AShooterWeapon_Deagle : public AShooterWeapon_Instant
+{
+	GENERATED_BODY()
+
+public:
+	AShooterWeapon_Deagle(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+};
+
+/** Counter-Strike's MP5: a cheap sub-machine gun for both teams, accurate on the move. */
+UCLASS(Config = Game)
+class SHOOTERGAME_API AShooterWeapon_MP5 : public AShooterWeapon_Instant
+{
+	GENERATED_BODY()
+
+public:
+	AShooterWeapon_MP5(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+};
+
+/** Counter-Strike's AK-47: the terrorists' rifle, strong against armor. */
+UCLASS(Config = Game)
+class SHOOTERGAME_API AShooterWeapon_AK47 : public AShooterWeapon_Instant
+{
+	GENERATED_BODY()
+
+public:
+	AShooterWeapon_AK47(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+};
+
+/** Counter-Strike's M4A1: the counter-terrorists' rifle, with a silencer. */
+UCLASS(Config = Game)
+class SHOOTERGAME_API AShooterWeapon_M4A1 : public AShooterWeapon_Instant
+{
+	GENERATED_BODY()
+
+public:
+	AShooterWeapon_M4A1(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 };

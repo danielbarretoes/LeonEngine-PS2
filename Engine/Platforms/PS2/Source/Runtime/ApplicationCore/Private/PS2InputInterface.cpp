@@ -1,61 +1,48 @@
 #include "PS2InputInterface.h"
 
 #include "GenericPlatform/DualShockAnalog.h"
+#include "GenericPlatform/DualShockConnection.h"
+#include "GenericPlatform/DualShockForceFeedback.h"
+#include "GenericPlatform/DualShockPressure.h"
 #include "GenericPlatform/GenericApplication.h"
 #include "HAL/PlatformMisc.h"
 
 #include <libpad.h>
-#include <loadfile.h>
+
+// The DualShocks on the PS2's two pad ports (Docs/PLANS/ps2-shipping.md N5, N24): libpad over the ROM's SIO2MAN and
+// PADMAN. Each port's pad is read every frame; FDualShockConnection says which command it needs (the analog mode, the
+// motors' alignment, the pressure mode: one a frame, when the pad is stable), and FDualShockActuators when its motors
+// are sent (padSetActDirect).
 
 namespace
 {
-	char GPadBuffer[256] __attribute__((aligned(64)));
-	FPS2InputInterface* GPS2InputInterface = nullptr;
+	constexpr int32 NumPorts = IInputInterface::MaxControllers;
 
-	bool bPortOpen = false;
-	bool bAnalogRequested = false;
-	bool bSampleValid = false;
-	padButtonStatus GPad{};
-	int32 LastPadState = -1;
-	uint16 LastLoggedButtons = 0;
+	/** libpad's buffer of each port: 256 bytes, 64-byte aligned. */
+	char GPadBuffers[NumPorts][256] __attribute__((aligned(64)));
 
-	/** SIO2MAN and PADMAN from the ROM; false if either did not load (libpad's padInit would wait for it forever). */
-	[[nodiscard]] bool LoadPadModules()
+	/** One port's pad. */
+	struct FPadPort
 	{
-		FPlatformMisc::InitializeIop(false);
-		if (SifLoadModule("rom0:SIO2MAN", 0, nullptr) < 0)
-		{
-			UE_LOG(LogApplicationCore, Error, "PS2InputInterface: SIO2MAN load failed");
-			return false;
-		}
-		if (SifLoadModule("rom0:PADMAN", 0, nullptr) < 0)
-		{
-			UE_LOG(LogApplicationCore, Error, "PS2InputInterface: PADMAN load failed");
-			return false;
-		}
-		return true;
-	}
+		bool bOpen = false;
+		bool bSampleValid = false;
+		FDualShockConnection Connection;
+		FDualShockActuators Actuators;
+		padButtonStatus Status{};
+		int32 LastState = -1;
+		/** What the pad has (padInfoAct, padInfoPressMode: asked once a connection, in DualShock mode). */
+		bool bCapsKnown = false;
+		bool bHasActuators = false;
+		bool bHasPressure = false;
+	};
+	FPadPort GPorts[NumPorts];
 
-	/** DualShock axis byte (0..255, centre ~128) to [-1, 1] with a rescaled dead zone. */
-	float AxisFromByte(uint8 Raw)
-	{
-		return FDualShockAnalog::FromByte(Raw);
-	}
+	/** padSetActAlign: the small motor on byte 0, the large one on byte 1, the rest unused. */
+	const char GActuatorAlign[6] = {0, 1, char(0xff), char(0xff), char(0xff), char(0xff)};
 
 	bool IsPadStateReadable(int32 State)
 	{
 		return State == PAD_STATE_STABLE || State == PAD_STATE_FINDCTP1;
-	}
-
-	void TryEnableAnalog()
-	{
-		if (bAnalogRequested || !bPortOpen || !IsPadStateReadable(padGetState(0, 0)))
-		{
-			return;
-		}
-		padSetMainMode(0, 0, PAD_MMODE_DUALSHOCK, PAD_MMODE_LOCK);
-		bAnalogRequested = true;
-		UE_LOG(LogApplicationCore, Log, "PS2InputInterface: DualShock analog mode requested");
 	}
 
 	/** The DualShock button of a gamepad key (the pad masks of libpad), or 0. */
@@ -93,117 +80,177 @@ namespace
 		}
 		return 0;
 	}
+
+	/** The pressed buttons of a port's last sample (libpad's bits are 0 when pressed). */
+	uint16 GetButtonMask(const FPadPort& Port)
+	{
+		return Port.bSampleValid ? static_cast<uint16>(Port.Status.btns ^ 0xFFFF) : 0;
+	}
+
+	/** A port's pressure bytes in padButtonStatus's order (FDualShockPressure). */
+	uint8 GetPressureByte(const FPadPort& Port, int32 Index)
+	{
+		const unsigned char* Bytes = &Port.Status.right_p;
+		return Bytes[Index];
+	}
+
+	/** Sends the command FDualShockConnection asks for. */
+	void UpdateConnection(int32 PortIndex, FPadPort& Port, int32 State)
+	{
+		const bool bConnected = State != PAD_STATE_DISCONN;
+		const bool bReadable = IsPadStateReadable(State);
+		const bool bDualShockMode = bReadable && padInfoMode(PortIndex, 0, PAD_MODECURID, 0) == PAD_TYPE_DUALSHOCK;
+		if (!bDualShockMode && (!bConnected || bReadable))
+		{
+			Port.bCapsKnown = false;
+		}
+		else if (bDualShockMode && !Port.bCapsKnown)
+		{
+			Port.bCapsKnown = true;
+			Port.bHasActuators = padInfoAct(PortIndex, 0, -1, 0) > 0;
+			Port.bHasPressure = padInfoPressMode(PortIndex, 0) == 1;
+			UE_LOG(LogApplicationCore, Log, "PS2InputInterface: port %d DualShock%s%s", PortIndex,
+				Port.bHasActuators ? ", motors" : "", Port.bHasPressure ? ", pressure" : "");
+		}
+		switch (Port.Connection.Update(bConnected, bReadable, bDualShockMode, bDualShockMode && Port.bHasActuators,
+			bDualShockMode && Port.bHasPressure))
+		{
+			case EDualShockCommand::SetAnalogMode:
+				padSetMainMode(PortIndex, 0, PAD_MMODE_DUALSHOCK, PAD_MMODE_LOCK);
+				UE_LOG(LogApplicationCore, Log, "PS2InputInterface: port %d DualShock analog mode requested (%d)",
+					PortIndex, Port.Connection.GetNumRequests());
+				break;
+			case EDualShockCommand::SetActuatorAlign:
+				padSetActAlign(PortIndex, 0, GActuatorAlign);
+				UE_LOG(LogApplicationCore, Log, "PS2InputInterface: port %d motors aligned", PortIndex);
+				break;
+			case EDualShockCommand::EnterPressureMode:
+				padEnterPressMode(PortIndex, 0);
+				UE_LOG(LogApplicationCore, Log, "PS2InputInterface: port %d pressure mode", PortIndex);
+				break;
+			case EDualShockCommand::None:
+				break;
+		}
+	}
 } // namespace
-
-FPS2InputInterface* FPS2InputInterface::Get()
-{
-	return GPS2InputInterface;
-}
-
-FPS2InputInterface::FPS2InputInterface()
-{
-	GPS2InputInterface = this;
-}
 
 FPS2InputInterface::~FPS2InputInterface()
 {
-	if (GPS2InputInterface == this)
+	// The motors stop with the game.
+	for (int32 PortIndex = 0; PortIndex < NumPorts; ++PortIndex)
 	{
-		GPS2InputInterface = nullptr;
+		if (GPorts[PortIndex].bOpen && GPorts[PortIndex].Connection.AreActuatorsAligned())
+		{
+			const char Stop[6] = {0, 0, 0, 0, 0, 0};
+			padSetActDirect(PortIndex, 0, Stop);
+		}
 	}
 }
 
 bool FPS2InputInterface::Initialize()
 {
-	bPortOpen = false;
-	if (LoadPadModules())
+	bool bAnyOpen = false;
+	const bool bModules = FPlatformMisc::LoadIopModule("rom0:SIO2MAN") && FPlatformMisc::LoadIopModule("rom0:PADMAN");
+	if (bModules)
 	{
+		// libpad's padInit waits for PADMAN forever when it is missing: only with the modules in.
 		padInit(0);
-		bPortOpen = padPortOpen(0, 0, GPadBuffer) != 0;
 	}
-	bAnalogRequested = false;
-	bSampleValid = false;
-	UE_LOG(LogApplicationCore, Log, "PS2InputInterface: pad port 0 %s", bPortOpen ? "open" : "failed");
-	return bPortOpen;
+	for (int32 PortIndex = 0; PortIndex < NumPorts; ++PortIndex)
+	{
+		FPadPort& Port = GPorts[PortIndex];
+		Port = FPadPort();
+		Port.bOpen = bModules && padPortOpen(PortIndex, 0, GPadBuffers[PortIndex]) != 0;
+		bAnyOpen |= Port.bOpen;
+		UE_LOG(LogApplicationCore, Log, "PS2InputInterface: pad port %d %s", PortIndex, Port.bOpen ? "open" : "failed");
+	}
+	return bAnyOpen;
 }
 
 void FPS2InputInterface::SendControllerEvents()
 {
-	bSampleValid = false;
-	if (!bPortOpen)
+	for (int32 PortIndex = 0; PortIndex < NumPorts; ++PortIndex)
 	{
-		return;
-	}
-	TryEnableAnalog();
-	const int32 State = padGetState(0, 0);
-	if (State != LastPadState)
-	{
-		UE_LOG(LogApplicationCore, Log, "PS2InputInterface: port0 state %d", State);
-		LastPadState = State;
-	}
-	if (!IsPadStateReadable(State) || padRead(0, 0, &GPad) == 0)
-	{
-		return;
-	}
-	bSampleValid = true;
-	const uint16 Buttons = GetRawButtonMask();
-	if (Buttons != LastLoggedButtons)
-	{
-		UE_LOG(LogApplicationCore, Log, "PS2InputInterface: btns 0x%04X", Buttons);
-		LastLoggedButtons = Buttons;
+		FPadPort& Port = GPorts[PortIndex];
+		Port.bSampleValid = false;
+		if (!Port.bOpen)
+		{
+			continue;
+		}
+		const int32 State = padGetState(PortIndex, 0);
+		UpdateConnection(PortIndex, Port, State);
+		if (State != Port.LastState)
+		{
+			UE_LOG(LogApplicationCore, Log, "PS2InputInterface: port %d state %d", PortIndex, State);
+			Port.LastState = State;
+		}
+		if (State == PAD_STATE_DISCONN)
+		{
+			// A pad pulled out stops, and the game's last request does not start it again when it comes back.
+			ForceFeedbackValues[PortIndex] = FForceFeedbackValues();
+		}
+		const bool bReadable = IsPadStateReadable(State);
+		FDualShockMotors Motors;
+		if (Port.Actuators.Update(
+				bReadable && Port.Connection.AreActuatorsAligned(), ForceFeedbackValues[PortIndex], Motors))
+		{
+			const char Direct[6] = {char(Motors.Small), char(Motors.Large), 0, 0, 0, 0};
+			padSetActDirect(PortIndex, 0, Direct);
+		}
+		if (bReadable && padRead(PortIndex, 0, &Port.Status) != 0)
+		{
+			Port.bSampleValid = true;
+		}
 	}
 }
 
-bool FPS2InputInterface::IsGamepadConnected() const
+bool FPS2InputInterface::IsGamepadConnected(int32 ControllerId) const
 {
-	return bSampleValid;
+	return ControllerId >= 0 && ControllerId < NumPorts && GPorts[ControllerId].bSampleValid;
 }
 
-bool FPS2InputInterface::IsGamepadKeyDown(const FKey& Key) const
+bool FPS2InputInterface::IsGamepadKeyDown(int32 ControllerId, const FKey& Key) const
 {
+	if (!IsGamepadConnected(ControllerId))
+	{
+		return false;
+	}
 	const uint16 Mask = PadMaskForKey(Key);
-	return Mask != 0 && (GetRawButtonMask() & Mask) != 0;
+	return Mask != 0 && (GetButtonMask(GPorts[ControllerId]) & Mask) != 0;
 }
 
-float FPS2InputInterface::GetGamepadAnalog(const FKey& Axis) const
+float FPS2InputInterface::GetGamepadAnalog(int32 ControllerId, const FKey& Axis) const
 {
-	if (!bSampleValid)
+	if (!IsGamepadConnected(ControllerId))
 	{
 		return 0.0f;
 	}
+	const FPadPort& Port = GPorts[ControllerId];
 	if (Axis == EKeys::Gamepad_LeftX)
 	{
-		return AxisFromByte(GPad.ljoy_h);
+		return FDualShockAnalog::FromByte(Port.Status.ljoy_h);
 	}
 	if (Axis == EKeys::Gamepad_LeftY)
 	{
-		return -AxisFromByte(GPad.ljoy_v); // raw 0 = stick up
+		return -FDualShockAnalog::FromByte(Port.Status.ljoy_v); // raw 0 = stick up
 	}
 	if (Axis == EKeys::Gamepad_RightX)
 	{
-		return AxisFromByte(GPad.rjoy_h);
+		return FDualShockAnalog::FromByte(Port.Status.rjoy_h);
 	}
 	if (Axis == EKeys::Gamepad_RightY)
 	{
-		return -AxisFromByte(GPad.rjoy_v);
+		return -FDualShockAnalog::FromByte(Port.Status.rjoy_v);
+	}
+	const int32 Pressure = FDualShockPressure::IndexOfAxis(Axis);
+	if (Pressure != INDEX_NONE)
+	{
+		// Without the pressure mode a button is all or nothing.
+		if (Port.Connection.IsPressureMode())
+		{
+			return FDualShockPressure::FromByte(GetPressureByte(Port, Pressure));
+		}
+		return IsGamepadKeyDown(ControllerId, FDualShockPressure::GetButtonKey(Pressure)) ? 1.0f : 0.0f;
 	}
 	return 0.0f;
-}
-
-bool FPS2InputInterface::IsPortOpen() const
-{
-	return bPortOpen;
-}
-
-uint16 FPS2InputInterface::GetRawButtonMask() const
-{
-	return bSampleValid ? static_cast<uint16>(GPad.btns ^ 0xFFFF) : 0;
-}
-
-void FPS2InputInterface::GetRawSticks(uint8& OutLeftX, uint8& OutLeftY, uint8& OutRightX, uint8& OutRightY) const
-{
-	OutLeftX = GPad.ljoy_h;
-	OutLeftY = GPad.ljoy_v;
-	OutRightX = GPad.rjoy_h;
-	OutRightY = GPad.rjoy_v;
 }

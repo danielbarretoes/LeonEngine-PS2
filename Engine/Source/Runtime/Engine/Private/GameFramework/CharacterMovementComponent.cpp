@@ -3,7 +3,11 @@
 #include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
+#include "Misc/MemStack.h"
 #include "Physics/PhysScene.h"
+#include "Stats/Stats.h"
+
+DECLARE_CYCLE_STAT(TEXT("Character Movement"), STAT_CharacterMovement, STATGROUP_Engine);
 
 namespace
 {
@@ -20,11 +24,12 @@ UCharacterMovementComponent::UCharacterMovementComponent(const FObjectInitialize
 {
 	bWantsToCrouch = false;
 	// UE: the character movement ticks (PrimaryComponentTick), after the character's controller.
-	SetComponentTickEnabled(true);
+	PrimaryComponentTick.bCanEverTick = true;
 }
 
 void UCharacterMovementComponent::TickComponent(float DeltaTime)
 {
+	SCOPE_CYCLE_COUNTER(STAT_CharacterMovement);
 	Super::TickComponent(DeltaTime);
 	if (CharacterOwner != nullptr)
 	{
@@ -254,7 +259,8 @@ bool UCharacterMovementComponent::UnCrouch(bool /*bClientSimulation*/)
 		const float Cylinder = FMath::Max(0.0f, CrouchedHalf - Radius);
 		const FVector Start = Feet + FVector(0.0f, 0.0f, CrouchedHalf);
 		const FVector End = Start + FVector(0.0f, 0.0f, TopStanding - TopNow);
-		TArray<FHitResult> Hits;
+		FMemMark Mark(FMemStack::Get());
+		TArray<FHitResult, TMemStackAllocator<>> Hits;
 		(void)PhysScene->CapsuleTraceMultiByChannel(
 			Hits, Start, End, Radius, Cylinder, CharacterOwner->GetMovementTraceChannel(), Query, nullptr, Response);
 		for (const FHitResult& Hit : Hits)
@@ -291,4 +297,54 @@ void UCharacterMovementComponent::UpdateCharacterStateBeforeMovement(FPhysScene&
 		Crouch(false);
 	}
 	CrouchPhysScene = nullptr;
+}
+
+void UCharacterMovementComponent::PhysCustom(FPhysScene& /*PhysScene*/, float /*DeltaTime*/)
+{
+}
+
+bool UCharacterMovementComponent::SafeMoveUpdatedComponent(
+	FPhysScene& PhysScene, const FVector& Delta, FHitResult& OutHit)
+{
+	OutHit = FHitResult();
+	const float DeltaSize = Delta.Size();
+	if (CharacterOwner == nullptr || DeltaSize < 1.0e-4f)
+	{
+		return true;
+	}
+	FVector& Feet = CharacterOwner->MutableLocation();
+	const FVector Start = CharacterOwner->CapsuleCenterFromFeet(Feet);
+
+	FCollisionQueryParams Query;
+	FCollisionResponseParams Response;
+	CharacterOwner->InitCollisionParams(Query, Response);
+	// The floor plane only stops a move down.
+	Query.bTraceFloorPlane = Delta.Z < 0.0f;
+	Query.FloorZ = FloorZ;
+	FMemMark Mark(FMemStack::Get());
+	TArray<FHitResult, TMemStackAllocator<>> Hits;
+	(void)PhysScene.CapsuleTraceMultiByChannel(Hits, Start, Start + Delta,
+		CharacterOwner->GetCapsule().GetCapsuleRadius(), CharacterOwner->CapsuleHalfHeight(),
+		CharacterOwner->GetMovementTraceChannel(), Query, nullptr, Response);
+
+	// The first surface the move goes into; one it touches or leaves does not stop it.
+	const FHitResult* Block = nullptr;
+	for (const FHitResult& Hit : Hits)
+	{
+		if (Hit.bBlockingHit && FVector::DotProduct(Delta, Hit.ImpactNormal) < 0.0f)
+		{
+			Block = &Hit;
+			break;
+		}
+	}
+	if (Block == nullptr)
+	{
+		Feet += Delta;
+		ClampPositionXY(Feet, WalkBounds);
+		return true;
+	}
+	Feet += Delta * FMath::Max(0.0f, Block->Time - (Skin / DeltaSize));
+	ClampPositionXY(Feet, WalkBounds);
+	OutHit = *Block;
+	return false;
 }

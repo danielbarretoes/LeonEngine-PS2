@@ -149,6 +149,33 @@ public:
 	/** Reads a whole entry. */
 	bool ReadEntry(const FPakEntry& Entry, TArray<uint8>& OutData);
 
+	/**
+	 * The handle the IO thread reads the pak through (Leon; Docs/PLANS/ps2-shipping.md N24): a second handle of the
+	 * pak file, opened at the first asynchronous read, so its seeks never move the one the game thread reads through;
+	 * null for a pak in memory or one that cannot be opened again.
+	 */
+	[[nodiscard]] TSharedPtr<IFileHandle> GetAsyncFileHandle();
+
+	/** Whether the pak is held in memory (MountFromMemory). */
+	[[nodiscard]] bool IsInMemory() const
+	{
+		return !PakHandle.IsValid();
+	}
+
+	/**
+	 * The paks' reads on the disk since the start (Leon, for the logs; Docs/PLANS/ps2-shipping.md N24b), through the
+	 * game thread's handles or the IO thread's: the reads that went to the file, their bytes and cycles, and the ones
+	 * the block cache served.
+	 */
+	struct FReadStats
+	{
+		uint32 FileReads = 0;
+		uint64 FileBytes = 0;
+		uint64 FileCycles = 0;
+		uint32 CachedReads = 0;
+	};
+	[[nodiscard]] static FReadStats GetReadStats(bool bAsyncHandle);
+
 	/** Verifies every entry's SHA-1 against its bytes; logs each mismatch as an error (UE: Check). */
 	bool Check();
 
@@ -168,6 +195,9 @@ private:
 	FString PakFilename;
 	/** The pak on disk, or null for a pak in memory. */
 	TUniquePtr<IFileHandle> PakHandle;
+	/** The platform file the pak was opened through, and the IO thread's handle (GetAsyncFileHandle). */
+	IPlatformFile* LowerLevelFile = nullptr;
+	TSharedPtr<IFileHandle> AsyncFileHandle;
 	TArray<uint8> MemoryData;
 	int64 PakSize = 0;
 	FPakInfo Info;
@@ -260,6 +290,8 @@ public:
 	virtual FDateTime GetTimeStamp(const TCHAR* Filename) override;
 	virtual IFileHandle* OpenRead(const TCHAR* Filename, bool bAllowWrite = false) override;
 	virtual IFileHandle* OpenWrite(const TCHAR* Filename, bool bAppend = false, bool bAllowRead = false) override;
+	/** A pak entry reads through its pak's own handle at the entry's offset (UE: FPakAsyncReadFileHandle). */
+	virtual IAsyncReadFileHandle* OpenAsyncRead(const TCHAR* Filename) override;
 	virtual bool DirectoryExists(const TCHAR* Directory) override;
 	virtual bool CreateDirectory(const TCHAR* Directory) override;
 	virtual bool DeleteDirectory(const TCHAR* Directory) override;

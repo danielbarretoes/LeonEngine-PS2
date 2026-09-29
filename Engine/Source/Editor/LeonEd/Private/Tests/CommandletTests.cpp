@@ -1,3 +1,9 @@
+#include "Animation/AimOffsetBlendSpace1D.h"
+#include "Animation/AnimMontage.h"
+#include "Animation/AnimSequence.h"
+#include "Animation/BlendSpace.h"
+#include "Animation/BlendSpace1D.h"
+#include "Animation/Skeleton.h"
 #include "AssetImportUtils.h"
 #include "CommandletHelpers.h"
 #include "Commandlets/CookCommandlet.h"
@@ -7,6 +13,7 @@
 #include "CoreMinimal.h"
 #include "EditorFramework/AssetImportData.h"
 #include "EditorReimportHandler.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture2D.h"
 #include "Factories/Factory.h"
@@ -46,6 +53,20 @@ namespace
 
 	const TArray<uint8> TestRGB = {255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255};
 
+	/** A glTF test fixture (MeshUtilities' Tests/Fixtures, written by MakeSkinnedFixture.py). */
+	FString FixturePath(const TCHAR* FileName)
+	{
+		return FPaths::ConvertRelativePathToFull(FPaths::Combine(
+			FPaths::EngineSourceDir(), TEXT("Developer/MeshUtilities/Private/Tests/Fixtures"), FileName));
+	}
+
+	/** A one-triangle .gltf, its buffer a data URI: (0, 0, 0), (1, 0, 0), (0, 1, 0) m. */
+	const TCHAR* const TriangleGltf = TEXT("{\"asset\":{\"version\":\"2.0\"},\"buffers\":[{\"byteLength\":36,\"uri\":")
+		TEXT("\"data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAA\"}],")
+			TEXT("\"bufferViews\":[{\"buffer\":0,\"byteLength\":36}],\"accessors\":[{\"bufferView\":0,")
+				TEXT("\"componentType\":5126,\"count\":3,\"type\":\"VEC3\",\"min\":[0,0,0],\"max\":[1,1,0]}],")
+					TEXT("\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0}}]}]}");
+
 } // namespace
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLeonEdCommandletLookupTest, "System.LeonEd.Commandlets.FoundByName",
@@ -80,8 +101,7 @@ bool FLeonEdImportAssetsTest::RunTest(const FString& Parameters)
 	// -source/-dest imports and saves one file, named with its prefix; -importlist imports every section with its
 	// settings; importing over an asset reimports it in place.
 	LeonEdTest::FScopedTestContent Content;
-	const FString Cube = FPaths::ConvertRelativePathToFull(
-		FPaths::Combine(FPaths::EngineSourceDir(), TEXT("Developer/MeshUtilities/Private/Tests/Fixtures/Cube.obj")));
+	const FString Cube = FixturePath(TEXT("Cube.glb"));
 	TestEqual("-source -dest",
 		RunCommandlet(TEXT("ImportAssets"), TEXT("-source=\"") + Cube + TEXT("\" -dest=/LeonEdTest/Meshes")), 0);
 	TestTrue("Saved with its prefix", FPaths::FileExists(LeonEdTest::GetContentDir() + TEXT("Meshes/SM_Cube.lasset")));
@@ -134,8 +154,7 @@ bool FLeonEdReimportTest::RunTest(const FString& Parameters)
 	// asset and its MD5; an asset whose source is gone is skipped.
 	LeonEdTest::FScopedTestContent Content;
 	const FString Texture = LeonEdTest::WriteSource(TEXT("T_Wall.bmp"), LeonEdTest::MakeBmp(2, 2, TestRGB));
-	const FString Mesh = LeonEdTest::WriteSource(
-		TEXT("Tri.obj"), FString(TEXT("v 0 0 0\nv 1 0 0\nv 0 1 0\nvn 0 0 1\nf 1//1 2//1 3//1\n")));
+	const FString Mesh = LeonEdTest::WriteSource(TEXT("Tri.gltf"), FString(TriangleGltf));
 	const FString Gone = LeonEdTest::WriteSource(TEXT("T_Gone.bmp"), LeonEdTest::MakeBmp(2, 2, TestRGB));
 	TestNotNull(
 		"Texture", UImportAssetsCommandlet::ImportAsset(Texture, TEXT("/LeonEdTest"), FString(), FString(), {}));
@@ -224,6 +243,144 @@ bool FLeonEdResaveValidateCookTest::RunTest(const FString& Parameters)
 	IFileManager::Get().Delete(*PackageFile(TEXT("/LeonEdTest/T_Rock")));
 	AddExpectedError(TEXT("does not resolve"), 2);
 	TestEqual("A missing import", UValidateAssetsCommandlet::ValidatePackage(TEXT("/LeonEdTest/M_Rock")) > 0, true);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLeonEdGltfSkeletalImportListTest,
+	"System.LeonEd.Commandlets.GltfSkeletalDeterministic",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+
+bool FLeonEdGltfSkeletalImportListTest::RunTest(const FString& Parameters)
+{
+	// An ImportList.ini imports a .glb as a skeletal mesh (Type=SkeletalMesh: SK_, SKEL_, the material and its embedded
+	// texture) and its animations (Type=Animation on that skeleton: an A_ per glTF animation). Importing again, and
+	// reimporting, writes the same bytes (gate G5).
+	LeonEdTest::FScopedTestContent Content;
+	const FString Arm = FixturePath(TEXT("SkinnedArm.glb"));
+	const FString List = LeonEdTest::WriteSource(TEXT("ImportList.ini"),
+		TEXT("[SK_Arm]\nSource=") + Arm +
+			TEXT("\nDest=/LeonEdTest/Arm\nType=SkeletalMesh\n\n[ArmAnimations]\nSource=") + Arm +
+			TEXT("\nDest=/LeonEdTest/Arm\nType=Animation\nSkeleton=/LeonEdTest/Arm/SKEL_SkinnedArm.SKEL_SkinnedArm\n"));
+	TestEqual("-importlist", RunCommandlet(TEXT("ImportAssets"), TEXT("-importlist=\"") + List + TEXT("\"")), 0);
+	const TCHAR* const Packages[] = {TEXT("/LeonEdTest/Arm/SK_SkinnedArm"), TEXT("/LeonEdTest/Arm/SKEL_SkinnedArm"),
+		TEXT("/LeonEdTest/Arm/M_ArmSkin"), TEXT("/LeonEdTest/Arm/T_ArmSkin_D"), TEXT("/LeonEdTest/Arm/A_Wave"),
+		TEXT("/LeonEdTest/Arm/A_Grip")};
+	TArray<TArray<uint8>> First;
+	for (const TCHAR* Package : Packages)
+	{
+		First.Add(LeonEdTest::ReadBytes(PackageFile(Package)));
+		TestTrue(*FString::Printf(TEXT("%s saved"), Package), First.Last().Num() > 0);
+	}
+	LeonEdTest::DestroyPackagesUnder(LeonEdTest::Root);
+
+	const USkeletalMesh* Mesh = LoadObject<USkeletalMesh>(nullptr, TEXT("/LeonEdTest/Arm/SK_SkinnedArm.SK_SkinnedArm"));
+	const UAnimSequence* Wave = LoadObject<UAnimSequence>(nullptr, TEXT("/LeonEdTest/Arm/A_Wave.A_Wave"));
+	TestTrue("They load, the clip on the mesh's skeleton",
+		Mesh != nullptr && Wave != nullptr && Mesh->Skeleton != nullptr && Wave->GetSkeleton() == Mesh->Skeleton &&
+			Mesh->HasValidRenderData() && Wave->GetNumberOfTracks() == 3);
+	LeonEdTest::DestroyPackagesUnder(LeonEdTest::Root);
+
+	TestEqual("-importlist again", RunCommandlet(TEXT("ImportAssets"), TEXT("-importlist=\"") + List + TEXT("\"")), 0);
+	for (int32 Index = 0; Index < int32(UE_ARRAY_COUNT(Packages)); ++Index)
+	{
+		TestTrue(*FString::Printf(TEXT("%s: the same bytes"), Packages[Index]),
+			LeonEdTest::ReadBytes(PackageFile(Packages[Index])) == First[Index]);
+	}
+	LeonEdTest::DestroyPackagesUnder(LeonEdTest::Root);
+
+	int32 Reimported = 0;
+	TestEqual("Reimported",
+		UImportAssetsCommandlet::ReimportPackages(
+			{TEXT("/LeonEdTest/Arm/SK_SkinnedArm"), TEXT("/LeonEdTest/Arm/A_Wave"), TEXT("/LeonEdTest/Arm/A_Grip")},
+			&Reimported),
+		0);
+	TestEqual("Three with a source", Reimported, 3);
+	for (int32 Index = 0; Index < int32(UE_ARRAY_COUNT(Packages)); ++Index)
+	{
+		TestTrue(*FString::Printf(TEXT("%s: the same bytes after a reimport"), Packages[Index]),
+			LeonEdTest::ReadBytes(PackageFile(Packages[Index])) == First[Index]);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLeonEdAnimationAssetsFromListTest,
+	"System.LeonEd.Commandlets.AnimationAssetsFromImportList",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+
+bool FLeonEdAnimationAssetsFromListTest::RunTest(const FString& Parameters)
+{
+	// Blend spaces, an aim offset and a montage have no source file: ImportList.ini sections describe them from the A_
+	// the same list imports (Docs/PLANS/ps2-shipping.md N25, Docs/TOOLS.md). Making them again writes the same bytes.
+	LeonEdTest::FScopedTestContent Content;
+	const FString Arm = FixturePath(TEXT("SkinnedArm.glb"));
+	const FString List = LeonEdTest::WriteSource(TEXT("AnimationList.ini"),
+		TEXT("[SK_Arm]\nSource=") + Arm +
+			TEXT("\nDest=/LeonEdTest/Arm\nType=SkeletalMesh\n\n[ArmAnimations]\nSource=") + Arm +
+			TEXT("\nDest=/LeonEdTest/Arm\nType=Animation\nSkeleton=/LeonEdTest/Arm/SKEL_SkinnedArm.SKEL_SkinnedArm\n\n"
+				 "[BS_ArmMove]\nType=BlendSpace\nDest=/LeonEdTest/Arm\nAxisX=Speed,0,600\nAxisY=Direction,-180,180\n"
+				 "+Sample=A_Wave,0,0\n+Sample=A_Grip,600,0\n+Sample=/LeonEdTest/Arm/A_Wave,300,180\n\n"
+				 "[BS_ArmSpeed]\nType=BlendSpace1D\nDest=/LeonEdTest/Arm\nAxisX=Speed,0,600\n+Sample=A_Wave,0\n"
+				 "+Sample=A_Grip,600\n\n"
+				 "[AO_ArmAim]\nType=AimOffsetBlendSpace1D\nDest=/LeonEdTest/Arm\n+Sample=A_Wave,-90\n+Sample=A_Grip,0\n"
+				 "+Sample=A_Wave,90\nBasePose=A_Grip\n\n"
+				 "[AM_ArmWave]\nType=AnimMontage\nDest=/LeonEdTest/Arm\nAnimation=A_Wave\nSlotName=UpperBody\n"
+				 "BlendInTime=0.2\nBlendOutTime=0.25\n+Section=Start,0\n+Section=Hold,0.5,Hold\n+Notify=MagIn,0.6\n"));
+	TestEqual("-importlist", RunCommandlet(TEXT("ImportAssets"), TEXT("-importlist=\"") + List + TEXT("\"")), 0);
+	const TCHAR* const Packages[] = {TEXT("/LeonEdTest/Arm/BS_ArmMove"), TEXT("/LeonEdTest/Arm/BS_ArmSpeed"),
+		TEXT("/LeonEdTest/Arm/AO_ArmAim"), TEXT("/LeonEdTest/Arm/AM_ArmWave")};
+	TArray<TArray<uint8>> First;
+	for (const TCHAR* Package : Packages)
+	{
+		First.Add(LeonEdTest::ReadBytes(PackageFile(Package)));
+		TestTrue(*FString::Printf(TEXT("%s saved"), Package), First.Last().Num() > 0);
+	}
+	LeonEdTest::DestroyPackagesUnder(LeonEdTest::Root);
+
+	const UBlendSpace* Move = LoadObject<UBlendSpace>(nullptr, TEXT("/LeonEdTest/Arm/BS_ArmMove.BS_ArmMove"));
+	const UAnimSequence* Wave = LoadObject<UAnimSequence>(nullptr, TEXT("/LeonEdTest/Arm/A_Wave.A_Wave"));
+	if (!TestNotNull("BS_ArmMove loads", Move) || !TestNotNull("A_Wave loads", Wave))
+	{
+		return false;
+	}
+	TestTrue("Its axes",
+		Move->GetBlendParameter(0).DisplayName == TEXT("Speed") && Move->GetBlendParameter(1).Min == -180.0f &&
+			Move->GetBlendParameter(0).Max == 600.0f);
+	TestTrue("Its samples, in order",
+		Move->GetBlendSamples().Num() == 3 && Move->GetBlendSamples()[0].Animation == Wave &&
+			Move->GetBlendSamples()[2].SampleValue.Equals(FVector(300.0f, 180.0f, 0.0f)));
+	TestEqual("Triangulated when loaded", Move->GetTriangles().Num(), 1);
+	TestTrue("On the clips' skeleton", Move->GetSkeleton() == Wave->GetSkeleton());
+	TestTrue("The clip's notifies from its glTF extras", Wave->Notifies.Num() == 2);
+	const UBlendSpace1D* Speed = LoadObject<UBlendSpace1D>(nullptr, TEXT("/LeonEdTest/Arm/BS_ArmSpeed.BS_ArmSpeed"));
+	TestTrue("BS_ArmSpeed",
+		Speed != nullptr && Speed->GetBlendSamples().Num() == 2 && Speed->GetBlendSamples()[1].SampleValue.X == 600.0f);
+	const UAimOffsetBlendSpace1D* Aim =
+		LoadObject<UAimOffsetBlendSpace1D>(nullptr, TEXT("/LeonEdTest/Arm/AO_ArmAim.AO_ArmAim"));
+	TestTrue("AO_ArmAim: pitch -90..90, its base pose",
+		Aim != nullptr && Aim->GetBlendSamples().Num() == 3 && Aim->GetBlendParameter(0).Min == -90.0f &&
+			Aim->BasePose != nullptr && Aim->BasePose->GetName() == TEXT("A_Grip"));
+	const UAnimMontage* Montage = LoadObject<UAnimMontage>(nullptr, TEXT("/LeonEdTest/Arm/AM_ArmWave.AM_ArmWave"));
+	TestTrue("AM_ArmWave",
+		Montage != nullptr && Montage->Animation == Wave && Montage->SlotName == FName(TEXT("UpperBody")) &&
+			Montage->BlendInTime == 0.2f && Montage->CompositeSections.Num() == 2 &&
+			Montage->CompositeSections[1].NextSectionName == FName(TEXT("Hold")) && Montage->Notifies.Num() == 1 &&
+			Montage->GetPlayLength() == Wave->GetPlayLength());
+	LeonEdTest::DestroyPackagesUnder(LeonEdTest::Root);
+
+	TestEqual("-importlist again", RunCommandlet(TEXT("ImportAssets"), TEXT("-importlist=\"") + List + TEXT("\"")), 0);
+	for (int32 Index = 0; Index < int32(UE_ARRAY_COUNT(Packages)); ++Index)
+	{
+		TestTrue(*FString::Printf(TEXT("%s: the same bytes"), Packages[Index]),
+			LeonEdTest::ReadBytes(PackageFile(Packages[Index])) == First[Index]);
+	}
+	LeonEdTest::DestroyPackagesUnder(LeonEdTest::Root);
+
+	// A sample naming a clip that does not exist fails the section.
+	const FString Bad = LeonEdTest::WriteSource(
+		TEXT("BadAnimationList.ini"), TEXT("[BS_Bad]\nType=BlendSpace1D\nDest=/LeonEdTest/Arm\n+Sample=A_Missing,0\n"));
+	AddExpectedError(TEXT("is not a AnimSequence"), 1);
+	AddExpectedError(TEXT("making /LeonEdTest/Arm/BS_Bad failed"), 1);
+	TestEqual("A missing clip", RunCommandlet(TEXT("ImportAssets"), TEXT("-importlist=\"") + Bad + TEXT("\"")), 1);
 	return true;
 }
 

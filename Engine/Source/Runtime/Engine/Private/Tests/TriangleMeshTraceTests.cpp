@@ -22,11 +22,10 @@ bool FTriangleMeshTraceLineTraceAndQuerySupportZUseTriangleMeshSurfaceTest::RunT
 	FMeshData Data;
 	// Flat plane at z=50 cm covering xy [-200, 200] cm
 	const FVector Up(0.0f, 0.0f, 1.0f);
-	const FVector4 Tangent(1.0f, 0.0f, 0.0f, 1.0f);
-	Data.Vertices.Add(FVertex(FVector(-200.0f, -200.0f, 50.0f), Up, FVector2D(0.0f, 0.0f), Tangent));
-	Data.Vertices.Add(FVertex(FVector(200.0f, -200.0f, 50.0f), Up, FVector2D(1.0f, 0.0f), Tangent));
-	Data.Vertices.Add(FVertex(FVector(200.0f, 200.0f, 50.0f), Up, FVector2D(1.0f, 1.0f), Tangent));
-	Data.Vertices.Add(FVertex(FVector(-200.0f, 200.0f, 50.0f), Up, FVector2D(0.0f, 1.0f), Tangent));
+	Data.Vertices.Add(FVertex(FVector(-200.0f, -200.0f, 50.0f), Up, FVector2D(0.0f, 0.0f)));
+	Data.Vertices.Add(FVertex(FVector(200.0f, -200.0f, 50.0f), Up, FVector2D(1.0f, 0.0f)));
+	Data.Vertices.Add(FVertex(FVector(200.0f, 200.0f, 50.0f), Up, FVector2D(1.0f, 1.0f)));
+	Data.Vertices.Add(FVertex(FVector(-200.0f, 200.0f, 50.0f), Up, FVector2D(0.0f, 1.0f)));
 	Data.Indices = {0, 1, 2, 0, 2, 3};
 	Data.Submeshes.Add(FMeshSection{0, 6, 0});
 

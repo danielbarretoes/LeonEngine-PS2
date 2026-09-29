@@ -1,8 +1,10 @@
 #include "Weapons/ShooterWeapon.h"
 
+#include "Animation/AimOffsetBlendSpace1D.h"
+#include "Animation/AnimMontage.h"
+#include "Animation/BlendSpaceBase.h"
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
-#include "Engine/Level.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "GameFramework/Controller.h"
@@ -10,22 +12,14 @@
 #include "Misc/PackageName.h"
 #include "ShooterCharacter.h"
 #include "ShooterGame.h"
+#include "ShooterGameMode.h"
+#include "ShooterPlayerController.h"
 #include "Sound/SoundWave.h"
+#include "TimerManager.h"
 #include "UObject/UObjectHash.h"
 
 namespace
 {
-
-	/** The asset a config path names, when its package exists (a missing asset is no error: the weapon is silent). */
-	template <class T>
-	T* LoadOptionalAsset(const FSoftObjectPath& Path)
-	{
-		if (Path.IsNull() || !FPackageName::DoesPackageExist(Path.GetLongPackageName()))
-		{
-			return nullptr;
-		}
-		return Cast<T>(Path.TryLoad());
-	}
 
 	/** The muzzle flash: a short orange light (UGameplayStatics::SpawnPointLightAtLocation). */
 	constexpr float MuzzleFlashIntensity = 3.0f;
@@ -35,6 +29,47 @@ namespace
 	/** How early a shot may come, seconds: the world's time sums float frame times (6 x 1/60 s may miss 0.1 s). */
 	constexpr float FireTimeTolerance = 1.0e-3f;
 
+	/** A weapon class FindWeaponClass can name, and its class name. */
+	struct FWeaponClassEntry
+	{
+		UClass* Class = nullptr;
+		FString ClassName;
+	};
+
+	/** The concrete weapon classes, listed once (the classes are native: they live as long as the program). */
+	const TArray<FWeaponClassEntry>& ListWeaponClasses()
+	{
+		static const TArray<FWeaponClassEntry> Entries = []()
+		{
+			TArray<UClass*> Classes;
+			GetDerivedClasses(AShooterWeapon::StaticClass(), Classes, /*bRecursive=*/true);
+			TArray<FWeaponClassEntry> Found;
+			for (UClass* Class : Classes)
+			{
+				if (!Class->HasAnyClassFlags(CLASS_Abstract))
+				{
+					Found.Add(FWeaponClassEntry{Class, Class->GetName()});
+				}
+			}
+			return Found;
+		}();
+		return Entries;
+	}
+
+	/** ClassName ends with `_` and Name, any case (ShooterWeapon_AK47 and "ak47"). */
+	bool HasClassSuffix(const FString& ClassName, const FString& Name)
+	{
+		const int32 Underscore = ClassName.Len() - Name.Len() - 1;
+		return Underscore >= 0 && ClassName[Underscore] == TEXT('_') &&
+			ClassName.EndsWith(Name, ESearchCase::IgnoreCase);
+	}
+
+	/** The world's game mode as the game's class (its registries), null without one. */
+	AShooterGameMode* GetShooterGameMode(const UWorld* World)
+	{
+		return World != nullptr ? World->GetAuthGameMode<AShooterGameMode>() : nullptr;
+	}
+
 } // namespace
 
 const FName AShooterWeapon::MuzzleSocketName(TEXT("Muzzle"));
@@ -42,6 +77,7 @@ const FName AShooterWeapon::MuzzleSocketName(TEXT("Muzzle"));
 AShooterWeapon::AShooterWeapon(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+	PrimaryActorTick.bCanEverTick = true;
 	// The view model: drawn in its owner's view only, last, with the camera's view model field of view.
 	Mesh1P = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("WeaponMesh1P"));
 	Mesh1P->SetupAttachment(GetRootComponent());
@@ -62,16 +98,30 @@ AShooterWeapon::AShooterWeapon(const FObjectInitializer& ObjectInitializer)
 void AShooterWeapon::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
-	if (UStaticMesh* Mesh = LoadOptionalAsset<UStaticMesh>(MeshName))
+	UStaticMesh* WorldMesh = LoadShooterAsset<UStaticMesh>(MeshName);
+	UStaticMesh* ViewMesh = LoadShooterAsset<UStaticMesh>(FirstPersonMeshName);
+	if (WorldMesh != nullptr)
 	{
-		(void)Mesh1P->SetStaticMesh(Mesh);
-		(void)Mesh3P->SetStaticMesh(Mesh);
+		(void)Mesh3P->SetStaticMesh(WorldMesh);
 	}
-	FireSound = LoadOptionalAsset<USoundWave>(FireSoundName);
-	ReloadSound = LoadOptionalAsset<USoundWave>(ReloadSoundName);
-	EmptySound = LoadOptionalAsset<USoundWave>(EmptySoundName);
-	EquipSound = LoadOptionalAsset<USoundWave>(EquipSoundName);
-	RefillAmmo();
+	if (ViewMesh != nullptr || WorldMesh != nullptr)
+	{
+		(void)Mesh1P->SetStaticMesh(ViewMesh != nullptr ? ViewMesh : WorldMesh);
+	}
+	ArmsIdle = LoadShooterAsset<UBlendSpaceBase>(ArmsIdleName);
+	AimOffset = LoadShooterAsset<UAimOffsetBlendSpace1D>(AimOffsetName);
+	FireSound = LoadShooterAsset<USoundWave>(FireSoundName);
+	ReloadSound = LoadShooterAsset<USoundWave>(ReloadSoundName);
+	EmptySound = LoadShooterAsset<USoundWave>(EmptySoundName);
+	EquipSound = LoadShooterAsset<USoundWave>(EquipSoundName);
+	MagOutSound = LoadShooterAsset<USoundWave>(MagOutSoundName);
+	MagInSound = LoadShooterAsset<USoundWave>(MagInSoundName);
+	FireAnim = {LoadShooterAsset<UAnimMontage>(FireAnim1PName), LoadShooterAsset<UAnimMontage>(FireAnim3PName)};
+	ReloadAnim = {LoadShooterAsset<UAnimMontage>(ReloadAnim1PName), LoadShooterAsset<UAnimMontage>(ReloadAnim3PName)};
+	EquipAnim = {LoadShooterAsset<UAnimMontage>(EquipAnim1PName), LoadShooterAsset<UAnimMontage>(EquipAnim3PName)};
+	// CS 1.6: a new weapon comes with a full clip; its reserve is bought by the box.
+	CurrentAmmoInClip = AmmoPerClip;
+	CurrentAmmo = 0;
 }
 
 UStaticMesh* AShooterWeapon::GetWeaponMesh() const
@@ -85,22 +135,24 @@ UClass* AShooterWeapon::FindWeaponClass(const FString& Name)
 	{
 		return nullptr;
 	}
-	TArray<UClass*> Classes;
-	GetDerivedClasses(AShooterWeapon::StaticClass(), Classes, /*bRecursive=*/true);
-	for (UClass* Class : Classes)
+	for (const FWeaponClassEntry& Entry : ListWeaponClasses())
 	{
-		if (Class->HasAnyClassFlags(CLASS_Abstract))
+		const AShooterWeapon* Defaults = Entry.Class->GetDefaultObject<AShooterWeapon>();
+		if (Defaults->WeaponName.Equals(Name, ESearchCase::IgnoreCase) || HasClassSuffix(Entry.ClassName, Name))
 		{
-			continue;
-		}
-		const AShooterWeapon* Defaults = Class->GetDefaultObject<AShooterWeapon>();
-		if (Defaults->WeaponName.Equals(Name, ESearchCase::IgnoreCase) ||
-			Class->GetName().EndsWith(TEXT("_") + Name, ESearchCase::IgnoreCase))
-		{
-			return Class;
+			return Entry.Class;
 		}
 	}
 	return nullptr;
+}
+
+void AShooterWeapon::GetWeaponClasses(TArray<UClass*>& OutClasses)
+{
+	OutClasses.Reset();
+	for (const FWeaponClassEntry& Entry : ListWeaponClasses())
+	{
+		OutClasses.Add(Entry.Class);
+	}
 }
 
 AController* AShooterWeapon::GetInstigatorController() const
@@ -120,6 +172,12 @@ void AShooterWeapon::RefillAmmo()
 	CurrentAmmo = MaxAmmo;
 }
 
+void AShooterWeapon::SetAmmo(int32 NewAmmoInClip, int32 NewAmmo)
+{
+	CurrentAmmoInClip = FMath::Clamp(NewAmmoInClip, 0, AmmoPerClip);
+	CurrentAmmo = FMath::Clamp(NewAmmo, 0, MaxAmmo);
+}
+
 int32 AShooterWeapon::GiveAmmo(int32 AddAmount)
 {
 	const int32 Taken = FMath::Clamp(AddAmount, 0, FMath::Max(0, MaxAmmo - CurrentAmmo));
@@ -129,6 +187,13 @@ int32 AShooterWeapon::GiveAmmo(int32 AddAmount)
 
 void AShooterWeapon::OnEnterInventory(AShooterCharacter* NewOwner)
 {
+	if (bDropped)
+	{
+		if (AShooterGameMode* GameMode = GetShooterGameMode(GetWorld()))
+		{
+			GameMode->UnregisterPickup(this);
+		}
+	}
 	bDropped = false;
 	MyPawn = NewOwner;
 	SetOwner(NewOwner);
@@ -161,22 +226,34 @@ void AShooterWeapon::OnDropped(const FVector& Location, float Yaw)
 	(void)SetActorLocationAndRotation(Location, FRotator(0.0f, Yaw, 0.0f));
 	Mesh3P->SetRelativeLocationAndRotation(FVector(0.0f, 0.0f, 2.0f), FRotator(0.0f, 0.0f, 90.0f));
 	Mesh3P->SetVisibility(true);
+	if (AShooterGameMode* GameMode = GetShooterGameMode(GetWorld()))
+	{
+		GameMode->RegisterPickup(this);
+	}
+}
+
+void AShooterWeapon::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (AShooterGameMode* GameMode = GetShooterGameMode(GetWorld()))
+	{
+		GameMode->UnregisterPickup(this);
+	}
+	Super::EndPlay(EndPlayReason);
 }
 
 void AShooterWeapon::TickPickup()
 {
-	const UWorld* World = GetWorld();
-	if (World == nullptr || World->PersistentLevel == nullptr || GetWorldTime() < PickupTime)
+	const AShooterGameMode* GameMode = GetShooterGameMode(GetWorld());
+	if (GameMode == nullptr || GetWorldTime() < PickupTime)
 	{
 		return;
 	}
 	constexpr float PickupReachZ = 100.0f;
 	const FVector Location = GetActorLocation();
-	for (AActor* Actor : World->PersistentLevel->Actors)
+	// The game mode's pawns, in the level's order (AddWeapon changes no registry).
+	for (AShooterCharacter* Pawn : GameMode->GetPawns())
 	{
-		AShooterCharacter* Pawn = Cast<AShooterCharacter>(Actor);
-		if (Pawn == nullptr || Pawn->IsPendingKillPending() || !Pawn->IsAlive() ||
-			Pawn->GetWeaponInSlot(Slot) != nullptr)
+		if (Pawn->IsPendingKillPending() || !Pawn->IsAlive() || Pawn->GetWeaponInSlot(Slot) != nullptr)
 		{
 			continue;
 		}
@@ -195,10 +272,22 @@ void AShooterWeapon::OnEquip()
 	bIsEquipped = true;
 	bWantsToFire = false;
 	bFiredThisPress = false;
-	CurrentState = EShooterWeaponState::Equipping;
-	EquipFinishTime = GetWorldTime() + EquipDuration;
 	AttachMeshToPawn();
+	if (MyPawn != nullptr)
+	{
+		MyPawn->SetArmsIdle(ArmsIdle);
+	}
+	// The draw lasts its montage when it has one (UE ShooterGame), EquipDuration otherwise.
+	const float AnimDuration = PlayWeaponAnimation(EquipAnim);
+	SetEquippingFor(AnimDuration > 0.0f ? AnimDuration : EquipDuration);
 	PlayWeaponSound(EquipSound);
+}
+
+void AShooterWeapon::SetEquippingFor(float Seconds)
+{
+	CurrentState = EShooterWeaponState::Equipping;
+	GetWorldTimerManager().SetTimer(
+		TimerHandle_OnEquipFinished, this, &AShooterWeapon::OnEquipFinished, FMath::Max(Seconds, 0.01f));
 }
 
 void AShooterWeapon::OnUnEquip()
@@ -206,6 +295,11 @@ void AShooterWeapon::OnUnEquip()
 	bIsEquipped = false;
 	StopFire();
 	StopReload();
+	StopWeaponAnimation(EquipAnim);
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(TimerHandle_OnEquipFinished);
+	}
 	CurrentState = EShooterWeaponState::Idle;
 	AttachMeshToPawn();
 }
@@ -222,17 +316,24 @@ void AShooterWeapon::AttachMeshToPawn()
 		(void)Root->AttachToComponent(
 			MyPawn->GetRootComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
 	}
-	if (Mesh1P->GetAttachParent() != MyPawn->GetFirstPersonCameraComponent())
+	// On the arms' and the body's hand sockets when the pawn has them; else at the offsets from the camera and the
+	// static body.
+	FName Socket1P;
+	USceneComponent* Parent1P = MyPawn->GetWeaponAttachParent1P(Socket1P);
+	if (Mesh1P->GetAttachParent() != Parent1P || Mesh1P->GetAttachSocketName() != Socket1P)
 	{
-		(void)Mesh1P->AttachToComponent(
-			MyPawn->GetFirstPersonCameraComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+		(void)Mesh1P->AttachToComponent(Parent1P, FAttachmentTransformRules::KeepRelativeTransform, Socket1P);
 	}
-	Mesh1P->SetRelativeLocationAndRotation(FirstPersonOffset, FRotator::ZeroRotator);
-	if (Mesh3P->GetAttachParent() != MyPawn->GetBodyMesh())
+	Mesh1P->SetRelativeLocationAndRotation(
+		Socket1P.IsNone() ? FirstPersonOffset : FVector::ZeroVector, FRotator::ZeroRotator);
+	FName Socket3P;
+	USceneComponent* Parent3P = MyPawn->GetWeaponAttachParent3P(Socket3P);
+	if (Mesh3P->GetAttachParent() != Parent3P || Mesh3P->GetAttachSocketName() != Socket3P)
 	{
-		(void)Mesh3P->AttachToComponent(MyPawn->GetBodyMesh(), FAttachmentTransformRules::KeepRelativeTransform);
+		(void)Mesh3P->AttachToComponent(Parent3P, FAttachmentTransformRules::KeepRelativeTransform, Socket3P);
 	}
-	Mesh3P->SetRelativeLocationAndRotation(ThirdPersonOffset, FRotator::ZeroRotator);
+	Mesh3P->SetRelativeLocationAndRotation(
+		Socket3P.IsNone() ? ThirdPersonOffset : FVector::ZeroVector, FRotator::ZeroRotator);
 	Mesh1P->SetVisibility(bIsEquipped);
 	Mesh3P->SetVisibility(bIsEquipped);
 }
@@ -256,7 +357,7 @@ void AShooterWeapon::StartFire()
 		bWantsToFire = true;
 		bFiredThisPress = false;
 		// The first shot of a press fires at once when the weapon is ready (the tick takes the next ones).
-		if (CanFire() && GetWorldTime() + FireTimeTolerance >= LastFireTime + TimeBetweenShots)
+		if (CanFire() && GetWorldTime() + FireTimeTolerance >= LastFireTime + GetTimeBetweenShots())
 		{
 			HandleFiring();
 		}
@@ -275,13 +376,14 @@ void AShooterWeapon::StopFire()
 
 bool AShooterWeapon::CanFire() const
 {
-	return bIsEquipped && MyPawn != nullptr && MyPawn->IsAlive() &&
+	// Frozen (the freeze, the match's end): a trigger held from before fires no more.
+	return bIsEquipped && MyPawn != nullptr && MyPawn->IsAlive() && !MyPawn->IsFrozen() &&
 		(CurrentState == EShooterWeaponState::Idle || CurrentState == EShooterWeaponState::Firing);
 }
 
 bool AShooterWeapon::CanReload() const
 {
-	return bIsEquipped && CurrentAmmoInClip < AmmoPerClip && CurrentAmmo > 0 &&
+	return bIsEquipped && !bInfiniteClip && CurrentAmmoInClip < AmmoPerClip && CurrentAmmo > 0 &&
 		CurrentState != EShooterWeaponState::Reloading && CurrentState != EShooterWeaponState::Equipping;
 }
 
@@ -292,7 +394,10 @@ void AShooterWeapon::StartReload()
 		return;
 	}
 	CurrentState = EShooterWeaponState::Reloading;
-	ReloadFinishTime = GetWorldTime() + ReloadDuration;
+	// The reload lasts CS's ReloadDuration, its montage fitted to it (weapons share the clips of their kind).
+	(void)PlayWeaponAnimation(ReloadAnim, ReloadDuration);
+	GetWorldTimerManager().SetTimer(
+		TimerHandle_ReloadWeapon, this, &AShooterWeapon::OnReloadFinished, FMath::Max(ReloadDuration, 0.01f));
 	PlayWeaponSound(ReloadSound);
 }
 
@@ -300,6 +405,67 @@ void AShooterWeapon::StopReload()
 {
 	if (CurrentState == EShooterWeaponState::Reloading)
 	{
+		CurrentState = EShooterWeaponState::Idle;
+		StopWeaponAnimation(ReloadAnim);
+	}
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(TimerHandle_ReloadWeapon);
+	}
+}
+
+float AShooterWeapon::PlayWeaponAnimation(const FShooterWeaponAnim& Animation, float Duration)
+{
+	if (MyPawn == nullptr)
+	{
+		return 0.0f;
+	}
+	float PlayRate = 1.0f;
+	if (Duration > 0.0f)
+	{
+		// The rate that makes the longer montage last Duration.
+		const float Length = FMath::Max(Animation.Pawn1P != nullptr ? Animation.Pawn1P->GetPlayLength() : 0.0f,
+			Animation.Pawn3P != nullptr ? Animation.Pawn3P->GetPlayLength() : 0.0f);
+		PlayRate = Length > 0.0f ? Length / Duration : 1.0f;
+	}
+	return MyPawn->PlayPawnMontages(Animation, PlayRate);
+}
+
+void AShooterWeapon::StopWeaponAnimation(const FShooterWeaponAnim& Animation)
+{
+	if (MyPawn != nullptr)
+	{
+		MyPawn->StopPawnMontages(Animation);
+	}
+}
+
+void AShooterWeapon::OnAnimNotify(FName NotifyName)
+{
+	static const FName MagOutName(TEXT("MagOut"));
+	static const FName MagInName(TEXT("MagIn"));
+	if (NotifyName == MagOutName)
+	{
+		PlayWeaponSound(MagOutSound);
+	}
+	else if (NotifyName == MagInName)
+	{
+		PlayWeaponSound(MagInSound);
+	}
+}
+
+void AShooterWeapon::OnEquipFinished()
+{
+	if (CurrentState == EShooterWeaponState::Equipping)
+	{
+		CurrentState = EShooterWeaponState::Idle;
+	}
+}
+
+void AShooterWeapon::OnReloadFinished()
+{
+	if (CurrentState == EShooterWeaponState::Reloading)
+	{
+		ReloadWeapon();
 		CurrentState = EShooterWeaponState::Idle;
 	}
 }
@@ -313,18 +479,27 @@ void AShooterWeapon::ReloadWeapon()
 
 void AShooterWeapon::UseAmmo()
 {
-	CurrentAmmoInClip = FMath::Max(0, CurrentAmmoInClip - 1);
+	if (!bInfiniteClip)
+	{
+		CurrentAmmoInClip = FMath::Max(0, CurrentAmmoInClip - 1);
+	}
 }
 
 void AShooterWeapon::HandleFiring()
 {
-	if (CurrentAmmoInClip > 0 && CanFire())
+	if ((bInfiniteClip || CurrentAmmoInClip > 0) && CanFire())
 	{
+		// A held automatic trigger keeps the weapon's cadence at any frame rate: the part of the frame past the shot's
+		// time counts toward the next one (UE ShooterGame: TimerIntervalAdjustment), so 30 fps fires as fast as 60.
+		const float Now = GetWorldTime();
+		const float Cycle = GetTimeBetweenShots();
+		const float Due = LastFireTime + Cycle;
+		const bool bRefiring = bAutomatic && bFiredThisPress && Now >= Due - FireTimeTolerance && Now < Due + Cycle;
 		CurrentState = EShooterWeaponState::Firing;
 		FireWeapon();
 		UseAmmo();
 		++ShotsFired;
-		LastFireTime = GetWorldTime();
+		LastFireTime = bRefiring ? Due : Now;
 		bFiredThisPress = true;
 		SimulateWeaponFire();
 		OnShotFired();
@@ -347,17 +522,29 @@ void AShooterWeapon::HandleFiring()
 void AShooterWeapon::SimulateWeaponFire()
 {
 	// The bots hear shots (AActor::MakeNoise, UPawnSensingComponent).
-	MakeNoise(FireNoiseLoudness, MyPawn, GetActorLocation());
-	PlayWeaponSound(FireSound);
+	MakeNoise(GetFireNoiseLoudness(), MyPawn, GetActorLocation());
+	PlayWeaponSound(FireSound, GetFireVolume());
+	PlayFireForceFeedback();
+	(void)PlayWeaponAnimation(FireAnim);
 	(void)UGameplayStatics::SpawnPointLightAtLocation(this, GetMuzzleLocation(), FLinearColor(1.0f, 0.72f, 0.35f),
 		MuzzleFlashIntensity, MuzzleFlashRadius, MuzzleFlashLifeSpan);
 }
 
-void AShooterWeapon::PlayWeaponSound(USoundWave* Sound) const
+void AShooterWeapon::PlayFireForceFeedback() const
+{
+	AShooterPlayerController* Controller =
+		MyPawn != nullptr ? Cast<AShooterPlayerController>(MyPawn->GetController()) : nullptr;
+	if (Controller != nullptr)
+	{
+		Controller->PlayFireForceFeedback();
+	}
+}
+
+void AShooterWeapon::PlayWeaponSound(USoundWave* Sound, float VolumeMultiplier) const
 {
 	if (Sound != nullptr)
 	{
-		UGameplayStatics::PlaySoundAtLocation(this, Sound, GetActorLocation());
+		UGameplayStatics::PlaySoundAtLocation(this, Sound, GetActorLocation(), VolumeMultiplier);
 	}
 }
 
@@ -394,17 +581,8 @@ void AShooterWeapon::Tick(float DeltaSeconds)
 		return;
 	}
 	const float Now = GetWorldTime();
-	if (CurrentState == EShooterWeaponState::Equipping && Now + FireTimeTolerance >= EquipFinishTime)
-	{
-		CurrentState = EShooterWeaponState::Idle;
-	}
-	if (CurrentState == EShooterWeaponState::Reloading && Now + FireTimeTolerance >= ReloadFinishTime)
-	{
-		ReloadWeapon();
-		CurrentState = EShooterWeaponState::Idle;
-	}
 	// The trigger held: the next shot when the fire rate allows (automatic), or the press's first shot once ready.
-	if (bWantsToFire && CanFire() && Now + FireTimeTolerance >= LastFireTime + TimeBetweenShots &&
+	if (bWantsToFire && CanFire() && Now + FireTimeTolerance >= LastFireTime + GetTimeBetweenShots() &&
 		(bAutomatic || !bFiredThisPress))
 	{
 		HandleFiring();

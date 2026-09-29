@@ -3,30 +3,29 @@
 #include "GenericPlatform/IInputInterface.h"
 
 /**
- * DualShock on pad port 0 through libpad (UE homologue: XInputInterface).
- * Owned by FPS2Application; SendControllerEvents() polls once per frame.
+ * The DualShocks on pad ports 0 and 1 through libpad (UE homologue: XInputInterface): controller ids 0 and 1
+ * (Docs/PLANS/ps2-shipping.md N24). Each pad is put in analog mode, gets its motors aligned and its pressure mode
+ * (FDualShockConnection) and is sent its motors (FDualShockActuators) as the game asks. Owned by FPS2Application;
+ * SendControllerEvents() polls once per frame.
  */
 class APPLICATIONCORE_API FPS2InputInterface final : public IInputInterface
 {
 public:
-	/** The single pad interface (nullptr before the application created it). */
-	static FPS2InputInterface* Get();
-
-	FPS2InputInterface();
+	FPS2InputInterface() = default;
+	/** Stops the motors. */
 	virtual ~FPS2InputInterface() override;
 
-	/** Loads the IOP pad modules and opens port 0. */
+	/** Loads the IOP pad modules and opens both ports. */
 	bool Initialize();
 
-	/** Reads the pad (UE: SendControllerEvents); called by PollGameDeviceState. */
+	/** Reads the pads and sends their commands and motors (UE: SendControllerEvents); called by PollGameDeviceState. */
 	void SendControllerEvents();
 
-	virtual bool IsGamepadConnected() const override;
-	virtual bool IsGamepadKeyDown(const FKey& Key) const override;
-	virtual float GetGamepadAnalog(const FKey& Axis) const override;
-
-	// Raw state for the engine debug widget.
-	bool IsPortOpen() const;
-	uint16 GetRawButtonMask() const;
-	void GetRawSticks(uint8& OutLeftX, uint8& OutLeftY, uint8& OutRightX, uint8& OutRightY) const;
+	virtual int32 GetNumControllers() const override
+	{
+		return MaxControllers;
+	}
+	virtual bool IsGamepadConnected(int32 ControllerId) const override;
+	virtual bool IsGamepadKeyDown(int32 ControllerId, const FKey& Key) const override;
+	virtual float GetGamepadAnalog(int32 ControllerId, const FKey& Axis) const override;
 };

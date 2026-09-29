@@ -30,8 +30,13 @@ public:
 	virtual void AddPrimitive(UPrimitiveComponent* Primitive) = 0;
 	/** Removes and deletes the component's proxy. */
 	virtual void RemovePrimitive(UPrimitiveComponent* Primitive) = 0;
-	/** Gives the component's proxy its current world transform. */
+	/** Gives the component's proxy its world transform of the world's current step. */
 	virtual void UpdatePrimitiveTransform(UPrimitiveComponent* Primitive) = 0;
+	/**
+	 * Draws the moving proxies Alpha of the way from their previous step's transform to their last one's (ps2-shipping
+	 * D4: the fixed step clock's remainder); the render calls it before drawing a frame. It changes only the proxies.
+	 */
+	virtual void InterpolateTransforms(float Alpha) = 0;
 
 	/** Adds the light's proxy (ULightComponent::CreateSceneProxy). */
 	virtual void AddLight(ULightComponent* Light) = 0;
@@ -41,6 +46,14 @@ public:
 	virtual void UpdateLightTransform(ULightComponent* Light) = 0;
 
 	/** The world the scene belongs to. */
+	/**
+	 * The level's cells or portals changed (Leon, N15: AVisibilityCellVolume, AVisibilityPortal): the scene gathers
+	 * them again, and assigns its primitives to the cells again, before its next frame.
+	 */
+	virtual void UpdateVisibilityCells()
+	{
+	}
+
 	[[nodiscard]] virtual UWorld* GetWorld() const = 0;
 
 	/** The renderer's scene behind the interface (UE: GetRenderScene); only the Renderer module uses it. */

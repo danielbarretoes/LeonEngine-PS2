@@ -18,13 +18,14 @@ class UStaticMeshComponent;
  * - Dropped: it lies on the floor; the first live terrorist within PickupRadius takes it.
  * - Planted: the carrier plants it by holding the use key, standing still in a bomb site, for PlantDuration
  *   (AShooterCharacter). It beeps, faster as its BombTimer runs out, and explodes: ExplosionDamage falling to nothing
- *   at ExplosionRadius, through walls (CS), and the terrorists win the round.
+ *   at ExplosionRadius, through walls (CS), armor taking its share (ArmorRatio), and the terrorists win the round.
  * - Defused: a counter-terrorist within DefuseRadius holds the use key for DefuseDuration (DefuseKitDuration with a
  *   kit). Leaving the bomb's reach, letting go or dying stops it; a defuse that finishes before the explosion wins the
  *   round for the counter-terrorists.
  *
  * The game mode hears of each step (OnBombPlanted, OnBombDefused, OnBombExploded) and copies the state to the game
- * state for the HUD.
+ * state for the HUD. The explosion, the defuse and the beeps are timers of the world's timer manager; a defuse that
+ * ends on the explosion's step wins.
  */
 UCLASS(Config = Game)
 class SHOOTERGAME_API AShooterBomb : public AActor
@@ -49,12 +50,22 @@ public:
 	UPROPERTY(Config)
 	float DefuseKitDuration = 5.0f;
 
-	/** The explosion's damage at the centre and its reach, cm (CS: 500 damage, about 700 units). */
+	/**
+	 * The explosion's damage at the centre and its reach, cm (CS 1.6: 500 damage out to 3.5 times that in units, 1750
+	 * units = 4445 cm).
+	 */
 	UPROPERTY(Config)
 	float ExplosionDamage = 500.0f;
 
 	UPROPERTY(Config)
-	float ExplosionRadius = 1750.0f;
+	float ExplosionRadius = 4445.0f;
+
+	/**
+	 * The victims' armor rule for the blast (AShooterWeapon::ArmorRatio). CS 1.6 lets armor take blast damage like any
+	 * other (health takes half, the armor half the rest): 1, the HE grenade's.
+	 */
+	UPROPERTY(Config)
+	float ArmorRatio = 1.0f;
 
 	/** How near a terrorist's feet a dropped bomb is picked up, and a defuser's feet must stay, cm. */
 	UPROPERTY(Config)
@@ -93,15 +104,15 @@ public:
 	{
 		return Defuser;
 	}
-	/** The world time it explodes (planted), and the time the defuse ends (defusing). */
+	/**
+	 * The world time it explodes, set when it is planted (the HUD's count down; the explosion is its timer's), and the
+	 * time the defuse ends (defusing; 0 without).
+	 */
 	[[nodiscard]] float GetExplodeTime() const
 	{
 		return ExplodeTime;
 	}
-	[[nodiscard]] float GetDefuseEndTime() const
-	{
-		return DefuseEndTime;
-	}
+	[[nodiscard]] float GetDefuseEndTime() const;
 	/** The site it was planted in ("A", "B"). */
 	[[nodiscard]] FName GetSite() const
 	{
@@ -122,13 +133,24 @@ public:
 	void Explode();
 
 	void PostInitializeComponents() override;
+	/** Joins the game mode's bombs. */
+	void BeginPlay() override;
 	void Tick(float DeltaSeconds) override;
-	/** Leaving the world (the round's clean-up) frees its carrier: nobody carries a destroyed bomb. */
+	/**
+	 * Leaving the world (the round's clean-up) frees its carrier (nobody carries a destroyed bomb) and leaves the game
+	 * mode's bombs and pickups.
+	 */
 	void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
-	/** The planted bomb's beeps: every second, then faster over the last 10 seconds. */
-	void TickBeeps(float Now);
+	/** A planted bomb's beep, and the next one: every second, then faster over the last 10 seconds (its timer). */
+	void Beep();
+	/** The bomb's timer ran out: it explodes, unless a defuse ends on the same step. */
+	void OnExplodeTimer();
+	/** The defuse's timer ran out: the bomb is defused. */
+	void OnDefuseTimer();
+	/** The world time a timer ends at, 0 without it. */
+	[[nodiscard]] float GetTimerEndTime(FTimerHandle Handle) const;
 	/** True when a pawn can still defuse: alive, near, holding the key. */
 	[[nodiscard]] bool CanKeepDefusing(const AShooterCharacter& Pawn) const;
 	void PlaySound(USoundWave* Sound) const;
@@ -158,6 +180,7 @@ private:
 	EShooterBombState State = EShooterBombState::None;
 	FName Site;
 	float ExplodeTime = 0.0f;
-	float DefuseEndTime = 0.0f;
-	float NextBeepTime = 0.0f;
+	FTimerHandle TimerHandle_Explode;
+	FTimerHandle TimerHandle_Defuse;
+	FTimerHandle TimerHandle_Beep;
 };

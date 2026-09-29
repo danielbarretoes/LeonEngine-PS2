@@ -48,17 +48,17 @@ MaxEmptyLinesToKeep: 1
 SortIncludes: CaseSensitive
 IncludeBlocks: Regroup
 IncludeIsMainRegex: '$'
-# Within the third-party block, prerequisite headers sort first (Jolt/Jolt.h, glad before GLFW).
+# Within the third-party block, prerequisite headers sort first (glad before GLFW).
 IncludeCategories:
   - Regex: '\.generated\.h"$'
     Priority: 1
     SortPriority: 2
   - Regex: '^"'
     Priority: 1
-  - Regex: '^<(Jolt/Jolt\.h|glad/)'
+  - Regex: '^<glad/'
     Priority: 3
     SortPriority: 3
-  - Regex: '^<(GLFW|glm|nlohmann|stb_|miniaudio|enet|ufbx|cgltf|tiny_obj|catch2|Jolt)'
+  - Regex: '^<(GLFW|glm|nlohmann|stb_|miniaudio|enet|cgltf|catch2)'
     Priority: 3
     SortPriority: 4
   - Regex: '^<'

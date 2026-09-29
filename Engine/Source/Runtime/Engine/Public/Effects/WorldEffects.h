@@ -107,3 +107,60 @@ public:
 private:
 	TArray<FTracer> Tracers;
 };
+
+/**
+ * A soft round sprite facing the camera, alpha blended over the scene (Leon's smoke puffs; UE: a sprite particle of an
+ * emitter, SpawnEmitterAtLocation): Size cm square, the effects' round mask, Color with A its thickest opacity, which
+ * it reaches in FadeInTime and loses over its last FadeOutTime seconds.
+ */
+struct ENGINE_API FEffectSprite
+{
+	FVector Location = FVector::ZeroVector;
+	float Size = 100.0f;
+	FLinearColor Color = FLinearColor(0.6f, 0.6f, 0.6f, 0.8f);
+	/** Seconds it lasts (0: until it is removed), and its fades at the start and the end. */
+	float LifeSpan = 0.0f;
+	float FadeInTime = 0.0f;
+	float FadeOutTime = 0.0f;
+	float Age = 0.0f;
+	/** Its id (FEffectSpritePool::AddSprite's), unique in its pool; 0 for a free slot. */
+	uint32 Serial = 0;
+
+	/** How strongly it shows now: Color.A through its fades. */
+	[[nodiscard]] float GetOpacity() const;
+};
+
+/**
+ * The world's effect sprites (Leon, UWorld::EffectSprites): at most MaxSprites (a new one takes the oldest's slot when
+ * full), so a round of smoke grenades never grows it. The GS scene renderer draws them after the translucent meshes,
+ * farthest first, two triangles each; a world without sprites draws nothing more.
+ */
+class ENGINE_API FEffectSpritePool
+{
+public:
+	static constexpr int32 MaxSprites = 32;
+
+	/** Adds a sprite; returns its serial (RemoveSprite's handle). */
+	uint32 AddSprite(const FEffectSprite& Sprite);
+	/** Removes the sprite of Serial, if it is still there. */
+	void RemoveSprite(uint32 Serial);
+	/** Ages the sprites and frees the expired ones. */
+	void Tick(float DeltaSeconds);
+	void Clear();
+
+	/** The slots, in use (Serial != 0) or free. */
+	[[nodiscard]] const TArray<FEffectSprite>& GetSprites() const
+	{
+		return Sprites;
+	}
+	/** How many sprites are in use. */
+	[[nodiscard]] int32 Num() const;
+	[[nodiscard]] bool IsEmpty() const
+	{
+		return Num() == 0;
+	}
+
+private:
+	TArray<FEffectSprite> Sprites;
+	uint32 NextSerial = 1;
+};

@@ -16,7 +16,8 @@ The rules are enforced by tools where possible:
 | clang-tidy | `.clang-tidy` | `readability-identifier-naming` (PascalCase, `E` enum prefix) + bug-prone checks; shown by clangd |
 | Compiler | LeonBuildTool `CompileEnvironment.cmake` | Warnings (`/W4`, `-Wall -Wextra`), shadowing as an error |
 | EditorConfig | `.editorconfig` | Tabs, UTF-8, final newline, line endings |
-| Gate G4 | `Engine/Build/BatchFiles/CheckBannedApis.ps1` | Banned APIs and the legacy coordinate bridge (§4) |
+| Gate G4 | `Engine/Build/BatchFiles/CheckBannedApis.ps1` | Banned APIs, the legacy coordinate bridge and every symbol a plan removed (§4) |
+| GS validator | `FGSCommandList::IsSupported` (GSCore) | Only GS features the emulator and the reference emulate (§4, D7) |
 
 ---
 
@@ -32,8 +33,8 @@ All identifiers are English (U.S. spelling), **PascalCase**, with no underscores
 | `U` | Classes that are `UObject`s in UE (components, assets, subsystems, widgets, engine objects). CoreUObject's types, the gameplay framework (P12: `UWorld`, `ULevel`, `UGameInstance`, the components), the engine and its settings (P13: `UEngine`, `UGameEngine`, `UGameViewportClient`, `ULocalPlayer`, `UPlayerInput`, `UInputSettings`, `UGameMapsSettings`), the assets (P14: `UTexture2D`, `UStaticMesh`, `UMaterial`, `USkeleton`, `USkeletalMesh`, `UAnimSequence`, `UBlendSpace1D`, `USoundWave`, `UDataAsset`, `UCommandlet`, `UAssetImportData`), the editor module's factories and commandlets (P14: `UFactory`, `UTextureFactory`, `UImportAssetsCommandlet`, `UCookCommandlet`, ...), `UUserWidget` and `UAnimInstance` derive from `UObject`. A few `U` types are still **naming only** until their phase: `UNavigationSystem` and the behavior tree lite (`UBehaviorTree`, `UBTNode`, `UBlackboardComponent`) | `UObject`, `UClass`, `UWorld`, `ULevel`, `UActorComponent`, `UCharacterMovementComponent`, `UUserWidget`, `UGameEngine`, `UTexture2D` |
 | `F` | Every other class or struct | `FEngineLoop`, `FTicker`, `FPaths`, `FGSSceneRenderer`, `FPhysScene`, `FHitResult`, `FPS2RHI` |
 | `T` | Class templates | `TArray`, `TMap`, `TSharedPtr`, `TDelegate`, `TOptional` |
-| `E` | Enums (prefer `enum class`, sized when stored) | `EKeys`, `EPhysicsBackend`, `EMovementMode`, `ECollisionChannel` |
-| `I` | Abstract interfaces (no data members) | `IModuleInterface`, `IInputInterface`, `IPhysicsBackend` |
+| `E` | Enums (prefer `enum class`, sized when stored) | `EKeys`, `EMovementMode`, `ECollisionChannel`, `EUISound` |
+| `I` | Abstract interfaces (no data members) | `IModuleInterface`, `IInputInterface`, `IPluginManager` |
 | `G` | Global variables | `GEngineLoop`, `GDynamicRHI`, `GPrimaryGameModuleName` |
 
 - Use the UE name when a type mirrors a UE type (`GenericApplication` keeps UE's unprefixed name).
@@ -42,7 +43,7 @@ All identifiers are English (U.S. spelling), **PascalCase**, with no underscores
   an actor. Plain data and helpers are `F`.
 - Typedefs take the prefix of what they alias (`typedef FWindowsPlatformMemory FPlatformMemory;`); delegate types
   declared with `DECLARE_DELEGATE*` are `F` (`DECLARE_DELEGATE_RetVal_OneParam(bool, FTickerDelegate, float);`).
-- Enumerators are PascalCase (`EPhysicsBackend::Arcade`). UE enumerators with underscores are kept as UE
+- Enumerators are PascalCase (`EUISound::Click`). UE enumerators with underscores are kept as UE
   spells them (`EKeys::Gamepad_FaceButton_Bottom`); `.clang-tidy` whitelists `Gamepad_*`.
 
 ### 1.2 Members, functions, parameters and locals
@@ -50,7 +51,7 @@ All identifiers are English (U.S. spelling), **PascalCase**, with no underscores
 | Kind | Rule | Examples |
 | --- | --- | --- |
 | Member variables (public or private) | PascalCase, no `m_`, no trailing `_` | `ExitCode`, `MainWindow`, `LastFrameCycles` |
-| Methods and free functions | PascalCase verbs; a function that returns a value names the value | `StartupModule()`, `PollGameDeviceState()`, `LoadLevelFile()` |
+| Methods and free functions | PascalCase verbs; a function that returns a value names the value | `StartupModule()`, `PollGameDeviceState()`, `LoadMap()` |
 | Parameters and locals | PascalCase | `DeltaTime`, `NowCycles`, `ModuleManager` |
 | Constants (`constexpr`, `static const`) | PascalCase, no `k` prefix | `MainWindowWidth`, `MaxPointLights`, `InvalidTexture`, `MaxOnScreenMessages` |
 | Booleans (members, params, locals) | `b` prefix | `bHeadless`, `bCursorCaptured`, `bEnabled` |
@@ -98,9 +99,8 @@ TUniquePtr<T> MakeUnique(ArgsType&&... Args)
 ### 1.4 Static classes vs free functions
 
 Sets of related free functions become a static class **only where UE has that homologue**
-(`FPaths`, `FFileHelper`, `FCString`, `FParse`, `FJsonSerializer`, `UGameplayStatics`, `FCookRecipe`, `FPS2RHI`). Otherwise
-keep PascalCase free functions, as UE does with `DrawDebugLine` (`LoadLevelFile`, `LoadObj`,
-`CreatePhysicsBackend`).
+(`FPaths`, `FFileHelper`, `FCString`, `FParse`, `FJsonSerializer`, `UGameplayStatics`, `FPS2RHI`). Otherwise keep
+PascalCase free functions, as UE does with `DrawDebugLine` (`LoadStaticMeshFromGltf`, `LoadAnimSequencesFromGltf`).
 
 ---
 
@@ -190,6 +190,13 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
   `CoreMinimal.h`: `TArray`, `TMap`, `TSet`, `FString`, `FName`, `FText`, `TUniquePtr` / `TSharedPtr`,
   `TFunction` and delegates. `TCHAR` is UTF-8 `char` on every platform, so write literals with `TEXT("...")`. Element
   types stored in UE containers must be relocatable with `memmove` (no pointers into themselves).
+- **No heap allocation per frame in a hot path** ([ps2-shipping](PLANS/ps2-shipping.md) N17). Code that runs every
+  frame (a tick, a query, the renderer, the HUD) does not allocate and free its temporaries on `GMalloc`: put them on
+  the frame's stack (`FMemMark Mark(FMemStack::Get()); TArray<T, TMemStackAllocator<>> Temp;`, the mark declared
+  before the container), in an inline allocator when the count is small and bounded (`TInlineAllocator<N>`), or in a
+  member that keeps its capacity (`Reset()`, `SetNum(N, false)`, not a shrink that reallocates). Nothing on the frame's
+  stack outlives its mark or the frame (`EndFrame` checks). `-LogFrameTimes`' `allocs_per_frame` and `stat memory` show
+  the churn. Allocations that live longer charge the right memory tag (`LLM_SCOPE(ELLMTag::X)`, UE's LLM).
 - **Banned APIs (gate G4).** Every module uses the UE types and Core math (`FVector`, `FRotator`, `FQuat`, `FMatrix`,
   `FTransform`, `FMath`, …) since P6. `Engine\Build\BatchFiles\CheckBannedApis.ps1` (run by `Lint.bat`) scans
   `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game`, ignoring comments, and rejects: glm and nlohmann
@@ -199,14 +206,24 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
   `<memory>`, `<sstream>`, `<vector>`, ...; use `TArray`, `FString`, `TMap`, `TSet`, `TFunction`, `TSharedPtr`,
   `TUniquePtr`); `<iostream>`, `std::cout`, `std::cerr`, `std::clog` and the `printf` family, `vfprintf` and `_snprintf`
   included (use `UE_LOG`, `FString::Printf`, `FCString`). They are allowed only where Core wraps the C and C++ libraries
-  (D2): ThirdParty folders, Core's platform HAL sources (`Core/Private/Windows`, `Core/Private/Linux`, the PS2 Core
-  extension), the `printf` family inside `Runtime/Core/Private`, `LeonHeaderTool` (a std-only host program) and the test
-  program mains (`LeonAutomationTestsMain.cpp`, `TestPAL/Private`). A third-party library's own types stay in the file
-  that calls it (Jolt, tinyobjloader, ufbx, cgltf). Do not add aliases that pretend to be UE types (`using FVector =
-  glm::vec3` is not allowed). G4 also rejects the legacy math bridges removed in P7 (`LegacyGL`, `FLegacyTransform`,
+  (D2): ThirdParty folders, Core's platform HAL sources (`Core/Private/Windows`, the PS2 Core extension), the `printf`
+  family inside `Runtime/Core/Private`, `LeonHeaderTool` (a std-only host program) and the test program mains
+  (`LeonAutomationTestsMain.cpp`, `TestPAL/Private`). A third-party library's own types stay in the file that calls it
+  (cgltf, meshoptimizer). Do not add aliases that pretend to be UE types (`using FVector = glm::vec3` is not
+  allowed). G4 also rejects the legacy math bridges removed in P7 (`LegacyGL`, `FLegacyTransform`,
   `LegacyAxes`, tests included) and `FLegacyCoordinateConversion` / `LegacyCoordinateConversion.h` outside the tests
   (`Public/Tests` and `Private/Tests` folders: the converter itself, the golden adapters and the tests; since P15 no
   runtime or editor code holds legacy data). A violation prints `<file>:<line>: G4 <rule>: <code> -> <what to use>`.
+- **What is replaced is deleted, in the same commit** ([ps2-shipping](PLANS/ps2-shipping.md) D10). No parallel path,
+  no compatibility `#if`, no stopgap kept "for the transition": the change that brings the new code removes the old
+  code, its tests, config and content. The removed names that could come back by habit get a rule in
+  `CheckBannedApis.ps1` (a pattern, the phase that removed them and what to use instead: the PS2's immediate path of
+  N2, the synchronous frame packet of N11, FBX / OBJ import of N21, `FCanvas::GetTriangles` of N15, ShooterGame's
+  `SurfaceMaterials` of N30f, ...), so G4 fails on them.
+- **No GS feature without a conformance scene** ([ps2-shipping](PLANS/ps2-shipping.md) D7): the PC must never show
+  what the PS2 does not do. A GS register, field or mode goes first into the reference rasterizer (GSReference) and a
+  GSConformance scene, and only then into the renderer; `FGSCommandList::IsSupported` rejects what is not emulated
+  (§10, GS features).
 - **Math is float.** No `double` arithmetic in engine code (the EE FPU is single precision); PS2 builds fail on an
   implicit float to double promotion (`-Werror=double-promotion`), so cast explicitly where a `double` is really
   meant (`Printf` arguments, `FTicker`'s clock).
@@ -222,12 +239,12 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
     / `FOrthoMatrix`. OpenGL code applies `ToGLClipSpace` (`RenderCore/Public/GLClipSpace.h`) once, after the
     projection, and uploads with `FShader::SetMat4(Name, const FMatrix&)`.
   - Data from outside the world is converted where it enters: importers end with `FImportCoordinateConversion`
-    (MeshUtilities; the map importer converts node transforms and light directions with it too); the Jolt and
-    miniaudio boundaries swap Y and Z and scale by 0.01 inside their own files. Engine code never holds legacy (Y-up,
+    (MeshUtilities; the map importer converts node transforms and light directions with it too); the audio mixer
+    turns centimetres into the metres of its attenuation inside its own file. Engine code never holds legacy (Y-up,
     metre) values: only the golden tests convert their legacy tables, with the test-only `FLegacyCoordinateConversion`
     (G4 enforces it).
   - Keep a triangle's index order when converting data (every basis change has determinant −1 and keeps the winding
-    on screen); a tangent's `w` flips with the basis.
+    on screen).
 - **Logging.** Log through `UE_LOG(<Category>, <Verbosity>, TEXT("..."), ...)` with a category
   (`DECLARE_LOG_CATEGORY_EXTERN` + `DEFINE_LOG_CATEGORY` for a module-wide one, `DEFINE_LOG_CATEGORY_STATIC` inside
   one `.cpp`), not `printf` / `std::cout`. On PS2 the log reaches the EE console.
@@ -237,7 +254,8 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 - **Files.** Open, read and list files through `IFileManager::Get()`, `FFileHelper` or
   `FPlatformFileManager::Get().GetPlatformFile()`, and build paths with `FPaths` (`FPaths::ProjectContentDir() /
   "Maps"`). No `fopen`, `std::fstream` or `std::filesystem` in engine code: on the PS2 the only backend is the
-  platform file layer, and later a pak file layer sits on top of it.
+  platform file layer, with the pak file layer on top of it. Reads that must not stall a frame go through
+  `IPlatformFile::OpenAsyncRead` / `LoadPackageAsync` (N24).
 - **Settings and flags.** A tunable goes in the config (`GConfig->GetFloat(Section, Key, Value, GGameIni)`, section
   `/Script/<Module>.<Class>` as UE names it) with the compiled value as the default, so the code still works when the
   file cannot be read (PS2 without the PCSX2 host filesystem). Command-line switches are read with
@@ -260,7 +278,8 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
     `TWeakObjectPtr` (or a `UPROPERTY` `TWeakObjectPtr`) for references that must not keep the object alive, and
     check it before use. A local `UObject*` is only safe until the next `CollectGarbage`, which runs at safe points
     only: the world teardown (`UEngine::LoadMap`, `UGameEngine::PreExit`, a test's `FScopedTestWorld`), a level
-    (re)load, `obj gc`, the engine's timer after the world tick (`UEngine::ConditionalCollectGarbage`); never inside a
+    (re)load, `obj gc`, the engine's step after each world step (`UEngine::ConditionalCollectGarbage`: an incremental
+    collection's slice, which checks at its end what changed, or a full collection); never inside a
     constructor or a tick.
   - **Gameplay objects** (P12). Spawn actors with `UWorld::SpawnActor<T>(…)` (never `NewObject` or a local
     `AActor`), destroy them with `Destroy()`: the actor ends play and leaves its level at once and the next collection
@@ -327,18 +346,17 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 
 ## 6. Platform code
 
-- Platform-specific code lives only in platform folders: `Private/Windows`, `Private/Linux`,
+- Platform-specific code lives only in platform folders: `Private/Windows`,
   `Private/Desktop` (GLFW / OpenGL), `Public/<Platform>/` for HAL headers, and the platform extension
   `Engine/Platforms/PS2/Source/...`. LeonBuildTool drops foreign platform folders automatically.
 - **No `PLATFORM_PS2` checks outside PS2 folders** (and no `PLATFORM_WINDOWS` / `_WIN32` outside Windows
   folders). Extend the HAL instead (`FPlatformTime`, `FPlatformMemory`, `FPlatformMath`,
-  `FPlatformApplicationMisc`, `FPlatformEngineLoopHooks`), or add a capability macro with a default in
+  `FPlatformApplicationMisc`), or add a capability macro with a default in
   `HAL/Platform.h` that the platform header overrides (`PLATFORM_DESKTOP`, `PLATFORM_64BITS`).
 - Include platform headers through `COMPILED_PLATFORM_HEADER(PlatformMemory.h)` from a `HAL/` header.
 - Dependencies that only exist on some platforms use suffixed keywords in the `.Build.cmake`
   (`PRIVATE_DEPENDENCIES_Desktop GLFW`) or the extension's `leon_module_extend`.
-- Known exceptions to remove: `Core/Private/HAL/MallocAnsi.cpp` and `Core/Private/Misc/OutputDeviceRedirector.cpp`
-  still test `PLATFORM_WINDOWS`.
+- Known exception to remove: `Core/Private/Misc/OutputDeviceRedirector.cpp` still tests `PLATFORM_WINDOWS`.
 
 ---
 
@@ -356,12 +374,12 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 | Asset | Convention | Example |
 | --- | --- | --- |
 | Content folders | PascalCase, UE's where one exists | `Engine/Content/EngineMaterials`, `EngineResources`, `BasicShapes`, `Maps` |
-| Assets (packages) | `<Prefix>_<Name>.lasset` with UE's prefixes: `SM_` static mesh, `SK_` skeletal mesh, `SKEL_` skeleton, `A_` animation, `BS_` blend space, `T_` texture, `M_` material, `S_` sound wave; maps `<Name>.lmap`; long package name = content path without extension | `/Engine/EngineMaterials/M_Default` → `Engine/Content/EngineMaterials/M_Default.lasset` |
-| Textures | `T_<Name>_<Suffix>` (`_D` diffuse, `_N` normal: imported linear) | `T_Default_D`, `T_Default_Bump_N` |
+| Assets (packages) | `<Prefix>_<Name>.lasset` with UE's prefixes: `SM_` static mesh, `SK_` skeletal mesh, `SKEL_` skeleton, `A_` animation, `BS_` blend space, `AO_` aim offset, `AM_` montage, `T_` texture, `M_` material, `PM_` physical material, `S_` sound wave; maps `<Name>.lmap`; long package name = content path without extension | `/Engine/EngineMaterials/M_Default` → `Engine/Content/EngineMaterials/M_Default.lasset` |
+| Textures | `T_<Name>_<Suffix>` (`_D` diffuse, `_N` normal: imported linear) | `T_Default_D` |
 | Source art | outside `Content`: `<Engine or Project>/SourceArt/`, folders mirroring the package paths, plus `ImportList.ini` | `Engine/SourceArt/EngineMaterials/T_Default_D.png`, `Engine/SourceArt/Maps/AxisTest.glb` |
 | Maps | `<Name>.lmap` in `Content/Maps` (UE's `Maps` folder), no prefix; an imported map's meshes and materials in `Maps/<Name>/Meshes` and `Maps/<Name>/Materials` | `/Engine/Maps/Template_Default`, `/Engine/Maps/AxisTest/Meshes/SM_RedCube` |
-| Map source nodes (Blender objects) | the map importer's prefixes ([LEVELS.md](LEVELS.md#naming-conventions)): `UCX_<Mesh>_<NN>`, `COL_`, `Clip_`, `PlayerStart_<Tag>`, `NavWaypoint`, a project's own (ShooterGame: `BombSite_<A\|B>`, `BuyZone_<CT\|T>`) | `UCX_CrateStack_01`, `PlayerStart_CT`, `BombSite_A` |
-| Source art scripts | a script that builds source art in Blender sits next to its output, `snake_case.py`, Blender's modules only, run headless (`blender --background --factory-startup --python <script>`); it saves the `.blend` and exports the `.glb` | `Game/ShooterGame/SourceArt/Maps/make_de_leon.py` |
+| Map source nodes (Blender objects) | the map importer's prefixes ([LEVELS.md](LEVELS.md#naming-conventions)): `UCX_<Mesh>_<NN>`, `COL_`, `Clip_`, `PlayerStart_<Tag>`, `NavWaypoint`, `VIS_<Cell>`, `PORTAL_<CellA>_<CellB>`, a project's own (ShooterGame: `BombSite_<A\|B>`, `BuyZone_<CT\|T>`, `Ladder`) | `UCX_CTSpawn_Floor_01`, `PlayerStart_CT`, `BombSite_A` |
+| Source art scripts | a script that builds source art in Blender sits next to its output, `make_<name>.py`, Blender's modules and the project's shared helpers only (ShooterGame: `SourceArt/leon_art.py`), run headless (`blender --background --factory-startup --python <script>`); it saves the `.blend` and exports the `.glb` with the fixed options, the same bytes every run (`check_art_determinism.py`; [ART_PIPELINE.md](ART_PIPELINE.md)) | `Game/ShooterGame/SourceArt/Maps/make_de_leon.py` |
 | Source art licenses | a project's `SourceArt/LICENSES.md` lists every file with its origin and license (ShooterGame: CC0 only) | `Game/ShooterGame/SourceArt/LICENSES.md` |
 | GLSL shaders (`Engine/Shaders`) | snake_case | `gs_emulator.vert`, `gs_present.frag` |
 
@@ -382,6 +400,9 @@ File formats: [ASSET_FORMATS.md](ASSET_FORMATS.md).
 8. New Core-dependent code logs with `UE_LOG` and a category and asserts with `check` / `ensure`.
 9. World values are in UE space and centimetres; data from other spaces is converted only at its boundary (§4,
    Coordinates).
+10. A GS feature the renderer starts to use is already in `FGSCommandList::IsSupported`, with its conformance scene
+    (D7; §10, GS features).
+11. What the change replaces is deleted in the same commit, and the removed names are in `CheckBannedApis.ps1` (D10).
 
 ---
 
@@ -392,7 +413,7 @@ File formats: [ASSET_FORMATS.md](ASSET_FORMATS.md).
   `bool F<Name>Test::RunTest(const FString& Parameters)` using `TestEqual` / `TestTrue` / `TestNotNull` / …; wrap the
   file in `#if WITH_DEV_AUTOMATION_TESTS`. An error logged during a test fails it unless the test declares it with
   `AddExpectedError` (the package tests that load a damaged package do). Every test follows this form
-  (`System.Core.Containers.Array`, `System.Engine.PhysScene.…`, `System.JoltPhysics.Step.…`); Catch2 is gone.
+  (`System.Core.Containers.Array`, `System.Engine.PhysScene.…`, `System.AIModule.Gameplay.…`); Catch2 is gone.
 - `RunTests.bat` runs all of them (`LeonAutomationTests`, `-automation=<filter>`); `TestPAL` runs the Core,
   CoreUObject, Json, Projects and PakFile tests on Win64 (`RunTests.bat` runs it too) and on the PS2.
 - A game project's tests are named `<Project>.<Area>.<Name>` (`ShooterGame.Spawn.BotFill`), live in its module's
@@ -401,6 +422,13 @@ File formats: [ASSET_FORMATS.md](ASSET_FORMATS.md).
   and runs after the engine's.
 - Reflected test types (`UCLASS` / `USTRUCT` fixtures) go in `<Module>/Private/Tests/*.h`; LeonHeaderTool compiles them
   into the test targets only (the `<Module>.Tests` unit).
+- **GS features** ([ps2-shipping](PLANS/ps2-shipping.md) D7): **a GS feature enters the renderer only with its
+  conformance scene.** A register, field or mode the renderer records goes, in this order, into the reference
+  rasterizer (GSReference) exactly as the GS User's Manual gives it, then into the desktop's emulator
+  (`FGSOpenGLEmulator`), then into a scene of `GSConformance::GetScenes` with a GSReference test of the manual's values
+  (`System.GSReference.*`), which `System.Renderer.GSEmulator.Conformance` compares with the emulator and the
+  GSConformance program shows on the PS2; last, `FGSCommandList::IsSupported` accepts it. The setters `check` it, so
+  whatever the list does not accept stops the build's tests instead of drawing differently on the PC and the PS2.
 - A test that needs actors creates its world with `FScopedTestWorld` (`Engine/Public/Tests/ScopedTestWorld.h`):
   `FScopedTestWorld TestWorld; UWorld& World = *TestWorld;`. At the end of the scope the world ends play, is destroyed
   and the garbage is collected, so no test leaves objects behind. Other objects come from `NewObject<T>()`; a

@@ -4,6 +4,7 @@
 // (UE: UObject/UObjectGlobals.h).
 
 #include "CoreMinimal.h"
+#include "Delegates/Delegate.h"
 #include "UObject/ObjectMacros.h"
 #include "UObject/Script.h"
 
@@ -323,6 +324,72 @@ inline UClass* LoadClass(
 {
 	return StaticLoadClass(T::StaticClass(), Outer, Name, Filename, LoadFlags);
 }
+
+// Asynchronous loading (UE: UObjectGlobals.h; implemented in Serialization/AsyncLoading.cpp; Docs/PLANS/ps2-shipping.md
+// N24).
+
+/** How an asynchronous package load ended (UE). */
+namespace EAsyncLoadingResult
+{
+	enum Type : uint8
+	{
+		/** The package could not be loaded. */
+		Failed,
+		/** The package loaded (or was loaded already). */
+		Succeeded,
+		/** CancelAsyncLoading dropped it. */
+		Canceled,
+	};
+} // namespace EAsyncLoadingResult
+
+/** Where ProcessAsyncLoading stopped (UE). */
+namespace EAsyncPackageState
+{
+	enum Type : uint8
+	{
+		/** The time ran out with packages left. */
+		TimeOut,
+		/** Packages wait for their bytes from the disc. */
+		PendingImports,
+		/** Nothing is loading. */
+		Complete,
+	};
+} // namespace EAsyncPackageState
+
+/** Called on the game thread when an asynchronous package load ends (UE: FLoadPackageAsyncDelegate). */
+DECLARE_DELEGATE_ThreeParams(FLoadPackageAsyncDelegate, const FName& /*PackageName*/, UPackage* /*LoadedPackage*/,
+	EAsyncLoadingResult::Type /*Result*/);
+
+/**
+ * Loads a package in the background (UE: LoadPackageAsync). Its file and the files of the packages it imports are read
+ * by the IO thread (IPlatformFile::OpenAsyncRead: the PS2's disc keeps reading while the game runs); the game thread
+ * serializes a package once its bytes and its imports' are in memory (ProcessAsyncLoading, each frame), with the
+ * synchronous loader (the same objects, PostLoad the same way), and calls InCompletionDelegate. A LoadPackage of a
+ * package whose bytes are on their way waits for them instead of reading the file again (UE: the flush). A package
+ * already loaded completes at the next ProcessAsyncLoading. Returns the request's id; a higher InPackagePriority reads
+ * first.
+ */
+COREUOBJECT_API int32 LoadPackageAsync(const FString& InName,
+	FLoadPackageAsyncDelegate InCompletionDelegate = FLoadPackageAsyncDelegate(), int32 InPackagePriority = 0);
+
+/**
+ * Serializes the packages whose bytes are in, runs their delegates, and starts the reads their imports need (UE:
+ * ProcessAsyncLoading). With bUseTimeLimit it stops once TimeLimit seconds went by, after one package at least.
+ */
+COREUOBJECT_API EAsyncPackageState::Type ProcessAsyncLoading(
+	bool bUseTimeLimit, bool bUseFullTimeLimit, float TimeLimit);
+
+/** Waits for request PackageID, or for every request with INDEX_NONE, and completes it (UE: FlushAsyncLoading). */
+COREUOBJECT_API void FlushAsyncLoading(int32 PackageID = INDEX_NONE);
+
+/** Drops every request: their reads are cancelled and their delegates called with Canceled (UE: CancelAsyncLoading). */
+COREUOBJECT_API void CancelAsyncLoading();
+
+/** Whether a request is not complete (UE: IsAsyncLoading). */
+COREUOBJECT_API bool IsAsyncLoading();
+
+/** The packages being loaded, their imports included (UE: GetNumAsyncPackages). */
+COREUOBJECT_API int32 GetNumAsyncPackages();
 
 // Garbage collection (UE: UObjectGlobals.h; implemented in GarbageCollection.cpp, see UObject/GarbageCollection.h).
 

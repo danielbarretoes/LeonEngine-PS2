@@ -13,47 +13,51 @@
 namespace
 {
 
-	// Translation matrices have the same memory as glm::translate, the layout the bone matrices keep.
+	/** root, and child 1 cm along Y at rest (its bind pose too). */
 	USkeleton* MakeTwoBoneSkeleton()
 	{
 		FReferenceSkeleton Bones;
 		Bones.BoneNames = {FName("root"), FName("child")};
 		Bones.ParentIndices = {INDEX_NONE, 0};
+		Bones.RefBonePose = {FTransform::Identity, FTransform(FVector(0.0f, 1.0f, 0.0f))};
 		Bones.InverseBindPose = {FMatrix::Identity, FTranslationMatrix(FVector(0.0f, -1.0f, 0.0f))};
 		USkeleton* Skeleton = NewObject<USkeleton>();
 		Skeleton->SetReferenceSkeleton(Bones);
 		return Skeleton;
 	}
 
-	/** A clip whose frames hold the given key per bone: Frames[frame][bone]. */
-	UAnimSequence* MakeClip(const TArray<TArray<FMatrix>>& Frames, float Length, float Rate, bool bInLoop = true)
+	/** A clip whose frames hold the given local translation per bone: Frames[frame][bone]. */
+	UAnimSequence* MakeClip(const TArray<TArray<FVector>>& Frames, float Length, float Rate, bool bInLoop = true)
 	{
-		TArray<FRawAnimSequenceTrack> Tracks;
+		FRawAnimSequence Raw;
+		Raw.SequenceLength = Length;
+		Raw.FrameRate = Rate;
+		Raw.bLoop = bInLoop;
 		const int32 NumBones = Frames.Num() > 0 ? Frames[0].Num() : 0;
-		Tracks.SetNum(NumBones);
-		for (const TArray<FMatrix>& Frame : Frames)
+		Raw.Tracks.SetNum(NumBones);
+		for (const TArray<FVector>& Frame : Frames)
 		{
 			for (int32 Bone = 0; Bone < NumBones; ++Bone)
 			{
-				Tracks[Bone].Keys.Add(Frame[Bone]);
+				Raw.Tracks[Bone].PosKeys.Add(Frame[Bone]);
+				Raw.Tracks[Bone].RotKeys.Add(FQuat::Identity);
+				Raw.Tracks[Bone].ScaleKeys.Add(FVector::OneVector);
 			}
 		}
 		UAnimSequence* Clip = NewObject<UAnimSequence>();
-		Clip->SequenceLength = Length;
-		Clip->FrameRate = Rate;
-		Clip->bLoop = bInLoop;
-		Clip->SetRawAnimationData(MoveTemp(Tracks));
+		(void)Clip->SetFromRawAnimSequence(Raw);
 		return Clip;
 	}
 
+	/** A one-frame two-bone clip with the child at ChildLocalTranslation. */
 	UAnimSequence* MakeTranslatedClip(const FVector& ChildLocalTranslation)
 	{
-		return MakeClip({{FMatrix::Identity, FTranslationMatrix(ChildLocalTranslation)}}, 1.0f, 1.0f);
+		return MakeClip({{FVector::ZeroVector, ChildLocalTranslation}}, 1.0f, 1.0f);
 	}
 
-	UAnimSequence* MakeTwoBoneIdentityClip()
+	UAnimSequence* MakeTwoBoneRestClip()
 	{
-		return MakeClip({{FMatrix::Identity, FMatrix::Identity}}, 1.0f, 1.0f);
+		return MakeTranslatedClip(FVector(0.0f, 1.0f, 0.0f));
 	}
 
 } // namespace
@@ -63,16 +67,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnimSequenceLoopTest, "System.Engine.Animation
 
 bool FAnimSequenceLoopTest::RunTest(const FString& Parameters)
 {
-	UAnimSequence& Clip = *MakeClip({{FMatrix::Identity}, {FTranslationMatrix(FVector(1.0f, 0.0f, 0.0f))}}, 2.0f, 1.0f);
+	UAnimSequence& Clip = *MakeClip({{FVector::ZeroVector}, {FVector(1.0f, 0.0f, 0.0f)}}, 2.0f, 1.0f);
 	TestEqual("Frames", Clip.GetNumberOfFrames(), 2);
 
-	TArray<FMatrix> Pose;
+	TArray<FTransform> Pose;
 	Clip.GetBonePose(0.0f, Pose);
 	TestEqual("Bones", Pose.Num(), 1);
-	TestEqual("Start", Pose[0].M[3][0], 0.0f, 1.0e-4f);
+	TestEqual("Start", Pose[0].GetTranslation().X, 0.0f, 1.0e-4f);
 
 	Clip.GetBonePose(2.0f, Pose); // wraps to the start
-	TestEqual("Wrapped", Pose[0].M[3][0], 0.0f, 1.0e-4f);
+	TestEqual("Wrapped", Pose[0].GetTranslation().X, 0.0f, 1.0e-4f);
 	return true;
 }
 
@@ -82,15 +86,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnimSequenceOneShotTest, "System.Engine.Animat
 bool FAnimSequenceOneShotTest::RunTest(const FString& Parameters)
 {
 	// A one-shot clip clamps to its last frame and reports when it is finished.
-	UAnimSequence& Clip = *MakeClip(
-		{{FMatrix::Identity}, {FTranslationMatrix(FVector(2.0f, 0.0f, 0.0f))}}, 1.0f, 1.0f, /*bInLoop =*/false);
+	UAnimSequence& Clip =
+		*MakeClip({{FVector::ZeroVector}, {FVector(2.0f, 0.0f, 0.0f)}}, 1.0f, 1.0f, /*bInLoop =*/false);
 
 	TestFalse("Not finished at the start", Clip.IsFinished(0.0f));
 	TestTrue("Finished at the end", Clip.IsFinished(1.0f));
 
-	TArray<FMatrix> Pose;
+	TArray<FTransform> Pose;
 	Clip.GetBonePose(5.0f, Pose);
-	TestEqual("Clamped", Pose[0].M[3][0], 2.0f, 1.0e-4f);
+	TestEqual("Clamped", Pose[0].GetTranslation().X, 2.0f, 1.0e-3f);
 	return true;
 }
 
@@ -99,13 +103,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnimSequenceLerpTest, "System.Engine.Animation
 
 bool FAnimSequenceLerpTest::RunTest(const FString& Parameters)
 {
-	// Halfway between two frames the translation is halfway too.
-	UAnimSequence& Clip = *MakeClip({{FMatrix::Identity}, {FTranslationMatrix(FVector(2.0f, 0.0f, 0.0f))}}, 1.0f, 1.0f);
+	// Halfway between two frames the translation is halfway too, in the bone's local space.
+	UAnimSequence& Clip = *MakeClip({{FVector::ZeroVector}, {FVector(2.0f, 0.0f, 0.0f)}}, 1.0f, 1.0f);
 
-	TArray<FMatrix> Pose;
+	TArray<FTransform> Pose;
 	Clip.GetBonePose(0.5f, Pose);
 	TestEqual("Bones", Pose.Num(), 1);
-	TestEqual("Translation", Pose[0].M[3][0], 1.0f, 1.0e-3f);
+	TestEqual("Translation", Pose[0].GetTranslation().X, 1.0f, 1.0e-3f);
 	return true;
 }
 
@@ -114,8 +118,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FBlendSpace1DEvaluateTest, "System.Engine.Anima
 
 bool FBlendSpace1DEvaluateTest::RunTest(const FString& Parameters)
 {
-	UAnimSequence* Idle = MakeTwoBoneIdentityClip();
-	UAnimSequence* Run = MakeTwoBoneIdentityClip();
+	UAnimSequence* Idle = MakeTwoBoneRestClip();
+	UAnimSequence* Run = MakeTwoBoneRestClip();
 
 	UBlendSpace1D& Bs = *NewObject<UBlendSpace1D>();
 	TestEqual("Default axis min", Bs.GetBlendParameter(0).Min, 0.0f, 1.0e-6f);
@@ -123,30 +127,33 @@ bool FBlendSpace1DEvaluateTest::RunTest(const FString& Parameters)
 	Bs.AddSample(Idle, 0.0f);
 	Bs.AddSample(Run, 1.0f);
 
-	const UAnimSequence* A = nullptr;
-	const UAnimSequence* B = nullptr;
-	float Alpha = -1.0f;
+	FBlendSampleDataArray Samples;
+	auto IsOnly = [&](int32 Index)
+	{ return Samples.Num() == 1 && Samples[0].SampleDataIndex == Index && Samples[0].TotalWeight == 1.0f; };
 
 	// At idle.
-	Bs.Evaluate(0.0f, A, B, Alpha);
-	TestTrue("Idle: both samples idle", A == Idle && B == Idle);
-	TestEqual("Idle: alpha", Alpha, 0.0f, 1.0e-5f);
+	Bs.GetSamplesFromBlendInput(FVector(0.0f, 0.0f, 0.0f), Samples);
+	TestTrue("Idle: the idle sample alone", IsOnly(0));
 
 	// Mid blend.
-	Bs.Evaluate(0.5f, A, B, Alpha);
-	TestTrue("Mid: idle to run", A == Idle && B == Run);
-	TestEqual("Mid: alpha", Alpha, 0.5f, 1.0e-5f);
+	Bs.GetSamplesFromBlendInput(FVector(0.5f, 0.0f, 0.0f), Samples);
+	TestTrue(
+		"Mid: idle and run", Samples.Num() == 2 && Samples[0].SampleDataIndex == 0 && Samples[1].SampleDataIndex == 1);
+	TestEqual("Mid: the run's weight", Samples.Num() == 2 ? Samples[1].TotalWeight : -1.0f, 0.5f, 1.0e-5f);
 
 	// At run.
-	Bs.Evaluate(1.0f, A, B, Alpha);
-	TestTrue("Run: both samples run", A == Run && B == Run);
-	TestEqual("Run: alpha", Alpha, 0.0f, 1.0e-5f);
+	Bs.GetSamplesFromBlendInput(FVector(1.0f, 0.0f, 0.0f), Samples);
+	TestTrue("Run: the run sample alone", IsOnly(1));
+
+	// A quarter of the way: 0.75 idle, 0.25 run.
+	Bs.GetSamplesFromBlendInput(FVector(0.25f, 0.0f, 0.0f), Samples);
+	TestTrue("Quarter: weights", Samples.Num() == 2 && FMath::IsNearlyEqual(Samples[0].TotalWeight, 0.75f, 1.0e-5f));
 
 	// Clamped below and above the axis.
-	Bs.Evaluate(-2.0f, A, B, Alpha);
-	TestTrue("Below the axis: idle", A == Idle && B == Idle);
-	Bs.Evaluate(3.0f, A, B, Alpha);
-	TestTrue("Above the axis: run", A == Run && B == Run);
+	Bs.GetSamplesFromBlendInput(FVector(-2.0f, 0.0f, 0.0f), Samples);
+	TestTrue("Below the axis: idle", IsOnly(0));
+	Bs.GetSamplesFromBlendInput(FVector(3.0f, 0.0f, 0.0f), Samples);
+	TestTrue("Above the axis: run", IsOnly(1));
 	return true;
 }
 
@@ -156,12 +163,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FBlendSpace1DEmptyTest, "System.Engine.Animatio
 bool FBlendSpace1DEmptyTest::RunTest(const FString& Parameters)
 {
 	UBlendSpace1D& Bs = *NewObject<UBlendSpace1D>();
-	const UAnimSequence* A = reinterpret_cast<const UAnimSequence*>(1);
-	const UAnimSequence* B = reinterpret_cast<const UAnimSequence*>(1);
-	float Alpha = 1.0f;
-	Bs.Evaluate(0.5f, A, B, Alpha);
-	TestTrue("No samples", A == nullptr && B == nullptr);
-	TestEqual("Alpha", Alpha, 0.0f, 1.0e-5f);
+	FBlendSampleDataArray Samples;
+	Samples.Add({3, 1.0f});
+	Bs.GetSamplesFromBlendInput(FVector(0.5f, 0.0f, 0.0f), Samples);
+	TestEqual("No samples", Samples.Num(), 0);
 	TestFalse("A null clip is not a sample", Bs.AddSample(nullptr, 0.5f));
 	return true;
 }
@@ -172,7 +177,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnimInstanceNoSkeletonTest, "System.Engine.Ani
 bool FAnimInstanceNoSkeletonTest::RunTest(const FString& Parameters)
 {
 	UAnimInstance& Anim = *NewObject<UAnimInstance>();
-	Anim.NativeUpdateAnimation(0.016f);
+	Anim.UpdateAnimation(0.016f);
 	TArray<FMatrix> Skin;
 	Anim.GetSkinMatrices(Skin);
 	TestEqual("No skin without a skeleton", Skin.Num(), 0);
@@ -190,18 +195,21 @@ bool FAnimInstanceSkinTest::RunTest(const FString& Parameters)
 	Bs.AddSample(MakeTranslatedClip(FVector(0.0f, 2.0f, 0.0f)), 1.0f);
 
 	{
-		// Idle input: the child is at its bind pose, so its skin matrix is the identity.
+		// Idle input: the child is 1 cm along Y, its bind pose, so its skin matrix is the identity.
 		UAnimInstance& Anim = *NewObject<UAnimInstance>();
 		Anim.SetSkeleton(Skeleton);
 		Anim.SetBlendSpace(&Bs);
 		Anim.SetLocomotionBlendInterpSpeed(0.0f); // snap for unit tests
 		Anim.SetBlendSpaceInput(0.0f);
-		Anim.NativeUpdateAnimation(0.016f);
+		Anim.UpdateAnimation(0.016f);
 		TArray<FMatrix> Skin;
 		Anim.GetSkinMatrices(Skin);
 		TestEqual("Idle: bones", Skin.Num(), 2);
 		TestEqual("Idle: child at bind", Skin[1].M[3][1], 0.0f, 1.0e-3f);
-		TestEqual("Idle: alpha", Anim.GetBlendAlpha(), 0.0f, 1.0e-5f);
+		TArray<FTransform> Pose;
+		Anim.EvaluatePose(Pose);
+		TestEqual("Idle: a local pose", Pose.Num(), 2);
+		TestEqual("Idle: one sample", Anim.GetLocomotionSamples().Num(), 1);
 	}
 	{
 		// Mid input blends.
@@ -210,11 +218,24 @@ bool FAnimInstanceSkinTest::RunTest(const FString& Parameters)
 		Anim.SetBlendSpace(&Bs);
 		Anim.SetLocomotionBlendInterpSpeed(0.0f);
 		Anim.SetBlendSpaceInput(0.5f);
-		Anim.NativeUpdateAnimation(0.016f);
-		TestEqual("Mid: alpha", Anim.GetBlendAlpha(), 0.5f, 1.0e-5f);
+		Anim.UpdateAnimation(0.016f);
+		TestTrue("Mid: two samples, half each",
+			Anim.GetLocomotionSamples().Num() == 2 &&
+				FMath::IsNearlyEqual(Anim.GetLocomotionSamples()[1].TotalWeight, 0.5f, 1.0e-5f));
 		TArray<FMatrix> Skin;
 		Anim.GetSkinMatrices(Skin);
 		TestEqual("Mid: bones", Skin.Num(), 2);
+		// Blended in local space: the child halfway between 1 and 2 cm, so 0.5 cm past its bind.
+		TestEqual("Mid: the child halfway", Skin[1].M[3][1], 0.5f, 1.0e-3f);
+	}
+	{
+		// Without clips the skeleton's reference pose: the bind pose here.
+		UAnimInstance& Anim = *NewObject<UAnimInstance>();
+		Anim.SetSkeleton(Skeleton);
+		Anim.UpdateAnimation(0.016f);
+		TArray<FMatrix> Skin;
+		Anim.GetSkinMatrices(Skin);
+		TestTrue("Reference pose", Skin.Num() == 2 && Skin[1].Equals(FMatrix::Identity, 1.0e-4f));
 	}
 	return true;
 }
@@ -233,9 +254,9 @@ bool FAnimInstanceEaseTest::RunTest(const FString& Parameters)
 	Anim.SetBlendSpace(&Bs);
 	Anim.SetLocomotionBlendInterpSpeed(8.0f);
 	Anim.SetBlendSpaceInput(1.0f);
-	Anim.NativeUpdateAnimation(0.016f);
-	TestTrue("Moving toward the target", Anim.GetBlendSpaceInput() > 0.0f && Anim.GetBlendSpaceInput() < 1.0f);
-	TestEqual("Target", Anim.GetBlendSpaceInputTarget(), 1.0f, 1.0e-5f);
+	Anim.UpdateAnimation(0.016f);
+	TestTrue("Moving toward the target", Anim.GetBlendSpaceInput().X > 0.0f && Anim.GetBlendSpaceInput().X < 1.0f);
+	TestEqual("Target", Anim.GetBlendSpaceInputTarget().X, 1.0f, 1.0e-5f);
 	return true;
 }
 
@@ -271,22 +292,22 @@ bool FCharacterAnimJumpTest::RunTest(const FString& Parameters)
 
 	Anim.NotifyJumped();
 	Anim.SetMovementState(true, 5.0f, false);
-	Anim.NativeUpdateAnimation(0.016f);
+	Anim.UpdateAnimation(0.016f);
 	TestTrue("Jump start", Anim.GetJumpState() == EAnimJumpState::JumpStart);
 	TestTrue("Crossfading", Anim.GetCrossfadeAlpha() < 1.0f);
 
 	Anim.SetMovementState(true, -1.0f, false);
-	Anim.NativeUpdateAnimation(0.016f);
+	Anim.UpdateAnimation(0.016f);
 	TestTrue("Falling", Anim.GetJumpState() == EAnimJumpState::FallLoop);
 
 	Anim.SetMovementState(false, 0.0f, true);
-	Anim.NativeUpdateAnimation(0.016f);
+	Anim.UpdateAnimation(0.016f);
 	TestTrue("Landing", Anim.GetJumpState() == EAnimJumpState::Land);
 
 	for (int32 I = 0; I < 20; ++I)
 	{
 		Anim.SetMovementState(false, 0.0f, false);
-		Anim.NativeUpdateAnimation(0.05f);
+		Anim.UpdateAnimation(0.05f);
 	}
 	TestTrue("Back to locomotion", Anim.GetJumpState() == EAnimJumpState::Locomotion);
 
@@ -322,12 +343,59 @@ bool FCharacterAnimPlayRateTest::RunTest(const FString& Parameters)
 
 	Anim.NotifyJumped();
 	Anim.SetMovementState(true, 5.0f, false);
-	Anim.NativeUpdateAnimation(0.0f);
+	Anim.UpdateAnimation(0.0f);
 	TestTrue("Jump start", Anim.GetJumpState() == EAnimJumpState::JumpStart);
 
 	Anim.SetMovementState(true, 5.0f, false);
-	Anim.NativeUpdateAnimation(0.3f);
+	Anim.UpdateAnimation(0.3f);
 	TestTrue("Falling after 0.3 s at 4x", Anim.GetJumpState() == EAnimJumpState::FallLoop);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterAnimCrouchTest, "System.Engine.Animation.CharacterAnimInstance.Crouch",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FCharacterAnimCrouchTest::RunTest(const FString& Parameters)
+{
+	// The crouched locomotion (N27): crouching crossfades from the standing space to the crouched one over the
+	// crossfade, the notifies come from the space playing only, and standing up fades back.
+	UAnimSequence* Stand = MakeTranslatedClip(FVector(0.0f, 2.0f, 0.0f));
+	Stand->AddNotify(TEXT("Footstep_L"), 0.5f);
+	UAnimSequence* Crouched = MakeTranslatedClip(FVector(0.0f, 1.0f, 0.0f));
+	UBlendSpace1D& StandSpace = *NewObject<UBlendSpace1D>();
+	StandSpace.AddSample(Stand, 0.0f);
+	UBlendSpace1D& CrouchSpace = *NewObject<UBlendSpace1D>();
+	CrouchSpace.AddSample(Crouched, 0.0f);
+
+	UCharacterAnimInstance& Anim = *NewObject<UCharacterAnimInstance>();
+	Anim.SetSkeleton(MakeTwoBoneSkeleton());
+	Anim.SetBlendSpace(&StandSpace);
+	Anim.SetCrouchBlendSpace(&CrouchSpace);
+	Anim.SetCrossfadeDuration(0.2f);
+	TArray<FTransform> Pose;
+	auto ChildY = [&]()
+	{
+		Anim.EvaluatePose(Pose);
+		return Pose.Num() == 2 ? Pose[1].GetTranslation().Y : -1.0f;
+	};
+
+	Anim.UpdateAnimation(0.1f);
+	TestEqual("Standing", ChildY(), 2.0f, 1.0e-3f);
+
+	Anim.SetCrouched(true);
+	Anim.UpdateAnimation(0.1f);
+	TestEqual("Half way down", Anim.GetCrouchAlpha(), 0.5f, 1.0e-4f);
+	TestEqual("A blend of both", ChildY(), 1.5f, 1.0e-3f);
+	Anim.UpdateAnimation(0.2f);
+	TestEqual("Crouched", ChildY(), 1.0f, 1.0e-3f);
+	// Crossing 0.5 s crouched fires nothing: the standing clip's footstep is not playing.
+	Anim.UpdateAnimation(0.4f);
+	TestEqual("No footstep while crouched", Anim.GetNumNotifiesFiredLastUpdate(), 0);
+
+	Anim.SetCrouched(false);
+	Anim.UpdateAnimation(0.3f);
+	TestEqual("Standing again", ChildY(), 2.0f, 1.0e-3f);
+	TestTrue("The standing space plays", Anim.GetCrouchAlpha() == 0.0f);
 	return true;
 }
 

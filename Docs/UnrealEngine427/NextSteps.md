@@ -1,7 +1,7 @@
 # Next steps toward UE 4.27 parity
 
 The UE-layout refactor is done: `Engine/Source/{Runtime,Developer,Programs,ThirdParty}` layout with the PS2
-platform extension and the JoltPhysics plugin, LeonBuildTool, HAL / ApplicationCore / RHI / Launch
+platform extension, LeonBuildTool and its plugin system, HAL / ApplicationCore / RHI / Launch
 (`GuardedMain` + `FEngineLoop` on both desktop and PS2), Epic naming in every module, the Epic
 `.clang-format`, and the docs ([ARCHITECTURE](../ARCHITECTURE.md), [BUILD](../BUILD.md),
 [CODING_STANDARD](../CODING_STANDARD.md), [LeonMapping](LeonMapping.md)).
@@ -167,7 +167,7 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 ### Done — Levels as actors and the render boundary (P13, part 1)
 
 ([LeonMapping — P13](LeonMapping.md#p13--levels-as-actors-and-the-render-boundary-part-1),
-[LEVELS.md](../LEVELS.md), [ARCHITECTURE §12](../ARCHITECTURE.md#12-rendering-desktop)):
+[LEVELS.md](../LEVELS.md), [ARCHITECTURE §12](../ARCHITECTURE.md#12-rendering-the-gs-path)):
 
 - The `.llev` reader spawns `AWorldSettings`, `AStaticMeshActor`, `APlayerStart`, `ATargetPoint`, `ATriggerVolume`,
   `ABlockingVolume`, `APainCausingVolume` (box volumes, D16), `ADirectionalLight` and `APointLight`; the saver writes
@@ -435,15 +435,15 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
 ## Engine / platform
 
 - Gameplay framework on PS2: ShooterGame runs, draws, plays and sounds on the EE since
-  [ps2-engine](../PLANS/ps2-engine.md) E1 to E5. `Game/ThirdPerson` can now use `AThirdPersonCharacter : ACharacter`
-  like TP_ThirdPerson.
+  [ps2-engine](../PLANS/ps2-engine.md) E1 to E5, and it is the only game since [ps2-shipping](../PLANS/ps2-shipping.md)
+  N2 (the `WITH_ENGINE=0` ThirdPerson demo went).
 - The renderer records GS command lists (0.21.0) instead of calling GL; a render thread later (the scene proxies are
   the seam).
 - `UNavigationSystemBase` seam so NavigationSystem can move to its own module; a navmesh (Recast) if a map ever
   needs more than a waypoint graph (the graph ignores dynamic obstacles; a bot blocked by one repaths).
 - The PS2 target platform's formats (the TargetPlatform module's PS2 stub: textures, LPS2 meshes, ADPCM) and a pak on
   `cdrom0:` mounted by the PS2 launch.
-- Texture mipmaps on PS2 (GS MIPTBP registers) — fixes floor moiré in ThirdPerson.
+- Texture mipmaps on PS2 (GS MIPTBP registers) — against the floors' moiré at a distance.
 - AutomationTool homologue (`RunLAT`: build → cook → stage).
 
 ## Debt surfaced by the refactor
@@ -463,7 +463,5 @@ budget is in [Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md).
   variables (`IConsoleManager`).
 - **Viewport:** no Slate; `UGameViewportClient` polls the window's keys and mouse each frame, and the desktop has no
   gamepad mappings.
-- **Platform checks in shared code:** the `PLATFORM_WINDOWS` tests in `Core/Private/HAL/MallocAnsi.cpp` and
-  `Core/Private/Misc/OutputDeviceRedirector.cpp` should become HAL functions or move under `Private/Windows`.
-- **Linux:** not an official platform (Win64 is the development and editor platform, PS2 the target); LeonBuildTool
-  registers it, but nothing builds or tests it.
+- **Platform checks in shared code:** the `PLATFORM_WINDOWS` test in `Core/Private/Misc/OutputDeviceRedirector.cpp`
+  should become a HAL function or move under `Private/Windows` (MallocAnsi's went with it in ps2-shipping N17).

@@ -5,6 +5,7 @@
 #include "Misc/PackageName.h"
 #include "ShooterCharacter.h"
 #include "ShooterGame.h"
+#include "ShooterGameMode.h"
 #include "Sound/SoundWave.h"
 #include "Weapons/ShooterProjectile.h"
 
@@ -25,10 +26,20 @@ AShooterWeapon_Projectile::AShooterWeapon_Projectile(const FObjectInitializer& O
 void AShooterWeapon_Projectile::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
-	if (!ExplodeSoundName.IsNull() && FPackageName::DoesPackageExist(ExplodeSoundName.GetLongPackageName()))
+	ExplodeSound = LoadShooterSound(ExplodeSoundName);
+	// A grenade comes one at a time (CS: a flashbang is bought twice for two).
+	CurrentAmmoInClip = FMath::Min(1, AmmoPerClip);
+	CurrentAmmo = 0;
+}
+
+bool AShooterWeapon_Projectile::AddGrenade()
+{
+	if (CurrentAmmoInClip >= AmmoPerClip)
 	{
-		ExplodeSound = Cast<USoundWave>(ExplodeSoundName.TryLoad());
+		return false;
 	}
+	++CurrentAmmoInClip;
+	return true;
 }
 
 void AShooterWeapon_Projectile::FireWeapon()
@@ -69,12 +80,18 @@ void AShooterWeapon_Projectile::FireWeapon()
 	Projectile->KillReward = KillReward;
 	Projectile->Launch(Velocity, GetInstigatorController(), GetWeaponMesh());
 	LastProjectile = Projectile;
+	// CS: every throw calls it on the team's radio.
+	if (AShooterGameMode* GameMode = World->GetAuthGameMode<AShooterGameMode>())
+	{
+		(void)GameMode->SendRadioMessage(GetInstigatorController(), EShooterRadioMessage::FireInTheHole);
+	}
 }
 
 void AShooterWeapon_Projectile::SimulateWeaponFire()
 {
-	// A throw has no muzzle flash: only the sound.
+	// A throw has no muzzle flash: only the sound (and the owner's pad).
 	PlayWeaponSound(FireSound);
+	PlayFireForceFeedback();
 }
 
 void AShooterWeapon_Projectile::OnShotFired()
@@ -88,12 +105,13 @@ void AShooterWeapon_Projectile::OnShotFired()
 	}
 }
 
-AShooterWeapon_Grenade::AShooterWeapon_Grenade(const FObjectInitializer& ObjectInitializer)
+AShooterWeapon_HEGrenade::AShooterWeapon_HEGrenade(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	// CS's HE grenade; DefaultGame.ini's [/Script/ShooterGame.ShooterWeapon_Grenade] tunes it.
+	// CS's HE grenade; DefaultGame.ini's [/Script/ShooterGame.ShooterWeapon_HEGrenade] tunes it.
 	WeaponName = TEXT("hegrenade");
 	Slot = EShooterWeaponSlot::Grenade;
+	GrenadeOrder = 0;
 	bAutomatic = false;
 	AmmoPerClip = 1;
 	MaxAmmo = 0;
@@ -104,4 +122,42 @@ AShooterWeapon_Grenade::AShooterWeapon_Grenade(const FObjectInitializer& ObjectI
 	ArmorRatio = 1.0f;
 	Price = 300;
 	KillReward = 300;
+}
+
+AShooterWeapon_Flashbang::AShooterWeapon_Flashbang(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	// CS's flashbang: two a player; DefaultGame.ini's [/Script/ShooterGame.ShooterWeapon_Flashbang] tunes it.
+	WeaponName = TEXT("flashbang");
+	Slot = EShooterWeaponSlot::Grenade;
+	GrenadeOrder = 1;
+	ProjectileClass = AShooterProjectile_Flashbang::StaticClass();
+	bAutomatic = false;
+	AmmoPerClip = 2;
+	MaxAmmo = 0;
+	TimeBetweenShots = 1.0f;
+	ReloadDuration = 0.0f;
+	EquipDuration = 0.5f;
+	ExplosionDamage = 0.0f;
+	HeadshotMultiplier = 1.0f;
+	Price = 200;
+}
+
+AShooterWeapon_SmokeGrenade::AShooterWeapon_SmokeGrenade(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	// CS's smoke grenade; DefaultGame.ini's [/Script/ShooterGame.ShooterWeapon_SmokeGrenade] tunes it.
+	WeaponName = TEXT("smokegrenade");
+	Slot = EShooterWeaponSlot::Grenade;
+	GrenadeOrder = 2;
+	ProjectileClass = AShooterProjectile_Smoke::StaticClass();
+	bAutomatic = false;
+	AmmoPerClip = 1;
+	MaxAmmo = 0;
+	TimeBetweenShots = 1.0f;
+	ReloadDuration = 0.0f;
+	EquipDuration = 0.5f;
+	ExplosionDamage = 0.0f;
+	HeadshotMultiplier = 1.0f;
+	Price = 300;
 }

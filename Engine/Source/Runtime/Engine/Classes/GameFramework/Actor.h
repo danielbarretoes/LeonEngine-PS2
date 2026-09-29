@@ -3,6 +3,7 @@
 #include "Components/ActorComponent.h"
 #include "Components/SceneComponent.h"
 #include "CoreMinimal.h"
+#include "Engine/EngineBaseTypes.h"
 #include "Engine/EngineTypes.h"
 #include "Engine/Level.h"
 #include "Templates/Casts.h"
@@ -10,6 +11,7 @@
 #include "Actor.generated.h"
 
 class AController;
+class FTimerManager;
 class APawn;
 class UDamageType;
 class UInputComponent;
@@ -42,13 +44,6 @@ using FTakeRadialDamageSignature =
 		FVector /*Origin*/, const FHitResult& /*HitInfo*/, AController* /*InstigatedBy*/, AActor* /*DamageCauser*/)>;
 
 /**
- * Yaw in degrees that makes content converted from the legacy formats face an actor's forward. Legacy content faces the
- * legacy +Z, which becomes +Y; UE actors face +X. A component showing such content gets this relative yaw (as UE's
- * mannequin mesh does).
- */
-inline constexpr float LegacyContentYaw = -90.0f;
-
-/**
  * An object placed in a world (UE: AActor).
  *
  * ## Lifetime
@@ -72,9 +67,16 @@ inline constexpr float LegacyContentYaw = -90.0f;
  * OnTakePointDamage / OnTakeRadialDamage; a game's pawn overrides it to apply the damage to its health. An actor with
  * bCanBeDamaged false takes none.
  *
+ * ## Tick
+ * PrimaryActorTick (UE) is the actor's tick function: a class that overrides Tick sets PrimaryActorTick.bCanEverTick
+ * in its constructor (off by default, as in UE: an actor that does not tick costs the world nothing), and may set its
+ * TickGroup and TickInterval. BeginPlay registers it with the world and EndPlay takes it out; SetActorTickEnabled turns
+ * it on and off. The components tick through their own tick functions (UActorComponent::PrimaryComponentTick), just
+ * before their actor.
+ *
  * ## Life span
- * SetLifeSpan (or InitialLifeSpan, applied at BeginPlay) destroys the actor after that many seconds of world ticks
- * (UE: a timer; Leon counts in TickActor).
+ * SetLifeSpan (or InitialLifeSpan, applied at BeginPlay) destroys the actor after that many seconds of world steps:
+ * a timer of the world's timer manager (UE: TimerHandle_LifeSpanExpired).
  */
 UCLASS()
 class ENGINE_API AActor : public UObject
@@ -94,10 +96,6 @@ public:
 	/** Hidden in game (UE: bHidden). */
 	UPROPERTY()
 	uint8 bHidden : 1;
-
-	/** Whether Tick runs each world tick (UE: PrimaryActorTick.bCanEverTick; Leon ticks every actor by default). */
-	UPROPERTY()
-	uint8 bCanEverTick : 1;
 
 	/** Whether the actor takes damage at all (UE: bCanBeDamaged); TakeDamage and the Apply*Damage helpers check it. */
 	UPROPERTY()
@@ -200,6 +198,14 @@ public:
 	{
 		return UniqueID;
 	}
+	/**
+	 * The actor's place in its level's Actors, counted as actors join it (0 before): an actor spawned while the world
+	 * ticks joins when the tick ends, so it may come after actors spawned later. Its tick functions tick in this order.
+	 */
+	[[nodiscard]] uint64 GetLevelOrder() const
+	{
+		return LevelOrder;
+	}
 
 	/** The root component's world location (UE: GetActorLocation). */
 	[[nodiscard]] FVector GetActorLocation() const;
@@ -265,10 +271,47 @@ public:
 	/** Ends play once, from UWorld::DestroyActor and the world teardown (UE: RouteEndPlay). */
 	void RouteEndPlay(const EEndPlayReason::Type EndPlayReason);
 
-	/** Per-frame update, after the components ticked (UE: Tick). */
+	/**
+	 * The actor's tick function (UE: PrimaryActorTick). Set bCanEverTick (and TickGroup, TickInterval,
+	 * bStartWithTickEnabled) in the constructor; BeginPlay registers it.
+	 */
+	FActorTickFunction PrimaryActorTick;
+
+	/** Per-step update (UE: Tick); runs only with PrimaryActorTick.bCanEverTick. */
 	virtual void Tick(float DeltaSeconds);
-	/** Ticks the registered components that enabled their tick, then Tick (UWorld::Tick). */
-	void TickActor(float DeltaSeconds);
+	/** What the tick function runs: Tick (UE: TickActor). */
+	virtual void TickActor(float DeltaSeconds, ELevelTick TickType, FActorTickFunction& ThisTickFunction);
+
+	/** Turns the actor's tick on or off (UE: SetActorTickEnabled); its components keep theirs. */
+	void SetActorTickEnabled(bool bEnabled);
+	[[nodiscard]] bool IsActorTickEnabled() const
+	{
+		return PrimaryActorTick.IsTickFunctionEnabled();
+	}
+	/** Seconds between the actor's ticks, 0 every step (UE: SetActorTickInterval / GetActorTickInterval). */
+	void SetActorTickInterval(float TickInterval);
+	[[nodiscard]] float GetActorTickInterval() const
+	{
+		return PrimaryActorTick.TickInterval;
+	}
+	/** The actor ticks after PrerequisiteActor in their group (UE: AddTickPrerequisiteActor). */
+	void AddTickPrerequisiteActor(AActor* PrerequisiteActor);
+	void RemoveTickPrerequisiteActor(AActor* PrerequisiteActor);
+	/** The actor ticks after PrerequisiteComponent in their group (UE: AddTickPrerequisiteComponent). */
+	void AddTickPrerequisiteComponent(UActorComponent* PrerequisiteComponent);
+	void RemoveTickPrerequisiteComponent(UActorComponent* PrerequisiteComponent);
+
+	/** Registers or unregisters the actor's tick function, and with bDoComponents its components' (UE). */
+	void RegisterAllActorTickFunctions(bool bRegister, bool bDoComponents);
+
+	/** The world's timer manager (UE: GetWorldTimerManager); the actor must be in a world. */
+	[[nodiscard]] FTimerManager& GetWorldTimerManager() const;
+
+	/** The next place of a component's tick among this actor's (FActorComponentTickFunction's tick order). */
+	[[nodiscard]] uint64 NextComponentTickSubOrder()
+	{
+		return ++NumComponentTickOrders;
+	}
 
 	[[nodiscard]] bool HasActorBegunPlay() const
 	{
@@ -323,10 +366,7 @@ public:
 	/** Destroys the actor after InLifespan seconds; 0 cancels (UE: SetLifeSpan). */
 	virtual void SetLifeSpan(float InLifespan);
 	/** Seconds left before the actor is destroyed, 0 without a life span (UE: GetLifeSpan). */
-	[[nodiscard]] float GetLifeSpan() const
-	{
-		return LifeSpanRemaining;
-	}
+	[[nodiscard]] float GetLifeSpan() const;
 	/** The life span ran out: destroys the actor (UE: LifeSpanExpired). */
 	virtual void LifeSpanExpired();
 
@@ -334,7 +374,13 @@ public:
 	UPROPERTY(Transient)
 	UInputComponent* InputComponent = nullptr;
 
+	// UObject
+	void BeginDestroy() override;
+
 protected:
+	/** Registers or unregisters the actor's own tick function (UE: RegisterActorTickFunctions). */
+	virtual void RegisterActorTickFunctions(bool bRegister);
+
 	/** The point damage an actor takes from a point event: the amount as it is (UE: InternalTakePointDamage). */
 	virtual float InternalTakePointDamage(
 		float Damage, const FPointDamageEvent& PointDamageEvent, AController* EventInstigator, AActor* DamageCauser);
@@ -378,8 +424,12 @@ private:
 	APawn* Instigator = nullptr;
 
 	uint64 UniqueID = 0;
-	/** Seconds until LifeSpanExpired; 0 without a life span (UE: the TimerHandle_LifeSpanExpired timer). */
-	float LifeSpanRemaining = 0.0f;
+	/** UWorld gives it when the actor joins the level (GetLevelOrder). */
+	uint64 LevelOrder = 0;
+	/** The components' tick orders given so far (NextComponentTickSubOrder). */
+	uint64 NumComponentTickOrders = 0;
+	/** The life span's timer (UE: TimerHandle_LifeSpanExpired). */
+	FTimerHandle TimerHandle_LifeSpanExpired;
 	bool bActorIsBeingDestroyed = false;
 	bool bActorInitialized = false;
 	bool bActorHasBegunPlay = false;

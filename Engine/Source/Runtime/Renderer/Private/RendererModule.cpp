@@ -41,6 +41,8 @@ namespace
 			// Uncooked textures draw as the PS2 cook makes them (cooked ones already are).
 			SceneRenderer.GetTextureCache().SetTextureConverter(&ConvertTextureAsPS2Cook);
 			Settings = FRendererSettings::Load();
+			SceneRenderer.GetTextureCache().SetUploadBudgetKB(Settings.TextureUploadBudgetKB);
+			SceneRenderer.SetLODDistanceScale(Settings.StaticMeshLODDistanceScale);
 			bInitialized = true;
 			UE_LOG(LogRenderer, Log,
 				"Renderer: the GS scene renderer on the OpenGL GS emulator (%dx%d shown at %.3f, a frame every %d "
@@ -59,7 +61,8 @@ namespace
 
 		void ReleaseAssetResources(const UObject* Asset) override
 		{
-			SceneRenderer.ReleaseAssetResources(Asset);
+			// The emulator executes each list as it is recorded: no list holds the asset's data after this.
+			(void)SceneRenderer.ReleaseAssetResources(Asset);
 		}
 
 		[[nodiscard]] bool IsRendererInitialized() const override

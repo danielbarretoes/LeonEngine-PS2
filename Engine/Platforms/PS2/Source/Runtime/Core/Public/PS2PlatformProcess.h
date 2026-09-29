@@ -3,7 +3,7 @@
 #include "GenericPlatform/GenericPlatformProcess.h"
 
 /**
- * The EE only knows the executable from argv[0] ("host:ThirdPerson.elf" in PCSX2, "cdrom0:\SLUS_000.00;1" on disc),
+ * The EE only knows the executable from argv[0] ("host:ShooterGame.elf" in PCSX2, "cdrom0:\SLUS_000.00;1" on disc),
  * so the base directory is everything up to the last '/', '\' or ':' of it.
  */
 struct CORE_API FPS2PlatformProcess : public FGenericPlatformProcess

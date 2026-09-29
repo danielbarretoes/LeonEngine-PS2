@@ -53,9 +53,12 @@ int main(int ArgC, char* ArgV[])
 	const FMallocUsage Usage = FMemory::GetUsage();
 	const FPlatformMemoryStats Stats = FPlatformMemory::GetStats();
 	UE_LOG(LogTestPAL, Display,
-		TEXT("Memory: GMalloc peak %llu KB, current %llu KB, %llu live allocations; process %llu KB"),
+		TEXT("Memory: GMalloc peak %llu KB, current %llu KB, %llu live allocations; small-block arena peak %llu KB of "
+			 "%llu KB, %llu overflows; process %llu KB"),
 		(unsigned long long)(Usage.PeakBytes / 1024), (unsigned long long)(Usage.CurrentBytes / 1024),
-		(unsigned long long)Usage.NumAllocations, (unsigned long long)(Stats.UsedPhysical / 1024));
+		(unsigned long long)Usage.NumAllocations, (unsigned long long)(Usage.ArenaPeakBytes / 1024),
+		(unsigned long long)(Usage.ArenaBytes / 1024), (unsigned long long)Usage.ArenaOverflows,
+		(unsigned long long)(Stats.UsedPhysical / 1024));
 	UE_LOG(LogTestPAL, Display, TEXT("Names: %d entries, %d KB used of %d KB (blocks + hash)"), FName::GetNumNames(),
 		FName::GetNameEntryMemorySize() / 1024, FName::GetNameTableMemorySize() / 1024);
 	const int32 ObjectsAfterTests = GUObjectArray.GetObjectArrayNumMinusAvailable();

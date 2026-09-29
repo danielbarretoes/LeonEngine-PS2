@@ -6,6 +6,7 @@
 
 class AActor;
 class FDebugDraw;
+class UPhysicalMaterial;
 class UPrimitiveComponent;
 
 /** No body owner (UE: an empty FCollisionQueryParams::IgnoreComponents, a null FHitResult::Component). */
@@ -40,6 +41,17 @@ struct PHYSICSCORE_API FHitResult
 	bool bFloorPlane = false;
 	/** The physics scene body that was hit (Leon: its index in FPhysScene::GetBodies), INDEX_NONE for the planes. */
 	int32 BodyIndex = INDEX_NONE;
+	/**
+	 * The hit triangle of a triangle mesh body (UE: FaceIndex, its index in the mesh's collision triangles), INDEX_NONE
+	 * for a hit on a simple shape or a plane.
+	 */
+	int32 FaceIndex = INDEX_NONE;
+	/**
+	 * What the hit surface is made of (UE: PhysMaterial), when the query asked for it (FCollisionQueryParams::
+	 * bReturnPhysicalMaterial): the physical material of the hit triangle's material, or of the component's first
+	 * material for a simple shape; unset for none (UPhysicalMaterial::DetermineSurfaceType gives the default surface).
+	 */
+	TWeakObjectPtr<UPhysicalMaterial> PhysMaterial;
 	/** The actor that owns the hit component (UE: Actor); unset for a body without a component. */
 	TWeakObjectPtr<AActor> Actor;
 	/** The hit component (UE: Component); unset for a body without a component. */
@@ -86,6 +98,10 @@ struct PHYSICSCORE_API FOverlapResult
  */
 struct PHYSICSCORE_API FCollisionQueryParams
 {
+	/** The ignored lists live in the parameters (UE's inline allocators): a query allocates nothing for them. */
+	typedef TArray<SIZE_T, TInlineAllocator<8>> IgnoreComponentsArrayType;
+	typedef TArray<SIZE_T, TInlineAllocator<4>> IgnoreActorsArrayType;
+
 	/** A body id the query ignores (Leon's single id; UE: AddIgnoredComponent). */
 	SIZE_T IgnoreComponentID = NoComponentID;
 	/** Include an infinite horizontal floor at height FloorZ (UCharacterMovementComponent floor). */
@@ -95,6 +111,11 @@ struct PHYSICSCORE_API FCollisionQueryParams
 	EDrawDebugTrace DrawDebugType = EDrawDebugTrace::None;
 	/** Kept for the UE signature: Leon traces the triangles of static meshes whenever they have them. */
 	bool bTraceComplex = false;
+	/**
+	 * The hits carry the physical material of what they hit (UE: bReturnPhysicalMaterial, FHitResult::PhysMaterial);
+	 * off, the queries skip the lookup.
+	 */
+	bool bReturnPhysicalMaterial = false;
 	/** Names the query in logs (UE: TraceTag). */
 	FName TraceTag;
 
@@ -125,11 +146,11 @@ struct PHYSICSCORE_API FCollisionQueryParams
 	{
 		IgnoreActors.Reset();
 	}
-	[[nodiscard]] const TArray<SIZE_T>& GetIgnoredComponents() const
+	[[nodiscard]] const IgnoreComponentsArrayType& GetIgnoredComponents() const
 	{
 		return IgnoreComponents;
 	}
-	[[nodiscard]] const TArray<SIZE_T>& GetIgnoredActors() const
+	[[nodiscard]] const IgnoreActorsArrayType& GetIgnoredActors() const
 	{
 		return IgnoreActors;
 	}
@@ -139,9 +160,9 @@ struct PHYSICSCORE_API FCollisionQueryParams
 
 private:
 	/** UE: IgnoreComponents (unique ids). */
-	TArray<SIZE_T> IgnoreComponents;
+	IgnoreComponentsArrayType IgnoreComponents;
 	/** UE: IgnoreActors (unique ids). */
-	TArray<SIZE_T> IgnoreActors;
+	IgnoreActorsArrayType IgnoreActors;
 };
 
 /**
@@ -226,8 +247,8 @@ struct PHYSICSCORE_API FCollisionObjectQueryParams
 };
 
 /** UE-like DrawDebugLineTrace / Kismet System Library helpers (one frame into FDebugDraw; defined in Engine). */
-void DrawDebugLineTrace(FDebugDraw& Draw, const FVector& Start, const FVector& End, const TArray<FHitResult>& Hits);
+void DrawDebugLineTrace(FDebugDraw& Draw, const FVector& Start, const FVector& End, TArrayView<const FHitResult> Hits);
 void DrawDebugSphereTrace(
-	FDebugDraw& Draw, const FVector& Start, const FVector& End, float Radius, const TArray<FHitResult>& Hits);
+	FDebugDraw& Draw, const FVector& Start, const FVector& End, float Radius, TArrayView<const FHitResult> Hits);
 void DrawDebugCapsuleTrace(FDebugDraw& Draw, const FVector& Start, const FVector& End, float Radius, float HalfHeight,
-	const TArray<FHitResult>& Hits);
+	TArrayView<const FHitResult> Hits);

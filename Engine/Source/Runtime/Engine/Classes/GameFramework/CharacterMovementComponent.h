@@ -8,12 +8,17 @@
 class ACharacter;
 class FPhysScene;
 
-/** Unreal-like EMovementMode (CMC lite: Walking / Falling only). */
+/** Unreal-like EMovementMode (CMC lite: Walking, Falling and a game's own modes). */
 enum class EMovementMode : uint8
 {
 	None = 0,
 	Walking,
 	Falling,
+	/**
+	 * A game's own mode (UE: MOVE_Custom): UCharacterMovementComponent::PhysCustom moves the character, and
+	 * ACharacter::GetCustomMovementMode says which of the game's modes it is (a ladder).
+	 */
+	Custom,
 };
 
 /** Unreal-like FFindFloorResult (CMC floor query). */
@@ -230,6 +235,14 @@ public:
 	virtual void UpdateCharacterStateBeforeMovement(FPhysScene& PhysScene);
 
 	/**
+	 * Moves the character in EMovementMode::Custom (UE: PhysCustom): a game overrides it for its own modes. Velocity
+	 * is the character's (its Z the vertical velocity), and GetCurrentAcceleration the input's; nothing pulls the
+	 * character down unless the mode does. Leon passes the scene the move runs against (UE's takes the iteration
+	 * count). The default does nothing.
+	 */
+	virtual void PhysCustom(FPhysScene& PhysScene, float DeltaTime);
+
+	/**
 	 * Moves the owning character in its world (UE: TickComponent runs PerformMovement): the component ticks with its
 	 * character, after the character's controller processed its input.
 	 */
@@ -238,6 +251,14 @@ public:
 	void PostInitProperties() override;
 
 protected:
+	/**
+	 * Sweeps the character's capsule by Delta (any direction) and moves it up to the first surface it moves into, a
+	 * skin short of it (UE: SafeMoveUpdatedComponent, for PhysCustom): surfaces it only touches or moves away from do
+	 * not stop it, and the floor plane stops a move down. Returns true when the whole Delta was applied; OutHit is the
+	 * surface that stopped it otherwise.
+	 */
+	bool SafeMoveUpdatedComponent(FPhysScene& PhysScene, const FVector& Delta, FHitResult& OutHit);
+
 	/** UE: CharacterOwner. */
 	UPROPERTY(Transient)
 	ACharacter* CharacterOwner = nullptr;

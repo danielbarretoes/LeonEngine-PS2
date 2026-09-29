@@ -45,6 +45,15 @@ public:
 	/** Asks the view target for its view and keeps it (UE: UpdateCamera). */
 	virtual void UpdateCamera(float DeltaTime);
 
+	/**
+	 * The view Alpha of the way from the update before the last to the last one (ps2-shipping D4: the render draws
+	 * between the world's last two steps); the last view when the view target changed or the view jumped.
+	 */
+	void GetInterpolatedView(float Alpha, FMinimalViewInfo& OutView) const;
+
+	/** A view that moves more than this in one update jumps (cm). */
+	static constexpr float TeleportDistance = 300.0f;
+
 	/** The view of the last update (UE: GetCameraCacheView). */
 	[[nodiscard]] const FMinimalViewInfo& GetCameraCacheView() const
 	{
@@ -57,6 +66,11 @@ public:
 	[[nodiscard]] FRotator GetCameraRotation() const
 	{
 		return CameraCachePOV.Rotation;
+	}
+	/** Whether UpdateCamera has run: before it the cached view is the default one, at the origin. */
+	[[nodiscard]] bool HasCameraCache() const
+	{
+		return bHasCameraCache;
 	}
 
 	/** The field of view in use (UE: GetFOVAngle). */
@@ -73,8 +87,12 @@ public:
 	}
 
 private:
-	/** The last view (UE: CameraCachePrivate.POV). */
+	/** The last view (UE: CameraCachePrivate.POV), and the one before it (UE: LastFrameCameraCachePrivate). */
 	FMinimalViewInfo CameraCachePOV;
+	FMinimalViewInfo LastFrameCameraCachePOV;
+	/** The view target of the last update: a new one is not interpolated from the old. */
+	TWeakObjectPtr<AActor> LastViewTarget;
+	bool bHasCameraCache = false;
 
 	/** A locked field of view, 0 when unlocked (UE: LockedFOV). */
 	float LockedFOV = 0.0f;

@@ -1,6 +1,6 @@
 @echo off
 REM Engine\Build\BatchFiles\Cook.bat <LeonCook arguments>
-REM   Cook.bat -run=ImportAssets -source=SourceArt\Mesh.obj -dest=/Game/Meshes
+REM   Cook.bat -run=ImportAssets -source=SourceArt\Mesh.glb -dest=/Game/Meshes
 REM   Cook.bat Game\MyGame\MyGame.lproj -run=Cook
 REM Builds LeonCook (Win64 Development) and runs it: a commandlet by name (UE: UE4Editor-Cmd <Project> -run=<Commandlet>).
 setlocal EnableExtensions

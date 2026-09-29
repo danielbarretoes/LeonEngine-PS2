@@ -57,8 +57,8 @@ public:
 	/** The scene to draw; null draws only the background (a world without a scene). */
 	FSceneInterface* Scene = nullptr;
 	FEngineShowFlags EngineShowFlags;
-	/** The views, which the caller owns (UE: Views). */
-	TArray<const class FSceneView*> Views;
+	/** The views, which the caller owns (UE: Views); Leon draws one, kept inline (no allocation per frame). */
+	TArray<const class FSceneView*, TInlineAllocator<2>> Views;
 };
 
 /** How to make a FSceneView (UE: FSceneViewInitOptions). */

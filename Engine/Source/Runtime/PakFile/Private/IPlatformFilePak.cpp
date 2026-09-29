@@ -1,8 +1,11 @@
 #include "IPlatformFilePak.h"
 
+#include "Async/AsyncFileHandle.h"
 #include "Containers/Set.h"
+#include "HAL/LowLevelMemTracker.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformProperties.h"
+#include "HAL/PlatformTime.h"
 #include "Misc/App.h"
 #include "Misc/Crc.h"
 #include "Misc/Parse.h"
@@ -14,6 +17,153 @@ DEFINE_LOG_CATEGORY(LogPakFile);
 
 namespace
 {
+	/**
+	 * FPakFile::GetReadStats's counts, the game thread's handles' [0] and the IO thread's [1]: each written by its own
+	 * thread only, read by the logs.
+	 */
+	volatile uint32 GFileReads[2] = {};
+	volatile uint64 GFileBytes[2] = {};
+	volatile uint64 GFileCycles[2] = {};
+	volatile uint32 GCachedReads[2] = {};
+
+	/** Reads the file and counts it. */
+	bool ReadFile(IFileHandle& File, int32 Kind, int64 Offset, uint8* Destination, int64 Bytes)
+	{
+		const uint64 Start = FPlatformTime::Cycles64();
+		const bool bRead = File.Seek(Offset) && File.Read(Destination, Bytes);
+		GFileCycles[Kind] = GFileCycles[Kind] + (FPlatformTime::Cycles64() - Start);
+		GFileReads[Kind] = GFileReads[Kind] + 1;
+		GFileBytes[Kind] = GFileBytes[Kind] + uint64(Bytes);
+		return bRead;
+	}
+
+	/**
+	 * A pak's handle on the disk, counted (GetReadStats), with a block cache on the game thread's (UE: the pak
+	 * precacher's blocks; Docs/PLANS/ps2-shipping.md N24b): a small read reads the BlockSize bytes from its position
+	 * once, and the reads after it that fall in the block (the next entries of a pak in its open order: the synchronous
+	 * loader reads a package's file whole) are copies. On the PS2 a read of the disc costs about 20 ms before its bytes
+	 * (the IOP's calls, the emulated drive) and 0.7 ms a KB. A read of a block or more goes straight to the file. The
+	 * IO thread's handle has no block: FAsyncIOSystem sorts and coalesces its reads, and a block ahead of a scattered
+	 * read is bytes read for nothing. One thread uses a handle: no lock.
+	 */
+	class FPakBlockCacheHandle final : public IFileHandle
+	{
+	public:
+		static constexpr int64 BlockSize = 64 * 1024;
+
+		FPakBlockCacheHandle(IFileHandle* InInner, bool bInAsync)
+			: Inner(InInner)
+			, Kind(bInAsync ? 1 : 0)
+			, FileSize(InInner->Size())
+		{
+			if (!bInAsync)
+			{
+				LLM_SCOPE(ELLMTag::EngineMisc);
+				Block = static_cast<uint8*>(FMemory::Malloc(SIZE_T(BlockSize), 64));
+			}
+		}
+
+		virtual ~FPakBlockCacheHandle() override
+		{
+			FMemory::Free(Block);
+		}
+
+		virtual int64 Tell() override
+		{
+			return Position;
+		}
+
+		virtual bool Seek(int64 NewPosition) override
+		{
+			if (NewPosition < 0 || NewPosition > FileSize)
+			{
+				return false;
+			}
+			Position = NewPosition;
+			return true;
+		}
+
+		virtual bool SeekFromEnd(int64 NewPositionRelativeToEnd) override
+		{
+			return Seek(FileSize + NewPositionRelativeToEnd);
+		}
+
+		virtual bool Read(uint8* Destination, int64 BytesToRead) override
+		{
+			if (BytesToRead < 0 || Position + BytesToRead > FileSize)
+			{
+				return false;
+			}
+			if (Position >= BlockStart && Position < BlockStart + BlockBytes)
+			{
+				GCachedReads[Kind] = GCachedReads[Kind] + 1;
+			}
+			while (BytesToRead > 0)
+			{
+				if (Position >= BlockStart && Position < BlockStart + BlockBytes)
+				{
+					const int64 Count = FMath::Min(BytesToRead, BlockStart + BlockBytes - Position);
+					FMemory::Memcpy(Destination, Block + (Position - BlockStart), SIZE_T(Count));
+					Destination += Count;
+					Position += Count;
+					BytesToRead -= Count;
+					continue;
+				}
+				if (BytesToRead >= BlockSize || Block == nullptr)
+				{
+					// Large, or no block: straight to the file (what it read is not kept).
+					if (!ReadFile(*Inner, Kind, Position, Destination, BytesToRead))
+					{
+						return false;
+					}
+					Position += BytesToRead;
+					return true;
+				}
+				// The block starts where the read does (a pak in its open order is read forward: nothing before the
+				// position is wanted again, and the block's rest is the next entries).
+				BlockStart = Position;
+				BlockBytes = FMath::Min(BlockSize, FileSize - BlockStart);
+				if (!ReadFile(*Inner, Kind, BlockStart, Block, BlockBytes))
+				{
+					BlockBytes = 0;
+					return false;
+				}
+			}
+			return true;
+		}
+
+		virtual bool Write(const uint8* /*Source*/, int64 /*BytesToWrite*/) override
+		{
+			return false;
+		}
+
+		virtual bool Flush(const bool /*bFullFlush*/) override
+		{
+			return true;
+		}
+
+		virtual bool Truncate(int64 /*NewSize*/) override
+		{
+			return false;
+		}
+
+		virtual int64 Size() override
+		{
+			return FileSize;
+		}
+
+	private:
+		TUniquePtr<IFileHandle> Inner;
+		/** GetReadStats's slot: 0 the game thread's handle, 1 the IO thread's. */
+		int32 Kind = 0;
+		int64 FileSize = 0;
+		int64 Position = 0;
+		uint8* Block = nullptr;
+		/** The block held: its offset in the file and its bytes (0: none). */
+		int64 BlockStart = 0;
+		int64 BlockBytes = 0;
+	};
+
 	/** Reads an entry's bytes from its pak (UE: FPakFileHandle, without the compression and encryption paths). */
 	class FPakFileHandle final : public IFileHandle
 	{
@@ -153,10 +303,14 @@ void FPakInfo::Serialize(FArchive& Ar)
 
 FPakFile::FPakFile(IPlatformFile* LowerLevel, const TCHAR* Filename)
 	: PakFilename(Filename)
+	, LowerLevelFile(LowerLevel)
 {
 	if (LowerLevel != nullptr)
 	{
-		PakHandle.Reset(LowerLevel->OpenRead(Filename));
+		if (IFileHandle* File = LowerLevel->OpenRead(Filename))
+		{
+			PakHandle.Reset(new FPakBlockCacheHandle(File, false));
+		}
 	}
 	if (!PakHandle)
 	{
@@ -195,6 +349,29 @@ bool FPakFile::ReadEntry(const FPakEntry& Entry, TArray<uint8>& OutData)
 {
 	OutData.SetNumUninitialized(int32(Entry.Size));
 	return Entry.Size == 0 || Read(Entry.Offset, OutData.GetData(), Entry.Size);
+}
+
+FPakFile::FReadStats FPakFile::GetReadStats(bool bAsyncHandle)
+{
+	const int32 Kind = bAsyncHandle ? 1 : 0;
+	FReadStats Stats;
+	Stats.FileReads = GFileReads[Kind];
+	Stats.FileBytes = GFileBytes[Kind];
+	Stats.FileCycles = GFileCycles[Kind];
+	Stats.CachedReads = GCachedReads[Kind];
+	return Stats;
+}
+
+TSharedPtr<IFileHandle> FPakFile::GetAsyncFileHandle()
+{
+	if (!AsyncFileHandle && PakHandle && LowerLevelFile != nullptr)
+	{
+		if (IFileHandle* File = LowerLevelFile->OpenRead(*PakFilename))
+		{
+			AsyncFileHandle = TSharedPtr<IFileHandle>(new FPakBlockCacheHandle(File, true));
+		}
+	}
+	return AsyncFileHandle;
 }
 
 bool FPakFile::Initialize()
@@ -674,6 +851,32 @@ IFileHandle* FPakPlatformFile::OpenRead(const TCHAR* Filename, bool bAllowWrite)
 		}
 	}
 	return IsNonPakFilenameAllowed(Filename) ? LowerLevel->OpenRead(Filename, bAllowWrite) : nullptr;
+}
+
+IAsyncReadFileHandle* FPakPlatformFile::OpenAsyncRead(const TCHAR* Filename)
+{
+	const FPakIndexEntry* Entry = nullptr;
+	if (FPakFile* PakFile = FindFileInPakFiles(Filename, &Entry))
+	{
+		for (const FPakListEntry& Listed : PakFiles)
+		{
+			if (Listed.PakFile.Get() != PakFile)
+			{
+				continue;
+			}
+			// A pak in memory reads through an entry handle of its own (a copy from memory, on any thread).
+			TSharedPtr<IFileHandle> File = PakFile->IsInMemory()
+				? TSharedPtr<IFileHandle>(new FPakFileHandle(Listed.PakFile, Entry->Entry))
+				: PakFile->GetAsyncFileHandle();
+			const int64 BaseOffset = PakFile->IsInMemory() ? 0 : Entry->Entry.Offset;
+			return new FGenericAsyncReadFileHandle(MoveTemp(File), BaseOffset, Entry->Entry.Size);
+		}
+	}
+	if (IsNonPakFilenameAllowed(Filename))
+	{
+		return LowerLevel->OpenAsyncRead(Filename);
+	}
+	return new FGenericAsyncReadFileHandle(nullptr, 0, -1);
 }
 
 IFileHandle* FPakPlatformFile::OpenWrite(const TCHAR* Filename, bool bAppend, bool bAllowRead)

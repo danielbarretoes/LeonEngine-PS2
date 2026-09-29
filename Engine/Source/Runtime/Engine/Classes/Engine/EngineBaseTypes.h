@@ -2,7 +2,204 @@
 
 #include "CoreMinimal.h"
 #include "UObject/ObjectMacros.h"
+#include "UObject/WeakObjectPtrTemplates.h"
 #include "EngineBaseTypes.generated.h"
+
+class AActor;
+class FTickTaskManager;
+class UActorComponent;
+class ULevel;
+
+/** What a world tick runs (UE: ELevelTick). Leon's worlds always tick everything. */
+enum ELevelTick
+{
+	/** Only the time moves (unused). */
+	LEVELTICK_TimeOnly = 0,
+	/** Only the viewports tick (unused). */
+	LEVELTICK_ViewportsOnly = 1,
+	/** Everything ticks. */
+	LEVELTICK_All = 2,
+	/** Paused (unused). */
+	LEVELTICK_PauseTick = 3,
+};
+
+/**
+ * When in a world step a tick function runs (UE: ETickingGroup, the groups Leon has). UWorld::Tick runs them in this
+ * order around the physics step: PrePhysics (the controllers, the pawns and their movement: UE's default), the physics
+ * step, DuringPhysics (whatever does not care about this step's physics: it runs after it on the one thread),
+ * PostPhysics (what follows the bodies), then the timers and the camera managers, then PostUpdateWork (after the
+ * cameras).
+ */
+enum ETickingGroup : uint8
+{
+	TG_PrePhysics = 0,
+	TG_DuringPhysics,
+	TG_PostPhysics,
+	TG_PostUpdateWork,
+	TG_MAX,
+};
+
+struct FTickFunction;
+
+/** A tick function another one waits for, and the object that owns it (UE: FTickPrerequisite). */
+struct ENGINE_API FTickPrerequisite
+{
+	/** The owner: once it is gone the prerequisite is ignored (UE: PrerequisiteObject). */
+	TWeakObjectPtr<UObject> PrerequisiteObject;
+	FTickFunction* PrerequisiteTickFunction = nullptr;
+
+	FTickPrerequisite() = default;
+	FTickPrerequisite(UObject* TargetObject, FTickFunction& TargetTickFunction);
+
+	/** The tick function while its owner lives, else null (UE: Get). */
+	[[nodiscard]] FTickFunction* Get() const;
+
+	bool operator==(const FTickPrerequisite& Other) const
+	{
+		return PrerequisiteObject == Other.PrerequisiteObject &&
+			PrerequisiteTickFunction == Other.PrerequisiteTickFunction;
+	}
+};
+
+/**
+ * Something the world ticks every step (UE: FTickFunction, the part Leon uses; one thread, no task graph). A subclass
+ * says what to run (ExecuteTick); an actor's is AActor::PrimaryActorTick, a component's
+ * UActorComponent::PrimaryComponentTick.
+ *
+ * - Set the options before registering: bCanEverTick (nothing registers without it), TickGroup, TickInterval and
+ *   bStartWithTickEnabled. RegisterTickFunction puts it in its level's world (actors and components do it when they
+ *   begin play, and undo it when they end play or unregister).
+ * - The world keeps, for each group, the list of the enabled tick functions only, so a disabled or never-ticking one
+ *   costs nothing. A list keeps the order of the actors in their level (AActor::GetLevelOrder), with an actor's
+ *   components before the actor, each in the order they were first registered; a tick function that is disabled and
+ *   enabled again goes back to its place. Other tick functions (tests) follow the actors in the order they were first
+ *   registered.
+ * - TickInterval > 0 ticks once that many seconds of steps have gone by, with the time since its last tick as the
+ *   delta; the interval's remainder carries over, so it keeps its rate on average whatever the step.
+ * - AddPrerequisite makes it wait, within its group, for another tick function of that group that is enabled and due
+ *   this step (UE; Leon ignores a prerequisite of another group: the groups already run in order).
+ */
+struct ENGINE_API FTickFunction
+{
+	FTickFunction();
+	virtual ~FTickFunction();
+
+	FTickFunction(const FTickFunction&) = delete;
+	FTickFunction& operator=(const FTickFunction&) = delete;
+
+	/** The group it runs in (UE: TickGroup). Set it before registering. */
+	ETickingGroup TickGroup = TG_PrePhysics;
+
+	/** Whether it may ever tick; without it RegisterTickFunction does nothing (UE: bCanEverTick). */
+	uint8 bCanEverTick : 1;
+
+	/** Enabled when registered (UE: bStartWithTickEnabled). */
+	uint8 bStartWithTickEnabled : 1;
+
+	/** Seconds between two ticks; 0 ticks every step (UE: TickInterval). */
+	float TickInterval = 0.0f;
+
+	/** Adds it to the world of Level (UE: RegisterTickFunction); nothing without bCanEverTick or a world. */
+	void RegisterTickFunction(ULevel* Level);
+	/** Takes it out of its world (UE: UnRegisterTickFunction). */
+	void UnRegisterTickFunction();
+	[[nodiscard]] bool IsTickFunctionRegistered() const
+	{
+		return TickTaskManager != nullptr;
+	}
+
+	/** Turns it on or off (UE: SetTickFunctionEnable); before registering it says whether it starts enabled. */
+	void SetTickFunctionEnable(bool bInEnabled);
+	/** Whether it is enabled; before it registers, whether it will start enabled. */
+	[[nodiscard]] bool IsTickFunctionEnabled() const;
+
+	/** Changes the interval; the time already waited counts toward the new one (UE: UpdateTickIntervalAndCoolDown). */
+	void UpdateTickIntervalAndCoolDown(float NewTickInterval);
+
+	/** Waits, in its group, for TargetTickFunction of TargetObject (UE: AddPrerequisite); once only. */
+	void AddPrerequisite(UObject* TargetObject, FTickFunction& TargetTickFunction);
+	void RemovePrerequisite(UObject* TargetObject, FTickFunction& TargetTickFunction);
+	[[nodiscard]] const TArray<FTickPrerequisite>& GetPrerequisites() const
+	{
+		return Prerequisites;
+	}
+
+	/** Runs the tick (UE: ExecuteTick, without the task graph's arguments). */
+	virtual void ExecuteTick(float DeltaTime, ELevelTick TickType) = 0;
+
+	/** What it ticks, for logs (UE: DiagnosticMessage). */
+	[[nodiscard]] virtual FString DiagnosticMessage()
+	{
+		return TEXT("FTickFunction");
+	}
+
+protected:
+	/**
+	 * Where it goes in its group's list (lower first): an actor's and its components' place in their level, else a
+	 * registration serial after every actor. Called once, on its first registration.
+	 */
+	[[nodiscard]] virtual uint64 MakeTickOrder();
+
+	/**
+	 * The tick functions this one also waits for: its own prerequisites, and for a component in its owner's group the
+	 * owner's (Leon: a component ticks with its actor, as the pawn's did after its controller).
+	 */
+	virtual void GetEffectivePrerequisites(
+		TArray<const FTickPrerequisite*, TInlineAllocator<8>>& OutPrerequisites) const;
+
+private:
+	friend class FTickTaskManager;
+
+	TArray<FTickPrerequisite> Prerequisites;
+	/** The world's manager while registered. */
+	FTickTaskManager* TickTaskManager = nullptr;
+	/** The place in the group's list (MakeTickOrder), kept across registrations. */
+	uint64 TickOrder = 0;
+	/** Seconds left until an interval tick is due (it ticks at 0 or below). */
+	float TickCooldown = 0.0f;
+	/** Seconds since it last ticked (the delta an interval tick gets). */
+	float TimeSinceLastTick = 0.0f;
+	/** The manager's step when it last ran, or was due, or was found not due (TickState's step). */
+	uint32 StateFrame = 0;
+	/** In this step: 0 not due, 1 due and not yet run, 2 run. */
+	uint8 TickState = 0;
+	/** The group whose list holds it (bInList). */
+	uint8 ListGroup = 0;
+	uint8 bTickEnabled : 1;
+	uint8 bHasTickOrder : 1;
+	/** In its group's list (enabled while registered). */
+	uint8 bInList : 1;
+	/** SetTickFunctionEnable was called: registering keeps that state instead of bStartWithTickEnabled. */
+	uint8 bEnableRequested : 1;
+};
+
+/** An actor's tick (UE: FActorTickFunction): AActor::TickActor. */
+struct ENGINE_API FActorTickFunction : public FTickFunction
+{
+	/** The actor (UE: Target). */
+	AActor* Target = nullptr;
+
+	void ExecuteTick(float DeltaTime, ELevelTick TickType) override;
+	[[nodiscard]] FString DiagnosticMessage() override;
+
+protected:
+	[[nodiscard]] uint64 MakeTickOrder() override;
+};
+
+/** A component's tick (UE: FActorComponentTickFunction): UActorComponent::TickComponent. */
+struct ENGINE_API FActorComponentTickFunction : public FTickFunction
+{
+	/** The component (UE: Target). */
+	UActorComponent* Target = nullptr;
+
+	void ExecuteTick(float DeltaTime, ELevelTick TickType) override;
+	[[nodiscard]] FString DiagnosticMessage() override;
+
+protected:
+	[[nodiscard]] uint64 MakeTickOrder() override;
+	void GetEffectivePrerequisites(
+		TArray<const FTickPrerequisite*, TInlineAllocator<8>>& OutPrerequisites) const override;
+};
 
 /** How a URL is read against a base URL (UE: ETravelType). */
 enum ETravelType

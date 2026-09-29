@@ -1,7 +1,6 @@
 #include "ShooterBomb.h"
 
 #include "Components/StaticMeshComponent.h"
-#include "Engine/Level.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "GameFramework/DamageType.h"
@@ -10,20 +9,12 @@
 #include "ShooterCharacter.h"
 #include "ShooterGame.h"
 #include "ShooterGameMode.h"
+#include "ShooterPlayerController.h"
 #include "Sound/SoundWave.h"
+#include "TimerManager.h"
 
 namespace
 {
-
-	template <class T>
-	T* LoadOptionalAsset(const FSoftObjectPath& Path)
-	{
-		if (Path.IsNull() || !FPackageName::DoesPackageExist(Path.GetLongPackageName()))
-		{
-			return nullptr;
-		}
-		return Cast<T>(Path.TryLoad());
-	}
 
 	/** The explosion's flash. */
 	constexpr float ExplosionLightIntensity = 20.0f;
@@ -47,6 +38,7 @@ namespace
 AShooterBomb::AShooterBomb(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+	PrimaryActorTick.bCanEverTick = true;
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BombMesh"));
 	Mesh->SetupAttachment(GetRootComponent());
 	Mesh->SetMobility(EComponentMobility::Movable);
@@ -57,20 +49,41 @@ AShooterBomb::AShooterBomb(const FObjectInitializer& ObjectInitializer)
 void AShooterBomb::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
-	if (UStaticMesh* BombMesh = LoadOptionalAsset<UStaticMesh>(MeshName))
+	if (UStaticMesh* BombMesh = LoadShooterAsset<UStaticMesh>(MeshName))
 	{
 		(void)Mesh->SetStaticMesh(BombMesh);
 	}
-	BeepSound = LoadOptionalAsset<USoundWave>(BeepSoundName);
-	PlantSound = LoadOptionalAsset<USoundWave>(PlantSoundName);
-	DefuseSound = LoadOptionalAsset<USoundWave>(DefuseSoundName);
-	ExplodeSound = LoadOptionalAsset<USoundWave>(ExplodeSoundName);
+	BeepSound = LoadShooterAsset<USoundWave>(BeepSoundName);
+	PlantSound = LoadShooterAsset<USoundWave>(PlantSoundName);
+	DefuseSound = LoadShooterAsset<USoundWave>(DefuseSoundName);
+	ExplodeSound = LoadShooterAsset<USoundWave>(ExplodeSoundName);
+}
+
+void AShooterBomb::BeginPlay()
+{
+	Super::BeginPlay();
+	if (AShooterGameMode* GameMode = GetShooterGameMode(GetWorld()))
+	{
+		GameMode->RegisterBomb(this);
+	}
 }
 
 float AShooterBomb::GetWorldTime() const
 {
 	const UWorld* World = GetWorld();
 	return World != nullptr ? World->GetTimeSeconds() : 0.0f;
+}
+
+float AShooterBomb::GetTimerEndTime(FTimerHandle Handle) const
+{
+	const UWorld* World = GetWorld();
+	const float Remaining = World != nullptr ? World->GetTimerManager().GetTimerRemaining(Handle) : -1.0f;
+	return Remaining >= 0.0f ? GetWorldTime() + Remaining : 0.0f;
+}
+
+float AShooterBomb::GetDefuseEndTime() const
+{
+	return GetTimerEndTime(TimerHandle_Defuse);
 }
 
 void AShooterBomb::PlaySound(USoundWave* Sound) const
@@ -87,6 +100,10 @@ void AShooterBomb::GiveTo(AShooterCharacter* NewCarrier)
 		State == EShooterBombState::Exploded)
 	{
 		return;
+	}
+	if (AShooterGameMode* GameMode = GetShooterGameMode(GetWorld()))
+	{
+		GameMode->UnregisterPickup(this);
 	}
 	Carrier = NewCarrier;
 	Carrier->SetCarriedBomb(this);
@@ -117,6 +134,7 @@ void AShooterBomb::Drop(const FVector& Location)
 		static_cast<double>(Location.Y), static_cast<double>(Location.Z));
 	if (AShooterGameMode* GameMode = GetShooterGameMode(GetWorld()))
 	{
+		GameMode->RegisterPickup(this);
 		GameMode->OnBombStateChanged(this);
 	}
 }
@@ -134,9 +152,11 @@ void AShooterBomb::Plant(const FVector& Location, FName InSite, AShooterCharacte
 	Carrier = nullptr;
 	State = EShooterBombState::Planted;
 	Site = InSite;
-	const float Now = GetWorldTime();
-	ExplodeTime = Now + BombTimer;
-	NextBeepTime = Now;
+	ExplodeTime = GetWorldTime() + BombTimer;
+	FTimerManager& TimerManager = GetWorldTimerManager();
+	TimerManager.SetTimer(TimerHandle_Explode, this, &AShooterBomb::OnExplodeTimer, BombTimer);
+	// The first beep at the next step.
+	TimerManager.SetTimer(TimerHandle_Beep, this, &AShooterBomb::Beep, BeepSlowest, false, 0.0f);
 	(void)SetActorLocationAndRotation(Location, FRotator::ZeroRotator);
 	Mesh->SetVisibility(true);
 	PlaySound(PlantSound);
@@ -154,7 +174,8 @@ bool AShooterBomb::StartDefuse(AShooterCharacter* NewDefuser)
 		return false;
 	}
 	Defuser = NewDefuser;
-	DefuseEndTime = GetWorldTime() + (NewDefuser->HasDefuseKit() ? DefuseKitDuration : DefuseDuration);
+	GetWorldTimerManager().SetTimer(TimerHandle_Defuse, this, &AShooterBomb::OnDefuseTimer,
+		NewDefuser->HasDefuseKit() ? DefuseKitDuration : DefuseDuration);
 	UE_LOG(LogShooter, Log, TEXT("%s is defusing the bomb%s"), *NewDefuser->GetName(),
 		NewDefuser->HasDefuseKit() ? TEXT(" with a kit") : TEXT(""));
 	return true;
@@ -165,7 +186,7 @@ void AShooterBomb::StopDefuse(AShooterCharacter* OldDefuser)
 	if (Defuser != nullptr && Defuser == OldDefuser)
 	{
 		Defuser = nullptr;
-		DefuseEndTime = 0.0f;
+		GetWorldTimerManager().ClearTimer(TimerHandle_Defuse);
 	}
 }
 
@@ -187,6 +208,15 @@ void AShooterBomb::Explode()
 		return;
 	}
 	State = EShooterBombState::Exploded;
+	FTimerManager& TimerManager = GetWorldTimerManager();
+	TimerManager.ClearTimer(TimerHandle_Explode);
+	TimerManager.ClearTimer(TimerHandle_Beep);
+	TimerManager.ClearTimer(TimerHandle_Defuse);
+	// A defuser who lives through the blast is not defusing any more.
+	if (AShooterCharacter* OldDefuser = Defuser)
+	{
+		OldDefuser->StopUse();
+	}
 	Defuser = nullptr;
 	const FVector Origin = GetActorLocation() + FVector(0.0f, 0.0f, ExplosionLift);
 	// CS's bomb reaches through walls: no line-of-sight channel.
@@ -196,6 +226,7 @@ void AShooterBomb::Explode()
 	(void)UGameplayStatics::SpawnPointLightAtLocation(this, Origin, FLinearColor(1.0f, 0.55f, 0.2f),
 		ExplosionLightIntensity, ExplosionRadius, ExplosionLightLifeSpan);
 	PlaySound(ExplodeSound);
+	AShooterPlayerController::PlayExplosionForceFeedback(GetWorld(), Origin, ExplosionRadius);
 	Mesh->SetVisibility(false);
 	UE_LOG(LogShooter, Log, TEXT("The bomb exploded at site %s"), *Site.ToString());
 	if (AShooterGameMode* GameMode = GetShooterGameMode(GetWorld()))
@@ -204,16 +235,50 @@ void AShooterBomb::Explode()
 	}
 }
 
-void AShooterBomb::TickBeeps(float Now)
+void AShooterBomb::Beep()
 {
-	if (Now < NextBeepTime)
+	if (State != EShooterBombState::Planted)
 	{
 		return;
 	}
 	PlaySound(BeepSound);
-	const float Left = ExplodeTime - Now;
+	FTimerManager& TimerManager = GetWorldTimerManager();
+	const float Left = TimerManager.GetTimerRemaining(TimerHandle_Explode);
 	const float Alpha = FMath::Clamp(1.0f - (Left / BeepSpeedUpTime), 0.0f, 1.0f);
-	NextBeepTime = Now + FMath::Lerp(BeepSlowest, BeepFastest, Alpha);
+	TimerManager.SetTimer(TimerHandle_Beep, this, &AShooterBomb::Beep, FMath::Lerp(BeepSlowest, BeepFastest, Alpha));
+}
+
+void AShooterBomb::OnExplodeTimer()
+{
+	// CS: a defuse that ends no later than the explosion wins (its timer is due on this step too).
+	if (Defuser != nullptr && GetWorldTimerManager().GetTimerRemaining(TimerHandle_Defuse) == 0.0f)
+	{
+		OnDefuseTimer();
+		return;
+	}
+	Explode();
+}
+
+void AShooterBomb::OnDefuseTimer()
+{
+	if (State != EShooterBombState::Planted || Defuser == nullptr)
+	{
+		return;
+	}
+	AShooterCharacter* Hero = Defuser;
+	State = EShooterBombState::Defused;
+	Defuser = nullptr;
+	FTimerManager& TimerManager = GetWorldTimerManager();
+	TimerManager.ClearTimer(TimerHandle_Defuse);
+	TimerManager.ClearTimer(TimerHandle_Explode);
+	TimerManager.ClearTimer(TimerHandle_Beep);
+	PlaySound(DefuseSound);
+	UE_LOG(LogShooter, Log, TEXT("%s defused the bomb"), *Hero->GetName());
+	Hero->StopUse();
+	if (AShooterGameMode* GameMode = GetShooterGameMode(GetWorld()))
+	{
+		GameMode->OnBombDefused(this, Hero);
+	}
 }
 
 void AShooterBomb::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -223,13 +288,17 @@ void AShooterBomb::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		Carrier->SetCarriedBomb(nullptr);
 	}
 	Carrier = nullptr;
+	if (AShooterGameMode* GameMode = GetShooterGameMode(GetWorld()))
+	{
+		GameMode->UnregisterPickup(this);
+		GameMode->UnregisterBomb(this);
+	}
 	Super::EndPlay(EndPlayReason);
 }
 
 void AShooterBomb::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	const float Now = GetWorldTime();
 	UWorld* World = GetWorld();
 	switch (State)
 	{
@@ -240,13 +309,12 @@ void AShooterBomb::Tick(float DeltaSeconds)
 			}
 			break;
 		case EShooterBombState::Dropped:
-			if (World != nullptr && World->PersistentLevel != nullptr)
+			if (const AShooterGameMode* GameMode = GetShooterGameMode(World))
 			{
-				for (AActor* Actor : World->PersistentLevel->Actors)
+				// The game mode's pawns, in the level's order (GiveTo changes no pawn).
+				for (AShooterCharacter* Pawn : GameMode->GetPawns())
 				{
-					AShooterCharacter* Pawn = Cast<AShooterCharacter>(Actor);
-					if (Pawn == nullptr || Pawn->IsPendingKillPending() || !Pawn->IsAlive() ||
-						Pawn->GetTeam() != EShooterTeam::T)
+					if (Pawn->IsPendingKillPending() || !Pawn->IsAlive() || Pawn->GetTeam() != EShooterTeam::T)
 					{
 						continue;
 					}
@@ -261,31 +329,12 @@ void AShooterBomb::Tick(float DeltaSeconds)
 			}
 			break;
 		case EShooterBombState::Planted:
+			// A defuser who leaves, lets go or dies stops (the defuse's timer goes with it).
 			if (Defuser != nullptr && !CanKeepDefusing(*Defuser))
 			{
 				Defuser->StopUse();
 				StopDefuse(Defuser);
 			}
-			if (Defuser != nullptr && Now >= DefuseEndTime && DefuseEndTime <= ExplodeTime)
-			{
-				AShooterCharacter* Hero = Defuser;
-				State = EShooterBombState::Defused;
-				Defuser = nullptr;
-				PlaySound(DefuseSound);
-				UE_LOG(LogShooter, Log, TEXT("%s defused the bomb"), *Hero->GetName());
-				Hero->StopUse();
-				if (AShooterGameMode* GameMode = GetShooterGameMode(World))
-				{
-					GameMode->OnBombDefused(this, Hero);
-				}
-				break;
-			}
-			if (Now >= ExplodeTime)
-			{
-				Explode();
-				break;
-			}
-			TickBeeps(Now);
 			break;
 		case EShooterBombState::None:
 		case EShooterBombState::Defused:

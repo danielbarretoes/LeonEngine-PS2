@@ -2,6 +2,7 @@
 #include "HAL/FileManager.h"
 #include "HAL/PlatformTime.h"
 #include "Misc/AutomationTest.h"
+#include "Misc/MemStack.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "Misc/SecureHash.h"
@@ -751,7 +752,7 @@ bool FPackageDeterministicTest::RunTest(const FString& Parameters)
 	const FString Hash = HashWithoutEngineVersion(First);
 	UE_LOG(
 		LogTemp, Display, TEXT("Package determinism: %d bytes, MD5 without the engine version %s"), First.Num(), *Hash);
-	TestEqual(TEXT("golden hash"), Hash, TEXT("4588866aed5cfdf92d196e4fe300e4ce"));
+	TestEqual(TEXT("golden hash"), Hash, TEXT("dd3fe13e6df48714ce9d2e260774da36"));
 	return true;
 }
 
@@ -1258,11 +1259,16 @@ bool FPackageBudgetTest::RunTest(const FString& Parameters)
 	TArray<UObject*> LoadedObjects;
 	GetObjectsWithOuter(Loaded, LoadedObjects, false);
 	TestEqual(TEXT("every object loaded"), LoadedObjects.Num(), NumObjects);
+	// The package's bytes were in the load arena, given back as a block when the load ended (ps2-shipping N17).
+	TestTrue(TEXT("the load arena is empty"), FLinkerLoad::GetLoadArena().IsEmpty());
+	TestEqual(
+		TEXT("the load arena gave its chunks back"), uint64(FLinkerLoad::GetLoadArena().GetChunkBytes()), uint64(0));
+	TestEqual(TEXT("no mark left open"), FLinkerLoad::GetLoadArena().GetNumMarks(), 0);
 
 	UE_LOG(LogTemp, Display,
 		TEXT("Package budget: %d objects, package %d bytes; save %.3f ms, load %.3f ms; heap %d KB -> %d KB with the "
 			 "objects -> %d KB destroyed (the package bytes stay registered) -> %d KB loaded; the load also holds the "
-			 "file bytes (%d KB) until it ends"),
+			 "file bytes (%d KB, the load arena) until its exports are serialized"),
 		NumObjects, Bytes.Num(), SaveSeconds * 1000.0, LoadSeconds * 1000.0, int32(HeapBefore / 1024),
 		int32(HeapWithObjects / 1024), int32(HeapAfterDestroy / 1024), int32(HeapLoaded / 1024),
 		int32(Bytes.Num() / 1024));

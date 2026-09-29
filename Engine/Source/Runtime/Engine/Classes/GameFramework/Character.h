@@ -11,6 +11,7 @@
 #include "Character.generated.h"
 
 class FDebugDraw;
+class UAnimMontage;
 
 /**
  * Kinematic capsule pawn (Unreal-style ACharacter + CMC lite).
@@ -22,14 +23,17 @@ class FDebugDraw;
  * Contract:
  * - Actor location = capsule **feet** (bottom), not capsule center (UE: the capsule center; a documented deviation).
  * - The capsule extends up (+Z) by twice its half height from the feet; XY radius = capsule radius.
- * - Actor yaw is a UE yaw (0 faces +X, 90 faces +Y); the mesh shows legacy content with a relative yaw of
- *   LegacyContentYaw.
+ * - Actor yaw is a UE yaw (0 faces +X, 90 faces +Y); the mesh has no relative rotation: its content faces +X, the
+ *   actor's forward.
  * - The capsule is a query-only body of the physics scene (P17): a Pawn object that ignores the Visibility channel
  *   (UE's Pawn profile) and the Pawn channel (Leon: the world separates pawns, ResolvePawnOverlap), so traces on the
  *   other channels hit characters. The movement's queries run on the capsule's object type with its responses and
  *   ignore the capsule itself; after moving, the character sends its capsule's body the new place.
  * - Moves via PerformMovement queries.
- * - Modes: Walking / Falling via SetMovementMode; floor via FindFloor → IsWalkable.
+ * - Modes: Walking / Falling via SetMovementMode; floor via FindFloor → IsWalkable. A game's own mode (Custom, with
+ *   its CustomMovementMode: a ladder) is moved by UCharacterMovementComponent::PhysCustom instead.
+ * - Events: Landed when a fall ends on a walkable floor (GetVelocityZ is still the speed it hit it at), OnJumped when
+ *   a jump leaves the floor (UE).
  * - Horizontal speed: the movement component's instant model by default, or UE's velocity model (acceleration,
  *   friction, braking, air control; UCharacterMovementComponent::bInstantVelocity). Crouching (Crouch / UnCrouch,
  *   NavAgentProps.bCanCrouch) shrinks the capsule to CrouchedHalfHeight before the next move.
@@ -78,11 +82,19 @@ public:
 		return *CharacterMovement;
 	}
 
-	/** Unreal-like UCharacterMovementComponent::SetMovementMode / MovementMode. */
-	void SetMovementMode(EMovementMode NewMode);
+	/**
+	 * Unreal-like UCharacterMovementComponent::SetMovementMode / MovementMode; NewCustomMode is the game's mode when
+	 * NewMode is Custom (UE: CustomMovementMode), 0 otherwise.
+	 */
+	void SetMovementMode(EMovementMode NewMode, uint8 NewCustomMode = 0);
 	[[nodiscard]] EMovementMode GetMovementMode() const
 	{
 		return MovementMode;
+	}
+	/** The game's mode while Custom, else 0 (UE: UCharacterMovementComponent::CustomMovementMode). */
+	[[nodiscard]] uint8 GetCustomMovementMode() const
+	{
+		return CustomMovementMode;
 	}
 
 	/** Unreal-like UCharacterMovementComponent::IsMovingOnGround. */
@@ -146,7 +158,17 @@ public:
 
 	void Reset(const FVector& Location, const FRotator& Rotation = FRotator::ZeroRotator);
 	void AddMovementInput(const FVector& WishDirXY);
-	void Jump();
+	/** Asks for a jump at the next move (UE: Jump); a game overrides it for its own modes (a ladder's jump). */
+	virtual void Jump();
+
+	/**
+	 * A fall ended on a walkable floor (UE: Landed): Hit is the floor, and GetVelocityZ is still the vertical speed
+	 * the character hit it at (it is zeroed after). The character already walks there. A game hurts a hard landing
+	 * here.
+	 */
+	virtual void Landed(const FHitResult& Hit);
+	/** A jump left the floor (or the air, for another of MaxJumpCount) this move (UE: OnJumped). */
+	virtual void OnJumped();
 
 	/** Move capsule against an explicit FPhysScene (unit tests / tools). Games may override. */
 	virtual void PerformMovement(FPhysScene& PhysScene, float DeltaTime, FDebugDraw* DebugDraw = nullptr);
@@ -197,6 +219,15 @@ public:
 	/** Ticks Mesh UAnimInstance (Unreal: Character::Tick → Mesh component). */
 	void Tick(float DeltaTime) override;
 
+	/**
+	 * Plays a montage on the mesh's anim instance (UE: PlayAnimMontage), from StartSectionName when given; returns its
+	 * length scaled by the rate, 0 when it did not play.
+	 */
+	virtual float PlayAnimMontage(
+		UAnimMontage* AnimMontage, float InPlayRate = 1.0f, FName StartSectionName = NAME_None);
+	/** Stops a montage (every one when null) with its blend out (UE: StopAnimMontage). */
+	virtual void StopAnimMontage(UAnimMontage* AnimMontage = nullptr);
+
 private:
 	/** The movement component changes the capsule, the crouch state and the feet (UE's is a friend too). */
 	friend class UCharacterMovementComponent;
@@ -208,6 +239,8 @@ private:
 	/** Sweeps Remaining along the floor with the step-up and the slides (both horizontal models). */
 	void MoveAlongFloor(FPhysScene& PhysScene, FVector Remaining, float DeltaTime, FDebugDraw* DebugDraw);
 	void IntegrateVertical(FPhysScene& PhysScene, float DeltaTime, FDebugDraw* DebugDraw);
+	/** EMovementMode::Custom: the input to the movement's acceleration, then its PhysCustom. */
+	void PerformCustomMovement(FPhysScene& PhysScene, float DeltaTime);
 	void ResolveSides(FPhysScene& PhysScene, bool bApplyPush);
 
 	/** Capsule cylinder half-height (excl. hemispherical caps) for CapsuleTrace. */
@@ -215,6 +248,12 @@ private:
 	[[nodiscard]] FVector CapsuleCenterFromFeet(const FVector& Feet) const;
 	/** True if a horizontal sweep should stop on this hit (not walkable floor/top). */
 	[[nodiscard]] bool BlocksHorizontalMove(const FHitResult& Hit) const;
+	/**
+	 * True if the hit is the edge of a box whose top is at the feet, within the skin (N29): a floor the capsule walks
+	 * onto, not a wall (the box sweep reports its side, as it grows the box by the capsule's extent). UE's
+	 * CharacterMovementComponent walks over it; a higher top is a step (TryStepUp) or a wall.
+	 */
+	[[nodiscard]] bool IsFloorEdgeHit(const FPhysScene& PhysScene, const FHitResult& Hit, float FeetZ) const;
 	/**
 	 * Unreal-like SafeMoveUpdatedComponent (XY): sweep capsule, advance to hit, optional outHit.
 	 * Returns true if the full delta was applied (no blocking side hit).
@@ -243,6 +282,7 @@ private:
 	FVector WishDir = FVector::ZeroVector;
 	float VelocityZ = 0.0f;
 	EMovementMode MovementMode = EMovementMode::Walking;
+	uint8 CustomMovementMode = 0;
 	bool bJumpRequested = false;
 	/** WishDir came from the pawn's input vector, which clears it when the input stops. */
 	bool bWishFromInputVector = false;

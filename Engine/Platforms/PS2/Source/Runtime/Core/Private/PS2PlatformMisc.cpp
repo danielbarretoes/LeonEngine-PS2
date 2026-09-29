@@ -2,8 +2,10 @@
 #include "HAL/PlatformMisc.h"
 
 #include <cstdio>
+#include <cstring>
 #include <iopcontrol.h>
 #include <kernel.h>
+#include <loadfile.h>
 #include <sbv_patches.h>
 #include <sifrpc.h>
 
@@ -35,6 +37,58 @@ void FPS2PlatformMisc::InitializeIop(bool bReset)
 	sbv_patch_enable_lmb();
 	sbv_patch_disable_prefix_check();
 	std::printf("FPS2PlatformMisc: IOP %s, SIF RPC and LOADFILE patches ready\n", bReset ? "reset" : "kept");
+}
+
+namespace
+{
+	int32 GIopLock = -1;
+} // namespace
+
+void FPS2PlatformMisc::LockIop()
+{
+	if (GIopLock < 0)
+	{
+		// First used on the game thread, before the IO thread exists.
+		ee_sema_t Sema{};
+		Sema.init_count = 1;
+		Sema.max_count = 1;
+		GIopLock = CreateSema(&Sema);
+	}
+	WaitSema(GIopLock);
+}
+
+void FPS2PlatformMisc::UnlockIop()
+{
+	SignalSema(GIopLock);
+}
+
+bool FPS2PlatformMisc::LoadIopModule(const char* Path)
+{
+	// Few modules: a fixed table (no heap this early).
+	constexpr int32 MaxModules = 8;
+	static const char* Loaded[MaxModules] = {};
+	static int32 NumLoaded = 0;
+	for (int32 Index = 0; Index < NumLoaded; ++Index)
+	{
+		if (std::strcmp(Loaded[Index], Path) == 0)
+		{
+			return true;
+		}
+	}
+	InitializeIop(false);
+	LockIop();
+	const bool bLoaded = SifLoadModule(Path, 0, nullptr) >= 0;
+	UnlockIop();
+	if (!bLoaded)
+	{
+		std::printf("FPS2PlatformMisc: IOP module %s could not be loaded\n", Path);
+		return false;
+	}
+	if (NumLoaded < MaxModules)
+	{
+		Loaded[NumLoaded++] = Path;
+	}
+	return true;
 }
 
 void FPS2PlatformMisc::SetFatalExitHandler(void (*Handler)(uint8 ReturnCode))

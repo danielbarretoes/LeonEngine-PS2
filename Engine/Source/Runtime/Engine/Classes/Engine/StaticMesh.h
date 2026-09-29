@@ -32,17 +32,46 @@ struct ENGINE_API FStaticMaterial
 	FName MaterialSlotName;
 };
 
+/** How a LOD is simplified from LOD 0 (UE: FMeshReductionSettings, its PercentTriangles only). */
+USTRUCT()
+struct ENGINE_API FMeshReductionSettings
+{
+	GENERATED_BODY()
+
+	/** The share of LOD 0's triangles the LOD keeps at most (UE: PercentTriangles, 0 to 1). */
+	UPROPERTY()
+	float PercentTriangles = 1.0f;
+};
+
+/** A LOD of a static mesh: how it is made and down to which screen size it draws (UE: FStaticMeshSourceModel). */
+USTRUCT()
+struct ENGINE_API FStaticMeshSourceModel
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FMeshReductionSettings ReductionSettings;
+
+	/**
+	 * The screen size from which the LOD is drawn (UE: ScreenSize): the bounding sphere's projected diameter over the
+	 * view's height; below the next LOD's, the next LOD draws. LOD 0's is 1.
+	 */
+	UPROPERTY()
+	float ScreenSize = 1.0f;
+};
+
 /**
- * A static mesh asset (UE: UStaticMesh): its geometry (one LOD: vertices, indices and sections), the bounds, a
- * material per slot and the collision description. The renderer keeps the GPU copy of the geometry, which it makes the
- * first time it draws the mesh (Engine never sees GPU objects); InitResources drops it when the geometry changes (and
- * after a load) and BeginDestroy releases it. The physics scene reads the triangles and the body setup for the mesh's
- * bodies.
+ * A static mesh asset (UE: UStaticMesh): its render data (LODs of LPS2 v2, the quantized strips in VU1's batches,
+ * FStaticMeshLODResources), the triangles it collides with (FTriMeshCollisionData, at full precision), the bounds, a
+ * material per slot and the collision description. The renderer keeps whatever it derives from the render data
+ * (Engine never sees GPU objects); InitResources drops it when the geometry changes (and after a load) and
+ * BeginDestroy releases it. The physics scene reads the collision triangles and the body setup for the mesh's bodies.
  *
- * In a package: the tagged properties (the slots, the body setup, an inner object), then the bounds and the geometry
- * as bulk data (at the end of the file, plan decision D13). Leon has no source models, LODs, nanite, UV channel data or
- * distance fields; BuildFromMeshData takes the place of UE's build from the mesh description. Its sockets (inner
- * UStaticMeshSocket objects) are named points a component attaches to or asks for (a weapon's muzzle).
+ * In a package: the tagged properties (the slots, the body setup, an inner object), then the bounds, and the render
+ * data and the collision triangles as bulk data (at the end of the file, plan decision D13). Leon has no source
+ * models, LODs, nanite, UV channel data or distance fields; BuildFromMeshData takes the place of UE's build from the
+ * mesh description. Its sockets (inner UStaticMeshSocket objects) are named points a component attaches to or asks for
+ * (a weapon's muzzle).
  */
 UCLASS()
 class ENGINE_API UStaticMesh : public UObject
@@ -64,6 +93,15 @@ public:
 	UPROPERTY()
 	TArray<UStaticMeshSocket*> Sockets;
 
+	/**
+	 * How each LOD is made and when it is drawn (UE: SourceModels, which UE keeps in the editor and cooks into
+	 * RenderData->ScreenSize; Leon keeps it at run time for the screen sizes; Docs/PLANS/ps2-shipping.md N15). Empty,
+	 * or one entry: one LOD. Entry 0 is LOD 0 (the mesh as imported); each later one a meshoptimizer simplification of
+	 * it (meshopt_simplify) to its PercentTriangles, built with the mesh (BuildFromMeshData) and saved with LOD 0.
+	 */
+	UPROPERTY()
+	TArray<FStaticMeshSourceModel> SourceModels;
+
 	/** The socket called InSocketName, or null (UE: FindSocket). */
 	[[nodiscard]] UStaticMeshSocket* FindSocket(FName InSocketName) const;
 
@@ -75,9 +113,10 @@ public:
 #endif
 
 	/**
-	 * Builds the mesh from Data (Leon; UE builds from its source models): the vertices, indices and sections (one
-	 * section over every index when Data has none), the bounds and, when there is none, the body setup. The slots
-	 * (StaticMaterials) are the caller's. False, leaving the mesh as it was, for empty data.
+	 * Builds the mesh from Data (Leon; UE builds from its source models): the render data through the mesh builder
+	 * (IMeshBuilderModule: MeshUtilities, linked by the editor and the tests only; one section over every index when
+	 * Data has none), the collision triangles, the bounds and, when there is none, the body setup. The slots
+	 * (StaticMaterials) are the caller's. False, leaving the mesh as it was, for empty data or without a builder.
 	 */
 	bool BuildFromMeshData(const FMeshData& Data);
 
@@ -96,13 +135,31 @@ public:
 	/** True when the mesh has triangles to draw (UE: HasValidRenderData). */
 	[[nodiscard]] bool HasValidRenderData() const
 	{
-		return LODResources.Indices.Num() > 0 && LODResources.Vertices.Num() > 0;
+		return LODResources.Num() > 0 && !LODResources[0].IsEmpty();
 	}
 
-	/** The geometry (Leon: UE reads RenderData->LODResources[0]). */
-	[[nodiscard]] const FStaticMeshLODResources& GetLODResources() const
+	/**
+	 * The render data of a LOD (UE: RenderData->LODResources[LODIndex]); LOD 0 is the mesh as imported, an index past
+	 * the last LOD the last one.
+	 */
+	[[nodiscard]] const FStaticMeshLODResources& GetLODResources(int32 LODIndex = 0) const;
+
+	/** The LODs the render data has (UE: GetNumLODs): SourceModels' count, at least 1. */
+	[[nodiscard]] int32 GetNumLODs() const
 	{
-		return LODResources;
+		return LODResources.Num() > 0 ? LODResources.Num() : 1;
+	}
+
+	/**
+	 * The screen size a LOD is drawn down to (UE: RenderData->ScreenSize[LODIndex]): the bounding sphere's projected
+	 * diameter over the view's height, 1 filling it. LOD 0 has 1.
+	 */
+	[[nodiscard]] float GetLODScreenSize(int32 LODIndex) const;
+
+	/** The triangles the physics scene collides with (UE: GetPhysicsTriMeshData, which fills a copy). */
+	[[nodiscard]] const FTriMeshCollisionData& GetPhysicsTriMeshData() const
+	{
+		return PhysicsTriMeshData;
 	}
 
 	/** The local bounding box of the vertices (UE: GetBoundingBox). */
@@ -116,15 +173,15 @@ public:
 		return FBoxSphereBounds(BoundingBox);
 	}
 
-	/** UE: GetNumSections (of the only LOD). */
+	/** UE: GetNumSections (of LOD 0; every LOD has the same sections). */
 	[[nodiscard]] int32 GetNumSections() const
 	{
-		return LODResources.Sections.Num();
+		return GetLODResources().GetNumSections();
 	}
 	/** Triangles of the geometry (UE: GetNumTriangles of LOD 0). */
 	[[nodiscard]] int32 GetNumTriangles() const
 	{
-		return LODResources.GetNumTriangles();
+		return GetLODResources().GetNumTriangles();
 	}
 
 	/** The material of a slot, or null (UE: GetMaterial). */
@@ -140,7 +197,7 @@ public:
 		return BodySetup;
 	}
 
-	/** The tagged properties, then the bounds and the geometry (bulk data). */
+	/** The tagged properties, then the bounds, the render data and the collision triangles (bulk data). */
 	void Serialize(FArchive& Ar) override;
 	/** UE: a loaded mesh initializes its resources. */
 	void PostLoad() override;
@@ -148,8 +205,13 @@ public:
 	void BeginDestroy() override;
 
 private:
-	FStaticMeshLODResources LODResources;
+	/** One a LOD, LOD 0 first (UE: RenderData->LODResources). */
+	TArray<FStaticMeshLODResources> LODResources;
+	FTriMeshCollisionData PhysicsTriMeshData;
 	FBox BoundingBox = FBox(FVector::ZeroVector, FVector::ZeroVector);
-	/** The geometry in a package: filled from LODResources while saving, read back and emptied while loading. */
+	/**
+	 * The render data and the collision triangles in a package: filled from them while saving, read back and emptied
+	 * while loading.
+	 */
 	FByteBulkData GeometryBulkData;
 };

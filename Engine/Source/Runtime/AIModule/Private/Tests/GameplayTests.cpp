@@ -22,7 +22,6 @@
 #include "MeshData.h"
 #include "Misc/AutomationTest.h"
 #include "Physics/PhysScene.h"
-#include "PhysicsBackend.h"
 #include "Tests/GameplayTestTypes.h"
 #include "Tests/ScopedTestWorld.h"
 #include "TriangleCollision.h"
@@ -122,10 +121,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayGameStateMatchTimerAndPlayerStateScore
 
 bool FGameplayGameStateMatchTimerAndPlayerStateScoreTest::RunTest(const FString& Parameters)
 {
-	// The match clock runs only while the match is in progress; Reset clears the clock and the player score.
-	AGameStateBase& GameState = *NewObject<AGameStateBase>();
+	// The match clock runs with the world's time while the match is in progress; Reset clears the clock and the player
+	// score.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AGameStateBase& GameState = *World.SpawnActor<AGameStateBase>();
 	GameState.HandleMatchHasStarted();
-	GameState.Tick(0.5f);
+	World.Tick(0.5f);
 	TestTrue("Match started", GameState.HasMatchStarted());
 	TestEqual("Clock advanced", GameState.GetServerWorldTimeSeconds(), 0.5f, 1.0e-5f);
 	GameState.Reset();
@@ -593,20 +595,20 @@ bool FGameplayCharacterResetJumpAndPerformMovementTest::RunTest(const FString& P
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayActorMeshComponentFollowsActorWithLegacyContentYawTest,
-	"System.AIModule.Gameplay.ActorMeshComponentFollowsActorWithLegacyContentYaw",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayActorMeshComponentFollowsActorTest,
+	"System.AIModule.Gameplay.ActorMeshComponentFollowsActor",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-bool FGameplayActorMeshComponentFollowsActorWithLegacyContentYawTest::RunTest(const FString& Parameters)
+bool FGameplayActorMeshComponentFollowsActorTest::RunTest(const FString& Parameters)
 {
-	// A mesh component attached to the actor's root follows the actor's location and yaw; it shows converted legacy
-	// content (facing +Y), so its relative yaw is LegacyContentYaw and its world yaw is the actor yaw plus that.
+	// A mesh component attached to the actor's root follows the actor's location and yaw; its world yaw is the actor
+	// yaw plus its relative yaw.
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	ATestActor* Actor = World.SpawnActor<ATestActor>();
 	UStaticMeshComponent* Mesh = NewObject<UStaticMeshComponent>(Actor);
 	Mesh->SetupAttachment(Actor->GetRootComponent());
-	Mesh->RelativeRotation = FRotator(0.0f, LegacyContentYaw, 0.0f);
+	Mesh->RelativeRotation = FRotator(0.0f, 30.0f, 0.0f);
 	Mesh->RegisterComponent();
 	Actor->SetActorLocationAndRotation(FVector(300.0f, 150.0f, -200.0f), FRotator(0.0f, 90.0f, 0.0f));
 
@@ -614,11 +616,12 @@ bool FGameplayActorMeshComponentFollowsActorWithLegacyContentYawTest::RunTest(co
 	TestEqual("Position X", Transform.GetLocation().X, 300.0f, 1.0e-3f);
 	TestEqual("Position Y", Transform.GetLocation().Y, 150.0f, 1.0e-3f);
 	TestEqual("Position Z", Transform.GetLocation().Z, -200.0f, 1.0e-3f);
-	TestTrue(
-		"Yaw", Transform.GetRotation().Equals(FRotator(0.0f, 90.0f + LegacyContentYaw, 0.0f).Quaternion(), 1.0e-6f));
-	// The content's forward (+Y) now faces the actor's forward (yaw 90: +Y).
-	TestTrue("Content faces the actor forward",
-		Transform.GetRotation().RotateVector(FVector(0.0f, 1.0f, 0.0f)).Equals(FVector(0.0f, 1.0f, 0.0f), 1.0e-5f));
+	TestTrue("Yaw", Transform.GetRotation().Equals(FRotator(0.0f, 120.0f, 0.0f).Quaternion(), 1.0e-6f));
+	// The content's forward (+X) turns by both yaws.
+	TestTrue("Content forward",
+		Transform.GetRotation()
+			.RotateVector(FVector::ForwardVector)
+			.Equals(FRotator(0.0f, 120.0f, 0.0f).Vector(), 1.0e-5f));
 	return true;
 }
 
@@ -641,7 +644,7 @@ bool FGameplayWorldTickGameplayFrameMovesCharacterMeshTest::RunTest(const FStrin
 	const FTransform Transform = Character->GetMesh().GetComponentTransform();
 	TestEqual("Position X", Transform.GetLocation().X, 100.0f, 1.0e-2f);
 	TestEqual("Position Y", Transform.GetLocation().Y, 200.0f, 1.0e-2f);
-	TestEqual("Yaw", Transform.Rotator().Yaw, 45.0f + LegacyContentYaw, 1.0e-3f);
+	TestEqual("Yaw", Transform.Rotator().Yaw, 45.0f, 1.0e-3f);
 	return true;
 }
 
@@ -735,28 +738,15 @@ bool FGameplayCharacterMeshAttachesToRootTest::RunTest(const FString& Parameters
 	Character.GetMesh().RelativeLocation = FVector(100.0f, 0.0f, 0.0f);
 	TestEqual("Mesh world X", Character.GetMesh().GetComponentLocation().X, 600.0f, 1.0e-2f);
 
-	// The mesh shows legacy content (facing +Y) with a relative yaw of -90: the content faces the actor's forward.
+	// The mesh has no relative rotation: its content's forward (+X) is the actor's forward.
 	Character.SetActorRotation(FRotator(0.0f, 30.0f, 0.0f));
 	const FVector ContentForward =
-		Character.GetMesh().GetComponentTransform().GetRotation().RotateVector(FVector(0.0f, 1.0f, 0.0f));
+		Character.GetMesh().GetComponentTransform().GetRotation().RotateVector(FVector::ForwardVector);
 	TestTrue("Content faces the actor forward", ContentForward.Equals(FRotator(0.0f, 30.0f, 0.0f).Vector(), 1.0e-5f));
 	TestTrue("Offset turns with the actor",
 		Character.GetMesh().GetComponentLocation().Equals(
 			FVector(500.0f, 0.0f, 0.0f) + FRotator(0.0f, 30.0f, 0.0f).RotateVector(FVector(100.0f, 0.0f, 0.0f)),
 			1.0e-2f));
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayPhysSceneReportsArcadeBackendByDefaultTest,
-	"System.AIModule.Gameplay.PhysSceneReportsArcadeBackendByDefault",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
-
-bool FGameplayPhysSceneReportsArcadeBackendByDefaultTest::RunTest(const FString& Parameters)
-{
-	// A default physics scene uses the Arcade backend and names it "Arcade".
-	FPhysScene Scene;
-	TestTrue("Arcade backend", Scene.GetBackend() == EPhysicsBackend::Arcade);
-	TestEqual("Backend name", PhysicsBackendName(Scene.GetBackend()), "Arcade");
 	return true;
 }
 

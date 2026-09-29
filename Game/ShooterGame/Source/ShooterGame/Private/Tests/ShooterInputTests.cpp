@@ -100,7 +100,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameInputBuyMenuTest, "ShooterGame.Inpu
 bool FShooterGameInputBuyMenuTest::RunTest(const FString& Parameters)
 {
 	// Closed, the buy menu leaves the number keys to the weapon slots. Open (Start), the D-pad moves its highlight,
-	// Cross buys the item instead of jumping, and Circle closes it instead of crouching.
+	// Cross opens the highlighted category and buys an item instead of jumping, and Circle goes back to the first page
+	// and then closes it instead of crouching.
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	const FTestShooter Shooter(World);
@@ -121,21 +122,29 @@ bool FShooterGameInputBuyMenuTest::RunTest(const FString& Parameters)
 	Shooter.Tap(World, EKeys::Gamepad_DPad_Up, true);
 	Shooter.Tap(World, EKeys::Gamepad_DPad_Up, true);
 	TestEqual("Up past the first wraps to the last", Controller.GetBuyMenuSelection(),
-		AShooterPlayerController::GetBuyMenuItems().Num() - 1);
-	// Without a game mode a buy is refused, but the attempt reaches the menu (its message).
+		AShooterPlayerController::GetNumBuyMenuCategories() - 1);
+	// The last category (the equipment): Cross opens it; then its first item. Without a game mode a buy is refused,
+	// but the attempt reaches the menu (its message).
 	Shooter.Tap(World, EKeys::Gamepad_FaceButton_Bottom, true);
-	TestFalse("Cross tries to buy", Controller.GetLastBuyMessage().IsEmpty());
+	TestEqual("Cross opens the equipment", Controller.GetBuyMenuCategory(),
+		AShooterPlayerController::GetNumBuyMenuCategories() - 1);
 	TestTrue("and does not jump", Character.IsMovingOnGround());
+	Shooter.Tap(World, EKeys::Gamepad_FaceButton_Bottom, true);
+	TestFalse("Cross tries to buy the vest", Controller.GetLastBuyMessage().IsEmpty());
+	TestEqual("then the first page", Controller.GetBuyMenuCategory(), static_cast<int32>(INDEX_NONE));
 	Controller.SetBuyMenuOpen(false);
 	Character.SelectSlot(EShooterWeaponSlot::Secondary);
 	TickFrames(World, 2);
 	Controller.SetBuyMenuOpen(true);
 	Shooter.Tap(World, EKeys::One, false);
-	TestFalse("1 buys the first item", Controller.GetLastBuyMessage().IsEmpty());
+	TestEqual("1 opens the pistols", Controller.GetBuyMenuCategory(), 0);
 	TestTrue("instead of drawing the rifle",
 		Character.GetWeapon() == Character.GetWeaponInSlot(EShooterWeaponSlot::Secondary));
 	Shooter.Tap(World, EKeys::Gamepad_FaceButton_Right, true);
-	TestFalse("Circle closes the menu", Controller.IsBuyMenuOpen());
+	TestTrue("Circle goes back to the first page",
+		Controller.IsBuyMenuOpen() && Controller.GetBuyMenuCategory() == INDEX_NONE);
+	Shooter.Tap(World, EKeys::Gamepad_FaceButton_Right, true);
+	TestFalse("and then closes the menu", Controller.IsBuyMenuOpen());
 	TestFalse("and does not crouch", Character.bIsCrouched);
 	return true;
 }

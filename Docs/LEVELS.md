@@ -4,7 +4,8 @@ A map is a `.lmap` package that holds a world: its `UWorld` (the map's asset, na
 persistent level, the level's `AWorldSettings` and the actors with their components (plan decision D13,
 `PKG_ContainsMap`), as UE's `.umap`. `UEngine::LoadMap` opens one; a map is made by importing a glTF scene exported from
 Blender (LeonEd's `UGLTFMapFactory`, [below](#importing-a-map-from-gltf)) or by code that builds a world and saves it.
-The PS2 runtime loads no map yet: the ThirdPerson demo builds its level in code (`FThirdPersonLevel`).
+The PS2 runtime loads maps the same way: ShooterGame opens `de_leon` from its pak on the EE, cooked by the PS2 target
+platform ([ps2-engine](PLANS/ps2-engine.md)).
 
 Code: `Engine/Source/Runtime/Engine/Classes/Engine/World.h`, `Level.h`, the actor and component classes in
 `Engine/Source/Runtime/Engine/Classes/{Engine,GameFramework,Camera,Components,AI}/`,
@@ -90,16 +91,20 @@ Engine\Binaries\Win64\LeonCook.exe Game\MyGame\MyGame.lproj -run=ImportAssets -t
 or as a section of the project's `SourceArt/ImportList.ini` (`Source=Maps/de_leon.glb`, `Dest=/Game/Maps/de_leon`,
 `Type=Map`). `-dest` is the map's package (UE's map path): the map is `Content/Maps/de_leon.lmap`, each glTF mesh a node
 shows one `SM_<Mesh>` in `/Game/Maps/de_leon/Meshes` (a mesh several nodes show is one asset), each PBR material an
-`M_<Material>` in `/Game/Maps/de_leon/Materials` with its external base colour and normal images as `T_` textures there.
+`M_<Material>` in `/Game/Maps/de_leon/Materials` with its base colour and normal images (embedded or external) as `T_`
+textures there. A material whose glTF extras name a physical material
+(`{"physMaterial": "/Game/PhysicalMaterials/PM_Wood"}`, N30f) gets it as its `PhysMaterial`; a name that does not
+exist is an error (the `PM_` assets are imported first).
 
 ### From Blender
 
 - Model in metres with Blender's axes. Blender and the engine are both Z up with the same +X; Blender is right-handed
   and the engine left-handed, so Blender's +Y is the engine's −Y (the exporter and the importer do this for you:
   glTF is +Y up, and `FImportCoordinateConversion` turns glTF (x, y, z) m into the engine's (x, z, y) × 100 cm).
-- Export **glTF 2.0**: *glTF Binary (.glb)*, or *glTF Separate* when materials have textures (the importer reads
-  external images only, not images embedded in a `.glb`); *+Y Up* on (the default); *Include › Custom Properties* on
-  for the waypoints' `links` / `flags`; *Include › Punctual Lights* on; apply the modifiers.
+- Export **glTF 2.0**: *glTF Binary (.glb)*, its images embedded (since [ps2-shipping](PLANS/ps2-shipping.md) N21), or
+  *glTF Separate* with external images; *+Y Up* on (the default); *Include › Custom Properties* on for the waypoints'
+  `links` / `flags`; *Include › Punctual Lights* on; apply the modifiers. A map script exports with ShooterGame's
+  `leon_art.export_glb` (the fixed options, the same bytes every run: [ART_PIPELINE.md](ART_PIPELINE.md)).
 - Name the objects after the conventions below; Blender's copy numbers (`BuyZone_T.001`) are fine.
 - The glTF source goes to the project's `SourceArt/Maps/` next to the `.blend`, both under version control; the
   imported map records it (its world's `AssetImportData`), so `-reimport` rebuilds the map from it.
@@ -124,8 +129,10 @@ starts with; the engine's rules are in `Engine/Config/BaseEditor.ini`, a project
 | `Clip_*` | `ABlockingVolume` | engine |
 | `PlayerStart*` | `APlayerStart` upright, facing the node's +X; the name's suffix is its `PlayerStartTag` (`PlayerStart_CT`: `CT`) | engine, `bSuffixAsTag` |
 | `NavWaypoint*` | `ANavigationWaypoint` at the node; the extras `links` (waypoint node names) and `flags` (names), each a JSON array of strings or one comma-separated string (Blender custom properties are strings) | engine |
+| `VIS_<Cell>` | `AVisibilityCellVolume`, the box of its mesh, `CellName` its suffix: a visibility cell ([cells and portals](#cells-and-portals)) | engine (N15) |
+| `PORTAL_<CellA>_<CellB>` | `AVisibilityPortal` between the two cells (either name may hold an underscore), `Corners` the rectangle of its quad in the world; left out, with a warning, when the suffix names no two cells of the map | engine (N15) |
 | `BombSite_A` / `_B`, `BuyZone_CT` / `_T` | `ATriggerVolume`, `Tags` [`BombSite`, `A`] / [`BuyZone`, `CT`] | a project's (ShooterGame, P17), below |
-| a KHR_lights_punctual light | `ADirectionalLight`, or `APointLight` for a point or spot light (Leon has no spot light: a warning): the colour, the glTF intensity as `Intensity`, `range` as `AttenuationRadius` (8 m without one); the directional light casts shadows (the renderer shadows the first one) | always, whatever its name |
+| a KHR_lights_punctual light | `ADirectionalLight`, or `APointLight` for a point or spot light (Leon has no spot light: a warning): the colour, the glTF intensity as `Intensity`, `range` as `AttenuationRadius` (8 m without one); every light casts shadows in the [static lighting](#static-lighting) | always, whatever its name |
 | a node with no mesh and no rule | nothing (a group; its children are placed with its transform) | — |
 
 A volume is the box of the node's mesh (its bounds in the mesh's space, placed and sized by the node's transform; a
@@ -170,7 +177,7 @@ higher than a jump and up to `AgentMaxDropHeight`. The agent is the Engine confi
 (`FWaypointLinkParams::FromConfig`), which the world's graph reads too, so the game walks the links the import made.
 The links the nodes name are kept; the added ones are saved in the map. ShooterGame's `DefaultEditor.ini` turns it on
 and its `DefaultEngine.ini` gives CS's hull (40 cm × 183 cm, a 45 cm step, a 112 cm jump: the character jumps 114 cm,
-a 3 m drop, 20 m); de_leon's import adds 26 links to the 18 waypoints' hand-authored ones, the same on every import
+a 3 m drop, 20 m); de_leon's import adds 38 links to the 22 waypoints' hand-authored ones, the same on every import
 (the map's bytes do not change: gate G5).
 
 ### Collision
@@ -179,7 +186,60 @@ A static mesh actor collides with its mesh's triangles (the physics scene's stat
 has `UCX_` boxes, which then answer traces and physics. Leon's physics scene has boxes and triangle meshes, no convex
 hulls, and gives a body the bounds of its boxes: a `UCX_` piece is its bounding box, and several pieces merge into one
 box (a documented deviation). `COL_` meshes collide with their triangles and are never drawn; `Clip_` volumes are
-boxes.
+boxes. A query with `FCollisionQueryParams::bReturnPhysicalMaterial` gets the surface it hit in
+`FHitResult::PhysMaterial`: the physical material of the hit triangle's material slot, or of the mesh's first material
+for a `UCX_` box (N30f; ShooterGame's footsteps, impacts and penetration read it).
+
+<a id="static-lighting"></a>
+
+### Static lighting
+
+The last step of the import bakes the map's lighting into its static meshes, per vertex ([ps2-shipping](PLANS/ps2-shipping.md)
+N22, decision D5: LeonCook bakes it, not Blender, so it is deterministic): LeonEd's `FStaticLightingSystem` (UE: Lightmass).
+`LeonCook <Project>.lproj -run=ResavePackages -buildlighting [-package=/Game/Maps/X]` (UE's switch) bakes a map again
+without its source (the engine's `Entry` and `Template_Default`). For each vertex of every Static, visible static mesh
+component of the level, in linear RGB:
+
+- **the sky**: the world settings' `LightmassSettings` (UE's `FLightmassWorldInfoSettings`), `EnvironmentColor` ×
+  `EnvironmentIntensity` (a light blue × 0.35 by default), times the share of the vertex's hemisphere that sees no
+  geometry within `MaxOcclusionDistance` (300 cm): `NumOcclusionRays` (64) cosine-weighted directions, a stratified set
+  from a fixed seed, the same for every vertex; `bUseAmbientOcclusion` off lets the whole sky in;
+- **each light that is not Movable** (the map's lights are Static): Lambert, a point light's range attenuation squared,
+  as the renderer lights what moves; a ray toward the light (along a directional light's direction, to a point light's
+  position) that meets the static geometry first leaves it out when the light `CastShadows`.
+
+The occluders are the Static, visible, shadow-casting (`CastShadow`) static meshes' triangles, their collision
+triangles at full precision, in a bounding volume tree (PhysicsCore's `FAabbTree`, the physics scene's). A ray starts
+2 cm off its vertex along the normal and ignores hits within 0.05 cm of its start, so the foot of a wall on the ground
+sees the ground only below it: make the ground a closed mesh (a slab), so that a ray into it meets its far side. The
+light times the mesh's own colour, clamped to 1, becomes the component's baked vertex colours
+(`UStaticMeshComponent::BakedVertexColors`, [ASSET_FORMATS.md](ASSET_FORMATS.md#lps2-instance-colors)), saved in the map
+and made for the mesh as it was: a mesh rebuilt since (another import) draws flat until the map is baked again, and the
+cook warns about it (`the lighting needs to be rebuilt`). The bake runs on one thread in a fixed order: the same map
+bakes the same bytes, so the reimport stays byte for byte (gate G5). de_leon bakes 3 471 vertices of 78 meshes against
+2 244 triangles and four lights with 224 885 rays in under 0.1 s.
+
+At run time a Static mesh draws its baked colours times its material's albedo, with no light computed per frame, and
+anything Movable (the pawns' bodies, the weapons, the projectiles, the bomb) is lit per frame by the scene's lights with
+the same sky as its ambient ([ARCHITECTURE.md](ARCHITECTURE.md#12-rendering-the-gs-path)). Per-vertex lighting shows
+only where there are vertices: a surface that should catch a shadow needs them (de_leon's ground is a grid of 3 m
+cells). A light probe grid from the bake, for the light and shadow at a pawn, is a later step.
+
+### Cells and portals
+
+A map may split itself into visibility cells ([ps2-shipping](PLANS/ps2-shipping.md) N15; UE 4.27's closest is its
+precomputed visibility volumes): a `VIS_<Cell>` node is a box around a room (or a corridor, a yard), a
+`PORTAL_<CellA>_<CellB>` node a quad in the opening between two of them. Each frame the renderer finds the cell the eye
+is in and walks the portals the view sees, each narrowing the screen rectangle the next cell is seen through; what the
+cells it reaches hold is drawn, the rest is not, whatever the frustum says. A prop is in every cell its bounds touch
+and a primitive in none is always drawn, so the cells only take away: a map without them draws as before, and so does
+an eye outside every cell. Make a cell's box hold its room's walls, keep the portals as big as the openings (a portal
+the eye stands within 60 cm of is open whole), and at most 64 cells.
+
+The same tuning has two more knobs, both off by default: the world settings' `FogSettings` (`bEnableFog`,
+`FogInscatteringColor`, `StartDistance`, `EndDistance`: a linear distance fog, the GS's) and a mesh's LODs
+(`LODs=<share>@<screen size>,...` in `ImportList.ini`). de_leon uses neither (N29): the whole map fits in the far plane,
+its largest piece has 146 triangles, and the portals already take away what a nearer far plane would.
 
 ### Reimport
 
@@ -209,8 +269,8 @@ that, in the start's view, +Y is on the right.
 
 ## Worked example: de_leon
 
-ShooterGame's map (P17), a 60 × 48 m blockout in the style of a CS defuse map, is built by a script, so the map is
-reproducible and its layout reviewable as code:
+ShooterGame's map (P17; rebuilt in [ps2-shipping](PLANS/ps2-shipping.md) N28), a 60 × 48 m desert town in the style of
+Counter-Strike 1.6's de_dust, is built by a script, so the map is reproducible and its layout reviewable as code:
 
 ```bat
 :: 1. Build the map in Blender (headless) -> de_leon.blend + de_leon.glb next to the script
@@ -225,62 +285,88 @@ Engine\Binaries\Win64\LeonCook.exe Game\ShooterGame\ShooterGame.lproj -run=Impor
 Game\ShooterGame\Binaries\Win64\ShooterGame.exe -ExecCmds=bot_fill
 ```
 
-`make_de_leon.py` uses only Blender's modules (`bpy`, `bmesh`): it writes the layout in the engine's axes (metres, X
-north, Y east) and places every object at Blender's (x, −y, z); it saves the `.blend` (to edit by hand afterwards:
-re-export with the same options, or change the script) and exports the `.glb` with *+Y Up*, *Apply Modifiers*,
-*Custom Properties* (the waypoint links), *Punctual Lights* and the *Raw* lighting mode (the sun's intensity 1.0 goes
-to the engine as it is). Every mesh is a 1 m cube shared by the objects of one material and scaled into place, so the
-import makes one `SM_` per material (`SM_Wall`, `SM_Crate`, `SM_Floor`, the four pads) and a `M_` per colour.
+`make_de_leon.py` uses Blender's modules through ShooterGame's `leon_art` ([ART_PIPELINE.md](ART_PIPELINE.md)): it
+writes the layout in the engine's axes (metres, X north, Y east), places every object at Blender's (x, −y, z), saves
+the `.blend` and exports the `.glb` with `leon_art.export_glb` (custom properties for the waypoint links, punctual
+lights in the *Raw* mode: the intensities go to the engine as they are). The textures are painted texel by texel in
+the script (sandstone blocks, a darker trim, sand, paving slabs, planks, CS's crate and the sites' letters; P4 and P8,
+64 texels a metre). Every piece of the map is an axis-aligned box or a few, one mesh of its own named
+`<Cell>_<Piece>` (`SM_<Cell>_<Piece>`), its vertices around its centre, its faces cut on a 3 m world grid and the walls
+again 1.2 m up, so the baked lighting has vertices for the shadows and the occlusion at the walls' foot (N22); the
+faces nobody sees (a wall's bottom, a face against the edge) are left out. The crates share `SM_Crate` (1.1 m, a CS
+jump clears it) and `SM_CrateBig` (1.6 m). The script fails when a cell has more than ART_PIPELINE's 1 500 triangles
+or when a waypoint link, a start or a site's middle runs into something, and prints each cell's count.
 
 ```text
        W (-Y)                   Y=0                  E (+Y)          (X north up; 1 character = 1 m across, 2 m down)
-  30 #################################################
-  28 #                 .............                 #      .  spawn pads      C / T  team starts (5 each)
-  26 #                 ..C.C.C.C.C..                 #      a  bomb site A     b      bomb site B
-  24 # bbbbbbbbbbb     .............     aaaaaaaacaa #      c  crates (1.1 m)  S      crate stack (UCX_ box)
-  22 # bbccbbbbbbb ### ...........c. ### aaaaaaaaaaa #      #  walls (3.5 m, the edge 4 m)
-  20 # bbbbbbbbbbb ###            c  ### aaacaaaaaaa #      =  the low wall at B (1 m) and its player clip
-  18 # bbbbbbbcbbb ###               ### aaacaaaaaaa #
-  16 # bbbbbbbcbbb ###               ### aaaaaaaaaaa #      ### beside a site: the site wall toward the CT spawn
-  14 # =====       ###         S     ###             #
-  12 #                                               #
-  10 #                 #####   #####                 #      mid doors (a 3 m doorway)
-   8 #####       #######           #######       #####
-   6 #####       #######           #######       #####
-   4 #####       #######           #######       #####
-   2 #####       #######           #######       #####
-   0 #####                cc                     #####      the short connectors (X -2 .. 2) cross the blocks
-  -2 #####       #######           #######       #####
-  -4 #####   c   #######           #######  c    #####      B long | short B | mid | short A | A long
-  -6 #####       #######        c  #######       #####
-  -8 #####       #######           #######       #####
- -10 #####       #######           #######       #####
- -12 #####       #######           #######       #####
- -14 #####       #######           #######       #####
- -16 #                                               #      the T plaza
- -18 #                                               #
- -20 #             c                   c             #
- -22 #               .................               #
- -24 #               .................               #
- -26 #               ....T.T.T.T.T....               #
- -28 #               .................               #
- -30 #################################################
+  30 ##################################################
+  28 #######                                    #######     #  walls and houses (3.5 to 5.5 m)
+  26 #######bbbbbb        + + + + +       aaaaaa#######     ^  under an arch or a lintel
+  24 #  bbbbbbbbCb                        aCaaaaacca  #     n  the B tunnel, roofed at 3 m
+  22 #  bcccbbbbbb                        aaaaaaaaaa  #     =  the low wall at B (1 m) and its clip
+  20 #  bbbbbbbbbb  ##            cc  ##  aaaaaaaaaa  #     c  crates (1.1 m)   C  big crates (1.6 m)
+  18 #  bbbbbbbbbb  ##                ##  aaccaaaaaa  #     H  ladders to the roofs (3.5 m)
+  16 #  bbcbbbbbbb  ##                ##  aaaaaaaaaa  #     a  bomb site A      b  bomb site B
+  14 #  =====bbbbb  ##          C     ##  aaaaaaaaaa  #     +  CT starts        t  T starts
+  12 #       bbbbb                        aaaaaaaaaa  #
+  10 #                                                #     ## at X 14 .. 22: the sites' walls
+   8 #####        ###########^^###########        #####     ^^ at X 9: the mid doors
+   6  ####c       ######            ######       c####
+   4  ####       H######            ######H       ####
+   2  ####        ######            ######        ####
+   0  ####                 c                      ####     B long | short B | mid | short A | A long
+  -2  ####                                        ####
+  -4  ####c       ######            ######cc      ####
+  -6  ####        ######        ccc ######        ####
+  -8  ######nnnn########            ######        ####
+ -10  ######nnnn########            ######        ####
+ -12  ######nnnn########            ######        ####
+ -14  ######nnnn##########^^^^^^^^###########^^#######     the tunnel, the mid arch, the A long gate at X -14
+ -16 #                  ##        ##      ##    ##    #
+ -18 #                                                #     the T plaza
+ -20 #                                                #
+ -22 #           ccc                    cc            #
+ -24 #                                                #
+ -26 #######                                    #######
+ -28 #######              t t t t t        CC   #######
+ -30 #######                                    #######
+ -32 ##################################################
 ```
+
+| Cell | Where | Triangles | What stands in it |
+| --- | --- | ---: | --- |
+| `TSpawn` | X −30 … −14 | 446 | the T plaza, sand; a house in each corner, crates, the T starts and buy zone |
+| `Mid` | X −14 … 9, Y −6 … 6 | 160 | the arch at its south end (a 9 m opening under a lintel at 3.2 m), crates |
+| `LongA` | X −14 … 9, Y 6 … 24 | 398 | A long (8 m wide), the gate at its south end (3 m under 2.8 m), short A, the blocks and houses beside it, the ladder to the north block's roof |
+| `LongB` | X −14 … 9, Y −24 … −6 | 458 | B long, the tunnel at its south end (4 m wide, 8 m long, roofed at 3 m, two lamps), short B, the blocks and houses, the ladder |
+| `CTSpawn` | X 9 … 30, Y −8.5 … 8.5 | 234 | the mid doors (a 3 m doorway under a lintel at 2.7 m, two wooden wings open against the north face, a lamp), paving, the CT starts and buy zone, crates |
+| `SiteA`, `SiteB` | X 9 … 30, north-east / north-west of the site walls | 266, 282 | paving, the site wall toward the CT spawn (open at both ends) with the site's letter, a house in the far corner, crates; the low wall at B |
+
+2 244 triangles in 78 pieces (N22's blockout: 1 070 in 35 cubes). The ground is the floor slabs' own `UCX_` boxes,
+their tops at Z = 0 and their materials the surfaces a step or a bullet finds: the sand's dirt and the paving's tile
+(ps2-shipping N29). The seams between two slabs, whose float bounds differ by a hair, stop no one: the engine takes a
+box whose top is at the capsule's feet, within the skin, for floor (`ACharacter::IsFloorEdgeHit`,
+`FPhysScene::ResolveCapsuleSides`, as UE's CharacterMovementComponent walks across). Until N29 a hidden `COL_Ground`
+box under the whole map was the ground, all of it dirt. Every material names its surface in the script (`SURFACES`,
+through `leon_art.make_material(..., surface=)`, N30f): sandstone, trim and signs concrete, sand dirt, paving tile,
+wood and crates wood, the lamps metal.
 
 | Nodes | Become (the rules above) |
 | --- | --- |
-| `Floor`, `Wall_*`, `Block*`, `SiteWall_A` / `_B`, `MidDoor_*`, `BLowWall`, `Crate_NN`, `Pad_*` | static mesh actors colliding with their triangles |
-| `CrateStack` + `UCX_CrateStack_01` | a static mesh actor whose collision is one box |
+| `<Cell>_Floor*`, `_Wall*`, `_Block*`, `_House*`, `_Arch*`, `_Gate*`, `_Tunnel*`, `_MidDoor*`, `_Door*`, `_SiteWall`, `_LowWall`, `_Sign`, `_Lamp*`, `_Ladder_*`, `_Crate*` | static mesh actors, each with its `UCX_<Node>_01` box (the ladders', the signs' and the tunnel's lamps' inside their wall, so they stop nobody); the crates' box is on their shared mesh |
 | `Clip_BLowWall` | a blocking volume: nobody jumps over the low wall at B |
 | `BombSite_A` / `_B` (14 × 10 × 3 m), `BuyZone_CT` (7 × 12 m) / `_T` (7 × 16 m) | trigger volumes tagged [`BombSite`, `A`], [`BuyZone`, `CT`], ... (ShooterGame's rules) |
+| `Ladder_A`, `Ladder_B` | trigger volumes tagged `Ladder` (N30c): 20 cm boxes against the north blocks' long faces, from the floor to their roofs (3.5 m); the bots walk through them |
 | `PlayerStart_CT` … `.004`, `PlayerStart_T` … `.004` | ten player starts, 2 m apart, 0.92 m up (UE's start: the capsule's centre), the CTs facing south, the Ts north; `PlayerStartTag` `CT` / `T` |
-| `NavWaypoint_*` (18: `TSpawn`, `TMid`, `TPlazaA` / `B`, `Mid`, `ShortA` / `B`, `LongA` / `B`, `MidDoors`, `CTMid`, `AConnector` / `BConnector`, `SiteA` / `B`, `CTSpawn`, `CTA` / `CTB`) | navigation waypoints, each linked both ways by its `links` custom property, plus the links the import adds (above) |
-| `Sun` | the directional light, shining down toward the south-east |
+| `NavWaypoint_*` (22: `TSpawn`, `TMid`, `TPlazaA` / `B`, `LongAGate`, `TunnelB`, `Mid`, `ShortA` / `B`, `LongA` / `B`, `ALongEnd` / `BLongEnd`, `MidDoors`, `CTMid`, `AConnector` / `BConnector`, `SiteA` / `B`, `CTSpawn`, `CTA` / `CTB`) | navigation waypoints, each linked both ways by its `links` custom property, plus the 38 links the import adds (above) |
+| `Sun`, `Light_Tunnel_01` / `_02`, `Light_MidDoors_01` | the directional light (warm, high in the north-west) and three warm point lights (7 and 6 m), baked into the static meshes with the sky |
+| `VIS_<Cell>` (7), `PORTAL_<CellA>_<CellB>` (24) | [cells and portals](#cells-and-portals) (box meshes up to 6 m, quads; `.001` copies for a second quad between two cells): the doorways and lanes, and the sky over the walls between two cells from 3.5 m up. The walls are low, so a view across the map keeps most cells; facing a wall only its own |
 
 The project's `RequiredTags` hold (both sites, both buy zones, both teams' starts). ShooterGame's tests
-(`ShooterGame.Map.*`) check the imported map, import `de_leon.glb` and the AxisTest source under the project's rules
-(the second is refused: no sites, buy zones or team starts) and spawn ten pawns on the map. `Characters/make_team_bodies.py` makes the teams' placeholder bodies the
-same way (`Body_CT.glb`, `Body_T.glb`, imported as static meshes).
+(`ShooterGame.Map.*`) check the imported map (the sites, the buy zones, the starts, the linked waypoints, the clip, the
+two ladders and the sun), import `de_leon.glb` and the AxisTest source under the project's rules (the second is
+refused: no sites, buy zones or team starts) and spawn ten pawns on the map; `ShooterGame.Bots.MatchOnDeLeon` plays
+three rounds on it.
 
 ## Engine maps
 
@@ -302,7 +388,7 @@ the levels'.
 ## Running a map
 
 ```text
-Engine\Binaries\Win64\LeonGame.exe [<map>[?game=<class>][#<portal>]] [-map=<map>] [-nullrhi] [-tick=<Hz>] [-showstats]
+Engine\Binaries\Win64\LeonGame.exe [<map>[?game=<class>][#<portal>]] [-map=<map>] [-nullrhi] [-benchmark] [-showstats]
                                    [-AxesGizmo] [-ExecCmds="<command>;<command>"] [-Screenshot=<file.bmp>] [-ExitAfterFrames=N]
 ```
 
@@ -321,4 +407,5 @@ map at the next frame. [SETUP.md](SETUP.md#leongame) has the options.
 - `ChoosePlayerStart` takes the first player start; there is no Play From Here start (no editor).
 - `ANavigationWaypoint` is Leon's (UE navigates a Recast navmesh; Leon a waypoint graph that `UNavigationSystem` builds).
 - An imported map keeps its source in its world's editor-only `AssetImportData` (UE keeps it on the Datasmith scene).
-- No streaming levels, world composition, level blueprints or built lighting data yet (`<Map>_BuiltData` later).
+- No streaming levels, world composition or level blueprints. The built lighting is per vertex and lives in the map's
+  static mesh components (UE: lightmaps in `<Map>_BuiltData`); Leon has no stationary lights or light probes yet.

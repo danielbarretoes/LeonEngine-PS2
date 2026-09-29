@@ -1,7 +1,9 @@
 #include "Animation/AnimSequence.h"
 
+#include "Animation/AnimNotify.h"
 #include "AssetBulkData.h"
 #include "EngineLogs.h"
+#include "HAL/LowLevelMemTracker.h"
 
 UAnimationAsset::UAnimationAsset(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -13,23 +15,62 @@ UAnimSequenceBase::UAnimSequenceBase(const FObjectInitializer& ObjectInitializer
 {
 }
 
+int32 UAnimSequenceBase::AddNotify(FName InNotifyName, float Time, UAnimNotify* InNotify)
+{
+	FAnimNotifyEvent Event;
+	Event.TriggerTime = FMath::Clamp(Time, 0.0f, FMath::Max(SequenceLength, 0.0f));
+	Event.NotifyName = InNotifyName;
+	Event.Notify = InNotify;
+	int32 Index = Notifies.Num();
+	while (Index > 0 && Notifies[Index - 1].TriggerTime > Event.TriggerTime)
+	{
+		--Index;
+	}
+	Notifies.Insert(Event, Index);
+	return Index;
+}
+
+UAnimNotify::UAnimNotify(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
+void UAnimNotify::Notify(USkeletalMeshComponent* /*MeshComp*/, UAnimSequenceBase* /*Animation*/)
+{
+}
+
+FName UAnimNotify::GetNotifyName() const
+{
+	return GetClass()->GetFName();
+}
+
 UAnimSequence::UAnimSequence(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 }
 
-void UAnimSequence::SetRawAnimationData(TArray<FRawAnimSequenceTrack> InTracks)
+bool UAnimSequence::SetFromRawAnimSequence(const FRawAnimSequence& Raw)
 {
-	RawAnimationData = MoveTemp(InTracks);
-	NumFrames = RawAnimationData.Num() > 0 ? RawAnimationData[0].Keys.Num() : 0;
+	return SetFromRawAnimSequence(Raw, FAnimCompressionSettings::Load());
 }
 
-void UAnimSequence::SetFromRawAnimSequence(const FRawAnimSequence& Raw)
+bool UAnimSequence::SetFromRawAnimSequence(const FRawAnimSequence& Raw, const FAnimCompressionSettings& Settings)
 {
 	SequenceLength = Raw.SequenceLength;
 	FrameRate = Raw.FrameRate;
 	bLoop = Raw.bLoop;
-	SetRawAnimationData(Raw.Tracks);
+	Notifies.Reset();
+	for (const FRawAnimNotify& RawNotify : Raw.Notifies)
+	{
+		(void)AddNotify(RawNotify.NotifyName, RawNotify.Time);
+	}
+	if (!FAnimCompression::Compress(Raw, Settings, CompressedData))
+	{
+		NumFrames = 0;
+		return false;
+	}
+	NumFrames = CompressedData.NumFrames;
+	return true;
 }
 
 bool UAnimSequence::IsFinished(float TimeSeconds) const
@@ -41,69 +82,53 @@ bool UAnimSequence::IsFinished(float TimeSeconds) const
 	return TimeSeconds >= (SequenceLength - 1.0e-4f);
 }
 
-void UAnimSequence::GetBonePose(float TimeSeconds, TArray<FMatrix>& OutBoneWorld) const
+float UAnimSequence::GetFrameAtTime(float TimeSeconds) const
 {
-	const int32 FrameCount = NumFrames;
-	const int32 LocalBoneCount = FrameCount > 0 ? RawAnimationData.Num() : 0;
-	OutBoneWorld.Init(FMatrix::Identity, LocalBoneCount);
-	if (LocalBoneCount <= 0 || FrameCount <= 0)
-	{
-		return;
-	}
-
-	float T = TimeSeconds;
+	float Time = TimeSeconds;
 	if (SequenceLength > 1.0e-4f)
 	{
 		if (bLoop)
 		{
-			T = FMath::Fmod(T, SequenceLength);
-			if (T < 0.0f)
+			Time = FMath::Fmod(Time, SequenceLength);
+			if (Time < 0.0f)
 			{
-				T += SequenceLength;
+				Time += SequenceLength;
 			}
 		}
 		else
 		{
-			T = FMath::Clamp(T, 0.0f, SequenceLength);
+			Time = FMath::Clamp(Time, 0.0f, SequenceLength);
 		}
 	}
-	const float FrameF = T * FrameRate;
-	int32 F0 = 0;
-	int32 F1 = 0;
-	float Alpha = 0.0f;
-	if (bLoop)
-	{
-		F0 = static_cast<int32>(FrameF) % FrameCount;
-		F1 = (F0 + 1) % FrameCount;
-		Alpha = FrameF - FMath::FloorToFloat(FrameF);
-	}
-	else
-	{
-		const float MaxFrame = static_cast<float>(FrameCount - 1);
-		const float Clamped = FMath::Min(FrameF, MaxFrame);
-		F0 = static_cast<int32>(Clamped);
-		F1 = FMath::Min(F0 + 1, FrameCount - 1);
-		Alpha = Clamped - FMath::FloorToFloat(Clamped);
-	}
+	const float LastFrame = float(FMath::Max(NumFrames - 1, 0));
+	return FMath::Clamp(Time * FrameRate, 0.0f, LastFrame);
+}
 
-	for (int32 I = 0; I < LocalBoneCount; ++I)
+void UAnimSequence::GetBonePose(float TimeSeconds, TArray<FTransform>& OutPose) const
+{
+	if (NumFrames <= 0 || CompressedData.IsEmpty())
 	{
-		const TArray<FMatrix>& Keys = RawAnimationData[I].Keys;
-		if (!Keys.IsValidIndex(F0) || !Keys.IsValidIndex(F1))
-		{
-			continue;
-		}
-		// Matrix lerp is approximate but fine for a micro blend-space / crossfade.
-		OutBoneWorld[I] = Keys[F0] * (1.0f - Alpha) + Keys[F1] * Alpha;
+		OutPose.Reset();
+		return;
+	}
+	CompressedData.GetBonePose(GetFrameAtTime(TimeSeconds), OutPose);
+}
+
+void UAnimSequence::GetBonePose(float TimeSeconds, TArrayView<FTransform> OutPose) const
+{
+	if (NumFrames > 0 && !CompressedData.IsEmpty())
+	{
+		CompressedData.GetBonePose(GetFrameAtTime(TimeSeconds), OutPose);
 	}
 }
 
 void UAnimSequence::Serialize(FArchive& Ar)
 {
+	LLM_SCOPE(ELLMTag::Animation);
 	Super::Serialize(Ar);
-	if (!SerializeBulkPayload(Ar, this, TrackBulkData, [this](FArchive& PayloadAr) { PayloadAr << RawAnimationData; }))
+	if (!SerializeBulkPayload(Ar, this, TrackBulkData, [this](FArchive& PayloadAr) { PayloadAr << CompressedData; }))
 	{
-		UE_LOG(LogEngine, Error, "UAnimSequence %s: damaged tracks", *GetPathName());
-		RawAnimationData.Empty();
+		UE_LOG(LogEngine, Error, "UAnimSequence %s: damaged keys", *GetPathName());
+		CompressedData = FCompressedAnimSequence();
 	}
 }

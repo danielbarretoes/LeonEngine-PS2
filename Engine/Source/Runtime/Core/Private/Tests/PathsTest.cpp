@@ -33,6 +33,15 @@ bool FPathsStringTest::RunTest(const FString& Parameters)
 	TestFalse("Absolute (PS2 device)", FPaths::IsRelative("host:Engine/Config"));
 	TestTrue("IsDrive", FPaths::IsDrive("C:"));
 	TestTrue("IsDrive device", FPaths::IsDrive("cdrom0:"));
+	// The PS2 disc's names (N23): ISO 9660 level 1 identifiers, 8.3, upper case, ";1" on a file.
+	TestEqual("A disc path", FPaths::ToIso9660Path("cdrom0:\\ShooterGame/Content/Paks/ShooterGame-PS2.lpak", true),
+		FString("cdrom0:\\SHOOTERG\\CONTENT\\PAKS\\SHOOTERG.LPA;1"));
+	TestEqual("A file at the root", FPaths::ToIso9660Path("cdrom0:\\LeonCommandLine.txt", true),
+		FString("cdrom0:\\LEONCOMM.TXT;1"));
+	TestEqual("Its version kept once", FPaths::ToIso9660Path("cdrom0:\\SLUS_990.01;1", true),
+		FString("cdrom0:\\SLUS_990.01;1"));
+	TestEqual("A folder", FPaths::ToIso9660Path("cdrom0:/Engine/Content/Paks/", false),
+		FString("cdrom0:\\ENGINE\\CONTENT\\PAKS"));
 	TestFalse("IsDrive path", FPaths::IsDrive("C:/Dir"));
 
 	FString Collapsed = "C:/A/B/../C/./D.txt";

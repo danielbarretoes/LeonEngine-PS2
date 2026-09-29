@@ -3,40 +3,32 @@
 #include "Containers/Ticker.h"
 #include "CoreGlobals.h"
 #include "DynamicRHI.h"
+#include "Engine/Engine.h"
+#include "Engine/GameEngine.h"
 #include "GenericPlatform/GenericApplication.h"
 #include "GenericPlatform/GenericWindow.h"
+#include "HAL/IPlatformFileOpenLogWrapper.h"
+#include "HAL/LowLevelMemTracker.h"
 #include "HAL/PlatformApplicationMisc.h"
 #include "HAL/PlatformFilemanager.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformTime.h"
+#include "IPlatformFilePak.h"
 #include "Interfaces/IProjectManager.h"
 #include "Logging/LogMacros.h"
 #include "Logging/LogSuppressionInterface.h"
 #include "Misc/App.h"
 #include "Misc/CommandLine.h"
 #include "Misc/ConfigCacheIni.h"
+#include "Misc/MemStack.h"
 #include "Misc/OutputDeviceFile.h"
 #include "Misc/OutputDeviceRedirector.h"
 #include "Misc/Parse.h"
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
-#include "PlatformEngineLoopHooks.h"
-
-// The pak platform file: every desktop target, and the engine games of the other platforms (the target links PakFile
-// when it is compiled against the engine).
-#define LEON_LAUNCH_WITH_PAK (PLATFORM_DESKTOP || WITH_ENGINE)
-
-#if LEON_LAUNCH_WITH_PAK
-	#include "IPlatformFilePak.h"
-#endif
-
-#if WITH_ENGINE
-	#include "Engine/Engine.h"
-	#include "Engine/GameEngine.h"
-	#include "UObject/GarbageCollection.h"
-	#include "UObject/Package.h"
-	#include "UnrealClient.h"
-#endif
+#include "UObject/GarbageCollection.h"
+#include "UObject/Package.h"
+#include "UnrealClient.h"
 
 FEngineLoop GEngineLoop;
 
@@ -47,10 +39,11 @@ namespace
 	/** The log file (desktop): <Project>/Saved/Logs/<Name>.log. */
 	TUniquePtr<FOutputDeviceFile> GLogFile;
 
-#if LEON_LAUNCH_WITH_PAK
 	/** The pak platform file PreInit put on top of the chain, if any. */
 	TUniquePtr<FPakPlatformFile> GPakPlatformFile;
-#endif
+
+	/** The file open order log PreInit put on top of the chain (-LogFileOpenOrder), if any. */
+	TUniquePtr<FPlatformFileOpenLog> GFileOpenLog;
 
 	/**
 	 * The platform file wrappers the command line and the build ask for, on top of the physical one (UE:
@@ -60,7 +53,6 @@ namespace
 	 */
 	bool LaunchCheckForFileOverride()
 	{
-#if LEON_LAUNCH_WITH_PAK
 		IPlatformFile& CurrentPlatformFile = FPlatformFileManager::Get().GetPlatformFile();
 		TUniquePtr<FPakPlatformFile> PakPlatformFile = MakeUnique<FPakPlatformFile>();
 		if (PakPlatformFile->ShouldBeUsed(&CurrentPlatformFile, FCommandLine::Get()))
@@ -72,11 +64,17 @@ namespace
 			FPlatformFileManager::Get().SetPlatformFile(*PakPlatformFile);
 			GPakPlatformFile = MoveTemp(PakPlatformFile);
 		}
-#endif
+		// On top: the order the game opens its files in, as the paks name them (Docs/PLANS/ps2-shipping.md N23).
+		TUniquePtr<FPlatformFileOpenLog> FileOpenLog = MakeUnique<FPlatformFileOpenLog>();
+		IPlatformFile& Top = FPlatformFileManager::Get().GetPlatformFile();
+		if (FileOpenLog->ShouldBeUsed(&Top, FCommandLine::Get()) && FileOpenLog->Initialize(&Top, FCommandLine::Get()))
+		{
+			FPlatformFileManager::Get().SetPlatformFile(*FileOpenLog);
+			GFileOpenLog = MoveTemp(FileOpenLog);
+		}
 		return true;
 	}
 
-#if WITH_ENGINE
 	/** The game window's size: [/Script/Engine.GameViewportClient] DefaultResolutionX / Y of the Engine config. */
 	[[nodiscard]] int32 GetEngineInt(const TCHAR* Section, const TCHAR* Key, int32 Default)
 	{
@@ -87,7 +85,6 @@ namespace
 		}
 		return Value;
 	}
-#endif
 } // namespace
 
 FEngineLoop::FEngineLoop() = default;
@@ -96,6 +93,7 @@ FEngineLoop::~FEngineLoop() = default;
 
 int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 {
+	PreInitCycles = FPlatformTime::Cycles64();
 	// The command line first: everything below may read it (UE: FEngineLoop::PreInit order).
 	FPlatformProcess::SetArgV0(ArgV[0]);
 	FCommandLine::Set(*FCommandLine::BuildFromArgV(nullptr, ArgC, ArgV, nullptr));
@@ -174,6 +172,8 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 	GLog->AddOutputDevice(GLogFile.Get());
 #endif
 	FLogSuppressionInterface::Get().ProcessConfigAndCommandLine();
+	// The memory budgets of the platform (PS2Engine.ini's), checked from here on.
+	FLowLevelMemTracker::LoadBudgetsFromConfig();
 
 	if (FPaths::IsProjectFilePathSet())
 	{
@@ -189,17 +189,10 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 	// The platform application, the main window and the RHI on its graphics context (UE: PreInit's RHIInit). The
 	// modules starting up below (the renderer, the PS2 game module) can already use them. A desktop game with -nullrhi
 	// has none: the engine runs headless.
-#if WITH_ENGINE
 	const bool bCreateMainWindow = FApp::CanEverRender();
 	const int32 WindowWidth = GetEngineInt("/Script/Engine.GameViewportClient", "DefaultResolutionX", 1280);
 	const int32 WindowHeight = GetEngineInt("/Script/Engine.GameViewportClient", "DefaultResolutionY", 896);
 	const FString WindowTitle = FApp::HasProjectName() ? FString("Leon - ") + FApp::GetProjectName() : FString("Leon");
-#else
-	const bool bCreateMainWindow = true;
-	constexpr int32 WindowWidth = 640;
-	constexpr int32 WindowHeight = 448;
-	const FString WindowTitle(LEON_TARGET_NAME);
-#endif
 	if (bCreateMainWindow)
 	{
 		Application.Reset(FPlatformApplicationMisc::CreateApplication());
@@ -226,20 +219,20 @@ int32 FEngineLoop::PreInit(int32 ArgC, char* ArgV[])
 
 int32 FEngineLoop::Init()
 {
-#if WITH_ENGINE
 	const TCHAR* CmdLine = FCommandLine::Get();
 
-	// Leon's capture and pacing switches: -Screenshot=<file.bmp> saves frame -ExitAfterFrames=N (60 by default), then
-	// the game exits; -tick=<Hz> paces a headless run (-benchmark: its steps do not wait for the clock).
+	// Leon's capture switches: -Screenshot=<file.bmp> saves frame -ExitAfterFrames=N (60 by default), then the game
+	// exits; -ExitAfterSeconds=N exits after N seconds. The steps are the engine's fixed ones (UEngine::
+	// UpdateTimeAndHandleMaxTickRate; -benchmark: they do not wait for the clock).
 	(void)FParse::Value(CmdLine, "ExitAfterFrames=", ExitAfterFrames);
+	int32 Seconds = 0;
+	if (FParse::Value(CmdLine, "ExitAfterSeconds=", Seconds) && Seconds > 0)
+	{
+		ExitAfterSeconds = uint32(Seconds);
+	}
 	if (FParse::Value(CmdLine, "Screenshot=", ScreenshotPath) && ExitAfterFrames <= 0)
 	{
 		ExitAfterFrames = 60;
-	}
-	float Hz = 60.0f;
-	if (FParse::Value(CmdLine, "tick=", Hz) && Hz >= 1.0f && Hz <= 240.0f)
-	{
-		TickHz = Hz;
 	}
 
 	// GEngine's class comes from the config (UE: FEngineLoop::Init, plan decision D18).
@@ -296,24 +289,25 @@ int32 FEngineLoop::Init()
 	}
 	if (MainWindow == nullptr)
 	{
-		UE_LOG(LogLaunch, Log, "Running headless @ %g Hz%s (Ctrl+C to stop)", static_cast<double>(TickHz),
-			FApp::IsBenchmarking() ? " steps, unpaced (-benchmark)" : "");
-		NextHeadlessTick = FPlatformTime::Seconds();
+		UE_LOG(LogLaunch, Log, "Running headless, steps of 1/%u s%s (Ctrl+C to stop)",
+			GEngine->GetFixedStepClock().GetStepsPerSecond(), FApp::IsBenchmarking() ? ", unpaced (-benchmark)" : "");
 	}
-	LastFrameTime = FPlatformTime::Seconds();
-#endif
-	LastFrameCycles = FPlatformTime::Cycles64();
+	InitEndCycles = FPlatformTime::Cycles64();
 	return 0;
 }
 
 void FEngineLoop::Tick()
 {
+	if (GEngine == nullptr)
+	{
+		RequestEngineExit("No engine");
+		return;
+	}
+	// The frame's time and the fixed steps it holds (ps2-shipping D4); a paced headless run waits here for its step.
+	GEngine->UpdateTimeAndHandleMaxTickRate();
+	const float DeltaTime = static_cast<float>(FApp::GetDeltaTime());
 	const uint64 NowCycles = FPlatformTime::Cycles64();
-	const float DeltaTime =
-		static_cast<float>(FPlatformTime::CyclesToMicroseconds(NowCycles - LastFrameCycles)) / 1000000.0f;
-	LastFrameCycles = NowCycles;
 
-#if WITH_ENGINE
 	FTicker::GetCoreTicker().Tick(DeltaTime);
 	// The platform's events (UE: Slate pumps them before the engine ticks).
 	if (Application)
@@ -324,11 +318,6 @@ void FEngineLoop::Tick()
 	{
 		MainWindow->PollEvents();
 	}
-	if (GEngine == nullptr)
-	{
-		RequestEngineExit("No engine");
-		return;
-	}
 	GEngine->TickDeferredCommands();
 
 	++FrameCount;
@@ -337,60 +326,44 @@ void FEngineLoop::Tick()
 		RequestEngineExit("ExitAfterFrames");
 		return;
 	}
+	if (ExitAfterSeconds > 0 &&
+		FPlatformTime::CyclesToMicroseconds(NowCycles - InitEndCycles) >= uint64(ExitAfterSeconds) * 1000000ull)
+	{
+		RequestEngineExit("ExitAfterSeconds");
+		return;
+	}
 	if (!ScreenshotPath.IsEmpty() && FrameCount == ExitAfterFrames)
 	{
 		FScreenshotRequest::RequestScreenshot(ScreenshotPath, true, false);
 	}
 
-	if (MainWindow)
+	// The world steps and the frame is drawn (windowed) between its last two steps; the frame's temporaries go with it.
+	GEngine->Tick(DeltaTime, false);
+	FMemStack::Get().EndFrame();
+	if (FrameCount == 1)
 	{
-		// A windowed frame: the real frame time, at most 0.1 s.
-		const double Now = FPlatformTime::Seconds();
-		const float FrameTime = FMath::Min(static_cast<float>(Now - LastFrameTime), 0.1f);
-		LastFrameTime = Now;
-		GEngine->Tick(FrameTime, false);
-	}
-	else
-	{
-		// Headless: fixed steps paced to -tick=<Hz> (no render, no present); -benchmark does not wait.
-		const float StepSeconds = 1.0f / (TickHz < 1.0f ? 1.0f : TickHz);
-		GEngine->Tick(StepSeconds, false);
-		if (FApp::IsBenchmarking())
+		// The load time (Docs/PLANS/ps2-shipping.md N23): the engine's start to the first frame, on the platform's
+		// clock (the emulated EE's in PCSX2).
+		const auto Seconds = [this](uint64 Cycles)
+		{ return double(FPlatformTime::CyclesToMicroseconds(Cycles - PreInitCycles)) / 1000000.0; };
+		UE_LOG(LogLaunch, Display, "First frame after %.2f s (the map ready after %.2f s), from the engine's start",
+			Seconds(FPlatformTime::Cycles64()), Seconds(InitEndCycles));
+		// What the paks' reads cost until then (Docs/PLANS/ps2-shipping.md N24b): the disc's reads and the block
+		// cache's.
+		for (const bool bAsync : {false, true})
 		{
-			return;
-		}
-		NextHeadlessTick += static_cast<double>(StepSeconds);
-		const double Now = FPlatformTime::Seconds();
-		if (NextHeadlessTick < Now)
-		{
-			NextHeadlessTick = Now; // fell behind: resync instead of spiralling
-		}
-		else
-		{
-			FPlatformProcess::Sleep(static_cast<float>(NextHeadlessTick - Now));
+			const FPakFile::FReadStats Reads = FPakFile::GetReadStats(bAsync);
+			UE_LOG(LogLaunch, Display,
+				"The paks until the first frame, %s: %u read(s) from the file, %llu KB in %llu ms; %u from the block "
+				"cache",
+				bAsync ? TEXT("the IO thread") : TEXT("the game thread"), Reads.FileReads, Reads.FileBytes / 1024,
+				FPlatformTime::CyclesToMicroseconds(Reads.FileCycles) / 1000, Reads.CachedReads);
 		}
 	}
-#else
-
-	Application->PollGameDeviceState();
-	MainWindow->PollEvents();
-
-	FTicker::GetCoreTicker().Tick(DeltaTime);
-
-	FPlatformEngineLoopHooks::EndFrame(*MainWindow, *Application);
-	MainWindow->SwapBuffers();
-	FPlatformEngineLoopHooks::PostPresent();
-
-	if (MainWindow->ShouldClose())
-	{
-		RequestEngineExit("Main window closed");
-	}
-#endif
 }
 
 void FEngineLoop::Exit()
 {
-#if WITH_ENGINE
 	// The engine ends first: the world, then the renderer while the window's context exists (UE: GEngine->PreExit).
 	if (GEngine != nullptr)
 	{
@@ -399,7 +372,6 @@ void FEngineLoop::Exit()
 		GEngine = nullptr;
 		CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
 	}
-#endif
 	FModuleManager::Get().ShutdownModules();
 	RHIExit();
 	if (MainWindow)
@@ -420,12 +392,16 @@ void FEngineLoop::Exit()
 		GLog->RemoveOutputDevice(GLogFile.Get());
 		GLogFile.Reset();
 	}
-#if LEON_LAUNCH_WITH_PAK
-	// The paks go last: nothing reads a file after this.
+	// The file open order, then the paks: nothing reads a file after this.
+	if (GFileOpenLog)
+	{
+		(void)GFileOpenLog->WriteOrderFile();
+		FPlatformFileManager::Get().SetPlatformFile(*GFileOpenLog->GetLowerLevel());
+		GFileOpenLog.Reset();
+	}
 	if (GPakPlatformFile)
 	{
 		FPlatformFileManager::Get().SetPlatformFile(*GPakPlatformFile->GetLowerLevel());
 		GPakPlatformFile.Reset();
 	}
-#endif
 }

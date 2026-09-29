@@ -1,6 +1,8 @@
 #include "GameFramework/GameState.h"
 
+#include "Engine/World.h"
 #include "GameFramework/GameMode.h"
+#include "TimerManager.h"
 
 AGameState::AGameState(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -33,30 +35,30 @@ bool AGameState::IsMatchInProgress() const
 
 void AGameState::OnRep_MatchState()
 {
+	UWorld* World = GetWorld();
 	if (MatchState == MatchState::InProgress)
 	{
 		ElapsedTime = 0;
-		ElapsedRemainder = 0.0f;
 		HandleMatchHasStarted();
+		if (World != nullptr)
+		{
+			World->GetTimerManager().SetTimer(TimerHandle_DefaultTimer, this, &AGameState::DefaultTimer, 1.0f, true);
+		}
 	}
 	else if (MatchState == MatchState::WaitingPostMatch)
 	{
 		HandleMatchHasEnded();
+		if (World != nullptr)
+		{
+			World->GetTimerManager().ClearTimer(TimerHandle_DefaultTimer);
+		}
 	}
 }
 
-void AGameState::Tick(float DeltaTime)
+void AGameState::DefaultTimer()
 {
-	Super::Tick(DeltaTime);
-	if (!IsMatchInProgress())
+	if (IsMatchInProgress())
 	{
-		return;
-	}
-	// UE counts whole seconds with a one-second timer (DefaultTimer).
-	ElapsedRemainder += DeltaTime;
-	while (ElapsedRemainder >= 1.0f)
-	{
-		ElapsedRemainder -= 1.0f;
 		++ElapsedTime;
 	}
 }

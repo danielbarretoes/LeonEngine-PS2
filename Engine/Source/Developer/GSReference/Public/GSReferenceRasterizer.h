@@ -16,20 +16,23 @@
  * - Rasterization (2.4.4, 3.2.9): pixel centers on integer window coordinates, the window coordinates being the
  *   primitive's minus XYOFFSET; a triangle's or a sprite's left and top sides are drawn, the right and bottom ones not;
  *   a point draws its nearest pixel.
- * - Texture mapping (3.4): STQ (s = S / Q, perspective correct) or UV (affine); texel centers at .5; the wrap modes;
- *   point and bilinear sampling; the LOD formula and the MIPMAP filters; the formats (5-bit colors shifted left 3,
- *   TEXA's alpha, CLUTs in CSM1 through the temporary buffer at CSA); the texture functions with A * B = (A x B) >> 7
- *   clamped.
+ * - Texture mapping (3.4): STQ (s = S / Q, perspective correct) or UV (affine); texel centers at .5; the wrap modes
+ *   (the region fields shifted by the level); point and bilinear sampling; the LOD formula per pixel from Q and the
+ *   MIPMAP filters with MIPTBP1 / MIPTBP2's levels; the formats (5-bit colors shifted left 3, TEXA's alpha, CLUTs in
+ *   CSM1 through the temporary buffer at CSA, loaded by CLD with CBP0 / CBP1); the texture functions with
+ *   A * B = (A x B) >> 7 clamped.
  * - Fog (3.5), the scissor (inclusive), alpha, destination alpha and depth tests with AFAIL (3.7), blending
  *   (A - B) * C >> 7 + D with PABE (3.8), dithering, color clamp, FBA, the 16-bit packing and FBMSK (3.9).
  * - Transfers (4.3): host to local, packed as the manual's transfer format.
  *
- * Where the manual gives no precision, it uses exact arithmetic: attributes are interpolated with barycentrics in
- * double precision and rounded to nearest (the GS's DDA rounding is not modeled), bilinear weights are exact, and a
- * blend's negative (A - B) * C shifts toward minus infinity. Lines are stepped along their major axis without their
- * end point (the manual only sketches the rule). The memory is FGSLocalMemory's linear model. A CLUT is read from a
- * buffer 64 pixels wide (upload it with DBW = 1). A Z beyond the Z buffer format's range is clamped to its maximum
- * (the manual does not say; the renderer keeps Z in range).
+ * Where the manual gives no precision, it uses exact arithmetic: attributes are interpolated as the vertices' sum
+ * weighted by the edge functions over the area, one rounding in double precision (whole where the GS's would be
+ * whole; the DDA's rounding is not modeled), then rounded to nearest; bilinear weights are exact, the LOD's log2 is in
+ * double precision, and a blend's negative (A - B) * C shifts toward minus infinity. Lines are stepped by GSStepLine
+ * (GSCore, shared with the emulator): along their major axis without their end point (the manual only sketches it).
+ * The memory is FGSLocalMemory, laid out as the GS's (pages, blocks and columns, manual chapter 8), shared with the
+ * desktop's emulator. A CLUT is read in CSM1 from a buffer 64 pixels wide (upload it with DBW = 1). A Z beyond the Z
+ * buffer format's range is clamped to its maximum (the manual does not say; the renderer keeps Z in range).
  */
 class GSREFERENCE_API FGSReferenceRasterizer
 {
@@ -44,7 +47,7 @@ public:
 	 * pixels with alpha 0x80.
 	 */
 	[[nodiscard]] TArray<FColor> ReadFrame(const FGSFrame& Frame, uint32 Width, uint32 Height) const;
-	/** A Z buffer's value at (X, Y) in a buffer WidthPixels wide. */
+	/** A Z buffer's value at (X, Y) in a buffer WidthPixels wide (a multiple of 64, as FBW gives it). */
 	[[nodiscard]] uint32 ReadZ(const FGSZBuf& ZBuf, uint32 WidthPixels, uint32 X, uint32 Y) const;
 
 	[[nodiscard]] const FGSLocalMemory& GetMemory() const

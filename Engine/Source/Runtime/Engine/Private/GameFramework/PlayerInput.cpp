@@ -5,6 +5,7 @@
 #include "Engine/Player.h"
 #include "GameFramework/InputSettings.h"
 #include "GameFramework/PlayerController.h"
+#include "Misc/MemStack.h"
 #include "Misc/OutputDevice.h"
 #include "Misc/OutputDeviceRedirector.h"
 #include "Misc/Parse.h"
@@ -416,9 +417,11 @@ void UPlayerInput::ProcessInputStack(
 		KeyState.RawValueAccumulator = 0.0f;
 	}
 
-	TArray<FDelegateDispatchDetails> ActionDelegates;
-	TArray<TPair<FInputAxisHandlerSignature, float>> AxisDelegates;
-	TArray<FKey> KeysToConsume;
+	// The frame's lists live on the frame's stack (UE keeps them in statics): no heap allocation per frame.
+	FMemMark Mark(FMemStack::Get());
+	TArray<FDelegateDispatchDetails, TMemStackAllocator<>> ActionDelegates;
+	TArray<TPair<FInputAxisHandlerSignature, float>, TMemStackAllocator<>> AxisDelegates;
+	TArray<FKey, TMemStackAllocator<>> KeysToConsume;
 	TArray<uint32> EventIndices;
 
 	// The stack from the top: each component's bindings take their keys from the components below (UE).

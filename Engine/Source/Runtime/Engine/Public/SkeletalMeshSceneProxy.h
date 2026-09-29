@@ -8,9 +8,10 @@ class USkeletalMesh;
 class USkeletalMeshComponent;
 
 /**
- * A USkeletalMeshComponent for the renderer (UE: FSkeletalMeshSceneProxy): its mesh, the values of the mesh's material
- * (slot 0, else the default material) and the skin matrices of the current pose, which the component sends before
- * each frame (USkeletalMeshComponent::SendRenderDynamicData_Concurrent).
+ * A USkeletalMeshComponent for the renderer (UE: FSkeletalMeshSceneProxy): its mesh, the values of each section's
+ * material (the component's override of the slot, else the mesh's, else the default material), and the dynamic data
+ * the component sends before each frame (USkeletalMeshComponent::SendRenderDynamicData_Concurrent): the skin matrices
+ * of the current pose and the pose's bounds, which the renderer culls with.
  */
 class ENGINE_API FSkeletalMeshSceneProxy : public FPrimitiveSceneProxy
 {
@@ -22,28 +23,38 @@ public:
 	{
 		return *SkeletalMesh;
 	}
-	/** The material of the mesh's slot 0, which draws the whole mesh (Leon: one section). */
-	[[nodiscard]] const FMaterial& GetMaterial() const
-	{
-		return Material;
-	}
+	/** The material a section of the mesh's render data draws with. */
+	[[nodiscard]] const FMaterial& GetSectionMaterial(int32 SectionIndex) const;
 
-	/** Skin matrices in the GL memory layout (uploaded as they are). */
+	/** One skin matrix per bone (InverseBindPose * component space); empty before the first pose (the bind pose). */
 	[[nodiscard]] const TArray<FMatrix>& GetBoneMatrices() const
 	{
 		return BoneMatrices;
 	}
-	/** UE: the dynamic data a skinned mesh sends each frame. */
-	void SetBoneMatrices(const TArray<FMatrix>& InBoneMatrices)
+	/** UE: the dynamic data a skinned mesh sends each frame: the skin matrices and the pose's local bounds. */
+	void SetDynamicData(TArrayView<const FMatrix> InBoneMatrices, const FBox& InLocalBounds)
 	{
-		BoneMatrices = InBoneMatrices;
+		// Copied into the proxy's own array, which keeps its memory from frame to frame.
+		BoneMatrices.SetNum(InBoneMatrices.Num(), false);
+		for (int32 Bone = 0; Bone < InBoneMatrices.Num(); ++Bone)
+		{
+			BoneMatrices[Bone] = InBoneMatrices[Bone];
+		}
+		LocalBounds = InLocalBounds;
 	}
 
-	/** The mesh and the maps of its material. */
+	/**
+	 * The pose's bounds in the world (the mesh's bind-pose box before the first pose): the renderer culls the mesh by
+	 * them, in the world pass and in the view model pass (N15), and they size its blob shadow.
+	 */
+	[[nodiscard]] FBox GetWorldBounds() const override;
+
+	/** The mesh and the maps of its materials. */
 	void AddReferencedObjects(FReferenceCollector& Collector) override;
 
 private:
 	USkeletalMesh* SkeletalMesh = nullptr;
-	FMaterial Material;
+	TArray<FMaterial> SectionMaterials;
 	TArray<FMatrix> BoneMatrices;
+	FBox LocalBounds = FBox(ForceInit);
 };

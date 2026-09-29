@@ -5,7 +5,7 @@
 /** Compile-time platform properties; each platform overrides what differs (UE: FGenericPlatformProperties). */
 struct CORE_API FGenericPlatformProperties
 {
-	/** Platform name as used by LeonBuildTool (Win64, Linux, PS2). */
+	/** Platform name as used by LeonBuildTool (Win64, PS2). */
 	static FORCEINLINE const char* PlatformName()
 	{
 		return "";
@@ -39,4 +39,10 @@ struct CORE_API FGenericPlatformProperties
 	 * (UE: gc.MaxObjectsInGame, a config value; Leon: a platform constant).
 	 */
 	static constexpr int32 MaxObjectsInGame = 131072;
+
+	/**
+	 * Bytes GMalloc (FMallocBinned) reserves at start-up for its small blocks, the pages of its size classes; the
+	 * small blocks that do not fit go to the system heap with the large ones (Leon).
+	 */
+	static constexpr uint32 SmallBlockArenaSize = 16 * 1024 * 1024;
 };

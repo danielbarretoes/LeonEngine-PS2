@@ -117,3 +117,97 @@ void FTracerBatch::Tick(float DeltaSeconds)
 		}
 	}
 }
+
+float FEffectSprite::GetOpacity() const
+{
+	if (Serial == 0)
+	{
+		return 0.0f;
+	}
+	float Opacity = Color.A;
+	if (FadeInTime > 0.0f)
+	{
+		Opacity *= FMath::Clamp(Age / FadeInTime, 0.0f, 1.0f);
+	}
+	if (LifeSpan > 0.0f && FadeOutTime > 0.0f)
+	{
+		Opacity *= FMath::Clamp((LifeSpan - Age) / FadeOutTime, 0.0f, 1.0f);
+	}
+	return Opacity;
+}
+
+uint32 FEffectSpritePool::AddSprite(const FEffectSprite& Sprite)
+{
+	int32 Slot = INDEX_NONE;
+	for (int32 Index = 0; Index < Sprites.Num(); ++Index)
+	{
+		if (Sprites[Index].Serial == 0)
+		{
+			Slot = Index;
+			break;
+		}
+	}
+	if (Slot == INDEX_NONE && Sprites.Num() < MaxSprites)
+	{
+		Slot = Sprites.AddDefaulted();
+	}
+	if (Slot == INDEX_NONE)
+	{
+		// Full: the oldest sprite goes.
+		Slot = 0;
+		for (int32 Index = 1; Index < Sprites.Num(); ++Index)
+		{
+			if (Sprites[Index].Serial < Sprites[Slot].Serial)
+			{
+				Slot = Index;
+			}
+		}
+	}
+	FEffectSprite& NewSprite = Sprites[Slot];
+	NewSprite = Sprite;
+	NewSprite.Age = 0.0f;
+	NewSprite.Serial = NextSerial++;
+	return NewSprite.Serial;
+}
+
+void FEffectSpritePool::RemoveSprite(uint32 Serial)
+{
+	for (FEffectSprite& Sprite : Sprites)
+	{
+		if (Serial != 0 && Sprite.Serial == Serial)
+		{
+			Sprite.Serial = 0;
+		}
+	}
+}
+
+void FEffectSpritePool::Tick(float DeltaSeconds)
+{
+	for (FEffectSprite& Sprite : Sprites)
+	{
+		if (Sprite.Serial == 0)
+		{
+			continue;
+		}
+		Sprite.Age += DeltaSeconds;
+		if (Sprite.LifeSpan > 0.0f && Sprite.Age >= Sprite.LifeSpan)
+		{
+			Sprite.Serial = 0;
+		}
+	}
+}
+
+void FEffectSpritePool::Clear()
+{
+	Sprites.Reset();
+}
+
+int32 FEffectSpritePool::Num() const
+{
+	int32 Count = 0;
+	for (const FEffectSprite& Sprite : Sprites)
+	{
+		Count += Sprite.Serial != 0 ? 1 : 0;
+	}
+	return Count;
+}

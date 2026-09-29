@@ -1,8 +1,16 @@
+#include "Components/MeshComponent.h"
 #include "Components/PrimitiveComponent.h"
 #include "Debug/DebugDraw.h"
 #include "GameFramework/Actor.h"
+#include "Materials/MaterialInterface.h"
+#include "Misc/MemStack.h"
 #include "Physics/PhysScene.h"
+#include "Stats/Stats.h"
 #include "TriangleCollision.h"
+
+DECLARE_CYCLE_STAT(TEXT("Line Trace"), STAT_LineTrace, STATGROUP_Collision);
+DECLARE_CYCLE_STAT(TEXT("Sweep"), STAT_Sweep, STATGROUP_Collision);
+DECLARE_CYCLE_STAT(TEXT("Overlap"), STAT_Overlap, STATGROUP_Collision);
 
 namespace
 {
@@ -18,229 +26,11 @@ namespace
 		Draw.AddLine(A, B, Color);
 	}
 
-	[[nodiscard]] bool SegmentAabb(
-		const FVector& Start, const FVector& End, const FVector& Mn, const FVector& Mx, float& OutT, FVector& OutNormal)
-	{
-		const FVector Dir = End - Start;
-		float TEnter = 0.0f;
-		float TExit = 1.0f;
-		FVector EnterNormal(0.0f, 0.0f, 1.0f);
-		bool bHitFace = false;
-
-		// X, then the vertical Z, then Y: on equal entry times the earlier axis gives the normal (the order of the
-		// Y-up world: X, vertical, second horizontal).
-		constexpr int32 AxisOrder[3] = {0, 2, 1};
-		for (const int32 Axis : AxisOrder)
-		{
-			if (FMath::Abs(Dir[Axis]) < 1.0e-6f)
-			{
-				if (Start[Axis] < Mn[Axis] || Start[Axis] > Mx[Axis])
-				{
-					return false;
-				}
-				continue;
-			}
-
-			const float Inv = 1.0f / Dir[Axis];
-			float T0 = (Mn[Axis] - Start[Axis]) * Inv;
-			float T1 = (Mx[Axis] - Start[Axis]) * Inv;
-			float NormalSign = -1.0f;
-			if (Inv < 0.0f)
-			{
-				Swap(T0, T1);
-				NormalSign = 1.0f;
-			}
-
-			if (T0 > TEnter)
-			{
-				TEnter = T0;
-				EnterNormal = FVector::ZeroVector;
-				EnterNormal[Axis] = NormalSign;
-				bHitFace = true;
-			}
-			TExit = FMath::Min(TExit, T1);
-			if (TEnter > TExit)
-			{
-				return false;
-			}
-		}
-
-		if (TEnter < 0.0f || TEnter > 1.0f)
-		{
-			return false;
-		}
-
-		if (!bHitFace && TEnter <= 0.0f)
-		{
-			OutT = 0.0f;
-			OutNormal = FVector(0.0f, 0.0f, 1.0f);
-			return true;
-		}
-
-		OutT = TEnter;
-		OutNormal = EnterNormal;
-		const float Len = OutNormal.Size();
-		if (Len > 1.0e-6f)
-		{
-			OutNormal /= Len;
-		}
-		return true;
-	}
-
-	/**
-	 * Segment vs an upright capsule around Center: a cylinder of Radius from Center.Z - CylinderHalfHeight to
-	 * Center.Z + CylinderHalfHeight, closed by two hemispheres. A swept sphere or upright capsule against it is the
-	 * segment of its centre against the capsule grown by the swept radius and cylinder (the Minkowski sum of two
-	 * upright capsules is one). The normal points from the capsule's axis to the entry point; a segment that starts
-	 * inside hits at 0 with the normal from the axis toward the start.
-	 */
-	[[nodiscard]] bool SegmentUprightCapsule(const FVector& Start, const FVector& End, const FVector& Center,
-		float Radius, float CylinderHalfHeight, float& OutT, FVector& OutNormal)
-	{
-		const float R = FMath::Max(Radius, 0.0f);
-		const float Hc = FMath::Max(CylinderHalfHeight, 0.0f);
-		const FVector Bottom = Center - FVector(0.0f, 0.0f, Hc);
-		const FVector Top = Center + FVector(0.0f, 0.0f, Hc);
-
-		auto ClosestOnAxis = [&](const FVector& P)
-		{ return FVector(Center.X, Center.Y, FMath::Clamp(P.Z, Bottom.Z, Top.Z)); };
-		auto NormalFrom = [&](const FVector& P)
-		{
-			const FVector Away = P - ClosestOnAxis(P);
-			const float Len = Away.Size();
-			return Len > 1.0e-6f ? Away / Len : FVector(0.0f, 0.0f, 1.0f);
-		};
-
-		// Starting inside: an immediate hit, as the boxes do.
-		if ((Start - ClosestOnAxis(Start)).SizeSquared() <= R * R)
-		{
-			OutT = 0.0f;
-			OutNormal = NormalFrom(Start);
-			return true;
-		}
-
-		const FVector D = End - Start;
-		float BestT = 2.0f;
-
-		// The side of the infinite cylinder, kept where it is between the caps.
-		const float A = (D.X * D.X) + (D.Y * D.Y);
-		if (A > 1.0e-8f)
-		{
-			const float Sx = Start.X - Center.X;
-			const float Sy = Start.Y - Center.Y;
-			const float B = 2.0f * ((Sx * D.X) + (Sy * D.Y));
-			const float C = (Sx * Sx) + (Sy * Sy) - (R * R);
-			const float Disc = (B * B) - (4.0f * A * C);
-			if (Disc >= 0.0f)
-			{
-				const float T = (-B - FMath::Sqrt(Disc)) / (2.0f * A);
-				const float Z = Start.Z + (D.Z * T);
-				if (T >= 0.0f && T <= 1.0f && Z >= Bottom.Z && Z <= Top.Z)
-				{
-					BestT = T;
-				}
-			}
-		}
-
-		// The two hemispheres (whole spheres: their parts inside the cylinder are entered through its side first).
-		for (const FVector& SphereCenter : {Bottom, Top})
-		{
-			const FVector S = Start - SphereCenter;
-			const float Qa = D.SizeSquared();
-			if (Qa < 1.0e-8f)
-			{
-				continue;
-			}
-			const float Qb = 2.0f * (S | D);
-			const float Qc = S.SizeSquared() - (R * R);
-			const float Disc = (Qb * Qb) - (4.0f * Qa * Qc);
-			if (Disc < 0.0f)
-			{
-				continue;
-			}
-			const float T = (-Qb - FMath::Sqrt(Disc)) / (2.0f * Qa);
-			if (T >= 0.0f && T <= 1.0f && T < BestT)
-			{
-				BestT = T;
-			}
-		}
-
-		if (BestT > 1.0f)
-		{
-			return false;
-		}
-		OutT = BestT;
-		OutNormal = NormalFrom(Start + (D * BestT));
-		return true;
-	}
-
-	/** Segment vs the horizontal plane z = FloorZ; the normal faces the segment's start. */
-	[[nodiscard]] bool SegmentFloorZ(
-		const FVector& Start, const FVector& End, float FloorZ, float& OutT, FVector& OutNormal)
-	{
-		const float Dz = End.Z - Start.Z;
-		if (FMath::Abs(Dz) < 1.0e-6f)
-		{
-			return false;
-		}
-		const float T = (FloorZ - Start.Z) / Dz;
-		if (T < 0.0f || T > 1.0f)
-		{
-			return false;
-		}
-		OutT = T;
-		OutNormal = FVector(0.0f, 0.0f, Dz < 0.0f ? 1.0f : -1.0f);
-		return true;
-	}
-
 	[[nodiscard]] bool PointInAabb(const FVector& P, const FVector& Center, const FVector& HalfExtents, float Inflate)
 	{
 		const FVector He = HalfExtents + FVector(Inflate);
 		return FMath::Abs(P.X - Center.X) <= He.X && FMath::Abs(P.Y - Center.Y) <= He.Y &&
 			FMath::Abs(P.Z - Center.Z) <= He.Z;
-	}
-
-	/**
-	 * Segment vs FSlopePlane. Inflate expands the plane along its normal (sphere / capsule radius).
-	 * Hits when the offset-plane distance changes sign (approach from either side).
-	 */
-	[[nodiscard]] bool SegmentSlopePlane(const FVector& Start, const FVector& End, const FSlopePlane& Plane,
-		float Inflate, float& OutT, FVector& OutNormal)
-	{
-		const float NLen = Plane.Normal.Size();
-		if (NLen < 1.0e-6f)
-		{
-			return false;
-		}
-		const FVector N = Plane.Normal / NLen;
-		const float D0 = ((Start - Plane.Point) | N) - Inflate;
-		const float D1 = ((End - Plane.Point) | N) - Inflate;
-		if (D0 < 0.0f && D1 < 0.0f)
-		{
-			return false;
-		}
-		if (D0 > 0.0f && D1 > 0.0f)
-		{
-			return false;
-		}
-		const float Denom = D0 - D1;
-		if (FMath::Abs(Denom) < 1.0e-6f)
-		{
-			return false;
-		}
-		const float T = D0 / Denom;
-		if (T < 0.0f || T > 1.0f)
-		{
-			return false;
-		}
-		const FVector HitLoc = Start + ((End - Start) * T);
-		if (!PointInAabb(HitLoc, Plane.BoundsCenter, Plane.BoundsHalfExtents, Inflate))
-		{
-			return false;
-		}
-		OutT = T;
-		OutNormal = (D0 >= 0.0f) ? N : -N;
-		return true;
 	}
 
 	void WriteHit(FHitResult& Out, const FVector& Start, const FVector& End, float T, const FVector& Normal,
@@ -260,29 +50,27 @@ namespace
 		Out.bFloorPlane = bFloorPlane;
 	}
 
-	void AppendSlopePlaneHits(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End, float Radius,
-		float HalfHeight, const TArray<FSlopePlane>& Planes)
+	/** A segment against a slope plane grown by a radius (and by a half height along its normal's Z). */
+	[[nodiscard]] bool SweepSlopePlane(const FSlopePlane& Plane, const FVector& Start, const FVector& End, float Radius,
+		float HalfHeight, FHitResult& OutHit)
 	{
-		for (const FSlopePlane& Plane : Planes)
+		const float NLen = Plane.Normal.Size();
+		const float Nz = (NLen > 1.0e-6f) ? (FMath::Abs(Plane.Normal.Z) / NLen) : 1.0f;
+		const float Inflate = Radius + (HalfHeight * Nz);
+		float T = 1.0f;
+		FVector Normal = FVector::ZeroVector;
+		if (!SegmentSlopePlane(Start, End, Plane, Inflate, T, Normal))
 		{
-			const float NLen = Plane.Normal.Size();
-			const float Nz = (NLen > 1.0e-6f) ? (FMath::Abs(Plane.Normal.Z) / NLen) : 1.0f;
-			const float Inflate = Radius + (HalfHeight * Nz);
-			float T = 1.0f;
-			FVector Normal = FVector::ZeroVector;
-			if (!SegmentSlopePlane(Start, End, Plane, Inflate, T, Normal))
-			{
-				continue;
-			}
-			FHitResult Hit;
-			WriteHit(Hit, Start, End, T, Normal, NoComponentID, false);
-			Hit.ImpactPoint = Hit.Location - (Normal * Inflate);
-			OutHits.Add(Hit);
+			return false;
 		}
+		WriteHit(OutHit, Start, End, T, Normal, NoComponentID, false);
+		OutHit.ImpactPoint = OutHit.Location - (Normal * Inflate);
+		return true;
 	}
 
 	/** Nearest first. Stable, so equal times keep the order they were found in. */
-	void SortHitsByTime(TArray<FHitResult>& Hits)
+	template <typename AllocatorType>
+	void SortHitsByTime(TArray<FHitResult, AllocatorType>& Hits)
 	{
 		StableSort(
 			Hits.GetData(), Hits.Num(), [](const FHitResult& A, const FHitResult& B) { return A.Time < B.Time; });
@@ -293,7 +81,7 @@ namespace
 	 * before it are not reported).
 	 */
 	[[nodiscard]] bool TakeNearestHit(
-		const TArray<FHitResult>& Hits, FHitResult& OutHit, const FVector& Start, const FVector& End)
+		TArrayView<const FHitResult> Hits, FHitResult& OutHit, const FVector& Start, const FVector& End)
 	{
 		OutHit = FHitResult();
 		OutHit.TraceStart = Start;
@@ -335,7 +123,7 @@ namespace
 		Draw.AddArrow(Hit.ImpactPoint, Hit.ImpactPoint + (Hit.ImpactNormal * NormalLength), TraceNormal, 12.0f, 7.0f);
 	}
 
-	void DrawTracePath(FDebugDraw& Draw, const FVector& Start, const FVector& End, const TArray<FHitResult>& Hits)
+	void DrawTracePath(FDebugDraw& Draw, const FVector& Start, const FVector& End, TArrayView<const FHitResult> Hits)
 	{
 		if (Hits.Num() == 0)
 		{
@@ -365,6 +153,45 @@ namespace
 
 } // namespace
 
+bool SegmentSlopePlane(
+	const FVector& Start, const FVector& End, const FSlopePlane& Plane, float Inflate, float& OutT, FVector& OutNormal)
+{
+	const float NLen = Plane.Normal.Size();
+	if (NLen < 1.0e-6f)
+	{
+		return false;
+	}
+	const FVector N = Plane.Normal / NLen;
+	const float D0 = ((Start - Plane.Point) | N) - Inflate;
+	const float D1 = ((End - Plane.Point) | N) - Inflate;
+	if (D0 < 0.0f && D1 < 0.0f)
+	{
+		return false;
+	}
+	if (D0 > 0.0f && D1 > 0.0f)
+	{
+		return false;
+	}
+	const float Denom = D0 - D1;
+	if (FMath::Abs(Denom) < 1.0e-6f)
+	{
+		return false;
+	}
+	const float T = D0 / Denom;
+	if (T < 0.0f || T > 1.0f)
+	{
+		return false;
+	}
+	const FVector HitLoc = Start + ((End - Start) * T);
+	if (!PointInAabb(HitLoc, Plane.BoundsCenter, Plane.BoundsHalfExtents, Inflate))
+	{
+		return false;
+	}
+	OutT = T;
+	OutNormal = (D0 >= 0.0f) ? N : -N;
+	return true;
+}
+
 FCollisionQueryParams::FCollisionQueryParams(FName InTraceTag, bool bInTraceComplex, const AActor* InIgnoreActor)
 	: bTraceComplex(bInTraceComplex)
 	, TraceTag(InTraceTag)
@@ -388,13 +215,13 @@ void FCollisionQueryParams::AddIgnoredActor(const AActor* InIgnoreActor)
 	}
 }
 
-void DrawDebugLineTrace(FDebugDraw& Draw, const FVector& Start, const FVector& End, const TArray<FHitResult>& Hits)
+void DrawDebugLineTrace(FDebugDraw& Draw, const FVector& Start, const FVector& End, TArrayView<const FHitResult> Hits)
 {
 	DrawTracePath(Draw, Start, End, Hits);
 }
 
 void DrawDebugSphereTrace(
-	FDebugDraw& Draw, const FVector& Start, const FVector& End, float Radius, const TArray<FHitResult>& Hits)
+	FDebugDraw& Draw, const FVector& Start, const FVector& End, float Radius, TArrayView<const FHitResult> Hits)
 {
 	const float R = FMath::Max(Radius, 0.0f);
 	DrawTracePath(Draw, Start, End, Hits);
@@ -407,7 +234,7 @@ void DrawDebugSphereTrace(
 }
 
 void DrawDebugCapsuleTrace(FDebugDraw& Draw, const FVector& Start, const FVector& End, float Radius, float HalfHeight,
-	const TArray<FHitResult>& Hits)
+	TArrayView<const FHitResult> Hits)
 {
 	const float R = FMath::Max(Radius, 0.0f);
 	const float Hh = FMath::Max(HalfHeight, 0.0f);
@@ -423,6 +250,417 @@ void DrawDebugCapsuleTrace(FDebugDraw& Draw, const FVector& Start, const FVector
 		AddRingXY(Draw, Hits[0].ImpactPoint, R, TraceHitPath);
 	}
 }
+
+/**
+ * FPhysScene's queries: the broadphase gives the candidate bodies, which take the tests every body took before it, in
+ * the order the bodies were added, so the hits and their order are the same.
+ */
+struct FPhysSceneQuery
+{
+	/** The shape a trace sweeps. */
+	enum class EShape : uint8
+	{
+		Line,
+		Sphere,
+		Capsule,
+		Box,
+	};
+
+	/** A trace's swept shape (cm). */
+	struct FSweep
+	{
+		EShape Shape = EShape::Line;
+		/** Sphere or capsule: the radius, at least 0. */
+		float Radius = 0.0f;
+		/** Capsule: the cylinder's half height, at least 0. */
+		float HalfHeight = 0.0f;
+		/** Box: its half extents, and the largest of them (its triangles and capsules see a sphere of it). */
+		FVector Extent = FVector::ZeroVector;
+		float Bound = 0.0f;
+		/** The floor plane (FCollisionQueryParams::bTraceFloorPlane) and the slope planes: not for a box. */
+		bool bPlanes = true;
+
+		[[nodiscard]] static FSweep MakeLine(bool bInPlanes)
+		{
+			FSweep Sweep;
+			Sweep.bPlanes = bInPlanes;
+			return Sweep;
+		}
+		[[nodiscard]] static FSweep MakeSphere(float InRadius)
+		{
+			FSweep Sweep;
+			Sweep.Shape = EShape::Sphere;
+			Sweep.Radius = FMath::Max(InRadius, 0.0f);
+			return Sweep;
+		}
+		[[nodiscard]] static FSweep MakeCapsule(float InRadius, float InHalfHeight)
+		{
+			FSweep Sweep;
+			Sweep.Shape = EShape::Capsule;
+			Sweep.Radius = FMath::Max(InRadius, 0.0f);
+			Sweep.HalfHeight = FMath::Max(InHalfHeight, 0.0f);
+			return Sweep;
+		}
+		[[nodiscard]] static FSweep MakeBox(const FVector& InExtent)
+		{
+			FSweep Sweep;
+			Sweep.Shape = EShape::Box;
+			Sweep.Extent = InExtent;
+			Sweep.Bound = FMath::Max(InExtent.X, FMath::Max(InExtent.Y, InExtent.Z));
+			Sweep.bPlanes = false;
+			return Sweep;
+		}
+
+		/** How far a body's box grows for the shape's centre (the capsule's cylinder is upright). */
+		[[nodiscard]] FVector GetBoxExpand() const
+		{
+			switch (Shape)
+			{
+				case EShape::Sphere:
+					return FVector(Radius);
+				case EShape::Capsule:
+					return FVector(Radius, Radius, HalfHeight + Radius);
+				case EShape::Box:
+					return Extent;
+				case EShape::Line:
+				default:
+					return FVector::ZeroVector;
+			}
+		}
+
+		/**
+		 * How far the broadphase grows its boxes: as the bodies' boxes grow, and by the triangles' inflate on every
+		 * axis (along a triangle's normal, which may lie on X or Y), at least 0.
+		 */
+		[[nodiscard]] FVector GetBroadphaseExpand() const
+		{
+			switch (Shape)
+			{
+				case EShape::Sphere:
+					return FVector(Radius);
+				case EShape::Capsule:
+					return FVector(Radius + HalfHeight);
+				case EShape::Box:
+					return FVector(FMath::Max(Bound, 0.0f));
+				case EShape::Line:
+				default:
+					return FVector::ZeroVector;
+			}
+		}
+
+		/** How far the triangles are grown along their normal. */
+		[[nodiscard]] float GetMeshInflate() const
+		{
+			switch (Shape)
+			{
+				case EShape::Sphere:
+					return Radius;
+				case EShape::Capsule:
+					// Like the slope planes: radius + |Nz| * half height, approximated with radius + half height.
+					return Radius + HalfHeight;
+				case EShape::Box:
+					return Bound;
+				case EShape::Line:
+				default:
+					return 0.0f;
+			}
+		}
+	};
+
+	/** Which bodies a query sees and how: a trace channel with its responses, or object types (every one blocks). */
+	struct FFilter
+	{
+		ECollisionChannel Channel;
+		const FCollisionQueryParams& Params;
+		const FCollisionResponseParams& ResponseParam;
+		const FCollisionObjectQueryParams* ObjectParams;
+
+		[[nodiscard]] ECollisionResponse GetResponse(const FBodyInstance& Body) const
+		{
+			if (ObjectParams != nullptr)
+			{
+				return Body.bQueryEnabled && !Params.IsIgnored(Body.ComponentID, Body.OwnerID) &&
+						ObjectParams->Contains(Body.ObjectType.GetValue())
+					? ECR_Block
+					: ECR_Ignore;
+			}
+			return FPhysScene::GetBodyQueryResponse(Body, Channel, Params, ResponseParam);
+		}
+	};
+
+	/**
+	 * The swept shape against a body: an upright capsule grown by the shape, else the box grown by the shape and, for
+	 * a triangle mesh, its triangles (the nearest at most MaxT along the segment, its index to OutFaceIndex; INDEX_NONE
+	 * for a simple shape).
+	 */
+	[[nodiscard]] static bool SweepBody(const FPhysScene& Scene, int32 BodyIndex, const FSweep& Sweep,
+		const FVector& Start, const FVector& End, float MaxT, float& OutT, FVector& OutNormal, int32& OutFaceIndex)
+	{
+		OutFaceIndex = INDEX_NONE;
+		const FBodyInstance& Body = Scene.Bodies[BodyIndex];
+		if (Body.CollisionShape == EBodyCollisionShape::Capsule)
+		{
+			float CapsuleRadius = 0.0f;
+			float CapsuleCylinder = 0.0f;
+			GetBodyCapsule(Body, CapsuleRadius, CapsuleCylinder);
+			if (Sweep.Shape == EShape::Sphere)
+			{
+				CapsuleRadius = CapsuleRadius + Sweep.Radius;
+			}
+			else if (Sweep.Shape == EShape::Capsule)
+			{
+				CapsuleRadius = CapsuleRadius + Sweep.Radius;
+				CapsuleCylinder = CapsuleCylinder + Sweep.HalfHeight;
+			}
+			else if (Sweep.Shape == EShape::Box)
+			{
+				CapsuleRadius = CapsuleRadius + Sweep.Bound;
+			}
+			return SegmentUprightCapsule(Start, End, Body.Position, CapsuleRadius, CapsuleCylinder, OutT, OutNormal);
+		}
+
+		FVector Mn = Body.Position - Body.HalfExtents;
+		FVector Mx = Body.Position + Body.HalfExtents;
+		if (Sweep.Shape != EShape::Line)
+		{
+			const FVector Expand = Sweep.GetBoxExpand();
+			Mn = Mn - Expand;
+			Mx = Mx + Expand;
+		}
+		float TAabb = 1.0f;
+		FVector NAabb = FVector::ZeroVector;
+		if (!SegmentAabb(Start, End, Mn, Mx, TAabb, NAabb))
+		{
+			return false;
+		}
+		OutT = TAabb;
+		OutNormal = NAabb;
+		if (const FTriangleMeshCollision* Mesh = Scene.GetBodyMesh(BodyIndex))
+		{
+			// The box only culls: the hit is on a triangle.
+			float TMesh = 1.0f;
+			FVector NMesh = FVector::ZeroVector;
+			if (!SegmentTriangleMesh(Start, End, *Mesh, Sweep.GetMeshInflate(), TMesh, NMesh, MaxT, &OutFaceIndex))
+			{
+				return false;
+			}
+			OutT = TMesh;
+			OutNormal = NMesh;
+		}
+		return true;
+	}
+
+	/**
+	 * The hit on a body (UE FHitResult: Location is the shape's centre, ImpactPoint the contact on the surface), with
+	 * its physical material when the query asks for it.
+	 */
+	static void MakeBodyHit(const FPhysScene& Scene, int32 BodyIndex, bool bBlocking, const FSweep& Sweep,
+		const FVector& Start, const FVector& End, float T, const FVector& Normal, int32 FaceIndex,
+		const FCollisionQueryParams& Params, FHitResult& OutHit)
+	{
+		WriteHit(OutHit, Start, End, T, Normal, Scene.Bodies[BodyIndex].ComponentID, false);
+		switch (Sweep.Shape)
+		{
+			case EShape::Sphere:
+				OutHit.ImpactPoint = OutHit.Location - (Normal * Sweep.Radius);
+				break;
+			case EShape::Capsule:
+			{
+				const float Pull = (FMath::Abs(Normal.Z) > 0.5f) ? (Sweep.HalfHeight + Sweep.Radius) : Sweep.Radius;
+				OutHit.ImpactPoint = OutHit.Location - (Normal * Pull);
+				break;
+			}
+			case EShape::Box:
+				OutHit.ImpactPoint = OutHit.Location - (Normal * FMath::Abs(Normal | Sweep.Extent));
+				break;
+			case EShape::Line:
+			default:
+				break;
+		}
+		OutHit.bBlockingHit = bBlocking;
+		OutHit.FaceIndex = FaceIndex;
+		Scene.SetHitBody(OutHit, BodyIndex);
+		if (Params.bReturnPhysicalMaterial)
+		{
+			OutHit.PhysMaterial = FPhysScene::GetHitPhysicalMaterial(OutHit.GetComponent(), FaceIndex);
+		}
+	}
+
+	/** The shape against the floor plane at FloorZ (the plane raised by the shape under its centre). */
+	[[nodiscard]] static bool SweepFloor(
+		const FSweep& Sweep, const FVector& Start, const FVector& End, float FloorZ, FHitResult& OutHit)
+	{
+		float PlaneZ = FloorZ;
+		if (Sweep.Shape == EShape::Sphere)
+		{
+			PlaneZ = FloorZ + Sweep.Radius;
+		}
+		else if (Sweep.Shape == EShape::Capsule)
+		{
+			PlaneZ = FloorZ + Sweep.HalfHeight + Sweep.Radius;
+		}
+		float T = 1.0f;
+		FVector Normal = FVector::ZeroVector;
+		if (!SegmentFloorZ(Start, End, PlaneZ, T, Normal))
+		{
+			return false;
+		}
+		WriteHit(OutHit, Start, End, T, Normal, NoComponentID, true);
+		if (Sweep.Shape == EShape::Sphere)
+		{
+			OutHit.ImpactPoint = OutHit.Location - (Normal * Sweep.Radius);
+		}
+		else if (Sweep.Shape == EShape::Capsule)
+		{
+			OutHit.ImpactPoint = OutHit.Location - (Normal * (Sweep.HalfHeight + Sweep.Radius));
+		}
+		return true;
+	}
+
+	/** The shape against a slope plane. */
+	[[nodiscard]] static bool SweepSlope(
+		const FSweep& Sweep, const FSlopePlane& Plane, const FVector& Start, const FVector& End, FHitResult& OutHit)
+	{
+		return SweepSlopePlane(
+			Plane, Start, End, Sweep.Radius, Sweep.Shape == EShape::Capsule ? Sweep.HalfHeight : 0.0f, OutHit);
+	}
+
+	/** Every hit, nearest first; at the same time the bodies in the order they were added, the floor, the slopes. */
+	template <typename AllocatorType>
+	static bool Multi(const FPhysScene& Scene, TArray<FHitResult, AllocatorType>& OutHits, const FVector& Start,
+		const FVector& End, const FSweep& Sweep, const FFilter& Filter)
+	{
+		OutHits.Reset();
+		Scene.UpdateBroadphase();
+		FPhysScene::FBodyIndexArray Candidates;
+		Scene.Broadphase.ForEachSegmentHit(FAabbTreeSegment(Start, End), Sweep.GetBroadphaseExpand(), 1.0f,
+			[&](int32 BodyIndex, float MaxT)
+			{
+				if (Filter.GetResponse(Scene.Bodies[BodyIndex]) != ECR_Ignore)
+				{
+					Candidates.Add(BodyIndex);
+				}
+				return MaxT;
+			});
+		Scene.SortBodiesBySerial(Candidates);
+		for (const int32 BodyIndex : Candidates)
+		{
+			float T = 1.0f;
+			FVector Normal = FVector::ZeroVector;
+			int32 FaceIndex = INDEX_NONE;
+			if (!SweepBody(Scene, BodyIndex, Sweep, Start, End, 1.0f, T, Normal, FaceIndex))
+			{
+				continue;
+			}
+			MakeBodyHit(Scene, BodyIndex, Filter.GetResponse(Scene.Bodies[BodyIndex]) == ECR_Block, Sweep, Start, End,
+				T, Normal, FaceIndex, Filter.Params, OutHits.AddDefaulted_GetRef());
+		}
+		if (Sweep.bPlanes)
+		{
+			FHitResult Hit;
+			if (Filter.Params.bTraceFloorPlane && SweepFloor(Sweep, Start, End, Filter.Params.FloorZ, Hit))
+			{
+				OutHits.Add(Hit);
+			}
+			for (const FSlopePlane& Plane : Scene.SlopePlanes)
+			{
+				Hit = FHitResult();
+				if (SweepSlope(Sweep, Plane, Start, End, Hit))
+				{
+					OutHits.Add(Hit);
+				}
+			}
+		}
+		SortHitsByTime(OutHits);
+		return OutHits.Num() > 0;
+	}
+
+	/**
+	 * The first blocking hit of Multi, without listing the others: the nearest, and at the same time the body added
+	 * first, then the floor, then the slopes. The broadphase and the triangle trees skip what lies beyond the nearest
+	 * hit so far.
+	 */
+	static bool Single(const FPhysScene& Scene, FHitResult& OutHit, const FVector& Start, const FVector& End,
+		const FSweep& Sweep, const FFilter& Filter)
+	{
+		Scene.UpdateBroadphase();
+		int32 BestBody = INDEX_NONE;
+		float BestT = 1.0f;
+		uint32 BestSerial = 0;
+		FVector BestNormal = FVector::ZeroVector;
+		int32 BestFace = INDEX_NONE;
+		Scene.Broadphase.ForEachSegmentHit(FAabbTreeSegment(Start, End), Sweep.GetBroadphaseExpand(), 1.0f,
+			[&](int32 BodyIndex, float MaxT)
+			{
+				if (Filter.GetResponse(Scene.Bodies[BodyIndex]) != ECR_Block)
+				{
+					return MaxT;
+				}
+				float T = 1.0f;
+				FVector Normal = FVector::ZeroVector;
+				int32 FaceIndex = INDEX_NONE;
+				if (!SweepBody(Scene, BodyIndex, Sweep, Start, End, MaxT, T, Normal, FaceIndex))
+				{
+					return MaxT;
+				}
+				const uint32 Serial = Scene.GetBodySerial(BodyIndex);
+				if (BestBody == INDEX_NONE || T < BestT || (T == BestT && Serial < BestSerial))
+				{
+					BestBody = BodyIndex;
+					BestT = T;
+					BestSerial = Serial;
+					BestNormal = Normal;
+					BestFace = FaceIndex;
+				}
+				return BestBody == INDEX_NONE ? MaxT : BestT;
+			});
+
+		// The planes come after the bodies: they win only when strictly nearer.
+		bool bFound = BestBody != INDEX_NONE;
+		float BestTime = BestT;
+		bool bPlaneBest = false;
+		FHitResult PlaneHit;
+		if (Sweep.bPlanes)
+		{
+			FHitResult Hit;
+			if (Filter.Params.bTraceFloorPlane && SweepFloor(Sweep, Start, End, Filter.Params.FloorZ, Hit) &&
+				(!bFound || Hit.Time < BestTime))
+			{
+				PlaneHit = Hit;
+				bPlaneBest = true;
+				bFound = true;
+				BestTime = Hit.Time;
+			}
+			for (const FSlopePlane& Plane : Scene.SlopePlanes)
+			{
+				Hit = FHitResult();
+				if (SweepSlope(Sweep, Plane, Start, End, Hit) && (!bFound || Hit.Time < BestTime))
+				{
+					PlaneHit = Hit;
+					bPlaneBest = true;
+					bFound = true;
+					BestTime = Hit.Time;
+				}
+			}
+		}
+
+		OutHit = FHitResult();
+		if (bPlaneBest)
+		{
+			OutHit = PlaneHit;
+			return true;
+		}
+		if (BestBody != INDEX_NONE)
+		{
+			MakeBodyHit(Scene, BestBody, true, Sweep, Start, End, BestT, BestNormal, BestFace, Filter.Params, OutHit);
+			return true;
+		}
+		OutHit.TraceStart = Start;
+		OutHit.TraceEnd = End;
+		OutHit.Time = 1.0f;
+		return false;
+	}
+};
 
 ECollisionResponse FPhysScene::GetBodyQueryResponse(const FBodyInstance& Body, ECollisionChannel TraceChannel,
 	const FCollisionQueryParams& Params, const FCollisionResponseParams& ResponseParam)
@@ -443,358 +681,135 @@ void FPhysScene::SetHitBody(FHitResult& Hit, int32 BodyIndex) const
 	Hit.Actor = Owner != nullptr ? Owner->GetOwner() : nullptr;
 }
 
-void FPhysScene::FilterBackendHits(TArray<FHitResult>& Hits, ECollisionChannel TraceChannel,
-	const FCollisionQueryParams& Params, const FCollisionResponseParams& ResponseParam) const
+UPhysicalMaterial* FPhysScene::GetHitPhysicalMaterial(const UPrimitiveComponent* Component, int32 FaceIndex)
 {
-	for (int32 HitIndex = Hits.Num() - 1; HitIndex >= 0; --HitIndex)
+	if (Component == nullptr)
 	{
-		FHitResult& Hit = Hits[HitIndex];
-		if (!Bodies.IsValidIndex(Hit.BodyIndex))
-		{
-			continue;
-		}
-		const ECollisionResponse Response =
-			GetBodyQueryResponse(Bodies[Hit.BodyIndex], TraceChannel, Params, ResponseParam);
-		if (Response == ECR_Ignore)
-		{
-			Hits.RemoveAt(HitIndex);
-			continue;
-		}
-		Hit.bBlockingHit = Response == ECR_Block;
-		SetHitBody(Hit, Hit.BodyIndex);
+		return nullptr;
 	}
+	// A triangle: its section's material (UE: GetMaterialFromCollisionFaceIndex); a simple shape: the first material
+	// (UE: FBodyInstance::GetSimplePhysicalMaterial, after the body setup's own, which Leon has not).
+	const UMaterialInterface* Material = nullptr;
+	if (FaceIndex != INDEX_NONE)
+	{
+		int32 SectionIndex = INDEX_NONE;
+		Material = Component->GetMaterialFromCollisionFaceIndex(FaceIndex, SectionIndex);
+	}
+	else if (const UMeshComponent* Mesh = Cast<UMeshComponent>(Component))
+	{
+		Material = Mesh->GetMaterial(0);
+	}
+	return Material != nullptr ? Material->GetPhysicalMaterial() : nullptr;
 }
 
 bool FPhysScene::LineTraceMultiByChannel(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End,
 	ECollisionChannel Channel, const FCollisionQueryParams& Params, FDebugDraw* DebugDraw,
 	const FCollisionResponseParams& ResponseParam) const
 {
-	OutHits.Reset();
-
-	// A rigid-body backend traces the bodies it simulates; the Arcade shapes cover the others (query-only bodies).
-	const bool bNarrowPhase = BackendIface != nullptr && BackendIface->HasNarrowPhaseTraces();
-	if (bNarrowPhase)
-	{
-		// Body instances may have been nudged CMC without a Step: sync before CastRay.
-		if (BackendIface->HasRigidWorld())
-		{
-			BackendIface->RigidPrepareStep(Bodies, Params.IgnoreComponentID);
-		}
-		(void)BackendIface->RigidLineTrace(OutHits, Start, End, Channel, Params.IgnoreComponentID);
-		FilterBackendHits(OutHits, Channel, Params, ResponseParam);
-	}
-	for (int32 Bi = 0; Bi < Bodies.Num(); ++Bi)
-	{
-		const FBodyInstance& Body = Bodies[Bi];
-		if (bNarrowPhase && Body.bPhysicsEnabled)
-		{
-			continue;
-		}
-		const ECollisionResponse Response = GetBodyQueryResponse(Body, Channel, Params, ResponseParam);
-		if (Response == ECR_Ignore)
-		{
-			continue;
-		}
-
-		float T = 1.0f;
-		FVector Normal = FVector::ZeroVector;
-		if (Body.CollisionShape == EBodyCollisionShape::Capsule)
-		{
-			float CapsuleRadius = 0.0f;
-			float CapsuleCylinder = 0.0f;
-			GetBodyCapsule(Body, CapsuleRadius, CapsuleCylinder);
-			if (!SegmentUprightCapsule(Start, End, Body.Position, CapsuleRadius, CapsuleCylinder, T, Normal))
-			{
-				continue;
-			}
-		}
-		else
-		{
-			const FVector Mn = Body.Position - Body.HalfExtents;
-			const FVector Mx = Body.Position + Body.HalfExtents;
-			float TAabb = 1.0f;
-			FVector NAabb = FVector::ZeroVector;
-			if (!SegmentAabb(Start, End, Mn, Mx, TAabb, NAabb))
-			{
-				continue;
-			}
-
-			T = TAabb;
-			Normal = NAabb;
-			if (Body.CollisionShape == EBodyCollisionShape::TriangleMesh && Bi < TriangleMeshes.Num() &&
-				TriangleMeshes[Bi].IsValid())
-			{
-				float TMesh = 1.0f;
-				FVector NMesh = FVector::ZeroVector;
-				if (!SegmentTriangleMesh(Start, End, TriangleMeshes[Bi], 0.0f, TMesh, NMesh))
-				{
-					continue; // Broadphase only: no actual triangle hit.
-				}
-				T = TMesh;
-				Normal = NMesh;
-			}
-		}
-
-		FHitResult Hit;
-		WriteHit(Hit, Start, End, T, Normal, Body.ComponentID, false);
-		Hit.bBlockingHit = Response == ECR_Block;
-		SetHitBody(Hit, Bi);
-		OutHits.Add(Hit);
-	}
-
-	if (Params.bTraceFloorPlane)
-	{
-		float T = 1.0f;
-		FVector Normal = FVector::ZeroVector;
-		if (SegmentFloorZ(Start, End, Params.FloorZ, T, Normal))
-		{
-			FHitResult Hit;
-			WriteHit(Hit, Start, End, T, Normal, NoComponentID, true);
-			OutHits.Add(Hit);
-		}
-	}
-	AppendSlopePlaneHits(OutHits, Start, End, 0.0f, 0.0f, SlopePlanes);
-
-	SortHitsByTime(OutHits);
+	SCOPE_CYCLE_COUNTER(STAT_LineTrace);
+	const bool bHit = FPhysSceneQuery::Multi(
+		*this, OutHits, Start, End, FPhysSceneQuery::FSweep::MakeLine(true), {Channel, Params, ResponseParam, nullptr});
 	if (ShouldDraw(Params, DebugDraw))
 	{
 		DrawDebugLineTrace(*DebugDraw, Start, End, OutHits);
 	}
-	return OutHits.Num() > 0;
+	return bHit;
 }
 
 bool FPhysScene::LineTraceSingleByChannel(FHitResult& OutHit, const FVector& Start, const FVector& End,
 	ECollisionChannel Channel, const FCollisionQueryParams& Params, FDebugDraw* DebugDraw,
 	const FCollisionResponseParams& ResponseParam) const
 {
-	TArray<FHitResult> Hits;
-	(void)LineTraceMultiByChannel(Hits, Start, End, Channel, Params, DebugDraw, ResponseParam);
-	return TakeNearestHit(Hits, OutHit, Start, End);
+	if (ShouldDraw(Params, DebugDraw))
+	{
+		// The debug view draws every hit.
+		FMemMark Mark(FMemStack::Get());
+		TArray<FHitResult, TMemStackAllocator<>> Hits;
+		(void)FPhysSceneQuery::Multi(*this, Hits, Start, End, FPhysSceneQuery::FSweep::MakeLine(true),
+			{Channel, Params, ResponseParam, nullptr});
+		DrawDebugLineTrace(*DebugDraw, Start, End, Hits);
+		return TakeNearestHit(Hits, OutHit, Start, End);
+	}
+	return FPhysSceneQuery::Single(
+		*this, OutHit, Start, End, FPhysSceneQuery::FSweep::MakeLine(true), {Channel, Params, ResponseParam, nullptr});
 }
 
 bool FPhysScene::SphereTraceMultiByChannel(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End,
 	float Radius, ECollisionChannel Channel, const FCollisionQueryParams& Params, FDebugDraw* DebugDraw,
 	const FCollisionResponseParams& ResponseParam) const
 {
-	const float R = FMath::Max(Radius, 0.0f);
-	OutHits.Reset();
-
-	const bool bNarrowPhase = BackendIface != nullptr && BackendIface->HasNarrowPhaseTraces();
-	if (bNarrowPhase)
-	{
-		// Push the body instances to Jolt before CastShape (same as the Step prepare).
-		if (BackendIface->HasRigidWorld())
-		{
-			BackendIface->RigidPrepareStep(Bodies, Params.IgnoreComponentID);
-		}
-		(void)BackendIface->RigidSphereTrace(OutHits, Start, End, R, Channel, Params.IgnoreComponentID);
-		FilterBackendHits(OutHits, Channel, Params, ResponseParam);
-	}
-	for (int32 Bi = 0; Bi < Bodies.Num(); ++Bi)
-	{
-		const FBodyInstance& Body = Bodies[Bi];
-		if (bNarrowPhase && Body.bPhysicsEnabled)
-		{
-			continue;
-		}
-		const ECollisionResponse Response = GetBodyQueryResponse(Body, Channel, Params, ResponseParam);
-		if (Response == ECR_Ignore)
-		{
-			continue;
-		}
-
-		float T = 1.0f;
-		FVector Normal = FVector::ZeroVector;
-		if (Body.CollisionShape == EBodyCollisionShape::Capsule)
-		{
-			float CapsuleRadius = 0.0f;
-			float CapsuleCylinder = 0.0f;
-			GetBodyCapsule(Body, CapsuleRadius, CapsuleCylinder);
-			if (!SegmentUprightCapsule(Start, End, Body.Position, CapsuleRadius + R, CapsuleCylinder, T, Normal))
-			{
-				continue;
-			}
-		}
-		else
-		{
-			const FVector Expand(R, R, R);
-			const FVector Mn = Body.Position - Body.HalfExtents - Expand;
-			const FVector Mx = Body.Position + Body.HalfExtents + Expand;
-			float TAabb = 1.0f;
-			FVector NAabb = FVector::ZeroVector;
-			if (!SegmentAabb(Start, End, Mn, Mx, TAabb, NAabb))
-			{
-				continue;
-			}
-
-			T = TAabb;
-			Normal = NAabb;
-			if (Body.CollisionShape == EBodyCollisionShape::TriangleMesh && Bi < TriangleMeshes.Num() &&
-				TriangleMeshes[Bi].IsValid())
-			{
-				float TMesh = 1.0f;
-				FVector NMesh = FVector::ZeroVector;
-				if (!SegmentTriangleMesh(Start, End, TriangleMeshes[Bi], R, TMesh, NMesh))
-				{
-					continue;
-				}
-				T = TMesh;
-				Normal = NMesh;
-			}
-		}
-
-		FHitResult Hit;
-		WriteHit(Hit, Start, End, T, Normal, Body.ComponentID, false);
-		// UE FHitResult: Location = sweep shape center; ImpactPoint = surface contact.
-		Hit.ImpactPoint = Hit.Location - (Normal * R);
-		Hit.bBlockingHit = Response == ECR_Block;
-		SetHitBody(Hit, Bi);
-		OutHits.Add(Hit);
-	}
-
-	if (Params.bTraceFloorPlane)
-	{
-		const float PlaneZ = Params.FloorZ + R;
-		float T = 1.0f;
-		FVector Normal = FVector::ZeroVector;
-		if (SegmentFloorZ(Start, End, PlaneZ, T, Normal))
-		{
-			FHitResult Hit;
-			WriteHit(Hit, Start, End, T, Normal, NoComponentID, true);
-			Hit.ImpactPoint = Hit.Location - (Normal * R);
-			OutHits.Add(Hit);
-		}
-	}
-	AppendSlopePlaneHits(OutHits, Start, End, R, 0.0f, SlopePlanes);
-
-	SortHitsByTime(OutHits);
+	SCOPE_CYCLE_COUNTER(STAT_Sweep);
+	const FPhysSceneQuery::FSweep Sweep = FPhysSceneQuery::FSweep::MakeSphere(Radius);
+	const bool bHit =
+		FPhysSceneQuery::Multi(*this, OutHits, Start, End, Sweep, {Channel, Params, ResponseParam, nullptr});
 	if (ShouldDraw(Params, DebugDraw))
 	{
-		DrawDebugSphereTrace(*DebugDraw, Start, End, R, OutHits);
+		DrawDebugSphereTrace(*DebugDraw, Start, End, Sweep.Radius, OutHits);
 	}
-	return OutHits.Num() > 0;
+	return bHit;
 }
 
 bool FPhysScene::SphereTraceSingleByChannel(FHitResult& OutHit, const FVector& Start, const FVector& End, float Radius,
 	ECollisionChannel Channel, const FCollisionQueryParams& Params, FDebugDraw* DebugDraw,
 	const FCollisionResponseParams& ResponseParam) const
 {
-	TArray<FHitResult> Hits;
-	(void)SphereTraceMultiByChannel(Hits, Start, End, Radius, Channel, Params, DebugDraw, ResponseParam);
-	return TakeNearestHit(Hits, OutHit, Start, End);
+	if (ShouldDraw(Params, DebugDraw))
+	{
+		FMemMark Mark(FMemStack::Get());
+		TArray<FHitResult, TMemStackAllocator<>> Hits;
+		const FPhysSceneQuery::FSweep Sweep = FPhysSceneQuery::FSweep::MakeSphere(Radius);
+		(void)FPhysSceneQuery::Multi(*this, Hits, Start, End, Sweep, {Channel, Params, ResponseParam, nullptr});
+		DrawDebugSphereTrace(*DebugDraw, Start, End, Sweep.Radius, Hits);
+		return TakeNearestHit(Hits, OutHit, Start, End);
+	}
+	return FPhysSceneQuery::Single(*this, OutHit, Start, End, FPhysSceneQuery::FSweep::MakeSphere(Radius),
+		{Channel, Params, ResponseParam, nullptr});
 }
 
 bool FPhysScene::CapsuleTraceMultiByChannel(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End,
 	float Radius, float HalfHeight, ECollisionChannel Channel, const FCollisionQueryParams& Params,
 	FDebugDraw* DebugDraw, const FCollisionResponseParams& ResponseParam) const
 {
-	const float R = FMath::Max(Radius, 0.0f);
-	const float Hh = FMath::Max(HalfHeight, 0.0f);
-	OutHits.Reset();
-	const FVector Expand(R, R, Hh + R);
-
-	const bool bNarrowPhase = BackendIface != nullptr && BackendIface->HasNarrowPhaseTraces();
-	if (bNarrowPhase)
-	{
-		if (BackendIface->HasRigidWorld())
-		{
-			BackendIface->RigidPrepareStep(Bodies, Params.IgnoreComponentID);
-		}
-		(void)BackendIface->RigidCapsuleTrace(OutHits, Start, End, R, Hh, Channel, Params.IgnoreComponentID);
-		FilterBackendHits(OutHits, Channel, Params, ResponseParam);
-	}
-	for (int32 Bi = 0; Bi < Bodies.Num(); ++Bi)
-	{
-		const FBodyInstance& Body = Bodies[Bi];
-		if (bNarrowPhase && Body.bPhysicsEnabled)
-		{
-			continue;
-		}
-		const ECollisionResponse Response = GetBodyQueryResponse(Body, Channel, Params, ResponseParam);
-		if (Response == ECR_Ignore)
-		{
-			continue;
-		}
-
-		float T = 1.0f;
-		FVector Normal = FVector::ZeroVector;
-		if (Body.CollisionShape == EBodyCollisionShape::Capsule)
-		{
-			float CapsuleRadius = 0.0f;
-			float CapsuleCylinder = 0.0f;
-			GetBodyCapsule(Body, CapsuleRadius, CapsuleCylinder);
-			if (!SegmentUprightCapsule(Start, End, Body.Position, CapsuleRadius + R, CapsuleCylinder + Hh, T, Normal))
-			{
-				continue;
-			}
-		}
-		else
-		{
-			const FVector Mn = Body.Position - Body.HalfExtents - Expand;
-			const FVector Mx = Body.Position + Body.HalfExtents + Expand;
-			float TAabb = 1.0f;
-			FVector NAabb = FVector::ZeroVector;
-			if (!SegmentAabb(Start, End, Mn, Mx, TAabb, NAabb))
-			{
-				continue;
-			}
-
-			T = TAabb;
-			Normal = NAabb;
-			if (Body.CollisionShape == EBodyCollisionShape::TriangleMesh && Bi < TriangleMeshes.Num() &&
-				TriangleMeshes[Bi].IsValid())
-			{
-				// Inflate like the slope planes: radius + |Nz| * half height, approximated with radius + half height.
-				float TMesh = 1.0f;
-				FVector NMesh = FVector::ZeroVector;
-				if (!SegmentTriangleMesh(Start, End, TriangleMeshes[Bi], R + Hh, TMesh, NMesh))
-				{
-					continue;
-				}
-				T = TMesh;
-				Normal = NMesh;
-			}
-		}
-
-		FHitResult Hit;
-		WriteHit(Hit, Start, End, T, Normal, Body.ComponentID, false);
-		const float Pull = (FMath::Abs(Normal.Z) > 0.5f) ? (Hh + R) : R;
-		Hit.ImpactPoint = Hit.Location - (Normal * Pull);
-		Hit.bBlockingHit = Response == ECR_Block;
-		SetHitBody(Hit, Bi);
-		OutHits.Add(Hit);
-	}
-
-	if (Params.bTraceFloorPlane)
-	{
-		const float PlaneZ = Params.FloorZ + Hh + R;
-		float T = 1.0f;
-		FVector Normal = FVector::ZeroVector;
-		if (SegmentFloorZ(Start, End, PlaneZ, T, Normal))
-		{
-			FHitResult Hit;
-			WriteHit(Hit, Start, End, T, Normal, NoComponentID, true);
-			Hit.ImpactPoint = Hit.Location - (Normal * (Hh + R));
-			OutHits.Add(Hit);
-		}
-	}
-	AppendSlopePlaneHits(OutHits, Start, End, R, Hh, SlopePlanes);
-
-	SortHitsByTime(OutHits);
+	SCOPE_CYCLE_COUNTER(STAT_Sweep);
+	const FPhysSceneQuery::FSweep Sweep = FPhysSceneQuery::FSweep::MakeCapsule(Radius, HalfHeight);
+	const bool bHit =
+		FPhysSceneQuery::Multi(*this, OutHits, Start, End, Sweep, {Channel, Params, ResponseParam, nullptr});
 	if (ShouldDraw(Params, DebugDraw))
 	{
-		DrawDebugCapsuleTrace(*DebugDraw, Start, End, R, Hh, OutHits);
+		DrawDebugCapsuleTrace(*DebugDraw, Start, End, Sweep.Radius, Sweep.HalfHeight, OutHits);
 	}
-	return OutHits.Num() > 0;
+	return bHit;
+}
+
+bool FPhysScene::CapsuleTraceMultiByChannel(TArray<FHitResult, TMemStackAllocator<>>& OutHits, const FVector& Start,
+	const FVector& End, float Radius, float HalfHeight, ECollisionChannel Channel, const FCollisionQueryParams& Params,
+	FDebugDraw* DebugDraw, const FCollisionResponseParams& ResponseParam) const
+{
+	SCOPE_CYCLE_COUNTER(STAT_Sweep);
+	const FPhysSceneQuery::FSweep Sweep = FPhysSceneQuery::FSweep::MakeCapsule(Radius, HalfHeight);
+	const bool bHit =
+		FPhysSceneQuery::Multi(*this, OutHits, Start, End, Sweep, {Channel, Params, ResponseParam, nullptr});
+	if (ShouldDraw(Params, DebugDraw))
+	{
+		DrawDebugCapsuleTrace(*DebugDraw, Start, End, Sweep.Radius, Sweep.HalfHeight, OutHits);
+	}
+	return bHit;
 }
 
 bool FPhysScene::CapsuleTraceSingleByChannel(FHitResult& OutHit, const FVector& Start, const FVector& End, float Radius,
 	float HalfHeight, ECollisionChannel Channel, const FCollisionQueryParams& Params, FDebugDraw* DebugDraw,
 	const FCollisionResponseParams& ResponseParam) const
 {
-	TArray<FHitResult> Hits;
-	(void)CapsuleTraceMultiByChannel(Hits, Start, End, Radius, HalfHeight, Channel, Params, DebugDraw, ResponseParam);
-	return TakeNearestHit(Hits, OutHit, Start, End);
+	if (ShouldDraw(Params, DebugDraw))
+	{
+		FMemMark Mark(FMemStack::Get());
+		TArray<FHitResult, TMemStackAllocator<>> Hits;
+		(void)CapsuleTraceMultiByChannel(
+			Hits, Start, End, Radius, HalfHeight, Channel, Params, DebugDraw, ResponseParam);
+		return TakeNearestHit(Hits, OutHit, Start, End);
+	}
+	return FPhysSceneQuery::Single(*this, OutHit, Start, End, FPhysSceneQuery::FSweep::MakeCapsule(Radius, HalfHeight),
+		{Channel, Params, ResponseParam, nullptr});
 }
 
 bool FPhysScene::SweepMultiByChannel(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End,
@@ -813,52 +828,12 @@ bool FPhysScene::SweepMultiByChannel(TArray<FHitResult>& OutHits, const FVector&
 				TraceChannel, Params, nullptr, ResponseParam);
 		case ECollisionShape::Box:
 		{
+			SCOPE_CYCLE_COUNTER(STAT_Sweep);
 			// An axis-aligned box: the segment against every body grown by the box (a sphere of the box's largest
-			// extent against triangles and capsules).
-			const FVector Extent = CollisionShape.GetBox();
-			const float Bound = FMath::Max(Extent.X, FMath::Max(Extent.Y, Extent.Z));
-			OutHits.Reset();
-			for (int32 Bi = 0; Bi < Bodies.Num(); ++Bi)
-			{
-				const FBodyInstance& Body = Bodies[Bi];
-				const ECollisionResponse Response = GetBodyQueryResponse(Body, TraceChannel, Params, ResponseParam);
-				if (Response == ECR_Ignore)
-				{
-					continue;
-				}
-				float T = 1.0f;
-				FVector Normal = FVector::ZeroVector;
-				if (Body.CollisionShape == EBodyCollisionShape::Capsule)
-				{
-					float CapsuleRadius = 0.0f;
-					float CapsuleCylinder = 0.0f;
-					GetBodyCapsule(Body, CapsuleRadius, CapsuleCylinder);
-					if (!SegmentUprightCapsule(
-							Start, End, Body.Position, CapsuleRadius + Bound, CapsuleCylinder, T, Normal))
-					{
-						continue;
-					}
-				}
-				else if (!SegmentAabb(Start, End, Body.Position - Body.HalfExtents - Extent,
-							 Body.Position + Body.HalfExtents + Extent, T, Normal))
-				{
-					continue;
-				}
-				else if (Body.CollisionShape == EBodyCollisionShape::TriangleMesh && Bi < TriangleMeshes.Num() &&
-					TriangleMeshes[Bi].IsValid() &&
-					!SegmentTriangleMesh(Start, End, TriangleMeshes[Bi], Bound, T, Normal))
-				{
-					continue;
-				}
-				FHitResult Hit;
-				WriteHit(Hit, Start, End, T, Normal, Body.ComponentID, false);
-				Hit.ImpactPoint = Hit.Location - (Normal * FMath::Abs(Normal | Extent));
-				Hit.bBlockingHit = Response == ECR_Block;
-				SetHitBody(Hit, Bi);
-				OutHits.Add(Hit);
-			}
-			SortHitsByTime(OutHits);
-			return OutHits.Num() > 0;
+			// extent against triangles and capsules); no planes.
+			return FPhysSceneQuery::Multi(*this, OutHits, Start, End,
+				FPhysSceneQuery::FSweep::MakeBox(CollisionShape.GetBox()),
+				{TraceChannel, Params, ResponseParam, nullptr});
 		}
 		case ECollisionShape::Line:
 		default:
@@ -866,64 +841,42 @@ bool FPhysScene::SweepMultiByChannel(TArray<FHitResult>& OutHits, const FVector&
 	}
 }
 
-bool FPhysScene::SweepSingleByChannel(FHitResult& OutHit, const FVector& Start, const FVector& End, const FQuat& Rot,
-	ECollisionChannel TraceChannel, const FCollisionShape& CollisionShape, const FCollisionQueryParams& Params,
-	const FCollisionResponseParams& ResponseParam) const
+bool FPhysScene::SweepSingleByChannel(FHitResult& OutHit, const FVector& Start, const FVector& End,
+	const FQuat& /*Rot*/, ECollisionChannel TraceChannel, const FCollisionShape& CollisionShape,
+	const FCollisionQueryParams& Params, const FCollisionResponseParams& ResponseParam) const
 {
-	TArray<FHitResult> Hits;
-	(void)SweepMultiByChannel(Hits, Start, End, Rot, TraceChannel, CollisionShape, Params, ResponseParam);
-	return TakeNearestHit(Hits, OutHit, Start, End);
+	switch (CollisionShape.ShapeType)
+	{
+		case ECollisionShape::Sphere:
+			return SphereTraceSingleByChannel(
+				OutHit, Start, End, CollisionShape.GetSphereRadius(), TraceChannel, Params, nullptr, ResponseParam);
+		case ECollisionShape::Capsule:
+			return CapsuleTraceSingleByChannel(OutHit, Start, End, CollisionShape.GetCapsuleRadius(),
+				FMath::Max(0.0f, CollisionShape.GetCapsuleHalfHeight() - CollisionShape.GetCapsuleRadius()),
+				TraceChannel, Params, nullptr, ResponseParam);
+		case ECollisionShape::Box:
+			return FPhysSceneQuery::Single(*this, OutHit, Start, End,
+				FPhysSceneQuery::FSweep::MakeBox(CollisionShape.GetBox()),
+				{TraceChannel, Params, ResponseParam, nullptr});
+		case ECollisionShape::Line:
+		default:
+			return LineTraceSingleByChannel(OutHit, Start, End, TraceChannel, Params, nullptr, ResponseParam);
+	}
 }
 
 bool FPhysScene::LineTraceMultiByObjectType(TArray<FHitResult>& OutHits, const FVector& Start, const FVector& End,
 	const FCollisionObjectQueryParams& ObjectQueryParams, const FCollisionQueryParams& Params) const
 {
-	OutHits.Reset();
-	for (int32 Bi = 0; Bi < Bodies.Num(); ++Bi)
-	{
-		const FBodyInstance& Body = Bodies[Bi];
-		if (!Body.bQueryEnabled || Params.IsIgnored(Body.ComponentID, Body.OwnerID) ||
-			!ObjectQueryParams.Contains(Body.ObjectType.GetValue()))
-		{
-			continue;
-		}
-		float T = 1.0f;
-		FVector Normal = FVector::ZeroVector;
-		if (Body.CollisionShape == EBodyCollisionShape::Capsule)
-		{
-			float CapsuleRadius = 0.0f;
-			float CapsuleCylinder = 0.0f;
-			GetBodyCapsule(Body, CapsuleRadius, CapsuleCylinder);
-			if (!SegmentUprightCapsule(Start, End, Body.Position, CapsuleRadius, CapsuleCylinder, T, Normal))
-			{
-				continue;
-			}
-		}
-		else if (!SegmentAabb(
-					 Start, End, Body.Position - Body.HalfExtents, Body.Position + Body.HalfExtents, T, Normal))
-		{
-			continue;
-		}
-		else if (Body.CollisionShape == EBodyCollisionShape::TriangleMesh && Bi < TriangleMeshes.Num() &&
-			TriangleMeshes[Bi].IsValid() && !SegmentTriangleMesh(Start, End, TriangleMeshes[Bi], 0.0f, T, Normal))
-		{
-			continue;
-		}
-		FHitResult Hit;
-		WriteHit(Hit, Start, End, T, Normal, Body.ComponentID, false);
-		SetHitBody(Hit, Bi);
-		OutHits.Add(Hit);
-	}
-	SortHitsByTime(OutHits);
-	return OutHits.Num() > 0;
+	SCOPE_CYCLE_COUNTER(STAT_LineTrace);
+	return FPhysSceneQuery::Multi(*this, OutHits, Start, End, FPhysSceneQuery::FSweep::MakeLine(false),
+		{ECC_WorldStatic, Params, FCollisionResponseParams::DefaultResponseParam, &ObjectQueryParams});
 }
 
 bool FPhysScene::LineTraceSingleByObjectType(FHitResult& OutHit, const FVector& Start, const FVector& End,
 	const FCollisionObjectQueryParams& ObjectQueryParams, const FCollisionQueryParams& Params) const
 {
-	TArray<FHitResult> Hits;
-	(void)LineTraceMultiByObjectType(Hits, Start, End, ObjectQueryParams, Params);
-	return TakeNearestHit(Hits, OutHit, Start, End);
+	return FPhysSceneQuery::Single(*this, OutHit, Start, End, FPhysSceneQuery::FSweep::MakeLine(false),
+		{ECC_WorldStatic, Params, FCollisionResponseParams::DefaultResponseParam, &ObjectQueryParams});
 }
 
 FBox FPhysScene::GetBodyBounds(int32 BodyIndex) const
@@ -940,21 +893,32 @@ bool FPhysScene::OverlapMultiByObjectType(TArray<FOverlapResult>& OutOverlaps, c
 	const FCollisionObjectQueryParams& ObjectQueryParams, const FCollisionShape& CollisionShape,
 	const FCollisionQueryParams& Params) const
 {
+	SCOPE_CYCLE_COUNTER(STAT_Overlap);
 	OutOverlaps.Reset();
+	UpdateBroadphase();
 	const bool bSphere = CollisionShape.IsSphere();
 	const float SphereRadius = bSphere ? CollisionShape.GetSphereRadius() : 0.0f;
 	const FVector QueryExtent = CollisionShape.IsBox() ? CollisionShape.GetBox()
 		: CollisionShape.IsCapsule() ? FVector(CollisionShape.GetCapsuleRadius(), CollisionShape.GetCapsuleRadius(),
 										   CollisionShape.GetCapsuleHalfHeight())
 									 : FVector(SphereRadius);
-	for (int32 Bi = 0; Bi < Bodies.Num(); ++Bi)
+	// The bodies whose boxes the shape's box reaches, in the order they were added.
+	const FVector Reach = QueryExtent.GetAbs();
+	FBodyIndexArray Candidates;
+	Broadphase.ForEachOverlap(FBox(Pos - Reach, Pos + Reach),
+		[&](int32 BodyIndex)
+		{
+			const FBodyInstance& Body = Bodies[BodyIndex];
+			if (Body.bQueryEnabled && !Params.IsIgnored(Body.ComponentID, Body.OwnerID) &&
+				ObjectQueryParams.Contains(Body.ObjectType.GetValue()))
+			{
+				Candidates.Add(BodyIndex);
+			}
+		});
+	SortBodiesBySerial(Candidates);
+	for (const int32 Bi : Candidates)
 	{
 		const FBodyInstance& Body = Bodies[Bi];
-		if (!Body.bQueryEnabled || Params.IsIgnored(Body.ComponentID, Body.OwnerID) ||
-			!ObjectQueryParams.Contains(Body.ObjectType.GetValue()))
-		{
-			continue;
-		}
 		bool bOverlaps = false;
 		if (bSphere && Body.CollisionShape == EBodyCollisionShape::Capsule)
 		{
@@ -979,8 +943,8 @@ bool FPhysScene::OverlapMultiByObjectType(TArray<FOverlapResult>& OutOverlaps, c
 		else
 		{
 			const FVector Delta = (Pos - Body.Position).GetAbs();
-			const FVector Reach = QueryExtent + Body.HalfExtents;
-			bOverlaps = Delta.X <= Reach.X && Delta.Y <= Reach.Y && Delta.Z <= Reach.Z;
+			const FVector Reach2 = QueryExtent + Body.HalfExtents;
+			bOverlaps = Delta.X <= Reach2.X && Delta.Y <= Reach2.Y && Delta.Z <= Reach2.Z;
 		}
 		if (!bOverlaps)
 		{

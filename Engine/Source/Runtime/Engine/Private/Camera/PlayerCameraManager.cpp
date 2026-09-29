@@ -37,7 +37,8 @@ void APlayerCameraManager::UpdateCamera(float DeltaTime)
 {
 	FMinimalViewInfo POV;
 	POV.FOV = DefaultFOV;
-	if (AActor* Target = GetViewTarget())
+	AActor* Target = GetViewTarget();
+	if (Target != nullptr)
 	{
 		Target->CalcCamera(DeltaTime, POV);
 	}
@@ -45,7 +46,13 @@ void APlayerCameraManager::UpdateCamera(float DeltaTime)
 	{
 		POV.FOV = LockedFOV;
 	}
+	// The last view is the one to draw from; a first view, a new target or a jump has nothing to come from.
+	const bool bContinuous = bHasCameraCache && LastViewTarget.Get() == Target &&
+		(POV.Location - CameraCachePOV.Location).SizeSquared() <= FMath::Square(TeleportDistance);
+	LastFrameCameraCachePOV = bContinuous ? CameraCachePOV : POV;
+	LastViewTarget = Target;
 	CameraCachePOV = POV;
+	bHasCameraCache = true;
 
 	// The view camera looks from the point of view (Leon: its free-look mode builds the renderer's matrices).
 	ViewCamera->SetMode(ECameraMode::FreeLook);
@@ -56,6 +63,17 @@ void APlayerCameraManager::UpdateCamera(float DeltaTime)
 		ViewCamera->SetFieldOfView(POV.FOV);
 	}
 	ViewCamera->ViewModelFOV = POV.ViewModelFOV;
+}
+
+void APlayerCameraManager::GetInterpolatedView(float Alpha, FMinimalViewInfo& OutView) const
+{
+	const float Weight = FMath::Clamp(Alpha, 0.0f, 1.0f);
+	OutView = CameraCachePOV;
+	OutView.Location = FMath::Lerp(LastFrameCameraCachePOV.Location, CameraCachePOV.Location, Weight);
+	// The shortest way around for the yaw and the roll (a turn through 180 degrees must not spin the other way).
+	const FRotator Delta = (CameraCachePOV.Rotation - LastFrameCameraCachePOV.Rotation).GetNormalized();
+	OutView.Rotation = LastFrameCameraCachePOV.Rotation + (Delta * Weight);
+	OutView.FOV = FMath::Lerp(LastFrameCameraCachePOV.FOV, CameraCachePOV.FOV, Weight);
 }
 
 float APlayerCameraManager::GetFOVAngle() const

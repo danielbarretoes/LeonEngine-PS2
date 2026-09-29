@@ -1,6 +1,7 @@
 #include "AI/Navigation/NavigationSystem.h"
 #include "AI/Navigation/NavigationWaypoint.h"
 #include "Commandlets/ImportAssetsCommandlet.h"
+#include "Components/StaticMeshComponent.h"
 #include "CoreMinimal.h"
 #include "EditorFramework/AssetImportData.h"
 #include "Engine/BlockingVolume.h"
@@ -10,6 +11,8 @@
 #include "Engine/StaticMeshActor.h"
 #include "Engine/Texture2D.h"
 #include "Engine/TriggerVolume.h"
+#include "Engine/VisibilityCellVolume.h"
+#include "Engine/VisibilityPortal.h"
 #include "Engine/World.h"
 #include "Factories/MapImportSettings.h"
 #include "GameFramework/PlayerStart.h"
@@ -19,6 +22,7 @@
 #include "Materials/Material.h"
 #include "Misc/AutomationTest.h"
 #include "PhysicsEngine/BodySetup.h"
+#include "StaticLightingSystem.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -135,10 +139,17 @@ bool FLeonEdMapImportSettingsTest::RunTest(const FString& Parameters)
 {
 	// The engine's rules of BaseEditor.ini, and how a node name finds its rule and its suffix.
 	const UMapImportSettings& Settings = *GetDefault<UMapImportSettings>();
-	if (!TestEqual("The engine's rules", Settings.NodeRules.Num(), 5))
+	if (!TestEqual("The engine's rules", Settings.NodeRules.Num(), 7))
 	{
 		return false;
 	}
+	// N15's cells and portals.
+	TestTrue("VIS_",
+		Settings.NodeRules[5].Prefix == TEXT("VIS_") &&
+			Settings.NodeRules[5].ActorClass.TryLoadClass<AActor>() == AVisibilityCellVolume::StaticClass());
+	TestTrue("PORTAL_",
+		Settings.NodeRules[6].Prefix == TEXT("PORTAL_") &&
+			Settings.NodeRules[6].ActorClass.TryLoadClass<AActor>() == AVisibilityPortal::StaticClass());
 	TestTrue("UCX_",
 		Settings.NodeRules[0].Prefix == TEXT("UCX_") &&
 			Settings.NodeRules[0].Kind == EMapImportNodeKind::ConvexCollision);
@@ -230,14 +241,12 @@ bool FLeonEdMapFactoryConventionsTest::RunTest(const FString& Parameters)
 			TestTrue("Box size", FVector(Box.X, Box.Y, Box.Z).Equals(FVector(120.0f, 120.0f, 120.0f), 1.0e-3f));
 			TestTrue("The box answers traces", Body->CollisionTraceFlag == CTF_UseSimpleAsComplex);
 		}
-		// The textured PBR material, in the map's Materials folder.
+		// The textured material, in the map's Materials folder.
 		const UMaterial* Material = Cast<UMaterial>(Crate->GetMaterial(0));
 		if (TestNotNull("M_Crate", Material))
 		{
 			TestEqual("M_Crate path", Material->GetPathName(),
 				FString(TEXT("/LeonEdTest/Maps/MapFixture/Materials/M_Crate.M_Crate")));
-			TestEqual("Metallic", Material->Metallic, 0.25f);
-			TestEqual("Roughness", Material->Roughness, 0.6f);
 			TestTrue("Base colour map",
 				Material->BaseColorMap != nullptr && Material->BaseColorMap->GetName() == TEXT("T_MapFixture_Checker"));
 		}
@@ -316,7 +325,8 @@ bool FLeonEdMapFactoryConventionsTest::RunTest(const FString& Parameters)
 		TestTrue("Lamp location", Lamp->GetActorLocation().Equals(FVector(100.0f, 100.0f, 300.0f), 1.0e-3f));
 		TestEqual("Lamp range", Lamp->GetPointLightComponent()->AttenuationRadius, 500.0f, 1.0e-3f);
 		TestEqual("Lamp intensity", Lamp->GetPointLightComponent()->Intensity, 2.0f);
-		TestFalse("Lamp shadows", Lamp->GetPointLightComponent()->CastShadows);
+		// Every light casts the baked lighting's shadows (N22).
+		TestTrue("Lamp shadows", Lamp->GetPointLightComponent()->CastShadows);
 	}
 	const APointLight* Spot = FindActor<APointLight>(*World, TEXT("Spot"));
 	TestTrue("Spot: a point light with the default range",
@@ -356,6 +366,57 @@ bool FLeonEdMapFactoryReimportTest::RunTest(const FString& Parameters)
 	TestEqual("Reimport", UImportAssetsCommandlet::ReimportPackages(Packages, &Reimported), 0);
 	TestEqual("The map reimported", Reimported, 1);
 	TestTrue("The same bytes after a load", SameFiles(First, ReadContentFiles()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLeonEdMapFactoryBakesStaticLightingTest,
+	"System.LeonEd.MapFactory.BakesStaticLighting",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FLeonEdMapFactoryBakesStaticLightingTest::RunTest(const FString& Parameters)
+{
+	// The import bakes the map's static lighting (N22): every static mesh it places has colours made for its mesh,
+	// saved with the map and loaded back the same.
+	LeonEdTest::FScopedTestContent Content;
+	FScopedProjectMapRules Rules;
+	UWorld* World = ImportFixtureMap();
+	if (!TestNotNull("Imported", World))
+	{
+		return false;
+	}
+	TMap<FString, TArray<uint8>> Imported;
+	for (const AActor* Actor : World->PersistentLevel->Actors)
+	{
+		const AStaticMeshActor* MeshActor = Cast<AStaticMeshActor>(Actor);
+		const UStaticMeshComponent* Component = MeshActor != nullptr ? MeshActor->GetStaticMeshComponent() : nullptr;
+		if (Component == nullptr || !FStaticLightingSystem::ReceivesStaticLighting(*Component))
+		{
+			continue;
+		}
+		TestTrue(*FString::Printf("%s is baked", *Actor->GetName()), Component->HasValidBakedVertexColors());
+		Imported.Add(Actor->GetName(), Component->BakedVertexColors.Data);
+	}
+	TestTrue("Static meshes baked", Imported.Num() >= 3);
+
+	LeonEdTest::DestroyPackagesUnder(LeonEdTest::Root);
+	const UWorld* Loaded = UWorld::FindWorldInPackage(LoadPackage(nullptr, FixtureMap, LOAD_None));
+	if (!TestNotNull("Loaded", Loaded))
+	{
+		return false;
+	}
+	int32 NumSame = 0;
+	for (const AActor* Actor : Loaded->PersistentLevel->Actors)
+	{
+		const AStaticMeshActor* MeshActor = Cast<AStaticMeshActor>(Actor);
+		const TArray<uint8>* Colors = MeshActor != nullptr ? Imported.Find(Actor->GetName()) : nullptr;
+		if (Colors == nullptr)
+		{
+			continue;
+		}
+		const UStaticMeshComponent& Component = *MeshActor->GetStaticMeshComponent();
+		NumSame += Component.HasValidBakedVertexColors() && Component.BakedVertexColors.Data == *Colors ? 1 : 0;
+	}
+	TestEqual("Every baked mesh loads its colours", NumSame, Imported.Num());
 	return true;
 }
 
@@ -446,6 +507,64 @@ bool FLeonEdMapFactoryEngineMapsSkipRequiredTagsTest::RunTest(const FString& Par
 	TestTrue("A project's map", UMapImportSettings::AppliesRequiredTags(TEXT("/Game/Maps/de_leon")));
 	TestTrue("A test mount's map", UMapImportSettings::AppliesRequiredTags(TEXT("/LeonEdTest/Maps/MapFixture")));
 	TestFalse("An engine map", UMapImportSettings::AppliesRequiredTags(TEXT("/Engine/Maps/AxisTest")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLeonEdMapFactoryCellsAndPortalsTest, "System.LeonEd.MapFactory.CellsAndPortals",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FLeonEdMapFactoryCellsAndPortalsTest::RunTest(const FString& Parameters)
+{
+	// N15: VIS_<Cell> nodes become cell volumes named after their suffix (the box of their mesh), PORTAL_<A>_<B> nodes
+	// portals between two of them (the rectangle of their quad, its corners in the world; a cell name may hold an
+	// underscore), and a portal to a cell the map lacks is left out; saved with the map and loaded back.
+	LeonEdTest::FScopedTestContent Content;
+	const FString Fixture = FPaths::ConvertRelativePathToFull(FPaths::Combine(
+		FPaths::EngineSourceDir(), TEXT("Developer/MeshUtilities/Private/Tests/Fixtures/CellsFixture.gltf")));
+	const TCHAR* const MapName = TEXT("/LeonEdTest/Maps/CellsFixture");
+	UWorld* World = Cast<UWorld>(
+		UImportAssetsCommandlet::ImportAsset(Fixture, MapName, FString(), TEXT("Map"), TMap<FString, FString>()));
+	if (!TestNotNull("Imported", World))
+	{
+		return false;
+	}
+	const AVisibilityCellVolume* Hall = FindActor<AVisibilityCellVolume>(*World, TEXT("VIS_Hall"));
+	const AVisibilityCellVolume* RoomB = FindActor<AVisibilityCellVolume>(*World, TEXT("VIS_Room_B"));
+	if (!TestNotNull("VIS_Hall: a cell", Hall) || !TestNotNull("VIS_Room_B: a cell", RoomB))
+	{
+		return false;
+	}
+	TestEqual("The hall's name", Hall->CellName, FName(TEXT("Hall")));
+	TestEqual("A name with an underscore", RoomB->CellName, FName(TEXT("Room_B")));
+	const FBox HallBox = Hall->GetBrushBounds();
+	TestTrue("The hall's box",
+		HallBox.Min.Equals(FVector(0.0f, 0.0f, 0.0f), 0.1f) &&
+			HallBox.Max.Equals(FVector(1000.0f, 1000.0f, 300.0f), 0.1f));
+	const AVisibilityPortal* Door = FindActor<AVisibilityPortal>(*World, TEXT("PORTAL_Hall_Room_B"));
+	if (TestNotNull("PORTAL_Hall_Room_B: a portal", Door))
+	{
+		TestEqual("From the hall", Door->CellA, FName(TEXT("Hall")));
+		TestEqual("To room B", Door->CellB, FName(TEXT("Room_B")));
+		FBox DoorBox(ForceInit);
+		for (const FVector& Corner : Door->Corners)
+		{
+			DoorBox += Corner;
+		}
+		TestEqual("Four corners", Door->Corners.Num(), 4);
+		TestTrue("The door in the wall",
+			DoorBox.Min.Equals(FVector(1000.0f, 450.0f, 0.0f), 0.1f) &&
+				DoorBox.Max.Equals(FVector(1000.0f, 550.0f, 200.0f), 0.1f));
+		TestTrue("Corners around it (the second and third share a side)",
+			FVector::Dist(Door->Corners[0], Door->Corners[2]) > 200.0f);
+	}
+	TestNull("A portal to no cell is left out", FindActor<AActor>(*World, TEXT("PORTAL_Hall_Nowhere")));
+
+	LeonEdTest::DestroyPackagesUnder(LeonEdTest::Root);
+	const UWorld* Loaded = UWorld::FindWorldInPackage(LoadPackage(nullptr, MapName, LOAD_None));
+	const AVisibilityPortal* LoadedDoor =
+		Loaded != nullptr ? FindActor<AVisibilityPortal>(*Loaded, TEXT("PORTAL_Hall_Room_B")) : nullptr;
+	TestTrue("Saved and loaded",
+		LoadedDoor != nullptr && LoadedDoor->Corners.Num() == 4 && LoadedDoor->CellB == FName(TEXT("Room_B")));
 	return true;
 }
 

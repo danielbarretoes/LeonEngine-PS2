@@ -3,6 +3,4 @@
 ANavigationWaypoint::ANavigationWaypoint(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	// A graph point does not tick.
-	bCanEverTick = false;
 }

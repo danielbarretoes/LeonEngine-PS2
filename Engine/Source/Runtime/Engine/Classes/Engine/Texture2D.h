@@ -5,9 +5,9 @@
 #include "Texture2D.generated.h"
 
 /**
- * A 2D texture asset (UE: UTexture2D): its texels in the platform data, mip 0 as bulk data, bottom row first (as
- * OpenGL reads them): RGBA8 as imported, or paletted (PF_P8 / PF_P4) as the PS2 cook stores it. The renderer's GS
- * texture cache uploads it and keeps the GS copy.
+ * A 2D texture asset (UE: UTexture2D): its texels in the platform data, each mip as bulk data, bottom row first (as
+ * OpenGL reads them): RGBA8 as imported (mip 0 only), or paletted (PF_P8 / PF_P4) with its mip chain as the PS2 cook
+ * stores it. The renderer's GS texture cache uploads it and keeps the GS copy.
  *
  * Made by CreateTransient (UE) or NewObject followed by SetPlatformData, and saved and loaded in `.lasset` packages.
  */
@@ -34,6 +34,14 @@ public:
 	 * fills PlatformData->Mips[0].BulkData by hand).
 	 */
 	bool SetPlatformData(int32 InSizeX, int32 InSizeY, EPixelFormat InFormat, const void* TexelData);
+
+	/**
+	 * Appends the next mip: half the last one's size on each side (at least 1), its texels copied from TexelData in the
+	 * texture's format (GetPixelFormatMipDataSize bytes: a paletted mip is its indices, through mip 0's palette). False
+	 * (and nothing changed) without a mip 0 or when the last mip is 1 x 1 (Leon; the PS2 cook's mip chains, UE's
+	 * TextureCompressor fills the mips of PlatformData by hand).
+	 */
+	bool AddMip(const void* TexelData);
 
 	/** Width of mip 0 (UE: GetSizeX). */
 	[[nodiscard]] int32 GetSizeX() const

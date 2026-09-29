@@ -6,9 +6,6 @@
 #ifndef PLATFORM_WINDOWS
 	#define PLATFORM_WINDOWS 0
 #endif
-#ifndef PLATFORM_LINUX
-	#define PLATFORM_LINUX 0
-#endif
 #ifndef PLATFORM_PS2
 	#define PLATFORM_PS2 0
 #endif

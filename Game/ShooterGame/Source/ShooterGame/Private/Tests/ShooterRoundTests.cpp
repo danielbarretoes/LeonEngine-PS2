@@ -1,12 +1,19 @@
+#include "Camera/PlayerCameraManager.h"
 #include "CanvasTypes.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "CoreMinimal.h"
 #include "Engine/BlockingVolume.h"
 #include "Engine/DamageEvents.h"
 #include "Engine/Level.h"
+#include "Engine/LocalPlayer.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/TriggerVolume.h"
 #include "Engine/World.h"
 #include "GameFramework/DamageType.h"
 #include "GameFramework/PlayerStart.h"
+#include "GameFramework/SpectatorPawn.h"
+#include "HAL/UnrealMemory.h"
+#include "InputCoreTypes.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/AutomationTest.h"
 #include "ShooterAIController.h"
@@ -16,11 +23,14 @@
 #include "ShooterGameState.h"
 #include "ShooterHUD.h"
 #include "ShooterMatchChecker.h"
+#include "ShooterPlayerController.h"
 #include "ShooterPlayerState.h"
 #include "Tests/ScopedTestWorld.h"
 #include "Weapons/ShooterProjectile.h"
+#include "Weapons/ShooterWeapon.h"
+#include "Weapons/ShooterWeapon_AWP.h"
 #include "Weapons/ShooterWeapon_Instant.h"
-#include "Weapons/ShooterWeapon_Sniper.h"
+#include "Weapons/ShooterWeapon_Projectile.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -262,6 +272,116 @@ bool FShooterGameRoundsMatchFlowTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameRoundsDeadPlayerPlaysAgainTest, "ShooterGame.Rounds.DeadPlayerPlaysAgain",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameRoundsDeadPlayerPlaysAgainTest::RunTest(const FString& Parameters)
+{
+	// A player who dies spectates for the rest of the round; the next round gives it a new shooter on its team's side,
+	// and it plays again (not the spectator it flew).
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpMatch(World, 1, 2);
+	AShooterGameState* State = GameMode->GetShooterGameState();
+	AShooterPlayerController* Player = World.SpawnActor<AShooterPlayerController>();
+	AShooterPlayerState* PlayerState = Player->GetPlayerState<AShooterPlayerState>();
+	if (!TestNotNull("The game's state", State) || !TestNotNull("The player's state", PlayerState))
+	{
+		return false;
+	}
+	PlayerState->SetTeam(EShooterTeam::CT);
+	GameMode->PostLogin(Player);
+	TickUntilLive(World, *GameMode);
+	AShooterCharacter* FirstPawn = Cast<AShooterCharacter>(Player->GetPawn());
+	if (!TestNotNull("The player plays", FirstPawn))
+	{
+		return false;
+	}
+
+	Player->SetBuyMenuOpen(true);
+	FirstPawn->Suicide();
+	TickFrames(World, 1);
+	TestTrue("Spectating", Player->IsInState(NAME_Spectating));
+	TestFalse("Death closes the buy menu", Player->IsBuyMenuOpen());
+	TestTrue("The round goes on (a CT bot lives)", State->GetRoundState() == EShooterRoundState::Live);
+	KillTeam(World, EShooterTeam::T);
+	TickFrames(World, 1);
+	TestTrue("Round over", State->GetRoundState() == EShooterRoundState::RoundEnd);
+	TickSeconds(World, GameMode->RoundRestartDelay);
+	TestEqual("Round 2", State->GetRoundNumber(), 2);
+
+	const AShooterCharacter* NewPawn = Cast<AShooterCharacter>(Player->GetPawn());
+	if (!TestNotNull("A shooter again", NewPawn))
+	{
+		return false;
+	}
+	TestTrue("A new one", NewPawn != FirstPawn && NewPawn->IsAlive());
+	TestTrue("Playing", Player->IsInState(NAME_Playing));
+	TestNull("No spectator", Player->GetSpectatorPawn());
+	TestEqual("On its side", NewPawn->GetActorLocation().X, -1500.0f, 1.0f);
+	TestTrue("With the pistol", NewPawn->GetWeaponInSlot(EShooterWeaponSlot::Secondary) != nullptr);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameRoundsSpectateTeammatesTest, "ShooterGame.Rounds.SpectateTeammates",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameRoundsSpectateTeammatesTest::RunTest(const FString& Parameters)
+{
+	// A dead player watches its living teammates through their eyes (CS: spec_next; it ends the death cam), in the game
+	// state's order and wrapping, never an enemy; when the watched one dies the camera moves on to the next; at the
+	// next round its camera is its own pawn's again.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpMatch(World, 2, 2);
+	AShooterPlayerController* Player = World.SpawnActor<AShooterPlayerController>();
+	// A local player: its controller gets the camera the spectator views through.
+	Player->SetPlayer(NewObject<ULocalPlayer>(Player));
+	AShooterPlayerState* PlayerState = Player->GetPlayerState<AShooterPlayerState>();
+	if (!TestNotNull("The player's state", PlayerState))
+	{
+		return false;
+	}
+	PlayerState->SetTeam(EShooterTeam::CT);
+	GameMode->PostLogin(Player);
+	TickUntilLive(World, *GameMode);
+	AShooterCharacter* FirstPawn = Cast<AShooterCharacter>(Player->GetPawn());
+	if (!TestNotNull("The player plays", FirstPawn) || !TestNotNull("A camera", Player->PlayerCameraManager))
+	{
+		return false;
+	}
+	Player->ViewNextPlayer();
+	TestNull("Playing, the player watches nobody else", Player->GetViewedPlayer());
+
+	FirstPawn->Suicide();
+	TickFrames(World, 1);
+	Player->ViewNextPlayer();
+	AShooterCharacter* First = Player->GetViewedPlayer();
+	if (!TestNotNull("A teammate watched", First))
+	{
+		return false;
+	}
+	TestTrue("A living CT", First->IsAlive() && First->GetTeam() == EShooterTeam::CT);
+	Player->ViewNextPlayer();
+	AShooterCharacter* Second = Player->GetViewedPlayer();
+	TestTrue("The other CT", Second != nullptr && Second != First && Second->GetTeam() == EShooterTeam::CT);
+	Player->ViewNextPlayer();
+	TestTrue("Wraps to the first", Player->GetViewedPlayer() == First);
+	First->Suicide();
+	TickFrames(World, 1);
+	TestTrue("The watched teammate died: the one left", Player->GetViewedPlayer() == Second);
+	Player->ViewNextPlayer();
+	TestTrue("Only the one left", Player->GetViewedPlayer() == Second);
+
+	KillTeam(World, EShooterTeam::T);
+	TickFrames(World, 1);
+	TickSeconds(World, GameMode->RoundRestartDelay);
+	const APawn* NewPawn = Player->GetPawn();
+	TestTrue("Playing again", NewPawn != nullptr && Player->IsInState(NAME_Playing));
+	TestTrue("Through its own eyes", Player->PlayerCameraManager->GetViewTarget() == NewPawn);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameRoundsWinMatrixTest, "ShooterGame.Rounds.WinMatrix",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
@@ -392,7 +512,7 @@ bool FShooterGameEconomyTest::RunTest(const FString& Parameters)
 	CTState->SetMoney(1000, GameMode->MaxMoney);
 	AShooterCharacter* CT = GetAlive(World, EShooterTeam::CT)[0];
 	AShooterCharacter* T = GetAlive(World, EShooterTeam::T)[0];
-	AShooterWeapon* Awp = CT->GiveWeapon(AShooterWeapon_Sniper::StaticClass());
+	AShooterWeapon* Awp = CT->GiveWeapon(AShooterWeapon_AWP::StaticClass());
 	(void)UGameplayStatics::ApplyDamage(T, 500.0f, CT->GetController(), Awp, UDamageType::StaticClass());
 	TestFalse("Killed", T->IsAlive());
 	TestEqual("The AWP's kill reward", CTState->GetMoney(), 1300);
@@ -513,6 +633,72 @@ bool FShooterGameBombSurvivingCarrierTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBombCarrierKilledInTheAirTest, "ShooterGame.Bomb.CarrierKilledInTheAir",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameBombCarrierKilledInTheAirTest::RunTest(const FString& Parameters)
+{
+	// The carrier dies falling, 4 m up: the body and the bomb land on the floor, where a terrorist picks the bomb up.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpMatch(World, 1, 2);
+	TickUntilLive(World, *GameMode);
+	AShooterBomb* Bomb = GameMode->GetBomb();
+	AShooterCharacter* Carrier = Bomb != nullptr ? Bomb->GetCarrier() : nullptr;
+	if (!TestNotNull("A carrier", Carrier))
+	{
+		return false;
+	}
+	Carrier->Reset(FVector(0.0f, 1000.0f, 400.0f), FRotator::ZeroRotator);
+	TickFrames(World, 2);
+	TestTrue("Falling", Carrier->IsFalling());
+	Carrier->Suicide();
+	TestTrue("Dropped", Bomb->GetBombState() == EShooterBombState::Dropped);
+	TestEqual("The bomb on the floor", Bomb->GetActorLocation().Z, 0.0f, 1.0f);
+	TestEqual("The body on the floor", Carrier->GetActorLocation().Z, 0.0f, 1.0f);
+
+	AShooterCharacter* Mate = nullptr;
+	for (AShooterCharacter* T : GetAlive(World, EShooterTeam::T))
+	{
+		Mate = T;
+	}
+	if (!TestNotNull("A terrorist left", Mate))
+	{
+		return false;
+	}
+	Mate->Reset(Bomb->GetActorLocation() + FVector(20.0f, 0.0f, 0.0f));
+	TickFrames(World, 2);
+	TestTrue("Picked up", Bomb->GetCarrier() == Mate);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameRoundsFrozenTriggerTest, "ShooterGame.Rounds.FrozenTriggerDoesNotFire",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameRoundsFrozenTriggerTest::RunTest(const FString& Parameters)
+{
+	// A trigger pulled on the weapon itself during the freeze (or held into the match's end) fires nothing while the
+	// pawn is frozen; the round going live lets it fire.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpMatch(World, 1, 1);
+	GameMode->FreezeTime = 3.0f;
+	TickSeconds(World, 1.5f);
+	AShooterCharacter* CT = GetAlive(World, EShooterTeam::CT)[0];
+	AShooterWeapon* Pistol = CT->GetWeapon();
+	if (!TestNotNull("A pistol", Pistol) || !TestTrue("Frozen", CT->IsFrozen()))
+	{
+		return false;
+	}
+	Pistol->StartFire();
+	TickFrames(World, 10);
+	TestEqual("No shot in the freeze", Pistol->GetShotsFired(), 0);
+	TickUntilLive(World, *GameMode);
+	TickFrames(World, 1);
+	TestEqual("It fires once live", Pistol->GetShotsFired(), 1);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBombNoPlantAfterTheRoundTest, "ShooterGame.Bomb.NoPlantAfterTheRound",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
@@ -566,7 +752,8 @@ bool FShooterGameBombExplosionTest::RunTest(const FString& Parameters)
 	AShooterBomb* Bomb = GameMode->GetBomb();
 	TArray<AShooterCharacter*> CTs = GetAlive(World, EShooterTeam::CT);
 	CTs[0]->Reset(Bomb->GetActorLocation() + FVector(-300.0f, 0.0f, 0.0f));
-	CTs[1]->Reset(Bomb->GetActorLocation() + FVector(-3000.0f, 0.0f, 0.0f));
+	// Past the explosion's 4445 cm (4667 cm, on the floor's diagonal).
+	CTs[1]->Reset(Bomb->GetActorLocation() + FVector(3300.0f, -3300.0f, 0.0f));
 	TestTrue("The explosion time", FMath::IsNearlyEqual(State->GetBombExplodeTime(), Bomb->GetExplodeTime()));
 	TickSeconds(World, Bomb->BombTimer);
 	TestTrue("Exploded", Bomb->GetBombState() == EShooterBombState::Exploded);
@@ -591,7 +778,7 @@ bool FShooterGameBuyRulesTest::RunTest(const FString& Parameters)
 	AShooterCharacter* T = GetAlive(World, EShooterTeam::T)[0];
 	AShooterPlayerState* CTState = CT->GetController()->GetPlayerState<AShooterPlayerState>();
 	FString Reason;
-	TestFalse("An AK-47 with 800", GameMode->Buy(CT, TEXT("ak47"), &Reason));
+	TestFalse("An M4A1 with 800", GameMode->Buy(CT, TEXT("m4a1"), &Reason));
 	TestTrue("Not enough money", Reason.Contains(TEXT("money")));
 	TestTrue("A vest", GameMode->Buy(CT, TEXT("vest")));
 	TestEqual("150 left", CTState->GetMoney(), 150);
@@ -602,13 +789,13 @@ bool FShooterGameBuyRulesTest::RunTest(const FString& Parameters)
 	TestEqual("The kit for a CT", GameMode->GetPrice(*CT, TEXT("defuser")), 200);
 
 	CTState->SetMoney(9000, GameMode->MaxMoney);
-	TestTrue("An AK-47", GameMode->Buy(CT, TEXT("ak47")));
-	TestTrue("Drawn", CT->GetWeapon() != nullptr && CT->GetWeapon()->WeaponName == TEXT("ak47"));
-	TestFalse("A second one", GameMode->Buy(CT, TEXT("ak47")));
+	TestTrue("An M4A1", GameMode->Buy(CT, TEXT("m4a1")));
+	TestTrue("Drawn", CT->GetWeapon() != nullptr && CT->GetWeapon()->WeaponName == TEXT("m4a1"));
+	TestFalse("A second one", GameMode->Buy(CT, TEXT("m4a1")));
 	AShooterWeapon* Rifle = CT->GetWeapon();
 	TestTrue("An AWP", GameMode->Buy(CT, TEXT("awp")));
-	TestTrue("The AK-47 was dropped", Rifle->IsDropped());
-	TestEqual("9000 - 2500 - 4750", CTState->GetMoney(), 1750);
+	TestTrue("The M4A1 was dropped", Rifle->IsDropped());
+	TestEqual("9000 - 3100 - 4750", CTState->GetMoney(), 1150);
 	TestTrue("A grenade", GameMode->Buy(CT, TEXT("hegrenade")));
 	TestFalse("A second grenade", GameMode->Buy(CT, TEXT("hegrenade")));
 	TestTrue("A kit", GameMode->Buy(CT, TEXT("defuser")) && CT->HasDefuseKit());
@@ -620,10 +807,10 @@ bool FShooterGameBuyRulesTest::RunTest(const FString& Parameters)
 	TestFalse("Outside the buy zone", GameMode->Buy(CT, TEXT("vesthelm"), &Reason));
 	TestTrue("The reason", Reason.Contains(TEXT("buy zone")));
 	TestTrue("The enemy's zone is not ours",
-		GameMode->FindZone(World, FVector(1500.0f, 0.0f, 0.0f), AShooterGameMode::BuyZoneTag, FName(TEXT("CT"))) ==
-			nullptr);
+		GameMode->FindZone(FVector(1500.0f, 0.0f, 0.0f), AShooterGameMode::BuyZoneTag, FName(TEXT("CT"))) == nullptr);
 	CT->Reset(FVector(-1500.0f, 0.0f, 0.0f));
-	TickSeconds(World, GameMode->BuyTime);
+	// The buy time counts from the freeze's end.
+	TickSeconds(World, GameMode->FreezeTime + GameMode->BuyTime);
 	TestFalse("After the buy time", GameMode->Buy(CT, TEXT("vesthelm"), &Reason));
 	TestTrue("The reason", Reason.Contains(TEXT("buy time")));
 	return true;
@@ -668,6 +855,8 @@ bool FShooterGameMatchEndAndRestartTest::RunTest(const FString& Parameters)
 	UWorld& World = *TestWorld;
 	AShooterGameMode* GameMode = SetUpMatch(World, 1, 1);
 	GameMode->MaxRounds = 3;
+	// The same team wins both rounds on the same side (the halftime has its own tests).
+	GameMode->bHalftime = false;
 	AShooterGameState* State = GameMode->GetShooterGameState();
 	for (int32 Round = 0; Round < 2; ++Round)
 	{
@@ -784,9 +973,817 @@ bool FShooterGameHUDRoundInfoTest::RunTest(const FString& Parameters)
 	FCanvas Canvas(1280, 720);
 	HUD->Paint(Canvas);
 	TArray<FCanvasVertex> Vertices;
-	Canvas.GetTriangles(Vertices);
-	TestTrue("The round's text too", Vertices.Num() > 4 * 6);
+	TArray<FCanvasPrimitiveRun> Runs;
+	Canvas.GetPrimitives(Vertices, Runs);
+	TestTrue("The round's text too", Vertices.Num() > 4 * 2);
 	TestEqual("No pawn: the base gap", HUD->GetCrosshairGap(), HUD->CrosshairGap);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBombExplosionRadiusTest, "ShooterGame.Bomb.ExplosionRadius",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameBombExplosionRadiusTest::RunTest(const FString& Parameters)
+{
+	// ps2-shipping N6: CS 1.6's C4 reaches 1750 units, 4445 cm (the config held the units as centimetres): a pawn 40 m
+	// from the bomb is hurt, one past 44.45 m is not.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpMatch(World, 2, 1);
+	TickUntilLive(World, *GameMode);
+	if (!TestNotNull("Planted", PlantInSiteA(World, *GameMode)))
+	{
+		return false;
+	}
+	AShooterBomb* Bomb = GameMode->GetBomb();
+	TestEqual("The radius, cm", Bomb->ExplosionRadius, 4445.0f);
+	TArray<AShooterCharacter*> CTs = GetAlive(World, EShooterTeam::CT);
+	const FVector BombLocation = Bomb->GetActorLocation();
+	CTs[0]->Reset(BombLocation + FVector(-4000.0f, 0.0f, 0.0f));
+	// 4667 cm away, on the floor's diagonal.
+	CTs[1]->Reset(BombLocation + FVector(3300.0f, -3300.0f, 0.0f));
+	TickFrames(World, 1);
+	Bomb->Explode();
+	TestTrue("40 m: hurt", CTs[0]->GetHealth() < 100.0f);
+	TestTrue("40 m: alive", CTs[0]->IsAlive());
+	TestEqual("Past 44.45 m: untouched", CTs[1]->GetHealth(), 100.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBombExplosionRespectsArmorTest, "ShooterGame.Bomb.ExplosionRespectsArmor",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameBombExplosionRespectsArmorTest::RunTest(const FString& Parameters)
+{
+	// ps2-shipping N6: CS 1.6 armors a blast like the rest (the HE grenade's rule): two CT at the same distance, the
+	// one in kevlar takes half the health damage of the other and its armor half the rest.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpMatch(World, 2, 1);
+	TickUntilLive(World, *GameMode);
+	if (!TestNotNull("Planted", PlantInSiteA(World, *GameMode)))
+	{
+		return false;
+	}
+	AShooterBomb* Bomb = GameMode->GetBomb();
+	TArray<AShooterCharacter*> CTs = GetAlive(World, EShooterTeam::CT);
+	const FVector BombLocation = Bomb->GetActorLocation();
+	AShooterCharacter* Armored = CTs[0];
+	AShooterCharacter* Bare = CTs[1];
+	Armored->Reset(BombLocation + FVector(0.0f, 3800.0f, 0.0f));
+	Bare->Reset(BombLocation + FVector(0.0f, -3800.0f, 0.0f));
+	Armored->SetArmor(100.0f, true);
+	TickFrames(World, 1);
+	Bomb->Explode();
+	const float BareDamage = 100.0f - Bare->GetHealth();
+	const float ArmoredDamage = 100.0f - Armored->GetHealth();
+	TestTrue("The bare CT is hurt and lives", BareDamage > 0.0f && Bare->IsAlive());
+	TestEqual("Kevlar halves the health's damage", ArmoredDamage, BareDamage * 0.5f, 0.01f);
+	TestEqual("The armor takes half the rest", Armored->GetArmor(), 100.0f - (BareDamage * 0.25f), 0.01f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBuyTimeAfterTheFreezeTest, "ShooterGame.Buy.BuyTimeAfterTheFreeze",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameBuyTimeAfterTheFreezeTest::RunTest(const FString& Parameters)
+{
+	// ps2-shipping N6: CS's mp_buytime counts from the freeze's end (it counted from the freeze's start, so the live
+	// round had BuyTime - FreezeTime to buy): buying goes on BuyTime into the live round and stops after.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpMatch(World, 1, 1);
+	GameMode->FreezeTime = 2.0f;
+	TickUntilLive(World, *GameMode);
+	const AShooterGameState* State = GameMode->GetShooterGameState();
+	const float LiveStart = World.GetTimeSeconds();
+	TestEqual("It ends BuyTime after the freeze", State->GetBuyEndTime(), LiveStart + GameMode->BuyTime, 0.05f);
+	const AShooterCharacter* CT = GetAlive(World, EShooterTeam::CT)[0];
+	TickSeconds(World, GameMode->BuyTime - 0.5f);
+	FString Reason;
+	TestTrue("Still buying BuyTime - 0.5 s into the round", GameMode->CanBuy(*CT, &Reason));
+	TickSeconds(World, 1.0f);
+	TestFalse("Over past BuyTime", GameMode->CanBuy(*CT, &Reason));
+	TestTrue("The reason", Reason.Contains(TEXT("buy time")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBuyMenuFollowsTheRulesTest, "ShooterGame.Buy.MenuFollowsTheRules",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameBuyMenuFollowsTheRulesTest::RunTest(const FString& Parameters)
+{
+	// ps2-shipping N6: the buy menu opens only when its player may buy (in the buy zone, within the buy time, alive and
+	// playing) and closes by itself when that stops (CS: the buy time's end closes it); a spectator cannot open it (its
+	// keys took the spectator's Cross). A refusal leaves its reason in the last buy's message for the HUD.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpMatch(World, 1, 1);
+	AShooterPlayerController* Player = World.SpawnActor<AShooterPlayerController>();
+	AShooterPlayerState* PlayerState = Player->GetPlayerState<AShooterPlayerState>();
+	if (!TestNotNull("The player's state", PlayerState))
+	{
+		return false;
+	}
+	PlayerState->SetTeam(EShooterTeam::CT);
+	GameMode->PostLogin(Player);
+	TickUntilLive(World, *GameMode);
+	AShooterCharacter* Pawn = Cast<AShooterCharacter>(Player->GetPawn());
+	if (!TestNotNull("The player plays", Pawn))
+	{
+		return false;
+	}
+
+	Player->BuyMenu();
+	TestTrue("Opens in the buy zone within the buy time", Player->IsBuyMenuOpen());
+	TickSeconds(World, GameMode->BuyTime + 0.1f);
+	TestFalse("The buy time's end closes it", Player->IsBuyMenuOpen());
+	TestTrue("It says why", Player->GetLastBuyMessage().Contains(TEXT("buy time")));
+	TestTrue("For the HUD", Player->GetBuyRefusalTime() >= 0.0f);
+	Player->BuyMenu();
+	TestFalse("Refused after the buy time", Player->IsBuyMenuOpen());
+
+	// The next round: out of the buy zone it is refused; opened in it, walking out closes it.
+	KillTeam(World, EShooterTeam::T);
+	TickFrames(World, 1);
+	TickSeconds(World, GameMode->RoundRestartDelay);
+	TestTrue("A new round's freeze", GameMode->GetShooterGameState()->IsFreezeTime());
+	const FVector Start = Pawn->GetActorLocation();
+	Pawn->Reset(FVector::ZeroVector);
+	TickFrames(World, 1);
+	Player->BuyMenu();
+	TestFalse("Refused out of the buy zone", Player->IsBuyMenuOpen());
+	TestTrue("It says why", Player->GetLastBuyMessage().Contains(TEXT("buy zone")));
+	Pawn->Reset(Start);
+	TickFrames(World, 1);
+	Player->BuyMenu();
+	TestTrue("Opens back in the zone", Player->IsBuyMenuOpen());
+	Pawn->Reset(FVector::ZeroVector);
+	TickFrames(World, 1);
+	TestFalse("Leaving the zone closes it", Player->IsBuyMenuOpen());
+
+	// Dead: the player spectates, and B (or Start) leaves its Cross alone.
+	Pawn->Suicide();
+	TickFrames(World, 1);
+	TestTrue("Spectating", Player->IsInState(NAME_Spectating));
+	Player->BuyMenu();
+	TestFalse("Refused to a spectator", Player->IsBuyMenuOpen());
+	TestTrue("It says why", Player->GetLastBuyMessage().Contains(TEXT("spectating")));
+	return true;
+}
+
+// ps2-shipping N30d: the halftime, the death cam and spectating, the radar and the damage indicator.
+
+namespace
+{
+
+	/** Ticks Seconds of world time frame by frame, the match checker watching every frame. */
+	void TickChecked(UWorld& World, const AShooterGameMode& GameMode, FShooterMatchChecker& Checker, float Seconds)
+	{
+		const int32 Frames = FMath::CeilToInt(Seconds / FrameTime) + 1;
+		for (int32 Frame = 0; Frame < Frames; ++Frame)
+		{
+			World.Tick(FrameTime);
+			Checker.Tick(GameMode);
+		}
+	}
+
+	/** Plays until the round is live, then ends it for Reason, the checker watching. */
+	void PlayRound(
+		UWorld& World, AShooterGameMode& GameMode, FShooterMatchChecker& Checker, EShooterRoundEndReason Reason)
+	{
+		for (int32 Frame = 0;
+			Frame < 600 && GameMode.GetShooterGameState()->GetRoundState() != EShooterRoundState::Live; ++Frame)
+		{
+			World.Tick(FrameTime);
+			Checker.Tick(GameMode);
+		}
+		GameMode.EndRound(Reason);
+		Checker.Tick(GameMode);
+	}
+
+	/** A local player on Team, logged in (its HUD, its camera): it plays from the next spawn on. */
+	AShooterPlayerController* AddLocalPlayer(UWorld& World, AShooterGameMode& GameMode, EShooterTeam Team)
+	{
+		AShooterPlayerController* Player = World.SpawnActor<AShooterPlayerController>();
+		Player->SetPlayer(NewObject<ULocalPlayer>(Player));
+		if (AShooterPlayerState* PlayerState = Player->GetPlayerState<AShooterPlayerState>())
+		{
+			PlayerState->SetTeam(Team);
+		}
+		GameMode.PostLogin(Player);
+		return Player;
+	}
+
+	/** Paints the player's HUD into a canvas of the GS's size. */
+	AShooterHUD* PaintHUD(const AShooterPlayerController& Player)
+	{
+		AShooterHUD* HUD = Cast<AShooterHUD>(Player.MyHUD);
+		if (HUD != nullptr)
+		{
+			FCanvas Canvas(640, 448);
+			HUD->Paint(Canvas);
+		}
+		return HUD;
+	}
+
+	/** Tap a key: pressed for a frame, released for a frame. */
+	void TapKey(UWorld& World, AShooterPlayerController& Player, const FKey& Key)
+	{
+		(void)Player.InputKey(Key, IE_Pressed, 1.0f, false);
+		TickFrames(World, 1);
+		(void)Player.InputKey(Key, IE_Released, 0.0f, false);
+		TickFrames(World, 1);
+	}
+
+} // namespace
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameRoundsHalftimeTest, "ShooterGame.Rounds.HalftimeSwitchesSides",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameRoundsHalftimeTest::RunTest(const FString& Parameters)
+{
+	// Four rounds a match: after round 2 the teams switch sides. The CT win both rounds; at the halftime every player
+	// (the bots too) moves to the other team, the scores go with them (CT 0 - T 2), the money starts over and the loss
+	// streaks with it, and the second half starts as the first: everyone on the new side's starts with the pistol only,
+	// the bomb with one of the new terrorists. FShooterMatchChecker sees the halftime and finds nothing wrong.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpMatch(World, 2, 2);
+	GameMode->MaxRounds = 4;
+	TestEqual("The halftime after round 2", GameMode->GetHalftimeRound(), 2);
+	AShooterGameState* State = GameMode->GetShooterGameState();
+	FShooterMatchChecker Checker;
+	PlayRound(World, *GameMode, Checker, EShooterRoundEndReason::TargetSaved);
+	TickChecked(World, *GameMode, Checker, GameMode->RoundRestartDelay);
+	const TArray<AShooterPlayerState*> FirstHalfCT = GetTeamStates(*GameMode, EShooterTeam::CT);
+	const TArray<AShooterPlayerState*> FirstHalfT = GetTeamStates(*GameMode, EShooterTeam::T);
+	AShooterCharacter* RifleCT = GetAlive(World, EShooterTeam::CT)[0];
+	(void)RifleCT->GiveWeapon(AShooterWeapon::FindWeaponClass(TEXT("ak47")));
+	PlayRound(World, *GameMode, Checker, EShooterRoundEndReason::TargetSaved);
+	TestEqual("CT 2 before the halftime", State->GetTeamScore(EShooterTeam::CT), 2);
+	TestFalse("The first half", State->IsSecondHalf());
+	TestEqual("The CT's money: 800 + 2 x 3250", FirstHalfCT[0]->GetMoney(), 7300);
+	TestEqual("The T lost twice", GameMode->GetLossStreak(EShooterTeam::T), 2);
+
+	TickChecked(World, *GameMode, Checker, GameMode->RoundRestartDelay);
+	TestEqual("Round 3", State->GetRoundNumber(), 3);
+	TestTrue("The second half", State->IsSecondHalf() && State->GetHalftimeRound() == 2);
+	TestEqual("The scores follow the teams: CT 0", State->GetTeamScore(EShooterTeam::CT), 0);
+	TestEqual("T 2", State->GetTeamScore(EShooterTeam::T), 2);
+	for (const AShooterPlayerState* PlayerState : FirstHalfCT)
+	{
+		TestTrue("A first-half CT plays T", PlayerState->GetTeam() == EShooterTeam::T);
+		TestEqual("With the start money", PlayerState->GetMoney(), GameMode->StartMoney);
+	}
+	for (const AShooterPlayerState* PlayerState : FirstHalfT)
+	{
+		TestTrue("A first-half T plays CT", PlayerState->GetTeam() == EShooterTeam::CT);
+		TestEqual("With the start money", PlayerState->GetMoney(), GameMode->StartMoney);
+	}
+	TestEqual("No loss streak (CT)", GameMode->GetLossStreak(EShooterTeam::CT), 0);
+	TestEqual("No loss streak (T)", GameMode->GetLossStreak(EShooterTeam::T), 0);
+	TestTrue("The rifle's pawn is gone", RifleCT->IsPendingKillPending());
+	const TArray<AShooterCharacter*> NewTerrorists = GetAlive(World, EShooterTeam::T);
+	TestEqual("Two terrorists", NewTerrorists.Num(), 2);
+	for (const AShooterCharacter* T : NewTerrorists)
+	{
+		TestEqual("On the T side's starts", T->GetActorLocation().X, 1500.0f, 1.0f);
+		TestNull("With the pistol only", T->GetWeaponInSlot(EShooterWeaponSlot::Primary));
+		TestTrue("A first-half CT", FirstHalfCT.Contains(T->GetController()->GetPlayerState<AShooterPlayerState>()));
+		// The new side's looks (N27): the terrorist's body and arms.
+		const USkeletalMesh* Body = T->GetMesh().GetSkeletalMesh();
+		const USkeletalMesh* Arms = T->GetMesh1P()->GetSkeletalMesh();
+		TestTrue("The terrorist's body and arms",
+			Body != nullptr && Body->GetName() == TEXT("SK_Body_T") && Arms != nullptr &&
+				Arms->GetName() == TEXT("SK_Arms_T"));
+	}
+	for (const AShooterCharacter* CT : GetAlive(World, EShooterTeam::CT))
+	{
+		TestEqual("On the CT side's starts", CT->GetActorLocation().X, -1500.0f, 1.0f);
+		const USkeletalMesh* Body = CT->GetMesh().GetSkeletalMesh();
+		TestTrue("The counter-terrorist's body", Body != nullptr && Body->GetName() == TEXT("SK_Body_CT"));
+	}
+	const AShooterBomb* Bomb = GameMode->GetBomb();
+	TestTrue("The bomb with a new terrorist",
+		Bomb != nullptr && Bomb->GetCarrier() != nullptr && NewTerrorists.Contains(Bomb->GetCarrier()));
+	TestEqual("The checker saw the halftime", Checker.GetNumHalftimes(), 1);
+	for (const FString& Violation : Checker.GetViolations())
+	{
+		AddError(Violation);
+	}
+
+	// A score the halftime did not swap is flagged.
+	FShooterMatchChecker Watcher;
+	Watcher.Tick(*GameMode);
+	GameMode->RestartGame(0.0f);
+	TickChecked(World, *GameMode, Watcher, 0.1f);
+	PlayRound(World, *GameMode, Watcher, EShooterRoundEndReason::TargetSaved);
+	PlayRound(World, *GameMode, Watcher, EShooterRoundEndReason::TargetSaved);
+	TickChecked(World, *GameMode, Watcher, GameMode->RoundRestartDelay);
+	TestFalse("A clean halftime", Watcher.HasViolations());
+	State->AddTeamScore(EShooterTeam::T);
+	State->BeginSecondHalf();
+	Watcher.Tick(*GameMode);
+	TestTrue("A halftime in the wrong round, nobody moved: flagged", Watcher.HasViolations());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameRoundsMatchEndsAtTheMajorityTest,
+	"ShooterGame.Rounds.MatchEndsAtTheMajority",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameRoundsMatchEndsAtTheMajorityTest::RunTest(const FString& Parameters)
+{
+	// Four rounds: the team that won the first half 2 - 0 wins round 3 on the other side and has 3 of 4, the majority:
+	// the match ends there, won by the side it plays now. Two rounds: one each (the second on the other side), 1 - 1
+	// at the last round, a draw.
+	{
+		FScopedTestWorld TestWorld;
+		UWorld& World = *TestWorld;
+		AShooterGameMode* GameMode = SetUpMatch(World, 1, 1);
+		GameMode->MaxRounds = 4;
+		AShooterGameState* State = GameMode->GetShooterGameState();
+		FShooterMatchChecker Checker;
+		PlayRound(World, *GameMode, Checker, EShooterRoundEndReason::TargetSaved);
+		TickChecked(World, *GameMode, Checker, GameMode->RoundRestartDelay);
+		const AShooterPlayerState* FirstCT = GetTeamStates(*GameMode, EShooterTeam::CT)[0];
+		PlayRound(World, *GameMode, Checker, EShooterRoundEndReason::TargetSaved);
+		TickChecked(World, *GameMode, Checker, GameMode->RoundRestartDelay);
+		TestTrue("The first CT plays T", FirstCT->GetTeam() == EShooterTeam::T);
+		PlayRound(World, *GameMode, Checker, EShooterRoundEndReason::CTsEliminated);
+		TestEqual("T 3", State->GetTeamScore(EShooterTeam::T), 3);
+		TickChecked(World, *GameMode, Checker, GameMode->RoundRestartDelay);
+		TestTrue("Over at the majority",
+			GameMode->HasMatchEnded() && State->GetRoundState() == EShooterRoundState::MatchEnd);
+		TestEqual("After round 3 of 4", State->GetRoundNumber(), 3);
+		TestTrue("Won by the side the team plays now", State->GetMatchWinner() == EShooterTeam::T);
+		for (const FString& Violation : Checker.GetViolations())
+		{
+			AddError(Violation);
+		}
+	}
+	{
+		FScopedTestWorld TestWorld;
+		UWorld& World = *TestWorld;
+		AShooterGameMode* GameMode = SetUpMatch(World, 1, 1);
+		GameMode->MaxRounds = 2;
+		AShooterGameState* State = GameMode->GetShooterGameState();
+		FShooterMatchChecker Checker;
+		PlayRound(World, *GameMode, Checker, EShooterRoundEndReason::TargetSaved);
+		TickChecked(World, *GameMode, Checker, GameMode->RoundRestartDelay);
+		TestTrue("Halftime after round 1", State->IsSecondHalf() && State->GetTeamScore(EShooterTeam::T) == 1);
+		PlayRound(World, *GameMode, Checker, EShooterRoundEndReason::TargetSaved);
+		TickChecked(World, *GameMode, Checker, GameMode->RoundRestartDelay);
+		TestTrue("Over at the last round", GameMode->HasMatchEnded() && State->GetRoundNumber() == 2);
+		TestTrue("1 - 1: a draw", State->GetMatchWinner() == EShooterTeam::None);
+		for (const FString& Violation : Checker.GetViolations())
+		{
+			AddError(Violation);
+		}
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameSpectateDeathCamTest, "ShooterGame.Spectate.DeathCamThenTeammates",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameSpectateDeathCamTest::RunTest(const FString& Parameters)
+{
+	// Killed, the player looks at its killer from the corpse's eyes (held there) for DeathCamDuration, the HUD naming
+	// the killer; then it watches a living teammate through its eyes; with every teammate dead it flies free.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpMatch(World, 2, 1);
+	AShooterPlayerController* Player = AddLocalPlayer(World, *GameMode, EShooterTeam::CT);
+	TickUntilLive(World, *GameMode);
+	AShooterCharacter* Pawn = Cast<AShooterCharacter>(Player->GetPawn());
+	AShooterCharacter* Killer = GetAlive(World, EShooterTeam::T)[0];
+	if (!TestNotNull("The player plays", Pawn) || !TestNotNull("A camera", Player->PlayerCameraManager))
+	{
+		return false;
+	}
+	// The killer off to the side, so the death cam has to turn to it.
+	Killer->Reset(FVector(-600.0f, 900.0f, 0.0f), FRotator::ZeroRotator);
+	TickFrames(World, 1);
+	(void)UGameplayStatics::ApplyDamage(
+		Pawn, 500.0f, Killer->GetController(), Killer->GetWeapon(), UDamageType::StaticClass());
+	const float DeathTime = World.GetTimeSeconds();
+	TestFalse("Dead", Pawn->IsAlive());
+	TestTrue("The death cam", Player->GetSpectatorMode() == EShooterSpectatorMode::DeathCam);
+	TestTrue("On the killer", Player->GetDeathCamTarget() == Killer);
+	TickFrames(World, 1);
+	const ASpectatorPawn* Spectator = Player->GetSpectatorPawn();
+	if (!TestNotNull("A spectator", Spectator))
+	{
+		return false;
+	}
+	TestTrue("Viewed from the spectator", Player->PlayerCameraManager->GetViewTarget() == Spectator);
+	TestNull("Nobody else watched", Player->GetViewedPlayer());
+	FVector Eyes;
+	FVector KillerEyes;
+	FRotator Unused;
+	Spectator->GetActorEyesViewPoint(Eyes, Unused);
+	Killer->GetActorEyesViewPoint(KillerEyes, Unused);
+	const FRotator Expected = (KillerEyes - Eyes).Rotation();
+	TestEqual("Looks at the killer (yaw)", Player->GetControlRotation().Yaw, Expected.Yaw, 0.5f);
+	TestEqual("Looks at the killer (pitch)", Player->GetControlRotation().Pitch, Expected.Pitch, 0.5f);
+	TestTrue("From the corpse", FVector::Dist2D(Spectator->GetActorLocation(), Pawn->GetActorLocation()) < 1.0f);
+	const AShooterHUD* HUD = PaintHUD(*Player);
+	if (!TestNotNull("The player's HUD", HUD))
+	{
+		return false;
+	}
+	// The bots' team-neutral names (the third bot made: two CTs, then the terrorist).
+	TestEqual("The HUD names the killer", HUD->GetSpectatorText(),
+		FString::Printf(TEXT("Killed by %s"), *GameMode->GetBotName(2)));
+	TestEqual("CS's names", GameMode->GetBotName(2), FString(TEXT("Bert")));
+
+	// W held: the death cam does not fly.
+	const FVector Held = Spectator->GetActorLocation();
+	(void)Player->InputKey(EKeys::W, IE_Pressed, 1.0f, false);
+	while (World.GetTimeSeconds() - DeathTime < Player->DeathCamDuration - 0.1f)
+	{
+		TickFrames(World, 1);
+	}
+	(void)Player->InputKey(EKeys::W, IE_Released, 0.0f, false);
+	TestTrue("Still the death cam just before its end", Player->GetSpectatorMode() == EShooterSpectatorMode::DeathCam);
+	TestTrue("Held at the corpse", Spectator->GetActorLocation().Equals(Held, 0.01f));
+	while (World.GetTimeSeconds() - DeathTime < Player->DeathCamDuration + 0.1f)
+	{
+		TickFrames(World, 1);
+	}
+	const AShooterCharacter* Watched = Player->GetViewedPlayer();
+	TestTrue("Then a teammate",
+		Player->GetSpectatorMode() == EShooterSpectatorMode::Player && Watched != nullptr && Watched->IsAlive() &&
+			Watched->GetTeam() == EShooterTeam::CT);
+	TestTrue("Through its eyes", Player->PlayerCameraManager->GetViewTarget() == Watched);
+	(void)PaintHUD(*Player);
+	const AShooterPlayerState* WatchedState =
+		Watched != nullptr ? Watched->GetController()->GetPlayerState<AShooterPlayerState>() : nullptr;
+	TestTrue("The HUD names it",
+		WatchedState != nullptr &&
+			HUD->GetSpectatorText().StartsWith(FString::Printf(TEXT("Spectating %s"), *WatchedState->GetPlayerName())));
+
+	KillTeam(World, EShooterTeam::CT);
+	TickFrames(World, 1);
+	TestTrue("Nobody left: the free look", Player->GetSpectatorMode() == EShooterSpectatorMode::FreeLook);
+	TestTrue("Through the spectator", Player->PlayerCameraManager->GetViewTarget() == Player->GetSpectatorPawn());
+	(void)PaintHUD(*Player);
+	TestEqual("The HUD says so", HUD->GetSpectatorText(), FString(TEXT("Free look")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameSpectateCyclingTest, "ShooterGame.Spectate.CyclingSkipsTheDead",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameSpectateCyclingTest::RunTest(const FString& Parameters)
+{
+	// A dead player's keys: Fire ends the death cam and watches the next living teammate, Fire again the next (in the
+	// game state's order, wrapping), the right button the one before; a dead teammate is skipped both ways; Jump
+	// switches to the free look and back.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpMatch(World, 3, 1);
+	AShooterPlayerController* Player = AddLocalPlayer(World, *GameMode, EShooterTeam::CT);
+	TickUntilLive(World, *GameMode);
+	AShooterCharacter* Pawn = Cast<AShooterCharacter>(Player->GetPawn());
+	if (!TestNotNull("The player plays", Pawn))
+	{
+		return false;
+	}
+	const TArray<AShooterCharacter*> Mates =
+		GetAlive(World, EShooterTeam::CT)
+			.FilterByPredicate([Pawn](const AShooterCharacter* Mate) { return Mate != Pawn; });
+	if (!TestEqual("Three teammates", Mates.Num(), 3))
+	{
+		return false;
+	}
+	Pawn->Suicide();
+	TickFrames(World, 1);
+	TestTrue("The death cam", Player->GetSpectatorMode() == EShooterSpectatorMode::DeathCam);
+	TapKey(World, *Player, EKeys::LeftMouseButton);
+	TestTrue("Fire ends it: the first teammate", Player->GetViewedPlayer() == Mates[0]);
+	TapKey(World, *Player, EKeys::LeftMouseButton);
+	TestTrue("The second", Player->GetViewedPlayer() == Mates[1]);
+	TapKey(World, *Player, EKeys::LeftMouseButton);
+	TestTrue("The third", Player->GetViewedPlayer() == Mates[2]);
+	TapKey(World, *Player, EKeys::LeftMouseButton);
+	TestTrue("Wraps to the first", Player->GetViewedPlayer() == Mates[0]);
+	TapKey(World, *Player, EKeys::RightMouseButton);
+	TestTrue("The right button: the one before, wrapping", Player->GetViewedPlayer() == Mates[2]);
+
+	Mates[1]->Suicide();
+	TickFrames(World, 1);
+	TapKey(World, *Player, EKeys::LeftMouseButton);
+	TestTrue("Next skips the dead one", Player->GetViewedPlayer() == Mates[0]);
+	TapKey(World, *Player, EKeys::LeftMouseButton);
+	TestTrue("Next skips the dead one", Player->GetViewedPlayer() == Mates[2]);
+	TapKey(World, *Player, EKeys::RightMouseButton);
+	TestTrue("Previous skips it too", Player->GetViewedPlayer() == Mates[0]);
+	Player->ViewPrevPlayer();
+	TestTrue("ViewPrevPlayer wraps past it", Player->GetViewedPlayer() == Mates[2]);
+
+	TapKey(World, *Player, EKeys::SpaceBar);
+	TestTrue("Jump: the free look", Player->GetSpectatorMode() == EShooterSpectatorMode::FreeLook);
+	TestNull("Nobody watched", Player->GetViewedPlayer());
+	TapKey(World, *Player, EKeys::SpaceBar);
+	TestTrue("Jump again: a teammate",
+		Player->GetSpectatorMode() == EShooterSpectatorMode::Player && Player->GetViewedPlayer() != nullptr);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameHUDRadarTest, "ShooterGame.HUD.Radar",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameHUDRadarTest::RunTest(const FString& Parameters)
+{
+	// The radar's projection: ahead is up and the right is right, it turns with the yaw, and what lies beyond the range
+	// sits on the edge in its direction. In a 5v5 the player's radar draws its frame and view (4), site A (1), its four
+	// teammates (4) and itself (1), and a frame with nothing new allocates nothing.
+	const FVector Origin = FVector::ZeroVector;
+	constexpr float Range = 2000.0f;
+	constexpr float Half = 40.0f;
+	auto Check = [this, &Origin](const TCHAR* What, float Yaw, const FVector& Location, const FVector2D& Expected)
+	{
+		const FVector2D Offset = AShooterHUD::ProjectToRadar(Origin, Yaw, Location, Range, Half);
+		TestTrue(What, Offset.Equals(Expected, 0.01f));
+	};
+	Check(TEXT("Ahead is up"), 0.0f, FVector(1000.0f, 0.0f, 0.0f), FVector2D(0.0f, -20.0f));
+	Check(TEXT("+Y is to the right at yaw 0"), 0.0f, FVector(0.0f, 1000.0f, 0.0f), FVector2D(20.0f, 0.0f));
+	Check(TEXT("Behind is down"), 0.0f, FVector(-500.0f, 0.0f, 300.0f), FVector2D(0.0f, 10.0f));
+	Check(TEXT("Facing +Y, +Y is up"), 90.0f, FVector(0.0f, 1000.0f, 0.0f), FVector2D(0.0f, -20.0f));
+	Check(TEXT("Facing +Y, +X is to the left"), 90.0f, FVector(1000.0f, 0.0f, 0.0f), FVector2D(-20.0f, 0.0f));
+	Check(TEXT("Facing -X, +X is down"), 180.0f, FVector(1000.0f, 0.0f, 0.0f), FVector2D(0.0f, 20.0f));
+	Check(TEXT("Beyond the range: on the edge"), 0.0f, FVector(10000.0f, 0.0f, 0.0f), FVector2D(0.0f, -40.0f));
+	Check(TEXT("In its direction"), 0.0f, FVector(10000.0f, 5000.0f, 0.0f), FVector2D(20.0f, -40.0f));
+	Check(TEXT("A corner"), 0.0f, FVector(-9000.0f, -9000.0f, 0.0f), FVector2D(-40.0f, 40.0f));
+
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpMatch(World, 4, 5);
+	AShooterPlayerController* Player = AddLocalPlayer(World, *GameMode, EShooterTeam::CT);
+	TickUntilLive(World, *GameMode);
+	TickFrames(World, 2);
+	const AShooterHUD* HUD = PaintHUD(*Player);
+	if (!TestNotNull("The player's HUD", HUD))
+	{
+		return false;
+	}
+	TestEqual("Frame, view, site A, four teammates, the player", HUD->GetNumRadarPrimitives(), 10);
+	TestTrue("Cheap", HUD->GetNumRadarPrimitives() <= 20);
+	(void)PaintHUD(*Player);
+	const uint64 AllocationsBefore = FMemory::GetUsage().TotalAllocations;
+	(void)PaintHUD(*Player);
+	TestEqual("A frame with nothing new allocates nothing",
+		static_cast<int64>(FMemory::GetUsage().TotalAllocations - AllocationsBefore), static_cast<int64>(0));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameHUDDamageIndicatorTest, "ShooterGame.HUD.DamageIndicator",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameHUDDamageIndicatorTest::RunTest(const FString& Parameters)
+{
+	// The indicator's angle: 0 ahead, 90 to the right, -90 to the left, 180 behind, turning with the view. Shot by an
+	// enemy standing to its right, the player's HUD draws the arc toward 90 degrees, and nothing a second later.
+	const FVector View(100.0f, 100.0f, 50.0f);
+	TestEqual(
+		"Ahead", AShooterHUD::GetDamageIndicatorAngle(View, 0.0f, View + FVector(500.0f, 0.0f, 0.0f)), 0.0f, 0.01f);
+	TestEqual(
+		"Right", AShooterHUD::GetDamageIndicatorAngle(View, 0.0f, View + FVector(0.0f, 500.0f, 80.0f)), 90.0f, 0.01f);
+	TestEqual(
+		"Left", AShooterHUD::GetDamageIndicatorAngle(View, 0.0f, View + FVector(0.0f, -500.0f, 0.0f)), -90.0f, 0.01f);
+	TestEqual("Behind",
+		FMath::Abs(AShooterHUD::GetDamageIndicatorAngle(View, 0.0f, View - FVector(500.0f, 0.0f, 0.0f))), 180.0f,
+		0.01f);
+	TestEqual("Facing +Y, +X is to the left",
+		AShooterHUD::GetDamageIndicatorAngle(View, 90.0f, View + FVector(500.0f, 0.0f, 0.0f)), -90.0f, 0.01f);
+	TestEqual("Front right", AShooterHUD::GetDamageIndicatorAngle(View, 30.0f, View + FVector(0.0f, 500.0f, 0.0f)),
+		60.0f, 0.01f);
+
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpMatch(World, 1, 1);
+	AShooterPlayerController* Player = AddLocalPlayer(World, *GameMode, EShooterTeam::CT);
+	TickUntilLive(World, *GameMode);
+	AShooterCharacter* Pawn = Cast<AShooterCharacter>(Player->GetPawn());
+	AShooterCharacter* Enemy = GetAlive(World, EShooterTeam::T)[0];
+	if (!TestNotNull("The player plays", Pawn))
+	{
+		return false;
+	}
+	// The player faces +X (the CT starts' yaw); the enemy 8 m to its right.
+	Enemy->Reset(Pawn->GetActorLocation() + FVector(0.0f, 800.0f, 0.0f), FRotator::ZeroRotator);
+	TickFrames(World, 1);
+	(void)UGameplayStatics::ApplyDamage(
+		Pawn, 10.0f, Enemy->GetController(), Enemy->GetWeapon(), UDamageType::StaticClass());
+	TestTrue("Hurt, alive", Pawn->IsAlive() && Pawn->GetHealth() < Pawn->GetMaxHealth());
+	TestTrue(
+		"The source is the shooter", Player->GetLastDamageSourceLocation().Equals(Enemy->GetActorLocation(), 0.01f));
+	TickFrames(World, 1);
+	const APlayerCameraManager* Camera = Player->PlayerCameraManager;
+	TestEqual("To the right",
+		AShooterHUD::GetDamageIndicatorAngle(
+			Camera->GetCameraLocation(), Camera->GetCameraRotation().Yaw, Player->GetLastDamageSourceLocation()),
+		90.0f, 1.0f);
+	const AShooterHUD* HUD = PaintHUD(*Player);
+	if (!TestNotNull("The player's HUD", HUD))
+	{
+		return false;
+	}
+	TestTrue("The arc shows", HUD->GetNumDamageIndicatorLines() > 0);
+	TickSeconds(World, HUD->DamageIndicatorDuration);
+	(void)PaintHUD(*Player);
+	TestEqual("Gone within its duration", HUD->GetNumDamageIndicatorLines(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBuyAmmoAndPricesTest, "ShooterGame.Buy.AmmoAndPrices",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameBuyAmmoAndPricesTest::RunTest(const FString& Parameters)
+{
+	// CS 1.6's ammunition: a bought weapon comes with its clip only; a box of its calibre costs the calibre's price
+	// (9 mm $20 for 30, .45 ACP $25 for 12, .50 AE $40 for 7, 7.62 mm $80 for 30) until the reserve is full; the
+	// buy menu's ammo lines and the `,` and `.` keys buy them.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpMatch(World, 1, 1);
+	AShooterPlayerController* Player = AddLocalPlayer(World, *GameMode, EShooterTeam::T);
+	TickUntilLive(World, *GameMode);
+	AShooterCharacter* Pawn = Cast<AShooterCharacter>(Player->GetPawn());
+	AShooterPlayerState* State = Player->GetPlayerState<AShooterPlayerState>();
+	if (!TestNotNull("The player plays", Pawn) || !TestNotNull("Its state", State))
+	{
+		return false;
+	}
+	State->SetMoney(16000, GameMode->MaxMoney);
+	AShooterWeapon* Glock = Pawn->GetWeaponInSlot(EShooterWeaponSlot::Secondary);
+	TestTrue("The Glock, 20/40", Glock != nullptr && Glock->GetCurrentAmmo() == 40);
+	TestEqual("A box of 9 mm", GameMode->GetPrice(*Pawn, TEXT("secammo")), 20);
+	TestEqual("No primary: no primary ammo", GameMode->GetPrice(*Pawn, TEXT("primammo")), -1);
+	for (int32 Box = 0; Box < 3; ++Box)
+	{
+		TestTrue(*FString::Printf(TEXT("Box %d"), Box + 1), GameMode->Buy(Pawn, TEXT("secammo")));
+	}
+	TestEqual("120: full", Glock->GetCurrentAmmo(), 120);
+	FString Reason;
+	TestFalse("No fourth box", GameMode->Buy(Pawn, TEXT("secammo"), &Reason));
+	TestTrue("The reason", Reason.Contains(TEXT("full")));
+	TestEqual("3 x $20", State->GetMoney(), 16000 - 60);
+
+	TestTrue("An AK-47", GameMode->Buy(Pawn, TEXT("ak47")));
+	AShooterWeapon* Rifle = Pawn->GetWeaponInSlot(EShooterWeaponSlot::Primary);
+	TestTrue("30/0", Rifle != nullptr && Rifle->GetCurrentAmmoInClip() == 30 && Rifle->GetCurrentAmmo() == 0);
+	TestEqual("7.62 mm: $80", GameMode->GetPrice(*Pawn, TEXT("primammo")), 80);
+	TestTrue("A box from the menu's line", GameMode->Buy(Pawn, TEXT("primammo")));
+	TapKey(World, *Player, EKeys::Comma);
+	TestEqual("And one with the , key", Rifle->GetCurrentAmmo(), 60);
+	TestTrue("The third", GameMode->Buy(Pawn, TEXT("primammo")));
+	TestFalse("Full at 90", GameMode->Buy(Pawn, TEXT("primammo")));
+	TestEqual("2500 + 3 x 80", State->GetMoney(), 16000 - 60 - 2500 - 240);
+
+	// The other calibres.
+	TestTrue("A Desert Eagle", GameMode->Buy(Pawn, TEXT("deagle")));
+	TestTrue("The Glock was dropped", Glock->IsDropped());
+	const AShooterWeapon* Deagle = Pawn->GetWeaponInSlot(EShooterWeaponSlot::Secondary);
+	TestEqual(".50 AE: $40", GameMode->GetPrice(*Pawn, TEXT("secammo")), 40);
+	TapKey(World, *Player, EKeys::Period);
+	TestTrue("The . key: 7 rounds", Deagle != nullptr && Deagle->GetCurrentAmmo() == 7);
+	TestTrue("A USP", GameMode->Buy(Pawn, TEXT("usp")));
+	TestEqual(".45 ACP: $25", GameMode->GetPrice(*Pawn, TEXT("secammo")), 25);
+	TestTrue("An MP5", GameMode->Buy(Pawn, TEXT("mp5")));
+	TestEqual("The MP5's 9 mm: $20", GameMode->GetPrice(*Pawn, TEXT("primammo")), 20);
+	TestEqual("The knife is not for sale", GameMode->GetPrice(*Pawn, TEXT("knife")), -1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBuyTeamRestrictionsTest, "ShooterGame.Buy.TeamRestrictions",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameBuyTeamRestrictionsTest::RunTest(const FString& Parameters)
+{
+	// CS's team weapons: the AK-47 only for the terrorists, the M4A1 only for the counter-terrorists; the pistols, the
+	// MP5 and the AWP for both. The buy menu's pages: 1 Pistols, 2 SMGs, 3 Rifles (the team's), ...; 3 then 1 buys the
+	// AK-47 for a terrorist and goes back to the first page.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpMatch(World, 1, 1);
+	AShooterPlayerController* Player = AddLocalPlayer(World, *GameMode, EShooterTeam::T);
+	TickUntilLive(World, *GameMode);
+	AShooterCharacter* Terrorist = Cast<AShooterCharacter>(Player->GetPawn());
+	AShooterCharacter* CT = GetAlive(World, EShooterTeam::CT)[0];
+	AShooterPlayerState* State = Player->GetPlayerState<AShooterPlayerState>();
+	if (!TestNotNull("The player plays", Terrorist) || !TestNotNull("Its state", State))
+	{
+		return false;
+	}
+	State->SetMoney(16000, GameMode->MaxMoney);
+	CT->GetController()->GetPlayerState<AShooterPlayerState>()->SetMoney(16000, GameMode->MaxMoney);
+	TestEqual("No M4A1 for a T", GameMode->GetPrice(*Terrorist, TEXT("m4a1")), -1);
+	TestEqual("No AK-47 for a CT", GameMode->GetPrice(*CT, TEXT("ak47")), -1);
+	FString Reason;
+	TestFalse("The T cannot buy it", GameMode->Buy(Terrorist, TEXT("m4a1"), &Reason));
+	TestTrue("The reason names the team", Reason.Contains(TEXT("only the CT")));
+	TestTrue("The CT's rifle", GameMode->Buy(CT, TEXT("m4a1")));
+	// For both teams (a pistol already owned is not bought again).
+	auto CanBuyOrHas = [GameMode](const AShooterCharacter& Pawn, const TCHAR* Item)
+	{
+		const AShooterWeapon* Pistol = Pawn.GetWeaponInSlot(EShooterWeaponSlot::Secondary);
+		return GameMode->GetPrice(Pawn, Item) > 0 || (Pistol != nullptr && Pistol->WeaponName == Item);
+	};
+	for (const TCHAR* Both : {TEXT("glock"), TEXT("usp"), TEXT("deagle"), TEXT("mp5"), TEXT("awp")})
+	{
+		TestTrue(*FString::Printf(TEXT("%s for both"), Both), CanBuyOrHas(*Terrorist, Both) && CanBuyOrHas(*CT, Both));
+	}
+
+	// The menu: the categories, then the terrorists' rifles.
+	TapKey(World, *Player, EKeys::B);
+	TArray<FShooterBuyMenuEntry, TInlineAllocator<AShooterPlayerController::MaxBuyMenuEntries>> Entries;
+	Player->GetBuyMenuEntries(Entries);
+	TestTrue("Open: the six categories",
+		Player->IsBuyMenuOpen() && Entries.Num() == 6 && Entries[2].Category == 2 && Entries[3].Item != nullptr);
+	TapKey(World, *Player, EKeys::Three);
+	Player->GetBuyMenuEntries(Entries);
+	TestTrue("3: the rifles a T may buy",
+		Entries.Num() == 2 && FCString::Strcmp(Entries[0].Item, TEXT("ak47")) == 0 &&
+			FCString::Strcmp(Entries[1].Item, TEXT("awp")) == 0);
+	State->SetTeam(EShooterTeam::CT);
+	Player->GetBuyMenuEntries(Entries);
+	TestTrue("A CT's", Entries.Num() == 2 && FCString::Strcmp(Entries[0].Item, TEXT("m4a1")) == 0);
+	State->SetTeam(EShooterTeam::T);
+	TapKey(World, *Player, EKeys::One);
+	const AShooterWeapon* Bought = Terrorist->GetWeaponInSlot(EShooterWeaponSlot::Primary);
+	TestTrue("1 bought the AK-47", Bought != nullptr && Bought->WeaponName == TEXT("ak47"));
+	TestEqual("Back on the first page", Player->GetBuyMenuCategory(), static_cast<int32>(INDEX_NONE));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameGrenadesCarryLimitsTest, "ShooterGame.Grenades.CarryLimits",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameGrenadesCarryLimitsTest::RunTest(const FString& Parameters)
+{
+	// CS 1.6: two flashbangs ($200 each), one HE and one smoke grenade ($300 each); a grenade bought stays in its slot
+	// (the gun stays drawn); the grenade key (4) cycles the HE, the flashbang and the smoke grenade; a flashbang thrown
+	// leaves the other. A flashed player's HUD draws the white.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpMatch(World, 1, 1);
+	AShooterPlayerController* Player = AddLocalPlayer(World, *GameMode, EShooterTeam::CT);
+	TickUntilLive(World, *GameMode);
+	AShooterCharacter* Pawn = Cast<AShooterCharacter>(Player->GetPawn());
+	AShooterPlayerState* State = Player->GetPlayerState<AShooterPlayerState>();
+	if (!TestNotNull("The player plays", Pawn) || !TestNotNull("Its state", State))
+	{
+		return false;
+	}
+	State->SetMoney(16000, GameMode->MaxMoney);
+	const AShooterWeapon* Pistol = Pawn->GetWeapon();
+	TestEqual("A flashbang: $200", GameMode->GetPrice(*Pawn, TEXT("flashbang")), 200);
+	TestTrue("One", GameMode->Buy(Pawn, TEXT("flashbang")));
+	const AShooterWeapon* Flashbang = Pawn->FindWeaponOfClass(AShooterWeapon_Flashbang::StaticClass());
+	TestTrue("It holds one", Flashbang != nullptr && Flashbang->GetCurrentAmmoInClip() == 1);
+	TestTrue("Two", GameMode->Buy(Pawn, TEXT("flashbang")));
+	TestTrue("It holds two, the same weapon",
+		Pawn->FindWeaponOfClass(AShooterWeapon_Flashbang::StaticClass()) == Flashbang &&
+			Flashbang->GetCurrentAmmoInClip() == 2);
+	FString Reason;
+	TestFalse("Not three", GameMode->Buy(Pawn, TEXT("flashbang"), &Reason));
+	TestTrue("The reason", Reason.Contains(TEXT("cannot carry more")));
+	TestTrue("An HE", GameMode->Buy(Pawn, TEXT("hegrenade")));
+	TestFalse("Not two", GameMode->Buy(Pawn, TEXT("hegrenade")));
+	TestTrue("A smoke grenade", GameMode->Buy(Pawn, TEXT("smokegrenade")));
+	TestFalse("Not two smokes", GameMode->Buy(Pawn, TEXT("smokegrenade")));
+	TestEqual("16000 - 2 x 200 - 300 - 300", State->GetMoney(), 15000);
+	TestTrue("The pistol still drawn", Pawn->GetWeapon() == Pistol);
+
+	// The HUD's white: one full-screen tile, as white as the flash.
+	Pawn->Flash(1.0f, 1.0f, 0.8f, 0.0f);
+	const AShooterHUD* HUD = PaintHUD(*Player);
+	TestTrue("The HUD whitens", HUD != nullptr && FMath::IsNearlyEqual(HUD->GetFlashOverlayAlpha(), 0.8f));
+	TickSeconds(World, 2.1f);
+	HUD = PaintHUD(*Player);
+	TestTrue("And clears", HUD != nullptr && HUD->GetFlashOverlayAlpha() == 0.0f);
+
+	auto Drawn = [Pawn]() { return Pawn->GetWeapon() != nullptr ? Pawn->GetWeapon()->WeaponName : FString(); };
+	TapKey(World, *Player, EKeys::Four);
+	TestEqual("4: the HE", Drawn(), FString(TEXT("hegrenade")));
+	TapKey(World, *Player, EKeys::Four);
+	TestEqual("4: the flashbang", Drawn(), FString(TEXT("flashbang")));
+	TapKey(World, *Player, EKeys::Four);
+	TestEqual("4: the smoke grenade", Drawn(), FString(TEXT("smokegrenade")));
+	TapKey(World, *Player, EKeys::Four);
+	TestEqual("4: the HE again", Drawn(), FString(TEXT("hegrenade")));
+	TapKey(World, *Player, EKeys::Four);
+	TickSeconds(World, 1.0f);
+	Pawn->StartWeaponFire();
+	Pawn->StopWeaponFire();
+	TestTrue("A flashbang thrown leaves one",
+		Pawn->FindWeaponOfClass(AShooterWeapon_Flashbang::StaticClass()) == Flashbang &&
+			Flashbang->GetCurrentAmmoInClip() == 1 && Pawn->GetWeapon() == Flashbang);
+
 	return true;
 }
 

@@ -1,6 +1,7 @@
 #include "Engine/Texture2D.h"
 
 #include "EngineLogs.h"
+#include "HAL/LowLevelMemTracker.h"
 #include "UObject/Package.h"
 
 UTexture2D::UTexture2D(const FObjectInitializer& ObjectInitializer)
@@ -35,6 +36,7 @@ bool UTexture2D::SetPlatformData(int32 InSizeX, int32 InSizeY, EPixelFormat InFo
 	FTexture2DMipMap& Mip = PlatformData.Mips.AddDefaulted_GetRef();
 	Mip.SizeX = InSizeX;
 	Mip.SizeY = InSizeY;
+	Mip.BulkData.SetPayloadAlignment(GetPixelFormatDataAlignment(InFormat));
 	(void)Mip.BulkData.Lock(LOCK_READ_WRITE);
 	void* Data = Mip.BulkData.Realloc(NumBytes);
 	if (TexelData != nullptr)
@@ -45,6 +47,36 @@ bool UTexture2D::SetPlatformData(int32 InSizeX, int32 InSizeY, EPixelFormat InFo
 	{
 		FMemory::Memzero(Data, static_cast<SIZE_T>(NumBytes));
 	}
+	Mip.BulkData.Unlock();
+	UpdateResource();
+	return true;
+}
+
+bool UTexture2D::AddMip(const void* TexelData)
+{
+	if (PlatformData.Mips.Num() == 0 || TexelData == nullptr)
+	{
+		return false;
+	}
+	const FTexture2DMipMap& Last = PlatformData.Mips.Last();
+	if (Last.SizeX <= 1 && Last.SizeY <= 1)
+	{
+		return false;
+	}
+	const int32 MipSizeX = FMath::Max(1, Last.SizeX / 2);
+	const int32 MipSizeY = FMath::Max(1, Last.SizeY / 2);
+	const int64 NumBytes =
+		GetPixelFormatMipDataSize(PlatformData.PixelFormat, MipSizeX, MipSizeY, PlatformData.Mips.Num());
+	if (NumBytes == 0)
+	{
+		return false;
+	}
+	FTexture2DMipMap& Mip = PlatformData.Mips.AddDefaulted_GetRef();
+	Mip.SizeX = MipSizeX;
+	Mip.SizeY = MipSizeY;
+	Mip.BulkData.SetPayloadAlignment(GetPixelFormatDataAlignment(PlatformData.PixelFormat));
+	(void)Mip.BulkData.Lock(LOCK_READ_WRITE);
+	FMemory::Memcpy(Mip.BulkData.Realloc(NumBytes), TexelData, static_cast<SIZE_T>(NumBytes));
 	Mip.BulkData.Unlock();
 	UpdateResource();
 	return true;
@@ -64,6 +96,7 @@ bool UTexture2D::HasValidPlatformData() const
 
 void UTexture2D::Serialize(FArchive& Ar)
 {
+	LLM_SCOPE(ELLMTag::Textures);
 	Super::Serialize(Ar);
 	PlatformData.Serialize(Ar, this);
 }

@@ -20,8 +20,35 @@ struct ENGINE_API FFrameStats
 	int32 TrianglesSubmitted = 0;
 	/** The GS register writes of the frame's scene list (the GIF packet's size in quadwords, about). */
 	int32 RegisterWrites = 0;
-	/** Textures uploaded to the GS local memory this frame. */
+	/** Textures uploaded to the GS local memory this frame (whole or in part). */
 	int32 TextureUploads = 0;
+	/** Bytes of texels and CLUTs uploaded this frame (the texture upload budget's measure). */
+	int32 TextureUploadBytes = 0;
+	/** Bytes of GS local memory the resident textures take after the frame (their blocks, 256 bytes each). */
+	int32 TextureResidentBytes = 0;
+	/** Textures evicted this frame to make room for others. */
+	int32 TextureEvictions = 0;
+	/** TEX0 writes this frame that loaded the GS's CLUT buffer. */
+	int32 ClutLoads = 0;
+	/** TEX0 writes of the frame's scene list. */
+	int32 Tex0Writes = 0;
+	/** The map's cells the view saw through its portals (N15; 0 for a map without cells or an eye outside them). */
+	int32 CellsVisible = 0;
+	/** Primitives left out because none of their cells was seen (N15). */
+	int32 ObjectsCulledByCells = 0;
+	/** Blob shadows drawn (N15). */
+	int32 BlobShadows = 0;
+	/** Static meshes drawn at a LOD after LOD 0 (N15). */
+	int32 ObjectsAtLowerLOD = 0;
+	/**
+	 * The mesh batches drawn, by where their sphere put them (plan D8, N29): recorded for VU1, sent by the C++ emitter
+	 * as strips (inside the guard band, without a microprogram or with -novu1), and clipped triangle by triangle on the
+	 * EE (across a clip plane); with the triangles of the last.
+	 */
+	int32 BatchesOnVU1 = 0;
+	int32 BatchesOnEmitter = 0;
+	int32 BatchesClipped = 0;
+	int32 TrianglesClipped = 0;
 };
 
 /**

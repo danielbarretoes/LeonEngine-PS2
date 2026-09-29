@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "Debug/DebugOverlay.h"
 #include "Engine/EngineBaseTypes.h"
+#include "FixedStepClock.h"
 #include "Misc/Exec.h"
 #include "Templates/SubclassOf.h"
 #include "UObject/GarbageCollection.h"
@@ -24,11 +25,19 @@ struct FWorldContext;
 /**
  * The engine (UE: UEngine), a config class of the Engine config ([/Script/Engine.Engine]) and the base of UGameEngine.
  * FEngineLoop::Init creates GEngine from `[/Script/Engine.Engine] GameEngine=` (plan decision D18), roots it and calls
- * Init, then Start; each frame it runs the deferred commands and Tick; PreExit ends it.
+ * Init, then Start; each frame it measures the frame's time and the fixed steps it holds
+ * (UpdateTimeAndHandleMaxTickRate), runs the deferred commands and Tick; PreExit ends it.
+ *
+ * - The game steps at a fixed rate (ps2-shipping D4): FixedStepClock turns the real time (integer microseconds of
+ *   FPlatformTime::Cycles64) into whole steps of 1 / FixedStepsPerSecond s (at most MaxStepsPerFrame a frame), and
+ *   the render draws between the last two (GetRenderInterpolationAlpha). A benchmark (`-benchmark`) or a capture
+ *   (FApp::IsUnattended) runs exactly one step a frame instead, drawn as it is: the frames then do not follow the
+ *   clock, so a capture is the same frame every run.
  *
  * - Browse / LoadMap: a URL opens a map in a world context (the flow is on LoadMap).
- * - Exec: the engine's console commands (`exit`, `obj gc`, `stat unit`, `RecompileShaders`, `open`), then every
- *   FSelfRegisteringExec. The console reaches it through the viewport client and the local player.
+ * - Exec: the engine's console commands (`exit`, `obj gc`, `stat unit`, `stat cycles`, `stat memory`,
+ *   `RecompileShaders`, `open`),
+ *   then every FSelfRegisteringExec. The console reaches it through the viewport client and the local player.
  * - Its default assets come from the config (the *Name paths below, as UE's DefaultTextureName & co.): Init loads
  *   them (InitializeObjectReferences). The audio device and the on-screen debug text (AddOnScreenDebugMessage) belong
  *   to it.
@@ -81,17 +90,9 @@ public:
 	UPROPERTY(Transient)
 	UTexture2D* DefaultTexture = nullptr;
 
-	/** The engine's bump normal map, a strong procedural ripple (Leon). */
-	UPROPERTY(GlobalConfig)
-	FSoftObjectPath DefaultBumpNormalTextureName;
-
-	/** DefaultBumpNormalTextureName, loaded by Init (Leon). */
-	UPROPERTY(Transient)
-	UTexture2D* DefaultBumpNormalTexture = nullptr;
-
 	/**
 	 * The sound wave of each UI cue FAudioDevice::PlayUiSound plays (Leon; UE's Slate styles name their sounds):
-	 * Click, Confirm, Back and Error. Empty keeps the cue's procedural tone.
+	 * Click, Confirm, Back and Error. Empty leaves the cue silent.
 	 */
 	UPROPERTY(GlobalConfig)
 	FSoftObjectPath UIClickSoundName;
@@ -102,7 +103,7 @@ public:
 	UPROPERTY(GlobalConfig)
 	FSoftObjectPath UIErrorSoundName;
 
-	/** The UI cues' sound waves, loaded by Init in EUISound order (null: the procedural tone) (Leon). */
+	/** The UI cues' sound waves, loaded by Init in EUISound order (null: a silent cue) (Leon). */
 	UPROPERTY(Transient)
 	TArray<USoundWave*> UISounds;
 
@@ -114,8 +115,7 @@ public:
 
 	/**
 	 * Loads the default assets the config names from their packages (UE: InitializeObjectReferences):
-	 * DefaultTexture, DefaultBumpNormalTexture, the default material (UMaterial::GetDefaultMaterial) and the UI
-	 * sounds.
+	 * DefaultTexture, the default material (UMaterial::GetDefaultMaterial) and the UI sounds.
 	 */
 	virtual void InitializeObjectReferences();
 
@@ -130,6 +130,46 @@ public:
 
 	/** Runs the queued console commands through the first local player, else the engine (UE: TickDeferredCommands). */
 	void TickDeferredCommands();
+
+	/**
+	 * The frame's time (UE: UpdateTimeAndHandleMaxTickRate): the real time since the last frame goes to FApp's delta
+	 * time and to the fixed step clock, which says how many world steps Tick runs (ConsumeFrameSteps) and where the
+	 * render draws between the last two (GetRenderInterpolationAlpha). A headless run that is not a benchmark waits
+	 * here until its next step is due (UE's max tick rate), instead of spinning; `-benchmark` runs one step a frame
+	 * without waiting, and a capture (FApp::IsUnattended) one step a frame.
+	 */
+	virtual void UpdateTimeAndHandleMaxTickRate();
+
+	/**
+	 * The world steps this frame runs: UpdateTimeAndHandleMaxTickRate's, else (a Tick called without it: tests,
+	 * tools) the steps DeltaSeconds holds on the fixed step clock. Tick calls it once a frame.
+	 */
+	int32 ConsumeFrameSteps(float DeltaSeconds);
+	/** Where the frame is drawn between the world's last two steps, [0, 1] (1: the last step). */
+	[[nodiscard]] float GetRenderInterpolationAlpha() const
+	{
+		return RenderInterpolationAlpha;
+	}
+	/** The game's fixed step clock (D4). */
+	[[nodiscard]] const FFixedStepClock& GetFixedStepClock() const
+	{
+		return FixedStepClock;
+	}
+
+	/** The world's step rate (D4: 30 Hz; `[/Script/Engine.Engine] FixedStepsPerSecond`). */
+	UPROPERTY(Config)
+	int32 FixedStepsPerSecond = FFixedStepClock::DefaultStepsPerSecond;
+
+	/** The most world steps a frame runs before the time beyond is dropped (the spiral-of-death guard). */
+	UPROPERTY(Config)
+	int32 MaxStepsPerFrame = FFixedStepClock::DefaultMaxStepsPerFrame;
+
+	/**
+	 * The time ProcessAsyncLoading may take a frame, in milliseconds, after one package at least (UE:
+	 * s.AsyncLoadingTimeLimit); 0 serializes every package whose bytes are in (Docs/PLANS/ps2-shipping.md N24).
+	 */
+	UPROPERTY(Config)
+	float AsyncLoadingTimeLimit = 0.0f;
 
 	/** The engine's console commands, then every FSelfRegisteringExec (UE: UEngine::Exec). */
 	bool Exec(UWorld* InWorld, const TCHAR* Cmd, FOutputDevice& Ar) override;
@@ -163,10 +203,18 @@ public:
 	void TickWorldTravel(FWorldContext& WorldContext, float DeltaSeconds);
 
 	/**
-	 * Collects garbage once gc.TimeBetweenPurgingPendingKillObjects has passed (UE: ConditionalCollectGarbage, with the
-	 * frame time passed in). Tick calls it after the world tick, a safe point (D11). True when it collected.
+	 * The garbage collector's step (UE: ConditionalCollectGarbage, with the step's time passed in): a slice of the
+	 * incremental collection under way, a new one every gc.TimeBetweenPurgingPendingKillObjects seconds, or the full
+	 * collection ForceGarbageCollection asked for (FGarbageCollectionTimer). Tick calls it after each world step, a
+	 * safe point (D11). True when a collection ended.
 	 */
 	bool ConditionalCollectGarbage(float DeltaSeconds);
+
+	/**
+	 * Makes the next ConditionalCollectGarbage a full collection (UE: ForceGarbageCollection): a game asks for one when
+	 * a lot went at once (ShooterGame: a round's start). Leon's collections always purge fully; bFullPurge is UE's.
+	 */
+	void ForceGarbageCollection(bool bFullPurge = false);
 
 	/** The context that holds InWorld, or null (UE: GetWorldContextFromWorld). */
 	[[nodiscard]] virtual FWorldContext* GetWorldContextFromWorld(const UWorld* InWorld);
@@ -205,11 +253,32 @@ public:
 	}
 
 	/**
-	 * The frames-per-second / RAM / triangles overlay (UE: `stat unit`); off unless bShowStatsByDefault. The state is
-	 * FStatsOverlay's, which the platform's own toggle changes too (PS2: L3 + R3).
+	 * The frames-per-second / RAM / triangles overlay (UE: `stat unit`, F4 on the desktop, R3 on the DualShock); off
+	 * unless bShowStatsByDefault.
 	 */
 	void SetHudStatsVisible(bool bVisible);
 	[[nodiscard]] bool IsHudStatsVisible() const;
+
+	/**
+	 * The cycle stats page (UE: `stat cycles`, F7 on the desktop): the frame's scopes (Stats/Stats.h) in the overlay's
+	 * top-left block, refreshed four times a second. The stats collect while it shows.
+	 */
+	void SetCycleStatsVisible(bool bVisible);
+	[[nodiscard]] bool IsCycleStatsVisible() const
+	{
+		return bCycleStatsVisible;
+	}
+
+	/**
+	 * The memory page (UE: `stat memory`, `stat llm`; F8 on the desktop): GMalloc's heap, arena and churn, the frame's
+	 * stack and every memory tag's current, peak and budget (HAL/LowLevelMemTracker.h), in the overlay's top-left block
+	 * instead of the cycles page.
+	 */
+	void SetMemoryStatsVisible(bool bVisible);
+	[[nodiscard]] bool IsMemoryStatsVisible() const
+	{
+		return bMemoryStatsVisible;
+	}
 
 protected:
 	/** The on-screen debug text. */
@@ -217,9 +286,20 @@ protected:
 	FAudioDevice AudioDevice;
 	/** Times the periodic garbage collection (UE: TimeSinceLastPendingKillPurge). */
 	FGarbageCollectionTimer GarbageCollectionTimer;
+	/** The fixed steps (D4) and what UpdateTimeAndHandleMaxTickRate made of the frame. */
+	FFixedStepClock FixedStepClock;
+	int32 NumStepsThisFrame = 0;
+	/** UpdateTimeAndHandleMaxTickRate ran since the last Tick. */
+	bool bFrameTimeUpdated = false;
+	float RenderInterpolationAlpha = 1.0f;
+	/** When the last frame's time was taken (FPlatformTime::Cycles64), 0 before the first. */
+	uint64 LastFrameCycles = 0;
 
 	bool bIsInitialized = false;
 	bool bHeadless = false;
+	bool bHudStatsVisible = false;
+	bool bCycleStatsVisible = false;
+	bool bMemoryStatsVisible = false;
 };
 
 /** The engine (UE: GEngine); FEngineLoop::Init creates it from the Engine config. */

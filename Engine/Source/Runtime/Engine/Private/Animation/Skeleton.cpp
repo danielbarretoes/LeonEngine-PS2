@@ -1,6 +1,7 @@
 #include "Animation/Skeleton.h"
 
 #include "Engine/SkeletalMeshSocket.h"
+#include "HAL/LowLevelMemTracker.h"
 
 USkeletalMeshSocket::USkeletalMeshSocket(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -48,6 +49,7 @@ USkeletalMeshSocket* USkeleton::AddSocket(FName InSocketName, FName InBoneName, 
 
 void USkeleton::Serialize(FArchive& Ar)
 {
+	LLM_SCOPE(ELLMTag::Animation);
 	Super::Serialize(Ar);
 	Ar << ReferenceSkeleton;
 }

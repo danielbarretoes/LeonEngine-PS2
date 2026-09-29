@@ -101,11 +101,28 @@ figures in `GetLastGarbageCollectionStats()`.
 rule: a `UObject*` member is a `UPROPERTY`; a non-UObject holder is an `FGCObject` or uses `TStrongObjectPtr`). The
 engine calls it where UE does: after the world is destroyed (`UEngine::LoadMap` before the new map,
 `UGameEngine::PreExit`, a replaced game instance, a test's `FScopedTestWorld`), after a level (re)load
-(`ApplyLevelDocument`), on `obj gc`, and every frame's `UEngine::ConditionalCollectGarbage` through
-`FGarbageCollectionTimer::Tick` after the world tick; the interval comes from
-`[/Script/Engine.GarbageCollectionSettings] gc.TimeBetweenPurgingPendingKillObjects` in the engine config
-(`FGarbageCollectionSettings::LoadFromConfig`, 61.1 s by default). `AActor::Destroy` marks the actor and its components
-pending kill and the next collection frees them.
+(`ApplyLevelDocument`), on `obj gc`, and after every world step's `UEngine::ConditionalCollectGarbage` through
+`FGarbageCollectionTimer::Tick`: an incremental collection (below) every `gc.TimeBetweenPurgingPendingKillObjects`
+seconds of game (`[/Script/Engine.GarbageCollectionSettings]`, 10 s), `gc.IncrementalObjectsPerStep` objects a step
+(100), or a full collection when `UEngine::ForceGarbageCollection` asked for one (ShooterGame: each round's start).
+`AActor::Destroy` marks the actor and its components pending kill and the next collection frees them.
+
+**Incremental collection** (Leon, [ps2-shipping](../../../../Docs/PLANS/ps2-shipping.md) N18). A full mark of a match's
+thousand objects costs about 5 ms of the EE, too much for one 33 ms frame; UE 5 marks incrementally behind
+`TObjectPtr` write barriers, which Leon's raw `UPROPERTY` pointers cannot give. So the collection checks instead of
+catching the writes: `StartIncrementalGarbageCollection` takes the roots (every other object white, in marks of its
+own: no flag changes, so weak pointers, iterators and finds see every object between the slices), each
+`IncrementalCollectGarbageStep(Budget)` visits that many queued objects (a count, not a time: the collection advances
+the same on every machine, D4) and records every reference slot it read (the value; a copy of a container's header and of
+an object array's elements). When the queue is empty the collection ends at once: the objects made meanwhile and the
+roots are kept and visited, the `FGCObject`s report again, each visited object whose records no longer match its
+memory is visited again (a reference stored into it after its visit is found; the header comes before the elements, so
+a reallocated container is never read), and what the classes' `AddReferencedObjects` report is reported again; then
+the white objects are swept and purged as above. Nothing is freed during a collection, so the records stay valid. An
+object that went pending kill after it was reached lives, and its references are cleared, at the next collection. A
+full `CollectGarbage` replaces a collection under way. `System.CoreUObject.GarbageCollection.IncrementalMatchesFull`,
+`.IncrementalMutations` and `.IncrementalWeakPointers` check it against a full collection on random graphs, with the
+references moved between visited and unvisited objects, new objects and destroys between the slices.
 
 **References.**
 
@@ -214,6 +231,22 @@ A package that is already loaded, or was created in memory and has no file, is r
 is an error (`LOAD_NoWarn`: a log line, `LOAD_Quiet`: nothing). `FLinkerLoad::CreateLinker(nullptr, ...)` reads the
 tables of a package without loading it (imports, soft package references: the cook's dependency walk).
 
+**Asynchronous loading** ([ps2-shipping](../../../../Docs/PLANS/ps2-shipping.md) N24; `Serialization/AsyncLoading.cpp`,
+UE's API). `LoadPackageAsync(Name, FLoadPackageAsyncDelegate, Priority)` asks for a package: its file's bytes are read
+through `IPlatformFile::OpenAsyncRead` (Core's `FAsyncIOSystem`: the PS2's IO thread, Win64's game thread in the
+queue's order), its tables name the packages it imports (`FLinkerLoad::GetImportedPackageNames`), which are asked for
+too; `ProcessAsyncLoading` (each frame, `UGameEngine::Tick`, before the world) serializes a package once its bytes and
+those of every package it imports are in, through `LoadPackage` (the bytes come from the async loader instead of the
+file: the same objects, the same `PostLoad`), and calls the delegates. `FlushAsyncLoading([Id])` waits (UE); a
+`LoadPackage` of a package on its way takes the bytes read for it (each file is read once). `CancelAsyncLoading`,
+`IsAsyncLoading`, `GetNumAsyncPackages`. At most 640 KB of package bytes are read ahead (`MaxBytesInFlight`: the rest
+waits, the imports first), so a preload holds its bytes a few packages at a time (`LoadMapMisc`'s budget on the PS2).
+`UEngine::LoadMap` loads the map itself this way and flushes (N24b: every read of the load goes through the IO
+thread's queue, sorted and coalesced, while the game thread serializes), then flushes again after `BeginPlay`, so what
+a game mode asks for in `InitGame` comes in with the map (ShooterGame's weapons, sounds and animations). Each flush
+logs what it cost (`FlushAsyncLoading: N package(s) serialized in ... ms; ... read(s), ... chunk(s), ... KB, the reads
+... ms; waited ... ms`).
+
 **Versions.** The summary's `FileVersionUE` is an `ELeonPackageVersion` (Core `UObject/ObjectVersion.h`); the linkers
 set `FArchive::UEVer()` from it, so native `Serialize` code checks `Ar.UEVer() >= VER_LEON_<Change>` for data added
 later. Older than `VER_LEON_OLDEST_LOADABLE_PACKAGE` or newer than `VER_LEON_LATEST` fails with an error.
@@ -252,6 +285,8 @@ is not reflected (its layout is `float M[4][4]`, a C array of C arrays).
 
 ## Deviations from UE 4.27
 
+- Asynchronous loading: only the reads are asynchronous; a package is serialized whole on the game thread (no
+  event-driven loader, no async loading thread, no time slicing inside a package), and the delegates run there.
 - Garbage collection: no disregard-for-GC pool (class default objects, native objects and compiled-in packages are
   roots by their flags instead), no clusters, no token stream (the collector walks the class's list of strong
   reference properties), single-threaded, no `UGCObjectReferencer` object (the `FGCObject` list lives in the

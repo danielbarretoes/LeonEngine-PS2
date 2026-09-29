@@ -5,6 +5,8 @@
 #include "Misc/DateTime.h"
 #include "Templates/Function.h"
 
+class IAsyncReadFileHandle;
+
 /** An open file (UE: IFileHandle). Delete it to close the file. */
 class CORE_API IFileHandle
 {
@@ -117,6 +119,13 @@ public:
 
 	virtual IFileHandle* OpenRead(const TCHAR* Filename, bool bAllowWrite = false) = 0;
 	virtual IFileHandle* OpenWrite(const TCHAR* Filename, bool bAppend = false, bool bAllowRead = false) = 0;
+
+	/**
+	 * Opens a file for asynchronous reads (UE: OpenAsyncRead; Docs/PLANS/ps2-shipping.md N24), never null: a file
+	 * that does not exist fails its requests. The generic handle reads through an OpenRead handle of its own on the IO
+	 * thread (FGenericAsyncReadFileHandle); the pak platform file serves its entries from the pak's own handle.
+	 */
+	virtual IAsyncReadFileHandle* OpenAsyncRead(const TCHAR* Filename);
 
 	virtual bool DirectoryExists(const TCHAR* Directory) = 0;
 

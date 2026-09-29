@@ -2,6 +2,8 @@
 
 #include "Camera/PlayerCameraManager.h"
 #include "Components/InputComponent.h"
+#include "Engine/GameViewportClient.h"
+#include "Engine/LocalPlayer.h"
 #include "Engine/Player.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
@@ -10,12 +12,15 @@
 #include "GameFramework/InputSettings.h"
 #include "GameFramework/PlayerInput.h"
 #include "GameFramework/SpectatorPawn.h"
+#include "GenericPlatform/IInputInterface.h"
 
 APlayerController::APlayerController(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 	bWantsPlayerState = true;
 	PlayerCameraManagerClass = APlayerCameraManager::StaticClass();
+	// The player's input is processed in the controller's tick (PlayerTick), before its pawn's.
+	PrimaryActorTick.bCanEverTick = true;
 }
 
 void APlayerController::Possess(ACharacter* Character)
@@ -156,6 +161,81 @@ void APlayerController::PlayerTick(float DeltaTime)
 	{
 		UpdateRotation(DeltaTime);
 	}
+	ProcessForceFeedbackAndHaptics(DeltaTime, false);
+}
+
+void APlayerController::ClientPlayForceFeedback(
+	UForceFeedbackEffect* ForceFeedbackEffect, FForceFeedbackParameters Params)
+{
+	if (ForceFeedbackEffect == nullptr)
+	{
+		return;
+	}
+	// A tagged effect replaces the one playing with its tag (UE).
+	if (Params.Tag != NAME_None)
+	{
+		for (FActiveForceFeedbackEffect& Active : ActiveForceFeedbackEffects)
+		{
+			if (Active.Parameters.Tag == Params.Tag)
+			{
+				Active.ForceFeedbackEffect = ForceFeedbackEffect;
+				Active.Parameters = Params;
+				Active.PlayTime = 0.0f;
+				return;
+			}
+		}
+	}
+	FActiveForceFeedbackEffect& Active = ActiveForceFeedbackEffects.AddDefaulted_GetRef();
+	Active.ForceFeedbackEffect = ForceFeedbackEffect;
+	Active.Parameters = Params;
+}
+
+void APlayerController::ClientStopForceFeedback(UForceFeedbackEffect* ForceFeedbackEffect, FName Tag)
+{
+	// Null and NAME_None stop everything (UE).
+	for (int32 Index = ActiveForceFeedbackEffects.Num() - 1; Index >= 0; --Index)
+	{
+		const FActiveForceFeedbackEffect& Active = ActiveForceFeedbackEffects[Index];
+		if ((ForceFeedbackEffect == nullptr || Active.ForceFeedbackEffect == ForceFeedbackEffect) &&
+			(Tag == NAME_None || Active.Parameters.Tag == Tag))
+		{
+			ActiveForceFeedbackEffects.RemoveAt(Index);
+		}
+	}
+}
+
+void APlayerController::ProcessForceFeedbackAndHaptics(const float DeltaTime, const bool bGamePaused)
+{
+	ForceFeedbackValues = FForceFeedbackValues();
+	for (int32 Index = ActiveForceFeedbackEffects.Num() - 1; Index >= 0; --Index)
+	{
+		FActiveForceFeedbackEffect& Active = ActiveForceFeedbackEffects[Index];
+		if (bGamePaused && !Active.Parameters.bPlayWhilePaused)
+		{
+			continue;
+		}
+		if (!Active.Update(DeltaTime, ForceFeedbackValues))
+		{
+			ActiveForceFeedbackEffects.RemoveAt(Index);
+		}
+	}
+	const float Scale = bForceFeedbackEnabled ? FMath::Clamp(ForceFeedbackScale, 0.0f, 1.0f) : 0.0f;
+	ForceFeedbackValues.LeftLarge *= Scale;
+	ForceFeedbackValues.LeftSmall *= Scale;
+	ForceFeedbackValues.RightLarge *= Scale;
+	ForceFeedbackValues.RightSmall *= Scale;
+	SendForceFeedback(ForceFeedbackValues);
+}
+
+void APlayerController::SendForceFeedback(const FForceFeedbackValues& Values) const
+{
+	// The local player's controller (UE: through Slate's input interface).
+	const ULocalPlayer* LocalPlayer = Cast<ULocalPlayer>(Player);
+	UGameViewportClient* Viewport = LocalPlayer != nullptr ? LocalPlayer->ViewportClient : nullptr;
+	if (IInputInterface* InputInterface = Viewport != nullptr ? Viewport->GetInputInterface() : nullptr)
+	{
+		InputInterface->SetForceFeedbackChannelValues(LocalPlayer->GetControllerId(), Values);
+	}
 }
 
 void APlayerController::TickPlayerInput(const float DeltaSeconds, const bool bGamePaused)
@@ -165,9 +245,12 @@ void APlayerController::TickPlayerInput(const float DeltaSeconds, const bool bGa
 
 void APlayerController::ProcessPlayerInput(const float DeltaTime, const bool bGamePaused)
 {
-	TArray<UInputComponent*> InputStack;
+	// Reused every frame (UE: a static array), so the stack allocates only the first time; one game thread.
+	static TArray<UInputComponent*> InputStack;
+	check(InputStack.Num() == 0);
 	BuildInputStack(InputStack);
 	PlayerInput->ProcessInputStack(InputStack, DeltaTime, bGamePaused);
+	InputStack.Reset();
 }
 
 void APlayerController::BuildInputStack(TArray<UInputComponent*>& InputStack)
@@ -238,6 +321,11 @@ void APlayerController::ClientRestart(APawn* NewPawn)
 	if (NewPawn != nullptr && NewPawn == GetPawn())
 	{
 		NewPawn->PawnClientRestart();
+		// The camera views the new pawn (UE: ClientRestart → SetViewTarget(Pawn)), whoever the player watched before.
+		if (PlayerCameraManager != nullptr)
+		{
+			PlayerCameraManager->SetViewTarget(nullptr);
+		}
 	}
 }
 
@@ -274,16 +362,17 @@ void APlayerController::ChangeState(FName NewState)
 
 void APlayerController::BeginSpectatingState()
 {
-	// The view point before the pawn goes (UE: GetSpawnLocation, the last view): the camera's, else the pawn's eyes.
-	FVector ViewLocation;
-	FRotator ViewRotation;
-	if (PlayerCameraManager == nullptr && GetPawn() != nullptr)
-	{
-		GetPawn()->GetActorEyesViewPoint(ViewLocation, ViewRotation);
-	}
-	else
+	// The view point before the pawn goes (UE: GetSpawnLocation, the last view): the camera's once it has a view, else
+	// the pawn's eyes, else where the controller stands (its start spot: a player spectating from its login on).
+	FVector ViewLocation = GetActorLocation();
+	FRotator ViewRotation = GetControlRotation();
+	if (PlayerCameraManager != nullptr && PlayerCameraManager->HasCameraCache())
 	{
 		GetPlayerViewPoint(ViewLocation, ViewRotation);
+	}
+	else if (GetPawn() != nullptr)
+	{
+		GetPawn()->GetActorEyesViewPoint(ViewLocation, ViewRotation);
 	}
 	if (GetPawn() != nullptr)
 	{
@@ -367,6 +456,10 @@ void APlayerController::FOV(float NewFOV)
 
 void APlayerController::Destroyed()
 {
+	// The motors stop with their player's controller.
+	ActiveForceFeedbackEffects.Reset();
+	ForceFeedbackValues = FForceFeedbackValues();
+	SendForceFeedback(ForceFeedbackValues);
 	// UE: the spectator goes with its controller.
 	DestroySpectatorPawn();
 	if (MyHUD != nullptr)

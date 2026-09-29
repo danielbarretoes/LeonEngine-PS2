@@ -21,4 +21,13 @@ typedef FGenericPlatformMemoryStats FPlatformMemoryStats;
 struct CORE_API FGenericPlatformMemory
 {
 	static FPlatformMemoryStats GetStats();
+
+	/**
+	 * The CPU's on-chip scratchpad RAM of FScratchpad::Size bytes (Leon, Misc/Scratchpad.h), or null when it has none
+	 * (the PC: FScratchpad then uses main RAM).
+	 */
+	static uint8* GetOnChipScratchpad()
+	{
+		return nullptr;
+	}
 };

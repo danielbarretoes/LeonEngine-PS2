@@ -23,7 +23,7 @@ From the repo root:
 Setup.bat
 ```
 
-`Setup.bat` downloads the pinned third-party archives (GLFW, miniaudio, tinyobjloader, Jolt) into
+`Setup.bat` downloads the pinned third-party archives (GLFW, meshoptimizer, miniaudio) into
 `Engine/Intermediate/ThirdPartyDownloads/`, checks their SHA-256 and extracts them next to their module rules. Run it
 again after pulling a change that bumps a library. List of libraries: [LIBRARIES.md](LIBRARIES.md).
 
@@ -49,15 +49,15 @@ Engine\Build\BatchFiles\RunTests.bat
 ```
 
 This builds `LeonAutomationTests` (Win64 Development) and runs it from the repo root. The executable contains the
-tests of every module in its closure (`<Module>/Private/Tests/`), all UE automation tests (386, named
-`System.<Module>.<Area>.<Name>`). Then it runs the LeonHeaderTool golden tests, builds and runs ShooterGame's test
-program (`ShooterGameTests`, 44 tests) and last builds and runs `TestPAL` (130 tests on Win64). The exit code is
+tests of every module in its closure (`<Module>/Private/Tests/`), all UE automation tests (575 at 0.24.0, named
+`System.<Module>.<Area>.<Name>`). Then it runs the LeonHeaderTool golden tests (35 cases), builds and runs ShooterGame's
+test program (`ShooterGameTests`, 99 tests) and last builds and runs `TestPAL` (171 tests on Win64). The exit code is
 non-zero if any test fails. `-automation=<filter>` runs only the tests whose name contains `<filter>` (the engine's and
 ShooterGame's):
 
 ```bat
 Engine\Build\BatchFiles\RunTests.bat -automation=System.Core.Containers
-Engine\Build\BatchFiles\RunTests.bat -automation=System.JoltPhysics
+Engine\Build\BatchFiles\RunTests.bat -automation=System.Engine.PhysScene
 ```
 
 `TestPAL` runs the Core, CoreUObject, Json, Projects and PakFile automation tests on Win64 and PS2, and ends with
@@ -77,7 +77,7 @@ On PS2 see [Run TestPAL in PCSX2](#run-testpal-in-pcsx2).
 (`UEngine::Browse` → `LoadMap`):
 
 ```bat
-Engine\Binaries\Win64\LeonGame.exe [<map>[?game=<class>]] [-map=<map>] [-nullrhi] [-tick=<Hz>] [-showstats]
+Engine\Binaries\Win64\LeonGame.exe [<map>[?game=<class>]] [-map=<map>] [-nullrhi] [-benchmark] [-showstats]
                                    [-AxesGizmo] [-ExecCmds="<command>;<command>"]
                                    [-Screenshot=<file.bmp>] [-ExitAfterFrames=N]
 ```
@@ -90,16 +90,17 @@ relative to the working directory; one outside the mount points mounts the folde
 mode, which otherwise comes from the level (its world settings), then `GlobalDefaultGameMode` (`AGameModeBase`, whose
 default pawn is `ADefaultPawn`). A map that cannot be opened logs `Failed to enter <map>` and exits with code 1.
 
-`-nullrhi` runs headless (no window, silent audio) at `-tick=` Hz (default 60), paced to the clock unless `-benchmark`
-(the steps then run as fast as they can); `-showstats` shows the HUD stats;
+`-nullrhi` runs headless (no window, silent audio); the world steps at 30 Hz (`[/Script/Engine.Engine]
+FixedStepsPerSecond`, [ps2-shipping](PLANS/ps2-shipping.md) D4), paced to the clock unless `-benchmark` (one step a
+frame, as fast as it can); `-showstats` shows the HUD stats;
 `-AxesGizmo` starts with the axes gizmo on; `-ExecCmds=` runs console commands (separated by `;` or `,`) on the first
 frame, for example `-ExecCmds="stat unit;FOV 75"`; `-Screenshot=` saves frame `-ExitAfterFrames=` (default 60) as a
 24-bit BMP and exits, and `-ExitAfterFrames=N` alone exits after frame N (headless too). In PowerShell quote an
 argument that has a dot after `=` (`"-map=D:\Work\Maps\Arena.lmap"`), or PowerShell splits it at the dot.
 
 In the window (`Engine/Config/BaseInput.ini`): mouse look (the cursor is captured), **WASD** or the arrows fly along the
-view, **E** / **Q** up / down; the function keys run console commands: **F1** `show Bounds` (mesh AABBs and the shadow
-volume), **F2** `show Collision` (the characters' capsules and the physics bodies), **F3** `show Navigation` (the
+view, **E** / **Q** up / down; the function keys run console commands: **F1** `show Bounds` (the static meshes' boxes;
+hidden ones, such as blocking volumes, in magenta), **F2** `show Collision` (the characters' capsules and the physics bodies), **F3** `show Navigation` (the
 waypoint graph), **F4** `stat unit` (stats), **F5** `RecompileShaders all`, **F6** `show AxesGizmo` (X red, Y green, Z
 blue). The world is UE's: X forward, Y right, Z up, centimetres. Manual checks: [TESTING.md](TESTING.md). Levels:
 [LEVELS.md](LEVELS.md).
@@ -114,7 +115,7 @@ a single key can be overridden from the command line with `-ini:Engine:[Section]
 ## Import and cook (LeonCook)
 
 ```bat
-Engine\Build\BatchFiles\Cook.bat -run=ImportAssets -source=SourceArt\Crate.fbx -dest=/Game/Props
+Engine\Build\BatchFiles\Cook.bat -run=ImportAssets -source=SourceArt\Crate.glb -dest=/Game/Props
 Engine\Build\BatchFiles\Cook.bat -run=ImportAssets -importlist=Engine/SourceArt/ImportList.ini
 Engine\Build\BatchFiles\Cook.bat -run=ImportAssets -reimport -all
 ```
@@ -126,32 +127,45 @@ reference: [TOOLS.md](TOOLS.md).
 
 ## PS2
 
-The PS2 game is `Game/ThirdPerson`, an isolated project built against the engine with `-Project=`. With Docker
-Desktop running:
+The PS2 game is `Game/ShooterGame`, an isolated project built against the engine with `-Project=` (the same game
+as on Win64). With Docker Desktop running:
 
 ```bat
-Engine\Build\BatchFiles\Build.bat ThirdPerson PS2 Development -Project=%CD%\Game\ThirdPerson\ThirdPerson.lproj
+Engine\Build\BatchFiles\Build.bat ShooterGame PS2 Development -Project=%CD%\Game\ShooterGame\ShooterGame.lproj
 ```
 
-→ `Game\ThirdPerson\Binaries\PS2\ThirdPerson.elf`. The first build pulls the ps2dev image. PS2 builds do not need Visual
-Studio. When `PS2DEV` is not set, LeonBuildTool runs itself inside the container; with a local ps2dev install (`PS2DEV`,
-`PS2SDK`, and `$PS2DEV/ee/bin` on `PATH`) it builds on the host. From Git Bash or WSL use
-`Engine/Build/BatchFiles/Linux/Build.sh` with the same arguments (inside the ps2dev container it builds directly).
+→ `Game\ShooterGame\Binaries\PS2\ShooterGame.elf`. The game reads its content from its pak, so the build PCSX2
+boots is the staged one: `BuildCookRun.bat` builds, cooks for the PS2, stages, paks and runs it in one go (below). The
+first build pulls the ps2dev image. PS2 builds do not need Visual Studio. When `PS2DEV` is not set, LeonBuildTool
+runs itself inside the container; with a local ps2dev install (`PS2DEV`, `PS2SDK`, and `$PS2DEV/ee/bin` on `PATH`)
+it builds on the host. From a Linux shell (WSL) run LeonBuildTool with CMake and the same arguments:
+`cmake -P Engine/Source/Programs/LeonBuildTool/LeonBuildTool.cmake -- ShooterGame PS2 Development -Project=...`.
 Details: [BUILD.md — PS2 builds in Docker](BUILD.md#ps2-builds-in-docker) and the platform extension
 [Engine/Platforms/PS2/README.md](../Engine/Platforms/PS2/README.md).
 
-The engine-only `BlankProgram` also builds for PS2 (`Build.bat BlankProgram PS2 Development` →
-`Engine\Binaries\PS2\BlankProgram.elf`).
+The engine-only programs build for PS2 the same way (`Build.bat <Name> PS2 Development` →
+`Engine\Binaries\PS2\<Name>.elf`): `BlankProgram`, `TestPAL`, and the PS2-only `GSConformance` (the GS conformance
+scenes) and `VU1Conformance` (VU1's microprograms against the C++ emitter). The EE compiles at `-O2`, and the
+`.vsm` microprograms are assembled with the toolchain's `dvp-as` ([BUILD.md](BUILD.md#compile-environment)).
+`BuildCookRun.bat ... -platform=PS2 -stage -pak -iso` also makes the bootable disc image
+`Game\ShooterGame\Saved\StagedBuilds\PS2\ShooterGame.iso` ([TOOLS.md](TOOLS.md#ps2-disc-image)).
 
 ### Run in PCSX2
 
-```powershell
-Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson          # run the built ELF
-Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Project Game\ThirdPerson -Build   # build first
+```bat
+:: build, cook, stage, pak and start ShooterGame -> Game\ShooterGame\Saved\StagedBuilds\PS2\ShooterGame.elf
+Engine\Build\BatchFiles\BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.lproj -platform=PS2 -build -cook -stage -pak -run
 ```
 
-`-Project` accepts a project folder or a `.lproj` file (default `Game\ThirdPerson`); `-Program <Name>` runs an
-engine program instead (`Engine\Binaries\PS2\<Name>.elf`, built with `Build.bat <Name> PS2 <Configuration>`);
+```powershell
+# start the staged ELF again, as it is
+Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -StagedElf Game\ShooterGame\Saved\StagedBuilds\PS2\ShooterGame.elf
+```
+
+`RunPCSX2.ps1 -StagedElf <file.elf>` starts an ELF that is already staged with its content. `-Project` (a project
+folder or a `.lproj` file, default `Game\ShooterGame`) runs `<Project>\Binaries\PS2\<Name>.elf` with the config
+staged beside it (`-Build` builds first; `-NoStage` stages nothing), but not the content, which only the staged build has; `-Program <Name>` runs
+an engine program instead (`Engine\Binaries\PS2\<Name>.elf`, built with `Build.bat <Name> PS2 <Configuration>`);
 `-Configuration` is `Debug`, `Development` (default) or `Shipping`. The script finds PCSX2 through
 `$env:LEON_PCSX2`, then `pcsx2-qt.exe` on `PATH`, then the default install folders, and starts it with
 `-fastboot -elf <file>`. You can also use PCSX2's **File → Run ELF** directly. Dev-loop staging puts config
@@ -165,25 +179,17 @@ next to the ELF under `Binaries\PS2\`; full cook/stage packages use `Saved\Stage
 Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build
 ```
 
-TestPAL runs the Core, CoreUObject, Json, Projects and PakFile automation tests on the EE (113 on PS2: Core 44,
-CoreUObject 61, Json 2, Projects 1, PakFile 5; the platform-file, config-cache, log-file, real-descriptor, file-package
-and SaveConfig tests are desktop-only) and logs to the EE console. With the EE console enabled (see
-[PCSX2 notes](#pcsx2-notes)), read `%USERPROFILE%\Documents\PCSX2\logs\emulog.txt` for the
-`TestPAL: PASSED (113 test(s), 0 failed)` line and the
-`LogTestPAL` reflection / object-array / memory / name-pool lines; their numbers are tracked in
-[Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md).
+TestPAL runs the Core, CoreUObject, Json, Projects and PakFile automation tests on the EE (fewer than on Win64: the
+platform-file, config-cache, log-file, real-descriptor, file-package and SaveConfig tests are desktop-only; 157 at
+[ps2-shipping](PLANS/ps2-shipping.md) N15, the last EE run) and logs to the EE console. With the EE console enabled
+(see [PCSX2 notes](#pcsx2-notes)), read `%USERPROFILE%\Documents\PCSX2\logs\emulog.txt` for the
+`TestPAL: PASSED (N test(s), 0 failed)` line and the `LogTestPAL` reflection / object-array / memory / name-pool
+lines; their numbers are tracked in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md).
+`-Program VU1Conformance -Build` runs VU1's microprograms against the C++ emitter the same way
+(`VU1Conformance: PASSED (84 batch(es), 0 failed)`, [TESTING.md](TESTING.md#automated)).
 
-ThirdPerson controls:
-
-| Input | Action |
-| --- | --- |
-| Left stick | move (camera-relative) |
-| Right stick | orbit the camera |
-| Cross | jump |
-| Start | quit |
-| L3 + R3 (together) | cycle the engine debug overlay: both panels → stats → gamepad → none |
-
-The overlay (FPS, MS, RAM, VRAM, TRIS, OBJ, the EE's work, plus the DualShock widget) is described in the
+ShooterGame's DualShock controls are in its [README](../Game/ShooterGame/README.md#controls). R3 toggles the engine's
+`stat unit` overlay (FPS, MS, RAM, VRAM, TRIS, OBJ; on from the start on the PS2), described in the
 [PS2 platform README](../Engine/Platforms/PS2/README.md#debug-overlay).
 
 ### PCSX2 notes
@@ -192,8 +198,8 @@ The overlay (FPS, MS, RAM, VRAM, TRIS, OBJ, the EE's work, plus the DualShock wi
   profile do not reach games unless that profile is the one in use. An Xbox controller shows up as an SDL device
   (`SDL-0`).
 - **EE console log**: `UE_LOG` output (stdout) and the remaining `printf` diagnostics go to the EE console (for
-  example the `LogThirdPerson` banner, `FPS2RHI::InitDisplay: 640x448, 16-bit dithered color, Z24, double buffered`, `PS2InputInterface: ...`,
-  `FStatsOverlay` visibility changes). Enable the EE console in PCSX2's
+  example `PS2InputInterface: ...`, the engine's `LogInit` / `LogEngine` lines and `-LogFrameTimes`' frame times).
+  Enable the EE console in PCSX2's
   logging settings (`EnableEEConsole = true` under `[Logging]` in `PCSX2.ini`) and read the PCSX2 log window or
   `logs/emulog.txt` in the PCSX2 user folder. Edit `PCSX2.ini` only while PCSX2 is closed; it rewrites the file on exit.
 - **Host filesystem**: a game reads its config and pak from `host:` (the ELF's folder), so enable **Settings >
@@ -223,7 +229,7 @@ clangd (VS Code, Cursor, or any editor) reads the root `compile_commands.json` t
 MSVC `cl.exe` gives it the system headers; tabs of width 4 and a ruler at 120 match the style).
 
 Re-run `GenerateProjectFiles.bat` after adding modules or files, then **Developer: Restart Language Server**.
-The database is Win64 only; PS2-only files (`Engine/Platforms/PS2/`, `Game/ThirdPerson/`) are not in it.
+The database is Win64 only; PS2-only files (`Engine/Platforms/PS2/`) are not in it.
 
 ## Formatting and lint
 
@@ -247,23 +253,28 @@ rules: [CODING_STANDARD.md](CODING_STANDARD.md).
 
 ## Checks before a push
 
-The gates run locally, from `Engine\Build\BatchFiles\` on Win64:
+The repository has no CI: the gates run locally, on Win64, all of them in order with
+`Engine\Build\BatchFiles\RunGates.bat [-PS2] [-Measure]` (`RunGates OK`; each gate's log in `Engine\Saved\Gates\`):
 
 - `Lint.bat`: the format check (G1, `FormatCode.bat --check`), `CheckBannedApis.ps1` (G4) and the Win64 Development
-  build of every engine target and ShooterGame's.
+  build (`/W4`) of every engine target and ShooterGame's.
 - `RunTests.bat`: `LeonAutomationTests`, the LeonHeaderTool golden tests, `ShooterGameTests` and TestPAL, on Win64.
-- `CheckReimport.bat Game\ThirdPerson\ThirdPerson.lproj Game\ShooterGame\ShooterGame.lproj` (G5, on a clean
-  checkout of the content): reimporting the content leaves it unchanged.
+- `CheckReimport.bat` (G5, on a clean checkout of the content): reimporting the content leaves it unchanged
+  (`CheckReimport.bat Game\ShooterGame\ShooterGame.lproj` covers the project's too).
 - `SmokeTest.bat` (G6): ShooterGame headless with `bot_fill`, ten pawns, exit code 0.
-- `BotMatch.bat` (10 rounds, seed 7): the headless bot match, played twice with the same result.
-- `BuildCookRun.bat`: the staged builds ([BUILD.md — Staging and Shipping](BUILD.md#staging-and-shipping)).
-- The root `Package.bat` builds and packages ShooterGame Win64 Shipping into `Game\ShooterGame\Packages\Win64\` and
-  PS2 artifacts into `Game\<Name>\Packages\PS2\` (games) or `Engine\Packages\PS2\<Name>\` (TestPAL, GSConformance);
-  `-NoWin64` / `-NoPS2` skip a platform.
+- `BotMatch.bat 10 7`: the headless bot match, played twice with the same result.
+- `LeonCook -run=ValidateAssets`, for the engine and for ShooterGame.
+- `-PS2`: the root `Package.bat -NoWin64` (G3).
+- `-Measure`: `MeasurePS2.bat`, the PS2 frame in PCSX2 ([TESTING.md](TESTING.md#automated)).
+
+The root `Package.bat` builds and packages ShooterGame Win64 Shipping into `Game\ShooterGame\Packages\Win64\` and the
+PS2 artifacts into `Game\<Name>\Packages\PS2\` (games) or `Engine\Packages\PS2\<Name>\` (TestPAL, GSConformance,
+VU1Conformance); `-NoWin64` / `-NoPS2` skip a platform, `-Only <Name[,Name]>` packages only those.
+`BuildCookRun.bat` makes the staged builds ([BUILD.md — Staging and Shipping](BUILD.md#staging-and-shipping)).
 
 The PS2 ELF sizes (G3) are measured with the toolchain's `mips64r5900el-ps2-elf-size` in the ps2dev image when a phase
-is recorded ([Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md)). TestPAL on PS2 runs in PCSX2
-([Run TestPAL in PCSX2](#run-testpal-in-pcsx2)).
+is recorded ([Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md)). TestPAL and VU1Conformance on PS2 run
+in PCSX2 ([Run TestPAL in PCSX2](#run-testpal-in-pcsx2)).
 
 ## Troubleshooting
 
@@ -272,7 +283,7 @@ is recorded ([Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md)). Te
 | `vcvars64.bat not found` | Install Visual Studio 18 (2026) or 2022 with the C++ workload |
 | `Ninja not on PATH` | `winget install Ninja-build.Ninja` and open a new terminal |
 | `cmake` is not recognized (`Setup.bat`) | Install CMake 3.24+ and add it to `PATH` |
-| `LeonBuildTool: unknown platform` / `configuration must be ...` | Platforms: `Win64`, `PS2` (LeonBuildTool also registers `Linux`, which is not an official platform); configurations: `Debug`, `Development`, `Shipping` |
+| `LeonBuildTool: unknown platform` / `configuration must be ...` | Platforms: `Win64`, `PS2`; configurations: `Debug`, `Development`, `Shipping` |
 | `LeonBuildTool: unknown module 'X' (required by ...)` | A dependency name is misspelled or its `.Build.cmake` is missing |
 | `module 'X' is not available on PS2` | A module used on PS2 depends on a Desktop-only module; move the dependency under a `_Desktop` suffix |
 | `LeonBuildTool: Docker build failed` | Start Docker Desktop; check that `docker run hello-world` works |

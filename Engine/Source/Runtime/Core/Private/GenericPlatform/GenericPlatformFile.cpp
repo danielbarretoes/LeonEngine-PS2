@@ -1,5 +1,6 @@
 #include "GenericPlatform/GenericPlatformFile.h"
 
+#include "Async/AsyncFileHandle.h"
 #include "HAL/PlatformFilemanager.h"
 #include "HAL/UnrealMemory.h"
 #include "Misc/AssertionMacros.h"
@@ -55,6 +56,14 @@ void IPhysicalPlatformFile::SetLowerLevel(IPlatformFile* /*NewLowerLevel*/)
 const TCHAR* IPlatformFile::GetPhysicalTypeName()
 {
 	return "PhysicalFile";
+}
+
+IAsyncReadFileHandle* IPlatformFile::OpenAsyncRead(const TCHAR* Filename)
+{
+	// A handle of its own: the IO thread's seeks never move a handle the game thread reads through.
+	TSharedPtr<IFileHandle> File(OpenRead(Filename));
+	const int64 Size = File ? File->Size() : -1;
+	return new FGenericAsyncReadFileHandle(MoveTemp(File), 0, Size);
 }
 
 bool IPlatformFile::IterateDirectory(const TCHAR* Directory, FDirectoryVisitorFunc Visitor)

@@ -41,7 +41,10 @@ enum class EAnimJumpState : uint8
 	Land,
 };
 
-/** Framework character AnimBP: locomotion UBlendSpace1D + Jump / Fall / Land state machine (rates game-tuned). */
+/**
+ * Framework character AnimBP: the locomotion blend space + a Jump / Fall / Land state machine (rates game-tuned) as the
+ * base pose, under UAnimInstance's slots and aim offset. The active state's clip fires its notifies.
+ */
 UCLASS(Transient)
 class ENGINE_API UCharacterAnimInstance : public UAnimInstance
 {
@@ -90,9 +93,30 @@ public:
 	void NotifyJumped();
 	void SetMovementState(bool bInFalling, float InVelocityZ, bool bInJustLanded);
 
+	/**
+	 * The crouched locomotion (UE AnimBP: a crouch state with its own blend space): while crouched the locomotion
+	 * plays InBlendSpace with the same input instead of the standing one (SetBlendSpace), crossfading over
+	 * CrossfadeDuration when the crouch changes. Null: the standing one always.
+	 */
+	void SetCrouchBlendSpace(const UBlendSpaceBase* InBlendSpace)
+	{
+		CrouchBlendSpace = InBlendSpace;
+	}
+	void SetCrouched(bool bInCrouched)
+	{
+		bCrouched = bInCrouched;
+	}
+	[[nodiscard]] bool IsCrouched() const
+	{
+		return bCrouched;
+	}
+	/** The weight of the crouched locomotion now, 0 standing to 1 crouched. */
+	[[nodiscard]] float GetCrouchAlpha() const
+	{
+		return CrouchAlpha;
+	}
+
 	void NativeUpdateAnimation(float DeltaTime) override;
-	void GetBoneWorldMatrices(TArray<FMatrix>& OutBoneWorld) const override;
-	void GetSkinMatrices(TArray<FMatrix>& OutSkin) const override;
 
 	[[nodiscard]] EAnimJumpState GetJumpState() const
 	{
@@ -103,11 +127,18 @@ public:
 		return CrossfadeAlpha;
 	}
 
+protected:
+	/** The active state's pose, crossfading from the previous state's in local space. */
+	void EvaluateBasePose(TArrayView<FTransform> OutPose) const override;
+
 private:
 	void EnterState(EAnimJumpState Next);
 	void UpdateJumpStateMachine();
-	void SamplePlayerBoneWorld(const FAnimPosePlayer& Player, TArray<FMatrix>& OutBoneWorld) const;
-	void AdvancePlayer(FAnimPosePlayer& Player, float DeltaTime, float PlayRate) const;
+	void SamplePlayerPose(const FAnimPosePlayer& Player, TArrayView<FTransform> OutPose) const;
+	/** The locomotion with the crouch crossfade: the active space's samples and, while fading, the other's. */
+	void SampleCrouchedLocomotionPose(TArrayView<FTransform> OutPose) const;
+	/** Picks the standing or crouched space for the update and eases CrouchAlpha. */
+	void UpdateCrouch(float DeltaTime);
 	[[nodiscard]] float PlayRateForState(EAnimJumpState State) const;
 
 	UPROPERTY(Transient)
@@ -131,6 +162,22 @@ private:
 	float JumpStartPlayRate = 1.0f;
 	float FallLoopPlayRate = 1.0f;
 	float LandPlayRate = 1.0f;
+
+	/** The standing and crouched locomotion spaces (the base class plays one of them), and the other's samples. */
+	UPROPERTY(Transient)
+	const UBlendSpaceBase* StandBlendSpace = nullptr;
+
+	UPROPERTY(Transient)
+	const UBlendSpaceBase* CrouchBlendSpace = nullptr;
+
+	FBlendSampleDataArray FadingSamples;
+	bool bCrouched = false;
+	/** The crouched space is the one playing (bCrouched with a crouch space). */
+	bool bCrouchActive = false;
+	/** The space the last update set: a different one is the owner's new standing space. */
+	const UBlendSpaceBase* AppliedBlendSpace = nullptr;
+	bool bAppliedBlendSpace = false;
+	float CrouchAlpha = 0.0f;
 
 	bool bFalling = false;
 	float VelocityZ = 0.0f;

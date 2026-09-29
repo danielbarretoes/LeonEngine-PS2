@@ -25,9 +25,9 @@ namespace
 
 void FGSClutBuffer::Load(const FGSLocalMemory& Memory, const FGSTex0& Tex0)
 {
+	// CSM1: the CLUT is an image at CBP, in a buffer 64 pixels wide (it never leaves the first page's blocks).
 	const bool bIndex8 = Tex0.PSM == EGSPixelFormat::PSMT8;
 	const uint32 NumEntries = bIndex8 ? 256 : 16;
-	const uint32 Base = uint32(Tex0.CBP) * 64;
 	for (uint32 Index = 0; Index < NumEntries; ++Index)
 	{
 		uint32 X = Index % 8;
@@ -37,8 +37,45 @@ void FGSClutBuffer::Load(const FGSLocalMemory& Memory, const FGSTex0& Tex0)
 			ClutPosition8(Index, X, Y);
 		}
 		// The temporary buffer takes the entries at CSA * 16 (manual 3.4.7).
-		Entries[((uint32(Tex0.CSA) * 16) + Index) % 512] = Memory.ReadPixel(Base, 64, Tex0.CPSM, X, Y);
+		Entries[((uint32(Tex0.CSA) * 16) + Index) % 512] = Memory.ReadPixel(Tex0.CBP, 1, Tex0.CPSM, X, Y);
 	}
+}
+
+bool FGSClutBuffer::Update(const FGSLocalMemory& Memory, const FGSTex0& Tex0)
+{
+	if (Tex0.PSM != EGSPixelFormat::PSMT8 && Tex0.PSM != EGSPixelFormat::PSMT4)
+	{
+		return false;
+	}
+	switch (Tex0.CLD)
+	{
+		case 1:
+			break;
+		case 2:
+			CBP0 = Tex0.CBP;
+			break;
+		case 3:
+			CBP1 = Tex0.CBP;
+			break;
+		case 4:
+			if (CBP0 == Tex0.CBP)
+			{
+				return false;
+			}
+			CBP0 = Tex0.CBP;
+			break;
+		case 5:
+			if (CBP1 == Tex0.CBP)
+			{
+				return false;
+			}
+			CBP1 = Tex0.CBP;
+			break;
+		default:
+			return false;
+	}
+	Load(Memory, Tex0);
+	return true;
 }
 
 FColor FGSTexelDecoder::ExpandColor(uint32 Value, EGSPixelFormat Format, const FGSTexA& TexA)
@@ -72,8 +109,9 @@ int32 FGSTexelDecoder::Wrap(EGSWrapMode Mode, int32 Coordinate, int32 Size, uint
 		case EGSWrapMode::RegionClamp:
 			return FMath::Clamp(Coordinate, int32(Min >> Level), int32(Max >> Level));
 		case EGSWrapMode::RegionRepeat:
-			// MINU / MINV are the masks, MAXU / MAXV the fixed bits.
-			return (Coordinate & int32(Min)) | int32(Max);
+			// MINU / MINV are the masks, MAXU / MAXV the fixed bits, shifted by the level as REGION_CLAMP's range is
+			// (the manual says so only for REGION_CLAMP; PCSX2's software GS shifts both).
+			return (Coordinate & int32(Min >> Level)) | int32(Max >> Level);
 	}
 	return Coordinate;
 }
@@ -81,7 +119,7 @@ int32 FGSTexelDecoder::Wrap(EGSWrapMode Mode, int32 Coordinate, int32 Size, uint
 FColor FGSTexelDecoder::Decode(const FGSLocalMemory& Memory, const FGSTex0& Tex0, uint32 BasePointer,
 	uint32 BufferWidth, const FGSTexA& TexA, const FGSClutBuffer& Clut, uint32 U, uint32 V)
 {
-	const uint32 Raw = Memory.ReadPixel(BasePointer * 64, BufferWidth * 64, Tex0.PSM, U & 0x7ff, V & 0x7ff);
+	const uint32 Raw = Memory.ReadPixel(BasePointer, BufferWidth, Tex0.PSM, U, V);
 	switch (Tex0.PSM)
 	{
 		case EGSPixelFormat::PSMCT32:

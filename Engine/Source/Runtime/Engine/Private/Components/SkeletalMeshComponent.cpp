@@ -1,9 +1,40 @@
 #include "Components/SkeletalMeshComponent.h"
 
 #include "Animation/Skeleton.h"
+#include "AnimationRuntime.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/SkeletalMeshSocket.h"
+#include "Engine/World.h"
+#include "Misc/ConfigCacheIni.h"
 #include "SkeletalMeshSceneProxy.h"
+#include "Stats/Stats.h"
+
+DECLARE_CYCLE_STAT(TEXT("Set Anim Instance"), STAT_SetAnimInstance, STATGROUP_Engine);
+
+DECLARE_CYCLE_STAT(TEXT("Set Skeletal Mesh"), STAT_SetSkeletalMesh, STATGROUP_Engine);
+
+const FAnimUpdateRateSettings& FAnimUpdateRateSettings::Get()
+{
+	static const FAnimUpdateRateSettings Settings = []()
+	{
+		FAnimUpdateRateSettings Loaded;
+		if (GConfig != nullptr)
+		{
+			const TCHAR* Section = TEXT("/Script/Engine.AnimationSettings");
+			(void)GConfig->GetFloat(Section, TEXT("UpdateRateDistanceStep"), Loaded.UpdateRateDistanceStep, GEngineIni);
+			(void)GConfig->GetInt(Section, TEXT("MaxUpdateRate"), Loaded.MaxUpdateRate, GEngineIni);
+		}
+		Loaded.UpdateRateDistanceStep = FMath::Max(Loaded.UpdateRateDistanceStep, 1.0f);
+		Loaded.MaxUpdateRate = FMath::Max(Loaded.MaxUpdateRate, 1);
+		return Loaded;
+	}();
+	return Settings;
+}
+
+int32 FAnimUpdateRateSettings::GetUpdateRate(float Distance) const
+{
+	return FMath::Clamp(1 + FMath::FloorToInt(Distance / UpdateRateDistanceStep), 1, MaxUpdateRate);
+}
 
 USkeletalMeshComponent::USkeletalMeshComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -20,6 +51,7 @@ bool USkeletalMeshComponent::HasValidMesh() const
 
 void USkeletalMeshComponent::SetAnimInstance(UAnimInstance* Instance)
 {
+	SCOPE_CYCLE_COUNTER(STAT_SetAnimInstance);
 	AnimInstance = Instance != nullptr ? Instance : NewObject<UAnimInstance>(this);
 	AnimInstance->SetOwningMeshComponent(this);
 	BindAnimInstanceToMesh();
@@ -28,10 +60,12 @@ void USkeletalMeshComponent::SetAnimInstance(UAnimInstance* Instance)
 void USkeletalMeshComponent::BindAnimInstanceToMesh()
 {
 	AnimInstance->SetSkeleton(HasValidMesh() ? SkeletalMesh->Skeleton : nullptr);
+	bPoseDirty = true;
 }
 
 void USkeletalMeshComponent::SetSkeletalMesh(USkeletalMesh* InMesh)
 {
+	SCOPE_CYCLE_COUNTER(STAT_SetSkeletalMesh);
 	SkeletalMesh = InMesh;
 	BindAnimInstanceToMesh();
 	MarkRenderStateDirty();
@@ -56,48 +90,74 @@ void USkeletalMeshComponent::ApplyFitHeight(float FitHeight)
 	RelativeLocation = RelativeRotation.RotateVector(Grounded) + FVector(0.0f, 0.0f, GroundEpsilon);
 }
 
-bool USkeletalMeshComponent::GetBoneModelMatrix(const FString& InBoneName, FMatrix& OutModel) const
+UMaterialInterface* USkeletalMeshComponent::GetMaterial(int32 ElementIndex) const
 {
-	if (!HasValidMesh() || InBoneName.IsEmpty())
+	if (HasOverrideMaterial(ElementIndex))
 	{
-		return false;
+		return OverrideMaterials[ElementIndex];
 	}
-	const int32 BoneIndex = SkeletalMesh->GetRefSkeleton().FindBoneIndex(FName(*InBoneName));
-	if (BoneIndex < 0)
+	return SkeletalMesh != nullptr ? SkeletalMesh->GetMaterial(ElementIndex) : nullptr;
+}
+
+int32 USkeletalMeshComponent::GetBoneIndex(FName BoneName) const
+{
+	return HasValidMesh() && !BoneName.IsNone() ? SkeletalMesh->GetRefSkeleton().FindBoneIndex(BoneName) : INDEX_NONE;
+}
+
+void USkeletalMeshComponent::RefreshBoneTransformsIfDirty() const
+{
+	if (!bPoseDirty)
 	{
-		return false;
+		return;
 	}
-	AnimInstance->GetBoneWorldMatrices(BoneWorldMatrices);
-	if (BoneWorldMatrices.Num() <= BoneIndex)
+	bPoseDirty = false;
+	if (!HasValidMesh())
 	{
-		return false;
+		LocalPose.Reset();
+		ComponentSpaceTransforms.Reset();
+		return;
 	}
-	OutModel = BoneWorldMatrices[BoneIndex];
-	return true;
+	AnimInstance->EvaluatePose(LocalPose);
+	FAnimationRuntime::FillUpComponentSpaceTransforms(
+		SkeletalMesh->GetRefSkeleton(), LocalPose, ComponentSpaceTransforms);
+	++NumPoseEvaluations;
+}
+
+void USkeletalMeshComponent::RefreshBoneTransforms()
+{
+	bPoseDirty = true;
+	RefreshBoneTransformsIfDirty();
+}
+
+const TArray<FMatrix>& USkeletalMeshComponent::GetComponentSpaceTransforms() const
+{
+	RefreshBoneTransformsIfDirty();
+	return ComponentSpaceTransforms;
+}
+
+FBox USkeletalMeshComponent::GetPoseBounds() const
+{
+	return HasValidMesh() ? SkeletalMesh->GetPoseBounds(GetComponentSpaceTransforms()) : FBox(ForceInit);
 }
 
 FTransform USkeletalMeshComponent::GetSocketTransform(FName InSocketName) const
 {
-	if (InSocketName.IsNone())
+	if (InSocketName.IsNone() || !HasValidMesh())
 	{
 		return GetComponentTransform();
 	}
-	FMatrix BoneModel = FMatrix::Identity;
-	const USkeleton* MeshSkeleton = HasValidMesh() ? SkeletalMesh->Skeleton : nullptr;
-	if (const USkeletalMeshSocket* Socket = MeshSkeleton != nullptr ? MeshSkeleton->FindSocket(InSocketName) : nullptr)
-	{
-		if (GetBoneModelMatrix(Socket->BoneName.ToString(), BoneModel))
-		{
-			return FTransform(Socket->GetSocketLocalTransform().ToMatrixWithScale() * BoneModel *
-				GetComponentTransform().ToMatrixWithScale());
-		}
-		return GetComponentTransform();
-	}
-	if (!GetBoneModelMatrix(InSocketName.ToString(), BoneModel))
+	// A skeleton socket's bone, else a bone of that name; the cached pose's matrix, no sampling here.
+	const USkeleton* MeshSkeleton = SkeletalMesh->Skeleton;
+	const USkeletalMeshSocket* Socket = MeshSkeleton != nullptr ? MeshSkeleton->FindSocket(InSocketName) : nullptr;
+	const int32 BoneIndex = GetBoneIndex(Socket != nullptr ? Socket->BoneName : InSocketName);
+	const TArray<FMatrix>& Pose = GetComponentSpaceTransforms();
+	if (!Pose.IsValidIndex(BoneIndex))
 	{
 		return GetComponentTransform();
 	}
-	return FTransform(BoneModel * GetComponentTransform().ToMatrixWithScale());
+	const FMatrix BoneToWorld = Pose[BoneIndex] * GetComponentTransform().ToMatrixWithScale();
+	return Socket != nullptr ? FTransform(Socket->GetSocketLocalTransform().ToMatrixWithScale() * BoneToWorld)
+							 : FTransform(BoneToWorld);
 }
 
 bool USkeletalMeshComponent::DoesSocketExist(FName InSocketName) const
@@ -108,7 +168,35 @@ bool USkeletalMeshComponent::DoesSocketExist(FName InSocketName) const
 	}
 	const USkeleton* MeshSkeleton = SkeletalMesh->Skeleton;
 	return (MeshSkeleton != nullptr && MeshSkeleton->FindSocket(InSocketName) != nullptr) ||
-		SkeletalMesh->GetRefSkeleton().FindBoneIndex(InSocketName) >= 0;
+		GetBoneIndex(InSocketName) != INDEX_NONE;
+}
+
+bool USkeletalMeshComponent::ShouldRefreshBoneTransforms()
+{
+	UpdateRate = 1;
+	const UWorld* World = GetWorld();
+	if (NumPoseEvaluations == 0 || World == nullptr)
+	{
+		return true;
+	}
+	if (VisibilityBasedAnimTickOption == EVisibilityBasedAnimTickOption::AlwaysTickPose && !WasRecentlyRendered())
+	{
+		UpdateRate = 0;
+		return false;
+	}
+	if (!bEnableUpdateRateOptimizations || World->ViewLocationsRenderedLastFrame.Num() == 0)
+	{
+		return true;
+	}
+	const FVector Location = GetComponentLocation();
+	float NearestSquared = TNumericLimits<float>::Max();
+	for (const FVector& ViewLocation : World->ViewLocationsRenderedLastFrame)
+	{
+		NearestSquared = FMath::Min(NearestSquared, FVector::DistSquared(ViewLocation, Location));
+	}
+	UpdateRate = FAnimUpdateRateSettings::Get().GetUpdateRate(FMath::Sqrt(NearestSquared));
+	// Staggered by the component's id, so that the far meshes spread their evaluations over the frames.
+	return ((UpdateCounter + uint32(GetUniqueID())) % uint32(UpdateRate)) == 0;
 }
 
 void USkeletalMeshComponent::TickComponent(float DeltaTime)
@@ -117,7 +205,12 @@ void USkeletalMeshComponent::TickComponent(float DeltaTime)
 	{
 		return;
 	}
-	AnimInstance->NativeUpdateAnimation(DeltaTime);
+	AnimInstance->UpdateAnimation(DeltaTime);
+	++UpdateCounter;
+	if (ShouldRefreshBoneTransforms())
+	{
+		RefreshBoneTransforms();
+	}
 }
 
 FPrimitiveSceneProxy* USkeletalMeshComponent::CreateSceneProxy()
@@ -131,6 +224,14 @@ void USkeletalMeshComponent::SendRenderDynamicData_Concurrent()
 	{
 		return;
 	}
-	AnimInstance->GetSkinMatrices(SkinMatrices);
-	static_cast<FSkeletalMeshSceneProxy*>(SceneProxy)->SetBoneMatrices(SkinMatrices);
+	const TArray<FMatrix>& Pose = GetComponentSpaceTransforms();
+	// A pose not evaluated again since it was sent (throttled, not drawn) is not sent again.
+	if (SentPoseEvaluation == NumPoseEvaluations && SentProxy == SceneProxy)
+	{
+		return;
+	}
+	SentPoseEvaluation = NumPoseEvaluations;
+	SentProxy = SceneProxy;
+	FAnimationRuntime::GetSkinMatrices(SkeletalMesh->GetRefSkeleton(), Pose, SkinMatrices);
+	static_cast<FSkeletalMeshSceneProxy*>(SceneProxy)->SetDynamicData(SkinMatrices, SkeletalMesh->GetPoseBounds(Pose));
 }

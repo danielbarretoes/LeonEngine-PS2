@@ -46,8 +46,6 @@ bool FEngineContentDefaultsTest::RunTest(const FString& Parameters)
 		FString("/Engine/EngineMaterials/M_Default.M_Default"));
 	TestEqual("DefaultTextureName from the config", Engine.DefaultTextureName.ToString(),
 		FString("/Engine/EngineResources/DefaultTexture.DefaultTexture"));
-	TestEqual("DefaultBumpNormalTextureName from the config", Engine.DefaultBumpNormalTextureName.ToString(),
-		FString("/Engine/EngineMaterials/T_Default_Bump_N.T_Default_Bump_N"));
 	TestTrue("No UI sounds in the engine config",
 		Engine.UIClickSoundName.IsNull() && Engine.UIConfirmSoundName.IsNull() && Engine.UIBackSoundName.IsNull() &&
 			Engine.UIErrorSoundName.IsNull());
@@ -65,9 +63,9 @@ bool FEngineContentDefaultsTest::RunTest(const FString& Parameters)
 	TestTrue("Made once", UMaterial::GetDefaultMaterial(MD_Surface) == DefaultMaterial);
 	TestTrue("LoadObject finds it",
 		LoadObject<UMaterial>(nullptr, *Engine.DefaultMaterialName.ToString()) == DefaultMaterial);
-	// M_Default.lmat: white, 8 shininess, the engine's T_Default_D.
+	// M_Default: white, lit, the engine's T_Default_D.
 	TestTrue("M_Default's base colour", DefaultMaterial->BaseColor.Equals(FLinearColor(1.0f, 1.0f, 1.0f, 1.0f)));
-	TestEqual("M_Default's shininess", DefaultMaterial->Shininess, 8.0f);
+	TestTrue("M_Default is lit", DefaultMaterial->ShadingModel == MSM_DefaultLit);
 	TestTrue("M_Default's map",
 		DefaultMaterial->BaseColorMap != nullptr &&
 			DefaultMaterial->BaseColorMap->GetPathName() == TEXT("/Engine/EngineMaterials/T_Default_D.T_Default_D"));
@@ -77,12 +75,6 @@ bool FEngineContentDefaultsTest::RunTest(const FString& Parameters)
 	{
 		TestEqual("Checker size", Checker->GetSizeX(), 64);
 		TestEqual("Checker is sRGB", static_cast<int32>(Checker->SRGB), 1);
-	}
-	const UTexture2D* Bump = LoadObject<UTexture2D>(nullptr, *Engine.DefaultBumpNormalTextureName.ToString());
-	if (TestNotNull("Bump map", Bump))
-	{
-		TestEqual("Bump size", Bump->GetSizeX(), 256);
-		TestEqual("A normal map is not sRGB", static_cast<int32>(Bump->SRGB), 0);
 	}
 	return true;
 }
@@ -103,10 +95,12 @@ bool FEngineContentBasicShapesTest::RunTest(const FString& Parameters)
 		TestEqual("The shapes have no slots", Cube->GetStaticMaterials().Num(), 0);
 		TestEqual("Plane size (cm)", Plane->GetBoundingBox().Max.Y - Plane->GetBoundingBox().Min.Y, 100.0f, 1.0e-3f);
 		const FMeshData Generated = MakeCube();
-		TestTrue("The generator's vertices",
-			Cube->GetLODResources().Vertices.Num() == Generated.Vertices.Num() &&
-				Cube->GetLODResources().Vertices[5].Position == Generated.Vertices[5].Position &&
-				Cube->GetLODResources().Vertices[5].Tangent == Generated.Vertices[5].Tangent);
+		const FTriMeshCollisionData& Collision = Cube->GetPhysicsTriMeshData();
+		TestTrue("The generator's triangles",
+			Collision.Vertices.Num() == Generated.Vertices.Num() &&
+				Collision.Vertices[5] == Generated.Vertices[5].Position && Collision.Indices == Generated.Indices);
+		// Each face is a strip of four vertices: 24 in LPS2 v2 (Docs/ASSET_FORMATS.md).
+		TestEqual("The cube's strips", Cube->GetLODResources().GetNumVertices(), 24);
 	}
 	const UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
 	if (TestNotNull("Sphere", Sphere))
@@ -122,26 +116,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEngineContentMigratedTest, "System.Engine.Engi
 
 bool FEngineContentMigratedTest::RunTest(const FString& Parameters)
 {
-	// The .lmat materials became M_ packages with the same parameters; the template map's plane shows the one its
-	// level named; T_Default_D keeps its source in Engine/SourceArt, relative to the engine and with its MD5 (a
-	// reimport writes the same bytes, G5).
+	// The .lmat materials became M_ packages; the template map's plane shows the one its level named; T_Default_D keeps
+	// its source in Engine/SourceArt, relative to the engine and with its MD5 (a reimport writes the same bytes, G5).
 	const UMaterial* WorldGrid =
 		LoadObject<UMaterial>(nullptr, TEXT("/Engine/EngineMaterials/M_WorldGrid.M_WorldGrid"));
 	if (TestNotNull("M_WorldGrid", WorldGrid))
 	{
 		TestTrue("UVScale 8", WorldGrid->UVScale == FVector2D(8.0f, 8.0f));
-		TestEqual("Roughness as written", WorldGrid->Roughness, 0.4472135954999579f, 0.0f);
 		TestTrue("Its map",
 			WorldGrid->BaseColorMap != nullptr &&
 				WorldGrid->BaseColorMap->GetPathName() == TEXT("/Engine/EngineMaterials/T_Default_D.T_Default_D"));
-	}
-	const UMaterial* SolidMetal =
-		LoadObject<UMaterial>(nullptr, TEXT("/Engine/EngineMaterials/M_SolidMetal.M_SolidMetal"));
-	if (TestNotNull("M_SolidMetal", SolidMetal))
-	{
-		TestEqual("Metallic", SolidMetal->Metallic, 1.0f);
-		TestEqual("Roughness", SolidMetal->Roughness, 0.35f);
-		TestNull("No map", SolidMetal->BaseColorMap);
 	}
 	UPackage* Starter = LoadPackage(nullptr, TEXT("/Engine/Maps/Template_Default"), LOAD_None);
 	const UWorld* StarterWorld = UWorld::FindWorldInPackage(Starter);

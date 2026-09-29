@@ -35,6 +35,12 @@ set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 set(CMAKE_C_FLAGS_INIT   "-D_EE -G0 -O2 -Wall -ffunction-sections -fdata-sections")
 set(CMAKE_CXX_FLAGS_INIT
     "-D_EE -G0 -O2 -Wall -fno-exceptions -fno-rtti -fno-threadsafe-statics -ffunction-sections -fdata-sections")
+# Development and Shipping map to Release (LeonBuildPS2.cmake). CMake's GNU defaults append -O3 to the Release flags,
+# after the -O2 above, and -O3's unrolling and inlining grow the code for the EE's 16 KB instruction cache: the
+# Release flags are the samples' -O2 (plan ps2-shipping D9). A cache entry forced here, in the toolchain that every
+# configure reads first, so an existing build tree gets it too.
+set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG" CACHE STRING "EE Release C flags" FORCE)
+set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG" CACHE STRING "EE Release C++ flags" FORCE)
 set(CMAKE_EXE_LINKER_FLAGS_INIT
     "-T${PS2SDK}/ee/startup/linkfile -L${PS2SDK}/ee/lib -Wl,-zmax-page-size=128 -Wl,--gc-sections")
 

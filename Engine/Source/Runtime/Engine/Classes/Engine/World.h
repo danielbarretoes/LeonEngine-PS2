@@ -10,6 +10,8 @@
 #include "Physics/PhysScene.h"
 #include "Templates/Casts.h"
 #include "Templates/SubclassOf.h"
+#include "TickTaskManager.h"
+#include "TimerManager.h"
 #include "UObject/Object.h"
 #include "World.generated.h"
 
@@ -17,6 +19,7 @@ class ACharacter;
 class AGameModeBase;
 class AGameStateBase;
 class APlayerController;
+class APointLight;
 class AWorldSettings;
 class FDebugDraw;
 class UAssetImportData;
@@ -157,6 +160,42 @@ public:
 
 	/** The shots' streaks of the moment (Leon; UE uses beam emitters): UGameplayStatics::SpawnTracer. Aged by Tick. */
 	FTracerBatch Tracers;
+
+	/**
+	 * The world's effect sprites (Leon; UE spawns sprite emitters): soft round sprites facing the camera, alpha blended
+	 * (a smoke grenade's puffs), a pool of 32 (UGameplayStatics::SpawnEffectSprite). Aged by Tick.
+	 */
+	FEffectSpritePool EffectSprites;
+
+	/**
+	 * Where the views the renderer drew last frame looked from (UE: ViewLocationsRenderedLastFrame): the skeletal
+	 * meshes' update rate goes by the distance to the nearest (USkeletalMeshComponent::bEnableUpdateRateOptimizations).
+	 * Empty in a world nothing draws.
+	 */
+	TArray<FVector> ViewLocationsRenderedLastFrame;
+
+	/** The most lights the flash light pool keeps (AcquirePooledPointLight). */
+	static constexpr int32 MaxPooledPointLights = 8;
+
+	/**
+	 * A light of the world's flash light pool at Location for LifeSpan seconds (Leon, for
+	 * UGameplayStatics::SpawnPointLightAtLocation: muzzle flashes and explosions; UE games attach a light to their
+	 * emitters): an APointLight whose time is up is taken again, a new one is spawned while the pool has fewer than
+	 * MaxPooledPointLights, else the one that goes out first. Tick hides a light once its time is up, so repeated
+	 * flashes spawn no actor. The caller sets the light's values and shows it. Null while the world is torn down. Each
+	 * light goes out with a timer of the world's timer manager.
+	 */
+	APointLight* AcquirePooledPointLight(const FVector& Location, float LifeSpan);
+
+	/** An actor was spawned (UE: FOnActorSpawned). */
+	using FOnActorSpawned = TMulticastDelegate<void(AActor* /*Actor*/)>;
+
+	/**
+	 * Adds a handler SpawnActor calls with each actor it spawned, once the actor is made (after its BeginPlay, or
+	 * before it while the world ticks) (UE: AddOnActorSpawnedHandler). A map's loaded actors are not spawned.
+	 */
+	FDelegateHandle AddOnActorSpawnedHandler(const FOnActorSpawned::FDelegate& InHandler);
+	void RemoveOnActorSpawnedHandler(FDelegateHandle InHandle);
 
 	/** What InitWorld sets up (UE: UWorld::InitializationValues, the part Leon has). */
 	struct InitializationValues
@@ -324,12 +363,6 @@ public:
 	}
 
 	/**
-	 * Recreates FPhysScene with another backend: the slope planes and the bodies added by hand go, and every registered
-	 * primitive gets its body again (RecreatePhysicsBodies).
-	 */
-	void SetPhysicsBackend(EPhysicsBackend PhysicsBackend);
-
-	/**
 	 * Clears the physics scene and recreates the physics state of every registered primitive component, in actor then
 	 * component order (Leon; UE recreates one component's state at a time): the bodies start again from the components'
 	 * transforms, at rest.
@@ -403,11 +436,26 @@ public:
 	void PostActorConstruction(AActor* Actor);
 
 	/**
-	 * Ticks the actors, then updates the player controllers' camera managers (UE: UWorld::Tick updates the cameras
-	 * last). A character moves in its tick (UCharacterMovementComponent::TickComponent); TickGameplayFrame adds the
-	 * physics step and the pawn separation, and is what the game engine runs.
+	 * One step of the world (UE: UWorld::Tick): the time moves on, the timers run (FTimerManager; Leon runs them first,
+	 * UE after TG_PostPhysics), then the tick groups in order (FTickTaskManager): TG_PrePhysics (the controllers, then
+	 * their pawns: a character moves in its movement component's tick), TG_DuringPhysics and TG_PostPhysics, the player
+	 * controllers' camera managers, TG_PostUpdateWork and the effects' ageing. Actors spawned while a group or the
+	 * timers run join the level when it ends. TickGameplayFrame adds the physics step after TG_PrePhysics, and is what
+	 * the game engine runs.
 	 */
 	void Tick(float InDeltaTime);
+
+	/** The world's tick functions by group (Leon: UE's FTickTaskManager, one per world). */
+	[[nodiscard]] FTickTaskManager& GetTickTaskManager()
+	{
+		return TickTaskManager;
+	}
+
+	/** The world's timers (UE: GetTimerManager), ticked first in each step. */
+	[[nodiscard]] FTimerManager& GetTimerManager() const
+	{
+		return const_cast<FTimerManager&>(TimerManager);
+	}
 
 	/** The delta time of the current or last tick, seconds (UE: GetDeltaSeconds). */
 	[[nodiscard]] float GetDeltaSeconds() const
@@ -415,10 +463,19 @@ public:
 		return DeltaTimeSeconds;
 	}
 
-	/** Seconds of world ticks since the world was created: the sum of the ticks' delta times (UE: GetTimeSeconds). */
+	/**
+	 * Seconds of world ticks since the world was created (UE: GetTimeSeconds): the ticks' delta times summed in the
+	 * timers' integer units (FTimerManager::TimeUnitsPerSecond), so it never drifts and matches the timers' clock.
+	 */
 	[[nodiscard]] float GetTimeSeconds() const
 	{
 		return TimeSeconds;
+	}
+
+	/** The world steps (ticks) run so far: the step the scene's proxies were last updated at. */
+	[[nodiscard]] uint32 GetStepCount() const
+	{
+		return TickTaskManager.GetFrameCounter();
 	}
 
 	/** The gravity when the world settings set none, cm/s^2 (UE: UPhysicsSettings::DefaultGravityZ). */
@@ -431,17 +488,18 @@ public:
 	[[nodiscard]] float GetGravityZ() const;
 
 	/**
-	 * The game's frame (UGameEngine::Tick): Tick (the controllers' input, then the pawns: the characters move, the
-	 * camera managers last) → the pawns separate → FPhysScene::Step → the characters leave the bodies they overlap
-	 * and separate again → the simulated bodies move their components (FPhysScene::SyncComponentsToBodies) → debug
-	 * draws.
+	 * The game's world step (UGameEngine::Tick): Tick with the physics step after TG_PrePhysics (the controllers'
+	 * input, then the pawns: the characters move) → the pawns separate → FPhysScene::Step → the characters leave the
+	 * bodies they overlap and separate again → the simulated bodies move their components
+	 * (FPhysScene::SyncComponentsToBodies) → TG_DuringPhysics, TG_PostPhysics, the timers, the camera managers,
+	 * TG_PostUpdateWork → debug draws.
 	 */
 	void TickGameplayFrame(const FWorldGameplayFrameParams& Params);
 
 	/**
-	 * Sends the renderer what changed since the last frame (UE: SendAllEndOfFrameUpdates): every registered
-	 * component's world transform and per-frame data (a skinned mesh's pose) go to its proxy. The engine calls it
-	 * before drawing the world.
+	 * Sends the renderer what changed (UE: SendAllEndOfFrameUpdates): every registered component's world transform and
+	 * per-frame data (a skinned mesh's pose) go to its proxy. Tick calls it at the end of each step, so the proxies
+	 * hold the last two steps' transforms the render interpolates (FSceneInterface::InterpolateTransforms).
 	 */
 	void SendAllEndOfFrameUpdates();
 
@@ -509,29 +567,55 @@ public:
 		ForEach<AActor>(Forward<TFn>(Fn));
 	}
 
+	/**
+	 * Pairwise character capsule depenetration (the capsules ignore the Pawn channel, so the world separates them):
+	 * three passes of ACharacter::ResolvePawnOverlap over the pairs in actor order, the pairs too far apart to touch
+	 * left out. TickGameplayFrame runs it before and after the physics step.
+	 */
+	void ResolveCharacterOverlaps();
+
 private:
 	friend class AActor;
 
 	AActor* SpawnActorInternal(UClass* Class, const FVector* Location, const FRotator* Rotation,
 		const FTransform* Transform, const FActorSpawnParameters& SpawnParameters);
+	/** Tick and TickGameplayFrame (with Params: the physics step and the debug draws). */
+	void RunTick(float InDeltaTime, const FWorldGameplayFrameParams* Params);
+	/** Runs a tick group; the actors it spawned join the level after it. */
+	void RunTickGroup(ETickingGroup Group, float InDeltaTime);
+	/** TickGameplayFrame's physics: the pawn separation and FPhysScene::Step. */
+	void StepPhysics(const FWorldGameplayFrameParams& Params);
 	void FlushPendingSpawns();
 	/** Removes the null slots destroyed actors left in the level while the world ticked or a ForEach ran. */
 	void CompactActors();
-	/** Pairwise character capsule depenetration (the capsules ignore the Pawn channel, so the world separates them). */
-	void ResolveCharacterOverlaps();
 
 	/** Actors spawned during a tick: they join the level when it ends (UE adds them at once). */
 	UPROPERTY(Transient)
 	TArray<AActor*> PendingSpawnActors;
 
+	/** The flash light pool (AcquirePooledPointLight), and the timer that puts each of its lights out. */
+	UPROPERTY(Transient)
+	TArray<APointLight*> PooledPointLights;
+	TArray<FTimerHandle> PooledPointLightTimers;
+	/** The pool's lights whose timer ran out go out (after the step's timers). */
+	void HideExpiredPooledPointLights();
+
+	FOnActorSpawned OnActorSpawned;
+
 	FPhysScene Physics{};
 	UNavigationSystem Navigation{};
+	FTickTaskManager TickTaskManager;
+	FTimerManager TimerManager;
 	EWorldType::Type WorldType = EWorldType::None;
 	uint64 NextUniqueID = 0;
+	/** The places given to actors joining the level (AActor::GetLevelOrder). */
+	uint64 NextLevelOrder = 0;
 	/** UE: DeltaTimeSeconds. */
 	float DeltaTimeSeconds = 0.0f;
-	/** UE: TimeSeconds. */
+	/** UE: TimeSeconds, read from TimeUnits. */
 	float TimeSeconds = 0.0f;
+	/** The world's time in the timers' units (FTimerManager::TimeUnitsPerSecond). */
+	uint64 TimeUnits = 0;
 	bool bBegunPlay = false;
 	bool bTicking = false;
 	bool bIsTearingDown = false;

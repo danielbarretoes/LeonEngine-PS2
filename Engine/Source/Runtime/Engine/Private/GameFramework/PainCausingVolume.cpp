@@ -4,12 +4,11 @@
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
+#include "TimerManager.h"
 
 APainCausingVolume::APainCausingVolume(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	// AVolume does not tick; the pain ticks do (UE's PainTimer).
-	bCanEverTick = true;
 	bPainCausing = true;
 }
 
@@ -24,20 +23,24 @@ void APainCausingVolume::CausePainTo(AActor* Other)
 	(void)UGameplayStatics::ApplyDamage(Other, Amount, DamageInstigator, this, DamageType);
 }
 
-void APainCausingVolume::Tick(float DeltaSeconds)
+void APainCausingVolume::BeginPlay()
 {
-	Super::Tick(DeltaSeconds);
+	Super::BeginPlay();
+	if (PainInterval > 0.0f)
+	{
+		// The first pain at the next step, then one every PainInterval.
+		GetWorldTimerManager().SetTimer(
+			TimerHandle_PainTimer, this, &APainCausingVolume::PainTimer, PainInterval, true, 0.0f);
+	}
+}
+
+void APainCausingVolume::PainTimer()
+{
 	const UWorld* World = GetWorld();
-	if (!bPainCausing || PainInterval <= 0.0f || World == nullptr || World->PersistentLevel == nullptr)
+	if (!bPainCausing || World == nullptr || World->PersistentLevel == nullptr)
 	{
 		return;
 	}
-	TimeUntilPain -= DeltaSeconds;
-	if (TimeUntilPain > 0.0f)
-	{
-		return;
-	}
-	TimeUntilPain += PainInterval;
 	// A copy: the damage may destroy pawns (the level's array changes).
 	const TArray<AActor*> Actors = World->PersistentLevel->Actors;
 	for (AActor* Actor : Actors)

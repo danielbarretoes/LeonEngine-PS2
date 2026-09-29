@@ -27,6 +27,7 @@ void FTexturePlatformData::Serialize(FArchive& Ar, UTexture* Owner)
 	}
 	for (int32 MipIndex = 0; MipIndex < Mips.Num() && !Ar.IsError(); ++MipIndex)
 	{
+		Mips[MipIndex].BulkData.SetPayloadAlignment(GetPixelFormatDataAlignment(PixelFormat));
 		Mips[MipIndex].Serialize(Ar, Owner, MipIndex);
 	}
 }

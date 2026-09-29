@@ -2,5 +2,5 @@
 leon_module(PS2RHI
 	PLATFORMS PS2
 	PUBLIC_DEPENDENCIES Core RHI GSCore
-	PUBLIC_SYSTEM_LIBRARIES draw math3d packet graph dma kernel
+	PUBLIC_SYSTEM_LIBRARIES draw graph dma kernel
 )

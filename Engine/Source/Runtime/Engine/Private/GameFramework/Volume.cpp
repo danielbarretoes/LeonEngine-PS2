@@ -3,7 +3,6 @@
 AVolume::AVolume(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.DoNotCreateDefaultSubobject(AActor::DefaultSceneRootName))
 {
-	bCanEverTick = false;
 	// Volumes are invisible in game (UE: ABrush volumes are hidden).
 	bHidden = true;
 	BrushComponent = CreateDefaultSubobject<UBoxComponent>(TEXT("BrushComponent0"));

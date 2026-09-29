@@ -1,6 +1,7 @@
 #include "HAL/UnrealMemory.h"
 
-#include "HAL/MallocAnsi.h"
+#include "HAL/MallocBinned.h"
+#include "HAL/PlatformProperties.h"
 
 #include <new>
 
@@ -11,8 +12,8 @@ namespace
 	/** Creates GMalloc on first use. The allocator is never destroyed: statics may free memory during exit. */
 	FORCENOINLINE void CreateGMalloc()
 	{
-		alignas(FMallocAnsi) static uint8 Storage[sizeof(FMallocAnsi)];
-		GMalloc = new (Storage) FMallocAnsi();
+		alignas(FMallocBinned) static uint8 Storage[sizeof(FMallocBinned)];
+		GMalloc = new (Storage) FMallocBinned(FPlatformProperties::SmallBlockArenaSize, true);
 	}
 
 	FORCEINLINE FMalloc& GetGMalloc()

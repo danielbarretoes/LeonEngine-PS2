@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "LPS2Mesh.h"
 #include "Serialization/BulkData.h"
 #include "SkeletalAnimation.h"
 #include "UObject/Object.h"
@@ -9,6 +10,7 @@
 class UAssetImportData;
 class UMaterialInterface;
 class USkeleton;
+struct FMeshData;
 
 /** A material slot of a skeletal mesh (UE: FSkeletalMaterial). */
 USTRUCT()
@@ -31,13 +33,14 @@ struct ENGINE_API FSkeletalMaterial
 };
 
 /**
- * A skinned mesh asset (UE: USkeletalMesh): its skeleton, its material slots, the skinned vertices (bone indices and
- * weights) and indices, and the bounds. The renderer keeps the GPU copy, which it makes the first time it draws the
- * mesh (InitResources drops it when the geometry changes and after a load, BeginDestroy releases it); the bones come
- * from the skeleton asset (Leon keeps no copy of the reference skeleton on the mesh).
+ * A skinned mesh asset (UE: USkeletalMesh): its skeleton, its material slots, its render data and the bounds. The
+ * render data is a skinned LPS2 v2 blob (FLPS2Mesh::IsSkinned: batches of at most 48 vertices, each with a palette of
+ * at most 24 bones, two bones and weights a vertex; Docs/ASSET_FORMATS.md), the same on every platform: the GS scene
+ * renderer's C++ emitter skins it on the EE and the PC until VU1 does. The bones come from the skeleton asset (Leon
+ * keeps no copy of the reference skeleton on the mesh).
  *
- * In a package: the tagged properties, then the bounds and the vertices and indices as bulk data. Leon has one LOD
- * and one section drawn with slot 0, no morph targets, cloth or physics asset.
+ * In a package: the tagged properties, then the bounds, and the render data and each bone's bounds radius as bulk data.
+ * Leon has one LOD, no morph targets, cloth or physics asset.
  */
 UCLASS()
 class ENGINE_API USkeletalMesh : public UObject
@@ -51,7 +54,7 @@ public:
 	UPROPERTY()
 	USkeleton* Skeleton = nullptr;
 
-	/** The material of each slot (UE: Materials). */
+	/** The material of each slot (UE: Materials); a section draws with the slot its render data names. */
 	UPROPERTY()
 	TArray<FSkeletalMaterial> Materials;
 
@@ -63,60 +66,74 @@ public:
 #endif
 
 	/**
-	 * Takes the geometry and the bounds of imported data (Leon; UE builds from its import data), skinned to
-	 * InSkeleton. The skeleton's bones must be those the data's vertices index (the FBX import's RefSkeleton). False
-	 * for empty data.
+	 * Builds the render data from bind-pose geometry (its sections name the material slots) and one FSkinWeightInfo a
+	 * vertex, skinned to InSkeleton, whose bones the weights index (Leon; UE builds from its import data). Needs the
+	 * mesh builder (IMeshBuilderModule: the editor and the tests). Also computes the bounds and each bone's bounds
+	 * radius. False, with an error, for empty data, weights past the skeleton or a build that fails.
 	 */
-	bool BuildFromImportData(const FSkeletalMeshData& Data, USkeleton* InSkeleton);
+	bool BuildFromMeshData(const FMeshData& Mesh, const TArray<FSkinWeightInfo>& SkinWeights, USkeleton* InSkeleton);
 
 	/** True when the mesh has triangles to draw (UE: HasValidRenderData). */
 	[[nodiscard]] bool HasValidRenderData() const
 	{
-		return Indices.Num() > 0 && Vertices.Num() > 0;
+		return RenderData.GetNumTriangles() > 0;
 	}
 	[[nodiscard]] int32 GetNumTriangles() const
 	{
-		return Indices.Num() / 3;
+		return RenderData.GetNumTriangles();
+	}
+
+	/** The skinned LPS2 v2 render data. */
+	[[nodiscard]] const FLPS2Mesh& GetRenderData() const
+	{
+		return RenderData;
 	}
 
 	/** The skeleton's bones, or an empty skeleton without one (UE: GetRefSkeleton). */
 	[[nodiscard]] const FReferenceSkeleton& GetRefSkeleton() const;
 
-	/** The local bounding box (UE: GetImportedBounds().GetBox()). */
+	/** The local bounding box of the bind pose (UE: GetImportedBounds().GetBox()). */
 	[[nodiscard]] const FBox& GetBoundingBox() const
 	{
 		return BoundingBox;
 	}
+
+	/**
+	 * Each bone's bounds radius (Leon): the farthest vertex it moves, from the bone's origin in its bind space (0 for a
+	 * bone that moves none). A pose's bounds are the spheres of these radii around the posed bones (GetPoseBounds).
+	 */
+	[[nodiscard]] const TArray<float>& GetBoneBoundsRadii() const
+	{
+		return BoneBoundsRadii;
+	}
+
+	/**
+	 * The bounds of a pose in the mesh's space: around each posed bone that moves vertices, its radius times the bone's
+	 * largest scale. Every skinned vertex is inside: it is a weighted average of points that are. The bind-pose box
+	 * when the pose has another number of bones.
+	 */
+	[[nodiscard]] FBox GetPoseBounds(const TArray<FMatrix>& ComponentSpaceTransforms) const;
+
 	/** Uniform scale that makes the mesh FitHeight tall (its Z extent, world units). */
 	[[nodiscard]] float FitUniformScale(float FitHeight) const;
 
 	/** The material of a slot, or null (UE: GetMaterial via Materials). */
 	[[nodiscard]] UMaterialInterface* GetMaterial(int32 MaterialIndex) const;
 
-	/** The skinned vertices and the indices the renderer uploads. */
-	[[nodiscard]] const TArray<FSkeletalVertex>& GetVertices() const
-	{
-		return Vertices;
-	}
-	[[nodiscard]] const TArray<uint32>& GetIndices() const
-	{
-		return Indices;
-	}
-
 	/** The geometry changed: the renderer's GPU copy is dropped and made again when drawn (UE: InitResources). */
 	void InitResources();
 	/** Frees the renderer's GPU copy (UE: ReleaseResources). */
 	void ReleaseResources();
 
-	/** The tagged properties, then the bounds and the geometry (bulk data). */
+	/** The tagged properties, then the bounds and the render data (bulk data). */
 	void Serialize(FArchive& Ar) override;
 	void PostLoad() override;
 	void BeginDestroy() override;
 
 private:
-	TArray<FSkeletalVertex> Vertices;
-	TArray<uint32> Indices;
+	FLPS2Mesh RenderData;
+	TArray<float> BoneBoundsRadii;
 	FBox BoundingBox = FBox(FVector::ZeroVector, FVector::ZeroVector);
-	/** The geometry in a package: filled while saving, read back and emptied while loading. */
+	/** The render data in a package: filled while saving, read back and emptied while loading. */
 	FByteBulkData GeometryBulkData;
 };

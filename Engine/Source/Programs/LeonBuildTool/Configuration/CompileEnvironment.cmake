@@ -9,10 +9,10 @@
 #
 # Leon code builds without RTTI and without C++ exceptions on every platform (plan decision D17; UE's defaults,
 # bUseRTTI and bEnableExceptions false): casts go through UObject reflection (Cast<>) and failures through check /
-# ensure. MSVC: /GR- and no /EH flag, with _HAS_EXCEPTIONS=0 so the STL does not throw either. GCC / Clang:
-# -fno-rtti -fno-exceptions (the PS2 toolchain file already passes them to everything). Third-party code keeps its
-# own flags: CMake's MSVC defaults (/EHsc, /GR) are stripped from CMAKE_CXX_FLAGS for the whole tree, and third-party
-# C++ that needs them gets them back with leon_third_party_cxx_defaults (Jolt sets its own: no exceptions, no RTTI).
+# ensure. MSVC: /GR- and no /EH flag, with _HAS_EXCEPTIONS=0 so the STL does not throw either. The PS2's GCC:
+# -fno-rtti -fno-exceptions (its toolchain file passes them to everything). Third-party code keeps its own flags:
+# CMake's MSVC defaults (/EHsc, /GR) are stripped from CMAKE_CXX_FLAGS for the whole tree, and third-party C++ that
+# needs them gets them back with leon_third_party_cxx_defaults.
 
 function(leon_read_build_version)
 	set(File "${LEON_ENGINE_DIR}/Build/Build.version")
@@ -101,16 +101,11 @@ function(leon_apply_compile_environment Target CxxStandard)
 			/wd4577
 			$<$<CONFIG:Debug,RelWithDebInfo>:/FS>)
 		target_compile_definitions(${Target} PRIVATE _HAS_EXCEPTIONS=0)
-	elseif(LEON_PLATFORM STREQUAL "PS2")
-		# Shadowing is an error like on MSVC (UE: ShadowVariableWarningLevel = Error). The EE FPU is single precision:
-		# an implicit float to double promotion goes through soft-float, so it is an error too.
-		target_compile_options(${Target} PRIVATE -Wall -Wextra -Werror=shadow -Werror=double-promotion)
 	else()
-		# A GCC / Clang host (Linux, a development convenience): the PS2's warnings (shadowing is an error, as on MSVC),
-		# no RTTI and no C++ exceptions (D17). No -Wpedantic: UE's checkf / UE_LOG style macros pass an empty
-		# __VA_ARGS__, which C++17 pedantic mode reports on every use.
-		target_compile_options(${Target} PRIVATE -Wall -Wextra -Werror=shadow
-			$<$<COMPILE_LANGUAGE:CXX>:-fno-rtti -fno-exceptions>)
+		# The PS2 (GCC for the EE; its toolchain sets -fno-exceptions -fno-rtti). Shadowing is an error like on MSVC (UE:
+		# ShadowVariableWarningLevel = Error). The EE FPU is single precision: an implicit float to double promotion goes
+		# through soft-float, so it is an error too.
+		target_compile_options(${Target} PRIVATE -Wall -Wextra -Werror=shadow -Werror=double-promotion)
 	endif()
 endfunction()
 

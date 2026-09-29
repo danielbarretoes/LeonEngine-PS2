@@ -1,7 +1,9 @@
 #include "GameFramework/Character.h"
 
+#include "Animation/AnimMontage.h"
 #include "Animation/CharacterAnimInstance.h"
 #include "Engine/World.h"
+#include "Misc/MemStack.h"
 
 namespace
 {
@@ -32,6 +34,8 @@ const FName ACharacter::MeshComponentName(TEXT("CharacterMesh0"));
 ACharacter::ACharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.DoNotCreateDefaultSubobject(AActor::DefaultSceneRootName))
 {
+	// The character's tick feeds its animation (Tick); its movement component ticks before it.
+	PrimaryActorTick.bCanEverTick = true;
 	// The capsule is the root: its relative transform is the actor's (the feet, see the class comment).
 	CapsuleComponent = CreateDefaultSubobject<UCapsuleComponent>(CapsuleComponentName);
 	CapsuleComponent->InitCapsuleSize(35.0f, 92.5f);
@@ -43,6 +47,8 @@ ACharacter::ACharacter(const FObjectInitializer& ObjectInitializer)
 	CapsuleComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
 	CapsuleComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	CapsuleComponent->SetCanEverAffectNavigation(false);
+	// The capsule moves (UE: a movable root): its body goes to the physics broadphase's moving bodies.
+	CapsuleComponent->SetMobility(EComponentMobility::Movable);
 	RootComponent = CapsuleComponent;
 
 	CharacterMovement = CreateDefaultSubobject<UCharacterMovementComponent>(CharacterMovementComponentName);
@@ -50,8 +56,6 @@ ACharacter::ACharacter(const FObjectInitializer& ObjectInitializer)
 
 	Mesh = CreateDefaultSubobject<USkeletalMeshComponent>(MeshComponentName);
 	Mesh->SetupAttachment(GetRootComponent());
-	// Legacy content faces +Y (UE: the mannequin mesh's relative yaw of -90).
-	Mesh->RelativeRotation = FRotator(0.0f, LegacyContentYaw, 0.0f);
 
 	bIsCrouched = false;
 }
@@ -133,13 +137,15 @@ void ACharacter::ApplyReplicatedState(
 	bYawInitialized = true;
 }
 
-void ACharacter::SetMovementMode(EMovementMode NewMode)
+void ACharacter::SetMovementMode(EMovementMode NewMode, uint8 NewCustomMode)
 {
 	if (NewMode == EMovementMode::None)
 	{
 		NewMode = EMovementMode::Walking;
 	}
 	MovementMode = NewMode;
+	// UE: the custom mode only means something while Custom.
+	CustomMovementMode = NewMode == EMovementMode::Custom ? NewCustomMode : 0;
 }
 
 void ACharacter::AddMovementInput(const FVector& WishDirXY)
@@ -163,6 +169,14 @@ bool ACharacter::ConsumeJustLanded()
 void ACharacter::Jump()
 {
 	bJumpRequested = true;
+}
+
+void ACharacter::Landed(const FHitResult& /*Hit*/)
+{
+}
+
+void ACharacter::OnJumped()
+{
 }
 
 bool ACharacter::IsWalkable(const FHitResult& Hit) const
@@ -249,6 +263,20 @@ bool ACharacter::BlocksHorizontalMove(const FHitResult& Hit) const
 	return true;
 }
 
+bool ACharacter::IsFloorEdgeHit(const FPhysScene& PhysScene, const FHitResult& Hit, float FeetZ) const
+{
+	if (!PhysScene.GetBodies().IsValidIndex(Hit.BodyIndex))
+	{
+		return false;
+	}
+	const FBodyInstance& Body = PhysScene.GetBodies()[Hit.BodyIndex];
+	if (Body.CollisionShape != EBodyCollisionShape::Box)
+	{
+		return false;
+	}
+	return Body.Position.Z + Body.HalfExtents.Z <= FeetZ + CharacterMovement->Skin;
+}
+
 FVector ACharacter::ComputeSlideVector(const FVector& Delta, const FVector& ImpactNormal)
 {
 	FVector N = FVector(ImpactNormal.X, ImpactNormal.Y, 0.0f);
@@ -283,14 +311,16 @@ bool ACharacter::SafeMoveUpdatedComponent(
 	Query.bTraceFloorPlane = false;
 	Query.DrawDebugType = DebugDraw != nullptr ? EDrawDebugTrace::ForOneFrame : EDrawDebugTrace::None;
 
-	TArray<FHitResult> Hits;
+	// The hits on the frame's stack.
+	FMemMark Mark(FMemStack::Get());
+	TArray<FHitResult, TMemStackAllocator<>> Hits;
 	(void)PhysScene.CapsuleTraceMultiByChannel(Hits, StartCenter, EndCenter, GetCapsule().GetCapsuleRadius(), HalfH,
 		GetMovementTraceChannel(), Query, DebugDraw, Response);
 
 	const FHitResult* Block = nullptr;
 	for (const FHitResult& Hit : Hits)
 	{
-		if (BlocksHorizontalMove(Hit))
+		if (BlocksHorizontalMove(Hit) && !IsFloorEdgeHit(PhysScene, Hit, Feet.Z))
 		{
 			Block = &Hit;
 			break;
@@ -372,7 +402,8 @@ bool ACharacter::TryStepUp(FPhysScene& PhysScene, const FVector& ForwardDelta, F
 	// 1) Raise by MaxStepHeight; only a true ceiling (downward normal) aborts.
 	const FVector UpStart = CapsuleCenterFromFeet(Feet);
 	const FVector UpEnd = UpStart + FVector(0.0f, 0.0f, CharacterMovement->MaxStepHeight);
-	TArray<FHitResult> UpHits;
+	FMemMark Mark(FMemStack::Get());
+	TArray<FHitResult, TMemStackAllocator<>> UpHits;
 	(void)PhysScene.CapsuleTraceMultiByChannel(UpHits, UpStart, UpEnd, GetCapsule().GetCapsuleRadius(), HalfH,
 		GetMovementTraceChannel(), Query, DebugDraw, Response);
 	for (const FHitResult& UpHit : UpHits)
@@ -581,6 +612,7 @@ void ACharacter::IntegrateVertical(FPhysScene& PhysScene, float DeltaTime, FDebu
 			{
 				CharacterAnim->NotifyJumped();
 			}
+			OnJumped();
 		}
 	}
 	bJumpRequested = false;
@@ -618,13 +650,15 @@ void ACharacter::IntegrateVertical(FPhysScene& PhysScene, float DeltaTime, FDebu
 		if (CurrentFloor.bWalkableFloor)
 		{
 			MutableLocation().Z = SurfaceZ;
-			VelocityZ = 0.0f;
 			SetMovementMode(EMovementMode::Walking);
 			JumpsRemaining = FMath::Max(0, CharacterMovement->MaxJumpCount - 1);
 			if (!bWasGrounded)
 			{
 				bJustLanded = true;
+				// UE: Landed sees the speed the fall hit the floor at.
+				Landed(CurrentFloor.Hit);
 			}
+			VelocityZ = 0.0f;
 		}
 		else
 		{
@@ -648,14 +682,40 @@ void ACharacter::IntegrateVertical(FPhysScene& PhysScene, float DeltaTime, FDebu
 
 void ACharacter::PerformMovement(FPhysScene& PhysScene, float DeltaTime, FDebugDraw* DebugDraw)
 {
-	// UE: crouch or stand up as asked before moving.
+	// UE: crouch or stand up as asked before moving (a game's modes may start or end here too).
 	CharacterMovement->UpdateCharacterStateBeforeMovement(PhysScene);
-	MoveHorizontal(PhysScene, DeltaTime, DebugDraw);
-	IntegrateVertical(PhysScene, DeltaTime, DebugDraw);
+	if (MovementMode == EMovementMode::Custom)
+	{
+		PerformCustomMovement(PhysScene, DeltaTime);
+	}
+	else
+	{
+		MoveHorizontal(PhysScene, DeltaTime, DebugDraw);
+		IntegrateVertical(PhysScene, DeltaTime, DebugDraw);
+	}
 	ResolveSides(PhysScene, false);
 	if (!CharacterMovement->bInstantVelocity)
 	{
 		CharacterMovement->Velocity.Z = VelocityZ;
+	}
+}
+
+void ACharacter::PerformCustomMovement(FPhysScene& PhysScene, float DeltaTime)
+{
+	UCharacterMovementComponent& Move = *CharacterMovement;
+	// UE: the input is the acceleration of every mode; the game's mode reads it (GetCurrentAcceleration).
+	const FVector Input = FVector(WishDir.X, WishDir.Y, 0.0f).GetClampedToMaxSize(1.0f);
+	Move.Acceleration = Input * Move.MaxAcceleration;
+	Move.AnalogInputModifier = FMath::Clamp(Input.Size(), 0.0f, 1.0f);
+	// A jump asked for in this mode is the mode's to handle (ACharacter::Jump's override).
+	bJumpRequested = false;
+	Move.Velocity.Z = VelocityZ;
+	Move.PhysCustom(PhysScene, DeltaTime);
+	VelocityZ = Move.Velocity.Z;
+	if (Move.bInstantVelocity)
+	{
+		// The lite model keeps no velocity of its own between moves.
+		Move.Velocity = FVector::ZeroVector;
 	}
 }
 
@@ -756,4 +816,29 @@ void ACharacter::Tick(float DeltaTime)
 		(void)ConsumeJustLanded();
 	}
 	Mesh->TickComponent(DeltaTime);
+}
+
+float ACharacter::PlayAnimMontage(UAnimMontage* AnimMontage, float InPlayRate, FName StartSectionName)
+{
+	UAnimInstance& AnimInstance = Mesh->GetAnimInstance();
+	const float Duration = AnimInstance.Montage_Play(AnimMontage, InPlayRate);
+	if (Duration <= 0.0f)
+	{
+		return 0.0f;
+	}
+	if (!StartSectionName.IsNone())
+	{
+		AnimInstance.Montage_JumpToSection(StartSectionName, AnimMontage);
+	}
+	return Duration / InPlayRate;
+}
+
+void ACharacter::StopAnimMontage(UAnimMontage* AnimMontage)
+{
+	UAnimInstance& AnimInstance = Mesh->GetAnimInstance();
+	const UAnimMontage* Montage = AnimMontage != nullptr ? AnimMontage : AnimInstance.GetCurrentActiveMontage();
+	if (Montage != nullptr && AnimInstance.Montage_IsPlaying(Montage))
+	{
+		AnimInstance.Montage_Stop(Montage->BlendOutTime, Montage);
+	}
 }

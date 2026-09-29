@@ -6,7 +6,8 @@
 
 /**
  * The game state of an AGameMode (UE: AGameState): the match state the mode sets, and the seconds elapsed while it is
- * in progress. Entering InProgress / WaitingPostMatch starts / ends the match clock of AGameStateBase.
+ * in progress (ElapsedTime, counted by UE's one-second DefaultTimer). Entering InProgress / WaitingPostMatch starts /
+ * ends the match clock of AGameStateBase.
  */
 UCLASS()
 class ENGINE_API AGameState : public AGameStateBase
@@ -40,7 +41,8 @@ public:
 	UPROPERTY()
 	int32 ElapsedTime = 0;
 
-	void Tick(float DeltaTime) override;
+	/** Counts a second of the match in progress (UE: DefaultTimer, a looping one-second timer). */
+	virtual void DefaultTimer();
 
 protected:
 	/** Reacts to a new state (UE: OnRep_MatchState; called directly, Leon does not replicate). */
@@ -55,6 +57,6 @@ protected:
 	FName PreviousMatchState;
 
 private:
-	/** Fraction of a second carried between ticks for ElapsedTime. */
-	float ElapsedRemainder = 0.0f;
+	/** UE: TimerHandle_DefaultTimer. */
+	FTimerHandle TimerHandle_DefaultTimer;
 };

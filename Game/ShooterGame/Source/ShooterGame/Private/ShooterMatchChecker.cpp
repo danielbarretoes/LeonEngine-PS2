@@ -1,7 +1,6 @@
 #include "ShooterMatchChecker.h"
 
 #include "AI/Navigation/NavigationSystem.h"
-#include "Engine/Level.h"
 #include "Engine/World.h"
 #include "ShooterCharacter.h"
 #include "ShooterGameMode.h"
@@ -42,6 +41,63 @@ void FShooterMatchChecker::CheckRoundEnd(int32 RoundNumber, EShooterRoundEndReas
 	LastScoreT = ScoreT;
 }
 
+void FShooterMatchChecker::CheckHalftime(
+	const AShooterGameMode& GameMode, int32 RoundNumber, int32 ScoreCT, int32 ScoreT)
+{
+	++NumHalftimes;
+	// The swap comes between the halftime round's end and the next round's start (the new round is under way now).
+	const int32 HalftimeRound = GameMode.GetHalftimeRound();
+	if (HalftimeRound == 0 || RoundNumber != HalftimeRound + 1)
+	{
+		AddViolation(FString::Printf(
+			TEXT("round %d: the teams switched sides, the halftime is after round %d"), RoundNumber, HalftimeRound));
+	}
+	// The scores follow the teams: each side has the other's rounds.
+	if (ScoreCT != LastScoreT || ScoreT != LastScoreCT)
+	{
+		AddViolation(
+			FString::Printf(TEXT("round %d: after the halftime the score is CT %d - T %d, expected CT %d - T %d"),
+				RoundNumber, ScoreCT, ScoreT, LastScoreT, LastScoreCT));
+	}
+	LastScoreCT = ScoreCT;
+	LastScoreT = ScoreT;
+	for (const APlayerState* PlayerState : GameMode.GetGameState().GetPlayerArray())
+	{
+		const AShooterPlayerState* ShooterState = Cast<AShooterPlayerState>(PlayerState);
+		const int32 Index = RecordedStates.IndexOfByKey(ShooterState);
+		if (ShooterState == nullptr || Index == INDEX_NONE)
+		{
+			continue; // joined since the last tick
+		}
+		const EShooterTeam Before = RecordedTeams[Index];
+		if (Before != EShooterTeam::None && ShooterState->GetTeam() != GetOpposingTeam(Before))
+		{
+			AddViolation(FString::Printf(TEXT("round %d: %s stayed on %s at the halftime"), RoundNumber,
+				*ShooterState->GetPlayerName(), GetShooterTeamName(ShooterState->GetTeam())));
+		}
+		// The money starts over (buying in the new freeze only lowers it).
+		if (Before != EShooterTeam::None && ShooterState->GetMoney() > GameMode.StartMoney)
+		{
+			AddViolation(FString::Printf(TEXT("round %d: %s kept $%d over the halftime (start money $%d)"), RoundNumber,
+				*ShooterState->GetPlayerName(), ShooterState->GetMoney(), GameMode.StartMoney));
+		}
+	}
+}
+
+void FShooterMatchChecker::RecordTeams(const AShooterGameMode& GameMode)
+{
+	RecordedStates.Reset();
+	RecordedTeams.Reset();
+	for (const APlayerState* PlayerState : GameMode.GetGameState().GetPlayerArray())
+	{
+		if (const AShooterPlayerState* ShooterState = Cast<AShooterPlayerState>(PlayerState))
+		{
+			RecordedStates.Add(ShooterState);
+			RecordedTeams.Add(ShooterState->GetTeam());
+		}
+	}
+}
+
 void FShooterMatchChecker::Tick(const AShooterGameMode& GameMode)
 {
 	const AShooterGameState* State = GameMode.GetShooterGameState();
@@ -60,6 +116,23 @@ void FShooterMatchChecker::Tick(const AShooterGameMode& GameMode)
 		DecidedRounds = 0;
 	}
 
+	if (State->GetHalftimeSerial() != LastHalftimeSerial)
+	{
+		// The first tick only learns the serial (a checker may start in the second half).
+		if (LastHalftimeSerial >= 0)
+		{
+			CheckHalftime(
+				GameMode, RoundNumber, State->GetTeamScore(EShooterTeam::CT), State->GetTeamScore(EShooterTeam::T));
+		}
+		LastHalftimeSerial = State->GetHalftimeSerial();
+	}
+	const int32 HalftimeRound = GameMode.GetHalftimeRound();
+	if (HalftimeRound > 0 && RoundNumber > HalftimeRound && !State->IsSecondHalf())
+	{
+		AddViolation(FString::Printf(
+			TEXT("round %d: the teams did not switch sides after round %d"), RoundNumber, HalftimeRound));
+	}
+
 	const EShooterRoundState RoundState = State->GetRoundState();
 	if ((RoundState == EShooterRoundState::RoundEnd || RoundState == EShooterRoundState::MatchEnd) &&
 		State->GetRoundSerial() != LastEndedRoundSerial)
@@ -68,6 +141,7 @@ void FShooterMatchChecker::Tick(const AShooterGameMode& GameMode)
 		CheckRoundEnd(RoundNumber, State->GetLastRoundEndReason(), State->GetTeamScore(EShooterTeam::CT),
 			State->GetTeamScore(EShooterTeam::T));
 	}
+	RecordTeams(GameMode);
 
 	for (const APlayerState* PlayerState : GameMode.GetGameState().GetPlayerArray())
 	{
@@ -93,14 +167,10 @@ void FShooterMatchChecker::Tick(const AShooterGameMode& GameMode)
 	{
 		LowestFloor = FMath::Min(LowestFloor, Node.Location.Z);
 	}
-	if (World->PersistentLevel == nullptr)
+	// The game mode's pawns (its registry), not the level's actors: this runs every frame of a bot match.
+	for (const AShooterCharacter* Pawn : GameMode.GetPawns())
 	{
-		return;
-	}
-	for (const AActor* Actor : World->PersistentLevel->Actors)
-	{
-		const AShooterCharacter* Pawn = Cast<AShooterCharacter>(Actor);
-		if (Pawn == nullptr || Pawn->IsPendingKillPending() || !Pawn->IsAlive())
+		if (Pawn->IsPendingKillPending() || !Pawn->IsAlive())
 		{
 			continue;
 		}

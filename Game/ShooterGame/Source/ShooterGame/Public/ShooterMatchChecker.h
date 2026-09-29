@@ -4,6 +4,7 @@
 #include "ShooterTypes.h"
 
 class AShooterGameMode;
+class AShooterPlayerState;
 
 /**
  * Watches a match and checks the invariants a round keeps (plan P21: the headless bot match, `-botmatch`, and the
@@ -15,6 +16,9 @@ class AShooterGameMode;
  * - A live pawn has health within (0, its max] and its feet no lower than the navigation's lowest floor less
  *   FloorTolerance (nobody falls through the map).
  * - A new match (mp_restartgame; AShooterGameState's match serial) starts the score over.
+ * - The halftime (AShooterGameState's halftime serial) comes after the game mode's halftime round, and there: every
+ *   player of a team is on the other one, the scores swapped sides with them, and nobody has more than StartMoney.
+ *   A round played past the halftime round without it is a violation too (the swap must happen).
  *
  * A broken invariant is kept as a line (GetViolations), once per kind and round.
  */
@@ -45,10 +49,19 @@ public:
 	{
 		return Violations.Num() > 0;
 	}
+	/** How many halftimes the checker saw (each checked). */
+	[[nodiscard]] int32 GetNumHalftimes() const
+	{
+		return NumHalftimes;
+	}
 
 private:
 	void AddViolation(const FString& Violation);
 	void CheckRoundEnd(int32 RoundNumber, EShooterRoundEndReason Reason, int32 ScoreCT, int32 ScoreT);
+	/** The teams just switched sides: checks the swap against the teams and scores seen before it. */
+	void CheckHalftime(const AShooterGameMode& GameMode, int32 RoundNumber, int32 ScoreCT, int32 ScoreT);
+	/** Keeps every player's team (the next halftime is checked against them); no allocation once grown. */
+	void RecordTeams(const AShooterGameMode& GameMode);
 
 	TArray<EShooterRoundEndReason> Reasons;
 	TArray<FString> Violations;
@@ -58,4 +71,9 @@ private:
 	int32 LastScoreCT = 0;
 	int32 LastScoreT = 0;
 	int32 DecidedRounds = 0;
+	/** The halftime serial observed (-1: none yet), how many were seen, and the players' teams of the last tick. */
+	int32 LastHalftimeSerial = -1;
+	int32 NumHalftimes = 0;
+	TArray<const AShooterPlayerState*> RecordedStates;
+	TArray<EShooterTeam> RecordedTeams;
 };

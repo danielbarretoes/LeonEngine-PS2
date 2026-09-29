@@ -22,6 +22,30 @@ struct FMallocUsage
 
 	/** Live allocations. */
 	uint64 NumAllocations = 0;
+
+	/** Allocations made since start-up: every Malloc, and every Realloc that moved its block (per frame: heap churn).
+	 */
+	uint64 TotalAllocations = 0;
+
+	/** The small-block arena: its size, the bytes of its pages in use now and at most (0 without one). */
+	uint64 ArenaBytes = 0;
+	uint64 ArenaUsedBytes = 0;
+	uint64 ArenaPeakBytes = 0;
+
+	/** Small blocks that found the arena full and went to the system heap. */
+	uint64 ArenaOverflows = 0;
+};
+
+/** One size class of a small-block allocator (Leon; UE: FMallocBinned's pool table stats). */
+struct FMallocSizeClassStats
+{
+	/** The block size in bytes. */
+	uint32 BlockSize = 0;
+	/** Blocks in use now and at most. */
+	uint32 CurrentBlocks = 0;
+	uint32 PeakBlocks = 0;
+	/** Pages the class holds now. */
+	uint32 NumPages = 0;
 };
 
 /** Allocator interface behind FMemory (UE: FMalloc). */
@@ -49,6 +73,12 @@ public:
 	virtual FMallocUsage GetUsage() const
 	{
 		return {};
+	}
+
+	/** Fills up to MaxClasses entries of OutClasses with the size classes; returns how many there are (Leon). */
+	virtual int32 GetSizeClassStats(FMallocSizeClassStats* /*OutClasses*/, int32 /*MaxClasses*/) const
+	{
+		return 0;
 	}
 
 	virtual const TCHAR* GetDescriptiveName()

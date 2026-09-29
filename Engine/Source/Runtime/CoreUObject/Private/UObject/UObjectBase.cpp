@@ -1,5 +1,6 @@
 #include "UObject/UObjectBase.h"
 
+#include "HAL/LowLevelMemTracker.h"
 #include "HAL/PlatformProperties.h"
 #include "Misc/CommandLine.h"
 #include "Misc/ConfigCacheIni.h"
@@ -247,6 +248,7 @@ void UObjectBaseInit()
 	{
 		return;
 	}
+	LLM_SCOPE(ELLMTag::UObject);
 	GUObjectArray.AllocateObjectPool(GetMaxObjectsInGame());
 	GObjectSystemInitialized = true;
 	// The intrinsic classes and the first packages count as reflection data too (the object array does not).
@@ -294,6 +296,7 @@ void ProcessNewlyLoadedUObjects(const TCHAR* ModuleName, bool bCanProcessNewlyLo
 		return;
 	}
 	bProcessing = true;
+	LLM_SCOPE(ELLMTag::UObject);
 	const SIZE_T HeapBefore = FMemory::GetUsage().CurrentBytes;
 
 	int32 NumClasses = 0;
@@ -375,6 +378,7 @@ void GetPrivateStaticClassBody(const TCHAR* PackageName, const TCHAR* Name, UCla
 	UObject* (*InClassVTableHelperCtorCaller)(FVTableHelper&),
 	void (*InClassAddReferencedObjects)(UObject*, FReferenceCollector&), UClass* (*InSuperClassFn)())
 {
+	LLM_SCOPE(ELLMTag::UObject);
 	// ReturnClass is set before anything else runs: building the super class or registering may need this class.
 	void* Memory = FMemory::Malloc(sizeof(UClass), alignof(UClass));
 	ReturnClass =

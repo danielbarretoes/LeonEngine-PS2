@@ -80,12 +80,12 @@ bool FComponentsPrimitivesRegisterWithTheWorldTest::RunTest(const FString& Param
 	TestFalse("Hidden with its owner", MeshComponent->ShouldRender());
 
 	UMaterial* Override = NewObject<UMaterial>();
-	Override->Roughness = 0.25f;
+	Override->Opacity = 0.25f;
 	MeshComponent->SetMaterial(1, Override);
 	TestTrue("Slot 1 overridden", MeshComponent->HasOverrideMaterial(1));
 	TestFalse("Slot 0 not overridden", MeshComponent->HasOverrideMaterial(0));
 	TestTrue("Override material", MeshComponent->GetMaterial(1) == Override);
-	TestEqual("Override material values", MeshComponent->GetMaterial(1)->GetRenderProxy().Roughness, 0.25f);
+	TestEqual("Override material values", MeshComponent->GetMaterial(1)->GetRenderProxy().Alpha, 0.25f);
 	// The overrides are UPROPERTYs: the material lives while the component does.
 	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
 	TestTrue("Override kept by the component", MeshComponent->GetMaterial(1) == Override);

@@ -7,7 +7,700 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-The PC plays under the PS2's conditions ([ps2-preview](Docs/PLANS/ps2-preview.md) V1).
+## [0.24.0] - 2026-09-29
+
+Real content, animation and CS parity ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N21 to N31, with N24b and N30a to
+N30f): glTF skins and animations (FBX gone), vertex lighting baked by LeonCook, the PS2's cook with hard budgets and a
+bootable ISO, asynchronous disc IO, the memory card and the DualShock 2, the animation runtime, the art pipeline and
+ShooterGame's characters, arms, weapons and de_leon made by Blender scripts, 30 fps with that art, and CS 1.6's
+weapons, grenades, movement, rounds, bots and physical materials. The engine and ShooterGame content is resaved for
+0.24.0. PCSX2 ([Budgets.md](Engine/Platforms/PS2/Documentation/Budgets.md), the row «0.24.0»): 29.95 fps,
+p50 / p95 / p99 33.5 ms, the scene 8.4 ms (the N1 baseline: 25.4 fps on the blockout map). The ISO (7 122 944 bytes)
+boots in PCSX2 and reaches its first frame at 2.93 s with the pak in its open order.
+
+### Added
+
+- The static lighting baked into the vertices ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N22, decision D5): LeonEd's
+  `FStaticLightingSystem` (UE: Lightmass) bakes, for every vertex of every Static mesh of a map, the sky
+  (`AWorldSettings::LightmassSettings`, UE's `FLightmassWorldInfoSettings`: `EnvironmentColor` × `EnvironmentIntensity`
+  times the hemisphere's share, cosine-weighted, that no geometry occludes within `MaxOcclusionDistance`: 64 fixed rays)
+  and every light that is not Movable (the imported KHR_lights_punctual ones, each shadowed by a ray against the static
+  geometry's triangles in PhysicsCore's `FAabbTree`), one thread, fixed seed: the same bytes every run. The map import
+  bakes as its last step, `ResavePackages -buildlighting` (UE's switch) bakes a map again, and the cook warns about a map
+  whose lighting needs rebuilding. The result is each component's own colour streams for its mesh's LPS2 v2 batches
+  (`UStaticMeshComponent::BakedVertexColors`, `FLPS2ColorStreams`: the mesh's colour streams' layout, made for the mesh's
+  CRC), saved in the map (`VER_LEON_BAKED_VERTEX_COLORS`, the oldest loadable version: every package saved again). A
+  Static mesh draws its baked colours times its albedo with no light computed per frame; Movable ones (the pawns'
+  bodies, now Movable, the weapons, the projectiles) keep the per-vertex lighting, with the sky as their ambient
+  instead of 0.10 of the albedo. de_leon's floor is a grid of 3 m cells for the shadows (`make_de_leon.py`); de_leon
+  bakes 1 562 vertices in under 0.1 s. PCSX2: 29.8 fps, p50 / p95 / p99 33.5 / 33.5 / 40.8 ms; the scene 15.9 ms for 794 triangles, 20.0 µs a triangle against N17's 27.7 (12.0 ms for 432): the floor grid doubles the triangles, the static meshes no longer cost any light. Tests: `System.LeonEd.StaticLighting.ShadowsAndOcclusion`
+  and `.Deterministic`, `System.LeonEd.MapFactory.BakesStaticLighting`, `System.Renderer.GS.Scene.StaticLighting`;
+  `System.Renderer.GSEmulator.SceneFrame` draws a baked floor (29 pixels beyond a 5-bit step, 20 before) (483 engine
+  tests, 63 ShooterGame, TestPAL 156).
+- The PS2's cook and a bootable ISO ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N23):
+  - Load-in-place textures: a paletted texture's data is the GS's CLUT image (CSM1, alpha 0..0x80) and each level's
+    IMAGE transfer payload, quadword-sized and allocated 128-byte aligned (`FByteBulkData::SetPayloadAlignment`); the
+    texture cache uploads them with `FGSCommandList::UploadImageInPlace`, so the PS2's DMA chain REFs the texture's own
+    bytes (no conversion, no copy; `FPS2RHI::RetireInPlaceImages` when a resident texture goes).
+  - Hard budgets that fail the cook: `[/Script/LeonEd.CookSettings]` (`FCookBudgets`: per map the GS VRAM, a RAM
+    estimate and the SPU2 RAM; per mesh triangles and bones; per texture size and bits a texel; `-<Key>=` overrides),
+    with the reports against them.
+  - Incremental cook (`-iterate`, the default; `-full`): `<Project>/Intermediate/CookCache/<Platform>/`, keyed by the
+    sources of a package and its imports, the cooker version and the platform (2.4 s full, 0.12 s cached, the same
+    bytes).
+  - Pak order: `-LogFileOpenOrder` (`FPlatformFileOpenLog`) records the order the game opens its files in (Win64: a
+    file in `Saved/Logs`, PS2: the EE log), `LeonPak -order=` / `BuildCookRun -pakorder=` lays the pak out in it.
+  - `BuildCookRun -platform=PS2 -iso [-region=NTSC|PAL] [-discserial=]`: `<Project>.iso` made by xorriso (added to the
+    PS2 build image) with `SYSTEM.CNF`, the ELF as `SLUS_990.01`, the pak first after them, ISO 9660 names
+    (`FPaths::ToIso9660Path`, which the PS2 file layer applies to `cdrom0:` paths); `MeasurePS2 -Iso` boots it. In
+    PCSX2 the game mounts its pak from `cdrom0:` and plays the bot match; the first frame 0.90 s after the engine's
+    start with the pak in its open order (1.42 s in path order). `LogLaunch: First frame after ...` logs the load time.
+  - Tests: `System.LeonEd.Cook.Budgets`, `.Cache`, `.StripConfig`, `System.PakFile.Format.OpenOrder`,
+    `System.Core.HAL.PlatformFileOpenLog` (535 engine tests, 70 ShooterGame, TestPAL 161).
+- Asynchronous disc IO, the memory card and the DualShock 2 ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N24):
+  - **Asynchronous reads** (UE's API): `IPlatformFile::OpenAsyncRead` gives an `IAsyncReadFileHandle` whose
+    `SizeRequest` / `ReadRequest` (a priority, the caller's memory or the request's) are `IAsyncReadRequest`s
+    (`PollCompletion`, `WaitCompletion`, `Cancel`, `GetReadResults`), served by Core's `FAsyncIOSystem` in priority then
+    issue order, in 64 KB chunks, their callbacks on the game thread. The PS2 reads on an EE thread one priority above
+    the game's (`PS2AsyncIO`), asleep in each IOP call while the game runs; Win64 reads on the game thread in the queue's
+    order (the same run every time). A pak entry reads through the pak's second handle at its offset; `-LogFileOpenOrder`
+    notes the asynchronous opens too.
+  - **`LoadPackageAsync`** and `ProcessAsyncLoading` / `FlushAsyncLoading` / `CancelAsyncLoading` / `IsAsyncLoading` /
+    `GetNumAsyncPackages` (CoreUObject, UE's API): a package's bytes and its imports' come through the asynchronous
+    reads and the game thread serializes it with the synchronous loader once they are in (a `LoadPackage` of a package
+    on its way takes its bytes). `UGameEngine::Tick` processes it before the world (`[/Script/Engine.Engine]
+    AsyncLoadingTimeLimit`, 8 ms on the PS2), `UEngine::LoadMap` flushes after `BeginPlay`, and ShooterGame's game mode
+    asks in `InitGame` for everything its weapons, projectiles, pawn, bomb and player controller name, in structs and
+    arrays too (101 packages), kept loaded while the map plays; at most 384 KB are read ahead. From the disc (on N30f's
+    content, the pak in its open order) no file opens after the first frame: the match's start went from 3 053.6 ms
+    (5 622.8 in path order) to 435.0 ms, the first frame from 2.39 to 7.79 s.
+  - **Saves**: `USaveGame` and `UGameplayStatics::CreateSaveGameObject`, `SaveGameToMemory`, `LoadGameFromMemory`,
+    `SaveGameToSlot`, `LoadGameFromSlot`, `DoesSaveGameExist`, `DeleteGameInSlot` (UE's GVAS header, the tagged
+    properties) and `GetLastSaveGameResult` (`ESaveGameResult`), over `IPlatformFeaturesModule`'s `ISaveGameSystem`: the
+    desktop's `FGenericSaveGameSystem` (`Saved/SaveGames/<Slot>.sav`) and the PS2's memory card, `FMemoryCardSaveGameSystem`
+    over libmc on `mc0:` (the game's folder with `icon.sys` and an icon for the console's browser, a CRC header, a reason
+    for a missing, unformatted, full or pulled out card). ShooterGame's options (`UShooterPersistentUser`: aim
+    sensitivity, inverted Y, volume, crosshair colour) in the slot `Settings`, set with `SetSensitivity`, `SetInvertY`,
+    `SetVolume`, `SetCrosshairColor`; `[MemoryCard]` of `DefaultGame.ini` names the card's folder and title.
+  - **The DualShock 2**: `IInputInterface` takes a controller id (the PS2's two ports, the desktop's first two
+    gamepads; the viewport sends each to the local player of that id), the pressures come as analog keys
+    (`Gamepad_LeftTriggerAxis` / `Gamepad_RightTriggerAxis` and Leon's `Gamepad_*Axis`, `FDualShockPressure`; libpad's
+    pressure mode on the PS2), and UE's force feedback drives the motors: `SetForceFeedbackChannelValue(s)`,
+    `UForceFeedbackEffect`, `APlayerController::ClientPlayForceFeedback` / `ClientStopForceFeedback` /
+    `ProcessForceFeedbackAndHaptics`, `padSetActAlign` / `padSetActDirect` on the PS2 (`FDualShockForceFeedback`,
+    `FDualShockActuators`), stopped when a pad is pulled out. ShooterGame buzzes the small motor on each shot and the
+    large one when hurt or near an explosion.
+  - `FPlatformMisc::LoadIopModule` (PS2: a ROM module once) and `LockIop` / `UnlockIop` (the IOP's file reads, module
+    loads and card calls one at a time across the EE's threads); `MeasurePS2 -PakOrder <file>` and
+    `-LogFileOpenOrder`; `FrameStats Summary:` gains `first_ms` and `worst_later_ms`, and `-LogFrameTimes` names the
+    frames longer than three fields (`Long frame N`); `Measure.ini` gives the measuring data folder its own memory card.
+  - Tests: `System.Core.AsyncIO.Order` / `.Completion` / `.Cancel`, `System.PakFile.PlatformFile.AsyncRead`,
+    `System.CoreUObject.AsyncLoading.Delegates` / `.Files`, `System.Engine.SaveGame.RoundTrip` / `.MemoryCard`,
+    `System.ApplicationCore.DualShock.ForceFeedback` / `.Pressure`, `System.Engine.ForceFeedback.PlayerController`,
+    `ShooterGame.Settings.RoundTrip` (572 engine tests, 99 ShooterGame, TestPAL 170 on Win64).
+- Faster disc loading and the round's start ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N24b). A read of the emulated
+  disc costs about 20 ms before its bytes, and N24 read the preload a few KB at a time: `FAsyncIOSystem` now takes the
+  queued read nearest ahead of the last one (UE's sweep) and coalesces the close ones (`CoalesceBytes`), the pak's
+  game-thread handle reads 64 KB blocks forward, a PS2 file handle skips the `lseek` it does not need, `UEngine::LoadMap`
+  loads the map through the same queue (`LoadPackageAsync` and a flush), and a synchronous load of a package on its way
+  raises its read (`FAsyncIOSystem::RaisePriority`). From the disc on N29's content, the pak in its open order: the
+  first frame from 7.72 to 2.93 s, the worst frame after it from 384.95 to 50.05 ms, no file opened after it. The
+  round's start spent 320 ms asking the file system about every pawn's and weapon's config paths: ShooterGame's
+  `LoadShooterObject` / `LoadShooterAsset` resolve what is in memory and keep it. `FlushAsyncLoading:` and `The paks
+  until the first frame` log what a load read; `-LogFrameTimes` logs a spike's scopes (`Frame spike:`).
+- Windows vibrates: `FXInputForceFeedback` sends UE's force feedback to the Xbox pads through `XInputSetState`
+  (`xinput1_4.dll` loaded at run time), the large channels on the heavy motor and the small ones on the light one;
+  tests `System.Core.AsyncIO.Coalesce` and `System.ApplicationCore.Windows.XInputForceFeedback` (575 engine tests, 99
+  ShooterGame, TestPAL 171 on Win64).
+- The art pipeline ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N26, decision D6): `Docs/ART_PIPELINE.md` sets the
+  budgets of each asset class (a character 600–1 000 triangles, the first-person arms 400–600, a weapon 100–300 in the
+  world and 300–600 in view), two weights and 24 bones a palette, P4 / P8 textures of 64–128 texels and their density,
+  the names (`SOCKET_Weapon_R`, `UCX_`, `VIS_` / `PORTAL_`, lights), the CT and T bodies' shared 23-bone skeleton and
+  the arms' 11, the third- and first-person clips at 30 fps with their loop flags and notifies, the fixed glTF export
+  options, how textures are made, the CC0 rule and the MCP → `make_*.py` workflow.
+  `Game/ShooterGame/SourceArt/leon_art.py` holds the shared Blender helpers (the empty scene at 30 fps, images painted
+  by code at P4 / P8 sizes, materials, armatures, sockets, weights clamped to two, clips keyed at 30 fps, the export
+  with `GLTF_OPTIONS`); `make_team_bodies.py` and `make_de_leon.py` use it and export the same bytes as before.
+  `check_art_determinism.py` runs each script twice and compares every `.glb` with the other run and the committed
+  one. The gate's samples (`Samples/make_art_samples.py`: a crate with a 2-bone skin, a painted texture and an `Open`
+  clip; a mannequin on the shared skeleton with an `Idle` clip) come out identical and import with LeonCook. The
+  Blender Lab MCP extension loads in Blender 5.2; N26 used the headless scripts.
+- ShooterGame's characters, arms and weapons ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N27), low-poly and textured
+  in the style of CS 1.6, every file made by a Blender script with `leon_art` (D6; CC0, the textures painted by code):
+  the counter-terrorist (`SK_Body_CT`, 932 triangles: blue-grey camouflage, a vest, a helmet) and the terrorist
+  (`SK_Body_T`, 828: a brown jacket, olive trousers, a balaclava, a backpack) on the shared 23-bone `SKEL_Body`
+  (`Characters/make_characters.py`), their first-person arms (`SK_Arms_CT` 542, `SK_Arms_T` 588) on the 11-bone
+  `SKEL_Arms` (`make_arms.py`), 128 × 128 P8 textures, two weights a vertex, one palette; and a world model (116-260
+  triangles, 64 × 64 P4) and a first-person model (308-556, 128 × 64 P8) of the knife, Glock, USP, Desert Eagle,
+  AK-47, M4A1, MP5, AWP, HE, flash and smoke grenades and C4 (`Weapons/make_weapons.py`). The third-person clips at 30
+  fps (`anim_body.py`: idle, walk and run in four directions with footsteps, crouch idle and walk, the jump's three
+  states, three stances' aim offsets at five pitches, fire, reload, throw, plant, defuse, two deaths) and every
+  weapon's first-person clips (`anim_arms.py`: idle, draw, fire, reload with `MagOut` / `MagIn`, the grenade's pin and
+  throw, the knife's slash, the C4's plant) are posed by code: `leon_art.Rig` / `Pose` (forward kinematics and
+  two-bone IK that puts a hand's `Weapon_R` socket on a weapon's grip), `leon_art.MeshBuilder` (lofts, boxes,
+  cylinders and chamfered prisms mapped to a texture atlas and weighted as they are made). `ImportList.ini` imports
+  them with `BS_Locomotion` (2D), `BS_Crouch`, `AO_Rifle` / `AO_Pistol` / `AO_Grenade` (all measured from the rifle's
+  pose), the arms' `BS_<Weapon>_Idle`, and 26 montages; `DefaultGame.ini` names them: ShooterGame plays the skinned
+  bodies, the arms, the sockets and the montages. The pistol shows the USP, the rifle the AK-47, the sniper the AWP,
+  the grenade the HE; the others wait for N30. `check_art_determinism.py` checks the five scripts (identical twice and
+  committed) and fails when one is missing. `S_Footstep` (`make_sounds.py`) for the footsteps.
+- `UCharacterAnimInstance::SetCrouchBlendSpace` / `SetCrouched`: the crouched locomotion, crossfaded, its notifies only
+  while it plays; `AShooterCharacter`'s jump clips (`JumpStartAnimName`, ...), crouch, death montages (on its back
+  when shot from the front, on its front from behind, held by a looping last section), the drawn weapon's aim offset
+  (`AShooterWeapon::AimOffsetName`, none while planting, defusing or dead), the arms' idle (`ArmsIdleName`) and the
+  first-person model (`FirstPersonMeshName`); the team's arms (`CTArmsMeshName` / `TArmsMeshName`) follow the team,
+  the halftime included. `UGLTFImportFactory::NewSkeletonName` names the skeleton the first of several meshes makes.
+- Tests: `System.MeshUtilities.GltfSkeletal.AnimationLoopFlag`, `System.Engine.Animation.CharacterAnimInstance.Crouch`,
+  `ShooterGame.Animation.CharacterArt` (the content's wiring, the arms' hold, the crouch, a death that holds), and
+  checks of the UV convention, the shared skeleton and the halftime's meshes (537 engine tests, 76 ShooterGame);
+  N30c's `ShooterGame.Movement.Footsteps` gives its test locomotion to the crouch too.
+- The PS2 with the characters (`MeasurePS2 -Label N27`, Budgets.md): 10.8 fps, p50 / p95 83.5 / 150.3 ms, 2 240
+  triangles a frame (the scene 66.7 ms of C++ skinning and transform on the EE); `[Core.MemoryBudgets] EngineMisc`
+  3 072 KB (the frame's GS containers peaked at 2 290 KB).
+- de_leon rebuilt ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N28): a 60 × 48 m desert town in the style of CS 1.6's
+  de_dust, made by `Maps/make_de_leon.py` with `leon_art` (D6; CC0, no external art): sandstone walls and houses with
+  darker caps, the arch into mid, the gate on A long, the tunnel on B long (roofed, two lamps), the mid doors with
+  their wooden wings open, crates, the sites' letters on the site walls and two ladders to the north blocks' roofs
+  (N30c's `Ladder` volumes). Seven textures painted texel by texel (sandstone P8; trim, sand, paving, wood, the crate
+  and the signs P4; 64 texels a metre): 66 KB of VRAM. 78 pieces, 2 244 triangles in seven cells (`TSpawn` 446, `Mid`
+  160, `LongA` 398, `LongB` 458, `CTSpawn` 234, `SiteA` 266, `SiteB` 282; the script fails a cell over ART_PIPELINE's
+  1 500), each piece its own mesh with one `UCX_` box, its faces cut on a 3 m world grid (and 1.2 m up the walls) for
+  the bake: the sun and three point lights, 3 471 vertices. `COL_Ground`, one box under the map, is the ground the
+  players walk on. `VIS_<Cell>` (7 boxes) and `PORTAL_<A>_<B>` (24 quads) are N15's cells: facing a wall only its cell draws,
+  across the open map most of them. `-LogFrameTimes`' `Frame work` line counts the cells seen and the objects they left
+  out.
+  The sites, buy zones and starts are where they were; 22 waypoints (38 more links from the import); the script
+  checks that the hand links, the starts and the sites' middles are clear. BotMatch 10 7: `10 round(s), CT 5 - T 5,
+  65 kill(s)`; over seeds 1 to 24 the terrorists win 61 % of the rounds (the old blockout: 59 %). PS2 (`MeasurePS2 -Label N28`, on N15): 8.76 fps
+  (13.76 with the blockout), the scene 83.4 ms (46.7), 277 KB of GIF a frame from the EE (87); the map's cook 309 KB
+  of its own, the pak 1 829 771 bytes.
+- `ViewFrom` (ShooterGame's debug camera) keeps its view after the round's spawn until `ViewPawn`, which removes the
+  camera: `-ExecCmds="ViewFrom <X> <Y> <Z> <Pitch> <Yaw>" -Screenshot=<file.bmp>` captures a view of the map.
+- ShooterGame's arsenal and economy at CS 1.6's ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N30a). **Weapons** with
+  CS's damage, range modifier, armor ratio, cycle, clip and reserve, price, speed and penetration: the knife
+  (`AShooterWeapon_Knife`, slot 3: a slash 15, a stab 65, a stab in the back x3), the Glock-18 (the terrorists' first
+  pistol, a three-round burst on the secondary button), the USP (the counter-terrorists', a silencer: 30 damage,
+  quieter), the Desert Eagle, the MP5, the AK-47 (terrorists only), the M4A1 (counter-terrorists only, a silencer) and
+  the AWP; their N27 models and animations, the pistols sharing the pistol's clips and the MP5 and the rifles the
+  rifle's (a reload lasts CS's time, its montage fitted to it). **Economy**: a bought weapon comes with its clip only,
+  the reserve bought by the box per calibre (`primammo` / `secammo`, the `,` and `.` keys, CS's `buyammo1` /
+  `buyammo2`); the first pistol has two clips more; the buy menu has CS's pages (Pistols, SMGs, Rifles, the ammo,
+  Equipment), listing the team's weapons. **Wall penetration** (CS's `FireBullets3`): a bullet goes through up to
+  `PenetrationCount - 1` things, leaving a surface within its penetration power cut by the material (concrete a
+  quarter, metal 15 %) with the material's share of the damage (wood 0.6, metal 0.2, the rest 0.5), and through a
+  body with three quarters; the surfaces come from the hit mesh's material (`SurfaceMaterials` in DefaultGame.ini:
+  de_leon's crates wood, the walls concrete). **Hit groups**: the head (x4), the chest and the arms (x1), the stomach
+  (x1.25) and the legs (x0.75) on height bands and sides of the capsule, armor covering all but the legs (the head
+  with a helmet). The bots buy their team's rifle and its ammunition, and a helmet for the kevlar they kept. Tests:
+  `ShooterGame.Arsenal.StatsTable`, `.SilencerAndBurst`, `.KnifeBackstab`, `ShooterGame.Weapons.Penetration`,
+  `ShooterGame.Damage.HitGroups`, `ShooterGame.Buy.AmmoAndPrices`, `.TeamRestrictions` (83 ShooterGame tests).
+- ShooterGame's flashbang and smoke grenade ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N30b). The grenade slot holds
+  one weapon of each grenade with CS 1.6's limits (two flashbangs at $200, one HE and one smoke at $300; a purchase of
+  one carried adds a grenade), and its key cycles them. **Flashbang** (`AShooterProjectile_Flashbang`, CS's
+  `RadiusFlash`): the players whose eyes it sees within 1500 units are flashed, the white held and faded by the
+  strength (4 falling to 0 with the distance) and the view's angle (looking at it 1.5 / 3 x the strength, aside 0.45 /
+  1.75, behind 0.2 / 1), drawn by the HUD as one full-screen alpha tile; a bot is blind a third of the fade (its sensing
+  sees nobody, it stands still). **Smoke grenade** (`AShooterProjectile_Smoke`, `AShooterSmokeCloud`): an 18 s cloud,
+  a 325 cm sphere that hides what is behind it from the bots' line of sight while thick, drawn as six grey puffs facing
+  the camera (12 triangles). `ThrowGrenade` throws the drawn grenade for captures. Tests:
+  `ShooterGame.Grenades.FlashIntensity`, `.FlashBlindsBots`, `.SmokeBlocksSight`, `.CarryLimits` (87 ShooterGame
+  tests).
+- The world's effect sprites (N30b): `FEffectSprite` / `FEffectSpritePool` (`UWorld::EffectSprites`, 32 at most, the
+  oldest recycled), `UGameplayStatics::SpawnEffectSprite`: soft round sprites square to the view, fading in and out,
+  drawn by the GS scene renderer after the translucent meshes, farthest first, two alpha-blended triangles each with
+  the effects' mask (UE: a sprite emitter). `UPawnSensingComponent::HasLineOfSightTo` is virtual (UE's). Test:
+  `System.Renderer.Effects.EffectSprites` (542 engine tests).
+- ShooterGame's movement at CS 1.6's ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N30c; `UShooterCharacterMovement`).
+  **Fall damage**: a landing faster than `SafeFallSpeed` (580 u/s, 1473 cm/s) takes `(speed - 1473) x 100 / (2601 -
+  1473)` health (CS's `DAMAGE_FOR_FALL_SPEED`, all of it at 1024 u/s), as the world's damage: no armor, no tagging, the
+  kill feed's `(world)`. **Ladders**: a trigger volume tagged `Ladder` (a map's `Ladder*` node) is climbed in a custom
+  movement mode as CS's `PM_LadderMove`: no gravity, forward along the view climbs at 200 u/s (508 cm/s) looking at the
+  ladder and down looking down, Jump pushes off at 270 u/s; the bots walk through ladders. **Jump stamina** (CS's
+  `fuser2`): a jump costs 1.3158 s, and on the floor each 10 ms of it scales the horizontal velocity by `1 - stamina x
+  0.19`, so a landing loses about 40 % of the speed and bunny hopping gains nothing. **Tagging** (CS's
+  `m_flVelocityModifier`): a shot halves the victim's velocity and top speed, back linearly in 1 s. **Footsteps**: the
+  body's `Footstep_L` / `Footstep_R` notifies play the footstep and make a noise the bots hear
+  (`FootstepNoiseLoudness`), only above CS's 150 u/s, so walking and crouching are silent. On a ladder the weapons
+  have their air spread. Tests: `ShooterGame.Movement.FallDamage`, `.Ladder`, `.JumpStamina`, `.Tagging`,
+  `.Footsteps` (75 ShooterGame tests).
+- `EMovementMode::Custom` and `UCharacterMovementComponent::PhysCustom` (UE: `MOVE_Custom`; a game's own modes, with
+  `ACharacter::GetCustomMovementMode` and `SetMovementMode(Mode, CustomMode)`), the component's
+  `SafeMoveUpdatedComponent` for them, and `ACharacter::Landed` (the fall's speed still in `GetVelocityZ`) and
+  `OnJumped`; `ACharacter::Jump` is virtual (UE).
+- ShooterGame's rounds and HUD at CS's ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N30d). **Halftime**
+  (`AShooterGameMode::bHalftime`, `mp_halftime`; `mp_maxrounds` sets `MaxRounds`): after round `MaxRounds / 2` every
+  player, the bots too, moves to the other team; the scores follow the teams (`AShooterGameState::BeginSecondHalf`,
+  `IsSecondHalf`, `GetHalftimeRound`), the money goes back to `StartMoney`, the loss streaks to none, and every pawn
+  respawns on the new side's starts with the pistol; the match still ends at the majority or after `MaxRounds`.
+  `FShooterMatchChecker` checks the swap (the round, every player on the other team, the scores swapped, no money
+  kept) and that it happens. **Radar** (top left, `RadarSize`, `RadarRange`): the teammates, for the terrorists the
+  carrier or the dropped or planted bomb, the sites' letters, turning with the view; about 10 rectangles, lines and
+  letters, no allocation. **Damage direction**: an arc toward the last damage's source (the shooter, the grenade, the
+  bomb) that narrows and darkens within `DamageIndicatorDuration` (1 s). **Death cam and spectating**
+  (`AShooterPlayerController::StartDeathCam`, `DeathCamDuration` 2 s): from the corpse's eyes, the spectator held
+  there, looking at the killer; then the living teammates through their eyes (Fire or `ViewNextPlayer` the next, the
+  right button or `ViewPrevPlayer` the one before, Jump the free look), the next one when the watched one dies, the
+  free look with nobody left; the HUD names the killer or the watched player. `-BotMatchSpectate` keeps following
+  anybody alive. Tests: `ShooterGame.Rounds.HalftimeSwitchesSides`, `.MatchEndsAtTheMajority`,
+  `ShooterGame.Spectate.DeathCamThenTeammates`, `.CyclingSkipsTheDead`, `ShooterGame.HUD.Radar`, `.DamageIndicator`
+  (70 ShooterGame tests); `ShooterGame.Bots.MatchOnDeLeon` crosses a halftime.
+- ShooterGame's bots at CS 1.6's ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N30e; `AShooterAIController`).
+  **Economy**: each team decides its buy plan when a round starts (`AShooterGameMode::GetTeamBuyPlan`,
+  `ChooseBuyPlan`, `EShooterBuyPlan`): the pistol round, a full buy when half of it can have its rifle and kevlar with a
+  helmet, else a force-buy after two losses in a row (`ForceBuyLossStreak`), after a win or in a half's last round, and
+  an eco otherwise, where only a rich bot buys; a force-buy takes the rifle, else an MP5, else a Desert Eagle, each with
+  kevlar; the money left buys the grenades of `GrenadeBuyOrder` within CS's limits. **Grenades**: a terrorist nearing
+  the round's site flashes (else smokes) it, a counter-terrorist nearing the planted bomb flashes it, and a spot where
+  an enemy was seen, heard or reported 9 to 22 m away gets the HE (else a flashbang), by draws from the bot's stream;
+  the throw's low arc (`ComputeThrowPitch`), up to 1 m off, never into a wall at the bot's nose, and its back to its
+  own flashbang. **Fighting**: the bots strafe left and right at the walk key's speed (0.4 to 1 s each way, from their
+  stream), crouch and stop with a rifle at 15 m or farther, and stand still with the AWP; a flashed bot fires at random
+  around where it last saw its enemy instead of standing still. **Radio** (`AShooterGameMode::SendRadioMessage`,
+  `EShooterRadioMessage`: CS 1.6's three menus and "Fire in the hole!", "Bomb has been planted."): a message a player
+  every 1.5 s, 60 a round, to its team only; the bots say "Enemy spotted." (with the place, which a free teammate within
+  30 m goes to look at), "Need backup." (the nearest teammate answers "Affirmative." and comes), "Sector clear.", "Bomb
+  has been planted." and "Fire in the hole!", never what a teammate said in the last 3 s; the HUD shows the team's
+  last messages above the money in the team's colour (`RadioMessageDuration`); the player opens the menus with Z, X
+  and C (`radio1`..`radio3`) and sends with the number keys. **Names**: CS's BotProfile names (`BotNames`: Albert,
+  Allen, Bert, ...) in the order the bots join, team-neutral since a bot keeps its name across the halftime; a bot's
+  stream is seeded from its index (`AShooterAIController::SetBotIndex`), not its name. Tests:
+  `ShooterGame.Bots.EcoAndForceBuy`, `.BuysGrenadesWithinLimits`, `.ThrowsGrenades`, `.StrafeCrouchAndStand`,
+  `ShooterGame.Radio.BotsReportEvents`, `.SectorClear`, `.PlayerMenu` (94 ShooterGame tests).
+- Physical materials ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N30f, UE's): `UPhysicalMaterial` (PhysicsCore, `PM_`
+  assets) with its `SurfaceType` (`EPhysicalSurface`: the default and `SurfaceType1..62`, named in
+  `[/Script/Engine.PhysicsSettings] +PhysicalSurfaces=`, `UPhysicsSettings`) and `DetermineSurfaceType`;
+  `UMaterial::PhysMaterial` (`UMaterialInterface::GetPhysicalMaterial`); `FCollisionQueryParams::bReturnPhysicalMaterial`
+  and `FHitResult::PhysMaterial` / `FaceIndex`: a hit on a triangle has its section's material's (the collision
+  triangles' `MaterialIndices`, `UPrimitiveComponent::GetMaterialFromCollisionFaceIndex`), a hit on a simple shape the
+  first material's. The glTF import reads a material's `physMaterial` extras and sets it on the `M_` it makes or finds
+  (`leon_art.make_material(..., surface=)` writes them); `UPhysicalMaterialFactoryNew` makes a `PM_` from an ImportList
+  section (`Type=PhysicalMaterial`, `SurfaceType=`). Tests: `System.Engine.PhysicalMaterial.TraceSurface`,
+  `.SurfaceNames`, `System.LeonEd.Factories.PhysicalMaterials` (561 engine tests).
+- ShooterGame's surfaces (N30f): `PM_Concrete`, `PM_Dirt`, `PM_Metal`, `PM_Wood`, `PM_Tile`, `PM_Glass`,
+  `PM_Computer`, `PM_Flesh` (CS's texture types, `SHOOTER_SURFACE_*` as UE ShooterGame names them) on de_leon's
+  materials (sandstone, trim and signs concrete, sand dirt, paving tile, planks and crates wood, lamps metal), the
+  weapons' (metal; the C4 a computer) and the characters' (flesh). By the surface: the footsteps (CS's `pl_step`,
+  `pl_dirt`, `pl_tile`, `pl_metal`, a wooden knock; a left and a right foot, `FootstepSounds`), a ladder's steps every
+  0.35 s (`pl_ladder`, `LadderStepSoundNames`), the bullets' impact sounds (`ImpactSounds`: debris, a ricochet on
+  metal, a shatter on glass) and marks (their tint and size), and CS's `bhit_flesh` / `bhit_kevlar` / `bhit_helmet` on
+  a character; the penetration adds CS's tile and computer. The radio's sounds: a squelched tone pattern a menu, and
+  "Fire in the hole!" and "Bomb has been planted." their own, to the team's local players
+  (`AShooterPlayerController::HearRadio`). 30 sounds more from `make_sounds.py` (CC0). Tests:
+  `ShooterGame.Surfaces.Footsteps`, `.LadderSteps`, `.Impacts`, `ShooterGame.Radio.Sounds` (98 ShooterGame tests).
+
+### Changed
+
+- The engine version is 0.24.0 (`Engine/Build/Build.version`; [ps2-shipping](Docs/PLANS/ps2-shipping.md) N31): the
+  engine and ShooterGame content was saved again and reimported (the same bytes a second time), and the import
+  identity's `SM_Cube` is `A24A1887…0ED1FC`. The documentation matches the code at this release (the architecture's
+  frame, the formats, the tests, the build, the tools, the levels, the art pipeline, the coding standard, the READMEs
+  and Budgets.md's final table). `CheckBannedApis.ps1` rejects what N14b and N24b removed (the posed skinned streams,
+  `bQuantizedPose`, ShooterGame's `LoadOptionalAsset`), as D10 asks.
+- glTF skinned meshes and animations ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N21). `UGLTFImportFactory` imports
+  `ImportType=SkeletalMesh` (`-type=SkeletalMesh`: `SK_` on `Skeleton=` or a `SKEL_` next to it) and
+  `ImportType=Animation` (`-type=Animation`: an `A_<Animation>` per glTF animation on `Skeleton=`, each recording its
+  `AnimationName` for the reimport), through MeshUtilities' `LoadSkeletalMeshFromGltf` / `LoadAnimSequencesFromGltf`:
+  the skin's joints (parents first; a joint's non-joint ancestors folded into its reference pose), `inverseBindMatrices`,
+  `JOINTS_n` / `WEIGHTS_n` normalized and reduced to the two largest weights, renormalized to 1/255 steps
+  (`FSkinWeightInfo`: the PS2's budget); `SOCKET_` nodes under joints as the skeleton's sockets; TRS channels with
+  LINEAR or STEP keys sampled at 30 Hz (CUBICSPLINE fails with an error); a mismatched skeleton (names, order, parents)
+  fails. Images embedded in a `.glb` or a `data:` URI become `T_` textures (static meshes too).
+  **Animation keys** are local-space tracks (`FCompressedAnimSequence`, AnimationCore): 48-bit smallest-three rotations,
+  `int16` translations with a per-track scale and bias (floats when the range would break the tolerance), scales only
+  where they are not 1, each key with a `uint16` frame, reduced to the keys the runtime's interpolation cannot rebuild
+  within `[/Script/Engine.AnimationSettings]` (0.1 degrees, 0.05 cm, 0.001): 8 bytes a rotation or translation key
+  where the matrices took 64 a bone a frame. The anim instances sample local transforms and blend them in local space
+  (`FAnimationRuntime`); `USkeletalMeshComponent` builds the component-space matrices once per update and reads its
+  sockets (by bone index), skin matrices and pose bounds from that cache. **Render data**: `USkeletalMesh` is a skinned
+  LPS2 v2 blob (a header flag, a 24-bone palette and a skin stream a batch, 48 vertices a batch, batches split by
+  palette), which the C++ emitter skins batch by batch; skeletal meshes are culled by their pose's bounds.
+  `VER_LEON_SKELETAL_LPS2_ANIM_TRACKS` (4) is the oldest loadable package version: the content (no skeletal assets) was
+  saved again. Fixtures: `Cube.glb` (the import identity, replacing `Cube.obj`) and `SkinnedArm.glb`, written by
+  `MakeSkinnedFixture.py`. Tests: `System.AnimationCore.*` (5 new), `System.MeshUtilities.GltfSkeletal.*` (4),
+  `System.MeshUtilities.LPS2.SkinnedBatchesAndPalettes`, `System.LeonEd.Factories.GltfSkeletalMeshAndAnimations`,
+  `System.LeonEd.Commandlets.GltfSkeletalDeterministic`, `System.Engine.Components.SkeletalMeshPoseAndSockets`,
+  `System.Renderer.GS.Scene.SkeletalMeshCulledByPose` (489 engine tests).
+- The animation runtime ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N25). **Blend spaces**: `UBlendSpace` (2D, e.g.
+  speed by direction; its samples Delaunay-triangulated on the normalized axes, `FBlendSpaceTriangulation`,
+  barycentric weights inside, the nearest edge outside) next to `UBlendSpace1D`, both through
+  `UBlendSpaceBase::GetSamplesFromBlendInput` (at most three `FBlendSampleData`, no allocation) and played synchronized
+  (one normalized time, UE's length-based sync). **Notifies**: `FAnimNotifyEvent` on `UAnimSequenceBase::Notifies`,
+  authored in the glTF animation's `extras` (`{"notifies": [{"name", "time"}]}`, imported by
+  `LoadAnimSequencesFromGltf`), `UAnimNotify` objects; each fires once per crossing (a loop's wrap and several in one
+  update included, none for an update of no time) after the anim update, to `UAnimNotify::Notify` and
+  `UAnimInstance::OnAnimNotify`. **Montages**: `UAnimMontage` (one slot, one clip, sections, blend in / out, play rate;
+  `Montage_Play` / `Stop` / `JumpToSection` / `SetNextSection` / `IsPlaying`, `OnMontageEnded`, `OnMontageBlendingOut`,
+  `ACharacter::PlayAnimMontage` / `StopAnimMontage`) on `DefaultSlot` or `UpperBody`. **Layers**: the upper body from a
+  branch bone as a layered blend per bone, and `UAimOffsetBlendSpace1D` (3 to 5 poses by pitch) applied as an additive
+  on it (`FAnimationRuntime::BlendPosesTogether`, `BlendPosesPerBoneFilter`, `FillBranchBoneWeights`,
+  `ConvertPoseToAdditive`, `AccumulateAdditivePose`, on views of poses on the frame's stack). **Pose cache and
+  throttling**: `USkeletalMeshComponent` evaluates at most once per update with every temporary on `FMemStack`, sends
+  the skin matrices only after a new evaluation, and may skip the evaluation while the anim instance keeps updating:
+  `VisibilityBasedAnimTickOption` (`AlwaysTickPose`: not drawn in the last 0.2 s, `UPrimitiveComponent::LastRenderTime`,
+  which the renderer stamps) and `bEnableUpdateRateOptimizations` (every 1 to `MaxUpdateRate` frames by the distance to
+  `UWorld::ViewLocationsRenderedLastFrame`, `UpdateRateDistanceStep`, `[/Script/Engine.AnimationSettings]`);
+  `GetNumPoseEvaluations` measures it. **View models**: skinned view models (first-person arms) in the view model pass
+  (`FScene::GatherSkeletalMeshes`, owner flags). **Assets without a source**: ImportList.ini sections of `Type=BlendSpace`,
+  `BlendSpace1D`, `AimOffsetBlendSpace1D` and `AnimMontage` (`UBlendSpaceFactoryNew`, `UBlendSpaceFactory1D`,
+  `UAimOffsetBlendSpaceFactory1D`, `UAnimMontageFactory`; repeated `+Key=` values) make `BS_`, `AO_` and `AM_` assets
+  from the `A_` clips, the same bytes each time. **ShooterGame** has the paths behind empty config names until N27's
+  art: skinned team bodies with `UCharacterAnimInstance` (speed and direction, aim pitch), first-person arms (`Mesh1P`),
+  the weapon on the `Grip` socket of both instead of its offsets, the weapons' fire / reload / draw and the bomb's plant /
+  defuse montages (`FShooterWeaponAnim`; a reload or a draw lasts its montage), footstep and magazine notifies; the
+  static bodies and the botmatch are unchanged (CT 4 - T 6, 75 kills, replayed identically). Cost: 10 characters of 32
+  bones with the whole graph, about 70 µs a frame on Win64 (`AnimPerf:`), estimated 0.5 ms a character on the EE
+  (ARCHITECTURE.md, animation runtime). Tests: `System.AnimationCore.Runtime.*` (3),
+  `System.AnimationCore.BlendSpace.Triangulation`, `System.Engine.Animation.*` (12 new: 2D interpolation, notifies once
+  per crossing, the wrap, several in one update, zero length, montage blend timing, interruption, sections, the layered
+  blend, the aim offset at its extremes, no heap allocation per frame, the ten-character benchmark),
+  `System.Engine.Components.SkeletalMeshPoseCacheReuse`, `.SkeletalMeshUpdateRate`,
+  `System.Renderer.GS.Scene.SkinnedViewModelOwnerOnly`, `System.MeshUtilities.GltfSkeletal.AnimationNotifies`,
+  `System.LeonEd.Commandlets.AnimationAssetsFromImportList`, `ShooterGame.Animation.SkinnedPawn`. The `SkinnedArm.glb`
+  fixture's Wave carries two notifies.
+- The PS2 runs at 30 fps with the real art ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N29): `MeasurePS2` on de_leon
+  gives 29.81 fps with p50, p95 and p99 at 33.5 ms (N28: 8.76 fps, p95 133.5 ms), the scene 8.4 ms (83.4). The scene's
+  profile has its parts (`GS Opaque`, `GS Skinned`, `GS Emitted Batches`, `GS Clipped Batches`, ...) and the run's
+  summary its work (`SceneWork:`, `Scene_<key>` in MeasurePS2's CSV). A lit draw takes only the point lights whose range
+  reaches its bounds, and VU1's StaticLit and SkinnedLit light with up to two point lights (N.L and the range
+  attenuation squared): the characters near the map's lamps no longer fall back to the EE's emitter. de_leon's ground is
+  its floor slabs' `UCX_` boxes with their materials (sand dirt, paving tile; `COL_Ground` removed), and a capsule
+  walks across the seams (`FPhysScene::ResolveCapsuleSides` and `ACharacter::IsFloorEdgeHit` take a box whose top is at
+  the feet for floor). A face whose UVs span more than 14 repeats fails the mesh build with an error naming the asset
+  instead of crashing LeonCook, and the cook's RAM estimate is calibrated (`RuntimeBaseKB=3072`). VU1Conformance passes
+  84 batches. Tests: `System.Engine.CharacterMovement.WalksAcrossFloorSeams`, `System.MeshUtilities.LPS2.Errors`,
+  `ShooterGame.Map.TenPawnsOnDeLeon`.
+- A bot match's `-rounds=N` is the match's length (`mp_maxrounds`, [ps2-shipping](Docs/PLANS/ps2-shipping.md) N30d):
+  the teams switch sides after round N / 2 and a team with the majority ends it sooner. Its line names the halftime:
+  `BotMatch 10 7` logs `Botmatch OK: 7 round(s), CT 1 - T 6, 47 kill(s), seed 7, sides switched after round 5, reasons
+  [4,4,4,3,4,3,3]` (the team that started as CT won 6 - 1) and replays it. With CS's movement (N30c: the jump's stamina
+  and tagging) it logs `Botmatch OK: 9 round(s), CT 3 - T 6, 65 kill(s), seed 7, sides switched after round 5,
+  reasons [4,4,4,3,4,4,4,3,3]` (the team that started as CT won 6 - 3); with CS's weapons (N30a: the M4A1 for the CT,
+  the bought ammunition, penetration and hit groups) `Botmatch OK: 9 round(s), CT 3 - T 6, 63 kill(s), seed 7, sides
+  switched after round 5, reasons [4,4,4,3,4,2,4,3,3]`; with CS's bots (N30e: the economy, grenades, strafing, blind
+  fire, the radio, the streams seeded by the bots' order) `Botmatch OK: 7 round(s), CT 6 - T 1, 45 kill(s), seed 7,
+  sides switched after round 5, reasons [3,3,4,3,3,4,4]` (the team that started as T won 6 - 1).
+- ShooterGame's fall damage is CS 1.6's multiplayer `FlPlayerFallDamage` (N30e): N30c's `(speed - 580) x 100 / 444`
+  in units a second times 1.25 (`UShooterCharacterMovement::FallDamageScale`), so a landing at about 935 u/s (a 13.9 m
+  drop) is lethal instead of 1024 u/s (16.6 m).
+- ShooterGame's C key is CS 1.6's radio3 (N30e); Left Ctrl (and Circle) crouch. The bots are `Albert`, `Allen`, ...
+  instead of `Bot_CT_1`, `Bot_T_1`, ... (`bot_kick <name>` takes them).
+- Package version 6, `VER_LEON_COLLISION_MATERIAL_INDICES` ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N30f): a static
+  mesh's collision triangles carry their material slots; the oldest loadable version, the content saved again and
+  every mesh reimported. A mesh's bulk payload reads and writes with its package's version.
+- The audio device (N30f): a sound below the default priority leaves the last 10 effect voices free
+  (`FAudioDevice::NumLowPriorityVoices`; ShooterGame's steps and impacts are at 0.5, its radio at 1.5), and a
+  spatialized sound too far to be heard takes no voice. Test: `System.AudioMixer.Device.LowPriorityAndInaudible`.
+
+### Removed
+
+- FBX and OBJ ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N21, plan decision D11: glTF is the only mesh, skeletal mesh
+  and animation format): `UFbxFactory` (`EFBXImportType`, `MeshTypeToImport`), MeshUtilities' FBX importers
+  (`FbxStaticMesh`, `FbxSkeletalImport`, `FbxImportCommon`) and OBJ importer (`ObjImport`: only tests used it), the
+  UFBX (vendored) and TinyObjLoader (downloaded by `Setup.bat`) third-party modules, the Z-up import basis
+  (`EImportAxes::RightHandedZUp`), the `Cube.obj` fixture and the FBX / OBJ tests; the model-space animation
+  (`FSkeletalVertex`, `FSkeletalMeshData`, the matrix keys, `GetBoneWorldMatrices`, `GetBoneModelMatrix`,
+  `SetRawAnimationData`, `BuildFromImportData`). `CheckBannedApis.ps1` rejects their names.
+- The per-frame lighting of static meshes ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N22): a Static component is
+  never lit on the EE any more (its baked colours, or the mesh's own), and the renderer's fixed 0.10 ambient share is
+  gone (the world's sky replaces it for what moves).
+- The texture cache's runtime conversions ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N23): the palette's reordering
+  into a CLUT image and its alpha scaling at each upload, and the copy of every uploaded level into the frame's list
+  (`FGSCommandList::GetImageData`, rejected by `CheckBannedApis.ps1`; `GetImage` / `GetNumImages`). Data the target never
+  reads leaves the cooked output: the staged ini files' comments and editor sections, and the collision triangles of a
+  mesh that collides with its simple shapes (ShooterGame's PS2 cook: 245 409 to 232 480 bytes).
+- The single pad's API (N24, D10): `FPS2InputInterface::Get`, `IsPortOpen`, `GetRawButtonMask` and `GetRawSticks` (the
+  debug widget that read them went in N2), and `IInputInterface`'s calls without a controller id; the IOP modules
+  loaded by hand (`SifLoadModule` of the ROM's SIO2MAN / PADMAN / MCMAN / MCSERV: `FPlatformMisc::LoadIopModule`). In
+  `CheckBannedApis.ps1`.
+- The two-clip locomotion player ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N25): `UBlendSpace1D::Evaluate` and
+  `UAnimInstance::GetBlendAlpha` (and its per-sample times and scratch poses) give way to
+  `UBlendSpaceBase::GetSamplesFromBlendInput` and one synchronized player; in `CheckBannedApis.ps1`.
+- The box proxies (N27, D10): the static team bodies (`SM_Body_CT` / `SM_Body_T`, their materials, `BodyMesh`,
+  `GetBodyMesh`, the static `CTBodyMeshName` / `TBodyMeshName`, `make_team_bodies.py`, `team_bodies.blend`) and the
+  box weapons (`SM_Pistol`, `SM_Rifle`, `SM_Sniper`, `SM_Grenade`, the old `SM_C4`, `M_Weapon*`, `M_BombDisplay`, the
+  standard-library `make_weapons.py`); `ArmsMeshName` and `CTBodySkeletalMeshName` / `TBodySkeletalMeshName` become
+  the team's names. Without a body the weapon sits on the capsule.
+- de_leon's blockout ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N28, D10): its shared 1 m cubes and pads
+  (`SM_Wall`, `SM_Floor`, `SM_CrateStack`, `SM_PadA`, `SM_PadB`, `SM_PadCT`, `SM_PadT`) and flat materials (`M_Wall`,
+  `M_Floor`, `M_SiteA`, `M_SiteB`, `M_SpawnCT`, `M_SpawnT`); `SM_Crate` and `M_Crate` are now the textured crate's.
+- ShooterGame's generic weapons (N30a, D10): `AShooterWeapon_Pistol`, `AShooterWeapon_Rifle` and
+  `AShooterWeapon_Sniper` give way to CS's (`AShooterWeapon_USP`, `_AK47`, `_AWP` and the rest), the capsule's two hit
+  groups (`EShooterHitGroup::Body`) to CS's seven, and the flat buy menu (`GetBuyMenuItems`) to its pages; in
+  `CheckBannedApis.ps1`.
+- ShooterGame's one grenade (N30b, D10): `AShooterWeapon_Grenade` is `AShooterWeapon_HEGrenade`, beside the flashbang
+  and the smoke grenade; in `CheckBannedApis.ps1`.
+- ShooterGame's surface table (N30f, D10): `SurfaceMaterials`, `EShooterSurface` and `FShooterSurfaceMaterial` are the
+  physical materials (`FHitResult::PhysMaterial`, `SHOOTER_SURFACE_*`); the one footstep (`FootstepSoundName`,
+  `S_Footstep`) is the surfaces' (`FootstepSounds`); in `CheckBannedApis.ps1`.
+
+### Fixed
+
+- The glTF import turns v over (N27): glTF's UVs start at the image's top left, the engine keeps a texture's bottom row
+  first; since FBX's removal (N21) every glTF texture was drawn upside down (no textured glTF content showed it until
+  the characters). de_leon's and AxisTest's meshes were imported again (their UVs change, nothing they draw).
+- The glTF animation extras (N27): the import reads `loop` into the clip's `bLoop` (every clip looped: a jump's start,
+  a montage's clip wrapped), and `leon_art.add_action` writes the notifies as the list of `{"name", "time"}` (seconds)
+  the import reads; N26 wrote a `Name@frame` string that the import skipped silently, and a string now fails it.
+- The first-person arms never ticked since N18 (a skeletal mesh component has no tick function of its own; ACharacter
+  ticks its body): `AShooterCharacter` ticks `Mesh1P`, so their montages advance and their pose follows; they are
+  evaluated only when drawn (a bot's never).
+- The weapon socket's name: N25's code used `Grip`, N26's art `Weapon_R`; it is `Weapon_R` everywhere (the character's
+  `WeaponSocketName`, the engine's skinned test character).
+
+## [0.23.0] - 2026-09-29
+
+VU1 and native data ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N12 to N20, with N14b): LPS2 v2 meshes drawn by VU1's
+static and skinned microprograms, textures resident by blocks with mips, VU0 in macro mode and the scratchpad, LODs,
+cells and portals, fog, blob shadows and the canvas as sprites, a collision broadphase, memory arenas and budgets, tick
+groups, timers, a fixed 30 Hz step and an incremental garbage collector, the sounds on the SPU2, and ShooterGame's
+frame on the EE. PCSX2 ([Budgets.md](Engine/Platforms/PS2/Documentation/Budgets.md), the rows «N17» and «N18»): the
+bot match on the blockout map at 29.9 and 29.65 fps, p50 / p95 33.5 / 33.5 ms; N18's fixed step makes its row the first
+the later ones compare with. The phases were not done in the milestones' order (N14, N14b and N15 came after the art
+of 0.24.0), so some entries name later phases.
+
+### Added
+
+- meshoptimizer 1.2 (MIT), a pinned download wrapped as the `MeshOptimizer` External module: MeshUtilities builds the
+  LPS2 v2 meshes with it, at edit time only (no game target links it); its simplifier is there for N15's LODs
+  ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N12). Tests: `System.MeshUtilities.LPS2.*` (the strips draw exactly the
+  source's triangles with their winding, the batches fit VU1's budget, the quantization error, the same bytes every
+  build, the errors), `System.Renderer.GS.Scene.StripsDrawTheSource` and `ShooterGame.Content.MeshQuantization` (437
+  engine tests, 57 ShooterGame).
+- The scene's features of [ps2-shipping](Docs/PLANS/ps2-shipping.md) N15. **VU0** in macro mode: `FVectorMath`
+  (`Math/VectorMath.h`; the PS2's `PS2VectorMath.cpp` issues COP2 from the EE, elsewhere the scalar reference
+  `FVectorMathFPU`) multiplies matrices (`FMatrix::operator*`, so the pose's palette products too), transforms vectors
+  (`TransformFVector4`) and tests a box or a sphere against planes four at a time (`FVectorPlaneSet`, which `FFrustum`
+  keeps); TestPAL compares VU0 with the reference (`System.Core.Math.VectorMathVU0`: at most 2 units in the last place
+  of the products' magnitudes in PCSX2). **The scratchpad** (`Misc/Scratchpad.h`: `FScratchpad`, `FScratchpadMark`,
+  `TScratchpadAllocator`; the EE's 16 KB at `0x70000000`, a static buffer elsewhere and with `-nospr`) holds the scene
+  renderer's frame lists (`FSceneRenderList`) and the emitter's per-batch scratch. **LODs**: a static mesh's
+  `SourceModels` (UE's) are simplified from LOD 0 when it is built (`IMeshBuilderModule::SimplifyMesh`,
+  `FLPS2MeshBuilder::Simplify`, `meshopt_simplify`) and saved after the collision triangles (a mesh of one LOD keeps
+  its bytes); ImportList.ini's `LODs=<share>@<size>,...`; the renderer picks by screen size (`ComputeStaticMeshLOD`,
+  `ComputeBoundsScreenSize`, `SceneManagement.h`, UE's) with `[/Script/Engine.RendererSettings]
+  StaticMeshLODDistanceScale`. **Cells and portals**: the map importer's `VIS_<Cell>` / `PORTAL_<CellA>_<CellB>` rules
+  make `AVisibilityCellVolume` / `AVisibilityPortal`; the scene gathers them into a `FVisibilityCellGraph` (RenderCore)
+  and draws only what the cells the view reaches through the portals hold (screen rectangles narrowed portal by
+  portal; a map without cells draws everything). **Fog**: `AWorldSettings::FogSettings` (`FWorldFogSettings`, a linear
+  distance fog, off by default) is the GS's per-vertex fog (FOGCOL, XYZF2 with FGE; `FGSVertexFog`), in the emitter and
+  in VU1's StaticUnlit and StaticLit alike. **Blob shadows**: `UPrimitiveComponent::bCastBlobShadow` (ShooterGame's
+  bodies) traces the floor down and the renderer lays a soft dark quad there. **The canvas's rectangles** (tiles,
+  glyphs, lines along an axis) go to the GS as SPRITEs (`FCanvas::GetPrimitives`, `ECanvasPrimitive`). The view model
+  pass is culled by its own frustum. `FFrameStats` counts the cells seen, what they left out, the blob shadows and the
+  meshes drawn at a lower LOD. Tests: `System.Core.Math.VectorMathVU0`, `System.Core.Memory.Scratchpad`,
+  `System.RenderCore.VisibilityCells.*`, `System.Renderer.GS.Scene.LODByScreenSize`, `.Fog`, `.BlobShadows`,
+  `.CellsAndPortals`, `.ViewModelCulling`, `System.Renderer.GS.Canvas.Sprites`,
+  `System.MeshUtilities.LPS2.SimplifiedLODs`, `System.Engine.Assets.StaticMeshLODsRoundTrip`,
+  `System.LeonEd.GLTFImport.StaticMeshLODs`, `System.LeonEd.MapFactory.CellsAndPortals` (the fixture
+  `CellsFixture.gltf` from `MakeCellsFixture.py`); VU1Conformance draws fogged batches (42 batches, F 0).
+- Memory arenas and budgets ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N17): `FMallocBinned` (UE's name) is GMalloc
+  on the EE and the PC: 64 size classes 16 bytes apart up to 1 KB, in 4 KB pages of an arena reserved at start-up
+  (`FPlatformProperties::SmallBlockArenaSize`: 2 MB on the PS2, 16 MB on Win64), O(1) and deterministic, 16 / 64 / 128
+  byte alignment, large blocks from the system heap; live stats (current, peak, live, allocations since start-up, the
+  arena's pages, each class). Memory tags (UE's LLM: `LLM_SCOPE(ELLMTag::X)`, `FLowLevelMemTracker`) charge every
+  block to a tag, with budgets from `[Core.MemoryBudgets]` (PS2Engine.ini sets the EE's): over 90 % a warning, over
+  the budget a fatal error that names the tag. `FMemStack` / `FMemMark` / `TMemStackAllocator` (UE) hold a frame's
+  temporaries, emptied by the engine loop, which checks nothing outlives the frame; the collision queries' hits, the
+  player input's lists, the canvas, the impact marks and tracers and the path search use it. A package's bytes live in
+  the linker's load arena, released once its exports are serialized and returned as a block when the load ends.
+  `stat unit`'s RAM is GMalloc's current / peak / budget, `stat memory` (F8) lists the tags, and `-LogFrameTimes` adds
+  `heap_kb`, `allocs_per_frame` and `MemoryTags:` (MeasurePS2's CSV). The strip emitter's scratch is on the frame's
+  stack too. The headless bot match allocates 9.2 times a frame instead of 25.1 and replays the same; PCSX2: 29.9 fps,
+  GMalloc peak 1 527 KB, arena 504 KB of 2 MB, 8 to 10 allocations a frame in a round (Budgets.md). Tests:
+  `System.Core.Memory.*` (10) (479 engine tests, TestPAL 156 on Win64, 149 on the EE).
+
+### Changed
+
+- A static mesh's render data is LPS2 v2 on every platform, the shape the PS2's VU1 is to read
+  ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N12, D1; [ASSET_FORMATS.md](Docs/ASSET_FORMATS.md#lps2-v2)):
+  `FStaticMeshLODResources::RenderData` (`FLPS2Mesh`, RenderCore) is one blob of batches of at most 64 vertices (a
+  batch's input and GIF output fit half of VU1's data memory: 3 + 7 x 64 = 451 of 496 quadwords), each a run of
+  triangle strips whose vertices that close no triangle carry the GS's ADC; positions as `int16` x 3 with the mesh's
+  scale and bias, normals as `int8` x 3 with the strip flags, a baked RGBA8 colour (white until N22), 4.12 texture
+  coordinates with a whole offset a batch, a material slot a section, every stream on a quadword for its VIF UNPACK
+  (V3-16, V4-8, V4-8, V2-16): 18 bytes a vertex instead of 32. MeshUtilities builds it at import (`FLPS2MeshBuilder`,
+  Engine's `IMeshBuilderModule`), the same bytes every time; the float vertices, 32-bit indices and index sections go.
+  A drawn position is within half a step of the source's (0.06 cm at most on de_leon, through its actors' scale).
+- The GS scene renderer draws a static mesh batch by batch as VU1 will (D8): the batch's sphere against the view's
+  planes skips it, sends its strips as a TRISTRIP (only the vertices of the drawn triangles; XYZ3 for those that close
+  none) when it is inside the guard band and the near and far planes, or sends its triangles through the clipper. The
+  same frame as the source's triangles one by one, in 391 GS writes instead of 946 (the test's scene); SceneFrame is
+  unchanged (29 pixels). On the PS2 a scene triangle costs 27.9 µs instead of 33.8 (PCSX2).
+- The physics scene collides with the triangles a static mesh saves beside its render data, the source's at full
+  precision (`FTriMeshCollisionData`, `UStaticMesh::GetPhysicsTriMeshData`): the bot match is unchanged (CT 8 - T 2).
+  Packages are `VER_LEON_LPS2_MESH` (3), the oldest loadable version: the engine and ShooterGame content was saved
+  again, and a second reimport gives the same bytes. The PS2 pak is 464 KB (456 KB): the collision triangles and the
+  vertices strips share outweigh the smaller vertex. G4 bans the removed arrays.
+- The GS texture cache keeps textures resident ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N13): each texture takes a
+  run of blocks with its levels at their real alignment and its CLUT (`FGSTextureLayout::GetFootprint`), and when the
+  arena is full the least recently used textures of earlier frames are evicted, never the frame's own and never all at
+  once. `[/Script/Engine.RendererSettings] TextureUploadBudgetKB` (128) caps a frame's uploads; a texture over it
+  draws from its smallest level or a flat colour until the next frames upload it. TEX0 loads a CLUT with CLD 4 / 5
+  only when CBP0 / CBP1 changes, and with CLD 2 / 3 when the buffer no longer holds the CLUT a register names. The PS2
+  cook makes the P4 / P8 mip chain down to 8 texels, averaged in linear space, through one palette (mips as indices:
+  `GetPixelFormatMipDataSize`, `UTexture2D::AddMip`; the package layout already had mips, so no version change); the
+  scene renderer samples it trilinear with the GS's LOD from Q (K from the section's texel density, documented in
+  ARCHITECTURE; `UMaterial::bMipmaps`, `LodBias`), draws the opaque sections grouped by texture and writes TEX0,
+  MIPTBP, TEX1 and CLAMP only when they change. `FFrameStats` and `FrameStats Summary:` add the upload bytes,
+  evictions, CLUT loads and resident KB (`tex_upload_kb`, `tex_evictions`, `clut_loads`, `tex_resident_kb`); the
+  GSConformance scene ClutAndFormats adds paletted mipmaps and CLD 2 to 4, and SceneFrame draws the cooked texture
+  with its mips (20 pixels beyond one 5-bit step). PS2: 29.0 fps, the scene 12.5 ms, 1 518 GS writes and 23.7 KB of
+  GIF a frame. Tests: `System.Renderer.GS.TextureCache.Oversubscribed` (3x, never a reset), `.EvictionOrder`,
+  `.UploadBudget`, `.ClutLoads`, `System.Renderer.GS.Scene.DrawsGroupedByTexture`,
+  `System.TextureCompressor.Paletted.MipChain` (456 engine tests).
+- The PS2 draws the static meshes on VU1 ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N14): a LPS2 v2 batch inside
+  the guard band is a command of the list (`FGSCommandList::DrawVertexBatch`, `FGSVertexBatch`, `FGSVertexDraw`,
+  GSCore), which the PS2 hands to VU1's microprograms StaticUnlit and StaticLit (`PS2RHI/Private/VU1/VU1Programs.vsm`,
+  assembled by `dvp-as` in the PS2 build: `LeonPlatform_PS2_ModuleSources`): transform, 1/w, the GS's 12.4 pixels,
+  Z, STQ, the baked colour times the material and the ambient and one sun, CLIP and back faces, and an XGKICKed PACKED
+  packet (PATH1), double buffered in VU1's memory. The frame is one VIF1 chain (`FGSGifPacket::BuildChain` with
+  `IGSVertexBatchEncoder`, `FPS2VU1BatchEncoder`): the EE's writes by DIRECT (PATH2), each batch's header by CNT, its
+  streams by REF where the mesh keeps them, MSCAL; FLUSH after batches, EOP before them; PATH3 is not used and the GIF
+  is reset at `InitDisplay`. `FGSPrimitiveEmitter` moves to GSCore and is the reference (`AddVertexBatch`,
+  `FGSCommandList::AppendExpanded`); batches across the near plane or the guard band stay on the EE's clipper (D8), and
+  `-novu1` sends every batch through the emitter; N21's skinned batches are posed on the EE and handed to the same
+  programs quantized around their sphere (N14b replaces that with skinning on VU1). A Static component's baked colours (N22) go to VU1 by reference in place of the mesh's colours;
+  a mesh's LPS2 blob or an instance's baked colours given up while a frame is in flight wait for that frame
+  (`FRHIDeferredRelease`, RHI; the PS2 numbers its frames). `VU1Conformance` (PS2 program) checks the programs against the
+  emitter in the same ELF: `PASSED` in PCSX2 (30 batches, XY 0, Z 5, RGBA 1, STQ 3 ulp). PCSX2 on N27: the scene 62.9 → 41.9
+  ms a frame against `-novu1`, 11.1 → 15.3 fps (N27's 10.8). `MeasurePS2.bat -ExtraArgs`; `Package.bat` packages
+  VU1Conformance; G4 bans `DMA_CHANNEL_GIF` and libpacket2's VIF helpers. Tests: `System.GSCore.GifPacket.ChainBatches`,
+  `System.Renderer.GS.Scene.VertexBatches`, `System.Renderer.GS.Scene.SkinnedVertexBatches`, `System.MeshUtilities.LPS2.ReleasedAfterTheFramesInFlight`.
+- The PS2 skins on VU1 ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N14b): `Skinned.vsm` (SkinnedLit, SkinnedUnlit)
+  takes a skinned LPS2 v2 batch as it is stored, with its skin stream and a palette of its bones' skin matrices
+  (`FGSSkinMatrix`, 3 quadwords a bone, in the list's memory: `FGSCommandList::AllocateSkinPalette`), blends each
+  vertex's two bone matrices, poses its position and normal and goes on as StaticLit (fog and XYZF2 as N15's). The EE
+  builds the palette and places the batch by the sphere its pose keeps it in without skinning a vertex; the batches
+  across a clip plane are skinned by the emitter with the same palette. The posed streams of N14 go (D10). The GS
+  lists and the DMA chains have their own memory tag, `RenderLists` (4 096 KB on the PS2), and `EngineMisc` is back to
+  2 048 KB. VU1Conformance passes 66 batches in PCSX2, 24 of them skinned. PCSX2 on N15's tree: 22.37 fps against
+  11.42 with `-novu1` (the scene 21.9 against 59.4 ms; N15's row 13.76); on N28's map 9.78 against 8.84 (N28's 8.76).
+- VU1's microprograms send XYZF2 (N15): Z shifted to bit 4 (the screen scale's w, 16), F from the header's quadword 7
+  (zw), ADC as 2048 more in the F lane (the limits' w); `FPS2VU1BatchEncoder` writes the draw's fog and PRIM's FGE.
+  `FFrustum` keeps its planes as an `FVectorPlaneSet` and gains `IntersectsSphere`.
+- The physics scene has a broadphase ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N16): the bodies that do not move are
+  in an AABB tree (`FAabbTree`, PhysicsCore: flat nodes and items, no pointers), built when static bodies are added
+  (once for a whole bot match), the moving ones (dynamic bodies, movable components such as the character's capsule, a
+  static body once it moves) in a list sorted on X (`FPhysSceneBroadphase`), and every triangle mesh has a tree of its
+  triangles. The traces, sweeps and overlaps, `QuerySupportZ`, `ResolveCapsuleSides`, `ApplyCapsuleSweepPush` and the
+  step test only what it finds, with the same hits in the same order as testing every body (the bodies keep the order
+  they were added in); the step no longer pairs static bodies, `*Single*` queries allocate nothing and skip what lies
+  beyond the nearest hit, and `UWorld::ResolveCharacterOverlaps` pairs the characters with a sort and sweep on X. A
+  component's body is found through its unique id, and a removal moves the last body into its place. The bot match
+  gives the same result (CT 8 - T 2, 78 kills) and runs in 1.15 s instead of 1.55 s on Win64; on the PS2 the world
+  takes 5.9 ms a frame instead of 8.1. `SegmentAabb`, `SegmentUprightCapsule` and `SegmentFloorZ` move to
+  PhysicsCore, `SegmentSlopePlane` next to `FSlopePlane`. Tests: `System.Engine.PhysScene.Broadphase.*` (6, against a
+  brute force), `System.PhysicsCore.Triangle.MeshTreeMatchesEveryTriangle` (428 engine tests).
+- Tick groups, timers, a fixed step and an incremental garbage collector
+  ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N18, D4):
+  - `FTickFunction` (UE's API: `PrimaryActorTick`, `PrimaryComponentTick`, `bCanEverTick`, `TickGroup`, `TickInterval`,
+    `bStartWithTickEnabled`, `AddPrerequisite`, `SetActorTickEnabled`, `SetComponentTickEnabled`) and the world's
+    `FTickTaskManager`: `TG_PrePhysics`, the physics step, `TG_DuringPhysics`, `TG_PostPhysics`, the camera managers,
+    `TG_PostUpdateWork`. Each group keeps only its enabled tick functions, in the level's order with an actor's
+    components before it, so placed geometry, lights and volumes cost nothing (an actor or a component ticks only when
+    its class sets `bCanEverTick`, as in UE); an interval carries its remainder; a pawn and its components wait for
+    their controller (`AController::AddPawnTickDependency`). The bot match played the same match as before on the
+    tick functions alone.
+  - `FTimerManager` (UE's API: `SetTimer` with a UObject's method or a delegate, rate, looping, first delay,
+    `SetTimerForNextTick`, `ClearTimer`, `ClearAllTimersForObject`, `IsTimerActive`, `GetTimerRemaining` / `Elapsed` /
+    `Rate`), owned by the world and ticked first in each step, on an integer clock (3 MHz: 1/30, 1/25 and 1/60 s are
+    whole numbers of units), so a timer fires on the same step every run. `AActor::SetLifeSpan`, the pain volume, the
+    pawn sensing's sight updates (a look held back to the next step turns the component's tick on for one step), the flash
+    light pool (timers without a delegate: nothing allocated per shot) and `AGameState::ElapsedTime` (UE's `DefaultTimer`) run on it,
+    and ShooterGame's round phases, buy time, `mp_restartgame`, bomb (explosion, defuse, beeps), planting, grenade fuse,
+    equip and reload (CS's timings unchanged).
+  - The world steps at a fixed 1/30 s (D4): `UEngine::UpdateTimeAndHandleMaxTickRate` turns the real time (integer
+    microseconds of `FPlatformTime::Cycles64`) into whole steps (`FFixedStepClock`, `[/Script/Engine.Engine]
+    FixedStepsPerSecond=30`), at most `MaxStepsPerFrame` (4) a frame, and the render draws between the last two steps:
+    the scene proxies keep two steps' transforms (`FPrimitiveSceneProxy::SetStepTransform`,
+    `FSceneInterface::InterpolateTransforms`) and the viewport the player camera's two views
+    (`APlayerCameraManager::GetInterpolatedView`), never feeding the simulation. PAL draws 25 fps of the same 30 Hz
+    steps. A headless run steps the same way (sleeping until its step), `-benchmark` one step a frame unpaced. The
+    world's time counts in the timers' units. The same seed now plays the same match headless, in a window or on the
+    PS2 whatever the frame rate: `BotMatch 10 7` gives `CT 8 - T 2, 70 kill(s), reasons [4,4,4,3,4,4,4,4,3,4]` (the
+    variable step's 60 Hz headless steps gave CT 4 - T 6, 75 kills), and a windowed 2-round match paced at 30 fps the
+    same line as the headless one (`CT 2 - T 0, 13 kill(s), reasons [4,4]`).
+  - Incremental garbage collection: every 10 s of game (`gc.TimeBetweenPurgingPendingKillObjects`) a collection starts
+    and visits `gc.IncrementalObjectsPerStep` (100) objects a step, a count and not a time so it advances the same on
+    every machine; its marks are its own (weak pointers and iterators see every object meanwhile), each visit records
+    the reference slots it read, and the end, at once, visits again the objects whose slots changed, the new objects,
+    the roots and what the classes' `AddReferencedObjects` report, then sweeps and purges
+    (`StartIncrementalGarbageCollection`, `IncrementalCollectGarbageStep`, `IsIncrementalReachabilityAnalysisPending`).
+    A level load collects fully, and ShooterGame asks for a full collection at each round's start
+    (`UEngine::ForceGarbageCollection`); the collector runs after each world step.
+  - PS2 (`MeasurePS2 -Label N18`): on N22 and N25: 29.65 fps, 33.7 ms average, p50 / p95 / p99 33.5 /
+    33.5 / 50.3 ms, the world 3.1 ms (the timers 0.1 to 1.1 ms with the bots' sight updates), the scene 15.6 ms (762
+    triangles: N22's baked floor), GMalloc peak 1 949 KB, 27.1 allocations a frame, 934 UObjects at most. Two runs, and
+    builds on N17, N22 and N25 (a render change and an animation runtime in between), all play the same match
+    (`CT 0 - T 2, 13 kill(s), reasons [3,3]`): the rows of Budgets.md are comparable from now on. The EE does not play
+    Win64's match (`CT 2 - T 0, 13 kill(s), reasons [4,4]`): its floats round otherwise (determinism per platform). A
+    full mark of 893 objects costs 2.4 ms on the EE; an incremental collection visits them in 10 steps and ends in
+    1.0 ms (purge 0.13 ms); a round's full collection takes 3.1 ms.
+  - Tests: `System.Engine.Tick.*` (6), `System.Engine.Timers.*` (5), `System.Engine.FixedStep.*` (2),
+    `System.CoreUObject.GarbageCollection.IncrementalMatchesFull`, `.IncrementalMutations`, `.IncrementalWeakPointers`
+    (530 engine tests, ShooterGame 64, TestPAL 159).
+- The sounds play on the SPU2 ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N19). The new Developer module
+  AudioCompressor encodes the SPU2's ADPCM (`FSpuAdpcmEncoder`: 16-byte blocks of 28 samples, each block's filter and
+  shift searched against the decoder, the loop flags; mono; resampled by a windowed sinc to the sound's
+  `CompressionSampleRate`, 22 050 Hz by default; a loop on a block; the same bytes every run), and AudioMixer decodes it
+  (`FSpuAdpcm`). Both target platforms cook every `USoundWave` to it (wave format `SPU2ADPCM`: the rate and loop start
+  with the blocks as bulk data, no PCM) and the cook writes `<Platform>-SoundReport.txt`, failing a map whose sounds do
+  not fit the SPU2 RAM; the desktop's editor builds make the same ADPCM from an uncooked sound's PCM. `FAudioDevice`
+  runs the SPU2's model on every platform: the buffers resident in its RAM from the sound's load (shared by path,
+  counted, freed from the top as audsrv allocates), 24 hardware voices (2 for music, the last 4 free effect voices for
+  sounds above the default `USoundBase::Priority`; ShooterGame's bomb sounds have 2), plays started by its tick after
+  the world, each voice's volume and pan from the listener in audsrv's steps, sent only when they change. The PS2's
+  `FAudioHardware` is audsrv's ADPCM calls (`audsrv_load_adpcm`, `audsrv_ch_play_adpcm`,
+  `audsrv_adpcm_set_volume_and_pan`); the desktop's decodes the buffers and mixes the voices with the SPU2's pitch and
+  audsrv's levels into miniaudio, so it sounds like the PS2. In PCSX2 the EE's audio falls from 2.1 to 0.05 ms a
+  frame, the cooked sounds from 242 to 68 KB and the PS2 pak from 456 to 292 KB (Budgets.md). Tests:
+  `System.AudioCompressor.SpuAdpcm.*` (4), `System.AudioMixer.SpuAdpcm.*` (3), `System.AudioMixer.Device.*` (4),
+  `System.AudioMixer.SoftwareMixer.SpuPitch`, `System.LeonEd.Cook.SpuAdpcmSounds` (454 engine tests).
+- ShooterGame's frame on the EE ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N20): the game mode keeps registries of
+  what the game looked up by walking the level's actors for every bot every frame (the map's bomb sites, buy zones and
+  team starts, found once and sorted once; the pawns, the pickups, the bombs and the grenades, from their BeginPlay to
+  their EndPlay) and counts the living once a frame. The bots trace only to living enemies
+  (`UShooterPawnSensingComponent`, on UE's `UPawnSensingComponent::ShouldCheckVisibilityOf`,
+  `ShouldCheckAudibilityOf`, `OnTimer` and `SetTimer`, new in the engine) and take turns to look: 10 Hz each as before,
+  spread over the 0.1 s, at most `MaxSensingUpdatesPerFrame` (2) a frame, the rest queued in turn. A noise reaches the
+  registered sensing components instead of every actor's components. The muzzle flashes and explosions reuse a pool
+  of eight lights (`UWorld::AcquirePooledPointLight`; `UWorld::AddOnActorSpawnedHandler` is new too); a sound plays
+  from its samples in place (`USoundWave::LockPCM` / `UnlockPCM` replace `GetPCMView`'s copy, which G4 now rejects);
+  the weapon classes are listed once; the HUD and the buy menu format a line only when what it shows changes. The bot
+  match with seed 7 goes from CT 8 - T 2 (78 kills) to CT 4 - T 6 (75 kills): only the moment of each bot's look moved
+  (with every bot looking in the same frame, as before, the match is the same); its UObjects' peak falls from 2 557 to
+  1 177. 36 000 headless frames take 1.8 s instead of 2.7 s on Win64, and
+  in PCSX2 the world takes 3.9 ms a frame instead of 9.0 (27.5 fps; Budgets.md). Tests:
+  `ShooterGame.Registry.MapOnDeLeon`, `.PickupsAndPawns`, `ShooterGame.Bots.SensingFilter`, `.SensingStagger`,
+  `ShooterGame.Effects.MuzzleFlashPool`, `ShooterGame.HUD.TextCache` (62 ShooterGame tests).
+
+### Removed
+
+- `FCanvas::GetTriangles` (N15, D10): `FCanvas::GetPrimitives` gives the rectangles as the GS's sprites;
+  `FScene::GatherStaticMeshes` / `GatherSkeletalMeshes` are `GatherPrimitives` (with the view's cells); both in
+  `CheckBannedApis.ps1`.
+- `FMallocAnsi` and `HAL/MallocAnsi.h`, with their `PLATFORM_WINDOWS` test (G4 rejects them; `FMallocBinned` replaces
+  them), and PS2Engine.ini's unread `[/Script/PS2RHI.PS2Settings]` (the RAM line's budget is `[Core.MemoryBudgets]`
+  `Total`) ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N17).
+- The variable step ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N18): the real frame time clamped to 0.1 s through
+  `FPlatformTime::Seconds`' doubles, the headless `-tick=<Hz>` pacing (`TickHz`, `NextHeadlessTick`), the world's walk
+  of every actor (`AActor::bCanEverTick`, `TickActor` ticking every component), the tick-counted life span, pain,
+  sensing and light pool times, the game mode ticking its game state and the periodic full garbage collection;
+  `CheckBannedApis.ps1` rejects them.
+- The PCM audio path ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N19): the PS2's software mix and audsrv's PCM stream
+  (`PS2AudioOutput`), `FSoundWavePCM`, `USoundWave::LockPCM` / `UnlockPCM`, the UI cues' procedural tones (`UiTone`;
+  a cue without a sound wave is silent) and the uncooked PCM in cooked sounds; `CheckBannedApis.ps1` rejects them.
+
+## [0.22.0] - 2026-09-29
+
+A measured and clean base ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N0 to N11, after
+[ps2-preview](Docs/PLANS/ps2-preview.md)'s PC under the PS2's conditions): the PS2's frame measured in PCSX2 unattended
+(`MeasurePS2.bat`, `RunGates.bat`), ThirdPerson, the PS2's immediate path, Linux and Jolt removed, the dead data and
+the confirmed bugs gone, the GS local memory's real layout and the emulator at the reference's parity, a cycle profiler
+on every platform, the vertical blank by interrupt and the frame sent as double-buffered DMA chains. PCSX2
+([Budgets.md](Engine/Platforms/PS2/Documentation/Budgets.md), the rows «N1 baseline» to «N11»): 25.4 fps at the
+baseline, 25.7 fps (p50 / p95 33.5 / 50.3 ms) at N11; the rows before N18 play a different match each (a variable
+step), so they compare by part, not by fps.
 
 ### Added
 
@@ -23,12 +716,137 @@ The PC plays under the PS2's conditions ([ps2-preview](Docs/PLANS/ps2-preview.md
 - The desktop's gamepad as the DualShock (`FGLFWInputInterface`), and `FDualShockAnalog` (libpad's bytes and dead zone)
   shared with the PS2.
 - `FAudioOutput`: the desktop's device of miniaudio (fed through its lock-free ring buffer) and the PS2's audsrv.
-- Tests: `System.Renderer.PS2Preview.*`, `System.ApplicationCore.DualShock.Analog`,
+- `-LogFrameTimes` splits the frame (`Frame split over N frames`: input, audio, world, GC, viewport tick, scene
+  updates, scene, HUD, overlay, canvas, present, engine loop) and, on the PS2, the present (`Present over N frames`:
+  the GIF packet, its DMA, the GS finishing, the vertical blank wait). The parts are integer cycles
+  (`FFrameTimeClock`), read only with the flag ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N0).
+- `Package.bat -Only <Name[,Name]>` packages only those artifacts.
+- Tests: `System.Engine.GameFramework.RestartReplacesTheSpectator`, `ShooterGame.Rounds.DeadPlayerPlaysAgain` and 4
+  more ShooterGame tests (49), `System.Renderer.PS2Preview.*`, `System.ApplicationCore.DualShock.Analog`,
   `System.ApplicationCore.Desktop.GamepadAsDualShock`, `System.AudioMixer.Device.QueuesTheMix` (414 engine tests on
   Linux, 423 on Win64).
+- The PS2 frame measured in PCSX2, unattended ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N1): `MeasurePS2.bat` stages
+  ShooterGame, runs a bot match watched through a bot's eyes in PCSX2 without its window, from a private data folder
+  with pinned settings (`Engine/Platforms/PS2/Build/PCSX2/Measure.ini`), and records the game's
+  `FrameStats Summary:` line (the run's frame time percentiles, its parts, the GS work, the heap and object peaks) in
+  `Saved/Profiling/PS2Frame.csv` and a Budgets.md row. The first: 25.4 fps (p50 33.5 ms, p95 50.3 ms), the same in
+  three runs. `-ExitAfterSeconds=N`, `-BotMatchSpectate` and `ViewNextPlayer` (CS's spec_next) come with it.
+- `RunGates.bat [-PS2] [-Measure]`: every local gate in order with a summary (the repository has no CI).
+- The GS emulator's parity ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N8): the desktop's emulator does what the
+  reference rasterizer does for MIPMAP (MIPTBP1 / MIPTBP2's levels, the LOD from Q per pixel or K, MMAG / MMIN, MXL,
+  trilinear by the LOD's fraction), the whole blend equation (Cd factors, Ad, FIX and As above 0x80, negative results),
+  COLCLAMP wrapping, dithering after the blend against the 16-bit destination, PABE, FBA, the destination alpha test,
+  FBMSK bit by bit, REGION_CLAMP / REGION_REPEAT on every level, CLD 0 to 5 with CBP0 / CBP1 (`FGSClutBuffer::Update`,
+  shared), and lines and points stepped as the reference steps them (`GSStepLine`, GSCore). Draws that read the frame
+  go group by group over a copy of it. `FGSCommandList::IsSupported` now accepts exactly that (AA1, FIX, CSM2, MTBA,
+  CLD 6 and 7 and the reserved encodings stay out), `AddVertexNoKick` takes XYZF3, and the rule is in
+  CODING_STANDARD: a GS feature enters the renderer only with its conformance scene. Ten new GSConformance scenes
+  (MipmapLod, AlphaTest, Fog, TexAAndFunctions, ClampModes, StripsAndSprites, BlendEquation, PabeFbaDate,
+  Dither16Blend, ClutLoads; the PS2 program shows 20 in a 4 x 5 grid), each with its `System.GSReference.*` test
+  (433 engine tests, TestPAL 137).
+- Cycle stats, a profiler on every platform ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N9): `Stats/Stats.h` in Core
+  (UE's `DECLARE_STATS_GROUP`, `DECLARE_CYCLE_STAT` / `DECLARE_CYCLE_STAT_EXTERN` / `DEFINE_STAT`,
+  `SCOPE_CYCLE_COUNTER`, `FThreadStats`; Leon's `FCycleStatsWindow`): a fixed tree of 256 nodes and 16 levels, no
+  allocation per scope, recording only with `-LogFrameTimes` or `stat cycles` (F7, a page in the debug overlay). The
+  clock is `FPlatformTime::Cycles()` (QPC on Win64, the COP0 Count on the EE), and on the EE the performance counters
+  (PCR0 / PCR1) count the instruction and data cache misses. The engine frame, the world, the collision queries, the
+  AI, the bots, the audio mix, the GS scene renderer and the PS2 present are instrumented; `-LogFrameTimes` logs a
+  `Profile over N frames (ms, calls):` block every 5 s and `ProfileSummary:` at exit (MeasurePS2 adds it to its CSV),
+  and works headless too. The `Frame split` and `FrameStats Summary:` come from the stats: `FFrameTimeClock`,
+  `FEngineFrameSplit`, the draw times structs and the PS2's `Present over` line are gone. PS2 (PCSX2): 24.7 fps, the
+  scene 12.6 ms, the world 9.2 ms, the canvas 4.6 ms, the audio mix 2.1 ms a frame; a scope costs 451 ns on the EE
+  (0.11 % of the frame). Tests: `System.Core.Stats.*` (6).
+
+### Changed
+
+- The view projects at the display's aspect ratio (4:3), so the PS2's scene is no longer squashed on the TV, and the
+  desktop shows the frame the TV's way (the lines at a whole scale, each stretched linearly).
+- The desktop keeps the PS2's frame rate (`FFramePacer`; `-benchmark` does not wait); the PS2 reads `SyncInterval` from
+  the renderer settings instead of `PS2Settings`.
+- One `FAudioDevice` on every platform, mixing with `FSoftwareAudioMixer`: the desktop hears the PS2's mix.
+- The Win64 cook makes the textures paletted, as the PS2's; the desktop draws uncooked RGBA8 textures through the same
+  conversion.
+- The PS2 builds at -O2 as documented: CMake's GNU Release flags appended -O3 after the toolchain's -O2; the toolchain
+  now forces `CMAKE_CXX_FLAGS_RELEASE` (ShooterGame's text: -8.4 %).
+- A player's camera views its new pawn when it possesses one (UE's ClientRestart), whoever it watched as a spectator.
+- `RunPCSX2.ps1` runs ShooterGame by default.
+- The PS2's debug text and rectangles are `FGSDebugDraw` (GSCore): recorded into an `FGSCommandList`, so every backend
+  draws them; the error screen and GSConformance use it, and the error screen keeps three lines per log error. R3
+  toggles `stat unit` on the DualShock. Tests: `System.GSCore.DebugDraw.String`, `.Rect` (426 engine tests, 132
+  TestPAL on Win64).
+- The GS local memory (`FGSLocalMemory`, GSCore) has the GS's layout instead of a linear one: pages, blocks placed by
+  each storage format's table, columns and the manual's pixel order for all 13 formats (chapter 8), PSMCT24 and the
+  PSMT8H / PSMT4HL / PSMT4HH formats sharing PSMCT32's words, addresses wrapping at 4 MB. Buffers are addressed by
+  block (`ReadPixel(BasePointer, BufferWidth, ...)`); the emulator and GSReference share it, and the texture cache and
+  the cook's VRAM report take a texture's real footprint (`FGSTextureLayout::GetNumBlocks`, `GetBaseAlignment`): one
+  that fits in a page starts at any block ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N7). The existing frames are
+  unchanged. Tests: `System.GSCore.LocalMemory.*` (423 engine tests, 137 TestPAL on Win64).
+- The PS2 waits for the vertical blank by interrupt and follows the console's region
+  ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N10): an `INTC_VBLANK_S` handler (`FPS2VerticalBlank`) counts the fields
+  and signals a semaphore, and `FPS2RHI::WaitVSync` sleeps on it until the field `FGSFieldPacer` (GSCore) picks from
+  the count (`SyncInterval` fields after the last flip, or the next blank for a late frame) instead of spinning on the
+  GS's CSR and guessing the field from a 59.94 Hz clock. The display is PAL when ROMVER says so (`-PAL` / `-NTSC`
+  choose), with the 640x448 frame centred in PAL's 512 lines: 25 fps there, 30 on NTSC. `FPS2RHI::ShutdownDisplay`
+  removes the handler. G4 bans libgraph's polls and `graph_initialize`. PCSX2: 25.5 fps, p50 / p95 / p99 of 33.5 /
+  50.3 / 66.8 ms (2, 3 and 4 fields). Tests: `System.GSCore.FieldPacer.*` (439 engine tests, 145 TestPAL on Win64,
+  138 on the EE).
+- The PS2 sends the frame as a DMA chain, double buffered ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N11):
+  `FGSGifPacket::BuildChain` (GSCore, the one encoder of the packet, with `Build`) writes the frame's list straight into
+  one of two 128-byte aligned buffers through the uncached accelerated segment, as CNT / END sections with each
+  upload's pixels by a REF to the command list's copy (written back with `SyncDCache`), and
+  `dma_channel_send_chain_ucab` kicks it without waiting. The EE builds the next frame into the other list and buffer
+  while the DMA and the GS draw; `WaitVSync` waits for the GS's FINISH only right before the flip and retires a buffer
+  (`dma_channel_wait`) only before its reuse. A frame reaches the screen one frame after it is recorded.
+  `FlushFrame`, its `TArray` copy, `memcpy` and synchronous waits, and libpacket are gone (G4 bans them). PCSX2: the
+  GIF packet's build 1.04 → 0.51 ms a frame, 25.7 fps; GSConformance draws the same. Tests:
+  `System.GSCore.GifPacket.Chain` (the tags, QWC / ID / ADDR, the payload's alignment, the chain carrying `Build`'s
+  bytes; 440 engine tests, 146 TestPAL on Win64, 139 on the EE).
+
+### Removed
+
+- ThirdPerson, the PS2 demo built without the engine, and everything only it used
+  ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N2):
+  - the immediate path of `FPS2RHI` (`DrawBox`, `BindMaterial`, the view and light setters, `DrawDebugText`,
+    `DrawUnlitRectAlpha`, `ScreenVertex`, the Draw3D counters, `FPS2Texture`, `FPS2Material`, math3d);
+  - Launch's loop without the engine and its platform hooks;
+  - `FPS2StatsOverlay` (never drawn in ShooterGame) and Core's `FStatsOverlay`;
+  - LeonBuildTool's `COMPILE_AGAINST_ENGINE`.
+
+  A game target always compiles against the engine (`WITH_ENGINE` is 1 for games, 0 for programs), and G4 bans the
+  removed names.
+- The Linux platform (its HAL, launch, OpenGL memory query, build scripts and `PLATFORM_LINUX`) and the JoltPhysics
+  plugin, with the physics backend layer that existed only for it (`IPhysicsBackend`, `EPhysicsBackend`,
+  `UWorld::SetPhysicsBackend`): Win64 and the PS2 are the platforms, and `FPhysScene` is the one physics, the same on
+  both ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N3). The engine ships no plugin; the plugin system stays, and
+  `System.Engine.Projects.RealDescriptors` checks it with a sample plugin (416 engine tests).
+- Dead data ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N4): what no renderer reads.
+  - `FMaterial` / `UMaterial` keep what the GS scene renderer draws with (the shading, the base colour, the opacity, the
+    UV scale and the base colour map): `Specular`, `Metallic`, `Roughness`, `Shininess`, `bPlanarMirror`, `NormalMap`,
+    `RoughnessFromShininess` go, and `bCastsShadows` with its unused chain (`HasShadowCastingMaterial`,
+    `FStaticMeshSceneProxy::IsShadowCaster`); `EMaterialLightingModel::BlinnPhong` is `Lit`. The importers read only
+    those values; `M_SolidMetal`, which differed only in them, goes.
+  - `FVertex::Tangent` and `FSkeletalVertex::Tangent` (32 and 64 bytes a vertex), with `ComputeTangents` and the tangent
+    conversions. Packages are `VER_LEON_REMOVE_VERTEX_TANGENT` (2), the oldest loadable version: the engine and
+    ShooterGame content was saved again.
+  - `UEngine::DefaultBumpNormalTexture` and `T_Default_Bump_N` (65 KB of the PS2's texture VRAM); the PS2 cook stages
+    no `Engine/Shaders` (`ITargetPlatform::GetAllTargetedShaderFormats`: only Win64 compiles them).
+  - `LegacyContentYaw`: the content faces +X, so `ACharacter`'s mesh has no relative yaw.
+
+  412 engine tests.
 
 ### Fixed
 
+- A dead player never played again: `AGameModeBase::RestartPlayer` kept the spectator pawn as the player's pawn. The
+  spectator no longer counts as a pawn to keep, nor blocks a start; spectating from the login looks from the
+  controller instead of the origin; the buy menu closes on possess; no crosshair while spectating.
+- ShooterGame: automatic fire keeps its rate at 30 fps (the frame's overshoot carries to the next shot); a frozen pawn
+  cannot fire through a trigger held from before; a reload leaves the AWP's scope; a new round clears the recoil and
+  the spread; a pawn killed in the air falls to the floor (its bomb can be picked up); a defuser who survives the blast
+  stops defusing; `mp_restartgame` needs both teams from the warmup; a frozen bot sees nobody, and a lost enemy is
+  searched for where it was last seen (it was its live position, through walls).
+- `Package.bat -NoPS2 -Only TestPAL` packaged nothing and succeeded: the "nothing to package" check runs after `-Only`.
+- The PS2's mix no longer uses doubles (software on the EE) per output frame: the voices' position is 16.16 fixed
+  point. The canvas keeps its text and vertex buffers between frames.
 - The HUD's text was twice the size it was designed at: `HudFontScale` (and the debug overlay's) was 2 for the old
   1280x896 canvas, and every platform draws the canvas into the GS's 640x448 frame since 0.21.0. It is 1, the font's
   own pixels; ShooterGame's HUD lays out from `HudLineHeight` (the scoreboard's box fits its lines, the kill feed
@@ -48,16 +866,36 @@ The PC plays under the PS2's conditions ([ps2-preview](Docs/PLANS/ps2-preview.md
   console build has no Engine config, and `FPS2ErrorScreen` shows the log's last errors and what to check on the TV
   (on a failed start and on a fatal error, through `FPS2PlatformMisc::SetFatalExitHandler`). The debug font gains the
   punctuation of paths and log lines; an empty argv[0] resolves to `host:`.
-
-### Changed
-
-- The view projects at the display's aspect ratio (4:3), so the PS2's scene is no longer squashed on the TV, and the
-  desktop shows the frame the TV's way (the lines at a whole scale, each stretched linearly).
-- The desktop keeps the PS2's frame rate (`FFramePacer`; `-benchmark` does not wait); the PS2 reads `SyncInterval` from
-  the renderer settings instead of `PS2Settings`.
-- One `FAudioDevice` on every platform, mixing with `FSoftwareAudioMixer`: the desktop hears the PS2's mix.
-- The Win64 cook makes the textures paletted, as the PS2's; the desktop draws uncooked RGBA8 textures through the same
-  conversion.
+- A DualShock plugged back in stayed digital: the pad is asked for its analog mode again after a reconnection, and
+  whenever it reads stable but is not in that mode (`FDualShockConnection`,
+  `System.ApplicationCore.DualShock.Reconnect`; [ps2-shipping](Docs/PLANS/ps2-shipping.md) N5).
+- Paletted textures lost their alpha on the GS (TCC was RGB): the CLUT's cooked alpha reaches the blend.
+- The PS2's audio queue no longer blocks the game thread when audsrv's buffer is full: what does not fit is dropped
+  and logged. The audio device counts time in integer cycles (no doubles on the EE); the mixer's 16.16 position is
+  checked over ten simulated minutes (`System.AudioMixer.SoftwareMixer.NoDrift`).
+- Per-frame allocations: an actor's tick and the character overlap resolution copy into inline storage, the effects'
+  mask is built once, and a translucent mesh is transformed once for all its sections.
+- ShooterGame's confirmed bugs ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N6):
+  - the bots kept an empty rifle drawn (they draw the best weapon every tick they engage):
+    `AShooterCharacter::EquipBestWeapon` passes over a weapon without ammunition (`AShooterWeapon::HasAmmo`: clip and
+    reserve empty; one that can reload counts) and keeps the weapon in hand when all are spent
+    (`ShooterGame.Weapons.BestWeaponSkipsEmpty`);
+  - the C4 reached 17.5 m, CS's 1750 units read as centimetres, and ignored armor: `ExplosionRadius` is 4445 cm and
+    the bomb has the HE grenade's `ArmorRatio` (1: health takes half, the armor half the rest, as CS 1.6 armors
+    blasts) (`ShooterGame.Bomb.ExplosionRadius`, `ShooterGame.Bomb.ExplosionRespectsArmor`);
+  - the bots' sprays were laser-straight: the turn toward the target erased the recoil every tick. The bot turns its
+    own aim and the kick rides on top, `RecoilCompensation` (0.5, times `Difficulty`) of each kick pulled back down
+    (`AShooterWeapon_Instant::CompensateRecoil`) (`ShooterGame.Bots.RecoilKicksTheAim`);
+  - the buy menu stayed open after the buy time and opened for a spectator (taking its Cross): it opens only when its
+    player may buy (`AShooterPlayerController::CanOpenBuyMenu`), closes by itself when that stops (the buy time's
+    end, the buy zone left), and the HUD shows why for a moment (`ShooterGame.Buy.MenuFollowsTheRules`);
+  - the buy time counted from the freeze's start, leaving the live round `BuyTime - FreezeTime` (39 s) to buy: it
+    counts from the freeze's end, as CS's `mp_buytime` (`ShooterGame.Buy.BuyTimeAfterTheFreeze`).
+- The desktop's CLUTs overwrote each other: the texture cache puts PSMT8 CLUTs 4 blocks apart, which is right on the
+  GS, but the emulator's linear local memory stored a 16 x 16 CLUT over 16 blocks, so a second paletted texture
+  corrupted the first one's palette (and GSReference's) ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N7). Tests:
+  `System.Renderer.GS.TextureCache.TwoPalettes`, `System.GSReference.Texture.TwoPalettes` and the conformance scene
+  `TwoPalettes`, which GSConformance shows on the PS2 too.
 
 ## [0.21.0] - 2026-09-26
 

@@ -8,6 +8,10 @@ UActorComponent::UActorComponent(const FObjectInitializer& ObjectInitializer)
 {
 	bAutoRegister = true;
 	bWantsInitializeComponent = false;
+	// UE: a component does not tick unless its class says so (PrimaryComponentTick.bCanEverTick).
+	PrimaryComponentTick.TickGroup = TG_PrePhysics;
+	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bStartWithTickEnabled = true;
 }
 
 void UActorComponent::PostInitProperties()
@@ -28,6 +32,7 @@ void UActorComponent::BeginDestroy()
 	{
 		UnregisterComponent();
 	}
+	RegisterAllComponentTickFunctions(false);
 	Super::BeginDestroy();
 }
 
@@ -67,9 +72,14 @@ void UActorComponent::RegisterComponentWithWorld(UWorld* InWorld)
 		{
 			InitializeComponent();
 		}
-		if (!bHasBegunPlay && OwnerPrivate->HasActorBegunPlay())
+		if (OwnerPrivate->HasActorBegunPlay())
 		{
-			BeginPlay();
+			// UE: its tick joins the world's (again, after an unregistration) while its owner plays.
+			RegisterAllComponentTickFunctions(true);
+			if (!bHasBegunPlay)
+			{
+				BeginPlay();
+			}
 		}
 	}
 }
@@ -80,6 +90,7 @@ void UActorComponent::UnregisterComponent()
 	{
 		return;
 	}
+	RegisterAllComponentTickFunctions(false);
 	if (bPhysicsStateCreated)
 	{
 		DestroyPhysicsState();
@@ -171,6 +182,40 @@ void UActorComponent::EndPlay(const EEndPlayReason::Type /*EndPlayReason*/)
 
 void UActorComponent::TickComponent(float /*DeltaTime*/)
 {
+}
+
+void UActorComponent::SetComponentTickEnabled(bool bEnabled)
+{
+	if (PrimaryComponentTick.bCanEverTick && !IsTemplate())
+	{
+		PrimaryComponentTick.SetTickFunctionEnable(bEnabled);
+	}
+}
+
+void UActorComponent::SetComponentTickInterval(float TickInterval)
+{
+	PrimaryComponentTick.UpdateTickIntervalAndCoolDown(TickInterval);
+}
+
+void UActorComponent::RegisterAllComponentTickFunctions(bool bRegister)
+{
+	RegisterComponentTickFunctions(bRegister);
+}
+
+void UActorComponent::RegisterComponentTickFunctions(bool bRegister)
+{
+	if (bRegister)
+	{
+		if (PrimaryComponentTick.bCanEverTick && bRegistered && !IsTemplate() && OwnerPrivate != nullptr)
+		{
+			PrimaryComponentTick.Target = this;
+			PrimaryComponentTick.RegisterTickFunction(OwnerPrivate->GetLevel());
+		}
+	}
+	else
+	{
+		PrimaryComponentTick.UnRegisterTickFunction();
+	}
 }
 
 void UActorComponent::OnRegister()

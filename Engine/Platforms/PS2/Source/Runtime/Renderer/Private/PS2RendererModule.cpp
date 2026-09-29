@@ -2,6 +2,7 @@
 #include "GS/GSSceneRenderer.h"
 #include "Modules/ModuleManager.h"
 #include "PS2RHI.h"
+#include "PS2VU1.h"
 #include "RendererInterface.h"
 #include "RendererLog.h"
 #include "RendererSettings.h"
@@ -36,15 +37,20 @@ namespace
 				return false;
 			}
 			SceneRenderer.GetTextureCache().SetArena(FirstBlock, NumBlocks);
+			// The static meshes' batches inside the guard band go to VU1; -novu1 sends them through the C++ emitter.
+			SceneRenderer.SetVertexBatches(FPS2VU1::IsEnabled());
 			// The frame rate (Docs/PLANS/ps2-engine.md D6: a steady 30 fps) and the TV's aspect ratio, as on the
 			// desktop.
 			Settings = FRendererSettings::Load();
+			SceneRenderer.GetTextureCache().SetUploadBudgetKB(Settings.TextureUploadBudgetKB);
+			SceneRenderer.SetLODDistanceScale(Settings.StaticMeshLODDistanceScale);
 			FPS2RHI::SetSyncInterval(Settings.SyncInterval);
 			bInitialized = true;
 			UE_LOG(LogRenderer, Log,
 				"PS2 renderer: GS scene renderer, %u KB of texture VRAM, a frame every %d vertical "
-				"blank(s)",
-				NumBlocks / 4, Settings.SyncInterval);
+				"blank(s), %s",
+				NumBlocks / 4, Settings.SyncInterval,
+				SceneRenderer.HasVertexBatches() ? "static meshes on VU1" : "static meshes on the EE (-novu1)");
 			return true;
 		}
 
@@ -61,7 +67,12 @@ namespace
 
 		void ReleaseAssetResources(const UObject* Asset) override
 		{
-			SceneRenderer.ReleaseAssetResources(Asset);
+			if (SceneRenderer.ReleaseAssetResources(Asset))
+			{
+				// Its levels may be in the frame's list (held in place) or in the chain being sent: copied, and waited
+				// for, before the asset frees them.
+				FPS2RHI::RetireInPlaceImages();
+			}
 		}
 
 		[[nodiscard]] bool IsRendererInitialized() const override

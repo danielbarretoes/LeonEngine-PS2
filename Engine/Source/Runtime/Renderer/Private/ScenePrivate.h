@@ -2,9 +2,18 @@
 
 #include "CoreMinimal.h"
 #include "LightSceneProxy.h"
+#include "Misc/Scratchpad.h"
 #include "PrimitiveSceneProxy.h"
 #include "SceneInterface.h"
 #include "UObject/GCObject.h"
+#include "VisibilityCells.h"
+
+/**
+ * A list of the frame's render (UE: TArray<T, SceneRenderingAllocator>, on the frame's stack there): on the scratchpad
+ * (N15), inside the scene renderer's FScratchpadMark.
+ */
+template <typename ElementType>
+using FSceneRenderList = TArray<ElementType, TScratchpadAllocator<>>;
 
 class FSceneView;
 class FStaticMeshSceneProxy;
@@ -17,6 +26,11 @@ struct FPrimitiveSceneInfo
 	TUniquePtr<FPrimitiveSceneProxy> Proxy;
 	/** Where the primitive sits in the scene (FScene::GetOrderKey). */
 	uint64 OrderKey = 0;
+	/**
+	 * The cells of the scene's FVisibilityCellGraph its bounds touch, a bit each (0: none, or no cells), assigned when
+	 * the cells or the primitive are added; a primitive that moves (not Static) is assigned again each frame.
+	 */
+	uint64 CellMask = 0;
 };
 
 /** A light of the scene (UE: FLightSceneInfo). */
@@ -48,9 +62,14 @@ public:
 	void AddPrimitive(UPrimitiveComponent* Primitive) override;
 	void RemovePrimitive(UPrimitiveComponent* Primitive) override;
 	void UpdatePrimitiveTransform(UPrimitiveComponent* Primitive) override;
+	void InterpolateTransforms(float Alpha) override;
 	void AddLight(ULightComponent* Light) override;
 	void RemoveLight(ULightComponent* Light) override;
 	void UpdateLightTransform(ULightComponent* Light) override;
+	void UpdateVisibilityCells() override
+	{
+		bVisibilityCellsDirty = true;
+	}
 	[[nodiscard]] UWorld* GetWorld() const override
 	{
 		return World;
@@ -78,11 +97,24 @@ public:
 	}
 
 	/**
-	 * The static meshes View draws, in the scene's order: the world's (shown, and seen by the view's actor) and the
-	 * view model pass's (bRenderAsViewModel, shown in View).
+	 * The primitives View draws, in the scene's order (UE: FSceneRenderer's visibility): the world pass's static and
+	 * skeletal meshes (shown, seen by the view's actor, and in a cell the view sees: VisibleCells) and the view model
+	 * pass's (bRenderAsViewModel, shown in View: a first-person weapon and arms, seen by their owner only). The lists
+	 * are the renderer's frame lists (on the scratchpad, N15). The skeletal meshes come as their infos, so the renderer
+	 * can stamp the components it draws (UPrimitiveComponent::LastRenderTime). Returns how many the cells left out.
 	 */
-	void GatherStaticMeshes(const FSceneView& View, TArray<const FStaticMeshSceneProxy*>& OutWorldMeshes,
-		TArray<const FStaticMeshSceneProxy*>& OutViewModelMeshes) const;
+	int32 GatherPrimitives(const FSceneView& View, const FVisibilityCellGraph::FVisibleCells& VisibleCells,
+		FSceneRenderList<const FStaticMeshSceneProxy*>& OutWorldMeshes,
+		FSceneRenderList<const FStaticMeshSceneProxy*>& OutViewModelMeshes,
+		FSceneRenderList<const FPrimitiveSceneInfo*>& OutWorldSkeletalMeshes,
+		FSceneRenderList<const FPrimitiveSceneInfo*>& OutViewModelSkeletalMeshes);
+
+	/**
+	 * The map's cells and portals (N15), gathered from the level's AVisibilityCellVolume and AVisibilityPortal actors
+	 * again when they changed (UpdateVisibilityCells), each primitive assigned to the cells it touches then; empty for
+	 * a map without cells.
+	 */
+	const FVisibilityCellGraph& GetVisibilityCells();
 
 	/** The component's place: its owner's spawn serial (AActor::GetUniqueID), then its index among the owner's. */
 	[[nodiscard]] static uint64 GetOrderKey(const UActorComponent* Component);
@@ -95,7 +127,12 @@ public:
 	}
 
 private:
+	/** The cells a primitive's bounds touch (0 without cells). */
+	[[nodiscard]] uint64 GetCellMask(const FPrimitiveSceneProxy& Proxy) const;
+
 	UWorld* World = nullptr;
 	TArray<FPrimitiveSceneInfo> Primitives;
 	TArray<FLightSceneInfo> Lights;
+	FVisibilityCellGraph VisibilityCells;
+	bool bVisibilityCellsDirty = true;
 };

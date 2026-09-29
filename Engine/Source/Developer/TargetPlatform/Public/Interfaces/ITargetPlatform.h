@@ -52,6 +52,12 @@ public:
 	virtual void GetAllWaveFormats(TArray<FName>& OutFormats) const = 0;
 
 	/**
+	 * The shader formats its builds compile at run time (UE: GetAllTargetedShaderFormats); the cook stages
+	 * Engine/Shaders only for a platform that has one. None for a platform that draws without shaders (the PS2's GS).
+	 */
+	virtual void GetAllTargetedShaderFormats(TArray<FName>& OutFormats) const = 0;
+
+	/**
 	 * What the cook does not convert for this platform yet, logged once per cook; empty when its content is complete
 	 * (Leon).
 	 */

@@ -25,7 +25,7 @@ UProjectileMovementComponent::UProjectileMovementComponent(const FObjectInitiali
 	// UE: a unit velocity along the component's forward, which InitialSpeed scales.
 	Velocity = FVector(1.0f, 0.0f, 0.0f);
 	bWantsInitializeComponent = true;
-	SetComponentTickEnabled(true);
+	PrimaryComponentTick.bCanEverTick = true;
 }
 
 void UProjectileMovementComponent::InitializeComponent()

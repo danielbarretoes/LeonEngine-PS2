@@ -2,12 +2,16 @@
 
 #include "CanvasTypes.h"
 #include "Engine/GameViewportClient.h"
+#include "EngineStats.h"
 #include "GenericPlatform/GenericWindow.h"
 #include "RendererInterface.h"
 
+DEFINE_STAT(STAT_ViewportDraw);
+DEFINE_STAT(STAT_CanvasFlush);
+DEFINE_STAT(STAT_ViewportPresent);
+
 namespace
 {
-
 	/** The pending screenshot's file, empty when none is requested. */
 	FString& GetScreenshotFilename()
 	{
@@ -53,12 +57,17 @@ void FViewport::Draw(bool bShouldPresent)
 	if (Size.X > 0 && Size.Y > 0 && ViewportClient != nullptr)
 	{
 		FCanvas Canvas(Size.X, Size.Y);
-		ViewportClient->Draw(this, &Canvas);
+		{
+			SCOPE_CYCLE_COUNTER(STAT_ViewportDraw);
+			ViewportClient->Draw(this, &Canvas);
+		}
+		SCOPE_CYCLE_COUNTER(STAT_CanvasFlush);
 		Canvas.Flush_GameThread();
 		(void)ViewportClient->ProcessScreenShots(this);
 	}
 	if (bShouldPresent)
 	{
+		SCOPE_CYCLE_COUNTER(STAT_ViewportPresent);
 		if (IRendererModule* RendererModule = GetRendererModulePtr())
 		{
 			RendererModule->EndDrawingViewport(GetWindowSize());

@@ -8,6 +8,8 @@ AHUD::AHUD(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 	bHidden = true;
+	// The widgets tick with the HUD.
+	PrimaryActorTick.bCanEverTick = true;
 }
 
 void AHUD::PostInitializeComponents()
