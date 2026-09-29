@@ -5,13 +5,34 @@ What the [ps2-shipping](PLANS/ps2-shipping.md) plan (0.22.0 to 0.24.0) left open
 [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md) has the measurements. ShooterGame runs at 29.95 fps in
 PCSX2 (p50/p95/p99 33.5 ms), so nothing here blocks the frame rate.
 
+## Bugs
+
+- **Characters vanish at some view angles** and leave their weapons floating. The skeletal mesh is culled while its
+  weapon (on the `Weapon_R` socket) is still drawn. Suspects: the pose bounds used for frustum culling (N15/N21), the
+  cells/portals assignment of moving primitives (N15), or the VU1 skinned batch placement sphere (N14b).
+- **Bots with no ammo attack with the knife from a distance.** When bots run dry and switch to the knife, they stay
+  where they are, facing each other and swinging at range, instead of closing in to melee. The AI must move into knife
+  range (as CS bots rush with the knife) or look for ammo or a weapon.
+
 ## Next features
 
+- **Minimap.** The radar (N30d) shows dots on a black square. It needs the map's real overview image, like CS's
+  overviews: a top-down render of the map, generated at cook time and paletted, drawn under the dots and rotated with
+  the view.
 - **Sky.** An HDR cubemap for the sky: a skybox drawn behind the world (today the sky is the renderer's dark clear
   colour). It can be generated procedurally (a desert sky gradient, sun and clouds) and cooked to paletted faces for
   the GS.
-- **Main menu.** A start menu to pick the map before the match.
-- **Team selection.** On joining a match the player chooses CT or T, as in CS.
+- **Main menu.** A start menu that sets up the match:
+  - the map;
+  - the bots' difficulty (CS's easy, normal, hard and expert: reaction time, aim error, awareness);
+  - the rounds to win, best of 5 by default (the first team to 3);
+  - the total number of bots.
+- **Team selection.** On joining a match the player chooses CT or T, as in CS. The bots are then redistributed so the
+  teams are as even as possible, counting the player.
+- **Crouch toggle.** Crouch toggles on press instead of being held.
+- **Drop and pick up weapons.** The player can drop the current weapon (CS's G), and walking over a weapon on the
+  ground picks it up when its slot is free, as in CS. Dead players drop their primary weapon (and the bomb) for others
+  to take.
 - **UI.** Better menus and HUD, and a new font family.
 
 ## Render
