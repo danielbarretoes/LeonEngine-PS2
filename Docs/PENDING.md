@@ -5,6 +5,15 @@ What the [ps2-shipping](PLANS/ps2-shipping.md) plan (0.22.0 to 0.24.0) left open
 [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md) has the measurements. ShooterGame runs at 29.95 fps in
 PCSX2 (p50/p95/p99 33.5 ms), so nothing here blocks the frame rate.
 
+## Next features
+
+- **Sky.** An HDR cubemap for the sky: a skybox drawn behind the world (today the sky is the renderer's dark clear
+  colour). It can be generated procedurally (a desert sky gradient, sun and clouds) and cooked to paletted faces for
+  the GS.
+- **Main menu.** A start menu to pick the map before the match.
+- **Team selection.** On joining a match the player chooses CT or T, as in CS.
+- **UI.** Better menus and HUD, and a new font family.
+
 ## Render
 
 - Batches that cross the near plane or the guard band still go through the EE's C++ clipper (13 a frame, 2.4 ms with
