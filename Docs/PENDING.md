@@ -13,6 +13,12 @@ PCSX2 (p50/p95/p99 33.5 ms), so nothing here blocks the frame rate.
 - **Bots with no ammo attack with the knife from a distance.** When bots run dry and switch to the knife, they stay
   where they are, facing each other and swinging at range, instead of closing in to melee. The AI must move into knife
   range (as CS bots rush with the knife) or look for ammo or a weapon.
+- **Bots idle when they see no enemy.** Bots fight well once they see an enemy, but without one in sight they don't
+  hunt: they should push to the objective, check the corners and the sites, follow sounds and radio reports, and
+  rotate, as CS bots do.
+- **Crouching doesn't tighten the crosshair or the spread.** In CS, crouching improves accuracy (a smaller spread and
+  a tighter dynamic crosshair); standing still is better than walking, and walking better than running. Today crouching
+  changes neither.
 
 ## Next features
 
@@ -29,6 +35,7 @@ PCSX2 (p50/p95/p99 33.5 ms), so nothing here blocks the frame rate.
   - the total number of bots.
 - **Team selection.** On joining a match the player chooses CT or T, as in CS. The bots are then redistributed so the
   teams are as even as possible, counting the player.
+- **In-game menu.** A pause menu during the match (Esc / Start) to resume, change team, or go back to the main menu.
 - **Crouch toggle.** Crouch toggles on press instead of being held.
 - **Drop and pick up weapons.** The player can drop the current weapon (CS's G), and walking over a weapon on the
   ground picks it up when its slot is free, as in CS. Dead players drop their primary weapon (and the bomb) for others
@@ -66,12 +73,18 @@ PCSX2 (p50/p95/p99 33.5 ms), so nothing here blocks the frame rate.
 
 ## Checks only a person can do
 
-- Listen to the audio in Win64 and PCSX2: weapons, the bomb, steps and impacts per surface, the ladder, body hits, the
-  radio.
-- A DualShock 2: vibration, pressure buttons, a second pad, pulling a pad out mid-game.
+Confirmed by playing (2026-09-30):
+- the sound works;
+- the pad vibrates;
+- the controls are comfortable;
+- matches progress, and the bots fight well except in the two AI bugs above;
+- the game holds 30 fps to the eye.
+
+Still to check:
+- A DualShock 2: pressure buttons, a second pad, pulling a pad out mid-game.
 - The memory card in the PCSX2 BIOS browser: the save, its icon and its title.
-- An Xbox pad's vibration on Win64. XInput pads are matched to GLFW pads by order, so a DirectInput pad next to an Xbox
-  pad can get the other pad's vibration.
+- XInput pads are matched to GLFW pads by order, so a DirectInput pad next to an Xbox pad can get the other pad's
+  vibration.
 - PAL: the region comes from ROMVER (`-PAL` forces it) and should give 25 fps, but it has never been run or measured.
 
 ## Measurements
