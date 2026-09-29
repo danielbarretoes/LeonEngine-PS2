@@ -41,6 +41,14 @@ PCSX2 (p50/p95/p99 33.5 ms), so nothing here blocks the frame rate.
   ground picks it up when its slot is free, as in CS. Dead players drop their primary weapon (and the bomb) for others
   to take.
 - **UI.** Better menus and HUD, and a new font family.
+- **A table widget for the HUD.** A reusable UMG-style table component (columns with headers, alignment and widths,
+  rows, sorting, a highlighted row) for the scoreboard. Today `AShooterHUD` draws the scoreboard by hand. The CS
+  scoreboard shows per team: name, score (kills), deaths, latency or bot, alive/dead, and the bomb carrier for T.
+- **Split screen.** Two local players on one screen, CS-style, as in console shooters. The pieces exist:
+  `UGameInstance::CreateLocalPlayer` and the second DualShock port (N24). Missing: one viewport per local player
+  (UE's `ESplitScreenType::TwoPlayer_Horizontal`/`Vertical` in `UGameViewportClient`), a HUD and view model per view,
+  audio listeners for both players, and the menu option. Each view renders the scene again, so on the PS2 it needs its
+  own budget: fewer triangles per view, LODs and fog on. Otherwise it drops to 15 fps.
 
 ## Render
 
