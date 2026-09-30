@@ -76,6 +76,13 @@ public:
 	UPROPERTY(Config)
 	float DefuseRadius = 120.0f;
 
+	/**
+	 * How loud a defuse's start is to the bots (AActor::MakeNoise at the bomb; CS's c4_disarm is heard across the site;
+	 * ps2-polish P3b): the terrorists holding the bomb come for the defuser.
+	 */
+	UPROPERTY(Config)
+	float DefuseNoiseLoudness = 1.0f;
+
 	/** Seconds after a drop before the terrorist who dropped it can take it back (a weapon's PickupDelay). */
 	UPROPERTY(Config)
 	float PickupDelay = 1.0f;

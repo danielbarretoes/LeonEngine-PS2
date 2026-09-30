@@ -8,6 +8,7 @@
 #include "GameFramework/PlayerStart.h"
 #include "Misc/AutomationTest.h"
 #include "ShooterAIController.h"
+#include "ShooterBomb.h"
 #include "ShooterCharacter.h"
 #include "ShooterCharacterMovement.h"
 #include "ShooterGameMode.h"
@@ -140,6 +141,41 @@ namespace
 			Waypoint->Flags.Add(FName(Flag));
 		}
 		return Waypoint;
+	}
+
+	/** A frozen terrorist plants the bomb at Location (site A must hold it); true once planted. */
+	bool PlantBomb(UWorld& World, AShooterGameMode& GameMode, AShooterCharacter& Planter, const FVector& Location)
+	{
+		Freeze(Planter);
+		Planter.Reset(Location);
+		TickFrames(World, 2);
+		if (!Planter.StartUse())
+		{
+			return false;
+		}
+		TickFrames(World, 60 * 4);
+		return GameMode.GetBomb() != nullptr && GameMode.GetBomb()->GetBombState() == EShooterBombState::Planted;
+	}
+
+	/** The radio's last Message from Team, or null. */
+	const FShooterRadioEntry* FindRadio(const AShooterGameMode& GameMode, EShooterRadioMessage Message)
+	{
+		const TArray<FShooterRadioEntry>& Log = GameMode.GetShooterGameState()->GetRadioLog();
+		for (int32 Index = Log.Num() - 1; Index >= 0; --Index)
+		{
+			if (Log[Index].Message == Message)
+			{
+				return &Log[Index];
+			}
+		}
+		return nullptr;
+	}
+
+	FVector GetLookAt(const AShooterAIController& Bot)
+	{
+		return Bot.GetBlackboard().IsValueSet(AShooterAIController::NoiseLocationKey)
+			? Bot.GetBlackboard().GetValueAsVector(AShooterAIController::NoiseLocationKey)
+			: FVector(1.0e9f, 1.0e9f, 1.0e9f);
 	}
 
 	/** The world's graph of its waypoints, auto-linked as the map import links them. */
@@ -432,6 +468,182 @@ bool FShooterGameBotsClimbsALadderTest::RunTest(const FString& Parameters)
 	TestTrue("It climbed down", bClimbedDown);
 	TestTrue("Looking down", bLookedDown);
 	TestTrue("And stepped off at the foot", bOffAtTheFoot);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBotsHoldThePlantedBombTest,
+	"ShooterGame.Bots.TerroristsHoldThePlantedBomb",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameBotsHoldThePlantedBombTest::RunTest(const FString& Parameters)
+{
+	// ps2-polish P3b: the bomb planted at site A, the terrorist bot holds near it (within PostPlantHoldRadius), calls
+	// "Hold this position.", and a teammate's report 20 m from the bomb does not draw it away.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpBotMatch(World, FVector(0.0f, 0.0f, 150.0f), FVector(600.0f, 600.0f, 300.0f));
+	TickUntilLive(World, *GameMode);
+	AShooterCharacter* CT = GetAlivePawn(World, EShooterTeam::CT);
+	AShooterCharacter* T = GetAlivePawn(World, EShooterTeam::T);
+	if (!TestNotNull("A CT bot", CT) || !TestNotNull("A terrorist bot", T))
+	{
+		return false;
+	}
+	// The CT far out of sight, still.
+	Freeze(*CT);
+	CT->Reset(FVector(-3000.0f, 3000.0f, 0.0f));
+	if (!TestTrue("Planted", PlantBomb(World, *GameMode, *T, FVector(100.0f, 50.0f, 0.0f))))
+	{
+		return false;
+	}
+	AShooterAIController* Bot = GetBot(*T);
+	Bot->SetActorTickEnabled(true);
+	const FVector BombLocation = GameMode->GetBomb()->GetActorLocation();
+	FShooterRadioEntry Report;
+	Report.Team = EShooterTeam::T;
+	Report.Message = EShooterRadioMessage::EnemySpotted;
+	Report.Location = BombLocation + FVector(-2000.0f, 0.0f, 0.0f);
+	float Farthest = 0.0f;
+	for (int32 Frame = 0; Frame < 60 * 12; ++Frame)
+	{
+		if (Frame == 60)
+		{
+			Bot->OnRadioMessage(Report);
+		}
+		World.Tick(FrameTime);
+		Farthest = FMath::Max(Farthest, FVector::Dist2D(T->GetActorLocation(), BombLocation));
+	}
+	TestTrue(*FString::Printf(TEXT("Near the bomb (%.0f cm at most)"), static_cast<double>(Farthest)),
+		Farthest <= Bot->PostPlantHoldRadius + Bot->GoalReachedDistance);
+	TestFalse("The far report is not followed", GetLookAt(*Bot).Equals(Report.Location, 1.0f));
+	const FShooterRadioEntry* Hold = FindRadio(*GameMode, EShooterRadioMessage::HoldThisPosition);
+	TestTrue("Hold this position.", Hold != nullptr && Hold->Team == EShooterTeam::T);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBotsDefuserEngagedTest, "ShooterGame.Bots.TerroristsEngageTheDefuser",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameBotsDefuserEngagedTest::RunTest(const FString& Parameters)
+{
+	// ps2-polish P3b: the terrorist holds 9 m from the planted bomb looking away; a counter-terrorist starts defusing
+	// behind it: the terrorist hears the defuse (AShooterBomb::DefuseNoiseLoudness), goes for the bomb and engages the
+	// defuser, who never finishes.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpBotMatch(World, FVector(0.0f, 0.0f, 150.0f), FVector(600.0f, 600.0f, 300.0f));
+	TickUntilLive(World, *GameMode);
+	AShooterCharacter* CT = GetAlivePawn(World, EShooterTeam::CT);
+	AShooterCharacter* T = GetAlivePawn(World, EShooterTeam::T);
+	if (!TestNotNull("A CT bot", CT) || !TestNotNull("A terrorist bot", T))
+	{
+		return false;
+	}
+	Freeze(*CT);
+	CT->Reset(FVector(-3000.0f, 3000.0f, 0.0f));
+	if (!TestTrue("Planted", PlantBomb(World, *GameMode, *T, FVector(0.0f, 0.0f, 0.0f))))
+	{
+		return false;
+	}
+	AShooterBomb* Bomb = GameMode->GetBomb();
+	const FVector BombLocation = Bomb->GetActorLocation();
+	AShooterAIController* Bot = GetBot(*T);
+	Bot->PostPlantHoldRadius = 1000.0f;
+	// The terrorist 9 m off, facing away from the bomb, its brain frozen until the defuse starts.
+	T->Reset(BombLocation + FVector(900.0f, 0.0f, 0.0f), FRotator(0.0f, 0.0f, 0.0f));
+	Bot->SetControlRotation(FRotator(0.0f, 0.0f, 0.0f));
+	CT->Reset(BombLocation + FVector(-50.0f, 0.0f, 0.0f), FRotator(0.0f, 0.0f, 0.0f));
+	CT->SetDefuseKit(false);
+	TickFrames(World, 2);
+	if (!TestTrue("Defusing", CT->StartUse()))
+	{
+		return false;
+	}
+	Bot->SetActorTickEnabled(true);
+	bool bHeard = false;
+	for (int32 Frame = 0; Frame < 30 && !bHeard; ++Frame)
+	{
+		World.Tick(FrameTime);
+		bHeard = GetLookAt(*Bot).Equals(BombLocation, 100.0f);
+	}
+	TestTrue("It heard the defuse at the bomb", bHeard);
+	bool bEngaged = false;
+	for (int32 Frame = 0; Frame < 60 * 8 && CT->IsAlive(); ++Frame)
+	{
+		World.Tick(FrameTime);
+		bEngaged |= Bot->GetEnemy() == CT;
+	}
+	TestTrue("It engaged the defuser", bEngaged);
+	TestTrue("The defuse never ended", Bomb->GetBombState() == EShooterBombState::Planted || !CT->IsAlive());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBotsRetakeGathersTest, "ShooterGame.Bots.RetakeGathers",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameBotsRetakeGathersTest::RunTest(const FString& Parameters)
+{
+	// ps2-polish P3b: the bomb planted at site A and the terrorist dead, two counter-terrorists far apart: the first to
+	// reach the staging point (RetakeStagingDistance toward the CT spawn) waits there for the second, they call "Go go
+	// go!" and go in together; the defuse starts only after both gathered.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpBotMatch(World, FVector(0.0f, 0.0f, 150.0f), FVector(600.0f, 600.0f, 300.0f));
+	(void)GameMode->AddBots(EShooterTeam::CT, 1);
+	TickUntilLive(World, *GameMode);
+	TArray<AShooterCharacter*> CTs;
+	AShooterCharacter* T = nullptr;
+	for (AShooterCharacter* Pawn : GameMode->GetPawns())
+	{
+		if (Pawn->IsAlive() && Pawn->GetTeam() == EShooterTeam::CT)
+		{
+			CTs.Add(Pawn);
+		}
+		else if (Pawn->IsAlive() && Pawn->GetTeam() == EShooterTeam::T)
+		{
+			T = Pawn;
+		}
+	}
+	if (!TestEqual("Two CT bots", CTs.Num(), 2) || !TestNotNull("A terrorist bot", T))
+	{
+		return false;
+	}
+	for (AShooterCharacter* Pawn : CTs)
+	{
+		Freeze(*Pawn);
+	}
+	if (!TestTrue("Planted", PlantBomb(World, *GameMode, *T, FVector(0.0f, 0.0f, 0.0f))))
+	{
+		return false;
+	}
+	// A second terrorist would keep the round going when the planter dies: the planter lives, far away and still.
+	T->Reset(FVector(3500.0f, -3500.0f, 0.0f));
+	CTs[0]->Reset(FVector(-1800.0f, 0.0f, 0.0f));
+	CTs[1]->Reset(FVector(-1800.0f, 2600.0f, 0.0f));
+	AShooterBomb* Bomb = GameMode->GetBomb();
+	for (AShooterCharacter* Pawn : CTs)
+	{
+		Pawn->SetDefuseKit(true);
+		GetBot(*Pawn)->SetActorTickEnabled(true);
+	}
+	const AShooterAIController* First = GetBot(*CTs[0]);
+	bool bGathered = false;
+	bool bWentInAlone = false;
+	for (int32 Frame = 0; Frame < 60 * 30 && Bomb->GetBombState() == EShooterBombState::Planted; ++Frame)
+	{
+		World.Tick(FrameTime);
+		const FVector Staging = First->GetRetakeStaging();
+		const bool bBothThere = FVector::Dist2D(CTs[0]->GetActorLocation(), Staging) <=
+				First->RetakeGroupRadius + First->GoalReachedDistance &&
+			FVector::Dist2D(CTs[1]->GetActorLocation(), Staging) <=
+				First->RetakeGroupRadius + First->GoalReachedDistance;
+		bGathered |= bBothThere;
+		bWentInAlone |= !bGathered && (CTs[0]->IsDefusing() || CTs[1]->IsDefusing());
+	}
+	TestTrue("They gathered", bGathered);
+	TestFalse("Nobody defused alone first", bWentInAlone);
+	TestTrue("Go go go!", FindRadio(*GameMode, EShooterRadioMessage::GoGoGo) != nullptr);
+	TestTrue("Defused", Bomb->GetBombState() == EShooterBombState::Defused);
 	return true;
 }
 

@@ -8,6 +8,7 @@
 #include "UObject/WeakObjectPtrTemplates.h"
 #include "ShooterAIController.generated.h"
 
+class AShooterBomb;
 class AShooterCharacter;
 class AShooterGameMode;
 class AShooterWeapon;
@@ -51,7 +52,11 @@ struct FShooterRadioEntry;
  *    sight for EnemyMemory seconds is forgotten (its last place is searched). The weapon's recoil kicks the aim as it
  *    kicks a player's: the bot turns its own aim to the target and the kick rides on top, the bot pulling
  *    RecoilCompensation of each new kick back down.
- * 4. A counter-terrorist and the bomb planted: go to it and defuse (hold the use key).
+ * 4. A counter-terrorist and the bomb planted: the retake (ps2-polish P3b). Gather at a staging point toward the CT
+ *    spawn (RetakeStagingDistance) until a teammate is there or RetakeWaitTime passes, go in, and defuse (hold the use
+ *    key) once no enemy was seen for SiteClearTime, or at once when the time is short. Outnumbered by
+ *    RetakeGiveUpAdvantage or too late to defuse, it gives the retake up ("Team, fall back!") and saves itself at its
+ *    spawn (the objective).
  * 5. The bomb's carrier: go to the round's site (AShooterGameMode::GetTerroristTargetSite) and plant once inside.
  * 6. A terrorist and the bomb dropped: fetch it.
  * 7. A weapon on the floor worth the walk (PickUp): out of ammunition, the nearest dropped weapon with ammunition it
@@ -64,11 +69,11 @@ struct FShooterRadioEntry;
  *    enemy's spawn, then from waypoint to waypoint of the map (drawn from the stream) until contact.
  * 11. The objective (ps2-polish P3, CS's bots with no enemy in sight): the counter-terrorists hold a site each (A for
  *    the even ones, B for the odd, by their place in the team) and the terrorists take the round's site (its support
- *    spots once the carrier is there; the planted bomb's site to guard it). Either moves between the site's lookouts
- *    (AShooterGameMode::GetBombSiteLookouts), LookoutMinTime to LookoutMaxTime at each, turning between the lookout's
- *    watched directions (the ways in) every WatchMinTime to WatchMaxTime. A counter-terrorist that held its site
- *    RotateTime with no contact rotates to the next one, and one that hears a teammate's enemy at another site goes
- *    there with RotateOnReportChance.
+ *    spots once the carrier is there; the planted bomb's site to guard it: HoldPlantedBomb, P3b). Either moves between
+ * the site's lookouts (AShooterGameMode::GetBombSiteLookouts), LookoutMinTime to LookoutMaxTime at each, turning
+ * between the lookout's watched directions (the ways in) every WatchMinTime to WatchMaxTime. A counter-terrorist that
+ * held its site RotateTime with no contact rotates to the next one, and one that hears a teammate's enemy at another
+ * site goes there with RotateOnReportChance.
  *
  * On the move with nobody to aim at, a bot looks along its path (LookTurnRate). Ladders (ps2-polish P3): the waypoint
  * graph links a ladder's foot and top, and on a ladder the bot faces it and climbs up (the path's point above) or
@@ -213,6 +218,37 @@ public:
 	/** How far a bot without a loaded primary goes for one on the floor, cm (out of ammunition: twice, any weapon). */
 	UPROPERTY(Config)
 	float PickupSearchDistance = 1500.0f;
+
+	// The planted bomb (ps2-polish P3b)
+
+	/**
+	 * The terrorists hold the planted bomb from the lookouts this near it (else from the bomb), and look after nothing
+	 * heard or reported farther from it, cm.
+	 */
+	UPROPERTY(Config)
+	float PostPlantHoldRadius = 1000.0f;
+
+	/** The counter-terrorists' retake: they gather this far from the bomb, toward their spawn, before going in, cm. */
+	UPROPERTY(Config)
+	float RetakeStagingDistance = 1500.0f;
+
+	/** How near the staging point a teammate counts as gathered, cm, and the longest wait for one there, s. */
+	UPROPERTY(Config)
+	float RetakeGroupRadius = 500.0f;
+
+	UPROPERTY(Config)
+	float RetakeWaitTime = 8.0f;
+
+	/**
+	 * A counter-terrorist gives the retake up and saves itself (CS's bots) when the terrorists alive outnumber its
+	 * team by this many, or when it cannot reach and defuse the bomb in the time left; 0 never for the numbers.
+	 */
+	UPROPERTY(Config)
+	int32 RetakeGiveUpAdvantage = 2;
+
+	/** A defuse starts once no enemy was seen for this long (the site clear), s, unless the time runs out. */
+	UPROPERTY(Config)
+	float SiteClearTime = 2.5f;
 
 	// Combat movement (ps2-shipping N30e)
 
@@ -387,6 +423,16 @@ public:
 	{
 		return PickupTarget.Get();
 	}
+	/** The retake has gone in (the counter-terrorists gathered, waited long enough, or the time is short). */
+	[[nodiscard]] bool IsRetaking() const
+	{
+		return bRetakeGo;
+	}
+	/** Where the counter-terrorists gather before the retake (valid once the bot went for it this round). */
+	[[nodiscard]] const FVector& GetRetakeStaging() const
+	{
+		return RetakeStaging;
+	}
 	/** The lookouts visited this round (arrivals, the first included). */
 	[[nodiscard]] int32 GetNumLookoutsVisited() const
 	{
@@ -428,7 +474,7 @@ private:
 	EBTNodeResult TaskBlind(float DeltaTime);
 	EBTNodeResult TaskEngage(float DeltaTime);
 	EBTNodeResult TaskThrowGrenade(float DeltaTime);
-	EBTNodeResult TaskDefuse();
+	EBTNodeResult TaskDefuse(float DeltaTime);
 	EBTNodeResult TaskPlant();
 	EBTNodeResult TaskFetchBomb();
 	EBTNodeResult TaskPickUp();
@@ -436,11 +482,19 @@ private:
 	EBTNodeResult TaskInvestigate();
 	EBTNodeResult TaskHunt(float DeltaTime);
 	EBTNodeResult TaskObjective(float DeltaTime);
+	/** A terrorist with the bomb planted holds near it (TaskObjective's post-plant; see the class comment). */
+	EBTNodeResult HoldPlantedBomb(const AShooterBomb& Bomb, const TArray<FShooterLookout>& Lookouts, float DeltaTime);
 
 	/** Moves to Goal unless already moving there (a new path only when the goal moves). */
 	void MoveToGoal(const FVector& Goal);
 	/** Stands still: no path, no wish. */
 	void StandStill();
+	/** A counter-terrorist gives the planted bomb up (RetakeGiveUpAdvantage, or no time to defuse it). */
+	[[nodiscard]] bool ShouldGiveUpRetake(const AShooterBomb& Bomb) const;
+	/** A terrorist with the bomb planted: it holds near it (PostPlantHoldRadius). */
+	[[nodiscard]] bool IsHoldingPlant() const;
+	/** The retake's gathering point for Bomb (the waypoint nearest to RetakeStagingDistance toward the CT spawn). */
+	[[nodiscard]] FVector FindRetakeStaging(const FVector& BombLocation) const;
 	/** The reaction time (with the difficulty) has passed since the enemy came into sight: the bot may fire. */
 	[[nodiscard]] bool HasReacted() const;
 	/** The knife's fight (Engage with the knife drawn; see the class comment). */
@@ -588,6 +642,17 @@ private:
 	bool bRushingThisTick = false;
 	/** The walk key is held for the strafe. */
 	bool bWalkingForStrafe = false;
+
+	/** The post-plant hold (a terrorist): holding since the plant, and the radio's call made. */
+	bool bHoldingPlant = false;
+	bool bHoldCalled = false;
+	/** The retake (a counter-terrorist): its gathering point, whether it went in, since when it waits there. */
+	FVector RetakeStaging = FVector::ZeroVector;
+	bool bHasRetakeStaging = false;
+	bool bRetakeGo = false;
+	float RetakeWaitStart = -1.0f;
+	/** The retake given up this round (ShouldGiveUpRetake): the bot saves itself until the round's end. */
+	bool bGaveUpRetake = false;
 
 	/** The hunt's next waypoint (a draw of the graph's) once at the enemy's spawn. */
 	FVector HuntGoal = FVector::ZeroVector;

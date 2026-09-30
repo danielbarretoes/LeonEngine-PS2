@@ -180,6 +180,8 @@ bool AShooterBomb::StartDefuse(AShooterCharacter* NewDefuser)
 		NewDefuser->HasDefuseKit() ? DefuseKitDuration : DefuseDuration);
 	UE_LOG(LogShooter, Log, TEXT("%s is defusing the bomb%s"), *NewDefuser->GetName(),
 		NewDefuser->HasDefuseKit() ? TEXT(" with a kit") : TEXT(""));
+	// The defuse is heard (the bots' hearing: the terrorists near come for the defuser).
+	MakeNoise(DefuseNoiseLoudness, NewDefuser, GetActorLocation());
 	return true;
 }
 

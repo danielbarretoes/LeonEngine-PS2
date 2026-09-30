@@ -79,6 +79,17 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   `System.AIModule.Gameplay.NavigationAutoLinkLadders`; `ShooterGame.Map.DeLeonHoldsTheGame` and
   `.Movement.Ladder` and `System.Engine.Components.AttachmentRulesAndSockets` extended (109 ShooterGame tests). The
   bot match logs `Botmatch OK: 8 round(s), CT 2 - T 6, 55 kill(s), seed 7, sides switched after round 5`.
+- ShooterGame's terrorists hold the planted bomb and the counter-terrorists retake it together
+  ([ps2-polish](Docs/PLANS/ps2-polish.md) P3b). The planter calls "Cover me!"; the terrorists hold from the site's
+  lookouts within `PostPlantHoldRadius` (10 m) of the bomb watching the CT's ways in, call "Hold this position." and
+  chase nothing farther; a defuse is heard (`AShooterBomb::DefuseNoiseLoudness`) and they come for the defuser. The
+  counter-terrorists gather at a staging point toward their spawn (`RetakeStagingDistance`) until a teammate joins or
+  `RetakeWaitTime` passes ("Go go go!"), defuse once the site is clear (`SiteClearTime`) or the time is short, and give
+  the retake up when outnumbered by `RetakeGiveUpAdvantage` or too late ("Team, fall back!", back to their spawn). Over
+  seeds 1 to 24 the terrorists win 56 % of the rounds (1 to 48: 53 %), the bomb explodes in 5 % of the rounds (none
+  before) and is defused in 21 %. Tests: `ShooterGame.Bots.TerroristsHoldThePlantedBomb`,
+  `.TerroristsEngageTheDefuser`, `.RetakeGathers` (112 ShooterGame tests). The bot match logs
+  `Botmatch OK: 8 round(s), CT 2 - T 6, 57 kill(s), seed 7, sides switched after round 5`.
 
 ### Changed
 

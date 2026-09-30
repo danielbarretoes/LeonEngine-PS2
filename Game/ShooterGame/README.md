@@ -502,7 +502,7 @@ most urgent first:
 | Blind | flashed (`AShooterCharacter::IsBlind`) | stands and fires at random (CS's bots): every `BlindFireMinTime` to `BlindFireMaxTime` (0.25 to 0.6 s) a new point within `BlindFireError` (25 degrees across, a quarter of it up and down) of where it last saw an enemy (else of its view), fired at with `BlindFireChance` (0.6), all from its stream |
 | ThrowGrenade | a throw under way (below) | draws the grenade, turns to the throw and throws it (an enemy that shows up meanwhile waits); after a flashbang it turns its back to it until it goes off, unless an enemy is in sight |
 | Engage | an enemy in sight (seen in the last three sensing updates, within `SightRadius`; one lost for `EnemyMemory` s is searched for where it was last seen, as a noise) | draws its best weapon with ammunition, never a grenade (`EquipBestWeapon(false)`: the throws are ThrowGrenade's), turns at `AimTurnRate`, fires once `ReactionTime` has passed since it came into sight; the aim error starts at `AimError` and settles toward `MinAimError`; automatic weapons fire bursts, the AWP zooms first; the recoil climbs on its aim as on a player's, `RecoilCompensation` of each kick pulled back down. It moves as CS's bots do (below): it strafes, crouches with a rifle at range, stands with the AWP, and rushes with the knife |
-| Defuse | a CT and the bomb planted | walks to the bomb and holds use |
+| Defuse | a CT and the bomb planted, the retake not given up (below) | the retake (ps2-polish P3b): gathers at a staging point `RetakeStagingDistance` (15 m) from the bomb toward the CT spawn until a teammate is within `RetakeGroupRadius` (5 m) or `RetakeWaitTime` (8 s) passes, calls "Go go go!", walks to the bomb and holds use once no enemy was seen for `SiteClearTime` (2.5 s); short of time, straight to it and the defuse |
 | Plant | the bomb's carrier | walks to the round's site (`AShooterGameMode::GetTerroristTargetSite`, drawn each round from the seeded stream) and plants inside it |
 | FetchBomb | a T and the bomb dropped | walks over it |
 | PickUp | a weapon on the floor worth the walk (below) | walks over it: its spent weapon is dropped for it |
@@ -559,6 +559,14 @@ most urgent first:
   bots start at different lookouts (their place in the team). A CT holding a site that hears a teammate's "Enemy
   spotted." within `SiteReportRadius` (15 m) of the other site rotates there with `RotateOnReportChance` (1). On the
   move with nobody to aim at, a bot looks along its path (`LookTurnRate`).
+- **The planted bomb** (ps2-polish P3b, CS's post-plant): the planter calls "Cover me!" as it plants. The terrorists
+  then hold from the site's lookouts within `PostPlantHoldRadius` (10 m) of the bomb (else from the bomb, facing the
+  CT spawn), watching the counter-terrorists' ways in; the first there calls "Hold this position.", and nothing heard
+  or reported farther from the bomb draws them away. A defuse is heard (`AShooterBomb::DefuseNoiseLoudness`, CS's
+  c4_disarm): the terrorists near come for the defuser. The counter-terrorists retake together (the Defuse row) or give
+  it up (`ShouldGiveUpRetake`: the terrorists alive outnumber them by `RetakeGiveUpAdvantage`, 2, or the walk and the
+  defuse outlast the bomb): "Team, fall back!", and they save themselves at their spawn. Over seeds 1 to 24 the bomb
+  explodes in 11 rounds of 214 (9 % of the 121 plants) and is defused in 45.
 - **Ladders** (ps2-polish P3): the waypoint graph links a ladder's foot and top (both flagged `Ladder`; the map
   import's `AutoLinkWaypoints` links two within `MaxLadderLinkDistance`, 2 m across, however high the climb), and the
   path follower does not jump at a ladder's top. On a ladder a bot faces its face (`GetLadderNormal`) and climbs to
@@ -754,7 +762,9 @@ when nothing changed; a score formats one line, a kill three).
   round; over seeds 1 to 24 then, the terrorists won 61 % of the rounds with 6.1 kills a round).
   ps2-polish P3's bots (the knife, the lookouts, the ladders, the pickups) and de_leon's CT starts out of the mid
   doors' line log `Botmatch OK: 8 round(s), CT 2 - T 6, 55 kill(s), seed 7, sides switched after round 5`; over seeds
-  1 to 24 the terrorists win 49 % of the rounds (60 % after P2b, before P3) with 7.1 kills a round.
+  1 to 24 the terrorists win 49 % of the rounds (60 % after P2b, before P3) with 7.1 kills a round. With P3b's
+  post-plant (the hold, the retake, the saves) it logs `Botmatch OK: 8 round(s), CT 2 - T 6, 57 kill(s), seed 7, sides
+  switched after round 5`, and over seeds 1 to 24 the terrorists win 56 % (1 to 48: 53 %).
 
 ## de_leon
 

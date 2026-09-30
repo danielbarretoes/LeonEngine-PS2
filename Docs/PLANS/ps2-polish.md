@@ -166,6 +166,22 @@ arregla en el motor. Los tejados
 con escalera no son puntos de vigilancia (desde ellos no se ve el acceso); los bots suben por la caza, que elige
 waypoints al azar.
 
+Estado (P3b, la bomba plantada): el que planta pide "Cover me!"; los T sostienen desde los puntos de vigilancia a menos
+de `PostPlantHoldRadius` (10 m) de la bomba (si no hay, desde la bomba mirando al spawn CT), con las direcciones de los
+accesos CT; el primero avisa "Hold this position." y no persiguen nada que se oiga o se informe más lejos de la bomba.
+El desactivado se oye (`AShooterBomb::DefuseNoiseLoudness`, el c4_disarm de CS) y los T cercanos van a por el que
+desactiva. Los CT recuperan juntos: se reúnen en un punto a `RetakeStagingDistance` (15 m) de la bomba hacia su spawn
+hasta que llega un compañero o pasa `RetakeWaitTime` (8 s), avisan "Go go go!", y desactivan cuando no han visto a
+nadie en `SiteClearTime` (2,5 s) o falta tiempo; se rinden (`RetakeGiveUpAdvantage` 2 en contra, o sin tiempo para
+llegar y desactivar), avisan "Team, fall back!" y se salvan en su spawn. Semillas 1–24: los T ganan el 55,6 % (119 de
+214; P3: 49,3 %), la bomba explota en 11 rondas (5,1 %, el 9 % de las 121 plantadas; antes ninguna) y se desactiva en
+45 (21 %); 25–48: 50,0 %, 9 explosiones. Tests: `ShooterGame.Bots.TerroristsHoldThePlantedBomb`,
+`.TerroristsEngageTheDefuser`, `.RetakeGathers` (112 tests de ShooterGame). BotMatch 10 7:
+`Botmatch OK: 8 round(s), CT 2 - T 6, 57 kill(s), seed 7, sides switched after round 5`.
+Desviaciones (P3b): la rendición no la pedía el encargo, pero sin ella ninguna bomba explotaba (los CT recuperaban
+siempre o morían todos, y eso acaba la ronda); con ella los T suben a 55,6 % en 1–24 (con 2 en contra; con 3 casi no
+explota ninguna). `PostPlantHoldRadius` de 10 m (a 15 m, 59 %).
+
 ### Juego y controles
 
 **P4 · Agacharse en toggle y soltar/recoger armas (S) — hecha**

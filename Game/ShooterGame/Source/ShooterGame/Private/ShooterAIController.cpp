@@ -170,8 +170,8 @@ void AShooterAIController::BuildTree()
 		Action([this](UBlackboardComponent&, float DeltaTime) { return TaskEngage(DeltaTime); })});
 	UBTNode* Throw = Sequence({Decorator(IsThrowingKey),
 		Action([this](UBlackboardComponent&, float DeltaTime) { return TaskThrowGrenade(DeltaTime); })});
-	UBTNode* Defuse =
-		Sequence({Decorator(ShouldDefuseKey), Action([this](UBlackboardComponent&, float) { return TaskDefuse(); })});
+	UBTNode* Defuse = Sequence({Decorator(ShouldDefuseKey),
+		Action([this](UBlackboardComponent&, float DeltaTime) { return TaskDefuse(DeltaTime); })});
 	UBTNode* Plant =
 		Sequence({Decorator(CarriesBombKey), Action([this](UBlackboardComponent&, float) { return TaskPlant(); })});
 	UBTNode* Fetch =
@@ -363,6 +363,14 @@ void AShooterAIController::OnHearNoise(APawn* NoiseInstigator, const FVector& Lo
 
 void AShooterAIController::LookAt(const FVector& Location)
 {
+	// Holding the planted bomb, a terrorist does not chase what is far from it (CS's post-plant: the CT come to it).
+	const AShooterGameMode* GameMode = GetShooterGameMode();
+	const AShooterBomb* Bomb = GameMode != nullptr ? GameMode->GetBomb() : nullptr;
+	if (Bomb != nullptr && IsHoldingPlant() &&
+		FVector::DistSquared2D(Location, Bomb->GetActorLocation()) > FMath::Square(PostPlantHoldRadius))
+	{
+		return;
+	}
 	Tree.GetBlackboard().SetValueAsVector(NoiseLocationKey, Location);
 	NoiseHeardTime = GetWorldTime();
 }
@@ -403,6 +411,12 @@ void AShooterAIController::UpdateBlackboard()
 		PickupTarget.Reset();
 		GivenUpPickup.Reset();
 		NextPickupCheckTime = 0.0f;
+		bHoldingPlant = false;
+		bHoldCalled = false;
+		bHasRetakeStaging = false;
+		bRetakeGo = false;
+		RetakeWaitStart = -1.0f;
+		bGaveUpRetake = false;
 	}
 
 	// The enemy: alive and seen within EnemyMemory (its last place is searched afterwards).
@@ -424,7 +438,16 @@ void AShooterAIController::UpdateBlackboard()
 
 	const EShooterTeam Team = Self != nullptr ? Self->GetTeam() : EShooterTeam::None;
 	const EShooterBombState BombState = State != nullptr ? State->GetBombState() : EShooterBombState::None;
-	Board.SetValueAsBool(ShouldDefuseKey, Team == EShooterTeam::CT && BombState == EShooterBombState::Planted);
+	// The retake, unless given up (once a round: "Team, fall back!").
+	const AShooterBomb* PlantedBomb = GameMode != nullptr ? GameMode->GetBomb() : nullptr;
+	const bool bRetakeLive =
+		Team == EShooterTeam::CT && BombState == EShooterBombState::Planted && PlantedBomb != nullptr;
+	if (bRetakeLive && !bGaveUpRetake && ShouldGiveUpRetake(*PlantedBomb))
+	{
+		bGaveUpRetake = true;
+		(void)SayOnRadio(EShooterRadioMessage::TeamFallBack);
+	}
+	Board.SetValueAsBool(ShouldDefuseKey, bRetakeLive && !bGaveUpRetake);
 	Board.SetValueAsBool(CarriesBombKey, Self != nullptr && Self->GetCarriedBomb() != nullptr);
 	Board.SetValueAsBool(BombDroppedKey, Team == EShooterTeam::T && BombState == EShooterBombState::Dropped);
 	Board.SetValueAsBool(HeardEnemyKey, NoiseHeardTime >= 0.0f && Now - NoiseHeardTime <= NoiseMemory);
@@ -1064,7 +1087,7 @@ EBTNodeResult AShooterAIController::TaskThrowGrenade(float DeltaTime)
 	return EBTNodeResult::Running;
 }
 
-EBTNodeResult AShooterAIController::TaskDefuse()
+EBTNodeResult AShooterAIController::TaskDefuse(float DeltaTime)
 {
 	AShooterCharacter* Self = GetShooterPawn();
 	const AShooterGameMode* GameMode = GetShooterGameMode();
@@ -1080,16 +1103,125 @@ EBTNodeResult AShooterAIController::TaskDefuse()
 		StandStill();
 		return EBTNodeResult::Running;
 	}
+	// CS's retake (ps2-polish P3b): gather at a staging point toward the CT spawn and go in together (or after
+	// RetakeWaitTime alone), defuse once the site is clear; with the time short, straight to the bomb and the defuse.
 	const FVector BombLocation = Bomb->GetActorLocation();
-	if (FVector::DistSquared2D(Self->GetActorLocation(), BombLocation) > FMath::Square(DefuseApproach))
+	const FVector Feet = Self->GetActorLocation();
+	const float Now = GetWorldTime();
+	const float DefuseSeconds = Self->HasDefuseKit() ? Bomb->DefuseKitDuration : Bomb->DefuseDuration;
+	constexpr float RetakeRunSpeed = 400.0f;
+	constexpr float RetakeTimeMargin = 2.0f;
+	const bool bShortOfTime = Bomb->GetExplodeTime() - Now <=
+		DefuseSeconds + (FVector::Dist2D(Feet, BombLocation) / RetakeRunSpeed) + RetakeTimeMargin;
+	if (!bRetakeGo && !bShortOfTime &&
+		FVector::DistSquared2D(Feet, BombLocation) > FMath::Square(RetakeStagingDistance))
+	{
+		if (!bHasRetakeStaging)
+		{
+			RetakeStaging = FindRetakeStaging(BombLocation);
+			bHasRetakeStaging = true;
+		}
+		if (FVector::DistSquared2D(Feet, RetakeStaging) > FMath::Square(GoalReachedDistance))
+		{
+			MoveToGoal(RetakeStaging);
+			return EBTNodeResult::Running;
+		}
+		// At the staging point: a teammate there (or one already in), or the wait is over, and the retake goes in.
+		if (RetakeWaitStart < 0.0f)
+		{
+			RetakeWaitStart = Now;
+		}
+		int32 NumGathered = 1;
+		bool bTeammateIn = false;
+		for (const AShooterCharacter* Other : GameMode->GetPawns())
+		{
+			if (Other == Self || !Other->IsAlive() || Other->GetTeam() != EShooterTeam::CT)
+			{
+				continue;
+			}
+			const AShooterAIController* Teammate = Cast<AShooterAIController>(Other->GetController());
+			bTeammateIn |= Teammate != nullptr && Teammate->bRetakeGo;
+			NumGathered +=
+				FVector::DistSquared2D(Other->GetActorLocation(), RetakeStaging) <= FMath::Square(RetakeGroupRadius)
+				? 1
+				: 0;
+		}
+		const int32 NumNeeded = FMath::Min(2, GameMode->CountAlive(EShooterTeam::CT));
+		bRetakeGo = bTeammateIn || NumGathered >= NumNeeded || Now - RetakeWaitStart >= RetakeWaitTime;
+		if (!bRetakeGo)
+		{
+			StandStill();
+			LookToward(FRotator(0.0f, (BombLocation - Feet).Rotation().Yaw, 0.0f), LookTurnRate, DeltaTime);
+			return EBTNodeResult::Running;
+		}
+		(void)SayOnRadio(EShooterRadioMessage::GoGoGo);
+	}
+	bRetakeGo = true;
+	if (FVector::DistSquared2D(Feet, BombLocation) > FMath::Square(DefuseApproach))
 	{
 		MoveToGoal(BombLocation);
 		return EBTNodeResult::Running;
 	}
 	StandStill();
+	// The site clear (no enemy seen for SiteClearTime), or no time left: the defuse; else it covers the bomb, facing
+	// where the enemy was.
+	const bool bSiteClear = EnemyLastSeenTime < 0.0f || Now - EnemyLastSeenTime >= SiteClearTime;
+	if (!bSiteClear && !bShortOfTime)
+	{
+		LookToward(FRotator(0.0f, (EnemyLastSeenLocation - Feet).Rotation().Yaw, 0.0f), LookTurnRate, DeltaTime);
+		return EBTNodeResult::Running;
+	}
 	// Another CT may be at it already: this one guards (StartUse fails).
 	(void)Self->StartUse();
 	return EBTNodeResult::Running;
+}
+
+bool AShooterAIController::ShouldGiveUpRetake(const AShooterBomb& Bomb) const
+{
+	const AShooterCharacter* Self = GetShooterPawn();
+	const AShooterGameMode* GameMode = GetShooterGameMode();
+	if (Self == nullptr || GameMode == nullptr || Bomb.GetDefuser() != nullptr)
+	{
+		return false;
+	}
+	// Too few (the terrorists alive outnumber the team by RetakeGiveUpAdvantage), or too late (the walk and the defuse
+	// outlast the bomb): CS's bots save themselves and their weapons.
+	constexpr float RetakeRunSpeed = 400.0f;
+	const float DefuseSeconds = Self->HasDefuseKit() ? Bomb.DefuseKitDuration : Bomb.DefuseDuration;
+	const float Needed =
+		DefuseSeconds + (FVector::Dist2D(Self->GetActorLocation(), Bomb.GetActorLocation()) / RetakeRunSpeed);
+	const bool bTooLate = Bomb.GetExplodeTime() - GetWorldTime() < Needed;
+	const bool bTooFew = RetakeGiveUpAdvantage > 0 &&
+		GameMode->CountAlive(EShooterTeam::T) >= GameMode->CountAlive(EShooterTeam::CT) + RetakeGiveUpAdvantage;
+	return bTooLate || bTooFew;
+}
+
+bool AShooterAIController::IsHoldingPlant() const
+{
+	const AShooterCharacter* Self = GetShooterPawn();
+	const AShooterGameMode* GameMode = GetShooterGameMode();
+	const AShooterBomb* Bomb = GameMode != nullptr ? GameMode->GetBomb() : nullptr;
+	return Self != nullptr && Self->GetTeam() == EShooterTeam::T && Bomb != nullptr &&
+		Bomb->GetBombState() == EShooterBombState::Planted;
+}
+
+FVector AShooterAIController::FindRetakeStaging(const FVector& BombLocation) const
+{
+	// Toward the CT spawn (the way the retake comes), the waypoint nearest to that point (a point of the open map).
+	const AShooterGameMode* GameMode = GetShooterGameMode();
+	const UWorld* World = GetWorld();
+	FVector Spawn = BombLocation;
+	if (GameMode == nullptr || !GameMode->GetTeamSpawnLocation(EShooterTeam::CT, Spawn))
+	{
+		return BombLocation;
+	}
+	const FVector Wanted = BombLocation + ((Spawn - BombLocation).GetSafeNormal2D() * RetakeStagingDistance);
+	FVector Staging = Wanted;
+	if (World != nullptr && World->GetNavigationSystem().HasNavigationData())
+	{
+		(void)World->GetNavigationSystem().ProjectPointToNavigation(Wanted, Staging);
+	}
+	return Staging;
 }
 
 EBTNodeResult AShooterAIController::TaskPlant()
@@ -1118,7 +1250,11 @@ EBTNodeResult AShooterAIController::TaskPlant()
 		FVector::DistSquared2D(Self->GetActorLocation(), SiteLocation) <= FMath::Square(GoalReachedDistance * 2.0f))
 	{
 		StandStill();
-		(void)Self->StartUse();
+		// CS's planter asks for cover as it plants.
+		if (Self->StartUse())
+		{
+			(void)SayOnRadio(EShooterRadioMessage::CoverMe);
+		}
 		return EBTNodeResult::Running;
 	}
 	MoveToGoal(SiteLocation);
@@ -1272,6 +1408,24 @@ EBTNodeResult AShooterAIController::TaskObjective(float DeltaTime)
 		Site = Sites[(GetTeamIndex() + SiteRotation) % Sites.Num()];
 	}
 	const TArray<FShooterLookout>& Lookouts = GameMode->GetBombSiteLookouts(Site);
+	if (bPlanted && Self->GetTeam() == EShooterTeam::T)
+	{
+		return HoldPlantedBomb(*Bomb, Lookouts, DeltaTime);
+	}
+	FVector SaveSpot = FVector::ZeroVector;
+	if (bPlanted && Self->GetTeam() == EShooterTeam::CT && GameMode->GetTeamSpawnLocation(EShooterTeam::CT, SaveSpot))
+	{
+		// The retake given up (the Defuse branch declined it): back to the spawn, away from the blast, watching the way
+		// the terrorists would come.
+		if (FVector::DistSquared2D(Self->GetActorLocation(), SaveSpot) > FMath::Square(GoalReachedDistance))
+		{
+			MoveToGoal(SaveSpot);
+			return EBTNodeResult::Running;
+		}
+		StandStill();
+		LookToward(FRotator(0.0f, (Bomb->GetActorLocation() - SaveSpot).Rotation().Yaw, 0.0f), LookTurnRate, DeltaTime);
+		return EBTNodeResult::Succeeded;
+	}
 	if (Lookouts.Num() == 0)
 	{
 		StandStill();
@@ -1325,6 +1479,68 @@ EBTNodeResult AShooterAIController::TaskObjective(float DeltaTime)
 		LookoutIndex = (LookoutIndex + 1 + BotRandom.RandHelper(Lookouts.Num() - 1)) % Lookouts.Num();
 		LookoutLeaveTime = -1.0f;
 	}
+	return EBTNodeResult::Succeeded;
+}
+
+EBTNodeResult AShooterAIController::HoldPlantedBomb(
+	const AShooterBomb& Bomb, const TArray<FShooterLookout>& Lookouts, float DeltaTime)
+{
+	// CS's post-plant (ps2-polish P3b): the site's lookouts near the bomb, watching the counter-terrorists' ways in
+	// (the terrorists' directions), one each from the bot's place in the team; none near: the bomb itself, facing the
+	// CT spawn. The first there calls "Hold this position."; a defuse heard brings them to the bomb (LookAt).
+	const AShooterCharacter* Self = GetShooterPawn();
+	const FVector BombLocation = Bomb.GetActorLocation();
+	TArray<int32, TInlineAllocator<8>> Near;
+	for (int32 Index = 0; Index < Lookouts.Num(); ++Index)
+	{
+		if (FVector::DistSquared2D(Lookouts[Index].Location, BombLocation) <= FMath::Square(PostPlantHoldRadius))
+		{
+			Near.Add(Index);
+		}
+	}
+	if (!bHoldingPlant)
+	{
+		bHoldingPlant = true;
+		LookoutIndex = GetTeamIndex();
+		LookoutLeaveTime = -1.0f;
+		WatchYaws.Reset();
+	}
+	FVector Spot = BombLocation;
+	TArray<float, TInlineAllocator<4>> BombYaws;
+	const TArray<float, TInlineAllocator<4>>* Yaws = &BombYaws;
+	if (Near.Num() > 0)
+	{
+		LookoutIndex %= Near.Num();
+		const FShooterLookout& Lookout = Lookouts[Near[LookoutIndex]];
+		Spot = Lookout.Location;
+		Yaws = &Lookout.GetWatchYaws(EShooterTeam::T);
+	}
+	else
+	{
+		FVector Spawn = BombLocation;
+		const AShooterGameMode* GameMode = GetShooterGameMode();
+		BombYaws.Add(GameMode != nullptr && GameMode->GetTeamSpawnLocation(EShooterTeam::CT, Spawn)
+				? (Spawn - BombLocation).Rotation().Yaw
+				: GetControlRotation().Yaw);
+	}
+	const FVector Feet = Self->GetActorLocation();
+	if (FVector::DistSquared2D(Feet, Spot) > FMath::Square(GoalReachedDistance) ||
+		FMath::Abs(Feet.Z - Spot.Z) > LookoutReachHeight)
+	{
+		MoveToGoal(Spot);
+		return EBTNodeResult::Running;
+	}
+	if (!bHoldCalled)
+	{
+		// Once said by this bot or a teammate just now; refused by the radio's cooldown, tried again.
+		const AShooterGameMode* GameMode = GetShooterGameMode();
+		const AShooterGameState* State = GameMode != nullptr ? GameMode->GetShooterGameState() : nullptr;
+		bHoldCalled = SayOnRadio(EShooterRadioMessage::HoldThisPosition) ||
+			(State != nullptr &&
+				State->WasRadioSentSince(
+					EShooterTeam::T, EShooterRadioMessage::HoldThisPosition, GetWorldTime() - RadioRepeatTime));
+	}
+	Watch(*Yaws, DeltaTime);
 	return EBTNodeResult::Succeeded;
 }
 
