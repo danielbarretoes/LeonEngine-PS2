@@ -18,10 +18,11 @@ Every asset is a UObject saved in a `.lasset` [package](#packages--lasset--lmap)
 | `.lproj` / `.lplugin` | JSON | Build descriptors | LeonBuildTool (CMake) |
 | `.png`, `.jpg`, `.tga`, `.bmp` | Image | Texture source | `UTextureFactory` (LeonEd, stb_image): import only |
 | `.wav` | RIFF / WAVE, PCM16 | Sound source | `USoundFactory` (LeonEd): import only |
+| `.hdr` | Radiance RGBE | A long-lat HDR panorama: a cube map's source ([cube maps](#cube-maps)) | `UTextureCubeFactory` (LeonEd, stb_image): import only |
 | `.gltf` / `.glb` | DCC source | Static mesh, skeletal mesh and animation source; a glTF scene is also a map's source | `UGLTFImportFactory`, `UGLTFMapFactory` (LeonEd, through MeshUtilities): import only |
 | `ImportList.ini` | INI text | The imports of a folder of source art | `UImportAssetsCommandlet` (`-importlist=`), see [TOOLS.md](TOOLS.md#importlistini) |
 
-The cooked skeletal formats (`.lskel`, `.lskm`, `.lanim`, `.lchar`, `*.blendspace1d.json`), `.lm` lightmaps, `.hdr` environment maps and the `leon.game.json` pack marker were removed in 0.12.0; the `.lmesh` / `.lmat` files and runtime PNG / WAV loading in P14; the `.llev` levels, their reader and the legacy content tools in P15 ([Legacy content](#legacy-content-migration)). Skeletal assets are `USkeletalMesh` / `UAnimSequence` packages, maps are `.lmap` packages, and static lighting is baked per vertex into the map's static mesh components ([instance colours](#lps2-instance-colors), N22).
+The cooked skeletal formats (`.lskel`, `.lskm`, `.lanim`, `.lchar`, `*.blendspace1d.json`), `.lm` lightmaps, the cooked `.hdr` environment maps (a Radiance file is a cube map's source again since ps2-polish P8) and the `leon.game.json` pack marker were removed in 0.12.0; the `.lmesh` / `.lmat` files and runtime PNG / WAV loading in P14; the `.llev` levels, their reader and the legacy content tools in P15 ([Legacy content](#legacy-content-migration)). Skeletal assets are `USkeletalMesh` / `UAnimSequence` packages, maps are `.lmap` packages, and static lighting is baked per vertex into the map's static mesh components ([instance colours](#lps2-instance-colors), N22).
 
 Engine content lives in `Engine/Content` as `/Engine` packages ([below](#engine-content)), the source files of the imported ones in `Engine/SourceArt`, and the GLSL shaders in `Engine/Shaders`.
 
@@ -39,7 +40,8 @@ load that package first. The tests save every class to memory and load it back
 | Class (header, `Engine/Classes/`) | Tagged properties | Native tail |
 | --- | --- | --- |
 | `UTexture` (`Engine/Texture.h`), abstract | `SRGB` (recorded; the forward renderer uploads the texels as they are) | — |
-| `UTexture2D` (`Engine/Texture2D.h`) | — | `FTexturePlatformData`: `int32` SizeX, SizeY, `uint8` `EPixelFormat` (UE values: `PF_R8G8B8A8` = 37, `PF_B8G8R8A8` = 2; Leon's paletted formats of the PS2 cook: `PF_P8` = 200, 256 RGBA8 palette entries then an index a texel, and `PF_P4` = 201, 16 entries then two texels a byte, the first in the low nibble), `int32` mip count, then per mip `int32` SizeX, SizeY and its data as bulk data, bottom row first: mip 0 `GetPixelFormatDataSize` bytes, a later mip `GetPixelFormatMipDataSize` (a paletted mip is its indices only, through mip 0's palette). An imported texture has mip 0 only; the PS2 cook's paletted ones carry their mip chain ([PS2](#ps2)) |
+| `UTexture2D` (`Engine/Texture2D.h`) | `AddressX`, `AddressY` (`ETextureAddress`: `Wrap` by default, `Clamp`; ps2-polish P8) | `FTexturePlatformData`: `int32` SizeX, SizeY, `uint8` `EPixelFormat` (UE values: `PF_R8G8B8A8` = 37, `PF_B8G8R8A8` = 2; Leon's paletted formats of the PS2 cook: `PF_P8` = 200, 256 RGBA8 palette entries then an index a texel, and `PF_P4` = 201, 16 entries then two texels a byte, the first in the low nibble), `int32` mip count, then per mip `int32` SizeX, SizeY and its data as bulk data, bottom row first: mip 0 `GetPixelFormatDataSize` bytes, a later mip `GetPixelFormatMipDataSize` (a paletted mip is its indices only, through mip 0's palette). An imported texture has mip 0 only; the PS2 cook's paletted ones carry their mip chain ([PS2](#ps2)) |
+| `UTextureCube` (`Engine/TextureCube.h`) | `Faces` (six `UTexture2D` subobjects `PosX` ... `NegZ`, in `ECubeFace` order), `HorizonColor`, `SRGB`, `AssetImportData` | — ([cube maps](#cube-maps)) |
 | `UFont` (`Engine/Font.h`) | `Textures` (the glyph pages: `UTexture2D` subobjects `Texture0` ..., PF_P4), `Ascent`, `Descent`, `Leading` (pixels), `Kerning` (0), `LegacyFontSize` (the pixel height), `LegacyFontName` (the TrueType family), `AssetImportData` | the characters (`int32` count, then each `FFontCharacter`: `int32` StartU, StartV, USize, VSize, `uint8` TextureIndex, `int32` VerticalOffset, HorizontalOffset, Advance; indexed by code point), then the kerning pairs (`int32` count, then each `uint32` pair, first code point in the high 16 bits, and `int32` pixels): [fonts](#fonts) |
 | `UStaticMesh` (`Engine/StaticMesh.h`) | `StaticMaterials` (`FStaticMaterial`: `MaterialInterface`, `MaterialSlotName`), `BodySetup` (an inner object), `SourceModels` ([LODs](#static-mesh-lods): `FStaticMeshSourceModel`, `ReductionSettings.PercentTriangles` and `ScreenSize`; empty for one LOD) | the local bounding box (`FBox`, of the source's positions), then one bulk payload: LOD 0's render data (`FStaticMeshLODResources`), an [LPS2 v2](#lps2-v2) blob as its `int32` size and its bytes, then the collision triangles (`FTriMeshCollisionData`: the source's positions as an array of `FVector`, its `uint32` indices, three a triangle, and each triangle's material slot as an array of `uint16`, `MaterialIndices`, [ps2-shipping](PLANS/ps2-shipping.md) N30f), then each later LOD's blob (as many as `SourceModels` has entries after the first) |
 | `UBodySetup` (`PhysicsEngine/BodySetup.h`) | `AggGeom` (`FKAggregateGeom`: `BoxElems`, each `FKBoxElem` Center, Rotation, X, Y, Z in cm), `CollisionTraceFlag` (`ECollisionTraceFlag`) | — |
@@ -365,6 +367,7 @@ UE's prefix for its class:
 | `UTextureFactory` | PNG, JPEG, TGA, BMP (stb_image) | `UTexture2D` (`T_`): RGBA8, bottom row first; sRGB unless `ColorSpaceMode=Linear` or a `_N` / `_Normal` name |
 | `UGLTFImportFactory` | glTF / GLB (cgltf) | `UStaticMesh` (`SM_`); with `ImportType=SkeletalMesh` (`-type=SkeletalMesh`) a `USkeletalMesh` (`SK_`) on `Skeleton` or a `SKEL_` skeleton next to it; with `ImportType=Animation` (`-type=Animation`) a `UAnimSequence` (`A_<Animation>`) per glTF animation on `Skeleton` ([below](#skeletal-meshes-and-animations--gltf-import)) |
 | `UGLTFMapFactory` (`-type=Map`) | glTF / GLB scene (cgltf) | a map (`UWorld`, `.lmap`, no prefix) with its `SM_` meshes and `M_` materials: [LEVELS.md](LEVELS.md#importing-a-map-from-gltf) |
+| `UTextureCubeFactory` (`-type=TextureCube`) | Radiance `.hdr`, long-lat (stb_image) | `UTextureCube` (`T_`): six tone-mapped sRGB faces of `CubeFaceSize` ([cube maps](#cube-maps)) |
 | `UTrueTypeFontFactory` (`-type=Font`) | `.ttf` (stb_truetype) | `UFont` (no prefix, as UE's engine fonts): the glyph pages and metrics at `Height` pixels ([fonts](#fonts)) |
 | `USoundFactory` | `.wav`, 16-bit PCM | `USoundWave` (`S_`): the samples as they are, with `CompressionSampleRate`, `bLooping`, `LoopStartFrame` and `Priority` (import settings) |
 | `UMaterialFactoryNew` | — (new) | `UMaterial` (`M_`) |
@@ -433,6 +436,36 @@ The engine's fonts are DejaVu Sans Condensed (`Engine/SourceArt/EngineFonts/`, t
 DejaVu changes in the public domain: `LICENSE.txt` there, [Engine/SourceArt/LICENSES.md](../Engine/SourceArt/LICENSES.md))
 at 10, 14, 20 and 32 pixels: one page each (256 × 64, 128 × 128, 256 × 128 and 256 × 256: 8, 8, 16 and 32 KB of GS
 memory when drawn), with 293, 430, 555 and 678 kerning pairs.
+
+---
+
+## Cube maps
+
+A `UTextureCube` is UE's cube map ([ps2-polish](PLANS/ps2-polish.md) P8): six square faces around a point, what a map's
+sky is drawn from (`FWorldSkySettings`, [LEVELS.md](LEVELS.md#the-world-settings)). The GS samples no cube, so each face
+is a `UTexture2D` subobject of the cube (`PosX`, `NegX`, `PosY`, `NegY`, `PosZ`, `NegZ`, in `Faces` in UE's `ECubeFace`
+order), clamped at its edges (`AddressX` / `AddressY` `Clamp`, the GS's CLAMP), which the PS2 cook palettes as any
+texture and the texture cache binds on its own; UE keeps the faces as the slices of one platform data. Its tagged
+properties are `Faces` and `HorizonColor` (the fog's colour when it follows the sky).
+
+- **Faces.** Face F holds the directions Forward + u Right + v Up (u, v from -1 to 1), seen from the centre, in the
+  world's axes (`UTextureCube::GetFaceBasis`): the side faces keep +Z up with UE's right (Up ^ Forward: +X's right is
+  +Y, +Y's is -X, -X's is -Y, -Y's is +X); +Z's up is -X and -Z's is +X (a view pitched up or down from +X), both with
+  +Y to the right. The texel columns go along Right and the rows along Up, the bottom row first, as every texture's.
+- **Import.** `UTextureCubeFactory` (LeonEd, `-type=TextureCube`, `.hdr`) reads a Radiance RGBE long-lat panorama with
+  stb_image (`UTextureFactory::DecodeHDRImage`): column x looks at the yaw (x + 0.5) / Width × 360 − 180 degrees (the
+  middle column along +X, the yaw growing toward +Y), row y (the top row first) at the pitch 90 − (y + 0.5) / Height ×
+  180 degrees. Each face texel averages four bilinear samples of it along its direction (a quarter of a texel apart;
+  the columns wrap, the rows clamp at the poles). Settings: `CubeFaceSize` (128; a power of two from 8 to 256),
+  `ExposureBias` (0; stops: the radiance times 2^ExposureBias) and `HorizonDegrees` (5).
+- **Tone mapping.** The GS shows bytes, so the import bakes the display in: each channel of the exposed radiance x
+  goes through the ACES filmic curve in Krzysztof Narkowicz's fit, x (2.51 x + 0.03) / (x (2.43 x + 0.59) + 0.14),
+  clamped to 0..1 (1.0 becomes 0.80, a sun of 60 becomes white), then the sRGB curve, rounded to bytes, opaque.
+  `HorizonColor` is the average of the side faces' texels within `HorizonDegrees` above the horizon, in bytes / 255.
+- **Cook.** Each face is an RGBA8 `UTexture2D`, so the PS2 cook palettes it (PSMT8, 256 colours by median cut, with its
+  mips, which the sky does not sample: it draws level 0, bilinear); the desktop's preview converts it the same way.
+- **Determinism.** The same file and settings give the same bytes (a fixed order, faces reused by name on a
+  reimport): gate G5 reimports ShooterGame's `T_Sky_Desert` with the rest of the content.
 
 ---
 

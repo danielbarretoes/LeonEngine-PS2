@@ -52,6 +52,34 @@ bool UTextureFactory::DecodeImage(
 	return OutWidth > 0 && OutHeight > 0;
 }
 
+bool UTextureFactory::DecodeHDRImage(
+	const uint8* Buffer, int64 Size, int32& OutWidth, int32& OutHeight, TArray<float>& OutRGB, FString& OutError)
+{
+	if (Buffer == nullptr || Size <= 0 || Size > static_cast<int64>(MAX_int32))
+	{
+		OutError = TEXT("empty image");
+		return false;
+	}
+	if (!stbi_is_hdr_from_memory(Buffer, static_cast<int32>(Size)))
+	{
+		OutError = TEXT("not a Radiance HDR image");
+		return false;
+	}
+	// The file's order: the top row first.
+	stbi_set_flip_vertically_on_load(0);
+	int32 Channels = 0;
+	float* Texels = stbi_loadf_from_memory(Buffer, static_cast<int32>(Size), &OutWidth, &OutHeight, &Channels, 3);
+	if (Texels == nullptr)
+	{
+		OutError = stbi_failure_reason();
+		return false;
+	}
+	OutRGB.Reset();
+	OutRGB.Append(Texels, OutWidth * OutHeight * 3);
+	stbi_image_free(Texels);
+	return OutWidth > 0 && OutHeight > 0;
+}
+
 bool UTextureFactory::IsSRGB(FName Name) const
 {
 	switch (ColorSpaceMode)

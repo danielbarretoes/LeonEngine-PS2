@@ -7,7 +7,9 @@ Runs each script twice in Blender, headless (`--background --factory-startup`, `
 every .glb of the two runs byte for byte, then with the .glb of that name next to the script (the committed one).
 Without arguments it checks every make_*.py under this folder that uses leon_art, and fails when one of the scripts
 the art needs is missing from that list (EXPECTED_SCRIPTS: the characters, the arms, the weapons, de_leon and the
-samples). The .blend files are not compared:
+samples). The generators that need no Blender (PYTHON_SCRIPTS: the sky's HDR, ps2-polish P8) run twice with this
+Python (`<script> --out <temp folder>`) and their .hdr files are compared the same way. The .blend files are not
+compared:
 Blender writes different bytes on every save. Blender is LEON_BLENDER, else Blender 5.2's default install; the glTF
 exporter writes its version in the file, so another Blender version is expected to differ from the committed files.
 Exits 1 on any difference. Only the Python standard library is used.
@@ -30,6 +32,11 @@ EXPECTED_SCRIPTS = [
     os.path.join("Samples", "make_art_samples.py"),
     os.path.join("Weapons", "make_weapons.py"),
 ]
+# The Python standard library's generators, run without Blender: the sky (Sky/make_sky.py, its Sky_Desert.hdr).
+PYTHON_SCRIPTS = [
+    os.path.join("Sky", "make_sky.py"),
+]
+OUTPUTS = ("*.glb", "*.hdr")
 
 
 def find_scripts():
@@ -42,7 +49,10 @@ def find_scripts():
 
 
 def run(blender, script, out):
-    command = [blender, "--background", "--factory-startup", "--python", script, "--", "--out", out]
+    if os.path.relpath(script, HERE) in PYTHON_SCRIPTS:
+        command = [sys.executable, script, "--out", out]
+    else:
+        command = [blender, "--background", "--factory-startup", "--python", script, "--", "--out", out]
     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
     if result.returncode != 0 or "Traceback" in result.stdout:
         sys.stdout.write(result.stdout)
@@ -62,9 +72,10 @@ def check(blender, script):
     try:
         for folder in folders:
             run(blender, script, folder)
-        outputs = sorted(os.path.basename(p) for p in glob.glob(os.path.join(folders[0], "*.glb")))
+        outputs = sorted(os.path.basename(p) for pattern in OUTPUTS
+                         for p in glob.glob(os.path.join(folders[0], pattern)))
         if not outputs:
-            failures.append("%s: wrote no .glb" % name)
+            failures.append("%s: wrote no .glb or .hdr" % name)
         for output in outputs:
             first = read(os.path.join(folders[0], output))
             second_path = os.path.join(folders[1], output)
@@ -89,7 +100,8 @@ def main(argv):
     if not os.path.exists(blender):
         print("check_art_determinism: Blender not found at %s (set LEON_BLENDER)" % blender)
         return 1
-    scripts = [os.path.abspath(path) for path in argv] or find_scripts()
+    scripts = [os.path.abspath(path) for path in argv] or (find_scripts() +
+                                                           [os.path.join(HERE, name) for name in PYTHON_SCRIPTS])
     failures = []
     if not argv:
         found = {os.path.relpath(script, HERE) for script in scripts}

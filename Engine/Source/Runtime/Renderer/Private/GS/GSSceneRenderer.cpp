@@ -7,6 +7,7 @@
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture2D.h"
+#include "Engine/TextureCube.h"
 #include "Engine/World.h"
 #include "Frustum.h"
 #include "GLClipSpace.h"
@@ -16,12 +17,15 @@
 #include "Level/Light.h"
 #include "LightSceneProxy.h"
 #include "MaterialShared.h"
+#include "Math/ScaleMatrix.h"
+#include "Math/TranslationMatrix.h"
 #include "Misc/MemStack.h"
 #include "Misc/Scratchpad.h"
 #include "SceneManagement.h"
 #include "ScenePrivate.h"
 #include "SceneView.h"
 #include "SkeletalMeshSceneProxy.h"
+#include "SkyBoxGeometry.h"
 #include "StaticMeshResources.h"
 #include "StaticMeshSceneProxy.h"
 #include "Stats/Stats.h"
@@ -31,6 +35,7 @@ DECLARE_CYCLE_STAT(TEXT("GS Scene Render"), STAT_GSSceneRender, STATGROUP_SceneR
 DECLARE_CYCLE_STAT(TEXT("GS Canvas"), STAT_GSDrawCanvas, STATGROUP_SceneRendering);
 // The scene's parts (N29): the profile's breakdown of GS Scene Render.
 DECLARE_CYCLE_STAT(TEXT("GS Visibility"), STAT_GSVisibility, STATGROUP_SceneRendering);
+DECLARE_CYCLE_STAT(TEXT("GS Sky"), STAT_GSSky, STATGROUP_SceneRendering);
 DECLARE_CYCLE_STAT(TEXT("GS Opaque"), STAT_GSOpaque, STATGROUP_SceneRendering);
 DECLARE_CYCLE_STAT(TEXT("GS Skinned"), STAT_GSSkinned, STATGROUP_SceneRendering);
 DECLARE_CYCLE_STAT(TEXT("GS Translucent and Effects"), STAT_GSTranslucent, STATGROUP_SceneRendering);
@@ -243,7 +248,11 @@ FGSSceneRenderer::FSectionState FGSSceneRenderer::BindMaterial(
 		const float K = FMath::Log2(TexelsPerCm / PixelsPerCm) + Material.LodBias;
 		Tex1.K = int16(FMath::Clamp(FMath::RoundToInt(K * 16.0f), -2048, 2047));
 	}
-	SetSampler(List, Tex1, FGSClamp());
+	// The texture's address modes (UE: AddressX, AddressY): repeat, or clamp at its edges (a sky's faces).
+	FGSClamp Clamp;
+	Clamp.WMS = Material.AlbedoMap->AddressX == ETextureAddress::Clamp ? EGSWrapMode::Clamp : EGSWrapMode::Repeat;
+	Clamp.WMT = Material.AlbedoMap->AddressY == ETextureAddress::Clamp ? EGSWrapMode::Clamp : EGSWrapMode::Repeat;
+	SetSampler(List, Tex1, Clamp);
 	State.bTextured = true;
 	return State;
 }
@@ -599,14 +608,22 @@ void FGSSceneRenderer::Render(
 
 	// The world settings' distance fog (N15): FOGCOL for the frame, a coefficient per vertex of the world pass.
 	FrameFog = FGSVertexFog();
+	// The sky's cube map (ps2-polish P8), whose horizon the fog fades into.
+	const UTextureCube* Sky = WorldSettings != nullptr ? WorldSettings->SkySettings.SkyCubemap : nullptr;
+	if (Sky != nullptr && !Sky->HasValidFaces())
+	{
+		Sky = nullptr;
+	}
 	if (WorldSettings != nullptr && WorldSettings->FogSettings.bEnableFog)
 	{
 		const FWorldFogSettings& Fog = WorldSettings->FogSettings;
 		FrameFog = FGSVertexFog::MakeLinear(Fog.StartDistance, Fog.EndDistance);
+		const FLinearColor FogColor =
+			Fog.bInscatteringColorFromSky && Sky != nullptr ? Sky->HorizonColor : Fog.FogInscatteringColor;
 		FGSFogCol FogCol;
-		FogCol.R = UnitByte(Fog.FogInscatteringColor.R);
-		FogCol.G = UnitByte(Fog.FogInscatteringColor.G);
-		FogCol.B = UnitByte(Fog.FogInscatteringColor.B);
+		FogCol.R = UnitByte(FogColor.R);
+		FogCol.G = UnitByte(FogColor.G);
+		FogCol.B = UnitByte(FogColor.B);
 		List.SetFogCol(FogCol);
 	}
 
@@ -616,6 +633,12 @@ void FGSSceneRenderer::Render(
 	FGSPrimitiveEmitter Emitter(Environment, List);
 	Emitter.SetFog(FrameFog);
 	PixelsPerCm = GetPixelsPerCm(View.ProjectionMatrix, Environment);
+
+	// The sky, over the clear and under everything else.
+	if (Sky != nullptr)
+	{
+		DrawSky(*Sky, View, ViewProjection, Emitter, List, Environment);
+	}
 
 	// Opaque sections grouped by texture, the groups in the order their first section comes in the scene (the same
 	// order every run: no addresses decide it) and the scene's order within a group; translucent ones afterwards,
@@ -792,6 +815,42 @@ void FGSSceneRenderer::Render(
 	FrameStats.TextureEvictions = Counters.Evictions;
 	FrameStats.ClutLoads = Counters.ClutLoads;
 	FrameStats.TextureResidentBytes = int32(TextureCache.GetResidentBlocks() * FGSTextureLayout::BytesPerBlock);
+}
+
+void FGSSceneRenderer::DrawSky(const UTextureCube& Sky, const FSceneView& View, const FMatrix& ViewProjection,
+	FGSPrimitiveEmitter& Emitter, FGSCommandList& List, const FGSDrawEnvironment& Environment)
+{
+	SCOPE_CYCLE_COUNTER(STAT_GSSky);
+	if (SkyMesh.IsEmpty() && !FSkyBoxGeometry::BuildMesh(SkyMesh))
+	{
+		return;
+	}
+	// Behind everything: the depth test always passes and Z is not written; not fogged.
+	const FGSVertexFog WorldFog = FrameFog;
+	FrameFog = FGSVertexFog();
+	Emitter.SetFog(FrameFog);
+	List.SetTest(0, FGSDrawEnvironment::DepthTest(false));
+	SetDepthWrite(List, Environment, false);
+	// Around the eye, never moving with it.
+	const float Radius = FSkyBoxGeometry::GetRadius(View.ProjectionMatrix);
+	const FMatrix LocalToWorld = FScaleMatrix(FVector(Radius)) * FTranslationMatrix(View.ViewLocation);
+	const FBox Bounds = FBox(FVector(-Radius), FVector(Radius)).ShiftBy(View.ViewLocation);
+	for (int32 Section = 0; Section < SkyMesh.GetNumSections(); ++Section)
+	{
+		// The face unlit, its texels as they are (MODULATE by white), level 0 bilinear, clamped (its texture's address
+		// modes).
+		FMaterial Face;
+		Face.Shading = EMaterialLightingModel::Unlit;
+		Face.Albedo = FVector::OneVector;
+		Face.AlbedoMap = Sky.GetFace(ECubeFace(SkyMesh.GetSection(Section).MaterialIndex));
+		Face.bMipmaps = false;
+		DrawMeshSection(Emitter, SkyMesh, Section, LocalToWorld, Bounds, Face, /*bStaticLighting =*/false, nullptr,
+			nullptr, ViewProjection, List, Environment);
+	}
+	SetDepthWrite(List, Environment, true);
+	List.SetTest(0, FGSDrawEnvironment::DepthTest(true));
+	FrameFog = WorldFog;
+	Emitter.SetFog(FrameFog);
 }
 
 void FGSSceneRenderer::DrawSkeletalMesh(FGSPrimitiveEmitter& Emitter, const FSkeletalMeshSceneProxy& Skeletal,

@@ -297,13 +297,61 @@ Desviaciones:
   de P5).
 - Tests: el overview es determinista; proyección mundo→imagen; el radar dibuja la textura.
 
-**P8 · Cielo (M)**
+**P8 · Cielo (M) — hecha**
 - Generador procedural (script Python versionado, D6): cielo de desierto HDR (degradado, sol, nubes) a cubemap, con
   tone-mapping a 6 caras P8 de 128² en el cook.
 - `ASkyBox`/ajuste en `AWorldSettings` con su textura; el renderer lo dibuja tras el clear y antes del mundo, sin Z,
   centrado en el ojo (caras subdivididas o domo para no pasar por el clipper del EE); el color de la niebla sigue al
   horizonte y se activan niebla y LODs en de_leon si no cuestan fps.
 - Tests: escena de conformidad del cielo (D7), el cielo no escribe Z, determinismo del generador; `MeasurePS2`.
+
+Estado: hecha.
+- Generador: `SourceArt/Sky/make_sky.py` (biblioteca estándar de Python, sin Blender, unos 8 s) escribe
+  `Sky_Desert.hdr`, un panorama long-lat de 1 024 x 512 en Radiance RGBE (RLE, sin fecha en la cabecera): cenit azul
+  que se aclara a una bruma cálida en el horizonte (más clara hacia el sol), arena lejana bajo él, el sol (disco de
+  1,5° de radio, 60 veces el horizonte, con su halo) donde está el sol horneado de de_leon (lee `SUN_DIRECTION` de
+  `make_de_leon.py`, que pasa a ser una constante) y nubes de ruido de valor con semilla. `check_art_determinism.py`
+  lo ejecuta dos veces con Python y compara el `.hdr` con el versionado (idéntico, 384 731 bytes); de_leon también.
+- Asset: `UTextureCube` (UE) con sus seis caras como subobjetos `UTexture2D` (`PosX` ... `NegZ`, orden de `ECubeFace`)
+  y `HorizonColor`; `UTextureCubeFactory` (LeonEd, `-type=TextureCube`, `.hdr` por stb_image) muestrea el panorama por
+  la dirección de cada texel (4 muestras bilineales), aplica `ExposureBias` (0) y la curva ACES de Narkowicz, codifica
+  sRGB y guarda caras de `CubeFaceSize` (128). `UTexture2D` gana `AddressX` / `AddressY` (`ETextureAddress`, UE:
+  TextureAddress): las caras van en `Clamp` y `BindMaterial` escribe el CLAMP del GS según la textura.
+- Colocación: `AWorldSettings::SkySettings` (`FWorldSkySettings::SkyCubemap`) y
+  `FWorldFogSettings::bInscatteringColorFromSky` (por defecto sí: la niebla toma `HorizonColor`). El importador de
+  mapas lee un nodo vacío `WorldSettings` cuyas extras fijan propiedades de `AWorldSettings` por ruta
+  (`SkySettings.SkyCubemap`, `FogSettings.bEnableFog`...) con `ImportText`, cargando los assets nombrados; una clave
+  desconocida falla la importación. de_leon lo usa (`WORLD_SETTINGS` en `make_de_leon.py`).
+- Render: `FGSSceneRenderer::DrawSky` tras el clear y antes del mundo: una caja (`FSkyBoxGeometry`, LPS2 v2 generado
+  en runtime, 12 x 12 quads por cara en lotes de 2 x 2, 216 lotes de a lo sumo 13,3°) escalada por la media
+  geométrica de near y far y trasladada al ojo, cada cara por `DrawMeshSection` sin luz ni niebla, ZTST ALWAYS y Z
+  enmascarada. En PS2 va por el programa StaticUnlit de VU1; ningún lote pasa por el clipper del EE (probado en 54
+  vistas). Unos 36 lotes por frame; 8 KB de GIF cuando los emite el EE.
+- Niebla y LODs en de_leon: niebla activada de 30 m al far de 100 m con el color del horizonte (tiñe solo el fondo
+  de las vistas largas y oculta el corte del far contra el cielo). LODs no: todas sus mallas son Static horneadas y
+  una malla horneada siempre dibuja el LOD 0, así que no cambiarían nada.
+- Tests (595 del motor): `System.Renderer.GS.Sky.BoxGeometry`, `.Orientation` (seis vistas de yaw y pitch conocidos
+  contra la referencia: la cara y sus cuadrantes donde deben; un cubo a 30 m, detrás de la caja, se ve encima: el
+  cielo no escribe Z y va primero; los lotes grabados para VU1 dan los mismos píxeles; ningún lote recortado en 48
+  vistas más), `.FogColor`, `System.LeonEd.Factories.TextureCube.FaceBasis` e `.Import` (tone-mapping, exposición,
+  horizonte, reimportación idéntica), `System.LeonEd.MapFactory.WorldSettingsFromNode`.
+- Capturas Win64 en el scratchpad (`p8_sky_sun.png`, `p8_sky_up.png`, `p8_sky_long.png`, `p8_sky_east.png`,
+  `p8_sky_fog.png`) y de PCSX2 en partida (`p8_pcsx2_sky.png`).
+- BotMatch 10 7 idéntico dos veces y sin cambios respecto a P3b: `Botmatch OK: 8 round(s), CT 2 - T 6, 57 kill(s),
+  seed 7, sides switched after round 5`.
+- PCSX2 (`MeasurePS2`, fila «ps2-polish P8» en Budgets.md): 29,20 fps, p50/p95/p99 33,5 / 33,5 / 83,5 ms, como P3
+  (29,26, con los mismos tirones); la escena 9,79 ms (9,32 en P3), el cielo 0,28 ms; las caras ocupan 127 KB de VRAM.
+
+Desviaciones:
+- Sin escena de conformidad nueva (D7): el cielo no usa ninguna función nueva del GS (textura PSMT8 con STQ, bilineal,
+  CLAMP, ZTST ALWAYS y ZMSK ya están en ClampModes, ClutAndFormats y el clear); en su lugar el test de orientación
+  compara la referencia con los lotes de VU1 expandidos y la captura de PCSX2 muestra el cielo.
+- Caras de 128² y no 256²: con 256² la carga de de_leon llegaba a 1 038 KB del presupuesto `LoadMapMisc` de 1 024 KB
+  (error fatal en PS2).
+- `AWorldSettings` en vez de un actor `ASkyBox` (como la niebla, que ya vivía ahí), y el nodo `WorldSettings` genérico
+  por rutas de propiedad en vez de extras específicas del cielo.
+- UE guarda las seis caras como slices de un único platform data; aquí son seis `UTexture2D` para que el cook y la
+  caché de texturas del GS las traten como cualquier textura.
 
 **P9 · Menú principal, selección de bando y pausa (L)**
 - Mapa de menú (`MainMenu` como `GameDefaultMap`) con `UShooterMainMenuWidget`: mapa (lista de mapas del proyecto),

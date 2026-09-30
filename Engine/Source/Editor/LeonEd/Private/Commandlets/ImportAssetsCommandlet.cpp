@@ -13,6 +13,7 @@
 #include "Factories/GLTFMapFactory.h"
 #include "Factories/PhysicalMaterialFactoryNew.h"
 #include "Factories/SoundFactory.h"
+#include "Factories/TextureCubeFactory.h"
 #include "Factories/TextureFactory.h"
 #include "Factories/TrueTypeFontFactory.h"
 #include "LeonEdLog.h"
@@ -61,6 +62,10 @@ namespace
 		{
 			return UTextureFactory::StaticClass();
 		}
+		if (Type == TEXT("TextureCube"))
+		{
+			return UTextureCubeFactory::StaticClass();
+		}
 		if (Type == TEXT("StaticMesh") || Type == TEXT("SkeletalMesh") || Type == TEXT("Animation"))
 		{
 			// glTF is the only mesh and animation format (ps2-shipping D11).
@@ -80,7 +85,8 @@ namespace
 			return UTrueTypeFontFactory::StaticClass();
 		}
 		UE_LOG(LogLeonEd, Error,
-			"ImportAssets: unknown type '%s' (Texture, StaticMesh, SkeletalMesh, Animation, Sound, Map, Font; without "
+			"ImportAssets: unknown type '%s' (Texture, TextureCube, StaticMesh, SkeletalMesh, Animation, Sound, Map, "
+			"Font; without "
 			"a "
 			"source: BlendSpace, BlendSpace1D, AimOffsetBlendSpace1D, AnimMontage, PhysicalMaterial)",
 			*Type);

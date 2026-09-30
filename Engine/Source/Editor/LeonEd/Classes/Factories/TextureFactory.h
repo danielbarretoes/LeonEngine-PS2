@@ -43,6 +43,13 @@ public:
 	static bool DecodeImage(
 		const uint8* Buffer, int64 Size, int32& OutWidth, int32& OutHeight, TArray<uint8>& OutRGBA, FString& OutError);
 
+	/**
+	 * Decodes a Radiance HDR file (`.hdr`, RGBE) into linear float RGB texels, three a texel, the top row first (as
+	 * the file stores it); false with an error (Leon: UTextureCubeFactory's source).
+	 */
+	static bool DecodeHDRImage(
+		const uint8* Buffer, int64 Size, int32& OutWidth, int32& OutHeight, TArray<float>& OutRGB, FString& OutError);
+
 	/** True when a texture named Name is read as sRGB under ColorSpaceMode (Leon). */
 	[[nodiscard]] bool IsSRGB(FName Name) const;
 

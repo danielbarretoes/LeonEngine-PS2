@@ -133,6 +133,7 @@ starts with; the engine's rules are in `Engine/Config/BaseEditor.ini`, a project
 | `PORTAL_<CellA>_<CellB>` | `AVisibilityPortal` between the two cells (either name may hold an underscore), `Corners` the rectangle of its quad in the world; left out, with a warning, when the suffix names no two cells of the map | engine (N15) |
 | `BombSite_A` / `_B`, `BuyZone_CT` / `_T` | `ATriggerVolume`, `Tags` [`BombSite`, `A`] / [`BuyZone`, `CT`] | a project's (ShooterGame, P17), below |
 | a KHR_lights_punctual light | `ADirectionalLight`, or `APointLight` for a point or spot light (Leon has no spot light: a warning): the colour, the glTF intensity as `Intensity`, `range` as `AttenuationRadius` (8 m without one); every light casts shadows in the [static lighting](#static-lighting) | always, whatever its name |
+| `WorldSettings` (an empty) | no actor: its extras set the map's `AWorldSettings` ([the world settings](#the-world-settings)) | always (ps2-polish P8) |
 | a node with no mesh and no rule | nothing (a group; its children are placed with its transform) | — |
 
 A volume is the box of the node's mesh (its bounds in the mesh's space, placed and sized by the node's transform; a
@@ -238,8 +239,32 @@ the eye stands within 60 cm of is open whole), and at most 64 cells.
 
 The same tuning has two more knobs, both off by default: the world settings' `FogSettings` (`bEnableFog`,
 `FogInscatteringColor`, `StartDistance`, `EndDistance`: a linear distance fog, the GS's) and a mesh's LODs
-(`LODs=<share>@<screen size>,...` in `ImportList.ini`). de_leon uses neither (N29): the whole map fits in the far plane,
-its largest piece has 146 triangles, and the portals already take away what a nearer far plane would.
+(`LODs=<share>@<screen size>,...` in `ImportList.ini`). Since [ps2-polish](PLANS/ps2-polish.md) P8 de_leon's fog is on,
+from 30 m to the far plane's 100 m, in the sky's horizon colour ([the world settings](#the-world-settings)): it tints
+only the far end of a long view and hides the far plane's cut against the sky. It uses no LODs: its meshes are Static
+and baked, and a mesh with baked colours always draws at LOD 0 (the colours are baked for LOD 0's batches), so LODs
+would change nothing; its largest piece has 146 triangles anyway.
+
+### The world settings
+
+A node named `WorldSettings` (an empty; Blender's custom properties become its glTF extras) sets the map's
+`AWorldSettings` ([ps2-polish](PLANS/ps2-polish.md) P8): each extras key is a property path of the world settings
+(`KillZ`, `FogSettings.bEnableFog`, `SkySettings.SkyCubemap`), each value its text as UE's `ImportText` reads it
+(`True`, `3000`, an asset by its object path, loaded when it is not); a key that names no property, or a value that
+does not parse, fails the import. de_leon's (`make_de_leon.py`'s `WORLD_SETTINGS`):
+
+| Key | Value |
+| --- | --- |
+| `SkySettings.SkyCubemap` | `/Game/Sky/T_Sky_Desert.T_Sky_Desert`, the sky ([ART_PIPELINE.md](ART_PIPELINE.md#the-sky)) |
+| `FogSettings.bEnableFog` | `True` |
+| `FogSettings.StartDistance` / `EndDistance` | `3000` / `10000` (cm) |
+
+**The sky** (`FWorldSkySettings::SkyCubemap`, a `UTextureCube`) is drawn after the clear and before the world: a box
+around the eye (it turns with the view and never moves), its faces the cube map's, unlit, unfogged, with no depth test
+and no Z written, so everything draws over it ([ARCHITECTURE.md](ARCHITECTURE.md#12-rendering-the-gs-path)). Without
+one the background is the renderer's clear colour. **The fog** takes the sky's horizon colour
+(`UTextureCube::HorizonColor`) while `FogSettings.bInscatteringColorFromSky` is on (the default), so the distance fades
+into the sky; `FogInscatteringColor` otherwise, or without a sky.
 
 ### Reimport
 

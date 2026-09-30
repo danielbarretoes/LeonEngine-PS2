@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/EngineTypes.h"
 #include "Engine/Texture.h"
 #include "Texture2D.generated.h"
 
@@ -18,6 +19,12 @@ class ENGINE_API UTexture2D : public UTexture
 
 public:
 	UTexture2D(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
+	/** How U and V outside 0..1 sample the texture (UE: AddressX, AddressY): the GS's CLAMP (WMS, WMT) of a draw. */
+	UPROPERTY()
+	ETextureAddress AddressX = ETextureAddress::Wrap;
+	UPROPERTY()
+	ETextureAddress AddressY = ETextureAddress::Wrap;
 
 	/**
 	 * A texture made at run time in the transient package (UE: CreateTransient): InSizeX x InSizeY zeroed texels of

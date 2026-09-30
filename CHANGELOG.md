@@ -9,6 +9,21 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A generated HDR sky ([ps2-polish](Docs/PLANS/ps2-polish.md) P8).
+  - `Game/ShooterGame/SourceArt/Sky/make_sky.py` (Python's standard library) generates de_leon's desert sky as a long-lat
+    Radiance HDR panorama (1 024 x 512): a zenith-to-haze gradient, sand below the horizon, the sun where the map's
+    baked sun is (`SUN_DIRECTION` of `make_de_leon.py`) and seeded clouds; `check_art_determinism.py` runs it twice.
+  - `UTextureCube` (UE) with its six faces as `UTexture2D` subobjects and a `HorizonColor`, and its importer
+    `UTextureCubeFactory` (LeonEd, `-type=TextureCube`, `.hdr`): each face texel samples the panorama along its
+    direction, tone-mapped by the ACES filmic curve at `ExposureBias` to sRGB bytes, faces of `CubeFaceSize` (128);
+    `/Game/Sky/T_Sky_Desert`. `UTexture2D::AddressX` / `AddressY` (`ETextureAddress`: `Wrap`, `Clamp`) set the GS's
+    CLAMP; the faces clamp.
+  - `AWorldSettings::SkySettings` (`FWorldSkySettings::SkyCubemap`): the GS scene renderer draws the sky after the
+    clear and before the world, a box of small batches around the eye (`FSkyBoxGeometry`), unlit, unfogged, no depth
+    test, no Z written, on VU1 and never through the EE's clipper. `FWorldFogSettings::bInscatteringColorFromSky`: the
+    fog takes the sky's horizon colour.
+  - The map importer reads a `WorldSettings` node's extras as world settings property paths (`SkySettings.SkyCubemap`,
+    `FogSettings.bEnableFog`, ...). de_leon has the sky and its fog on, from 30 m to the far plane.
 - Fonts, a textured canvas and UMG's missing widgets, the base of the new UI ([ps2-polish](Docs/PLANS/ps2-polish.md)
   P5).
   - `UFont` (UE's offline font) and its importer, `UTrueTypeFontFactory` (LeonEd, `-type=Font`, `.ttf`, stb_truetype):

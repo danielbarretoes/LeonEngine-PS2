@@ -31,6 +31,7 @@ centimetres). Node names follow the map importer's rules (Docs/LEVELS.md, Game/S
                               what the bots make of it: Lookout (a spot they watch a site from), Ladder (a ladder's
                               foot and top: the import links them across the climb)
     Sun, Light_<Place>_NN     the directional light and the point lights (KHR_lights_punctual, RAW intensities)
+    WorldSettings             an empty whose custom properties set the map's AWorldSettings (the sky, the fog)
     VIS_<Cell>, PORTAL_<A>_<B>  the cells (box meshes: AVisibilityCellVolume) and the openings between them (quad
                               meshes: AVisibilityPortal), N15's rules (Engine/Config/BaseEditor.ini)
 
@@ -71,6 +72,9 @@ CELL_TOP = 6.0
 SKY = 3.5
 # The capsule's radius and a margin: what the waypoint links must keep clear of.
 AGENT_CLEARANCE = 0.45
+# Where the sun's light travels (engine axes, not normalized): high, from the north-west. The sky's generator
+# (Sky/make_sky.py) reads this line to put its sun where the bake's is.
+SUN_DIRECTION = (-0.45, 0.30, -0.84)
 
 CELLS = ["TSpawn", "Mid", "LongA", "LongB", "CTSpawn", "SiteA", "SiteB"]
 
@@ -860,9 +864,27 @@ def build_sun(b):
     sun_data.energy = 1.0
     sun_data.color = (1.0, 0.95, 0.84)
     sun = leon_art.add_object("Sun", sun_data, b.collections["Lights"])
-    direction = to_blender(-0.45, 0.30, -0.84).normalized()
+    direction = to_blender(*SUN_DIRECTION).normalized()
     sun.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
     sun.location = to_blender(0.0, 0.0, 30.0)
+
+
+# The map's world settings (the WorldSettings node's extras, Docs/LEVELS.md): the sky (Sky/make_sky.py's desert, imported
+# as /Game/Sky/T_Sky_Desert) and the distance fog, fading into the sky's horizon from 30 m to the far plane's 100 m so
+# only the far end of a long view is tinted.
+WORLD_SETTINGS = {
+    "SkySettings.SkyCubemap": "/Game/Sky/T_Sky_Desert.T_Sky_Desert",
+    "FogSettings.bEnableFog": "True",
+    "FogSettings.StartDistance": "3000",
+    "FogSettings.EndDistance": "10000",
+}
+
+
+def build_world_settings(b):
+    """An empty named WorldSettings whose custom properties set the map's AWorldSettings, by property path."""
+    obj = b.empty("Gameplay", "WorldSettings", (0.0, 0.0, 10.0), "PLAIN_AXES")
+    for key, value in WORLD_SETTINGS.items():
+        obj[key] = value
 
 
 def build():
@@ -872,6 +894,7 @@ def build():
     build_cells(builder)
     build_gameplay(builder)
     build_sun(builder)
+    build_world_settings(builder)
     check_navigation(builder)
     total = 0
     for cell in CELLS:

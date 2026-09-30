@@ -10,9 +10,6 @@ PCSX2 (p50/p95/p99 33.5 ms), so nothing here blocks the frame rate.
 - **Minimap.** The radar (N30d) shows dots on a black square. It needs the map's real overview image, like CS's
   overviews: a top-down render of the map, generated at cook time and paletted, drawn under the dots and rotated with
   the view.
-- **Sky.** An HDR cubemap for the sky: a skybox drawn behind the world (today the sky is the renderer's dark clear
-  colour). It can be generated procedurally (a desert sky gradient, sun and clouds) and cooked to paletted faces for
-  the GS.
 - **Main menu.** A start menu that sets up the match:
   - the map;
   - the bots' difficulty (CS's easy, normal, hard and expert: reaction time, aim error, awareness);
@@ -34,11 +31,11 @@ ShooterGame stays single player against bots: no split screen (decided 2026-09-3
 - Batches that cross the near plane or the guard band still go through the EE's C++ clipper (13 a frame, 2.4 ms with
   the view model). Clipping on VU1, or smaller batches, was not needed at 30 fps.
 - Cells and portals cull little on de_leon's open layout: the sky portals keep most cells visible.
-- Fog and static mesh LODs work and are tested, but de_leon uses neither.
+- Static mesh LODs work and are tested, but de_leon uses none: its meshes are baked, and a baked mesh draws at LOD 0.
 - de_leon's 78 pieces are not merged per cell and material. A mesh has a single `UCX_` box, because Leon folds a mesh's
   boxes into one AABB; merging needs compound collision (several boxes per mesh).
-- No light probes for moving objects (pawns take the sky without occlusion), no skybox, and Movable lights do not light
-  the static world.
+- No light probes for moving objects (pawns take the sky without occlusion), and Movable lights do not light the static
+  world.
 - The `GSH_Capture` headless GS dump (plan D3) was never built; VU1 is validated with VU1Conformance in PCSX2.
 - The 512-line PAL frame (448 lines, centred, today) and CSM2 CLUTs are not supported.
 

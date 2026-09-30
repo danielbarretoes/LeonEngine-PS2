@@ -18,12 +18,13 @@ CMakeLists.txt text eol=lf
 Engine/Source/Programs/LeonHeaderTool/Tests/** text eol=lf
 
 # Binary content: packages (.lasset / .lmap), paks (.lpak, P16), binary glTF source art (.glb) and Blender sources (.blend,
-# P17), source sounds (.wav, P18)
+# P17), source sounds (.wav, P18), source HDR images (.hdr, ps2-polish P8)
 *.lasset binary
 *.lmap binary
 *.glb binary
 *.blend binary
 *.wav binary
+*.hdr binary
 *.ttf binary
 *.lpak binary
 *.png binary

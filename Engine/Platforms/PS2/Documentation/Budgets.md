@@ -298,6 +298,12 @@ With their mip chains ([ps2-shipping](../../../../Docs/PLANS/ps2-shipping.md) N1
 levels at their alignment and its CLUT, as the cache allocates it): `T_Default_D` 5 levels, 12 KB; `DefaultTexture`
 4 levels, 4 KB (N7's real footprints: its level 0 is 8 blocks, not a page); 15 KB for de_leon.
 
+Since [ps2-polish](../../../../Docs/PLANS/ps2-polish.md) P8 de_leon's sky, the cube map `T_Sky_Desert`, adds six
+128 x 128 faces: five PSMT8 of 23 KB with their mips and CLUT and the ground below the horizon PSMT4 (6 colours),
+12 KB; 127 KB in all. The cook's report: de_leon's own textures 190 KB, 380 KB with the common ones, of 1 856 KB.
+The faces were 256 x 256 first (522 KB, fitting the arena), but the map's load then took 1 038 KB of LoadMapMisc's
+1 024 KB (a fatal error on the PS2): 128 x 128 keeps its peak at 710 KB.
+
 **Texture residency** (N13). The cache keeps textures resident by blocks and evicts the least recently used ones of
 earlier frames when the arena is full (never the frame's own, never all at once); a frame uploads at most
 `TextureUploadBudgetKB` (128 KB: about 20 PSMT8 64x64 textures with their mips and CLUTs, 6.3 KB each). In the
@@ -393,6 +399,7 @@ is not the hardware, so each row names its PCSX2 and the hash of the settings it
 | ps2-polish P1 (the pawns' bodies Movable) | 29.95 | 33.38 ms | 33.50 / 33.50 / 33.50 ms | 50.05 ms | 4.74 ms | 8.53 ms | 0.07 + 2.89 ms | 0.17 ms | 17.56 ms (15.93) | 6 469 (before VU1 culls) | 19.2 KB (the EE's) | 4 432 KB | 1 804 | 2.8.2.0, d29e64bc |
 | ps2-polish P5 (fonts, the textured canvas; on P2b) | 29.98 | 33.36 ms | 33.50 / 33.50 / 33.50 ms | 50.07 ms | 4.57 ms | 9.15 ms | 0.18 + 1.45 ms | 0.18 ms | 18.44 ms (16.79) | 6 723 (before VU1 culls) | 22.1 KB (the EE's) | 4 289 KB | 1 831 | 2.8.2.0, d29e64bc |
 | ps2-polish P3 (the bots' knife, pickups, lookouts and ladders; on P5; 12 frames of 83 ms at 12 to 15 s, a teammate 80 cm before the watched bot: its skinned batches through the EE's emitter) | 29.26 | 34.18 ms | 33.50 / 33.50 / 83.50 ms | 88.55 ms | 4.71 ms | 9.32 ms | 0.17 + 1.41 ms | 0.19 ms | 19.06 ms (17.61) | 5 924 (before VU1 culls) | 23.4 KB (the EE's) | 5 075 KB | 1 853 | 2.8.2.0, d29e64bc |
+| ps2-polish P8 (the sky: a cube map of six 128-texel PSMT8 faces, 36 VU1 batches a frame, none clipped; de_leon's fog on; on P3, the same hitches) | 29.20 | 34.25 ms | 33.50 / 33.50 / 83.50 ms | 100.10 ms | 4.72 ms | 9.79 ms (the sky 0.28) | 0.17 + 1.41 ms | 0.19 ms | 18.63 ms (17.04) | 6 299 (before VU1 culls) | 23.8 KB (the EE's) | 5 344 KB | 1 865 | 2.8.2.0, d29e64bc |
 
 The GMalloc column is the peak (MeasurePS2's `gmalloc_peak_kb`) from the ps2-polish P3 row on; the ps2-polish P1 and
 P5 rows' 4 432 and 4 289 KB are likely the heap at the end (`heap_kb`, printed next to it), so compare those rows with

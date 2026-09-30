@@ -6,6 +6,7 @@
 #include "WorldSettings.generated.h"
 
 class AGameModeBase;
+class UTextureCube;
 
 /**
  * How LeonEd bakes a map's static lighting (UE: FLightmassWorldInfoSettings, the world settings' Lightmass settings;
@@ -65,6 +66,14 @@ struct ENGINE_API FWorldFogSettings
 	UPROPERTY()
 	FLinearColor FogInscatteringColor = FLinearColor(0.45f, 0.5f, 0.55f, 1.0f);
 
+	/**
+	 * The fog takes the colour of the sky's horizon (UTextureCube::HorizonColor of FWorldSkySettings::SkyCubemap) when
+	 * the map has a sky, so the distance fades into it; FogInscatteringColor otherwise (Leon, Docs/PLANS/ps2-polish.md
+	 * P8; UE: InscatteringColorCubemap).
+	 */
+	UPROPERTY()
+	bool bInscatteringColorFromSky = true;
+
 	/** The view depth where the fog starts, cm (UE: StartDistance). */
 	UPROPERTY()
 	float StartDistance = 1500.0f;
@@ -73,6 +82,22 @@ struct ENGINE_API FWorldFogSettings
 	 */
 	UPROPERTY()
 	float EndDistance = 6000.0f;
+};
+
+/**
+ * A map's sky (Leon, Docs/PLANS/ps2-polish.md P8; UE draws its sky as a mesh, BP_Sky_Sphere): a cube map drawn behind
+ * everything, centred on the eye (it turns with the view and never moves), unlit and never fogged, before the world.
+ * Its horizon is the fog's colour (FWorldFogSettings::bInscatteringColorFromSky). Without one the frame's background is
+ * the renderer's clear colour.
+ */
+USTRUCT()
+struct ENGINE_API FWorldSkySettings
+{
+	GENERATED_BODY()
+
+	/** The sky's cube map (none: no sky). */
+	UPROPERTY()
+	UTextureCube* SkyCubemap = nullptr;
 };
 
 /**
@@ -110,4 +135,8 @@ public:
 	/** The map's distance fog (Leon, N15; off by default). */
 	UPROPERTY()
 	FWorldFogSettings FogSettings;
+
+	/** The map's sky (Leon, ps2-polish P8; none by default). */
+	UPROPERTY()
+	FWorldSkySettings SkySettings;
 };

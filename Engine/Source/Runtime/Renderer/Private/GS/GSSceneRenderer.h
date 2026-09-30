@@ -7,13 +7,13 @@
 #include "GSPrimitiveEmitter.h"
 #include "GSTextureCache.h"
 #include "GSVertexBatch.h"
+#include "LPS2Mesh.h"
 #include "RendererInterface.h"
 #include "WorldEffectsGeometry.h"
 
 class FCanvas;
 class FDebugDraw;
 struct FLPS2ColorStreams;
-class FLPS2Mesh;
 class FPrimitiveSceneProxy;
 class FSceneView;
 class FSceneViewFamily;
@@ -23,6 +23,7 @@ struct FLPS2Batch;
 struct FLPS2ColorStreams;
 struct FMaterial;
 struct FPrimitiveSceneInfo;
+class UTextureCube;
 
 /**
  * The scene renderer of the GS (Docs/PLANS/ps2-gs-parity.md P5, Docs/PLANS/ps2-engine.md E2): a view family of the
@@ -68,11 +69,11 @@ struct FPrimitiveSceneInfo;
  * - Fog (N15): the world settings' linear distance fog (FWorldFogSettings), the GS's per-vertex fog with FOGCOL, on
  *   the world pass's meshes, blob shadows, impact marks and effect sprites.
  *
- * The frame: the clear, the opaque meshes, the skinned meshes, the blob shadows under what casts them, the impact marks
- * (a lerp toward the mark's colour: the GS cannot multiply by the destination), the translucent meshes, the effect
- * sprites, the tracers (added), the world's debug lines and the show flags' (F1 boxes, F6 axes), then the view model
- * meshes, static and skinned (first-person arms), over a cleared Z buffer with their own projection. The canvas (HUD,
- * text) draws after, with DrawCanvas: its rectangles as SPRITEs.
+ * The frame: the clear, the world settings' sky (DrawSky, ps2-polish P8), the opaque meshes, the skinned meshes, the
+ * blob shadows under what casts them, the impact marks (a lerp toward the mark's colour: the GS cannot multiply by the
+ * destination), the translucent meshes, the effect sprites, the tracers (added), the world's debug lines and the show
+ * flags' (F1 boxes, F6 axes), then the view model meshes, static and skinned (first-person arms), over a cleared Z
+ * buffer with their own projection. The canvas (HUD, text) draws after, with DrawCanvas: its rectangles as SPRITEs.
  *
  * The skinned meshes it draws get the world's time as their LastRenderTime, and the view's location goes to the world's
  * ViewLocationsRenderedLastFrame: the skeletal meshes throttle their poses by both (N25).
@@ -203,6 +204,16 @@ private:
 	void MakeSkinPalette(const FLPS2Mesh& Mesh, const FLPS2Batch& Batch, const TArray<FMatrix>& SkinMatrices,
 		FVector& OutCenter, float& OutRadius);
 
+	/**
+	 * The world settings' sky (Docs/PLANS/ps2-polish.md P8), after the clear and before the world: the sky box's six
+	 * faces (FSkyBoxGeometry), each textured with its face of Sky clamped at the edges, scaled by the projection's sky
+	 * radius around the eye (so only the view's rotation moves it), unlit and unfogged, with no depth test and no Z
+	 * written, so the world draws over it whatever its depth. Its batches draw as any static mesh's (DrawMeshSection):
+	 * on VU1 when recorded, and never through the clipper (the box's batches are small enough for the guard band).
+	 */
+	void DrawSky(const UTextureCube& Sky, const FSceneView& View, const FMatrix& ViewProjection,
+		FGSPrimitiveEmitter& Emitter, FGSCommandList& List, const FGSDrawEnvironment& Environment);
+
 	/** The world's impact marks (a lerp toward their colour, nearer than their surface by DecalDepthBias). */
 	void DrawImpactMarks(const FSceneViewFamily& ViewFamily, const FMatrix& ViewProjection,
 		FGSPrimitiveEmitter& Emitter, FGSCommandList& List, const FGSDrawEnvironment& Environment);
@@ -277,4 +288,6 @@ private:
 	TArray<FCanvasPrimitiveRun> CanvasRuns;
 	/** The effects' mask texels (BindEffectsMask), built on first use. */
 	TArray<uint8> EffectsMaskTexels;
+	/** The sky box's render data (FSkyBoxGeometry), built on the first sky drawn. */
+	FLPS2Mesh SkyMesh;
 };
