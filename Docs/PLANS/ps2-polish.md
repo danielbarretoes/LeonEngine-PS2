@@ -406,7 +406,6 @@ Desviaciones:
 - UE guarda las seis caras como slices de un único platform data; aquí son seis `UTexture2D` para que el cook y la
   caché de texturas del GS las traten como cualquier textura.
 
-**P9 · Menú principal, selección de bando y pausa (L)**
 **P9 · Menú principal, selección de bando y pausa (L) — hecha**
 - Mapa de menú (`MainMenu` como `GameDefaultMap`) con `UShooterMainMenuWidget`: mapa (lista de mapas del proyecto),
   dificultad (Fácil, Normal, Difícil, Experto → presets por bot de `ReactionTime`, `AimError`, `AimTurnRate`,
@@ -461,7 +460,7 @@ Estado: hecha.
 - `-botmatch` sin mapa: el game mode del menú viaja a de_leon al instante (BotMatch.bat y MeasurePS2 no cambian).
   SmokeTest arranca con `"/Game/Maps/de_leon?team=CT"` (los nueve bots entran repartidos) y sigue dando 10 peones, CT 5,
   T 5.
-- Tests (591 del motor, 118 de ShooterGame): `System.Engine.World.Pause`, `System.Engine.Travel.OpenLevel`,
+- Tests (597 del motor, 118 de ShooterGame): `System.Engine.World.Pause`, `System.Engine.Travel.OpenLevel`,
   `System.LeonEd.MapFactory.EngineMapsSkipRequiredTags` ampliado; `ShooterGame.Menu.MatchOptions`, `.DifficultyPresets`,
   `.BotSplit`, `.TeamChoiceAndChange`, `.PauseMenu`, `.MainMenuToMatchAndBack`; `ShooterGame.Settings.RoundTrip`,
   `Config.InputAndChannels`, `Input.BuyMenuTakesItsKeys`, `Map.DeLeonHoldsTheGame` y `.TenPawnsOnDeLeon` actualizados.

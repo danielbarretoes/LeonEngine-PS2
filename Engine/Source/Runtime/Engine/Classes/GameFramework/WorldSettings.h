@@ -140,6 +140,7 @@ public:
 	/** The map's sky (Leon, ps2-polish P8; none by default). */
 	UPROPERTY()
 	FWorldSkySettings SkySettings;
+
 	/**
 	 * The player who paused the game, null while it plays (UE: GetPauserPlayerState / SetPauserPlayerState):
 	 * AGameModeBase::SetPause sets it, and UWorld::IsPaused reads it.
