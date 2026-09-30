@@ -1,8 +1,8 @@
 @echo off
 REM Engine\Build\BatchFiles\SmokeTest.bat
-REM Gate G6, the ShooterGame smoke: builds ShooterGame (Win64 Development), boots it headless on its default map
-REM (de_leon), fills both teams with bots on the first frame (-ExecCmds=bot_fill: five a side with the local player),
-REM runs the frames and exits. It fails when the game's exit code is not 0 or when the game mode's end-of-match line
+REM Gate G6, the ShooterGame smoke: builds ShooterGame (Win64 Development), boots it headless straight into a match on
+REM de_leon past the main menu (the URL /Game/Maps/de_leon?team=CT: the team menu's choice), where the nine bots join
+REM around the player (five a side with the local player: AShooterGameMode::RebalanceBots), runs the frames and exits. It fails when the game's exit code is not 0 or when the game mode's end-of-match line
 REM does not report the ten pawns (the local player's and nine bots') in their teams.
 setlocal EnableExtensions
 set "LEON_ROOT=%~dp0..\..\.."
@@ -13,7 +13,7 @@ if errorlevel 1 exit /b 1
 pushd "%LEON_ROOT%"
 set "SMOKE_LOG=Game\ShooterGame\Saved\Logs\SmokeTest.log"
 if not exist "Game\ShooterGame\Saved\Logs" mkdir "Game\ShooterGame\Saved\Logs"
-"Game\ShooterGame\Binaries\Win64\ShooterGame.exe" -nullrhi -ExecCmds=bot_fill -ExitAfterFrames=120 > "%SMOKE_LOG%" 2>&1
+"Game\ShooterGame\Binaries\Win64\ShooterGame.exe" "/Game/Maps/de_leon?team=CT" -nullrhi -ExitAfterFrames=120 > "%SMOKE_LOG%" 2>&1
 set "GAME_EXIT=%ERRORLEVEL%"
 findstr /c:"ShooterGame: " /c:"joined" /c:"ShooterGameMode:" "%SMOKE_LOG%"
 if not "%GAME_EXIT%"=="0" (

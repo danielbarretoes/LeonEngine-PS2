@@ -126,8 +126,9 @@ public:
 	void Append(const FGSCommandList& Other);
 	/**
 	 * Appends Other with its vertex batches as the GS writes the C++ emitter makes of them (BeginStrip, then
-	 * FGSPrimitiveEmitter::AddVertexBatch, against Environment): the reference of what VU1 draws, for a backend
-	 * without it (the reference rasterizer in the tests).
+	 * FGSPrimitiveEmitter::AddVertexBatch, against Environment; a batch across a clip plane BeginTriangles, then
+	 * AddClippedVertexBatch): the reference of what VU1 draws, for a backend without it (the reference rasterizer in
+	 * the tests).
 	 */
 	void AppendExpanded(const FGSCommandList& Other, const FGSDrawEnvironment& Environment);
 

@@ -10,8 +10,9 @@
  * and flags of the node's extras (and, with bAutoLinkWaypoints, the links an agent can walk); UNavigationSystem builds
  * its graph from the level's waypoints when the world begins play (P20).
  *
- * Links are one way: a waypoint links the waypoints its node lists. Flags are names the navigation gives meaning to
- * (`Jump`, `Crouch`, ...).
+ * Links are one way: a waypoint links the waypoints its node lists. Flags are names the navigation and the game give
+ * meaning to: `Jump` and `Crouch` (the path follower), `Ladder` (a ladder's foot and top, linked across the climb) and
+ * the game's own (ShooterGame's bots watch from the waypoints flagged `Lookout`).
  */
 UCLASS()
 class ENGINE_API ANavigationWaypoint : public AActor

@@ -32,6 +32,15 @@ namespace
 	constexpr float MaxDisagreeingArea = 1.0f;
 	/** The fog coefficient (N15): VU1 truncates its multiply-add where the EE rounds, so F may round the other way. */
 	constexpr int32 MaxFog = 1;
+	/**
+	 * A clipped batch's (ps2-polish P8b): the vertices the clipper makes are A + (B - A) t, t = dA / (dA - dB), whose
+	 * rounding the division and the lerp's cancellation carry into Z and STQ: Z within 32 of the 24-bit depth (on the
+	 * near plane z is 0 give or take a few ulps of the ends' z, so the depth is 1 give or take 2^-19), and S, T and Q
+	 * within what the GS keeps of them, 2^-16 of the value (of 1 at least: a coordinate near 0 is the difference of
+	 * the ends', whose ulps it keeps; a 256-texel texture's 2^-8 texel).
+	 */
+	constexpr int32 MaxClippedZ = 32;
+	constexpr float MaxClippedSTQ = 1.0f / 65536.0f;
 
 	/** A GS vertex as the GS takes it: its ST and Q, RGBA, XYZ, the fog's F and whether it kicks the drawing. */
 	struct FGSVertexState
@@ -56,6 +65,11 @@ namespace
 	struct FReport
 	{
 		int32 NumBatches = 0;
+		int32 NumClippedBatches = 0;
+		/** The clipped batches' triangles compared, their chunks, and the triangles the emitter's clipper cut. */
+		int32 NumClippedTriangles = 0;
+		int32 NumChunks = 0;
+		int32 NumCut = 0;
 		int32 NumTriangles = 0;
 		int32 NumDisagreements = 0;
 		int32 NumFailures = 0;
@@ -64,6 +78,9 @@ namespace
 		int32 MaxColorSeen = 0;
 		int32 MaxUlpsSeen = 0;
 		int32 MaxFogSeen = 0;
+		int32 MaxClippedZSeen = 0;
+		/** In MaxClippedSTQ's units. */
+		float MaxClippedSTQSeen = 0.0f;
 	};
 
 	/** A deterministic sequence (a linear congruential generator). */
@@ -179,29 +196,34 @@ namespace
 	}
 
 	/**
-	 * The GS vertices of VU1's PACKED packet (its GIFtag, then ST, RGBAQ and XYZF2 a vertex; Q is ST's): XYZF2's Z is
-	 * 24 bits at bit 4 of the third word, F 8 bits at bit 4 of the fourth, ADC its bit 15.
+	 * The GS vertices of VU1's PACKED packets, one after the other (each its GIFtag, then ST, RGBAQ and XYZF2 a vertex;
+	 * Q is ST's): XYZF2's Z is 24 bits at bit 4 of the third word, F 8 bits at bit 4 of the fourth, ADC its bit 15.
 	 */
-	TArray<FGSVertexState> DecodePacket(const TArray<uint64>& Packet)
+	TArray<FGSVertexState> DecodePackets(const TArray<uint64>& Packets)
 	{
 		TArray<FGSVertexState> Vertices;
-		const uint32 NumVertices = uint32(Packet[0] & 0x7fff);
-		for (uint32 Index = 0; Index < NumVertices; ++Index)
+		int32 Tag = 0;
+		while (Tag + 1 < Packets.Num())
 		{
-			const uint64* Quadwords = &Packet[2 + (Index * 6)];
-			FGSVertexState& Vertex = Vertices.AddDefaulted_GetRef();
-			Vertex.S = BitsToFloat(uint32(Quadwords[0]));
-			Vertex.T = BitsToFloat(uint32(Quadwords[0] >> 32));
-			Vertex.Q = BitsToFloat(uint32(Quadwords[1]));
-			Vertex.Color[0] = uint8(Quadwords[2]);
-			Vertex.Color[1] = uint8(Quadwords[2] >> 32);
-			Vertex.Color[2] = uint8(Quadwords[3]);
-			Vertex.Color[3] = uint8(Quadwords[3] >> 32);
-			Vertex.X = uint16(Quadwords[4]);
-			Vertex.Y = uint16(Quadwords[4] >> 32);
-			Vertex.Z = uint32(Quadwords[5] >> 4) & 0xffffffu;
-			Vertex.F = uint8(Quadwords[5] >> 36);
-			Vertex.bKick = (Quadwords[5] & (uint64(1) << 47)) == 0;
+			const uint32 NumVertices = uint32(Packets[Tag] & 0x7fff);
+			for (uint32 Index = 0; Index < NumVertices && Tag + 2 + int32(Index * 6) + 5 < Packets.Num(); ++Index)
+			{
+				const uint64* Quadwords = &Packets[Tag + 2 + int32(Index * 6)];
+				FGSVertexState& Vertex = Vertices.AddDefaulted_GetRef();
+				Vertex.S = BitsToFloat(uint32(Quadwords[0]));
+				Vertex.T = BitsToFloat(uint32(Quadwords[0] >> 32));
+				Vertex.Q = BitsToFloat(uint32(Quadwords[1]));
+				Vertex.Color[0] = uint8(Quadwords[2]);
+				Vertex.Color[1] = uint8(Quadwords[2] >> 32);
+				Vertex.Color[2] = uint8(Quadwords[3]);
+				Vertex.Color[3] = uint8(Quadwords[3] >> 32);
+				Vertex.X = uint16(Quadwords[4]);
+				Vertex.Y = uint16(Quadwords[4] >> 32);
+				Vertex.Z = uint32(Quadwords[5] >> 4) & 0xffffffu;
+				Vertex.F = uint8(Quadwords[5] >> 36);
+				Vertex.bKick = (Quadwords[5] & (uint64(1) << 47)) == 0;
+			}
+			Tag += 2 * int32(1 + (3 * NumVertices));
 		}
 		return Vertices;
 	}
@@ -216,6 +238,17 @@ namespace
 			{
 				Triangles.Add({{Vertices[Index - 2], Vertices[Index - 1], Vertices[Index]}});
 			}
+		}
+		return Triangles;
+	}
+
+	/** The triangles of TRIANGLE: every three vertices (a clipped batch's, P8b). */
+	TArray<FTriangle> IndependentTriangles(const TArray<FGSVertexState>& Vertices)
+	{
+		TArray<FTriangle> Triangles;
+		for (int32 Index = 2; Index < Vertices.Num(); Index += 3)
+		{
+			Triangles.Add({{Vertices[Index - 2], Vertices[Index - 1], Vertices[Index]}});
 		}
 		return Triangles;
 	}
@@ -235,9 +268,14 @@ namespace
 			FMath::Abs(int32(A.Corners[2].Y) - int32(B.Corners[2].Y)) <= MaxXY;
 	}
 
-	/** Compares a triangle of VU1 with the emitter's; false beyond the tolerances. */
-	bool CompareTriangle(const FTriangle& Vu1, const FTriangle& Reference, bool bTextured, bool bFog, FReport& Report)
+	/** Compares a triangle of VU1 with the emitter's; false beyond the tolerances (a clipped batch's with bClipped). */
+	bool CompareTriangle(
+		const FTriangle& Vu1, const FTriangle& Reference, bool bTextured, bool bFog, bool bClipped, FReport& Report)
 	{
+		const int32 ZTolerance = bClipped ? MaxClippedZ : MaxZ;
+		// A clipped vertex's STQ against the value (1 at least), in MaxClippedSTQ's units (1 is the tolerance).
+		const auto RelativeSTQ = [](float A, float B)
+		{ return FMath::Abs(A - B) / (FMath::Max(FMath::Abs(B), 1.0f) * MaxClippedSTQ); };
 		bool bSame = true;
 		for (int32 Corner = 0; Corner < 3; ++Corner)
 		{
@@ -250,14 +288,20 @@ namespace
 			{
 				DColor = FMath::Max(DColor, FMath::Abs(int32(A.Color[Channel]) - int32(B.Color[Channel])));
 			}
-			const int32 DUlps = bTextured ? FMath::Max(Ulps(A.S, B.S), FMath::Max(Ulps(A.T, B.T), Ulps(A.Q, B.Q))) : 0;
+			const int32 DUlps =
+				bTextured && !bClipped ? FMath::Max(Ulps(A.S, B.S), FMath::Max(Ulps(A.T, B.T), Ulps(A.Q, B.Q))) : 0;
+			const float DSTQ = bTextured && bClipped
+				? FMath::Max(RelativeSTQ(A.S, B.S), FMath::Max(RelativeSTQ(A.T, B.T), RelativeSTQ(A.Q, B.Q)))
+				: 0.0f;
 			Report.MaxXYSeen = FMath::Max(Report.MaxXYSeen, DXY);
-			Report.MaxZSeen = FMath::Max(Report.MaxZSeen, DZ);
+			(bClipped ? Report.MaxClippedZSeen : Report.MaxZSeen) =
+				FMath::Max(bClipped ? Report.MaxClippedZSeen : Report.MaxZSeen, DZ);
 			Report.MaxColorSeen = FMath::Max(Report.MaxColorSeen, DColor);
 			Report.MaxUlpsSeen = FMath::Max(Report.MaxUlpsSeen, DUlps);
+			Report.MaxClippedSTQSeen = FMath::Max(Report.MaxClippedSTQSeen, DSTQ);
 			const int32 DFog = bFog ? FMath::Abs(int32(A.F) - int32(B.F)) : 0;
 			Report.MaxFogSeen = FMath::Max(Report.MaxFogSeen, DFog);
-			if (DXY > MaxXY || DZ > MaxZ || DColor > MaxColor || DUlps > MaxUlps || DFog > MaxFog)
+			if (DXY > MaxXY || DZ > ZTolerance || DColor > MaxColor || DUlps > MaxUlps || DSTQ > 1.0f || DFog > MaxFog)
 			{
 				if (bSame)
 				{
@@ -276,8 +320,43 @@ namespace
 	}
 
 	/**
+	 * The triangles of a batch's strips the clipper cuts: a vertex behind the near plane or beyond the guard band,
+	 * and not all three outside one side of the view.
+	 */
+	int32 CountCutTriangles(
+		const FGSVertexDraw& Draw, const FGSVertexBatch& Batch, const FGSDrawEnvironment& Environment)
+	{
+		FGSClipVertex Vertices[FGSVertexBatch::MaxVertices];
+		EGSStripTriangle Triangles[FGSVertexBatch::MaxVertices];
+		FGSPrimitiveEmitter::TransformVertexBatch(Draw, Batch, Vertices, Triangles);
+		const float GuardX = FGSPrimitiveEmitter::GuardExtent / (float(Environment.Width) * 0.5f);
+		const float GuardY = FGSPrimitiveEmitter::GuardExtent / (float(Environment.Height) * 0.5f);
+		const auto Outside = [&](const FVector4& C)
+		{ return C.Z < 0.0f || FMath::Abs(C.X) > GuardX * C.W || FMath::Abs(C.Y) > GuardY * C.W; };
+		const auto ViewCode = [](const FVector4& C)
+		{
+			return (C.X > C.W ? 1u : 0u) | (C.X < -C.W ? 2u : 0u) | (C.Y > C.W ? 4u : 0u) | (C.Y < -C.W ? 8u : 0u) |
+				(C.Z < 0.0f ? 16u : 0u) | (C.Z > C.W ? 32u : 0u);
+		};
+		int32 Count = 0;
+		for (uint32 Index = 2; Index < Batch.NumVertices; ++Index)
+		{
+			const FVector4& A = Vertices[Index - 2].Clip;
+			const FVector4& B = Vertices[Index - 1].Clip;
+			const FVector4& C = Vertices[Index].Clip;
+			if (Triangles[Index] != EGSStripTriangle::None && (ViewCode(A) & ViewCode(B) & ViewCode(C)) == 0 &&
+				(Outside(A) || Outside(B) || Outside(C)))
+			{
+				++Count;
+			}
+		}
+		return Count;
+	}
+
+	/**
 	 * Runs Batch of Draw on VU1 and through the C++ emitter and compares the triangles each draws, in order; a triangle
-	 * only one side draws is a sliver (under MaxDisagreeingArea) or a failure.
+	 * only one side draws is a sliver (under MaxDisagreeingArea) or a failure. A batch with bClip is clipped on both
+	 * (P8b): VU1's packets are its chunks of independent triangles, the emitter's its clipper's triangles.
 	 */
 	void CheckBatch(const TCHAR* Name, const FGSVertexDraw& Draw, const FGSVertexBatch& Batch,
 		const FGSDrawEnvironment& Environment, FReport& Report)
@@ -290,7 +369,7 @@ namespace
 			++Report.NumFailures;
 			return;
 		}
-		if (uint32(Packet[0] & 0x7fff) != Batch.NumVertices)
+		if (!Batch.bClip && uint32(Packet[0] & 0x7fff) != Batch.NumVertices)
 		{
 			UE_LOG(LogVU1Conformance, Error, "VU1Conformance: %s: the GIFtag's NLOOP is %u, not %u", Name,
 				uint32(Packet[0] & 0x7fff), Batch.NumVertices);
@@ -302,10 +381,30 @@ namespace
 		FGSCommandList List;
 		FGSPrimitiveEmitter Emitter(Environment, List);
 		Emitter.SetFog(Draw.Fog);
-		Emitter.BeginStrip(Draw.bTextured, Draw.bBlend, true);
-		Emitter.AddVertexBatch(Draw, Batch);
-		const TArray<FTriangle> Vu1 = StripTriangles(DecodePacket(Packet));
-		const TArray<FTriangle> Reference = StripTriangles(DecodeWrites(List));
+		if (Batch.bClip)
+		{
+			Emitter.BeginTriangles(Draw.bTextured, Draw.bBlend, true);
+			Emitter.AddClippedVertexBatch(Draw, Batch);
+			++Report.NumClippedBatches;
+		}
+		else
+		{
+			Emitter.BeginStrip(Draw.bTextured, Draw.bBlend, true);
+			Emitter.AddVertexBatch(Draw, Batch);
+		}
+		const TArray<FTriangle> Vu1 =
+			Batch.bClip ? IndependentTriangles(DecodePackets(Packet)) : StripTriangles(DecodePackets(Packet));
+		const TArray<FTriangle> Reference =
+			Batch.bClip ? IndependentTriangles(DecodeWrites(List)) : StripTriangles(DecodeWrites(List));
+		if (Batch.bClip)
+		{
+			Report.NumClippedTriangles += Reference.Num();
+			for (int32 Tag = 0; Tag + 1 < Packet.Num(); Tag += 2 * int32(1 + (3 * (Packet[Tag] & 0x7fff))))
+			{
+				++Report.NumChunks;
+			}
+			Report.NumCut += CountCutTriangles(Draw, Batch, Environment);
+		}
 		int32 IndexVu1 = 0;
 		int32 IndexReference = 0;
 		bool bFailed = false;
@@ -317,7 +416,7 @@ namespace
 			{
 				++Report.NumTriangles;
 				bFailed |= !CompareTriangle(
-					Vu1[IndexVu1], Reference[IndexReference], Draw.bTextured, Draw.Fog.bEnabled, Report);
+					Vu1[IndexVu1], Reference[IndexReference], Draw.bTextured, Draw.Fog.bEnabled, Batch.bClip, Report);
 				++IndexVu1;
 				++IndexReference;
 				continue;
@@ -346,8 +445,11 @@ namespace
 		}
 	}
 
-	/** Random strips of Streams' NumVertices vertices within +-Extent (quantized units) of the origin. */
-	void MakeStrips(FTestStreams& Streams, uint32 NumVertices, int32 Extent, FRandom& Random)
+	/**
+	 * Random strips of Streams' NumVertices vertices within +-Extent (quantized units) of the origin, each vertex
+	 * within Step of its strip's centre, their texture coordinates within +-Repeats.
+	 */
+	void MakeStrips(FTestStreams& Streams, uint32 NumVertices, int32 Extent, int32 Step, int32 Repeats, FRandom& Random)
 	{
 		uint32 StripStart = 0;
 		uint32 StripLength = 0;
@@ -366,7 +468,6 @@ namespace
 				CenterZ = Random.Range(-Extent, Extent);
 			}
 			const uint32 InStrip = Index - StripStart;
-			const int32 Step = Extent / 6;
 			Streams.Positions[(Index * 3) + 0] =
 				int16(FMath::Clamp(CenterX + Random.Range(-Step, Step), -32767, 32767));
 			Streams.Positions[(Index * 3) + 1] =
@@ -393,8 +494,8 @@ namespace
 			{
 				Streams.Colors[(Index * 4) + Channel] = uint8(Random.Range(Channel == 3 ? 64 : 0, 255));
 			}
-			Streams.TexCoords[(Index * 2) + 0] = int16(Random.Range(-8 * 4096, (8 * 4096) - 1));
-			Streams.TexCoords[(Index * 2) + 1] = int16(Random.Range(-8 * 4096, (8 * 4096) - 1));
+			Streams.TexCoords[(Index * 2) + 0] = int16(Random.Range(-Repeats * 4096, (Repeats * 4096) - 1));
+			Streams.TexCoords[(Index * 2) + 1] = int16(Random.Range(-Repeats * 4096, (Repeats * 4096) - 1));
 		}
 	}
 
@@ -499,25 +600,40 @@ namespace
 		return Draw;
 	}
 
-	/** Whether the batch's vertices are inside the guard band and between the near and far planes (plan D8). */
-	bool IsInsideGuardBand(
+	/** The draw with a linear fog from 20 cm to 2 m (P8b's clipped batches, which reach behind the near plane). */
+	FGSVertexDraw FoggedNear(FGSVertexDraw Draw)
+	{
+		Draw.Fog = FGSVertexFog::MakeLinear(20.0f, 200.0f);
+		return Draw;
+	}
+
+	/** Which clip planes the batch's vertices are outside of (plan D8). */
+	struct FBatchCrossing
+	{
+		bool bNear = false;
+		bool bGuardBand = false;
+
+		[[nodiscard]] bool IsInside() const
+		{
+			return !bNear && !bGuardBand;
+		}
+	};
+	FBatchCrossing GetCrossing(
 		const FGSVertexDraw& Draw, const FGSVertexBatch& Batch, const FGSDrawEnvironment& Environment)
 	{
 		FGSClipVertex Vertices[FGSVertexBatch::MaxVertices];
 		EGSStripTriangle Triangles[FGSVertexBatch::MaxVertices];
 		FGSPrimitiveEmitter::TransformVertexBatch(Draw, Batch, Vertices, Triangles);
-		const float GuardX = 2000.0f / (float(Environment.Width) * 0.5f);
-		const float GuardY = 2000.0f / (float(Environment.Height) * 0.5f);
+		const float GuardX = FGSPrimitiveEmitter::GuardExtent / (float(Environment.Width) * 0.5f);
+		const float GuardY = FGSPrimitiveEmitter::GuardExtent / (float(Environment.Height) * 0.5f);
+		FBatchCrossing Crossing;
 		for (uint32 Index = 0; Index < Batch.NumVertices; ++Index)
 		{
 			const FVector4& Clip = Vertices[Index].Clip;
-			if (Clip.Z < 0.0f || Clip.Z > Clip.W || FMath::Abs(Clip.X) > GuardX * Clip.W ||
-				FMath::Abs(Clip.Y) > GuardY * Clip.W)
-			{
-				return false;
-			}
+			Crossing.bNear |= Clip.Z < 0.0f || Clip.Z > Clip.W;
+			Crossing.bGuardBand |= FMath::Abs(Clip.X) > GuardX * Clip.W || FMath::Abs(Clip.Y) > GuardY * Clip.W;
 		}
-		return true;
+		return Crossing;
 	}
 
 	/** The draw of a skinned batch. */
@@ -541,9 +657,9 @@ namespace
 
 } // namespace
 
-// Checks VU1's microprograms against the C++ emitter (Docs/PLANS/ps2-shipping.md N14, D2) on fixed batches, then shows
-// the batches, VU1's (the frame's own VIF1 chain, with XGKICK) on the left and the emitter's on the right, frame after
-// frame.
+// Checks VU1's microprograms against the C++ emitter (Docs/PLANS/ps2-shipping.md N14, D2) on fixed batches, the
+// clipped ones too (ps2-polish P8b), then shows the batches, VU1's (the frame's own VIF1 chain, with XGKICK) on the
+// left and the emitter's on the right, frame after frame.
 int main(int ArgC, char* ArgV[])
 {
 	FPlatformProcess::SetArgV0(ArgV[0]);
@@ -567,7 +683,12 @@ int main(int ArgC, char* ArgV[])
 		const TCHAR* Name;
 		FGSVertexDraw Draw;
 		bool bSkinned = false;
+		/** Close to the eye, across the near plane and the guard band: clipped (P8b). */
+		bool bClip = false;
 	};
+	// The clipped draws are 40 to 80 cm ahead of a near plane at 11 cm, their batches' triangles up to 1.6 m across:
+	// behind the eye, across the near plane, beside the view beyond the guard band and inside, as the scene's close
+	// batches are.
 	const FTestDraw Draws[] = {
 		{"StaticUnlit", MakeDraw(false, false, 0.01f, 500.0f, FRotator(10.0f, 25.0f, 5.0f), FVector(1.1f, 0.9f, 1.2f))},
 		{"StaticUnlit textured",
@@ -599,6 +720,42 @@ int main(int ArgC, char* ArgV[])
 			AsSkinned(WithPointLights(
 				MakeDraw(true, false, 0.01f, 500.0f, FRotator(5.0f, -35.0f, 15.0f), FVector(1.0f)), 500.0f, 2)),
 			true},
+		{"StaticUnlit clipped",
+			MakeDraw(false, false, 0.01f, 60.0f, FRotator(10.0f, 25.0f, 5.0f), FVector(1.1f, 0.9f, 1.2f)), false, true},
+		{"StaticUnlit textured clipped",
+			MakeDraw(false, true, 0.01f, 50.0f, FRotator(-20.0f, 60.0f, 0.0f), FVector(1.0f)), false, true},
+		{"StaticLit clipped",
+			MakeDraw(true, false, 0.01f, 70.0f, FRotator(30.0f, -40.0f, 15.0f), FVector(1.3f, 0.8f, 1.0f)), false,
+			true},
+		{"StaticLit textured mirrored clipped",
+			MakeDraw(true, true, 0.01f, 40.0f, FRotator(0.0f, 90.0f, 45.0f), FVector(-1.0f, 1.2f, 0.9f)), false, true},
+		{"StaticUnlit fogged clipped",
+			FoggedNear(MakeDraw(false, false, 0.01f, 60.0f, FRotator(-5.0f, 15.0f, 20.0f), FVector(1.2f, 1.0f, 0.9f))),
+			false, true},
+		{"StaticLit textured fogged clipped",
+			FoggedNear(MakeDraw(true, true, 0.01f, 80.0f, FRotator(15.0f, -30.0f, 0.0f), FVector(1.0f, 1.1f, 1.0f))),
+			false, true},
+		{"StaticLit textured two point lights clipped",
+			WithPointLights(MakeDraw(true, true, 0.01f, 60.0f, FRotator(-25.0f, 10.0f, 0.0f), FVector(1.2f)), 60.0f, 2),
+			false, true},
+		{"SkinnedUnlit clipped",
+			AsSkinned(MakeDraw(false, false, 0.01f, 60.0f, FRotator(-10.0f, 35.0f, 0.0f), FVector(1.0f))), true, true},
+		{"SkinnedLit textured clipped",
+			AsSkinned(MakeDraw(true, true, 0.01f, 50.0f, FRotator(20.0f, -70.0f, 10.0f), FVector(1.1f, 1.1f, 1.1f))),
+			true, true},
+		{"SkinnedLit mirrored clipped",
+			AsSkinned(MakeDraw(true, false, 0.01f, 70.0f, FRotator(0.0f, 120.0f, -30.0f), FVector(-1.0f, 1.0f, 1.0f))),
+			true, true},
+		{"SkinnedUnlit fogged clipped",
+			AsSkinned(FoggedNear(MakeDraw(false, false, 0.01f, 60.0f, FRotator(5.0f, -15.0f, 10.0f), FVector(1.0f)))),
+			true, true},
+		{"SkinnedLit textured fogged clipped",
+			AsSkinned(FoggedNear(MakeDraw(true, true, 0.01f, 80.0f, FRotator(-15.0f, 45.0f, 5.0f), FVector(1.0f)))),
+			true, true},
+		{"SkinnedLit two point lights clipped",
+			AsSkinned(WithPointLights(
+				MakeDraw(true, false, 0.01f, 60.0f, FRotator(5.0f, -35.0f, 15.0f), FVector(1.0f)), 60.0f, 2)),
+			true, true},
 		{"StaticUnlit off the view", MakeDraw(false, false, 0.03f, 900.0f, FRotator(5.0f, 5.0f, 5.0f), FVector(1.0f))},
 	};
 	constexpr uint32 BatchSizes[] = {3, 4, 17, 40, 63, 64};
@@ -616,11 +773,16 @@ int main(int ArgC, char* ArgV[])
 	FReport Report;
 	for (int32 DrawIndex = 0; DrawIndex < NumDraws; ++DrawIndex)
 	{
+		// A clipped draw's batches must cross the near plane and the guard band, some of them.
+		FBatchCrossing DrawCrossing;
 		for (int32 SizeIndex = 0; SizeIndex < NumSizes; ++SizeIndex)
 		{
 			FTestStreams& Data = Streams[DrawIndex][SizeIndex];
 			const uint32 NumVertices = GetSize(DrawIndex, SizeIndex);
-			MakeStrips(Data, NumVertices, 15000, Random);
+			// A clipped draw's strips: centres within 50 cm, triangles up to 1.6 m across the near plane, their texture
+			// coordinates within the 14 repeats a face may have (the cook's limit, ps2-shipping N29).
+			const bool bClip = Draws[DrawIndex].bClip;
+			MakeStrips(Data, NumVertices, bClip ? 5000 : 15000, bClip ? 8000 : 2500, bClip ? 2 : 8, Random);
 			if (Draws[DrawIndex].bSkinned)
 			{
 				MakeSkin(Data, NumVertices, SkinnedBones[SizeIndex], Random);
@@ -634,8 +796,12 @@ int main(int ArgC, char* ArgV[])
 			Batch.TexCoordOffset[0] = float(Random.Range(-3, 3));
 			Batch.TexCoordOffset[1] = float(Random.Range(-3, 3));
 			SetSkin(Batch, Data, Draws[DrawIndex].bSkinned);
+			Batch.bClip = Draws[DrawIndex].bClip;
 			const FGSVertexDraw& Draw = Draws[DrawIndex].Draw;
-			if (!IsInsideGuardBand(Draw, Batch, Environment))
+			const FBatchCrossing Crossing = GetCrossing(Draw, Batch, Environment);
+			DrawCrossing.bNear |= Crossing.bNear;
+			DrawCrossing.bGuardBand |= Crossing.bGuardBand;
+			if (!Batch.bClip && !Crossing.IsInside())
 			{
 				UE_LOG(LogVU1Conformance, Error,
 					"VU1Conformance: %s, %u vertices: the test's batch leaves the guard band", Draws[DrawIndex].Name,
@@ -645,26 +811,52 @@ int main(int ArgC, char* ArgV[])
 			}
 			CheckBatch(Draws[DrawIndex].Name, Draw, Batch, Environment, Report);
 		}
+		if (Draws[DrawIndex].bClip && (!DrawCrossing.bNear || !DrawCrossing.bGuardBand))
+		{
+			UE_LOG(LogVU1Conformance, Error,
+				"VU1Conformance: %s: the test's batches do not cross both the near plane and the guard band",
+				Draws[DrawIndex].Name);
+			++Report.NumFailures;
+		}
 	}
 	UE_LOG(LogVU1Conformance, Display,
-		"VU1Conformance: %d batch(es), %d triangle(s) compared, %d culled by one side only (slivers); largest "
-		"differences: XY %d (1/16 px), Z %d, RGBA %d, STQ %d ulp, F %d",
-		Report.NumBatches, Report.NumTriangles, Report.NumDisagreements, Report.MaxXYSeen, Report.MaxZSeen,
-		Report.MaxColorSeen, Report.MaxUlpsSeen, Report.MaxFogSeen);
+		"VU1Conformance: %d batch(es) (%d clipped), %d triangle(s) compared, %d culled by one side only (slivers); "
+		"largest differences: XY %d (1/16 px), Z %d, RGBA %d, STQ %d ulp, F %d",
+		Report.NumBatches, Report.NumClippedBatches, Report.NumTriangles, Report.NumDisagreements, Report.MaxXYSeen,
+		Report.MaxZSeen, Report.MaxColorSeen, Report.MaxUlpsSeen, Report.MaxFogSeen);
+	UE_LOG(LogVU1Conformance, Display,
+		"VU1Conformance: clipped batches: %d triangle(s) compared in %d chunk(s), %d strip triangle(s) cut by the "
+		"clipper; largest differences: Z %d, STQ %.3f of 2^-16 of the value",
+		Report.NumClippedTriangles, Report.NumChunks, Report.NumCut, Report.MaxClippedZSeen,
+		double(Report.MaxClippedSTQSeen));
+	if (Report.NumCut == 0 || Report.NumChunks <= Report.NumClippedBatches)
+	{
+		UE_LOG(LogVU1Conformance, Error,
+			"VU1Conformance: the clipped batches cut no triangle or fill no second chunk: the clipping is not tested");
+		++Report.NumFailures;
+	}
 	UE_LOG(LogVU1Conformance, Display, "VU1Conformance: %s (%d batch(es), %d failed)",
 		Report.NumFailures == 0 ? "PASSED" : "FAILED", Report.NumBatches, Report.NumFailures);
 
-	// The picture: every batch, VU1's on the left (through the RHI's frame chain) and the emitter's on the right.
-	for (;;)
+	// The pictures, 4 seconds each: the batches inside the guard band, VU1's on the left (through the RHI's frame
+	// chain, XGKICK) and the emitter's on the right; then the clipped batches, which fill the screen, VU1's alone, then
+	// the emitter's alone (P8b: the chunks' XGKICK).
+	for (uint32 Frame = 0;; ++Frame)
 	{
+		const uint32 Picture = (Frame / 240) % 3;
 		FPS2RHI::ClearColor(0.1f, 0.1f, 0.12f);
 		FMemMark Mark(FMemStack::Get());
 		FGSCommandList List;
 		FGSPrimitiveEmitter Emitter(Environment, List);
 		for (int32 DrawIndex = 0; DrawIndex < NumDraws - 1; ++DrawIndex)
 		{
-			const int32 Left = List.AddVertexDraw(Shifted(Draws[DrawIndex].Draw, -0.5f));
-			const FGSVertexDraw Right = Shifted(Draws[DrawIndex].Draw, 0.5f);
+			const bool bClip = Draws[DrawIndex].bClip;
+			if (bClip != (Picture != 0))
+			{
+				continue;
+			}
+			const int32 Left = List.AddVertexDraw(Shifted(Draws[DrawIndex].Draw, bClip ? 0.0f : -0.5f));
+			const FGSVertexDraw Right = Shifted(Draws[DrawIndex].Draw, bClip ? 0.0f : 0.5f);
 			for (int32 SizeIndex = 0; SizeIndex < NumSizes; ++SizeIndex)
 			{
 				const FTestStreams& Data = Streams[DrawIndex][SizeIndex];
@@ -676,8 +868,22 @@ int main(int ArgC, char* ArgV[])
 				Batch.Colors = Data.Colors;
 				Batch.TexCoords = Data.TexCoords;
 				SetSkin(Batch, Data, Draws[DrawIndex].bSkinned);
-				List.DrawVertexBatch(Batch);
+				Batch.bClip = bClip;
+				if (Picture != 2)
+				{
+					List.DrawVertexBatch(Batch);
+				}
+				if (Picture == 1)
+				{
+					continue;
+				}
 				Emitter.SetFog(Right.Fog);
+				if (bClip)
+				{
+					Emitter.BeginTriangles(false, false, true);
+					Emitter.AddClippedVertexBatch(Right, Batch);
+					continue;
+				}
 				Emitter.BeginStrip(false, false, true);
 				Emitter.AddVertexBatch(Right, Batch);
 			}

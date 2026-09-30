@@ -35,11 +35,13 @@ namespace
 			None = 0,
 			Jump = 1 << 0,
 			Crouch = 1 << 1,
+			Ladder = 1 << 2,
 		};
 	} // namespace EPathPointFlags
 
 	const FName JumpFlag(TEXT("Jump"));
 	const FName CrouchFlag(TEXT("Crouch"));
+	const FName LadderFlag(TEXT("Ladder"));
 
 } // namespace
 
@@ -93,7 +95,8 @@ void AAIController::RebuildPath()
 		}
 		const TArray<FName>& Flags = Nodes[FoundNodes[Index]].Flags;
 		PathPointFlags[Index] = uint8((Flags.Contains(JumpFlag) ? EPathPointFlags::Jump : EPathPointFlags::None) |
-			(Flags.Contains(CrouchFlag) ? EPathPointFlags::Crouch : EPathPointFlags::None));
+			(Flags.Contains(CrouchFlag) ? EPathPointFlags::Crouch : EPathPointFlags::None) |
+			(Flags.Contains(LadderFlag) ? EPathPointFlags::Ladder : EPathPointFlags::None));
 	}
 	PathIndex = 0;
 	bUsePath = true;
@@ -162,6 +165,11 @@ FVector AAIController::SteerWithNavFallback(const FVector& From) const
 		return {};
 	}
 	return SteerToward(From, GoalNav, ArriveRadius);
+}
+
+FVector AAIController::GetCurrentTargetLocation() const
+{
+	return bUsePath && Path.Num() > 0 ? Path[FMath::Min(PathIndex, Path.Num() - 1)] : Target;
 }
 
 void AAIController::MoveToLocation(const FVector& WorldPosition)
@@ -255,17 +263,22 @@ FVector AAIController::TickAI(float DeltaTime)
 			bool bOnFinalSegment = PathIndex + 1 >= Path.Num();
 			// A copy: a repath below replaces Path.
 			FVector Wp = Path[FMath::Min(PathIndex, Path.Num() - 1)];
-			// A point above a step or flagged Jump, close: jump onto it (a crate, a ledge, a gap).
-			const bool bJumpPoint =
-				PathPointFlags.IsValidIndex(PathIndex) && (PathPointFlags[PathIndex] & EPathPointFlags::Jump) != 0;
-			if ((bJumpPoint || Wp.Z - From.Z > JumpRise) &&
+			// A point above a step or flagged Jump, close: jump onto it (a crate, a ledge, a gap); a ladder's top is
+			// climbed.
+			const uint8 PointFlags = PathPointFlags.IsValidIndex(PathIndex) ? PathPointFlags[PathIndex] : 0;
+			const bool bJumpPoint = (PointFlags & EPathPointFlags::Jump) != 0;
+			const bool bLadderPoint = (PointFlags & EPathPointFlags::Ladder) != 0;
+			if ((bJumpPoint || (!bLadderPoint && Wp.Z - From.Z > JumpRise)) &&
 				FVector::DistSquared2D(Wp, From) <= FMath::Square(JumpTriggerDistance) && Character->IsMovingOnGround())
 			{
 				Character->Jump();
 			}
-			// No progress for a while (a pawn in the way, a corner): find the path again.
+			// No progress for a while (a pawn in the way, a corner): find the path again. On the way to a ladder's
+			// point the climb counts too.
 			StuckTime += DeltaTime;
-			if (FVector::DistSquared2D(From, StuckCheckLocation) > FMath::Square(StuckDistance))
+			const float Moved = bLadderPoint ? FVector::DistSquared(From, StuckCheckLocation)
+											 : FVector::DistSquared2D(From, StuckCheckLocation);
+			if (Moved > FMath::Square(StuckDistance))
 			{
 				StuckCheckLocation = From;
 				StuckTime = 0.0f;

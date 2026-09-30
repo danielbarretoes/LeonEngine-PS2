@@ -19,12 +19,38 @@ class APlayerStart;
 class ATriggerVolume;
 
 /**
+ * A spot the bots watch a bomb site from (ps2-polish P3; CS's bots' hiding and approach spots): the map's waypoints
+ * flagged `Lookout`, each given to its nearest site (AShooterGameMode::GetBombSiteLookouts).
+ */
+struct FShooterLookout
+{
+	/** Where the watcher stands (the waypoint's floor). */
+	FVector Location = FVector::ZeroVector;
+	/**
+	 * The yaws a team's watcher turns between, degrees (EShooterTeam as the index): first the main way in (the first
+	 * link of the waypoint graph's path to the other team's spawn), then over the site from a spot away from it and the
+	 * spot's other links toward that spawn (without any, its links), at most four, 35 degrees apart or more.
+	 */
+	TArray<float, TInlineAllocator<4>> WatchYaws[3];
+
+	[[nodiscard]] const TArray<float, TInlineAllocator<4>>& GetWatchYaws(EShooterTeam Team) const
+	{
+		return WatchYaws[static_cast<int32>(Team)];
+	}
+};
+
+/**
  * ShooterGame's rules (UE ShooterGame: AShooterGameMode), the game mode of every map through GlobalDefaultGameMode
  * (plan decision D18): Counter-Strike's defusal rules, teams, rounds, money, buying and the bomb.
  *
- * Teams and spawns (P17):
- * - A joining player takes a team (ChooseTeam): `?team=CT` / `?team=T` in the map URL, else the smaller team (CT on a
- *   tie). A bot joins the team it is added to (bot_add_ct / bot_add_t, AddBots).
+ * Teams and spawns (P17; the team menu, ps2-polish P9):
+ * - A joining player takes the team `?team=CT|T|Auto|Spectate` of the map URL names (Auto: the smaller team, CT on a
+ *   tie: ChooseTeam); without one it spectates and waits for its choice (IsChoosingTeam: the player controller shows
+ *   the team menu), which SelectTeam takes (CS: jointeam). A bot joins the team it is added to (bot_add_ct /
+ *   bot_add_t, AddBots).
+ * - A team change during a match (CS's rule): a living player dies during a fought round (a death on the scoreboard)
+ *   and plays for its new side from the next round; before the round is fought (the warmup, the freeze) it respawns
+ *   there at once. The bots even the teams out again at the next round's start (RebalanceBots).
  * - ChoosePlayerStart picks, in level order, the first free APlayerStart whose PlayerStartTag is the team's tag ("CT",
  *   "T"). A start is free when no pawn stands within two capsule radii of it. With every start taken it reuses the
  *   team's first; a map without team starts uses the engine's choice. A round's start places each team's players on
@@ -33,8 +59,9 @@ class ATriggerVolume;
  *   so SpawnDefaultPawnFor lowers it by the start capsule's half height.
  *
  * Rounds (the match states of AGameMode, the round's phase in AShooterGameState):
- * - Warmup (WaitingToStart): players join and spawn at once. With bFillTeamsWithBots, bots fill both teams to
- *   MaxPlayersPerTeam as soon as a human is in. The match starts (StartMatch) when both teams have a player.
+ * - Warmup (WaitingToStart): players join and spawn at once. Once the player has a team (or spectates), NumBots bots
+ *   join, shared out so the teams are as even as possible counting the player (RebalanceBots; a bot match's ten at
+ *   once). The match starts (StartMatch) when both teams have a player.
  * - Each round: Freeze (FreezeTime: pawns hold still, buying), Live (RoundTime), RoundEnd (RoundRestartDelay: the
  *   result shows), each ended by the phase timer of the world's timer manager (OnPhaseTimer), then the next round or,
  * once a team has won more than half of MaxRounds or MaxRounds were played, MatchEnd (WaitingPostMatch). A round's
@@ -78,7 +105,12 @@ class ATriggerVolume;
  * the sender answers a request.
  *
  * Bots: named from BotNames (CS's BotProfile names, team-neutral) in the order they are created, and seeded by that
- * order (AShooterAIController::SetBotIndex), not by their names.
+ * order (AShooterAIController::SetBotIndex), not by their names. Each takes BotDifficulty's skill preset
+ * (AShooterAIController::ApplyDifficulty).
+ *
+ * The main menu's match (ps2-polish P9; FShooterMatchSettings): InitGame reads `?bots=N` (NumBots), `?difficulty=`
+ * (BotDifficulty: Easy, Normal, Hard, Expert) and `?winrounds=N` (MaxRounds = 2 N - 1: the first team to N wins, the
+ * halftime after round N - 1).
  *
  * Damage: CanDealDamage refuses a teammate's (bFriendlyFire false, CS's mp_friendlyfire 0); a player may hurt itself
  * (its own grenade). Killed hears of each death from AShooterCharacter::Die: the kill feed, the money, the kills and
@@ -92,7 +124,7 @@ class ATriggerVolume;
  * (the pickups: dropped weapons, the dropped bomb). Each keeps the level's order, so what walked the level before finds
  * the same actors in the same order. The bomb sites (by name, with their places) and each team's starts are sorted out
  * once, when a volume or a start joins or goes. A world without a ShooterGameMode has no registries: nothing is picked
- * up there.
+ * up there. The bots' lookouts of each site (GetBombSiteLookouts) are made once from the waypoint graph.
  *
  * Console (the Exec chain reaches the game mode): `bot_add_ct [N]`, `bot_add_t [N]`, `bot_add [N]` (the smaller team),
  * `bot_fill` (both teams to MaxPlayersPerTeam; the G6 smoke: `ShooterGame -nullrhi -ExecCmds=bot_fill`),
@@ -126,9 +158,16 @@ public:
 	UPROPERTY(Config)
 	bool bBotStop = false;
 
-	/** Bots fill both teams as soon as a human player is in (CS: bot_quota with bot_quota_mode fill). */
+	/**
+	 * The bots of the match (CS: bot_quota), shared between the teams around the humans once the player has chosen a
+	 * team (RebalanceBots); `?bots=N` in the URL. A bot match has 2 x MaxPlayersPerTeam.
+	 */
 	UPROPERTY(Config)
-	bool bFillTeamsWithBots = false;
+	int32 NumBots = 9;
+
+	/** The skill of the bots the game mode adds (`?difficulty=` in the URL; AShooterAIController::ApplyDifficulty). */
+	UPROPERTY(Config)
+	EShooterBotDifficulty BotDifficulty = EShooterBotDifficulty::Normal;
 
 	/**
 	 * The most bots that look (their sight's traces) in one frame (ClaimSensingUpdate); the others wait for the next
@@ -280,14 +319,49 @@ public:
 	 */
 	int32 AddBots(EShooterTeam Team, int32 Count);
 
-	/** Adds bots until both teams have MaxPlayersPerTeam (CS: bot_quota; plan P19's 5v5 fill); how many joined. */
+	/** Adds bots until both teams have MaxPlayersPerTeam (CS: bot_fill; plan P19's 5v5 fill); how many joined. */
 	int32 FillTeamsWithBots();
+
+	/**
+	 * How NumBots bots split between the teams so that they are as even as possible counting the humans on each
+	 * (ps2-polish P9): half of all the players a side, the odd one to the side with fewer humans (the player's
+	 * opponents; T on a tie), never fewer than a side's humans nor more than MaxPerTeam.
+	 */
+	static void ComputeBotSplit(
+		int32 InNumBots, int32 HumansCT, int32 HumansT, int32 MaxPerTeam, int32& OutBotsCT, int32& OutBotsT);
+
+	/**
+	 * Shares NumBots bots out between the teams (ComputeBotSplit around the humans): the bots too many on a side move
+	 * to the other (the last to join first, their pawns gone until the round's start), then those still too many
+	 * leave, then the missing ones join (CT first). The player's team choice asks for it (at once in the warmup and
+	 * the freeze, else at the next round's start).
+	 */
+	void RebalanceBots();
+
+	/**
+	 * The player's team choice (the team menu; CS: jointeam): CT, T, Auto (ChooseTeam without it) or Spectate. The
+	 * first choice lets the bots join; a later one changes the player's side by CS's rule (see the class comment).
+	 * False when nothing changed (the team it has) or Player is not a human's.
+	 */
+	bool SelectTeam(AController* Player, EShooterTeamChoice Choice);
+
+	/** Player joined without a team and waits for its choice (the team menu). */
+	[[nodiscard]] bool IsChoosingTeam(const AController* Player) const;
+
+	/** The rounds a team needs to win the match: more than half of MaxRounds. */
+	[[nodiscard]] int32 GetRoundsToWin() const
+	{
+		return (MaxRounds / 2) + 1;
+	}
 
 	/** Removes a bot by player name ("all": every bot); how many left. */
 	int32 KickBots(const FString& Name);
 
 	/** The team a new player joins: `?team=` of Options, else the smaller team, CT on a tie. */
 	[[nodiscard]] EShooterTeam ChooseTeam(const FString& Options) const;
+
+	/** The team a choice gives Player's state: the smaller team without it for Auto, None for Spectate. */
+	[[nodiscard]] EShooterTeam ResolveTeamChoice(EShooterTeamChoice Choice, const AShooterPlayerState* Player) const;
 
 	/** How many players (and bots) a team has. */
 	[[nodiscard]] int32 GetTeamSize(EShooterTeam Team) const;
@@ -426,6 +500,17 @@ public:
 	/** Where a team spawns: its first start (level order), false without one (the bots' hunt goal). */
 	bool GetTeamSpawnLocation(EShooterTeam Team, FVector& OutLocation) const;
 	/**
+	 * The spots the bots watch Site from (FShooterLookout; ps2-polish P3): the waypoints flagged `Lookout` nearest to
+	 * it; a map without them, the site's nearest waypoints (up to three within LookoutFallbackRadius), else its middle,
+	 * watching around from the other team's side. Made once from the world's waypoint graph (again when the sites or
+	 * the graph change); empty for a site the map does not have.
+	 */
+	[[nodiscard]] const TArray<FShooterLookout>& GetBombSiteLookouts(FName Site) const;
+
+	/** A map without lookouts: how near a site its waypoints stand in for them, cm. */
+	UPROPERTY(Config)
+	float LookoutFallbackRadius = 1500.0f;
+	/**
 	 * The live pawns of a team (CountPawns), counted once a frame: the count holds until the world's time moves on or
 	 * NotifyPawnsChanged.
 	 */
@@ -539,6 +624,15 @@ private:
 	int32 NumBotsCreated = 0;
 	int32 NumBotsAddedToTeam[3] = {0, 0, 0};
 
+	/** A team choice (or a bot match) asks the bots to share out (RebalanceBots) at the next chance. */
+	bool bRebalancePending = false;
+	/** The players who joined without a team and wait for their choice (IsChoosingTeam). */
+	TArray<TWeakObjectPtr<AController>> PlayersChoosingTeam;
+	/** A bot goes to Team (RebalanceBots): its pawn goes (it respawns there at the round's start). */
+	void MoveBotToTeam(AShooterAIController& Bot, EShooterTeam Team);
+	/** A bot leaves quietly (RebalanceBots: no death on the board). */
+	void RemoveBot(AShooterAIController& Bot);
+
 	/** The world time of the frame whose looks are counted, and how many were taken (ClaimSensingUpdate). */
 	float SensingFrameTime = -1.0f;
 	int32 SensingUpdatesThisFrame = 0;
@@ -644,6 +738,16 @@ private:
 	mutable TArray<ATriggerVolume*> BombSiteZones;
 	mutable TArray<APlayerStart*> TeamStarts[3];
 	mutable bool bMapCachesDirty = true;
+
+	/** Makes the sites' lookouts (GetBombSiteLookouts) from the world's waypoint graph. */
+	void BuildBombSiteLookouts() const;
+	/**
+	 * Each site's lookouts (BombSiteNames' order), the waypoint graph's node count they were made from, and whether the
+	 * sites changed since.
+	 */
+	mutable TArray<TArray<FShooterLookout>> BombSiteLookouts;
+	mutable int32 LookoutsNodeCount = -1;
+	mutable bool bLookoutsDirty = true;
 
 	/** CountAlive's count (EShooterTeam as the index), with the world time and the pawns' serial it was counted at. */
 	uint32 PawnsSerial = 0;

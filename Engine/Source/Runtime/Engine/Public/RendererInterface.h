@@ -42,8 +42,9 @@ struct ENGINE_API FFrameStats
 	int32 ObjectsAtLowerLOD = 0;
 	/**
 	 * The mesh batches drawn, by where their sphere put them (plan D8, N29): recorded for VU1, sent by the C++ emitter
-	 * as strips (inside the guard band, without a microprogram or with -novu1), and clipped triangle by triangle on the
-	 * EE (across a clip plane); with the triangles of the last.
+	 * as strips (inside the guard band, without a microprogram or with -novu1), and across a clip plane (clipped on VU1
+	 * when recorded, ps2-polish P8b; counted in BatchesOnVU1 too); with the triangles the EE's clipper took (the
+	 * across batches not recorded).
 	 */
 	int32 BatchesOnVU1 = 0;
 	int32 BatchesOnEmitter = 0;
@@ -120,6 +121,20 @@ public:
 	[[nodiscard]] virtual float GetDisplayAspectRatio(const FIntPoint& TargetSize) const
 	{
 		return TargetSize.Y > 0 ? float(TargetSize.X) / float(TargetSize.Y) : 1.0f;
+	}
+
+	/**
+	 * A point of a WindowSize window in the frame's pixels (GetRenderTargetSize), where the frame is shown in it (Leon:
+	 * the mouse over the HUD's widgets; the desktop's GS frame sits scaled and centred in the window).
+	 */
+	[[nodiscard]] virtual FVector2D WindowToRenderTarget(
+		const FVector2D& WindowPosition, const FIntPoint& WindowSize) const
+	{
+		const FIntPoint Target = GetRenderTargetSize(WindowSize);
+		return WindowSize.X > 0 && WindowSize.Y > 0
+			? FVector2D(WindowPosition.X * float(Target.X) / float(WindowSize.X),
+				  WindowPosition.Y * float(Target.Y) / float(WindowSize.Y))
+			: WindowPosition;
 	}
 
 	/**

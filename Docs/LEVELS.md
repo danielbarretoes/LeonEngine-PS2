@@ -133,6 +133,7 @@ starts with; the engine's rules are in `Engine/Config/BaseEditor.ini`, a project
 | `PORTAL_<CellA>_<CellB>` | `AVisibilityPortal` between the two cells (either name may hold an underscore), `Corners` the rectangle of its quad in the world; left out, with a warning, when the suffix names no two cells of the map | engine (N15) |
 | `BombSite_A` / `_B`, `BuyZone_CT` / `_T` | `ATriggerVolume`, `Tags` [`BombSite`, `A`] / [`BuyZone`, `CT`] | a project's (ShooterGame, P17), below |
 | a KHR_lights_punctual light | `ADirectionalLight`, or `APointLight` for a point or spot light (Leon has no spot light: a warning): the colour, the glTF intensity as `Intensity`, `range` as `AttenuationRadius` (8 m without one); every light casts shadows in the [static lighting](#static-lighting) | always, whatever its name |
+| `WorldSettings` (an empty) | no actor: its extras set the map's `AWorldSettings` ([the world settings](#the-world-settings)) | always (ps2-polish P8) |
 | a node with no mesh and no rule | nothing (a group; its children are placed with its transform) | — |
 
 A volume is the box of the node's mesh (its bounds in the mesh's space, placed and sized by the node's transform; a
@@ -238,8 +239,32 @@ the eye stands within 60 cm of is open whole), and at most 64 cells.
 
 The same tuning has two more knobs, both off by default: the world settings' `FogSettings` (`bEnableFog`,
 `FogInscatteringColor`, `StartDistance`, `EndDistance`: a linear distance fog, the GS's) and a mesh's LODs
-(`LODs=<share>@<screen size>,...` in `ImportList.ini`). de_leon uses neither (N29): the whole map fits in the far plane,
-its largest piece has 146 triangles, and the portals already take away what a nearer far plane would.
+(`LODs=<share>@<screen size>,...` in `ImportList.ini`). Since [ps2-polish](PLANS/ps2-polish.md) P8 de_leon's fog is on,
+from 30 m to the far plane's 100 m, in the sky's horizon colour ([the world settings](#the-world-settings)): it tints
+only the far end of a long view and hides the far plane's cut against the sky. It uses no LODs: its meshes are Static
+and baked, and a mesh with baked colours always draws at LOD 0 (the colours are baked for LOD 0's batches), so LODs
+would change nothing; its largest piece has 146 triangles anyway.
+
+### The world settings
+
+A node named `WorldSettings` (an empty; Blender's custom properties become its glTF extras) sets the map's
+`AWorldSettings` ([ps2-polish](PLANS/ps2-polish.md) P8): each extras key is a property path of the world settings
+(`KillZ`, `FogSettings.bEnableFog`, `SkySettings.SkyCubemap`), each value its text as UE's `ImportText` reads it
+(`True`, `3000`, an asset by its object path, loaded when it is not); a key that names no property, or a value that
+does not parse, fails the import. de_leon's (`make_de_leon.py`'s `WORLD_SETTINGS`):
+
+| Key | Value |
+| --- | --- |
+| `SkySettings.SkyCubemap` | `/Game/Sky/T_Sky_Desert.T_Sky_Desert`, the sky ([ART_PIPELINE.md](ART_PIPELINE.md#the-sky)) |
+| `FogSettings.bEnableFog` | `True` |
+| `FogSettings.StartDistance` / `EndDistance` | `3000` / `10000` (cm) |
+
+**The sky** (`FWorldSkySettings::SkyCubemap`, a `UTextureCube`) is drawn after the clear and before the world: a box
+around the eye (it turns with the view and never moves), its faces the cube map's, unlit, unfogged, with no depth test
+and no Z written, so everything draws over it ([ARCHITECTURE.md](ARCHITECTURE.md#12-rendering-the-gs-path)). Without
+one the background is the renderer's clear colour. **The fog** takes the sky's horizon colour
+(`UTextureCube::HorizonColor`) while `FogSettings.bInscatteringColorFromSky` is on (the default), so the distance fades
+into the sky; `FogInscatteringColor` otherwise, or without a sky.
 
 ### Reimport
 
@@ -281,8 +306,8 @@ Counter-Strike 1.6's de_dust, is built by a script, so the map is reproducible a
 Engine\Binaries\Win64\LeonCook.exe Game\ShooterGame\ShooterGame.lproj -run=ImportAssets ^
     -importlist=Game/ShooterGame/SourceArt/ImportList.ini
 
-:: 3. Play it (GameDefaultMap of the project)
-Game\ShooterGame\Binaries\Win64\ShooterGame.exe -ExecCmds=bot_fill
+:: 3. Play it (the main menu is GameDefaultMap; this URL skips it, joining CT with nine bots)
+Game\ShooterGame\Binaries\Win64\ShooterGame.exe /Game/Maps/de_leon?team=CT
 ```
 
 `make_de_leon.py` uses Blender's modules through ShooterGame's `leon_art` ([ART_PIPELINE.md](ART_PIPELINE.md)): it
@@ -300,9 +325,9 @@ or when a waypoint link, a start or a site's middle runs into something, and pri
 ```text
        W (-Y)                   Y=0                  E (+Y)          (X north up; 1 character = 1 m across, 2 m down)
   30 ##################################################
-  28 #######                                    #######     #  walls and houses (3.5 to 5.5 m)
-  26 #######bbbbbb        + + + + +       aaaaaa#######     ^  under an arch or a lintel
-  24 #  bbbbbbbbCb                        aCaaaaacca  #     n  the B tunnel, roofed at 3 m
+  28 #######           +             +          #######     #  walls and houses (3.5 to 5.5 m)
+  26 #######bbbbbb      +           +     aaaaaa#######     ^  under an arch or a lintel
+  24 #  bbbbbbbbCb                   +    aCaaaaacca  #     n  the B tunnel, roofed at 3 m
   22 #  bcccbbbbbb                        aaaaaaaaaa  #     =  the low wall at B (1 m) and its clip
   20 #  bbbbbbbbbb  ##            cc  ##  aaaaaaaaaa  #     c  crates (1.1 m)   C  big crates (1.6 m)
   18 #  bbbbbbbbbb  ##                ##  aaccaaaaaa  #     H  ladders to the roofs (3.5 m)
@@ -355,10 +380,10 @@ wood and crates wood, the lamps metal.
 | --- | --- |
 | `<Cell>_Floor*`, `_Wall*`, `_Block*`, `_House*`, `_Arch*`, `_Gate*`, `_Tunnel*`, `_MidDoor*`, `_Door*`, `_SiteWall`, `_LowWall`, `_Sign`, `_Lamp*`, `_Ladder_*`, `_Crate*` | static mesh actors, each with its `UCX_<Node>_01` box (the ladders', the signs' and the tunnel's lamps' inside their wall, so they stop nobody); the crates' box is on their shared mesh |
 | `Clip_BLowWall` | a blocking volume: nobody jumps over the low wall at B |
-| `BombSite_A` / `_B` (14 × 10 × 3 m), `BuyZone_CT` (7 × 12 m) / `_T` (7 × 16 m) | trigger volumes tagged [`BombSite`, `A`], [`BuyZone`, `CT`], ... (ShooterGame's rules) |
-| `Ladder_A`, `Ladder_B` | trigger volumes tagged `Ladder` (N30c): 20 cm boxes against the north blocks' long faces, from the floor to their roofs (3.5 m); the bots walk through them |
-| `PlayerStart_CT` … `.004`, `PlayerStart_T` … `.004` | ten player starts, 2 m apart, 0.92 m up (UE's start: the capsule's centre), the CTs facing south, the Ts north; `PlayerStartTag` `CT` / `T` |
-| `NavWaypoint_*` (22: `TSpawn`, `TMid`, `TPlazaA` / `B`, `LongAGate`, `TunnelB`, `Mid`, `ShortA` / `B`, `LongA` / `B`, `ALongEnd` / `BLongEnd`, `MidDoors`, `CTMid`, `AConnector` / `BConnector`, `SiteA` / `B`, `CTSpawn`, `CTA` / `CTB`) | navigation waypoints, each linked both ways by its `links` custom property, plus the 38 links the import adds (above) |
+| `BombSite_A` / `_B` (14 × 10 × 3 m), `BuyZone_CT` (7.5 × 16 m) / `_T` (7 × 16 m) | trigger volumes tagged [`BombSite`, `A`], [`BuyZone`, `CT`], ... (ShooterGame's rules) |
+| `Ladder_A`, `Ladder_B` | trigger volumes tagged `Ladder` (N30c): 20 cm boxes against the north blocks' long faces, from the floor to their roofs (3.5 m); the bots climb them (ps2-polish P3: a waypoint flagged `Ladder` at each one's foot and top) |
+| `PlayerStart_CT` … `.004`, `PlayerStart_T` … `.004` | ten player starts, 2 m apart or more, 0.92 m up (UE's start: the capsule's centre), the CTs facing south, the Ts north; `PlayerStartTag` `CT` / `T`. The CT starts stand 6 to 7 m to either side of the middle (ps2-polish P3: in the line of the mid doors and the arch the terrorists' spawn saw them across the map), A's side and B's in turn |
+| `NavWaypoint_*` (34: `TSpawn`, `TMid`, `TPlazaA` / `B`, `LongAGate`, `TunnelB`, `Mid`, `ShortA` / `B`, `LongA` / `B`, `ALongEnd` / `BLongEnd`, `MidDoors`, `CTMid`, `AConnector` / `BConnector`, `SiteA` / `B`, `CTSpawn`, `CTA` / `CTB`; ps2-polish P3's `LookoutA1` … `B3`, flagged `Lookout`, three a site off the lanes' line, `LadderAFoot` / `BFoot` and, on the roofs, `LadderATop` / `BTop` (flagged `Ladder`) and `RoofA` / `B`) | navigation waypoints, each linked both ways by its `links` custom property and flagged by its `flags` one, plus the 66 links the import adds (above; the ladders' feet to their tops among them) |
 | `Sun`, `Light_Tunnel_01` / `_02`, `Light_MidDoors_01` | the directional light (warm, high in the north-west) and three warm point lights (7 and 6 m), baked into the static meshes with the sky |
 | `VIS_<Cell>` (7), `PORTAL_<CellA>_<CellB>` (24) | [cells and portals](#cells-and-portals) (box meshes up to 6 m, quads; `.001` copies for a second quad between two cells): the doorways and lanes, and the sky over the walls between two cells from 3.5 m up. The walls are low, so a view across the map keeps most cells; facing a wall only its own |
 

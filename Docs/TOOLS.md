@@ -67,13 +67,14 @@ Engine\Build\BatchFiles\Cook.bat -run=ImportAssets -reimport -all
 
 | `-run=` | Class (LeonEd) | Arguments | Does |
 | --- | --- | --- | --- |
-| `ImportAssets` | `UImportAssetsCommandlet` | `-source=<file> -dest=<LongPackagePath> [-name=<Asset>] [-type=<Type>] [-<Setting>=<Value>...]` | Imports one file into the folder `-dest` (`/Game/Meshes`); the asset is named after the file with its class prefix (`Cube.glb` → `SM_Cube`) unless `-name`; `-type` is `Texture`, `StaticMesh`, `SkeletalMesh`, `Animation`, `Sound` or `Map` (default: by extension; a `.gltf` / `.glb` is a static mesh). `-type=SkeletalMesh` makes `SK_<File>` on `-Skeleton=` or a `SKEL_<File>` next to it; `-type=Animation -Skeleton=<path>` makes an `A_<Animation>` per glTF animation of the file next to the folder's other assets (`-AnimationName=<name>`: that one only, named by `-name`). The other switches set the factory's properties (`-ColorSpaceMode=Linear`, `-Skeleton=/Game/Hero/SKEL_Hero.SKEL_Hero`, `-bImportMaterials=False`). glTF is the only mesh and animation format ([ASSET_FORMATS.md](ASSET_FORMATS.md#skeletal-meshes-and-animations--gltf-import)) |
+| `ImportAssets` | `UImportAssetsCommandlet` | `-source=<file> -dest=<LongPackagePath> [-name=<Asset>] [-type=<Type>] [-<Setting>=<Value>...]` | Imports one file into the folder `-dest` (`/Game/Meshes`); the asset is named after the file with its class prefix (`Cube.glb` → `SM_Cube`) unless `-name`; `-type` is `Texture`, `TextureCube`, `StaticMesh`, `SkeletalMesh`, `Animation`, `Sound`, `Map` or `Font` (default: by extension; a `.gltf` / `.glb` is a static mesh, a `.ttf` a font, a `.hdr` a cube map). `-type=SkeletalMesh` makes `SK_<File>` on `-Skeleton=` or a `SKEL_<File>` next to it; `-type=Animation -Skeleton=<path>` makes an `A_<Animation>` per glTF animation of the file next to the folder's other assets (`-AnimationName=<name>`: that one only, named by `-name`). The other switches set the factory's properties (`-ColorSpaceMode=Linear`, `-Skeleton=/Game/Hero/SKEL_Hero.SKEL_Hero`, `-bImportMaterials=False`). glTF is the only mesh and animation format ([ASSET_FORMATS.md](ASSET_FORMATS.md#skeletal-meshes-and-animations--gltf-import)) |
 | | | `-type=Map -source=<file.glb> -dest=/Game/Maps/<Map>` | Imports a glTF scene as the map `-dest` names (its package, UE's map path), with its meshes in `<Map>/Meshes` and materials in `<Map>/Materials`, by the naming rules of `[/Script/LeonEd.MapImportSettings]` ([LEVELS.md](LEVELS.md#importing-a-map-from-gltf)); fails when the project's `RequiredTags` are not met |
 | | | `-type=BlendSpace\|BlendSpace1D\|AimOffsetBlendSpace1D\|AnimMontage\|PhysicalMaterial -dest=<LongPackagePath> -name=<Asset> [-<Setting>=<Value>...]` | Makes an animation asset or a physical material from a description, without a source file ([ps2-shipping](PLANS/ps2-shipping.md) N25, N30f; the settings as in an ImportList section, one value each) |
 | | | `-importlist=<ImportList.ini>` | Imports every section of the list ([below](#importlistini)) |
 | | | `-reimport -all` / `-reimport -package=<LongPackageName>[,...]` | Reimports every asset under the mount points (`/Engine`, and `/Game` with a project), or of those packages, whose import data names a source file that exists (the others are skipped), and saves them |
 | `ResavePackages` | `UResavePackagesCommandlet` | `[-package=<LongPackageName>[,...]] [-packagefolder=<LongPackagePath>] [-buildlighting]` | Loads and saves packages in the current format (every package under the mount points by default); `-buildlighting` (UE's) bakes a map's static lighting again before saving it ([LEVELS.md](LEVELS.md#static-lighting)) |
 | `ValidateAssets` | `UValidateAssetsCommandlet` | same as ResavePackages | Reads each package's tables and loads it: every import must resolve (its package exists, the object is in it) and every export must be made with a valid, non-abstract class |
+| `EmbedFont` | `UEmbedFontCommandlet` | `[-check] [-source=<file.ttf>] [-output=<file.inl>]` | Writes the GS debug font compiled into GSCore ([ps2-polish](PLANS/ps2-polish.md) P5b): rasterizes `Engine/SourceArt/EngineFonts/DejaVuSansCondensed.ttf` with `UTrueTypeFontFactory` (the game's UFonts' importer) at 10 and 14 pixels, ASCII and Latin-1, a 128 x 128 PSMT4 page each with a shared 16-level alpha CLUT, and writes the pages, their layout in the GS's local memory (65 blocks), the glyph metrics and the kerning pairs as `Engine/Source/Runtime/GSCore/Private/GSDebugFontData.inl` (LF, byte-identical on regeneration). `-check` writes nothing and fails when the file differs; `System.LeonEd.Commandlets.EmbedFont.MatchesSource` checks the same in RunTests. Run it (engine-only: `LeonCook -run=EmbedFont`, then rebuild) after changing the font, the importer or the generator, and commit the file |
 | `Cook` | `UCookCommandlet` | `-TargetPlatform=Win64\|PS2 [-map=<Map>+<Map>] [-package=<LongPackageName>[,...]] [-packagefolder=<LongPackagePath>]` | Cooks the maps the game opens and everything they use, without editor-only data, with the config and the shaders, into `<Project>/Saved/Cooked/<Platform>/` ([below](#the-cook)) |
 
 An import over an existing asset reimports it in place (the same object, so its references hold). Every package an import makes or changes is saved, deterministically: the same source gives the same bytes (gate G5).
@@ -88,7 +89,7 @@ A folder of source art lists its imports in an `ImportList.ini` (`Engine/SourceA
 | `Dest` | yes | the long package path of the asset's folder (`/Engine/EngineMaterials`); for a map, its package (`/Engine/Maps/AxisTest`) |
 | `Name` | no | the asset name; default: the file name with its class prefix |
 | `Type` | no | as `-type` |
-| any other | no | an import setting: a property of the factory, set from its text (`ColorSpaceMode=Linear`, `Skeleton=<object path>`, `AnimationName=<glTF animation>`, a sound's `CompressionSampleRate=44100`, `bLooping=True`, `LoopStartFrame=<frame>`, `Priority=2`, `bImportMaterials=False`) |
+| any other | no | an import setting: a property of the factory, set from its text (`ColorSpaceMode=Linear`, `Skeleton=<object path>`, `AnimationName=<glTF animation>`, a sound's `CompressionSampleRate=44100`, `bLooping=True`, `LoopStartFrame=<frame>`, `Priority=2`, `bImportMaterials=False`, a font's `Height=14`, `UnicodeRange=0020-007E,00A0-00FF`, a cube map's `CubeFaceSize=128`, `ExposureBias=0`) |
 
 ```ini
 [T_Default_D]
@@ -173,7 +174,7 @@ Engine\Binaries\Win64\LeonCook.exe -run=ValidateAssets
 The import identity: the `Cube.glb` fixture imported into a scratch project in the ignored `Engine/Saved`
 (`LeonCook Engine/Saved/CookIdentity/CookIdentity.lproj -run=ImportAssets
 -source=Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/Cube.glb -dest=/Game/Identity`, any minimal
-`.lproj`) saves `SM_Cube.lasset` with SHA-256 `A24A188795C94680A639E1BC18822206EA48DE8135B9625E97C9FAC9630ED1FC` (2 372 bytes; engine version 0.24.0, package version 6, on Win64:
+`.lproj`) saves `SM_Cube.lasset` with SHA-256 `EDB2BA3E5BF7E8DB269172C4B54BAA6B4FE23C9846B3BCAC022FCDB6194B7540` (2 372 bytes; engine version 0.25.0, package version 6, on Win64:
 the summary records both; [ASSET_FORMATS.md](ASSET_FORMATS.md#importing-assets) keeps the earlier hashes), run after
 run.
 
@@ -316,7 +317,7 @@ and `PAL` with `-region=PAL`), the ELF renamed to that 8.3 serial, the pak as `S
 `AUDSRV.IRX` and `LEONCOMM.TXT` (the `-addcmdline` arguments). Every name is the ISO 9660 name of the staged path
 (`FPaths::ToIso9660Path`): the PS2 file layer asks `cdrom0:` for the same names (upper case, 8.3, `;1`), so the game
 boots from the disc with the same code as from `host:`. The dates are fixed (`SOURCE_DATE_EPOCH`): the same stage gives
-the same image. ShooterGame's is 7 122 944 bytes at 0.24.0 (5 056 512 at N23, before the real art);
+the same image. ShooterGame's is 7 784 448 bytes at 0.25.0 (7 122 944 at 0.24.0, 5 056 512 at N23, before the real art);
 `MeasurePS2 -Iso` boots it in PCSX2 ([TESTING.md](TESTING.md#ps2-disc-boot)).
 
 ```bat
@@ -355,6 +356,21 @@ Engine\Build\BatchFiles\BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.l
 | `GetTargetPlatformManagerRef()`, `ITargetPlatform` | `TargetPlatform/Public/Interfaces/` | The cook's platforms |
 | `FPakWriter`, `FPakFile`, `FPakPlatformFile` | `PakFile/Public/PakWriter.h`, `IPlatformFilePak.h` | Writing, reading and mounting paks |
 
+### Launching straight into a match
+
+ShooterGame opens its main menu (GameDefaultMap, `/Game/Maps/MainMenu`, [ps2-polish](PLANS/ps2-polish.md) P9). A map
+URL as the first argument, or `-map=`, starts a match directly; its options are the menu's ([ShooterGame's
+README](../Game/ShooterGame/README.md#build-and-run)): `?team=CT|T|Auto|Spectate` (without it the player waits in the
+team menu), `?bots=`, `?difficulty=Easy|Normal|Hard|Expert`, `?winrounds=` and `?seed=`. `-botmatch` needs no map:
+the menu's game mode travels to de_leon at once, so BotMatch.bat and MeasurePS2 (and a staged PS2 build's
+`-addcmdline`) keep their command lines.
+
+```bat
+Game\ShooterGame\Binaries\Win64\ShooterGame.exe /Game/Maps/de_leon?team=CT?bots=9?difficulty=Hard?winrounds=3
+Game\ShooterGame\Binaries\Win64\ShooterGame.exe -map=/Game/Maps/de_leon?team=T -ExecCmds="ViewFrom 0 0 5200 -89 0"
+Engine\Build\BatchFiles\BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.lproj -platform=PS2 -build -cook -stage -pak -run "-addcmdline=/Game/Maps/de_leon?team=CT"
+```
+
 ## Build scripts
 
 All scripts forward to LeonBuildTool (`cmake -P Engine/Source/Programs/LeonBuildTool/LeonBuildTool.cmake -- ...`). Win64 builds set up the MSVC environment through `GetVSEnv.bat`; PS2 builds run inside the pinned ps2dev Docker image unless `PS2DEV` is set on the host.
@@ -368,11 +384,11 @@ All scripts forward to LeonBuildTool (`cmake -P Engine/Source/Programs/LeonBuild
 | `Engine\Build\BatchFiles\Cook.bat` | `<LeonCook arguments>` | Builds LeonCook (Win64 Development) and runs it |
 | `Engine\Build\BatchFiles\CheckReimport.bat` | `[<Project>.lproj ...]` | Gate G5: reimports the engine content (and the projects') and fails when git sees a change under a `Content` folder |
 | `Engine\Build\BatchFiles\BuildCookRun.bat` | `-project=<.lproj> -platform=Win64\|PS2 [-configuration=...] [-build] [-cook] [-stage] [-pak] [-iso] [-run] [-addcmdline="..."] [-pakorder=<file>] [-fullcook] [-region=NTSC\|PAL] [-discserial=<serial>]` | Builds, cooks, stages and paks a project into `<Project>\Saved\StagedBuilds\<Platform>\`, makes the PS2 disc image, and runs it ([above](#buildcookrun)) |
-| `Engine\Build\BatchFiles\RunTests.bat` | `[-automation=<filter>]` | Builds LeonAutomationTests (Win64 Development) and runs it from the repo root: every automation test, or those whose name contains `<filter>`; then the LeonHeaderTool golden tests, then ShooterGame's test program (`ShooterGameTests`, the same filter), then `TestPAL` (built for Win64 Development); fails if any fails. At 0.24.0: 575, 35 golden cases, 99 and 171 |
+| `Engine\Build\BatchFiles\RunTests.bat` | `[-automation=<filter>]` | Builds LeonAutomationTests (Win64 Development) and runs it from the repo root: every automation test, or those whose name contains `<filter>`; then the LeonHeaderTool golden tests, then ShooterGame's test program (`ShooterGameTests`, the same filter), then `TestPAL` (built for Win64 Development); fails if any fails. At 0.24.0: 575, 35 golden cases, 99 and 171; at ps2-polish P9: 597, 35, 118 and 171; at 0.25.0: 605, 35, 125 and 174 |
 | `Engine\Build\BatchFiles\RunGates.bat` | `[-PS2] [-Measure]` | Every local gate in order: Lint, RunTests, CheckReimport, SmokeTest, BotMatch 10 7, ValidateAssets (engine and ShooterGame); `-PS2` adds `Package.bat -NoWin64` (G3), `-Measure` MeasurePS2; logs in `Engine\Saved\Gates\`, `RunGates OK` or the failed gates ([TESTING.md](TESTING.md#automated)) |
 | `Engine\Build\BatchFiles\MeasurePS2.bat` | `[-Project <dir>] [-Rounds 2] [-Seed 7] [-Seconds 120] [-NoBuild] [-TimeoutSeconds 900] [-Label <text>] [-Iso] [-PakOrder <file>] [-LogFileOpenOrder] [-ExtraArgs <args>]` | The PS2 frame in PCSX2, unattended ([ps2-shipping](PLANS/ps2-shipping.md) N1): stages the game with its measuring command line (a spectated bot match, `-LogFrameTimes`, `-ExitAfterSeconds`), runs PCSX2 without its window on `Measure.ini`, reads the EE log to `ProfileSummary:`, closes PCSX2, appends to `<Project>\Saved\Profiling\PS2Frame.csv` and prints the Budgets.md row labelled `-Label`. `-Iso` boots the disc, `-PakOrder` orders its pak, `-LogFileOpenOrder` records the order, `-ExtraArgs` adds game switches (`-novu1`), `-NoBuild` keeps the stage ([TESTING.md](TESTING.md#ps2-disc-boot)) |
-| `Engine\Build\BatchFiles\SmokeTest.bat` | | Gate G6: builds ShooterGame, runs it headless on de_leon with `-ExecCmds=bot_fill -ExitAfterFrames=120` and fails unless it exits with 0 and logs ten pawns, five a team (`SmokeTest OK: 10 pawns, CT 5, T 5, exit code 0`) |
-| `Engine\Build\BatchFiles\BotMatch.bat` | `[Rounds] [Seed]` | Builds ShooterGame, plays a headless bot match twice (`-nullrhi -benchmark -botmatch -rounds=<Rounds> -seed=<Seed>`, 10 and 7) and fails unless both exit with 0 and log the same `Botmatch OK` line (P21) |
+| `Engine\Build\BatchFiles\SmokeTest.bat` | | Gate G6: builds ShooterGame, runs it headless straight into a match (`"/Game/Maps/de_leon?team=CT" -ExitAfterFrames=120`: past the main menu, the nine bots joining around the player) and fails unless it exits with 0 and logs ten pawns, five a team (`SmokeTest OK: 10 pawns, CT 5, T 5, exit code 0`) |
+| `Engine\Build\BatchFiles\BotMatch.bat` | `[Rounds] [Seed]` | Builds ShooterGame, plays a headless bot match twice (`-nullrhi -benchmark -botmatch -rounds=<Rounds> -seed=<Seed>`, 10 and 7; `-botmatch` skips the main menu by itself) and fails unless both exit with 0 and log the same `Botmatch OK` line (P21) |
 | `Engine\Build\BatchFiles\FormatCode.bat` | `[--check]` | clang-format on every `.cpp` / `.h` / `.inl` under `Engine\Source`, `Engine\Platforms`, `Engine\Plugins` and `Game` (skips `ThirdParty`, `Intermediate`, `Binaries`); `--check` is a dry run that fails on unformatted files. It runs `LEON_CLANG_FORMAT`, else Visual Studio's LLVM `clang-format`, else the one on `PATH`, and warns when its major version is not 20 (the repository's; 20.1.8 is the reference, `pip install clang-format==20.1.8`) |
 | `Engine\Build\BatchFiles\Lint.bat` | | `FormatCode.bat --check`, then `CheckBannedApis.ps1`, then builds LeonAutomationTests, LeonCook, LeonPak, LeonGame and BlankProgram, and ShooterGame and ShooterGameTests, for Win64 Development |
 | `Engine\Build\BatchFiles\CheckBannedApis.ps1` | | Gate G4: fails when engine or game code (`Engine\Source`, `Engine\Platforms`, `Engine\Plugins`, `Game`; comments ignored) uses glm, nlohmann, a `std::` container, string, `string_view`, stream, function or smart pointer or its header (D2), iostream, the `printf` family (`vfprintf`, `_snprintf`, ...), `LegacyGL` / `FLegacyTransform` / `LegacyAxes`, a removed API of the ps2-shipping plan (the FBX / OBJ importers and the model-space animation of N21, ...), or `FLegacyCoordinateConversion` outside the tests (`Public/Tests`, `Private/Tests`); the allowed places are listed in [CODING_STANDARD.md §4](CODING_STANDARD.md#4-language). Violations print `<file>:<line>: G4 <rule>: <code> -> <replacement>`; `-Root <dir>` scans another tree. `Lint.bat` runs it (`pwsh` works too) |
@@ -413,6 +429,18 @@ Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build
 ```
 
 `RunTests.bat` builds and runs it on Win64 (171 tests at 0.24.0). On PS2 (fewer: the desktop-only file, config and log tests stay out; 157 at [ps2-shipping](PLANS/ps2-shipping.md) N15, the last EE run) the verdict (`TestPAL: PASSED (N test(s), 0 failed)`) and the `LogTestPAL` numbers are read from the PCSX2 log; the numbers are recorded in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md). `RunPCSX2.ps1 -Program VU1Conformance -Build` runs VU1Conformance the same way (`VU1Conformance: PASSED (84 batch(es), 0 failed)`).
+
+## Game captures
+
+A game's captures come from its own switches ([SETUP.md](SETUP.md)): `-Screenshot=<file.bmp>` saves frame
+`-ExitAfterFrames=N`, `-ExecCmds="Cmd;Cmd"` runs console commands on the first frame, and `-ExecCmdsAfterFrames=N`
+([ps2-polish](PLANS/ps2-polish.md) P6, not in Shipping) holds them until frame N, for what only exists once the match
+plays. ShooterGame's buy menu and scoreboard:
+
+```bat
+Game\ShooterGame\Binaries\Win64\ShooterGame.exe "-ExecCmds=bot_fill;buymenu" -ExecCmdsAfterFrames=40 -Screenshot=C:\Temp\buy.bmp -ExitAfterFrames=90
+Game\ShooterGame\Binaries\Win64\ShooterGame.exe "-ExecCmds=bot_fill;ShowScores 1" -ExecCmdsAfterFrames=40 -Screenshot=C:\Temp\scores.bmp -ExitAfterFrames=90
+```
 
 ## Related docs
 

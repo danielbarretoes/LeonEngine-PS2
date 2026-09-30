@@ -49,7 +49,7 @@ Engine\Build\BatchFiles\RunTests.bat
 ```
 
 This builds `LeonAutomationTests` (Win64 Development) and runs it from the repo root. The executable contains the
-tests of every module in its closure (`<Module>/Private/Tests/`), all UE automation tests (575 at 0.24.0, named
+tests of every module in its closure (`<Module>/Private/Tests/`), all UE automation tests (575 at 0.24.0, 605 at 0.25.0, named
 `System.<Module>.<Area>.<Name>`). Then it runs the LeonHeaderTool golden tests (35 cases), builds and runs ShooterGame's
 test program (`ShooterGameTests`, 99 tests) and last builds and runs `TestPAL` (171 tests on Win64). The exit code is
 non-zero if any test fails. `-automation=<filter>` runs only the tests whose name contains `<filter>` (the engine's and
@@ -94,8 +94,9 @@ default pawn is `ADefaultPawn`). A map that cannot be opened logs `Failed to ent
 FixedStepsPerSecond`, [ps2-shipping](PLANS/ps2-shipping.md) D4), paced to the clock unless `-benchmark` (one step a
 frame, as fast as it can); `-showstats` shows the HUD stats;
 `-AxesGizmo` starts with the axes gizmo on; `-ExecCmds=` runs console commands (separated by `;` or `,`) on the first
-frame, for example `-ExecCmds="stat unit;FOV 75"`; `-Screenshot=` saves frame `-ExitAfterFrames=` (default 60) as a
-24-bit BMP and exits, and `-ExitAfterFrames=N` alone exits after frame N (headless too). In PowerShell quote an
+frame, for example `-ExecCmds="stat unit;FOV 75"` (`-ExecCmdsAfterFrames=N` holds them until frame N, not in
+Shipping: a capture of what only exists once the match plays, the buy menu or the scoreboard); `-Screenshot=` saves
+frame `-ExitAfterFrames=` (default 60) as a 24-bit BMP and exits, and `-ExitAfterFrames=N` alone exits after frame N (headless too). In PowerShell quote an
 argument that has a dot after `=` (`"-map=D:\Work\Maps\Arena.lmap"`), or PowerShell splits it at the dot.
 
 In the window (`Engine/Config/BaseInput.ini`): mouse look (the cursor is captured), **WASD** or the arrows fly along the
@@ -186,7 +187,7 @@ platform-file, config-cache, log-file, real-descriptor, file-package and SaveCon
 `TestPAL: PASSED (N test(s), 0 failed)` line and the `LogTestPAL` reflection / object-array / memory / name-pool
 lines; their numbers are tracked in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md).
 `-Program VU1Conformance -Build` runs VU1's microprograms against the C++ emitter the same way
-(`VU1Conformance: PASSED (84 batch(es), 0 failed)`, [TESTING.md](TESTING.md#automated)).
+(`VU1Conformance: PASSED (162 batch(es), 0 failed)`, 78 of them clipped, [TESTING.md](TESTING.md#automated)).
 
 ShooterGame's DualShock controls are in its [README](../Game/ShooterGame/README.md#controls). R3 toggles the engine's
 `stat unit` overlay (FPS, MS, RAM, VRAM, TRIS, OBJ; on from the start on the PS2), described in the

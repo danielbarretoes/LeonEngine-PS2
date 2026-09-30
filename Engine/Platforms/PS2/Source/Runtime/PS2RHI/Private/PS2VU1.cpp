@@ -2,6 +2,7 @@
 
 #include "DynamicRHI.h"
 #include "GSGifPacket.h"
+#include "GSPrimitiveEmitter.h"
 #include "GSTypes.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
@@ -173,6 +174,26 @@ namespace Leon::PS2
 			float(Environment.Height) * -0.5f, -DepthScale, 16.0f);
 		PutQuadword(&Shared[VU1Memory::ScreenOffset * 4], Center, Center, DepthScale, 0.0f);
 		PutQuadword(&Shared[VU1Memory::Limits * 4], 255.0f, 0.5f, DepthScale, 2048.0f);
+		// The clipping (ps2-polish P8b, ClipTriangles.vsi), with the emitter's guard band: a position's outcodes are
+		// the signs of (w - x, w + x, w - y, w + y) = w (1, 1, 1, 1) + x (-1, 1, 0, 0) + y (0, 0, -1, 1), of the same
+		// with the guard band's w (GX, GX, GY, GY), and of (z, w - z) = w (0, 1) + z (1, -1); the clip planes are
+		// distance = plane . position, FGSPrimitiveEmitter's (near, far, then the guard band's four sides).
+		const float GuardX = FGSPrimitiveEmitter::GuardExtent / (float(Environment.Width) * 0.5f);
+		const float GuardY = FGSPrimitiveEmitter::GuardExtent / (float(Environment.Height) * 0.5f);
+		uint32* Outcodes = &Shared[VU1Memory::OutcodeVectors * 4];
+		PutQuadword(Outcodes + 0, 1.0f, 1.0f, 1.0f, 1.0f);
+		PutQuadword(Outcodes + 4, -1.0f, 1.0f, 0.0f, 0.0f);
+		PutQuadword(Outcodes + 8, 0.0f, 0.0f, -1.0f, 1.0f);
+		PutQuadword(Outcodes + 12, GuardX, GuardX, GuardY, GuardY);
+		PutQuadword(Outcodes + 16, 0.0f, 1.0f, 0.0f, 0.0f);
+		PutQuadword(Outcodes + 20, 1.0f, -1.0f, 0.0f, 0.0f);
+		uint32* Planes = &Shared[VU1Memory::ClipPlanes * 4];
+		PutQuadword(Planes + 0, 0.0f, 0.0f, 1.0f, 0.0f);
+		PutQuadword(Planes + 4, 0.0f, 0.0f, -1.0f, 1.0f);
+		PutQuadword(Planes + 8, -1.0f, 0.0f, 0.0f, GuardX);
+		PutQuadword(Planes + 12, 1.0f, 0.0f, 0.0f, GuardX);
+		PutQuadword(Planes + 16, 0.0f, -1.0f, 0.0f, GuardY);
+		PutQuadword(Planes + 20, 0.0f, 1.0f, 0.0f, GuardY);
 		return CopyQuadwords(Out + 4, Shared, VU1Memory::NumShared);
 	}
 
@@ -250,6 +271,8 @@ namespace Leon::PS2
 		Prim.bFog = Draw.Fog.bEnabled;
 		Prim.bAlphaBlend = Draw.bBlend;
 		HeaderPrim = Prim.Encode();
+		Prim.Type = EGSPrimitive::Triangle;
+		HeaderClipPrim = Prim.Encode();
 	}
 
 	void FPS2VU1BatchEncoder::PrepareRows(const FMatrix& Matrix, const float* Scale, const float* Bias, uint32 FirstRow)
@@ -287,14 +310,15 @@ namespace Leon::PS2
 			: bLit                              ? VU1Memory::HeaderLit
 												: VU1Memory::HeaderUnlit;
 		// The batch's own: its vertices and flags, its texture coordinates' offset and the GIFtag (NLOOP, EOP, PRE and
-		// PRIM, PACKED with ST, RGBAQ and XYZF2: StaticUnlit and StaticLit write the fog's F, N15).
+		// PRIM, PACKED with ST, RGBAQ and XYZF2: StaticUnlit and StaticLit write the fog's F, N15). A clipped batch's
+		// (P8b) is its chunks' TRIANGLE tag, whose NLOOP the program writes.
 		Header[0] = NumVertices;
 		Header[1] = bKick ? 1 : 0;
 		Header[2] = HeaderLighting;
-		Header[3] = 0;
+		Header[3] = Batch.bClip ? 1 : 0;
 		PutQuadword(&Header[6 * 4], Batch.TexCoordOffset[0], Batch.TexCoordOffset[1], 0.0f, 0.0f);
-		const uint64 GifTag =
-			FGSGifPacket::MakeTag(NumVertices, true, EGSGifFormat::Packed, 3) | (uint64(1) << 46) | (HeaderPrim << 47);
+		const uint64 GifTag = FGSGifPacket::MakeTag(Batch.bClip ? 0 : NumVertices, true, EGSGifFormat::Packed, 3) |
+			(uint64(1) << 46) | ((Batch.bClip ? HeaderClipPrim : HeaderPrim) << 47);
 		const uint64 Registers =
 			uint64(EGSRegister::ST) | (uint64(EGSRegister::RGBAQ) << 4) | (uint64(EGSRegister::XYZF2) << 8);
 		Header[(VU1Memory::GifTag * 4) + 0] = uint32(GifTag);
@@ -407,34 +431,68 @@ bool FPS2VU1::RunBatchForTest(const FGSVertexDraw& Draw, const FGSVertexBatch& B
 	List.DrawVertexBatch(Local);
 	FPS2VU1BatchEncoder Encoder;
 	Encoder.Begin(Environment, false);
-	alignas(64) static uint64 Chain[2 * 40];
+	// The prologue, a batch and the END.
+	constexpr uint32 ChainQuadwords = 2 + VU1Memory::NumShared + 1 + VU1SkinnedMemory::Header + 6 + 1 + 1;
+	alignas(64) static uint64 Chain[2 * ChainQuadwords];
+	check(Encoder.GetPrologueQuadwords() + Encoder.GetMaxBatchQuadwords() + 1 <= ChainQuadwords);
 	uint64* Out = Encoder.WritePrologue(Chain);
 	Out = Encoder.WriteBatch(List, Local, Out);
-	// FLUSHE last: once VIF1 is idle with nothing in its FIFO, the program has ended.
+	// FLUSHE last: once VIF1 is idle with nothing in its FIFO, the program has ended (or stopped with a chunk, P8b).
 	Out[0] = FGSGifPacket::MakeDmaTag(0, EGSDmaTag::End);
 	Out[1] = FGSGifPacket::MakeVifCodes(FGSGifPacket::MakeVifCode(EGSVifCommand::FlushE), 0);
 	Out += 2;
-	FlushCache(WRITEBACK_DCACHE);
-	dma_channel_send_chain(DMA_CHANNEL_VIF1, Chain, int((Out - Chain) / 2), DMA_FLAG_TRANSFERTAG, 0);
-	dma_channel_wait(DMA_CHANNEL_VIF1, 0);
-	bool bIdle = false;
-	for (int32 Spin = 0; Spin < 1000000 && !bIdle; ++Spin)
+	const auto SendAndWait = [](uint64* Start, uint64* End)
 	{
-		const uint32 Stat = *Vif1Stat;
-		bIdle = (Stat & 3) == 0 && ((Stat >> 24) & 0x1f) == 0;
-	}
-	if (!bIdle)
+		FlushCache(WRITEBACK_DCACHE);
+		dma_channel_send_chain(DMA_CHANNEL_VIF1, Start, int((End - Start) / 2), DMA_FLAG_TRANSFERTAG, 0);
+		dma_channel_wait(DMA_CHANNEL_VIF1, 0);
+		bool bIdle = false;
+		for (int32 Spin = 0; Spin < 1000000 && !bIdle; ++Spin)
+		{
+			const uint32 Stat = *Vif1Stat;
+			bIdle = (Stat & 3) == 0 && ((Stat >> 24) & 0x1f) == 0;
+		}
+		return bIdle;
+	};
+	const auto Read = [&OutQuadwords](uint32 Address, uint32 NumQuadwords)
+	{
+		const uint32 First = Address * 4;
+		for (uint32 Index = 0; Index < NumQuadwords * 2; ++Index)
+		{
+			OutQuadwords.Add(
+				uint64(Vu1Memory[First + (Index * 2)]) | (uint64(Vu1Memory[First + (Index * 2) + 1]) << 32));
+		}
+	};
+	if (!SendAndWait(Chain, Out))
 	{
 		return false;
 	}
-	// The first batch after OFFSET is in the buffer at BASE.
-	const uint32 NumQuadwords = GetPacketQuadwords(Batch.NumVertices);
-	const uint32 First = (VU1Memory::Base + (Batch.IsSkinned() ? VU1SkinnedMemory::Packet : VU1Memory::Packet)) * 4;
-	OutQuadwords.SetNumUninitialized(int32(NumQuadwords) * 2);
-	for (uint32 Index = 0; Index < NumQuadwords * 2; ++Index)
+	OutQuadwords.Reset();
+	if (!Batch.bClip)
 	{
-		OutQuadwords[int32(Index)] =
-			uint64(Vu1Memory[First + (Index * 2)]) | (uint64(Vu1Memory[First + (Index * 2) + 1]) << 32);
+		// The first batch after OFFSET is in the buffer at BASE.
+		Read(VU1Memory::Base + (Batch.IsSkinned() ? VU1SkinnedMemory::Packet : VU1Memory::Packet),
+			GetPacketQuadwords(Batch.NumVertices));
+		return true;
 	}
-	return true;
+	// A clipped batch stops with each full chunk, its address in the clipping's state (x), until MSCNT; 0 there once it
+	// has ended.
+	for (int32 Chunk = 0; Chunk < 256; ++Chunk)
+	{
+		const uint32 Address = Vu1Memory[VU1Memory::ClipState * 4] & 0xffff;
+		if (Address == 0)
+		{
+			return true;
+		}
+		Read(Address, GetPacketQuadwords(Vu1Memory[Address * 4] & 0x7fff));
+		alignas(64) static uint64 Continue[2];
+		Continue[0] = FGSGifPacket::MakeDmaTag(0, EGSDmaTag::End);
+		Continue[1] = FGSGifPacket::MakeVifCodes(
+			FGSGifPacket::MakeVifCode(EGSVifCommand::MsCnt), FGSGifPacket::MakeVifCode(EGSVifCommand::FlushE));
+		if (!SendAndWait(Continue, Continue + 2))
+		{
+			return false;
+		}
+	}
+	return false;
 }

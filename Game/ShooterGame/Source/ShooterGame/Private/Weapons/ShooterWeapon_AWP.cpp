@@ -9,6 +9,7 @@ AShooterWeapon_AWP::AShooterWeapon_AWP(const FObjectInitializer& ObjectInitializ
 {
 	// CS's AWP; DefaultGame.ini's [/Script/ShooterGame.ShooterWeapon_AWP] tunes it.
 	WeaponName = TEXT("awp");
+	DisplayName = TEXT("AWP");
 	Slot = EShooterWeaponSlot::Primary;
 	bAutomatic = false;
 	AmmoPerClip = 10;
@@ -22,7 +23,12 @@ AShooterWeapon_AWP::AShooterWeapon_AWP(const FObjectInitializer& ObjectInitializ
 	RangeModifier = 0.99f;
 	ArmorRatio = 1.95f;
 	SpeedModifier = 0.84f;
+	// CS's AWPPrimaryAttack: the air 0.85, past 140 units a second 0.25, walking 0.1, ducking 0, still 0.001.
 	WeaponSpread = 0.05f;
+	WalkingSpread = 1.2f;
+	MovingSpread = 3.0f;
+	JumpingSpread = 6.0f;
+	CrouchingSpreadMod = 0.5f;
 	Price = 4750;
 	// .338 Magnum: 45 units of power, two walls, 8000 units.
 	PenetrationCount = 3;

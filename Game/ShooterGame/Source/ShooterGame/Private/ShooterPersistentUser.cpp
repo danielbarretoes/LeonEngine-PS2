@@ -21,9 +21,9 @@ UShooterPersistentUser* UShooterPersistentUser::LoadPersistentUser(int32 UserInd
 		}
 		else
 		{
-			UE_LOG(LogShooter, Log, TEXT("Settings loaded: sensitivity %.2f, Y axis %s, volume %.2f"),
+			UE_LOG(LogShooter, Log, TEXT("Settings loaded: sensitivity %.2f, Y axis %s, volume %.2f, crouch %s"),
 				static_cast<double>(User->AimSensitivity), User->bInvertedYAxis ? TEXT("inverted") : TEXT("normal"),
-				static_cast<double>(User->SoundVolume));
+				static_cast<double>(User->SoundVolume), User->bToggleCrouch ? TEXT("toggles") : TEXT("held"));
 		}
 	}
 	if (User == nullptr)
@@ -31,6 +31,26 @@ UShooterPersistentUser* UShooterPersistentUser::LoadPersistentUser(int32 UserInd
 		User = Cast<UShooterPersistentUser>(UGameplayStatics::CreateSaveGameObject(StaticClass()));
 	}
 	return User;
+}
+
+FShooterMatchSettings UShooterPersistentUser::GetMatchSettings() const
+{
+	FShooterMatchSettings Settings;
+	Settings.MapName = MatchMapName;
+	Settings.BotDifficulty = BotDifficulty;
+	Settings.RoundsToWin = FShooterMatchSettings::GetRoundsToWinChoices().Contains(RoundsToWin)
+		? RoundsToWin
+		: FShooterMatchSettings::GetRoundsToWinChoices()[0];
+	Settings.NumBots = FMath::Clamp(NumBots, FShooterMatchSettings::MinBots, FShooterMatchSettings::MaxBots);
+	return Settings;
+}
+
+void UShooterPersistentUser::SetMatchSettings(const FShooterMatchSettings& Settings)
+{
+	MatchMapName = Settings.MapName;
+	BotDifficulty = Settings.BotDifficulty;
+	RoundsToWin = Settings.RoundsToWin;
+	NumBots = Settings.NumBots;
 }
 
 bool UShooterPersistentUser::SaveToSlot(int32 UserIndex)

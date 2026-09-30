@@ -3,6 +3,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "CoreMinimal.h"
 #include "Engine/BlockingVolume.h"
+#include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Misc/AutomationTest.h"
@@ -10,6 +11,8 @@
 #include "ShooterCharacter.h"
 #include "ShooterCharacterMovement.h"
 #include "ShooterGameMode.h"
+#include "ShooterHUD.h"
+#include "ShooterPlayerController.h"
 #include "ShooterPlayerState.h"
 #include "Tests/ScopedTestWorld.h"
 #include "Weapons/ShooterProjectile.h"
@@ -81,6 +84,7 @@ namespace
 	void MakeAccurate(AShooterWeapon_Instant& Weapon)
 	{
 		Weapon.WeaponSpread = 0.0f;
+		Weapon.WalkingSpread = 0.0f;
 		Weapon.MovingSpread = 0.0f;
 		Weapon.JumpingSpread = 0.0f;
 		Weapon.FiringSpreadIncrement = 0.0f;
@@ -271,27 +275,283 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameWeaponsSpreadModelTest, "ShooterGam
 
 bool FShooterGameWeaponsSpreadModelTest::RunTest(const FString& Parameters)
 {
-	// The spread adds the movement's share and the jump's, and shrinks crouched.
+	// The movement's term: 0 still, WalkingSpread at WalkingSpeed (CS's 140 units a second), MovingSpread at the
+	// running speed, in proportion between; the rest of the model (the air, crouched) per weapon in
+	// ShooterGame.Weapons.SpreadByState.
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	SpawnFloor(World);
 	AShooterCharacter* Shooter = SpawnShooter(World, FVector::ZeroVector, 0.0f, EShooterTeam::CT);
 	AShooterWeapon_Instant* Rifle = GiveAndDraw<AShooterWeapon_AK47>(World, *Shooter);
-	const float Standing = Rifle->GetCurrentSpread();
-	TestEqual("Standing", Standing, Rifle->WeaponSpread, 1.0e-4f);
-	UCharacterMovementComponent& Movement = Shooter->GetCharacterMovement();
-	Movement.Velocity = FVector(Movement.MaxWalkSpeed * 0.5f, 0.0f, 0.0f);
-	TestEqual("Half speed", Rifle->GetCurrentSpread(), Rifle->WeaponSpread + (Rifle->MovingSpread * 0.5f), 1.0e-4f);
-	Movement.Velocity = FVector::ZeroVector;
-	Shooter->SetMovementMode(EMovementMode::Falling);
-	TestEqual("In the air", Rifle->GetCurrentSpread(), Rifle->WeaponSpread + Rifle->JumpingSpread, 1.0e-4f);
-	Shooter->SetMovementMode(EMovementMode::Walking);
-	Shooter->Crouch();
-	TickFrames(World, 2);
-	TestTrue("Crouched", Shooter->bIsCrouched);
-	TestEqual("Crouched spread", Rifle->GetCurrentSpread(), Rifle->WeaponSpread * Rifle->CrouchingSpreadMod, 1.0e-4f);
+	TestEqual("Standing", Rifle->GetCurrentSpread(), Rifle->WeaponSpread, 1.0e-4f);
+	const float Walk = Rifle->WalkingSpeed;
+	const float Run = Shooter->GetCharacterMovement().MaxWalkSpeed * Rifle->GetSpeedModifier();
+	TestEqual("Still", Rifle->GetMovementSpread(0.0f, Run), 0.0f);
+	TestEqual("Half the walk", Rifle->GetMovementSpread(Walk * 0.5f, Run), Rifle->WalkingSpread * 0.5f, 1.0e-4f);
+	TestEqual("The walk's limit", Rifle->GetMovementSpread(Walk, Run), Rifle->WalkingSpread, 1.0e-4f);
+	TestEqual("Halfway to the run", Rifle->GetMovementSpread((Walk + Run) * 0.5f, Run),
+		(Rifle->WalkingSpread + Rifle->MovingSpread) * 0.5f, 1.0e-4f);
+	TestEqual("Running", Rifle->GetMovementSpread(Run, Run), Rifle->MovingSpread, 1.0e-4f);
+	TestEqual("Faster (a fall, a push)", Rifle->GetMovementSpread(Run * 2.0f, Run), Rifle->MovingSpread, 1.0e-4f);
 	TestEqual("Damage at 0 m", Rifle->GetDamageAtDistance(0.0f), Rifle->HitDamage);
 	TestEqual("Damage at 12.7 m", Rifle->GetDamageAtDistance(1270.0f), Rifle->HitDamage * 0.98f, 1.0e-4f);
+	return true;
+}
+
+namespace
+{
+
+	/** The owner's states the spread tells apart, best to worst (CS's cases in each weapon's PrimaryAttack). */
+	enum class ESpreadState : uint8
+	{
+		Crouched,
+		Still,
+		Walking,
+		Running,
+		Jumping,
+		Num
+	};
+
+	const TCHAR* const SpreadStateNames[] = {
+		TEXT("crouched"), TEXT("still"), TEXT("walking"), TEXT("running"), TEXT("jumping")};
+
+	/**
+	 * Puts Shooter in State: crouched still, standing still, walking (the walk key's speed with the weapon), running
+	 * (the weapon's full speed), or running in the air.
+	 */
+	void SetSpreadState(UWorld& World, AShooterCharacter& Shooter, const AShooterWeapon& Weapon, ESpreadState State)
+	{
+		UShooterCharacterMovement& Movement = *Shooter.GetShooterCharacterMovement();
+		const float Run = Movement.MaxWalkSpeed * Weapon.GetSpeedModifier();
+		if (State == ESpreadState::Crouched)
+		{
+			Shooter.Crouch();
+		}
+		else
+		{
+			Shooter.UnCrouch();
+		}
+		Movement.Velocity = FVector::ZeroVector;
+		Shooter.SetMovementMode(EMovementMode::Walking);
+		TickFrames(World, 2);
+		const float Speed = State == ESpreadState::Walking ? Run * Movement.WalkSpeedModifier
+			: State >= ESpreadState::Running               ? Run
+														   : 0.0f;
+		Movement.Velocity = FVector(Speed, 0.0f, 0.0f);
+		if (State == ESpreadState::Jumping)
+		{
+			Shooter.SetMovementMode(EMovementMode::Falling);
+		}
+	}
+
+	/** The spread of Weapon's owner in each state, degrees. */
+	TArray<float> GetSpreadTable(UWorld& World, AShooterCharacter& Shooter, const AShooterWeapon_Instant& Weapon)
+	{
+		TArray<float> Spreads;
+		for (int32 State = 0; State < int32(ESpreadState::Num); ++State)
+		{
+			SetSpreadState(World, Shooter, Weapon, ESpreadState(State));
+			Spreads.Add(Weapon.GetCurrentSpread());
+		}
+		SetSpreadState(World, Shooter, Weapon, ESpreadState::Still);
+		return Spreads;
+	}
+
+} // namespace
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameWeaponsSpreadByStateTest, "ShooterGame.Weapons.SpreadByState",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameWeaponsSpreadByStateTest::RunTest(const FString& Parameters)
+{
+	// Counter-Strike 1.6's accuracy (ps2-polish P2, P2b), each hitscan weapon's table: crouched is 0.5 to 0.65 of
+	// standing still, still beats walking (the rifles and the MP5 walk as still), walking beats running, and the air is
+	// worst; each state's value is the model's
+	// (WeaponSpread, WalkingSpread at the walk key's speed, MovingSpread at the run, JumpingSpread on top in the air,
+	// times CrouchingSpreadMod crouched; the AWP unscoped adds UnscopedSpread after all of it).
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	SpawnFloor(World);
+	const TArray<UClass*> Classes = {AShooterWeapon_Glock::StaticClass(), AShooterWeapon_USP::StaticClass(),
+		AShooterWeapon_Deagle::StaticClass(), AShooterWeapon_MP5::StaticClass(), AShooterWeapon_AK47::StaticClass(),
+		AShooterWeapon_M4A1::StaticClass(), AShooterWeapon_AWP::StaticClass()};
+	for (int32 Index = 0; Index < Classes.Num(); ++Index)
+	{
+		AShooterCharacter* Shooter =
+			SpawnShooter(World, FVector(0.0f, 400.0f * float(Index), 0.0f), 0.0f, EShooterTeam::CT);
+		AShooterWeapon_Instant* Weapon = Cast<AShooterWeapon_Instant>(Shooter->GiveWeapon(Classes[Index]));
+		if (!TestNotNull("The weapon", Weapon))
+		{
+			return false;
+		}
+		Shooter->EquipWeapon(Weapon);
+		TickFrames(World, FMath::CeilToInt((Weapon->EquipDuration + 0.1f) / FrameTime));
+		const TArray<float> Spreads = GetSpreadTable(World, *Shooter, *Weapon);
+		const FString Name = Weapon->WeaponName;
+		UE_LOG(LogTemp, Display, "%s",
+			*FString::Printf("Spread %s: crouched %.3f, still %.3f, walking %.3f, running %.3f, jumping %.3f", *Name,
+				Spreads[0], Spreads[1], Spreads[2], Spreads[3], Spreads[4]));
+		// CS's rifles and the MP5 only look past 140 units a second: a walk is as accurate as standing still (P2b).
+		const bool bWalkFree = Weapon->IsA<AShooterWeapon_AK47>() || Weapon->IsA<AShooterWeapon_M4A1>() ||
+			Weapon->IsA<AShooterWeapon_MP5>();
+		TestEqual(*FString::Printf("%s: a walking term only where CS has one", *Name), Weapon->WalkingSpread == 0.0f,
+			bWalkFree);
+		for (int32 State = 1; State < int32(ESpreadState::Num); ++State)
+		{
+			if (bWalkFree && ESpreadState(State) == ESpreadState::Walking)
+			{
+				TestEqual(*FString::Printf("%s: walking as still", *Name), Spreads[State], Spreads[State - 1], 1.0e-4f);
+				continue;
+			}
+			TestTrue(*FString::Printf("%s: %s beats %s", *Name, SpreadStateNames[State - 1], SpreadStateNames[State]),
+				Spreads[State - 1] < Spreads[State]);
+		}
+		// The AWP's unscoped spread comes on top of the rest, crouched too (CS: + 0.08 unless zoomed).
+		const AShooterWeapon_AWP* Sniper = Cast<AShooterWeapon_AWP>(Weapon);
+		const float Unscoped = Sniper != nullptr ? Sniper->UnscopedSpread : 0.0f;
+		const float Still = Weapon->WeaponSpread + Unscoped;
+		const float Run = Shooter->GetCharacterMovement().MaxWalkSpeed * Weapon->GetSpeedModifier();
+		const float WalkSpeed = Run * Shooter->GetShooterCharacterMovement()->WalkSpeedModifier;
+		TestTrue(*FString::Printf("%s: walks below CS's 140 units a second", *Name), WalkSpeed <= Weapon->WalkingSpeed);
+		TestTrue(*FString::Printf("%s: crouched 0.5 to 0.65 of standing", *Name),
+			Weapon->CrouchingSpreadMod >= 0.5f && Weapon->CrouchingSpreadMod <= 0.65f);
+		TestEqual(*FString::Printf("%s crouched", *Name), Spreads[0],
+			(Weapon->WeaponSpread * Weapon->CrouchingSpreadMod) + Unscoped, 1.0e-4f);
+		TestEqual(*FString::Printf("%s still", *Name), Spreads[1], Still, 1.0e-4f);
+		TestEqual(*FString::Printf("%s walking", *Name), Spreads[2],
+			Still + (Weapon->WalkingSpread * WalkSpeed / Weapon->WalkingSpeed), 1.0e-4f);
+		TestEqual(*FString::Printf("%s running", *Name), Spreads[3], Still + Weapon->MovingSpread, 1.0e-4f);
+		TestEqual(*FString::Printf("%s jumping", *Name), Spreads[4],
+			Still + Weapon->MovingSpread + Weapon->JumpingSpread, 1.0e-4f);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameHUDDynamicCrosshairTest, "ShooterGame.HUD.DynamicCrosshair",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameHUDDynamicCrosshairTest::RunTest(const FString& Parameters)
+{
+	// CS's dynamic crosshair (ps2-polish P2, P2b): the HUD's gap follows the drawn weapon's spread, so with a pistol it
+	// is tightest crouched and opens standing, walking, running and in the air, in that order; with a rifle a walk
+	// leaves it as standing still.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	SpawnFloor(World);
+	AShooterCharacter* Shooter = World.SpawnActor<AShooterCharacter>(FVector::ZeroVector, FRotator::ZeroRotator);
+	AShooterPlayerController* Controller = World.SpawnActor<AShooterPlayerController>();
+	Controller->SetPlayer(NewObject<ULocalPlayer>(Controller));
+	Controller->Possess(Shooter);
+	AShooterHUD* HUD = World.SpawnActor<AShooterHUD>();
+	HUD->PlayerOwner = Controller;
+	constexpr float ViewHeight = 448.0f;
+	const auto GetGaps = [&](const AShooterWeapon_Instant& Weapon)
+	{
+		TArray<float> Gaps;
+		for (int32 State = 0; State < int32(ESpreadState::Num); ++State)
+		{
+			SetSpreadState(World, *Shooter, Weapon, ESpreadState(State));
+			Gaps.Add(HUD->GetCrosshairGap(ViewHeight));
+		}
+		UE_LOG(LogTemp, Display, "%s",
+			*FString::Printf("Crosshair gap (%s, 448 lines): crouched %.2f, still %.2f, walking %.2f, running %.2f, "
+							 "jumping %.2f px",
+				*Weapon.WeaponName, Gaps[0], Gaps[1], Gaps[2], Gaps[3], Gaps[4]));
+		return Gaps;
+	};
+
+	const TArray<float> Pistol = GetGaps(*GiveAndDraw<AShooterWeapon_Glock>(World, *Shooter));
+	TestTrue("Opened by the spread", Pistol[1] > HUD->CrosshairGap);
+	// CS's ACCURACY_DUCK: the crosshair's own gap closes crouched too, so it is at most about two thirds of standing.
+	TestTrue("Crouched: visibly tighter", Pistol[0] < Pistol[1] * 0.7f);
+	for (int32 State = 1; State < int32(ESpreadState::Num); ++State)
+	{
+		TestTrue(*FString::Printf("Tighter %s than %s", SpreadStateNames[State - 1], SpreadStateNames[State]),
+			Pistol[State - 1] < Pistol[State]);
+	}
+
+	const TArray<float> Rifle = GetGaps(*GiveAndDraw<AShooterWeapon_AK47>(World, *Shooter));
+	TestTrue("Rifle: crouched tighter", Rifle[0] < Rifle[1] * 0.7f);
+	TestEqual("Rifle: walking as still", Rifle[2], Rifle[1], 1.0e-3f);
+	TestTrue("Rifle: running, then the air, wider", Rifle[1] < Rifle[3] && Rifle[3] < Rifle[4]);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameWeaponsKickBackByStateTest, "ShooterGame.Weapons.KickBackByState",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameWeaponsKickBackByStateTest::RunTest(const FString& Parameters)
+{
+	// CS 1.6's KickBack branches (ps2-polish P2b): the AK-47, the M4A1 and the MP5 kick by the owner's state, crouched
+	// least, moving and in the air most, each state's share CS's arguments over standing's; the moving test comes
+	// before the air's for the AK-47 and the M4A1 and after it for the MP5; a pistol keeps its standing kick. Fired, a
+	// crouched shot kicks up the crouched share of a standing one (the same seed, the same random draws).
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	SpawnFloor(World);
+	struct FExpected
+	{
+		UClass* Class;
+		float CrouchedUp;
+		float MovingUp;
+		float JumpingUp;
+		bool bMovingBeforeAir;
+	};
+	const FExpected Table[] = {{AShooterWeapon_AK47::StaticClass(), 0.9f / 1.0f, 1.5f / 1.0f, 2.0f / 1.0f, true},
+		{AShooterWeapon_M4A1::StaticClass(), 0.6f / 0.65f, 1.0f / 0.65f, 1.2f / 0.65f, true},
+		{AShooterWeapon_MP5::StaticClass(), 0.35f / 0.375f, 0.5f / 0.375f, 0.9f / 0.375f, false},
+		{AShooterWeapon_Glock::StaticClass(), 1.0f, 1.0f, 1.0f, false}};
+	int32 Index = 0;
+	for (const FExpected& Expected : Table)
+	{
+		AShooterCharacter* Standing =
+			SpawnShooter(World, FVector(0.0f, 400.0f * float(Index), 0.0f), 0.0f, EShooterTeam::CT);
+		AShooterCharacter* Crouched =
+			SpawnShooter(World, FVector(400.0f, 400.0f * float(Index), 0.0f), 0.0f, EShooterTeam::CT);
+		++Index;
+		const auto Draw = [&World](AShooterCharacter& Shooter, UClass* Class)
+		{
+			AShooterWeapon_Instant* Weapon = Cast<AShooterWeapon_Instant>(Shooter.GiveWeapon(Class));
+			Shooter.EquipWeapon(Weapon);
+			TickFrames(World, FMath::CeilToInt((Weapon->EquipDuration + 0.1f) / FrameTime));
+			return Weapon;
+		};
+		AShooterWeapon_Instant* Weapon = Draw(*Standing, Expected.Class);
+		AShooterWeapon_Instant* Twin = Draw(*Crouched, Expected.Class);
+		const FString Name = Weapon->WeaponName;
+		const auto UpIn = [&](ESpreadState State)
+		{
+			SetSpreadState(World, *Standing, *Weapon, State);
+			return Weapon->GetRecoilScale().Up;
+		};
+		TestEqual(*FString::Printf("%s standing", *Name), UpIn(ESpreadState::Still), 1.0f);
+		TestEqual(*FString::Printf("%s crouched", *Name), UpIn(ESpreadState::Crouched), Expected.CrouchedUp, 1.0e-3f);
+		TestEqual(
+			*FString::Printf("%s walking: moving", *Name), UpIn(ESpreadState::Walking), Expected.MovingUp, 1.0e-3f);
+		TestEqual(*FString::Printf("%s running", *Name), UpIn(ESpreadState::Running), Expected.MovingUp, 1.0e-3f);
+		TestEqual(*FString::Printf("%s moving in the air", *Name), UpIn(ESpreadState::Jumping),
+			Expected.bMovingBeforeAir ? Expected.MovingUp : Expected.JumpingUp, 1.0e-3f);
+		Standing->SetMovementMode(EMovementMode::Falling);
+		Standing->GetCharacterMovement().Velocity = FVector::ZeroVector;
+		TestEqual(
+			*FString::Printf("%s still in the air", *Name), Weapon->GetRecoilScale().Up, Expected.JumpingUp, 1.0e-3f);
+		SetSpreadState(World, *Standing, *Weapon, ESpreadState::Still);
+
+		// Fired: the same stream, so the crouched kick is the standing one times the crouched share.
+		SetSpreadState(World, *Crouched, *Twin, ESpreadState::Crouched);
+		Weapon->ResetAim();
+		Twin->ResetAim();
+		// Each kick read right after its shot (the next frame starts recovering it).
+		Shoot(World, *Standing);
+		const float StandingKick = Weapon->GetRecoilToRecover();
+		Shoot(World, *Crouched);
+		const float CrouchedKick = Twin->GetRecoilToRecover();
+		UE_LOG(LogTemp, Display, "%s",
+			*FString::Printf("Kick %s: standing %.3f, crouched %.3f degrees up", *Name, StandingKick, CrouchedKick));
+		TestTrue(*FString::Printf("%s kicked", *Name), StandingKick > 0.0f);
+		TestEqual(
+			*FString::Printf("%s crouched kick", *Name), CrouchedKick, StandingKick * Expected.CrouchedUp, 1.0e-3f);
+	}
 	return true;
 }
 

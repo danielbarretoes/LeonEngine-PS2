@@ -550,6 +550,60 @@ bool FGameplayNavAutoLinkStepsJumpsAndDropsTest::RunTest(const FString& Paramete
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayNavAutoLinkLaddersTest, "System.AIModule.Gameplay.NavigationAutoLinkLadders",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGameplayNavAutoLinkLaddersTest::RunTest(const FString& Parameters)
+{
+	// A ladder up a 3.5 m block: its foot and its top, both flagged Ladder, are linked both ways (no walk climbs it);
+	// a waypoint on the ground beside it and one on the roof are not; a path from the ground to the roof climbs it,
+	// and the follower steers to the top without jumping at it (the climb is the pawn movement's), the ladder's point
+	// being its current target.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	SpawnNavFloor(World);
+	SpawnNavBox(World, 500.0f, 0.0f, FVector(400.0f, 400.0f, 350.0f));
+	ANavigationWaypoint* Ground = SpawnWaypoint(World, FVector(-500.0f, 0.0f, 0.0f));
+	ANavigationWaypoint* Foot = SpawnWaypoint(World, FVector(240.0f, 0.0f, 0.0f));
+	ANavigationWaypoint* Top = SpawnWaypoint(World, FVector(360.0f, 0.0f, 350.0f));
+	ANavigationWaypoint* Roof = SpawnWaypoint(World, FVector(600.0f, 0.0f, 350.0f));
+	Foot->Flags.Add(TEXT("Ladder"));
+	Top->Flags.Add(TEXT("Ladder"));
+	TestTrue("Links added", UNavigationSystem::AutoLinkWaypoints(World) > 0);
+	TestTrue("The ladder: both ways", Foot->Links.Contains(Top) && Top->Links.Contains(Foot));
+	TestTrue("The roof walks to the top", Roof->Links.Contains(Top) && Top->Links.Contains(Roof));
+	TestFalse("No climb without the flags", Ground->Links.Contains(Roof) || Roof->Links.Contains(Ground));
+	TestFalse("Nor from the ground", Ground->Links.Contains(Top));
+
+	World.GetNavigationSystem().Build(World);
+	TArray<FVector> Path;
+	if (!TestTrue("A path up",
+			World.GetNavigationSystem().FindPath(FVector(-500.0f, 0.0f, 0.0f), FVector(600.0f, 0.0f, 350.0f), Path)))
+	{
+		return false;
+	}
+	TestTrue("Over the ladder",
+		Path.Num() >= 3 && FMath::IsNearlyEqual(Path[0].X, 240.0f, 1.0f) &&
+			FMath::IsNearlyEqual(Path[1].Z, 350.0f, 1.0f));
+
+	ACharacter* Character = World.SpawnActor<ACharacter>();
+	Character->Reset(FVector(160.0f, 0.0f, 0.0f));
+	Character->GetCharacterMovement().WalkBounds = 100000.0f;
+	AAIController& Ai = *World.SpawnActor<AAIController>();
+	Ai.Possess(Character);
+	Ai.MoveToLocation(FVector(600.0f, 0.0f, 350.0f));
+	bool bJumped = false;
+	for (int32 Frame = 0; Frame < 30; ++Frame)
+	{
+		(void)Ai.TickAI(1.0f / 60.0f);
+		World.Tick(1.0f / 60.0f);
+		bJumped |= !Character->IsMovingOnGround();
+	}
+	TestFalse("No jump at the ladder", bJumped);
+	TestTrue("Steering to the ladder's top", FMath::IsNearlyEqual(Ai.GetCurrentTargetLocation().Z, 350.0f, 1.0f));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameplayNavAppendDebugDrawFillsOverlayTest,
 	"System.AIModule.Gameplay.NavigationSystemAppendDebugDrawFillsOverlay",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)

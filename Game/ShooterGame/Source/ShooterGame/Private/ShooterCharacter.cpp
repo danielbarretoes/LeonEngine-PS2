@@ -135,6 +135,7 @@ AShooterCharacter::AShooterCharacter(const FObjectInitializer& ObjectInitializer
 	FirstPersonCameraComponent->RelativeLocation = FVector(0.0f, 0.0f, StandingEyeHeight);
 	FirstPersonCameraComponent->bUsePawnControlRotation = true;
 	FirstPersonCameraComponent->SetFieldOfView(ShooterFieldOfView);
+	FirstPersonCameraComponent->SetMobility(EComponentMobility::Movable);
 
 	// The body the others see (UE ShooterGame: Mesh3P): ACharacter's skeletal mesh, standing on the feet, the team's
 	// (UpdateBody), not in its own player's view, its pose evaluated only when drawn and less often far away, with a
@@ -148,6 +149,7 @@ AShooterCharacter::AShooterCharacter(const FObjectInitializer& ObjectInitializer
 	// UE ShooterGame: Mesh1P, the arms on the camera, drawn in the view model pass of their player's view only.
 	Mesh1P = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("PawnMesh1P"));
 	Mesh1P->SetupAttachment(FirstPersonCameraComponent);
+	Mesh1P->SetMobility(EComponentMobility::Movable);
 	Mesh1P->bOnlyOwnerSee = true;
 	Mesh1P->bRenderAsViewModel = true;
 	Mesh1P->CastShadow = false;
@@ -198,14 +200,15 @@ void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAction(TEXT("Crouch"), IE_Released, this, &AShooterCharacter::OnCrouchReleased);
 	PlayerInputComponent->BindAction(TEXT("Walk"), IE_Pressed, this, &AShooterCharacter::OnWalkPressed);
 	PlayerInputComponent->BindAction(TEXT("Walk"), IE_Released, this, &AShooterCharacter::OnWalkReleased);
-	PlayerInputComponent->BindAction(TEXT("Fire"), IE_Pressed, this, &AShooterCharacter::StartWeaponFire);
-	PlayerInputComponent->BindAction(TEXT("Fire"), IE_Released, this, &AShooterCharacter::StopWeaponFire);
+	PlayerInputComponent->BindAction(TEXT("Fire"), IE_Pressed, this, &AShooterCharacter::OnFirePressed);
+	PlayerInputComponent->BindAction(TEXT("Fire"), IE_Released, this, &AShooterCharacter::OnFireReleased);
 	PlayerInputComponent->BindAction(TEXT("Targeting"), IE_Pressed, this, &AShooterCharacter::StartSecondaryFire);
 	PlayerInputComponent->BindAction(TEXT("Reload"), IE_Pressed, this, &AShooterCharacter::ReloadWeapon);
 	PlayerInputComponent->BindAction(TEXT("PrimaryWeapon"), IE_Pressed, this, &AShooterCharacter::OnSelectPrimary);
 	PlayerInputComponent->BindAction(TEXT("SecondaryWeapon"), IE_Pressed, this, &AShooterCharacter::OnSelectSecondary);
 	PlayerInputComponent->BindAction(TEXT("Knife"), IE_Pressed, this, &AShooterCharacter::OnSelectKnife);
 	PlayerInputComponent->BindAction(TEXT("Grenade"), IE_Pressed, this, &AShooterCharacter::OnSelectGrenade);
+	PlayerInputComponent->BindAction(TEXT("Bomb"), IE_Pressed, this, &AShooterCharacter::OnSelectBomb);
 	PlayerInputComponent->BindAction(TEXT("DropWeapon"), IE_Pressed, this, &AShooterCharacter::OnDropWeapon);
 	PlayerInputComponent->BindAction(TEXT("Use"), IE_Pressed, this, &AShooterCharacter::OnUsePressed);
 	PlayerInputComponent->BindAction(TEXT("Use"), IE_Released, this, &AShooterCharacter::OnUseReleased);
@@ -323,17 +326,34 @@ void AShooterCharacter::OnJumpPressed()
 	}
 }
 
+bool AShooterCharacter::IsCrouchToggle() const
+{
+	// The player's option (ps2-polish P4: a toggle by default); a pawn without a player's controller holds it.
+	const AShooterPlayerController* PlayerController = Cast<AShooterPlayerController>(GetController());
+	return PlayerController != nullptr && PlayerController->IsCrouchToggle();
+}
+
 void AShooterCharacter::OnCrouchPressed()
 {
-	if (IsAlive())
+	if (!IsAlive())
 	{
-		Crouch();
+		return;
 	}
+	// Toggled: a press stands a crouching pawn up (it stays down under a ceiling until there is room, as held).
+	if (IsCrouchToggle() && GetCharacterMovement().bWantsToCrouch)
+	{
+		UnCrouch();
+		return;
+	}
+	Crouch();
 }
 
 void AShooterCharacter::OnCrouchReleased()
 {
-	UnCrouch();
+	if (!IsCrouchToggle())
+	{
+		UnCrouch();
+	}
 }
 
 void AShooterCharacter::OnWalkPressed()
@@ -398,8 +418,22 @@ void AShooterCharacter::OnSelectGrenade()
 	}
 }
 
+void AShooterCharacter::OnSelectBomb()
+{
+	if (!IsBuyMenuOpen(GetController()))
+	{
+		(void)DrawBomb();
+	}
+}
+
 void AShooterCharacter::OnDropWeapon()
 {
+	// CS drops the C4 when it is drawn (it then draws the best weapon: SetCarriedBomb).
+	if (bBombDrawn)
+	{
+		(void)DropBomb();
+		return;
+	}
 	// CS drops the rifle or the pistol in hand; the knife and the grenades stay (plan P18's rule).
 	if (CurrentWeapon != nullptr && CurrentWeapon->CanBeDropped() && DropWeapon(CurrentWeapon))
 	{
@@ -413,6 +447,28 @@ void AShooterCharacter::StartWeaponFire()
 	{
 		CurrentWeapon->StartFire();
 	}
+}
+
+void AShooterCharacter::OnFirePressed()
+{
+	// CS: with the C4 drawn the primary fire plants it (held, as E); otherwise the weapon fires.
+	if (bBombDrawn)
+	{
+		bPlantingWithFire = StartUse();
+		return;
+	}
+	StartWeaponFire();
+}
+
+void AShooterCharacter::OnFireReleased()
+{
+	if (bPlantingWithFire)
+	{
+		bPlantingWithFire = false;
+		StopUse();
+		return;
+	}
+	StopWeaponFire();
 }
 
 void AShooterCharacter::StopWeaponFire()
@@ -575,6 +631,54 @@ void AShooterCharacter::OnPlantTimer()
 	// On the floor at the feet, a little ahead (CS puts it down in front of the planter).
 	const FVector Ahead = FRotator(0.0f, GetActorRotation().Yaw, 0.0f).Vector() * 30.0f;
 	Bomb->Plant(GetActorLocation() + Ahead, Site, this);
+}
+
+void AShooterCharacter::SetCarriedBomb(AShooterBomb* Bomb)
+{
+	CarriedBomb = Bomb;
+	if (Bomb == nullptr && bBombDrawn)
+	{
+		PutAwayBomb();
+		if (IsAlive())
+		{
+			EquipBestWeapon();
+		}
+	}
+}
+
+bool AShooterCharacter::DrawBomb()
+{
+	if (!IsAlive() || CarriedBomb == nullptr || bBombDrawn)
+	{
+		return false;
+	}
+	if (CurrentWeapon != nullptr)
+	{
+		CurrentWeapon->OnUnEquip();
+		CurrentWeapon = nullptr;
+	}
+	bBombDrawn = true;
+	Mesh1P->SetVisibility(false);
+	return true;
+}
+
+void AShooterCharacter::PutAwayBomb()
+{
+	if (bBombDrawn)
+	{
+		bBombDrawn = false;
+		Mesh1P->SetVisibility(true);
+	}
+}
+
+bool AShooterCharacter::DropBomb()
+{
+	if (!IsAlive() || CarriedBomb == nullptr || bIsPlanting)
+	{
+		return false;
+	}
+	CarriedBomb->Drop(GetDropLocation(CarriedBomb));
+	return true;
 }
 
 float AShooterCharacter::GetPlantEndTime() const
@@ -1325,9 +1429,32 @@ void AShooterCharacter::AddWeapon(AShooterWeapon* Weapon)
 	}
 	Inventory.Add(Weapon);
 	Weapon->OnEnterInventory(this);
-	if (CurrentWeapon == nullptr)
+	if (CurrentWeapon == nullptr && !bBombDrawn)
 	{
 		EquipWeapon(Weapon);
+	}
+}
+
+void AShooterCharacter::PickUpWeapon(AShooterWeapon* Weapon)
+{
+	if (Weapon == nullptr || !Weapon->IsDropped())
+	{
+		return;
+	}
+	AddWeapon(Weapon);
+	// CS's pickup sound: the weapon's draw, unless drawing it at once played it already.
+	if (Weapon != CurrentWeapon)
+	{
+		Weapon->PlayEquipSound();
+	}
+	NotifyPickup(Weapon->WeaponName);
+}
+
+void AShooterCharacter::NotifyPickup(const FString& ItemName) const
+{
+	if (AShooterPlayerController* PlayerController = Cast<AShooterPlayerController>(GetController()))
+	{
+		PlayerController->NotifyPickup(ItemName);
 	}
 }
 
@@ -1356,6 +1483,7 @@ void AShooterCharacter::EquipWeapon(AShooterWeapon* Weapon)
 	{
 		return;
 	}
+	PutAwayBomb();
 	if (CurrentWeapon != nullptr)
 	{
 		CurrentWeapon->OnUnEquip();
@@ -1406,7 +1534,7 @@ AShooterWeapon* AShooterCharacter::FindWeaponOfClass(const UClass* WeaponClass) 
 	return nullptr;
 }
 
-void AShooterCharacter::EquipBestWeapon()
+void AShooterCharacter::EquipBestWeapon(bool bWithGrenades)
 {
 	// A spent weapon is passed over (CS: an empty rifle gives way to the pistol); the bots call this every tick they
 	// engage, so an empty primary must not win the slot order.
@@ -1414,7 +1542,7 @@ void AShooterCharacter::EquipBestWeapon()
 	for (const EShooterWeaponSlot Slot : SlotsByPreference)
 	{
 		AShooterWeapon* Weapon = GetWeaponInSlot(Slot);
-		if (Weapon == nullptr)
+		if (Weapon == nullptr || (!bWithGrenades && Slot == EShooterWeaponSlot::Grenade))
 		{
 			continue;
 		}
@@ -1460,13 +1588,23 @@ bool AShooterCharacter::DropWeapon(AShooterWeapon* Weapon)
 	}
 	Inventory.Remove(Weapon);
 	Weapon->OnLeaveInventory();
+	Weapon->OnDropped(GetDropLocation(Weapon), GetActorRotation().Yaw);
+	return true;
+}
 
+FVector AShooterCharacter::GetDropLocation(const AActor* Dropped) const
+{
 	// Ahead of the feet, short of a wall, on the floor below (the Visibility channel ignores the pawns).
 	const FVector Feet = GetActorLocation();
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return Feet;
+	}
 	const FVector Knee = Feet + FVector(0.0f, 0.0f, ShooterCapsuleRadius);
 	const FVector Ahead = Knee + (FRotator(0.0f, GetActorRotation().Yaw, 0.0f).Vector() * DropDistance);
 	FCollisionQueryParams Params(FName(TEXT("DropWeapon")), false, this);
-	Params.AddIgnoredActor(Weapon);
+	Params.AddIgnoredActor(Dropped);
 	FHitResult Hit;
 	FVector Location = Ahead;
 	if (UGameplayStatics::LineTraceSingleByChannel(*World, Hit, Knee, Ahead, ECC_Visibility, Params))
@@ -1476,8 +1614,7 @@ bool AShooterCharacter::DropWeapon(AShooterWeapon* Weapon)
 	FHitResult Floor;
 	const bool bFloor = UGameplayStatics::LineTraceSingleByChannel(
 		*World, Floor, Location, Location - FVector(0.0f, 0.0f, DropFloorSearch), ECC_Visibility, Params);
-	Weapon->OnDropped(bFloor ? Floor.Location : Feet, GetActorRotation().Yaw);
-	return true;
+	return bFloor ? Floor.Location : Feet;
 }
 
 void AShooterCharacter::DestroyInventory()

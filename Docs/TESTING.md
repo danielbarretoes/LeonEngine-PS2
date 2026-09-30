@@ -9,8 +9,8 @@ What runs automatically and what a person still has to check by hand. Build and 
 | --- | --- | --- |
 | Every local gate ([ps2-shipping](PLANS/ps2-shipping.md) N1; the repository has no CI) | `Engine\Build\BatchFiles\RunGates.bat [-PS2] [-Measure]` | `RunGates OK`: Lint (G1, G4, /W4), RunTests, CheckReimport (G5, the engine and ShooterGame content), SmokeTest (G6), BotMatch (`10 7`, played twice) and ValidateAssets (engine and ShooterGame) each print `[ OK ]` (logs in `Engine\Saved\Gates\`); `-PS2` adds `Package.bat -NoWin64` (G3), `-Measure` `MeasurePS2.bat` (below) |
 | The PS2 frame in PCSX2 ([ps2-shipping](PLANS/ps2-shipping.md) N1, N9) | `Engine\Build\BatchFiles\MeasurePS2.bat [-Project Game\ShooterGame] [-Rounds 2] [-Seed 7] [-Seconds 120] [-NoBuild] [-TimeoutSeconds 900] [-Label <text>] [-Iso] [-PakOrder <order file>] [-LogFileOpenOrder] [-ExtraArgs <game arguments>]` (Docker and PCSX2, unattended; `-ExtraArgs -novu1` measures the EE's C++ emitter; the disc switches are [below](#ps2-disc-boot)) | `MeasurePS2 OK`: PCSX2 runs the staged ShooterGame without its window, from `Game\ShooterGame\Saved\PCSX2` (the user's `PCSX2.ini` with `Engine\Platforms\PS2\Build\PCSX2\Measure.ini` on top), a bot match watched through a bot's eyes (`-BotMatchSpectate -LogFrameTimes -ExitAfterSeconds`) until the game's `FrameStats Summary:` and `ProfileSummary:` lines (the cycle stats' top level scopes, N9); the figures go to `Saved\Profiling\PS2Frame.csv` (the `ProfileSummary:` pairs as `Profile_<key>` columns), and a [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md) row and the last `Profile over N frames (ms, calls):` block (the frame's scopes as a hierarchy) are printed. Three runs agree within 3 % |
-| Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` twice, the engine's (`LeonAutomationTests`, 575 at 0.24.0; `-nodisplay` skips the `NonNullRHI` tests, which need an OpenGL window) and ShooterGame's (`ShooterGameTests`, 99), between them `LeonHeaderTool -Test: 35 of 35 golden cases passed`, then `TestPAL: PASSED (171 test(s), 0 failed)` (TestPAL on Win64) |
-| GS emulator conformance ([ps2-gs-parity](PLANS/ps2-gs-parity.md) P4, [ps2-engine](PLANS/ps2-engine.md) E2, [ps2-shipping](PLANS/ps2-shipping.md) N8) | `LeonAutomationTests -automation=GSEmulator` (it needs an OpenGL window) | `System.Renderer.GSEmulator.Conformance`: the OpenGL GS emulator draws the 20 GS conformance scenes within 2 levels per channel of the reference rasterizer, but for at most 8 pixels a scene (today 3 in StripsAndSprites, pixel centres on a shallow side, and 3 in MipmapLod, a minified bilinear weight); `System.Renderer.GSEmulator.SceneFrame`: a frame of the GS scene renderer (textured, flat and translucent meshes, two lights, a floor through the near plane; the texture as the PS2 cook makes it, PSMT8 with its mips, trilinear, since ps2-shipping N13) within one 5-bit step of the reference, but for at most 64 pixels |
+| Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` twice, the engine's (`LeonAutomationTests`, 575 at 0.24.0, 588 at [ps2-polish](PLANS/ps2-polish.md) P5, 589 at P3, 595 at P8, 597 at P9, 603 at P5b on P9, 605 at 0.25.0; `-nodisplay` skips the `NonNullRHI` tests, which need an OpenGL window) and ShooterGame's (`ShooterGameTests`, 112 at P3b, 118 at P9, 125 at 0.25.0), between them `LeonHeaderTool -Test: 35 of 35 golden cases passed`, then `TestPAL: PASSED (171 test(s), 0 failed)` (TestPAL on Win64) |
+| GS emulator conformance ([ps2-gs-parity](PLANS/ps2-gs-parity.md) P4, [ps2-engine](PLANS/ps2-engine.md) E2, [ps2-shipping](PLANS/ps2-shipping.md) N8) | `LeonAutomationTests -automation=GSEmulator` (it needs an OpenGL window) | `System.Renderer.GSEmulator.Conformance`: the OpenGL GS emulator draws the 21 GS conformance scenes within 2 levels per channel of the reference rasterizer, but for at most 8 pixels a scene (today 3 in StripsAndSprites, pixel centres on a shallow side, and 3 in MipmapLod, a minified bilinear weight); `System.Renderer.GSEmulator.SceneFrame`: a frame of the GS scene renderer (textured, flat and translucent meshes, two lights, a floor through the near plane; the texture as the PS2 cook makes it, PSMT8 with its mips, trilinear, since ps2-shipping N13) within one 5-bit step of the reference, but for at most 64 pixels |
 | LeonHeaderTool golden tests (run by `RunTests.bat` too) | `Engine\Intermediate\Build\HostTools\Win64\LeonHeaderTool.exe -Test` | `LeonHeaderTool -Test: 35 of 35 golden cases passed` |
 | Core, CoreUObject, Json, Projects and PakFile on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (N test(s), 0 failed)` in the EE log: 157 at [ps2-shipping](PLANS/ps2-shipping.md) N15, against 164 on Win64 then (the platform-file, config-cache, log-file, SaveConfig and package-file tests are desktop-only); not run again on the EE since N24's tests (171 on Win64 at 0.24.0). N15's `System.Core.Math.VectorMathVU0` compares VU0 with the scalar reference there: at most 2 units in the last place of the products' magnitudes |
 | VU1's microprograms against the C++ emitter on PS2 ([ps2-shipping](PLANS/ps2-shipping.md) N14, N14b, N29, D2) | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program VU1Conformance -Build` (or the capture of a PCSX2 run) | `VU1Conformance: PASSED (84 batch(es), 0 failed)` in the EE log, after the line with the largest differences (XY 0, Z 5, RGBA 1, STQ 4 ulp, F 0; N15's two fogged draws, N14b's skinned batches: 1 to 24 bones turned, scaled and moved, unlit, lit and textured, mirrored and fogged; N29's lit draws with one and two point lights, static and skinned; the tolerances are XY 1, Z 8, RGBA 1, STQ 8 ulp, F 1); the screen shows the batches twice, VU1's (left) as the emitter's (right). Play!'s leonrun is not built on this host: PCSX2 is where it runs |
@@ -21,7 +21,7 @@ What runs automatically and what a person still has to check by hand. Build and 
 | ShooterGame on PS2 ([ps2-engine](PLANS/ps2-engine.md) E2 to E4) | `Engine\Build\BatchFiles\BuildCookRun.bat -project=Game\ShooterGame\ShooterGame.lproj -platform=PS2 -build -cook -stage -pak -run "-addcmdline=-LogFrameTimes"` (Docker and PCSX2 with its host filesystem) | de_leon draws with the player, the bots, the tracers and the HUD; the DualShock plays it (the buy menu too); the EE log's `Frame times over ...` lines stay at 33.4 ms average (30 fps) |
 | Reproducible reimport (G5; on a clean checkout) | `Engine\Build\BatchFiles\CheckReimport.bat [<Project>.lproj ...]` | `CheckReimport OK`: `LeonCook -run=ImportAssets -reimport -all` leaves `Engine/Content` and `Game/*/Content` unchanged, the imported maps included (`git diff --exit-code`, no new file) |
 | ShooterGame smoke (G6) | `Engine\Build\BatchFiles\SmokeTest.bat` | `SmokeTest OK: 10 pawns, CT 5, T 5, exit code 0`: ShooterGame boots de_leon headless, `bot_fill` adds nine bots to the local player, and the game mode's end-of-match line counts ten pawns in their teams |
-| ShooterGame bot match (P21) | `Engine\Build\BatchFiles\BotMatch.bat [Rounds] [Seed]` (10, 7) | `BotMatch OK: 10 round(s), seed 7, exit code 0, replayed identically` (the game's line at 0.24.0: `Botmatch OK: 9 round(s), CT 3 - T 6, 55 kill(s), seed 7, sides switched after round 5`; the match ends at the majority): ten bots play de_leon headless and unpaced at the fixed 30 Hz step ([ps2-shipping](PLANS/ps2-shipping.md) D4: a run paced to the clock or drawn in a window plays the same match) (`ShooterGame -nullrhi -benchmark -botmatch -rounds=10 -seed=7`), `FShooterMatchChecker` finds no broken invariant, and a second run logs the same `Botmatch OK` line ([ShooterGame README — Bot match](../Game/ShooterGame/README.md#bot-match)) |
+| ShooterGame bot match (P21) | `Engine\Build\BatchFiles\BotMatch.bat [Rounds] [Seed]` (10, 7) | `BotMatch OK: 10 round(s), seed 7, exit code 0, replayed identically` (the game's line at 0.24.0: `Botmatch OK: 9 round(s), CT 3 - T 6, 55 kill(s), seed 7, sides switched after round 5`, at 0.25.0: `Botmatch OK: 8 round(s), CT 2 - T 6, 57 kill(s), seed 7, sides switched after round 5`; the match ends at the majority): ten bots play de_leon headless and unpaced at the fixed 30 Hz step ([ps2-shipping](PLANS/ps2-shipping.md) D4: a run paced to the clock or drawn in a window plays the same match) (`ShooterGame -nullrhi -benchmark -botmatch -rounds=10 -seed=7`), `FShooterMatchChecker` finds no broken invariant, and a second run logs the same `Botmatch OK` line ([ShooterGame README — Bot match](../Game/ShooterGame/README.md#bot-match)) |
 | Content loads | `Engine\Binaries\Win64\LeonCook.exe -run=ValidateAssets` | `ValidateAssets: N packages, N valid, 0 problem(s)` |
 | Frame capture | `LeonGame.exe [<map>] "-Screenshot=<file.bmp>" "-ExitAfterFrames=N"` | the BMP matches a reference capture byte for byte; a capture is unattended (`FApp::IsUnattended`) and ignores the mouse and the keyboard, so moving the mouse during it changes nothing |
 | Staged build (Win64) | `BuildCookRun.bat -project=<.lproj> -platform=Win64 -build -cook -stage -pak -run "-addcmdline=-Screenshot=<file.bmp> -ExitAfterFrames=30"` | the staged Shipping game's capture matches the Development build's byte for byte; two `-cook -stage -pak` runs give the same `.lpak` (SHA-256); it also runs in Development, headless (`-nullrhi -ExitAfterFrames=60`, exit code 0), for a content-only project and for ShooterGame (`-ExecCmds=bot_fill`), and in Shipping for ShooterGame playing three rounds of a bot match (`-nullrhi -benchmark -botmatch -rounds=3 -seed=7`, exit code 0) |
@@ -137,17 +137,35 @@ and standing up only with room under a ceiling, the `GetMaxSpeed` hook, the pawn
 following the control rotation and the mouse sensitivity. The default (instant) model keeps every golden table as it
 was.
 
-ShooterGame's tests (`ShooterGame.*`, 99 now, in `ShooterGameTests.exe` with the project's config) cover, since P17, the
+ShooterGame's tests (`ShooterGame.*`, 118 now, in `ShooterGameTests.exe` with the project's config) cover, since P17, the
 team choice, ten bots on ten team starts and a sixth refused, a pawn standing on its start, `bot_fill`, the character's
 CS movement (UE's model, the run and walk speeds, crouching, the capsule, the first-person camera), the crosshair the
 HUD draws, the project's input and channel config, and the map: `ShooterGame.Map.DeLeonHoldsTheGame` loads
 `/Game/Maps/de_leon` and checks its sites, buy zones, team starts, waypoint links, player clip, ladders and sun; `RequiredTags`
 imports `de_leon.glb` under the project's rules and refuses the AxisTest source; `TenPawnsOnDeLeon` opens the map in a
-headless `UGameEngine`, adds nine bots and ticks 60 frames: ten pawns standing on distinct starts, on the ground.
+headless `UGameEngine` with `?team=CT` (the nine bots join around the player) and ticks 60 frames: ten pawns standing
+on distinct starts, on the ground. The menus ([ps2-polish](PLANS/ps2-polish.md) P9, `ShooterGame.Menu.*`):
+`MatchOptions` (the menu's choices as URL options and what `InitGame` makes of them: the bots, the difficulty,
+`MaxRounds = 2 N - 1` and the halftime for 3, 5, 8 and 16 rounds to win), `DifficultyPresets` (a bot added at each
+difficulty takes its preset, harder reacting sooner, aiming better, turning faster, remembering longer; Normal the class's
+old skill), `BotSplit` (the bots shared out around the humans for a dozen totals and teams), `TeamChoiceAndChange` (no
+bot before the choice, 4 CT and 5 T around a CT player, the change to T killing the player during the live round and
+taking effect at the next one, a bot moving to CT, spectating), `PauseMenu` (Start pauses: the world's time, the round's
+clock and the pawns stop while the menu ticks and navigates with the pad; Change team and Back; Escape resumes) and
+`MainMenuToMatchAndBack` (the MainMenu map's game mode and menu, its choices travelling to de_leon as URL options, the
+team menu there, Quit to main menu). The engine's `System.Engine.World.Pause` and `System.Engine.Travel.OpenLevel` test
+UE's pause (only `bTickEvenWhenPaused` ticks, the timers wait) and `UGameplayStatics::OpenLevel` with the input modes.
 `ShooterGame.Input.Pad` and `ShooterGame.Input.BuyMenuTakesItsKeys` (E4) drive a player with the PS2 pad's keys: the
 right stick turns at `BaseTurnRate`, the left one walks, the shoulders draw the slots, and the buy menu takes the
 D-pad, Cross, Circle and the number keys only while it is open (closed, 1 draws the rifle); `System.Engine.Viewport.Gamepad`
-feeds a fake pad through the viewport client. The fixes of [ps2-shipping](PLANS/ps2-shipping.md) N6 have one test
+feeds a fake pad through the viewport client. [ps2-polish](PLANS/ps2-polish.md) P4 adds
+`ShooterGame.Input.CrouchToggleAndHold` (a tap of Left Ctrl or Circle crouches and the next stands up, the option off
+holds it, a new round stands up), `.DropAndPickUpWeapon` (G drops the rifle, walking over it takes it back with its
+clip, reserve and silencer, the HUD's `Picked up m4a1` for its two seconds, a full slot leaves a weapon) and
+`.DropAndPickUpBomb` (5 and the D-pad's down draw the C4, a weapon's key puts it away, G drops it ahead, its dropper
+takes it back only after its delay, `Picked up C4`, a dead carrier drops it and its rifle);
+`ShooterGame.Settings.RoundTrip` saves the crouch option and `ShooterGame.Config.InputAndChannels` checks the crouch,
+bomb and drop keys. The fixes of [ps2-shipping](PLANS/ps2-shipping.md) N6 have one test
 each: `ShooterGame.Weapons.BestWeaponSkipsEmpty`, `ShooterGame.Bomb.ExplosionRadius`,
 `ShooterGame.Bomb.ExplosionRespectsArmor`, `ShooterGame.Bots.RecoilKicksTheAim`, `ShooterGame.Buy.MenuFollowsTheRules`
 and `ShooterGame.Buy.BuyTimeAfterTheFreeze`. N30d's halftime, spectating and HUD have theirs:
@@ -155,11 +173,17 @@ and `ShooterGame.Buy.BuyTimeAfterTheFreeze`. N30d's halftime, spectating and HUD
 halftime), `.MatchEndsAtTheMajority`, `ShooterGame.Spectate.DeathCamThenTeammates` (the death cam's aim and length,
 then a teammate, then the free look), `.CyclingSkipsTheDead` (the spectator's keys), `ShooterGame.HUD.Radar` (the
 projection, the primitives of a 5v5 frame, no allocation) and `.DamageIndicator` (the arc's direction and its end).
+[ps2-polish](PLANS/ps2-polish.md) P6's HUD (`ShooterHUDTests.cpp`): `ShooterGame.HUD.IconAtlas` (the atlas and the
+HUD's icon table agree), `.DisplayNames`, `.KillFeedIcons` (the icons drawn at their texels), `.Scoreboard` (the
+`UTableView`s' content, order, DEAD / BOMB / BOT and the highlight, for a CT and a T viewer), `.BuyMenuTable`,
+`.FrameStats` (the readout under the radar and its option) and
+`ShooterGame.Input.FirePlantsTheBomb`; the engine's `System.Engine.Canvas.TrianglesAndIcons` (an icon's texels, a
+triangle item's corners and colours, drawn in the tiles' order).
 N30c's CS movement is `ShooterGame.Movement.*` (`ShooterMovementTests.cpp`, at the fixed 30 Hz step): `FallDamage`
 (the thresholds with N30e's multiplayer 1.25, lethal at 935 u/s, and drops of 3, 9 and 16 m: unhurt, hurt by the
 landing speed's damage without armor or tagging, dead by the world in the kill feed), `Ladder` (grabbing a tagged volume, climbing at 508 cm/s and faster looking up, hanging
-without gravity, climbing down looking down, the jump off at 686 cm/s, climbing over the top onto the roof, a bot
-walking through it), `JumpStamina` (the ratio, the landing's speed step by step against the formula, full speed again
+without gravity, climbing down looking down, the jump off at 686 cm/s, climbing over the top onto the roof, the face
+toward the climber), `JumpStamina` (the ratio, the landing's speed step by step against the formula, full speed again
 when the stamina runs out), `Tagging` (half the speed at a shot, three quarters half a second later, recovered after a
 second; the world's damage does not tag) and `Footsteps` (the locomotion's notifies heard by an enemy bot while
 running, silent walking, crouching and standing). N30a's CS arsenal (`ShooterArsenalTests.cpp`):
@@ -198,14 +222,19 @@ imports a map with the auto-linking; `System.AIModule.Blackboard.TypedKeys` and 
 in a cone behind a line of sight, hearing within the loudness' range) test the AI's pieces. ShooterGame's
 `ShooterGame.Bots.*` (10, `ShooterBotTests.cpp`) test the bots on a small open map (buying, engaging with the reaction
 time respected, the carrier planting, a CT defusing, the terrorists escorting the carrier, an outnumbering team hunting,
-a CT rotating between the sites), the agent read from the config (`AgentFromConfig`), and play three rounds of de_leon
+a CT rotating between the sites; [ps2-polish](PLANS/ps2-polish.md) P3's four in `ShooterBotBehaviorTests.cpp`: the
+knife's rush and stab in the back, a spent pistol swapped for one on the floor, the lookouts watched and walked the same
+way with the same seed, a ladder climbed up and down; P3b's three: the terrorists holding near the planted bomb, one
+coming for a defuser it heard, the counter-terrorists gathering before the retake), the agent read from the config (`AgentFromConfig`), and play three rounds of de_leon
 headless with ten bots and `?seed=5` under `FShooterMatchChecker` (each round ends with a reason, the scores add up, the
 money stays within [0, 16000], no pawn falls through the floor) and kills happen; `MatchCheckerFlagsViolations` shows
 the checker catches a score the rules did not give. The bot match (P21, `BotMatch.bat`) runs the same checker over ten
 rounds and plays them twice: a seed must replay the same match, which caught a read of a freed path in `AAIController`'s
 repath (the bots then diverged between runs; valgrind reports no error since the fix).
 `System.AIModule.Gameplay.AIControllerPathFollowReadsWaypointFlags` checks that a controller jumps at a `Jump` waypoint
-and crouches along a `Crouch` one. The round and weapon tests keep the bots still (`bot_stop`, or a controller that does
+and crouches along a `Crouch` one; `System.AIModule.Gameplay.NavigationAutoLinkLadders` (ps2-polish P3) that a
+ladder's foot and top flagged `Ladder` are linked both ways across the climb, a path to the roof goes up it and the
+follower does not jump at it. The round and weapon tests keep the bots still (`bot_stop`, or a controller that does
 not tick) so they test the rules alone.
 
 The golden tests (`System.Engine.Golden.*`) replay movement, traces, cameras, shadows
@@ -218,8 +247,8 @@ reads the Starter's meshes, light and camera framing from `/Engine/Maps/Template
 `LeonGame.exe -ExitAfterFrames=300` should log `RequestEngineExit: ExitAfterFrames`, the `LogGarbage` lines of the
 level load and of the exit (the world teardown in `PreExit`, which also frees the level's assets, then the
 engine itself) and no errors; it exits with code 0. The same holds headless (`-nullrhi`). ShooterGame's captures
-use its view commands: `ShooterGame.exe "-ExecCmds=bot_fill;ViewFrom 0 0 5600 -89 0" "-Screenshot=<file.bmp>"
-"-ExitAfterFrames=30"` shows the whole of de_leon from above (north up) with the teams on their spawns. `-AxesGizmo` turns
+use its view commands in a match (the URL skips the main menu): `ShooterGame.exe /Game/Maps/de_leon?team=CT
+"-ExecCmds=bot_fill;ViewFrom 0 0 5600 -89 0" "-Screenshot=<file.bmp>" "-ExitAfterFrames=30"` shows the whole of de_leon from above (north up) with the teams on their spawns. `-AxesGizmo` turns
 the axes gizmo on from the start (see below); captures without it do not change.
 
 The asynchronous IO, the saves and the pad ([ps2-shipping](PLANS/ps2-shipping.md) N24):
@@ -324,7 +353,7 @@ never been run.
 Gate G8 ([ps2-gs-parity](PLANS/ps2-gs-parity.md) P7): the desktop draws what the PS2 draws. `RunTests.bat` runs it
 with the engine's tests (a window is needed: `-nodisplay` skips it):
 
-- `System.Renderer.GSEmulator.Conformance`: the OpenGL GS emulator against the reference rasterizer on the 20 GS
+- `System.Renderer.GSEmulator.Conformance`: the OpenGL GS emulator against the reference rasterizer on the 21 GS
   conformance scenes (`GSConformance::GetScenes`), within 2 levels per channel but for 8 pixels a scene. Since
   [ps2-shipping](PLANS/ps2-shipping.md) N8 they cover every feature `FGSCommandList::IsSupported` accepts: MipmapLod
   (the LOD from Q and K, the MIPMAP filters), AlphaTest (8 methods, 4 AFAIL), Fog, TexAAndFunctions (TEXA, TCC and
@@ -333,7 +362,13 @@ with the engine's tests (a window is needed: `-nodisplay` skips it):
   PabeFbaDate (PABE, FBA, DATE, FBMSK bit by bit), Dither16Blend (a blend dithered against the 16-bit destination)
   and ClutLoads (CLD 0 to 5), each with its `System.GSReference.*` test of the manual's values; since N13
   ClutAndFormats also draws PSMT8 / PSMT4 MIPMAP levels through one CLUT, trilinear, loaded by CLD 2 to 4 as the
-  scene renderer's texture cache loads it;
+  scene renderer's texture cache loads it; since [ps2-polish](PLANS/ps2-polish.md) P5 TexturedCanvas draws the
+  canvas's textured draws (a PSMT4 texture whose CLUT carries an alpha ramp, MODULATE and blended: UV sprites at
+  half-pixel positions, nearest one to one, turned in V and scaled bilinear, and a rotated quad of UV triangles);
+- `System.Renderer.GSEmulator.CanvasFrame` ([ps2-polish](PLANS/ps2-polish.md) P5): the canvas's text in the four
+  engine fonts (Spanish, a shadow, an outline) and its textured, scaled and rotated tiles, emulated and referenced
+  from the same list, within one 5-bit step but for 64 pixels; `System.Renderer.GS.Canvas.Text` draws it with the
+  reference alone (the glyphs where their metrics put them, the frame's CRC as verified);
 - `System.Renderer.GSEmulator.SceneFrame`: a frame of the GS scene renderer (its texture PSMT8 with mips since N13),
   within one 5-bit step but for 64 pixels (20 today);
 - `System.Renderer.GS.*`: the scene renderer's lists drawn by the reference (the emitter, the texture cache with the
@@ -372,8 +407,8 @@ The PS2 side is manual (PCSX2 needs a BIOS): the same scenes captured on the con
 1. `Package.bat` (or `Engine\Build\BatchFiles\Build.bat GSConformance PS2 Development`).
 2. Boot `Engine\Packages\PS2\GSConformance\GSConformance.elf` in PCSX2 (`pcsx2-qt -fastboot -elf <file>`), with the
    software renderer (Settings > Graphics > Renderer: Software) for a faithful GS.
-3. Take a screenshot (F8, `snaps\` in PCSX2's folder) and compare it with the reference's scenes: twenty cells in a
-   4 x 5 grid, each with its name. A difference is a bug in the reference, the emulator or the PS2 backend; report it with
+3. Take a screenshot (F8, `snaps\` in PCSX2's folder) and compare it with the reference's scenes: twenty-one cells in a
+   4 x 6 grid, each with its name. A difference is a bug in the reference, the emulator or the PS2 backend; report it with
    the cell's name.
 4. Keep the screenshot in `Engine/Platforms/PS2/Documentation/Captures/GSConformance.png` as the fixture the next
    captures are compared with.

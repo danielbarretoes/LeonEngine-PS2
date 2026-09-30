@@ -14,8 +14,10 @@ class UStaticMeshComponent;
  * Counter-Strike's C4 (the bomb of a defusal map). One per round: the game mode gives it to a terrorist at the round's
  * start (AShooterGameMode::StartRound).
  *
- * - Carried: it goes where its carrier goes, hidden. The carrier drops it when it dies.
- * - Dropped: it lies on the floor; the first live terrorist within PickupRadius takes it.
+ * - Carried: it goes where its carrier goes, hidden. The carrier drops it when it dies, or with the drop key while it
+ *   is drawn (AShooterCharacter::DropBomb, CS's C4 in slot 5).
+ * - Dropped: it lies on the floor; the first live terrorist within PickupRadius takes it (the one who dropped it only
+ *   after PickupDelay), and its player reads "Picked up C4".
  * - Planted: the carrier plants it by holding the use key, standing still in a bomb site, for PlantDuration
  *   (AShooterCharacter). It beeps, faster as its BombTimer runs out, and explodes: ExplosionDamage falling to nothing
  *   at ExplosionRadius, through walls (CS), armor taking its share (ArmorRatio), and the terrorists win the round.
@@ -73,6 +75,17 @@ public:
 
 	UPROPERTY(Config)
 	float DefuseRadius = 120.0f;
+
+	/**
+	 * How loud a defuse's start is to the bots (AActor::MakeNoise at the bomb; CS's c4_disarm is heard across the site;
+	 * ps2-polish P3b): the terrorists holding the bomb come for the defuser.
+	 */
+	UPROPERTY(Config)
+	float DefuseNoiseLoudness = 1.0f;
+
+	/** Seconds after a drop before the terrorist who dropped it can take it back (a weapon's PickupDelay). */
+	UPROPERTY(Config)
+	float PickupDelay = 1.0f;
 
 	/** The bomb's mesh (/Game/Weapons/SM_C4) and sounds. */
 	UPROPERTY(Config)
@@ -164,6 +177,12 @@ private:
 
 	UPROPERTY(Transient)
 	AShooterCharacter* Defuser = nullptr;
+
+	/** Who dropped it last, and the world time from which it may take it back (PickupDelay). */
+	UPROPERTY(Transient)
+	AShooterCharacter* Dropper = nullptr;
+
+	float DropperPickupTime = 0.0f;
 
 	UPROPERTY(Transient)
 	USoundWave* BeepSound = nullptr;

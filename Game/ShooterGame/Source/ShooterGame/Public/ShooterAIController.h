@@ -8,11 +8,14 @@
 #include "UObject/WeakObjectPtrTemplates.h"
 #include "ShooterAIController.generated.h"
 
+class AShooterBomb;
 class AShooterCharacter;
 class AShooterGameMode;
 class AShooterWeapon;
+class AShooterWeapon_Knife;
 class AShooterWeapon_Projectile;
 class UShooterPawnSensingComponent;
+struct FShooterLookout;
 struct FShooterRadioEntry;
 
 /**
@@ -38,20 +41,43 @@ struct FShooterRadioEntry;
  *    between MinGrenadeDistance and MaxGrenadeDistance away (or reported by a teammate) gets the HE (else a flashbang,
  *    else the smoke), again by a draw a spot. The aim point is off by up to GrenadeThrowError, the pitch the throw's
  * low arc; a throw that would hit a wall at the bot's nose waits.
- * 3. An enemy in sight: engage (Engage). Turn to it at AimTurnRate, and fire once ReactionTime has passed since it came
- *    into sight: the aim is off by an error that starts at AimError and shrinks with the time on target
- *    (AimErrorDecayTime), drawn again for each burst; automatic weapons fire bursts of BurstShots with BurstPause
- *    between; the AWP zooms first. It moves as CS's bots do: it strafes left and right (StrafeMinTime to StrafeMaxTime
- *    each way, from its stream), crouches with a rifle at CrouchFireDistance or farther, and stands still with the AWP.
- *    An enemy out of sight for EnemyMemory seconds is forgotten (its last place is searched). The weapon's recoil kicks
- *    the aim as it kicks a player's: the bot turns its own aim to the target and the kick rides on top, the bot pulling
+ * 3. An enemy in sight: engage (Engage) with the best weapon that has ammunition (never a grenade: the throws are
+ *    the bot's own). Turn to it at AimTurnRate, and fire once ReactionTime has passed since it came into sight: the aim
+ *    is off by an error that starts at AimError and shrinks with the time on target (AimErrorDecayTime), drawn again
+ *    for each burst; automatic weapons fire bursts of BurstShots with BurstPause between; the AWP zooms first. It moves
+ *    as CS's bots do: it strafes left and right (StrafeMinTime to StrafeMaxTime each way, from its stream), crouches
+ *    with a rifle at CrouchFireDistance or farther, and stands still with the AWP. With the knife it rushes (ps2-polish
+ *    P3): it runs the path to the enemy (a new one as the enemy moves), closes in by the side once within the slash's
+ *    reach, and cuts only within reach: a stab in the back when the enemy turns it, a slash otherwise. An enemy out of
+ *    sight for EnemyMemory seconds is forgotten (its last place is searched). The weapon's recoil kicks the aim as it
+ *    kicks a player's: the bot turns its own aim to the target and the kick rides on top, the bot pulling
  *    RecoilCompensation of each new kick back down.
- * 4. A counter-terrorist and the bomb planted: go to it and defuse (hold the use key).
+ * 4. A counter-terrorist and the bomb planted: the retake (ps2-polish P3b). Gather at a staging point toward the CT
+ *    spawn (RetakeStagingDistance) until a teammate is there or RetakeWaitTime passes, go in, and defuse (hold the use
+ *    key) once no enemy was seen for SiteClearTime, or at once when the time is short. Outnumbered by
+ *    RetakeGiveUpAdvantage or too late to defuse, it gives the retake up ("Team, fall back!") and saves itself at its
+ *    spawn (the objective).
  * 5. The bomb's carrier: go to the round's site (AShooterGameMode::GetTerroristTargetSite) and plant once inside.
  * 6. A terrorist and the bomb dropped: fetch it.
- * 7. A shot heard (an enemy's), or a teammate's report: go and look where it came from.
- * 8. The objective: the terrorists go to the round's site (and guard the bomb once planted); the counter-terrorists
- *    hold a site each (A for the even ones, B for the odd, by their place in the team), and retake the planted bomb.
+ * 7. A weapon on the floor worth the walk (PickUp): out of ammunition, the nearest dropped weapon with ammunition it
+ *    may take within twice PickupSearchDistance; without a loaded primary, the nearest primary within
+ *    PickupSearchDistance. Its spent weapon is dropped for it (AShooterWeapon::CanBePickedUpBy).
+ * 8. A terrorist without the bomb while the carrier pushes (still SupportDistance or farther from the site): escort
+ *    it, watching to one side of its way.
+ * 9. A shot heard (an enemy's), or a teammate's report: go and look where it came from.
+ * 10. Hunt: outnumbering the enemy by HuntAdvantage, or a terrorist with HuntTimeLeft left and no bomb planted: to the
+ *    enemy's spawn, then from waypoint to waypoint of the map (drawn from the stream) until contact.
+ * 11. The objective (ps2-polish P3, CS's bots with no enemy in sight): the counter-terrorists hold a site each (A for
+ *    the even ones, B for the odd, by their place in the team) and the terrorists take the round's site (its support
+ *    spots once the carrier is there; the planted bomb's site to guard it: HoldPlantedBomb, P3b). Either moves between
+ * the site's lookouts (AShooterGameMode::GetBombSiteLookouts), LookoutMinTime to LookoutMaxTime at each, turning
+ * between the lookout's watched directions (the ways in) every WatchMinTime to WatchMaxTime. A counter-terrorist that
+ * held its site RotateTime with no contact rotates to the next one, and one that hears a teammate's enemy at another
+ * site goes there with RotateOnReportChance.
+ *
+ * On the move with nobody to aim at, a bot looks along its path (LookTurnRate). Ladders (ps2-polish P3): the waypoint
+ * graph links a ladder's foot and top, and on a ladder the bot faces it and climbs up (the path's point above) or
+ * down (looking down), and jumps off it at the bottom.
  *
  * The radio (ps2-shipping N30e; AShooterGameMode::SendRadioMessage): a bot says "Enemy spotted." with the enemy's
  * place when it sees a new one, "Need backup." once a round when its health falls below NeedBackupHealth, "Sector
@@ -61,8 +87,10 @@ struct FShooterRadioEntry;
  * else to look at and holds no site, and the bot nearest a request answers it ("Affirmative.", "Reporting in.") and,
  * for "Need backup." or "Taking fire", goes there.
  *
- * Difficulty (config, [/Script/ShooterGame.ShooterAIController]): Difficulty scales the reaction time and the aim
- * error down and the turn rate up (1: the values as set). Every random choice (the aim error, the AWP, the strafes,
+ * Difficulty (ps2-polish P9; CS's bot_difficulty and bot profiles): the game mode gives each new bot the preset of the
+ * match's difficulty (ApplyDifficulty; DifficultyPresets in the config, one for Easy, Normal, Hard and Expert): its
+ * reaction time, aim error, turn rate, recoil control and memory. A bot made without the game mode keeps the class's
+ * values, Normal's. Every random choice (the aim error, the AWP, the strafes,
  * the grenades, the blind fire) comes from the bot's stream, seeded from the game mode's RandomSeed and the bot's
  * index (the order the game mode created the bots in: SetBotIndex), so a match with a seed replays, and a bot's name
  * (CS's team-neutral BotProfile names, AShooterGameMode::BotNames) never changes it.
@@ -87,34 +115,55 @@ public:
 	static const FName ShouldHuntKey;
 	static const FName IsBlindKey;
 	static const FName IsThrowingKey;
+	static const FName ShouldPickUpKey;
 
-	/** Scales the skill (see the class comment): 0.5 easy, 1 normal, 2 hard. */
+	/**
+	 * The skill of each difficulty (see the class comment; DefaultGame.ini's `+DifficultyPresets`): ApplyDifficulty
+	 * copies the preset into the values below.
+	 */
 	UPROPERTY(Config)
-	float Difficulty = 1.0f;
+	TArray<FShooterBotSkill> DifficultyPresets;
+
+	/**
+	 * Takes the skill of InDifficulty's preset (the game mode, when it adds the bot); a difficulty without a preset
+	 * leaves the bot as it is (a warning). False then.
+	 */
+	bool ApplyDifficulty(EShooterBotDifficulty InDifficulty);
+	/** The difficulty the bot took (Normal until ApplyDifficulty). */
+	[[nodiscard]] EShooterBotDifficulty GetDifficulty() const
+	{
+		return Difficulty;
+	}
+
+	// The skill (the difficulty's preset: FShooterBotSkill; Normal's values until a preset is applied)
 
 	/** Seconds from an enemy coming into sight to the first shot. */
-	UPROPERTY(Config)
+	UPROPERTY()
 	float ReactionTime = 0.35f;
 
 	/** The aim's error on a new target, degrees, and how fast it settles (seconds for 1/e) down to MinAimError. */
-	UPROPERTY(Config)
+	UPROPERTY()
 	float AimError = 5.0f;
 
-	UPROPERTY(Config)
+	UPROPERTY()
 	float AimErrorDecayTime = 0.8f;
 
-	UPROPERTY(Config)
+	UPROPERTY()
 	float MinAimError = 0.4f;
 
-	/** How fast the bot turns to its aim, degrees a second. */
+	/** How far the bot sees an enemy, cm (its senses' SightRadius). */
 	UPROPERTY(Config)
+	float SightRadius = 3500.0f;
+
+	/** How fast the bot turns to its aim, degrees a second. */
+	UPROPERTY()
 	float AimTurnRate = 360.0f;
 
 	/**
 	 * The part of each recoil kick the bot pulls back down as it fires, 0 (the kick climbs as it does for a player who
-	 * does not pull down) to 1 (none shows: a laser), at Difficulty 1; the difficulty scales it (at most 1).
+	 * does not pull down) to 1 (none shows: a laser).
 	 */
-	UPROPERTY(Config)
+	UPROPERTY()
 	float RecoilCompensation = 0.5f;
 
 	/** Shots a burst of an automatic weapon, and the pause after it, seconds. */
@@ -125,7 +174,7 @@ public:
 	float BurstPause = 0.35f;
 
 	/** Seconds an enemy out of sight is remembered. */
-	UPROPERTY(Config)
+	UPROPERTY()
 	float EnemyMemory = 1.5f;
 
 	/** The chance to buy the AWP when it can be afforded with armor. */
@@ -147,6 +196,77 @@ public:
 	/** The living players a team needs over the enemy's to hunt them (no bomb planted); 0 never hunts. */
 	UPROPERTY(Config)
 	int32 HuntAdvantage = 2;
+
+	/** The round's seconds left below which a terrorist with no bomb planted hunts; 0 never. */
+	UPROPERTY(Config)
+	float HuntTimeLeft = 30.0f;
+
+	// No enemy in sight (ps2-polish P3)
+
+	/** Seconds at a lookout before the next one of the site, drawn between these. */
+	UPROPERTY(Config)
+	float LookoutMinTime = 3.0f;
+
+	UPROPERTY(Config)
+	float LookoutMaxTime = 7.0f;
+
+	/** Seconds watching one direction of a lookout before turning to the next, drawn between these. */
+	UPROPERTY(Config)
+	float WatchMinTime = 1.0f;
+
+	UPROPERTY(Config)
+	float WatchMaxTime = 2.5f;
+
+	/** How fast the bot turns to look (along its path, a lookout's directions), degrees a second. */
+	UPROPERTY(Config)
+	float LookTurnRate = 240.0f;
+
+	/** How near its site the carrier must be for its escorts to take the site's support spots, cm. */
+	UPROPERTY(Config)
+	float SupportDistance = 1500.0f;
+
+	/** A teammate's enemy this near a site is at that site (a counter-terrorist may rotate there), cm. */
+	UPROPERTY(Config)
+	float SiteReportRadius = 1500.0f;
+
+	/** The chance a counter-terrorist holding a site rotates to another site where a teammate saw an enemy. */
+	UPROPERTY(Config)
+	float RotateOnReportChance = 1.0f;
+
+	/** How far a bot without a loaded primary goes for one on the floor, cm (out of ammunition: twice, any weapon). */
+	UPROPERTY(Config)
+	float PickupSearchDistance = 1500.0f;
+
+	// The planted bomb (ps2-polish P3b)
+
+	/**
+	 * The terrorists hold the planted bomb from the lookouts this near it (else from the bomb), and look after nothing
+	 * heard or reported farther from it, cm.
+	 */
+	UPROPERTY(Config)
+	float PostPlantHoldRadius = 1000.0f;
+
+	/** The counter-terrorists' retake: they gather this far from the bomb, toward their spawn, before going in, cm. */
+	UPROPERTY(Config)
+	float RetakeStagingDistance = 1500.0f;
+
+	/** How near the staging point a teammate counts as gathered, cm, and the longest wait for one there, s. */
+	UPROPERTY(Config)
+	float RetakeGroupRadius = 500.0f;
+
+	UPROPERTY(Config)
+	float RetakeWaitTime = 8.0f;
+
+	/**
+	 * A counter-terrorist gives the retake up and saves itself (CS's bots) when the terrorists alive outnumber its
+	 * team by this many, or when it cannot reach and defuse the bomb in the time left; 0 never for the numbers.
+	 */
+	UPROPERTY(Config)
+	int32 RetakeGiveUpAdvantage = 2;
+
+	/** A defuse starts once no enemy was seen for this long (the site clear), s, unless the time runs out. */
+	UPROPERTY(Config)
+	float SiteClearTime = 2.5f;
 
 	// Combat movement (ps2-shipping N30e)
 
@@ -233,16 +353,16 @@ public:
 	/** The enemy engaged, or null. */
 	[[nodiscard]] AShooterCharacter* GetEnemy() const;
 	/**
-	 * The name of the tree's branch that ran last (Idle, Blind, Engage, ThrowGrenade, Defuse, Plant, FetchBomb, Escort,
-	 * Investigate, Hunt, Objective).
+	 * The name of the tree's branch that ran last (Idle, Blind, Engage, ThrowGrenade, Defuse, Plant, FetchBomb, PickUp,
+	 * Escort, Investigate, Hunt, Objective).
 	 */
 	[[nodiscard]] FName GetCurrentTask() const
 	{
 		return CurrentTask;
 	}
-	/** The aim error now, degrees (after the difficulty and the time on target). */
+	/** The aim error now, degrees (after the time on target). */
 	[[nodiscard]] float GetCurrentAimError() const;
-	/** The part of each recoil kick pulled down: RecoilCompensation times the difficulty, within [0, 1]. */
+	/** The part of each recoil kick pulled down: RecoilCompensation, within [0, 1]. */
 	[[nodiscard]] float GetRecoilCompensation() const;
 
 	/**
@@ -314,6 +434,34 @@ public:
 		return bStrafingThisTick ? StrafeDirection : 0.0f;
 	}
 
+	// No enemy in sight
+
+	/** The weapon on the floor the bot goes for (the PickUp branch), or null. */
+	[[nodiscard]] AShooterWeapon* GetPickupTarget() const
+	{
+		return PickupTarget.Get();
+	}
+	/** The retake has gone in (the counter-terrorists gathered, waited long enough, or the time is short). */
+	[[nodiscard]] bool IsRetaking() const
+	{
+		return bRetakeGo;
+	}
+	/** Where the counter-terrorists gather before the retake (valid once the bot went for it this round). */
+	[[nodiscard]] const FVector& GetRetakeStaging() const
+	{
+		return RetakeStaging;
+	}
+	/** The lookouts visited this round (arrivals, the first included). */
+	[[nodiscard]] int32 GetNumLookoutsVisited() const
+	{
+		return NumLookoutsVisited;
+	}
+	/** The site whose lookouts the bot keeps (NAME_None before the objective's first tick). */
+	[[nodiscard]] FName GetLookoutSite() const
+	{
+		return LookoutSite;
+	}
+
 	// The radio
 
 	/** A teammate's radio message (AShooterGameMode::SendRadioMessage): a spotted enemy near it is a place to look. */
@@ -327,11 +475,14 @@ public:
 	void Tick(float DeltaSeconds) override;
 
 protected:
-	/** Seeds the bot's stream once and starts over; the pawn walks through ladders (it does not climb them). */
+	/** Seeds the bot's stream once and starts over. */
 	void OnPossess(APawn* InPawn) override;
 	void OnUnPossess() override;
 
 private:
+	/** The difficulty applied (ApplyDifficulty). */
+	EShooterBotDifficulty Difficulty = EShooterBotDifficulty::Normal;
+
 	/** Builds the tree's nodes (once). */
 	void BuildTree();
 	/** Refreshes the blackboard from the senses and the game (the tree's decorators read it). */
@@ -344,20 +495,42 @@ private:
 	EBTNodeResult TaskBlind(float DeltaTime);
 	EBTNodeResult TaskEngage(float DeltaTime);
 	EBTNodeResult TaskThrowGrenade(float DeltaTime);
-	EBTNodeResult TaskDefuse();
+	EBTNodeResult TaskDefuse(float DeltaTime);
 	EBTNodeResult TaskPlant();
 	EBTNodeResult TaskFetchBomb();
+	EBTNodeResult TaskPickUp();
 	EBTNodeResult TaskEscort(float DeltaTime);
 	EBTNodeResult TaskInvestigate();
 	EBTNodeResult TaskHunt(float DeltaTime);
 	EBTNodeResult TaskObjective(float DeltaTime);
+	/** A terrorist with the bomb planted holds near it (TaskObjective's post-plant; see the class comment). */
+	EBTNodeResult HoldPlantedBomb(const AShooterBomb& Bomb, const TArray<FShooterLookout>& Lookouts, float DeltaTime);
 
 	/** Moves to Goal unless already moving there (a new path only when the goal moves). */
 	void MoveToGoal(const FVector& Goal);
 	/** Stands still: no path, no wish. */
 	void StandStill();
-	/** Stands still at a goal, looking around slowly. */
-	void HoldAndLookAround(float DeltaTime);
+	/** A counter-terrorist gives the planted bomb up (RetakeGiveUpAdvantage, or no time to defuse it). */
+	[[nodiscard]] bool ShouldGiveUpRetake(const AShooterBomb& Bomb) const;
+	/** A terrorist with the bomb planted: it holds near it (PostPlantHoldRadius). */
+	[[nodiscard]] bool IsHoldingPlant() const;
+	/** The retake's gathering point for Bomb (the waypoint nearest to RetakeStagingDistance toward the CT spawn). */
+	[[nodiscard]] FVector FindRetakeStaging(const FVector& BombLocation) const;
+	/** The reaction time (with the difficulty) has passed since the enemy came into sight: the bot may fire. */
+	[[nodiscard]] bool HasReacted() const;
+	/** The knife's fight (Engage with the knife drawn; see the class comment). */
+	EBTNodeResult EngageWithKnife(AShooterWeapon_Knife& Knife, float DeltaTime);
+	/** Chooses the weapon on the floor to go for, a few times a second (the PickUp branch's). */
+	void UpdatePickupTarget();
+	/** Turns the view toward Wanted at Rate degrees a second (no weapon's kick: looking, not aiming). */
+	void LookToward(const FRotator& Wanted, float Rate, float DeltaTime);
+	/**
+	 * Stands still and watches Yaws (a lookout's): the first (the main way in) for twice a drawn time between each of
+	 * the others in turn (from a drawn one), each a drawn time; again from the first when Yaws change.
+	 */
+	void Watch(const TArray<float, TInlineAllocator<4>>& Yaws, float DeltaTime);
+	/** On a ladder: faces it and climbs toward the path's point, or jumps off it at the bottom. */
+	void UpdateLadderClimb(AShooterCharacter& Self);
 	/** The trigger up. */
 	void ReleaseTrigger();
 	/**
@@ -469,4 +642,47 @@ private:
 	/** The CT's rotation: sites moved on this round, and since when it holds its site (-1: not there). */
 	int32 SiteRotation = 0;
 	float HoldingSinceTime = -1.0f;
+
+	/**
+	 * The lookouts: the site whose lookouts the bot keeps, the one it goes to or stands at, when it leaves it (-1: not
+	 * there yet), and how many it reached this round.
+	 */
+	FName LookoutSite;
+	int32 LookoutIndex = 0;
+	float LookoutLeaveTime = -1.0f;
+	int32 NumLookoutsVisited = 0;
+
+	/** The watch (Watch): the directions, the one watched, the last of the others watched, when it turns. */
+	TArray<float, TInlineAllocator<4>> WatchYaws;
+	int32 WatchIndex = 0;
+	int32 WatchOther = 0;
+	float NextWatchTime = 0.0f;
+	/** The bot turned its view this tick (a task looked or aimed): the path does not turn it. */
+	bool bLookedThisTick = false;
+	/** The knife's rush this tick: its moves are run, not walked. */
+	bool bRushingThisTick = false;
+	/** The walk key is held for the strafe. */
+	bool bWalkingForStrafe = false;
+
+	/** The post-plant hold (a terrorist): holding since the plant, and the radio's call made. */
+	bool bHoldingPlant = false;
+	bool bHoldCalled = false;
+	/** The retake (a counter-terrorist): its gathering point, whether it went in, since when it waits there. */
+	FVector RetakeStaging = FVector::ZeroVector;
+	bool bHasRetakeStaging = false;
+	bool bRetakeGo = false;
+	float RetakeWaitStart = -1.0f;
+	/** The retake given up this round (ShouldGiveUpRetake): the bot saves itself until the round's end. */
+	bool bGaveUpRetake = false;
+
+	/** The hunt's next waypoint (a draw of the graph's) once at the enemy's spawn. */
+	FVector HuntGoal = FVector::ZeroVector;
+	bool bHasHuntGoal = false;
+
+	/** The weapon on the floor it goes for, when it chose it, and the next choice. */
+	TWeakObjectPtr<AShooterWeapon> PickupTarget;
+	float PickupChosenTime = 0.0f;
+	float NextPickupCheckTime = 0.0f;
+	/** A weapon it went for and could not take this round (another took the spot, the walk failed). */
+	TWeakObjectPtr<AShooterWeapon> GivenUpPickup;
 };

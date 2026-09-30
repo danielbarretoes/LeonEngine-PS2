@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Delegates/Delegate.h"
 #include "UObject/ObjectMacros.h"
 #include "UObject/WeakObjectPtrTemplates.h"
 #include "EngineBaseTypes.generated.h"
@@ -10,7 +11,13 @@ class FTickTaskManager;
 class UActorComponent;
 class ULevel;
 
-/** What a world tick runs (UE: ELevelTick). Leon's worlds always tick everything. */
+/** Whether the player who paused the game lets it go on (UE: FCanUnpause; AGameModeBase::SetPause): unbound, it may. */
+DECLARE_DELEGATE_RetVal(bool, FCanUnpause);
+
+/**
+ * What a world tick runs (UE: ELevelTick): everything, or, while the world is paused (UWorld::IsPaused), only the tick
+ * functions that tick when paused (FTickFunction::bTickEvenWhenPaused: the player controllers and the HUDs).
+ */
 enum ELevelTick
 {
 	/** Only the time moves (unused). */
@@ -19,7 +26,7 @@ enum ELevelTick
 	LEVELTICK_ViewportsOnly = 1,
 	/** Everything ticks. */
 	LEVELTICK_All = 2,
-	/** Paused (unused). */
+	/** The world is paused: its time and timers stand still, and only bTickEvenWhenPaused tick functions run. */
 	LEVELTICK_PauseTick = 3,
 };
 
@@ -95,6 +102,9 @@ struct ENGINE_API FTickFunction
 
 	/** Enabled when registered (UE: bStartWithTickEnabled). */
 	uint8 bStartWithTickEnabled : 1;
+
+	/** Ticks while the world is paused too (UE: bTickEvenWhenPaused): the player's input and UI. */
+	uint8 bTickEvenWhenPaused : 1;
 
 	/** Seconds between two ticks; 0 ticks every step (UE: TickInterval). */
 	float TickInterval = 0.0f;

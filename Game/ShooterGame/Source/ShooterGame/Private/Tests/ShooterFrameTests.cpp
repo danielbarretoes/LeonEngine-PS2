@@ -89,7 +89,6 @@ namespace
 		SpawnZone(FVector(1500.0f, 0.0f, 150.0f), FVector(600.0f, 1000.0f, 300.0f), TEXT("BuyZone"), TEXT("T"));
 		SpawnZone(FVector(0.0f, 0.0f, 150.0f), FVector(600.0f, 600.0f, 300.0f), TEXT("BombSite"), TEXT("A"));
 		AShooterGameMode* GameMode = Cast<AShooterGameMode>(World.SetGameMode(AShooterGameMode::StaticClass()));
-		GameMode->bFillTeamsWithBots = false;
 		GameMode->FreezeTime = 0.5f;
 		GameMode->RoundTime = 60.0f;
 		GameMode->RoundRestartDelay = 0.5f;
@@ -388,7 +387,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameHUDTextCacheTest, "ShooterGame.HUD.
 bool FShooterGameHUDTextCacheTest::RunTest(const FString& Parameters)
 {
 	// The HUD formats a line of text only when what it shows changes: drawn again with nothing changed, it formats
-	// nothing; a new score formats that score's line only, a kill the feed's line.
+	// nothing; a new score formats that score's line only, a kill the feed's names.
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	AShooterGameMode* GameMode = SetUpBotMatch(World, 1, 1);
@@ -418,7 +417,7 @@ bool FShooterGameHUDTextCacheTest::RunTest(const FString& Parameters)
 	State->AddKillFeedEntry(Entry);
 	Paint();
 	const int32 AfterKill = HUD->GetNumTextFormats();
-	TestEqual("A kill: its three parts", AfterKill, First + 1 + 3);
+	TestEqual("A kill: its two names", AfterKill, First + 1 + 2);
 	Paint();
 	TestEqual("Then nothing again", HUD->GetNumTextFormats(), AfterKill);
 	return true;

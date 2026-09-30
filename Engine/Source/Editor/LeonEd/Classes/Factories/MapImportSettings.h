@@ -71,7 +71,7 @@ struct LEONED_API FMapImportNodeRule
  *   class, named without its prefix: `PlayerStart`) must carry every tag, a player start's PlayerStartTag counting as
  *   one of its tags; the import fails, naming the missing entries, when one is not met. The engine's maps
  *   (/Engine/...) are not a project's: a reimport of every asset with a project (CheckReimport, gate G5) does not
- *   check them against it.
+ *   check them against it. Nor are the project's maps it lists in MapsWithoutRequiredTags (a front end's menu map).
  * - With bAutoLinkWaypoints the import links the map's waypoints the way the project's agent (the Engine config's
  *   [/Script/Engine.NavigationSystem], FWaypointLinkParams::FromConfig) can walk (UNavigationSystem::AutoLinkWaypoints:
  *   a capsule sweep, steps, jumps, drops), besides the links the nodes name; the links are saved in the map.
@@ -92,6 +92,10 @@ public:
 	UPROPERTY(Config)
 	TArray<FString> RequiredTags;
 
+	/** The project's maps (long package names) RequiredTags do not apply to: not played on (a main menu's map). */
+	UPROPERTY(Config)
+	TArray<FString> MapsWithoutRequiredTags;
+
 	/** Links the waypoints an agent can walk between (see the class comment); off in the engine's config. */
 	UPROPERTY(Config)
 	bool bAutoLinkWaypoints = false;
@@ -105,6 +109,6 @@ public:
 	 */
 	[[nodiscard]] static FString GetSuffix(const FString& NodeName, const FString& Prefix);
 
-	/** Whether RequiredTags apply to the map of a package: every map but the engine's (/Engine/...). */
+	/** Whether RequiredTags apply to the map of a package: every map but the engine's (/Engine/...) and the exempt. */
 	[[nodiscard]] static bool AppliesRequiredTags(const FString& MapPackageName);
 };

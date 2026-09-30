@@ -634,4 +634,64 @@ bool FGSReferenceClutLoadsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSReferenceTexturedCanvasTest, "System.GSReference.Texture.TexturedCanvas",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGSReferenceTexturedCanvasTest::RunTest(const FString& Parameters)
+{
+	// The canvas's textured draws by the manual: the texel's colour and alpha from the PSMT4 texture's CLUT (entry i is
+	// (16 i, 255, 255 - 16 i), alpha 17 i scaled to 0..0x80), MODULATE (3.4.9: Cv = Ct Cf >> 7, clamped), then the
+	// blend (3.4.13: Cv = ((Cs - Cd) As >> 7) + Cd over the frame; the frame's alpha is the pixel's As).
+	FGSCommandList List;
+	GSConformance::BuildTexturedCanvas(List);
+	const TArray<FColor> Pixels = Render(List);
+	const auto EntryAlpha = [](int32 Index) { return ((Index * 17 * 0x80) + 127) / 255; };
+	const auto Modulate = [](int32 Texel, int32 Vertex) { return FMath::Min(255, (Texel * Vertex) >> 7); };
+	const auto Blend = [](int32 Source, int32 Destination, int32 Alpha)
+	{
+		const int32 Difference = (Source - Destination) * Alpha;
+		// An arithmetic shift: the GS floors the negative products.
+		const int32 Shifted = Difference >= 0 ? Difference >> 7 : -((-Difference + 127) >> 7);
+		return FMath::Clamp(Shifted + Destination, 0, 255);
+	};
+	const auto Expected = [&](int32 Index, const FColor& Tint, const FColor& Frame)
+	{
+		const int32 Alpha = Modulate(EntryAlpha(Index), Tint.A);
+		return FColor(uint8(Blend(Modulate(Index * 16, Tint.R), Frame.R, Alpha)),
+			uint8(Blend(Modulate(255, Tint.G), Frame.G, Alpha)),
+			uint8(Blend(Modulate(255 - (Index * 16), Tint.B), Frame.B, Alpha)), uint8(Alpha));
+	};
+	const FColor Blue(0x00, 0x40, 0x80, 0x80);
+	const FColor Orange(0x80, 0x20, 0x00, 0x80);
+	const FColor White(0x80, 0x80, 0x80, 0x80);
+	const FColor Tint(0x80, 0x40, 0x80, 0x80);
+	// The glyph: pixel (x, y) samples texel (x - 1, y - 1), index (x - 1 + y - 1) mod 16.
+	TestTrue("Glyph texel 0: transparent", PixelAt(Pixels, 1, 1) == Expected(0, White, Blue));
+	TestTrue("Glyph texel (3, 1)", PixelAt(Pixels, 4, 2) == Expected(4, White, Blue));
+	TestTrue("Glyph texel (15, 0): opaque", PixelAt(Pixels, 16, 1) == Expected(15, White, Blue));
+	TestTrue("Glyph texel (9, 7)", PixelAt(Pixels, 10, 8) == Expected(0, White, Blue));
+	TestTrue("Outside the glyph", PixelAt(Pixels, 0, 0) == Blue);
+	// Upside down: pixel (x, y) samples texel (x - 17, 8 - y), tinted.
+	TestTrue("Turned: pixel (17, 1) from texel (0, 7)", PixelAt(Pixels, 17, 1) == Expected(7, Tint, Blue));
+	TestTrue("Turned: pixel (20, 8) from texel (3, 0)", PixelAt(Pixels, 20, 8) == Expected(3, Tint, Blue));
+	TestTrue("Turned: pixel (32, 4) from texel (15, 4)", PixelAt(Pixels, 32, 4) == Expected(3, Tint, Orange));
+	// Bilinear: between the texels it lies between (rows 8 to 15 fall from index 15 to 0 along x).
+	bool bBetween = true;
+	for (int32 X = 2; X < 32; ++X)
+	{
+		const int32 Texel = FMath::Clamp((X - 1) / 2, 0, 15);
+		const int32 Low = EntryAlpha(15 - FMath::Min(15, Texel + 1));
+		const int32 High = EntryAlpha(15 - FMath::Max(0, Texel - 1));
+		const int32 Alpha = PixelAt(Pixels, uint32(X), 16).A;
+		bBetween &= Alpha >= Low && Alpha <= High;
+	}
+	TestTrue("Bilinear: each pixel's alpha between its texels'", bBetween);
+	TestTrue("Bilinear: falling along x", PixelAt(Pixels, 3, 16).A > PixelAt(Pixels, 30, 16).A);
+	// The rotated quad: blended inside, the frame outside its corners.
+	TestTrue("Quad: outside the corner", PixelAt(Pixels, 37, 5) == Orange);
+	TestTrue("Quad: inside", PixelAt(Pixels, 48, 16) != Orange && PixelAt(Pixels, 48, 16).A <= 0x60);
+	TestTrue("Quad: its left point", PixelAt(Pixels, 38, 16) != Orange);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

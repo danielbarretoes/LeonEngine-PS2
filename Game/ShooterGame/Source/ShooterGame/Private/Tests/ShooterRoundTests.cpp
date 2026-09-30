@@ -4,6 +4,8 @@
 #include "CoreMinimal.h"
 #include "Engine/BlockingVolume.h"
 #include "Engine/DamageEvents.h"
+#include "Engine/Engine.h"
+#include "Engine/Font.h"
 #include "Engine/Level.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/SkeletalMesh.h"
@@ -95,7 +97,6 @@ namespace
 			World, FVector(0.0f, 0.0f, 150.0f), FVector(600.0f, 600.0f, 300.0f), TEXT("BombSite"), TEXT("A"));
 
 		AShooterGameMode* GameMode = Cast<AShooterGameMode>(World.SetGameMode(AShooterGameMode::StaticClass()));
-		GameMode->bFillTeamsWithBots = false;
 		// The rules alone: the bots stand still (bot_stop; P20's bots have their own tests).
 		GameMode->bBotStop = true;
 		GameMode->FreezeTime = 0.5f;
@@ -963,8 +964,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameHUDRoundInfoTest, "ShooterGame.HUD.
 
 bool FShooterGameHUDRoundInfoTest::RunTest(const FString& Parameters)
 {
-	// In a match the HUD draws more than the crosshair (the clock, the score, the round), and the crosshair opens with
-	// the spread.
+	// In a match the HUD draws more than the crosshair (the clock and the scores in the bold number font, the round in
+	// the engine's small font: a textured sprite a glyph, and one more for its shadow; the stopwatch from the icons),
+	// and the crosshair opens with the spread.
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	(void)SetUpMatch(World, 1, 1);
@@ -976,7 +978,30 @@ bool FShooterGameHUDRoundInfoTest::RunTest(const FString& Parameters)
 	TArray<FCanvasPrimitiveRun> Runs;
 	Canvas.GetPrimitives(Vertices, Runs);
 	TestTrue("The round's text too", Vertices.Num() > 4 * 2);
-	TestEqual("No pawn: the base gap", HUD->GetCrosshairGap(), HUD->CrosshairGap);
+	const UFont* Font = UEngine::GetSmallFont();
+	const UFont* Numbers = HUD->GetNumberFont();
+	int32 Glyphs = 0;
+	int32 NumberGlyphs = 0;
+	bool bKnownTextures = Font != nullptr && Numbers != nullptr;
+	for (const FCanvasPrimitiveRun& Run : Runs)
+	{
+		if (Run.Texture == nullptr)
+		{
+			continue;
+		}
+		const bool bSmall = Font->Textures.Contains(Run.Texture);
+		const bool bNumber = Numbers->Textures.Contains(Run.Texture);
+		Glyphs += bSmall ? Run.NumVertices / 2 : 0;
+		NumberGlyphs += bNumber ? Run.NumVertices / 2 : 0;
+		bKnownTextures &= Run.Type == ECanvasPrimitive::Rectangle &&
+			(bSmall || bNumber || HUD->GetBoldFont()->Textures.Contains(Run.Texture) ||
+				Run.Texture == HUD->GetIconsTexture());
+	}
+	// "Round 1" shadowed in the small font; "0:.." and the scores in the numbers' font, shadowed too.
+	TestTrue("A sprite a glyph and its shadow, in the small font", Glyphs >= 12 && Glyphs % 2 == 0);
+	TestTrue("The clock and the scores in the numbers' font", NumberGlyphs >= 12);
+	TestTrue("Only the HUD's fonts and icons", bKnownTextures);
+	TestEqual("No pawn: the base gap", HUD->GetCrosshairGap(720.0f), HUD->CrosshairGap);
 	return true;
 }
 

@@ -10,6 +10,7 @@
 #include "GameFramework/Controller.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/PackageName.h"
+#include "ShooterAIController.h"
 #include "ShooterCharacter.h"
 #include "ShooterGame.h"
 #include "ShooterGameMode.h"
@@ -146,6 +147,35 @@ UClass* AShooterWeapon::FindWeaponClass(const FString& Name)
 	return nullptr;
 }
 
+FString AShooterWeapon::GetItemDisplayName(const FString& ItemName)
+{
+	// The equipment and what is no weapon class (CS's buy menu and kill feed names).
+	struct FItemName
+	{
+		const TCHAR* Name;
+		const TCHAR* DisplayName;
+	};
+	static const FItemName Items[] = {
+		{TEXT("c4"), TEXT("C4")},
+		{TEXT("vest"), TEXT("Kevlar Vest")},
+		{TEXT("vesthelm"), TEXT("Kevlar + Helmet")},
+		{TEXT("defuser"), TEXT("Defuse Kit")},
+		{TEXT("primammo"), TEXT("Primary Ammo")},
+		{TEXT("secammo"), TEXT("Secondary Ammo")},
+		{TEXT("world"), TEXT("World")},
+	};
+	for (const FItemName& Item : Items)
+	{
+		if (ItemName.Equals(Item.Name, ESearchCase::IgnoreCase))
+		{
+			return Item.DisplayName;
+		}
+	}
+	const UClass* WeaponClass = FindWeaponClass(ItemName);
+	const AShooterWeapon* Defaults = WeaponClass != nullptr ? WeaponClass->GetDefaultObject<AShooterWeapon>() : nullptr;
+	return Defaults != nullptr && !Defaults->DisplayName.IsEmpty() ? Defaults->DisplayName : ItemName;
+}
+
 void AShooterWeapon::GetWeaponClasses(TArray<UClass*>& OutClasses)
 {
 	OutClasses.Reset();
@@ -241,6 +271,18 @@ void AShooterWeapon::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
+bool AShooterWeapon::CanBePickedUpBy(const AShooterCharacter& Pawn) const
+{
+	const AShooterWeapon* Held = Pawn.GetWeaponInSlot(Slot);
+	if (Held == nullptr)
+	{
+		return true;
+	}
+	// A bot swaps a spent weapon for one with ammunition (AddWeapon drops the spent one: CS's bots drop it and walk
+	// over the other); a player's slot must be free (CS's walk-over).
+	return !Held->HasAmmo() && HasAmmo() && Cast<AShooterAIController>(Pawn.GetController()) != nullptr;
+}
+
 void AShooterWeapon::TickPickup()
 {
 	const AShooterGameMode* GameMode = GetShooterGameMode(GetWorld());
@@ -253,7 +295,7 @@ void AShooterWeapon::TickPickup()
 	// The game mode's pawns, in the level's order (AddWeapon changes no registry).
 	for (AShooterCharacter* Pawn : GameMode->GetPawns())
 	{
-		if (Pawn->IsPendingKillPending() || !Pawn->IsAlive() || Pawn->GetWeaponInSlot(Slot) != nullptr)
+		if (Pawn->IsPendingKillPending() || !Pawn->IsAlive() || !CanBePickedUpBy(*Pawn))
 		{
 			continue;
 		}
@@ -261,7 +303,7 @@ void AShooterWeapon::TickPickup()
 		if (Delta.SizeSquared2D() <= FMath::Square(PickupRadius) && FMath::Abs(Delta.Z) <= PickupReachZ)
 		{
 			UE_LOG(LogShooter, Log, TEXT("%s picked up %s"), *Pawn->GetName(), *WeaponName);
-			Pawn->AddWeapon(this);
+			Pawn->PickUpWeapon(this);
 			return;
 		}
 	}
@@ -280,7 +322,7 @@ void AShooterWeapon::OnEquip()
 	// The draw lasts its montage when it has one (UE ShooterGame), EquipDuration otherwise.
 	const float AnimDuration = PlayWeaponAnimation(EquipAnim);
 	SetEquippingFor(AnimDuration > 0.0f ? AnimDuration : EquipDuration);
-	PlayWeaponSound(EquipSound);
+	PlayEquipSound();
 }
 
 void AShooterWeapon::SetEquippingFor(float Seconds)

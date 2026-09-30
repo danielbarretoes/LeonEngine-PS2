@@ -1,5 +1,6 @@
 #include "ShooterGameMode.h"
 
+#include "AI/Navigation/NavigationSystem.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/Level.h"
@@ -39,6 +40,17 @@ namespace
 
 	/** How high above the feet a pawn is tested against a zone (the volumes stand on the floor), cm. */
 	constexpr float ZoneTestHeight = 50.0f;
+
+	/**
+	 * The bots' lookouts (GetBombSiteLookouts): the waypoints' flag; how far apart the directions one watches are
+	 * (degrees) and how many; how far from its site one watches over it first (cm); how many waypoints stand in for
+	 * them on a map without.
+	 */
+	const FName LookoutFlag(TEXT("Lookout"));
+	constexpr float LookoutWatchSpacing = 35.0f;
+	constexpr int32 MaxLookoutWatchYaws = 4;
+	constexpr float LookoutOverSiteDistance = 800.0f;
+	constexpr int32 MaxFallbackLookouts = 3;
 
 	/** The half height of a start's capsule: its location is the capsule's centre (UE). */
 	float GetStartHalfHeight(const AActor& StartSpot)
@@ -191,16 +203,33 @@ void AShooterGameMode::InitGame(const FString& MapName, const FString& Options, 
 	RandomSeed = UGameplayStatics::GetIntOption(Options, TEXT("seed"), RandomSeed);
 	const TCHAR* CmdLine = FCommandLine::Get();
 	(void)FParse::Value(CmdLine, TEXT("seed="), RandomSeed);
+	// The main menu's match (ps2-polish P9, FShooterMatchSettings): the bots, their skill and the rounds to win.
+	NumBots = FMath::Clamp(UGameplayStatics::GetIntOption(Options, TEXT("bots"), NumBots), 0, 2 * MaxPlayersPerTeam);
+	const FString DifficultyOption = UGameplayStatics::ParseOption(Options, TEXT("difficulty"));
+	if (!DifficultyOption.IsEmpty() && !ParseBotDifficulty(DifficultyOption, BotDifficulty))
+	{
+		UE_LOG(LogShooter, Warning, TEXT("?difficulty=%s is not Easy, Normal, Hard or Expert: %s"), *DifficultyOption,
+			GetBotDifficultyName(BotDifficulty));
+	}
+	const int32 RoundsToWin = UGameplayStatics::GetIntOption(Options, TEXT("winrounds"), 0);
+	if (RoundsToWin > 0)
+	{
+		MaxRounds = FShooterMatchSettings::GetMaxRounds(RoundsToWin);
+	}
 	if (FParse::Param(CmdLine, TEXT("botmatch")))
 	{
 		bBotMatch = true;
-		bFillTeamsWithBots = true;
+		// Ten bots, five a side, at once (the local player spectates).
+		NumBots = 2 * MaxPlayersPerTeam;
+		bRebalancePending = true;
 		(void)FParse::Value(CmdLine, TEXT("rounds="), BotMatchRounds);
 		// The match is that long (mp_maxrounds): its halftime and its majority come from it.
 		BotMatchRounds = FMath::Max(BotMatchRounds, 1);
 		MaxRounds = BotMatchRounds;
 		UE_LOG(LogShooter, Display, TEXT("Botmatch: %d round(s), seed %d"), BotMatchRounds, RandomSeed);
 	}
+	UE_LOG(LogShooter, Display, TEXT("Match: %d bot(s) (%s), %d round(s), the first team to %d wins"), NumBots,
+		GetBotDifficultyName(BotDifficulty), MaxRounds, GetRoundsToWin());
 	RequestGameplayAssets();
 }
 
@@ -360,6 +389,80 @@ EShooterTeam AShooterGameMode::ChooseTeam(const FString& Options) const
 	return GetTeamSize(EShooterTeam::T) < GetTeamSize(EShooterTeam::CT) ? EShooterTeam::T : EShooterTeam::CT;
 }
 
+EShooterTeam AShooterGameMode::ResolveTeamChoice(EShooterTeamChoice Choice, const AShooterPlayerState* Player) const
+{
+	switch (Choice)
+	{
+		case EShooterTeamChoice::CT:
+			return EShooterTeam::CT;
+		case EShooterTeamChoice::T:
+			return EShooterTeam::T;
+		case EShooterTeamChoice::Spectate:
+			return EShooterTeam::None;
+		case EShooterTeamChoice::Auto:
+			break;
+	}
+	// CS's auto-assign: the smaller team (CT on a tie), the player itself not counted.
+	const EShooterTeam Own = Player != nullptr ? Player->GetTeam() : EShooterTeam::None;
+	const int32 SizeCT = GetTeamSize(EShooterTeam::CT) - (Own == EShooterTeam::CT ? 1 : 0);
+	const int32 SizeT = GetTeamSize(EShooterTeam::T) - (Own == EShooterTeam::T ? 1 : 0);
+	return SizeT < SizeCT ? EShooterTeam::T : EShooterTeam::CT;
+}
+
+bool AShooterGameMode::IsChoosingTeam(const AController* Player) const
+{
+	return Player != nullptr &&
+		PlayersChoosingTeam.Contains(TWeakObjectPtr<AController>(const_cast<AController*>(Player)));
+}
+
+bool AShooterGameMode::SelectTeam(AController* Player, EShooterTeamChoice Choice)
+{
+	AShooterPlayerState* State = Player != nullptr ? Player->GetPlayerState<AShooterPlayerState>() : nullptr;
+	if (State == nullptr || State->bIsABot)
+	{
+		return false;
+	}
+	const bool bWasChoosing = PlayersChoosingTeam.Remove(TWeakObjectPtr<AController>(Player)) > 0;
+	const EShooterTeam OldTeam = State->GetTeam();
+	const EShooterTeam NewTeam = ResolveTeamChoice(Choice, State);
+	if (NewTeam == OldTeam && !bWasChoosing)
+	{
+		return false;
+	}
+	// CS: a living player who changes sides while the round is fought dies (a death on the board); before it is
+	// fought the pawn just goes.
+	AShooterCharacter* Pawn = Cast<AShooterCharacter>(Player->GetPawn());
+	if (Pawn != nullptr && Pawn->IsAlive() && NewTeam != OldTeam)
+	{
+		if (IsRoundLive())
+		{
+			Pawn->Suicide();
+		}
+		else
+		{
+			Player->UnPossess();
+			(void)Pawn->Destroy();
+		}
+	}
+	State->SetTeam(NewTeam);
+	NotifyPawnsChanged();
+	UE_LOG(LogShooter, Display, TEXT("%s is joining the %s"), *State->GetPlayerName(),
+		NewTeam == EShooterTeam::CT      ? TEXT("Counter-Terrorist force")
+			: NewTeam == EShooterTeam::T ? TEXT("Terrorist force")
+										 : TEXT("spectators"));
+	bRebalancePending = true;
+	if (!IsRoundLive())
+	{
+		// The warmup's bots join on the game mode's next tick; in the freeze they move now, and the player spawns now.
+		if (HasMatchStarted())
+		{
+			RebalanceBots();
+		}
+		RestartPlayer(Player);
+	}
+	return true;
+}
+
 int32 AShooterGameMode::GetTeamSize(EShooterTeam Team) const
 {
 	int32 Size = 0;
@@ -509,6 +612,7 @@ void AShooterGameMode::UpdateMapCaches() const
 		return;
 	}
 	bMapCachesDirty = false;
+	bLookoutsDirty = true;
 	// The sites by name ("A", "B"), compared as text once here (not in every bot's frame).
 	struct FSite
 	{
@@ -657,8 +761,23 @@ FString AShooterGameMode::InitNewPlayer(
 	if (AShooterPlayerState* State =
 			NewPlayerController != nullptr ? NewPlayerController->GetPlayerState<AShooterPlayerState>() : nullptr)
 	{
-		// A bot match's player only watches (no team: RestartPlayer makes it a spectator).
-		State->SetTeam(bBotMatch ? EShooterTeam::None : ChooseTeam(Options));
+		// A bot match's player only watches (no team: RestartPlayer makes it a spectator). `?team=` chooses at once;
+		// without it the player spectates until its choice in the team menu (SelectTeam).
+		EShooterTeam Team = EShooterTeam::None;
+		EShooterTeamChoice Choice = EShooterTeamChoice::Auto;
+		if (!bBotMatch)
+		{
+			if (ParseShooterTeamChoice(UGameplayStatics::ParseOption(Options, TEXT("team")), Choice))
+			{
+				Team = ResolveTeamChoice(Choice, State);
+				bRebalancePending = true;
+			}
+			else
+			{
+				PlayersChoosingTeam.AddUnique(TWeakObjectPtr<AController>(NewPlayerController));
+			}
+		}
+		State->SetTeam(Team);
 		State->SetMoney(StartMoney, MaxMoney);
 	}
 	return Super::InitNewPlayer(NewPlayerController, Options, Portal);
@@ -711,6 +830,177 @@ bool AShooterGameMode::GetTeamSpawnLocation(EShooterTeam Team, FVector& OutLocat
 	}
 	OutLocation = Starts[0]->GetActorLocation();
 	return true;
+}
+
+const TArray<FShooterLookout>& AShooterGameMode::GetBombSiteLookouts(FName Site) const
+{
+	UpdateMapCaches();
+	const UWorld* World = GetWorld();
+	const int32 NumNodes = World != nullptr ? World->GetNavigationSystem().GetNodes().Num() : 0;
+	if (bLookoutsDirty || NumNodes != LookoutsNodeCount)
+	{
+		BuildBombSiteLookouts();
+	}
+	static const TArray<FShooterLookout> NoLookouts;
+	const int32 Index = BombSiteNames.IndexOfByKey(Site);
+	return BombSiteLookouts.IsValidIndex(Index) ? BombSiteLookouts[Index] : NoLookouts;
+}
+
+void AShooterGameMode::BuildBombSiteLookouts() const
+{
+	bLookoutsDirty = false;
+	BombSiteLookouts.Reset();
+	BombSiteLookouts.SetNum(BombSiteNames.Num());
+	const UWorld* World = GetWorld();
+	const TArray<UNavigationSystem::FNode> NoNodes;
+	const TArray<UNavigationSystem::FNode>& Nodes =
+		World != nullptr ? World->GetNavigationSystem().GetNodes() : NoNodes;
+	LookoutsNodeCount = Nodes.Num();
+	if (BombSiteNames.Num() == 0)
+	{
+		return;
+	}
+	auto AddYaw = [](TArray<float, TInlineAllocator<4>>& Yaws, float Yaw)
+	{
+		for (const float Watched : Yaws)
+		{
+			if (FMath::Abs(FRotator::NormalizeAxis(Yaw - Watched)) < LookoutWatchSpacing)
+			{
+				return;
+			}
+		}
+		if (Yaws.Num() < MaxLookoutWatchYaws)
+		{
+			Yaws.Add(FRotator::NormalizeAxis(Yaw));
+		}
+	};
+	auto YawTo = [](const FVector& From, const FVector& To) { return (To - From).Rotation().Yaw; };
+	// Each team's watcher looks toward the other team's spawn (the way it comes).
+	FVector Spawns[3] = {FVector::ZeroVector, FVector::ZeroVector, FVector::ZeroVector};
+	bool bSpawns[3] = {false, false, false};
+	bSpawns[static_cast<int32>(EShooterTeam::CT)] =
+		GetTeamSpawnLocation(EShooterTeam::T, Spawns[static_cast<int32>(EShooterTeam::CT)]);
+	bSpawns[static_cast<int32>(EShooterTeam::T)] =
+		GetTeamSpawnLocation(EShooterTeam::CT, Spawns[static_cast<int32>(EShooterTeam::T)]);
+	constexpr EShooterTeam Watchers[] = {EShooterTeam::CT, EShooterTeam::T};
+	int32 SpawnNodes[3] = {INDEX_NONE, INDEX_NONE, INDEX_NONE};
+	for (const EShooterTeam Team : Watchers)
+	{
+		const int32 TeamIndex = static_cast<int32>(Team);
+		for (int32 NodeIndex = 0; NodeIndex < Nodes.Num() && bSpawns[TeamIndex]; ++NodeIndex)
+		{
+			if (SpawnNodes[TeamIndex] == INDEX_NONE ||
+				FVector::DistSquared2D(Nodes[NodeIndex].Location, Spawns[TeamIndex]) <
+					FVector::DistSquared2D(Nodes[SpawnNodes[TeamIndex]].Location, Spawns[TeamIndex]))
+			{
+				SpawnNodes[TeamIndex] = NodeIndex;
+			}
+		}
+	}
+	auto MakeLookout = [&](int32 NodeIndex, const FVector& SiteLocation)
+	{
+		FShooterLookout Lookout;
+		const UNavigationSystem::FNode& Node = Nodes[NodeIndex];
+		Lookout.Location = Node.Location;
+		for (const EShooterTeam Team : Watchers)
+		{
+			const int32 TeamIndex = static_cast<int32>(Team);
+			TArray<float, TInlineAllocator<4>>& Yaws = Lookout.WatchYaws[TeamIndex];
+			// The main way in: the path's first link toward the other team's spawn (CS's bots' approach areas).
+			TArray<int32> Approach;
+			if (SpawnNodes[TeamIndex] != INDEX_NONE &&
+				UNavigationSystem::FindNodePath(Nodes, NodeIndex, SpawnNodes[TeamIndex], Approach) &&
+				Approach.Num() >= 2)
+			{
+				AddYaw(Yaws, YawTo(Node.Location, Nodes[Approach[1]].Location));
+			}
+			// Away from the site: over it; then the links toward the other team's spawn, else any link.
+			if (FVector::Dist2D(Node.Location, SiteLocation) > LookoutOverSiteDistance)
+			{
+				AddYaw(Yaws, YawTo(Node.Location, SiteLocation));
+			}
+			const float ToEnemy = FVector::Dist2D(Node.Location, Spawns[TeamIndex]);
+			for (const int32 Link : Node.Links)
+			{
+				if (bSpawns[TeamIndex] && Nodes.IsValidIndex(Link) &&
+					FVector::Dist2D(Nodes[Link].Location, Spawns[TeamIndex]) < ToEnemy)
+				{
+					AddYaw(Yaws, YawTo(Node.Location, Nodes[Link].Location));
+				}
+			}
+			for (const int32 Link : Node.Links)
+			{
+				if (Yaws.Num() == 0 && Nodes.IsValidIndex(Link))
+				{
+					AddYaw(Yaws, YawTo(Node.Location, Nodes[Link].Location));
+				}
+			}
+		}
+		return Lookout;
+	};
+	// The flagged waypoints, each to its nearest site (ties: the first by name).
+	for (int32 NodeIndex = 0; NodeIndex < Nodes.Num(); ++NodeIndex)
+	{
+		if (!Nodes[NodeIndex].Flags.Contains(LookoutFlag))
+		{
+			continue;
+		}
+		int32 Nearest = 0;
+		for (int32 SiteIndex = 1; SiteIndex < BombSiteLocations.Num(); ++SiteIndex)
+		{
+			if (FVector::DistSquared2D(Nodes[NodeIndex].Location, BombSiteLocations[SiteIndex]) <
+				FVector::DistSquared2D(Nodes[NodeIndex].Location, BombSiteLocations[Nearest]))
+			{
+				Nearest = SiteIndex;
+			}
+		}
+		BombSiteLookouts[Nearest].Add(MakeLookout(NodeIndex, BombSiteLocations[Nearest]));
+	}
+	for (int32 SiteIndex = 0; SiteIndex < BombSiteNames.Num(); ++SiteIndex)
+	{
+		TArray<FShooterLookout>& Lookouts = BombSiteLookouts[SiteIndex];
+		const FVector& SiteLocation = BombSiteLocations[SiteIndex];
+		if (Lookouts.Num() > 0)
+		{
+			continue;
+		}
+		// A map without lookouts: the site's nearest waypoints (ties: the lower index).
+		TArray<int32> Near;
+		for (int32 NodeIndex = 0; NodeIndex < Nodes.Num(); ++NodeIndex)
+		{
+			if (FVector::DistSquared2D(Nodes[NodeIndex].Location, SiteLocation) <= FMath::Square(LookoutFallbackRadius))
+			{
+				Near.Add(NodeIndex);
+			}
+		}
+		Near.Sort(
+			[&Nodes, &SiteLocation](int32 A, int32 B)
+			{
+				const float DistA = FVector::DistSquared2D(Nodes[A].Location, SiteLocation);
+				const float DistB = FVector::DistSquared2D(Nodes[B].Location, SiteLocation);
+				return DistA < DistB || (DistA == DistB && A < B);
+			});
+		for (int32 Index = 0; Index < FMath::Min(Near.Num(), MaxFallbackLookouts); ++Index)
+		{
+			Lookouts.Add(MakeLookout(Near[Index], SiteLocation));
+		}
+		if (Lookouts.Num() > 0)
+		{
+			continue;
+		}
+		// No waypoints near: the site's middle, watching around from the other team's side.
+		FShooterLookout& Middle = Lookouts.AddDefaulted_GetRef();
+		Middle.Location = SiteLocation;
+		for (const EShooterTeam Team : Watchers)
+		{
+			const int32 TeamIndex = static_cast<int32>(Team);
+			const float Base = bSpawns[TeamIndex] ? YawTo(SiteLocation, Spawns[TeamIndex]) : 0.0f;
+			for (int32 Quarter = 0; Quarter < MaxLookoutWatchYaws; ++Quarter)
+			{
+				AddYaw(Middle.WatchYaws[TeamIndex], Base + (90.0f * static_cast<float>(Quarter)));
+			}
+		}
+	}
 }
 
 APawn* AShooterGameMode::SpawnDefaultPawnFor(AController* NewPlayer, AActor* StartSpot)
@@ -802,6 +1092,7 @@ int32 AShooterGameMode::AddBots(EShooterTeam Team, int32 Count)
 		// The bot's index seeds its stream (its name does not: a name never changes the match) and picks its name.
 		const int32 BotIndex = NumBotsCreated++;
 		BotController->SetBotIndex(BotIndex);
+		(void)BotController->ApplyDifficulty(BotDifficulty);
 		State->SetTeam(BotTeam);
 		State->bIsABot = true;
 		State->SetMoney(StartMoney, MaxMoney);
@@ -830,6 +1121,127 @@ int32 AShooterGameMode::FillTeamsWithBots()
 	const int32 AddedCT = AddBots(EShooterTeam::CT, FMath::Max(0, MaxPlayersPerTeam - GetTeamSize(EShooterTeam::CT)));
 	const int32 AddedT = AddBots(EShooterTeam::T, FMath::Max(0, MaxPlayersPerTeam - GetTeamSize(EShooterTeam::T)));
 	return AddedCT + AddedT;
+}
+
+void AShooterGameMode::ComputeBotSplit(
+	int32 InNumBots, int32 HumansCT, int32 HumansT, int32 MaxPerTeam, int32& OutBotsCT, int32& OutBotsT)
+{
+	const int32 Players = FMath::Max(0, InNumBots) + HumansCT + HumansT;
+	int32 SizeCT = Players / 2;
+	int32 SizeT = Players / 2;
+	if (Players % 2 != 0)
+	{
+		// The odd player goes to the side with fewer humans (the player's opponents), T on a tie.
+		(HumansT > HumansCT ? SizeCT : SizeT) += 1;
+	}
+	// A side never has fewer players than its humans: the other gives up the difference.
+	if (SizeCT < HumansCT)
+	{
+		SizeT -= HumansCT - SizeCT;
+		SizeCT = HumansCT;
+	}
+	if (SizeT < HumansT)
+	{
+		SizeCT -= HumansT - SizeT;
+		SizeT = HumansT;
+	}
+	OutBotsCT = FMath::Clamp(SizeCT - HumansCT, 0, FMath::Max(0, MaxPerTeam - HumansCT));
+	OutBotsT = FMath::Clamp(SizeT - HumansT, 0, FMath::Max(0, MaxPerTeam - HumansT));
+}
+
+void AShooterGameMode::RebalanceBots()
+{
+	bRebalancePending = false;
+	int32 Humans[3] = {0, 0, 0};
+	TArray<AShooterAIController*> Bots[3];
+	for (const APlayerState* PlayerState : GetGameState().GetPlayerArray())
+	{
+		const AShooterPlayerState* ShooterState = Cast<AShooterPlayerState>(PlayerState);
+		if (ShooterState == nullptr || ShooterState->IsPendingKillPending())
+		{
+			continue;
+		}
+		const int32 Team = static_cast<int32>(ShooterState->GetTeam());
+		AShooterAIController* Bot = Cast<AShooterAIController>(GetStateController(ShooterState));
+		if (ShooterState->bIsABot && Bot != nullptr)
+		{
+			Bots[Team].Add(Bot);
+		}
+		else if (!ShooterState->bIsABot)
+		{
+			++Humans[Team];
+		}
+	}
+	const int32 CT = static_cast<int32>(EShooterTeam::CT);
+	const int32 T = static_cast<int32>(EShooterTeam::T);
+	int32 Target[3] = {0, 0, 0};
+	ComputeBotSplit(NumBots, Humans[CT], Humans[T], MaxPlayersPerTeam, Target[CT], Target[T]);
+	// A bot without a team (none today) counts as one to place.
+	for (AShooterAIController* Bot : Bots[static_cast<int32>(EShooterTeam::None)])
+	{
+		const int32 To = Bots[CT].Num() < Target[CT] ? CT : T;
+		MoveBotToTeam(*Bot, static_cast<EShooterTeam>(To));
+		Bots[To].Add(Bot);
+	}
+	// The bots too many on a side move to the other while it lacks some (the last to join first)...
+	for (const int32 From : {CT, T})
+	{
+		const int32 To = From == CT ? T : CT;
+		while (Bots[From].Num() > Target[From] && Bots[To].Num() < Target[To])
+		{
+			AShooterAIController* Bot = Bots[From].Pop();
+			MoveBotToTeam(*Bot, static_cast<EShooterTeam>(To));
+			Bots[To].Add(Bot);
+		}
+	}
+	// ...those still too many leave, and the missing ones join (CT first: a bot match's five CT, then five T).
+	for (const int32 Team : {CT, T})
+	{
+		while (Bots[Team].Num() > Target[Team])
+		{
+			RemoveBot(*Bots[Team].Pop());
+		}
+	}
+	const int32 AddedCT = AddBots(EShooterTeam::CT, Target[CT] - Bots[CT].Num());
+	const int32 AddedT = AddBots(EShooterTeam::T, Target[T] - Bots[T].Num());
+	UE_LOG(LogShooter, Display, TEXT("Bots: %d CT and %d T with %d and %d player(s) (%d joined)"), Target[CT],
+		Target[T], Humans[CT], Humans[T], AddedCT + AddedT);
+}
+
+void AShooterGameMode::MoveBotToTeam(AShooterAIController& Bot, EShooterTeam Team)
+{
+	AShooterPlayerState* State = Bot.GetPlayerState<AShooterPlayerState>();
+	if (State == nullptr)
+	{
+		return;
+	}
+	if (APawn* Pawn = Bot.GetPawn())
+	{
+		Bot.UnPossess();
+		(void)Pawn->Destroy();
+	}
+	State->SetTeam(Team);
+	const int32 TeamIndex = static_cast<int32>(Team);
+	Bot.SetSensingSlot(
+		(2 * NumBotsAddedToTeam[TeamIndex]++) + (Team == EShooterTeam::T ? 1 : 0), 2 * MaxPlayersPerTeam);
+	NotifyPawnsChanged();
+	// Before the round is fought it plays at once (the freeze); else from the next round's start.
+	if (!IsRoundLive())
+	{
+		RestartPlayer(&Bot);
+	}
+}
+
+void AShooterGameMode::RemoveBot(AShooterAIController& Bot)
+{
+	if (APawn* Pawn = Bot.GetPawn())
+	{
+		Bot.UnPossess();
+		(void)Pawn->Destroy();
+	}
+	Logout(&Bot);
+	(void)Bot.Destroy();
+	NotifyPawnsChanged();
 }
 
 int32 AShooterGameMode::KickBots(const FString& Name)
@@ -1078,6 +1490,11 @@ void AShooterGameMode::StartRound()
 		return;
 	}
 	CleanUpMap();
+	// A team changed during the last round: the bots even the sides out again before anyone is placed.
+	if (bRebalancePending)
+	{
+		RebalanceBots();
+	}
 	// The last round's weapons, grenades, corpses and bomb go in a full collection at the next safe point (the steps'
 	// incremental ones collect in between).
 	if (GEngine != nullptr)
@@ -1421,7 +1838,7 @@ void AShooterGameMode::OnPhaseTimer()
 			break;
 		case EShooterRoundState::RoundEnd:
 		{
-			const int32 RoundsToWin = (MaxRounds / 2) + 1;
+			const int32 RoundsToWin = GetRoundsToWin();
 			if (State->GetTeamScore(EShooterTeam::CT) >= RoundsToWin ||
 				State->GetTeamScore(EShooterTeam::T) >= RoundsToWin || State->GetRoundNumber() >= MaxRounds)
 			{
@@ -1491,15 +1908,10 @@ void AShooterGameMode::Tick(float DeltaSeconds)
 	}
 	if (GetMatchState() == MatchState::WaitingToStart)
 	{
-		bool bHasHuman = false;
-		for (const APlayerState* PlayerState : GetGameState().GetPlayerArray())
+		// The bots join once the player has chosen a team (a bot match's at once).
+		if (bRebalancePending)
 		{
-			const AShooterPlayerState* ShooterState = Cast<AShooterPlayerState>(PlayerState);
-			bHasHuman |= ShooterState != nullptr && !ShooterState->bIsABot;
-		}
-		if (bFillTeamsWithBots && (bHasHuman || bBotMatch))
-		{
-			(void)FillTeamsWithBots();
+			RebalanceBots();
 		}
 		if (ReadyToStartMatch())
 		{

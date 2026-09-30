@@ -27,6 +27,7 @@
 #include "Serialization/JsonSerializer.h"
 #include "StaticLightingSystem.h"
 #include "UObject/Package.h"
+#include "UObject/UnrealType.h"
 
 namespace
 {
@@ -147,6 +148,83 @@ namespace
 			return nullptr;
 		}
 		return Object;
+	}
+
+	/** The node whose extras set the map's AWorldSettings (Docs/LEVELS.md, "The world settings"). */
+	const TCHAR* const WorldSettingsNodeName = TEXT("WorldSettings");
+
+	/** An extras value as ImportText reads it: a string as it is, a number as C++ writes it, a bool as True / False. */
+	bool ExtrasValueText(const FJsonValue& Value, FString& OutText)
+	{
+		switch (Value.Type)
+		{
+			case EJson::String:
+				OutText = Value.AsString();
+				return true;
+			case EJson::Number:
+				OutText = FString::Printf("%.9g", Value.AsNumber());
+				return true;
+			case EJson::Boolean:
+				OutText = Value.AsBool() ? TEXT("True") : TEXT("False");
+				return true;
+			default:
+				return false;
+		}
+	}
+
+	/**
+	 * Sets the map's world settings from the WorldSettings node's extras (Leon, Docs/PLANS/ps2-polish.md P8): each key
+	 * a property of AWorldSettings, or of a struct in it, by its path (`KillZ`, `FogSettings.bEnableFog`,
+	 * `SkySettings.SkyCubemap`), each value its text as ImportText reads it (an asset by its object path, loaded when
+	 * it is not: ImportText only finds loaded objects). False, logged, for a key that names no property or a value that
+	 * does not parse.
+	 */
+	bool ApplyWorldSettingsExtras(AWorldSettings& WorldSettings, const FJsonObject& Extras, const FString& Filename)
+	{
+		bool bApplied = true;
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Field : Extras.Values)
+		{
+			TArray<FString> Path;
+			Field.Key.ParseIntoArray(Path, TEXT("."), true);
+			void* Container = &WorldSettings;
+			const UStruct* Struct = AWorldSettings::StaticClass();
+			FProperty* Property = nullptr;
+			for (int32 Index = 0; Index < Path.Num() && Struct != nullptr; ++Index)
+			{
+				Property = Struct->FindPropertyByName(FName(*Path[Index]));
+				if (Property == nullptr || Index + 1 == Path.Num())
+				{
+					break;
+				}
+				const FStructProperty* StructProperty = CastField<FStructProperty>(Property);
+				Container = Property->ContainerPtrToValuePtr<void>(Container);
+				Struct = StructProperty != nullptr ? StructProperty->Struct : nullptr;
+				Property = nullptr;
+			}
+			FString Text;
+			if (Property == nullptr || !Field.Value.IsValid() || !ExtrasValueText(*Field.Value, Text))
+			{
+				UE_LOG(LogLeonEd, Error, "GLTFMapFactory: '%s': the %s node's '%s' is no world settings property",
+					*Filename, WorldSettingsNodeName, *Field.Key);
+				bApplied = false;
+				continue;
+			}
+			if (const FObjectPropertyBase* ObjectProperty = CastField<FObjectPropertyBase>(Property))
+			{
+				if (Text.StartsWith(TEXT("/")) && ObjectProperty->PropertyClass != nullptr)
+				{
+					(void)StaticLoadObject(ObjectProperty->PropertyClass, nullptr, *Text);
+				}
+			}
+			if (Property->ImportText(
+					*Text, Property->ContainerPtrToValuePtr<void>(Container), PPF_None, &WorldSettings) == nullptr)
+			{
+				UE_LOG(LogLeonEd, Error, "GLTFMapFactory: '%s': the %s node cannot set %s to '%s'", *Filename,
+					WorldSettingsNodeName, *Field.Key, *Text);
+				bApplied = false;
+			}
+		}
+		return bApplied;
 	}
 
 	/** True when Class is or derives from a class named ClassName (without its prefix: `PlayerStart`). */
@@ -349,11 +427,18 @@ UObject* UGLTFMapFactory::FactoryCreateFile(UClass* InClass, UObject* InParent, 
 	UsedNames.Add(FName(TEXT("WorldSettings")));
 	TMap<FString, int32> MeshNodeByName;
 	bool bRulesValid = true;
+	// The world settings node's extras, set on the map's AWorldSettings once it is spawned.
+	TSharedPtr<FJsonObject> WorldSettingsExtras;
 	for (int32 NodeIndex = 0; NodeIndex < Scene.Nodes.Num(); ++NodeIndex)
 	{
 		const FGltfSceneNode& Node = Scene.Nodes[NodeIndex];
 		FNodePlan Plan;
 		Plan.NodeIndex = NodeIndex;
+		if (Node.Name == WorldSettingsNodeName && Node.Mesh == INDEX_NONE && Node.Light == INDEX_NONE)
+		{
+			WorldSettingsExtras = ParseExtras(Node);
+			continue;
+		}
 		if (Node.Light != INDEX_NONE)
 		{
 			// A light is a light whatever its name.
@@ -569,6 +654,10 @@ UObject* UGLTFMapFactory::FactoryCreateFile(UClass* InClass, UObject* InParent, 
 	AWorldSettings* WorldSettings =
 		World->SpawnActor<AWorldSettings>(AWorldSettings::StaticClass(), NamedSpawn(FName(TEXT("WorldSettings"))));
 	World->PersistentLevel->SetWorldSettings(WorldSettings);
+	if (WorldSettingsExtras.IsValid() && !ApplyWorldSettingsExtras(*WorldSettings, *WorldSettingsExtras, Filename))
+	{
+		return nullptr;
+	}
 	TMap<FString, ANavigationWaypoint*> WaypointsByName;
 	TArray<TPair<ANavigationWaypoint*, int32>> WaypointNodes;
 	for (const FNodePlan& Plan : Plans)

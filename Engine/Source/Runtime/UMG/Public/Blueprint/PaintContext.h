@@ -1,14 +1,18 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Fonts/SlateFontInfo.h"
 #include "Fonts/TextLayout.h"
 
 class FCanvas;
+class FHittestGrid;
+struct FSlateBrush;
 
 /**
  * Screen-space drawing for the widgets' paint (pixel coords, top-left origin), into the frame's FCanvas
- * (Engine's CanvasTypes.h). UE analogy: FPaintContext / Slate draw elements (lite). Colors are linear RGB (alpha
- * unused).
+ * (Engine's CanvasTypes.h). UE analogy: FPaintContext / Slate draw elements (lite). Colours are linear RGBA, blended by
+ * their alpha. While a user widget paints, it also collects the interactable widgets and where they went (the hit-test
+ * grid: hover, clicks and focus navigation).
  */
 class UMG_API FPaintContext
 {
@@ -23,21 +27,41 @@ public:
 	{
 		return Height;
 	}
+	[[nodiscard]] FCanvas& GetCanvas() const
+	{
+		return Canvas;
+	}
 
 	void DrawLine(float X0, float Y0, float X1, float Y1, const FLinearColor& Color, float Thickness = 2.0f);
 	void DrawRect(float X, float Y, float W, float H, const FLinearColor& Color);
+	/** A brush over the rectangle: its texture's UV region tinted by its tint times Color, or the tint alone. */
+	void DrawBrush(
+		const FSlateBrush& Brush, float X, float Y, float W, float H, const FLinearColor& Color = FLinearColor::White);
 
-	/** Draws multiline text; X is the left / center / right of each line per Justify. */
-	void DrawText(const FString& Text, float X, float Y, const FLinearColor& Color, float Scale = HudFontScale,
-		ETextJustify Justify = ETextJustify::Left);
+	/**
+	 * Multiline text in Font; X is the left / center / right of each line per Justify. A shadow when ShadowColor's
+	 * alpha is above 0 (ShadowOffset away), an outline when the font's OutlineSettings ask for one.
+	 */
+	void DrawText(const FSlateFontInfo& Font, const FString& Text, float X, float Y, const FLinearColor& Color,
+		ETextJustify Justify = ETextJustify::Left, const FVector2D& ShadowOffset = FVector2D::ZeroVector,
+		const FLinearColor& ShadowColor = FLinearColor::Transparent);
 
-	void MeasureText(const FString& Text, float Scale, float& OutWidth, float& OutHeight) const;
+	/** The size of multiline text in Font (layout outside a paint too). */
+	static void MeasureText(const FSlateFontInfo& Font, const FString& Text, float& OutWidth, float& OutHeight);
 
-	/** Measures without a paint context (layout outside NativePaint). */
-	static void MeasureTextOnly(const FString& Text, float Scale, float& OutWidth, float& OutHeight);
+	/** The grid the interactable widgets painted now go to; null outside a user widget's paint. */
+	[[nodiscard]] FHittestGrid* GetHittestGrid() const
+	{
+		return HittestGrid;
+	}
+	void SetHittestGrid(FHittestGrid* InHittestGrid)
+	{
+		HittestGrid = InHittestGrid;
+	}
 
 private:
 	FCanvas& Canvas;
 	int32 Width = 0;
 	int32 Height = 0;
+	FHittestGrid* HittestGrid = nullptr;
 };

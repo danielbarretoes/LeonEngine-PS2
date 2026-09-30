@@ -1,7 +1,7 @@
 # Leon Engine
 
 A C++ game engine that follows the **Unreal Engine 4.27** source layout, module architecture and Epic naming
-conventions, built with CMake through **LeonBuildTool** (our UnrealBuildTool). Version 0.24.0
+conventions, built with CMake through **LeonBuildTool** (our UnrealBuildTool). Version 0.25.0
 ([CHANGELOG.md](CHANGELOG.md)).
 
 - **Win64, the development and editor platform**: the engine modules (`Core`, `CoreUObject`, `Engine`, `Renderer`:
@@ -62,14 +62,15 @@ CT 3 - T 6, 55 kill(s), seed 7, sides switched after round 5`):
 
 ```bat
 Engine\Build\BatchFiles\Build.bat ShooterGame Win64 Development -Project=%CD%\Game\ShooterGame\ShooterGame.lproj
-Game\ShooterGame\Binaries\Win64\ShooterGame.exe -ExecCmds=bot_fill
+Game\ShooterGame\Binaries\Win64\ShooterGame.exe
 Engine\Build\BatchFiles\SmokeTest.bat
 Engine\Build\BatchFiles\BotMatch.bat 10 7
 ```
 
 Measure the PS2 frame in PCSX2, unattended (a bot match watched through a bot's eyes; `-Iso` boots the disc):
-`Engine\Build\BatchFiles\MeasurePS2.bat [-Iso]`. At 0.24.0 ShooterGame on de_leon runs at 29.95 fps (p50 / p95 / p99
-33.5 ms) and its first frame from the disc comes 2.93 s after the engine starts
+`Engine\Build\BatchFiles\MeasurePS2.bat [-Iso]`. At 0.25.0 ShooterGame on de_leon runs every frame after the
+first at 33.5 ms (p50 / p95 / p99; 29.62 fps with the travel from the main menu); at 0.24.0 its first frame from the
+disc came 2.93 s after the engine starts
 ([Budgets.md](Engine/Platforms/PS2/Documentation/Budgets.md)).
 
 Run the staged PS2 game in PCSX2 again (it reads its content from its pak, so the staged build is the one to boot):
@@ -123,6 +124,7 @@ and run in `LeonAutomationTests`.
 | [Engine/Platforms/PS2/README.md](Engine/Platforms/PS2/README.md) | PS2 platform extension: HAL, VU1 / VU0, DMA, SPU2, disc IO, memory card, pad, ISO, measuring |
 | [Engine/Platforms/PS2/Documentation/Budgets.md](Engine/Platforms/PS2/Documentation/Budgets.md) | PS2 ELF size, memory and frame measures per phase |
 | [Docs/PLANS/ps2-shipping.md](Docs/PLANS/ps2-shipping.md) | The plan behind 0.22.0 to 0.24.0 (Spanish): each phase's state and deviations |
+| [Docs/PLANS/ps2-polish.md](Docs/PLANS/ps2-polish.md) | The plan behind 0.25.0 (Spanish); what is left is in [Docs/PENDING.md](Docs/PENDING.md) |
 | [Docs/ASSET_FORMATS.md](Docs/ASSET_FORMATS.md), [Docs/LEVELS.md](Docs/LEVELS.md), [Docs/TOOLS.md](Docs/TOOLS.md) | Asset formats, maps (`.lmap`, the glTF map import), cook tools |
 | [Docs/ART_PIPELINE.md](Docs/ART_PIPELINE.md) | Art: budgets, naming, the shared skeletons, the animation list, the Blender scripts and their glTF export |
 | [Docs/TESTING.md](Docs/TESTING.md) | Automated gates, frame captures, the axes gizmo and the manual checklist |

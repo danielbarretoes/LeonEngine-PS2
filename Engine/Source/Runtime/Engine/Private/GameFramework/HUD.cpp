@@ -8,8 +8,9 @@ AHUD::AHUD(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 	bHidden = true;
-	// The widgets tick with the HUD.
+	// The widgets tick with the HUD, also while the game is paused (UE): a pause menu is a HUD's widget.
 	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bTickEvenWhenPaused = true;
 }
 
 void AHUD::PostInitializeComponents()
@@ -65,6 +66,63 @@ void AHUD::Tick(float DeltaTime)
 		{
 			Widget->NativeTick(DeltaTime);
 		}
+	}
+}
+
+bool AHUD::InputKey(const FKey& Key, EInputEvent EventType)
+{
+	if (EventType != IE_Pressed && EventType != IE_Released && EventType != IE_Repeat)
+	{
+		return false;
+	}
+	const bool bPressed = EventType != IE_Released;
+	// The top widget first: the last added paints over the others.
+	for (int32 Index = Widgets.Num() - 1; Index >= 0; --Index)
+	{
+		UUserWidget* Widget = Widgets[Index];
+		if (Widget == nullptr || !Widget->IsVisible())
+		{
+			continue;
+		}
+		FReply Reply = FReply::Unhandled();
+		if (Key.IsMouseButton())
+		{
+			const FPointerEvent MouseEvent(MousePosition, Key);
+			Reply = bPressed ? Widget->ProcessMouseButtonDownEvent(MouseEvent)
+							 : Widget->ProcessMouseButtonUpEvent(MouseEvent);
+		}
+		else
+		{
+			const FKeyEvent KeyEvent(Key, EventType == IE_Repeat);
+			Reply = bPressed ? Widget->ProcessKeyDownEvent(KeyEvent) : Widget->ProcessKeyUpEvent(KeyEvent);
+		}
+		if (Reply.IsEventHandled())
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void AHUD::InputMouseMove(const FVector2D& CanvasPosition)
+{
+	MousePosition = CanvasPosition;
+	const FPointerEvent MouseEvent(CanvasPosition, FKey());
+	bool bTaken = false;
+	for (int32 Index = Widgets.Num() - 1; Index >= 0; --Index)
+	{
+		UUserWidget* Widget = Widgets[Index];
+		if (Widget == nullptr || !Widget->IsVisible())
+		{
+			continue;
+		}
+		// Only the top widget under the mouse hovers; the ones under it lose their hover.
+		if (bTaken)
+		{
+			(void)Widget->ProcessMouseMoveEvent(FPointerEvent(FVector2D(-1.0f, -1.0f), FKey()));
+			continue;
+		}
+		bTaken = Widget->ProcessMouseMoveEvent(MouseEvent).IsEventHandled();
 	}
 }
 

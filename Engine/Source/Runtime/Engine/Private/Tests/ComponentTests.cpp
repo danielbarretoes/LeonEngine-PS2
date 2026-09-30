@@ -197,6 +197,17 @@ bool FComponentsAttachmentRulesAndSocketsTest::RunTest(const FString& Parameters
 	TestFalse("No bone socket", Skeletal->DoesSocketExist(TEXT("hand_r")));
 	TestTrue("Missing bone falls back to the component",
 		Skeletal->GetSocketTransform(TEXT("hand_r")).GetLocation().Equals(Skeletal->GetComponentLocation(), 1.0e-3f));
+
+	// A child listed under a parent it no longer points to (its pointer cleared) leaves the list when the parent goes,
+	// and the parent's detaching ends (ps2-polish P3: it looped for ever).
+	USceneComponent* Parent = NewObject<USceneComponent>(Actor);
+	USceneComponent* Stale = NewObject<USceneComponent>(Actor);
+	TestTrue(
+		"Attach the stale child", Stale->AttachToComponent(Parent, FAttachmentTransformRules::KeepRelativeTransform));
+	Stale->SetupAttachment(nullptr);
+	Parent->DestroyComponent();
+	TestEqual("The stale child left the list", Parent->GetAttachChildren().Num(), 0);
+	TestNull("And has no parent", Stale->GetAttachParent());
 	return true;
 }
 

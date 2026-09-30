@@ -17,7 +17,7 @@ source layout, module architecture and Epic naming, and is built with CMake thro
 LeonEngine-PS2/
 ├── Engine/
 │   ├── Build/                 # BatchFiles (Build, Clean, Rebuild, RunTests, RunGates, Cook, BuildCookRun, BotMatch,
-│   │                          #   SmokeTest, MeasurePS2, FormatCode, Lint, …), Build.version (0.24.0)
+│   │                          #   SmokeTest, MeasurePS2, FormatCode, Lint, …), Build.version (0.25.0)
 │   ├── Config/                # BaseEngine.ini, BaseGame.ini, BaseInput.ini, BaseEditor.ini (first config layer)
 │   ├── Content/               # engine content: .lasset packages (EngineMaterials, EngineResources, BasicShapes),
 │   │                          #   .lmap maps (Maps: Entry, Template_Default, AxisTest)
@@ -207,6 +207,7 @@ flowchart BT
   GSConformance -.-> PS2RHI
   VU1Conformance -.-> PS2RHI
   PhysicsCore --> CoreUObject
+  SlateCore --> InputCore
   UMG --> CoreUObject
   UMG --> SlateCore
   UMG -.-> ApplicationCore
@@ -296,7 +297,7 @@ and `LAUNCH_API`; the symbols resolve when the executable links. No module depen
 | Library | Used by (public / private) | Platforms |
 | --- | --- | --- |
 | GLFW | private: ApplicationCore (`_Desktop`) | Desktop |
-| STB | private: Engine (`stb_easy_font`, the canvas font), LeonEd (`stb_image`, the texture factory: the only image decoder) | all (header-only) |
+| STB | private: LeonEd (`stb_image`, the texture factory: the only image decoder; `stb_truetype`, the TrueType font factory: the only font reader) | Desktop (header-only) |
 | Glad | private: OpenGLDrv, Renderer | Desktop |
 | MiniAudio | private: AudioMixer | Desktop |
 | CGLTF | private: MeshUtilities (glTF, the only mesh format) | Desktop |
@@ -315,7 +316,7 @@ and `LAUNCH_API`; the symbols resolve when the executable links. No module depen
 | **EngineSettings** | The project's map, game mode and general settings as config classes | `UGameMapsSettings`, `FGameModeName`, `UGeneralProjectSettings` | all |
 | **ApplicationCore** | Platform application, windows, gamepad input (the DualShock on every platform: a desktop gamepad reads as one, through libpad's bytes and dead zone) | `GenericApplication`, `FGenericWindow`, `IInputInterface` (controller ids, `FForceFeedbackValues`), `FDualShockAnalog`, `FDualShockConnection`, `FDualShockForceFeedback`, `FDualShockPressure`, `FPlatformApplicationMisc`; desktop `FGLFWApplication`, `FGLFWWindow`, `FGLFWInputInterface`; PS2 ext `FPS2Application`, `FPS2Window`, `FPS2InputInterface` | all |
 | **RHI** | Graphics backend interface + opaque GPU handle ids | `RHIInit` / `RHIExit`, `FDynamicRHI`, `GDynamicRHI`, `FRHIGPUMemoryStats`, `FRHITextureId` … | all |
-| **GSCore** | The Graphics Synthesizer's contract (Leon; [plan](PLANS/ps2-gs-parity.md)): its registers and formats as in the GS User's Manual (chapter 7), encoded and decoded, and the command list the renderer fills and every backend consumes (register writes in order, image uploads), limited to what every backend reproduces; the list as a GIF packet (PACKED A+D writes, IMAGE transfers), appended to an array or written as the VIF1 DMA source chain the PS2 sends (CNT / REF / END with DIRECT, and each vertex batch as the platform's `IGSVertexBatchEncoder` writes it: [ps2-shipping](PLANS/ps2-shipping.md) N14); the vertex batch command (`FGSVertexDraw`, `FGSVertexBatch`: a LPS2 v2 batch with its transforms, material and lights) and the C++ emitter that is its reference (`FGSPrimitiveEmitter`: transform, lighting, clipping, guard band, back faces, strips); the GS conformance scenes the reference's tests check and GSConformance draws on the PS2; the drawing environment every backend shares (buffers, size, pixel mapping, depth test); the 4 MB local memory laid out as the GS's (pages, blocks and columns with each storage format's tables, manual chapter 8) with its transfers, and the texel decoder (formats, CLUTs, wrap modes) the reference and the emulator share; debug text (5x7 glyphs) and rectangles recorded as sprites, which every backend draws (the PS2 error screen, GSConformance); the television modes and the frame pacing in fields (which vertical blank shows a frame) | `EGSRegister`, `EGSPixelFormat`, `FGSPrim`, `FGSRGBAQ`, `FGSXYZ`, `FGSTex0`, `FGSTex1`, `FGSAlpha`, `FGSTest`, `FGSFrame`, `FGSZBuf`, `FGSDimx`, `GSToFixed4`, `FGSCommandList`, `FGSGifPacket`, `FGSVertexBatch`, `FGSVertexDraw`, `FGSPrimitiveEmitter`, `IGSVertexBatchEncoder`, `GSConformance::GetScenes`, `FGSDrawEnvironment`, `FGSLocalMemory`, `FGSTexelDecoder`, `FGSClutBuffer`, `FGSTextureLayout`, `FGSDebugDraw`, `EGSDmaTag`, `EGSVifCommand`, `EGSVideoMode`, `FGSFieldPacer` | all |
+| **GSCore** | The Graphics Synthesizer's contract (Leon; [plan](PLANS/ps2-gs-parity.md)): its registers and formats as in the GS User's Manual (chapter 7), encoded and decoded, and the command list the renderer fills and every backend consumes (register writes in order, image uploads), limited to what every backend reproduces; the list as a GIF packet (PACKED A+D writes, IMAGE transfers), appended to an array or written as the VIF1 DMA source chain the PS2 sends (CNT / REF / END with DIRECT, and each vertex batch as the platform's `IGSVertexBatchEncoder` writes it: [ps2-shipping](PLANS/ps2-shipping.md) N14); the vertex batch command (`FGSVertexDraw`, `FGSVertexBatch`: a LPS2 v2 batch with its transforms, material and lights) and the C++ emitter that is its reference (`FGSPrimitiveEmitter`: transform, lighting, clipping, guard band, back faces, strips); the GS conformance scenes the reference's tests check and GSConformance draws on the PS2; the drawing environment every backend shares (buffers, size, pixel mapping, depth test); the 4 MB local memory laid out as the GS's (pages, blocks and columns with each storage format's tables, manual chapter 8) with its transfers, and the texel decoder (formats, CLUTs, wrap modes) the reference and the emulator share; debug text in the game's font compiled in (DejaVu Sans Condensed at 10 and 14 pixels, `GSDebugFontData.inl` written by `LeonCook -run=EmbedFont`: PSMT4 pages uploaded once, a textured SPRITE a glyph, [ps2-polish](PLANS/ps2-polish.md) P5b) and rectangles, which every backend draws (the PS2 error screen, GSConformance: no asset to load); the television modes and the frame pacing in fields (which vertical blank shows a frame) | `EGSRegister`, `EGSPixelFormat`, `FGSPrim`, `FGSRGBAQ`, `FGSXYZ`, `FGSTex0`, `FGSTex1`, `FGSAlpha`, `FGSTest`, `FGSFrame`, `FGSZBuf`, `FGSDimx`, `GSToFixed4`, `FGSCommandList`, `FGSGifPacket`, `FGSVertexBatch`, `FGSVertexDraw`, `FGSPrimitiveEmitter`, `IGSVertexBatchEncoder`, `GSConformance::GetScenes`, `FGSDrawEnvironment`, `FGSLocalMemory`, `FGSTexelDecoder`, `FGSClutBuffer`, `FGSTextureLayout`, `FGSDebugDraw`, `EGSDebugFont`, `EGSDmaTag`, `EGSVifCommand`, `EGSVideoMode`, `FGSFieldPacer` | all |
 | **GSReference** (Developer) | A software Graphics Synthesizer ([plan](PLANS/ps2-gs-parity.md), P2): executes an `FGSCommandList` into a 4 MB local memory by the GS User's Manual's rules (drawing rules, texture sampling, CLUTs, fog, pixel tests, blending, dithering, frame buffer writes, transfers); the oracle the desktop GS emulator and the PS2 backend are compared with | `FGSReferenceRasterizer` | Desktop |
 | **TextureCompressor** (Developer) | A texture's platform data for a cook (UE: TextureCompressor and the TextureFormat modules): the PS2's paletted textures, powers of two up to 256, PSMT4 / PSMT8 with a deterministic median cut ([ps2-engine](PLANS/ps2-engine.md) E3) | `FPalettedTextureBuilder`, `FPalettedTexture` | Desktop |
 | **AudioCompressor** (Developer) | A sound's platform data for a cook (UE: the AudioFormat modules, AudioFormatADPCM): the SPU2's ADPCM, 16-byte blocks of 28 samples, each block's filter and shift searched against the decoder, mono, resampled by a windowed sinc to the sound's rate (22 050 Hz for effects), the loop on a block, the same bytes every run ([ps2-shipping](PLANS/ps2-shipping.md) N19); the desktop game uses it for uncooked sounds | `FSpuAdpcmEncoder`, `FSpuAdpcmSettings`, `FSpuAdpcmCompressed` | Desktop |
@@ -330,9 +331,9 @@ and `LAUNCH_API`; the symbols resolve when the executable links. No module depen
 | **AudioMixer** | Audio device over the SPU2's model on every platform ([ps2-shipping](PLANS/ps2-shipping.md) N19, [Audio](#audio)): SPU2 ADPCM buffers resident in its 2 MB (a stack, as audsrv allocates it), 24 hardware voices (2 for music, 4 kept for sounds above the default priority), the volume and pan of each voice computed from the listener with audsrv's steps; the format and its decoder; the platform's `FAudioHardware` carries it out (audsrv's voices on the PS2; on the desktop the buffers decoded and the voices mixed on the CPU by `FSoftwareAudioMixer` into miniaudio's `FAudioOutput`) | `FAudioDevice`, `EUISound`, `FSpuAdpcm`, `FSpuAdpcmSound`, `FSpuVoiceVolume`, `FAudioHardware`, `FSoftwareAudioMixer`, `FAudioOutput` (desktop) | all |
 | **RenderCore** | CPU-side render data, UE view matrices, the GL clip-space adapter; the tests' legacy data converter | `FMeshData`, `FMeshSection`, `FVertex`, `FLPS2Mesh` (LPS2 v2: a mesh's render data, static or skinned), `FVisibilityCellGraph` (cells and portals, N15), `FFrustum` (over Core's `FBox` / `FPlane`), `FMaterial` (`MaterialShared.h`: the values a material gives the renderer), `EMaterialLightingModel`, `EPixelFormat` (`PixelFormat.h`), `MakeViewMatrix` / `MakeLookAtView` (`ViewMatrices.h`), `ToGLClipSpace` (`GLClipSpace.h`), `EShaderReloadResult` (`ShaderCore.h`); for the tests only, `FLegacyCoordinateConversion` (`Public/Tests`) | all |
 | **Renderer** | The renderer module (§12): the scene (`FScene`, its cells and portals) and the GS scene renderer, which records every frame as an `FGSCommandList` (GS register writes and VU1 vertex batches); on PS2 it goes to `PS2RHI`'s DMA chain (`Renderer_PS2.Build.cmake`), on the desktop to the OpenGL GS emulator. Only its module interface is public (Engine's `IRendererModule`) | `FScene`, `FGSSceneRenderer`, `FSceneRenderList` (the scratchpad's frame lists), `FGSTextureCache`, `FWorldEffectsGeometry`; desktop `FRendererModule`, `FGSOpenGLEmulator`, `FShader`; PS2 `FPS2RendererModule`; `LogRenderer` | all |
-| **SlateCore** | Text layout primitives and the layout types UMG uses | `ETextJustify`, HUD font metrics, `FMargin` (`Layout/Margin.h`), `EHorizontalAlignment` (`Types/SlateEnums.h`) | all |
-| **UMG** | Widgets (UObjects since P12) as UE's widget tree; no Slate behind them and no input | `UWidget` (`ESlateVisibility`, `Slot`, `GetDesiredSize`, `Paint`), `UPanelWidget` / `UPanelSlot`, `UContentWidget`, `UBorder`, `UVerticalBox` / `UVerticalBoxSlot`, `UCanvasPanel` / `UCanvasPanelSlot`, `UTextBlock`, `UImage`, `UProgressBar`, `UUserWidget`, `UWidgetTree`, `FPaintContext` | all |
-| **Engine** | The engine object and maps (`.lmap`, P15), gameplay framework as UObjects (P12), world, levels as actors (P13), the fixed step, tick groups and timers (N18), input, the viewport client and the console (P13), physics scene and its broadphase (N16), save games (N24), the asset classes and their import data (P14), the render interfaces (P13) | `UEngine` / `GEngine`, `UGameEngine`, `IEngineLoop`, `FFixedStepClock`, `FTickTaskManager`, `FTimerManager`, `FPhysSceneBroadphase`, `UPhysicsSettings`, `AVisibilityCellVolume`, `AVisibilityPortal`, `FURL`, `UGameViewportClient`, `FViewport`, `UPlayer`, `ULocalPlayer`, `UGameInstance` / `FWorldContext`, `UWorld`, `ULevel`, `FActorSpawnParameters`, `AActor`, `AInfo`, `UActorComponent`, `USceneComponent`, `UPrimitiveComponent`, `UShapeComponent`, `UCapsuleComponent`, `UBoxComponent`, `USphereComponent`, `UMeshComponent`, `UStaticMeshComponent`, `USkeletalMeshComponent`, `UCameraComponent`, `USpringArmComponent`, `UMovementComponent`, `UPawnMovementComponent`, `UCharacterMovementComponent`, `APawn`, `ACharacter`, `AController`, `APlayerController`, `AGameModeBase`, `AGameMode` (`MatchState`), `AGameStateBase`, `AGameState`, `APlayerState`, `AHUD`, `APlayerCameraManager`, `UForceFeedbackEffect` (N24), `USaveGame`, `ISaveGameSystem` / `FGenericSaveGameSystem` / `FMemoryCardSaveGameSystem` / `IPlatformFeaturesModule` (N24), `ADefaultPawn`, `UFloatingPawnMovement`, `URotatingMovementComponent`, `UInputSettings`, `UPlayerInput`, `UInputComponent`, `UGameplayStatics`, `FPhysScene`, `UNavigationSystem`; `AStaticMeshActor`, `APlayerStart`, `ATargetPoint`, `AVolume`, `ATriggerVolume`, `ABlockingVolume`, `APainCausingVolume`, `ALight`, `ADirectionalLight`, `APointLight`, `ULightComponent` (+ base, local, directional, point), `AWorldSettings`, `ACameraActor`, `ANavigationWaypoint`; `UTexture` / `UTexture2D`, `UStaticMesh` (`FStaticMeshLODResources`, `FTriMeshCollisionData`, `FStaticMaterial`, `IMeshBuilderModule`), `UBodySetup` (`FKAggregateGeom`, `FKBoxElem`, `ECollisionTraceFlag`), `UMaterialInterface` / `UMaterial` (`EMaterialShadingModel`), `USkeleton`, `USkeletalMeshSocket`, `USkeletalMesh`, `UAnimationAsset`, `UAnimSequenceBase`, `UAnimSequence`, `UAnimMontage`, `UAnimNotify`, `UBlendSpaceBase`, `UBlendSpace1D`, `UBlendSpace`, `UAimOffsetBlendSpace1D`, `UAnimInstance`, `UCharacterAnimInstance`, `USoundBase` / `USoundWave`, `UDataAsset`, `UCommandlet`, `UAssetImportData` (`FAssetImportInfo`); `FDebugDraw`, `FDebugOverlay`; `FSceneInterface`, `FPrimitiveSceneProxy`, `FLightSceneProxy`, `IRendererModule`, `FSceneViewFamily`, `FSceneView`, `FCanvas`; `LogEngine`, `LogLevel`, `LogPath`, `LogPhysics`, `LogSpawn`, `LogWorld` (`EngineLogs.h`) | all |
+| **SlateCore** | The UI's primitives UMG uses: text justification, layout, geometry, input events and the navigation keys | `ETextJustify`, `FMargin` (`Layout/Margin.h`), `EHorizontalAlignment` / `EVerticalAlignment`, `EUINavigation` / `EUINavigationAction` (`Types/SlateEnums.h`), `FGeometry`, `FReply`, `FKeyEvent` / `FPointerEvent` (`Input/`), `FNavigationConfig` (UE's, from Slate) | all |
+| **UMG** | Widgets (UObjects since P12) as UE's widget tree; no Slate behind them: the widgets take input themselves (Slate's handlers), the user widget routes it and holds the focus ([ps2-polish](PLANS/ps2-polish.md) P5) | `UWidget` (`ESlateVisibility`, `Slot`, `GetDesiredSize`, `Paint`, `GetCachedGeometry`, focus and navigation rules, `OnKeyDown` ...), `UPanelWidget` / `UPanelSlot`, `UContentWidget`, `UBorder`, `UVerticalBox` / `UVerticalBoxSlot`, `UHorizontalBox` / `UHorizontalBoxSlot`, `UCanvasPanel` / `UCanvasPanelSlot`, `UWidgetSwitcher`, `UButton`, `UTextBlock`, `UImage`, `UProgressBar`, `UTableView`, `UUserWidget`, `UWidgetTree`, `FPaintContext`, `FHittestGrid`, `FSlateBrush`, `FSlateFontInfo`, `FButtonStyle` | all |
+| **Engine** | The engine object and maps (`.lmap`, P15), gameplay framework as UObjects (P12), world, levels as actors (P13), the fixed step, tick groups and timers (N18), input, the viewport client and the console (P13), physics scene and its broadphase (N16), save games (N24), the asset classes and their import data (P14), the render interfaces (P13) | `UEngine` / `GEngine`, `UGameEngine`, `IEngineLoop`, `FFixedStepClock`, `FTickTaskManager`, `FTimerManager`, `FPhysSceneBroadphase`, `UPhysicsSettings`, `AVisibilityCellVolume`, `AVisibilityPortal`, `FURL`, `UGameViewportClient`, `FViewport`, `UPlayer`, `ULocalPlayer`, `UGameInstance` / `FWorldContext`, `UWorld`, `ULevel`, `FActorSpawnParameters`, `AActor`, `AInfo`, `UActorComponent`, `USceneComponent`, `UPrimitiveComponent`, `UShapeComponent`, `UCapsuleComponent`, `UBoxComponent`, `USphereComponent`, `UMeshComponent`, `UStaticMeshComponent`, `USkeletalMeshComponent`, `UCameraComponent`, `USpringArmComponent`, `UMovementComponent`, `UPawnMovementComponent`, `UCharacterMovementComponent`, `APawn`, `ACharacter`, `AController`, `APlayerController`, `AGameModeBase`, `AGameMode` (`MatchState`), `AGameStateBase`, `AGameState`, `APlayerState`, `AHUD`, `APlayerCameraManager`, `UForceFeedbackEffect` (N24), `USaveGame`, `ISaveGameSystem` / `FGenericSaveGameSystem` / `FMemoryCardSaveGameSystem` / `IPlatformFeaturesModule` (N24), `ADefaultPawn`, `UFloatingPawnMovement`, `URotatingMovementComponent`, `UInputSettings`, `UPlayerInput`, `UInputComponent`, `UGameplayStatics`, `FPhysScene`, `UNavigationSystem`; `AStaticMeshActor`, `APlayerStart`, `ATargetPoint`, `AVolume`, `ATriggerVolume`, `ABlockingVolume`, `APainCausingVolume`, `ALight`, `ADirectionalLight`, `APointLight`, `ULightComponent` (+ base, local, directional, point), `AWorldSettings`, `ACameraActor`, `ANavigationWaypoint`; `UTexture` / `UTexture2D` / `UTextureCube`, `UStaticMesh` (`FStaticMeshLODResources`, `FTriMeshCollisionData`, `FStaticMaterial`, `IMeshBuilderModule`), `UBodySetup` (`FKAggregateGeom`, `FKBoxElem`, `ECollisionTraceFlag`), `UMaterialInterface` / `UMaterial` (`EMaterialShadingModel`), `USkeleton`, `USkeletalMeshSocket`, `USkeletalMesh`, `UAnimationAsset`, `UAnimSequenceBase`, `UAnimSequence`, `UAnimMontage`, `UAnimNotify`, `UBlendSpaceBase`, `UBlendSpace1D`, `UBlendSpace`, `UAimOffsetBlendSpace1D`, `UAnimInstance`, `UCharacterAnimInstance`, `USoundBase` / `USoundWave`, `UDataAsset`, `UCommandlet`, `UAssetImportData` (`FAssetImportInfo`); `FDebugDraw`, `FDebugOverlay`; `FSceneInterface`, `FPrimitiveSceneProxy`, `FLightSceneProxy`, `IRendererModule`, `FSceneViewFamily`, `FSceneView`, `FCanvas`; `LogEngine`, `LogLevel`, `LogPath`, `LogPhysics`, `LogSpawn`, `LogWorld` (`EngineLogs.h`) | all |
 | **AIModule** | AI controller (a UObject actor), behavior trees over a typed blackboard, and senses | `AAIController`, `UBehaviorTree`, `UBTComposite_Sequence`, `UBTComposite_Selector`, `UBTDecorator_Bool`, `UBTTask_Action`, `UBlackboardComponent`, `UPawnSensingComponent` (P20), `EPathFollowingStatus` | all |
 | **MeshUtilities** | glTF import (static meshes, skinned meshes and their animations, scenes: the only mesh format since [ps2-shipping](PLANS/ps2-shipping.md) N21), the LPS2 v2 build of the meshes' render data, static and skinned (Developer; Engine's `IMeshBuilderModule`) | `FLPS2MeshBuilder`, `FStaticMeshBuilder`, `LoadStaticMeshFromGltf`, `LoadSkeletalMeshFromGltf`, `LoadAnimSequencesFromGltf`, `LoadGltfScene` (`FGltfScene`), `FImportCoordinateConversion` | Desktop |
 | **TargetPlatform** | The platforms the cook targets (Developer, P16; UE: TargetPlatform): Win64 and PS2, both with the PS2's formats (paletted textures, SPU2 ADPCM sounds); only Win64 stages the shaders | `ITargetPlatform`, `ITargetPlatformManagerModule`, `GetTargetPlatformManager` / `GetTargetPlatformManagerRef` | Desktop |
@@ -663,7 +664,8 @@ ThirdPerson in [ps2-shipping](PLANS/ps2-shipping.md) N2.
 - `Init` (UE's `FEngineLoop::Init`): reads Leon's capture switches (`-Screenshot=<file.bmp>`, `-ExitAfterFrames=N`,
   `-ExitAfterSeconds=N`, `-benchmark`: the steps do not wait for the clock, `FApp::IsBenchmarking`; a capture is an unattended run, `FApp::IsUnattended`, so the viewport client ignores the OS input and
   the mouse cannot move the view), creates `GEngine` of the class `[/Script/Engine.Engine] GameEngine=` names (`UGameEngine`, in the
-  root set), queues `-ExecCmds="Cmd1;Cmd2"` (`;` or `,` separate them) in `GEngine->DeferredCommands`, then calls
+  root set), queues `-ExecCmds="Cmd1;Cmd2"` (`;` or `,` separate them) in `GEngine->DeferredCommands` (held until
+  frame N with `-ExecCmdsAfterFrames=N`, not in Shipping: [ps2-polish](PLANS/ps2-polish.md) P6's captures), then calls
   `GEngine->Init(this)` and `GEngine->Start()`. `UGameEngine::Init` starts the renderer on the window, creates the
   game instance (`GameInstanceClass`) and its world context, the viewport client (`GameViewportClientClassName`) on the
   window's `FViewport`, and the first local player (`SetupInitialLocalPlayer`); `Start` has the game instance open the
@@ -720,9 +722,9 @@ FEngineLoop::Tick
     FAudioDevice::Tick             the listener, the queued plays, the voices' volumes
     UGameViewportClient::Draw      the proxies and the view interpolated between the last two steps
       FGSSceneRenderer::Render     cells and portals, VU0 frustum tests, the frame's lists on the scratchpad, each LPS2
-                                   batch inside the guard band to VU1 (DrawVertexBatch; the C++ emitter on Win64), one
-                                   that crosses it or the near plane to the C++ clipper (D8) → FGSCommandList
-      DrawCanvas                   the HUD and the debug text as SPRITEs
+                                   batch to VU1 (DrawVertexBatch; the C++ emitter on Win64), one that crosses the guard
+                                   band or the near plane to be clipped there (D8, ps2-polish P8b) → FGSCommandList
+      DrawCanvas                   the HUD and the debug text as SPRITEs (a glyph a textured one)
       present                      PS2: FPS2RHI::WaitVSync: the lists as one VIF1 DMA chain (BuildChain), kicked,
                                         then sleep until FGSFieldPacer's vertical blank (FPS2VerticalBlank)
                                    Win64: FGSOpenGLEmulator executes the list, FFramePacer holds it SyncInterval fields
@@ -864,6 +866,23 @@ FGenericWindow keys / mouse --> UGameViewportClient::ProcessInput --> InputKey /
   Force feedback is UE's: `SetForceFeedbackChannelValue(s)`, `UForceFeedbackEffect`,
   `APlayerController::ClientPlayForceFeedback`; Win64 reads its pads through GLFW and drives the Xbox pads' motors
   through XInput (`FXInputForceFeedback`, loaded at run time).
+- **Input modes** ([ps2-polish](PLANS/ps2-polish.md) P9): `APlayerController::SetInputMode` with UE's
+  `FInputModeGameOnly` (the viewport captures the mouse, which looks), `FInputModeUIOnly` (a free cursor for the HUD's
+  widgets, which does not look: `EMouseCaptureMode::NoCapture`) and `FInputModeGameAndUI` (free, looking while the
+  left button is held). The HUD's widgets always see the keys first; a menu that must keep the game's input still pushes
+  a blocking input component (`bBlockInput`).
+
+### Pause
+
+UE's pause ([ps2-polish](PLANS/ps2-polish.md) P9). `APlayerController::SetPause` (or `UGameplayStatics::SetGamePaused`,
+the `Pause` command) asks the game mode: `AGameModeBase::SetPause` keeps a pauser with its `FCanUnpause` and makes the
+first one the world settings' `PauserPlayerState`; `ClearPause` drops the pausers that may unpause and, with none left,
+clears it (`AllowPausing`: Leon's games are standalone, so always). `UWorld::IsPaused` reads it, and a paused world's
+step is a `LEVELTICK_PauseTick`: the world's time (`GetTimeSeconds`), its timers (`FTimerManager`), the physics step and
+the effects' ageing stand still, and the tick task manager runs only the tick functions with `bTickEvenWhenPaused`:
+the player controllers (which then only process their input, the bindings with `bExecuteWhenPaused`, unless
+`bShouldPerformFullTickWhenPaused`) and the HUDs with their widgets. The camera managers and the scene keep their last
+step (the frame draws still), `GetRealTimeSeconds` goes on, and the audio device, outside the world, plays on.
 
 ### Viewport client and console
 
@@ -1149,20 +1168,59 @@ UWorld::LineBatcher (FDebugDraw), impact marks, tracers ------------------------
   (`IRendererModule::GetRenderTargetSize`, `FViewport::GetSizeXY`), and the projection's aspect ratio is the display's
   (`IRendererModule::GetDisplayAspectRatio`: 4:3, the TV the frame's non-square pixels fill; `[/Script/Engine.RendererSettings]
   DisplayAspectRatio`, with `SyncInterval`, the PS2's values on every platform: [ps2-preview](PLANS/ps2-preview.md)).
-- **Canvas.** The HUD's widgets and the debug text draw into a frame `FCanvas` (tiles, lines and text in the HUD font,
-  batched by depth sort key; the debug text uses key 1, so it goes under the HUD), which `Flush_GameThread` hands to
-  `IRendererModule::DrawCanvas`: blended, without the depth test, after the scene. `FCanvas::GetPrimitives` gives runs
-  of rectangles (a tile, a line along an axis, every bar of a glyph: stb_easy_font's are axis aligned) and triangles
-  (a slanted line); the renderer draws the rectangles as the GS's SPRITEs, two vertices each instead of six
-  ([ps2-shipping](PLANS/ps2-shipping.md) N15; the same pixels, `System.Renderer.GS.Canvas.Sprites`).
+- **Canvas.** The HUD's widgets and the debug text draw into a frame `FCanvas` (tiles flat or textured and rotated,
+  icons (`FCanvasIcon`, `MakeIcon` / `DrawIcon`: a texture's region in texels, one to one), triangle items
+  (`FCanvasTriangleItem` / `FCanvasUVTri`: each corner's position, UV and colour, drawn in the tiles' order;
+  [ps2-polish](PLANS/ps2-polish.md) P6 / P7), lines, and text in a `UFont`, batched by depth sort key; the debug text
+  uses key 1, so it goes under the HUD), which
+  `Flush_GameThread` hands to `IRendererModule::DrawCanvas`: blended by each item's alpha, without the depth test,
+  after the scene. `FCanvas::GetPrimitives` gives runs of one primitive type and one texture: rectangles (a tile, a line
+  along an axis, a glyph) and triangles (a slanted line, a rotated tile: `FCanvasTileItem::Rotation`); the renderer
+  draws the rectangles as the GS's SPRITEs, two vertices each instead of six ([ps2-shipping](PLANS/ps2-shipping.md)
+  N15; the same pixels, `System.Renderer.GS.Canvas.Sprites`), and a textured run through the texture cache: TEX0 when
+  the texture changes, UV texel coordinates (V turned: the texels are stored bottom row first), MODULATE by the vertex
+  colour (0x80 is 1.0), clamped, nearest when the texels map to the pixels one to one (glyphs, unscaled tiles) and
+  bilinear otherwise; a texture not resident this frame waits for the next (the `TexturedCanvas` conformance scene,
+  [ps2-polish](PLANS/ps2-polish.md) P5, D7).
+- **Fonts** ([ps2-polish](PLANS/ps2-polish.md) P5). `UFont` is UE's offline font: glyphs rasterized at import by
+  LeonEd's `UTrueTypeFontFactory` (stb_truetype) into PF_P4 pages of at most 256 x 256 (white texels, the coverage in
+  the CLUT's alpha, 16 levels), its characters indexed by code point (ASCII and Latin-1: Spanish), with whole-pixel
+  advances, bearings and kerning pairs ([ASSET_FORMATS.md](ASSET_FORMATS.md#fonts)). The engine's are DejaVu Sans
+  Condensed at 10, 14, 20 and 32 pixels (`UEngine::GetTinyFont`, `GetSmallFont`, `GetMediumFont`, `GetLargeFont`, from
+  `[/Script/Engine.Engine] TinyFontName ...`; without `GEngine` they load on first use). Text is UTF-8 (Leon's `TCHAR`
+  is a byte): the canvas lays each line out by the font's metrics (`UFont::GetStringSize`, `FCanvas::MeasureText`),
+  justified at whole pixels, and draws a glyph as one textured SPRITE (a drop shadow adds a copy, an outline four:
+  `FCanvasTextItem`, `DrawShadowedString`); a character past Latin-1 draws as `?`. `FGSDebugDraw` (GSCore) draws the
+  same font where nothing can be loaded (the PS2's error screen, GSConformance; [ps2-polish](PLANS/ps2-polish.md) P5b),
+  compiled in as UE compiles its fallback fonts: `LeonCook -run=EmbedFont` rasterizes the TrueType file with
+  `UTrueTypeFontFactory` at 10 and 14 pixels (`EGSDebugFont::Tiny`, `Small`) into one 128 x 128 PSMT4 page each and a
+  shared alpha CLUT, with the metrics and kerning pairs, as `GSCore/Private/GSDebugFontData.inl` (65 blocks of the GS's
+  local memory; `System.LeonEd.Commandlets.EmbedFont.MatchesSource` regenerates it and compares). The caller puts it
+  in VRAM it owns (`FGSDebugDraw::UploadFont(List, FontBlock)`, in place, once: the error screen and GSConformance at
+  the start of the texture arena `FPS2RHI::AllocateTextureArena` hands them, which nothing else holds there; the game's
+  own overlay is canvas text in the UFonts, beside the texture cache), then `DrawString` lays UTF-8 out by the same
+  rules as the canvas (whole-pixel pen, kerning, '?' for a missing character; a UV SPRITE a glyph, nearest, MODULATE
+  and blended: the `TexturedCanvas` scene's state) and `MeasureString`, `GetLineHeight` and `FindLineBreak` (word
+  wrap) lay out the error screen's paragraphs.
+- **UMG input** ([ps2-polish](PLANS/ps2-polish.md) P5). `APlayerController::InputKey` hands every key to the HUD first
+  (`AHUD::InputKey`, UE's Slate-before-the-game order), and the viewport sends the free cursor's position in the frame's
+  pixels (`IRendererModule::WindowToRenderTarget`, `AHUD::InputMouseMove`). The HUD tries its visible user widgets from
+  the top; each routes as `FSlateApplication` would, small: a key goes to its focused widget and up through the
+  parents to `NativeOnKeyDown`, then a navigation key (`FNavigationConfig`: the arrows, the d-pad, Tab) moves the focus
+  to the nearest focusable widget that way among the ones painted last (`FHittestGrid`; explicit rules win), and the
+  rest goes to the game; the mouse hovers and clicks the topmost interactable widget under it. A user widget takes keys
+  only while something inside is focused, or when `bIsFocusable` (a menu), so the HUD never eats the game's keys.
+  `UButton` presses on Accept (Enter, Space, the pad's Cross) or the left button and clicks on the release.
 - **`FGSSceneRenderer`** (`Renderer/Private/GS`, built for every platform). What the GS cannot do per pixel happens per
   vertex, on the CPU:
   - the transform (UE's view and projection, `ToGLClipSpace`), clipping against the near and far planes and a guard
     band, back face culling and the pixel mapping of the drawing environment (`FGSPrimitiveEmitter`);
   - a static mesh's render data is [LPS2 v2](ASSET_FORMATS.md#lps2-v2) (`FLPS2Mesh`, the same on every platform:
     [ps2-shipping](PLANS/ps2-shipping.md) D1), drawn batch by batch: each batch's bounding sphere against the view's
-    planes (D8) skips it, makes it a vertex batch (`FGSVertexBatch`) when it is inside the guard band and the near and
-    far planes, or sends each of its triangles through the clipper on the CPU otherwise. A vertex batch is recorded as
+    planes (D8) skips it, or makes it a vertex batch (`FGSVertexBatch`) of strips when it is inside the guard band and
+    the near and far planes, one whose triangles are clipped (`bClip`: on VU1 when recorded, else
+    `FGSPrimitiveEmitter::AddClippedVertexBatch` on the CPU; [ps2-polish](PLANS/ps2-polish.md) P8b) otherwise. A draw
+    takes the two point lights that light it most. A vertex batch is recorded as
     the list's command when the renderer has vertex batches on (`SetVertexBatches`: the PS2 with VU1) and a
     microprogram does its lighting (unlit, or the ambient, one sun and up to two point lights, N29), and VU1 draws it (see *The VU1 pipeline*
     below); otherwise `FGSPrimitiveEmitter::AddVertexBatch` sends its triangle strips as they are (PRIM TRISTRIP; XYZ3
@@ -1184,7 +1242,18 @@ UWorld::LineBatcher (FDebugDraw), impact marks, tracers ------------------------
     `StartDistance` to `EndDistance`, `FogInscatteringColor`, off by default) is the GS's fog: FOGCOL once a frame and
     each vertex's F (`FGSVertexFog`: `F = Offset + Scale x w`, clamped and rounded) as XYZF2 with PRIM's FGE, in the
     emitter and in VU1's programs alike. The world pass's meshes, blob shadows, impact marks and effect sprites are
-    fogged; the tracers (added), the lines, the view model and the canvas are not;
+    fogged; the tracers (added), the lines, the sky, the view model and the canvas are not. With a sky the fog's
+    colour is the sky's horizon (`UTextureCube::HorizonColor`, `bInscatteringColorFromSky`, ps2-polish P8);
+  - the sky ([ps2-polish](PLANS/ps2-polish.md) P8): the world settings' `SkySettings.SkyCubemap`, a `UTextureCube`
+    ([ASSET_FORMATS.md](ASSET_FORMATS.md#cube-maps)), is drawn after the clear and before the world as a box around
+    the eye (`FSkyBoxGeometry`: LPS2 v2 render data the renderer builds once, a section a face, 12 × 12 quads a face in
+    batches of 2 × 2, 216 batches), scaled by the geometric mean of the near and far planes and translated to the eye
+    (so only the view's rotation moves it), each face unlit and unfogged with its texture clamped (the faces'
+    `AddressX` / `AddressY`, the GS's CLAMP), with ZTST ALWAYS and Z masked: everything draws over it whatever its
+    depth. Its batches go through `DrawMeshSection` like any static mesh's, on VU1's StaticUnlit program on the PS2; a
+    batch spans at most 13.3 degrees from the eye, so the one the view sees is inside the guard band and past the near
+    plane for any vertical field of view up to 90 degrees, and none goes through the EE's clipper (about 36 drawn a
+    frame, 8 KB of GIF when the EE emits them);
   - blob shadows (N15): a primitive with `bCastBlobShadow` (ShooterGame's bodies) traces down from its bounds against
     the world's static bodies whenever its transform is sent (`UPrimitiveComponent::UpdateBlobShadowFloor`, N16's
     broadphase), and the renderer lays a soft dark square on that floor under each drawn one
@@ -1240,7 +1309,7 @@ UWorld::LineBatcher (FDebugDraw), impact marks, tracers ------------------------
     scene's order within a group: the same every run), and TEX0, MIPTBP1 / MIPTBP2, TEX1 and CLAMP are written only
     when they change.
 
-  The frame: the clear, the opaque meshes, the skinned meshes, the blob shadows, the impact marks (a lerp toward their
+  The frame: the clear, the sky, the opaque meshes, the skinned meshes, the blob shadows, the impact marks (a lerp toward their
   colour nearer than the surface by `DecalDepthBias`: the GS cannot multiply by the destination), the translucent
   meshes, the effect sprites, the tracers (added), the world's debug lines and the show flags' overlays, then the view
   model (static and skinned) over a cleared Z buffer (FBMSK keeps the colour), then the canvas. Nothing casts a shadow

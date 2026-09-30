@@ -4,7 +4,8 @@
 ;
 ; Data memory (quadwords). Shared: 0 the screen scale (W/2, -H/2, -ZMax/16, 16), 1 the screen offset (2047.5 + 1/32,
 ; the same, ZMax/16, 0), 2 the limits (255, 0.5, ZMax/16, 2048). A batch's buffer at TOP (VIF1's double buffer):
-;   0      ints: x the vertices, y 1 to XGKICK the packet, z 0 unlit, 1 lit, 2 or 3 lit with one or two point lights
+;   0      ints: x the vertices, y 1 to XGKICK the packet, z 0 unlit, 1 lit, 2 or 3 lit with one or two point lights,
+;          w 1 to clip the triangles (ps2-polish P8b: ClipTriangles.vsi)
 ;   1-4    the rows of the quantized position's transform to clip space (clip = r3 + qx r0 + qy r1 + qz r2)
 ;   5      the colour scale (the baked RGBA to RGBAQ bytes: the material's colour times 255 or 128, over 255)
 ;   6, 7   the texture coordinates' offset and scale (u = (q / 4096 + offset) * scale); 7 zw the fog's scale and
@@ -16,18 +17,21 @@
 ;   19-22  the point lights: position (w: 1 / range) and colour, two at most
 ;   24     the positions (V3-16), 88 the normals and strip flags (V4-8), 152 the colours (V4-8 unsigned), 216 the
 ;          texture coordinates (V2-16), a quadword a vertex, at most 64
-;   280    the GIF packet: the GIFtag, then ST, RGBAQ and XYZF2 a vertex (ADC on the vertices that close no triangle)
+;   280    the GIF packet: the GIFtag, then ST, RGBAQ and XYZF2 a vertex (ADC on the vertices that close no triangle);
+;          clipped, two polygons of 30 quadwords (280, 310) and two chunks of 82 (340, 422)
 ;
 ; A vertex closes the triangle of the two before it unless its strip flags say no kick (0x80), wound the other way when
 ; they say reversed (0x01); VU1 does not draw a triangle whose three vertices are outside one side of the view (CLIP)
 ; or that faces away (the sign of its area on the screen). The batch is inside the guard band and between the near and
-; far planes (the EE decided, plan D8): nothing is clipped.
+; far planes (the EE decided, plan D8): nothing is clipped. A batch across one of them has the header's w: its
+; vertices go to ClipTriangles.vsi instead, which clips its triangles (P8b).
 ;
 ; XYZF2 in PACKED: X and Y 12.4 in the first two words, Z (24 bits) at bit 4 of the third, F at bit 4 of the fourth and
 ; ADC at its bit 15. So Z is scaled by 16 before FTOI4 and F, rounded (+0.5), goes through FTOI4 as the fourth lane;
 ; 2048 more (FTOI4: 0x8000) is ADC.
 
 		.vu
+		.include "ClipTriangles.vsi"
 		.align 4
 		.global	VU1Programs_CodeStart
 		.global	VU1Programs_CodeEnd
@@ -185,17 +189,20 @@ Vertex:
 LitDone:
 		mul.xyz vf14, vf14, vf29	nop
 Unlit:
-		; RGBAQ's bytes: rounded, at most 255.
-		addy.xyzw vf14, vf14, vf11y	nop
-		minix.xyzw vf14, vf14, vf11x	nop
-		ftoi0.xyzw vf14, vf14		waitq
+		; RGBAQ's bytes: rounded, at most 255 (vf19: vf14 keeps the colour for ClipVertex, which a clipped batch's
+		; vertex goes to from here).
+		addy.xyzw vf19, vf14, vf11y	ilw.w vi01, 0(vi02)
+		minix.xyzw vf19, vf19, vf11x	nop
+		ftoi0.xyzw vf19, vf19		nop
+		nop							ibne vi01, vi00, ClipVertex
+		nop							waitq
 		; The screen: the pixel (12.4 after FTOI4, rounded) and Z; STQ.
 		mulq.xyz vf13, vf12, Q		nop
 		mulq.xyz vf15, vf15, Q		nop
 		mulaw.xyz ACC, vf10, vf00w	nop
 		madd.xyz vf13, vf13, vf09	nop
 		maxx.z vf13, vf13, vf00x	sq vf15, 0(vi05)
-		mini.z vf13, vf13, vf11		sq vf14, 1(vi05)
+		mini.z vf13, vf13, vf11		sq vf19, 1(vi05)
 		; XYZF2: Z times 16 (its field starts at bit 4), F rounded in w, and F with ADC (2048 more) in vf19's w (the
 		; area below writes its xy only).
 		mulw.z vf13, vf13, vf09w	nop
@@ -256,5 +263,9 @@ Store:
 End:
 		nop[E]						nop
 		nop							nop
+
+		; A clipped batch (P8b): the record at the positions (24), rows 64 apart; polygons at 280 and 310, chunks at
+		; 340 and 422 (82 quadwords: 9 triangles).
+		CLIP_PROGRAM 64, 128, 192, 26, 280, 310, 340, 762, 83
 		.align 4
 VU1Programs_CodeEnd:

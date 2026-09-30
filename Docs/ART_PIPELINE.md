@@ -8,8 +8,8 @@ of truth) and D11 (glTF is the only mesh, skeletal mesh and animation format).
 
 Code: `Game/ShooterGame/SourceArt/leon_art.py` (the shared Blender helpers), `check_art_determinism.py`,
 `Samples/make_art_samples.py`, `Characters/make_characters.py` and `make_arms.py` (with `anim_body.py` and
-`anim_arms.py`), `Weapons/make_weapons.py`, `Maps/make_de_leon.py`, `Sounds/make_sounds.py` (no Blender); the import
-in [ASSET_FORMATS.md](ASSET_FORMATS.md#skeletal-meshes-and-animations--gltf-import)
+`anim_arms.py`), `Weapons/make_weapons.py`, `Maps/make_de_leon.py`, `Sounds/make_sounds.py` and `Sky/make_sky.py` (no
+Blender); the import in [ASSET_FORMATS.md](ASSET_FORMATS.md#skeletal-meshes-and-animations--gltf-import)
 and [LEVELS.md](LEVELS.md#importing-a-map-from-gltf); the commandlets in [TOOLS.md](TOOLS.md#importlistini).
 
 ## Workflow
@@ -334,6 +334,24 @@ ADPCM at that rate: [ASSET_FORMATS.md](ASSET_FORMATS.md)), and `DefaultGame.ini`
   (`Hit_Flesh`, `Hit_Kevlar`, `Hit_Helmet`), all at `Priority=0.5` so they leave voices free for the shots;
 - the radio (`Radio_Command`, `Radio_Group`, `Radio_Report`: a squelched tone pattern a menu;
   `Radio_FireInTheHole`, `Radio_BombPlanted`), at `Priority=1.5`.
+
+## The sky
+
+`Sky/make_sky.py` ([ps2-polish](PLANS/ps2-polish.md) P8; Python's standard library, no Blender, about 8 s) generates
+de_leon's desert sky as a high dynamic range long-lat panorama, `Sky/Sky_Desert.hdr` (1 024 x 512, Radiance RGBE with
+run-length encoded scanlines and no date in the header): a deep blue zenith fading to a pale, warm haze at the horizon
+(brighter toward the sun), distant sand below it, the sun (a disc 1.5 degrees in radius, 60 times the horizon's
+radiance, and its glow) where de_leon's baked sun is (the script reads `SUN_DIRECTION` from `Maps/make_de_leon.py`),
+and soft clouds of seeded value noise on a plane over the map, lit from the sun's side. Integer hashes and fixed
+formulas only: `check_art_determinism.py` runs it twice with Python and compares the `.hdr` with the committed one.
+
+`ImportList.ini` imports it as the cube map `/Game/Sky/T_Sky_Desert` (`Type=TextureCube`, `UTextureCubeFactory`):
+six faces of 128 x 128 (`CubeFaceSize`), each texel four bilinear samples of the panorama along its direction, the
+radiance tone-mapped by the ACES filmic curve (Narkowicz's fit) at `ExposureBias=0` and stored as sRGB bytes
+([ASSET_FORMATS.md](ASSET_FORMATS.md#cube-maps)); the PS2 cook palettes each face to PSMT8 (23 KB with its mips and CLUT; the ground below the horizon,
+6 colours, PSMT4 of 12 KB: 127 KB of the 1 856 KB texture arena). Faces of 256 x 256 look sharper but made de_leon's load
+take 1 038 KB of the PS2's 1 024 KB `LoadMapMisc` budget. de_leon's `WorldSettings` node names it
+([LEVELS.md](LEVELS.md#the-world-settings)).
 
 ## The samples (N26's gate)
 

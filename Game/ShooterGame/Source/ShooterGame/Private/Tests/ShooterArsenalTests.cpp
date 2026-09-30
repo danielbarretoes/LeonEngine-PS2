@@ -85,6 +85,7 @@ namespace
 	void MakeAccurate(AShooterWeapon_Instant& Weapon)
 	{
 		Weapon.WeaponSpread = 0.0f;
+		Weapon.WalkingSpread = 0.0f;
 		Weapon.MovingSpread = 0.0f;
 		Weapon.JumpingSpread = 0.0f;
 		Weapon.FiringSpreadIncrement = 0.0f;

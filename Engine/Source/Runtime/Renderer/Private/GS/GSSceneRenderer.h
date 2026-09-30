@@ -7,13 +7,13 @@
 #include "GSPrimitiveEmitter.h"
 #include "GSTextureCache.h"
 #include "GSVertexBatch.h"
+#include "LPS2Mesh.h"
 #include "RendererInterface.h"
 #include "WorldEffectsGeometry.h"
 
 class FCanvas;
 class FDebugDraw;
 struct FLPS2ColorStreams;
-class FLPS2Mesh;
 class FPrimitiveSceneProxy;
 class FSceneView;
 class FSceneViewFamily;
@@ -23,6 +23,7 @@ struct FLPS2Batch;
 struct FLPS2ColorStreams;
 struct FMaterial;
 struct FPrimitiveSceneInfo;
+class UTextureCube;
 
 /**
  * The scene renderer of the GS (Docs/PLANS/ps2-gs-parity.md P5, Docs/PLANS/ps2-engine.md E2): a view family of the
@@ -34,19 +35,22 @@ struct FPrimitiveSceneInfo;
  *   CPU with the pose's skin matrices.
  * - A static or skinned mesh is drawn from its LPS2 v2 render data (FLPS2Mesh), batch by batch (plan D1, D8): a
  *   batch whose sphere is outside the view is skipped, one inside the guard band and the near and far planes is a
- *   vertex batch (FGSVertexBatch), and any other goes through the clipper triangle by triangle. With SetVertexBatches
- *   a static vertex batch is recorded as the list's command, which the PS2 draws on VU1 (ps2-shipping N14), when a
- *   microprogram does its lighting (baked or unlit, or the ambient, one sun and up to two point lights); otherwise
- *   FGSPrimitiveEmitter::AddVertexBatch sends its triangle strips (TRISTRIP: the vertices of the drawn triangles, XYZ3
- *   for those that close none), the reference of VU1's packet. A skinned batch is placed by the sphere its pose
- *   keeps it in (MakeSkinPalette), without skinning a vertex; recorded, VU1 skins it (N14b), else the emitter does.
+ *   vertex batch (FGSVertexBatch) of strips, and one across a clip plane a vertex batch whose triangles are clipped
+ *   (bClip, ps2-polish P8b). With SetVertexBatches a vertex batch is recorded as the list's command, which the PS2
+ *   draws on VU1 (ps2-shipping N14; the clipping too, P8b), when a microprogram does its lighting (baked or unlit, or
+ *   the ambient, one sun and up to two point lights); otherwise FGSPrimitiveEmitter::AddVertexBatch sends its
+ *   triangle strips (TRISTRIP: the vertices of the drawn triangles, XYZ3 for those that close none) and
+ *   AddClippedVertexBatch its clipped triangles, the references of VU1's packets. A skinned batch is placed by the
+ *   sphere its pose keeps it in (MakeSkinPalette), without skinning a vertex; recorded, VU1 skins it (N14b), else the
+ *   emitter does.
  * - Static lighting (Docs/PLANS/ps2-shipping.md N22): a Static component's lit sections draw with the vertex colours
  *   LeonEd baked for the instance (the lights with their shadows, and the sky with its occlusion), with no light
  *   computed per frame; without a bake, with the mesh's own colours.
  * - Dynamic lighting of what moves (Movable components, skinned meshes): Lambert per vertex, the map's environment
  *   light (its world settings' LightmassSettings) as ambient, then up to MaxDirectionalLights directional and
- *   MaxPointLights point lights (range attenuation squared), unshadowed. There is no specular, normal map or
- *   reflection: the GS has no pixel stage.
+ *   MaxPointLights point lights (range attenuation squared), unshadowed; a draw takes the two of the frame's point
+ *   lights that reach its bounds and light them most (FGSVertexDraw::MaxVU1PointLights, ps2-polish P8b). There is no
+ *   specular, normal map or reflection: the GS has no pixel stage.
  * - Materials: the albedo times the light (unlit: the albedo), the albedo map through the texture cache with UvScale,
  *   translucent (Alpha < 1) sections blended back to front without writing Z.
  * - Mipmaps (Docs/PLANS/ps2-shipping.md N13): a texture with levels samples them trilinear (MMIN LINEAR_MIPMAP_LINEAR,
@@ -68,11 +72,11 @@ struct FPrimitiveSceneInfo;
  * - Fog (N15): the world settings' linear distance fog (FWorldFogSettings), the GS's per-vertex fog with FOGCOL, on
  *   the world pass's meshes, blob shadows, impact marks and effect sprites.
  *
- * The frame: the clear, the opaque meshes, the skinned meshes, the blob shadows under what casts them, the impact marks
- * (a lerp toward the mark's colour: the GS cannot multiply by the destination), the translucent meshes, the effect
- * sprites, the tracers (added), the world's debug lines and the show flags' (F1 boxes, F6 axes), then the view model
- * meshes, static and skinned (first-person arms), over a cleared Z buffer with their own projection. The canvas (HUD,
- * text) draws after, with DrawCanvas: its rectangles as SPRITEs.
+ * The frame: the clear, the world settings' sky (DrawSky, ps2-polish P8), the opaque meshes, the skinned meshes, the
+ * blob shadows under what casts them, the impact marks (a lerp toward the mark's colour: the GS cannot multiply by the
+ * destination), the translucent meshes, the effect sprites, the tracers (added), the world's debug lines and the show
+ * flags' (F1 boxes, F6 axes), then the view model meshes, static and skinned (first-person arms), over a cleared Z
+ * buffer with their own projection. The canvas (HUD, text) draws after, with DrawCanvas: its rectangles as SPRITEs.
  *
  * The skinned meshes it draws get the world's time as their LastRenderTime, and the view's location goes to the world's
  * ViewLocationsRenderedLastFrame: the skeletal meshes throttle their poses by both (N25).
@@ -95,7 +99,8 @@ public:
 
 	/**
 	 * Records the canvas into List, blended, without the depth test: its rectangles (tiles, glyphs, lines along an
-	 * axis) as SPRITEs of two vertices, its other lines as triangles (FCanvas::GetPrimitives, N15).
+	 * axis) as SPRITEs of two vertices, its rotated tiles and slanted lines as triangles (FCanvas::GetPrimitives, N15);
+	 * the textured ones sample their texture by UV through the texture cache (the font's pages, UImage's brushes).
 	 */
 	void DrawCanvas(const FCanvas& Canvas, const FGSDrawEnvironment& Environment, FGSCommandList& List);
 
@@ -181,7 +186,7 @@ private:
 
 	/**
 	 * Draws a section of LPS2 v2 render data (opaque or translucent, as its material says) through ViewProjection: its
-	 * batches, each skipped, as strips or through the clipper by its sphere against the view (plan D8). A skinned blob
+	 * batches, each skipped, as strips or clipped by its sphere against the view (plan D8, P8b). A skinned blob
 	 * with SkinMatrices (one a bone; the bind pose where one is missing) draws each batch with its palette's skin
 	 * matrices (MakeSkinPalette), placed by the sphere of its pose; recorded, a skinned batch's palette goes into the
 	 * list's memory and VU1's Skinned programs pose its vertices. With bStaticLighting
@@ -202,6 +207,16 @@ private:
 	void MakeSkinPalette(const FLPS2Mesh& Mesh, const FLPS2Batch& Batch, const TArray<FMatrix>& SkinMatrices,
 		FVector& OutCenter, float& OutRadius);
 
+	/**
+	 * The world settings' sky (Docs/PLANS/ps2-polish.md P8), after the clear and before the world: the sky box's six
+	 * faces (FSkyBoxGeometry), each textured with its face of Sky clamped at the edges, scaled by the projection's sky
+	 * radius around the eye (so only the view's rotation moves it), unlit and unfogged, with no depth test and no Z
+	 * written, so the world draws over it whatever its depth. Its batches draw as any static mesh's (DrawMeshSection):
+	 * on VU1 when recorded, and never through the clipper (the box's batches are small enough for the guard band).
+	 */
+	void DrawSky(const UTextureCube& Sky, const FSceneView& View, const FMatrix& ViewProjection,
+		FGSPrimitiveEmitter& Emitter, FGSCommandList& List, const FGSDrawEnvironment& Environment);
+
 	/** The world's impact marks (a lerp toward their colour, nearer than their surface by DecalDepthBias). */
 	void DrawImpactMarks(const FSceneViewFamily& ViewFamily, const FMatrix& ViewProjection,
 		FGSPrimitiveEmitter& Emitter, FGSCommandList& List, const FGSDrawEnvironment& Environment);
@@ -213,6 +228,8 @@ private:
 		FGSPrimitiveEmitter& Emitter, FGSCommandList& List, const FGSDrawEnvironment& Environment);
 	/** Binds the effects' mask (the spot in the alpha); false without a texture arena. */
 	bool BindEffectsMask(FGSCommandList& List);
+	/** Binds a canvas run's texture (TEX0 when it changes); false when it is not resident this frame. */
+	bool BindCanvasTexture(const UTexture2D& Texture, FGSCommandList& List);
 	/** Blended triangles of the effects' vertices, not culled. */
 	void DrawEffectVertices(FGSPrimitiveEmitter& Emitter, TArrayView<const FWorldEffectVertex> Vertices,
 		const FMatrix& ViewProjection, bool bTextured);
@@ -264,9 +281,6 @@ private:
 	};
 	TMap<const UTexture2D*, int32> TextureGroups;
 
-	/** A batch's vertices, transformed and lit, and the triangle each closes (at most 64). */
-	TArray<FGSClipVertex> BatchVertices;
-	TArray<EGSStripTriangle> BatchTriangles;
 	/** A skinned batch's palette (MakeSkinPalette; at most 24 bones). */
 	TArray<FGSSkinMatrix> BatchPalette;
 	/** The canvas's vertices and runs (DrawCanvas), kept between frames for their capacity. */
@@ -274,4 +288,6 @@ private:
 	TArray<FCanvasPrimitiveRun> CanvasRuns;
 	/** The effects' mask texels (BindEffectsMask), built on first use. */
 	TArray<uint8> EffectsMaskTexels;
+	/** The sky box's render data (FSkyBoxGeometry), built on the first sky drawn. */
+	FLPS2Mesh SkyMesh;
 };

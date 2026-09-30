@@ -43,9 +43,10 @@ class UStaticMeshComponent;
  * forwards its animations' notifies (OnAnimNotify): MagOut and MagIn play MagOutSound and MagInSound.
  *
  * On the floor (OnDropped): a weapon a pawn dropped or left when it died lies where it fell, Mesh3P shown, among the
- * game mode's pickups, and is picked up (AShooterCharacter::AddWeapon) by the first live pawn of the game mode's pawns
- * that walks within PickupRadius and has its slot free, after PickupDelay (so the pawn that dropped it does not take it
- * back at once). It keeps its ammunition.
+ * game mode's pickups, and is picked up (AShooterCharacter::PickUpWeapon: the draw's sound and the HUD's notice) by the
+ * first live pawn of the game mode's pawns that walks within PickupRadius and may take it (CanBePickedUpBy: its slot
+ * free; a bot's spent weapon there is swapped for it, AddWeapon dropping the spent one), after PickupDelay (so the pawn
+ * that dropped it does not take it back at once). It keeps its ammunition and its state (the silencer, the burst mode).
  *
  * Timing: the fire rate counts in the weapon's tick against the world's time: a shot every GetTimeBetweenShots while
  * the trigger is held (automatic) or once per press (semi-automatic); the draw and the reload are timers. Firing with
@@ -59,9 +60,16 @@ class SHOOTERGAME_API AShooterWeapon : public AActor
 public:
 	AShooterWeapon(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	/** The name the kill feed, the HUD, the buy menu and `give` use (CS's buy names: glock, usp, ak47, awp, ...). */
+	/** The name the kill feed, the buy menu and `give` go by (CS's buy names: glock, usp, ak47, awp, ...). */
 	UPROPERTY(Config)
 	FString WeaponName;
+
+	/**
+	 * The name the player reads (CS's: "AK-47", "Desert Eagle", "HE Grenade"): the HUD, the kill feed, the buy menu and
+	 * the pickup notice (GetItemDisplayName).
+	 */
+	UPROPERTY(Config)
+	FString DisplayName;
 
 	/** The inventory slot (set by each class). */
 	UPROPERTY()
@@ -246,10 +254,20 @@ public:
 	{
 		return bDropped;
 	}
+	/**
+	 * Pawn may take the weapon from the floor: its slot is free, or (a bot's, ps2-polish P3) the weapon there has no
+	 * ammunition left and this one has some; AddWeapon then drops the spent one.
+	 */
+	[[nodiscard]] bool CanBePickedUpBy(const AShooterCharacter& Pawn) const;
 	/** Drawn: shown on the pawn, ready after EquipDuration (UE ShooterGame: OnEquip). */
 	virtual void OnEquip();
 	/** Put away: the trigger, the reload and the zoom stop, the meshes hide (UE ShooterGame: OnUnEquip). */
 	virtual void OnUnEquip();
+	/** The draw's sound at the weapon (OnEquip's; a pickup's too, AShooterCharacter::PickUpWeapon). */
+	void PlayEquipSound() const
+	{
+		PlayWeaponSound(EquipSound);
+	}
 	[[nodiscard]] bool IsEquipped() const
 	{
 		return bIsEquipped;
@@ -343,6 +361,12 @@ public:
 	[[nodiscard]] static UClass* FindWeaponClass(const FString& Name);
 	/** Every concrete weapon class, in the order FindWeaponClass lists them (the tests' table). */
 	static void GetWeaponClasses(TArray<UClass*>& OutClasses);
+	/**
+	 * What the player reads for an item's buy name (a weapon's WeaponName, the kill feed's): the weapon's DisplayName,
+	 * the bomb's (c4) "C4", the equipment's ("Kevlar Vest", "Kevlar + Helmet", "Defuse Kit", the ammunition), the
+	 * world's "World"; the name itself for anything else.
+	 */
+	[[nodiscard]] static FString GetItemDisplayName(const FString& ItemName);
 
 	/** Shots fired since it was spawned. */
 	[[nodiscard]] int32 GetShotsFired() const
@@ -427,7 +451,7 @@ protected:
 	}
 	/** A shot's buzz on the owner's pad, when a player at this machine holds it (ps2-shipping N24). */
 	void PlayFireForceFeedback() const;
-	/** On the floor: the first live pawn near enough with the slot free takes the weapon. */
+	/** On the floor: the first live pawn near enough that may take it (CanBePickedUpBy) takes the weapon. */
 	void TickPickup();
 	/** The world's time (UWorld::GetTimeSeconds). */
 	[[nodiscard]] float GetWorldTime() const;

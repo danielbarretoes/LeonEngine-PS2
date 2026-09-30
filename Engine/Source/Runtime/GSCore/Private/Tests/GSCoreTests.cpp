@@ -819,7 +819,7 @@ bool FGSCoreConformanceScenesTest::RunTest(const FString& Parameters)
 	// Every scene records within the supported subset (the setters check it) and starts by pointing FRAME_1 at its
 	// frame buffer; the reference rasterizer's tests check what they draw.
 	const TArrayView<const FGSConformanceScene> Scenes = GSConformance::GetScenes();
-	TestEqual("Twenty scenes", Scenes.Num(), 20);
+	TestEqual("Twenty-one scenes", Scenes.Num(), 21);
 	for (const FGSConformanceScene& Scene : Scenes)
 	{
 		FGSCommandList List;

@@ -57,15 +57,15 @@ enum class EShooterCustomMovementMode : uint8
  *   (a fall) does not tag.
  * - Ladders: a trigger volume tagged Ladder (AShooterGameMode::LadderTag; a map's Ladder node) is a ladder: a thin
  *   box against its wall (CS's func_ladder), whose face looks along the box's thinner horizontal axis, toward the side
- *   the climber is on. While the capsule touches one (and bCanClimbLadders), the character is in the Ladder mode
+ *   the climber is on. While the capsule touches one, the character is in the Ladder mode
  *   (EMovementMode::Custom): no gravity, and the input moves it as CS's PM_LadderMove does. The forward input
  *   (LadderClimbSpeed) goes along the view, its pitch included, the side input along the view's right; the part of
  *   that going into the ladder's face turns into climbing. So looking at the ladder climbs up at LadderClimbSpeed,
  *   looking straight down climbs down, and backing off it on the floor steps away; no input holds the character
  *   where it is. Jumping (JumpOffLadder) pushes it off at LadderJumpOffSpeed, and it falls; it grabs a ladder again
  *   only once it touches none. Leaving the volume (over the top, below, to a side) ends the mode with the climb's
- *   velocity, so climbing on carries the character up onto the ledge. The bots do not climb (their controller
- *   clears bCanClimbLadders): they walk through a ladder's volume as if it were not there.
+ *   velocity, so climbing on carries the character up onto the ledge. The bots climb as the players do: their
+ *   controller turns them to the ladder (GetLadderNormal) and looks up or down (ps2-polish P3).
  */
 UCLASS(Config = Game)
 class SHOOTERGAME_API UShooterCharacterMovement : public UCharacterMovementComponent
@@ -122,10 +122,6 @@ public:
 	UPROPERTY()
 	float TaggingRecoveryTime = 1.0f;
 
-	/** Whether the character grabs the ladders it touches (the bots' controller clears it). */
-	UPROPERTY(Transient)
-	bool bCanClimbLadders = true;
-
 	/**
 	 * The drawn weapon's speed modifier (AShooterWeapon::GetSpeedModifier), and walking on the ground the walk modifier
 	 * on the running speed, not on the crouched one (UE ShooterGame: the targeting and running modifiers); times the
@@ -169,6 +165,8 @@ public:
 	{
 		return CurrentLadder;
 	}
+	/** The face of the ladder the character is on (level, toward the character's side), zero off one. */
+	[[nodiscard]] FVector GetLadderNormal() const;
 	/** A jump on the ladder: the next move pushes the character off it (AShooterCharacter::Jump). */
 	void JumpOffLadder();
 

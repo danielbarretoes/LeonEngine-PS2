@@ -1,62 +1,31 @@
 # Pending
 
-What the [ps2-shipping](PLANS/ps2-shipping.md) plan (0.22.0 to 0.24.0) left open. Each item comes from a phase's
-"Desviaciones"; the plan's "Pendiente / fuera de alcance" section has the detail, and
-[Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md) has the measurements. ShooterGame runs at 29.95 fps in
-PCSX2 (p50/p95/p99 33.5 ms), so nothing here blocks the frame rate.
-
-## Bugs
-
-- **Characters vanish at some view angles** and leave their weapons floating. The skeletal mesh is culled while its
-  weapon (on the `Weapon_R` socket) is still drawn. Suspects: the pose bounds used for frustum culling (N15/N21), the
-  cells/portals assignment of moving primitives (N15), or the VU1 skinned batch placement sphere (N14b).
-- **Bots with no ammo attack with the knife from a distance.** When bots run dry and switch to the knife, they stay
-  where they are, facing each other and swinging at range, instead of closing in to melee. The AI must move into knife
-  range (as CS bots rush with the knife) or look for ammo or a weapon.
-- **Bots idle when they see no enemy.** Bots fight well once they see an enemy, but without one in sight they don't
-  hunt: they should push to the objective, check the corners and the sites, follow sounds and radio reports, and
-  rotate, as CS bots do.
-- **Crouching doesn't tighten the crosshair or the spread.** In CS, crouching improves accuracy (a smaller spread and
-  a tighter dynamic crosshair); standing still is better than walking, and walking better than running. Today crouching
-  changes neither.
+What is left after [ps2-polish](PLANS/ps2-polish.md) (0.25.0), on top of what the
+[ps2-shipping](PLANS/ps2-shipping.md) plan (0.22.0 to 0.24.0) left open. Each item comes from a phase's "Desviaciones";
+the plans have the detail, and [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md) has the measurements.
+ShooterGame runs at 30 fps in PCSX2 (Budgets.md, the row "0.25.0"), so nothing here blocks the frame rate.
 
 ## Next features
 
-- **Minimap.** The radar (N30d) shows dots on a black square. It needs the map's real overview image, like CS's
-  overviews: a top-down render of the map, generated at cook time and paletted, drawn under the dots and rotated with
-  the view.
-- **Sky.** An HDR cubemap for the sky: a skybox drawn behind the world (today the sky is the renderer's dark clear
-  colour). It can be generated procedurally (a desert sky gradient, sun and clouds) and cooked to paletted faces for
-  the GS.
-- **Main menu.** A start menu that sets up the match:
-  - the map;
-  - the bots' difficulty (CS's easy, normal, hard and expert: reaction time, aim error, awareness);
-  - the rounds to win, best of 5 by default (the first team to 3);
-  - the total number of bots.
-- **Team selection.** On joining a match the player chooses CT or T, as in CS. The bots are then redistributed so the
-  teams are as even as possible, counting the player.
-- **In-game menu.** A pause menu during the match (Esc / Start) to resume, change team, or go back to the main menu.
-- **Crouch toggle.** Crouch toggles on press instead of being held.
-- **Drop and pick up weapons.** The player can drop the current weapon (CS's G), and walking over a weapon on the
-  ground picks it up when its slot is free, as in CS. Dead players drop their primary weapon (and the bomb) for others
-  to take.
-- **UI.** Better menus and HUD, and a new font family.
-- **A table widget for the HUD.** A reusable UMG-style table component (columns with headers, alignment and widths,
-  rows, sorting, a highlighted row) for the scoreboard. Today `AShooterHUD` draws the scoreboard by hand. The CS
-  scoreboard shows per team: name, score (kills), deaths, latency or bot, alive/dead, and the bomb carrier for T.
+- **Minimap** (ps2-polish P7, not done). The radar still shows dots on a black square. It needs the map's real overview
+  image, like CS's overviews: a top-down render of the map, generated at cook time and paletted, drawn under the dots
+  and rotated with the view. An uncompiled draft (a `BuildOverview` commandlet, the scene capture, the radar and its
+  tests) is on the branch `wip/ps2-polish-p7-minimap`, under `Docs/PLANS/ps2-polish-p7-draft/`; it predates P8's
+  `AWorldSettings` and renderer changes, and it leaves open whether LeonCook should link Renderer and GSReference or
+  the overview should be a separate tool.
 
 ShooterGame stays single player against bots: no split screen (decided 2026-09-30).
 
 ## Render
 
-- Batches that cross the near plane or the guard band still go through the EE's C++ clipper (13 a frame, 2.4 ms with
-  the view model). Clipping on VU1, or smaller batches, was not needed at 30 fps.
+- A draw takes at most two point lights (the two that light its bounds most, ps2-polish P8b): VU1 lights two. It could
+  take four with a new VU1 memory layout.
 - Cells and portals cull little on de_leon's open layout: the sky portals keep most cells visible.
-- Fog and static mesh LODs work and are tested, but de_leon uses neither.
+- Static mesh LODs work and are tested, but de_leon uses none: its meshes are baked, and a baked mesh draws at LOD 0.
 - de_leon's 78 pieces are not merged per cell and material. A mesh has a single `UCX_` box, because Leon folds a mesh's
   boxes into one AABB; merging needs compound collision (several boxes per mesh).
-- No light probes for moving objects (pawns take the sky without occlusion), no skybox, and Movable lights do not light
-  the static world.
+- No light probes for moving objects (pawns take the sky without occlusion), and Movable lights do not light the static
+  world.
 - The `GSH_Capture` headless GS dump (plan D3) was never built; VU1 is validated with VU1Conformance in PCSX2.
 - The 512-line PAL frame (448 lines, centred, today) and CSM2 CLUTs are not supported.
 
@@ -71,10 +40,16 @@ ShooterGame stays single player against bots: no split screen (decided 2026-09-3
 ## Game
 
 - Hit groups are capsule height bands, not per-bone boxes. Spread and recoil are chosen per weapon, not CS's formulas.
-- Bots don't climb ladders and throw few of the grenades they buy. The T side wins 59–61 % of rounds over seeds 1–24.
+- Bots throw few of the grenades they buy, hear shots but not steps, and see enemies within 35 m only
+  (`SightRadius`: a compromise, de_leon's lanes gave the terrorists' plaza the long duels into the sites).
 - The radio is tones, not voices, and the gamepad has no radio menu. One sound variant per surface; no smoke or
   magazine sounds. The smoke is a fixed sphere and does not block flashes.
-- One locomotion stance (rifle). The feet slide a little. No arms clip for defusing. The C4 is not a first-person weapon.
+- One locomotion stance (rifle). The feet slide a little. No arms clip for defusing. The C4 has no first-person view
+  model: with it out, fire plants the bomb (ps2-polish P6), but the arms show nothing.
+- The menus move with the D-pad and the arrows, not the left stick (UMG's navigation, ps2-polish P5 and P9); the main
+  menu lists de_leon only, the one map.
+- A match launched straight into a map without `?winrounds=` (the map on the command line) plays the
+  config's `MaxRounds=30`, while the main menu's default is `?winrounds=5`.
 
 ## Checks only a person can do
 
@@ -82,10 +57,13 @@ Confirmed by playing (2026-09-30):
 - the sound works;
 - the pad vibrates;
 - the controls are comfortable;
-- matches progress, and the bots fight well except in the two AI bugs above;
+- matches progress, and the bots fight well (the two AI bugs this play found, the knife at range and the bots with no
+  enemy in sight, are fixed in [ps2-polish](PLANS/ps2-polish.md) P3 and wait for another play);
 - the game holds 30 fps to the eye.
 
 Still to check:
+- Playing from the main menu in PCSX2 with the pad: the menus, the team choice, the pause (ps2-polish P9), the new HUD
+  and scoreboard (P6) and the sky (P8).
 - A DualShock 2: pressure buttons, a second pad, pulling a pad out mid-game.
 - The memory card in the PCSX2 BIOS browser: the save, its icon and its title.
 - XInput pads are matched to GLFW pads by order, so a DirectInput pad next to an Xbox pad can get the other pad's

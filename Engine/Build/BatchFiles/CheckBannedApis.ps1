@@ -71,6 +71,23 @@
 #   the skinned batches posed on the EE (bQuantizedPose, AllocatePosedStreams, QuantizePose, SkinBatch, PosedPositions /
 #   PosedNormals)                            -> removed in ps2-shipping N14b: VU1's Skinned programs with the palette
 #   ShooterGame's LoadOptionalAsset copies   -> removed in ps2-shipping N24b: LoadShooterObject / LoadShooterAsset
+#   the HUD's bitmap font (stb_easy_font, stb_easy_font_print / _width, HudFontScale, HudLineHeight,
+#   FCanvas::DrawTextBlock and the canvas text's scale argument)
+#                                            -> removed in ps2-polish P5: UFont (the engine's DejaVu Sans Condensed,
+#                                               UEngine::GetSmallFont ...), FCanvas::DrawText / MeasureText with a font,
+#                                               FCanvasTextItem, UFont::GetLineHeight
+#   ShooterGame's bots that walked through ladders and spun in place (bCanClimbLadders, HoldAndLookAround)
+#                                            -> removed in ps2-polish P3: the bots climb (UShooterCharacterMovement::
+#                                               GetLadderNormal, the waypoints' Ladder links) and watch the sites'
+#                                               lookouts (AShooterGameMode::GetBombSiteLookouts)
+#   ShooterGame's hand-drawn scoreboard (AShooterHUD::DrawScoreboard, its space-aligned ScoreboardCTText /
+#   ScoreboardTText lines) and the HUD's C4 / KIT text (ItemsText)
+#                                            -> removed in ps2-polish P6: UShooterScoreboardWidget (UMG's UTableView),
+#                                               the HUD's icons (EShooterHUDIcon, AShooterHUD::DrawHUDIcon)
+#   the GS debug text's 5x7 uppercase bitmap font (GlyphRows, GlyphOf, AppendGlyphRuns, FGSDebugDraw::GetTextWidth /
+#   GetTextHeight and DrawString's scale)    -> removed in ps2-polish P5b: the game's font compiled in
+#                                               (GSDebugFontData.inl, LeonCook -run=EmbedFont), FGSDebugDraw::UploadFont,
+#                                               MeasureString, GetLineHeight, FindLineBreak, EGSDebugFont
 #   FLegacyCoordinateConversion and LegacyCoordinateConversion.h
 #                                            -> UE-space data; only tests convert legacy (Y up, metres) data, the
 #                                               golden tables: see $TestsOnly
@@ -168,6 +185,21 @@ $Rules = @(
 		Use = "VU1's Skinned programs with the batch's palette (FGSCommandList::AllocateSkinPalette, MakeSkinPalette)" },
 	@{ Name = "ShooterGame's per-class optional asset loaders (ps2-shipping N24b)"; Pattern = '\bLoadOptionalAsset\b'
 		Use = "LoadShooterObject / LoadShooterAsset (ShooterGame), which resolve what is in memory and keep it" },
+	@{ Name = "the HUD's bitmap font (ps2-polish P5)"
+		Pattern = '\bstb_easy_font\w*|<stb_easy_font\.h>|\bHudFontScale\b|\bHudLineHeight\b|\bDrawTextBlock\b|\bMeasureTextOnly\b'
+		Use = "UFont (UEngine::GetTinyFont .. GetLargeFont), FCanvas::DrawText / MeasureText with a font, FCanvasTextItem, UFont::GetLineHeight; UMG's FSlateFontInfo" },
+	@{ Name = "ShooterGame's bots that walked through ladders and spun in place (ps2-polish P3)"
+		Pattern = '\b(bCanClimbLadders|HoldAndLookAround)\b'
+		Use = "the bots climb (UShooterCharacterMovement::GetLadderNormal, the waypoints' Ladder links) and watch the sites' lookouts (AShooterGameMode::GetBombSiteLookouts, AShooterAIController's Watch)" },
+	@{ Name = "ShooterGame's bot fill flag and single difficulty scale (ps2-polish P9)"
+		Pattern = '\bbFillTeamsWithBots\b|Max\(0\.1f, Difficulty\)'
+		Use = "AShooterGameMode::NumBots and RebalanceBots (the bots shared out around the player's team); AShooterAIController::ApplyDifficulty with DifficultyPresets (EShooterBotDifficulty)" },
+	@{ Name = "the hand-drawn scoreboard (ps2-polish P6)"
+		Pattern = '\bDrawScoreboard\b|\bScoreboardCTText\b|\bScoreboardTText\b|\bItemsText\b'
+		Use = "UShooterScoreboardWidget (UMG's UTableView); the HUD's icons (EShooterHUDIcon, AShooterHUD::DrawHUDIcon)" },
+	@{ Name = "the GS debug text's 5x7 bitmap font (ps2-polish P5b)"
+		Pattern = '\b(GlyphRows|GlyphOf|AppendGlyphRuns)\b|FGSDebugDraw::(GetTextWidth|GetTextHeight)\b'
+		Use = "the game's font compiled in (GSDebugFontData.inl, LeonCook -run=EmbedFont): FGSDebugDraw::UploadFont, DrawString with an EGSDebugFont, MeasureString, GetLineHeight, FindLineBreak" },
 	@{ Name = "legacy GL / transform / axes"; Pattern = 'LegacyGL|FLegacyTransform|LegacyAxes'
 		Use = "UE view and projection matrices (ToGLClipSpace last), FTransform, UE axes" },
 	@{ Name = "legacy coordinate conversion outside the tests"

@@ -7,6 +7,7 @@
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture2D.h"
+#include "Engine/TextureCube.h"
 #include "Engine/World.h"
 #include "Frustum.h"
 #include "GLClipSpace.h"
@@ -16,12 +17,15 @@
 #include "Level/Light.h"
 #include "LightSceneProxy.h"
 #include "MaterialShared.h"
+#include "Math/ScaleMatrix.h"
+#include "Math/TranslationMatrix.h"
 #include "Misc/MemStack.h"
 #include "Misc/Scratchpad.h"
 #include "SceneManagement.h"
 #include "ScenePrivate.h"
 #include "SceneView.h"
 #include "SkeletalMeshSceneProxy.h"
+#include "SkyBoxGeometry.h"
 #include "StaticMeshResources.h"
 #include "StaticMeshSceneProxy.h"
 #include "Stats/Stats.h"
@@ -31,6 +35,7 @@ DECLARE_CYCLE_STAT(TEXT("GS Scene Render"), STAT_GSSceneRender, STATGROUP_SceneR
 DECLARE_CYCLE_STAT(TEXT("GS Canvas"), STAT_GSDrawCanvas, STATGROUP_SceneRendering);
 // The scene's parts (N29): the profile's breakdown of GS Scene Render.
 DECLARE_CYCLE_STAT(TEXT("GS Visibility"), STAT_GSVisibility, STATGROUP_SceneRendering);
+DECLARE_CYCLE_STAT(TEXT("GS Sky"), STAT_GSSky, STATGROUP_SceneRendering);
 DECLARE_CYCLE_STAT(TEXT("GS Opaque"), STAT_GSOpaque, STATGROUP_SceneRendering);
 DECLARE_CYCLE_STAT(TEXT("GS Skinned"), STAT_GSSkinned, STATGROUP_SceneRendering);
 DECLARE_CYCLE_STAT(TEXT("GS Translucent and Effects"), STAT_GSTranslucent, STATGROUP_SceneRendering);
@@ -111,7 +116,7 @@ namespace
 		Outside,
 		/** Inside the guard band and the near and far planes: its strips need no clipping. */
 		Inside,
-		/** Across a clip plane: its triangles go through the clipper. */
+		/** Across a clip plane: its triangles are clipped (on VU1 when recorded, P8b). */
 		Crossing,
 	};
 
@@ -243,7 +248,11 @@ FGSSceneRenderer::FSectionState FGSSceneRenderer::BindMaterial(
 		const float K = FMath::Log2(TexelsPerCm / PixelsPerCm) + Material.LodBias;
 		Tex1.K = int16(FMath::Clamp(FMath::RoundToInt(K * 16.0f), -2048, 2047));
 	}
-	SetSampler(List, Tex1, FGSClamp());
+	// The texture's address modes (UE: AddressX, AddressY): repeat, or clamp at its edges (a sky's faces).
+	FGSClamp Clamp;
+	Clamp.WMS = Material.AlbedoMap->AddressX == ETextureAddress::Clamp ? EGSWrapMode::Clamp : EGSWrapMode::Repeat;
+	Clamp.WMT = Material.AlbedoMap->AddressY == ETextureAddress::Clamp ? EGSWrapMode::Clamp : EGSWrapMode::Repeat;
+	SetSampler(List, Tex1, Clamp);
 	State.bTextured = true;
 	return State;
 }
@@ -367,17 +376,41 @@ void FGSSceneRenderer::DrawMeshSection(FGSPrimitiveEmitter& Emitter, const FLPS2
 	{
 		Draw.NormalToWorld = MakeNormalToWorld(LocalToWorld);
 		// Only the point lights whose range reaches the mesh's bounds (N29): the others light none of its vertices,
-		// and without them a microprogram does the draw's light (VU1 has the ambient and one sun).
+		// and without them a microprogram does the draw's light (VU1 has the ambient and one sun). At most the two
+		// that light the bounds most (ps2-polish P8b, as UE's per-primitive light limit): a firefight's muzzle flashes
+		// beside a lamp otherwise left every lit draw near them to the EE (83 ms frames), and VU1 lights two.
 		Draw.Lights = FrameLights;
 		Draw.Lights.NumPoint = 0;
+		float Strength[FGSVertexDraw::MaxVU1PointLights] = {};
 		for (int32 Index = 0; Index < FrameLights.NumPoint; ++Index)
 		{
 			const FGSVertexLights::FPoint& Point = FrameLights.Point[Index];
-			if (WorldBounds.ComputeSquaredDistanceToPoint(Point.Position) < FMath::Square(Point.Radius))
+			const float DistanceSquared = WorldBounds.ComputeSquaredDistanceToPoint(Point.Position);
+			if (DistanceSquared >= FMath::Square(Point.Radius))
 			{
-				Draw.Lights.Point[Draw.Lights.NumPoint++] = Point;
+				continue;
 			}
+			// Its light at the bounds' nearest point: the colour's sum by the range attenuation, squared.
+			const float Falloff = 1.0f - (FMath::Sqrt(DistanceSquared) / FMath::Max(Point.Radius, 0.1f));
+			const float Light = (Point.Color.X + Point.Color.Y + Point.Color.Z) * FMath::Square(Falloff);
+			int32 Slot = Draw.Lights.NumPoint;
+			if (Slot == FGSVertexDraw::MaxVU1PointLights)
+			{
+				// Full: it takes the weakest's place if it is stronger (the earlier light on a tie).
+				Slot = Strength[0] <= Strength[1] ? 0 : 1;
+				if (Light <= Strength[Slot])
+				{
+					continue;
+				}
+			}
+			else
+			{
+				++Draw.Lights.NumPoint;
+			}
+			Draw.Lights.Point[Slot] = Point;
+			Strength[Slot] = Light;
 		}
+		static_assert(FGSVertexDraw::MaxVU1PointLights == 2, "The weakest of two");
 	}
 	// VU1 draws the batches inside the guard band when a microprogram does the draw's lighting (plan N14); a skinned
 	// batch's palette goes with it (N14b).
@@ -426,36 +459,39 @@ void FGSSceneRenderer::DrawMeshSection(FGSPrimitiveEmitter& Emitter, const FLPS2
 			Batch.Palette = BatchPalette.GetData();
 			Batch.NumBones = uint32(BatchPalette.Num());
 		}
-		if (Placement == EBatchPlacement::Inside)
+		// Across a clip plane: each triangle of the strips on its own through the clipper (VU1's clipping when
+		// recorded, P8b).
+		Batch.bClip = Placement == EBatchPlacement::Crossing;
+		FrameStats.BatchesClipped += Batch.bClip ? 1 : 0;
+		if (bRecordBatches)
 		{
-			if (bRecordBatches)
+			if (DrawIndex == INDEX_NONE)
 			{
-				if (DrawIndex == INDEX_NONE)
-				{
-					DrawIndex = List.AddVertexDraw(Draw);
-				}
-				Batch.Draw = DrawIndex;
-				if (bSkinned)
-				{
-					// The palette where the list keeps it until its chain has been sent, once for batches that share
-					// it.
-					if (RecordedPalette == nullptr || RecordedBones != Batch.NumBones ||
-						FMemory::Memcmp(RecordedPalette, Batch.Palette, Batch.NumBones * sizeof(FGSSkinMatrix)) != 0)
-					{
-						FGSSkinMatrix* Copy = List.AllocateSkinPalette(Batch.NumBones);
-						FMemory::Memcpy(Copy, Batch.Palette, Batch.NumBones * sizeof(FGSSkinMatrix));
-						RecordedPalette = Copy;
-						RecordedBones = Batch.NumBones;
-					}
-					Batch.Palette = RecordedPalette;
-				}
-				List.DrawVertexBatch(Batch);
-				NumBatchTriangles += CountStripTriangles(Batch);
-				++FrameStats.BatchesOnVU1;
-				// The batch sets PRIM itself: a run of the emitter after it starts again.
-				Started = EBatchPlacement::Outside;
-				continue;
+				DrawIndex = List.AddVertexDraw(Draw);
 			}
+			Batch.Draw = DrawIndex;
+			if (bSkinned)
+			{
+				// The palette where the list keeps it until its chain has been sent, once for batches that share it.
+				if (RecordedPalette == nullptr || RecordedBones != Batch.NumBones ||
+					FMemory::Memcmp(RecordedPalette, Batch.Palette, Batch.NumBones * sizeof(FGSSkinMatrix)) != 0)
+				{
+					FGSSkinMatrix* Copy = List.AllocateSkinPalette(Batch.NumBones);
+					FMemory::Memcpy(Copy, Batch.Palette, Batch.NumBones * sizeof(FGSSkinMatrix));
+					RecordedPalette = Copy;
+					RecordedBones = Batch.NumBones;
+				}
+				Batch.Palette = RecordedPalette;
+			}
+			List.DrawVertexBatch(Batch);
+			NumBatchTriangles += CountStripTriangles(Batch);
+			++FrameStats.BatchesOnVU1;
+			// The batch sets PRIM itself: a run of the emitter after it starts again.
+			Started = EBatchPlacement::Outside;
+			continue;
+		}
+		if (!Batch.bClip)
+		{
 			SCOPE_CYCLE_COUNTER(STAT_GSEmittedBatches);
 			if (Started != EBatchPlacement::Inside)
 			{
@@ -466,29 +502,14 @@ void FGSSceneRenderer::DrawMeshSection(FGSPrimitiveEmitter& Emitter, const FLPS2
 			++FrameStats.BatchesOnEmitter;
 			continue;
 		}
-		// Across a clip plane: each triangle of the strips on its own, in the source's winding.
 		SCOPE_CYCLE_COUNTER(STAT_GSClippedBatches);
-		++FrameStats.BatchesClipped;
-		const int32 NumVertices = int32(Batch.NumVertices);
-		BatchVertices.SetNumUninitialized(NumVertices, false);
-		BatchTriangles.SetNumUninitialized(NumVertices, false);
-		FGSPrimitiveEmitter::TransformVertexBatch(Draw, Batch, BatchVertices.GetData(), BatchTriangles.GetData());
 		if (Started != EBatchPlacement::Crossing)
 		{
 			Emitter.BeginTriangles(State.bTextured, State.bTranslucent, true);
 			Started = EBatchPlacement::Crossing;
 		}
-		for (int32 Index = 2; Index < NumVertices; ++Index)
-		{
-			if (BatchTriangles[Index] == EGSStripTriangle::None)
-			{
-				continue;
-			}
-			const bool bReversed = BatchTriangles[Index] == EGSStripTriangle::Reversed;
-			++FrameStats.TrianglesClipped;
-			Emitter.AddTriangle(BatchVertices[bReversed ? Index - 1 : Index - 2],
-				BatchVertices[bReversed ? Index - 2 : Index - 1], BatchVertices[Index]);
-		}
+		Emitter.AddClippedVertexBatch(Draw, Batch);
+		FrameStats.TrianglesClipped += CountStripTriangles(Batch);
 	}
 	if (State.bTranslucent)
 	{
@@ -599,14 +620,22 @@ void FGSSceneRenderer::Render(
 
 	// The world settings' distance fog (N15): FOGCOL for the frame, a coefficient per vertex of the world pass.
 	FrameFog = FGSVertexFog();
+	// The sky's cube map (ps2-polish P8), whose horizon the fog fades into.
+	const UTextureCube* Sky = WorldSettings != nullptr ? WorldSettings->SkySettings.SkyCubemap : nullptr;
+	if (Sky != nullptr && !Sky->HasValidFaces())
+	{
+		Sky = nullptr;
+	}
 	if (WorldSettings != nullptr && WorldSettings->FogSettings.bEnableFog)
 	{
 		const FWorldFogSettings& Fog = WorldSettings->FogSettings;
 		FrameFog = FGSVertexFog::MakeLinear(Fog.StartDistance, Fog.EndDistance);
+		const FLinearColor FogColor =
+			Fog.bInscatteringColorFromSky && Sky != nullptr ? Sky->HorizonColor : Fog.FogInscatteringColor;
 		FGSFogCol FogCol;
-		FogCol.R = UnitByte(Fog.FogInscatteringColor.R);
-		FogCol.G = UnitByte(Fog.FogInscatteringColor.G);
-		FogCol.B = UnitByte(Fog.FogInscatteringColor.B);
+		FogCol.R = UnitByte(FogColor.R);
+		FogCol.G = UnitByte(FogColor.G);
+		FogCol.B = UnitByte(FogColor.B);
 		List.SetFogCol(FogCol);
 	}
 
@@ -616,6 +645,12 @@ void FGSSceneRenderer::Render(
 	FGSPrimitiveEmitter Emitter(Environment, List);
 	Emitter.SetFog(FrameFog);
 	PixelsPerCm = GetPixelsPerCm(View.ProjectionMatrix, Environment);
+
+	// The sky, over the clear and under everything else.
+	if (Sky != nullptr)
+	{
+		DrawSky(*Sky, View, ViewProjection, Emitter, List, Environment);
+	}
 
 	// Opaque sections grouped by texture, the groups in the order their first section comes in the scene (the same
 	// order every run: no addresses decide it) and the scene's order within a group; translucent ones afterwards,
@@ -792,6 +827,42 @@ void FGSSceneRenderer::Render(
 	FrameStats.TextureEvictions = Counters.Evictions;
 	FrameStats.ClutLoads = Counters.ClutLoads;
 	FrameStats.TextureResidentBytes = int32(TextureCache.GetResidentBlocks() * FGSTextureLayout::BytesPerBlock);
+}
+
+void FGSSceneRenderer::DrawSky(const UTextureCube& Sky, const FSceneView& View, const FMatrix& ViewProjection,
+	FGSPrimitiveEmitter& Emitter, FGSCommandList& List, const FGSDrawEnvironment& Environment)
+{
+	SCOPE_CYCLE_COUNTER(STAT_GSSky);
+	if (SkyMesh.IsEmpty() && !FSkyBoxGeometry::BuildMesh(SkyMesh))
+	{
+		return;
+	}
+	// Behind everything: the depth test always passes and Z is not written; not fogged.
+	const FGSVertexFog WorldFog = FrameFog;
+	FrameFog = FGSVertexFog();
+	Emitter.SetFog(FrameFog);
+	List.SetTest(0, FGSDrawEnvironment::DepthTest(false));
+	SetDepthWrite(List, Environment, false);
+	// Around the eye, never moving with it.
+	const float Radius = FSkyBoxGeometry::GetRadius(View.ProjectionMatrix);
+	const FMatrix LocalToWorld = FScaleMatrix(FVector(Radius)) * FTranslationMatrix(View.ViewLocation);
+	const FBox Bounds = FBox(FVector(-Radius), FVector(Radius)).ShiftBy(View.ViewLocation);
+	for (int32 Section = 0; Section < SkyMesh.GetNumSections(); ++Section)
+	{
+		// The face unlit, its texels as they are (MODULATE by white), level 0 bilinear, clamped (its texture's address
+		// modes).
+		FMaterial Face;
+		Face.Shading = EMaterialLightingModel::Unlit;
+		Face.Albedo = FVector::OneVector;
+		Face.AlbedoMap = Sky.GetFace(ECubeFace(SkyMesh.GetSection(Section).MaterialIndex));
+		Face.bMipmaps = false;
+		DrawMeshSection(Emitter, SkyMesh, Section, LocalToWorld, Bounds, Face, /*bStaticLighting =*/false, nullptr,
+			nullptr, ViewProjection, List, Environment);
+	}
+	SetDepthWrite(List, Environment, true);
+	List.SetTest(0, FGSDrawEnvironment::DepthTest(true));
+	FrameFog = WorldFog;
+	Emitter.SetFog(FrameFog);
 }
 
 void FGSSceneRenderer::DrawSkeletalMesh(FGSPrimitiveEmitter& Emitter, const FSkeletalMeshSceneProxy& Skeletal,
@@ -1060,6 +1131,25 @@ void FGSSceneRenderer::DrawWorldLines(const FSceneViewFamily& ViewFamily, const 
 	World->LineBatcher.Clear();
 }
 
+bool FGSSceneRenderer::BindCanvasTexture(const UTexture2D& Texture, FGSCommandList& List)
+{
+	if (TextureState.Texture != &Texture)
+	{
+		FGSTextureBinding Binding;
+		// Not resident this frame (the upload budget, a full arena): the run waits for a later frame rather than
+		// drawing its texels' average over its rectangles.
+		if (!TextureCache.BindTexture(Texture, List, Binding) || Binding.bFlat)
+		{
+			return false;
+		}
+		List.SetTex0(0, Binding.Tex0);
+		++FrameStats.Tex0Writes;
+		TextureState.Texture = &Texture;
+		TextureState.Binding = Binding;
+	}
+	return true;
+}
+
 void FGSSceneRenderer::DrawCanvas(const FCanvas& Canvas, const FGSDrawEnvironment& Environment, FGSCommandList& List)
 {
 	SCOPE_CYCLE_COUNTER(STAT_GSDrawCanvas);
@@ -1068,27 +1158,49 @@ void FGSSceneRenderer::DrawCanvas(const FCanvas& Canvas, const FGSDrawEnvironmen
 	{
 		return;
 	}
-	// Kept between frames: the canvas's vertices (the HUD's text is thousands) reuse their capacity.
+	// Kept between frames: the canvas's vertices reuse their capacity.
 	TArray<FCanvasVertex>& Vertices = CanvasVertices;
 	Canvas.GetPrimitives(Vertices, CanvasRuns);
 	// Pixel coordinates (top-left origin) blended by their alpha over the frame, without the depth test or Z writes:
-	// the rectangles as SPRITEs (two vertices, the colour flat), the rest as Gouraud triangles (N15).
+	// the rectangles as SPRITEs (two vertices, the colour flat), the rest as Gouraud triangles (N15). A textured run
+	// samples its texture by UV (texels; the texture's rows are stored bottom first, so V turns), MODULATE by the
+	// vertex colour, clamped, nearest when its texels map to pixels one to one (glyphs), bilinear otherwise.
 	List.SetTest(0, FGSDrawEnvironment::DepthTest(false));
 	SetDepthWrite(List, Environment, false);
 	FGSRGBAQ Last;
 	bool bHasLast = false;
-	// A run of vertices shares its colour (a label, a panel): it converts once per run, not per vertex.
-	float LastR = -1.0f;
-	float LastG = -1.0f;
-	float LastB = -1.0f;
-	float LastA = -1.0f;
+	FGSClamp Clamp;
+	Clamp.WMS = EGSWrapMode::Clamp;
+	Clamp.WMT = EGSWrapMode::Clamp;
+	FGSTex1 Nearest;
+	Nearest.bFixedLOD = true;
 	for (const FCanvasPrimitiveRun& Run : CanvasRuns)
 	{
+		const bool bTextured = Run.Texture != nullptr;
+		if (bTextured)
+		{
+			if (!BindCanvasTexture(*Run.Texture, List))
+			{
+				continue;
+			}
+			SetSampler(List, Run.bNearest ? Nearest : BilinearSampling(), Clamp);
+		}
 		FGSPrim Prim;
 		Prim.Type = Run.Type == ECanvasPrimitive::Rectangle ? EGSPrimitive::Sprite : EGSPrimitive::Triangle;
 		Prim.bGouraud = Run.Type == ECanvasPrimitive::Triangle;
 		Prim.bAlphaBlend = true;
+		Prim.bTextured = bTextured;
+		Prim.bUseUV = bTextured;
 		List.SetPrim(Prim);
+		// MODULATE takes 0x80 as 1.0; a flat colour is written as it is.
+		const float ColorScale = bTextured ? 128.0f : 255.0f;
+		const float TexelsU = bTextured ? float(Run.Texture->GetSizeX()) : 0.0f;
+		const float TexelsV = bTextured ? float(Run.Texture->GetSizeY()) : 0.0f;
+		// A run of vertices shares its colour (a label, a panel): it converts once per run, not per vertex.
+		float LastR = -1.0f;
+		float LastG = -1.0f;
+		float LastB = -1.0f;
+		float LastA = -1.0f;
 		for (int32 Index = Run.FirstVertex; Index < Run.FirstVertex + Run.NumVertices; ++Index)
 		{
 			const FCanvasVertex& Vertex = Vertices[Index];
@@ -1099,9 +1211,9 @@ void FGSSceneRenderer::DrawCanvas(const FCanvas& Canvas, const FGSDrawEnvironmen
 				LastB = Vertex.B;
 				LastA = Vertex.A;
 				FGSRGBAQ Color;
-				Color.R = UnitByte(Vertex.R);
-				Color.G = UnitByte(Vertex.G);
-				Color.B = UnitByte(Vertex.B);
+				Color.R = uint8(FMath::Clamp(FMath::RoundToInt(Vertex.R * ColorScale), 0, 255));
+				Color.G = uint8(FMath::Clamp(FMath::RoundToInt(Vertex.G * ColorScale), 0, 255));
+				Color.B = uint8(FMath::Clamp(FMath::RoundToInt(Vertex.B * ColorScale), 0, 255));
 				Color.A = uint8(FMath::Clamp(FMath::RoundToInt(Vertex.A * 128.0f), 0, 0x80));
 				if (!bHasLast || Color.Encode() != Last.Encode())
 				{
@@ -1109,6 +1221,13 @@ void FGSSceneRenderer::DrawCanvas(const FCanvas& Canvas, const FGSDrawEnvironmen
 					Last = Color;
 					bHasLast = true;
 				}
+			}
+			if (bTextured)
+			{
+				FGSUV UV;
+				UV.U = uint16(FMath::Clamp(FMath::RoundToInt(Vertex.U * TexelsU * 16.0f), 0, 0x3fff));
+				UV.V = uint16(FMath::Clamp(FMath::RoundToInt((1.0f - Vertex.V) * TexelsV * 16.0f), 0, 0x3fff));
+				List.SetUV(UV);
 			}
 			// OpenGL covers pixel i when i + 0.5 is inside; the GS samples pixel i at i.
 			List.AddVertex(Environment.PixelVertex(Vertex.X - 0.5f, Vertex.Y - 0.5f, 0));

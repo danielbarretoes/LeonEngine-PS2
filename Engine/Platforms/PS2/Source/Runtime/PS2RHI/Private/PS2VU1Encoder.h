@@ -19,7 +19,18 @@ namespace Leon::PS2
 		constexpr uint32 ScreenScale = 0;
 		constexpr uint32 ScreenOffset = 1;
 		constexpr uint32 Limits = 2;
-		constexpr uint32 NumShared = 3;
+		/**
+		 * The clipping's constants (ps2-polish P8b, ClipTriangles.vsi): the vectors of a position's outcodes (the
+		 * view's sides, the guard band's, near and far) and the six clip planes (near, far, then the guard band's
+		 * right, left, top and bottom).
+		 */
+		constexpr uint32 OutcodeVectors = 3;
+		constexpr uint32 NumOutcodeVectors = 6;
+		constexpr uint32 ClipPlanes = OutcodeVectors + NumOutcodeVectors;
+		constexpr uint32 NumClipPlanes = 6;
+		constexpr uint32 NumShared = ClipPlanes + NumClipPlanes;
+		/** The clipping's state, the program's own: the chunk handed over (x, VU1Conformance), the chunks, TOP. */
+		constexpr uint32 ClipState = NumShared;
 		/** VIF1's BASE and OFFSET: two buffers of 504 quadwords after the 16 of the shared constants. */
 		constexpr uint32 Base = 16;
 		constexpr uint32 Offset = 504;
@@ -38,10 +49,19 @@ namespace Leon::PS2
 		constexpr uint32 Colors = 152;
 		constexpr uint32 TexCoords = 216;
 		constexpr uint32 Packet = 280;
+		/**
+		 * A clipped batch's (P8b): each vertex's record in its own rows of the streams, two polygons (10 vertices of 3
+		 * quadwords: 9 and the first again) and two chunks of GIF packets (VU1Programs.vsm's CLIP_PROGRAM).
+		 */
+		constexpr uint32 ClipPolygonQuadwords = 30;
+		constexpr uint32 ClipPolygons = Packet;
+		constexpr uint32 ClipChunks = ClipPolygons + (2 * ClipPolygonQuadwords);
+		constexpr uint32 ClipChunkQuadwords = 82;
 		static_assert(PointLights + (2 * MaxPointLights) == HeaderLit && HeaderLit <= Positions, "The lit header");
 		static_assert(MaxPointLights == FGSVertexDraw::MaxVU1PointLights, "What GetProgram lets through");
 		static_assert(Packet + 1 + (3 * FGSVertexBatch::MaxVertices) <= Offset, "A batch fits its buffer");
-		static_assert(Base + (2 * Offset) <= 1024, "The buffers fit VU1's 16 KB");
+		static_assert(ClipChunks == 340 && ClipChunks + (2 * ClipChunkQuadwords) <= Offset, "A clipped batch's too");
+		static_assert(ClipState < Base && Base + (2 * Offset) <= 1024, "The buffers fit VU1's 16 KB");
 	} // namespace VU1Memory
 
 	/**
@@ -60,9 +80,15 @@ namespace Leon::PS2
 		constexpr uint32 TexCoords = Colors + FGSVertexBatch::MaxSkinnedVertices;
 		constexpr uint32 Skin = TexCoords + FGSVertexBatch::MaxSkinnedVertices;
 		constexpr uint32 Packet = Skin + FGSVertexBatch::MaxSkinnedVertices;
+		/** A clipped batch's polygons and chunks (Skinned.vsm's CLIP_PROGRAM, P8b). */
+		constexpr uint32 ClipPolygons = Packet;
+		constexpr uint32 ClipChunks = ClipPolygons + (2 * VU1Memory::ClipPolygonQuadwords);
+		constexpr uint32 ClipChunkQuadwords = 53;
 		static_assert(Positions == 97 && Packet == 337, "Skinned.vsm's offsets");
 		static_assert(
 			Packet + 1 + (3 * FGSVertexBatch::MaxSkinnedVertices) <= VU1Memory::Offset, "A batch fits its buffer");
+		static_assert(
+			ClipChunks == 397 && ClipChunks + (2 * ClipChunkQuadwords) <= VU1Memory::Offset, "A clipped batch's too");
 	} // namespace VU1SkinnedMemory
 
 	/** The microprograms' start addresses in the micro memory (in instructions, MSCAL's). */
@@ -101,7 +127,9 @@ namespace Leon::PS2
 		const FGSCommandList* HeaderList = nullptr;
 		int32 HeaderDraw = INDEX_NONE;
 		EGSVertexProgram HeaderProgram = EGSVertexProgram::StaticUnlit;
+		/** The draw's PRIM: its strips' (TRISTRIP), and a clipped batch's triangles' (TRIANGLE, P8b). */
 		uint64 HeaderPrim = 0;
+		uint64 HeaderClipPrim = 0;
 		/** The header's z: 0 unlit, 1 lit, 2 or 3 lit with one or two point lights. */
 		uint32 HeaderLighting = 0;
 		alignas(16) uint32 Header[VU1SkinnedMemory::Header * 4] = {};

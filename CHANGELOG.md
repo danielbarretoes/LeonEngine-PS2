@@ -7,6 +7,268 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-01
+
+Polish from playing 0.24.0 ([ps2-polish](Docs/PLANS/ps2-polish.md) P0 to P10, with P2b, P3b, P5b and P8b): the
+vanishing characters and the bots' knife and idle walks fixed, CS 1.6's accuracy and recoil, the bots' pickups,
+lookouts, ladders and post-plant, the crouch toggle and dropped weapons, fonts, a textured canvas and UMG's widgets,
+CS 1.6's HUD and a table scoreboard, a generated HDR sky, the near geometry clipped on VU1, and the main menu, team
+selection and pause. The real minimap (P7) is not done ([Docs/PENDING.md](Docs/PENDING.md)). The engine and ShooterGame
+content is resaved for 0.25.0. PCSX2 ([Budgets.md](Engine/Platforms/PS2/Documentation/Budgets.md), the row «0.25.0»):
+every frame after the first at 33.5 ms (p50 / p95 / p99), 29.62 fps with the first frame's travel from the main menu,
+the scene 6.6 ms. The ISO (7 784 448 bytes) boots in PCSX2 into the main menu. `BotMatch 10 7`: `Botmatch OK: 8
+round(s), CT 2 - T 6, 57 kill(s), seed 7, sides switched after round 5`.
+
+### Added
+
+- A generated HDR sky ([ps2-polish](Docs/PLANS/ps2-polish.md) P8).
+  - `Game/ShooterGame/SourceArt/Sky/make_sky.py` (Python's standard library) generates de_leon's desert sky as a long-lat
+    Radiance HDR panorama (1 024 x 512): a zenith-to-haze gradient, sand below the horizon, the sun where the map's
+    baked sun is (`SUN_DIRECTION` of `make_de_leon.py`) and seeded clouds; `check_art_determinism.py` runs it twice.
+  - `UTextureCube` (UE) with its six faces as `UTexture2D` subobjects and a `HorizonColor`, and its importer
+    `UTextureCubeFactory` (LeonEd, `-type=TextureCube`, `.hdr`): each face texel samples the panorama along its
+    direction, tone-mapped by the ACES filmic curve at `ExposureBias` to sRGB bytes, faces of `CubeFaceSize` (128);
+    `/Game/Sky/T_Sky_Desert`. `UTexture2D::AddressX` / `AddressY` (`ETextureAddress`: `Wrap`, `Clamp`) set the GS's
+    CLAMP; the faces clamp.
+  - `AWorldSettings::SkySettings` (`FWorldSkySettings::SkyCubemap`): the GS scene renderer draws the sky after the
+    clear and before the world, a box of small batches around the eye (`FSkyBoxGeometry`), unlit, unfogged, no depth
+    test, no Z written, on VU1 and never through the EE's clipper. `FWorldFogSettings::bInscatteringColorFromSky`: the
+    fog takes the sky's horizon colour.
+  - The map importer reads a `WorldSettings` node's extras as world settings property paths (`SkySettings.SkyCubemap`,
+    `FogSettings.bEnableFog`, ...). de_leon has the sky and its fog on, from 30 m to the far plane.
+- Fonts, a textured canvas and UMG's missing widgets, the base of the new UI ([ps2-polish](Docs/PLANS/ps2-polish.md)
+  P5).
+  - `UFont` (UE's offline font) and its importer, `UTrueTypeFontFactory` (LeonEd, `-type=Font`, `.ttf`, stb_truetype):
+    the glyphs of `UnicodeRange` (ASCII and Latin-1, so Spanish) rasterized at `Height` pixels into PF_P4 pages of at
+    most 256 x 256 (white texels, the coverage in the CLUT's alpha, 16 levels), with whole-pixel advances, bearings and
+    kerning pairs; the same file gives the same bytes. The engine's font is DejaVu Sans Condensed 2.37
+    (`Engine/SourceArt/EngineFonts`, the Bitstream Vera license with the DejaVu changes in the public domain;
+    `Engine/SourceArt/LICENSES.md`), imported at 10, 14, 20 and 32 pixels as `/Engine/EngineFonts/DejaVuSansCondensed*`,
+    one page each; `UEngine::GetTinyFont`, `GetSmallFont`, `GetMediumFont` and `GetLargeFont` load them
+    (`[/Script/Engine.Engine] TinyFontName ...`).
+  - The canvas draws text in a font, a textured SPRITE a glyph laid out by its metrics and kerning, UTF-8 decoded
+    (`FCanvas::DrawText(Font, ...)`, `MeasureText(Font, ...)`, `DrawShadowedString`, `FCanvasTextItem` with a shadow or
+    an outline), and textured tiles (`DrawTile` with a `UTexture`, UVs, colour and alpha; `FCanvasTileItem` with a
+    rotation about a pivot: two UV triangles). `FGSSceneRenderer::DrawCanvas` samples them through the texture cache
+    (UV, MODULATE, nearest one to one and bilinear otherwise), after the GS conformance scene `TexturedCanvas` (D7:
+    GSReference, the OpenGL emulator and GSConformance.elf in PCSX2).
+  - UMG: `UHorizontalBox` / `UHorizontalBoxSlot` (automatic and fill sizes), `UButton` (`FButtonStyle`; `OnClicked`,
+    `OnPressed`, `OnReleased`, `OnHovered`, `OnUnhovered`), `UWidgetSwitcher`, `UTableView` (columns with a header, a
+    width and an alignment, rows sorted by a column, a highlighted row; cached text widths), `UImage` with a texture
+    brush (`FSlateBrush`, `SetBrushFromTexture`), `UTextBlock` with a font (`FSlateFontInfo`) and a shadow. Focus and
+    navigation, small and UE-like: `AHUD::InputKey` gives the widgets the keys before the game, the focused widget and
+    its parents first, then the arrows, the d-pad and Tab move the focus to the nearest focusable widget painted that
+    way (`FHittestGrid`, explicit rules), Accept (Enter, Space, the pad's Cross) presses a button and clicks on the
+    release; on Win64 the free mouse hovers and clicks (`AHUD::InputMouseMove`,
+    `IRendererModule::WindowToRenderTarget`). SlateCore gains `FGeometry`, `FReply`, `FKeyEvent` / `FPointerEvent`,
+    `EUINavigation` and `FNavigationConfig`.
+  - Tests: `System.Engine.Font.MetricsAndKerning`, `System.Engine.Canvas.TextGlyphs`, `.TexturedTile`,
+    `System.LeonEd.Factories.TrueTypeFont.Rasterize` and `.Import` (byte-identical reimport),
+    `System.GSReference.Texture.TexturedCanvas`, `System.Renderer.GS.Canvas.Text` (the reference's frame),
+    `System.Renderer.GSEmulator.CanvasFrame` (the emulator against it), `System.UMG.Focus.Navigation`,
+    `System.UMG.Button.Activation`, `System.UMG.Panels.HorizontalBoxAndSwitcher`, `System.UMG.Image.Texture`,
+    `System.UMG.TableView.SortAndLayout` (588 engine tests, 105 of ShooterGame); `ShooterGame.HUD.RoundInfo` counts
+    the glyphs' sprites.
+
+- ShooterGame's crouch toggles, and the bomb and the weapons are dropped and picked up as in CS
+  ([ps2-polish](Docs/PLANS/ps2-polish.md) P4): a press of the crouch key (Left Ctrl, Circle) crouches and the next
+  stands up, the default; the player's option `bToggleCrouch` (`UShooterPersistentUser`, the `Settings` slot on the
+  memory card; the `SetToggleCrouch 0|1` command) holds it instead; the bots crouch as before. The carried bomb is
+  CS 1.6's slot 5: 5 or the D-pad's down draws it (`AShooterCharacter::DrawBomb`: the weapon put away, the arms hidden,
+  the HUD's weapon line `C4`), a weapon's key puts it away, and the drop key (G, the D-pad's right) drops it ahead of
+  the feet (`DropBomb`); its dropper takes it back only after `AShooterBomb::PickupDelay` (1 s). A weapon or the bomb
+  picked up from the floor shows `Picked up <item>` on the HUD for `PickupNoticeDuration` (2 s), and a weapon that is
+  not drawn at once plays its draw sound (`AShooterCharacter::PickUpWeapon`); it keeps its rounds and its silencer.
+  Tests: `ShooterGame.Input.CrouchToggleAndHold`, `.DropAndPickUpWeapon`, `.DropAndPickUpBomb`; `Settings.RoundTrip` and
+  `Config.InputAndChannels` updated (102 ShooterGame tests). The bot match is unchanged
+  (`Botmatch OK: 9 round(s), CT 3 - T 6, 55 kill(s), seed 7, sides switched after round 5`).
+- ShooterGame's bots rush with the knife, pick up weapons, watch the sites and climb ladders
+  ([ps2-polish](Docs/PLANS/ps2-polish.md) P3). With the knife a bot runs the path to its enemy and cuts only within
+  reach: a stab when the enemy's back is turned, else slashes as it circles in (`EngageWithKnife`); a fight never draws
+  a grenade (`AShooterCharacter::EquipBestWeapon(false)`). A bot without a loaded primary goes for one on the floor
+  within `PickupSearchDistance` (15 m), and out of ammunition for any loaded weapon within 30 m (the `PickUp` branch):
+  `AShooterWeapon::CanBePickedUpBy` lets a bot swap a spent weapon for it (the player keeps CS's walk-over into a free
+  slot). With no enemy in sight the bots keep the sites' lookouts (`AShooterGameMode::GetBombSiteLookouts`: the map's
+  waypoints flagged `Lookout`, else the site's nearest waypoints), turning between each team's directions there (first
+  the main way in: the graph's path toward the other team's spawn) and moving from one to another; the terrorists
+  escort the carrier watching its flanks and take the site's lookouts once it is near; the counter-terrorists rotate
+  after `RotateTime` or on a teammate's report at the other site (`RotateOnReportChance`); the terrorists hunt with
+  `HuntTimeLeft` (30 s) left; the hunt roams the waypoints; a bot on the move looks along its path. Ladders: the
+  navigation links two waypoints flagged `Ladder` across the climb (`FWaypointLinkParams::MaxLadderLinkDistance`),
+  the path follower does not jump at them (`AAIController::GetCurrentTargetLocation`, UE's), and the bots climb up
+  and down facing the ladder (`UShooterCharacterMovement::GetLadderNormal`); `bCanClimbLadders` and
+  `HoldAndLookAround` are gone (`CheckBannedApis.ps1`). de_leon gets six lookouts off the lanes' line, the ladders'
+  feet and tops, and CT starts out of the mid doors' line (the terrorists' spawn saw them across the map). The bots
+  see enemies within `SightRadius` (35 m). Over seeds 1 to 24 the terrorists now win 49 % of the rounds (60 % before).
+  A scene component's `DetachAllChildren` no longer loops for ever on a child that points to another parent (a bot
+  match hung in the exit's collection).
+  Tests: `ShooterGame.Bots.KnifeRushesAndKills`, `.PicksUpAWeaponOutOfAmmo`, `.VisitsLookouts`, `.ClimbsALadder`,
+  `System.AIModule.Gameplay.NavigationAutoLinkLadders`; `ShooterGame.Map.DeLeonHoldsTheGame` and
+  `.Movement.Ladder` and `System.Engine.Components.AttachmentRulesAndSockets` extended (109 ShooterGame tests). The
+  bot match logs `Botmatch OK: 8 round(s), CT 2 - T 6, 55 kill(s), seed 7, sides switched after round 5`.
+- ShooterGame's terrorists hold the planted bomb and the counter-terrorists retake it together
+  ([ps2-polish](Docs/PLANS/ps2-polish.md) P3b). The planter calls "Cover me!"; the terrorists hold from the site's
+  lookouts within `PostPlantHoldRadius` (10 m) of the bomb watching the CT's ways in, call "Hold this position." and
+  chase nothing farther; a defuse is heard (`AShooterBomb::DefuseNoiseLoudness`) and they come for the defuser. The
+  counter-terrorists gather at a staging point toward their spawn (`RetakeStagingDistance`) until a teammate joins or
+  `RetakeWaitTime` passes ("Go go go!"), defuse once the site is clear (`SiteClearTime`) or the time is short, and give
+  the retake up when outnumbered by `RetakeGiveUpAdvantage` or too late ("Team, fall back!", back to their spawn). Over
+  seeds 1 to 24 the terrorists win 56 % of the rounds (1 to 48: 53 %), the bomb explodes in 5 % of the rounds (none
+  before) and is defused in 21 %. Tests: `ShooterGame.Bots.TerroristsHoldThePlantedBomb`,
+  `.TerroristsEngageTheDefuser`, `.RetakeGathers` (112 ShooterGame tests). The bot match logs
+  `Botmatch OK: 8 round(s), CT 2 - T 6, 57 kill(s), seed 7, sides switched after round 5`.
+- ShooterGame's main menu, team selection and pause menu ([ps2-polish](Docs/PLANS/ps2-polish.md) P9), UMG widgets in
+  CS 1.6's olive and amber (`UShooterMenuWidget`: a centred panel of `UShooterMenuButton` lines, left and right
+  stepping an option), driven by the pad alone or the keyboard and the mouse, readable at 640 x 448.
+  - The main menu is the new GameDefaultMap, `/Game/Maps/MainMenu` (a small desert backdrop made by the standard
+    library script `SourceArt/Maps/make_main_menu.py`, exempt from the project's required map tags by the new
+    `MapsWithoutRequiredTags` of `[/Script/LeonEd.MapImportSettings]`), with `AShooterGame_Menu` (by the map's prefix,
+    `GameModeMapPrefixes`) and `AShooterPlayerController_Menu`: the map (`+MapNames=`), the bots' difficulty (Easy,
+    Normal, Hard, Expert), the rounds to win (3, a best of 5, by default; 5, 8, 16), the number of bots (1 to 9),
+    Options, Start and Quit (Win64). The choices are saved with the player's options (`UShooterPersistentUser`) and
+    travel as URL options, `?bots=N?difficulty=Hard?winrounds=3`, which `AShooterGameMode::InitGame` reads
+    (`MaxRounds = 2 N - 1`); `-botmatch` skips the menu.
+  - The team menu (`UShooterTeamMenuWidget`): a player who joins without `?team=` spectates and the warmup waits for
+    its choice (CT, T, Auto, Spectate; `?team=` takes the same four); then `AShooterGameMode::RebalanceBots` shares the
+    match's bots out so the teams are as even as possible counting the player (nine bots with the player on CT: 4 CT
+    and 5 T). The pause menu's Change team changes sides by CS's rule: the change takes effect at the next round, the
+    player dying if alive during a fought round, and the bots even the sides out again then.
+  - The pause menu (`UShooterPauseMenuWidget`, Escape or Start): Resume, Change team, Options (sensitivity, invert Y,
+    volume, crouch toggle; saved once when the page is left), Quit to main menu. The game pauses as UE does.
+  - The bots' difficulty is a preset each (`AShooterAIController::DifficultyPresets`, `ApplyDifficulty` when the game
+    mode adds a bot; `FShooterBotSkill`): the reaction, the aim error, its settling and floor, the turn rate, the
+    recoil control and the memory, modelled on CS's bot profiles. Normal is the bots' old skill: the bot match is
+    unchanged.
+- The engine's pause (UE's): `AGameModeBase::SetPause` / `ClearPause` / `AllowPausing` / `IsPaused` with
+  `FCanUnpause`, `AWorldSettings::GetPauserPlayerState`, `UWorld::IsPaused`, `APlayerController::SetPause`, `IsPaused`,
+  `CanUnpause` and the `Pause` command, `UGameplayStatics::SetGamePaused` / `IsGamePaused`. A paused world steps as
+  `LEVELTICK_PauseTick`: its time, its timers, the physics step and the effects stand still and only the tick
+  functions with `bTickEvenWhenPaused` run (the player controllers, which then only process their input, and the
+  HUDs with their widgets); `UWorld::GetRealTimeSeconds` goes on. `UGameplayStatics::OpenLevel` (UE's, over
+  `SetClientTravel`) and `GetPlayerController`; `APlayerController::SetInputMode` with `FInputModeUIOnly`,
+  `FInputModeGameAndUI` and `FInputModeGameOnly` (the viewport's mouse capture: the UI's free cursor does not look).
+  Tests: `System.Engine.World.Pause`, `System.Engine.Travel.OpenLevel`, `System.LeonEd.MapFactory.EngineMapsSkipRequiredTags`
+  extended; `ShooterGame.Menu.MatchOptions`, `.DifficultyPresets`, `.BotSplit`, `.TeamChoiceAndChange`, `.PauseMenu`,
+  `.MainMenuToMatchAndBack`, `ShooterGame.Settings.RoundTrip` extended (118 ShooterGame tests).
+- ShooterGame's HUD, scoreboard and buy menu are CS 1.6's ([ps2-polish](Docs/PLANS/ps2-polish.md) P6). The HUD:
+  the health and the armor bottom left with their icons, the ammunition (`clip | reserve`), the weapon and the money
+  (the buy zone's cart while the player may buy) bottom right, the bomb (blinking in a site) and the defuse kit on the
+  left, the clock with a stopwatch between the scores top centre, the kill feed top right with the weapons' icons, the
+  headshot's and a skull for the world, and a compact frame readout under the radar (`30 fps  33.3 ms`, the option
+  `bShowFrameStats`, `SetShowFrameStats 0|1`, saved on the memory card). The numbers in DejaVu Sans Condensed Bold at
+  24 px and the headings at 14 px (`/Engine/EngineFonts/DejaVuSansCondensedBold24` / `14`, vendored from the same
+  release, `Engine/SourceArt/LICENSES.md`); every text and icon over the world with a black drop shadow and the top
+  blocks on dark bands, readable on a bright sky. The icons are one atlas, `/Game/UI/T_HUDIcons`, drawn by
+  `SourceArt/UI/make_hud_icons.py` (Python's standard library, the same bytes every run; PSMT4 once cooked). The
+  weapons have CS's display names (`AShooterWeapon::DisplayName`, `GetItemDisplayName`: "AK-47", "Desert Eagle",
+  "HE Grenade", ...) in the HUD, the kill feed, the buy menu and the notices (`Picked up AK-47`, `Bought M4A1`). The
+  scoreboard is `UShooterScoreboardWidget`: a `UTableView` a team (name, DEAD / BOMB, score, deaths, BOT or latency)
+  sorted by score, the player's row highlighted, the team's score over it; the buy menu's page is a `UTableView` (key,
+  name, price; categories amber, what the player cannot afford grey, the pad's line highlighted). With the C4 drawn,
+  Fire plants it while held (`AShooterCharacter::OnFirePressed`), as E does. The canvas gains UE's icons
+  (`FCanvasIcon`, `FCanvas::MakeIcon` / `DrawIcon`) and triangle items (`FCanvasTriangleItem`, `FCanvasUVTri`, drawn
+  in the tiles' order). Captures: `-ExecCmdsAfterFrames=N` (not in Shipping) holds `-ExecCmds=` until frame N, and
+  `ShowScores 0|1` shows the scoreboard. Tests: `ShooterGame.HUD.IconAtlas`, `.DisplayNames`, `.KillFeedIcons`,
+  `.Scoreboard`, `.BuyMenuTable`, `.FrameStats`, `ShooterGame.Input.FirePlantsTheBomb`,
+  `System.Engine.Canvas.TrianglesAndIcons`; `HUD.RoundInfo`, `HUD.TextCache`, `Settings.RoundTrip` and the pickup tests
+  updated (590 engine tests, 119 ShooterGame tests). The bot match is unchanged.
+
+### Changed
+
+- The near geometry is clipped on VU1 and a lit draw takes two point lights, so no frame of the bot match falls to
+  the EE any more ([ps2-polish](Docs/PLANS/ps2-polish.md) P8b). A vertex batch whose sphere crosses the near or far
+  plane or the guard band is recorded too (`FGSVertexBatch::bClip`), and the same Static and Skinned programs clip
+  it (`PS2RHI/Private/VU1/ClipTriangles.vsi`, a `CLIP_PROGRAM` macro both `.vsm` expand; LeonBuildTool passes
+  `dvp-as -I` the folder): each vertex's clip space position, colour, coordinates and outcodes go to its own stream
+  rows, then each triangle of the strips is rejected outside a side of the view, sent as it is inside the guard band,
+  or clipped (Sutherland-Hodgman against each plane it crosses) and sent as a fan, facing the camera, in chunks of
+  TRIANGLE packets that alternate under XGKICK. The C++ reference is `FGSPrimitiveEmitter::AddClippedVertexBatch`
+  (the renderer's clipping loop moved there; `FGSCommandList::AppendExpanded` expands a clipped batch with it), and
+  the emitter's guard band is `FGSPrimitiveEmitter::GuardExtent`. A lit draw takes the two point lights that light
+  its bounds most (`FGSVertexDraw::MaxVU1PointLights`): P3's 83 ms frames were a firefight's muzzle flashes beside a
+  lamp sending every lit draw near them, 145 skinned batches, to the EE's emitter. In PCSX2 the bot match goes from
+  29.26 to 29.97 fps, p99 83.5 to 33.5 ms, the scene 9.32 to 5.70 ms; `MeasurePS2 -CloseUp` (a terrorist 80 cm before
+  a fixed camera) measures the near geometry: the scene 3.69 to 1.82 ms (Budgets.md, the rows «ps2-polish P8b»).
+  VU1Conformance clips 78 batches more (static and skinned, lit and unlit, textured, fogged, with point lights; each
+  full chunk read back with the E bit and MSCNT): `VU1Conformance: PASSED (162 batch(es), 0 failed)`, the clipped
+  vertices within Z 32 and 2^-16 of their STQ (seen: 24 and 0.2 of it). Tests:
+  `System.Renderer.GS.Scene.PointLightsPerDraw`; `VertexBatches` and `SkinnedVertexBatches` (close up) record clipped
+  batches and expand them to the same frame.
+- ShooterGame's HUD, the buy menu and the debug overlay draw in the engine's 14-pixel DejaVu Sans Condensed instead of
+  stb_easy_font's bars ([ps2-polish](Docs/PLANS/ps2-polish.md) P5); the HUD's layout is unchanged (P6 redesigns it,
+  and its scoreboard, aligned with spaces, no longer lines up in the proportional font). The canvas now blends every
+  tile and line by its colour's alpha (it drew them opaque), so the flash's white-out fades and the scoreboard's and
+  the buy menu's backgrounds are as translucent as their colours say. A glyph is one sprite (four GS writes) where
+  stb_easy_font drew several bars: in PCSX2 the canvas's EE time falls from 2.89 to 1.45 ms a frame (`Canvas Flush`;
+  `GS Canvas` 1.33 ms) and the widgets' paint rises from 0.07 to 0.18 ms, at 29.98 fps, p50 / p95 / p99 33.5 ms
+  (Budgets.md, the row «ps2-polish P5»).
+- ShooterGame's accuracy follows CS 1.6's cases for crouched, still, walking, running and in the air
+  ([ps2-polish](Docs/PLANS/ps2-polish.md) P2). Every hitscan weapon had the same `CrouchingSpreadMod` (0.8), and
+  walking had no term of its own. Now the movement's term grows with the speed to `WalkingSpread` at `WalkingSpeed`
+  (CS's 140 units a second, 356 cm/s, above the walk key's speed) and on to `MovingSpread` at the weapon's running
+  speed (`AShooterWeapon_Instant::GetMovementSpread`). Each weapon sets `WalkingSpread` and `CrouchingSpreadMod` in its
+  constructor: crouched is 0.5 (AK-47, AWP) to 0.65 (the pistols) of standing. The HUD's gap takes the view's height
+  (`AShooterHUD::GetCrosshairGap(ViewHeight)`), and crouched its own gap closes by the same factor (CS's
+  `ACCURACY_DUCK`): the AK-47's crosshair on 448 lines is 2.9 px crouched, 5.8 still, 10.9 walking, 29.2 running.
+  Tests: `ShooterGame.Weapons.SpreadByState` (the table per weapon and state, and their order),
+  `ShooterGame.HUD.DynamicCrosshair`; `ShooterGame.Weapons.SpreadModel` checks the movement's term (104 ShooterGame
+  tests). The bots crouch to fire at range, so the bot match changes:
+  `Botmatch OK: 10 round(s), CT 4 - T 6, 59 kill(s), seed 7, sides switched after round 5`.
+- CS 1.6's recoil by state and the rifles' walking accuracy ([ps2-polish](Docs/PLANS/ps2-polish.md) P2b). The AK-47,
+  the M4A1 and the MP5 kick by their owner's state as CS's `KickBack` branches do: `MovingRecoilScale`,
+  `JumpingRecoilScale` and `CrouchingRecoilScale` (`FShooterRecoilScale`: CS's up and sideways arguments over the
+  standing ones) scale each shot's kick, chosen by `AShooterWeapon_Instant::GetRecoilScale` (moving at all, in the air,
+  crouched; `bRecoilMovingBeforeAir` for the AK-47 and the M4A1, which test the movement first). Crouched, the AK-47
+  kicks up 0.9 times standing's, moving 1.5, in the air 2.0. The rifles and the MP5 walk as accurately as they stand
+  (`WalkingSpread` 0: CS's cases for them only look past 140 units a second); the pistols and the AWP keep a walking
+  term. Tests: `ShooterGame.Weapons.KickBackByState`; `SpreadByState` and `HUD.DynamicCrosshair` updated (a pistol for
+  the full order, the AK-47 walking as still); `Bots.RecoilKicksTheAim` allows 2 degrees instead of 1.5, the bot
+  strafing at a walk while it sprays (105 ShooterGame tests). The bot match changes:
+  `Botmatch OK: 10 round(s), CT 5 - T 5, 63 kill(s), seed 7, sides switched after round 5`.
+
+- ShooterGame's pad: Start opens the pause menu, and the buy menu moves to the D-pad's down where the player may buy
+  (elsewhere the D-pad's down draws the C4, as before; CS on consoles bought from the D-pad) ([ps2-polish](Docs/PLANS/ps2-polish.md)
+  P9). Escape opens the pause menu when neither the buy nor the radio menu is open. ShooterGame starts on the main menu;
+  `ShooterGame.exe /Game/Maps/de_leon?team=CT` (or `-map=`) starts a match directly, as SmokeTest.bat now does.
+
+### Removed
+
+- `AShooterGameMode::bFillTeamsWithBots` and `AShooterAIController::Difficulty`, the single scale of the bots' skill
+  ([ps2-polish](Docs/PLANS/ps2-polish.md) P9, D10): `NumBots` with `RebalanceBots`, and the difficulty presets.
+  `CheckBannedApis.ps1` rejects them.
+- The GS debug text's 5x7 uppercase bitmap font (`GlyphRows`, `GlyphOf`, `FGSDebugDraw::GetTextWidth` /
+  `GetTextHeight`, `DrawString`'s scale; [ps2-polish](Docs/PLANS/ps2-polish.md) P5b, D10): the PS2's error screen and
+  GSConformance's labels drew lowercase as uppercase but for "m" and "s". `FGSDebugDraw` now draws the game's DejaVu
+  Sans Condensed compiled in (`GSDebugFontData.inl`, written by the new `LeonCook -run=EmbedFont` with
+  `UTrueTypeFontFactory` at 10 and 14 pixels: two 128 x 128 PSMT4 pages and an alpha CLUT, 65 GS blocks, uploaded in
+  place by `FGSDebugDraw::UploadFont`), a textured SPRITE a glyph with kerning and whole-pixel advances, UTF-8 and
+  Latin-1; `MeasureString`, `GetLineHeight` and `FindLineBreak` word-wrap the error screen at its margins. No asset is
+  loaded, so it still shows with a missing or damaged pak. The ELFs grow by 23 KB (ShooterGame 4 829 156 to 4 852 144
+  bytes, GSConformance 1 477 128 to 1 498 852). Tests: `System.GSCore.DebugDraw.Upload`, `.Measure`, `.LineBreak`,
+  `.String` rewritten, `System.LeonEd.Commandlets.EmbedFont.MatchesSource` (the checked-in file is what the generator
+  makes today), `System.GSReference.DebugDraw.Text` (the frame's CRC, verified by eye) and
+  `System.Renderer.GSEmulator.DebugText` (the emulator against the reference, 0 pixels apart). `CheckBannedApis.ps1`
+  rejects the old names. `FChar::DecodeCodePoint` (Core) is the UTF-8 decoder `UFont` and the debug text share.
+- `stb_easy_font` (the HUD's bitmap font), `HudFontScale`, `HudLineHeight`, `FCanvas::DrawTextBlock`, the canvas
+  text's scale argument and `FPaintContext::MeasureTextOnly` ([ps2-polish](Docs/PLANS/ps2-polish.md) P5, D10):
+  `UFont`, `FCanvas::DrawText` / `MeasureText` with a font, `UFont::GetLineHeight`. `CheckBannedApis.ps1` rejects them.
+  No third-party library builds for the PS2 any more; STB is desktop-only (LeonEd's `stb_image` and `stb_truetype`).
+- ShooterGame's hand-drawn scoreboard (`AShooterHUD::DrawScoreboard` and its space-aligned lines) and the HUD's `C4` /
+  `KIT` text ([ps2-polish](Docs/PLANS/ps2-polish.md) P6, D10): `UShooterScoreboardWidget` and the HUD's icons.
+  `CheckBannedApis.ps1` rejects them.
+
+### Fixed
+
+- Characters no longer vanish at some view angles and leave their weapons floating
+  ([ps2-polish](Docs/PLANS/ps2-polish.md) P1). `ACharacter`'s `Mesh` stayed Static, the default of every scene
+  component, and only the capsule was Movable. `FScene::GatherPrimitives` assigns only what is not Static to the cells
+  again, so the body kept the cells it spawned in and the portals culled it from the others. Its pose then froze (a body
+  that is not drawn is not evaluated) while the Movable weapon was still drawn. `ACharacter` now makes its mesh Movable,
+  as UE does, and ShooterGame does the same for its arms (`Mesh1P`) and its camera. A Static skeletal mesh in a map with
+  cells is now an `ensure`. `System.Renderer.GS.Scene.CellsAndPortals` walks a pawn from one room into the other: the
+  view that culls it in the far room draws it once it is in the near one. The bot match is unchanged, and PCSX2 still
+  runs at 29.95 fps, p50 / p95 / p99 33.5 ms (Budgets.md, the row «ps2-polish P1»).
+
 ## [0.24.0] - 2026-09-29
 
 Real content, animation and CS parity ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N21 to N31, with N24b and N30a to

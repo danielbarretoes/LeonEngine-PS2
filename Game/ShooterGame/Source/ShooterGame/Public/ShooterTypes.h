@@ -232,6 +232,23 @@ struct SHOOTERGAME_API FShooterWeaponAnim
 };
 
 /**
+ * A state's share of a weapon's kick (AShooterWeapon_Instant::GetRecoilScale): CS 1.6's KickBack arguments in that
+ * state's branch of the weapon's PrimaryAttack over the standing branch's. Up scales the kick up (RecoilPitch and its
+ * random part), Lateral the sideways kick (RecoilYawRandom). 1 and 1 is the standing kick.
+ */
+USTRUCT()
+struct SHOOTERGAME_API FShooterRecoilScale
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	float Up = 1.0f;
+
+	UPROPERTY()
+	float Lateral = 1.0f;
+};
+
+/**
  * A team's purchases for a round (ps2-shipping N30e; AShooterGameMode decides it for each team when the round starts,
  * and the bots buy by it: AShooterAIController::BuyForRound). CS's economy: the first round of each half is the pistol
  * round, a team that can equip most of its players buys in full, one that cannot saves (eco) unless it has lost too
@@ -336,3 +353,112 @@ constexpr int32 NumRadioMenus = 3;
 
 /** The team's display name ("CT", "T", "None"). */
 [[nodiscard]] SHOOTERGAME_API const TCHAR* GetShooterTeamName(EShooterTeam Team);
+
+/** The team menu's choices (CS: jointeam): a side, the automatic choice (the smaller team) or spectating. */
+enum class EShooterTeamChoice : uint8
+{
+	CT,
+	T,
+	Auto,
+	Spectate,
+};
+
+/** The choice a name stands for ("CT", "T", "Auto", "Spectate", any case); false for another text. */
+[[nodiscard]] SHOOTERGAME_API bool ParseShooterTeamChoice(const FString& Text, EShooterTeamChoice& OutChoice);
+
+/** The choice's name ("CT", "T", "Auto", "Spectate"). */
+[[nodiscard]] SHOOTERGAME_API const TCHAR* GetShooterTeamChoiceName(EShooterTeamChoice Choice);
+
+/**
+ * The bots' skill (ps2-polish P9; CS: bot_difficulty 0 easy, 1 normal, 2 hard, 3 expert): each is a preset of the
+ * bots' reaction, aim, turn rate, recoil control and memory (FShooterBotSkill,
+ * AShooterAIController::DifficultyPresets).
+ */
+UENUM()
+enum class EShooterBotDifficulty : uint8
+{
+	Easy,
+	Normal,
+	Hard,
+	Expert,
+};
+
+/** The difficulty's name ("Easy", "Normal", "Hard", "Expert"): the menu's and the URL's (`?difficulty=Hard`). */
+[[nodiscard]] SHOOTERGAME_API const TCHAR* GetBotDifficultyName(EShooterBotDifficulty Difficulty);
+
+/** The difficulty a name stands for (any case), or CS's bot_difficulty number (0 to 3); false for another text. */
+[[nodiscard]] SHOOTERGAME_API bool ParseBotDifficulty(const FString& Text, EShooterBotDifficulty& OutDifficulty);
+
+/**
+ * A bot's skill at a difficulty (ps2-polish P9; CS's bot profiles, whose difficulty templates set the reaction time
+ * and the aim): AShooterAIController::ApplyDifficulty copies it into a new bot. DefaultGame.ini's `+DifficultyPresets`
+ * of [/Script/ShooterGame.ShooterAIController] hold one a difficulty.
+ */
+USTRUCT()
+struct SHOOTERGAME_API FShooterBotSkill
+{
+	GENERATED_BODY()
+
+	/** The difficulty the preset is for. */
+	UPROPERTY()
+	EShooterBotDifficulty Difficulty = EShooterBotDifficulty::Normal;
+
+	/** Seconds from an enemy coming into sight to the first shot (AShooterAIController::ReactionTime). */
+	UPROPERTY()
+	float ReactionTime = 0.35f;
+
+	/** The aim's error on a new target (degrees), how fast it settles (seconds for 1/e) and its floor. */
+	UPROPERTY()
+	float AimError = 5.0f;
+
+	UPROPERTY()
+	float AimErrorDecayTime = 0.8f;
+
+	UPROPERTY()
+	float MinAimError = 0.4f;
+
+	/** How fast the bot turns to its aim, degrees a second. */
+	UPROPERTY()
+	float AimTurnRate = 360.0f;
+
+	/** The part of each recoil kick the bot pulls back down (0 to 1). */
+	UPROPERTY()
+	float RecoilCompensation = 0.5f;
+
+	/** Seconds an enemy out of sight is remembered. */
+	UPROPERTY()
+	float EnemyMemory = 1.5f;
+};
+
+/**
+ * A match's setup (ps2-polish P9): the main menu's choices, saved with the player's options (UShooterPersistentUser),
+ * that travel to the match as URL options (`?bots=9?difficulty=Normal?winrounds=3`, GetURLOptions) which
+ * AShooterGameMode::InitGame reads.
+ */
+struct SHOOTERGAME_API FShooterMatchSettings
+{
+	/** The fewest and the most bots the menu offers: 10 players at most, the PS2's budget (the player counts). */
+	static constexpr int32 MinBots = 1;
+	static constexpr int32 MaxBots = 9;
+
+	/** The map (a long package name, `/Game/Maps/de_leon`). */
+	FString MapName;
+	/** The bots' skill. */
+	EShooterBotDifficulty BotDifficulty = EShooterBotDifficulty::Normal;
+	/** The rounds a team needs to win (3: a best of 5). */
+	int32 RoundsToWin = 3;
+	/** The bots in the match, shared between the teams around the player (AShooterGameMode::RebalanceBots). */
+	int32 NumBots = MaxBots;
+
+	/** The menu's choices of rounds to win (CS's best of 5, 9 and 15, and mp_maxrounds 30's 16). */
+	[[nodiscard]] static TArrayView<const int32> GetRoundsToWinChoices();
+
+	/** The rounds a match of RoundsToWin lasts at most: 2 N - 1 (the first team to N wins). */
+	[[nodiscard]] static int32 GetMaxRounds(int32 InRoundsToWin)
+	{
+		return (2 * FMath::Max(1, InRoundsToWin)) - 1;
+	}
+
+	/** The URL options of the match, without the leading '?': `bots=9?difficulty=Normal?winrounds=3`. */
+	[[nodiscard]] FString GetURLOptions() const;
+};

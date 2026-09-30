@@ -40,6 +40,81 @@ EShooterTeam ParseShooterTeam(const FString& Text)
 	return EShooterTeam::None;
 }
 
+bool ParseShooterTeamChoice(const FString& Text, EShooterTeamChoice& OutChoice)
+{
+	for (const EShooterTeamChoice Choice :
+		{EShooterTeamChoice::CT, EShooterTeamChoice::T, EShooterTeamChoice::Auto, EShooterTeamChoice::Spectate})
+	{
+		if (Text.Equals(GetShooterTeamChoiceName(Choice), ESearchCase::IgnoreCase))
+		{
+			OutChoice = Choice;
+			return true;
+		}
+	}
+	return false;
+}
+
+const TCHAR* GetShooterTeamChoiceName(EShooterTeamChoice Choice)
+{
+	switch (Choice)
+	{
+		case EShooterTeamChoice::CT:
+			return TEXT("CT");
+		case EShooterTeamChoice::T:
+			return TEXT("T");
+		case EShooterTeamChoice::Auto:
+			return TEXT("Auto");
+		case EShooterTeamChoice::Spectate:
+			break;
+	}
+	return TEXT("Spectate");
+}
+
+const TCHAR* GetBotDifficultyName(EShooterBotDifficulty Difficulty)
+{
+	switch (Difficulty)
+	{
+		case EShooterBotDifficulty::Easy:
+			return TEXT("Easy");
+		case EShooterBotDifficulty::Normal:
+			return TEXT("Normal");
+		case EShooterBotDifficulty::Hard:
+			return TEXT("Hard");
+		case EShooterBotDifficulty::Expert:
+			break;
+	}
+	return TEXT("Expert");
+}
+
+bool ParseBotDifficulty(const FString& Text, EShooterBotDifficulty& OutDifficulty)
+{
+	const FString Trimmed = Text.TrimStartAndEnd();
+	for (const EShooterBotDifficulty Difficulty : {EShooterBotDifficulty::Easy, EShooterBotDifficulty::Normal,
+			 EShooterBotDifficulty::Hard, EShooterBotDifficulty::Expert})
+	{
+		// The name, or CS's bot_difficulty number (0 easy ... 3 expert).
+		if (Trimmed.Equals(GetBotDifficultyName(Difficulty), ESearchCase::IgnoreCase) ||
+			Trimmed == FString::Printf(TEXT("%d"), static_cast<int32>(Difficulty)))
+		{
+			OutDifficulty = Difficulty;
+			return true;
+		}
+	}
+	return false;
+}
+
+TArrayView<const int32> FShooterMatchSettings::GetRoundsToWinChoices()
+{
+	static const int32 Choices[] = {3, 5, 8, 16};
+	return Choices;
+}
+
+FString FShooterMatchSettings::GetURLOptions() const
+{
+	return FString::Printf(TEXT("bots=%d?difficulty=%s?winrounds=%d"), NumBots, GetBotDifficultyName(BotDifficulty),
+		FMath::Max(1, RoundsToWin));
+}
+
 const TCHAR* GetShooterTeamName(EShooterTeam Team)
 {
 	switch (Team)

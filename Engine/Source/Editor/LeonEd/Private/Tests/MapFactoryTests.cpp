@@ -10,6 +10,7 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/Texture2D.h"
+#include "Engine/TextureCube.h"
 #include "Engine/TriggerVolume.h"
 #include "Engine/VisibilityCellVolume.h"
 #include "Engine/VisibilityPortal.h"
@@ -503,10 +504,17 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLeonEdMapFactoryEngineMapsSkipRequiredTagsTest
 bool FLeonEdMapFactoryEngineMapsSkipRequiredTagsTest::RunTest(const FString& Parameters)
 {
 	// RequiredTags are a project's check of its maps: a reimport of everything with a project (gate G5) does not check
-	// the engine's maps (AxisTest has no bomb site) against the project's rules.
+	// the engine's maps (AxisTest has no bomb site) against the project's rules, nor the project's maps listed in
+	// MapsWithoutRequiredTags (ShooterGame's MainMenu).
 	TestTrue("A project's map", UMapImportSettings::AppliesRequiredTags(TEXT("/Game/Maps/de_leon")));
 	TestTrue("A test mount's map", UMapImportSettings::AppliesRequiredTags(TEXT("/LeonEdTest/Maps/MapFixture")));
 	TestFalse("An engine map", UMapImportSettings::AppliesRequiredTags(TEXT("/Engine/Maps/AxisTest")));
+	UMapImportSettings* Settings = GetMutableDefault<UMapImportSettings>();
+	const TArray<FString> SavedExempt = Settings->MapsWithoutRequiredTags;
+	Settings->MapsWithoutRequiredTags = {TEXT("/Game/Maps/MainMenu")};
+	TestFalse("An exempt map", UMapImportSettings::AppliesRequiredTags(TEXT("/Game/Maps/mainmenu")));
+	TestTrue("Only that one", UMapImportSettings::AppliesRequiredTags(TEXT("/Game/Maps/de_leon")));
+	Settings->MapsWithoutRequiredTags = SavedExempt;
 	return true;
 }
 
@@ -565,6 +573,49 @@ bool FLeonEdMapFactoryCellsAndPortalsTest::RunTest(const FString& Parameters)
 		Loaded != nullptr ? FindActor<AVisibilityPortal>(*Loaded, TEXT("PORTAL_Hall_Room_B")) : nullptr;
 	TestTrue("Saved and loaded",
 		LoadedDoor != nullptr && LoadedDoor->Corners.Num() == 4 && LoadedDoor->CellB == FName(TEXT("Room_B")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLeonEdMapFactoryWorldSettingsTest, "System.LeonEd.MapFactory.WorldSettingsFromNode",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FLeonEdMapFactoryWorldSettingsTest::RunTest(const FString& Parameters)
+{
+	// The WorldSettings node's extras set the map's AWorldSettings by property path (ps2-polish P8): the fog, the sky's
+	// cube map by its object path, a number, a bool; a key that names no property fails the import.
+	LeonEdTest::FScopedTestContent Content;
+	UPackage* SkyPackage = CreatePackage(TEXT("/LeonEdTest/Sky/T_Sky"));
+	UTextureCube* Sky = NewObject<UTextureCube>(SkyPackage, FName(TEXT("T_Sky")), RF_Public | RF_Standalone);
+	const auto Gltf = [](const FString& Extras)
+	{
+		return FString::Printf("{\"asset\":{\"version\":\"2.0\"},\"scene\":0,\"scenes\":[{\"nodes\":[0]}],"
+							   "\"nodes\":[{\"name\":\"WorldSettings\",\"extras\":%s}]}",
+			*Extras);
+	};
+	const FString Good = LeonEdTest::WriteSource(TEXT("Maps/Settings.gltf"),
+		Gltf(TEXT("{\"FogSettings.bEnableFog\":true,\"FogSettings.StartDistance\":3000,"
+				  "\"FogSettings.EndDistance\":\"9000\",\"SkySettings.SkyCubemap\":\"/LeonEdTest/Sky/T_Sky.T_Sky\","
+				  "\"KillZ\":-5000}")));
+	UWorld* World = Cast<UWorld>(UImportAssetsCommandlet::ImportAsset(
+		Good, TEXT("/LeonEdTest/Maps/Settings"), FString(), TEXT("Map"), TMap<FString, FString>()));
+	const AWorldSettings* Settings = World != nullptr ? World->GetWorldSettings() : nullptr;
+	if (!TestNotNull("Imported, with world settings", Settings))
+	{
+		return false;
+	}
+	TestTrue("The fog on", Settings->FogSettings.bEnableFog);
+	TestEqual("The fog's start", Settings->FogSettings.StartDistance, 3000.0f);
+	TestEqual("The fog's end (a string)", Settings->FogSettings.EndDistance, 9000.0f);
+	TestTrue("The sky", Settings->SkySettings.SkyCubemap == Sky);
+	TestEqual("KillZ", Settings->KillZ, -5000.0f);
+	TestNull("No actor for the node", FindActor<AActor>(*World, TEXT("WorldSettings_2")));
+
+	const FString Bad = LeonEdTest::WriteSource(TEXT("Maps/Bad.gltf"), Gltf(TEXT("{\"FogSettings.NoSuchThing\":1}")));
+	AddExpectedError(TEXT("is no world settings property"), 1);
+	AddExpectedError(TEXT("failed to import"), 1);
+	TestNull("A key that names no property",
+		UImportAssetsCommandlet::ImportAsset(
+			Bad, TEXT("/LeonEdTest/Maps/Bad"), FString(), TEXT("Map"), TMap<FString, FString>()));
 	return true;
 }
 

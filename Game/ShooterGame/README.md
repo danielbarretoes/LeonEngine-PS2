@@ -2,7 +2,7 @@
 
 An offline Counter-Strike 1.6 clone, modelled on UE's ShooterGame sample: two teams (CT and T), five players a side,
 on `de_leon`, a desert town built in Blender, on Win64 and the PS2 (30 fps in PCSX2, from its pak or a bootable ISO).
-At 0.24.0 it has CS 1.6's movement (fall damage, ladders, the jump's stamina, tagging, footsteps by surface), its
+At 0.25.0 it has CS 1.6's movement (fall damage, ladders, the jump's stamina, tagging, footsteps by surface), its
 arsenal (knife, Glock, USP, Desert Eagle, MP5, AK-47, M4A1, AWP; HE, flashbang and smoke grenades) with the economy,
 ammunition, wall penetration and hit groups, the defusal rounds with the halftime side switch, the radar, the damage
 indicator, the death cam and spectating, bots that buy by the team's plan (eco, force-buy), throw grenades, strafe and
@@ -19,6 +19,10 @@ with it, and N30a to N30f CS 1.6 parity: the arsenal and economy ([Weapons](#wea
 ([Grenades](#grenades)), the movement ([CS 1.6's movement](#cs-16s-movement)), the halftime, radar and spectating
 ([Death and spectating](#death-and-spectating)), the bots' economy, grenades and radio ([Bots](#bots),
 [The radio](#the-radio)) and the physical materials ([Surfaces and their sounds](#surfaces-and-their-sounds)).
+[ps2-polish](../../Docs/PLANS/ps2-polish.md) (0.25.0) fixes the vanishing characters and the bots' knife and idle
+walks, follows CS 1.6's accuracy and recoil, toggles the crouch, drops and picks up weapons, and adds the fonts and
+UMG widgets, CS 1.6's HUD and a table scoreboard, the desert sky, the main menu, team selection and the pause menu
+(the real minimap is still pending).
 
 ## Build and run
 
@@ -28,8 +32,11 @@ From the repository root (Windows):
 :: The game -> Game\ShooterGame\Binaries\Win64\ShooterGame.exe
 Engine\Build\BatchFiles\Build.bat ShooterGame Win64 Development -Project=%CD%\Game\ShooterGame\ShooterGame.lproj
 
-:: Play de_leon (GameDefaultMap): bots fill both teams to five a side (bFillTeamsWithBots) and the match starts
+:: The main menu (GameDefaultMap, /Game/Maps/MainMenu): choose the match, Start, then the team
 Game\ShooterGame\Binaries\Win64\ShooterGame.exe
+
+:: Straight into a match on de_leon, past the menus: the team, and optionally the bots, their skill and the rounds
+Game\ShooterGame\Binaries\Win64\ShooterGame.exe /Game/Maps/de_leon?team=CT?bots=9?difficulty=Hard?winrounds=3
 
 :: The smoke test (gate G6): headless, ten pawns, exit code 0
 Engine\Build\BatchFiles\SmokeTest.bat
@@ -57,8 +64,18 @@ On the PS2 (PCSX2, NTSC) de_leon runs at 29.95 fps, p50 / p95 / p99 33.5 ms (ps2
 disc), and the first frame from the disc comes 2.93 s after the engine starts
 ([PS2 README](../../Engine/Platforms/PS2/README.md#measuring-in-pcsx2)).
 
-A map URL picks the team and the seed of the rounds (the bomb's carrier): `ShooterGame.exe /Game/Maps/de_leon?team=T?seed=42`
-(else the smaller team, CT on a tie, and `RandomSeed`).
+A match's URL options ([ps2-polish](../../Docs/PLANS/ps2-polish.md) P9; the main menu passes the last three):
+
+| Option | Values | Without it |
+| --- | --- | --- |
+| `?team=` | `CT`, `T`, `Auto` (the smaller team, CT on a tie), `Spectate` | the player spectates and chooses in the team menu; the warmup waits |
+| `?bots=` | 0 to 10 bots, shared out around the player's team (`RebalanceBots`) | `NumBots` (9: five a side with the player) |
+| `?difficulty=` | `Easy`, `Normal`, `Hard`, `Expert` (or CS's 0 to 3) | `BotDifficulty` (Normal) |
+| `?winrounds=` | the rounds to win, N: `MaxRounds = 2 N - 1`, the halftime after round N - 1 | `MaxRounds` (30: the first to 16) |
+| `?seed=` | the round stream's seed (the bomb's carrier, the terrorists' site) | `RandomSeed` |
+
+`ShooterGame.exe /Game/Maps/de_leon?team=T?seed=42`, or `-map=/Game/Maps/de_leon?team=T`; `-botmatch` skips the menu
+by itself ([Bot match](#bot-match)).
 
 ## Controls
 
@@ -67,18 +84,19 @@ A map URL picks the team and the seed of the rounds (the bomb's carrier): `Shoot
 | Mouse | Right stick | Look (the mouse 0.07° per pixel, `SetMouseSensitivity <degrees per pixel>` changes it; the stick up to 150° a second across, 100° up and down: `BaseTurnRate` / `BaseLookUpRate`) |
 | W / S, D / A | Left stick | Move forward / back, right / left (the stick walks slower when tilted less) |
 | Space | Cross | Jump (on a ladder: off it) |
-| Left Ctrl (held) | Circle (held) | Crouch (it stays crouched under a ceiling until there is room) |
+| Left Ctrl | Circle | Crouch: a press crouches and the next stands up (`SetToggleCrouch 0` holds it instead; it stays crouched under a ceiling until there is room) |
 | Left Shift (held) | L3 (held) | Walk (52 % of the speed) |
-| Left mouse button | R2 | Fire (held: automatic weapons keep firing) |
+| Left mouse button | R2 | Fire (held: automatic weapons keep firing); with the bomb drawn in a bomb site, plant it while held (CS) |
 | Right mouse button | L2 | The secondary attack: the AWP's zoom (two levels, then off), the USP's and the M4A1's silencer, the Glock's burst mode, the knife's stab |
 | R | Square | Reload |
-| 1 / 2 / 3 / 4 | R1 / L1 / D-pad up / D-pad left | Primary (the MP5, the rifles, the AWP) / pistol / knife / grenade (again: the next grenade, HE, flashbang, smoke) |
-| G | D-pad right | Drop the weapon in hand, not the knife nor a grenade (a pawn without one in that slot picks it up by walking over it) |
+| 1 / 2 / 3 / 4 / 5 | R1 / L1 / D-pad up / D-pad left / D-pad down (outside the buy zone or time) | Primary (the MP5, the rifles, the AWP) / pistol / knife / grenade (again: the next grenade, HE, flashbang, smoke) / the bomb (CS's C4 in slot 5, for its carrier: the weapon is put away and the HUD shows `C4`; a weapon's key puts it back) |
+| G | D-pad right | Drop the weapon in hand, not the knife nor a grenade, or the bomb when it is drawn (a pawn without one in that slot, or a terrorist for the bomb, picks it up by walking over it; the HUD says `Picked up <item>`) |
 | , / . | — | A box of the primary's / the pistol's ammunition (CS: buyammo1 / buyammo2), when the player may buy |
-| E (held) | Triangle (held) | Plant the bomb (its carrier, standing still in a bomb site, 3 s) or defuse it (a CT at the planted bomb, 10 s, 5 with a kit) |
-| B | Start | The buy menu (the console's `buymenu` toggles it too), CS's: 1 Pistols, 2 SMGs, 3 Rifles, 4 Primary ammo, 5 Secondary ammo, 6 Equipment; a category's page lists what the team may buy (Rifles: the AK-47 for the T, the M4A1 for the CT, the AWP), and a purchase goes back to the first page. It opens only when its player may buy (alive, in the team's buy zone, within the buy time; never while spectating) and closes by itself when that stops; the HUD says why for 2 s (`BuyRefusalDuration`). While it is open: the number keys choose a line; the D-pad's up and down move the highlight (`>`) and Cross chooses it; Escape or Circle go back to the first page, and there close it (B and Start close it). It takes these keys only while it is open |
+| E (held) | Triangle (held) | Plant the bomb (its carrier, standing still in a bomb site, 3 s; Fire plants too with the bomb drawn) or defuse it (a CT at the planted bomb, 10 s, 5 with a kit) |
+| Escape | Start | The pause menu ([Menus](#menus)): the game pauses; Start or Escape again resumes. Escape closes the buy or the radio menu first |
+| B | D-pad down, where the player may buy (elsewhere it draws the C4, as 5) | The buy menu (the console's `buymenu` toggles it too), CS's: 1 Pistols, 2 SMGs, 3 Rifles, 4 Primary ammo, 5 Secondary ammo, 6 Equipment; a category's page lists what the team may buy (Rifles: the AK-47 for the T, the M4A1 for the CT, the AWP), and a purchase goes back to the first page. It opens only when its player may buy (alive, in the team's buy zone, within the buy time; never while spectating) and closes by itself when that stops; the HUD says why for 2 s (`BuyRefusalDuration`). While it is open: the number keys choose a line; the D-pad's up and down move the highlight (`>`) and Cross chooses it; Escape or Circle go back to the first page, and there close it (B and Start close it). It takes these keys only while it is open |
 | Z / X / C | — | The radio's menus (CS 1.6's radio1, radio2, radio3; [The radio](#the-radio)): the number keys (1 to 9) send a message to the team and close the menu, Esc or the same key closes it; a menu takes these keys only while it is open, and it and the buy menu close each other |
-| Tab (held) | Select (held) | The scoreboard |
+| Tab (held) | Select (held) | The scoreboard (the console's `ShowScores 1` / `ShowScores 0` too) |
 | F4 (`stat unit`) | R3 (`stat unit`) | The engine's stats (FPS, MS, RAM, VRAM, TRIS, OBJ; on from the start on the PS2: `bShowStatsByDefault`) |
 | Left mouse button, while spectating | R2 | The death cam ends; the next living teammate (CS 1.6's spectator keys) |
 | Right mouse button, while spectating | L2 | The teammate before |
@@ -95,6 +113,42 @@ captures), `ViewNextPlayer` /
 `ViewPrevPlayer` (CS's spec_next / spec_prev), the cheats `give <weapon>` (its reserve full), `god` and `kill`, `ViewFrom X Y Z Pitch
 Yaw` (a fixed view, for captures), `ViewPawn` (back to the pawn), `exit`.
 
+## Menus
+
+[ps2-polish](../../Docs/PLANS/ps2-polish.md) P9: UMG widgets on the player's HUD (`UShooterMenuWidget`: a centred panel
+in CS 1.6's olive and amber, the title in the 32 px font, the lines in the 20 px one, readable at the PS2's 640 x 448),
+driven by the pad alone or by the keyboard and the mouse: up and down (the D-pad, the arrows, Tab) move between the
+lines, Cross or Enter chooses one, left and right change an option (`< Normal >`; a click steps it too), Circle or
+Escape goes back. On Win64 the mouse is free while a menu shows (`FInputModeUIOnly`) and points and clicks; the game
+takes it back when the menu closes. A menu takes every other key while it shows: nothing reaches the game.
+
+- **The main menu** (`UShooterMainMenuWidget`, the `MainMenu` map: GameDefaultMap, a small desert backdrop made by
+  `SourceArt/Maps/make_main_menu.py`; its game mode `AShooterGame_Menu` by the map's prefix, no pawn, the camera swaying
+  slowly at the map's player start): **Map** (the project's maps: `[/Script/ShooterGame.ShooterMainMenuWidget]
+  +MapNames=`, de_leon today), **Bot difficulty** (Easy, Normal, Hard, Expert: the bots' presets, [Bots](#bots)),
+  **Rounds to win** (3 by default, a best of 5; 5, 8, 16: `MaxRounds = 2 N - 1`), **Bots** (1 to 9: ten players at
+  most, the PS2's budget), **Options**, **Start** and, on Win64, **Quit**. The choices come from the saved settings and
+  Start saves them there, then travels to the map with them as URL options (`UGameplayStatics::OpenLevel`).
+- **The team menu** (`UShooterTeamMenuWidget`): on joining a match without `?team=` the player spectates and chooses
+  **Counter-Terrorists** or **Terrorists** (each with its players), **Auto-select** (the smaller team) or **Spectate**;
+  the warmup waits for it. Then the bots join around the player so the teams are as even as possible counting it
+  (`AShooterGameMode::RebalanceBots`: nine bots with the player on CT give 4 CT and 5 T bots; an odd player more goes
+  to the player's opponents). Escape or Circle there opens the pause menu (the way back to the main menu).
+- **The pause menu** (`UShooterPauseMenuWidget`, Escape or Start): the match's line (the map, the score, the round, the
+  rounds to win) over the shaded game, **Resume**, **Change team**, **Options** and **Quit to main menu**. The game
+  pauses for real, as UE does (`APlayerController::SetPause`, `UGameplayStatics::SetGamePaused`): the world's time,
+  its timers, the physics, the animation and every actor stop, while the input, the HUD and its widgets and the sound
+  go on. **Change team** shows the team menu (still paused; Back returns): by CS's rule the change takes effect at the
+  next round, and a living player dies for it during a fought round (a death on the board); before the round is fought
+  (the warmup, the freeze) the player respawns on the new side at once. The bots even the sides out again at the next
+  round's start.
+- **Options** (the main menu's and the pause menu's): **Aim sensitivity** (0.25 to 3, by 0.25), **Invert Y axis**,
+  **Volume** (0 to 100 %, by 10) and **Crouch key** (Toggle or Hold). A change applies at once; leaving the page saves
+  them, once (the memory card on the PS2).
+
+Console: `PauseMenu` (opens or closes it), `Pause` (UE's: pauses without a menu), `ChooseTeam` (CS's chooseteam: the
+team menu), `JoinTeam CT|T|Auto|Spectate` (CS's jointeam), `ReturnToMainMenu`.
+
 ## Settings and the pad
 
 The player's options ([ps2-shipping](../../Docs/PLANS/ps2-shipping.md) N24) are a save game, `UShooterPersistentUser`
@@ -103,7 +157,11 @@ PS2 (the folder `BASLUS-99001SHOOTER` with the title `ShooterGame Settings` and 
 `[MemoryCard]` of `DefaultGame.ini`). The player's controller loads them when it plays at a screen (not headless nor
 in the tests) and each command applies its option and saves them all: `SetSensitivity <scale>` (the mouse's 0.07° a
 pixel and the stick's rates times the scale, 1 by default), `SetInvertY 0|1` (up looks down, the mouse and the stick),
-`SetVolume <0..1>` (the audio device's master volume), `SetCrosshairColor <r> <g> <b>` (0..1 each). A card that is
+`SetVolume <0..1>` (the audio device's master volume), `SetCrosshairColor <r> <g> <b>` (0..1 each), `SetToggleCrouch 0|1`
+(1, the default: a press of the crouch key crouches and the next stands up; 0: held, as CS 1.6); the menus' options
+page changes the same four ([Menus](#menus)); `SetShowFrameStats 0|1` (the HUD's frame readout under the
+radar, on by default). The main menu's last match (the map, the difficulty, the rounds to win,
+the bots) is saved with them when a match starts from the menu. A card that is
 missing, unformatted, full or pulled out logs why the options were not saved (`ESaveGameResult`), and the game plays
 on with them.
 
@@ -118,15 +176,17 @@ ShooterGame binds none yet.
 
 | Class | UE ShooterGame / CS counterpart | What it does |
 | --- | --- | --- |
-| `AShooterGameMode` (`AGameMode`) | `AShooterGame_TeamDeathMatch` | `GlobalDefaultGameMode` of the project: the match and its rounds, the money, buying and the bomb's events ([Rounds](#rounds-money-and-the-bomb)). Who may hurt whom (`CanDealDamage`: no friendly fire, `bFriendlyFire`) and the kills (`Killed`: the feed, the money, the stats). Teams (`ChooseTeam`: `?team=`, else the smaller team), team spawns (`ChoosePlayerStart`: the first free start tagged with the team, level order), the bot commands (`AddBots`, `FillTeamsWithBots`), `MaxPlayersPerTeam` 5; logs where each player joined and the pawn count at the end (the smoke reads it). The registries of what the game looks up every frame ([Registries](#registries)) |
+| `AShooterGameMode` (`AGameMode`) | `AShooterGame_TeamDeathMatch` | `GlobalDefaultGameMode` of the project: the match and its rounds, the money, buying and the bomb's events ([Rounds](#rounds-money-and-the-bomb)). Who may hurt whom (`CanDealDamage`: no friendly fire, `bFriendlyFire`) and the kills (`Killed`: the feed, the money, the stats). Teams (`?team=`, else the team menu's choice: `SelectTeam`; `ChooseTeam`, the smaller team, for Auto), team spawns (`ChoosePlayerStart`: the first free start tagged with the team, level order), the bots (`NumBots`, `RebalanceBots` around the player's team, `BotDifficulty`; the commands' `AddBots`, `FillTeamsWithBots`), `MaxPlayersPerTeam` 5; the URL's match options (`?bots=`, `?difficulty=`, `?winrounds=`); logs where each player joined and the pawn count at the end (the smoke reads it). The registries of what the game looks up every frame ([Registries](#registries)) |
 | `AShooterCharacter` (`ACharacter`) | `AShooterCharacter` | First-person camera at the eyes (`UCameraComponent`, `bUsePawnControlRotation`, 74° vertical FOV), capsule 40 × 91.5 cm, eyes 163 cm (76 crouched, eased with `FInterpTo`), the team's animated body the other players see (`CTBodyMeshName` / `TBodyMeshName`, `bOwnerNoSee`) and first-person arms (`CTArmsMeshName` / `TArmsMeshName`) ([Characters and animation](#characters-and-animation)); health, armor and helmet, the hit groups, the damage rules and death ([Weapons](#weapons)); the inventory (one weapon a slot: `DefaultWeapons`, the knife, and the team's pistol, `DefaultWeaponsCT` / `DefaultWeaponsT`) |
 | `UShooterCharacterMovement` (`UCharacterMovementComponent`) | `UShooterCharacterMovement` | CS 1.6 movement in centimetres (below), the walk key and the tagging through `GetMaxSpeed`, the jump's stamina, fall damage and ladders (`EMovementMode::Custom`) ([CS 1.6's movement](#cs-16s-movement)) |
-| `AShooterPlayerController` | `AShooterPlayerController` | The player's input, the hit marker's state (`NotifyHitConfirmed`), where the last damage came from (`NotifyTakeDamage`) and the `ViewFrom` / `ViewPawn` commands; when its pawn dies the death cam, then spectating ([Death and spectating](#death-and-spectating)) |
+| `AShooterGame_Menu` (`AGameModeBase`), `AShooterPlayerController_Menu` | `AShooterGame_Menu`, `AShooterPlayerController_Menu` | The MainMenu map's: no pawn, the main menu on the HUD; `-botmatch` travels straight to `BotMatchMapName` ([Menus](#menus)) |
+| `UShooterMenuWidget` and its `UShooterMainMenuWidget`, `UShooterTeamMenuWidget`, `UShooterPauseMenuWidget` (`UUserWidget`) | `FShooterMainMenu`, `FShooterIngameMenu` (Slate) | The menus ([Menus](#menus)): a panel of `UShooterMenuButton` lines (a `UButton` with a label and a value that left and right step) in a `UWidgetSwitcher` of pages, and the options page (`FShooterOptionsPage`) |
+| `AShooterPlayerController` | `AShooterPlayerController` | The player's input, the pause and team menus (`ShowPauseMenu`, `ShowTeamMenu`, `JoinTeam`, `ReturnToMainMenu`), the hit marker's state (`NotifyHitConfirmed`), where the last damage came from (`NotifyTakeDamage`) and the `ViewFrom` / `ViewPawn` commands; when its pawn dies the death cam, then spectating ([Death and spectating](#death-and-spectating)) |
 | `AShooterAIController` (`AAIController`) | `AShooterAIController` | The bots' brain: a behavior tree over a typed blackboard, `UPawnSensingComponent` senses, the waypoint navigation ([Bots](#bots)) |
 | `AShooterGameState` (`AGameState`) | `AShooterGameState` | The round's phase and number, the phase's end, the score, the halftime (`IsSecondHalf`, `GetHalftimeRound`), the bomb's state, the kill feed and the radio's last messages (`GetRadioLog`) |
 | `AShooterPlayerState` | `AShooterPlayerState` | The team (`EShooterTeam`: None, CT, T), the money, the kills and the deaths |
 | `AShooterBomb` (`AActor`) | CS's C4 | Carried, dropped, planted (beeping), defused or exploded |
-| `AShooterHUD` (`AHUD`) | `AShooterHUD` | CS's crosshair (green, 4 px gap growing with the spread, 7 px arms, 2 px thick; config), health, armor and money, the weapon and its ammunition, the bomb and the kit, the round's clock (`C4` instead once the bomb is planted: no countdown, as in CS) and the score, the kill feed, the team's radio messages and the radio menu ([The radio](#the-radio)), the round's messages (the terrorists read `The bomb has been dropped` while it lies on the floor; the second half's first freeze says the teams switched sides), the plant and defuse bar, the hit marker, the AWP's scope, the scoreboard, the radar, the damage direction indicator and who a spectator watches ([The HUD's radar and damage indicator](#the-huds-radar-and-damage-indicator)); `UShooterBuyMenuWidget` (a `UUserWidget`) is the buy menu: a widget tree (a `UCanvasPanel` holding a `UBorder` around a `UVerticalBox` of `UTextBlock`s: the money, why buying is refused, the items with their prices, the last buy) built in `NativeOnInitialized` and refreshed in `NativeTick`, collapsed while the menu is closed. A line of text is formatted (and a widget's text set) only when what it shows changes (`FShooterHUDText`: the money, the health, the clock's second, the score, the kill feed, the scoreboard's players) |
+| `AShooterHUD` (`AHUD`) | `AShooterHUD` | CS 1.6's HUD ([The HUD](#the-hud)): the crosshair (green, 4 px gap growing with the spread, 7 px arms, 2 px thick; config), the health and the armor, the ammunition, the weapon and the money, the bomb and the kit, the round's clock (`C4` instead once the bomb is planted: no countdown, as in CS) and the score, the kill feed with the weapons' icons, the team's radio messages and the radio menu ([The radio](#the-radio)), the round's messages (the terrorists read `The bomb has been dropped` while it lies on the floor; the second half's first freeze says the teams switched sides), the plant and defuse bar, the hit marker, the AWP's scope, the radar, the damage direction indicator and who a spectator watches ([The HUD's radar and damage indicator](#the-huds-radar-and-damage-indicator)). Its widgets: `UShooterBuyMenuWidget` (the buy menu: a `UBorder` around a heading, the refusal, the page in a `UTableView` and the last buy) and `UShooterScoreboardWidget` (the scoreboard: a `UTableView` a team), built in `NativeOnInitialized` and refreshed in `NativeTick`, collapsed while closed. A line of text is formatted (and a widget's text set) only when what it shows changes (`FShooterHUDText`: the money, the health, the clock's second, the score, the kill feed; the scoreboard's key) |
 | `AShooterWeapon` (`AActor`) and its classes | `AShooterWeapon`, `_Instant`, `_Projectile`; `AShooterProjectile` | The weapons ([Weapons](#weapons)) |
 
 The CS movement values, at 1 unit = 2.54 cm (CS's player is 72 units tall and 183 cm here):
@@ -168,8 +228,8 @@ ps2-shipping N30c, on top of UE's velocity model (`UShooterCharacterMovement`, `
   degrees, as in CS, 1.4 times faster), looking straight down it climbs down, and backing off it on the floor steps
   away; without a key the character hangs there. Jump pushes it off the ladder at 686 cm/s and it falls; it grabs a
   ladder again only once it touches none. Climbing on past the top carries it up onto the ledge. On a ladder the
-  weapons have their air spread (CS: off the floor). The bots do not climb: their pawns walk through ladders
-  (`bCanClimbLadders`).
+  weapons have their air spread (CS: off the floor). The bots climb too ([Bots](#bots)): they face the ladder
+  (`UShooterCharacterMovement::GetLadderNormal`) and look up or down.
 - **The jump's stamina** (CS's `fuser2`): a jump costs `JumpStaminaTime` (1.3158 s), which runs down with the time. On
   the floor, each 10 ms (a CS command) of a step scales the horizontal velocity by `1 - stamina x 0.19` (CS: `(100 -
   fuser2 x 0.001 x 19) / 100`; a step of `dt` by that to the power `dt / 10 ms`, the same at any step): 0.75 at the
@@ -237,10 +297,37 @@ sounds and seeds; any `UPROPERTY(Config)` of the classes can be tuned there.
 
 - **Hitscan** (`AShooterWeapon_Instant`): a line on the `Weapon` channel from the eyes within the spread cone. The
   damage falls off as CS's range modifier per 1270 cm (500 units), segment by segment through what it pierces
-  (below). The spread is `WeaponSpread`, plus `MovingSpread`
-  in proportion to the speed, plus `JumpingSpread` in the air, plus the firing spread (grows each shot, recovers once
-  the trigger is released), times `CrouchingSpreadMod` crouched. Each shot kicks the aim up (and sideways at random);
-  the kick comes back down. The spread's direction and the recoil come from an `FRandomStream` seeded with
+  (below). The spread follows CS 1.6's cases in each weapon's `PrimaryAttack` ([ps2-polish](../../Docs/PLANS/ps2-polish.md)
+  P2): `WeaponSpread` standing still; plus the movement's term, which grows with the speed to `WalkingSpread` at
+  `WalkingSpeed` (CS's 140 units a second, 356 cm/s: the walk key always stays below it) and on to `MovingSpread` at
+  the weapon's running speed; plus `JumpingSpread` in the air; plus the firing spread (grows each shot, recovers once
+  the trigger is released); all of it times `CrouchingSpreadMod` crouched. A walk costs the pistols and the AWP
+  accuracy but not the AK-47, the M4A1 and the MP5 (`WalkingSpread` 0: CS's cases for them only look past 140 units
+  a second; P2b). Each weapon sets its values in its constructor (`DefaultGame.ini` can tune them). In degrees:
+
+  | Weapon | crouched still | still | walking | running | jumping | `CrouchingSpreadMod` |
+  |---|---:|---:|---:|---:|---:|---:|
+  | Glock | 0.29 | 0.45 | 1.38 | 3.95 | 10.95 | 0.65 |
+  | USP | 0.20 | 0.30 | 1.23 | 3.30 | 9.30 | 0.65 |
+  | Desert Eagle | 0.33 | 0.50 | 1.61 | 4.50 | 12.50 | 0.65 |
+  | MP5 | 0.27 | 0.45 | 0.45 | 1.95 | 6.95 | 0.6 |
+  | AK-47 | 0.18 | 0.35 | 0.35 | 4.85 | 12.85 | 0.5 |
+  | M4A1 | 0.17 | 0.30 | 0.30 | 3.80 | 10.80 | 0.55 |
+  | AWP (unscoped: + 6.0 after the rest, as CS's + 0.08) | 0.03 | 0.05 | 0.99 | 3.05 | 9.05 | 0.5 |
+
+  The crosshair's gap follows the spread (`AShooterHUD::GetCrosshairGap`), so it closes crouched and opens walking,
+  running and in the air, as CS's dynamic crosshair; crouched, its own 4 px gap closes by `CrouchingSpreadMod` too
+  (CS's `ACCURACY_DUCK`). The gap on 448 lines, the Glock's: 4.1 px crouched, 6.3 still, 11.2 walking, 24.5 running,
+  61.5 in the air; the AK-47's: 2.9 crouched, 5.8 still and walking, 29.2 running, 71.8 in the air.
+
+  Each shot kicks the aim up (and sideways at random); the kick comes back down. The AK-47, the M4A1 and the MP5 kick
+  by the owner's state, as CS's `KickBack` branches (`MovingRecoilScale`, `JumpingRecoilScale`,
+  `CrouchingRecoilScale`: CS's arguments over standing's; `GetRecoilScale`): moving at all, up 1.5 (AK-47), 1.54
+  (M4A1), 1.33 (MP5) times standing's; in the air 2.0, 1.85, 2.4; crouched 0.9, 0.92, 0.93, and less sideways. The AK-47
+  and the M4A1 test the movement before the air, the MP5 after it, as in CS. The pistols and the AWP keep one kick.
+  Tests: `ShooterGame.Weapons.SpreadByState` (the table, and the order crouched < still < walking < running < jumping,
+  a walk as still for the rifles and the MP5), `ShooterGame.HUD.DynamicCrosshair` (the gap in the same order),
+  `ShooterGame.Weapons.KickBackByState` (each state's share, and a crouched shot's kick against a standing one's). The spread's direction and the recoil come from an `FRandomStream` seeded with
   `RandomSeed`: a weapon fires the same sequence every time (the tests replay it). A hit on a surface leaves a mark
   (the pool of 64; its tint and size the surface's) and plays the surface's impact sound, a hit on a player CS's
   `bhit_` sound and the shooter's hit marker ([Surfaces and their sounds](#surfaces-and-their-sounds)).
@@ -296,7 +383,10 @@ Damage (`AShooterCharacter::TakeDamage`, after `AActor::TakeDamage`):
   its back when shot from the front, on its front from behind) and lies there (until the next round), a player gets
   the death cam and then spectates ([Death and spectating](#death-and-spectating)) and a bot
   lets go of the pawn.
-- A weapon on the floor is picked up after 1 s by the first live pawn within 60 cm that has its slot free.
+- A weapon on the floor is picked up after 1 s by the first live pawn within 60 cm that has its slot free
+  (`AShooterCharacter::PickUpWeapon`), with its rounds and its silencer or burst mode; a weapon not drawn at once plays
+  its draw sound, and a player reads `Picked up <weapon>` on the HUD for 2 s (`PickupNoticeDuration`). G drops the
+  weapon in hand ahead of the feet ([ps2-polish](../../Docs/PLANS/ps2-polish.md) P4).
 
 Tests (N30a, `ShooterArsenalTests.cpp`): `ShooterGame.Arsenal.StatsTable` (every weapon against the table, no other
 weapon class, the first pistols' reserves), `.SilencerAndBurst`, `.KnifeBackstab`, `ShooterGame.Weapons.Penetration`
@@ -365,14 +455,18 @@ Low-poly and textured in the style of Counter-Strike 1.6 ([ps2-shipping](../../D
   throw, the C4's plant; the view model in their hand.
 - The body evaluates its pose only when drawn and less often far from the view, the arms only when drawn (a bot's
   never are); the botmatch plays the same with or without them.
+- The body, the arms and the camera are Movable, as the capsule is (UE: a character's mesh moves with it). The scene
+  then assigns the body to the map's cells it walks into, and the portals draw it from any cell that sees it. A Static
+  body kept the cells it spawned in, so from some angles it vanished and left its weapon floating
+  ([ps2-polish](../../Docs/PLANS/ps2-polish.md) P1). A Static skeletal mesh in a map with cells is an `ensure`.
 
 ## Rounds, money and the bomb
 
 Counter-Strike's defusal rules (`AShooterGameMode`, all in `DefaultGame.ini`'s `[/Script/ShooterGame.ShooterGameMode]`):
 
-- **The match**: a warmup until both teams have a player (bots fill the teams as soon as the player is in), then up to
-  `MaxRounds` (30, `mp_maxrounds`) rounds; a team wins at 16 (more than half), else the match ends after the last
-  round (a tie is a draw). `mp_restartgame` starts over (from the warmup only with both teams in).
+- **The match**: a warmup until both teams have a player (the bots join once the player has chosen its team), then
+  up to `MaxRounds` (30, `mp_maxrounds`; the menu's `?winrounds=N` makes it 2 N - 1) rounds; a team wins at more than
+  half (16 of 30, 3 of 5), else the match ends after the last round (a tie is a draw). `mp_restartgame` starts over (from the warmup only with both teams in).
 - **Halftime** (`bHalftime`, `mp_halftime`; CS's competitive halves, CS:GO's `mp_halftime`): after round `MaxRounds /
   2` (15) the teams switch sides. Every player, the bots too, joins the other team, and the scores go with the teams
   (CT 9 - T 6 becomes CT 6 - T 9); the money goes back to $800 and the loss streaks to none; every pawn goes, so the
@@ -409,7 +503,9 @@ Counter-Strike's defusal rules (`AShooterGameMode`, all in `DefaultGame.ini`'s `
   500 damage falling to nothing at 44.5 m (CS's 1750 units), through walls, armor taking its share as with the
   grenade. A counter-terrorist within 1.2 m defuses it by holding E for
   10 s (5 with a kit); walking off or dying stops the defuse. A dead carrier drops the bomb, and the first live
-  terrorist to walk over it takes it.
+  terrorist to walk over it takes it (`Picked up C4` on its player's HUD). The carrier draws it as CS's slot 5 (5, the
+  D-pad's down) and drops it with G ahead of the feet; the one who dropped it can take it back after 1 s
+  (`AShooterBomb::PickupDelay`). It is planted with E, drawn or not.
 
 Tests: `ShooterGame.Rounds.HalftimeSwitchesSides` (four rounds: after round 2 every player is on the other team, the
 scores went with them, the money is back to $800, the new terrorists stand on the T starts with the pistol only and one
@@ -436,6 +532,57 @@ Tests: `ShooterGame.Spectate.DeathCamThenTeammates` (killed by a terrorist off t
 the corpse and stays there with W held until 0.1 s before `DeathCamDuration`, then a living CT through its eyes, then
 the free look when every CT is dead; the HUD's line each time), `ShooterGame.Spectate.CyclingSkipsTheDead` (Fire, the
 right button and Jump while spectating, a dead teammate skipped both ways) and `ShooterGame.Rounds.SpectateTeammates`.
+
+## The HUD
+
+CS 1.6's layout on the 640 x 448 frame ([ps2-polish](../../Docs/PLANS/ps2-polish.md) P6), readable on a TV: the text in
+the engine's DejaVu Sans Condensed (14 px), the numbers in its bold face at 24 px (`NumberFontName`) and the headings at
+14 px (`BoldFontName`), every text and icon over the world with a one-pixel black drop shadow (readable on a bright
+sky as in a dark tunnel), the top centre's block and the kill feed on dark bands, the radar, the scoreboard and the buy
+menu on dark panels; the icons from one atlas,
+`/Game/UI/T_HUDIcons` (`IconsTextureName`: white shapes, their coverage in the alpha, tinted as they are drawn;
+`SourceArt/UI/make_hud_icons.py` draws them, the same bytes every run; 256 x 64, PSMT4 once cooked).
+
+- Bottom left the health with a cross (red at 25 or less) and the armor with a vest (with a helmet when it has one);
+  above them the team's radio messages.
+- Bottom right the ammunition (`clip | reserve`), the weapon's display name over it (`(silenced)` / `(burst)` after it;
+  `C4` with the bomb drawn), and over them the money in green with the buy zone's cart while the player may buy; the
+  pickup notice (`Picked up AK-47`) above.
+- On the left halfway down the bomb for its carrier (green, blinking red inside a bomb site, as CS's) and the defuse kit.
+- Under the radar a compact frame readout, `30 fps  33.3 ms` (the frames' real time averaged over half a second,
+  `FrameStatsRefreshSeconds`), the player's option `bShowFrameStats` (on by default; `SetShowFrameStats 0|1`, saved in
+  the `Settings` slot); the stats overlay (`stat unit`, F4, R3) keeps its place top right, above the kill feed. The
+  menus (the buy menu, the radio menu, a refusal) start under the readout.
+- Top centre the round's clock with a stopwatch (a bomb and `C4` once planted) between the teams' scores, `CT` and `T`
+  beside them, the round's number under it.
+- Top right the kill feed: the killer in the team's colour, the weapon's icon (a skull for the world, the C4 for the
+  bomb), the headshot's icon, the victim, on a dark band, for `KillFeedDuration` (6 s).
+- The weapons' names are CS's (`AShooterWeapon::DisplayName`: "AK-47", "M4A1", "USP", "Desert Eagle", "Glock-18",
+  "MP5", "AWP", "HE Grenade", "Flashbang", "Smoke Grenade", "Knife"; `GetItemDisplayName` adds "C4" and the
+  equipment's), in the HUD, the kill feed, the buy menu and the pickup notice.
+- **The scoreboard** (Tab, Select; `UShooterScoreboardWidget`): a panel in the middle with the map's name, then each
+  team (the counter-terrorists first): its name and players, its score, and a `UTableView` of its players (Name, a
+  status column, Score (the kills), Deaths, Latency) sorted by score, fewer deaths first on a tie; `DEAD` on the dead
+  (their rows dimmed), `BOMB` on the carrier for a terrorist or a spectator, `BOT` as a bot's latency (`0` for the
+  player, who plays locally); the player's row highlighted, the spectators listed under the tables. It is filled only
+  when a score or a player's line changes.
+- **The buy menu** (`UShooterBuyMenuWidget`): a panel under the radar with the page's name and the money, why buying is
+  refused, the page's lines in a `UTableView` (the number key, the category in amber with `>` or the item's display
+  name and price, grey when the player cannot afford it) with the pad's line highlighted, and the last buy's result.
+
+Captures: `-ExecCmdsAfterFrames=N` holds `-ExecCmds=` until frame N (not in Shipping), so the buy menu and the
+scoreboard can be shot once the match plays:
+`ShooterGame.exe "-ExecCmds=bot_fill;buymenu" -ExecCmdsAfterFrames=40 -Screenshot=<file.bmp> -ExitAfterFrames=90`
+(`ShowScores 1` for the scoreboard).
+
+Tests: `ShooterGame.HUD.IconAtlas` (every icon of the table has its shape in the atlas, nothing outside, white at 16
+alphas), `.DisplayNames` (CS's names, every weapon's and its kill feed icon), `.KillFeedIcons` (the weapons' and the
+headshot's icons at their texels, the world's skull, the status's icons and numbers), `.Scoreboard` (a CT and a T
+viewer: the tables' rows, their order, DEAD, BOMB for the T only, BOT, the highlight, the team's score, filled again
+only on a change), `.BuyMenuTable` (the categories, the rifles by their names and prices, grey until affordable),
+`.FrameStats` (30 fps, 33.3 ms at 30 Hz; the option hides it), `ShooterGame.Input.FirePlantsTheBomb` (Fire with the
+bomb drawn plants while held, stops when released, fires no shot),
+and `.RoundInfo`, `.TextCache` updated.
 
 ## The HUD's radar and damage indicator
 
@@ -464,14 +611,15 @@ most urgent first:
 | Idle | frozen, dead or `bot_stop` | stands; in the freeze it buys once (below) and sees nobody, so its reaction starts with the round |
 | Blind | flashed (`AShooterCharacter::IsBlind`) | stands and fires at random (CS's bots): every `BlindFireMinTime` to `BlindFireMaxTime` (0.25 to 0.6 s) a new point within `BlindFireError` (25 degrees across, a quarter of it up and down) of where it last saw an enemy (else of its view), fired at with `BlindFireChance` (0.6), all from its stream |
 | ThrowGrenade | a throw under way (below) | draws the grenade, turns to the throw and throws it (an enemy that shows up meanwhile waits); after a flashbang it turns its back to it until it goes off, unless an enemy is in sight |
-| Engage | an enemy in sight (seen in the last three sensing updates; one lost for `EnemyMemory` s is searched for where it was last seen, as a noise) | draws its best weapon with ammunition, turns at `AimTurnRate`, fires once `ReactionTime` has passed since it came into sight; the aim error starts at `AimError` and settles toward `MinAimError`; automatic weapons fire bursts, the AWP zooms first; the recoil climbs on its aim as on a player's, `RecoilCompensation` of each kick pulled back down. It moves as CS's bots do (below): it strafes, crouches with a rifle at range, stands with the AWP |
-| Defuse | a CT and the bomb planted | walks to the bomb and holds use |
+| Engage | an enemy in sight (seen in the last three sensing updates, within `SightRadius`; one lost for `EnemyMemory` s is searched for where it was last seen, as a noise) | draws its best weapon with ammunition, never a grenade (`EquipBestWeapon(false)`: the throws are ThrowGrenade's), turns at `AimTurnRate`, fires once `ReactionTime` has passed since it came into sight; the aim error starts at `AimError` and settles toward `MinAimError`; automatic weapons fire bursts, the AWP zooms first; the recoil climbs on its aim as on a player's, `RecoilCompensation` of each kick pulled back down. It moves as CS's bots do (below): it strafes, crouches with a rifle at range, stands with the AWP, and rushes with the knife |
+| Defuse | a CT and the bomb planted, the retake not given up (below) | the retake (ps2-polish P3b): gathers at a staging point `RetakeStagingDistance` (15 m) from the bomb toward the CT spawn until a teammate is within `RetakeGroupRadius` (5 m) or `RetakeWaitTime` (8 s) passes, calls "Go go go!", walks to the bomb and holds use once no enemy was seen for `SiteClearTime` (2.5 s); short of time, straight to it and the defuse |
 | Plant | the bomb's carrier | walks to the round's site (`AShooterGameMode::GetTerroristTargetSite`, drawn each round from the seeded stream) and plants inside it |
 | FetchBomb | a T and the bomb dropped | walks over it |
-| Escort | a T without the bomb while a live teammate carries it | stays within `EscortDistance` (350 cm) of the carrier |
+| PickUp | a weapon on the floor worth the walk (below) | walks over it: its spent weapon is dropped for it |
+| Escort | a T without the bomb while a live teammate carries it, still `SupportDistance` (15 m) or farther from the site | stays within `EscortDistance` (350 cm) of the carrier, watching one side of its way (`EscortWatchAngle`, 50 degrees: the even bots its right, the odd its left) |
 | Investigate | an enemy's shot heard (`AActor::MakeNoise`), or a teammate's report on the radio | walks to where it came from; nobody there: "Sector clear." |
-| Hunt | its team's living players outnumber the enemy's by `HuntAdvantage` (2; 0 never hunts) and no bomb is planted | walks to the enemy's first spawn (`AShooterGameMode::GetTeamSpawnLocation`) until contact |
-| Objective | otherwise | T: to the round's site (guarding the planted bomb); CT: A for the even, B for the odd of the team, and a CT that has held its site `RotateTime` (25 s) with no contact rotates to the next site |
+| Hunt | its team's living players outnumber the enemy's by `HuntAdvantage` (2; 0 never), or a T with `HuntTimeLeft` (30 s) of the round left (0 never), and no bomb is planted | walks to the enemy's first spawn (`AShooterGameMode::GetTeamSpawnLocation`), then to waypoints of the graph drawn from its stream, until contact |
+| Objective | otherwise | the site's lookouts (below): T the round's site (its support spots once the carrier is near, the planted bomb's site to guard it); CT A for the even, B for the odd of the team, a CT that has held its site `RotateTime` (25 s) with no contact rotating to the next site |
 
 - **The economy** (ps2-shipping N30e, CS's): when a round starts each team decides its plan once
   (`AShooterGameMode::GetTeamBuyPlan`, `ChooseBuyPlan`): the first round of each half is the **pistol** round; a team
@@ -497,8 +645,47 @@ most urgent first:
   walk key's speed (`bStrafeWalking`), each way for `StrafeMinTime` to `StrafeMaxTime` (0.4 to 1 s, from its stream);
   with a rifle (the AK-47, the M4A1) and the enemy at `CrouchFireDistance` (15 m) or farther it crouches and stops;
   with the AWP it stands still.
+- **The knife** (ps2-polish P3, CS's bots' rush; `EngageWithKnife`): with the knife drawn (nothing else has
+  ammunition) a bot runs the path to its enemy (a new one as the enemy moves 1.5 m), and within the slash's reach
+  (`AShooterWeapon_Knife::SlashRange`, 122 cm to the enemy's capsule, less 10) it goes straight in behind an enemy
+  whose back is turned and stabs within the stab's reach (81 cm; `IsBackstab`: three times as hard), else circles it
+  by the side, closing in, and slashes. It never cuts out of reach.
+- **Weapons on the floor** (ps2-polish P3; `UpdatePickupTarget`, twice a second): a bot without a loaded primary goes
+  for the nearest primary with ammunition on the floor (`AShooterGameMode::GetPickups`) within `PickupSearchDistance`
+  (15 m); out of ammunition altogether (the knife left), for any weapon with ammunition within twice that. Walking
+  over it swaps its spent weapon for it: `AShooterWeapon::CanBePickedUpBy` lets a bot take a weapon into a slot whose
+  weapon has no ammunition left (`AShooterCharacter::PickUpWeapon`, `AddWeapon` dropping the spent one); a player's
+  slot must be free, as CS's walk-over. A walk longer than 12 s gives that weapon up for the round.
+- **No enemy in sight** (ps2-polish P3): the bots watch the sites from their **lookouts**
+  (`AShooterGameMode::GetBombSiteLookouts`): the map's waypoints flagged `Lookout` (de_leon's three a site, off the
+  lanes' line: behind the crates, in the corners by the houses, by the site walls), each given to its nearest site; a
+  map without them uses the site's three nearest waypoints within `LookoutFallbackRadius` (15 m), else its middle.
+  Each lookout has a team's directions (`FShooterLookout::GetWatchYaws`): first the main way in (the first link of the
+  graph's path toward the other team's spawn: CS's approach areas), then over the site from a spot away from it and
+  its other links toward that spawn, at most four, 35 degrees apart. At a lookout a bot turns between them at
+  `LookTurnRate` (240 degrees a second), the main way in for twice a drawn `WatchMinTime` to `WatchMaxTime` (1 to 2.5
+  s) between each of the others, and after `LookoutMinTime` to `LookoutMaxTime` (3 to 7 s) it moves to another of the
+  site's lookouts, drawn from its stream; within 10 m of the next one it already watches its main way in. The team's
+  bots start at different lookouts (their place in the team). A CT holding a site that hears a teammate's "Enemy
+  spotted." within `SiteReportRadius` (15 m) of the other site rotates there with `RotateOnReportChance` (1). On the
+  move with nobody to aim at, a bot looks along its path (`LookTurnRate`).
+- **The planted bomb** (ps2-polish P3b, CS's post-plant): the planter calls "Cover me!" as it plants. The terrorists
+  then hold from the site's lookouts within `PostPlantHoldRadius` (10 m) of the bomb (else from the bomb, facing the
+  CT spawn), watching the counter-terrorists' ways in; the first there calls "Hold this position.", and nothing heard
+  or reported farther from the bomb draws them away. A defuse is heard (`AShooterBomb::DefuseNoiseLoudness`, CS's
+  c4_disarm): the terrorists near come for the defuser. The counter-terrorists retake together (the Defuse row) or give
+  it up (`ShouldGiveUpRetake`: the terrorists alive outnumber them by `RetakeGiveUpAdvantage`, 2, or the walk and the
+  defuse outlast the bomb): "Team, fall back!", and they save themselves at their spawn. Over seeds 1 to 24 the bomb
+  explodes in 11 rounds of 214 (9 % of the 121 plants) and is defused in 45.
+- **Ladders** (ps2-polish P3): the waypoint graph links a ladder's foot and top (both flagged `Ladder`; the map
+  import's `AutoLinkWaypoints` links two within `MaxLadderLinkDistance`, 2 m across, however high the climb), and the
+  path follower does not jump at a ladder's top. On a ladder a bot faces its face (`GetLadderNormal`) and climbs to
+  the path's point at the top looking level, climbs down to one below looking down (85 degrees), and at the foot jumps
+  off it (a jump on a ladder pushes off its face); standing on one with nothing to climb it lets go, unless it
+  fights.
 - **Senses**: `UShooterPawnSensingComponent`, UE's `UPawnSensingComponent` narrowed to what a bot acts on: sight in a
-  cone with a line of sight on the Visibility channel, hearing of the noises `AActor::MakeNoise` reports within a
+  cone (140 degrees) within `SightRadius` (35 m; ps2-polish P3: at 60 m de_leon's lanes gave the terrorists' plaza the
+  duels into both sites, the terrorists winning three rounds in four) with a line of sight on the Visibility channel, hearing of the noises `AActor::MakeNoise` reports within a
   loudness-scaled range (a weapon's shot: `FireNoiseLoudness`; a noise reaches the registered sensing components, not
   every actor). Its `ShouldCheckVisibilityOf` lets through only the living shooters of the other team, while the bot's
   own pawn is alive and not frozen, and `ShouldCheckAudibilityOf` only the other team's noises: the pawns and noises
@@ -514,11 +701,16 @@ most urgent first:
   bot's looks within the 0.1 s moved.
 - **Navigation**: `AAIController::MoveToLocation` on `UNavigationSystem`'s waypoint graph (A* over de_leon's waypoints,
   linked at import); a bot jumps when the next path point rises more than 50 cm within 1.5 m or is a waypoint flagged
-  `Jump`, crouches along the links on both sides of a waypoint flagged `Crouch` and stands up past them, and repaths
-  when it moves less than 30 cm in 1.5 s.
-- **Skill** (`[/Script/ShooterGame.ShooterAIController]`): `Difficulty` scales the reaction and the aim error down and
-  the turn rate and the recoil control (`RecoilCompensation`, 0.5: half of each kick pulled down; 0 lets it climb, 1
-  holds the spray flat) up; `EscortDistance`, `HuntAdvantage` and `RotateTime` tune the branches above. Every random
+  `Jump` (not at a ladder's top, which it climbs), crouches along the links on both sides of a waypoint flagged
+  `Crouch` and stands up past them, and repaths when it moves less than 30 cm in 1.5 s (climbing counts).
+- **Skill** (`[/Script/ShooterGame.ShooterAIController]`, [ps2-polish](../../Docs/PLANS/ps2-polish.md) P9): a preset a
+  difficulty (`+DifficultyPresets`, CS's bot_difficulty and its bot profiles), which the game mode gives each bot it
+  adds (`ApplyDifficulty`, the match's `BotDifficulty`, `?difficulty=`): the reaction (Easy 0.6 s, Normal 0.35, Hard
+  0.25, Expert 0.15), the aim error on a new target and its floor (9°/1.2°, 5°/0.4°, 3.5°/0.25°, 2°/0.1°) and how fast
+  it settles, the turn rate (200, 360, 480, 720° a second), the recoil control (`RecoilCompensation`: 0.2, 0.5, 0.7,
+  0.9 of each kick pulled down) and the memory of an enemy out of sight (1, 1.5, 2.5, 4 s); the sight's reach
+  (`SightRadius`, 35 m) is every difficulty's. Normal is the bots' skill before the presets; `EscortDistance`, `SupportDistance`, `HuntAdvantage`, `HuntTimeLeft`, `RotateTime`,
+  `RotateOnReportChance`, the lookouts' and the watch's times and `PickupSearchDistance` tune the branches above. Every random
   choice comes from the bot's stream, seeded from the game mode's `RandomSeed` and the bot's index, the order the game
   mode created it in (`SetBotIndex`): a match with `?seed=N` replays.
 - **Names** (N30e): CS 1.6's BotProfile names (`[/Script/ShooterGame.ShooterGameMode]` `+BotNames=`: Albert, Allen,
@@ -536,7 +728,14 @@ back to the flash; a teammate's report thrown at with the HE, the same point wit
 with a rifle at 16 m; upright and still with the AWP), `EngageKillsAnEnemy` (no shot before the reaction time),
 `RecoilKicksTheAim`,
 `CarrierPlants`, `CTDefuses`,
-`TerroristsEscortTheCarrier`, `OutnumberingTeamHunts`, `CTRotatesBetweenSites`, `AgentFromConfig`,
+`TerroristsEscortTheCarrier`, `OutnumberingTeamHunts`, `CTRotatesBetweenSites`, `AgentFromConfig`, ps2-polish P3's
+`KnifeRushesAndKills` (a bot with the knife, and a flashbang it never draws, runs at a terrorist 8 m away with its back
+turned, cuts nothing out of reach and kills it with a stab in the back), `PicksUpAWeaponOutOfAmmo` (a spent pistol
+swapped for a loaded Glock on the floor 8 m away, dropped for it; not for a pawn that is not a bot's),
+`VisitsLookouts` (three lookouts around a site, each team's first direction toward the other's spawn; a CT walks
+between them and turns between their directions; the same walk with the same seed) and `ClimbsALadder` (a site on the
+roof of a 4 m block: up the ladder facing it, onto the roof, down it looking down to the lookout at its foot, off
+it),
 `MatchCheckerFlagsViolations`, `MatchOnDeLeon` (ten bots, three rounds of a four-round match, across its halftime,
 seed 5, under `FShooterMatchChecker`; kills happen), `SensingFilter` (no trace to a teammate, a corpse or the spectator; one to a living enemy) and
 `SensingStagger` (ten bots at 60 and 30 fps: at most two looks a frame, each bot as often as the others, 10 Hz at 60
@@ -564,7 +763,9 @@ the sender in the team's colour.
   when they plant; "Fire in the hole!" with every throw (anybody's). A bot does not say what a teammate said in the
   last `RadioRepeatTime` (3 s).
 - **What they do with it**: a teammate's "Enemy spotted." within `RadioReportRange` (30 m) is a place to look at, as
-  a heard shot, for a bot that fights nobody, has nothing else to look at and holds no site; the living bot nearest the
+  a heard shot, for a bot that fights nobody, has nothing else to look at and holds no site; a CT holding a site
+  rotates to the other site when the report is within `SiteReportRadius` of it, with `RotateOnReportChance`
+  (ps2-polish P3); the living bot nearest the
   sender answers a request (radio1's, radio2's and "Need backup.") with "Affirmative." ("Reporting in." to "Report
   in, team.") and goes to the sender for "Need backup." and "Taking fire".
 - **Its sounds** (N30f; `AShooterPlayerController::HearRadio`): the team's local players hear a message's sound, 2D:
@@ -648,7 +849,9 @@ when nothing changed; a score formats one line, a kill three).
 
 `ShooterGame -nullrhi -benchmark -botmatch [-rounds=N] [-seed=N]` plays a match of bots and exits (P21):
 
-- `-botmatch`: the local player spectates (no team), the bots fill both teams, and the match is `-rounds=` rounds long
+- `-botmatch`: the game starts on the main menu's map as always, whose game mode travels at once to de_leon
+  (`AShooterGame_Menu`'s `BotMatchMapName`: BotMatch.bat and MeasurePS2 name no map); there the local player spectates
+  (no team), ten bots join, five a side (`RebalanceBots`), and the match is `-rounds=` rounds long
   (10; it sets `MaxRounds`, so the teams switch sides after half of them and a team with the majority ends it sooner);
   then the game exits. `-seed=` sets `RandomSeed` (as `?seed=`).
 - Every frame `FShooterMatchChecker` checks the invariants: each round that ends has a reason and gives its winner one
@@ -668,10 +871,16 @@ when nothing changed; a score formats one line, a kill three).
   steps, so the same seed plays the same match headless or drawn. The bots' choices, the weapons' spread and the
   rounds come from seeded streams and the steps are fixed, so a seed replays the same match: `BotMatch.bat` (10 rounds, seed 7 by default) plays it twice and fails when the
   summaries differ, and a staged Shipping build (`BuildCookRun.bat`) plays three rounds (Shipping logs nothing, so only
-  the exit code tells). At 0.24.0 (since ps2-shipping N29, the floor slabs as the ground) seed 7 logs `Botmatch OK:
-  9 round(s), CT 3 - T 6, 55 kill(s), seed 7, sides switched after round 5`: a team reached the majority after nine
-  rounds (N28's de_leon on one ground box: `10 round(s), CT 5 - T 5, 65 kill(s)`, the terrorists winning every
+  the exit code tells). Since [ps2-polish](../../Docs/PLANS/ps2-polish.md) P2b (CS's accuracy crouched, walking and
+  still, and its recoil by state; the bots crouch to fire at range) seed 7 logs `Botmatch OK: 10 round(s), CT 5 - T 5,
+  63 kill(s), seed 7, sides switched after round 5` (P2: `CT 4 - T 6, 59 kill(s)`). At 0.24.0 (since ps2-shipping N29, the floor slabs as the ground) it logged
+  `9 round(s), CT 3 - T 6, 55 kill(s)`: a team reached the majority after nine rounds (N28's de_leon on one ground box: `10 round(s), CT 5 - T 5, 65 kill(s)`, the terrorists winning every
   round; over seeds 1 to 24 then, the terrorists won 61 % of the rounds with 6.1 kills a round).
+  ps2-polish P3's bots (the knife, the lookouts, the ladders, the pickups) and de_leon's CT starts out of the mid
+  doors' line log `Botmatch OK: 8 round(s), CT 2 - T 6, 55 kill(s), seed 7, sides switched after round 5`; over seeds
+  1 to 24 the terrorists win 49 % of the rounds (60 % after P2b, before P3) with 7.1 kills a round. With P3b's
+  post-plant (the hold, the retake, the saves) it logs `Botmatch OK: 8 round(s), CT 2 - T 6, 57 kill(s), seed 7, sides
+  switched after round 5`, and over seeds 1 to 24 the terrorists win 56 % (1 to 48: 53 %).
 
 ## de_leon
 
@@ -683,7 +892,7 @@ ladders to two roofs, `a` / `b` the bomb sites, `+` / `t` the team starts; 1 cha
 ```text
        W (-Y)                   Y=0                  E (+Y)
   30 ##################################################
-  26 #######bbbbbb        + + + + +       aaaaaa#######
+  26 #######bbbbbb     ++           ++    aaaaaa#######
   22 #  bcccbbbbbb                        aaaaaaaaaa  #
   18 #  bbbbbbbbbb  ##                ##  aaccaaaaaa  #   <- the site walls
   14 #  =====bbbbb  ##          C     ##  aaaaaaaaaa  #
@@ -715,7 +924,7 @@ both sites, both buy zones and both teams' starts. Only CC0 art enters the proje
 shared skeleton, the fixed glTF export); `SourceArt/check_art_determinism.py` checks that they export the same bytes
 every run ([Docs/ART_PIPELINE.md](../../Docs/ART_PIPELINE.md)).
 
-Looking at the map: `ShooterGame.exe -ExecCmds="ViewFrom <X> <Y> <Z> <Pitch> <Yaw>" -Screenshot=<file.bmp>
+Looking at the map: `ShooterGame.exe /Game/Maps/de_leon?team=CT -ExecCmds="ViewFrom <X> <Y> <Z> <Pitch> <Yaw>" -Screenshot=<file.bmp>
 -ExitAfterFrames=20` saves a view from a point (centimetres and degrees; `ViewFrom 0 0 5200 -89 0` looks down on the
 whole map); the view stays after the round's spawn until `ViewPawn`.
 

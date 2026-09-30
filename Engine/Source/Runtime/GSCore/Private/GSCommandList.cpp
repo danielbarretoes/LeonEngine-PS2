@@ -333,6 +333,12 @@ void FGSCommandList::AppendExpanded(const FGSCommandList& Other, const FGSDrawEn
 			const FGSVertexBatch& Batch = Other.VertexBatches[int32(OtherWrite.Value)];
 			const FGSVertexDraw& Draw = Other.VertexDraws[Batch.Draw];
 			Emitter.SetFog(Draw.Fog);
+			if (Batch.bClip)
+			{
+				Emitter.BeginTriangles(Draw.bTextured, Draw.bBlend, true);
+				Emitter.AddClippedVertexBatch(Draw, Batch);
+				continue;
+			}
 			Emitter.BeginStrip(Draw.bTextured, Draw.bBlend, true);
 			Emitter.AddVertexBatch(Draw, Batch);
 			continue;

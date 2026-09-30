@@ -415,3 +415,68 @@ bool AGameModeBase::ShouldSpawnAtStartSpot(AController* Player)
 {
 	return Player != nullptr && Player->StartSpot.IsValid();
 }
+
+// Pause (UE's)
+
+bool AGameModeBase::AllowPausing(APlayerController* /*PC*/)
+{
+	// UE: bPauseable || GetNetMode() == NM_Standalone; Leon's games are all standalone.
+	return true;
+}
+
+bool AGameModeBase::SetPause(APlayerController* PC, FCanUnpause CanUnpauseDelegate)
+{
+	UWorld* World = GetWorld();
+	AWorldSettings* WorldSettings = World != nullptr ? World->GetWorldSettings() : nullptr;
+	if (WorldSettings == nullptr || !AllowPausing(PC))
+	{
+		return false;
+	}
+	// The first pauser owns the pause (UE): its player state is the world settings' pauser.
+	if (WorldSettings->GetPauserPlayerState() == nullptr)
+	{
+		APlayerState* PauserState = PC != nullptr ? PC->GetPlayerState<APlayerState>() : nullptr;
+		if (PauserState == nullptr)
+		{
+			UE_LOG(LogGameMode, Warning, TEXT("SetPause: %s has no player state to pause with"),
+				PC != nullptr ? *PC->GetName() : TEXT("NULL"));
+			return false;
+		}
+		WorldSettings->SetPauserPlayerState(PauserState);
+	}
+	Pausers.Add(MoveTemp(CanUnpauseDelegate));
+	return true;
+}
+
+bool AGameModeBase::ClearPause()
+{
+	if (!AllowPausing() && Pausers.Num() > 0)
+	{
+		UE_LOG(LogGameMode, Log, TEXT("Clearing the pausers: pausing is not allowed"));
+		Pausers.Empty();
+	}
+	for (int32 Index = Pausers.Num() - 1; Index >= 0; --Index)
+	{
+		// An unbound pauser, or one that says so, lets the game go on (UE).
+		if (!Pausers[Index].IsBound() || Pausers[Index].Execute())
+		{
+			Pausers.RemoveAtSwap(Index);
+		}
+	}
+	if (Pausers.Num() > 0)
+	{
+		return false;
+	}
+	UWorld* World = GetWorld();
+	if (AWorldSettings* WorldSettings = World != nullptr ? World->GetWorldSettings() : nullptr)
+	{
+		WorldSettings->SetPauserPlayerState(nullptr);
+	}
+	return true;
+}
+
+bool AGameModeBase::IsPaused() const
+{
+	const UWorld* World = GetWorld();
+	return World != nullptr && World->IsPaused();
+}

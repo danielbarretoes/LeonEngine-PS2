@@ -125,8 +125,16 @@ public:
 	/** `show <Flag>`, then the game instance's and the engine's commands (UE: UGameViewportClient::Exec). */
 	bool Exec(UWorld* InWorld, const TCHAR* Cmd, FOutputDevice& Ar) override;
 
-	/** Captures the mouse or lets it go (UE: SetMouseCaptureMode / the viewport's capture). */
+	/**
+	 * Captures the mouse or lets it go (UE: SetMouseCaptureMode / the viewport's capture): the capture modes hide the
+	 * cursor and the mouse looks; CaptureDuringMouseDown frees it and looks while the left button is held; NoCapture
+	 * frees it for the UI only (APlayerController::SetInputMode).
+	 */
 	void SetMouseCaptureMode(EMouseCaptureMode Mode);
+	[[nodiscard]] EMouseCaptureMode GetMouseCaptureMode() const
+	{
+		return MouseCaptureMode;
+	}
 	[[nodiscard]] bool IsCursorCaptured() const;
 
 	/** The game instance's world (UE: GetWorld). */
@@ -198,6 +206,8 @@ private:
 	bool bMouseLookSampleValid = false;
 	/** SetIgnoreInput (UE: bIgnoreInput). */
 	bool bIgnoreInput = false;
+	/** SetMouseCaptureMode's mode (the input settings' until a player sets its input mode). */
+	EMouseCaptureMode MouseCaptureMode = EMouseCaptureMode::CapturePermanently_IncludingInitialMouseDown;
 	double LastMouseX = 0.0;
 	double LastMouseY = 0.0;
 

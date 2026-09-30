@@ -1666,6 +1666,115 @@ void GSConformance::BuildClutLoads(FGSCommandList& List)
 	DrawRow(28, 4);
 }
 
+void GSConformance::BuildTexturedCanvas(FGSCommandList& List)
+{
+	SetUpScene(List);
+	// The frame under the draws: blue on the left half, orange on the right.
+	AddSprite(List, 0, 0, 32, 32, Color(0x00, 0x40, 0x80));
+	AddSprite(List, 32, 0, 64, 32, Color(0x80, 0x20, 0x00));
+
+	// The CLUT at CBP 320: entry i is (16 i, 255, 255 - 16 i) with alpha 17 i (0 to 255, the GS's 0 to 0x80).
+	TArray<uint32> Palette;
+	for (uint32 Index = 0; Index < 16; ++Index)
+	{
+		Palette.Add((Index * 16) | (0xffu << 8) | ((255u - (Index * 16)) << 16) | ((Index * 17) << 24));
+	}
+	TArray<uint8> ClutImage;
+	uint16 ClutWidth = 0;
+	uint16 ClutHeight = 0;
+	FGSTextureLayout::MakeClutImage(Palette, ClutImage, ClutWidth, ClutHeight);
+	FGSBitBltBuf ClutBuffer;
+	ClutBuffer.DBP = 320;
+	ClutBuffer.DBW = 1;
+	ClutBuffer.DPSM = EGSPixelFormat::PSMCT32;
+	List.UploadImage(ClutBuffer, 0, 0, ClutWidth, ClutHeight, ClutImage);
+	// A 16 x 16 PSMT4 texture at TBP 256: rows 0 to 7 hold index (x + y) mod 16, rows 8 to 15 index 15 - x.
+	TArray<uint8> Indices;
+	for (uint32 Row = 0; Row < 16; ++Row)
+	{
+		for (uint32 X = 0; X < 16; X += 2)
+		{
+			const uint32 First = Row < 8 ? (X + Row) & 15 : 15 - X;
+			const uint32 Second = Row < 8 ? (X + 1 + Row) & 15 : 14 - X;
+			Indices.Add(uint8(First | (Second << 4)));
+		}
+	}
+	FGSBitBltBuf TextureBuffer;
+	TextureBuffer.DBP = 256;
+	TextureBuffer.DBW = 2;
+	TextureBuffer.DPSM = EGSPixelFormat::PSMT4;
+	List.UploadImage(TextureBuffer, 0, 0, 16, 16, Indices);
+	List.TexFlush();
+
+	FGSTex0 Tex0;
+	Tex0.TBP0 = 256;
+	Tex0.TBW = 2;
+	Tex0.PSM = EGSPixelFormat::PSMT4;
+	Tex0.TW = 4;
+	Tex0.TH = 4;
+	Tex0.bRGBA = true;
+	Tex0.TFX = EGSTextureFunction::Modulate;
+	Tex0.CBP = 320;
+	Tex0.CPSM = EGSPixelFormat::PSMCT32;
+	Tex0.CLD = 1;
+	List.SetTex0(0, Tex0);
+	FGSClamp Clamp;
+	Clamp.WMS = EGSWrapMode::Clamp;
+	Clamp.WMT = EGSWrapMode::Clamp;
+	List.SetClamp(0, Clamp);
+	FGSTex1 Nearest;
+	Nearest.bFixedLOD = true;
+	FGSTex1 Bilinear = Nearest;
+	Bilinear.MMAG = EGSFilter::Linear;
+	Bilinear.MMIN = EGSFilter::Linear;
+	List.SetAlpha(0, FGSAlpha::Translucent());
+
+	FGSPrim Sprite = Blended(EGSPrimitive::Sprite);
+	Sprite.bTextured = true;
+	Sprite.bUseUV = true;
+	const auto UV = [](float U, float V) { return FGSUV{GSToFixed4(U, 14), GSToFixed4(V, 14)}; };
+	// A glyph: pixels 1 to 16 x 1 to 8 from texels 0 to 15 x 0 to 7, one to one, nearest, the corners half a pixel up
+	// and left as the canvas puts them.
+	List.SetTex1(0, Nearest);
+	List.SetPrim(Sprite);
+	List.SetRGBAQ(Color(0x80, 0x80, 0x80, 0x80));
+	List.SetUV(UV(0, 0));
+	List.AddVertex(Vertex(0.5f, 0.5f));
+	List.SetUV(UV(16, 8));
+	List.AddVertex(Vertex(16.5f, 8.5f));
+	// The same rows upside down (V from 8 down to 0) at x 17 to 32, tinted (0x80, 0x40, 0x80).
+	List.SetRGBAQ(Color(0x80, 0x40, 0x80, 0x80));
+	List.SetUV(UV(0, 8));
+	List.AddVertex(Vertex(16.5f, 0.5f));
+	List.SetUV(UV(16, 0));
+	List.AddVertex(Vertex(32.5f, 8.5f));
+	// Scaled twice, bilinear: pixels 1 to 32 x 9 to 24 from texels 0 to 15 x 8 to 15.
+	List.SetTex1(0, Bilinear);
+	List.SetRGBAQ(Color(0x80, 0x80, 0x80, 0x80));
+	List.SetUV(UV(0, 8));
+	List.AddVertex(Vertex(0.5f, 8.5f));
+	List.SetUV(UV(16, 16));
+	List.AddVertex(Vertex(32.5f, 24.5f));
+
+	// A quad turned 45 degrees on the right half: two UV triangles, bilinear, the vertex alpha at 0x60.
+	FGSPrim Triangle = Blended(EGSPrimitive::Triangle);
+	Triangle.bTextured = true;
+	Triangle.bUseUV = true;
+	List.SetPrim(Triangle);
+	List.SetRGBAQ(Color(0x80, 0x80, 0x80, 0x60));
+	const float QuadX[4] = {48.0f, 60.0f, 48.0f, 36.0f};
+	const float QuadY[4] = {4.0f, 16.0f, 28.0f, 16.0f};
+	const float QuadU[4] = {0.0f, 16.0f, 16.0f, 0.0f};
+	const float QuadV[4] = {0.0f, 0.0f, 16.0f, 16.0f};
+	constexpr int32 Order[6] = {0, 1, 2, 0, 2, 3};
+	for (const int32 Corner : Order)
+	{
+		List.SetUV(UV(QuadU[Corner], QuadV[Corner]));
+		List.AddVertex(Vertex(QuadX[Corner], QuadY[Corner]));
+	}
+	List.SetAlpha(0, FGSAlpha());
+}
+
 TArrayView<const FGSConformanceScene> GSConformance::GetScenes()
 {
 	static const FGSConformanceScene Scenes[] = {
@@ -1689,6 +1798,7 @@ TArrayView<const FGSConformanceScene> GSConformance::GetScenes()
 		{"PabeFbaDate", EGSPixelFormat::PSMCT32, &BuildPabeFbaDate},
 		{"Dither16Blend", EGSPixelFormat::PSMCT16S, &BuildDither16Blend},
 		{"ClutLoads", EGSPixelFormat::PSMCT32, &BuildClutLoads},
+		{"TexturedCanvas", EGSPixelFormat::PSMCT32, &BuildTexturedCanvas},
 	};
 	return MakeArrayView(Scenes, UE_ARRAY_COUNT(Scenes));
 }

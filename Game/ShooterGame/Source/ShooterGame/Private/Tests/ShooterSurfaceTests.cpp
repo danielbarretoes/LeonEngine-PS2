@@ -114,8 +114,7 @@ namespace
 		FScopedTestWorld TestWorld;
 		UWorld& World = *TestWorld;
 		(void)SpawnSurfaceBox(World, FVector(0.0f, 0.0f, -50.0f), FVector(8000.0f, 8000.0f, 100.0f), Surface);
-		AShooterGameMode* GameMode = Cast<AShooterGameMode>(World.SetGameMode(AShooterGameMode::StaticClass()));
-		GameMode->bFillTeamsWithBots = false;
+		(void)World.SetGameMode(AShooterGameMode::StaticClass());
 		AShooterCharacter* Runner = SpawnShooter(World, FVector(-2000.0f, 0.0f, 0.0f), 0.0f, EShooterTeam::CT);
 		Runner->SetSkeletalBody(FSkinnedTestCharacter::MakeMesh());
 		UAnimSequence* Steps =
@@ -190,15 +189,13 @@ bool FShooterSurfacesLadderStepsTest::RunTest(const FString& Parameters)
 		FTransform(FQuat::Identity, FVector(0.0f, 0.0f, -50.0f), FVector(80.0f, 80.0f, 1.0f)));
 	(void)World.SpawnActor<ABlockingVolume>(ABlockingVolume::StaticClass(),
 		FTransform(FQuat::Identity, FVector(300.0f, 0.0f, 400.0f), FVector(4.0f, 6.0f, 8.0f)));
-	AShooterGameMode* GameMode = Cast<AShooterGameMode>(World.SetGameMode(AShooterGameMode::StaticClass()));
-	GameMode->bFillTeamsWithBots = false;
+	(void)World.SetGameMode(AShooterGameMode::StaticClass());
 	ATriggerVolume* Ladder = World.SpawnActor<ATriggerVolume>(ATriggerVolume::StaticClass(),
 		FTransform(FQuat::Identity, FVector(90.0f, 0.0f, 400.0f), FVector(0.2f, 1.0f, 8.0f)));
 	Ladder->Tags.Add(AShooterGameMode::LadderTag);
 	TickSteps(World, 1);
 	AShooterCharacter* Climber = SpawnShooter(World, FVector(-100.0f, 0.0f, 0.0f), 0.0f, EShooterTeam::CT);
 	UShooterCharacterMovement& Move = *Climber->GetShooterCharacterMovement();
-	Move.bCanClimbLadders = true;
 	TestEqual("CS's 0.35 s", Climber->LadderStepInterval, 0.35f);
 	for (int32 Index = 0; Index < 60 && !Move.IsOnLadder(); ++Index)
 	{

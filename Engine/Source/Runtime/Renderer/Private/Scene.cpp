@@ -285,6 +285,10 @@ int32 FScene::GatherPrimitives(const FSceneView& View, const FVisibilityCellGrap
 		// The cells and portals (N15): what moves is assigned again as it moves.
 		if (bCells)
 		{
+			// A skeletal mesh moves or poses out of its bounds: a Static one keeps the cells it was added in, and the
+			// portals cull it from the cells it walks into (a character's mesh is Movable, ACharacter).
+			ensureMsgf(!bSkeletal || !Proxy->HasStaticLighting(),
+				"Scene: a Static skeletal mesh in a map with cells keeps its first cells; make it Movable");
 			if (!Proxy->HasStaticLighting())
 			{
 				Info.CellMask = GetCellMask(*Proxy);

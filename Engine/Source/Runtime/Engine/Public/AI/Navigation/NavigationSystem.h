@@ -35,6 +35,11 @@ struct ENGINE_API FWaypointLinkParams
 	float MaxDropHeight = 300.0f;
 	/** The longest link, cm. */
 	float MaxLinkDistance = 2000.0f;
+	/**
+	 * Two waypoints flagged `Ladder` this near across (a ladder's foot and its top) are linked both ways however high
+	 * the climb between them, cm.
+	 */
+	float MaxLadderLinkDistance = 200.0f;
 	/** The floor is probed along the walk every this many cm (a gap or a hole breaks the walk). */
 	float FloorProbeSpacing = 50.0f;
 	/** How far below a point its floor is looked for, cm. */
@@ -55,8 +60,9 @@ struct ENGINE_API FWaypointLinkParams
  *   floor.
  * - FindPathToLocationSynchronously (UE's name): the same as a UNavigationPath.
  * - AutoLinkWaypoints: links every pair of waypoints within MaxLinkDistance that an agent can walk between both ways
- *   (a step or a jump up and back down), and one way down a drop too high to climb; the map importer runs it, so
- *   the links are saved in the map.
+ *   (a step or a jump up and back down), and one way down a drop too high to climb; two waypoints flagged `Ladder`
+ *   within MaxLadderLinkDistance across (a ladder's foot and its top) both ways, however high the climb; the map
+ *   importer runs it, so the links are saved in the map.
  *
  * Not a UObject: the world owns it by value and the waypoints own nothing (a documented deviation: UE's navigation
  * data is an actor, ANavigationData).

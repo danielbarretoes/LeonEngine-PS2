@@ -32,6 +32,11 @@ class UPlayer;
  *
  * The defaults are UE's: ADefaultPawn (a flying pawn the input settings' axes move), APlayerController, AHUD (each
  * player gets one, InitializeHUDForPlayer), AGameStateBase and APlayerState.
+ *
+ * Pause (UE's): SetPause adds a pauser (its FCanUnpause) and makes the first one the world settings' pauser, which
+ * pauses the world (UWorld::IsPaused: its time, timers, physics and actors stand still; the players' input and HUDs
+ * go on); ClearPause removes the pausers that may unpause and, with none left, lets the world go on. Leon is single
+ * player, so a game may always pause (AllowPausing, UE's standalone game).
  */
 UCLASS()
 class ENGINE_API AGameModeBase : public AInfo
@@ -72,6 +77,19 @@ public:
 	/** The URL options the map was opened with (UE: OptionsString). */
 	UPROPERTY(Transient)
 	FString OptionsString;
+
+	/**
+	 * Pauses the game for PC (UE: SetPause): false when pausing is not allowed or the world has no world settings. The
+	 * first pauser owns the pause (AWorldSettings::GetPauserPlayerState); CanUnpauseDelegate says when it may be
+	 * cleared (unbound: whenever ClearPause is called).
+	 */
+	virtual bool SetPause(APlayerController* PC, FCanUnpause CanUnpauseDelegate = FCanUnpause());
+	/** Removes the pausers that may unpause; true when none is left and the game goes on (UE: ClearPause). */
+	virtual bool ClearPause();
+	/** Whether the game may be paused now (UE: AllowPausing: bPauseable or a standalone game; Leon's all are). */
+	[[nodiscard]] virtual bool AllowPausing(APlayerController* PC = nullptr);
+	/** Whether the game is paused (UE: IsPaused). */
+	[[nodiscard]] virtual bool IsPaused() const;
 
 	/** Spawns the game state before the components initialize (UE). */
 	void PreInitializeComponents() override;
@@ -221,4 +239,8 @@ protected:
 	/** The game state (UE: GameState). */
 	UPROPERTY(Transient)
 	AGameStateBase* GameState = nullptr;
+
+private:
+	/** The pausers, each with whether it may unpause (UE: Pausers). */
+	TArray<FCanUnpause> Pausers;
 };

@@ -125,6 +125,26 @@ namespace
 			return Settings.GetDisplayAspectRatio(TargetSize);
 		}
 
+		[[nodiscard]] FVector2D WindowToRenderTarget(
+			const FVector2D& WindowPosition, const FIntPoint& WindowSize) const override
+		{
+			// The inverse of Present: the frame scaled into the window's centre at the display's aspect.
+			int32 X = 0;
+			int32 Y = 0;
+			int32 Width = 0;
+			int32 Height = 0;
+			FGSOpenGLEmulator::GetPresentRect(WindowSize.X, WindowSize.Y,
+				Settings.GetDisplayAspectRatio(
+					FIntPoint(FGSOpenGLEmulator::FrameWidth, FGSOpenGLEmulator::FrameHeight)),
+				X, Y, Width, Height);
+			if (Width <= 0 || Height <= 0)
+			{
+				return WindowPosition;
+			}
+			return FVector2D((WindowPosition.X - float(X)) * float(FGSOpenGLEmulator::FrameWidth) / float(Width),
+				(WindowPosition.Y - float(Y)) * float(FGSOpenGLEmulator::FrameHeight) / float(Height));
+		}
+
 		void EndDrawingViewport(const FIntPoint& WindowSize) override
 		{
 			if (bInitialized)

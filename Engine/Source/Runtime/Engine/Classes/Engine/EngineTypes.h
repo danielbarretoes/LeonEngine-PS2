@@ -64,6 +64,19 @@ enum EMaterialShadingModel
 	MSM_DefaultLit,
 };
 
+/**
+ * How a texture is sampled outside its 0..1 coordinates (UE: TextureAddress, TA_Wrap and TA_Clamp; the GS's CLAMP
+ * register has no mirror, so neither has Leon).
+ */
+UENUM()
+enum class ETextureAddress : uint8
+{
+	/** The texture repeats. */
+	Wrap,
+	/** The edge texels go on: a face of a cube map, where the next face takes over. */
+	Clamp,
+};
+
 /** What a material is used for (UE: EMaterialDomain). Leon's materials are all surface materials. */
 UENUM()
 enum EMaterialDomain

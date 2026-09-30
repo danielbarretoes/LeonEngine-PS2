@@ -11,6 +11,7 @@
 #include "GS/GSSceneRenderer.h"
 #include "GSCommandList.h"
 #include "GSConformanceScenes.h"
+#include "GSDebugDraw.h"
 #include "GSEmulator/GSOpenGLEmulator.h"
 #include "GSEmulator/PS2TexturePreview.h"
 #include "GSReferenceRasterizer.h"
@@ -23,6 +24,7 @@
 #include "Misc/Paths.h"
 #include "Primitives.h"
 #include "SceneView.h"
+#include "Tests/CanvasTestScene.h"
 #include "Tests/ScopedTestWorld.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -278,6 +280,100 @@ bool FGSEmulatorSceneFrameTest::RunTest(const FString& Parameters)
 	const int32 NumDifferent = CountDifferentPixels(
 		TEXT("Scene frame"), Emulated, Expected, FGSOpenGLEmulator::FrameWidth, SceneChannelTolerance);
 	TestTrue("The scene frame within the tolerance", NumDifferent <= SceneMaxDifferentPixels);
+	Emulator.Shutdown();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSEmulatorCanvasFrameTest, "System.Renderer.GSEmulator.CanvasFrame",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::NonNullRHI | EAutomationTestFlags::SmokeFilter)
+
+bool FGSEmulatorCanvasFrameTest::RunTest(const FString& Parameters)
+{
+	// The canvas's text (the four fonts, Spanish, a shadow, an outline) and textured tiles (one to one, scaled,
+	// rotated) in the desktop's environment: the emulator draws what the reference draws from the same list.
+	FScopedGLContext Context;
+	if (!Context.IsValid())
+	{
+		AddError("No OpenGL context (a display is needed; run LeonAutomationTests with -nodisplay to skip this test)");
+		return false;
+	}
+	FGSOpenGLEmulator Emulator;
+	if (!TestTrue("The emulator starts", Emulator.Initialize(FPaths::Combine(FPaths::EngineDir(), TEXT("Shaders")))))
+	{
+		return false;
+	}
+	UTexture2D* Texture = CanvasTestScene::MakeTexture();
+	FCanvas Canvas(FGSOpenGLEmulator::FrameWidth, FGSOpenGLEmulator::FrameHeight);
+	CanvasTestScene::Draw(Canvas, Texture);
+	const FGSDrawEnvironment Environment = FGSOpenGLEmulator::GetDrawEnvironment();
+	uint32 ArenaFirstBlock = 0;
+	uint32 ArenaBlocks = 0;
+	FGSOpenGLEmulator::GetTextureArena(ArenaFirstBlock, ArenaBlocks);
+	FGSSceneRenderer Renderer;
+	Renderer.GetTextureCache().SetArena(ArenaFirstBlock, ArenaBlocks);
+	Renderer.GetTextureCache().SetTextureConverter(&ConvertTextureAsPS2Cook);
+	Renderer.GetTextureCache().BeginFrame();
+	FGSCommandList List;
+	Environment.Append(List);
+	Renderer.DrawCanvas(Canvas, Environment, List);
+
+	Emulator.Execute(List);
+	const TArray<FColor> Emulated = Emulator.ReadFrame(FGSOpenGLEmulator::FrameWidth, FGSOpenGLEmulator::FrameHeight);
+	FGSReferenceRasterizer Reference;
+	Reference.Execute(List);
+	const TArray<FColor> Expected =
+		Reference.ReadFrame(Environment.Frame, FGSOpenGLEmulator::FrameWidth, FGSOpenGLEmulator::FrameHeight);
+	const int32 NumDifferent = CountDifferentPixels(
+		TEXT("Canvas frame"), Emulated, Expected, FGSOpenGLEmulator::FrameWidth, SceneChannelTolerance);
+	TestTrue("The canvas frame within the tolerance", NumDifferent <= SceneMaxDifferentPixels);
+	Emulator.Shutdown();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSEmulatorDebugTextTest, "System.Renderer.GSEmulator.DebugText",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::NonNullRHI | EAutomationTestFlags::SmokeFilter)
+
+bool FGSEmulatorDebugTextTest::RunTest(const FString& Parameters)
+{
+	// FGSDebugDraw's text as the PS2's error screen records it (Docs/PLANS/ps2-polish.md P5b): the compiled-in font
+	// uploaded to the texture arena, both sizes over a flat backdrop, on the desktop's 16-bit dithered frame (the error
+	// screen's): the emulator draws what the reference draws from the same list.
+	FScopedGLContext Context;
+	if (!Context.IsValid())
+	{
+		AddError("No OpenGL context (a display is needed; run LeonAutomationTests with -nodisplay to skip this test)");
+		return false;
+	}
+	FGSOpenGLEmulator Emulator;
+	if (!TestTrue("The emulator starts", Emulator.Initialize(FPaths::Combine(FPaths::EngineDir(), TEXT("Shaders")))))
+	{
+		return false;
+	}
+	const FGSDrawEnvironment Environment = FGSOpenGLEmulator::GetDrawEnvironment();
+	uint32 FontBlock = 0;
+	uint32 ArenaBlocks = 0;
+	FGSOpenGLEmulator::GetTextureArena(FontBlock, ArenaBlocks);
+	FGSCommandList List;
+	Environment.Append(List);
+	FGSDebugDraw::UploadFont(List, FontBlock);
+	FGSDebugDraw::DrawRect(List, Environment, 0.0f, 0.0f, float(FGSOpenGLEmulator::FrameWidth),
+		float(FGSOpenGLEmulator::FrameHeight), FGSDebugDraw::UnitColor(0.25f, 0.02f, 0.02f));
+	FGSDebugDraw::DrawString(List, Environment, FontBlock, 24.0f, 24.0f, "The game stopped (exit code 1)",
+		FGSDebugDraw::UnitColor(1.0f, 0.9f, 0.6f));
+	FGSDebugDraw::DrawString(List, Environment, FontBlock, 24.0f, 52.0f,
+		"LogPakFile: Error: cannot open 'host:ShooterGame/Content/Paks/ShooterGame-PS2.lpak' (A\xc3\xb1o, "
+		"\xc2\xbfQu\xc3\xa9?)",
+		FGSDebugDraw::UnitColor(1.0f, 0.75f, 0.75f), EGSDebugFont::Tiny);
+
+	Emulator.Execute(List);
+	const TArray<FColor> Emulated = Emulator.ReadFrame(FGSOpenGLEmulator::FrameWidth, FGSOpenGLEmulator::FrameHeight);
+	FGSReferenceRasterizer Reference;
+	Reference.Execute(List);
+	const TArray<FColor> Expected =
+		Reference.ReadFrame(Environment.Frame, FGSOpenGLEmulator::FrameWidth, FGSOpenGLEmulator::FrameHeight);
+	const int32 NumDifferent = CountDifferentPixels(
+		TEXT("Debug text frame"), Emulated, Expected, FGSOpenGLEmulator::FrameWidth, SceneChannelTolerance);
+	TestTrue("The debug text within the tolerance", NumDifferent <= SceneMaxDifferentPixels);
 	Emulator.Shutdown();
 	return true;
 }

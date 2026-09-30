@@ -28,7 +28,8 @@ namespace EPathFollowingStatus
  * MoveTo* follows a path of the navigation (SetNavigationSystem's, else the world's waypoint graph) when it has
  * navigation data, else a straight line on XY (PathFollowing-lite): the path's points one by one, a jump onto a point
  * above a step or flagged `Jump`, a crouch along the links of a point flagged `Crouch`, and a new path when the pawn
- * has not moved for a while (stuck).
+ * has not moved for a while (stuck). A point flagged `Ladder` above the pawn is no jump: it is climbed (the pawn's
+ * movement climbs, the game turns it to the ladder), and the climb counts as moving.
  */
 UCLASS()
 class AIMODULE_API AAIController : public AController
@@ -90,6 +91,8 @@ public:
 	{
 		return Path;
 	}
+	/** The path point steered to now, else the goal (UE: UPathFollowingComponent::GetCurrentTargetLocation). */
+	[[nodiscard]] FVector GetCurrentTargetLocation() const;
 	/** The path crouched the pawn (a `Crouch` waypoint); it stands up again past it. */
 	[[nodiscard]] bool IsCrouchedForPath() const
 	{
@@ -131,7 +134,7 @@ private:
 	/** Not a UObject (UNavigationSystem lite): the caller keeps it alive. */
 	UNavigationSystem* Navigation = nullptr;
 	TArray<FVector> Path;
-	/** Per path point: its waypoint's `Jump` and `Crouch` flags (EPathPointFlags in AIController.cpp). */
+	/** Per path point: its waypoint's `Jump`, `Crouch` and `Ladder` flags (EPathPointFlags in AIController.cpp). */
 	TArray<uint8> PathPointFlags;
 	int32 PathIndex = 0;
 	float PathRebuildCooldown = 0.0f;
