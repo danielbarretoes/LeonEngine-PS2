@@ -14,7 +14,36 @@ ShooterGame runs at 30 fps in PCSX2 (Budgets.md, the row "0.25.0"), so nothing h
   `AWorldSettings` and renderer changes, and it leaves open whether LeonCook should link Renderer and GSReference or
   the overview should be a separate tool.
 
+- **Death and spectator camera.** On death the view does not jump straight to a teammate: for about 3 seconds a
+  third-person camera orbits the player's body (CS's death cam), then it moves to a live teammate. Spectating a
+  teammate is not first person only: a button toggles between their first-person view and a third-person orbit camera
+  around them (CS's in-eye and chase modes), and another cycles the teammate.
+
 ShooterGame stays single player against bots: no split screen (decided 2026-09-30).
+
+## Engine
+
+Proposed 2026-10-01, in priority order after the minimap; some expand items of the sections below.
+- **The engine knows nothing of the game.** The one leak: `MemoryCardSaveGameSystem.cpp` draws the memory card icon with
+  ShooterGame's green crosshair. The icon should be a project setting or asset (the project's save icon), not engine
+  code. The other mentions of ShooterGame in `Engine/Source` are comments and tests.
+- **Compound collision** (several `UCX_` boxes per mesh), so de_leon's pieces can be merged per cell and material:
+  fewer draws.
+- **LODs for baked meshes**: bake the vertex lighting per LOD, so LODs work on baked maps (today a baked mesh always
+  draws LOD 0).
+- **Per-bone hitboxes** instead of capsule height bands, closer to CS.
+- **Disc streaming** with fileXio or `sceCdRead`, and music streaming with an IOP module; it also cuts the 2.9 s load.
+- **UObject arenas** and write barriers for the incremental GC.
+- **Four point lights per draw** on VU1, with a new VU1 memory layout.
+- **Movable lights on the static world** and light probes for pawns.
+- **An editor.** The foundation is there (reflection with LeonHeaderTool, versioned packages, LeonEd's factories and
+  commandlets, Slate/UMG and the OpenGL RHI); missing are an editor application (viewport, outliner, a details panel
+  generated from `UPROPERTY`, gizmos, selection), undo/redo transactions (`FTransaction`), saving an edited map to a
+  package (maps come from glTF made by Blender scripts today), asset hot reload, and edit metadata (`EditAnywhere`,
+  `Category`, `ClampMin`) read by LeonHeaderTool. The cheapest start: Dear ImGui over the OpenGL RHI with panels
+  generated from reflection, placing actors in a map and saving it.
+- **A navmesh** instead of hand-placed waypoints, once there is more than one map.
+- **A second map**, to prove the art pipeline does not depend on de_leon.
 
 ## Render
 
@@ -60,6 +89,7 @@ Confirmed by playing (2026-09-30):
 - matches progress, and the bots fight well (the two AI bugs this play found, the knife at range and the bots with no
   enemy in sight, are fixed in [ps2-polish](PLANS/ps2-polish.md) P3 and wait for another play);
 - the game holds 30 fps to the eye.
+- overall, the game plays well and is enjoyable (2026-10-01).
 
 Still to check:
 - Playing from the main menu in PCSX2 with the pad: the menus, the team choice, the pause (ps2-polish P9), the new HUD
