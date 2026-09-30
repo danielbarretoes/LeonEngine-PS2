@@ -51,13 +51,39 @@ Estado: hecha.
 - PCSX2 (`MeasurePS2`, fila «ps2-polish P1» en Budgets.md): 29,95 fps, p50/p95/p99 33,5 ms; la escena 8,53 ms (8,42
   en 0.24.0).
 
-**P2 · Precisión al agacharse, andar y estar quieto (S)**
+**P2 · Precisión al agacharse, andar y estar quieto (S) — hecha**
 - Causa: `CrouchingSpreadMod` = 0,8 para todas las armas y nadie lo ajusta (`ShooterWeapon_Instant.h:97`); andar no
   tiene término propio (`GetCurrentSpread`, `ShooterWeapon_Instant.cpp:156`).
 - Arreglo con los factores de CS 1.6 por arma (agachado ≈ 0,5–0,65 del de pie según el arma, andar entre quieto y
   correr, salto penalizado), valores en los constructores de cada arma; la mira dinámica
   (`AShooterHUD::GetCrosshairGap`) ya lee el spread, se comprueba que se cierra al agacharse.
 - Tests: tabla de spread por estado y arma; la mira mide menos agachado que de pie y que corriendo.
+
+Estado: hecha.
+- Causa confirmada: todas las armas tenían `CrouchingSpreadMod` = 0,8 y andar no tenía término; la mira se abría con el
+  spread pero sus 4 px de hueco no cambiaban, así que agachado se cerraba menos de medio píxel.
+- `GetCurrentSpread`: el término de movimiento sube con la velocidad hasta `WalkingSpread` en `WalkingSpeed` (los
+  140 u/s de CS, 356 cm/s; la tecla de andar siempre queda por debajo) y de ahí a `MovingSpread` a la carrera del arma
+  (`MaxWalkSpeed` × `GetSpeedModifier`), en `GetMovementSpread`; el aire suma `JumpingSpread`; agachado multiplica
+  todo por `CrouchingSpreadMod`. Cada arma fija `WalkingSpread` y `CrouchingSpreadMod` en su constructor (AK 0,5,
+  AWP 0,5, M4A1 0,55, MP5 0,6, pistolas 0,65), con la rama de su `PrimaryAttack` de CS en un comentario.
+- Mira: `GetCrosshairGap(ViewHeight)` (se puede probar sin canvas); agachado en el suelo su hueco propio se multiplica
+  también por `CrouchingSpreadMod` (el `ACCURACY_DUCK` de CS). AK en 448 líneas: 2,9 px agachado, 5,8 quieto, 10,9
+  andando, 29,2 corriendo, 71,8 en el aire.
+- Tests: `ShooterGame.Weapons.SpreadByState` (tabla por arma y estado y su orden), `ShooterGame.HUD.DynamicCrosshair`;
+  `SpreadModel` pasa a comprobar el término de movimiento (104 tests de ShooterGame).
+- BotMatch 10 7 cambia, idéntico dos veces: `Botmatch OK: 10 round(s), CT 4 - T 6, 59 kill(s), seed 7, sides switched
+  after round 5` (antes 9 rondas, CT 3 - T 6, 55 bajas).
+
+Desviaciones:
+- En CS 1.6 solo las pistolas y el AWP tienen rama `ducking` en el spread (Glock 0,75, USP 0,8, Deagle 0,88 del de pie;
+  AWP 0); en los rifles agacharse solo baja el retroceso (`KickBack`). Se sigue el plan (0,5–0,65 en todas) y el
+  retroceso agachado queda sin tocar.
+- CS no penaliza andar por debajo de 140 u/s con los rifles; aquí andar queda entre quieto y correr en todas las armas,
+  como pide el plan.
+- La mira no se limita a leer el spread: agachada también cierra su hueco fijo, porque con el spread solo el cambio
+  quedaba en un píxel.
+- El AWP sin mira suma `UnscopedSpread` después de todo (como el +0,08 de CS), así que agachado sin mira apenas mejora.
 
 **P3 · IA de bots: cuchillo, sin rumbo, recoger armas, escaleras, balance (M)**
 - Cuchillo: `TaskEngage` (`ShooterAIController.cpp:581`) llama `StandStill()` y solo hace strafe. Con arma cuerpo a

@@ -22,6 +22,21 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   `Config.InputAndChannels` updated (102 ShooterGame tests). The bot match is unchanged
   (`Botmatch OK: 9 round(s), CT 3 - T 6, 55 kill(s), seed 7, sides switched after round 5`).
 
+### Changed
+
+- ShooterGame's accuracy follows CS 1.6's cases for crouched, still, walking, running and in the air
+  ([ps2-polish](Docs/PLANS/ps2-polish.md) P2). Every hitscan weapon had the same `CrouchingSpreadMod` (0.8), and
+  walking had no term of its own. Now the movement's term grows with the speed to `WalkingSpread` at `WalkingSpeed`
+  (CS's 140 units a second, 356 cm/s, above the walk key's speed) and on to `MovingSpread` at the weapon's running
+  speed (`AShooterWeapon_Instant::GetMovementSpread`). Each weapon sets `WalkingSpread` and `CrouchingSpreadMod` in its
+  constructor: crouched is 0.5 (AK-47, AWP) to 0.65 (the pistols) of standing. The HUD's gap takes the view's height
+  (`AShooterHUD::GetCrosshairGap(ViewHeight)`), and crouched its own gap closes by the same factor (CS's
+  `ACCURACY_DUCK`): the AK-47's crosshair on 448 lines is 2.9 px crouched, 5.8 still, 10.9 walking, 29.2 running.
+  Tests: `ShooterGame.Weapons.SpreadByState` (the table per weapon and state, and their order),
+  `ShooterGame.HUD.DynamicCrosshair`; `ShooterGame.Weapons.SpreadModel` checks the movement's term (104 ShooterGame
+  tests). The bots crouch to fire at range, so the bot match changes:
+  `Botmatch OK: 10 round(s), CT 4 - T 6, 59 kill(s), seed 7, sides switched after round 5`.
+
 ### Fixed
 
 - Characters no longer vanish at some view angles and leave their weapons floating

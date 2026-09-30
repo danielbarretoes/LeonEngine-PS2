@@ -872,7 +872,7 @@ void AShooterHUD::DrawHitMarker()
 	const float CenterX = static_cast<float>(Canvas->GetSizeX()) * 0.5f;
 	const float CenterY = static_cast<float>(Canvas->GetSizeY()) * 0.5f;
 	const FLinearColor Color = Controller->WasLastHitKill() ? FLinearColor(1.0f, 0.15f, 0.1f) : FLinearColor::White;
-	const float Inner = GetCrosshairGap() + 3.0f;
+	const float Inner = GetCrosshairGap(static_cast<float>(Canvas->GetSizeY())) + 3.0f;
 	const float Outer = Inner + (Controller->WasLastHitHeadshot() ? 9.0f : 6.0f);
 	for (const float SignX : {-1.0f, 1.0f})
 	{
@@ -904,27 +904,31 @@ bool AShooterHUD::DrawScope()
 	return true;
 }
 
-float AShooterHUD::GetCrosshairGap() const
+float AShooterHUD::GetCrosshairGap(float ViewHeight) const
 {
 	const AShooterCharacter* Pawn = GetViewedPawn();
 	const AShooterWeapon_Instant* Weapon = Pawn != nullptr ? Cast<AShooterWeapon_Instant>(Pawn->GetWeapon()) : nullptr;
-	if (Weapon == nullptr || Canvas == nullptr)
+	if (Weapon == nullptr || ViewHeight <= 0.0f)
 	{
 		return CrosshairGap;
 	}
-	// The spread's half angle on the screen: the view's vertical field of view spans the canvas's height.
+	// The spread's half angle on the screen: the view's vertical field of view spans its height.
 	const float FieldOfView = FMath::Max(1.0f, Pawn->GetFirstPersonCameraComponent()->FieldOfView());
-	const float HalfHeight = static_cast<float>(Canvas->GetSizeY()) * 0.5f;
+	const float HalfHeight = ViewHeight * 0.5f;
 	const float SpreadPixels = HalfHeight * FMath::Tan(FMath::DegreesToRadians(Weapon->GetCurrentSpread())) /
 		FMath::Tan(FMath::DegreesToRadians(FieldOfView * 0.5f));
-	return CrosshairGap + (SpreadPixels * CrosshairSpreadScale);
+	// CS's ACCURACY_DUCK: crouched on the floor, the crosshair's own gap closes with the weapon's crouched spread too,
+	// so it visibly tightens even where the spread is a pixel or two.
+	const float BaseGap =
+		Pawn->bIsCrouched && Pawn->IsMovingOnGround() ? CrosshairGap * Weapon->CrouchingSpreadMod : CrosshairGap;
+	return BaseGap + (SpreadPixels * CrosshairSpreadScale);
 }
 
 void AShooterHUD::DrawCrosshair()
 {
 	const float CenterX = static_cast<float>(Canvas->GetSizeX()) * 0.5f;
 	const float CenterY = static_cast<float>(Canvas->GetSizeY()) * 0.5f;
-	const float Inner = GetCrosshairGap();
+	const float Inner = GetCrosshairGap(static_cast<float>(Canvas->GetSizeY()));
 	const float Outer = Inner + CrosshairLength;
 	Canvas->DrawLine(CenterX - Outer, CenterY, CenterX - Inner, CenterY, CrosshairColor, CrosshairThickness);
 	Canvas->DrawLine(CenterX + Inner, CenterY, CenterX + Outer, CenterY, CrosshairColor, CrosshairThickness);

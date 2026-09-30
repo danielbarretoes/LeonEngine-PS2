@@ -228,8 +228,11 @@ public:
 	[[nodiscard]] AShooterCharacter* GetViewedPawn() const;
 	/** The world's game state, as the game's class, or null. */
 	[[nodiscard]] AShooterGameState* GetShooterGameState() const;
-	/** The crosshair's gap now: CrosshairGap plus the drawn weapon's spread on screen, pixels. */
-	[[nodiscard]] float GetCrosshairGap() const;
+	/**
+	 * The crosshair's gap now on a view ViewHeight pixels high: CrosshairGap plus the drawn weapon's spread on screen,
+	 * pixels (CS's dynamic crosshair: tighter crouched, wider moving and in the air).
+	 */
+	[[nodiscard]] float GetCrosshairGap(float ViewHeight) const;
 	/** The owner as the game's controller. */
 	[[nodiscard]] AShooterPlayerController* GetShooterPlayerController() const;
 

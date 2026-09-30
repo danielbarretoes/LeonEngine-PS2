@@ -976,7 +976,7 @@ bool FShooterGameHUDRoundInfoTest::RunTest(const FString& Parameters)
 	TArray<FCanvasPrimitiveRun> Runs;
 	Canvas.GetPrimitives(Vertices, Runs);
 	TestTrue("The round's text too", Vertices.Num() > 4 * 2);
-	TestEqual("No pawn: the base gap", HUD->GetCrosshairGap(), HUD->CrosshairGap);
+	TestEqual("No pawn: the base gap", HUD->GetCrosshairGap(720.0f), HUD->CrosshairGap);
 	return true;
 }
 

@@ -13,9 +13,6 @@ PCSX2 (p50/p95/p99 33.5 ms), so nothing here blocks the frame rate.
 - **Bots idle when they see no enemy.** Bots fight well once they see an enemy, but without one in sight they don't
   hunt: they should push to the objective, check the corners and the sites, follow sounds and radio reports, and
   rotate, as CS bots do.
-- **Crouching doesn't tighten the crosshair or the spread.** In CS, crouching improves accuracy (a smaller spread and
-  a tighter dynamic crosshair); standing still is better than walking, and walking better than running. Today crouching
-  changes neither.
 
 ## Next features
 

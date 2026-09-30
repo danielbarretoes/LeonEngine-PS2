@@ -158,10 +158,9 @@ float AShooterWeapon_Instant::GetCurrentSpread() const
 	float Spread = WeaponSpread + CurrentFiringSpread;
 	if (MyPawn != nullptr)
 	{
+		// The running speed with this weapon in hand (UShooterCharacterMovement::GetMaxSpeed without the walk key).
 		const UCharacterMovementComponent& Movement = MyPawn->GetCharacterMovement();
-		const float RunSpeed = FMath::Max(1.0f, Movement.MaxWalkSpeed);
-		const float SpeedFraction = FMath::Clamp(Movement.Velocity.Size2D() / RunSpeed, 0.0f, 1.0f);
-		Spread += MovingSpread * SpeedFraction;
+		Spread += GetMovementSpread(Movement.Velocity.Size2D(), Movement.MaxWalkSpeed * GetSpeedModifier());
 		// Off the floor: in the air or on a ladder (CS: not FL_ONGROUND).
 		if (!MyPawn->IsMovingOnGround())
 		{
@@ -181,6 +180,17 @@ float AShooterWeapon_Instant::GetCurrentSpread() const
 		Spread *= BurstSpreadScale;
 	}
 	return Spread;
+}
+
+float AShooterWeapon_Instant::GetMovementSpread(float Speed, float RunSpeed) const
+{
+	const float Walk = FMath::Max(1.0f, WalkingSpeed);
+	if (Speed <= Walk)
+	{
+		return WalkingSpread * FMath::Max(0.0f, Speed) / Walk;
+	}
+	const float Run = FMath::Max(Walk + 1.0f, RunSpeed);
+	return FMath::Lerp(WalkingSpread, MovingSpread, FMath::Min(1.0f, (Speed - Walk) / (Run - Walk)));
 }
 
 float AShooterWeapon_Instant::GetTimeBetweenShots() const
@@ -493,9 +503,12 @@ AShooterWeapon_Glock::AShooterWeapon_Glock(const FObjectInitializer& ObjectIniti
 	PenetrationCount = 1;
 	PenetrationPower = 53.34f;
 	PenetrationDistance = 2032.0f;
+	// CS's GLOCK18PrimaryAttack: the air, moving, ducking (three quarters of standing), still.
 	WeaponSpread = 0.45f;
+	WalkingSpread = 1.0f;
 	MovingSpread = 3.5f;
 	JumpingSpread = 7.0f;
+	CrouchingSpreadMod = 0.65f;
 	FiringSpreadIncrement = 0.5f;
 	RecoilPitch = 0.6f;
 	RecoilPitchRandom = 0.2f;
@@ -534,6 +547,12 @@ AShooterWeapon_USP::AShooterWeapon_USP(const FObjectInitializer& ObjectInitializ
 	SilencedHitDamage = 30.0f;
 	SilencedRangeModifier = 0.79f;
 	SilencedSpreadScale = 1.0f;
+	// CS's USPPrimaryAttack: the air, moving, ducking (0.08 against 0.1 standing), still.
+	WeaponSpread = 0.3f;
+	WalkingSpread = 1.0f;
+	MovingSpread = 3.0f;
+	JumpingSpread = 6.0f;
+	CrouchingSpreadMod = 0.65f;
 }
 
 AShooterWeapon_Deagle::AShooterWeapon_Deagle(const FObjectInitializer& ObjectInitializer)
@@ -556,9 +575,12 @@ AShooterWeapon_Deagle::AShooterWeapon_Deagle(const FObjectInitializer& ObjectIni
 	PenetrationCount = 2;
 	PenetrationPower = 76.2f;
 	PenetrationDistance = 2540.0f;
+	// CS's DEAGLEPrimaryAttack: the air, moving (twice standing), ducking (0.115 against 0.13), still.
 	WeaponSpread = 0.5f;
+	WalkingSpread = 1.2f;
 	MovingSpread = 4.0f;
 	JumpingSpread = 8.0f;
+	CrouchingSpreadMod = 0.65f;
 	FiringSpreadIncrement = 1.2f;
 	FiringSpreadMax = 5.0f;
 	FiringSpreadRecovery = 5.0f;
@@ -588,9 +610,12 @@ AShooterWeapon_MP5::AShooterWeapon_MP5(const FObjectInitializer& ObjectInitializ
 	PenetrationCount = 1;
 	PenetrationPower = 53.34f;
 	PenetrationDistance = 2032.0f;
+	// CS's MP5NPrimaryAttack: the air or not; the SMG barely minds moving.
 	WeaponSpread = 0.45f;
+	WalkingSpread = 0.5f;
 	MovingSpread = 1.5f;
 	JumpingSpread = 5.0f;
+	CrouchingSpreadMod = 0.6f;
 	FiringSpreadIncrement = 0.25f;
 	FiringSpreadMax = 3.5f;
 	RecoilPitch = 0.45f;
@@ -620,9 +645,13 @@ AShooterWeapon_AK47::AShooterWeapon_AK47(const FObjectInitializer& ObjectInitial
 	PenetrationCount = 2;
 	PenetrationPower = 99.06f;
 	PenetrationDistance = 12700.0f;
+	// CS's AK47PrimaryAttack: the air (0.04 + 0.4 x the accuracy), past 140 units a second (0.04 + 0.07 x), else
+	// 0.0275 x; crouched, the AK tightens most.
 	WeaponSpread = 0.35f;
+	WalkingSpread = 1.2f;
 	MovingSpread = 4.5f;
 	JumpingSpread = 8.0f;
+	CrouchingSpreadMod = 0.5f;
 	FiringSpreadIncrement = 0.45f;
 	FiringSpreadMax = 5.0f;
 	RecoilPitch = 1.0f;
@@ -652,9 +681,13 @@ AShooterWeapon_M4A1::AShooterWeapon_M4A1(const FObjectInitializer& ObjectInitial
 	PenetrationCount = 2;
 	PenetrationPower = 88.9f;
 	PenetrationDistance = 10160.0f;
+	// CS's M4A1PrimaryAttack: the air (0.035 + 0.4 x the accuracy), past 140 units a second (0.035 + 0.07 x), else
+	// 0.02 x.
 	WeaponSpread = 0.3f;
+	WalkingSpread = 0.9f;
 	MovingSpread = 3.5f;
 	JumpingSpread = 7.0f;
+	CrouchingSpreadMod = 0.55f;
 	FiringSpreadIncrement = 0.35f;
 	RecoilPitch = 0.8f;
 	RecoilPitchRandom = 0.25f;

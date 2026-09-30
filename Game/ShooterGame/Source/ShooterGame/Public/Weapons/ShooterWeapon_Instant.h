@@ -23,10 +23,14 @@
  *   GetSurfacePenetration), keeping the material's share of the damage; the range left halves. Beyond
  *   PenetrationDistance from the shooter nothing is pierced. The surface is the hit's physical material's
  *   (FHitResult::PhysMaterial: the hit mesh's material's, UMaterial::PhysMaterial; GetSurfaceType).
- * - Spread, a cone's half angle: WeaponSpread, plus MovingSpread times the owner's speed over its running speed, plus
- *   JumpingSpread off the floor (in the air, on a ladder), plus the firing spread (FiringSpreadIncrement a shot, up
- *   to FiringSpreadMax, recovering at FiringSpreadRecovery a second once the trigger is released); times
- *   CrouchingSpreadMod crouched.
+ * - Spread, a cone's half angle (CS's per-weapon cases in each *PrimaryAttack: in the air, running, walking, ducking,
+ *   still): WeaponSpread standing still; plus the movement's term, which grows with the owner's speed to WalkingSpread
+ *   at WalkingSpeed (CS's 140 units a second, the fastest a walk goes) and on to MovingSpread at the weapon's running
+ *   speed (GetMovementSpread); plus JumpingSpread off the floor (in the air, on a ladder); plus the firing spread
+ *   (FiringSpreadIncrement a shot, up to FiringSpreadMax, recovering at FiringSpreadRecovery a second once the trigger
+ *   is released); all of it times CrouchingSpreadMod crouched (0.5 to 0.65 of standing, by the weapon). So crouched
+ *   beats standing, still beats walking, walking beats running, and the air is worst; the HUD's crosshair
+ *   (AShooterHUD::GetCrosshairGap) follows the spread.
  * - Recoil: each shot kicks the owner's aim up by RecoilPitch +- RecoilPitchRandom and sideways by +- RecoilYawRandom;
  *   the kick comes back down at RecoilRecovery a second once the trigger is released.
  * - The spread's direction and the recoil come from an FRandomStream seeded with RandomSeed when the weapon spawns,
@@ -84,7 +88,15 @@ public:
 	UPROPERTY(Config)
 	float WeaponSpread = 0.3f;
 
-	/** Added at full running speed, in proportion below it, degrees. */
+	/** Added at WalkingSpeed, in proportion below it, degrees. */
+	UPROPERTY(Config)
+	float WalkingSpread = 1.0f;
+
+	/** The fastest a walk goes, cm/s (CS: 140 units a second); past it the owner runs. */
+	UPROPERTY(Config)
+	float WalkingSpeed = 355.6f;
+
+	/** Added at the weapon's full running speed, degrees; from WalkingSpread at WalkingSpeed, in proportion. */
 	UPROPERTY(Config)
 	float MovingSpread = 3.0f;
 
@@ -94,7 +106,7 @@ public:
 
 	/** The spread's multiplier crouched. */
 	UPROPERTY(Config)
-	float CrouchingSpreadMod = 0.8f;
+	float CrouchingSpreadMod = 0.6f;
 
 	/** Added by each shot, degrees (UE ShooterGame: FiringSpreadIncrement). */
 	UPROPERTY(Config)
@@ -222,6 +234,11 @@ public:
 
 	/** The spread now, degrees (the cone's half angle; see the class comment). */
 	[[nodiscard]] virtual float GetCurrentSpread() const;
+	/**
+	 * The movement's share of the spread at Speed cm/s, degrees: 0 still, WalkingSpread at WalkingSpeed, MovingSpread
+	 * at RunSpeed (the owner's running speed with this weapon), in proportion between them.
+	 */
+	[[nodiscard]] float GetMovementSpread(float Speed, float RunSpeed) const;
 	/** The accumulated firing spread, degrees. */
 	[[nodiscard]] float GetCurrentFiringSpread() const
 	{
