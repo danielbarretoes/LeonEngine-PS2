@@ -21,6 +21,7 @@
 #include "ShooterGame.h"
 #include "ShooterGameMode.h"
 #include "ShooterPlayerState.h"
+#include "UI/ShooterMainMenuWidget.h"
 #include "UObject/GarbageCollection.h"
 #include "UObject/Package.h"
 #include "UObject/StrongObjectPtr.h"
@@ -130,9 +131,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterMapDeLeonHoldsTheGameTest, "ShooterGame
 
 bool FShooterMapDeLeonHoldsTheGameTest::RunTest(const FString& Parameters)
 {
-	// The imported map is the game's default map and holds two bomb sites, the teams' buy zones and five starts a
-	// team, the waypoint graph with its links, a player clip, two ladders and the sun.
-	TestEqual("The default map", UGameMapsSettings::GetGameDefaultMap(), FString(DeLeon));
+	// The imported map is the main menu's (its map list) and holds two bomb sites, the teams' buy zones and five
+	// starts a team, the waypoint graph with its links, a player clip, two ladders and the sun.
+	TestTrue("The main menu's map", GetDefault<UShooterMainMenuWidget>()->MapNames.Contains(FString(DeLeon)));
 	TestEqual("The game mode", UGameMapsSettings::GetGlobalDefaultGameMode(),
 		FString(TEXT("/Script/ShooterGame.ShooterGameMode")));
 	UPackage* Package = LoadPackage(nullptr, DeLeon, LOAD_None);
@@ -232,16 +233,17 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterMapTenPawnsOnDeLeonTest, "ShooterGame.M
 
 bool FShooterMapTenPawnsOnDeLeonTest::RunTest(const FString& Parameters)
 {
-	// A headless engine opens the default map as the game does: the player joins CT at a CT start, bot_add_ct 4 and
-	// bot_add_t 5 fill both teams, and after a second of play the ten pawns stand on ten different starts of their
-	// teams (the G6 smoke, in a test). The surfaces are de_leon's physical materials (N30f): everybody walks on the
-	// floor slabs (N29), the T spawn's sand (dirt) and the CT spawn's paving (tile); a crate is wood and a wall
-	// concrete to a bullet.
+	// A headless engine opens de_leon with the player's team (`?team=CT`, the team menu's choice): the player joins CT
+	// at a CT start, the nine bots join around it (4 CT, 5 T: AShooterGameMode::RebalanceBots), and after a second of
+	// play the ten pawns stand on ten different starts of their teams (the G6 smoke, in a test). The surfaces are
+	// de_leon's physical materials (N30f): everybody walks on the floor slabs (N29), the T spawn's sand (dirt) and the
+	// CT spawn's paving (tile); a crate is wood and a wall concrete to a bullet.
 	TStrongObjectPtr<UGameEngine> Engine(NewObject<UGameEngine>());
 	Engine->Init(nullptr);
 	FWorldContext& Context = *Engine->GameInstance->GetWorldContext();
 	FString Error;
-	if (!TestEqual("Browse", static_cast<int32>(Engine->Browse(Context, FURL(nullptr, DeLeon, TRAVEL_Absolute), Error)),
+	const FString URL = FString(DeLeon) + TEXT("?team=CT");
+	if (!TestEqual("Browse", static_cast<int32>(Engine->Browse(Context, FURL(nullptr, *URL, TRAVEL_Absolute), Error)),
 			static_cast<int32>(EBrowseReturnVal::Success)))
 	{
 		AddError(Error);
@@ -261,8 +263,6 @@ bool FShooterMapTenPawnsOnDeLeonTest::RunTest(const FString& Parameters)
 	const AShooterPlayerState* PlayerState = Controller->GetPlayerState<AShooterPlayerState>();
 	TestTrue("The player is CT", PlayerState != nullptr && PlayerState->GetTeam() == EShooterTeam::CT);
 
-	TestEqual("Four CT bots", GameMode->AddBots(EShooterTeam::CT, 4), 4);
-	TestEqual("Five T bots", GameMode->AddBots(EShooterTeam::T, 5), 5);
 	for (int32 Frame = 0; Frame < 60; ++Frame)
 	{
 		Engine->Tick(1.0f / 60.0f, false);

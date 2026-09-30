@@ -8,6 +8,7 @@
 #include "Templates/SubclassOf.h"
 
 class AController;
+class APlayerController;
 class USaveGame;
 class APointLight;
 class FDebugDraw;
@@ -110,6 +111,27 @@ public:
 	[[nodiscard]] static bool HasOption(const FString& Options, const FString& Key);
 	/** Key's value as an integer, DefaultValue when absent (UE: GetIntOption). */
 	[[nodiscard]] static int32 GetIntOption(const FString& Options, const FString& Key, int32 DefaultValue);
+
+	/**
+	 * Travels to another map (UE: OpenLevel): `LevelName?Options` (Options without the leading '?', e.g.
+	 * `team=CT?bots=9`) goes to UEngine::SetClientTravel, so the map changes at the start of the next frame, never
+	 * inside the world's tick. bAbsolute drops the current URL's options (TRAVEL_Absolute); else they carry over
+	 * (TRAVEL_Relative). A map that does not exist is warned about here, and the travel then fails and leaves the
+	 * world.
+	 */
+	static void OpenLevel(
+		const UObject* WorldContextObject, FName LevelName, bool bAbsolute = true, FString Options = FString());
+
+	/** The world's player controller at PlayerIndex, in the level's order (UE: GetPlayerController); null for none. */
+	[[nodiscard]] static APlayerController* GetPlayerController(const UObject* WorldContextObject, int32 PlayerIndex);
+
+	/**
+	 * Pauses the game or lets it go on (UE: SetGamePaused): the first player controller's SetPause. True when the
+	 * state changed.
+	 */
+	static bool SetGamePaused(const UObject* WorldContextObject, bool bPaused);
+	/** The world is paused (UE: IsGamePaused). */
+	[[nodiscard]] static bool IsGamePaused(const UObject* WorldContextObject);
 
 	/**
 	 * Plays a sound wave once, not spatialized, on the engine's audio device (UE: PlaySound2D; silent headless). A

@@ -69,7 +69,6 @@ namespace
 		SpawnZone(FVector(1500.0f, 0.0f, 150.0f), FVector(600.0f, 1000.0f, 300.0f), TEXT("BuyZone"), TEXT("T"));
 		SpawnZone(FVector(0.0f, 0.0f, 150.0f), FVector(600.0f, 600.0f, 300.0f), TEXT("BombSite"), TEXT("A"));
 		AShooterGameMode* GameMode = Cast<AShooterGameMode>(World.SetGameMode(AShooterGameMode::StaticClass()));
-		GameMode->bFillTeamsWithBots = false;
 		GameMode->FreezeTime = 0.5f;
 		GameMode->RoundTime = 60.0f;
 		GameMode->RoundRestartDelay = 0.5f;
@@ -518,7 +517,6 @@ bool FShooterGameBotsRecoilKicksTheAimTest::RunTest(const FString& Parameters)
 		Bot->AimError = 0.0f;
 		Bot->MinAimError = 0.0f;
 		Bot->BurstShots = 10;
-		Bot->Difficulty = 1.0f;
 		Bot->RecoilCompensation = Compensation;
 		TickUntilLive(World, *GameMode);
 		Freeze(*T);

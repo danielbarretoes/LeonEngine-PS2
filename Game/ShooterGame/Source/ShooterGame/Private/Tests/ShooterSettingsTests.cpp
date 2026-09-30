@@ -14,8 +14,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterSettingsRoundTripTest, "ShooterGame.Set
 
 bool FShooterSettingsRoundTripTest::RunTest(const FString& Parameters)
 {
-	// The player's options (ps2-shipping N24) go to the "Settings" slot and come back; without a save they are the
-	// defaults. The slot is a folder of the test's here (Saved/SaveGames/ in the game, the memory card on the PS2).
+	// The player's options (ps2-shipping N24) and the main menu's last match (ps2-polish P9) go to the "Settings" slot
+	// and come back; without a save they are the defaults (a best of 5 against nine Normal bots). The slot is a folder
+	// of the test's here (Saved/SaveGames/ in the game, the memory card on the PS2).
 	FGenericSaveGameSystem Files;
 	const FString Dir = FPaths::ProjectIntermediateDir() + TEXT("Tests/ShooterSettings/");
 	IFileManager::Get().DeleteDirectory(*Dir, false, true);
@@ -31,6 +32,16 @@ bool FShooterSettingsRoundTripTest::RunTest(const FString& Parameters)
 	Defaults->SoundVolume = 0.3f;
 	Defaults->CrosshairColor = FLinearColor(1.0f, 0.0f, 1.0f);
 	Defaults->bToggleCrouch = false;
+	const FShooterMatchSettings DefaultMatch = Defaults->GetMatchSettings();
+	TestTrue("The default match",
+		DefaultMatch.RoundsToWin == 3 && DefaultMatch.NumBots == 9 &&
+			DefaultMatch.BotDifficulty == EShooterBotDifficulty::Normal && DefaultMatch.MapName.IsEmpty());
+	FShooterMatchSettings Match;
+	Match.MapName = TEXT("/Game/Maps/de_leon");
+	Match.BotDifficulty = EShooterBotDifficulty::Expert;
+	Match.RoundsToWin = 16;
+	Match.NumBots = 5;
+	Defaults->SetMatchSettings(Match);
 	TestTrue("Saved", Defaults->SaveToSlot(0));
 	TestTrue("In the Settings slot", IFileManager::Get().FileExists(*(Dir + TEXT("Settings.sav"))));
 	TStrongObjectPtr<UShooterPersistentUser> Loaded(UShooterPersistentUser::LoadPersistentUser(0));
@@ -39,6 +50,11 @@ bool FShooterSettingsRoundTripTest::RunTest(const FString& Parameters)
 	TestTrue("The volume", Loaded.IsValid() && Loaded->SoundVolume == 0.3f);
 	TestTrue("The crosshair", Loaded.IsValid() && Loaded->CrosshairColor.Equals(FLinearColor(1.0f, 0.0f, 1.0f)));
 	TestTrue("Crouch held", Loaded.IsValid() && !Loaded->bToggleCrouch);
+	const FShooterMatchSettings LoadedMatch = Loaded.IsValid() ? Loaded->GetMatchSettings() : FShooterMatchSettings();
+	TestEqual("The map", LoadedMatch.MapName, Match.MapName);
+	TestTrue("Expert", LoadedMatch.BotDifficulty == EShooterBotDifficulty::Expert);
+	TestEqual("The first to 16", LoadedMatch.RoundsToWin, 16);
+	TestEqual("Five bots", LoadedMatch.NumBots, 5);
 
 	IPlatformFeaturesModule::Get().SetSaveGameSystemOverride(nullptr);
 	IFileManager::Get().DeleteDirectory(*Dir, false, true);

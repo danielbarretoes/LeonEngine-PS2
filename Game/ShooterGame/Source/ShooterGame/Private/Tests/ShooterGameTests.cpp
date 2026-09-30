@@ -266,8 +266,19 @@ bool FShooterGameConfigTest::RunTest(const FString& Parameters)
 		Crouch.Num() == 2 && Crouch[0].Key == EKeys::LeftControl && Crouch[1].Key == EKeys::Gamepad_FaceButton_Right);
 	TArray<FInputActionKeyMapping> Bomb;
 	Settings->GetActionMappingByName(TEXT("Bomb"), Bomb);
-	TestTrue("The bomb (CS's slot 5): 5, the D-pad's down",
-		Bomb.Num() == 2 && Bomb[0].Key == EKeys::Five && Bomb[1].Key == EKeys::Gamepad_DPad_Down);
+	TestTrue("The bomb (CS's slot 5): 5", Bomb.Num() == 1 && Bomb[0].Key == EKeys::Five);
+	// ps2-polish P9: Start pauses, the D-pad's down buys (or draws the C4 where the player cannot buy), B buys.
+	TArray<FInputActionKeyMapping> BuyOrBomb;
+	Settings->GetActionMappingByName(TEXT("BuyMenuOrBomb"), BuyOrBomb);
+	TestTrue("The buy menu or the bomb: the D-pad's down",
+		BuyOrBomb.Num() == 1 && BuyOrBomb[0].Key == EKeys::Gamepad_DPad_Down);
+	TArray<FInputActionKeyMapping> BuyMenu;
+	Settings->GetActionMappingByName(TEXT("BuyMenu"), BuyMenu);
+	TestTrue("The buy menu: B", BuyMenu.Num() == 1 && BuyMenu[0].Key == EKeys::B);
+	TArray<FInputActionKeyMapping> Pause;
+	Settings->GetActionMappingByName(TEXT("PauseMenu"), Pause);
+	TestTrue("The pause menu: Escape, Start",
+		Pause.Num() == 2 && Pause[0].Key == EKeys::Escape && Pause[1].Key == EKeys::Gamepad_Special_Right);
 	TArray<FInputActionKeyMapping> Drop;
 	Settings->GetActionMappingByName(TEXT("DropWeapon"), Drop);
 	TestTrue("Drop: G, the D-pad's right",

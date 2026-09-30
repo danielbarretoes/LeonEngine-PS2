@@ -41,6 +41,7 @@ FTickFunction* FTickPrerequisite::Get() const
 FTickFunction::FTickFunction()
 	: bCanEverTick(false)
 	, bStartWithTickEnabled(true)
+	, bTickEvenWhenPaused(false)
 	, bTickEnabled(false)
 	, bHasTickOrder(false)
 	, bInList(false)
@@ -334,6 +335,11 @@ void FTickTaskManager::RemoveFromList(FTickFunction& TickFunction)
 
 bool FTickTaskManager::IsDueThisFrame(FTickFunction& TickFunction, float DeltaSeconds)
 {
+	// A paused world's step runs only what ticks when paused; the others keep their state (their interval waits).
+	if (RunningTickType == LEVELTICK_PauseTick && !TickFunction.bTickEvenWhenPaused)
+	{
+		return false;
+	}
 	if (TickFunction.StateFrame == FrameCounter)
 	{
 		return TickFunction.TickState != TickStateNotDue;
@@ -422,6 +428,7 @@ void FTickTaskManager::RunTickGroup(ETickingGroup Group, float DeltaSeconds, ELe
 {
 	check(RunningGroup < 0);
 	RunningGroup = Group;
+	RunningTickType = TickType;
 	Waiting.Reset();
 	TArray<FTickFunction*>& List = Enabled[Group];
 	for (RunningIndex = 0; RunningIndex < List.Num(); ++RunningIndex)
@@ -453,6 +460,7 @@ void FTickTaskManager::RunTickGroup(ETickingGroup Group, float DeltaSeconds, ELe
 	}
 	RunningGroup = -1;
 	RunningIndex = -1;
+	RunningTickType = LEVELTICK_All;
 	if (bHasNullSlots)
 	{
 		bHasNullSlots = false;

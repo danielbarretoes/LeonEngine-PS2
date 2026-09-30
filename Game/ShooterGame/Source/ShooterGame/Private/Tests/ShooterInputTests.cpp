@@ -137,7 +137,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameInputBuyMenuTest, "ShooterGame.Inpu
 
 bool FShooterGameInputBuyMenuTest::RunTest(const FString& Parameters)
 {
-	// Closed, the buy menu leaves the number keys to the weapon slots. Open (Start), the D-pad moves its highlight,
+	// Closed, the buy menu leaves the number keys to the weapon slots. Open (the D-pad's down where the player may buy;
+	// Start is the pause menu's since ps2-polish P9), the D-pad moves its highlight,
 	// Cross opens the highlighted category and buys an item instead of jumping, and Circle goes back to the first page
 	// and then closes it instead of crouching.
 	FScopedTestWorld TestWorld;
@@ -151,8 +152,9 @@ bool FShooterGameInputBuyMenuTest::RunTest(const FString& Parameters)
 	Shooter.Tap(World, EKeys::One, false);
 	TestTrue("1 draws the rifle with the menu closed", Rifle != nullptr && Character.GetWeapon() == Rifle);
 
-	Shooter.Tap(World, EKeys::Gamepad_Special_Right, true);
-	TestTrue("Start opens the menu", Controller.IsBuyMenuOpen());
+	Shooter.Tap(World, EKeys::Gamepad_DPad_Down, true);
+	TestTrue("The D-pad's down opens the menu", Controller.IsBuyMenuOpen());
+	TestTrue("and does not draw the bomb", !Character.IsBombDrawn());
 	Shooter.Tap(World, EKeys::Gamepad_DPad_Down, true);
 	Shooter.Tap(World, EKeys::Gamepad_DPad_Down, true);
 	TestEqual("Down twice: the third item", Controller.GetBuyMenuSelection(), 2);

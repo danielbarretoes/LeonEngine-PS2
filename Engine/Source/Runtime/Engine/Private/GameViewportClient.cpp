@@ -130,6 +130,7 @@ UCameraComponent* UGameViewportClient::GetViewCamera() const
 
 void UGameViewportClient::SetMouseCaptureMode(EMouseCaptureMode Mode)
 {
+	MouseCaptureMode = Mode;
 	FGenericWindow* Window = GetWindow();
 	if (Window == nullptr)
 	{
@@ -224,12 +225,14 @@ void UGameViewportClient::ProcessInput(float DeltaTime)
 		(void)InputKey(Viewport.Get(), 0, Key, bDown ? IE_Pressed : IE_Released, bDown ? 1.0f : 0.0f, false);
 	}
 
-	// The mouse moves the MouseX / MouseY axes in pixels (up is positive, as in UE) while the cursor is captured or
-	// the left button is down; the first sample after a change only records the position.
+	// The mouse moves the MouseX / MouseY axes in pixels (up is positive, as in UE) while the cursor is captured or,
+	// captured during a press (CaptureDuringMouseDown), while the left button is down; a free cursor for the UI only
+	// (NoCapture) does not look. The first sample after a change only records the position.
 	const FVector2D Cursor = Window->GetCursorPos();
 	const double MouseX = Cursor.X;
 	const double MouseY = Cursor.Y;
-	const bool bWantLook = Window->IsCursorCaptured() || Window->IsMouseButtonDown(EMouseButtons::Left);
+	const bool bWantLook = Window->IsCursorCaptured() ||
+		(MouseCaptureMode != EMouseCaptureMode::NoCapture && Window->IsMouseButtonDown(EMouseButtons::Left));
 	if (bWantLook)
 	{
 		if (bMouseLookSampleValid)

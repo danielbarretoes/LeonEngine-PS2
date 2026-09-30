@@ -14,6 +14,7 @@
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerInput.h"
 #include "GameFramework/SpectatorPawn.h"
+#include "GameMapsSettings.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
@@ -26,6 +27,8 @@
 #include "ShooterPlayerState.h"
 #include "Sound/SoundWave.h"
 #include "TimerManager.h"
+#include "UI/ShooterPauseMenuWidget.h"
+#include "UI/ShooterTeamMenuWidget.h"
 #include "Weapons/ShooterWeapon.h"
 #include "Weapons/ShooterWeapon_Projectile.h"
 
@@ -116,6 +119,186 @@ void AShooterPlayerController::BeginPlay()
 		PersistentUser =
 			UShooterPersistentUser::LoadPersistentUser(LocalPlayer != nullptr ? LocalPlayer->GetControllerId() : 0);
 		ApplyPersistentUser();
+	}
+	if (IsLocalController())
+	{
+		// A player who joined a match without a team chooses it first (the game waits); else the game has the mouse.
+		const UWorld* World = GetWorld();
+		const AShooterGameMode* GameMode = World != nullptr ? World->GetAuthGameMode<AShooterGameMode>() : nullptr;
+		if (GameMode != nullptr && GameMode->IsChoosingTeam(this))
+		{
+			ShowTeamMenu(true);
+		}
+		else
+		{
+			SetInputMode(FInputModeGameOnly());
+		}
+	}
+}
+
+void AShooterPlayerController::CreateMenus()
+{
+	if (MyHUD == nullptr || PauseMenuWidget != nullptr)
+	{
+		return;
+	}
+	// The pause menu last: it paints over the team menu (the first choice's Back opens it).
+	TeamMenuWidget = MyHUD->AddWidget<UShooterTeamMenuWidget>();
+	PauseMenuWidget = MyHUD->AddWidget<UShooterPauseMenuWidget>();
+}
+
+bool AShooterPlayerController::IsPauseMenuOpen() const
+{
+	return PauseMenuWidget != nullptr && PauseMenuWidget->IsShown();
+}
+
+bool AShooterPlayerController::IsTeamMenuOpen() const
+{
+	return TeamMenuWidget != nullptr && TeamMenuWidget->IsShown();
+}
+
+void AShooterPlayerController::ShowPauseMenu(bool bShow)
+{
+	const UWorld* World = GetWorld();
+	if (World == nullptr || World->GetAuthGameMode<AShooterGameMode>() == nullptr)
+	{
+		return;
+	}
+	CreateMenus();
+	if (PauseMenuWidget == nullptr || bShow == IsPauseMenuOpen())
+	{
+		return;
+	}
+	if (bShow)
+	{
+		// The game's menus close under it (their keys would come back after it).
+		SetBuyMenuOpen(false);
+		SetRadioMenu(0);
+		bShowScoreboard = false;
+		PauseMenuWidget->SetShown(true);
+		PauseMenuWidget->ShowPage(0);
+	}
+	else
+	{
+		PauseMenuWidget->SetShown(false);
+	}
+	UpdateMenuState();
+}
+
+void AShooterPlayerController::ShowTeamMenu(bool bShow)
+{
+	const UWorld* World = GetWorld();
+	const AShooterGameMode* GameMode = World != nullptr ? World->GetAuthGameMode<AShooterGameMode>() : nullptr;
+	if (GameMode == nullptr)
+	{
+		return;
+	}
+	CreateMenus();
+	if (TeamMenuWidget == nullptr)
+	{
+		return;
+	}
+	if (bShow)
+	{
+		SetBuyMenuOpen(false);
+		SetRadioMenu(0);
+		bShowScoreboard = false;
+		TeamMenuWidget->SetInitialChoice(GameMode->IsChoosingTeam(this));
+		// A change comes from the pause menu: the team menu takes its place (the game stays paused).
+		if (PauseMenuWidget != nullptr)
+		{
+			PauseMenuWidget->SetShown(false);
+		}
+		TeamMenuWidget->SetShown(true);
+	}
+	else
+	{
+		TeamMenuWidget->SetShown(false);
+	}
+	UpdateMenuState();
+}
+
+void AShooterPlayerController::UpdateMenuState()
+{
+	// The pause menu pauses, and so does a team change (the first choice waits in the warmup instead).
+	const bool bTeamChange = IsTeamMenuOpen() && !TeamMenuWidget->IsInitialChoice();
+	(void)SetPause(IsPauseMenuOpen() || bTeamChange);
+	const bool bAnyMenu = IsPauseMenuOpen() || IsTeamMenuOpen();
+	if (ModalInputComponent != nullptr && bAnyMenu != bModalInputPushed)
+	{
+		if (bAnyMenu)
+		{
+			PushInputComponent(ModalInputComponent);
+		}
+		else
+		{
+			(void)PopInputComponent(ModalInputComponent);
+		}
+		bModalInputPushed = bAnyMenu;
+	}
+	if (bAnyMenu)
+	{
+		SetInputMode(FInputModeUIOnly());
+	}
+	else
+	{
+		SetInputMode(FInputModeGameOnly());
+	}
+}
+
+void AShooterPlayerController::PauseMenu()
+{
+	ShowPauseMenu(!IsPauseMenuOpen());
+}
+
+void AShooterPlayerController::OnPauseMenuPressed()
+{
+	PauseMenu();
+}
+
+void AShooterPlayerController::ChooseTeam()
+{
+	ShowTeamMenu(true);
+}
+
+void AShooterPlayerController::JoinTeam(FString TeamName)
+{
+	UWorld* World = GetWorld();
+	AShooterGameMode* GameMode = World != nullptr ? World->GetAuthGameMode<AShooterGameMode>() : nullptr;
+	EShooterTeamChoice Choice = EShooterTeamChoice::Auto;
+	if (!ParseShooterTeamChoice(TeamName, Choice))
+	{
+		UE_LOG(LogShooter, Warning, TEXT("JoinTeam: '%s' is not CT, T, Auto or Spectate"), *TeamName);
+		return;
+	}
+	if (GameMode != nullptr)
+	{
+		(void)GameMode->SelectTeam(this, Choice);
+	}
+	ShowTeamMenu(false);
+	if (PauseMenuWidget != nullptr && IsPauseMenuOpen())
+	{
+		ShowPauseMenu(false);
+	}
+}
+
+void AShooterPlayerController::ReturnToMainMenu()
+{
+	const FString MainMenu = UGameMapsSettings::GetGameDefaultMap();
+	UE_LOG(LogShooter, Display, TEXT("Back to the main menu (%s)"), *MainMenu);
+	UGameplayStatics::OpenLevel(this, FName(*MainMenu));
+}
+
+void AShooterPlayerController::OnBuyMenuOrBombPressed()
+{
+	// Where the player may buy the D-pad's down is the buy menu; elsewhere it draws the C4 (the keyboard's 5).
+	if (bBuyMenuOpen || CanOpenBuyMenu())
+	{
+		BuyMenu();
+	}
+	else if (AShooterCharacter* ShooterPawn = Cast<AShooterCharacter>(GetPawn()))
+	{
+		(void)ShooterPawn->DrawBomb();
 	}
 }
 
@@ -554,6 +737,9 @@ void AShooterPlayerController::SetupInputComponent()
 	InputComponent->BindAction(TEXT("Scoreboard"), IE_Pressed, this, &AShooterPlayerController::OnScoreboardPressed);
 	InputComponent->BindAction(TEXT("Scoreboard"), IE_Released, this, &AShooterPlayerController::OnScoreboardReleased);
 	InputComponent->BindAction(TEXT("BuyMenu"), IE_Pressed, this, &AShooterPlayerController::OnBuyMenuPressed);
+	InputComponent->BindAction(
+		TEXT("BuyMenuOrBomb"), IE_Pressed, this, &AShooterPlayerController::OnBuyMenuOrBombPressed);
+	InputComponent->BindAction(TEXT("PauseMenu"), IE_Pressed, this, &AShooterPlayerController::OnPauseMenuPressed);
 	InputComponent->BindAction(TEXT("BuyPrimaryAmmo"), IE_Pressed, this, &AShooterPlayerController::BuyAmmo1);
 	InputComponent->BindAction(TEXT("BuySecondaryAmmo"), IE_Pressed, this, &AShooterPlayerController::BuyAmmo2);
 	InputComponent->BindAction(TEXT("Radio1"), IE_Pressed, this, &AShooterPlayerController::Radio1);
@@ -590,6 +776,12 @@ void AShooterPlayerController::SetupInputComponent()
 			TEXT("Targeting"), IE_Pressed, this, &AShooterPlayerController::OnSpectatePrev);
 		SpectatorInputComponent->BindAction(
 			TEXT("Jump"), IE_Pressed, this, &AShooterPlayerController::OnSpectateToggleFreeLook);
+	}
+	// Under a menu nothing reaches the game (UMG takes the keys first; this blocks the rest, the sticks too).
+	if (ModalInputComponent == nullptr)
+	{
+		ModalInputComponent = NewObject<UInputComponent>(this, TEXT("ModalMenuInput"));
+		ModalInputComponent->bBlockInput = 1;
 	}
 	// A player spectating from its login on (a bot match's) began before its input existed.
 	SetSpectatorInput(IsInState(NAME_Spectating));
@@ -978,8 +1170,8 @@ void AShooterPlayerController::OnScoreboardReleased()
 
 void AShooterPlayerController::OnMenuPressed()
 {
-	// Escape closes the radio menu; it goes back to the buy menu's first page, and closes it there (ShooterGame has no
-	// pause menu).
+	// Escape closes the radio menu; it goes back to the buy menu's first page, and closes it there (with neither open
+	// Escape is the pause menu's: PauseMenu, on the controller's own input component under this one).
 	if (RadioMenu != 0)
 	{
 		SetRadioMenu(0);

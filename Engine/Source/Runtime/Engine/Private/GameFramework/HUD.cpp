@@ -8,8 +8,9 @@ AHUD::AHUD(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 	bHidden = true;
-	// The widgets tick with the HUD.
+	// The widgets tick with the HUD, also while the game is paused (UE): a pause menu is a HUD's widget.
 	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bTickEvenWhenPaused = true;
 }
 
 void AHUD::PostInitializeComponents()

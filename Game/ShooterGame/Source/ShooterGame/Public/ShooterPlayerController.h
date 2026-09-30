@@ -10,7 +10,9 @@ class ACameraActor;
 class AShooterCharacter;
 class UForceFeedbackEffect;
 class UInputComponent;
+class UShooterPauseMenuWidget;
 class UShooterPersistentUser;
+class UShooterTeamMenuWidget;
 class USoundWave;
 struct FShooterRadioEntry;
 
@@ -27,7 +29,21 @@ struct FShooterBuyMenuEntry
 
 /**
  * The human player's controller (UE ShooterGame: AShooterPlayerController): the scoreboard (Tab, held; Select), the
- * buy menu (B; Start), the hit marker's state, CS's console commands and a debug view for captures.
+ * buy menu (B; the D-pad's down), the pause and team menus, the hit marker's state, CS's console commands and a debug
+ * view for captures.
+ *
+ * The menus (ps2-polish P9; UMG widgets on the player's HUD, UShooterMenuWidget):
+ * - The pause menu (UShooterPauseMenuWidget) on Escape or Start (PauseMenu): the game pauses while it shows (UE's
+ *   SetPause: the world's time, timers and actors stop; the input, the HUD and the sound go on). Resume, Change team,
+ *   Options, Quit to main menu (ReturnToMainMenu).
+ * - The team menu (UShooterTeamMenuWidget): shown when the player joins a match without a team
+ *   (AShooterGameMode::IsChoosingTeam; the game waits in its warmup), and by Change team or `ChooseTeam` (paused);
+ *   a choice goes to the game mode (JoinTeam, AShooterGameMode::SelectTeam).
+ * - While one shows its keys are the menu's (a blocking input component under it; UMG sees them first) and on Win64
+ *   the mouse is free to point and click (FInputModeUIOnly); the game takes the mouse back when they close.
+ *
+ * The pad's D-pad down (BuyMenuOrBomb) opens the buy menu where the player may buy, and draws the C4 elsewhere (CS on
+ * consoles buys from the D-pad; Start is the pause menu's).
  *
  * The buy menu is CS's: its first page lists the categories (1 Pistols, 2 SMGs, 3 Rifles, 4 Primary ammo, 5 Secondary
  * ammo, 6 Equipment); a category's page lists its items the player's team may buy (the rifles: the AK-47 for the
@@ -154,6 +170,37 @@ public:
 	/** Opens or closes the buy menu (CS: buymenu); it does not open when CanOpenBuyMenu refuses. */
 	UFUNCTION(Exec)
 	void BuyMenu();
+
+	// The menus (ps2-polish P9; see the class comment)
+
+	/** Shows the pause menu, pausing the game, or hides it; only in a ShooterGame match (AShooterGameMode). */
+	void ShowPauseMenu(bool bShow);
+	[[nodiscard]] bool IsPauseMenuOpen() const;
+	/** Shows the team menu (the first choice, or a change: paused), or hides it. */
+	void ShowTeamMenu(bool bShow);
+	[[nodiscard]] bool IsTeamMenuOpen() const;
+	/** The menus, once made (the tests). */
+	[[nodiscard]] UShooterPauseMenuWidget* GetPauseMenu() const
+	{
+		return PauseMenuWidget;
+	}
+	[[nodiscard]] UShooterTeamMenuWidget* GetTeamMenu() const
+	{
+		return TeamMenuWidget;
+	}
+
+	/** Opens or closes the pause menu (Escape, Start). */
+	UFUNCTION(Exec)
+	void PauseMenu();
+	/** The team menu, to change sides (CS: chooseteam). */
+	UFUNCTION(Exec)
+	void ChooseTeam();
+	/** Joins a team: CT, T, Auto or Spectate (CS: jointeam; AShooterGameMode::SelectTeam); the team menu closes. */
+	UFUNCTION(Exec)
+	void JoinTeam(FString TeamName);
+	/** Leaves the match for the main menu (the project's GameDefaultMap, UGameplayStatics::OpenLevel). */
+	UFUNCTION(Exec)
+	void ReturnToMainMenu();
 
 	/** Cheat: a weapon by name, free (CS: give weapon_ak47). */
 	UFUNCTION(Exec)
@@ -347,6 +394,8 @@ public:
 	[[nodiscard]] float GetAimSensitivity() const;
 	/** The crouch key toggles (the default without options) rather than being held. */
 	[[nodiscard]] bool IsCrouchToggle() const;
+	/** Applies the options and saves them, when they belong to a player at a screen. */
+	void SavePersistentUser();
 
 	// Force feedback (N24; UE ShooterGame's): the DualShock's small motor on each shot, the large one when hurt and
 	// near an explosion.
@@ -393,6 +442,13 @@ private:
 	void OnScoreboardPressed();
 	void OnScoreboardReleased();
 	void OnBuyMenuPressed();
+	/** The pad's D-pad down: the buy menu where the player may buy, else the C4 drawn. */
+	void OnBuyMenuOrBombPressed();
+	void OnPauseMenuPressed();
+	/** Makes the pause and team menus on the HUD (once, when it has one). */
+	void CreateMenus();
+	/** After a menu opened or closed: the pause (a menu that pauses shows), the modal input and the mouse. */
+	void UpdateMenuState();
 	/** A number key while a menu is open (1-based): the radio menu's message, else the buy menu's line. */
 	void OnMenuItem(int32 Number);
 	void OnMenuItem1();
@@ -477,6 +533,14 @@ private:
 	UShooterPersistentUser* PersistentUser = nullptr;
 	/** The mouse's sensitivity before the options scale it (the input config's), once read. */
 	float BaseMouseSensitivity = -1.0f;
-	/** Saves the options, when they belong to a player at a screen. */
-	void SavePersistentUser();
+
+	/** The pause and team menus (CreateMenus). */
+	UPROPERTY(Transient)
+	UShooterPauseMenuWidget* PauseMenuWidget = nullptr;
+	UPROPERTY(Transient)
+	UShooterTeamMenuWidget* TeamMenuWidget = nullptr;
+	/** Blocks the game's input under a menu (on the input stack while one shows). */
+	UPROPERTY(Transient)
+	UInputComponent* ModalInputComponent = nullptr;
+	bool bModalInputPushed = false;
 };

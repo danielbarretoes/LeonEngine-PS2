@@ -26,7 +26,10 @@ public:
 	/** A new step: the tick functions' states of the last one are forgotten (UE: StartFrame). */
 	void StartFrame();
 
-	/** Runs a group's due tick functions (UE: RunTickGroup). */
+	/**
+	 * Runs a group's due tick functions (UE: RunTickGroup); a LEVELTICK_PauseTick step runs only the ones that tick
+	 * when paused (FTickFunction::bTickEvenWhenPaused).
+	 */
 	void RunTickGroup(ETickingGroup Group, float DeltaSeconds, ELevelTick TickType = LEVELTICK_All);
 
 	/** How many enabled tick functions a group has (tests, stats). */
@@ -83,6 +86,8 @@ private:
 	/** The group running and the index of its tick function running (the list may change meanwhile). */
 	int32 RunningGroup = -1;
 	int32 RunningIndex = -1;
+	/** What the running group's step runs (LEVELTICK_PauseTick: only what ticks when paused). */
+	ELevelTick RunningTickType = LEVELTICK_All;
 	/** A tick function left its list while its group ran: the list is compacted when the group ends. */
 	bool bHasNullSlots = false;
 

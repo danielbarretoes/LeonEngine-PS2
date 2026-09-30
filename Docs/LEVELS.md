@@ -306,8 +306,8 @@ Counter-Strike 1.6's de_dust, is built by a script, so the map is reproducible a
 Engine\Binaries\Win64\LeonCook.exe Game\ShooterGame\ShooterGame.lproj -run=ImportAssets ^
     -importlist=Game/ShooterGame/SourceArt/ImportList.ini
 
-:: 3. Play it (GameDefaultMap of the project)
-Game\ShooterGame\Binaries\Win64\ShooterGame.exe -ExecCmds=bot_fill
+:: 3. Play it (the main menu is GameDefaultMap; this URL skips it, joining CT with nine bots)
+Game\ShooterGame\Binaries\Win64\ShooterGame.exe /Game/Maps/de_leon?team=CT
 ```
 
 `make_de_leon.py` uses Blender's modules through ShooterGame's `leon_art` ([ART_PIPELINE.md](ART_PIPELINE.md)): it

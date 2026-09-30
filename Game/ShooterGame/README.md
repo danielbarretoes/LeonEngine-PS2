@@ -28,8 +28,11 @@ From the repository root (Windows):
 :: The game -> Game\ShooterGame\Binaries\Win64\ShooterGame.exe
 Engine\Build\BatchFiles\Build.bat ShooterGame Win64 Development -Project=%CD%\Game\ShooterGame\ShooterGame.lproj
 
-:: Play de_leon (GameDefaultMap): bots fill both teams to five a side (bFillTeamsWithBots) and the match starts
+:: The main menu (GameDefaultMap, /Game/Maps/MainMenu): choose the match, Start, then the team
 Game\ShooterGame\Binaries\Win64\ShooterGame.exe
+
+:: Straight into a match on de_leon, past the menus: the team, and optionally the bots, their skill and the rounds
+Game\ShooterGame\Binaries\Win64\ShooterGame.exe /Game/Maps/de_leon?team=CT?bots=9?difficulty=Hard?winrounds=3
 
 :: The smoke test (gate G6): headless, ten pawns, exit code 0
 Engine\Build\BatchFiles\SmokeTest.bat
@@ -57,8 +60,18 @@ On the PS2 (PCSX2, NTSC) de_leon runs at 29.95 fps, p50 / p95 / p99 33.5 ms (ps2
 disc), and the first frame from the disc comes 2.93 s after the engine starts
 ([PS2 README](../../Engine/Platforms/PS2/README.md#measuring-in-pcsx2)).
 
-A map URL picks the team and the seed of the rounds (the bomb's carrier): `ShooterGame.exe /Game/Maps/de_leon?team=T?seed=42`
-(else the smaller team, CT on a tie, and `RandomSeed`).
+A match's URL options ([ps2-polish](../../Docs/PLANS/ps2-polish.md) P9; the main menu passes the last three):
+
+| Option | Values | Without it |
+| --- | --- | --- |
+| `?team=` | `CT`, `T`, `Auto` (the smaller team, CT on a tie), `Spectate` | the player spectates and chooses in the team menu; the warmup waits |
+| `?bots=` | 0 to 10 bots, shared out around the player's team (`RebalanceBots`) | `NumBots` (9: five a side with the player) |
+| `?difficulty=` | `Easy`, `Normal`, `Hard`, `Expert` (or CS's 0 to 3) | `BotDifficulty` (Normal) |
+| `?winrounds=` | the rounds to win, N: `MaxRounds = 2 N - 1`, the halftime after round N - 1 | `MaxRounds` (30: the first to 16) |
+| `?seed=` | the round stream's seed (the bomb's carrier, the terrorists' site) | `RandomSeed` |
+
+`ShooterGame.exe /Game/Maps/de_leon?team=T?seed=42`, or `-map=/Game/Maps/de_leon?team=T`; `-botmatch` skips the menu
+by itself ([Bot match](#bot-match)).
 
 ## Controls
 
@@ -72,11 +85,12 @@ A map URL picks the team and the seed of the rounds (the bomb's carrier): `Shoot
 | Left mouse button | R2 | Fire (held: automatic weapons keep firing) |
 | Right mouse button | L2 | The secondary attack: the AWP's zoom (two levels, then off), the USP's and the M4A1's silencer, the Glock's burst mode, the knife's stab |
 | R | Square | Reload |
-| 1 / 2 / 3 / 4 / 5 | R1 / L1 / D-pad up / D-pad left / D-pad down | Primary (the MP5, the rifles, the AWP) / pistol / knife / grenade (again: the next grenade, HE, flashbang, smoke) / the bomb (CS's C4 in slot 5, for its carrier: the weapon is put away and the HUD shows `C4`; a weapon's key puts it back) |
+| 1 / 2 / 3 / 4 / 5 | R1 / L1 / D-pad up / D-pad left / D-pad down (outside the buy zone or time) | Primary (the MP5, the rifles, the AWP) / pistol / knife / grenade (again: the next grenade, HE, flashbang, smoke) / the bomb (CS's C4 in slot 5, for its carrier: the weapon is put away and the HUD shows `C4`; a weapon's key puts it back) |
 | G | D-pad right | Drop the weapon in hand, not the knife nor a grenade, or the bomb when it is drawn (a pawn without one in that slot, or a terrorist for the bomb, picks it up by walking over it; the HUD says `Picked up <item>`) |
 | , / . | — | A box of the primary's / the pistol's ammunition (CS: buyammo1 / buyammo2), when the player may buy |
 | E (held) | Triangle (held) | Plant the bomb (its carrier, standing still in a bomb site, 3 s) or defuse it (a CT at the planted bomb, 10 s, 5 with a kit) |
-| B | Start | The buy menu (the console's `buymenu` toggles it too), CS's: 1 Pistols, 2 SMGs, 3 Rifles, 4 Primary ammo, 5 Secondary ammo, 6 Equipment; a category's page lists what the team may buy (Rifles: the AK-47 for the T, the M4A1 for the CT, the AWP), and a purchase goes back to the first page. It opens only when its player may buy (alive, in the team's buy zone, within the buy time; never while spectating) and closes by itself when that stops; the HUD says why for 2 s (`BuyRefusalDuration`). While it is open: the number keys choose a line; the D-pad's up and down move the highlight (`>`) and Cross chooses it; Escape or Circle go back to the first page, and there close it (B and Start close it). It takes these keys only while it is open |
+| Escape | Start | The pause menu ([Menus](#menus)): the game pauses; Start or Escape again resumes. Escape closes the buy or the radio menu first |
+| B | D-pad down, where the player may buy (elsewhere it draws the C4, as 5) | The buy menu (the console's `buymenu` toggles it too), CS's: 1 Pistols, 2 SMGs, 3 Rifles, 4 Primary ammo, 5 Secondary ammo, 6 Equipment; a category's page lists what the team may buy (Rifles: the AK-47 for the T, the M4A1 for the CT, the AWP), and a purchase goes back to the first page. It opens only when its player may buy (alive, in the team's buy zone, within the buy time; never while spectating) and closes by itself when that stops; the HUD says why for 2 s (`BuyRefusalDuration`). While it is open: the number keys choose a line; the D-pad's up and down move the highlight (`>`) and Cross chooses it; Escape or Circle go back to the first page, and there close it (B and Start close it). It takes these keys only while it is open |
 | Z / X / C | — | The radio's menus (CS 1.6's radio1, radio2, radio3; [The radio](#the-radio)): the number keys (1 to 9) send a message to the team and close the menu, Esc or the same key closes it; a menu takes these keys only while it is open, and it and the buy menu close each other |
 | Tab (held) | Select (held) | The scoreboard |
 | F4 (`stat unit`) | R3 (`stat unit`) | The engine's stats (FPS, MS, RAM, VRAM, TRIS, OBJ; on from the start on the PS2: `bShowStatsByDefault`) |
@@ -95,6 +109,42 @@ captures), `ViewNextPlayer` /
 `ViewPrevPlayer` (CS's spec_next / spec_prev), the cheats `give <weapon>` (its reserve full), `god` and `kill`, `ViewFrom X Y Z Pitch
 Yaw` (a fixed view, for captures), `ViewPawn` (back to the pawn), `exit`.
 
+## Menus
+
+[ps2-polish](../../Docs/PLANS/ps2-polish.md) P9: UMG widgets on the player's HUD (`UShooterMenuWidget`: a centred panel
+in CS 1.6's olive and amber, the title in the 32 px font, the lines in the 20 px one, readable at the PS2's 640 x 448),
+driven by the pad alone or by the keyboard and the mouse: up and down (the D-pad, the arrows, Tab) move between the
+lines, Cross or Enter chooses one, left and right change an option (`< Normal >`; a click steps it too), Circle or
+Escape goes back. On Win64 the mouse is free while a menu shows (`FInputModeUIOnly`) and points and clicks; the game
+takes it back when the menu closes. A menu takes every other key while it shows: nothing reaches the game.
+
+- **The main menu** (`UShooterMainMenuWidget`, the `MainMenu` map: GameDefaultMap, a small desert backdrop made by
+  `SourceArt/Maps/make_main_menu.py`; its game mode `AShooterGame_Menu` by the map's prefix, no pawn, the camera swaying
+  slowly at the map's player start): **Map** (the project's maps: `[/Script/ShooterGame.ShooterMainMenuWidget]
+  +MapNames=`, de_leon today), **Bot difficulty** (Easy, Normal, Hard, Expert: the bots' presets, [Bots](#bots)),
+  **Rounds to win** (3 by default, a best of 5; 5, 8, 16: `MaxRounds = 2 N - 1`), **Bots** (1 to 9: ten players at
+  most, the PS2's budget), **Options**, **Start** and, on Win64, **Quit**. The choices come from the saved settings and
+  Start saves them there, then travels to the map with them as URL options (`UGameplayStatics::OpenLevel`).
+- **The team menu** (`UShooterTeamMenuWidget`): on joining a match without `?team=` the player spectates and chooses
+  **Counter-Terrorists** or **Terrorists** (each with its players), **Auto-select** (the smaller team) or **Spectate**;
+  the warmup waits for it. Then the bots join around the player so the teams are as even as possible counting it
+  (`AShooterGameMode::RebalanceBots`: nine bots with the player on CT give 4 CT and 5 T bots; an odd player more goes
+  to the player's opponents). Escape or Circle there opens the pause menu (the way back to the main menu).
+- **The pause menu** (`UShooterPauseMenuWidget`, Escape or Start): the match's line (the map, the score, the round, the
+  rounds to win) over the shaded game, **Resume**, **Change team**, **Options** and **Quit to main menu**. The game
+  pauses for real, as UE does (`APlayerController::SetPause`, `UGameplayStatics::SetGamePaused`): the world's time,
+  its timers, the physics, the animation and every actor stop, while the input, the HUD and its widgets and the sound
+  go on. **Change team** shows the team menu (still paused; Back returns): by CS's rule the change takes effect at the
+  next round, and a living player dies for it during a fought round (a death on the board); before the round is fought
+  (the warmup, the freeze) the player respawns on the new side at once. The bots even the sides out again at the next
+  round's start.
+- **Options** (the main menu's and the pause menu's): **Aim sensitivity** (0.25 to 3, by 0.25), **Invert Y axis**,
+  **Volume** (0 to 100 %, by 10) and **Crouch key** (Toggle or Hold). A change applies at once; leaving the page saves
+  them, once (the memory card on the PS2).
+
+Console: `PauseMenu` (opens or closes it), `Pause` (UE's: pauses without a menu), `ChooseTeam` (CS's chooseteam: the
+team menu), `JoinTeam CT|T|Auto|Spectate` (CS's jointeam), `ReturnToMainMenu`.
+
 ## Settings and the pad
 
 The player's options ([ps2-shipping](../../Docs/PLANS/ps2-shipping.md) N24) are a save game, `UShooterPersistentUser`
@@ -104,7 +154,9 @@ PS2 (the folder `BASLUS-99001SHOOTER` with the title `ShooterGame Settings` and 
 in the tests) and each command applies its option and saves them all: `SetSensitivity <scale>` (the mouse's 0.07° a
 pixel and the stick's rates times the scale, 1 by default), `SetInvertY 0|1` (up looks down, the mouse and the stick),
 `SetVolume <0..1>` (the audio device's master volume), `SetCrosshairColor <r> <g> <b>` (0..1 each), `SetToggleCrouch 0|1`
-(1, the default: a press of the crouch key crouches and the next stands up; 0: held, as CS 1.6). A card that is
+(1, the default: a press of the crouch key crouches and the next stands up; 0: held, as CS 1.6); the menus' options
+page changes the same four ([Menus](#menus)). The main menu's last match (the map, the difficulty, the rounds to win,
+the bots) is saved with them when a match starts from the menu. A card that is
 missing, unformatted, full or pulled out logs why the options were not saved (`ESaveGameResult`), and the game plays
 on with them.
 
@@ -119,10 +171,12 @@ ShooterGame binds none yet.
 
 | Class | UE ShooterGame / CS counterpart | What it does |
 | --- | --- | --- |
-| `AShooterGameMode` (`AGameMode`) | `AShooterGame_TeamDeathMatch` | `GlobalDefaultGameMode` of the project: the match and its rounds, the money, buying and the bomb's events ([Rounds](#rounds-money-and-the-bomb)). Who may hurt whom (`CanDealDamage`: no friendly fire, `bFriendlyFire`) and the kills (`Killed`: the feed, the money, the stats). Teams (`ChooseTeam`: `?team=`, else the smaller team), team spawns (`ChoosePlayerStart`: the first free start tagged with the team, level order), the bot commands (`AddBots`, `FillTeamsWithBots`), `MaxPlayersPerTeam` 5; logs where each player joined and the pawn count at the end (the smoke reads it). The registries of what the game looks up every frame ([Registries](#registries)) |
+| `AShooterGameMode` (`AGameMode`) | `AShooterGame_TeamDeathMatch` | `GlobalDefaultGameMode` of the project: the match and its rounds, the money, buying and the bomb's events ([Rounds](#rounds-money-and-the-bomb)). Who may hurt whom (`CanDealDamage`: no friendly fire, `bFriendlyFire`) and the kills (`Killed`: the feed, the money, the stats). Teams (`?team=`, else the team menu's choice: `SelectTeam`; `ChooseTeam`, the smaller team, for Auto), team spawns (`ChoosePlayerStart`: the first free start tagged with the team, level order), the bots (`NumBots`, `RebalanceBots` around the player's team, `BotDifficulty`; the commands' `AddBots`, `FillTeamsWithBots`), `MaxPlayersPerTeam` 5; the URL's match options (`?bots=`, `?difficulty=`, `?winrounds=`); logs where each player joined and the pawn count at the end (the smoke reads it). The registries of what the game looks up every frame ([Registries](#registries)) |
 | `AShooterCharacter` (`ACharacter`) | `AShooterCharacter` | First-person camera at the eyes (`UCameraComponent`, `bUsePawnControlRotation`, 74° vertical FOV), capsule 40 × 91.5 cm, eyes 163 cm (76 crouched, eased with `FInterpTo`), the team's animated body the other players see (`CTBodyMeshName` / `TBodyMeshName`, `bOwnerNoSee`) and first-person arms (`CTArmsMeshName` / `TArmsMeshName`) ([Characters and animation](#characters-and-animation)); health, armor and helmet, the hit groups, the damage rules and death ([Weapons](#weapons)); the inventory (one weapon a slot: `DefaultWeapons`, the knife, and the team's pistol, `DefaultWeaponsCT` / `DefaultWeaponsT`) |
 | `UShooterCharacterMovement` (`UCharacterMovementComponent`) | `UShooterCharacterMovement` | CS 1.6 movement in centimetres (below), the walk key and the tagging through `GetMaxSpeed`, the jump's stamina, fall damage and ladders (`EMovementMode::Custom`) ([CS 1.6's movement](#cs-16s-movement)) |
-| `AShooterPlayerController` | `AShooterPlayerController` | The player's input, the hit marker's state (`NotifyHitConfirmed`), where the last damage came from (`NotifyTakeDamage`) and the `ViewFrom` / `ViewPawn` commands; when its pawn dies the death cam, then spectating ([Death and spectating](#death-and-spectating)) |
+| `AShooterGame_Menu` (`AGameModeBase`), `AShooterPlayerController_Menu` | `AShooterGame_Menu`, `AShooterPlayerController_Menu` | The MainMenu map's: no pawn, the main menu on the HUD; `-botmatch` travels straight to `BotMatchMapName` ([Menus](#menus)) |
+| `UShooterMenuWidget` and its `UShooterMainMenuWidget`, `UShooterTeamMenuWidget`, `UShooterPauseMenuWidget` (`UUserWidget`) | `FShooterMainMenu`, `FShooterIngameMenu` (Slate) | The menus ([Menus](#menus)): a panel of `UShooterMenuButton` lines (a `UButton` with a label and a value that left and right step) in a `UWidgetSwitcher` of pages, and the options page (`FShooterOptionsPage`) |
+| `AShooterPlayerController` | `AShooterPlayerController` | The player's input, the pause and team menus (`ShowPauseMenu`, `ShowTeamMenu`, `JoinTeam`, `ReturnToMainMenu`), the hit marker's state (`NotifyHitConfirmed`), where the last damage came from (`NotifyTakeDamage`) and the `ViewFrom` / `ViewPawn` commands; when its pawn dies the death cam, then spectating ([Death and spectating](#death-and-spectating)) |
 | `AShooterAIController` (`AAIController`) | `AShooterAIController` | The bots' brain: a behavior tree over a typed blackboard, `UPawnSensingComponent` senses, the waypoint navigation ([Bots](#bots)) |
 | `AShooterGameState` (`AGameState`) | `AShooterGameState` | The round's phase and number, the phase's end, the score, the halftime (`IsSecondHalf`, `GetHalftimeRound`), the bomb's state, the kill feed and the radio's last messages (`GetRadioLog`) |
 | `AShooterPlayerState` | `AShooterPlayerState` | The team (`EShooterTeam`: None, CT, T), the money, the kills and the deaths |
@@ -405,9 +459,9 @@ Low-poly and textured in the style of Counter-Strike 1.6 ([ps2-shipping](../../D
 
 Counter-Strike's defusal rules (`AShooterGameMode`, all in `DefaultGame.ini`'s `[/Script/ShooterGame.ShooterGameMode]`):
 
-- **The match**: a warmup until both teams have a player (bots fill the teams as soon as the player is in), then up to
-  `MaxRounds` (30, `mp_maxrounds`) rounds; a team wins at 16 (more than half), else the match ends after the last
-  round (a tie is a draw). `mp_restartgame` starts over (from the warmup only with both teams in).
+- **The match**: a warmup until both teams have a player (the bots join once the player has chosen its team), then
+  up to `MaxRounds` (30, `mp_maxrounds`; the menu's `?winrounds=N` makes it 2 N - 1) rounds; a team wins at more than
+  half (16 of 30, 3 of 5), else the match ends after the last round (a tie is a draw). `mp_restartgame` starts over (from the warmup only with both teams in).
 - **Halftime** (`bHalftime`, `mp_halftime`; CS's competitive halves, CS:GO's `mp_halftime`): after round `MaxRounds /
   2` (15) the teams switch sides. Every player, the bots too, joins the other team, and the scores go with the teams
   (CT 9 - T 6 becomes CT 6 - T 9); the money goes back to $800 and the loss streaks to none; every pawn goes, so the
@@ -593,9 +647,13 @@ most urgent first:
   linked at import); a bot jumps when the next path point rises more than 50 cm within 1.5 m or is a waypoint flagged
   `Jump` (not at a ladder's top, which it climbs), crouches along the links on both sides of a waypoint flagged
   `Crouch` and stands up past them, and repaths when it moves less than 30 cm in 1.5 s (climbing counts).
-- **Skill** (`[/Script/ShooterGame.ShooterAIController]`): `Difficulty` scales the reaction and the aim error down and
-  the turn rate and the recoil control (`RecoilCompensation`, 0.5: half of each kick pulled down; 0 lets it climb, 1
-  holds the spray flat) up; `EscortDistance`, `SupportDistance`, `HuntAdvantage`, `HuntTimeLeft`, `RotateTime`,
+- **Skill** (`[/Script/ShooterGame.ShooterAIController]`, [ps2-polish](../../Docs/PLANS/ps2-polish.md) P9): a preset a
+  difficulty (`+DifficultyPresets`, CS's bot_difficulty and its bot profiles), which the game mode gives each bot it
+  adds (`ApplyDifficulty`, the match's `BotDifficulty`, `?difficulty=`): the reaction (Easy 0.6 s, Normal 0.35, Hard
+  0.25, Expert 0.15), the aim error on a new target and its floor (9°/1.2°, 5°/0.4°, 3.5°/0.25°, 2°/0.1°) and how fast
+  it settles, the turn rate (200, 360, 480, 720° a second), the recoil control (`RecoilCompensation`: 0.2, 0.5, 0.7,
+  0.9 of each kick pulled down) and the memory of an enemy out of sight (1, 1.5, 2.5, 4 s); the sight's reach
+  (`SightRadius`, 35 m) is every difficulty's. Normal is the bots' skill before the presets; `EscortDistance`, `SupportDistance`, `HuntAdvantage`, `HuntTimeLeft`, `RotateTime`,
   `RotateOnReportChance`, the lookouts' and the watch's times and `PickupSearchDistance` tune the branches above. Every random
   choice comes from the bot's stream, seeded from the game mode's `RandomSeed` and the bot's index, the order the game
   mode created it in (`SetBotIndex`): a match with `?seed=N` replays.
@@ -735,7 +793,9 @@ when nothing changed; a score formats one line, a kill three).
 
 `ShooterGame -nullrhi -benchmark -botmatch [-rounds=N] [-seed=N]` plays a match of bots and exits (P21):
 
-- `-botmatch`: the local player spectates (no team), the bots fill both teams, and the match is `-rounds=` rounds long
+- `-botmatch`: the game starts on the main menu's map as always, whose game mode travels at once to de_leon
+  (`AShooterGame_Menu`'s `BotMatchMapName`: BotMatch.bat and MeasurePS2 name no map); there the local player spectates
+  (no team), ten bots join, five a side (`RebalanceBots`), and the match is `-rounds=` rounds long
   (10; it sets `MaxRounds`, so the teams switch sides after half of them and a team with the majority ends it sooner);
   then the game exits. `-seed=` sets `RandomSeed` (as `?seed=`).
 - Every frame `FShooterMatchChecker` checks the invariants: each round that ends has a reason and gives its winner one
@@ -808,7 +868,7 @@ both sites, both buy zones and both teams' starts. Only CC0 art enters the proje
 shared skeleton, the fixed glTF export); `SourceArt/check_art_determinism.py` checks that they export the same bytes
 every run ([Docs/ART_PIPELINE.md](../../Docs/ART_PIPELINE.md)).
 
-Looking at the map: `ShooterGame.exe -ExecCmds="ViewFrom <X> <Y> <Z> <Pitch> <Yaw>" -Screenshot=<file.bmp>
+Looking at the map: `ShooterGame.exe /Game/Maps/de_leon?team=CT -ExecCmds="ViewFrom <X> <Y> <Z> <Pitch> <Yaw>" -Screenshot=<file.bmp>
 -ExitAfterFrames=20` saves a view from a point (centimetres and degrees; `ViewFrom 0 0 5200 -89 0` looks down on the
 whole map); the view stays after the round's spawn until `ViewPawn`.
 

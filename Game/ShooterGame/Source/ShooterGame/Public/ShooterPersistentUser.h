@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/SaveGame.h"
+#include "ShooterTypes.h"
 #include "ShooterPersistentUser.generated.h"
 
 class AShooterPlayerController;
@@ -13,7 +14,10 @@ class AShooterPlayerController;
  * held). They live in the save slot "Settings": Saved/SaveGames/Settings.sav on the desktop, the memory card's
  * ShooterGame folder on the PS2 (UGameplayStatics::SaveGameToSlot). The player controller loads them when its player
  * plays at a screen, applies them, and saves them when a console command changes one (SetSensitivity, SetInvertY,
- * SetVolume, SetCrosshairColor, SetToggleCrouch).
+ * SetVolume, SetCrosshairColor, SetToggleCrouch) or the options page of a menu changes them (ps2-polish P9).
+ *
+ * They also keep the main menu's last match (ps2-polish P9): the map, the bots' difficulty, the rounds to win and the
+ * number of bots (GetMatchSettings / SetMatchSettings), saved when a match starts from the menu.
  */
 UCLASS()
 class SHOOTERGAME_API UShooterPersistentUser : public USaveGame
@@ -54,4 +58,22 @@ public:
 	/** A press of the crouch key crouches or stands up (Docs/PLANS/ps2-polish.md P4); false: held to crouch. */
 	UPROPERTY()
 	bool bToggleCrouch = true;
+
+	/** The main menu's last match (FShooterMatchSettings): the map (empty: the menu's first), difficulty, rounds, bots.
+	 */
+	UPROPERTY()
+	FString MatchMapName;
+
+	UPROPERTY()
+	EShooterBotDifficulty BotDifficulty = EShooterBotDifficulty::Normal;
+
+	UPROPERTY()
+	int32 RoundsToWin = 3;
+
+	UPROPERTY()
+	int32 NumBots = FShooterMatchSettings::MaxBots;
+
+	/** The last match's settings (its values within the menu's ranges). */
+	[[nodiscard]] FShooterMatchSettings GetMatchSettings() const;
+	void SetMatchSettings(const FShooterMatchSettings& Settings);
 };

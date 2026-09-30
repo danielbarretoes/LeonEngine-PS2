@@ -47,7 +47,6 @@ namespace
 	AShooterGameMode* SetUpGameMode(UWorld& World)
 	{
 		AShooterGameMode* GameMode = Cast<AShooterGameMode>(World.SetGameMode(AShooterGameMode::StaticClass()));
-		GameMode->bFillTeamsWithBots = false;
 		return GameMode;
 	}
 

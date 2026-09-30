@@ -80,7 +80,6 @@ namespace
 			World, FVector(1500.0f, 0.0f, 150.0f), FVector(600.0f, 1000.0f, 300.0f), TEXT("BuyZone"), TEXT("T"));
 		(void)SpawnZone(World, SiteCenter, SiteSize, TEXT("BombSite"), TEXT("A"));
 		AShooterGameMode* GameMode = Cast<AShooterGameMode>(World.SetGameMode(AShooterGameMode::StaticClass()));
-		GameMode->bFillTeamsWithBots = false;
 		GameMode->FreezeTime = 0.5f;
 		GameMode->RoundTime = 90.0f;
 		GameMode->RoundRestartDelay = 0.5f;

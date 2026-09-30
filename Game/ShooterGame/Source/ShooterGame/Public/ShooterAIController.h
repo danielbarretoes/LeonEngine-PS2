@@ -87,8 +87,10 @@ struct FShooterRadioEntry;
  * else to look at and holds no site, and the bot nearest a request answers it ("Affirmative.", "Reporting in.") and,
  * for "Need backup." or "Taking fire", goes there.
  *
- * Difficulty (config, [/Script/ShooterGame.ShooterAIController]): Difficulty scales the reaction time and the aim
- * error down and the turn rate up (1: the values as set). Every random choice (the aim error, the AWP, the strafes,
+ * Difficulty (ps2-polish P9; CS's bot_difficulty and bot profiles): the game mode gives each new bot the preset of the
+ * match's difficulty (ApplyDifficulty; DifficultyPresets in the config, one for Easy, Normal, Hard and Expert): its
+ * reaction time, aim error, turn rate, recoil control and memory. A bot made without the game mode keeps the class's
+ * values, Normal's. Every random choice (the aim error, the AWP, the strafes,
  * the grenades, the blind fire) comes from the bot's stream, seeded from the game mode's RandomSeed and the bot's
  * index (the order the game mode created the bots in: SetBotIndex), so a match with a seed replays, and a bot's name
  * (CS's team-neutral BotProfile names, AShooterGameMode::BotNames) never changes it.
@@ -115,22 +117,38 @@ public:
 	static const FName IsThrowingKey;
 	static const FName ShouldPickUpKey;
 
-	/** Scales the skill (see the class comment): 0.5 easy, 1 normal, 2 hard. */
+	/**
+	 * The skill of each difficulty (see the class comment; DefaultGame.ini's `+DifficultyPresets`): ApplyDifficulty
+	 * copies the preset into the values below.
+	 */
 	UPROPERTY(Config)
-	float Difficulty = 1.0f;
+	TArray<FShooterBotSkill> DifficultyPresets;
+
+	/**
+	 * Takes the skill of InDifficulty's preset (the game mode, when it adds the bot); a difficulty without a preset
+	 * leaves the bot as it is (a warning). False then.
+	 */
+	bool ApplyDifficulty(EShooterBotDifficulty InDifficulty);
+	/** The difficulty the bot took (Normal until ApplyDifficulty). */
+	[[nodiscard]] EShooterBotDifficulty GetDifficulty() const
+	{
+		return Difficulty;
+	}
+
+	// The skill (the difficulty's preset: FShooterBotSkill; Normal's values until a preset is applied)
 
 	/** Seconds from an enemy coming into sight to the first shot. */
-	UPROPERTY(Config)
+	UPROPERTY()
 	float ReactionTime = 0.35f;
 
 	/** The aim's error on a new target, degrees, and how fast it settles (seconds for 1/e) down to MinAimError. */
-	UPROPERTY(Config)
+	UPROPERTY()
 	float AimError = 5.0f;
 
-	UPROPERTY(Config)
+	UPROPERTY()
 	float AimErrorDecayTime = 0.8f;
 
-	UPROPERTY(Config)
+	UPROPERTY()
 	float MinAimError = 0.4f;
 
 	/** How far the bot sees an enemy, cm (its senses' SightRadius). */
@@ -138,14 +156,14 @@ public:
 	float SightRadius = 3500.0f;
 
 	/** How fast the bot turns to its aim, degrees a second. */
-	UPROPERTY(Config)
+	UPROPERTY()
 	float AimTurnRate = 360.0f;
 
 	/**
 	 * The part of each recoil kick the bot pulls back down as it fires, 0 (the kick climbs as it does for a player who
-	 * does not pull down) to 1 (none shows: a laser), at Difficulty 1; the difficulty scales it (at most 1).
+	 * does not pull down) to 1 (none shows: a laser).
 	 */
-	UPROPERTY(Config)
+	UPROPERTY()
 	float RecoilCompensation = 0.5f;
 
 	/** Shots a burst of an automatic weapon, and the pause after it, seconds. */
@@ -156,7 +174,7 @@ public:
 	float BurstPause = 0.35f;
 
 	/** Seconds an enemy out of sight is remembered. */
-	UPROPERTY(Config)
+	UPROPERTY()
 	float EnemyMemory = 1.5f;
 
 	/** The chance to buy the AWP when it can be afforded with armor. */
@@ -342,9 +360,9 @@ public:
 	{
 		return CurrentTask;
 	}
-	/** The aim error now, degrees (after the difficulty and the time on target). */
+	/** The aim error now, degrees (after the time on target). */
 	[[nodiscard]] float GetCurrentAimError() const;
-	/** The part of each recoil kick pulled down: RecoilCompensation times the difficulty, within [0, 1]. */
+	/** The part of each recoil kick pulled down: RecoilCompensation, within [0, 1]. */
 	[[nodiscard]] float GetRecoilCompensation() const;
 
 	/**
@@ -462,6 +480,9 @@ protected:
 	void OnUnPossess() override;
 
 private:
+	/** The difficulty applied (ApplyDifficulty). */
+	EShooterBotDifficulty Difficulty = EShooterBotDifficulty::Normal;
+
 	/** Builds the tree's nodes (once). */
 	void BuildTree();
 	/** Refreshes the blackboard from the senses and the game (the tree's decorators read it). */

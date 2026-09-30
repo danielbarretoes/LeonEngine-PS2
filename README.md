@@ -62,7 +62,7 @@ CT 3 - T 6, 55 kill(s), seed 7, sides switched after round 5`):
 
 ```bat
 Engine\Build\BatchFiles\Build.bat ShooterGame Win64 Development -Project=%CD%\Game\ShooterGame\ShooterGame.lproj
-Game\ShooterGame\Binaries\Win64\ShooterGame.exe -ExecCmds=bot_fill
+Game\ShooterGame\Binaries\Win64\ShooterGame.exe
 Engine\Build\BatchFiles\SmokeTest.bat
 Engine\Build\BatchFiles\BotMatch.bat 10 7
 ```

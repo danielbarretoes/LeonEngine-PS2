@@ -9,7 +9,7 @@ What runs automatically and what a person still has to check by hand. Build and 
 | --- | --- | --- |
 | Every local gate ([ps2-shipping](PLANS/ps2-shipping.md) N1; the repository has no CI) | `Engine\Build\BatchFiles\RunGates.bat [-PS2] [-Measure]` | `RunGates OK`: Lint (G1, G4, /W4), RunTests, CheckReimport (G5, the engine and ShooterGame content), SmokeTest (G6), BotMatch (`10 7`, played twice) and ValidateAssets (engine and ShooterGame) each print `[ OK ]` (logs in `Engine\Saved\Gates\`); `-PS2` adds `Package.bat -NoWin64` (G3), `-Measure` `MeasurePS2.bat` (below) |
 | The PS2 frame in PCSX2 ([ps2-shipping](PLANS/ps2-shipping.md) N1, N9) | `Engine\Build\BatchFiles\MeasurePS2.bat [-Project Game\ShooterGame] [-Rounds 2] [-Seed 7] [-Seconds 120] [-NoBuild] [-TimeoutSeconds 900] [-Label <text>] [-Iso] [-PakOrder <order file>] [-LogFileOpenOrder] [-ExtraArgs <game arguments>]` (Docker and PCSX2, unattended; `-ExtraArgs -novu1` measures the EE's C++ emitter; the disc switches are [below](#ps2-disc-boot)) | `MeasurePS2 OK`: PCSX2 runs the staged ShooterGame without its window, from `Game\ShooterGame\Saved\PCSX2` (the user's `PCSX2.ini` with `Engine\Platforms\PS2\Build\PCSX2\Measure.ini` on top), a bot match watched through a bot's eyes (`-BotMatchSpectate -LogFrameTimes -ExitAfterSeconds`) until the game's `FrameStats Summary:` and `ProfileSummary:` lines (the cycle stats' top level scopes, N9); the figures go to `Saved\Profiling\PS2Frame.csv` (the `ProfileSummary:` pairs as `Profile_<key>` columns), and a [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md) row and the last `Profile over N frames (ms, calls):` block (the frame's scopes as a hierarchy) are printed. Three runs agree within 3 % |
-| Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` twice, the engine's (`LeonAutomationTests`, 575 at 0.24.0, 588 at [ps2-polish](PLANS/ps2-polish.md) P5, 589 at P3, 595 at P8; `-nodisplay` skips the `NonNullRHI` tests, which need an OpenGL window) and ShooterGame's (`ShooterGameTests`, 112), between them `LeonHeaderTool -Test: 35 of 35 golden cases passed`, then `TestPAL: PASSED (171 test(s), 0 failed)` (TestPAL on Win64) |
+| Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` twice, the engine's (`LeonAutomationTests`, 575 at 0.24.0, 588 at [ps2-polish](PLANS/ps2-polish.md) P5, 589 at P3, 595 at P8, 597 at P9; `-nodisplay` skips the `NonNullRHI` tests, which need an OpenGL window) and ShooterGame's (`ShooterGameTests`, 112 at P3b, 118 at P9), between them `LeonHeaderTool -Test: 35 of 35 golden cases passed`, then `TestPAL: PASSED (171 test(s), 0 failed)` (TestPAL on Win64) |
 | GS emulator conformance ([ps2-gs-parity](PLANS/ps2-gs-parity.md) P4, [ps2-engine](PLANS/ps2-engine.md) E2, [ps2-shipping](PLANS/ps2-shipping.md) N8) | `LeonAutomationTests -automation=GSEmulator` (it needs an OpenGL window) | `System.Renderer.GSEmulator.Conformance`: the OpenGL GS emulator draws the 21 GS conformance scenes within 2 levels per channel of the reference rasterizer, but for at most 8 pixels a scene (today 3 in StripsAndSprites, pixel centres on a shallow side, and 3 in MipmapLod, a minified bilinear weight); `System.Renderer.GSEmulator.SceneFrame`: a frame of the GS scene renderer (textured, flat and translucent meshes, two lights, a floor through the near plane; the texture as the PS2 cook makes it, PSMT8 with its mips, trilinear, since ps2-shipping N13) within one 5-bit step of the reference, but for at most 64 pixels |
 | LeonHeaderTool golden tests (run by `RunTests.bat` too) | `Engine\Intermediate\Build\HostTools\Win64\LeonHeaderTool.exe -Test` | `LeonHeaderTool -Test: 35 of 35 golden cases passed` |
 | Core, CoreUObject, Json, Projects and PakFile on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (N test(s), 0 failed)` in the EE log: 157 at [ps2-shipping](PLANS/ps2-shipping.md) N15, against 164 on Win64 then (the platform-file, config-cache, log-file, SaveConfig and package-file tests are desktop-only); not run again on the EE since N24's tests (171 on Win64 at 0.24.0). N15's `System.Core.Math.VectorMathVU0` compares VU0 with the scalar reference there: at most 2 units in the last place of the products' magnitudes |
@@ -137,13 +137,24 @@ and standing up only with room under a ceiling, the `GetMaxSpeed` hook, the pawn
 following the control rotation and the mouse sensitivity. The default (instant) model keeps every golden table as it
 was.
 
-ShooterGame's tests (`ShooterGame.*`, 105 now, in `ShooterGameTests.exe` with the project's config) cover, since P17, the
+ShooterGame's tests (`ShooterGame.*`, 118 now, in `ShooterGameTests.exe` with the project's config) cover, since P17, the
 team choice, ten bots on ten team starts and a sixth refused, a pawn standing on its start, `bot_fill`, the character's
 CS movement (UE's model, the run and walk speeds, crouching, the capsule, the first-person camera), the crosshair the
 HUD draws, the project's input and channel config, and the map: `ShooterGame.Map.DeLeonHoldsTheGame` loads
 `/Game/Maps/de_leon` and checks its sites, buy zones, team starts, waypoint links, player clip, ladders and sun; `RequiredTags`
 imports `de_leon.glb` under the project's rules and refuses the AxisTest source; `TenPawnsOnDeLeon` opens the map in a
-headless `UGameEngine`, adds nine bots and ticks 60 frames: ten pawns standing on distinct starts, on the ground.
+headless `UGameEngine` with `?team=CT` (the nine bots join around the player) and ticks 60 frames: ten pawns standing
+on distinct starts, on the ground. The menus ([ps2-polish](PLANS/ps2-polish.md) P9, `ShooterGame.Menu.*`):
+`MatchOptions` (the menu's choices as URL options and what `InitGame` makes of them: the bots, the difficulty,
+`MaxRounds = 2 N - 1` and the halftime for 3, 5, 8 and 16 rounds to win), `DifficultyPresets` (a bot added at each
+difficulty takes its preset, harder reacting sooner, aiming better, turning faster, remembering longer; Normal the class's
+old skill), `BotSplit` (the bots shared out around the humans for a dozen totals and teams), `TeamChoiceAndChange` (no
+bot before the choice, 4 CT and 5 T around a CT player, the change to T killing the player during the live round and
+taking effect at the next one, a bot moving to CT, spectating), `PauseMenu` (Start pauses: the world's time, the round's
+clock and the pawns stop while the menu ticks and navigates with the pad; Change team and Back; Escape resumes) and
+`MainMenuToMatchAndBack` (the MainMenu map's game mode and menu, its choices travelling to de_leon as URL options, the
+team menu there, Quit to main menu). The engine's `System.Engine.World.Pause` and `System.Engine.Travel.OpenLevel` test
+UE's pause (only `bTickEvenWhenPaused` ticks, the timers wait) and `UGameplayStatics::OpenLevel` with the input modes.
 `ShooterGame.Input.Pad` and `ShooterGame.Input.BuyMenuTakesItsKeys` (E4) drive a player with the PS2 pad's keys: the
 right stick turns at `BaseTurnRate`, the left one walks, the shoulders draw the slots, and the buy menu takes the
 D-pad, Cross, Circle and the number keys only while it is open (closed, 1 draws the rifle); `System.Engine.Viewport.Gamepad`
@@ -230,8 +241,8 @@ reads the Starter's meshes, light and camera framing from `/Engine/Maps/Template
 `LeonGame.exe -ExitAfterFrames=300` should log `RequestEngineExit: ExitAfterFrames`, the `LogGarbage` lines of the
 level load and of the exit (the world teardown in `PreExit`, which also frees the level's assets, then the
 engine itself) and no errors; it exits with code 0. The same holds headless (`-nullrhi`). ShooterGame's captures
-use its view commands: `ShooterGame.exe "-ExecCmds=bot_fill;ViewFrom 0 0 5600 -89 0" "-Screenshot=<file.bmp>"
-"-ExitAfterFrames=30"` shows the whole of de_leon from above (north up) with the teams on their spawns. `-AxesGizmo` turns
+use its view commands in a match (the URL skips the main menu): `ShooterGame.exe /Game/Maps/de_leon?team=CT
+"-ExecCmds=bot_fill;ViewFrom 0 0 5600 -89 0" "-Screenshot=<file.bmp>" "-ExitAfterFrames=30"` shows the whole of de_leon from above (north up) with the teams on their spawns. `-AxesGizmo` turns
 the axes gizmo on from the start (see below); captures without it do not change.
 
 The asynchronous IO, the saves and the pad ([ps2-shipping](PLANS/ps2-shipping.md) N24):

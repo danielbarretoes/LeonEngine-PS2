@@ -320,6 +320,12 @@ AWorldSettings* UWorld::GetWorldSettings() const
 	return PersistentLevel != nullptr ? PersistentLevel->GetWorldSettings() : nullptr;
 }
 
+bool UWorld::IsPaused() const
+{
+	const AWorldSettings* Settings = GetWorldSettings();
+	return Settings != nullptr && Settings->GetPauserPlayerState() != nullptr;
+}
+
 float UWorld::GetGravityZ() const
 {
 	const AWorldSettings* Settings = GetWorldSettings();
@@ -580,12 +586,12 @@ void UWorld::Tick(float InDeltaTime)
 	RunTick(InDeltaTime, nullptr);
 }
 
-void UWorld::RunTickGroup(ETickingGroup Group, float InDeltaTime)
+void UWorld::RunTickGroup(ETickingGroup Group, float InDeltaTime, ELevelTick TickType)
 {
 	// Spawns wait in PendingSpawnActors and destroys null their slot while a group runs: the level keeps its size
 	// until the group ends, then the spawned actors join it and begin play.
 	bTicking = true;
-	TickTaskManager.RunTickGroup(Group, InDeltaTime);
+	TickTaskManager.RunTickGroup(Group, InDeltaTime, TickType);
 	bTicking = false;
 	FlushPendingSpawns();
 	CompactActors();
@@ -594,11 +600,21 @@ void UWorld::RunTickGroup(ETickingGroup Group, float InDeltaTime)
 void UWorld::RunTick(float InDeltaTime, const FWorldGameplayFrameParams* Params)
 {
 	LLM_SCOPE(ELLMTag::GameMisc);
+	// UE's pause: the world's time, its timers, the physics and the effects stand still, and only what ticks when
+	// paused runs (the players' input and UI).
+	const bool bPaused = IsPaused();
+	const ELevelTick TickType = bPaused ? LEVELTICK_PauseTick : LEVELTICK_All;
 	DeltaTimeSeconds = InDeltaTime;
 	// The time is counted in the timers' integer units and read as seconds from them: no float sum drifts (D4).
-	TimeUnits += FTimerManager::SecondsToTimeUnits(InDeltaTime);
-	TimeSeconds = FTimerManager::TimeUnitsToSeconds(TimeUnits);
+	RealTimeUnits += FTimerManager::SecondsToTimeUnits(InDeltaTime);
+	RealTimeSeconds = FTimerManager::TimeUnitsToSeconds(RealTimeUnits);
+	if (!bPaused)
+	{
+		TimeUnits += FTimerManager::SecondsToTimeUnits(InDeltaTime);
+		TimeSeconds = FTimerManager::TimeUnitsToSeconds(TimeUnits);
+	}
 	TickTaskManager.StartFrame();
+	if (!bPaused)
 	{
 		// The timers first: what a timer due now changes (a reload done, a round gone live) is what this step's actors
 		// see, as if each of them had polled its deadline in its own tick (Leon; UE ticks them after TG_PostPhysics).
@@ -614,17 +630,17 @@ void UWorld::RunTick(float InDeltaTime, const FWorldGameplayFrameParams* Params)
 		// The controllers process their input and their pawns tick after them (AController::AddPawnTickDependency),
 		// so a character's movement component moves it with this step's input.
 		SCOPE_CYCLE_COUNTER(STAT_TickActors);
-		RunTickGroup(TG_PrePhysics, InDeltaTime);
+		RunTickGroup(TG_PrePhysics, InDeltaTime, TickType);
 	}
-	if (Params != nullptr)
+	if (Params != nullptr && !bPaused)
 	{
 		SCOPE_CYCLE_COUNTER(STAT_WorldPhysicsStep);
 		StepPhysics(*Params);
 	}
 	{
 		SCOPE_CYCLE_COUNTER(STAT_TickActors);
-		RunTickGroup(TG_DuringPhysics, InDeltaTime);
-		RunTickGroup(TG_PostPhysics, InDeltaTime);
+		RunTickGroup(TG_DuringPhysics, InDeltaTime, TickType);
+		RunTickGroup(TG_PostPhysics, InDeltaTime, TickType);
 	}
 
 	// The cameras last, after every actor moved (UE).
@@ -632,13 +648,16 @@ void UWorld::RunTick(float InDeltaTime, const FWorldGameplayFrameParams* Params)
 		[InDeltaTime](APlayerController& PlayerController) { PlayerController.UpdateCameraManager(InDeltaTime); });
 	{
 		SCOPE_CYCLE_COUNTER(STAT_TickActors);
-		RunTickGroup(TG_PostUpdateWork, InDeltaTime);
+		RunTickGroup(TG_PostUpdateWork, InDeltaTime, TickType);
 	}
 
 	// The effects age with the world's time.
-	ImpactMarks.Tick(InDeltaTime);
-	Tracers.Tick(InDeltaTime);
-	EffectSprites.Tick(InDeltaTime);
+	if (!bPaused)
+	{
+		ImpactMarks.Tick(InDeltaTime);
+		Tracers.Tick(InDeltaTime);
+		EffectSprites.Tick(InDeltaTime);
+	}
 
 	if (Params != nullptr)
 	{

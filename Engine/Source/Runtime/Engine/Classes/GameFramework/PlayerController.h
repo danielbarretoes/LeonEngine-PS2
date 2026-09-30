@@ -14,8 +14,45 @@ class AHUD;
 class APlayerCameraManager;
 class ASpectatorPawn;
 class UInputComponent;
+class UGameViewportClient;
 class UPlayer;
 class UPlayerInput;
+
+/**
+ * How the player's input goes to the game and the UI (UE: FInputModeDataBase; APlayerController::SetInputMode). Leon's
+ * HUD widgets always see the keys first (AHUD::InputKey); a mode sets how the viewport treats the mouse.
+ */
+struct ENGINE_API FInputModeDataBase
+{
+	virtual ~FInputModeDataBase() = default;
+
+protected:
+	/** Applies the mode to the viewport (UE: ApplyInputMode, with Slate's operations there). */
+	virtual void ApplyInputMode(UGameViewportClient& GameViewportClient) const = 0;
+
+	friend class APlayerController;
+};
+
+/** Only the UI: the cursor is free to point at the widgets, and the mouse does not look (UE: FInputModeUIOnly). */
+struct ENGINE_API FInputModeUIOnly : public FInputModeDataBase
+{
+protected:
+	void ApplyInputMode(UGameViewportClient& GameViewportClient) const override;
+};
+
+/** The game and the UI: the cursor is free, and dragging with a button down looks (UE: FInputModeGameAndUI). */
+struct ENGINE_API FInputModeGameAndUI : public FInputModeDataBase
+{
+protected:
+	void ApplyInputMode(UGameViewportClient& GameViewportClient) const override;
+};
+
+/** Only the game: the viewport captures the mouse, which looks (UE: FInputModeGameOnly). */
+struct ENGINE_API FInputModeGameOnly : public FInputModeDataBase
+{
+protected:
+	void ApplyInputMode(UGameViewportClient& GameViewportClient) const override;
+};
 
 /**
  * A player's controller (UE: APlayerController). It spawns its APlayerState when spawned (bWantsPlayerState).
@@ -28,6 +65,11 @@ class UPlayerInput;
  * component, its own and the pushed ones, top first) and turns the pawn with the control rotation (UpdateRotation);
  * the world then updates the camera (UpdateCameraManager). The viewport client feeds it key events and mouse samples
  * (InputKey, InputAxis).
+ *
+ * Pause (UE's): SetPause asks the game mode to pause or go on (AGameModeBase::SetPause / ClearPause; the `Pause`
+ * command toggles it). A player controller ticks while the world is paused (bTickEvenWhenPaused), but then only
+ * processes its input: the bindings that run when paused (FInputBinding::bExecuteWhenPaused) and its HUD's widgets,
+ * which see the keys first anyway. SetInputMode says whether the mouse looks or points at the UI.
  */
 UCLASS()
 class ENGINE_API APlayerController : public AController
@@ -177,6 +219,30 @@ public:
 
 	/** A local controller ticks its player (UE: TickActor → PlayerTick). */
 	void Tick(float DeltaSeconds) override;
+	/**
+	 * A paused world's step only processes the input (TickPlayerInput with the game paused) and the force feedback that
+	 * plays while paused, unless bShouldPerformFullTickWhenPaused (UE: TickActor).
+	 */
+	void TickActor(float DeltaSeconds, ELevelTick TickType, FActorTickFunction& ThisTickFunction) override;
+
+	/** The whole tick runs while the world is paused too (UE: bShouldPerformFullTickWhenPaused). */
+	uint8 bShouldPerformFullTickWhenPaused : 1;
+
+	/**
+	 * Pauses the game or lets it go on (UE: SetPause): the game mode's SetPause / ClearPause. True when the state
+	 * changed (a paused game asked to pause again, or one playing asked to go on, does nothing).
+	 */
+	virtual bool SetPause(bool bPause, FCanUnpause CanUnpauseDelegate = FCanUnpause());
+	/** The game is paused (UE: IsPaused). */
+	[[nodiscard]] virtual bool IsPaused() const;
+	/** This player paused the game, so it may let it go on (UE: CanUnpause). */
+	[[nodiscard]] virtual bool CanUnpause();
+	/** Pauses the game, or lets it go on when paused (UE: the Pause command). */
+	UFUNCTION(Exec)
+	virtual void Pause();
+
+	/** How the mouse works for the local player's viewport: the UI, the game or both (UE: SetInputMode). */
+	void SetInputMode(const FInputModeDataBase& InData);
 
 	/** The HUD and the camera go with the controller (UE: Destroyed). */
 	void Destroyed() override;

@@ -183,6 +183,9 @@ $Rules = @(
 	@{ Name = "ShooterGame's bots that walked through ladders and spun in place (ps2-polish P3)"
 		Pattern = '\b(bCanClimbLadders|HoldAndLookAround)\b'
 		Use = "the bots climb (UShooterCharacterMovement::GetLadderNormal, the waypoints' Ladder links) and watch the sites' lookouts (AShooterGameMode::GetBombSiteLookouts, AShooterAIController's Watch)" },
+	@{ Name = "ShooterGame's bot fill flag and single difficulty scale (ps2-polish P9)"
+		Pattern = '\bbFillTeamsWithBots\b|Max\(0\.1f, Difficulty\)'
+		Use = "AShooterGameMode::NumBots and RebalanceBots (the bots shared out around the player's team); AShooterAIController::ApplyDifficulty with DifficultyPresets (EShooterBotDifficulty)" },
 	@{ Name = "legacy GL / transform / axes"; Pattern = 'LegacyGL|FLegacyTransform|LegacyAxes'
 		Use = "UE view and projection matrices (ToGLClipSpace last), FTransform, UE axes" },
 	@{ Name = "legacy coordinate conversion outside the tests"

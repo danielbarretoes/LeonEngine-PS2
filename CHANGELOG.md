@@ -105,6 +105,39 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   before) and is defused in 21 %. Tests: `ShooterGame.Bots.TerroristsHoldThePlantedBomb`,
   `.TerroristsEngageTheDefuser`, `.RetakeGathers` (112 ShooterGame tests). The bot match logs
   `Botmatch OK: 8 round(s), CT 2 - T 6, 57 kill(s), seed 7, sides switched after round 5`.
+- ShooterGame's main menu, team selection and pause menu ([ps2-polish](Docs/PLANS/ps2-polish.md) P9), UMG widgets in
+  CS 1.6's olive and amber (`UShooterMenuWidget`: a centred panel of `UShooterMenuButton` lines, left and right
+  stepping an option), driven by the pad alone or the keyboard and the mouse, readable at 640 x 448.
+  - The main menu is the new GameDefaultMap, `/Game/Maps/MainMenu` (a small desert backdrop made by the standard
+    library script `SourceArt/Maps/make_main_menu.py`, exempt from the project's required map tags by the new
+    `MapsWithoutRequiredTags` of `[/Script/LeonEd.MapImportSettings]`), with `AShooterGame_Menu` (by the map's prefix,
+    `GameModeMapPrefixes`) and `AShooterPlayerController_Menu`: the map (`+MapNames=`), the bots' difficulty (Easy,
+    Normal, Hard, Expert), the rounds to win (3, a best of 5, by default; 5, 8, 16), the number of bots (1 to 9),
+    Options, Start and Quit (Win64). The choices are saved with the player's options (`UShooterPersistentUser`) and
+    travel as URL options, `?bots=N?difficulty=Hard?winrounds=3`, which `AShooterGameMode::InitGame` reads
+    (`MaxRounds = 2 N - 1`); `-botmatch` skips the menu.
+  - The team menu (`UShooterTeamMenuWidget`): a player who joins without `?team=` spectates and the warmup waits for
+    its choice (CT, T, Auto, Spectate; `?team=` takes the same four); then `AShooterGameMode::RebalanceBots` shares the
+    match's bots out so the teams are as even as possible counting the player (nine bots with the player on CT: 4 CT
+    and 5 T). The pause menu's Change team changes sides by CS's rule: the change takes effect at the next round, the
+    player dying if alive during a fought round, and the bots even the sides out again then.
+  - The pause menu (`UShooterPauseMenuWidget`, Escape or Start): Resume, Change team, Options (sensitivity, invert Y,
+    volume, crouch toggle; saved once when the page is left), Quit to main menu. The game pauses as UE does.
+  - The bots' difficulty is a preset each (`AShooterAIController::DifficultyPresets`, `ApplyDifficulty` when the game
+    mode adds a bot; `FShooterBotSkill`): the reaction, the aim error, its settling and floor, the turn rate, the
+    recoil control and the memory, modelled on CS's bot profiles. Normal is the bots' old skill: the bot match is
+    unchanged.
+- The engine's pause (UE's): `AGameModeBase::SetPause` / `ClearPause` / `AllowPausing` / `IsPaused` with
+  `FCanUnpause`, `AWorldSettings::GetPauserPlayerState`, `UWorld::IsPaused`, `APlayerController::SetPause`, `IsPaused`,
+  `CanUnpause` and the `Pause` command, `UGameplayStatics::SetGamePaused` / `IsGamePaused`. A paused world steps as
+  `LEVELTICK_PauseTick`: its time, its timers, the physics step and the effects stand still and only the tick
+  functions with `bTickEvenWhenPaused` run (the player controllers, which then only process their input, and the
+  HUDs with their widgets); `UWorld::GetRealTimeSeconds` goes on. `UGameplayStatics::OpenLevel` (UE's, over
+  `SetClientTravel`) and `GetPlayerController`; `APlayerController::SetInputMode` with `FInputModeUIOnly`,
+  `FInputModeGameAndUI` and `FInputModeGameOnly` (the viewport's mouse capture: the UI's free cursor does not look).
+  Tests: `System.Engine.World.Pause`, `System.Engine.Travel.OpenLevel`, `System.LeonEd.MapFactory.EngineMapsSkipRequiredTags`
+  extended; `ShooterGame.Menu.MatchOptions`, `.DifficultyPresets`, `.BotSplit`, `.TeamChoiceAndChange`, `.PauseMenu`,
+  `.MainMenuToMatchAndBack`, `ShooterGame.Settings.RoundTrip` extended (118 ShooterGame tests).
 
 ### Changed
 
@@ -140,8 +173,16 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   strafing at a walk while it sprays (105 ShooterGame tests). The bot match changes:
   `Botmatch OK: 10 round(s), CT 5 - T 5, 63 kill(s), seed 7, sides switched after round 5`.
 
+- ShooterGame's pad: Start opens the pause menu, and the buy menu moves to the D-pad's down where the player may buy
+  (elsewhere the D-pad's down draws the C4, as before; CS on consoles bought from the D-pad) ([ps2-polish](Docs/PLANS/ps2-polish.md)
+  P9). Escape opens the pause menu when neither the buy nor the radio menu is open. ShooterGame starts on the main menu;
+  `ShooterGame.exe /Game/Maps/de_leon?team=CT` (or `-map=`) starts a match directly, as SmokeTest.bat now does.
+
 ### Removed
 
+- `AShooterGameMode::bFillTeamsWithBots` and `AShooterAIController::Difficulty`, the single scale of the bots' skill
+  ([ps2-polish](Docs/PLANS/ps2-polish.md) P9, D10): `NumBots` with `RebalanceBots`, and the difficulty presets.
+  `CheckBannedApis.ps1` rejects them.
 - `stb_easy_font` (the HUD's bitmap font), `HudFontScale`, `HudLineHeight`, `FCanvas::DrawTextBlock`, the canvas
   text's scale argument and `FPaintContext::MeasureTextOnly` ([ps2-polish](Docs/PLANS/ps2-polish.md) P5, D10):
   `UFont`, `FCanvas::DrawText` / `MeasureText` with a font, `UFont::GetLineHeight`. `CheckBannedApis.ps1` rejects them.

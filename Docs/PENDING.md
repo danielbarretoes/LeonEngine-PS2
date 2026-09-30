@@ -10,16 +10,9 @@ PCSX2 (p50/p95/p99 33.5 ms), so nothing here blocks the frame rate.
 - **Minimap.** The radar (N30d) shows dots on a black square. It needs the map's real overview image, like CS's
   overviews: a top-down render of the map, generated at cook time and paletted, drawn under the dots and rotated with
   the view.
-- **Main menu.** A start menu that sets up the match:
-  - the map;
-  - the bots' difficulty (CS's easy, normal, hard and expert: reaction time, aim error, awareness);
-  - the rounds to win, best of 5 by default (the first team to 3);
-  - the total number of bots.
-- **Team selection.** On joining a match the player chooses CT or T, as in CS. The bots are then redistributed so the
-  teams are as even as possible, counting the player.
-- **In-game menu.** A pause menu during the match (Esc / Start) to resume, change team, or go back to the main menu.
-- **UI.** Better menus and HUD. The font family (DejaVu Sans Condensed, `UFont`), the textured canvas and UMG's
-  buttons, focus, switcher and table exist since [ps2-polish](PLANS/ps2-polish.md) P5; the HUD only changed its font.
+- **UI.** A better HUD. The font family (DejaVu Sans Condensed, `UFont`), the textured canvas and UMG's buttons, focus,
+  switcher and table exist since [ps2-polish](PLANS/ps2-polish.md) P5, and the main, team and pause menus are built on
+  them since P9; the HUD only changed its font.
 - **The scoreboard in a table.** `AShooterHUD` still draws the scoreboard by hand, aligned with spaces (which the
   proportional font no longer lines up); UMG's `UTableView` (P5) is for it. The CS scoreboard shows per team: name,
   score (kills), deaths, latency or bot, alive/dead, and the bomb carrier for T.
@@ -55,6 +48,8 @@ ShooterGame stays single player against bots: no split screen (decided 2026-09-3
 - The radio is tones, not voices, and the gamepad has no radio menu. One sound variant per surface; no smoke or
   magazine sounds. The smoke is a fixed sphere and does not block flashes.
 - One locomotion stance (rifle). The feet slide a little. No arms clip for defusing. The C4 is not a first-person weapon.
+- The menus move with the D-pad and the arrows, not the left stick (UMG's navigation, ps2-polish P5); the main menu
+  lists de_leon only, the one map.
 
 ## Checks only a person can do
 
@@ -67,6 +62,7 @@ Confirmed by playing (2026-09-30):
 - the game holds 30 fps to the eye.
 
 Still to check:
+- Playing from the main menu in PCSX2 with the pad: the menus, the team choice, the pause (ps2-polish P9).
 - A DualShock 2: pressure buttons, a second pad, pulling a pad out mid-game.
 - The memory card in the PCSX2 BIOS browser: the save, its icon and its title.
 - XInput pads are matched to GLFW pads by order, so a DirectInput pad next to an Xbox pad can get the other pad's

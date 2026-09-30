@@ -865,6 +865,23 @@ FGenericWindow keys / mouse --> UGameViewportClient::ProcessInput --> InputKey /
   Force feedback is UE's: `SetForceFeedbackChannelValue(s)`, `UForceFeedbackEffect`,
   `APlayerController::ClientPlayForceFeedback`; Win64 reads its pads through GLFW and drives the Xbox pads' motors
   through XInput (`FXInputForceFeedback`, loaded at run time).
+- **Input modes** ([ps2-polish](PLANS/ps2-polish.md) P9): `APlayerController::SetInputMode` with UE's
+  `FInputModeGameOnly` (the viewport captures the mouse, which looks), `FInputModeUIOnly` (a free cursor for the HUD's
+  widgets, which does not look: `EMouseCaptureMode::NoCapture`) and `FInputModeGameAndUI` (free, looking while the
+  left button is held). The HUD's widgets always see the keys first; a menu that must keep the game's input still pushes
+  a blocking input component (`bBlockInput`).
+
+### Pause
+
+UE's pause ([ps2-polish](PLANS/ps2-polish.md) P9). `APlayerController::SetPause` (or `UGameplayStatics::SetGamePaused`,
+the `Pause` command) asks the game mode: `AGameModeBase::SetPause` keeps a pauser with its `FCanUnpause` and makes the
+first one the world settings' `PauserPlayerState`; `ClearPause` drops the pausers that may unpause and, with none left,
+clears it (`AllowPausing`: Leon's games are standalone, so always). `UWorld::IsPaused` reads it, and a paused world's
+step is a `LEVELTICK_PauseTick`: the world's time (`GetTimeSeconds`), its timers (`FTimerManager`), the physics step and
+the effects' ageing stand still, and the tick task manager runs only the tick functions with `bTickEvenWhenPaused`:
+the player controllers (which then only process their input, the bindings with `bExecuteWhenPaused`, unless
+`bShouldPerformFullTickWhenPaused`) and the HUDs with their widgets. The camera managers and the scene keep their last
+step (the frame draws still), `GetRealTimeSeconds` goes on, and the audio device, outside the world, plays on.
 
 ### Viewport client and console
 

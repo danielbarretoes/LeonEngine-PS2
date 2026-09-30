@@ -3,6 +3,9 @@
 #include "Components/PointLightComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/PointLight.h"
+#include "EngineLogs.h"
+#include "GameFramework/PlayerController.h"
+#include "Misc/PackageName.h"
 #include "Sound/SoundWave.h"
 
 // The sound, effect and URL option helpers of UGameplayStatics (UE: GameplayStatics.cpp); the traces and the damage
@@ -53,6 +56,59 @@ int32 UGameplayStatics::GetIntOption(const FString& Options, const FString& Key,
 {
 	FString Value;
 	return FindOption(Options, Key, Value) && !Value.IsEmpty() ? FCString::Atoi(*Value) : DefaultValue;
+}
+
+void UGameplayStatics::OpenLevel(const UObject* WorldContextObject, FName LevelName, bool bAbsolute, FString Options)
+{
+	UWorld* World = GetWorldFromContextObject(WorldContextObject);
+	if (World == nullptr || GEngine == nullptr)
+	{
+		return;
+	}
+	FString Cmd = LevelName.ToString();
+	if (!Options.IsEmpty())
+	{
+		Cmd += TEXT("?") + Options;
+	}
+	// UE checks a local map's name here; the travel itself fails later and keeps the world playing.
+	const FString MapName = LevelName.ToString();
+	if (FPackageName::IsValidLongPackageName(MapName) && !FPackageName::DoesPackageExist(MapName))
+	{
+		UE_LOG(LogEngine, Warning, TEXT("OpenLevel: the map '%s' does not exist"), *MapName);
+	}
+	GEngine->SetClientTravel(World, *Cmd, bAbsolute ? TRAVEL_Absolute : TRAVEL_Relative);
+}
+
+APlayerController* UGameplayStatics::GetPlayerController(const UObject* WorldContextObject, int32 PlayerIndex)
+{
+	const UWorld* World = GetWorldFromContextObject(WorldContextObject);
+	if (World == nullptr || PlayerIndex < 0)
+	{
+		return nullptr;
+	}
+	int32 Index = 0;
+	APlayerController* Found = nullptr;
+	World->ForEach<APlayerController>(
+		[&Index, &Found, PlayerIndex](APlayerController& PlayerController)
+		{
+			if (Found == nullptr && Index++ == PlayerIndex)
+			{
+				Found = &PlayerController;
+			}
+		});
+	return Found;
+}
+
+bool UGameplayStatics::SetGamePaused(const UObject* WorldContextObject, bool bPaused)
+{
+	APlayerController* PlayerController = GetPlayerController(WorldContextObject, 0);
+	return PlayerController != nullptr && PlayerController->SetPause(bPaused);
+}
+
+bool UGameplayStatics::IsGamePaused(const UObject* WorldContextObject)
+{
+	const UWorld* World = GetWorldFromContextObject(WorldContextObject);
+	return World != nullptr && World->IsPaused();
 }
 
 void UGameplayStatics::PlaySound2D(const UObject* WorldContextObject, USoundBase* Sound, float VolumeMultiplier)

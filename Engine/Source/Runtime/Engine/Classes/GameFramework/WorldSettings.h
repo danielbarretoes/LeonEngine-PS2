@@ -7,6 +7,7 @@
 
 class AGameModeBase;
 class UTextureCube;
+class APlayerState;
 
 /**
  * How LeonEd bakes a map's static lighting (UE: FLightmassWorldInfoSettings, the world settings' Lightmass settings;
@@ -139,4 +140,21 @@ public:
 	/** The map's sky (Leon, ps2-polish P8; none by default). */
 	UPROPERTY()
 	FWorldSkySettings SkySettings;
+	/**
+	 * The player who paused the game, null while it plays (UE: GetPauserPlayerState / SetPauserPlayerState):
+	 * AGameModeBase::SetPause sets it, and UWorld::IsPaused reads it.
+	 */
+	[[nodiscard]] APlayerState* GetPauserPlayerState() const
+	{
+		return PauserPlayerState;
+	}
+	void SetPauserPlayerState(APlayerState* PlayerState)
+	{
+		PauserPlayerState = PlayerState;
+	}
+
+private:
+	/** UE: PauserPlayerState. */
+	UPROPERTY(Transient)
+	APlayerState* PauserPlayerState = nullptr;
 };

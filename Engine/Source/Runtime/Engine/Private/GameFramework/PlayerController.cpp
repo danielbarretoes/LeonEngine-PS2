@@ -12,6 +12,7 @@
 #include "GameFramework/InputSettings.h"
 #include "GameFramework/PlayerInput.h"
 #include "GameFramework/SpectatorPawn.h"
+#include "GameFramework/WorldSettings.h"
 #include "GenericPlatform/IInputInterface.h"
 
 APlayerController::APlayerController(const FObjectInitializer& ObjectInitializer)
@@ -19,8 +20,88 @@ APlayerController::APlayerController(const FObjectInitializer& ObjectInitializer
 {
 	bWantsPlayerState = true;
 	PlayerCameraManagerClass = APlayerCameraManager::StaticClass();
-	// The player's input is processed in the controller's tick (PlayerTick), before its pawn's.
+	// The player's input is processed in the controller's tick (PlayerTick), before its pawn's; also while the game is
+	// paused (UE).
 	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bTickEvenWhenPaused = true;
+	bShouldPerformFullTickWhenPaused = false;
+}
+
+void FInputModeUIOnly::ApplyInputMode(UGameViewportClient& GameViewportClient) const
+{
+	GameViewportClient.SetMouseCaptureMode(EMouseCaptureMode::NoCapture);
+}
+
+void FInputModeGameAndUI::ApplyInputMode(UGameViewportClient& GameViewportClient) const
+{
+	GameViewportClient.SetMouseCaptureMode(EMouseCaptureMode::CaptureDuringMouseDown);
+}
+
+void FInputModeGameOnly::ApplyInputMode(UGameViewportClient& GameViewportClient) const
+{
+	GameViewportClient.SetMouseCaptureMode(EMouseCaptureMode::CapturePermanently_IncludingInitialMouseDown);
+}
+
+void APlayerController::SetInputMode(const FInputModeDataBase& InData)
+{
+	const ULocalPlayer* LocalPlayer = Cast<ULocalPlayer>(Player);
+	if (UGameViewportClient* Viewport = LocalPlayer != nullptr ? LocalPlayer->ViewportClient : nullptr)
+	{
+		InData.ApplyInputMode(*Viewport);
+	}
+}
+
+bool APlayerController::SetPause(bool bPause, FCanUnpause CanUnpauseDelegate)
+{
+	UWorld* World = GetWorld();
+	AGameModeBase* GameMode = World != nullptr ? World->GetAuthGameMode() : nullptr;
+	if (GameMode == nullptr)
+	{
+		return false;
+	}
+	const bool bCurrentPauseState = IsPaused();
+	if (bPause && !bCurrentPauseState)
+	{
+		return GameMode->SetPause(this, MoveTemp(CanUnpauseDelegate));
+	}
+	if (!bPause && bCurrentPauseState)
+	{
+		return GameMode->ClearPause();
+	}
+	return false;
+}
+
+bool APlayerController::IsPaused() const
+{
+	const UWorld* World = GetWorld();
+	return World != nullptr && World->IsPaused();
+}
+
+bool APlayerController::CanUnpause()
+{
+	const UWorld* World = GetWorld();
+	const AWorldSettings* WorldSettings = World != nullptr ? World->GetWorldSettings() : nullptr;
+	return WorldSettings != nullptr && WorldSettings->GetPauserPlayerState() == GetPlayerState<APlayerState>();
+}
+
+void APlayerController::Pause()
+{
+	(void)SetPause(!IsPaused());
+}
+
+void APlayerController::TickActor(float DeltaSeconds, ELevelTick TickType, FActorTickFunction& ThisTickFunction)
+{
+	if (TickType == LEVELTICK_PauseTick && !bShouldPerformFullTickWhenPaused)
+	{
+		// Paused: only the input (the bindings that run when paused) and the effects that play while paused (UE).
+		if (Player != nullptr && PlayerInput != nullptr)
+		{
+			TickPlayerInput(DeltaSeconds, true);
+			ProcessForceFeedbackAndHaptics(DeltaSeconds, true);
+		}
+		return;
+	}
+	Super::TickActor(DeltaSeconds, TickType, ThisTickFunction);
 }
 
 void APlayerController::Possess(ACharacter* Character)

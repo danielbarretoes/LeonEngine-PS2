@@ -21,7 +21,12 @@ const FMapImportNodeRule* UMapImportSettings::FindRule(const FString& NodeName) 
 
 bool UMapImportSettings::AppliesRequiredTags(const FString& MapPackageName)
 {
-	return !MapPackageName.StartsWith(TEXT("/Engine/"), ESearchCase::IgnoreCase);
+	if (MapPackageName.StartsWith(TEXT("/Engine/"), ESearchCase::IgnoreCase))
+	{
+		return false;
+	}
+	return !GetDefault<UMapImportSettings>()->MapsWithoutRequiredTags.ContainsByPredicate(
+		[&MapPackageName](const FString& Exempt) { return Exempt.Equals(MapPackageName, ESearchCase::IgnoreCase); });
 }
 
 FString UMapImportSettings::GetSuffix(const FString& NodeName, const FString& Prefix)

@@ -291,22 +291,42 @@ int32 AShooterAIController::GetTeamIndex() const
 	return 0;
 }
 
+bool AShooterAIController::ApplyDifficulty(EShooterBotDifficulty InDifficulty)
+{
+	const FShooterBotSkill* Preset = DifficultyPresets.FindByPredicate(
+		[InDifficulty](const FShooterBotSkill& Skill) { return Skill.Difficulty == InDifficulty; });
+	if (Preset == nullptr)
+	{
+		UE_LOG(LogShooter, Warning, TEXT("%s: no %s preset in DifficultyPresets; the bot keeps its skill"), *GetName(),
+			GetBotDifficultyName(InDifficulty));
+		return false;
+	}
+	Difficulty = InDifficulty;
+	ReactionTime = Preset->ReactionTime;
+	AimError = Preset->AimError;
+	AimErrorDecayTime = Preset->AimErrorDecayTime;
+	MinAimError = Preset->MinAimError;
+	AimTurnRate = Preset->AimTurnRate;
+	RecoilCompensation = Preset->RecoilCompensation;
+	EnemyMemory = Preset->EnemyMemory;
+	return true;
+}
+
 float AShooterAIController::GetRecoilCompensation() const
 {
-	return FMath::Clamp(RecoilCompensation * FMath::Max(0.1f, Difficulty), 0.0f, 1.0f);
+	return FMath::Clamp(RecoilCompensation, 0.0f, 1.0f);
 }
 
 bool AShooterAIController::HasReacted() const
 {
-	return GetWorldTime() - EnemyFirstSeenTime >= ReactionTime / FMath::Max(0.1f, Difficulty);
+	return GetWorldTime() - EnemyFirstSeenTime >= ReactionTime;
 }
 
 float AShooterAIController::GetCurrentAimError() const
 {
-	const float Skill = FMath::Max(0.1f, Difficulty);
 	const float TimeOnTarget = EnemyFirstSeenTime >= 0.0f ? GetWorldTime() - EnemyFirstSeenTime : 0.0f;
 	const float Settle = FMath::Exp(-TimeOnTarget / FMath::Max(0.01f, AimErrorDecayTime));
-	return ((AimError * Settle) + MinAimError) / Skill;
+	return (AimError * Settle) + MinAimError;
 }
 
 // The senses
@@ -1824,7 +1844,7 @@ float AShooterAIController::AimToward(const FRotator& Wanted, AShooterWeapon& We
 	// The bot's own aim is what the kick sits on; it turns toward Wanted and the kick goes back on top.
 	FRotator Aim = GetControlRotation();
 	Aim.Pitch -= Kick;
-	const float MaxStep = AimTurnRate * FMath::Max(0.1f, Difficulty) * DeltaTime;
+	const float MaxStep = AimTurnRate * DeltaTime;
 	Aim.Yaw += FMath::Clamp(FRotator::NormalizeAxis(Wanted.Yaw - Aim.Yaw), -MaxStep, MaxStep);
 	Aim.Pitch += FMath::Clamp(FRotator::NormalizeAxis(Wanted.Pitch - Aim.Pitch), -MaxStep, MaxStep);
 	Aim.Pitch = FMath::Clamp(Aim.Pitch, -89.0f, 89.0f);

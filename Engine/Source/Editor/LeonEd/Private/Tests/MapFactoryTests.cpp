@@ -504,10 +504,17 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLeonEdMapFactoryEngineMapsSkipRequiredTagsTest
 bool FLeonEdMapFactoryEngineMapsSkipRequiredTagsTest::RunTest(const FString& Parameters)
 {
 	// RequiredTags are a project's check of its maps: a reimport of everything with a project (gate G5) does not check
-	// the engine's maps (AxisTest has no bomb site) against the project's rules.
+	// the engine's maps (AxisTest has no bomb site) against the project's rules, nor the project's maps listed in
+	// MapsWithoutRequiredTags (ShooterGame's MainMenu).
 	TestTrue("A project's map", UMapImportSettings::AppliesRequiredTags(TEXT("/Game/Maps/de_leon")));
 	TestTrue("A test mount's map", UMapImportSettings::AppliesRequiredTags(TEXT("/LeonEdTest/Maps/MapFixture")));
 	TestFalse("An engine map", UMapImportSettings::AppliesRequiredTags(TEXT("/Engine/Maps/AxisTest")));
+	UMapImportSettings* Settings = GetMutableDefault<UMapImportSettings>();
+	const TArray<FString> SavedExempt = Settings->MapsWithoutRequiredTags;
+	Settings->MapsWithoutRequiredTags = {TEXT("/Game/Maps/MainMenu")};
+	TestFalse("An exempt map", UMapImportSettings::AppliesRequiredTags(TEXT("/Game/Maps/mainmenu")));
+	TestTrue("Only that one", UMapImportSettings::AppliesRequiredTags(TEXT("/Game/Maps/de_leon")));
+	Settings->MapsWithoutRequiredTags = SavedExempt;
 	return true;
 }
 

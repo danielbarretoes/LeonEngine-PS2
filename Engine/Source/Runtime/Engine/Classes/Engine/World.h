@@ -442,6 +442,11 @@ public:
 	 * controllers' camera managers, TG_PostUpdateWork and the effects' ageing. Actors spawned while a group or the
 	 * timers run join the level when it ends. TickGameplayFrame adds the physics step after TG_PrePhysics, and is what
 	 * the game engine runs.
+	 *
+	 * A paused world (IsPaused; UE's pause) steps as a LEVELTICK_PauseTick: its time (GetTimeSeconds), its timers, the
+	 * physics step and the effects stand still, and only the tick functions that tick when paused run (the player
+	 * controllers' input, the HUDs and their widgets); the cameras and the scene keep their last step. The real time
+	 * (GetRealTimeSeconds) moves on.
 	 */
 	void Tick(float InDeltaTime);
 
@@ -450,6 +455,12 @@ public:
 	{
 		return TickTaskManager;
 	}
+
+	/**
+	 * The world is paused (UE: IsPaused): a player paused it (AGameModeBase::SetPause, AWorldSettings'
+	 * GetPauserPlayerState).
+	 */
+	[[nodiscard]] bool IsPaused() const;
 
 	/** The world's timers (UE: GetTimerManager), ticked first in each step. */
 	[[nodiscard]] FTimerManager& GetTimerManager() const
@@ -468,6 +479,18 @@ public:
 	 * timers' integer units (FTimerManager::TimeUnitsPerSecond), so it never drifts and matches the timers' clock.
 	 */
 	[[nodiscard]] float GetTimeSeconds() const
+	{
+		return TimeSeconds;
+	}
+
+	/** Seconds of world steps since the world was created, paused ones included (UE: GetRealTimeSeconds). */
+	[[nodiscard]] float GetRealTimeSeconds() const
+	{
+		return RealTimeSeconds;
+	}
+
+	/** Seconds of world steps while the world was not paused (UE: GetUnpausedTimeSeconds): GetTimeSeconds in Leon. */
+	[[nodiscard]] float GetUnpausedTimeSeconds() const
 	{
 		return TimeSeconds;
 	}
@@ -581,8 +604,8 @@ private:
 		const FTransform* Transform, const FActorSpawnParameters& SpawnParameters);
 	/** Tick and TickGameplayFrame (with Params: the physics step and the debug draws). */
 	void RunTick(float InDeltaTime, const FWorldGameplayFrameParams* Params);
-	/** Runs a tick group; the actors it spawned join the level after it. */
-	void RunTickGroup(ETickingGroup Group, float InDeltaTime);
+	/** Runs a tick group (TickType: a paused step's); the actors it spawned join the level after it. */
+	void RunTickGroup(ETickingGroup Group, float InDeltaTime, ELevelTick TickType);
 	/** TickGameplayFrame's physics: the pawn separation and FPhysScene::Step. */
 	void StepPhysics(const FWorldGameplayFrameParams& Params);
 	void FlushPendingSpawns();
@@ -616,6 +639,9 @@ private:
 	float TimeSeconds = 0.0f;
 	/** The world's time in the timers' units (FTimerManager::TimeUnitsPerSecond). */
 	uint64 TimeUnits = 0;
+	/** UE: RealTimeSeconds, read from RealTimeUnits (the paused steps too). */
+	float RealTimeSeconds = 0.0f;
+	uint64 RealTimeUnits = 0;
 	bool bBegunPlay = false;
 	bool bTicking = false;
 	bool bIsTearingDown = false;

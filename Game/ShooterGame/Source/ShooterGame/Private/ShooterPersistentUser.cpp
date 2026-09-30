@@ -33,6 +33,26 @@ UShooterPersistentUser* UShooterPersistentUser::LoadPersistentUser(int32 UserInd
 	return User;
 }
 
+FShooterMatchSettings UShooterPersistentUser::GetMatchSettings() const
+{
+	FShooterMatchSettings Settings;
+	Settings.MapName = MatchMapName;
+	Settings.BotDifficulty = BotDifficulty;
+	Settings.RoundsToWin = FShooterMatchSettings::GetRoundsToWinChoices().Contains(RoundsToWin)
+		? RoundsToWin
+		: FShooterMatchSettings::GetRoundsToWinChoices()[0];
+	Settings.NumBots = FMath::Clamp(NumBots, FShooterMatchSettings::MinBots, FShooterMatchSettings::MaxBots);
+	return Settings;
+}
+
+void UShooterPersistentUser::SetMatchSettings(const FShooterMatchSettings& Settings)
+{
+	MatchMapName = Settings.MapName;
+	BotDifficulty = Settings.BotDifficulty;
+	RoundsToWin = Settings.RoundsToWin;
+	NumBots = Settings.NumBots;
+}
+
 bool UShooterPersistentUser::SaveToSlot(int32 UserIndex)
 {
 	const bool bSaved = UGameplayStatics::SaveGameToSlot(this, GetSlotName(), UserIndex);

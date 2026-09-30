@@ -354,6 +354,7 @@ Desviaciones:
   caché de texturas del GS las traten como cualquier textura.
 
 **P9 · Menú principal, selección de bando y pausa (L)**
+**P9 · Menú principal, selección de bando y pausa (L) — hecha**
 - Mapa de menú (`MainMenu` como `GameDefaultMap`) con `UShooterMainMenuWidget`: mapa (lista de mapas del proyecto),
   dificultad (Fácil, Normal, Difícil, Experto → presets por bot de `ReactionTime`, `AimError`, `AimTurnRate`,
   memoria; hoy `Difficulty` es un solo valor), rondas para ganar (por defecto mejor de 5 = gana quien llega a 3;
@@ -366,6 +367,70 @@ Desviaciones:
   toggle), volver al menú principal. Pausa real del mundo (`SetGamePaused`: ticks y timers parados). El menú de compra
   pasa de Start a otro botón del pad.
 - Tests: opciones → URL → game mode; reparto de bots; pausa detiene timers; volver al menú; guardar opciones.
+
+Estado: hecha.
+- Motor: la pausa de UE. `AGameModeBase::SetPause` / `ClearPause` / `AllowPausing` / `IsPaused` con `FCanUnpause`,
+  `AWorldSettings::GetPauserPlayerState`, `UWorld::IsPaused`, `APlayerController::SetPause`, `IsPaused`, `CanUnpause` y
+  el comando `Pause`, `UGameplayStatics::SetGamePaused` / `IsGamePaused`. Un mundo en pausa hace un paso
+  `LEVELTICK_PauseTick`: su tiempo, los timers, la física y los efectos se paran y solo corren las tick functions con
+  `bTickEvenWhenPaused` (los player controllers, que entonces solo procesan su input, y los HUDs con sus widgets);
+  `GetRealTimeSeconds` sigue y el audio también. `UGameplayStatics::OpenLevel` (sobre `SetClientTravel`) y
+  `GetPlayerController`; `APlayerController::SetInputMode` con `FInputModeUIOnly` / `GameAndUI` / `GameOnly` (la captura
+  del ratón del viewport; el cursor libre de la UI no mira). LeonEd: `MapsWithoutRequiredTags` exime un mapa del
+  proyecto de las etiquetas obligatorias.
+- Menús (UMG, `UShooterMenuWidget`: panel centrado en el oliva y ámbar de CS 1.6, título de 32 px, líneas de 20 px,
+  `UShooterMenuButton` con valor que izquierda/derecha cambian; modal: se queda toda tecla que no sea de navegación, y
+  el controller apila un input component que bloquea el resto; dibujado con una depth sort key por delante del HUD).
+  Principal (`UShooterMainMenuWidget`, mapa `MainMenu`: `GameDefaultMap`, un rincón de pueblo desértico hecho por
+  `SourceArt/Maps/make_main_menu.py`, solo biblioteca estándar; `AShooterGame_Menu` por `GameModeMapPrefixes`,
+  `AShooterPlayerController_Menu` sin pawn, la cámara balanceándose despacio): mapa (`+MapNames=`, de_leon), dificultad,
+  rondas para ganar (3, 5, 8, 16; por defecto 3), bots (1–9), opciones, empezar y salir (solo Win64). Bando
+  (`UShooterTeamMenuWidget`): CT, T, Auto, Espectador. Pausa (`UShooterPauseMenuWidget`, Esc / Start): continuar,
+  cambiar de bando, opciones, volver al menú principal, con la línea del partido (mapa, marcador, ronda, rondas para
+  ganar). Opciones (`FShooterOptionsPage`): sensibilidad, invertir Y, volumen, agacharse (toggle / mantener); se aplican
+  al momento y se guardan una vez al salir de la página.
+- Partido: `?bots=N?difficulty=Hard?winrounds=3` (`FShooterMatchSettings::GetURLOptions`) que `InitGame` lee
+  (`MaxRounds = 2 N − 1`; el descanso sigue en `MaxRounds / 2`, con valores impares la segunda mitad es la larga: 2 + 3
+  en un mejor de 5). Sin `?team=` el jugador espera en el warmup con el menú de bando; `?team=CT|T|Auto|Spectate` elige
+  directamente. `RebalanceBots` reparte `NumBots` con los equipos lo más parejos posible contando al jugador (9 bots
+  con el jugador en CT: 4 CT y 5 T; el impar va al rival del jugador, a T si no hay jugador) y mueve bots al otro lado
+  al empezar la ronda siguiente a un cambio. Cambio de bando con la regla de CS: durante una ronda en juego el jugador
+  vivo muere (cuenta la muerte) y juega en el nuevo bando desde la ronda siguiente; en warmup o freeze reaparece al
+  momento. Las elecciones del menú se guardan en `UShooterPersistentUser` (tarjeta de memoria).
+- Dificultad (D10): presets por dificultad en `DefaultGame.ini` (`+DifficultyPresets`, `FShooterBotSkill`: reacción,
+  error de puntería inicial, asentamiento y mínimo, giro, control del retroceso, memoria), al estilo de los bot profiles
+  de CS; `AShooterAIController::ApplyDifficulty` al añadir el bot. Normal es la habilidad de antes: el BotMatch no
+  cambia. El alcance de la vista (`SightRadius`, 35 m, P3) es igual en todas.
+- Pad: Start abre la pausa; el menú de compra pasa a la cruceta abajo donde se puede comprar (fuera de zona o de tiempo
+  la cruceta abajo sigue sacando la C4, acción `BuyMenuOrBomb`). Esc abre la pausa si no está abierto el menú de compra
+  o el de radio.
+- D10: fuera `bFillTeamsWithBots` y el `Difficulty` único (regla en `CheckBannedApis.ps1`).
+- `-botmatch` sin mapa: el game mode del menú viaja a de_leon al instante (BotMatch.bat y MeasurePS2 no cambian).
+  SmokeTest arranca con `"/Game/Maps/de_leon?team=CT"` (los nueve bots entran repartidos) y sigue dando 10 peones, CT 5,
+  T 5.
+- Tests (591 del motor, 118 de ShooterGame): `System.Engine.World.Pause`, `System.Engine.Travel.OpenLevel`,
+  `System.LeonEd.MapFactory.EngineMapsSkipRequiredTags` ampliado; `ShooterGame.Menu.MatchOptions`, `.DifficultyPresets`,
+  `.BotSplit`, `.TeamChoiceAndChange`, `.PauseMenu`, `.MainMenuToMatchAndBack`; `ShooterGame.Settings.RoundTrip`,
+  `Config.InputAndChannels`, `Input.BuyMenuTakesItsKeys`, `Map.DeLeonHoldsTheGame` y `.TenPawnsOnDeLeon` actualizados.
+- BotMatch 10 7 idéntico dos veces y sin cambios respecto a P3b: `Botmatch OK: 8 round(s), CT 2 - T 6, 57 kill(s),
+  seed 7, sides switched after round 5`. RunGates -PS2 en verde.
+- PCSX2: el ELF arranca en el menú principal a 30 fps (0,38 s hasta el primer frame); `/Game/Maps/de_leon?bots=9?
+  difficulty=Hard?winrounds=3 "-ExecCmds=JoinTeam CT"` elige CT, entran 4 CT y 5 T, el partido es a 5 rondas con el
+  descanso tras la 2, a 30 fps; sin `JoinTeam` el warmup espera; con el menú de pausa abierto y el mundo parado, 30 fps
+  (el canvas 2,4 ms). El manejo con el mando en PCSX2 no se puede automatizar: queda para la prueba del usuario.
+  MeasurePS2 (sobre P3, antes del rebase a P3b, que solo toca bots; tras él PCSX2 estaba ocupado por otro agente;
+  fila «ps2-polish P9» en Budgets.md): 28,80 fps, p50/p95 33,5 ms, p99 83,5 ms (los mismos frames de 83 ms que P3); el
+  primer frame, 1079 ms, incluye ahora el viaje del menú a de_leon (`-botmatch` pasa por el menú), fuera de los
+  percentiles.
+- Capturas Win64 en el scratchpad (`polish/p9_main_menu.png`, `p9_team_menu.png`, `p9_pause_menu.png`).
+
+Desviaciones:
+- La lista de mapas es de config (`+MapNames=`), no del asset registry (Leon no tiene); `-botmatch` salta el menú desde
+  su game mode (el mapa del menú se carga y se viaja en el primer frame), no desde la línea de comandos del motor.
+- `ChooseTeam` en Auto no desempata por marcador (el menor equipo, CT en empate, como antes).
+- El impar del reparto va al rival del jugador (con 4 bots y el jugador en CT: 2 contra 3).
+- Pausar un mundo sin world settings (los mundos de test) falla: los tests crean los suyos.
+- El menú no navega con el stick (la navegación de UMG de P5 es cruceta, flechas y Tab).
 
 ### Cierre
 

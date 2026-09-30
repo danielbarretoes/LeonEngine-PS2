@@ -97,7 +97,6 @@ namespace
 			World, FVector(0.0f, 0.0f, 150.0f), FVector(600.0f, 600.0f, 300.0f), TEXT("BombSite"), TEXT("A"));
 
 		AShooterGameMode* GameMode = Cast<AShooterGameMode>(World.SetGameMode(AShooterGameMode::StaticClass()));
-		GameMode->bFillTeamsWithBots = false;
 		// The rules alone: the bots stand still (bot_stop; P20's bots have their own tests).
 		GameMode->bBotStop = true;
 		GameMode->FreezeTime = 0.5f;
