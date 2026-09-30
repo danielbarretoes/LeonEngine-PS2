@@ -187,6 +187,7 @@ void AShooterHUD::DrawHUD()
 	DrawRadio();
 	DrawMessages();
 	DrawBuyRefusal();
+	DrawPickupNotice();
 	DrawRadioMenu();
 	DrawProgress();
 	DrawSpectatorInfo();
@@ -458,13 +459,19 @@ void AShooterHUD::DrawStatus()
 	const int32 Clip = Weapon != nullptr ? Weapon->GetCurrentAmmoInClip() : 0;
 	const int32 Reserve = Weapon != nullptr ? Weapon->GetCurrentAmmo() : 0;
 	const AShooterWeapon_Instant* InstantWeapon = Cast<AShooterWeapon_Instant>(Weapon);
-	const int32 WeaponMode = InstantWeapon == nullptr ? 0
-		: InstantWeapon->IsSilenced()                 ? 1
-		: InstantWeapon->IsBurstMode()                ? 2
-													  : 0;
+	const int32 WeaponMode = Pawn->IsBombDrawn() ? 3
+		: InstantWeapon == nullptr               ? 0
+		: InstantWeapon->IsSilenced()            ? 1
+		: InstantWeapon->IsBurstMode()           ? 2
+												 : 0;
 	UpdateText(WeaponText, MakeKey(ToKey(Weapon), Clip, Reserve, WeaponMode),
 		[Weapon, Clip, Reserve, WeaponMode]()
 		{
+			// The C4 drawn (CS's slot 5): no weapon in hand.
+			if (WeaponMode == 3)
+			{
+				return FString(TEXT("C4"));
+			}
 			if (Weapon == nullptr)
 			{
 				return FString();
@@ -792,6 +799,26 @@ void AShooterHUD::DrawBuyRefusal()
 		return;
 	}
 	Canvas->DrawText(Controller->GetLastBuyMessage(), EdgeMargin * 2.0f, BuyMenuTop, RefusalColor);
+}
+
+void AShooterHUD::DrawPickupNotice()
+{
+	bPickupNoticeShown = false;
+	const AShooterPlayerController* Controller = GetShooterPlayerController();
+	const AShooterCharacter* Pawn = GetViewedPawn();
+	if (Controller == nullptr || Pawn == nullptr || !Pawn->IsAlive() || Controller->GetPickupTime() < 0.0f ||
+		GetWorldTime() - Controller->GetPickupTime() > PickupNoticeDuration)
+	{
+		return;
+	}
+	const FString& Message = Controller->GetPickupMessage();
+	// Formatted once per pickup (its time is the key).
+	UpdateText(PickupText, MakeKey(static_cast<int64>(Controller->GetPickupTime() * 1000.0f)),
+		[&Message]() { return Message; });
+	const float Width = static_cast<float>(Canvas->GetSizeX());
+	const float Bottom = static_cast<float>(Canvas->GetSizeY()) - EdgeMargin - HudLineHeight;
+	Canvas->DrawText(PickupText.Text, Width - PickupText.Width - EdgeMargin, Bottom - (2.0f * LineStep), StatusColor);
+	bPickupNoticeShown = true;
 }
 
 void AShooterHUD::DrawProgress()

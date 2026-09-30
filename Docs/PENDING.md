@@ -36,10 +36,6 @@ PCSX2 (p50/p95/p99 33.5 ms), so nothing here blocks the frame rate.
 - **Team selection.** On joining a match the player chooses CT or T, as in CS. The bots are then redistributed so the
   teams are as even as possible, counting the player.
 - **In-game menu.** A pause menu during the match (Esc / Start) to resume, change team, or go back to the main menu.
-- **Crouch toggle.** Crouch toggles on press instead of being held.
-- **Drop and pick up weapons.** The player can drop the current weapon (CS's G), and walking over a weapon on the
-  ground picks it up when its slot is free, as in CS. Dead players drop their primary weapon (and the bomb) for others
-  to take.
 - **UI.** Better menus and HUD, and a new font family.
 - **A table widget for the HUD.** A reusable UMG-style table component (columns with headers, alignment and widths,
   rows, sorting, a highlighted row) for the scoreboard. Today `AShooterHUD` draws the scoreboard by hand. The CS

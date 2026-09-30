@@ -65,13 +65,30 @@ Objetivo: cerrar todo eso con buenas prácticas y nada legacy, manteniendo 30 fp
 
 ### Juego y controles
 
-**P4 · Agacharse en toggle y soltar/recoger armas (S)**
+**P4 · Agacharse en toggle y soltar/recoger armas (S) — hecha**
 - Crouch en toggle por defecto (opción guardada en `UShooterPersistentUser`: toggle/mantener); `OnCrouchPressed`
   alterna (`ShooterCharacter.cpp:326`); se actualiza `Config.InputAndChannels`.
 - Soltar ya existe (G, `DropWeapon`); se añade soltar la bomba (G con la bomba como slot 5, como CS) y recoger al
   pasar por encima cuando el hueco está libre (`TickPickup`) con aviso en el HUD; los muertos ya sueltan primaria y
   bomba (`ShooterCharacter.cpp:1190`).
 - Tests: toggle, soltar y recoger arma y bomba.
+
+Estado: el crouch alterna por defecto (`bToggleCrouch` en `UShooterPersistentUser`, comando `SetToggleCrouch 0|1`;
+con la opción apagada se mantiene; los bots siguen llamando a `Crouch()`/`UnCrouch()`). La bomba sigue fuera del
+inventario (`CarriedBomb`), pero se saca como el slot 5 de CS: la acción `Bomb` (5, cruceta abajo) llama a
+`AShooterCharacter::DrawBomb`, que guarda el arma y oculta los brazos (el C4 no tiene modelo en primera persona); el
+HUD muestra `C4` como arma; cualquier arma la guarda (`EquipWeapon`); G (`OnDropWeapon`) la suelta delante de los pies
+(`DropBomb`, el mismo punto que un arma, `GetDropLocation`) y quien la soltó no la recoge hasta pasado
+`AShooterBomb::PickupDelay` (1 s; la muerte no cambia, así que el BotMatch es idéntico). Recoger un arma pasa por
+`AShooterCharacter::PickUpWeapon` (suena su equipamiento si no se saca al momento) y un arma o la bomba recogidas
+muestran `Picked up <item>` en el HUD 2 s (`PickupNoticeDuration`). El arma conserva munición y silenciador. Tests:
+`ShooterGame.Input.CrouchToggleAndHold`, `.DropAndPickUpWeapon`, `.DropAndPickUpBomb`, `Settings.RoundTrip` y
+`Config.InputAndChannels` ampliados (102 tests de ShooterGame). BotMatch 10 7 sin cambios: `Botmatch OK: 9 round(s),
+CT 3 - T 6, 55 kill(s), seed 7, sides switched after round 5`.
+
+Desviaciones: el aviso usa el `WeaponName` del arma (`Picked up m4a1`), como el resto del HUD, no un nombre largo
+(`AK-47`); los nombres para mostrar quedan para el HUD nuevo de P6. Disparar con el C4 en la mano no planta (se
+planta con E, como antes).
 
 ### Interfaz
 

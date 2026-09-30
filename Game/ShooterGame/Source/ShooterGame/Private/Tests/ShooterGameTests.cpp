@@ -262,7 +262,16 @@ bool FShooterGameConfigTest::RunTest(const FString& Parameters)
 	const UInputSettings* Settings = GetDefault<UInputSettings>();
 	TArray<FInputActionKeyMapping> Crouch;
 	Settings->GetActionMappingByName(TEXT("Crouch"), Crouch);
-	TestEqual("Crouch keys (Left Ctrl, Circle; C is CS's radio3)", Crouch.Num(), 2);
+	TestTrue("Crouch keys (Left Ctrl, Circle; C is CS's radio3)",
+		Crouch.Num() == 2 && Crouch[0].Key == EKeys::LeftControl && Crouch[1].Key == EKeys::Gamepad_FaceButton_Right);
+	TArray<FInputActionKeyMapping> Bomb;
+	Settings->GetActionMappingByName(TEXT("Bomb"), Bomb);
+	TestTrue("The bomb (CS's slot 5): 5, the D-pad's down",
+		Bomb.Num() == 2 && Bomb[0].Key == EKeys::Five && Bomb[1].Key == EKeys::Gamepad_DPad_Down);
+	TArray<FInputActionKeyMapping> Drop;
+	Settings->GetActionMappingByName(TEXT("DropWeapon"), Drop);
+	TestTrue("Drop: G, the D-pad's right",
+		Drop.Num() == 2 && Drop[0].Key == EKeys::G && Drop[1].Key == EKeys::Gamepad_DPad_Right);
 	for (const TCHAR* Radio : {TEXT("Radio1"), TEXT("Radio2"), TEXT("Radio3")})
 	{
 		TArray<FInputActionKeyMapping> RadioKeys;

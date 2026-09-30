@@ -67,13 +67,13 @@ A map URL picks the team and the seed of the rounds (the bomb's carrier): `Shoot
 | Mouse | Right stick | Look (the mouse 0.07° per pixel, `SetMouseSensitivity <degrees per pixel>` changes it; the stick up to 150° a second across, 100° up and down: `BaseTurnRate` / `BaseLookUpRate`) |
 | W / S, D / A | Left stick | Move forward / back, right / left (the stick walks slower when tilted less) |
 | Space | Cross | Jump (on a ladder: off it) |
-| Left Ctrl (held) | Circle (held) | Crouch (it stays crouched under a ceiling until there is room) |
+| Left Ctrl | Circle | Crouch: a press crouches and the next stands up (`SetToggleCrouch 0` holds it instead; it stays crouched under a ceiling until there is room) |
 | Left Shift (held) | L3 (held) | Walk (52 % of the speed) |
 | Left mouse button | R2 | Fire (held: automatic weapons keep firing) |
 | Right mouse button | L2 | The secondary attack: the AWP's zoom (two levels, then off), the USP's and the M4A1's silencer, the Glock's burst mode, the knife's stab |
 | R | Square | Reload |
-| 1 / 2 / 3 / 4 | R1 / L1 / D-pad up / D-pad left | Primary (the MP5, the rifles, the AWP) / pistol / knife / grenade (again: the next grenade, HE, flashbang, smoke) |
-| G | D-pad right | Drop the weapon in hand, not the knife nor a grenade (a pawn without one in that slot picks it up by walking over it) |
+| 1 / 2 / 3 / 4 / 5 | R1 / L1 / D-pad up / D-pad left / D-pad down | Primary (the MP5, the rifles, the AWP) / pistol / knife / grenade (again: the next grenade, HE, flashbang, smoke) / the bomb (CS's C4 in slot 5, for its carrier: the weapon is put away and the HUD shows `C4`; a weapon's key puts it back) |
+| G | D-pad right | Drop the weapon in hand, not the knife nor a grenade, or the bomb when it is drawn (a pawn without one in that slot, or a terrorist for the bomb, picks it up by walking over it; the HUD says `Picked up <item>`) |
 | , / . | — | A box of the primary's / the pistol's ammunition (CS: buyammo1 / buyammo2), when the player may buy |
 | E (held) | Triangle (held) | Plant the bomb (its carrier, standing still in a bomb site, 3 s) or defuse it (a CT at the planted bomb, 10 s, 5 with a kit) |
 | B | Start | The buy menu (the console's `buymenu` toggles it too), CS's: 1 Pistols, 2 SMGs, 3 Rifles, 4 Primary ammo, 5 Secondary ammo, 6 Equipment; a category's page lists what the team may buy (Rifles: the AK-47 for the T, the M4A1 for the CT, the AWP), and a purchase goes back to the first page. It opens only when its player may buy (alive, in the team's buy zone, within the buy time; never while spectating) and closes by itself when that stops; the HUD says why for 2 s (`BuyRefusalDuration`). While it is open: the number keys choose a line; the D-pad's up and down move the highlight (`>`) and Cross chooses it; Escape or Circle go back to the first page, and there close it (B and Start close it). It takes these keys only while it is open |
@@ -103,7 +103,8 @@ PS2 (the folder `BASLUS-99001SHOOTER` with the title `ShooterGame Settings` and 
 `[MemoryCard]` of `DefaultGame.ini`). The player's controller loads them when it plays at a screen (not headless nor
 in the tests) and each command applies its option and saves them all: `SetSensitivity <scale>` (the mouse's 0.07° a
 pixel and the stick's rates times the scale, 1 by default), `SetInvertY 0|1` (up looks down, the mouse and the stick),
-`SetVolume <0..1>` (the audio device's master volume), `SetCrosshairColor <r> <g> <b>` (0..1 each). A card that is
+`SetVolume <0..1>` (the audio device's master volume), `SetCrosshairColor <r> <g> <b>` (0..1 each), `SetToggleCrouch 0|1`
+(1, the default: a press of the crouch key crouches and the next stands up; 0: held, as CS 1.6). A card that is
 missing, unformatted, full or pulled out logs why the options were not saved (`ESaveGameResult`), and the game plays
 on with them.
 
@@ -296,7 +297,10 @@ Damage (`AShooterCharacter::TakeDamage`, after `AActor::TakeDamage`):
   its back when shot from the front, on its front from behind) and lies there (until the next round), a player gets
   the death cam and then spectates ([Death and spectating](#death-and-spectating)) and a bot
   lets go of the pawn.
-- A weapon on the floor is picked up after 1 s by the first live pawn within 60 cm that has its slot free.
+- A weapon on the floor is picked up after 1 s by the first live pawn within 60 cm that has its slot free
+  (`AShooterCharacter::PickUpWeapon`), with its rounds and its silencer or burst mode; a weapon not drawn at once plays
+  its draw sound, and a player reads `Picked up <weapon>` on the HUD for 2 s (`PickupNoticeDuration`). G drops the
+  weapon in hand ahead of the feet ([ps2-polish](../../Docs/PLANS/ps2-polish.md) P4).
 
 Tests (N30a, `ShooterArsenalTests.cpp`): `ShooterGame.Arsenal.StatsTable` (every weapon against the table, no other
 weapon class, the first pistols' reserves), `.SilencerAndBurst`, `.KnifeBackstab`, `ShooterGame.Weapons.Penetration`
@@ -409,7 +413,9 @@ Counter-Strike's defusal rules (`AShooterGameMode`, all in `DefaultGame.ini`'s `
   500 damage falling to nothing at 44.5 m (CS's 1750 units), through walls, armor taking its share as with the
   grenade. A counter-terrorist within 1.2 m defuses it by holding E for
   10 s (5 with a kit); walking off or dying stops the defuse. A dead carrier drops the bomb, and the first live
-  terrorist to walk over it takes it.
+  terrorist to walk over it takes it (`Picked up C4` on its player's HUD). The carrier draws it as CS's slot 5 (5, the
+  D-pad's down) and drops it with G ahead of the feet; the one who dropped it can take it back after 1 s
+  (`AShooterBomb::PickupDelay`). It is planted with E, drawn or not.
 
 Tests: `ShooterGame.Rounds.HalftimeSwitchesSides` (four rounds: after round 2 every player is on the other team, the
 scores went with them, the money is back to $800, the new terrorists stand on the T starts with the pistol only and one

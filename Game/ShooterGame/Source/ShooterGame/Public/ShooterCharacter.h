@@ -59,13 +59,14 @@ struct FDamageEvent;
  * the knife) and its team's (DefaultWeaponsCT: the USP, DefaultWeaponsT: the Glock; a pawn without a team the CT's)
  * when a controller first takes it, each with DefaultWeaponClips clips in the reserve (CS: 12/24, 20/40), and draws
  * the best (primary, secondary, grenade, then the knife). A weapon on the floor is picked up by walking over it when
- * its slot is free (AShooterWeapon's pickup). The grenade slot holds one weapon of each grenade (the HE, the
- * flashbang, the smoke grenade), and its key cycles them (SelectSlot).
+ * its slot is free (AShooterWeapon's pickup, PickUpWeapon). The grenade slot holds one weapon of each grenade (the HE,
+ * the flashbang, the smoke grenade), and its key cycles them (SelectSlot).
  *
  * The bomb (AShooterBomb): the terrorist carrying it plants it by holding Use (E) standing still in a bomb site for
  * the bomb's PlantDuration; a counter-terrorist defuses a planted bomb by holding Use near it (quicker with a defuse
- * kit). Neither moves while planting or defusing (CS). The freeze time at a round's start holds every pawn still and
- * its weapons silent; it can still look around.
+ * kit). Neither moves while planting or defusing (CS). The carrier draws the bomb (5; D-pad down) and drops it with the
+ * drop key (G; D-pad right), as CS's C4 in slot 5; a terrorist walking over it takes it. The freeze time at a round's
+ * start holds every pawn still and its weapons silent; it can still look around.
  *
  * Animation (Docs/PLANS/ps2-shipping.md N25, N27): the team's skinned body (CTBodyMeshName, TBodyMeshName, on
  * ACharacter's skeletal mesh) plays a UCharacterAnimInstance: the locomotion blend space by speed and direction
@@ -91,10 +92,11 @@ struct FDamageEvent;
  *
  * Input (Config/DefaultInput.ini): MoveForward / MoveRight (W A S D; the left stick), Turn / LookUp (the mouse),
  * TurnRate / LookUpRate (the right stick: BaseTurnRate / BaseLookUpRate degrees a second at full tilt), Jump (Space;
- * Cross), Crouch (Left Ctrl: held; Circle), Walk (Left Shift: held; L3), Fire (the left button; R2), Targeting (the
- * right button: the AWP's zoom, a silencer, the Glock's burst, the knife's stab; L2), Reload (R; Square),
- * PrimaryWeapon / SecondaryWeapon / Knife / Grenade (1, 2, 3, 4; R1, L1, D-pad up, D-pad left), DropWeapon (G; D-pad
- * right), Use (E: held; Triangle). A dead pawn ignores them, and the buy menu takes its keys while it is open
+ * Cross), Crouch (Left Ctrl; Circle: a press toggles, or held with the player's option), Walk (Left Shift: held; L3),
+ * Fire (the left button; R2), Targeting (the right button: the AWP's zoom, a silencer, the Glock's burst, the knife's
+ * stab; L2), Reload (R; Square), PrimaryWeapon / SecondaryWeapon / Knife / Grenade / Bomb (1, 2, 3, 4, 5; R1, L1,
+ * D-pad up, D-pad left, D-pad down), DropWeapon (G; D-pad right: the weapon in hand, or the bomb when drawn), Use (E:
+ * held; Triangle). A dead pawn ignores them, and the buy menu takes its keys while it is open
  * (AShooterPlayerController).
  */
 UCLASS(Config = Game)
@@ -321,10 +323,23 @@ public:
 	{
 		return CarriedBomb;
 	}
-	void SetCarriedBomb(AShooterBomb* Bomb)
+	/** Sets the bomb carried; when it goes (dropped, planted, destroyed) while drawn, the best weapon is drawn. */
+	void SetCarriedBomb(AShooterBomb* Bomb);
+	/**
+	 * Draws the carried bomb (CS 1.6's slot 5): the weapon in hand is put away and the arms hidden (the C4 has no
+	 * first-person model). Drawing a weapon puts the bomb away. False without a bomb, dead or already drawn.
+	 */
+	bool DrawBomb();
+	/** The bomb is drawn (DrawBomb). */
+	[[nodiscard]] bool IsBombDrawn() const
 	{
-		CarriedBomb = Bomb;
+		return bBombDrawn;
 	}
+	/**
+	 * Drops the carried bomb ahead of the feet, as a weapon falls (CS's drop key with the C4 drawn); the dropper cannot
+	 * take it back for the bomb's PickupDelay. False without a bomb, dead or planting.
+	 */
+	bool DropBomb();
 	/** A counter-terrorist's defuse kit (the buy menu; lost with the pawn). */
 	[[nodiscard]] bool HasDefuseKit() const
 	{
@@ -378,6 +393,13 @@ public:
 	void EquipBestWeapon();
 	/** Drops a weapon of the inventory at the pawn's feet, ahead; returns true when dropped. */
 	bool DropWeapon(AShooterWeapon* Weapon);
+	/**
+	 * Takes a weapon from the floor (AShooterWeapon's pickup: walking over it with its slot free): adds it, plays its
+	 * draw sound when it is not drawn at once (drawn, its draw plays it) and tells the player (NotifyPickup).
+	 */
+	void PickUpWeapon(AShooterWeapon* Weapon);
+	/** Tells the controlling player what was picked up (the HUD's "Picked up <item>"); a bot hears nothing. */
+	void NotifyPickup(const FString& ItemName) const;
 	/** Destroys every weapon of the inventory (UE ShooterGame: DestroyInventory). */
 	void DestroyInventory();
 	/** The drawn weapon (UE ShooterGame: GetWeapon). */
@@ -554,6 +576,7 @@ private:
 	void OnSelectSecondary();
 	void OnSelectKnife();
 	void OnSelectGrenade();
+	void OnSelectBomb();
 	void OnDropWeapon();
 	void OnUsePressed();
 	void OnUseReleased();
@@ -561,6 +584,13 @@ private:
 	void TickPlanting();
 	/** Whether the pawn may plant now: alive, carrying, in a site, on the floor, still. */
 	[[nodiscard]] bool CanPlant() const;
+
+	/** The crouch key toggles (the controlling player's option, UShooterPersistentUser::bToggleCrouch). */
+	[[nodiscard]] bool IsCrouchToggle() const;
+	/** Where a dropped item lands: ahead of the feet, short of a wall, on the floor below (Dropped ignored). */
+	[[nodiscard]] FVector GetDropLocation(const AActor* Dropped) const;
+	/** The drawn bomb goes back (a weapon is drawn, the bomb left): the arms show again. */
+	void PutAwayBomb();
 
 	/** Sets the body's mesh for the team. */
 	void UpdateBody();
@@ -662,6 +692,8 @@ private:
 
 	bool bHasDefuseKit = false;
 	bool bIsPlanting = false;
+	/** The carried bomb is drawn (DrawBomb): no weapon in hand. */
+	bool bBombDrawn = false;
 	/** The team's default weapons were given (SpawnTeamInventory). */
 	bool bTeamInventoryGiven = false;
 	/** The last flash: when it began, its hold, fade and white, and when the blindness ends (world time). */

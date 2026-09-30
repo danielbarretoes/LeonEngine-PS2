@@ -164,6 +164,12 @@ float AShooterPlayerController::GetAimSensitivity() const
 	return PersistentUser != nullptr ? FMath::Max(PersistentUser->AimSensitivity, 0.01f) : 1.0f;
 }
 
+bool AShooterPlayerController::IsCrouchToggle() const
+{
+	return PersistentUser != nullptr ? PersistentUser->bToggleCrouch
+									 : GetDefault<UShooterPersistentUser>()->bToggleCrouch;
+}
+
 void AShooterPlayerController::ApplyPersistentUser()
 {
 	const UShooterPersistentUser* User = GetPersistentUser();
@@ -232,6 +238,12 @@ void AShooterPlayerController::SetCrosshairColor(float Red, float Green, float B
 {
 	GetPersistentUser()->CrosshairColor =
 		FLinearColor(FMath::Clamp(Red, 0.0f, 1.0f), FMath::Clamp(Green, 0.0f, 1.0f), FMath::Clamp(Blue, 0.0f, 1.0f));
+	SavePersistentUser();
+}
+
+void AShooterPlayerController::SetToggleCrouch(int32 Toggle)
+{
+	GetPersistentUser()->bToggleCrouch = Toggle != 0;
 	SavePersistentUser();
 }
 
@@ -748,6 +760,13 @@ bool AShooterPlayerController::CanOpenBuyMenu(FString* OutReason) const
 	const UWorld* World = GetWorld();
 	const AShooterGameMode* GameMode = World != nullptr ? World->GetAuthGameMode<AShooterGameMode>() : nullptr;
 	return GameMode == nullptr || GameMode->CanBuy(*ShooterPawn, OutReason);
+}
+
+void AShooterPlayerController::NotifyPickup(const FString& ItemName)
+{
+	PickupMessage = FString::Printf(TEXT("Picked up %s"), *ItemName);
+	const UWorld* World = GetWorld();
+	PickupTime = World != nullptr ? World->GetTimeSeconds() : 0.0f;
 }
 
 void AShooterPlayerController::OnBuyMenuRefused(const FString& Reason)

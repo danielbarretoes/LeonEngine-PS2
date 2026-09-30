@@ -127,6 +127,18 @@ public:
 		return LastBuyMessage;
 	}
 
+	/** The pawn picked up an item from the floor (a weapon's WeaponName, C4): the HUD says so (CS's pickup notice). */
+	void NotifyPickup(const FString& ItemName);
+	/** The last pickup's notice ("Picked up ak47"), and the world time it came (negative: none yet). */
+	[[nodiscard]] const FString& GetPickupMessage() const
+	{
+		return PickupMessage;
+	}
+	[[nodiscard]] float GetPickupTime() const
+	{
+		return PickupTime;
+	}
+
 	/** Buys an item for the pawn (AShooterGameMode::Buy). */
 	UFUNCTION(Exec)
 	void Buy(FString Item);
@@ -323,6 +335,9 @@ public:
 	/** The crosshair's colour, each channel 0 to 1. */
 	UFUNCTION(Exec)
 	void SetCrosshairColor(float Red, float Green, float Blue);
+	/** 1: a press of the crouch key crouches or stands up (the default); 0: the key is held to crouch. */
+	UFUNCTION(Exec)
+	void SetToggleCrouch(int32 Toggle);
 
 	/** The options (loaded at BeginPlay for a player at a screen; the defaults otherwise), never null once playing. */
 	[[nodiscard]] UShooterPersistentUser* GetPersistentUser();
@@ -330,6 +345,8 @@ public:
 	void ApplyPersistentUser();
 	/** The aim's scale the pawn's stick rates take (1 without options). */
 	[[nodiscard]] float GetAimSensitivity() const;
+	/** The crouch key toggles (the default without options) rather than being held. */
+	[[nodiscard]] bool IsCrouchToggle() const;
 
 	// Force feedback (N24; UE ShooterGame's): the DualShock's small motor on each shot, the large one when hurt and
 	// near an explosion.
@@ -408,6 +425,8 @@ private:
 	int32 BuyMenuCategory = INDEX_NONE;
 	FString LastBuyMessage;
 	float BuyRefusalTime = -1.0f;
+	FString PickupMessage;
+	float PickupTime = -1.0f;
 
 	/** The radio menu open (1 to 3), 0 when none. */
 	int32 RadioMenu = 0;

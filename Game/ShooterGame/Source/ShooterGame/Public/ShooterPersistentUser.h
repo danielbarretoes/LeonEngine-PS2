@@ -9,10 +9,11 @@ class AShooterPlayerController;
 /**
  * The player's options, kept between sessions (UE ShooterGame: UShooterPersistentUser; Docs/PLANS/ps2-shipping.md N24):
  * the aim sensitivity (a scale of the mouse's degrees a pixel and of the right stick's turn rates), an inverted Y axis
- * (the mouse and the stick), the sound's volume and the crosshair's colour. They live in the save slot "Settings":
- * Saved/SaveGames/Settings.sav on the desktop, the memory card's ShooterGame folder on the PS2
- * (UGameplayStatics::SaveGameToSlot). The player controller loads them when its player plays at a screen, applies them,
- * and saves them when a console command changes one (SetSensitivity, SetInvertY, SetVolume, SetCrosshairColor).
+ * (the mouse and the stick), the sound's volume, the crosshair's colour and how the crouch key works (a toggle or
+ * held). They live in the save slot "Settings": Saved/SaveGames/Settings.sav on the desktop, the memory card's
+ * ShooterGame folder on the PS2 (UGameplayStatics::SaveGameToSlot). The player controller loads them when its player
+ * plays at a screen, applies them, and saves them when a console command changes one (SetSensitivity, SetInvertY,
+ * SetVolume, SetCrosshairColor, SetToggleCrouch).
  */
 UCLASS()
 class SHOOTERGAME_API UShooterPersistentUser : public USaveGame
@@ -49,4 +50,8 @@ public:
 	/** The crosshair's colour (AShooterHUD::CrosshairColor). */
 	UPROPERTY()
 	FLinearColor CrosshairColor = FLinearColor(0.0f, 1.0f, 0.0f);
+
+	/** A press of the crouch key crouches or stands up (Docs/PLANS/ps2-polish.md P4); false: held to crouch. */
+	UPROPERTY()
+	bool bToggleCrouch = true;
 };

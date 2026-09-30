@@ -43,9 +43,10 @@ class UStaticMeshComponent;
  * forwards its animations' notifies (OnAnimNotify): MagOut and MagIn play MagOutSound and MagInSound.
  *
  * On the floor (OnDropped): a weapon a pawn dropped or left when it died lies where it fell, Mesh3P shown, among the
- * game mode's pickups, and is picked up (AShooterCharacter::AddWeapon) by the first live pawn of the game mode's pawns
- * that walks within PickupRadius and has its slot free, after PickupDelay (so the pawn that dropped it does not take it
- * back at once). It keeps its ammunition.
+ * game mode's pickups, and is picked up (AShooterCharacter::PickUpWeapon: the draw's sound and the HUD's notice) by the
+ * first live pawn of the game mode's pawns that walks within PickupRadius and has its slot free, after PickupDelay (so
+ * the pawn that dropped it does not take it back at once). It keeps its ammunition and its state (the silencer, the
+ * burst mode).
  *
  * Timing: the fire rate counts in the weapon's tick against the world's time: a shot every GetTimeBetweenShots while
  * the trigger is held (automatic) or once per press (semi-automatic); the draw and the reload are timers. Firing with
@@ -250,6 +251,11 @@ public:
 	virtual void OnEquip();
 	/** Put away: the trigger, the reload and the zoom stop, the meshes hide (UE ShooterGame: OnUnEquip). */
 	virtual void OnUnEquip();
+	/** The draw's sound at the weapon (OnEquip's; a pickup's too, AShooterCharacter::PickUpWeapon). */
+	void PlayEquipSound() const
+	{
+		PlayWeaponSound(EquipSound);
+	}
 	[[nodiscard]] bool IsEquipped() const
 	{
 		return bIsEquipped;

@@ -21,9 +21,9 @@ UShooterPersistentUser* UShooterPersistentUser::LoadPersistentUser(int32 UserInd
 		}
 		else
 		{
-			UE_LOG(LogShooter, Log, TEXT("Settings loaded: sensitivity %.2f, Y axis %s, volume %.2f"),
+			UE_LOG(LogShooter, Log, TEXT("Settings loaded: sensitivity %.2f, Y axis %s, volume %.2f, crouch %s"),
 				static_cast<double>(User->AimSensitivity), User->bInvertedYAxis ? TEXT("inverted") : TEXT("normal"),
-				static_cast<double>(User->SoundVolume));
+				static_cast<double>(User->SoundVolume), User->bToggleCrouch ? TEXT("toggles") : TEXT("held"));
 		}
 	}
 	if (User == nullptr)

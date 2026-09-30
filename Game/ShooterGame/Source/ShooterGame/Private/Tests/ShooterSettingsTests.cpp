@@ -25,11 +25,12 @@ bool FShooterSettingsRoundTripTest::RunTest(const FString& Parameters)
 	TStrongObjectPtr<UShooterPersistentUser> Defaults(UShooterPersistentUser::LoadPersistentUser(0));
 	TestTrue("The defaults without a save",
 		Defaults.IsValid() && Defaults->AimSensitivity == 1.0f && !Defaults->bInvertedYAxis &&
-			Defaults->SoundVolume == 1.0f);
+			Defaults->SoundVolume == 1.0f && Defaults->bToggleCrouch);
 	Defaults->AimSensitivity = 1.75f;
 	Defaults->bInvertedYAxis = true;
 	Defaults->SoundVolume = 0.3f;
 	Defaults->CrosshairColor = FLinearColor(1.0f, 0.0f, 1.0f);
+	Defaults->bToggleCrouch = false;
 	TestTrue("Saved", Defaults->SaveToSlot(0));
 	TestTrue("In the Settings slot", IFileManager::Get().FileExists(*(Dir + TEXT("Settings.sav"))));
 	TStrongObjectPtr<UShooterPersistentUser> Loaded(UShooterPersistentUser::LoadPersistentUser(0));
@@ -37,6 +38,7 @@ bool FShooterSettingsRoundTripTest::RunTest(const FString& Parameters)
 	TestTrue("The inverted Y axis", Loaded.IsValid() && Loaded->bInvertedYAxis);
 	TestTrue("The volume", Loaded.IsValid() && Loaded->SoundVolume == 0.3f);
 	TestTrue("The crosshair", Loaded.IsValid() && Loaded->CrosshairColor.Equals(FLinearColor(1.0f, 0.0f, 1.0f)));
+	TestTrue("Crouch held", Loaded.IsValid() && !Loaded->bToggleCrouch);
 
 	IPlatformFeaturesModule::Get().SetSaveGameSystemOverride(nullptr);
 	IFileManager::Get().DeleteDirectory(*Dir, false, true);

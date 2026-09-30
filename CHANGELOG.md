@@ -7,6 +7,21 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- ShooterGame's crouch toggles, and the bomb and the weapons are dropped and picked up as in CS
+  ([ps2-polish](Docs/PLANS/ps2-polish.md) P4): a press of the crouch key (Left Ctrl, Circle) crouches and the next
+  stands up, the default; the player's option `bToggleCrouch` (`UShooterPersistentUser`, the `Settings` slot on the
+  memory card; the `SetToggleCrouch 0|1` command) holds it instead; the bots crouch as before. The carried bomb is
+  CS 1.6's slot 5: 5 or the D-pad's down draws it (`AShooterCharacter::DrawBomb`: the weapon put away, the arms hidden,
+  the HUD's weapon line `C4`), a weapon's key puts it away, and the drop key (G, the D-pad's right) drops it ahead of
+  the feet (`DropBomb`); its dropper takes it back only after `AShooterBomb::PickupDelay` (1 s). A weapon or the bomb
+  picked up from the floor shows `Picked up <item>` on the HUD for `PickupNoticeDuration` (2 s), and a weapon that is
+  not drawn at once plays its draw sound (`AShooterCharacter::PickUpWeapon`); it keeps its rounds and its silencer.
+  Tests: `ShooterGame.Input.CrouchToggleAndHold`, `.DropAndPickUpWeapon`, `.DropAndPickUpBomb`; `Settings.RoundTrip` and
+  `Config.InputAndChannels` updated (102 ShooterGame tests). The bot match is unchanged
+  (`Botmatch OK: 9 round(s), CT 3 - T 6, 55 kill(s), seed 7, sides switched after round 5`).
+
 ## [0.24.0] - 2026-09-29
 
 Real content, animation and CS parity ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N21 to N31, with N24b and N30a to

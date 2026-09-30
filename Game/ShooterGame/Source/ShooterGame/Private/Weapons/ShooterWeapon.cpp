@@ -261,7 +261,7 @@ void AShooterWeapon::TickPickup()
 		if (Delta.SizeSquared2D() <= FMath::Square(PickupRadius) && FMath::Abs(Delta.Z) <= PickupReachZ)
 		{
 			UE_LOG(LogShooter, Log, TEXT("%s picked up %s"), *Pawn->GetName(), *WeaponName);
-			Pawn->AddWeapon(this);
+			Pawn->PickUpWeapon(this);
 			return;
 		}
 	}
@@ -280,7 +280,7 @@ void AShooterWeapon::OnEquip()
 	// The draw lasts its montage when it has one (UE ShooterGame), EquipDuration otherwise.
 	const float AnimDuration = PlayWeaponAnimation(EquipAnim);
 	SetEquippingFor(AnimDuration > 0.0f ? AnimDuration : EquipDuration);
-	PlayWeaponSound(EquipSound);
+	PlayEquipSound();
 }
 
 void AShooterWeapon::SetEquippingFor(float Seconds)

@@ -122,12 +122,14 @@ void AShooterBomb::Drop(const FVector& Location)
 	{
 		return;
 	}
-	if (Carrier != nullptr)
-	{
-		Carrier->SetCarriedBomb(nullptr);
-	}
-	Carrier = nullptr;
+	Dropper = Carrier;
+	DropperPickupTime = GetWorldTime() + PickupDelay;
 	State = EShooterBombState::Dropped;
+	Carrier = nullptr;
+	if (Dropper != nullptr)
+	{
+		Dropper->SetCarriedBomb(nullptr);
+	}
 	(void)SetActorLocationAndRotation(Location, FRotator::ZeroRotator);
 	Mesh->SetVisibility(true);
 	UE_LOG(LogShooter, Log, TEXT("The bomb was dropped at (%.0f, %.0f, %.0f)"), static_cast<double>(Location.X),
@@ -314,7 +316,8 @@ void AShooterBomb::Tick(float DeltaSeconds)
 				// The game mode's pawns, in the level's order (GiveTo changes no pawn).
 				for (AShooterCharacter* Pawn : GameMode->GetPawns())
 				{
-					if (Pawn->IsPendingKillPending() || !Pawn->IsAlive() || Pawn->GetTeam() != EShooterTeam::T)
+					if (Pawn->IsPendingKillPending() || !Pawn->IsAlive() || Pawn->GetTeam() != EShooterTeam::T ||
+						(Pawn == Dropper && GetWorldTime() < DropperPickupTime))
 					{
 						continue;
 					}
@@ -323,6 +326,7 @@ void AShooterBomb::Tick(float DeltaSeconds)
 					{
 						UE_LOG(LogShooter, Log, TEXT("%s picked up the bomb"), *Pawn->GetName());
 						GiveTo(Pawn);
+						Pawn->NotifyPickup(TEXT("C4"));
 						break;
 					}
 				}

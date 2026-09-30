@@ -63,8 +63,9 @@ private:
  * - the crosshair at the centre, its gap growing with the weapon's spread (the dynamic crosshair), and the hit marker
  *   (four diagonal ticks, red on a kill) for HitMarkerDuration after a confirmed hit; the AWP's scope (a square view
  *   between black side bars, thin black cross lines) instead of the crosshair while zoomed;
- * - bottom left the health, the armor (H: a helmet) and the money, bottom right the weapon with its clip and reserve,
- *   the bomb (C4) and the defuse kit when carried;
+ * - bottom left the health, the armor (H: a helmet) and the money, bottom right the weapon with its clip and reserve
+ *   (C4 while the bomb is drawn), the bomb (C4) and the defuse kit when carried, and above them for
+ *   PickupNoticeDuration what the player last picked up from the floor ("Picked up ak47", CS's pickup notice);
  * - top centre the round's clock (the freeze, then the round's time; the bomb once planted) and the score; top right
  *   the kill feed (the last kills, for KillFeedDuration);
  * - bottom left above the money the radio (CS's chat area): the viewer's team's last messages for
@@ -129,6 +130,10 @@ public:
 	/** Seconds the buy menu's refusal ("You cannot buy now: ...") shows after the menu was refused or closed. */
 	UPROPERTY(Config)
 	float BuyRefusalDuration = 2.0f;
+
+	/** Seconds the pickup notice ("Picked up ak47") shows after a pickup. */
+	UPROPERTY(Config)
+	float PickupNoticeDuration = 2.0f;
 
 	/** Seconds a kill stays in the kill feed. */
 	UPROPERTY(Config)
@@ -208,6 +213,16 @@ public:
 	{
 		return SpectatorText.Text;
 	}
+	/** The pickup notice drawn in the last frame, or empty. */
+	[[nodiscard]] FString GetPickupNoticeText() const
+	{
+		return bPickupNoticeShown ? PickupText.Text : FString();
+	}
+	/** The weapon line drawn in the last frame ("ak47  30 | 90", "C4" with the bomb drawn). */
+	[[nodiscard]] const FString& GetWeaponText() const
+	{
+		return WeaponText.Text;
+	}
 
 	/** The pawn the HUD shows (the owner's), or null. */
 	[[nodiscard]] AShooterCharacter* GetViewedPawn() const;
@@ -239,6 +254,8 @@ private:
 	void DrawMessages();
 	/** Why the buy menu did not open or closed by itself, where the menu sits, for BuyRefusalDuration. */
 	void DrawBuyRefusal();
+	/** What the player last picked up, bottom right above the weapon, for PickupNoticeDuration. */
+	void DrawPickupNotice();
 	/** A bar under the crosshair while planting or defusing. */
 	void DrawProgress();
 	/** The ticks of a confirmed hit. */
@@ -286,6 +303,8 @@ private:
 	FShooterHUDText ScoreboardCTText;
 	FShooterHUDText ScoreboardTText;
 	FShooterHUDText SpectatorText;
+	FShooterHUDText PickupText;
+	bool bPickupNoticeShown = false;
 	/** The bomb sites' letters on the radar (the game mode's sites, made once). */
 	TArray<FString> RadarSiteLabels;
 	int32 NumRadarPrimitives = 0;
