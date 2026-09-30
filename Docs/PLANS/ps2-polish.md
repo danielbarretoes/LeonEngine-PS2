@@ -28,7 +28,7 @@ Objetivo: cerrar todo eso con buenas prácticas y nada legacy, manteniendo 30 fp
 
 ### Bugs
 
-**P1 · Personajes que desaparecen (S)**
+**P1 · Personajes que desaparecen (S) — hecha**
 - Causa encontrada: el `Mesh` del `ACharacter` (y `Mesh1P`) se queda `Static` (`SceneComponent.h:50`; solo la cápsula
   es Movable en `Character.cpp:51`). `FScene::GatherPrimitives` (`Renderer/Private/Scene.cpp:288`) solo recalcula la
   celda de lo no estático, así que el cuerpo conserva la celda de su spawn y los portales lo descartan según el ángulo;
@@ -38,6 +38,18 @@ Objetivo: cerrar todo eso con buenas prácticas y nada legacy, manteniendo 30 fp
   `ensure` si llega Static a una escena con celdas.
 - Test: un peón que cruza de una celda a otra sigue visible desde la celda vecina (`GS.Scene.CellsAndPortals`
   ampliado); `ObjectsCulledByCells` no cuenta peones.
+
+Estado: hecha.
+- Causa confirmada: sin el arreglo, el test ampliado falla (el peón que entra en A sigue contado en
+  `ObjectsCulledByCells` y no se dibuja) y salta el `ensure` nuevo. En Win64, con la misma semilla y vista
+  (`ViewFrom -1100 -1600 150 0 0`, fotograma 1100), un T en el túnel de B no aparece antes del arreglo y sí después; en
+  las demás vistas probadas la imagen es idéntica.
+- `ACharacter` hace Movable su `Mesh`; ShooterGame, `Mesh1P` y la cámara. El `ensure` está en
+  `FScene::GatherPrimitives`: un skeletal Static en un mapa con celdas.
+- Nada dependía de que el cuerpo fuera Static: la luz ya lo trataba como dinámico, no tiene cuerpo de colisión propio, y
+  el BotMatch no cambia (`9 round(s), CT 3 - T 6, 55 kill(s)`).
+- PCSX2 (`MeasurePS2`, fila «ps2-polish P1» en Budgets.md): 29,95 fps, p50/p95/p99 33,5 ms; la escena 8,53 ms (8,42
+  en 0.24.0).
 
 **P2 · Precisión al agacharse, andar y estar quieto (S)**
 - Causa: `CrouchingSpreadMod` = 0,8 para todas las armas y nadie lo ajusta (`ShooterWeapon_Instant.h:97`); andar no

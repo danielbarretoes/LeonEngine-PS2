@@ -22,6 +22,18 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   `Config.InputAndChannels` updated (102 ShooterGame tests). The bot match is unchanged
   (`Botmatch OK: 9 round(s), CT 3 - T 6, 55 kill(s), seed 7, sides switched after round 5`).
 
+### Fixed
+
+- Characters no longer vanish at some view angles and leave their weapons floating
+  ([ps2-polish](Docs/PLANS/ps2-polish.md) P1). `ACharacter`'s `Mesh` stayed Static, the default of every scene
+  component, and only the capsule was Movable. `FScene::GatherPrimitives` assigns only what is not Static to the cells
+  again, so the body kept the cells it spawned in and the portals culled it from the others. Its pose then froze (a body
+  that is not drawn is not evaluated) while the Movable weapon was still drawn. `ACharacter` now makes its mesh Movable,
+  as UE does, and ShooterGame does the same for its arms (`Mesh1P`) and its camera. A Static skeletal mesh in a map with
+  cells is now an `ensure`. `System.Renderer.GS.Scene.CellsAndPortals` walks a pawn from one room into the other: the
+  view that culls it in the far room draws it once it is in the near one. The bot match is unchanged, and PCSX2 still
+  runs at 29.95 fps, p50 / p95 / p99 33.5 ms (Budgets.md, the row «ps2-polish P1»).
+
 ## [0.24.0] - 2026-09-29
 
 Real content, animation and CS parity ([ps2-shipping](Docs/PLANS/ps2-shipping.md) N21 to N31, with N24b and N30a to

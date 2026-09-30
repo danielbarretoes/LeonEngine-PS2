@@ -135,6 +135,7 @@ AShooterCharacter::AShooterCharacter(const FObjectInitializer& ObjectInitializer
 	FirstPersonCameraComponent->RelativeLocation = FVector(0.0f, 0.0f, StandingEyeHeight);
 	FirstPersonCameraComponent->bUsePawnControlRotation = true;
 	FirstPersonCameraComponent->SetFieldOfView(ShooterFieldOfView);
+	FirstPersonCameraComponent->SetMobility(EComponentMobility::Movable);
 
 	// The body the others see (UE ShooterGame: Mesh3P): ACharacter's skeletal mesh, standing on the feet, the team's
 	// (UpdateBody), not in its own player's view, its pose evaluated only when drawn and less often far away, with a
@@ -148,6 +149,7 @@ AShooterCharacter::AShooterCharacter(const FObjectInitializer& ObjectInitializer
 	// UE ShooterGame: Mesh1P, the arms on the camera, drawn in the view model pass of their player's view only.
 	Mesh1P = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("PawnMesh1P"));
 	Mesh1P->SetupAttachment(FirstPersonCameraComponent);
+	Mesh1P->SetMobility(EComponentMobility::Movable);
 	Mesh1P->bOnlyOwnerSee = true;
 	Mesh1P->bRenderAsViewModel = true;
 	Mesh1P->CastShadow = false;

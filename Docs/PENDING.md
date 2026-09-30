@@ -7,9 +7,6 @@ PCSX2 (p50/p95/p99 33.5 ms), so nothing here blocks the frame rate.
 
 ## Bugs
 
-- **Characters vanish at some view angles** and leave their weapons floating. The skeletal mesh is culled while its
-  weapon (on the `Weapon_R` socket) is still drawn. Suspects: the pose bounds used for frustum culling (N15/N21), the
-  cells/portals assignment of moving primitives (N15), or the VU1 skinned batch placement sphere (N14b).
 - **Bots with no ammo attack with the knife from a distance.** When bots run dry and switch to the knife, they stay
   where they are, facing each other and swinging at range, instead of closing in to melee. The AI must move into knife
   range (as CS bots rush with the knife) or look for ammo or a weapon.

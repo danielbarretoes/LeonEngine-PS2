@@ -56,6 +56,9 @@ ACharacter::ACharacter(const FObjectInitializer& ObjectInitializer)
 
 	Mesh = CreateDefaultSubobject<USkeletalMeshComponent>(MeshComponentName);
 	Mesh->SetupAttachment(GetRootComponent());
+	// The body moves with the capsule (UE: a character's mesh is Movable), so the scene assigns it to the cells it
+	// walks into; a Static body would keep its spawn cell and the portals would cull it from the others.
+	Mesh->SetMobility(EComponentMobility::Movable);
 
 	bIsCrouched = false;
 }

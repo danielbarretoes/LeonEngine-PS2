@@ -369,6 +369,10 @@ Low-poly and textured in the style of Counter-Strike 1.6 ([ps2-shipping](../../D
   throw, the C4's plant; the view model in their hand.
 - The body evaluates its pose only when drawn and less often far from the view, the arms only when drawn (a bot's
   never are); the botmatch plays the same with or without them.
+- The body, the arms and the camera are Movable, as the capsule is (UE: a character's mesh moves with it). The scene
+  then assigns the body to the map's cells it walks into, and the portals draw it from any cell that sees it. A Static
+  body kept the cells it spawned in, so from some angles it vanished and left its weapon floating
+  ([ps2-polish](../../Docs/PLANS/ps2-polish.md) P1). A Static skeletal mesh in a map with cells is an `ensure`.
 
 ## Rounds, money and the bomb
 

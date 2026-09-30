@@ -1,5 +1,6 @@
 #include "Camera/CameraComponent.h"
 #include "CanvasTypes.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "CoreMinimal.h"
 #include "Engine/StaticMesh.h"
@@ -10,6 +11,7 @@
 #include "GS/GSSceneRenderer.h"
 #include "GSPrimitiveEmitter.h"
 #include "GSReferenceRasterizer.h"
+#include "GameFramework/Character.h"
 #include "GameFramework/WorldSettings.h"
 #include "Materials/Material.h"
 #include "Misc/AutomationTest.h"
@@ -19,6 +21,7 @@
 #include "SceneView.h"
 #include "StaticMeshSceneProxy.h"
 #include "Tests/ScopedTestWorld.h"
+#include "Tests/SkinnedTestMesh.h"
 #include "WorldEffectsGeometry.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -478,6 +481,26 @@ bool FGSSceneCellsAndPortalsTest::RunTest(const FString& Parameters)
 	Stats = RenderFrame(World, ThroughDoor, Renderer, List);
 	TestEqual("Both cells seen", Stats.CellsVisible, 2);
 	TestEqual("Nothing left out by the cells", Stats.ObjectsCulledByCells, 0);
+
+	// A pawn walks from B into A (Docs/PLANS/ps2-polish.md P1): its body is Movable (ACharacter), so the scene assigns
+	// it to the cells it walks into. In B the view at the wall leaves it out with B's cube; in A, in front of the same
+	// view, it is drawn (a Static body kept its spawn cell, and the portals culled it from A).
+	USkeletalMesh* CharacterMesh = FSkinnedTestCharacter::MakeMesh();
+	if (!TestNotNull("The test character", CharacterMesh))
+	{
+		return false;
+	}
+	ACharacter* Pawn = World.SpawnActor<ACharacter>(FVector(1500.0f, 200.0f, 0.0f), FRotator(0.0f, 180.0f, 0.0f));
+	USkeletalMeshComponent& Body = Pawn->GetMesh();
+	Body.SetSkeletalMesh(CharacterMesh);
+	TestTrue("The body Movable", Body.Mobility == EComponentMobility::Movable);
+	Stats = RenderFrame(World, AtWall, Renderer, List);
+	TestEqual("The pawn in B left out with B's cube", Stats.ObjectsCulledByCells, 2);
+	(void)Pawn->SetActorLocation(FVector(950.0f, 900.0f, 0.0f));
+	Body.LastRenderTime = -1000.0f;
+	Stats = RenderFrame(World, AtWall, Renderer, List);
+	TestEqual("In A: only B's cube left out", Stats.ObjectsCulledByCells, 1);
+	TestTrue("The pawn drawn from A", Body.WasRecentlyRendered());
 
 	// Without cells: the frustum alone.
 	for (AActor* Actor : TArray<AActor*>(World.PersistentLevel->Actors))
