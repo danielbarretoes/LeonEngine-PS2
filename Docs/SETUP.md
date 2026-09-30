@@ -186,7 +186,7 @@ platform-file, config-cache, log-file, real-descriptor, file-package and SaveCon
 `TestPAL: PASSED (N test(s), 0 failed)` line and the `LogTestPAL` reflection / object-array / memory / name-pool
 lines; their numbers are tracked in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md).
 `-Program VU1Conformance -Build` runs VU1's microprograms against the C++ emitter the same way
-(`VU1Conformance: PASSED (84 batch(es), 0 failed)`, [TESTING.md](TESTING.md#automated)).
+(`VU1Conformance: PASSED (162 batch(es), 0 failed)`, 78 of them clipped, [TESTING.md](TESTING.md#automated)).
 
 ShooterGame's DualShock controls are in its [README](../Game/ShooterGame/README.md#controls). R3 toggles the engine's
 `stat unit` overlay (FPS, MS, RAM, VRAM, TRIS, OBJ; on from the start on the PS2), described in the

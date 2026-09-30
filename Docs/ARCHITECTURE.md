@@ -721,8 +721,8 @@ FEngineLoop::Tick
     FAudioDevice::Tick             the listener, the queued plays, the voices' volumes
     UGameViewportClient::Draw      the proxies and the view interpolated between the last two steps
       FGSSceneRenderer::Render     cells and portals, VU0 frustum tests, the frame's lists on the scratchpad, each LPS2
-                                   batch inside the guard band to VU1 (DrawVertexBatch; the C++ emitter on Win64), one
-                                   that crosses it or the near plane to the C++ clipper (D8) → FGSCommandList
+                                   batch to VU1 (DrawVertexBatch; the C++ emitter on Win64), one that crosses the guard
+                                   band or the near plane to be clipped there (D8, ps2-polish P8b) → FGSCommandList
       DrawCanvas                   the HUD and the debug text as SPRITEs (a glyph a textured one)
       present                      PS2: FPS2RHI::WaitVSync: the lists as one VIF1 DMA chain (BuildChain), kicked,
                                         then sleep until FGSFieldPacer's vertical blank (FPS2VerticalBlank)
@@ -1203,8 +1203,10 @@ UWorld::LineBatcher (FDebugDraw), impact marks, tracers ------------------------
     band, back face culling and the pixel mapping of the drawing environment (`FGSPrimitiveEmitter`);
   - a static mesh's render data is [LPS2 v2](ASSET_FORMATS.md#lps2-v2) (`FLPS2Mesh`, the same on every platform:
     [ps2-shipping](PLANS/ps2-shipping.md) D1), drawn batch by batch: each batch's bounding sphere against the view's
-    planes (D8) skips it, makes it a vertex batch (`FGSVertexBatch`) when it is inside the guard band and the near and
-    far planes, or sends each of its triangles through the clipper on the CPU otherwise. A vertex batch is recorded as
+    planes (D8) skips it, or makes it a vertex batch (`FGSVertexBatch`) of strips when it is inside the guard band and
+    the near and far planes, one whose triangles are clipped (`bClip`: on VU1 when recorded, else
+    `FGSPrimitiveEmitter::AddClippedVertexBatch` on the CPU; [ps2-polish](PLANS/ps2-polish.md) P8b) otherwise. A draw
+    takes the two point lights that light it most. A vertex batch is recorded as
     the list's command when the renderer has vertex batches on (`SetVertexBatches`: the PS2 with VU1) and a
     microprogram does its lighting (unlit, or the ambient, one sun and up to two point lights, N29), and VU1 draws it (see *The VU1 pipeline*
     below); otherwise `FGSPrimitiveEmitter::AddVertexBatch` sends its triangle strips as they are (PRIM TRISTRIP; XYZ3

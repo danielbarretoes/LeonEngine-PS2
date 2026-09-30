@@ -30,14 +30,27 @@ It provides three things:
   into the frame's chain: its header in a CNT (UNPACK V4-32 at TOPS), its four streams by REF where the mesh keeps them
   (UNPACK V3-16, V4-8, V4-8 unsigned, V2-16) and MSCAL of StaticUnlit or StaticLit; a skinned batch's longer header,
   its palette by REF (UNPACK V4-32) and its fifth stream, the skin (V4-8 unsigned), then SkinnedUnlit or SkinnedLit.
+- **Clipping on VU1** ([ps2-polish](../../../../../../Docs/PLANS/ps2-polish.md) P8b, `Private/VU1/ClipTriangles.vsi`,
+  which both `.vsm` include and expand with their buffer's layout): a batch across the near or far plane or the guard
+  band (`FGSVertexBatch::bClip`, the header's w) runs the same program, whose vertex part keeps each vertex's clip
+  space position, colour and texture coordinates with its outcodes in the vertex's own stream rows; then each triangle
+  of the strips is drawn on its own: rejected when all three vertices are outside one side of the view (or behind
+  near, beyond far), sent as it is when inside the guard band and the near and far planes, else clipped
+  (Sutherland-Hodgman against each plane a vertex is outside of, at most 9 vertices) and sent as a fan, each only if
+  it faces the camera. The triangles go in chunks of GIF packets (TRIANGLE, PACKED ST RGBAQ XYZF2, EOP each), two
+  alternating while the GIF takes the other (XGKICK); the C++ reference is `FGSPrimitiveEmitter::AddClippedVertexBatch`.
+  Without XGKICK (`RunBatchForTest`) a full chunk stops the program (E bit, its address in the shared quadword 15)
+  until VIF1's MSCNT, so VU1Conformance reads each chunk.
 
 ### VU1 memory
 
 | Quadwords | What |
 | --- | --- |
 | 0-2 | shared: the screen's scale and offset (clip space to the GS's 12.4 pixels and Z / 16; the scale's w 16, XYZF2's Z shift), the limits (255, 0.5, Z max / 16, 2048: XYZF2's ADC after FTOI4) |
+| 3-14 | shared, the clipping (P8b): the vectors whose signs are a position's outcodes (the view's sides, the guard band's, near and far) and the six clip planes (near, far, the guard band's right, left, top, bottom; the emitter's `GuardExtent`) |
+| 15 | the clipping's state, the program's: the chunk handed over (x), the two chunks' addresses added (y), TOP (z), the clipped triangle's last vertex (w) |
 | 16 (BASE), 520 (BASE + OFFSET 504) | the double buffer, a batch in each: |
-| +0 | ints: vertices, XGKICK, the lighting (0 unlit, 1 lit, 2 or 3 lit with one or two point lights, N29) |
+| +0 | ints: vertices, XGKICK, the lighting (0 unlit, 1 lit, 2 or 3 lit with one or two point lights, N29), clipped (P8b) |
 | +1-4 | the quantized position to clip space (the mesh's scale and bias folded into LocalToClip) |
 | +5-8 | the colour scale (the material's colour to RGBAQ's bytes), the UV offset and scale with the fog's scale and offset in 7's zw (N15: F = offset + scale x w; 0 and 255 without fog), the GIFtag (NLOOP, EOP, PRE and the draw's PRIM with FGE, PACKED ST RGBAQ XYZF2) |
 | +9-14 | StaticLit: the normal to the world (rows), the sun's reversed direction and colour, the ambient share |
@@ -45,6 +58,7 @@ It provides three things:
 | +19-22 | the point lights: position with 1 / range in w, colour (two at most) |
 | +24, +88, +152, +216 | the positions, normals with the strip flags, baked colours and texture coordinates (64 at most) |
 | +280 | the GIF packet VU1 builds and kicks: the GIFtag, then ST, RGBAQ and XYZF2 a vertex (Z at bit 4 of its third word, F at bit 4 of its fourth, ADC its bit 15 where no triangle is drawn) |
+| +280, +310, +340, +422 | a clipped batch's: two polygons (10 vertices of 3 quadwords), two chunks of 82 quadwords (9 triangles); each vertex's record in its stream rows (position, colour, coordinates, outcodes and strip flags) |
 
 A skinned batch's buffer (`VU1SkinnedMemory`, `Skinned.vsm`):
 
@@ -55,6 +69,7 @@ A skinned batch's buffer (`VU1SkinnedMemory`, `Skinned.vsm`):
 | +25 | the palette: 3 quadwords a bone (`FGSSkinMatrix`), 24 bones at most |
 | +97, +145, +193, +241, +289 | the positions, normals with the strip flags, colours, texture coordinates and skin (48 at most) |
 | +337 | the GIF packet |
+| +337, +367, +397, +450 | a clipped batch's two polygons and two chunks of 53 quadwords (5 triangles) |
 
 ### PATH1 and PATH2
 
@@ -114,6 +129,7 @@ N2).
 | `Public/PS2VU1.h`, `Private/PS2VU1.cpp`, `Private/PS2VU1Encoder.h` | `FPS2VU1`, `Leon::PS2::FPS2VU1BatchEncoder`, the VU1 memory layout (`Leon::PS2::VU1Memory`) |
 | `Private/VU1/VU1Programs.vsm` | the microprograms StaticLit and StaticUnlit (one loop), assembled by `dvp-as` (`LeonPlatform_PS2_ModuleSources`, `LeonBuildPS2.cmake`) |
 | `Private/VU1/Skinned.vsm` | the microprograms SkinnedLit and SkinnedUnlit (N14b: a vertex posed by its two palette bones, then StaticLit's work), uploaded after the static ones |
+| `Private/VU1/ClipTriangles.vsi` | the clipping of a batch across a clip plane (P8b), a `CLIP_PROGRAM` macro both `.vsm` expand (`dvp-as -I` the folder) |
 | `Private/PS2RHIModule.cpp` | `IMPLEMENT_MODULE(FDefaultModuleImpl, PS2RHI)` |
 | `Private/PS2DynamicRHI.cpp` | `FPS2DynamicRHI`, `PlatformCreateDynamicRHI()`, `InitDisplay` (the region: ROMVER, `-PAL` / `-NTSC`), `ShutdownDisplay`, `ClearColor`, `Submit`, `WaitVSync` |
 | `Private/PS2VerticalBlank.h/.cpp` | `Leon::PS2::FPS2VerticalBlank`: the `INTC_VBLANK_S` handler that counts the fields and signals a semaphore, and the wait for a field |

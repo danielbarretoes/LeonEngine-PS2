@@ -814,7 +814,8 @@ the same bytes (`System.MeshUtilities.LPS2.Deterministic`; gate G5 reimports the
 planes (D8). Wholly outside one: skipped. Inside the guard band and the near and far planes: on the PS2, VU1
 (StaticUnlit / StaticLit, SkinnedUnlit / SkinnedLit) transforms, lights and culls it and XGKICKs its packet; elsewhere
 (or with `-novu1`) the C++ emitter draws its strips as a TRISTRIP, only the vertices the drawn triangles use, with XYZ3
-for those that close none. Otherwise: each of its triangles through the C++ clipper on the EE.
+for those that close none. Otherwise, across a clip plane: each of its triangles clipped, on the PS2 by the same
+programs on VU1 ([ps2-polish](PLANS/ps2-polish.md) P8b), elsewhere by the C++ emitter's clipper.
 
 <a id="static-mesh-lods"></a>**LODs** ([ps2-shipping](PLANS/ps2-shipping.md) N15; UE: `SourceModels` and
 `RenderData->ScreenSize`). A static mesh's `SourceModels` (a tagged property) lists its LODs, LOD 0 first; LOD *n*

@@ -141,6 +141,25 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The near geometry is clipped on VU1 and a lit draw takes two point lights, so no frame of the bot match falls to
+  the EE any more ([ps2-polish](Docs/PLANS/ps2-polish.md) P8b). A vertex batch whose sphere crosses the near or far
+  plane or the guard band is recorded too (`FGSVertexBatch::bClip`), and the same Static and Skinned programs clip
+  it (`PS2RHI/Private/VU1/ClipTriangles.vsi`, a `CLIP_PROGRAM` macro both `.vsm` expand; LeonBuildTool passes
+  `dvp-as -I` the folder): each vertex's clip space position, colour, coordinates and outcodes go to its own stream
+  rows, then each triangle of the strips is rejected outside a side of the view, sent as it is inside the guard band,
+  or clipped (Sutherland-Hodgman against each plane it crosses) and sent as a fan, facing the camera, in chunks of
+  TRIANGLE packets that alternate under XGKICK. The C++ reference is `FGSPrimitiveEmitter::AddClippedVertexBatch`
+  (the renderer's clipping loop moved there; `FGSCommandList::AppendExpanded` expands a clipped batch with it), and
+  the emitter's guard band is `FGSPrimitiveEmitter::GuardExtent`. A lit draw takes the two point lights that light
+  its bounds most (`FGSVertexDraw::MaxVU1PointLights`): P3's 83 ms frames were a firefight's muzzle flashes beside a
+  lamp sending every lit draw near them, 145 skinned batches, to the EE's emitter. In PCSX2 the bot match goes from
+  29.26 to 29.97 fps, p99 83.5 to 33.5 ms, the scene 9.32 to 5.70 ms; `MeasurePS2 -CloseUp` (a terrorist 80 cm before
+  a fixed camera) measures the near geometry: the scene 3.69 to 1.82 ms (Budgets.md, the rows «ps2-polish P8b»).
+  VU1Conformance clips 78 batches more (static and skinned, lit and unlit, textured, fogged, with point lights; each
+  full chunk read back with the E bit and MSCNT): `VU1Conformance: PASSED (162 batch(es), 0 failed)`, the clipped
+  vertices within Z 32 and 2^-16 of their STQ (seen: 24 and 0.2 of it). Tests:
+  `System.Renderer.GS.Scene.PointLightsPerDraw`; `VertexBatches` and `SkinnedVertexBatches` (close up) record clipped
+  batches and expand them to the same frame.
 - ShooterGame's HUD, the buy menu and the debug overlay draw in the engine's 14-pixel DejaVu Sans Condensed instead of
   stb_easy_font's bars ([ps2-polish](Docs/PLANS/ps2-polish.md) P5); the HUD's layout is unchanged (P6 redesigns it,
   and its scoreboard, aligned with spaces, no longer lines up in the proportional font). The canvas now blends every

@@ -21,8 +21,6 @@ ShooterGame stays single player against bots: no split screen (decided 2026-09-3
 
 ## Render
 
-- Batches that cross the near plane or the guard band still go through the EE's C++ clipper (13 a frame, 2.4 ms with
-  the view model). Clipping on VU1, or smaller batches, was not needed at 30 fps.
 - Cells and portals cull little on de_leon's open layout: the sky portals keep most cells visible.
 - Static mesh LODs work and are tested, but de_leon uses none: its meshes are baked, and a baked mesh draws at LOD 0.
 - de_leon's 78 pieces are not merged per cell and material. A mesh has a single `UCX_` box, because Leon folds a mesh's

@@ -157,14 +157,18 @@ struct GSCORE_API FGSVertexDraw
 /**
  * A vertex batch to draw (FGSCommandList::DrawVertexBatch): LPS2 v2's batch of at most MaxVertices vertices of
  * triangle strips, read where the mesh keeps it (each stream quadword aligned: the PS2 hands them to the VIF by
- * reference, uncopied), drawn with the list's draw Draw. Its vertices must need no clipping: the batch's sphere is
- * inside the guard band and between the near and far planes (plan D8). A skinned batch (at most MaxSkinnedVertices)
- * poses each vertex with its skin's two palette bones first: Weight0 (V M0) + Weight1 (V M1), the normal the same way.
+ * reference, uncopied), drawn with the list's draw Draw. A skinned batch (at most MaxSkinnedVertices) poses each vertex
+ * with its skin's two palette bones first: Weight0 (V M0) + Weight1 (V M1), the normal the same way.
  *
  * What it draws is what FGSPrimitiveEmitter::AddVertexBatch sends (the reference): a TRISTRIP of the batch's vertices,
  * Gouraud, textured and blended as the draw says, where vertex i closes the triangle (i - 2, i - 1, i) unless its
  * strip flags say no kick, wound (i - 1, i - 2, i) when they say reversed; a triangle outside a side of the view or
- * back facing is not drawn.
+ * back facing is not drawn. Its vertices then need no clipping: the batch's sphere is inside the guard band and between
+ * the near and far planes (plan D8).
+ *
+ * A batch whose sphere crosses one of those planes has bClip (Docs/PLANS/ps2-polish.md P8b): it draws what
+ * FGSPrimitiveEmitter::AddClippedVertexBatch sends instead, each triangle of the strips on its own through the clipper
+ * (independent triangles, TRIANGLE), which VU1's programs do too.
  */
 struct GSCORE_API FGSVertexBatch
 {
@@ -202,6 +206,8 @@ struct GSCORE_API FGSVertexBatch
 	 */
 	const FGSSkinMatrix* Palette = nullptr;
 	uint32 NumBones = 0;
+	/** Across the near or far plane or the guard band: its triangles are clipped (P8b). */
+	bool bClip = false;
 
 	[[nodiscard]] bool IsSkinned() const
 	{

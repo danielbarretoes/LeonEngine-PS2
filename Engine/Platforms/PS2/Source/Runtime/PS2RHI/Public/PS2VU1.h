@@ -28,7 +28,9 @@ public:
 	/**
 	 * Runs one batch of Draw on VU1 through the renderer's own VIF1 encoding, without XGKICK, waits for it and copies
 	 * the GIF packet it built from VU1's data memory into OutQuadwords (GetPacketQuadwords, as 64-bit pairs): what
-	 * VU1Conformance compares with the C++ emitter. Environment gives the screen's mapping. False if VU1 did not end.
+	 * VU1Conformance compares with the C++ emitter. A clipped batch (FGSVertexBatch::bClip, ps2-polish P8b) stops with
+	 * each full chunk of its triangles, which is copied before VIF1's MSCNT goes on: its packets one after the other.
+	 * Environment gives the screen's mapping. False if VU1 did not end.
 	 */
 	static bool RunBatchForTest(const FGSVertexDraw& Draw, const FGSVertexBatch& Batch,
 		const FGSDrawEnvironment& Environment, TArray<uint64>& OutQuadwords);

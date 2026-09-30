@@ -401,6 +401,21 @@ is not the hardware, so each row names its PCSX2 and the hash of the settings it
 | ps2-polish P3 (the bots' knife, pickups, lookouts and ladders; on P5; 12 frames of 83 ms at 12 to 15 s, a teammate 80 cm before the watched bot: its skinned batches through the EE's emitter) | 29.26 | 34.18 ms | 33.50 / 33.50 / 83.50 ms | 88.55 ms | 4.71 ms | 9.32 ms | 0.17 + 1.41 ms | 0.19 ms | 19.06 ms (17.61) | 5 924 (before VU1 culls) | 23.4 KB (the EE's) | 5 075 KB | 1 853 | 2.8.2.0, d29e64bc |
 | ps2-polish P8 (the sky: a cube map of six 128-texel PSMT8 faces, 36 VU1 batches a frame, none clipped; de_leon's fog on; on P3, the same hitches) | 29.20 | 34.25 ms | 33.50 / 33.50 / 83.50 ms | 100.10 ms | 4.72 ms | 9.79 ms (the sky 0.28) | 0.17 + 1.41 ms | 0.19 ms | 18.63 ms (17.04) | 6 299 (before VU1 culls) | 23.8 KB (the EE's) | 5 344 KB | 1 865 | 2.8.2.0, d29e64bc |
 | ps2-polish P9 (the menus and UE's pause; on P3; the first frame, 1 079 ms, now holds the travel from the main menu to de_leon) | 28.80 | 34.73 ms | 33.50 / 33.50 / 83.50 ms | 1079.33 ms | 4.73 ms | 9.32 ms | 0.17 + 1.41 ms | 0.19 ms | 19.05 ms (17.60) | 5922 | 23.4 KB | 5090 KB | 4866 KB | 109.9 | 1880 | 2.8.2.0, d29e64bc |
+| ps2-polish P8b base, close up (P3's build; `MeasurePS2 -CloseUp -Seconds 60`: a terrorist 80 cm before a fixed camera) | 29.99 | 33.35 ms | 33.50 / 33.50 / 33.50 ms | 50.05 ms | 3.52 ms | 3.69 ms | 0.14 + 0.87 ms | 0.01 ms | 25.84 ms (25.58) | 726 (before VU1 culls) | 8.3 KB (the EE's) | 3 412 KB | 1 849 | 2.8.2.0, d29e64bc |
+| ps2-polish P8b, close up (the clipping on VU1) | 29.99 | 33.35 ms | 33.50 / 33.50 / 33.50 ms | 50.05 ms | 3.52 ms | 1.82 ms | 0.14 + 0.86 ms | 0.01 ms | 27.72 ms (27.46) | 979 (before VU1 culls) | 0.5 KB (the EE's) | 3 389 KB | 1 849 | 2.8.2.0, d29e64bc |
+| ps2-polish P8b (the clipping on VU1, two point lights a draw; on P3, the same match) | 29.97 | 33.37 ms | 33.50 / 33.50 / 33.50 ms | 50.05 ms | 4.60 ms | 5.70 ms | 0.17 + 1.40 ms | 0.18 ms | 21.97 ms (20.47) | 6 303 (before VU1 culls) | 8.6 KB (the EE's) | 4 309 KB | 1 853 | 2.8.2.0, d29e64bc |
+
+**Near geometry on VU1** ([ps2-polish](../../../../Docs/PLANS/ps2-polish.md) P8b). P3's 12 frames of 83 ms (at 12 to
+15 s) were not the close teammate: their `Frame spike:` scopes show `GS Skinned` 42.9 ms of `GS Emitted Batches`
+(145 skinned batches a frame on the EE's emitter) and `GS Opaque` 8.4 ms (25), in a firefight: the muzzle flashes
+beside the tunnel's lamp gave the lit draws near them three or four point lights, and VU1's programs light two, so
+those draws fell to the emitter. A draw now takes the two point lights that light its bounds most. The batches across
+the near plane or the guard band (14.5 a frame in the match, 1.8 ms of `GS Clipped Batches` with the view model's
+5.1 at 1.1 ms) are clipped on VU1 (`ClipTriangles.vsi`) instead of by the EE's clipper. The match: 29.26 → 29.97
+fps, p99 83.5 → 33.5 ms, worst 88.55 → 50.05 ms (the load's first frames), scene 9.32 → 5.70 ms, the EE's GIF 23.4 →
+8.6 KB a frame, no batch left on the EE (`batches_ee=0.0 clipped_tris=0.0`). The close-up (`-CloseUp`: a terrorist
+80 cm before the camera, bots stopped) never went above 33.5 ms before either (15.5 clipped batches a frame cost the EE
+1.8 ms): scene 3.69 → 1.82 ms, the EE's GIF 8.3 → 0.5 KB, p99 33.5 ms before and after.
 
 The GMalloc column is the peak (MeasurePS2's `gmalloc_peak_kb`) from the ps2-polish P3 row on; the ps2-polish P1 and
 P5 rows' 4 432 and 4 289 KB are likely the heap at the end (`heap_kb`, printed next to it), so compare those rows with

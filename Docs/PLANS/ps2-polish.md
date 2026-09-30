@@ -182,6 +182,59 @@ Desviaciones (P3b): la rendición no la pedía el encargo, pero sin ella ninguna
 siempre o morían todos, y eso acaba la ronda); con ella los T suben a 55,6 % en 1–24 (con 2 en contra; con 3 casi no
 explota ninguna). `PostPlantHoldRadius` de 10 m (a 15 m, 59 %).
 
+### P8b · Recorte de lo cercano en la VU1 (M) — hecha
+
+- Los lotes que cruzan el near o la guard band (D8) iban al recortador C++ del EE: con un peón a 80 cm, sus lotes con
+  piel; el view model, 13 lotes por frame y 2,4 ms. Objetivo: ningún frame de más de 33,5 ms por lo cercano, 30 fps.
+- Opciones a medir: (1) contar como dentro los lotes que solo cruzan la guard band; (2) recortar el near en la VU1
+  (CLIP por vértice, Sutherland-Hodgman, triángulos sueltos); (3) lotes con piel más pequeños en el cook.
+
+Estado: hecha.
+- Causa real del p99 de P3: no era lo cercano. Los `Frame spike:` de los 12 frames de 83 ms (12 a 15 s) dan `GS Skinned`
+  42,9 ms de `GS Emitted Batches` (145 lotes con piel por frame en el emisor del EE) y `GS Opaque` 8,4 ms (25): en un
+  tiroteo, los fogonazos junto a la lámpara del túnel daban a los draws con luz de alrededor tres o cuatro luces
+  puntuales, la VU1 ilumina dos (N29) y esos draws caían al emisor. Un draw toma ahora las dos luces puntuales que más
+  iluminan sus bounds (color × (1 − d / r)² en el punto más cercano; como el límite de luces por primitiva de UE), en la
+  VU1 y en la referencia por igual. Test `System.Renderer.GS.Scene.PointLightsPerDraw`.
+- Lo cercano, opción (2) ampliada: la VU1 recorta contra los seis planos del recortador C++ (near, far y los cuatro de
+  la guard band), no solo el near. La opción (1) no vale: la esfera contra el plano ya es exacta, y un vértice más allá
+  de la guard band se sale de los 4096 píxeles del GS (la guard band es justo el margen del scissor); la (3) solo
+  reduciría cuántos lotes cruzan (la esfera de la pose es holgada: el peón a 80 cm cruza con 3,5 lotes), no el coste de
+  los que cruzan, y el view model cruza siempre.
+- `FGSVertexBatch::bClip`: el renderer graba también el lote que cruza; `ClipTriangles.vsi` (macro `CLIP_PROGRAM` que
+  `VU1Programs.vsm` y `Skinned.vsm` expanden con su memoria; LeonBuildTool pasa `dvp-as -I` la carpeta). La parte de
+  vértices del programa es la de siempre hasta la posición en clip, el color y las coordenadas; con la w de la
+  cabecera los guarda con sus outcodes (los signos de tres vectores de distancias, FMAND) en las propias filas de
+  los streams del vértice. Luego, cada triángulo de las tiras: fuera de un lado de la vista (los outcodes de la
+  referencia, AND) se descarta; dentro de la guard band, near y far va tal cual; si no, Sutherland-Hodgman contra cada
+  plano que cruza (hasta 9 vértices), proyección y abanico; siempre con la cara hacia la cámara. Salen como TRIANGLE
+  en chunks de paquetes GIF (82 quadwords, 9 triángulos; 53 y 5 con piel) que se alternan con XGKICK.
+- Referencia C++: `FGSPrimitiveEmitter::AddClippedVertexBatch` (el bucle del renderer pasa ahí; `AppendExpanded` la
+  usa) y `FGSPrimitiveEmitter::GuardExtent`. Constantes nuevas en la memoria compartida de la VU1 (3-14) y un quadword
+  de estado (15).
+- VU1Conformance: 13 draws recortados (estáticos y con piel, con y sin luz, texturizados, espejados, con niebla y con
+  dos luces puntuales, a 40–80 cm de un near de 11 cm), 78 lotes más; sin XGKICK cada chunk lleno para el programa (bit
+  E, su dirección en el quadword 15) hasta el MSCNT de VIF1 y se lee. En PCSX2: `VU1Conformance: PASSED (162 batch(es),
+  0 failed)`, 851 triángulos recortados comparados en 160 chunks, 477 cortados por el recortador; los de siempre XY 1,
+  Z 5, RGBA 1, STQ 4 ulp, F 0; los recortados Z 24 y STQ 0,2 de 2^-16. La imagen alterna los lotes recortados de la VU1
+  (con XGKICK) y del emisor: iguales salvo un píxel de 60 800 muestreados.
+- Tests Win64: `VertexBatches` graba el suelo como lote recortado (ninguno en el EE); `SkinnedVertexBatches` a 45 cm
+  graba lotes recortados; los dos se expanden al mismo frame, 0 píxeles distintos.
+- Medida reproducible: `MeasurePS2 -CloseUp` (bots parados, `ViewFrom -2570 0 150 0 180`: el T del inicio central a
+  80 cm, 60 s). Antes 29,99 fps, p99 33,5 ms, peor 50,05 (el arranque), escena 3,69 ms (15,5 lotes recortados en el EE,
+  1,8 ms); después 29,99 fps, p99 33,5, peor 50,05, escena 1,82 ms, GIF del EE 8,3 → 0,5 KB.
+- `MeasurePS2` (la misma partida de P3): 29,26 → 29,97 fps, p99 83,5 → 33,5 ms, peor 88,55 → 50,05 ms, escena 9,32 →
+  5,70 ms, GIF del EE 23,4 → 8,6 KB, ningún lote en el EE (filas «ps2-polish P8b» de Budgets.md).
+
+Desviaciones:
+- El p99 de P3 no venía del recorte (lo atribuimos mal en P3): se arregla con el límite de dos luces por draw, que no
+  estaba en el plan de P8b; lo cercano costaba 1,8 ms y nunca pasaba de 33,5 ms por sí solo.
+- Se recortan en la VU1 los seis planos (no solo el near) y la decisión D8 cambia: lo que cruza también va a la VU1.
+- Tolerancias medidas para los vértices que crea el recorte: Z ±32 y STQ 2^-16 del valor (mínimo 1), no las de D2;
+  lo visto, 24 y 0,2.
+- Sin escena nueva de G8/GSConformance: los triángulos TRIANGLE con XYZF2 ya estaban en uso (el recortador del EE).
+- El close-up no reproduce los 83 ms (no eran del recorte); mide el coste de lo cercano en el EE.
+
 ### Juego y controles
 
 **P4 · Agacharse en toggle y soltar/recoger armas (S) — hecha**

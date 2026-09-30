@@ -35,19 +35,22 @@ class UTextureCube;
  *   CPU with the pose's skin matrices.
  * - A static or skinned mesh is drawn from its LPS2 v2 render data (FLPS2Mesh), batch by batch (plan D1, D8): a
  *   batch whose sphere is outside the view is skipped, one inside the guard band and the near and far planes is a
- *   vertex batch (FGSVertexBatch), and any other goes through the clipper triangle by triangle. With SetVertexBatches
- *   a static vertex batch is recorded as the list's command, which the PS2 draws on VU1 (ps2-shipping N14), when a
- *   microprogram does its lighting (baked or unlit, or the ambient, one sun and up to two point lights); otherwise
- *   FGSPrimitiveEmitter::AddVertexBatch sends its triangle strips (TRISTRIP: the vertices of the drawn triangles, XYZ3
- *   for those that close none), the reference of VU1's packet. A skinned batch is placed by the sphere its pose
- *   keeps it in (MakeSkinPalette), without skinning a vertex; recorded, VU1 skins it (N14b), else the emitter does.
+ *   vertex batch (FGSVertexBatch) of strips, and one across a clip plane a vertex batch whose triangles are clipped
+ *   (bClip, ps2-polish P8b). With SetVertexBatches a vertex batch is recorded as the list's command, which the PS2
+ *   draws on VU1 (ps2-shipping N14; the clipping too, P8b), when a microprogram does its lighting (baked or unlit, or
+ *   the ambient, one sun and up to two point lights); otherwise FGSPrimitiveEmitter::AddVertexBatch sends its
+ *   triangle strips (TRISTRIP: the vertices of the drawn triangles, XYZ3 for those that close none) and
+ *   AddClippedVertexBatch its clipped triangles, the references of VU1's packets. A skinned batch is placed by the
+ *   sphere its pose keeps it in (MakeSkinPalette), without skinning a vertex; recorded, VU1 skins it (N14b), else the
+ *   emitter does.
  * - Static lighting (Docs/PLANS/ps2-shipping.md N22): a Static component's lit sections draw with the vertex colours
  *   LeonEd baked for the instance (the lights with their shadows, and the sky with its occlusion), with no light
  *   computed per frame; without a bake, with the mesh's own colours.
  * - Dynamic lighting of what moves (Movable components, skinned meshes): Lambert per vertex, the map's environment
  *   light (its world settings' LightmassSettings) as ambient, then up to MaxDirectionalLights directional and
- *   MaxPointLights point lights (range attenuation squared), unshadowed. There is no specular, normal map or
- *   reflection: the GS has no pixel stage.
+ *   MaxPointLights point lights (range attenuation squared), unshadowed; a draw takes the two of the frame's point
+ *   lights that reach its bounds and light them most (FGSVertexDraw::MaxVU1PointLights, ps2-polish P8b). There is no
+ *   specular, normal map or reflection: the GS has no pixel stage.
  * - Materials: the albedo times the light (unlit: the albedo), the albedo map through the texture cache with UvScale,
  *   translucent (Alpha < 1) sections blended back to front without writing Z.
  * - Mipmaps (Docs/PLANS/ps2-shipping.md N13): a texture with levels samples them trilinear (MMIN LINEAR_MIPMAP_LINEAR,
@@ -183,7 +186,7 @@ private:
 
 	/**
 	 * Draws a section of LPS2 v2 render data (opaque or translucent, as its material says) through ViewProjection: its
-	 * batches, each skipped, as strips or through the clipper by its sphere against the view (plan D8). A skinned blob
+	 * batches, each skipped, as strips or clipped by its sphere against the view (plan D8, P8b). A skinned blob
 	 * with SkinMatrices (one a bone; the bind pose where one is missing) draws each batch with its palette's skin
 	 * matrices (MakeSkinPalette), placed by the sphere of its pose; recorded, a skinned batch's palette goes into the
 	 * list's memory and VU1's Skinned programs pose its vertices. With bStaticLighting
@@ -278,9 +281,6 @@ private:
 	};
 	TMap<const UTexture2D*, int32> TextureGroups;
 
-	/** A batch's vertices, transformed and lit, and the triangle each closes (at most 64). */
-	TArray<FGSClipVertex> BatchVertices;
-	TArray<EGSStripTriangle> BatchTriangles;
 	/** A skinned batch's palette (MakeSkinPalette; at most 24 bones). */
 	TArray<FGSSkinMatrix> BatchPalette;
 	/** The canvas's vertices and runs (DrawCanvas), kept between frames for their capacity. */

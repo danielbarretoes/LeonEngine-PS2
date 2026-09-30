@@ -7,8 +7,6 @@ namespace
 	constexpr int32 NumPlanes = 6;
 	/** A clipped triangle has at most one more vertex per plane. */
 	constexpr int32 MaxPolygon = 3 + NumPlanes;
-	/** The largest primitive coordinate distance from the frame's center that stays in 0..4095 with a margin. */
-	constexpr float GuardExtent = 2000.0f;
 
 	[[nodiscard]] float PlaneDistance(const FVector4& Clip, int32 Plane, float GuardX, float GuardY)
 	{
@@ -312,6 +310,24 @@ void FGSPrimitiveEmitter::AddVertexBatch(const FGSVertexDraw& Draw, const FGSVer
 	BatchTriangles.SetNumUninitialized(int32(Batch.NumVertices), false);
 	TransformVertexBatch(Draw, Batch, BatchVertices.GetData(), BatchTriangles.GetData());
 	AddStrips(BatchVertices, BatchTriangles);
+}
+
+void FGSPrimitiveEmitter::AddClippedVertexBatch(const FGSVertexDraw& Draw, const FGSVertexBatch& Batch)
+{
+	const int32 NumVertices = int32(Batch.NumVertices);
+	BatchVertices.SetNumUninitialized(NumVertices, false);
+	BatchTriangles.SetNumUninitialized(NumVertices, false);
+	TransformVertexBatch(Draw, Batch, BatchVertices.GetData(), BatchTriangles.GetData());
+	for (int32 Index = 2; Index < NumVertices; ++Index)
+	{
+		if (BatchTriangles[Index] == EGSStripTriangle::None)
+		{
+			continue;
+		}
+		const bool bReversed = BatchTriangles[Index] == EGSStripTriangle::Reversed;
+		AddTriangle(BatchVertices[bReversed ? Index - 1 : Index - 2], BatchVertices[bReversed ? Index - 2 : Index - 1],
+			BatchVertices[Index]);
+	}
 }
 
 void FGSPrimitiveEmitter::AddLine(const FGSClipVertex& A, const FGSClipVertex& B)

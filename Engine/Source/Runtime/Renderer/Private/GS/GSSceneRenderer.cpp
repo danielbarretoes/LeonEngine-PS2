@@ -116,7 +116,7 @@ namespace
 		Outside,
 		/** Inside the guard band and the near and far planes: its strips need no clipping. */
 		Inside,
-		/** Across a clip plane: its triangles go through the clipper. */
+		/** Across a clip plane: its triangles are clipped (on VU1 when recorded, P8b). */
 		Crossing,
 	};
 
@@ -376,17 +376,41 @@ void FGSSceneRenderer::DrawMeshSection(FGSPrimitiveEmitter& Emitter, const FLPS2
 	{
 		Draw.NormalToWorld = MakeNormalToWorld(LocalToWorld);
 		// Only the point lights whose range reaches the mesh's bounds (N29): the others light none of its vertices,
-		// and without them a microprogram does the draw's light (VU1 has the ambient and one sun).
+		// and without them a microprogram does the draw's light (VU1 has the ambient and one sun). At most the two
+		// that light the bounds most (ps2-polish P8b, as UE's per-primitive light limit): a firefight's muzzle flashes
+		// beside a lamp otherwise left every lit draw near them to the EE (83 ms frames), and VU1 lights two.
 		Draw.Lights = FrameLights;
 		Draw.Lights.NumPoint = 0;
+		float Strength[FGSVertexDraw::MaxVU1PointLights] = {};
 		for (int32 Index = 0; Index < FrameLights.NumPoint; ++Index)
 		{
 			const FGSVertexLights::FPoint& Point = FrameLights.Point[Index];
-			if (WorldBounds.ComputeSquaredDistanceToPoint(Point.Position) < FMath::Square(Point.Radius))
+			const float DistanceSquared = WorldBounds.ComputeSquaredDistanceToPoint(Point.Position);
+			if (DistanceSquared >= FMath::Square(Point.Radius))
 			{
-				Draw.Lights.Point[Draw.Lights.NumPoint++] = Point;
+				continue;
 			}
+			// Its light at the bounds' nearest point: the colour's sum by the range attenuation, squared.
+			const float Falloff = 1.0f - (FMath::Sqrt(DistanceSquared) / FMath::Max(Point.Radius, 0.1f));
+			const float Light = (Point.Color.X + Point.Color.Y + Point.Color.Z) * FMath::Square(Falloff);
+			int32 Slot = Draw.Lights.NumPoint;
+			if (Slot == FGSVertexDraw::MaxVU1PointLights)
+			{
+				// Full: it takes the weakest's place if it is stronger (the earlier light on a tie).
+				Slot = Strength[0] <= Strength[1] ? 0 : 1;
+				if (Light <= Strength[Slot])
+				{
+					continue;
+				}
+			}
+			else
+			{
+				++Draw.Lights.NumPoint;
+			}
+			Draw.Lights.Point[Slot] = Point;
+			Strength[Slot] = Light;
 		}
+		static_assert(FGSVertexDraw::MaxVU1PointLights == 2, "The weakest of two");
 	}
 	// VU1 draws the batches inside the guard band when a microprogram does the draw's lighting (plan N14); a skinned
 	// batch's palette goes with it (N14b).
@@ -435,36 +459,39 @@ void FGSSceneRenderer::DrawMeshSection(FGSPrimitiveEmitter& Emitter, const FLPS2
 			Batch.Palette = BatchPalette.GetData();
 			Batch.NumBones = uint32(BatchPalette.Num());
 		}
-		if (Placement == EBatchPlacement::Inside)
+		// Across a clip plane: each triangle of the strips on its own through the clipper (VU1's clipping when
+		// recorded, P8b).
+		Batch.bClip = Placement == EBatchPlacement::Crossing;
+		FrameStats.BatchesClipped += Batch.bClip ? 1 : 0;
+		if (bRecordBatches)
 		{
-			if (bRecordBatches)
+			if (DrawIndex == INDEX_NONE)
 			{
-				if (DrawIndex == INDEX_NONE)
-				{
-					DrawIndex = List.AddVertexDraw(Draw);
-				}
-				Batch.Draw = DrawIndex;
-				if (bSkinned)
-				{
-					// The palette where the list keeps it until its chain has been sent, once for batches that share
-					// it.
-					if (RecordedPalette == nullptr || RecordedBones != Batch.NumBones ||
-						FMemory::Memcmp(RecordedPalette, Batch.Palette, Batch.NumBones * sizeof(FGSSkinMatrix)) != 0)
-					{
-						FGSSkinMatrix* Copy = List.AllocateSkinPalette(Batch.NumBones);
-						FMemory::Memcpy(Copy, Batch.Palette, Batch.NumBones * sizeof(FGSSkinMatrix));
-						RecordedPalette = Copy;
-						RecordedBones = Batch.NumBones;
-					}
-					Batch.Palette = RecordedPalette;
-				}
-				List.DrawVertexBatch(Batch);
-				NumBatchTriangles += CountStripTriangles(Batch);
-				++FrameStats.BatchesOnVU1;
-				// The batch sets PRIM itself: a run of the emitter after it starts again.
-				Started = EBatchPlacement::Outside;
-				continue;
+				DrawIndex = List.AddVertexDraw(Draw);
 			}
+			Batch.Draw = DrawIndex;
+			if (bSkinned)
+			{
+				// The palette where the list keeps it until its chain has been sent, once for batches that share it.
+				if (RecordedPalette == nullptr || RecordedBones != Batch.NumBones ||
+					FMemory::Memcmp(RecordedPalette, Batch.Palette, Batch.NumBones * sizeof(FGSSkinMatrix)) != 0)
+				{
+					FGSSkinMatrix* Copy = List.AllocateSkinPalette(Batch.NumBones);
+					FMemory::Memcpy(Copy, Batch.Palette, Batch.NumBones * sizeof(FGSSkinMatrix));
+					RecordedPalette = Copy;
+					RecordedBones = Batch.NumBones;
+				}
+				Batch.Palette = RecordedPalette;
+			}
+			List.DrawVertexBatch(Batch);
+			NumBatchTriangles += CountStripTriangles(Batch);
+			++FrameStats.BatchesOnVU1;
+			// The batch sets PRIM itself: a run of the emitter after it starts again.
+			Started = EBatchPlacement::Outside;
+			continue;
+		}
+		if (!Batch.bClip)
+		{
 			SCOPE_CYCLE_COUNTER(STAT_GSEmittedBatches);
 			if (Started != EBatchPlacement::Inside)
 			{
@@ -475,29 +502,14 @@ void FGSSceneRenderer::DrawMeshSection(FGSPrimitiveEmitter& Emitter, const FLPS2
 			++FrameStats.BatchesOnEmitter;
 			continue;
 		}
-		// Across a clip plane: each triangle of the strips on its own, in the source's winding.
 		SCOPE_CYCLE_COUNTER(STAT_GSClippedBatches);
-		++FrameStats.BatchesClipped;
-		const int32 NumVertices = int32(Batch.NumVertices);
-		BatchVertices.SetNumUninitialized(NumVertices, false);
-		BatchTriangles.SetNumUninitialized(NumVertices, false);
-		FGSPrimitiveEmitter::TransformVertexBatch(Draw, Batch, BatchVertices.GetData(), BatchTriangles.GetData());
 		if (Started != EBatchPlacement::Crossing)
 		{
 			Emitter.BeginTriangles(State.bTextured, State.bTranslucent, true);
 			Started = EBatchPlacement::Crossing;
 		}
-		for (int32 Index = 2; Index < NumVertices; ++Index)
-		{
-			if (BatchTriangles[Index] == EGSStripTriangle::None)
-			{
-				continue;
-			}
-			const bool bReversed = BatchTriangles[Index] == EGSStripTriangle::Reversed;
-			++FrameStats.TrianglesClipped;
-			Emitter.AddTriangle(BatchVertices[bReversed ? Index - 1 : Index - 2],
-				BatchVertices[bReversed ? Index - 2 : Index - 1], BatchVertices[Index]);
-		}
+		Emitter.AddClippedVertexBatch(Draw, Batch);
+		FrameStats.TrianglesClipped += CountStripTriangles(Batch);
 	}
 	if (State.bTranslucent)
 	{

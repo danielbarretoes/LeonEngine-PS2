@@ -2,7 +2,7 @@
 # Usage: Engine\Build\BatchFiles\MeasurePS2.bat [-Project Game\ShooterGame] [-Rounds 2] [-Seed 7] [-Seconds 120]
 #                                               [-NoBuild] [-TimeoutSeconds 900] [-Label <text>] [-Iso]
 #                                               [-ExtraArgs <game arguments>] (e.g. -novu1: the EE's C++ emitter)
-#                                               [-PakOrder <order file>] [-LogFileOpenOrder]
+#                                               [-PakOrder <order file>] [-LogFileOpenOrder] [-CloseUp]
 #
 # 1. BuildCookRun -platform=PS2 -build -cook -stage -pak stages the game with its measuring command line (-NoBuild keeps
 #    the stage and only rewrites LeonCommandLine.txt): a bot match of -Rounds rounds with -Seed, the local player
@@ -23,6 +23,10 @@
 # in a recorded open order (BuildCookRun -pakorder=, N23), and -LogFileOpenOrder adds the switch that records it to the
 # game's command line: the run's EE log is the order file of the next (N24 measures the disc with the ordered pak).
 #
+# -CloseUp (Docs/PLANS/ps2-polish.md P8b) measures the near geometry instead of the match: the bots stand still
+# (bot_stop 1) and a fixed camera (ViewFrom) looks at the terrorist on the middle start from 80 cm, his body filling the
+# frame across the guard band, for -Seconds of the first round's freeze and live time.
+#
 # The game's clock is the emulated console's, so the milliseconds do not depend on the host's speed. PCSX2 is not the
 # hardware: rows are labelled "PCSX2 <version>, Measure.ini <hash>".
 param(
@@ -36,7 +40,8 @@ param(
 	[switch]$Iso,
 	[string]$ExtraArgs = "",
 	[string]$PakOrder = "",
-	[switch]$LogFileOpenOrder
+	[switch]$LogFileOpenOrder,
+	[switch]$CloseUp
 )
 
 $ErrorActionPreference = "Stop"
@@ -55,8 +60,12 @@ $ProjectName = [System.IO.Path]::GetFileNameWithoutExtension($ProjectFile.Name)
 $StageDir = Join-Path $ProjectDir "Saved\StagedBuilds\PS2"
 $StagedElf = Join-Path $StageDir "$ProjectName.elf"
 $GameArgs = "-botmatch -rounds=$Rounds -seed=$Seed -BotMatchSpectate -LogFrameTimes -ExitAfterSeconds=$Seconds"
+if ($CloseUp) { $GameArgs = "-botmatch -rounds=$Rounds -seed=$Seed -LogFrameTimes -ExitAfterSeconds=$Seconds" }
 if ($ExtraArgs) { $GameArgs = "$GameArgs $ExtraArgs" }
 if ($LogFileOpenOrder) { $GameArgs += " -LogFileOpenOrder" }
+# The staged command line; the build's (-addcmdline=) goes without the close-up's quoted commands, which the file adds.
+$StagedArgs = $GameArgs
+if ($CloseUp) { $StagedArgs += " ""-ExecCmds=bot_stop 1,ViewFrom -2570 0 150 0 180""" }
 $StagedIso = Join-Path $StageDir "$ProjectName.iso"
 $IsoArg = if ($Iso) { " -iso" } else { "" }
 if ($PakOrder -ne "")
@@ -72,7 +81,7 @@ if (-not $NoBuild)
 	if ($LASTEXITCODE -ne 0) { Fail "BuildCookRun failed ($LASTEXITCODE)" }
 }
 if (-not (Test-Path $StagedElf)) { Fail "no staged game '$StagedElf' (run without -NoBuild)" }
-Set-Content -Path (Join-Path $StageDir "LeonCommandLine.txt") -Value $GameArgs -Encoding ascii
+Set-Content -Path (Join-Path $StageDir "LeonCommandLine.txt") -Value $StagedArgs -Encoding ascii
 if ($Iso -and $NoBuild)
 {
 	# The disc again, with this command line on it.
@@ -217,7 +226,7 @@ $Row = [ordered]@{
 	Label = $Label
 	Pcsx2 = $Pcsx2Version
 	MeasureIni = $MeasureHash
-	Args = $GameArgs + $(if ($Iso) { " (disc)" } else { "" })
+	Args = $StagedArgs + $(if ($Iso) { " (disc)" } else { "" })
 }
 foreach ($Key in $Values.Keys) { $Row[$Key] = $Values[$Key] }
 foreach ($Key in $ProfileValues.Keys) { $Row["Profile_$Key"] = $ProfileValues[$Key] }

@@ -1,0 +1,523 @@
+; ClipTriangles.vsi: the clipping of a vertex batch across a clip plane on VU1 (Docs/PLANS/ps2-polish.md P8b; dvp-as,
+; one upper and one lower instruction a line), which VU1Programs.vsm and Skinned.vsm include and expand once each
+; (CLIP_PROGRAM, with their buffer's layout). FGSPrimitiveEmitter::AddClippedVertexBatch (GSCore) is the C++ reference:
+; each triangle of the strips on its own, Sutherland-Hodgman against the planes it crosses, as a fan of independent
+; triangles (TRIANGLE), in GIF packets of at most a chunk.
+;
+; A clipped batch's header says so in qword 0's w (the encoder, FGSVertexBatch::bClip), and its GIFtag (8) is the
+; TRIANGLE one with NLOOP 0 and EOP. The program's vertex part runs as for the strips up to the vertex's clip space
+; position (vf12), colour (vf14, before rounding) and texture coordinates (vf15, z 1), then ClipVertex keeps them in the
+; vertex's own input rows, which the vertex no longer needs (a record: row 0 the position, 1 the colour, 2 the
+; coordinates, 3 the outcodes and the strip flags as integers), and once every vertex is in, ClipTriangles draws the
+; triangles:
+; - a triangle wholly outside one side of the view, behind the near plane or beyond the far one (the reference's
+;   outcodes: x > w, x < -w, y > w, y < -w, z < 0, z > w, their AND) is not drawn;
+; - one inside the guard band and the near and far planes goes to the chunk as it is, facing the camera;
+; - any other is clipped against the planes one of its vertices is outside of (near, far, then the guard band's right,
+;   left, top and bottom, the reference's order), projected, and its fan goes to the chunk if its first three vertices
+;   face the camera.
+;
+; Shared data memory (the encoder's prologue): 3-5 (1, 1, 1, 1), (-1, 1, 0, 0) and (0, 0, -1, 1), 6 the guard band
+; (GX, GX, GY, GY), 7 and 8 (0, 1, 0, 0) and (1, -1, 0, 0): the view's sides (w - x, w + x, w - y, w + y), the guard
+; band's (GX w - x, ...) and (z, w - z) of a position, whose signs are its outcodes; 9-14 the clip planes as
+; distance = plane . position: near, far, right, left, top, bottom. 15: x the chunk handed over (VU1Conformance), y the
+; two chunks' addresses added (the next is that less this one), z TOP, w the triangle's vertex while one is clipped.
+;
+; A chunk: its GIFtag (the header's with NLOOP), then ST, RGBAQ and XYZF2 a vertex. Two alternate: while the GIF takes
+; one (XGKICK), VU1 writes the other; the next XGKICK waits for the one before. Without XGKICK (the header's y 0), a full
+; chunk stops the program (its address in 15.x, the E bit) until VIF1's MSCNT, so VU1Conformance reads each.
+;
+; Registers: from ClipTriangles on, vi02 the chunk's vertices, vi03 the triangles left, vi04 the triangle's last
+; vertex's record, vi05 where the chunk goes on, vi06 the chunk, vi07 XGKICK or not; vf07 the fog's line, vf08 the
+; GIFtag, vf09-vf11 the screen's constants.
+;
+; Integer hazards: a branch reads a VI register one instruction or more after the instruction that wrote it, and an
+; FMAND four instructions or more after the flag-setting upper instruction whose flags it reads, none between.
+
+		.macro CLIP_PROGRAM row1, row2, row3, records2, polya, polyb, chunka, chunksum, chunkqw1
+
+ClipVertex:
+		; The record, and the signs of the position's three distance vectors (MAC flags 0xf0: x 0x80 ... w 0x10).
+		nop							lq vf16, 3(vi00)
+		nop							lq vf17, 4(vi00)
+		nop							lq vf18, 5(vi00)
+		mulaw.xyzw ACC, vf16, vf12w	lq vf19, 6(vi00)
+		maddax.xyzw ACC, vf17, vf12x	lq vf27, 7(vi00)
+		maddy.xyzw vf13, vf18, vf12y	lq vf28, 8(vi00)
+		nop							sq vf12, 0(vi04)
+		nop							sq vf14, \row1(vi04)
+		nop							sq vf15, \row2(vi04)
+		nop							iaddiu vi09, vi00, 0xf0
+		nop							fmand vi09, vi09
+		mulaw.xyzw ACC, vf19, vf12w	isw.x vi09, \row3(vi04)
+		maddax.xyzw ACC, vf17, vf12x	iaddiu vi10, vi00, 0xf0
+		maddy.xyzw vf13, vf18, vf12y	iaddiu vi11, vi00, 0xc0
+		nop							nop
+		nop							nop
+		nop							nop
+		nop							nop
+		nop							fmand vi10, vi10
+		mulaw.xyzw ACC, vf27, vf12w	isw.y vi10, \row3(vi04)
+		maddz.xyzw vf13, vf28, vf12z	isw.w vi08, \row3(vi04)
+		nop							nop
+		nop							nop
+		nop							nop
+		nop							nop
+		nop							fmand vi11, vi11
+		nop							iaddi vi03, vi03, -1
+		nop							isw.z vi11, \row3(vi04)
+		nop							ibne vi03, vi00, Vertex
+		nop							iaddi vi04, vi04, 1
+
+ClipTriangles:
+		; The chunks, TOP, and the triangles: vertex 2 on.
+		nop							ilw.x vi03, 0(vi02)
+		nop							iaddiu vi06, vi02, \chunka
+		nop							iadd vi01, vi02, vi02
+		nop							iaddiu vi01, vi01, \chunksum
+		nop							isw.z vi02, 15(vi00)
+		nop							isw.y vi01, 15(vi00)
+		nop							isw.x vi00, 15(vi00)
+		nop							iaddiu vi04, vi02, \records2
+		nop							iaddiu vi05, vi06, 1
+		nop							iaddiu vi02, vi00, 0
+		nop							iaddi vi03, vi03, -2
+
+TriLoop:
+		; The triangle this vertex closes (none with no kick), in the source's winding: A, B, C in vi09, vi10, vi04.
+		nop							ilw.w vi08, \row3(vi04)
+		nop							iaddi vi09, vi04, -2
+		nop							iaddi vi10, vi04, -1
+		nop							iaddiu vi01, vi00, 0x80
+		nop							iand vi11, vi08, vi01
+		nop							iaddiu vi01, vi00, 1
+		nop							ibne vi11, vi00, TriNext
+		nop							iand vi12, vi08, vi01
+		nop							nop
+		nop							ibeq vi12, vi00, TriOrdered
+		nop							nop
+		nop							iaddi vi09, vi04, -1
+		nop							iaddi vi10, vi04, -2
+TriOrdered:
+		; Outside a side of the view, or near or far, all three: not drawn.
+		nop							ilw.x vi11, \row3(vi09)
+		nop							ilw.x vi12, \row3(vi10)
+		nop							ilw.x vi13, \row3(vi04)
+		nop							ilw.z vi14, \row3(vi09)
+		nop							iand vi11, vi11, vi12
+		nop							iand vi11, vi11, vi13
+		nop							ilw.z vi12, \row3(vi10)
+		nop							ilw.z vi13, \row3(vi04)
+		nop							nop
+		nop							iand vi14, vi14, vi12
+		nop							iand vi14, vi14, vi13
+		nop							ior vi11, vi11, vi14
+		nop							nop
+		nop							ibne vi11, vi00, TriNext
+		nop							nop
+		; Outside the guard band, near or far, any of them: clipped (vi11 and vi12 the planes).
+		nop							ilw.y vi11, \row3(vi09)
+		nop							ilw.y vi12, \row3(vi10)
+		nop							ilw.y vi13, \row3(vi04)
+		nop							ilw.z vi14, \row3(vi09)
+		nop							ior vi11, vi11, vi12
+		nop							ior vi11, vi11, vi13
+		nop							ilw.z vi12, \row3(vi10)
+		nop							ilw.z vi13, \row3(vi04)
+		nop							nop
+		nop							ior vi12, vi12, vi14
+		nop							ior vi12, vi12, vi13
+		nop							ior vi13, vi11, vi12
+		nop							nop
+		nop							ibne vi13, vi00, ClipTri
+		nop							nop
+		; Inside: the three vertices to the chunk, which keeps them if the triangle faces the camera.
+		nop							iaddiu vi01, vi05, 9
+		nop							isub vi01, vi01, vi06
+		nop							isubiu vi01, vi01, \chunkqw1
+		nop							nop
+		nop							ibltz vi01, TriRoom
+		nop							nop
+		nop							bal vi15, Flush
+		nop							nop
+TriRoom:
+		nop							lq vf12, 0(vi09)
+		nop							lq vf14, \row1(vi09)
+		nop							lq vf15, \row2(vi09)
+		nop							bal vi15, Project
+		nop							iaddiu vi13, vi05, 0
+		nop							move.xy vf16, vf13
+		nop							lq vf12, 0(vi10)
+		nop							lq vf14, \row1(vi10)
+		nop							lq vf15, \row2(vi10)
+		nop							bal vi15, Project
+		nop							iaddiu vi13, vi05, 3
+		nop							move.xy vf17, vf13
+		nop							lq vf12, 0(vi04)
+		nop							lq vf14, \row1(vi04)
+		nop							lq vf15, \row2(vi04)
+		nop							bal vi15, Project
+		nop							iaddiu vi13, vi05, 6
+		nop							move.xy vf18, vf13
+		nop							bal vi15, Facing
+		nop							nop
+		nop							nop
+		nop							ibne vi01, vi00, TriNext
+		nop							nop
+		nop							iaddiu vi05, vi05, 9
+		nop							iaddiu vi02, vi02, 3
+TriNext:
+		nop							iaddi vi03, vi03, -1
+		nop							nop
+		nop							ibne vi03, vi00, TriLoop
+		nop							iaddi vi04, vi04, 1
+		; The last chunk, then the end.
+		nop							bal vi15, Flush
+		nop							nop
+		nop							b End
+		nop							nop
+
+ClipTri:
+		; One mask of the planes: near 0x800, far 0x400 (their signs 16 times up), right 0x80, left 0x40, top 0x20,
+		; bottom 0x10. The triangle to polygon A (3 quadwords a vertex: position, colour, coordinates).
+		nop							iadd vi12, vi12, vi12
+		nop							iadd vi12, vi12, vi12
+		nop							iadd vi12, vi12, vi12
+		nop							iadd vi12, vi12, vi12
+		nop							ilw.z vi01, 15(vi00)
+		nop							ior vi13, vi11, vi12
+		nop							isw.w vi04, 15(vi00)
+		nop							nop
+		nop							iaddiu vi08, vi01, \polya
+		nop							lq vf12, 0(vi09)
+		nop							lq vf13, \row1(vi09)
+		nop							lq vf14, \row2(vi09)
+		nop							sq vf12, 0(vi08)
+		nop							sq vf13, 1(vi08)
+		nop							sq vf14, 2(vi08)
+		nop							lq vf12, 0(vi10)
+		nop							lq vf13, \row1(vi10)
+		nop							lq vf14, \row2(vi10)
+		nop							sq vf12, 3(vi08)
+		nop							sq vf13, 4(vi08)
+		nop							sq vf14, 5(vi08)
+		nop							lq vf12, 0(vi04)
+		nop							lq vf13, \row1(vi04)
+		nop							lq vf14, \row2(vi04)
+		nop							sq vf12, 6(vi08)
+		nop							sq vf13, 7(vi08)
+		nop							sq vf14, 8(vi08)
+		nop							iaddiu vi04, vi13, 0
+		nop							iaddiu vi09, vi01, \polyb
+		nop							iaddiu vi10, vi00, 3
+		; Each plane it crosses; fewer than three vertices left: nothing to draw.
+		nop							iaddiu vi01, vi00, 0x800
+		nop							iand vi01, vi04, vi01
+		nop							nop
+		nop							ibeq vi01, vi00, ClipFar
+		nop							nop
+		nop							lq vf29, 9(vi00)
+		nop							bal vi15, ClipPlane
+		nop							nop
+		nop							iaddi vi01, vi10, -3
+		nop							nop
+		nop							ibltz vi01, ClipDone
+		nop							nop
+ClipFar:
+		nop							iaddiu vi01, vi00, 0x400
+		nop							iand vi01, vi04, vi01
+		nop							nop
+		nop							ibeq vi01, vi00, ClipRight
+		nop							nop
+		nop							lq vf29, 10(vi00)
+		nop							bal vi15, ClipPlane
+		nop							nop
+		nop							iaddi vi01, vi10, -3
+		nop							nop
+		nop							ibltz vi01, ClipDone
+		nop							nop
+ClipRight:
+		nop							iaddiu vi01, vi00, 0x80
+		nop							iand vi01, vi04, vi01
+		nop							nop
+		nop							ibeq vi01, vi00, ClipLeft
+		nop							nop
+		nop							lq vf29, 11(vi00)
+		nop							bal vi15, ClipPlane
+		nop							nop
+		nop							iaddi vi01, vi10, -3
+		nop							nop
+		nop							ibltz vi01, ClipDone
+		nop							nop
+ClipLeft:
+		nop							iaddiu vi01, vi00, 0x40
+		nop							iand vi01, vi04, vi01
+		nop							nop
+		nop							ibeq vi01, vi00, ClipTop
+		nop							nop
+		nop							lq vf29, 12(vi00)
+		nop							bal vi15, ClipPlane
+		nop							nop
+		nop							iaddi vi01, vi10, -3
+		nop							nop
+		nop							ibltz vi01, ClipDone
+		nop							nop
+ClipTop:
+		nop							iaddiu vi01, vi00, 0x20
+		nop							iand vi01, vi04, vi01
+		nop							nop
+		nop							ibeq vi01, vi00, ClipBottom
+		nop							nop
+		nop							lq vf29, 13(vi00)
+		nop							bal vi15, ClipPlane
+		nop							nop
+		nop							iaddi vi01, vi10, -3
+		nop							nop
+		nop							ibltz vi01, ClipDone
+		nop							nop
+ClipBottom:
+		nop							iaddiu vi01, vi00, 0x10
+		nop							iand vi01, vi04, vi01
+		nop							nop
+		nop							ibeq vi01, vi00, ClipProject
+		nop							nop
+		nop							lq vf29, 14(vi00)
+		nop							bal vi15, ClipPlane
+		nop							nop
+		nop							iaddi vi01, vi10, -3
+		nop							nop
+		nop							ibltz vi01, ClipDone
+		nop							nop
+ClipProject:
+		; The polygon's vertices projected where they are (ST, RGBAQ, XYZF2); the first three's screen positions.
+		nop							lq vf12, 0(vi08)
+		nop							lq vf14, 1(vi08)
+		nop							lq vf15, 2(vi08)
+		nop							bal vi15, Project
+		nop							iaddiu vi13, vi08, 0
+		nop							move.xy vf16, vf13
+		nop							lq vf12, 3(vi08)
+		nop							lq vf14, 4(vi08)
+		nop							lq vf15, 5(vi08)
+		nop							bal vi15, Project
+		nop							iaddiu vi13, vi08, 3
+		nop							move.xy vf17, vf13
+		nop							lq vf12, 6(vi08)
+		nop							lq vf14, 7(vi08)
+		nop							lq vf15, 8(vi08)
+		nop							bal vi15, Project
+		nop							iaddiu vi13, vi08, 6
+		nop							move.xy vf18, vf13
+		nop							iaddiu vi11, vi08, 9
+		nop							iaddi vi12, vi10, -3
+		nop							nop
+		nop							ibeq vi12, vi00, ClipFacing
+		nop							nop
+ClipProjectRest:
+		nop							lq vf12, 0(vi11)
+		nop							lq vf14, 1(vi11)
+		nop							lq vf15, 2(vi11)
+		nop							bal vi15, Project
+		nop							iaddiu vi13, vi11, 0
+		nop							iaddi vi12, vi12, -1
+		nop							iaddiu vi11, vi11, 3
+		nop							ibne vi12, vi00, ClipProjectRest
+		nop							nop
+ClipFacing:
+		; Its facing (the reference's: the first three vertices'), then the fan (0, t, t + 1), n - 2 triangles.
+		nop							bal vi15, Facing
+		nop							nop
+		nop							nop
+		nop							ibne vi01, vi00, ClipDone
+		nop							nop
+		nop							iaddiu vi11, vi08, 3
+		nop							iaddi vi12, vi10, -2
+ClipFan:
+		nop							iaddiu vi01, vi05, 9
+		nop							isub vi01, vi01, vi06
+		nop							isubiu vi01, vi01, \chunkqw1
+		nop							nop
+		nop							ibltz vi01, ClipFanRoom
+		nop							nop
+		nop							bal vi15, Flush
+		nop							nop
+ClipFanRoom:
+		nop							lq vf12, 0(vi08)
+		nop							lq vf13, 1(vi08)
+		nop							lq vf14, 2(vi08)
+		nop							sq vf12, 0(vi05)
+		nop							sq vf13, 1(vi05)
+		nop							sq vf14, 2(vi05)
+		nop							lq vf12, 0(vi11)
+		nop							lq vf13, 1(vi11)
+		nop							lq vf14, 2(vi11)
+		nop							sq vf12, 3(vi05)
+		nop							sq vf13, 4(vi05)
+		nop							sq vf14, 5(vi05)
+		nop							lq vf12, 3(vi11)
+		nop							lq vf13, 4(vi11)
+		nop							lq vf14, 5(vi11)
+		nop							sq vf12, 6(vi05)
+		nop							sq vf13, 7(vi05)
+		nop							sq vf14, 8(vi05)
+		nop							iaddiu vi05, vi05, 9
+		nop							iaddiu vi02, vi02, 3
+		nop							iaddi vi12, vi12, -1
+		nop							iaddiu vi11, vi11, 3
+		nop							ibne vi12, vi00, ClipFan
+		nop							nop
+ClipDone:
+		nop							ilw.w vi04, 15(vi00)
+		nop							b TriNext
+		nop							nop
+
+ClipPlane:
+		; Sutherland-Hodgman against the plane in vf29 (distance = plane . position, inside when not negative): the
+		; polygon at vi08 of vi10 vertices into vi09, at most 9 of them; returns the new one at vi08 (vi10 its count)
+		; and the other buffer at vi09. In[n] = In[0] closes it; vf27 A's distance, vi14 its sign (0x80 outside).
+		nop							iadd vi11, vi10, vi10
+		nop							iadd vi11, vi11, vi10
+		nop							iadd vi11, vi11, vi08
+		nop							lq vf12, 0(vi08)
+		nop							lq vf13, 1(vi08)
+		mul.xyzw vf30, vf29, vf12	lq vf14, 2(vi08)
+		addy.x vf30, vf30, vf30y	sq vf12, 0(vi11)
+		addz.x vf30, vf30, vf30z	sq vf13, 1(vi11)
+		addw.x vf27, vf30, vf30w	sq vf14, 2(vi11)
+		nop							iaddiu vi14, vi00, 0x80
+		nop							iaddiu vi11, vi08, 0
+		nop							iaddiu vi12, vi09, 0
+		nop							iaddiu vi13, vi10, 0
+		nop							fmand vi14, vi14
+		nop							iaddiu vi10, vi00, 9
+ClipEdge:
+		; B = In[i + 1]: its distance (vf28) and sign (vi01).
+		nop							lq vf15, 3(vi11)
+		nop							lq vf16, 4(vi11)
+		mul.xyzw vf30, vf29, vf15	lq vf17, 5(vi11)
+		addy.x vf30, vf30, vf30y	lq vf12, 0(vi11)
+		addz.x vf30, vf30, vf30z	lq vf13, 1(vi11)
+		addw.x vf28, vf30, vf30w	lq vf14, 2(vi11)
+		nop							iaddiu vi01, vi00, 0x80
+		nop							nop
+		nop							nop
+		nop							nop
+		nop							fmand vi01, vi01
+		; A inside: A (while the output has room).
+		nop							ibne vi14, vi00, ClipEdgeCross
+		nop							nop
+		nop							ibeq vi10, vi00, ClipEdgeCross
+		nop							nop
+		nop							sq vf12, 0(vi12)
+		nop							sq vf13, 1(vi12)
+		nop							sq vf14, 2(vi12)
+		nop							iaddiu vi12, vi12, 3
+		nop							iaddi vi10, vi10, -1
+ClipEdgeCross:
+		; A and B on either side: A + (B - A) t, t = dA / (dA - dB).
+		nop							ibeq vi14, vi01, ClipEdgeNext
+		nop							nop
+		nop							ibeq vi10, vi00, ClipEdgeNext
+		nop							nop
+		sub.x vf31, vf27, vf28		nop
+		sub.xyzw vf19, vf15, vf12	nop
+		sub.xyzw vf20, vf16, vf13	nop
+		sub.xyzw vf18, vf17, vf14	div Q, vf27x, vf31x
+		nop							waitq
+		mulq.xyzw vf19, vf19, Q		nop
+		mulq.xyzw vf20, vf20, Q		nop
+		mulq.xyzw vf18, vf18, Q		nop
+		add.xyzw vf19, vf12, vf19	nop
+		add.xyzw vf20, vf13, vf20	nop
+		add.xyzw vf18, vf14, vf18	nop
+		nop							sq vf19, 0(vi12)
+		nop							sq vf20, 1(vi12)
+		nop							sq vf18, 2(vi12)
+		nop							iaddiu vi12, vi12, 3
+		nop							iaddi vi10, vi10, -1
+ClipEdgeNext:
+		nop							move.x vf27, vf28
+		nop							iaddiu vi14, vi01, 0
+		nop							iaddi vi13, vi13, -1
+		nop							iaddiu vi11, vi11, 3
+		nop							ibne vi13, vi00, ClipEdge
+		nop							nop
+		; The output's count (9 less the room left), and the buffers swapped.
+		nop							iaddiu vi01, vi00, 9
+		nop							isub vi10, vi01, vi10
+		nop							iaddiu vi01, vi08, 0
+		nop							iaddiu vi08, vi09, 0
+		nop							jr vi15
+		nop							iaddiu vi09, vi01, 0
+
+Project:
+		; A vertex (vf12 position, vf14 colour, vf15 coordinates with z 1) to ST, RGBAQ and XYZF2 at vi13, as the
+		; strips' vertices; vf13's xy its pixel, before FTOI4.
+		nop							div Q, vf00w, vf12w
+		mulz.w vf20, vf12, vf07z	nop
+		addy.xyzw vf14, vf14, vf11y	nop
+		addw.w vf20, vf20, vf07w	nop
+		minix.xyzw vf14, vf14, vf11x	nop
+		maxx.w vf20, vf20, vf00x	nop
+		ftoi0.xyzw vf14, vf14		nop
+		minix.w vf20, vf20, vf11x	waitq
+		mulq.xyz vf13, vf12, Q		nop
+		mulq.xyz vf15, vf15, Q		nop
+		mulaw.xyz ACC, vf10, vf00w	nop
+		madd.xyz vf13, vf13, vf09	nop
+		maxx.z vf13, vf13, vf00x	sq vf15, 0(vi13)
+		mini.z vf13, vf13, vf11		sq vf14, 1(vi13)
+		mulw.z vf13, vf13, vf09w	nop
+		addy.w vf13, vf20, vf11y	nop
+		ftoi4.xyzw vf31, vf13		nop
+		nop							jr vi15
+		nop							sq vf31, 2(vi13)
+
+Facing:
+		; The triangle of the pixels in vf16, vf17, vf18 faces the camera: vi01 0 (a negative area, the screen's Y
+		; going down), else not 0.
+		sub.xy vf19, vf17, vf16		nop
+		sub.xy vf20, vf18, vf16		nop
+		opmula.xyz ACC, vf19, vf20	nop
+		opmsub.xyz vf30, vf20, vf19	iaddiu vi01, vi00, 0x22
+		nop							nop
+		nop							nop
+		nop							nop
+		nop							nop
+		nop							fmand vi01, vi01
+		nop							nop
+		nop							jr vi15
+		nop							isubiu vi01, vi01, 0x20
+
+Flush:
+		; The chunk (vi02 vertices) to the GS: its GIFtag with NLOOP, XGKICK (or handed over), then the other chunk.
+		nop							ibeq vi02, vi00, FlushDone
+		nop							nop
+		nop							sq vf08, 0(vi06)
+		nop							ilw.x vi01, 0(vi06)
+		nop							nop
+		nop							nop
+		nop							iadd vi01, vi01, vi02
+		nop							isw.x vi01, 0(vi06)
+		nop							ibeq vi07, vi00, FlushYield
+		nop							nop
+		nop							xgkick vi06
+		nop							b FlushSwap
+		nop							nop
+FlushYield:
+		nop							isw.x vi06, 15(vi00)
+		nop[E]						nop
+		nop							nop
+		nop							isw.x vi00, 15(vi00)
+FlushSwap:
+		nop							ilw.y vi01, 15(vi00)
+		nop							nop
+		nop							nop
+		nop							isub vi06, vi01, vi06
+		nop							iaddiu vi02, vi00, 0
+		nop							iaddiu vi05, vi06, 1
+FlushDone:
+		nop							jr vi15
+		nop							nop
+
+		.endm

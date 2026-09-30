@@ -5,6 +5,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "CoreMinimal.h"
 #include "Engine/DirectionalLight.h"
+#include "Engine/PointLight.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/Texture2D.h"
@@ -636,10 +637,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSSceneRendererVertexBatchesTest, "System.Rend
 
 bool FGSSceneRendererVertexBatchesTest::RunTest(const FString& Parameters)
 {
-	// The batches inside the guard band as the list's vertex batch commands (what the PS2 draws on VU1, ps2-shipping
-	// N14): unlit meshes, a Static lit one (its light baked: none here, the mesh's colours) and a Movable lit one under
-	// a sun (lit per frame), one across the near plane. Expanded by the C++ emitter, the list draws the frame the
-	// emitter draws when it sends the batches itself, pixel for pixel.
+	// The batches as the list's vertex batch commands (what the PS2 draws on VU1, ps2-shipping N14): unlit meshes, a
+	// Static lit one (its light baked: none here, the mesh's colours) and a Movable lit one under a sun (lit per
+	// frame), one across the near plane (to be clipped, ps2-polish P8b). Expanded by the C++ emitter, the list draws
+	// the frame the emitter draws when it sends the batches itself, pixel for pixel.
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	const auto Spawn = [&World](const FMeshData& Source, const FVector& Location, const FVector& Scale,
@@ -696,7 +697,16 @@ bool FGSSceneRendererVertexBatchesTest::RunTest(const FString& Parameters)
 		NumLit += Draw.GetProgram(Program) && Program == EGSVertexProgram::StaticLit ? 1 : 0;
 	}
 	TestTrue("Lit and unlit draws", NumLit > 0 && NumLit < Recorded.GetVertexDraws().Num());
-	TestTrue("The floor still clipped on the EE", Recorded.GetWrites().Num() > Recorded.GetVertexBatches().Num());
+	// The floor's batches across the near plane are recorded to be clipped (on VU1, ps2-polish P8b): the EE's clipper
+	// takes none.
+	int32 NumClipped = 0;
+	for (const FGSVertexBatch& Batch : Recorded.GetVertexBatches())
+	{
+		NumClipped += Batch.bClip ? 1 : 0;
+	}
+	TestTrue("The floor recorded to be clipped", NumClipped > 0 && NumClipped < Recorded.GetVertexBatches().Num());
+	TestEqual("Clipped batches counted", Renderer.GetFrameStats().BatchesClipped, NumClipped);
+	TestEqual("None clipped on the EE", Renderer.GetFrameStats().TrianglesClipped, 0);
 	TestTrue("Counted before VU1 culls", Renderer.GetFrameStats().TrianglesSubmitted >= EmittedTriangles);
 
 	FGSCommandList Expanded;
@@ -711,6 +721,79 @@ bool FGSSceneRendererVertexBatchesTest::RunTest(const FString& Parameters)
 	UE_LOG(LogTemp, Display, "%s",
 		*FString::Printf("Vertex batches: %d batches of %d draws (%d lit), %d pixel(s) differ",
 			Recorded.GetVertexBatches().Num(), Recorded.GetVertexDraws().Num(), NumLit, NumDifferent));
+	TestEqual("The same frame", NumDifferent, 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSSceneRendererPointLightsPerDrawTest, "System.Renderer.GS.Scene.PointLightsPerDraw",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+
+bool FGSSceneRendererPointLightsPerDrawTest::RunTest(const FString& Parameters)
+{
+	// Four point lights reach a Movable lit sphere (a lamp and three muzzle flashes, say): its draw takes the two that
+	// light it most (ps2-polish P8b), so VU1's lit program draws it instead of the EE's emitter, and the recorded frame
+	// is still the emitter's.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	UStaticMesh* Mesh = NewObject<UStaticMesh>();
+	(void)Mesh->BuildFromMeshData(MakeSphere(24, 16));
+	AStaticMeshActor* Actor = World.SpawnActor<AStaticMeshActor>(FVector::ZeroVector, FRotator::ZeroRotator);
+	Actor->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+	(void)Actor->GetStaticMeshComponent()->SetStaticMesh(Mesh);
+	UMaterial* Material = NewObject<UMaterial>();
+	Material->ShadingModel = MSM_DefaultLit;
+	Material->BaseColor = FLinearColor(0.8f, 0.8f, 0.8f);
+	Actor->GetStaticMeshComponent()->SetMaterial(0, Material);
+	Actor->SetActorScale3D(FVector(1.5f));
+	// Weak and far, strong and near, weak and near, strong and far: the second and the third light it most.
+	const FVector Positions[4] = {FVector(-150.0f, 0.0f, 0.0f), FVector(0.0f, -120.0f, 40.0f),
+		FVector(0.0f, 120.0f, 40.0f), FVector(0.0f, 0.0f, 300.0f)};
+	const float Intensities[4] = {0.3f, 2.0f, 1.0f, 2.0f};
+	for (int32 Index = 0; Index < 4; ++Index)
+	{
+		APointLight* Light = World.SpawnActor<APointLight>(Positions[Index], FRotator::ZeroRotator);
+		Light->GetPointLightComponent()->SetIntensity(Intensities[Index]);
+		Light->GetPointLightComponent()->SetAttenuationRadius(500.0f);
+	}
+	World.SendAllEndOfFrameUpdates();
+
+	UCameraComponent& Camera = MakeCamera(450.0f);
+	FSceneViewFamily Family(
+		FSceneViewFamily::ConstructionValues(FrameWidth, FrameHeight, World.Scene, FEngineShowFlags()));
+	const FSceneView View(FSceneView::FromCamera(Family, Camera));
+	Family.Views.Add(&View);
+	const FGSDrawEnvironment Environment = MakeEnvironment();
+	FGSSceneRenderer Renderer;
+	Renderer.GetTextureCache().SetArena(ArenaFirstBlock, ArenaBlocks);
+	FGSCommandList Emitted;
+	Environment.Append(Emitted);
+	Renderer.Render(Family, Environment, Emitted);
+	Renderer.SetVertexBatches(true);
+	FGSCommandList Recorded;
+	Environment.Append(Recorded);
+	Renderer.Render(Family, Environment, Recorded);
+
+	TestEqual("None on the EE", Renderer.GetFrameStats().BatchesOnEmitter, 0);
+	if (!TestEqual("One draw recorded", Recorded.GetVertexDraws().Num(), 1))
+	{
+		return false;
+	}
+	const FGSVertexLights& Lights = Recorded.GetVertexDraws()[0].Lights;
+	TestEqual("Two point lights", Lights.NumPoint, FGSVertexDraw::MaxVU1PointLights);
+	TestTrue("The strong near one",
+		Lights.Point[0].Position.Equals(Positions[1]) || Lights.Point[1].Position.Equals(Positions[1]));
+	TestTrue("The weak near one",
+		Lights.Point[0].Position.Equals(Positions[2]) || Lights.Point[1].Position.Equals(Positions[2]));
+
+	FGSCommandList Expanded;
+	Expanded.AppendExpanded(Recorded, Environment);
+	const TArray<FColor> Drawn = Rasterize(Expanded, Environment);
+	const TArray<FColor> Expected = Rasterize(Emitted, Environment);
+	int32 NumDifferent = 0;
+	for (int32 Index = 0; Index < Drawn.Num() && Index < Expected.Num(); ++Index)
+	{
+		NumDifferent += Drawn[Index] == Expected[Index] ? 0 : 1;
+	}
 	TestEqual("The same frame", NumDifferent, 0);
 	return true;
 }
@@ -747,68 +830,80 @@ bool FGSSceneRendererSkinnedVertexBatchesTest::RunTest(const FString& Parameters
 	(void)World.SpawnActor<ADirectionalLight>(FVector::ZeroVector, FRotator(-40.0f, 20.0f, 0.0f));
 	World.SendAllEndOfFrameUpdates();
 
-	UCameraComponent& Camera = MakeCamera(450.0f);
-	FSceneViewFamily Family(
-		FSceneViewFamily::ConstructionValues(FrameWidth, FrameHeight, World.Scene, FEngineShowFlags()));
-	const FSceneView View(FSceneView::FromCamera(Family, Camera));
-	Family.Views.Add(&View);
-	// Two renderers: each list uploads the character's texture (a texture cache sends it once).
-	const FGSDrawEnvironment Environment = MakeEnvironment();
-	FGSSceneRenderer Renderer;
-	Renderer.GetTextureCache().SetArena(ArenaFirstBlock, ArenaBlocks);
-	FGSCommandList Emitted;
-	Environment.Append(Emitted);
-	Renderer.Render(Family, Environment, Emitted);
-
-	FGSSceneRenderer BatchRenderer;
-	BatchRenderer.GetTextureCache().SetArena(ArenaFirstBlock, ArenaBlocks);
-	BatchRenderer.SetVertexBatches(true);
-	FGSCommandList Recorded;
-	Environment.Append(Recorded);
-	BatchRenderer.Render(Family, Environment, Recorded);
-	int32 NumSkinned = 0;
-	int32 NumPalettes = 0;
-	const FGSSkinMatrix* LastPalette = nullptr;
-	for (const FGSVertexBatch& Batch : Recorded.GetVertexBatches())
+	// From afar, every batch inside the guard band; close up, the batches across the near plane recorded to be clipped
+	// (ps2-polish P8b), their palettes too.
+	for (const float Distance : {450.0f, 45.0f})
 	{
-		NumSkinned += Batch.IsSkinned() && Batch.Palette != nullptr && Batch.NumBones > 0 ? 1 : 0;
-		NumPalettes += Batch.Palette != LastPalette ? 1 : 0;
-		LastPalette = Batch.Palette;
-		TestTrue("A palette on a quadword", (UPTRINT(Batch.Palette) & 15) == 0);
-	}
-	TestTrue("Skinned batches recorded", NumSkinned > 0 && NumSkinned == Recorded.GetVertexBatches().Num());
-	EGSVertexProgram Program = EGSVertexProgram::StaticUnlit;
-	TestTrue("Lit by the Skinned lit program",
-		Recorded.GetVertexDraws().Num() > 0 && Recorded.GetVertexDraws()[0].GetProgram(Program) &&
-			Program == EGSVertexProgram::SkinnedLit);
+		const bool bCloseUp = Distance < 100.0f;
+		UCameraComponent& Camera = MakeCamera(Distance);
+		FSceneViewFamily Family(
+			FSceneViewFamily::ConstructionValues(FrameWidth, FrameHeight, World.Scene, FEngineShowFlags()));
+		const FSceneView View(FSceneView::FromCamera(Family, Camera));
+		Family.Views.Add(&View);
+		// Two renderers: each list uploads the character's texture (a texture cache sends it once).
+		const FGSDrawEnvironment Environment = MakeEnvironment();
+		FGSSceneRenderer Renderer;
+		Renderer.GetTextureCache().SetArena(ArenaFirstBlock, ArenaBlocks);
+		FGSCommandList Emitted;
+		Environment.Append(Emitted);
+		Renderer.Render(Family, Environment, Emitted);
 
-	// Appended, then the source list's memory reused: the appended batches keep their palettes.
-	FGSCommandList Appended;
-	Appended.Append(Recorded);
-	Recorded.Reset();
-	for (const FGSVertexBatch& Batch : Appended.GetVertexBatches())
-	{
-		FGSSkinMatrix* Reused = Recorded.AllocateSkinPalette(Batch.NumBones);
-		FMemory::Memset(Reused, 0x55, Batch.NumBones * sizeof(FGSSkinMatrix));
-		TestTrue("Palettes of their own", Reused != Batch.Palette);
-	}
+		FGSSceneRenderer BatchRenderer;
+		BatchRenderer.GetTextureCache().SetArena(ArenaFirstBlock, ArenaBlocks);
+		BatchRenderer.SetVertexBatches(true);
+		FGSCommandList Recorded;
+		Environment.Append(Recorded);
+		BatchRenderer.Render(Family, Environment, Recorded);
+		int32 NumSkinned = 0;
+		int32 NumPalettes = 0;
+		int32 NumClipped = 0;
+		const FGSSkinMatrix* LastPalette = nullptr;
+		for (const FGSVertexBatch& Batch : Recorded.GetVertexBatches())
+		{
+			NumSkinned += Batch.IsSkinned() && Batch.Palette != nullptr && Batch.NumBones > 0 ? 1 : 0;
+			NumPalettes += Batch.Palette != LastPalette ? 1 : 0;
+			NumClipped += Batch.bClip ? 1 : 0;
+			LastPalette = Batch.Palette;
+			TestTrue("A palette on a quadword", (UPTRINT(Batch.Palette) & 15) == 0);
+		}
+		TestTrue("Skinned batches recorded", NumSkinned > 0 && NumSkinned == Recorded.GetVertexBatches().Num());
+		TestTrue(bCloseUp ? "Close up: batches to clip" : "Afar: none to clip", bCloseUp == (NumClipped > 0));
+		TestEqual("None clipped on the EE", BatchRenderer.GetFrameStats().TrianglesClipped, 0);
+		EGSVertexProgram Program = EGSVertexProgram::StaticUnlit;
+		TestTrue("Lit by the Skinned lit program",
+			Recorded.GetVertexDraws().Num() > 0 && Recorded.GetVertexDraws()[0].GetProgram(Program) &&
+				Program == EGSVertexProgram::SkinnedLit);
 
-	FGSCommandList Expanded;
-	Expanded.AppendExpanded(Appended, Environment);
-	const TArray<FColor> Drawn = Rasterize(Expanded, Environment);
-	const TArray<FColor> Expected = Rasterize(Emitted, Environment);
-	int32 NumDifferent = 0;
-	int32 NumCovered = 0;
-	for (int32 Index = 0; Index < Drawn.Num() && Index < Expected.Num(); ++Index)
-	{
-		NumDifferent += Drawn[Index] == Expected[Index] ? 0 : 1;
-		NumCovered += Expected[Index] == Expected[0] ? 0 : 1;
+		// Appended, then the source list's memory reused: the appended batches keep their palettes.
+		FGSCommandList Appended;
+		Appended.Append(Recorded);
+		Recorded.Reset();
+		for (const FGSVertexBatch& Batch : Appended.GetVertexBatches())
+		{
+			FGSSkinMatrix* Reused = Recorded.AllocateSkinPalette(Batch.NumBones);
+			FMemory::Memset(Reused, 0x55, Batch.NumBones * sizeof(FGSSkinMatrix));
+			TestTrue("Palettes of their own", Reused != Batch.Palette);
+		}
+
+		FGSCommandList Expanded;
+		Expanded.AppendExpanded(Appended, Environment);
+		const TArray<FColor> Drawn = Rasterize(Expanded, Environment);
+		const TArray<FColor> Expected = Rasterize(Emitted, Environment);
+		int32 NumDifferent = 0;
+		int32 NumCovered = 0;
+		for (int32 Index = 0; Index < Drawn.Num() && Index < Expected.Num(); ++Index)
+		{
+			NumDifferent += Drawn[Index] == Expected[Index] ? 0 : 1;
+			NumCovered += Expected[Index] == Expected[0] ? 0 : 1;
+		}
+		UE_LOG(LogTemp, Display, "%s",
+			*FString::Printf(
+				"Skinned vertex batches at %.0f cm: %d batch(es) (%d to clip) of %d palette(s), %d pixel(s) drawn, "
+				"%d differ",
+				double(Distance), NumSkinned, NumClipped, NumPalettes, NumCovered, NumDifferent));
+		TestTrue("The character drawn", NumCovered > 1000);
+		TestEqual("The same frame", NumDifferent, 0);
 	}
-	UE_LOG(LogTemp, Display, "%s",
-		*FString::Printf("Skinned vertex batches: %d batch(es) of %d palette(s), %d pixel(s) drawn, %d differ",
-			NumSkinned, NumPalettes, NumCovered, NumDifferent));
-	TestTrue("The character drawn", NumCovered > 1000);
-	TestEqual("The same frame", NumDifferent, 0);
 	return true;
 }
 

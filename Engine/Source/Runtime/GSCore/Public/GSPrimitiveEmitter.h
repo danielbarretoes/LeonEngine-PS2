@@ -49,6 +49,12 @@ enum class EGSStripTriangle : uint8
 class GSCORE_API FGSPrimitiveEmitter
 {
 public:
+	/**
+	 * The guard band's half size in pixels: the largest distance of a primitive coordinate from the frame's center
+	 * that stays in the GS's 0..4095 with a margin (VU1's clipping takes the same, ps2-polish P8b).
+	 */
+	static constexpr float GuardExtent = 2000.0f;
+
 	FGSPrimitiveEmitter(const FGSDrawEnvironment& InEnvironment, FGSCommandList& InList);
 
 	/**
@@ -85,6 +91,13 @@ public:
 	 * draw's bTextured and bBlend).
 	 */
 	void AddVertexBatch(const FGSVertexDraw& Draw, const FGSVertexBatch& Batch);
+	/**
+	 * Draws a vertex batch across a clip plane (FGSVertexBatch::bClip, Docs/PLANS/ps2-polish.md P8b; the reference of
+	 * VU1's clipping): its vertices through TransformVertexBatch, then each triangle its strips close through
+	 * AddTriangle, in the source's winding. The triangles must have been started (BeginTriangles, with the draw's
+	 * bTextured and bBlend).
+	 */
+	void AddClippedVertexBatch(const FGSVertexDraw& Draw, const FGSVertexBatch& Batch);
 
 	/** Starts a run of untextured lines (the end point of each is not drawn, as on the GS). */
 	void BeginLines(bool bBlend);
