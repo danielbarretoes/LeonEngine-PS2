@@ -232,6 +232,23 @@ struct SHOOTERGAME_API FShooterWeaponAnim
 };
 
 /**
+ * A state's share of a weapon's kick (AShooterWeapon_Instant::GetRecoilScale): CS 1.6's KickBack arguments in that
+ * state's branch of the weapon's PrimaryAttack over the standing branch's. Up scales the kick up (RecoilPitch and its
+ * random part), Lateral the sideways kick (RecoilYawRandom). 1 and 1 is the standing kick.
+ */
+USTRUCT()
+struct SHOOTERGAME_API FShooterRecoilScale
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	float Up = 1.0f;
+
+	UPROPERTY()
+	float Lateral = 1.0f;
+};
+
+/**
  * A team's purchases for a round (ps2-shipping N30e; AShooterGameMode decides it for each team when the round starts,
  * and the bots buy by it: AShooterAIController::BuyForRound). CS's economy: the first round of each half is the pistol
  * round, a team that can equip most of its players buys in full, one that cannot saves (eco) unless it has lost too

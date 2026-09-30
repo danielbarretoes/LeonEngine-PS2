@@ -85,6 +85,22 @@ Desviaciones:
   quedaba en un píxel.
 - El AWP sin mira suma `UnscopedSpread` después de todo (como el +0,08 de CS), así que agachado sin mira apenas mejora.
 
+Añadido (P2b, tras la revisión, por fidelidad a CS):
+- Retroceso por estado: el AK-47, la M4A1 y la MP5 escalan cada patada con las ramas de `KickBack` de CS
+  (`MovingRecoilScale`, `JumpingRecoilScale`, `CrouchingRecoilScale`: los argumentos de CS sobre los de pie;
+  `GetRecoilScale`). Agachado el AK patea 0,9 veces lo de pie, moviéndose 1,5 y en el aire 2,0; la M4A1 0,92 / 1,54 /
+  1,85; la MP5 0,93 / 1,33 / 2,4 (y de lado en proporción). El AK y la M4A1 miran el movimiento antes que el aire, la
+  MP5 al revés, como CS. Pistolas y AWP mantienen una sola patada.
+- Rifles y MP5 andando tan precisos como quietos (`WalkingSpread` 0), como CS, que en ellos solo mira pasar de 140 u/s;
+  el término de andar queda en pistolas y AWP. La mira del AK andando es la de quieto (5,8 px).
+- Tests: `ShooterGame.Weapons.KickBackByState` nuevo; `SpreadByState` y `HUD.DynamicCrosshair` al día (el orden completo
+  con la Glock). `Bots.RecoilKicksTheAim` admite 2° en vez de 1,5° con compensación total: el bot dispara andando de
+  lado y cada patada es la del AK en movimiento (1,5×). 105 tests de ShooterGame.
+- BotMatch 10 7, idéntico dos veces: `Botmatch OK: 10 round(s), CT 5 - T 5, 63 kill(s), seed 7, sides switched after
+  round 5`.
+- Desviación: la MP5 de CS no tiene término de carrera en el spread (solo el aire); aquí correr sigue abriéndolo
+  (`MovingSpread` 1,5), como pide el plan.
+
 **P3 · IA de bots: cuchillo, sin rumbo, recoger armas, escaleras, balance (M)**
 - Cuchillo: `TaskEngage` (`ShooterAIController.cpp:581`) llama `StandStill()` y solo hace strafe. Con arma cuerpo a
   cuerpo el bot corre hacia el enemigo (MoveToLocation al enemigo, re-path) y ataca solo dentro del alcance

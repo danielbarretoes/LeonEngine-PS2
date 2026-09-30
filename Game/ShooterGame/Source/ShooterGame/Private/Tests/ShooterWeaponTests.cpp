@@ -364,8 +364,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameWeaponsSpreadByStateTest, "ShooterG
 
 bool FShooterGameWeaponsSpreadByStateTest::RunTest(const FString& Parameters)
 {
-	// Counter-Strike 1.6's accuracy (ps2-polish P2), each hitscan weapon's table: crouched is 0.5 to 0.65 of standing
-	// still, still beats walking, walking beats running, and the air is worst; each state's value is the model's
+	// Counter-Strike 1.6's accuracy (ps2-polish P2, P2b), each hitscan weapon's table: crouched is 0.5 to 0.65 of
+	// standing still, still beats walking (the rifles and the MP5 walk as still), walking beats running, and the air is
+	// worst; each state's value is the model's
 	// (WeaponSpread, WalkingSpread at the walk key's speed, MovingSpread at the run, JumpingSpread on top in the air,
 	// times CrouchingSpreadMod crouched; the AWP unscoped adds UnscopedSpread after all of it).
 	FScopedTestWorld TestWorld;
@@ -390,8 +391,18 @@ bool FShooterGameWeaponsSpreadByStateTest::RunTest(const FString& Parameters)
 		UE_LOG(LogTemp, Display, "%s",
 			*FString::Printf("Spread %s: crouched %.3f, still %.3f, walking %.3f, running %.3f, jumping %.3f", *Name,
 				Spreads[0], Spreads[1], Spreads[2], Spreads[3], Spreads[4]));
+		// CS's rifles and the MP5 only look past 140 units a second: a walk is as accurate as standing still (P2b).
+		const bool bWalkFree = Weapon->IsA<AShooterWeapon_AK47>() || Weapon->IsA<AShooterWeapon_M4A1>() ||
+			Weapon->IsA<AShooterWeapon_MP5>();
+		TestEqual(*FString::Printf("%s: a walking term only where CS has one", *Name), Weapon->WalkingSpread == 0.0f,
+			bWalkFree);
 		for (int32 State = 1; State < int32(ESpreadState::Num); ++State)
 		{
+			if (bWalkFree && ESpreadState(State) == ESpreadState::Walking)
+			{
+				TestEqual(*FString::Printf("%s: walking as still", *Name), Spreads[State], Spreads[State - 1], 1.0e-4f);
+				continue;
+			}
 			TestTrue(*FString::Printf("%s: %s beats %s", *Name, SpreadStateNames[State - 1], SpreadStateNames[State]),
 				Spreads[State - 1] < Spreads[State]);
 		}
@@ -421,8 +432,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameHUDDynamicCrosshairTest, "ShooterGa
 
 bool FShooterGameHUDDynamicCrosshairTest::RunTest(const FString& Parameters)
 {
-	// CS's dynamic crosshair (ps2-polish P2): the HUD's gap follows the drawn weapon's spread, so it is tightest
-	// crouched and opens standing, walking, running and in the air, in that order.
+	// CS's dynamic crosshair (ps2-polish P2, P2b): the HUD's gap follows the drawn weapon's spread, so with a pistol it
+	// is tightest crouched and opens standing, walking, running and in the air, in that order; with a rifle a walk
+	// leaves it as standing still.
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	SpawnFloor(World);
@@ -430,27 +442,115 @@ bool FShooterGameHUDDynamicCrosshairTest::RunTest(const FString& Parameters)
 	AShooterPlayerController* Controller = World.SpawnActor<AShooterPlayerController>();
 	Controller->SetPlayer(NewObject<ULocalPlayer>(Controller));
 	Controller->Possess(Shooter);
-	AShooterWeapon_Instant* Rifle = GiveAndDraw<AShooterWeapon_AK47>(World, *Shooter);
 	AShooterHUD* HUD = World.SpawnActor<AShooterHUD>();
 	HUD->PlayerOwner = Controller;
 	constexpr float ViewHeight = 448.0f;
-	TArray<float> Gaps;
-	for (int32 State = 0; State < int32(ESpreadState::Num); ++State)
+	const auto GetGaps = [&](const AShooterWeapon_Instant& Weapon)
 	{
-		SetSpreadState(World, *Shooter, *Rifle, ESpreadState(State));
-		Gaps.Add(HUD->GetCrosshairGap(ViewHeight));
-	}
-	UE_LOG(LogTemp, Display, "%s",
-		*FString::Printf("Crosshair gap (ak47, 448 lines): crouched %.2f, still %.2f, walking %.2f, running %.2f, "
-						 "jumping %.2f px",
-			Gaps[0], Gaps[1], Gaps[2], Gaps[3], Gaps[4]));
-	TestTrue("Opened by the spread", Gaps[1] > HUD->CrosshairGap);
+		TArray<float> Gaps;
+		for (int32 State = 0; State < int32(ESpreadState::Num); ++State)
+		{
+			SetSpreadState(World, *Shooter, Weapon, ESpreadState(State));
+			Gaps.Add(HUD->GetCrosshairGap(ViewHeight));
+		}
+		UE_LOG(LogTemp, Display, "%s",
+			*FString::Printf("Crosshair gap (%s, 448 lines): crouched %.2f, still %.2f, walking %.2f, running %.2f, "
+							 "jumping %.2f px",
+				*Weapon.WeaponName, Gaps[0], Gaps[1], Gaps[2], Gaps[3], Gaps[4]));
+		return Gaps;
+	};
+
+	const TArray<float> Pistol = GetGaps(*GiveAndDraw<AShooterWeapon_Glock>(World, *Shooter));
+	TestTrue("Opened by the spread", Pistol[1] > HUD->CrosshairGap);
 	// CS's ACCURACY_DUCK: the crosshair's own gap closes crouched too, so it is at most about two thirds of standing.
-	TestTrue("Crouched: visibly tighter", Gaps[0] < Gaps[1] * 0.7f);
+	TestTrue("Crouched: visibly tighter", Pistol[0] < Pistol[1] * 0.7f);
 	for (int32 State = 1; State < int32(ESpreadState::Num); ++State)
 	{
 		TestTrue(*FString::Printf("Tighter %s than %s", SpreadStateNames[State - 1], SpreadStateNames[State]),
-			Gaps[State - 1] < Gaps[State]);
+			Pistol[State - 1] < Pistol[State]);
+	}
+
+	const TArray<float> Rifle = GetGaps(*GiveAndDraw<AShooterWeapon_AK47>(World, *Shooter));
+	TestTrue("Rifle: crouched tighter", Rifle[0] < Rifle[1] * 0.7f);
+	TestEqual("Rifle: walking as still", Rifle[2], Rifle[1], 1.0e-3f);
+	TestTrue("Rifle: running, then the air, wider", Rifle[1] < Rifle[3] && Rifle[3] < Rifle[4]);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameWeaponsKickBackByStateTest, "ShooterGame.Weapons.KickBackByState",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameWeaponsKickBackByStateTest::RunTest(const FString& Parameters)
+{
+	// CS 1.6's KickBack branches (ps2-polish P2b): the AK-47, the M4A1 and the MP5 kick by the owner's state, crouched
+	// least, moving and in the air most, each state's share CS's arguments over standing's; the moving test comes
+	// before the air's for the AK-47 and the M4A1 and after it for the MP5; a pistol keeps its standing kick. Fired, a
+	// crouched shot kicks up the crouched share of a standing one (the same seed, the same random draws).
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	SpawnFloor(World);
+	struct FExpected
+	{
+		UClass* Class;
+		float CrouchedUp;
+		float MovingUp;
+		float JumpingUp;
+		bool bMovingBeforeAir;
+	};
+	const FExpected Table[] = {{AShooterWeapon_AK47::StaticClass(), 0.9f / 1.0f, 1.5f / 1.0f, 2.0f / 1.0f, true},
+		{AShooterWeapon_M4A1::StaticClass(), 0.6f / 0.65f, 1.0f / 0.65f, 1.2f / 0.65f, true},
+		{AShooterWeapon_MP5::StaticClass(), 0.35f / 0.375f, 0.5f / 0.375f, 0.9f / 0.375f, false},
+		{AShooterWeapon_Glock::StaticClass(), 1.0f, 1.0f, 1.0f, false}};
+	int32 Index = 0;
+	for (const FExpected& Expected : Table)
+	{
+		AShooterCharacter* Standing =
+			SpawnShooter(World, FVector(0.0f, 400.0f * float(Index), 0.0f), 0.0f, EShooterTeam::CT);
+		AShooterCharacter* Crouched =
+			SpawnShooter(World, FVector(400.0f, 400.0f * float(Index), 0.0f), 0.0f, EShooterTeam::CT);
+		++Index;
+		const auto Draw = [&World](AShooterCharacter& Shooter, UClass* Class)
+		{
+			AShooterWeapon_Instant* Weapon = Cast<AShooterWeapon_Instant>(Shooter.GiveWeapon(Class));
+			Shooter.EquipWeapon(Weapon);
+			TickFrames(World, FMath::CeilToInt((Weapon->EquipDuration + 0.1f) / FrameTime));
+			return Weapon;
+		};
+		AShooterWeapon_Instant* Weapon = Draw(*Standing, Expected.Class);
+		AShooterWeapon_Instant* Twin = Draw(*Crouched, Expected.Class);
+		const FString Name = Weapon->WeaponName;
+		const auto UpIn = [&](ESpreadState State)
+		{
+			SetSpreadState(World, *Standing, *Weapon, State);
+			return Weapon->GetRecoilScale().Up;
+		};
+		TestEqual(*FString::Printf("%s standing", *Name), UpIn(ESpreadState::Still), 1.0f);
+		TestEqual(*FString::Printf("%s crouched", *Name), UpIn(ESpreadState::Crouched), Expected.CrouchedUp, 1.0e-3f);
+		TestEqual(
+			*FString::Printf("%s walking: moving", *Name), UpIn(ESpreadState::Walking), Expected.MovingUp, 1.0e-3f);
+		TestEqual(*FString::Printf("%s running", *Name), UpIn(ESpreadState::Running), Expected.MovingUp, 1.0e-3f);
+		TestEqual(*FString::Printf("%s moving in the air", *Name), UpIn(ESpreadState::Jumping),
+			Expected.bMovingBeforeAir ? Expected.MovingUp : Expected.JumpingUp, 1.0e-3f);
+		Standing->SetMovementMode(EMovementMode::Falling);
+		Standing->GetCharacterMovement().Velocity = FVector::ZeroVector;
+		TestEqual(
+			*FString::Printf("%s still in the air", *Name), Weapon->GetRecoilScale().Up, Expected.JumpingUp, 1.0e-3f);
+		SetSpreadState(World, *Standing, *Weapon, ESpreadState::Still);
+
+		// Fired: the same stream, so the crouched kick is the standing one times the crouched share.
+		SetSpreadState(World, *Crouched, *Twin, ESpreadState::Crouched);
+		Weapon->ResetAim();
+		Twin->ResetAim();
+		// Each kick read right after its shot (the next frame starts recovering it).
+		Shoot(World, *Standing);
+		const float StandingKick = Weapon->GetRecoilToRecover();
+		Shoot(World, *Crouched);
+		const float CrouchedKick = Twin->GetRecoilToRecover();
+		UE_LOG(LogTemp, Display, "%s",
+			*FString::Printf("Kick %s: standing %.3f, crouched %.3f degrees up", *Name, StandingKick, CrouchedKick));
+		TestTrue(*FString::Printf("%s kicked", *Name), StandingKick > 0.0f);
+		TestEqual(
+			*FString::Printf("%s crouched kick", *Name), CrouchedKick, StandingKick * Expected.CrouchedUp, 1.0e-3f);
 	}
 	return true;
 }

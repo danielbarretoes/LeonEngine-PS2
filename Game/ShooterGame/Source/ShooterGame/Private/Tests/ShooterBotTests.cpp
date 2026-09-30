@@ -545,8 +545,10 @@ bool FShooterGameBotsRecoilKicksTheAimTest::RunTest(const FString& Parameters)
 	TestTrue(
 		*FString::Printf(TEXT("No compensation: the aim climbs (%.2f degrees)"), static_cast<double>(Uncompensated)),
 		Uncompensated > 3.0f);
+	// The bot strafes at a walk while it sprays, so each shot kicks as CS's moving AK-47 does (1.5 times standing's,
+	// ps2-polish P2b): a kick is pulled down only after it lands, so the aim peaks a little higher.
 	TestTrue(*FString::Printf(TEXT("Full compensation: held down (%.2f degrees)"), static_cast<double>(Compensated)),
-		Compensated < 1.5f);
+		Compensated < 2.0f);
 	return true;
 }
 

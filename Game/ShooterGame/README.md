@@ -242,26 +242,33 @@ sounds and seeds; any `UPROPERTY(Config)` of the classes can be tuned there.
   P2): `WeaponSpread` standing still; plus the movement's term, which grows with the speed to `WalkingSpread` at
   `WalkingSpeed` (CS's 140 units a second, 356 cm/s: the walk key always stays below it) and on to `MovingSpread` at
   the weapon's running speed; plus `JumpingSpread` in the air; plus the firing spread (grows each shot, recovers once
-  the trigger is released); all of it times `CrouchingSpreadMod` crouched. Each weapon sets its values in its
-  constructor (`DefaultGame.ini` can tune them). In degrees:
+  the trigger is released); all of it times `CrouchingSpreadMod` crouched. A walk costs the pistols and the AWP
+  accuracy but not the AK-47, the M4A1 and the MP5 (`WalkingSpread` 0: CS's cases for them only look past 140 units
+  a second; P2b). Each weapon sets its values in its constructor (`DefaultGame.ini` can tune them). In degrees:
 
   | Weapon | crouched still | still | walking | running | jumping | `CrouchingSpreadMod` |
   |---|---:|---:|---:|---:|---:|---:|
   | Glock | 0.29 | 0.45 | 1.38 | 3.95 | 10.95 | 0.65 |
   | USP | 0.20 | 0.30 | 1.23 | 3.30 | 9.30 | 0.65 |
   | Desert Eagle | 0.33 | 0.50 | 1.61 | 4.50 | 12.50 | 0.65 |
-  | MP5 | 0.27 | 0.45 | 0.91 | 1.95 | 6.95 | 0.6 |
-  | AK-47 | 0.18 | 0.35 | 1.34 | 4.85 | 12.85 | 0.5 |
-  | M4A1 | 0.17 | 0.30 | 1.07 | 3.80 | 10.80 | 0.55 |
+  | MP5 | 0.27 | 0.45 | 0.45 | 1.95 | 6.95 | 0.6 |
+  | AK-47 | 0.18 | 0.35 | 0.35 | 4.85 | 12.85 | 0.5 |
+  | M4A1 | 0.17 | 0.30 | 0.30 | 3.80 | 10.80 | 0.55 |
   | AWP (unscoped: + 6.0 after the rest, as CS's + 0.08) | 0.03 | 0.05 | 0.99 | 3.05 | 9.05 | 0.5 |
 
   The crosshair's gap follows the spread (`AShooterHUD::GetCrosshairGap`), so it closes crouched and opens walking,
   running and in the air, as CS's dynamic crosshair; crouched, its own 4 px gap closes by `CrouchingSpreadMod` too
-  (CS's `ACCURACY_DUCK`). The AK-47's gap on 448 lines: 2.9 px crouched, 5.8 still, 10.9 walking, 29.2 running, 71.8
-  in the air. Tests: `ShooterGame.Weapons.SpreadByState` (the table, and the
-  order crouched < still < walking < running < jumping for every weapon), `ShooterGame.HUD.DynamicCrosshair` (the gap
-  in the same order). Each shot kicks the aim up (and sideways at random);
-  the kick comes back down. The spread's direction and the recoil come from an `FRandomStream` seeded with
+  (CS's `ACCURACY_DUCK`). The gap on 448 lines, the Glock's: 4.1 px crouched, 6.3 still, 11.2 walking, 24.5 running,
+  61.5 in the air; the AK-47's: 2.9 crouched, 5.8 still and walking, 29.2 running, 71.8 in the air.
+
+  Each shot kicks the aim up (and sideways at random); the kick comes back down. The AK-47, the M4A1 and the MP5 kick
+  by the owner's state, as CS's `KickBack` branches (`MovingRecoilScale`, `JumpingRecoilScale`,
+  `CrouchingRecoilScale`: CS's arguments over standing's; `GetRecoilScale`): moving at all, up 1.5 (AK-47), 1.54
+  (M4A1), 1.33 (MP5) times standing's; in the air 2.0, 1.85, 2.4; crouched 0.9, 0.92, 0.93, and less sideways. The AK-47
+  and the M4A1 test the movement before the air, the MP5 after it, as in CS. The pistols and the AWP keep one kick.
+  Tests: `ShooterGame.Weapons.SpreadByState` (the table, and the order crouched < still < walking < running < jumping,
+  a walk as still for the rifles and the MP5), `ShooterGame.HUD.DynamicCrosshair` (the gap in the same order),
+  `ShooterGame.Weapons.KickBackByState` (each state's share, and a crouched shot's kick against a standing one's). The spread's direction and the recoil come from an `FRandomStream` seeded with
   `RandomSeed`: a weapon fires the same sequence every time (the tests replay it). A hit on a surface leaves a mark
   (the pool of 64; its tint and size the surface's) and plays the surface's impact sound, a hit on a player CS's
   `bhit_` sound and the shooter's hit marker ([Surfaces and their sounds](#surfaces-and-their-sounds)).
@@ -698,9 +705,9 @@ when nothing changed; a score formats one line, a kill three).
   steps, so the same seed plays the same match headless or drawn. The bots' choices, the weapons' spread and the
   rounds come from seeded streams and the steps are fixed, so a seed replays the same match: `BotMatch.bat` (10 rounds, seed 7 by default) plays it twice and fails when the
   summaries differ, and a staged Shipping build (`BuildCookRun.bat`) plays three rounds (Shipping logs nothing, so only
-  the exit code tells). Since [ps2-polish](../../Docs/PLANS/ps2-polish.md) P2 (CS's accuracy crouched, walking and
-  still; the bots crouch to fire at range) seed 7 logs `Botmatch OK: 10 round(s), CT 4 - T 6, 59 kill(s), seed 7,
-  sides switched after round 5`. At 0.24.0 (since ps2-shipping N29, the floor slabs as the ground) it logged
+  the exit code tells). Since [ps2-polish](../../Docs/PLANS/ps2-polish.md) P2b (CS's accuracy crouched, walking and
+  still, and its recoil by state; the bots crouch to fire at range) seed 7 logs `Botmatch OK: 10 round(s), CT 5 - T 5,
+  63 kill(s), seed 7, sides switched after round 5` (P2: `CT 4 - T 6, 59 kill(s)`). At 0.24.0 (since ps2-shipping N29, the floor slabs as the ground) it logged
   `9 round(s), CT 3 - T 6, 55 kill(s)`: a team reached the majority after nine rounds (N28's de_leon on one ground box: `10 round(s), CT 5 - T 5, 65 kill(s)`, the terrorists winning every
   round; over seeds 1 to 24 then, the terrorists won 61 % of the rounds with 6.1 kills a round).
 

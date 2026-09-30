@@ -400,10 +400,34 @@ void AShooterWeapon_Instant::OnShotFired()
 	}
 }
 
+FShooterRecoilScale AShooterWeapon_Instant::GetRecoilScale() const
+{
+	if (MyPawn == nullptr)
+	{
+		return FShooterRecoilScale();
+	}
+	// CS's KickBack branches: moving at all (velocity.Length2D() > 0), off the floor, ducking, else standing; the
+	// AK-47 and the M4A1 test the movement first, the MP5 the air.
+	constexpr float StillSpeed = 1.0f;
+	const bool bMoving = MyPawn->GetCharacterMovement().Velocity.Size2D() > StillSpeed;
+	const bool bInAir = !MyPawn->IsMovingOnGround();
+	if (bMoving && (bRecoilMovingBeforeAir || !bInAir))
+	{
+		return MovingRecoilScale;
+	}
+	if (bInAir)
+	{
+		return JumpingRecoilScale;
+	}
+	return MyPawn->bIsCrouched ? CrouchingRecoilScale : FShooterRecoilScale();
+}
+
 void AShooterWeapon_Instant::ApplyRecoil()
 {
-	const float PitchKick = RecoilPitch + WeaponRandomStream.FRandRange(-RecoilPitchRandom, RecoilPitchRandom);
-	const float YawKick = WeaponRandomStream.FRandRange(-RecoilYawRandom, RecoilYawRandom);
+	const FShooterRecoilScale Scale = GetRecoilScale();
+	const float PitchKick =
+		Scale.Up * (RecoilPitch + WeaponRandomStream.FRandRange(-RecoilPitchRandom, RecoilPitchRandom));
+	const float YawKick = Scale.Lateral * WeaponRandomStream.FRandRange(-RecoilYawRandom, RecoilYawRandom);
 	AController* Controller = GetInstigatorController();
 	if (Controller == nullptr)
 	{
@@ -610,9 +634,9 @@ AShooterWeapon_MP5::AShooterWeapon_MP5(const FObjectInitializer& ObjectInitializ
 	PenetrationCount = 1;
 	PenetrationPower = 53.34f;
 	PenetrationDistance = 2032.0f;
-	// CS's MP5NPrimaryAttack: the air or not; the SMG barely minds moving.
+	// CS's MP5NPrimaryAttack: the air or not; a walk costs nothing, the run a little.
 	WeaponSpread = 0.45f;
-	WalkingSpread = 0.5f;
+	WalkingSpread = 0.0f;
 	MovingSpread = 1.5f;
 	JumpingSpread = 5.0f;
 	CrouchingSpreadMod = 0.6f;
@@ -621,6 +645,14 @@ AShooterWeapon_MP5::AShooterWeapon_MP5(const FObjectInitializer& ObjectInitializ
 	RecoilPitch = 0.45f;
 	RecoilPitchRandom = 0.15f;
 	RecoilYawRandom = 0.3f;
+	// CS's KickBack, over standing's (0.375 up, 0.175 sideways): the air (0.9, 0.475) first, then moving (0.5, 0.275),
+	// ducking (0.35, 0.15).
+	JumpingRecoilScale.Up = 2.4f;
+	JumpingRecoilScale.Lateral = 2.714f;
+	MovingRecoilScale.Up = 1.333f;
+	MovingRecoilScale.Lateral = 1.571f;
+	CrouchingRecoilScale.Up = 0.933f;
+	CrouchingRecoilScale.Lateral = 0.857f;
 }
 
 AShooterWeapon_AK47::AShooterWeapon_AK47(const FObjectInitializer& ObjectInitializer)
@@ -646,9 +678,9 @@ AShooterWeapon_AK47::AShooterWeapon_AK47(const FObjectInitializer& ObjectInitial
 	PenetrationPower = 99.06f;
 	PenetrationDistance = 12700.0f;
 	// CS's AK47PrimaryAttack: the air (0.04 + 0.4 x the accuracy), past 140 units a second (0.04 + 0.07 x), else
-	// 0.0275 x; crouched, the AK tightens most.
+	// 0.0275 x (a walk as still); crouched, the AK tightens most.
 	WeaponSpread = 0.35f;
-	WalkingSpread = 1.2f;
+	WalkingSpread = 0.0f;
 	MovingSpread = 4.5f;
 	JumpingSpread = 8.0f;
 	CrouchingSpreadMod = 0.5f;
@@ -657,6 +689,15 @@ AShooterWeapon_AK47::AShooterWeapon_AK47(const FObjectInitializer& ObjectInitial
 	RecoilPitch = 1.0f;
 	RecoilPitchRandom = 0.3f;
 	RecoilYawRandom = 0.5f;
+	// CS's KickBack, over standing's (1.0 up, 0.375 sideways): moving (1.5, 0.45) first, then the air (2.0, 1.0),
+	// ducking (0.9, 0.35).
+	bRecoilMovingBeforeAir = true;
+	MovingRecoilScale.Up = 1.5f;
+	MovingRecoilScale.Lateral = 1.2f;
+	JumpingRecoilScale.Up = 2.0f;
+	JumpingRecoilScale.Lateral = 2.667f;
+	CrouchingRecoilScale.Up = 0.9f;
+	CrouchingRecoilScale.Lateral = 0.933f;
 }
 
 AShooterWeapon_M4A1::AShooterWeapon_M4A1(const FObjectInitializer& ObjectInitializer)
@@ -682,9 +723,9 @@ AShooterWeapon_M4A1::AShooterWeapon_M4A1(const FObjectInitializer& ObjectInitial
 	PenetrationPower = 88.9f;
 	PenetrationDistance = 10160.0f;
 	// CS's M4A1PrimaryAttack: the air (0.035 + 0.4 x the accuracy), past 140 units a second (0.035 + 0.07 x), else
-	// 0.02 x.
+	// 0.02 x (a walk as still).
 	WeaponSpread = 0.3f;
-	WalkingSpread = 0.9f;
+	WalkingSpread = 0.0f;
 	MovingSpread = 3.5f;
 	JumpingSpread = 7.0f;
 	CrouchingSpreadMod = 0.55f;
@@ -692,6 +733,15 @@ AShooterWeapon_M4A1::AShooterWeapon_M4A1(const FObjectInitializer& ObjectInitial
 	RecoilPitch = 0.8f;
 	RecoilPitchRandom = 0.25f;
 	RecoilYawRandom = 0.35f;
+	// CS's KickBack, over standing's (0.65 up, 0.35 sideways): moving (1.0, 0.45) first, then the air (1.2, 0.5),
+	// ducking (0.6, 0.3).
+	bRecoilMovingBeforeAir = true;
+	MovingRecoilScale.Up = 1.538f;
+	MovingRecoilScale.Lateral = 1.286f;
+	JumpingRecoilScale.Up = 1.846f;
+	JumpingRecoilScale.Lateral = 1.429f;
+	CrouchingRecoilScale.Up = 0.923f;
+	CrouchingRecoilScale.Lateral = 0.857f;
 	// CS: the silencer takes 2 s; silenced it hits for 33 but falls off faster and spreads a quarter more.
 	bHasSilencer = true;
 	SilencerDuration = 2.0f;

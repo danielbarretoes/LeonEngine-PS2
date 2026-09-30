@@ -29,10 +29,12 @@
  *   speed (GetMovementSpread); plus JumpingSpread off the floor (in the air, on a ladder); plus the firing spread
  *   (FiringSpreadIncrement a shot, up to FiringSpreadMax, recovering at FiringSpreadRecovery a second once the trigger
  *   is released); all of it times CrouchingSpreadMod crouched (0.5 to 0.65 of standing, by the weapon). So crouched
- *   beats standing, still beats walking, walking beats running, and the air is worst; the HUD's crosshair
- *   (AShooterHUD::GetCrosshairGap) follows the spread.
- * - Recoil: each shot kicks the owner's aim up by RecoilPitch +- RecoilPitchRandom and sideways by +- RecoilYawRandom;
- *   the kick comes back down at RecoilRecovery a second once the trigger is released.
+ *   beats standing, walking beats running and the air is worst; a walk costs the pistols and the AWP accuracy, but not
+ *   the rifles and the MP5 (WalkingSpread 0: CS's cases for them only look past 140 units a second). The HUD's
+ *   crosshair (AShooterHUD::GetCrosshairGap) follows the spread.
+ * - Recoil: each shot kicks the owner's aim up by RecoilPitch +- RecoilPitchRandom and sideways by +- RecoilYawRandom,
+ *   scaled by the owner's state (GetRecoilScale: CS's KickBack branches, moving, in the air, crouched); the kick comes
+ *   back down at RecoilRecovery a second once the trigger is released.
  * - The spread's direction and the recoil come from an FRandomStream seeded with RandomSeed when the weapon spawns,
  *   so a weapon's sequence of shots is the same every time (the tests replay it).
  * - A silencer (bHasSilencer: the USP, the M4A1): the secondary button puts it on or takes it off in
@@ -130,6 +132,24 @@ public:
 	/** The sideways kick's range, degrees (either way). */
 	UPROPERTY(Config)
 	float RecoilYawRandom = 0.4f;
+
+	/**
+	 * The kick's share by the owner's state (CS's KickBack branches: the rifles' and the MP5's; the rest keep the
+	 * standing kick): moving at all (CS: speed > 0), off the floor, crouched.
+	 */
+	UPROPERTY(Config)
+	FShooterRecoilScale MovingRecoilScale;
+
+	UPROPERTY(Config)
+	FShooterRecoilScale JumpingRecoilScale;
+
+	UPROPERTY(Config)
+	FShooterRecoilScale CrouchingRecoilScale;
+
+	/** CS's AK-47 and M4A1 test the movement before the air (moving in the air kicks as moving); the MP5 the other way.
+	 */
+	UPROPERTY(Config)
+	bool bRecoilMovingBeforeAir = false;
 
 	/** How fast the kick comes back down once the trigger is released, degrees a second. */
 	UPROPERTY(Config)
@@ -239,6 +259,8 @@ public:
 	 * at RunSpeed (the owner's running speed with this weapon), in proportion between them.
 	 */
 	[[nodiscard]] float GetMovementSpread(float Speed, float RunSpeed) const;
+	/** The share of the next shot's kick by the owner's state now (see MovingRecoilScale); 1 and 1 without an owner. */
+	[[nodiscard]] FShooterRecoilScale GetRecoilScale() const;
 	/** The accumulated firing spread, degrees. */
 	[[nodiscard]] float GetCurrentFiringSpread() const
 	{

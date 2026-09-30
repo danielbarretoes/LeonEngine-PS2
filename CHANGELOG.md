@@ -36,6 +36,17 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   `ShooterGame.HUD.DynamicCrosshair`; `ShooterGame.Weapons.SpreadModel` checks the movement's term (104 ShooterGame
   tests). The bots crouch to fire at range, so the bot match changes:
   `Botmatch OK: 10 round(s), CT 4 - T 6, 59 kill(s), seed 7, sides switched after round 5`.
+- CS 1.6's recoil by state and the rifles' walking accuracy ([ps2-polish](Docs/PLANS/ps2-polish.md) P2b). The AK-47,
+  the M4A1 and the MP5 kick by their owner's state as CS's `KickBack` branches do: `MovingRecoilScale`,
+  `JumpingRecoilScale` and `CrouchingRecoilScale` (`FShooterRecoilScale`: CS's up and sideways arguments over the
+  standing ones) scale each shot's kick, chosen by `AShooterWeapon_Instant::GetRecoilScale` (moving at all, in the air,
+  crouched; `bRecoilMovingBeforeAir` for the AK-47 and the M4A1, which test the movement first). Crouched, the AK-47
+  kicks up 0.9 times standing's, moving 1.5, in the air 2.0. The rifles and the MP5 walk as accurately as they stand
+  (`WalkingSpread` 0: CS's cases for them only look past 140 units a second); the pistols and the AWP keep a walking
+  term. Tests: `ShooterGame.Weapons.KickBackByState`; `SpreadByState` and `HUD.DynamicCrosshair` updated (a pistol for
+  the full order, the AK-47 walking as still); `Bots.RecoilKicksTheAim` allows 2 degrees instead of 1.5, the bot
+  strafing at a walk while it sprays (105 ShooterGame tests). The bot match changes:
+  `Botmatch OK: 10 round(s), CT 5 - T 5, 63 kill(s), seed 7, sides switched after round 5`.
 
 ### Fixed
 
