@@ -2,7 +2,7 @@
 
 An offline Counter-Strike 1.6 clone, modelled on UE's ShooterGame sample: two teams (CT and T), five players a side,
 on `de_leon`, a desert town built in Blender, on Win64 and the PS2 (30 fps in PCSX2, from its pak or a bootable ISO).
-At 0.24.0 it has CS 1.6's movement (fall damage, ladders, the jump's stamina, tagging, footsteps by surface), its
+At 0.25.0 it has CS 1.6's movement (fall damage, ladders, the jump's stamina, tagging, footsteps by surface), its
 arsenal (knife, Glock, USP, Desert Eagle, MP5, AK-47, M4A1, AWP; HE, flashbang and smoke grenades) with the economy,
 ammunition, wall penetration and hit groups, the defusal rounds with the halftime side switch, the radar, the damage
 indicator, the death cam and spectating, bots that buy by the team's plan (eco, force-buy), throw grenades, strafe and
@@ -19,6 +19,10 @@ with it, and N30a to N30f CS 1.6 parity: the arsenal and economy ([Weapons](#wea
 ([Grenades](#grenades)), the movement ([CS 1.6's movement](#cs-16s-movement)), the halftime, radar and spectating
 ([Death and spectating](#death-and-spectating)), the bots' economy, grenades and radio ([Bots](#bots),
 [The radio](#the-radio)) and the physical materials ([Surfaces and their sounds](#surfaces-and-their-sounds)).
+[ps2-polish](../../Docs/PLANS/ps2-polish.md) (0.25.0) fixes the vanishing characters and the bots' knife and idle
+walks, follows CS 1.6's accuracy and recoil, toggles the crouch, drops and picks up weapons, and adds the fonts and
+UMG widgets, CS 1.6's HUD and a table scoreboard, the desert sky, the main menu, team selection and the pause menu
+(the real minimap is still pending).
 
 ## Build and run
 

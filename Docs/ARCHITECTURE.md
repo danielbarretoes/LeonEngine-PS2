@@ -17,7 +17,7 @@ source layout, module architecture and Epic naming, and is built with CMake thro
 LeonEngine-PS2/
 ├── Engine/
 │   ├── Build/                 # BatchFiles (Build, Clean, Rebuild, RunTests, RunGates, Cook, BuildCookRun, BotMatch,
-│   │                          #   SmokeTest, MeasurePS2, FormatCode, Lint, …), Build.version (0.24.0)
+│   │                          #   SmokeTest, MeasurePS2, FormatCode, Lint, …), Build.version (0.25.0)
 │   ├── Config/                # BaseEngine.ini, BaseGame.ini, BaseInput.ini, BaseEditor.ini (first config layer)
 │   ├── Content/               # engine content: .lasset packages (EngineMaterials, EngineResources, BasicShapes),
 │   │                          #   .lmap maps (Maps: Entry, Template_Default, AxisTest)

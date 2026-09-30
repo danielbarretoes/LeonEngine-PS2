@@ -1,22 +1,25 @@
 # Pending
 
-What the [ps2-shipping](PLANS/ps2-shipping.md) plan (0.22.0 to 0.24.0) left open. Each item comes from a phase's
-"Desviaciones"; the plan's "Pendiente / fuera de alcance" section has the detail, and
-[Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md) has the measurements. ShooterGame runs at 29.95 fps in
-PCSX2 (p50/p95/p99 33.5 ms), so nothing here blocks the frame rate.
+What is left after [ps2-polish](PLANS/ps2-polish.md) (0.25.0), on top of what the
+[ps2-shipping](PLANS/ps2-shipping.md) plan (0.22.0 to 0.24.0) left open. Each item comes from a phase's "Desviaciones";
+the plans have the detail, and [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md) has the measurements.
+ShooterGame runs at 30 fps in PCSX2 (Budgets.md, the row "0.25.0"), so nothing here blocks the frame rate.
 
 ## Next features
 
-- **Minimap.** The radar (N30d) shows dots on a black square. It needs the map's real overview image, like CS's
-  overviews: a top-down render of the map, generated at cook time and paletted, drawn under the dots and rotated with
-  the view.
-- **UI.** The HUD, the scoreboard and the buy menu are CS 1.6's since [ps2-polish](PLANS/ps2-polish.md) P6
-  (icons, the bold font, `UTableView`), the main, team and pause menus since P9.
+- **Minimap** (ps2-polish P7, not done). The radar still shows dots on a black square. It needs the map's real overview
+  image, like CS's overviews: a top-down render of the map, generated at cook time and paletted, drawn under the dots
+  and rotated with the view. An uncompiled draft (a `BuildOverview` commandlet, the scene capture, the radar and its
+  tests) is on the branch `wip/ps2-polish-p7-minimap`, under `Docs/PLANS/ps2-polish-p7-draft/`; it predates P8's
+  `AWorldSettings` and renderer changes, and it leaves open whether LeonCook should link Renderer and GSReference or
+  the overview should be a separate tool.
 
 ShooterGame stays single player against bots: no split screen (decided 2026-09-30).
 
 ## Render
 
+- A draw takes at most two point lights (the two that light its bounds most, ps2-polish P8b): VU1 lights two. It could
+  take four with a new VU1 memory layout.
 - Cells and portals cull little on de_leon's open layout: the sky portals keep most cells visible.
 - Static mesh LODs work and are tested, but de_leon uses none: its meshes are baked, and a baked mesh draws at LOD 0.
 - de_leon's 78 pieces are not merged per cell and material. A mesh has a single `UCX_` box, because Leon folds a mesh's
@@ -38,12 +41,15 @@ ShooterGame stays single player against bots: no split screen (decided 2026-09-3
 
 - Hit groups are capsule height bands, not per-bone boxes. Spread and recoil are chosen per weapon, not CS's formulas.
 - Bots throw few of the grenades they buy, hear shots but not steps, and see enemies within 35 m only
-  (`SightRadius`: de_leon's lanes gave the terrorists' plaza the long duels into the sites).
+  (`SightRadius`: a compromise, de_leon's lanes gave the terrorists' plaza the long duels into the sites).
 - The radio is tones, not voices, and the gamepad has no radio menu. One sound variant per surface; no smoke or
   magazine sounds. The smoke is a fixed sphere and does not block flashes.
-- One locomotion stance (rifle). The feet slide a little. No arms clip for defusing. The C4 is not a first-person weapon.
-- The menus move with the D-pad and the arrows, not the left stick (UMG's navigation, ps2-polish P5); the main menu
-  lists de_leon only, the one map.
+- One locomotion stance (rifle). The feet slide a little. No arms clip for defusing. The C4 has no first-person view
+  model: with it out, fire plants the bomb (ps2-polish P6), but the arms show nothing.
+- The menus move with the D-pad and the arrows, not the left stick (UMG's navigation, ps2-polish P5 and P9); the main
+  menu lists de_leon only, the one map.
+- A match launched straight into a map without `?winrounds=` (the map on the command line) plays the
+  config's `MaxRounds=30`, while the main menu's default is `?winrounds=5`.
 
 ## Checks only a person can do
 
@@ -56,7 +62,8 @@ Confirmed by playing (2026-09-30):
 - the game holds 30 fps to the eye.
 
 Still to check:
-- Playing from the main menu in PCSX2 with the pad: the menus, the team choice, the pause (ps2-polish P9).
+- Playing from the main menu in PCSX2 with the pad: the menus, the team choice, the pause (ps2-polish P9), the new HUD
+  and scoreboard (P6) and the sky (P8).
 - A DualShock 2: pressure buttons, a second pad, pulling a pad out mid-game.
 - The memory card in the PCSX2 BIOS browser: the save, its icon and its title.
 - XInput pads are matched to GLFW pads by order, so a DirectInput pad next to an Xbox pad can get the other pad's

@@ -335,7 +335,6 @@ Desviaciones:
 - El marcador de ShooterGame sigue dibujado a mano con columnas alineadas por espacios, que la fuente proporcional ya no
   alinea: P6 lo pasa a `UTableView`.
 
-**P6 · HUD y scoreboard nuevos (M) — hecha**
 ### P5b · La fuente del juego en la pantalla de error (S) — hecha
 
 Estado: hecha.
@@ -372,7 +371,7 @@ Estado: hecha.
 Desviaciones: `MeasureString` sustituye a `GetTextWidth`; `DrawString` recibe el bloque de VRAM de la fuente
 (`FontBlock`) en vez de una escala. No hay escena de conformidad nueva: el estado es el de `TexturedCanvas`.
 
-**P6 · HUD y scoreboard nuevos (M)**
+**P6 · HUD y scoreboard nuevos (M) — hecha**
 - HUD rediseñado al estilo CS 1.6 con la fuente nueva e iconos (vida, blindaje, dinero, munición, tiempo, kill feed
   con icono del arma).
 - Scoreboard con la tabla de P5: por equipo nombre, bajas, muertes, BOT, muerto, bomba; se borra el dibujo a mano
@@ -427,13 +426,18 @@ Desviaciones:
 - La latencia del jugador humano es `0`: juega en local, no hay red.
 - Las fuentes negritas, ya paletizadas, no cuentan en el informe de VRAM del cook (como las de P5); el atlas sí.
 
-**P7 · Minimapa real (M)**
+**P7 · Minimapa real (M) — no hecha — pendiente**
 - Commandlet `-run=BuildOverview` en LeonCook: renderiza el mapa desde arriba en ortográfica con `FGSReferenceRasterizer`
   (sin depender de GPU), lo paletiza a P8 256² y guarda `T_<Mapa>_Overview` y su rectángulo en el mundo
   (`AWorldSettings` o un actor `AShooterOverview`); se regenera en la importación del mapa (determinista, G5).
 - El radar (`DrawRadar`, `ShooterHUD.cpp:236`) dibuja la imagen rotada y recortada bajo los puntos (quad texturizado
   de P5).
 - Tests: el overview es determinista; proyección mundo→imagen; el radar dibuja la textura.
+
+Estado: no hecha — pendiente. El radar sigue dibujando puntos sobre negro. Hay un borrador sin compilar
+(`BuildOverview`, la captura de la escena, el radar y sus tests) en la rama `wip/ps2-polish-p7-minimap`, en
+`Docs/PLANS/ps2-polish-p7-draft/`: es anterior a los cambios de P8 en `AWorldSettings` y el renderer, y queda abierto si
+LeonCook debe enlazar Renderer y GSReference o si el overview va en una herramienta aparte. Sigue en `Docs/PENDING.md`.
 
 **P8 · Cielo (M) — hecha**
 - Generador procedural (script Python versionado, D6): cielo de desierto HDR (degradado, sol, nubes) a cubemap, con
@@ -571,10 +575,34 @@ Desviaciones:
 
 ### Cierre
 
-**P10 · Documentación y release 0.25.0 (S)**
+**P10 · Documentación y release 0.25.0 (S) — hecha**
 - `Docs/PENDING.md` actualizado (lo hecho fuera; lo que quede), README de ShooterGame, TESTING, ARCHITECTURE,
   Budgets (fila 0.25.0), CHANGELOG 0.25.0, versión del motor 0.25.0 y contenido re-guardado; `RunGates -PS2`,
   `MeasurePS2`, la ISO arranca; squash a `main`.
+
+Estado: hecha.
+- `RunGates -PS2` sobre P6 + P5b encima de P8, P9 y P8b, en verde: 605 tests del motor, 35 casos dorados, 125 de
+  ShooterGame y 171 → 174 de TestPAL. BotMatch 10 7 idéntico dos veces y sin cambios respecto a P3b y P6:
+  `Botmatch OK: 8 round(s), CT 2 - T 6, 57 kill(s), seed 7, sides switched after round 5`.
+- Versión: `Engine/Build/Build.version` pasa a 0.25.0; el contenido del motor y de ShooterGame se volvió a guardar
+  (`ResavePackages`), se reimportó entero (`ImportAssets -reimport -all`) y se volvieron a hornear `Entry` y
+  `Template_Default` (`ResavePackages -buildlighting`); `RunGates -PS2 -Measure` después, con CheckReimport idéntico.
+  La identidad del import (`SM_Cube`, versión de paquete 6) pasa a
+  `EDB2BA3E5BF7E8DB269172C4B54BAA6B4FE23C9846B3BCAC022FCDB6194B7540` (2 372 bytes; ASSET_FORMATS y TOOLS).
+- CHANGELOG `[0.25.0] - 2026-10-01`; README, README de ShooterGame, ARCHITECTURE, ASSET_FORMATS, BUILD, SETUP,
+  TESTING y TOOLS con la versión y los recuentos; `Docs/PENDING.md` con lo que queda tras 0.25.0.
+- PCSX2 (`MeasurePS2`, fila «0.25.0» en Budgets.md): 29,62 fps, media 33,76 ms, p50/p95/p99 33,5 ms; el primer frame,
+  1 137 ms, es el viaje del menú a de_leon (como en P9). Canvas 0,19 + 2,24 ms (el HUD y el scoreboard de P6, sin
+  medir hasta ahora; 1,41 ms en P8b), escena 6,60 ms, GMalloc pico 4 794 KB.
+- ISO (`BuildCookRun -stage -pak -iso`): 7 784 448 bytes; arranca en PCSX2 y llega al menú principal
+  (`LoadMap: /Game/Maps/MainMenu`, primer frame a 1,50 s).
+
+Desviaciones:
+- P7 (minimapa real) no se hizo: queda pendiente con su borrador en la rama `wip/ps2-polish-p7-minimap`.
+- La media de fps queda por debajo de 30 solo por el primer frame (el viaje desde el menú); todo frame posterior va a
+  33,5 ms.
+- En esta máquina la caché de CMake del build de Win64 se había creado desde una unidad `subst` (`p:`); el primer Lint
+  falló por eso y pasó al volver a configurar desde la ruta real. Sin cambios de código.
 
 ## Fuera de este plan (se queda en PENDING)
 

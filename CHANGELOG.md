@@ -7,6 +7,18 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-01
+
+Polish from playing 0.24.0 ([ps2-polish](Docs/PLANS/ps2-polish.md) P0 to P10, with P2b, P3b, P5b and P8b): the
+vanishing characters and the bots' knife and idle walks fixed, CS 1.6's accuracy and recoil, the bots' pickups,
+lookouts, ladders and post-plant, the crouch toggle and dropped weapons, fonts, a textured canvas and UMG's widgets,
+CS 1.6's HUD and a table scoreboard, a generated HDR sky, the near geometry clipped on VU1, and the main menu, team
+selection and pause. The real minimap (P7) is not done ([Docs/PENDING.md](Docs/PENDING.md)). The engine and ShooterGame
+content is resaved for 0.25.0. PCSX2 ([Budgets.md](Engine/Platforms/PS2/Documentation/Budgets.md), the row «0.25.0»):
+every frame after the first at 33.5 ms (p50 / p95 / p99), 29.62 fps with the first frame's travel from the main menu,
+the scene 6.6 ms. The ISO (7 784 448 bytes) boots in PCSX2 into the main menu. `BotMatch 10 7`: `Botmatch OK: 8
+round(s), CT 2 - T 6, 57 kill(s), seed 7, sides switched after round 5`.
+
 ### Added
 
 - A generated HDR sky ([ps2-polish](Docs/PLANS/ps2-polish.md) P8).

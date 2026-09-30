@@ -145,7 +145,7 @@ Little-endian, as FArchive writes it: an `int32` is 4 bytes, `bool` is a `uint32
 ```text
 FPackageFileSummary                         (UObject/PackageFileSummary.h)
   int32   Tag                    0x4E4F454C: the file starts with the bytes "LEON"
-  int32   FileVersionUE          ELeonPackageVersion (Core UObject/ObjectVersion.h); 6 in 0.24.0 (Versioning, below)
+  int32   FileVersionUE          ELeonPackageVersion (Core UObject/ObjectVersion.h); 6 in 0.25.0 (Versioning, below)
   int32   FileVersionLicenseeUE  0
   int32   TotalHeaderSize        summary + tables: where the export data starts
   uint32  PackageFlags           PKG_Cooked 0x200, PKG_ContainsMap 0x20000, PKG_FilterEditorOnly 0x80000000, ...
@@ -155,7 +155,7 @@ FPackageFileSummary                         (UObject/PackageFileSummary.h)
   int32   SoftPackageReferencesCount, SoftPackageReferencesOffset
   FGuid   Guid                   4 x uint32: FGuid::NewDeterministicGuid(long package name) (MD5)
   FEngineVersion SavedByEngineVersion
-          uint16 Major, Minor, Patch; uint32 Changelist; FString Branch   ("0.24.0-0+LeonEngine")
+          uint16 Major, Minor, Patch; uint32 Changelist; FString Branch   ("0.25.0-0+LeonEngine")
   FString CookedPlatform         empty unless PKG_Cooked
   int64   BulkDataStartOffset
 name table          NameCount x FString: every FName string of the package, number-less, sorted, no duplicates
@@ -396,10 +396,11 @@ UE's prefix for its class:
 written by `MakeSkinnedFixture.py` next to it) imported with
 `LeonCook Engine/Saved/CookIdentity/CookIdentity.lproj -run=ImportAssets -source=Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/Cube.glb -dest=/Game/Identity`
 (a scratch project in the ignored `Engine/Saved`) saves `SM_Cube.lasset` with SHA-256
-`A24A188795C94680A639E1BC18822206EA48DE8135B9625E97C9FAC9630ED1FC` (2 372 bytes: its 12 collision triangles' material
-slots; the same when imported again over it or reimported, on Win64; measured with engine version 0.24.0, package
-version 6, [ps2-shipping](PLANS/ps2-shipping.md) N31). The engine and package versions are in the package summary, so a
-release or a version bump changes the hash: 0.21.0 with package version 6 (N30f) gave
+`EDB2BA3E5BF7E8DB269172C4B54BAA6B4FE23C9846B3BCAC022FCDB6194B7540` (2 372 bytes: its 12 collision triangles' material
+slots; the same when imported again over it or reimported, on Win64; measured with engine version 0.25.0, package
+version 6, [ps2-polish](PLANS/ps2-polish.md) P10). The engine and package versions are in the package summary, so a
+release or a version bump changes the hash: 0.24.0 gave
+`A24A188795C94680A639E1BC18822206EA48DE8135B9625E97C9FAC9630ED1FC`, 0.21.0 with package version 6 (N30f) gave
 `2D2B59B8A9804FF746C1B126501A2A2DF88E2040FAD6432650F525ECC9407C56`, package version 5 (N22)
 `F60454FC5600B82629A388B84599293F87E90A8FA9E4A58E34584F39ED8E29FF` and version 4 (N21)
 `50EEB3471A5CB963FCDFB4EED52744E42D087A78DB8BFEC3BAFCCBE4D3C3F087`; the same cube as `Cube.obj`, before N21,
